@@ -1,10 +1,12 @@
-<p align="center">
-	  <h2 align="center">kwatch</h2>
+<p align="left">
+	  <h1>kwatch</h1>
     <br />
     <a href="https://godoc.org/github.com/abahmed/kwatch">
       <img src="https://godoc.org/github.com/abahmed/kwatch?status.png" />
     </a>
-    <img src="https://github.com/abahmed/kwatch/workflows/Check/badge.svg?branch=main" />
+    <a href="https://github.com/abahmed/kwatch/actions/workflows/check.yaml">
+      <img src="https://github.com/abahmed/kwatch/workflows/Check/badge.svg?branch=main" />
+    </a>
     <a href="https://goreportcard.com/report/github.com/abahmed/kwatch">
       <img src="https://goreportcard.com/badge/github.com/abahmed/kwatch" />
     </a>
@@ -23,7 +25,7 @@
 ## Screenshots
 
 <p align="center">
-	<img src="https://raw.githubusercontent.com/abahmed/kwatch/main/assets/demo.png" width="75%"/>
+	<img src="https://raw.githubusercontent.com/abahmed/kwatch/main/assets/demo.png" width="60%"/>
 </p>
 
 ## Getting Started
