@@ -7,41 +7,18 @@ on:
     branches:
       - main
 
-env:
-  GO111MODULE: on
-  ACTIONS_ALLOW_UNSECURE_COMMANDS: true
-
 jobs:
   check:
-    strategy:
-      matrix:
-        go-version: [1.17.x]
-        platform: [ubuntu-latest]
-    runs-on: ${{ matrix.platform }}
     steps:
-    - name: Install Go ${{ matrix.go-version }}
-      uses: actions/setup-go@v1
+    - name: Install Go
+      uses: actions/setup-go@v2
       with:
-        go-version: ${{ matrix.go-version }}
-
-    - name: Set GOPATH and PATH
-      # temporary fix
-      # see https://github.com/actions/setup-go/issues/14
-      run: |
-        echo "::set-env name=GOPATH::$(dirname $GITHUB_WORKSPACE)"
-        echo "::add-path::$(dirname $GITHUB_WORKSPACE)/bin"
-      shell: bash
+        go-version: '1.17'
 
     - name: Checkout code
       uses: actions/checkout@v2
       with:
           ref: ${{ github.ref }}
 
-    - name: Install dependencies
-      run: go get -v golang.org/x/lint/golint
-
     - name: Build
       run: go build
-
-    - name: Lint
-      run: golint -set_exit_status ./...
