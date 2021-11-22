@@ -1,0 +1,67 @@
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: kwatch
+---
+kind: ClusterRole
+apiVersion: rbac.authorization.k8s.io/v1
+metadata:
+  name: kwatch
+rules:
+- apiGroups: [""]
+  resources: ["pods", "pods/log", "events"]
+  verbs: ["get", "watch", "list"]
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: kwatch
+  namespace: kwatch
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: kwatch
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: kwatch
+subjects:
+  - kind: ServiceAccount
+    name: kwatch
+    namespace: kwatch
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: kwatch
+  namespace: kwatch
+spec:
+  selector:
+    matchLabels:
+      app: kwatch
+  template:
+    metadata:
+      labels:
+        app: kwatch
+    spec:
+      restartPolicy: Always
+      serviceAccountName: kwatch
+      containers:
+      - name: kwatch
+        image: abahmed1/kwatch:latest
+        imagePullPolicy: Always
+        volumeMounts:
+          - name: config-volume
+            mountPath: /config
+        env:
+          - name: CONFIG_FILE
+            value: "/config/config.yaml"
+        resources:
+          limits:
+            memory: "128Mi"
+            cpu: "100m"
+      volumes:
+      - name: config-volume
+        configMap:
+          name: kwatch
