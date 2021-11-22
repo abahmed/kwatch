@@ -19,3 +19,4 @@ kwatch
 ### Go Patch ###
 /vendor/
 /Godeps/
+*.DS_Store
