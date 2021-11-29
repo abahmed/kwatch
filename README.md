@@ -53,6 +53,7 @@ kubectl apply -f https://raw.githubusercontent.com/abahmed/kwatch/main/deploy/de
 
 | Parameter                 |  Description                              |Required        |
 |:--------------------------|:----------------------------------------- |:-------------- |
+| `maxRecentLogLines`       |  Max tail log lines in messages           | No             |
 | `providers.slack.webhook` |  Slack webhook URL                        | Yes            |
 | `providers.slack.title`   |  Customized title in slack message        | No             |
 | `providers.slack.text`    |  Customized text in slack message         | No             |

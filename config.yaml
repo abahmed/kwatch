@@ -1,3 +1,4 @@
+maxRecentLogLines: 0
 providers:
   slack:
     webhook: ""

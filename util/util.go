@@ -2,52 +2,84 @@ package util
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"strings"
 
 	"github.com/sirupsen/logrus"
+	"github.com/spf13/viper"
 	v1 "k8s.io/api/core/v1"
 
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes"
 )
 
-func GetPodFailedEvents(c kubernetes.Interface, name, namespace string) string {
+// GetPodEventsStr returns formatted events as a string for specified pod
+func GetPodEventsStr(c kubernetes.Interface, name, namespace string) string {
 	evnts, err := getPodEvents(c, name, namespace)
 
-	// get only failed events
 	eventsString := ""
-
 	if err != nil {
-		logrus.Warnf("failed to get events for %s: %s", name, err.Error())
+		logrus.Warnf("failed to get events for %s@%s: %s", name, namespace, err.Error())
 		return eventsString
 	}
 
 	for _, ev := range evnts.Items {
-		if ev.Reason == "Failed" {
-			eventsString += fmt.Sprintf("[%s] %s\n\n", ev.LastTimestamp.String(), ev.Message)
-		}
+		eventsString +=
+			fmt.Sprintf(
+				"[%s] %s %s\n",
+				ev.LastTimestamp.String(),
+				ev.Reason,
+				ev.Message)
 	}
 
 	return strings.TrimSpace(eventsString)
 }
 
-func GetPodContainerLogs(c kubernetes.Interface, name, container, namespace string) string {
-	log, err := c.CoreV1().
+// GetPodContainerLogs returns logs for specified container in pod
+func GetPodContainerLogs(
+	c kubernetes.Interface, name, container, namespace string,
+	previous bool) string {
+	options := v1.PodLogOptions{
+		Container: container,
+		Previous:  previous,
+	}
+
+	// get max recent log lines
+	var maxLogs int64 = viper.GetInt64("maxRecentLogLines")
+	if maxLogs != 0 {
+		options.TailLines = &maxLogs
+	}
+
+	// get logs
+	logs, err := c.CoreV1().
 		Pods(namespace).
-		GetLogs(name, &v1.PodLogOptions{Container: container}).
-		Do(context.TODO()).Get()
+		GetLogs(name, &options).
+		DoRaw(context.TODO())
+
 	if err != nil {
-		return err.Error()
+		logrus.Warnf(
+			"failed to get logs for container %s in pod %s@%s: %s",
+			name,
+			container,
+			namespace,
+			err.Error())
+
+		// try to decode response
+		var status metav1.Status
+		if parseErr := json.Unmarshal(logs, &status); parseErr == nil {
+			return status.Message
+		} else {
+			logrus.Warnf(
+				"failed to parse logs for container %s in pod %s@%s: %s",
+				name,
+				container,
+				namespace,
+				parseErr.Error())
+		}
 	}
 
-	logObj, ok := log.(*metav1.Status)
-	if !ok {
-		logrus.Warnf("failed to cast log for %s: %v", container, logObj)
-		return ""
-	}
-
-	return logObj.Message
+	return string(logs)
 }
 
 func getPodEvents(c kubernetes.Interface, name, namespace string) (*v1.EventList, error) {
