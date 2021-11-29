@@ -11,6 +11,8 @@ import (
 	"k8s.io/client-go/util/homedir"
 )
 
+// Create returns kubernetes client after initializing it with in-cluster, or
+// out of cluster config
 func Create() kubernetes.Interface {
 	// try to use in cluster config
 	config, err := rest.InClusterConfig()

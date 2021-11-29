@@ -22,16 +22,17 @@ import (
 	"k8s.io/client-go/util/workqueue"
 )
 
+// Controller holds necessary
 type Controller struct {
-	name            string
-	informer        cache.Controller
-	indexer         cache.Indexer
-	kclient         kubernetes.Interface
-	queue           workqueue.RateLimitingInterface
-	serverStartTime time.Time
-	providers       []provider.Provider
+	name      string
+	informer  cache.Controller
+	indexer   cache.Indexer
+	kclient   kubernetes.Interface
+	queue     workqueue.RateLimitingInterface
+	providers []provider.Provider
 }
 
+// Start creates an instance of controller after initialization and runs it
 func Start() {
 	// create kubernetes client
 	kclient := client.Create()
@@ -42,11 +43,11 @@ func Start() {
 	indexer, informer := cache.NewIndexerInformer(
 		&cache.ListWatch{
 			ListFunc: func(options metav1.ListOptions) (runtime.Object, error) {
-				options.FieldSelector = "status.phase!=Running"
+				//options.FieldSelector = "status.phase!=Running"
 				return kclient.CoreV1().Pods(v1.NamespaceAll).List(context.TODO(), options)
 			},
 			WatchFunc: func(options metav1.ListOptions) (watch.Interface, error) {
-				options.FieldSelector = "status.phase!=Running"
+				//options.FieldSelector = "status.phase!=Running"
 				return kclient.CoreV1().Pods(v1.NamespaceAll).Watch(context.TODO(), options)
 			},
 		},
@@ -90,14 +91,14 @@ func Start() {
 	stopCh := make(chan struct{})
 	defer close(stopCh)
 
-	con.Run(constant.NumWorkers, stopCh)
+	con.run(constant.NumWorkers, stopCh)
 }
 
-func (c *Controller) Run(workers int, stopCh chan struct{}) {
+// run starts the controller
+func (c *Controller) run(workers int, stopCh chan struct{}) {
 	defer utilruntime.HandleCrash()
 	defer c.queue.ShutDown()
 
-	c.serverStartTime = time.Now().Local()
 	logrus.Infof("starting %s controller", c.name)
 
 	go c.informer.Run(stopCh)
@@ -179,41 +180,45 @@ func (c *Controller) processItem(key string) error {
 		return nil
 	}
 
-	// ignore messages happened before starting controller
-	if pod.CreationTimestamp.Sub(c.serverStartTime).Seconds() <= 0 {
-		return nil
-	}
-
 	for _, container := range pod.Status.ContainerStatuses {
 		// filter running containers
 		if container.Ready || container.State.Waiting == nil {
 			continue
 		}
 
-		switch container.State.Waiting.Reason {
-		case "CrashLoopBackOff":
-		case "ImagePullBackOff":
-		case "ErrImagePull":
-			// retrieve logs of container
-			logs := util.GetPodContainerLogs(c.kclient, pod.Name, container.Name, pod.Namespace)
+		logrus.Debugf(
+			"processing container %s in pod %s@%s",
+			container.Name,
+			pod.Name,
+			pod.Namespace)
 
-			// get only failed events
-			eventsString := util.GetPodFailedEvents(c.kclient, pod.Name, pod.Namespace)
+		// get logs for this container
+		logs := util.GetPodContainerLogs(
+			c.kclient,
+			pod.Name,
+			container.Name,
+			pod.Namespace,
+			container.RestartCount > 0)
 
-			evnt := event.Event{
-				Name:      pod.Name,
-				Container: container.Name,
-				Namespace: pod.Namespace,
-				Reason:    container.State.Waiting.Reason,
-				Logs:      logs,
-				Events:    eventsString,
-			}
+		// get events for this pod
+		eventsString := util.GetPodEventsStr(c.kclient, pod.Name, pod.Namespace)
 
-			// send notification to providers
-			for _, prv := range c.providers {
-				if err := prv.SendEvent(&evnt); err != nil {
-					logrus.Errorf("failed to send event with %s: %s", prv.Name(), err.Error())
-				}
+		evnt := event.Event{
+			Name:      pod.Name,
+			Container: container.Name,
+			Namespace: pod.Namespace,
+			Reason:    container.State.Waiting.Reason,
+			Logs:      logs,
+			Events:    eventsString,
+		}
+
+		// send notification to providers
+		for _, prv := range c.providers {
+			if err := prv.SendEvent(&evnt); err != nil {
+				logrus.Errorf(
+					"failed to send event with %s: %s",
+					prv.Name(),
+					err.Error())
 			}
 		}
 	}

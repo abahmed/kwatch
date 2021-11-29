@@ -1,3 +1,4 @@
+maxRecentLogLines: 20
 providers:
   slack:
-    webhook: ""
+    webhook: "https://hooks.slack.com/services/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"
