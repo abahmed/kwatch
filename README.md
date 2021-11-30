@@ -62,7 +62,7 @@ kubectl apply -f https://raw.githubusercontent.com/abahmed/kwatch/main/deploy/de
 ### Cleanup
 
 ```shell
-kubectl delete -f config.yaml
+kubectl delete -f https://raw.githubusercontent.com/abahmed/kwatch/main/deploy/config.yaml
 kubectl delete -f https://raw.githubusercontent.com/abahmed/kwatch/main/deploy/deploy.yaml
 ```
 

@@ -38,17 +38,20 @@ func Start() {
 	kclient := client.Create()
 
 	// create rate limiting queue
-	queue := workqueue.NewRateLimitingQueue(workqueue.DefaultControllerRateLimiter())
+	queue :=
+		workqueue.NewRateLimitingQueue(workqueue.DefaultControllerRateLimiter())
 
 	indexer, informer := cache.NewIndexerInformer(
 		&cache.ListWatch{
-			ListFunc: func(options metav1.ListOptions) (runtime.Object, error) {
-				//options.FieldSelector = "status.phase!=Running"
-				return kclient.CoreV1().Pods(v1.NamespaceAll).List(context.TODO(), options)
+			ListFunc: func(opts metav1.ListOptions) (runtime.Object, error) {
+				return kclient.CoreV1().
+					Pods(v1.NamespaceAll).
+					List(context.TODO(), opts)
 			},
-			WatchFunc: func(options metav1.ListOptions) (watch.Interface, error) {
-				//options.FieldSelector = "status.phase!=Running"
-				return kclient.CoreV1().Pods(v1.NamespaceAll).Watch(context.TODO(), options)
+			WatchFunc: func(opts metav1.ListOptions) (watch.Interface, error) {
+				return kclient.CoreV1().
+					Pods(v1.NamespaceAll).
+					Watch(context.TODO(), opts)
 			},
 		},
 		&v1.Pod{},
@@ -69,8 +72,8 @@ func Start() {
 				}
 			},
 			DeleteFunc: func(obj interface{}) {
-				// IndexerInformer uses a delta queue, therefore for deletes we have to use this
-				// key function.
+				// IndexerInformer uses a delta queue, therefore for deletes
+				// we have to use this key function.
 				key, err := cache.DeletionHandlingMetaNamespaceKeyFunc(obj)
 				if err == nil {
 					logrus.Debugf("received delete for Pod %s\n", key)
@@ -79,7 +82,7 @@ func Start() {
 			},
 		}, cache.Indexers{})
 
-	con := Controller{
+	controller := Controller{
 		name:      "pod-crash",
 		informer:  informer,
 		indexer:   indexer,
@@ -91,7 +94,7 @@ func Start() {
 	stopCh := make(chan struct{})
 	defer close(stopCh)
 
-	con.run(constant.NumWorkers, stopCh)
+	controller.run(constant.NumWorkers, stopCh)
 }
 
 // run starts the controller
@@ -104,7 +107,8 @@ func (c *Controller) run(workers int, stopCh chan struct{}) {
 	go c.informer.Run(stopCh)
 
 	if !cache.WaitForCacheSync(stopCh, c.informer.HasSynced) {
-		utilruntime.HandleError(errors.New("timed out waiting for caches to sync"))
+		utilruntime.HandleError(
+			errors.New("timed out waiting for caches to sync"))
 		return
 	}
 
@@ -112,8 +116,13 @@ func (c *Controller) run(workers int, stopCh chan struct{}) {
 
 	// send notification to providers
 	for _, prv := range c.providers {
-		if err := prv.SendMessage(constant.WelcomeMsg); err != nil {
-			logrus.Errorf("failed to send msg with %s: %s", prv.Name(), err.Error())
+		err :=
+			prv.SendMessage(constant.WelcomeMsg)
+		if err != nil {
+			logrus.Errorf(
+				"failed to send msg with %s: %s",
+				prv.Name(),
+				err.Error())
 		}
 	}
 
@@ -160,12 +169,16 @@ func (c *Controller) processNextItem() bool {
 func (c *Controller) processItem(key string) error {
 	obj, exists, err := c.indexer.GetByKey(key)
 	if err != nil {
-		logrus.Errorf("failed to fetch object %s from store: %s", key, err.Error())
+		logrus.Errorf(
+			"failed to fetch object %s from store: %s",
+			key,
+			err.Error())
 		return err
 	}
 
 	if !exists {
-		// Below we will warm up our cache with a Pod, so that we will see a delete for one pod
+		// Below we will warm up our cache with a Pod, so that we will see
+		// a delete for one pod
 		logrus.Infof("pod %s does not exist anymore\n", key)
 
 		// Clean up intervals if possible
@@ -182,7 +195,16 @@ func (c *Controller) processItem(key string) error {
 
 	for _, container := range pod.Status.ContainerStatuses {
 		// filter running containers
-		if container.Ready || container.State.Waiting == nil {
+		if container.Ready ||
+			(container.State.Waiting == nil &&
+				container.State.Terminated == nil) {
+			continue
+		}
+
+		if (container.State.Waiting != nil &&
+			container.State.Waiting.Reason == "ContainerCreating") ||
+			(container.State.Terminated != nil &&
+				container.State.Terminated.Reason == "Completed") {
 			continue
 		}
 
@@ -201,13 +223,22 @@ func (c *Controller) processItem(key string) error {
 			container.RestartCount > 0)
 
 		// get events for this pod
-		eventsString := util.GetPodEventsStr(c.kclient, pod.Name, pod.Namespace)
+		eventsString :=
+			util.GetPodEventsStr(c.kclient, pod.Name, pod.Namespace)
+
+		// get reason according to state
+		reason := "Unknown"
+		if container.State.Waiting != nil {
+			reason = container.State.Waiting.Reason
+		} else if container.State.Terminated != nil {
+			reason = container.State.Terminated.Reason
+		}
 
 		evnt := event.Event{
 			Name:      pod.Name,
 			Container: container.Name,
 			Namespace: pod.Namespace,
-			Reason:    container.State.Waiting.Reason,
+			Reason:    reason,
 			Logs:      logs,
 			Events:    eventsString,
 		}
