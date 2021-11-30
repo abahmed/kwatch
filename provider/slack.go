@@ -12,15 +12,27 @@ import (
 
 const (
 	footer       = "<https://github.com/abahmed/kwatch|kwatch>"
-	defaultTitle = ":red_circle: kwatch detected crash in a pod"
+	defaultTitle = ":red_circle: kwatch detected a crash in pod"
 	defaultText  = "There is an issue with container in a pod!"
 )
 
-type slack struct{}
+type slack struct {
+	webhook string
+}
 
 // NewSlack returns new Slack object
 func NewSlack() Provider {
-	return &slack{}
+	url := viper.GetString("providers.slack.webhook")
+
+	if len(url) == 0 {
+		logrus.Warnf("initializing slack with empty webhook url")
+	} else {
+		logrus.Infof("initializing slack with webhook url: %s", url)
+	}
+
+	return &slack{
+		webhook: url,
+	}
 }
 
 // Name returns name of the provider
@@ -33,8 +45,7 @@ func (s *slack) SendEvent(ev *event.Event) error {
 	logrus.Debugf("sending to slack event: %v", ev)
 
 	// check config
-	url := viper.GetString("providers.slack.webhook")
-	if len(url) == 0 {
+	if len(s.webhook) == 0 {
 		return errors.New("webhook url is empty")
 	}
 
@@ -106,19 +117,18 @@ func (s *slack) SendEvent(ev *event.Event) error {
 	}
 
 	// send message
-	return slackClient.PostWebhook(url, &msg)
+	return slackClient.PostWebhook(s.webhook, &msg)
 }
 
 // SendMessage sends text message to the provider
 func (s *slack) SendMessage(msg string) error {
 	// check config
-	url := viper.GetString("providers.slack.webhook")
-	if len(url) == 0 {
+	if len(s.webhook) == 0 {
 		return errors.New("webhook url is empty")
 	}
 
 	sMsg := slackClient.WebhookMessage{
 		Text: msg,
 	}
-	return slackClient.PostWebhook(url, &sMsg)
+	return slackClient.PostWebhook(s.webhook, &sMsg)
 }

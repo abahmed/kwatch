@@ -38,5 +38,7 @@ func Create() kubernetes.Interface {
 		logrus.Fatalf("cannot create kubernetes client: %v", err)
 	}
 
+	logrus.Debugf("created kubernetes client successfully")
+
 	return clientset
 }

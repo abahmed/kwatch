@@ -4,12 +4,15 @@ import (
 	"os"
 	"path/filepath"
 
+	"github.com/abahmed/kwatch/constant"
 	"github.com/abahmed/kwatch/controller"
 	"github.com/sirupsen/logrus"
 	"github.com/spf13/viper"
 )
 
 func main() {
+	logrus.Infof(constant.WelcomeMsg)
+
 	// initialize configuration
 	configFile := os.Getenv("CONFIG_FILE")
 	if len(configFile) == 0 {

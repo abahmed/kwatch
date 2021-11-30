@@ -67,16 +67,17 @@ func GetPodContainerLogs(
 
 		// try to decode response
 		var status metav1.Status
-		if parseErr := json.Unmarshal(logs, &status); parseErr == nil {
+		parseErr := json.Unmarshal(logs, &status)
+		if parseErr == nil {
 			return status.Message
-		} else {
-			logrus.Warnf(
-				"failed to parse logs for container %s in pod %s@%s: %s",
-				name,
-				container,
-				namespace,
-				parseErr.Error())
 		}
+
+		logrus.Warnf(
+			"failed to parse logs for container %s in pod %s@%s: %s",
+			name,
+			container,
+			namespace,
+			parseErr.Error())
 	}
 
 	return string(logs)
