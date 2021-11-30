@@ -1,7 +1,7 @@
 package constant
 
 // WelcomeMsg is used to be sent to all providers when kwatch starts
-const WelcomeMsg = ":tada: kwatch@%s just started!"
+const WelcomeMsg = ":tada: kwatch just started!"
 
 // NumRequeues indicates number of retries when worker fails to handle item
 const NumRequeues = 5
