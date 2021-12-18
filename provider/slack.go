@@ -10,12 +10,6 @@ import (
 	"github.com/spf13/viper"
 )
 
-const (
-	footer       = "<https://github.com/abahmed/kwatch|kwatch>"
-	defaultTitle = ":red_circle: kwatch detected a crash in pod"
-	defaultText  = "There is an issue with container in a pod!"
-)
-
 type slack struct {
 	webhook string
 }

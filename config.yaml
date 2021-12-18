@@ -4,3 +4,5 @@ providers:
     webhook: ""
   pagerduty:
     integrationKey: ""
+  discord:
+    webhook: ""

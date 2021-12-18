@@ -88,7 +88,7 @@ func Start() {
 		indexer:   indexer,
 		queue:     queue,
 		kclient:   kclient,
-		providers: []provider.Provider{provider.NewSlack(), provider.NewPagerDuty()},
+		providers: []provider.Provider{provider.NewSlack(), provider.NewPagerDuty(), provider.NewDiscord()},
 	}
 
 	stopCh := make(chan struct{})
