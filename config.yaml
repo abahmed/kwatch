@@ -2,3 +2,5 @@ maxRecentLogLines: 0
 providers:
   slack:
     webhook: ""
+  pagerduty:
+    integrationKey: ""
