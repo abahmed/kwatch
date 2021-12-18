@@ -57,7 +57,12 @@ kubectl apply -f https://raw.githubusercontent.com/abahmed/kwatch/v0.0.4/deploy/
 | `providers.slack.webhook` |  Slack webhook URL                        | Yes            |
 | `providers.slack.title`   |  Customized title in slack message        | No             |
 | `providers.slack.text`    |  Customized text in slack message         | No             |
+| `providers.discord.webhook` |  Discord webhook URL                        | Yes            |
+| `providers.discord.title`   |  Customized title in discord message        | No             |
+| `providers.discord.text`    |  Customized text in discord message         | No             |
+| `providers.pagerduty.integrationKey`    |  PagerDuty integration key [more info](https://support.pagerduty.com/docs/services-and-integrations)         | Yes             |
 
+Each provider can be enabled or disabled separately using the boolean property `enabled`.
 
 ### Cleanup
 

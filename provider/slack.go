@@ -15,9 +15,7 @@ type slack struct {
 }
 
 // NewSlack returns new Slack object
-func NewSlack() Provider {
-	url := viper.GetString("providers.slack.webhook")
-
+func NewSlack(url string) Provider {
 	if len(url) == 0 {
 		logrus.Warnf("initializing slack with empty webhook url")
 	} else {

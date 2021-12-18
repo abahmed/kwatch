@@ -9,7 +9,6 @@ import (
 
 	"github.com/abahmed/kwatch/event"
 	"github.com/sirupsen/logrus"
-	"github.com/spf13/viper"
 )
 
 const (
@@ -21,9 +20,7 @@ type pagerduty struct {
 	integrationKey string
 }
 
-func NewPagerDuty() Provider {
-	integrationKey := viper.GetString("providers.pagerduty.integrationKey")
-
+func NewPagerDuty(integrationKey string) Provider {
 	if len(integrationKey) == 0 {
 		logrus.Warnf("initializing pagerduty with an empty integration key")
 	} else {

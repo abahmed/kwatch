@@ -99,13 +99,13 @@ func GetProviders() []provider.Provider {
 		for e, b := range value.(map[string]interface{}) {
 			if e == "enabled" && b == true {
 				if key == "slack" {
-					providers = append(providers, provider.NewSlack())
+					providers = append(providers, provider.NewSlack(viper.GetString("providers.slack.webhook")))
 				}
 				if key == "pagerduty" {
-					providers = append(providers, provider.NewPagerDuty())
+					providers = append(providers, provider.NewPagerDuty(viper.GetString("providers.pagerduty.integrationKey")))
 				}
 				if key == "discord" {
-					providers = append(providers, provider.NewDiscord())
+					providers = append(providers, provider.NewDiscord(viper.GetString("providers.discord.webhook")))
 				}
 			}
 		}
