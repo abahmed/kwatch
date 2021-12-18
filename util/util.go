@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/abahmed/kwatch/provider"
 	"github.com/sirupsen/logrus"
 	"github.com/spf13/viper"
 	v1 "k8s.io/api/core/v1"
@@ -89,4 +90,26 @@ func getPodEvents(c kubernetes.Interface, name, namespace string) (*v1.EventList
 		List(context.TODO(), metav1.ListOptions{
 			FieldSelector: "involvedObject.name=" + name,
 		})
+}
+
+func GetProviders() []provider.Provider {
+	var providers []provider.Provider
+
+	for key, value := range viper.Get("providers").(map[string]interface{}) {
+		for e, b := range value.(map[string]interface{}) {
+			if e == "enabled" && b == true {
+				if key == "slack" {
+					providers = append(providers, provider.NewSlack())
+				}
+				if key == "pagerduty" {
+					providers = append(providers, provider.NewPagerDuty())
+				}
+				if key == "discord" {
+					providers = append(providers, provider.NewDiscord())
+				}
+			}
+		}
+	}
+
+	return providers
 }

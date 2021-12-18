@@ -1,8 +1,11 @@
 maxRecentLogLines: 0
 providers:
   slack:
+    enabled: true
     webhook: ""
   pagerduty:
+    enabled: true
     integrationKey: ""
   discord:
+    enabled: true
     webhook: ""
