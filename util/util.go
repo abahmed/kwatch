@@ -96,17 +96,15 @@ func GetProviders() []provider.Provider {
 	var providers []provider.Provider
 
 	for key, value := range viper.Get("providers").(map[string]interface{}) {
-		for e, b := range value.(map[string]interface{}) {
-			if e == "enabled" && b == true {
-				if key == "slack" {
-					providers = append(providers, provider.NewSlack(viper.GetString("providers.slack.webhook")))
-				}
-				if key == "pagerduty" {
-					providers = append(providers, provider.NewPagerDuty(viper.GetString("providers.pagerduty.integrationKey")))
-				}
-				if key == "discord" {
-					providers = append(providers, provider.NewDiscord(viper.GetString("providers.discord.webhook")))
-				}
+		for c, v := range value.(map[string]interface{}) {
+			if key == "slack" && c == "webhook" && len(strings.TrimSpace(v.(string))) > 0 {
+				providers = append(providers, provider.NewSlack(viper.GetString("providers.slack.webhook")))
+			}
+			if key == "pagerduty" && c == "integrationkey" && len(strings.TrimSpace(v.(string))) > 0 {
+				providers = append(providers, provider.NewPagerDuty(viper.GetString("providers.pagerduty.integrationKey")))
+			}
+			if key == "discord" && c == "webhook" && len(strings.TrimSpace(v.(string))) > 0 {
+				providers = append(providers, provider.NewDiscord(viper.GetString("providers.discord.webhook")))
 			}
 		}
 	}

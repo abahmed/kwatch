@@ -62,7 +62,6 @@ kubectl apply -f https://raw.githubusercontent.com/abahmed/kwatch/v0.0.4/deploy/
 | `providers.discord.text`    |  Customized text in discord message         | No             |
 | `providers.pagerduty.integrationKey`    |  PagerDuty integration key [more info](https://support.pagerduty.com/docs/services-and-integrations)         | Yes             |
 
-Each provider can be enabled or disabled separately using the boolean property `enabled`.
 
 ### Cleanup
 
