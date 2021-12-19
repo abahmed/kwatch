@@ -96,8 +96,9 @@ func getPodEvents(c kubernetes.Interface, name, namespace string) (*v1.EventList
 func GetProviders() []provider.Provider {
 	var providers []provider.Provider
 
-	for key, value := range viper.Get("providers").(map[string]interface{}) {
+	for key, value := range viper.Get("alert").(map[string]interface{}) {
 		for c, v := range value.(map[string]interface{}) {
+			fmt.Println(key, c, v)
 			if key == "slack" && c == "webhook" && len(strings.TrimSpace(v.(string))) > 0 {
 				providers = append(providers, provider.NewSlack(viper.GetString("alert.slack.webhook")))
 			}
