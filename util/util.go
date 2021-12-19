@@ -98,7 +98,6 @@ func GetProviders() []provider.Provider {
 
 	for key, value := range viper.Get("alert").(map[string]interface{}) {
 		for c, v := range value.(map[string]interface{}) {
-			fmt.Println(key, c, v)
 			if key == "slack" && c == "webhook" && len(strings.TrimSpace(v.(string))) > 0 {
 				providers = append(providers, provider.NewSlack(viper.GetString("alert.slack.webhook")))
 			}
