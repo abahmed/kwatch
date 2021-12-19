@@ -5,7 +5,7 @@ import (
 
 	"github.com/abahmed/kwatch/client"
 	"github.com/abahmed/kwatch/constant"
-	"github.com/abahmed/kwatch/provider"
+	"github.com/abahmed/kwatch/util"
 	"github.com/sirupsen/logrus"
 	v1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -71,7 +71,7 @@ func Start() {
 		indexer:   indexer,
 		queue:     queue,
 		kclient:   kclient,
-		providers: []provider.Provider{provider.NewSlack(), provider.NewDiscord()},
+		providers: util.GetProviders(),
 	}
 
 	stopCh := make(chan struct{})

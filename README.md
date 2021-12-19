@@ -51,12 +51,16 @@ kubectl apply -f https://raw.githubusercontent.com/abahmed/kwatch/v0.0.4/deploy/
 
 ### Configuration
 
-| Parameter                 |  Description                              |Required        |
-|:--------------------------|:----------------------------------------- |:-------------- |
-| `maxRecentLogLines`       |  Max tail log lines in messages           | No             |
-| `providers.slack.webhook` |  Slack webhook URL                        | Yes            |
-| `providers.slack.title`   |  Customized title in slack message        | No             |
-| `providers.slack.text`    |  Customized text in slack message         | No             |
+| Parameter                            | Description                                 |
+|:-------------------------------------|:------------------------------------------- |
+| `maxRecentLogLines`                  | Max tail log lines in messages              |
+| `providers.slack.webhook`            | Slack webhook URL                           |
+| `providers.slack.title`              | Customized title in slack message           |
+| `providers.slack.text`               | Customized text in slack message            |
+| `providers.discord.webhook`          | Discord webhook URL                         |
+| `providers.discord.title`            | Customized title in discord message         |
+| `providers.discord.text`             | Customized text in discord message          |
+| `providers.pagerduty.integrationKey` | PagerDuty integration key [more info](https://support.pagerduty.com/docs/services-and-integrations) |
 
 
 ### Cleanup

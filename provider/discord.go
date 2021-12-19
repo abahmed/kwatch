@@ -15,9 +15,7 @@ type discord struct {
 }
 
 // NewDiscord returns new Discord object
-func NewDiscord() Provider {
-	url := viper.GetString("providers.discord.webhook")
-
+func NewDiscord(url string) Provider {
 	if len(url) == 0 {
 		logrus.Warnf("initializing discord with empty webhook url")
 	} else {

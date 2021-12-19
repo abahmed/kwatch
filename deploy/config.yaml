@@ -14,3 +14,7 @@ data:
     alert:
       slack:
         webhook: <webhook_url>
+      pagerduty:
+        integrationKey: <integration_key>
+      discord:
+        webhook: <webhook_url>

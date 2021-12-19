@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/abahmed/kwatch/provider"
 	"github.com/sirupsen/logrus"
 	"github.com/spf13/viper"
 	v1 "k8s.io/api/core/v1"
@@ -89,4 +90,25 @@ func getPodEvents(c kubernetes.Interface, name, namespace string) (*v1.EventList
 		List(context.TODO(), metav1.ListOptions{
 			FieldSelector: "involvedObject.name=" + name,
 		})
+}
+
+// GetProviders returns slice of provider objects after parsing config
+func GetProviders() []provider.Provider {
+	var providers []provider.Provider
+
+	for key, value := range viper.Get("providers").(map[string]interface{}) {
+		for c, v := range value.(map[string]interface{}) {
+			if key == "slack" && c == "webhook" && len(strings.TrimSpace(v.(string))) > 0 {
+				providers = append(providers, provider.NewSlack(viper.GetString("providers.slack.webhook")))
+			}
+			if key == "pagerduty" && c == "integrationkey" && len(strings.TrimSpace(v.(string))) > 0 {
+				providers = append(providers, provider.NewPagerDuty(viper.GetString("providers.pagerduty.integrationKey")))
+			}
+			if key == "discord" && c == "webhook" && len(strings.TrimSpace(v.(string))) > 0 {
+				providers = append(providers, provider.NewDiscord(viper.GetString("providers.discord.webhook")))
+			}
+		}
+	}
+
+	return providers
 }
