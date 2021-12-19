@@ -1,6 +1,8 @@
 maxRecentLogLines: 0
 providers:
   slack:
+    enabled: false
     webhook: ""
   discord:
+    enabled: false
     webhook: ""

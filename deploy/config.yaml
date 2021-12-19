@@ -11,6 +11,6 @@ metadata:
 data:
   config.yaml: |
     maxRecentLogLines: <optional_number_of_lines>
-    providers:
+    alert:
       slack:
         webhook: <webhook_url>
