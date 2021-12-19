@@ -12,7 +12,7 @@ COPY go.mod go.sum /build/
 RUN go mod download
 
 COPY . /build/
-RUN sed -i '' -e 's/dev/'"${RELEASE_VERSION}"'/g' constant/constant.go
+RUN sed -i 's/dev/'"${RELEASE_VERSION}"'/g' constant/constant.go
 RUN CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -a --installsuffix cgo --ldflags="-s"
 
 FROM alpine:latest
