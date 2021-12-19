@@ -84,13 +84,13 @@ func (s *slack) SendEvent(ev *event.Event) error {
 	}
 
 	// use custom title if it's provided, otherwise use default
-	title := viper.GetString("providers.slack.title")
+	title := viper.GetString("alert.slack.title")
 	if len(title) == 0 {
 		title = defaultTitle
 	}
 
 	// use custom text if it's provided, otherwise use default
-	text := viper.GetString("providers.slack.text")
+	text := viper.GetString("alert.slack.text")
 	if len(text) == 0 {
 		text = defaultText
 	}
