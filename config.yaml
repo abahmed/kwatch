@@ -1,10 +1,8 @@
 maxRecentLogLines: 0
 alert:
   slack:
-    enabled: false
     webhook: ""
   pagerduty:
     integrationKey: ""
   discord:
-    enabled: false
     webhook: ""

@@ -29,6 +29,6 @@ func main() {
 		logrus.Warnf("unable to load config file: %s", err.Error())
 	}
 
-	// create controller
+	// start controller
 	controller.Start()
 }
