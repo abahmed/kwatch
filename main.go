@@ -1,6 +1,7 @@
 package main
 
 import (
+	"fmt"
 	"os"
 	"path/filepath"
 
@@ -11,7 +12,7 @@ import (
 )
 
 func main() {
-	logrus.Infof(constant.WelcomeMsg)
+	logrus.Infof(fmt.Sprintf(constant.WelcomeMsg, constant.Version))
 
 	// initialize configuration
 	configFile := os.Getenv("CONFIG_FILE")

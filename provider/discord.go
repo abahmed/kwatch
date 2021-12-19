@@ -90,13 +90,13 @@ func (s *discord) SendEvent(ev *event.Event) error {
 	}
 
 	// use custom title if it's provided, otherwise use default
-	title := viper.GetString("providers.discord.title")
+	title := viper.GetString("alert.discord.title")
 	if len(title) == 0 {
 		title = defaultTitle
 	}
 
 	// use custom text if it's provided, otherwise use default
-	text := viper.GetString("providers.discord.text")
+	text := viper.GetString("alert.discord.text")
 	if len(text) == 0 {
 		text = defaultText
 	}

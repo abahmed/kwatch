@@ -1,5 +1,5 @@
 maxRecentLogLines: 0
-providers:
+alert:
   slack:
     webhook: ""
   pagerduty:
