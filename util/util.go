@@ -140,3 +140,21 @@ func SendProvidersEvent(p []provider.Provider, event event.Event) {
 		}
 	}
 }
+
+// IsSelectedNamespace to check if a namespace is selected in config
+func IsSelectedNamespace(ns string) bool {
+	namespaces := viper.GetStringSlice("namespaces")
+
+	// no namespaces in config so accept all
+	if len(namespaces) == 0 {
+		return true
+	}
+
+	for _, v := range namespaces {
+		if v == ns {
+			return true
+		}
+	}
+
+	return false
+}

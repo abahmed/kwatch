@@ -115,6 +115,10 @@ func (c *Controller) processItem(key string) error {
 		return nil
 	}
 
+	if !util.IsSelectedNamespace(pod.Namespace) {
+		logrus.Info(pod.Namespace, "Skip namespace %s as not selected in configuration")
+		return nil
+	}
 	for _, container := range pod.Status.ContainerStatuses {
 		// filter running containers
 		if container.Ready ||
