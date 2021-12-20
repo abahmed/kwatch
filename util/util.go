@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"github.com/abahmed/kwatch/event"
 	"strings"
 
 	"github.com/abahmed/kwatch/provider"
@@ -17,7 +18,7 @@ import (
 
 // GetPodEventsStr returns formatted events as a string for specified pod
 func GetPodEventsStr(c kubernetes.Interface, name, namespace string) string {
-	evnts, err := getPodEvents(c, name, namespace)
+	events, err := getPodEvents(c, name, namespace)
 
 	eventsString := ""
 	if err != nil {
@@ -25,7 +26,7 @@ func GetPodEventsStr(c kubernetes.Interface, name, namespace string) string {
 		return eventsString
 	}
 
-	for _, ev := range evnts.Items {
+	for _, ev := range events.Items {
 		eventsString +=
 			fmt.Sprintf(
 				"[%s] %s %s\n",
@@ -111,4 +112,31 @@ func GetProviders() []provider.Provider {
 	}
 
 	return providers
+}
+
+// SendProvidersMsg sends string msg to all providers
+func SendProvidersMsg(p []provider.Provider, msg string) {
+	for _, prv := range p {
+		err :=
+			prv.SendMessage(msg)
+		if err != nil {
+			logrus.Errorf(
+				"failed to send msg with %s: %s",
+				prv.Name(),
+				err.Error())
+		}
+	}
+}
+
+// SendProvidersEvent sends event to all providers
+func SendProvidersEvent(p []provider.Provider, event event.Event) {
+	for _, prv := range p {
+		if err := prv.SendEvent(&event); err != nil {
+			logrus.Errorf(
+				"failed to send event with %s: %s",
+				prv.Name(),
+				err.Error(),
+			)
+		}
+	}
 }

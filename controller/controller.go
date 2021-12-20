@@ -2,6 +2,7 @@ package controller
 
 import (
 	"errors"
+	"fmt"
 	"time"
 
 	"github.com/abahmed/kwatch/constant"
@@ -45,16 +46,7 @@ func (c *Controller) run(workers int, stopCh chan struct{}) {
 	logrus.Infof("%s controller synced and ready", c.name)
 
 	// send notification to providers
-	for _, prv := range c.providers {
-		err :=
-			prv.SendMessage(constant.WelcomeMsg)
-		if err != nil {
-			logrus.Errorf(
-				"failed to send msg with %s: %s",
-				prv.Name(),
-				err.Error())
-		}
-	}
+	util.SendProvidersMsg(c.providers, fmt.Sprintf(constant.WelcomeMsg, constant.Version))
 
 	// start workers
 	for i := 0; i < workers; i++ {
@@ -173,15 +165,8 @@ func (c *Controller) processItem(key string) error {
 			Events:    eventsString,
 		}
 
-		// send notification to providers
-		for _, prv := range c.providers {
-			if err := prv.SendEvent(&evnt); err != nil {
-				logrus.Errorf(
-					"failed to send event with %s: %s",
-					prv.Name(),
-					err.Error())
-			}
-		}
+		// send event to providers
+		util.SendProvidersEvent(c.providers, evnt)
 	}
 
 	return nil

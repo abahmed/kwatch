@@ -51,17 +51,41 @@ kubectl apply -f https://raw.githubusercontent.com/abahmed/kwatch/v0.0.7/deploy/
 
 ### Configuration
 
+#### General
+
 | Parameter                            | Description                                 |
 |:-------------------------------------|:------------------------------------------- |
-| `maxRecentLogLines`                  | Max tail log lines in messages              |
-| `providers.slack.webhook`            | Slack webhook URL                           |
-| `providers.slack.title`              | Customized title in slack message           |
-| `providers.slack.text`               | Customized text in slack message            |
-| `providers.discord.webhook`          | Discord webhook URL                         |
-| `providers.discord.title`            | Customized title in discord message         |
-| `providers.discord.text`             | Customized text in discord message          |
-| `providers.pagerduty.integrationKey` | PagerDuty integration key [more info](https://support.pagerduty.com/docs/services-and-integrations) |
+| `maxRecentLogLines`                  | optional Max tail log lines in messages     |
 
+#### Slack
+
+If you want to enable Slack, provide the webhook with optional text and title.
+
+
+| Parameter                        | Description                                 |
+|:---------------------------------|:------------------------------------------- |
+| `alert.slack.webhook`            | Slack webhook URL                           |
+| `alert.slack.title`              | Customized title in slack message           |
+| `alert.slack.text`               | Customized text in slack message            |
+
+#### Discord
+
+If you want to enable Discord, provide the webhook with optional text and title. 
+
+
+| Parameter                        | Description                                 |
+|:---------------------------------|:------------------------------------------- |
+| `alert.discord.webhook`          | Discord webhook URL                         |
+| `alert.discord.title`            | Customized title in discord message         |
+| `alert.discord.text`             | Customized text in discord message          |
+
+#### PagerDuty
+
+If you want to enable PagerDuty, provide the integration key.
+
+| Parameter                        | Description                                 |
+|:---------------------------------|:------------------------------------------- |
+| `alert.pagerduty.integrationKey` | PagerDuty integration key [more info](https://support.pagerduty.com/docs/services-and-integrations) |
 
 ### Cleanup
 
