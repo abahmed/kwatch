@@ -53,9 +53,11 @@ kubectl apply -f https://raw.githubusercontent.com/abahmed/kwatch/v0.0.7/deploy/
 
 #### General
 
-| Parameter                            | Description                                 |
-|:-------------------------------------|:------------------------------------------- |
-| `maxRecentLogLines`                  | optional Max tail log lines in messages     |
+| Parameter                            | Description                                                                                          |
+|:-------------------------------------|:-----------------------------------------------------------------------------------------------------|
+| `maxRecentLogLines`                  | Optional Max tail log lines in messages, if it's not provided it will get all log lines              |
+| `namespaces`                         | Optional list of namespaces that you want to watch, if it's not provided it will watch all namespaces|
+
 
 #### Slack
 

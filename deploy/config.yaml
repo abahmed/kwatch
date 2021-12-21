@@ -18,3 +18,7 @@ data:
         integrationKey: <integration_key>
       discord:
         webhook: <webhook_url>
+    namespaces:
+      - <optional_namespace>
+
+:

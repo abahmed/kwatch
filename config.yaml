@@ -6,3 +6,6 @@ alert:
     integrationKey: ""
   discord:
     webhook: ""
+namespaces:
+  - default
+
