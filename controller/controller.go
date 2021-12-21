@@ -115,8 +115,8 @@ func (c *Controller) processItem(key string) error {
 		// to avoid re-queuing it
 		return nil
 	}
+	// filer by namespaces in config
 	namespaces := viper.GetStringSlice("namespaces")
-
 	if !util.IsStrInSlice(pod.Namespace, namespaces) && len(namespaces) != 0 {
 		logrus.Info(pod.Namespace, "skip namespace %s as not selected in configuration")
 		return nil
