@@ -117,7 +117,7 @@ func (c *Controller) processItem(key string) error {
 	}
 	// filer by namespaces in config
 	namespaces := viper.GetStringSlice("namespaces")
-	if !util.IsStrInSlice(pod.Namespace, namespaces) && len(namespaces) != 0 {
+	if len(namespaces) != 0 && !util.IsStrInSlice(pod.Namespace, namespaces) {
 		logrus.Info(pod.Namespace, "skip namespace %s as not selected in configuration")
 		return nil
 	}

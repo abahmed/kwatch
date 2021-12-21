@@ -141,7 +141,7 @@ func SendProvidersEvent(p []provider.Provider, event event.Event) {
 	}
 }
 
-// IsStrInSlice to check if a str is in a str list
+// IsStrInSlice checks if string is existing in a slice of string
 func IsStrInSlice(str string, strList []string) bool {
 	if len(strList) == 0 {
 		return false
