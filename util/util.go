@@ -141,17 +141,14 @@ func SendProvidersEvent(p []provider.Provider, event event.Event) {
 	}
 }
 
-// IsSelectedNamespace to check if a namespace is selected in config
-func IsSelectedNamespace(ns string) bool {
-	namespaces := viper.GetStringSlice("namespaces")
-
-	// no namespaces in config so accept all
-	if len(namespaces) == 0 {
-		return true
+// IsStrInSlice to check if a str is in a str list
+func IsStrInSlice(str string, strList []string) bool {
+	if len(strList) == 0 {
+		return false
 	}
 
-	for _, v := range namespaces {
-		if v == ns {
+	for _, s := range strList {
+		if s == str {
 			return true
 		}
 	}

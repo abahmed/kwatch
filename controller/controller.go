@@ -3,6 +3,7 @@ package controller
 import (
 	"errors"
 	"fmt"
+	"github.com/spf13/viper"
 	"time"
 
 	"github.com/abahmed/kwatch/constant"
@@ -114,9 +115,10 @@ func (c *Controller) processItem(key string) error {
 		// to avoid re-queuing it
 		return nil
 	}
+	namespaces := viper.GetStringSlice("namespaces")
 
-	if !util.IsSelectedNamespace(pod.Namespace) {
-		logrus.Info(pod.Namespace, "Skip namespace %s as not selected in configuration")
+	if !util.IsStrInSlice(pod.Namespace, namespaces) && len(namespaces) != 0 {
+		logrus.Info(pod.Namespace, "skip namespace %s as not selected in configuration")
 		return nil
 	}
 	for _, container := range pod.Status.ContainerStatuses {
