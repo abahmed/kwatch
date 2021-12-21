@@ -19,7 +19,6 @@ data:
       discord:
         webhook: <webhook_url>
     namespaces:
-      - ns1
-      - ns2
+      - <optional_namespace>
 
 :
