@@ -18,7 +18,11 @@ data:
         integrationKey: <integration_key>
       discord:
         webhook: <webhook_url>
+      telegram:
+          token: <token_key>
+          chatId: <chat_id>
     namespaces:
       - <optional_namespace>
 
-:
+
+

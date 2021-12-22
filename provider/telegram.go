@@ -16,18 +16,25 @@ const (
 )
 
 type telegram struct {
-	token string
+	token  string
+	chatId string
 }
 
 // NewTelegram returns a new Telegram object
-func NewTelegram(token string) Provider {
+func NewTelegram(token string, chatId string) Provider {
+	// object validation
 	if len(token) == 0 {
 		logrus.Warnf("initializing telegram with empty token")
+	} else if len(chatId) == 0 {
+		logrus.Warnf("initializing telegram with empty chat_id")
 	} else {
-		logrus.Infof("initializing telegram with token  %s", token)
+		logrus.Infof("initializing telegram with token  %s and chat_id %s", token, chatId)
 	}
+
+	// returns a new telegram object
 	return &telegram{
-		token: token,
+		token:  token,
+		chatId: chatId,
 	}
 }
 
@@ -43,13 +50,17 @@ func (t telegram) SendEvent(e *event.Event) error {
 	if len(t.token) == 0 {
 		return errors.New("token key is empty")
 	}
+	if len(t.chatId) == 0 {
+		return errors.New("chat id is empty")
+	}
 
 	client := &http.Client{}
 
-	reqBody := buildRequestBodyTelegram(e, t.token)
+	reqBody := buildRequestBodyTelegram(e, t.chatId)
 	buffer := bytes.NewBuffer([]byte(reqBody))
+	url := fmt.Sprintf(telegramAPIURL, t.token)
 
-	request, err := http.NewRequest(http.MethodPost, telegramAPIURL, buffer)
+	request, err := http.NewRequest(http.MethodPost, url, buffer)
 	if err != nil {
 		return err
 	}
@@ -69,7 +80,7 @@ func (t telegram) SendMessage(s string) error {
 	return nil
 }
 
-func buildRequestBodyTelegram(e *event.Event, token string) string {
+func buildRequestBodyTelegram(e *event.Event, chatId string) string {
 	eventsText := "No events captured"
 	logsText := "No logs captured"
 
@@ -85,32 +96,26 @@ func buildRequestBodyTelegram(e *event.Event, token string) string {
 		logsText = e.Logs
 	}
 
-	reqBody := fmt.Sprintf(`{
-		"routing_key": "%s",
-		"event_action": "trigger",
-		"payload": {
-		  "summary": "%s",
-		  "source": "%s",
-		  "severity": "critical",
-		  "custom_details": {
-			"Name": "%s",
-			"Container": "%s",
-			"Namespace": "%s",
-			"Reason": "%s",
-			"Events": "%s",
-			"Logs": "%s"
-		  }
-		}
-	  }`,
-		token,
-		fmt.Sprintf(defaultEventTitle, e.Container),
-		e.Container,
+	// build text will be sent in the message
+	txt := fmt.Sprintf(
+		"An alert for Name: *%s*  Container: *%s* Namespace: *%s*  has been triggered:\\n—\\n Logs: *%s* \\n Events: *%s* ",
 		e.Name,
 		e.Container,
 		e.Namespace,
-		e.Reason,
+		logsText,
 		eventsText,
-		logsText)
+	)
 
+	// build the message to be sent
+	msg := fmt.Sprintf(
+		"⛑ Kwatch detected a crash in pod \\n%s ",
+		txt,
+	)
+
+	reqBody := fmt.Sprintf(
+		`{"chat_id": "%s", "text": "%s", "parse_mode": "MARKDOWN"}`,
+		chatId,
+		msg,
+	)
 	return reqBody
 }
