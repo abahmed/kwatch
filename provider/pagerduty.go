@@ -47,7 +47,7 @@ func (s *pagerduty) SendEvent(ev *event.Event) error {
 
 	client := &http.Client{}
 
-	reqBody := buildRequestBody(ev, s.integrationKey)
+	reqBody := buildRequestBodyPagerDuty(ev, s.integrationKey)
 	buffer := bytes.NewBuffer([]byte(reqBody))
 
 	request, err := http.NewRequest(http.MethodPost, pagerdutyAPIURL, buffer)
@@ -70,7 +70,7 @@ func (s *pagerduty) SendMessage(msg string) error {
 	return nil
 }
 
-func buildRequestBody(ev *event.Event, key string) string {
+func buildRequestBodyPagerDuty(ev *event.Event, key string) string {
 	eventsText := "No events captured"
 	logsText := "No logs captured"
 
