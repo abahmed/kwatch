@@ -15,18 +15,13 @@
   	</a>
 </p>
 
-**kwatch** helps you monitor all changes in your Kubernetes(K8s) cluster, detects crashes in your running apps in realtime, and publishes notifications to your channels (Slack, Discord, etc.)
+**kwatch** helps you monitor all changes in your Kubernetes(K8s) cluster, detects crashes in your running apps in realtime, and publishes notifications to your channels (Slack, Discord, etc.) instantly
 
 ## Contribute & Support
 + Add a [GitHub Star](https://github.com/abahmed/kwatch/stargazers)
 + [Suggest new features, ideas and optimizations](https://github.com/abahmed/kwatch/issues)
 + [Report issues](https://github.com/abahmed/kwatch/issues)
 
-## Screenshots
-
-<p align="center">
-	<img src="https://raw.githubusercontent.com/abahmed/kwatch/main/assets/demo.png" width="60%"/>
-</p>
 
 ## Getting Started
 
@@ -61,7 +56,11 @@ kubectl apply -f https://raw.githubusercontent.com/abahmed/kwatch/v0.0.7/deploy/
 
 #### Slack
 
-If you want to enable Slack, provide the webhook with optional text and title.
+<p>
+	<img src="./assets/slack.png" width="30%"/>
+</p>
+
+If you want to enable Slack, provide the webhook with optional text and title
 
 
 | Parameter                        | Description                                 |
@@ -72,8 +71,11 @@ If you want to enable Slack, provide the webhook with optional text and title.
 
 #### Discord
 
-If you want to enable Discord, provide the webhook with optional text and title. 
+<p>
+	<img src="./assets/discord.png" width="30%"/>
+</p>
 
+If you want to enable Discord, provide the webhook with optional text and title
 
 | Parameter                        | Description                                 |
 |:---------------------------------|:------------------------------------------- |
@@ -83,7 +85,11 @@ If you want to enable Discord, provide the webhook with optional text and title.
 
 #### PagerDuty
 
-If you want to enable PagerDuty, provide the integration key.
+<p>
+	<img src="./assets/pagerduty.png" width="50%"/>
+</p>
+
+If you want to enable PagerDuty, provide the integration key
 
 | Parameter                        | Description                                 |
 |:---------------------------------|:------------------------------------------- |
@@ -95,6 +101,14 @@ If you want to enable PagerDuty, provide the integration key.
 kubectl delete -f https://raw.githubusercontent.com/abahmed/kwatch/v0.0.7/deploy/config.yaml
 kubectl delete -f https://raw.githubusercontent.com/abahmed/kwatch/v0.0.7/deploy/deploy.yaml
 ```
+
+## Who uses kwatch?
+
+**kwatch** is being used by multiple entities including, but not limited to
+
+[<img src="./assets/users/trella.png"/>](https://www.trella.app)
+
+If you want to add your entity, [open issue](https://github.com/abahmed/kwatch/issues) to add it
 
 ## Contributors
 

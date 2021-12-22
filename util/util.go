@@ -4,8 +4,9 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"github.com/abahmed/kwatch/event"
 	"strings"
+
+	"github.com/abahmed/kwatch/event"
 
 	"github.com/abahmed/kwatch/provider"
 	"github.com/sirupsen/logrus"
@@ -116,6 +117,7 @@ func GetProviders() []provider.Provider {
 
 // SendProvidersMsg sends string msg to all providers
 func SendProvidersMsg(p []provider.Provider, msg string) {
+	logrus.Infof("sending message: %s", msg)
 	for _, prv := range p {
 		err :=
 			prv.SendMessage(msg)
@@ -130,6 +132,7 @@ func SendProvidersMsg(p []provider.Provider, msg string) {
 
 // SendProvidersEvent sends event to all providers
 func SendProvidersEvent(p []provider.Provider, event event.Event) {
+	logrus.Infof("sending event: %+v", event)
 	for _, prv := range p {
 		if err := prv.SendEvent(&event); err != nil {
 			logrus.Errorf(

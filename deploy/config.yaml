@@ -20,5 +20,3 @@ data:
         webhook: <webhook_url>
     namespaces:
       - <optional_namespace>
-
-:
