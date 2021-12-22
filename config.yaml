@@ -1,9 +1,10 @@
-maxRecentLogLines: 20
+maxRecentLogLines: 0
 alert:
   slack:
-    webhook: https://hooks.slack.com/services/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
+    webhook: ""
   pagerduty:
-    integrationKey: 898f77d2832d4604c0c1a178f476a5c7
+    integrationKey: ""
   discord:
-    webhook: ''
-
+    webhook: ""
+namespaces:
+  - default
