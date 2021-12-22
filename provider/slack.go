@@ -14,7 +14,7 @@ type slack struct {
 	webhook string
 }
 
-// NewSlack returns new Slack object
+// NewSlack returns new Slack instance
 func NewSlack(url string) Provider {
 	if len(url) == 0 {
 		logrus.Warnf("initializing slack with empty webhook url")

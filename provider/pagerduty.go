@@ -20,6 +20,7 @@ type pagerduty struct {
 	integrationKey string
 }
 
+// NewPagerDuty returns new PagerDuty instance
 func NewPagerDuty(integrationKey string) Provider {
 	if len(integrationKey) == 0 {
 		logrus.Warnf("initializing pagerduty with an empty integration key")
