@@ -2,6 +2,7 @@ package provider
 
 import (
 	"bytes"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"net/http"
@@ -78,13 +79,13 @@ func buildRequestBody(ev *event.Event, key string) string {
 	// add events part if it exists
 	events := strings.TrimSpace(ev.Events)
 	if len(events) > 0 {
-		eventsText = ev.Events
+		eventsText = JsonEscape(ev.Events)
 	}
 
 	// add logs part if it exists
 	logs := strings.TrimSpace(ev.Logs)
 	if len(logs) > 0 {
-		logsText = ev.Logs
+		logsText = JsonEscape(ev.Logs)
 	}
 
 	reqBody := fmt.Sprintf(`{
@@ -115,4 +116,15 @@ func buildRequestBody(ev *event.Event, key string) string {
 		logsText)
 
 	return reqBody
+}
+
+func JsonEscape(i string) string {
+	jm, err := json.Marshal(i)
+	if err != nil {
+		logrus.Warnf("failed to marshal string %s: %s", i, err.Error())
+		return ""
+	}
+
+	s := string(jm)
+	return s[1 : len(s)-1]
 }
