@@ -118,6 +118,7 @@ func buildRequestBody(ev *event.Event, key string) string {
 	return reqBody
 }
 
+// JsonEscape escapes the json special characters in a string
 func JsonEscape(i string) string {
 	jm, err := json.Marshal(i)
 	if err != nil {
