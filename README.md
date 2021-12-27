@@ -83,6 +83,19 @@ If you want to enable Discord, provide the webhook with optional text and title
 | `alert.discord.title`            | Customized title in discord message         |
 | `alert.discord.text`             | Customized text in discord message          |
 
+#### Email
+
+If you want to enable Email, provide the from and to emails with host and the port
+
+| Parameter                        | Description                                 |
+|:---------------------------------|:------------------------------------------- |
+| `alert.email.from`               | From email                                  |
+| `alert.email.password`           | From email Password                         |
+| `alert.email.host`               | provide the host                            |
+| `alert.email.port`               | provide the port                            |
+| `alert.email.to`                 | the receiver email                          |
+
+
 #### PagerDuty
 
 <p>
