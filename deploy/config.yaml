@@ -18,5 +18,11 @@ data:
         integrationKey: <integration_key>
       discord:
         webhook: <webhook_url>
+      email:
+        form: <from_mail>
+        password: <password>
+        host: <host>
+        port: <port_number>
+        to: <to_mail>
     namespaces:
       - <optional_namespace>

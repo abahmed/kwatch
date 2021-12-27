@@ -7,6 +7,8 @@ require (
 	github.com/sirupsen/logrus v1.8.1
 	github.com/slack-go/slack v0.10.0
 	github.com/spf13/viper v1.9.0
+	gopkg.in/alexcesaro/quotedprintable.v3 v3.0.0-20150716171945-2caba252f4dc // indirect
+	gopkg.in/mail.v2 v2.3.1
 	k8s.io/api v0.22.4
 	k8s.io/apimachinery v0.22.4
 	k8s.io/client-go v0.22.4

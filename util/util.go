@@ -109,6 +109,13 @@ func GetProviders() []provider.Provider {
 			if key == "discord" && c == "webhook" && len(strings.TrimSpace(v.(string))) > 0 {
 				providers = append(providers, provider.NewDiscord(viper.GetString("alert.discord.webhook")))
 			}
+			if key == "email" && c == "from" && len(strings.TrimSpace(v.(string))) > 0 {
+				providers = append(providers, provider.NewEmail(viper.GetString("alert.email.from"),
+					viper.GetString("alert.email.password"),
+					viper.GetString("alert.email.host"),
+					viper.GetInt("alert.email.port"),
+					viper.GetString("alert.email.to")))
+			}
 		}
 	}
 
