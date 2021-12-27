@@ -39,12 +39,12 @@ func NewTelegram(token string, chatId string) Provider {
 }
 
 // Name returns name of the provider
-func (t telegram) Name() string {
+func (t *telegram) Name() string {
 	return "Telegram"
 }
 
 // SendEvent sends event to the provider
-func (t telegram) SendEvent(e *event.Event) error {
+func (t *telegram) SendEvent(e *event.Event) error {
 	logrus.Debugf("sending to telegram event: %v", e)
 
 	if len(t.token) == 0 {
@@ -76,7 +76,7 @@ func (t telegram) SendEvent(e *event.Event) error {
 }
 
 // SendMessage sends text message to the provider
-func (t telegram) SendMessage(s string) error {
+func (t *telegram) SendMessage(s string) error {
 	return nil
 }
 
