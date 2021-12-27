@@ -76,7 +76,7 @@ func (t *telegram) SendEvent(e *event.Event) error {
 
 // SendMessage sends text message to the provider
 func (t *telegram) SendMessage(msg string) error {
-	logrus.Warnf("sending to telegram msg: %s", msg)
+	logrus.Debugf("sending to telegram msg: %s", msg)
 
 	// validate telegram token and chat Id
 	err, _ := validateTelegram(t)
@@ -123,7 +123,6 @@ func buildRequestBodyTelegram(e *event.Event, chatId string, customMsg string) s
 
 	// build text will be sent in the message
 	txt := ""
-	logrus.Warnf("customMsg %s", customMsg)
 	if len(customMsg) <= 0 {
 		txt = fmt.Sprintf(
 			"An alert for Name: *%s*  Container: *%s* Namespace: *%s*  has been triggered:\\n—\\n Logs: *%s* \\n Events: *%s* ",
