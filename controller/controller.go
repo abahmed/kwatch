@@ -3,12 +3,14 @@ package controller
 import (
 	"errors"
 	"fmt"
-	"github.com/spf13/viper"
 	"time"
+
+	"github.com/spf13/viper"
 
 	"github.com/abahmed/kwatch/constant"
 	"github.com/abahmed/kwatch/event"
 	"github.com/abahmed/kwatch/provider"
+	"github.com/abahmed/kwatch/storage"
 	"github.com/abahmed/kwatch/util"
 	"github.com/sirupsen/logrus"
 	v1 "k8s.io/api/core/v1"
@@ -27,6 +29,7 @@ type Controller struct {
 	kclient   kubernetes.Interface
 	queue     workqueue.RateLimitingInterface
 	providers []provider.Provider
+	store     storage.Storage
 }
 
 // run starts the controller
@@ -104,6 +107,8 @@ func (c *Controller) processItem(key string) error {
 		// a delete for one pod
 		logrus.Infof("pod %s does not exist anymore\n", key)
 
+		c.store.DelPod(key)
+
 		// Clean up intervals if possible
 		return nil
 	}
@@ -115,17 +120,20 @@ func (c *Controller) processItem(key string) error {
 		// to avoid re-queuing it
 		return nil
 	}
-	// filer by namespaces in config
+
+	// filter by namespaces in config if specified
 	namespaces := viper.GetStringSlice("namespaces")
 	if len(namespaces) != 0 && !util.IsStrInSlice(pod.Namespace, namespaces) {
-		logrus.Info(pod.Namespace, "skip namespace %s as not selected in configuration")
+		logrus.Infof("skip namespace %s as not selected in configuration", pod.Namespace)
 		return nil
 	}
+
 	for _, container := range pod.Status.ContainerStatuses {
 		// filter running containers
 		if container.Ready ||
 			(container.State.Waiting == nil &&
 				container.State.Terminated == nil) {
+			c.store.DelPodContainer(key, container.Name)
 			continue
 		}
 
@@ -136,23 +144,16 @@ func (c *Controller) processItem(key string) error {
 			continue
 		}
 
+		// if reported, continue
+		if c.store.HasPodContainer(key, container.Name) {
+			continue
+		}
+
 		logrus.Debugf(
 			"processing container %s in pod %s@%s",
 			container.Name,
 			pod.Name,
 			pod.Namespace)
-
-		// get logs for this container
-		logs := util.GetPodContainerLogs(
-			c.kclient,
-			pod.Name,
-			container.Name,
-			pod.Namespace,
-			container.RestartCount > 0)
-
-		// get events for this pod
-		eventsString :=
-			util.GetPodEventsStr(c.kclient, pod.Name, pod.Namespace)
 
 		// get reason according to state
 		reason := "Unknown"
@@ -162,6 +163,25 @@ func (c *Controller) processItem(key string) error {
 			reason = container.State.Terminated.Reason
 		}
 
+		// get logs for this container
+		previous := true
+		if reason == "Error" {
+			previous = false
+		} else if container.RestartCount > 0 {
+			previous = true
+		}
+
+		logs := util.GetPodContainerLogs(
+			c.kclient,
+			pod.Name,
+			container.Name,
+			pod.Namespace,
+			previous)
+
+		// get events for this pod
+		eventsString :=
+			util.GetPodEventsStr(c.kclient, pod.Name, pod.Namespace)
+
 		evnt := event.Event{
 			Name:      pod.Name,
 			Container: container.Name,
@@ -170,6 +190,9 @@ func (c *Controller) processItem(key string) error {
 			Logs:      logs,
 			Events:    eventsString,
 		}
+
+		// save container as it's reported to avoid duplication
+		c.store.AddPodContainer(key, container.Name)
 
 		// send event to providers
 		util.SendProvidersEvent(c.providers, evnt)

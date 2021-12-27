@@ -14,7 +14,7 @@ type discord struct {
 	webhook string
 }
 
-// NewDiscord returns new Discord object
+// NewDiscord returns new Discord instance
 func NewDiscord(url string) Provider {
 	if len(url) == 0 {
 		logrus.Warnf("initializing discord with empty webhook url")
