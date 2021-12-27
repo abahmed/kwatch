@@ -47,16 +47,15 @@ func (t *telegram) Name() string {
 func (t *telegram) SendEvent(e *event.Event) error {
 	logrus.Debugf("sending to telegram event: %v", e)
 
-	if len(t.token) == 0 {
-		return errors.New("token key is empty")
-	}
-	if len(t.chatId) == 0 {
-		return errors.New("chat id is empty")
+	// validate telegram token and chat Id
+	err, _ := validateTelegram(t)
+	if err != nil {
+		return err
 	}
 
 	client := &http.Client{}
 
-	reqBody := buildRequestBodyTelegram(e, t.chatId)
+	reqBody := buildRequestBodyTelegram(e, t.chatId, "")
 	buffer := bytes.NewBuffer([]byte(reqBody))
 	url := fmt.Sprintf(telegramAPIURL, t.token)
 
@@ -76,11 +75,37 @@ func (t *telegram) SendEvent(e *event.Event) error {
 }
 
 // SendMessage sends text message to the provider
-func (t *telegram) SendMessage(s string) error {
+func (t *telegram) SendMessage(msg string) error {
+	logrus.Warnf("sending to telegram msg: %s", msg)
+
+	// validate telegram token and chat Id
+	err, _ := validateTelegram(t)
+	if err != nil {
+		return err
+	}
+	client := &http.Client{}
+
+	reqBody := buildRequestBodyTelegram(new(event.Event), t.chatId, msg)
+	buffer := bytes.NewBuffer([]byte(reqBody))
+	url := fmt.Sprintf(telegramAPIURL, t.token)
+
+	request, err := http.NewRequest(http.MethodPost, url, buffer)
+	if err != nil {
+		return err
+	}
+
+	request.Header.Set("Content-Type", "application/json")
+
+	response, err := client.Do(request)
+	if err != nil || response.StatusCode > 202 {
+		return err
+	}
+
 	return nil
+
 }
 
-func buildRequestBodyTelegram(e *event.Event, chatId string) string {
+func buildRequestBodyTelegram(e *event.Event, chatId string, customMsg string) string {
 	eventsText := "No events captured"
 	logsText := "No logs captured"
 
@@ -97,14 +122,20 @@ func buildRequestBodyTelegram(e *event.Event, chatId string) string {
 	}
 
 	// build text will be sent in the message
-	txt := fmt.Sprintf(
-		"An alert for Name: *%s*  Container: *%s* Namespace: *%s*  has been triggered:\\n—\\n Logs: *%s* \\n Events: *%s* ",
-		e.Name,
-		e.Container,
-		e.Namespace,
-		logsText,
-		eventsText,
-	)
+	txt := ""
+	logrus.Warnf("customMsg %s", customMsg)
+	if len(customMsg) <= 0 {
+		txt = fmt.Sprintf(
+			"An alert for Name: *%s*  Container: *%s* Namespace: *%s*  has been triggered:\\n—\\n Logs: *%s* \\n Events: *%s* ",
+			e.Name,
+			e.Container,
+			e.Namespace,
+			logsText,
+			eventsText,
+		)
+	} else {
+		txt = customMsg
+	}
 
 	// build the message to be sent
 	msg := fmt.Sprintf(
@@ -118,4 +149,14 @@ func buildRequestBodyTelegram(e *event.Event, chatId string) string {
 		msg,
 	)
 	return reqBody
+}
+
+func validateTelegram(t *telegram) (error, bool) {
+	if len(t.token) == 0 {
+		return errors.New("token key is empty"), false
+	}
+	if len(t.chatId) == 0 {
+		return errors.New("chat id is empty"), false
+	}
+	return nil, true
 }
