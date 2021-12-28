@@ -85,6 +85,10 @@ If you want to enable Discord, provide the webhook with optional text and title
 
 #### Email
 
+<p>
+    <img src="./assets/email.png" width="50%"/>
+</p>
+
 If you want to enable Email, provide the from and to emails with host and the port
 
 | Parameter                        | Description                                 |
