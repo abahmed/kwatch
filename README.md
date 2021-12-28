@@ -97,6 +97,10 @@ If you want to enable PagerDuty, provide the integration key
 
 #### Telegram
 
+<p>
+    <img src="./assets/telegram.png" width="50%"/>
+</p>
+
 If you want to enable Telegram, provide a valid token and the chat Id.
 
 | Parameter                        | Description                                     |
