@@ -29,6 +29,9 @@ func main() {
 		logrus.Warnf("unable to load config file: %s", err.Error())
 	}
 
+	// Check and notify if newer versions are available
+	controller.CheckVersion()
+
 	// start controller
 	controller.Start()
 }
