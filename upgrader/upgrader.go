@@ -10,6 +10,7 @@ import (
 	"github.com/google/go-github/v41/github"
 )
 
+// CheckUpdates checks every 24 hours if a newer version of Kwatch is available
 func CheckUpdates() {
 	ticker := time.NewTicker(24 * time.Hour)
 
@@ -24,6 +25,7 @@ func CheckUpdates() {
 	}
 }
 
+// notifyNewVersion notifies registered providers if a newer version of Kwatch is available
 func notifyNewVersion(version string) {
 	providers := util.GetProviders()
 	for _, p := range providers {
