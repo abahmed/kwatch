@@ -7,6 +7,7 @@ import (
 
 	"github.com/abahmed/kwatch/constant"
 	"github.com/abahmed/kwatch/controller"
+	"github.com/abahmed/kwatch/upgrader"
 	"github.com/sirupsen/logrus"
 	"github.com/spf13/viper"
 )
@@ -30,7 +31,7 @@ func main() {
 	}
 
 	// Check and notify if newer versions are available
-	controller.CheckVersion()
+	go upgrader.CheckUpdates()
 
 	// start controller
 	controller.Start()

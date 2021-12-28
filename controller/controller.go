@@ -1,12 +1,10 @@
 package controller
 
 import (
-	"context"
 	"errors"
 	"fmt"
 	"time"
 
-	"github.com/google/go-github/v41/github"
 	"github.com/spf13/viper"
 
 	"github.com/abahmed/kwatch/constant"
@@ -201,29 +199,4 @@ func (c *Controller) processItem(key string) error {
 	}
 
 	return nil
-}
-
-func CheckVersion() {
-	ticker := time.NewTicker(24 * time.Hour)
-
-	for range ticker.C {
-		client := github.NewClient(nil)
-		r, _, err := client.Repositories.GetLatestRelease(context.TODO(), "abahmed", "kwatch")
-		if err == nil {
-			if r.TagName == nil {
-				return
-			}
-
-			if constant.Version != *r.TagName {
-				notifyNewVersion(*r.TagName)
-			}
-		}
-	}
-}
-
-func notifyNewVersion(version string) {
-	providers := util.GetProviders()
-	for _, p := range providers {
-		p.SendMessage(fmt.Sprintf(constant.KwatchUpdateMsg, version))
-	}
 }
