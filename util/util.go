@@ -99,6 +99,7 @@ func GetProviders() []provider.Provider {
 	var providers []provider.Provider
 	const isPresent = false
 	telegram := []bool{isPresent, isPresent}
+	email := []bool{isPresent, isPresent, isPresent, isPresent, isPresent}
 
 	for key, value := range viper.Get("alert").(map[string]interface{}) {
 		for c, v := range value.(map[string]interface{}) {
@@ -117,16 +118,31 @@ func GetProviders() []provider.Provider {
 			if key == "telegram" && c == "chatid" && len(strings.TrimSpace(v.(string))) > 0 {
 				telegram[1] = true
 			}
+			if key == "email" && c == "from" && len(strings.TrimSpace(v.(string))) > 0 {
+				email[0] = true
+			}
+			if key == "email" && c == "to" && len(strings.TrimSpace(v.(string))) > 0 {
+				email[1] = true
+			}
+			if key == "email" && c == "port" && len(strings.TrimSpace(v.(string))) > 0 {
+				email[2] = true
+			}
+			if key == "email" && c == "host" && len(strings.TrimSpace(v.(string))) > 0 {
+				email[3] = true
+			}
+			if key == "email" && c == "password" && len(strings.TrimSpace(v.(string))) > 0 {
+				email[4] = true
+			}
 		}
 		if key == "telegram" && isListAllBool(true, telegram) {
 			providers = append(providers, provider.NewTelegram(viper.GetString("alert.telegram.token"), viper.GetString("alert.telegram.chatId")))
-			if key == "email" && c == "from" && len(strings.TrimSpace(v.(string))) > 0 {
-				providers = append(providers, provider.NewEmail(viper.GetString("alert.email.from"),
-					viper.GetString("alert.email.password"),
-					viper.GetString("alert.email.host"),
-					viper.GetInt("alert.email.port"),
-					viper.GetString("alert.email.to")))
-			}
+		}
+		if key == "email" && isListAllBool(true, email) {
+			providers = append(providers, provider.NewEmail(viper.GetString("alert.email.from"),
+				viper.GetString("alert.email.password"),
+				viper.GetString("alert.email.host"),
+				viper.GetInt("alert.email.port"),
+				viper.GetString("alert.email.to")))
 		}
 	}
 
