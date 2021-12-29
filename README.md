@@ -106,7 +106,7 @@ If you want to enable Telegram, provide a valid token and the chat Id.
 | Parameter                        | Description                                     |
 |:---------------------------------|:------------------------------------------------|
 | `alert.telegram.token`           | Telegram token                                  |
-| `alert.telegram.chatId`          | chat the you want to receive alert messages on  |
+| `alert.telegram.chatId`          | Telegram chat id                                |
 
 ### Cleanup
 
