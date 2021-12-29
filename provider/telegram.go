@@ -52,8 +52,8 @@ func (t *telegram) SendEvent(e *event.Event) error {
 	if err != nil {
 		return err
 	}
-
-	return sendByTelegramApi("", t, e)
+	reqBody := buildRequestBodyTelegram(e, t.chatId, "")
+	return sendByTelegramApi(reqBody, t)
 }
 
 // SendMessage sends text message to the provider
@@ -66,8 +66,8 @@ func (t *telegram) SendMessage(msg string) error {
 		return err
 	}
 
-	return sendByTelegramApi(msg, t, new(event.Event))
-
+	reqBody := buildRequestBodyTelegram(new(event.Event), t.chatId, msg)
+	return sendByTelegramApi(reqBody, t)
 }
 
 func buildRequestBodyTelegram(e *event.Event, chatId string, customMsg string) string {
@@ -125,10 +125,9 @@ func validateTelegram(t *telegram) (error, bool) {
 	return nil, true
 }
 
-func sendByTelegramApi(customMsg string, t *telegram, e *event.Event) error {
+func sendByTelegramApi(reqBody string, t *telegram) error {
 
 	client := &http.Client{}
-	reqBody := buildRequestBodyTelegram(e, t.chatId, customMsg)
 	buffer := bytes.NewBuffer([]byte(reqBody))
 	url := fmt.Sprintf(telegramAPIURL, t.token)
 
