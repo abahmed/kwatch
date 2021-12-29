@@ -18,6 +18,9 @@ data:
         integrationKey: <integration_key>
       discord:
         webhook: <webhook_url>
+      telegram:
+          token: <token_key>
+          chatId: <chat_id>
       email:
         form: <from_mail>
         password: <password>

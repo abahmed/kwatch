@@ -112,6 +112,19 @@ If you want to enable PagerDuty, provide the integration key
 |:---------------------------------|:------------------------------------------- |
 | `alert.pagerduty.integrationKey` | PagerDuty integration key [more info](https://support.pagerduty.com/docs/services-and-integrations) |
 
+#### Telegram
+
+<p>
+    <img src="./assets/telegram.png" width="50%"/>
+</p>
+
+If you want to enable Telegram, provide a valid token and the chat Id.
+
+| Parameter                        | Description                                     |
+|:---------------------------------|:------------------------------------------------|
+| `alert.telegram.token`           | Telegram token                                  |
+| `alert.telegram.chatId`          | Telegram chat id                                |
+
 ### Cleanup
 
 ```shell

@@ -97,6 +97,8 @@ func getPodEvents(c kubernetes.Interface, name, namespace string) (*v1.EventList
 // GetProviders returns slice of provider objects after parsing config
 func GetProviders() []provider.Provider {
 	var providers []provider.Provider
+	const isPresent = false
+	telegram := []bool{isPresent, isPresent}
 
 	for key, value := range viper.Get("alert").(map[string]interface{}) {
 		for c, v := range value.(map[string]interface{}) {
@@ -109,6 +111,15 @@ func GetProviders() []provider.Provider {
 			if key == "discord" && c == "webhook" && len(strings.TrimSpace(v.(string))) > 0 {
 				providers = append(providers, provider.NewDiscord(viper.GetString("alert.discord.webhook")))
 			}
+			if key == "telegram" && c == "token" && len(strings.TrimSpace(v.(string))) > 0 {
+				telegram[0] = true
+			}
+			if key == "telegram" && c == "chatid" && len(strings.TrimSpace(v.(string))) > 0 {
+				telegram[1] = true
+			}
+		}
+		if key == "telegram" && isListAllBool(true, telegram) {
+			providers = append(providers, provider.NewTelegram(viper.GetString("alert.telegram.token"), viper.GetString("alert.telegram.chatId")))
 			if key == "email" && c == "from" && len(strings.TrimSpace(v.(string))) > 0 {
 				providers = append(providers, provider.NewEmail(viper.GetString("alert.email.from"),
 					viper.GetString("alert.email.password"),
@@ -164,4 +175,15 @@ func IsStrInSlice(str string, strList []string) bool {
 	}
 
 	return false
+}
+
+// checks if all elements in a boolean list have the same value
+func isListAllBool(v bool, l []bool) bool {
+
+	for _, x := range l {
+		if x != v {
+			return false
+		}
+	}
+	return true
 }
