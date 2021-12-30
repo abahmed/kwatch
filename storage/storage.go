@@ -1,5 +1,6 @@
 package storage
 
+// Storage interface
 type Storage interface {
 	AddPodContainer(podKey, containerKey string)
 	DelPodContainer(podKey, containerKey string)

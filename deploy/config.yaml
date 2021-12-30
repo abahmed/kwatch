@@ -21,6 +21,8 @@ data:
       telegram:
           token: <token_key>
           chatId: <chat_id>
+      teams:
+          webhook: <webhook_url>
     namespaces:
       - <optional_namespace>
       

@@ -117,6 +117,9 @@ func GetProviders() []provider.Provider {
 			if key == "telegram" && c == "chatid" && len(strings.TrimSpace(v.(string))) > 0 {
 				telegram[1] = true
 			}
+			if key == "teams" && c == "webhook" && len(strings.TrimSpace(v.(string))) > 0 {
+				providers = append(providers, provider.NewTeams(viper.GetString("alert.teams.webhook")))
+			}
 		}
 		if key == "telegram" && isListAllBool(true, telegram) {
 			providers = append(providers, provider.NewTelegram(viper.GetString("alert.telegram.token"), viper.GetString("alert.telegram.chatId")))
