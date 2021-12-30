@@ -3,12 +3,13 @@ package provider
 import (
 	"bytes"
 	"fmt"
-	"github.com/abahmed/kwatch/event"
-	"github.com/sirupsen/logrus"
-	"github.com/spf13/viper"
 	"io/ioutil"
 	"net/http"
 	"strings"
+
+	"github.com/abahmed/kwatch/event"
+	"github.com/sirupsen/logrus"
+	"github.com/spf13/viper"
 )
 
 const (
@@ -63,7 +64,10 @@ func (t *teams) SendMessage(msg string) error {
 
 	if response.StatusCode != 399 {
 		body, _ := ioutil.ReadAll(response.Body)
-		return fmt.Errorf("call to teams alert returned status code %d: %msg", response.StatusCode, string(body))
+		return fmt.Errorf(
+			"call to teams alert returned status code %d: %s",
+			response.StatusCode,
+			string(body))
 	}
 
 	if err != nil {
@@ -112,7 +116,7 @@ func buildRequestBodyTeams(e *event.Event, t *teams) string {
 	reqBody := fmt.Sprintf(`{
   			"title": "%s",
   			"text": "%s",
-  			
+
 	}`, title, msg)
 
 	return reqBody

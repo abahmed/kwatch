@@ -48,7 +48,7 @@ func (t *telegram) SendEvent(e *event.Event) error {
 	logrus.Debugf("sending to telegram event: %v", e)
 
 	// validate telegram token and chat Id
-	err, _ := validateTelegram(t)
+	_, err := validateTelegram(t)
 	if err != nil {
 		return err
 	}
@@ -61,7 +61,7 @@ func (t *telegram) SendMessage(msg string) error {
 	logrus.Debugf("sending to telegram msg: %s", msg)
 
 	// validate telegram token and chat Id
-	err, _ := validateTelegram(t)
+	_, err := validateTelegram(t)
 	if err != nil {
 		return err
 	}
@@ -115,14 +115,14 @@ func buildRequestBodyTelegram(e *event.Event, chatId string, customMsg string) s
 	return reqBody
 }
 
-func validateTelegram(t *telegram) (error, bool) {
+func validateTelegram(t *telegram) (bool, error) {
 	if len(t.token) == 0 {
-		return errors.New("token key is empty"), false
+		return false, errors.New("token key is empty")
 	}
 	if len(t.chatId) == 0 {
-		return errors.New("chat id is empty"), false
+		return false, errors.New("chat id is empty")
 	}
-	return nil, true
+	return true, nil
 }
 
 func sendByTelegramApi(reqBody string, t *telegram) error {
@@ -131,7 +131,7 @@ func sendByTelegramApi(reqBody string, t *telegram) error {
 	buffer := bytes.NewBuffer([]byte(reqBody))
 	url := fmt.Sprintf(telegramAPIURL, t.token)
 
-	request, err := http.NewRequest(http.MethodPost, url, buffer)
+	request, _ := http.NewRequest(http.MethodPost, url, buffer)
 	response, err := client.Do(request)
 	if err != nil || response.StatusCode > 202 {
 		return err
