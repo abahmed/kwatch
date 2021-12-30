@@ -12,8 +12,9 @@ import (
 )
 
 const (
-	defaultLogs   = "No logs captured"
-	defaultEvents = "No events captured"
+	defaultLogs       = "No logs captured"
+	defaultEvents     = "No events captured"
+	defaultTeamsTitle = "&#9937; Kwatch detected a crash in pod"
 )
 
 type teams struct {
@@ -90,7 +91,7 @@ func buildRequestBodyTeams(e *event.Event, t *teams) string {
 	// use custom title if it's provided, otherwise use default
 	title := viper.GetString("alert.teams.title")
 	if len(title) == 0 {
-		title = "&#9937; Kwatch detected a crash in pod"
+		title = defaultTeamsTitle
 	}
 
 	// use custom text if it's provided, otherwise use default
