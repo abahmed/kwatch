@@ -110,12 +110,18 @@ If you want to enable Telegram, provide a valid token and the chat Id.
 
 #### Microsoft teams
 
+<p>
+    <img src="./assets/teams.png" width="50%"/>
+</p>
 
-If you want to enable teams, provide the channel webhook.
+If you want to enable Microsoft Teams, provide the channel webhook.
 
 | Parameter                        | Description                                     |
 |:---------------------------------|:------------------------------------------------|
-| `alert.teams.webhook`            | Slack webhook URL                               |
+| `alert.teams.webhook`            |  webhook Microsoft team                         |
+| `alert.teams.title`              | Customized title in Microsoft teams message     |
+| `alert.teams.title`              | Customized title in Microsoft teams message     |
+
 
 ### Cleanup
 

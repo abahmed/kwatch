@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"github.com/abahmed/kwatch/event"
 	"github.com/sirupsen/logrus"
+	"github.com/spf13/viper"
 	"io/ioutil"
 	"net/http"
 	"strings"
@@ -37,6 +38,7 @@ func (t *teams) SendEvent(e *event.Event) error {
 
 	client := &http.Client{}
 	buffer := bytes.NewBuffer([]byte(buildRequestBodyTeams(e, t)))
+	//buffer = bytes.NewBuffer([]byte("{\"text\": \"Hello World\"}"))
 	request, err := http.NewRequest(http.MethodPost, t.webhook, buffer)
 	if err != nil {
 		return err
@@ -46,7 +48,9 @@ func (t *teams) SendEvent(e *event.Event) error {
 	if err != nil {
 		return err
 	}
-	if response.StatusCode > 399 {
+	logrus.Info(response.Body)
+	logrus.Info(response.StatusCode)
+	if response.StatusCode != 399 {
 		body, _ := ioutil.ReadAll(response.Body)
 		return fmt.Errorf("call to teams alert returned status code %d: %s", response.StatusCode, string(body))
 	}
@@ -78,22 +82,32 @@ func buildRequestBodyTeams(e *event.Event, t *teams) string {
 	if len(logs) > 0 {
 		logsText = e.Logs
 	}
+	// use custom title if it's provided, otherwise use default
+	title := viper.GetString("alert.team.title")
+	if len(title) == 0 {
+		title = "&#9937; Kwatch detected a crash in pod"
+	}
+
+	// use custom text if it's provided, otherwise use default
+	text := viper.GetString("alert.team.text")
+	if len(text) == 0 {
+		text = defaultText
+	}
 
 	msg := fmt.Sprintf(
-		"An alert for Name: *%s*  Container: *%s* Namespace: *%s*  has been triggered:\\n—\\n Logs: *%s* \\n Events: *%s* ",
+		"%s \n\n **Pod:** %s  \n\n **Container:** %s \n\n **Namespace:** %s  \n\n **Events:** \n\n ``` %s ``` \n\n **Logs:** \n\n ``` %s ``` ",
+		text,
 		e.Name,
 		e.Container,
 		e.Namespace,
-		logsText,
 		eventsText,
+		logsText,
 	)
 	reqBody := fmt.Sprintf(`{
-  			"@type": "MessageCard",
-  			"@context": "http://schema.org/extensions",
-  			"title": &#9937;&#x26D1; Kwatch detected a crash in pod",
+  			"title": "%s",
   			"text": "%s",
   			
-	}`, msg)
+	}`, title, msg)
 
 	return reqBody
 }
