@@ -81,13 +81,13 @@ func buildRequestBodyTeams(e *event.Event, t *teams) string {
 		logsText = e.Logs
 	}
 	// use custom title if it's provided, otherwise use default
-	title := viper.GetString("alert.team.title")
+	title := viper.GetString("alert.teams.title")
 	if len(title) == 0 {
 		title = "&#9937; Kwatch detected a crash in pod"
 	}
 
 	// use custom text if it's provided, otherwise use default
-	text := viper.GetString("alert.team.text")
+	text := viper.GetString("alert.teams.text")
 	if len(text) == 0 {
 		text = defaultText
 	}
