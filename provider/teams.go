@@ -30,12 +30,11 @@ func NewTeams(url string) Provider {
 
 // Name returns name of the provider
 func (t *teams) Name() string {
-	return "Teams"
+	return "Microsoft Teams"
 }
 
 // SendEvent sends event to the provider
 func (t *teams) SendEvent(e *event.Event) error {
-
 	client := &http.Client{}
 	buffer := bytes.NewBuffer([]byte(buildRequestBodyTeams(e, t)))
 	request, err := http.NewRequest(http.MethodPost, t.webhook, buffer)

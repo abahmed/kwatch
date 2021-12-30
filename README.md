@@ -108,7 +108,7 @@ If you want to enable Telegram, provide a valid token and the chat Id.
 | `alert.telegram.token`           | Telegram token                                  |
 | `alert.telegram.chatId`          | Telegram chat id                                |
 
-#### Microsoft teams
+#### Microsoft Teams
 
 <p>
     <img src="./assets/teams.png" width="50%"/>
