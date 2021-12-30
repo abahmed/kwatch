@@ -40,9 +40,9 @@ func (t *teams) Name() string {
 
 // SendEvent sends event to the provider
 func (t *teams) SendEvent(e *event.Event) error {
-	buffer := buildRequestBodyTeams(e, t)
+	reqBody := buildRequestBodyTeams(e, t)
 
-	return t.SendMessage(buffer)
+	return t.SendMessage(reqBody)
 }
 
 // SendMessage sends text message to the provider
