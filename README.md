@@ -108,6 +108,15 @@ If you want to enable Telegram, provide a valid token and the chat Id.
 | `alert.telegram.token`           | Telegram token                                  |
 | `alert.telegram.chatId`          | Telegram chat id                                |
 
+#### Microsoft teams
+
+
+If you want to enable teams, provide the channel webhook.
+
+| Parameter                        | Description                                     |
+|:---------------------------------|:------------------------------------------------|
+| `alert.teams.webhook`            | Slack webhook URL                               |
+
 ### Cleanup
 
 ```shell
