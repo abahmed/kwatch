@@ -120,7 +120,7 @@ If you want to enable Microsoft Teams, provide the channel webhook.
 |:---------------------------------|:------------------------------------------------|
 | `alert.teams.webhook`            |  webhook Microsoft team                         |
 | `alert.teams.title`              | Customized title in Microsoft teams message     |
-| `alert.teams.title`              | Customized title in Microsoft teams message     |
+| `alert.teams.text`              | Customized title in Microsoft teams message     |
 
 
 ### Cleanup

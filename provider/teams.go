@@ -11,6 +11,11 @@ import (
 	"strings"
 )
 
+const (
+	defaultLogs   = "No logs captured"
+	defaultEvents = "No events captured"
+)
+
 type teams struct {
 	webhook string
 }
@@ -35,9 +40,17 @@ func (t *teams) Name() string {
 
 // SendEvent sends event to the provider
 func (t *teams) SendEvent(e *event.Event) error {
+	buffer := buildRequestBodyTeams(e, t)
+
+	return t.SendMessage(buffer)
+}
+
+// SendMessage sends text message to the provider
+func (t *teams) SendMessage(msg string) error {
 	client := &http.Client{}
-	buffer := bytes.NewBuffer([]byte(buildRequestBodyTeams(e, t)))
+	buffer := bytes.NewBuffer([]byte(msg))
 	request, err := http.NewRequest(http.MethodPost, t.webhook, buffer)
+
 	if err != nil {
 		return err
 	}
@@ -49,7 +62,7 @@ func (t *teams) SendEvent(e *event.Event) error {
 
 	if response.StatusCode != 399 {
 		body, _ := ioutil.ReadAll(response.Body)
-		return fmt.Errorf("call to teams alert returned status code %d: %s", response.StatusCode, string(body))
+		return fmt.Errorf("call to teams alert returned status code %d: %msg", response.StatusCode, string(body))
 	}
 
 	if err != nil {
@@ -59,14 +72,9 @@ func (t *teams) SendEvent(e *event.Event) error {
 	return err
 }
 
-// SendMessage sends text message to the provider
-func (t *teams) SendMessage(s string) error {
-	return nil
-}
-
 func buildRequestBodyTeams(e *event.Event, t *teams) string {
-	eventsText := "No events captured"
-	logsText := "No logs captured"
+	eventsText := defaultEvents
+	logsText := defaultLogs
 
 	// add events part if it exists
 	events := strings.TrimSpace(e.Events)
