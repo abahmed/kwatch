@@ -38,7 +38,6 @@ func (t *teams) SendEvent(e *event.Event) error {
 
 	client := &http.Client{}
 	buffer := bytes.NewBuffer([]byte(buildRequestBodyTeams(e, t)))
-	//buffer = bytes.NewBuffer([]byte("{\"text\": \"Hello World\"}"))
 	request, err := http.NewRequest(http.MethodPost, t.webhook, buffer)
 	if err != nil {
 		return err
@@ -48,8 +47,7 @@ func (t *teams) SendEvent(e *event.Event) error {
 	if err != nil {
 		return err
 	}
-	logrus.Info(response.Body)
-	logrus.Info(response.StatusCode)
+
 	if response.StatusCode != 399 {
 		body, _ := ioutil.ReadAll(response.Body)
 		return fmt.Errorf("call to teams alert returned status code %d: %s", response.StatusCode, string(body))
