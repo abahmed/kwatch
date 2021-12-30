@@ -14,7 +14,7 @@ type teams struct {
 	webhook string
 }
 
-// NewDiscord returns new Discord instance
+// NewTeams returns new team instance
 func NewTeams(url string) Provider {
 	if len(url) == 0 {
 		logrus.Warnf("initializing Teams with empty webhook url")
@@ -48,7 +48,7 @@ func (t *teams) SendEvent(e *event.Event) error {
 	}
 	if response.StatusCode > 399 {
 		body, _ := ioutil.ReadAll(response.Body)
-		return fmt.Errorf("call to provider alert returned status code %d: %s", response.StatusCode, string(body))
+		return fmt.Errorf("call to teams alert returned status code %d: %s", response.StatusCode, string(body))
 	}
 
 	if err != nil {
