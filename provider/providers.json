@@ -1,0 +1,18 @@
+{
+  "slack": {
+    "webhook": ""
+  },
+  "pagerduty": {
+    "integrationkey": ""
+  },
+  "discord": {
+    "webhook": ""
+  },
+  "telegram": {
+    "token": "",
+    "chatid": ""
+  },
+  "teams": {
+    "webhook": ""
+  }
+}

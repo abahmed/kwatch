@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"io/ioutil"
 	"strings"
 
 	"github.com/abahmed/kwatch/event"
@@ -96,33 +97,26 @@ func getPodEvents(c kubernetes.Interface, name, namespace string) (*v1.EventList
 
 // GetProviders returns slice of provider objects after parsing config
 func GetProviders() []provider.Provider {
-	var providers []provider.Provider
-	const isPresent = false
-	telegram := []bool{isPresent, isPresent}
+	pAttributes := populateProvidersAttributes()
 
+	var providers []provider.Provider
 	for key, value := range viper.Get("alert").(map[string]interface{}) {
+		// checks if the provider name exists
+		att, found := pAttributes[key]
+		if !found {
+			continue
+		}
+
+		// checks if the corresponding attributes exists
 		for c, v := range value.(map[string]interface{}) {
-			if key == "slack" && c == "webhook" && len(strings.TrimSpace(v.(string))) > 0 {
-				providers = append(providers, provider.NewSlack(viper.GetString("alert.slack.webhook")))
-			}
-			if key == "pagerduty" && c == "integrationkey" && len(strings.TrimSpace(v.(string))) > 0 {
-				providers = append(providers, provider.NewPagerDuty(viper.GetString("alert.pagerduty.integrationKey")))
-			}
-			if key == "discord" && c == "webhook" && len(strings.TrimSpace(v.(string))) > 0 {
-				providers = append(providers, provider.NewDiscord(viper.GetString("alert.discord.webhook")))
-			}
-			if key == "telegram" && c == "token" && len(strings.TrimSpace(v.(string))) > 0 {
-				telegram[0] = true
-			}
-			if key == "telegram" && c == "chatid" && len(strings.TrimSpace(v.(string))) > 0 {
-				telegram[1] = true
-			}
-			if key == "teams" && c == "webhook" && len(strings.TrimSpace(v.(string))) > 0 {
-				providers = append(providers, provider.NewTeams(viper.GetString("alert.teams.webhook")))
+			if !IsStrInSlice(c, att) || len(strings.TrimSpace(v.(string))) <= 0 {
+				found = false
 			}
 		}
-		if key == "telegram" && isListAllBool(true, telegram) {
-			providers = append(providers, provider.NewTelegram(viper.GetString("alert.telegram.token"), viper.GetString("alert.telegram.chatId")))
+
+		// add a new object from corresponding provider
+		if found {
+			providers = append(providers, provider.New(key))
 		}
 	}
 
@@ -173,13 +167,24 @@ func IsStrInSlice(str string, strList []string) bool {
 	return false
 }
 
-// checks if all elements in a boolean list have the same value
-func isListAllBool(v bool, l []bool) bool {
-
-	for _, x := range l {
-		if x != v {
-			return false
-		}
+// populateProvidersAttributes populates and maps providers names and required attributes from json file
+func populateProvidersAttributes() map[string][]string {
+	js, err := ioutil.ReadFile("provider/providers.json")
+	if err != nil {
+		logrus.Error(err)
 	}
-	return true
+	activeProviders := make(map[string]interface{})
+	parseErr := json.Unmarshal(js, &activeProviders)
+	if parseErr != nil {
+		logrus.Error(parseErr)
+	}
+	pAttributes := make(map[string][]string)
+	for key, value := range activeProviders {
+		var attList []string
+		for att := range value.(map[string]interface{}) {
+			attList = append(attList, att)
+		}
+		pAttributes[key] = attList
+	}
+	return pAttributes
 }
