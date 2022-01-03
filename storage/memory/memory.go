@@ -1,9 +1,9 @@
-package storage
+package memory
 
 import (
 	"sync"
 
-	"github.com/sirupsen/logrus"
+	storage "github.com/abahmed/kwatch/storage"
 )
 
 type memory struct {
@@ -11,7 +11,7 @@ type memory struct {
 }
 
 // NewMemory returns new Memory object
-func NewMemory() Storage {
+func NewMemory() storage.Storage {
 	return &memory{
 		smap: sync.Map{},
 	}
@@ -31,8 +31,6 @@ func (m *memory) AddPodContainer(podKey, containerKey string) {
 
 // Delete deletes pod with all its containers
 func (m *memory) DelPod(key string) {
-	logrus.Info("del called: " + key)
-
 	m.smap.Delete(key)
 }
 

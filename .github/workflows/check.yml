@@ -22,3 +22,6 @@ jobs:
 
     - name: Build
       run: go build
+
+    - name: Run Test
+      run: go test ./... -v -race

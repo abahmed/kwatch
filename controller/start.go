@@ -5,7 +5,7 @@ import (
 
 	"github.com/abahmed/kwatch/client"
 	"github.com/abahmed/kwatch/constant"
-	"github.com/abahmed/kwatch/storage"
+	memory "github.com/abahmed/kwatch/storage/memory"
 	"github.com/abahmed/kwatch/util"
 	"github.com/sirupsen/logrus"
 	v1 "k8s.io/api/core/v1"
@@ -73,7 +73,7 @@ func Start() {
 		queue:     queue,
 		kclient:   kclient,
 		providers: util.GetProviders(),
-		store:     storage.NewMemory(),
+		store:     memory.NewMemory(),
 	}
 
 	stopCh := make(chan struct{})
