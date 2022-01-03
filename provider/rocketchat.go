@@ -49,7 +49,7 @@ func (r *rocketChat) Name() string {
 func (r *rocketChat) SendEvent(e *event.Event) error {
 	logrus.Debugf("sending to rocket chat event: %v", e)
 
-	// validate rocket chat token and chat Id
+	// validate rocket chat webhook url
 	_, err := validateRocketChat(r)
 	if err != nil {
 		return err
@@ -139,7 +139,7 @@ func buildRequestBodyRocketChat(e *event.Event, customMsg string) (string, error
 func (r *rocketChat) SendMessage(msg string) error {
 	logrus.Debugf("sending to rocket chat msg: %s", msg)
 
-	// validate rocket chat token and chat Id
+	// validate rocket chat webhook url
 	_, err := validateRocketChat(r)
 	if err != nil {
 		return err
