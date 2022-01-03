@@ -147,6 +147,7 @@ kubectl delete -f https://raw.githubusercontent.com/abahmed/kwatch/v0.2.0/deploy
 **kwatch** is being used by multiple entities including, but not limited to
 
 [<img src="./assets/users/trella.png"/>](https://www.trella.app)
+[<img src="./assets/users/ibec-systems.svg" width="50%"/>](https://ibecsystems.com/en#/)
 
 If you want to add your entity, [open issue](https://github.com/abahmed/kwatch/issues) to add it
 
