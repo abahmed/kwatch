@@ -6,5 +6,10 @@ alert:
     integrationKey: ""
   discord:
     webhook: ""
+  telegram:
+    token: ""
+    chatId: ""
+  teams:
+    webhook: ""
 namespaces:
   - default

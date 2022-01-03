@@ -4,6 +4,7 @@ go 1.17
 
 require (
 	github.com/bwmarrin/discordgo v0.23.2
+	github.com/google/go-github/v41 v41.0.1-0.20211227215900-a899e0fadbec
 	github.com/sirupsen/logrus v1.8.1
 	github.com/slack-go/slack v0.10.1
 	github.com/spf13/viper v1.10.1
@@ -20,6 +21,7 @@ require (
 	github.com/gogo/protobuf v1.3.2 // indirect
 	github.com/golang/protobuf v1.5.2 // indirect
 	github.com/google/go-cmp v0.5.6 // indirect
+	github.com/google/go-querystring v1.1.0 // indirect
 	github.com/google/gofuzz v1.1.0 // indirect
 	github.com/googleapis/gnostic v0.5.5 // indirect
 	github.com/gorilla/websocket v1.4.2 // indirect
