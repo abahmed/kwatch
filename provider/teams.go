@@ -2,6 +2,7 @@ package provider
 
 import (
 	"bytes"
+	"encoding/json"
 	"fmt"
 	"io/ioutil"
 	"net/http"
@@ -20,6 +21,11 @@ const (
 
 type teams struct {
 	webhook string
+}
+
+type teamsWebhookPayload struct {
+	Title string `json:"title"`
+	Text  string `json:"text"`
 }
 
 // NewTeams returns new team instance
@@ -42,7 +48,10 @@ func (t *teams) Name() string {
 
 // SendEvent sends event to the provider
 func (t *teams) SendEvent(e *event.Event) error {
-	reqBody := t.buildRequestBodyTeams(e)
+	reqBody, err := t.buildRequestBodyTeams(e)
+	if err != nil {
+		return err
+	}
 
 	return t.SendMessage(reqBody)
 }
@@ -62,7 +71,7 @@ func (t *teams) SendMessage(msg string) error {
 		return err
 	}
 
-	if response.StatusCode != 399 {
+	if response.StatusCode != 200 {
 		body, _ := ioutil.ReadAll(response.Body)
 		return fmt.Errorf(
 			"call to teams alert returned status code %d: %s",
@@ -78,7 +87,7 @@ func (t *teams) SendMessage(msg string) error {
 }
 
 // buildRequestBodyTeams builds formatted string from event
-func (t *teams) buildRequestBodyTeams(e *event.Event) string {
+func (t *teams) buildRequestBodyTeams(e *event.Event) (string, error) {
 	eventsText := defaultEvents
 	logsText := defaultLogs
 
@@ -114,11 +123,15 @@ func (t *teams) buildRequestBodyTeams(e *event.Event) string {
 		eventsText,
 		logsText,
 	)
-	reqBody := fmt.Sprintf(`{
-  			"title": "%s",
-  			"text": "%s",
+	msgPayload := &teamsWebhookPayload{
+		Title: title,
+		Text:  msg,
+	}
 
-	}`, title, msg)
+	jsonBytes, err := json.Marshal(msgPayload)
+	if err != nil {
+		return "", fmt.Errorf("failed to marshal string %v: %s", msgPayload, err)
+	}
 
-	return reqBody
+	return string(jsonBytes), nil
 }
