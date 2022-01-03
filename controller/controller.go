@@ -128,12 +128,19 @@ func (c *Controller) processItem(key string) error {
 		return nil
 	}
 
+	c.processPod(pod)
+
+	return nil
+}
+
+// processPod checks status of pod and notify in abnormal cases
+func (c *Controller) processPod(pod *v1.Pod) {
 	for _, container := range pod.Status.ContainerStatuses {
 		// filter running containers
 		if container.Ready ||
 			(container.State.Waiting == nil &&
 				container.State.Terminated == nil) {
-			c.store.DelPodContainer(key, container.Name)
+			c.store.DelPodContainer(pod.Name, container.Name)
 			continue
 		}
 
@@ -145,7 +152,7 @@ func (c *Controller) processItem(key string) error {
 		}
 
 		// if reported, continue
-		if c.store.HasPodContainer(key, container.Name) {
+		if c.store.HasPodContainer(pod.Name, container.Name) {
 			continue
 		}
 
@@ -192,11 +199,9 @@ func (c *Controller) processItem(key string) error {
 		}
 
 		// save container as it's reported to avoid duplication
-		c.store.AddPodContainer(key, container.Name)
+		c.store.AddPodContainer(pod.Name, container.Name)
 
 		// send event to providers
 		util.SendProvidersEvent(c.providers, evnt)
 	}
-
-	return nil
 }
