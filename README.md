@@ -122,6 +122,18 @@ If you want to enable Microsoft Teams, provide the channel webhook.
 | `alert.teams.title`              | Customized title in Microsoft teams message     |
 | `alert.teams.text`              | Customized title in Microsoft teams message     |
 
+#### Rocket Chat
+
+<p>
+	<img src="./assets/rocketchat.png" width="50%"/>
+</p>
+
+If you want to enable Rocket Chat, provide the webhook with optional text
+
+| Parameter                  | Description                            |
+|:---------------------------|:---------------------------------------|
+| `alert.rocketchat.webhook` | Rocket Chat webhook URL                |
+| `alert.rocketchat.text`    | Customized text in rocket chat message |
 
 ### Cleanup
 
