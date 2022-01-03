@@ -121,7 +121,7 @@ func GetProviders() []provider.Provider {
 				providers = append(providers, provider.NewTeams(viper.GetString("alert.teams.webhook")))
 			}
 		}
-		if key == "telegram" && isListAllBool(true, telegram) {
+		if key == "telegram" && IsListAllBool(true, telegram) {
 			providers = append(providers, provider.NewTelegram(viper.GetString("alert.telegram.token"), viper.GetString("alert.telegram.chatId")))
 		}
 	}
@@ -173,9 +173,8 @@ func IsStrInSlice(str string, strList []string) bool {
 	return false
 }
 
-// checks if all elements in a boolean list have the same value
-func isListAllBool(v bool, l []bool) bool {
-
+// IsListAllBool checks if all elements in a boolean list have the same value
+func IsListAllBool(v bool, l []bool) bool {
 	for _, x := range l {
 		if x != v {
 			return false

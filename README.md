@@ -10,7 +10,13 @@
     <a href="https://goreportcard.com/report/github.com/abahmed/kwatch">
       <img src="https://goreportcard.com/badge/github.com/abahmed/kwatch" />
     </a>
-	<a href="https://discord.gg/kzJszdKmJ7">
+    <a href="https://codecov.io/gh/abahmed/kwatch">
+      <img src="https://codecov.io/gh/abahmed/kwatch/branch/main/graph/badge.svg?token=ZMCU75JJO7"/>
+    </a>
+    <a href="https://github.com/abahmed/kwatch/releases/latest">
+      <img src="https://img.shields.io/github/v/release/abahmed/kwatch?label=kwatch" />
+    </a>
+	  <a href="https://discord.gg/kzJszdKmJ7">
       <img src="https://img.shields.io/discord/911647396918870036?label=Discord&logo=discord">
   	</a>
 </p>

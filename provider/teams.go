@@ -42,7 +42,7 @@ func (t *teams) Name() string {
 
 // SendEvent sends event to the provider
 func (t *teams) SendEvent(e *event.Event) error {
-	reqBody := buildRequestBodyTeams(e, t)
+	reqBody := t.buildRequestBodyTeams(e)
 
 	return t.SendMessage(reqBody)
 }
@@ -77,7 +77,8 @@ func (t *teams) SendMessage(msg string) error {
 	return err
 }
 
-func buildRequestBodyTeams(e *event.Event, t *teams) string {
+// buildRequestBodyTeams builds formatted string from event
+func (t *teams) buildRequestBodyTeams(e *event.Event) string {
 	eventsText := defaultEvents
 	logsText := defaultLogs
 

@@ -11,7 +11,8 @@ import (
 )
 
 type discord struct {
-	webhook string
+	id    string
+	token string
 }
 
 // NewDiscord returns new Discord instance
@@ -22,8 +23,20 @@ func NewDiscord(url string) Provider {
 		logrus.Infof("initializing discord with webhook url: %s", url)
 	}
 
+	webhookToken := ""
+	webhookID := ""
+
+	webhookList := strings.Split(url, "/")
+	if len(webhookList) > 1 {
+		webhookToken = webhookList[len(webhookList)-1]
+		webhookID = webhookList[len(webhookList)-2]
+	} else {
+		logrus.Warnf("initializing discord with missing id or token")
+	}
+
 	return &discord{
-		webhook: url,
+		id:    webhookID,
+		token: webhookToken,
 	}
 }
 
@@ -37,15 +50,11 @@ func (s *discord) SendEvent(ev *event.Event) error {
 	logrus.Debugf("sending to discord event: %v", ev)
 
 	// check config
-	if len(s.webhook) == 0 {
+	if len(s.id) == 0 || len(s.token) == 0 {
 		return errors.New("webhook url is empty")
 	}
 
 	discordClient, _ := discordgo.New("")
-
-	webhookList := strings.Split(s.webhook, "/")
-	webhookToken := webhookList[len(webhookList)-1]
-	webhookID := webhookList[len(webhookList)-2]
 
 	// initialize fields with basic info
 	fields := []*discordgo.MessageEmbedField{
@@ -102,7 +111,7 @@ func (s *discord) SendEvent(ev *event.Event) error {
 	}
 
 	// send message
-	_, err := discordClient.WebhookExecute(webhookID, webhookToken, false, &discordgo.WebhookParams{
+	_, err := discordClient.WebhookExecute(s.id, s.token, false, &discordgo.WebhookParams{
 		Embeds: []*discordgo.MessageEmbed{
 			{
 				Color:       13041664,
@@ -121,18 +130,14 @@ func (s *discord) SendEvent(ev *event.Event) error {
 // SendMessage sends text message to the provider
 func (s *discord) SendMessage(msg string) error {
 	// check config
-	if len(s.webhook) == 0 {
+	if len(s.id) == 0 || len(s.token) == 0 {
 		return errors.New("webhook url is empty")
 	}
 
 	discordClient, _ := discordgo.New("")
 
-	webhookList := strings.Split(s.webhook, "/")
-	webhookToken := webhookList[len(webhookList)-1]
-	webhookID := webhookList[len(webhookList)-2]
-
 	// send message
-	_, err := discordClient.WebhookExecute(webhookID, webhookToken, false, &discordgo.WebhookParams{
+	_, err := discordClient.WebhookExecute(s.id, s.token, false, &discordgo.WebhookParams{
 		Content: msg,
 	})
 	return err
