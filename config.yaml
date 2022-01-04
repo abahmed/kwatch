@@ -15,5 +15,7 @@ alert:
     host: ""
     port: ""
     to: ""
+  teams:
+    webhook: ""
 namespaces:
   - default

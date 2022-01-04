@@ -27,5 +27,8 @@ data:
         host: <host>
         port: <port_number>
         to: <to_mail>
+      teams:
+          webhook: <webhook_url>
     namespaces:
       - <optional_namespace>
+      

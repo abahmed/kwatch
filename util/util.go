@@ -118,6 +118,9 @@ func GetProviders() []provider.Provider {
 			if key == "telegram" && c == "chatid" && len(strings.TrimSpace(v.(string))) > 0 {
 				telegram[1] = true
 			}
+			if key == "teams" && c == "webhook" && len(strings.TrimSpace(v.(string))) > 0 {
+				providers = append(providers, provider.NewTeams(viper.GetString("alert.teams.webhook")))
+			}
 			if key == "email" && c == "from" && len(strings.TrimSpace(v.(string))) > 0 {
 				email[0] = true
 			}

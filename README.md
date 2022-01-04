@@ -29,7 +29,7 @@
 
 You need to get config template to add your configs
 ```shell
-curl  -L https://raw.githubusercontent.com/abahmed/kwatch/v0.1.0/deploy/config.yaml -o config.yaml
+curl  -L https://raw.githubusercontent.com/abahmed/kwatch/v0.2.0/deploy/config.yaml -o config.yaml
 ```
 
 Then edit `config.yaml` file and apply your configuration
@@ -41,7 +41,7 @@ kubectl apply -f config.yaml
 To deploy **kwatch**, execute following command:
 
 ```shell
-kubectl apply -f https://raw.githubusercontent.com/abahmed/kwatch/v0.1.0/deploy/deploy.yaml
+kubectl apply -f https://raw.githubusercontent.com/abahmed/kwatch/v0.2.0/deploy/deploy.yaml
 ```
 
 ### Configuration
@@ -125,11 +125,26 @@ If you want to enable Telegram, provide a valid token and the chat Id.
 | `alert.telegram.token`           | Telegram token                                  |
 | `alert.telegram.chatId`          | Telegram chat id                                |
 
+#### Microsoft Teams
+
+<p>
+    <img src="./assets/teams.png" width="50%"/>
+</p>
+
+If you want to enable Microsoft Teams, provide the channel webhook.
+
+| Parameter                        | Description                                     |
+|:---------------------------------|:------------------------------------------------|
+| `alert.teams.webhook`            |  webhook Microsoft team                         |
+| `alert.teams.title`              | Customized title in Microsoft teams message     |
+| `alert.teams.text`              | Customized title in Microsoft teams message     |
+
+
 ### Cleanup
 
 ```shell
-kubectl delete -f https://raw.githubusercontent.com/abahmed/kwatch/v0.1.0/deploy/config.yaml
-kubectl delete -f https://raw.githubusercontent.com/abahmed/kwatch/v0.1.0/deploy/deploy.yaml
+kubectl delete -f https://raw.githubusercontent.com/abahmed/kwatch/v0.2.0/deploy/config.yaml
+kubectl delete -f https://raw.githubusercontent.com/abahmed/kwatch/v0.2.0/deploy/deploy.yaml
 ```
 
 ## Who uses kwatch?
