@@ -162,6 +162,9 @@ func TestSendProvidersEvent(t *testing.T) {
 		"teams": map[string]interface{}{
 			"webhook": "test",
 		},
+		"rocketchat": map[string]interface{}{
+			"webhook": "test",
+		},
 	}
 	viper.SetDefault("alert", alertMap)
 	providers := GetProviders()
@@ -185,6 +188,9 @@ func TestSendProvidersMsg(t *testing.T) {
 			"chatid": "test",
 		},
 		"teams": map[string]interface{}{
+			"webhook": "test",
+		},
+		"rocketchat": map[string]interface{}{
 			"webhook": "test",
 		},
 	}

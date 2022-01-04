@@ -23,6 +23,8 @@ data:
           chatId: <chat_id>
       teams:
           webhook: <webhook_url>
+      rocketchat:
+          webhook: <webhook_url>
     namespaces:
       - <optional_namespace>
-      
+
