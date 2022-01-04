@@ -21,13 +21,17 @@ type email struct {
 func NewEmail(from string, password string, host string, port int, to string) Provider {
 	if len(from) == 0 {
 		logrus.Warnf("initializing email with an empty from")
-	} else if len(password) == 0 {
+	}
+	if len(password) == 0 {
 		logrus.Warnf("initializing email with an empty password")
-	} else if len(host) == 0 {
+	}
+	if len(host) == 0 {
 		logrus.Warnf("initializing email with an empty host")
-	} else if port > math.MaxUint16 {
+	}
+	if port > math.MaxUint16 {
 		logrus.Warnf("initializing email with an invalid port number")
-	} else if len(to) == 0 {
+	}
+	if len(to) == 0 {
 		logrus.Warnf("initializing email with an empty to")
 	}
 
