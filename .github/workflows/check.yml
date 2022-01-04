@@ -22,3 +22,13 @@ jobs:
 
     - name: Build
       run: go build
+
+    - name: Test
+      run: go test -race --coverprofile=coverage.txt --covermode=atomic ./...
+
+    - name: Upload coverage to Codecov
+      if: success() && github.ref == 'refs/heads/main'
+      uses: codecov/codecov-action@v1
+      with:
+        token: ${{ secrets.CODECOV_TOKEN }}
+        fail_ci_if_error: false

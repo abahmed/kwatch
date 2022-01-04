@@ -8,6 +8,7 @@ import (
 	"github.com/abahmed/kwatch/constant"
 	"github.com/abahmed/kwatch/controller"
 	"github.com/abahmed/kwatch/upgrader"
+	"github.com/abahmed/kwatch/util"
 	"github.com/sirupsen/logrus"
 	"github.com/spf13/viper"
 )
@@ -23,16 +24,19 @@ func main() {
 	viper.SetConfigFile(configFile)
 	viper.AutomaticEnv()
 
-	// If a config file is found, read it in.
+	// if a config file is found, read it in.
 	if err := viper.ReadInConfig(); err == nil {
 		logrus.Infof("using config file: %s", viper.ConfigFileUsed())
 	} else {
 		logrus.Warnf("unable to load config file: %s", err.Error())
 	}
 
-	// Check and notify if newer versions are available
-	go upgrader.CheckUpdates()
+	// get providers
+	providers := util.GetProviders()
+
+	// check and notify if newer versions are available
+	go upgrader.CheckUpdates(providers)
 
 	// start controller
-	controller.Start()
+	controller.Start(providers)
 }

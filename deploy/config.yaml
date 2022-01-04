@@ -29,6 +29,8 @@ data:
         to: <to_mail>
       teams:
           webhook: <webhook_url>
+      rocketchat:
+          webhook: <webhook_url>
     namespaces:
       - <optional_namespace>
-      
+

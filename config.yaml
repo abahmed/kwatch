@@ -17,5 +17,7 @@ alert:
     to: ""
   teams:
     webhook: ""
+  rocketchat:
+    webhook: ""
 namespaces:
   - default

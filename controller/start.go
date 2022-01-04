@@ -5,8 +5,8 @@ import (
 
 	"github.com/abahmed/kwatch/client"
 	"github.com/abahmed/kwatch/constant"
-	"github.com/abahmed/kwatch/storage"
-	"github.com/abahmed/kwatch/util"
+	"github.com/abahmed/kwatch/provider"
+	memory "github.com/abahmed/kwatch/storage/memory"
 	"github.com/sirupsen/logrus"
 	v1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -17,7 +17,7 @@ import (
 )
 
 // Start creates an instance of controller after initialization and runs it
-func Start() {
+func Start(providers []provider.Provider) {
 	// create kubernetes client
 	kclient := client.Create()
 
@@ -48,7 +48,7 @@ func Start() {
 					queue.Add(key)
 				}
 			},
-			UpdateFunc: func(old interface{}, new interface{}) {
+			UpdateFunc: func(_, new interface{}) {
 				key, err := cache.MetaNamespaceKeyFunc(new)
 				if err == nil {
 					logrus.Debugf("received update for Pod %s\n", key)
@@ -72,8 +72,8 @@ func Start() {
 		indexer:   indexer,
 		queue:     queue,
 		kclient:   kclient,
-		providers: util.GetProviders(),
-		store:     storage.NewMemory(),
+		providers: providers,
+		store:     memory.NewMemory(),
 	}
 
 	stopCh := make(chan struct{})

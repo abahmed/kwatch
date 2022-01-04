@@ -17,7 +17,7 @@ Before making changes, please first discuss the change you want to make through 
 If you wish to work on an issue, please comment on the issue that you want to work on it. This is to prevent duplicated efforts on the same issue.
 
 
-Contributions to kwatch should be made in the form of pull requests to the **main** branch. Each pull request will be reviewed by someone with permission to land patches. After reviewing the patch, it could be landed in the master branch or given feedback for changes.
+Contributions to kwatch should be made in the form of pull requests to the **main** branch. Each pull request will be reviewed by someone with permission to land patches. After reviewing the patch, it could be landed in the main branch or given feedback for changes.
 
 ### Code of Conduct
 We expect everyone to follow the [Code Of Conduct](./CODE_OF_CONDUCT.md)
