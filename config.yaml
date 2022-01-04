@@ -11,5 +11,7 @@ alert:
     chatId: ""
   teams:
     webhook: ""
+  rocketchat:
+    webhook: ""
 namespaces:
   - default
