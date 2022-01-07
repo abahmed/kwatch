@@ -13,5 +13,11 @@ alert:
     webhook: ""
   rocketchat:
     webhook: ""
+  email:
+    form: ""
+    password: ""
+    host: ""
+    port: ""
+    to: ""
 namespaces:
   - default

@@ -126,7 +126,7 @@ If you want to enable Microsoft Teams, provide the channel webhook.
 |:---------------------------------|:------------------------------------------------|
 | `alert.teams.webhook`            |  webhook Microsoft team                         |
 | `alert.teams.title`              | Customized title in Microsoft teams message     |
-| `alert.teams.text`              | Customized title in Microsoft teams message     |
+| `alert.teams.text`               | Customized text in Microsoft teams message     |
 
 #### Rocket Chat
 
@@ -140,6 +140,22 @@ If you want to enable Rocket Chat, provide the webhook with optional text
 |:---------------------------|:---------------------------------------|
 | `alert.rocketchat.webhook` | Rocket Chat webhook URL                |
 | `alert.rocketchat.text`    | Customized text in rocket chat message |
+
+#### Email
+
+<p>
+    <img src="./assets/email.png" width="50%"/>
+</p>
+
+If you want to enable Email, provide the from and to emails with host and the port
+
+| Parameter                        | Description                                 |
+|:---------------------------------|:------------------------------------------- |
+| `alert.email.from`               | From email                                  |
+| `alert.email.password`           | From email Password                         |
+| `alert.email.host`               | provide the host                            |
+| `alert.email.port`               | provide the port                            |
+| `alert.email.to`                 | The receiver email                          |
 
 ### Cleanup
 
