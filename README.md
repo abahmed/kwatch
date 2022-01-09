@@ -1,35 +1,34 @@
-<p align="left">
-	  <h1>kwatch</h1>
-    <br />
-    <a href="https://godoc.org/github.com/abahmed/kwatch">
-      <img src="https://godoc.org/github.com/abahmed/kwatch?status.png" />
-    </a>
-    <a href="https://github.com/abahmed/kwatch/actions/workflows/check.yaml">
-      <img src="https://github.com/abahmed/kwatch/workflows/Check/badge.svg?branch=main" />
-    </a>
-    <a href="https://goreportcard.com/report/github.com/abahmed/kwatch">
-      <img src="https://goreportcard.com/badge/github.com/abahmed/kwatch" />
-    </a>
-    <a href="https://codecov.io/gh/abahmed/kwatch">
-      <img src="https://codecov.io/gh/abahmed/kwatch/branch/main/graph/badge.svg?token=ZMCU75JJO7"/>
-    </a>
-    <a href="https://github.com/abahmed/kwatch/releases/latest">
-      <img src="https://img.shields.io/github/v/release/abahmed/kwatch?label=kwatch" />
-    </a>
-	  <a href="https://discord.gg/kzJszdKmJ7">
-      <img src="https://img.shields.io/discord/911647396918870036?label=Discord&logo=discord">
-  	</a>
+<p align="center">
+  <a href="https://kwatch.dev">
+    <img src="./assets/logo.png" width="30%"/>
+  </a>
+  <br />
+  <a href="https://kwatch.dev">
+    <img src="https://img.shields.io/badge/%F0%9F%92%A1%20kwatch-website-00ACD7.svg" />
+  </a>
+  <a href="https://godoc.org/github.com/abahmed/kwatch">
+    <img src="https://godoc.org/github.com/abahmed/kwatch?status.png" />
+  </a>
+  <a href="https://github.com/abahmed/kwatch/actions/workflows/check.yaml">
+    <img src="https://github.com/abahmed/kwatch/workflows/Check/badge.svg?branch=main" />
+  </a>
+  <a href="https://goreportcard.com/report/github.com/abahmed/kwatch">
+    <img src="https://goreportcard.com/badge/github.com/abahmed/kwatch" />
+  </a>
+  <a href="https://codecov.io/gh/abahmed/kwatch">
+    <img src="https://codecov.io/gh/abahmed/kwatch/branch/main/graph/badge.svg?token=ZMCU75JJO7"/>
+  </a>
+  <a href="https://github.com/abahmed/kwatch/releases/latest">
+    <img src="https://img.shields.io/github/v/release/abahmed/kwatch?label=kwatch" />
+  </a>
+  <a href="https://discord.gg/kzJszdKmJ7">
+    <img src="https://img.shields.io/discord/911647396918870036?label=Discord&logo=discord">
+  </a>
 </p>
 
 **kwatch** helps you monitor all changes in your Kubernetes(K8s) cluster, detects crashes in your running apps in realtime, and publishes notifications to your channels (Slack, Discord, etc.) instantly
 
-## Contribute & Support
-+ Add a [GitHub Star](https://github.com/abahmed/kwatch/stargazers)
-+ [Suggest new features, ideas and optimizations](https://github.com/abahmed/kwatch/issues)
-+ [Report issues](https://github.com/abahmed/kwatch/issues)
-
-
-## Getting Started
+## ⚡️ Getting Started
 
 ### Install
 
@@ -148,7 +147,12 @@ kubectl delete -f https://raw.githubusercontent.com/abahmed/kwatch/v0.3.0/deploy
 kubectl delete -f https://raw.githubusercontent.com/abahmed/kwatch/v0.3.0/deploy/deploy.yaml
 ```
 
-## Who uses kwatch?
+## 👍 Contribute & Support
++ Add a [GitHub Star](https://github.com/abahmed/kwatch/stargazers)
++ [Suggest new features, ideas and optimizations](https://github.com/abahmed/kwatch/issues)
++ [Report issues](https://github.com/abahmed/kwatch/issues)
+
+## 🚀 Who uses kwatch?
 
 **kwatch** is being used by multiple entities including, but not limited to
 
@@ -157,16 +161,20 @@ kubectl delete -f https://raw.githubusercontent.com/abahmed/kwatch/v0.3.0/deploy
 
 If you want to add your entity, [open issue](https://github.com/abahmed/kwatch/issues) to add it
 
-## Contributors
+## 💻 Contributors
 
 <a href="https://github.com/abahmed/kwatch/graphs/contributors">
   <img src="https://contributors-img.firebaseapp.com/image?repo=abahmed/kwatch" />
 </a>
 
-## Get in touch!
+## ⭐️ Stargazers
+
+<img src="https://starchart.cc/abahmed/kwatch.svg" alt="Stargazers over time" style="max-width: 100%">
+
+## 👋 Get in touch!
 
 Feel free to chat with us on [Discord](https://discord.gg/kzJszdKmJ7) if you have questions, or suggestions
 
-## License
+## ⚠️ License
 
 kwatch is licensed under [MIT License](LICENSE)
