@@ -1,6 +1,7 @@
-<p align="left">
-	  <h1>kwatch</h1>
+<p align="center">
     <br />
+	<img src="./assets/logo.png" width="30%"/>
+  <br />
     <a href="https://godoc.org/github.com/abahmed/kwatch">
       <img src="https://godoc.org/github.com/abahmed/kwatch?status.png" />
     </a>
