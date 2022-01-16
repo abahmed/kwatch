@@ -132,6 +132,7 @@ func sendByTelegramApi(reqBody string, t *telegram) error {
 	url := fmt.Sprintf(telegramAPIURL, t.token)
 
 	request, _ := http.NewRequest(http.MethodPost, url, buffer)
+	request.Header.Set("Content-Type", "application/json")
 	response, err := client.Do(request)
 	if err != nil || response.StatusCode > 202 {
 		return err
