@@ -9,6 +9,12 @@ alert:
   telegram:
     token: ""
     chatId: ""
+  email:
+    form: ""
+    password: ""
+    host: ""
+    port: ""
+    to: ""
   teams:
     webhook: ""
   rocketchat:
