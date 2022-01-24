@@ -143,7 +143,7 @@ If you want to enable Rocket Chat, provide the webhook with optional text
 #### Mattermost
 
 <p>
-	<img src="./assets/mattermost.png" width="35%"/>
+	<img src="./assets/mattermost.png" width="45%"/>
 </p>
 
 If you want to enable Mattermost, provide the webhook with optional text and title
