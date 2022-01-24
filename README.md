@@ -140,6 +140,22 @@ If you want to enable Rocket Chat, provide the webhook with optional text
 | `alert.rocketchat.webhook` | Rocket Chat webhook URL                |
 | `alert.rocketchat.text`    | Customized text in rocket chat message |
 
+#### Mattermost
+
+<p>
+	<img src="./assets/mattermost.png" width="35%"/>
+</p>
+
+If you want to enable Mattermost, provide the webhook with optional text and title
+
+
+| Parameter                             | Description                               |
+|:--------------------------------------|:----------------------------------------- |
+| `alert.mattermost.webhook`            | Mattermost webhook URL                    |
+| `alert.mattermost.title`              | Customized title in Mattermost message    |
+| `alert.mattermost.text`               | Customized text in Mattermost message     |
+
+
 ### Cleanup
 
 ```shell
