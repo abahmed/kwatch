@@ -146,6 +146,8 @@ func (c *Controller) processPod(key string, pod *v1.Pod) {
 
 		if (container.State.Waiting != nil &&
 			container.State.Waiting.Reason == "ContainerCreating") ||
+			(container.State.Waiting != nil &&
+				container.State.Waiting.Reason == "PodInitializing") ||
 			(container.State.Terminated != nil &&
 				container.State.Terminated.Reason == "Completed") {
 			continue
