@@ -13,5 +13,7 @@ alert:
     webhook: ""
   rocketchat:
     webhook: ""
+  mattermost:
+    webhook: ""
 namespaces:
   - default

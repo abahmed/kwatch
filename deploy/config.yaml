@@ -25,6 +25,8 @@ data:
           webhook: <webhook_url>
       rocketchat:
           webhook: <webhook_url>
+      mattermost:
+          webhook: <webhook_url>
     namespaces:
       - <optional_namespace>
 
