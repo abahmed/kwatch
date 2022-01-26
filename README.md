@@ -57,6 +57,7 @@ kubectl apply -f https://raw.githubusercontent.com/abahmed/kwatch/v0.3.0/deploy/
 |:-------------------------------------|:-----------------------------------------------------------------------------------------------------|
 | `maxRecentLogLines`                  | Optional Max tail log lines in messages, if it's not provided it will get all log lines              |
 | `namespaces`                         | Optional list of namespaces that you want to watch, if it's not provided it will watch all namespaces|
+| `ignoreFailedGracefulShutdown`       | If set to true, containers which are forcefully killed during shutdown (as their graceful shutdown failed) are not reported as error     |
 
 
 #### Slack

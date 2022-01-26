@@ -23,13 +23,14 @@ import (
 
 // Controller holds necessary
 type Controller struct {
-	name      string
-	informer  cache.Controller
-	indexer   cache.Indexer
-	kclient   kubernetes.Interface
-	queue     workqueue.RateLimitingInterface
-	providers []provider.Provider
-	store     storage.Storage
+	name                         string
+	informer                     cache.Controller
+	indexer                      cache.Indexer
+	kclient                      kubernetes.Interface
+	queue                        workqueue.RateLimitingInterface
+	providers                    []provider.Provider
+	store                        storage.Storage
+	ignoreFailedGracefulShutdown bool
 }
 
 // run starts the controller
@@ -155,6 +156,12 @@ func (c *Controller) processPod(key string, pod *v1.Pod) {
 
 		// if reported, continue
 		if c.store.HasPodContainer(key, container.Name) {
+			continue
+		}
+
+		if c.ignoreFailedGracefulShutdown && util.ContainsKillingStoppingContainerEvents(c.kclient, pod.Name, pod.Namespace) {
+			// Graceful shutdown did not work and container was killed during shutdown.
+			//  Not really an error
 			continue
 		}
 
