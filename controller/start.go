@@ -17,7 +17,7 @@ import (
 )
 
 // Start creates an instance of controller after initialization and runs it
-func Start(providers []provider.Provider) {
+func Start(providers []provider.Provider, ignoreFailedGracefulShutdown bool) {
 	// create kubernetes client
 	kclient := client.Create()
 
@@ -67,13 +67,14 @@ func Start(providers []provider.Provider) {
 		}, cache.Indexers{})
 
 	controller := Controller{
-		name:      "pod-crash",
-		informer:  informer,
-		indexer:   indexer,
-		queue:     queue,
-		kclient:   kclient,
-		providers: providers,
-		store:     memory.NewMemory(),
+		name:                         "pod-crash",
+		informer:                     informer,
+		indexer:                      indexer,
+		queue:                        queue,
+		kclient:                      kclient,
+		providers:                    providers,
+		store:                        memory.NewMemory(),
+		ignoreFailedGracefulShutdown: ignoreFailedGracefulShutdown,
 	}
 
 	stopCh := make(chan struct{})
