@@ -156,6 +156,21 @@ If you want to enable Mattermost, provide the webhook with optional text and tit
 | `alert.mattermost.title`              | Customized title in Mattermost message    |
 | `alert.mattermost.text`               | Customized text in Mattermost message     |
 
+#### Opsgenie
+
+<p>
+	<img src="./assets/opsgenie.png" width="45%"/>
+</p>
+
+If you want to enable Opsgenie, provide the API key with optional text and title
+
+
+| Parameter                             | Description                             |
+|:--------------------------------------|:--------------------------------------- |
+| `alert.opsgenie.apiKey`               | Opsgenie API Key                        |
+| `alert.opsgenie.title`                | Customized title in Opsgenie message    |
+| `alert.opsgenie.text`                 | Customized text in Opsgenie message     |
+
 
 ### Cleanup
 

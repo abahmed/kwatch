@@ -15,5 +15,7 @@ alert:
     webhook: ""
   mattermost:
     webhook: ""
+  opsgenie:
+    apiKey: ""
 namespaces:
   - default
