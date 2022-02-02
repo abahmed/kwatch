@@ -39,6 +39,24 @@ func GetPodEventsStr(c kubernetes.Interface, name, namespace string) string {
 	return strings.TrimSpace(eventsString)
 }
 
+// ContainsKillingStoppingContainerEvents checks if the events contain an event with "Killing Stopping container" which
+// indicates that a container could not be gracefully shutdown
+func ContainsKillingStoppingContainerEvents(c kubernetes.Interface, name, namespace string) bool {
+	events, err := getPodEvents(c, name, namespace)
+	if err != nil {
+		return false
+	}
+
+	for _, ev := range events.Items {
+		if strings.ToLower(ev.Reason) == "killing" &&
+			strings.Contains(strings.ToLower(ev.Message), "stopping container") {
+			return true
+		}
+	}
+
+	return false
+}
+
 // GetPodContainerLogs returns logs for specified container in pod
 func GetPodContainerLogs(
 	c kubernetes.Interface, name, container, namespace string,

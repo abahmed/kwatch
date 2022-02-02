@@ -23,13 +23,14 @@ import (
 
 // Controller holds necessary
 type Controller struct {
-	name      string
-	informer  cache.Controller
-	indexer   cache.Indexer
-	kclient   kubernetes.Interface
-	queue     workqueue.RateLimitingInterface
-	providers []provider.Provider
-	store     storage.Storage
+	name                         string
+	informer                     cache.Controller
+	indexer                      cache.Indexer
+	kclient                      kubernetes.Interface
+	queue                        workqueue.RateLimitingInterface
+	providers                    []provider.Provider
+	store                        storage.Storage
+	ignoreFailedGracefulShutdown bool
 }
 
 // run starts the controller
@@ -144,17 +145,34 @@ func (c *Controller) processPod(key string, pod *v1.Pod) {
 			continue
 		}
 
-		if (container.State.Waiting != nil &&
-			container.State.Waiting.Reason == "ContainerCreating") ||
-			(container.State.Waiting != nil &&
-				container.State.Waiting.Reason == "PodInitializing") ||
-			(container.State.Terminated != nil &&
-				container.State.Terminated.Reason == "Completed") {
-			continue
+		if container.State.Waiting != nil {
+			switch {
+			case container.State.Waiting.Reason == "ContainerCreating":
+				continue
+			case container.State.Waiting.Reason == "PodInitializing":
+				continue
+			}
+		} else if container.State.Terminated != nil {
+			switch {
+			case container.State.Terminated.Reason == "Completed":
+				continue
+			case container.State.Terminated.ExitCode == 143:
+				// 143 is the exit code for graceful termination
+				continue
+			case container.State.Terminated.ExitCode == 0:
+				// 0 is the exit code for purpose stop
+				continue
+			}
 		}
 
 		// if reported, continue
 		if c.store.HasPodContainer(key, container.Name) {
+			continue
+		}
+
+		if c.ignoreFailedGracefulShutdown && util.ContainsKillingStoppingContainerEvents(c.kclient, pod.Name, pod.Namespace) {
+			// Graceful shutdown did not work and container was killed during shutdown.
+			//  Not really an error
 			continue
 		}
 

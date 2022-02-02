@@ -38,5 +38,5 @@ func main() {
 	go upgrader.CheckUpdates(providers)
 
 	// start controller
-	controller.Start(providers)
+	controller.Start(providers, viper.GetBool("ignoreFailedGracefulShutdown"))
 }
