@@ -136,6 +136,9 @@ func TestGetProviders(t *testing.T) {
 		"mattermost": map[string]interface{}{
 			"webhook": "test",
 		},
+		"opsgenie": map[string]interface{}{
+			"apiKey": "test",
+		},
 	}
 	viper.SetDefault("alert", alertMap)
 
@@ -172,6 +175,9 @@ func TestSendProvidersEvent(t *testing.T) {
 		"mattermost": map[string]interface{}{
 			"webhook": "test",
 		},
+		"opsgenie": map[string]interface{}{
+			"apiKey": "test",
+		},
 	}
 	viper.SetDefault("alert", alertMap)
 	providers := GetProviders()
@@ -202,6 +208,9 @@ func TestSendProvidersMsg(t *testing.T) {
 		},
 		"mattermost": map[string]interface{}{
 			"webhook": "test",
+		},
+		"opsgenie": map[string]interface{}{
+			"apiKey": "test",
 		},
 	}
 	viper.SetDefault("alert", alertMap)

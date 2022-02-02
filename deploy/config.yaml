@@ -11,6 +11,7 @@ metadata:
 data:
   config.yaml: |
     maxRecentLogLines: <optional_number_of_lines>
+    ignoreFailedGracefulShutdown: <optional_boolean>
     alert:
       slack:
         webhook: <webhook_url>
@@ -27,6 +28,8 @@ data:
           webhook: <webhook_url>
       mattermost:
           webhook: <webhook_url>
+      opsgenie:
+        apiKey: <api_key>
     namespaces:
       - <optional_namespace>
 
