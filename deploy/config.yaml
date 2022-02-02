@@ -11,6 +11,7 @@ metadata:
 data:
   config.yaml: |
     maxRecentLogLines: <optional_number_of_lines>
+    ignoreFailedGracefulShutdown: <optional_boolean>
     alert:
       slack:
         webhook: <webhook_url>
