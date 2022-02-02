@@ -27,6 +27,8 @@ data:
           webhook: <webhook_url>
       mattermost:
           webhook: <webhook_url>
+      opsgenie:
+        apiKey: <api_key>
     namespaces:
       - <optional_namespace>
 
