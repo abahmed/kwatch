@@ -167,7 +167,7 @@ If you want to enable Opsgenie, provide the API key with optional text and title
 
 | Parameter                             | Description                             |
 |:--------------------------------------|:--------------------------------------- |
-| `alert.opsgenie.apiKey`               | Opsgenie webhook URL                    |
+| `alert.opsgenie.apiKey`               | Opsgenie API Key                        |
 | `alert.opsgenie.title`                | Customized title in Opsgenie message    |
 | `alert.opsgenie.text`                 | Customized text in Opsgenie message     |
 
