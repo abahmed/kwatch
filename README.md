@@ -190,6 +190,7 @@ kubectl delete -f https://raw.githubusercontent.com/abahmed/kwatch/v0.4.0/deploy
 
 [<img src="./assets/users/trella.png"/>](https://www.trella.app)
 [<img src="./assets/users/ibec-systems.svg" width="50%"/>](https://ibecsystems.com/en#/)
+[<img src="./assets/users/justwatch.png" width="50%"/>](https://www.justwatch.com/us/talent)
 
 If you want to add your entity, [open issue](https://github.com/abahmed/kwatch/issues) to add it
 
