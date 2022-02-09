@@ -35,7 +35,9 @@ func main() {
 	providers := util.GetProviders()
 
 	// check and notify if newer versions are available
-	go upgrader.CheckUpdates(providers)
+	if !viper.GetBool("disableUpdateCheck") {
+		go upgrader.CheckUpdates(providers)
+	}
 
 	// start controller
 	controller.Start(providers, viper.GetBool("ignoreFailedGracefulShutdown"))
