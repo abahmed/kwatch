@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 
 	"github.com/abahmed/kwatch/constant"
 	"github.com/abahmed/kwatch/controller"
@@ -39,6 +40,20 @@ func main() {
 		go upgrader.CheckUpdates(providers)
 	}
 
+	// Parse namespace allow/forbid lists
+	namespaceAllowList := make([]string, 0)
+	namespaceForbidList := make([]string, 0)
+	for _, namespace := range viper.GetStringSlice("namespaces") {
+		if clean := strings.TrimPrefix(namespace, "!"); namespace != clean {
+			namespaceForbidList = append(namespaceForbidList, clean)
+			continue
+		}
+		namespaceAllowList = append(namespaceAllowList, namespace)
+	}
+	if len(namespaceAllowList) > 0 && len(namespaceForbidList) > 0 {
+		logrus.Fatal("Either allowed or forbidden namespaces must be set. Can't set both")
+	}
+
 	// start controller
-	controller.Start(providers, viper.GetBool("ignoreFailedGracefulShutdown"))
+	controller.Start(providers, viper.GetBool("ignoreFailedGracefulShutdown"), namespaceAllowList, namespaceForbidList)
 }

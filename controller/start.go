@@ -17,7 +17,7 @@ import (
 )
 
 // Start creates an instance of controller after initialization and runs it
-func Start(providers []provider.Provider, ignoreFailedGracefulShutdown bool) {
+func Start(providers []provider.Provider, ignoreFailedGracefulShutdown bool, namespaceAllowList, namespaceForbidList []string) {
 	// create kubernetes client
 	kclient := client.Create()
 
@@ -75,6 +75,9 @@ func Start(providers []provider.Provider, ignoreFailedGracefulShutdown bool) {
 		providers:                    providers,
 		store:                        memory.NewMemory(),
 		ignoreFailedGracefulShutdown: ignoreFailedGracefulShutdown,
+
+		namespaceAllowList:  namespaceAllowList,
+		namespaceForbidList: namespaceForbidList,
 	}
 
 	stopCh := make(chan struct{})
