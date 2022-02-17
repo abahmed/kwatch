@@ -5,8 +5,6 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/spf13/viper"
-
 	"github.com/abahmed/kwatch/constant"
 	"github.com/abahmed/kwatch/event"
 	"github.com/abahmed/kwatch/provider"
@@ -31,6 +29,8 @@ type Controller struct {
 	providers                    []provider.Provider
 	store                        storage.Storage
 	ignoreFailedGracefulShutdown bool
+	namespaceAllowList           []string
+	namespaceForbidList          []string
 }
 
 // run starts the controller
@@ -123,9 +123,12 @@ func (c *Controller) processItem(key string) error {
 	}
 
 	// filter by namespaces in config if specified
-	namespaces := viper.GetStringSlice("namespaces")
-	if len(namespaces) != 0 && !util.IsStrInSlice(pod.Namespace, namespaces) {
-		logrus.Infof("skip namespace %s as not selected in configuration", pod.Namespace)
+	if len(c.namespaceAllowList) > 0 && !util.IsStrInSlice(pod.Namespace, c.namespaceAllowList) {
+		logrus.Infof("skip namespace %s as not in namespace allow list", pod.Namespace)
+		return nil
+	}
+	if len(c.namespaceForbidList) > 0 && util.IsStrInSlice(pod.Namespace, c.namespaceForbidList) {
+		logrus.Infof("skip namespace %s as in namespace forbid list", pod.Namespace)
 		return nil
 	}
 
