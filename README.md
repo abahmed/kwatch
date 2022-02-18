@@ -56,7 +56,7 @@ kubectl apply -f https://raw.githubusercontent.com/abahmed/kwatch/v0.4.0/deploy/
 | Parameter                            | Description                                                                                          |
 |:-------------------------------------|:-----------------------------------------------------------------------------------------------------|
 | `maxRecentLogLines`                  | Optional Max tail log lines in messages, if it's not provided it will get all log lines              |
-| `namespaces`                         | Optional comma separated list of namespaces that you want to watch or forbid, if it's not provided it will watch all namespaces. If you want to forbid a namespace, configure it with `!<namespace name>`. You can either set forbidden namespaces or allowed, not both.|
+| `namespaces`                         | Optional white space separated list of namespaces that you want to watch or forbid, if it's not provided it will watch all namespaces. If you want to forbid a namespace, configure it with `!<namespace name>`. You can either set forbidden namespaces or allowed, not both.|
 | `ignoreFailedGracefulShutdown`       | If set to true, containers which are forcefully killed during shutdown (as their graceful shutdown failed) are not reported as error     |
 | `disableUpdateCheck`       | If set to true, does not check for and notify about kwatch updates    |
 
