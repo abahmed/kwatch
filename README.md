@@ -34,7 +34,7 @@
 
 You need to get config template to add your configs
 ```shell
-curl  -L https://raw.githubusercontent.com/abahmed/kwatch/v0.4.0/deploy/config.yaml -o config.yaml
+curl  -L https://raw.githubusercontent.com/abahmed/kwatch/v0.5.0/deploy/config.yaml -o config.yaml
 ```
 
 Then edit `config.yaml` file and apply your configuration
@@ -46,7 +46,7 @@ kubectl apply -f config.yaml
 To deploy **kwatch**, execute following command:
 
 ```shell
-kubectl apply -f https://raw.githubusercontent.com/abahmed/kwatch/v0.4.0/deploy/deploy.yaml
+kubectl apply -f https://raw.githubusercontent.com/abahmed/kwatch/v0.5.0/deploy/deploy.yaml
 ```
 
 ### Configuration
@@ -176,8 +176,8 @@ If you want to enable Opsgenie, provide the API key with optional text and title
 ### Cleanup
 
 ```shell
-kubectl delete -f https://raw.githubusercontent.com/abahmed/kwatch/v0.4.0/deploy/config.yaml
-kubectl delete -f https://raw.githubusercontent.com/abahmed/kwatch/v0.4.0/deploy/deploy.yaml
+kubectl delete -f https://raw.githubusercontent.com/abahmed/kwatch/v0.5.0/deploy/config.yaml
+kubectl delete -f https://raw.githubusercontent.com/abahmed/kwatch/v0.5.0/deploy/deploy.yaml
 ```
 
 ## 👍 Contribute & Support
