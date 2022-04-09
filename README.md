@@ -60,6 +60,26 @@ kubectl apply -f https://raw.githubusercontent.com/abahmed/kwatch/v0.5.0/deploy/
 | `ignoreFailedGracefulShutdown`       | If set to true, containers which are forcefully killed during shutdown (as their graceful shutdown failed) are not reported as error     |
 | `disableUpdateCheck`       | If set to true, does not check for and notify about kwatch updates    |
 
+#### High Level Architecture 
+
+<p>
+	<img src="./assets/highlevelarchitecture.png" width="70%"/>
+</p>
+
+| Point                            | URL                                                                               |
+|:---------------------------------|:--------------------------------------------------------------------------------- |
+| `4.1`                            | https://github.com/abahmed/kwatch/blob/main/main.go#L18                           |
+| `5.1.`                           | https://github.com/abahmed/kwatch/blob/main/main.go#L21 / 24                      |
+| `6.1.`                           | https://github.com/abahmed/kwatch/blob/main/main.go#L36                           |
+| `7.0.`                           | https://github.com/abahmed/kwatch/blob/main/main.go#L40                           |
+| `7.1.`                           | https://github.com/abahmed/kwatch/blob/main/upgrader/upgrader.go#L16              |
+| `8.1.&8.2`                       | https://github.com/abahmed/kwatch/blob/main/main.go#L46 / 52                      |
+| `8.3.`                           | https://github.com/abahmed/kwatch/blob/main/main.go#L53                           |
+| `9.0.`                           | https://github.com/abahmed/kwatch/blob/main/main.go#L58                           |
+| `9.1.`                           | https://github.com/abahmed/kwatch/blob/main/controller/start.go#L20               |
+| `9.2.`                           | https://github.com/abahmed/kwatch/blob/main/controller/controller.go#L37          |
+| `9.3.`                           | https://github.com/abahmed/kwatch/blob/main/controller/controller.go              |
+| `9.4.`                           | https://github.com/abahmed/kwatch/tree/main/provider                              |
 
 #### Slack
 
