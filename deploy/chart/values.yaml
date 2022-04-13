@@ -30,6 +30,7 @@ kwatch:
     capabilities:
       drop:
       - ALL
+  envFrom: []
   config:
     ## if You want to provide your own config as a secret or configMap
     ## set create to false and set appropriate values

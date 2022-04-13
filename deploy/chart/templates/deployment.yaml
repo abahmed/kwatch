@@ -71,6 +71,9 @@ spec:
         env:
         - name: CONFIG_FILE
           value: "/config.yaml"
+        {{- with $k.envFrom }}
+        envFrom: {{ toYaml . | nindent 10 }}
+        {{- end }}
         resources:
           {{- if $k.resources.requests }}
           requests:

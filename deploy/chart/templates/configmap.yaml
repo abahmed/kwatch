@@ -25,6 +25,9 @@ data:
       maxRecentLogLines: {{ default 0 $conf.maxRecentLogLines }}
       ignoreFailedGracefulShutdown: {{ default false $conf.ignoreFailedGracefulShutdown }}
       disableUpdateCheck: {{ default false $conf.disableUpdateCheck }}
+      {{- with $conftpl.namespaces }}
+      namespaces: {{ toYaml . | nident 8 }}
+      {{- end }}
       {{- if or $conftpl.slack.webhook $conftpl.pagerduty.integrationKey $conftpl.discord.webhook $conftpl.teams.webhook $conftpl.rocketchat.webhook $conftpl.mattermost.webhook $conftpl.opsgenie.apiKey $conftpl.namespaces }}
       alert:
       {{- if $conftpl.slack.webhook }}
@@ -70,12 +73,6 @@ data:
           apiKey: {{ $conftpl.opsgenie.apiKey | quote}}
           title: {{ default "" $conftpl.opsgenie.title | quote }}
           text: {{ default "" $conftpl.opsgenie.text | quote }}
-      {{- end }}
-      {{- if $conftpl.namespaces }}
-      {{- range $conftpl.namespaces }}
-      namespaces:
-      - {{ . }}
-      {{- end }}
       {{- end }}
       {{- end }}
 ...
