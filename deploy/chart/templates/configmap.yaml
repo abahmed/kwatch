@@ -26,7 +26,7 @@ data:
       ignoreFailedGracefulShutdown: {{ default false $conf.ignoreFailedGracefulShutdown }}
       disableUpdateCheck: {{ default false $conf.disableUpdateCheck }}
       {{- with $conftpl.namespaces }}
-      namespaces: {{ toYaml . | nident 8 }}
+      namespaces: {{ toYaml . | indent 8 }}
       {{- end }}
       {{- if or $conftpl.slack.webhook $conftpl.pagerduty.integrationKey $conftpl.discord.webhook $conftpl.teams.webhook $conftpl.rocketchat.webhook $conftpl.mattermost.webhook $conftpl.opsgenie.apiKey $conftpl.namespaces }}
       alert:
