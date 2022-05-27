@@ -9,7 +9,7 @@ require (
 	github.com/slack-go/slack v0.10.3
 	github.com/spf13/viper v1.11.0
 	k8s.io/api v0.24.0
-	k8s.io/apimachinery v0.24.0
+	k8s.io/apimachinery v0.24.1
 	k8s.io/client-go v0.24.0
 )
 
