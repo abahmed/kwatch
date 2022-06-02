@@ -54,6 +54,20 @@ func main() {
 		logrus.Fatal("Either allowed or forbidden namespaces must be set. Can't set both")
 	}
 
+	// Parse reason allow/forbid lists
+	reasonAllowList := make([]string, 0)
+	reasonForbidList := make([]string, 0)
+	for _, namespace := range viper.GetStringSlice("reasons") {
+		if clean := strings.TrimPrefix(namespace, "!"); namespace != clean {
+			reasonForbidList = append(namespaceForbidList, clean)
+			continue
+		}
+		reasonAllowList = append(namespaceAllowList, namespace)
+	}
+	if len(reasonAllowList) > 0 && len(reasonForbidList) > 0 {
+		logrus.Fatal("Either allowed or forbidden reasons must be set. Can't set both")
+	}
+
 	// start controller
-	controller.Start(providers, viper.GetBool("ignoreFailedGracefulShutdown"), namespaceAllowList, namespaceForbidList)
+	controller.Start(providers, viper.GetBool("ignoreFailedGracefulShutdown"), namespaceAllowList, namespaceForbidList, reasonAllowList, reasonForbidList)
 }
