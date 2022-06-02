@@ -31,6 +31,8 @@ type Controller struct {
 	ignoreFailedGracefulShutdown bool
 	namespaceAllowList           []string
 	namespaceForbidList          []string
+	reasonAllowList              []string
+	reasonForbidList             []string
 }
 
 // run starts the controller
@@ -191,6 +193,15 @@ func (c *Controller) processPod(key string, pod *v1.Pod) {
 			reason = container.State.Waiting.Reason
 		} else if container.State.Terminated != nil {
 			reason = container.State.Terminated.Reason
+		}
+
+		if len(c.reasonAllowList) > 0 && !util.IsStrInSlice(reason, c.reasonAllowList) {
+			logrus.Infof("skip reason %s as not in reason allow list", reason)
+			return
+		}
+		if len(c.reasonForbidList) > 0 && util.IsStrInSlice(reason, c.reasonForbidList) {
+			logrus.Infof("skip reason %s as in reason forbid list", reason)
+			return
 		}
 
 		// get logs for this container

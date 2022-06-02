@@ -17,13 +17,14 @@ import (
 )
 
 // Start creates an instance of controller after initialization and runs it
-func Start(providers []provider.Provider, ignoreFailedGracefulShutdown bool, namespaceAllowList, namespaceForbidList []string) {
+func Start(providers []provider.Provider, ignoreFailedGracefulShutdown bool,
+	namespaceAllowList, namespaceForbidList,
+	reasonAllowList, reasonForbidList []string) {
 	// create kubernetes client
 	kclient := client.Create()
 
 	// create rate limiting queue
-	queue :=
-		workqueue.NewRateLimitingQueue(workqueue.DefaultControllerRateLimiter())
+	queue := workqueue.NewRateLimitingQueue(workqueue.DefaultControllerRateLimiter())
 
 	indexer, informer := cache.NewIndexerInformer(
 		&cache.ListWatch{
@@ -78,6 +79,8 @@ func Start(providers []provider.Provider, ignoreFailedGracefulShutdown bool, nam
 
 		namespaceAllowList:  namespaceAllowList,
 		namespaceForbidList: namespaceForbidList,
+		reasonAllowList:     reasonAllowList,
+		reasonForbidList:    reasonForbidList,
 	}
 
 	stopCh := make(chan struct{})
