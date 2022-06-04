@@ -92,9 +92,15 @@ func (s *discord) SendEvent(ev *event.Event) error {
 	// add logs part if it exists
 	logs := strings.TrimSpace(ev.Logs)
 	if len(logs) > 0 {
+		logData := logs
+
+		if len(logData) > 1024 {
+			logData = logs[:1024]
+		}
+
 		fields = append(fields, &discordgo.MessageEmbedField{
 			Name:  ":memo: Logs",
-			Value: "```\n" + logs + "```",
+			Value: "```\n" + logData + "```",
 		})
 	}
 
