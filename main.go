@@ -59,10 +59,10 @@ func main() {
 	reasonForbidList := make([]string, 0)
 	for _, namespace := range viper.GetStringSlice("reasons") {
 		if clean := strings.TrimPrefix(namespace, "!"); namespace != clean {
-			reasonForbidList = append(namespaceForbidList, clean)
+			reasonForbidList = append(reasonForbidList, clean)
 			continue
 		}
-		reasonAllowList = append(namespaceAllowList, namespace)
+		reasonAllowList = append(reasonAllowList, namespace)
 	}
 	if len(reasonAllowList) > 0 && len(reasonForbidList) > 0 {
 		logrus.Fatal("Either allowed or forbidden reasons must be set. Can't set both")
