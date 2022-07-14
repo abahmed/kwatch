@@ -6,6 +6,9 @@ privateRegistries: []
 
 
 kwatch:
+  ## if true kwatch will be deployed with permissions only
+  ## for the namepsace it is deployed to.
+  namespaced: false
   strategy:
     type: Recreate
     # type: RollingUpdate
