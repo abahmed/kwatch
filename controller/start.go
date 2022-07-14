@@ -26,10 +26,8 @@ func Start(providers []provider.Provider, ignoreFailedGracefulShutdown bool,
 	// create rate limiting queue
 	queue := workqueue.NewRateLimitingQueue(workqueue.DefaultControllerRateLimiter())
 
-	// which context the controller should work on
-	// when NamespaceAll is selected it will watch on
-	// when a single namespace is provided it will watch on
-	// the namespace level.
+	// Namespace to watch, if all is selected it will watch all namespaces
+	// in a cluster scope, if not then it will watch only in the namespace
 	var namespaceToWatch = v1.NamespaceAll
 
 	// if there is exactly 1 namespace listen only to that namespace for events
