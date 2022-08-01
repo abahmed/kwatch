@@ -33,7 +33,7 @@ type Controller struct {
 	namespaceForbidList          []string
 	reasonAllowList              []string
 	reasonForbidList             []string
-	igonreContainerList		     []string
+	igonreContainerList	     []string
 }
 
 // run starts the controller
