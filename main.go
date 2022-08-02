@@ -68,11 +68,11 @@ func main() {
 		logrus.Fatal("Either allowed or forbidden reasons must be set. Can't set both")
 	}
 
-	igonreContainerList := make([]string, 0)
-	for _, containr := range viper.GetStringSlice("ignoreContainrNames") {
-		igonreContainerList = append(igonreContainerList, containr)
+	ignoreContainerList := make([]string, 0)
+	for _, container := range viper.GetStringSlice("ignoreContainerNames") {
+		ignoreContainerList = append(ignoreContainerList, container)
 	}
 
 	// start controller
-	controller.Start(providers, viper.GetBool("ignoreFailedGracefulShutdown"), namespaceAllowList, namespaceForbidList, reasonAllowList, reasonForbidList, igonreContainerList)
+	controller.Start(providers, viper.GetBool("ignoreFailedGracefulShutdown"), namespaceAllowList, namespaceForbidList, reasonAllowList, reasonForbidList, ignoreContainerList)
 }
