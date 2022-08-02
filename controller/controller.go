@@ -33,6 +33,7 @@ type Controller struct {
 	namespaceForbidList          []string
 	reasonAllowList              []string
 	reasonForbidList             []string
+	ignoreContainerList	     []string
 }
 
 // run starts the controller
@@ -201,6 +202,11 @@ func (c *Controller) processPod(key string, pod *v1.Pod) {
 		}
 		if len(c.reasonForbidList) > 0 && util.IsStrInSlice(reason, c.reasonForbidList) {
 			logrus.Infof("skip reason %s as in reason forbid list", reason)
+			return
+		}
+
+		if len(c.ignoreContainerList) > 0 && util.IsStrInSlice(container.Name, c.ignoreContainerList) {
+			logrus.Infof("skip pod %s as in container ignore list", container.Name)
 			return
 		}
 
