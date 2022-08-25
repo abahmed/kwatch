@@ -153,25 +153,26 @@ func GetProviders() []provider.Provider {
 			}
 			if key == "email" && c == "password" && len(strings.TrimSpace(v.(string))) > 0 {
 				email[4] = true
-			if key == "rocketchat" && c == "webhook" && len(strings.TrimSpace(v.(string))) > 0 {
-				providers = append(providers, provider.NewRocketChat(viper.GetString("alert.rocketchat.webhook")))
+				if key == "rocketchat" && c == "webhook" && len(strings.TrimSpace(v.(string))) > 0 {
+					providers = append(providers, provider.NewRocketChat(viper.GetString("alert.rocketchat.webhook")))
+				}
+				if key == "mattermost" && c == "webhook" && len(strings.TrimSpace(v.(string))) > 0 {
+					providers = append(providers, provider.NewMattermost(viper.GetString("alert.mattermost.webhook")))
+				}
+				if key == "opsgenie" && c == "apikey" && len(strings.TrimSpace(v.(string))) > 0 {
+					providers = append(providers, provider.NewOpsgenie(viper.GetString("alert.opsgenie.apikey")))
+				}
 			}
-			if key == "mattermost" && c == "webhook" && len(strings.TrimSpace(v.(string))) > 0 {
-				providers = append(providers, provider.NewMattermost(viper.GetString("alert.mattermost.webhook")))
+			if key == "telegram" && IsListAllBool(true, telegram) {
+				providers = append(providers, provider.NewTelegram(viper.GetString("alert.telegram.token"), viper.GetString("alert.telegram.chatId")))
 			}
-			if key == "opsgenie" && c == "apikey" && len(strings.TrimSpace(v.(string))) > 0 {
-				providers = append(providers, provider.NewOpsgenie(viper.GetString("alert.opsgenie.apikey")))
+			if key == "email" && IsListAllBool(true, email) {
+				providers = append(providers, provider.NewEmail(viper.GetString("alert.email.from"),
+					viper.GetString("alert.email.password"),
+					viper.GetString("alert.email.host"),
+					viper.GetInt("alert.email.port"),
+					viper.GetString("alert.email.to")))
 			}
-		}
-		if key == "telegram" && IsListAllBool(true, telegram) {
-			providers = append(providers, provider.NewTelegram(viper.GetString("alert.telegram.token"), viper.GetString("alert.telegram.chatId")))
-		}
-		if key == "email" && isListAllBool(true, email) {
-			providers = append(providers, provider.NewEmail(viper.GetString("alert.email.from"),
-				viper.GetString("alert.email.password"),
-				viper.GetString("alert.email.host"),
-				viper.GetInt("alert.email.port"),
-				viper.GetString("alert.email.to")))
 		}
 	}
 
