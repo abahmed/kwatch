@@ -32,18 +32,25 @@ func main() {
 		logrus.Warnf("unable to load config file: %s", err.Error())
 	}
 
+	// Load config
+	var config constant.Config
+	if err := viper.Unmarshal(&config); err != nil {
+		fmt.Println(err)
+		return
+	}
+
 	// get providers
 	providers := util.GetProviders()
 
 	// check and notify if newer versions are available
-	if !viper.GetBool("disableUpdateCheck") {
+	if !config.DisableUpdateCheck {
 		go upgrader.CheckUpdates(providers)
 	}
 
 	// Parse namespace allow/forbid lists
 	namespaceAllowList := make([]string, 0)
 	namespaceForbidList := make([]string, 0)
-	for _, namespace := range viper.GetStringSlice("namespaces") {
+	for _, namespace := range config.Namespaces {
 		if clean := strings.TrimPrefix(namespace, "!"); namespace != clean {
 			namespaceForbidList = append(namespaceForbidList, clean)
 			continue
@@ -57,7 +64,7 @@ func main() {
 	// Parse reason allow/forbid lists
 	reasonAllowList := make([]string, 0)
 	reasonForbidList := make([]string, 0)
-	for _, namespace := range viper.GetStringSlice("reasons") {
+	for _, namespace := range config.Reasons {
 		if clean := strings.TrimPrefix(namespace, "!"); namespace != clean {
 			reasonForbidList = append(reasonForbidList, clean)
 			continue
@@ -68,11 +75,13 @@ func main() {
 		logrus.Fatal("Either allowed or forbidden reasons must be set. Can't set both")
 	}
 
-	ignoreContainerList := make([]string, 0)
-	for _, container := range viper.GetStringSlice("ignoreContainerNames") {
-		ignoreContainerList = append(ignoreContainerList, container)
-	}
-
 	// start controller
-	controller.Start(providers, viper.GetBool("ignoreFailedGracefulShutdown"), namespaceAllowList, namespaceForbidList, reasonAllowList, reasonForbidList, ignoreContainerList)
+	controller.Start(
+		providers,
+		namespaceAllowList,
+		namespaceForbidList,
+		reasonAllowList,
+		reasonForbidList,
+		config,
+	)
 }
