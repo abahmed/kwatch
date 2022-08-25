@@ -133,8 +133,15 @@ func TestGetProviders(t *testing.T) {
 		"teams": map[string]interface{}{
 			"webhook": "test",
 		},
+		"mattermost": map[string]interface{}{
+			"webhook": "test",
+		},
+		"opsgenie": map[string]interface{}{
+			"apiKey": "test",
+		},
 	}
 	viper.SetDefault("alert", alertMap)
+
 	providers := GetProviders()
 	if len(providers) != len(alertMap) {
 		t.Fatalf(
@@ -165,6 +172,12 @@ func TestSendProvidersEvent(t *testing.T) {
 		"rocketchat": map[string]interface{}{
 			"webhook": "test",
 		},
+		"mattermost": map[string]interface{}{
+			"webhook": "test",
+		},
+		"opsgenie": map[string]interface{}{
+			"apiKey": "test",
+		},
 	}
 	viper.SetDefault("alert", alertMap)
 	providers := GetProviders()
@@ -192,6 +205,12 @@ func TestSendProvidersMsg(t *testing.T) {
 		},
 		"rocketchat": map[string]interface{}{
 			"webhook": "test",
+		},
+		"mattermost": map[string]interface{}{
+			"webhook": "test",
+		},
+		"opsgenie": map[string]interface{}{
+			"apiKey": "test",
 		},
 	}
 	viper.SetDefault("alert", alertMap)

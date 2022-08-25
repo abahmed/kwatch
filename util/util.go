@@ -39,6 +39,24 @@ func GetPodEventsStr(c kubernetes.Interface, name, namespace string) string {
 	return strings.TrimSpace(eventsString)
 }
 
+// ContainsKillingStoppingContainerEvents checks if the events contain an event with "Killing Stopping container" which
+// indicates that a container could not be gracefully shutdown
+func ContainsKillingStoppingContainerEvents(c kubernetes.Interface, name, namespace string) bool {
+	events, err := getPodEvents(c, name, namespace)
+	if err != nil {
+		return false
+	}
+
+	for _, ev := range events.Items {
+		if strings.ToLower(ev.Reason) == "killing" &&
+			strings.Contains(strings.ToLower(ev.Message), "stopping container") {
+			return true
+		}
+	}
+
+	return false
+}
+
 // GetPodContainerLogs returns logs for specified container in pod
 func GetPodContainerLogs(
 	c kubernetes.Interface, name, container, namespace string,
@@ -137,6 +155,12 @@ func GetProviders() []provider.Provider {
 				email[4] = true
 			if key == "rocketchat" && c == "webhook" && len(strings.TrimSpace(v.(string))) > 0 {
 				providers = append(providers, provider.NewRocketChat(viper.GetString("alert.rocketchat.webhook")))
+			}
+			if key == "mattermost" && c == "webhook" && len(strings.TrimSpace(v.(string))) > 0 {
+				providers = append(providers, provider.NewMattermost(viper.GetString("alert.mattermost.webhook")))
+			}
+			if key == "opsgenie" && c == "apikey" && len(strings.TrimSpace(v.(string))) > 0 {
+				providers = append(providers, provider.NewOpsgenie(viper.GetString("alert.opsgenie.apikey")))
 			}
 		}
 		if key == "telegram" && IsListAllBool(true, telegram) {

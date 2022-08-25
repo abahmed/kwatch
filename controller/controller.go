@@ -5,8 +5,6 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/spf13/viper"
-
 	"github.com/abahmed/kwatch/constant"
 	"github.com/abahmed/kwatch/event"
 	"github.com/abahmed/kwatch/provider"
@@ -23,13 +21,19 @@ import (
 
 // Controller holds necessary
 type Controller struct {
-	name      string
-	informer  cache.Controller
-	indexer   cache.Indexer
-	kclient   kubernetes.Interface
-	queue     workqueue.RateLimitingInterface
-	providers []provider.Provider
-	store     storage.Storage
+	name                         string
+	informer                     cache.Controller
+	indexer                      cache.Indexer
+	kclient                      kubernetes.Interface
+	queue                        workqueue.RateLimitingInterface
+	providers                    []provider.Provider
+	store                        storage.Storage
+	ignoreFailedGracefulShutdown bool
+	namespaceAllowList           []string
+	namespaceForbidList          []string
+	reasonAllowList              []string
+	reasonForbidList             []string
+	ignoreContainerList	     []string
 }
 
 // run starts the controller
@@ -122,37 +126,59 @@ func (c *Controller) processItem(key string) error {
 	}
 
 	// filter by namespaces in config if specified
-	namespaces := viper.GetStringSlice("namespaces")
-	if len(namespaces) != 0 && !util.IsStrInSlice(pod.Namespace, namespaces) {
-		logrus.Infof("skip namespace %s as not selected in configuration", pod.Namespace)
+	if len(c.namespaceAllowList) > 0 && !util.IsStrInSlice(pod.Namespace, c.namespaceAllowList) {
+		logrus.Infof("skip namespace %s as not in namespace allow list", pod.Namespace)
+		return nil
+	}
+	if len(c.namespaceForbidList) > 0 && util.IsStrInSlice(pod.Namespace, c.namespaceForbidList) {
+		logrus.Infof("skip namespace %s as in namespace forbid list", pod.Namespace)
 		return nil
 	}
 
-	c.processPod(pod)
+	c.processPod(key, pod)
 
 	return nil
 }
 
 // processPod checks status of pod and notify in abnormal cases
-func (c *Controller) processPod(pod *v1.Pod) {
+func (c *Controller) processPod(key string, pod *v1.Pod) {
 	for _, container := range pod.Status.ContainerStatuses {
 		// filter running containers
 		if container.Ready ||
 			(container.State.Waiting == nil &&
 				container.State.Terminated == nil) {
-			c.store.DelPodContainer(pod.Name, container.Name)
+			c.store.DelPodContainer(key, container.Name)
 			continue
 		}
 
-		if (container.State.Waiting != nil &&
-			container.State.Waiting.Reason == "ContainerCreating") ||
-			(container.State.Terminated != nil &&
-				container.State.Terminated.Reason == "Completed") {
-			continue
+		if container.State.Waiting != nil {
+			switch {
+			case container.State.Waiting.Reason == "ContainerCreating":
+				continue
+			case container.State.Waiting.Reason == "PodInitializing":
+				continue
+			}
+		} else if container.State.Terminated != nil {
+			switch {
+			case container.State.Terminated.Reason == "Completed":
+				continue
+			case container.State.Terminated.ExitCode == 143:
+				// 143 is the exit code for graceful termination
+				continue
+			case container.State.Terminated.ExitCode == 0:
+				// 0 is the exit code for purpose stop
+				continue
+			}
 		}
 
 		// if reported, continue
-		if c.store.HasPodContainer(pod.Name, container.Name) {
+		if c.store.HasPodContainer(key, container.Name) {
+			continue
+		}
+
+		if c.ignoreFailedGracefulShutdown && util.ContainsKillingStoppingContainerEvents(c.kclient, pod.Name, pod.Namespace) {
+			// Graceful shutdown did not work and container was killed during shutdown.
+			//  Not really an error
 			continue
 		}
 
@@ -168,6 +194,20 @@ func (c *Controller) processPod(pod *v1.Pod) {
 			reason = container.State.Waiting.Reason
 		} else if container.State.Terminated != nil {
 			reason = container.State.Terminated.Reason
+		}
+
+		if len(c.reasonAllowList) > 0 && !util.IsStrInSlice(reason, c.reasonAllowList) {
+			logrus.Infof("skip reason %s as not in reason allow list", reason)
+			return
+		}
+		if len(c.reasonForbidList) > 0 && util.IsStrInSlice(reason, c.reasonForbidList) {
+			logrus.Infof("skip reason %s as in reason forbid list", reason)
+			return
+		}
+
+		if len(c.ignoreContainerList) > 0 && util.IsStrInSlice(container.Name, c.ignoreContainerList) {
+			logrus.Infof("skip pod %s as in container ignore list", container.Name)
+			return
 		}
 
 		// get logs for this container
@@ -199,7 +239,7 @@ func (c *Controller) processPod(pod *v1.Pod) {
 		}
 
 		// save container as it's reported to avoid duplication
-		c.store.AddPodContainer(pod.Name, container.Name)
+		c.store.AddPodContainer(key, container.Name)
 
 		// send event to providers
 		util.SendProvidersEvent(c.providers, evnt)

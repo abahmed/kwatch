@@ -23,3 +23,6 @@ kwatch
 /vendor/
 /Godeps/
 *.DS_Store
+
+# debug
+__debug_bin

@@ -1,0 +1,79 @@
+{{- $c := .Values.kwatch.config -}}
+{{- if $c.create -}}
+{{- $conf := $c.configTemplate -}}
+{{- $conftpl := $c.configTemplate.alert -}}
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ .Release.Name }}-kwatch
+  namespace: {{ .Release.Namespace }}
+  {{- if .Values.commonLabels }}
+  labels:
+  {{- with .Values.commonLabels }}
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
+  {{- end }}
+  {{- if .Values.commonAnnotations }}
+  annotations:
+  {{- with .Values.commonAnnotations }}
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
+  {{- end }}
+data:
+  config: |4
+      maxRecentLogLines: {{ default 0 $conf.maxRecentLogLines }}
+      ignoreFailedGracefulShutdown: {{ default false $conf.ignoreFailedGracefulShutdown }}
+      disableUpdateCheck: {{ default false $conf.disableUpdateCheck }}
+      {{- with $conftpl.namespaces }}
+      namespaces: {{ toYaml . | indent 8 }}
+      {{- end }}
+      {{- if or $conftpl.slack.webhook $conftpl.pagerduty.integrationKey $conftpl.discord.webhook $conftpl.teams.webhook $conftpl.rocketchat.webhook $conftpl.mattermost.webhook $conftpl.opsgenie.apiKey $conftpl.namespaces }}
+      alert:
+      {{- if $conftpl.slack.webhook }}
+        slack:
+          webhook: {{ $conftpl.slack.webhook | quote }}
+          title: {{ default "" $conftpl.slack.title | quote }}
+          text: {{ default "" $conftpl.slack.text | quote }}
+      {{- end }}
+      {{- if $conftpl.pagerduty.integrationKey }}
+        pagerduty:
+          integrationKey: {{ $conftpl.pagerduty.integrationKey | quote }}
+      {{- end }}
+      {{- if $conftpl.discord.webhook }}
+        discord:
+          webhook: {{ $conftpl.discord.webhook }}
+          title: {{ default "" $conftpl.discord.title | quote }}
+          text: {{ default "" $conftpl.discord.text | quote }}
+      {{- end }}
+      {{- if and $conftpl.telegram.token $conftpl.telegram.chatId }}
+        telegram:
+          token: {{ $conftpl.telegram.token }}
+          chatId: {{ $conftpl.telegram.chatId }}
+      {{- end }}
+      {{- if $conftpl.teams.webhook }}
+        teams:
+          webhook: {{ $conftpl.teams.webhook }}
+          title: {{ default "" $conftpl.teams.title | quote }}
+          text: {{ default "" $conftpl.teams.text | quote }}
+      {{- end }}
+      {{- if $conftpl.rocketchat.webhook }}
+        rocketchat:
+          webhook: {{ $conftpl.rocketchat.webhook }}
+          text: {{ default "" $conftpl.rocketchat.text | quote }}
+      {{- end }}
+      {{- if $conftpl.mattermost.webhook }}
+        mattermost:
+          webhook: {{ $conftpl.mattermost.webhook | quote }}
+          title: {{ default "" $conftpl.mattermost.title | quote }}
+          text: {{ default "" $conftpl.mattermost.text | quote }}
+      {{- end }}
+      {{- if $conftpl.opsgenie.apiKey }}
+        opsgenie:
+          apiKey: {{ $conftpl.opsgenie.apiKey | quote}}
+          title: {{ default "" $conftpl.opsgenie.title | quote }}
+          text: {{ default "" $conftpl.opsgenie.text | quote }}
+      {{- end }}
+      {{- end }}
+...
+{{- end }}

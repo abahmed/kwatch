@@ -1,0 +1,16 @@
+---
+apiVersion: v2
+appVersion: v0.6.1
+version: 0.1.0
+name: kwatch
+description: |4
+    Helm chart to deploy Kwatch on Your kubernetes cluster.
+type: application
+keywords:
+- kwatch
+maintainers:
+- name: yaser
+  email: yaserkalali.work@gmail.com
+  url: github.com/yaskinny
+home: https://github.com/abahmed/kwatch
+...

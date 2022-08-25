@@ -17,24 +17,34 @@ import (
 )
 
 // Start creates an instance of controller after initialization and runs it
-func Start(providers []provider.Provider) {
+func Start(providers []provider.Provider, ignoreFailedGracefulShutdown bool,
+	namespaceAllowList, namespaceForbidList,
+	reasonAllowList, reasonForbidList []string, ignoreContainerList []string) {
 	// create kubernetes client
 	kclient := client.Create()
 
 	// create rate limiting queue
-	queue :=
-		workqueue.NewRateLimitingQueue(workqueue.DefaultControllerRateLimiter())
+	queue := workqueue.NewRateLimitingQueue(workqueue.DefaultControllerRateLimiter())
+
+	// Namespace to watch, if all is selected it will watch all namespaces
+	// in a cluster scope, if not then it will watch only in the namespace
+	var namespaceToWatch = v1.NamespaceAll
+
+	// if there is exactly 1 namespace listen only to that namespace for events
+	if len(namespaceAllowList) == 1 {
+		namespaceToWatch = namespaceAllowList[0]
+	}
 
 	indexer, informer := cache.NewIndexerInformer(
 		&cache.ListWatch{
 			ListFunc: func(opts metav1.ListOptions) (runtime.Object, error) {
 				return kclient.CoreV1().
-					Pods(v1.NamespaceAll).
+					Pods(namespaceToWatch).
 					List(context.TODO(), opts)
 			},
 			WatchFunc: func(opts metav1.ListOptions) (watch.Interface, error) {
 				return kclient.CoreV1().
-					Pods(v1.NamespaceAll).
+					Pods(namespaceToWatch).
 					Watch(context.TODO(), opts)
 			},
 		},
@@ -67,13 +77,20 @@ func Start(providers []provider.Provider) {
 		}, cache.Indexers{})
 
 	controller := Controller{
-		name:      "pod-crash",
-		informer:  informer,
-		indexer:   indexer,
-		queue:     queue,
-		kclient:   kclient,
-		providers: providers,
-		store:     memory.NewMemory(),
+		name:                         "pod-crash",
+		informer:                     informer,
+		indexer:                      indexer,
+		queue:                        queue,
+		kclient:                      kclient,
+		providers:                    providers,
+		store:                        memory.NewMemory(),
+		ignoreFailedGracefulShutdown: ignoreFailedGracefulShutdown,
+
+		namespaceAllowList:  namespaceAllowList,
+		namespaceForbidList: namespaceForbidList,
+		reasonAllowList:     reasonAllowList,
+		reasonForbidList:    reasonForbidList,
+		ignoreContainerList: ignoreContainerList,
 	}
 
 	stopCh := make(chan struct{})

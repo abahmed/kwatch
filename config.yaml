@@ -19,5 +19,9 @@ alert:
     webhook: ""
   rocketchat:
     webhook: ""
+  mattermost:
+    webhook: ""
+  opsgenie:
+    apiKey: ""
 namespaces:
   - default

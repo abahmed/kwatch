@@ -1,41 +1,40 @@
-<p align="left">
-	  <h1>kwatch</h1>
-    <br />
-    <a href="https://godoc.org/github.com/abahmed/kwatch">
-      <img src="https://godoc.org/github.com/abahmed/kwatch?status.png" />
-    </a>
-    <a href="https://github.com/abahmed/kwatch/actions/workflows/check.yaml">
-      <img src="https://github.com/abahmed/kwatch/workflows/Check/badge.svg?branch=main" />
-    </a>
-    <a href="https://goreportcard.com/report/github.com/abahmed/kwatch">
-      <img src="https://goreportcard.com/badge/github.com/abahmed/kwatch" />
-    </a>
-    <a href="https://codecov.io/gh/abahmed/kwatch">
-      <img src="https://codecov.io/gh/abahmed/kwatch/branch/main/graph/badge.svg?token=ZMCU75JJO7"/>
-    </a>
-    <a href="https://github.com/abahmed/kwatch/releases/latest">
-      <img src="https://img.shields.io/github/v/release/abahmed/kwatch?label=kwatch" />
-    </a>
-	  <a href="https://discord.gg/kzJszdKmJ7">
-      <img src="https://img.shields.io/discord/911647396918870036?label=Discord&logo=discord">
-  	</a>
+<p align="center">
+  <a href="https://kwatch.dev">
+    <img src="./assets/logo.png" width="30%"/>
+  </a>
+  <br />
+  <a href="https://kwatch.dev">
+    <img src="https://img.shields.io/badge/%F0%9F%92%A1%20kwatch-website-00ACD7.svg" />
+  </a>
+  <a href="https://godoc.org/github.com/abahmed/kwatch">
+    <img src="https://godoc.org/github.com/abahmed/kwatch?status.png" />
+  </a>
+  <a href="https://github.com/abahmed/kwatch/actions/workflows/check.yaml">
+    <img src="https://github.com/abahmed/kwatch/workflows/Check/badge.svg?branch=main" />
+  </a>
+  <a href="https://goreportcard.com/report/github.com/abahmed/kwatch">
+    <img src="https://goreportcard.com/badge/github.com/abahmed/kwatch" />
+  </a>
+  <a href="https://codecov.io/gh/abahmed/kwatch">
+    <img src="https://codecov.io/gh/abahmed/kwatch/branch/main/graph/badge.svg?token=ZMCU75JJO7"/>
+  </a>
+  <a href="https://github.com/abahmed/kwatch/releases/latest">
+    <img src="https://img.shields.io/github/v/release/abahmed/kwatch?label=kwatch" />
+  </a>
+  <a href="https://discord.gg/kzJszdKmJ7">
+    <img src="https://img.shields.io/discord/911647396918870036?label=Discord&logo=discord">
+  </a>
 </p>
 
 **kwatch** helps you monitor all changes in your Kubernetes(K8s) cluster, detects crashes in your running apps in realtime, and publishes notifications to your channels (Slack, Discord, etc.) instantly
 
-## Contribute & Support
-+ Add a [GitHub Star](https://github.com/abahmed/kwatch/stargazers)
-+ [Suggest new features, ideas and optimizations](https://github.com/abahmed/kwatch/issues)
-+ [Report issues](https://github.com/abahmed/kwatch/issues)
-
-
-## Getting Started
+## ⚡️ Getting Started
 
 ### Install
 
 You need to get config template to add your configs
 ```shell
-curl  -L https://raw.githubusercontent.com/abahmed/kwatch/v0.2.0/deploy/config.yaml -o config.yaml
+curl  -L https://raw.githubusercontent.com/abahmed/kwatch/v0.6.1/deploy/config.yaml -o config.yaml
 ```
 
 Then edit `config.yaml` file and apply your configuration
@@ -47,18 +46,42 @@ kubectl apply -f config.yaml
 To deploy **kwatch**, execute following command:
 
 ```shell
-kubectl apply -f https://raw.githubusercontent.com/abahmed/kwatch/v0.2.0/deploy/deploy.yaml
+kubectl apply -f https://raw.githubusercontent.com/abahmed/kwatch/v0.6.1/deploy/deploy.yaml
 ```
 
 ### Configuration
 
 #### General
 
-| Parameter                            | Description                                                                                          |
-|:-------------------------------------|:-----------------------------------------------------------------------------------------------------|
-| `maxRecentLogLines`                  | Optional Max tail log lines in messages, if it's not provided it will get all log lines              |
-| `namespaces`                         | Optional list of namespaces that you want to watch, if it's not provided it will watch all namespaces|
+| Parameter           | Description                                                                                                                                                                                                                                                              |
+|:--------------------|:-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
+| `maxRecentLogLines` | Optional Max tail log lines in messages, if it's not provided it will get all log lines                                                                                                                                                                                  |
+| `namespaces`        | Optional comma separated list of namespaces that you want to watch or forbid, if it's not provided it will watch all namespaces. If you want to forbid a namespace, configure it with `!<namespace name>`. You can either set forbidden namespaces or allowed, not both. |
+| `reasons`           | Optional comma separated list of reasons that you want to watch or forbid, if it's not provided it will watch all reasons. If you want to forbid a reason, configure it with `!<reason>`. You can either set forbidden reasons or allowed, not both.                     |
+| `ignoreFailedGracefulShutdown`       | If set to true, containers which are forcefully killed during shutdown (as their graceful shutdown failed) are not reported as error     |
+| `disableUpdateCheck`       | If set to true, does not check for and notify about kwatch updates    |
+| `ignoreContainerNames`       | Optional comma separated list of container names to ignore    |
 
+#### High Level Architecture
+
+<p>
+	<img src="./assets/highlevelarchitecture.png" width="70%"/>
+</p>
+
+| Point                            | URL                                                                               |
+|:---------------------------------|:--------------------------------------------------------------------------------- |
+| `4.1`                            | https://github.com/abahmed/kwatch/blob/main/main.go#L18                           |
+| `5.1.`                           | https://github.com/abahmed/kwatch/blob/main/main.go#L21 / 24                      |
+| `6.1.`                           | https://github.com/abahmed/kwatch/blob/main/main.go#L36                           |
+| `7.0.`                           | https://github.com/abahmed/kwatch/blob/main/main.go#L40                           |
+| `7.1.`                           | https://github.com/abahmed/kwatch/blob/main/upgrader/upgrader.go#L16              |
+| `8.1.&8.2`                       | https://github.com/abahmed/kwatch/blob/main/main.go#L46 / 52                      |
+| `8.3.`                           | https://github.com/abahmed/kwatch/blob/main/main.go#L53                           |
+| `9.0.`                           | https://github.com/abahmed/kwatch/blob/main/main.go#L58                           |
+| `9.1.`                           | https://github.com/abahmed/kwatch/blob/main/controller/start.go#L20               |
+| `9.2.`                           | https://github.com/abahmed/kwatch/blob/main/controller/controller.go#L37          |
+| `9.3.`                           | https://github.com/abahmed/kwatch/blob/main/controller/controller.go              |
+| `9.4.`                           | https://github.com/abahmed/kwatch/tree/main/provider                              |
 
 #### Slack
 
@@ -158,32 +181,73 @@ If you want to enable Rocket Chat, provide the webhook with optional text
 | `alert.rocketchat.webhook` | Rocket Chat webhook URL                |
 | `alert.rocketchat.text`    | Customized text in rocket chat message |
 
+#### Mattermost
+
+<p>
+	<img src="./assets/mattermost.png" width="45%"/>
+</p>
+
+If you want to enable Mattermost, provide the webhook with optional text and title
+
+
+| Parameter                             | Description                               |
+|:--------------------------------------|:----------------------------------------- |
+| `alert.mattermost.webhook`            | Mattermost webhook URL                    |
+| `alert.mattermost.title`              | Customized title in Mattermost message    |
+| `alert.mattermost.text`               | Customized text in Mattermost message     |
+
+#### Opsgenie
+
+<p>
+	<img src="./assets/opsgenie.png" width="45%"/>
+</p>
+
+If you want to enable Opsgenie, provide the API key with optional text and title
+
+
+| Parameter                             | Description                             |
+|:--------------------------------------|:--------------------------------------- |
+| `alert.opsgenie.apiKey`               | Opsgenie API Key                        |
+| `alert.opsgenie.title`                | Customized title in Opsgenie message    |
+| `alert.opsgenie.text`                 | Customized text in Opsgenie message     |
+
+
 ### Cleanup
 
 ```shell
-kubectl delete -f https://raw.githubusercontent.com/abahmed/kwatch/v0.2.0/deploy/config.yaml
-kubectl delete -f https://raw.githubusercontent.com/abahmed/kwatch/v0.2.0/deploy/deploy.yaml
+kubectl delete -f https://raw.githubusercontent.com/abahmed/kwatch/v0.6.1/deploy/config.yaml
+kubectl delete -f https://raw.githubusercontent.com/abahmed/kwatch/v0.6.1/deploy/deploy.yaml
 ```
 
-## Who uses kwatch?
+## 👍 Contribute & Support
++ Add a [GitHub Star](https://github.com/abahmed/kwatch/stargazers)
++ [Suggest new features, ideas and optimizations](https://github.com/abahmed/kwatch/issues)
++ [Report issues](https://github.com/abahmed/kwatch/issues)
+
+## 🚀 Who uses kwatch?
 
 **kwatch** is being used by multiple entities including, but not limited to
 
 [<img src="./assets/users/trella.png"/>](https://www.trella.app)
 [<img src="./assets/users/ibec-systems.svg" width="50%"/>](https://ibecsystems.com/en#/)
+[<img src="./assets/users/justwatch.png" width="50%"/>](https://www.justwatch.com/us/talent)
 
 If you want to add your entity, [open issue](https://github.com/abahmed/kwatch/issues) to add it
 
-## Contributors
+## 💻 Contributors
 
 <a href="https://github.com/abahmed/kwatch/graphs/contributors">
   <img src="https://contributors-img.firebaseapp.com/image?repo=abahmed/kwatch" />
 </a>
 
-## Get in touch!
+## ⭐️ Stargazers
+
+<img src="https://starchart.cc/abahmed/kwatch.svg" alt="Stargazers over time" style="max-width: 100%">
+
+## 👋 Get in touch!
 
 Feel free to chat with us on [Discord](https://discord.gg/kzJszdKmJ7) if you have questions, or suggestions
 
-## License
+## ⚠️ License
 
 kwatch is licensed under [MIT License](LICENSE)

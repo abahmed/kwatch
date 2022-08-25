@@ -1,0 +1,117 @@
+{{- $k := .Values.kwatch -}}
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  namespace: {{ .Release.Namespace }}
+  name: {{ .Release.Name }}-kwatch
+  {{- if .Values.commonLabels }}
+  labels:
+  {{- with .Values.commonLabels }}
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
+  {{- end }}
+  {{- if .Values.commonAnnotations }}
+  annotations:
+  {{- with .Values.commonAnnotations }}
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
+  {{- end }}
+spec:
+  replicas: {{ default 1 $k.replicas }}
+  strategy:
+  {{- if and $k.strategy.type (eq $k.strategy.type "RollingUpdate") }}
+    type: RollingUpdate
+    rollingUpdate:
+      maxUnavailable: {{ default 0 $k.strategy.maxUnavailable }}
+      maxSurge: {{ default 0 $k.strategy.maxSurge }}
+  {{- else }}
+    type: Recreate
+  {{- end }}
+  selector:
+    matchLabels:
+      {{- include "kwatch.commonLabels" . | nindent 6 }}
+      {{- if .Values.commonLabels }}
+      {{- with .Values.commonLabels }}
+        {{- toYaml . | nindent 6 }}
+      {{- end }}
+      {{- end }}
+  template:
+    metadata:
+      labels:
+        {{- include "kwatch.commonLabels" . | nindent 8 }}
+        {{- if .Values.commonLabels }}
+        {{- with .Values.commonLabels }}
+          {{- toYaml . | nindent 8 }}
+        {{- end }}
+        {{- end }}
+      {{- if .Values.commonAnnotations }}
+      annotations:
+      {{- with .Values.commonAnnotations }}
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- end }}
+    spec:
+      serviceAccountName: {{ .Release.Name }}-kwatch
+      {{- if .Values.privateRegistries }}
+      {{- range .Values.privateRegistries }}
+      imagePullSecrets:
+      - name: {{ . | quote }}
+      {{- end }}
+      {{- end }}
+      containers:
+      - name: kwatch
+        image: {{ tpl $k.image . | quote }}
+        imagePullPolicy: {{ default "IfNotPresent" $k.imagePullPolicy }}
+        volumeMounts:
+        - name: config
+          mountPath: /config.yaml
+          subPath: config.yaml
+          readOnly: true
+        env:
+        - name: CONFIG_FILE
+          value: "/config.yaml"
+        {{- with $k.envFrom }}
+        envFrom: {{ toYaml . | nindent 10 }}
+        {{- end }}
+        resources:
+          {{- if $k.resources.requests }}
+          requests:
+            memory: {{ default "128Mi" $k.resources.requests.memory }}
+            cpu: {{ default "100m" $k.resources.requests.cpu }}
+          {{- end }}
+          limits:
+            memory: {{ default "128Mi" $k.resources.limits.memory }}
+            cpu: {{ default "100m" $k.resources.limits.cpu }}
+        securityContext:
+        {{- with $k.securityContext }}
+        {{- toYaml . | nindent 10 }}
+        {{- end }}
+      volumes:
+      - name: config
+        {{- if not $k.config.create }}
+        {{- if $k.config.secret }}
+        {{- if and $k.config.secret.name $k.config.secret.key }}
+        secret:
+          secretName: {{ $k.config.secret.name }}
+          items:
+          - key: {{ $k.config.secret.key }}
+            path: config.yaml
+        {{- end }}
+        {{- else if $k.config.configMap }}
+        {{- if and $k.config.configMap.name $k.config.configMap.key }}
+        configMap:
+          name: {{ $k.config.configMap.name }}
+          items:
+          - key: {{ $k.config.configMap.key }}
+            path: config.yaml
+        {{- end }}
+        {{- end }}
+        {{- else }}
+        configMap:
+          name: {{ .Release.Name }}-kwatch
+          items:
+          - key: config
+            path: config.yaml
+        {{- end }}
+...
