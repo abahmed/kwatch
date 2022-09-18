@@ -5,7 +5,8 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"io/ioutil"
+	"io"
+
 	"net/http"
 
 	"github.com/abahmed/kwatch/event"
@@ -111,7 +112,7 @@ func (m *mattermost) sendAPI(content []byte) error {
 	}
 
 	if response.StatusCode != 200 {
-		body, _ := ioutil.ReadAll(response.Body)
+		body, _ := io.ReadAll(response.Body)
 		return fmt.Errorf(
 			"call to mattermost alert returned status code %d: %s",
 			response.StatusCode,

@@ -5,7 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"io/ioutil"
+	"io"
 	"net/http"
 	"strings"
 
@@ -76,7 +76,7 @@ func sendByRocketChatApi(reqBody string, r *rocketChat) error {
 	}
 
 	if response.StatusCode != 200 {
-		body, _ := ioutil.ReadAll(response.Body)
+		body, _ := io.ReadAll(response.Body)
 		return fmt.Errorf(
 			"call to rocket chat alert returned status code %d: %s",
 			response.StatusCode,
@@ -106,8 +106,8 @@ func buildRequestBodyRocketChat(e *event.Event, customMsg string) (string, error
 		logsText = e.Logs
 	}
 
-	// build text will be sent in the message
-	// use custom text if it's provided, otherwise use default
+	// build text will be sent in the message use custom text if it's provided,
+	// otherwise use default
 	text := viper.GetString("alert.rocketchat.text")
 	if len(customMsg) <= 0 {
 		text = fmt.Sprintf(

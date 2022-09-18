@@ -33,7 +33,7 @@ type Controller struct {
 	namespaceForbidList          []string
 	reasonAllowList              []string
 	reasonForbidList             []string
-	ignoreContainerList	     []string
+	ignoreContainerList          []string
 }
 
 // run starts the controller
@@ -54,7 +54,10 @@ func (c *Controller) run(workers int, stopCh chan struct{}) {
 	logrus.Infof("%s controller synced and ready", c.name)
 
 	// send notification to providers
-	util.SendProvidersMsg(c.providers, fmt.Sprintf(constant.WelcomeMsg, constant.Version))
+	util.SendProvidersMsg(
+		c.providers,
+		fmt.Sprintf(constant.WelcomeMsg, constant.Version),
+	)
 
 	// start workers
 	for i := 0; i < workers; i++ {
@@ -107,8 +110,8 @@ func (c *Controller) processItem(key string) error {
 	}
 
 	if !exists {
-		// Below we will warm up our cache with a Pod, so that we will see
-		// a delete for one pod
+		// Below we will warm up our cache with a Pod, so that we will see a
+		// delete for one pod
 		logrus.Infof("pod %s does not exist anymore\n", key)
 
 		c.store.DelPod(key)
@@ -126,12 +129,18 @@ func (c *Controller) processItem(key string) error {
 	}
 
 	// filter by namespaces in config if specified
-	if len(c.namespaceAllowList) > 0 && !util.IsStrInSlice(pod.Namespace, c.namespaceAllowList) {
-		logrus.Infof("skip namespace %s as not in namespace allow list", pod.Namespace)
+	if len(c.namespaceAllowList) > 0 &&
+		!util.IsStrInSlice(pod.Namespace, c.namespaceAllowList) {
+		logrus.Infof(
+			"skip namespace %s as not in namespace allow list",
+			pod.Namespace)
 		return nil
 	}
-	if len(c.namespaceForbidList) > 0 && util.IsStrInSlice(pod.Namespace, c.namespaceForbidList) {
-		logrus.Infof("skip namespace %s as in namespace forbid list", pod.Namespace)
+	if len(c.namespaceForbidList) > 0 &&
+		util.IsStrInSlice(pod.Namespace, c.namespaceForbidList) {
+		logrus.Infof(
+			"skip namespace %s as in namespace forbid list",
+			pod.Namespace)
 		return nil
 	}
 
@@ -176,8 +185,13 @@ func (c *Controller) processPod(key string, pod *v1.Pod) {
 			continue
 		}
 
-		if c.ignoreFailedGracefulShutdown && util.ContainsKillingStoppingContainerEvents(c.kclient, pod.Name, pod.Namespace) {
-			// Graceful shutdown did not work and container was killed during shutdown.
+		if c.ignoreFailedGracefulShutdown &&
+			util.ContainsKillingStoppingContainerEvents(
+				c.kclient,
+				pod.Name,
+				pod.Namespace) {
+			// Graceful shutdown did not work and container was killed during
+			// shutdown.
 			//  Not really an error
 			continue
 		}
@@ -196,17 +210,22 @@ func (c *Controller) processPod(key string, pod *v1.Pod) {
 			reason = container.State.Terminated.Reason
 		}
 
-		if len(c.reasonAllowList) > 0 && !util.IsStrInSlice(reason, c.reasonAllowList) {
+		if len(c.reasonAllowList) > 0 &&
+			!util.IsStrInSlice(reason, c.reasonAllowList) {
 			logrus.Infof("skip reason %s as not in reason allow list", reason)
 			return
 		}
-		if len(c.reasonForbidList) > 0 && util.IsStrInSlice(reason, c.reasonForbidList) {
+		if len(c.reasonForbidList) > 0 &&
+			util.IsStrInSlice(reason, c.reasonForbidList) {
 			logrus.Infof("skip reason %s as in reason forbid list", reason)
 			return
 		}
 
-		if len(c.ignoreContainerList) > 0 && util.IsStrInSlice(container.Name, c.ignoreContainerList) {
-			logrus.Infof("skip pod %s as in container ignore list", container.Name)
+		if len(c.ignoreContainerList) > 0 &&
+			util.IsStrInSlice(container.Name, c.ignoreContainerList) {
+			logrus.Infof(
+				"skip pod %s as in container ignore list",
+				container.Name)
 			return
 		}
 

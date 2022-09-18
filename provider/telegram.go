@@ -28,7 +28,10 @@ func NewTelegram(token string, chatId string) Provider {
 	} else if len(chatId) == 0 {
 		logrus.Warnf("initializing telegram with empty chat_id")
 	} else {
-		logrus.Infof("initializing telegram with token  %s and chat_id %s", token, chatId)
+		logrus.Infof(
+			"initializing telegram with token  %s and chat_id %s",
+			token,
+			chatId)
 	}
 
 	// returns a new telegram object
@@ -70,7 +73,10 @@ func (t *telegram) SendMessage(msg string) error {
 	return sendByTelegramApi(reqBody, t)
 }
 
-func buildRequestBodyTelegram(e *event.Event, chatId string, customMsg string) string {
+func buildRequestBodyTelegram(
+	e *event.Event,
+	chatId string,
+	customMsg string) string {
 	eventsText := "No events captured"
 	logsText := "No logs captured"
 
