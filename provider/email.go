@@ -2,11 +2,12 @@ package provider
 
 import (
 	"fmt"
+	"math"
+	"strings"
+
 	"github.com/abahmed/kwatch/event"
 	"github.com/sirupsen/logrus"
 	gomail "gopkg.in/mail.v2"
-	"math"
-	"strings"
 )
 
 type email struct {
@@ -18,7 +19,12 @@ type email struct {
 }
 
 // NewEmail returns new email instance
-func NewEmail(from string, password string, host string, port int, to string) Provider {
+func NewEmail(
+	from string,
+	password string,
+	host string,
+	port int,
+	to string) Provider {
 	if len(from) == 0 {
 		logrus.Warnf("initializing email with an empty from")
 	}

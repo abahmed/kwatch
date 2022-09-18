@@ -63,7 +63,12 @@ func TestGetPodContainerLogs(t *testing.T) {
 	viper.SetDefault("maxRecentLogLines", 20)
 	podName := "test"
 	containerName := "test"
-	logs := GetPodContainerLogs(client, podName, containerName, "default", false)
+	logs := GetPodContainerLogs(
+		client,
+		podName,
+		containerName,
+		"default",
+		false)
 	if logs != "fake logs" {
 		t.Fatalf(
 			"get logs for %s in %s: returned %s expected %s",

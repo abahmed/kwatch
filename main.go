@@ -51,7 +51,9 @@ func main() {
 		namespaceAllowList = append(namespaceAllowList, namespace)
 	}
 	if len(namespaceAllowList) > 0 && len(namespaceForbidList) > 0 {
-		logrus.Fatal("Either allowed or forbidden namespaces must be set. Can't set both")
+		logrus.Fatal(
+			"Either allowed or forbidden namespaces must be set. " +
+				"Can't set both")
 	}
 
 	// Parse reason allow/forbid lists
@@ -65,14 +67,22 @@ func main() {
 		reasonAllowList = append(reasonAllowList, namespace)
 	}
 	if len(reasonAllowList) > 0 && len(reasonForbidList) > 0 {
-		logrus.Fatal("Either allowed or forbidden reasons must be set. Can't set both")
+		logrus.Fatal("Either allowed or forbidden reasons must be set. " +
+			"Can't set both")
 	}
 
 	ignoreContainerList := make([]string, 0)
-	for _, container := range viper.GetStringSlice("ignoreContainerNames") {
-		ignoreContainerList = append(ignoreContainerList, container)
-	}
+	ignoreContainerList = append(
+		ignoreContainerList,
+		viper.GetStringSlice("ignoreContainerNames")...)
 
 	// start controller
-	controller.Start(providers, viper.GetBool("ignoreFailedGracefulShutdown"), namespaceAllowList, namespaceForbidList, reasonAllowList, reasonForbidList, ignoreContainerList)
+	controller.Start(
+		providers,
+		viper.GetBool("ignoreFailedGracefulShutdown"),
+		namespaceAllowList,
+		namespaceForbidList,
+		reasonAllowList,
+		reasonForbidList,
+		ignoreContainerList)
 }

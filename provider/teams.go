@@ -4,7 +4,8 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
-	"io/ioutil"
+	"io"
+
 	"net/http"
 	"strings"
 
@@ -72,7 +73,7 @@ func (t *teams) SendMessage(msg string) error {
 	}
 
 	if response.StatusCode != 200 {
-		body, _ := ioutil.ReadAll(response.Body)
+		body, _ := io.ReadAll(response.Body)
 		return fmt.Errorf(
 			"call to teams alert returned status code %d: %s",
 			response.StatusCode,
@@ -130,7 +131,8 @@ func (t *teams) buildRequestBodyTeams(e *event.Event) (string, error) {
 
 	jsonBytes, err := json.Marshal(msgPayload)
 	if err != nil {
-		return "", fmt.Errorf("failed to marshal string %v: %s", msgPayload, err)
+		return "",
+			fmt.Errorf("failed to marshal string %v: %s", msgPayload, err)
 	}
 
 	return string(jsonBytes), nil
