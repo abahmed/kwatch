@@ -1,6 +1,7 @@
 package util
 
 import (
+	"fmt"
 	"testing"
 
 	"github.com/abahmed/kwatch/event"
@@ -133,7 +134,7 @@ func TestGetProviders(t *testing.T) {
 		},
 		"telegram": map[string]interface{}{
 			"token":  "test",
-			"chatid": "test",
+			"chatId": "test",
 		},
 		"teams": map[string]interface{}{
 			"webhook": "test",
@@ -148,6 +149,7 @@ func TestGetProviders(t *testing.T) {
 	viper.SetDefault("alert", alertMap)
 
 	providers := GetProviders()
+	fmt.Printf("t: %v\n", providers)
 	if len(providers) != len(alertMap) {
 		t.Fatalf(
 			"get providers returned %d expected %d",
