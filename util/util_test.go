@@ -1,6 +1,7 @@
 package util
 
 import (
+	"fmt"
 	"testing"
 
 	"github.com/abahmed/kwatch/event"
@@ -63,7 +64,12 @@ func TestGetPodContainerLogs(t *testing.T) {
 	viper.SetDefault("maxRecentLogLines", 20)
 	podName := "test"
 	containerName := "test"
-	logs := GetPodContainerLogs(client, podName, containerName, "default", false)
+	logs := GetPodContainerLogs(
+		client,
+		podName,
+		containerName,
+		"default",
+		false)
 	if logs != "fake logs" {
 		t.Fatalf(
 			"get logs for %s in %s: returned %s expected %s",
@@ -128,7 +134,7 @@ func TestGetProviders(t *testing.T) {
 		},
 		"telegram": map[string]interface{}{
 			"token":  "test",
-			"chatid": "test",
+			"chatId": "test",
 		},
 		"teams": map[string]interface{}{
 			"webhook": "test",
@@ -143,6 +149,7 @@ func TestGetProviders(t *testing.T) {
 	viper.SetDefault("alert", alertMap)
 
 	providers := GetProviders()
+	fmt.Printf("t: %v\n", providers)
 	if len(providers) != len(alertMap) {
 		t.Fatalf(
 			"get providers returned %d expected %d",

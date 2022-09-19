@@ -93,7 +93,9 @@ func (s *slack) SendEvent(ev *event.Event) error {
 	}
 
 	msg := slackClient.WebhookMessage{
-		Blocks: &slackClient.Blocks{BlockSet: append(blocks, markdownSection(footer))},
+		Blocks: &slackClient.Blocks{
+			BlockSet: append(blocks, markdownSection(footer)),
+		},
 	}
 
 	// send message
@@ -136,7 +138,11 @@ func chunks(s string, chunkSize int) []string {
 }
 
 func plain(txt string) *slackClient.TextBlockObject {
-	return slackClient.NewTextBlockObject(slackClient.PlainTextType, txt, true, false)
+	return slackClient.NewTextBlockObject(
+		slackClient.PlainTextType,
+		txt,
+		true,
+		false)
 }
 func plainSection(txt string) slackClient.SectionBlock {
 	return slackClient.SectionBlock{
@@ -145,7 +151,10 @@ func plainSection(txt string) slackClient.SectionBlock {
 	}
 }
 func markdown(txt string) *slackClient.TextBlockObject {
-	return slackClient.NewTextBlockObject(slackClient.MarkdownType, txt, false, true)
+	return slackClient.NewTextBlockObject(slackClient.MarkdownType,
+		txt,
+		false,
+		true)
 }
 func markdownSection(txt string) slackClient.SectionBlock {
 	return slackClient.SectionBlock{
@@ -154,9 +163,14 @@ func markdownSection(txt string) slackClient.SectionBlock {
 	}
 }
 func markdownF(format string, a ...interface{}) *slackClient.TextBlockObject {
-	return slackClient.NewTextBlockObject(slackClient.MarkdownType, fmt.Sprintf(format, a...), false, true)
+	return slackClient.NewTextBlockObject(
+		slackClient.MarkdownType,
+		fmt.Sprintf(format, a...),
+		false,
+		true)
 }
-func markdownSectionF(format string, a ...interface{}) slackClient.SectionBlock {
+func markdownSectionF(
+	format string, a ...interface{}) slackClient.SectionBlock {
 	return slackClient.SectionBlock{
 		Type: "section",
 		Text: markdownF(format, a...),

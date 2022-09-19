@@ -28,7 +28,9 @@ func Create() kubernetes.Interface {
 
 		config, err = clientcmd.BuildConfigFromFlags("", kubeconfigPath)
 		if err != nil {
-			logrus.Fatalf("cannot build kubernetes out of cluster config: %v", err)
+			logrus.Fatalf(
+				"cannot build kubernetes out of cluster config: %v",
+				err)
 		}
 	}
 

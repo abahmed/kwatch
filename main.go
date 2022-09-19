@@ -58,7 +58,9 @@ func main() {
 		namespaceAllowList = append(namespaceAllowList, namespace)
 	}
 	if len(namespaceAllowList) > 0 && len(namespaceForbidList) > 0 {
-		logrus.Fatal("Either allowed or forbidden namespaces must be set. Can't set both")
+		logrus.Fatal(
+			"Either allowed or forbidden namespaces must be set. " +
+				"Can't set both")
 	}
 
 	// Parse reason allow/forbid lists
@@ -72,7 +74,8 @@ func main() {
 		reasonAllowList = append(reasonAllowList, namespace)
 	}
 	if len(reasonAllowList) > 0 && len(reasonForbidList) > 0 {
-		logrus.Fatal("Either allowed or forbidden reasons must be set. Can't set both")
+		logrus.Fatal("Either allowed or forbidden reasons must be set. " +
+			"Can't set both")
 	}
 
 	// start controller

@@ -23,7 +23,11 @@ func GetPodEventsStr(c kubernetes.Interface, name, namespace string) string {
 
 	eventsString := ""
 	if err != nil {
-		logrus.Warnf("failed to get events for %s@%s: %s", name, namespace, err.Error())
+		logrus.Warnf(
+			"failed to get events for %s@%s: %s",
+			name,
+			namespace,
+			err.Error())
 		return eventsString
 	}
 
@@ -39,9 +43,13 @@ func GetPodEventsStr(c kubernetes.Interface, name, namespace string) string {
 	return strings.TrimSpace(eventsString)
 }
 
-// ContainsKillingStoppingContainerEvents checks if the events contain an event with "Killing Stopping container" which
-// indicates that a container could not be gracefully shutdown
-func ContainsKillingStoppingContainerEvents(c kubernetes.Interface, name, namespace string) bool {
+// ContainsKillingStoppingContainerEvents checks if the events contain an event
+// with "Killing Stopping container" which indicates that a container could not
+// be gracefully shutdown
+func ContainsKillingStoppingContainerEvents(
+	c kubernetes.Interface,
+	name,
+	namespace string) bool {
 	events, err := getPodEvents(c, name, namespace)
 	if err != nil {
 		return false
@@ -49,7 +57,9 @@ func ContainsKillingStoppingContainerEvents(c kubernetes.Interface, name, namesp
 
 	for _, ev := range events.Items {
 		if strings.ToLower(ev.Reason) == "killing" &&
-			strings.Contains(strings.ToLower(ev.Message), "stopping container") {
+			strings.Contains(
+				strings.ToLower(ev.Message),
+				"stopping container") {
 			return true
 		}
 	}
@@ -104,7 +114,10 @@ func GetPodContainerLogs(
 	return string(logs)
 }
 
-func getPodEvents(c kubernetes.Interface, name, namespace string) (*v1.EventList, error) {
+func getPodEvents(
+	c kubernetes.Interface,
+	name,
+	namespace string) (*v1.EventList, error) {
 	return c.CoreV1().
 		Events(namespace).
 		List(context.TODO(), metav1.ListOptions{
@@ -117,39 +130,117 @@ func GetProviders() []provider.Provider {
 	var providers []provider.Provider
 	const isPresent = false
 	telegram := []bool{isPresent, isPresent}
+	email := []bool{isPresent, isPresent, isPresent, isPresent, isPresent}
 
 	for key, value := range viper.Get("alert").(map[string]interface{}) {
 		for c, v := range value.(map[string]interface{}) {
-			if key == "slack" && c == "webhook" && len(strings.TrimSpace(v.(string))) > 0 {
-				providers = append(providers, provider.NewSlack(viper.GetString("alert.slack.webhook")))
+			if key == "slack" &&
+				c == "webhook" &&
+				len(strings.TrimSpace(v.(string))) > 0 {
+				providers = append(
+					providers,
+					provider.NewSlack(viper.GetString("alert.slack.webhook")))
 			}
-			if key == "pagerduty" && c == "integrationkey" && len(strings.TrimSpace(v.(string))) > 0 {
-				providers = append(providers, provider.NewPagerDuty(viper.GetString("alert.pagerduty.integrationKey")))
+			if key == "pagerduty" &&
+				c == "integrationkey" &&
+				len(strings.TrimSpace(v.(string))) > 0 {
+				providers = append(
+					providers,
+					provider.NewPagerDuty(
+						viper.GetString("alert.pagerduty.integrationKey")))
 			}
-			if key == "discord" && c == "webhook" && len(strings.TrimSpace(v.(string))) > 0 {
-				providers = append(providers, provider.NewDiscord(viper.GetString("alert.discord.webhook")))
+			if key == "discord" &&
+				c == "webhook" &&
+				len(strings.TrimSpace(v.(string))) > 0 {
+				providers = append(
+					providers,
+					provider.NewDiscord(
+						viper.GetString("alert.discord.webhook")))
 			}
-			if key == "telegram" && c == "token" && len(strings.TrimSpace(v.(string))) > 0 {
+			if key == "telegram" &&
+				c == "token" &&
+				len(strings.TrimSpace(v.(string))) > 0 {
 				telegram[0] = true
 			}
-			if key == "telegram" && c == "chatid" && len(strings.TrimSpace(v.(string))) > 0 {
+			if key == "telegram" &&
+				c == "chatid" &&
+				len(strings.TrimSpace(v.(string))) > 0 {
 				telegram[1] = true
 			}
-			if key == "teams" && c == "webhook" && len(strings.TrimSpace(v.(string))) > 0 {
-				providers = append(providers, provider.NewTeams(viper.GetString("alert.teams.webhook")))
+			if key == "teams" &&
+				c == "webhook" &&
+				len(strings.TrimSpace(v.(string))) > 0 {
+				providers = append(
+					providers,
+					provider.NewTeams(viper.GetString("alert.teams.webhook")))
 			}
-			if key == "rocketchat" && c == "webhook" && len(strings.TrimSpace(v.(string))) > 0 {
-				providers = append(providers, provider.NewRocketChat(viper.GetString("alert.rocketchat.webhook")))
+			if key == "email" &&
+				c == "from" &&
+				len(strings.TrimSpace(v.(string))) > 0 {
+				email[0] = true
 			}
-			if key == "mattermost" && c == "webhook" && len(strings.TrimSpace(v.(string))) > 0 {
-				providers = append(providers, provider.NewMattermost(viper.GetString("alert.mattermost.webhook")))
+			if key == "email" &&
+				c == "to" &&
+				len(strings.TrimSpace(v.(string))) > 0 {
+				email[1] = true
 			}
-			if key == "opsgenie" && c == "apikey" && len(strings.TrimSpace(v.(string))) > 0 {
-				providers = append(providers, provider.NewOpsgenie(viper.GetString("alert.opsgenie.apikey")))
+			if key == "email" &&
+				c == "port" &&
+				len(strings.TrimSpace(v.(string))) > 0 {
+				email[2] = true
 			}
-		}
-		if key == "telegram" && IsListAllBool(true, telegram) {
-			providers = append(providers, provider.NewTelegram(viper.GetString("alert.telegram.token"), viper.GetString("alert.telegram.chatId")))
+			if key == "email" &&
+				c == "host" &&
+				len(strings.TrimSpace(v.(string))) > 0 {
+				email[3] = true
+			}
+			if key == "email" &&
+				c == "password" &&
+				len(strings.TrimSpace(v.(string))) > 0 {
+				email[4] = true
+			}
+			if key == "rocketchat" &&
+				c == "webhook" &&
+				len(strings.TrimSpace(v.(string))) > 0 {
+				providers = append(
+					providers,
+					provider.NewRocketChat(
+						viper.GetString("alert.rocketchat.webhook")))
+			}
+			if key == "mattermost" &&
+				c == "webhook" &&
+				len(strings.TrimSpace(v.(string))) > 0 {
+				providers = append(
+					providers,
+					provider.NewMattermost(
+						viper.GetString("alert.mattermost.webhook")))
+			}
+			if key == "opsgenie" &&
+				c == "apikey" &&
+				len(strings.TrimSpace(v.(string))) > 0 {
+				providers = append(
+					providers,
+					provider.NewOpsgenie(
+						viper.GetString("alert.opsgenie.apikey")))
+			}
+			if key == "telegram" &&
+				IsListAllBool(true, telegram) {
+				providers = append(
+					providers,
+					provider.NewTelegram(
+						viper.GetString("alert.telegram.token"),
+						viper.GetString("alert.telegram.chatId")))
+			}
+			if key == "email" &&
+				IsListAllBool(true, email) {
+				providers = append(
+					providers,
+					provider.NewEmail(viper.GetString("alert.email.from"),
+						viper.GetString("alert.email.password"),
+						viper.GetString("alert.email.host"),
+						viper.GetInt("alert.email.port"),
+						viper.GetString("alert.email.to")))
+			}
 		}
 	}
 

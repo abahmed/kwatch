@@ -22,6 +22,12 @@ data:
       telegram:
           token: <token_key>
           chatId: <chat_id>
+      email:
+        form: <from_mail>
+        password: <password>
+        host: <host>
+        port: <port_number>
+        to: <to_mail>
       teams:
           webhook: <webhook_url>
       rocketchat:

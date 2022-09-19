@@ -5,7 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"io/ioutil"
+	"io"
 	"net/http"
 
 	"github.com/abahmed/kwatch/event"
@@ -57,11 +57,6 @@ func (m *opsgenie) SendMessage(msg string) error {
 func (m *opsgenie) SendEvent(e *event.Event) error {
 	logrus.Debugf("sending to opsgenie event: %v", e)
 
-	// validate webhook url
-	if len(m.apikey) == 0 {
-		errors.New("apikey url is empty")
-	}
-
 	reqBody, err := m.buildMessage(e)
 	if err != nil {
 		return err
@@ -89,7 +84,7 @@ func (m *opsgenie) sendAPI(content []byte) error {
 	}
 
 	if response.StatusCode != 202 {
-		body, _ := ioutil.ReadAll(response.Body)
+		body, _ := io.ReadAll(response.Body)
 		return fmt.Errorf(
 			"call to opsgenie alert returned status code %d: %s",
 			response.StatusCode,

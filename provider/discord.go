@@ -117,19 +117,23 @@ func (s *discord) SendEvent(ev *event.Event) error {
 	}
 
 	// send message
-	_, err := discordClient.WebhookExecute(s.id, s.token, false, &discordgo.WebhookParams{
-		Embeds: []*discordgo.MessageEmbed{
-			{
-				Color:       13041664,
-				Title:       title,
-				Description: text,
-				Fields:      fields,
-				Footer: &discordgo.MessageEmbedFooter{
-					Text: footer,
+	_, err := discordClient.WebhookExecute(
+		s.id,
+		s.token,
+		false,
+		&discordgo.WebhookParams{
+			Embeds: []*discordgo.MessageEmbed{
+				{
+					Color:       13041664,
+					Title:       title,
+					Description: text,
+					Fields:      fields,
+					Footer: &discordgo.MessageEmbedFooter{
+						Text: footer,
+					},
 				},
 			},
-		},
-	})
+		})
 	return err
 }
 
@@ -143,8 +147,12 @@ func (s *discord) SendMessage(msg string) error {
 	discordClient, _ := discordgo.New("")
 
 	// send message
-	_, err := discordClient.WebhookExecute(s.id, s.token, false, &discordgo.WebhookParams{
-		Content: msg,
-	})
+	_, err := discordClient.WebhookExecute(
+		s.id,
+		s.token,
+		false,
+		&discordgo.WebhookParams{
+			Content: msg,
+		})
 	return err
 }
