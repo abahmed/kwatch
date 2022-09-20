@@ -21,18 +21,23 @@ type telegram struct {
 }
 
 // NewTelegram returns a new Telegram object
-func NewTelegram(token string, chatId string) Provider {
-	// object validation
-	if len(token) == 0 {
+func NewTelegram(config map[string]string) Provider {
+	token, ok := config["token"]
+	if !ok || len(token) == 0 {
 		logrus.Warnf("initializing telegram with empty token")
-	} else if len(chatId) == 0 {
-		logrus.Warnf("initializing telegram with empty chat_id")
-	} else {
-		logrus.Infof(
-			"initializing telegram with token  %s and chat_id %s",
-			token,
-			chatId)
+		return nil
 	}
+
+	chatId, ok := config["chatId"]
+	if !ok || len(token) == 0 {
+		logrus.Warnf("initializing telegram with empty chat_id")
+		return nil
+	}
+
+	logrus.Infof(
+		"initializing telegram with token  %s and chat_id %s",
+		token,
+		chatId)
 
 	// returns a new telegram object
 	return &telegram{

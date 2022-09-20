@@ -16,23 +16,23 @@ type discord struct {
 }
 
 // NewDiscord returns new Discord instance
-func NewDiscord(url string) Provider {
-	if len(url) == 0 {
+func NewDiscord(config map[string]string) Provider {
+	webhook, ok := config["webhook"]
+	if !ok || len(webhook) == 0 {
 		logrus.Warnf("initializing discord with empty webhook url")
-	} else {
-		logrus.Infof("initializing discord with webhook url: %s", url)
+		return nil
 	}
 
-	webhookToken := ""
-	webhookID := ""
+	logrus.Infof("initializing discord with webhook url: %s", webhook)
 
-	webhookList := strings.Split(url, "/")
-	if len(webhookList) > 1 {
-		webhookToken = webhookList[len(webhookList)-1]
-		webhookID = webhookList[len(webhookList)-2]
-	} else {
+	webhookList := strings.Split(webhook, "/")
+	if len(webhookList) <= 1 {
 		logrus.Warnf("initializing discord with missing id or token")
+		return nil
 	}
+
+	webhookToken := webhookList[len(webhookList)-1]
+	webhookID := webhookList[len(webhookList)-2]
 
 	return &discord{
 		id:    webhookID,

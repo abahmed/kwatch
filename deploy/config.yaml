@@ -24,10 +24,10 @@ data:
           chatId: <chat_id>
       email:
         form: <from_mail>
+        to: <to_mail>
         password: <password>
         host: <host>
         port: <port_number>
-        to: <to_mail>
       teams:
           webhook: <webhook_url>
       rocketchat:
@@ -38,4 +38,8 @@ data:
         apiKey: <api_key>
     namespaces:
       - <optional_namespace>
+    reasons:
+      - <optional_reason>
+    ignoreContainerNames:
+      - <optional_container_name>
 

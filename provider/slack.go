@@ -16,15 +16,17 @@ type slack struct {
 }
 
 // NewSlack returns new Slack instance
-func NewSlack(url string) Provider {
-	if len(url) == 0 {
+func NewSlack(config map[string]string) Provider {
+	webhook, ok := config["webhook"]
+	if !ok || len(webhook) == 0 {
 		logrus.Warnf("initializing slack with empty webhook url")
-	} else {
-		logrus.Infof("initializing slack with webhook url: %s", url)
+		return nil
 	}
 
+	logrus.Infof("initializing slack with webhook url: %s", webhook)
+
 	return &slack{
-		webhook: url,
+		webhook: webhook,
 	}
 }
 

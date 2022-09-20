@@ -22,12 +22,14 @@ type pagerduty struct {
 }
 
 // NewPagerDuty returns new PagerDuty instance
-func NewPagerDuty(integrationKey string) Provider {
-	if len(integrationKey) == 0 {
+func NewPagerDuty(config map[string]string) Provider {
+	integrationKey, ok := config["integrationKey"]
+	if !ok || len(integrationKey) == 0 {
 		logrus.Warnf("initializing pagerduty with an empty integration key")
-	} else {
-		logrus.Infof("initializing pagerduty with the provided integration key")
+		return nil
 	}
+
+	logrus.Infof("initializing pagerduty with the provided integration key")
 
 	return &pagerduty{
 		integrationKey: integrationKey,
