@@ -4,6 +4,7 @@ import (
 	"context"
 
 	"github.com/abahmed/kwatch/client"
+	"github.com/abahmed/kwatch/config"
 	"github.com/abahmed/kwatch/constant"
 	"github.com/abahmed/kwatch/provider"
 	memory "github.com/abahmed/kwatch/storage/memory"
@@ -19,8 +20,7 @@ import (
 // Start creates an instance of controller after initialization and runs it
 func Start(
 	providers []provider.Provider,
-	namespaceAllowList, namespaceForbidList, reasonAllowList, reasonForbidList []string,
-	config constant.Config) {
+	config *config.Config) {
 	// create kubernetes client
 	kclient := client.Create()
 
@@ -32,8 +32,8 @@ func Start(
 	var namespaceToWatch = v1.NamespaceAll
 
 	// if there is exactly 1 namespace listen only to that namespace for events
-	if len(namespaceAllowList) == 1 {
-		namespaceToWatch = namespaceAllowList[0]
+	if len(config.AllowedNamespaces) == 1 {
+		namespaceToWatch = config.AllowedNamespaces[0]
 	}
 
 	indexer, informer := cache.NewIndexerInformer(
@@ -78,20 +78,14 @@ func Start(
 		}, cache.Indexers{})
 
 	controller := Controller{
-		name:                         "pod-crash",
-		informer:                     informer,
-		indexer:                      indexer,
-		queue:                        queue,
-		kclient:                      kclient,
-		providers:                    providers,
-		store:                        memory.NewMemory(),
-		ignoreFailedGracefulShutdown: config.IgnoreFailedGracefulShutdown,
-
-		namespaceAllowList:  namespaceAllowList,
-		namespaceForbidList: namespaceForbidList,
-		reasonAllowList:     reasonAllowList,
-		reasonForbidList:    reasonForbidList,
-		ignoreContainerList: config.IgnoreContainerNames,
+		name:      "pod-crash",
+		informer:  informer,
+		indexer:   indexer,
+		queue:     queue,
+		kclient:   kclient,
+		providers: providers,
+		store:     memory.NewMemory(),
+		config:    config,
 	}
 
 	stopCh := make(chan struct{})

@@ -3,6 +3,7 @@ package provider
 import (
 	"fmt"
 	"math"
+	"strconv"
 	"strings"
 
 	"github.com/abahmed/kwatch/event"
@@ -19,34 +20,52 @@ type email struct {
 }
 
 // NewEmail returns new email instance
-func NewEmail(
-	from string,
-	password string,
-	host string,
-	port int,
-	to string) Provider {
-	if len(from) == 0 {
+func NewEmail(config map[string]string) Provider {
+	from, ok := config["from"]
+	if !ok || len(from) == 0 {
 		logrus.Warnf("initializing email with an empty from")
+		return nil
 	}
-	if len(password) == 0 {
-		logrus.Warnf("initializing email with an empty password")
-	}
-	if len(host) == 0 {
-		logrus.Warnf("initializing email with an empty host")
-	}
-	if port > math.MaxUint16 {
-		logrus.Warnf("initializing email with an invalid port number")
-	}
-	if len(to) == 0 {
+
+	to, ok := config["to"]
+	if !ok || len(to) == 0 {
 		logrus.Warnf("initializing email with an empty to")
+		return nil
+	}
+
+	password, ok := config["password"]
+	if !ok || len(password) == 0 {
+		logrus.Warnf("initializing email with an empty password")
+		return nil
+	}
+
+	host, ok := config["host"]
+	if !ok || len(host) == 0 {
+		logrus.Warnf("initializing email with an empty host")
+		return nil
+	}
+
+	port, ok := config["port"]
+	if !ok || len(port) == 0 {
+		logrus.Warnf("initializing email with an empty port number")
+		return nil
+	}
+	portNumber, err := strconv.Atoi(port)
+	if err != nil {
+		logrus.Warnf("initializing email with an invalid port number: %s", err)
+		return nil
+	}
+
+	if portNumber > math.MaxUint16 {
+		logrus.Warnf("initializing email with an invalid range for port number")
 	}
 
 	return &email{
 		from:     from,
+		to:       to,
 		password: password,
 		host:     host,
-		port:     port,
-		to:       to,
+		port:     portNumber,
 	}
 }
 

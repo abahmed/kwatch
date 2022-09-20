@@ -28,15 +28,17 @@ type rocketChatWebhookPayload struct {
 }
 
 // NewRocketChat returns new rocket chat instance
-func NewRocketChat(url string) Provider {
-	if len(url) == 0 {
+func NewRocketChat(config map[string]string) Provider {
+	webhook, ok := config["webhook"]
+	if !ok || len(webhook) == 0 {
 		logrus.Warnf("initializing Rocket Chat with empty webhook url")
-	} else {
-		logrus.Infof("initializing Rocket Chat with webhook url: %s", url)
+		return nil
 	}
 
-	return &rocketChat{
-		webhook: url,
+	logrus.Infof("initializing Rocket Chat with webhook url: %s", webhook)
+
+	return &slack{
+		webhook: webhook,
 	}
 }
 

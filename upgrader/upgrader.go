@@ -7,7 +7,6 @@ import (
 
 	"github.com/abahmed/kwatch/constant"
 	"github.com/abahmed/kwatch/provider"
-	"github.com/abahmed/kwatch/util"
 	"github.com/google/go-github/v41/github"
 	"github.com/sirupsen/logrus"
 )
@@ -46,7 +45,7 @@ func checkRelease(providers []provider.Provider) {
 		return
 	}
 
-	util.SendProvidersMsg(
+	provider.SendProvidersMsg(
 		providers,
 		fmt.Sprintf(constant.KwatchUpdateMsg, *r.TagName),
 	)

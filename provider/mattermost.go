@@ -40,15 +40,17 @@ type mmPayload struct {
 }
 
 // NewMattermost returns new mattermost instance
-func NewMattermost(url string) Provider {
-	if len(url) == 0 {
+func NewMattermost(config map[string]string) Provider {
+	webhook, ok := config["webhook"]
+	if !ok || len(webhook) == 0 {
 		logrus.Warnf("initializing mattermost with empty webhook url")
-	} else {
-		logrus.Infof("initializing mattermost with webhook url: %s", url)
+		return nil
 	}
 
+	logrus.Infof("initializing mattermost with webhook url: %s", webhook)
+
 	return &mattermost{
-		webhook: url,
+		webhook: webhook,
 	}
 }
 
