@@ -19,6 +19,9 @@ kwatch
 # Dependency directories (remove the comment below to include it)
 # vendor/
 
+# Config files
+config.yaml
+
 ### Go Patch ###
 /vendor/
 /Godeps/
