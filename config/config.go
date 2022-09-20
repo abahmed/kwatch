@@ -9,18 +9,47 @@ import (
 )
 
 type Config struct {
-	MaxRecentLogLines            int                          `mapstructure:"maxRecentLogLines"`
-	IgnoreFailedGracefulShutdown bool                         `mapstructure:"ignoreFailedGracefulShutdown"`
-	DisableUpdateCheck           bool                         `mapstructure:"DisableUpdateCheck"`
-	Namespaces                   []string                     `mapstructure:"namespaces"`
-	Reasons                      []string                     `mapstructure:"reasons"`
-	IgnoreContainerNames         []string                     `mapstructure:"ignoreContainerNames"`
-	Alert                        map[string]map[string]string `mapstructure:"alert"`
+	// MaxRecentLogLines optional max tail log lines in messages,
+	// if it's not provided it will get all log lines
+	MaxRecentLogLines int `mapstructure:"maxRecentLogLines"`
 
+	// IgnoreFailedGracefulShutdown if set to true, containers which are
+	// forcefully killed during shutdown (as their graceful shutdown failed)
+	// are not reported as error
+	IgnoreFailedGracefulShutdown bool `mapstructure:"ignoreFailedGracefulShutdown"`
+
+	// DisableUpdateCheck if set to true, does not check for and
+	// notify about kwatch updates
+	DisableUpdateCheck bool `mapstructure:"DisableUpdateCheck"`
+
+	// Namespaces is an optional list of namespaces that you want to watch or
+	// forbid, if it's not provided it will watch all namespaces.
+	// If you want to forbid a namespace, configure it with !<namespace name>
+	// You can either set forbidden namespaces or allowed, not both
+	Namespaces []string `mapstructure:"namespaces"`
+
+	// Reasons is an  optional list of reasons that you want to watch or forbid,
+	// if it's not provided it will watch all reasons.
+	// If you want to forbid a reason, configure it with !<reason>
+	// You can either set forbidden reasons or allowed, not both
+	Reasons []string `mapstructure:"reasons"`
+
+	// IgnoreContainerNames optional list of container names to ignore
+	IgnoreContainerNames []string `mapstructure:"ignoreContainerNames"`
+
+	// Alert is a map contains a map of each provider configuration
+	// e.g. {"slack": {"webhook": "URL"}}
+	Alert map[string]map[string]string `mapstructure:"alert"`
+
+	// AllowedNamespaces, ForbiddenNamespaces are calculated internally
+	// after loading Namespaces configuration
 	AllowedNamespaces   []string
-	AllowedReasons      []string
 	ForbiddenNamespaces []string
-	ForbiddenReasons    []string
+
+	// AllowedReasons, ForbiddenReasons are calculated internally after loading
+	// Reasons configuration
+	AllowedReasons   []string
+	ForbiddenReasons []string
 }
 
 // LoadConfig loads yaml configuration from file if provided, otherwise

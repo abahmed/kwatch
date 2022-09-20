@@ -37,7 +37,7 @@ func NewRocketChat(config map[string]string) Provider {
 
 	logrus.Infof("initializing Rocket Chat with webhook url: %s", webhook)
 
-	return &slack{
+	return &rocketChat{
 		webhook: webhook,
 	}
 }

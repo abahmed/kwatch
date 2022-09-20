@@ -1,4 +1,4 @@
-maxRecentLogLines: 0
+maxRecentLogLines: 100
 alert:
   slack:
     webhook: ""
@@ -25,3 +25,4 @@ alert:
     apiKey: ""
 namespaces:
   - default
+  - kwatch
