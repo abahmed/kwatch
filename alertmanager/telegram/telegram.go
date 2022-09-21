@@ -1,4 +1,4 @@
-package provider
+package telegram
 
 import (
 	"bytes"
@@ -15,13 +15,13 @@ const (
 	telegramAPIURL = "https://api.telegram.org/bot%s/sendMessage"
 )
 
-type telegram struct {
+type Telegram struct {
 	token  string
 	chatId string
 }
 
 // NewTelegram returns a new Telegram object
-func NewTelegram(config map[string]string) Provider {
+func NewTelegram(config map[string]string) *Telegram {
 	token, ok := config["token"]
 	if !ok || len(token) == 0 {
 		logrus.Warnf("initializing telegram with empty token")
@@ -40,19 +40,19 @@ func NewTelegram(config map[string]string) Provider {
 		chatId)
 
 	// returns a new telegram object
-	return &telegram{
+	return &Telegram{
 		token:  token,
 		chatId: chatId,
 	}
 }
 
 // Name returns name of the provider
-func (t *telegram) Name() string {
+func (t *Telegram) Name() string {
 	return "Telegram"
 }
 
 // SendEvent sends event to the provider
-func (t *telegram) SendEvent(e *event.Event) error {
+func (t *Telegram) SendEvent(e *event.Event) error {
 	logrus.Debugf("sending to telegram event: %v", e)
 
 	// validate telegram token and chat Id
@@ -65,7 +65,7 @@ func (t *telegram) SendEvent(e *event.Event) error {
 }
 
 // SendMessage sends text message to the provider
-func (t *telegram) SendMessage(msg string) error {
+func (t *Telegram) SendMessage(msg string) error {
 	logrus.Debugf("sending to telegram msg: %s", msg)
 
 	// validate telegram token and chat Id
@@ -126,7 +126,7 @@ func buildRequestBodyTelegram(
 	return reqBody
 }
 
-func validateTelegram(t *telegram) (bool, error) {
+func validateTelegram(t *Telegram) (bool, error) {
 	if len(t.token) == 0 {
 		return false, errors.New("token key is empty")
 	}
@@ -136,8 +136,7 @@ func validateTelegram(t *telegram) (bool, error) {
 	return true, nil
 }
 
-func sendByTelegramApi(reqBody string, t *telegram) error {
-
+func sendByTelegramApi(reqBody string, t *Telegram) error {
 	client := &http.Client{}
 	buffer := bytes.NewBuffer([]byte(reqBody))
 	url := fmt.Sprintf(telegramAPIURL, t.token)

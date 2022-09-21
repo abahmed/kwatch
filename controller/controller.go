@@ -5,10 +5,10 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/abahmed/kwatch/alertmanager"
 	"github.com/abahmed/kwatch/config"
 	"github.com/abahmed/kwatch/constant"
 	"github.com/abahmed/kwatch/event"
-	"github.com/abahmed/kwatch/provider"
 	"github.com/abahmed/kwatch/storage"
 	"github.com/abahmed/kwatch/util"
 	"github.com/sirupsen/logrus"
@@ -22,14 +22,14 @@ import (
 
 // Controller holds necessary
 type Controller struct {
-	name      string
-	informer  cache.Controller
-	indexer   cache.Indexer
-	kclient   kubernetes.Interface
-	queue     workqueue.RateLimitingInterface
-	providers []provider.Provider
-	store     storage.Storage
-	config    *config.Config
+	name         string
+	informer     cache.Controller
+	indexer      cache.Indexer
+	kclient      kubernetes.Interface
+	queue        workqueue.RateLimitingInterface
+	alertManager *alertmanager.AlertManager
+	store        storage.Storage
+	config       *config.Config
 }
 
 // run starts the controller
@@ -50,10 +50,7 @@ func (c *Controller) run(workers int, stopCh chan struct{}) {
 	logrus.Infof("%s controller synced and ready", c.name)
 
 	// send notification to providers
-	provider.SendProvidersMsg(
-		c.providers,
-		fmt.Sprintf(constant.WelcomeMsg, constant.Version),
-	)
+	c.alertManager.Notify(fmt.Sprintf(constant.WelcomeMsg, constant.Version))
 
 	// start workers
 	for i := 0; i < workers; i++ {
@@ -257,6 +254,6 @@ func (c *Controller) processPod(key string, pod *v1.Pod) {
 		c.store.AddPodContainer(key, container.Name)
 
 		// send event to providers
-		provider.SendProvidersEvent(c.providers, evnt)
+		c.alertManager.NotifyEvent(evnt)
 	}
 }

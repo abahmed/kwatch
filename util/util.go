@@ -136,3 +136,15 @@ func IsStrInSlice(str string, strList []string) bool {
 
 	return false
 }
+
+// JsonEscape escapes the json special characters in a string
+func JsonEscape(i string) string {
+	jm, err := json.Marshal(i)
+	if err != nil {
+		logrus.Warnf("failed to marshal string %s: %s", i, err.Error())
+		return ""
+	}
+
+	s := string(jm)
+	return s[1 : len(s)-1]
+}

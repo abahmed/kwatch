@@ -1,13 +1,22 @@
-package provider
+package alertmanager
 
 import (
 	"testing"
 
-	"github.com/abahmed/kwatch/config"
 	"github.com/abahmed/kwatch/event"
+	"github.com/stretchr/testify/assert"
 )
 
+func TestAlertManagerNoConfig(t *testing.T) {
+	assert := assert.New(t)
+	alertmanager := AlertManager{}
+	alertmanager.Init(nil)
+	assert.Len(alertmanager.providers, 0)
+}
+
 func TestGetProviders(t *testing.T) {
+	assert := assert.New(t)
+
 	alertMap := map[string]map[string]string{
 		"slack": {
 			"webhook": "test",
@@ -33,13 +42,13 @@ func TestGetProviders(t *testing.T) {
 		},
 	}
 
-	providers := GetProviders(&config.Config{Alert: alertMap})
-	if len(providers) != len(alertMap) {
-		t.Fatalf(
-			"get providers returned %d expected %d",
-			len(providers),
-			len(alertMap))
-	}
+	alertmanager := AlertManager{}
+	alertmanager.Init(alertMap)
+
+	assert.Len(
+		alertmanager.providers,
+		len(alertMap),
+		"get providers returned %d expected %d")
 }
 
 func TestSendProvidersEvent(t *testing.T) {
@@ -51,7 +60,7 @@ func TestSendProvidersEvent(t *testing.T) {
 			"integrationkey": "test",
 		},
 		"discord": {
-			"webhook": "test",
+			"webhook": "test/test",
 		},
 		"telegram": {
 			"token":  "test",
@@ -70,9 +79,9 @@ func TestSendProvidersEvent(t *testing.T) {
 			"apiKey": "test",
 		},
 	}
-	providers := GetProviders(&config.Config{Alert: alertMap})
-
-	SendProvidersEvent(providers, event.Event{})
+	alertmanager := AlertManager{}
+	alertmanager.Init(alertMap)
+	alertmanager.NotifyEvent(event.Event{})
 }
 
 func TestSendProvidersMsg(t *testing.T) {
@@ -103,7 +112,8 @@ func TestSendProvidersMsg(t *testing.T) {
 			"apiKey": "test",
 		},
 	}
-	providers := GetProviders(&config.Config{Alert: alertMap})
 
-	SendProvidersMsg(providers, "hello world!")
+	alertmanager := AlertManager{}
+	alertmanager.Init(alertMap)
+	alertmanager.Notify("hello world!")
 }

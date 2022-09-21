@@ -1,4 +1,4 @@
-package provider
+package teams
 
 import (
 	"bytes"
@@ -18,9 +18,11 @@ const (
 	defaultLogs       = "No logs captured"
 	defaultEvents     = "No events captured"
 	defaultTeamsTitle = "&#9937; Kwatch detected a crash in pod"
+	defaultTitle      = ":red_circle: kwatch detected a crash in pod"
+	defaultText       = "There is an issue with container in a pod!"
 )
 
-type teams struct {
+type Teams struct {
 	webhook string
 }
 
@@ -30,7 +32,7 @@ type teamsWebhookPayload struct {
 }
 
 // NewTeams returns new team instance
-func NewTeams(config map[string]string) Provider {
+func NewTeams(config map[string]string) *Teams {
 	webhook, ok := config["webhook"]
 
 	if !ok || len(webhook) == 0 {
@@ -40,18 +42,18 @@ func NewTeams(config map[string]string) Provider {
 
 	logrus.Infof("initializing Teams with webhook url: %s", webhook)
 
-	return &teams{
+	return &Teams{
 		webhook: webhook,
 	}
 }
 
 // Name returns name of the provider
-func (t *teams) Name() string {
+func (t *Teams) Name() string {
 	return "Microsoft Teams"
 }
 
 // SendEvent sends event to the provider
-func (t *teams) SendEvent(e *event.Event) error {
+func (t *Teams) SendEvent(e *event.Event) error {
 	reqBody, err := t.buildRequestBodyTeams(e)
 	if err != nil {
 		return err
@@ -61,7 +63,7 @@ func (t *teams) SendEvent(e *event.Event) error {
 }
 
 // SendMessage sends text message to the provider
-func (t *teams) SendMessage(msg string) error {
+func (t *Teams) SendMessage(msg string) error {
 	client := &http.Client{}
 	buffer := bytes.NewBuffer([]byte(msg))
 	request, err := http.NewRequest(http.MethodPost, t.webhook, buffer)
@@ -91,7 +93,7 @@ func (t *teams) SendMessage(msg string) error {
 }
 
 // buildRequestBodyTeams builds formatted string from event
-func (t *teams) buildRequestBodyTeams(e *event.Event) (string, error) {
+func (t *Teams) buildRequestBodyTeams(e *event.Event) (string, error) {
 	eventsText := defaultEvents
 	logsText := defaultLogs
 

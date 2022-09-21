@@ -1,14 +1,13 @@
-package provider
+package pagerduty
 
 import (
 	"bytes"
-	"encoding/json"
-	"errors"
 	"fmt"
 	"net/http"
 	"strings"
 
 	"github.com/abahmed/kwatch/event"
+	"github.com/abahmed/kwatch/util"
 	"github.com/sirupsen/logrus"
 )
 
@@ -17,12 +16,12 @@ const (
 	defaultEventTitle = "[%s] There is an issue with a container in a pod"
 )
 
-type pagerduty struct {
+type Pagerduty struct {
 	integrationKey string
 }
 
 // NewPagerDuty returns new PagerDuty instance
-func NewPagerDuty(config map[string]string) Provider {
+func NewPagerDuty(config map[string]string) *Pagerduty {
 	integrationKey, ok := config["integrationKey"]
 	if !ok || len(integrationKey) == 0 {
 		logrus.Warnf("initializing pagerduty with an empty integration key")
@@ -31,23 +30,19 @@ func NewPagerDuty(config map[string]string) Provider {
 
 	logrus.Infof("initializing pagerduty with the provided integration key")
 
-	return &pagerduty{
+	return &Pagerduty{
 		integrationKey: integrationKey,
 	}
 }
 
 // Name returns name of the provider
-func (s *pagerduty) Name() string {
+func (s *Pagerduty) Name() string {
 	return "PagerDuty"
 }
 
 // SendEvent sends event to the provider
-func (s *pagerduty) SendEvent(ev *event.Event) error {
+func (s *Pagerduty) SendEvent(ev *event.Event) error {
 	logrus.Debugf("sending to pagerduty event: %v", ev)
-
-	if len(s.integrationKey) == 0 {
-		return errors.New("integration key is empty")
-	}
 
 	client := &http.Client{}
 
@@ -70,7 +65,7 @@ func (s *pagerduty) SendEvent(ev *event.Event) error {
 }
 
 // SendMessage sends text message to the provider
-func (s *pagerduty) SendMessage(msg string) error {
+func (s *Pagerduty) SendMessage(msg string) error {
 	return nil
 }
 
@@ -81,13 +76,13 @@ func buildRequestBodyPagerDuty(ev *event.Event, key string) string {
 	// add events part if it exists
 	events := strings.TrimSpace(ev.Events)
 	if len(events) > 0 {
-		eventsText = JsonEscape(ev.Events)
+		eventsText = util.JsonEscape(ev.Events)
 	}
 
 	// add logs part if it exists
 	logs := strings.TrimSpace(ev.Logs)
 	if len(logs) > 0 {
-		logsText = JsonEscape(ev.Logs)
+		logsText = util.JsonEscape(ev.Logs)
 	}
 
 	reqBody := fmt.Sprintf(`{
@@ -118,16 +113,4 @@ func buildRequestBodyPagerDuty(ev *event.Event, key string) string {
 		logsText)
 
 	return reqBody
-}
-
-// JsonEscape escapes the json special characters in a string
-func JsonEscape(i string) string {
-	jm, err := json.Marshal(i)
-	if err != nil {
-		logrus.Warnf("failed to marshal string %s: %s", i, err.Error())
-		return ""
-	}
-
-	s := string(jm)
-	return s[1 : len(s)-1]
 }

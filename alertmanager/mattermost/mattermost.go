@@ -1,9 +1,8 @@
-package provider
+package mattermost
 
 import (
 	"bytes"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"io"
 
@@ -17,10 +16,15 @@ import (
 const (
 	defaultMattermostLogs   = "No logs captured"
 	defaultMattermostEvents = "No events captured"
+	footer                  = "<https://github.com/abahmed/kwatch|kwatch>"
+	defaultTitle            = ":red_circle: kwatch detected a crash in pod"
+	defaultText             = "There is an issue with container in a pod!"
+	chunkSize               = 80
 )
 
-type mattermost struct {
+type Mattermost struct {
 	webhook string
+	send    func(content []byte) error
 }
 
 type mmField struct {
@@ -40,7 +44,7 @@ type mmPayload struct {
 }
 
 // NewMattermost returns new mattermost instance
-func NewMattermost(config map[string]string) Provider {
+func NewMattermost(config map[string]string) *Mattermost {
 	webhook, ok := config["webhook"]
 	if !ok || len(webhook) == 0 {
 		logrus.Warnf("initializing mattermost with empty webhook url")
@@ -49,25 +53,19 @@ func NewMattermost(config map[string]string) Provider {
 
 	logrus.Infof("initializing mattermost with webhook url: %s", webhook)
 
-	return &mattermost{
+	return &Mattermost{
 		webhook: webhook,
 	}
 }
 
 // Name returns name of the provider
-func (m *mattermost) Name() string {
+func (m *Mattermost) Name() string {
 	return "Mattermost"
 }
 
 // SendMessage sends text message to the provider
-func (m *mattermost) SendMessage(msg string) error {
+func (m *Mattermost) SendMessage(msg string) error {
 	logrus.Debugf("sending to mattermost msg: %s", msg)
-
-	// validate webhook url
-	_, err := m.validateWebhook()
-	if err != nil {
-		return err
-	}
 
 	reqBody, err := m.buildMessage(nil, &msg)
 	if err != nil {
@@ -77,14 +75,9 @@ func (m *mattermost) SendMessage(msg string) error {
 }
 
 // SendEvent sends event to the provider
-func (m *mattermost) SendEvent(e *event.Event) error {
+func (m *Mattermost) SendEvent(e *event.Event) error {
 	logrus.Debugf("sending to mattermost event: %v", e)
 
-	// validate webhook url
-	_, err := m.validateWebhook()
-	if err != nil {
-		return err
-	}
 	reqBody, err := m.buildMessage(e, nil)
 	if err != nil {
 		return err
@@ -92,14 +85,7 @@ func (m *mattermost) SendEvent(e *event.Event) error {
 	return m.sendAPI(reqBody)
 }
 
-func (m *mattermost) validateWebhook() (bool, error) {
-	if len(m.webhook) == 0 {
-		return false, errors.New("webhook url is empty")
-	}
-	return true, nil
-}
-
-func (m *mattermost) sendAPI(content []byte) error {
+func (m *Mattermost) sendAPI(content []byte) error {
 	client := &http.Client{}
 	buffer := bytes.NewBuffer(content)
 	request, err := http.NewRequest(http.MethodPost, m.webhook, buffer)
@@ -128,7 +114,7 @@ func (m *mattermost) sendAPI(content []byte) error {
 	return err
 }
 
-func (m *mattermost) buildMessage(e *event.Event, msg *string) ([]byte, error) {
+func (m *Mattermost) buildMessage(e *event.Event, msg *string) ([]byte, error) {
 	payload := mmPayload{}
 
 	if msg != nil && len(*msg) > 0 {

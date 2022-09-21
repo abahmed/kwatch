@@ -41,6 +41,8 @@ type Config struct {
 	// e.g. {"slack": {"webhook": "URL"}}
 	Alert map[string]map[string]string `mapstructure:"alert"`
 
+	Upgrader Upgrader `mapstructure:"upgrader"`
+
 	// AllowedNamespaces, ForbiddenNamespaces are calculated internally
 	// after loading Namespaces configuration
 	AllowedNamespaces   []string
@@ -50,6 +52,16 @@ type Config struct {
 	// Reasons configuration
 	AllowedReasons   []string
 	ForbiddenReasons []string
+}
+
+type Upgrader struct {
+	// MaxRecentLogLines optional max tail log lines in messages,
+	// if it's not provided it will get all log lines
+	CheckInterval int `mapstructure:"checkInterval"`
+
+	// DisableUpdateCheck if set to true, does not check for and
+	// notify about kwatch updates
+	DisableUpdateCheck bool `mapstructure:"DisableUpdateCheck"`
 }
 
 // LoadConfig loads yaml configuration from file if provided, otherwise
@@ -93,6 +105,9 @@ func LoadConfig() (*Config, error) {
 		logrus.Fatal("Either allowed or forbidden reasons must be set. " +
 			"Can't set both")
 	}
+
+	// Should be removed
+	config.Upgrader.DisableUpdateCheck = config.DisableUpdateCheck
 
 	return &config, nil
 }

@@ -1,4 +1,4 @@
-package provider
+package email
 
 import (
 	"fmt"
@@ -7,20 +7,19 @@ import (
 	"strings"
 
 	"github.com/abahmed/kwatch/event"
+	"github.com/abahmed/kwatch/util"
 	"github.com/sirupsen/logrus"
 	gomail "gopkg.in/mail.v2"
 )
 
-type email struct {
-	from     string
-	password string
-	host     string
-	port     int
-	to       string
+type Email struct {
+	from string
+	to   string
+	send func(m ...*gomail.Message) error
 }
 
 // NewEmail returns new email instance
-func NewEmail(config map[string]string) Provider {
+func NewEmail(config map[string]string) *Email {
 	from, ok := config["from"]
 	if !ok || len(from) == 0 {
 		logrus.Warnf("initializing email with an empty from")
@@ -60,34 +59,35 @@ func NewEmail(config map[string]string) Provider {
 		logrus.Warnf("initializing email with an invalid range for port number")
 	}
 
-	return &email{
-		from:     from,
-		to:       to,
-		password: password,
-		host:     host,
-		port:     portNumber,
+	d := gomail.NewDialer(host, portNumber, from, password)
+
+	return &Email{
+		from: from,
+		to:   to,
+		send: d.DialAndSend,
 	}
 }
 
 // Name returns name of the provider
-func (e *email) Name() string {
+func (e *Email) Name() string {
 	return "Email"
 }
 
 // SendEvent sends event to the provider
-func (e *email) SendEvent(event *event.Event) error {
+func (e *Email) SendEvent(event *event.Event) error {
 	subject, body := buildMessageSubjectAndBody(event)
+
 	m := gomail.NewMessage()
 	m.SetHeader("From", e.from)
 	m.SetHeader("To", strings.Split(e.to, ",")...)
 	m.SetHeader("Subject", subject)
 	m.SetBody("text/plain", body)
-	d := gomail.NewDialer(e.host, e.port, e.from, e.password)
-	return d.DialAndSend(m)
+
+	return e.send(m)
 }
 
 // SendMessage sends text message to the provider
-func (e *email) SendMessage(s string) error {
+func (e *Email) SendMessage(s string) error {
 	return nil
 }
 
@@ -98,13 +98,13 @@ func buildMessageSubjectAndBody(e *event.Event) (string, string) {
 	// add events part if it exists
 	events := strings.TrimSpace(e.Events)
 	if len(events) > 0 {
-		eventsText = JsonEscape(e.Events)
+		eventsText = util.JsonEscape(e.Events)
 	}
 
 	// add logs part if it exists
 	logs := strings.TrimSpace(e.Logs)
 	if len(logs) > 0 {
-		logsText = JsonEscape(e.Logs)
+		logsText = util.JsonEscape(e.Logs)
 	}
 
 	subject := fmt.Sprintf("⛑ Kwatch detected a crash in pod %s ", e.Container)

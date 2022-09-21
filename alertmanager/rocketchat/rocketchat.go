@@ -1,4 +1,4 @@
-package provider
+package rocketchat
 
 import (
 	"bytes"
@@ -19,7 +19,7 @@ const (
 	defaultRocketChatEvents = "No events captured"
 )
 
-type rocketChat struct {
+type RocketChat struct {
 	webhook string
 }
 
@@ -28,7 +28,7 @@ type rocketChatWebhookPayload struct {
 }
 
 // NewRocketChat returns new rocket chat instance
-func NewRocketChat(config map[string]string) Provider {
+func NewRocketChat(config map[string]string) *RocketChat {
 	webhook, ok := config["webhook"]
 	if !ok || len(webhook) == 0 {
 		logrus.Warnf("initializing Rocket Chat with empty webhook url")
@@ -37,18 +37,18 @@ func NewRocketChat(config map[string]string) Provider {
 
 	logrus.Infof("initializing Rocket Chat with webhook url: %s", webhook)
 
-	return &rocketChat{
+	return &RocketChat{
 		webhook: webhook,
 	}
 }
 
 // Name returns name of the provider
-func (r *rocketChat) Name() string {
+func (r *RocketChat) Name() string {
 	return "Rocket Chat"
 }
 
 // SendEvent sends event to the provider
-func (r *rocketChat) SendEvent(e *event.Event) error {
+func (r *RocketChat) SendEvent(e *event.Event) error {
 	logrus.Debugf("sending to rocket chat event: %v", e)
 
 	// validate rocket chat webhook url
@@ -63,7 +63,7 @@ func (r *rocketChat) SendEvent(e *event.Event) error {
 	return sendByRocketChatApi(reqBody, r)
 }
 
-func sendByRocketChatApi(reqBody string, r *rocketChat) error {
+func sendByRocketChatApi(reqBody string, r *RocketChat) error {
 	client := &http.Client{}
 	buffer := bytes.NewBuffer([]byte(reqBody))
 	request, err := http.NewRequest(http.MethodPost, r.webhook, buffer)
@@ -138,7 +138,7 @@ func buildRequestBodyRocketChat(e *event.Event, customMsg string) (string, error
 }
 
 // SendMessage sends text message to the provider
-func (r *rocketChat) SendMessage(msg string) error {
+func (r *RocketChat) SendMessage(msg string) error {
 	logrus.Debugf("sending to rocket chat msg: %s", msg)
 
 	// validate rocket chat webhook url
@@ -154,7 +154,7 @@ func (r *rocketChat) SendMessage(msg string) error {
 	return sendByRocketChatApi(reqBody, r)
 }
 
-func validateRocketChat(r *rocketChat) (bool, error) {
+func validateRocketChat(r *RocketChat) (bool, error) {
 	if len(r.webhook) == 0 {
 		return false, errors.New("webhook url is empty")
 	}

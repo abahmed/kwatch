@@ -1,4 +1,4 @@
-package provider
+package opsgenie
 
 import (
 	"bytes"
@@ -17,9 +17,14 @@ const (
 	defaultOpsgenieTitle = "kwatch detected a crash in pod: %s"
 	defaultOpsgenieText  = "There is an issue with container (%s) in pod (%s)"
 	opsgenieAPIURL       = "https://api.opsgenie.com/v2/alerts"
+	defaultTitle         = ":red_circle: kwatch detected a crash in pod"
+	defaultText          = "There is an issue with container in a pod!"
+	defaultLogs          = "No logs captured"
+	defaultEvents        = "No events captured"
+	defaultTeamsTitle    = "&#9937; Kwatch detected a crash in pod"
 )
 
-type opsgenie struct {
+type Opsgenie struct {
 	apikey string
 }
 
@@ -31,7 +36,7 @@ type ogPayload struct {
 }
 
 // NewOpsgenie returns new opsgenie instance
-func NewOpsgenie(config map[string]string) Provider {
+func NewOpsgenie(config map[string]string) *Opsgenie {
 	apiKey, ok := config["apiKey"]
 	if !ok || len(apiKey) == 0 {
 		logrus.Warnf("initializing opsgenie with empty webhook url")
@@ -40,23 +45,23 @@ func NewOpsgenie(config map[string]string) Provider {
 
 	logrus.Infof("initializing opsgenie with secret apiKey")
 
-	return &opsgenie{
+	return &Opsgenie{
 		apikey: apiKey,
 	}
 }
 
 // Name returns name of the provider
-func (m *opsgenie) Name() string {
+func (m *Opsgenie) Name() string {
 	return "Opsgenie"
 }
 
 // SendMessage sends text message to the provider
-func (m *opsgenie) SendMessage(msg string) error {
+func (m *Opsgenie) SendMessage(msg string) error {
 	return nil
 }
 
 // SendEvent sends event to the provider
-func (m *opsgenie) SendEvent(e *event.Event) error {
+func (m *Opsgenie) SendEvent(e *event.Event) error {
 	logrus.Debugf("sending to opsgenie event: %v", e)
 
 	reqBody, err := m.buildMessage(e)
@@ -67,7 +72,7 @@ func (m *opsgenie) SendEvent(e *event.Event) error {
 }
 
 // sendAPI sends http request to Opsgenie API
-func (m *opsgenie) sendAPI(content []byte) error {
+func (m *Opsgenie) sendAPI(content []byte) error {
 	client := &http.Client{}
 	buffer := bytes.NewBuffer(content)
 	request, err := http.NewRequest(http.MethodPost, opsgenieAPIURL, buffer)
@@ -100,7 +105,7 @@ func (m *opsgenie) sendAPI(content []byte) error {
 	return err
 }
 
-func (m *opsgenie) buildMessage(e *event.Event) ([]byte, error) {
+func (m *Opsgenie) buildMessage(e *event.Event) ([]byte, error) {
 	payload := ogPayload{
 		Priority: "P1",
 	}

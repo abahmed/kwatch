@@ -5,26 +5,33 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/abahmed/kwatch/alertmanager"
+	"github.com/abahmed/kwatch/config"
 	"github.com/abahmed/kwatch/constant"
-	"github.com/abahmed/kwatch/provider"
 	"github.com/google/go-github/v41/github"
 	"github.com/sirupsen/logrus"
 )
 
 // CheckUpdates checks every 24 hours if a newer version of Kwatch is available
-func CheckUpdates(providers []provider.Provider) {
+func CheckUpdates(
+	config *config.Upgrader,
+	alertManager *alertmanager.AlertManager) {
+	if config.DisableUpdateCheck {
+		return
+	}
+
 	// check at startup
-	checkRelease(providers)
+	checkRelease(alertManager)
 
 	ticker := time.NewTicker(24 * time.Hour)
 	defer ticker.Stop()
 
 	for range ticker.C {
-		checkRelease(providers)
+		checkRelease(alertManager)
 	}
 }
 
-func checkRelease(providers []provider.Provider) {
+func checkRelease(alertManager *alertmanager.AlertManager) {
 	client := github.NewClient(nil)
 
 	r, _, err := client.Repositories.GetLatestRelease(
@@ -45,8 +52,5 @@ func checkRelease(providers []provider.Provider) {
 		return
 	}
 
-	provider.SendProvidersMsg(
-		providers,
-		fmt.Sprintf(constant.KwatchUpdateMsg, *r.TagName),
-	)
+	alertManager.Notify(fmt.Sprintf(constant.KwatchUpdateMsg, *r.TagName))
 }
