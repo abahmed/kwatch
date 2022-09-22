@@ -9,9 +9,9 @@ require (
 	github.com/slack-go/slack v0.11.3
 	github.com/spf13/viper v1.13.0
 	gopkg.in/mail.v2 v2.3.1
-	k8s.io/api v0.25.1
-	k8s.io/apimachinery v0.25.1
-	k8s.io/client-go v0.25.1
+	k8s.io/api v0.25.2
+	k8s.io/apimachinery v0.25.2
+	k8s.io/client-go v0.25.2
 )
 
 require (
