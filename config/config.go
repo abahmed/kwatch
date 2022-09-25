@@ -41,6 +41,8 @@ type Config struct {
 	// e.g. {"slack": {"webhook": "URL"}}
 	Alert map[string]map[string]string `mapstructure:"alert"`
 
+	Upgrader Upgrader `mapstructure:"upgrader"`
+
 	// AllowedNamespaces, ForbiddenNamespaces are calculated internally
 	// after loading Namespaces configuration
 	AllowedNamespaces   []string
@@ -50,6 +52,16 @@ type Config struct {
 	// Reasons configuration
 	AllowedReasons   []string
 	ForbiddenReasons []string
+}
+
+type Upgrader struct {
+	// MaxRecentLogLines optional max tail log lines in messages,
+	// if it's not provided it will get all log lines
+	CheckInterval int `mapstructure:"checkInterval"`
+
+	// DisableUpdateCheck if set to true, does not check for and
+	// notify about kwatch updates
+	DisableUpdateCheck bool `mapstructure:"DisableUpdateCheck"`
 }
 
 // LoadConfig loads yaml configuration from file if provided, otherwise
@@ -69,6 +81,8 @@ func LoadConfig() (*Config, error) {
 		logrus.Warnf("unable to load config file: %s", err.Error())
 	}
 
+	q := viper.AllSettings()
+	logrus.Infof("%v", q)
 	// Load config
 	var config Config
 	if err := viper.Unmarshal(&config); err != nil {
@@ -80,7 +94,7 @@ func LoadConfig() (*Config, error) {
 		getAllowForbidSlices(config.Namespaces)
 	if len(config.AllowedNamespaces) > 0 &&
 		len(config.ForbiddenNamespaces) > 0 {
-		logrus.Fatal(
+		logrus.Error(
 			"Either allowed or forbidden namespaces must be set. " +
 				"Can't set both")
 	}
@@ -90,9 +104,12 @@ func LoadConfig() (*Config, error) {
 		getAllowForbidSlices(config.Reasons)
 	if len(config.AllowedReasons) > 0 &&
 		len(config.ForbiddenReasons) > 0 {
-		logrus.Fatal("Either allowed or forbidden reasons must be set. " +
+		logrus.Error("Either allowed or forbidden reasons must be set. " +
 			"Can't set both")
 	}
+
+	// Should be removed
+	config.Upgrader.DisableUpdateCheck = config.DisableUpdateCheck
 
 	return &config, nil
 }

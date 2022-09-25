@@ -1,7 +1,6 @@
-package provider
+package discord
 
 import (
-	"errors"
 	"strings"
 
 	"github.com/abahmed/kwatch/event"
@@ -10,13 +9,25 @@ import (
 	"github.com/spf13/viper"
 )
 
-type discord struct {
+const (
+	footer       = "<https://github.com/abahmed/kwatch|kwatch>"
+	defaultTitle = ":red_circle: kwatch detected a crash in pod"
+	defaultText  = "There is an issue with container in a pod!"
+	chunkSize    = 80
+)
+
+type Discord struct {
 	id    string
 	token string
+	send  func(
+		webhookID,
+		token string,
+		wait bool,
+		data *discordgo.WebhookParams) (st *discordgo.Message, err error)
 }
 
 // NewDiscord returns new Discord instance
-func NewDiscord(config map[string]string) Provider {
+func NewDiscord(config map[string]string) *Discord {
 	webhook, ok := config["webhook"]
 	if !ok || len(webhook) == 0 {
 		logrus.Warnf("initializing discord with empty webhook url")
@@ -34,27 +45,23 @@ func NewDiscord(config map[string]string) Provider {
 	webhookToken := webhookList[len(webhookList)-1]
 	webhookID := webhookList[len(webhookList)-2]
 
-	return &discord{
+	discordClient, _ := discordgo.New("")
+
+	return &Discord{
 		id:    webhookID,
 		token: webhookToken,
+		send:  discordClient.WebhookExecute,
 	}
 }
 
 // Name returns name of the provider
-func (s *discord) Name() string {
+func (s *Discord) Name() string {
 	return "Discord"
 }
 
 // SendEvent sends event to the provider
-func (s *discord) SendEvent(ev *event.Event) error {
+func (s *Discord) SendEvent(ev *event.Event) error {
 	logrus.Debugf("sending to discord event: %v", ev)
-
-	// check config
-	if len(s.id) == 0 || len(s.token) == 0 {
-		return errors.New("webhook url is empty")
-	}
-
-	discordClient, _ := discordgo.New("")
 
 	// initialize fields with basic info
 	fields := []*discordgo.MessageEmbedField{
@@ -117,7 +124,7 @@ func (s *discord) SendEvent(ev *event.Event) error {
 	}
 
 	// send message
-	_, err := discordClient.WebhookExecute(
+	_, err := s.send(
 		s.id,
 		s.token,
 		false,
@@ -138,16 +145,9 @@ func (s *discord) SendEvent(ev *event.Event) error {
 }
 
 // SendMessage sends text message to the provider
-func (s *discord) SendMessage(msg string) error {
-	// check config
-	if len(s.id) == 0 || len(s.token) == 0 {
-		return errors.New("webhook url is empty")
-	}
-
-	discordClient, _ := discordgo.New("")
-
+func (s *Discord) SendMessage(msg string) error {
 	// send message
-	_, err := discordClient.WebhookExecute(
+	_, err := s.send(
 		s.id,
 		s.token,
 		false,

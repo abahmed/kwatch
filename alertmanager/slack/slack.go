@@ -1,22 +1,31 @@
-package provider
+package slack
 
 import (
-	"errors"
 	"fmt"
 	"strings"
 
 	"github.com/abahmed/kwatch/event"
+
 	"github.com/sirupsen/logrus"
 	slackClient "github.com/slack-go/slack"
-	"github.com/spf13/viper"
 )
 
-type slack struct {
+const (
+	footer       = "<https://github.com/abahmed/kwatch|kwatch>"
+	defaultTitle = ":red_circle: kwatch detected a crash in pod"
+	defaultText  = "There is an issue with container in a pod!"
+	chunkSize    = 80
+)
+
+type Slack struct {
 	webhook string
+	title   string
+	text    string
+	send    func(url string, msg *slackClient.WebhookMessage) error
 }
 
 // NewSlack returns new Slack instance
-func NewSlack(config map[string]string) Provider {
+func NewSlack(config map[string]string) *Slack {
 	webhook, ok := config["webhook"]
 	if !ok || len(webhook) == 0 {
 		logrus.Warnf("initializing slack with empty webhook url")
@@ -25,33 +34,29 @@ func NewSlack(config map[string]string) Provider {
 
 	logrus.Infof("initializing slack with webhook url: %s", webhook)
 
-	return &slack{
+	return &Slack{
 		webhook: webhook,
+		send:    slackClient.PostWebhook,
 	}
 }
 
 // Name returns name of the provider
-func (s *slack) Name() string {
+func (s *Slack) Name() string {
 	return "Slack"
 }
 
 // SendEvent sends event to the provider
-func (s *slack) SendEvent(ev *event.Event) error {
+func (s *Slack) SendEvent(ev *event.Event) error {
 	logrus.Debugf("sending to slack event: %v", ev)
 
-	// check config
-	if len(s.webhook) == 0 {
-		return errors.New("webhook url is empty")
-	}
-
 	// use custom title if it's provided, otherwise use default
-	title := viper.GetString("alert.slack.title")
+	title := s.title
 	if len(title) == 0 {
 		title = defaultTitle
 	}
 
 	// use custom text if it's provided, otherwise use default
-	text := viper.GetString("alert.slack.text")
+	text := s.text
 	if len(text) == 0 {
 		text = defaultText
 	}
@@ -76,7 +81,7 @@ func (s *slack) SendEvent(ev *event.Event) error {
 		blocks = append(blocks,
 			markdownSection(":mag: *Events*"))
 
-		for _, chunk := range chunks(events, 2000) {
+		for _, chunk := range chunks(events, chunkSize) {
 			blocks = append(blocks,
 				markdownSectionF("```%s```", chunk))
 		}
@@ -88,7 +93,7 @@ func (s *slack) SendEvent(ev *event.Event) error {
 		blocks = append(blocks,
 			markdownSection(":memo: *Logs*"))
 
-		for _, chunk := range chunks(logs, 2000) {
+		for _, chunk := range chunks(logs, chunkSize) {
 			blocks = append(blocks,
 				markdownSectionF("```%s```", chunk))
 		}
@@ -101,26 +106,18 @@ func (s *slack) SendEvent(ev *event.Event) error {
 	}
 
 	// send message
-	return slackClient.PostWebhook(s.webhook, &msg)
+	return s.send(s.webhook, &msg)
 }
 
 // SendMessage sends text message to the provider
-func (s *slack) SendMessage(msg string) error {
-	// check config
-	if len(s.webhook) == 0 {
-		return errors.New("webhook url is empty")
-	}
-
+func (s *Slack) SendMessage(msg string) error {
 	sMsg := slackClient.WebhookMessage{
 		Text: msg,
 	}
-	return slackClient.PostWebhook(s.webhook, &sMsg)
+	return s.send(s.webhook, &sMsg)
 }
 
 func chunks(s string, chunkSize int) []string {
-	if len(s) == 0 {
-		return nil
-	}
 	if chunkSize >= len(s) {
 		return []string{s}
 	}
@@ -139,31 +136,28 @@ func chunks(s string, chunkSize int) []string {
 	return chunks
 }
 
-func plain(txt string) *slackClient.TextBlockObject {
-	return slackClient.NewTextBlockObject(
-		slackClient.PlainTextType,
-		txt,
-		true,
-		false)
-}
 func plainSection(txt string) slackClient.SectionBlock {
 	return slackClient.SectionBlock{
 		Type: "section",
-		Text: plain(txt),
+		Text: slackClient.NewTextBlockObject(
+			slackClient.PlainTextType,
+			txt,
+			true,
+			false),
 	}
 }
-func markdown(txt string) *slackClient.TextBlockObject {
-	return slackClient.NewTextBlockObject(slackClient.MarkdownType,
-		txt,
-		false,
-		true)
-}
+
 func markdownSection(txt string) slackClient.SectionBlock {
 	return slackClient.SectionBlock{
 		Type: "section",
-		Text: markdown(txt),
+		Text: slackClient.NewTextBlockObject(
+			slackClient.MarkdownType,
+			txt,
+			false,
+			true),
 	}
 }
+
 func markdownF(format string, a ...interface{}) *slackClient.TextBlockObject {
 	return slackClient.NewTextBlockObject(
 		slackClient.MarkdownType,
@@ -171,6 +165,7 @@ func markdownF(format string, a ...interface{}) *slackClient.TextBlockObject {
 		false,
 		true)
 }
+
 func markdownSectionF(
 	format string, a ...interface{}) slackClient.SectionBlock {
 	return slackClient.SectionBlock{

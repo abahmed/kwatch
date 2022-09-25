@@ -3,10 +3,10 @@ package controller
 import (
 	"context"
 
+	"github.com/abahmed/kwatch/alertmanager"
 	"github.com/abahmed/kwatch/client"
 	"github.com/abahmed/kwatch/config"
 	"github.com/abahmed/kwatch/constant"
-	"github.com/abahmed/kwatch/provider"
 	memory "github.com/abahmed/kwatch/storage/memory"
 	"github.com/sirupsen/logrus"
 	v1 "k8s.io/api/core/v1"
@@ -19,7 +19,7 @@ import (
 
 // Start creates an instance of controller after initialization and runs it
 func Start(
-	providers []provider.Provider,
+	alertManager *alertmanager.AlertManager,
 	config *config.Config) {
 	// create kubernetes client
 	kclient := client.Create()
@@ -78,14 +78,14 @@ func Start(
 		}, cache.Indexers{})
 
 	controller := Controller{
-		name:      "pod-crash",
-		informer:  informer,
-		indexer:   indexer,
-		queue:     queue,
-		kclient:   kclient,
-		providers: providers,
-		store:     memory.NewMemory(),
-		config:    config,
+		name:         "pod-crash",
+		informer:     informer,
+		indexer:      indexer,
+		queue:        queue,
+		kclient:      kclient,
+		alertManager: alertManager,
+		store:        memory.NewMemory(),
+		config:       config,
 	}
 
 	stopCh := make(chan struct{})

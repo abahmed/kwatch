@@ -1,4 +1,4 @@
-package provider
+package teams
 
 import (
 	"bytes"
@@ -18,9 +18,11 @@ const (
 	defaultLogs       = "No logs captured"
 	defaultEvents     = "No events captured"
 	defaultTeamsTitle = "&#9937; Kwatch detected a crash in pod"
+	defaultTitle      = ":red_circle: kwatch detected a crash in pod"
+	defaultText       = "There is an issue with container in a pod!"
 )
 
-type teams struct {
+type Teams struct {
 	webhook string
 }
 
@@ -30,7 +32,7 @@ type teamsWebhookPayload struct {
 }
 
 // NewTeams returns new team instance
-func NewTeams(config map[string]string) Provider {
+func NewTeams(config map[string]string) *Teams {
 	webhook, ok := config["webhook"]
 
 	if !ok || len(webhook) == 0 {
@@ -40,41 +42,29 @@ func NewTeams(config map[string]string) Provider {
 
 	logrus.Infof("initializing Teams with webhook url: %s", webhook)
 
-	return &teams{
+	return &Teams{
 		webhook: webhook,
 	}
 }
 
 // Name returns name of the provider
-func (t *teams) Name() string {
+func (t *Teams) Name() string {
 	return "Microsoft Teams"
 }
 
 // SendEvent sends event to the provider
-func (t *teams) SendEvent(e *event.Event) error {
-	reqBody, err := t.buildRequestBodyTeams(e)
-	if err != nil {
-		return err
-	}
-
-	return t.SendMessage(reqBody)
+func (t *Teams) SendEvent(e *event.Event) error {
+	return t.SendMessage(t.buildRequestBodyTeams(e))
 }
 
 // SendMessage sends text message to the provider
-func (t *teams) SendMessage(msg string) error {
+func (t *Teams) SendMessage(msg string) error {
 	client := &http.Client{}
 	buffer := bytes.NewBuffer([]byte(msg))
-	request, err := http.NewRequest(http.MethodPost, t.webhook, buffer)
-
-	if err != nil {
-		return err
-	}
+	request, _ := http.NewRequest(http.MethodPost, t.webhook, buffer)
 	request.Header.Set("Content-Type", "application/json")
-	response, err := client.Do(request)
-	if err != nil {
-		return err
-	}
 
+	response, _ := client.Do(request)
 	if response.StatusCode != 200 {
 		body, _ := io.ReadAll(response.Body)
 		return fmt.Errorf(
@@ -83,15 +73,11 @@ func (t *teams) SendMessage(msg string) error {
 			string(body))
 	}
 
-	if err != nil {
-		return err
-	}
-
-	return err
+	return nil
 }
 
 // buildRequestBodyTeams builds formatted string from event
-func (t *teams) buildRequestBodyTeams(e *event.Event) (string, error) {
+func (t *Teams) buildRequestBodyTeams(e *event.Event) string {
 	eventsText := defaultEvents
 	logsText := defaultLogs
 
@@ -132,11 +118,6 @@ func (t *teams) buildRequestBodyTeams(e *event.Event) (string, error) {
 		Text:  msg,
 	}
 
-	jsonBytes, err := json.Marshal(msgPayload)
-	if err != nil {
-		return "",
-			fmt.Errorf("failed to marshal string %v: %s", msgPayload, err)
-	}
-
-	return string(jsonBytes), nil
+	jsonBytes, _ := json.Marshal(msgPayload)
+	return string(jsonBytes)
 }

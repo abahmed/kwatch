@@ -136,3 +136,11 @@ func IsStrInSlice(str string, strList []string) bool {
 
 	return false
 }
+
+// JsonEscape escapes the json special characters in a string
+func JsonEscape(i string) string {
+	jm, _ := json.Marshal(i)
+
+	s := string(jm)
+	return s[1 : len(s)-1]
+}

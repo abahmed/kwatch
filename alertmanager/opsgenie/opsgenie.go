@@ -1,9 +1,8 @@
-package provider
+package opsgenie
 
 import (
 	"bytes"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -17,10 +16,16 @@ const (
 	defaultOpsgenieTitle = "kwatch detected a crash in pod: %s"
 	defaultOpsgenieText  = "There is an issue with container (%s) in pod (%s)"
 	opsgenieAPIURL       = "https://api.opsgenie.com/v2/alerts"
+	defaultTitle         = ":red_circle: kwatch detected a crash in pod"
+	defaultText          = "There is an issue with container in a pod!"
+	defaultLogs          = "No logs captured"
+	defaultEvents        = "No events captured"
+	defaultTeamsTitle    = "&#9937; Kwatch detected a crash in pod"
 )
 
-type opsgenie struct {
+type Opsgenie struct {
 	apikey string
+	url    string
 }
 
 type ogPayload struct {
@@ -31,7 +36,7 @@ type ogPayload struct {
 }
 
 // NewOpsgenie returns new opsgenie instance
-func NewOpsgenie(config map[string]string) Provider {
+func NewOpsgenie(config map[string]string) *Opsgenie {
 	apiKey, ok := config["apiKey"]
 	if !ok || len(apiKey) == 0 {
 		logrus.Warnf("initializing opsgenie with empty webhook url")
@@ -40,51 +45,40 @@ func NewOpsgenie(config map[string]string) Provider {
 
 	logrus.Infof("initializing opsgenie with secret apiKey")
 
-	return &opsgenie{
+	return &Opsgenie{
 		apikey: apiKey,
+		url:    opsgenieAPIURL,
 	}
 }
 
 // Name returns name of the provider
-func (m *opsgenie) Name() string {
+func (m *Opsgenie) Name() string {
 	return "Opsgenie"
 }
 
 // SendMessage sends text message to the provider
-func (m *opsgenie) SendMessage(msg string) error {
+func (m *Opsgenie) SendMessage(msg string) error {
 	return nil
 }
 
 // SendEvent sends event to the provider
-func (m *opsgenie) SendEvent(e *event.Event) error {
+func (m *Opsgenie) SendEvent(e *event.Event) error {
 	logrus.Debugf("sending to opsgenie event: %v", e)
 
-	reqBody, err := m.buildMessage(e)
-	if err != nil {
-		return err
-	}
-	return m.sendAPI(reqBody)
+	return m.sendAPI(m.buildMessage(e))
 }
 
 // sendAPI sends http request to Opsgenie API
-func (m *opsgenie) sendAPI(content []byte) error {
+func (m *Opsgenie) sendAPI(content []byte) error {
 	client := &http.Client{}
 	buffer := bytes.NewBuffer(content)
-	request, err := http.NewRequest(http.MethodPost, opsgenieAPIURL, buffer)
-
-	if err != nil {
-		return err
-	}
+	request, _ := http.NewRequest(http.MethodPost, m.url, buffer)
 
 	// set request headers
 	request.Header.Set("Content-Type", "application/json")
 	request.Header.Set("Authorization", "GenieKey "+m.apikey)
 
-	response, err := client.Do(request)
-	if err != nil {
-		return err
-	}
-
+	response, _ := client.Do(request)
 	if response.StatusCode != 202 {
 		body, _ := io.ReadAll(response.Body)
 		return fmt.Errorf(
@@ -93,21 +87,14 @@ func (m *opsgenie) sendAPI(content []byte) error {
 			string(body))
 	}
 
-	if err != nil {
-		return err
-	}
-
-	return err
+	return nil
 }
 
-func (m *opsgenie) buildMessage(e *event.Event) ([]byte, error) {
+func (m *Opsgenie) buildMessage(e *event.Event) []byte {
 	payload := ogPayload{
 		Priority: "P1",
 	}
 
-	if e == nil {
-		return nil, errors.New("trying to send empty event")
-	}
 	logs := defaultLogs
 	if len(e.Logs) > 0 {
 		logs = (e.Logs)
@@ -140,5 +127,7 @@ func (m *opsgenie) buildMessage(e *event.Event) ([]byte, error) {
 		"Events":    events,
 		"Logs":      logs,
 	}
-	return json.Marshal(payload)
+
+	str, _ := json.Marshal(payload)
+	return str
 }
