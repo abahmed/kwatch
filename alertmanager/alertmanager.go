@@ -20,6 +20,13 @@ type AlertManager struct {
 	providers []Provider
 }
 
+// Provider interface
+type Provider interface {
+	Name() string
+	SendEvent(*event.Event) error
+	SendMessage(string) error
+}
+
 // Init initializes AlertManager with provided config
 func (a *AlertManager) Init(config map[string]map[string]string) {
 	a.providers = make([]Provider, 0)
