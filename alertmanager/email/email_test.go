@@ -67,7 +67,7 @@ func TestEmailInvalidConfig(t *testing.T) {
 		"to":       "test12@test.com",
 		"password": "testPassword",
 		"host":     "chat.google.com",
-		"port":     "379182742",
+		"port":     "65539",
 	}
 	c = NewEmail(config)
 	assert.Nil(c)

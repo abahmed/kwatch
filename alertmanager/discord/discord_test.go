@@ -74,7 +74,24 @@ func TestSendEvent(t *testing.T) {
 		Container: "test-container",
 		Namespace: "default",
 		Reason:    "OOMKILLED",
-		Logs:      "test\ntestlogs",
+		Logs: "Nam quis nulla. Integer malesuada. In in enim a arcu " +
+			"imperdiet malesuada. Sed vel lectus. Donec odio urna, tempus " +
+			"molestie, porttitor ut, iaculis quis, sem. Phasellus rhoncus.\n" +
+			"Nam quis nulla. Integer malesuada. In in enim a arcu " +
+			"imperdiet malesuada. Sed vel lectus. Donec odio urna, tempus " +
+			"molestie, porttitor ut, iaculis quis, sem. Phasellus rhoncus.\n" +
+			"Nam quis nulla. Integer malesuada. In in enim a arcu " +
+			"imperdiet malesuada. Sed vel lectus. Donec odio urna, tempus " +
+			"molestie, porttitor ut, iaculis quis, sem. Phasellus rhoncus.\n" +
+			"Nam quis nulla. Integer malesuada. In in enim a arcu " +
+			"imperdiet malesuada. Sed vel lectus. Donec odio urna, tempus " +
+			"molestie, porttitor ut, iaculis quis, sem. Phasellus rhoncus.\n" +
+			"Nam quis nulla. Integer malesuada. In in enim a arcu " +
+			"imperdiet malesuada. Sed vel lectus. Donec odio urna, tempus " +
+			"molestie, porttitor ut, iaculis quis, sem. Phasellus rhoncus.\n" +
+			"Nam quis nulla. Integer malesuada. In in enim a arcu " +
+			"imperdiet malesuada. Sed vel lectus. Donec odio urna, tempus " +
+			"molestie, porttitor ut, iaculis quis, sem. Phasellus rhoncus.\n",
 		Events: "event1-event2-event3-event1-event2-event3-event1-event2-" +
 			"event3\nevent5\nevent6-event8-event11-event12",
 	}

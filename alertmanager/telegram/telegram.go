@@ -2,7 +2,6 @@ package telegram
 
 import (
 	"bytes"
-	"errors"
 	"fmt"
 	"net/http"
 	"strings"
@@ -18,6 +17,7 @@ const (
 type Telegram struct {
 	token  string
 	chatId string
+	url    string
 }
 
 // NewTelegram returns a new Telegram object
@@ -43,6 +43,7 @@ func NewTelegram(config map[string]string) *Telegram {
 	return &Telegram{
 		token:  token,
 		chatId: chatId,
+		url:    telegramAPIURL,
 	}
 }
 
@@ -55,27 +56,16 @@ func (t *Telegram) Name() string {
 func (t *Telegram) SendEvent(e *event.Event) error {
 	logrus.Debugf("sending to telegram event: %v", e)
 
-	// validate telegram token and chat Id
-	_, err := validateTelegram(t)
-	if err != nil {
-		return err
-	}
 	reqBody := buildRequestBodyTelegram(e, t.chatId, "")
-	return sendByTelegramApi(reqBody, t)
+	return t.sendByTelegramApi(reqBody)
 }
 
 // SendMessage sends text message to the provider
 func (t *Telegram) SendMessage(msg string) error {
 	logrus.Debugf("sending to telegram msg: %s", msg)
 
-	// validate telegram token and chat Id
-	_, err := validateTelegram(t)
-	if err != nil {
-		return err
-	}
-
 	reqBody := buildRequestBodyTelegram(new(event.Event), t.chatId, msg)
-	return sendByTelegramApi(reqBody, t)
+	return t.sendByTelegramApi(reqBody)
 }
 
 func buildRequestBodyTelegram(
@@ -126,26 +116,19 @@ func buildRequestBodyTelegram(
 	return reqBody
 }
 
-func validateTelegram(t *Telegram) (bool, error) {
-	if len(t.token) == 0 {
-		return false, errors.New("token key is empty")
-	}
-	if len(t.chatId) == 0 {
-		return false, errors.New("chat id is empty")
-	}
-	return true, nil
-}
-
-func sendByTelegramApi(reqBody string, t *Telegram) error {
+func (t *Telegram) sendByTelegramApi(reqBody string) error {
 	client := &http.Client{}
 	buffer := bytes.NewBuffer([]byte(reqBody))
-	url := fmt.Sprintf(telegramAPIURL, t.token)
+	url := fmt.Sprintf(t.url, t.token)
 
 	request, _ := http.NewRequest(http.MethodPost, url, buffer)
 	request.Header.Set("Content-Type", "application/json")
-	response, err := client.Do(request)
-	if err != nil || response.StatusCode > 202 {
-		return err
+
+	response, _ := client.Do(request)
+	if response.StatusCode > 202 {
+		return fmt.Errorf(
+			"call to telegram alert returned status code %d",
+			response.StatusCode)
 	}
 
 	return nil

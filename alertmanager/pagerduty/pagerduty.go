@@ -18,6 +18,7 @@ const (
 
 type Pagerduty struct {
 	integrationKey string
+	url            string
 }
 
 // NewPagerDuty returns new PagerDuty instance
@@ -32,6 +33,7 @@ func NewPagerDuty(config map[string]string) *Pagerduty {
 
 	return &Pagerduty{
 		integrationKey: integrationKey,
+		url:            pagerdutyAPIURL,
 	}
 }
 
@@ -42,23 +44,20 @@ func (s *Pagerduty) Name() string {
 
 // SendEvent sends event to the provider
 func (s *Pagerduty) SendEvent(ev *event.Event) error {
-	logrus.Debugf("sending to pagerduty event: %v", ev)
-
 	client := &http.Client{}
 
 	reqBody := buildRequestBodyPagerDuty(ev, s.integrationKey)
 	buffer := bytes.NewBuffer([]byte(reqBody))
 
-	request, err := http.NewRequest(http.MethodPost, pagerdutyAPIURL, buffer)
-	if err != nil {
-		return err
-	}
+	request, _ := http.NewRequest(http.MethodPost, s.url, buffer)
 
 	request.Header.Set("Content-Type", "application/json")
 
-	response, err := client.Do(request)
-	if err != nil || response.StatusCode > 202 {
-		return err
+	response, _ := client.Do(request)
+	if response.StatusCode > 202 {
+		return fmt.Errorf(
+			"call to teams alert returned status code %d",
+			response.StatusCode)
 	}
 
 	return nil

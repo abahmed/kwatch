@@ -81,6 +81,8 @@ func LoadConfig() (*Config, error) {
 		logrus.Warnf("unable to load config file: %s", err.Error())
 	}
 
+	q := viper.AllSettings()
+	logrus.Infof("%v", q)
 	// Load config
 	var config Config
 	if err := viper.Unmarshal(&config); err != nil {
@@ -92,7 +94,7 @@ func LoadConfig() (*Config, error) {
 		getAllowForbidSlices(config.Namespaces)
 	if len(config.AllowedNamespaces) > 0 &&
 		len(config.ForbiddenNamespaces) > 0 {
-		logrus.Fatal(
+		logrus.Error(
 			"Either allowed or forbidden namespaces must be set. " +
 				"Can't set both")
 	}
@@ -102,7 +104,7 @@ func LoadConfig() (*Config, error) {
 		getAllowForbidSlices(config.Reasons)
 	if len(config.AllowedReasons) > 0 &&
 		len(config.ForbiddenReasons) > 0 {
-		logrus.Fatal("Either allowed or forbidden reasons must be set. " +
+		logrus.Error("Either allowed or forbidden reasons must be set. " +
 			"Can't set both")
 	}
 

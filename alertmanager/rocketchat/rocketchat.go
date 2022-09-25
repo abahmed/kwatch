@@ -3,7 +3,6 @@ package rocketchat
 import (
 	"bytes"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -49,34 +48,16 @@ func (r *RocketChat) Name() string {
 
 // SendEvent sends event to the provider
 func (r *RocketChat) SendEvent(e *event.Event) error {
-	logrus.Debugf("sending to rocket chat event: %v", e)
-
-	// validate rocket chat webhook url
-	_, err := validateRocketChat(r)
-	if err != nil {
-		return err
-	}
-	reqBody, err := buildRequestBodyRocketChat(e, "")
-	if err != nil {
-		return err
-	}
-	return sendByRocketChatApi(reqBody, r)
+	return r.sendByRocketChatApi(buildRequestBodyRocketChat(e, ""))
 }
 
-func sendByRocketChatApi(reqBody string, r *RocketChat) error {
+func (r *RocketChat) sendByRocketChatApi(reqBody string) error {
 	client := &http.Client{}
 	buffer := bytes.NewBuffer([]byte(reqBody))
-	request, err := http.NewRequest(http.MethodPost, r.webhook, buffer)
-
-	if err != nil {
-		return err
-	}
+	request, _ := http.NewRequest(http.MethodPost, r.webhook, buffer)
 	request.Header.Set("Content-Type", "application/json")
-	response, err := client.Do(request)
-	if err != nil {
-		return err
-	}
 
+	response, _ := client.Do(request)
 	if response.StatusCode != 200 {
 		body, _ := io.ReadAll(response.Body)
 		return fmt.Errorf(
@@ -85,14 +66,17 @@ func sendByRocketChatApi(reqBody string, r *RocketChat) error {
 			string(body))
 	}
 
-	if err != nil {
-		return err
-	}
-
-	return err
+	return nil
 }
 
-func buildRequestBodyRocketChat(e *event.Event, customMsg string) (string, error) {
+// SendMessage sends text message to the provider
+func (r *RocketChat) SendMessage(msg string) error {
+	return r.sendByRocketChatApi(
+		buildRequestBodyRocketChat(new(event.Event), msg),
+	)
+}
+
+func buildRequestBodyRocketChat(e *event.Event, customMsg string) string {
 	eventsText := defaultRocketChatEvents
 	logsText := defaultRocketChatLogs
 
@@ -129,34 +113,6 @@ func buildRequestBodyRocketChat(e *event.Event, customMsg string) (string, error
 		Text: text,
 	}
 
-	jsonBytes, err := json.Marshal(msgPayload)
-	if err != nil {
-		return "", fmt.Errorf("failed to marshal string %v: %s", msgPayload, err)
-	}
-
-	return string(jsonBytes), nil
-}
-
-// SendMessage sends text message to the provider
-func (r *RocketChat) SendMessage(msg string) error {
-	logrus.Debugf("sending to rocket chat msg: %s", msg)
-
-	// validate rocket chat webhook url
-	_, err := validateRocketChat(r)
-	if err != nil {
-		return err
-	}
-
-	reqBody, err := buildRequestBodyRocketChat(new(event.Event), msg)
-	if err != nil {
-		return err
-	}
-	return sendByRocketChatApi(reqBody, r)
-}
-
-func validateRocketChat(r *RocketChat) (bool, error) {
-	if len(r.webhook) == 0 {
-		return false, errors.New("webhook url is empty")
-	}
-	return true, nil
+	jsonBytes, _ := json.Marshal(msgPayload)
+	return string(jsonBytes)
 }

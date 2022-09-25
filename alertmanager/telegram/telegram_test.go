@@ -1,4 +1,4 @@
-package mattermost
+package telegram
 
 import (
 	"net/http"
@@ -9,23 +9,40 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
-func TestMattermostEmptyConfig(t *testing.T) {
+func TestEmptyConfig(t *testing.T) {
 	assert := assert.New(t)
 
-	c := NewMattermost(map[string]string{})
+	c := NewTelegram(map[string]string{})
 	assert.Nil(c)
 }
 
-func TestMattermost(t *testing.T) {
+func TestTelegram(t *testing.T) {
 	assert := assert.New(t)
 
 	config := map[string]string{
-		"webhook": "testtest",
+		"token":  "testtest",
+		"chatId": "tessst",
 	}
-	c := NewMattermost(config)
+	c := NewTelegram(config)
 	assert.NotNil(c)
 
-	assert.Equal(c.Name(), "Mattermost")
+	assert.Equal(c.Name(), "Telegram")
+}
+
+func TestTelegramInvalidConfig(t *testing.T) {
+	assert := assert.New(t)
+
+	config := map[string]string{
+		"token": "test",
+	}
+	c := NewTelegram(config)
+	assert.Nil(c)
+
+	config = map[string]string{
+		"chatId": "test",
+	}
+	c = NewTelegram(config)
+	assert.Nil(c)
 }
 
 func TestSendMessage(t *testing.T) {
@@ -38,9 +55,11 @@ func TestSendMessage(t *testing.T) {
 	defer s.Close()
 
 	config := map[string]string{
-		"webhook": s.URL,
+		"token":  "test",
+		"chatId": "test",
 	}
-	c := NewMattermost(config)
+	c := NewTelegram(config)
+	c.url = s.URL + "/%s"
 	assert.NotNil(c)
 
 	assert.Nil(c.SendMessage("test"))
@@ -56,9 +75,11 @@ func TestSendMessageError(t *testing.T) {
 	defer s.Close()
 
 	config := map[string]string{
-		"webhook": s.URL,
+		"token":  "test",
+		"chatId": "test",
 	}
-	c := NewMattermost(config)
+	c := NewTelegram(config)
+	c.url = s.URL + "/%s"
 	assert.NotNil(c)
 
 	assert.NotNil(c.SendMessage("test"))
@@ -74,9 +95,11 @@ func TestSendEvent(t *testing.T) {
 	defer s.Close()
 
 	config := map[string]string{
-		"webhook": s.URL,
+		"token":  "test",
+		"chatId": "test",
 	}
-	c := NewMattermost(config)
+	c := NewTelegram(config)
+	c.url = s.URL + "/%s"
 	assert.NotNil(c)
 
 	ev := event.Event{

@@ -1,4 +1,4 @@
-package mattermost
+package teams
 
 import (
 	"net/http"
@@ -9,23 +9,23 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
-func TestMattermostEmptyConfig(t *testing.T) {
+func TestEmptyConfig(t *testing.T) {
 	assert := assert.New(t)
 
-	c := NewMattermost(map[string]string{})
+	c := NewTeams(map[string]string{})
 	assert.Nil(c)
 }
 
-func TestMattermost(t *testing.T) {
+func TestPagerduty(t *testing.T) {
 	assert := assert.New(t)
 
 	config := map[string]string{
 		"webhook": "testtest",
 	}
-	c := NewMattermost(config)
+	c := NewTeams(config)
 	assert.NotNil(c)
 
-	assert.Equal(c.Name(), "Mattermost")
+	assert.Equal(c.Name(), "Microsoft Teams")
 }
 
 func TestSendMessage(t *testing.T) {
@@ -40,7 +40,7 @@ func TestSendMessage(t *testing.T) {
 	config := map[string]string{
 		"webhook": s.URL,
 	}
-	c := NewMattermost(config)
+	c := NewTeams(config)
 	assert.NotNil(c)
 
 	assert.Nil(c.SendMessage("test"))
@@ -58,7 +58,7 @@ func TestSendMessageError(t *testing.T) {
 	config := map[string]string{
 		"webhook": s.URL,
 	}
-	c := NewMattermost(config)
+	c := NewTeams(config)
 	assert.NotNil(c)
 
 	assert.NotNil(c.SendMessage("test"))
@@ -76,7 +76,7 @@ func TestSendEvent(t *testing.T) {
 	config := map[string]string{
 		"webhook": s.URL,
 	}
-	c := NewMattermost(config)
+	c := NewTeams(config)
 	assert.NotNil(c)
 
 	ev := event.Event{

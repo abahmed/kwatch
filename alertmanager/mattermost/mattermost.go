@@ -67,38 +67,23 @@ func (m *Mattermost) Name() string {
 func (m *Mattermost) SendMessage(msg string) error {
 	logrus.Debugf("sending to mattermost msg: %s", msg)
 
-	reqBody, err := m.buildMessage(nil, &msg)
-	if err != nil {
-		return err
-	}
-	return m.sendAPI(reqBody)
+	return m.sendAPI(m.buildMessage(nil, &msg))
 }
 
 // SendEvent sends event to the provider
 func (m *Mattermost) SendEvent(e *event.Event) error {
 	logrus.Debugf("sending to mattermost event: %v", e)
 
-	reqBody, err := m.buildMessage(e, nil)
-	if err != nil {
-		return err
-	}
-	return m.sendAPI(reqBody)
+	return m.sendAPI(m.buildMessage(e, nil))
 }
 
 func (m *Mattermost) sendAPI(content []byte) error {
 	client := &http.Client{}
 	buffer := bytes.NewBuffer(content)
-	request, err := http.NewRequest(http.MethodPost, m.webhook, buffer)
-
-	if err != nil {
-		return err
-	}
+	request, _ := http.NewRequest(http.MethodPost, m.webhook, buffer)
 	request.Header.Set("Content-Type", "application/json")
-	response, err := client.Do(request)
-	if err != nil {
-		return err
-	}
 
+	response, _ := client.Do(request)
 	if response.StatusCode != 200 {
 		body, _ := io.ReadAll(response.Body)
 		return fmt.Errorf(
@@ -107,14 +92,10 @@ func (m *Mattermost) sendAPI(content []byte) error {
 			string(body))
 	}
 
-	if err != nil {
-		return err
-	}
-
-	return err
+	return nil
 }
 
-func (m *Mattermost) buildMessage(e *event.Event, msg *string) ([]byte, error) {
+func (m *Mattermost) buildMessage(e *event.Event, msg *string) []byte {
 	payload := mmPayload{}
 
 	if msg != nil && len(*msg) > 0 {
@@ -184,5 +165,6 @@ func (m *Mattermost) buildMessage(e *event.Event, msg *string) ([]byte, error) {
 		}
 	}
 
-	return json.Marshal(payload)
+	str, _ := json.Marshal(payload)
+	return str
 }

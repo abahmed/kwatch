@@ -54,29 +54,17 @@ func (t *Teams) Name() string {
 
 // SendEvent sends event to the provider
 func (t *Teams) SendEvent(e *event.Event) error {
-	reqBody, err := t.buildRequestBodyTeams(e)
-	if err != nil {
-		return err
-	}
-
-	return t.SendMessage(reqBody)
+	return t.SendMessage(t.buildRequestBodyTeams(e))
 }
 
 // SendMessage sends text message to the provider
 func (t *Teams) SendMessage(msg string) error {
 	client := &http.Client{}
 	buffer := bytes.NewBuffer([]byte(msg))
-	request, err := http.NewRequest(http.MethodPost, t.webhook, buffer)
-
-	if err != nil {
-		return err
-	}
+	request, _ := http.NewRequest(http.MethodPost, t.webhook, buffer)
 	request.Header.Set("Content-Type", "application/json")
-	response, err := client.Do(request)
-	if err != nil {
-		return err
-	}
 
+	response, _ := client.Do(request)
 	if response.StatusCode != 200 {
 		body, _ := io.ReadAll(response.Body)
 		return fmt.Errorf(
@@ -85,15 +73,11 @@ func (t *Teams) SendMessage(msg string) error {
 			string(body))
 	}
 
-	if err != nil {
-		return err
-	}
-
-	return err
+	return nil
 }
 
 // buildRequestBodyTeams builds formatted string from event
-func (t *Teams) buildRequestBodyTeams(e *event.Event) (string, error) {
+func (t *Teams) buildRequestBodyTeams(e *event.Event) string {
 	eventsText := defaultEvents
 	logsText := defaultLogs
 
@@ -134,11 +118,6 @@ func (t *Teams) buildRequestBodyTeams(e *event.Event) (string, error) {
 		Text:  msg,
 	}
 
-	jsonBytes, err := json.Marshal(msgPayload)
-	if err != nil {
-		return "",
-			fmt.Errorf("failed to marshal string %v: %s", msgPayload, err)
-	}
-
-	return string(jsonBytes), nil
+	jsonBytes, _ := json.Marshal(msgPayload)
+	return string(jsonBytes)
 }

@@ -57,6 +57,7 @@ func NewEmail(config map[string]string) *Email {
 
 	if portNumber > math.MaxUint16 {
 		logrus.Warnf("initializing email with an invalid range for port number")
+		return nil
 	}
 
 	d := gomail.NewDialer(host, portNumber, from, password)

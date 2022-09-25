@@ -3,7 +3,6 @@ package opsgenie
 import (
 	"bytes"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -26,6 +25,7 @@ const (
 
 type Opsgenie struct {
 	apikey string
+	url    string
 }
 
 type ogPayload struct {
@@ -47,6 +47,7 @@ func NewOpsgenie(config map[string]string) *Opsgenie {
 
 	return &Opsgenie{
 		apikey: apiKey,
+		url:    opsgenieAPIURL,
 	}
 }
 
@@ -64,32 +65,20 @@ func (m *Opsgenie) SendMessage(msg string) error {
 func (m *Opsgenie) SendEvent(e *event.Event) error {
 	logrus.Debugf("sending to opsgenie event: %v", e)
 
-	reqBody, err := m.buildMessage(e)
-	if err != nil {
-		return err
-	}
-	return m.sendAPI(reqBody)
+	return m.sendAPI(m.buildMessage(e))
 }
 
 // sendAPI sends http request to Opsgenie API
 func (m *Opsgenie) sendAPI(content []byte) error {
 	client := &http.Client{}
 	buffer := bytes.NewBuffer(content)
-	request, err := http.NewRequest(http.MethodPost, opsgenieAPIURL, buffer)
-
-	if err != nil {
-		return err
-	}
+	request, _ := http.NewRequest(http.MethodPost, m.url, buffer)
 
 	// set request headers
 	request.Header.Set("Content-Type", "application/json")
 	request.Header.Set("Authorization", "GenieKey "+m.apikey)
 
-	response, err := client.Do(request)
-	if err != nil {
-		return err
-	}
-
+	response, _ := client.Do(request)
 	if response.StatusCode != 202 {
 		body, _ := io.ReadAll(response.Body)
 		return fmt.Errorf(
@@ -98,21 +87,14 @@ func (m *Opsgenie) sendAPI(content []byte) error {
 			string(body))
 	}
 
-	if err != nil {
-		return err
-	}
-
-	return err
+	return nil
 }
 
-func (m *Opsgenie) buildMessage(e *event.Event) ([]byte, error) {
+func (m *Opsgenie) buildMessage(e *event.Event) []byte {
 	payload := ogPayload{
 		Priority: "P1",
 	}
 
-	if e == nil {
-		return nil, errors.New("trying to send empty event")
-	}
 	logs := defaultLogs
 	if len(e.Logs) > 0 {
 		logs = (e.Logs)
@@ -145,5 +127,7 @@ func (m *Opsgenie) buildMessage(e *event.Event) ([]byte, error) {
 		"Events":    events,
 		"Logs":      logs,
 	}
-	return json.Marshal(payload)
+
+	str, _ := json.Marshal(payload)
+	return str
 }

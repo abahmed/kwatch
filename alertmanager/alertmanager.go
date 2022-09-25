@@ -20,10 +20,6 @@ type AlertManager struct {
 	providers []Provider
 }
 
-func NewAlertManager(config map[string]map[string]string) *AlertManager {
-	return &AlertManager{}
-}
-
 // Init initializes AlertManager with provided config
 func (a *AlertManager) Init(config map[string]map[string]string) {
 	a.providers = make([]Provider, 0)
