@@ -1,7 +1,6 @@
 package config
 
 import (
-	"fmt"
 	"os"
 	"testing"
 
@@ -45,33 +44,35 @@ func TestGetAllowForbidSlices(t *testing.T) {
 func TestConfig(t *testing.T) {
 	assert := assert.New(t)
 
-	c, _ := LoadConfig()
-	assert.NotNil(c)
+	cfg, _ := LoadConfig()
+	assert.NotNil(cfg)
 }
+
 func TestConfigFromFile(t *testing.T) {
+	assert := assert.New(t)
+
 	defer os.Unsetenv("CONFIG_FILE")
 	defer os.RemoveAll("config.yaml")
 
 	os.Setenv("CONFIG_FILE", "config.yaml")
 
 	n := Config{
-		MaxRecentLogLines: 10,
+		MaxRecentLogLines: 20,
 		Namespaces:        []string{"default", "!kwatch"},
+		Reasons:           []string{"default", "!kwatch"},
 	}
 	yamlData, _ := yaml.Marshal(&n)
 	os.WriteFile("config.yaml", yamlData, 0644)
-	LoadConfig()
 
-	n = Config{
-		MaxRecentLogLines: 10,
-		Reasons:           []string{"default", "!kwatch"},
-	}
-	yamlData, _ = yaml.Marshal(&n)
-	w := string(yamlData)
-	fmt.Println(w)
-	os.WriteFile("config.yaml", yamlData, 0644)
-	LoadConfig()
+	cfg, _ := LoadConfig()
+	assert.NotNil(cfg)
+	assert.Equal(cfg.MaxRecentLogLines, 20)
+	assert.Len(cfg.AllowedNamespaces, 1)
+	assert.Len(cfg.AllowedReasons, 1)
+	assert.Len(cfg.ForbiddenNamespaces, 1)
+	assert.Len(cfg.ForbiddenReasons, 1)
 
 	os.WriteFile("config.yaml", []byte("maxRecentLogLines: test"), 0644)
-	LoadConfig()
+	_, err := LoadConfig()
+	assert.NotNil(err)
 }
