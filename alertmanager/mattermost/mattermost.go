@@ -80,10 +80,18 @@ func (m *Mattermost) SendEvent(e *event.Event) error {
 func (m *Mattermost) sendAPI(content []byte) error {
 	client := &http.Client{}
 	buffer := bytes.NewBuffer(content)
-	request, _ := http.NewRequest(http.MethodPost, m.webhook, buffer)
+	request, err := http.NewRequest(http.MethodPost, m.webhook, buffer)
+	if err != nil {
+		return err
+	}
+
 	request.Header.Set("Content-Type", "application/json")
 
-	response, _ := client.Do(request)
+	response, err := client.Do(request)
+	if err != nil {
+		return err
+	}
+
 	if response.StatusCode != 200 {
 		body, _ := io.ReadAll(response.Body)
 		return fmt.Errorf(

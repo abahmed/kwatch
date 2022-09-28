@@ -1,10 +1,12 @@
 package alertmanager
 
 import (
+	"reflect"
 	"strings"
 
 	"github.com/abahmed/kwatch/alertmanager/discord"
 	"github.com/abahmed/kwatch/alertmanager/email"
+	"github.com/abahmed/kwatch/alertmanager/matrix"
 	"github.com/abahmed/kwatch/alertmanager/mattermost"
 	"github.com/abahmed/kwatch/alertmanager/opsgenie"
 	"github.com/abahmed/kwatch/alertmanager/pagerduty"
@@ -33,7 +35,7 @@ func (a *AlertManager) Init(config map[string]map[string]string) {
 
 	for k, v := range config {
 		lowerCaseKey := strings.ToLower(k)
-		var pvdr Provider
+		var pvdr Provider = nil
 		if lowerCaseKey == "slack" {
 			pvdr = slack.NewSlack(v)
 		} else if lowerCaseKey == "pagerduty" {
@@ -52,11 +54,12 @@ func (a *AlertManager) Init(config map[string]map[string]string) {
 			pvdr = mattermost.NewMattermost(v)
 		} else if lowerCaseKey == "opsgenie" {
 			pvdr = opsgenie.NewOpsgenie(v)
+		} else if lowerCaseKey == "matrix" {
+			pvdr = matrix.NewMatrix(v)
 		}
 
-		if pvdr != nil {
+		if !reflect.ValueOf(pvdr).IsNil() {
 			a.providers = append(a.providers, pvdr)
-
 		}
 	}
 }

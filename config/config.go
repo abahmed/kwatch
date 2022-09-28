@@ -81,8 +81,6 @@ func LoadConfig() (*Config, error) {
 		logrus.Warnf("unable to load config file: %s", err.Error())
 	}
 
-	q := viper.AllSettings()
-	logrus.Infof("%v", q)
 	// Load config
 	var config Config
 	if err := viper.Unmarshal(&config); err != nil {

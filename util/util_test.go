@@ -2,6 +2,7 @@ package util
 
 import (
 	"errors"
+	"math/rand"
 	"testing"
 
 	"github.com/spf13/viper"
@@ -51,14 +52,13 @@ func TestGetPodContainerLogs(t *testing.T) {
 
 	client := fake.NewSimpleClientset()
 	viper.SetDefault("maxRecentLogLines", 20)
-	podName := "test"
-	containerName := "test"
 	logs := GetPodContainerLogs(
 		client,
-		podName,
-		containerName,
+		"test",
+		"test",
 		"default",
 		false)
+
 	assert.Equal(logs, "fake logs")
 }
 
@@ -101,27 +101,33 @@ func TestGetPodEventsStr(t *testing.T) {
 		Message:       "test message",
 		LastTimestamp: metav1.Now(),
 	}
-	cli.PrependReactor("list", "events", func(action k8stesting.Action) (bool, runtime.Object, error) {
-		return true, &v1.EventList{
-			Items: []v1.Event{event},
-		}, nil
-	})
+	cli.PrependReactor(
+		"list",
+		"events",
+		func(action k8stesting.Action) (bool, runtime.Object, error) {
+			return true, &v1.EventList{
+				Items: []v1.Event{event},
+			}, nil
+		})
 
 	result := GetPodEventsStr(cli, "dummy-app-579f7cd745-t6fdg", "test")
 	expectedOutput :=
 		"[" + event.LastTimestamp.String() + "] " + event.Reason + " " +
 			event.Message
 	assert.Equal(result, expectedOutput)
-
 }
+
 func TestGetPodEventsStrError(t *testing.T) {
 	assert := assert.New(t)
 
 	cli := fake.NewSimpleClientset()
 
-	cli.PrependReactor("list", "events", func(action k8stesting.Action) (bool, runtime.Object, error) {
-		return true, nil, errors.New("ssss")
-	})
+	cli.PrependReactor(
+		"list",
+		"events",
+		func(action k8stesting.Action) (bool, runtime.Object, error) {
+			return true, nil, errors.New("ssss")
+		})
 
 	result := GetPodEventsStr(cli, "dummy-app-579f7cd745-t6fdg", "test")
 	assert.Equal(result, "")
@@ -193,4 +199,13 @@ func TestContainsKillingStoppingContainerEmpty(t *testing.T) {
 			"test")
 
 	assert.False(result)
+}
+
+func TestRandomString(t *testing.T) {
+	assert := assert.New(t)
+
+	randLen := rand.Intn(300)
+	result := RandomString(randLen)
+
+	assert.Len(result, randLen)
 }

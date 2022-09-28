@@ -28,7 +28,7 @@ func NewTelegram(config map[string]string) *Telegram {
 		return nil
 	}
 
-	chatId, ok := config["chatId"]
+	chatId, ok := config["chatid"]
 	if !ok || len(token) == 0 {
 		logrus.Warnf("initializing telegram with empty chat_id")
 		return nil
@@ -91,7 +91,11 @@ func buildRequestBodyTelegram(
 	txt := ""
 	if len(customMsg) <= 0 {
 		txt = fmt.Sprintf(
-			"An alert for Name: *%s*  Container: *%s* Namespace: *%s*  has been triggered:\\n—\\n Logs: *%s* \\n Events: *%s* ",
+			"An alert for Name: *%s*  "+
+				"Container: *%s* "+
+				"Namespace: *%s*  has been triggered:\\n—\\n "+
+				"Logs: *%s* \\n "+
+				"Events: *%s* ",
 			e.Name,
 			e.Container,
 			e.Namespace,
@@ -121,10 +125,18 @@ func (t *Telegram) sendByTelegramApi(reqBody string) error {
 	buffer := bytes.NewBuffer([]byte(reqBody))
 	url := fmt.Sprintf(t.url, t.token)
 
-	request, _ := http.NewRequest(http.MethodPost, url, buffer)
+	request, err := http.NewRequest(http.MethodPost, url, buffer)
+	if err != nil {
+		return err
+	}
+
 	request.Header.Set("Content-Type", "application/json")
 
-	response, _ := client.Do(request)
+	response, err := client.Do(request)
+	if err != nil {
+		return err
+	}
+
 	if response.StatusCode > 202 {
 		return fmt.Errorf(
 			"call to telegram alert returned status code %d",

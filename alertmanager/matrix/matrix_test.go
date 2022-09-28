@@ -1,4 +1,4 @@
-package telegram
+package matrix
 
 import (
 	"net/http"
@@ -12,37 +12,48 @@ import (
 func TestEmptyConfig(t *testing.T) {
 	assert := assert.New(t)
 
-	c := NewTelegram(map[string]string{})
+	c := NewMatrix(map[string]string{})
 	assert.Nil(c)
 }
 
-func TestTelegram(t *testing.T) {
+func TestInvalidConfig(t *testing.T) {
 	assert := assert.New(t)
 
 	config := map[string]string{
-		"token":  "testtest",
-		"chatid": "tessst",
+		"serverurl": "https://matrix-client.matrix.org",
 	}
-	c := NewTelegram(config)
-	assert.NotNil(c)
-
-	assert.Equal(c.Name(), "Telegram")
-}
-
-func TestTelegramInvalidConfig(t *testing.T) {
-	assert := assert.New(t)
-
-	config := map[string]string{
-		"token": "test",
-	}
-	c := NewTelegram(config)
+	c := NewMatrix(config)
 	assert.Nil(c)
 
 	config = map[string]string{
-		"chatid": "test",
+		"serverurl":   "https://matrix-client.matrix.org",
+		"accesstoken": "testToken",
 	}
-	c = NewTelegram(config)
+	c = NewMatrix(config)
 	assert.Nil(c)
+
+	config = map[string]string{
+		"serverurl":      "https://matrix-client.matrix.org",
+		"accesstoken":    "testToken",
+		"internalroomid": "",
+	}
+	c = NewMatrix(config)
+	assert.Nil(c)
+
+}
+
+func TestMatrix(t *testing.T) {
+	assert := assert.New(t)
+
+	config := map[string]string{
+		"serverurl":      "https://matrix-client.matrix.org",
+		"accesstoken":    "testToken",
+		"internalroomid": "room1",
+	}
+	c := NewMatrix(config)
+	assert.NotNil(c)
+
+	assert.Equal(c.Name(), "Matrix")
 }
 
 func TestSendMessage(t *testing.T) {
@@ -56,11 +67,11 @@ func TestSendMessage(t *testing.T) {
 	defer s.Close()
 
 	config := map[string]string{
-		"token":  "test",
-		"chatid": "test",
+		"serverurl":      s.URL,
+		"accesstoken":    "testToken",
+		"internalroomid": "room1",
 	}
-	c := NewTelegram(config)
-	c.url = s.URL + "/%s"
+	c := NewMatrix(config)
 	assert.NotNil(c)
 
 	assert.Nil(c.SendMessage("test"))
@@ -77,11 +88,11 @@ func TestSendMessageError(t *testing.T) {
 	defer s.Close()
 
 	config := map[string]string{
-		"token":  "test",
-		"chatid": "test",
+		"serverurl":      s.URL,
+		"accesstoken":    "testToken",
+		"internalroomid": "room1",
 	}
-	c := NewTelegram(config)
-	c.url = s.URL + "/%s"
+	c := NewMatrix(config)
 	assert.NotNil(c)
 
 	assert.NotNil(c.SendMessage("test"))
@@ -98,11 +109,11 @@ func TestSendEvent(t *testing.T) {
 	defer s.Close()
 
 	config := map[string]string{
-		"token":  "test",
-		"chatid": "test",
+		"serverurl":      s.URL,
+		"accesstoken":    "testToken",
+		"internalroomid": "room1",
 	}
-	c := NewTelegram(config)
-	c.url = s.URL + "/%s"
+	c := NewMatrix(config)
 	assert.NotNil(c)
 
 	ev := event.Event{
@@ -121,19 +132,22 @@ func TestInvaildHttpRequest(t *testing.T) {
 	assert := assert.New(t)
 
 	config := map[string]string{
-		"token":  "test",
-		"chatid": "test",
+		"serverurl":      "h ttp://localhost",
+		"accesstoken":    "testToken",
+		"internalroomid": "room1",
 	}
-
-	c := NewTelegram(config)
+	c := NewMatrix(config)
 	assert.NotNil(c)
-	c.url = "h ttp://localhost/%s"
 
 	assert.NotNil(c.SendMessage("test"))
 
-	c = NewTelegram(config)
+	config = map[string]string{
+		"serverurl":      "http://localhost:132323",
+		"accesstoken":    "testToken",
+		"internalroomid": "room1",
+	}
+	c = NewMatrix(config)
 	assert.NotNil(c)
-	c.url = "http://localhost:132323/%s"
 
 	assert.NotNil(c.SendMessage("test"))
 }

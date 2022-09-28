@@ -54,10 +54,18 @@ func (r *RocketChat) SendEvent(e *event.Event) error {
 func (r *RocketChat) sendByRocketChatApi(reqBody string) error {
 	client := &http.Client{}
 	buffer := bytes.NewBuffer([]byte(reqBody))
-	request, _ := http.NewRequest(http.MethodPost, r.webhook, buffer)
+	request, err := http.NewRequest(http.MethodPost, r.webhook, buffer)
+	if err != nil {
+		return err
+	}
+
 	request.Header.Set("Content-Type", "application/json")
 
-	response, _ := client.Do(request)
+	response, err := client.Do(request)
+	if err != nil {
+		return err
+	}
+
 	if response.StatusCode != 200 {
 		body, _ := io.ReadAll(response.Body)
 		return fmt.Errorf(
@@ -97,7 +105,12 @@ func buildRequestBodyRocketChat(e *event.Event, customMsg string) string {
 	text := viper.GetString("alert.rocketchat.text")
 	if len(customMsg) <= 0 {
 		text = fmt.Sprintf(
-			"%s \n\n **Pod:** %s  \n\n **Container:** %s \n\n **Namespace:** %s  \n\n **Events:** \n\n ``` %s ``` \n\n **Logs:** \n\n ``` %s ``` ",
+			"%s \n\n "+
+				"**Pod:** %s  \n\n "+
+				"**Container:** %s \n\n "+
+				"**Namespace:** %s  \n\n "+
+				"**Events:** \n\n ``` %s ``` \n\n "+
+				"**Logs:** \n\n ``` %s ``` ",
 			text,
 			e.Name,
 			e.Container,

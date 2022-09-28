@@ -110,7 +110,10 @@ func buildMessageSubjectAndBody(e *event.Event) (string, string) {
 
 	subject := fmt.Sprintf("⛑ Kwatch detected a crash in pod %s ", e.Container)
 	body := fmt.Sprintf(
-		"An alert for Name: *%s*  Container: *%s* Namespace: *%s*  has been triggered:\\n—\\n Logs: *%s* \\n Events: *%s* ",
+		"An alert for Name: *%s*  Container: *%s* Namespace: *%s*  "+
+			"has been triggered:\\n—\\n "+
+			"Logs: *%s* \\n "+
+			"Events: *%s* ",
 		e.Name,
 		e.Container,
 		e.Namespace,

@@ -37,13 +37,13 @@ type ogPayload struct {
 
 // NewOpsgenie returns new opsgenie instance
 func NewOpsgenie(config map[string]string) *Opsgenie {
-	apiKey, ok := config["apiKey"]
+	apiKey, ok := config["apikey"]
 	if !ok || len(apiKey) == 0 {
 		logrus.Warnf("initializing opsgenie with empty webhook url")
 		return nil
 	}
 
-	logrus.Infof("initializing opsgenie with secret apiKey")
+	logrus.Infof("initializing opsgenie with secret apikey")
 
 	return &Opsgenie{
 		apikey: apiKey,
@@ -72,13 +72,20 @@ func (m *Opsgenie) SendEvent(e *event.Event) error {
 func (m *Opsgenie) sendAPI(content []byte) error {
 	client := &http.Client{}
 	buffer := bytes.NewBuffer(content)
-	request, _ := http.NewRequest(http.MethodPost, m.url, buffer)
+	request, err := http.NewRequest(http.MethodPost, m.url, buffer)
+	if err != nil {
+		return err
+	}
 
 	// set request headers
 	request.Header.Set("Content-Type", "application/json")
 	request.Header.Set("Authorization", "GenieKey "+m.apikey)
 
-	response, _ := client.Do(request)
+	response, err := client.Do(request)
+	if err != nil {
+		return err
+	}
+
 	if response.StatusCode != 202 {
 		body, _ := io.ReadAll(response.Body)
 		return fmt.Errorf(

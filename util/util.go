@@ -4,7 +4,9 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"math/rand"
 	"strings"
+	"time"
 
 	"github.com/sirupsen/logrus"
 	"github.com/spf13/viper"
@@ -80,11 +82,7 @@ func GetPodContainerLogs(
 	}
 
 	// get logs
-	logs, err := c.CoreV1().
-		Pods(namespace).
-		GetLogs(name, &options).
-		DoRaw(context.TODO())
-
+	logs, err := getContainerLogs(c, name, namespace, &options)
 	if err != nil {
 		logrus.Warnf(
 			"failed to get logs for container %s in pod %s@%s: %s",
@@ -109,6 +107,17 @@ func GetPodContainerLogs(
 	}
 
 	return string(logs)
+}
+
+func getContainerLogs(
+	c kubernetes.Interface,
+	name string,
+	namespace string,
+	options *v1.PodLogOptions) ([]byte, error) {
+	return c.CoreV1().
+		Pods(namespace).
+		GetLogs(name, options).
+		DoRaw(context.TODO())
 }
 
 func getPodEvents(
@@ -143,4 +152,18 @@ func JsonEscape(i string) string {
 
 	s := string(jm)
 	return s[1 : len(s)-1]
+}
+
+// RandomString generates random string with provided n size
+func RandomString(n int) string {
+	const availableCharacterBytes = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLM" +
+		"NOPQRSTUVWXYZ0123456789"
+
+	b := make([]byte, n)
+	rand.Seed(time.Now().UnixNano())
+	for i := range b {
+		b[i] = availableCharacterBytes[rand.Intn(len(availableCharacterBytes))]
+	}
+
+	return string(b)
 }

@@ -23,7 +23,7 @@ type Pagerduty struct {
 
 // NewPagerDuty returns new PagerDuty instance
 func NewPagerDuty(config map[string]string) *Pagerduty {
-	integrationKey, ok := config["integrationKey"]
+	integrationKey, ok := config["integrationkey"]
 	if !ok || len(integrationKey) == 0 {
 		logrus.Warnf("initializing pagerduty with an empty integration key")
 		return nil
@@ -49,11 +49,18 @@ func (s *Pagerduty) SendEvent(ev *event.Event) error {
 	reqBody := buildRequestBodyPagerDuty(ev, s.integrationKey)
 	buffer := bytes.NewBuffer([]byte(reqBody))
 
-	request, _ := http.NewRequest(http.MethodPost, s.url, buffer)
+	request, err := http.NewRequest(http.MethodPost, s.url, buffer)
+	if err != nil {
+		return err
+	}
 
 	request.Header.Set("Content-Type", "application/json")
 
-	response, _ := client.Do(request)
+	response, err := client.Do(request)
+	if err != nil {
+		return err
+	}
+
 	if response.StatusCode > 202 {
 		return fmt.Errorf(
 			"call to teams alert returned status code %d",
