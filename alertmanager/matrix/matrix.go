@@ -16,7 +16,7 @@ import (
 )
 
 type Matrix struct {
-	serverURL      string
+	homeServer     string
 	accessToken    string
 	internalRoomID string
 	title          string
@@ -25,9 +25,9 @@ type Matrix struct {
 
 // NewMatrix returns new Matrix instance
 func NewMatrix(config map[string]string) *Matrix {
-	serverURL, ok := config["serverurl"]
-	if !ok || len(serverURL) == 0 {
-		logrus.Warnf("initializing slack with empty serverURL")
+	homeServer, ok := config["homeserver"]
+	if !ok || len(homeServer) == 0 {
+		logrus.Warnf("initializing slack with empty homeServer")
 		return nil
 	}
 
@@ -44,7 +44,7 @@ func NewMatrix(config map[string]string) *Matrix {
 	}
 
 	return &Matrix{
-		serverURL:      serverURL,
+		homeServer:     homeServer,
 		accessToken:    accessToken,
 		internalRoomID: internalRoomID,
 		title:          config["title"],
@@ -92,14 +92,16 @@ func (m *Matrix) SendEvent(e *event.Event) error {
 			"<b>Pod:</b> %s <br/>"+
 			"<b>Container:</b> %s<br/>"+
 			"<b>Namespace:</b> %s<br/>"+
-			"<b>Events:</b><br/><blockquote>%s</blockquote><br/>"+
+			"<b>Reason:</b> %s<br/>"+
+			"<b>Events:</b><br/><blockquote>%s</blockquote>"+
 			"<b>Logs:</b> <br/><blockquote>%s</blockquote>",
 		text,
 		e.Name,
 		e.Container,
 		e.Namespace,
-		eventsText,
-		logsText,
+		e.Reason,
+		strings.ReplaceAll(eventsText, "\n", "<br/>"),
+		strings.ReplaceAll(logsText, "\n", "<br/>"),
 	)
 
 	return m.sendAPI(msg)
@@ -121,7 +123,7 @@ func (m *Matrix) sendAPI(formattedMsg string) error {
 		fmt.Sprintf(
 			"%s/_matrix/client/v3/rooms/%s/send/m.room.message/%s"+
 				"?access_token=%s",
-			m.serverURL,
+			m.homeServer,
 			url.PathEscape(m.internalRoomID),
 			util.RandomString(24),
 			url.QueryEscape(m.accessToken),

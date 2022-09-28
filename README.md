@@ -211,6 +211,24 @@ If you want to enable Opsgenie, provide the API key with optional text and title
 | `alert.opsgenie.title`                | Customized title in Opsgenie message    |
 | `alert.opsgenie.text`                 | Customized text in Opsgenie message     |
 
+#### Matrix
+
+<p>
+	<img src="./assets/matrix.png" width="45%"/>
+</p>
+
+If you want to enable Matrix, provide homeServer, accessToken and internalRoomID
+with optional text and title
+
+
+| Parameter                           | Description                            |
+|:------------------------------------|:-------------------------------------- |
+| `alert.matrix.homeServer`           | HomeServer URL                         |
+| `alert.matrix.accessToken`          | Account access token                   |
+| `alert.matrix.internalRoomID`       | Internal room ID                       |
+| `alert.matrix.title`                | Customized title in message            |
+| `alert.matrix.text`                 | Customized text in message             |
+
 
 ### Cleanup
 

@@ -20,20 +20,20 @@ func TestInvalidConfig(t *testing.T) {
 	assert := assert.New(t)
 
 	config := map[string]string{
-		"serverurl": "https://matrix-client.matrix.org",
+		"homeserver": "https://matrix-client.matrix.org",
 	}
 	c := NewMatrix(config)
 	assert.Nil(c)
 
 	config = map[string]string{
-		"serverurl":   "https://matrix-client.matrix.org",
+		"homeserver":  "https://matrix-client.matrix.org",
 		"accesstoken": "testToken",
 	}
 	c = NewMatrix(config)
 	assert.Nil(c)
 
 	config = map[string]string{
-		"serverurl":      "https://matrix-client.matrix.org",
+		"homeserver":     "https://matrix-client.matrix.org",
 		"accesstoken":    "testToken",
 		"internalroomid": "",
 	}
@@ -46,7 +46,7 @@ func TestMatrix(t *testing.T) {
 	assert := assert.New(t)
 
 	config := map[string]string{
-		"serverurl":      "https://matrix-client.matrix.org",
+		"homeserver":     "https://matrix-client.matrix.org",
 		"accesstoken":    "testToken",
 		"internalroomid": "room1",
 	}
@@ -67,7 +67,7 @@ func TestSendMessage(t *testing.T) {
 	defer s.Close()
 
 	config := map[string]string{
-		"serverurl":      s.URL,
+		"homeserver":     s.URL,
 		"accesstoken":    "testToken",
 		"internalroomid": "room1",
 	}
@@ -88,7 +88,7 @@ func TestSendMessageError(t *testing.T) {
 	defer s.Close()
 
 	config := map[string]string{
-		"serverurl":      s.URL,
+		"homeserver":     s.URL,
 		"accesstoken":    "testToken",
 		"internalroomid": "room1",
 	}
@@ -109,7 +109,7 @@ func TestSendEvent(t *testing.T) {
 	defer s.Close()
 
 	config := map[string]string{
-		"serverurl":      s.URL,
+		"homeserver":     s.URL,
 		"accesstoken":    "testToken",
 		"internalroomid": "room1",
 	}
@@ -132,7 +132,7 @@ func TestInvaildHttpRequest(t *testing.T) {
 	assert := assert.New(t)
 
 	config := map[string]string{
-		"serverurl":      "h ttp://localhost",
+		"homeserver":     "h ttp://localhost",
 		"accesstoken":    "testToken",
 		"internalroomid": "room1",
 	}
@@ -142,7 +142,7 @@ func TestInvaildHttpRequest(t *testing.T) {
 	assert.NotNil(c.SendMessage("test"))
 
 	config = map[string]string{
-		"serverurl":      "http://localhost:132323",
+		"homeserver":     "http://localhost:132323",
 		"accesstoken":    "testToken",
 		"internalroomid": "room1",
 	}
