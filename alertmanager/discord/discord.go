@@ -3,22 +3,18 @@ package discord
 import (
 	"strings"
 
+	"github.com/abahmed/kwatch/constant"
 	"github.com/abahmed/kwatch/event"
+
 	discordgo "github.com/bwmarrin/discordgo"
 	"github.com/sirupsen/logrus"
-	"github.com/spf13/viper"
-)
-
-const (
-	footer       = "<https://github.com/abahmed/kwatch|kwatch>"
-	defaultTitle = ":red_circle: kwatch detected a crash in pod"
-	defaultText  = "There is an issue with container in a pod!"
-	chunkSize    = 80
 )
 
 type Discord struct {
 	id    string
 	token string
+	title string
+	text  string
 	send  func(
 		webhookID,
 		token string,
@@ -34,13 +30,12 @@ func NewDiscord(config map[string]string) *Discord {
 		return nil
 	}
 
-	logrus.Infof("initializing discord with webhook url: %s", webhook)
-
 	webhookList := strings.Split(webhook, "/")
 	if len(webhookList) <= 1 {
 		logrus.Warnf("initializing discord with missing id or token")
 		return nil
 	}
+	logrus.Infof("initializing discord with webhook url: %s", webhook)
 
 	webhookToken := webhookList[len(webhookList)-1]
 	webhookID := webhookList[len(webhookList)-2]
@@ -50,6 +45,8 @@ func NewDiscord(config map[string]string) *Discord {
 	return &Discord{
 		id:    webhookID,
 		token: webhookToken,
+		title: config["title"],
+		text:  config["text"],
 		send:  discordClient.WebhookExecute,
 	}
 }
@@ -112,15 +109,15 @@ func (s *Discord) SendEvent(ev *event.Event) error {
 	}
 
 	// use custom title if it's provided, otherwise use default
-	title := viper.GetString("alert.discord.title")
+	title := s.title
 	if len(title) == 0 {
-		title = defaultTitle
+		title = constant.DefaultTitle
 	}
 
 	// use custom text if it's provided, otherwise use default
-	text := viper.GetString("alert.discord.text")
+	text := s.text
 	if len(text) == 0 {
-		text = defaultText
+		text = constant.DefaultText
 	}
 
 	// send message
@@ -136,7 +133,7 @@ func (s *Discord) SendEvent(ev *event.Event) error {
 					Description: text,
 					Fields:      fields,
 					Footer: &discordgo.MessageEmbedFooter{
-						Text: footer,
+						Text: constant.Footer,
 					},
 				},
 			},

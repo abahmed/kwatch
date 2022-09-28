@@ -8,23 +8,15 @@ import (
 
 	"net/http"
 
+	"github.com/abahmed/kwatch/constant"
 	"github.com/abahmed/kwatch/event"
 	"github.com/sirupsen/logrus"
-	"github.com/spf13/viper"
-)
-
-const (
-	defaultMattermostLogs   = "No logs captured"
-	defaultMattermostEvents = "No events captured"
-	footer                  = "<https://github.com/abahmed/kwatch|kwatch>"
-	defaultTitle            = ":red_circle: kwatch detected a crash in pod"
-	defaultText             = "There is an issue with container in a pod!"
-	chunkSize               = 80
 )
 
 type Mattermost struct {
 	webhook string
-	send    func(content []byte) error
+	title   string
+	text    string
 }
 
 type mmField struct {
@@ -32,6 +24,7 @@ type mmField struct {
 	Title string      `json:"title"`
 	Value interface{} `json:"value"`
 }
+
 type mmAttachment struct {
 	Title  string    `json:"title"`
 	Text   string    `json:"text"`
@@ -55,6 +48,8 @@ func NewMattermost(config map[string]string) *Mattermost {
 
 	return &Mattermost{
 		webhook: webhook,
+		title:   config["title"],
+		text:    config["text"],
 	}
 }
 
@@ -80,10 +75,18 @@ func (m *Mattermost) SendEvent(e *event.Event) error {
 func (m *Mattermost) sendAPI(content []byte) error {
 	client := &http.Client{}
 	buffer := bytes.NewBuffer(content)
-	request, _ := http.NewRequest(http.MethodPost, m.webhook, buffer)
+	request, err := http.NewRequest(http.MethodPost, m.webhook, buffer)
+	if err != nil {
+		return err
+	}
+
 	request.Header.Set("Content-Type", "application/json")
 
-	response, _ := client.Do(request)
+	response, err := client.Do(request)
+	if err != nil {
+		return err
+	}
+
 	if response.StatusCode != 200 {
 		body, _ := io.ReadAll(response.Body)
 		return fmt.Errorf(
@@ -103,26 +106,26 @@ func (m *Mattermost) buildMessage(e *event.Event, msg *string) []byte {
 	}
 
 	if e != nil {
-		logs := defaultMattermostLogs
+		logs := constant.DefaultLogs
 		if len(e.Logs) > 0 {
 			logs = (e.Logs)
 		}
 
-		events := defaultMattermostEvents
+		events := constant.DefaultEvents
 		if len(e.Events) > 0 {
 			events = (e.Events)
 		}
 
 		// use custom title if it's provided, otherwise use default
-		title := viper.GetString("alert.mattermost.title")
+		title := m.title
 		if len(title) == 0 {
-			title = defaultTitle
+			title = constant.DefaultTitle
 		}
 
 		// use custom text if it's provided, otherwise use default
-		text := viper.GetString("alert.mattermost.text")
+		text := m.text
 		if len(text) == 0 {
-			text = defaultText
+			text = constant.DefaultText
 		}
 
 		payload.Attachments = []mmAttachment{

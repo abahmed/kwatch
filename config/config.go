@@ -11,7 +11,7 @@ import (
 type Config struct {
 	// MaxRecentLogLines optional max tail log lines in messages,
 	// if it's not provided it will get all log lines
-	MaxRecentLogLines int `mapstructure:"maxRecentLogLines"`
+	MaxRecentLogLines int64 `mapstructure:"maxRecentLogLines"`
 
 	// IgnoreFailedGracefulShutdown if set to true, containers which are
 	// forcefully killed during shutdown (as their graceful shutdown failed)
@@ -81,8 +81,6 @@ func LoadConfig() (*Config, error) {
 		logrus.Warnf("unable to load config file: %s", err.Error())
 	}
 
-	q := viper.AllSettings()
-	logrus.Infof("%v", q)
 	// Load config
 	var config Config
 	if err := viper.Unmarshal(&config); err != nil {

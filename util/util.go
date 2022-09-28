@@ -4,10 +4,11 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"math/rand"
 	"strings"
+	"time"
 
 	"github.com/sirupsen/logrus"
-	"github.com/spf13/viper"
 	v1 "k8s.io/api/core/v1"
 
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -67,24 +68,20 @@ func ContainsKillingStoppingContainerEvents(
 // GetPodContainerLogs returns logs for specified container in pod
 func GetPodContainerLogs(
 	c kubernetes.Interface, name, container, namespace string,
-	previous bool) string {
+	previous bool,
+	maxRecentLogLines int64) string {
 	options := v1.PodLogOptions{
 		Container: container,
 		Previous:  previous,
 	}
 
 	// get max recent log lines
-	var maxLogs int64 = viper.GetInt64("maxRecentLogLines")
-	if maxLogs != 0 {
-		options.TailLines = &maxLogs
+	if maxRecentLogLines != 0 {
+		options.TailLines = &maxRecentLogLines
 	}
 
 	// get logs
-	logs, err := c.CoreV1().
-		Pods(namespace).
-		GetLogs(name, &options).
-		DoRaw(context.TODO())
-
+	logs, err := getContainerLogs(c, name, namespace, &options)
 	if err != nil {
 		logrus.Warnf(
 			"failed to get logs for container %s in pod %s@%s: %s",
@@ -109,6 +106,17 @@ func GetPodContainerLogs(
 	}
 
 	return string(logs)
+}
+
+func getContainerLogs(
+	c kubernetes.Interface,
+	name string,
+	namespace string,
+	options *v1.PodLogOptions) ([]byte, error) {
+	return c.CoreV1().
+		Pods(namespace).
+		GetLogs(name, options).
+		DoRaw(context.TODO())
 }
 
 func getPodEvents(
@@ -143,4 +151,18 @@ func JsonEscape(i string) string {
 
 	s := string(jm)
 	return s[1 : len(s)-1]
+}
+
+// RandomString generates random string with provided n size
+func RandomString(n int) string {
+	const availableCharacterBytes = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLM" +
+		"NOPQRSTUVWXYZ0123456789"
+
+	b := make([]byte, n)
+	rand.Seed(time.Now().UnixNano())
+	for i := range b {
+		b[i] = availableCharacterBytes[rand.Intn(len(availableCharacterBytes))]
+	}
+
+	return string(b)
 }

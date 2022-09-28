@@ -9,21 +9,19 @@ import (
 	"net/http"
 	"strings"
 
+	"github.com/abahmed/kwatch/constant"
 	"github.com/abahmed/kwatch/event"
 	"github.com/sirupsen/logrus"
-	"github.com/spf13/viper"
 )
 
 const (
-	defaultLogs       = "No logs captured"
-	defaultEvents     = "No events captured"
 	defaultTeamsTitle = "&#9937; Kwatch detected a crash in pod"
-	defaultTitle      = ":red_circle: kwatch detected a crash in pod"
-	defaultText       = "There is an issue with container in a pod!"
 )
 
 type Teams struct {
 	webhook string
+	title   string
+	text    string
 }
 
 type teamsWebhookPayload struct {
@@ -44,6 +42,8 @@ func NewTeams(config map[string]string) *Teams {
 
 	return &Teams{
 		webhook: webhook,
+		title:   config["title"],
+		text:    config["text"],
 	}
 }
 
@@ -61,10 +61,18 @@ func (t *Teams) SendEvent(e *event.Event) error {
 func (t *Teams) SendMessage(msg string) error {
 	client := &http.Client{}
 	buffer := bytes.NewBuffer([]byte(msg))
-	request, _ := http.NewRequest(http.MethodPost, t.webhook, buffer)
+	request, err := http.NewRequest(http.MethodPost, t.webhook, buffer)
+	if err != nil {
+		return err
+	}
+
 	request.Header.Set("Content-Type", "application/json")
 
-	response, _ := client.Do(request)
+	response, err := client.Do(request)
+	if err != nil {
+		return err
+	}
+
 	if response.StatusCode != 200 {
 		body, _ := io.ReadAll(response.Body)
 		return fmt.Errorf(
@@ -78,34 +86,38 @@ func (t *Teams) SendMessage(msg string) error {
 
 // buildRequestBodyTeams builds formatted string from event
 func (t *Teams) buildRequestBodyTeams(e *event.Event) string {
-	eventsText := defaultEvents
-	logsText := defaultLogs
-
 	// add events part if it exists
+	eventsText := constant.DefaultEvents
 	events := strings.TrimSpace(e.Events)
 	if len(events) > 0 {
 		eventsText = e.Events
 	}
 
 	// add logs part if it exists
+	logsText := constant.DefaultLogs
 	logs := strings.TrimSpace(e.Logs)
 	if len(logs) > 0 {
 		logsText = e.Logs
 	}
 	// use custom title if it's provided, otherwise use default
-	title := viper.GetString("alert.teams.title")
+	title := t.title
 	if len(title) == 0 {
 		title = defaultTeamsTitle
 	}
 
 	// use custom text if it's provided, otherwise use default
-	text := viper.GetString("alert.teams.text")
+	text := t.text
 	if len(text) == 0 {
-		text = defaultText
+		text = constant.DefaultText
 	}
 
 	msg := fmt.Sprintf(
-		"%s \n\n **Pod:** %s  \n\n **Container:** %s \n\n **Namespace:** %s  \n\n **Events:** \n\n ``` %s ``` \n\n **Logs:** \n\n ``` %s ``` ",
+		"%s \n\n "+
+			"**Pod:** %s  \n\n "+
+			"**Container:** %s \n\n "+
+			"**Namespace:** %s  \n\n "+
+			"**Events:** \n\n ``` %s ``` \n\n "+
+			"**Logs:** \n\n ``` %s ``` ",
 		text,
 		e.Name,
 		e.Container,

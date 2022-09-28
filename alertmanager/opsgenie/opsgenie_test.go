@@ -16,11 +16,11 @@ func TestOpsgenieEmptyConfig(t *testing.T) {
 	assert.Nil(c)
 }
 
-func TestPagerduty(t *testing.T) {
+func TestOpsgenie(t *testing.T) {
 	assert := assert.New(t)
 
 	config := map[string]string{
-		"apiKey": "testtest",
+		"apikey": "testtest",
 	}
 	c := NewOpsgenie(config)
 	assert.NotNil(c)
@@ -32,7 +32,7 @@ func TestSendMessage(t *testing.T) {
 	assert := assert.New(t)
 
 	config := map[string]string{
-		"apiKey": "test",
+		"apikey": "test",
 	}
 	c := NewOpsgenie(config)
 	assert.NotNil(c)
@@ -52,7 +52,7 @@ func TestSendEvent(t *testing.T) {
 	defer s.Close()
 
 	config := map[string]string{
-		"apiKey": "test",
+		"apikey": "test",
 	}
 	c := NewOpsgenie(config)
 	assert.NotNil(c)
@@ -74,14 +74,15 @@ func TestSendEvent(t *testing.T) {
 func TestSendEventError(t *testing.T) {
 	assert := assert.New(t)
 
-	s := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.WriteHeader(http.StatusBadGateway)
-	}))
+	s := httptest.NewServer(
+		http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			w.WriteHeader(http.StatusBadGateway)
+		}))
 
 	defer s.Close()
 
 	config := map[string]string{
-		"apiKey": "test",
+		"apikey": "test",
 	}
 	c := NewOpsgenie(config)
 	assert.NotNil(c)
@@ -97,5 +98,33 @@ func TestSendEventError(t *testing.T) {
 		Events: "event1-event2-event3-event1-event2-event3-event1-event2-" +
 			"event3\nevent5\nevent6-event8-event11-event12",
 	}
+	assert.NotNil(c.SendEvent(&ev))
+}
+
+func TestInvaildHttpRequest(t *testing.T) {
+	assert := assert.New(t)
+
+	config := map[string]string{
+		"apikey": "test",
+	}
+	c := NewOpsgenie(config)
+	assert.NotNil(c)
+	c.url = "h ttp://localhost"
+
+	ev := event.Event{
+		Name:      "test-pod",
+		Container: "test-container",
+		Namespace: "default",
+		Reason:    "OOMKILLED",
+		Logs:      "test\ntestlogs",
+		Events: "event1-event2-event3-event1-event2-event3-event1-event2-" +
+			"event3\nevent5\nevent6-event8-event11-event12",
+	}
+	assert.NotNil(c.SendEvent(&ev))
+
+	c = NewOpsgenie(config)
+	assert.NotNil(c)
+	c.url = "http://localhost:132323"
+
 	assert.NotNil(c.SendEvent(&ev))
 }

@@ -17,3 +17,11 @@ const NumRequeues = 5
 
 // NumWorkers is the number concurrent workers that consume items for the queue
 const NumWorkers = 4
+
+const (
+	Footer        = "<https://github.com/abahmed/kwatch|kwatch>"
+	DefaultTitle  = ":red_circle: kwatch detected a crash in pod"
+	DefaultText   = "There is an issue with container in a pod!"
+	DefaultLogs   = "No logs captured"
+	DefaultEvents = "No events captured"
+)

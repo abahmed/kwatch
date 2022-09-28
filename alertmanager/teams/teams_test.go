@@ -16,7 +16,7 @@ func TestEmptyConfig(t *testing.T) {
 	assert.Nil(c)
 }
 
-func TestPagerduty(t *testing.T) {
+func TestTeams(t *testing.T) {
 	assert := assert.New(t)
 
 	config := map[string]string{
@@ -31,9 +31,10 @@ func TestPagerduty(t *testing.T) {
 func TestSendMessage(t *testing.T) {
 	assert := assert.New(t)
 
-	s := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.Write([]byte(`{"isOk": true}`))
-	}))
+	s := httptest.NewServer(
+		http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			w.Write([]byte(`{"isOk": true}`))
+		}))
 
 	defer s.Close()
 
@@ -49,9 +50,10 @@ func TestSendMessage(t *testing.T) {
 func TestSendMessageError(t *testing.T) {
 	assert := assert.New(t)
 
-	s := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.WriteHeader(http.StatusBadGateway)
-	}))
+	s := httptest.NewServer(
+		http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			w.WriteHeader(http.StatusBadGateway)
+		}))
 
 	defer s.Close()
 
@@ -67,9 +69,10 @@ func TestSendMessageError(t *testing.T) {
 func TestSendEvent(t *testing.T) {
 	assert := assert.New(t)
 
-	s := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.Write([]byte(`{"isOk": true}`))
-	}))
+	s := httptest.NewServer(
+		http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			w.Write([]byte(`{"isOk": true}`))
+		}))
 
 	defer s.Close()
 
@@ -89,4 +92,24 @@ func TestSendEvent(t *testing.T) {
 			"event3\nevent5\nevent6-event8-event11-event12",
 	}
 	assert.Nil(c.SendEvent(&ev))
+}
+
+func TestInvaildHttpRequest(t *testing.T) {
+	assert := assert.New(t)
+
+	config := map[string]string{
+		"webhook": "h ttp://localhost",
+	}
+	c := NewTeams(config)
+	assert.NotNil(c)
+
+	assert.NotNil(c.SendMessage("test"))
+
+	config = map[string]string{
+		"webhook": "http://localhost:132323",
+	}
+	c = NewTeams(config)
+	assert.NotNil(c)
+
+	assert.NotNil(c.SendMessage("test"))
 }
