@@ -235,7 +235,8 @@ func (c *Controller) processPod(key string, pod *v1.Pod) {
 			pod.Name,
 			container.Name,
 			pod.Namespace,
-			previous)
+			previous,
+			c.config.MaxRecentLogLines)
 
 		// get events for this pod
 		eventsString :=

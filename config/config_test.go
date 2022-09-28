@@ -66,7 +66,7 @@ func TestConfigFromFile(t *testing.T) {
 
 	cfg, _ := LoadConfig()
 	assert.NotNil(cfg)
-	assert.Equal(cfg.MaxRecentLogLines, 20)
+	assert.Equal(cfg.MaxRecentLogLines, int64(20))
 	assert.Len(cfg.AllowedNamespaces, 1)
 	assert.Len(cfg.AllowedReasons, 1)
 	assert.Len(cfg.ForbiddenNamespaces, 1)

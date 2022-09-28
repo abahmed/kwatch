@@ -8,18 +8,14 @@ import (
 	"net/http"
 	"strings"
 
+	"github.com/abahmed/kwatch/constant"
 	"github.com/abahmed/kwatch/event"
 	"github.com/sirupsen/logrus"
-	"github.com/spf13/viper"
-)
-
-const (
-	defaultRocketChatLogs   = "No logs captured"
-	defaultRocketChatEvents = "No events captured"
 )
 
 type RocketChat struct {
 	webhook string
+	text    string
 }
 
 type rocketChatWebhookPayload struct {
@@ -38,6 +34,7 @@ func NewRocketChat(config map[string]string) *RocketChat {
 
 	return &RocketChat{
 		webhook: webhook,
+		text:    config["text"],
 	}
 }
 
@@ -48,7 +45,7 @@ func (r *RocketChat) Name() string {
 
 // SendEvent sends event to the provider
 func (r *RocketChat) SendEvent(e *event.Event) error {
-	return r.sendByRocketChatApi(buildRequestBodyRocketChat(e, ""))
+	return r.sendByRocketChatApi(r.buildRequestBodyRocketChat(e, ""))
 }
 
 func (r *RocketChat) sendByRocketChatApi(reqBody string) error {
@@ -80,21 +77,22 @@ func (r *RocketChat) sendByRocketChatApi(reqBody string) error {
 // SendMessage sends text message to the provider
 func (r *RocketChat) SendMessage(msg string) error {
 	return r.sendByRocketChatApi(
-		buildRequestBodyRocketChat(new(event.Event), msg),
+		r.buildRequestBodyRocketChat(new(event.Event), msg),
 	)
 }
 
-func buildRequestBodyRocketChat(e *event.Event, customMsg string) string {
-	eventsText := defaultRocketChatEvents
-	logsText := defaultRocketChatLogs
-
+func (r *RocketChat) buildRequestBodyRocketChat(
+	e *event.Event,
+	customMsg string) string {
 	// add events part if it exists
+	eventsText := constant.DefaultEvents
 	events := strings.TrimSpace(e.Events)
 	if len(events) > 0 {
 		eventsText = e.Events
 	}
 
-	// add logs part if it exists
+	// add logs part if it exist
+	logsText := constant.DefaultLogs
 	logs := strings.TrimSpace(e.Logs)
 	if len(logs) > 0 {
 		logsText = e.Logs
@@ -102,7 +100,7 @@ func buildRequestBodyRocketChat(e *event.Event, customMsg string) string {
 
 	// build text will be sent in the message use custom text if it's provided,
 	// otherwise use default
-	text := viper.GetString("alert.rocketchat.text")
+	text := r.text
 	if len(customMsg) <= 0 {
 		text = fmt.Sprintf(
 			"%s \n\n "+

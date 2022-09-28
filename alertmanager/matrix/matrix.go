@@ -9,16 +9,18 @@ import (
 	"regexp"
 	"strings"
 
+	"github.com/abahmed/kwatch/constant"
 	"github.com/abahmed/kwatch/event"
 	"github.com/abahmed/kwatch/util"
 	"github.com/sirupsen/logrus"
-	"github.com/spf13/viper"
 )
 
 type Matrix struct {
 	serverURL      string
 	accessToken    string
 	internalRoomID string
+	title          string
+	text           string
 }
 
 // NewMatrix returns new Matrix instance
@@ -45,6 +47,8 @@ func NewMatrix(config map[string]string) *Matrix {
 		serverURL:      serverURL,
 		accessToken:    accessToken,
 		internalRoomID: internalRoomID,
+		title:          config["title"],
+		text:           config["text"],
 	}
 }
 
@@ -57,8 +61,8 @@ func (m *Matrix) SendMessage(msg string) error {
 }
 
 func (m *Matrix) SendEvent(e *event.Event) error {
-	eventsText := "defaultEvents"
-	logsText := "defaultLogs"
+	eventsText := constant.DefaultEvents
+	logsText := constant.DefaultLogs
 
 	// add events part if it exists
 	events := strings.TrimSpace(e.Events)
@@ -72,15 +76,15 @@ func (m *Matrix) SendEvent(e *event.Event) error {
 		logsText = e.Logs
 	}
 	// use custom title if it's provided, otherwise use default
-	title := viper.GetString("alert.teams.title")
+	title := m.title
 	if len(title) == 0 {
-		title = "defaultTeamsTitle"
+		title = constant.DefaultTitle
 	}
 
 	// use custom text if it's provided, otherwise use default
-	text := viper.GetString("alert.teams.text")
+	text := m.text
 	if len(text) == 0 {
-		text = "defaultText"
+		text = constant.DefaultText
 	}
 
 	msg := fmt.Sprintf(

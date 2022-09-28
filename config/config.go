@@ -11,7 +11,7 @@ import (
 type Config struct {
 	// MaxRecentLogLines optional max tail log lines in messages,
 	// if it's not provided it will get all log lines
-	MaxRecentLogLines int `mapstructure:"maxRecentLogLines"`
+	MaxRecentLogLines int64 `mapstructure:"maxRecentLogLines"`
 
 	// IgnoreFailedGracefulShutdown if set to true, containers which are
 	// forcefully killed during shutdown (as their graceful shutdown failed)

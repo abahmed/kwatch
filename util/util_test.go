@@ -5,7 +5,6 @@ import (
 	"math/rand"
 	"testing"
 
-	"github.com/spf13/viper"
 	"github.com/stretchr/testify/assert"
 	v1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -51,13 +50,13 @@ func TestGetPodContainerLogs(t *testing.T) {
 	assert := assert.New(t)
 
 	client := fake.NewSimpleClientset()
-	viper.SetDefault("maxRecentLogLines", 20)
 	logs := GetPodContainerLogs(
 		client,
 		"test",
 		"test",
 		"default",
-		false)
+		false,
+		20)
 
 	assert.Equal(logs, "fake logs")
 }

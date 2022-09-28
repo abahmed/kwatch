@@ -9,7 +9,6 @@ import (
 	"time"
 
 	"github.com/sirupsen/logrus"
-	"github.com/spf13/viper"
 	v1 "k8s.io/api/core/v1"
 
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -69,16 +68,16 @@ func ContainsKillingStoppingContainerEvents(
 // GetPodContainerLogs returns logs for specified container in pod
 func GetPodContainerLogs(
 	c kubernetes.Interface, name, container, namespace string,
-	previous bool) string {
+	previous bool,
+	maxRecentLogLines int64) string {
 	options := v1.PodLogOptions{
 		Container: container,
 		Previous:  previous,
 	}
 
 	// get max recent log lines
-	var maxLogs int64 = viper.GetInt64("maxRecentLogLines")
-	if maxLogs != 0 {
-		options.TailLines = &maxLogs
+	if maxRecentLogLines != 0 {
+		options.TailLines = &maxRecentLogLines
 	}
 
 	// get logs

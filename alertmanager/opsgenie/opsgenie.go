@@ -7,25 +7,22 @@ import (
 	"io"
 	"net/http"
 
+	"github.com/abahmed/kwatch/constant"
 	"github.com/abahmed/kwatch/event"
 	"github.com/sirupsen/logrus"
-	"github.com/spf13/viper"
 )
 
 const (
 	defaultOpsgenieTitle = "kwatch detected a crash in pod: %s"
 	defaultOpsgenieText  = "There is an issue with container (%s) in pod (%s)"
 	opsgenieAPIURL       = "https://api.opsgenie.com/v2/alerts"
-	defaultTitle         = ":red_circle: kwatch detected a crash in pod"
-	defaultText          = "There is an issue with container in a pod!"
-	defaultLogs          = "No logs captured"
-	defaultEvents        = "No events captured"
-	defaultTeamsTitle    = "&#9937; Kwatch detected a crash in pod"
 )
 
 type Opsgenie struct {
 	apikey string
 	url    string
+	title  string
+	text   string
 }
 
 type ogPayload struct {
@@ -48,6 +45,8 @@ func NewOpsgenie(config map[string]string) *Opsgenie {
 	return &Opsgenie{
 		apikey: apiKey,
 		url:    opsgenieAPIURL,
+		title:  config["title"],
+		text:   config["text"],
 	}
 }
 
@@ -63,8 +62,6 @@ func (m *Opsgenie) SendMessage(msg string) error {
 
 // SendEvent sends event to the provider
 func (m *Opsgenie) SendEvent(e *event.Event) error {
-	logrus.Debugf("sending to opsgenie event: %v", e)
-
 	return m.sendAPI(m.buildMessage(e))
 }
 
@@ -102,25 +99,25 @@ func (m *Opsgenie) buildMessage(e *event.Event) []byte {
 		Priority: "P1",
 	}
 
-	logs := defaultLogs
+	logs := constant.DefaultLogs
 	if len(e.Logs) > 0 {
 		logs = (e.Logs)
 	}
 
-	events := defaultEvents
+	events := constant.DefaultEvents
 	if len(e.Events) > 0 {
 		events = (e.Events)
 	}
 
 	// use custom title if it's provided, otherwise use default
-	title := viper.GetString("alert.opsgenie.title")
+	title := m.title
 	if len(title) == 0 {
 		title = fmt.Sprintf(defaultOpsgenieTitle, e.Name)
 	}
 	payload.Message = title
 
 	// use custom text if it's provided, otherwise use default
-	text := viper.GetString("alert.opsgenie.text")
+	text := m.text
 	if len(text) == 0 {
 		text = fmt.Sprintf(defaultOpsgenieText, e.Container, e.Name)
 	}

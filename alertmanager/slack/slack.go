@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/abahmed/kwatch/constant"
 	"github.com/abahmed/kwatch/event"
 
 	"github.com/sirupsen/logrus"
@@ -11,10 +12,7 @@ import (
 )
 
 const (
-	footer       = "<https://github.com/abahmed/kwatch|kwatch>"
-	defaultTitle = ":red_circle: kwatch detected a crash in pod"
-	defaultText  = "There is an issue with container in a pod!"
-	chunkSize    = 80
+	chunkSize = 80
 )
 
 type Slack struct {
@@ -52,13 +50,13 @@ func (s *Slack) SendEvent(ev *event.Event) error {
 	// use custom title if it's provided, otherwise use default
 	title := s.title
 	if len(title) == 0 {
-		title = defaultTitle
+		title = constant.DefaultTitle
 	}
 
 	// use custom text if it's provided, otherwise use default
 	text := s.text
 	if len(text) == 0 {
-		text = defaultText
+		text = constant.DefaultText
 	}
 
 	blocks := []slackClient.Block{
@@ -101,7 +99,7 @@ func (s *Slack) SendEvent(ev *event.Event) error {
 
 	msg := slackClient.WebhookMessage{
 		Blocks: &slackClient.Blocks{
-			BlockSet: append(blocks, markdownSection(footer)),
+			BlockSet: append(blocks, markdownSection(constant.Footer)),
 		},
 	}
 
