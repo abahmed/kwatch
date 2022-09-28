@@ -75,7 +75,7 @@ func TestGetProviders(t *testing.T) {
 			"password": "test",
 		},
 		"matrix": {
-			"serverurl":      "localhost",
+			"homeserver":     "localhost",
 			"accesstoken":    "testToken",
 			"internalroomid": "room1",
 		},
