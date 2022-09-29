@@ -34,6 +34,7 @@ type DingTalk struct {
 	title       string
 }
 
+// NewDingTalk returns new DingTalk instance
 func NewDingTalk(config map[string]string) *DingTalk {
 	accessToken, ok := config["accesstoken"]
 	if !ok || len(accessToken) == 0 {
@@ -170,5 +171,6 @@ func computeHmacSha256(message string, secret string) string {
 	key := []byte(secret)
 	h := hmac.New(sha256.New, key)
 	h.Write([]byte(message))
+
 	return base64.StdEncoding.EncodeToString(h.Sum(nil))
 }
