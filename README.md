@@ -236,8 +236,8 @@ title
 
 | Parameter                           | Description                            |
 |:------------------------------------|:-------------------------------------- |
-| `alert.dingtalk.accessToken`        | Account access token                   |
-| `alert.dingtalk.secret`             | Internal room ID                       |
+| `alert.dingtalk.accessToken`        | Chat access token                      |
+| `alert.dingtalk.secret`             | Optional secret used to sign requests  |
 | `alert.dingtalk.title`              | Customized title in message            |
 
 
