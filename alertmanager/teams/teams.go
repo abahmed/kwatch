@@ -113,16 +113,18 @@ func (t *Teams) buildRequestBodyTeams(e *event.Event) string {
 	}
 
 	msg := fmt.Sprintf(
-		"%s \n\n "+
-			"**Pod:** %s  \n\n "+
-			"**Container:** %s \n\n "+
-			"**Namespace:** %s  \n\n "+
-			"**Events:** \n\n ``` %s ``` \n\n "+
-			"**Logs:** \n\n ``` %s ``` ",
+		"%s\n"+
+			"**Pod:** %s\n"+
+			"**Container:** %s\n"+
+			"**Namespace:** %s\n"+
+			"**Reason:** %s\n"+
+			"**Events:**\n```\n%s\n```\n"+
+			"**Logs:**\n```\n%s\n```",
 		text,
 		e.Name,
 		e.Container,
 		e.Namespace,
+		e.Reason,
 		eventsText,
 		logsText,
 	)
