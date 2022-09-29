@@ -82,6 +82,7 @@ func (m *Opsgenie) sendAPI(content []byte) error {
 	if err != nil {
 		return err
 	}
+	defer response.Body.Close()
 
 	if response.StatusCode != 202 {
 		body, _ := io.ReadAll(response.Body)

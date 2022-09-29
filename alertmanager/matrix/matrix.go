@@ -140,6 +140,7 @@ func (m *Matrix) sendAPI(formattedMsg string) error {
 	if err != nil {
 		return err
 	}
+	defer response.Body.Close()
 
 	if response.StatusCode > 399 {
 		body, _ := io.ReadAll(response.Body)

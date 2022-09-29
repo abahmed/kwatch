@@ -62,6 +62,7 @@ func (r *RocketChat) sendByRocketChatApi(reqBody string) error {
 	if err != nil {
 		return err
 	}
+	defer response.Body.Close()
 
 	if response.StatusCode != 200 {
 		body, _ := io.ReadAll(response.Body)
