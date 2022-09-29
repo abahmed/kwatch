@@ -60,6 +60,7 @@ func (s *Pagerduty) SendEvent(ev *event.Event) error {
 	if err != nil {
 		return err
 	}
+	defer response.Body.Close()
 
 	if response.StatusCode > 202 {
 		return fmt.Errorf(

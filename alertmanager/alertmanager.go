@@ -4,6 +4,7 @@ import (
 	"reflect"
 	"strings"
 
+	"github.com/abahmed/kwatch/alertmanager/dingtalk"
 	"github.com/abahmed/kwatch/alertmanager/discord"
 	"github.com/abahmed/kwatch/alertmanager/email"
 	"github.com/abahmed/kwatch/alertmanager/matrix"
@@ -56,6 +57,8 @@ func (a *AlertManager) Init(config map[string]map[string]string) {
 			pvdr = opsgenie.NewOpsgenie(v)
 		} else if lowerCaseKey == "matrix" {
 			pvdr = matrix.NewMatrix(v)
+		} else if lowerCaseKey == "dingtalk" {
+			pvdr = dingtalk.NewDingTalk(v)
 		}
 
 		if !reflect.ValueOf(pvdr).IsNil() {

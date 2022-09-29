@@ -229,6 +229,17 @@ with optional text and title
 | `alert.matrix.title`                | Customized title in message            |
 | `alert.matrix.text`                 | Customized text in message             |
 
+#### DingTalk
+
+If you want to enable DingTalk, provide accessToken with optional secret and
+title
+
+| Parameter                           | Description                            |
+|:------------------------------------|:-------------------------------------- |
+| `alert.dingtalk.accessToken`        | Chat access token                      |
+| `alert.dingtalk.secret`             | Optional secret used to sign requests  |
+| `alert.dingtalk.title`              | Customized title in message            |
+
 
 ### Cleanup
 

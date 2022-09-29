@@ -136,6 +136,7 @@ func (t *Telegram) sendByTelegramApi(reqBody string) error {
 	if err != nil {
 		return err
 	}
+	defer response.Body.Close()
 
 	if response.StatusCode > 202 {
 		return fmt.Errorf(
