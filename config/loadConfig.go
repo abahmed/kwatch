@@ -13,25 +13,6 @@ import (
 func LoadConfig() (*Config, error) {
 	// initialize configuration
 	configFile := os.Getenv("CONFIG_FILE")
-	/*
-		if len(configFile) != 0 {
-			viper.SetConfigFile(configFile)
-			viper.SetConfigType("yaml")
-		}
-		viper.AutomaticEnv()
-
-		// if a config file is found, read it in.
-		if err := viper.ReadInConfig(); err == nil {
-			logrus.Infof("using config file: %s", viper.ConfigFileUsed())
-		} else {
-			logrus.Warnf("unable to load config file: %s", err.Error())
-		}
-
-		// Load config
-		var config Config
-		if err := viper.Unmarshal(&config); err != nil {
-			return nil, err
-		}*/
 
 	var config Config
 	yamlFile, err := os.ReadFile(configFile)
