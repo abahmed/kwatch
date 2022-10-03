@@ -95,6 +95,7 @@ If you want to enable Slack, provide the webhook with optional text and title
 | Parameter                        | Description                                 |
 |:---------------------------------|:------------------------------------------- |
 | `alert.slack.webhook`            | Slack webhook URL                           |
+| `alert.slack.channel`            | Used by legacy webhooks to send messages to specific channel instead of default one |
 | `alert.slack.title`              | Customized title in slack message           |
 | `alert.slack.text`               | Customized text in slack message            |
 

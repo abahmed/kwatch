@@ -12,14 +12,19 @@ import (
 )
 
 const (
-	chunkSize = 80
+	chunkSize = 2000
 )
 
 type Slack struct {
 	webhook string
 	title   string
 	text    string
-	send    func(url string, msg *slackClient.WebhookMessage) error
+
+	// used by legacy webhook to send messages to specific channel,
+	// instead of default one
+	channel string
+
+	send func(url string, msg *slackClient.WebhookMessage) error
 }
 
 // NewSlack returns new Slack instance
@@ -34,6 +39,7 @@ func NewSlack(config map[string]string) *Slack {
 
 	return &Slack{
 		webhook: webhook,
+		channel: config["channel"],
 		send:    slackClient.PostWebhook,
 	}
 }
@@ -97,22 +103,26 @@ func (s *Slack) SendEvent(ev *event.Event) error {
 		}
 	}
 
-	msg := slackClient.WebhookMessage{
+	// send message
+	return s.sendAPI(&slackClient.WebhookMessage{
 		Blocks: &slackClient.Blocks{
 			BlockSet: append(blocks, markdownSection(constant.Footer)),
 		},
-	}
-
-	// send message
-	return s.send(s.webhook, &msg)
+	})
 }
 
 // SendMessage sends text message to the provider
 func (s *Slack) SendMessage(msg string) error {
-	sMsg := slackClient.WebhookMessage{
+	return s.sendAPI(&slackClient.WebhookMessage{
 		Text: msg,
+	})
+}
+
+func (s *Slack) sendAPI(msg *slackClient.WebhookMessage) error {
+	if len(s.channel) > 0 {
+		msg.Channel = s.channel
 	}
-	return s.send(s.webhook, &sMsg)
+	return s.send(s.webhook, msg)
 }
 
 func chunks(s string, chunkSize int) []string {
