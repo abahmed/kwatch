@@ -1,9 +1,11 @@
 package client
 
 import (
+	"net/http"
 	"os"
 	"path/filepath"
 
+	"github.com/abahmed/kwatch/config"
 	"github.com/sirupsen/logrus"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/rest"
@@ -13,7 +15,7 @@ import (
 
 // Create returns kubernetes client after initializing it with in-cluster, or
 // out of cluster config
-func Create() kubernetes.Interface {
+func Create(c *config.Cluster) kubernetes.Interface {
 	// try to use in cluster config
 	config, err := rest.InClusterConfig()
 	if err != nil {
@@ -32,6 +34,10 @@ func Create() kubernetes.Interface {
 				"cannot build kubernetes out of cluster config: %v",
 				err)
 		}
+	}
+
+	if len(c.Proxy) > 0 && config.Proxy == nil {
+		config.Proxy = http.ProxyURL(nil)
 	}
 
 	// creates the clientset

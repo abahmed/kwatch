@@ -10,7 +10,7 @@
             "showLog": true,
             "env": {
                 "CONFIG_FILE": "config.yaml"
-              }
+            }
         }
     ]
 }

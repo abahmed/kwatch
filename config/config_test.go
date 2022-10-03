@@ -60,6 +60,9 @@ func TestConfigFromFile(t *testing.T) {
 		MaxRecentLogLines: 20,
 		Namespaces:        []string{"default", "!kwatch"},
 		Reasons:           []string{"default", "!kwatch"},
+		Cluster: Cluster{
+			Proxy: "https://localhost",
+		},
 	}
 	yamlData, _ := yaml.Marshal(&n)
 	os.WriteFile("config.yaml", yamlData, 0644)

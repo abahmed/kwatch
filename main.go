@@ -23,7 +23,8 @@ func main() {
 	alertManager.Init(config.Alert)
 
 	// check and notify if newer versions are available
-	go upgrader.CheckUpdates(&config.Upgrader, &alertManager)
+	upgrader := upgrader.NewUpgrader(&config.Upgrader, &alertManager)
+	go upgrader.CheckUpdates()
 
 	// start controller
 	controller.Start(

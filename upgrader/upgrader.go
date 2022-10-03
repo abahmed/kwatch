@@ -12,26 +12,38 @@ import (
 	"github.com/sirupsen/logrus"
 )
 
+type Upgrader struct {
+	config       *config.Upgrader
+	alertManager *alertmanager.AlertManager
+}
+
+// NewUpgrader returns new instance of upgrader
+func NewUpgrader(config *config.Upgrader,
+	alertManager *alertmanager.AlertManager) *Upgrader {
+	return &Upgrader{
+		config:       config,
+		alertManager: alertManager,
+	}
+}
+
 // CheckUpdates checks every 24 hours if a newer version of Kwatch is available
-func CheckUpdates(
-	config *config.Upgrader,
-	alertManager *alertmanager.AlertManager) {
-	if config.DisableUpdateCheck {
+func (u *Upgrader) CheckUpdates() {
+	if u.config.DisableUpdateCheck {
 		return
 	}
 
 	// check at startup
-	checkRelease(alertManager)
+	u.checkRelease()
 
 	ticker := time.NewTicker(24 * time.Hour)
 	defer ticker.Stop()
 
 	for range ticker.C {
-		checkRelease(alertManager)
+		u.checkRelease()
 	}
 }
 
-func checkRelease(alertManager *alertmanager.AlertManager) {
+func (u *Upgrader) checkRelease() {
 	client := github.NewClient(nil)
 
 	r, _, err := client.Repositories.GetLatestRelease(
@@ -52,5 +64,5 @@ func checkRelease(alertManager *alertmanager.AlertManager) {
 		return
 	}
 
-	alertManager.Notify(fmt.Sprintf(constant.KwatchUpdateMsg, *r.TagName))
+	u.alertManager.Notify(fmt.Sprintf(constant.KwatchUpdateMsg, *r.TagName))
 }

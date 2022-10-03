@@ -43,6 +43,8 @@ type Config struct {
 
 	Upgrader Upgrader `mapstructure:"upgrader"`
 
+	Cluster Cluster `mapstructure:"cluster"`
+
 	// AllowedNamespaces, ForbiddenNamespaces are calculated internally
 	// after loading Namespaces configuration
 	AllowedNamespaces   []string
@@ -62,6 +64,10 @@ type Upgrader struct {
 	// DisableUpdateCheck if set to true, does not check for and
 	// notify about kwatch updates
 	DisableUpdateCheck bool `mapstructure:"DisableUpdateCheck"`
+}
+
+type Cluster struct {
+	Proxy string `mapstructure:"proxy"`
 }
 
 // LoadConfig loads yaml configuration from file if provided, otherwise
@@ -108,6 +114,11 @@ func LoadConfig() (*Config, error) {
 
 	// Should be removed
 	config.Upgrader.DisableUpdateCheck = config.DisableUpdateCheck
+
+	// Parse proxy config
+	if len(config.Cluster.Proxy) > 0 {
+		os.Setenv("HTTPS_PROXY", config.Cluster.Proxy)
+	}
 
 	return &config, nil
 }
