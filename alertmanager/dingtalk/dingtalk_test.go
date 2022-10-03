@@ -20,7 +20,7 @@ func TestDingTalk(t *testing.T) {
 	assert := assert.New(t)
 
 	config := map[string]string{
-		"accesstoken": "testToken",
+		"accessToken": "testToken",
 	}
 	c := NewDingTalk(config)
 	assert.NotNil(c)
@@ -39,7 +39,7 @@ func TestSendMessage(t *testing.T) {
 	defer s.Close()
 
 	config := map[string]string{
-		"accesstoken": "testToken",
+		"accessToken": "testToken",
 		"secret":      "secret1",
 	}
 	c := NewDingTalk(config)
@@ -60,7 +60,7 @@ func TestSendMessageInvalidBody(t *testing.T) {
 	defer s.Close()
 
 	config := map[string]string{
-		"accesstoken": "testToken",
+		"accessToken": "testToken",
 	}
 	c := NewDingTalk(config)
 	assert.NotNil(c)
@@ -80,7 +80,7 @@ func TestSendMessageInvalidJson(t *testing.T) {
 	defer s.Close()
 
 	config := map[string]string{
-		"accesstoken": "testToken",
+		"accessToken": "testToken",
 	}
 	c := NewDingTalk(config)
 	assert.NotNil(c)
@@ -100,7 +100,7 @@ func TestSendMessageErrorResponse(t *testing.T) {
 	defer s.Close()
 
 	config := map[string]string{
-		"accesstoken": "testToken",
+		"accessToken": "testToken",
 	}
 	c := NewDingTalk(config)
 	assert.NotNil(c)
@@ -120,7 +120,7 @@ func TestSendEvent(t *testing.T) {
 	defer s.Close()
 
 	config := map[string]string{
-		"accesstoken": "testToken",
+		"accessToken": "testToken",
 	}
 	c := NewDingTalk(config)
 	assert.NotNil(c)
@@ -142,7 +142,7 @@ func TestInvaildHttpRequest(t *testing.T) {
 	assert := assert.New(t)
 
 	config := map[string]string{
-		"accesstoken": "testToken",
+		"accessToken": "testToken",
 	}
 	c := NewDingTalk(config)
 	assert.NotNil(c)
@@ -151,7 +151,7 @@ func TestInvaildHttpRequest(t *testing.T) {
 	assert.NotNil(c.SendMessage("test"))
 
 	config = map[string]string{
-		"accesstoken": "testToken",
+		"accessToken": "testToken",
 	}
 	c = NewDingTalk(config)
 	assert.NotNil(c)

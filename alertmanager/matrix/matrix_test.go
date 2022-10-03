@@ -20,22 +20,22 @@ func TestInvalidConfig(t *testing.T) {
 	assert := assert.New(t)
 
 	config := map[string]string{
-		"homeserver": "https://matrix-client.matrix.org",
+		"homeServer": "https://matrix-client.matrix.org",
 	}
 	c := NewMatrix(config)
 	assert.Nil(c)
 
 	config = map[string]string{
-		"homeserver":  "https://matrix-client.matrix.org",
-		"accesstoken": "testToken",
+		"homeServer":  "https://matrix-client.matrix.org",
+		"accessToken": "testToken",
 	}
 	c = NewMatrix(config)
 	assert.Nil(c)
 
 	config = map[string]string{
-		"homeserver":     "https://matrix-client.matrix.org",
-		"accesstoken":    "testToken",
-		"internalroomid": "",
+		"homeServer":     "https://matrix-client.matrix.org",
+		"accessToken":    "testToken",
+		"internalRoomId": "",
 	}
 	c = NewMatrix(config)
 	assert.Nil(c)
@@ -46,9 +46,9 @@ func TestMatrix(t *testing.T) {
 	assert := assert.New(t)
 
 	config := map[string]string{
-		"homeserver":     "https://matrix-client.matrix.org",
-		"accesstoken":    "testToken",
-		"internalroomid": "room1",
+		"homeServer":     "https://matrix-client.matrix.org",
+		"accessToken":    "testToken",
+		"internalRoomId": "room1",
 	}
 	c := NewMatrix(config)
 	assert.NotNil(c)
@@ -67,9 +67,9 @@ func TestSendMessage(t *testing.T) {
 	defer s.Close()
 
 	config := map[string]string{
-		"homeserver":     s.URL,
-		"accesstoken":    "testToken",
-		"internalroomid": "room1",
+		"homeServer":     s.URL,
+		"accessToken":    "testToken",
+		"internalRoomId": "room1",
 	}
 	c := NewMatrix(config)
 	assert.NotNil(c)
@@ -88,9 +88,9 @@ func TestSendMessageError(t *testing.T) {
 	defer s.Close()
 
 	config := map[string]string{
-		"homeserver":     s.URL,
-		"accesstoken":    "testToken",
-		"internalroomid": "room1",
+		"homeServer":     s.URL,
+		"accessToken":    "testToken",
+		"internalRoomId": "room1",
 	}
 	c := NewMatrix(config)
 	assert.NotNil(c)
@@ -109,9 +109,9 @@ func TestSendEvent(t *testing.T) {
 	defer s.Close()
 
 	config := map[string]string{
-		"homeserver":     s.URL,
-		"accesstoken":    "testToken",
-		"internalroomid": "room1",
+		"homeServer":     s.URL,
+		"accessToken":    "testToken",
+		"internalRoomId": "room1",
 	}
 	c := NewMatrix(config)
 	assert.NotNil(c)
@@ -132,9 +132,9 @@ func TestInvaildHttpRequest(t *testing.T) {
 	assert := assert.New(t)
 
 	config := map[string]string{
-		"homeserver":     "h ttp://localhost",
-		"accesstoken":    "testToken",
-		"internalroomid": "room1",
+		"homeServer":     "h ttp://localhost",
+		"accessToken":    "testToken",
+		"internalRoomId": "room1",
 	}
 	c := NewMatrix(config)
 	assert.NotNil(c)
@@ -142,9 +142,9 @@ func TestInvaildHttpRequest(t *testing.T) {
 	assert.NotNil(c.SendMessage("test"))
 
 	config = map[string]string{
-		"homeserver":     "http://localhost:132323",
-		"accesstoken":    "testToken",
-		"internalroomid": "room1",
+		"homeServer":     "http://localhost:132323",
+		"accessToken":    "testToken",
+		"internalRoomId": "room1",
 	}
 	c = NewMatrix(config)
 	assert.NotNil(c)

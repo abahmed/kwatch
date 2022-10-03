@@ -46,14 +46,14 @@ func TestGetProviders(t *testing.T) {
 			"webhook": "test",
 		},
 		"pagerduty": {
-			"integrationkey": "test",
+			"integrationKey": "test",
 		},
 		"discord": {
 			"webhook": "test/id",
 		},
 		"telegram": {
 			"token":  "test",
-			"chatid": "test",
+			"chatId": "test",
 		},
 		"teams": {
 			"webhook": "test",
@@ -65,7 +65,7 @@ func TestGetProviders(t *testing.T) {
 			"webhook": "test",
 		},
 		"opsgenie": {
-			"apikey": "test",
+			"apiKey": "test",
 		},
 		"email": {
 			"from":     "test@test.com",
@@ -75,9 +75,12 @@ func TestGetProviders(t *testing.T) {
 			"password": "test",
 		},
 		"matrix": {
-			"homeserver":     "localhost",
-			"accesstoken":    "testToken",
-			"internalroomid": "room1",
+			"homeServer":     "localhost",
+			"accessToken":    "testToken",
+			"internalRoomId": "room1",
+		},
+		"dingtalk": {
+			"accessToken": "testToken",
 		},
 	}
 

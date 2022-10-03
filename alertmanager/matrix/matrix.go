@@ -25,21 +25,21 @@ type Matrix struct {
 
 // NewMatrix returns new Matrix instance
 func NewMatrix(config map[string]string) *Matrix {
-	homeServer, ok := config["homeserver"]
+	homeServer, ok := config["homeServer"]
 	if !ok || len(homeServer) == 0 {
 		logrus.Warnf("initializing slack with empty homeServer")
 		return nil
 	}
 
-	accessToken, ok := config["accesstoken"]
+	accessToken, ok := config["accessToken"]
 	if !ok || len(accessToken) == 0 {
 		logrus.Warnf("initializing slack with empty accessToken")
 		return nil
 	}
 
-	internalRoomID, ok := config["internalroomid"]
+	internalRoomID, ok := config["internalRoomId"]
 	if !ok || len(internalRoomID) == 0 {
-		logrus.Warnf("initializing slack with empty internalroomid")
+		logrus.Warnf("initializing slack with empty internalRoomId")
 		return nil
 	}
 

@@ -5,7 +5,7 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
-	"gopkg.in/yaml.v2"
+	"gopkg.in/yaml.v3"
 )
 
 func TestGetAllowForbidSlices(t *testing.T) {
@@ -41,11 +41,24 @@ func TestGetAllowForbidSlices(t *testing.T) {
 	}
 }
 
-func TestConfig(t *testing.T) {
+func TestEmptyConfig(t *testing.T) {
 	assert := assert.New(t)
+
+	os.Setenv("CONFIG_FILE", "config.yaml")
+	defer os.Unsetenv("CONFIG_FILE")
+
+	os.WriteFile("config.yaml", []byte{}, 0644)
+	defer os.RemoveAll("config.yaml")
 
 	cfg, _ := LoadConfig()
 	assert.NotNil(cfg)
+}
+
+func TestConfigInvalidFile(t *testing.T) {
+	assert := assert.New(t)
+	cfg, err := LoadConfig()
+	assert.Nil(cfg)
+	assert.NotNil(err)
 }
 
 func TestConfigFromFile(t *testing.T) {
@@ -60,8 +73,8 @@ func TestConfigFromFile(t *testing.T) {
 		MaxRecentLogLines: 20,
 		Namespaces:        []string{"default", "!kwatch"},
 		Reasons:           []string{"default", "!kwatch"},
-		Cluster: Cluster{
-			Proxy: "https://localhost",
+		App: App{
+			ProxyURL: "https://localhost",
 		},
 	}
 	yamlData, _ := yaml.Marshal(&n)

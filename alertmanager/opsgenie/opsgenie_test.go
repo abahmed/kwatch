@@ -20,7 +20,7 @@ func TestOpsgenie(t *testing.T) {
 	assert := assert.New(t)
 
 	config := map[string]string{
-		"apikey": "testtest",
+		"apiKey": "testtest",
 	}
 	c := NewOpsgenie(config)
 	assert.NotNil(c)
@@ -32,7 +32,7 @@ func TestSendMessage(t *testing.T) {
 	assert := assert.New(t)
 
 	config := map[string]string{
-		"apikey": "test",
+		"apiKey": "test",
 	}
 	c := NewOpsgenie(config)
 	assert.NotNil(c)
@@ -52,7 +52,7 @@ func TestSendEvent(t *testing.T) {
 	defer s.Close()
 
 	config := map[string]string{
-		"apikey": "test",
+		"apiKey": "test",
 	}
 	c := NewOpsgenie(config)
 	assert.NotNil(c)
@@ -82,7 +82,7 @@ func TestSendEventError(t *testing.T) {
 	defer s.Close()
 
 	config := map[string]string{
-		"apikey": "test",
+		"apiKey": "test",
 	}
 	c := NewOpsgenie(config)
 	assert.NotNil(c)
@@ -105,7 +105,7 @@ func TestInvaildHttpRequest(t *testing.T) {
 	assert := assert.New(t)
 
 	config := map[string]string{
-		"apikey": "test",
+		"apiKey": "test",
 	}
 	c := NewOpsgenie(config)
 	assert.NotNil(c)
