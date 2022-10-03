@@ -52,6 +52,8 @@ type Config struct {
 
 // App confing struct
 type App struct {
+	// ProxyURL to be used in outgoing http(s) requests except Kubernetes
+	// requests to cluster
 	ProxyURL string `yaml:"proxyURL"`
 }
 
