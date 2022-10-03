@@ -35,6 +35,7 @@ func TestSendMessage(t *testing.T) {
 
 	s := NewSlack(map[string]string{
 		"webhook": "testtest",
+		"channel": "test",
 	})
 	assert.NotNil(s)
 
@@ -57,8 +58,43 @@ func TestSendEvent(t *testing.T) {
 		Container: "test-container",
 		Namespace: "default",
 		Reason:    "OOMKILLED",
-		Logs:      "test\ntestlogs",
-		Events: "event1-event2-event3-event1-event2-event3-event1-event2-" +
+		Logs: "Nam quis nulla. Integer malesuada. In in enim a arcu " +
+			"imperdiet malesuada. Sed vel lectus. Donec odio urna, tempus " +
+			"molestie, porttitor ut, iaculis quis, sem. Phasellus rhoncus.\n" +
+			"Nam quis nulla. Integer malesuada. In in enim a arcu " +
+			"imperdiet malesuada. Sed vel lectus. Donec odio urna, tempus " +
+			"molestie, porttitor ut, iaculis quis, sem. Phasellus rhoncus.\n" +
+			"Nam quis nulla. Integer malesuada. In in enim a arcu " +
+			"imperdiet malesuada. Sed vel lectus. Donec odio urna, tempus " +
+			"molestie, porttitor ut, iaculis quis, sem. Phasellus rhoncus.\n" +
+			"Nam quis nulla. Integer malesuada. In in enim a arcu " +
+			"imperdiet malesuada. Sed vel lectus. Donec odio urna, tempus " +
+			"molestie, porttitor ut, iaculis quis, sem. Phasellus rhoncus.\n" +
+			"Nam quis nulla. Integer malesuada. In in enim a arcu " +
+			"imperdiet malesuada. Sed vel lectus. Donec odio urna, tempus " +
+			"molestie, porttitor ut, iaculis quis, sem. Phasellus rhoncus.\n" +
+			"Nam quis nulla. Integer malesuada. In in enim a arcu " +
+			"imperdiet malesuada. Sed vel lectus. Donec odio urna, tempus " +
+			"molestie, porttitor ut, iaculis quis, sem. Phasellus rhoncus.\n" +
+			"Nam quis nulla. Integer malesuada. In in enim a arcu " +
+			"imperdiet malesuada. Sed vel lectus. Donec odio urna, tempus " +
+			"molestie, porttitor ut, iaculis quis, sem. Phasellus rhoncus.\n" +
+			"Nam quis nulla. Integer malesuada. In in enim a arcu " +
+			"imperdiet malesuada. Sed vel lectus. Donec odio urna, tempus " +
+			"molestie, porttitor ut, iaculis quis, sem. Phasellus rhoncus.\n" +
+			"Nam quis nulla. Integer malesuada. In in enim a arcu " +
+			"imperdiet malesuada. Sed vel lectus. Donec odio urna, tempus " +
+			"molestie, porttitor ut, iaculis quis, sem. Phasellus rhoncus.\n" +
+			"Nam quis nulla. Integer malesuada. In in enim a arcu " +
+			"imperdiet malesuada. Sed vel lectus. Donec odio urna, tempus " +
+			"molestie, porttitor ut, iaculis quis, sem. Phasellus rhoncus.\n" +
+			"Nam quis nulla. Integer malesuada. In in enim a arcu " +
+			"imperdiet malesuada. Sed vel lectus. Donec odio urna, tempus " +
+			"molestie, porttitor ut, iaculis quis, sem. Phasellus rhoncus.\n" +
+			"Nam quis nulla. Integer malesuada. In in enim a arcu " +
+			"imperdiet malesuada. Sed vel lectus. Donec odio urna, tempus " +
+			"molestie, porttitor ut, iaculis quis, sem. Phasellus rhoncus.\n",
+		Events: "BackOff Back-off restarting failed container\n" +
 			"event3\nevent5\nevent6-event8-event11-event12",
 	}
 	assert.Nil(s.SendEvent(&ev))
