@@ -21,7 +21,7 @@ func TestTelegram(t *testing.T) {
 
 	config := map[string]string{
 		"token":  "testtest",
-		"chatid": "tessst",
+		"chatId": "tessst",
 	}
 	c := NewTelegram(config)
 	assert.NotNil(c)
@@ -39,7 +39,7 @@ func TestTelegramInvalidConfig(t *testing.T) {
 	assert.Nil(c)
 
 	config = map[string]string{
-		"chatid": "test",
+		"chatId": "test",
 	}
 	c = NewTelegram(config)
 	assert.Nil(c)
@@ -57,7 +57,7 @@ func TestSendMessage(t *testing.T) {
 
 	config := map[string]string{
 		"token":  "test",
-		"chatid": "test",
+		"chatId": "test",
 	}
 	c := NewTelegram(config)
 	c.url = s.URL + "/%s"
@@ -78,7 +78,7 @@ func TestSendMessageError(t *testing.T) {
 
 	config := map[string]string{
 		"token":  "test",
-		"chatid": "test",
+		"chatId": "test",
 	}
 	c := NewTelegram(config)
 	c.url = s.URL + "/%s"
@@ -99,7 +99,7 @@ func TestSendEvent(t *testing.T) {
 
 	config := map[string]string{
 		"token":  "test",
-		"chatid": "test",
+		"chatId": "test",
 	}
 	c := NewTelegram(config)
 	c.url = s.URL + "/%s"
@@ -122,7 +122,7 @@ func TestInvaildHttpRequest(t *testing.T) {
 
 	config := map[string]string{
 		"token":  "test",
-		"chatid": "test",
+		"chatId": "test",
 	}
 
 	c := NewTelegram(config)

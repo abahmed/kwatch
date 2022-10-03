@@ -20,7 +20,7 @@ func TestPagerduty(t *testing.T) {
 	assert := assert.New(t)
 
 	config := map[string]string{
-		"integrationkey": "testtest",
+		"integrationKey": "testtest",
 	}
 	c := NewPagerDuty(config)
 	assert.NotNil(c)
@@ -32,7 +32,7 @@ func TestSendMessage(t *testing.T) {
 	assert := assert.New(t)
 
 	config := map[string]string{
-		"integrationkey": "test",
+		"integrationKey": "test",
 	}
 	c := NewPagerDuty(config)
 	assert.NotNil(c)
@@ -51,7 +51,7 @@ func TestSendEvent(t *testing.T) {
 	defer s.Close()
 
 	config := map[string]string{
-		"integrationkey": "test",
+		"integrationKey": "test",
 	}
 	c := NewPagerDuty(config)
 	c.url = s.URL
@@ -80,7 +80,7 @@ func TestSendEventError(t *testing.T) {
 	defer s.Close()
 
 	config := map[string]string{
-		"integrationkey": "test",
+		"integrationKey": "test",
 	}
 	c := NewPagerDuty(config)
 	assert.NotNil(c)
@@ -102,7 +102,7 @@ func TestInvaildHttpRequest(t *testing.T) {
 	assert := assert.New(t)
 
 	config := map[string]string{
-		"integrationkey": "test",
+		"integrationKey": "test",
 	}
 	c := NewPagerDuty(config)
 	assert.NotNil(c)

@@ -22,7 +22,7 @@ func Start(
 	alertManager *alertmanager.AlertManager,
 	config *config.Config) {
 	// create kubernetes client
-	kclient := client.Create()
+	kclient := client.Create(&config.App)
 
 	// create rate limiting queue
 	queue := workqueue.NewRateLimitingQueue(workqueue.DefaultControllerRateLimiter())

@@ -28,7 +28,7 @@ func NewTelegram(config map[string]string) *Telegram {
 		return nil
 	}
 
-	chatId, ok := config["chatid"]
+	chatId, ok := config["chatId"]
 	if !ok || len(token) == 0 {
 		logrus.Warnf("initializing telegram with empty chat_id")
 		return nil

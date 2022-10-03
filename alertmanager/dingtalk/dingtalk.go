@@ -36,7 +36,7 @@ type DingTalk struct {
 
 // NewDingTalk returns new DingTalk instance
 func NewDingTalk(config map[string]string) *DingTalk {
-	accessToken, ok := config["accesstoken"]
+	accessToken, ok := config["accessToken"]
 	if !ok || len(accessToken) == 0 {
 		logrus.Warnf("initializing dingtalk with empty access token")
 		return nil
