@@ -8,11 +8,12 @@ import (
 	"github.com/abahmed/kwatch/constant"
 	"github.com/abahmed/kwatch/controller"
 	"github.com/abahmed/kwatch/upgrader"
+	"github.com/abahmed/kwatch/version"
 	"github.com/sirupsen/logrus"
 )
 
 func main() {
-	logrus.Infof(fmt.Sprintf(constant.WelcomeMsg, constant.Version))
+	logrus.Infof(fmt.Sprintf(constant.WelcomeMsg, version.Short()))
 
 	config, err := config.LoadConfig()
 	if err != nil {
@@ -21,6 +22,9 @@ func main() {
 
 	alertManager := alertmanager.AlertManager{}
 	alertManager.Init(config.Alert)
+
+	// send notification to providers
+	alertManager.Notify(fmt.Sprintf(constant.WelcomeMsg, version.Short()))
 
 	// check and notify if newer versions are available
 	upgrader := upgrader.NewUpgrader(&config.Upgrader, &alertManager)

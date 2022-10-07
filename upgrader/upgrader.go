@@ -8,6 +8,7 @@ import (
 	"github.com/abahmed/kwatch/alertmanager"
 	"github.com/abahmed/kwatch/config"
 	"github.com/abahmed/kwatch/constant"
+	"github.com/abahmed/kwatch/version"
 	"github.com/google/go-github/v41/github"
 	"github.com/sirupsen/logrus"
 )
@@ -60,7 +61,7 @@ func (u *Upgrader) checkRelease() {
 		return
 	}
 
-	if constant.Version == *r.TagName {
+	if version.Short() == *r.TagName {
 		return
 	}
 

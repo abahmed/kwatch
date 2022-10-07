@@ -1,8 +1,5 @@
 package constant
 
-// Version is the current versions of kwatch
-const Version = "dev"
-
 // WelcomeMsg is used to be sent to all providers when kwatch starts
 const WelcomeMsg = ":tada: kwatch@%s just started!"
 
