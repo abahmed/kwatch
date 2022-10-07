@@ -2,7 +2,6 @@ package controller
 
 import (
 	"errors"
-	"fmt"
 	"time"
 
 	"github.com/abahmed/kwatch/alertmanager"
@@ -48,9 +47,6 @@ func (c *Controller) run(workers int, stopCh chan struct{}) {
 	}
 
 	logrus.Infof("%s controller synced and ready", c.name)
-
-	// send notification to providers
-	c.alertManager.Notify(fmt.Sprintf(constant.WelcomeMsg, constant.Version))
 
 	// start workers
 	for i := 0; i < workers; i++ {
