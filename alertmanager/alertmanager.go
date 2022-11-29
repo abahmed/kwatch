@@ -1,6 +1,7 @@
 package alertmanager
 
 import (
+	"github.com/abahmed/kwatch/alertmanager/feishu"
 	"reflect"
 	"strings"
 
@@ -59,6 +60,8 @@ func (a *AlertManager) Init(config map[string]map[string]string) {
 			pvdr = matrix.NewMatrix(v)
 		} else if lowerCaseKey == "dingtalk" {
 			pvdr = dingtalk.NewDingTalk(v)
+		} else if lowerCaseKey == "feishu" {
+			pvdr = feishu.NewFeiShu(v)
 		}
 
 		if !reflect.ValueOf(pvdr).IsNil() {
