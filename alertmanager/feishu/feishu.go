@@ -15,7 +15,6 @@ import (
 type FeiShu struct {
 	webhook string
 	title   string
-	keyword string
 }
 
 type feiShuWebhookContent struct {
@@ -36,7 +35,6 @@ func NewFeiShu(config map[string]string) *FeiShu {
 	return &FeiShu{
 		webhook: webhook,
 		title:   config["title"],
-		keyword: config["keyword"],
 	}
 }
 
