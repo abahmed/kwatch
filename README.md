@@ -249,10 +249,10 @@ title
 If you want to enable FeiShu, provide accessToken with optional secret and
 title
 
-| Parameter                 | Description                 |
-|:--------------------------|:----------------------------|
-| `alert.feishu.webhook`    | FeiShu bot webhook URL      |
-| `alert.dingtalk.title`    | Customized title in message |
+| Parameter                | Description                 |
+|:-------------------------|:----------------------------|
+| `alert.feishu.webhook`   | FeiShu bot webhook URL      |
+| `alert.feishu.title`     | Customized title in message |
 
 
 ### Cleanup
