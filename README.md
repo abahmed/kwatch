@@ -241,6 +241,19 @@ title
 | `alert.dingtalk.secret`             | Optional secret used to sign requests  |
 | `alert.dingtalk.title`              | Customized title in message            |
 
+#### FeiShu
+
+<p>
+	<img src="./assets/feishu.png" width="45%"/>
+</p>
+If you want to enable FeiShu, provide accessToken with optional secret and
+title
+
+| Parameter                | Description                 |
+|:-------------------------|:----------------------------|
+| `alert.feishu.webhook`   | FeiShu bot webhook URL      |
+| `alert.feishu.title`     | Customized title in message |
+
 
 ### Cleanup
 
