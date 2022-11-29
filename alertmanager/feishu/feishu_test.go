@@ -50,8 +50,7 @@ func TestBuildRequestBodyFeiShu(t *testing.T) {
 		Logs:      "test\ntestlogs",
 		Events:    "test",
 	}
-	expectMessage := "{\"msg_type\": \"post\",\"content\": {\"post\": {\"en_us\":  {\"title\":\"\",\"content\": [[" +
-		"{\"tag\":\"text\",\"text\":\"**Pod:** test-pod\\n**Container:** test-container\\n**Namespace:** default\\n**Reason:** OOMKILLED\\n**Events:**\\n```\\ntest\\n```\\n**Logs:**\\n```\\ntest\\ntestlogs\\n```\"}]]}}}}"
+	expectMessage := "{\"msg_type\": \"interactive\",\"card\": {\"config\": {\"wide_screen_mode\": true},\"header\": {\"title\": {\"tag\": \"plain_text\",\"content\": \"\"},\"template\": \"blue\"},\"elements\": [{\"tag\":\"markdown\",\"content\":\"**Pod:** test-pod\\n**Container:** test-container\\n**Namespace:** default\\n**Reason:** OOMKILLED\\n**Events:**\\n```\\ntest\\n```\\n**Logs:**\\n```\\ntest\\ntestlogs\\n```\"}]}}"
 	assertions.Equal(expectMessage, c.buildRequestBodyFeiShu(&ev, ""))
 }
 

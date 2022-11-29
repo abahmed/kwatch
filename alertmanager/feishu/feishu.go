@@ -19,8 +19,8 @@ type FeiShu struct {
 }
 
 type feiShuWebhookContent struct {
-	Tag  string `json:"tag"`
-	Text string `json:"text"`
+	Tag     string `json:"tag"`
+	Content string `json:"content"`
 }
 
 // NewFeiShu returns new feishu web bot instance
@@ -124,14 +124,15 @@ func (r *FeiShu) buildRequestBodyFeiShu(
 	}
 	var content = []feiShuWebhookContent{
 		{
-			Tag:  "markdown",
-			Text: text,
+			Tag:     "markdown",
+			Content: text,
 		},
 	}
 
 	jsonBytes, _ := json.Marshal(content)
 
-	body := "{\"msg_type\": \"post\",\"content\": {\"post\": {\"en_us\":  {\"title\":\"" + r.title + "\",\"content\": [" + string(jsonBytes) + "]}}}}"
-	println(body)
+	body := "{\"msg_type\": \"interactive\",\"card\": {\"config\": {\"wide_screen_mode\": true},\"header\": {\"title\": {\"tag\": \"plain_text\",\"content\": \"" +
+		r.title +
+		"\"},\"template\": \"blue\"},\"elements\": " + string(jsonBytes) + "}}"
 	return body
 }
