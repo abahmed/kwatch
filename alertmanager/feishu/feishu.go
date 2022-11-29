@@ -124,7 +124,7 @@ func (r *FeiShu) buildRequestBodyFeiShu(
 	}
 	var content = []feiShuWebhookContent{
 		{
-			Tag:  "text",
+			Tag:  "markdown",
 			Text: text,
 		},
 	}
