@@ -74,7 +74,8 @@ func TestConfigFromFile(t *testing.T) {
 		Namespaces:        []string{"default", "!kwatch"},
 		Reasons:           []string{"default", "!kwatch"},
 		App: App{
-			ProxyURL: "https://localhost",
+			ProxyURL:    "https://localhost",
+			ClusterName: "development",
 		},
 	}
 	yamlData, _ := yaml.Marshal(&n)
@@ -82,6 +83,10 @@ func TestConfigFromFile(t *testing.T) {
 
 	cfg, _ := LoadConfig()
 	assert.NotNil(cfg)
+
+	assert.Equal(cfg.App.ClusterName, "development")
+	assert.Equal(cfg.App.ProxyURL, "https://localhost")
+
 	assert.Equal(cfg.MaxRecentLogLines, int64(20))
 	assert.Len(cfg.AllowedNamespaces, 1)
 	assert.Len(cfg.AllowedReasons, 1)

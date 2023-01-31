@@ -7,6 +7,7 @@ import (
 	"io"
 	"net/http"
 
+	"github.com/abahmed/kwatch/config"
 	"github.com/abahmed/kwatch/constant"
 	"github.com/abahmed/kwatch/event"
 	"github.com/sirupsen/logrus"
@@ -23,6 +24,9 @@ type Opsgenie struct {
 	url    string
 	title  string
 	text   string
+
+	// reference for general app configuration
+	appCfg *config.App
 }
 
 type ogPayload struct {
@@ -33,7 +37,7 @@ type ogPayload struct {
 }
 
 // NewOpsgenie returns new opsgenie instance
-func NewOpsgenie(config map[string]string) *Opsgenie {
+func NewOpsgenie(config map[string]string, appCfg *config.App) *Opsgenie {
 	apiKey, ok := config["apiKey"]
 	if !ok || len(apiKey) == 0 {
 		logrus.Warnf("initializing opsgenie with empty webhook url")
@@ -47,6 +51,7 @@ func NewOpsgenie(config map[string]string) *Opsgenie {
 		url:    opsgenieAPIURL,
 		title:  config["title"],
 		text:   config["text"],
+		appCfg: appCfg,
 	}
 }
 
@@ -125,6 +130,7 @@ func (m *Opsgenie) buildMessage(e *event.Event) []byte {
 
 	payload.Description = text
 	payload.Details = map[string]string{
+		"Cluster":   m.appCfg.ClusterName,
 		"Name":      e.Name,
 		"Container": e.Container,
 		"Namespace": e.Namespace,

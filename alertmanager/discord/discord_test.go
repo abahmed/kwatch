@@ -3,6 +3,7 @@ package discord
 import (
 	"testing"
 
+	"github.com/abahmed/kwatch/config"
 	"github.com/abahmed/kwatch/event"
 	discordgo "github.com/bwmarrin/discordgo"
 	"github.com/stretchr/testify/assert"
@@ -12,34 +13,35 @@ func mockedSend(
 	webhookID,
 	token string,
 	wait bool,
-	data *discordgo.WebhookParams) (st *discordgo.Message, err error) {
+	data *discordgo.WebhookParams,
+	options ...discordgo.RequestOption) (st *discordgo.Message, err error) {
 	return nil, nil
 }
 
 func TestDiscordEmptyConfig(t *testing.T) {
 	assert := assert.New(t)
 
-	c := NewDiscord(map[string]string{})
+	c := NewDiscord(map[string]string{}, &config.App{ClusterName: "dev"})
 	assert.Nil(c)
 }
 
 func TestDiscordInvalidConfig(t *testing.T) {
 	assert := assert.New(t)
 
-	config := map[string]string{
+	configMap := map[string]string{
 		"webhook": "testtest",
 	}
-	c := NewDiscord(config)
+	c := NewDiscord(configMap, &config.App{ClusterName: "dev"})
 	assert.Nil(c)
 }
 
 func TestDiscord(t *testing.T) {
 	assert := assert.New(t)
 
-	config := map[string]string{
+	configMap := map[string]string{
 		"webhook": "test/test",
 	}
-	c := NewDiscord(config)
+	c := NewDiscord(configMap, &config.App{ClusterName: "dev"})
 	assert.NotNil(c)
 
 	assert.Equal(c.Name(), "Discord")
@@ -48,10 +50,10 @@ func TestDiscord(t *testing.T) {
 func TestSendMessage(t *testing.T) {
 	assert := assert.New(t)
 
-	config := map[string]string{
+	configMap := map[string]string{
 		"webhook": "test/test",
 	}
-	c := NewDiscord(config)
+	c := NewDiscord(configMap, &config.App{ClusterName: "dev"})
 	assert.NotNil(c)
 
 	c.send = mockedSend
@@ -61,10 +63,10 @@ func TestSendMessage(t *testing.T) {
 func TestSendEvent(t *testing.T) {
 	assert := assert.New(t)
 
-	config := map[string]string{
+	configMap := map[string]string{
 		"webhook": "test/test",
 	}
-	c := NewDiscord(config)
+	c := NewDiscord(configMap, &config.App{ClusterName: "dev"})
 	assert.NotNil(c)
 
 	c.send = mockedSend

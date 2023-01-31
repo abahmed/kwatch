@@ -3,6 +3,7 @@ package slack
 import (
 	"testing"
 
+	"github.com/abahmed/kwatch/config"
 	"github.com/abahmed/kwatch/event"
 	slackClient "github.com/slack-go/slack"
 	"github.com/stretchr/testify/assert"
@@ -14,17 +15,17 @@ func mockedSend(url string, msg *slackClient.WebhookMessage) error {
 func TestSlackEmptyConfig(t *testing.T) {
 	assert := assert.New(t)
 
-	s := NewSlack(map[string]string{})
+	s := NewSlack(map[string]string{}, &config.App{ClusterName: "dev"})
 	assert.Nil(s)
 }
 
 func TestSlack(t *testing.T) {
 	assert := assert.New(t)
 
-	config := map[string]string{
+	configMap := map[string]string{
 		"webhook": "testtest",
 	}
-	s := NewSlack(config)
+	s := NewSlack(configMap, &config.App{ClusterName: "dev"})
 	assert.NotNil(s)
 
 	assert.Equal(s.Name(), "Slack")
@@ -36,7 +37,7 @@ func TestSendMessage(t *testing.T) {
 	s := NewSlack(map[string]string{
 		"webhook": "testtest",
 		"channel": "test",
-	})
+	}, &config.App{ClusterName: "dev"})
 	assert.NotNil(s)
 
 	s.send = mockedSend
@@ -48,7 +49,7 @@ func TestSendEvent(t *testing.T) {
 
 	s := NewSlack(map[string]string{
 		"webhook": "testtest",
-	})
+	}, &config.App{ClusterName: "dev"})
 	assert.NotNil(s)
 
 	s.send = mockedSend

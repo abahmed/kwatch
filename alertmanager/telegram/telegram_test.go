@@ -5,6 +5,7 @@ import (
 	"net/http/httptest"
 	"testing"
 
+	"github.com/abahmed/kwatch/config"
 	"github.com/abahmed/kwatch/event"
 	"github.com/stretchr/testify/assert"
 )
@@ -12,18 +13,18 @@ import (
 func TestEmptyConfig(t *testing.T) {
 	assert := assert.New(t)
 
-	c := NewTelegram(map[string]string{})
+	c := NewTelegram(map[string]string{}, &config.App{ClusterName: "dev"})
 	assert.Nil(c)
 }
 
 func TestTelegram(t *testing.T) {
 	assert := assert.New(t)
 
-	config := map[string]string{
+	configMap := map[string]string{
 		"token":  "testtest",
 		"chatId": "tessst",
 	}
-	c := NewTelegram(config)
+	c := NewTelegram(configMap, &config.App{ClusterName: "dev"})
 	assert.NotNil(c)
 
 	assert.Equal(c.Name(), "Telegram")
@@ -32,16 +33,16 @@ func TestTelegram(t *testing.T) {
 func TestTelegramInvalidConfig(t *testing.T) {
 	assert := assert.New(t)
 
-	config := map[string]string{
+	configMap := map[string]string{
 		"token": "test",
 	}
-	c := NewTelegram(config)
+	c := NewTelegram(configMap, &config.App{ClusterName: "dev"})
 	assert.Nil(c)
 
-	config = map[string]string{
+	configMap = map[string]string{
 		"chatId": "test",
 	}
-	c = NewTelegram(config)
+	c = NewTelegram(configMap, &config.App{ClusterName: "dev"})
 	assert.Nil(c)
 }
 
@@ -55,11 +56,11 @@ func TestSendMessage(t *testing.T) {
 
 	defer s.Close()
 
-	config := map[string]string{
+	configMap := map[string]string{
 		"token":  "test",
 		"chatId": "test",
 	}
-	c := NewTelegram(config)
+	c := NewTelegram(configMap, &config.App{ClusterName: "dev"})
 	c.url = s.URL + "/%s"
 	assert.NotNil(c)
 
@@ -76,11 +77,11 @@ func TestSendMessageError(t *testing.T) {
 
 	defer s.Close()
 
-	config := map[string]string{
+	configMap := map[string]string{
 		"token":  "test",
 		"chatId": "test",
 	}
-	c := NewTelegram(config)
+	c := NewTelegram(configMap, &config.App{ClusterName: "dev"})
 	c.url = s.URL + "/%s"
 	assert.NotNil(c)
 
@@ -97,11 +98,11 @@ func TestSendEvent(t *testing.T) {
 
 	defer s.Close()
 
-	config := map[string]string{
+	configMap := map[string]string{
 		"token":  "test",
 		"chatId": "test",
 	}
-	c := NewTelegram(config)
+	c := NewTelegram(configMap, &config.App{ClusterName: "dev"})
 	c.url = s.URL + "/%s"
 	assert.NotNil(c)
 
@@ -120,18 +121,18 @@ func TestSendEvent(t *testing.T) {
 func TestInvaildHttpRequest(t *testing.T) {
 	assert := assert.New(t)
 
-	config := map[string]string{
+	configMap := map[string]string{
 		"token":  "test",
 		"chatId": "test",
 	}
 
-	c := NewTelegram(config)
+	c := NewTelegram(configMap, &config.App{ClusterName: "dev"})
 	assert.NotNil(c)
 	c.url = "h ttp://localhost/%s"
 
 	assert.NotNil(c.SendMessage("test"))
 
-	c = NewTelegram(config)
+	c = NewTelegram(configMap, &config.App{ClusterName: "dev"})
 	assert.NotNil(c)
 	c.url = "http://localhost:132323/%s"
 

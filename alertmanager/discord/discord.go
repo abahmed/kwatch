@@ -3,6 +3,7 @@ package discord
 import (
 	"strings"
 
+	"github.com/abahmed/kwatch/config"
 	"github.com/abahmed/kwatch/constant"
 	"github.com/abahmed/kwatch/event"
 
@@ -15,15 +16,18 @@ type Discord struct {
 	token string
 	title string
 	text  string
-	send  func(
-		webhookID,
+	send  func(webhookID,
 		token string,
 		wait bool,
-		data *discordgo.WebhookParams) (st *discordgo.Message, err error)
+		data *discordgo.WebhookParams,
+		options ...discordgo.RequestOption) (st *discordgo.Message, err error)
+
+	// reference for general app configuration
+	appCfg *config.App
 }
 
 // NewDiscord returns new Discord instance
-func NewDiscord(config map[string]string) *Discord {
+func NewDiscord(config map[string]string, appCfg *config.App) *Discord {
 	webhook, ok := config["webhook"]
 	if !ok || len(webhook) == 0 {
 		logrus.Warnf("initializing discord with empty webhook url")
@@ -43,11 +47,12 @@ func NewDiscord(config map[string]string) *Discord {
 	discordClient, _ := discordgo.New("")
 
 	return &Discord{
-		id:    webhookID,
-		token: webhookToken,
-		title: config["title"],
-		text:  config["text"],
-		send:  discordClient.WebhookExecute,
+		id:     webhookID,
+		token:  webhookToken,
+		title:  config["title"],
+		text:   config["text"],
+		send:   discordClient.WebhookExecute,
+		appCfg: appCfg,
 	}
 }
 
@@ -62,6 +67,11 @@ func (s *Discord) SendEvent(ev *event.Event) error {
 
 	// initialize fields with basic info
 	fields := []*discordgo.MessageEmbedField{
+		{
+			Name:   "Cluster",
+			Value:  s.appCfg.ClusterName,
+			Inline: true,
+		},
 		{
 			Name:   "Name",
 			Value:  ev.Name,

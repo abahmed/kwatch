@@ -55,6 +55,10 @@ type App struct {
 	// ProxyURL to be used in outgoing http(s) requests except Kubernetes
 	// requests to cluster
 	ProxyURL string `yaml:"proxyURL"`
+
+	// ClusterName to used in notifications to indicate which cluster has
+	// issue
+	ClusterName string `yaml:"clusterName"`
 }
 
 // Upgrader confing struct

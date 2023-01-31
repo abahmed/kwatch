@@ -5,6 +5,7 @@ import (
 	"net/http/httptest"
 	"testing"
 
+	"github.com/abahmed/kwatch/config"
 	"github.com/abahmed/kwatch/event"
 	"github.com/stretchr/testify/assert"
 )
@@ -12,17 +13,17 @@ import (
 func TestEmptyConfig(t *testing.T) {
 	assert := assert.New(t)
 
-	c := NewDingTalk(map[string]string{})
+	c := NewDingTalk(map[string]string{}, &config.App{ClusterName: "dev"})
 	assert.Nil(c)
 }
 
 func TestDingTalk(t *testing.T) {
 	assert := assert.New(t)
 
-	config := map[string]string{
+	configMap := map[string]string{
 		"accessToken": "testToken",
 	}
-	c := NewDingTalk(config)
+	c := NewDingTalk(configMap, &config.App{ClusterName: "dev"})
 	assert.NotNil(c)
 
 	assert.Equal(c.Name(), "DingTalk")
@@ -38,11 +39,11 @@ func TestSendMessage(t *testing.T) {
 
 	defer s.Close()
 
-	config := map[string]string{
+	configMap := map[string]string{
 		"accessToken": "testToken",
 		"secret":      "secret1",
 	}
-	c := NewDingTalk(config)
+	c := NewDingTalk(configMap, &config.App{ClusterName: "dev"})
 	assert.NotNil(c)
 	c.url = s.URL + "/send?accessToken=%s"
 
@@ -59,10 +60,10 @@ func TestSendMessageInvalidBody(t *testing.T) {
 
 	defer s.Close()
 
-	config := map[string]string{
+	configMap := map[string]string{
 		"accessToken": "testToken",
 	}
-	c := NewDingTalk(config)
+	c := NewDingTalk(configMap, &config.App{ClusterName: "dev"})
 	assert.NotNil(c)
 	c.url = s.URL + "/send?accessToken=%s"
 
@@ -79,10 +80,10 @@ func TestSendMessageInvalidJson(t *testing.T) {
 
 	defer s.Close()
 
-	config := map[string]string{
+	configMap := map[string]string{
 		"accessToken": "testToken",
 	}
-	c := NewDingTalk(config)
+	c := NewDingTalk(configMap, &config.App{ClusterName: "dev"})
 	assert.NotNil(c)
 	c.url = s.URL + "/send?accessToken=%s"
 
@@ -99,10 +100,10 @@ func TestSendMessageErrorResponse(t *testing.T) {
 
 	defer s.Close()
 
-	config := map[string]string{
+	configMap := map[string]string{
 		"accessToken": "testToken",
 	}
-	c := NewDingTalk(config)
+	c := NewDingTalk(configMap, &config.App{ClusterName: "dev"})
 	assert.NotNil(c)
 	c.url = s.URL + "/send?accessToken=%s"
 
@@ -119,10 +120,10 @@ func TestSendEvent(t *testing.T) {
 
 	defer s.Close()
 
-	config := map[string]string{
+	configMap := map[string]string{
 		"accessToken": "testToken",
 	}
-	c := NewDingTalk(config)
+	c := NewDingTalk(configMap, &config.App{ClusterName: "dev"})
 	assert.NotNil(c)
 	c.url = s.URL + "/send?accessToken=%s"
 
@@ -141,19 +142,19 @@ func TestSendEvent(t *testing.T) {
 func TestInvaildHttpRequest(t *testing.T) {
 	assert := assert.New(t)
 
-	config := map[string]string{
+	configMap := map[string]string{
 		"accessToken": "testToken",
 	}
-	c := NewDingTalk(config)
+	c := NewDingTalk(configMap, &config.App{ClusterName: "dev"})
 	assert.NotNil(c)
 	c.url = "h ttp://localhost" + "/send?accessToken=%s"
 
 	assert.NotNil(c.SendMessage("test"))
 
-	config = map[string]string{
+	configMap = map[string]string{
 		"accessToken": "testToken",
 	}
-	c = NewDingTalk(config)
+	c = NewDingTalk(configMap, &config.App{ClusterName: "dev"})
 	assert.NotNil(c)
 	c.url = "http://localhost:132323" + "/send?accessToken=%s"
 

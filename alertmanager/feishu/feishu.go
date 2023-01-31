@@ -4,17 +4,22 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
-	"github.com/abahmed/kwatch/constant"
-	"github.com/abahmed/kwatch/event"
-	"github.com/sirupsen/logrus"
 	"io"
 	"net/http"
 	"strings"
+
+	"github.com/abahmed/kwatch/config"
+	"github.com/abahmed/kwatch/constant"
+	"github.com/abahmed/kwatch/event"
+	"github.com/sirupsen/logrus"
 )
 
 type FeiShu struct {
 	webhook string
 	title   string
+
+	// reference for general app configuration
+	appCfg *config.App
 }
 
 type feiShuWebhookContent struct {
@@ -23,7 +28,7 @@ type feiShuWebhookContent struct {
 }
 
 // NewFeiShu returns new feishu web bot instance
-func NewFeiShu(config map[string]string) *FeiShu {
+func NewFeiShu(config map[string]string, appCfg *config.App) *FeiShu {
 	webhook, ok := config["webhook"]
 	if !ok || len(webhook) == 0 {
 		logrus.Warnf("initializing Fei Shu with empty webhook url")
@@ -35,6 +40,7 @@ func NewFeiShu(config map[string]string) *FeiShu {
 	return &FeiShu{
 		webhook: webhook,
 		title:   config["title"],
+		appCfg:  appCfg,
 	}
 }
 
@@ -104,12 +110,14 @@ func (r *FeiShu) buildRequestBodyFeiShu(
 	text := ""
 	if len(customMsg) <= 0 {
 		text = fmt.Sprintf(
-			"**Pod:** %s\n"+
+			"**Cluster:** %s\n"+
+				"**Pod:** %s\n"+
 				"**Container:** %s\n"+
 				"**Namespace:** %s\n"+
 				"**Reason:** %s\n"+
 				"**Events:**\n```\n%s\n```\n"+
 				"**Logs:**\n```\n%s\n```",
+			r.appCfg.ClusterName,
 			e.Name,
 			e.Container,
 			e.Namespace,

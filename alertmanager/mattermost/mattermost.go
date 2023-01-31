@@ -8,6 +8,7 @@ import (
 
 	"net/http"
 
+	"github.com/abahmed/kwatch/config"
 	"github.com/abahmed/kwatch/constant"
 	"github.com/abahmed/kwatch/event"
 	"github.com/sirupsen/logrus"
@@ -17,6 +18,9 @@ type Mattermost struct {
 	webhook string
 	title   string
 	text    string
+
+	// reference for general app configuration
+	appCfg *config.App
 }
 
 type mmField struct {
@@ -37,7 +41,7 @@ type mmPayload struct {
 }
 
 // NewMattermost returns new mattermost instance
-func NewMattermost(config map[string]string) *Mattermost {
+func NewMattermost(config map[string]string, appCfg *config.App) *Mattermost {
 	webhook, ok := config["webhook"]
 	if !ok || len(webhook) == 0 {
 		logrus.Warnf("initializing mattermost with empty webhook url")
@@ -50,6 +54,7 @@ func NewMattermost(config map[string]string) *Mattermost {
 		webhook: webhook,
 		title:   config["title"],
 		text:    config["text"],
+		appCfg:  appCfg,
 	}
 }
 
@@ -134,6 +139,11 @@ func (m *Mattermost) buildMessage(e *event.Event, msg *string) []byte {
 				Title: title,
 				Text:  text,
 				Fields: []mmField{
+					{
+						Title: "Cluster",
+						Value: m.appCfg.ClusterName,
+						Short: true,
+					},
 					{
 						Title: "Name",
 						Value: e.Name,

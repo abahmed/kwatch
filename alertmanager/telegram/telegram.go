@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"strings"
 
+	"github.com/abahmed/kwatch/config"
 	"github.com/abahmed/kwatch/event"
 	"github.com/sirupsen/logrus"
 )
@@ -18,10 +19,13 @@ type Telegram struct {
 	token  string
 	chatId string
 	url    string
+
+	// reference for general app configuration
+	appCfg *config.App
 }
 
 // NewTelegram returns a new Telegram object
-func NewTelegram(config map[string]string) *Telegram {
+func NewTelegram(config map[string]string, appCfg *config.App) *Telegram {
 	token, ok := config["token"]
 	if !ok || len(token) == 0 {
 		logrus.Warnf("initializing telegram with empty token")
@@ -44,6 +48,7 @@ func NewTelegram(config map[string]string) *Telegram {
 		token:  token,
 		chatId: chatId,
 		url:    telegramAPIURL,
+		appCfg: appCfg,
 	}
 }
 
@@ -56,7 +61,7 @@ func (t *Telegram) Name() string {
 func (t *Telegram) SendEvent(e *event.Event) error {
 	logrus.Debugf("sending to telegram event: %v", e)
 
-	reqBody := buildRequestBodyTelegram(e, t.chatId, "")
+	reqBody := t.buildRequestBodyTelegram(e, t.chatId, "")
 	return t.sendByTelegramApi(reqBody)
 }
 
@@ -64,11 +69,11 @@ func (t *Telegram) SendEvent(e *event.Event) error {
 func (t *Telegram) SendMessage(msg string) error {
 	logrus.Debugf("sending to telegram msg: %s", msg)
 
-	reqBody := buildRequestBodyTelegram(new(event.Event), t.chatId, msg)
+	reqBody := t.buildRequestBodyTelegram(new(event.Event), t.chatId, msg)
 	return t.sendByTelegramApi(reqBody)
 }
 
-func buildRequestBodyTelegram(
+func (t *Telegram) buildRequestBodyTelegram(
 	e *event.Event,
 	chatId string,
 	customMsg string) string {
@@ -91,11 +96,12 @@ func buildRequestBodyTelegram(
 	txt := ""
 	if len(customMsg) <= 0 {
 		txt = fmt.Sprintf(
-			"An alert for Name: *%s*  "+
+			"An alert for Cluster: *%s* Name: *%s*  "+
 				"Container: *%s* "+
 				"Namespace: *%s*  has been triggered:\\n—\\n "+
 				"Logs: *%s* \\n "+
 				"Events: *%s* ",
+			t.appCfg.ClusterName,
 			e.Name,
 			e.Container,
 			e.Namespace,

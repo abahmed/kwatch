@@ -6,6 +6,7 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/abahmed/kwatch/config"
 	"github.com/abahmed/kwatch/event"
 	"github.com/abahmed/kwatch/util"
 	"github.com/sirupsen/logrus"
@@ -16,10 +17,13 @@ type Email struct {
 	from string
 	to   string
 	send func(m ...*gomail.Message) error
+
+	// reference for general app configuration
+	appCfg *config.App
 }
 
 // NewEmail returns new email instance
-func NewEmail(config map[string]string) *Email {
+func NewEmail(config map[string]string, appCfg *config.App) *Email {
 	from, ok := config["from"]
 	if !ok || len(from) == 0 {
 		logrus.Warnf("initializing email with an empty from")
@@ -63,9 +67,10 @@ func NewEmail(config map[string]string) *Email {
 	d := gomail.NewDialer(host, portNumber, from, password)
 
 	return &Email{
-		from: from,
-		to:   to,
-		send: d.DialAndSend,
+		from:   from,
+		to:     to,
+		send:   d.DialAndSend,
+		appCfg: appCfg,
 	}
 }
 
@@ -76,7 +81,7 @@ func (e *Email) Name() string {
 
 // SendEvent sends event to the provider
 func (e *Email) SendEvent(event *event.Event) error {
-	subject, body := buildMessageSubjectAndBody(event)
+	subject, body := e.buildMessageSubjectAndBody(event)
 
 	m := gomail.NewMessage()
 	m.SetHeader("From", e.from)
@@ -92,31 +97,34 @@ func (e *Email) SendMessage(s string) error {
 	return nil
 }
 
-func buildMessageSubjectAndBody(e *event.Event) (string, string) {
+func (e *Email) buildMessageSubjectAndBody(
+	ev *event.Event) (string, string) {
 	eventsText := "No events captured"
 	logsText := "No logs captured"
 
 	// add events part if it exists
-	events := strings.TrimSpace(e.Events)
+	events := strings.TrimSpace(ev.Events)
 	if len(events) > 0 {
-		eventsText = util.JsonEscape(e.Events)
+		eventsText = util.JsonEscape(ev.Events)
 	}
 
 	// add logs part if it exists
-	logs := strings.TrimSpace(e.Logs)
+	logs := strings.TrimSpace(ev.Logs)
 	if len(logs) > 0 {
-		logsText = util.JsonEscape(e.Logs)
+		logsText = util.JsonEscape(ev.Logs)
 	}
 
-	subject := fmt.Sprintf("⛑ Kwatch detected a crash in pod %s ", e.Container)
+	subject := fmt.Sprintf("⛑ Kwatch detected a crash in pod %s ", ev.Container)
 	body := fmt.Sprintf(
-		"An alert for Name: *%s*  Container: *%s* Namespace: *%s*  "+
+		"An alert for cluster: *%s* Name: *%s*  Container: *%s* "+
+			"Namespace: *%s*  "+
 			"has been triggered:\\n—\\n "+
 			"Logs: *%s* \\n "+
 			"Events: *%s* ",
-		e.Name,
-		e.Container,
-		e.Namespace,
+		e.appCfg.ClusterName,
+		ev.Name,
+		ev.Container,
+		ev.Namespace,
 		logsText,
 		eventsText,
 	)

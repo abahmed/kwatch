@@ -5,6 +5,7 @@ import (
 	"net/http/httptest"
 	"testing"
 
+	"github.com/abahmed/kwatch/config"
 	"github.com/abahmed/kwatch/event"
 	"github.com/stretchr/testify/assert"
 )
@@ -12,17 +13,17 @@ import (
 func TestOpsgenieEmptyConfig(t *testing.T) {
 	assert := assert.New(t)
 
-	c := NewOpsgenie(map[string]string{})
+	c := NewOpsgenie(map[string]string{}, &config.App{ClusterName: "dev"})
 	assert.Nil(c)
 }
 
 func TestOpsgenie(t *testing.T) {
 	assert := assert.New(t)
 
-	config := map[string]string{
+	configMap := map[string]string{
 		"apiKey": "testtest",
 	}
-	c := NewOpsgenie(config)
+	c := NewOpsgenie(configMap, &config.App{ClusterName: "dev"})
 	assert.NotNil(c)
 
 	assert.Equal(c.Name(), "Opsgenie")
@@ -31,10 +32,10 @@ func TestOpsgenie(t *testing.T) {
 func TestSendMessage(t *testing.T) {
 	assert := assert.New(t)
 
-	config := map[string]string{
+	configMap := map[string]string{
 		"apiKey": "test",
 	}
-	c := NewOpsgenie(config)
+	c := NewOpsgenie(configMap, &config.App{ClusterName: "dev"})
 	assert.NotNil(c)
 
 	assert.Nil(c.SendMessage("test"))
@@ -51,10 +52,10 @@ func TestSendEvent(t *testing.T) {
 
 	defer s.Close()
 
-	config := map[string]string{
+	configMap := map[string]string{
 		"apiKey": "test",
 	}
-	c := NewOpsgenie(config)
+	c := NewOpsgenie(configMap, &config.App{ClusterName: "dev"})
 	assert.NotNil(c)
 
 	c.url = s.URL
@@ -81,10 +82,10 @@ func TestSendEventError(t *testing.T) {
 
 	defer s.Close()
 
-	config := map[string]string{
+	configMap := map[string]string{
 		"apiKey": "test",
 	}
-	c := NewOpsgenie(config)
+	c := NewOpsgenie(configMap, &config.App{ClusterName: "dev"})
 	assert.NotNil(c)
 
 	c.url = s.URL
@@ -104,10 +105,10 @@ func TestSendEventError(t *testing.T) {
 func TestInvaildHttpRequest(t *testing.T) {
 	assert := assert.New(t)
 
-	config := map[string]string{
+	configMap := map[string]string{
 		"apiKey": "test",
 	}
-	c := NewOpsgenie(config)
+	c := NewOpsgenie(configMap, &config.App{ClusterName: "dev"})
 	assert.NotNil(c)
 	c.url = "h ttp://localhost"
 
@@ -122,7 +123,7 @@ func TestInvaildHttpRequest(t *testing.T) {
 	}
 	assert.NotNil(c.SendEvent(&ev))
 
-	c = NewOpsgenie(config)
+	c = NewOpsgenie(configMap, &config.App{ClusterName: "dev"})
 	assert.NotNil(c)
 	c.url = "http://localhost:132323"
 

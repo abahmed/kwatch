@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/abahmed/kwatch/config"
 	"github.com/abahmed/kwatch/constant"
 	"github.com/abahmed/kwatch/event"
 
@@ -24,11 +25,14 @@ type Slack struct {
 	// instead of default one
 	channel string
 
+	// reference for general app configuration
+	appCfg *config.App
+
 	send func(url string, msg *slackClient.WebhookMessage) error
 }
 
 // NewSlack returns new Slack instance
-func NewSlack(config map[string]string) *Slack {
+func NewSlack(config map[string]string, appCfg *config.App) *Slack {
 	webhook, ok := config["webhook"]
 	if !ok || len(webhook) == 0 {
 		logrus.Warnf("initializing slack with empty webhook url")
@@ -41,6 +45,7 @@ func NewSlack(config map[string]string) *Slack {
 		webhook: webhook,
 		channel: config["channel"],
 		send:    slackClient.PostWebhook,
+		appCfg:  appCfg,
 	}
 }
 
@@ -71,6 +76,7 @@ func (s *Slack) SendEvent(ev *event.Event) error {
 		slackClient.SectionBlock{
 			Type: "section",
 			Fields: []*slackClient.TextBlockObject{
+				markdownF("*Cluster*\n%s", s.appCfg.ClusterName),
 				markdownF("*Name*\n%s", ev.Name),
 				markdownF("*Container*\n%s", ev.Container),
 				markdownF("*Namespace*\n%s", ev.Namespace),

@@ -4,6 +4,7 @@ import (
 	"errors"
 	"testing"
 
+	"github.com/abahmed/kwatch/config"
 	"github.com/abahmed/kwatch/event"
 	"github.com/stretchr/testify/assert"
 )
@@ -34,7 +35,7 @@ func (p *fakeProviderWithError) Name() string {
 func TestAlertManagerNoConfig(t *testing.T) {
 	assert := assert.New(t)
 	alertmanager := AlertManager{}
-	alertmanager.Init(nil)
+	alertmanager.Init(nil, nil)
 	assert.Len(alertmanager.providers, 0)
 }
 
@@ -82,10 +83,13 @@ func TestGetProviders(t *testing.T) {
 		"dingtalk": {
 			"accessToken": "testToken",
 		},
+		"feishu": {
+			"webhook": "test",
+		},
 	}
 
 	alertmanager := AlertManager{}
-	alertmanager.Init(alertMap)
+	alertmanager.Init(alertMap, &config.App{ClusterName: "dev"})
 
 	assert.Len(
 		alertmanager.providers,
