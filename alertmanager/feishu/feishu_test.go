@@ -5,6 +5,7 @@ import (
 	"net/http/httptest"
 	"testing"
 
+	"github.com/abahmed/kwatch/config"
 	"github.com/abahmed/kwatch/event"
 	"github.com/stretchr/testify/assert"
 )
@@ -12,17 +13,17 @@ import (
 func TestEmptyConfig(t *testing.T) {
 	assertions := assert.New(t)
 
-	c := NewFeiShu(map[string]string{})
+	c := NewFeiShu(map[string]string{}, &config.App{ClusterName: "dev"})
 	assertions.Nil(c)
 }
 
 func TestRocketChat(t *testing.T) {
 	assertions := assert.New(t)
 
-	config := map[string]string{
+	configMap := map[string]string{
 		"webhook": "testtest",
 	}
-	c := NewFeiShu(config)
+	c := NewFeiShu(configMap, &config.App{ClusterName: "dev"})
 	assertions.NotNil(c)
 
 	assertions.Equal(c.Name(), "Fei Shu")
@@ -37,10 +38,10 @@ func TestBuildRequestBodyFeiShu(t *testing.T) {
 
 	defer s.Close()
 
-	config := map[string]string{
+	configMap := map[string]string{
 		"webhook": s.URL,
 	}
-	c := NewFeiShu(config)
+	c := NewFeiShu(configMap, &config.App{ClusterName: "dev"})
 	assertions.NotNil(c)
 	ev := event.Event{
 		Name:      "test-pod",
@@ -50,7 +51,7 @@ func TestBuildRequestBodyFeiShu(t *testing.T) {
 		Logs:      "test\ntestlogs",
 		Events:    "test",
 	}
-	expectMessage := "{\"msg_type\": \"interactive\",\"card\": {\"config\": {\"wide_screen_mode\": true},\"header\": {\"title\": {\"tag\": \"plain_text\",\"content\": \"\"},\"template\": \"blue\"},\"elements\": [{\"tag\":\"markdown\",\"content\":\"**Pod:** test-pod\\n**Container:** test-container\\n**Namespace:** default\\n**Reason:** OOMKILLED\\n**Events:**\\n```\\ntest\\n```\\n**Logs:**\\n```\\ntest\\ntestlogs\\n```\"}]}}"
+	expectMessage := "{\"msg_type\": \"interactive\",\"card\": {\"config\": {\"wide_screen_mode\": true},\"header\": {\"title\": {\"tag\": \"plain_text\",\"content\": \"\"},\"template\": \"blue\"},\"elements\": [{\"tag\":\"markdown\",\"content\":\"**Cluster:** dev\\n**Pod:** test-pod\\n**Container:** test-container\\n**Namespace:** default\\n**Reason:** OOMKILLED\\n**Events:**\\n```\\ntest\\n```\\n**Logs:**\\n```\\ntest\\ntestlogs\\n```\"}]}}"
 	assertions.Equal(expectMessage, c.buildRequestBodyFeiShu(&ev, ""))
 }
 
@@ -64,10 +65,10 @@ func TestSendMessage(t *testing.T) {
 
 	defer s.Close()
 
-	config := map[string]string{
+	configMap := map[string]string{
 		"webhook": s.URL,
 	}
-	c := NewFeiShu(config)
+	c := NewFeiShu(configMap, &config.App{ClusterName: "dev"})
 	assertions.NotNil(c)
 
 	assertions.Nil(c.SendMessage("test"))
@@ -83,10 +84,10 @@ func TestSendMessageError(t *testing.T) {
 
 	defer s.Close()
 
-	config := map[string]string{
+	configMap := map[string]string{
 		"webhook": s.URL,
 	}
-	c := NewFeiShu(config)
+	c := NewFeiShu(configMap, &config.App{ClusterName: "dev"})
 	assertions.NotNil(c)
 
 	assertions.NotNil(c.SendMessage("test"))
@@ -102,10 +103,10 @@ func TestSendEvent(t *testing.T) {
 
 	defer s.Close()
 
-	config := map[string]string{
+	configMap := map[string]string{
 		"webhook": s.URL,
 	}
-	c := NewFeiShu(config)
+	c := NewFeiShu(configMap, &config.App{ClusterName: "dev"})
 	assertions.NotNil(c)
 
 	ev := event.Event{
@@ -123,18 +124,18 @@ func TestSendEvent(t *testing.T) {
 func TestInvalidHttpRequest(t *testing.T) {
 	assertions := assert.New(t)
 
-	config := map[string]string{
+	configMap := map[string]string{
 		"webhook": "h ttp://localhost",
 	}
-	c := NewFeiShu(config)
+	c := NewFeiShu(configMap, &config.App{ClusterName: "dev"})
 	assertions.NotNil(c)
 
 	assertions.NotNil(c.SendMessage("test"))
 
-	config = map[string]string{
+	configMap = map[string]string{
 		"webhook": "http://localhost:132323",
 	}
-	c = NewFeiShu(config)
+	c = NewFeiShu(configMap, &config.App{ClusterName: "dev"})
 	assertions.NotNil(c)
 
 	assertions.NotNil(c.SendMessage("test"))

@@ -5,6 +5,7 @@ import (
 	"net/http/httptest"
 	"testing"
 
+	"github.com/abahmed/kwatch/config"
 	"github.com/abahmed/kwatch/event"
 	"github.com/stretchr/testify/assert"
 )
@@ -12,17 +13,17 @@ import (
 func TestMattermostEmptyConfig(t *testing.T) {
 	assert := assert.New(t)
 
-	c := NewMattermost(map[string]string{})
+	c := NewMattermost(map[string]string{}, &config.App{ClusterName: "dev"})
 	assert.Nil(c)
 }
 
 func TestMattermost(t *testing.T) {
 	assert := assert.New(t)
 
-	config := map[string]string{
+	configMap := map[string]string{
 		"webhook": "testtest",
 	}
-	c := NewMattermost(config)
+	c := NewMattermost(configMap, &config.App{ClusterName: "dev"})
 	assert.NotNil(c)
 
 	assert.Equal(c.Name(), "Mattermost")
@@ -38,10 +39,10 @@ func TestSendMessage(t *testing.T) {
 
 	defer s.Close()
 
-	config := map[string]string{
+	configMap := map[string]string{
 		"webhook": s.URL,
 	}
-	c := NewMattermost(config)
+	c := NewMattermost(configMap, &config.App{ClusterName: "dev"})
 	assert.NotNil(c)
 
 	assert.Nil(c.SendMessage("test"))
@@ -57,10 +58,10 @@ func TestSendMessageError(t *testing.T) {
 
 	defer s.Close()
 
-	config := map[string]string{
+	configMap := map[string]string{
 		"webhook": s.URL,
 	}
-	c := NewMattermost(config)
+	c := NewMattermost(configMap, &config.App{ClusterName: "dev"})
 	assert.NotNil(c)
 
 	assert.NotNil(c.SendMessage("test"))
@@ -76,10 +77,10 @@ func TestSendEvent(t *testing.T) {
 
 	defer s.Close()
 
-	config := map[string]string{
+	configMap := map[string]string{
 		"webhook": s.URL,
 	}
-	c := NewMattermost(config)
+	c := NewMattermost(configMap, &config.App{ClusterName: "dev"})
 	assert.NotNil(c)
 
 	ev := event.Event{
@@ -97,18 +98,18 @@ func TestSendEvent(t *testing.T) {
 func TestInvaildHttpRequest(t *testing.T) {
 	assert := assert.New(t)
 
-	config := map[string]string{
+	configMap := map[string]string{
 		"webhook": "h ttp://localhost",
 	}
-	c := NewMattermost(config)
+	c := NewMattermost(configMap, &config.App{ClusterName: "dev"})
 	assert.NotNil(c)
 
 	assert.NotNil(c.SendMessage("test"))
 
-	config = map[string]string{
+	configMap = map[string]string{
 		"webhook": "http://localhost:132323",
 	}
-	c = NewMattermost(config)
+	c = NewMattermost(configMap, &config.App{ClusterName: "dev"})
 	assert.NotNil(c)
 
 	assert.NotNil(c.SendMessage("test"))

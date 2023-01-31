@@ -5,6 +5,7 @@ import (
 	"net/http/httptest"
 	"testing"
 
+	"github.com/abahmed/kwatch/config"
 	"github.com/abahmed/kwatch/event"
 	"github.com/stretchr/testify/assert"
 )
@@ -12,17 +13,17 @@ import (
 func TestEmptyConfig(t *testing.T) {
 	assert := assert.New(t)
 
-	c := NewTeams(map[string]string{})
+	c := NewTeams(map[string]string{}, &config.App{ClusterName: "dev"})
 	assert.Nil(c)
 }
 
 func TestTeams(t *testing.T) {
 	assert := assert.New(t)
 
-	config := map[string]string{
+	configMap := map[string]string{
 		"webhook": "testtest",
 	}
-	c := NewTeams(config)
+	c := NewTeams(configMap, &config.App{ClusterName: "dev"})
 	assert.NotNil(c)
 
 	assert.Equal(c.Name(), "Microsoft Teams")
@@ -38,10 +39,10 @@ func TestSendMessage(t *testing.T) {
 
 	defer s.Close()
 
-	config := map[string]string{
+	configMap := map[string]string{
 		"webhook": s.URL,
 	}
-	c := NewTeams(config)
+	c := NewTeams(configMap, &config.App{ClusterName: "dev"})
 	assert.NotNil(c)
 
 	assert.Nil(c.SendMessage("test"))
@@ -57,10 +58,10 @@ func TestSendMessageError(t *testing.T) {
 
 	defer s.Close()
 
-	config := map[string]string{
+	configMap := map[string]string{
 		"webhook": s.URL,
 	}
-	c := NewTeams(config)
+	c := NewTeams(configMap, &config.App{ClusterName: "dev"})
 	assert.NotNil(c)
 
 	assert.NotNil(c.SendMessage("test"))
@@ -76,10 +77,10 @@ func TestSendEvent(t *testing.T) {
 
 	defer s.Close()
 
-	config := map[string]string{
+	configMap := map[string]string{
 		"webhook": s.URL,
 	}
-	c := NewTeams(config)
+	c := NewTeams(configMap, &config.App{ClusterName: "dev"})
 	assert.NotNil(c)
 
 	ev := event.Event{
@@ -97,18 +98,18 @@ func TestSendEvent(t *testing.T) {
 func TestInvaildHttpRequest(t *testing.T) {
 	assert := assert.New(t)
 
-	config := map[string]string{
+	configMap := map[string]string{
 		"webhook": "h ttp://localhost",
 	}
-	c := NewTeams(config)
+	c := NewTeams(configMap, &config.App{ClusterName: "dev"})
 	assert.NotNil(c)
 
 	assert.NotNil(c.SendMessage("test"))
 
-	config = map[string]string{
+	configMap = map[string]string{
 		"webhook": "http://localhost:132323",
 	}
-	c = NewTeams(config)
+	c = NewTeams(configMap, &config.App{ClusterName: "dev"})
 	assert.NotNil(c)
 
 	assert.NotNil(c.SendMessage("test"))

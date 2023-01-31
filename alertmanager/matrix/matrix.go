@@ -9,6 +9,7 @@ import (
 	"regexp"
 	"strings"
 
+	"github.com/abahmed/kwatch/config"
 	"github.com/abahmed/kwatch/constant"
 	"github.com/abahmed/kwatch/event"
 	"github.com/abahmed/kwatch/util"
@@ -21,10 +22,13 @@ type Matrix struct {
 	internalRoomID string
 	title          string
 	text           string
+
+	// reference for general app configuration
+	appCfg *config.App
 }
 
 // NewMatrix returns new Matrix instance
-func NewMatrix(config map[string]string) *Matrix {
+func NewMatrix(config map[string]string, appCfg *config.App) *Matrix {
 	homeServer, ok := config["homeServer"]
 	if !ok || len(homeServer) == 0 {
 		logrus.Warnf("initializing slack with empty homeServer")
@@ -49,6 +53,7 @@ func NewMatrix(config map[string]string) *Matrix {
 		internalRoomID: internalRoomID,
 		title:          config["title"],
 		text:           config["text"],
+		appCfg:         appCfg,
 	}
 }
 
@@ -89,6 +94,7 @@ func (m *Matrix) SendEvent(e *event.Event) error {
 
 	msg := fmt.Sprintf(
 		"%s<br/>"+
+			"<b>Cluster:</b> %s <br/>"+
 			"<b>Pod:</b> %s <br/>"+
 			"<b>Container:</b> %s<br/>"+
 			"<b>Namespace:</b> %s<br/>"+
@@ -96,6 +102,7 @@ func (m *Matrix) SendEvent(e *event.Event) error {
 			"<b>Events:</b><br/><blockquote>%s</blockquote>"+
 			"<b>Logs:</b> <br/><blockquote>%s</blockquote>",
 		text,
+		m.appCfg.ClusterName,
 		e.Name,
 		e.Container,
 		e.Namespace,

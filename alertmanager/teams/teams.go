@@ -9,6 +9,7 @@ import (
 	"net/http"
 	"strings"
 
+	"github.com/abahmed/kwatch/config"
 	"github.com/abahmed/kwatch/constant"
 	"github.com/abahmed/kwatch/event"
 	"github.com/sirupsen/logrus"
@@ -22,6 +23,9 @@ type Teams struct {
 	webhook string
 	title   string
 	text    string
+
+	// reference for general app configuration
+	appCfg *config.App
 }
 
 type teamsWebhookPayload struct {
@@ -30,7 +34,7 @@ type teamsWebhookPayload struct {
 }
 
 // NewTeams returns new team instance
-func NewTeams(config map[string]string) *Teams {
+func NewTeams(config map[string]string, appCfg *config.App) *Teams {
 	webhook, ok := config["webhook"]
 
 	if !ok || len(webhook) == 0 {
@@ -44,6 +48,7 @@ func NewTeams(config map[string]string) *Teams {
 		webhook: webhook,
 		title:   config["title"],
 		text:    config["text"],
+		appCfg:  appCfg,
 	}
 }
 
@@ -114,6 +119,7 @@ func (t *Teams) buildRequestBodyTeams(e *event.Event) string {
 
 	msg := fmt.Sprintf(
 		"%s\n"+
+			"**Cluster:** %s\n"+
 			"**Pod:** %s\n"+
 			"**Container:** %s\n"+
 			"**Namespace:** %s\n"+
@@ -121,6 +127,7 @@ func (t *Teams) buildRequestBodyTeams(e *event.Event) string {
 			"**Events:**\n```\n%s\n```\n"+
 			"**Logs:**\n```\n%s\n```",
 		text,
+		t.appCfg.ClusterName,
 		e.Name,
 		e.Container,
 		e.Namespace,

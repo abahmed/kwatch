@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"strings"
 
+	"github.com/abahmed/kwatch/config"
 	"github.com/abahmed/kwatch/constant"
 	"github.com/abahmed/kwatch/event"
 	"github.com/sirupsen/logrus"
@@ -16,6 +17,9 @@ import (
 type RocketChat struct {
 	webhook string
 	text    string
+
+	// reference for general app configuration
+	appCfg *config.App
 }
 
 type rocketChatWebhookPayload struct {
@@ -23,7 +27,7 @@ type rocketChatWebhookPayload struct {
 }
 
 // NewRocketChat returns new rocket chat instance
-func NewRocketChat(config map[string]string) *RocketChat {
+func NewRocketChat(config map[string]string, appCfg *config.App) *RocketChat {
 	webhook, ok := config["webhook"]
 	if !ok || len(webhook) == 0 {
 		logrus.Warnf("initializing Rocket Chat with empty webhook url")
@@ -35,6 +39,7 @@ func NewRocketChat(config map[string]string) *RocketChat {
 	return &RocketChat{
 		webhook: webhook,
 		text:    config["text"],
+		appCfg:  appCfg,
 	}
 }
 
@@ -105,6 +110,7 @@ func (r *RocketChat) buildRequestBodyRocketChat(
 	if len(customMsg) <= 0 {
 		text = fmt.Sprintf(
 			"%s\n"+
+				"**Cluster:** %s\n"+
 				"**Pod:** %s\n"+
 				"**Container:** %s\n"+
 				"**Namespace:** %s\n"+
@@ -112,6 +118,7 @@ func (r *RocketChat) buildRequestBodyRocketChat(
 				"**Events:**\n```\n%s\n```\n"+
 				"**Logs:**\n```\n%s\n```",
 			text,
+			r.appCfg.ClusterName,
 			e.Name,
 			e.Container,
 			e.Namespace,

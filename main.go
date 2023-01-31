@@ -21,7 +21,7 @@ func main() {
 	}
 
 	alertManager := alertmanager.AlertManager{}
-	alertManager.Init(config.Alert)
+	alertManager.Init(config.Alert, &config.App)
 
 	// send notification to providers
 	alertManager.Notify(fmt.Sprintf(constant.WelcomeMsg, version.Short()))

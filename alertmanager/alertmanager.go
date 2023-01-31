@@ -1,9 +1,11 @@
 package alertmanager
 
 import (
-	"github.com/abahmed/kwatch/alertmanager/feishu"
 	"reflect"
 	"strings"
+
+	"github.com/abahmed/kwatch/alertmanager/feishu"
+	"github.com/abahmed/kwatch/config"
 
 	"github.com/abahmed/kwatch/alertmanager/dingtalk"
 	"github.com/abahmed/kwatch/alertmanager/discord"
@@ -32,36 +34,37 @@ type Provider interface {
 }
 
 // Init initializes AlertManager with provided config
-func (a *AlertManager) Init(config map[string]map[string]string) {
+func (a *AlertManager) Init(
+	alertCfg map[string]map[string]string,
+	appCfg *config.App) {
 	a.providers = make([]Provider, 0)
-
-	for k, v := range config {
+	for k, v := range alertCfg {
 		lowerCaseKey := strings.ToLower(k)
 		var pvdr Provider = nil
 		if lowerCaseKey == "slack" {
-			pvdr = slack.NewSlack(v)
+			pvdr = slack.NewSlack(v, appCfg)
 		} else if lowerCaseKey == "pagerduty" {
-			pvdr = pagerduty.NewPagerDuty(v)
+			pvdr = pagerduty.NewPagerDuty(v, appCfg)
 		} else if lowerCaseKey == "discord" {
-			pvdr = discord.NewDiscord(v)
+			pvdr = discord.NewDiscord(v, appCfg)
 		} else if lowerCaseKey == "telegram" {
-			pvdr = telegram.NewTelegram(v)
+			pvdr = telegram.NewTelegram(v, appCfg)
 		} else if lowerCaseKey == "teams" {
-			pvdr = teams.NewTeams(v)
+			pvdr = teams.NewTeams(v, appCfg)
 		} else if lowerCaseKey == "email" {
-			pvdr = email.NewEmail(v)
+			pvdr = email.NewEmail(v, appCfg)
 		} else if lowerCaseKey == "rocketchat" {
-			pvdr = rocketchat.NewRocketChat(v)
+			pvdr = rocketchat.NewRocketChat(v, appCfg)
 		} else if lowerCaseKey == "mattermost" {
-			pvdr = mattermost.NewMattermost(v)
+			pvdr = mattermost.NewMattermost(v, appCfg)
 		} else if lowerCaseKey == "opsgenie" {
-			pvdr = opsgenie.NewOpsgenie(v)
+			pvdr = opsgenie.NewOpsgenie(v, appCfg)
 		} else if lowerCaseKey == "matrix" {
-			pvdr = matrix.NewMatrix(v)
+			pvdr = matrix.NewMatrix(v, appCfg)
 		} else if lowerCaseKey == "dingtalk" {
-			pvdr = dingtalk.NewDingTalk(v)
+			pvdr = dingtalk.NewDingTalk(v, appCfg)
 		} else if lowerCaseKey == "feishu" {
-			pvdr = feishu.NewFeiShu(v)
+			pvdr = feishu.NewFeiShu(v, appCfg)
 		}
 
 		if !reflect.ValueOf(pvdr).IsNil() {

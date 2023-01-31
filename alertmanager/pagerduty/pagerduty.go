@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"strings"
 
+	"github.com/abahmed/kwatch/config"
 	"github.com/abahmed/kwatch/event"
 	"github.com/abahmed/kwatch/util"
 	"github.com/sirupsen/logrus"
@@ -19,10 +20,13 @@ const (
 type Pagerduty struct {
 	integrationKey string
 	url            string
+
+	// reference for general app configuration
+	appCfg *config.App
 }
 
 // NewPagerDuty returns new PagerDuty instance
-func NewPagerDuty(config map[string]string) *Pagerduty {
+func NewPagerDuty(config map[string]string, appCfg *config.App) *Pagerduty {
 	integrationKey, ok := config["integrationKey"]
 	if !ok || len(integrationKey) == 0 {
 		logrus.Warnf("initializing pagerduty with an empty integration key")
@@ -34,6 +38,7 @@ func NewPagerDuty(config map[string]string) *Pagerduty {
 	return &Pagerduty{
 		integrationKey: integrationKey,
 		url:            pagerdutyAPIURL,
+		appCfg:         appCfg,
 	}
 }
 
@@ -46,7 +51,7 @@ func (s *Pagerduty) Name() string {
 func (s *Pagerduty) SendEvent(ev *event.Event) error {
 	client := &http.Client{}
 
-	reqBody := buildRequestBodyPagerDuty(ev, s.integrationKey)
+	reqBody := s.buildRequestBodyPagerDuty(ev, s.integrationKey)
 	buffer := bytes.NewBuffer([]byte(reqBody))
 
 	request, err := http.NewRequest(http.MethodPost, s.url, buffer)
@@ -76,7 +81,9 @@ func (s *Pagerduty) SendMessage(msg string) error {
 	return nil
 }
 
-func buildRequestBodyPagerDuty(ev *event.Event, key string) string {
+func (s *Pagerduty) buildRequestBodyPagerDuty(
+	ev *event.Event,
+	key string) string {
 	eventsText := "No events captured"
 	logsText := "No logs captured"
 
@@ -100,6 +107,7 @@ func buildRequestBodyPagerDuty(ev *event.Event, key string) string {
 		  "source": "%s",
 		  "severity": "critical",
 		  "custom_details": {
+			"Cluster": "%s",
 			"Name": "%s",
 			"Container": "%s",
 			"Namespace": "%s",
@@ -112,6 +120,7 @@ func buildRequestBodyPagerDuty(ev *event.Event, key string) string {
 		key,
 		fmt.Sprintf(defaultEventTitle, ev.Container),
 		ev.Container,
+		s.appCfg.ClusterName,
 		ev.Name,
 		ev.Container,
 		ev.Namespace,

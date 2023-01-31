@@ -5,6 +5,7 @@ import (
 	"net/http/httptest"
 	"testing"
 
+	"github.com/abahmed/kwatch/config"
 	"github.com/abahmed/kwatch/event"
 	"github.com/stretchr/testify/assert"
 )
@@ -12,17 +13,17 @@ import (
 func TestPagerdutyEmptyConfig(t *testing.T) {
 	assert := assert.New(t)
 
-	c := NewPagerDuty(map[string]string{})
+	c := NewPagerDuty(map[string]string{}, &config.App{ClusterName: "dev"})
 	assert.Nil(c)
 }
 
 func TestPagerduty(t *testing.T) {
 	assert := assert.New(t)
 
-	config := map[string]string{
+	configMap := map[string]string{
 		"integrationKey": "testtest",
 	}
-	c := NewPagerDuty(config)
+	c := NewPagerDuty(configMap, &config.App{ClusterName: "dev"})
 	assert.NotNil(c)
 
 	assert.Equal(c.Name(), "PagerDuty")
@@ -31,10 +32,10 @@ func TestPagerduty(t *testing.T) {
 func TestSendMessage(t *testing.T) {
 	assert := assert.New(t)
 
-	config := map[string]string{
+	configMap := map[string]string{
 		"integrationKey": "test",
 	}
-	c := NewPagerDuty(config)
+	c := NewPagerDuty(configMap, &config.App{ClusterName: "dev"})
 	assert.NotNil(c)
 
 	assert.Nil(c.SendMessage("test"))
@@ -50,10 +51,10 @@ func TestSendEvent(t *testing.T) {
 
 	defer s.Close()
 
-	config := map[string]string{
+	configMap := map[string]string{
 		"integrationKey": "test",
 	}
-	c := NewPagerDuty(config)
+	c := NewPagerDuty(configMap, &config.App{ClusterName: "dev"})
 	c.url = s.URL
 	assert.NotNil(c)
 
@@ -79,10 +80,10 @@ func TestSendEventError(t *testing.T) {
 
 	defer s.Close()
 
-	config := map[string]string{
+	configMap := map[string]string{
 		"integrationKey": "test",
 	}
-	c := NewPagerDuty(config)
+	c := NewPagerDuty(configMap, &config.App{ClusterName: "dev"})
 	assert.NotNil(c)
 	c.url = s.URL
 
@@ -101,10 +102,10 @@ func TestSendEventError(t *testing.T) {
 func TestInvaildHttpRequest(t *testing.T) {
 	assert := assert.New(t)
 
-	config := map[string]string{
+	configMap := map[string]string{
 		"integrationKey": "test",
 	}
-	c := NewPagerDuty(config)
+	c := NewPagerDuty(configMap, &config.App{ClusterName: "dev"})
 	assert.NotNil(c)
 	c.url = "h ttp://localhost"
 
@@ -120,7 +121,7 @@ func TestInvaildHttpRequest(t *testing.T) {
 
 	assert.NotNil(assert.NotNil(c.SendEvent(&ev)))
 
-	c = NewPagerDuty(config)
+	c = NewPagerDuty(configMap, &config.App{ClusterName: "dev"})
 	assert.NotNil(c)
 	c.url = "http://localhost:132323"
 

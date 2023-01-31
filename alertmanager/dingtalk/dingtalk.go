@@ -13,6 +13,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/abahmed/kwatch/config"
 	"github.com/abahmed/kwatch/constant"
 	"github.com/abahmed/kwatch/event"
 	"github.com/sirupsen/logrus"
@@ -32,10 +33,13 @@ type DingTalk struct {
 	secret      string
 	url         string
 	title       string
+
+	// reference for general app configuration
+	appCfg *config.App
 }
 
 // NewDingTalk returns new DingTalk instance
-func NewDingTalk(config map[string]string) *DingTalk {
+func NewDingTalk(config map[string]string, appCfg *config.App) *DingTalk {
 	accessToken, ok := config["accessToken"]
 	if !ok || len(accessToken) == 0 {
 		logrus.Warnf("initializing dingtalk with empty access token")
@@ -49,6 +53,7 @@ func NewDingTalk(config map[string]string) *DingTalk {
 		url:         dingTalkAPIURL,
 		title:       config["title"],
 		secret:      config["secret"],
+		appCfg:      appCfg,
 	}
 }
 
@@ -80,12 +85,14 @@ func (d *DingTalk) SendEvent(e *event.Event) error {
 	}
 
 	txt := fmt.Sprintf(
-		"Name: *%s* \n"+
+		"Cluster: *%s* \n"+
+			"Name: *%s* \n"+
 			"Container: *%s* \n"+
 			"Namespace: *%s* \n"+
 			"Reason: *%s* \n"+
 			"Logs: *%s* \n "+
 			"Events: *%s* ",
+		d.appCfg.ClusterName,
 		e.Name,
 		e.Container,
 		e.Namespace,
