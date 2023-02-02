@@ -30,7 +30,7 @@ spec:
   {{- end }}
   selector:
     matchLabels:
-      {{- include "kwatch.commonLabels" . | nindent 6 }}
+      {{- include "kwatch.matchLabels" . | nindent 6 }}
       {{- if .Values.commonLabels }}
       {{- with .Values.commonLabels }}
         {{- toYaml . | nindent 6 }}
