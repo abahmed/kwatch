@@ -25,7 +25,7 @@ data:
       maxRecentLogLines: {{ default 0 $conf.maxRecentLogLines }}
       ignoreFailedGracefulShutdown: {{ default false $conf.ignoreFailedGracefulShutdown }}
       disableUpdateCheck: {{ default false $conf.disableUpdateCheck }}
-      {{- if or $conftpl.slack.webhook $conftpl.pagerduty.integrationKey $conftpl.discord.webhook $conftpl.teams.webhook $conftpl.rocketchat.webhook $conftpl.mattermost.webhook $conftpl.opsgenie.apiKey $conftpl.namespaces }}
+      {{- if or $conftpl.slack.webhook $conftpl.telegram $conftpl.pagerduty.integrationKey $conftpl.discord.webhook $conftpl.teams.webhook $conftpl.rocketchat.webhook $conftpl.mattermost.webhook $conftpl.opsgenie.apiKey $conftpl.namespaces }}
       alert:
       {{- if $conftpl.slack.webhook }}
         slack:
