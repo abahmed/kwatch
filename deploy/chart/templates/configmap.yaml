@@ -28,7 +28,7 @@ data:
       {{- with $conftpl.namespaces }}
       namespaces: {{ toYaml . | indent 8 }}
       {{- end }}
-      {{- if or $conftpl.slack.webhook $conftpl.pagerduty.integrationKey $conftpl.discord.webhook $conftpl.teams.webhook $conftpl.rocketchat.webhook $conftpl.mattermost.webhook $conftpl.opsgenie.apiKey $conftpl.namespaces }}
+      {{- if or $conftpl.slack.webhook $conftpl.telegram.token $conftpl.pagerduty.integrationKey $conftpl.discord.webhook $conftpl.teams.webhook $conftpl.rocketchat.webhook $conftpl.mattermost.webhook $conftpl.opsgenie.apiKey $conftpl.namespaces }}
       alert:
       {{- if $conftpl.slack.webhook }}
         slack:
