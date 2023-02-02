@@ -1,9 +1,11 @@
 package client
 
 import (
+	"net/http"
 	"os"
 	"path/filepath"
 
+	"github.com/abahmed/kwatch/config"
 	"github.com/sirupsen/logrus"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/rest"
@@ -13,9 +15,9 @@ import (
 
 // Create returns kubernetes client after initializing it with in-cluster, or
 // out of cluster config
-func Create() kubernetes.Interface {
+func Create(appConfig *config.App) kubernetes.Interface {
 	// try to use in cluster config
-	config, err := rest.InClusterConfig()
+	clientConfig, err := rest.InClusterConfig()
 	if err != nil {
 		logrus.Warnf("cannot get kubernetes in cluster config: %v", err)
 
@@ -26,14 +28,21 @@ func Create() kubernetes.Interface {
 			kubeconfigPath = filepath.Join(home, ".kube", "config")
 		}
 
-		config, err = clientcmd.BuildConfigFromFlags("", kubeconfigPath)
+		clientConfig, err = clientcmd.BuildConfigFromFlags("", kubeconfigPath)
 		if err != nil {
-			logrus.Fatalf("cannot build kubernetes out of cluster config: %v", err)
+			logrus.Fatalf(
+				"cannot build kubernetes out of cluster config: %v",
+				err)
 		}
 	}
 
+	// avoid using default app proxy if it's set
+	if len(appConfig.ProxyURL) > 0 && clientConfig.Proxy == nil {
+		clientConfig.Proxy = http.ProxyURL(nil)
+	}
+
 	// creates the clientset
-	clientset, err := kubernetes.NewForConfig(config)
+	clientset, err := kubernetes.NewForConfig(clientConfig)
 	if err != nil {
 		logrus.Fatalf("cannot create kubernetes client: %v", err)
 	}

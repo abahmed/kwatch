@@ -1,25 +1,26 @@
-package provider
+package mattermost
 
 import (
 	"bytes"
 	"encoding/json"
-	"errors"
 	"fmt"
-	"io/ioutil"
+	"io"
+
 	"net/http"
 
+	"github.com/abahmed/kwatch/config"
+	"github.com/abahmed/kwatch/constant"
 	"github.com/abahmed/kwatch/event"
 	"github.com/sirupsen/logrus"
-	"github.com/spf13/viper"
 )
 
-const (
-	defaultMattermostLogs   = "No logs captured"
-	defaultMattermostEvents = "No events captured"
-)
-
-type mattermost struct {
+type Mattermost struct {
 	webhook string
+	title   string
+	text    string
+
+	// reference for general app configuration
+	appCfg *config.App
 }
 
 type mmField struct {
@@ -27,6 +28,7 @@ type mmField struct {
 	Title string      `json:"title"`
 	Value interface{} `json:"value"`
 }
+
 type mmAttachment struct {
 	Title  string    `json:"title"`
 	Text   string    `json:"text"`
@@ -39,93 +41,70 @@ type mmPayload struct {
 }
 
 // NewMattermost returns new mattermost instance
-func NewMattermost(url string) Provider {
-	if len(url) == 0 {
+func NewMattermost(config map[string]string, appCfg *config.App) *Mattermost {
+	webhook, ok := config["webhook"]
+	if !ok || len(webhook) == 0 {
 		logrus.Warnf("initializing mattermost with empty webhook url")
-	} else {
-		logrus.Infof("initializing mattermost with webhook url: %s", url)
+		return nil
 	}
 
-	return &mattermost{
-		webhook: url,
+	logrus.Infof("initializing mattermost with webhook url: %s", webhook)
+
+	return &Mattermost{
+		webhook: webhook,
+		title:   config["title"],
+		text:    config["text"],
+		appCfg:  appCfg,
 	}
 }
 
 // Name returns name of the provider
-func (m *mattermost) Name() string {
+func (m *Mattermost) Name() string {
 	return "Mattermost"
 }
 
 // SendMessage sends text message to the provider
-func (m *mattermost) SendMessage(msg string) error {
+func (m *Mattermost) SendMessage(msg string) error {
 	logrus.Debugf("sending to mattermost msg: %s", msg)
 
-	// validate webhook url
-	_, err := m.validateWebhook()
-	if err != nil {
-		return err
-	}
-
-	reqBody, err := m.buildMessage(nil, &msg)
-	if err != nil {
-		return err
-	}
-	return m.sendAPI(reqBody)
+	return m.sendAPI(m.buildMessage(nil, &msg))
 }
 
 // SendEvent sends event to the provider
-func (m *mattermost) SendEvent(e *event.Event) error {
+func (m *Mattermost) SendEvent(e *event.Event) error {
 	logrus.Debugf("sending to mattermost event: %v", e)
 
-	// validate webhook url
-	_, err := m.validateWebhook()
-	if err != nil {
-		return err
-	}
-	reqBody, err := m.buildMessage(e, nil)
-	if err != nil {
-		return err
-	}
-	return m.sendAPI(reqBody)
+	return m.sendAPI(m.buildMessage(e, nil))
 }
 
-func (m *mattermost) validateWebhook() (bool, error) {
-	if len(m.webhook) == 0 {
-		return false, errors.New("webhook url is empty")
-	}
-	return true, nil
-}
-
-func (m *mattermost) sendAPI(content []byte) error {
+func (m *Mattermost) sendAPI(content []byte) error {
 	client := &http.Client{}
 	buffer := bytes.NewBuffer(content)
 	request, err := http.NewRequest(http.MethodPost, m.webhook, buffer)
-
 	if err != nil {
 		return err
 	}
+
 	request.Header.Set("Content-Type", "application/json")
+
 	response, err := client.Do(request)
 	if err != nil {
 		return err
 	}
+	defer response.Body.Close()
 
 	if response.StatusCode != 200 {
-		body, _ := ioutil.ReadAll(response.Body)
+		body, _ := io.ReadAll(response.Body)
 		return fmt.Errorf(
 			"call to mattermost alert returned status code %d: %s",
 			response.StatusCode,
 			string(body))
 	}
 
-	if err != nil {
-		return err
-	}
-
-	return err
+	return nil
 }
 
-func (m *mattermost) buildMessage(e *event.Event, msg *string) ([]byte, error) {
+func (m *Mattermost) buildMessage(e *event.Event, msg *string) []byte {
 	payload := mmPayload{}
 
 	if msg != nil && len(*msg) > 0 {
@@ -133,26 +112,26 @@ func (m *mattermost) buildMessage(e *event.Event, msg *string) ([]byte, error) {
 	}
 
 	if e != nil {
-		logs := defaultMattermostLogs
+		logs := constant.DefaultLogs
 		if len(e.Logs) > 0 {
 			logs = (e.Logs)
 		}
 
-		events := defaultMattermostEvents
+		events := constant.DefaultEvents
 		if len(e.Events) > 0 {
 			events = (e.Events)
 		}
 
 		// use custom title if it's provided, otherwise use default
-		title := viper.GetString("alert.mattermost.title")
+		title := m.title
 		if len(title) == 0 {
-			title = defaultTitle
+			title = constant.DefaultTitle
 		}
 
 		// use custom text if it's provided, otherwise use default
-		text := viper.GetString("alert.mattermost.text")
+		text := m.text
 		if len(text) == 0 {
-			text = defaultText
+			text = constant.DefaultText
 		}
 
 		payload.Attachments = []mmAttachment{
@@ -160,6 +139,11 @@ func (m *mattermost) buildMessage(e *event.Event, msg *string) ([]byte, error) {
 				Title: title,
 				Text:  text,
 				Fields: []mmField{
+					{
+						Title: "Cluster",
+						Value: m.appCfg.ClusterName,
+						Short: true,
+					},
 					{
 						Title: "Name",
 						Value: e.Name,
@@ -195,5 +179,6 @@ func (m *mattermost) buildMessage(e *event.Event, msg *string) ([]byte, error) {
 		}
 	}
 
-	return json.Marshal(payload)
+	str, _ := json.Marshal(payload)
+	return str
 }

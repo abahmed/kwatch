@@ -6,6 +6,9 @@ privateRegistries: []
 
 
 kwatch:
+  ## if true kwatch will be deployed with permissions only
+  ## for the namepsace it is deployed to.
+  namespaced: false
   strategy:
     type: Recreate
     # type: RollingUpdate
@@ -30,6 +33,7 @@ kwatch:
     capabilities:
       drop:
       - ALL
+  envFrom: []
   config:
     ## if You want to provide your own config as a secret or configMap
     ## set create to false and set appropriate values

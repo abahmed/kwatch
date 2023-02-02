@@ -12,6 +12,7 @@ kwatch
 
 # Test binary, built with `go test -c`
 *.test
+coverage.txt
 
 # Output of the go coverage tool, specifically when used with LiteIDE
 *.out
@@ -19,7 +20,13 @@ kwatch
 # Dependency directories (remove the comment below to include it)
 # vendor/
 
+# Config files
+config.yaml
+
 ### Go Patch ###
 /vendor/
 /Godeps/
 *.DS_Store
+
+# debug
+__debug_bin

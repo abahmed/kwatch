@@ -34,7 +34,7 @@
 
 You need to get config template to add your configs
 ```shell
-curl  -L https://raw.githubusercontent.com/abahmed/kwatch/v0.5.0/deploy/config.yaml -o config.yaml
+curl  -L https://raw.githubusercontent.com/abahmed/kwatch/v0.7.0/deploy/config.yaml -o config.yaml
 ```
 
 Then edit `config.yaml` file and apply your configuration
@@ -46,21 +46,23 @@ kubectl apply -f config.yaml
 To deploy **kwatch**, execute following command:
 
 ```shell
-kubectl apply -f https://raw.githubusercontent.com/abahmed/kwatch/v0.5.0/deploy/deploy.yaml
+kubectl apply -f https://raw.githubusercontent.com/abahmed/kwatch/v0.7.0/deploy/deploy.yaml
 ```
 
 ### Configuration
 
 #### General
 
-| Parameter                            | Description                                                                                          |
-|:-------------------------------------|:-----------------------------------------------------------------------------------------------------|
-| `maxRecentLogLines`                  | Optional Max tail log lines in messages, if it's not provided it will get all log lines              |
-| `namespaces`                         | Optional comma separated list of namespaces that you want to watch or forbid, if it's not provided it will watch all namespaces. If you want to forbid a namespace, configure it with `!<namespace name>`. You can either set forbidden namespaces or allowed, not both.|
+| Parameter           | Description                                                                                                                                                                                                                                                              |
+|:--------------------|:-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
+| `maxRecentLogLines` | Optional Max tail log lines in messages, if it's not provided it will get all log lines                                                                                                                                                                                  |
+| `namespaces`        | Optional comma separated list of namespaces that you want to watch or forbid, if it's not provided it will watch all namespaces. If you want to forbid a namespace, configure it with `!<namespace name>`. You can either set forbidden namespaces or allowed, not both. |
+| `reasons`           | Optional comma separated list of reasons that you want to watch or forbid, if it's not provided it will watch all reasons. If you want to forbid a reason, configure it with `!<reason>`. You can either set forbidden reasons or allowed, not both.                     |
 | `ignoreFailedGracefulShutdown`       | If set to true, containers which are forcefully killed during shutdown (as their graceful shutdown failed) are not reported as error     |
 | `disableUpdateCheck`       | If set to true, does not check for and notify about kwatch updates    |
+| `ignoreContainerNames`       | Optional comma separated list of container names to ignore    |
 
-#### High Level Architecture 
+#### High Level Architecture
 
 <p>
 	<img src="./assets/highlevelarchitecture.png" width="70%"/>
@@ -93,6 +95,7 @@ If you want to enable Slack, provide the webhook with optional text and title
 | Parameter                        | Description                                 |
 |:---------------------------------|:------------------------------------------- |
 | `alert.slack.webhook`            | Slack webhook URL                           |
+| `alert.slack.channel`            | Used by legacy webhooks to send messages to specific channel instead of default one |
 | `alert.slack.title`              | Customized title in slack message           |
 | `alert.slack.text`               | Customized text in slack message            |
 
@@ -109,6 +112,23 @@ If you want to enable Discord, provide the webhook with optional text and title
 | `alert.discord.webhook`          | Discord webhook URL                         |
 | `alert.discord.title`            | Customized title in discord message         |
 | `alert.discord.text`             | Customized text in discord message          |
+
+#### Email
+
+<p>
+    <img src="./assets/email.png" width="50%"/>
+</p>
+
+If you want to enable Email, provide the from and to emails with host and the port
+
+| Parameter                        | Description                                 |
+|:---------------------------------|:------------------------------------------- |
+| `alert.email.from`               | From email                                  |
+| `alert.email.password`           | From email Password                         |
+| `alert.email.host`               | provide the host                            |
+| `alert.email.port`               | provide the port                            |
+| `alert.email.to`                 | the receiver email                          |
+
 
 #### PagerDuty
 
@@ -192,12 +212,54 @@ If you want to enable Opsgenie, provide the API key with optional text and title
 | `alert.opsgenie.title`                | Customized title in Opsgenie message    |
 | `alert.opsgenie.text`                 | Customized text in Opsgenie message     |
 
+#### Matrix
+
+<p>
+	<img src="./assets/matrix.png" width="45%"/>
+</p>
+
+If you want to enable Matrix, provide homeServer, accessToken and internalRoomID
+with optional text and title
+
+
+| Parameter                           | Description                            |
+|:------------------------------------|:-------------------------------------- |
+| `alert.matrix.homeServer`           | HomeServer URL                         |
+| `alert.matrix.accessToken`          | Account access token                   |
+| `alert.matrix.internalRoomID`       | Internal room ID                       |
+| `alert.matrix.title`                | Customized title in message            |
+| `alert.matrix.text`                 | Customized text in message             |
+
+#### DingTalk
+
+If you want to enable DingTalk, provide accessToken with optional secret and
+title
+
+| Parameter                           | Description                            |
+|:------------------------------------|:-------------------------------------- |
+| `alert.dingtalk.accessToken`        | Chat access token                      |
+| `alert.dingtalk.secret`             | Optional secret used to sign requests  |
+| `alert.dingtalk.title`              | Customized title in message            |
+
+#### FeiShu
+
+<p>
+	<img src="./assets/feishu.png" width="45%"/>
+</p>
+If you want to enable FeiShu, provide accessToken with optional secret and
+title
+
+| Parameter                | Description                 |
+|:-------------------------|:----------------------------|
+| `alert.feishu.webhook`   | FeiShu bot webhook URL      |
+| `alert.feishu.title`     | Customized title in message |
+
 
 ### Cleanup
 
 ```shell
-kubectl delete -f https://raw.githubusercontent.com/abahmed/kwatch/v0.5.0/deploy/config.yaml
-kubectl delete -f https://raw.githubusercontent.com/abahmed/kwatch/v0.5.0/deploy/deploy.yaml
+kubectl delete -f https://raw.githubusercontent.com/abahmed/kwatch/v0.7.0/deploy/config.yaml
+kubectl delete -f https://raw.githubusercontent.com/abahmed/kwatch/v0.7.0/deploy/deploy.yaml
 ```
 
 ## 👍 Contribute & Support

@@ -1,14 +1,23 @@
 package util
 
 import (
+	"errors"
+	"math/rand"
 	"testing"
 
-	"github.com/abahmed/kwatch/event"
-	"github.com/spf13/viper"
-	testclient "k8s.io/client-go/kubernetes/fake"
+	"github.com/stretchr/testify/assert"
+	v1 "k8s.io/api/core/v1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/runtime"
+
+	"k8s.io/client-go/kubernetes/fake"
+
+	k8stesting "k8s.io/client-go/testing"
 )
 
 func TestIsStrInSlice(t *testing.T) {
+	assert := assert.New(t)
+
 	testCases := []struct {
 		str    string
 		list   []string
@@ -33,188 +42,169 @@ func TestIsStrInSlice(t *testing.T) {
 
 	for _, tc := range testCases {
 		out := IsStrInSlice(tc.str, tc.list)
-		if out != tc.output {
-			t.Fatalf(
-				"search %s in %v: returned %t expected %t",
-				tc.str,
-				tc.list,
-				out,
-				tc.output)
-		}
-	}
-}
-
-func TestGetPodEventsStr(t *testing.T) {
-	client := testclient.NewSimpleClientset()
-
-	podName := "test-pod"
-	events := GetPodEventsStr(client, podName, "default")
-	if len(events) > 0 {
-		t.Fatalf(
-			"get events for %s: returned %s expected %s",
-			podName,
-			events,
-			"")
+		assert.Equal(out, tc.output)
 	}
 }
 
 func TestGetPodContainerLogs(t *testing.T) {
-	client := testclient.NewSimpleClientset()
-	viper.SetDefault("maxRecentLogLines", 20)
-	podName := "test"
-	containerName := "test"
-	logs := GetPodContainerLogs(client, podName, containerName, "default", false)
-	if logs != "fake logs" {
-		t.Fatalf(
-			"get logs for %s in %s: returned %s expected %s",
-			containerName,
-			podName,
-			logs,
-			"")
-	}
+	assert := assert.New(t)
+
+	client := fake.NewSimpleClientset()
+	logs := GetPodContainerLogs(
+		client,
+		"test",
+		"test",
+		"default",
+		false,
+		20)
+
+	assert.Equal(logs, "fake logs")
 }
 
-func TestIsListAllBool(t *testing.T) {
+func TestJsonEscape(t *testing.T) {
+	assert := assert.New(t)
+
 	testCases := []struct {
-		boolean bool
-		list    []bool
-		output  bool
+		Input  string
+		Output string
 	}{
 		{
-			boolean: true,
-			list:    []bool{true, true},
-			output:  true,
+			Input:  "test",
+			Output: "test",
 		},
 		{
-			boolean: false,
-			list:    []bool{false, false},
-			output:  true,
+			Input:  "te\bst",
+			Output: "te\\u0008st",
 		},
 		{
-			boolean: true,
-			list:    []bool{false, true},
-			output:  false,
+			Input:  "\b",
+			Output: "\\u0008",
 		},
 		{
-			boolean: true,
-			list:    []bool{},
-			output:  true,
+			Input:  "\"",
+			Output: "\\\"",
 		},
 	}
 
 	for _, tc := range testCases {
-		out := IsListAllBool(tc.boolean, tc.list)
-		if out != tc.output {
-			t.Fatalf(
-				"IsListAllBool %t in %v: returned %t expected %t",
-				tc.boolean,
-				tc.list,
-				out,
-				tc.output)
-		}
+		assert.Equal(JsonEscape(tc.Input), tc.Output)
 	}
 }
 
-func TestGetProviders(t *testing.T) {
-	alertMap := map[string]interface{}{
-		"slack": map[string]interface{}{
-			"webhook": "test",
-		},
-		"pagerduty": map[string]interface{}{
-			"integrationkey": "test",
-		},
-		"discord": map[string]interface{}{
-			"webhook": "test",
-		},
-		"telegram": map[string]interface{}{
-			"token":  "test",
-			"chatid": "test",
-		},
-		"teams": map[string]interface{}{
-			"webhook": "test",
-		},
-		"mattermost": map[string]interface{}{
-			"webhook": "test",
-		},
-		"opsgenie": map[string]interface{}{
-			"apiKey": "test",
-		},
-	}
-	viper.SetDefault("alert", alertMap)
+func TestGetPodEventsStr(t *testing.T) {
+	assert := assert.New(t)
 
-	providers := GetProviders()
-	if len(providers) != len(alertMap) {
-		t.Fatalf(
-			"get providers returned %d expected %d",
-			len(providers),
-			len(alertMap))
+	cli := fake.NewSimpleClientset()
+	event := v1.Event{
+		Reason:        "test reason",
+		Message:       "test message",
+		LastTimestamp: metav1.Now(),
 	}
+	cli.PrependReactor(
+		"list",
+		"events",
+		func(action k8stesting.Action) (bool, runtime.Object, error) {
+			return true, &v1.EventList{
+				Items: []v1.Event{event},
+			}, nil
+		})
+
+	result := GetPodEventsStr(cli, "dummy-app-579f7cd745-t6fdg", "test")
+	expectedOutput :=
+		"[" + event.LastTimestamp.String() + "] " + event.Reason + " " +
+			event.Message
+	assert.Equal(result, expectedOutput)
 }
 
-func TestSendProvidersEvent(t *testing.T) {
-	alertMap := map[string]interface{}{
-		"slack": map[string]interface{}{
-			"webhook": "test",
-		},
-		"pagerduty": map[string]interface{}{
-			"integrationkey": "test",
-		},
-		"discord": map[string]interface{}{
-			"webhook": "test",
-		},
-		"telegram": map[string]interface{}{
-			"token":  "test",
-			"chatid": "test",
-		},
-		"teams": map[string]interface{}{
-			"webhook": "test",
-		},
-		"rocketchat": map[string]interface{}{
-			"webhook": "test",
-		},
-		"mattermost": map[string]interface{}{
-			"webhook": "test",
-		},
-		"opsgenie": map[string]interface{}{
-			"apiKey": "test",
-		},
-	}
-	viper.SetDefault("alert", alertMap)
-	providers := GetProviders()
+func TestGetPodEventsStrError(t *testing.T) {
+	assert := assert.New(t)
 
-	SendProvidersEvent(providers, event.Event{})
+	cli := fake.NewSimpleClientset()
+
+	cli.PrependReactor(
+		"list",
+		"events",
+		func(action k8stesting.Action) (bool, runtime.Object, error) {
+			return true, nil, errors.New("ssss")
+		})
+
+	result := GetPodEventsStr(cli, "dummy-app-579f7cd745-t6fdg", "test")
+	assert.Equal(result, "")
 }
 
-func TestSendProvidersMsg(t *testing.T) {
-	alertMap := map[string]interface{}{
-		"slack": map[string]interface{}{
-			"webhook": "test",
-		},
-		"pagerduty": map[string]interface{}{
-			"integrationkey": "test",
-		},
-		"discord": map[string]interface{}{
-			"webhook": "test",
-		},
-		"telegram": map[string]interface{}{
-			"token":  "test",
-			"chatid": "test",
-		},
-		"teams": map[string]interface{}{
-			"webhook": "test",
-		},
-		"rocketchat": map[string]interface{}{
-			"webhook": "test",
-		},
-		"mattermost": map[string]interface{}{
-			"webhook": "test",
-		},
-		"opsgenie": map[string]interface{}{
-			"apiKey": "test",
-		},
-	}
-	viper.SetDefault("alert", alertMap)
-	providers := GetProviders()
+func TestContainsKillingStoppingContainerEvents(t *testing.T) {
+	assert := assert.New(t)
 
-	SendProvidersMsg(providers, "hello world!")
+	cli := fake.NewSimpleClientset()
+	cli.PrependReactor(
+		"list",
+		"events",
+		func(action k8stesting.Action) (bool, runtime.Object, error) {
+			return true, &v1.EventList{
+				Items: []v1.Event{{
+					Reason:        "killing",
+					Message:       "test stopping container",
+					LastTimestamp: metav1.Now(),
+				}},
+			}, nil
+		})
+
+	result :=
+		ContainsKillingStoppingContainerEvents(
+			cli,
+			"dummy-app-579f7cd745-t6fdg",
+			"test")
+
+	assert.True(result)
+}
+
+func TestContainsKillingStoppingContainerEventsError(t *testing.T) {
+	assert := assert.New(t)
+
+	cli := fake.NewSimpleClientset()
+	cli.PrependReactor(
+		"list",
+		"events",
+		func(action k8stesting.Action) (bool, runtime.Object, error) {
+			return true, nil, errors.New("ssss")
+		})
+
+	result :=
+		ContainsKillingStoppingContainerEvents(
+			cli,
+			"dummy-app-579f7cd745-t6fdg",
+			"test")
+
+	assert.False(result)
+}
+
+func TestContainsKillingStoppingContainerEmpty(t *testing.T) {
+	assert := assert.New(t)
+
+	cli := fake.NewSimpleClientset()
+	cli.PrependReactor(
+		"list",
+		"events",
+		func(action k8stesting.Action) (bool, runtime.Object, error) {
+			return true, &v1.EventList{
+				Items: []v1.Event{},
+			}, nil
+		})
+
+	result :=
+		ContainsKillingStoppingContainerEvents(
+			cli,
+			"dummy-app-579f7cd745-t6fdg",
+			"test")
+
+	assert.False(result)
+}
+
+func TestRandomString(t *testing.T) {
+	assert := assert.New(t)
+
+	randLen := rand.Intn(300)
+	result := RandomString(randLen)
+
+	assert.Len(result, randLen)
 }

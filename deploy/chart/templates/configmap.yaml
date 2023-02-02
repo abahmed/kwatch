@@ -25,7 +25,10 @@ data:
       maxRecentLogLines: {{ default 0 $conf.maxRecentLogLines }}
       ignoreFailedGracefulShutdown: {{ default false $conf.ignoreFailedGracefulShutdown }}
       disableUpdateCheck: {{ default false $conf.disableUpdateCheck }}
-      {{- if or $conftpl.slack.webhook $conftpl.telegram $conftpl.pagerduty.integrationKey $conftpl.discord.webhook $conftpl.teams.webhook $conftpl.rocketchat.webhook $conftpl.mattermost.webhook $conftpl.opsgenie.apiKey $conftpl.namespaces }}
+      {{- with $conftpl.namespaces }}
+      namespaces: {{ toYaml . | indent 8 }}
+      {{- end }}
+      {{- if or $conftpl.slack.webhook $conftpl.telegram.token $conftpl.pagerduty.integrationKey $conftpl.discord.webhook $conftpl.teams.webhook $conftpl.rocketchat.webhook $conftpl.mattermost.webhook $conftpl.opsgenie.apiKey $conftpl.namespaces }}
       alert:
       {{- if $conftpl.slack.webhook }}
         slack:
@@ -70,12 +73,6 @@ data:
           apiKey: {{ $conftpl.opsgenie.apiKey | quote}}
           title: {{ default "" $conftpl.opsgenie.title | quote }}
           text: {{ default "" $conftpl.opsgenie.text | quote }}
-      {{- end }}
-      {{- if $conftpl.namespaces }}
-      {{- range $conftpl.namespaces }}
-      namespaces:
-      - {{ . }}
-      {{- end }}
       {{- end }}
       {{- end }}
 ...

@@ -5,27 +5,46 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/abahmed/kwatch/alertmanager"
+	"github.com/abahmed/kwatch/config"
 	"github.com/abahmed/kwatch/constant"
-	"github.com/abahmed/kwatch/provider"
-	"github.com/abahmed/kwatch/util"
+	"github.com/abahmed/kwatch/version"
 	"github.com/google/go-github/v41/github"
 	"github.com/sirupsen/logrus"
 )
 
+type Upgrader struct {
+	config       *config.Upgrader
+	alertManager *alertmanager.AlertManager
+}
+
+// NewUpgrader returns new instance of upgrader
+func NewUpgrader(config *config.Upgrader,
+	alertManager *alertmanager.AlertManager) *Upgrader {
+	return &Upgrader{
+		config:       config,
+		alertManager: alertManager,
+	}
+}
+
 // CheckUpdates checks every 24 hours if a newer version of Kwatch is available
-func CheckUpdates(providers []provider.Provider) {
+func (u *Upgrader) CheckUpdates() {
+	if u.config.DisableUpdateCheck {
+		return
+	}
+
 	// check at startup
-	checkRelease(providers)
+	u.checkRelease()
 
 	ticker := time.NewTicker(24 * time.Hour)
 	defer ticker.Stop()
 
 	for range ticker.C {
-		checkRelease(providers)
+		u.checkRelease()
 	}
 }
 
-func checkRelease(providers []provider.Provider) {
+func (u *Upgrader) checkRelease() {
 	client := github.NewClient(nil)
 
 	r, _, err := client.Repositories.GetLatestRelease(
@@ -42,12 +61,9 @@ func checkRelease(providers []provider.Provider) {
 		return
 	}
 
-	if constant.Version == *r.TagName {
+	if version.Short() == *r.TagName {
 		return
 	}
 
-	util.SendProvidersMsg(
-		providers,
-		fmt.Sprintf(constant.KwatchUpdateMsg, *r.TagName),
-	)
+	u.alertManager.Notify(fmt.Sprintf(constant.KwatchUpdateMsg, *r.TagName))
 }

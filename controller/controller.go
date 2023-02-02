@@ -2,12 +2,12 @@ package controller
 
 import (
 	"errors"
-	"fmt"
 	"time"
 
+	"github.com/abahmed/kwatch/alertmanager"
+	"github.com/abahmed/kwatch/config"
 	"github.com/abahmed/kwatch/constant"
 	"github.com/abahmed/kwatch/event"
-	"github.com/abahmed/kwatch/provider"
 	"github.com/abahmed/kwatch/storage"
 	"github.com/abahmed/kwatch/util"
 	"github.com/sirupsen/logrus"
@@ -21,16 +21,14 @@ import (
 
 // Controller holds necessary
 type Controller struct {
-	name                         string
-	informer                     cache.Controller
-	indexer                      cache.Indexer
-	kclient                      kubernetes.Interface
-	queue                        workqueue.RateLimitingInterface
-	providers                    []provider.Provider
-	store                        storage.Storage
-	ignoreFailedGracefulShutdown bool
-	namespaceAllowList           []string
-	namespaceForbidList          []string
+	name         string
+	informer     cache.Controller
+	indexer      cache.Indexer
+	kclient      kubernetes.Interface
+	queue        workqueue.RateLimitingInterface
+	alertManager *alertmanager.AlertManager
+	store        storage.Storage
+	config       *config.Config
 }
 
 // run starts the controller
@@ -49,9 +47,6 @@ func (c *Controller) run(workers int, stopCh chan struct{}) {
 	}
 
 	logrus.Infof("%s controller synced and ready", c.name)
-
-	// send notification to providers
-	util.SendProvidersMsg(c.providers, fmt.Sprintf(constant.WelcomeMsg, constant.Version))
 
 	// start workers
 	for i := 0; i < workers; i++ {
@@ -104,8 +99,8 @@ func (c *Controller) processItem(key string) error {
 	}
 
 	if !exists {
-		// Below we will warm up our cache with a Pod, so that we will see
-		// a delete for one pod
+		// Below we will warm up our cache with a Pod, so that we will see a
+		// delete for one pod
 		logrus.Infof("pod %s does not exist anymore\n", key)
 
 		c.store.DelPod(key)
@@ -123,12 +118,18 @@ func (c *Controller) processItem(key string) error {
 	}
 
 	// filter by namespaces in config if specified
-	if len(c.namespaceAllowList) > 0 && !util.IsStrInSlice(pod.Namespace, c.namespaceAllowList) {
-		logrus.Infof("skip namespace %s as not in namespace allow list", pod.Namespace)
+	if len(c.config.AllowedNamespaces) > 0 &&
+		!util.IsStrInSlice(pod.Namespace, c.config.AllowedNamespaces) {
+		logrus.Infof(
+			"skip namespace %s as not in namespace allow list",
+			pod.Namespace)
 		return nil
 	}
-	if len(c.namespaceForbidList) > 0 && util.IsStrInSlice(pod.Namespace, c.namespaceForbidList) {
-		logrus.Infof("skip namespace %s as in namespace forbid list", pod.Namespace)
+	if len(c.config.ForbiddenNamespaces) > 0 &&
+		util.IsStrInSlice(pod.Namespace, c.config.ForbiddenNamespaces) {
+		logrus.Infof(
+			"skip namespace %s as in namespace forbid list",
+			pod.Namespace)
 		return nil
 	}
 
@@ -173,8 +174,13 @@ func (c *Controller) processPod(key string, pod *v1.Pod) {
 			continue
 		}
 
-		if c.ignoreFailedGracefulShutdown && util.ContainsKillingStoppingContainerEvents(c.kclient, pod.Name, pod.Namespace) {
-			// Graceful shutdown did not work and container was killed during shutdown.
+		if c.config.IgnoreFailedGracefulShutdown &&
+			util.ContainsKillingStoppingContainerEvents(
+				c.kclient,
+				pod.Name,
+				pod.Namespace) {
+			// Graceful shutdown did not work and container was killed during
+			// shutdown.
 			//  Not really an error
 			continue
 		}
@@ -193,6 +199,25 @@ func (c *Controller) processPod(key string, pod *v1.Pod) {
 			reason = container.State.Terminated.Reason
 		}
 
+		if len(c.config.AllowedReasons) > 0 &&
+			!util.IsStrInSlice(reason, c.config.AllowedReasons) {
+			logrus.Infof("skip reason %s as not in reason allow list", reason)
+			return
+		}
+		if len(c.config.ForbiddenReasons) > 0 &&
+			util.IsStrInSlice(reason, c.config.ForbiddenReasons) {
+			logrus.Infof("skip reason %s as in reason forbid list", reason)
+			return
+		}
+
+		if len(c.config.IgnoreContainerNames) > 0 &&
+			util.IsStrInSlice(container.Name, c.config.IgnoreContainerNames) {
+			logrus.Infof(
+				"skip pod %s as in container ignore list",
+				container.Name)
+			return
+		}
+
 		// get logs for this container
 		previous := true
 		if reason == "Error" {
@@ -206,7 +231,8 @@ func (c *Controller) processPod(key string, pod *v1.Pod) {
 			pod.Name,
 			container.Name,
 			pod.Namespace,
-			previous)
+			previous,
+			c.config.MaxRecentLogLines)
 
 		// get events for this pod
 		eventsString :=
@@ -225,6 +251,6 @@ func (c *Controller) processPod(key string, pod *v1.Pod) {
 		c.store.AddPodContainer(key, container.Name)
 
 		// send event to providers
-		util.SendProvidersEvent(c.providers, evnt)
+		c.alertManager.NotifyEvent(evnt)
 	}
 }
