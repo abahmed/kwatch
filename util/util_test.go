@@ -15,37 +15,6 @@ import (
 	k8stesting "k8s.io/client-go/testing"
 )
 
-func TestIsStrInSlice(t *testing.T) {
-	assert := assert.New(t)
-
-	testCases := []struct {
-		str    string
-		list   []string
-		output bool
-	}{
-		{
-			str:    "hello",
-			list:   []string{"hello", "world"},
-			output: true,
-		},
-		{
-			str:    "test",
-			list:   []string{"hello", "world"},
-			output: false,
-		},
-		{
-			str:    "hello",
-			list:   []string{},
-			output: false,
-		},
-	}
-
-	for _, tc := range testCases {
-		out := IsStrInSlice(tc.str, tc.list)
-		assert.Equal(out, tc.output)
-	}
-}
-
 func TestGetPodContainerLogs(t *testing.T) {
 	assert := assert.New(t)
 

@@ -4,7 +4,6 @@ import (
 	"context"
 
 	"github.com/abahmed/kwatch/alertmanager"
-	"github.com/abahmed/kwatch/client"
 	"github.com/abahmed/kwatch/config"
 	"github.com/abahmed/kwatch/constant"
 	memory "github.com/abahmed/kwatch/storage/memory"
@@ -13,17 +12,16 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/watch"
+	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/tools/cache"
 	"k8s.io/client-go/util/workqueue"
 )
 
 // Start creates an instance of controller after initialization and runs it
 func Start(
+	client kubernetes.Interface,
 	alertManager *alertmanager.AlertManager,
 	config *config.Config) {
-	// create kubernetes client
-	kclient := client.Create(&config.App)
-
 	// create rate limiting queue
 	queue := workqueue.NewRateLimitingQueue(workqueue.DefaultControllerRateLimiter())
 
@@ -39,12 +37,12 @@ func Start(
 	indexer, informer := cache.NewIndexerInformer(
 		&cache.ListWatch{
 			ListFunc: func(opts metav1.ListOptions) (runtime.Object, error) {
-				return kclient.CoreV1().
+				return client.CoreV1().
 					Pods(namespaceToWatch).
 					List(context.TODO(), opts)
 			},
 			WatchFunc: func(opts metav1.ListOptions) (watch.Interface, error) {
-				return kclient.CoreV1().
+				return client.CoreV1().
 					Pods(namespaceToWatch).
 					Watch(context.TODO(), opts)
 			},
@@ -82,7 +80,7 @@ func Start(
 		informer:     informer,
 		indexer:      indexer,
 		queue:        queue,
-		kclient:      kclient,
+		kclient:      client,
 		alertManager: alertManager,
 		store:        memory.NewMemory(),
 		config:       config,

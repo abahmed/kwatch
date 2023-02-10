@@ -7,6 +7,9 @@ type Config struct {
 	// Upgrader configuration
 	Upgrader Upgrader `yaml:"upgrader"`
 
+	// PvcMonitor configuration
+	PvcMonitor PvcMonitor `yaml:"pvcMonitor"`
+
 	// MaxRecentLogLines optional max tail log lines in messages,
 	// if it's not provided it will get all log lines
 	MaxRecentLogLines int64 `yaml:"maxRecentLogLines"`
@@ -15,10 +18,6 @@ type Config struct {
 	// forcefully killed during shutdown (as their graceful shutdown failed)
 	// are not reported as error
 	IgnoreFailedGracefulShutdown bool `yaml:"ignoreFailedGracefulShutdown"`
-
-	// DisableUpdateCheck if set to true, does not check for and
-	// notify about kwatch updates
-	DisableUpdateCheck bool `yaml:"disableUpdateCheck"`
 
 	// Namespaces is an optional list of namespaces that you want to watch or
 	// forbid, if it's not provided it will watch all namespaces.
@@ -66,4 +65,20 @@ type Upgrader struct {
 	// DisableUpdateCheck if set to true, does not check for and
 	// notify about kwatch updates
 	DisableUpdateCheck bool `yaml:"disableUpdateCheck"`
+}
+
+// PvcMonitor confing struct
+type PvcMonitor struct {
+	// Enabled if set to true, it will check pvc usage periodically
+	// By default, this value is true
+	Enabled bool `yaml:"enabled"`
+
+	// Interval is the frequency (in minutes) to check pvc usage in the cluster
+	// By default, this value is 5
+	Interval int `yaml:"interval"`
+
+	// Threshold is the percentage of accepted pvc usage. if current usage
+	// exceeds this value, it will send a notification.
+	// By default, this value is 80
+	Threshold float64 `yaml:"threshold"`
 }

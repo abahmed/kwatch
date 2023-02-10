@@ -4,9 +4,11 @@ import (
 	"fmt"
 
 	"github.com/abahmed/kwatch/alertmanager"
+	"github.com/abahmed/kwatch/client"
 	"github.com/abahmed/kwatch/config"
 	"github.com/abahmed/kwatch/constant"
 	"github.com/abahmed/kwatch/controller"
+	"github.com/abahmed/kwatch/pvcmonitor"
 	"github.com/abahmed/kwatch/upgrader"
 	"github.com/abahmed/kwatch/version"
 	"github.com/sirupsen/logrus"
@@ -20,6 +22,9 @@ func main() {
 		logrus.Fatalf("failed to load config: %s", err.Error())
 	}
 
+	// create kubernetes client
+	client := client.Create(&config.App)
+
 	alertManager := alertmanager.AlertManager{}
 	alertManager.Init(config.Alert, &config.App)
 
@@ -30,8 +35,14 @@ func main() {
 	upgrader := upgrader.NewUpgrader(&config.Upgrader, &alertManager)
 	go upgrader.CheckUpdates()
 
+	// start monitoring Persistent Volume Claims
+	pvcMonitor :=
+		pvcmonitor.NewPvcMonitor(client, &config.PvcMonitor, &alertManager)
+	go pvcMonitor.Start()
+
 	// start controller
 	controller.Start(
+		client,
 		&alertManager,
 		config,
 	)

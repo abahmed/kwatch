@@ -14,14 +14,14 @@ func LoadConfig() (*Config, error) {
 	// initialize configuration
 	configFile := os.Getenv("CONFIG_FILE")
 
-	var config Config
+	config := DefaultConfig()
 	yamlFile, err := os.ReadFile(configFile)
 	if err != nil {
 		logrus.Warnf("unable to load config file: %s", err.Error())
 		return nil, err
 	}
 
-	err = yaml.Unmarshal(yamlFile, &config)
+	err = yaml.Unmarshal(yamlFile, config)
 	if err != nil {
 		logrus.Warnf("unable to parse config file: %s", err.Error())
 		return nil, err
@@ -46,15 +46,12 @@ func LoadConfig() (*Config, error) {
 			"Can't set both")
 	}
 
-	// Should be removed
-	config.Upgrader.DisableUpdateCheck = config.DisableUpdateCheck
-
 	// Parse proxy config
 	if len(config.App.ProxyURL) > 0 {
 		os.Setenv("HTTPS_PROXY", config.App.ProxyURL)
 	}
 
-	return &config, nil
+	return config, nil
 }
 
 // getAllowForbidSlices split input slice into two slices by items start with !

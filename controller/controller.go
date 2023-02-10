@@ -17,6 +17,7 @@ import (
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/tools/cache"
 	"k8s.io/client-go/util/workqueue"
+	"k8s.io/utils/strings/slices"
 )
 
 // Controller holds necessary
@@ -119,14 +120,14 @@ func (c *Controller) processItem(key string) error {
 
 	// filter by namespaces in config if specified
 	if len(c.config.AllowedNamespaces) > 0 &&
-		!util.IsStrInSlice(pod.Namespace, c.config.AllowedNamespaces) {
+		!slices.Contains(c.config.AllowedNamespaces, pod.Namespace) {
 		logrus.Infof(
 			"skip namespace %s as not in namespace allow list",
 			pod.Namespace)
 		return nil
 	}
 	if len(c.config.ForbiddenNamespaces) > 0 &&
-		util.IsStrInSlice(pod.Namespace, c.config.ForbiddenNamespaces) {
+		slices.Contains(c.config.ForbiddenNamespaces, pod.Namespace) {
 		logrus.Infof(
 			"skip namespace %s as in namespace forbid list",
 			pod.Namespace)
@@ -200,18 +201,18 @@ func (c *Controller) processPod(key string, pod *v1.Pod) {
 		}
 
 		if len(c.config.AllowedReasons) > 0 &&
-			!util.IsStrInSlice(reason, c.config.AllowedReasons) {
+			!slices.Contains(c.config.AllowedReasons, reason) {
 			logrus.Infof("skip reason %s as not in reason allow list", reason)
 			return
 		}
 		if len(c.config.ForbiddenReasons) > 0 &&
-			util.IsStrInSlice(reason, c.config.ForbiddenReasons) {
+			slices.Contains(c.config.ForbiddenReasons, reason) {
 			logrus.Infof("skip reason %s as in reason forbid list", reason)
 			return
 		}
 
 		if len(c.config.IgnoreContainerNames) > 0 &&
-			util.IsStrInSlice(container.Name, c.config.IgnoreContainerNames) {
+			slices.Contains(c.config.IgnoreContainerNames, container.Name) {
 			logrus.Infof(
 				"skip pod %s as in container ignore list",
 				container.Name)

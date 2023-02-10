@@ -11,7 +11,9 @@ import (
 	"github.com/sirupsen/logrus"
 	v1 "k8s.io/api/core/v1"
 
+	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+
 	"k8s.io/client-go/kubernetes"
 )
 
@@ -130,19 +132,40 @@ func getPodEvents(
 		})
 }
 
-// IsStrInSlice checks if string is existing in a slice of string
-func IsStrInSlice(str string, strList []string) bool {
-	if len(strList) == 0 {
-		return false
+// GetNodes gets a list of nodes
+func GetNodes(c kubernetes.Interface) (*corev1.NodeList, error) {
+	return c.CoreV1().
+		Nodes().
+		List(context.TODO(), metav1.ListOptions{})
+}
+
+// // GetNodeSummary gets a list of nodes
+func GetNodeSummary(c kubernetes.Interface, name string) ([]byte, error) {
+	return c.CoreV1().
+		RESTClient().
+		Get().
+		Resource("nodes").
+		Name(name).
+		SubResource("proxy").
+		Suffix("stats/summary").
+		Do(context.TODO()).
+		Raw()
+}
+
+// GetPVNameFromPVC returns the name of persistent volume given a namespace and
+// persistent volume claim name
+func GetPVNameFromPVC(
+	c kubernetes.Interface,
+	namespace, pvcName string) (string, error) {
+	pvc, err :=
+		c.CoreV1().
+			PersistentVolumeClaims(namespace).
+			Get(context.TODO(), pvcName, metav1.GetOptions{})
+	if err != nil {
+		return "", err
 	}
 
-	for _, s := range strList {
-		if s == str {
-			return true
-		}
-	}
-
-	return false
+	return pvc.Spec.VolumeName, nil
 }
 
 // JsonEscape escapes the json special characters in a string
