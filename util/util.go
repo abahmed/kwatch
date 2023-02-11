@@ -148,8 +148,7 @@ func GetNodeSummary(c kubernetes.Interface, name string) ([]byte, error) {
 		Name(name).
 		SubResource("proxy").
 		Suffix("stats/summary").
-		Do(context.TODO()).
-		Raw()
+		DoRaw(context.TODO())
 }
 
 // GetPVNameFromPVC returns the name of persistent volume given a namespace and
