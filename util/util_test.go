@@ -177,3 +177,59 @@ func TestRandomString(t *testing.T) {
 
 	assert.Len(result, randLen)
 }
+
+func TestGetNodes(t *testing.T) {
+	assert := assert.New(t)
+
+	cli := fake.NewSimpleClientset()
+	node := v1.Node{}
+	cli.PrependReactor(
+		"list",
+		"nodes",
+		func(action k8stesting.Action) (bool, runtime.Object, error) {
+			return true, &v1.NodeList{
+				Items: []v1.Node{node},
+			}, nil
+		})
+
+	result, err := GetNodes(cli)
+	assert.NoError(err)
+	assert.NotNil(result)
+	assert.Equal(len(result.Items), 1)
+}
+
+func TestGetPVNameFromPVC(t *testing.T) {
+	assert := assert.New(t)
+
+	cli := fake.NewSimpleClientset()
+	cli.PrependReactor(
+		"get",
+		"persistentvolumeclaims",
+		func(action k8stesting.Action) (bool, runtime.Object, error) {
+			return true, &v1.PersistentVolumeClaim{
+				Spec: v1.PersistentVolumeClaimSpec{
+					VolumeName: "test",
+				},
+			}, nil
+		})
+
+	result, err := GetPVNameFromPVC(cli, "test", "test")
+	assert.NoError(err)
+	assert.Equal(result, "test")
+}
+
+func TestGetPVNameFromPVCError(t *testing.T) {
+	assert := assert.New(t)
+
+	cli := fake.NewSimpleClientset()
+	cli.PrependReactor(
+		"get",
+		"persistentvolumeclaims",
+		func(action k8stesting.Action) (bool, runtime.Object, error) {
+			return true, nil, errors.New("failed")
+		})
+
+	result, err := GetPVNameFromPVC(cli, "test", "test")
+	assert.Error(err, "failed")
+	assert.Equal(result, "")
+}
