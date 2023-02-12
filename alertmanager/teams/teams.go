@@ -7,10 +7,8 @@ import (
 	"io"
 
 	"net/http"
-	"strings"
 
 	"github.com/abahmed/kwatch/config"
-	"github.com/abahmed/kwatch/constant"
 	"github.com/abahmed/kwatch/event"
 	"github.com/sirupsen/logrus"
 )
@@ -92,49 +90,13 @@ func (t *Teams) SendMessage(msg string) error {
 
 // buildRequestBodyTeams builds formatted string from event
 func (t *Teams) buildRequestBodyTeams(e *event.Event) string {
-	// add events part if it exists
-	eventsText := constant.DefaultEvents
-	events := strings.TrimSpace(e.Events)
-	if len(events) > 0 {
-		eventsText = e.Events
-	}
-
-	// add logs part if it exists
-	logsText := constant.DefaultLogs
-	logs := strings.TrimSpace(e.Logs)
-	if len(logs) > 0 {
-		logsText = e.Logs
-	}
 	// use custom title if it's provided, otherwise use default
 	title := t.title
 	if len(title) == 0 {
 		title = defaultTeamsTitle
 	}
 
-	// use custom text if it's provided, otherwise use default
-	text := t.text
-	if len(text) == 0 {
-		text = constant.DefaultText
-	}
-
-	msg := fmt.Sprintf(
-		"%s\n"+
-			"**Cluster:** %s\n"+
-			"**Pod:** %s\n"+
-			"**Container:** %s\n"+
-			"**Namespace:** %s\n"+
-			"**Reason:** %s\n"+
-			"**Events:**\n```\n%s\n```\n"+
-			"**Logs:**\n```\n%s\n```",
-		text,
-		t.appCfg.ClusterName,
-		e.Name,
-		e.Container,
-		e.Namespace,
-		e.Reason,
-		eventsText,
-		logsText,
-	)
+	msg := e.FormatMarkdown(t.appCfg.ClusterName, t.text)
 	msgPayload := &teamsWebhookPayload{
 		Title: title,
 		Text:  msg,

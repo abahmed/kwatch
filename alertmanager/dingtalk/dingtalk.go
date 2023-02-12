@@ -10,7 +10,6 @@ import (
 	"io"
 	"net/http"
 	"net/url"
-	"strings"
 	"time"
 
 	"github.com/abahmed/kwatch/config"
@@ -64,19 +63,6 @@ func (d *DingTalk) Name() string {
 
 // SendEvent sends event to the provider
 func (d *DingTalk) SendEvent(e *event.Event) error {
-	// add events part if it exists
-	eventsText := "No events captured"
-	events := strings.TrimSpace(e.Events)
-	if len(events) > 0 {
-		eventsText = e.Events
-	}
-
-	// add logs part if it exists
-	logsText := "No logs captured"
-	logs := strings.TrimSpace(e.Logs)
-	if len(logs) > 0 {
-		logsText = e.Logs
-	}
 
 	// use custom title if it's provided, otherwise use default
 	title := d.title
@@ -84,27 +70,12 @@ func (d *DingTalk) SendEvent(e *event.Event) error {
 		title = constant.DefaultTitle
 	}
 
-	txt := fmt.Sprintf(
-		"Cluster: *%s* \n"+
-			"Name: *%s* \n"+
-			"Container: *%s* \n"+
-			"Namespace: *%s* \n"+
-			"Reason: *%s* \n"+
-			"Logs: *%s* \n "+
-			"Events: *%s* ",
-		d.appCfg.ClusterName,
-		e.Name,
-		e.Container,
-		e.Namespace,
-		e.Reason,
-		logsText,
-		eventsText,
-	)
+	msg := e.FormatMarkdown(d.appCfg.ClusterName, "")
 
 	body := fmt.Sprintf(`{
 		"msgtype": "markdown",
 		"markdown": { "title": "%s", "text: "%s" }
-	}`, title, txt)
+	}`, title, msg)
 
 	return d.sendAPI(body)
 }
