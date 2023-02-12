@@ -51,8 +51,11 @@ func TestBuildRequestBodyFeiShu(t *testing.T) {
 		Logs:      "test\ntestlogs",
 		Events:    "test",
 	}
+	formattedMsg := ev.FormatMarkdown(c.appCfg.ClusterName, "")
+
 	expectMessage := "{\"msg_type\": \"interactive\",\"card\": {\"config\": {\"wide_screen_mode\": true},\"header\": {\"title\": {\"tag\": \"plain_text\",\"content\": \"\"},\"template\": \"blue\"},\"elements\": [{\"tag\":\"markdown\",\"content\":\"**Cluster:** dev\\n**Pod:** test-pod\\n**Container:** test-container\\n**Namespace:** default\\n**Reason:** OOMKILLED\\n**Events:**\\n```\\ntest\\n```\\n**Logs:**\\n```\\ntest\\ntestlogs\\n```\"}]}}"
-	assertions.Equal(expectMessage, c.buildRequestBodyFeiShu(&ev, ""))
+
+	assertions.Equal(expectMessage, c.buildRequestBodyFeiShu(formattedMsg))
 }
 
 func TestSendMessage(t *testing.T) {

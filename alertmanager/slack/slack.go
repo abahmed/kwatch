@@ -44,6 +44,8 @@ func NewSlack(config map[string]string, appCfg *config.App) *Slack {
 	return &Slack{
 		webhook: webhook,
 		channel: config["channel"],
+		title:   config["title"],
+		text:    config["text"],
 		send:    slackClient.PostWebhook,
 		appCfg:  appCfg,
 	}
