@@ -13,14 +13,14 @@ import (
 func TestEmptyConfig(t *testing.T) {
 	assert := assert.New(t)
 
-	c := NewTeams(map[string]string{}, &config.App{ClusterName: "dev"})
+	c := NewTeams(map[string]interface{}{}, &config.App{ClusterName: "dev"})
 	assert.Nil(c)
 }
 
 func TestTeams(t *testing.T) {
 	assert := assert.New(t)
 
-	configMap := map[string]string{
+	configMap := map[string]interface{}{
 		"webhook": "testtest",
 	}
 	c := NewTeams(configMap, &config.App{ClusterName: "dev"})
@@ -39,7 +39,7 @@ func TestSendMessage(t *testing.T) {
 
 	defer s.Close()
 
-	configMap := map[string]string{
+	configMap := map[string]interface{}{
 		"webhook": s.URL,
 	}
 	c := NewTeams(configMap, &config.App{ClusterName: "dev"})
@@ -58,7 +58,7 @@ func TestSendMessageError(t *testing.T) {
 
 	defer s.Close()
 
-	configMap := map[string]string{
+	configMap := map[string]interface{}{
 		"webhook": s.URL,
 	}
 	c := NewTeams(configMap, &config.App{ClusterName: "dev"})
@@ -77,7 +77,7 @@ func TestSendEvent(t *testing.T) {
 
 	defer s.Close()
 
-	configMap := map[string]string{
+	configMap := map[string]interface{}{
 		"webhook": s.URL,
 	}
 	c := NewTeams(configMap, &config.App{ClusterName: "dev"})
@@ -98,7 +98,7 @@ func TestSendEvent(t *testing.T) {
 func TestInvaildHttpRequest(t *testing.T) {
 	assert := assert.New(t)
 
-	configMap := map[string]string{
+	configMap := map[string]interface{}{
 		"webhook": "h ttp://localhost",
 	}
 	c := NewTeams(configMap, &config.App{ClusterName: "dev"})
@@ -106,7 +106,7 @@ func TestInvaildHttpRequest(t *testing.T) {
 
 	assert.NotNil(c.SendMessage("test"))
 
-	configMap = map[string]string{
+	configMap = map[string]interface{}{
 		"webhook": "http://localhost:132323",
 	}
 	c = NewTeams(configMap, &config.App{ClusterName: "dev"})

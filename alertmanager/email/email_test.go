@@ -16,27 +16,27 @@ func mockedSend(m ...*gomail.Message) error {
 func TestEmailEmptyConfig(t *testing.T) {
 	assert := assert.New(t)
 
-	c := NewEmail(map[string]string{}, &config.App{ClusterName: "dev"})
+	c := NewEmail(map[string]interface{}{}, &config.App{ClusterName: "dev"})
 	assert.Nil(c)
 }
 
 func TestEmailInvalidConfig(t *testing.T) {
 	assert := assert.New(t)
 
-	configMap := map[string]string{
+	configMap := map[string]interface{}{
 		"from": "test@test.com",
 	}
 	c := NewEmail(configMap, &config.App{ClusterName: "dev"})
 	assert.Nil(c)
 
-	configMap = map[string]string{
+	configMap = map[string]interface{}{
 		"from": "test@test.com",
 		"to":   "test12@test.com",
 	}
 	c = NewEmail(configMap, &config.App{ClusterName: "dev"})
 	assert.Nil(c)
 
-	configMap = map[string]string{
+	configMap = map[string]interface{}{
 		"from":     "test@test.com",
 		"to":       "test12@test.com",
 		"password": "testPassword",
@@ -44,7 +44,7 @@ func TestEmailInvalidConfig(t *testing.T) {
 	c = NewEmail(configMap, &config.App{ClusterName: "dev"})
 	assert.Nil(c)
 
-	configMap = map[string]string{
+	configMap = map[string]interface{}{
 		"from":     "test@test.com",
 		"to":       "test12@test.com",
 		"password": "testPassword",
@@ -53,7 +53,7 @@ func TestEmailInvalidConfig(t *testing.T) {
 	c = NewEmail(configMap, &config.App{ClusterName: "dev"})
 	assert.Nil(c)
 
-	configMap = map[string]string{
+	configMap = map[string]interface{}{
 		"from":     "test@test.com",
 		"to":       "test12@test.com",
 		"password": "testPassword",
@@ -63,7 +63,7 @@ func TestEmailInvalidConfig(t *testing.T) {
 	c = NewEmail(configMap, &config.App{ClusterName: "dev"})
 	assert.Nil(c)
 
-	configMap = map[string]string{
+	configMap = map[string]interface{}{
 		"from":     "test@test.com",
 		"to":       "test12@test.com",
 		"password": "testPassword",
@@ -77,7 +77,7 @@ func TestEmailInvalidConfig(t *testing.T) {
 func TestEmail(t *testing.T) {
 	assert := assert.New(t)
 
-	configMap := map[string]string{
+	configMap := map[string]interface{}{
 		"from":     "test@test.com",
 		"to":       "test12@test.com",
 		"password": "testPassword",
@@ -93,7 +93,7 @@ func TestEmail(t *testing.T) {
 func TestSendMessage(t *testing.T) {
 	assert := assert.New(t)
 
-	configMap := map[string]string{
+	configMap := map[string]interface{}{
 		"from":     "test@test.com",
 		"to":       "test12@test.com",
 		"password": "testPassword",
@@ -110,7 +110,7 @@ func TestSendMessage(t *testing.T) {
 func TestSendEvent(t *testing.T) {
 	assert := assert.New(t)
 
-	configMap := map[string]string{
+	configMap := map[string]interface{}{
 		"from":     "test@test.com",
 		"to":       "test12@test.com",
 		"password": "testPassword",

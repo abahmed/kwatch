@@ -25,18 +25,19 @@ type rocketChatWebhookPayload struct {
 }
 
 // NewRocketChat returns new rocket chat instance
-func NewRocketChat(config map[string]string, appCfg *config.App) *RocketChat {
+func NewRocketChat(config map[string]interface{}, appCfg *config.App) *RocketChat {
 	webhook, ok := config["webhook"]
-	if !ok || len(webhook) == 0 {
+	webhookString := fmt.Sprint(webhook)
+	if !ok || len(webhookString) == 0 {
 		logrus.Warnf("initializing Rocket Chat with empty webhook url")
 		return nil
 	}
 
-	logrus.Infof("initializing Rocket Chat with webhook url: %s", webhook)
+	logrus.Infof("initializing Rocket Chat with webhook url: %s", webhookString)
 
 	return &RocketChat{
-		webhook: webhook,
-		text:    config["text"],
+		webhook: webhookString,
+		text:    fmt.Sprint(config["text"]),
 		appCfg:  appCfg,
 	}
 }

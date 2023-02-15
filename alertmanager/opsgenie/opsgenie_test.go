@@ -13,14 +13,14 @@ import (
 func TestOpsgenieEmptyConfig(t *testing.T) {
 	assert := assert.New(t)
 
-	c := NewOpsgenie(map[string]string{}, &config.App{ClusterName: "dev"})
+	c := NewOpsgenie(map[string]interface{}{}, &config.App{ClusterName: "dev"})
 	assert.Nil(c)
 }
 
 func TestOpsgenie(t *testing.T) {
 	assert := assert.New(t)
 
-	configMap := map[string]string{
+	configMap := map[string]interface{}{
 		"apiKey": "testtest",
 	}
 	c := NewOpsgenie(configMap, &config.App{ClusterName: "dev"})
@@ -32,7 +32,7 @@ func TestOpsgenie(t *testing.T) {
 func TestSendMessage(t *testing.T) {
 	assert := assert.New(t)
 
-	configMap := map[string]string{
+	configMap := map[string]interface{}{
 		"apiKey": "test",
 	}
 	c := NewOpsgenie(configMap, &config.App{ClusterName: "dev"})
@@ -52,7 +52,7 @@ func TestSendEvent(t *testing.T) {
 
 	defer s.Close()
 
-	configMap := map[string]string{
+	configMap := map[string]interface{}{
 		"apiKey": "test",
 	}
 	c := NewOpsgenie(configMap, &config.App{ClusterName: "dev"})
@@ -82,7 +82,7 @@ func TestSendEventError(t *testing.T) {
 
 	defer s.Close()
 
-	configMap := map[string]string{
+	configMap := map[string]interface{}{
 		"apiKey": "test",
 	}
 	c := NewOpsgenie(configMap, &config.App{ClusterName: "dev"})
@@ -105,7 +105,7 @@ func TestSendEventError(t *testing.T) {
 func TestInvaildHttpRequest(t *testing.T) {
 	assert := assert.New(t)
 
-	configMap := map[string]string{
+	configMap := map[string]interface{}{
 		"apiKey": "test",
 	}
 	c := NewOpsgenie(configMap, &config.App{ClusterName: "dev"})

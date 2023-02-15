@@ -246,6 +246,7 @@ func (c *Controller) processPod(key string, pod *v1.Pod) {
 			Reason:    reason,
 			Logs:      logs,
 			Events:    eventsString,
+			Labels:    pod.Labels,
 		}
 
 		// save container as it's reported to avoid duplication

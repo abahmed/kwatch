@@ -13,14 +13,14 @@ import (
 func TestPagerdutyEmptyConfig(t *testing.T) {
 	assert := assert.New(t)
 
-	c := NewPagerDuty(map[string]string{}, &config.App{ClusterName: "dev"})
+	c := NewPagerDuty(map[string]interface{}{}, &config.App{ClusterName: "dev"})
 	assert.Nil(c)
 }
 
 func TestPagerduty(t *testing.T) {
 	assert := assert.New(t)
 
-	configMap := map[string]string{
+	configMap := map[string]interface{}{
 		"integrationKey": "testtest",
 	}
 	c := NewPagerDuty(configMap, &config.App{ClusterName: "dev"})
@@ -32,7 +32,7 @@ func TestPagerduty(t *testing.T) {
 func TestSendMessage(t *testing.T) {
 	assert := assert.New(t)
 
-	configMap := map[string]string{
+	configMap := map[string]interface{}{
 		"integrationKey": "test",
 	}
 	c := NewPagerDuty(configMap, &config.App{ClusterName: "dev"})
@@ -51,7 +51,7 @@ func TestSendEvent(t *testing.T) {
 
 	defer s.Close()
 
-	configMap := map[string]string{
+	configMap := map[string]interface{}{
 		"integrationKey": "test",
 	}
 	c := NewPagerDuty(configMap, &config.App{ClusterName: "dev"})
@@ -80,7 +80,7 @@ func TestSendEventError(t *testing.T) {
 
 	defer s.Close()
 
-	configMap := map[string]string{
+	configMap := map[string]interface{}{
 		"integrationKey": "test",
 	}
 	c := NewPagerDuty(configMap, &config.App{ClusterName: "dev"})
@@ -102,7 +102,7 @@ func TestSendEventError(t *testing.T) {
 func TestInvaildHttpRequest(t *testing.T) {
 	assert := assert.New(t)
 
-	configMap := map[string]string{
+	configMap := map[string]interface{}{
 		"integrationKey": "test",
 	}
 	c := NewPagerDuty(configMap, &config.App{ClusterName: "dev"})

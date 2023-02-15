@@ -15,14 +15,14 @@ func mockedSend(url string, msg *slackClient.WebhookMessage) error {
 func TestSlackEmptyConfig(t *testing.T) {
 	assert := assert.New(t)
 
-	s := NewSlack(map[string]string{}, &config.App{ClusterName: "dev"})
+	s := NewSlack(map[string]interface{}{}, &config.App{ClusterName: "dev"})
 	assert.Nil(s)
 }
 
 func TestSlack(t *testing.T) {
 	assert := assert.New(t)
 
-	configMap := map[string]string{
+	configMap := map[string]interface{}{
 		"webhook": "testtest",
 	}
 	s := NewSlack(configMap, &config.App{ClusterName: "dev"})
@@ -34,7 +34,7 @@ func TestSlack(t *testing.T) {
 func TestSendMessage(t *testing.T) {
 	assert := assert.New(t)
 
-	s := NewSlack(map[string]string{
+	s := NewSlack(map[string]interface{}{
 		"webhook": "testtest",
 		"channel": "test",
 	}, &config.App{ClusterName: "dev"})
@@ -47,7 +47,7 @@ func TestSendMessage(t *testing.T) {
 func TestSendEvent(t *testing.T) {
 	assert := assert.New(t)
 
-	s := NewSlack(map[string]string{
+	s := NewSlack(map[string]interface{}{
 		"webhook": "testtest",
 	}, &config.App{ClusterName: "dev"})
 	assert.NotNil(s)

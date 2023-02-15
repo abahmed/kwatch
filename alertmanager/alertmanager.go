@@ -1,6 +1,7 @@
 package alertmanager
 
 import (
+	"github.com/abahmed/kwatch/alertmanager/webhook"
 	"reflect"
 	"strings"
 
@@ -35,7 +36,7 @@ type Provider interface {
 
 // Init initializes AlertManager with provided config
 func (a *AlertManager) Init(
-	alertCfg map[string]map[string]string,
+	alertCfg map[string]map[string]interface{},
 	appCfg *config.App) {
 	a.providers = make([]Provider, 0)
 	for k, v := range alertCfg {
@@ -65,8 +66,9 @@ func (a *AlertManager) Init(
 			pvdr = dingtalk.NewDingTalk(v, appCfg)
 		} else if lowerCaseKey == "feishu" {
 			pvdr = feishu.NewFeiShu(v, appCfg)
+		} else if lowerCaseKey == "webhook" {
+			pvdr = webhook.NewWebhook(v, appCfg)
 		}
-
 		if !reflect.ValueOf(pvdr).IsNil() {
 			a.providers = append(a.providers, pvdr)
 		}

@@ -38,20 +38,21 @@ type DingTalk struct {
 }
 
 // NewDingTalk returns new DingTalk instance
-func NewDingTalk(config map[string]string, appCfg *config.App) *DingTalk {
+func NewDingTalk(config map[string]interface{}, appCfg *config.App) *DingTalk {
 	accessToken, ok := config["accessToken"]
-	if !ok || len(accessToken) == 0 {
+	accessTokenString := fmt.Sprint(accessToken)
+	if !ok || len(accessTokenString) == 0 {
 		logrus.Warnf("initializing dingtalk with empty access token")
 		return nil
 	}
 
-	logrus.Infof("initializing dingtalk with access token: %s", accessToken)
+	logrus.Infof("initializing dingtalk with access token: %s", accessTokenString)
 
 	return &DingTalk{
-		accessToken: accessToken,
+		accessToken: accessTokenString,
 		url:         dingTalkAPIURL,
-		title:       config["title"],
-		secret:      config["secret"],
+		title:       fmt.Sprint(config["title"]),
+		secret:      fmt.Sprint(config["secret"]),
 		appCfg:      appCfg,
 	}
 }

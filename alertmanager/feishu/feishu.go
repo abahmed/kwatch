@@ -26,20 +26,28 @@ type feiShuWebhookContent struct {
 }
 
 // NewFeiShu returns new feishu web bot instance
-func NewFeiShu(config map[string]string, appCfg *config.App) *FeiShu {
+func NewFeiShu(config map[string]interface{}, appCfg *config.App) *FeiShu {
 	webhook, ok := config["webhook"]
-	if !ok || len(webhook) == 0 {
+	webhookString := fmt.Sprint(webhook)
+	if !ok || len(webhookString) == 0 {
 		logrus.Warnf("initializing Fei Shu with empty webhook url")
 		return nil
 	}
 
-	logrus.Infof("initializing Fei Shu with webhook url: %s", webhook)
+	logrus.Infof("initializing Fei Shu with webhook url: %s", webhookString)
+
+	title, ok := config["title"]
+	titleFormatted := fmt.Sprint(title)
+	if !ok {
+		titleFormatted = ""
+	}
 
 	return &FeiShu{
-		webhook: webhook,
-		title:   config["title"],
+		webhook: webhookString,
+		title:   titleFormatted,
 		appCfg:  appCfg,
 	}
+
 }
 
 // Name returns name of the provider

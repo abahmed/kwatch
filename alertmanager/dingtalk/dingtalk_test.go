@@ -13,14 +13,14 @@ import (
 func TestEmptyConfig(t *testing.T) {
 	assert := assert.New(t)
 
-	c := NewDingTalk(map[string]string{}, &config.App{ClusterName: "dev"})
+	c := NewDingTalk(map[string]interface{}{}, &config.App{ClusterName: "dev"})
 	assert.Nil(c)
 }
 
 func TestDingTalk(t *testing.T) {
 	assert := assert.New(t)
 
-	configMap := map[string]string{
+	configMap := map[string]interface{}{
 		"accessToken": "testToken",
 	}
 	c := NewDingTalk(configMap, &config.App{ClusterName: "dev"})
@@ -39,7 +39,7 @@ func TestSendMessage(t *testing.T) {
 
 	defer s.Close()
 
-	configMap := map[string]string{
+	configMap := map[string]interface{}{
 		"accessToken": "testToken",
 		"secret":      "secret1",
 	}
@@ -60,7 +60,7 @@ func TestSendMessageInvalidBody(t *testing.T) {
 
 	defer s.Close()
 
-	configMap := map[string]string{
+	configMap := map[string]interface{}{
 		"accessToken": "testToken",
 	}
 	c := NewDingTalk(configMap, &config.App{ClusterName: "dev"})
@@ -80,7 +80,7 @@ func TestSendMessageInvalidJson(t *testing.T) {
 
 	defer s.Close()
 
-	configMap := map[string]string{
+	configMap := map[string]interface{}{
 		"accessToken": "testToken",
 	}
 	c := NewDingTalk(configMap, &config.App{ClusterName: "dev"})
@@ -100,7 +100,7 @@ func TestSendMessageErrorResponse(t *testing.T) {
 
 	defer s.Close()
 
-	configMap := map[string]string{
+	configMap := map[string]interface{}{
 		"accessToken": "testToken",
 	}
 	c := NewDingTalk(configMap, &config.App{ClusterName: "dev"})
@@ -120,7 +120,7 @@ func TestSendEvent(t *testing.T) {
 
 	defer s.Close()
 
-	configMap := map[string]string{
+	configMap := map[string]interface{}{
 		"accessToken": "testToken",
 	}
 	c := NewDingTalk(configMap, &config.App{ClusterName: "dev"})
@@ -142,7 +142,7 @@ func TestSendEvent(t *testing.T) {
 func TestInvaildHttpRequest(t *testing.T) {
 	assert := assert.New(t)
 
-	configMap := map[string]string{
+	configMap := map[string]interface{}{
 		"accessToken": "testToken",
 	}
 	c := NewDingTalk(configMap, &config.App{ClusterName: "dev"})
@@ -151,7 +151,7 @@ func TestInvaildHttpRequest(t *testing.T) {
 
 	assert.NotNil(c.SendMessage("test"))
 
-	configMap = map[string]string{
+	configMap = map[string]interface{}{
 		"accessToken": "testToken",
 	}
 	c = NewDingTalk(configMap, &config.App{ClusterName: "dev"})

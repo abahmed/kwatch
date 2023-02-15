@@ -13,14 +13,14 @@ import (
 func TestEmptyConfig(t *testing.T) {
 	assertions := assert.New(t)
 
-	c := NewFeiShu(map[string]string{}, &config.App{ClusterName: "dev"})
+	c := NewFeiShu(map[string]interface{}{}, &config.App{ClusterName: "dev"})
 	assertions.Nil(c)
 }
 
 func TestRocketChat(t *testing.T) {
 	assertions := assert.New(t)
 
-	configMap := map[string]string{
+	configMap := map[string]interface{}{
 		"webhook": "testtest",
 	}
 	c := NewFeiShu(configMap, &config.App{ClusterName: "dev"})
@@ -38,7 +38,7 @@ func TestBuildRequestBodyFeiShu(t *testing.T) {
 
 	defer s.Close()
 
-	configMap := map[string]string{
+	configMap := map[string]interface{}{
 		"webhook": s.URL,
 	}
 	c := NewFeiShu(configMap, &config.App{ClusterName: "dev"})
@@ -68,7 +68,7 @@ func TestSendMessage(t *testing.T) {
 
 	defer s.Close()
 
-	configMap := map[string]string{
+	configMap := map[string]interface{}{
 		"webhook": s.URL,
 	}
 	c := NewFeiShu(configMap, &config.App{ClusterName: "dev"})
@@ -87,7 +87,7 @@ func TestSendMessageError(t *testing.T) {
 
 	defer s.Close()
 
-	configMap := map[string]string{
+	configMap := map[string]interface{}{
 		"webhook": s.URL,
 	}
 	c := NewFeiShu(configMap, &config.App{ClusterName: "dev"})
@@ -106,7 +106,7 @@ func TestSendEvent(t *testing.T) {
 
 	defer s.Close()
 
-	configMap := map[string]string{
+	configMap := map[string]interface{}{
 		"webhook": s.URL,
 	}
 	c := NewFeiShu(configMap, &config.App{ClusterName: "dev"})
@@ -127,7 +127,7 @@ func TestSendEvent(t *testing.T) {
 func TestInvalidHttpRequest(t *testing.T) {
 	assertions := assert.New(t)
 
-	configMap := map[string]string{
+	configMap := map[string]interface{}{
 		"webhook": "h ttp://localhost",
 	}
 	c := NewFeiShu(configMap, &config.App{ClusterName: "dev"})
@@ -135,7 +135,7 @@ func TestInvalidHttpRequest(t *testing.T) {
 
 	assertions.NotNil(c.SendMessage("test"))
 
-	configMap = map[string]string{
+	configMap = map[string]interface{}{
 		"webhook": "http://localhost:132323",
 	}
 	c = NewFeiShu(configMap, &config.App{ClusterName: "dev"})

@@ -13,14 +13,14 @@ import (
 func TestMattermostEmptyConfig(t *testing.T) {
 	assert := assert.New(t)
 
-	c := NewMattermost(map[string]string{}, &config.App{ClusterName: "dev"})
+	c := NewMattermost(map[string]interface{}{}, &config.App{ClusterName: "dev"})
 	assert.Nil(c)
 }
 
 func TestMattermost(t *testing.T) {
 	assert := assert.New(t)
 
-	configMap := map[string]string{
+	configMap := map[string]interface{}{
 		"webhook": "testtest",
 	}
 	c := NewMattermost(configMap, &config.App{ClusterName: "dev"})
@@ -39,7 +39,7 @@ func TestSendMessage(t *testing.T) {
 
 	defer s.Close()
 
-	configMap := map[string]string{
+	configMap := map[string]interface{}{
 		"webhook": s.URL,
 	}
 	c := NewMattermost(configMap, &config.App{ClusterName: "dev"})
@@ -58,7 +58,7 @@ func TestSendMessageError(t *testing.T) {
 
 	defer s.Close()
 
-	configMap := map[string]string{
+	configMap := map[string]interface{}{
 		"webhook": s.URL,
 	}
 	c := NewMattermost(configMap, &config.App{ClusterName: "dev"})
@@ -77,7 +77,7 @@ func TestSendEvent(t *testing.T) {
 
 	defer s.Close()
 
-	configMap := map[string]string{
+	configMap := map[string]interface{}{
 		"webhook": s.URL,
 	}
 	c := NewMattermost(configMap, &config.App{ClusterName: "dev"})
@@ -98,7 +98,7 @@ func TestSendEvent(t *testing.T) {
 func TestInvaildHttpRequest(t *testing.T) {
 	assert := assert.New(t)
 
-	configMap := map[string]string{
+	configMap := map[string]interface{}{
 		"webhook": "h ttp://localhost",
 	}
 	c := NewMattermost(configMap, &config.App{ClusterName: "dev"})
@@ -106,7 +106,7 @@ func TestInvaildHttpRequest(t *testing.T) {
 
 	assert.NotNil(c.SendMessage("test"))
 
-	configMap = map[string]string{
+	configMap = map[string]interface{}{
 		"webhook": "http://localhost:132323",
 	}
 	c = NewMattermost(configMap, &config.App{ClusterName: "dev"})
