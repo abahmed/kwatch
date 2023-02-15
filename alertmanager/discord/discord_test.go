@@ -21,14 +21,14 @@ func mockedSend(
 func TestDiscordEmptyConfig(t *testing.T) {
 	assert := assert.New(t)
 
-	c := NewDiscord(map[string]string{}, &config.App{ClusterName: "dev"})
+	c := NewDiscord(map[string]interface{}{}, &config.App{ClusterName: "dev"})
 	assert.Nil(c)
 }
 
 func TestDiscordInvalidConfig(t *testing.T) {
 	assert := assert.New(t)
 
-	configMap := map[string]string{
+	configMap := map[string]interface{}{
 		"webhook": "testtest",
 	}
 	c := NewDiscord(configMap, &config.App{ClusterName: "dev"})
@@ -38,7 +38,7 @@ func TestDiscordInvalidConfig(t *testing.T) {
 func TestDiscord(t *testing.T) {
 	assert := assert.New(t)
 
-	configMap := map[string]string{
+	configMap := map[string]interface{}{
 		"webhook": "test/test",
 	}
 	c := NewDiscord(configMap, &config.App{ClusterName: "dev"})
@@ -50,7 +50,7 @@ func TestDiscord(t *testing.T) {
 func TestSendMessage(t *testing.T) {
 	assert := assert.New(t)
 
-	configMap := map[string]string{
+	configMap := map[string]interface{}{
 		"webhook": "test/test",
 	}
 	c := NewDiscord(configMap, &config.App{ClusterName: "dev"})
@@ -63,7 +63,7 @@ func TestSendMessage(t *testing.T) {
 func TestSendEvent(t *testing.T) {
 	assert := assert.New(t)
 
-	configMap := map[string]string{
+	configMap := map[string]interface{}{
 		"webhook": "test/test",
 	}
 	c := NewDiscord(configMap, &config.App{ClusterName: "dev"})

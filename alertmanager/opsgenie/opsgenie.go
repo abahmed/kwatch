@@ -37,9 +37,10 @@ type ogPayload struct {
 }
 
 // NewOpsgenie returns new opsgenie instance
-func NewOpsgenie(config map[string]string, appCfg *config.App) *Opsgenie {
+func NewOpsgenie(config map[string]interface{}, appCfg *config.App) *Opsgenie {
 	apiKey, ok := config["apiKey"]
-	if !ok || len(apiKey) == 0 {
+	apiKeyString := fmt.Sprint(apiKey)
+	if !ok || len(apiKeyString) == 0 {
 		logrus.Warnf("initializing opsgenie with empty webhook url")
 		return nil
 	}
@@ -47,10 +48,10 @@ func NewOpsgenie(config map[string]string, appCfg *config.App) *Opsgenie {
 	logrus.Infof("initializing opsgenie with secret apikey")
 
 	return &Opsgenie{
-		apikey: apiKey,
+		apikey: apiKeyString,
 		url:    opsgenieAPIURL,
-		title:  config["title"],
-		text:   config["text"],
+		title:  fmt.Sprint(config["title"]),
+		text:   fmt.Sprint(config["text"]),
 		appCfg: appCfg,
 	}
 }

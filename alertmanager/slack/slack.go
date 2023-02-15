@@ -32,20 +32,21 @@ type Slack struct {
 }
 
 // NewSlack returns new Slack instance
-func NewSlack(config map[string]string, appCfg *config.App) *Slack {
+func NewSlack(config map[string]interface{}, appCfg *config.App) *Slack {
 	webhook, ok := config["webhook"]
-	if !ok || len(webhook) == 0 {
+	webhookString := fmt.Sprint(webhook)
+	if !ok || len(webhookString) == 0 {
 		logrus.Warnf("initializing slack with empty webhook url")
 		return nil
 	}
 
-	logrus.Infof("initializing slack with webhook url: %s", webhook)
+	logrus.Infof("initializing slack with webhook url: %s", webhookString)
 
 	return &Slack{
-		webhook: webhook,
-		channel: config["channel"],
-		title:   config["title"],
-		text:    config["text"],
+		webhook: webhookString,
+		channel: fmt.Sprint(config["channel"]),
+		title:   fmt.Sprint(config["title"]),
+		text:    fmt.Sprint(config["text"]),
 		send:    slackClient.PostWebhook,
 		appCfg:  appCfg,
 	}
@@ -58,7 +59,7 @@ func (s *Slack) Name() string {
 
 // SendEvent sends event to the provider
 func (s *Slack) SendEvent(ev *event.Event) error {
-	logrus.Debugf("sending to slack event: %v", ev)
+	logrus.Infof("sending to slack event: %v", ev)
 
 	// use custom title if it's provided, otherwise use default
 	title := s.title

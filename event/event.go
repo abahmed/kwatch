@@ -8,4 +8,5 @@ type Event struct {
 	Reason    string
 	Events    string
 	Logs      string
+	Labels    map[string]string
 }

@@ -26,31 +26,34 @@ type Matrix struct {
 }
 
 // NewMatrix returns new Matrix instance
-func NewMatrix(config map[string]string, appCfg *config.App) *Matrix {
+func NewMatrix(config map[string]interface{}, appCfg *config.App) *Matrix {
 	homeServer, ok := config["homeServer"]
-	if !ok || len(homeServer) == 0 {
+	homeServerString := fmt.Sprint(homeServer)
+	if !ok || len(homeServerString) == 0 {
 		logrus.Warnf("initializing slack with empty homeServer")
 		return nil
 	}
 
 	accessToken, ok := config["accessToken"]
-	if !ok || len(accessToken) == 0 {
+	accessTokenString := fmt.Sprint(accessToken)
+	if !ok || len(accessTokenString) == 0 {
 		logrus.Warnf("initializing slack with empty accessToken")
 		return nil
 	}
 
 	internalRoomID, ok := config["internalRoomId"]
-	if !ok || len(internalRoomID) == 0 {
+	internalRoomIDString := fmt.Sprint(internalRoomID)
+	if !ok || len(internalRoomIDString) == 0 {
 		logrus.Warnf("initializing slack with empty internalRoomId")
 		return nil
 	}
 
 	return &Matrix{
-		homeServer:     homeServer,
-		accessToken:    accessToken,
-		internalRoomID: internalRoomID,
-		title:          config["title"],
-		text:           config["text"],
+		homeServer:     homeServerString,
+		accessToken:    accessTokenString,
+		internalRoomID: internalRoomIDString,
+		title:          fmt.Sprint(config["title"]),
+		text:           fmt.Sprint(config["text"]),
 		appCfg:         appCfg,
 	}
 }

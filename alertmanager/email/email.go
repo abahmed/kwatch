@@ -23,37 +23,42 @@ type Email struct {
 }
 
 // NewEmail returns new email instance
-func NewEmail(config map[string]string, appCfg *config.App) *Email {
+func NewEmail(config map[string]interface{}, appCfg *config.App) *Email {
 	from, ok := config["from"]
-	if !ok || len(from) == 0 {
+	fromString := fmt.Sprint(from)
+	if !ok || len(fromString) == 0 {
 		logrus.Warnf("initializing email with an empty from")
 		return nil
 	}
 
 	to, ok := config["to"]
-	if !ok || len(to) == 0 {
+	toString := fmt.Sprint(to)
+	if !ok || len(toString) == 0 {
 		logrus.Warnf("initializing email with an empty to")
 		return nil
 	}
 
 	password, ok := config["password"]
-	if !ok || len(password) == 0 {
+	passwordString := fmt.Sprint(password)
+	if !ok || len(passwordString) == 0 {
 		logrus.Warnf("initializing email with an empty password")
 		return nil
 	}
 
 	host, ok := config["host"]
-	if !ok || len(host) == 0 {
+	hostString := fmt.Sprint(host)
+	if !ok || len(hostString) == 0 {
 		logrus.Warnf("initializing email with an empty host")
 		return nil
 	}
 
 	port, ok := config["port"]
-	if !ok || len(port) == 0 {
+	portString := fmt.Sprint(port)
+	if !ok || len(portString) == 0 {
 		logrus.Warnf("initializing email with an empty port number")
 		return nil
 	}
-	portNumber, err := strconv.Atoi(port)
+	portNumber, err := strconv.Atoi(portString)
 	if err != nil {
 		logrus.Warnf("initializing email with an invalid port number: %s", err)
 		return nil
@@ -64,11 +69,11 @@ func NewEmail(config map[string]string, appCfg *config.App) *Email {
 		return nil
 	}
 
-	d := gomail.NewDialer(host, portNumber, from, password)
+	d := gomail.NewDialer(hostString, portNumber, fromString, passwordString)
 
 	return &Email{
-		from:   from,
-		to:     to,
+		from:   fromString,
+		to:     toString,
 		send:   d.DialAndSend,
 		appCfg: appCfg,
 	}

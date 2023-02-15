@@ -36,7 +36,7 @@ type Config struct {
 
 	// Alert is a map contains a map of each provider configuration
 	// e.g. {"slack": {"webhook": "URL"}}
-	Alert map[string]map[string]string `yaml:"alert"`
+	Alert map[string]map[string]interface{} `yaml:"alert"`
 
 	// AllowedNamespaces, ForbiddenNamespaces are calculated internally
 	// after loading Namespaces configuration

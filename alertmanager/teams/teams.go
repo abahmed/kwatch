@@ -32,20 +32,21 @@ type teamsWebhookPayload struct {
 }
 
 // NewTeams returns new team instance
-func NewTeams(config map[string]string, appCfg *config.App) *Teams {
+func NewTeams(config map[string]interface{}, appCfg *config.App) *Teams {
 	webhook, ok := config["webhook"]
+	webhookString := fmt.Sprint(webhook)
 
-	if !ok || len(webhook) == 0 {
+	if !ok || len(webhookString) == 0 {
 		logrus.Warnf("initializing Teams with empty webhook url")
 		return nil
 	}
 
-	logrus.Infof("initializing Teams with webhook url: %s", webhook)
+	logrus.Infof("initializing Teams with webhook url: %s", webhookString)
 
 	return &Teams{
-		webhook: webhook,
-		title:   config["title"],
-		text:    config["text"],
+		webhook: webhookString,
+		title:   fmt.Sprint(config["title"]),
+		text:    fmt.Sprint(config["text"]),
 		appCfg:  appCfg,
 	}
 }

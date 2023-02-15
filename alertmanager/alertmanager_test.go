@@ -42,7 +42,7 @@ func TestAlertManagerNoConfig(t *testing.T) {
 func TestGetProviders(t *testing.T) {
 	assert := assert.New(t)
 
-	alertMap := map[string]map[string]string{
+	alertMap := map[string]map[string]interface{}{
 		"slack": {
 			"webhook": "test",
 		},

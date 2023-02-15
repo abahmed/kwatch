@@ -13,27 +13,27 @@ import (
 func TestEmptyConfig(t *testing.T) {
 	assert := assert.New(t)
 
-	c := NewMatrix(map[string]string{}, &config.App{ClusterName: "dev"})
+	c := NewMatrix(map[string]interface{}{}, &config.App{ClusterName: "dev"})
 	assert.Nil(c)
 }
 
 func TestInvalidConfig(t *testing.T) {
 	assert := assert.New(t)
 
-	configMap := map[string]string{
+	configMap := map[string]interface{}{
 		"homeServer": "https://matrix-client.matrix.org",
 	}
 	c := NewMatrix(configMap, &config.App{ClusterName: "dev"})
 	assert.Nil(c)
 
-	configMap = map[string]string{
+	configMap = map[string]interface{}{
 		"homeServer":  "https://matrix-client.matrix.org",
 		"accessToken": "testToken",
 	}
 	c = NewMatrix(configMap, &config.App{ClusterName: "dev"})
 	assert.Nil(c)
 
-	configMap = map[string]string{
+	configMap = map[string]interface{}{
 		"homeServer":     "https://matrix-client.matrix.org",
 		"accessToken":    "testToken",
 		"internalRoomId": "",
@@ -46,7 +46,7 @@ func TestInvalidConfig(t *testing.T) {
 func TestMatrix(t *testing.T) {
 	assert := assert.New(t)
 
-	configMap := map[string]string{
+	configMap := map[string]interface{}{
 		"homeServer":     "https://matrix-client.matrix.org",
 		"accessToken":    "testToken",
 		"internalRoomId": "room1",
@@ -67,7 +67,7 @@ func TestSendMessage(t *testing.T) {
 
 	defer s.Close()
 
-	configMap := map[string]string{
+	configMap := map[string]interface{}{
 		"homeServer":     s.URL,
 		"accessToken":    "testToken",
 		"internalRoomId": "room1",
@@ -88,7 +88,7 @@ func TestSendMessageError(t *testing.T) {
 
 	defer s.Close()
 
-	configMap := map[string]string{
+	configMap := map[string]interface{}{
 		"homeServer":     s.URL,
 		"accessToken":    "testToken",
 		"internalRoomId": "room1",
@@ -109,7 +109,7 @@ func TestSendEvent(t *testing.T) {
 
 	defer s.Close()
 
-	configMap := map[string]string{
+	configMap := map[string]interface{}{
 		"homeServer":     s.URL,
 		"accessToken":    "testToken",
 		"internalRoomId": "room1",
@@ -132,7 +132,7 @@ func TestSendEvent(t *testing.T) {
 func TestInvaildHttpRequest(t *testing.T) {
 	assert := assert.New(t)
 
-	configMap := map[string]string{
+	configMap := map[string]interface{}{
 		"homeServer":     "h ttp://localhost",
 		"accessToken":    "testToken",
 		"internalRoomId": "room1",
@@ -142,7 +142,7 @@ func TestInvaildHttpRequest(t *testing.T) {
 
 	assert.NotNil(c.SendMessage("test"))
 
-	configMap = map[string]string{
+	configMap = map[string]interface{}{
 		"homeServer":     "http://localhost:132323",
 		"accessToken":    "testToken",
 		"internalRoomId": "room1",
