@@ -36,11 +36,18 @@ func NewFeiShu(config map[string]interface{}, appCfg *config.App) *FeiShu {
 
 	logrus.Infof("initializing Fei Shu with webhook url: %s", webhookString)
 
+	title, ok := config["title"]
+	titleFormatted := fmt.Sprint(title)
+	if !ok {
+		titleFormatted = ""
+	}
+
 	return &FeiShu{
 		webhook: webhookString,
-		title:   fmt.Sprint(config["title"]),
+		title:   titleFormatted,
 		appCfg:  appCfg,
 	}
+
 }
 
 // Name returns name of the provider
