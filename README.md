@@ -41,7 +41,7 @@ helm install [RELEASE_NAME] kwatch/kwatch --namespace kwatch --create-namespace 
 
 To get more details, please check [chart's configuration](https://github.com/abahmed/kwatch/blob/main/deploy/chart/README.md)
 
-### Using kubectl
+#### Using kubectl
 
 You need to get config template to add your configs
 
