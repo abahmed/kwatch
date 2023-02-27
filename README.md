@@ -32,6 +32,17 @@
 
 ### Install
 
+#### Using Helm
+
+```shell
+helm repo add kwatch https://kwatch.dev/charts
+helm install [RELEASE_NAME] kwatch/kwatch --namespace kwatch --create-namespace --version 0.8.0
+```
+
+To get more details, please check [chart's configuration](https://github.com/abahmed/kwatch/blob/main/deploy/chart/README.md)
+
+#### Using kubectl
+
 You need to get config template to add your configs
 
 ```shell
