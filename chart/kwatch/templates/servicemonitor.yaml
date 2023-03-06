@@ -1,0 +1,28 @@
+{{- if .Values.serviceMonitor.enabled -}}
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: {{ include "kwatch.fullname" . }}-sm
+  namespace: {{ $.Values.serviceMonitor.namespace }}
+  labels:
+    app: {{ include "kwatch.name" . }}
+    chart: {{ include "kwatch.chart" . }}
+    release: {{ .Release.Name }}
+    helm.sh/chart: {{ include "kwatch.chart" . }}
+    app.kubernetes.io/name: {{ include "kwatch.name" . }}
+    app.kubernetes.io/instance: {{ .Release.Name }}
+    app.kubernetes.io/managed-by: {{ .Release.Service }}
+spec:
+  selector:
+    matchLabels:
+      app: {{ include "kwatch.name" . }}
+      release: {{ .Release.Name }}
+  namespaceSelector:
+    matchNames:
+    - {{ .Release.Namespace }}
+  endpoints:
+    - port: http
+      interval: 10s
+      path: /prometheus
+      honorLabels: true
+{{- end }}
