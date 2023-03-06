@@ -1,6 +1,6 @@
 FROM golang:alpine AS builder
 ARG RELEASE_VERSION="nothing"
-LABEL maintainer="Abdelrahman Ahmed <a.ahmed1026@gmail.com"
+LABEL maintainer="Abdelrahman Ahmed <a.ahmed1026@gmail.com>"
 
 RUN apk update && \
     apk add git build-base && \
@@ -13,7 +13,7 @@ RUN go mod download
 
 COPY . /build/
 RUN sed -i 's/dev/'"${RELEASE_VERSION}"'/g' version/version.go
-RUN CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -a --installsuffix cgo --ldflags="-s"
+RUN CGO_ENABLED=0 GOOS=linux go build -a -installsuffix cgo -o kwatch .
 
 FROM alpine:latest
 RUN apk add --update ca-certificates
