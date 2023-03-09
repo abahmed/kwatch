@@ -283,6 +283,17 @@ title
 | `alert.feishu.webhook`   | FeiShu bot webhook URL      |
 | `alert.feishu.title`     | Customized title in message |
 
+#### Custom webhook
+
+If you want to enable custom webhook, provide url with optional headers and
+basic auth
+
+| Parameter                 | Description                     |
+|:--------------------------|:--------------------------------|
+| `alert.webhook.url`       | Webhook URL                     |
+| `alert.webhook.headers`   | optional list of name and value |
+| `alert.webhook.basicAuth` | optional username and password  |
+
 ### Cleanup
 
 ```shell
