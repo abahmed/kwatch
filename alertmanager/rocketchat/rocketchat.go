@@ -26,18 +26,19 @@ type rocketChatWebhookPayload struct {
 
 // NewRocketChat returns new rocket chat instance
 func NewRocketChat(config map[string]interface{}, appCfg *config.App) *RocketChat {
-	webhook, ok := config["webhook"]
-	webhookString := fmt.Sprint(webhook)
-	if !ok || len(webhookString) == 0 {
+	webhook, ok := config["webhook"].(string)
+	if !ok || len(webhook) == 0 {
 		logrus.Warnf("initializing Rocket Chat with empty webhook url")
 		return nil
 	}
 
-	logrus.Infof("initializing Rocket Chat with webhook url: %s", webhookString)
+	logrus.Infof("initializing Rocket Chat with webhook url: %s", webhook)
+
+	text, _ := config["text"].(string)
 
 	return &RocketChat{
-		webhook: webhookString,
-		text:    fmt.Sprint(config["text"]),
+		webhook: webhook,
+		text:    text,
 		appCfg:  appCfg,
 	}
 }
@@ -49,7 +50,7 @@ func (r *RocketChat) Name() string {
 
 // SendEvent sends event to the provider
 func (r *RocketChat) SendEvent(e *event.Event) error {
-	formattedMsg := e.FormatMarkdown(r.appCfg.ClusterName, r.text)
+	formattedMsg := e.FormatMarkdown(r.appCfg.ClusterName, r.text, "")
 	return r.sendByRocketChatApi(r.buildRequestBodyRocketChat(formattedMsg))
 }
 

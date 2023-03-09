@@ -33,20 +33,23 @@ type Slack struct {
 
 // NewSlack returns new Slack instance
 func NewSlack(config map[string]interface{}, appCfg *config.App) *Slack {
-	webhook, ok := config["webhook"]
-	webhookString := fmt.Sprint(webhook)
-	if !ok || len(webhookString) == 0 {
+	webhook, ok := config["webhook"].(string)
+	if !ok || len(webhook) == 0 {
 		logrus.Warnf("initializing slack with empty webhook url")
 		return nil
 	}
 
-	logrus.Infof("initializing slack with webhook url: %s", webhookString)
+	logrus.Infof("initializing slack with webhook url: %s", webhook)
+
+	channel, _ := config["channel"].(string)
+	title, _ := config["title"].(string)
+	text, _ := config["text"].(string)
 
 	return &Slack{
-		webhook: webhookString,
-		channel: fmt.Sprint(config["channel"]),
-		title:   fmt.Sprint(config["title"]),
-		text:    fmt.Sprint(config["text"]),
+		webhook: webhook,
+		channel: channel,
+		title:   title,
+		text:    text,
 		send:    slackClient.PostWebhook,
 		appCfg:  appCfg,
 	}

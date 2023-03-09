@@ -7,7 +7,7 @@ import (
 	"github.com/abahmed/kwatch/constant"
 )
 
-func (e *Event) FormatMarkdown(clusterName, text string) string {
+func (e *Event) FormatMarkdown(clusterName, text, delimiter string) string {
 	// add events part if it exists
 	eventsText := constant.DefaultEvents
 	events := strings.TrimSpace(e.Events)
@@ -27,14 +27,18 @@ func (e *Event) FormatMarkdown(clusterName, text string) string {
 		text = constant.DefaultText
 	}
 
+	if len(delimiter) == 0 {
+		delimiter = "\n"
+	}
+
 	msg := fmt.Sprintf(
-		"%s\n"+
-			"**Cluster:** %s\n"+
-			"**Pod:** %s\n"+
-			"**Container:** %s\n"+
-			"**Namespace:** %s\n"+
-			"**Reason:** %s\n"+
-			"**Events:**\n```\n%s\n```\n"+
+		"%s"+delimiter+
+			"**Cluster:** %s"+delimiter+
+			"**Pod:** %s"+delimiter+
+			"**Container:** %s"+delimiter+
+			"**Namespace:** %s"+delimiter+
+			"**Reason:** %s"+delimiter+
+			"**Events:**\n```\n%s\n```"+delimiter+
 			"**Logs:**\n```\n%s\n```",
 		text,
 		clusterName, e.Name,

@@ -51,7 +51,7 @@ func TestBuildRequestBodyFeiShu(t *testing.T) {
 		Logs:      "test\ntestlogs",
 		Events:    "test",
 	}
-	formattedMsg := ev.FormatMarkdown(c.appCfg.ClusterName, "")
+	formattedMsg := ev.FormatMarkdown(c.appCfg.ClusterName, "", "")
 
 	expectMessage := "{\"msg_type\": \"interactive\",\"card\": {\"config\": {\"wide_screen_mode\": true},\"header\": {\"title\": {\"tag\": \"plain_text\",\"content\": \"\"},\"template\": \"blue\"},\"elements\": [{\"tag\":\"markdown\",\"content\":\"There is an issue with container in a pod!\\n**Cluster:** dev\\n**Pod:** test-pod\\n**Container:** test-container\\n**Namespace:** default\\n**Reason:** OOMKILLED\\n**Events:**\\n```\\ntest\\n```\\n**Logs:**\\n```\\ntest\\ntestlogs\\n```\"}]}}"
 

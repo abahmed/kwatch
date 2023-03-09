@@ -1,9 +1,10 @@
 package alertmanager
 
 import (
-	"github.com/abahmed/kwatch/alertmanager/webhook"
 	"reflect"
 	"strings"
+
+	"github.com/abahmed/kwatch/alertmanager/webhook"
 
 	"github.com/abahmed/kwatch/alertmanager/feishu"
 	"github.com/abahmed/kwatch/config"

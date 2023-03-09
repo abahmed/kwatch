@@ -4,11 +4,12 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
+	"net/http"
+	"strings"
+
 	"github.com/abahmed/kwatch/config"
 	"github.com/abahmed/kwatch/event"
 	"github.com/abahmed/kwatch/util"
-	"net/http"
-	"strings"
 
 	"github.com/sirupsen/logrus"
 )
@@ -37,9 +38,8 @@ func (w *Webhook) SendMessage(msg string) error {
 
 // NewSlack returns new Slack instance
 func NewWebhook(config map[string]interface{}, appCfg *config.App) *Webhook {
-	url, ok := config["url"]
-	urlString := fmt.Sprint(url)
-	if !ok || len(urlString) == 0 {
+	url, ok := config["url"].(string)
+	if !ok || len(url) == 0 {
 		logrus.Warnf("initializing  with empty webhook url")
 		return nil
 	}
@@ -61,16 +61,14 @@ func NewWebhook(config map[string]interface{}, appCfg *config.App) *Webhook {
 	var a Authentication
 	json.Unmarshal(basicAuthJson, &a)
 
-	userName := fmt.Sprint(a.UserName)
-	password := fmt.Sprint(a.Password)
-
-	logrus.Infof("initializing  with webhook url: %s with headers: %s and username: %s password: %s", url, headers, userName, password)
+	logrus.Infof("initializing  with webhook url: %s "+
+		"with headers: %s and username: %s", url, headers, a.UserName)
 
 	return &Webhook{
-		webhook:  urlString,
+		webhook:  url,
 		headers:  headers,
-		username: userName,
-		password: password,
+		username: a.UserName,
+		password: a.Password,
 		appCfg:   appCfg,
 	}
 }

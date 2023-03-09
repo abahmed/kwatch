@@ -39,20 +39,22 @@ type DingTalk struct {
 
 // NewDingTalk returns new DingTalk instance
 func NewDingTalk(config map[string]interface{}, appCfg *config.App) *DingTalk {
-	accessToken, ok := config["accessToken"]
-	accessTokenString := fmt.Sprint(accessToken)
-	if !ok || len(accessTokenString) == 0 {
+	accessToken, ok := config["accessToken"].(string)
+	if !ok || len(accessToken) == 0 {
 		logrus.Warnf("initializing dingtalk with empty access token")
 		return nil
 	}
 
-	logrus.Infof("initializing dingtalk with access token: %s", accessTokenString)
+	logrus.Infof("initializing dingtalk with access token: %s", accessToken)
+
+	title, _ := config["title"].(string)
+	secret, _ := config["secret"].(string)
 
 	return &DingTalk{
-		accessToken: accessTokenString,
+		accessToken: accessToken,
 		url:         dingTalkAPIURL,
-		title:       fmt.Sprint(config["title"]),
-		secret:      fmt.Sprint(config["secret"]),
+		title:       title,
+		secret:      secret,
 		appCfg:      appCfg,
 	}
 }
@@ -71,7 +73,7 @@ func (d *DingTalk) SendEvent(e *event.Event) error {
 		title = constant.DefaultTitle
 	}
 
-	msg := e.FormatMarkdown(d.appCfg.ClusterName, "")
+	msg := e.FormatMarkdown(d.appCfg.ClusterName, "", "")
 
 	body := fmt.Sprintf(`{
 		"msgtype": "markdown",

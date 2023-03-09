@@ -9,7 +9,7 @@ metadata:
   name: kwatch
 rules:
 - apiGroups: [""]
-  resources: ["pods", "pods/log", "events"]
+  resources: ["pods", "pods/log", "events", "nodes"]
   verbs: ["get", "watch", "list"]
 ---
 apiVersion: v1

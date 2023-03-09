@@ -27,24 +27,19 @@ type feiShuWebhookContent struct {
 
 // NewFeiShu returns new feishu web bot instance
 func NewFeiShu(config map[string]interface{}, appCfg *config.App) *FeiShu {
-	webhook, ok := config["webhook"]
-	webhookString := fmt.Sprint(webhook)
-	if !ok || len(webhookString) == 0 {
+	webhook, ok := config["webhook"].(string)
+	if !ok || len(webhook) == 0 {
 		logrus.Warnf("initializing Fei Shu with empty webhook url")
 		return nil
 	}
 
-	logrus.Infof("initializing Fei Shu with webhook url: %s", webhookString)
+	logrus.Infof("initializing Fei Shu with webhook url: %s", webhook)
 
-	title, ok := config["title"]
-	titleFormatted := fmt.Sprint(title)
-	if !ok {
-		titleFormatted = ""
-	}
+	title, _ := config["title"].(string)
 
 	return &FeiShu{
-		webhook: webhookString,
-		title:   titleFormatted,
+		webhook: webhook,
+		title:   title,
 		appCfg:  appCfg,
 	}
 
@@ -57,7 +52,7 @@ func (r *FeiShu) Name() string {
 
 // SendEvent sends event to the provider
 func (r *FeiShu) SendEvent(e *event.Event) error {
-	formattedMsg := e.FormatMarkdown(r.appCfg.ClusterName, "")
+	formattedMsg := e.FormatMarkdown(r.appCfg.ClusterName, "", "")
 	return r.sendByFeiShuApi(r.buildRequestBodyFeiShu(formattedMsg))
 }
 

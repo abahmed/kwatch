@@ -27,33 +27,33 @@ type Matrix struct {
 
 // NewMatrix returns new Matrix instance
 func NewMatrix(config map[string]interface{}, appCfg *config.App) *Matrix {
-	homeServer, ok := config["homeServer"]
-	homeServerString := fmt.Sprint(homeServer)
-	if !ok || len(homeServerString) == 0 {
+	homeServer, ok := config["homeServer"].(string)
+	if !ok || len(homeServer) == 0 {
 		logrus.Warnf("initializing slack with empty homeServer")
 		return nil
 	}
 
-	accessToken, ok := config["accessToken"]
-	accessTokenString := fmt.Sprint(accessToken)
-	if !ok || len(accessTokenString) == 0 {
+	accessToken, ok := config["accessToken"].(string)
+	if !ok || len(accessToken) == 0 {
 		logrus.Warnf("initializing slack with empty accessToken")
 		return nil
 	}
 
-	internalRoomID, ok := config["internalRoomId"]
-	internalRoomIDString := fmt.Sprint(internalRoomID)
-	if !ok || len(internalRoomIDString) == 0 {
+	internalRoomID, ok := config["internalRoomId"].(string)
+	if !ok || len(internalRoomID) == 0 {
 		logrus.Warnf("initializing slack with empty internalRoomId")
 		return nil
 	}
 
+	title, _ := config["title"].(string)
+	text, _ := config["text"].(string)
+
 	return &Matrix{
-		homeServer:     homeServerString,
-		accessToken:    accessTokenString,
-		internalRoomID: internalRoomIDString,
-		title:          fmt.Sprint(config["title"]),
-		text:           fmt.Sprint(config["text"]),
+		homeServer:     homeServer,
+		accessToken:    accessToken,
+		internalRoomID: internalRoomID,
+		title:          title,
+		text:           text,
 		appCfg:         appCfg,
 	}
 }

@@ -26,29 +26,27 @@ type Telegram struct {
 
 // NewTelegram returns a new Telegram object
 func NewTelegram(config map[string]interface{}, appCfg *config.App) *Telegram {
-	token, ok := config["token"]
-	tokenString := fmt.Sprint(token)
-	if !ok || len(tokenString) == 0 {
+	token, ok := config["token"].(string)
+	if !ok || len(token) == 0 {
 		logrus.Warnf("initializing telegram with empty token")
 		return nil
 	}
 
-	chatId, ok := config["chatId"]
-	chatIdString := fmt.Sprint(chatId)
-	if !ok || len(chatIdString) == 0 {
+	chatId, ok := config["chatId"].(string)
+	if !ok || len(chatId) == 0 {
 		logrus.Warnf("initializing telegram with empty chat_id")
 		return nil
 	}
 
 	logrus.Infof(
 		"initializing telegram with token  %s and chat_id %s",
-		tokenString,
-		chatIdString)
+		token,
+		chatId)
 
 	// returns a new telegram object
 	return &Telegram{
-		token:  tokenString,
-		chatId: chatIdString,
+		token:  token,
+		chatId: chatId,
 		url:    telegramAPIURL,
 		appCfg: appCfg,
 	}

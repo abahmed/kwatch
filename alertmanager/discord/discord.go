@@ -1,7 +1,6 @@
 package discord
 
 import (
-	"fmt"
 	"strings"
 
 	"github.com/abahmed/kwatch/config"
@@ -29,30 +28,32 @@ type Discord struct {
 
 // NewDiscord returns new Discord instance
 func NewDiscord(config map[string]interface{}, appCfg *config.App) *Discord {
-	webhook, ok := config["webhook"]
-	webhookString := fmt.Sprint(webhook)
-	if !ok || len(webhookString) == 0 {
+	webhook, ok := config["webhook"].(string)
+	if !ok || len(webhook) == 0 {
 		logrus.Warnf("initializing discord with empty webhook url")
 		return nil
 	}
 
-	webhookList := strings.Split(webhookString, "/")
+	webhookList := strings.Split(webhook, "/")
 	if len(webhookList) <= 1 {
 		logrus.Warnf("initializing discord with missing id or token")
 		return nil
 	}
-	logrus.Infof("initializing discord with webhook url: %s", webhookString)
+	logrus.Infof("initializing discord with webhook url: %s", webhook)
 
 	webhookToken := webhookList[len(webhookList)-1]
 	webhookID := webhookList[len(webhookList)-2]
 
 	discordClient, _ := discordgo.New("")
 
+	title, _ := config["title"].(string)
+	text, _ := config["text"].(string)
+
 	return &Discord{
 		id:     webhookID,
 		token:  webhookToken,
-		title:  fmt.Sprint(config["title"]),
-		text:   fmt.Sprint(config["text"]),
+		title:  title,
+		text:   text,
 		send:   discordClient.WebhookExecute,
 		appCfg: appCfg,
 	}
