@@ -86,6 +86,9 @@ func TestGetProviders(t *testing.T) {
 		"feishu": {
 			"webhook": "test",
 		},
+		"webhook": {
+			"url": "test",
+		},
 	}
 
 	alertmanager := AlertManager{}

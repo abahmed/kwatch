@@ -42,19 +42,21 @@ type mmPayload struct {
 
 // NewMattermost returns new mattermost instance
 func NewMattermost(config map[string]interface{}, appCfg *config.App) *Mattermost {
-	webhook, ok := config["webhook"]
-	webhookString := fmt.Sprint(webhook)
-	if !ok || len(webhookString) == 0 {
+	webhook, ok := config["webhook"].(string)
+	if !ok || len(webhook) == 0 {
 		logrus.Warnf("initializing mattermost with empty webhook url")
 		return nil
 	}
 
-	logrus.Infof("initializing mattermost with webhook url: %s", webhookString)
+	logrus.Infof("initializing mattermost with webhook url: %s", webhook)
+
+	title, _ := config["title"].(string)
+	text, _ := config["text"].(string)
 
 	return &Mattermost{
-		webhook: webhookString,
-		title:   fmt.Sprint(config["title"]),
-		text:    fmt.Sprint(config["text"]),
+		webhook: webhook,
+		title:   title,
+		text:    text,
 		appCfg:  appCfg,
 	}
 }

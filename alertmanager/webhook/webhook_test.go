@@ -22,6 +22,12 @@ func TestWebhook(t *testing.T) {
 
 	configMap := map[string]interface{}{
 		"url": "testtest",
+		"headers": []interface{}{
+			map[string]string{
+				"name":  "test",
+				"value": "test",
+			},
+		},
 	}
 	c := NewWebhook(configMap, &config.App{ClusterName: "dev"})
 	assert.NotNil(c)
@@ -41,6 +47,12 @@ func TestSendMessage(t *testing.T) {
 
 	configMap := map[string]interface{}{
 		"url": s.URL,
+		"headers": []interface{}{
+			map[string]string{
+				"name":  "test",
+				"value": "test",
+			},
+		},
 	}
 	c := NewWebhook(configMap, &config.App{ClusterName: "dev"})
 	assert.NotNil(c)
@@ -72,6 +84,34 @@ func TestSendEvent(t *testing.T) {
 
 	s := httptest.NewServer(
 		http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			w.WriteHeader(http.StatusBadGateway)
+		}))
+
+	defer s.Close()
+
+	configMap := map[string]interface{}{
+		"url": s.URL,
+	}
+	c := NewWebhook(configMap, &config.App{ClusterName: "dev"})
+	assert.NotNil(c)
+
+	ev := event.Event{
+		Name:      "test-pod",
+		Container: "test-container",
+		Namespace: "default",
+		Reason:    "OOMKILLED",
+		Logs:      "test\ntestlogs",
+		Events: "event1-event2-event3-event1-event2-event3-event1-event2-" +
+			"event3\nevent5\nevent6-event8-event11-event12",
+	}
+	assert.Error(c.SendEvent(&ev))
+}
+
+func TestSendEventError(t *testing.T) {
+	assert := assert.New(t)
+
+	s := httptest.NewServer(
+		http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			w.Write([]byte(`{"isOk": true}`))
 		}))
 
@@ -79,6 +119,12 @@ func TestSendEvent(t *testing.T) {
 
 	configMap := map[string]interface{}{
 		"url": s.URL,
+		"headers": []interface{}{
+			map[string]string{
+				"name":  "test",
+				"value": "test",
+			},
+		},
 	}
 	c := NewWebhook(configMap, &config.App{ClusterName: "dev"})
 	assert.NotNil(c)

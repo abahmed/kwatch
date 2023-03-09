@@ -33,20 +33,21 @@ type teamsWebhookPayload struct {
 
 // NewTeams returns new team instance
 func NewTeams(config map[string]interface{}, appCfg *config.App) *Teams {
-	webhook, ok := config["webhook"]
-	webhookString := fmt.Sprint(webhook)
-
-	if !ok || len(webhookString) == 0 {
+	webhook, ok := config["webhook"].(string)
+	if !ok || len(webhook) == 0 {
 		logrus.Warnf("initializing Teams with empty webhook url")
 		return nil
 	}
 
-	logrus.Infof("initializing Teams with webhook url: %s", webhookString)
+	logrus.Infof("initializing Teams with webhook url: %s", webhook)
+
+	title, _ := config["title"].(string)
+	text, _ := config["text"].(string)
 
 	return &Teams{
-		webhook: webhookString,
-		title:   fmt.Sprint(config["title"]),
-		text:    fmt.Sprint(config["text"]),
+		webhook: webhook,
+		title:   title,
+		text:    text,
 		appCfg:  appCfg,
 	}
 }
@@ -58,13 +59,22 @@ func (t *Teams) Name() string {
 
 // SendEvent sends event to the provider
 func (t *Teams) SendEvent(e *event.Event) error {
-	return t.SendMessage(t.buildRequestBodyTeams(e))
+	return t.sendAPI(t.buildRequestBodyTeams(e))
 }
 
 // SendMessage sends text message to the provider
 func (t *Teams) SendMessage(msg string) error {
-	client := &http.Client{}
-	buffer := bytes.NewBuffer([]byte(msg))
+
+	msgPayload := &teamsWebhookPayload{
+		Text: msg,
+	}
+
+	jsonBytes, _ := json.Marshal(msgPayload)
+	return t.sendAPI(jsonBytes)
+}
+
+func (t *Teams) sendAPI(b []byte) error {
+	buffer := bytes.NewBuffer(b)
 	request, err := http.NewRequest(http.MethodPost, t.webhook, buffer)
 	if err != nil {
 		return err
@@ -72,6 +82,7 @@ func (t *Teams) SendMessage(msg string) error {
 
 	request.Header.Set("Content-Type", "application/json")
 
+	client := &http.Client{}
 	response, err := client.Do(request)
 	if err != nil {
 		return err
@@ -90,19 +101,19 @@ func (t *Teams) SendMessage(msg string) error {
 }
 
 // buildRequestBodyTeams builds formatted string from event
-func (t *Teams) buildRequestBodyTeams(e *event.Event) string {
+func (t *Teams) buildRequestBodyTeams(e *event.Event) []byte {
 	// use custom title if it's provided, otherwise use default
 	title := t.title
 	if len(title) == 0 {
 		title = defaultTeamsTitle
 	}
 
-	msg := e.FormatMarkdown(t.appCfg.ClusterName, t.text)
+	msg := e.FormatMarkdown(t.appCfg.ClusterName, t.text, "\n\n")
 	msgPayload := &teamsWebhookPayload{
 		Title: title,
 		Text:  msg,
 	}
 
 	jsonBytes, _ := json.Marshal(msgPayload)
-	return string(jsonBytes)
+	return (jsonBytes)
 }

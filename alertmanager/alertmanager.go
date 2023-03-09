@@ -1,16 +1,13 @@
 package alertmanager
 
 import (
-	"github.com/abahmed/kwatch/alertmanager/webhook"
 	"reflect"
 	"strings"
-
-	"github.com/abahmed/kwatch/alertmanager/feishu"
-	"github.com/abahmed/kwatch/config"
 
 	"github.com/abahmed/kwatch/alertmanager/dingtalk"
 	"github.com/abahmed/kwatch/alertmanager/discord"
 	"github.com/abahmed/kwatch/alertmanager/email"
+	"github.com/abahmed/kwatch/alertmanager/feishu"
 	"github.com/abahmed/kwatch/alertmanager/matrix"
 	"github.com/abahmed/kwatch/alertmanager/mattermost"
 	"github.com/abahmed/kwatch/alertmanager/opsgenie"
@@ -19,6 +16,8 @@ import (
 	"github.com/abahmed/kwatch/alertmanager/slack"
 	"github.com/abahmed/kwatch/alertmanager/teams"
 	"github.com/abahmed/kwatch/alertmanager/telegram"
+	"github.com/abahmed/kwatch/alertmanager/webhook"
+	"github.com/abahmed/kwatch/config"
 	"github.com/abahmed/kwatch/event"
 	"github.com/sirupsen/logrus"
 )
