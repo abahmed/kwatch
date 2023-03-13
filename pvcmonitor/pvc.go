@@ -24,6 +24,7 @@ func NewPvcMonitor(
 		client:       client,
 		config:       config,
 		alertManager: alertManager,
+		notifiedPvc:  make(map[string]bool),
 	}
 }
 
