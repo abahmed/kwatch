@@ -42,8 +42,8 @@ func (p *PvcMonitor) checkUsage() {
 				continue
 			}
 
-			msg := fmt.Sprintf("pv usage for %s(%s) attached to pod %s "+
-				"in namespace %s is %f, higher than %f",
+			msg := fmt.Sprintf("Volume Usage for %s (%s) attached to pod %s "+
+				"in namespace %s is %.2f%% (higher than %.0f%%)",
 				pvc.Name,
 				pvc.PVName,
 				pvc.PodName,
