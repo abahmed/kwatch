@@ -10,15 +10,12 @@ require (
 	github.com/stretchr/testify v1.8.2
 	gopkg.in/mail.v2 v2.3.1
 	gopkg.in/yaml.v3 v3.0.1
-	k8s.io/api v0.26.3
+	k8s.io/api v0.27.0
 	k8s.io/apimachinery v0.27.0
-	k8s.io/client-go v0.26.3
+	k8s.io/client-go v0.27.0
 )
 
-require (
-	github.com/google/uuid v1.3.0 // indirect
-	github.com/rogpeppe/go-internal v1.6.1 // indirect
-)
+require github.com/google/uuid v1.3.0 // indirect
 
 require (
 	github.com/davecgh/go-spew v1.1.1 // indirect
