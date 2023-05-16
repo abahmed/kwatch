@@ -93,7 +93,9 @@ func (w *Webhook) SendEvent(ev *event.Event) error {
 	for _, header := range w.headers {
 		request.Header.Set(header.Name, header.Value)
 	}
-	request.SetBasicAuth(w.username, w.password)
+	if len(w.username) > 0 && len(w.password) > 0 {
+		request.SetBasicAuth(w.username, w.password)
+	}
 
 	response, err := client.Do(request)
 	if err != nil {
