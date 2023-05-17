@@ -5,7 +5,7 @@ go 1.20
 require (
 	github.com/bwmarrin/discordgo v0.27.1
 	github.com/google/go-github/v41 v41.0.1-0.20211227215900-a899e0fadbec
-	github.com/sirupsen/logrus v1.9.0
+	github.com/sirupsen/logrus v1.9.1
 	github.com/slack-go/slack v0.12.2
 	github.com/stretchr/testify v1.8.2
 	gopkg.in/mail.v2 v2.3.1
