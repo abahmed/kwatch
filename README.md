@@ -100,6 +100,7 @@ kubectl apply -f https://raw.githubusercontent.com/abahmed/kwatch/v0.8.3/deploy/
 |:------------------------------|:------------------------------------------- |
 | `app.proxyURL` | used in outgoing http(s) requests except Kubernetes requests to cluster optionally |
 | `app.clusterName` | used in notifications to indicate which cluster has issue |
+| `app.disableStartupMessage` | If set to true, welcome message will not be sent to notification channels |
 
 ### Upgrader
 

@@ -58,6 +58,10 @@ type App struct {
 	// ClusterName to used in notifications to indicate which cluster has
 	// issue
 	ClusterName string `yaml:"clusterName"`
+
+	// DisableUpdateCheck if set to true, welcome message will not be
+	// sent to configured notification channels
+	DisableStartupMessage bool `yaml:"disableStartupMessage"`
 }
 
 // Upgrader confing struct
