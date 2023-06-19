@@ -28,8 +28,10 @@ func main() {
 	alertManager := alertmanager.AlertManager{}
 	alertManager.Init(config.Alert, &config.App)
 
-	// send notification to providers
-	alertManager.Notify(fmt.Sprintf(constant.WelcomeMsg, version.Short()))
+	if !config.App.DisableStartupMessage {
+		// send notification to providers
+		alertManager.Notify(fmt.Sprintf(constant.WelcomeMsg, version.Short()))
+	}
 
 	// check and notify if newer versions are available
 	upgrader := upgrader.NewUpgrader(&config.Upgrader, &alertManager)
