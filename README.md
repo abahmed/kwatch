@@ -28,6 +28,11 @@
 
 **kwatch** helps you monitor all changes in your Kubernetes(K8s) cluster, detects crashes in your running apps in realtime, and publishes notifications to your channels (Slack, Discord, etc.) instantly
 
+## ⭐️ Join Waitlist
+
+We're working on SAAS version of kwatch that provides User interface, optimized notifications, more details about crashes, and more. You can join <a href="https://join.kwatch.dev">the waitlist</a> to get early access!
+
+
 ## ⚡️ Getting Started
 
 ### Install
