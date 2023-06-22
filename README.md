@@ -30,7 +30,7 @@
 
 ## ⭐️ Join Waitlist
 
-We\'re working on SAAS version of kwatch that provides User interface, optimized notifications, more details about crashes, and more. you can join <a href="https://join.kwatch.dev">the waitlist</a> to get early access!
+We're working on SAAS version of kwatch that provides User interface, optimized notifications, more details about crashes, and more. you can join <a href="https://join.kwatch.dev">the waitlist</a> to get early access!
 
 
 ## ⚡️ Getting Started
