@@ -11,7 +11,6 @@ import (
 	"github.com/sirupsen/logrus"
 	v1 "k8s.io/api/core/v1"
 
-	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
 	"k8s.io/client-go/kubernetes"
@@ -133,7 +132,7 @@ func getPodEvents(
 }
 
 // GetNodes gets a list of nodes
-func GetNodes(c kubernetes.Interface) (*corev1.NodeList, error) {
+func GetNodes(c kubernetes.Interface) (*v1.NodeList, error) {
 	return c.CoreV1().
 		Nodes().
 		List(context.TODO(), metav1.ListOptions{})
