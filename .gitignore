@@ -29,4 +29,4 @@ config.yaml
 *.DS_Store
 
 # debug
-__debug_bin
+__debug_bin*

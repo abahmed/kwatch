@@ -7,10 +7,12 @@ import (
 	"github.com/abahmed/kwatch/client"
 	"github.com/abahmed/kwatch/config"
 	"github.com/abahmed/kwatch/constant"
-	"github.com/abahmed/kwatch/controller"
+	"github.com/abahmed/kwatch/handler"
 	"github.com/abahmed/kwatch/pvcmonitor"
+	"github.com/abahmed/kwatch/storage/memory"
 	"github.com/abahmed/kwatch/upgrader"
 	"github.com/abahmed/kwatch/version"
+	"github.com/abahmed/kwatch/watcher"
 	"github.com/sirupsen/logrus"
 )
 
@@ -42,10 +44,19 @@ func main() {
 		pvcmonitor.NewPvcMonitor(client, &config.PvcMonitor, &alertManager)
 	go pvcMonitor.Start()
 
-	// start controller
-	controller.Start(
+	// Create handler
+	h := handler.NewHandler(
 		client,
-		&alertManager,
 		config,
+		memory.NewMemory(),
+		&alertManager,
 	)
+
+	namespace := ""
+	if len(config.AllowedNamespaces) == 1 {
+		namespace = config.AllowedNamespaces[0]
+	}
+
+	// start watcher
+	watcher.Start(client, namespace, h.ProcessPod)
 }

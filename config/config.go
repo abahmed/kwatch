@@ -39,12 +39,12 @@ type Config struct {
 	Alert map[string]map[string]interface{} `yaml:"alert"`
 
 	// AllowedNamespaces, ForbiddenNamespaces are calculated internally
-	// after loading Namespaces configuration
+	// after populating Namespaces configuration
 	AllowedNamespaces   []string
 	ForbiddenNamespaces []string
 
-	// AllowedReasons, ForbiddenReasons are calculated internally after loading
-	// Reasons configuration
+	// AllowedReasons, ForbiddenReasons are calculated internally after
+	// populating Reasons configuration
 	AllowedReasons   []string
 	ForbiddenReasons []string
 }
