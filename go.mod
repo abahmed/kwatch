@@ -1,6 +1,6 @@
 module github.com/abahmed/kwatch
 
-go 1.20
+go 1.21
 
 require (
 	github.com/bwmarrin/discordgo v0.27.1
