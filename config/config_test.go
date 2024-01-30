@@ -97,3 +97,24 @@ func TestConfigFromFile(t *testing.T) {
 	_, err := LoadConfig()
 	assert.NotNil(err)
 }
+
+func TestGetCompiledIgnorePodNamePatterns(t *testing.T) {
+	assert := assert.New(t)
+
+	validPatterns := []string{
+		"my-fancy-pod-[0-9]",
+	}
+
+	compiledPatterns, err := getCompiledIgnorePodNamePatterns(validPatterns)
+
+	assert.Nil(err)
+	assert.True(compiledPatterns[0].MatchString("my-fancy-pod-8"))
+
+	invalidPatterns := []string{
+		"my-fancy-pod-[.*",
+	}
+
+	compiledPatterns, err = getCompiledIgnorePodNamePatterns(invalidPatterns)
+
+	assert.NotNil(err)
+}

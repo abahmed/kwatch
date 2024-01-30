@@ -98,6 +98,7 @@ kubectl apply -f https://raw.githubusercontent.com/abahmed/kwatch/v0.8.4/deploy/
 | `reasons`                      | Optional comma separated list of reasons that you want to watch or forbid, if it's not provided it will watch all reasons. If you want to forbid a reason, configure it with `!<reason>`. You can either set forbidden reasons or allowed, not both.                     |
 | `ignoreFailedGracefulShutdown` | If set to true, containers which are forcefully killed during shutdown (as their graceful shutdown failed) are not reported as error     |
 | `ignoreContainerNames`         | Optional comma separated list of container names to ignore    |
+| `ignorePodNames`               | Optional list of pod name regexp patterns to ignore    |
 
 ### App
 
