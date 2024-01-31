@@ -214,9 +214,20 @@ func (c *Controller) processPod(key string, pod *v1.Pod) {
 		if len(c.config.IgnoreContainerNames) > 0 &&
 			slices.Contains(c.config.IgnoreContainerNames, container.Name) {
 			logrus.Infof(
-				"skip pod %s as in container ignore list",
+				"skip container %s as in container ignore list",
 				container.Name)
 			return
+		}
+
+		if len(c.config.IgnorePodNames) > 0 {
+			for _, pattern := range c.config.IgnorePodNamePatterns {
+				if pattern.MatchString(pod.Name) {
+					logrus.Infof(
+						"skip pod %s as in pod name patterns ignore list",
+						container.Name)
+					return
+				}
+			}
 		}
 
 		// get logs for this container
