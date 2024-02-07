@@ -73,6 +73,7 @@ func TestConfigFromFile(t *testing.T) {
 		MaxRecentLogLines: 20,
 		Namespaces:        []string{"default", "!kwatch"},
 		Reasons:           []string{"default", "!kwatch"},
+		IgnorePodNames:    []string{"my-fancy-pod-[.*"},
 		App: App{
 			ProxyURL:    "https://localhost",
 			ClusterName: "development",
