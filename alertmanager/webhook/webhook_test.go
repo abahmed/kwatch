@@ -125,6 +125,10 @@ func TestSendEventError(t *testing.T) {
 				"value": "test",
 			},
 		},
+		"basicAuth": map[string]string{
+			"username": "test",
+			"password": "test",
+		},
 	}
 	c := NewWebhook(configMap, &config.App{ClusterName: "dev"})
 	assert.NotNil(c)

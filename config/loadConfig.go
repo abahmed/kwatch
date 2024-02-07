@@ -1,7 +1,9 @@
 package config
 
 import (
+	"fmt"
 	"os"
+	"regexp"
 	"strings"
 
 	"github.com/sirupsen/logrus"
@@ -46,6 +48,13 @@ func LoadConfig() (*Config, error) {
 			"Can't set both")
 	}
 
+	// Prepare ignored pod name patters
+	config.IgnorePodNamePatterns, err =
+		getCompiledIgnorePodNamePatterns(config.IgnorePodNames)
+	if err != nil {
+		logrus.Errorf("Failed to compile pod name pattern: %s", err.Error())
+	}
+
 	// Parse proxy config
 	if len(config.App.ProxyURL) > 0 {
 		os.Setenv("HTTPS_PROXY", config.App.ProxyURL)
@@ -66,4 +75,20 @@ func getAllowForbidSlices(items []string) (allow []string, forbid []string) {
 		allow = append(allow, item)
 	}
 	return allow, forbid
+}
+
+func getCompiledIgnorePodNamePatterns(patterns []string) (compiledPatterns []*regexp.Regexp, err error) {
+	compiledPatterns = make([]*regexp.Regexp, 0)
+
+	for _, pattern := range patterns {
+		compiledPattern, err := regexp.Compile(pattern)
+
+		if err != nil {
+			return nil, fmt.Errorf("failed to compile pattern '%s'", pattern)
+		}
+
+		compiledPatterns = append(compiledPatterns, compiledPattern)
+	}
+
+	return compiledPatterns, nil
 }

@@ -1,5 +1,9 @@
 package config
 
+import (
+	"regexp"
+)
+
 type Config struct {
 	// App general configuration
 	App App `yaml:"app"`
@@ -34,6 +38,9 @@ type Config struct {
 	// IgnoreContainerNames optional list of container names to ignore
 	IgnoreContainerNames []string `yaml:"ignoreContainerNames"`
 
+	// IgnorePodNames optional list of pod name regexp patterns to ignore
+	IgnorePodNames []string `yaml:"ignorePodNames"`
+
 	// Alert is a map contains a map of each provider configuration
 	// e.g. {"slack": {"webhook": "URL"}}
 	Alert map[string]map[string]interface{} `yaml:"alert"`
@@ -47,6 +54,9 @@ type Config struct {
 	// populating Reasons configuration
 	AllowedReasons   []string
 	ForbiddenReasons []string
+
+	// Patterns are compiled from IgnorePodNames after loading
+	IgnorePodNamePatterns []*regexp.Regexp
 }
 
 // App confing struct

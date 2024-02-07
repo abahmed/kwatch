@@ -73,6 +73,7 @@ func TestConfigFromFile(t *testing.T) {
 		MaxRecentLogLines: 20,
 		Namespaces:        []string{"default", "!kwatch"},
 		Reasons:           []string{"default", "!kwatch"},
+		IgnorePodNames:    []string{"my-fancy-pod-[.*"},
 		App: App{
 			ProxyURL:    "https://localhost",
 			ClusterName: "development",
@@ -95,5 +96,26 @@ func TestConfigFromFile(t *testing.T) {
 
 	os.WriteFile("config.yaml", []byte("maxRecentLogLines: test"), 0644)
 	_, err := LoadConfig()
+	assert.NotNil(err)
+}
+
+func TestGetCompiledIgnorePodNamePatterns(t *testing.T) {
+	assert := assert.New(t)
+
+	validPatterns := []string{
+		"my-fancy-pod-[0-9]",
+	}
+
+	compiledPatterns, err := getCompiledIgnorePodNamePatterns(validPatterns)
+
+	assert.Nil(err)
+	assert.True(compiledPatterns[0].MatchString("my-fancy-pod-8"))
+
+	invalidPatterns := []string{
+		"my-fancy-pod-[.*",
+	}
+
+	compiledPatterns, err = getCompiledIgnorePodNamePatterns(invalidPatterns)
+
 	assert.NotNil(err)
 }
