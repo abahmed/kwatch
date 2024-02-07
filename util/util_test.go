@@ -43,11 +43,11 @@ func TestJsonEscape(t *testing.T) {
 		},
 		{
 			Input:  "te\bst",
-			Output: "te\\u0008st",
+			Output: "te\\bst",
 		},
 		{
 			Input:  "\b",
-			Output: "\\u0008",
+			Output: "\\b",
 		},
 		{
 			Input:  "\"",
