@@ -18,46 +18,72 @@ func NewMemory() storage.Storage {
 }
 
 // AddPodContainer attaches container to pod to mark it has an error
-func (m *memory) AddPodContainer(podKey, containerKey string) {
-	if v, ok := m.smap.Load(podKey); ok {
-		containers := v.(map[string]bool)
-		containers[containerKey] = true
+func (m *memory) AddPodContainer(namespace, podKey, containerKey string, state *storage.ContainerState) {
+	key := m.getKey(namespace, podKey)
+	if v, ok := m.smap.Load(key); ok {
+		containers := v.(map[string]*storage.ContainerState)
+		containers[containerKey] = state
 
-		m.smap.Store(podKey, containers)
+		m.smap.Store(key, containers)
 		return
 	}
-	m.smap.Store(podKey, map[string]bool{containerKey: true})
+	m.smap.Store(key, map[string]*storage.ContainerState{containerKey: state})
 }
 
 // Delete deletes pod with all its containers
-func (m *memory) DelPod(key string) {
+func (m *memory) DelPod(namespace, podKey string) {
+	key := m.getKey(namespace, podKey)
 	m.smap.Delete(key)
 }
 
 // DelPodContainer detaches container from pod to mark error is resolved
-func (m *memory) DelPodContainer(podKey, containerKey string) {
-	v, ok := m.smap.Load(podKey)
+func (m *memory) DelPodContainer(namespace, podKey, containerKey string) {
+	key := m.getKey(namespace, podKey)
+
+	v, ok := m.smap.Load(key)
 	if !ok {
 		return
 	}
 
-	containers := v.(map[string]bool)
+	containers := v.(map[string]*storage.ContainerState)
 	delete(containers, containerKey)
 
-	m.smap.Store(podKey, containers)
+	m.smap.Store(key, containers)
 }
 
 // HasPodContainer checks if container is attached to given pod or not
-func (m *memory) HasPodContainer(podKey, containerKey string) bool {
-	v, ok := m.smap.Load(podKey)
+func (m *memory) HasPodContainer(namespace, podKey, containerKey string) bool {
+	key := m.getKey(namespace, podKey)
+
+	v, ok := m.smap.Load(key)
 	if !ok {
 		return false
 	}
 
-	containers := v.(map[string]bool)
+	containers := v.(map[string]*storage.ContainerState)
 	if _, ok := containers[containerKey]; ok {
 		return true
 	}
 
 	return false
+}
+
+func (m *memory) GetPodContainer(namespace, podKey, containerKey string) *storage.ContainerState {
+	key := m.getKey(namespace, podKey)
+
+	v, ok := m.smap.Load(key)
+	if !ok {
+		return nil
+	}
+
+	containers := v.(map[string]*storage.ContainerState)
+	if val, ok := containers[containerKey]; ok {
+		return val
+	}
+
+	return nil
+}
+
+func (*memory) getKey(namespace, pod string) string {
+	return namespace + "/" + pod
 }

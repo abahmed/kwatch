@@ -9,12 +9,6 @@ const KwatchUpdateMsg = ":tada: A newer version " +
 	"<https://github.com/abahmed/kwatch/releases/tag/%[1]s|%[1]s> of Kwatch " +
 	"is available! Please update to the latest version."
 
-// NumRequeues indicates number of retries when worker fails to handle item
-const NumRequeues = 5
-
-// NumWorkers is the number concurrent workers that consume items for the queue
-const NumWorkers = 4
-
 const (
 	Footer        = "<https://github.com/abahmed/kwatch|kwatch>"
 	DefaultTitle  = ":red_circle: kwatch detected a crash in pod"

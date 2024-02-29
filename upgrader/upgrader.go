@@ -29,7 +29,8 @@ func NewUpgrader(config *config.Upgrader,
 
 // CheckUpdates checks every 24 hours if a newer version of Kwatch is available
 func (u *Upgrader) CheckUpdates() {
-	if u.config.DisableUpdateCheck {
+	if u.config.DisableUpdateCheck ||
+		version.Short() == "dev" {
 		return
 	}
 

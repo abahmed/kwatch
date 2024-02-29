@@ -18,7 +18,7 @@ import (
 
 // GetPodEventsStr returns formatted events as a string for specified pod
 func GetPodEventsStr(c kubernetes.Interface, name, namespace string) string {
-	events, err := getPodEvents(c, name, namespace)
+	events, err := GetPodEvents(c, name, namespace)
 
 	eventsString := ""
 	if err != nil {
@@ -49,7 +49,7 @@ func ContainsKillingStoppingContainerEvents(
 	c kubernetes.Interface,
 	name,
 	namespace string) bool {
-	events, err := getPodEvents(c, name, namespace)
+	events, err := GetPodEvents(c, name, namespace)
 	if err != nil {
 		return false
 	}
@@ -120,7 +120,7 @@ func getContainerLogs(
 		DoRaw(context.TODO())
 }
 
-func getPodEvents(
+func GetPodEvents(
 	c kubernetes.Interface,
 	name,
 	namespace string) (*v1.EventList, error) {
@@ -180,9 +180,9 @@ func RandomString(n int) string {
 		"NOPQRSTUVWXYZ0123456789"
 
 	b := make([]byte, n)
-	rand.Seed(time.Now().UnixNano())
+	r := rand.New(rand.NewSource(time.Now().UnixNano()))
 	for i := range b {
-		b[i] = availableCharacterBytes[rand.Intn(len(availableCharacterBytes))]
+		b[i] = availableCharacterBytes[r.Intn(len(availableCharacterBytes))]
 	}
 
 	return string(b)
