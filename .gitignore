@@ -8,7 +8,6 @@
 *.dll
 *.so
 *.dylib
-kwatch
 
 # Test binary, built with `go test -c`
 *.test
