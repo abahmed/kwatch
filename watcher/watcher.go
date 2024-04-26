@@ -16,14 +16,13 @@ type watcherEvent struct {
 	pod       *corev1.Pod
 }
 
-// Watcher holds necessary
 type Watcher struct {
 	watcher     *toolsWatch.RetryWatcher
 	queue       *workqueue.Type
 	handlerFunc func(string, *corev1.Pod)
 }
 
-// run starts the controller
+// run starts the watcher
 func (w *Watcher) run(stopCh chan struct{}) {
 	defer utilruntime.HandleCrash()
 	defer w.queue.ShutDown()

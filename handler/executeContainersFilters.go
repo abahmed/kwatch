@@ -18,7 +18,7 @@ func (h *handler) executeContainersFilters(ctx *filter.Context) {
 
 		isContainerOk := false
 		for i := range h.containerFilters {
-			if h.containerFilters[i].Execute(ctx) {
+			if shouldStop := h.containerFilters[i].Execute(ctx); shouldStop {
 				isContainerOk = true
 				break
 			}

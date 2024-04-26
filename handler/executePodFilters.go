@@ -9,7 +9,7 @@ import (
 func (h *handler) executePodFilters(ctx *filter.Context) {
 	isPodOk := false
 	for i := range h.podFilters {
-		if h.podFilters[i].Execute(ctx) {
+		if shouldStop := h.podFilters[i].Execute(ctx); shouldStop {
 			isPodOk = true
 			break
 		}
