@@ -1,6 +1,6 @@
 module github.com/abahmed/kwatch
 
-go 1.22.2
+go 1.22.3
 
 require (
 	github.com/bwmarrin/discordgo v0.28.1
@@ -41,21 +41,21 @@ require (
 	github.com/pkg/errors v0.9.1 // indirect
 	github.com/pmezard/go-difflib v1.0.0 // indirect
 	github.com/spf13/pflag v1.0.5 // indirect
-	golang.org/x/crypto v0.22.0 // indirect
-	golang.org/x/exp v0.0.0-20240416160154-fe59bbe5cc7f
-	golang.org/x/net v0.24.0 // indirect
-	golang.org/x/oauth2 v0.19.0 // indirect
-	golang.org/x/sys v0.19.0 // indirect
-	golang.org/x/term v0.19.0 // indirect
-	golang.org/x/text v0.14.0 // indirect
+	golang.org/x/crypto v0.23.0 // indirect
+	golang.org/x/exp v0.0.0-20240506185415-9bf2ced13842
+	golang.org/x/net v0.25.0 // indirect
+	golang.org/x/oauth2 v0.20.0 // indirect
+	golang.org/x/sys v0.20.0 // indirect
+	golang.org/x/term v0.20.0 // indirect
+	golang.org/x/text v0.15.0 // indirect
 	golang.org/x/time v0.5.0 // indirect
-	google.golang.org/protobuf v1.33.0 // indirect
+	google.golang.org/protobuf v1.34.1 // indirect
 	gopkg.in/alexcesaro/quotedprintable.v3 v3.0.0-20150716171945-2caba252f4dc // indirect
 	gopkg.in/inf.v0 v0.9.1 // indirect
 	gopkg.in/yaml.v2 v2.4.0 // indirect
 	k8s.io/klog/v2 v2.120.1 // indirect
-	k8s.io/kube-openapi v0.0.0-20240423202451-8948a665c108 // indirect
-	k8s.io/utils v0.0.0-20240423183400-0849a56e8f22 // indirect
+	k8s.io/kube-openapi v0.0.0-20240430033511-f0e62f92d13f // indirect
+	k8s.io/utils v0.0.0-20240502163921-fe8a2dddb1d0 // indirect
 	sigs.k8s.io/json v0.0.0-20221116044647-bc3834ca7abd // indirect
 	sigs.k8s.io/structured-merge-diff/v4 v4.4.1 // indirect
 	sigs.k8s.io/yaml v1.4.0 // indirect
