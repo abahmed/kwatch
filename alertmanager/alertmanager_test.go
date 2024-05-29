@@ -89,6 +89,9 @@ func TestGetProviders(t *testing.T) {
 		"webhook": {
 			"url": "test",
 		},
+		"zenduty": {
+			"integrationKey": "test",
+		},
 	}
 
 	alertmanager := AlertManager{}
