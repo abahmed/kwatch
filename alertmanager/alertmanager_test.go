@@ -92,6 +92,9 @@ func TestGetProviders(t *testing.T) {
 		"zenduty": {
 			"integrationKey": "test",
 		},
+		"googlechat": {
+			"webhook": "test",
+		},
 	}
 
 	alertmanager := AlertManager{}

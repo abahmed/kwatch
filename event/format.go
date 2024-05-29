@@ -94,3 +94,45 @@ func (e *Event) FormatHtml(clusterName, text string) string {
 
 	return msg
 }
+
+func (e *Event) FormatText(clusterName, text string) string {
+	eventsText := constant.DefaultEvents
+	logsText := constant.DefaultLogs
+
+	// add events part if it exists
+	events := strings.TrimSpace(e.Events)
+	if len(events) > 0 {
+		eventsText = e.Events
+	}
+
+	// add logs part if it exists
+	logs := strings.TrimSpace(e.Logs)
+	if len(logs) > 0 {
+		logsText = e.Logs
+	}
+
+	// use custom text if it's provided, otherwise use default
+	if len(text) == 0 {
+		text = constant.DefaultText
+	}
+
+	msg := fmt.Sprintf(
+		"There is an issue with container in a pod!\n\n"+
+			"cluster: %s\n"+
+			"Pod Name: %s\n"+
+			"Container: %s\n"+
+			"Namespace: %s\n"+
+			"Reason: %s\n\n"+
+			"Events:\n%s\n\n"+
+			"Logs:\n%s\n\n",
+		clusterName,
+		e.Name,
+		e.Container,
+		e.Namespace,
+		e.Reason,
+		eventsText,
+		logsText,
+	)
+
+	return msg
+}
