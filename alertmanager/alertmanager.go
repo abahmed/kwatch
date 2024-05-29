@@ -17,6 +17,7 @@ import (
 	"github.com/abahmed/kwatch/alertmanager/teams"
 	"github.com/abahmed/kwatch/alertmanager/telegram"
 	"github.com/abahmed/kwatch/alertmanager/webhook"
+	"github.com/abahmed/kwatch/alertmanager/zenduty"
 	"github.com/abahmed/kwatch/config"
 	"github.com/abahmed/kwatch/event"
 	"github.com/sirupsen/logrus"
@@ -67,7 +68,10 @@ func (a *AlertManager) Init(
 			pvdr = feishu.NewFeiShu(v, appCfg)
 		} else if lowerCaseKey == "webhook" {
 			pvdr = webhook.NewWebhook(v, appCfg)
+		} else if lowerCaseKey == "zenduty" {
+			pvdr = zenduty.NewZenduty(v, appCfg)
 		}
+
 		if !reflect.ValueOf(pvdr).IsNil() {
 			a.providers = append(a.providers, pvdr)
 		}
