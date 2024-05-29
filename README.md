@@ -285,6 +285,18 @@ title
 | `alert.feishu.webhook`   | FeiShu bot webhook URL      |
 | `alert.feishu.title`     | Customized title in message |
 
+#### Zenduty
+
+<p>
+  <img src="./assets/zenduty.png" width="45%"/>
+</p>
+If you want to enable Zenduty, provide IntegrationKey with optional alert type
+
+| Parameter                      | Description                 |
+|:-------------------------------|:----------------------------|
+| `alert.zenduty.integrationKey` | Zenduty integration Key     |
+| `alert.zenduty.alertType`      | Optional alert type of incident: critical, acknowledged, resolved, error, warning, info (default: critical) |
+
 #### Custom webhook
 
 If you want to enable custom webhook, provide url with optional headers and
