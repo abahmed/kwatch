@@ -297,6 +297,19 @@ If you want to enable Zenduty, provide IntegrationKey with optional alert type
 | `alert.zenduty.integrationKey` | Zenduty integration Key     |
 | `alert.zenduty.alertType`      | Optional alert type of incident: critical, acknowledged, resolved, error, warning, info (default: critical) |
 
+#### Google Chat
+
+<p>
+  <img src="./assets/googlechat.png" width="50%"/>
+</p>
+
+If you want to enable Rocket Chat, provide the webhook with optional text
+
+| Parameter                  | Description                            |
+|:---------------------------|:---------------------------------------|
+| `alert.googlechat.webhook` | Google Chat webhook URL                |
+| `alert.rocketchat.text`    | Customized text in Google Chat message |
+
 #### Custom webhook
 
 If you want to enable custom webhook, provide url with optional headers and

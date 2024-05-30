@@ -8,6 +8,7 @@ import (
 	"github.com/abahmed/kwatch/alertmanager/discord"
 	"github.com/abahmed/kwatch/alertmanager/email"
 	"github.com/abahmed/kwatch/alertmanager/feishu"
+	"github.com/abahmed/kwatch/alertmanager/googlechat"
 	"github.com/abahmed/kwatch/alertmanager/matrix"
 	"github.com/abahmed/kwatch/alertmanager/mattermost"
 	"github.com/abahmed/kwatch/alertmanager/opsgenie"
@@ -70,6 +71,8 @@ func (a *AlertManager) Init(
 			pvdr = webhook.NewWebhook(v, appCfg)
 		} else if lowerCaseKey == "zenduty" {
 			pvdr = zenduty.NewZenduty(v, appCfg)
+		} else if lowerCaseKey == "googlechat" {
+			pvdr = googlechat.NewGoogleChat(v, appCfg)
 		}
 
 		if !reflect.ValueOf(pvdr).IsNil() {
