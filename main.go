@@ -18,12 +18,13 @@ import (
 )
 
 func main() {
-	logrus.Infof(fmt.Sprintf(constant.WelcomeMsg, version.Short()))
-
 	config, err := config.LoadConfig()
 	if err != nil {
 		logrus.Fatalf("failed to load config: %s", err.Error())
 	}
+	setLogFormatter(config.App.LogFormatter)
+
+	logrus.Infof(fmt.Sprintf(constant.WelcomeMsg, version.Short()))
 
 	// create kubernetes client
 	client := client.Create(&config.App)
@@ -60,4 +61,13 @@ func main() {
 
 	// start watcher
 	watcher.Start(client, namespace, h.ProcessPod)
+}
+
+func setLogFormatter(formatter string) {
+	switch formatter {
+	case "json":
+		logrus.SetFormatter(&logrus.JSONFormatter{})
+	default:
+		logrus.SetFormatter(&logrus.TextFormatter{})
+	}
 }
