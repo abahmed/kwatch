@@ -72,6 +72,9 @@ type App struct {
 	// DisableUpdateCheck if set to true, welcome message will not be
 	// sent to configured notification channels
 	DisableStartupMessage bool `yaml:"disableStartupMessage"`
+
+	// LogFormatter used for setting custom formatter when app prints logs
+	LogFormatter string `yaml:"logFormatter"`
 }
 
 // Upgrader confing struct

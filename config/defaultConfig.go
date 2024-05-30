@@ -2,6 +2,9 @@ package config
 
 func DefaultConfig() *Config {
 	return &Config{
+		App: App{
+			LogFormatter: "text",
+		},
 		IgnoreFailedGracefulShutdown: true,
 		PvcMonitor: PvcMonitor{
 			Enabled:   true,
