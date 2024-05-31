@@ -76,6 +76,14 @@ func TestGetPodEventsStr(t *testing.T) {
 	assert.Equal(result, expectedOutput)
 }
 
+func TestGetPodEventsStrNil(t *testing.T) {
+	assert := assert.New(t)
+
+	result := GetPodEventsStr(nil)
+	expectedOutput := ""
+	assert.Equal(result, expectedOutput)
+}
+
 func TestContainsKillingStoppingContainerEvents(t *testing.T) {
 	assert := assert.New(t)
 

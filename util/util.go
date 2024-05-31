@@ -18,6 +18,10 @@ import (
 
 // GetPodEventsStr returns formatted events as a string for specified pod
 func GetPodEventsStr(events *[]v1.Event) string {
+	if events == nil {
+		return ""
+	}
+
 	eventsString := ""
 
 	for _, ev := range *events {
