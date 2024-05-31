@@ -83,8 +83,8 @@ func (s *Slack) SendEvent(ev *event.Event) error {
 			Type: "section",
 			Fields: []*slackClient.TextBlockObject{
 				markdownF("*Cluster*\n%s", s.appCfg.ClusterName),
-				markdownF("*Name*\n%s", ev.Name),
-				markdownF("*Container*\n%s", ev.Container),
+				markdownF("*Name*\n%s", ev.PodName),
+				markdownF("*Container*\n%s", ev.ContainerName),
 				markdownF("*Namespace*\n%s", ev.Namespace),
 				markdownF("*Reason*\n%s", ev.Reason),
 			},

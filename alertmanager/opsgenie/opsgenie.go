@@ -121,21 +121,21 @@ func (m *Opsgenie) buildMessage(e *event.Event) []byte {
 	// use custom title if it's provided, otherwise use default
 	title := m.title
 	if len(title) == 0 {
-		title = fmt.Sprintf(defaultOpsgenieTitle, e.Name)
+		title = fmt.Sprintf(defaultOpsgenieTitle, e.PodName)
 	}
 	payload.Message = title
 
 	// use custom text if it's provided, otherwise use default
 	text := m.text
 	if len(text) == 0 {
-		text = fmt.Sprintf(defaultOpsgenieText, e.Container, e.Name)
+		text = fmt.Sprintf(defaultOpsgenieText, e.ContainerName, e.PodName)
 	}
 
 	payload.Description = text
 	payload.Details = map[string]string{
 		"Cluster":   m.appCfg.ClusterName,
-		"Name":      e.Name,
-		"Container": e.Container,
+		"Name":      e.PodName,
+		"Container": e.ContainerName,
 		"Namespace": e.Namespace,
 		"Reason":    e.Reason,
 		"Events":    events,

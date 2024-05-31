@@ -126,7 +126,7 @@ func (m *Zenduty) buildMessage(e *event.Event) []byte {
 		events = (e.Events)
 	}
 
-	payload.Message = fmt.Sprintf(defaultZendutyTitle, e.Name)
+	payload.Message = fmt.Sprintf(defaultZendutyTitle, e.PodName)
 	payload.Summary = fmt.Sprintf(
 		"An alert has been triggered for\n\n"+
 			"cluster: %s\n"+
@@ -137,8 +137,8 @@ func (m *Zenduty) buildMessage(e *event.Event) []byte {
 			"Events:\n%s\n\n"+
 			"Logs:\n%s\n\n",
 		m.appCfg.ClusterName,
-		e.Name,
-		e.Container,
+		e.PodName,
+		e.ContainerName,
 		e.Namespace,
 		e.Reason,
 		events,

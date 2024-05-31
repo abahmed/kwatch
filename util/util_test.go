@@ -63,42 +63,17 @@ func TestJsonEscape(t *testing.T) {
 func TestGetPodEventsStr(t *testing.T) {
 	assert := assert.New(t)
 
-	cli := fake.NewSimpleClientset()
 	event := v1.Event{
 		Reason:        "test reason",
 		Message:       "test message",
 		LastTimestamp: metav1.Now(),
 	}
-	cli.PrependReactor(
-		"list",
-		"events",
-		func(action k8stesting.Action) (bool, runtime.Object, error) {
-			return true, &v1.EventList{
-				Items: []v1.Event{event},
-			}, nil
-		})
 
-	result := GetPodEventsStr(cli, "dummy-app-579f7cd745-t6fdg", "test")
+	result := GetPodEventsStr(&[]v1.Event{event})
 	expectedOutput :=
 		"[" + event.LastTimestamp.String() + "] " + event.Reason + " " +
 			event.Message
 	assert.Equal(result, expectedOutput)
-}
-
-func TestGetPodEventsStrError(t *testing.T) {
-	assert := assert.New(t)
-
-	cli := fake.NewSimpleClientset()
-
-	cli.PrependReactor(
-		"list",
-		"events",
-		func(action k8stesting.Action) (bool, runtime.Object, error) {
-			return true, nil, errors.New("ssss")
-		})
-
-	result := GetPodEventsStr(cli, "dummy-app-579f7cd745-t6fdg", "test")
-	assert.Equal(result, "")
 }
 
 func TestContainsKillingStoppingContainerEvents(t *testing.T) {
