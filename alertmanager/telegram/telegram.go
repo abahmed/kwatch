@@ -102,8 +102,8 @@ func (t *Telegram) buildRequestBodyTelegram(
 				"Logs: *%s* \\n "+
 				"Events: *%s* ",
 			t.appCfg.ClusterName,
-			e.Name,
-			e.Container,
+			e.PodName,
+			e.ContainerName,
 			e.Namespace,
 			logsText,
 			eventsText,

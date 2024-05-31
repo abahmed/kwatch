@@ -149,12 +149,12 @@ func (m *Mattermost) buildMessage(e *event.Event, msg *string) []byte {
 					},
 					{
 						Title: "Name",
-						Value: e.Name,
+						Value: e.PodName,
 						Short: true,
 					},
 					{
 						Title: "Container",
-						Value: e.Container,
+						Value: e.ContainerName,
 						Short: true,
 					},
 					{

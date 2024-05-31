@@ -3,8 +3,10 @@ package handler
 import (
 	"time"
 
+	"github.com/abahmed/kwatch/event"
 	"github.com/abahmed/kwatch/filter"
 	"github.com/abahmed/kwatch/storage"
+	"github.com/abahmed/kwatch/util"
 	"github.com/sirupsen/logrus"
 )
 
@@ -51,6 +53,16 @@ func (h *handler) executeContainersFilters(ctx *filter.Context) {
 				ctx.Container.Reason,
 				ctx.Container.Msg,
 				ctx.Container.ExitCode)
+
+			h.alertManager.NotifyEvent(event.Event{
+				PodName:       ctx.Pod.Name,
+				ContainerName: ctx.Container.Container.Name,
+				Namespace:     ctx.Pod.Namespace,
+				Reason:        ctx.Container.Reason,
+				Events:        util.GetPodEventsStr(ctx.Events),
+				Logs:          ctx.Container.Logs,
+				Labels:        ctx.Pod.Labels,
+			})
 		}
 	}
 }

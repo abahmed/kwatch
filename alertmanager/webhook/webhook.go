@@ -132,8 +132,8 @@ func (w *Webhook) buildRequestBody(
 
 	postBody, _ := json.Marshal(map[string]interface{}{
 		"Cluster":   w.appCfg.ClusterName,
-		"Name":      ev.Name,
-		"Container": ev.Container,
+		"Name":      ev.PodName,
+		"Container": ev.ContainerName,
 		"Namespace": ev.Namespace,
 		"Reason":    ev.Reason,
 		"Events":    eventsText,

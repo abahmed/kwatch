@@ -61,11 +61,11 @@ func TestSendEvent(t *testing.T) {
 	c.url = s.URL
 
 	ev := event.Event{
-		Name:      "test-pod",
-		Container: "test-container",
-		Namespace: "default",
-		Reason:    "OOMKILLED",
-		Logs:      "test\ntestlogs",
+		PodName:       "test-pod",
+		ContainerName: "test-container",
+		Namespace:     "default",
+		Reason:        "OOMKILLED",
+		Logs:          "test\ntestlogs",
 		Events: "event1-event2-event3-event1-event2-event3-event1-event2-" +
 			"event3\nevent5\nevent6-event8-event11-event12",
 	}
@@ -91,11 +91,11 @@ func TestSendEventError(t *testing.T) {
 	c.url = s.URL
 
 	ev := event.Event{
-		Name:      "test-pod",
-		Container: "test-container",
-		Namespace: "default",
-		Reason:    "OOMKILLED",
-		Logs:      "test\ntestlogs",
+		PodName:       "test-pod",
+		ContainerName: "test-container",
+		Namespace:     "default",
+		Reason:        "OOMKILLED",
+		Logs:          "test\ntestlogs",
 		Events: "event1-event2-event3-event1-event2-event3-event1-event2-" +
 			"event3\nevent5\nevent6-event8-event11-event12",
 	}
@@ -113,11 +113,11 @@ func TestInvaildHttpRequest(t *testing.T) {
 	c.url = "h ttp://localhost"
 
 	ev := event.Event{
-		Name:      "test-pod",
-		Container: "test-container",
-		Namespace: "default",
-		Reason:    "OOMKILLED",
-		Logs:      "test\ntestlogs",
+		PodName:       "test-pod",
+		ContainerName: "test-container",
+		Namespace:     "default",
+		Reason:        "OOMKILLED",
+		Logs:          "test\ntestlogs",
 		Events: "event1-event2-event3-event1-event2-event3-event1-event2-" +
 			"event3\nevent5\nevent6-event8-event11-event12",
 	}

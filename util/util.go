@@ -17,20 +17,10 @@ import (
 )
 
 // GetPodEventsStr returns formatted events as a string for specified pod
-func GetPodEventsStr(c kubernetes.Interface, name, namespace string) string {
-	events, err := GetPodEvents(c, name, namespace)
-
+func GetPodEventsStr(events *[]v1.Event) string {
 	eventsString := ""
-	if err != nil {
-		logrus.Warnf(
-			"failed to get events for %s@%s: %s",
-			name,
-			namespace,
-			err.Error())
-		return eventsString
-	}
 
-	for _, ev := range events.Items {
+	for _, ev := range *events {
 		eventsString +=
 			fmt.Sprintf(
 				"[%s] %s %s\n",

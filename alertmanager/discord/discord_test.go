@@ -72,10 +72,10 @@ func TestSendEvent(t *testing.T) {
 	c.send = mockedSend
 
 	ev := event.Event{
-		Name:      "test-pod",
-		Container: "test-container",
-		Namespace: "default",
-		Reason:    "OOMKILLED",
+		PodName:       "test-pod",
+		ContainerName: "test-container",
+		Namespace:     "default",
+		Reason:        "OOMKILLED",
 		Logs: "Nam quis nulla. Integer malesuada. In in enim a arcu " +
 			"imperdiet malesuada. Sed vel lectus. Donec odio urna, tempus " +
 			"molestie, porttitor ut, iaculis quis, sem. Phasellus rhoncus.\n" +

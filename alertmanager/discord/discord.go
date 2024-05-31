@@ -77,12 +77,12 @@ func (s *Discord) SendEvent(ev *event.Event) error {
 		},
 		{
 			Name:   "Name",
-			Value:  ev.Name,
+			Value:  ev.PodName,
 			Inline: true,
 		},
 		{
 			Name:   "Container",
-			Value:  ev.Container,
+			Value:  ev.ContainerName,
 			Inline: true,
 		},
 		{

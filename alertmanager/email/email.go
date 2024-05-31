@@ -114,7 +114,7 @@ func (e *Email) buildMessageSubjectAndBody(
 		logsText = util.JsonEscape(ev.Logs)
 	}
 
-	subject := fmt.Sprintf("⛑ Kwatch detected a crash in pod %s ", ev.Container)
+	subject := fmt.Sprintf("⛑ Kwatch detected a crash in pod %s ", ev.ContainerName)
 	body := fmt.Sprintf(
 		"An alert for cluster: *%s* Name: *%s*  Container: *%s* "+
 			"Namespace: *%s*  "+
@@ -122,8 +122,8 @@ func (e *Email) buildMessageSubjectAndBody(
 			"Logs: *%s* \\n "+
 			"Events: *%s* ",
 		e.appCfg.ClusterName,
-		ev.Name,
-		ev.Container,
+		ev.PodName,
+		ev.ContainerName,
 		ev.Namespace,
 		logsText,
 		eventsText,
