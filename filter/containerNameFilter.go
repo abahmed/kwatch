@@ -12,7 +12,7 @@ func (f ContainerNameFilter) Execute(ctx *Context) bool {
 	if len(ctx.Config.IgnoreContainerNames) > 0 &&
 		slices.Contains(ctx.Config.IgnoreContainerNames, container.Name) {
 		logrus.Infof(
-			"skip pod %s as in container ignore list",
+			"skipping container %s as it is in the container ignore list",
 			container.Name)
 		return true
 	}

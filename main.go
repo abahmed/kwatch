@@ -14,7 +14,6 @@ import (
 	"github.com/abahmed/kwatch/version"
 	"github.com/abahmed/kwatch/watcher"
 	"github.com/sirupsen/logrus"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
 func main() {
@@ -54,13 +53,8 @@ func main() {
 		&alertManager,
 	)
 
-	namespace := metav1.NamespaceAll
-	if len(config.AllowedNamespaces) == 1 {
-		namespace = config.AllowedNamespaces[0]
-	}
-
 	// start watcher
-	watcher.Start(client, namespace, h.ProcessPod)
+	watcher.Start(client, config, h.ProcessPod)
 }
 
 func setLogFormatter(formatter string) {

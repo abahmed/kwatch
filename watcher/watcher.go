@@ -41,7 +41,12 @@ func (w *Watcher) processEvents() {
 	}
 
 	for event := range w.watcher.ResultChan() {
-		pod := event.Object.(*corev1.Pod)
+		pod, ok := event.Object.(*corev1.Pod)
+		if !ok {
+			logrus.Warnf("failed to cast event to pod object: %v", event.Object)
+			continue
+		}
+
 		w.queue.Add(watcherEvent{
 			eventType: string(event.Type),
 			pod:       pod.DeepCopy(),
@@ -57,7 +62,6 @@ func (w *Watcher) runWorker() {
 
 func (w *Watcher) processNextItem() bool {
 	newEvent, quit := w.queue.Get()
-
 	if quit {
 		return false
 	}
