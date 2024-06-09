@@ -27,15 +27,6 @@ func (f PodEventsFilter) Execute(ctx *Context) bool {
 				ctx.ContainersHasIssues = false
 				return true
 			}
-
-			/*
-				if ev.Reason == "FailedScheduling" ||
-					ev.Reason == "NetworkNotReady" ||
-					ev.Reason == "FailedMount" {
-					ctx.PodHasIssues = true
-					ctx.ContainersHasIssues = false
-					return false
-				}*/
 		}
 	}
 	return false

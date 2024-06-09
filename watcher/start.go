@@ -3,6 +3,7 @@ package watcher
 import (
 	"context"
 
+	"github.com/abahmed/kwatch/config"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
@@ -16,8 +17,13 @@ import (
 // Start creates an instance of watcher after initialization and runs it
 func Start(
 	client kubernetes.Interface,
-	namespace string,
+	config *config.Config,
 	handleFunc func(string, *corev1.Pod)) {
+	namespace := metav1.NamespaceAll
+	if len(config.AllowedNamespaces) == 1 {
+		namespace = config.AllowedNamespaces[0]
+	}
+
 	watchFunc :=
 		func(options metav1.ListOptions) (watch.Interface, error) {
 			return client.CoreV1().Pods(namespace).Watch(

@@ -55,7 +55,8 @@ type Config struct {
 	AllowedReasons   []string
 	ForbiddenReasons []string
 
-	// Patterns are compiled from IgnorePodNames after loading
+	// Patterns are compiled from IgnorePodNames after populating
+	// IgnorePodNames configuration
 	IgnorePodNamePatterns []*regexp.Regexp
 }
 

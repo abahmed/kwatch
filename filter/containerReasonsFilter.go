@@ -20,21 +20,6 @@ func (f ContainerReasonsFilter) Execute(ctx *Context) bool {
 		ctx.Container.LastTerminatedOn = container.State.Terminated.StartedAt.Time
 	}
 
-	if len(ctx.Config.AllowedReasons) > 0 &&
-		!slices.Contains(ctx.Config.AllowedReasons, ctx.Container.Reason) {
-		logrus.Infof(
-			"skip reason %s as not in reason allow list",
-			ctx.Container.Reason)
-		return true
-	}
-
-	if len(ctx.Config.ForbiddenReasons) > 0 &&
-		slices.Contains(ctx.Config.ForbiddenReasons, ctx.Container.Reason) {
-		logrus.Infof(
-			"skip reason %s as in reason forbid list",
-			ctx.Container.Reason)
-		return true
-	}
 	if (ctx.Container.Reason == "CrashLoopBackOff" ||
 		ctx.Container.HasRestarts) &&
 		container.LastTerminationState.Terminated != nil {
@@ -46,6 +31,22 @@ func (f ContainerReasonsFilter) Execute(ctx *Context) bool {
 			container.LastTerminationState.Terminated.ExitCode
 		ctx.Container.LastTerminatedOn =
 			container.LastTerminationState.Terminated.StartedAt.Time
+	}
+
+	if len(ctx.Config.AllowedReasons) > 0 &&
+		!slices.Contains(ctx.Config.AllowedReasons, ctx.Container.Reason) {
+		logrus.Infof(
+			"skipping reason %s as it is not in the reason allow list",
+			ctx.Container.Reason)
+		return true
+	}
+
+	if len(ctx.Config.ForbiddenReasons) > 0 &&
+		slices.Contains(ctx.Config.ForbiddenReasons, ctx.Container.Reason) {
+		logrus.Infof(
+			"skipping reason %s as it is in the reason forbid list",
+			ctx.Container.Reason)
+		return true
 	}
 
 	lastState := ctx.Memory.GetPodContainer(ctx.Pod.Namespace,

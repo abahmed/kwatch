@@ -29,13 +29,15 @@ func NewHandler(
 	alertManager *alertmanager.AlertManager) Handler {
 	// Order is important
 	podFilters := []filter.Filter{
-		filter.NsFilter{},
+		filter.NamespaceFilter{},
+		filter.PodNameFilter{},
 		filter.PodStatusFilter{},
 		filter.PodEventsFilter{},
-		//filter.PodOwnersFilter{},
+		filter.PodOwnersFilter{},
 	}
 
 	containersFilters := []filter.Filter{
+		filter.NamespaceFilter{},
 		filter.ContainerNameFilter{},
 		filter.ContainerRestartsFilter{},
 		filter.ContainerStateFilter{},

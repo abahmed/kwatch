@@ -5,14 +5,14 @@ import (
 	"golang.org/x/exp/slices"
 )
 
-type NsFilter struct{}
+type NamespaceFilter struct{}
 
-func (f NsFilter) Execute(ctx *Context) bool {
+func (f NamespaceFilter) Execute(ctx *Context) bool {
 	// filter by namespaces in config if specified
 	if len(ctx.Config.AllowedNamespaces) > 0 &&
 		!slices.Contains(ctx.Config.AllowedNamespaces, ctx.Pod.Namespace) {
 		logrus.Infof(
-			"skip namespace %s as not in namespace allow list",
+			"skipping namespace %s as it is not in the namespace allow list",
 			ctx.Pod.Namespace)
 		return true
 	}
@@ -20,7 +20,7 @@ func (f NsFilter) Execute(ctx *Context) bool {
 	if len(ctx.Config.ForbiddenNamespaces) > 0 &&
 		slices.Contains(ctx.Config.ForbiddenNamespaces, ctx.Pod.Namespace) {
 		logrus.Infof(
-			"skip namespace %s as in namespace forbid list",
+			"skipping namespace %s as it is in the namespace forbid list",
 			ctx.Pod.Namespace)
 		return true
 	}
