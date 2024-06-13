@@ -74,6 +74,7 @@ func TestConfigFromFile(t *testing.T) {
 		Namespaces:        []string{"default", "!kwatch"},
 		Reasons:           []string{"default", "!kwatch"},
 		IgnorePodNames:    []string{"my-fancy-pod-[.*"},
+		IgnoreLogPatterns: []string{"leaderelection lost"},
 		App: App{
 			ProxyURL:    "https://localhost",
 			ClusterName: "development",
@@ -99,23 +100,25 @@ func TestConfigFromFile(t *testing.T) {
 	assert.NotNil(err)
 }
 
-func TestGetCompiledIgnorePodNamePatterns(t *testing.T) {
+func TestGetCompiledIgnorePatterns(t *testing.T) {
 	assert := assert.New(t)
 
 	validPatterns := []string{
 		"my-fancy-pod-[0-9]",
+		"leaderelection lost",
 	}
 
-	compiledPatterns, err := getCompiledIgnorePodNamePatterns(validPatterns)
+	compiledPatterns, err := getCompiledIgnorePatterns(validPatterns)
 
 	assert.Nil(err)
 	assert.True(compiledPatterns[0].MatchString("my-fancy-pod-8"))
+	assert.True(compiledPatterns[1].MatchString(`controllermanager.go:272] "leaderelection lost"`))
 
 	invalidPatterns := []string{
 		"my-fancy-pod-[.*",
 	}
 
-	compiledPatterns, err = getCompiledIgnorePodNamePatterns(invalidPatterns)
+	compiledPatterns, err = getCompiledIgnorePatterns(invalidPatterns)
 
 	assert.NotNil(err)
 }
