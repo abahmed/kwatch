@@ -50,9 +50,16 @@ func LoadConfig() (*Config, error) {
 
 	// Prepare ignored pod name patters
 	config.IgnorePodNamePatterns, err =
-		getCompiledIgnorePodNamePatterns(config.IgnorePodNames)
+		getCompiledIgnorePatterns(config.IgnorePodNames)
 	if err != nil {
 		logrus.Errorf("Failed to compile pod name pattern: %s", err.Error())
+	}
+
+	// Prepare ignored log patterns
+	config.IgnoreLogPatternsCompiled, err =
+		getCompiledIgnorePatterns(config.IgnoreLogPatterns)
+	if err != nil {
+		logrus.Errorf("Failed to compile log pattern: %s", err.Error())
 	}
 
 	// Parse proxy config
@@ -77,7 +84,7 @@ func getAllowForbidSlices(items []string) (allow []string, forbid []string) {
 	return allow, forbid
 }
 
-func getCompiledIgnorePodNamePatterns(patterns []string) (compiledPatterns []*regexp.Regexp, err error) {
+func getCompiledIgnorePatterns(patterns []string) (compiledPatterns []*regexp.Regexp, err error) {
 	compiledPatterns = make([]*regexp.Regexp, 0)
 
 	for _, pattern := range patterns {

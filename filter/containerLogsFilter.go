@@ -2,6 +2,7 @@ package filter
 
 import (
 	"github.com/abahmed/kwatch/util"
+	"github.com/sirupsen/logrus"
 )
 
 type ContainerLogsFilter struct{}
@@ -25,6 +26,15 @@ func (f ContainerLogsFilter) Execute(ctx *Context) bool {
 		ctx.Pod.Namespace,
 		previousLogs,
 		ctx.Config.MaxRecentLogLines)
+
+	for _, pattern := range ctx.Config.IgnoreLogPatternsCompiled {
+		if pattern.MatchString(logs) {
+			logrus.Infof(
+				"skipping container %s logs as it matches the ignore log pattern",
+				container.Name)
+			return true
+		}
+	}
 
 	ctx.Container.Logs = logs
 	return false

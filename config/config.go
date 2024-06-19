@@ -41,6 +41,9 @@ type Config struct {
 	// IgnorePodNames optional list of pod name regexp patterns to ignore
 	IgnorePodNames []string `yaml:"ignorePodNames"`
 
+	// IgnoreLogPatterns optional list of regexp patterns to ignore
+	IgnoreLogPatterns []string `yaml:"ignoreLogPatterns"`
+
 	// Alert is a map contains a map of each provider configuration
 	// e.g. {"slack": {"webhook": "URL"}}
 	Alert map[string]map[string]interface{} `yaml:"alert"`
@@ -58,6 +61,10 @@ type Config struct {
 	// Patterns are compiled from IgnorePodNames after populating
 	// IgnorePodNames configuration
 	IgnorePodNamePatterns []*regexp.Regexp
+
+	// Patterns are compiled from IgnoreLogPatterns after populating
+	// IgnoreLogPatterns configuration
+	IgnoreLogPatternsCompiled []*regexp.Regexp
 }
 
 // App confing struct
