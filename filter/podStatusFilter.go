@@ -55,7 +55,7 @@ func (f PodStatusFilter) Execute(ctx *Context) bool {
 		!slices.Contains(ctx.Config.AllowedReasons, ctx.PodReason) {
 		logrus.Infof(
 			"skipping reason %s for pod %s as it is not in the reason allow list",
-			ctx.Container.Reason,
+			ctx.PodReason,
 			ctx.Pod.Name)
 		return true
 	}
@@ -65,7 +65,7 @@ func (f PodStatusFilter) Execute(ctx *Context) bool {
 		slices.Contains(ctx.Config.ForbiddenReasons, ctx.PodReason) {
 		logrus.Infof(
 			"skipping reason %s for pod %s as it is in the reason forbid list",
-			ctx.Container.Reason,
+			ctx.PodReason,
 			ctx.Pod.Name)
 		return true
 	}
