@@ -1,6 +1,8 @@
 package filter
 
 import (
+	"github.com/sirupsen/logrus"
+	"golang.org/x/exp/slices"
 	corev1 "k8s.io/api/core/v1"
 )
 
@@ -47,6 +49,26 @@ func (f PodStatusFilter) Execute(ctx *Context) bool {
 
 	ctx.PodHasIssues = issueInPod
 	ctx.ContainersHasIssues = issueInContainers
+
+	if len(ctx.PodReason) > 0 &&
+		len(ctx.Config.AllowedReasons) > 0 &&
+		!slices.Contains(ctx.Config.AllowedReasons, ctx.PodReason) {
+		logrus.Infof(
+			"skipping reason %s for pod %s as it is not in the reason allow list",
+			ctx.Container.Reason,
+			ctx.Pod.Name)
+		return true
+	}
+
+	if len(ctx.PodReason) > 0 &&
+		len(ctx.Config.ForbiddenReasons) > 0 &&
+		slices.Contains(ctx.Config.ForbiddenReasons, ctx.PodReason) {
+		logrus.Infof(
+			"skipping reason %s for pod %s as it is in the reason forbid list",
+			ctx.Container.Reason,
+			ctx.Pod.Name)
+		return true
+	}
 
 	lastState := ctx.Memory.GetPodContainer(ctx.Pod.Namespace,
 		ctx.Pod.Name,
