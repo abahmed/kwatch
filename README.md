@@ -36,7 +36,7 @@
 
 ```shell
 helm repo add kwatch https://kwatch.dev/charts
-helm install [RELEASE_NAME] kwatch/kwatch --namespace kwatch --create-namespace --version 0.9.3
+helm install [RELEASE_NAME] kwatch/kwatch --namespace kwatch --create-namespace --version 0.9.4
 ```
 
 To get more details, please check [chart's configuration](https://github.com/abahmed/kwatch/blob/main/deploy/chart/README.md)
@@ -46,7 +46,7 @@ To get more details, please check [chart's configuration](https://github.com/aba
 You need to get config template to add your configs
 
 ```shell
-curl  -L https://raw.githubusercontent.com/abahmed/kwatch/v0.9.3/deploy/config.yaml -o config.yaml
+curl  -L https://raw.githubusercontent.com/abahmed/kwatch/v0.9.4/deploy/config.yaml -o config.yaml
 ```
 
 Then edit `config.yaml` file and apply your configuration
@@ -58,7 +58,7 @@ kubectl apply -f config.yaml
 To deploy **kwatch**, execute following command:
 
 ```shell
-kubectl apply -f https://raw.githubusercontent.com/abahmed/kwatch/v0.9.3/deploy/deploy.yaml
+kubectl apply -f https://raw.githubusercontent.com/abahmed/kwatch/v0.9.4/deploy/deploy.yaml
 ```
 
 ## High Level Architecture
@@ -94,6 +94,8 @@ kubectl apply -f https://raw.githubusercontent.com/abahmed/kwatch/v0.9.3/deploy/
 | `ignoreFailedGracefulShutdown` | If set to true, containers which are forcefully killed during shutdown (as their graceful shutdown failed) are not reported as error     |
 | `ignoreContainerNames`         | Optional comma separated list of container names to ignore    |
 | `ignorePodNames`               | Optional list of pod name regexp patterns to ignore    |
+| `IgnoreLogPatterns`            | Optional list of regexp patterns of logs to ignore     |
+
 
 ### App
 
@@ -326,8 +328,8 @@ basic auth
 ### Cleanup
 
 ```shell
-kubectl delete -f https://raw.githubusercontent.com/abahmed/kwatch/v0.9.3/deploy/config.yaml
-kubectl delete -f https://raw.githubusercontent.com/abahmed/kwatch/v0.9.3/deploy/deploy.yaml
+kubectl delete -f https://raw.githubusercontent.com/abahmed/kwatch/v0.9.4/deploy/config.yaml
+kubectl delete -f https://raw.githubusercontent.com/abahmed/kwatch/v0.9.4/deploy/deploy.yaml
 ```
 
 ## 👍 Contribute & Support
