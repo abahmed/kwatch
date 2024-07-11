@@ -23,6 +23,10 @@ tolerations: []
 
 affinity: {}
 
+podAnnotations: {}
+
+podLabels: {}
+
 # kwatch configuration
 config: {}
 
