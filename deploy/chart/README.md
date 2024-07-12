@@ -27,6 +27,7 @@ helm delete --purge [RELEASE_NAME]
 | Parameter | Description | Default |
 |-----------|-------------|---------|
 | `podAnnotations` | Pod annotations | {} |
+| `podLabels` | Pod labels | {} |
 | `securityContext.runAsNonRoot` | Container runs as a non-root user | true |
 | `securityContext.runAsUser` | Container processes' UID to run the entrypoint | 101 |
 | `securityContext.runAsGroup` | Container processes' GID to run the entrypoint | 101 |
