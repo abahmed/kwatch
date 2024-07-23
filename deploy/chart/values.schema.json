@@ -1,0 +1,150 @@
+{
+    "type": "object",
+    "$schema": "http://json-schema.org/draft-07/schema",
+    "required": [
+      "config"
+    ],
+    "properties": {
+      "image": {
+        "type": "object",
+        "required": [],
+        "properties": {
+          "repository": {
+            "type": [
+              "string",
+              "boolean",
+              "number",
+              "object",
+              "array"
+            ],
+            "default": "ghcr.io/abahmed/kwatch"
+          },
+          "pullPolicy": {
+            "type": [
+              "string",
+              "boolean",
+              "number",
+              "object",
+              "array"
+            ],
+            "default": "Always"
+          }
+        }
+      },
+      "securityContext": {
+        "type": "object",
+        "required": [],
+        "properties": {
+          "runAsUser": {
+            "type": [
+              "string",
+              "boolean",
+              "number",
+              "object",
+              "array"
+            ],
+            "default": "101"
+          },
+          "runAsGroup": {
+            "type": [
+              "string",
+              "boolean",
+              "number",
+              "object",
+              "array"
+            ],
+            "default": "101"
+          },
+          "runAsNonRoot": {
+            "type": [
+              "string",
+              "boolean",
+              "number",
+              "object",
+              "array"
+            ],
+            "default": "true"
+          },
+          "readOnlyRootFilesystem": {
+            "type": [
+              "string",
+              "boolean",
+              "number",
+              "object",
+              "array"
+            ],
+            "default": "true"
+          }
+        }
+      },
+      "resources": {
+        "type": "object",
+        "required": [],
+        "properties": {
+          "limits": {
+            "type": "object",
+            "required": [],
+            "properties": {
+              "memory": {
+                "type": [
+                  "string",
+                  "boolean",
+                  "number",
+                  "object",
+                  "array"
+                ],
+                "default": "128Mi"
+              },
+              "cpu": {
+                "type": [
+                  "string",
+                  "boolean",
+                  "number",
+                  "object",
+                  "array"
+                ],
+                "default": "100m"
+              }
+            }
+          }
+        }
+      },
+      "nodeSelector": {
+        "type": [
+          "string",
+          "boolean",
+          "number",
+          "object",
+          "array"
+        ]
+      },
+      "tolerations": {
+        "type": [
+          "string",
+          "boolean",
+          "number",
+          "object",
+          "array"
+        ]
+      },
+      "affinity": {
+        "type": [
+          "string",
+          "boolean",
+          "number",
+          "object",
+          "array"
+        ]
+      },
+      "config": {
+        "type": [
+          "string",
+          "boolean",
+          "number",
+          "object",
+          "array"
+        ],
+        "description": "kwatch configuration"
+      }
+    }
+  }

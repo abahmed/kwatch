@@ -45,11 +45,6 @@ func (h *handler) executeContainersFilters(ctx *filter.Context) {
 				ownerName = ctx.Owner.Name
 			}
 
-			if ctx.Events == nil {
-				events, _ := util.GetPodEvents(ctx.Client, ctx.Pod.Name, ctx.Pod.Namespace)
-				ctx.Events = &events.Items
-			}
-
 			logrus.Printf(
 				"container only issue %s %s %s %s %s %d",
 				ctx.Container.Container.Name,
