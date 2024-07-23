@@ -3,7 +3,6 @@ package filter
 import (
 	"strings"
 
-	"github.com/abahmed/kwatch/util"
 	corev1 "k8s.io/api/core/v1"
 )
 
@@ -13,8 +12,6 @@ func (f PodEventsFilter) Execute(ctx *Context) bool {
 	if !ctx.PodHasIssues {
 		return false
 	}
-	events, _ := util.GetPodEvents(ctx.Client, ctx.Pod.Name, ctx.Pod.Namespace)
-	ctx.Events = &events.Items
 
 	if ctx.Events == nil {
 		return false
