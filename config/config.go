@@ -14,6 +14,9 @@ type Config struct {
 	// PvcMonitor configuration
 	PvcMonitor PvcMonitor `yaml:"pvcMonitor"`
 
+	// NodeMonitor configuration
+	NodeMonitor NodeMonitor `yaml:"nodeMonitor"`
+
 	// MaxRecentLogLines optional max tail log lines in messages,
 	// if it's not provided it will get all log lines
 	MaxRecentLogLines int64 `yaml:"maxRecentLogLines"`
@@ -106,4 +109,11 @@ type PvcMonitor struct {
 	// exceeds this value, it will send a notification.
 	// By default, this value is 80
 	Threshold float64 `yaml:"threshold"`
+}
+
+// NodeMonitor confing struct
+type NodeMonitor struct {
+	// Enabled if set to true, it will enable node watcher
+	// By default, this value is true
+	Enabled bool `yaml:"enabled"`
 }

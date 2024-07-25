@@ -54,7 +54,7 @@ func main() {
 	)
 
 	// start watcher
-	watcher.Start(client, config, h.ProcessPod)
+	watcher.Start(client, config, h)
 }
 
 func setLogFormatter(formatter string) {

@@ -5,10 +5,17 @@ import (
 	"github.com/abahmed/kwatch/util"
 	"github.com/sirupsen/logrus"
 	corev1 "k8s.io/api/core/v1"
+	"k8s.io/apimachinery/pkg/runtime"
 )
 
-func (h *handler) ProcessPod(eventType string, pod *corev1.Pod) {
-	if pod == nil {
+func (h *handler) ProcessPod(eventType string, obj runtime.Object) {
+	if obj == nil {
+		return
+	}
+
+	pod, ok := obj.(*corev1.Pod)
+	if !ok {
+		logrus.Warnf("failed to cast event to pod object: %v", obj)
 		return
 	}
 

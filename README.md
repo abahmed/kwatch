@@ -121,6 +121,15 @@ kubectl apply -f https://raw.githubusercontent.com/abahmed/kwatch/v0.9.5/deploy/
 | `pvcMonitor.interval`        | the frequency (in minutes) to check pvc usage in the cluster  (default: 15) |
 | `pvcMonitor.threshold`       | the percentage of accepted pvc usage. if current usage exceeds this value, it will send a notification (default: 80) |
 
+
+### Node Monitor
+
+| Parameter                    | Description                                 |
+|:-----------------------------|:------------------------------------------- |
+| `nodeMonitor.enabled`        | to enable or disable node monitoring (default: true) |
+
+
+
 ### Alerts
 
 #### Slack

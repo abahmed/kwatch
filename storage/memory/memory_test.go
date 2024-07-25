@@ -125,3 +125,49 @@ func TestDelPod(t *testing.T) {
 		t.Errorf("expected not to find pod test")
 	}
 }
+
+func TestAddNode(t *testing.T) {
+	mem := &memory{
+		nmap: sync.Map{},
+	}
+
+	mem.AddNode("default-node-1")
+	mem.AddNode("default-node-2")
+
+	if _, ok := mem.nmap.Load("default-node-1"); !ok {
+		t.Errorf("expected to find node default-node-1")
+	}
+}
+
+func TestHasNode(t *testing.T) {
+	mem := &memory{
+		nmap: sync.Map{},
+	}
+
+	mem.AddNode("default-node-1")
+	mem.AddNode("default-node-2")
+
+	if !mem.HasNode(("default-node-1")) {
+		t.Errorf("expected to find node default-node-1")
+	}
+
+	if mem.HasNode("default-node-3") {
+		t.Errorf("expected not to find node default-node-3")
+	}
+}
+
+func TestDelNode(t *testing.T) {
+	mem := &memory{
+		smap: sync.Map{},
+	}
+
+	mem.AddNode("default-node-1")
+	mem.AddNode("default-node-2")
+
+	mem.DelNode("default-node-1")
+	mem.DelNode("default-node-2")
+
+	if _, ok := mem.nmap.Load("default-node-1"); ok {
+		t.Errorf("expected not to find node default-node-1")
+	}
+}

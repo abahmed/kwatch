@@ -8,12 +8,14 @@ import (
 
 type memory struct {
 	smap sync.Map
+	nmap sync.Map
 }
 
 // NewMemory returns new Memory object
 func NewMemory() storage.Storage {
 	return &memory{
 		smap: sync.Map{},
+		nmap: sync.Map{},
 	}
 }
 
@@ -86,4 +88,20 @@ func (m *memory) GetPodContainer(namespace, podKey, containerKey string) *storag
 
 func (*memory) getKey(namespace, pod string) string {
 	return namespace + "/" + pod
+}
+
+// AddNode stores node with key
+func (m *memory) AddNode(nodeKey string) {
+	m.nmap.Store(nodeKey, true)
+}
+
+// HasNode checks if node is stored
+func (m *memory) HasNode(nodeKey string) bool {
+	_, ok := m.nmap.Load(nodeKey)
+	return ok
+}
+
+// AddNode deletes node with key
+func (m *memory) DelNode(nodeKey string) {
+	m.nmap.Delete(nodeKey)
 }
