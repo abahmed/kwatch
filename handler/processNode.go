@@ -19,8 +19,6 @@ func (h *handler) ProcessNode(eventType string, obj runtime.Object) {
 		return
 	}
 
-	logrus.Printf("processing Event %s for node %s", eventType, node.Name)
-
 	if eventType == "DELETED" {
 		h.memory.DelNode(node.Name)
 		return
