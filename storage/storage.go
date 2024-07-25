@@ -19,4 +19,8 @@ type Storage interface {
 	DelPod(namespace, podKey string)
 	HasPodContainer(namespace, podKey, containerKey string) bool
 	GetPodContainer(namespace, podKey, containerKey string) *ContainerState
+
+	AddNode(nodeKey string)
+	HasNode(nodeKey string) bool
+	DelNode(nodeKey string)
 }

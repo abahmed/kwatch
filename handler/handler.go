@@ -5,12 +5,13 @@ import (
 	"github.com/abahmed/kwatch/config"
 	"github.com/abahmed/kwatch/filter"
 	"github.com/abahmed/kwatch/storage"
-	corev1 "k8s.io/api/core/v1"
+	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/client-go/kubernetes"
 )
 
 type Handler interface {
-	ProcessPod(evType string, pod *corev1.Pod)
+	ProcessPod(evType string, obj runtime.Object)
+	ProcessNode(evType string, obj runtime.Object)
 }
 
 type handler struct {

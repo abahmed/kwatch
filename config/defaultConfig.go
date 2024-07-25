@@ -11,5 +11,8 @@ func DefaultConfig() *Config {
 			Interval:  5,
 			Threshold: 80,
 		},
+		NodeMonitor: NodeMonitor{
+			Enabled: true,
+		},
 	}
 }

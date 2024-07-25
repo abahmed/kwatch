@@ -4,7 +4,7 @@ import (
 	"time"
 
 	"github.com/sirupsen/logrus"
-	corev1 "k8s.io/api/core/v1"
+	"k8s.io/apimachinery/pkg/runtime"
 	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
 	"k8s.io/apimachinery/pkg/util/wait"
 	toolsWatch "k8s.io/client-go/tools/watch"
@@ -13,13 +13,14 @@ import (
 
 type watcherEvent struct {
 	eventType string
-	pod       *corev1.Pod
+	obj       runtime.Object
 }
 
 type Watcher struct {
+	name        string
 	watcher     *toolsWatch.RetryWatcher
 	queue       *workqueue.Type
-	handlerFunc func(string, *corev1.Pod)
+	handlerFunc func(string, runtime.Object)
 }
 
 // run starts the watcher
@@ -27,7 +28,7 @@ func (w *Watcher) run(stopCh chan struct{}) {
 	defer utilruntime.HandleCrash()
 	defer w.queue.ShutDown()
 
-	logrus.Info("starting pod watcher")
+	logrus.Infof("starting %s watcher", w.name)
 
 	go wait.Until(w.processEvents, time.Second, stopCh)
 	go wait.Until(w.runWorker, time.Second, stopCh)
@@ -41,15 +42,9 @@ func (w *Watcher) processEvents() {
 	}
 
 	for event := range w.watcher.ResultChan() {
-		pod, ok := event.Object.(*corev1.Pod)
-		if !ok {
-			logrus.Warnf("failed to cast event to pod object: %v", event.Object)
-			continue
-		}
-
 		w.queue.Add(watcherEvent{
 			eventType: string(event.Type),
-			pod:       pod.DeepCopy(),
+			obj:       event.Object.DeepCopyObject(),
 		})
 	}
 }
@@ -74,7 +69,7 @@ func (w *Watcher) processNextItem() bool {
 		return true
 	}
 
-	w.handlerFunc(ev.eventType, ev.pod)
+	w.handlerFunc(ev.eventType, ev.obj)
 
 	return true
 }
