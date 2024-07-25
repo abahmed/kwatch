@@ -13,7 +13,7 @@ helm repo update
 ## Install Chart
 
 ```console
-helm install [RELEASE_NAME] kwatch/kwatch --version 0.9.5
+helm install [RELEASE_NAME] kwatch/kwatch --version 0.10.0
 ```
 
 ## Uninstall Chart
