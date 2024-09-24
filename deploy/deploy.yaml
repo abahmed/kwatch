@@ -9,7 +9,10 @@ metadata:
   name: kwatch
 rules:
 - apiGroups: [""]
-  resources: ["pods", "pods/log", "events", "nodes"]
+  resources: ["events", "nodes", "nodes/proxy", "pods", "pods/log", "persistentvolumeclaims"]
+  verbs: ["get", "watch", "list"]
+- apiGroups: ["apps"]
+  resources: ["daemonsets", "statefulsets", "deployments", "replicasets"]
   verbs: ["get", "watch", "list"]
 ---
 apiVersion: v1
@@ -49,7 +52,7 @@ spec:
       serviceAccountName: kwatch
       containers:
       - name: kwatch
-        image: ghcr.io/abahmed/kwatch:v0.10.0
+        image: ghcr.io/abahmed/kwatch:v0.10.1
         imagePullPolicy: Always
         volumeMounts:
           - name: config-volume
