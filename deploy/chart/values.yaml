@@ -25,6 +25,8 @@ affinity: {}
 
 podAnnotations: {}
 
+sacAnnotations: {}
+
 podLabels: {}
 
 # kwatch configuration
