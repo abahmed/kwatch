@@ -39,6 +39,7 @@ func NewHandler(
 
 	containersFilters := []filter.Filter{
 		filter.NamespaceFilter{},
+		filter.PodNameFilter{},
 		filter.ContainerNameFilter{},
 		filter.ContainerRestartsFilter{},
 		filter.ContainerStateFilter{},
