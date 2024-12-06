@@ -74,7 +74,7 @@ func TestConfigFromFile(t *testing.T) {
 		Namespaces:        []string{"default", "!kwatch"},
 		Reasons:           []string{"default", "!kwatch"},
 		IgnorePodNames:    []string{"my-fancy-pod-[.*"},
-		IgnoreLogPatterns: []string{"leaderelection lost"},
+		IgnoreLogPatterns: []string{"leaderelection lost-[.*"},
 		App: App{
 			ProxyURL:    "https://localhost",
 			ClusterName: "development",
