@@ -8,12 +8,21 @@ import (
 	"github.com/abahmed/kwatch/storage"
 	"github.com/abahmed/kwatch/util"
 	"github.com/sirupsen/logrus"
+	corev1 "k8s.io/api/core/v1"
 )
 
 func (h *handler) executeContainersFilters(ctx *filter.Context) {
-	for cIdx := range ctx.Pod.Status.ContainerStatuses {
+	containers := make([]*corev1.ContainerStatus, 0)
+	for idx := range ctx.Pod.Status.InitContainerStatuses {
+		containers = append(containers, &ctx.Pod.Status.InitContainerStatuses[idx])
+	}
+	for idx := range ctx.Pod.Status.ContainerStatuses {
+		containers = append(containers, &ctx.Pod.Status.ContainerStatuses[idx])
+	}
+
+	for _, container := range containers {
 		ctx.Container = &filter.ContainerContext{
-			Container:        &ctx.Pod.Status.ContainerStatuses[cIdx],
+			Container:        container,
 			HasRestarts:      false,
 			LastTerminatedOn: time.Time{},
 		}
