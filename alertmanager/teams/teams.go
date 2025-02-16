@@ -19,7 +19,7 @@ const (
 )
 
 type Teams struct {
-	# The HTTP trigger URL for the Power Automate flow
+	// The HTTP trigger URL for the Power Automate flow
 	flowUrl string
 	title   string
 	text    string
