@@ -1,7 +1,6 @@
 package teams
 
 import (
-    "bytes"
     "encoding/json"
     "net/http"
     "net/http/httptest"
