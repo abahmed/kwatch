@@ -6,7 +6,6 @@ import (
     "net/http/httptest"
     "testing"
 
-    "github.com/abahmed/kwatch/config"
     "github.com/abahmed/kwatch/event"
     "github.com/stretchr/testify/assert"
 )
@@ -17,7 +16,7 @@ func TestNewTeams(t *testing.T) {
         "title":   "Test Title",
         "text":    "Test Text",
     }
-    appCfg := &config.App{}
+    appCfg := &struct{}{} // Use an empty struct for appCfg
 
     teams := NewTeams(config, appCfg)
     assert.NotNil(t, teams)
@@ -30,7 +29,7 @@ func TestSendEvent(t *testing.T) {
     config := map[string]interface{}{
         "flowURL": "http://example.com",
     }
-    appCfg := &config.App{}
+    appCfg := &struct{}{} // Use an empty struct for appCfg
     teams := NewTeams(config, appCfg)
 
     e := &event.Event{
@@ -55,7 +54,7 @@ func TestSendMessage(t *testing.T) {
     config := map[string]interface{}{
         "flowURL": "http://example.com",
     }
-    appCfg := &config.App{}
+    appCfg := &struct{}{} // Use an empty struct for appCfg
     teams := NewTeams(config, appCfg)
 
     server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -72,7 +71,7 @@ func TestSendAPI(t *testing.T) {
     config := map[string]interface{}{
         "flowURL": "http://example.com",
     }
-    appCfg := &config.App{}
+    appCfg := &struct{}{} // Use an empty struct for appCfg
     teams := NewTeams(config, appCfg)
 
     payload := []byte(`{"title":"Test Title","text":"Test Text","attachment":[]}`)
@@ -93,7 +92,7 @@ func TestBuildRequestBodyTeams(t *testing.T) {
         "title":   "Test Title",
         "text":    "Test Text",
     }
-    appCfg := &config.App{}
+    appCfg := &struct{}{} // Use an empty struct for appCfg
     teams := NewTeams(config, appCfg)
 
     e := &event.Event{
@@ -120,7 +119,7 @@ func TestBuildRequestBodyMessage(t *testing.T) {
     config := map[string]interface{}{
         "flowURL": "http://example.com",
     }
-    appCfg := &config.App{}
+    appCfg := &struct{}{} // Use an empty struct for appCfg
     teams := NewTeams(config, appCfg)
 
     payload := teams.buildRequestBodyMessage("test message")
