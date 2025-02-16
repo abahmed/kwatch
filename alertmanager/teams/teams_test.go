@@ -8,6 +8,7 @@ import (
 
     "github.com/abahmed/kwatch/event"
     "github.com/stretchr/testify/assert"
+	"github.com/stretchr/kwatch/config"
 )
 
 func TestNewTeams(t *testing.T) {
@@ -16,8 +17,7 @@ func TestNewTeams(t *testing.T) {
         "title":   "Test Title",
         "text":    "Test Text",
     }
-    appCfg := &struct{}{} // Use an empty struct for appCfg
-
+    appCfg := &config.App{}
     teams := NewTeams(config, appCfg)
     assert.NotNil(t, teams)
     assert.Equal(t, "http://example.com", teams.flowURL)
@@ -29,7 +29,7 @@ func TestSendEvent(t *testing.T) {
     config := map[string]interface{}{
         "flowURL": "http://example.com",
     }
-    appCfg := &struct{}{} // Use an empty struct for appCfg
+    appCfg := &config.App{}
     teams := NewTeams(config, appCfg)
 
     e := &event.Event{
@@ -54,7 +54,7 @@ func TestSendMessage(t *testing.T) {
     config := map[string]interface{}{
         "flowURL": "http://example.com",
     }
-    appCfg := &struct{}{} // Use an empty struct for appCfg
+    appCfg := &config.App{}
     teams := NewTeams(config, appCfg)
 
     server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -71,7 +71,7 @@ func TestSendAPI(t *testing.T) {
     config := map[string]interface{}{
         "flowURL": "http://example.com",
     }
-    appCfg := &struct{}{} // Use an empty struct for appCfg
+    appCfg := &config.App{}
     teams := NewTeams(config, appCfg)
 
     payload := []byte(`{"title":"Test Title","text":"Test Text","attachment":[]}`)
@@ -92,7 +92,7 @@ func TestBuildRequestBodyTeams(t *testing.T) {
         "title":   "Test Title",
         "text":    "Test Text",
     }
-    appCfg := &struct{}{} // Use an empty struct for appCfg
+    appCfg := &config.App{}
     teams := NewTeams(config, appCfg)
 
     e := &event.Event{
@@ -119,7 +119,7 @@ func TestBuildRequestBodyMessage(t *testing.T) {
     config := map[string]interface{}{
         "flowURL": "http://example.com",
     }
-    appCfg := &struct{}{} // Use an empty struct for appCfg
+    appCfg := &config.App{}
     teams := NewTeams(config, appCfg)
 
     payload := teams.buildRequestBodyMessage("test message")
