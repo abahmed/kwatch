@@ -72,7 +72,7 @@ func TestSendEvent(t *testing.T) {
 
 func TestSendMessage(t *testing.T) {
 	configMap := map[string]interface{}{
-		"webhook": "http://example.com",
+		"webhook": "http://localhost",
 	}
 	appCfg := &config.App{ClusterName: "dev"}
 	teams := NewTeams(configMap, appCfg)
@@ -170,22 +170,20 @@ func TestSendMessageErrorServer(t *testing.T) {
 }
 
 func TestSendAPI(t *testing.T) {
-	configMap := map[string]interface{}{
-		"webhook": "http://example.com",
-	}
-	appCfg := &config.App{ClusterName: "dev"}
-	teams := NewTeams(configMap, appCfg)
-
-	payload :=
-		[]byte(`{"title":"Test Title","text":"Test Text","attachment":[]}`)
-
 	server := httptest.NewServer(
 		http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			w.WriteHeader(http.StatusOK)
 		}))
 	defer server.Close()
 
-	teams.webhook = server.URL
+	configMap := map[string]interface{}{
+		"webhook": server.URL,
+	}
+	appCfg := &config.App{ClusterName: "dev"}
+	teams := NewTeams(configMap, appCfg)
+
+	payload :=
+		[]byte(`{"title":"Test Title","text":"Test Text","attachment":[]}`)
 	err := teams.sendAPI(payload)
 	assert.NoError(t, err)
 }
