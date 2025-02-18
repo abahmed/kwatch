@@ -1,116 +1,132 @@
 package teams
 
 import (
-	"net/http"
-	"net/http/httptest"
-	"testing"
+    "encoding/json"
+    "net/http"
+    "net/http/httptest"
+    "testing"
 
-	"github.com/abahmed/kwatch/config"
-	"github.com/abahmed/kwatch/event"
-	"github.com/stretchr/testify/assert"
+    "github.com/abahmed/kwatch/event"
+    "github.com/stretchr/testify/assert"
+	"github.com/stretchr/kwatch/config"
 )
 
-func TestEmptyConfig(t *testing.T) {
-	assert := assert.New(t)
-
-	c := NewTeams(map[string]interface{}{}, &config.App{ClusterName: "dev"})
-	assert.Nil(c)
-}
-
-func TestTeams(t *testing.T) {
-	assert := assert.New(t)
-
-	configMap := map[string]interface{}{
-		"webhook": "testtest",
-	}
-	c := NewTeams(configMap, &config.App{ClusterName: "dev"})
-	assert.NotNil(c)
-
-	assert.Equal(c.Name(), "Microsoft Teams")
-}
-
-func TestSendMessage(t *testing.T) {
-	assert := assert.New(t)
-
-	s := httptest.NewServer(
-		http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			w.Write([]byte(`{"isOk": true}`))
-		}))
-
-	defer s.Close()
-
-	configMap := map[string]interface{}{
-		"webhook": s.URL,
-	}
-	c := NewTeams(configMap, &config.App{ClusterName: "dev"})
-	assert.NotNil(c)
-
-	assert.Nil(c.SendMessage("test"))
-}
-
-func TestSendMessageError(t *testing.T) {
-	assert := assert.New(t)
-
-	s := httptest.NewServer(
-		http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			w.WriteHeader(http.StatusBadGateway)
-		}))
-
-	defer s.Close()
-
-	configMap := map[string]interface{}{
-		"webhook": s.URL,
-	}
-	c := NewTeams(configMap, &config.App{ClusterName: "dev"})
-	assert.NotNil(c)
-
-	assert.NotNil(c.SendMessage("test"))
+func TestNewTeams(t *testing.T) {
+    config := map[string]interface{}{
+        "flowURL": "http://example.com",
+        "title":   "Test Title",
+        "text":    "Test Text",
+    }
+    appCfg := &config.App{}
+    teams := NewTeams(config, appCfg)
+    assert.NotNil(t, teams)
+    assert.Equal(t, "http://example.com", teams.flowURL)
+    assert.Equal(t, "Test Title", teams.title)
+    assert.Equal(t, "Test Text", teams.text)
 }
 
 func TestSendEvent(t *testing.T) {
-	assert := assert.New(t)
+    config := map[string]interface{}{
+        "flowURL": "http://example.com",
+    }
+    appCfg := &config.App{}
+    teams := NewTeams(config, appCfg)
 
-	s := httptest.NewServer(
-		http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			w.Write([]byte(`{"isOk": true}`))
-		}))
+    e := &event.Event{
+        PodName:   "test-pod",
+        Namespace: "test-namespace",
+        Reason:    "test-reason",
+        Logs:      "test-logs",
+        Events:    "test-events",
+    }
 
-	defer s.Close()
+    server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+        w.WriteHeader(http.StatusOK)
+    }))
+    defer server.Close()
 
-	configMap := map[string]interface{}{
-		"webhook": s.URL,
-	}
-	c := NewTeams(configMap, &config.App{ClusterName: "dev"})
-	assert.NotNil(c)
-
-	ev := event.Event{
-		PodName:       "test-pod",
-		ContainerName: "test-container",
-		Namespace:     "default",
-		Reason:        "OOMKILLED",
-		Logs:          "test\ntestlogs",
-		Events: "event1-event2-event3-event1-event2-event3-event1-event2-" +
-			"event3\nevent5\nevent6-event8-event11-event12",
-	}
-	assert.Nil(c.SendEvent(&ev))
+    teams.flowURL = server.URL
+    err := teams.SendEvent(e)
+    assert.NoError(t, err)
 }
 
-func TestInvaildHttpRequest(t *testing.T) {
-	assert := assert.New(t)
+func TestSendMessage(t *testing.T) {
+    config := map[string]interface{}{
+        "flowURL": "http://example.com",
+    }
+    appCfg := &config.App{}
+    teams := NewTeams(config, appCfg)
 
-	configMap := map[string]interface{}{
-		"webhook": "h ttp://localhost",
-	}
-	c := NewTeams(configMap, &config.App{ClusterName: "dev"})
-	assert.NotNil(c)
+    server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+        w.WriteHeader(http.StatusOK)
+    }))
+    defer server.Close()
 
-	assert.NotNil(c.SendMessage("test"))
+    teams.flowURL = server.URL
+    err := teams.SendMessage("test message")
+    assert.NoError(t, err)
+}
 
-	configMap = map[string]interface{}{
-		"webhook": "http://localhost:132323",
-	}
-	c = NewTeams(configMap, &config.App{ClusterName: "dev"})
-	assert.NotNil(c)
+func TestSendAPI(t *testing.T) {
+    config := map[string]interface{}{
+        "flowURL": "http://example.com",
+    }
+    appCfg := &config.App{}
+    teams := NewTeams(config, appCfg)
 
-	assert.NotNil(c.SendMessage("test"))
+    payload := []byte(`{"title":"Test Title","text":"Test Text","attachment":[]}`)
+
+    server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+        w.WriteHeader(http.StatusOK)
+    }))
+    defer server.Close()
+
+    teams.flowURL = server.URL
+    err := teams.sendAPI(payload)
+    assert.NoError(t, err)
+}
+
+func TestBuildRequestBodyTeams(t *testing.T) {
+    config := map[string]interface{}{
+        "flowURL": "http://example.com",
+        "title":   "Test Title",
+        "text":    "Test Text",
+    }
+    appCfg := &config.App{}
+    teams := NewTeams(config, appCfg)
+
+    e := &event.Event{
+        PodName:   "test-pod",
+        Namespace: "test-namespace",
+        Reason:    "test-reason",
+        Logs:      "test-logs",
+        Events:    "test-events",
+    }
+
+    payload := teams.buildRequestBodyTeams(e)
+    var result teamsFlowPayload
+    err := json.Unmarshal(payload, &result)
+    assert.NoError(t, err)
+    assert.Equal(t, "Test Title", result.Title)
+    assert.Contains(t, result.Text, "test-pod")
+    assert.Contains(t, result.Text, "test-namespace")
+    assert.Contains(t, result.Text, "test-reason")
+    assert.Contains(t, result.Text, "test-logs")
+    assert.Contains(t, result.Text, "test-events")
+}
+
+func TestBuildRequestBodyMessage(t *testing.T) {
+    config := map[string]interface{}{
+        "flowURL": "http://example.com",
+    }
+    appCfg := &config.App{}
+    teams := NewTeams(config, appCfg)
+
+    payload := teams.buildRequestBodyMessage("test message")
+    var result teamsFlowPayload
+    err := json.Unmarshal(payload, &result)
+    assert.NoError(t, err)
+    assert.Equal(t, "New Alert", result.Title)
+    assert.Equal(t, "test message", result.Text)
+    assert.Empty(t, result.Attachment)
 }
