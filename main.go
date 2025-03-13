@@ -23,7 +23,7 @@ func main() {
 	}
 	setLogFormatter(config.App.LogFormatter)
 
-	logrus.Infof(fmt.Sprintf(constant.WelcomeMsg, version.Short()))
+	logrus.Info(fmt.Sprintf(constant.WelcomeMsg, version.Short()))
 
 	// create kubernetes client
 	client := client.Create(&config.App)
