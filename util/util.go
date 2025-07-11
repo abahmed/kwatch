@@ -114,6 +114,7 @@ func getContainerLogs(
 		DoRaw(context.TODO())
 }
 
+// GetPodEvents retrieves the events for a specific pod
 func GetPodEvents(
 	c kubernetes.Interface,
 	name,
@@ -132,7 +133,7 @@ func GetNodes(c kubernetes.Interface) (*v1.NodeList, error) {
 		List(context.TODO(), metav1.ListOptions{})
 }
 
-// // GetNodeSummary gets a list of nodes
+// GetNodeSummary gets a list of nodes
 func GetNodeSummary(c kubernetes.Interface, name string) ([]byte, error) {
 	return c.CoreV1().
 		RESTClient().
