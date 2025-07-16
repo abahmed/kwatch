@@ -11,7 +11,7 @@ require (
 	gopkg.in/mail.v2 v2.3.1
 	gopkg.in/yaml.v3 v3.0.1
 	k8s.io/api v0.33.1
-	k8s.io/apimachinery v0.33.1
+	k8s.io/apimachinery v0.33.3
 	k8s.io/client-go v0.33.1
 )
 
