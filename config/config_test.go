@@ -122,3 +122,60 @@ func TestGetCompiledIgnorePatterns(t *testing.T) {
 
 	assert.NotNil(err)
 }
+
+func TestIgnoreNodeReasonsLoading(t *testing.T) {
+	assert := assert.New(t)
+
+	defer os.Unsetenv("CONFIG_FILE")
+	defer os.RemoveAll("config.yaml")
+
+	os.Setenv("CONFIG_FILE", "config.yaml")
+
+	n := Config{
+		IgnoreNodeReasons: []string{"NotReady", "KubeletNotReady", "custom-reason"},
+	}
+	yamlData, _ := yaml.Marshal(&n)
+	os.WriteFile("config.yaml", yamlData, 0644)
+
+	cfg, _ := LoadConfig()
+	assert.NotNil(cfg)
+	assert.Equal([]string{"NotReady", "KubeletNotReady", "custom-reason"}, cfg.IgnoreNodeReasons)
+}
+
+func TestIgnoreNodeReasonsEmpty(t *testing.T) {
+	assert := assert.New(t)
+
+	defer os.Unsetenv("CONFIG_FILE")
+	defer os.RemoveAll("config.yaml")
+
+	os.Setenv("CONFIG_FILE", "config.yaml")
+
+	n := Config{
+		IgnoreNodeReasons: []string{},
+	}
+	yamlData, _ := yaml.Marshal(&n)
+	os.WriteFile("config.yaml", yamlData, 0644)
+
+	cfg, _ := LoadConfig()
+	assert.NotNil(cfg)
+	assert.Equal([]string{}, cfg.IgnoreNodeReasons)
+}
+
+func TestIgnoreNodeReasonsSpecialChars(t *testing.T) {
+	assert := assert.New(t)
+
+	defer os.Unsetenv("CONFIG_FILE")
+	defer os.RemoveAll("config.yaml")
+
+	os.Setenv("CONFIG_FILE", "config.yaml")
+
+	n := Config{
+		IgnoreNodeReasons: []string{"reason-1", "reason_2", "reason.with.dot", "reason/with/slash"},
+	}
+	yamlData, _ := yaml.Marshal(&n)
+	os.WriteFile("config.yaml", yamlData, 0644)
+
+	cfg, _ := LoadConfig()
+	assert.NotNil(cfg)
+	assert.Equal([]string{"reason-1", "reason_2", "reason.with.dot", "reason/with/slash"}, cfg.IgnoreNodeReasons)
+}
