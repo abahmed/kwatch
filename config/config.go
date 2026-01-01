@@ -68,6 +68,9 @@ type Config struct {
 	// Patterns are compiled from IgnoreLogPatterns after populating
 	// IgnoreLogPatterns configuration
 	IgnoreLogPatternsCompiled []*regexp.Regexp
+
+	// IgnoreNodeReasons is an optional list of node reasons for which alerting should be skipped
+	IgnoreNodeReasons []string `yaml:"ignoreNodeReasons"`
 }
 
 // App confing struct
