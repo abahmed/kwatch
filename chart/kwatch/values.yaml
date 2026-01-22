@@ -1,0 +1,170 @@
+# Values for kwatch should update image version
+image:
+  repository: ghcr.io/abahmed/kwatch
+  tag: v0.8.0
+  pullPolicy: Always
+
+# nameOverride: ""
+# fullnameOverride: ""
+
+# Configuration for server deployment
+server:
+  # Number of replicas (Required) 
+  # Note: Support only 1 replica till now, Working on the scalability 
+  replicaCount: 1
+
+  # Server container port (Required)
+  httpPort: 80
+
+  # How kubernetes determines when the server is ready and if it's still alive (Suggested)
+  health:
+    readinessProbe:
+      httpGet:
+        path: /health/readiness
+        port: 8080
+      initialDelaySeconds: 60
+      periodSeconds: 60
+    livenessProbe:
+      httpGet:
+        path: /health/liveness
+        port: 8080
+      initialDelaySeconds: 60
+      periodSeconds: 60
+  # Determing processes securityContext.
+
+  # https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.21/#podsecuritycontext-v1-core ( podSecurityContext [ Optioanl ])
+  podSecurityContext:
+    fsGroup: 2000
+
+  # Requested resources and limits for the server (Suggested)
+  resources: {}
+    # requests:
+    #   cpu: 100m
+    #   memory: 128Mi
+    # limits:
+    #   cpu: 100m
+    #   memory: 128Mi
+
+  # Pass custom command. Defaults to docker image ENTRYPOINT (Optional)
+  command: []
+
+  # Pass custom args. Defaults to docker image CMD (Optional)
+  args: []
+
+  # Constraints how pods should be spread across nodes
+  # valid values:
+  # - ""     (no constraints)
+  # - "soft" (tries to spread the pods if possible)
+  # - "hard" (forces the pods to be spread)
+  antiAffinity: ""
+
+  # The deployment strategy to use to replace existing pods with new ones. (Optional)
+  updateStrategy: {}
+    # rollingUpdate:
+    #   maxUnavailable: 1
+    # type: RollingUpdate
+
+  # Annotations to add to server pods. (Optional)
+  podAnnotations: {}
+    # fluentbit.io/parser: nginx-ingress
+
+  # Labels to add to server pods. (Optional)
+  podLabels: {}
+    # stack: node
+
+  # Which nodes should the server run on. (Suggested)
+  nodeSelector: {}
+    # environment: dev
+
+  # https://kubernetes.io/docs/concepts/configuration/taint-and-toleration. (Optional)
+  tolerations: []
+    # - key: "instancegroup"
+    #   operation: "Equal"
+    #   value: "dev"
+
+  # Server environment variables. (Optional)
+  # server also inherits variables from envVarSource, secretEnv and existSecretNames but env has higher priority.
+  # values can contain go templates
+  env:
+    # KEY: val
+    # URL: value-{{ .Release.Prefix }}
+    CONFIG_FILE: "/config/config.yaml"
+ 
+  # Server environment variables from a source/reference for the value. (Optional)
+  # Sources Like:
+    # fieldRef: Selects a field of the pod
+      # metadata.name, metadata.namespace, `metadata.labels['<KEY>']`, `metadata.annotations['<KEY>']`, spec.nodeName, spec.serviceAccountName, status.hostIP, status.podIP, status.podIPs.
+      # Examaples: https://raw.githubusercontent.com/kubernetes/website/main/content/en/examples/pods/inject/dapi-envars-pod.yaml
+    # resourceFieldRef: Selects a resource of the container
+     # Note: only resources limits and requests (limits.cpu, limits.memory, limits.ephemeral-storage, requests.cpu, requests.memory and requests.ephemeral-storage) are currently supported.
+     # Examples: https://kubernetes.io/docs/tasks/inject-data-application/_print/#use-container-fields-as-values-for-environment-variables
+    # configMapKeyRef: Selects a key of a ConfigMap.
+    # secretKeyRef: Selects a key of a secret in the pod's namespaceource for the value of an Env
+  envVarSource: {}
+    # KEY: "{ <SOURCE>: { <OBJECTS....> } }"
+    # POD_IP: "{ fieldRef: { fieldPath: status.podIP } }"
+
+  # Will add custom configuration options & Create Configmap in k8s cluster with config
+  # Should Update Configmap config data
+  config:
+    config.yaml: |
+    #   maxRecentLogLines: <optional_number_of_lines>
+    #   ignoreFailedGracefulShutdown: <optional_boolean>
+    #   alert:
+    #     slack:
+    #       webhook: <webhook_url>
+    #     pagerduty:
+    #       integrationKey: <integration_key>
+    #     discord:
+    #       webhook: <webhook_url>
+    #     telegram:
+    #         token: <token_key>
+    #         chatId: <chat_id>
+    #     email:
+    #       form: <from_mail>
+    #       to: <to_mail>
+    #       password: <password>
+    #       host: <host>
+    #       port: <port_number>
+    #     teams:
+    #         webhook: <webhook_url>
+    #     rocketchat:
+    #         webhook: <webhook_url>
+    #     mattermost:
+    #         webhook: <webhook_url>
+    #     opsgenie:
+    #       apiKey: <api_key>
+    #   namespaces:
+    #     - <optional_namespace>
+    #   reasons:
+    #     - <optional_reason>
+    #   ignoreContainerNames:
+    #     - <optional_container_name>
+    
+
+  # to use existing secret in deployment file
+  existSecretNames: []
+    # the names of existing secrets names
+    #  - existsecret
+    #  - secondsecret
+
+  # add containerVolumeMounts to container
+  containerVolumeMounts:
+  - name: config-volume
+    mountPath: /config
+    readOnly: true
+
+  # add the volumes to pod
+  volumes:
+  - name: config-volume
+    configMap:
+      name: {{ .Release.Name }}
+
+# To Create ServiceAccount
+serviceAccount:
+  enabled: true
+
+# Configuration for Prometheus monintoring
+serviceMonitor:
+  enabled: false
+  namespace: monitoring

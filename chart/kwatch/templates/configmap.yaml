@@ -1,0 +1,18 @@
+{{- if .Values.server.config -}}
+apiVersion: v1
+kind: ConfigMap
+metadata:
+metadata:
+  name: {{ include "kwatch.fullname" . }}
+  namespace: {{ .Release.Namespace }}
+  labels:
+    app: {{ include "kwatch.name" . }}
+    chart: {{ include "kwatch.chart" . }}
+    release: {{ .Release.Name }}
+    helm.sh/chart: {{ include "kwatch.chart" . }}
+    app.kubernetes.io/name: {{ include "kwatch.name" . }}
+    app.kubernetes.io/instance: {{ .Release.Name }}
+    app.kubernetes.io/managed-by: {{ .Release.Service }}
+data:
+{{{ tpl $value $ | quote}}
+{{- end }}
