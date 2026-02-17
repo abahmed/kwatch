@@ -1,7 +1,7 @@
 apiVersion: v2
 name: kwatch
-version: "0.10.3"
-appVersion: "v0.10.3"
+version: "0.10.4"
+appVersion: "v0.10.4"
 description: monitor all changes in your Kubernetes(K8s) cluster, detects crashes
   in your running apps in realtime, and publishes notifications to your channels (Slack,
   Discord, etc.) instantly
