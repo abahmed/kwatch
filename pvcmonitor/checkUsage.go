@@ -16,7 +16,6 @@ type PvcUsage struct {
 }
 
 func (p *PvcMonitor) checkUsage() {
-	// getting nodes
 	nodes, err := util.GetNodes(p.client)
 	if err != nil {
 		logrus.Errorf("pvc monitor: failed to get nodes %s", err.Error())
@@ -35,9 +34,11 @@ func (p *PvcMonitor) checkUsage() {
 		pvcUsages = append(pvcUsages, nodePvcUsage...)
 	}
 
+	p.mu.Lock()
+	defer p.mu.Unlock()
+
 	for _, pvc := range pvcUsages {
 		if pvc.UsagePercentage >= p.config.Threshold {
-			// ignore notified pv
 			if _, ok := p.notifiedPvc[pvc.PVName]; ok {
 				continue
 			}
