@@ -36,7 +36,7 @@ type Teams struct {
 type teamsFlowPayload struct {
 	Title      string                   `json:"title"`
 	Text       string                   `json:"text"`
-	Attachment []map[string]interface{} `json:"attachment"`
+	Attachment []map[string]interface{} `json:"attachments"`
 }
 
 // NewTeams returns new team instance

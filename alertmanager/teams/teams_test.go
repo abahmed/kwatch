@@ -183,7 +183,7 @@ func TestSendAPI(t *testing.T) {
 	teams := NewTeams(configMap, appCfg)
 
 	payload :=
-		[]byte(`{"title":"Test Title","text":"Test Text","attachment":[]}`)
+		[]byte(`{"title":"Test Title","text":"Test Text","attachments":[]}`)
 	err := teams.sendAPI(payload)
 	assert.NoError(t, err)
 }
