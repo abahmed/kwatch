@@ -11,6 +11,7 @@ import (
 
 	"github.com/abahmed/kwatch/config"
 	"github.com/abahmed/kwatch/event"
+	"github.com/abahmed/kwatch/util"
 	"github.com/sirupsen/logrus"
 )
 
@@ -103,22 +104,22 @@ func (t *Teams) sendAPI(payload []byte) error {
 
 		request.Header.Set("Content-Type", "application/json")
 
-		client := &http.Client{}
+		client := util.GetDefaultClient()
 		resp, err := client.Do(request)
 		if err != nil {
 			return fmt.Errorf("failed to create HTTP response: %w", err)
 		}
 		defer resp.Body.Close()
 
-		// Check for success (HTTP 200 OK)
 		if resp.StatusCode == http.StatusOK {
 			return nil
 		}
 
-		// Handle specific 400 errors (TriggerInputSchemaMismatch)
 		if resp.StatusCode == http.StatusBadRequest {
-			body, _ := io.ReadAll(resp.Body)
-			// Check for error (TriggerInputSchemaMismatch)
+			body, err := io.ReadAll(resp.Body)
+			if err != nil {
+				return fmt.Errorf("call to power automate flow returned status %d", resp.StatusCode)
+			}
 			if strings.Contains(string(body), "TriggerInputSchemaMismatch") {
 				return fmt.Errorf(
 					"failed to send message due to schema mismatch: %s",
@@ -130,15 +131,17 @@ func (t *Teams) sendAPI(payload []byte) error {
 				string(body))
 		}
 
-		// Handle 202 status and retry
 		if resp.StatusCode == http.StatusAccepted {
 			logrus.Warnf("Request accepted by Power Automate flow, "+
 				"but not processed immediately. Attempt %d of %d.",
 				attempts+1,
 				t.maxRetries)
 		} else {
-			// For other non-200 status codes, log the error
-			body, _ := io.ReadAll(resp.Body)
+			body, err := io.ReadAll(resp.Body)
+			if err != nil {
+				return fmt.Errorf(
+					"call to power automate flow returned status %d", resp.StatusCode)
+			}
 			return fmt.Errorf(
 				"call to power automate flow returned status %d: %s",
 				resp.StatusCode,

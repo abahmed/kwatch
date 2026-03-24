@@ -49,7 +49,7 @@ func (s *Pagerduty) Name() string {
 
 // SendEvent sends event to the provider
 func (s *Pagerduty) SendEvent(ev *event.Event) error {
-	client := &http.Client{}
+	client := util.GetDefaultClient()
 
 	reqBody := s.buildRequestBodyPagerDuty(ev, s.integrationKey)
 	buffer := bytes.NewBuffer([]byte(reqBody))
@@ -119,14 +119,14 @@ func (s *Pagerduty) buildRequestBodyPagerDuty(
 		}
 	  }`,
 		key,
-		fmt.Sprintf(defaultEventTitle, ev.ContainerName),
-		ev.ContainerName,
-		s.appCfg.ClusterName,
-		ev.PodName,
-		ev.ContainerName,
-		ev.Namespace,
-		ev.NodeName,
-		ev.Reason,
+		util.JsonEscape(fmt.Sprintf(defaultEventTitle, ev.ContainerName)),
+		util.JsonEscape(ev.ContainerName),
+		util.JsonEscape(s.appCfg.ClusterName),
+		util.JsonEscape(ev.PodName),
+		util.JsonEscape(ev.ContainerName),
+		util.JsonEscape(ev.Namespace),
+		util.JsonEscape(ev.NodeName),
+		util.JsonEscape(ev.Reason),
 		eventsText,
 		logsText)
 

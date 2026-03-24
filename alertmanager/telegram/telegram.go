@@ -2,6 +2,7 @@ package telegram
 
 import (
 	"bytes"
+	"encoding/json"
 	"fmt"
 	"net/http"
 	"strings"
@@ -14,6 +15,13 @@ import (
 const (
 	telegramAPIURL = "https://api.telegram.org/bot%s/sendMessage"
 )
+
+func maskString(s string) string {
+	if len(s) <= 4 {
+		return "****"
+	}
+	return s[:4] + strings.Repeat("*", len(s)-4)
+}
 
 type Telegram struct {
 	token  string
@@ -39,9 +47,9 @@ func NewTelegram(config map[string]interface{}, appCfg *config.App) *Telegram {
 	}
 
 	logrus.Infof(
-		"initializing telegram with token  %s and chat_id %s",
-		token,
-		chatId)
+		"initializing telegram with token %s and chat_id %s",
+		maskString(token),
+		maskString(chatId))
 
 	// returns a new telegram object
 	return &Telegram{
@@ -120,10 +128,11 @@ func (t *Telegram) buildRequestBodyTelegram(
 		txt,
 	)
 
+	escapedMsg, _ := json.Marshal(msg)
 	reqBody := fmt.Sprintf(
-		`{"chat_id": "%s", "text": "%s", "parse_mode": "MARKDOWN"}`,
+		`{"chat_id": "%s", "text": %s, "parse_mode": "MARKDOWN"}`,
 		chatId,
-		msg,
+		string(escapedMsg),
 	)
 	return reqBody
 }

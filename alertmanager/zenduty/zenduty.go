@@ -11,6 +11,7 @@ import (
 	"github.com/abahmed/kwatch/config"
 	"github.com/abahmed/kwatch/constant"
 	"github.com/abahmed/kwatch/event"
+	"github.com/abahmed/kwatch/util"
 	"github.com/sirupsen/logrus"
 )
 
@@ -86,13 +87,15 @@ func (m *Zenduty) SendEvent(e *event.Event) error {
 
 // sendAPI sends http request to Zenduty API
 func (m *Zenduty) sendAPI(content []byte) error {
-	client := &http.Client{}
+	client := util.GetDefaultClient()
 	buffer := bytes.NewBuffer(content)
 	url := m.url + "/" + m.integrationkey + "/"
 	request, err := http.NewRequest(http.MethodPost, url, buffer)
 	if err != nil {
 		return err
 	}
+
+	request.Header.Set("Content-Type", "application/json")
 
 	response, err := client.Do(request)
 	if err != nil {

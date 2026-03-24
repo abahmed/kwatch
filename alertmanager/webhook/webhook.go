@@ -40,18 +40,20 @@ func (w *Webhook) SendMessage(msg string) error {
 func NewWebhook(config map[string]interface{}, appCfg *config.App) *Webhook {
 	url, ok := config["url"].(string)
 	if !ok || len(url) == 0 {
-		logrus.Warnf("initializing  with empty webhook url")
+		logrus.Warnf("initializing webhook with empty url")
 		return nil
 	}
 	rawHeaders, ok := config["headers"]
 	var headers []KeyValue
 	if ok {
-		headerArray := rawHeaders.([]interface{})
-		for _, header := range headerArray {
-			headerJson, _ := json.Marshal(header)
-			var k KeyValue
-			json.Unmarshal(headerJson, &k)
-			headers = append(headers, k)
+		headerArray, ok := rawHeaders.([]interface{})
+		if ok {
+			for _, header := range headerArray {
+				headerJson, _ := json.Marshal(header)
+				var k KeyValue
+				json.Unmarshal(headerJson, &k)
+				headers = append(headers, k)
+			}
 		}
 	}
 
@@ -61,7 +63,7 @@ func NewWebhook(config map[string]interface{}, appCfg *config.App) *Webhook {
 	var a Authentication
 	json.Unmarshal(basicAuthJson, &a)
 
-	logrus.Infof("initializing  with webhook url: %s "+
+	logrus.Infof("initializing webhook with url: %s "+
 		"with headers: %s and username: %s", url, headers, a.UserName)
 
 	return &Webhook{
@@ -80,7 +82,7 @@ func (w *Webhook) Name() string {
 
 // SendEvent sends event to the provider
 func (w *Webhook) SendEvent(ev *event.Event) error {
-	client := &http.Client{}
+	client := util.GetDefaultClient()
 
 	reqBody := w.buildRequestBody(ev)
 	buffer := bytes.NewBuffer(reqBody)
@@ -105,7 +107,7 @@ func (w *Webhook) SendEvent(ev *event.Event) error {
 
 	if response.StatusCode > 202 {
 		return fmt.Errorf(
-			"call to teams alert returned status code %d",
+			"call to webhook returned status code %d",
 			response.StatusCode)
 	}
 

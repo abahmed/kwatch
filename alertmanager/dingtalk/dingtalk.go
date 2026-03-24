@@ -15,6 +15,7 @@ import (
 	"github.com/abahmed/kwatch/config"
 	"github.com/abahmed/kwatch/constant"
 	"github.com/abahmed/kwatch/event"
+	"github.com/abahmed/kwatch/util"
 	"github.com/sirupsen/logrus"
 )
 
@@ -66,8 +67,6 @@ func (d *DingTalk) Name() string {
 
 // SendEvent sends event to the provider
 func (d *DingTalk) SendEvent(e *event.Event) error {
-
-	// use custom title if it's provided, otherwise use default
 	title := d.title
 	if len(title) == 0 {
 		title = constant.DefaultTitle
@@ -77,8 +76,8 @@ func (d *DingTalk) SendEvent(e *event.Event) error {
 
 	body := fmt.Sprintf(`{
 		"msgtype": "markdown",
-		"markdown": { "title": "%s", "text: "%s" }
-	}`, title, msg)
+		"markdown": { "title": "%s", "text": "%s" }
+	}`, util.JsonEscape(title), util.JsonEscape(msg))
 
 	return d.sendAPI(body)
 }
@@ -88,7 +87,7 @@ func (d *DingTalk) SendMessage(msg string) error {
 	body := fmt.Sprintf(`{
 		"msgtype": "text",
 		"text": { "content": "%s"}
-	}`, msg)
+	}`, util.JsonEscape(msg))
 	return d.sendAPI(body)
 }
 
@@ -111,7 +110,7 @@ func (d *DingTalk) sendAPI(msg string) error {
 
 	request.Header.Set("Content-Type", "application/json")
 
-	client := &http.Client{}
+	client := util.GetDefaultClient()
 	response, err := client.Do(request)
 	if err != nil {
 		return err

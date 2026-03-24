@@ -30,7 +30,7 @@ func NewStartupManager(
 	sm := &StartupManager{
 		stateManager: state.NewStateManager(client, namespace),
 		telemetry:    telemetry.NewTelemetry(telemetryCfg),
-		config:       &config.Config{},
+		config:       &config.Config{App: *appCfg},
 	}
 
 	sm.alertManager = &alertmanager.AlertManager{}

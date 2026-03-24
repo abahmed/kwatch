@@ -24,12 +24,14 @@ const (
 type StateManager struct {
 	client    kubernetes.Interface
 	namespace string
+	retryMgr  *RetryConfigMapManager
 }
 
 func NewStateManager(client kubernetes.Interface, namespace string) *StateManager {
 	return &StateManager{
 		client:    client,
 		namespace: namespace,
+		retryMgr:  NewRetryConfigMapManager(client, namespace),
 	}
 }
 
@@ -67,13 +69,10 @@ func (s *StateManager) IsTelemetrySent(ctx context.Context) bool {
 }
 
 func (s *StateManager) MarkTelemetrySent(ctx context.Context) error {
-	cm, err := s.client.CoreV1().ConfigMaps(s.namespace).Get(ctx, stateConfigMapName, metav1.GetOptions{})
-	if err != nil {
-		return err
-	}
-	cm.Data[telemetrySentKey] = "true"
-	_, err = s.client.CoreV1().ConfigMaps(s.namespace).Update(ctx, cm, metav1.UpdateOptions{})
-	return err
+	return s.retryMgr.UpdateWithRetry(ctx, func(cm *corev1.ConfigMap) error {
+		cm.Data[telemetrySentKey] = "true"
+		return nil
+	})
 }
 
 func (s *StateManager) GetNotifiedVersion(ctx context.Context) string {
@@ -85,13 +84,10 @@ func (s *StateManager) GetNotifiedVersion(ctx context.Context) string {
 }
 
 func (s *StateManager) SetNotifiedVersion(ctx context.Context, version string) error {
-	cm, err := s.client.CoreV1().ConfigMaps(s.namespace).Get(ctx, stateConfigMapName, metav1.GetOptions{})
-	if err != nil {
-		return err
-	}
-	cm.Data[notifiedVersionKey] = version
-	_, err = s.client.CoreV1().ConfigMaps(s.namespace).Update(ctx, cm, metav1.UpdateOptions{})
-	return err
+	return s.retryMgr.UpdateWithRetry(ctx, func(cm *corev1.ConfigMap) error {
+		cm.Data[notifiedVersionKey] = version
+		return nil
+	})
 }
 
 func (s *StateManager) EnsureClusterID(ctx context.Context) (string, error) {
@@ -114,23 +110,19 @@ func (s *StateManager) MarkAsInitialized(ctx context.Context, clusterID, version
 		return nil
 	}
 
-	if _, exists := cm.Data[initKey]; !exists {
-		cm.Data[initKey] = "true"
-	}
-	if _, exists := cm.Data[clusterIDKey]; !exists || cm.Data[clusterIDKey] == "" {
-		cm.Data[clusterIDKey] = clusterID
-	}
-	if _, exists := cm.Data[firstRunKey]; !exists {
-		cm.Data[firstRunKey] = time.Now().UTC().Format(time.RFC3339)
-	}
-	cm.Data[versionKey] = version
-
-	_, err = s.client.CoreV1().ConfigMaps(s.namespace).Update(ctx, cm, metav1.UpdateOptions{})
-	if err != nil {
-		return err
-	}
-	logrus.Debugf("updated state configmap with version: %s", version)
-	return nil
+	return s.retryMgr.UpdateWithRetry(ctx, func(c *corev1.ConfigMap) error {
+		if _, exists := c.Data[initKey]; !exists {
+			c.Data[initKey] = "true"
+		}
+		if _, exists := c.Data[clusterIDKey]; !exists || c.Data[clusterIDKey] == "" {
+			c.Data[clusterIDKey] = clusterID
+		}
+		if _, exists := c.Data[firstRunKey]; !exists {
+			c.Data[firstRunKey] = time.Now().UTC().Format(time.RFC3339)
+		}
+		c.Data[versionKey] = version
+		return nil
+	})
 }
 
 func (s *StateManager) createConfigMap(clusterID, version string) *corev1.ConfigMap {

@@ -3,6 +3,9 @@ package main
 import (
 	"context"
 	"fmt"
+	"os"
+	"os/signal"
+	"syscall"
 
 	"github.com/abahmed/kwatch/client"
 	"github.com/abahmed/kwatch/config"
@@ -56,4 +59,12 @@ func main() {
 	)
 
 	watcher.Start(k8sClient, cfg, h)
+
+	sigCh := make(chan os.Signal, 1)
+	signal.Notify(sigCh, syscall.SIGINT, syscall.SIGTERM)
+	<-sigCh
+
+	logrus.Info("shutting down gracefully...")
+	healthServer.Stop(context.Background())
+	os.Exit(0)
 }
