@@ -2,6 +2,7 @@ package pagerduty
 
 import (
 	"bytes"
+	"encoding/json"
 	"fmt"
 	"net/http"
 	"strings"
@@ -16,6 +17,30 @@ const (
 	pagerdutyAPIURL   = "https://events.pagerduty.com/v2/enqueue"
 	defaultEventTitle = "[%s] There is an issue with a container in a pod"
 )
+
+type pagerdutyPayload struct {
+	RoutingKey  string                  `json:"routing_key"`
+	EventAction string                  `json:"event_action"`
+	Payload     pagerdutyPayloadDetails `json:"payload"`
+}
+
+type pagerdutyPayloadDetails struct {
+	Summary      string                 `json:"summary"`
+	Source       string                 `json:"source"`
+	Severity     string                 `json:"severity"`
+	CustomDetail pagerdutyCustomDetails `json:"custom_details"`
+}
+
+type pagerdutyCustomDetails struct {
+	Cluster   string `json:"Cluster"`
+	Name      string `json:"Name"`
+	Container string `json:"Container"`
+	Namespace string `json:"Namespace"`
+	Node      string `json:"Node"`
+	Reason    string `json:"Reason"`
+	Events    string `json:"Events"`
+	Logs      string `json:"Logs"`
+}
 
 type Pagerduty struct {
 	integrationKey string
@@ -51,7 +76,10 @@ func (s *Pagerduty) Name() string {
 func (s *Pagerduty) SendEvent(ev *event.Event) error {
 	client := util.GetDefaultClient()
 
-	reqBody := s.buildRequestBodyPagerDuty(ev, s.integrationKey)
+	reqBody, err := s.buildRequestBodyPagerDuty(ev, s.integrationKey)
+	if err != nil {
+		return err
+	}
 	buffer := bytes.NewBuffer([]byte(reqBody))
 
 	request, err := http.NewRequest(http.MethodPost, s.url, buffer)
@@ -83,53 +111,44 @@ func (s *Pagerduty) SendMessage(msg string) error {
 
 func (s *Pagerduty) buildRequestBodyPagerDuty(
 	ev *event.Event,
-	key string) string {
+	key string) (string, error) {
 	eventsText := "No events captured"
 	logsText := "No logs captured"
 
-	// add events part if it exists
 	events := strings.TrimSpace(ev.Events)
 	if len(events) > 0 {
-		eventsText = util.JsonEscape(ev.Events)
+		eventsText = ev.Events
 	}
 
-	// add logs part if it exists
 	logs := strings.TrimSpace(ev.Logs)
 	if len(logs) > 0 {
-		logsText = util.JsonEscape(ev.Logs)
+		logsText = ev.Logs
 	}
 
-	reqBody := fmt.Sprintf(`{
-		"routing_key": "%s",
-		"event_action": "trigger",
-		"payload": {
-		  "summary": "%s",
-		  "source": "%s",
-		  "severity": "critical",
-		  "custom_details": {
-			"Cluster": "%s",
-			"Name": "%s",
-			"Container": "%s",
-			"Namespace": "%s",
-			"Node": "%s",
-			"Reason": "%s",
-			"Events": "%s",
-			"Logs": "%s"
-		  }
-		}
-	  }`,
-		//nolint:gosec // JsonEscape uses json.Marshal which properly escapes
-		key,
-		util.JsonEscape(fmt.Sprintf(defaultEventTitle, ev.ContainerName)),
-		util.JsonEscape(ev.ContainerName),
-		util.JsonEscape(s.appCfg.ClusterName),
-		util.JsonEscape(ev.PodName),
-		util.JsonEscape(ev.ContainerName),
-		util.JsonEscape(ev.Namespace),
-		util.JsonEscape(ev.NodeName),
-		util.JsonEscape(ev.Reason),
-		eventsText,
-		logsText)
+	payload := pagerdutyPayload{
+		RoutingKey:  key,
+		EventAction: "trigger",
+		Payload: pagerdutyPayloadDetails{
+			Summary:  fmt.Sprintf(defaultEventTitle, ev.ContainerName),
+			Source:   ev.ContainerName,
+			Severity: "critical",
+			CustomDetail: pagerdutyCustomDetails{
+				Cluster:   s.appCfg.ClusterName,
+				Name:      ev.PodName,
+				Container: ev.ContainerName,
+				Namespace: ev.Namespace,
+				Node:      ev.NodeName,
+				Reason:    ev.Reason,
+				Events:    eventsText,
+				Logs:      logsText,
+			},
+		},
+	}
 
-	return reqBody
+	bodyBytes, err := json.Marshal(payload)
+	if err != nil {
+		return "", err
+	}
+
+	return string(bodyBytes), nil
 }

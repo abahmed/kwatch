@@ -23,6 +23,12 @@ func maskString(s string) string {
 	return s[:4] + strings.Repeat("*", len(s)-4)
 }
 
+type telegramPayload struct {
+	ChatID    string `json:"chat_id"`
+	Text      string `json:"text"`
+	ParseMode string `json:"parse_mode"`
+}
+
 type Telegram struct {
 	token  string
 	chatId string
@@ -122,20 +128,22 @@ func (t *Telegram) buildRequestBodyTelegram(
 		txt = customMsg
 	}
 
-	// build the message to be sent
 	msg := fmt.Sprintf(
 		"⛑ Kwatch detected a crash in pod \\n%s ",
 		txt,
 	)
 
-	//nolint:gosec // json.Marshal properly escapes all special chars
-	escapedMsg, _ := json.Marshal(msg)
-	reqBody := fmt.Sprintf(
-		`{"chat_id": "%s", "text": %s, "parse_mode": "MARKDOWN"}`,
-		chatId,
-		string(escapedMsg),
-	)
-	return reqBody
+	payload := telegramPayload{
+		ChatID:    chatId,
+		Text:      msg,
+		ParseMode: "MARKDOWN",
+	}
+
+	bodyBytes, err := json.Marshal(payload)
+	if err != nil {
+		return ""
+	}
+	return string(bodyBytes)
 }
 
 func (t *Telegram) sendByTelegramApi(reqBody string) error {
