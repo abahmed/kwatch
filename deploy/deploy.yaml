@@ -54,6 +54,11 @@ spec:
       - name: kwatch
         image: ghcr.io/abahmed/kwatch:v0.10.4
         imagePullPolicy: Always
+        securityContext:
+          runAsNonRoot: true
+          runAsUser: 1000
+          runAsGroup: 1000
+          readOnlyRootFilesystem: true
         volumeMounts:
           - name: config-volume
             mountPath: /config

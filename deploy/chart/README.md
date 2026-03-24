@@ -29,8 +29,8 @@ helm delete --purge [RELEASE_NAME]
 | `podAnnotations` | Pod annotations | {} |
 | `podLabels` | Pod labels | {} |
 | `securityContext.runAsNonRoot` | Container runs as a non-root user | true |
-| `securityContext.runAsUser` | Container processes' UID to run the entrypoint | 101 |
-| `securityContext.runAsGroup` | Container processes' GID to run the entrypoint | 101 |
+| `securityContext.runAsUser` | Container processes' UID to run the entrypoint | 1000 |
+| `securityContext.runAsGroup` | Container processes' GID to run the entrypoint | 1000 |
 | `securityContext.readOnlyRootFilesystem` | Container's root filesystem is read-only | true |
 | `resources` | CPU/Memory resource requests/limits | {limits: memory: 128Mi cpu: 100m} |
 | `nodeSelector` | Node labels for pod assignment | {} |

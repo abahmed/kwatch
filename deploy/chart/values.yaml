@@ -7,8 +7,8 @@ image:
   pullPolicy: Always
 
 securityContext:
-  runAsUser: 101
-  runAsGroup: 101
+  runAsUser: 1000
+  runAsGroup: 1000
   runAsNonRoot: true
   readOnlyRootFilesystem: true
 

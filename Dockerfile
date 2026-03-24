@@ -16,6 +16,9 @@ RUN sed -i 's/dev/'"${RELEASE_VERSION}"'/g' version/version.go
 RUN CGO_ENABLED=0 GOOS=linux go build -a -installsuffix cgo -o kwatch .
 
 FROM alpine:latest
-RUN apk add --update ca-certificates
+RUN apk add --update ca-certificates && \
+    adduser -D -u 1000 kwatch && \
+    rm -rf /var/cache/apk/*
 COPY --from=builder /build/kwatch /bin/kwatch
+USER kwatch
 ENTRYPOINT ["/bin/kwatch"]
