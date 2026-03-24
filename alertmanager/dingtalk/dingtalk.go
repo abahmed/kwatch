@@ -74,23 +74,44 @@ func (d *DingTalk) SendEvent(e *event.Event) error {
 
 	msg := e.FormatMarkdown(d.appCfg.ClusterName, "", "")
 
-	//nolint:gosec // JsonEscape uses json.Marshal which properly escapes
-	body := fmt.Sprintf(`{
-		"msgtype": "markdown",
-		"markdown": { "title": "%s", "text": "%s" }
-	}`, util.JsonEscape(title), util.JsonEscape(msg))
+	payload := struct {
+		MsgType  string `json:"msgtype"`
+		Markdown struct {
+			Title string `json:"title"`
+			Text  string `json:"text"`
+		} `json:"markdown"`
+	}{
+		MsgType: "markdown",
+	}
+	payload.Markdown.Title = title
+	payload.Markdown.Text = msg
 
-	return d.sendAPI(body)
+	bodyBytes, err := json.Marshal(payload)
+	if err != nil {
+		return err
+	}
+
+	return d.sendAPI(string(bodyBytes))
 }
 
 // SendMessage sends text message to the provider
 func (d *DingTalk) SendMessage(msg string) error {
-	//nolint:gosec // JsonEscape uses json.Marshal which properly escapes
-	body := fmt.Sprintf(`{
-		"msgtype": "text",
-		"text": { "content": "%s"}
-	}`, util.JsonEscape(msg))
-	return d.sendAPI(body)
+	payload := struct {
+		MsgType string `json:"msgtype"`
+		Text    struct {
+			Content string `json:"content"`
+		} `json:"text"`
+	}{
+		MsgType: "text",
+	}
+	payload.Text.Content = msg
+
+	bodyBytes, err := json.Marshal(payload)
+	if err != nil {
+		return err
+	}
+
+	return d.sendAPI(string(bodyBytes))
 }
 
 func (d *DingTalk) sendAPI(msg string) error {
