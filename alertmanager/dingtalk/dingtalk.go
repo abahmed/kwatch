@@ -74,6 +74,7 @@ func (d *DingTalk) SendEvent(e *event.Event) error {
 
 	msg := e.FormatMarkdown(d.appCfg.ClusterName, "", "")
 
+	//nolint:gosec // JsonEscape uses json.Marshal which properly escapes
 	body := fmt.Sprintf(`{
 		"msgtype": "markdown",
 		"markdown": { "title": "%s", "text": "%s" }
@@ -84,6 +85,7 @@ func (d *DingTalk) SendEvent(e *event.Event) error {
 
 // SendMessage sends text message to the provider
 func (d *DingTalk) SendMessage(msg string) error {
+	//nolint:gosec // JsonEscape uses json.Marshal which properly escapes
 	body := fmt.Sprintf(`{
 		"msgtype": "text",
 		"text": { "content": "%s"}

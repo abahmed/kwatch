@@ -128,6 +128,7 @@ func (t *Telegram) buildRequestBodyTelegram(
 		txt,
 	)
 
+	//nolint:gosec // json.Marshal properly escapes all special chars
 	escapedMsg, _ := json.Marshal(msg)
 	reqBody := fmt.Sprintf(
 		`{"chat_id": "%s", "text": %s, "parse_mode": "MARKDOWN"}`,

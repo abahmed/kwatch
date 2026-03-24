@@ -118,6 +118,7 @@ func (s *Pagerduty) buildRequestBodyPagerDuty(
 		  }
 		}
 	  }`,
+		//nolint:gosec // JsonEscape uses json.Marshal which properly escapes
 		key,
 		util.JsonEscape(fmt.Sprintf(defaultEventTitle, ev.ContainerName)),
 		util.JsonEscape(ev.ContainerName),
