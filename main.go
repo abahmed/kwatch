@@ -44,7 +44,6 @@ func main() {
 
 	healthServer := health.NewHealthServer(cfg.HealthCheck.Port, cfg.HealthCheck.Enabled)
 	healthServer.Start(context.Background())
-
 	upgrader := upgrader.NewUpgrader(&cfg.Upgrader, sm.GetAlertManager(), sm.GetStateManager())
 	go upgrader.CheckUpdates()
 
