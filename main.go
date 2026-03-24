@@ -8,6 +8,7 @@ import (
 	"github.com/abahmed/kwatch/config"
 	"github.com/abahmed/kwatch/constant"
 	"github.com/abahmed/kwatch/handler"
+	"github.com/abahmed/kwatch/health"
 	"github.com/abahmed/kwatch/pvcmonitor"
 	"github.com/abahmed/kwatch/startup"
 	"github.com/abahmed/kwatch/storage/memory"
@@ -37,6 +38,9 @@ func main() {
 		&cfg.App,
 	)
 	sm.HandleStartup(context.Background())
+
+	healthServer := health.NewHealthServer(cfg.HealthCheck.Port, cfg.HealthCheck.Enabled)
+	healthServer.Start(context.Background())
 
 	upgrader := upgrader.NewUpgrader(&cfg.Upgrader, sm.GetAlertManager(), sm.GetStateManager())
 	go upgrader.CheckUpdates()

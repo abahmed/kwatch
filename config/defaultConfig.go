@@ -20,5 +20,9 @@ func DefaultConfig() *Config {
 		Telemetry: Telemetry{
 			Enabled: false,
 		},
+		HealthCheck: HealthCheck{
+			Enabled: false,
+			Port:    8060,
+		},
 	}
 }

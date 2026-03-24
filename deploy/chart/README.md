@@ -32,6 +32,13 @@ helm delete --purge [RELEASE_NAME]
 | `securityContext.runAsUser` | Container processes' UID to run the entrypoint | 1000 |
 | `securityContext.runAsGroup` | Container processes' GID to run the entrypoint | 1000 |
 | `securityContext.readOnlyRootFilesystem` | Container's root filesystem is read-only | true |
+| `service.port` | Health check port | 8060 |
+| `readinessProbe.enabled` | Enable readiness probe | true |
+| `readinessProbe.initialDelaySeconds` | Readiness probe initial delay | 5 |
+| `readinessProbe.periodSeconds` | Readiness probe period | 10 |
+| `livenessProbe.enabled` | Enable liveness probe | true |
+| `livenessProbe.initialDelaySeconds` | Liveness probe initial delay | 15 |
+| `livenessProbe.periodSeconds` | Liveness probe period | 20 |
 | `resources` | CPU/Memory resource requests/limits | {limits: memory: 128Mi cpu: 100m} |
 | `nodeSelector` | Node labels for pod assignment | {} |
 | `tolerations` | Tolerations for pod assignment | [] |

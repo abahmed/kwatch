@@ -20,6 +20,9 @@ type Config struct {
 	// Telemetry configuration
 	Telemetry Telemetry `yaml:"telemetry"`
 
+	// HealthCheck configuration
+	HealthCheck HealthCheck `yaml:"healthCheck"`
+
 	// MaxRecentLogLines optional max tail log lines in messages,
 	// if it's not provided it will get all log lines
 	MaxRecentLogLines int64 `yaml:"maxRecentLogLines"`
@@ -131,4 +134,15 @@ type Telemetry struct {
 	// Enabled if set to true, it will send anonymous telemetry events
 	// By default, this value is false
 	Enabled bool `yaml:"enabled"`
+}
+
+// HealthCheck config struct
+type HealthCheck struct {
+	// Enabled if set to true, it will enable health check endpoint
+	// By default, this value is false
+	Enabled bool `yaml:"enabled"`
+
+	// Port is the port to listen on for health check requests
+	// By default, this value is 8060
+	Port int `yaml:"port"`
 }
