@@ -1,6 +1,7 @@
 package discord
 
 import (
+	"strings"
 	"testing"
 
 	"github.com/abahmed/kwatch/config"
@@ -98,4 +99,22 @@ func TestSendEvent(t *testing.T) {
 			"event3\nevent5\nevent6-event8-event11-event12",
 	}
 	assert.Nil(c.SendEvent(&ev))
+}
+
+func TestChunks(t *testing.T) {
+	assert := assert.New(t)
+
+	result := chunks("short", 1024)
+	assert.Equal([]string{"short"}, result)
+
+	longString := strings.Repeat("a", 2000)
+	result = chunks(longString, 1024)
+	assert.Equal(2, len(result))
+	assert.Equal(1024, len(result[0]))
+	assert.Equal(976, len(result[1]))
+
+	exactChunk := strings.Repeat("b", 1024)
+	result = chunks(exactChunk, 1024)
+	assert.Equal(1, len(result))
+	assert.Equal(1024, len(result[0]))
 }
