@@ -8,6 +8,7 @@ import (
 	"github.com/abahmed/kwatch/alertmanager"
 	"github.com/abahmed/kwatch/config"
 	"github.com/abahmed/kwatch/constant"
+	"github.com/abahmed/kwatch/state"
 	"github.com/abahmed/kwatch/version"
 	"github.com/google/go-github/v41/github"
 	"github.com/sirupsen/logrus"
@@ -16,14 +17,19 @@ import (
 type Upgrader struct {
 	config       *config.Upgrader
 	alertManager *alertmanager.AlertManager
+	stateManager *state.StateManager
 }
 
 // NewUpgrader returns new instance of upgrader
-func NewUpgrader(config *config.Upgrader,
-	alertManager *alertmanager.AlertManager) *Upgrader {
+func NewUpgrader(
+	config *config.Upgrader,
+	alertManager *alertmanager.AlertManager,
+	stateManager *state.StateManager,
+) *Upgrader {
 	return &Upgrader{
 		config:       config,
 		alertManager: alertManager,
+		stateManager: stateManager,
 	}
 }
 
@@ -46,6 +52,8 @@ func (u *Upgrader) CheckUpdates() {
 }
 
 func (u *Upgrader) checkRelease() {
+	ctx := context.Background()
+
 	client := github.NewClient(nil)
 
 	r, _, err := client.Repositories.GetLatestRelease(
@@ -66,5 +74,23 @@ func (u *Upgrader) checkRelease() {
 		return
 	}
 
+	// Check if we already notified about this version
+	if u.stateManager != nil {
+		notifiedVersion := u.stateManager.GetNotifiedVersion(ctx)
+		if notifiedVersion == *r.TagName {
+			logrus.Debugf(
+				"already notified about version %s, skipping",
+				*r.TagName)
+			return
+		}
+	}
+
 	u.alertManager.Notify(fmt.Sprintf(constant.KwatchUpdateMsg, *r.TagName))
+
+	// Mark this version as notified
+	if u.stateManager != nil {
+		if err := u.stateManager.SetNotifiedVersion(ctx, *r.TagName); err != nil {
+			logrus.Warnf("failed to set notified version: %v", err)
+		}
+	}
 }

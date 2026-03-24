@@ -5,14 +5,13 @@ import (
 	"encoding/json"
 	"fmt"
 	"math/rand"
+	"os"
 	"strings"
 	"time"
 
 	"github.com/sirupsen/logrus"
 	v1 "k8s.io/api/core/v1"
-
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-
 	"k8s.io/client-go/kubernetes"
 )
 
@@ -181,4 +180,24 @@ func RandomString(n int) string {
 	}
 
 	return string(b)
+}
+
+// SetLogFormatter sets the log formatter based on the provided format string
+func SetLogFormatter(formatter string) {
+	switch formatter {
+	case "json":
+		logrus.SetFormatter(&logrus.JSONFormatter{})
+	default:
+		logrus.SetFormatter(&logrus.TextFormatter{})
+	}
+}
+
+// GetNamespace returns the namespace where kwatch is running.
+// It reads from POD_NAMESPACE environment variable and falls back to "kwatch".
+func GetNamespace() string {
+	namespace := os.Getenv("POD_NAMESPACE")
+	if namespace == "" {
+		return "kwatch"
+	}
+	return namespace
 }

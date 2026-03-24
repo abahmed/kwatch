@@ -107,6 +107,13 @@ kubectl apply -f https://raw.githubusercontent.com/abahmed/kwatch/v0.10.4/deploy
 | `app.logFormatter` | used for setting custom formatter when app prints logs: text, json (default: text) |
 
 
+### Telemetry
+
+| Parameter                     | Description                                 |
+|:------------------------------|:------------------------------------------- |
+| `telemetry.enabled` | If set to true, anonymous telemetry data (cluster ID and version) is sent on first run to help track kwatch usage (default: false) |
+
+
 ### Upgrader
 
 | Parameter                     | Description                                 |

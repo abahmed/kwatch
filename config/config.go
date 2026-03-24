@@ -17,6 +17,9 @@ type Config struct {
 	// NodeMonitor configuration
 	NodeMonitor NodeMonitor `yaml:"nodeMonitor"`
 
+	// Telemetry configuration
+	Telemetry Telemetry `yaml:"telemetry"`
+
 	// MaxRecentLogLines optional max tail log lines in messages,
 	// if it's not provided it will get all log lines
 	MaxRecentLogLines int64 `yaml:"maxRecentLogLines"`
@@ -120,5 +123,12 @@ type PvcMonitor struct {
 type NodeMonitor struct {
 	// Enabled if set to true, it will enable node watcher
 	// By default, this value is true
+	Enabled bool `yaml:"enabled"`
+}
+
+// Telemetry config struct
+type Telemetry struct {
+	// Enabled if set to true, it will send anonymous telemetry events
+	// By default, this value is false
 	Enabled bool `yaml:"enabled"`
 }

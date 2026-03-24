@@ -30,6 +30,9 @@ sacAnnotations: {}
 podLabels: {}
 
 # kwatch configuration
-config: {}
+config:
+  # telemetry:
+  #   enabled: true  # Enable anonymous telemetry to help track kwatch usage
+
 
 

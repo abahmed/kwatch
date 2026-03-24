@@ -37,3 +37,4 @@ helm delete --purge [RELEASE_NAME]
 | `tolerations` | Tolerations for pod assignment | [] |
 | `affinity` | affinity for pod | {} |
 | `config` | [kwatch configuration](https://github.com/abahmed/kwatch#configuration) | {} |
+| `config.telemetry.enabled` | Enable anonymous telemetry (cluster ID and version) | false |

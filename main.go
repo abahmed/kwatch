@@ -1,67 +1,55 @@
 package main
 
 import (
+	"context"
 	"fmt"
 
-	"github.com/abahmed/kwatch/alertmanager"
 	"github.com/abahmed/kwatch/client"
 	"github.com/abahmed/kwatch/config"
 	"github.com/abahmed/kwatch/constant"
 	"github.com/abahmed/kwatch/handler"
 	"github.com/abahmed/kwatch/pvcmonitor"
+	"github.com/abahmed/kwatch/startup"
 	"github.com/abahmed/kwatch/storage/memory"
 	"github.com/abahmed/kwatch/upgrader"
+	"github.com/abahmed/kwatch/util"
 	"github.com/abahmed/kwatch/version"
 	"github.com/abahmed/kwatch/watcher"
 	"github.com/sirupsen/logrus"
 )
 
 func main() {
-	config, err := config.LoadConfig()
+	cfg, err := config.LoadConfig()
 	if err != nil {
 		logrus.Fatalf("failed to load config: %s", err.Error())
 	}
-	setLogFormatter(config.App.LogFormatter)
+	util.SetLogFormatter(cfg.App.LogFormatter)
 
 	logrus.Info(fmt.Sprintf(constant.WelcomeMsg, version.Short()))
 
-	// create kubernetes client
-	client := client.Create(&config.App)
+	k8sClient := client.Create(&cfg.App)
 
-	alertManager := alertmanager.AlertManager{}
-	alertManager.Init(config.Alert, &config.App)
+	sm := startup.NewStartupManager(
+		k8sClient,
+		util.GetNamespace(),
+		&cfg.Telemetry,
+		cfg.Alert,
+		&cfg.App,
+	)
+	sm.HandleStartup(context.Background())
 
-	if !config.App.DisableStartupMessage {
-		// send notification to providers
-		alertManager.Notify(fmt.Sprintf(constant.WelcomeMsg, version.Short()))
-	}
-
-	// check and notify if newer versions are available
-	upgrader := upgrader.NewUpgrader(&config.Upgrader, &alertManager)
+	upgrader := upgrader.NewUpgrader(&cfg.Upgrader, sm.GetAlertManager(), sm.GetStateManager())
 	go upgrader.CheckUpdates()
 
-	// start monitoring Persistent Volume Claims
-	pvcMonitor :=
-		pvcmonitor.NewPvcMonitor(client, &config.PvcMonitor, &alertManager)
+	pvcMonitor := pvcmonitor.NewPvcMonitor(k8sClient, &cfg.PvcMonitor, sm.GetAlertManager())
 	go pvcMonitor.Start()
 
-	// Create handler
 	h := handler.NewHandler(
-		client,
-		config,
+		k8sClient,
+		cfg,
 		memory.NewMemory(),
-		&alertManager,
+		sm.GetAlertManager(),
 	)
 
-	// start watcher
-	watcher.Start(client, config, h)
-}
-
-func setLogFormatter(formatter string) {
-	switch formatter {
-	case "json":
-		logrus.SetFormatter(&logrus.JSONFormatter{})
-	default:
-		logrus.SetFormatter(&logrus.TextFormatter{})
-	}
+	watcher.Start(k8sClient, cfg, h)
 }

@@ -9,8 +9,8 @@ metadata:
   name: kwatch
 rules:
 - apiGroups: [""]
-  resources: ["events", "nodes", "nodes/proxy", "pods", "pods/log", "persistentvolumeclaims"]
-  verbs: ["get", "watch", "list"]
+  resources: ["events", "nodes", "nodes/proxy", "pods", "pods/log", "persistentvolumeclaims", "configmaps"]
+  verbs: ["get", "watch", "list", "create", "update"]
 - apiGroups: ["apps"]
   resources: ["daemonsets", "statefulsets", "deployments", "replicasets"]
   verbs: ["get", "watch", "list"]
@@ -60,6 +60,10 @@ spec:
         env:
           - name: CONFIG_FILE
             value: "/config/config.yaml"
+          - name: POD_NAMESPACE
+            valueFrom:
+              fieldRef:
+                fieldPath: metadata.namespace
         resources:
           limits:
             memory: "128Mi"

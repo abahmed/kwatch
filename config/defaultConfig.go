@@ -14,5 +14,11 @@ func DefaultConfig() *Config {
 		NodeMonitor: NodeMonitor{
 			Enabled: true,
 		},
+		Upgrader: Upgrader{
+			DisableUpdateCheck: false,
+		},
+		Telemetry: Telemetry{
+			Enabled: false,
+		},
 	}
 }
