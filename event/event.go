@@ -5,6 +5,7 @@ type Event struct {
 	PodName       string
 	ContainerName string
 	Namespace     string
+	NodeName      string
 	Reason        string
 	Events        string
 	Logs          string

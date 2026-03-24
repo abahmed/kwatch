@@ -111,6 +111,7 @@ func (s *Pagerduty) buildRequestBodyPagerDuty(
 			"Name": "%s",
 			"Container": "%s",
 			"Namespace": "%s",
+			"Node": "%s",
 			"Reason": "%s",
 			"Events": "%s",
 			"Logs": "%s"
@@ -124,6 +125,7 @@ func (s *Pagerduty) buildRequestBodyPagerDuty(
 		ev.PodName,
 		ev.ContainerName,
 		ev.Namespace,
+		ev.NodeName,
 		ev.Reason,
 		eventsText,
 		logsText)

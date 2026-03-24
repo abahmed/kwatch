@@ -122,6 +122,7 @@ func TestSendEvent(t *testing.T) {
 
 	c.send = mockedSend
 	ev := event.Event{
+		NodeName:      "test-node",
 		PodName:       "test-pod",
 		ContainerName: "test-container",
 		Namespace:     "default",

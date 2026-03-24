@@ -189,6 +189,10 @@ func (t *Teams) buildRequestBodyTeams(e *event.Event) []byte {
 					},
 					{
 						"type": "TextBlock",
+						"text": fmt.Sprintf("Node: %s", e.NodeName),
+					},
+					{
+						"type": "TextBlock",
 						"text": fmt.Sprintf("Reason: %s", e.Reason),
 					},
 					{

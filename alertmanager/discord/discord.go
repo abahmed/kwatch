@@ -91,6 +91,11 @@ func (s *Discord) SendEvent(ev *event.Event) error {
 			Inline: true,
 		},
 		{
+			Name:   "Node",
+			Value:  ev.NodeName,
+			Inline: true,
+		},
+		{
 			Name:   "Reason",
 			Value:  ev.Reason,
 			Inline: true,

@@ -163,6 +163,11 @@ func (m *Mattermost) buildMessage(e *event.Event, msg *string) []byte {
 						Short: true,
 					},
 					{
+						Title: "Node",
+						Value: e.NodeName,
+						Short: true,
+					},
+					{
 						Title: "Reason",
 						Value: e.Reason,
 						Short: true,

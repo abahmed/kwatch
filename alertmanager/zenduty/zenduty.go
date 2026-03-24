@@ -130,6 +130,7 @@ func (m *Zenduty) buildMessage(e *event.Event) []byte {
 	payload.Summary = fmt.Sprintf(
 		"An alert has been triggered for\n\n"+
 			"cluster: %s\n"+
+			"Node Name: %s\n"+
 			"Pod Name: %s\n"+
 			"Container: %s\n"+
 			"Namespace: %s\n"+
@@ -137,6 +138,7 @@ func (m *Zenduty) buildMessage(e *event.Event) []byte {
 			"Events:\n%s\n\n"+
 			"Logs:\n%s\n\n",
 		m.appCfg.ClusterName,
+		e.NodeName,
 		e.PodName,
 		e.ContainerName,
 		e.Namespace,

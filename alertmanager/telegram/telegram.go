@@ -98,13 +98,15 @@ func (t *Telegram) buildRequestBodyTelegram(
 		txt = fmt.Sprintf(
 			"An alert for Cluster: *%s* Name: *%s*  "+
 				"Container: *%s* "+
-				"Namespace: *%s*  has been triggered:\\n—\\n "+
-				"Logs: *%s* \\n "+
+				"Namespace: *%s* "+
+				"Node: *%s* has been triggered:\n—\n "+
+				"Logs: *%s* \n "+
 				"Events: *%s* ",
 			t.appCfg.ClusterName,
 			e.PodName,
 			e.ContainerName,
 			e.Namespace,
+			e.NodeName,
 			logsText,
 			eventsText,
 		)

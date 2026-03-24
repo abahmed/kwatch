@@ -137,6 +137,7 @@ func (m *Opsgenie) buildMessage(e *event.Event) []byte {
 		"Name":      e.PodName,
 		"Container": e.ContainerName,
 		"Namespace": e.Namespace,
+		"Node":      e.NodeName,
 		"Reason":    e.Reason,
 		"Events":    events,
 		"Logs":      logs,

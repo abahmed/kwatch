@@ -135,6 +135,7 @@ func (w *Webhook) buildRequestBody(
 		"Name":      ev.PodName,
 		"Container": ev.ContainerName,
 		"Namespace": ev.Namespace,
+		"Node":      ev.NodeName,
 		"Reason":    ev.Reason,
 		"Events":    eventsText,
 		"Logs":      logsText,
