@@ -114,6 +114,18 @@ kubectl apply -f https://raw.githubusercontent.com/abahmed/kwatch/v0.10.4/deploy
 | `telemetry.enabled` | If set to true, anonymous telemetry data (cluster ID and version) is sent on first run to help track kwatch usage (default: false) |
 
 
+### Health Check
+
+| Parameter                     | Description                                 |
+|:------------------------------|:------------------------------------------- |
+| `healthCheck.enabled` | If set to true, enables health check endpoints (default: false) |
+| `healthCheck.port` | Port for health check endpoints (default: 8060) |
+
+**Endpoints:**
+- `GET /healthz` - Returns "OK" (text/plain)
+- `GET /health` - Returns `{"status": "ok"}` (application/json)
+
+
 ### Upgrader
 
 | Parameter                     | Description                                 |
