@@ -26,7 +26,16 @@
   </a>
 </p>
 
-**kwatch** helps you monitor all changes in your Kubernetes(K8s) cluster, detects crashes in your running apps in realtime, and publishes notifications to your channels (Slack, Discord, etc.) instantly
+**kwatch** helps you monitor all changes in your Kubernetes(K8s) cluster, detects crashes in your running apps in realtime, and publishes notifications to your channels (Slack, Discord, etc.) instantly.
+
+### Key Features
+
+- **Smart Detection**: Heuristic-based issue detection with confidence levels
+- **Cluster-Wide Monitoring**: Detect patterns across multiple pods
+- **Resource Monitoring**: Monitor CPU/Memory thresholds
+- **PVC Usage Monitoring**: Track persistent volume usage (even when detached)
+- **Intelligent Aggregation**: Group repeated issues to reduce alert noise
+- **PVC Storage**: Persistent state with automatic failover
 
 ## ⚡️ Getting Started
 
@@ -64,23 +73,47 @@ kubectl apply -f https://raw.githubusercontent.com/abahmed/kwatch/v0.10.4/deploy
 ## High Level Architecture
 
 <p>
- <img src="./assets/highlevelarchitecture.png" width="70%"/>
+  <img src="./assets/highlevelarchitecture.png" width="70%"/>
 </p>
 
-| Point                            | URL                                                                               |
-|:---------------------------------|:--------------------------------------------------------------------------------- |
-| `4.1`                            | <https://github.com/abahmed/kwatch/blob/main/main.go#L18>                           |
-| `5.1.`                           | <https://github.com/abahmed/kwatch/blob/main/main.go#L21> / 24                      |
-| `6.1.`                           | <https://github.com/abahmed/kwatch/blob/main/main.go#L36>                           |
-| `7.0.`                           | <https://github.com/abahmed/kwatch/blob/main/main.go#L40>                           |
-| `7.1.`                           | <https://github.com/abahmed/kwatch/blob/main/upgrader/upgrader.go#L16>              |
-| `8.1.&8.2`                       | <https://github.com/abahmed/kwatch/blob/main/main.go#L46> / 52                      |
-| `8.3.`                           | <https://github.com/abahmed/kwatch/blob/main/main.go#L53>                           |
-| `9.0.`                           | <https://github.com/abahmed/kwatch/blob/main/main.go#L58>                           |
-| `9.1.`                           | <https://github.com/abahmed/kwatch/blob/main/controller/start.go#L20>               |
-| `9.2.`                           | <https://github.com/abahmed/kwatch/blob/main/controller/controller.go#L37>          |
-| `9.3.`                           | <https://github.com/abahmed/kwatch/blob/main/controller/controller.go>              |
-| `9.4.`                           | <https://github.com/abahmed/kwatch/tree/main/provider>                              |
+### Project Structure
+
+```
+kwatch/
+├── internal/
+│   ├── alertmanager/    # Alert providers (Slack, Discord, etc.)
+│   ├── client/          # Kubernetes client
+│   ├── config/          # Configuration
+│   ├── detector/        # Smart detection pipeline
+│   │   ├── predicate/   # Event filtering (k8s-style)
+│   │   ├── detector/    # Issue detection
+│   │   ├── handler/    # Event enrichment (k8s-style)
+│   │   ├── volume/     # PVC-based storage
+│   │   └── cluster/    # Cluster-wide pattern detection
+│   ├── filter/         # Event filters
+│   ├── handler/        # Event handlers
+│   ├── watcher/        # Kubernetes watcher
+│   └── ...             # Other modules
+├── deploy/             # Kubernetes manifests
+├── main.go            # Entry point
+└── config.yaml        # Configuration
+```
+
+### Detection Pipeline
+
+The smart detection pipeline follows Kubernetes community patterns:
+
+```
+Event → Predicate (filter) → Detector (detect) → Handler (enrich) → Alert
+```
+
+| Component | Description |
+|:---------|:------------|
+| **Predicate** | Filters events before processing (k8s-style) |
+| **Detector** | Identifies issues in events |
+| **Handler** | Enriches or transforms events (k8s-style) |
+| **Volume** | Persistent storage with PVC support |
+| **Cluster** | Detects patterns across the cluster |
 
 ## Configuration
 
