@@ -2,31 +2,36 @@ package watcher
 
 import (
 	"context"
+	"log"
 
 	"github.com/abahmed/kwatch/internal/config"
-	"github.com/abahmed/kwatch/internal/handler"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
-
 	"k8s.io/apimachinery/pkg/watch"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/tools/cache"
-	toolsWatch "k8s.io/client-go/tools/watch"
+	watchtools "k8s.io/client-go/tools/watch"
 	"k8s.io/client-go/util/workqueue"
 )
 
-// Start creates an instance of watcher after initialization and runs it
+type Handler interface {
+	ProcessPod(evType string, obj runtime.Object)
+	ProcessNode(evType string, obj runtime.Object)
+}
+
 func Start(
 	client kubernetes.Interface,
-	config *config.Config,
-	handler handler.Handler) {
+	cfg *config.Config,
+	handler Handler) {
+
+	ctx := context.Background()
 
 	watchers := []*Watcher{
-		newPodWatcher(client, config, handler.ProcessPod),
+		newPodWatcher(ctx, client, cfg, handler.ProcessPod),
 	}
 
-	if config.NodeMonitor.Enabled {
-		watchers = append(watchers, newNodeWatcher(client, handler.ProcessNode))
+	if cfg.NodeMonitor.Enabled {
+		watchers = append(watchers, newNodeWatcher(ctx, client, handler.ProcessNode))
 	}
 
 	stopCh := make(chan struct{})
@@ -39,68 +44,52 @@ func Start(
 	<-stopCh
 }
 
-// newNodeWatcher creates watcher for nodes
 func newNodeWatcher(
+	ctx context.Context,
 	client kubernetes.Interface,
 	handler func(evType string, obj runtime.Object),
 ) *Watcher {
-	watchFunc :=
-		func(options metav1.ListOptions) (watch.Interface, error) {
-			return client.CoreV1().Nodes().Watch(
-				context.Background(),
-				metav1.ListOptions{},
-			)
-		}
+	watchFunc := func(options metav1.ListOptions) (watch.Interface, error) {
+		return client.CoreV1().Nodes().Watch(ctx, metav1.ListOptions{})
+	}
 
-	return newWatcher(
-		"node",
-		watchFunc,
-		handler,
-	)
+	return newWatcher(ctx, "node", watchFunc, handler)
 }
 
-// newPodWatcher creates watcher for pods
 func newPodWatcher(
+	ctx context.Context,
 	client kubernetes.Interface,
-	config *config.Config,
+	cfg *config.Config,
 	handler func(evType string, obj runtime.Object),
 ) *Watcher {
 	namespace := metav1.NamespaceAll
-	if len(config.AllowedNamespaces) == 1 {
-		namespace = config.AllowedNamespaces[0]
+	if len(cfg.AllowedNamespaces) == 1 {
+		namespace = cfg.AllowedNamespaces[0]
 	}
 
-	watchFunc :=
-		func(options metav1.ListOptions) (watch.Interface, error) {
-			return client.CoreV1().Pods(namespace).Watch(
-				context.Background(),
-				metav1.ListOptions{},
-			)
-		}
+	watchFunc := func(options metav1.ListOptions) (watch.Interface, error) {
+		return client.CoreV1().Pods(namespace).Watch(ctx, metav1.ListOptions{})
+	}
 
-	return newWatcher(
-		"pod",
-		watchFunc,
-		handler,
-	)
+	return newWatcher(ctx, "pod", watchFunc, handler)
 }
 
-// newWatcher creates watcher with provided name, watch, and handle functions
 func newWatcher(
+	ctx context.Context,
 	name string,
 	watchFunc func(options metav1.ListOptions) (watch.Interface, error),
 	handleFunc func(string, runtime.Object),
 ) *Watcher {
-	watcher, _ :=
-		toolsWatch.NewRetryWatcher(
-			"1",
-			&cache.ListWatch{WatchFunc: watchFunc},
-		)
+	watcher, err := watchtools.NewRetryWatcherWithContext(ctx, "1", &cache.ListWatch{WatchFunc: watchFunc})
+	if err != nil {
+		log.Printf("failed to create watcher %s: %v", name, err)
+	}
 
+	queue := workqueue.NewTyped[any]()
 	return &Watcher{
 		name:        name,
 		watcher:     watcher,
-		queue:       workqueue.New(),
 		handlerFunc: handleFunc,
+		queue:       queue,
 	}
 }

@@ -7,7 +7,7 @@ import (
 	"k8s.io/apimachinery/pkg/runtime"
 	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
 	"k8s.io/apimachinery/pkg/util/wait"
-	toolsWatch "k8s.io/client-go/tools/watch"
+	"k8s.io/client-go/tools/watch"
 	"k8s.io/client-go/util/workqueue"
 )
 
@@ -18,12 +18,11 @@ type watcherEvent struct {
 
 type Watcher struct {
 	name        string
-	watcher     *toolsWatch.RetryWatcher
-	queue       *workqueue.Type
+	watcher     *watch.RetryWatcher
+	queue       *workqueue.Typed[any]
 	handlerFunc func(string, runtime.Object)
 }
 
-// run starts the watcher
 func (w *Watcher) run(stopCh chan struct{}) {
 	defer utilruntime.HandleCrash()
 	defer w.queue.ShutDown()
@@ -51,7 +50,6 @@ func (w *Watcher) processEvents() {
 
 func (w *Watcher) runWorker() {
 	for w.processNextItem() {
-		// continue looping
 	}
 }
 

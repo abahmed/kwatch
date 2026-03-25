@@ -6,15 +6,18 @@ import (
 	"os"
 	"os/signal"
 	"syscall"
+	"time"
 
 	"github.com/abahmed/kwatch/internal/client"
 	"github.com/abahmed/kwatch/internal/config"
 	"github.com/abahmed/kwatch/internal/constant"
-	"github.com/abahmed/kwatch/internal/handler"
+	"github.com/abahmed/kwatch/internal/detector"
+	"github.com/abahmed/kwatch/internal/detector/aggregator"
+	"github.com/abahmed/kwatch/internal/detector/cluster"
+	"github.com/abahmed/kwatch/internal/detector/store"
+	"github.com/abahmed/kwatch/internal/detector/volume"
 	"github.com/abahmed/kwatch/internal/health"
-	"github.com/abahmed/kwatch/internal/pvcmonitor"
 	"github.com/abahmed/kwatch/internal/startup"
-	"github.com/abahmed/kwatch/internal/storage/memory"
 	"github.com/abahmed/kwatch/internal/upgrader"
 	"github.com/abahmed/kwatch/internal/util"
 	"github.com/abahmed/kwatch/internal/version"
@@ -48,15 +51,56 @@ func main() {
 	upgrader := upgrader.NewUpgrader(&cfg.Upgrader, sm.GetAlertManager(), sm.GetStateManager())
 	go upgrader.CheckUpdates()
 
-	pvcMonitor := pvcmonitor.NewPvcMonitor(k8sClient, &cfg.PvcMonitor, sm.GetAlertManager())
-	go pvcMonitor.Start()
+	vol, err := volume.New(&volume.Config{
+		BasePath:     "/data",
+		SyncInterval: 30 * time.Second,
+	})
+	if err != nil {
+		logrus.Warnf("Failed to create volume: %v, using memory fallback", err)
+		vol, _ = volume.New(&volume.Config{
+			BasePath:     "",
+			SyncInterval: 30 * time.Second,
+		})
+	}
 
-	h := handler.NewHandler(
-		k8sClient,
-		cfg,
-		memory.NewMemory(),
-		sm.GetAlertManager(),
-	)
+	s := store.NewStore(vol)
+
+	pipelineCfg := &detector.PipelineConfig{
+		Volume:          vol,
+		Client:          k8sClient,
+		Config:          cfg,
+		DedupWindow:     5 * time.Minute,
+		AggregateWindow: 10 * time.Minute,
+	}
+
+	pipeline := detector.NewPipeline(pipelineCfg)
+
+	pipeline.AddDetector(detector.NewPodDetector())
+	pipeline.AddDetector(detector.NewContainerDetector())
+	pipeline.AddDetector(detector.NewNodeDetector())
+	pipeline.AddDetector(detector.NewPVCUsageDetector(80.0))
+	pipeline.AddDetector(detector.NewResourceDetector(&detector.ResourceConfig{
+		CPUThreshold:    80.0,
+		MemoryThreshold: 80.0,
+	}))
+
+	clusterDetector := cluster.NewDetector(&cluster.Config{
+		ThresholdPercent: 5.0,
+		MinThreshold:     5,
+		MaxThreshold:     20,
+		Window:           15 * time.Minute,
+	})
+	pipeline.AddDetector(clusterDetector)
+
+	dedup := s.NewDeduplication()
+	pipeline.SetDeduplication(dedup)
+
+	agg := aggregator.NewAggregator(s)
+	pipeline.SetAggregator(agg)
+
+	logrus.Info("kwatch started with intelligent detection pipeline")
+
+	h := detector.NewEventHandler(pipeline, sm.GetAlertManager(), k8sClient)
 
 	watcher.Start(k8sClient, cfg, h)
 

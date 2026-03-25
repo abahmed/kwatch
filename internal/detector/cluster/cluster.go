@@ -7,15 +7,13 @@ import (
 	"github.com/abahmed/kwatch/internal/detector"
 )
 
-// Config holds cluster detection configuration
 type Config struct {
-	ThresholdPercent float64 // percentage of cluster size
-	MinThreshold     int     // minimum pods to trigger
-	MaxThreshold     int     // maximum pods to trigger
+	ThresholdPercent float64
+	MinThreshold     int
+	MaxThreshold     int
 	Window           time.Duration
 }
 
-// Pattern holds cluster-wide pattern info
 type Pattern struct {
 	Reason       string
 	Namespace    string
@@ -26,7 +24,6 @@ type Pattern struct {
 	Threshold    int
 }
 
-// Detector detects cluster-wide patterns
 type Detector struct {
 	config      *Config
 	mu          sync.Mutex
@@ -34,32 +31,18 @@ type Detector struct {
 	clustersize int
 }
 
-func NewDetector(config *Config) *Detector {
+func NewDetector(cfg *Config) *Detector {
+	if cfg == nil {
+		cfg = &Config{
+			ThresholdPercent: 5.0,
+			MinThreshold:     5,
+			MaxThreshold:     20,
+			Window:           15 * time.Minute,
+		}
+	}
 	return &Detector{
-		config:   config,
+		config:   cfg,
 		patterns: make(map[string]*Pattern),
-	}
-}
-
-// SetClusterSize sets the cluster size for threshold calculation
-func (d *Detector) SetClusterSize(size int) {
-	d.mu.Lock()
-	defer d.mu.Unlock()
-	d.clustersize = size
-	d.updateThresholds()
-}
-
-func (d *Detector) updateThresholds() {
-	threshold := int(float64(d.clustersize) * d.config.ThresholdPercent / 100)
-	if threshold < d.config.MinThreshold {
-		threshold = d.config.MinThreshold
-	}
-	if threshold > d.config.MaxThreshold {
-		threshold = d.config.MaxThreshold
-	}
-
-	for _, p := range d.patterns {
-		p.Threshold = threshold
 	}
 }
 
@@ -67,60 +50,88 @@ func (d *Detector) Name() string {
 	return "ClusterDetector"
 }
 
-func (d *Detector) Detect(input *detector.Input) *detector.Event {
-	if !input.HasIssue {
-		return nil
+func (d *Detector) Detect(input *detector.Input) bool {
+	if input == nil || input.Pod == nil || !input.HasIssue {
+		return false
 	}
 
 	d.mu.Lock()
 	defer d.mu.Unlock()
 
 	key := input.IssueType + "/" + input.Reason
-	if input.Pod != nil && input.Pod.Namespace != "" {
+	if input.Pod.Namespace != "" {
 		key = key + "/" + input.Pod.Namespace
 	}
 
-	if pattern, exists := d.patterns[key]; exists {
-		pattern.AffectedPods[input.Pod.Name] = time.Now()
-		pattern.TotalCount++
-		pattern.LastSeen = time.Now()
-
-		// Check if threshold exceeded
-		if len(pattern.AffectedPods) >= pattern.Threshold {
-			event := &detector.Event{
-				Type:      "cluster",
-				Name:      "cluster-wide",
-				Namespace: input.Pod.Namespace,
-				Reason:    pattern.Reason,
-				Message:   buildClusterMessage(pattern),
-			}
-			// Reset after alert
-			pattern.AffectedPods = make(map[string]time.Time)
-			return event
-		}
-	} else {
-		threshold := int(float64(d.clustersize) * d.config.ThresholdPercent / 100)
-		if threshold < d.config.MinThreshold {
-			threshold = d.config.MinThreshold
-		}
-		if threshold > d.config.MaxThreshold {
-			threshold = d.config.MaxThreshold
-		}
-
-		d.patterns[key] = &Pattern{
+	pattern, exists := d.patterns[key]
+	if !exists {
+		threshold := d.calculateThreshold()
+		pattern = &Pattern{
 			Reason:       input.Reason,
 			Namespace:    input.Pod.Namespace,
-			AffectedPods: map[string]time.Time{input.Pod.Name: time.Now()},
+			AffectedPods: make(map[string]time.Time),
 			FirstSeen:    time.Now(),
 			LastSeen:     time.Now(),
-			TotalCount:   1,
+			TotalCount:   0,
 			Threshold:    threshold,
 		}
+		d.patterns[key] = pattern
 	}
 
-	return nil
+	pattern.AffectedPods[input.Pod.Name] = time.Now()
+	pattern.TotalCount++
+	pattern.LastSeen = time.Now()
+
+	return len(pattern.AffectedPods) >= pattern.Threshold
 }
 
-func buildClusterMessage(pattern *Pattern) string {
-	return "Cluster-wide issue detected"
+func (d *Detector) calculateThreshold() int {
+	threshold := int(float64(d.clustersize) * d.config.ThresholdPercent / 100)
+	if threshold < d.config.MinThreshold {
+		threshold = d.config.MinThreshold
+	}
+	if threshold > d.config.MaxThreshold {
+		threshold = d.config.MaxThreshold
+	}
+	return threshold
+}
+
+func (d *Detector) SetClusterSize(size int) {
+	d.mu.Lock()
+	defer d.mu.Unlock()
+	d.clustersize = size
+}
+
+func (d *Detector) GetPatterns() map[string]*Pattern {
+	d.mu.Lock()
+	defer d.mu.Unlock()
+	result := make(map[string]*Pattern)
+	for k, v := range d.patterns {
+		result[k] = v
+	}
+	return result
+}
+
+func (d *Detector) Cleanup() {
+	d.mu.Lock()
+	defer d.mu.Unlock()
+
+	cutoff := time.Now().Add(-d.config.Window)
+	for key, pattern := range d.patterns {
+		if pattern.LastSeen.Before(cutoff) {
+			delete(d.patterns, key)
+		}
+	}
+}
+
+func BuildClusterMessage(pattern *Pattern) string {
+	return "Cluster-wide issue detected: " + pattern.Reason +
+		" affecting " + formatCount(len(pattern.AffectedPods)) + " pods"
+}
+
+func formatCount(n int) string {
+	if n == 1 {
+		return "1 pod"
+	}
+	return string(rune(n+'0')) + " pods"
 }

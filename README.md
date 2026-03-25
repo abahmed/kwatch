@@ -26,16 +26,78 @@
   </a>
 </p>
 
-**kwatch** helps you monitor all changes in your Kubernetes(K8s) cluster, detects crashes in your running apps in realtime, and publishes notifications to your channels (Slack, Discord, etc.) instantly.
+**kwatch** 🚀 helps you monitor all changes in your Kubernetes(K8s) cluster, detects crashes in your running apps in realtime, and publishes notifications to your channels (Slack, Discord, etc.) instantly.
 
 ### Key Features
 
-- **Smart Detection**: Heuristic-based issue detection with confidence levels
-- **Cluster-Wide Monitoring**: Detect patterns across multiple pods
-- **Resource Monitoring**: Monitor CPU/Memory thresholds
-- **PVC Usage Monitoring**: Track persistent volume usage (even when detached)
-- **Intelligent Aggregation**: Group repeated issues to reduce alert noise
-- **PVC Storage**: Persistent state with automatic failover
+- 🧠 **Intelligent Alerting**: Smart heuristics reduce noise - no more alert floods
+- ⏳ **Wait When Unsure**: Gathers more data before alerting on uncertain issues
+- 📦 **Per-Pod Aggregation**: Groups repeated failures into summary notifications
+- 🌐 **Cluster Detection**: Finds patterns across pods (e.g., 5+ pods crashing)
+- 📈 **Adaptive Thresholds**: Auto-learns sensitivity based on cluster size
+- 💻 **Resource Monitoring**: Proactive alerts for CPU/Memory thresholds
+- 💾 **PVC Usage**: Tracks persistent volume usage (even when detached!)
+- 🔄 **Persistent State**: PVC-based storage survives restarts
+- ⚡ **Modern APIs**: Uses context-aware watchers (NewRetryWatcherWithContext)
+
+### How Intelligent Alerting Works
+
+| Scenario | Old Behavior | kwatch Behavior |
+|----------|-------------|-----------------|
+| 🚢 Container starting up | Alert: ContainerCreating | Waits 5 min → confirms normal |
+| ✅ Graceful shutdown | Alert: Terminated | Skips: Exit code 0 |
+| ❓ First crash (unknown) | Alert immediately | Waits for confirmation |
+| 💥 3+ crashes same pod | 3+ alerts | 1 alert + summary |
+| 🌩️ 10 pods crash | 10 alerts | 1 cluster alert |
+
+**Alert Types:**
+- 🚨 **Immediate**: Confirmed issue detected
+- 📊 **Summary**: Multiple failures grouped (e.g., "4 crashes in 10 minutes")
+- ⚠️ **Cluster**: Pattern across pods (e.g., "5 pods have CrashLoopBackOff")
+- 📈 **Resource**: CPU/Memory threshold exceeded
+- 💾 **PVC**: Disk usage above threshold (even when detached!)
+
+### Architecture
+
+```
+Input Sources → [Filter → Detect → Heuristics → Enrich → Dedup → Aggregate → Cluster] → Alerts
+                         │                                              │
+                    PVC Storage ←─────────────────────────────────────┘
+```
+
+1. 🔍 **Filter**: Exclude irrelevant events (namespace, pod name patterns)
+2. 🎯 **Detect**: Find issues (event-based, resource-based)
+3. 🧠 **Heuristics**: Smart decisions (ALERT/WAIT/SKIP)
+4. ✨ **Enrich**: Add context (owner info, container details)
+5. 🚫 **Dedup**: Prevent duplicate alerts
+6. 📦 **Aggregate**: Group repeated failures
+7. 🌐 **Cluster**: Detect patterns across pods
+
+### Package Structure
+
+```
+internal/
+├── detector/              # Intelligent detection engine
+│   ├── detector.go       # Core interfaces (Input, Event, Pipeline)
+│   ├── pipeline.go       # Unified processing pipeline
+│   ├── handler.go        # Event handler (pod/node processing)
+│   ├── pod_detector.go   # Pod issue detection
+│   ├── container_detector.go
+│   ├── node_detector.go
+│   ├── pvc_detector.go
+│   ├── resource_detector.go
+│   ├── predicate/        # Event filtering
+│   ├── enrichment/       # Context enrichment
+│   ├── store/           # PVC-based persistence
+│   ├── aggregator/      # Alert aggregation
+│   ├── cluster/         # Cluster-wide pattern detection
+│   ├── volume/          # PVC storage with memory fallback
+│   └── common/          # Utilities (matcher, extractor, heuristic, metrics)
+├── watcher/             # Kubernetes event watcher
+├── alertmanager/        # Notification providers
+├── pvcmonitor/         # PVC usage monitoring
+└── event/               # Event definitions
+```
 
 ## ⚡️ Getting Started
 
