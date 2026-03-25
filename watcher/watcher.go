@@ -7,7 +7,7 @@ import (
 	"k8s.io/apimachinery/pkg/runtime"
 	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
 	"k8s.io/apimachinery/pkg/util/wait"
-	toolsWatch "k8s.io/client-go/tools/watch"
+	"k8s.io/apimachinery/pkg/watch"
 	"k8s.io/client-go/util/workqueue"
 )
 
@@ -16,10 +16,15 @@ type watcherEvent struct {
 	obj       runtime.Object
 }
 
+type WatchInterface interface {
+	ResultChan() <-chan watch.Event
+	Stop()
+}
+
 type Watcher struct {
 	name        string
-	watcher     *toolsWatch.RetryWatcher
-	queue       *workqueue.Type
+	watcher     WatchInterface
+	queue       workqueue.TypedInterface[watcherEvent]
 	handlerFunc func(string, runtime.Object)
 }
 
@@ -63,13 +68,7 @@ func (w *Watcher) processNextItem() bool {
 
 	defer w.queue.Done(newEvent)
 
-	ev, ok := newEvent.(watcherEvent)
-	if !ok {
-		logrus.Errorf("failed to cast watcher event: %v", ev)
-		return true
-	}
-
-	w.handlerFunc(ev.eventType, ev.obj)
+	w.handlerFunc(newEvent.eventType, newEvent.obj)
 
 	return true
 }

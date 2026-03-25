@@ -7,13 +7,14 @@ import (
 	"net/http/httptest"
 	"testing"
 
+	"github.com/abahmed/kwatch/config"
 	"github.com/stretchr/testify/assert"
 )
 
 func TestNewHealthServer(t *testing.T) {
 	assert := assert.New(t)
 
-	server := NewHealthServer(8080, true)
+	server := NewHealthServer(config.HealthCheck{Port: 8080, Enabled: true})
 	assert.NotNil(server)
 	assert.Equal(8080, server.port)
 	assert.True(server.enabled)
@@ -22,7 +23,7 @@ func TestNewHealthServer(t *testing.T) {
 func TestNewHealthServerDisabled(t *testing.T) {
 	assert := assert.New(t)
 
-	server := NewHealthServer(8080, false)
+	server := NewHealthServer(config.HealthCheck{Port: 8080, Enabled: false})
 	assert.NotNil(server)
 	assert.Equal(8080, server.port)
 	assert.False(server.enabled)
@@ -69,7 +70,7 @@ func TestHealthHandler(t *testing.T) {
 func TestHealthServerStartDisabled(t *testing.T) {
 	assert := assert.New(t)
 
-	server := NewHealthServer(8080, false)
+	server := NewHealthServer(config.HealthCheck{Port: 8080, Enabled: false})
 	err := server.Start(context.Background())
 	assert.Nil(err)
 }
@@ -77,7 +78,7 @@ func TestHealthServerStartDisabled(t *testing.T) {
 func TestHealthServerStartEnabled(t *testing.T) {
 	assert := assert.New(t)
 
-	server := NewHealthServer(8080, true)
+	server := NewHealthServer(config.HealthCheck{Port: 8080, Enabled: true})
 	err := server.Start(context.Background())
 	assert.Nil(err)
 
@@ -97,7 +98,7 @@ func TestHealthServerStartEnabled(t *testing.T) {
 func TestHealthServerStop(t *testing.T) {
 	assert := assert.New(t)
 
-	server := NewHealthServer(8080, true)
+	server := NewHealthServer(config.HealthCheck{Port: 8080, Enabled: true})
 	err := server.Start(context.Background())
 	assert.Nil(err)
 
@@ -108,7 +109,7 @@ func TestHealthServerStop(t *testing.T) {
 func TestHealthServerStopNilServer(t *testing.T) {
 	assert := assert.New(t)
 
-	server := NewHealthServer(8080, true)
+	server := NewHealthServer(config.HealthCheck{Port: 8080, Enabled: true})
 	err := server.Stop(context.Background())
 	assert.Nil(err)
 }

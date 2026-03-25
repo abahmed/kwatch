@@ -1,6 +1,7 @@
 package client
 
 import (
+	"fmt"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -16,23 +17,26 @@ import (
 // Create returns kubernetes client after initializing it with in-cluster, or
 // out of cluster config
 func Create(appConfig *config.App) kubernetes.Interface {
+	client, err := CreateClient(appConfig)
+	if err != nil {
+		logrus.Fatalf("failed to create kubernetes client: %v", err)
+	}
+	return client
+}
+
+// CreateClient returns kubernetes client or an error
+func CreateClient(appConfig *config.App) (kubernetes.Interface, error) {
 	// try to use in cluster config
 	clientConfig, err := rest.InClusterConfig()
 	if err != nil {
 		logrus.Warnf("cannot get kubernetes in cluster config: %v", err)
 
 		// try to use out of cluster config
-		kubeconfigPath := os.Getenv("KUBECONFIG")
-		if kubeconfigPath == "" {
-			home := homedir.HomeDir()
-			kubeconfigPath = filepath.Join(home, ".kube", "config")
-		}
+		kubeconfigPath := getKubeconfigPath()
 
 		clientConfig, err = clientcmd.BuildConfigFromFlags("", kubeconfigPath)
 		if err != nil {
-			logrus.Fatalf(
-				"cannot build kubernetes out of cluster config: %v",
-				err)
+			return nil, fmt.Errorf("cannot build kubernetes out of cluster config: %w", err)
 		}
 	}
 
@@ -44,10 +48,19 @@ func Create(appConfig *config.App) kubernetes.Interface {
 	// creates the clientset
 	clientset, err := kubernetes.NewForConfig(clientConfig)
 	if err != nil {
-		logrus.Fatalf("cannot create kubernetes client: %v", err)
+		return nil, fmt.Errorf("cannot create kubernetes client: %w", err)
 	}
 
 	logrus.Debugf("created kubernetes client successfully")
 
-	return clientset
+	return clientset, nil
+}
+
+func getKubeconfigPath() string {
+	kubeconfigPath := os.Getenv("KUBECONFIG")
+	if kubeconfigPath == "" {
+		home := homedir.HomeDir()
+		kubeconfigPath = filepath.Join(home, ".kube", "config")
+	}
+	return kubeconfigPath
 }

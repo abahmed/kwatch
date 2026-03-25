@@ -42,7 +42,7 @@ func main() {
 	)
 	sm.HandleStartup(context.Background())
 
-	healthServer := health.NewHealthServer(cfg.HealthCheck.Port, cfg.HealthCheck.Enabled)
+	healthServer := health.NewHealthServer(cfg.HealthCheck)
 	healthServer.Start(context.Background())
 
 	upgrader := upgrader.NewUpgrader(&cfg.Upgrader, sm.GetAlertManager(), sm.GetStateManager())
@@ -58,7 +58,8 @@ func main() {
 		sm.GetAlertManager(),
 	)
 
-	watcher.Start(k8sClient, cfg, h)
+	ctx := context.Background()
+	watcher.Start(ctx, k8sClient, cfg, h)
 
 	sigCh := make(chan os.Signal, 1)
 	signal.Notify(sigCh, syscall.SIGINT, syscall.SIGTERM)
