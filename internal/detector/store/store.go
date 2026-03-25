@@ -25,6 +25,12 @@ func NewStore(volume detector.Volume) *Store {
 	return s
 }
 
+func (s *Store) Close() error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return nil
+}
+
 func (s *Store) Read(key string, dest interface{}) error {
 	s.mu.RLock()
 	defer s.mu.RUnlock()

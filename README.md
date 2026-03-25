@@ -39,6 +39,7 @@
 - 💾 **PVC Usage**: Tracks persistent volume usage (even when detached!)
 - 🔄 **Persistent State**: PVC-based storage survives restarts
 - ⚡ **Modern APIs**: Uses context-aware watchers (NewRetryWatcherWithContext)
+- 🧹 **Clean Code**: Well-structured packages, no dead code
 
 ### How Intelligent Alerting Works
 

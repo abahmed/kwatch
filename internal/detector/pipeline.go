@@ -6,6 +6,19 @@ import (
 	"github.com/sirupsen/logrus"
 )
 
+// Heuristic represents a heuristic rule
+type Heuristic struct {
+	Name  string
+	Check func(input *Input) HeuristicResult
+}
+
+// HeuristicResult represents the result of heuristic evaluation
+type HeuristicResult struct {
+	Status   string // "ALERT", "WAIT", "SKIP"
+	Reason   string
+	WaitTime int
+}
+
 // PipelineConfig holds pipeline configuration
 type PipelineConfig struct {
 	Volume          Volume
@@ -13,6 +26,7 @@ type PipelineConfig struct {
 	Config          interface{}
 	DedupWindow     time.Duration
 	AggregateWindow time.Duration
+	Heuristics      []Heuristic
 }
 
 // pipeline implements the detection pipeline
@@ -20,19 +34,25 @@ type pipeline struct {
 	config     *PipelineConfig
 	predicates []Predicate
 	detectors  []Detector
-	handlers   []Handler
+	handlers   []Enricher
 	dedup      Deduplication
 	aggregator Aggregator
+	heuristics []Heuristic
 }
 
 // NewPipeline creates a new pipeline
 func NewPipeline(config *PipelineConfig) *pipeline {
-	return &pipeline{
+	p := &pipeline{
 		config:     config,
 		predicates: []Predicate{},
 		detectors:  []Detector{},
-		handlers:   []Handler{},
+		handlers:   []Enricher{},
+		heuristics: []Heuristic{},
 	}
+	if config.Heuristics != nil {
+		p.heuristics = config.Heuristics
+	}
+	return p
 }
 
 // AddPredicate adds a predicate to the pipeline
@@ -45,9 +65,9 @@ func (p *pipeline) AddDetector(detector Detector) {
 	p.detectors = append(p.detectors, detector)
 }
 
-// AddHandler adds a handler to the pipeline
-func (p *pipeline) AddHandler(handler Handler) {
-	p.handlers = append(p.handlers, handler)
+// AddHandler adds an enricher to the pipeline
+func (p *pipeline) AddHandler(enricher Enricher) {
+	p.handlers = append(p.handlers, enricher)
 }
 
 // SetDeduplication sets the deduplication component
@@ -81,6 +101,21 @@ func (p *pipeline) ProcessPod(input *Input) *Event {
 
 	if !issueDetected {
 		return nil
+	}
+
+	// 2.5. Evaluate heuristics
+	if len(p.heuristics) > 0 {
+		result := p.evaluateHeuristics(input)
+		switch result.Status {
+		case "SKIP":
+			logrus.Debugf("Pod skipped by heuristics: %s", result.Reason)
+			return nil
+		case "WAIT":
+			logrus.Debugf("Pod waiting by heuristics: %s", result.Reason)
+			return nil
+		case "ALERT":
+			logrus.Debugf("Pod alert confirmed by heuristics: %s", result.Reason)
+		}
 	}
 
 	// 3. Run handlers (enrichment)
@@ -192,5 +227,39 @@ func (p *pipeline) buildNodeEvent(input *Input) *Event {
 	}
 }
 
+func (p *pipeline) evaluateHeuristics(input *Input) HeuristicResult {
+	for _, h := range p.heuristics {
+		result := h.Check(input)
+		if result.Status != "SKIP" {
+			return result
+		}
+	}
+	return HeuristicResult{Status: "ALERT", Reason: "default"}
+}
+
 // Ensure pipeline implements Pipeline interface
 var _ Pipeline = (*pipeline)(nil)
+
+// DefaultHeuristics returns the default set of heuristic rules
+func DefaultHeuristics() []Heuristic {
+	return []Heuristic{
+		{
+			Name: "GracefulExit",
+			Check: func(i *Input) HeuristicResult {
+				if i.ExitCode == 0 || i.ExitCode == 143 {
+					return HeuristicResult{Status: "SKIP", Reason: "graceful exit"}
+				}
+				return HeuristicResult{Status: "SKIP", Reason: "not graceful"}
+			},
+		},
+		{
+			Name: "ClearFailure",
+			Check: func(i *Input) HeuristicResult {
+				if i.RestartCount >= 3 {
+					return HeuristicResult{Status: "ALERT", Reason: "3+ restarts"}
+				}
+				return HeuristicResult{Status: "SKIP", Reason: "low restart count"}
+			},
+		},
+	}
+}

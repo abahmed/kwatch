@@ -17,7 +17,7 @@ func (e *ContainerStateEnricher) Name() string {
 	return "ContainerStateEnricher"
 }
 
-func (e *ContainerStateEnricher) Enrich(input *detector.Input) error {
+func (e *ContainerStateEnricher) Handle(input *detector.Input) error {
 	if input.Pod == nil {
 		return nil
 	}

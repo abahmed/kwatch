@@ -60,8 +60,8 @@ type Detector interface {
 	Detect(input *Input) bool
 }
 
-// Handler enriches or transforms events (like k8s handler)
-type Handler interface {
+// Enricher enriches or transforms events
+type Enricher interface {
 	Name() string
 	Handle(input *Input) error
 }

@@ -14,6 +14,7 @@ import (
 	"github.com/abahmed/kwatch/internal/detector"
 	"github.com/abahmed/kwatch/internal/detector/aggregator"
 	"github.com/abahmed/kwatch/internal/detector/cluster"
+	"github.com/abahmed/kwatch/internal/detector/enrichment"
 	"github.com/abahmed/kwatch/internal/detector/store"
 	"github.com/abahmed/kwatch/internal/detector/volume"
 	"github.com/abahmed/kwatch/internal/health"
@@ -57,10 +58,13 @@ func main() {
 	})
 	if err != nil {
 		logrus.Warnf("Failed to create volume: %v, using memory fallback", err)
-		vol, _ = volume.New(&volume.Config{
+		vol, err = volume.New(&volume.Config{
 			BasePath:     "",
 			SyncInterval: 30 * time.Second,
 		})
+		if err != nil {
+			logrus.Fatalf("Failed to create memory volume: %v", err)
+		}
 	}
 
 	s := store.NewStore(vol)
@@ -71,6 +75,7 @@ func main() {
 		Config:          cfg,
 		DedupWindow:     5 * time.Minute,
 		AggregateWindow: 10 * time.Minute,
+		Heuristics:      detector.DefaultHeuristics(),
 	}
 
 	pipeline := detector.NewPipeline(pipelineCfg)
@@ -98,17 +103,23 @@ func main() {
 	agg := aggregator.NewAggregator(s)
 	pipeline.SetAggregator(agg)
 
+	pipeline.AddHandler(enrichment.NewOwnerEnricher())
+	pipeline.AddHandler(enrichment.NewContainerStateEnricher())
+
 	logrus.Info("kwatch started with intelligent detection pipeline")
 
-	h := detector.NewEventHandler(pipeline, sm.GetAlertManager(), k8sClient)
+	k8sHandler := detector.NewK8sHandler(pipeline, sm.GetAlertManager(), k8sClient)
 
-	watcher.Start(k8sClient, cfg, h)
+	watcher.Start(k8sClient, cfg, k8sHandler)
 
 	sigCh := make(chan os.Signal, 1)
 	signal.Notify(sigCh, syscall.SIGINT, syscall.SIGTERM)
 	<-sigCh
 
 	logrus.Info("shutting down gracefully...")
+
+	s.Close()
+
 	healthServer.Stop(context.Background())
 	os.Exit(0)
 }

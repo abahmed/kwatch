@@ -15,7 +15,7 @@ func (e *OwnerEnricher) Name() string {
 	return "OwnerEnricher"
 }
 
-func (e *OwnerEnricher) Enrich(input *detector.Input) error {
+func (e *OwnerEnricher) Handle(input *detector.Input) error {
 	if input.Pod == nil {
 		return nil
 	}
