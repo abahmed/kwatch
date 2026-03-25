@@ -4,7 +4,7 @@ import (
 	"context"
 
 	"github.com/abahmed/kwatch/internal/detector"
-	"github.com/abahmed/kwatch/util"
+	"github.com/abahmed/kwatch/internal/util"
 )
 
 // ContainerHandler enriches container events with state info
