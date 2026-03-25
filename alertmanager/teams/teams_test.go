@@ -254,3 +254,106 @@ func TestBuildRequestBodyMessage(t *testing.T) {
 	assert.Equal(t, "test message", result.Text)
 	assert.Empty(t, result.Attachment)
 }
+
+func TestNewTeamsWithCustomRetrySettings(t *testing.T) {
+	configMap := map[string]interface{}{
+		"webhook":    "http://example.com",
+		"maxRetries": 5,
+		"retryDelay": 10,
+	}
+	appCfg := &config.App{ClusterName: "dev"}
+	teams := NewTeams(configMap, appCfg)
+	assert.NotNil(t, teams)
+	assert.Equal(t, 5, teams.maxRetries)
+	assert.Equal(t, 10, teams.retryDelay)
+}
+
+func TestBuildRequestBodyTeamsDefaultTitle(t *testing.T) {
+	configMap := map[string]interface{}{
+		"webhook": "http://example.com",
+	}
+	appCfg := &config.App{}
+	teams := NewTeams(configMap, appCfg)
+
+	e := &event.Event{
+		PodName:   "test-pod",
+		Namespace: "test-namespace",
+		Reason:    "test-reason",
+		Logs:      "test-logs",
+		Events:    "test-events",
+		NodeName:  "test-node",
+	}
+
+	payload := teams.buildRequestBodyTeams(e)
+	var result teamsFlowPayload
+	err := json.Unmarshal(payload, &result)
+	assert.NoError(t, err)
+	assert.Contains(t, result.Title, "Kwatch")
+}
+
+func TestSendEventWithCustomTitle(t *testing.T) {
+	configMap := map[string]interface{}{
+		"webhook": "http://example.com",
+		"title":   "Custom Title",
+		"text":    "Custom Text",
+	}
+	appCfg := &config.App{ClusterName: "dev"}
+	teams := NewTeams(configMap, appCfg)
+
+	e := &event.Event{
+		PodName:   "test-pod",
+		Namespace: "test-namespace",
+		Reason:    "test-reason",
+		Logs:      "test-logs",
+		Events:    "test-events",
+	}
+
+	server := httptest.NewServer(
+		http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			w.WriteHeader(http.StatusOK)
+		}))
+	defer server.Close()
+
+	teams.webhook = server.URL
+	err := teams.SendEvent(e)
+	assert.NoError(t, err)
+}
+
+func TestSendMessageBadRequestWithBody(t *testing.T) {
+	configMap := map[string]interface{}{
+		"webhook": "http://example.com",
+	}
+	appCfg := &config.App{ClusterName: "dev"}
+	teams := NewTeams(configMap, appCfg)
+
+	server := httptest.NewServer(
+		http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			w.WriteHeader(http.StatusBadRequest)
+			w.Write([]byte(`{"error": "bad request details"}`))
+		}))
+	defer server.Close()
+
+	teams.webhook = server.URL
+	err := teams.SendMessage("test message")
+	assert.Error(t, err)
+}
+
+func TestSendMessageMultipleRetries(t *testing.T) {
+	configMap := map[string]interface{}{
+		"webhook":    "http://example.com",
+		"maxRetries": 3,
+		"retryDelay": 1,
+	}
+	appCfg := &config.App{ClusterName: "dev"}
+	teams := NewTeams(configMap, appCfg)
+
+	server := httptest.NewServer(
+		http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			w.WriteHeader(http.StatusAccepted)
+		}))
+	defer server.Close()
+
+	teams.webhook = server.URL
+	err := teams.SendMessage("test message")
+	assert.Error(t, err)
+}

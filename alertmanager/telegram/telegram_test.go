@@ -138,3 +138,95 @@ func TestInvaildHttpRequest(t *testing.T) {
 
 	assert.NotNil(c.SendMessage("test"))
 }
+
+func TestMaskString(t *testing.T) {
+	assert := assert.New(t)
+
+	assert.Equal("****", maskString("abc"))
+	assert.Equal("****", maskString("ab"))
+	assert.Equal("****", maskString("a"))
+	assert.Equal("test***", maskString("test123"))
+	assert.Equal("long*****", maskString("longvalue"))
+}
+
+func TestBuildRequestBodyTelegramEmptyEventsLogs(t *testing.T) {
+	assert := assert.New(t)
+
+	configMap := map[string]interface{}{
+		"token":  "test",
+		"chatId": "test",
+	}
+	c := NewTelegram(configMap, &config.App{ClusterName: "dev"})
+
+	e := &event.Event{
+		PodName:       "test-pod",
+		ContainerName: "test-container",
+		Namespace:     "default",
+		Reason:        "OOMKILLED",
+		Logs:          "",
+		Events:        "",
+	}
+
+	body := c.buildRequestBodyTelegram(e, "chat123", "")
+	assert.NotEmpty(body)
+	assert.Contains(body, "test-pod")
+	assert.Contains(body, "No logs captured")
+	assert.Contains(body, "No events captured")
+}
+
+func TestBuildRequestBodyTelegramCustomMessage(t *testing.T) {
+	assert := assert.New(t)
+
+	configMap := map[string]interface{}{
+		"token":  "test",
+		"chatId": "test",
+	}
+	c := NewTelegram(configMap, &config.App{ClusterName: "dev"})
+
+	e := &event.Event{}
+	body := c.buildRequestBodyTelegram(e, "chat123", "custom alert message")
+	assert.NotEmpty(body)
+	assert.Contains(body, "custom alert message")
+}
+
+func TestSendMessageStatusAccepted(t *testing.T) {
+	assert := assert.New(t)
+
+	s := httptest.NewServer(
+		http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			w.WriteHeader(http.StatusAccepted)
+		}))
+
+	defer s.Close()
+
+	configMap := map[string]interface{}{
+		"token":  "test",
+		"chatId": "test",
+	}
+	c := NewTelegram(configMap, &config.App{ClusterName: "dev"})
+	c.url = s.URL + "/%s"
+
+	err := c.SendMessage("test")
+	assert.Nil(err)
+}
+
+func TestSendMessageStatusOK(t *testing.T) {
+	assert := assert.New(t)
+
+	s := httptest.NewServer(
+		http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			w.WriteHeader(http.StatusOK)
+		}))
+
+	defer s.Close()
+
+	configMap := map[string]interface{}{
+		"token":  "test",
+		"chatId": "test",
+	}
+	c := NewTelegram(configMap, &config.App{ClusterName: "dev"})
+	c.url = s.URL + "/%s"
+
+	err := c.SendMessage("test")
+	assert.Nil(err)
+}

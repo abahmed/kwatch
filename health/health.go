@@ -7,6 +7,7 @@ import (
 	"strconv"
 	"time"
 
+	"github.com/abahmed/kwatch/config"
 	"github.com/sirupsen/logrus"
 )
 
@@ -20,10 +21,10 @@ type HealthResponse struct {
 	Status string `json:"status"`
 }
 
-func NewHealthServer(port int, enabled bool) *HealthServer {
+func NewHealthServer(cfg config.HealthCheck) *HealthServer {
 	return &HealthServer{
-		port:    port,
-		enabled: enabled,
+		port:    cfg.Port,
+		enabled: cfg.Enabled,
 	}
 }
 
