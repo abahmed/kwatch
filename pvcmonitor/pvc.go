@@ -1,10 +1,12 @@
 package pvcmonitor
 
 import (
+	"sync"
 	"time"
 
 	"github.com/abahmed/kwatch/alertmanager"
 	"github.com/abahmed/kwatch/config"
+	"github.com/sirupsen/logrus"
 	"k8s.io/client-go/kubernetes"
 )
 
@@ -13,9 +15,9 @@ type PvcMonitor struct {
 	config       *config.PvcMonitor
 	alertManager *alertmanager.AlertManager
 	notifiedPvc  map[string]bool
+	mu           sync.RWMutex
 }
 
-// NewPvcMonitor returns new instance of pvc monitor
 func NewPvcMonitor(
 	client kubernetes.Interface,
 	config *config.PvcMonitor,
@@ -33,13 +35,30 @@ func (p *PvcMonitor) Start() {
 		return
 	}
 
-	// check at startup
 	p.checkUsage()
 
 	ticker := time.NewTicker(time.Duration(p.config.Interval) * time.Minute)
+	cleanupTicker := time.NewTicker(1 * time.Hour)
 	defer ticker.Stop()
+	defer cleanupTicker.Stop()
 
-	for range ticker.C {
-		p.checkUsage()
+	for {
+		select {
+		case <-ticker.C:
+			p.checkUsage()
+		case <-cleanupTicker.C:
+			p.cleanup()
+		}
+	}
+}
+
+func (p *PvcMonitor) cleanup() {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+
+	count := len(p.notifiedPvc)
+	if count > 1000 {
+		logrus.Debugf("pvc monitor: clearing %d stale entries from notifiedPvc cache", count)
+		p.notifiedPvc = make(map[string]bool)
 	}
 }

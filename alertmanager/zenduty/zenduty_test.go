@@ -61,6 +61,7 @@ func TestSendEvent(t *testing.T) {
 	c.url = s.URL
 
 	ev := event.Event{
+		NodeName:      "test-node",
 		PodName:       "test-pod",
 		ContainerName: "test-container",
 		Namespace:     "default",
@@ -91,6 +92,7 @@ func TestSendEventError(t *testing.T) {
 	c.url = s.URL
 
 	ev := event.Event{
+		NodeName:      "test-node",
 		PodName:       "test-pod",
 		ContainerName: "test-container",
 		Namespace:     "default",
@@ -113,6 +115,7 @@ func TestInvaildHttpRequest(t *testing.T) {
 	c.url = "h ttp://localhost"
 
 	ev := event.Event{
+		NodeName:      "test-node",
 		PodName:       "test-pod",
 		ContainerName: "test-container",
 		Namespace:     "default",

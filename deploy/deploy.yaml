@@ -9,8 +9,8 @@ metadata:
   name: kwatch
 rules:
 - apiGroups: [""]
-  resources: ["events", "nodes", "nodes/proxy", "pods", "pods/log", "persistentvolumeclaims"]
-  verbs: ["get", "watch", "list"]
+  resources: ["events", "nodes", "nodes/proxy", "pods", "pods/log", "persistentvolumeclaims", "configmaps"]
+  verbs: ["get", "watch", "list", "create", "update"]
 - apiGroups: ["apps"]
   resources: ["daemonsets", "statefulsets", "deployments", "replicasets"]
   verbs: ["get", "watch", "list"]
@@ -54,12 +54,36 @@ spec:
       - name: kwatch
         image: ghcr.io/abahmed/kwatch:v0.10.4
         imagePullPolicy: Always
+        securityContext:
+          runAsNonRoot: true
+          runAsUser: 1000
+          runAsGroup: 1000
+          readOnlyRootFilesystem: true
+        ports:
+          - name: health
+            containerPort: 8060
         volumeMounts:
           - name: config-volume
             mountPath: /config
         env:
           - name: CONFIG_FILE
             value: "/config/config.yaml"
+          - name: POD_NAMESPACE
+            valueFrom:
+              fieldRef:
+                fieldPath: metadata.namespace
+        readinessProbe:
+          httpGet:
+            path: /healthz
+            port: 8060
+          initialDelaySeconds: 5
+          periodSeconds: 10
+        livenessProbe:
+          httpGet:
+            path: /healthz
+            port: 8060
+          initialDelaySeconds: 15
+          periodSeconds: 20
         resources:
           limits:
             memory: "128Mi"

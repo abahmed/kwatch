@@ -86,6 +86,7 @@ func (s *Slack) SendEvent(ev *event.Event) error {
 				markdownF("*Name*\n%s", ev.PodName),
 				markdownF("*Container*\n%s", ev.ContainerName),
 				markdownF("*Namespace*\n%s", ev.Namespace),
+				markdownF("*Node*\n%s", ev.NodeName),
 				markdownF("*Reason*\n%s", ev.Reason),
 			},
 		},

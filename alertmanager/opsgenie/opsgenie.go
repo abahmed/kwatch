@@ -10,6 +10,7 @@ import (
 	"github.com/abahmed/kwatch/config"
 	"github.com/abahmed/kwatch/constant"
 	"github.com/abahmed/kwatch/event"
+	"github.com/abahmed/kwatch/util"
 	"github.com/sirupsen/logrus"
 )
 
@@ -75,7 +76,7 @@ func (m *Opsgenie) SendEvent(e *event.Event) error {
 
 // sendAPI sends http request to Opsgenie API
 func (m *Opsgenie) sendAPI(content []byte) error {
-	client := &http.Client{}
+	client := util.GetDefaultClient()
 	buffer := bytes.NewBuffer(content)
 	request, err := http.NewRequest(http.MethodPost, m.url, buffer)
 	if err != nil {
@@ -137,6 +138,7 @@ func (m *Opsgenie) buildMessage(e *event.Event) []byte {
 		"Name":      e.PodName,
 		"Container": e.ContainerName,
 		"Namespace": e.Namespace,
+		"Node":      e.NodeName,
 		"Reason":    e.Reason,
 		"Events":    events,
 		"Logs":      logs,

@@ -44,6 +44,7 @@ func TestBuildRequestBodyFeiShu(t *testing.T) {
 	c := NewFeiShu(configMap, &config.App{ClusterName: "dev"})
 	assertions.NotNil(c)
 	ev := event.Event{
+		NodeName:      "test-node",
 		PodName:       "test-pod",
 		ContainerName: "test-container",
 		Namespace:     "default",
@@ -53,7 +54,7 @@ func TestBuildRequestBodyFeiShu(t *testing.T) {
 	}
 	formattedMsg := ev.FormatMarkdown(c.appCfg.ClusterName, "", "")
 
-	expectMessage := "{\"msg_type\": \"interactive\",\"card\": {\"config\": {\"wide_screen_mode\": true},\"header\": {\"title\": {\"tag\": \"plain_text\",\"content\": \"\"},\"template\": \"blue\"},\"elements\": [{\"tag\":\"markdown\",\"content\":\"There is an issue with container in a pod!\\n**Cluster:** dev\\n**Pod:** test-pod\\n**Container:** test-container\\n**Namespace:** default\\n**Reason:** OOMKILLED\\n**Events:**\\n```\\ntest\\n```\\n**Logs:**\\n```\\ntest\\ntestlogs\\n```\"}]}}"
+	expectMessage := "{\"msg_type\": \"interactive\",\"card\": {\"config\": {\"wide_screen_mode\": true},\"header\": {\"title\": {\"tag\": \"plain_text\",\"content\": \"\"},\"template\": \"blue\"},\"elements\": [{\"tag\":\"markdown\",\"content\":\"There is an issue with container in a pod!\\n**Cluster:** dev\\n**Pod:** test-pod\\n**Container:** test-container\\n**Namespace:** default\\n**Node:** test-node\\n**Reason:** OOMKILLED\\n**Events:**\\n```\\ntest\\n```\\n**Logs:**\\n```\\ntest\\ntestlogs\\n```\"}]}}"
 
 	assertions.Equal(expectMessage, c.buildRequestBodyFeiShu(formattedMsg))
 }
@@ -113,6 +114,7 @@ func TestSendEvent(t *testing.T) {
 	assertions.NotNil(c)
 
 	ev := event.Event{
+		NodeName:      "test-node",
 		PodName:       "test-pod",
 		ContainerName: "test-container",
 		Namespace:     "default",

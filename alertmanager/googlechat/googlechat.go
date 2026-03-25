@@ -9,6 +9,7 @@ import (
 
 	"github.com/abahmed/kwatch/config"
 	"github.com/abahmed/kwatch/event"
+	"github.com/abahmed/kwatch/util"
 	"github.com/sirupsen/logrus"
 )
 
@@ -55,7 +56,7 @@ func (r *GoogleChat) SendEvent(e *event.Event) error {
 }
 
 func (r *GoogleChat) sendAPI(reqBody string) error {
-	client := &http.Client{}
+	client := util.GetDefaultClient()
 	buffer := bytes.NewBuffer([]byte(reqBody))
 	request, err := http.NewRequest(http.MethodPost, r.webhook, buffer)
 	if err != nil {

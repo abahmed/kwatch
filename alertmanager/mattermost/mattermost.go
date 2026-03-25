@@ -11,6 +11,7 @@ import (
 	"github.com/abahmed/kwatch/config"
 	"github.com/abahmed/kwatch/constant"
 	"github.com/abahmed/kwatch/event"
+	"github.com/abahmed/kwatch/util"
 	"github.com/sirupsen/logrus"
 )
 
@@ -81,7 +82,7 @@ func (m *Mattermost) SendEvent(e *event.Event) error {
 }
 
 func (m *Mattermost) sendAPI(content []byte) error {
-	client := &http.Client{}
+	client := util.GetDefaultClient()
 	buffer := bytes.NewBuffer(content)
 	request, err := http.NewRequest(http.MethodPost, m.webhook, buffer)
 	if err != nil {
@@ -160,6 +161,11 @@ func (m *Mattermost) buildMessage(e *event.Event, msg *string) []byte {
 					{
 						Title: "Namespace",
 						Value: e.Namespace,
+						Short: true,
+					},
+					{
+						Title: "Node",
+						Value: e.NodeName,
 						Short: true,
 					},
 					{

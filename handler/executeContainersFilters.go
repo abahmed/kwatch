@@ -67,6 +67,7 @@ func (h *handler) executeContainersFilters(ctx *filter.Context) {
 				PodName:       ctx.Pod.Name,
 				ContainerName: ctx.Container.Container.Name,
 				Namespace:     ctx.Pod.Namespace,
+				NodeName:      ctx.Pod.Spec.NodeName,
 				Reason:        ctx.Container.Reason,
 				Events:        util.GetPodEventsStr(ctx.Events),
 				Logs:          ctx.Container.Logs,

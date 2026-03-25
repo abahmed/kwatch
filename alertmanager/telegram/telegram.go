@@ -2,6 +2,7 @@ package telegram
 
 import (
 	"bytes"
+	"encoding/json"
 	"fmt"
 	"net/http"
 	"strings"
@@ -14,6 +15,19 @@ import (
 const (
 	telegramAPIURL = "https://api.telegram.org/bot%s/sendMessage"
 )
+
+func maskString(s string) string {
+	if len(s) <= 4 {
+		return "****"
+	}
+	return s[:4] + strings.Repeat("*", len(s)-4)
+}
+
+type telegramPayload struct {
+	ChatID    string `json:"chat_id"`
+	Text      string `json:"text"`
+	ParseMode string `json:"parse_mode"`
+}
 
 type Telegram struct {
 	token  string
@@ -39,9 +53,9 @@ func NewTelegram(config map[string]interface{}, appCfg *config.App) *Telegram {
 	}
 
 	logrus.Infof(
-		"initializing telegram with token  %s and chat_id %s",
-		token,
-		chatId)
+		"initializing telegram with token %s and chat_id %s",
+		maskString(token),
+		maskString(chatId))
 
 	// returns a new telegram object
 	return &Telegram{
@@ -98,13 +112,15 @@ func (t *Telegram) buildRequestBodyTelegram(
 		txt = fmt.Sprintf(
 			"An alert for Cluster: *%s* Name: *%s*  "+
 				"Container: *%s* "+
-				"Namespace: *%s*  has been triggered:\\n—\\n "+
-				"Logs: *%s* \\n "+
+				"Namespace: *%s* "+
+				"Node: *%s* has been triggered:\n—\n "+
+				"Logs: *%s* \n "+
 				"Events: *%s* ",
 			t.appCfg.ClusterName,
 			e.PodName,
 			e.ContainerName,
 			e.Namespace,
+			e.NodeName,
 			logsText,
 			eventsText,
 		)
@@ -112,18 +128,22 @@ func (t *Telegram) buildRequestBodyTelegram(
 		txt = customMsg
 	}
 
-	// build the message to be sent
 	msg := fmt.Sprintf(
 		"⛑ Kwatch detected a crash in pod \\n%s ",
 		txt,
 	)
 
-	reqBody := fmt.Sprintf(
-		`{"chat_id": "%s", "text": "%s", "parse_mode": "MARKDOWN"}`,
-		chatId,
-		msg,
-	)
-	return reqBody
+	payload := telegramPayload{
+		ChatID:    chatId,
+		Text:      msg,
+		ParseMode: "MARKDOWN",
+	}
+
+	bodyBytes, err := json.Marshal(payload)
+	if err != nil {
+		return ""
+	}
+	return string(bodyBytes)
 }
 
 func (t *Telegram) sendByTelegramApi(reqBody string) error {

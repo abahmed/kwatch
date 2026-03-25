@@ -14,5 +14,15 @@ func DefaultConfig() *Config {
 		NodeMonitor: NodeMonitor{
 			Enabled: true,
 		},
+		Upgrader: Upgrader{
+			DisableUpdateCheck: false,
+		},
+		Telemetry: Telemetry{
+			Enabled: false,
+		},
+		HealthCheck: HealthCheck{
+			Enabled: false,
+			Port:    8060,
+		},
 	}
 }

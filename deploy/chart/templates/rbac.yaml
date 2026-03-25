@@ -4,8 +4,8 @@ metadata:
   name: {{ .Release.Name }}
 rules:
 - apiGroups: [""]
-  resources: ["events", "nodes", "nodes/proxy", "pods", "pods/log", "persistentvolumeclaims"]
-  verbs: ["get", "watch", "list"]
+  resources: ["events", "nodes", "nodes/proxy", "pods", "pods/log", "persistentvolumeclaims", "configmaps"]
+  verbs: ["get", "watch", "list", "create", "update"]
 - apiGroups: ["apps"]
   resources: ["daemonsets", "statefulsets", "deployments", "replicasets"]
   verbs: ["get", "watch", "list"]

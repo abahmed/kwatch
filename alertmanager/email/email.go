@@ -116,12 +116,13 @@ func (e *Email) buildMessageSubjectAndBody(
 
 	subject := fmt.Sprintf("⛑ Kwatch detected a crash in pod %s ", ev.ContainerName)
 	body := fmt.Sprintf(
-		"An alert for cluster: *%s* Name: *%s*  Container: *%s* "+
-			"Namespace: *%s*  "+
-			"has been triggered:\\n—\\n "+
-			"Logs: *%s* \\n "+
+		"An alert for cluster: *%s* Node: *%s* Name: *%s*  "+
+			"Container: *%s* Namespace: *%s* "+
+			"has been triggered:\n—\n "+
+			"Logs: *%s* \n "+
 			"Events: *%s* ",
 		e.appCfg.ClusterName,
+		ev.NodeName,
 		ev.PodName,
 		ev.ContainerName,
 		ev.Namespace,

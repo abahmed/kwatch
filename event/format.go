@@ -37,6 +37,7 @@ func (e *Event) FormatMarkdown(clusterName, text, delimiter string) string {
 			"**Pod:** %s"+delimiter+
 			"**Container:** %s"+delimiter+
 			"**Namespace:** %s"+delimiter+
+			"**Node:** %s"+delimiter+
 			"**Reason:** %s"+delimiter+
 			"**Events:**\n```\n%s\n```"+delimiter+
 			"**Logs:**\n```\n%s\n```",
@@ -44,6 +45,7 @@ func (e *Event) FormatMarkdown(clusterName, text, delimiter string) string {
 		clusterName, e.PodName,
 		e.ContainerName,
 		e.Namespace,
+		e.NodeName,
 		e.Reason,
 		eventsText,
 		logsText,
@@ -79,6 +81,7 @@ func (e *Event) FormatHtml(clusterName, text string) string {
 			"<b>Pod:</b> %s <br/>"+
 			"<b>Container:</b> %s<br/>"+
 			"<b>Namespace:</b> %s<br/>"+
+			"<b>Node:</b> %s<br/>"+
 			"<b>Reason:</b> %s<br/>"+
 			"<b>Events:</b><br/><blockquote>%s</blockquote>"+
 			"<b>Logs:</b> <br/><blockquote>%s</blockquote>",
@@ -87,6 +90,7 @@ func (e *Event) FormatHtml(clusterName, text string) string {
 		e.PodName,
 		e.ContainerName,
 		e.Namespace,
+		e.NodeName,
 		e.Reason,
 		strings.ReplaceAll(eventsText, "\n", "<br/>"),
 		strings.ReplaceAll(logsText, "\n", "<br/>"),
@@ -122,6 +126,7 @@ func (e *Event) FormatText(clusterName, text string) string {
 			"Pod Name: %s\n"+
 			"Container: %s\n"+
 			"Namespace: %s\n"+
+			"Node: %s\n"+
 			"Reason: %s\n\n"+
 			"Events:\n%s\n\n"+
 			"Logs:\n%s\n\n",
@@ -129,6 +134,7 @@ func (e *Event) FormatText(clusterName, text string) string {
 		e.PodName,
 		e.ContainerName,
 		e.Namespace,
+		e.NodeName,
 		e.Reason,
 		eventsText,
 		logsText,

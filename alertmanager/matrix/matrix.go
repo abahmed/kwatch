@@ -98,7 +98,7 @@ func (m *Matrix) sendAPI(formattedMsg string) error {
 	}
 
 	request.Header.Set("Content-Type", "application/json")
-	client := &http.Client{}
+	client := util.GetDefaultClient()
 	response, err := client.Do(request)
 	if err != nil {
 		return err

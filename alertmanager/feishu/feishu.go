@@ -9,6 +9,7 @@ import (
 
 	"github.com/abahmed/kwatch/config"
 	"github.com/abahmed/kwatch/event"
+	"github.com/abahmed/kwatch/util"
 	"github.com/sirupsen/logrus"
 )
 
@@ -57,7 +58,7 @@ func (r *FeiShu) SendEvent(e *event.Event) error {
 }
 
 func (r *FeiShu) sendByFeiShuApi(reqBody string) error {
-	client := &http.Client{}
+	client := util.GetDefaultClient()
 	buffer := bytes.NewBuffer([]byte(reqBody))
 	request, err := http.NewRequest(http.MethodPost, r.webhook, buffer)
 	if err != nil {

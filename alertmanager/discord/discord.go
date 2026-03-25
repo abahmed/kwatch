@@ -11,6 +11,10 @@ import (
 	"github.com/sirupsen/logrus"
 )
 
+const (
+	chunkSize = 1024
+)
+
 type Discord struct {
 	id    string
 	token string
@@ -91,6 +95,11 @@ func (s *Discord) SendEvent(ev *event.Event) error {
 			Inline: true,
 		},
 		{
+			Name:   "Node",
+			Value:  ev.NodeName,
+			Inline: true,
+		},
+		{
 			Name:   "Reason",
 			Value:  ev.Reason,
 			Inline: true,
@@ -100,10 +109,12 @@ func (s *Discord) SendEvent(ev *event.Event) error {
 	// add events part if it exists
 	events := strings.TrimSpace(ev.Events)
 	if len(events) > 0 {
-		fields = append(fields, &discordgo.MessageEmbedField{
-			Name:  ":mag: Events",
-			Value: "```\n" + events + "```",
-		})
+		for _, chunk := range chunks(events, chunkSize) {
+			fields = append(fields, &discordgo.MessageEmbedField{
+				Name:  ":mag: Events",
+				Value: "```\n" + chunk + "```",
+			})
+		}
 	}
 
 	// add logs part if it exists
@@ -165,4 +176,26 @@ func (s *Discord) SendMessage(msg string) error {
 			Content: msg,
 		})
 	return err
+}
+
+func chunks(s string, chunkSize int) []string {
+	if chunkSize >= len(s) {
+		return []string{s}
+	}
+
+	var chunks []string = make([]string, 0, (len(s)-1)/chunkSize+1)
+	currentLen := 0
+	currentStart := 0
+
+	for i := range s {
+		if currentLen == chunkSize {
+			chunks = append(chunks, s[currentStart:i])
+			currentLen = 0
+			currentStart = i
+		}
+		currentLen++
+	}
+
+	chunks = append(chunks, s[currentStart:])
+	return chunks
 }
