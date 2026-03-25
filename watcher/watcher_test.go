@@ -1,6 +1,8 @@
 package watcher
 
 import (
+	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -490,7 +492,7 @@ func TestProcessEventsWithMockWatcher(t *testing.T) {
 func TestRunWithMockWatcher(t *testing.T) {
 	assert := assert.New(t)
 
-	var receivedEvents []string
+	var count atomic.Int32
 	mw := NewMockWatcher()
 
 	w := &Watcher{
@@ -498,7 +500,7 @@ func TestRunWithMockWatcher(t *testing.T) {
 		watcher: mw,
 		queue:   workqueue.NewTyped[watcherEvent](),
 		handlerFunc: func(evType string, obj runtime.Object) {
-			receivedEvents = append(receivedEvents, evType)
+			count.Add(1)
 		},
 	}
 
@@ -516,13 +518,14 @@ func TestRunWithMockWatcher(t *testing.T) {
 
 	time.Sleep(100 * time.Millisecond)
 
-	assert.Equal(1, len(receivedEvents))
+	assert.Equal(int32(1), count.Load())
 }
 
 func TestRunWorkerProcessesEvents(t *testing.T) {
 	assert := assert.New(t)
 
-	var processedEvents []string
+	var mu sync.Mutex
+	var events []string
 	mw := NewMockWatcher()
 
 	w := &Watcher{
@@ -530,7 +533,9 @@ func TestRunWorkerProcessesEvents(t *testing.T) {
 		watcher: mw,
 		queue:   workqueue.NewTyped[watcherEvent](),
 		handlerFunc: func(evType string, obj runtime.Object) {
-			processedEvents = append(processedEvents, evType)
+			mu.Lock()
+			events = append(events, evType)
+			mu.Unlock()
 		},
 	}
 
@@ -550,10 +555,14 @@ func TestRunWorkerProcessesEvents(t *testing.T) {
 
 	time.Sleep(100 * time.Millisecond)
 
-	assert.Equal(3, len(processedEvents))
-	assert.Equal("ADDED", processedEvents[0])
-	assert.Equal("MODIFIED", processedEvents[1])
-	assert.Equal("DELETED", processedEvents[2])
+	mu.Lock()
+	assert.Equal(3, len(events))
+	if len(events) == 3 {
+		assert.Equal("ADDED", events[0])
+		assert.Equal("MODIFIED", events[1])
+		assert.Equal("DELETED", events[2])
+	}
+	mu.Unlock()
 }
 
 func TestProcessEventsMultipleCalls(t *testing.T) {
