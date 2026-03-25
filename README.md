@@ -70,51 +70,6 @@ To deploy **kwatch**, execute following command:
 kubectl apply -f https://raw.githubusercontent.com/abahmed/kwatch/v0.10.4/deploy/deploy.yaml
 ```
 
-## High Level Architecture
-
-<p>
-  <img src="./assets/highlevelarchitecture.png" width="70%"/>
-</p>
-
-### Project Structure
-
-```
-kwatch/
-├── internal/
-│   ├── alertmanager/    # Alert providers (Slack, Discord, etc.)
-│   ├── client/          # Kubernetes client
-│   ├── config/          # Configuration
-│   ├── detector/        # Smart detection pipeline
-│   │   ├── predicate/   # Event filtering (k8s-style)
-│   │   ├── detector/    # Issue detection
-│   │   ├── handler/    # Event enrichment (k8s-style)
-│   │   ├── volume/     # PVC-based storage
-│   │   └── cluster/    # Cluster-wide pattern detection
-│   ├── filter/         # Event filters
-│   ├── handler/        # Event handlers
-│   ├── watcher/        # Kubernetes watcher
-│   └── ...             # Other modules
-├── deploy/             # Kubernetes manifests
-├── main.go            # Entry point
-└── config.yaml        # Configuration
-```
-
-### Detection Pipeline
-
-The smart detection pipeline follows Kubernetes community patterns:
-
-```
-Event → Predicate (filter) → Detector (detect) → Handler (enrich) → Alert
-```
-
-| Component | Description |
-|:---------|:------------|
-| **Predicate** | Filters events before processing (k8s-style) |
-| **Detector** | Identifies issues in events |
-| **Handler** | Enriches or transforms events (k8s-style) |
-| **Volume** | Persistent storage with PVC support |
-| **Cluster** | Detects patterns across the cluster |
-
 ## Configuration
 
 ### General
