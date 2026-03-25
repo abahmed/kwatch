@@ -4,7 +4,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/abahmed/kwatch/internal/alert"
+	"github.com/abahmed/kwatch/internal/alertmanager"
 	"github.com/abahmed/kwatch/internal/config"
 	"github.com/sirupsen/logrus"
 	"k8s.io/client-go/kubernetes"

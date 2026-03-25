@@ -4,7 +4,7 @@ import (
 	"context"
 	"testing"
 
-	"github.com/abahmed/kwatch/internal/alert"
+	"github.com/abahmed/kwatch/internal/alertmanager"
 	"github.com/abahmed/kwatch/internal/config"
 	"github.com/abahmed/kwatch/internal/state"
 	"github.com/abahmed/kwatch/internal/version"

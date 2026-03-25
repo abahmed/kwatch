@@ -1,7 +1,7 @@
 package handler
 
 import (
-	"github.com/abahmed/kwatch/internal/alert"
+	"github.com/abahmed/kwatch/internal/alertmanager"
 	"github.com/abahmed/kwatch/internal/config"
 	"github.com/abahmed/kwatch/internal/filter"
 	"github.com/abahmed/kwatch/internal/storage"

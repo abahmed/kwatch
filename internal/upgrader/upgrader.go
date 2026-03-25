@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/abahmed/kwatch/internal/alert"
+	"github.com/abahmed/kwatch/internal/alertmanager"
 	"github.com/abahmed/kwatch/internal/config"
 	"github.com/abahmed/kwatch/internal/constant"
 	"github.com/abahmed/kwatch/internal/state"
