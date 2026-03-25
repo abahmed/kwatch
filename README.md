@@ -30,9 +30,9 @@
 
 ## ⚡️ Getting Started
 
-### Install
+### 📦 Install
 
-#### Using Helm
+#### ⎈ Using Helm
 
 ```shell
 helm repo add kwatch https://kwatch.dev/charts
@@ -41,7 +41,7 @@ helm install [RELEASE_NAME] kwatch/kwatch --namespace kwatch --create-namespace 
 
 To get more details, please check [chart's configuration](https://github.com/abahmed/kwatch/blob/main/deploy/chart/README.md)
 
-#### Using kubectl
+#### 🐙 Using kubectl
 
 You need to get config template to add your configs
 
@@ -61,30 +61,9 @@ To deploy **kwatch**, execute following command:
 kubectl apply -f https://raw.githubusercontent.com/abahmed/kwatch/v0.10.4/deploy/deploy.yaml
 ```
 
-## High Level Architecture
+## ⚙️ Configuration
 
-<p>
- <img src="./assets/highlevelarchitecture.png" width="70%"/>
-</p>
-
-| Point                            | URL                                                                               |
-|:---------------------------------|:--------------------------------------------------------------------------------- |
-| `4.1`                            | <https://github.com/abahmed/kwatch/blob/main/main.go#L18>                           |
-| `5.1.`                           | <https://github.com/abahmed/kwatch/blob/main/main.go#L21> / 24                      |
-| `6.1.`                           | <https://github.com/abahmed/kwatch/blob/main/main.go#L36>                           |
-| `7.0.`                           | <https://github.com/abahmed/kwatch/blob/main/main.go#L40>                           |
-| `7.1.`                           | <https://github.com/abahmed/kwatch/blob/main/upgrader/upgrader.go#L16>              |
-| `8.1.&8.2`                       | <https://github.com/abahmed/kwatch/blob/main/main.go#L46> / 52                      |
-| `8.3.`                           | <https://github.com/abahmed/kwatch/blob/main/main.go#L53>                           |
-| `9.0.`                           | <https://github.com/abahmed/kwatch/blob/main/main.go#L58>                           |
-| `9.1.`                           | <https://github.com/abahmed/kwatch/blob/main/controller/start.go#L20>               |
-| `9.2.`                           | <https://github.com/abahmed/kwatch/blob/main/controller/controller.go#L37>          |
-| `9.3.`                           | <https://github.com/abahmed/kwatch/blob/main/controller/controller.go>              |
-| `9.4.`                           | <https://github.com/abahmed/kwatch/tree/main/provider>                              |
-
-## Configuration
-
-### General
+### 🔧 General
 
 | Parameter                      | Description   |
 |:-------------------------------|:-----------------------|
@@ -97,7 +76,7 @@ kubectl apply -f https://raw.githubusercontent.com/abahmed/kwatch/v0.10.4/deploy
 | `IgnoreLogPatterns`            | Optional list of regexp patterns of logs to ignore     |
 
 
-### App
+### 📱 App
 
 | Parameter                     | Description                                 |
 |:------------------------------|:------------------------------------------- |
@@ -107,14 +86,14 @@ kubectl apply -f https://raw.githubusercontent.com/abahmed/kwatch/v0.10.4/deploy
 | `app.logFormatter` | used for setting custom formatter when app prints logs: text, json (default: text) |
 
 
-### Telemetry (Not Released)
+### 📊 Telemetry (Not Released)
 
 | Parameter                     | Description                                 |
 |:------------------------------|:------------------------------------------- |
 | `telemetry.enabled` | If set to true, anonymous telemetry data (cluster ID and version) is sent on first run to help track kwatch usage (default: false) |
 
 
-### Health Check (Not Released)
+### 💓 Health Check (Not Released)
 
 | Parameter                     | Description                                 |
 |:------------------------------|:------------------------------------------- |
@@ -126,13 +105,13 @@ kubectl apply -f https://raw.githubusercontent.com/abahmed/kwatch/v0.10.4/deploy
 - `GET /health` - Returns `{"status": "ok"}` (application/json)
 
 
-### Upgrader
+### 🔄 Upgrader
 
 | Parameter                     | Description                                 |
 |:------------------------------|:------------------------------------------- |
 | `upgrader.disableUpdateCheck` | If set to true, does not check for and notify about kwatch updates |
 
-### PVC Monitor
+### 💾 PVC Monitor
 
 | Parameter                    | Description                                 |
 |:-----------------------------|:------------------------------------------- |
@@ -141,7 +120,7 @@ kubectl apply -f https://raw.githubusercontent.com/abahmed/kwatch/v0.10.4/deploy
 | `pvcMonitor.threshold`       | the percentage of accepted pvc usage. if current usage exceeds this value, it will send a notification (default: 80) |
 
 
-### Node Monitor
+### 🖥️ Node Monitor
 
 | Parameter                    | Description                                 |
 |:-----------------------------|:------------------------------------------- |
@@ -149,7 +128,7 @@ kubectl apply -f https://raw.githubusercontent.com/abahmed/kwatch/v0.10.4/deploy
 
 
 
-### Alerts
+### 🔔 Alerts
 
 #### Slack
 
@@ -335,12 +314,12 @@ If you want to enable Zenduty, provide IntegrationKey with optional alert type
   <img src="./assets/googlechat.png" width="50%"/>
 </p>
 
-If you want to enable Rocket Chat, provide the webhook with optional text
+If you want to enable Google Chat, provide the webhook with optional text
 
 | Parameter                  | Description                            |
 |:---------------------------|:---------------------------------------|
 | `alert.googlechat.webhook` | Google Chat webhook URL                |
-| `alert.rocketchat.text`    | Customized text in Google Chat message |
+| `alert.googlechat.text`    | Customized text in Google Chat message |
 
 #### Custom webhook
 
@@ -353,7 +332,7 @@ basic auth
 | `alert.webhook.headers`   | optional list of name and value |
 | `alert.webhook.basicAuth` | optional username and password  |
 
-### Cleanup
+### 🧹 Cleanup
 
 ```shell
 kubectl delete -f https://raw.githubusercontent.com/abahmed/kwatch/v0.10.4/deploy/config.yaml
