@@ -86,7 +86,7 @@ kubectl apply -f https://raw.githubusercontent.com/abahmed/kwatch/v0.10.5/deploy
 | `app.logFormatter` | used for setting custom formatter when app prints logs: text, json (default: text) |
 
 
-### 💓 Health Check (Not Released)
+### 💓 Health Check
 
 | Parameter                     | Description                                 |
 |:------------------------------|:------------------------------------------- |
