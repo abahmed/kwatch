@@ -36,7 +36,7 @@
 
 ```shell
 helm repo add kwatch https://kwatch.dev/charts
-helm install [RELEASE_NAME] kwatch/kwatch --namespace kwatch --create-namespace --version 0.10.4
+helm install [RELEASE_NAME] kwatch/kwatch --namespace kwatch --create-namespace --version 0.10.5
 ```
 
 To get more details, please check [chart's configuration](https://github.com/abahmed/kwatch/blob/main/deploy/chart/README.md)
@@ -46,7 +46,7 @@ To get more details, please check [chart's configuration](https://github.com/aba
 You need to get config template to add your configs
 
 ```shell
-curl  -L https://raw.githubusercontent.com/abahmed/kwatch/v0.10.4/deploy/config.yaml -o config.yaml
+curl  -L https://raw.githubusercontent.com/abahmed/kwatch/v0.10.5/deploy/config.yaml -o config.yaml
 ```
 
 Then edit `config.yaml` file and apply your configuration
@@ -58,7 +58,7 @@ kubectl apply -f config.yaml
 To deploy **kwatch**, execute following command:
 
 ```shell
-kubectl apply -f https://raw.githubusercontent.com/abahmed/kwatch/v0.10.4/deploy/deploy.yaml
+kubectl apply -f https://raw.githubusercontent.com/abahmed/kwatch/v0.10.5/deploy/deploy.yaml
 ```
 
 ## ⚙️ Configuration
@@ -86,7 +86,7 @@ kubectl apply -f https://raw.githubusercontent.com/abahmed/kwatch/v0.10.4/deploy
 | `app.logFormatter` | used for setting custom formatter when app prints logs: text, json (default: text) |
 
 
-### 💓 Health Check (Not Released)
+### 💓 Health Check
 
 | Parameter                     | Description                                 |
 |:------------------------------|:------------------------------------------- |
@@ -129,12 +129,23 @@ kubectl apply -f https://raw.githubusercontent.com/abahmed/kwatch/v0.10.4/deploy
   <img src="./assets/slack.png" width="30%"/>
 </p>
 
-If you want to enable Slack, provide the webhook with optional text and title
+If you want to enable Slack, provide either a webhook URL or a bot token with channel
+
+**Webhook mode:**
 
 | Parameter                        | Description                                 |
 |:---------------------------------|:------------------------------------------- |
 | `alert.slack.webhook`            | Slack webhook URL                           |
 | `alert.slack.channel`            | Used by legacy webhooks to send messages to specific channel instead of default one |
+| `alert.slack.title`              | Customized title in slack message           |
+| `alert.slack.text`               | Customized text in slack message            |
+
+**Bot Token mode:**
+
+| Parameter                        | Description                                 |
+|:---------------------------------|:------------------------------------------- |
+| `alert.slack.token`              | Slack bot token (xoxb-...)                  |
+| `alert.slack.channel`            | Channel to post to (e.g. #alerts)           |
 | `alert.slack.title`              | Customized title in slack message           |
 | `alert.slack.text`               | Customized text in slack message            |
 
@@ -328,8 +339,8 @@ basic auth
 ### 🧹 Cleanup
 
 ```shell
-kubectl delete -f https://raw.githubusercontent.com/abahmed/kwatch/v0.10.4/deploy/config.yaml
-kubectl delete -f https://raw.githubusercontent.com/abahmed/kwatch/v0.10.4/deploy/deploy.yaml
+kubectl delete -f https://raw.githubusercontent.com/abahmed/kwatch/v0.10.5/deploy/config.yaml
+kubectl delete -f https://raw.githubusercontent.com/abahmed/kwatch/v0.10.5/deploy/deploy.yaml
 ```
 
 ## 👍 Contribute & Support

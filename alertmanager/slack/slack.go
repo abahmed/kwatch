@@ -1,6 +1,7 @@
 package slack
 
 import (
+	"context"
 	"fmt"
 	"strings"
 
@@ -17,41 +18,60 @@ const (
 )
 
 type Slack struct {
-	webhook string
 	title   string
 	text    string
-
-	// used by legacy webhook to send messages to specific channel,
-	// instead of default one
 	channel string
+	appCfg  *config.App
 
-	// reference for general app configuration
-	appCfg *config.App
+	// webhook mode
+	webhook string
+	send    func(url string, msg *slackClient.WebhookMessage) error
 
-	send func(url string, msg *slackClient.WebhookMessage) error
+	// token mode
+	token     string
+	apiClient *slackClient.Client
 }
 
 // NewSlack returns new Slack instance
 func NewSlack(config map[string]interface{}, appCfg *config.App) *Slack {
+	title, _ := config["title"].(string)
+	text, _ := config["text"].(string)
+
+	// token mode: requires token + channel
+	token, hasToken := config["token"].(string)
+	channel, hasChannel := config["channel"].(string)
+	if hasToken && len(token) > 0 {
+		if !hasChannel || len(channel) == 0 {
+			logrus.Warnf("initializing slack with token but missing channel")
+			return nil
+		}
+		logrus.Infof("initializing slack with token and channel: %s", channel)
+		return &Slack{
+			token:     token,
+			channel:   channel,
+			title:     title,
+			text:      text,
+			appCfg:    appCfg,
+			apiClient: slackClient.New(token),
+		}
+	}
+
+	// webhook mode: requires webhook
 	webhook, ok := config["webhook"].(string)
 	if !ok || len(webhook) == 0 {
-		logrus.Warnf("initializing slack with empty webhook url")
+		logrus.Warnf("initializing slack with empty webhook url and no token")
 		return nil
 	}
 
 	logrus.Infof("initializing slack with webhook url: %s", webhook)
-
-	channel, _ := config["channel"].(string)
-	title, _ := config["title"].(string)
-	text, _ := config["text"].(string)
 
 	return &Slack{
 		webhook: webhook,
 		channel: channel,
 		title:   title,
 		text:    text,
-		send:    slackClient.PostWebhook,
 		appCfg:  appCfg,
+		send:    slackClient.PostWebhook,
 	}
 }
 
@@ -132,10 +152,29 @@ func (s *Slack) SendMessage(msg string) error {
 }
 
 func (s *Slack) sendAPI(msg *slackClient.WebhookMessage) error {
+	if s.apiClient != nil {
+		return s.sendAPIWithToken(msg)
+	}
 	if len(s.channel) > 0 {
 		msg.Channel = s.channel
 	}
 	return s.send(s.webhook, msg)
+}
+
+func (s *Slack) sendAPIWithToken(msg *slackClient.WebhookMessage) error {
+	opts := []slackClient.MsgOption{}
+	if len(msg.Text) > 0 {
+		opts = append(opts, slackClient.MsgOptionText(msg.Text, false))
+	}
+	if msg.Blocks != nil {
+		opts = append(opts, slackClient.MsgOptionBlocks(msg.Blocks.BlockSet...))
+	}
+	_, _, err := s.apiClient.PostMessageContext(
+		context.Background(),
+		s.channel,
+		opts...,
+	)
+	return err
 }
 
 func chunks(s string, chunkSize int) []string {
