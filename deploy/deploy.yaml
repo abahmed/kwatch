@@ -72,18 +72,6 @@ spec:
             valueFrom:
               fieldRef:
                 fieldPath: metadata.namespace
-        readinessProbe:
-          httpGet:
-            path: /healthz
-            port: 8060
-          initialDelaySeconds: 5
-          periodSeconds: 10
-        livenessProbe:
-          httpGet:
-            path: /healthz
-            port: 8060
-          initialDelaySeconds: 15
-          periodSeconds: 20
         resources:
           limits:
             memory: "128Mi"
