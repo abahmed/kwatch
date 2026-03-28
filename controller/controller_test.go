@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"sync"
 	"testing"
 	"time"
 
@@ -18,6 +19,7 @@ import (
 )
 
 type mockHandler struct {
+	mu       sync.Mutex
 	podKeys  []string
 	podDel   []bool
 	nodeKeys []string
@@ -26,14 +28,38 @@ type mockHandler struct {
 }
 
 func (m *mockHandler) ProcessPod(key string, deleted bool) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
 	m.podKeys = append(m.podKeys, key)
 	m.podDel = append(m.podDel, deleted)
 	return m.err
 }
 func (m *mockHandler) ProcessNode(key string, deleted bool) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
 	m.nodeKeys = append(m.nodeKeys, key)
 	m.nodeDel = append(m.nodeDel, deleted)
 	return m.err
+}
+func (m *mockHandler) podCount() int {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	return len(m.podKeys)
+}
+func (m *mockHandler) nodeCount() int {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	return len(m.nodeKeys)
+}
+func (m *mockHandler) podEntry(i int) (string, bool) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	return m.podKeys[i], m.podDel[i]
+}
+func (m *mockHandler) nodeEntry(i int) (string, bool) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	return m.nodeKeys[i], m.nodeDel[i]
 }
 func (m *mockHandler) ProcessPodObject(*corev1.Pod, bool) error   { return m.err }
 func (m *mockHandler) ProcessNodeObject(*corev1.Node, bool) error { return m.err }
@@ -438,11 +464,12 @@ func TestRunEndToEndPodAdd(t *testing.T) {
 	go ctrl.Run(ctx, 1)
 
 	assert.Eventually(func() bool {
-		return len(h.podKeys) > 0
+		return h.podCount() > 0
 	}, 5*time.Second, 100*time.Millisecond)
 
-	assert.Equal("default/app-pod", h.podKeys[0])
-	assert.False(h.podDel[0])
+	key, del := h.podEntry(0)
+	assert.Equal("default/app-pod", key)
+	assert.False(del)
 }
 
 func TestRunEndToEndPodDelete(t *testing.T) {
@@ -470,21 +497,25 @@ func TestRunEndToEndPodDelete(t *testing.T) {
 	assert.NoError(err)
 
 	assert.Eventually(func() bool {
-		return len(h.podKeys) > 0
+		return h.podCount() > 0
 	}, 5*time.Second, 100*time.Millisecond)
 
+	// Reset tracking by appending a separator
+	h.mu.Lock()
 	h.podKeys = nil
 	h.podDel = nil
+	h.mu.Unlock()
 
 	err = client.CoreV1().Pods("default").Delete(ctx, "ephemeral", metav1.DeleteOptions{})
 	assert.NoError(err)
 
 	assert.Eventually(func() bool {
-		return len(h.podKeys) > 0
+		return h.podCount() > 0
 	}, 5*time.Second, 100*time.Millisecond)
 
-	assert.Equal("default/ephemeral", h.podKeys[0])
-	assert.True(h.podDel[0])
+	key, del := h.podEntry(0)
+	assert.Equal("default/ephemeral", key)
+	assert.True(del)
 }
 
 func TestRunEndToEndNodeAdd(t *testing.T) {
@@ -510,11 +541,12 @@ func TestRunEndToEndNodeAdd(t *testing.T) {
 	go ctrl.Run(ctx, 1)
 
 	assert.Eventually(func() bool {
-		return len(h.nodeKeys) > 0
+		return h.nodeCount() > 0
 	}, 5*time.Second, 100*time.Millisecond)
 
-	assert.Equal("worker-1", h.nodeKeys[0])
-	assert.False(h.nodeDel[0])
+	key, del := h.nodeEntry(0)
+	assert.Equal("worker-1", key)
+	assert.False(del)
 }
 
 func TestRunEndToEndRequeueOnError(t *testing.T) {
@@ -543,11 +575,13 @@ func TestRunEndToEndRequeueOnError(t *testing.T) {
 
 	// Handler returns error — pod should be requeued and processed again
 	assert.Eventually(func() bool {
-		return len(h.podKeys) >= 2
+		return h.podCount() >= 2
 	}, 5*time.Second, 100*time.Millisecond)
 
-	assert.Equal("default/retry-pod", h.podKeys[0])
-	assert.Equal("default/retry-pod", h.podKeys[1])
+	key0, _ := h.podEntry(0)
+	key1, _ := h.podEntry(1)
+	assert.Equal("default/retry-pod", key0)
+	assert.Equal("default/retry-pod", key1)
 }
 
 func TestRunPodDeduplication(t *testing.T) {
@@ -576,7 +610,7 @@ func TestRunPodDeduplication(t *testing.T) {
 	q.ShutDown()
 	assert.False(ctrl.processNextPodItem())
 
-	assert.Equal(1, len(ctrl.handler.(*mockHandler).podKeys))
+	assert.Equal(1, ctrl.handler.(*mockHandler).podCount())
 }
 
 func TestMultipleWorkers(t *testing.T) {
@@ -603,7 +637,7 @@ func TestMultipleWorkers(t *testing.T) {
 		ctrl.processNextPodItem()
 	}
 
-	assert.Equal(10, len(ctrl.handler.(*mockHandler).podKeys))
+	assert.Equal(10, ctrl.handler.(*mockHandler).podCount())
 	assert.Equal(0, q.Len())
 }
 
