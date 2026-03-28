@@ -5,13 +5,18 @@ import (
 	"github.com/abahmed/kwatch/config"
 	"github.com/abahmed/kwatch/filter"
 	"github.com/abahmed/kwatch/storage"
-	"k8s.io/apimachinery/pkg/runtime"
+	corev1 "k8s.io/api/core/v1"
 	"k8s.io/client-go/kubernetes"
+	corev1lister "k8s.io/client-go/listers/core/v1"
 )
 
 type Handler interface {
-	ProcessPod(evType string, obj runtime.Object)
-	ProcessNode(evType string, obj runtime.Object)
+	ProcessPod(key string, deleted bool) error
+	ProcessNode(key string, deleted bool) error
+	ProcessPodObject(pod *corev1.Pod, deleted bool) error
+	ProcessNodeObject(node *corev1.Node, deleted bool) error
+	SetPodLister(lister corev1lister.PodLister)
+	SetNodeLister(lister corev1lister.NodeLister)
 }
 
 type handler struct {
@@ -21,6 +26,8 @@ type handler struct {
 	podFilters       []filter.Filter
 	containerFilters []filter.Filter
 	alertManager     *alertmanager.AlertManager
+	podLister        corev1lister.PodLister
+	nodeLister       corev1lister.NodeLister
 }
 
 func NewHandler(
@@ -57,4 +64,12 @@ func NewHandler(
 		memory:           mem,
 		alertManager:     alertManager,
 	}
+}
+
+func (h *handler) SetPodLister(lister corev1lister.PodLister) {
+	h.podLister = lister
+}
+
+func (h *handler) SetNodeLister(lister corev1lister.NodeLister) {
+	h.nodeLister = lister
 }

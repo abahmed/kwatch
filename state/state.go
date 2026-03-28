@@ -17,7 +17,6 @@ const (
 	clusterIDKey       = "cluster-id"
 	versionKey         = "version"
 	firstRunKey        = "first-run"
-	telemetrySentKey   = "telemetry-sent"
 	notifiedVersionKey = "notified-version"
 )
 
@@ -58,21 +57,6 @@ func (s *StateManager) GetStoredVersion(ctx context.Context) string {
 		return ""
 	}
 	return cm.Data[versionKey]
-}
-
-func (s *StateManager) IsTelemetrySent(ctx context.Context) bool {
-	cm, err := s.client.CoreV1().ConfigMaps(s.namespace).Get(ctx, stateConfigMapName, metav1.GetOptions{})
-	if err != nil {
-		return false
-	}
-	return cm.Data[telemetrySentKey] == "true"
-}
-
-func (s *StateManager) MarkTelemetrySent(ctx context.Context) error {
-	return s.retryMgr.UpdateWithRetry(ctx, func(cm *corev1.ConfigMap) error {
-		cm.Data[telemetrySentKey] = "true"
-		return nil
-	})
 }
 
 func (s *StateManager) GetNotifiedVersion(ctx context.Context) string {

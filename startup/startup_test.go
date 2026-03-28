@@ -16,14 +16,12 @@ func TestNewStartupManager(t *testing.T) {
 
 	client := fake.NewSimpleClientset()
 	namespace := "kwatch"
-	telemetryCfg := &config.Telemetry{Enabled: false}
 	alertCfg := make(map[string]map[string]interface{})
 	appCfg := &config.App{}
 
-	sm := NewStartupManager(client, namespace, telemetryCfg, alertCfg, appCfg)
+	sm := NewStartupManager(client, namespace, alertCfg, appCfg)
 	assert.NotNil(sm)
 	assert.NotNil(sm.stateManager)
-	assert.NotNil(sm.telemetry)
 	assert.NotNil(sm.alertManager)
 }
 
@@ -32,10 +30,9 @@ func TestNewStartupManagerWithNilAlertConfig(t *testing.T) {
 
 	client := fake.NewSimpleClientset()
 	namespace := "kwatch"
-	telemetryCfg := &config.Telemetry{Enabled: false}
 	appCfg := &config.App{}
 
-	sm := NewStartupManager(client, namespace, telemetryCfg, nil, appCfg)
+	sm := NewStartupManager(client, namespace, nil, appCfg)
 	assert.NotNil(sm)
 	assert.NotNil(sm.alertManager)
 }
@@ -45,11 +42,10 @@ func TestGetAlertManager(t *testing.T) {
 
 	client := fake.NewSimpleClientset()
 	namespace := "kwatch"
-	telemetryCfg := &config.Telemetry{Enabled: false}
 	alertCfg := make(map[string]map[string]interface{})
 	appCfg := &config.App{}
 
-	sm := NewStartupManager(client, namespace, telemetryCfg, alertCfg, appCfg)
+	sm := NewStartupManager(client, namespace, alertCfg, appCfg)
 	assert.NotNil(sm)
 	assert.NotNil(sm.GetAlertManager())
 }
@@ -59,13 +55,12 @@ func TestHandleStartupFirstRun(t *testing.T) {
 
 	client := fake.NewSimpleClientset()
 	namespace := "kwatch"
-	telemetryCfg := &config.Telemetry{Enabled: false}
 	alertCfg := make(map[string]map[string]interface{})
 	appCfg := &config.App{
 		DisableStartupMessage: true,
 	}
 
-	sm := NewStartupManager(client, namespace, telemetryCfg, alertCfg, appCfg)
+	sm := NewStartupManager(client, namespace, alertCfg, appCfg)
 	assert.NotNil(sm)
 
 	err := sm.HandleStartup(context.Background())
@@ -103,13 +98,12 @@ func TestHandleStartupUpgrade(t *testing.T) {
 		context.Background(), cm, metav1.CreateOptions{})
 	assert.Nil(err)
 
-	telemetryCfg := &config.Telemetry{Enabled: false}
 	alertCfg := make(map[string]map[string]interface{})
 	appCfg := &config.App{
 		DisableStartupMessage: true,
 	}
 
-	sm := NewStartupManager(client, namespace, telemetryCfg, alertCfg, appCfg)
+	sm := NewStartupManager(client, namespace, alertCfg, appCfg)
 	assert.NotNil(sm)
 
 	err = sm.HandleStartup(context.Background())
@@ -143,13 +137,12 @@ func TestHandleStartupPreservesClusterID(t *testing.T) {
 		context.Background(), cm, metav1.CreateOptions{})
 	assert.Nil(err)
 
-	telemetryCfg := &config.Telemetry{Enabled: false}
 	alertCfg := make(map[string]map[string]interface{})
 	appCfg := &config.App{
 		DisableStartupMessage: true,
 	}
 
-	sm := NewStartupManager(client, namespace, telemetryCfg, alertCfg, appCfg)
+	sm := NewStartupManager(client, namespace, alertCfg, appCfg)
 
 	err = sm.HandleStartup(context.Background())
 	assert.Nil(err)
@@ -171,30 +164,27 @@ func TestHandleStartupSameVersion(t *testing.T) {
 			Namespace: namespace,
 		},
 		Data: map[string]string{
-			"kwatch-init":    "true",
-			"cluster-id":     "test-cluster-id",
-			"version":        "dev",
-			"telemetry-sent": "true",
+			"kwatch-init": "true",
+			"cluster-id":  "test-cluster-id",
+			"version":     "dev",
 		},
 	}
 	_, err := client.CoreV1().ConfigMaps(namespace).Create(
 		context.Background(), cm, metav1.CreateOptions{})
 	assert.Nil(err)
 
-	telemetryCfg := &config.Telemetry{Enabled: true}
 	alertCfg := make(map[string]map[string]interface{})
 	appCfg := &config.App{
 		DisableStartupMessage: true,
 	}
 
-	sm := NewStartupManager(client, namespace, telemetryCfg, alertCfg, appCfg)
+	sm := NewStartupManager(client, namespace, alertCfg, appCfg)
 
 	err = sm.HandleStartup(context.Background())
 	assert.Nil(err)
 
 	updatedCM, _ := client.CoreV1().ConfigMaps(namespace).Get(
 		context.Background(), "kwatch-state", metav1.GetOptions{})
-	assert.Equal("true", updatedCM.Data["telemetry-sent"])
 	assert.Equal("dev", updatedCM.Data["version"])
 }
 
@@ -203,11 +193,10 @@ func TestGetStateManager(t *testing.T) {
 
 	client := fake.NewSimpleClientset()
 	namespace := "kwatch"
-	telemetryCfg := &config.Telemetry{Enabled: false}
 	alertCfg := make(map[string]map[string]interface{})
 	appCfg := &config.App{}
 
-	sm := NewStartupManager(client, namespace, telemetryCfg, alertCfg, appCfg)
+	sm := NewStartupManager(client, namespace, alertCfg, appCfg)
 	assert.NotNil(sm)
 	assert.NotNil(sm.GetStateManager())
 }
@@ -217,51 +206,16 @@ func TestHandleStartupWithStartupMessageEnabled(t *testing.T) {
 
 	client := fake.NewSimpleClientset()
 	namespace := "kwatch"
-	telemetryCfg := &config.Telemetry{Enabled: false}
 	alertCfg := make(map[string]map[string]interface{})
 	appCfg := &config.App{
 		DisableStartupMessage: false,
 	}
 
-	sm := NewStartupManager(client, namespace, telemetryCfg, alertCfg, appCfg)
+	sm := NewStartupManager(client, namespace, alertCfg, appCfg)
 
 	err := sm.HandleStartup(context.Background())
 	assert.Nil(err)
 
 	isFirstRun, _ := sm.stateManager.IsFirstRun(context.Background())
 	assert.False(isFirstRun)
-}
-
-func TestHandleStartupTelemetryAlreadySent(t *testing.T) {
-	assert := assert.New(t)
-
-	client := fake.NewSimpleClientset()
-	namespace := "kwatch"
-
-	cm := &corev1.ConfigMap{
-		ObjectMeta: metav1.ObjectMeta{
-			Name:      "kwatch-state",
-			Namespace: namespace,
-		},
-		Data: map[string]string{
-			"kwatch-init":    "true",
-			"cluster-id":     "test-cluster-id",
-			"version":        "dev",
-			"telemetry-sent": "true",
-		},
-	}
-	_, err := client.CoreV1().ConfigMaps(namespace).Create(
-		context.Background(), cm, metav1.CreateOptions{})
-	assert.Nil(err)
-
-	telemetryCfg := &config.Telemetry{Enabled: true}
-	alertCfg := make(map[string]map[string]interface{})
-	appCfg := &config.App{
-		DisableStartupMessage: true,
-	}
-
-	sm := NewStartupManager(client, namespace, telemetryCfg, alertCfg, appCfg)
-
-	err = sm.HandleStartup(context.Background())
-	assert.Nil(err)
 }

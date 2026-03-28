@@ -17,9 +17,6 @@ type Config struct {
 	// NodeMonitor configuration
 	NodeMonitor NodeMonitor `yaml:"nodeMonitor"`
 
-	// Telemetry configuration
-	Telemetry Telemetry `yaml:"telemetry"`
-
 	// HealthCheck configuration
 	HealthCheck HealthCheck `yaml:"healthCheck"`
 
@@ -79,6 +76,10 @@ type Config struct {
 	IgnoreNodeReasons []string `yaml:"ignoreNodeReasons"`
 	// IgnoreNodeMessages is an optional list of node messages for which alerting should be skipped
 	IgnoreNodeMessages []string `yaml:"ignoreNodeMessages"`
+
+	// ResyncSeconds is the interval (in seconds) for periodic informer resyncs.
+	// If 0, no periodic resync occurs (event-driven only).
+	ResyncSeconds int `yaml:"resyncSeconds"`
 }
 
 // App confing struct
@@ -126,13 +127,6 @@ type PvcMonitor struct {
 type NodeMonitor struct {
 	// Enabled if set to true, it will enable node watcher
 	// By default, this value is true
-	Enabled bool `yaml:"enabled"`
-}
-
-// Telemetry config struct
-type Telemetry struct {
-	// Enabled if set to true, it will send anonymous telemetry events
-	// By default, this value is false
 	Enabled bool `yaml:"enabled"`
 }
 

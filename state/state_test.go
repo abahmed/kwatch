@@ -83,67 +83,6 @@ func TestGetStoredVersionWithConfigMap(t *testing.T) {
 	assert.Equal("v0.10.0", version)
 }
 
-func TestIsTelemetrySentNoConfigMap(t *testing.T) {
-	assert := assert.New(t)
-	client := fake.NewSimpleClientset()
-	sm := NewStateManager(client, "kwatch")
-
-	sent := sm.IsTelemetrySent(context.Background())
-	assert.False(sent)
-}
-
-func TestIsTelemetrySentTrue(t *testing.T) {
-	assert := assert.New(t)
-	client := fake.NewSimpleClientset()
-	sm := NewStateManager(client, "kwatch")
-
-	cm := &corev1.ConfigMap{
-		ObjectMeta: metav1.ObjectMeta{
-			Name:      stateConfigMapName,
-			Namespace: "kwatch",
-		},
-		Data: map[string]string{
-			telemetrySentKey: "true",
-		},
-	}
-	_, err := client.CoreV1().ConfigMaps("kwatch").Create(context.Background(), cm, metav1.CreateOptions{})
-	assert.Nil(err)
-
-	sent := sm.IsTelemetrySent(context.Background())
-	assert.True(sent)
-}
-
-func TestMarkTelemetrySentNoConfigMap(t *testing.T) {
-	assert := assert.New(t)
-	client := fake.NewSimpleClientset()
-	sm := NewStateManager(client, "kwatch")
-
-	err := sm.MarkTelemetrySent(context.Background())
-	assert.NotNil(err)
-}
-
-func TestMarkTelemetrySentSuccess(t *testing.T) {
-	assert := assert.New(t)
-	client := fake.NewSimpleClientset()
-	sm := NewStateManager(client, "kwatch")
-
-	cm := &corev1.ConfigMap{
-		ObjectMeta: metav1.ObjectMeta{
-			Name:      stateConfigMapName,
-			Namespace: "kwatch",
-		},
-		Data: map[string]string{},
-	}
-	_, err := client.CoreV1().ConfigMaps("kwatch").Create(context.Background(), cm, metav1.CreateOptions{})
-	assert.Nil(err)
-
-	err = sm.MarkTelemetrySent(context.Background())
-	assert.Nil(err)
-
-	sent := sm.IsTelemetrySent(context.Background())
-	assert.True(sent)
-}
-
 func TestEnsureClusterIDNoConfigMap(t *testing.T) {
 	assert := assert.New(t)
 	client := fake.NewSimpleClientset()

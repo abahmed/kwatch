@@ -15,16 +15,6 @@ securityContext:
 service:
   port: 8060
 
-readinessProbe:
-  enabled: true
-  initialDelaySeconds: 5
-  periodSeconds: 10
-
-livenessProbe:
-  enabled: true
-  initialDelaySeconds: 15
-  periodSeconds: 20
-
 resources:
   limits:
     memory: 128Mi
@@ -44,8 +34,6 @@ podLabels: {}
 
 # kwatch configuration
 config:
-  # telemetry:
-  #   enabled: true  # Enable anonymous telemetry to help track kwatch usage
 
 
 

@@ -31,17 +31,7 @@ func TestProcessPodNilObject(t *testing.T) {
 	alertMgr := &alertmanager.AlertManager{}
 
 	h := NewHandler(client, cfg, mem, alertMgr)
-	h.ProcessPod("ADDED", nil)
-}
-
-func TestProcessPodInvalidType(t *testing.T) {
-	client := fake.NewSimpleClientset()
-	cfg := &config.Config{}
-	mem := memory.NewMemory()
-	alertMgr := &alertmanager.AlertManager{}
-
-	h := NewHandler(client, cfg, mem, alertMgr)
-	h.ProcessPod("ADDED", &corev1.Node{})
+	assert.NoError(t, h.ProcessPodObject(nil, false))
 }
 
 func TestProcessPodDeleted(t *testing.T) {
@@ -61,7 +51,7 @@ func TestProcessPodDeleted(t *testing.T) {
 
 	mem.AddPodContainer("default", "test-pod", "test-container", &storage.ContainerState{})
 
-	h.ProcessPod("DELETED", pod)
+	assert.NoError(t, h.ProcessPodObject(pod, true))
 }
 
 func TestProcessNodeNilObject(t *testing.T) {
@@ -71,17 +61,7 @@ func TestProcessNodeNilObject(t *testing.T) {
 	alertMgr := &alertmanager.AlertManager{}
 
 	h := NewHandler(client, cfg, mem, alertMgr)
-	h.ProcessNode("ADDED", nil)
-}
-
-func TestProcessNodeInvalidType(t *testing.T) {
-	client := fake.NewSimpleClientset()
-	cfg := &config.Config{}
-	mem := memory.NewMemory()
-	alertMgr := &alertmanager.AlertManager{}
-
-	h := NewHandler(client, cfg, mem, alertMgr)
-	h.ProcessNode("ADDED", &corev1.Pod{})
+	assert.NoError(t, h.ProcessNodeObject(nil, false))
 }
 
 func TestProcessNodeDeleted(t *testing.T) {
@@ -99,7 +79,7 @@ func TestProcessNodeDeleted(t *testing.T) {
 	}
 
 	mem.AddNode("test-node")
-	h.ProcessNode("DELETED", node)
+	assert.NoError(t, h.ProcessNodeObject(node, true))
 }
 
 func TestProcessNodeNotReadyNoAlert(t *testing.T) {
@@ -129,7 +109,7 @@ func TestProcessNodeNotReadyNoAlert(t *testing.T) {
 		},
 	}
 
-	h.ProcessNode("ADDED", node)
+	assert.NoError(t, h.ProcessNodeObject(node, false))
 }
 
 func TestProcessNodeReadyRecovery(t *testing.T) {
@@ -157,7 +137,7 @@ func TestProcessNodeReadyRecovery(t *testing.T) {
 		},
 	}
 
-	h.ProcessNode("MODIFIED", node)
+	assert.NoError(t, h.ProcessNodeObject(node, false))
 }
 
 func TestProcessNodeNotReadyAlert(t *testing.T) {
@@ -184,7 +164,7 @@ func TestProcessNodeNotReadyAlert(t *testing.T) {
 		},
 	}
 
-	h.ProcessNode("ADDED", node)
+	assert.NoError(t, h.ProcessNodeObject(node, false))
 }
 
 func TestProcessNodeNotReadyWithIgnoredMessage(t *testing.T) {
@@ -213,7 +193,7 @@ func TestProcessNodeNotReadyWithIgnoredMessage(t *testing.T) {
 		},
 	}
 
-	h.ProcessNode("ADDED", node)
+	assert.NoError(t, h.ProcessNodeObject(node, false))
 }
 
 func TestProcessNodeAlreadyKnownNotReady(t *testing.T) {
@@ -242,7 +222,7 @@ func TestProcessNodeAlreadyKnownNotReady(t *testing.T) {
 		},
 	}
 
-	h.ProcessNode("MODIFIED", node)
+	assert.NoError(t, h.ProcessNodeObject(node, false))
 }
 
 func TestProcessPodWithPodIssues(t *testing.T) {
@@ -271,7 +251,7 @@ func TestProcessPodWithPodIssues(t *testing.T) {
 		},
 	}
 
-	h.ProcessPod("ADDED", pod)
+	assert.NoError(t, h.ProcessPodObject(pod, false))
 }
 
 func TestProcessPodWithContainersIssues(t *testing.T) {
@@ -315,7 +295,7 @@ func TestProcessPodWithContainersIssues(t *testing.T) {
 		},
 	}
 
-	h.ProcessPod("ADDED", pod)
+	assert.NoError(t, h.ProcessPodObject(pod, false))
 }
 
 func TestProcessPodIgnoredNamespace(t *testing.T) {
@@ -346,7 +326,7 @@ func TestProcessPodIgnoredNamespace(t *testing.T) {
 		},
 	}
 
-	h.ProcessPod("ADDED", pod)
+	assert.NoError(t, h.ProcessPodObject(pod, false))
 }
 
 func TestProcessPodIgnoredPodName(t *testing.T) {
@@ -377,7 +357,7 @@ func TestProcessPodIgnoredPodName(t *testing.T) {
 		},
 	}
 
-	h.ProcessPod("ADDED", pod)
+	assert.NoError(t, h.ProcessPodObject(pod, false))
 }
 
 func TestProcessPodIgnoredContainerName(t *testing.T) {
@@ -422,7 +402,7 @@ func TestProcessPodIgnoredContainerName(t *testing.T) {
 		},
 	}
 
-	h.ProcessPod("ADDED", pod)
+	assert.NoError(t, h.ProcessPodObject(pod, false))
 }
 
 func TestProcessPodSucceededPhase(t *testing.T) {
@@ -443,7 +423,7 @@ func TestProcessPodSucceededPhase(t *testing.T) {
 		},
 	}
 
-	h.ProcessPod("ADDED", pod)
+	assert.NoError(t, h.ProcessPodObject(pod, false))
 }
 
 func TestProcessPodCompletedStatus(t *testing.T) {
@@ -471,5 +451,5 @@ func TestProcessPodCompletedStatus(t *testing.T) {
 		},
 	}
 
-	h.ProcessPod("ADDED", pod)
+	assert.NoError(t, h.ProcessPodObject(pod, false))
 }

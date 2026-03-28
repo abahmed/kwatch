@@ -17,9 +17,6 @@ func DefaultConfig() *Config {
 		Upgrader: Upgrader{
 			DisableUpdateCheck: false,
 		},
-		Telemetry: Telemetry{
-			Enabled: false,
-		},
 		HealthCheck: HealthCheck{
 			Enabled: false,
 			Port:    8060,
