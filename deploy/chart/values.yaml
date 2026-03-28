@@ -44,8 +44,6 @@ podLabels: {}
 
 # kwatch configuration
 config:
-  # telemetry:
-  #   enabled: true  # Enable anonymous telemetry to help track kwatch usage
 
 
 

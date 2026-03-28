@@ -16,5 +16,3 @@ const (
 	DefaultLogs   = "No logs captured"
 	DefaultEvents = "No events captured"
 )
-
-const TelemetryAPIURL = "https://telemetry.kwatch.dev/api/v1/events"

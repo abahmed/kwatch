@@ -10,6 +10,7 @@ import (
 	"github.com/abahmed/kwatch/client"
 	"github.com/abahmed/kwatch/config"
 	"github.com/abahmed/kwatch/constant"
+	"github.com/abahmed/kwatch/controller"
 	"github.com/abahmed/kwatch/handler"
 	"github.com/abahmed/kwatch/health"
 	"github.com/abahmed/kwatch/pvcmonitor"
@@ -18,7 +19,6 @@ import (
 	"github.com/abahmed/kwatch/upgrader"
 	"github.com/abahmed/kwatch/util"
 	"github.com/abahmed/kwatch/version"
-	"github.com/abahmed/kwatch/watcher"
 	"github.com/sirupsen/logrus"
 )
 
@@ -36,7 +36,6 @@ func main() {
 	sm := startup.NewStartupManager(
 		k8sClient,
 		util.GetNamespace(),
-		&cfg.Telemetry,
 		cfg.Alert,
 		&cfg.App,
 	)
@@ -58,14 +57,24 @@ func main() {
 		sm.GetAlertManager(),
 	)
 
-	ctx := context.Background()
-	watcher.Start(ctx, k8sClient, cfg, h)
+	ctrl, cleanup := controller.New(k8sClient, cfg, h)
+	defer cleanup()
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	go func() {
+		if err := ctrl.Run(ctx, 1); err != nil {
+			logrus.Fatalf("controller error: %s", err.Error())
+		}
+	}()
 
 	sigCh := make(chan os.Signal, 1)
 	signal.Notify(sigCh, syscall.SIGINT, syscall.SIGTERM)
 	<-sigCh
 
 	logrus.Info("shutting down gracefully...")
+	cancel()
 	healthServer.Stop(context.Background())
 	os.Exit(0)
 }

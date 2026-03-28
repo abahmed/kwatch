@@ -3,25 +3,40 @@ package handler
 import (
 	"fmt"
 	"strings"
+
 	"github.com/sirupsen/logrus"
 	corev1 "k8s.io/api/core/v1"
-	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/apimachinery/pkg/api/errors"
 )
 
-func (h *handler) ProcessNode(eventType string, obj runtime.Object) {
-	if obj == nil {
-		return
+func (h *handler) ProcessNode(key string, deleted bool) error {
+	name := key
+
+	if deleted {
+		h.memory.DelNode(name)
+		return nil
 	}
 
-	node, ok := obj.(*corev1.Node)
-	if !ok {
-		logrus.Warnf("failed to cast event to node object: %v", obj)
-		return
+	node, err := h.nodeLister.Get(name)
+	if err != nil {
+		if errors.IsNotFound(err) {
+			h.memory.DelNode(name)
+			return nil
+		}
+		return fmt.Errorf("failed to get node %s from cache: %w", name, err)
 	}
 
-	if eventType == "DELETED" {
+	return h.ProcessNodeObject(node, false)
+}
+
+func (h *handler) ProcessNodeObject(node *corev1.Node, deleted bool) error {
+	if node == nil {
+		return nil
+	}
+
+	if deleted {
 		h.memory.DelNode(node.Name)
-		return
+		return nil
 	}
 
 	for _, c := range node.Status.Conditions {
@@ -32,14 +47,14 @@ func (h *handler) ProcessNode(eventType string, obj runtime.Object) {
 				for _, ignoreReason := range h.config.IgnoreNodeReasons {
 					if c.Reason == ignoreReason {
 						logrus.Debugf("Skipping Notify for node %s due to ignored reason: %s", node.Name, c.Reason)
-						return
+						return nil
 					}
 				}
 				// Skip alert if Message matches in IgnoreNodeMessages
 				for _, ignoreMessage := range h.config.IgnoreNodeMessages {
 					if strings.Contains(c.Message, ignoreMessage) {
 						logrus.Debugf("Skipping Notify for node %s due to ignored message: %s", node.Name, c.Message)
-						return
+						return nil
 					}
 				}
 				h.alertManager.Notify(fmt.Sprintf("Node %s is not ready: %s - %s",
@@ -53,5 +68,5 @@ func (h *handler) ProcessNode(eventType string, obj runtime.Object) {
 			}
 		}
 	}
-
+	return nil
 }
