@@ -36,6 +36,16 @@ spec:
             - name: health
               containerPort: {{ . }}
           {{- end }}
+          volumeMounts:
+          - name: config-volume
+            mountPath: /config
+          env:
+            - name: CONFIG_FILE
+              value: "/config/config.yaml"
+            - name: POD_NAMESPACE
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.namespace
           resources:
             {{- toYaml .Values.resources | nindent 12 }}
       {{- with .Values.nodeSelector }}
