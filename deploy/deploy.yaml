@@ -52,7 +52,7 @@ spec:
       serviceAccountName: kwatch
       containers:
       - name: kwatch
-        image: ghcr.io/abahmed/kwatch:v0.10.4
+        image: ghcr.io/abahmed/kwatch:v0.10.5
         imagePullPolicy: Always
         securityContext:
           runAsNonRoot: true
