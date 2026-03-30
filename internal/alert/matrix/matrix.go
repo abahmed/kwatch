@@ -2,6 +2,7 @@ package matrix
 
 import (
 	"bytes"
+	"encoding/json"
 	"fmt"
 	"io"
 	"net/http"
@@ -72,15 +73,24 @@ func (m *Matrix) SendEvent(e *event.Event) error {
 
 func (m *Matrix) sendAPI(formattedMsg string) error {
 	plainMsg := stripHtmlRegex(formattedMsg)
-	msg := fmt.Sprintf(`{
-		"msgtype": "m.text",
-		"format": "org.matrix.custom.html",
-		"body": "%s",
-		"formatted_body": "%s"
-	}`,
-		k8s.JsonEscape(plainMsg),
-		k8s.JsonEscape(formattedMsg),
-	)
+
+	payload := struct {
+		Msgtype       string `json:"msgtype"`
+		Format        string `json:"format"`
+		Body          string `json:"body"`
+		FormattedBody string `json:"formatted_body"`
+	}{
+		Msgtype:       "m.text",
+		Format:        "org.matrix.custom.html",
+		Body:          plainMsg,
+		FormattedBody: formattedMsg,
+	}
+
+	msgBytes, err := json.Marshal(payload)
+	if err != nil {
+		return err
+	}
+
 	request, err := http.NewRequest(
 		http.MethodPut,
 		fmt.Sprintf(
@@ -91,7 +101,7 @@ func (m *Matrix) sendAPI(formattedMsg string) error {
 			k8s.RandomString(24),
 			url.QueryEscape(m.accessToken),
 		),
-		bytes.NewBuffer([]byte(msg)),
+		bytes.NewBuffer(msgBytes),
 	)
 	if err != nil {
 		return err
