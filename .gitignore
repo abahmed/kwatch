@@ -8,7 +8,6 @@
 *.dll
 *.so
 *.dylib
-kwatch
 
 # Test binary, built with `go test -c`
 *.test
@@ -16,6 +15,7 @@ coverage.txt
 
 # Output of the go coverage tool, specifically when used with LiteIDE
 *.out
+_output/
 
 # Dependency directories (remove the comment below to include it)
 # vendor/
