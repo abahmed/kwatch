@@ -2,6 +2,7 @@ package startup
 
 import (
 	"context"
+	"fmt"
 
 	"github.com/abahmed/kwatch/internal/alert"
 	"github.com/abahmed/kwatch/internal/config"
@@ -52,7 +53,7 @@ func (s *StartupManager) HandleStartup(ctx context.Context) error {
 
 	if sendNotification {
 		s.alertManager.Notify(
-			constant.WelcomeMsg)
+			fmt.Sprintf(constant.WelcomeMsg, currentVersion))
 	}
 
 	if err := s.stateManager.MarkAsInitialized(ctx, clusterID, currentVersion); err != nil {
