@@ -18,6 +18,7 @@ func (h *handler) ProcessPod(key string, deleted bool) error {
 
 	if deleted {
 		h.memory.DelPod(namespace, name)
+		h.correlator.RemovePod(namespace, name)
 		return nil
 	}
 
@@ -40,6 +41,7 @@ func (h *handler) ProcessPodObject(pod *corev1.Pod, deleted bool) error {
 
 	if deleted {
 		h.memory.DelPod(pod.Namespace, pod.Name)
+		h.correlator.RemovePod(pod.Namespace, pod.Name)
 		return nil
 	}
 

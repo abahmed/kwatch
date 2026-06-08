@@ -150,6 +150,10 @@ func (m *Zenduty) buildMessage(e *event.Event) []byte {
 		logs,
 	)
 
-	str, _ := json.Marshal(payload)
+	str, err := json.Marshal(payload)
+	if err != nil {
+		klog.ErrorS(err, "failed to marshal zenduty payload")
+		return nil
+	}
 	return str
 }

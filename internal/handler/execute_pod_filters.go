@@ -4,6 +4,7 @@ import (
 	"github.com/abahmed/kwatch/internal/event"
 	"github.com/abahmed/kwatch/internal/filter"
 	"github.com/abahmed/kwatch/internal/k8s"
+	"github.com/abahmed/kwatch/internal/model"
 	"github.com/abahmed/kwatch/internal/storage"
 	"k8s.io/klog/v2"
 )
@@ -41,7 +42,12 @@ func (h *handler) executePodFilters(ctx *filter.Context) {
 
 	klog.InfoS("pod only issue", "pod", ctx.Pod.Name, "owner", ownerName, "reason", ctx.PodReason, "message", ctx.PodMsg)
 
-	h.alertManager.NotifyEvent(event.Event{
+	ownerKind := ""
+	if ctx.Owner != nil {
+		ownerKind = ctx.Owner.Kind
+	}
+
+	ev := event.Event{
 		PodName:       ctx.Pod.Name,
 		ContainerName: "",
 		Namespace:     ctx.Pod.Namespace,
@@ -50,5 +56,11 @@ func (h *handler) executePodFilters(ctx *filter.Context) {
 		Events:        k8s.GetPodEventsStr(ctx.Events),
 		Logs:          "",
 		Labels:        ctx.Pod.Labels,
-	})
+		OwnerKind:     ownerKind,
+	}
+
+	inc, action := h.correlator.Process(ev, ownerName)
+	if action != model.ActionSkip {
+		h.alertManager.NotifyIncident(inc, action)
+	}
 }

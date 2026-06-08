@@ -4,10 +4,13 @@ import (
 	"context"
 	"fmt"
 	"strings"
+	"sync"
+	"time"
 
 	"github.com/abahmed/kwatch/internal/config"
 	"github.com/abahmed/kwatch/internal/constant"
 	"github.com/abahmed/kwatch/internal/event"
+	"github.com/abahmed/kwatch/internal/model"
 
 	slackClient "github.com/slack-go/slack"
 	"k8s.io/klog/v2"
@@ -30,6 +33,13 @@ type Slack struct {
 	// token mode
 	token     string
 	apiClient *slackClient.Client
+
+	// thread support
+	threadMap map[string]string
+	mu        sync.Mutex
+
+	// overridable in tests
+	postBlocksFn func(blocks *slackClient.Blocks, threadTS string) (string, error)
 }
 
 // NewSlack returns new Slack instance
@@ -175,6 +185,224 @@ func (s *Slack) sendAPIWithToken(msg *slackClient.WebhookMessage) error {
 		opts...,
 	)
 	return err
+}
+
+// SendIncident implements alert.ThreadProvider.
+// In token mode it posts rich blocks and threads updates.
+// In webhook mode it falls back to SendMessage.
+func (s *Slack) SendIncident(inc *model.Incident, action model.IncidentAction) error {
+	if action == model.ActionSkip {
+		return nil
+	}
+	if s.postBlocksFn != nil || s.apiClient != nil {
+		return s.sendIncidentWithToken(inc, action)
+	}
+	return s.SendMessage(formatIncidentText(inc, action))
+}
+
+func (s *Slack) sendIncidentWithToken(inc *model.Incident, action model.IncidentAction) error {
+	key := inc.Key
+
+	post := s.postBlocks
+	if s.postBlocksFn != nil {
+		post = s.postBlocksFn
+	}
+
+	switch action {
+	case model.ActionCreate:
+		blocks := buildIncidentBlocks(inc, s.appCfg)
+		ts, err := post(blocks, "")
+		if err != nil {
+			return err
+		}
+		s.mu.Lock()
+		if s.threadMap == nil {
+			s.threadMap = make(map[string]string)
+		}
+		s.threadMap[key] = ts
+		s.mu.Unlock()
+		return nil
+
+	case model.ActionUpdate:
+		s.mu.Lock()
+		threadTS, ok := s.threadMap[key]
+		s.mu.Unlock()
+		if !ok {
+			threadTS = ""
+		}
+		blocks := buildIncidentUpdateBlocks(inc)
+		_, err := post(blocks, threadTS)
+		return err
+
+	case model.ActionStale:
+		s.mu.Lock()
+		threadTS, _ := s.threadMap[key]
+		s.mu.Unlock()
+		blocks := buildIncidentStaleBlocks(inc)
+		_, err := post(blocks, threadTS)
+		return err
+
+	case model.ActionResolved:
+		s.mu.Lock()
+		threadTS, _ := s.threadMap[key]
+		s.mu.Unlock()
+		blocks := buildIncidentResolvedBlocks(inc)
+		_, err := post(blocks, threadTS)
+		return err
+	}
+
+	return nil
+}
+
+func (s *Slack) postBlocks(blocks *slackClient.Blocks, threadTS string) (string, error) {
+	opts := []slackClient.MsgOption{
+		slackClient.MsgOptionBlocks(blocks.BlockSet...),
+		slackClient.MsgOptionAsUser(true),
+	}
+	if threadTS != "" {
+		opts = append(opts, slackClient.MsgOptionTS(threadTS))
+	}
+	_, ts, err := s.apiClient.PostMessageContext(
+		context.Background(),
+		s.channel,
+		opts...,
+	)
+	return ts, err
+}
+
+func buildIncidentBlocks(inc *model.Incident, appCfg *config.App) *slackClient.Blocks {
+	resources := make([]string, 0, len(inc.Resources))
+	for r := range inc.Resources {
+		resources = append(resources, r)
+	}
+	resourcesStr := strings.Join(resources, ", ")
+	if len(resourcesStr) > 200 {
+		resourcesStr = resourcesStr[:200] + "..."
+	}
+	duration := inc.LastSeen.Sub(inc.FirstSeen).Round(time.Minute)
+	hint := inc.Hint
+	if hint != "" {
+		hint = "\n💡 " + hint
+	}
+
+	title := "🚨 Incident"
+	text := constant.DefaultText
+
+	blocks := []slackClient.Block{
+		markdownSection(title),
+		plainSection(text),
+		slackClient.SectionBlock{
+			Type: "section",
+			Fields: []*slackClient.TextBlockObject{
+				markdownF("*Cluster*\n%s", appCfg.ClusterName),
+				markdownF("*Name*\n%s", inc.Name),
+				markdownF("*Kind*\n%s", inc.OwnerKind),
+				markdownF("*Namespace*\n%s", inc.Namespace),
+				markdownF("*Container*\n%s", inc.ContainerName),
+				markdownF("*Reason*\n%s", inc.Reason),
+				markdownF("*Restarts*\n%d", inc.RestartCount),
+				markdownF("*Count*\n%d", inc.Count),
+				markdownF("*Resources*\n%s", resourcesStr),
+				markdownF("*Duration*\n%s", duration),
+			},
+		},
+	}
+
+	if hint != "" {
+		blocks = append(blocks, markdownSection(hint))
+	}
+
+	return &slackClient.Blocks{
+		BlockSet: append(blocks, markdownSection(constant.Footer)),
+	}
+}
+
+func buildIncidentUpdateBlocks(inc *model.Incident) *slackClient.Blocks {
+	resources := make([]string, 0, len(inc.Resources))
+	for r := range inc.Resources {
+		resources = append(resources, r)
+	}
+	resourcesStr := strings.Join(resources, ", ")
+	if len(resourcesStr) > 200 {
+		resourcesStr = resourcesStr[:200] + "..."
+	}
+	duration := inc.LastSeen.Sub(inc.FirstSeen).Round(time.Minute)
+
+	text := fmt.Sprintf(
+		"🔄 Update — Count: %d | Restarts: %d | Resources: %s | Duration: %s",
+		inc.Count, inc.RestartCount, resourcesStr, duration,
+	)
+
+	return &slackClient.Blocks{
+		BlockSet: []slackClient.Block{
+			markdownSection(text),
+		},
+	}
+}
+
+func buildIncidentStaleBlocks(inc *model.Incident) *slackClient.Blocks {
+	duration := inc.LastSeen.Sub(inc.FirstSeen).Round(time.Minute)
+
+	text := fmt.Sprintf(
+		"⚠️ *Stale* — No new events\nLast seen: %s | Count: %d | Duration: %s",
+		inc.LastSeen.Format("15:04:05"), inc.Count, duration,
+	)
+
+	return &slackClient.Blocks{
+		BlockSet: []slackClient.Block{
+			markdownSection(text),
+		},
+	}
+}
+
+func buildIncidentResolvedBlocks(inc *model.Incident) *slackClient.Blocks {
+	duration := inc.LastSeen.Sub(inc.FirstSeen).Round(time.Minute)
+
+	text := fmt.Sprintf(
+		"✅ *Resolved* — All pods recovered\nDuration: %s | Total events: %d",
+		duration, inc.Count,
+	)
+
+	return &slackClient.Blocks{
+		BlockSet: []slackClient.Block{
+			markdownSection(text),
+		},
+	}
+}
+
+func formatIncidentText(inc *model.Incident, action model.IncidentAction) string {
+	switch action {
+	case model.ActionCreate:
+		resources := len(inc.Resources)
+		duration := inc.LastSeen.Sub(inc.FirstSeen).Round(time.Minute)
+		return fmt.Sprintf(
+			"🚨 Incident: %s (%s)\nNamespace: %s\nContainer: %s\nReason: %s\nRestarts: %d\nHint: %s\nAffected: %d resource(s)\nCount: %d\nDuration: %s",
+			inc.Name, inc.OwnerKind, inc.Namespace, inc.ContainerName,
+			inc.Reason, inc.RestartCount, inc.Hint,
+			resources, inc.Count, duration,
+		)
+	case model.ActionUpdate:
+		resources := len(inc.Resources)
+		duration := inc.LastSeen.Sub(inc.FirstSeen).Round(time.Minute)
+		return fmt.Sprintf(
+			"🔄 Update: %s | Count: %d | Duration: %s | Affected: %d",
+			inc.Name, inc.Count, duration, resources,
+		)
+	case model.ActionStale:
+		duration := inc.LastSeen.Sub(inc.FirstSeen).Round(time.Minute)
+		return fmt.Sprintf(
+			"⚠️ Stale: %s | Last seen: %s | Count: %d | Duration: %s",
+			inc.Name, inc.LastSeen.Format("15:04:05"), inc.Count, duration,
+		)
+	case model.ActionResolved:
+		duration := inc.LastSeen.Sub(inc.FirstSeen).Round(time.Minute)
+		return fmt.Sprintf(
+			"✅ Resolved: %s | Duration: %s | Total events: %d",
+			inc.Name, duration, inc.Count,
+		)
+	default:
+		return ""
+	}
 }
 
 func chunks(s string, chunkSize int) []string {

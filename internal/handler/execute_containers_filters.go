@@ -6,6 +6,7 @@ import (
 	"github.com/abahmed/kwatch/internal/event"
 	"github.com/abahmed/kwatch/internal/filter"
 	"github.com/abahmed/kwatch/internal/k8s"
+	"github.com/abahmed/kwatch/internal/model"
 	"github.com/abahmed/kwatch/internal/storage"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/klog/v2"
@@ -63,7 +64,12 @@ func (h *handler) executeContainersFilters(ctx *filter.Context) {
 				"message", ctx.Container.Msg,
 				"exitCode", ctx.Container.ExitCode)
 
-			h.alertManager.NotifyEvent(event.Event{
+			ownerKind := ""
+			if ctx.Owner != nil {
+				ownerKind = ctx.Owner.Kind
+			}
+
+			ev := event.Event{
 				PodName:       ctx.Pod.Name,
 				ContainerName: ctx.Container.Container.Name,
 				Namespace:     ctx.Pod.Namespace,
@@ -72,7 +78,14 @@ func (h *handler) executeContainersFilters(ctx *filter.Context) {
 				Events:        k8s.GetPodEventsStr(ctx.Events),
 				Logs:          ctx.Container.Logs,
 				Labels:        ctx.Pod.Labels,
-			})
+				OwnerKind:     ownerKind,
+				RestartCount:  int(ctx.Container.Container.RestartCount),
+			}
+
+			inc, action := h.correlator.Process(ev, ownerName)
+			if action != model.ActionSkip {
+				h.alertManager.NotifyIncident(inc, action)
+			}
 		}
 	}
 }

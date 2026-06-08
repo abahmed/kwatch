@@ -53,8 +53,11 @@ func (r *FeiShu) Name() string {
 
 // SendEvent sends event to the provider
 func (r *FeiShu) SendEvent(e *event.Event) error {
-	formattedMsg := e.FormatMarkdown(r.appCfg.ClusterName, "", "")
-	return r.sendByFeiShuApi(r.buildRequestBodyFeiShu(formattedMsg))
+	body, err := r.buildRequestBodyFeiShu(e.FormatMarkdown(r.appCfg.ClusterName, "", ""))
+	if err != nil {
+		return err
+	}
+	return r.sendByFeiShuApi(body)
 }
 
 func (r *FeiShu) sendByFeiShuApi(reqBody string) error {
@@ -86,21 +89,28 @@ func (r *FeiShu) sendByFeiShuApi(reqBody string) error {
 
 // SendMessage sends text message to the provider
 func (r *FeiShu) SendMessage(msg string) error {
-	return r.sendByFeiShuApi(r.buildRequestBodyFeiShu(msg))
+	body, err := r.buildRequestBodyFeiShu(msg)
+	if err != nil {
+		return err
+	}
+	return r.sendByFeiShuApi(body)
 }
 
 func (r *FeiShu) buildRequestBodyFeiShu(
-	text string) string {
+	text string) (string, error) {
 	var content = []feiShuWebhookContent{
 		{
 			Tag:     "markdown",
 			Content: text,
 		},
 	}
-	jsonBytes, _ := json.Marshal(content)
+	jsonBytes, err := json.Marshal(content)
+	if err != nil {
+		return "", fmt.Errorf("failed to marshal feishu content: %w", err)
+	}
 
 	body := "{\"msg_type\": \"interactive\",\"card\": {\"config\": {\"wide_screen_mode\": true},\"header\": {\"title\": {\"tag\": \"plain_text\",\"content\": \"" +
 		r.title +
 		"\"},\"template\": \"blue\"},\"elements\": " + string(jsonBytes) + "}}"
-	return body
+	return body, nil
 }

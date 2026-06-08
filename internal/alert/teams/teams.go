@@ -223,7 +223,11 @@ func (t *Teams) buildRequestBodyTeams(e *event.Event) []byte {
 		Attachment: attachments, // Attachment should be an array
 	}
 
-	jsonBytes, _ := json.Marshal(payload)
+	jsonBytes, err := json.Marshal(payload)
+	if err != nil {
+		klog.ErrorS(err, "failed to marshal teams event payload")
+		return nil
+	}
 
 	return jsonBytes
 }
@@ -238,7 +242,11 @@ func (t *Teams) buildRequestBodyMessage(msg string) []byte {
 		Attachment: []map[string]interface{}{},
 	}
 
-	jsonBytes, _ := json.Marshal(payload)
+	jsonBytes, err := json.Marshal(payload)
+	if err != nil {
+		klog.ErrorS(err, "failed to marshal teams message payload")
+		return nil
+	}
 
 	return jsonBytes
 }

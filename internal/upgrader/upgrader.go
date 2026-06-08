@@ -66,7 +66,7 @@ func (u *Upgrader) SetStateManager(stateMgr VersionTracker) {
 	u.stateManager = stateMgr
 }
 
-func (u *Upgrader) CheckUpdates() {
+func (u *Upgrader) CheckUpdates(ctx context.Context) {
 	if u.config.DisableUpdateCheck ||
 		version.Short() == "dev" {
 		return
@@ -77,8 +77,14 @@ func (u *Upgrader) CheckUpdates() {
 	ticker := time.NewTicker(24 * time.Hour)
 	defer ticker.Stop()
 
-	for range ticker.C {
-		u.checkRelease()
+	for {
+		select {
+		case <-ctx.Done():
+			klog.InfoS("upgrader stopped")
+			return
+		case <-ticker.C:
+			u.checkRelease()
+		}
 	}
 }
 

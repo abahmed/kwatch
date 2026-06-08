@@ -1,6 +1,7 @@
 package pvc
 
 import (
+	"context"
 	"sync"
 	"time"
 
@@ -30,7 +31,7 @@ func NewPvcMonitor(
 	}
 }
 
-func (p *PvcMonitor) Start() {
+func (p *PvcMonitor) Start(ctx context.Context) {
 	if !p.config.Enabled {
 		return
 	}
@@ -44,6 +45,9 @@ func (p *PvcMonitor) Start() {
 
 	for {
 		select {
+		case <-ctx.Done():
+			klog.InfoS("pvc monitor stopped")
+			return
 		case <-ticker.C:
 			p.checkUsage()
 		case <-cleanupTicker.C:

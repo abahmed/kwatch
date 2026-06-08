@@ -3,9 +3,11 @@ package handler
 import (
 	"regexp"
 	"testing"
+	"time"
 
 	"github.com/abahmed/kwatch/internal/alert"
 	"github.com/abahmed/kwatch/internal/config"
+	"github.com/abahmed/kwatch/internal/correlation"
 	"github.com/abahmed/kwatch/internal/storage"
 	"github.com/abahmed/kwatch/internal/storage/memory"
 	"github.com/stretchr/testify/assert"
@@ -14,13 +16,20 @@ import (
 	"k8s.io/client-go/kubernetes/fake"
 )
 
+func testCorrelator() *correlation.Engine {
+	return correlation.NewEngine(correlation.Config{
+		Window:   10 * time.Minute,
+		Cooldown: 5 * time.Minute,
+	})
+}
+
 func TestNewHandler(t *testing.T) {
 	client := fake.NewSimpleClientset()
 	cfg := &config.Config{}
 	mem := memory.NewMemory()
 	alertMgr := &alert.AlertManager{}
 
-	h := NewHandler(client, cfg, mem, alertMgr)
+	h := NewHandler(client, cfg, mem, testCorrelator(), alertMgr)
 	assert.NotNil(t, h)
 }
 
@@ -30,7 +39,7 @@ func TestProcessPodNilObject(t *testing.T) {
 	mem := memory.NewMemory()
 	alertMgr := &alert.AlertManager{}
 
-	h := NewHandler(client, cfg, mem, alertMgr)
+	h := NewHandler(client, cfg, mem, testCorrelator(), alertMgr)
 	assert.NoError(t, h.ProcessPodObject(nil, false))
 }
 
@@ -40,7 +49,7 @@ func TestProcessPodDeleted(t *testing.T) {
 	mem := memory.NewMemory()
 	alertMgr := &alert.AlertManager{}
 
-	h := NewHandler(client, cfg, mem, alertMgr)
+	h := NewHandler(client, cfg, mem, testCorrelator(), alertMgr)
 
 	pod := &corev1.Pod{
 		ObjectMeta: metav1.ObjectMeta{
@@ -60,7 +69,7 @@ func TestProcessNodeNilObject(t *testing.T) {
 	mem := memory.NewMemory()
 	alertMgr := &alert.AlertManager{}
 
-	h := NewHandler(client, cfg, mem, alertMgr)
+	h := NewHandler(client, cfg, mem, testCorrelator(), alertMgr)
 	assert.NoError(t, h.ProcessNodeObject(nil, false))
 }
 
@@ -70,7 +79,7 @@ func TestProcessNodeDeleted(t *testing.T) {
 	mem := memory.NewMemory()
 	alertMgr := &alert.AlertManager{}
 
-	h := NewHandler(client, cfg, mem, alertMgr)
+	h := NewHandler(client, cfg, mem, testCorrelator(), alertMgr)
 
 	node := &corev1.Node{
 		ObjectMeta: metav1.ObjectMeta{
@@ -91,7 +100,7 @@ func TestProcessNodeNotReadyNoAlert(t *testing.T) {
 	mem := memory.NewMemory()
 	alertMgr := &alert.AlertManager{}
 
-	h := NewHandler(client, cfg, mem, alertMgr)
+	h := NewHandler(client, cfg, mem, testCorrelator(), alertMgr)
 
 	node := &corev1.Node{
 		ObjectMeta: metav1.ObjectMeta{
@@ -120,7 +129,7 @@ func TestProcessNodeReadyRecovery(t *testing.T) {
 
 	mem.AddNode("test-node")
 
-	h := NewHandler(client, cfg, mem, alertMgr)
+	h := NewHandler(client, cfg, mem, testCorrelator(), alertMgr)
 
 	node := &corev1.Node{
 		ObjectMeta: metav1.ObjectMeta{
@@ -146,7 +155,7 @@ func TestProcessNodeNotReadyAlert(t *testing.T) {
 	mem := memory.NewMemory()
 	alertMgr := &alert.AlertManager{}
 
-	h := NewHandler(client, cfg, mem, alertMgr)
+	h := NewHandler(client, cfg, mem, testCorrelator(), alertMgr)
 
 	node := &corev1.Node{
 		ObjectMeta: metav1.ObjectMeta{
@@ -175,7 +184,7 @@ func TestProcessNodeNotReadyWithIgnoredMessage(t *testing.T) {
 	mem := memory.NewMemory()
 	alertMgr := &alert.AlertManager{}
 
-	h := NewHandler(client, cfg, mem, alertMgr)
+	h := NewHandler(client, cfg, mem, testCorrelator(), alertMgr)
 
 	node := &corev1.Node{
 		ObjectMeta: metav1.ObjectMeta{
@@ -204,7 +213,7 @@ func TestProcessNodeAlreadyKnownNotReady(t *testing.T) {
 
 	mem.AddNode("test-node")
 
-	h := NewHandler(client, cfg, mem, alertMgr)
+	h := NewHandler(client, cfg, mem, testCorrelator(), alertMgr)
 
 	node := &corev1.Node{
 		ObjectMeta: metav1.ObjectMeta{
@@ -231,7 +240,7 @@ func TestProcessPodWithPodIssues(t *testing.T) {
 	mem := memory.NewMemory()
 	alertMgr := &alert.AlertManager{}
 
-	h := NewHandler(client, cfg, mem, alertMgr)
+	h := NewHandler(client, cfg, mem, testCorrelator(), alertMgr)
 
 	pod := &corev1.Pod{
 		ObjectMeta: metav1.ObjectMeta{
@@ -262,7 +271,7 @@ func TestProcessPodWithContainersIssues(t *testing.T) {
 	mem := memory.NewMemory()
 	alertMgr := &alert.AlertManager{}
 
-	h := NewHandler(client, cfg, mem, alertMgr)
+	h := NewHandler(client, cfg, mem, testCorrelator(), alertMgr)
 
 	pod := &corev1.Pod{
 		ObjectMeta: metav1.ObjectMeta{
@@ -306,7 +315,7 @@ func TestProcessPodIgnoredNamespace(t *testing.T) {
 	mem := memory.NewMemory()
 	alertMgr := &alert.AlertManager{}
 
-	h := NewHandler(client, cfg, mem, alertMgr)
+	h := NewHandler(client, cfg, mem, testCorrelator(), alertMgr)
 
 	pod := &corev1.Pod{
 		ObjectMeta: metav1.ObjectMeta{
@@ -337,7 +346,7 @@ func TestProcessPodIgnoredPodName(t *testing.T) {
 	mem := memory.NewMemory()
 	alertMgr := &alert.AlertManager{}
 
-	h := NewHandler(client, cfg, mem, alertMgr)
+	h := NewHandler(client, cfg, mem, testCorrelator(), alertMgr)
 
 	pod := &corev1.Pod{
 		ObjectMeta: metav1.ObjectMeta{
@@ -369,7 +378,7 @@ func TestProcessPodIgnoredContainerName(t *testing.T) {
 	mem := memory.NewMemory()
 	alertMgr := &alert.AlertManager{}
 
-	h := NewHandler(client, cfg, mem, alertMgr)
+	h := NewHandler(client, cfg, mem, testCorrelator(), alertMgr)
 
 	pod := &corev1.Pod{
 		ObjectMeta: metav1.ObjectMeta{
@@ -411,7 +420,7 @@ func TestProcessPodSucceededPhase(t *testing.T) {
 	mem := memory.NewMemory()
 	alertMgr := &alert.AlertManager{}
 
-	h := NewHandler(client, cfg, mem, alertMgr)
+	h := NewHandler(client, cfg, mem, testCorrelator(), alertMgr)
 
 	pod := &corev1.Pod{
 		ObjectMeta: metav1.ObjectMeta{
@@ -432,7 +441,7 @@ func TestProcessPodCompletedStatus(t *testing.T) {
 	mem := memory.NewMemory()
 	alertMgr := &alert.AlertManager{}
 
-	h := NewHandler(client, cfg, mem, alertMgr)
+	h := NewHandler(client, cfg, mem, testCorrelator(), alertMgr)
 
 	pod := &corev1.Pod{
 		ObjectMeta: metav1.ObjectMeta{

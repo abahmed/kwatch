@@ -49,7 +49,11 @@ func NewWebhook(config map[string]interface{}, appCfg *config.App) *Webhook {
 		headerArray, ok := rawHeaders.([]interface{})
 		if ok {
 			for _, header := range headerArray {
-				headerJson, _ := json.Marshal(header)
+				headerJson, err := json.Marshal(header)
+				if err != nil {
+					klog.InfoS("skipping invalid header", "error", err)
+					continue
+				}
 				var k KeyValue
 				json.Unmarshal(headerJson, &k)
 				headers = append(headers, k)
@@ -58,7 +62,11 @@ func NewWebhook(config map[string]interface{}, appCfg *config.App) *Webhook {
 	}
 
 	basicAuth, ok := config["basicAuth"]
-	basicAuthJson, _ := json.Marshal(basicAuth)
+	basicAuthJson, err := json.Marshal(basicAuth)
+	if err != nil {
+		klog.InfoS("invalid basic auth config", "error", err)
+		basicAuthJson = []byte("{}")
+	}
 
 	var a Authentication
 	json.Unmarshal(basicAuthJson, &a)
@@ -134,7 +142,7 @@ func (w *Webhook) buildRequestBody(
 		logsText = k8s.JsonEscape(ev.Logs)
 	}
 
-	postBody, _ := json.Marshal(map[string]interface{}{
+	postBody, err := json.Marshal(map[string]interface{}{
 		"Cluster":   w.appCfg.ClusterName,
 		"Name":      ev.PodName,
 		"Container": ev.ContainerName,
@@ -145,6 +153,9 @@ func (w *Webhook) buildRequestBody(
 		"Logs":      logsText,
 		"Labels":    ev.Labels,
 	})
+	if err != nil {
+		return nil
+	}
 
 	return postBody
 }

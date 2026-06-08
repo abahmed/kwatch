@@ -1,0 +1,202 @@
+package correlation
+
+import (
+	"context"
+	"strconv"
+	"strings"
+	"sync"
+	"time"
+
+	"github.com/abahmed/kwatch/internal/enricher"
+	"github.com/abahmed/kwatch/internal/event"
+	"github.com/abahmed/kwatch/internal/model"
+	"k8s.io/klog/v2"
+)
+
+type Config struct {
+	Window            time.Duration
+	Cooldown          time.Duration
+	StaleThreshold    time.Duration
+	LifecycleInterval time.Duration
+	Enricher          enricher.Enricher
+	LifecycleHook     func(inc *model.Incident, action model.IncidentAction)
+}
+
+type Engine struct {
+	mu     sync.Mutex
+	state  map[string]*model.Incident
+	config Config
+}
+
+func NewEngine(cfg Config) *Engine {
+	if cfg.Enricher == nil {
+		cfg.Enricher = &enricher.DefaultEnricher{}
+	}
+	if cfg.LifecycleInterval <= 0 {
+		cfg.LifecycleInterval = 1 * time.Minute
+	}
+	return &Engine{
+		state:  make(map[string]*model.Incident),
+		config: cfg,
+	}
+}
+
+func normalizeReason(reason string) string {
+	idx := strings.LastIndex(reason, " ")
+	if idx > 0 {
+		if _, err := strconv.Atoi(reason[idx+1:]); err == nil {
+			return reason[:idx]
+		}
+	}
+	return reason
+}
+
+func (e *Engine) Process(ev event.Event, owner string) (*model.Incident, model.IncidentAction) {
+	e.mu.Lock()
+	defer e.mu.Unlock()
+
+	r := normalizeReason(ev.Reason)
+	key := ev.Namespace + ":" + owner + ":" + r + ":" + ev.ContainerName
+	now := time.Now()
+
+	if inc, ok := e.state[key]; ok {
+		if now.Before(inc.LastSeen.Add(e.config.Cooldown)) {
+			return inc, model.ActionSkip
+		}
+		inc.Count++
+		inc.LastSeen = now
+		inc.State = model.StateActive
+		inc.LastUpdate = now
+		if ev.PodName != "" {
+			inc.Resources[ev.PodName] = true
+		}
+		e.config.Enricher.Enrich(&ev, inc)
+		return inc, model.ActionUpdate
+	}
+
+	inc := &model.Incident{
+		Key:       key,
+		Reason:    ev.Reason,
+		Namespace: ev.Namespace,
+		Resource:  "pod",
+		Name:      owner,
+		Count:     1,
+		FirstSeen: now,
+		LastSeen:  now,
+		LastUpdate: now,
+		State:     model.StateActive,
+		Resources: map[string]bool{},
+	}
+	if ev.PodName != "" {
+		inc.Resources[ev.PodName] = true
+	}
+	e.config.Enricher.Enrich(&ev, inc)
+	e.state[key] = inc
+	return inc, model.ActionCreate
+}
+
+func (e *Engine) MarkResolved(key string) {
+	e.mu.Lock()
+	inc, ok := e.state[key]
+	if !ok {
+		e.mu.Unlock()
+		return
+	}
+	inc.State = model.StateResolved
+	e.mu.Unlock()
+
+	if hook := e.config.LifecycleHook; hook != nil {
+		hook(inc, model.ActionResolved)
+	}
+}
+
+func (e *Engine) RemovePod(namespace, podName string) {
+	type transition struct {
+		inc    *model.Incident
+		action model.IncidentAction
+	}
+	var pending []transition
+
+	e.mu.Lock()
+	for _, inc := range e.state {
+		if inc.Namespace != namespace {
+			continue
+		}
+		if !inc.Resources[podName] {
+			continue
+		}
+		delete(inc.Resources, podName)
+		if len(inc.Resources) == 0 && inc.State != model.StateResolved && inc.State != model.StateStale {
+			inc.State = model.StateResolved
+			pending = append(pending, transition{inc, model.ActionResolved})
+		}
+		break
+	}
+	e.mu.Unlock()
+
+	for _, t := range pending {
+		if hook := e.config.LifecycleHook; hook != nil {
+			hook(t.inc, t.action)
+		}
+	}
+}
+
+func (e *Engine) StartCleanup(ctx context.Context) {
+	cleanupInterval := e.config.Window / 2
+	if cleanupInterval < 30*time.Second {
+		cleanupInterval = 30 * time.Second
+	}
+	cleanupTicker := time.NewTicker(cleanupInterval)
+	defer cleanupTicker.Stop()
+
+	lifecycleTicker := time.NewTicker(e.config.LifecycleInterval)
+	defer lifecycleTicker.Stop()
+
+	for {
+		select {
+		case <-ctx.Done():
+			klog.InfoS("correlation cleanup stopped")
+			return
+		case <-cleanupTicker.C:
+			e.cleanup()
+		case <-lifecycleTicker.C:
+			e.checkLifecycle()
+		}
+	}
+}
+
+func (e *Engine) cleanup() {
+	e.mu.Lock()
+	defer e.mu.Unlock()
+
+	now := time.Now()
+	for key, inc := range e.state {
+		if now.After(inc.LastSeen.Add(e.config.Window)) {
+			delete(e.state, key)
+		}
+	}
+}
+
+func (e *Engine) checkLifecycle() {
+	type transition struct {
+		inc    *model.Incident
+		action model.IncidentAction
+	}
+	var pending []transition
+
+	e.mu.Lock()
+	now := time.Now()
+	for _, inc := range e.state {
+		if inc.State == model.StateActive && now.After(inc.LastUpdate.Add(e.config.StaleThreshold)) {
+			inc.State = model.StateStale
+			pending = append(pending, transition{inc, model.ActionStale})
+		}
+	}
+	e.mu.Unlock()
+
+	for _, t := range pending {
+		if hook := e.config.LifecycleHook; hook != nil {
+			hook(t.inc, t.action)
+		}
+	}
+}

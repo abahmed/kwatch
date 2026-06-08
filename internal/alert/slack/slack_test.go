@@ -2,9 +2,11 @@ package slack
 
 import (
 	"testing"
+	"time"
 
 	"github.com/abahmed/kwatch/internal/config"
 	"github.com/abahmed/kwatch/internal/event"
+	"github.com/abahmed/kwatch/internal/model"
 	slackClient "github.com/slack-go/slack"
 	"github.com/stretchr/testify/assert"
 )
@@ -215,4 +217,206 @@ func TestPlainSection(t *testing.T) {
 func TestMarkdownF(t *testing.T) {
 	obj := markdownF("*%s*", "test")
 	assert.NotNil(t, obj)
+}
+
+func testIncident() *model.Incident {
+	return &model.Incident{
+		Key:       "default:deploy-1:CrashLoopBackOff",
+		Name:      "deploy-1",
+		Namespace: "default",
+		Reason:    "CrashLoopBackOff",
+		Resource:  "pod",
+		Count:     1,
+		FirstSeen: time.Now().Add(-5 * time.Minute),
+		LastSeen:  time.Now(),
+		Resources: map[string]bool{"pod-1": true, "pod-2": true},
+	}
+}
+
+// --- SendIncident: webhook fallback ---
+
+func TestSendIncidentWebhookCreate(t *testing.T) {
+	assert := assert.New(t)
+
+	s := NewSlack(map[string]interface{}{
+		"webhook": "testtest",
+	}, &config.App{ClusterName: "dev"})
+	assert.NotNil(s)
+
+	var lastMsg string
+	s.send = func(_ string, msg *slackClient.WebhookMessage) error {
+		lastMsg = msg.Text
+		return nil
+	}
+
+	err := s.SendIncident(testIncident(), model.ActionCreate)
+	assert.Nil(err)
+	assert.Contains(lastMsg, "Incident")
+	assert.Contains(lastMsg, "deploy-1")
+	assert.Contains(lastMsg, "CrashLoopBackOff")
+}
+
+func TestSendIncidentWebhookUpdate(t *testing.T) {
+	assert := assert.New(t)
+
+	s := NewSlack(map[string]interface{}{
+		"webhook": "testtest",
+	}, &config.App{ClusterName: "dev"})
+	assert.NotNil(s)
+
+	var lastMsg string
+	s.send = func(_ string, msg *slackClient.WebhookMessage) error {
+		lastMsg = msg.Text
+		return nil
+	}
+
+	err := s.SendIncident(testIncident(), model.ActionUpdate)
+	assert.Nil(err)
+	assert.Contains(lastMsg, "Update")
+}
+
+func TestSendIncidentWebhookSkip(t *testing.T) {
+	assert := assert.New(t)
+
+	s := NewSlack(map[string]interface{}{
+		"webhook": "testtest",
+	}, &config.App{ClusterName: "dev"})
+	assert.NotNil(s)
+
+	called := false
+	s.send = func(_ string, _ *slackClient.WebhookMessage) error {
+		called = true
+		return nil
+	}
+
+	err := s.SendIncident(testIncident(), model.ActionSkip)
+	assert.Nil(err)
+	assert.False(called)
+}
+
+// --- SendIncident: token mode with mocked postBlocksFn ---
+
+func TestSendIncidentTokenCreate(t *testing.T) {
+	assert := assert.New(t)
+
+	s := &Slack{
+		channel: "#alerts",
+		appCfg:  &config.App{ClusterName: "dev"},
+	}
+
+	var capturedBlocks *slackClient.Blocks
+	var capturedThreadTS string
+	s.postBlocksFn = func(blocks *slackClient.Blocks, threadTS string) (string, error) {
+		capturedBlocks = blocks
+		capturedThreadTS = threadTS
+		return "12345.67890", nil
+	}
+
+	err := s.SendIncident(testIncident(), model.ActionCreate)
+	assert.Nil(err)
+	assert.NotNil(capturedBlocks)
+	assert.Empty(capturedThreadTS)
+
+	// verify threadMap was populated
+	s.mu.Lock()
+	ts, ok := s.threadMap["default:deploy-1:CrashLoopBackOff"]
+	s.mu.Unlock()
+	assert.True(ok)
+	assert.Equal("12345.67890", ts)
+}
+
+func TestSendIncidentTokenUpdate(t *testing.T) {
+	assert := assert.New(t)
+
+	s := &Slack{
+		channel:   "#alerts",
+		appCfg:    &config.App{ClusterName: "dev"},
+		threadMap: map[string]string{"default:deploy-1:CrashLoopBackOff": "12345.67890"},
+	}
+
+	var capturedBlocks *slackClient.Blocks
+	var capturedThreadTS string
+	s.postBlocksFn = func(blocks *slackClient.Blocks, threadTS string) (string, error) {
+		capturedBlocks = blocks
+		capturedThreadTS = threadTS
+		return "12345.67891", nil
+	}
+
+	err := s.SendIncident(testIncident(), model.ActionUpdate)
+	assert.Nil(err)
+	assert.NotNil(capturedBlocks)
+	assert.Equal("12345.67890", capturedThreadTS)
+}
+
+func TestSendIncidentTokenUpdateNoThread(t *testing.T) {
+	assert := assert.New(t)
+
+	s := &Slack{
+		channel: "#alerts",
+		appCfg:  &config.App{ClusterName: "dev"},
+		// no threadMap set — first update should still work (no thread)
+	}
+
+	var capturedThreadTS string
+	s.postBlocksFn = func(_ *slackClient.Blocks, threadTS string) (string, error) {
+		capturedThreadTS = threadTS
+		return "12345.67890", nil
+	}
+
+	err := s.SendIncident(testIncident(), model.ActionUpdate)
+	assert.Nil(err)
+	assert.Empty(capturedThreadTS)
+}
+
+func TestSendIncidentTokenSkip(t *testing.T) {
+	assert := assert.New(t)
+
+	s := &Slack{
+		channel: "#alerts",
+		appCfg:  &config.App{ClusterName: "dev"},
+	}
+
+	called := false
+	s.postBlocksFn = func(_ *slackClient.Blocks, _ string) (string, error) {
+		called = true
+		return "", nil
+	}
+
+	err := s.SendIncident(testIncident(), model.ActionSkip)
+	assert.Nil(err)
+	assert.False(called)
+}
+
+// --- buildIncidentBlocks ---
+
+func TestBuildIncidentBlocks(t *testing.T) {
+	assert := assert.New(t)
+
+	inc := testIncident()
+	blocks := buildIncidentBlocks(inc, &config.App{ClusterName: "prod-cluster"})
+
+	assert.NotNil(blocks)
+	assert.Greater(len(blocks.BlockSet), 0)
+}
+
+func TestBuildIncidentUpdateBlocks(t *testing.T) {
+	assert := assert.New(t)
+
+	inc := testIncident()
+	blocks := buildIncidentUpdateBlocks(inc)
+
+	assert.NotNil(blocks)
+	assert.Equal(1, len(blocks.BlockSet))
+}
+
+func TestFormatIncidentText(t *testing.T) {
+	assert := assert.New(t)
+
+	inc := testIncident()
+	text := formatIncidentText(inc, model.ActionCreate)
+	assert.Contains(text, "Incident")
+	assert.Contains(text, "deploy-1")
+
+	textUpdate := formatIncidentText(inc, model.ActionUpdate)
+	assert.Contains(textUpdate, "Update")
 }

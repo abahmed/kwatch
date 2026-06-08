@@ -46,7 +46,7 @@ func NewDingTalk(config map[string]interface{}, appCfg *config.App) *DingTalk {
 		return nil
 	}
 
-	klog.InfoS("initializing dingtalk with access token", "accessToken", accessToken)
+	klog.InfoS("initializing dingtalk with access token")
 
 	title, _ := config["title"].(string)
 	secret, _ := config["secret"].(string)
