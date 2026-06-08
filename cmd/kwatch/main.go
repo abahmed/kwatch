@@ -6,14 +6,17 @@ import (
 	"os"
 	"os/signal"
 	"syscall"
+	"time"
 
 	"github.com/abahmed/kwatch/internal/client"
 	"github.com/abahmed/kwatch/internal/config"
 	"github.com/abahmed/kwatch/internal/constant"
 	"github.com/abahmed/kwatch/internal/controller"
+	"github.com/abahmed/kwatch/internal/correlation"
 	"github.com/abahmed/kwatch/internal/handler"
 	"github.com/abahmed/kwatch/internal/health"
 	"github.com/abahmed/kwatch/internal/k8s"
+	"github.com/abahmed/kwatch/internal/model"
 	"github.com/abahmed/kwatch/internal/pvc"
 	"github.com/abahmed/kwatch/internal/startup"
 	"github.com/abahmed/kwatch/internal/storage/memory"
@@ -23,6 +26,9 @@ import (
 )
 
 func main() {
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
 	cfg, err := config.LoadConfig()
 	if err != nil {
 		klog.ErrorS(err, "failed to load config")
@@ -39,29 +45,42 @@ func main() {
 		cfg.Alert,
 		&cfg.App,
 	)
-	sm.HandleStartup(context.Background())
+	sm.HandleStartup(ctx)
 
 	healthServer := health.NewHealthServer(cfg.HealthCheck)
-	healthServer.Start(context.Background())
+	healthServer.Start(ctx)
 
-	up := upgrader.NewUpgrader(&cfg.Upgrader, sm.GetAlertManager(), sm.GetStateManager())
-	go up.CheckUpdates()
+	alertManager := sm.GetAlertManager()
 
-	pvcMonitor := pvc.NewPvcMonitor(k8sClient, &cfg.PvcMonitor, sm.GetAlertManager())
-	go pvcMonitor.Start()
+	up := upgrader.NewUpgrader(&cfg.Upgrader, alertManager, sm.GetStateManager())
+	go up.CheckUpdates(ctx)
+
+	pvcMonitor := pvc.NewPvcMonitor(k8sClient, &cfg.PvcMonitor, alertManager)
+	go pvcMonitor.Start(ctx)
+
+	correlator := correlation.NewEngine(correlation.Config{
+		Window:            time.Duration(cfg.Correlation.Window) * time.Minute,
+		Cooldown:          time.Duration(cfg.Correlation.Cooldown) * time.Minute,
+		StaleThreshold:    time.Duration(cfg.Correlation.StaleThreshold) * time.Minute,
+		LifecycleInterval: time.Duration(cfg.Correlation.LifecycleInterval) * time.Minute,
+		LifecycleHook: func(inc *model.Incident, action model.IncidentAction) {
+			if action != model.ActionSkip {
+				alertManager.NotifyIncident(inc, action)
+			}
+		},
+	})
+	go correlator.StartCleanup(ctx)
 
 	h := handler.NewHandler(
 		k8sClient,
 		cfg,
 		memory.NewMemory(),
-		sm.GetAlertManager(),
+		correlator,
+		alertManager,
 	)
 
 	ctrl, cleanup := controller.New(k8sClient, cfg, h)
 	defer cleanup()
-
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
 
 	go func() {
 		if err := ctrl.Run(ctx, 1); err != nil {
@@ -71,11 +90,11 @@ func main() {
 	}()
 
 	sigCh := make(chan os.Signal, 1)
-	signal.Notify(sigCh, syscall.SIGINT, syscall.SIGTERM)
+	signal.Notify(sigCh, os.Interrupt, syscall.SIGTERM)
 	<-sigCh
 
 	klog.InfoS("shutting down gracefully...")
 	cancel()
-	healthServer.Stop(context.Background())
+	healthServer.Stop(ctx)
 	os.Exit(0)
 }

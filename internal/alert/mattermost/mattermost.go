@@ -188,6 +188,10 @@ func (m *Mattermost) buildMessage(e *event.Event, msg *string) []byte {
 		}
 	}
 
-	str, _ := json.Marshal(payload)
+	str, err := json.Marshal(payload)
+	if err != nil {
+		klog.ErrorS(err, "failed to marshal mattermost payload")
+		return nil
+	}
 	return str
 }

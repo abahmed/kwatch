@@ -182,8 +182,23 @@ func RandomString(n int) string {
 	return string(b)
 }
 
+// SafeMarshalJSON marshals v to JSON, returning an error on failure
+func SafeMarshalJSON(v interface{}) (string, error) {
+	data, err := json.Marshal(v)
+	if err != nil {
+		return "", fmt.Errorf("failed to marshal json: %w", err)
+	}
+	return string(data), nil
+}
+
 // SetLogFormatter sets the log formatter based on the provided format string
 func SetLogFormatter(formatter string) {
+	switch formatter {
+	case "json":
+		klog.LogToStderr(false)
+	default:
+		klog.LogToStderr(true)
+	}
 }
 
 // GetNamespace returns the namespace where kwatch is running.

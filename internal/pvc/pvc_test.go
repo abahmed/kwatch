@@ -1,6 +1,7 @@
 package pvc
 
 import (
+	"context"
 	"encoding/json"
 	"sync"
 	"testing"
@@ -60,7 +61,7 @@ func TestStartDisabled(t *testing.T) {
 	alertMgr := &alert.AlertManager{}
 
 	pvc := NewPvcMonitor(client, cfg, alertMgr)
-	pvc.Start()
+	pvc.Start(context.Background())
 }
 
 func TestCleanupUnderThreshold(t *testing.T) {

@@ -20,6 +20,9 @@ type Config struct {
 	// HealthCheck configuration
 	HealthCheck HealthCheck `yaml:"healthCheck"`
 
+	// Correlation configuration for incident dedup/grouping
+	Correlation Correlation `yaml:"correlation"`
+
 	// MaxRecentLogLines optional max tail log lines in messages,
 	// if it's not provided it will get all log lines
 	MaxRecentLogLines int64 `yaml:"maxRecentLogLines"`
@@ -139,4 +142,23 @@ type HealthCheck struct {
 	// Port is the port to listen on for health check requests
 	// By default, this value is 8060
 	Port int `yaml:"port"`
+}
+
+// Correlation config struct
+type Correlation struct {
+	// Window is the time window (in minutes) for correlating events.
+	// Events outside this window start a new incident.
+	Window int `yaml:"window"`
+
+	// Cooldown is the minimum time (in minutes) between notifications
+	// for the same incident to prevent alert fatigue.
+	Cooldown int `yaml:"cooldown"`
+
+	// StaleThreshold is the time (in minutes) without updates before
+	// an incident is marked stale.
+	StaleThreshold int `yaml:"staleThreshold"`
+
+	// LifecycleInterval is the interval (in minutes) for checking
+	// lifecycle transitions (stale, resolved). Default 1.
+	LifecycleInterval int `yaml:"lifecycleInterval"`
 }

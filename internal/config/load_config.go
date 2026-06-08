@@ -1,6 +1,7 @@
 package config
 
 import (
+	"errors"
 	"fmt"
 	"os"
 	"regexp"
@@ -29,14 +30,15 @@ func LoadConfig() (*Config, error) {
 		return nil, err
 	}
 
+	var errs []error
+
 	// Parse namespace allow/forbid lists
 	config.AllowedNamespaces, config.ForbiddenNamespaces =
 		getAllowForbidSlices(config.Namespaces)
 	if len(config.AllowedNamespaces) > 0 &&
 		len(config.ForbiddenNamespaces) > 0 {
-		klog.ErrorS(nil,
-			"Either allowed or forbidden namespaces must be set. "+
-				"Can't set both")
+		errs = append(errs,
+			errors.New("either allowed or forbidden namespaces must be set, can't set both"))
 	}
 
 	// Parse reason allow/forbid lists
@@ -44,27 +46,26 @@ func LoadConfig() (*Config, error) {
 		getAllowForbidSlices(config.Reasons)
 	if len(config.AllowedReasons) > 0 &&
 		len(config.ForbiddenReasons) > 0 {
-		klog.ErrorS(nil, "Either allowed or forbidden reasons must be set. "+
-			"Can't set both")
+		errs = append(errs,
+			errors.New("either allowed or forbidden reasons must be set, can't set both"))
 	}
 
 	// Prepare ignored pod name patters
 	config.IgnorePodNamePatterns, err =
 		getCompiledIgnorePatterns(config.IgnorePodNames)
 	if err != nil {
-		klog.ErrorS(err, "Failed to compile pod name pattern")
+		errs = append(errs, fmt.Errorf("failed to compile pod name pattern: %w", err))
 	}
 
 	// Prepare ignored log patterns
 	config.IgnoreLogPatternsCompiled, err =
 		getCompiledIgnorePatterns(config.IgnoreLogPatterns)
 	if err != nil {
-		klog.ErrorS(err, "Failed to compile log pattern")
+		errs = append(errs, fmt.Errorf("failed to compile log pattern: %w", err))
 	}
 
-	// Parse proxy config
-	if len(config.App.ProxyURL) > 0 {
-		os.Setenv("HTTPS_PROXY", config.App.ProxyURL)
+	if len(errs) > 0 {
+		return nil, errors.Join(errs...)
 	}
 
 	return config, nil

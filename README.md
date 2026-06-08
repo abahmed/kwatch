@@ -121,6 +121,21 @@ kubectl apply -f https://raw.githubusercontent.com/abahmed/kwatch/v0.10.5/deploy
 
 
 
+### 🧠 Correlation *(not released)*
+
+Incident grouping and lifecycle management. Events from the same owner/reason/container are grouped into incidents, with stale detection and auto-resolution.
+
+| Parameter                          | Description                                                        |
+|:-----------------------------------|:------------------------------------------------------------------ |
+| `correlation.window`               | Time window (minutes) to keep incidents in memory (default: 10)    |
+| `correlation.cooldown`             | Minimum gap (minutes) between incident updates (default: 5)        |
+| `correlation.staleThreshold`       | Minutes of inactivity before an incident is marked stale (default: 15) |
+| `correlation.lifecycleInterval`    | Interval (minutes) for lifecycle checks (default: 1)               |
+
+When Slack is configured with a bot token, incidents are sent as threaded messages: a root message on creation, with updates, stale, and resolved notifications as thread replies.
+
+Noise filter automatically skips `Normal`/`Scheduled`/`Pulled`/`Pulling` events before correlation to reduce alert fatigue. *(not released)*
+
 ### 🔔 Alerts
 
 #### Slack
@@ -148,6 +163,8 @@ If you want to enable Slack, provide either a webhook URL or a bot token with ch
 | `alert.slack.channel`            | Channel to post to (e.g. #alerts)           |
 | `alert.slack.title`              | Customized title in slack message           |
 | `alert.slack.text`               | Customized text in slack message            |
+
+> **Incident mode** *(not released)* — When correlation is enabled and Slack is in bot token mode, alerts are sent as threaded conversations. A root message is created on the first occurrence, with updates, stale, and resolved notifications posted as thread replies. The incident message includes enriched fields: Owner Kind, Container Name, Restart Count, and Hint (e.g. "Memory", "Registry/Auth").
 
 #### Discord
 

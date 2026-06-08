@@ -94,12 +94,10 @@ func (m *Matrix) sendAPI(formattedMsg string) error {
 	request, err := http.NewRequest(
 		http.MethodPut,
 		fmt.Sprintf(
-			"%s/_matrix/client/v3/rooms/%s/send/m.room.message/%s"+
-				"?access_token=%s",
+			"%s/_matrix/client/v3/rooms/%s/send/m.room.message/%s",
 			m.homeServer,
 			url.PathEscape(m.internalRoomID),
 			k8s.RandomString(24),
-			url.QueryEscape(m.accessToken),
 		),
 		bytes.NewBuffer(msgBytes),
 	)
@@ -108,6 +106,7 @@ func (m *Matrix) sendAPI(formattedMsg string) error {
 	}
 
 	request.Header.Set("Content-Type", "application/json")
+	request.Header.Set("Authorization", "Bearer "+m.accessToken)
 	client := k8s.GetDefaultClient()
 	response, err := client.Do(request)
 	if err != nil {

@@ -21,5 +21,11 @@ func DefaultConfig() *Config {
 			Enabled: false,
 			Port:    8060,
 		},
+		Correlation: Correlation{
+			Window:            10,
+			Cooldown:          5,
+			StaleThreshold:    15,
+			LifecycleInterval: 1,
+		},
 	}
 }

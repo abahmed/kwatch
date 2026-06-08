@@ -3,6 +3,7 @@ package handler
 import (
 	"github.com/abahmed/kwatch/internal/alert"
 	"github.com/abahmed/kwatch/internal/config"
+	"github.com/abahmed/kwatch/internal/correlation"
 	"github.com/abahmed/kwatch/internal/filter"
 	"github.com/abahmed/kwatch/internal/storage"
 	corev1 "k8s.io/api/core/v1"
@@ -25,6 +26,7 @@ type handler struct {
 	memory           storage.Storage
 	podFilters       []filter.Filter
 	containerFilters []filter.Filter
+	correlator       *correlation.Engine
 	alertManager     *alert.AlertManager
 	podLister        corev1lister.PodLister
 	nodeLister       corev1lister.NodeLister
@@ -34,6 +36,7 @@ func NewHandler(
 	cli kubernetes.Interface,
 	cfg *config.Config,
 	mem storage.Storage,
+	correlator *correlation.Engine,
 	alertManager *alert.AlertManager) Handler {
 	// Order is important
 	podFilters := []filter.Filter{
@@ -52,6 +55,7 @@ func NewHandler(
 		filter.ContainerStateFilter{},
 		filter.ContainerKillingFilter{},
 		filter.ContainerReasonsFilter{},
+		filter.NoiseFilter{},
 		filter.ContainerLogsFilter{},
 		filter.PodOwnersFilter{},
 	}
@@ -62,6 +66,7 @@ func NewHandler(
 		podFilters:       podFilters,
 		containerFilters: containersFilters,
 		memory:           mem,
+		correlator:       correlator,
 		alertManager:     alertManager,
 	}
 }

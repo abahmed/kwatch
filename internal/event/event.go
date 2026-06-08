@@ -10,4 +10,6 @@ type Event struct {
 	Events        string
 	Logs          string
 	Labels        map[string]string
+	OwnerKind     string
+	RestartCount  int
 }

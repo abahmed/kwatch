@@ -144,6 +144,10 @@ func (m *Opsgenie) buildMessage(e *event.Event) []byte {
 		"Logs":      logs,
 	}
 
-	str, _ := json.Marshal(payload)
+	str, err := json.Marshal(payload)
+	if err != nil {
+		klog.ErrorS(err, "failed to marshal opsgenie payload")
+		return nil
+	}
 	return str
 }

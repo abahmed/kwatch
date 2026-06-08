@@ -1,8 +1,10 @@
 package alert
 
 import (
+	"fmt"
 	"reflect"
 	"strings"
+	"time"
 
 	"github.com/abahmed/kwatch/internal/alert/dingtalk"
 	"github.com/abahmed/kwatch/internal/alert/discord"
@@ -21,6 +23,7 @@ import (
 	"github.com/abahmed/kwatch/internal/alert/zenduty"
 	"github.com/abahmed/kwatch/internal/config"
 	"github.com/abahmed/kwatch/internal/event"
+	"github.com/abahmed/kwatch/internal/model"
 	"k8s.io/klog/v2"
 )
 
@@ -105,4 +108,92 @@ func (a *AlertManager) NotifyEvent(event event.Event) {
 				"provider", prv.Name())
 		}
 	}
+}
+
+// ThreadProvider is an optional interface for providers that support
+// incident-aware messaging (e.g., Slack threads).
+type ThreadProvider interface {
+	SendIncident(inc *model.Incident, action model.IncidentAction) error
+}
+
+// NotifyIncident sends incident summary to all providers.
+// Providers implementing ThreadProvider receive structured incident data;
+// others fall back to plain text.
+func (a *AlertManager) NotifyIncident(inc *model.Incident, action model.IncidentAction) {
+	if action == model.ActionSkip {
+		return
+	}
+	msg := formatIncidentMessage(inc, action)
+	klog.InfoS("sending incident", "action", action, "key", inc.Key, "count", inc.Count)
+	for _, prv := range a.providers {
+		if tp, ok := prv.(ThreadProvider); ok {
+			if err := tp.SendIncident(inc, action); err != nil {
+				klog.ErrorS(err,
+					"failed to send incident via thread provider",
+					"provider", prv.Name())
+			}
+		} else if err := prv.SendMessage(msg); err != nil {
+			klog.ErrorS(err,
+				"failed to send incident",
+				"provider", prv.Name())
+		}
+	}
+}
+
+func formatIncidentMessage(inc *model.Incident, action model.IncidentAction) string {
+	switch action {
+	case model.ActionCreate:
+		return formatCreateMessage(inc)
+	case model.ActionUpdate:
+		return formatUpdateMessage(inc)
+	case model.ActionStale:
+		return formatStaleMessage(inc)
+	case model.ActionResolved:
+		return formatResolvedMessage(inc)
+	default:
+		return ""
+	}
+}
+
+func formatCreateMessage(inc *model.Incident) string {
+	resources := len(inc.Resources)
+	duration := inc.LastSeen.Sub(inc.FirstSeen).Round(time.Minute)
+
+	return fmt.Sprintf(
+		"🚨 Incident: %s\nOwner: %s (%s)\nNamespace: %s\nContainer: %s\nReason: %s\nRestarts: %d\nHint: %s\nAffected: %d resource(s)\nCount: %d\nDuration: %s",
+		inc.Name, inc.OwnerKind, inc.Name,
+		inc.Namespace, inc.ContainerName, inc.Reason,
+		inc.RestartCount, inc.Hint,
+		resources, inc.Count, duration,
+	)
+}
+
+func formatUpdateMessage(inc *model.Incident) string {
+	resources := len(inc.Resources)
+	duration := inc.LastSeen.Sub(inc.FirstSeen).Round(time.Minute)
+
+	return fmt.Sprintf(
+		"🔄 Update: %s | Namespace: %s | Reason: %s | Count: %d | Duration: %s | Affected: %d resource(s)",
+		inc.Name, inc.Namespace, inc.Reason, inc.Count, duration, resources,
+	)
+}
+
+func formatStaleMessage(inc *model.Incident) string {
+	resources := len(inc.Resources)
+	duration := inc.LastSeen.Sub(inc.FirstSeen).Round(time.Minute)
+
+	return fmt.Sprintf(
+		"⚠️ Stale: %s | Namespace: %s | Reason: %s | Last seen: %s | Count: %d | Duration: %s | Affected: %d resource(s)",
+		inc.Name, inc.Namespace, inc.Reason,
+		inc.LastSeen.Format("15:04:05"), inc.Count, duration, resources,
+	)
+}
+
+func formatResolvedMessage(inc *model.Incident) string {
+	duration := inc.LastSeen.Sub(inc.FirstSeen).Round(time.Minute)
+
+	return fmt.Sprintf(
+		"✅ Resolved: %s | Namespace: %s | Reason: %s | Duration: %s | Total events: %d",
+		inc.Name, inc.Namespace, inc.Reason, duration, inc.Count,
+	)
 }

@@ -52,6 +52,8 @@ func TestEmptyConfig(t *testing.T) {
 
 	cfg, _ := LoadConfig()
 	assert.NotNil(cfg)
+	assert.Equal(10, cfg.Correlation.Window)
+	assert.Equal(5, cfg.Correlation.Cooldown)
 }
 
 func TestConfigInvalidFile(t *testing.T) {
@@ -71,10 +73,10 @@ func TestConfigFromFile(t *testing.T) {
 
 	n := Config{
 		MaxRecentLogLines: 20,
-		Namespaces:        []string{"default", "!kwatch"},
-		Reasons:           []string{"default", "!kwatch"},
-		IgnorePodNames:    []string{"my-fancy-pod-[.*"},
-		IgnoreLogPatterns: []string{"leaderelection lost-[.*"},
+		Namespaces:        []string{"default", "kwatch"},
+		Reasons:           []string{"CrashLoopBackOff", "OOMKilling"},
+		IgnorePodNames:    []string{"my-fancy-pod-.*"},
+		IgnoreLogPatterns: []string{"leader-election-.*"},
 		App: App{
 			ProxyURL:    "https://localhost",
 			ClusterName: "development",
@@ -83,20 +85,21 @@ func TestConfigFromFile(t *testing.T) {
 	yamlData, _ := yaml.Marshal(&n)
 	os.WriteFile("config.yaml", yamlData, 0644)
 
-	cfg, _ := LoadConfig()
+	cfg, err := LoadConfig()
+	assert.Nil(err)
 	assert.NotNil(cfg)
 
 	assert.Equal(cfg.App.ClusterName, "development")
 	assert.Equal(cfg.App.ProxyURL, "https://localhost")
 
 	assert.Equal(cfg.MaxRecentLogLines, int64(20))
-	assert.Len(cfg.AllowedNamespaces, 1)
-	assert.Len(cfg.AllowedReasons, 1)
-	assert.Len(cfg.ForbiddenNamespaces, 1)
-	assert.Len(cfg.ForbiddenReasons, 1)
+	assert.Len(cfg.AllowedNamespaces, 2)
+	assert.Len(cfg.AllowedReasons, 2)
+	assert.Len(cfg.ForbiddenNamespaces, 0)
+	assert.Len(cfg.ForbiddenReasons, 0)
 
 	os.WriteFile("config.yaml", []byte("maxRecentLogLines: test"), 0644)
-	_, err := LoadConfig()
+	_, err = LoadConfig()
 	assert.NotNil(err)
 }
 
@@ -137,7 +140,8 @@ func TestIgnoreNodeReasonsLoading(t *testing.T) {
 	yamlData, _ := yaml.Marshal(&n)
 	os.WriteFile("config.yaml", yamlData, 0644)
 
-	cfg, _ := LoadConfig()
+	cfg, err := LoadConfig()
+	assert.Nil(err)
 	assert.NotNil(cfg)
 	assert.Equal([]string{"NotReady", "KubeletNotReady", "custom-reason"}, cfg.IgnoreNodeReasons)
 }
@@ -156,7 +160,8 @@ func TestIgnoreNodeReasonsEmpty(t *testing.T) {
 	yamlData, _ := yaml.Marshal(&n)
 	os.WriteFile("config.yaml", yamlData, 0644)
 
-	cfg, _ := LoadConfig()
+	cfg, err := LoadConfig()
+	assert.Nil(err)
 	assert.NotNil(cfg)
 	assert.Equal([]string{}, cfg.IgnoreNodeReasons)
 }
@@ -175,7 +180,8 @@ func TestIgnoreNodeReasonsSpecialChars(t *testing.T) {
 	yamlData, _ := yaml.Marshal(&n)
 	os.WriteFile("config.yaml", yamlData, 0644)
 
-	cfg, _ := LoadConfig()
+	cfg, err := LoadConfig()
+	assert.Nil(err)
 	assert.NotNil(cfg)
 	assert.Equal([]string{"reason-1", "reason_2", "reason.with.dot", "reason/with/slash"}, cfg.IgnoreNodeReasons)
 }

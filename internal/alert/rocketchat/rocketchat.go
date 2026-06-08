@@ -92,6 +92,10 @@ func (r *RocketChat) buildRequestBodyRocketChat(text string) string {
 		Text: text,
 	}
 
-	jsonBytes, _ := json.Marshal(msgPayload)
+	jsonBytes, err := json.Marshal(msgPayload)
+	if err != nil {
+		klog.ErrorS(err, "failed to marshal rocketchat payload")
+		return ""
+	}
 	return string(jsonBytes)
 }
