@@ -26,6 +26,7 @@ func DefaultConfig() *Config {
 			Cooldown:          5,
 			StaleThreshold:    15,
 			LifecycleInterval: 1,
+			StartupQuiet:      30,
 		},
 	}
 }

@@ -3,7 +3,9 @@ package pvc
 import (
 	"fmt"
 
+	"github.com/abahmed/kwatch/internal/event"
 	"github.com/abahmed/kwatch/internal/k8s"
+	"github.com/abahmed/kwatch/internal/model"
 	"k8s.io/klog/v2"
 )
 
@@ -37,23 +39,35 @@ func (p *PvcMonitor) checkUsage() {
 	p.mu.Lock()
 	defer p.mu.Unlock()
 
+	currentNotified := make(map[string]bool, len(pvcUsages))
+
 	for _, pvc := range pvcUsages {
 		if pvc.UsagePercentage >= p.config.Threshold {
-			if _, ok := p.notifiedPvc[pvc.PVName]; ok {
-				continue
+			currentNotified[pvc.PVName] = true
+
+			ev := event.Event{
+				Resource:  "pvc",
+				PodName:   pvc.PodName,
+				Namespace: pvc.Namespace,
+				NodeName:  "",
+				Reason:    fmt.Sprintf("VolumeUsage(%.0f%%)", pvc.UsagePercentage),
+				Logs:      "",
+				Labels:    nil,
 			}
 
-			msg := fmt.Sprintf("Volume Usage for %s (%s) attached to pod %s "+
-				"in namespace %s is %.2f%% (higher than %.0f%%)",
-				pvc.Name,
-				pvc.PVName,
-				pvc.PodName,
-				pvc.Namespace,
-				pvc.UsagePercentage,
-				p.config.Threshold,
-			)
-			p.alertManager.Notify(msg)
-			p.notifiedPvc[pvc.PVName] = true
+			inc, action := p.correlator.Process(ev, pvc.PVName, nil)
+			if action != model.ActionSkip {
+				p.alertManager.NotifyIncident(inc, action)
+			}
 		}
 	}
+
+	// Resolve previously notified PVCs that are now under threshold
+	for pvName := range p.notifiedPvc {
+		if !currentNotified[pvName] {
+			p.correlator.ResolveByResource("pvc", pvName)
+		}
+	}
+
+	p.notifiedPvc = currentNotified
 }

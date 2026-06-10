@@ -2,6 +2,7 @@ package event
 
 // Event used to represent info needed by providers to send messages
 type Event struct {
+	Resource      string            // "pod", "node", "pvc"
 	PodName       string
 	ContainerName string
 	Namespace     string

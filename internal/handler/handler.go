@@ -5,7 +5,6 @@ import (
 	"github.com/abahmed/kwatch/internal/config"
 	"github.com/abahmed/kwatch/internal/correlation"
 	"github.com/abahmed/kwatch/internal/filter"
-	"github.com/abahmed/kwatch/internal/storage"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/client-go/kubernetes"
 	corev1lister "k8s.io/client-go/listers/core/v1"
@@ -23,7 +22,6 @@ type Handler interface {
 type handler struct {
 	kclient               kubernetes.Interface
 	config                *config.Config
-	memory                storage.Storage
 	podDetectors          []filter.Detector
 	podEnrichers          []filter.Enricher
 	containerDetectors    []filter.Detector
@@ -37,7 +35,6 @@ type handler struct {
 func NewHandler(
 	cli kubernetes.Interface,
 	cfg *config.Config,
-	mem storage.Storage,
 	correlator *correlation.Engine,
 	alertManager *alert.AlertManager) Handler {
 	podDetectors := []filter.Detector{
@@ -74,7 +71,6 @@ func NewHandler(
 		podEnrichers:       podEnrichers,
 		containerDetectors: containerDetectors,
 		containerEnrichers: containerEnrichers,
-		memory:             mem,
 		correlator:         correlator,
 		alertManager:       alertManager,
 	}

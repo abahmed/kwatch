@@ -18,14 +18,16 @@ type Config struct {
 	Cooldown          time.Duration
 	StaleThreshold    time.Duration
 	LifecycleInterval time.Duration
+	StartupQuiet      time.Duration
 	Enricher          enricher.Enricher
 	LifecycleHook     func(inc *model.Incident, action model.IncidentAction)
 }
 
 type Engine struct {
-	mu     sync.Mutex
-	state  map[string]*model.Incident
-	config Config
+	mu          sync.Mutex
+	state       map[string]*model.Incident
+	config      Config
+	startedAt   time.Time
 }
 
 func NewEngine(cfg Config) *Engine {
@@ -36,9 +38,14 @@ func NewEngine(cfg Config) *Engine {
 		cfg.LifecycleInterval = 1 * time.Minute
 	}
 	return &Engine{
-		state:  make(map[string]*model.Incident),
-		config: cfg,
+		state:     make(map[string]*model.Incident),
+		config:    cfg,
+		startedAt: time.Now(),
 	}
+}
+
+func (e *Engine) inStartupQuiet() bool {
+	return e.config.StartupQuiet > 0 && time.Since(e.startedAt) < e.config.StartupQuiet
 }
 
 var knownRetryReasons = map[string]bool{
@@ -76,6 +83,10 @@ func (e *Engine) Process(ev event.Event, owner string, cs *model.ContainerState)
 	e.mu.Lock()
 	defer e.mu.Unlock()
 
+	if e.inStartupQuiet() {
+		return nil, model.ActionSkip
+	}
+
 	r := normalizeReason(ev.Reason)
 	key := ev.Namespace + ":" + owner + ":" + r + ":" + ev.ContainerName
 	now := time.Now()
@@ -96,11 +107,16 @@ func (e *Engine) Process(ev event.Event, owner string, cs *model.ContainerState)
 		return inc, model.ActionUpdate
 	}
 
+	res := ev.Resource
+	if res == "" {
+		res = "pod"
+	}
+
 	inc := &model.Incident{
 		Key:       key,
 		Reason:    ev.Reason,
 		Namespace: ev.Namespace,
-		Resource:  "pod",
+		Resource:  res,
 		Name:      owner,
 		Count:     1,
 		FirstSeen: now,
@@ -150,6 +166,29 @@ func (e *Engine) RemovePod(namespace, podName string) {
 		}
 		delete(inc.Resources, podName)
 		if len(inc.Resources) == 0 && inc.State != model.StateResolved && inc.State != model.StateStale {
+			inc.State = model.StateResolved
+			pending = append(pending, transition{inc, model.ActionResolved})
+		}
+	}
+	e.mu.Unlock()
+
+	for _, t := range pending {
+		if hook := e.config.LifecycleHook; hook != nil {
+			hook(t.inc, t.action)
+		}
+	}
+}
+
+func (e *Engine) ResolveByResource(resource, name string) {
+	type transition struct {
+		inc    *model.Incident
+		action model.IncidentAction
+	}
+	var pending []transition
+
+	e.mu.Lock()
+	for _, inc := range e.state {
+		if inc.Resource == resource && inc.Name == name && inc.State != model.StateResolved && inc.State != model.StateStale {
 			inc.State = model.StateResolved
 			pending = append(pending, transition{inc, model.ActionResolved})
 		}

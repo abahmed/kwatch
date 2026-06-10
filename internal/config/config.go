@@ -161,4 +161,9 @@ type Correlation struct {
 	// LifecycleInterval is the interval (in minutes) for checking
 	// lifecycle transitions (stale, resolved). Default 1.
 	LifecycleInterval int `yaml:"lifecycleInterval"`
+
+	// StartupQuiet is the quiet period (in seconds) after startup
+	// during which no alerts are sent. This prevents re-alerting
+	// pre-existing breakage after a restart. Default 30.
+	StartupQuiet int `yaml:"startupQuiet"`
 }

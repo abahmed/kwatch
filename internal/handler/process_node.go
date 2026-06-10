@@ -4,6 +4,8 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/abahmed/kwatch/internal/event"
+	"github.com/abahmed/kwatch/internal/model"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/klog/v2"
@@ -13,14 +15,14 @@ func (h *handler) ProcessNode(key string, deleted bool) error {
 	name := key
 
 	if deleted {
-		h.memory.DelNode(name)
+		h.correlator.ResolveByResource("node", name)
 		return nil
 	}
 
 	node, err := h.nodeLister.Get(name)
 	if err != nil {
 		if errors.IsNotFound(err) {
-			h.memory.DelNode(name)
+			h.correlator.ResolveByResource("node", name)
 			return nil
 		}
 		return fmt.Errorf("failed to get node %s from cache: %w", name, err)
@@ -35,14 +37,13 @@ func (h *handler) ProcessNodeObject(node *corev1.Node, deleted bool) error {
 	}
 
 	if deleted {
-		h.memory.DelNode(node.Name)
+		h.correlator.ResolveByResource("node", node.Name)
 		return nil
 	}
 
 	for _, c := range node.Status.Conditions {
 		if c.Type == corev1.NodeReady {
-			if c.Status == corev1.ConditionFalse && !h.memory.HasNode(node.Name) {
-				klog.InfoS("node is not ready", "node", node.Name, "reason", c.Reason)
+			if c.Status == corev1.ConditionFalse {
 				// Skip alert if Reason is in IgnoreNodeReasons
 				for _, ignoreReason := range h.config.IgnoreNodeReasons {
 					if c.Reason == ignoreReason {
@@ -57,14 +58,24 @@ func (h *handler) ProcessNodeObject(node *corev1.Node, deleted bool) error {
 						return nil
 					}
 				}
-				h.alertManager.Notify(fmt.Sprintf("Node %s is not ready: %s - %s",
-					node.Name,
-					c.Reason,
-					c.Message,
-				))
-				h.memory.AddNode(node.Name)
+
+				ev := event.Event{
+					Resource:  "node",
+					PodName:   node.Name,
+					Namespace: "",
+					NodeName:  node.Name,
+					Reason:    c.Reason,
+					Events:    "",
+					Logs:      "",
+					Labels:    node.Labels,
+				}
+
+				inc, action := h.correlator.Process(ev, node.Name, nil)
+				if action != model.ActionSkip {
+					h.alertManager.NotifyIncident(inc, action)
+				}
 			} else if c.Status == corev1.ConditionTrue {
-				h.memory.DelNode(node.Name)
+				h.correlator.ResolveByResource("node", node.Name)
 			}
 		}
 	}

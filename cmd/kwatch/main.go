@@ -19,7 +19,6 @@ import (
 	"github.com/abahmed/kwatch/internal/model"
 	"github.com/abahmed/kwatch/internal/pvc"
 	"github.com/abahmed/kwatch/internal/startup"
-	"github.com/abahmed/kwatch/internal/storage/memory"
 	"github.com/abahmed/kwatch/internal/upgrader"
 	"github.com/abahmed/kwatch/internal/version"
 	"k8s.io/klog/v2"
@@ -55,14 +54,17 @@ func main() {
 	up := upgrader.NewUpgrader(&cfg.Upgrader, alertManager, sm.GetStateManager())
 	go up.CheckUpdates(ctx)
 
-	pvcMonitor := pvc.NewPvcMonitor(k8sClient, &cfg.PvcMonitor, alertManager)
-	go pvcMonitor.Start(ctx)
+	startupQuiet := cfg.Correlation.StartupQuiet
+	if startupQuiet <= 0 {
+		startupQuiet = 30
+	}
 
 	correlator := correlation.NewEngine(correlation.Config{
 		Window:            time.Duration(cfg.Correlation.Window) * time.Minute,
 		Cooldown:          time.Duration(cfg.Correlation.Cooldown) * time.Minute,
 		StaleThreshold:    time.Duration(cfg.Correlation.StaleThreshold) * time.Minute,
 		LifecycleInterval: time.Duration(cfg.Correlation.LifecycleInterval) * time.Minute,
+		StartupQuiet:      time.Duration(startupQuiet) * time.Second,
 		LifecycleHook: func(inc *model.Incident, action model.IncidentAction) {
 			if action != model.ActionSkip {
 				alertManager.NotifyIncident(inc, action)
@@ -71,10 +73,12 @@ func main() {
 	})
 	go correlator.StartCleanup(ctx)
 
+	pvcMonitor := pvc.NewPvcMonitor(k8sClient, &cfg.PvcMonitor, alertManager, correlator)
+	go pvcMonitor.Start(ctx)
+
 	h := handler.NewHandler(
 		k8sClient,
 		cfg,
-		memory.NewMemory(),
 		correlator,
 		alertManager,
 	)

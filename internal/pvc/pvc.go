@@ -7,6 +7,7 @@ import (
 
 	"github.com/abahmed/kwatch/internal/alert"
 	"github.com/abahmed/kwatch/internal/config"
+	"github.com/abahmed/kwatch/internal/correlation"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/klog/v2"
 )
@@ -15,6 +16,7 @@ type PvcMonitor struct {
 	client       kubernetes.Interface
 	config       *config.PvcMonitor
 	alertManager *alert.AlertManager
+	correlator   *correlation.Engine
 	notifiedPvc  map[string]bool
 	mu           sync.RWMutex
 }
@@ -22,11 +24,13 @@ type PvcMonitor struct {
 func NewPvcMonitor(
 	client kubernetes.Interface,
 	config *config.PvcMonitor,
-	alertManager *alert.AlertManager) *PvcMonitor {
+	alertManager *alert.AlertManager,
+	correlator *correlation.Engine) *PvcMonitor {
 	return &PvcMonitor{
 		client:       client,
 		config:       config,
 		alertManager: alertManager,
+		correlator:   correlator,
 		notifiedPvc:  make(map[string]bool),
 	}
 }
