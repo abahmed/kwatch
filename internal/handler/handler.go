@@ -31,6 +31,7 @@ type Handler interface {
 	SetJobLister(lister batchv1lister.JobLister)
 	SetReplicaLister(lister appsv1lister.ReplicaSetLister)
 	SetSeen(keys []string)
+	ClearSeen(podKey string)
 }
 
 type handler struct {
@@ -123,4 +124,8 @@ func (h *handler) SetReplicaLister(lister appsv1lister.ReplicaSetLister) {
 
 func (h *handler) SetSeen(keys []string) {
 	h.correlator.SetSeen(keys)
+}
+
+func (h *handler) ClearSeen(podKey string) {
+	h.correlator.ClearSeen(podKey)
 }

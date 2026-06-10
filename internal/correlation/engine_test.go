@@ -251,3 +251,116 @@ func TestProcessConcurrentSafe(t *testing.T) {
 	inc := e.state["default:deploy-1:CrashLoopBackOff:"]
 	assert.Equal(t, 100, inc.Count)
 }
+
+func TestBaselineSuppression(t *testing.T) {
+	e := newTestEngine()
+	e.config.StartupQuiet = 0
+
+	ev := event.Event{
+		PodName:   "pod-1",
+		Namespace: "default",
+		Reason:    "CrashLoopBackOff",
+	}
+
+	e.SetSeen([]string{"default/pod-1"})
+
+	_, action := e.Process(ev, "deploy-1", nil)
+	assert.Equal(t, model.ActionSkip, action)
+}
+
+func TestClearSeenUnsuppresses(t *testing.T) {
+	e := newTestEngine()
+	e.config.StartupQuiet = 0
+
+	ev := event.Event{
+		PodName:   "pod-1",
+		Namespace: "default",
+		Reason:    "CrashLoopBackOff",
+	}
+
+	e.SetSeen([]string{"default/pod-1"})
+	e.ClearSeen("default/pod-1")
+
+	_, action := e.Process(ev, "deploy-1", nil)
+	assert.Equal(t, model.ActionCreate, action)
+}
+
+func TestRemovePodClearsSeen(t *testing.T) {
+	e := newTestEngine()
+	e.config.StartupQuiet = 0
+
+	ev := event.Event{
+		PodName:   "pod-1",
+		Namespace: "default",
+		Reason:    "CrashLoopBackOff",
+	}
+
+	e.SetSeen([]string{"default/pod-1"})
+	e.RemovePod("default", "pod-1")
+
+	_, action := e.Process(ev, "deploy-1", nil)
+	assert.Equal(t, model.ActionCreate, action)
+}
+
+func TestCheckLifecycleStale(t *testing.T) {
+	e := newTestEngine()
+	e.config.StaleThreshold = 1 * time.Millisecond
+
+	ev := event.Event{
+		PodName:   "pod-1",
+		Namespace: "default",
+		Reason:    "CrashLoopBackOff",
+	}
+
+	e.Process(ev, "deploy-1", nil)
+
+	var staleActions int
+	e.config.LifecycleHook = func(inc *model.Incident, action model.IncidentAction) {
+		if action == model.ActionStale {
+			staleActions++
+		}
+	}
+
+	time.Sleep(2 * time.Millisecond)
+	e.checkLifecycle()
+
+	assert.Equal(t, 1, staleActions)
+}
+
+func TestCheckLifecycleNotStale(t *testing.T) {
+	e := newTestEngine()
+	e.config.StaleThreshold = 1 * time.Hour
+
+	ev := event.Event{
+		PodName:   "pod-1",
+		Namespace: "default",
+		Reason:    "CrashLoopBackOff",
+	}
+
+	e.Process(ev, "deploy-1", nil)
+
+	var staleActions int
+	e.config.LifecycleHook = func(inc *model.Incident, action model.IncidentAction) {
+		if action == model.ActionStale {
+			staleActions++
+		}
+	}
+
+	e.checkLifecycle()
+
+	assert.Equal(t, 0, staleActions)
+}
+
+func TestStartupQuietSuppressesAllBeforeSeen(t *testing.T) {
+	e := newTestEngine()
+	e.config.StartupQuiet = 10 * time.Minute
+
+	ev := event.Event{
+		PodName:   "pod-1",
+		Namespace: "default",
+		Reason:    "CrashLoopBackOff",
+	}
+
+	_, action := e.Process(ev, "deploy-1", nil)
+	assert.Equal(t, model.ActionSkip, action)
+}

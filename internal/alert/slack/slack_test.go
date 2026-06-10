@@ -420,3 +420,70 @@ func TestFormatIncidentText(t *testing.T) {
 	textUpdate := formatIncidentText(inc, model.ActionUpdate)
 	assert.Contains(textUpdate, "Update")
 }
+
+func TestBuildIncidentBlocksWithLogsEvents(t *testing.T) {
+	assert := assert.New(t)
+
+	inc := testIncident()
+	inc.Events = "Warning Unhealthy pod-1 liveness probe failed"
+	inc.Logs = "Error: connection refused"
+
+	blocks := buildIncidentBlocks(inc, &config.App{ClusterName: "prod-cluster"})
+
+	assert.NotNil(blocks)
+	foundEvents := false
+	foundLogs := false
+	for _, b := range blocks.BlockSet {
+		if s, ok := b.(slackClient.SectionBlock); ok && s.Text != nil {
+			if s.Text.Text == ":mag: *Events*" {
+				foundEvents = true
+			}
+			if s.Text.Text == ":memo: *Logs*" {
+				foundLogs = true
+			}
+		}
+	}
+	assert.True(foundEvents, "Events block should be present")
+	assert.True(foundLogs, "Logs block should be present")
+}
+
+func TestBuildIncidentUpdateBlocksWithLogsEvents(t *testing.T) {
+	assert := assert.New(t)
+
+	inc := testIncident()
+	inc.Events = "Warning BackOff restarting container"
+	inc.Logs = "Error: server closed connection"
+
+	blocks := buildIncidentUpdateBlocks(inc)
+
+	assert.NotNil(blocks)
+	assert.Greater(len(blocks.BlockSet), 1, "update blocks should include Logs/Events sections")
+}
+
+func TestFormatIncidentTextWithLogsEvents(t *testing.T) {
+	assert := assert.New(t)
+
+	inc := testIncident()
+	inc.Events = "Warning Unhealthy"
+	inc.Logs = "Error: timeout"
+
+	text := formatIncidentText(inc, model.ActionCreate)
+	assert.Contains(text, "Events:")
+	assert.Contains(text, "Warning Unhealthy")
+	assert.Contains(text, "Logs:")
+	assert.Contains(text, "Error: timeout")
+}
+
+func TestFormatIncidentTextUpdateWithLogsEvents(t *testing.T) {
+	assert := assert.New(t)
+
+	inc := testIncident()
+	inc.Events = "Warning BackOff"
+	inc.Logs = "Error: crash"
+
+	text := formatIncidentText(inc, model.ActionUpdate)
+	assert.Contains(text, "Events:")
+	assert.Contains(text, "Warning BackOff")
+	assert.Contains(text, "Logs:")
+	assert.Contains(text, "Error: crash")
+}

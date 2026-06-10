@@ -158,11 +158,16 @@ type NodeMonitor struct {
 
 // HeartbeatMonitor config for dead man's switch
 type HeartbeatMonitor struct {
-	// Enabled if set to true, a periodic heartbeat event is fired.
+	// Enabled if set to true, a periodic heartbeat ping is sent.
 	Enabled bool `yaml:"enabled"`
 
-	// Interval is the frequency (in seconds) between heartbeats. Default 300 (5 min).
+	// Interval is the frequency (in seconds) between pings. Default 300 (5 min).
 	Interval int `yaml:"interval"`
+
+	// URL is the external endpoint to ping (e.g. Healthchecks.io).
+	// When set, a GET request is sent every interval; no response means the
+	// external monitor pages.
+	URL string `yaml:"url"`
 }
 
 // RolloutMonitor config struct

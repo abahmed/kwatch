@@ -14,6 +14,9 @@ rules:
 - apiGroups: ["apps"]
   resources: ["daemonsets", "statefulsets", "deployments", "replicasets"]
   verbs: ["get", "watch", "list"]
+- apiGroups: ["batch"]
+  resources: ["jobs"]
+  verbs: ["get", "watch", "list"]
 ---
 apiVersion: v1
 kind: ServiceAccount
@@ -43,6 +46,9 @@ rules:
 - apiGroups: [""]
   resources: ["configmaps"]
   verbs: ["get", "create", "update", "patch"]
+- apiGroups: ["coordination.k8s.io"]
+  resources: ["leases"]
+  verbs: ["get", "create", "update"]
 ---
 apiVersion: rbac.authorization.k8s.io/v1
 kind: RoleBinding

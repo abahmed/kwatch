@@ -2,36 +2,31 @@ package heartbeat
 
 import (
 	"context"
+	"net/http"
 	"time"
 
-	"github.com/abahmed/kwatch/internal/alert"
 	"github.com/abahmed/kwatch/internal/config"
-	"github.com/abahmed/kwatch/internal/correlation"
-	"github.com/abahmed/kwatch/internal/event"
-	"github.com/abahmed/kwatch/internal/model"
 	"k8s.io/klog/v2"
 )
 
 type HeartbeatMonitor struct {
-	correlator   *correlation.Engine
-	alertManager *alert.AlertManager
-	config       *config.HeartbeatMonitor
+	config *config.HeartbeatMonitor
+	client *http.Client
 }
 
-func NewHeartbeatMonitor(
-	correlator *correlation.Engine,
-	alertManager *alert.AlertManager,
-	cfg *config.HeartbeatMonitor,
-) *HeartbeatMonitor {
+func NewHeartbeatMonitor(cfg *config.HeartbeatMonitor) *HeartbeatMonitor {
 	return &HeartbeatMonitor{
-		correlator:   correlator,
-		alertManager: alertManager,
-		config:       cfg,
+		config: cfg,
+		client: &http.Client{Timeout: 10 * time.Second},
 	}
 }
 
 func (m *HeartbeatMonitor) Start(ctx context.Context) {
 	if !m.config.Enabled {
+		return
+	}
+	if m.config.URL == "" {
+		klog.InfoS("heartbeat monitor disabled: no URL configured")
 		return
 	}
 
@@ -43,26 +38,26 @@ func (m *HeartbeatMonitor) Start(ctx context.Context) {
 	ticker := time.NewTicker(interval)
 	defer ticker.Stop()
 
-	klog.InfoS("heartbeat monitor started", "interval", interval)
+	klog.InfoS("heartbeat monitor started", "interval", interval, "url", m.config.URL)
 	for {
 		select {
 		case <-ctx.Done():
 			klog.InfoS("heartbeat monitor stopped")
 			return
 		case <-ticker.C:
-			m.beat()
+			m.ping()
 		}
 	}
 }
 
-func (m *HeartbeatMonitor) beat() {
-	ev := event.Event{
-		Resource: "heartbeat",
-		PodName:  "deadmansswitch",
-		Reason:   "Heartbeat",
+func (m *HeartbeatMonitor) ping() {
+	resp, err := m.client.Get(m.config.URL)
+	if err != nil {
+		klog.ErrorS(err, "heartbeat ping failed", "url", m.config.URL)
+		return
 	}
-	inc, action := m.correlator.Process(ev, "deadmansswitch", nil)
-	if action != model.ActionSkip {
-		m.alertManager.NotifyIncident(inc, action)
+	resp.Body.Close()
+	if resp.StatusCode >= 400 {
+		klog.InfoS("heartbeat ping returned non-2xx", "status", resp.StatusCode, "url", m.config.URL)
 	}
 }

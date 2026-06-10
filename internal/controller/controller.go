@@ -29,15 +29,15 @@ type Controller struct {
 	deploymentQueue        workqueue.TypedRateLimitingInterface[string]
 	jobQueue               workqueue.TypedRateLimitingInterface[string]
 	podLister              corev1lister.PodLister
-	podsSynced             cache.InformerSynced
+	podsSynced             []cache.InformerSynced
 	nodeLister             corev1lister.NodeLister
 	nodesSynced            cache.InformerSynced
 	deployLister           appsv1lister.DeploymentLister
-	deploysSynced          cache.InformerSynced
+	deploysSynced          []cache.InformerSynced
 	jobLister              batchv1lister.JobLister
-	jobsSynced             cache.InformerSynced
+	jobsSynced             []cache.InformerSynced
 	rsLister               appsv1lister.ReplicaSetLister
-	rsSynced               cache.InformerSynced
+	rsSynced               []cache.InformerSynced
 	deploymentWatchEnabled bool
 	jobWatchEnabled        bool
 }
@@ -78,11 +78,15 @@ func (fs factorySet) podLister() corev1lister.PodLister {
 	return &multiPodLister{listers: listers}
 }
 
-func (fs factorySet) podInformer() cache.SharedIndexInformer {
+func (fs factorySet) podInformers() []cache.SharedIndexInformer {
 	if fs.global != nil {
-		return fs.global.Core().V1().Pods().Informer()
+		return []cache.SharedIndexInformer{fs.global.Core().V1().Pods().Informer()}
 	}
-	return fs.perNamespace[0].Core().V1().Pods().Informer()
+	out := make([]cache.SharedIndexInformer, 0, len(fs.perNamespace))
+	for _, f := range fs.perNamespace {
+		out = append(out, f.Core().V1().Pods().Informer())
+	}
+	return out
 }
 
 func (fs factorySet) nodeLister() corev1lister.NodeLister {
@@ -110,11 +114,15 @@ func (fs factorySet) deployLister() appsv1lister.DeploymentLister {
 	return &multiDeploymentLister{listers: listers}
 }
 
-func (fs factorySet) deployInformer() cache.SharedIndexInformer {
+func (fs factorySet) deployInformers() []cache.SharedIndexInformer {
 	if fs.global != nil {
-		return fs.global.Apps().V1().Deployments().Informer()
+		return []cache.SharedIndexInformer{fs.global.Apps().V1().Deployments().Informer()}
 	}
-	return fs.perNamespace[0].Apps().V1().Deployments().Informer()
+	out := make([]cache.SharedIndexInformer, 0, len(fs.perNamespace))
+	for _, f := range fs.perNamespace {
+		out = append(out, f.Apps().V1().Deployments().Informer())
+	}
+	return out
 }
 
 func (fs factorySet) jobLister() batchv1lister.JobLister {
@@ -139,18 +147,26 @@ func (fs factorySet) rsLister() appsv1lister.ReplicaSetLister {
 	return &multiReplicaSetLister{listers: listers}
 }
 
-func (fs factorySet) rsInformer() cache.SharedIndexInformer {
+func (fs factorySet) rsInformers() []cache.SharedIndexInformer {
 	if fs.global != nil {
-		return fs.global.Apps().V1().ReplicaSets().Informer()
+		return []cache.SharedIndexInformer{fs.global.Apps().V1().ReplicaSets().Informer()}
 	}
-	return fs.perNamespace[0].Apps().V1().ReplicaSets().Informer()
+	out := make([]cache.SharedIndexInformer, 0, len(fs.perNamespace))
+	for _, f := range fs.perNamespace {
+		out = append(out, f.Apps().V1().ReplicaSets().Informer())
+	}
+	return out
 }
 
-func (fs factorySet) jobInformer() cache.SharedIndexInformer {
+func (fs factorySet) jobInformers() []cache.SharedIndexInformer {
 	if fs.global != nil {
-		return fs.global.Batch().V1().Jobs().Informer()
+		return []cache.SharedIndexInformer{fs.global.Batch().V1().Jobs().Informer()}
 	}
-	return fs.perNamespace[0].Batch().V1().Jobs().Informer()
+	out := make([]cache.SharedIndexInformer, 0, len(fs.perNamespace))
+	for _, f := range fs.perNamespace {
+		out = append(out, f.Batch().V1().Jobs().Informer())
+	}
+	return out
 }
 
 func New(
@@ -162,8 +178,13 @@ func New(
 
 	fs, factories := newFactories(client, cfg, resync)
 
-	podInformer := fs.podInformer()
 	podLister := fs.podLister()
+	podInformers := fs.podInformers()
+
+	var podsSynced []cache.InformerSynced
+	for _, inf := range podInformers {
+		podsSynced = append(podsSynced, inf.HasSynced)
+	}
 
 	c := &Controller{
 		handler: h,
@@ -184,16 +205,18 @@ func New(
 			workqueue.TypedRateLimitingQueueConfig[string]{Name: "jobs"},
 		),
 		podLister:  podLister,
-		podsSynced: podInformer.HasSynced,
+		podsSynced: podsSynced,
 	}
 
 	h.SetPodLister(podLister)
 
-	podInformer.AddEventHandler(cache.ResourceEventHandlerFuncs{
-		AddFunc:    c.enqueuePod,
-		UpdateFunc: func(old, new interface{}) { c.enqueuePod(new) },
-		DeleteFunc: c.enqueuePod,
-	})
+	for _, inf := range podInformers {
+		inf.AddEventHandler(cache.ResourceEventHandlerFuncs{
+			AddFunc:    c.enqueuePod,
+			UpdateFunc: func(old, new interface{}) { c.enqueuePod(new) },
+			DeleteFunc: c.enqueuePod,
+		})
+	}
 
 	if cfg.NodeMonitor.Enabled {
 		nodeInformer := fs.nodeInformer()
@@ -212,43 +235,62 @@ func New(
 	}
 
 	if cfg.RolloutMonitor.Enabled {
-		deployInformer := fs.deployInformer()
 		deployLister := fs.deployLister()
+		deployInformers := fs.deployInformers()
 
 		c.deployLister = deployLister
-		c.deploysSynced = deployInformer.HasSynced
 		c.deploymentWatchEnabled = true
+
+		var deploysSynced []cache.InformerSynced
+		for _, inf := range deployInformers {
+			deploysSynced = append(deploysSynced, inf.HasSynced)
+		}
+		c.deploysSynced = deploysSynced
 
 		h.SetDeploymentLister(deployLister)
 
-		deployInformer.AddEventHandler(cache.ResourceEventHandlerFuncs{
-			AddFunc:    c.enqueueDeployment,
-			UpdateFunc: func(old, new interface{}) { c.enqueueDeployment(new) },
-			DeleteFunc: c.enqueueDeployment,
-		})
+		for _, inf := range deployInformers {
+			inf.AddEventHandler(cache.ResourceEventHandlerFuncs{
+				AddFunc:    c.enqueueDeployment,
+				UpdateFunc: func(old, new interface{}) { c.enqueueDeployment(new) },
+				DeleteFunc: c.enqueueDeployment,
+			})
+		}
 	}
 
 	if cfg.JobMonitor.Enabled {
-		jobInformer := fs.jobInformer()
 		jobLister := fs.jobLister()
+		jobInformers := fs.jobInformers()
 
 		c.jobLister = jobLister
-		c.jobsSynced = jobInformer.HasSynced
 		c.jobWatchEnabled = true
+
+		var jobsSynced []cache.InformerSynced
+		for _, inf := range jobInformers {
+			jobsSynced = append(jobsSynced, inf.HasSynced)
+		}
+		c.jobsSynced = jobsSynced
 
 		h.SetJobLister(jobLister)
 
-		jobInformer.AddEventHandler(cache.ResourceEventHandlerFuncs{
-			AddFunc:    c.enqueueJob,
-			UpdateFunc: func(old, new interface{}) { c.enqueueJob(new) },
-			DeleteFunc: c.enqueueJob,
-		})
+		for _, inf := range jobInformers {
+			inf.AddEventHandler(cache.ResourceEventHandlerFuncs{
+				AddFunc:    c.enqueueJob,
+				UpdateFunc: func(old, new interface{}) { c.enqueueJob(new) },
+				DeleteFunc: c.enqueueJob,
+			})
+		}
 	}
 
 	{
-		rsInformer := fs.rsInformer()
 		c.rsLister = fs.rsLister()
-		c.rsSynced = rsInformer.HasSynced
+
+		var rsSynced []cache.InformerSynced
+		for _, inf := range fs.rsInformers() {
+			rsSynced = append(rsSynced, inf.HasSynced)
+		}
+		c.rsSynced = rsSynced
+
 		h.SetReplicaLister(c.rsLister)
 	}
 
@@ -313,16 +355,14 @@ func (c *Controller) Run(ctx context.Context, workers int) error {
 	klog.InfoS("starting controller")
 
 	klog.InfoS("waiting for informer caches to sync")
-	syncFns := []cache.InformerSynced{c.podsSynced, c.rsSynced}
+	syncFns := make([]cache.InformerSynced, 0, 1+len(c.podsSynced)+len(c.rsSynced)+len(c.deploysSynced)+len(c.jobsSynced))
+	syncFns = append(syncFns, c.podsSynced...)
+	syncFns = append(syncFns, c.rsSynced...)
 	if c.nodesSynced != nil {
 		syncFns = append(syncFns, c.nodesSynced)
 	}
-	if c.deploysSynced != nil {
-		syncFns = append(syncFns, c.deploysSynced)
-	}
-	if c.jobsSynced != nil {
-		syncFns = append(syncFns, c.jobsSynced)
-	}
+	syncFns = append(syncFns, c.deploysSynced...)
+	syncFns = append(syncFns, c.jobsSynced...)
 	if !cache.WaitForCacheSync(ctx.Done(), syncFns...) {
 		return fmt.Errorf("failed to wait for caches to sync")
 	}

@@ -14,9 +14,11 @@ import (
 )
 
 type StartupManager struct {
-	stateManager *state.StateManager
-	alertManager *alert.AlertManager
-	config       *config.Config
+	stateManager   *state.StateManager
+	alertManager   *alert.AlertManager
+	config         *config.Config
+	shouldNotify   bool
+	currentVersion string
 }
 
 func NewStartupManager(
@@ -45,22 +47,25 @@ func (s *StartupManager) HandleStartup(ctx context.Context) error {
 
 	isFirstRun, _ := s.stateManager.IsFirstRun(ctx)
 
-	currentVersion := version.Short()
+	s.currentVersion = version.Short()
 	storedVersion := s.stateManager.GetStoredVersion(ctx)
-	isUpgrade := storedVersion != "" && storedVersion != currentVersion
+	isUpgrade := storedVersion != "" && storedVersion != s.currentVersion
 
-	sendNotification := (isFirstRun || isUpgrade) && !s.config.App.DisableStartupMessage
+	s.shouldNotify = (isFirstRun || isUpgrade) && !s.config.App.DisableStartupMessage
 
-	if sendNotification {
-		s.alertManager.Notify(
-			fmt.Sprintf(constant.WelcomeMsg, currentVersion))
-	}
-
-	if err := s.stateManager.MarkAsInitialized(ctx, clusterID, currentVersion); err != nil {
+	if err := s.stateManager.MarkAsInitialized(ctx, clusterID, s.currentVersion); err != nil {
 		klog.InfoS("failed to mark as initialized", "error", err)
 	}
 
 	return nil
+}
+
+func (s *StartupManager) NotifyStartup() {
+	if s.shouldNotify {
+		s.alertManager.Notify(
+			fmt.Sprintf(constant.WelcomeMsg, s.currentVersion),
+		)
+	}
 }
 
 func (s *StartupManager) GetAlertManager() *alert.AlertManager {

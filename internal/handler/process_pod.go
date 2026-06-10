@@ -9,6 +9,21 @@ import (
 	"k8s.io/client-go/tools/cache"
 )
 
+func isPodHealthy(pod *corev1.Pod) bool {
+	if pod.Status.Phase == corev1.PodRunning || pod.Status.Phase == corev1.PodSucceeded {
+		for _, cs := range pod.Status.ContainerStatuses {
+			if cs.State.Waiting != nil && cs.State.Waiting.Reason != "ContainerCreating" && cs.State.Waiting.Reason != "PodInitializing" {
+				return false
+			}
+			if cs.State.Terminated != nil && cs.State.Terminated.ExitCode != 0 && cs.State.Terminated.Reason != "Completed" {
+				return false
+			}
+		}
+		return true
+	}
+	return false
+}
+
 func (h *handler) ProcessPod(key string, deleted bool) error {
 	namespace, name, err := cache.SplitMetaNamespaceKey(key)
 	if err != nil {
@@ -52,5 +67,9 @@ func (h *handler) ProcessPodObject(pod *corev1.Pod, deleted bool) error {
 
 	h.executePodFilters(&ctx)
 	h.executeContainersFilters(&ctx)
+
+	if isPodHealthy(pod) {
+		h.correlator.ClearSeen(pod.Namespace + "/" + pod.Name)
+	}
 	return nil
 }

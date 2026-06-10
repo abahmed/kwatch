@@ -54,14 +54,22 @@ func (e *Engine) SetSeen(keys []string) {
 	}
 }
 
-func (e *Engine) inStartupQuiet(podKey string) bool {
-	if e.config.StartupQuiet <= 0 || time.Since(e.startedAt) >= e.config.StartupQuiet {
-		return false
-	}
-	if len(e.seen) == 0 {
+func (e *Engine) isBaselined(podKey string) bool {
+	if len(e.seen) > 0 && e.seen[podKey] {
 		return true
 	}
-	return e.seen[podKey]
+	if e.config.StartupQuiet > 0 && time.Since(e.startedAt) < e.config.StartupQuiet {
+		if len(e.seen) == 0 {
+			return true
+		}
+	}
+	return false
+}
+
+func (e *Engine) ClearSeen(podKey string) {
+	e.mu.Lock()
+	defer e.mu.Unlock()
+	delete(e.seen, podKey)
 }
 
 var knownRetryReasons = map[string]bool{
@@ -100,7 +108,7 @@ func (e *Engine) Process(ev event.Event, owner string, cs *model.ContainerState)
 	defer e.mu.Unlock()
 
 	podKey := ev.Namespace + "/" + ev.PodName
-	if e.inStartupQuiet(podKey) {
+	if e.isBaselined(podKey) {
 		return nil, model.ActionSkip
 	}
 
@@ -192,6 +200,7 @@ func (e *Engine) RemovePod(namespace, podName string) {
 			pending = append(pending, transition{inc, model.ActionResolved})
 		}
 	}
+	delete(e.seen, namespace+"/"+podName)
 	e.mu.Unlock()
 
 	for _, t := range pending {

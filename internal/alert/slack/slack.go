@@ -312,6 +312,22 @@ func buildIncidentBlocks(inc *model.Incident, appCfg *config.App) *slackClient.B
 		blocks = append(blocks, markdownSection(hint))
 	}
 
+	events := strings.TrimSpace(inc.Events)
+	if len(events) > 0 {
+		blocks = append(blocks, markdownSection(":mag: *Events*"))
+		for _, chunk := range chunks(events, chunkSize) {
+			blocks = append(blocks, markdownSectionF("```%s```", chunk))
+		}
+	}
+
+	logs := strings.TrimSpace(inc.Logs)
+	if len(logs) > 0 {
+		blocks = append(blocks, markdownSection(":memo: *Logs*"))
+		for _, chunk := range chunks(logs, chunkSize) {
+			blocks = append(blocks, markdownSectionF("```%s```", chunk))
+		}
+	}
+
 	return &slackClient.Blocks{
 		BlockSet: append(blocks, markdownSection(constant.Footer)),
 	}
@@ -333,10 +349,28 @@ func buildIncidentUpdateBlocks(inc *model.Incident) *slackClient.Blocks {
 		inc.Count, inc.RestartCount, resourcesStr, duration,
 	)
 
+	blocks := []slackClient.Block{
+		markdownSection(text),
+	}
+
+	events := strings.TrimSpace(inc.Events)
+	if len(events) > 0 {
+		blocks = append(blocks, markdownSection(":mag: *Events*"))
+		for _, chunk := range chunks(events, chunkSize) {
+			blocks = append(blocks, markdownSectionF("```%s```", chunk))
+		}
+	}
+
+	logs := strings.TrimSpace(inc.Logs)
+	if len(logs) > 0 {
+		blocks = append(blocks, markdownSection(":memo: *Logs*"))
+		for _, chunk := range chunks(logs, chunkSize) {
+			blocks = append(blocks, markdownSectionF("```%s```", chunk))
+		}
+	}
+
 	return &slackClient.Blocks{
-		BlockSet: []slackClient.Block{
-			markdownSection(text),
-		},
+		BlockSet: blocks,
 	}
 }
 
@@ -375,19 +409,33 @@ func formatIncidentText(inc *model.Incident, action model.IncidentAction) string
 	case model.ActionCreate:
 		resources := len(inc.Resources)
 		duration := inc.LastSeen.Sub(inc.FirstSeen).Round(time.Minute)
-		return fmt.Sprintf(
+		text := fmt.Sprintf(
 			"🚨 Incident: %s (%s)\nNamespace: %s\nContainer: %s\nReason: %s\nRestarts: %d\nHint: %s\nAffected: %d resource(s)\nCount: %d\nDuration: %s",
 			inc.Name, inc.OwnerKind, inc.Namespace, inc.ContainerName,
 			inc.Reason, inc.RestartCount, inc.Hint,
 			resources, inc.Count, duration,
 		)
+		if ev := strings.TrimSpace(inc.Events); len(ev) > 0 {
+			text += "\n\nEvents:\n" + ev
+		}
+		if logs := strings.TrimSpace(inc.Logs); len(logs) > 0 {
+			text += "\n\nLogs:\n" + logs
+		}
+		return text
 	case model.ActionUpdate:
 		resources := len(inc.Resources)
 		duration := inc.LastSeen.Sub(inc.FirstSeen).Round(time.Minute)
-		return fmt.Sprintf(
+		text := fmt.Sprintf(
 			"🔄 Update: %s | Count: %d | Duration: %s | Affected: %d",
 			inc.Name, inc.Count, duration, resources,
 		)
+		if ev := strings.TrimSpace(inc.Events); len(ev) > 0 {
+			text += "\n\nEvents:\n" + ev
+		}
+		if logs := strings.TrimSpace(inc.Logs); len(logs) > 0 {
+			text += "\n\nLogs:\n" + logs
+		}
+		return text
 	case model.ActionStale:
 		duration := inc.LastSeen.Sub(inc.FirstSeen).Round(time.Minute)
 		return fmt.Sprintf(

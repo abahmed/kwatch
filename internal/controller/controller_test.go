@@ -84,6 +84,7 @@ func (m *mockHandler) SetDeploymentLister(appsv1lister.DeploymentLister)       {
 func (m *mockHandler) SetJobLister(batchv1lister.JobLister)                    {}
 func (m *mockHandler) SetReplicaLister(appsv1lister.ReplicaSetLister)          {}
 func (m *mockHandler) SetSeen([]string)                                        {}
+func (m *mockHandler) ClearSeen(string)                                        {}
 
 func TestNewCreatesController(t *testing.T) {
 	assert := assert.New(t)
@@ -99,7 +100,7 @@ func TestNewCreatesController(t *testing.T) {
 	assert.NotNil(ctrl.podQueue)
 	assert.NotNil(ctrl.nodeQueue)
 	assert.NotNil(ctrl.podLister)
-	assert.NotNil(ctrl.podsSynced)
+	assert.Len(ctrl.podsSynced, 1)
 	// Node monitor disabled by default — no node informer
 	assert.Nil(ctrl.nodesSynced)
 	assert.Nil(ctrl.nodeLister)
@@ -722,4 +723,50 @@ func TestProcessNextPodItemForgetsOnSuccess(t *testing.T) {
 	ctrl.processNextPodItem()
 
 	assert.Equal(0, ctrl.podQueue.Len())
+}
+
+func TestNewMultiNamespaceHasMultipleSynced(t *testing.T) {
+	assert := assert.New(t)
+
+	pod1 := &corev1.Pod{
+		ObjectMeta: metav1.ObjectMeta{Name: "pod-1", Namespace: "ns1"},
+	}
+	pod2 := &corev1.Pod{
+		ObjectMeta: metav1.ObjectMeta{Name: "pod-2", Namespace: "ns2"},
+	}
+	client := fake.NewSimpleClientset(pod1, pod2)
+	cfg := &config.Config{
+		AllowedNamespaces: []string{"ns1", "ns2"},
+	}
+	h := &mockHandler{}
+
+	ctrl, cleanup := New(client, cfg, h)
+	defer cleanup()
+
+	assert.Len(ctrl.podsSynced, 2, "should have one synced fn per namespace")
+}
+
+func TestMultiNamespaceListerSeesBothNamespaces(t *testing.T) {
+	assert := assert.New(t)
+
+	pod1 := &corev1.Pod{
+		ObjectMeta: metav1.ObjectMeta{Name: "pod-1", Namespace: "ns1"},
+	}
+	pod2 := &corev1.Pod{
+		ObjectMeta: metav1.ObjectMeta{Name: "pod-2", Namespace: "ns2"},
+	}
+	client := fake.NewSimpleClientset(pod1, pod2)
+	cfg := &config.Config{
+		AllowedNamespaces: []string{"ns1", "ns2"},
+	}
+	h := &mockHandler{}
+
+	ctrl, cleanup := New(client, cfg, h)
+	defer cleanup()
+
+	assert.Eventually(func() bool {
+		_, err1 := ctrl.podLister.Pods("ns1").Get("pod-1")
+		_, err2 := ctrl.podLister.Pods("ns2").Get("pod-2")
+		return err1 == nil && err2 == nil
+	}, 5*time.Second, 50*time.Millisecond)
 }

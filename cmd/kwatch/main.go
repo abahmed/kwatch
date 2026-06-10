@@ -78,13 +78,9 @@ func main() {
 			}
 		},
 	})
-	go correlator.StartCleanup(ctx)
 
 	pvcMonitor := pvc.NewPvcMonitor(k8sClient, &cfg.PvcMonitor, alertManager, correlator)
-	go pvcMonitor.Start(ctx)
-
-	hbMonitor := heartbeat.NewHeartbeatMonitor(correlator, alertManager, &cfg.HeartbeatMonitor)
-	go hbMonitor.Start(ctx)
+	hbMonitor := heartbeat.NewHeartbeatMonitor(&cfg.HeartbeatMonitor)
 
 	h := handler.NewHandler(
 		k8sClient,
@@ -95,6 +91,16 @@ func main() {
 
 	ctrl, cleanup := controller.New(k8sClient, cfg, h)
 	defer cleanup()
+
+	runLeaderTasks := func(ctx context.Context) {
+		go correlator.StartCleanup(ctx)
+		go pvcMonitor.Start(ctx)
+		go hbMonitor.Start(ctx)
+		sm.NotifyStartup()
+		if err := ctrl.Run(ctx, 1); err != nil {
+			klog.ErrorS(err, "controller error")
+		}
+	}
 
 	if cfg.LeaderElection.Enabled {
 		leaseName := cfg.LeaderElection.LeaseName
@@ -124,23 +130,17 @@ func main() {
 			RetryPeriod:     2 * time.Second,
 			Callbacks: leaderelection.LeaderCallbacks{
 				OnStartedLeading: func(ctx context.Context) {
-					klog.InfoS("became leader, starting controller")
-					if err := ctrl.Run(ctx, 1); err != nil {
-						klog.ErrorS(err, "controller error")
-					}
+					klog.InfoS("became leader, starting tasks")
+					runLeaderTasks(ctx)
 				},
 				OnStoppedLeading: func() {
-					klog.InfoS("stopped leading")
+					klog.ErrorS(nil, "lost leadership, exiting for clean re-election")
+					os.Exit(0)
 				},
 			},
 		})
 	} else {
-		go func() {
-			if err := ctrl.Run(ctx, 1); err != nil {
-				klog.ErrorS(err, "controller error")
-				os.Exit(1)
-			}
-		}()
+		go runLeaderTasks(ctx)
 	}
 
 	sigCh := make(chan os.Signal, 1)
