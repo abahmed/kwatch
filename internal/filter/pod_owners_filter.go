@@ -4,6 +4,7 @@ import (
 	"context"
 
 	apiv1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/klog/v2"
 )
 
 type PodOwnersFilter struct{}
@@ -19,31 +20,36 @@ func (f PodOwnersFilter) Execute(ctx *Context) bool {
 
 	owner := ctx.Pod.OwnerReferences[0]
 	if owner.Kind == "ReplicaSet" {
-		rs, _ :=
+		rs, err :=
 			ctx.Client.AppsV1().ReplicaSets(ctx.Pod.Namespace).Get(
 				context.TODO(),
 				owner.Name,
 				apiv1.GetOptions{})
-
-		if rs != nil && len(rs.ObjectMeta.OwnerReferences) > 0 {
+		if err != nil {
+			klog.ErrorS(err, "failed to get ReplicaSet", "name", owner.Name, "namespace", ctx.Pod.Namespace)
+		} else if len(rs.ObjectMeta.OwnerReferences) > 0 {
 			owner = rs.ObjectMeta.OwnerReferences[0]
 		}
 	} else if owner.Kind == "DaemonSet" {
-		ds, _ :=
+		ds, err :=
 			ctx.Client.AppsV1().DaemonSets(ctx.Pod.Namespace).Get(
 				context.TODO(),
 				owner.Name,
 				apiv1.GetOptions{})
-		if ds != nil && len(ds.ObjectMeta.OwnerReferences) > 0 {
+		if err != nil {
+			klog.ErrorS(err, "failed to get DaemonSet", "name", owner.Name, "namespace", ctx.Pod.Namespace)
+		} else if len(ds.ObjectMeta.OwnerReferences) > 0 {
 			owner = ds.ObjectMeta.OwnerReferences[0]
 		}
 	} else if owner.Kind == "StatefulSet" {
-		ss, _ :=
+		ss, err :=
 			ctx.Client.AppsV1().StatefulSets(ctx.Pod.Namespace).Get(
 				context.TODO(),
 				owner.Name,
 				apiv1.GetOptions{})
-		if ss != nil && len(ss.ObjectMeta.OwnerReferences) > 0 {
+		if err != nil {
+			klog.ErrorS(err, "failed to get StatefulSet", "name", owner.Name, "namespace", ctx.Pod.Namespace)
+		} else if len(ss.ObjectMeta.OwnerReferences) > 0 {
 			owner = ss.ObjectMeta.OwnerReferences[0]
 		}
 	}

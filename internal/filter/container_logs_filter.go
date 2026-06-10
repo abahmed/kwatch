@@ -14,10 +14,7 @@ func (f ContainerLogsFilter) Execute(ctx *Context) bool {
 		return false
 	}
 
-	previousLogs := false
-	if ctx.Container.HasRestarts && container.State.Running != nil {
-		previousLogs = true
-	}
+	previousLogs := container.RestartCount > 0 && container.State.Running == nil
 
 	logs := k8s.GetPodContainerLogs(
 		ctx.Client,

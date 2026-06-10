@@ -41,11 +41,17 @@ func NewEngine(cfg Config) *Engine {
 	}
 }
 
+var knownRetryReasons = map[string]bool{
+	"CrashLoopBackOff": true,
+	"BackOff":          true,
+}
+
 func normalizeReason(reason string) string {
 	idx := strings.LastIndex(reason, " ")
 	if idx > 0 {
-		if _, err := strconv.Atoi(reason[idx+1:]); err == nil {
-			return reason[:idx]
+		base, suffix := reason[:idx], reason[idx+1:]
+		if _, err := strconv.Atoi(suffix); err == nil && knownRetryReasons[base] {
+			return base
 		}
 	}
 	return reason
@@ -130,7 +136,6 @@ func (e *Engine) RemovePod(namespace, podName string) {
 			inc.State = model.StateResolved
 			pending = append(pending, transition{inc, model.ActionResolved})
 		}
-		break
 	}
 	e.mu.Unlock()
 

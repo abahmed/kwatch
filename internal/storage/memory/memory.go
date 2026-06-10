@@ -7,6 +7,7 @@ import (
 )
 
 type memory struct {
+	mu   sync.Mutex
 	smap sync.Map
 	nmap sync.Map
 }
@@ -22,6 +23,10 @@ func NewMemory() storage.Storage {
 // AddPodContainer attaches container to pod to mark it has an error
 func (m *memory) AddPodContainer(namespace, podKey, containerKey string, state *storage.ContainerState) {
 	key := m.getKey(namespace, podKey)
+
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
 	if v, ok := m.smap.Load(key); ok {
 		containers := v.(map[string]*storage.ContainerState)
 		containers[containerKey] = state
@@ -42,6 +47,9 @@ func (m *memory) DelPod(namespace, podKey string) {
 func (m *memory) DelPodContainer(namespace, podKey, containerKey string) {
 	key := m.getKey(namespace, podKey)
 
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
 	v, ok := m.smap.Load(key)
 	if !ok {
 		return
@@ -56,6 +64,9 @@ func (m *memory) DelPodContainer(namespace, podKey, containerKey string) {
 // HasPodContainer checks if container is attached to given pod or not
 func (m *memory) HasPodContainer(namespace, podKey, containerKey string) bool {
 	key := m.getKey(namespace, podKey)
+
+	m.mu.Lock()
+	defer m.mu.Unlock()
 
 	v, ok := m.smap.Load(key)
 	if !ok {
@@ -72,6 +83,9 @@ func (m *memory) HasPodContainer(namespace, podKey, containerKey string) bool {
 
 func (m *memory) GetPodContainer(namespace, podKey, containerKey string) *storage.ContainerState {
 	key := m.getKey(namespace, podKey)
+
+	m.mu.Lock()
+	defer m.mu.Unlock()
 
 	v, ok := m.smap.Load(key)
 	if !ok {

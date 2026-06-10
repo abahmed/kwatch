@@ -49,7 +49,7 @@ func (h *handler) executePodFilters(ctx *filter.Context) {
 
 	ev := event.Event{
 		PodName:       ctx.Pod.Name,
-		ContainerName: "",
+		ContainerName: ".",
 		Namespace:     ctx.Pod.Namespace,
 		NodeName:      ctx.Pod.Spec.NodeName,
 		Reason:        ctx.PodReason,

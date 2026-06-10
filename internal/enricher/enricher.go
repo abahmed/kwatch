@@ -16,4 +16,6 @@ func (e *DefaultEnricher) Enrich(ev *event.Event, inc *model.Incident) {
 	inc.ContainerName = ev.ContainerName
 	inc.RestartCount = ev.RestartCount
 	inc.Hint = hintForReason(ev.Reason)
+	inc.Logs = ev.Logs
+	inc.Events = ev.Events
 }

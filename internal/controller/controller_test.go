@@ -61,7 +61,13 @@ func (m *mockHandler) nodeEntry(i int) (string, bool) {
 	defer m.mu.Unlock()
 	return m.nodeKeys[i], m.nodeDel[i]
 }
-func (m *mockHandler) ProcessPodObject(*corev1.Pod, bool) error   { return m.err }
+func (m *mockHandler) ProcessPodObject(pod *corev1.Pod, deleted bool) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	m.podKeys = append(m.podKeys, pod.Namespace+"/"+pod.Name)
+	m.podDel = append(m.podDel, deleted)
+	return m.err
+}
 func (m *mockHandler) ProcessNodeObject(*corev1.Node, bool) error { return m.err }
 func (m *mockHandler) SetPodLister(corev1lister.PodLister)        {}
 func (m *mockHandler) SetNodeLister(corev1lister.NodeLister)      {}

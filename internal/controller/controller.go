@@ -99,7 +99,7 @@ func New(
 }
 
 func (c *Controller) enqueuePod(obj interface{}) {
-	key, err := cache.MetaNamespaceKeyFunc(obj)
+	key, err := cache.DeletionHandlingMetaNamespaceKeyFunc(obj)
 	if err != nil {
 		utilruntime.HandleError(err)
 		return
@@ -190,22 +190,20 @@ func (c *Controller) processNextNodeItem() bool {
 }
 
 func (c *Controller) syncPod(key string) error {
-	deleted := false
 	namespace, name, err := cache.SplitMetaNamespaceKey(key)
 	if err != nil {
 		return err
 	}
 
-	_, err = c.podLister.Pods(namespace).Get(name)
+	pod, err := c.podLister.Pods(namespace).Get(name)
 	if err != nil {
 		if errors.IsNotFound(err) {
-			deleted = true
-		} else {
-			return err
+			return c.handler.ProcessPod(key, true)
 		}
+		return err
 	}
 
-	return c.handler.ProcessPod(key, deleted)
+	return c.handler.ProcessPodObject(pod, false)
 }
 
 func (c *Controller) syncNode(key string) error {

@@ -34,6 +34,8 @@ type Incident struct {
 	ContainerName string
 	RestartCount  int
 	Hint          string
+	Logs          string
+	Events        string
 	State         IncidentState
 	LastUpdate    time.Time
 }

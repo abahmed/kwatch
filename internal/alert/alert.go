@@ -78,6 +78,10 @@ func (a *AlertManager) Init(
 			pvdr = googlechat.NewGoogleChat(v, appCfg)
 		}
 
+		if pvdr == nil {
+			klog.InfoS("unknown alert provider, skipping", "name", k)
+			continue
+		}
 		if !reflect.ValueOf(pvdr).IsNil() {
 			a.providers = append(a.providers, pvdr)
 		}
@@ -159,13 +163,31 @@ func formatCreateMessage(inc *model.Incident) string {
 	resources := len(inc.Resources)
 	duration := inc.LastSeen.Sub(inc.FirstSeen).Round(time.Minute)
 
+	logsBlock := ""
+	if inc.Logs != "" {
+		logsBlock = fmt.Sprintf("\nLogs:\n%s", truncateText(inc.Logs, 100))
+	}
+	eventsBlock := ""
+	if inc.Events != "" {
+		eventsBlock = fmt.Sprintf("\nEvents:\n%s", truncateText(inc.Events, 100))
+	}
+
 	return fmt.Sprintf(
-		"🚨 Incident: %s\nOwner: %s (%s)\nNamespace: %s\nContainer: %s\nReason: %s\nRestarts: %d\nHint: %s\nAffected: %d resource(s)\nCount: %d\nDuration: %s",
+		"🚨 Incident: %s\nOwner: %s (%s)\nNamespace: %s\nContainer: %s\nReason: %s\nRestarts: %d\nHint: %s%s%s\nAffected: %d resource(s)\nCount: %d\nDuration: %s",
 		inc.Name, inc.OwnerKind, inc.Name,
 		inc.Namespace, inc.ContainerName, inc.Reason,
 		inc.RestartCount, inc.Hint,
+		logsBlock, eventsBlock,
 		resources, inc.Count, duration,
 	)
+}
+
+func truncateText(s string, maxLines int) string {
+	lines := strings.Split(s, "\n")
+	if len(lines) > maxLines {
+		lines = lines[:maxLines]
+	}
+	return strings.Join(lines, "\n")
 }
 
 func formatUpdateMessage(inc *model.Incident) string {
