@@ -9,11 +9,14 @@ import (
 
 type PodOwnersFilter struct{}
 
-func (f PodOwnersFilter) Execute(ctx *Context) bool {
+func (f PodOwnersFilter) Detect(ctx *Context) Status {
+	return StatusAlert
+}
+
+func (f PodOwnersFilter) Enrich(ctx *Context) bool {
 	if ctx.Owner != nil {
 		return false
 	}
-
 	if len(ctx.Pod.OwnerReferences) == 0 {
 		return false
 	}
@@ -55,6 +58,9 @@ func (f PodOwnersFilter) Execute(ctx *Context) bool {
 	}
 
 	ctx.Owner = &owner
-
 	return false
+}
+
+func (f PodOwnersFilter) Execute(ctx *Context) bool {
+	return f.Enrich(ctx)
 }

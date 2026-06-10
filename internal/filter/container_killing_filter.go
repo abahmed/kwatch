@@ -6,27 +6,25 @@ import (
 
 type ContainerKillingFilter struct{}
 
-func (f ContainerKillingFilter) Execute(ctx *Context) bool {
+func (f ContainerKillingFilter) Enrich(ctx *Context) bool {
 	if !ctx.Config.IgnoreFailedGracefulShutdown || ctx.Events == nil {
 		return false
 	}
 	container := ctx.Container.Container
-
-	isOk := false
 	if container.State.Waiting != nil {
-		return isOk
+		return false
 	}
-
 	for _, ev := range *ctx.Events {
 		// Graceful shutdown did not work and container was killed during
 		// shutdown. Not really an error
 		if ev.Reason == "Killing" &&
-			strings.Contains(
-				ev.Message,
-				"Stopping container "+container.Name) {
-			isOk = true
+			strings.Contains(ev.Message, "Stopping container "+container.Name) {
+			return true
 		}
 	}
+	return false
+}
 
-	return isOk
+func (f ContainerKillingFilter) Execute(ctx *Context) bool {
+	return f.Enrich(ctx)
 }

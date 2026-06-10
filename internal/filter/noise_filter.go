@@ -14,14 +14,18 @@ var noiseReasons = []string{
 	"Pulling",
 }
 
-func (f NoiseFilter) Execute(ctx *Context) bool {
+func (f NoiseFilter) Detect(ctx *Context) Status {
 	reason := ctx.Container.Reason
 	if len(reason) == 0 {
-		return false
+		return StatusAlert
 	}
 	if slices.Contains(noiseReasons, reason) {
 		klog.V(4).InfoS("skipping noise reason", "reason", reason)
-		return true
+		return StatusSkip
 	}
-	return false
+	return StatusAlert
+}
+
+func (f NoiseFilter) Execute(ctx *Context) bool {
+	return f.Detect(ctx) == StatusSkip
 }

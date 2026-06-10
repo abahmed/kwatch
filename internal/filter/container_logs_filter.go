@@ -7,7 +7,11 @@ import (
 
 type ContainerLogsFilter struct{}
 
-func (f ContainerLogsFilter) Execute(ctx *Context) bool {
+func (f ContainerLogsFilter) Detect(ctx *Context) Status {
+	return StatusAlert
+}
+
+func (f ContainerLogsFilter) Enrich(ctx *Context) bool {
 	container := ctx.Container.Container
 
 	if container.RestartCount == 0 && container.State.Waiting != nil {
@@ -35,4 +39,8 @@ func (f ContainerLogsFilter) Execute(ctx *Context) bool {
 
 	ctx.Container.Logs = logs
 	return false
+}
+
+func (f ContainerLogsFilter) Execute(ctx *Context) bool {
+	return f.Enrich(ctx)
 }

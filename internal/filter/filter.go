@@ -10,12 +10,23 @@ import (
 	"k8s.io/client-go/kubernetes"
 )
 
-type Filter interface {
-	Execute(ctx *Context) (ShouldStop bool)
+type Status int
+
+const (
+	StatusSkip  Status = iota
+	StatusAlert
+)
+
+type Detector interface {
+	Detect(ctx *Context) Status
 }
 
-type FilterResult struct {
-	ShouldStop bool
+type Enricher interface {
+	Enrich(ctx *Context) (shouldSkip bool)
+}
+
+type Filter interface {
+	Execute(ctx *Context) (ShouldStop bool)
 }
 
 type Context struct {

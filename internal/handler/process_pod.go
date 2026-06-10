@@ -4,7 +4,6 @@ import (
 	"fmt"
 
 	"github.com/abahmed/kwatch/internal/filter"
-	"github.com/abahmed/kwatch/internal/k8s"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/client-go/tools/cache"
@@ -48,19 +47,6 @@ func (h *handler) ProcessPodObject(pod *corev1.Pod, deleted bool) error {
 		Config: h.config,
 		Pod:    pod,
 		EvType: "ADDED",
-	}
-
-	podEvents, err := k8s.GetPodEvents(ctx.Client, ctx.Pod.Name, ctx.Pod.Namespace)
-	if err != nil {
-		return fmt.Errorf(
-			"failed to get events for pod %s(%s): %w",
-			ctx.Pod.Name,
-			ctx.Pod.Namespace,
-			err)
-	}
-
-	if podEvents != nil {
-		ctx.Events = &podEvents.Items
 	}
 
 	h.executePodFilters(&ctx)

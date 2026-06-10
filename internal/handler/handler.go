@@ -21,15 +21,17 @@ type Handler interface {
 }
 
 type handler struct {
-	kclient          kubernetes.Interface
-	config           *config.Config
-	memory           storage.Storage
-	podFilters       []filter.Filter
-	containerFilters []filter.Filter
-	correlator       *correlation.Engine
-	alertManager     *alert.AlertManager
-	podLister        corev1lister.PodLister
-	nodeLister       corev1lister.NodeLister
+	kclient               kubernetes.Interface
+	config                *config.Config
+	memory                storage.Storage
+	podDetectors          []filter.Detector
+	podEnrichers          []filter.Enricher
+	containerDetectors    []filter.Detector
+	containerEnrichers    []filter.Enricher
+	correlator            *correlation.Engine
+	alertManager          *alert.AlertManager
+	podLister             corev1lister.PodLister
+	nodeLister            corev1lister.NodeLister
 }
 
 func NewHandler(
@@ -38,36 +40,43 @@ func NewHandler(
 	mem storage.Storage,
 	correlator *correlation.Engine,
 	alertManager *alert.AlertManager) Handler {
-	// Order is important
-	podFilters := []filter.Filter{
+	podDetectors := []filter.Detector{
 		filter.NamespaceFilter{},
 		filter.PodNameFilter{},
 		filter.PodStatusFilter{},
+	}
+
+	podEnrichers := []filter.Enricher{
 		filter.PodEventsFilter{},
 		filter.PodOwnersFilter{},
 	}
 
-	containersFilters := []filter.Filter{
+	containerDetectors := []filter.Detector{
 		filter.NamespaceFilter{},
 		filter.PodNameFilter{},
 		filter.ContainerNameFilter{},
 		filter.ContainerRestartsFilter{},
 		filter.ContainerStateFilter{},
-		filter.ContainerKillingFilter{},
 		filter.ContainerReasonsFilter{},
 		filter.NoiseFilter{},
-		filter.ContainerLogsFilter{},
+	}
+
+	containerEnrichers := []filter.Enricher{
+		filter.ContainerKillingFilter{},
 		filter.PodOwnersFilter{},
+		filter.ContainerLogsFilter{},
 	}
 
 	return &handler{
-		kclient:          cli,
-		config:           cfg,
-		podFilters:       podFilters,
-		containerFilters: containersFilters,
-		memory:           mem,
-		correlator:       correlator,
-		alertManager:     alertManager,
+		kclient:            cli,
+		config:             cfg,
+		podDetectors:       podDetectors,
+		podEnrichers:       podEnrichers,
+		containerDetectors: containerDetectors,
+		containerEnrichers: containerEnrichers,
+		memory:             mem,
+		correlator:         correlator,
+		alertManager:       alertManager,
 	}
 }
 

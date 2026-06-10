@@ -29,59 +29,85 @@ func (h *handler) executeContainersFilters(ctx *filter.Context) {
 				ctx.Pod.Namespace, ctx.Pod.Name, container.Name),
 		}
 
-		isContainerOk := false
-		for i := range h.containerFilters {
-			if shouldStop := h.containerFilters[i].Execute(ctx); shouldStop {
-				isContainerOk = true
+		// Phase 1: Detect (pure, no I/O)
+		broken := false
+		for i := range h.containerDetectors {
+			if h.containerDetectors[i].Detect(ctx) == filter.StatusSkip {
+				broken = false
+				break
+			}
+			broken = true
+		}
+
+		if !broken {
+			continue
+		}
+
+		// Phase 2: Enrich (I/O: events, owner, logs)
+		if ctx.Events == nil {
+			podEvents, err := k8s.GetPodEvents(ctx.Client, ctx.Pod.Name, ctx.Pod.Namespace)
+			if err != nil {
+				klog.ErrorS(err, "failed to fetch pod events", "pod", ctx.Pod.Name)
+			}
+			if podEvents != nil {
+				ctx.Events = &podEvents.Items
+			}
+		}
+
+		for i := range h.containerEnrichers {
+			if h.containerEnrichers[i].Enrich(ctx) {
+				broken = false
 				break
 			}
 		}
 
-		if !isContainerOk {
-			ownerName := ""
-			if ctx.Owner != nil {
-				ownerName = ctx.Owner.Name
-			}
+		if !broken {
+			continue
+		}
 
-			klog.InfoS(
-				"container only issue",
-				"container", ctx.Container.Container.Name,
-				"pod", ctx.Pod.Name,
-				"owner", ownerName,
-				"reason", ctx.Container.Reason,
-				"message", ctx.Container.Msg,
-				"exitCode", ctx.Container.ExitCode)
+		ownerName := ""
+		if ctx.Owner != nil {
+			ownerName = ctx.Owner.Name
+		}
 
-			ownerKind := ""
-			if ctx.Owner != nil {
-				ownerKind = ctx.Owner.Kind
-			}
+		klog.InfoS(
+			"container only issue",
+			"container", ctx.Container.Container.Name,
+			"pod", ctx.Pod.Name,
+			"owner", ownerName,
+			"reason", ctx.Container.Reason,
+			"message", ctx.Container.Msg,
+			"exitCode", ctx.Container.ExitCode)
 
-			ev := event.Event{
-				PodName:       ctx.Pod.Name,
-				ContainerName: ctx.Container.Container.Name,
-				Namespace:     ctx.Pod.Namespace,
-				NodeName:      ctx.Pod.Spec.NodeName,
-				Reason:        ctx.Container.Reason,
-				Events:        k8s.GetPodEventsStr(ctx.Events),
-				Logs:          ctx.Container.Logs,
-				Labels:        ctx.Pod.Labels,
-				OwnerKind:     ownerKind,
-				RestartCount:  int(ctx.Container.Container.RestartCount),
-			}
+		ownerKind := ""
+		if ctx.Owner != nil {
+			ownerKind = ctx.Owner.Kind
+		}
 
-			cs := &model.ContainerState{
-				RestartCount:     ctx.Container.Container.RestartCount,
-				LastTerminatedOn: ctx.Container.LastTerminatedOn,
-				Reason:           ctx.Container.Reason,
-				Msg:              ctx.Container.Msg,
-				ExitCode:         ctx.Container.ExitCode,
-				Status:           ctx.Container.Status,
-			}
-			inc, action := h.correlator.Process(ev, ownerName, cs)
-			if action != model.ActionSkip {
-				h.alertManager.NotifyIncident(inc, action)
-			}
+		ev := event.Event{
+			PodName:       ctx.Pod.Name,
+			ContainerName: ctx.Container.Container.Name,
+			Namespace:     ctx.Pod.Namespace,
+			NodeName:      ctx.Pod.Spec.NodeName,
+			Reason:        ctx.Container.Reason,
+			Events:        k8s.GetPodEventsStr(ctx.Events),
+			Logs:          ctx.Container.Logs,
+			Labels:        ctx.Pod.Labels,
+			OwnerKind:     ownerKind,
+			RestartCount:  int(ctx.Container.Container.RestartCount),
+		}
+
+		cs := &model.ContainerState{
+			RestartCount:     ctx.Container.Container.RestartCount,
+			LastTerminatedOn: ctx.Container.LastTerminatedOn,
+			Reason:           ctx.Container.Reason,
+			Msg:              ctx.Container.Msg,
+			ExitCode:         ctx.Container.ExitCode,
+			Status:           ctx.Container.Status,
+		}
+		inc, action := h.correlator.Process(ev, ownerName, cs)
+		if action != model.ActionSkip {
+			h.alertManager.NotifyIncident(inc, action)
 		}
 	}
 }

@@ -12,17 +12,33 @@ func (h *handler) executePodFilters(ctx *filter.Context) {
 	ctx.PodLastState = h.correlator.GetLastContainerState(
 		ctx.Pod.Namespace, ctx.Pod.Name, ".")
 
-	isPodOk := false
-	for i := range h.podFilters {
-		if shouldStop := h.podFilters[i].Execute(ctx); shouldStop {
-			isPodOk = true
-			break
+	// Phase 1: Detect (pure, no I/O)
+	for i := range h.podDetectors {
+		if h.podDetectors[i].Detect(ctx) == filter.StatusSkip {
+			return
 		}
 	}
 
-	if isPodOk ||
-		ctx.ContainersHasIssues ||
-		!ctx.PodHasIssues {
+	if !ctx.PodHasIssues || ctx.ContainersHasIssues {
+		return
+	}
+
+	// Phase 2: Enrich (I/O: events, owner)
+	podEvents, err := k8s.GetPodEvents(ctx.Client, ctx.Pod.Name, ctx.Pod.Namespace)
+	if err != nil {
+		klog.ErrorS(err, "failed to fetch pod events", "pod", ctx.Pod.Name)
+	}
+	if podEvents != nil {
+		ctx.Events = &podEvents.Items
+	}
+
+	for i := range h.podEnrichers {
+		if h.podEnrichers[i].Enrich(ctx) {
+			return
+		}
+	}
+
+	if !ctx.PodHasIssues {
 		return
 	}
 
