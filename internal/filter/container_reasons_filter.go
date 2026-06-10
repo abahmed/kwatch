@@ -49,12 +49,10 @@ func (f ContainerReasonsFilter) Execute(ctx *Context) bool {
 		return true
 	}
 
-	lastState := ctx.Memory.GetPodContainer(ctx.Pod.Namespace,
-		ctx.Pod.Name,
-		container.Name)
+	lastState := ctx.Container.LastState
 
 	if lastState != nil {
-		if lastState.LastTerminatedOn == ctx.Container.LastTerminatedOn {
+		if lastState.LastTerminatedOn.Equal(ctx.Container.LastTerminatedOn) {
 			return true
 		}
 

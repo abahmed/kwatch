@@ -57,7 +57,22 @@ func normalizeReason(reason string) string {
 	return reason
 }
 
-func (e *Engine) Process(ev event.Event, owner string) (*model.Incident, model.IncidentAction) {
+func (e *Engine) GetLastContainerState(namespace, podName, containerName string) *model.ContainerState {
+	e.mu.Lock()
+	defer e.mu.Unlock()
+	for _, inc := range e.state {
+		if inc.Namespace == namespace && inc.ContainerName == containerName && inc.Resources[podName] {
+			if inc.LastContainerState != nil {
+				cs := *inc.LastContainerState
+				return &cs
+			}
+			return nil
+		}
+	}
+	return nil
+}
+
+func (e *Engine) Process(ev event.Event, owner string, cs *model.ContainerState) (*model.Incident, model.IncidentAction) {
 	e.mu.Lock()
 	defer e.mu.Unlock()
 
@@ -76,6 +91,7 @@ func (e *Engine) Process(ev event.Event, owner string) (*model.Incident, model.I
 		if ev.PodName != "" {
 			inc.Resources[ev.PodName] = true
 		}
+		inc.LastContainerState = cs
 		e.config.Enricher.Enrich(&ev, inc)
 		return inc, model.ActionUpdate
 	}
@@ -96,6 +112,7 @@ func (e *Engine) Process(ev event.Event, owner string) (*model.Incident, model.I
 	if ev.PodName != "" {
 		inc.Resources[ev.PodName] = true
 	}
+	inc.LastContainerState = cs
 	e.config.Enricher.Enrich(&ev, inc)
 	e.state[key] = inc
 	return inc, model.ActionCreate

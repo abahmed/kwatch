@@ -7,7 +7,6 @@ import (
 	"github.com/abahmed/kwatch/internal/filter"
 	"github.com/abahmed/kwatch/internal/k8s"
 	"github.com/abahmed/kwatch/internal/model"
-	"github.com/abahmed/kwatch/internal/storage"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/klog/v2"
 )
@@ -26,6 +25,8 @@ func (h *handler) executeContainersFilters(ctx *filter.Context) {
 			Container:        container,
 			HasRestarts:      false,
 			LastTerminatedOn: time.Time{},
+			LastState: h.correlator.GetLastContainerState(
+				ctx.Pod.Namespace, ctx.Pod.Name, container.Name),
 		}
 
 		isContainerOk := false
@@ -35,19 +36,6 @@ func (h *handler) executeContainersFilters(ctx *filter.Context) {
 				break
 			}
 		}
-
-		ctx.Memory.AddPodContainer(
-			ctx.Pod.Namespace,
-			ctx.Pod.Name,
-			ctx.Container.Container.Name,
-			&storage.ContainerState{
-				RestartCount:     ctx.Container.Container.RestartCount,
-				LastTerminatedOn: ctx.Container.LastTerminatedOn,
-				Reason:           ctx.Container.Reason,
-				Msg:              ctx.Container.Msg,
-				ExitCode:         ctx.Container.ExitCode,
-				Status:           ctx.Container.Status,
-			})
 
 		if !isContainerOk {
 			ownerName := ""
@@ -82,7 +70,15 @@ func (h *handler) executeContainersFilters(ctx *filter.Context) {
 				RestartCount:  int(ctx.Container.Container.RestartCount),
 			}
 
-			inc, action := h.correlator.Process(ev, ownerName)
+			cs := &model.ContainerState{
+				RestartCount:     ctx.Container.Container.RestartCount,
+				LastTerminatedOn: ctx.Container.LastTerminatedOn,
+				Reason:           ctx.Container.Reason,
+				Msg:              ctx.Container.Msg,
+				ExitCode:         ctx.Container.ExitCode,
+				Status:           ctx.Container.Status,
+			}
+			inc, action := h.correlator.Process(ev, ownerName, cs)
 			if action != model.ActionSkip {
 				h.alertManager.NotifyIncident(inc, action)
 			}

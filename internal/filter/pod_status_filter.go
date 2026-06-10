@@ -70,11 +70,7 @@ func (f PodStatusFilter) Execute(ctx *Context) bool {
 		return true
 	}
 
-	lastState := ctx.Memory.GetPodContainer(ctx.Pod.Namespace,
-		ctx.Pod.Name,
-		".")
-
-	if ctx.PodHasIssues && lastState != nil {
+	if ctx.PodHasIssues && ctx.PodLastState != nil {
 		return true
 	}
 

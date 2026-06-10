@@ -5,8 +5,7 @@ import (
 	"testing"
 
 	"github.com/abahmed/kwatch/internal/config"
-	"github.com/abahmed/kwatch/internal/storage"
-	"github.com/abahmed/kwatch/internal/storage/memory"
+	"github.com/abahmed/kwatch/internal/model"
 	"github.com/stretchr/testify/assert"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -24,7 +23,7 @@ func TestNamespaceFilterAllowed(t *testing.T) {
 	ctx := &Context{
 		Client: client,
 		Config: cfg,
-		Memory: memory.NewMemory(),
+
 		Pod: &corev1.Pod{
 			ObjectMeta: metav1.ObjectMeta{
 				Name:      "test-pod",
@@ -49,7 +48,7 @@ func TestNamespaceFilterForbidden(t *testing.T) {
 	ctx := &Context{
 		Client: client,
 		Config: cfg,
-		Memory: memory.NewMemory(),
+
 		Pod: &corev1.Pod{
 			ObjectMeta: metav1.ObjectMeta{
 				Name:      "test-pod",
@@ -74,7 +73,7 @@ func TestNamespaceFilterNotInAllowedList(t *testing.T) {
 	ctx := &Context{
 		Client: client,
 		Config: cfg,
-		Memory: memory.NewMemory(),
+
 		Pod: &corev1.Pod{
 			ObjectMeta: metav1.ObjectMeta{
 				Name:      "test-pod",
@@ -97,7 +96,7 @@ func TestNamespaceFilterNoConfig(t *testing.T) {
 	ctx := &Context{
 		Client: client,
 		Config: cfg,
-		Memory: memory.NewMemory(),
+
 		Pod: &corev1.Pod{
 			ObjectMeta: metav1.ObjectMeta{
 				Name:      "test-pod",
@@ -124,7 +123,7 @@ func TestPodNameFilter(t *testing.T) {
 	ctx := &Context{
 		Client: client,
 		Config: cfg,
-		Memory: memory.NewMemory(),
+
 		Pod: &corev1.Pod{
 			ObjectMeta: metav1.ObjectMeta{
 				Name:      "test-pod",
@@ -151,7 +150,7 @@ func TestPodNameFilterNoMatch(t *testing.T) {
 	ctx := &Context{
 		Client: client,
 		Config: cfg,
-		Memory: memory.NewMemory(),
+
 		Pod: &corev1.Pod{
 			ObjectMeta: metav1.ObjectMeta{
 				Name:      "test-pod",
@@ -174,7 +173,7 @@ func TestPodNameFilterEmptyConfig(t *testing.T) {
 	ctx := &Context{
 		Client: client,
 		Config: cfg,
-		Memory: memory.NewMemory(),
+
 		Pod: &corev1.Pod{
 			ObjectMeta: metav1.ObjectMeta{
 				Name:      "test-pod",
@@ -199,7 +198,7 @@ func TestContainerStateFilterRunning(t *testing.T) {
 				},
 			},
 		},
-		Memory: memory.NewMemory(),
+
 		Pod: &corev1.Pod{
 			ObjectMeta: metav1.ObjectMeta{
 				Name:      "test-pod",
@@ -226,7 +225,7 @@ func TestContainerStateFilterRunningWithRestarts(t *testing.T) {
 				},
 			},
 		},
-		Memory: memory.NewMemory(),
+
 		Pod: &corev1.Pod{
 			ObjectMeta: metav1.ObjectMeta{
 				Name:      "test-pod",
@@ -254,7 +253,7 @@ func TestContainerStateFilterWaiting(t *testing.T) {
 				},
 			},
 		},
-		Memory: memory.NewMemory(),
+
 		Pod: &corev1.Pod{
 			ObjectMeta: metav1.ObjectMeta{
 				Name:      "test-pod",
@@ -282,7 +281,7 @@ func TestContainerStateFilterWaitingCreating(t *testing.T) {
 				},
 			},
 		},
-		Memory: memory.NewMemory(),
+
 		Pod: &corev1.Pod{
 			ObjectMeta: metav1.ObjectMeta{
 				Name:      "test-pod",
@@ -309,7 +308,7 @@ func TestContainerStateFilterWaitingPodInitializing(t *testing.T) {
 				},
 			},
 		},
-		Memory: memory.NewMemory(),
+
 		Pod: &corev1.Pod{
 			ObjectMeta: metav1.ObjectMeta{
 				Name:      "test-pod",
@@ -337,7 +336,7 @@ func TestContainerStateFilterTerminated(t *testing.T) {
 				},
 			},
 		},
-		Memory: memory.NewMemory(),
+
 		Pod: &corev1.Pod{
 			ObjectMeta: metav1.ObjectMeta{
 				Name:      "test-pod",
@@ -366,7 +365,7 @@ func TestContainerStateFilterTerminatedCompleted(t *testing.T) {
 				},
 			},
 		},
-		Memory: memory.NewMemory(),
+
 		Pod: &corev1.Pod{
 			ObjectMeta: metav1.ObjectMeta{
 				Name:      "test-pod",
@@ -394,7 +393,7 @@ func TestContainerStateFilterTerminatedGraceful(t *testing.T) {
 				},
 			},
 		},
-		Memory: memory.NewMemory(),
+
 		Pod: &corev1.Pod{
 			ObjectMeta: metav1.ObjectMeta{
 				Name:      "test-pod",
@@ -422,7 +421,7 @@ func TestContainerStateFilterTerminatedExitCode0(t *testing.T) {
 				},
 			},
 		},
-		Memory: memory.NewMemory(),
+
 		Pod: &corev1.Pod{
 			ObjectMeta: metav1.ObjectMeta{
 				Name:      "test-pod",
@@ -446,7 +445,7 @@ func TestContainerRestartsFilterNoState(t *testing.T) {
 				RestartCount: 5,
 			},
 		},
-		Memory: memory.NewMemory(),
+
 		Pod: &corev1.Pod{
 			ObjectMeta: metav1.ObjectMeta{
 				Name:      "test-pod",
@@ -464,19 +463,16 @@ func TestContainerRestartsFilterNoState(t *testing.T) {
 func TestContainerRestartsFilterWithRestarts(t *testing.T) {
 	assert := assert.New(t)
 
-	mem := memory.NewMemory()
-	mem.AddPodContainer("default", "test-pod", "test-container", &storage.ContainerState{
-		RestartCount: 1,
-	})
-
 	ctx := &Context{
 		Container: &ContainerContext{
 			Container: &corev1.ContainerStatus{
 				Name:         "test-container",
 				RestartCount: 5,
 			},
+			LastState: &model.ContainerState{
+				RestartCount: 1,
+			},
 		},
-		Memory: mem,
 		Pod: &corev1.Pod{
 			ObjectMeta: metav1.ObjectMeta{
 				Name:      "test-pod",
@@ -494,19 +490,16 @@ func TestContainerRestartsFilterWithRestarts(t *testing.T) {
 func TestContainerRestartsFilterNoRestarts(t *testing.T) {
 	assert := assert.New(t)
 
-	mem := memory.NewMemory()
-	mem.AddPodContainer("default", "test-pod", "test-container", &storage.ContainerState{
-		RestartCount: 5,
-	})
-
 	ctx := &Context{
 		Container: &ContainerContext{
 			Container: &corev1.ContainerStatus{
 				Name:         "test-container",
 				RestartCount: 5,
 			},
+			LastState: &model.ContainerState{
+				RestartCount: 5,
+			},
 		},
-		Memory: mem,
 		Pod: &corev1.Pod{
 			ObjectMeta: metav1.ObjectMeta{
 				Name:      "test-pod",
@@ -533,7 +526,7 @@ func TestContainerKillingFilterDisabled(t *testing.T) {
 				Name: "test-container",
 			},
 		},
-		Memory: memory.NewMemory(),
+
 		Pod: &corev1.Pod{
 			ObjectMeta: metav1.ObjectMeta{
 				Name:      "test-pod",
@@ -560,7 +553,7 @@ func TestContainerKillingFilterNilEvents(t *testing.T) {
 			},
 		},
 		Events: nil,
-		Memory: memory.NewMemory(),
+
 		Pod: &corev1.Pod{
 			ObjectMeta: metav1.ObjectMeta{
 				Name:      "test-pod",
@@ -592,7 +585,7 @@ func TestContainerKillingFilterWaitingState(t *testing.T) {
 			},
 		},
 		Events: &[]corev1.Event{},
-		Memory: memory.NewMemory(),
+
 		Pod: &corev1.Pod{
 			ObjectMeta: metav1.ObjectMeta{
 				Name:      "test-pod",
@@ -624,7 +617,7 @@ func TestContainerKillingFilterWithKillingEvent(t *testing.T) {
 				Message: "Stopping container test-container",
 			},
 		},
-		Memory: memory.NewMemory(),
+
 		Pod: &corev1.Pod{
 			ObjectMeta: metav1.ObjectMeta{
 				Name:      "test-pod",
@@ -656,7 +649,7 @@ func TestContainerKillingFilterWithOtherEvent(t *testing.T) {
 				Message: "Started container test-container",
 			},
 		},
-		Memory: memory.NewMemory(),
+
 		Pod: &corev1.Pod{
 			ObjectMeta: metav1.ObjectMeta{
 				Name:      "test-pod",
@@ -682,7 +675,7 @@ func TestPodEventsFilterNotPodHasIssues(t *testing.T) {
 			},
 		},
 		PodHasIssues: false,
-		Memory:       memory.NewMemory(),
+
 		Pod: &corev1.Pod{
 			ObjectMeta: metav1.ObjectMeta{
 				Name:      "test-pod",
@@ -703,7 +696,7 @@ func TestPodEventsFilterNilEvents(t *testing.T) {
 		Config:       &config.Config{},
 		Events:       nil,
 		PodHasIssues: true,
-		Memory:       memory.NewMemory(),
+
 		Pod: &corev1.Pod{
 			ObjectMeta: metav1.ObjectMeta{
 				Name:      "test-pod",
@@ -729,7 +722,7 @@ func TestPodEventsFilterWarningDeletingPod(t *testing.T) {
 				Message: "deleting pod",
 			},
 		},
-		Memory: memory.NewMemory(),
+
 		Pod: &corev1.Pod{
 			ObjectMeta: metav1.ObjectMeta{
 				Name:      "test-pod",
@@ -757,7 +750,7 @@ func TestContainerNameFilterIgnored(t *testing.T) {
 				Name: "test-container",
 			},
 		},
-		Memory: memory.NewMemory(),
+
 		Pod: &corev1.Pod{
 			ObjectMeta: metav1.ObjectMeta{
 				Name:      "test-pod",
@@ -783,7 +776,7 @@ func TestContainerNameFilterNoMatch(t *testing.T) {
 				Name: "test-container",
 			},
 		},
-		Memory: memory.NewMemory(),
+
 		Pod: &corev1.Pod{
 			ObjectMeta: metav1.ObjectMeta{
 				Name:      "test-pod",
@@ -807,7 +800,7 @@ func TestContainerNameFilterEmptyConfig(t *testing.T) {
 				Name: "test-container",
 			},
 		},
-		Memory: memory.NewMemory(),
+
 		Pod: &corev1.Pod{
 			ObjectMeta: metav1.ObjectMeta{
 				Name:      "test-pod",
@@ -828,7 +821,7 @@ func TestNoiseFilterEmptyReason(t *testing.T) {
 		Container: &ContainerContext{
 			Container: &corev1.ContainerStatus{},
 		},
-		Memory: memory.NewMemory(),
+
 		Pod: &corev1.Pod{
 			ObjectMeta: metav1.ObjectMeta{
 				Name:      "test-pod",
@@ -852,7 +845,7 @@ func TestNoiseFilterNoiseReason(t *testing.T) {
 					Container: &corev1.ContainerStatus{},
 					Reason:    reason,
 				},
-				Memory: memory.NewMemory(),
+		
 				Pod: &corev1.Pod{
 					ObjectMeta: metav1.ObjectMeta{
 						Name:      "test-pod",
@@ -876,7 +869,7 @@ func TestNoiseFilterNonNoiseReason(t *testing.T) {
 			Container: &corev1.ContainerStatus{},
 			Reason:    "CrashLoopBackOff",
 		},
-		Memory: memory.NewMemory(),
+
 		Pod: &corev1.Pod{
 			ObjectMeta: metav1.ObjectMeta{
 				Name:      "test-pod",
@@ -906,7 +899,7 @@ func TestContainerReasonsFilterWaiting(t *testing.T) {
 				},
 			},
 		},
-		Memory: memory.NewMemory(),
+
 		Pod: &corev1.Pod{
 			ObjectMeta: metav1.ObjectMeta{
 				Name:      "test-pod",
@@ -940,7 +933,7 @@ func TestContainerReasonsFilterTerminated(t *testing.T) {
 				},
 			},
 		},
-		Memory: memory.NewMemory(),
+
 		Pod: &corev1.Pod{
 			ObjectMeta: metav1.ObjectMeta{
 				Name:      "test-pod",
@@ -959,8 +952,6 @@ func TestContainerReasonsFilterTerminated(t *testing.T) {
 
 func TestContainerReasonsFilterCrashLoopBackOff(t *testing.T) {
 	assert := assert.New(t)
-
-	mem := memory.NewMemory()
 
 	ctx := &Context{
 		Config: &config.Config{},
@@ -984,7 +975,6 @@ func TestContainerReasonsFilterCrashLoopBackOff(t *testing.T) {
 				},
 			},
 		},
-		Memory: mem,
 		Pod: &corev1.Pod{
 			ObjectMeta: metav1.ObjectMeta{
 				Name:      "test-pod",
@@ -1016,7 +1006,7 @@ func TestContainerReasonsFilterAllowedReason(t *testing.T) {
 				},
 			},
 		},
-		Memory: memory.NewMemory(),
+
 		Pod: &corev1.Pod{
 			ObjectMeta: metav1.ObjectMeta{
 				Name:      "test-pod",
@@ -1047,7 +1037,7 @@ func TestContainerReasonsFilterForbiddenReason(t *testing.T) {
 				},
 			},
 		},
-		Memory: memory.NewMemory(),
+
 		Pod: &corev1.Pod{
 			ObjectMeta: metav1.ObjectMeta{
 				Name:      "test-pod",
@@ -1066,17 +1056,10 @@ func TestContainerReasonsFilterSameTerminatedTime(t *testing.T) {
 
 	now := metav1.Now()
 
-	mem := memory.NewMemory()
-	mem.AddPodContainer("default", "test-pod", "test-container", &storage.ContainerState{
-		LastTerminatedOn: now.Time,
-		Reason:           "OOMKilled",
-		Msg:              "killed",
-		ExitCode:         137,
-	})
-
 	ctx := &Context{
 		Config: &config.Config{},
 		Container: &ContainerContext{
+			LastTerminatedOn: now.Time,
 			Container: &corev1.ContainerStatus{
 				Name: "test-container",
 				State: corev1.ContainerState{
@@ -1086,8 +1069,13 @@ func TestContainerReasonsFilterSameTerminatedTime(t *testing.T) {
 					},
 				},
 			},
+			LastState: &model.ContainerState{
+				LastTerminatedOn: now.Time,
+				Reason:           "OOMKilled",
+				Msg:              "killed",
+				ExitCode:         137,
+			},
 		},
-		Memory: mem,
 		Pod: &corev1.Pod{
 			ObjectMeta: metav1.ObjectMeta{
 				Name:      "test-pod",
@@ -1104,13 +1092,6 @@ func TestContainerReasonsFilterSameTerminatedTime(t *testing.T) {
 func TestContainerReasonsFilterSameReason(t *testing.T) {
 	assert := assert.New(t)
 
-	mem := memory.NewMemory()
-	mem.AddPodContainer("default", "test-pod", "test-container", &storage.ContainerState{
-		Reason:   "OOMKilled",
-		Msg:      "killed",
-		ExitCode: 137,
-	})
-
 	ctx := &Context{
 		Config: &config.Config{},
 		Container: &ContainerContext{
@@ -1125,8 +1106,12 @@ func TestContainerReasonsFilterSameReason(t *testing.T) {
 					},
 				},
 			},
+			LastState: &model.ContainerState{
+				Reason:   "OOMKilled",
+				Msg:      "killed",
+				ExitCode: 137,
+			},
 		},
-		Memory: mem,
 		Pod: &corev1.Pod{
 			ObjectMeta: metav1.ObjectMeta{
 				Name:      "test-pod",
@@ -1159,7 +1144,7 @@ func TestContainerLogsFilterNoRestarts(t *testing.T) {
 				},
 			},
 		},
-		Memory: memory.NewMemory(),
+
 		Pod: &corev1.Pod{
 			ObjectMeta: metav1.ObjectMeta{
 				Name:      "test-pod",
@@ -1193,7 +1178,7 @@ func TestContainerLogsFilterCrashLoopBackOff(t *testing.T) {
 				},
 			},
 		},
-		Memory: memory.NewMemory(),
+
 		Pod: &corev1.Pod{
 			ObjectMeta: metav1.ObjectMeta{
 				Name:      "test-pod",
@@ -1227,7 +1212,7 @@ func TestContainerLogsFilterWithRestarts(t *testing.T) {
 				},
 			},
 		},
-		Memory: memory.NewMemory(),
+
 		Pod: &corev1.Pod{
 			ObjectMeta: metav1.ObjectMeta{
 				Name:      "test-pod",
@@ -1259,7 +1244,7 @@ func TestContainerLogsFilterIgnoredPattern(t *testing.T) {
 				},
 			},
 		},
-		Memory: memory.NewMemory(),
+
 		Pod: &corev1.Pod{
 			ObjectMeta: metav1.ObjectMeta{
 				Name:      "test-pod",
@@ -1384,7 +1369,7 @@ func TestPodStatusFilterSucceeded(t *testing.T) {
 	ctx := &Context{
 		Client: fake.NewSimpleClientset(),
 		Config: &config.Config{},
-		Memory: memory.NewMemory(),
+
 		Pod: &corev1.Pod{
 			ObjectMeta: metav1.ObjectMeta{
 				Name:      "test-pod",
@@ -1410,7 +1395,7 @@ func TestPodStatusFilterAddedWithNoConditions(t *testing.T) {
 		Client: fake.NewSimpleClientset(),
 		Config: &config.Config{},
 		EvType: "Added",
-		Memory: memory.NewMemory(),
+
 		Pod: &corev1.Pod{
 			ObjectMeta: metav1.ObjectMeta{
 				Name:      "test-pod",
@@ -1435,7 +1420,7 @@ func TestPodStatusFilterPodCompleted(t *testing.T) {
 	ctx := &Context{
 		Client: fake.NewSimpleClientset(),
 		Config: &config.Config{},
-		Memory: memory.NewMemory(),
+
 		Pod: &corev1.Pod{
 			ObjectMeta: metav1.ObjectMeta{
 				Name:      "test-pod",
@@ -1466,7 +1451,7 @@ func TestPodStatusFilterPodReady(t *testing.T) {
 	ctx := &Context{
 		Client: fake.NewSimpleClientset(),
 		Config: &config.Config{},
-		Memory: memory.NewMemory(),
+
 		Pod: &corev1.Pod{
 			ObjectMeta: metav1.ObjectMeta{
 				Name:      "test-pod",
@@ -1497,7 +1482,7 @@ func TestPodStatusFilterContainersNotReady(t *testing.T) {
 	ctx := &Context{
 		Client: fake.NewSimpleClientset(),
 		Config: &config.Config{},
-		Memory: memory.NewMemory(),
+
 		Pod: &corev1.Pod{
 			ObjectMeta: metav1.ObjectMeta{
 				Name:      "test-pod",
@@ -1527,7 +1512,7 @@ func TestPodStatusFilterPodNotScheduled(t *testing.T) {
 	ctx := &Context{
 		Client: fake.NewSimpleClientset(),
 		Config: &config.Config{},
-		Memory: memory.NewMemory(),
+
 		Pod: &corev1.Pod{
 			ObjectMeta: metav1.ObjectMeta{
 				Name:      "test-pod",
@@ -1560,7 +1545,7 @@ func TestPodStatusFilterContainersReadyFalse(t *testing.T) {
 	ctx := &Context{
 		Client: fake.NewSimpleClientset(),
 		Config: &config.Config{},
-		Memory: memory.NewMemory(),
+
 		Pod: &corev1.Pod{
 			ObjectMeta: metav1.ObjectMeta{
 				Name:      "test-pod",
@@ -1596,7 +1581,7 @@ func TestPodStatusFilterAllowedReason(t *testing.T) {
 		Config: &config.Config{
 			AllowedReasons: []string{"OOMKilled"},
 		},
-		Memory: memory.NewMemory(),
+
 		Pod: &corev1.Pod{
 			ObjectMeta: metav1.ObjectMeta{
 				Name:      "test-pod",
@@ -1629,7 +1614,7 @@ func TestPodStatusFilterForbiddenReason(t *testing.T) {
 		Config: &config.Config{
 			ForbiddenReasons: []string{"Unschedulable"},
 		},
-		Memory: memory.NewMemory(),
+
 		Pod: &corev1.Pod{
 			ObjectMeta: metav1.ObjectMeta{
 				Name:      "test-pod",
@@ -1657,14 +1642,11 @@ func TestPodStatusFilterForbiddenReason(t *testing.T) {
 func TestPodStatusFilterAlreadyKnown(t *testing.T) {
 	assert := assert.New(t)
 
-	mem := memory.NewMemory()
-	mem.AddPodContainer("default", "test-pod", ".", &storage.ContainerState{})
-
 	ctx := &Context{
 		Client:       fake.NewSimpleClientset(),
 		Config:       &config.Config{},
-		Memory:       mem,
 		PodHasIssues: true,
+		PodLastState: &model.ContainerState{},
 		Pod: &corev1.Pod{
 			ObjectMeta: metav1.ObjectMeta{
 				Name:      "test-pod",

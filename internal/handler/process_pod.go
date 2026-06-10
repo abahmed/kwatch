@@ -17,7 +17,6 @@ func (h *handler) ProcessPod(key string, deleted bool) error {
 	}
 
 	if deleted {
-		h.memory.DelPod(namespace, name)
 		h.correlator.RemovePod(namespace, name)
 		return nil
 	}
@@ -25,7 +24,7 @@ func (h *handler) ProcessPod(key string, deleted bool) error {
 	pod, err := h.podLister.Pods(namespace).Get(name)
 	if err != nil {
 		if errors.IsNotFound(err) {
-			h.memory.DelPod(namespace, name)
+			h.correlator.RemovePod(namespace, name)
 			return nil
 		}
 		return fmt.Errorf("failed to get pod %s/%s from cache: %w", namespace, name, err)
@@ -40,7 +39,6 @@ func (h *handler) ProcessPodObject(pod *corev1.Pod, deleted bool) error {
 	}
 
 	if deleted {
-		h.memory.DelPod(pod.Namespace, pod.Name)
 		h.correlator.RemovePod(pod.Namespace, pod.Name)
 		return nil
 	}
@@ -48,7 +46,6 @@ func (h *handler) ProcessPodObject(pod *corev1.Pod, deleted bool) error {
 	ctx := filter.Context{
 		Client: h.kclient,
 		Config: h.config,
-		Memory: h.memory,
 		Pod:    pod,
 		EvType: "ADDED",
 	}

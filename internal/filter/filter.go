@@ -4,7 +4,7 @@ import (
 	"time"
 
 	"github.com/abahmed/kwatch/internal/config"
-	"github.com/abahmed/kwatch/internal/storage"
+	"github.com/abahmed/kwatch/internal/model"
 	corev1 "k8s.io/api/core/v1"
 	apiv1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes"
@@ -21,7 +21,6 @@ type FilterResult struct {
 type Context struct {
 	Client kubernetes.Interface
 	Config *config.Config
-	Memory storage.Storage
 
 	Pod    *corev1.Pod
 	EvType string
@@ -33,6 +32,7 @@ type Context struct {
 	ContainersHasIssues bool
 	PodReason           string
 	PodMsg              string
+	PodLastState        *model.ContainerState
 
 	// Container
 	Container *ContainerContext
@@ -48,4 +48,5 @@ type ContainerContext struct {
 	LastTerminatedOn time.Time
 	State            string
 	Status           string
+	LastState        *model.ContainerState
 }

@@ -4,10 +4,7 @@ type ContainerRestartsFilter struct{}
 
 func (f ContainerRestartsFilter) Execute(ctx *Context) bool {
 	container := ctx.Container.Container
-
-	lastState := ctx.Memory.GetPodContainer(ctx.Pod.Namespace,
-		ctx.Pod.Name,
-		container.Name)
+	lastState := ctx.Container.LastState
 
 	ctx.Container.HasRestarts = false
 	if lastState == nil {

@@ -33,7 +33,7 @@ func TestProcessCreateNew(t *testing.T) {
 	}
 	owner := "deploy-1"
 
-	inc, action := e.Process(ev, owner)
+	inc, action := e.Process(ev, owner, nil)
 
 	assert.Equal(t, model.ActionCreate, action)
 	assert.NotNil(t, inc)
@@ -56,7 +56,7 @@ func TestProcessUpdateAfterCooldown(t *testing.T) {
 	}
 
 	// First event creates
-	inc1, action1 := e.Process(ev, "deploy-1")
+	inc1, action1 := e.Process(ev, "deploy-1", nil)
 	assert.Equal(t, model.ActionCreate, action1)
 
 	// Wait for cooldown to pass
@@ -65,7 +65,7 @@ func TestProcessUpdateAfterCooldown(t *testing.T) {
 
 	// Second event should update
 	ev.PodName = "pod-2"
-	inc2, action2 := e.Process(ev, "deploy-1")
+	inc2, action2 := e.Process(ev, "deploy-1", nil)
 
 	assert.Equal(t, model.ActionUpdate, action2)
 	assert.Equal(t, inc1.Key, inc2.Key)
@@ -82,12 +82,12 @@ func TestProcessSkipWithinCooldown(t *testing.T) {
 		Reason:    "CrashLoopBackOff",
 	}
 
-	inc1, action1 := e.Process(ev, "deploy-1")
+	inc1, action1 := e.Process(ev, "deploy-1", nil)
 	assert.Equal(t, model.ActionCreate, action1)
 
 	// Second event within cooldown (0 time passed)
 	ev.PodName = "pod-2"
-	inc2, action2 := e.Process(ev, "deploy-1")
+	inc2, action2 := e.Process(ev, "deploy-1", nil)
 
 	assert.Equal(t, model.ActionSkip, action2)
 	assert.Equal(t, inc1.Key, inc2.Key)
@@ -104,11 +104,11 @@ func TestProcessDifferentOwnerNewIncident(t *testing.T) {
 		Reason:    "CrashLoopBackOff",
 	}
 
-	_, action1 := e.Process(ev, "deploy-1")
+	_, action1 := e.Process(ev, "deploy-1", nil)
 	assert.Equal(t, model.ActionCreate, action1)
 
 	// Same namespace+reason but different owner
-	_, action2 := e.Process(ev, "deploy-2")
+	_, action2 := e.Process(ev, "deploy-2", nil)
 	assert.Equal(t, model.ActionCreate, action2)
 }
 
@@ -120,12 +120,12 @@ func TestProcessDifferentReasonNewIncident(t *testing.T) {
 		Reason:    "CrashLoopBackOff",
 	}
 
-	_, action1 := e.Process(ev, "deploy-1")
+	_, action1 := e.Process(ev, "deploy-1", nil)
 	assert.Equal(t, model.ActionCreate, action1)
 
 	// Same namespace+owner but different reason
 	ev.Reason = "OOMKilled"
-	_, action2 := e.Process(ev, "deploy-1")
+	_, action2 := e.Process(ev, "deploy-1", nil)
 	assert.Equal(t, model.ActionCreate, action2)
 }
 
@@ -137,12 +137,12 @@ func TestProcessDifferentNamespaceNewIncident(t *testing.T) {
 		Reason:    "CrashLoopBackOff",
 	}
 
-	_, action1 := e.Process(ev, "deploy-1")
+	_, action1 := e.Process(ev, "deploy-1", nil)
 	assert.Equal(t, model.ActionCreate, action1)
 
 	// Different namespace
 	ev.Namespace = "kube-system"
-	_, action2 := e.Process(ev, "deploy-1")
+	_, action2 := e.Process(ev, "deploy-1", nil)
 	assert.Equal(t, model.ActionCreate, action2)
 }
 
@@ -154,7 +154,7 @@ func TestProcessEmptyOwner(t *testing.T) {
 		Reason:    "OOMKilled",
 	}
 
-	inc, action := e.Process(ev, "")
+	inc, action := e.Process(ev, "", nil)
 	assert.Equal(t, model.ActionCreate, action)
 	assert.Equal(t, "default::OOMKilled:", inc.Key)
 }
@@ -169,7 +169,7 @@ func TestCleanup(t *testing.T) {
 		Reason:    "CrashLoopBackOff",
 	}
 
-	e.Process(ev, "deploy-1")
+	e.Process(ev, "deploy-1", nil)
 	assert.Equal(t, 1, len(e.state))
 
 	time.Sleep(2 * time.Millisecond)
@@ -187,7 +187,7 @@ func TestCleanupKeepsRecent(t *testing.T) {
 		Reason:    "CrashLoopBackOff",
 	}
 
-	e.Process(ev, "deploy-1")
+	e.Process(ev, "deploy-1", nil)
 	assert.Equal(t, 1, len(e.state))
 
 	e.cleanup()
@@ -208,8 +208,8 @@ func TestRemovePodMultiIncidentResolve(t *testing.T) {
 		Reason:    "OOMKilled",
 	}
 
-	e.Process(ev1, "deploy-1")
-	e.Process(ev2, "deploy-1")
+	e.Process(ev1, "deploy-1", nil)
+	e.Process(ev2, "deploy-1", nil)
 
 	assert.Equal(t, 2, len(e.state))
 
@@ -242,7 +242,7 @@ func TestProcessConcurrentSafe(t *testing.T) {
 				Namespace: "default",
 				Reason:    "CrashLoopBackOff",
 			}
-			e.Process(ev, "deploy-1")
+			e.Process(ev, "deploy-1", nil)
 		}()
 	}
 	wg.Wait()

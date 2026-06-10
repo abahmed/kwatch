@@ -2,6 +2,15 @@ package model
 
 import "time"
 
+type ContainerState struct {
+	RestartCount     int32
+	LastTerminatedOn time.Time
+	Reason           string
+	Msg              string
+	ExitCode         int32
+	Status           string
+}
+
 type IncidentAction int
 
 const (
@@ -38,4 +47,5 @@ type Incident struct {
 	Events        string
 	State         IncidentState
 	LastUpdate    time.Time
+	LastContainerState *ContainerState
 }
