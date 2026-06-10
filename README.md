@@ -119,9 +119,54 @@ kubectl apply -f https://raw.githubusercontent.com/abahmed/kwatch/v0.10.5/deploy
 |:-----------------------------|:------------------------------------------- |
 | `nodeMonitor.enabled`        | to enable or disable node monitoring (default: true) |
 
+Node monitoring alerts on `NotReady` and `Unknown` conditions, plus `MemoryPressure`, `DiskPressure`, `PIDPressure`, and `NetworkUnavailable`. Node-specific suppression is available via `ignoreNodeReasons` and `ignoreNodeMessages`.
+
+### 🚀 Rollout Monitor
+
+| Parameter                       | Description                                                    |
+|:--------------------------------|:-------------------------------------------------------------- |
+| `rolloutMonitor.enabled`        | Watch Deployments for stuck rollouts (`ProgressDeadlineExceeded`) (default: true) |
+
+### 🧑‍💼 Job Monitor
+
+| Parameter                  | Description                                                 |
+|:---------------------------|:----------------------------------------------------------- |
+| `jobMonitor.enabled`       | Watch Jobs for failures and suspension (default: true)      |
+
+### ⏳ Pending Pod Threshold
+
+| Parameter                       | Description                                                        |
+|:--------------------------------|:------------------------------------------------------------------ |
+| `pendingPodThreshold`           | Seconds a pod can stay in Pending before alerting (default: 300)   |
+
+### 🎯 Severity
+
+| Parameter                          | Description                                                        |
+|:-----------------------------------|:------------------------------------------------------------------ |
+| `severityByOwnerKind`              | Map owner kinds to severity levels, e.g. `{"StatefulSet": "high", "default": "normal"}` |
+
+Built-in defaults: `StatefulSet` → `high`, all others → `normal`.
+
+### 🔇 Silences
+
+Suppress alerts matching namespace, reason, or pod name patterns:
+
+```yaml
+silences:
+  - namespaces: ["kube-system", "monitoring"]
+  - reasons: ["BackOff"]
+  - podNamePatterns: ["my-fancy-pod-.*"]
+```
+
+### 🔄 Resync
+
+| Parameter                | Description                                                           |
+|:-------------------------|:--------------------------------------------------------------------- |
+| `resyncSeconds`          | Periodic informer resync interval in seconds (0 = event-driven only)  |
 
 
-### 🧠 Correlation *(not released)*
+
+### 🧠 Correlation
 
 Incident grouping and lifecycle management. Events from the same owner/reason/container are grouped into incidents, with stale detection and auto-resolution.
 
@@ -131,10 +176,11 @@ Incident grouping and lifecycle management. Events from the same owner/reason/co
 | `correlation.cooldown`             | Minimum gap (minutes) between incident updates (default: 5)        |
 | `correlation.staleThreshold`       | Minutes of inactivity before an incident is marked stale (default: 15) |
 | `correlation.lifecycleInterval`    | Interval (minutes) for lifecycle checks (default: 1)               |
+| `correlation.startupQuiet`         | Quiet period (seconds) after startup with no alerts (default: 30)  |
 
 When Slack is configured with a bot token, incidents are sent as threaded messages: a root message on creation, with updates, stale, and resolved notifications as thread replies.
 
-Noise filter automatically skips `Normal`/`Scheduled`/`Pulled`/`Pulling` events before correlation to reduce alert fatigue. *(not released)*
+Noise filter automatically skips `Normal`/`Scheduled`/`Pulled`/`Pulling` events before correlation to reduce alert fatigue.
 
 ### 🔔 Alerts
 
@@ -164,7 +210,25 @@ If you want to enable Slack, provide either a webhook URL or a bot token with ch
 | `alert.slack.title`              | Customized title in slack message           |
 | `alert.slack.text`               | Customized text in slack message            |
 
-> **Incident mode** *(not released)* — When correlation is enabled and Slack is in bot token mode, alerts are sent as threaded conversations. A root message is created on the first occurrence, with updates, stale, and resolved notifications posted as thread replies. The incident message includes enriched fields: Owner Kind, Container Name, Restart Count, and Hint (e.g. "Memory", "Registry/Auth").
+> **Incident mode** — When correlation is enabled and Slack is in bot token mode, alerts are sent as threaded conversations. A root message is created on the first occurrence, with updates, stale, and resolved notifications posted as thread replies. The incident message includes enriched fields: Owner Kind, Container Name, Restart Count, Severity, and Hint (e.g. "Memory pressure", "Registry/Auth").
+
+#### Provider Routing & Retry
+
+Each provider supports optional routing and retry:
+
+```yaml
+alert:
+  slack:
+    webhook: "<url>"
+    routes:
+      - namespaces: ["production"]
+        severities: ["high", "critical"]
+    retry:
+      maxAttempts: 3
+      delay: 5s
+```
+
+When `routes` are configured, only matching incidents are delivered to that provider. When omitted, all incidents are delivered (default). Retry is configurable per provider with `maxAttempts` (default 1) and `delay` (default 1s).
 
 #### Discord
 

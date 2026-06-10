@@ -1,8 +1,10 @@
 package handler
 
 import (
+	"fmt"
 	"time"
 
+	"github.com/abahmed/kwatch/internal/enricher"
 	"github.com/abahmed/kwatch/internal/event"
 	"github.com/abahmed/kwatch/internal/filter"
 	"github.com/abahmed/kwatch/internal/k8s"
@@ -84,6 +86,7 @@ func (h *handler) executeContainersFilters(ctx *filter.Context) {
 			ownerKind = ctx.Owner.Kind
 		}
 
+		hint := buildContainerHint(ctx)
 		ev := event.Event{
 			PodName:       ctx.Pod.Name,
 			ContainerName: ctx.Container.Container.Name,
@@ -95,6 +98,7 @@ func (h *handler) executeContainersFilters(ctx *filter.Context) {
 			Labels:        ctx.Pod.Labels,
 			OwnerKind:     ownerKind,
 			RestartCount:  int(ctx.Container.Container.RestartCount),
+			Hint:          hint,
 		}
 
 		cs := &model.ContainerState{
@@ -110,4 +114,94 @@ func (h *handler) executeContainersFilters(ctx *filter.Context) {
 			h.alertManager.NotifyIncident(inc, action)
 		}
 	}
+}
+
+// findContainerSpec returns the matching container spec (including init containers) by name.
+func findContainerSpec(pod *corev1.Pod, name string) *corev1.Container {
+	for i := range pod.Spec.Containers {
+		if pod.Spec.Containers[i].Name == name {
+			return &pod.Spec.Containers[i]
+		}
+	}
+	for i := range pod.Spec.InitContainers {
+		if pod.Spec.InitContainers[i].Name == name {
+			return &pod.Spec.InitContainers[i]
+		}
+	}
+	return nil
+}
+
+// buildContainerHint computes a rich diagnostic hint from container state + spec.
+func buildContainerHint(ctx *filter.Context) string {
+	reason := ctx.Container.Reason
+	exitCode := ctx.Container.ExitCode
+
+	hint := enricher.HintForReason(reason)
+
+	if exitCode != 0 {
+		ecHint := enricher.HintForExitCode(exitCode)
+		hint = enricher.CombineHints(hint, ecHint)
+	}
+
+	spec := findContainerSpec(ctx.Pod, ctx.Container.Container.Name)
+
+	if reason == "OOMKilled" || exitCode == 137 {
+		if spec != nil && spec.Resources.Limits != nil {
+			mem := spec.Resources.Limits.Memory()
+			if mem != nil && !mem.IsZero() {
+				hint = fmt.Sprintf("OOMKilled (memory limit: %s) — consider increasing memory limits", mem.String())
+			}
+		}
+	}
+
+	if spec != nil {
+		if reason == "LivenessProbeFailed" || reason == "ReadinessProbeFailed" || reason == "StartupProbeFailed" {
+			hint = buildProbeHint(reason, spec)
+		} else if reason == "CrashLoopBackOff" && spec.LivenessProbe != nil {
+			hint = hint + "; check liveness probe configuration"
+		}
+	}
+
+	return hint
+}
+
+func buildProbeHint(reason string, spec *corev1.Container) string {
+	var probe *corev1.Probe
+	switch reason {
+	case "LivenessProbeFailed":
+		probe = spec.LivenessProbe
+	case "ReadinessProbeFailed":
+		probe = spec.ReadinessProbe
+	case "StartupProbeFailed":
+		probe = spec.StartupProbe
+	}
+	if probe == nil {
+		return enricher.HintForReason(reason)
+	}
+
+	detail := reason
+	if probe.HTTPGet != nil {
+		detail = fmt.Sprintf("%s (HTTP GET http://%s%s:%d%s)", reason, spec.Name, probe.HTTPGet.Host, probe.HTTPGet.Port.IntValue(), probe.HTTPGet.Path)
+	} else if probe.TCPSocket != nil {
+		detail = fmt.Sprintf("%s (TCP check :%d)", reason, probe.TCPSocket.Port.IntValue())
+	} else if probe.Exec != nil {
+		cmd := ""
+		if len(probe.Exec.Command) > 0 {
+			cmd = probe.Exec.Command[0]
+		}
+		detail = fmt.Sprintf("%s (exec %s)", reason, cmd)
+	}
+	return fmt.Sprintf("%s — application not responding to %s probe", detail, probeType(reason))
+}
+
+func probeType(reason string) string {
+	switch reason {
+	case "LivenessProbeFailed":
+		return "liveness"
+	case "ReadinessProbeFailed":
+		return "readiness"
+	case "StartupProbeFailed":
+		return "startup"
+	}
+	return "probe"
 }

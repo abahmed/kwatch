@@ -1,22 +1,34 @@
 package handler
 
 import (
+	"time"
+
 	"github.com/abahmed/kwatch/internal/alert"
 	"github.com/abahmed/kwatch/internal/config"
 	"github.com/abahmed/kwatch/internal/correlation"
 	"github.com/abahmed/kwatch/internal/filter"
+	appsv1 "k8s.io/api/apps/v1"
+	batchv1 "k8s.io/api/batch/v1"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/client-go/kubernetes"
+	appsv1lister "k8s.io/client-go/listers/apps/v1"
+	batchv1lister "k8s.io/client-go/listers/batch/v1"
 	corev1lister "k8s.io/client-go/listers/core/v1"
 )
 
 type Handler interface {
 	ProcessPod(key string, deleted bool) error
 	ProcessNode(key string, deleted bool) error
+	ProcessDeployment(key string, deleted bool) error
+	ProcessJob(key string, deleted bool) error
 	ProcessPodObject(pod *corev1.Pod, deleted bool) error
 	ProcessNodeObject(node *corev1.Node, deleted bool) error
+	ProcessDeploymentObject(deploy *appsv1.Deployment, deleted bool) error
+	ProcessJobObject(job *batchv1.Job, deleted bool) error
 	SetPodLister(lister corev1lister.PodLister)
 	SetNodeLister(lister corev1lister.NodeLister)
+	SetDeploymentLister(lister appsv1lister.DeploymentLister)
+	SetJobLister(lister batchv1lister.JobLister)
 }
 
 type handler struct {
@@ -30,6 +42,8 @@ type handler struct {
 	alertManager          *alert.AlertManager
 	podLister             corev1lister.PodLister
 	nodeLister            corev1lister.NodeLister
+	deployLister          appsv1lister.DeploymentLister
+	jobLister             batchv1lister.JobLister
 }
 
 func NewHandler(
@@ -37,10 +51,16 @@ func NewHandler(
 	cfg *config.Config,
 	correlator *correlation.Engine,
 	alertManager *alert.AlertManager) Handler {
+	pendingThreshold := time.Duration(cfg.PendingPodThreshold) * time.Second
+	if cfg.PendingPodThreshold <= 0 {
+		pendingThreshold = 300 * time.Second
+	}
+
 	podDetectors := []filter.Detector{
 		filter.NamespaceFilter{},
 		filter.PodNameFilter{},
 		filter.PodStatusFilter{},
+		filter.PendingPodFilter{Threshold: pendingThreshold},
 	}
 
 	podEnrichers := []filter.Enricher{
@@ -82,4 +102,12 @@ func (h *handler) SetPodLister(lister corev1lister.PodLister) {
 
 func (h *handler) SetNodeLister(lister corev1lister.NodeLister) {
 	h.nodeLister = lister
+}
+
+func (h *handler) SetDeploymentLister(lister appsv1lister.DeploymentLister) {
+	h.deployLister = lister
+}
+
+func (h *handler) SetJobLister(lister batchv1lister.JobLister) {
+	h.jobLister = lister
 }

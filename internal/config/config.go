@@ -83,6 +83,24 @@ type Config struct {
 	// ResyncSeconds is the interval (in seconds) for periodic informer resyncs.
 	// If 0, no periodic resync occurs (event-driven only).
 	ResyncSeconds int `yaml:"resyncSeconds"`
+
+	// SeverityByOwnerKind maps owner kinds to severity levels.
+	// e.g. {"StatefulSet": "high", "DaemonSet": "low"}
+	// Default: StatefulSet → "high", everything else → "normal"
+	SeverityByOwnerKind map[string]string `yaml:"severityByOwnerKind"`
+
+	// PendingPodThreshold is the duration (in seconds) a pod can remain
+	// in Pending phase before an alert is raised. Default 300 (5 min).
+	PendingPodThreshold int `yaml:"pendingPodThreshold"`
+
+	// RolloutMonitor configures stuck-rollout detection for Deployments.
+	RolloutMonitor RolloutMonitor `yaml:"rolloutMonitor"`
+
+	// JobMonitor configures failed/suspended Job detection.
+	JobMonitor JobMonitor `yaml:"jobMonitor"`
+
+	// Silences is an optional list of silence rules that suppress matching incidents.
+	Silences []SilenceRule `yaml:"silences"`
 }
 
 // App confing struct
@@ -133,6 +151,20 @@ type NodeMonitor struct {
 	Enabled bool `yaml:"enabled"`
 }
 
+// RolloutMonitor config struct
+type RolloutMonitor struct {
+	// Enabled if set to true, it will watch Deployments for stuck rollouts
+	// By default, this value is true
+	Enabled bool `yaml:"enabled"`
+}
+
+// JobMonitor config struct
+type JobMonitor struct {
+	// Enabled if set to true, it will watch Jobs for failures
+	// By default, this value is true
+	Enabled bool `yaml:"enabled"`
+}
+
 // HealthCheck config struct
 type HealthCheck struct {
 	// Enabled if set to true, it will enable health check endpoint
@@ -142,6 +174,29 @@ type HealthCheck struct {
 	// Port is the port to listen on for health check requests
 	// By default, this value is 8060
 	Port int `yaml:"port"`
+}
+
+// SilenceRule defines an alert suppression rule.
+// An incident matching any silence rule is suppressed entirely.
+type SilenceRule struct {
+	// Namespaces is an optional list of namespaces to silence.
+	Namespaces []string `yaml:"namespaces"`
+	// Reasons is an optional list of reasons to silence.
+	Reasons []string `yaml:"reasons"`
+	// PodNamePatterns is an optional list of regex patterns for pod names to silence.
+	PodNamePatterns []string `yaml:"podNamePatterns"`
+}
+
+// AlertRoute defines routing filters for a provider.
+// An incident matching at least one route is delivered; if no routes are
+// configured all incidents are delivered (current behavior).
+type AlertRoute struct {
+	// Namespaces is an optional list of allowed namespaces.
+	Namespaces []string `yaml:"namespaces"`
+	// Severities is an optional list of allowed severity levels.
+	Severities []string `yaml:"severities"`
+	// Reasons is an optional list of allowed reasons.
+	Reasons []string `yaml:"reasons"`
 }
 
 // Correlation config struct

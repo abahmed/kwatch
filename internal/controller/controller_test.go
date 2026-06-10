@@ -10,10 +10,14 @@ import (
 
 	"github.com/abahmed/kwatch/internal/config"
 	"github.com/stretchr/testify/assert"
+	appsv1 "k8s.io/api/apps/v1"
+	batchv1 "k8s.io/api/batch/v1"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/informers"
 	"k8s.io/client-go/kubernetes/fake"
+	appsv1lister "k8s.io/client-go/listers/apps/v1"
+	batchv1lister "k8s.io/client-go/listers/batch/v1"
 	corev1lister "k8s.io/client-go/listers/core/v1"
 	"k8s.io/client-go/tools/cache"
 	"k8s.io/client-go/util/workqueue"
@@ -69,9 +73,15 @@ func (m *mockHandler) ProcessPodObject(pod *corev1.Pod, deleted bool) error {
 	m.podDel = append(m.podDel, deleted)
 	return m.err
 }
-func (m *mockHandler) ProcessNodeObject(*corev1.Node, bool) error { return m.err }
-func (m *mockHandler) SetPodLister(corev1lister.PodLister)        {}
-func (m *mockHandler) SetNodeLister(corev1lister.NodeLister)      {}
+func (m *mockHandler) ProcessNodeObject(*corev1.Node, bool) error   { return m.err }
+func (m *mockHandler) ProcessDeployment(string, bool) error         { return m.err }
+func (m *mockHandler) ProcessJob(string, bool) error                { return m.err }
+func (m *mockHandler) ProcessDeploymentObject(*appsv1.Deployment, bool) error { return m.err }
+func (m *mockHandler) ProcessJobObject(*batchv1.Job, bool) error               { return m.err }
+func (m *mockHandler) SetPodLister(corev1lister.PodLister)                     {}
+func (m *mockHandler) SetNodeLister(corev1lister.NodeLister)                   {}
+func (m *mockHandler) SetDeploymentLister(appsv1lister.DeploymentLister)       {}
+func (m *mockHandler) SetJobLister(batchv1lister.JobLister)                    {}
 
 func TestNewCreatesController(t *testing.T) {
 	assert := assert.New(t)

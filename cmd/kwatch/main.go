@@ -13,6 +13,7 @@ import (
 	"github.com/abahmed/kwatch/internal/constant"
 	"github.com/abahmed/kwatch/internal/controller"
 	"github.com/abahmed/kwatch/internal/correlation"
+	"github.com/abahmed/kwatch/internal/enricher"
 	"github.com/abahmed/kwatch/internal/handler"
 	"github.com/abahmed/kwatch/internal/health"
 	"github.com/abahmed/kwatch/internal/k8s"
@@ -50,6 +51,7 @@ func main() {
 	healthServer.Start(ctx)
 
 	alertManager := sm.GetAlertManager()
+	alertManager.SetSilences(cfg.Silences)
 
 	up := upgrader.NewUpgrader(&cfg.Upgrader, alertManager, sm.GetStateManager())
 	go up.CheckUpdates(ctx)
@@ -65,6 +67,7 @@ func main() {
 		StaleThreshold:    time.Duration(cfg.Correlation.StaleThreshold) * time.Minute,
 		LifecycleInterval: time.Duration(cfg.Correlation.LifecycleInterval) * time.Minute,
 		StartupQuiet:      time.Duration(startupQuiet) * time.Second,
+		Enricher:          &enricher.DefaultEnricher{SeverityByOwnerKind: cfg.SeverityByOwnerKind},
 		LifecycleHook: func(inc *model.Incident, action model.IncidentAction) {
 			if action != model.ActionSkip {
 				alertManager.NotifyIncident(inc, action)

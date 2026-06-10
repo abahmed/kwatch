@@ -1,6 +1,7 @@
 package handler
 
 import (
+	"github.com/abahmed/kwatch/internal/enricher"
 	"github.com/abahmed/kwatch/internal/event"
 	"github.com/abahmed/kwatch/internal/filter"
 	"github.com/abahmed/kwatch/internal/k8s"
@@ -64,6 +65,7 @@ func (h *handler) executePodFilters(ctx *filter.Context) {
 		Logs:          "",
 		Labels:        ctx.Pod.Labels,
 		OwnerKind:     ownerKind,
+		Hint:          enricher.HintForReason(ctx.PodReason),
 	}
 
 	cs := &model.ContainerState{

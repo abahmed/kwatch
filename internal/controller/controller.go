@@ -12,6 +12,8 @@ import (
 	"k8s.io/apimachinery/pkg/util/wait"
 	"k8s.io/client-go/informers"
 	"k8s.io/client-go/kubernetes"
+	appsv1lister "k8s.io/client-go/listers/apps/v1"
+	batchv1lister "k8s.io/client-go/listers/batch/v1"
 	corev1lister "k8s.io/client-go/listers/core/v1"
 	"k8s.io/client-go/tools/cache"
 	"k8s.io/client-go/util/workqueue"
@@ -19,13 +21,21 @@ import (
 )
 
 type Controller struct {
-	handler     handler.Handler
-	podQueue    workqueue.TypedRateLimitingInterface[string]
-	nodeQueue   workqueue.TypedRateLimitingInterface[string]
-	podLister   corev1lister.PodLister
-	podsSynced  cache.InformerSynced
-	nodeLister  corev1lister.NodeLister
-	nodesSynced cache.InformerSynced
+	handler                handler.Handler
+	podQueue               workqueue.TypedRateLimitingInterface[string]
+	nodeQueue              workqueue.TypedRateLimitingInterface[string]
+	deploymentQueue        workqueue.TypedRateLimitingInterface[string]
+	jobQueue               workqueue.TypedRateLimitingInterface[string]
+	podLister              corev1lister.PodLister
+	podsSynced             cache.InformerSynced
+	nodeLister             corev1lister.NodeLister
+	nodesSynced            cache.InformerSynced
+	deployLister           appsv1lister.DeploymentLister
+	deploysSynced          cache.InformerSynced
+	jobLister              batchv1lister.JobLister
+	jobsSynced             cache.InformerSynced
+	deploymentWatchEnabled bool
+	jobWatchEnabled        bool
 }
 
 func New(
@@ -59,6 +69,14 @@ func New(
 			workqueue.DefaultTypedControllerRateLimiter[string](),
 			workqueue.TypedRateLimitingQueueConfig[string]{Name: "nodes"},
 		),
+		deploymentQueue: workqueue.NewTypedRateLimitingQueueWithConfig(
+			workqueue.DefaultTypedControllerRateLimiter[string](),
+			workqueue.TypedRateLimitingQueueConfig[string]{Name: "deployments"},
+		),
+		jobQueue: workqueue.NewTypedRateLimitingQueueWithConfig(
+			workqueue.DefaultTypedControllerRateLimiter[string](),
+			workqueue.TypedRateLimitingQueueConfig[string]{Name: "jobs"},
+		),
 		podLister:  podLister,
 		podsSynced: podInformer.HasSynced,
 	}
@@ -84,6 +102,40 @@ func New(
 			AddFunc:    c.enqueueNode,
 			UpdateFunc: func(old, new interface{}) { c.enqueueNode(new) },
 			DeleteFunc: c.enqueueNode,
+		})
+	}
+
+	if cfg.RolloutMonitor.Enabled {
+		deployInformer := factory.Apps().V1().Deployments().Informer()
+		deployLister := factory.Apps().V1().Deployments().Lister()
+
+		c.deployLister = deployLister
+		c.deploysSynced = deployInformer.HasSynced
+		c.deploymentWatchEnabled = true
+
+		h.SetDeploymentLister(deployLister)
+
+		deployInformer.AddEventHandler(cache.ResourceEventHandlerFuncs{
+			AddFunc:    c.enqueueDeployment,
+			UpdateFunc: func(old, new interface{}) { c.enqueueDeployment(new) },
+			DeleteFunc: c.enqueueDeployment,
+		})
+	}
+
+	if cfg.JobMonitor.Enabled {
+		jobInformer := factory.Batch().V1().Jobs().Informer()
+		jobLister := factory.Batch().V1().Jobs().Lister()
+
+		c.jobLister = jobLister
+		c.jobsSynced = jobInformer.HasSynced
+		c.jobWatchEnabled = true
+
+		h.SetJobLister(jobLister)
+
+		jobInformer.AddEventHandler(cache.ResourceEventHandlerFuncs{
+			AddFunc:    c.enqueueJob,
+			UpdateFunc: func(old, new interface{}) { c.enqueueJob(new) },
+			DeleteFunc: c.enqueueJob,
 		})
 	}
 
@@ -116,10 +168,30 @@ func (c *Controller) enqueueNode(obj interface{}) {
 	c.nodeQueue.Add(key)
 }
 
+func (c *Controller) enqueueDeployment(obj interface{}) {
+	key, err := cache.DeletionHandlingMetaNamespaceKeyFunc(obj)
+	if err != nil {
+		utilruntime.HandleError(err)
+		return
+	}
+	c.deploymentQueue.Add(key)
+}
+
+func (c *Controller) enqueueJob(obj interface{}) {
+	key, err := cache.DeletionHandlingMetaNamespaceKeyFunc(obj)
+	if err != nil {
+		utilruntime.HandleError(err)
+		return
+	}
+	c.jobQueue.Add(key)
+}
+
 func (c *Controller) Run(ctx context.Context, workers int) error {
 	defer utilruntime.HandleCrash()
 	defer c.podQueue.ShutDown()
 	defer c.nodeQueue.ShutDown()
+	defer c.deploymentQueue.ShutDown()
+	defer c.jobQueue.ShutDown()
 
 	klog.InfoS("starting controller")
 
@@ -127,6 +199,12 @@ func (c *Controller) Run(ctx context.Context, workers int) error {
 	syncFns := []cache.InformerSynced{c.podsSynced}
 	if c.nodesSynced != nil {
 		syncFns = append(syncFns, c.nodesSynced)
+	}
+	if c.deploysSynced != nil {
+		syncFns = append(syncFns, c.deploysSynced)
+	}
+	if c.jobsSynced != nil {
+		syncFns = append(syncFns, c.jobsSynced)
 	}
 	if !cache.WaitForCacheSync(ctx.Done(), syncFns...) {
 		return fmt.Errorf("failed to wait for caches to sync")
@@ -137,6 +215,12 @@ func (c *Controller) Run(ctx context.Context, workers int) error {
 		go wait.UntilWithContext(ctx, c.runPodWorker, time.Second)
 		if c.nodesSynced != nil {
 			go wait.UntilWithContext(ctx, c.runNodeWorker, time.Second)
+		}
+		if c.deploysSynced != nil {
+			go wait.UntilWithContext(ctx, c.runDeploymentWorker, time.Second)
+		}
+		if c.jobsSynced != nil {
+			go wait.UntilWithContext(ctx, c.runJobWorker, time.Second)
 		}
 	}
 
@@ -152,6 +236,16 @@ func (c *Controller) runPodWorker(ctx context.Context) {
 
 func (c *Controller) runNodeWorker(ctx context.Context) {
 	for c.processNextNodeItem() {
+	}
+}
+
+func (c *Controller) runDeploymentWorker(ctx context.Context) {
+	for c.processNextDeploymentItem() {
+	}
+}
+
+func (c *Controller) runJobWorker(ctx context.Context) {
+	for c.processNextJobItem() {
 	}
 }
 
@@ -189,6 +283,40 @@ func (c *Controller) processNextNodeItem() bool {
 	return true
 }
 
+func (c *Controller) processNextDeploymentItem() bool {
+	key, quit := c.deploymentQueue.Get()
+	if quit {
+		return false
+	}
+	defer c.deploymentQueue.Done(key)
+
+	if err := c.syncDeployment(key); err != nil {
+		c.deploymentQueue.AddRateLimited(key)
+		utilruntime.HandleError(fmt.Errorf("error syncing deployment %q: %s, requeuing", key, err.Error()))
+		return true
+	}
+
+	c.deploymentQueue.Forget(key)
+	return true
+}
+
+func (c *Controller) processNextJobItem() bool {
+	key, quit := c.jobQueue.Get()
+	if quit {
+		return false
+	}
+	defer c.jobQueue.Done(key)
+
+	if err := c.syncJob(key); err != nil {
+		c.jobQueue.AddRateLimited(key)
+		utilruntime.HandleError(fmt.Errorf("error syncing job %q: %s, requeuing", key, err.Error()))
+		return true
+	}
+
+	c.jobQueue.Forget(key)
+	return true
+}
+
 func (c *Controller) syncPod(key string) error {
 	namespace, name, err := cache.SplitMetaNamespaceKey(key)
 	if err != nil {
@@ -218,4 +346,38 @@ func (c *Controller) syncNode(key string) error {
 	}
 
 	return c.handler.ProcessNode(key, deleted)
+}
+
+func (c *Controller) syncDeployment(key string) error {
+	namespace, name, err := cache.SplitMetaNamespaceKey(key)
+	if err != nil {
+		return err
+	}
+
+	deploy, err := c.deployLister.Deployments(namespace).Get(name)
+	if err != nil {
+		if errors.IsNotFound(err) {
+			return c.handler.ProcessDeployment(key, true)
+		}
+		return err
+	}
+
+	return c.handler.ProcessDeploymentObject(deploy, false)
+}
+
+func (c *Controller) syncJob(key string) error {
+	namespace, name, err := cache.SplitMetaNamespaceKey(key)
+	if err != nil {
+		return err
+	}
+
+	job, err := c.jobLister.Jobs(namespace).Get(name)
+	if err != nil {
+		if errors.IsNotFound(err) {
+			return c.handler.ProcessJob(key, true)
+		}
+		return err
+	}
+
+	return c.handler.ProcessJobObject(job, false)
 }

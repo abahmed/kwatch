@@ -39,21 +39,21 @@ func TestAlertManagerNoConfig(t *testing.T) {
 	assert := assert.New(t)
 	am := AlertManager{}
 	am.Init(nil, nil)
-	assert.Len(am.providers, 0)
+	assert.Len(am.entries, 0)
 }
 
 func TestGetProvidersUnknownSkipped(t *testing.T) {
 	assert := assert.New(t)
 
 	alertMap := map[string]map[string]interface{}{
-		"slack":       {"webhook": "test"},
+		"slack":        {"webhook": "test"},
 		"notaprovider": {"key": "val"},
 	}
 
 	am := AlertManager{}
 	am.Init(alertMap, &config.App{ClusterName: "dev"})
 
-	assert.Len(am.providers, 1)
+	assert.Len(am.entries, 1)
 }
 
 func TestGetProviders(t *testing.T) {
@@ -118,34 +118,34 @@ func TestGetProviders(t *testing.T) {
 	am.Init(alertMap, &config.App{ClusterName: "dev"})
 
 	assert.Len(
-		am.providers,
+		am.entries,
 		len(alertMap),
 		"get providers returned %d expected %d")
 }
 
 func TestSendProvidersEvent(t *testing.T) {
 	am := AlertManager{}
-	am.providers = append(
-		am.providers,
-		&fakeProvider{},
-		&fakeProviderWithError{},
+	am.entries = append(
+		am.entries,
+		providerEntry{provider: &fakeProvider{}},
+		providerEntry{provider: &fakeProviderWithError{}},
 	)
 	am.NotifyEvent(event.Event{})
 }
 
 func TestSendProvidersMsg(t *testing.T) {
 	am := AlertManager{}
-	am.providers = append(
-		am.providers,
-		&fakeProvider{},
-		&fakeProviderWithError{},
+	am.entries = append(
+		am.entries,
+		providerEntry{provider: &fakeProvider{}},
+		providerEntry{provider: &fakeProviderWithError{}},
 	)
 	am.Notify("hello world!")
 }
 
 func TestNotifyIncidentCreate(t *testing.T) {
 	am := AlertManager{}
-	am.providers = append(am.providers, &fakeProvider{})
+	am.entries = append(am.entries, providerEntry{provider: &fakeProvider{}})
 
 	inc := &model.Incident{
 		Key:       "default:deploy:CrashLoopBackOff",
@@ -164,7 +164,7 @@ func TestNotifyIncidentCreate(t *testing.T) {
 
 func TestNotifyIncidentUpdate(t *testing.T) {
 	am := AlertManager{}
-	am.providers = append(am.providers, &fakeProvider{}, &fakeProviderWithError{})
+	am.entries = append(am.entries, providerEntry{provider: &fakeProvider{}}, providerEntry{provider: &fakeProviderWithError{}})
 
 	inc := &model.Incident{
 		Key:       "default:deploy:OOMKilled",
@@ -183,7 +183,7 @@ func TestNotifyIncidentUpdate(t *testing.T) {
 
 func TestNotifyIncidentSkip(t *testing.T) {
 	am := AlertManager{}
-	am.providers = append(am.providers, &fakeProvider{})
+	am.entries = append(am.entries, providerEntry{provider: &fakeProvider{}})
 
 	inc := &model.Incident{
 		Key:  "default:deploy:OOMKilled",
@@ -195,13 +195,13 @@ func TestNotifyIncidentSkip(t *testing.T) {
 
 // fakeThreadProvider implements both Provider and ThreadProvider
 type fakeThreadProvider struct {
-	lastInc  *model.Incident
-	lastAct  model.IncidentAction
+	lastInc *model.Incident
+	lastAct model.IncidentAction
 }
 
-func (p *fakeThreadProvider) SendMessage(msg string) error { return nil }
+func (p *fakeThreadProvider) SendMessage(msg string) error  { return nil }
 func (p *fakeThreadProvider) SendEvent(evt *event.Event) error { return nil }
-func (p *fakeThreadProvider) Name() string { return "ThreadSlack" }
+func (p *fakeThreadProvider) Name() string                   { return "ThreadSlack" }
 func (p *fakeThreadProvider) SendIncident(inc *model.Incident, action model.IncidentAction) error {
 	p.lastInc = inc
 	p.lastAct = action
@@ -211,7 +211,7 @@ func (p *fakeThreadProvider) SendIncident(inc *model.Incident, action model.Inci
 func TestNotifyIncidentCallsThreadProvider(t *testing.T) {
 	tp := &fakeThreadProvider{}
 	am := AlertManager{}
-	am.providers = append(am.providers, tp)
+	am.entries = append(am.entries, providerEntry{provider: tp})
 
 	inc := &model.Incident{
 		Key:  "default:deploy:OOMKilled",
@@ -223,41 +223,10 @@ func TestNotifyIncidentCallsThreadProvider(t *testing.T) {
 	assert.Equal(t, model.ActionCreate, tp.lastAct)
 }
 
-func TestNotifyIncidentFallsBackToMessage(t *testing.T) {
-	// fakeProvider does NOT implement ThreadProvider
-	var lastMsg string
-	fp := &fakeProvider{}
-	am := AlertManager{}
-	// wrap to capture the message
-	capturePvdr := struct {
-		*fakeProvider
-	}{fp}
-	am.providers = append(am.providers, capturePvdr)
-
-	// We need to actually test the fallback. Since fakeProvider doesn't
-	// implement ThreadProvider, it should get SendMessage.
-	// We can verify by making a provider that tracks SendMessage.
-	type captureProvider struct {
-		*fakeProvider
-		msg string
-	}
-	cp := &captureProvider{fakeProvider: &fakeProvider{}}
-	cp.fakeProvider = &fakeProvider{}
-
-	am2 := AlertManager{}
-	am2.providers = append(am2.providers, cp)
-
-	// Override SendMessage on the provider to capture
-	// Actually, fakeProvider.SendMessage is a method, can't override it inline.
-	// Let's use the simpler approach: verify the test doesn't panic and completes.
-	_ = lastMsg
-	_ = fp
-}
-
 func TestNotifyIncidentThreadProviderWithSkip(t *testing.T) {
 	tp := &fakeThreadProvider{}
 	am := AlertManager{}
-	am.providers = append(am.providers, tp)
+	am.entries = append(am.entries, providerEntry{provider: tp})
 
 	inc := &model.Incident{
 		Key:  "default:deploy:OOMKilled",
@@ -315,4 +284,89 @@ func TestFormatIncidentMessageWithLogsEvents(t *testing.T) {
 	assert.Contains(t, msg, "Events:")
 	assert.Contains(t, msg, "Pulling image")
 	assert.Contains(t, msg, "BackOff restart")
+}
+
+func TestSilenceByNamespace(t *testing.T) {
+	am := AlertManager{}
+	am.SetSilences([]config.SilenceRule{
+		{Namespaces: []string{"kube-system"}},
+	})
+
+	inc := &model.Incident{
+		Key:       "kube-system:pod:ImagePullBackOff",
+		Name:      "pod",
+		Namespace: "kube-system",
+		Reason:    "ImagePullBackOff",
+	}
+	assert.True(t, am.isSilenced(inc))
+
+	inc2 := &model.Incident{
+		Key:       "default:pod:ImagePullBackOff",
+		Name:      "pod",
+		Namespace: "default",
+		Reason:    "ImagePullBackOff",
+	}
+	assert.False(t, am.isSilenced(inc2))
+}
+
+func TestSilenceByReason(t *testing.T) {
+	am := AlertManager{}
+	am.SetSilences([]config.SilenceRule{
+		{Reasons: []string{"BackOff"}},
+	})
+
+	inc := &model.Incident{
+		Key:       "default:pod:BackOff",
+		Name:      "pod",
+		Namespace: "default",
+		Reason:    "BackOff",
+	}
+	assert.True(t, am.isSilenced(inc))
+
+	inc2 := &model.Incident{
+		Key:       "default:pod:OOMKilled",
+		Name:      "pod",
+		Namespace: "default",
+		Reason:    "OOMKilled",
+	}
+	assert.False(t, am.isSilenced(inc2))
+}
+
+func TestRouteFilter(t *testing.T) {
+	routes := []config.AlertRoute{
+		{Namespaces: []string{"production"}, Severities: []string{"high"}},
+	}
+
+	inc := &model.Incident{
+		Key:       "production:pod:OOMKilled",
+		Name:      "pod",
+		Namespace: "production",
+		Reason:    "OOMKilled",
+		Severity:  "high",
+	}
+	assert.True(t, matchesRoute(routes[0], inc))
+
+	inc2 := &model.Incident{
+		Key:       "staging:pod:OOMKilled",
+		Name:      "pod",
+		Namespace: "staging",
+		Reason:    "OOMKilled",
+		Severity:  "high",
+	}
+	assert.False(t, matchesRoute(routes[0], inc2))
+
+	inc3 := &model.Incident{
+		Key:       "production:pod:BackOff",
+		Name:      "pod",
+		Namespace: "production",
+		Reason:    "BackOff",
+		Severity:  "normal",
+	}
+	assert.False(t, matchesRoute(routes[0], inc3))
+}
+
+func TestShouldDeliverNoRoutes(t *testing.T) {
+	inc := &model.Incident{Key: "default:pod:Error"}
+	assert.True(t, shouldDeliver(nil, inc))
+	assert.True(t, shouldDeliver([]config.AlertRoute{}, inc))
 }

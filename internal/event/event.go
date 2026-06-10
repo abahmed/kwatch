@@ -13,4 +13,5 @@ type Event struct {
 	Labels        map[string]string
 	OwnerKind     string
 	RestartCount  int
+	Hint          string // Pre-computed diagnostic hint; empty = auto-generate from Reason
 }

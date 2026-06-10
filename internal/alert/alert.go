@@ -3,6 +3,7 @@ package alert
 import (
 	"fmt"
 	"reflect"
+	"regexp"
 	"strings"
 	"time"
 
@@ -27,8 +28,20 @@ import (
 	"k8s.io/klog/v2"
 )
 
+type providerEntry struct {
+	provider Provider
+	routes   []config.AlertRoute
+}
+
 type AlertManager struct {
-	providers []Provider
+	entries  []providerEntry
+	silences []silenceMatcher
+}
+
+type silenceMatcher struct {
+	namespaces []string
+	reasons    []string
+	podPattern []*regexp.Regexp
 }
 
 // Provider interface
@@ -38,11 +51,69 @@ type Provider interface {
 	SendMessage(string) error
 }
 
+func extractRoutes(cfg map[string]interface{}) []config.AlertRoute {
+	if r, ok := cfg["routes"]; ok {
+		if routes, ok := r.([]interface{}); ok {
+			out := make([]config.AlertRoute, 0, len(routes))
+			for _, ri := range routes {
+				if rm, ok := ri.(map[string]interface{}); ok {
+					route := config.AlertRoute{}
+					if ns, ok := rm["namespaces"]; ok {
+						for _, n := range ns.([]interface{}) {
+							route.Namespaces = append(route.Namespaces, fmt.Sprint(n))
+						}
+					}
+					if sev, ok := rm["severities"]; ok {
+						for _, s := range sev.([]interface{}) {
+							route.Severities = append(route.Severities, fmt.Sprint(s))
+						}
+					}
+					if rea, ok := rm["reasons"]; ok {
+						for _, r := range rea.([]interface{}) {
+							route.Reasons = append(route.Reasons, fmt.Sprint(r))
+						}
+					}
+					if len(route.Namespaces) > 0 || len(route.Severities) > 0 || len(route.Reasons) > 0 {
+						out = append(out, route)
+					}
+				}
+			}
+			return out
+		}
+	}
+	return nil
+}
+
+func extractRetry(cfg map[string]interface{}) (maxAttempts int, delay time.Duration) {
+	maxAttempts = 1
+	delay = time.Second
+	if r, ok := cfg["retry"]; ok {
+		if rm, ok := r.(map[string]interface{}); ok {
+			if a, ok := rm["maxAttempts"]; ok {
+				if f, ok := a.(float64); ok {
+					maxAttempts = int(f)
+				}
+			}
+			if d, ok := rm["delay"]; ok {
+				if s, ok := d.(string); ok {
+					if parsed, err := time.ParseDuration(s); err == nil {
+						delay = parsed
+					}
+				}
+			}
+		}
+	}
+	return
+}
+
 // Init initializes AlertManager with provided config
 func (a *AlertManager) Init(
 	alertCfg map[string]map[string]interface{},
-	appCfg *config.App) {
-	a.providers = make([]Provider, 0)
+	appCfg *config.App,
+) {
+	a.entries = make([]providerEntry, 0)
+	a.silences = nil
+
 	for k, v := range alertCfg {
 		lowerCaseKey := strings.ToLower(k)
 		var pvdr Provider = nil
@@ -83,21 +154,168 @@ func (a *AlertManager) Init(
 			continue
 		}
 		if !reflect.ValueOf(pvdr).IsNil() {
-			a.providers = append(a.providers, pvdr)
+			a.entries = append(a.entries, providerEntry{
+				provider: pvdr,
+				routes:   extractRoutes(v),
+			})
 		}
 	}
+}
+
+// SetSilences configures silence rules on the alert manager.
+// Must be called after Init.
+func (a *AlertManager) SetSilences(rules []config.SilenceRule) {
+	a.silences = make([]silenceMatcher, 0, len(rules))
+	for _, sr := range rules {
+		sm := silenceMatcher{
+			namespaces: sr.Namespaces,
+			reasons:    sr.Reasons,
+		}
+		for _, p := range sr.PodNamePatterns {
+			if re, err := regexp.Compile(p); err == nil {
+				sm.podPattern = append(sm.podPattern, re)
+			} else {
+				klog.ErrorS(err, "invalid silence pod name pattern", "pattern", p)
+			}
+		}
+		a.silences = append(a.silences, sm)
+	}
+}
+
+func (a *AlertManager) isSilenced(inc *model.Incident) bool {
+	for _, sm := range a.silences {
+		if matchesSilence(sm, inc) {
+			return true
+		}
+	}
+	return false
+}
+
+func matchesSilence(sm silenceMatcher, inc *model.Incident) bool {
+	if len(sm.namespaces) > 0 {
+		found := false
+		for _, ns := range sm.namespaces {
+			if ns == inc.Namespace {
+				found = true
+				break
+			}
+		}
+		if !found {
+			return false
+		}
+	}
+	if len(sm.reasons) > 0 {
+		found := false
+		for _, r := range sm.reasons {
+			if r == inc.Reason {
+				found = true
+				break
+			}
+		}
+		if !found {
+			return false
+		}
+	}
+	if len(sm.podPattern) > 0 {
+		found := false
+		for _, re := range sm.podPattern {
+			if re.MatchString(inc.Name) {
+				found = true
+				break
+			}
+		}
+		if !found {
+			return false
+		}
+	}
+	return true
+}
+
+func matchesRoute(route config.AlertRoute, inc *model.Incident) bool {
+	if len(route.Namespaces) > 0 {
+		found := false
+		for _, ns := range route.Namespaces {
+			if ns == inc.Namespace {
+				found = true
+				break
+			}
+		}
+		if !found {
+			return false
+		}
+	}
+	if len(route.Severities) > 0 {
+		found := false
+		for _, s := range route.Severities {
+			if s == inc.Severity {
+				found = true
+				break
+			}
+		}
+		if !found {
+			return false
+		}
+	}
+	if len(route.Reasons) > 0 {
+		found := false
+		for _, r := range route.Reasons {
+			if r == inc.Reason {
+				found = true
+				break
+			}
+		}
+		if !found {
+			return false
+		}
+	}
+	return true
+}
+
+// shouldDeliver checks whether an incident should be delivered to a provider.
+// If the provider has no routes defined, all incidents are delivered.
+func shouldDeliver(routes []config.AlertRoute, inc *model.Incident) bool {
+	if len(routes) == 0 {
+		return true
+	}
+	for _, route := range routes {
+		if matchesRoute(route, inc) {
+			return true
+		}
+	}
+	return false
+}
+
+func sendWithRetry(sendFn func() error, maxAttempts int, delay time.Duration, providerName string) {
+	var lastErr error
+	for attempt := 1; attempt <= maxAttempts; attempt++ {
+		if err := sendFn(); err != nil {
+			lastErr = err
+			if attempt < maxAttempts {
+				klog.V(4).InfoS("retrying provider delivery",
+					"provider", providerName,
+					"attempt", attempt,
+					"maxAttempts", maxAttempts)
+				time.Sleep(delay)
+			}
+			continue
+		}
+		return
+	}
+	klog.ErrorS(lastErr, "failed to deliver after retries",
+		"provider", providerName,
+		"maxAttempts", maxAttempts)
 }
 
 // Notify sends string msg to all providers
 func (a *AlertManager) Notify(msg string) {
 	klog.InfoS("sending message", "msg", msg)
 
-	for _, prv := range a.providers {
-		if err := prv.SendMessage(msg); err != nil {
-			klog.ErrorS(err,
-				"failed to send msg",
-				"provider", prv.Name())
-		}
+	for _, entry := range a.entries {
+		p := entry.provider
+		maxRetries, retryDelay := 1, time.Second
+		sendWithRetry(func() error {
+			return p.SendMessage(msg)
+		}, maxRetries, retryDelay, p.Name())
 	}
 }
 
@@ -105,12 +323,12 @@ func (a *AlertManager) Notify(msg string) {
 func (a *AlertManager) NotifyEvent(event event.Event) {
 	klog.InfoS("sending event", "event", event)
 
-	for _, prv := range a.providers {
-		if err := prv.SendEvent(&event); err != nil {
-			klog.ErrorS(err,
-				"failed to send event",
-				"provider", prv.Name())
-		}
+	for _, entry := range a.entries {
+		p := entry.provider
+		maxRetries, retryDelay := 1, time.Second
+		sendWithRetry(func() error {
+			return p.SendEvent(&event)
+		}, maxRetries, retryDelay, p.Name())
 	}
 }
 
@@ -127,19 +345,32 @@ func (a *AlertManager) NotifyIncident(inc *model.Incident, action model.Incident
 	if action == model.ActionSkip {
 		return
 	}
+
+	if a.isSilenced(inc) {
+		klog.V(4).InfoS("incident suppressed by silence rule",
+			"key", inc.Key, "reason", inc.Reason, "namespace", inc.Namespace)
+		return
+	}
+
 	msg := formatIncidentMessage(inc, action)
 	klog.InfoS("sending incident", "action", action, "key", inc.Key, "count", inc.Count)
-	for _, prv := range a.providers {
-		if tp, ok := prv.(ThreadProvider); ok {
-			if err := tp.SendIncident(inc, action); err != nil {
-				klog.ErrorS(err,
-					"failed to send incident via thread provider",
-					"provider", prv.Name())
-			}
-		} else if err := prv.SendMessage(msg); err != nil {
-			klog.ErrorS(err,
-				"failed to send incident",
-				"provider", prv.Name())
+	for _, entry := range a.entries {
+		if !shouldDeliver(entry.routes, inc) {
+			klog.V(4).InfoS("incident filtered by route",
+				"provider", entry.provider.Name(),
+				"key", inc.Key)
+			continue
+		}
+		p := entry.provider
+		maxRetries, retryDelay := 1, time.Second
+		if tp, ok := p.(ThreadProvider); ok {
+			sendWithRetry(func() error {
+				return tp.SendIncident(inc, action)
+			}, maxRetries, retryDelay, p.Name())
+		} else {
+			sendWithRetry(func() error {
+				return p.SendMessage(msg)
+			}, maxRetries, retryDelay, p.Name())
 		}
 	}
 }
@@ -163,6 +394,11 @@ func formatCreateMessage(inc *model.Incident) string {
 	resources := len(inc.Resources)
 	duration := inc.LastSeen.Sub(inc.FirstSeen).Round(time.Minute)
 
+	severity := inc.Severity
+	if severity == "" {
+		severity = "normal"
+	}
+
 	logsBlock := ""
 	if inc.Logs != "" {
 		logsBlock = fmt.Sprintf("\nLogs:\n%s", truncateText(inc.Logs, 100))
@@ -173,8 +409,8 @@ func formatCreateMessage(inc *model.Incident) string {
 	}
 
 	return fmt.Sprintf(
-		"🚨 Incident: %s\nOwner: %s (%s)\nNamespace: %s\nContainer: %s\nReason: %s\nRestarts: %d\nHint: %s%s%s\nAffected: %d resource(s)\nCount: %d\nDuration: %s",
-		inc.Name, inc.OwnerKind, inc.Name,
+		"🚨 Incident: %s\nSeverity: %s\nOwner: %s (%s)\nNamespace: %s\nContainer: %s\nReason: %s\nRestarts: %d\nHint: %s%s%s\nAffected: %d resource(s)\nCount: %d\nDuration: %s",
+		inc.Name, severity, inc.OwnerKind, inc.Name,
 		inc.Namespace, inc.ContainerName, inc.Reason,
 		inc.RestartCount, inc.Hint,
 		logsBlock, eventsBlock,
@@ -194,9 +430,14 @@ func formatUpdateMessage(inc *model.Incident) string {
 	resources := len(inc.Resources)
 	duration := inc.LastSeen.Sub(inc.FirstSeen).Round(time.Minute)
 
+	severity := inc.Severity
+	if severity == "" {
+		severity = "normal"
+	}
+
 	return fmt.Sprintf(
-		"🔄 Update: %s | Namespace: %s | Reason: %s | Count: %d | Duration: %s | Affected: %d resource(s)",
-		inc.Name, inc.Namespace, inc.Reason, inc.Count, duration, resources,
+		"🔄 Update: %s | Severity: %s | Namespace: %s | Reason: %s | Count: %d | Duration: %s | Affected: %d resource(s)",
+		inc.Name, severity, inc.Namespace, inc.Reason, inc.Count, duration, resources,
 	)
 }
 
