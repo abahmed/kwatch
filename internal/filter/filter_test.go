@@ -1358,9 +1358,7 @@ func TestPodOwnersFilterReplicaSet(t *testing.T) {
 	filter := PodOwnersFilter{}
 	result := filter.Execute(ctx)
 	assert.False(result)
-	assert.NotNil(ctx.Owner)
-	assert.Equal("ReplicaSet", ctx.Owner.Kind)
-	assert.Equal("my-rs", ctx.Owner.Name)
+	assert.Nil(ctx.Owner, "owner should remain nil when ReplicaSet API lookup fails")
 }
 
 func TestPodStatusFilterSucceeded(t *testing.T) {

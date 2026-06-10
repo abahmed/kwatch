@@ -29,8 +29,10 @@ import (
 )
 
 type providerEntry struct {
-	provider Provider
-	routes   []config.AlertRoute
+	provider    Provider
+	routes      []config.AlertRoute
+	maxAttempts int
+	retryDelay  time.Duration
 }
 
 type AlertManager struct {
@@ -154,9 +156,12 @@ func (a *AlertManager) Init(
 			continue
 		}
 		if !reflect.ValueOf(pvdr).IsNil() {
+			maxAttempts, retryDelay := extractRetry(v)
 			a.entries = append(a.entries, providerEntry{
-				provider: pvdr,
-				routes:   extractRoutes(v),
+				provider:    pvdr,
+				routes:      extractRoutes(v),
+				maxAttempts: maxAttempts,
+				retryDelay:  retryDelay,
 			})
 		}
 	}
@@ -312,10 +317,9 @@ func (a *AlertManager) Notify(msg string) {
 
 	for _, entry := range a.entries {
 		p := entry.provider
-		maxRetries, retryDelay := 1, time.Second
 		sendWithRetry(func() error {
 			return p.SendMessage(msg)
-		}, maxRetries, retryDelay, p.Name())
+		}, entry.maxAttempts, entry.retryDelay, p.Name())
 	}
 }
 
@@ -325,10 +329,9 @@ func (a *AlertManager) NotifyEvent(event event.Event) {
 
 	for _, entry := range a.entries {
 		p := entry.provider
-		maxRetries, retryDelay := 1, time.Second
 		sendWithRetry(func() error {
 			return p.SendEvent(&event)
-		}, maxRetries, retryDelay, p.Name())
+		}, entry.maxAttempts, entry.retryDelay, p.Name())
 	}
 }
 
@@ -362,15 +365,14 @@ func (a *AlertManager) NotifyIncident(inc *model.Incident, action model.Incident
 			continue
 		}
 		p := entry.provider
-		maxRetries, retryDelay := 1, time.Second
 		if tp, ok := p.(ThreadProvider); ok {
 			sendWithRetry(func() error {
 				return tp.SendIncident(inc, action)
-			}, maxRetries, retryDelay, p.Name())
+			}, entry.maxAttempts, entry.retryDelay, p.Name())
 		} else {
 			sendWithRetry(func() error {
 				return p.SendMessage(msg)
-			}, maxRetries, retryDelay, p.Name())
+			}, entry.maxAttempts, entry.retryDelay, p.Name())
 		}
 	}
 }

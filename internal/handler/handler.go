@@ -29,6 +29,8 @@ type Handler interface {
 	SetNodeLister(lister corev1lister.NodeLister)
 	SetDeploymentLister(lister appsv1lister.DeploymentLister)
 	SetJobLister(lister batchv1lister.JobLister)
+	SetReplicaLister(lister appsv1lister.ReplicaSetLister)
+	SetSeen(keys []string)
 }
 
 type handler struct {
@@ -44,6 +46,7 @@ type handler struct {
 	nodeLister            corev1lister.NodeLister
 	deployLister          appsv1lister.DeploymentLister
 	jobLister             batchv1lister.JobLister
+	rsLister              appsv1lister.ReplicaSetLister
 }
 
 func NewHandler(
@@ -51,16 +54,18 @@ func NewHandler(
 	cfg *config.Config,
 	correlator *correlation.Engine,
 	alertManager *alert.AlertManager) Handler {
-	pendingThreshold := time.Duration(cfg.PendingPodThreshold) * time.Second
-	if cfg.PendingPodThreshold <= 0 {
-		pendingThreshold = 300 * time.Second
-	}
-
 	podDetectors := []filter.Detector{
 		filter.NamespaceFilter{},
 		filter.PodNameFilter{},
 		filter.PodStatusFilter{},
-		filter.PendingPodFilter{Threshold: pendingThreshold},
+	}
+
+	if cfg.PendingPodMonitor.Enabled {
+		pendingThreshold := time.Duration(cfg.PendingPodMonitor.Threshold) * time.Second
+		if pendingThreshold <= 0 {
+			pendingThreshold = 300 * time.Second
+		}
+		podDetectors = append(podDetectors, filter.PendingPodFilter{Threshold: pendingThreshold})
 	}
 
 	podEnrichers := []filter.Enricher{
@@ -110,4 +115,12 @@ func (h *handler) SetDeploymentLister(lister appsv1lister.DeploymentLister) {
 
 func (h *handler) SetJobLister(lister batchv1lister.JobLister) {
 	h.jobLister = lister
+}
+
+func (h *handler) SetReplicaLister(lister appsv1lister.ReplicaSetLister) {
+	h.rsLister = lister
+}
+
+func (h *handler) SetSeen(keys []string) {
+	h.correlator.SetSeen(keys)
 }

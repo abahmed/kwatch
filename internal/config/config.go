@@ -14,6 +14,9 @@ type Config struct {
 	// PvcMonitor configuration
 	PvcMonitor PvcMonitor `yaml:"pvcMonitor"`
 
+	// HeartbeatMonitor configuration
+	HeartbeatMonitor HeartbeatMonitor `yaml:"heartbeatMonitor"`
+
 	// NodeMonitor configuration
 	NodeMonitor NodeMonitor `yaml:"nodeMonitor"`
 
@@ -89,9 +92,8 @@ type Config struct {
 	// Default: StatefulSet → "high", everything else → "normal"
 	SeverityByOwnerKind map[string]string `yaml:"severityByOwnerKind"`
 
-	// PendingPodThreshold is the duration (in seconds) a pod can remain
-	// in Pending phase before an alert is raised. Default 300 (5 min).
-	PendingPodThreshold int `yaml:"pendingPodThreshold"`
+	// PendingPodMonitor configures Pending-phase pod detection.
+	PendingPodMonitor PendingPodMonitor `yaml:"pendingPodMonitor"`
 
 	// RolloutMonitor configures stuck-rollout detection for Deployments.
 	RolloutMonitor RolloutMonitor `yaml:"rolloutMonitor"`
@@ -101,6 +103,9 @@ type Config struct {
 
 	// Silences is an optional list of silence rules that suppress matching incidents.
 	Silences []SilenceRule `yaml:"silences"`
+
+	// LeaderElection config for high-availability deployments.
+	LeaderElection LeaderElection `yaml:"leaderElection"`
 }
 
 // App confing struct
@@ -151,6 +156,15 @@ type NodeMonitor struct {
 	Enabled bool `yaml:"enabled"`
 }
 
+// HeartbeatMonitor config for dead man's switch
+type HeartbeatMonitor struct {
+	// Enabled if set to true, a periodic heartbeat event is fired.
+	Enabled bool `yaml:"enabled"`
+
+	// Interval is the frequency (in seconds) between heartbeats. Default 300 (5 min).
+	Interval int `yaml:"interval"`
+}
+
 // RolloutMonitor config struct
 type RolloutMonitor struct {
 	// Enabled if set to true, it will watch Deployments for stuck rollouts
@@ -163,6 +177,28 @@ type JobMonitor struct {
 	// Enabled if set to true, it will watch Jobs for failures
 	// By default, this value is true
 	Enabled bool `yaml:"enabled"`
+}
+
+// LeaderElection config for high-availability deployments
+type LeaderElection struct {
+	// Enabled if set to true, leader election between replicas is enabled.
+	Enabled bool `yaml:"enabled"`
+
+	// LeaseName is the name of the Lease object used for leader election.
+	LeaseName string `yaml:"leaseName"`
+
+	// Namespace where the Lease object is created.
+	Namespace string `yaml:"namespace"`
+}
+
+// PendingPodMonitor config struct
+type PendingPodMonitor struct {
+	// Enabled if set to true, it will watch pods stuck in Pending phase
+	Enabled bool `yaml:"enabled"`
+
+	// Threshold is the duration (in seconds) a pod can remain
+	// in Pending phase before an alert is raised. Default 300 (5 min).
+	Threshold int `yaml:"threshold"`
 }
 
 // HealthCheck config struct

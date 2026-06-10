@@ -3,11 +3,16 @@ package pvc
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"sync"
 	"testing"
+	"time"
 
 	"github.com/abahmed/kwatch/internal/alert"
 	"github.com/abahmed/kwatch/internal/config"
+	"github.com/abahmed/kwatch/internal/correlation"
+	"github.com/abahmed/kwatch/internal/event"
+	"github.com/abahmed/kwatch/internal/model"
 	"github.com/stretchr/testify/assert"
 	"k8s.io/client-go/kubernetes/fake"
 )
@@ -387,4 +392,60 @@ func TestPodStruct(t *testing.T) {
 
 	assert.Equal("test-pod", pod.PodRef.Name)
 	assert.Equal(1, len(pod.Volume))
+}
+
+func TestPvcStableReasonDedup(t *testing.T) {
+	correlator := correlation.NewEngine(correlation.Config{
+		Window:   10 * time.Minute,
+		Cooldown: 1 * time.Millisecond,
+	})
+
+	ev := event.Event{
+		Resource:  "pvc",
+		PodName:   "test-pod",
+		Namespace: "default",
+		Reason:    "VolumeUsageHigh",
+		Hint:      "VolumeUsage(95%)",
+	}
+	owner := "test-pv"
+
+	_, action1 := correlator.Process(ev, owner, nil)
+	assert.Equal(t, model.ActionCreate, action1)
+
+	time.Sleep(2 * time.Millisecond)
+
+	_, action2 := correlator.Process(ev, owner, nil)
+	assert.Equal(t, model.ActionUpdate, action2, "second call with stable reason should update, not create")
+}
+
+func TestPvcStableReasonDifferentPercentages(t *testing.T) {
+	correlator := correlation.NewEngine(correlation.Config{
+		Window:   10 * time.Minute,
+		Cooldown: 1 * time.Millisecond,
+	})
+
+	ev1 := event.Event{
+		Resource:  "pvc",
+		PodName:   "test-pod",
+		Namespace: "default",
+		Reason:    "VolumeUsageHigh",
+		Hint:      fmt.Sprintf("VolumeUsage(%.0f%%)", 95.0),
+	}
+	owner := "test-pv"
+
+	_, action1 := correlator.Process(ev1, owner, nil)
+	assert.Equal(t, model.ActionCreate, action1)
+
+	time.Sleep(2 * time.Millisecond)
+
+	ev2 := event.Event{
+		Resource:  "pvc",
+		PodName:   "test-pod",
+		Namespace: "default",
+		Reason:    "VolumeUsageHigh",
+		Hint:      fmt.Sprintf("VolumeUsage(%.0f%%)", 96.0),
+	}
+
+	_, action2 := correlator.Process(ev2, owner, nil)
+	assert.Equal(t, model.ActionUpdate, action2, "different percentage, same stable reason should still dedup")
 }

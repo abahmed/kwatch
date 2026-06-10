@@ -28,6 +28,7 @@ type Engine struct {
 	state       map[string]*model.Incident
 	config      Config
 	startedAt   time.Time
+	seen        map[string]bool
 }
 
 func NewEngine(cfg Config) *Engine {
@@ -44,8 +45,23 @@ func NewEngine(cfg Config) *Engine {
 	}
 }
 
-func (e *Engine) inStartupQuiet() bool {
-	return e.config.StartupQuiet > 0 && time.Since(e.startedAt) < e.config.StartupQuiet
+func (e *Engine) SetSeen(keys []string) {
+	e.mu.Lock()
+	defer e.mu.Unlock()
+	e.seen = make(map[string]bool, len(keys))
+	for _, k := range keys {
+		e.seen[k] = true
+	}
+}
+
+func (e *Engine) inStartupQuiet(podKey string) bool {
+	if e.config.StartupQuiet <= 0 || time.Since(e.startedAt) >= e.config.StartupQuiet {
+		return false
+	}
+	if len(e.seen) == 0 {
+		return true
+	}
+	return e.seen[podKey]
 }
 
 var knownRetryReasons = map[string]bool{
@@ -83,11 +99,17 @@ func (e *Engine) Process(ev event.Event, owner string, cs *model.ContainerState)
 	e.mu.Lock()
 	defer e.mu.Unlock()
 
-	if e.inStartupQuiet() {
+	podKey := ev.Namespace + "/" + ev.PodName
+	if e.inStartupQuiet(podKey) {
 		return nil, model.ActionSkip
 	}
 
 	r := normalizeReason(ev.Reason)
+
+	if r == "CrashLoopBackOff" && cs != nil && cs.RestartCount > 5 {
+		r = "CrashLoopHighFrequency"
+	}
+
 	key := ev.Namespace + ":" + owner + ":" + r + ":" + ev.ContainerName
 	now := time.Now()
 

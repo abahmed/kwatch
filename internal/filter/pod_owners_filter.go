@@ -22,16 +22,29 @@ func (f PodOwnersFilter) Enrich(ctx *Context) bool {
 	}
 
 	owner := ctx.Pod.OwnerReferences[0]
+	resolved := true
+
 	if owner.Kind == "ReplicaSet" {
-		rs, err :=
-			ctx.Client.AppsV1().ReplicaSets(ctx.Pod.Namespace).Get(
-				context.TODO(),
-				owner.Name,
-				apiv1.GetOptions{})
-		if err != nil {
-			klog.ErrorS(err, "failed to get ReplicaSet", "name", owner.Name, "namespace", ctx.Pod.Namespace)
-		} else if len(rs.ObjectMeta.OwnerReferences) > 0 {
-			owner = rs.ObjectMeta.OwnerReferences[0]
+		if ctx.RSLister != nil {
+			rs, err := ctx.RSLister.ReplicaSets(ctx.Pod.Namespace).Get(owner.Name)
+			if err != nil {
+				klog.ErrorS(err, "failed to get ReplicaSet via lister", "name", owner.Name, "namespace", ctx.Pod.Namespace)
+				resolved = false
+			} else if len(rs.ObjectMeta.OwnerReferences) > 0 {
+				owner = rs.ObjectMeta.OwnerReferences[0]
+			}
+		} else {
+			rs, err :=
+				ctx.Client.AppsV1().ReplicaSets(ctx.Pod.Namespace).Get(
+					context.TODO(),
+					owner.Name,
+					apiv1.GetOptions{})
+			if err != nil {
+				klog.ErrorS(err, "failed to get ReplicaSet via API", "name", owner.Name, "namespace", ctx.Pod.Namespace)
+				resolved = false
+			} else if len(rs.ObjectMeta.OwnerReferences) > 0 {
+				owner = rs.ObjectMeta.OwnerReferences[0]
+			}
 		}
 	} else if owner.Kind == "DaemonSet" {
 		ds, err :=
@@ -41,6 +54,7 @@ func (f PodOwnersFilter) Enrich(ctx *Context) bool {
 				apiv1.GetOptions{})
 		if err != nil {
 			klog.ErrorS(err, "failed to get DaemonSet", "name", owner.Name, "namespace", ctx.Pod.Namespace)
+			resolved = false
 		} else if len(ds.ObjectMeta.OwnerReferences) > 0 {
 			owner = ds.ObjectMeta.OwnerReferences[0]
 		}
@@ -52,12 +66,15 @@ func (f PodOwnersFilter) Enrich(ctx *Context) bool {
 				apiv1.GetOptions{})
 		if err != nil {
 			klog.ErrorS(err, "failed to get StatefulSet", "name", owner.Name, "namespace", ctx.Pod.Namespace)
+			resolved = false
 		} else if len(ss.ObjectMeta.OwnerReferences) > 0 {
 			owner = ss.ObjectMeta.OwnerReferences[0]
 		}
 	}
 
-	ctx.Owner = &owner
+	if resolved {
+		ctx.Owner = &owner
+	}
 	return false
 }
 

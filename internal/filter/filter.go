@@ -8,6 +8,7 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	apiv1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes"
+	appsv1lister "k8s.io/client-go/listers/apps/v1"
 )
 
 type Status int
@@ -36,8 +37,9 @@ type Context struct {
 	Pod    *corev1.Pod
 	EvType string
 
-	Owner  *apiv1.OwnerReference
-	Events *[]corev1.Event
+	Owner    *apiv1.OwnerReference
+	Events   *[]corev1.Event
+	RSLister appsv1lister.ReplicaSetLister
 
 	PodHasIssues        bool
 	ContainersHasIssues bool

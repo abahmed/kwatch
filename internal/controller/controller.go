@@ -7,7 +7,9 @@ import (
 
 	"github.com/abahmed/kwatch/internal/config"
 	"github.com/abahmed/kwatch/internal/handler"
+	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
+	"k8s.io/apimachinery/pkg/labels"
 	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
 	"k8s.io/apimachinery/pkg/util/wait"
 	"k8s.io/client-go/informers"
@@ -34,8 +36,121 @@ type Controller struct {
 	deploysSynced          cache.InformerSynced
 	jobLister              batchv1lister.JobLister
 	jobsSynced             cache.InformerSynced
+	rsLister               appsv1lister.ReplicaSetLister
+	rsSynced               cache.InformerSynced
 	deploymentWatchEnabled bool
 	jobWatchEnabled        bool
+}
+
+func newFactories(client kubernetes.Interface, cfg *config.Config, resync time.Duration) (factorySet, []informers.SharedInformerFactory) {
+	if len(cfg.AllowedNamespaces) <= 1 {
+		var opts []informers.SharedInformerOption
+		if len(cfg.AllowedNamespaces) == 1 {
+			opts = append(opts, informers.WithNamespace(cfg.AllowedNamespaces[0]))
+		}
+		factory := informers.NewSharedInformerFactoryWithOptions(client, resync, opts...)
+		return factorySet{global: factory}, []informers.SharedInformerFactory{factory}
+	}
+
+	factories := make([]informers.SharedInformerFactory, 0, len(cfg.AllowedNamespaces))
+	for _, ns := range cfg.AllowedNamespaces {
+		opts := []informers.SharedInformerOption{informers.WithNamespace(ns)}
+		factories = append(factories, informers.NewSharedInformerFactoryWithOptions(client, resync, opts...))
+	}
+	return factorySet{perNamespace: factories}, factories
+}
+
+type factorySet struct {
+	global       informers.SharedInformerFactory
+	perNamespace []informers.SharedInformerFactory
+}
+
+func (fs factorySet) hasMultiple() bool { return len(fs.perNamespace) > 0 }
+
+func (fs factorySet) podLister() corev1lister.PodLister {
+	if fs.global != nil {
+		return fs.global.Core().V1().Pods().Lister()
+	}
+	listers := make([]corev1lister.PodLister, 0, len(fs.perNamespace))
+	for _, f := range fs.perNamespace {
+		listers = append(listers, f.Core().V1().Pods().Lister())
+	}
+	return &multiPodLister{listers: listers}
+}
+
+func (fs factorySet) podInformer() cache.SharedIndexInformer {
+	if fs.global != nil {
+		return fs.global.Core().V1().Pods().Informer()
+	}
+	return fs.perNamespace[0].Core().V1().Pods().Informer()
+}
+
+func (fs factorySet) nodeLister() corev1lister.NodeLister {
+	if fs.global != nil {
+		return fs.global.Core().V1().Nodes().Lister()
+	}
+	return fs.perNamespace[0].Core().V1().Nodes().Lister()
+}
+
+func (fs factorySet) nodeInformer() cache.SharedIndexInformer {
+	if fs.global != nil {
+		return fs.global.Core().V1().Nodes().Informer()
+	}
+	return fs.perNamespace[0].Core().V1().Nodes().Informer()
+}
+
+func (fs factorySet) deployLister() appsv1lister.DeploymentLister {
+	if fs.global != nil {
+		return fs.global.Apps().V1().Deployments().Lister()
+	}
+	listers := make([]appsv1lister.DeploymentLister, 0, len(fs.perNamespace))
+	for _, f := range fs.perNamespace {
+		listers = append(listers, f.Apps().V1().Deployments().Lister())
+	}
+	return &multiDeploymentLister{listers: listers}
+}
+
+func (fs factorySet) deployInformer() cache.SharedIndexInformer {
+	if fs.global != nil {
+		return fs.global.Apps().V1().Deployments().Informer()
+	}
+	return fs.perNamespace[0].Apps().V1().Deployments().Informer()
+}
+
+func (fs factorySet) jobLister() batchv1lister.JobLister {
+	if fs.global != nil {
+		return fs.global.Batch().V1().Jobs().Lister()
+	}
+	listers := make([]batchv1lister.JobLister, 0, len(fs.perNamespace))
+	for _, f := range fs.perNamespace {
+		listers = append(listers, f.Batch().V1().Jobs().Lister())
+	}
+	return &multiJobLister{listers: listers}
+}
+
+func (fs factorySet) rsLister() appsv1lister.ReplicaSetLister {
+	if fs.global != nil {
+		return fs.global.Apps().V1().ReplicaSets().Lister()
+	}
+	listers := make([]appsv1lister.ReplicaSetLister, 0, len(fs.perNamespace))
+	for _, f := range fs.perNamespace {
+		listers = append(listers, f.Apps().V1().ReplicaSets().Lister())
+	}
+	return &multiReplicaSetLister{listers: listers}
+}
+
+func (fs factorySet) rsInformer() cache.SharedIndexInformer {
+	if fs.global != nil {
+		return fs.global.Apps().V1().ReplicaSets().Informer()
+	}
+	return fs.perNamespace[0].Apps().V1().ReplicaSets().Informer()
+}
+
+func (fs factorySet) jobInformer() cache.SharedIndexInformer {
+	if fs.global != nil {
+		return fs.global.Batch().V1().Jobs().Informer()
+	}
+	return fs.perNamespace[0].Batch().V1().Jobs().Informer()
 }
 
 func New(
@@ -43,21 +158,12 @@ func New(
 	cfg *config.Config,
 	h handler.Handler,
 ) (*Controller, func()) {
-	var opts []informers.SharedInformerOption
-	if len(cfg.AllowedNamespaces) == 1 {
-		opts = append(opts, informers.WithNamespace(cfg.AllowedNamespaces[0]))
-	}
-
 	resync := time.Duration(cfg.ResyncSeconds) * time.Second
 
-	factory := informers.NewSharedInformerFactoryWithOptions(
-		client,
-		resync,
-		opts...,
-	)
+	fs, factories := newFactories(client, cfg, resync)
 
-	podInformer := factory.Core().V1().Pods().Informer()
-	podLister := factory.Core().V1().Pods().Lister()
+	podInformer := fs.podInformer()
+	podLister := fs.podLister()
 
 	c := &Controller{
 		handler: h,
@@ -90,8 +196,8 @@ func New(
 	})
 
 	if cfg.NodeMonitor.Enabled {
-		nodeInformer := factory.Core().V1().Nodes().Informer()
-		nodeLister := factory.Core().V1().Nodes().Lister()
+		nodeInformer := fs.nodeInformer()
+		nodeLister := fs.nodeLister()
 
 		c.nodeLister = nodeLister
 		c.nodesSynced = nodeInformer.HasSynced
@@ -106,8 +212,8 @@ func New(
 	}
 
 	if cfg.RolloutMonitor.Enabled {
-		deployInformer := factory.Apps().V1().Deployments().Informer()
-		deployLister := factory.Apps().V1().Deployments().Lister()
+		deployInformer := fs.deployInformer()
+		deployLister := fs.deployLister()
 
 		c.deployLister = deployLister
 		c.deploysSynced = deployInformer.HasSynced
@@ -123,8 +229,8 @@ func New(
 	}
 
 	if cfg.JobMonitor.Enabled {
-		jobInformer := factory.Batch().V1().Jobs().Informer()
-		jobLister := factory.Batch().V1().Jobs().Lister()
+		jobInformer := fs.jobInformer()
+		jobLister := fs.jobLister()
 
 		c.jobLister = jobLister
 		c.jobsSynced = jobInformer.HasSynced
@@ -139,12 +245,23 @@ func New(
 		})
 	}
 
+	{
+		rsInformer := fs.rsInformer()
+		c.rsLister = fs.rsLister()
+		c.rsSynced = rsInformer.HasSynced
+		h.SetReplicaLister(c.rsLister)
+	}
+
 	stopCh := make(chan struct{})
-	factory.Start(stopCh)
+	for _, f := range factories {
+		f.Start(stopCh)
+	}
 
 	cleanup := func() {
 		close(stopCh)
-		factory.Shutdown()
+		for _, f := range factories {
+			f.Shutdown()
+		}
 	}
 
 	return c, cleanup
@@ -196,7 +313,7 @@ func (c *Controller) Run(ctx context.Context, workers int) error {
 	klog.InfoS("starting controller")
 
 	klog.InfoS("waiting for informer caches to sync")
-	syncFns := []cache.InformerSynced{c.podsSynced}
+	syncFns := []cache.InformerSynced{c.podsSynced, c.rsSynced}
 	if c.nodesSynced != nil {
 		syncFns = append(syncFns, c.nodesSynced)
 	}
@@ -209,6 +326,8 @@ func (c *Controller) Run(ctx context.Context, workers int) error {
 	if !cache.WaitForCacheSync(ctx.Done(), syncFns...) {
 		return fmt.Errorf("failed to wait for caches to sync")
 	}
+
+	c.buildSeenSet()
 
 	klog.InfoS("starting workers")
 	for i := 0; i < workers; i++ {
@@ -315,6 +434,38 @@ func (c *Controller) processNextJobItem() bool {
 
 	c.jobQueue.Forget(key)
 	return true
+}
+
+func (c *Controller) buildSeenSet() {
+	pods, err := c.podLister.List(labels.Everything())
+	if err != nil {
+		klog.ErrorS(err, "failed to list pods for Seen set")
+		return
+	}
+	var seen []string
+	for _, pod := range pods {
+		if pod.Status.Phase == corev1.PodRunning || pod.Status.Phase == corev1.PodSucceeded {
+			continue
+		}
+		if pod.Status.Phase == corev1.PodPending || pod.Status.Phase == corev1.PodFailed {
+			seen = append(seen, pod.Namespace+"/"+pod.Name)
+			continue
+		}
+		for _, cs := range pod.Status.ContainerStatuses {
+			if cs.State.Waiting != nil && cs.State.Waiting.Reason != "ContainerCreating" && cs.State.Waiting.Reason != "PodInitializing" {
+				seen = append(seen, pod.Namespace+"/"+pod.Name)
+				break
+			}
+			if cs.State.Terminated != nil && cs.State.Terminated.ExitCode != 0 && cs.State.Terminated.Reason != "Completed" {
+				seen = append(seen, pod.Namespace+"/"+pod.Name)
+				break
+			}
+		}
+	}
+	if len(seen) > 0 {
+		klog.V(4).InfoS("Seen set built", "count", len(seen))
+		c.handler.SetSeen(seen)
+	}
 }
 
 func (c *Controller) syncPod(key string) error {

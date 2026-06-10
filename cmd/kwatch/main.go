@@ -16,12 +16,16 @@ import (
 	"github.com/abahmed/kwatch/internal/enricher"
 	"github.com/abahmed/kwatch/internal/handler"
 	"github.com/abahmed/kwatch/internal/health"
+	"github.com/abahmed/kwatch/internal/heartbeat"
 	"github.com/abahmed/kwatch/internal/k8s"
 	"github.com/abahmed/kwatch/internal/model"
 	"github.com/abahmed/kwatch/internal/pvc"
 	"github.com/abahmed/kwatch/internal/startup"
 	"github.com/abahmed/kwatch/internal/upgrader"
 	"github.com/abahmed/kwatch/internal/version"
+	apiv1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/client-go/tools/leaderelection"
+	"k8s.io/client-go/tools/leaderelection/resourcelock"
 	"k8s.io/klog/v2"
 )
 
@@ -79,6 +83,9 @@ func main() {
 	pvcMonitor := pvc.NewPvcMonitor(k8sClient, &cfg.PvcMonitor, alertManager, correlator)
 	go pvcMonitor.Start(ctx)
 
+	hbMonitor := heartbeat.NewHeartbeatMonitor(correlator, alertManager, &cfg.HeartbeatMonitor)
+	go hbMonitor.Start(ctx)
+
 	h := handler.NewHandler(
 		k8sClient,
 		cfg,
@@ -89,12 +96,52 @@ func main() {
 	ctrl, cleanup := controller.New(k8sClient, cfg, h)
 	defer cleanup()
 
-	go func() {
-		if err := ctrl.Run(ctx, 1); err != nil {
-			klog.ErrorS(err, "controller error")
-			os.Exit(1)
+	if cfg.LeaderElection.Enabled {
+		leaseName := cfg.LeaderElection.LeaseName
+		if leaseName == "" {
+			leaseName = "kwatch-leader"
 		}
-	}()
+		leaseNS := cfg.LeaderElection.Namespace
+		if leaseNS == "" {
+			leaseNS = k8s.GetNamespace()
+		}
+		podName := os.Getenv("HOSTNAME")
+		if podName == "" {
+			podName, _ = os.Hostname()
+		}
+
+		lock := &resourcelock.LeaseLock{
+			LeaseMeta:  apiv1.ObjectMeta{Name: leaseName, Namespace: leaseNS},
+			Client:     k8sClient.CoordinationV1(),
+			LockConfig: resourcelock.ResourceLockConfig{Identity: podName},
+		}
+
+		go leaderelection.RunOrDie(ctx, leaderelection.LeaderElectionConfig{
+			Lock:            lock,
+			ReleaseOnCancel: true,
+			LeaseDuration:   15 * time.Second,
+			RenewDeadline:   10 * time.Second,
+			RetryPeriod:     2 * time.Second,
+			Callbacks: leaderelection.LeaderCallbacks{
+				OnStartedLeading: func(ctx context.Context) {
+					klog.InfoS("became leader, starting controller")
+					if err := ctrl.Run(ctx, 1); err != nil {
+						klog.ErrorS(err, "controller error")
+					}
+				},
+				OnStoppedLeading: func() {
+					klog.InfoS("stopped leading")
+				},
+			},
+		})
+	} else {
+		go func() {
+			if err := ctrl.Run(ctx, 1); err != nil {
+				klog.ErrorS(err, "controller error")
+				os.Exit(1)
+			}
+		}()
+	}
 
 	sigCh := make(chan os.Signal, 1)
 	signal.Notify(sigCh, os.Interrupt, syscall.SIGTERM)

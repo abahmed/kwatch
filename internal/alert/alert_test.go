@@ -127,8 +127,8 @@ func TestSendProvidersEvent(t *testing.T) {
 	am := AlertManager{}
 	am.entries = append(
 		am.entries,
-		providerEntry{provider: &fakeProvider{}},
-		providerEntry{provider: &fakeProviderWithError{}},
+		providerEntry{provider: &fakeProvider{}, maxAttempts: 1},
+		providerEntry{provider: &fakeProviderWithError{}, maxAttempts: 1},
 	)
 	am.NotifyEvent(event.Event{})
 }
@@ -137,15 +137,15 @@ func TestSendProvidersMsg(t *testing.T) {
 	am := AlertManager{}
 	am.entries = append(
 		am.entries,
-		providerEntry{provider: &fakeProvider{}},
-		providerEntry{provider: &fakeProviderWithError{}},
+		providerEntry{provider: &fakeProvider{}, maxAttempts: 1},
+		providerEntry{provider: &fakeProviderWithError{}, maxAttempts: 1},
 	)
 	am.Notify("hello world!")
 }
 
 func TestNotifyIncidentCreate(t *testing.T) {
 	am := AlertManager{}
-	am.entries = append(am.entries, providerEntry{provider: &fakeProvider{}})
+	am.entries = append(am.entries, providerEntry{provider: &fakeProvider{}, maxAttempts: 1})
 
 	inc := &model.Incident{
 		Key:       "default:deploy:CrashLoopBackOff",
@@ -164,7 +164,7 @@ func TestNotifyIncidentCreate(t *testing.T) {
 
 func TestNotifyIncidentUpdate(t *testing.T) {
 	am := AlertManager{}
-	am.entries = append(am.entries, providerEntry{provider: &fakeProvider{}}, providerEntry{provider: &fakeProviderWithError{}})
+	am.entries = append(am.entries, providerEntry{provider: &fakeProvider{}, maxAttempts: 1}, providerEntry{provider: &fakeProviderWithError{}, maxAttempts: 1})
 
 	inc := &model.Incident{
 		Key:       "default:deploy:OOMKilled",
@@ -183,7 +183,7 @@ func TestNotifyIncidentUpdate(t *testing.T) {
 
 func TestNotifyIncidentSkip(t *testing.T) {
 	am := AlertManager{}
-	am.entries = append(am.entries, providerEntry{provider: &fakeProvider{}})
+	am.entries = append(am.entries, providerEntry{provider: &fakeProvider{}, maxAttempts: 1})
 
 	inc := &model.Incident{
 		Key:  "default:deploy:OOMKilled",
@@ -211,7 +211,7 @@ func (p *fakeThreadProvider) SendIncident(inc *model.Incident, action model.Inci
 func TestNotifyIncidentCallsThreadProvider(t *testing.T) {
 	tp := &fakeThreadProvider{}
 	am := AlertManager{}
-	am.entries = append(am.entries, providerEntry{provider: tp})
+	am.entries = append(am.entries, providerEntry{provider: tp, maxAttempts: 1})
 
 	inc := &model.Incident{
 		Key:  "default:deploy:OOMKilled",
@@ -226,7 +226,7 @@ func TestNotifyIncidentCallsThreadProvider(t *testing.T) {
 func TestNotifyIncidentThreadProviderWithSkip(t *testing.T) {
 	tp := &fakeThreadProvider{}
 	am := AlertManager{}
-	am.entries = append(am.entries, providerEntry{provider: tp})
+	am.entries = append(am.entries, providerEntry{provider: tp, maxAttempts: 1})
 
 	inc := &model.Incident{
 		Key:  "default:deploy:OOMKilled",

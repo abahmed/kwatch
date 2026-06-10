@@ -82,6 +82,8 @@ func (m *mockHandler) SetPodLister(corev1lister.PodLister)                     {
 func (m *mockHandler) SetNodeLister(corev1lister.NodeLister)                   {}
 func (m *mockHandler) SetDeploymentLister(appsv1lister.DeploymentLister)       {}
 func (m *mockHandler) SetJobLister(batchv1lister.JobLister)                    {}
+func (m *mockHandler) SetReplicaLister(appsv1lister.ReplicaSetLister)          {}
+func (m *mockHandler) SetSeen([]string)                                        {}
 
 func TestNewCreatesController(t *testing.T) {
 	assert := assert.New(t)

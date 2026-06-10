@@ -50,9 +50,10 @@ func (p *PvcMonitor) checkUsage() {
 				PodName:   pvc.PodName,
 				Namespace: pvc.Namespace,
 				NodeName:  "",
-				Reason:    fmt.Sprintf("VolumeUsage(%.0f%%)", pvc.UsagePercentage),
+				Reason:    "VolumeUsageHigh",
 				Logs:      "",
 				Labels:    nil,
+				Hint:      fmt.Sprintf("VolumeUsage(%.0f%%)", pvc.UsagePercentage),
 			}
 
 			inc, action := p.correlator.Process(ev, pvc.PVName, nil)

@@ -43,10 +43,11 @@ func (h *handler) ProcessPodObject(pod *corev1.Pod, deleted bool) error {
 	}
 
 	ctx := filter.Context{
-		Client: h.kclient,
-		Config: h.config,
-		Pod:    pod,
-		EvType: "ADDED",
+		Client:   h.kclient,
+		Config:   h.config,
+		Pod:      pod,
+		EvType:   "ADDED",
+		RSLister: h.rsLister,
 	}
 
 	h.executePodFilters(&ctx)

@@ -28,12 +28,15 @@ func DefaultConfig() *Config {
 			LifecycleInterval: 1,
 			StartupQuiet:      30,
 		},
-		PendingPodThreshold: 300,
+		PendingPodMonitor: PendingPodMonitor{
+			Enabled:   false,
+			Threshold: 300,
+		},
 		RolloutMonitor: RolloutMonitor{
-			Enabled: true,
+			Enabled: false,
 		},
 		JobMonitor: JobMonitor{
-			Enabled: true,
+			Enabled: false,
 		},
 	}
 }
