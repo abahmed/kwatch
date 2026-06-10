@@ -821,6 +821,75 @@ func TestContainerNameFilterEmptyConfig(t *testing.T) {
 	assert.False(result)
 }
 
+func TestNoiseFilterEmptyReason(t *testing.T) {
+	assert := assert.New(t)
+
+	ctx := &Context{
+		Container: &ContainerContext{
+			Container: &corev1.ContainerStatus{},
+		},
+		Memory: memory.NewMemory(),
+		Pod: &corev1.Pod{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      "test-pod",
+				Namespace: "default",
+			},
+		},
+	}
+
+	f := NoiseFilter{}
+	result := f.Execute(ctx)
+	assert.False(result)
+}
+
+func TestNoiseFilterNoiseReason(t *testing.T) {
+	for _, reason := range noiseReasons {
+		t.Run(reason, func(t *testing.T) {
+			assert := assert.New(t)
+
+			ctx := &Context{
+				Container: &ContainerContext{
+					Container: &corev1.ContainerStatus{},
+					Reason:    reason,
+				},
+				Memory: memory.NewMemory(),
+				Pod: &corev1.Pod{
+					ObjectMeta: metav1.ObjectMeta{
+						Name:      "test-pod",
+						Namespace: "default",
+					},
+				},
+			}
+
+			f := NoiseFilter{}
+			result := f.Execute(ctx)
+			assert.True(result)
+		})
+	}
+}
+
+func TestNoiseFilterNonNoiseReason(t *testing.T) {
+	assert := assert.New(t)
+
+	ctx := &Context{
+		Container: &ContainerContext{
+			Container: &corev1.ContainerStatus{},
+			Reason:    "CrashLoopBackOff",
+		},
+		Memory: memory.NewMemory(),
+		Pod: &corev1.Pod{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      "test-pod",
+				Namespace: "default",
+			},
+		},
+	}
+
+	f := NoiseFilter{}
+	result := f.Execute(ctx)
+	assert.False(result)
+}
+
 func TestContainerReasonsFilterWaiting(t *testing.T) {
 	assert := assert.New(t)
 
