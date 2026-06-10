@@ -42,6 +42,20 @@ func TestAlertManagerNoConfig(t *testing.T) {
 	assert.Len(am.providers, 0)
 }
 
+func TestGetProvidersUnknownSkipped(t *testing.T) {
+	assert := assert.New(t)
+
+	alertMap := map[string]map[string]interface{}{
+		"slack":       {"webhook": "test"},
+		"notaprovider": {"key": "val"},
+	}
+
+	am := AlertManager{}
+	am.Init(alertMap, &config.App{ClusterName: "dev"})
+
+	assert.Len(am.providers, 1)
+}
+
 func TestGetProviders(t *testing.T) {
 	assert := assert.New(t)
 
@@ -276,4 +290,29 @@ func TestFormatIncidentMessage(t *testing.T) {
 
 	msgUpdate := formatIncidentMessage(inc, model.ActionUpdate)
 	assert.Contains(t, msgUpdate, "Update")
+}
+
+func TestFormatIncidentMessageWithLogsEvents(t *testing.T) {
+	now := time.Now()
+	inc := &model.Incident{
+		Key:       "default:deploy:CrashLoopBackOff",
+		Name:      "deploy",
+		Namespace: "default",
+		Reason:    "CrashLoopBackOff",
+		Resource:  "pod",
+		Count:     2,
+		FirstSeen: now.Add(-10 * time.Minute),
+		LastSeen:  now,
+		Resources: map[string]bool{"pod-1": true, "pod-2": true},
+		Logs:      "line1\nline2\nline3",
+		Events:    "[2024-01-01] Pulling image\n[2024-01-01] BackOff restart",
+	}
+
+	msg := formatIncidentMessage(inc, model.ActionCreate)
+	assert.Contains(t, msg, "Logs:")
+	assert.Contains(t, msg, "line1")
+	assert.Contains(t, msg, "line2")
+	assert.Contains(t, msg, "Events:")
+	assert.Contains(t, msg, "Pulling image")
+	assert.Contains(t, msg, "BackOff restart")
 }

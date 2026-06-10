@@ -1173,6 +1173,42 @@ func TestContainerLogsFilterNoRestarts(t *testing.T) {
 	assert.False(result)
 }
 
+func TestContainerLogsFilterCrashLoopBackOff(t *testing.T) {
+	assert := assert.New(t)
+
+	ctx := &Context{
+		Client: fake.NewSimpleClientset(),
+		Config: &config.Config{
+			MaxRecentLogLines: 10,
+		},
+		Container: &ContainerContext{
+			HasRestarts: true,
+			Container: &corev1.ContainerStatus{
+				Name:         "test-container",
+				RestartCount: 5,
+				State: corev1.ContainerState{
+					Waiting: &corev1.ContainerStateWaiting{
+						Reason: "CrashLoopBackOff",
+					},
+				},
+			},
+		},
+		Memory: memory.NewMemory(),
+		Pod: &corev1.Pod{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      "test-pod",
+				Namespace: "default",
+			},
+		},
+	}
+
+	filter := ContainerLogsFilter{}
+	result := filter.Execute(ctx)
+	// Should not short-circuit (return false means "don't stop processing"):
+	// with RestartCount>0 and Waiting, previousLogs=true and it attempts log fetch
+	assert.False(result)
+}
+
 func TestContainerLogsFilterWithRestarts(t *testing.T) {
 	assert := assert.New(t)
 
@@ -1338,6 +1374,8 @@ func TestPodOwnersFilterReplicaSet(t *testing.T) {
 	result := filter.Execute(ctx)
 	assert.False(result)
 	assert.NotNil(ctx.Owner)
+	assert.Equal("ReplicaSet", ctx.Owner.Kind)
+	assert.Equal("my-rs", ctx.Owner.Name)
 }
 
 func TestPodStatusFilterSucceeded(t *testing.T) {

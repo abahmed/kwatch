@@ -1,6 +1,7 @@
 package memory
 
 import (
+	"fmt"
 	"sync"
 	"testing"
 
@@ -107,6 +108,62 @@ func TestGetPodContainer(t *testing.T) {
 	state3 := mem.GetPodContainer("default", "test3", "test1")
 	if state3 != nil {
 		t.Errorf("expected to be nil as pod does not exist")
+	}
+}
+
+func TestMemoryConcurrentAccess(t *testing.T) {
+	mem := &memory{
+		smap: sync.Map{},
+	}
+
+	var wg sync.WaitGroup
+	for i := 0; i < 50; i++ {
+		wg.Add(1)
+		go func(i int) {
+			defer wg.Done()
+			name := fmt.Sprintf("container-%d", i)
+			mem.AddPodContainer("default", "shared-pod", name, &storage.ContainerState{RestartCount: int32(i)})
+		}(i)
+	}
+	wg.Wait()
+
+	if v, ok := mem.smap.Load(mem.getKey("default", "shared-pod")); !ok {
+		t.Errorf("expected to find pod shared-pod")
+	} else {
+		containers := v.(map[string]*storage.ContainerState)
+		if len(containers) != 50 {
+			t.Errorf("expected 50 containers, got %d", len(containers))
+		}
+	}
+
+	var wg2 sync.WaitGroup
+	for i := 0; i < 50; i++ {
+		wg2.Add(1)
+		go func(i int) {
+			defer wg2.Done()
+			name := fmt.Sprintf("container-%d", i)
+			mem.HasPodContainer("default", "shared-pod", name)
+			mem.GetPodContainer("default", "shared-pod", name)
+		}(i)
+	}
+	wg2.Wait()
+
+	var wg3 sync.WaitGroup
+	for i := 0; i < 50; i++ {
+		wg3.Add(1)
+		go func(i int) {
+			defer wg3.Done()
+			name := fmt.Sprintf("container-%d", i)
+			mem.DelPodContainer("default", "shared-pod", name)
+		}(i)
+	}
+	wg3.Wait()
+
+	if v, ok := mem.smap.Load(mem.getKey("default", "shared-pod")); ok {
+		containers := v.(map[string]*storage.ContainerState)
+		if len(containers) != 0 {
+			t.Errorf("expected 0 containers after deletion, got %d", len(containers))
+		}
 	}
 }
 

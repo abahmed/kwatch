@@ -194,6 +194,39 @@ func TestCleanupKeepsRecent(t *testing.T) {
 	assert.Equal(t, 1, len(e.state))
 }
 
+func TestRemovePodMultiIncidentResolve(t *testing.T) {
+	e := newTestEngine()
+
+	ev1 := event.Event{
+		PodName:   "pod-1",
+		Namespace: "default",
+		Reason:    "CrashLoopBackOff",
+	}
+	ev2 := event.Event{
+		PodName:   "pod-1",
+		Namespace: "default",
+		Reason:    "OOMKilled",
+	}
+
+	e.Process(ev1, "deploy-1")
+	e.Process(ev2, "deploy-1")
+
+	assert.Equal(t, 2, len(e.state))
+
+	var resolvedKeys []string
+	e.config.LifecycleHook = func(inc *model.Incident, action model.IncidentAction) {
+		if action == model.ActionResolved {
+			resolvedKeys = append(resolvedKeys, inc.Key)
+		}
+	}
+
+	e.RemovePod("default", "pod-1")
+
+	assert.Equal(t, 2, len(resolvedKeys), "both incidents should resolve")
+	assert.Equal(t, 0, len(e.state["default:deploy-1:CrashLoopBackOff:"].Resources))
+	assert.Equal(t, 0, len(e.state["default:deploy-1:OOMKilled:"].Resources))
+}
+
 func TestProcessConcurrentSafe(t *testing.T) {
 	e := newTestEngine()
 	e.config.Cooldown = 0

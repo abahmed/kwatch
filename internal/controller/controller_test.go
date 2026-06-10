@@ -15,6 +15,7 @@ import (
 	"k8s.io/client-go/informers"
 	"k8s.io/client-go/kubernetes/fake"
 	corev1lister "k8s.io/client-go/listers/core/v1"
+	"k8s.io/client-go/tools/cache"
 	"k8s.io/client-go/util/workqueue"
 )
 
@@ -668,6 +669,31 @@ func TestEnqueuePodWithTombstone(t *testing.T) {
 
 	key, _ := ctrl.podQueue.Get()
 	assert.Equal("kube-system/tombstone-pod", key)
+	ctrl.podQueue.Done(key)
+}
+
+func TestEnqueuePodDeletedFinalStateUnknown(t *testing.T) {
+	assert := assert.New(t)
+
+	ctrl := &Controller{
+		podQueue: workqueue.NewTypedRateLimitingQueue(
+			workqueue.DefaultTypedControllerRateLimiter[string](),
+		),
+	}
+	defer ctrl.podQueue.ShutDown()
+
+	pod := &corev1.Pod{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "lost-pod",
+			Namespace: "default",
+		},
+	}
+	tombstone := cache.DeletedFinalStateUnknown{Key: "default/lost-pod", Obj: pod}
+	ctrl.enqueuePod(tombstone)
+	assert.Equal(1, ctrl.podQueue.Len())
+
+	key, _ := ctrl.podQueue.Get()
+	assert.Equal("default/lost-pod", key)
 	ctrl.podQueue.Done(key)
 }
 
