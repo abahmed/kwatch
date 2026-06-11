@@ -36,7 +36,8 @@ type providerEntry struct {
 	maxAttempts   int
 	retryDelay    time.Duration
 	fallback      *providerEntry
-	fallbackNamed string // resolved in second pass
+	fallbackNamed string                   // resolved in second pass
+	templates     map[string]*template.Template
 }
 
 type AlertManager struct {
@@ -106,6 +107,26 @@ func extractRoutes(cfg map[string]interface{}) []config.AlertRoute {
 					if len(route.Namespaces) > 0 || len(route.Severities) > 0 || len(route.Reasons) > 0 {
 						out = append(out, route)
 					}
+				}
+			}
+			return out
+		}
+	}
+	return nil
+}
+
+func extractTemplates(cfg map[string]interface{}) map[string]*template.Template {
+	if raw, ok := cfg["templates"]; ok {
+		if tpl, ok := raw.(map[string]interface{}); ok {
+			out := make(map[string]*template.Template, len(tpl))
+			for reason, rawBody := range tpl {
+				if body, ok := rawBody.(string); ok {
+					t, err := template.New(reason).Option("missingkey=zero").Parse(body)
+					if err != nil {
+						klog.ErrorS(err, "invalid provider template, skipping", "reason", reason)
+						continue
+					}
+					out[strings.ToLower(reason)] = t
 				}
 			}
 			return out
@@ -197,6 +218,7 @@ func (a *AlertManager) Init(
 				retryDelay:    retryDelay,
 				fallback:      nil,
 				fallbackNamed: fbName,
+				templates:     extractTemplates(v),
 			})
 		}
 	}
@@ -415,11 +437,16 @@ func (a *AlertManager) NotifyIncident(inc *model.Incident, action model.Incident
 	if maxLines <= 0 {
 		maxLines = 100
 	}
-	msg := formatIncidentMessage(inc, action, maxLines, a.templates)
 	klog.InfoS("sending incident", "action", action, "key", inc.Key, "count", inc.Count)
 	for _, entry := range a.entries {
 		p := entry.provider
 		var err error
+		// per-provider templates fall back to global
+		tpl := entry.templates
+		if len(tpl) == 0 {
+			tpl = a.templates
+		}
+		msg := formatIncidentMessage(inc, action, maxLines, tpl)
 		if action == model.ActionDigestFlush {
 			// digests bypass route filtering (no namespace) and ThreadProvider
 			err = sendWithRetry(func() error {
@@ -445,7 +472,8 @@ func (a *AlertManager) NotifyIncident(inc *model.Incident, action model.Incident
 		if err != nil {
 			klog.ErrorS(err, "failed to send", "provider", p.Name(), "key", inc.Key)
 			if entry.fallback != nil {
-				fbErr := entry.fallback.provider.SendMessage("[fallback — primary " + p.Name() + " failed] " + msg)
+				fbMsg := msg
+				fbErr := entry.fallback.provider.SendMessage("[fallback — primary " + p.Name() + " failed] " + fbMsg)
 				if fbErr != nil {
 					klog.ErrorS(fbErr, "fallback delivery failed", "provider", entry.fallback.provider.Name())
 				}

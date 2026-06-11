@@ -6,8 +6,8 @@
   <a href="https://kwatch.dev">
     <img src="https://img.shields.io/badge/%F0%9F%92%A1%20kwatch-website-00ACD7.svg" />
   </a>
-  <a href="https://godoc.org/github.com/abahmed/kwatch">
-    <img src="https://godoc.org/github.com/abahmed/kwatch?status.png" />
+  <a href="https://pkg.go.dev/github.com/abahmed/kwatch">
+    <img src="https://pkg.go.dev/badge/github.com/abahmed/kwatch" />
   </a>
   <a href="https://github.com/abahmed/kwatch/actions/workflows/check.yaml">
     <img src="https://github.com/abahmed/kwatch/workflows/Check/badge.svg?branch=main" />
@@ -20,6 +20,12 @@
   </a>
   <a href="https://github.com/abahmed/kwatch/releases/latest">
     <img src="https://img.shields.io/github/v/release/abahmed/kwatch?label=kwatch" />
+  </a>
+  <a href="https://github.com/abahmed/kwatch/blob/main/LICENSE">
+    <img src="https://img.shields.io/github/license/abahmed/kwatch" />
+  </a>
+  <a href="https://github.com/abahmed/kwatch">
+    <img src="https://img.shields.io/github/go-mod/go-version/abahmed/kwatch" />
   </a>
   <a href="https://discord.gg/kzJszdKmJ7">
     <img src="https://img.shields.io/discord/911647396918870036?label=Discord&logo=discord">

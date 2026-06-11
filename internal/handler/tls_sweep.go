@@ -75,7 +75,11 @@ func (h *handler) checkTLSSecret(secret *corev1.Secret, now time.Time, warnWindo
 	} else if remaining < warnWindow {
 		daysLeft := int(remaining.Hours() / 24)
 		severity := "normal"
-		if daysLeft <= 3 {
+		critical := h.config.TlsMonitor.CriticalThreshold
+		if critical <= 0 {
+			critical = 3
+		}
+		if daysLeft <= critical {
 			severity = "high"
 		}
 		ev := event.Event{

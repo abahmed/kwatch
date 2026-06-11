@@ -103,7 +103,8 @@ func main() {
 		StaleThreshold:    time.Duration(cfg.Correlation.StaleThreshold) * time.Minute,
 		LifecycleInterval: time.Duration(cfg.Correlation.LifecycleInterval) * time.Minute,
 		StartupQuiet:      time.Duration(startupQuiet) * time.Second,
-		Baseline:          baseline,
+		Baseline:                 baseline,
+		BaselineDebounce:         time.Duration(cfg.BaselineDebounce) * time.Minute,
 		Enricher:          &enricher.DefaultEnricher{SeverityByOwnerKind: cfg.SeverityByOwnerKind},
 		EscalationEnabled:         cfg.Correlation.Escalation.Enabled,
 		EscalationTiers:           cfg.Correlation.Escalation.Tiers,
@@ -112,8 +113,9 @@ func main() {
 		StormThreshold:            cfg.StormConfig.Threshold,
 		StormWindow:               time.Duration(cfg.StormConfig.WindowMinutes) * time.Minute,
 		StormDigestInterval:       time.Duration(cfg.StormConfig.DigestIntervalMinutes) * time.Minute,
-		RenotifyInterval:          time.Duration(cfg.Correlation.Renotify.Interval) * time.Minute,
-		RenotifyMaxPerIncident:    cfg.Correlation.Renotify.MaxPerIncident,
+		RenotifyInterval:           time.Duration(cfg.Correlation.Renotify.Interval) * time.Minute,
+		RenotifyIntervalBySeverity: renotifyIntervalBySeverity(cfg.Correlation.Renotify.IntervalBySeverity),
+		RenotifyMaxPerIncident:     cfg.Correlation.Renotify.MaxPerIncident,
 		LifecycleHook: func(inc *model.Incident, action model.IncidentAction) {
 			if action != model.ActionSkip {
 				alertManager.NotifyIncident(inc, action)
@@ -241,16 +243,7 @@ func runLint() {
 		fmt.Fprintf(os.Stderr, "ERROR: %v\n", err)
 		os.Exit(1)
 	}
-	var errs []string
-	if len(cfg.Alert) == 0 {
-		errs = append(errs, "no alert providers configured")
-	}
-	if cfg.HealthCheck.Enabled && cfg.HealthCheck.Port <= 0 {
-		errs = append(errs, "healthCheck.port must be > 0")
-	}
-	if cfg.MaxRecentLogLines < 0 {
-		errs = append(errs, "maxRecentLogLines must be >= 0")
-	}
+	errs := config.ValidateConfig(cfg)
 	if len(errs) > 0 {
 		for _, e := range errs {
 			fmt.Fprintf(os.Stderr, "  %s\n", e)
@@ -290,4 +283,12 @@ func runReplay() {
 		fmt.Fprintf(os.Stderr, "ERROR: reading stdin: %v\n", err)
 		os.Exit(1)
 	}
+}
+
+func renotifyIntervalBySeverity(m map[string]int) map[string]time.Duration {
+	r := make(map[string]time.Duration, len(m))
+	for k, v := range m {
+		r[k] = time.Duration(v) * time.Minute
+	}
+	return r
 }

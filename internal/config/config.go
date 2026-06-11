@@ -24,7 +24,8 @@ type Config struct {
 	HealthCheck HealthCheck `yaml:"healthCheck"`
 
 	// Correlation configuration for incident dedup/grouping
-	Correlation Correlation `yaml:"correlation"`
+	BaselineDebounce int          `yaml:"baselineDebounce"`
+	Correlation      Correlation `yaml:"correlation"`
 
 	// MaxRecentLogLines optional max tail log lines in messages,
 	// if it's not provided it will get all log lines
@@ -174,6 +175,10 @@ type TlsMonitor struct {
 
 	// Threshold is the number of days before expiry at which to alert. Default 30.
 	Threshold int `yaml:"threshold"`
+
+	// CriticalThreshold is the number of days before expiry at which severity
+	// is raised to "high". Default 3.
+	CriticalThreshold int `yaml:"criticalThreshold"`
 }
 
 // App confing struct
@@ -366,8 +371,12 @@ type Correlation struct {
 
 // RenotifyConfig configures periodic re-notification for active incidents.
 type RenotifyConfig struct {
-	// Interval is the minimum time between renotifications (in minutes).
-	// 0 disables renotify. Default 0.
+	// IntervalBySeverity is the minimum time (in minutes) between renotifications,
+	// keyed by severity ("normal", "high", "critical"). Falls back to a flat
+	// interval when the field is zero or the severity key is missing.
+	IntervalBySeverity map[string]int `yaml:"intervalBySeverity"`
+	// Interval (deprecated) is the minimum time between renotifications (in minutes).
+	// Prefer intervalBySeverity. 0 disables renotify. Default 0.
 	Interval int `yaml:"interval"`
 	// MaxPerIncident is the maximum number of renotifications per incident. Default 3.
 	MaxPerIncident int `yaml:"maxPerIncident"`

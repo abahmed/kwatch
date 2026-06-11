@@ -30,6 +30,7 @@ type Config struct {
 	Enricher          enricher.Enricher
 	LifecycleHook     func(inc *model.Incident, action model.IncidentAction)
 	BaselineTTL       time.Duration
+	BaselineDebounce  time.Duration
 	Baseline          map[string]int64
 	OnBaselineChange  func(baseline map[string]int64)
 	EscalationEnabled bool
@@ -40,7 +41,8 @@ type Config struct {
 	StormWindow               time.Duration
 	StormDigestInterval       time.Duration
 	RenotifyInterval          time.Duration
-	RenotifyMaxPerIncident    int
+	RenotifyIntervalBySeverity map[string]time.Duration
+	RenotifyMaxPerIncident     int
 }
 
 // BuildKey constructs the incident key used for dedup, grouping, and baseline.
@@ -128,10 +130,20 @@ func (e *Engine) SetSeen(baseline map[string]int64) {
 
 func (e *Engine) isBaselined(incidentKey string) bool {
 	if ts, ok := e.seen[incidentKey]; ok {
-		if time.Since(time.Unix(ts, 0)) < e.config.BaselineTTL {
+		age := time.Since(time.Unix(ts, 0))
+		debounce := e.config.BaselineDebounce
+		if debounce <= 0 {
+			debounce = e.config.BaselineTTL
+		}
+		if debounce > e.config.BaselineTTL {
+			debounce = e.config.BaselineTTL
+		}
+		if age < debounce {
 			return true
 		}
-		delete(e.seen, incidentKey)
+		if age >= e.config.BaselineTTL {
+			delete(e.seen, incidentKey)
+		}
 	}
 	if e.config.StartupQuiet > 0 && time.Since(e.startedAt) < e.config.StartupQuiet {
 		if len(e.seen) == 0 && len(e.state) == 0 {
@@ -536,7 +548,7 @@ func (e *Engine) checkLifecycle() {
 	}
 
 	// renotify — resend stale message periodically
-	if e.config.RenotifyInterval > 0 {
+	if e.config.RenotifyInterval > 0 || len(e.config.RenotifyIntervalBySeverity) > 0 {
 		for _, inc := range e.state {
 			if inc.State != model.StateStale {
 				continue
@@ -548,8 +560,17 @@ func (e *Engine) checkLifecycle() {
 			if e.renotifyCount[inc.Key] >= maxPer {
 				continue
 			}
+			interval := e.config.RenotifyInterval
+			if len(e.config.RenotifyIntervalBySeverity) > 0 {
+				if sv, ok := e.config.RenotifyIntervalBySeverity[inc.Severity]; ok && sv > 0 {
+					interval = sv
+				}
+			}
+			if interval <= 0 {
+				continue
+			}
 			last := e.lastRenotify[inc.Key]
-			if now.After(last.Add(e.config.RenotifyInterval)) {
+			if now.After(last.Add(interval)) {
 				e.renotifyCount[inc.Key]++
 				e.lastRenotify[inc.Key] = now
 				pending = append(pending, transition{inc, model.ActionStale})
