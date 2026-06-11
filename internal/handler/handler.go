@@ -32,6 +32,7 @@ type Handler interface {
 	SetReplicaLister(lister appsv1lister.ReplicaSetLister)
 	SetDaemonSetLister(lister appsv1lister.DaemonSetLister)
 	SetStatefulSetLister(lister appsv1lister.StatefulSetLister)
+	SetEventLister(lister corev1lister.EventLister)
 	SetSeen(keys []string)
 	ClearSeen(podKey string)
 }
@@ -52,6 +53,7 @@ type handler struct {
 	rsLister              appsv1lister.ReplicaSetLister
 	dsLister              appsv1lister.DaemonSetLister
 	ssLister              appsv1lister.StatefulSetLister
+	eventLister           corev1lister.EventLister
 }
 
 func NewHandler(
@@ -132,6 +134,10 @@ func (h *handler) SetDaemonSetLister(lister appsv1lister.DaemonSetLister) {
 
 func (h *handler) SetStatefulSetLister(lister appsv1lister.StatefulSetLister) {
 	h.ssLister = lister
+}
+
+func (h *handler) SetEventLister(lister corev1lister.EventLister) {
+	h.eventLister = lister
 }
 
 func (h *handler) SetSeen(keys []string) {

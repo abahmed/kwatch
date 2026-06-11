@@ -9,6 +9,7 @@ import (
 	apiv1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes"
 	appsv1lister "k8s.io/client-go/listers/apps/v1"
+	corev1lister "k8s.io/client-go/listers/core/v1"
 )
 
 type Status int
@@ -42,6 +43,7 @@ type Context struct {
 	RSLister appsv1lister.ReplicaSetLister
 	DSLister appsv1lister.DaemonSetLister
 	SSLister appsv1lister.StatefulSetLister
+	EventLister corev1lister.EventLister
 
 	PodHasIssues        bool
 	ContainersHasIssues bool

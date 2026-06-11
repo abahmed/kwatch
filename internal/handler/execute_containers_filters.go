@@ -10,6 +10,7 @@ import (
 	"github.com/abahmed/kwatch/internal/k8s"
 	"github.com/abahmed/kwatch/internal/model"
 	corev1 "k8s.io/api/core/v1"
+	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/klog/v2"
 )
 
@@ -47,12 +48,27 @@ func (h *handler) executeContainersFilters(ctx *filter.Context) {
 
 		// Phase 2: Enrich (I/O: events, owner, logs)
 		if ctx.Events == nil {
-			podEvents, err := k8s.GetPodEvents(ctx.Client, ctx.Pod.Name, ctx.Pod.Namespace)
-			if err != nil {
-				klog.ErrorS(err, "failed to fetch pod events", "pod", ctx.Pod.Name)
-			}
-			if podEvents != nil {
-				ctx.Events = &podEvents.Items
+			if ctx.EventLister != nil {
+				all, err := ctx.EventLister.Events(ctx.Pod.Namespace).List(labels.Everything())
+				if err != nil {
+					klog.ErrorS(err, "event lister failed", "pod", ctx.Pod.Name)
+				} else {
+					items := make([]corev1.Event, 0, len(all))
+					for _, e := range all {
+						if e.InvolvedObject.Kind == "Pod" && e.InvolvedObject.Name == ctx.Pod.Name {
+							items = append(items, *e)
+						}
+					}
+					ctx.Events = &items
+				}
+			} else {
+				podEvents, err := k8s.GetPodEvents(ctx.Client, ctx.Pod.Name, ctx.Pod.Namespace)
+				if err != nil {
+					klog.ErrorS(err, "failed to fetch pod events", "pod", ctx.Pod.Name)
+				}
+				if podEvents != nil {
+					ctx.Events = &podEvents.Items
+				}
 			}
 		}
 

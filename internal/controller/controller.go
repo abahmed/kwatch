@@ -10,6 +10,7 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/labels"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
 	"k8s.io/apimachinery/pkg/util/wait"
 	"k8s.io/client-go/informers"
@@ -42,6 +43,8 @@ type Controller struct {
 	dsSynced               []cache.InformerSynced
 	ssLister               appsv1lister.StatefulSetLister
 	ssSynced               []cache.InformerSynced
+	eventLister            corev1lister.EventLister
+	eventsSynced           []cache.InformerSynced
 	deploymentWatchEnabled bool
 	jobWatchEnabled        bool
 }
@@ -366,6 +369,43 @@ func New(
 		h.SetStatefulSetLister(c.ssLister)
 	}
 
+	// Events informer uses a dedicated factory with field selector to only cache Pod events
+	{
+		var eventFactories []informers.SharedInformerFactory
+		if len(cfg.AllowedNamespaces) <= 1 {
+			opts := []informers.SharedInformerOption{
+				informers.WithTweakListOptions(func(o *metav1.ListOptions) {
+					o.FieldSelector = "involvedObject.kind=Pod"
+				}),
+			}
+			if len(cfg.AllowedNamespaces) == 1 {
+				opts = append(opts, informers.WithNamespace(cfg.AllowedNamespaces[0]))
+			}
+			ef := informers.NewSharedInformerFactoryWithOptions(client, resync, opts...)
+			eventFactories = append(eventFactories, ef)
+			c.eventLister = ef.Core().V1().Events().Lister()
+			c.eventsSynced = append(c.eventsSynced, ef.Core().V1().Events().Informer().HasSynced)
+		} else {
+			listers := make([]corev1lister.EventLister, 0, len(cfg.AllowedNamespaces))
+			for _, ns := range cfg.AllowedNamespaces {
+				ns := ns
+				opts := []informers.SharedInformerOption{
+					informers.WithTweakListOptions(func(o *metav1.ListOptions) {
+						o.FieldSelector = "involvedObject.kind=Pod"
+					}),
+					informers.WithNamespace(ns),
+				}
+				ef := informers.NewSharedInformerFactoryWithOptions(client, resync, opts...)
+				eventFactories = append(eventFactories, ef)
+				listers = append(listers, ef.Core().V1().Events().Lister())
+				c.eventsSynced = append(c.eventsSynced, ef.Core().V1().Events().Informer().HasSynced)
+			}
+			c.eventLister = &multiEventLister{listers: listers}
+		}
+		h.SetEventLister(c.eventLister)
+		factories = append(factories, eventFactories...)
+	}
+
 	stopCh := make(chan struct{})
 	for _, f := range factories {
 		f.Start(stopCh)
@@ -427,11 +467,12 @@ func (c *Controller) Run(ctx context.Context, workers int) error {
 	klog.InfoS("starting controller")
 
 	klog.InfoS("waiting for informer caches to sync")
-	syncFns := make([]cache.InformerSynced, 0, 1+len(c.podsSynced)+len(c.rsSynced)+len(c.dsSynced)+len(c.ssSynced)+len(c.deploysSynced)+len(c.jobsSynced))
+	syncFns := make([]cache.InformerSynced, 0, 1+len(c.podsSynced)+len(c.rsSynced)+len(c.dsSynced)+len(c.ssSynced)+len(c.eventsSynced)+len(c.deploysSynced)+len(c.jobsSynced))
 	syncFns = append(syncFns, c.podsSynced...)
 	syncFns = append(syncFns, c.rsSynced...)
 	syncFns = append(syncFns, c.dsSynced...)
 	syncFns = append(syncFns, c.ssSynced...)
+	syncFns = append(syncFns, c.eventsSynced...)
 	if c.nodesSynced != nil {
 		syncFns = append(syncFns, c.nodesSynced)
 	}

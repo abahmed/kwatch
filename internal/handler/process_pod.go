@@ -62,9 +62,10 @@ func (h *handler) ProcessPodObject(pod *corev1.Pod, deleted bool) error {
 		Config:   h.config,
 		Pod:      pod,
 		EvType:   "ADDED",
-		RSLister: h.rsLister,
-		DSLister: h.dsLister,
-		SSLister: h.ssLister,
+		RSLister:   h.rsLister,
+		DSLister:   h.dsLister,
+		SSLister:   h.ssLister,
+		EventLister: h.eventLister,
 	}
 
 	h.executePodFilters(&ctx)
