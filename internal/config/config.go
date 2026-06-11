@@ -107,6 +107,9 @@ type Config struct {
 	// CronJobMonitor configures failed/suspended CronJob detection.
 	CronJobMonitor CronJobMonitor `yaml:"cronJobMonitor"`
 
+	// HpaMonitor configures HPA-maxed-out detection.
+	HpaMonitor HpaMonitor `yaml:"hpaMonitor"`
+
 	// Silences is an optional list of silence rules that suppress matching incidents.
 	Silences []SilenceRule `yaml:"silences"`
 
@@ -120,6 +123,12 @@ type Config struct {
 
 	// CrdConfig configures the KwatchConfig CRD watcher.
 	CrdConfig CrdConfig `yaml:"crd"`
+}
+
+// HpaMonitor configures HPA-maxed-out detection.
+type HpaMonitor struct {
+	// Enabled if set to true, it will watch HPAs for maxed-out replicas.
+	Enabled bool `yaml:"enabled"`
 }
 
 // App confing struct

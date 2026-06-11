@@ -43,6 +43,8 @@ config:
   #   enabled: false
   # healthCheck:
   #   pprof: false
+  # hpaMonitor:
+  #   enabled: false
 
 
 

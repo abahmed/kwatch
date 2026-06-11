@@ -11,12 +11,14 @@ import (
 	"github.com/abahmed/kwatch/internal/config"
 	"github.com/stretchr/testify/assert"
 	appsv1 "k8s.io/api/apps/v1"
+	autoscalingv2 "k8s.io/api/autoscaling/v2"
 	batchv1 "k8s.io/api/batch/v1"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/informers"
 	"k8s.io/client-go/kubernetes/fake"
 	appsv1lister "k8s.io/client-go/listers/apps/v1"
+	autoscalingv2lister "k8s.io/client-go/listers/autoscaling/v2"
 	batchv1lister "k8s.io/client-go/listers/batch/v1"
 	corev1lister "k8s.io/client-go/listers/core/v1"
 	"k8s.io/client-go/tools/cache"
@@ -91,6 +93,9 @@ func (m *mockHandler) ProcessCronJob(string, bool) error                       {
 func (m *mockHandler) ProcessDaemonSetObject(*appsv1.DaemonSet, bool) error    { return m.err }
 func (m *mockHandler) ProcessCronJobObject(*batchv1.CronJob, bool) error       { return m.err }
 func (m *mockHandler) SetCronJobLister(batchv1lister.CronJobLister)            {}
+func (m *mockHandler) SetHorizontalPodAutoscalerLister(autoscalingv2lister.HorizontalPodAutoscalerLister) {}
+func (m *mockHandler) ProcessHorizontalPodAutoscaler(string, bool) error       { return m.err }
+func (m *mockHandler) ProcessHorizontalPodAutoscalerObject(*autoscalingv2.HorizontalPodAutoscaler, bool) error { return m.err }
 func (m *mockHandler) SetSeen(map[string]int64)                                {}
 func (m *mockHandler) ClearSeen(string)                                        {}
 func (m *mockHandler) ClearSeenByPrefix(string) bool                           { return false }

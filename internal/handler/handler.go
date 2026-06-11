@@ -8,10 +8,12 @@ import (
 	"github.com/abahmed/kwatch/internal/correlation"
 	"github.com/abahmed/kwatch/internal/filter"
 	appsv1 "k8s.io/api/apps/v1"
+	autoscalingv2 "k8s.io/api/autoscaling/v2"
 	batchv1 "k8s.io/api/batch/v1"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/client-go/kubernetes"
 	appsv1lister "k8s.io/client-go/listers/apps/v1"
+	autoscalingv2lister "k8s.io/client-go/listers/autoscaling/v2"
 	batchv1lister "k8s.io/client-go/listers/batch/v1"
 	corev1lister "k8s.io/client-go/listers/core/v1"
 )
@@ -29,6 +31,8 @@ type Handler interface {
 	ProcessJobObject(job *batchv1.Job, deleted bool) error
 	ProcessDaemonSetObject(ds *appsv1.DaemonSet, deleted bool) error
 	ProcessCronJobObject(cj *batchv1.CronJob, deleted bool) error
+	ProcessHorizontalPodAutoscaler(key string, deleted bool) error
+	ProcessHorizontalPodAutoscalerObject(hpa *autoscalingv2.HorizontalPodAutoscaler, deleted bool) error
 	SetPodLister(lister corev1lister.PodLister)
 	SetNodeLister(lister corev1lister.NodeLister)
 	SetDeploymentLister(lister appsv1lister.DeploymentLister)
@@ -38,6 +42,7 @@ type Handler interface {
 	SetStatefulSetLister(lister appsv1lister.StatefulSetLister)
 	SetEventLister(lister corev1lister.EventLister)
 	SetCronJobLister(lister batchv1lister.CronJobLister)
+	SetHorizontalPodAutoscalerLister(lister autoscalingv2lister.HorizontalPodAutoscalerLister)
 	SetSeen(baseline map[string]int64)
 	ClearSeen(podKey string)
 	ClearSeenByPrefix(prefix string) bool
@@ -61,6 +66,7 @@ type handler struct {
 	dsLister              appsv1lister.DaemonSetLister
 	ssLister              appsv1lister.StatefulSetLister
 	eventLister           corev1lister.EventLister
+	hpaLister             autoscalingv2lister.HorizontalPodAutoscalerLister
 }
 
 func NewHandler(
@@ -145,6 +151,10 @@ func (h *handler) SetStatefulSetLister(lister appsv1lister.StatefulSetLister) {
 
 func (h *handler) SetEventLister(lister corev1lister.EventLister) {
 	h.eventLister = lister
+}
+
+func (h *handler) SetHorizontalPodAutoscalerLister(lister autoscalingv2lister.HorizontalPodAutoscalerLister) {
+	h.hpaLister = lister
 }
 
 func (h *handler) SetCronJobLister(lister batchv1lister.CronJobLister) {

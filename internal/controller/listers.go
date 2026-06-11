@@ -4,10 +4,12 @@ import (
 	"fmt"
 
 	appsv1 "k8s.io/api/apps/v1"
+	autoscalingv2 "k8s.io/api/autoscaling/v2"
 	batchv1 "k8s.io/api/batch/v1"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/labels"
 	appsv1lister "k8s.io/client-go/listers/apps/v1"
+	autoscalingv2lister "k8s.io/client-go/listers/autoscaling/v2"
 	batchv1lister "k8s.io/client-go/listers/batch/v1"
 	corev1lister "k8s.io/client-go/listers/core/v1"
 )
@@ -469,4 +471,54 @@ func (m *multiCronJobNamespaceLister) Get(name string) (*batchv1.CronJob, error)
 		}
 	}
 	return nil, fmt.Errorf("cronjob %q not found in any namespace lister", name)
+}
+
+type multiHorizontalPodAutoscalerLister struct {
+	listers []autoscalingv2lister.HorizontalPodAutoscalerLister
+}
+
+func (m *multiHorizontalPodAutoscalerLister) List(selector labels.Selector) ([]*autoscalingv2.HorizontalPodAutoscaler, error) {
+	var all []*autoscalingv2.HorizontalPodAutoscaler
+	for _, l := range m.listers {
+		items, err := l.List(selector)
+		if err != nil {
+			return nil, err
+		}
+		all = append(all, items...)
+	}
+	return all, nil
+}
+
+func (m *multiHorizontalPodAutoscalerLister) HorizontalPodAutoscalers(namespace string) autoscalingv2lister.HorizontalPodAutoscalerNamespaceLister {
+	nsl := make([]autoscalingv2lister.HorizontalPodAutoscalerNamespaceLister, 0, len(m.listers))
+	for _, l := range m.listers {
+		nsl = append(nsl, l.HorizontalPodAutoscalers(namespace))
+	}
+	return &multiHorizontalPodAutoscalerNamespaceLister{listers: nsl}
+}
+
+type multiHorizontalPodAutoscalerNamespaceLister struct {
+	listers []autoscalingv2lister.HorizontalPodAutoscalerNamespaceLister
+}
+
+func (m *multiHorizontalPodAutoscalerNamespaceLister) List(selector labels.Selector) ([]*autoscalingv2.HorizontalPodAutoscaler, error) {
+	var all []*autoscalingv2.HorizontalPodAutoscaler
+	for _, l := range m.listers {
+		items, err := l.List(selector)
+		if err != nil {
+			return nil, err
+		}
+		all = append(all, items...)
+	}
+	return all, nil
+}
+
+func (m *multiHorizontalPodAutoscalerNamespaceLister) Get(name string) (*autoscalingv2.HorizontalPodAutoscaler, error) {
+	for _, l := range m.listers {
+		item, err := l.Get(name)
+		if err == nil {
+			return item, nil
+		}
+	}
+	return nil, fmt.Errorf("hpa %q not found in any namespace lister", name)
 }

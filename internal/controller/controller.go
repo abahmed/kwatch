@@ -17,6 +17,7 @@ import (
 	"k8s.io/client-go/informers"
 	"k8s.io/client-go/kubernetes"
 	appsv1lister "k8s.io/client-go/listers/apps/v1"
+	autoscalingv2lister "k8s.io/client-go/listers/autoscaling/v2"
 	batchv1lister "k8s.io/client-go/listers/batch/v1"
 	corev1lister "k8s.io/client-go/listers/core/v1"
 	"k8s.io/client-go/tools/cache"
@@ -54,6 +55,10 @@ type Controller struct {
 	jobWatchEnabled        bool
 	daemonSetWatchEnabled  bool
 	cronJobWatchEnabled    bool
+	hpaQueue               workqueue.TypedRateLimitingInterface[string]
+	hpaLister              autoscalingv2lister.HorizontalPodAutoscalerLister
+	hpaSynced              []cache.InformerSynced
+	hpaWatchEnabled        bool
 }
 
 func newFactories(client kubernetes.Interface, cfg *config.Config, resync time.Duration) (factorySet, []informers.SharedInformerFactory) {
@@ -249,6 +254,28 @@ func (fs factorySet) cronJobInformers() []cache.SharedIndexInformer {
 	return out
 }
 
+func (fs factorySet) hpaLister() autoscalingv2lister.HorizontalPodAutoscalerLister {
+	if fs.global != nil {
+		return fs.global.Autoscaling().V2().HorizontalPodAutoscalers().Lister()
+	}
+	listers := make([]autoscalingv2lister.HorizontalPodAutoscalerLister, 0, len(fs.perNamespace))
+	for _, f := range fs.perNamespace {
+		listers = append(listers, f.Autoscaling().V2().HorizontalPodAutoscalers().Lister())
+	}
+	return &multiHorizontalPodAutoscalerLister{listers: listers}
+}
+
+func (fs factorySet) hpaInformers() []cache.SharedIndexInformer {
+	if fs.global != nil {
+		return []cache.SharedIndexInformer{fs.global.Autoscaling().V2().HorizontalPodAutoscalers().Informer()}
+	}
+	out := make([]cache.SharedIndexInformer, 0, len(fs.perNamespace))
+	for _, f := range fs.perNamespace {
+		out = append(out, f.Autoscaling().V2().HorizontalPodAutoscalers().Informer())
+	}
+	return out
+}
+
 func New(
 	client kubernetes.Interface,
 	cfg *config.Config,
@@ -291,6 +318,10 @@ func New(
 		cronJobQueue: workqueue.NewTypedRateLimitingQueueWithConfig(
 			workqueue.DefaultTypedControllerRateLimiter[string](),
 			workqueue.TypedRateLimitingQueueConfig[string]{Name: "cronjobs"},
+		),
+		hpaQueue: workqueue.NewTypedRateLimitingQueueWithConfig(
+			workqueue.DefaultTypedControllerRateLimiter[string](),
+			workqueue.TypedRateLimitingQueueConfig[string]{Name: "horizontalpodautoscalers"},
 		),
 		podLister:  podLister,
 		podsSynced: podsSynced,
@@ -412,6 +443,29 @@ func New(
 				AddFunc:    c.enqueueCronJob,
 				UpdateFunc: func(old, new interface{}) { c.enqueueCronJob(new) },
 				DeleteFunc: c.enqueueCronJob,
+			})
+		}
+	}
+
+	if cfg.HpaMonitor.Enabled {
+		hpaLister := fs.hpaLister()
+		hpaInformers := fs.hpaInformers()
+
+		c.hpaWatchEnabled = true
+
+		var hpaSynced []cache.InformerSynced
+		for _, inf := range hpaInformers {
+			hpaSynced = append(hpaSynced, inf.HasSynced)
+		}
+		c.hpaSynced = hpaSynced
+
+		h.SetHorizontalPodAutoscalerLister(hpaLister)
+
+		for _, inf := range hpaInformers {
+			inf.AddEventHandler(cache.ResourceEventHandlerFuncs{
+				AddFunc:    c.enqueueHorizontalPodAutoscaler,
+				UpdateFunc: func(old, new interface{}) { c.enqueueHorizontalPodAutoscaler(new) },
+				DeleteFunc: c.enqueueHorizontalPodAutoscaler,
 			})
 		}
 	}
@@ -558,6 +612,15 @@ func (c *Controller) enqueueCronJob(obj interface{}) {
 	c.cronJobQueue.Add(key)
 }
 
+func (c *Controller) enqueueHorizontalPodAutoscaler(obj interface{}) {
+	key, err := cache.DeletionHandlingMetaNamespaceKeyFunc(obj)
+	if err != nil {
+		utilruntime.HandleError(err)
+		return
+	}
+	c.hpaQueue.Add(key)
+}
+
 func (c *Controller) Run(ctx context.Context, workers int) error {
 	defer utilruntime.HandleCrash()
 	defer c.podQueue.ShutDown()
@@ -566,6 +629,7 @@ func (c *Controller) Run(ctx context.Context, workers int) error {
 	defer c.jobQueue.ShutDown()
 	defer c.daemonSetQueue.ShutDown()
 	defer c.cronJobQueue.ShutDown()
+	defer c.hpaQueue.ShutDown()
 
 	klog.InfoS("starting controller")
 
@@ -582,6 +646,7 @@ func (c *Controller) Run(ctx context.Context, workers int) error {
 	syncFns = append(syncFns, c.deploysSynced...)
 	syncFns = append(syncFns, c.jobsSynced...)
 	syncFns = append(syncFns, c.cronJobsSynced...)
+	syncFns = append(syncFns, c.hpaSynced...)
 	if !cache.WaitForCacheSync(ctx.Done(), syncFns...) {
 		return fmt.Errorf("failed to wait for caches to sync")
 	}
@@ -605,6 +670,9 @@ func (c *Controller) Run(ctx context.Context, workers int) error {
 		}
 		if c.cronJobWatchEnabled {
 			go wait.UntilWithContext(ctx, c.runCronJobWorker, time.Second)
+		}
+		if c.hpaWatchEnabled {
+			go wait.UntilWithContext(ctx, c.runHorizontalPodAutoscalerWorker, time.Second)
 		}
 	}
 
@@ -640,6 +708,11 @@ func (c *Controller) runDaemonSetWorker(ctx context.Context) {
 
 func (c *Controller) runCronJobWorker(ctx context.Context) {
 	for c.processNextCronJobItem() {
+	}
+}
+
+func (c *Controller) runHorizontalPodAutoscalerWorker(ctx context.Context) {
+	for c.processNextHorizontalPodAutoscalerItem() {
 	}
 }
 
@@ -910,6 +983,40 @@ func (c *Controller) syncCronJob(key string) error {
 	}
 
 	return c.handler.ProcessCronJobObject(cj, false)
+}
+
+func (c *Controller) processNextHorizontalPodAutoscalerItem() bool {
+	key, quit := c.hpaQueue.Get()
+	if quit {
+		return false
+	}
+	defer c.hpaQueue.Done(key)
+
+	if err := c.syncHorizontalPodAutoscaler(key); err != nil {
+		c.hpaQueue.AddRateLimited(key)
+		utilruntime.HandleError(fmt.Errorf("error syncing hpa %q: %s, requeuing", key, err.Error()))
+		return true
+	}
+
+	c.hpaQueue.Forget(key)
+	return true
+}
+
+func (c *Controller) syncHorizontalPodAutoscaler(key string) error {
+	namespace, name, err := cache.SplitMetaNamespaceKey(key)
+	if err != nil {
+		return err
+	}
+
+	hpa, err := c.hpaLister.HorizontalPodAutoscalers(namespace).Get(name)
+	if err != nil {
+		if errors.IsNotFound(err) {
+			return c.handler.ProcessHorizontalPodAutoscaler(key, true)
+		}
+		return err
+	}
+
+	return c.handler.ProcessHorizontalPodAutoscalerObject(hpa, false)
 }
 
 func (c *Controller) syncJob(key string) error {
