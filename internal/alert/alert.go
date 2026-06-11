@@ -29,10 +29,12 @@ import (
 )
 
 type providerEntry struct {
-	provider    Provider
-	routes      []config.AlertRoute
-	maxAttempts int
-	retryDelay  time.Duration
+	provider      Provider
+	routes        []config.AlertRoute
+	maxAttempts   int
+	retryDelay    time.Duration
+	fallback      *providerEntry
+	fallbackNamed string // resolved in second pass
 }
 
 type AlertManager struct {
@@ -123,6 +125,7 @@ func (a *AlertManager) Init(
 	a.entries = make([]providerEntry, 0)
 	a.silences = nil
 
+	entries := make([]providerEntry, 0, len(alertCfg))
 	for k, v := range alertCfg {
 		lowerCaseKey := strings.ToLower(k)
 		var pvdr Provider = nil
@@ -164,14 +167,36 @@ func (a *AlertManager) Init(
 		}
 		if !reflect.ValueOf(pvdr).IsNil() {
 			maxAttempts, retryDelay := extractRetry(v)
-			a.entries = append(a.entries, providerEntry{
-				provider:    pvdr,
-				routes:      extractRoutes(v),
-				maxAttempts: maxAttempts,
-				retryDelay:  retryDelay,
+			fbName := ""
+			if raw, ok := v["fallback"]; ok {
+				fbName, _ = raw.(string)
+			}
+			entries = append(entries, providerEntry{
+				provider:      pvdr,
+				routes:        extractRoutes(v),
+				maxAttempts:   maxAttempts,
+				retryDelay:    retryDelay,
+				fallback:      nil,
+				fallbackNamed: fbName,
 			})
 		}
 	}
+	// second pass: resolve fallback names to pointers
+	for i := range entries {
+		if entries[i].fallbackNamed != "" {
+			for j := range entries {
+				if strings.EqualFold(entries[j].provider.Name(), entries[i].fallbackNamed) {
+					entries[i].fallback = &entries[j]
+					break
+				}
+			}
+			if entries[i].fallback == nil {
+				klog.InfoS("fallback provider not found, skipping", "provider", entries[i].provider.Name(), "fallback", entries[i].fallbackNamed)
+			}
+			entries[i].fallbackNamed = ""
+		}
+	}
+	a.entries = entries
 }
 
 // SetSilences configures silence rules on the alert manager.
@@ -297,7 +322,7 @@ func shouldDeliver(routes []config.AlertRoute, inc *model.Incident) bool {
 	return false
 }
 
-func sendWithRetry(sendFn func() error, maxAttempts int, delay time.Duration, providerName string) {
+func sendWithRetry(sendFn func() error, maxAttempts int, delay time.Duration, providerName string) error {
 	var lastErr error
 	for attempt := 1; attempt <= maxAttempts; attempt++ {
 		if err := sendFn(); err != nil {
@@ -311,11 +336,12 @@ func sendWithRetry(sendFn func() error, maxAttempts int, delay time.Duration, pr
 			}
 			continue
 		}
-		return
+		return nil
 	}
 	klog.ErrorS(lastErr, "failed to deliver after retries",
 		"provider", providerName,
 		"maxAttempts", maxAttempts)
+	return lastErr
 }
 
 // Notify sends string msg to all providers
@@ -324,9 +350,11 @@ func (a *AlertManager) Notify(msg string) {
 
 	for _, entry := range a.entries {
 		p := entry.provider
-		sendWithRetry(func() error {
+		if err := sendWithRetry(func() error {
 			return p.SendMessage(msg)
-		}, entry.maxAttempts, entry.retryDelay, p.Name())
+		}, entry.maxAttempts, entry.retryDelay, p.Name()); err != nil && entry.fallback != nil {
+			entry.fallback.provider.SendMessage("[fallback — primary " + p.Name() + " failed] " + msg)
+		}
 	}
 }
 
@@ -336,9 +364,11 @@ func (a *AlertManager) NotifyEvent(event event.Event) {
 
 	for _, entry := range a.entries {
 		p := entry.provider
-		sendWithRetry(func() error {
+		if err := sendWithRetry(func() error {
 			return p.SendEvent(&event)
-		}, entry.maxAttempts, entry.retryDelay, p.Name())
+		}, entry.maxAttempts, entry.retryDelay, p.Name()); err != nil && entry.fallback != nil {
+			entry.fallback.provider.SendMessage("[fallback — primary " + p.Name() + " failed] " + event.Reason + " in " + event.Namespace + "/" + event.PodName)
+		}
 	}
 }
 
@@ -376,14 +406,18 @@ func (a *AlertManager) NotifyIncident(inc *model.Incident, action model.Incident
 			continue
 		}
 		p := entry.provider
+		var err error
 		if tp, ok := p.(ThreadProvider); ok {
-			sendWithRetry(func() error {
+			err = sendWithRetry(func() error {
 				return tp.SendIncident(inc, action)
 			}, entry.maxAttempts, entry.retryDelay, p.Name())
 		} else {
-			sendWithRetry(func() error {
+			err = sendWithRetry(func() error {
 				return p.SendMessage(msg)
 			}, entry.maxAttempts, entry.retryDelay, p.Name())
+		}
+		if err != nil && entry.fallback != nil {
+			entry.fallback.provider.SendMessage("[fallback — primary " + p.Name() + " failed] " + msg)
 		}
 	}
 }

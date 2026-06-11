@@ -31,6 +31,19 @@ const (
 	StateResolved
 )
 
+type IncidentView struct {
+	Key       string         `json:"key"`
+	Reason    string         `json:"reason"`
+	Namespace string         `json:"namespace"`
+	Name      string         `json:"name"`
+	State     IncidentState  `json:"state"`
+	Severity  string         `json:"severity"`
+	Count     int            `json:"count"`
+	FirstSeen time.Time      `json:"firstSeen"`
+	LastSeen  time.Time      `json:"lastSeen"`
+	Hint      string         `json:"hint,omitempty"`
+}
+
 type Incident struct {
 	Key           string
 	Reason        string

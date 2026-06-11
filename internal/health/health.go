@@ -9,14 +9,27 @@ import (
 	"time"
 
 	"github.com/abahmed/kwatch/internal/config"
+	"github.com/abahmed/kwatch/internal/event"
+	"github.com/abahmed/kwatch/internal/model"
 	"k8s.io/klog/v2"
 )
 
+type IncidentLister interface {
+	Snapshot() []model.IncidentView
+}
+
+type TestAlertSender interface {
+	NotifyEvent(event event.Event)
+	Notify(msg string)
+}
+
 type HealthServer struct {
-	server  *http.Server
-	port    int
-	enabled bool
-	pprof   bool
+	server       *http.Server
+	port         int
+	enabled      bool
+	pprof        bool
+	incidentAPI  IncidentLister
+	alertManager TestAlertSender
 }
 
 type HealthResponse struct {
@@ -31,6 +44,14 @@ func NewHealthServer(cfg config.HealthCheck) *HealthServer {
 	}
 }
 
+func (h *HealthServer) SetIncidentAPI(lister IncidentLister) {
+	h.incidentAPI = lister
+}
+
+func (h *HealthServer) SetAlertManager(a TestAlertSender) {
+	h.alertManager = a
+}
+
 func (h *HealthServer) Start(ctx context.Context) error {
 	if !h.enabled {
 		klog.V(4).InfoS("health check is disabled")
@@ -41,6 +62,8 @@ func (h *HealthServer) Start(ctx context.Context) error {
 	mux.HandleFunc("/healthz", h.healthzHandler)
 	mux.HandleFunc("/health", h.healthHandler)
 	mux.HandleFunc("/readyz", h.readyzHandler)
+	mux.HandleFunc("/incidents", h.incidentsHandler)
+	mux.HandleFunc("/test-alert", h.testAlertHandler)
 
 	if h.pprof {
 		mux.HandleFunc("/debug/pprof/", pprof.Index)
@@ -95,4 +118,43 @@ func (h *HealthServer) readyzHandler(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "text/plain")
 	w.WriteHeader(http.StatusOK)
 	w.Write([]byte("OK"))
+}
+
+func (h *HealthServer) incidentsHandler(w http.ResponseWriter, r *http.Request) {
+	if h.incidentAPI == nil {
+		w.Header().Set("Content-Type", "text/plain")
+		w.WriteHeader(http.StatusServiceUnavailable)
+		w.Write([]byte("incident API not available"))
+		return
+	}
+	snap := h.incidentAPI.Snapshot()
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusOK)
+	json.NewEncoder(w).Encode(snap)
+}
+
+func (h *HealthServer) testAlertHandler(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		w.Header().Set("Content-Type", "text/plain")
+		w.WriteHeader(http.StatusMethodNotAllowed)
+		w.Write([]byte("use POST"))
+		return
+	}
+	if h.alertManager == nil {
+		w.Header().Set("Content-Type", "text/plain")
+		w.WriteHeader(http.StatusServiceUnavailable)
+		w.Write([]byte("alert manager not available"))
+		return
+	}
+	ev := event.Event{
+		PodName:   "test-pod",
+		Namespace: "default",
+		Reason:    "TestAlert",
+		Events:    "this is a test alert from kwatch",
+	}
+	h.alertManager.NotifyEvent(ev)
+	h.alertManager.Notify("[test-alert] kwatch test alert sent")
+	w.Header().Set("Content-Type", "text/plain")
+	w.WriteHeader(http.StatusOK)
+	w.Write([]byte("test alert sent"))
 }

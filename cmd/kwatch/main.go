@@ -108,6 +108,9 @@ func main() {
 		},
 	})
 
+	healthServer.SetIncidentAPI(correlator)
+	healthServer.SetAlertManager(alertManager)
+
 	pvcMonitor := pvc.NewPvcMonitor(k8sClient, &cfg.PvcMonitor, alertManager, correlator)
 	hbMonitor := heartbeat.NewHeartbeatMonitor(&cfg.HeartbeatMonitor)
 

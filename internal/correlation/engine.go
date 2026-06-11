@@ -182,6 +182,27 @@ func (e *Engine) BaselineSnapshot() map[string]int64 {
 	return cloneBaseline(e.seen)
 }
 
+func (e *Engine) Snapshot() []model.IncidentView {
+	e.mu.Lock()
+	defer e.mu.Unlock()
+	out := make([]model.IncidentView, 0, len(e.state))
+	for _, inc := range e.state {
+		out = append(out, model.IncidentView{
+			Key:       inc.Key,
+			Reason:    inc.Reason,
+			Namespace: inc.Namespace,
+			Name:      inc.Name,
+			State:     inc.State,
+			Severity:  inc.Severity,
+			Count:     inc.Count,
+			FirstSeen: inc.FirstSeen,
+			LastSeen:  inc.LastSeen,
+			Hint:      inc.Hint,
+		})
+	}
+	return out
+}
+
 var knownRetryReasons = map[string]bool{
 	"CrashLoopBackOff": true,
 	"BackOff":          true,
