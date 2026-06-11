@@ -86,6 +86,7 @@ data:
     healthCheck:
       enabled: true
       port: 8060
+      # pprof: false      # set true to enable /debug/pprof/* profiling endpoints
 
     # ── App ───────────────────────────────────────────────
     app:

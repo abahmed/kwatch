@@ -30,3 +30,4 @@ config.yaml
 
 # debug
 __debug_bin*
+/kwatch

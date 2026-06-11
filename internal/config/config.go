@@ -246,6 +246,10 @@ type HealthCheck struct {
 	// Port is the port to listen on for health check requests
 	// By default, this value is 8060
 	Port int `yaml:"port"`
+
+	// Pprof if set to true, enables /debug/pprof/* profiling endpoints.
+	// Disabled by default — enabling exposes runtime profiling data.
+	Pprof bool `yaml:"pprof"`
 }
 
 // SilenceRule defines an alert suppression rule.
