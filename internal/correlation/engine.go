@@ -21,14 +21,24 @@ type Config struct {
 	StartupQuiet      time.Duration
 	Enricher          enricher.Enricher
 	LifecycleHook     func(inc *model.Incident, action model.IncidentAction)
+	BaselineTTL       time.Duration
+	Baseline          map[string]int64
+	OnBaselineChange  func(baseline map[string]int64)
 }
+
+// BuildKey constructs the incident key used for dedup, grouping, and baseline.
+func BuildKey(namespace, owner, reason, container string) string {
+	return namespace + ":" + owner + ":" + reason + ":" + container
+}
+
+const defaultBaselineTTL = 24 * time.Hour
 
 type Engine struct {
 	mu          sync.Mutex
 	state       map[string]*model.Incident
 	config      Config
 	startedAt   time.Time
-	seen        map[string]bool
+	seen        map[string]int64
 }
 
 func NewEngine(cfg Config) *Engine {
@@ -38,38 +48,69 @@ func NewEngine(cfg Config) *Engine {
 	if cfg.LifecycleInterval <= 0 {
 		cfg.LifecycleInterval = 1 * time.Minute
 	}
-	return &Engine{
+	if cfg.BaselineTTL <= 0 {
+		cfg.BaselineTTL = defaultBaselineTTL
+	}
+	e := &Engine{
 		state:     make(map[string]*model.Incident),
 		config:    cfg,
 		startedAt: time.Now(),
 	}
+	if cfg.Baseline != nil {
+		e.SetSeen(cfg.Baseline)
+	}
+	return e
 }
 
-func (e *Engine) SetSeen(keys []string) {
+func (e *Engine) SetSeen(baseline map[string]int64) {
 	e.mu.Lock()
 	defer e.mu.Unlock()
-	e.seen = make(map[string]bool, len(keys))
-	for _, k := range keys {
-		e.seen[k] = true
+	now := time.Now()
+	ttl := e.config.BaselineTTL
+	e.seen = make(map[string]int64, len(baseline))
+	for k, ts := range baseline {
+		if now.Sub(time.Unix(ts, 0)) < ttl {
+			e.seen[k] = ts
+		}
 	}
 }
 
-func (e *Engine) isBaselined(podKey string) bool {
-	if len(e.seen) > 0 && e.seen[podKey] {
-		return true
+func (e *Engine) isBaselined(incidentKey string) bool {
+	if ts, ok := e.seen[incidentKey]; ok {
+		if time.Since(time.Unix(ts, 0)) < e.config.BaselineTTL {
+			return true
+		}
+		delete(e.seen, incidentKey)
 	}
 	if e.config.StartupQuiet > 0 && time.Since(e.startedAt) < e.config.StartupQuiet {
-		if len(e.seen) == 0 {
+		if len(e.seen) == 0 && len(e.state) == 0 {
 			return true
 		}
 	}
 	return false
 }
 
-func (e *Engine) ClearSeen(podKey string) {
+func (e *Engine) ClearSeen(key string) {
 	e.mu.Lock()
 	defer e.mu.Unlock()
-	delete(e.seen, podKey)
+	delete(e.seen, key)
+	if hook := e.config.OnBaselineChange; hook != nil {
+		hook(cloneBaseline(e.seen))
+	}
+}
+
+func cloneBaseline(src map[string]int64) map[string]int64 {
+	dst := make(map[string]int64, len(src))
+	for k, v := range src {
+		dst[k] = v
+	}
+	return dst
+}
+
+func (e *Engine) BaselineSnapshot() map[string]int64 {
+	e.mu.Lock()
+	defer e.mu.Unlock()
+	return cloneBaseline(e.seen)
 }
 
 var knownRetryReasons = map[string]bool{
@@ -107,18 +148,17 @@ func (e *Engine) Process(ev event.Event, owner string, cs *model.ContainerState)
 	e.mu.Lock()
 	defer e.mu.Unlock()
 
-	podKey := ev.Namespace + "/" + ev.PodName
-	if e.isBaselined(podKey) {
-		return nil, model.ActionSkip
-	}
-
 	r := normalizeReason(ev.Reason)
 
 	if r == "CrashLoopBackOff" && cs != nil && cs.RestartCount > 5 {
 		r = "CrashLoopHighFrequency"
 	}
 
-	key := ev.Namespace + ":" + owner + ":" + r + ":" + ev.ContainerName
+	key := BuildKey(ev.Namespace, owner, r, ev.ContainerName)
+
+	if e.isBaselined(key) {
+		return nil, model.ActionSkip
+	}
 	now := time.Now()
 
 	if inc, ok := e.state[key]; ok {
@@ -172,10 +212,17 @@ func (e *Engine) MarkResolved(key string) {
 		return
 	}
 	inc.State = model.StateResolved
+	delete(e.seen, key)
 	e.mu.Unlock()
 
 	if hook := e.config.LifecycleHook; hook != nil {
 		hook(inc, model.ActionResolved)
+	}
+	if hook := e.config.OnBaselineChange; hook != nil {
+		e.mu.Lock()
+		snapshot := cloneBaseline(e.seen)
+		e.mu.Unlock()
+		hook(snapshot)
 	}
 }
 
@@ -185,9 +232,10 @@ func (e *Engine) RemovePod(namespace, podName string) {
 		action model.IncidentAction
 	}
 	var pending []transition
+	var baselineChanged bool
 
 	e.mu.Lock()
-	for _, inc := range e.state {
+	for key, inc := range e.state {
 		if inc.Namespace != namespace {
 			continue
 		}
@@ -197,15 +245,24 @@ func (e *Engine) RemovePod(namespace, podName string) {
 		delete(inc.Resources, podName)
 		if len(inc.Resources) == 0 && inc.State != model.StateResolved && inc.State != model.StateStale {
 			inc.State = model.StateResolved
+			delete(e.seen, key)
+			baselineChanged = true
 			pending = append(pending, transition{inc, model.ActionResolved})
 		}
 	}
-	delete(e.seen, namespace+"/"+podName)
 	e.mu.Unlock()
 
 	for _, t := range pending {
 		if hook := e.config.LifecycleHook; hook != nil {
 			hook(t.inc, t.action)
+		}
+	}
+	if baselineChanged {
+		if hook := e.config.OnBaselineChange; hook != nil {
+			e.mu.Lock()
+			snapshot := cloneBaseline(e.seen)
+			e.mu.Unlock()
+			hook(snapshot)
 		}
 	}
 }
@@ -216,11 +273,14 @@ func (e *Engine) ResolveByResource(resource, name string) {
 		action model.IncidentAction
 	}
 	var pending []transition
+	var baselineChanged bool
 
 	e.mu.Lock()
-	for _, inc := range e.state {
+	for key, inc := range e.state {
 		if inc.Resource == resource && inc.Name == name && inc.State != model.StateResolved && inc.State != model.StateStale {
 			inc.State = model.StateResolved
+			delete(e.seen, key)
+			baselineChanged = true
 			pending = append(pending, transition{inc, model.ActionResolved})
 		}
 	}
@@ -229,6 +289,14 @@ func (e *Engine) ResolveByResource(resource, name string) {
 	for _, t := range pending {
 		if hook := e.config.LifecycleHook; hook != nil {
 			hook(t.inc, t.action)
+		}
+	}
+	if baselineChanged {
+		if hook := e.config.OnBaselineChange; hook != nil {
+			e.mu.Lock()
+			snapshot := cloneBaseline(e.seen)
+			e.mu.Unlock()
+			hook(snapshot)
 		}
 	}
 }

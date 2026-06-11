@@ -432,3 +432,65 @@ func TestNewRetryConfigMapManager(t *testing.T) {
 	assert.Equal(client, mgr.client)
 	assert.Equal("test-namespace", mgr.namespace)
 }
+
+func TestGetBaselineNoConfigMap(t *testing.T) {
+	assert := assert.New(t)
+	client := fake.NewSimpleClientset()
+	sm := NewStateManager(client, "kwatch")
+
+	result := sm.GetBaseline(context.Background())
+	assert.Nil(result)
+}
+
+func TestSaveAndGetBaseline(t *testing.T) {
+	assert := assert.New(t)
+	client := fake.NewSimpleClientset()
+
+	cm := &corev1.ConfigMap{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      stateConfigMapName,
+			Namespace: "kwatch",
+		},
+		Data: map[string]string{},
+	}
+	_, err := client.CoreV1().ConfigMaps("kwatch").Create(context.Background(), cm, metav1.CreateOptions{})
+	assert.Nil(err)
+
+	sm := NewStateManager(client, "kwatch")
+
+	baseline := map[string]int64{
+		"default:deploy-1:CrashLoopBackOff:app": 1718064000,
+		"default:sts-0:OOMKilled:web":           1718065000,
+	}
+	err = sm.SaveBaseline(context.Background(), baseline)
+	assert.Nil(err)
+
+	loaded := sm.GetBaseline(context.Background())
+	assert.NotNil(loaded)
+	assert.Equal(baseline, loaded)
+}
+
+func TestSaveBaselineOverwrites(t *testing.T) {
+	assert := assert.New(t)
+	client := fake.NewSimpleClientset()
+
+	cm := &corev1.ConfigMap{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      stateConfigMapName,
+			Namespace: "kwatch",
+		},
+		Data: map[string]string{},
+	}
+	_, err := client.CoreV1().ConfigMaps("kwatch").Create(context.Background(), cm, metav1.CreateOptions{})
+	assert.Nil(err)
+
+	sm := NewStateManager(client, "kwatch")
+
+	err = sm.SaveBaseline(context.Background(), map[string]int64{"key-1": 100})
+	assert.Nil(err)
+	assert.Equal(map[string]int64{"key-1": 100}, sm.GetBaseline(context.Background()))
+
+	err = sm.SaveBaseline(context.Background(), map[string]int64{"key-2": 200})
+	assert.Nil(err)
+	assert.Equal(map[string]int64{"key-2": 200}, sm.GetBaseline(context.Background()))
+}

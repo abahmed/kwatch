@@ -33,7 +33,7 @@ type Handler interface {
 	SetDaemonSetLister(lister appsv1lister.DaemonSetLister)
 	SetStatefulSetLister(lister appsv1lister.StatefulSetLister)
 	SetEventLister(lister corev1lister.EventLister)
-	SetSeen(keys []string)
+	SetSeen(baseline map[string]int64)
 	ClearSeen(podKey string)
 }
 
@@ -140,8 +140,8 @@ func (h *handler) SetEventLister(lister corev1lister.EventLister) {
 	h.eventLister = lister
 }
 
-func (h *handler) SetSeen(keys []string) {
-	h.correlator.SetSeen(keys)
+func (h *handler) SetSeen(baseline map[string]int64) {
+	h.correlator.SetSeen(baseline)
 }
 
 func (h *handler) ClearSeen(podKey string) {

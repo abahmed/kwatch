@@ -257,13 +257,15 @@ func TestBaselineSuppression(t *testing.T) {
 	e := newTestEngine()
 	e.config.StartupQuiet = 0
 
+	incidentKey := BuildKey("default", "deploy-1", "CrashLoopBackOff", "")
+
+	e.SetSeen(map[string]int64{incidentKey: time.Now().Unix()})
+
 	ev := event.Event{
 		PodName:   "pod-1",
 		Namespace: "default",
 		Reason:    "CrashLoopBackOff",
 	}
-
-	e.SetSeen([]string{"default/pod-1"})
 
 	_, action := e.Process(ev, "deploy-1", nil)
 	assert.Equal(t, model.ActionSkip, action)
@@ -273,34 +275,56 @@ func TestClearSeenUnsuppresses(t *testing.T) {
 	e := newTestEngine()
 	e.config.StartupQuiet = 0
 
+	incidentKey := BuildKey("default", "deploy-1", "CrashLoopBackOff", "")
+
+	e.SetSeen(map[string]int64{incidentKey: time.Now().Unix()})
+	e.ClearSeen(incidentKey)
+
 	ev := event.Event{
 		PodName:   "pod-1",
 		Namespace: "default",
 		Reason:    "CrashLoopBackOff",
 	}
-
-	e.SetSeen([]string{"default/pod-1"})
-	e.ClearSeen("default/pod-1")
 
 	_, action := e.Process(ev, "deploy-1", nil)
 	assert.Equal(t, model.ActionCreate, action)
 }
 
 func TestRemovePodClearsSeen(t *testing.T) {
-	e := newTestEngine()
+	e := NewEngine(Config{
+		Window:   10 * time.Minute,
+		Cooldown: 1 * time.Nanosecond,
+	})
 	e.config.StartupQuiet = 0
 
+	// First, create an incident (not baselined)
 	ev := event.Event{
 		PodName:   "pod-1",
 		Namespace: "default",
 		Reason:    "CrashLoopBackOff",
 	}
 
-	e.SetSeen([]string{"default/pod-1"})
+	inc, action := e.Process(ev, "deploy-1", nil)
+	assert.Equal(t, model.ActionCreate, action)
+	assert.NotNil(t, inc)
+	incidentKey := inc.Key
+
+	// Now baseline the incident key
+	e.SetSeen(map[string]int64{incidentKey: time.Now().Unix()})
+
+	// RemovePod should clear the baseline when the incident empties
 	e.RemovePod("default", "pod-1")
 
-	_, action := e.Process(ev, "deploy-1", nil)
-	assert.Equal(t, model.ActionCreate, action)
+	// A new event for the same key should now fire (update, since the resolved
+	// incident is still in state and gets reactivated)
+	ev2 := event.Event{
+		PodName:   "pod-2",
+		Namespace: "default",
+		Reason:    "CrashLoopBackOff",
+	}
+
+	_, action = e.Process(ev2, "deploy-1", nil)
+	assert.Equal(t, model.ActionUpdate, action)
 }
 
 func TestCheckLifecycleStale(t *testing.T) {

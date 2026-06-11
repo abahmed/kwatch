@@ -60,6 +60,9 @@ func main() {
 	up := upgrader.NewUpgrader(&cfg.Upgrader, alertManager, sm.GetStateManager())
 	go up.CheckUpdates(ctx)
 
+	stateMgr := sm.GetStateManager()
+	baseline := stateMgr.GetBaseline(ctx)
+
 	startupQuiet := cfg.Correlation.StartupQuiet
 	if startupQuiet <= 0 {
 		startupQuiet = 30
@@ -71,10 +74,16 @@ func main() {
 		StaleThreshold:    time.Duration(cfg.Correlation.StaleThreshold) * time.Minute,
 		LifecycleInterval: time.Duration(cfg.Correlation.LifecycleInterval) * time.Minute,
 		StartupQuiet:      time.Duration(startupQuiet) * time.Second,
+		Baseline:          baseline,
 		Enricher:          &enricher.DefaultEnricher{SeverityByOwnerKind: cfg.SeverityByOwnerKind},
 		LifecycleHook: func(inc *model.Incident, action model.IncidentAction) {
 			if action != model.ActionSkip {
 				alertManager.NotifyIncident(inc, action)
+			}
+		},
+		OnBaselineChange: func(b map[string]int64) {
+			if err := stateMgr.SaveBaseline(context.Background(), b); err != nil {
+				klog.ErrorS(err, "failed to save baseline")
 			}
 		},
 	})

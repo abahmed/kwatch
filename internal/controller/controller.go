@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/abahmed/kwatch/internal/config"
+	"github.com/abahmed/kwatch/internal/correlation"
 	"github.com/abahmed/kwatch/internal/handler"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
@@ -597,30 +598,83 @@ func (c *Controller) buildSeenSet() {
 		klog.ErrorS(err, "failed to list pods for Seen set")
 		return
 	}
-	var seen []string
+	now := time.Now()
+	baseline := make(map[string]int64)
 	for _, pod := range pods {
 		if pod.Status.Phase == corev1.PodRunning || pod.Status.Phase == corev1.PodSucceeded {
 			continue
 		}
 		if pod.Status.Phase == corev1.PodPending || pod.Status.Phase == corev1.PodFailed {
-			seen = append(seen, pod.Namespace+"/"+pod.Name)
+			addPodKeys(baseline, pod, c.rsLister, c.dsLister, c.ssLister, now)
 			continue
 		}
 		for _, cs := range pod.Status.ContainerStatuses {
 			if cs.State.Waiting != nil && cs.State.Waiting.Reason != "ContainerCreating" && cs.State.Waiting.Reason != "PodInitializing" {
-				seen = append(seen, pod.Namespace+"/"+pod.Name)
+				addContainerKeys(baseline, pod, cs, c.rsLister, c.dsLister, c.ssLister, now)
 				break
 			}
 			if cs.State.Terminated != nil && cs.State.Terminated.ExitCode != 0 && cs.State.Terminated.Reason != "Completed" {
-				seen = append(seen, pod.Namespace+"/"+pod.Name)
+				addContainerKeys(baseline, pod, cs, c.rsLister, c.dsLister, c.ssLister, now)
 				break
 			}
 		}
 	}
-	if len(seen) > 0 {
-		klog.V(4).InfoS("Seen set built", "count", len(seen))
-		c.handler.SetSeen(seen)
+	if len(baseline) > 0 {
+		klog.V(4).InfoS("Seen set built", "count", len(baseline))
+		c.handler.SetSeen(baseline)
 	}
+}
+
+func resolveOwnerName(pod *corev1.Pod, rsLister appsv1lister.ReplicaSetLister, dsLister appsv1lister.DaemonSetLister, ssLister appsv1lister.StatefulSetLister) string {
+	if len(pod.OwnerReferences) == 0 {
+		return pod.Name
+	}
+	owner := pod.OwnerReferences[0]
+	if owner.Kind == "ReplicaSet" && rsLister != nil {
+		rs, err := rsLister.ReplicaSets(pod.Namespace).Get(owner.Name)
+		if err == nil && len(rs.OwnerReferences) > 0 {
+			return rs.OwnerReferences[0].Name
+		}
+	}
+	if owner.Kind == "DaemonSet" && dsLister != nil {
+		if ds, err := dsLister.DaemonSets(pod.Namespace).Get(owner.Name); err == nil && len(ds.OwnerReferences) > 0 {
+			return ds.OwnerReferences[0].Name
+		}
+	}
+	if owner.Kind == "StatefulSet" && ssLister != nil {
+		if ss, err := ssLister.StatefulSets(pod.Namespace).Get(owner.Name); err == nil && len(ss.OwnerReferences) > 0 {
+			return ss.OwnerReferences[0].Name
+		}
+	}
+	return owner.Name
+}
+
+func addPodKeys(baseline map[string]int64, pod *corev1.Pod, rsLister appsv1lister.ReplicaSetLister, dsLister appsv1lister.DaemonSetLister, ssLister appsv1lister.StatefulSetLister, now time.Time) {
+	owner := resolveOwnerName(pod, rsLister, dsLister, ssLister)
+	reason := string(pod.Status.Phase)
+	if len(pod.Status.Conditions) > 0 {
+		reason = pod.Status.Conditions[0].Reason
+		if reason == "" {
+			reason = string(pod.Status.Phase)
+		}
+	}
+	key := correlation.BuildKey(pod.Namespace, owner, reason, ".")
+	baseline[key] = now.Unix()
+}
+
+func addContainerKeys(baseline map[string]int64, pod *corev1.Pod, cs corev1.ContainerStatus, rsLister appsv1lister.ReplicaSetLister, dsLister appsv1lister.DaemonSetLister, ssLister appsv1lister.StatefulSetLister, now time.Time) {
+	owner := resolveOwnerName(pod, rsLister, dsLister, ssLister)
+	reason := ""
+	if cs.State.Waiting != nil {
+		reason = cs.State.Waiting.Reason
+	} else if cs.State.Terminated != nil {
+		reason = cs.State.Terminated.Reason
+	}
+	if reason == "" {
+		return
+	}
+	key := correlation.BuildKey(pod.Namespace, owner, reason, cs.Name)
+	baseline[key] = now.Unix()
 }
 
 func (c *Controller) syncPod(key string) error {

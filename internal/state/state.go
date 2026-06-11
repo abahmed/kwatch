@@ -2,6 +2,7 @@ package state
 
 import (
 	"context"
+	"encoding/json"
 	"time"
 
 	"github.com/google/uuid"
@@ -18,6 +19,7 @@ const (
 	versionKey         = "version"
 	firstRunKey        = "first-run"
 	notifiedVersionKey = "notified-version"
+	baselineKey        = "baseline"
 )
 
 type StateManager struct {
@@ -105,6 +107,34 @@ func (s *StateManager) MarkAsInitialized(ctx context.Context, clusterID, version
 			c.Data[firstRunKey] = time.Now().UTC().Format(time.RFC3339)
 		}
 		c.Data[versionKey] = version
+		return nil
+	})
+}
+
+func (s *StateManager) GetBaseline(ctx context.Context) map[string]int64 {
+	cm, err := s.client.CoreV1().ConfigMaps(s.namespace).Get(ctx, stateConfigMapName, metav1.GetOptions{})
+	if err != nil {
+		return nil
+	}
+	raw, ok := cm.Data[baselineKey]
+	if !ok || raw == "" {
+		return nil
+	}
+	var result map[string]int64
+	if err := json.Unmarshal([]byte(raw), &result); err != nil {
+		klog.ErrorS(err, "failed to unmarshal baseline")
+		return nil
+	}
+	return result
+}
+
+func (s *StateManager) SaveBaseline(ctx context.Context, baseline map[string]int64) error {
+	return s.retryMgr.UpdateWithRetry(ctx, func(cm *corev1.ConfigMap) error {
+		data, err := json.Marshal(baseline)
+		if err != nil {
+			return err
+		}
+		cm.Data[baselineKey] = string(data)
 		return nil
 	})
 }
