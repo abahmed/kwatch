@@ -24,11 +24,50 @@ type Config struct {
 	BaselineTTL       time.Duration
 	Baseline          map[string]int64
 	OnBaselineChange  func(baseline map[string]int64)
+	EscalationTiers   []Tier
 }
 
 // BuildKey constructs the incident key used for dedup, grouping, and baseline.
 func BuildKey(namespace, owner, reason, container string) string {
 	return namespace + ":" + owner + ":" + reason + ":" + container
+}
+
+var defaultSeverityNames = []string{"normal", "high", "critical"}
+
+// Tier pairs a restart-count threshold with a severity name.
+type Tier struct {
+	Threshold int
+	Severity  string
+}
+
+// BuildTiers converts int thresholds into severity-labelled tiers.
+func BuildTiers(thresholds []int) []Tier {
+	if len(thresholds) == 0 {
+		return nil
+	}
+	names := defaultSeverityNames
+	// ensure we have enough names
+	for len(names) < len(thresholds)+1 {
+		names = append(names, "critical")
+	}
+	tiers := make([]Tier, len(thresholds))
+	for i, t := range thresholds {
+		tiers[i] = Tier{Threshold: t, Severity: names[i+1]}
+	}
+	return tiers
+}
+
+// escalationSeverity returns the severity name for a given restart count
+// based on the configured thresholds. Returns empty if no tier is matched.
+func escalationSeverity(restartCount int, tiers []Tier) string {
+	// walk from highest to lowest so we return the highest matched tier
+	best := ""
+	for _, t := range tiers {
+		if restartCount >= t.Threshold {
+			best = t.Severity
+		}
+	}
+	return best
 }
 
 const defaultBaselineTTL = 24 * time.Hour
@@ -176,6 +215,12 @@ func (e *Engine) Process(ev event.Event, owner string, cs *model.ContainerState)
 
 	if r == "CrashLoopBackOff" && cs != nil && cs.RestartCount > 5 {
 		r = "CrashLoopHighFrequency"
+	}
+
+	if ev.Severity == "" && cs != nil {
+		if s := escalationSeverity(int(cs.RestartCount), e.config.EscalationTiers); s != "" {
+			ev.Severity = s
+		}
 	}
 
 	key := BuildKey(ev.Namespace, owner, r, ev.ContainerName)

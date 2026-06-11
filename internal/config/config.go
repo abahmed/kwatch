@@ -302,4 +302,20 @@ type Correlation struct {
 	// during which no alerts are sent. This prevents re-alerting
 	// pre-existing breakage after a restart. Default 30.
 	StartupQuiet int `yaml:"startupQuiet"`
+
+	// Escalation configures restart-count-based severity escalation.
+	Escalation EscalationConfig `yaml:"escalation"`
+}
+
+// EscalationConfig configures severity escalation when restart count
+// crosses configured thresholds.
+type EscalationConfig struct {
+	// Enabled if set to true, severity escalates when restart count
+	// crosses configured tier boundaries.
+	Enabled bool `yaml:"enabled"`
+
+	// Tiers is an ordered list of restart count thresholds. When the
+	// RestartCount crosses a tier, severity escalates one level.
+	// Example: [3, 10, 50] → at 3+ restarts → "high", 10+ → "critical".
+	Tiers []int `yaml:"tiers"`
 }
