@@ -26,9 +26,30 @@
   </a>
 </p>
 
-**kwatch** helps you monitor all changes in your Kubernetes(K8s) cluster, detects crashes in your running apps in realtime, and publishes notifications to your channels (Slack, Discord, etc.) instantly
+> **Kubernetes alerts that tell you what broke — and why.**
+> kwatch monitors your cluster and sends one clear, self-explaining
+> notification the moment something crashes — 60 seconds to install, no
+> backend, no dashboards.
 
-## ⚡️ Getting Started
+## Why kwatch
+
+- **Self-explaining** — OOMKilled → "hit 512Mi limit; raise limits.memory";
+  probe failures include which probe and port; exit codes decoded.
+- **Low-noise** — incident grouping, cooldown, node→pod inhibition,
+  storm digests, silences, and routing rules keep your channels clean.
+- **GitOps-native** — config as a `KwatchConfig` CR, live-reloaded without
+  a restart.
+- Built on four promises: **never miss** · **never lie** · **never flood** ·
+  **never silently die**.
+
+## The smart alert (before → after)
+
+| Raw kubectl | kwatch |
+|---|---|
+| `CrashLoopBackOff` | 🚨 OOMKilled (memory limit: 512Mi) — consider raising limits.memory · previous logs + events inline |
+| `Error` | 🚨 HTTP probe failing on :8080/healthz (exit code 137) — container OOM-killed |
+
+## ⚡️ 60-second install
 
 ### 📦 Install
 
@@ -60,6 +81,44 @@ To deploy **kwatch**, execute following command:
 ```shell
 kubectl apply -f https://raw.githubusercontent.com/abahmed/kwatch/v0.10.5/deploy/deploy.yaml
 ```
+
+## What it catches
+
+| Signal | Default | Details |
+|--------|---------|---------|
+| Pod crashes (CrashLoop, OOM, ImagePull, Error) | **on** | Container-state + previous logs + events inline |
+| Pending pods (incl. `Unschedulable`) | **on** | Threshold: 300s |
+| Node conditions (NotReady, Unknown, pressure) | **on** | Per-condition severity |
+| PVC usage tiers (warn / critical) | **on** | Thresholds: 80% / 90% |
+| Job failures & suspension | **on** | Reason: `JobFailed` / `JobSuspended` |
+| Stuck rollouts (`ProgressDeadlineExceeded`) | **on** | Deployments only |
+| DaemonSet unavailability | off | By DaemonSet |
+| CronJob suspension / missed schedules | off | By CronJob |
+| HPA pinned at max replicas | off | Sustain window configurable |
+| TLS certificates expiring | off | Threshold in days |
+| Node crash → pod inhibition | off | Controlled per-cluster |
+
+Each signal beyond core pod/node/PVC is opt-in to keep baseline zero-config.
+
+## kwatch vs …
+
+| | kwatch | DIY Prometheus + Alertmanager | Heavy SaaS |
+|---|---|---|---|
+| Install time | ~5 minutes | hours of YAML | agent + backend setup |
+| Footprint | ~20 MB single binary | whole monitoring stack | per-node agents + cloud costs |
+| Alert content | Self-explaining (hint + logs + events) | Rule-defined message | Depends on configuration |
+| Data storage | None (stateless) | Prometheus TSDB | Full retention (costly) |
+| Learning curve | One ConfigMap | PromQL + alert rules | Platform-specific DSL |
+
+## Not a monitoring platform
+
+kwatch is not a metrics collector, dashboard, or observability backend.
+There is no metrics/TSDB storage, no dashboards, no log storage, and no
+query language. kwatch is the alarm — your existing platform is the archive.
+
+For full observability, pair kwatch with Prometheus + Grafana for metrics,
+or Loki for logs. kwatch handles the one thing a dashboard cannot: telling
+you something broke *right now*.
 
 ## ⚙️ Configuration
 
@@ -213,7 +272,20 @@ silences:
 
 Hot-applied: `maxRecentLogLines`, `silences`, `severityByOwnerKind`. Restart-only fields are logged and skipped. CR deletion restores boot-time ConfigMap snapshot.
 
-
+**Example KwatchConfig CR:**
+```yaml
+apiVersion: kwatch.abahmed.dev/v1alpha1
+kind: KwatchConfig
+metadata:
+  name: kwatch-config
+  namespace: kwatch
+spec:
+  maxRecentLogLines: 100
+  silences:
+    - namespaces: ["kube-system"]
+  severityByOwnerKind:
+    StatefulSet: "high"
+```
 
 ### 🚫 Inhibition
 
