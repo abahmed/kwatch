@@ -118,6 +118,8 @@ type Config struct {
 	// ordering across pods becomes non-deterministic (engine dedup unaffected).
 	Workers int `yaml:"workers"`
 
+	// CrdConfig configures the KwatchConfig CRD watcher.
+	CrdConfig CrdConfig `yaml:"crd"`
 }
 
 // App confing struct
@@ -209,6 +211,12 @@ type DaemonSetMonitor struct {
 // CronJobMonitor configures failed/suspended CronJob detection.
 type CronJobMonitor struct {
 	// Enabled if set to true, it will watch CronJobs for failures or suspension.
+	Enabled bool `yaml:"enabled"`
+}
+
+// CrdConfig configures the KwatchConfig CRD watcher.
+type CrdConfig struct {
+	// Enabled if set to true, watches KwatchConfig CRs for live config changes.
 	Enabled bool `yaml:"enabled"`
 }
 

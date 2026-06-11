@@ -66,6 +66,22 @@ func getKubeconfigPath() string {
 	return kubeconfigPath
 }
 
+func GetRestConfig(appConfig *config.App) (*rest.Config, error) {
+	clientConfig, err := rest.InClusterConfig()
+	if err != nil {
+		klog.InfoS("cannot get kubernetes in cluster config", "error", err)
+		kubeconfigPath := getKubeconfigPath()
+		clientConfig, err = clientcmd.BuildConfigFromFlags("", kubeconfigPath)
+		if err != nil {
+			return nil, fmt.Errorf("cannot build kubernetes out of cluster config: %w", err)
+		}
+	}
+	if len(appConfig.ProxyURL) > 0 && clientConfig.Proxy == nil {
+		clientConfig.Proxy = http.ProxyURL(nil)
+	}
+	return clientConfig, nil
+}
+
 func GetNamespace() string {
 	namespace := os.Getenv("POD_NAMESPACE")
 	if namespace == "" {

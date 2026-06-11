@@ -13,6 +13,7 @@ import (
 	"github.com/abahmed/kwatch/internal/constant"
 	"github.com/abahmed/kwatch/internal/controller"
 	"github.com/abahmed/kwatch/internal/correlation"
+	"github.com/abahmed/kwatch/internal/crdwatch"
 	"github.com/abahmed/kwatch/internal/enricher"
 	"github.com/abahmed/kwatch/internal/handler"
 	"github.com/abahmed/kwatch/internal/health"
@@ -108,6 +109,18 @@ func main() {
 		go correlator.StartCleanup(ctx)
 		go pvcMonitor.Start(ctx)
 		go hbMonitor.Start(ctx)
+		if cfg.CrdConfig.Enabled {
+			restCfg, err := client.GetRestConfig(&cfg.App)
+			if err != nil {
+				klog.ErrorS(err, "failed to get rest config for CRD watcher")
+			} else {
+				resync := time.Duration(cfg.ResyncSeconds) * time.Second
+				w := crdwatch.New(cfg, alertManager, restCfg, k8s.GetNamespace(), resync)
+				if err := w.Start(ctx); err != nil {
+					klog.ErrorS(err, "CRD watcher error")
+				}
+			}
+		}
 		sm.NotifyStartup()
 		workers := cfg.Workers
 		if workers < 1 {
