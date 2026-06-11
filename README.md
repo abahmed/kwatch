@@ -88,6 +88,44 @@ To deploy **kwatch**, execute following command:
 kubectl apply -f https://raw.githubusercontent.com/abahmed/kwatch/v0.10.5/deploy/deploy.yaml
 ```
 
+## ⬆️ Upgrading from v0.10.x
+
+Most changes in this release are additive and off-by-default. The
+following WILL change behavior you may depend on:
+
+### Alert formats changed — update anything that parses kwatch messages
+- **Incident messages** now include a `Severity:` line and `Logs:` /
+  `Events:` blocks on creation, and there are new update / stale /
+  resolved / digest message shapes.
+- **Node alerts** were a single plain string
+  (`Node <name> is not ready: <reason> - <message>`). They are now full
+  incidents with lifecycle messages (🚨 create → ✅ resolve), deduplication
+  and cooldown — expect different text and fewer repeats.
+- **PVC alerts** now use the stable reason `VolumeUsageHigh` with the
+  live percentage in the hint (previously the percentage was part of the
+  alert itself). Update any silences, routes, or webhook consumers that
+  matched the old strings.
+
+### kwatch restarts no longer re-alert existing incidents
+kwatch now persists a baseline of already-broken workloads (in its state
+ConfigMap) and suppresses re-alerts for them across restarts. If you
+relied on restarting kwatch to re-page open issues, configure
+`correlation.renotify` instead.
+
+### Custom container args are now parsed
+The binary accepts flags and subcommands (`--version`, `lint`, `replay`).
+Unrecognized flags now fail at startup instead of being silently ignored —
+review any custom `args:` in your Deployment. Standard klog flags
+(`-v`, `-logtostderr`, …) remain supported.
+
+### RBAC — required only for newly enabled features
+The default path needs no new permissions. Apply the updated
+chart/manifests BEFORE enabling any of: `leaderElection`
+(coordination.k8s.io/leases), `jobMonitor` / `cronJobMonitor` (batch),
+`hpaMonitor` (autoscaling), `tlsMonitor` (secrets — read-widening; see
+the chart README for a namespace-scoped alternative), `crd.enabled`
+(kwatch.abahmed.dev/kwatchconfigs + installing `deploy/crd.yaml`).
+
 ## What it catches
 
 | Signal | Default | Details |
