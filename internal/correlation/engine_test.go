@@ -291,6 +291,44 @@ func TestClearSeenUnsuppresses(t *testing.T) {
 	assert.Equal(t, model.ActionCreate, action)
 }
 
+func TestBaselineSuppressesForFullTTL(t *testing.T) {
+	e := newTestEngine()
+	e.config.StartupQuiet = 0
+	e.config.BaselineTTL = 24 * time.Hour
+
+	incidentKey := BuildKey("default", "deploy-1", "CrashLoopBackOff", "")
+	// entry created 1 hour ago — well within the 24h TTL
+	e.SetSeen(map[string]int64{incidentKey: time.Now().Add(-1 * time.Hour).Unix()})
+
+	ev := event.Event{
+		PodName: "pod-1", Namespace: "default", Reason: "CrashLoopBackOff",
+	}
+	_, action := e.Process(ev, "deploy-1", nil)
+	assert.Equal(t, model.ActionSkip, action)
+}
+
+func TestBaselineExpiredPrunes(t *testing.T) {
+	e := newTestEngine()
+	e.config.StartupQuiet = 0
+	e.config.BaselineTTL = 24 * time.Hour
+
+	incidentKey := BuildKey("default", "deploy-1", "CrashLoopBackOff", "")
+	// entry created 25 hours ago — past the 24h TTL
+	e.SetSeen(map[string]int64{incidentKey: time.Now().Add(-25 * time.Hour).Unix()})
+
+	ev := event.Event{
+		PodName: "pod-1", Namespace: "default", Reason: "CrashLoopBackOff",
+	}
+	_, action := e.Process(ev, "deploy-1", nil)
+	assert.Equal(t, model.ActionCreate, action)
+
+	// entry should be pruned from seen
+	e.mu.Lock()
+	_, stillSeen := e.seen[incidentKey]
+	e.mu.Unlock()
+	assert.False(t, stillSeen, "expired baseline entry should be pruned")
+}
+
 func TestRemovePodClearsSeen(t *testing.T) {
 	e := NewEngine(Config{
 		Window:   10 * time.Minute,

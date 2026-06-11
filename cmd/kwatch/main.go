@@ -97,14 +97,16 @@ func main() {
 		startupQuiet = 30
 	}
 
+	baselineCh := make(chan map[string]int64, 1)
+	go startBaselineSaver(ctx, stateMgr, baselineCh, 0)
+
 	correlator := correlation.NewEngine(correlation.Config{
 		Window:            time.Duration(cfg.Correlation.Window) * time.Minute,
 		Cooldown:          time.Duration(cfg.Correlation.Cooldown) * time.Minute,
 		StaleThreshold:    time.Duration(cfg.Correlation.StaleThreshold) * time.Minute,
 		LifecycleInterval: time.Duration(cfg.Correlation.LifecycleInterval) * time.Minute,
 		StartupQuiet:      time.Duration(startupQuiet) * time.Second,
-		Baseline:                 baseline,
-		BaselineDebounce:         time.Duration(cfg.BaselineDebounce) * time.Minute,
+		Baseline:          baseline,
 		Enricher:          &enricher.DefaultEnricher{SeverityByOwnerKind: cfg.SeverityByOwnerKind},
 		EscalationEnabled:         cfg.Correlation.Escalation.Enabled,
 		EscalationTiers:           cfg.Correlation.Escalation.Tiers,
@@ -122,8 +124,14 @@ func main() {
 			}
 		},
 		OnBaselineChange: func(b map[string]int64) {
-			if err := stateMgr.SaveBaseline(context.Background(), b); err != nil {
-				klog.ErrorS(err, "failed to save baseline")
+			select {
+			case baselineCh <- b:
+			default:
+				select {
+				case <-baselineCh:
+				default:
+				}
+				baselineCh <- b
 			}
 		},
 	})
@@ -282,6 +290,40 @@ func runReplay() {
 	if err := scanner.Err(); err != nil {
 		fmt.Fprintf(os.Stderr, "ERROR: reading stdin: %v\n", err)
 		os.Exit(1)
+	}
+}
+
+// startBaselineSaver coalesces baseline writes: at most one ConfigMap write
+// every interval. The latest snapshot always wins. Use 0 for the default
+// interval (10 seconds).
+func startBaselineSaver(ctx context.Context, stateMgr interface{ SaveBaseline(context.Context, map[string]int64) error }, ch <-chan map[string]int64, interval time.Duration) {
+	if interval <= 0 {
+		interval = 10 * time.Second
+	}
+	var pending map[string]int64
+	var timer *time.Timer
+	var timerC <-chan time.Time
+	for {
+		select {
+		case b := <-ch:
+			pending = b
+			if timer == nil {
+				timer = time.NewTimer(interval)
+			} else {
+				timer.Reset(interval)
+			}
+			timerC = timer.C
+		case <-timerC:
+			if err := stateMgr.SaveBaseline(context.Background(), pending); err != nil {
+				klog.ErrorS(err, "failed to save baseline")
+			}
+			timerC = nil
+		case <-ctx.Done():
+			if timer != nil {
+				timer.Stop()
+			}
+			return
+		}
 	}
 }
 

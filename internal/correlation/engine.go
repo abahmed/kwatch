@@ -29,9 +29,8 @@ type Config struct {
 	StartupQuiet      time.Duration
 	Enricher          enricher.Enricher
 	LifecycleHook     func(inc *model.Incident, action model.IncidentAction)
-	BaselineTTL       time.Duration
-	BaselineDebounce  time.Duration
-	Baseline          map[string]int64
+	BaselineTTL      time.Duration
+	Baseline         map[string]int64
 	OnBaselineChange  func(baseline map[string]int64)
 	EscalationEnabled bool
 	EscalationTiers   []int
@@ -130,20 +129,10 @@ func (e *Engine) SetSeen(baseline map[string]int64) {
 
 func (e *Engine) isBaselined(incidentKey string) bool {
 	if ts, ok := e.seen[incidentKey]; ok {
-		age := time.Since(time.Unix(ts, 0))
-		debounce := e.config.BaselineDebounce
-		if debounce <= 0 {
-			debounce = e.config.BaselineTTL
-		}
-		if debounce > e.config.BaselineTTL {
-			debounce = e.config.BaselineTTL
-		}
-		if age < debounce {
+		if time.Since(time.Unix(ts, 0)) < e.config.BaselineTTL {
 			return true
 		}
-		if age >= e.config.BaselineTTL {
-			delete(e.seen, incidentKey)
-		}
+		delete(e.seen, incidentKey)
 	}
 	if e.config.StartupQuiet > 0 && time.Since(e.startedAt) < e.config.StartupQuiet {
 		if len(e.seen) == 0 && len(e.state) == 0 {

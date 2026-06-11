@@ -24,8 +24,7 @@ type Config struct {
 	HealthCheck HealthCheck `yaml:"healthCheck"`
 
 	// Correlation configuration for incident dedup/grouping
-	BaselineDebounce int          `yaml:"baselineDebounce"`
-	Correlation      Correlation `yaml:"correlation"`
+	Correlation Correlation `yaml:"correlation"`
 
 	// MaxRecentLogLines optional max tail log lines in messages,
 	// if it's not provided it will get all log lines
