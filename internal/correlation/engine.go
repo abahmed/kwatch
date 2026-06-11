@@ -2,6 +2,7 @@ package correlation
 
 import (
 	"context"
+	"fmt"
 	"strconv"
 	"strings"
 	"sync"
@@ -24,7 +25,8 @@ type Config struct {
 	BaselineTTL       time.Duration
 	Baseline          map[string]int64
 	OnBaselineChange  func(baseline map[string]int64)
-	EscalationTiers   []Tier
+	EscalationEnabled bool
+	EscalationTiers   []int
 }
 
 // BuildKey constructs the incident key used for dedup, grouping, and baseline.
@@ -32,42 +34,28 @@ func BuildKey(namespace, owner, reason, container string) string {
 	return namespace + ":" + owner + ":" + reason + ":" + container
 }
 
-var defaultSeverityNames = []string{"normal", "high", "critical"}
-
-// Tier pairs a restart-count threshold with a severity name.
-type Tier struct {
-	Threshold int
-	Severity  string
-}
-
-// BuildTiers converts int thresholds into severity-labelled tiers.
-func BuildTiers(thresholds []int) []Tier {
-	if len(thresholds) == 0 {
-		return nil
-	}
-	names := defaultSeverityNames
-	// ensure we have enough names
-	for len(names) < len(thresholds)+1 {
-		names = append(names, "critical")
-	}
-	tiers := make([]Tier, len(thresholds))
-	for i, t := range thresholds {
-		tiers[i] = Tier{Threshold: t, Severity: names[i+1]}
-	}
-	return tiers
-}
-
-// escalationSeverity returns the severity name for a given restart count
-// based on the configured thresholds. Returns empty if no tier is matched.
-func escalationSeverity(restartCount int, tiers []Tier) string {
-	// walk from highest to lowest so we return the highest matched tier
-	best := ""
-	for _, t := range tiers {
-		if restartCount >= t.Threshold {
-			best = t.Severity
+// crossedTier returns the highest index of a tier whose threshold was
+// crossed when moving from prev to new restarts, or -1.
+func crossedTier(prev, new int, tiers []int) int {
+	hit := -1
+	for i, t := range tiers {
+		if prev < t && new >= t {
+			hit = i
 		}
 	}
-	return best
+	return hit
+}
+
+// escalateSeverity moves severity one level up: "" → "high", "high" → "critical", "critical" → "critical".
+func escalateSeverity(s string) string {
+	switch s {
+	case "", "normal":
+		return "high"
+	case "high":
+		return "critical"
+	default:
+		return s
+	}
 }
 
 const defaultBaselineTTL = 24 * time.Hour
@@ -217,12 +205,6 @@ func (e *Engine) Process(ev event.Event, owner string, cs *model.ContainerState)
 		r = "CrashLoopHighFrequency"
 	}
 
-	if ev.Severity == "" && cs != nil {
-		if s := escalationSeverity(int(cs.RestartCount), e.config.EscalationTiers); s != "" {
-			ev.Severity = s
-		}
-	}
-
 	key := BuildKey(ev.Namespace, owner, r, ev.ContainerName)
 
 	if e.isBaselined(key) {
@@ -231,6 +213,27 @@ func (e *Engine) Process(ev event.Event, owner string, cs *model.ContainerState)
 	now := time.Now()
 
 	if inc, ok := e.state[key]; ok {
+		if e.config.EscalationEnabled && cs != nil {
+			prev := inc.RestartCount
+			cur := int(cs.RestartCount)
+			if t := crossedTier(prev, cur, e.config.EscalationTiers); t >= 0 {
+				ev.Severity = escalateSeverity(ev.Severity)
+				e.config.Enricher.Enrich(&ev, inc)
+				ev.Severity = escalateSeverity(ev.Severity)
+				inc.Severity = ev.Severity
+				inc.Hint = fmt.Sprintf("restart count crossed %d", e.config.EscalationTiers[t])
+				inc.Count++
+				inc.LastSeen = now
+				inc.State = model.StateActive
+				inc.LastUpdate = now
+				inc.RestartCount = cur
+				if ev.PodName != "" {
+					inc.Resources[ev.PodName] = true
+				}
+				inc.LastContainerState = cs
+				return inc, model.ActionUpdate
+			}
+		}
 		if now.Before(inc.LastSeen.Add(e.config.Cooldown)) {
 			return inc, model.ActionSkip
 		}
@@ -242,6 +245,9 @@ func (e *Engine) Process(ev event.Event, owner string, cs *model.ContainerState)
 			inc.Resources[ev.PodName] = true
 		}
 		inc.LastContainerState = cs
+		if cs != nil {
+			inc.RestartCount = int(cs.RestartCount)
+		}
 		e.config.Enricher.Enrich(&ev, inc)
 		return inc, model.ActionUpdate
 	}
@@ -268,6 +274,9 @@ func (e *Engine) Process(ev event.Event, owner string, cs *model.ContainerState)
 		inc.Resources[ev.PodName] = true
 	}
 	inc.LastContainerState = cs
+	if cs != nil {
+		inc.RestartCount = int(cs.RestartCount)
+	}
 	e.config.Enricher.Enrich(&ev, inc)
 	e.state[key] = inc
 	return inc, model.ActionCreate

@@ -82,11 +82,6 @@ func main() {
 		startupQuiet = 30
 	}
 
-	var escTiers []correlation.Tier
-	if cfg.Correlation.Escalation.Enabled {
-		escTiers = correlation.BuildTiers(cfg.Correlation.Escalation.Tiers)
-	}
-
 	correlator := correlation.NewEngine(correlation.Config{
 		Window:            time.Duration(cfg.Correlation.Window) * time.Minute,
 		Cooldown:          time.Duration(cfg.Correlation.Cooldown) * time.Minute,
@@ -95,7 +90,8 @@ func main() {
 		StartupQuiet:      time.Duration(startupQuiet) * time.Second,
 		Baseline:          baseline,
 		Enricher:          &enricher.DefaultEnricher{SeverityByOwnerKind: cfg.SeverityByOwnerKind},
-		EscalationTiers:   escTiers,
+		EscalationEnabled: cfg.Correlation.Escalation.Enabled,
+		EscalationTiers:   cfg.Correlation.Escalation.Tiers,
 		LifecycleHook: func(inc *model.Incident, action model.IncidentAction) {
 			if action != model.ActionSkip {
 				alertManager.NotifyIncident(inc, action)
