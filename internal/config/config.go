@@ -132,6 +132,9 @@ type Config struct {
 type HpaMonitor struct {
 	// Enabled if set to true, it will watch HPAs for maxed-out replicas.
 	Enabled bool `yaml:"enabled"`
+
+	// SustainedMinutes is how long the HPA must be maxed before alerting.
+	SustainedMinutes int `yaml:"sustainedMinutes"`
 }
 
 // TlsMonitor configures TLS certificate expiry monitoring.

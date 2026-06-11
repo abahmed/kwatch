@@ -1,6 +1,7 @@
 package handler
 
 import (
+	"sync"
 	"time"
 
 	"github.com/abahmed/kwatch/internal/alert"
@@ -67,6 +68,8 @@ type handler struct {
 	ssLister              appsv1lister.StatefulSetLister
 	eventLister           corev1lister.EventLister
 	hpaLister             autoscalingv2lister.HorizontalPodAutoscalerLister
+	firstMaxedHPAs       map[string]time.Time
+	hpaMu                sync.Mutex
 }
 
 func NewHandler(
@@ -118,6 +121,7 @@ func NewHandler(
 		containerEnrichers: containerEnrichers,
 		correlator:         correlator,
 		alertManager:       alertManager,
+		firstMaxedHPAs:     make(map[string]time.Time),
 	}
 }
 
