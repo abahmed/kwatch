@@ -17,6 +17,10 @@ type DefaultEnricher struct {
 	SeverityByOwnerKind map[string]string
 }
 
+func (e *DefaultEnricher) SetSeverityMap(m map[string]string) {
+	e.SeverityByOwnerKind = m
+}
+
 func (e *DefaultEnricher) Enrich(ev *event.Event, inc *model.Incident) {
 	inc.OwnerKind = ev.OwnerKind
 	inc.ContainerName = ev.ContainerName

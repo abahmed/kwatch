@@ -12,7 +12,6 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/abahmed/kwatch/internal/alert"
 	"github.com/abahmed/kwatch/internal/client"
 	"github.com/abahmed/kwatch/internal/config"
 	"github.com/abahmed/kwatch/internal/constant"
@@ -79,7 +78,6 @@ func main() {
 	sm.HandleStartup(ctx)
 
 	healthServer := health.NewHealthServer(cfg.HealthCheck)
-	healthServer.Start(ctx)
 
 	alertManager := sm.GetAlertManager()
 	alertManager.SetSilences(cfg.Silences)
@@ -130,6 +128,7 @@ func main() {
 
 	healthServer.SetIncidentAPI(correlator)
 	healthServer.SetAlertManager(alertManager)
+	healthServer.Start(ctx)
 
 	pvcMonitor := pvc.NewPvcMonitor(k8sClient, &cfg.PvcMonitor, alertManager, correlator)
 	hbMonitor := heartbeat.NewHeartbeatMonitor(&cfg.HeartbeatMonitor)
@@ -169,7 +168,7 @@ func main() {
 				klog.ErrorS(err, "failed to get rest config for CRD watcher")
 			} else {
 				resync := time.Duration(cfg.ResyncSeconds) * time.Second
-				w := crdwatch.New(cfg, alertManager, restCfg, k8s.GetNamespace(), resync)
+				w := crdwatch.New(cfg, alertManager, correlator, restCfg, k8s.GetNamespace(), resync)
 				if err := w.Start(ctx); err != nil {
 					klog.ErrorS(err, "CRD watcher error")
 				}
@@ -268,11 +267,9 @@ func runReplay() {
 		os.Exit(1)
 	}
 
-	am := &alert.AlertManager{}
-	am.Init(cfg.Alert, &cfg.App)
-	am.SetTemplates(cfg.Templates)
-	if cfg.MaxRecentLogLines > 0 {
-		am.SetMaxLogLines(int(cfg.MaxRecentLogLines))
+	providers := make([]string, 0, len(cfg.Alert))
+	for k := range cfg.Alert {
+		providers = append(providers, k)
 	}
 
 	scanner := bufio.NewScanner(os.Stdin)
@@ -286,7 +283,8 @@ func runReplay() {
 			fmt.Fprintf(os.Stderr, "ERROR: invalid event line: %v\n  %s\n", err, line)
 			continue
 		}
-		am.Notify(fmt.Sprintf("[replay] %s/%s %s: %s", ev.Namespace, ev.PodName, ev.Reason, ev.Events))
+		msg := fmt.Sprintf("[replay] %s/%s %s: %s", ev.Namespace, ev.PodName, ev.Reason, ev.Events)
+		fmt.Printf("would notify %v: %s\n", providers, msg)
 	}
 	if err := scanner.Err(); err != nil {
 		fmt.Fprintf(os.Stderr, "ERROR: reading stdin: %v\n", err)

@@ -28,9 +28,14 @@ var gvr = schema.GroupVersionResource{
 }
 
 // Watcher monitors KwatchConfig CRs and applies safe config changes live.
+type SeveritySetter interface {
+	SetSeverityMap(map[string]string)
+}
+
 type Watcher struct {
 	cfg           *config.Config
 	alertManager  *alert.AlertManager
+	engine        SeveritySetter
 	restConfig    *rest.Config
 	namespace     string
 	resync        time.Duration
@@ -38,10 +43,11 @@ type Watcher struct {
 	fallbackCfg   *config.Config // boot-time values restored on CR delete
 }
 
-func New(cfg *config.Config, alertManager *alert.AlertManager, restConfig *rest.Config, namespace string, resync time.Duration) *Watcher {
+func New(cfg *config.Config, alertManager *alert.AlertManager, engine SeveritySetter, restConfig *rest.Config, namespace string, resync time.Duration) *Watcher {
 	return &Watcher{
 		cfg:          cfg,
 		alertManager: alertManager,
+		engine:       engine,
 		restConfig:   restConfig,
 		namespace:    namespace,
 		resync:       resync,
@@ -118,7 +124,7 @@ func (w *Watcher) reload(obj interface{}) {
 		w.alertManager.SetMaxLogLines(int(spec.MaxRecentLogLines))
 	}
 
-	if len(spec.Silences) > 0 {
+	{
 		silences := make([]config.SilenceRule, 0, len(spec.Silences))
 		for _, s := range spec.Silences {
 			silences = append(silences, config.SilenceRule{
@@ -131,7 +137,7 @@ func (w *Watcher) reload(obj interface{}) {
 	}
 
 	if spec.SeverityByOwnerKind != nil {
-		w.cfg.SeverityByOwnerKind = spec.SeverityByOwnerKind
+		w.engine.SetSeverityMap(spec.SeverityByOwnerKind)
 	}
 
 	// Log restart-only fields that can't be hot-applied
@@ -149,7 +155,10 @@ func (w *Watcher) restore() {
 	defer w.mu.Unlock()
 
 	w.alertManager.SetSilences(w.fallbackCfg.Silences)
-	w.cfg.SeverityByOwnerKind = w.fallbackCfg.SeverityByOwnerKind
+	if w.fallbackCfg.MaxRecentLogLines > 0 {
+		w.alertManager.SetMaxLogLines(int(w.fallbackCfg.MaxRecentLogLines))
+	}
+	w.engine.SetSeverityMap(w.fallbackCfg.SeverityByOwnerKind)
 
 	klog.InfoS("crdwatch: restored config from boot-time snapshot")
 }

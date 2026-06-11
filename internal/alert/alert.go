@@ -442,10 +442,13 @@ func (a *AlertManager) NotifyIncident(inc *model.Incident, action model.Incident
 				}, entry.maxAttempts, entry.retryDelay, p.Name())
 			}
 		}
-		if err != nil && entry.fallback != nil {
-			fbErr := entry.fallback.provider.SendMessage("[fallback — primary " + p.Name() + " failed] " + msg)
-			if fbErr != nil {
-				klog.ErrorS(fbErr, "fallback delivery failed", "provider", entry.fallback.provider.Name())
+		if err != nil {
+			klog.ErrorS(err, "failed to send", "provider", p.Name(), "key", inc.Key)
+			if entry.fallback != nil {
+				fbErr := entry.fallback.provider.SendMessage("[fallback — primary " + p.Name() + " failed] " + msg)
+				if fbErr != nil {
+					klog.ErrorS(fbErr, "fallback delivery failed", "provider", entry.fallback.provider.Name())
+				}
 			}
 		}
 	}

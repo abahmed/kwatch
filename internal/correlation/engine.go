@@ -379,6 +379,8 @@ func (e *Engine) MarkResolved(key string) {
 	}
 	inc.State = model.StateResolved
 	delete(e.seen, key)
+	delete(e.renotifyCount, key)
+	delete(e.lastRenotify, key)
 	e.mu.Unlock()
 
 	if hook := e.config.LifecycleHook; hook != nil {
@@ -408,10 +410,12 @@ func (e *Engine) RemovePod(namespace, podName string) {
 		if !inc.Resources[podName] {
 			continue
 		}
-		delete(inc.Resources, podName)
+			delete(inc.Resources, podName)
 		if len(inc.Resources) == 0 && inc.State != model.StateResolved && inc.State != model.StateStale {
 			inc.State = model.StateResolved
 			delete(e.seen, key)
+			delete(e.renotifyCount, key)
+			delete(e.lastRenotify, key)
 			baselineChanged = true
 			pending = append(pending, transition{inc, model.ActionResolved})
 		}
@@ -449,6 +453,8 @@ func (e *Engine) ResolveByResource(resource, name string) {
 		if inc.Resource == resource && inc.Name == name && inc.State != model.StateResolved && inc.State != model.StateStale {
 			inc.State = model.StateResolved
 			delete(e.seen, key)
+			delete(e.renotifyCount, key)
+			delete(e.lastRenotify, key)
 			baselineChanged = true
 			pending = append(pending, transition{inc, model.ActionResolved})
 		}
@@ -505,6 +511,8 @@ func (e *Engine) cleanup() {
 				delete(e.activeNodeIncidents, inc.Name)
 			}
 			delete(e.state, key)
+			delete(e.renotifyCount, key)
+			delete(e.lastRenotify, key)
 		}
 	}
 }
@@ -611,4 +619,12 @@ func (e *Engine) buildDigestSummary() string {
 	}
 	window := e.config.StormWindow
 	return fmt.Sprintf("⚡ %d new incidents in %s — %s", len(e.digestBuf), window.String(), strings.Join(top, "; "))
+}
+
+func (e *Engine) SetSeverityMap(m map[string]string) {
+	e.mu.Lock()
+	defer e.mu.Unlock()
+	if en, ok := e.config.Enricher.(*enricher.DefaultEnricher); ok {
+		en.SetSeverityMap(m)
+	}
 }
