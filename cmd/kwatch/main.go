@@ -56,8 +56,8 @@ func main() {
 
 	alertManager := sm.GetAlertManager()
 	alertManager.SetSilences(cfg.Silences)
-	if cfg.MaxLogBlockLines > 0 {
-		alertManager.SetMaxLogBlockLines(cfg.MaxLogBlockLines)
+	if cfg.MaxRecentLogLines > 0 {
+		alertManager.SetMaxLogLines(int(cfg.MaxRecentLogLines))
 	}
 
 	up := upgrader.NewUpgrader(&cfg.Upgrader, alertManager, sm.GetStateManager())

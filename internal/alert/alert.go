@@ -36,13 +36,15 @@ type providerEntry struct {
 }
 
 type AlertManager struct {
-	entries          []providerEntry
-	silences         []silenceMatcher
-	maxLogBlockLines int
+	entries      []providerEntry
+	silences     []silenceMatcher
+	maxLogLines int
 }
 
-func (a *AlertManager) SetMaxLogBlockLines(n int) {
-	a.maxLogBlockLines = n
+func (a *AlertManager) SetMaxLogLines(n int) {
+	if n > 0 {
+		a.maxLogLines = n
+	}
 }
 
 type silenceMatcher struct {
@@ -360,7 +362,7 @@ func (a *AlertManager) NotifyIncident(inc *model.Incident, action model.Incident
 		return
 	}
 
-	maxLines := a.maxLogBlockLines
+	maxLines := a.maxLogLines
 	if maxLines <= 0 {
 		maxLines = 100
 	}

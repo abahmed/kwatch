@@ -11,8 +11,7 @@ metadata:
 data:
   config.yaml: |
     # ── General ──────────────────────────────────────────────
-    maxRecentLogLines: <optional_number_of_lines>
-    maxLogBlockLines: 50
+    maxRecentLogLines: <optional_number_of_lines>    # also caps logs/events in alert message blocks (default 100)
     ignoreFailedGracefulShutdown: true
 
     # Pods stuck in Pending beyond this threshold (seconds) trigger an alert

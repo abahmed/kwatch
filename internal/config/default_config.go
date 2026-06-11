@@ -45,7 +45,6 @@ func DefaultConfig() *Config {
 		CronJobMonitor: CronJobMonitor{
 			Enabled: false,
 		},
-		Workers:          1,
-		MaxLogBlockLines: 50,
+		Workers: 1,
 	}
 }

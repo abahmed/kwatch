@@ -67,8 +67,7 @@ kubectl apply -f https://raw.githubusercontent.com/abahmed/kwatch/v0.10.5/deploy
 
 | Parameter                      | Description   |
 |:-------------------------------|:-----------------------|
-| `maxRecentLogLines`            | Optional Max tail log lines in messages, if it's not provided it will get all log lines |
-| `maxLogBlockLines`            | Maximum lines from logs/events included in alert message blocks (default: 50) |
+| `maxRecentLogLines`            | Max tail log lines fetched from API and displayed in alert message blocks (default: 100) |
 | `workers`                     | Number of concurrent reconcile workers (default: 1). Raise for large clusters. |
 | `namespaces`                   | Optional list of namespaces that you want to watch or forbid, if it's not provided it will watch all namespaces. If you want to forbid a namespace, configure it with `!<namespace name>`. You can either set forbidden namespaces or allowed, not both. |
 | `reasons`                      | Optional list of reasons that you want to watch or forbid, if it's not provided it will watch all reasons. If you want to forbid a reason, configure it with `!<reason>`. You can either set forbidden reasons or allowed, not both.                     |

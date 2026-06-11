@@ -15,7 +15,6 @@ type KwatchConfig struct {
 // KwatchConfigSpec defines the desired kwatch configuration.
 type KwatchConfigSpec struct {
 	MaxRecentLogLines          int64                  `json:"maxRecentLogLines,omitempty"`
-	MaxLogBlockLines           int                    `json:"maxLogBlockLines,omitempty"`
 	IgnoreFailedGracefulShutdown bool                 `json:"ignoreFailedGracefulShutdown,omitempty"`
 	Namespaces                 []string               `json:"namespaces,omitempty"`
 	Reasons                    []string               `json:"reasons,omitempty"`

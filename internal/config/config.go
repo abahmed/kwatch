@@ -118,9 +118,6 @@ type Config struct {
 	// ordering across pods becomes non-deterministic (engine dedup unaffected).
 	Workers int `yaml:"workers"`
 
-	// MaxLogBlockLines is the maximum number of lines to include from logs
-	// and events in alert messages. Default 50.
-	MaxLogBlockLines int `yaml:"maxLogBlockLines"`
 }
 
 // App confing struct

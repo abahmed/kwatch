@@ -25,8 +25,6 @@ spec:
                 maxRecentLogLines:
                   type: integer
                   format: int64
-                maxLogBlockLines:
-                  type: integer
                 workers:
                   type: integer
                 ignoreFailedGracefulShutdown:
