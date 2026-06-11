@@ -20,7 +20,6 @@ type DefaultEnricher struct {
 func (e *DefaultEnricher) Enrich(ev *event.Event, inc *model.Incident) {
 	inc.OwnerKind = ev.OwnerKind
 	inc.ContainerName = ev.ContainerName
-	inc.RestartCount = ev.RestartCount
 	if ev.Hint != "" {
 		inc.Hint = ev.Hint
 	} else {

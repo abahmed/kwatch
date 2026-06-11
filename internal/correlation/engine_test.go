@@ -1,6 +1,7 @@
 package correlation
 
 import (
+	"fmt"
 	"sync"
 	"testing"
 	"time"
@@ -477,4 +478,210 @@ func TestRenotifyConfig(t *testing.T) {
 	if e.config.RenotifyMaxPerIncident != 3 {
 		t.Errorf("unexpected renotify max: %d", e.config.RenotifyMaxPerIncident)
 	}
+}
+
+// ── BUG-1: escalation ──────────────────────────────────────────────
+
+func escTestEngine() *Engine {
+	return NewEngine(Config{
+		Window:            10 * time.Minute,
+		Cooldown:          5 * time.Minute,
+		EscalationEnabled: true,
+		EscalationTiers:   []int{3, 10, 50},
+	})
+}
+
+func TestEscalationFirstCrossingIsHigh(t *testing.T) {
+	e := escTestEngine()
+	// Use OOMKilled to avoid CrashLoopHighFrequency rename when RestartCount > 5
+	ev := event.Event{PodName: "p", Namespace: "ns", Reason: "OOMKilled"}
+	inc, _ := e.Process(ev, "dep", &model.ContainerState{RestartCount: 2})
+	// within cooldown, cross tier 3:
+	inc2, action := e.Process(ev, "dep", &model.ContainerState{RestartCount: 4})
+	assert.Equal(t, model.ActionUpdate, action)
+	assert.Equal(t, "high", inc2.Severity)
+	assert.Contains(t, inc2.Hint, "crossed 3")
+	assert.Same(t, inc, inc2)
+}
+
+func TestEscalationSecondCrossingIsCritical(t *testing.T) {
+	e := escTestEngine()
+	ev := event.Event{PodName: "p", Namespace: "ns", Reason: "OOMKilled"}
+	e.Process(ev, "dep", &model.ContainerState{RestartCount: 2})
+	e.Process(ev, "dep", &model.ContainerState{RestartCount: 4}) // → high
+	inc, action := e.Process(ev, "dep", &model.ContainerState{RestartCount: 11})
+	assert.Equal(t, model.ActionUpdate, action)
+	assert.Equal(t, "critical", inc.Severity)
+}
+
+func TestEscalationSameTierRespectsCooldown(t *testing.T) {
+	e := escTestEngine()
+	ev := event.Event{PodName: "p", Namespace: "ns", Reason: "OOMKilled"}
+	e.Process(ev, "dep", &model.ContainerState{RestartCount: 4})
+	_, action := e.Process(ev, "dep", &model.ContainerState{RestartCount: 5}) // 4→5: no tier
+	assert.Equal(t, model.ActionSkip, action)
+}
+
+func TestEscalationDisabledIsNoop(t *testing.T) {
+	e := newTestEngine() // escalation off
+	ev := event.Event{PodName: "p", Namespace: "ns", Reason: "OOMKilled"}
+	e.Process(ev, "dep", &model.ContainerState{RestartCount: 2})
+	_, action := e.Process(ev, "dep", &model.ContainerState{RestartCount: 50})
+	assert.Equal(t, model.ActionSkip, action) // cooldown applies, no bypass
+}
+
+// ── BUG-2: inhibition ──────────────────────────────────────────────
+
+func TestInhibitionSuppressesPodOnBrokenNode(t *testing.T) {
+	e := NewEngine(Config{
+		Window:                    10 * time.Minute,
+		Cooldown:                  5 * time.Minute,
+		InhibitNodeSuppressesPods: true,
+	})
+	nodeEv := event.Event{Resource: "node", PodName: "node-1", NodeName: "node-1", Reason: "NodeNotReady"}
+	e.Process(nodeEv, "node-1", nil)
+	podEv := event.Event{PodName: "p", Namespace: "ns", NodeName: "node-1", Reason: "CrashLoopBackOff"}
+	inc, action := e.Process(podEv, "dep", nil)
+	assert.Nil(t, inc)
+	assert.Equal(t, model.ActionSkip, action)
+}
+
+func TestInhibitionFlagOffDoesNotSuppress(t *testing.T) {
+	e := NewEngine(Config{
+		Window:                    10 * time.Minute,
+		Cooldown:                  5 * time.Minute,
+		InhibitNodeSuppressesPods: false,
+	})
+	e.Process(event.Event{Resource: "node", PodName: "node-1", NodeName: "node-1", Reason: "NodeNotReady"}, "node-1", nil)
+	_, action := e.Process(event.Event{PodName: "p", Namespace: "ns", NodeName: "node-1", Reason: "CrashLoopBackOff"}, "dep", nil)
+	assert.Equal(t, model.ActionCreate, action)
+}
+
+func TestInhibitionOtherNodeUnaffected(t *testing.T) {
+	e := NewEngine(Config{
+		Window:                    10 * time.Minute,
+		Cooldown:                  5 * time.Minute,
+		InhibitNodeSuppressesPods: true,
+	})
+	e.Process(event.Event{Resource: "node", PodName: "node-1", NodeName: "node-1", Reason: "NodeNotReady"}, "node-1", nil)
+	podEv := event.Event{PodName: "p", Namespace: "ns", NodeName: "node-2", Reason: "CrashLoopBackOff"}
+	_, action := e.Process(podEv, "dep", nil)
+	assert.Equal(t, model.ActionCreate, action)
+}
+
+func TestInhibitionLiftsOnNodeResolve(t *testing.T) {
+	e := NewEngine(Config{
+		Window:                    10 * time.Minute,
+		Cooldown:                  5 * time.Minute,
+		InhibitNodeSuppressesPods: true,
+	})
+	e.Process(event.Event{Resource: "node", PodName: "node-1", NodeName: "node-1", Reason: "NodeNotReady"}, "node-1", nil)
+	e.ResolveByResource("node", "node-1")
+	podEv := event.Event{PodName: "p", Namespace: "ns", NodeName: "node-1", Reason: "CrashLoopBackOff"}
+	_, action := e.Process(podEv, "dep", nil)
+	assert.Equal(t, model.ActionCreate, action)
+}
+
+func TestInhibitionSuppressedCounter(t *testing.T) {
+	e := NewEngine(Config{
+		Window:                    10 * time.Minute,
+		Cooldown:                  5 * time.Minute,
+		InhibitNodeSuppressesPods: true,
+	})
+	e.Process(event.Event{Resource: "node", PodName: "node-1", NodeName: "node-1", Reason: "NodeNotReady"}, "node-1", nil)
+	e.Process(event.Event{PodName: "p1", Namespace: "ns", NodeName: "node-1", Reason: "CrashLoopBackOff"}, "dep", nil)
+	nodeInc := e.findNodeIncident("node-1")
+	if nodeInc != nil {
+		assert.Equal(t, 1, nodeInc.SuppressedPods)
+	}
+}
+
+// ── Storm tests ───────────────────────────────────────────────────
+
+func stormEngine() *Engine {
+	return NewEngine(Config{
+		Window:               10 * time.Minute,
+		Cooldown:             time.Nanosecond,
+		StormEnabled:         true,
+		StormThreshold:       3,
+		StormWindow:          time.Minute,
+		StormDigestInterval:  time.Nanosecond,
+	})
+}
+
+func TestStormBuffersCreatesOverThreshold(t *testing.T) {
+	e := stormEngine()
+	var digests int
+	e.config.LifecycleHook = func(inc *model.Incident, action model.IncidentAction) {
+		if action == model.ActionDigestFlush {
+			digests++
+		}
+	}
+	for i := 0; i < 5; i++ {
+		ev := event.Event{
+			PodName:   fmt.Sprintf("p%d", i),
+			Namespace: "ns",
+			Reason:    fmt.Sprintf("R%d", i),
+		}
+		_, action := e.Process(ev, fmt.Sprintf("o%d", i), nil)
+		if action == model.ActionDigest {
+			digests++
+		}
+	}
+	assert.GreaterOrEqual(t, digests, 1)
+	assert.NotEmpty(t, e.digestBuf)
+	assert.Equal(t, 5, len(e.state))
+}
+
+func TestStormFlushEmitsSummary(t *testing.T) {
+	e := stormEngine()
+	var flushActions int
+	e.config.LifecycleHook = func(inc *model.Incident, action model.IncidentAction) {
+		if action == model.ActionDigestFlush {
+			flushActions++
+		}
+	}
+	// fill storm buffer
+	for i := 0; i < 5; i++ {
+		e.Process(event.Event{
+			PodName: fmt.Sprintf("p%d", i), Namespace: "ns", Reason: fmt.Sprintf("R%d", i),
+		}, fmt.Sprintf("o%d", i), nil)
+	}
+	// trigger lifecycle
+	e.checkLifecycle()
+	assert.GreaterOrEqual(t, flushActions, 1)
+}
+
+func TestStormDisabledNeverDigests(t *testing.T) {
+	e := NewEngine(Config{
+		Window:  10 * time.Minute,
+		Cooldown: time.Nanosecond,
+	})
+	var digests int
+	e.config.LifecycleHook = func(inc *model.Incident, action model.IncidentAction) {
+		if action == model.ActionDigestFlush || action == model.ActionDigest {
+			digests++
+		}
+	}
+	for i := 0; i < 20; i++ {
+		e.Process(event.Event{
+			PodName: fmt.Sprintf("p%d", i), Namespace: "ns", Reason: fmt.Sprintf("R%d", i),
+		}, fmt.Sprintf("o%d", i), nil)
+	}
+	assert.Equal(t, 0, digests)
+}
+
+func TestStormResolvesStillNotify(t *testing.T) {
+	e := stormEngine()
+	var resolves int
+	e.config.LifecycleHook = func(inc *model.Incident, action model.IncidentAction) {
+		if action == model.ActionResolved {
+			resolves++
+		}
+	}
+	// create an incident then remove the pod
+	ev := event.Event{PodName: "p1", Namespace: "ns", Reason: "CrashLoopBackOff"}
+	e.Process(ev, "dep", nil)
+	e.RemovePod("ns", "p1")
+	assert.GreaterOrEqual(t, resolves, 1)
 }

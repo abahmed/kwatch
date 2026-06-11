@@ -276,7 +276,8 @@ func (e *Engine) Process(ev event.Event, owner string, cs *model.ContainerState)
 	}
 
 	// Suppress pod incidents when the node has an active incident
-	if res == "pod" && ev.NodeName != "" && e.activeNodeIncidents[ev.NodeName] {
+	if e.config.InhibitNodeSuppressesPods &&
+		res == "pod" && ev.NodeName != "" && e.activeNodeIncidents[ev.NodeName] {
 		if nodeInc := e.findNodeIncident(ev.NodeName); nodeInc != nil {
 			nodeInc.SuppressedPods++
 		}
@@ -290,10 +291,8 @@ func (e *Engine) Process(ev event.Event, owner string, cs *model.ContainerState)
 			prev := inc.RestartCount
 			cur := int(cs.RestartCount)
 			if t := crossedTier(prev, cur, e.config.EscalationTiers); t >= 0 {
-				ev.Severity = escalateSeverity(ev.Severity)
+				ev.Severity = escalateSeverity(inc.Severity)
 				e.config.Enricher.Enrich(&ev, inc)
-				ev.Severity = escalateSeverity(ev.Severity)
-				inc.Severity = ev.Severity
 				inc.Hint = fmt.Sprintf("restart count crossed %d", e.config.EscalationTiers[t])
 				inc.Count++
 				inc.LastSeen = now
@@ -502,6 +501,9 @@ func (e *Engine) cleanup() {
 	now := time.Now()
 	for key, inc := range e.state {
 		if now.After(inc.LastSeen.Add(e.config.Window)) {
+			if inc.Resource == "node" {
+				delete(e.activeNodeIncidents, inc.Name)
+			}
 			delete(e.state, key)
 		}
 	}
