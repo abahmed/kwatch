@@ -38,5 +38,6 @@ func DefaultConfig() *Config {
 		JobMonitor: JobMonitor{
 			Enabled: false,
 		},
+		Workers: 1,
 	}
 }

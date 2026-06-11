@@ -749,6 +749,33 @@ func TestNewMultiNamespaceHasMultipleSynced(t *testing.T) {
 	assert.Len(ctrl.podsSynced, 2, "should have one synced fn per namespace")
 }
 
+func TestRunMultipleWorkers(t *testing.T) {
+	assert := assert.New(t)
+
+	client := fake.NewSimpleClientset()
+	cfg := &config.Config{}
+	h := &mockHandler{}
+
+	ctrl, cleanup := New(client, cfg, h)
+	defer cleanup()
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	go ctrl.Run(ctx, 4)
+
+	// Add 20 pods via the pod queue
+	for i := 0; i < 20; i++ {
+		ctrl.podQueue.Add(fmt.Sprintf("default/pod-%d", i))
+	}
+
+	assert.Eventually(func() bool {
+		return h.podCount() >= 20
+	}, 10*time.Second, 100*time.Millisecond, "all 20 pods should be processed with 4 workers")
+
+	cancel()
+}
+
 func TestMultiNamespaceListerSeesBothNamespaces(t *testing.T) {
 	assert := assert.New(t)
 

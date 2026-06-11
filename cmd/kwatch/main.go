@@ -97,7 +97,11 @@ func main() {
 		go pvcMonitor.Start(ctx)
 		go hbMonitor.Start(ctx)
 		sm.NotifyStartup()
-		if err := ctrl.Run(ctx, 1); err != nil {
+		workers := cfg.Workers
+		if workers < 1 {
+			workers = 1
+		}
+		if err := ctrl.Run(ctx, workers); err != nil {
 			klog.ErrorS(err, "controller error")
 		}
 	}

@@ -106,6 +106,11 @@ type Config struct {
 
 	// LeaderElection config for high-availability deployments.
 	LeaderElection LeaderElection `yaml:"leaderElection"`
+
+	// Workers is the number of concurrent reconcile workers per queue.
+	// Default 1. Raising it increases throughput on large clusters; alert
+	// ordering across pods becomes non-deterministic (engine dedup unaffected).
+	Workers int `yaml:"workers"`
 }
 
 // App confing struct
