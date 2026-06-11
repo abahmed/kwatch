@@ -1,6 +1,8 @@
 package handler
 
 import (
+	"sort"
+
 	"github.com/abahmed/kwatch/internal/enricher"
 	"github.com/abahmed/kwatch/internal/event"
 	"github.com/abahmed/kwatch/internal/filter"
@@ -39,6 +41,9 @@ func (h *handler) executePodFilters(ctx *filter.Context) {
 						items = append(items, *e)
 					}
 				}
+				sort.Slice(items, func(i, j int) bool {
+					return items[i].LastTimestamp.Before(&items[j].LastTimestamp)
+				})
 				ctx.Events = &items
 			}
 		} else {

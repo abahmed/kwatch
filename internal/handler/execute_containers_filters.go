@@ -2,6 +2,7 @@ package handler
 
 import (
 	"fmt"
+	"sort"
 	"time"
 
 	"github.com/abahmed/kwatch/internal/enricher"
@@ -52,15 +53,18 @@ func (h *handler) executeContainersFilters(ctx *filter.Context) {
 				all, err := ctx.EventLister.Events(ctx.Pod.Namespace).List(labels.Everything())
 				if err != nil {
 					klog.ErrorS(err, "event lister failed", "pod", ctx.Pod.Name)
-				} else {
-					items := make([]corev1.Event, 0, len(all))
-					for _, e := range all {
-						if e.InvolvedObject.Kind == "Pod" && e.InvolvedObject.Name == ctx.Pod.Name {
-							items = append(items, *e)
-						}
+			} else {
+				items := make([]corev1.Event, 0, len(all))
+				for _, e := range all {
+					if e.InvolvedObject.Kind == "Pod" && e.InvolvedObject.Name == ctx.Pod.Name {
+						items = append(items, *e)
 					}
-					ctx.Events = &items
 				}
+				sort.Slice(items, func(i, j int) bool {
+					return items[i].LastTimestamp.Before(&items[j].LastTimestamp)
+				})
+				ctx.Events = &items
+			}
 			} else {
 				podEvents, err := k8s.GetPodEvents(ctx.Client, ctx.Pod.Name, ctx.Pod.Namespace)
 				if err != nil {

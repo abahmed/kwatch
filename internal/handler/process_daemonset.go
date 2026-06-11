@@ -10,6 +10,14 @@ import (
 	"k8s.io/client-go/tools/cache"
 )
 
+func availabilityHint(ds *appsv1.DaemonSet) string {
+	unavailable := ds.Status.NumberUnavailable
+	desired := ds.Status.DesiredNumberScheduled
+	available := ds.Status.NumberAvailable
+	return fmt.Sprintf("%d/%d pods unavailable (available: %d) — check node capacity, taints, or image",
+		unavailable, desired, available)
+}
+
 func (h *handler) ProcessDaemonSet(key string, deleted bool) error {
 	namespace, name, err := cache.SplitMetaNamespaceKey(key)
 	if err != nil {
@@ -52,6 +60,7 @@ func (h *handler) ProcessDaemonSetObject(ds *appsv1.DaemonSet, deleted bool) err
 			Events:    "",
 			Logs:      "",
 			Labels:    ds.Labels,
+			Hint:      availabilityHint(ds),
 		}
 		inc, action := h.correlator.Process(ev, ds.Namespace+"/"+ds.Name, nil)
 		if action != model.ActionSkip {

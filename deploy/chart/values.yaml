@@ -34,6 +34,15 @@ podLabels: {}
 
 # kwatch configuration
 config:
+  # workers: 1
+  # pvcMonitor:
+  #   criticalThreshold: 90
+  # daemonSetMonitor:
+  #   enabled: false
+  # cronJobMonitor:
+  #   enabled: false
+  # healthCheck:
+  #   pprof: false
 
 
 
