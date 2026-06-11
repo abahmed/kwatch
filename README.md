@@ -99,6 +99,8 @@ kubectl apply -f https://raw.githubusercontent.com/abahmed/kwatch/v0.10.5/deploy
 - `GET /healthz` - Liveness probe (text/plain: "OK")
 - `GET /readyz` - Readiness probe (text/plain: "OK")
 - `GET /health` - Returns `{"status": "ok"}` (application/json)
+- `GET /incidents` - Returns all active incidents as JSON (requires correlation)
+- `POST /test-alert` - Sends a test alert through all configured providers
 - `GET /debug/pprof/` - Go pprof index (runtime profiling data, when enabled)
 - `--version` flag - Prints version and exits
 
@@ -213,6 +215,41 @@ Hot-applied: `maxRecentLogLines`, `silences`, `severityByOwnerKind`. Restart-onl
 
 
 
+### 🚫 Inhibition
+
+| Parameter                          | Description                                                        |
+|:-----------------------------------|:------------------------------------------------------------------ |
+| `inhibition.nodeSuppressesPods`    | Suppress pod incidents on nodes with an active node incident (default: false) |
+
+When a node-level incident (e.g. `NotReady`) is active, pod incidents on that same node are skipped to reduce noise during node outages.
+
+### ⛈️ Storm / Digest
+
+Aggregate rapidly-firing incidents into periodic digests to prevent alert storms.
+
+| Parameter                          | Description                                                        |
+|:-----------------------------------|:------------------------------------------------------------------ |
+| `storm.enabled`                    | Enable digest aggregation (default: false)                          |
+| `storm.threshold`                  | Max creates per window before digest mode activates                 |
+| `storm.windowMinutes`              | Sliding window (minutes) for rate tracking                          |
+| `storm.digestIntervalMinutes`      | How often (minutes) a digest summary is sent                        |
+
+When the create rate exceeds `threshold` within `windowMinutes`, new incidents are silently buffered and a single summary message is sent every `digestIntervalMinutes`.
+
+### 📝 Templates
+
+Override alert message formatting per incident reason using Go `text/template`:
+
+```yaml
+templates:
+  CrashLoopBackOff: "{{.Incident.Name}} — {{.Action}} — {{.Incident.Hint}}"
+```
+
+Available template keys:
+- `{{.Incident.Key}}`, `{{.Incident.Reason}}`, `{{.Incident.Name}}`, `{{.Incident.Namespace}}`, `{{.Incident.Hint}}`
+- `{{.Action}}` — `create`, `update`, `stale`, `resolved`
+- `{{.Message}}` — the default formatted message
+
 ### 🧠 Correlation
 
 Incident grouping and lifecycle management. Events from the same owner/reason/container are grouped into incidents, with stale detection and auto-resolution.
@@ -226,6 +263,8 @@ Incident grouping and lifecycle management. Events from the same owner/reason/co
 | `correlation.startupQuiet`         | Quiet period (seconds) after startup with no alerts (default: 30)  |
 | `correlation.escalation.enabled`   | Escalate severity based on container restart count (default: false) |
 | `correlation.escalation.tiers`     | Ordered restart thresholds, e.g. `[3, 10]` → 3+ "high", 10+ "critical" |
+| `correlation.renotify.interval`    | Resend stale messages periodically (minutes, 0 = off)               |
+| `correlation.renotify.maxPerIncident` | Max renotifications per incident (default: 3)                    |
 
 When Slack is configured with a bot token, incidents are sent as threaded messages: a root message on creation, with updates, stale, and resolved notifications as thread replies.
 
@@ -278,6 +317,20 @@ alert:
 ```
 
 When `routes` are configured, only matching incidents are delivered to that provider. When omitted, all incidents are delivered (default). Retry is configurable per provider with `maxAttempts` (default 1) and `delay` (default 1s).
+
+**Fallback provider** — When `maxAttempts` is exhausted, a fallback provider can be called as a last resort. Configure with the `fallback` key:
+
+```yaml
+alert:
+  slack:
+    webhook: "<url>"
+    fallback: "pagerduty"    # name of another provider entry
+    retry:
+      maxAttempts: 3
+      delay: 5s
+```
+
+The fallback sends a single prefixed message (no further retry or fallback recursion).
 
 #### Discord
 
@@ -465,6 +518,21 @@ basic auth
 | `alert.webhook.url`       | Webhook URL                     |
 | `alert.webhook.headers`   | optional list of name and value |
 | `alert.webhook.basicAuth` | optional username and password  |
+
+### 🛠️ CLI
+
+| Command                        | Description                                                       |
+|:-------------------------------|:----------------------------------------------------------------- |
+| `kwatch`                       | Run the main monitoring daemon                                    |
+| `kwatch --version`             | Print version and exit                                            |
+| `kwatch lint`                  | Validate config file and print errors to stderr (exit 1 on failure) |
+| `kwatch replay < events.jsonl` | Replay JSONL events from stdin through the alert pipeline         |
+
+`kwatch replay` reads JSON lines from stdin in the following format:
+
+```json
+{"podName": "test-pod", "namespace": "default", "reason": "CrashLoopBackOff", "events": "Back-off restarting failed container"}
+```
 
 ### 🧹 Cleanup
 
