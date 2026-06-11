@@ -45,6 +45,9 @@ config:
   #   pprof: false
   # hpaMonitor:
   #   enabled: false
+  # tlsMonitor:
+  #   enabled: false
+  #   threshold: 30
 
 
 

@@ -110,6 +110,9 @@ type Config struct {
 	// HpaMonitor configures HPA-maxed-out detection.
 	HpaMonitor HpaMonitor `yaml:"hpaMonitor"`
 
+	// TlsMonitor configures TLS certificate expiry monitoring.
+	TlsMonitor TlsMonitor `yaml:"tlsMonitor"`
+
 	// Silences is an optional list of silence rules that suppress matching incidents.
 	Silences []SilenceRule `yaml:"silences"`
 
@@ -129,6 +132,15 @@ type Config struct {
 type HpaMonitor struct {
 	// Enabled if set to true, it will watch HPAs for maxed-out replicas.
 	Enabled bool `yaml:"enabled"`
+}
+
+// TlsMonitor configures TLS certificate expiry monitoring.
+type TlsMonitor struct {
+	// Enabled if set to true, it will monitor TLS secret certificates for expiry.
+	Enabled bool `yaml:"enabled"`
+
+	// Threshold is the number of days before expiry at which to alert. Default 30.
+	Threshold int `yaml:"threshold"`
 }
 
 // App confing struct

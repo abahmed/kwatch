@@ -22,6 +22,7 @@ import (
 	"github.com/abahmed/kwatch/internal/model"
 	"github.com/abahmed/kwatch/internal/pvc"
 	"github.com/abahmed/kwatch/internal/startup"
+	"github.com/abahmed/kwatch/internal/tlsmonitor"
 	"github.com/abahmed/kwatch/internal/upgrader"
 	"github.com/abahmed/kwatch/internal/version"
 	apiv1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -100,6 +101,7 @@ func main() {
 
 	pvcMonitor := pvc.NewPvcMonitor(k8sClient, &cfg.PvcMonitor, alertManager, correlator)
 	hbMonitor := heartbeat.NewHeartbeatMonitor(&cfg.HeartbeatMonitor)
+	tlsMon := tlsmonitor.New(k8sClient, &cfg.TlsMonitor, alertManager, correlator)
 
 	h := handler.NewHandler(
 		k8sClient,
@@ -115,6 +117,7 @@ func main() {
 		go correlator.StartCleanup(ctx)
 		go pvcMonitor.Start(ctx)
 		go hbMonitor.Start(ctx)
+		go tlsMon.Start(ctx)
 		if cfg.CrdConfig.Enabled {
 			restCfg, err := client.GetRestConfig(&cfg.App)
 			if err != nil {
