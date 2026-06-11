@@ -72,7 +72,10 @@ func (h *handler) ProcessPodObject(pod *corev1.Pod, deleted bool) error {
 	h.executeContainersFilters(&ctx)
 
 	if isPodHealthy(pod) {
-		h.correlator.ClearSeen(pod.Namespace + "/" + pod.Name)
+		owner := h.resolveOwnerName(pod)
+		if owner != "" {
+			h.correlator.ClearSeenByPrefix(pod.Namespace + ":" + owner + ":")
+		}
 	}
 	return nil
 }

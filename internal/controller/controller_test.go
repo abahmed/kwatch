@@ -93,6 +93,7 @@ func (m *mockHandler) ProcessCronJobObject(*batchv1.CronJob, bool) error       {
 func (m *mockHandler) SetCronJobLister(batchv1lister.CronJobLister)            {}
 func (m *mockHandler) SetSeen(map[string]int64)                                {}
 func (m *mockHandler) ClearSeen(string)                                        {}
+func (m *mockHandler) ClearSeenByPrefix(string) bool                           { return false }
 
 func TestNewCreatesController(t *testing.T) {
 	assert := assert.New(t)

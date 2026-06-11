@@ -99,6 +99,30 @@ func (e *Engine) ClearSeen(key string) {
 	}
 }
 
+// ClearSeenByPrefix removes all baseline entries whose key starts with
+// prefix (e.g. "ns:owner:"). Returns true if anything was removed.
+func (e *Engine) ClearSeenByPrefix(prefix string) bool {
+	e.mu.Lock()
+	changed := false
+	for k := range e.seen {
+		if strings.HasPrefix(k, prefix) {
+			delete(e.seen, k)
+			changed = true
+		}
+	}
+	var snapshot map[string]int64
+	if changed {
+		snapshot = cloneBaseline(e.seen)
+	}
+	e.mu.Unlock()
+	if changed {
+		if hook := e.config.OnBaselineChange; hook != nil {
+			hook(snapshot)
+		}
+	}
+	return changed
+}
+
 func cloneBaseline(src map[string]int64) map[string]int64 {
 	dst := make(map[string]int64, len(src))
 	for k, v := range src {
