@@ -93,12 +93,14 @@ kubectl apply -f https://raw.githubusercontent.com/abahmed/kwatch/v0.10.5/deploy
 |:------------------------------|:------------------------------------------- |
 | `healthCheck.enabled` | If set to true, enables health check endpoints (default: false) |
 | `healthCheck.port` | Port for health check endpoints (default: 8060) |
+| `healthCheck.pprof` | Enable /debug/pprof/* endpoints (default: false) |
 
 **Endpoints:**
 - `GET /healthz` - Liveness probe (text/plain: "OK")
 - `GET /readyz` - Readiness probe (text/plain: "OK")
 - `GET /health` - Returns `{"status": "ok"}` (application/json)
 - `GET /debug/pprof/` - Go pprof index (runtime profiling data, when enabled)
+- `--version` flag - Prints version and exits
 
 
 ### 🔄 Upgrader
@@ -153,6 +155,23 @@ Alerts when `status.numberUnavailable > 0`, resolves when all pods become availa
 
 Alerts when a CronJob is suspended (`spec.suspend: true`) or has not been scheduled within the last 24 hours.
 
+### 📈 HPA Monitor
+
+| Parameter                       | Description                                                    |
+|:--------------------------------|:-------------------------------------------------------------- |
+| `hpaMonitor.enabled`            | Watch HPAs for maxed-out replicas (currentReplicas >= maxReplicas) (default: false) |
+
+Alerts with reason `HPAMaxedOut` when an HPA has scaled to its maximum replica count.
+
+### 🔒 TLS Certificate Monitor
+
+| Parameter                       | Description                                                    |
+|:--------------------------------|:-------------------------------------------------------------- |
+| `tlsMonitor.enabled`            | Monitor TLS secret certificates for expiry (default: false)    |
+| `tlsMonitor.threshold`          | Days before expiry to start alerting (default: 30)             |
+
+Scans `kubernetes.io/tls` secrets daily. Alerts with `TlsCertExpired` or `TlsCertExpiringSoon` based on certificate `NotAfter`.
+
 ### ⏳ Pending Pod Threshold
 
 | Parameter                       | Description                                                        |
@@ -184,6 +203,14 @@ silences:
 |:-------------------------|:--------------------------------------------------------------------- |
 | `resyncSeconds`          | Periodic informer resync interval in seconds (0 = event-driven only)  |
 
+### 📋 CRD Configuration
+
+| Parameter                | Description                                                           |
+|:-------------------------|:--------------------------------------------------------------------- |
+| `crd.enabled`            | Watch KwatchConfig CRs for live config changes (default: false)       |
+
+Hot-applied: `maxRecentLogLines`, `silences`, `severityByOwnerKind`. Restart-only fields are logged and skipped. CR deletion restores boot-time ConfigMap snapshot.
+
 
 
 ### 🧠 Correlation
@@ -197,6 +224,8 @@ Incident grouping and lifecycle management. Events from the same owner/reason/co
 | `correlation.staleThreshold`       | Minutes of inactivity before an incident is marked stale (default: 15) |
 | `correlation.lifecycleInterval`    | Interval (minutes) for lifecycle checks (default: 1)               |
 | `correlation.startupQuiet`         | Quiet period (seconds) after startup with no alerts (default: 30)  |
+| `correlation.escalation.enabled`   | Escalate severity based on container restart count (default: false) |
+| `correlation.escalation.tiers`     | Ordered restart thresholds, e.g. `[3, 10]` → 3+ "high", 10+ "critical" |
 
 When Slack is configured with a bot token, incidents are sent as threaded messages: a root message on creation, with updates, stale, and resolved notifications as thread replies.
 
