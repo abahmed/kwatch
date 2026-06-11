@@ -422,3 +422,59 @@ func TestStsOwnedPodsGroupByStsName(t *testing.T) {
 	assert.True(t, inc1.Resources["db-1"])
 	assert.Equal(t, 2, inc1.Count)
 }
+
+func TestSnapshot(t *testing.T) {
+	e := newTestEngine()
+
+	ev := event.Event{
+		PodName:   "pod-1",
+		Namespace: "default",
+		Reason:    "CrashLoopBackOff",
+	}
+	e.Process(ev, "deploy-1", nil)
+
+	snap := e.Snapshot()
+	if len(snap) != 1 {
+		t.Fatalf("expected 1 incident in snapshot, got %d", len(snap))
+	}
+	v := snap[0]
+	if v.Key != "default:deploy-1:CrashLoopBackOff:" {
+		t.Errorf("unexpected key: %s", v.Key)
+	}
+	if v.Reason != "CrashLoopBackOff" {
+		t.Errorf("unexpected reason: %s", v.Reason)
+	}
+	if v.Namespace != "default" {
+		t.Errorf("unexpected namespace: %s", v.Namespace)
+	}
+	if v.Count != 1 {
+		t.Errorf("unexpected count: %d", v.Count)
+	}
+	if v.State != model.StateActive {
+		t.Errorf("unexpected state: %v", v.State)
+	}
+}
+
+func TestSnapshotEmpty(t *testing.T) {
+	e := newTestEngine()
+	snap := e.Snapshot()
+	if len(snap) != 0 {
+		t.Fatalf("expected empty snapshot, got %d", len(snap))
+	}
+}
+
+func TestRenotifyConfig(t *testing.T) {
+	e := NewEngine(Config{
+		Window:                10 * time.Minute,
+		Cooldown:              5 * time.Minute,
+		StaleThreshold:        10 * time.Minute,
+		RenotifyInterval:      1 * time.Minute,
+		RenotifyMaxPerIncident: 3,
+	})
+	if e.config.RenotifyInterval != 1*time.Minute {
+		t.Errorf("unexpected renotify interval: %v", e.config.RenotifyInterval)
+	}
+	if e.config.RenotifyMaxPerIncident != 3 {
+		t.Errorf("unexpected renotify max: %d", e.config.RenotifyMaxPerIncident)
+	}
+}

@@ -2,6 +2,7 @@ package alert
 
 import (
 	"errors"
+	"strings"
 	"testing"
 	"time"
 
@@ -412,4 +413,224 @@ func TestShouldDeliverNoRoutes(t *testing.T) {
 	inc := &model.Incident{Key: "default:pod:Error"}
 	assert.True(t, shouldDeliver(nil, inc))
 	assert.True(t, shouldDeliver([]config.AlertRoute{}, inc))
+}
+
+func TestSetTemplates(t *testing.T) {
+	am := AlertManager{}
+	am.SetTemplates(map[string]string{
+		"crashloopbackoff": "ALERT {{.Incident.Name}} — {{.Action}}",
+	})
+	if am.templates == nil {
+		t.Fatal("templates map is nil")
+	}
+	if _, ok := am.templates["crashloopbackoff"]; !ok {
+		t.Fatal("crashloopbackoff template not found")
+	}
+}
+
+func TestSetTemplatesNil(t *testing.T) {
+	am := AlertManager{}
+	am.SetTemplates(nil)
+	if am.templates != nil {
+		t.Fatal("expected nil templates")
+	}
+	am.SetTemplates(map[string]string{})
+	if am.templates != nil {
+		t.Fatal("expected nil templates for empty map")
+	}
+}
+
+func TestFormatIncidentMessageWithTemplate(t *testing.T) {
+	now := time.Now()
+	inc := &model.Incident{
+		Key:       "default:deploy:CrashLoopBackOff",
+		Name:      "deploy",
+		Namespace: "default",
+		Reason:    "CrashLoopBackOff",
+		Resource:  "pod",
+		Count:     2,
+		FirstSeen: now.Add(-10 * time.Minute),
+		LastSeen:  now,
+		Resources: map[string]bool{"pod-1": true},
+	}
+
+	am := AlertManager{}
+	am.SetTemplates(map[string]string{
+		"crashloopbackoff": "{{.Incident.Name}} {{.Action}}",
+	})
+
+	msg := formatIncidentMessage(inc, model.ActionCreate, 100, am.templates)
+	want := "deploy create"
+	if msg != want {
+		t.Errorf("got %q, want %q", msg, want)
+	}
+}
+
+func TestFormatIncidentMessageWithTemplateRenderError(t *testing.T) {
+	now := time.Now()
+	inc := &model.Incident{
+		Key:       "default:deploy:OOMKilled",
+		Name:      "deploy",
+		Namespace: "default",
+		Reason:    "OOMKilled",
+		Resource:  "pod",
+		Count:     2,
+		FirstSeen: now.Add(-10 * time.Minute),
+		LastSeen:  now,
+		Resources: map[string]bool{"pod-1": true},
+	}
+
+	am := AlertManager{}
+	// bad template syntax — Parse will reject it, so it won't be stored
+	am.SetTemplates(map[string]string{
+		"oomkilled": "{{.Incident.Name {{.Action}}",
+	})
+	// no template stored -> falls back to default
+	msg := formatIncidentMessage(inc, model.ActionCreate, 100, am.templates)
+	if msg == "" {
+		t.Fatal("expected fallback message, got empty")
+	}
+	if !strings.Contains(msg, "deploy") {
+		t.Errorf("expected default message to contain pod name, got %q", msg)
+	}
+}
+
+func TestFormatIncidentMessageUnregisteredReason(t *testing.T) {
+	now := time.Now()
+	inc := &model.Incident{
+		Key:       "default:deploy:NodeNotReady",
+		Name:      "deploy",
+		Namespace: "default",
+		Reason:    "NodeNotReady",
+		Resource:  "pod",
+		Count:     1,
+		FirstSeen: now.Add(-10 * time.Minute),
+		LastSeen:  now,
+		Resources: map[string]bool{"pod-1": true},
+	}
+
+	am := AlertManager{}
+	am.SetTemplates(map[string]string{
+		"crashloopbackoff": "OVERRIDE",
+	})
+
+	msg := formatIncidentMessage(inc, model.ActionCreate, 100, am.templates)
+	if !strings.Contains(msg, "NodeNotReady") {
+		t.Errorf("expected default message to contain reason, got %q", msg)
+	}
+}
+
+func TestFallbackResolve(t *testing.T) {
+	am := AlertManager{}
+	am.Init(map[string]map[string]interface{}{
+		"slack": {
+			"webhook":  "test",
+			"fallback": "pagerduty",
+		},
+		"pagerduty": {
+			"integrationKey": "test",
+		},
+	}, &config.App{ClusterName: "dev"})
+
+	var slackEntry, pagerEntry *providerEntry
+	for i := range am.entries {
+		switch am.entries[i].provider.Name() {
+		case "Slack":
+			slackEntry = &am.entries[i]
+		case "PagerDuty":
+			pagerEntry = &am.entries[i]
+		}
+	}
+	if slackEntry == nil {
+		t.Fatal("Slack entry not found")
+	}
+	if pagerEntry == nil {
+		t.Fatal("PagerDuty entry not found")
+	}
+	if slackEntry.fallback != pagerEntry {
+		t.Errorf("expected slack fallback to point to pagerduty entry")
+	}
+	if pagerEntry.fallback != nil {
+		t.Errorf("expected pagerduty to have no fallback, got %v", pagerEntry.fallback)
+	}
+}
+
+func TestFallbackResolveUnknown(t *testing.T) {
+	am := AlertManager{}
+	am.Init(map[string]map[string]interface{}{
+		"slack": {
+			"webhook":  "test",
+			"fallback": "nonexistent",
+		},
+	}, &config.App{ClusterName: "dev"})
+
+	if len(am.entries) != 1 {
+		t.Fatalf("expected 1 entry, got %d", len(am.entries))
+	}
+	if am.entries[0].fallback != nil {
+		t.Errorf("expected nil fallback for unknown target")
+	}
+}
+
+// errorRecorderProvider records calls and optionally returns errors
+type errorRecorderProvider struct {
+	name      string
+	msg       string
+	err       error
+	callCount int
+}
+
+func (p *errorRecorderProvider) SendMessage(msg string) error {
+	p.msg = msg
+	p.callCount++
+	return p.err
+}
+func (p *errorRecorderProvider) SendEvent(evt *event.Event) error { return p.err }
+func (p *errorRecorderProvider) Name() string                     { return p.name }
+
+func TestFallbackUsedOnExhaustion(t *testing.T) {
+	primary := &errorRecorderProvider{name: "Primary", err: nil}
+	fb := &errorRecorderProvider{name: "Fallback", err: nil}
+
+	am := AlertManager{}
+	am.entries = append(am.entries, providerEntry{
+		provider:    primary,
+		maxAttempts: 1,
+		retryDelay:  time.Millisecond,
+		fallback:    &providerEntry{provider: fb},
+	})
+
+	// primary succeeds — fallback should NOT be called
+	am.Notify("test message")
+	if primary.callCount != 1 {
+		t.Errorf("expected 1 primary call, got %d", primary.callCount)
+	}
+	// Now make primary fail
+	primary.err = errors.New("fail")
+	primary.callCount = 0
+	am.Notify("test message 2")
+	if primary.callCount != 1 {
+		t.Errorf("expected 1 primary call on failure, got %d", primary.callCount)
+	}
+	if fb.callCount != 1 {
+		t.Errorf("expected 1 fallback call, got %d", fb.callCount)
+	}
+}
+
+func TestSendWithRetryReturnsError(t *testing.T) {
+	err := sendWithRetry(func() error {
+		return errors.New("fail")
+	}, 1, time.Millisecond, "test")
+	if err == nil {
+		t.Fatal("expected error from sendWithRetry")
+	}
+}
+
+func TestSendWithRetrySuccess(t *testing.T) {
+	err := sendWithRetry(func() error {
+		return nil
+	}, 3, time.Millisecond, "test")
+	if err != nil {
+		t.Fatalf("expected nil, got %v", err)
+	}
 }
