@@ -1,0 +1,65 @@
+package handler
+
+import (
+	"fmt"
+
+	"github.com/abahmed/kwatch/internal/event"
+	"github.com/abahmed/kwatch/internal/model"
+	appsv1 "k8s.io/api/apps/v1"
+	"k8s.io/apimachinery/pkg/api/errors"
+	"k8s.io/client-go/tools/cache"
+)
+
+func (h *handler) ProcessDaemonSet(key string, deleted bool) error {
+	namespace, name, err := cache.SplitMetaNamespaceKey(key)
+	if err != nil {
+		return fmt.Errorf("invalid daemonset key %q: %w", key, err)
+	}
+
+	if deleted {
+		h.correlator.ResolveByResource("daemonset", namespace+"/"+name)
+		return nil
+	}
+
+	ds, err := h.dsLister.DaemonSets(namespace).Get(name)
+	if err != nil {
+		if errors.IsNotFound(err) {
+			h.correlator.ResolveByResource("daemonset", namespace+"/"+name)
+			return nil
+		}
+		return fmt.Errorf("failed to get daemonset %s/%s from cache: %w", namespace, name, err)
+	}
+
+	return h.ProcessDaemonSetObject(ds, false)
+}
+
+func (h *handler) ProcessDaemonSetObject(ds *appsv1.DaemonSet, deleted bool) error {
+	if ds == nil {
+		return nil
+	}
+
+	if deleted {
+		h.correlator.ResolveByResource("daemonset", ds.Namespace+"/"+ds.Name)
+		return nil
+	}
+
+	if ds.Status.DesiredNumberScheduled > 0 && ds.Status.NumberUnavailable > 0 {
+		ev := event.Event{
+			Resource:  "daemonset",
+			PodName:   ds.Name,
+			Namespace: ds.Namespace,
+			Reason:    "DaemonSetUnavailable",
+			Events:    "",
+			Logs:      "",
+			Labels:    ds.Labels,
+		}
+		inc, action := h.correlator.Process(ev, ds.Namespace+"/"+ds.Name, nil)
+		if action != model.ActionSkip {
+			h.alertManager.NotifyIncident(inc, action)
+		}
+		return nil
+	}
+
+	h.correlator.ResolveByResource("daemonset", ds.Namespace+"/"+ds.Name)
+	return nil
+}

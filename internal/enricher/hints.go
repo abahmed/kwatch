@@ -27,6 +27,9 @@ var defaultHints = map[string]string{
 	"JobFailed":                "Job failed — check job logs and exit code",
 	"JobSuspended":             "Job suspended — check suspension request or cronjob configuration",
 	"PodPending":               "Pod stuck in Pending — check scheduler, resources, and persistent volumes",
+	"DaemonSetUnavailable":     "DaemonSet has unavailable pods — check node capacity and pod status",
+	"CronJobSuspended":         "CronJob is suspended — check suspension request or schedule configuration",
+	"CronJobNotScheduled":      "CronJob has not been scheduled recently — check schedule expression and job history",
 }
 
 var exitCodeHints = map[int32]string{

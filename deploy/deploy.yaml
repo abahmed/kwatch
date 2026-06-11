@@ -15,7 +15,7 @@ rules:
   resources: ["daemonsets", "statefulsets", "deployments", "replicasets"]
   verbs: ["get", "watch", "list"]
 - apiGroups: ["batch"]
-  resources: ["jobs"]
+  resources: ["jobs", "cronjobs"]
   verbs: ["get", "watch", "list"]
 ---
 apiVersion: v1

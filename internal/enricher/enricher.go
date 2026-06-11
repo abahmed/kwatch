@@ -28,7 +28,11 @@ func (e *DefaultEnricher) Enrich(ev *event.Event, inc *model.Incident) {
 	}
 	inc.Logs = ev.Logs
 	inc.Events = ev.Events
-	inc.Severity = e.resolveSeverity(ev.OwnerKind)
+	if ev.Severity != "" {
+		inc.Severity = ev.Severity
+	} else {
+		inc.Severity = e.resolveSeverity(ev.OwnerKind)
+	}
 }
 
 func (e *DefaultEnricher) resolveSeverity(ownerKind string) string {

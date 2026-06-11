@@ -420,3 +420,53 @@ func (m *multiEventNamespaceLister) Get(name string) (*corev1.Event, error) {
 	}
 	return nil, fmt.Errorf("event %q not found in any namespace lister", name)
 }
+
+type multiCronJobLister struct {
+	listers []batchv1lister.CronJobLister
+}
+
+func (m *multiCronJobLister) List(selector labels.Selector) ([]*batchv1.CronJob, error) {
+	var all []*batchv1.CronJob
+	for _, l := range m.listers {
+		items, err := l.List(selector)
+		if err != nil {
+			return nil, err
+		}
+		all = append(all, items...)
+	}
+	return all, nil
+}
+
+func (m *multiCronJobLister) CronJobs(namespace string) batchv1lister.CronJobNamespaceLister {
+	nsl := make([]batchv1lister.CronJobNamespaceLister, 0, len(m.listers))
+	for _, l := range m.listers {
+		nsl = append(nsl, l.CronJobs(namespace))
+	}
+	return &multiCronJobNamespaceLister{listers: nsl}
+}
+
+type multiCronJobNamespaceLister struct {
+	listers []batchv1lister.CronJobNamespaceLister
+}
+
+func (m *multiCronJobNamespaceLister) List(selector labels.Selector) ([]*batchv1.CronJob, error) {
+	var all []*batchv1.CronJob
+	for _, l := range m.listers {
+		items, err := l.List(selector)
+		if err != nil {
+			return nil, err
+		}
+		all = append(all, items...)
+	}
+	return all, nil
+}
+
+func (m *multiCronJobNamespaceLister) Get(name string) (*batchv1.CronJob, error) {
+	for _, l := range m.listers {
+		item, err := l.Get(name)
+		if err == nil {
+			return item, nil
+		}
+	}
+	return nil, fmt.Errorf("cronjob %q not found in any namespace lister", name)
+}

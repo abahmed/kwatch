@@ -45,6 +45,11 @@ func (p *PvcMonitor) checkUsage() {
 		if pvc.UsagePercentage >= p.config.Threshold {
 			currentNotified[pvc.PVName] = true
 
+			severity := "normal"
+			if pvc.UsagePercentage >= p.config.CriticalThreshold {
+				severity = "high"
+			}
+
 			ev := event.Event{
 				Resource:  "pvc",
 				PodName:   pvc.PodName,
@@ -54,6 +59,7 @@ func (p *PvcMonitor) checkUsage() {
 				Logs:      "",
 				Labels:    nil,
 				Hint:      fmt.Sprintf("VolumeUsage(%.0f%%)", pvc.UsagePercentage),
+				Severity:  severity,
 			}
 
 			inc, action := p.correlator.Process(ev, pvc.PVName, nil)

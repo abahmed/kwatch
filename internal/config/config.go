@@ -101,6 +101,12 @@ type Config struct {
 	// JobMonitor configures failed/suspended Job detection.
 	JobMonitor JobMonitor `yaml:"jobMonitor"`
 
+	// DaemonSetMonitor configures rollout-stuck detection for DaemonSets.
+	DaemonSetMonitor DaemonSetMonitor `yaml:"daemonSetMonitor"`
+
+	// CronJobMonitor configures failed/suspended CronJob detection.
+	CronJobMonitor CronJobMonitor `yaml:"cronJobMonitor"`
+
 	// Silences is an optional list of silence rules that suppress matching incidents.
 	Silences []SilenceRule `yaml:"silences"`
 
@@ -111,6 +117,10 @@ type Config struct {
 	// Default 1. Raising it increases throughput on large clusters; alert
 	// ordering across pods becomes non-deterministic (engine dedup unaffected).
 	Workers int `yaml:"workers"`
+
+	// MaxLogBlockLines is the maximum number of lines to include from logs
+	// and events in alert messages. Default 50.
+	MaxLogBlockLines int `yaml:"maxLogBlockLines"`
 }
 
 // App confing struct
@@ -149,9 +159,13 @@ type PvcMonitor struct {
 	Interval int `yaml:"interval"`
 
 	// Threshold is the percentage of accepted pvc usage. if current usage
-	// exceeds this value, it will send a notification.
+	// exceeds this value, it will send a notification (warn tier).
 	// By default, this value is 80
 	Threshold float64 `yaml:"threshold"`
+
+	// CriticalThreshold is the percentage above which severity is "high".
+	// By default, this value is 90
+	CriticalThreshold float64 `yaml:"criticalThreshold"`
 }
 
 // NodeMonitor confing struct
@@ -186,6 +200,18 @@ type RolloutMonitor struct {
 type JobMonitor struct {
 	// Enabled if set to true, it will watch Jobs for failures
 	// By default, this value is true
+	Enabled bool `yaml:"enabled"`
+}
+
+// DaemonSetMonitor configures rollout-stuck detection for DaemonSets.
+type DaemonSetMonitor struct {
+	// Enabled if set to true, it will watch DaemonSets for stuck rollouts.
+	Enabled bool `yaml:"enabled"`
+}
+
+// CronJobMonitor configures failed/suspended CronJob detection.
+type CronJobMonitor struct {
+	// Enabled if set to true, it will watch CronJobs for failures or suspension.
 	Enabled bool `yaml:"enabled"`
 }
 

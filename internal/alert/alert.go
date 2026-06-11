@@ -36,8 +36,13 @@ type providerEntry struct {
 }
 
 type AlertManager struct {
-	entries  []providerEntry
-	silences []silenceMatcher
+	entries          []providerEntry
+	silences         []silenceMatcher
+	maxLogBlockLines int
+}
+
+func (a *AlertManager) SetMaxLogBlockLines(n int) {
+	a.maxLogBlockLines = n
 }
 
 type silenceMatcher struct {
@@ -355,7 +360,11 @@ func (a *AlertManager) NotifyIncident(inc *model.Incident, action model.Incident
 		return
 	}
 
-	msg := formatIncidentMessage(inc, action)
+	maxLines := a.maxLogBlockLines
+	if maxLines <= 0 {
+		maxLines = 100
+	}
+	msg := formatIncidentMessage(inc, action, maxLines)
 	klog.InfoS("sending incident", "action", action, "key", inc.Key, "count", inc.Count)
 	for _, entry := range a.entries {
 		if !shouldDeliver(entry.routes, inc) {
@@ -377,12 +386,12 @@ func (a *AlertManager) NotifyIncident(inc *model.Incident, action model.Incident
 	}
 }
 
-func formatIncidentMessage(inc *model.Incident, action model.IncidentAction) string {
+func formatIncidentMessage(inc *model.Incident, action model.IncidentAction, maxLines int) string {
 	switch action {
 	case model.ActionCreate:
-		return formatCreateMessage(inc)
+		return formatCreateMessage(inc, maxLines)
 	case model.ActionUpdate:
-		return formatUpdateMessage(inc)
+		return formatUpdateMessage(inc, maxLines)
 	case model.ActionStale:
 		return formatStaleMessage(inc)
 	case model.ActionResolved:
@@ -392,7 +401,7 @@ func formatIncidentMessage(inc *model.Incident, action model.IncidentAction) str
 	}
 }
 
-func formatCreateMessage(inc *model.Incident) string {
+func formatCreateMessage(inc *model.Incident, maxLines int) string {
 	resources := len(inc.Resources)
 	duration := inc.LastSeen.Sub(inc.FirstSeen).Round(time.Minute)
 
@@ -403,11 +412,11 @@ func formatCreateMessage(inc *model.Incident) string {
 
 	logsBlock := ""
 	if inc.Logs != "" {
-		logsBlock = fmt.Sprintf("\nLogs:\n%s", truncateText(inc.Logs, 100))
+		logsBlock = fmt.Sprintf("\nLogs:\n%s", truncateText(inc.Logs, maxLines))
 	}
 	eventsBlock := ""
 	if inc.Events != "" {
-		eventsBlock = fmt.Sprintf("\nEvents:\n%s", truncateText(inc.Events, 100))
+		eventsBlock = fmt.Sprintf("\nEvents:\n%s", truncateText(inc.Events, maxLines))
 	}
 
 	return fmt.Sprintf(
@@ -428,7 +437,7 @@ func truncateText(s string, maxLines int) string {
 	return strings.Join(lines, "\n")
 }
 
-func formatUpdateMessage(inc *model.Incident) string {
+func formatUpdateMessage(inc *model.Incident, _ int) string {
 	resources := len(inc.Resources)
 	duration := inc.LastSeen.Sub(inc.FirstSeen).Round(time.Minute)
 

@@ -68,6 +68,8 @@ kubectl apply -f https://raw.githubusercontent.com/abahmed/kwatch/v0.10.5/deploy
 | Parameter                      | Description   |
 |:-------------------------------|:-----------------------|
 | `maxRecentLogLines`            | Optional Max tail log lines in messages, if it's not provided it will get all log lines |
+| `maxLogBlockLines`            | Maximum lines from logs/events included in alert message blocks (default: 50) |
+| `workers`                     | Number of concurrent reconcile workers (default: 1). Raise for large clusters. |
 | `namespaces`                   | Optional list of namespaces that you want to watch or forbid, if it's not provided it will watch all namespaces. If you want to forbid a namespace, configure it with `!<namespace name>`. You can either set forbidden namespaces or allowed, not both. |
 | `reasons`                      | Optional list of reasons that you want to watch or forbid, if it's not provided it will watch all reasons. If you want to forbid a reason, configure it with `!<reason>`. You can either set forbidden reasons or allowed, not both.                     |
 | `ignoreFailedGracefulShutdown` | If set to true, containers which are forcefully killed during shutdown (as their graceful shutdown failed) are not reported as error     |
@@ -94,8 +96,10 @@ kubectl apply -f https://raw.githubusercontent.com/abahmed/kwatch/v0.10.5/deploy
 | `healthCheck.port` | Port for health check endpoints (default: 8060) |
 
 **Endpoints:**
-- `GET /healthz` - Returns "OK" (text/plain)
+- `GET /healthz` - Liveness probe (text/plain: "OK")
+- `GET /readyz` - Readiness probe (text/plain: "OK")
 - `GET /health` - Returns `{"status": "ok"}` (application/json)
+- `GET /debug/pprof/` - Go pprof index (runtime profiling data, when enabled)
 
 
 ### 🔄 Upgrader
@@ -110,7 +114,8 @@ kubectl apply -f https://raw.githubusercontent.com/abahmed/kwatch/v0.10.5/deploy
 |:-----------------------------|:------------------------------------------- |
 | `pvcMonitor.enabled`         | to enable or disable this module (default: true) |
 | `pvcMonitor.interval`        | the frequency (in minutes) to check pvc usage in the cluster  (default: 15) |
-| `pvcMonitor.threshold`       | the percentage of accepted pvc usage. if current usage exceeds this value, it will send a notification (default: 80) |
+| `pvcMonitor.threshold`       | the percentage of accepted pvc usage (warn tier). if current usage exceeds this value, it will send a notification with normal severity (default: 80) |
+| `pvcMonitor.criticalThreshold` | the percentage above which severity is "high" (default: 90) |
 
 
 ### 🖥️ Node Monitor
@@ -127,11 +132,27 @@ Node monitoring alerts on `NotReady` and `Unknown` conditions, plus `MemoryPress
 |:--------------------------------|:-------------------------------------------------------------- |
 | `rolloutMonitor.enabled`        | Watch Deployments for stuck rollouts (`ProgressDeadlineExceeded`) (default: true) |
 
+### 🖥️ DaemonSet Monitor
+
+| Parameter                       | Description                                                    |
+|:--------------------------------|:-------------------------------------------------------------- |
+| `daemonSetMonitor.enabled`      | Watch DaemonSets for unavailable pods (default: false)         |
+
+Alerts when `status.numberUnavailable > 0`, resolves when all pods become available.
+
 ### 🧑‍💼 Job Monitor
 
 | Parameter                  | Description                                                 |
 |:---------------------------|:----------------------------------------------------------- |
 | `jobMonitor.enabled`       | Watch Jobs for failures and suspension (default: true)      |
+
+### ⏰ CronJob Monitor
+
+| Parameter                       | Description                                                    |
+|:--------------------------------|:-------------------------------------------------------------- |
+| `cronJobMonitor.enabled`        | Watch CronJobs for suspension or missed schedules (default: false) |
+
+Alerts when a CronJob is suspended (`spec.suspend: true`) or has not been scheduled within the last 24 hours.
 
 ### ⏳ Pending Pod Threshold
 

@@ -12,6 +12,7 @@ data:
   config.yaml: |
     # ── General ──────────────────────────────────────────────
     maxRecentLogLines: <optional_number_of_lines>
+    maxLogBlockLines: 50
     ignoreFailedGracefulShutdown: true
 
     # Pods stuck in Pending beyond this threshold (seconds) trigger an alert
@@ -60,13 +61,20 @@ data:
     rolloutMonitor:
       enabled: true
 
+    daemonSetMonitor:
+      enabled: false
+
     jobMonitor:
       enabled: true
+
+    cronJobMonitor:
+      enabled: false
 
     pvcMonitor:
       enabled: true
       interval: 5
       threshold: 80
+      criticalThreshold: 90
 
     # ── Node alert suppression ────────────────────────────
     ignoreNodeReasons:

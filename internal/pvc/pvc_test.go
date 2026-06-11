@@ -11,6 +11,7 @@ import (
 	"github.com/abahmed/kwatch/internal/alert"
 	"github.com/abahmed/kwatch/internal/config"
 	"github.com/abahmed/kwatch/internal/correlation"
+	"github.com/abahmed/kwatch/internal/enricher"
 	"github.com/abahmed/kwatch/internal/event"
 	"github.com/abahmed/kwatch/internal/model"
 	"github.com/stretchr/testify/assert"
@@ -448,4 +449,80 @@ func TestPvcStableReasonDifferentPercentages(t *testing.T) {
 
 	_, action2 := correlator.Process(ev2, owner, nil)
 	assert.Equal(t, model.ActionUpdate, action2, "different percentage, same stable reason should still dedup")
+}
+
+func TestPvcSeverityWarnTier(t *testing.T) {
+	correlator := correlation.NewEngine(correlation.Config{
+		Window:   10 * time.Minute,
+		Cooldown: 1 * time.Nanosecond,
+		Enricher: &enricher.DefaultEnricher{},
+	})
+
+	ev := event.Event{
+		Resource:  "pvc",
+		PodName:   "test-pod",
+		Namespace: "default",
+		Reason:    "VolumeUsageHigh",
+		Hint:      "VolumeUsage(85%)",
+		Severity:  "normal",
+	}
+
+	inc, action := correlator.Process(ev, "test-pv", nil)
+	assert.Equal(t, model.ActionCreate, action)
+	assert.Equal(t, "normal", inc.Severity)
+}
+
+func TestPvcSeverityCriticalTier(t *testing.T) {
+	correlator := correlation.NewEngine(correlation.Config{
+		Window:   10 * time.Minute,
+		Cooldown: 1 * time.Nanosecond,
+		Enricher: &enricher.DefaultEnricher{},
+	})
+
+	ev := event.Event{
+		Resource:  "pvc",
+		PodName:   "test-pod",
+		Namespace: "default",
+		Reason:    "VolumeUsageHigh",
+		Hint:      "VolumeUsage(92%)",
+		Severity:  "high",
+	}
+
+	inc, action := correlator.Process(ev, "test-pv", nil)
+	assert.Equal(t, model.ActionCreate, action)
+	assert.Equal(t, "high", inc.Severity)
+}
+
+func TestPvcSeverityUpgradeFromWarnToCritical(t *testing.T) {
+	correlator := correlation.NewEngine(correlation.Config{
+		Window:   10 * time.Minute,
+		Cooldown: 1 * time.Nanosecond,
+		Enricher: &enricher.DefaultEnricher{},
+	})
+
+	ev1 := event.Event{
+		Resource:  "pvc",
+		PodName:   "test-pod",
+		Namespace: "default",
+		Reason:    "VolumeUsageHigh",
+		Hint:      "VolumeUsage(85%)",
+		Severity:  "normal",
+	}
+
+	inc1, action1 := correlator.Process(ev1, "test-pv", nil)
+	assert.Equal(t, model.ActionCreate, action1)
+	assert.Equal(t, "normal", inc1.Severity)
+
+	ev2 := event.Event{
+		Resource:  "pvc",
+		PodName:   "test-pod",
+		Namespace: "default",
+		Reason:    "VolumeUsageHigh",
+		Hint:      "VolumeUsage(92%)",
+		Severity:  "high",
+	}
+
+	inc2, action2 := correlator.Process(ev2, "test-pv", nil)
+	assert.Equal(t, model.ActionUpdate, action2, "same key should update, not create")
+	assert.Equal(t, "high", inc2.Severity, "severity should upgrade to high")
 }

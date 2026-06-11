@@ -86,6 +86,11 @@ func (m *mockHandler) SetReplicaLister(appsv1lister.ReplicaSetLister)          {
 func (m *mockHandler) SetDaemonSetLister(appsv1lister.DaemonSetLister)         {}
 func (m *mockHandler) SetStatefulSetLister(appsv1lister.StatefulSetLister)     {}
 func (m *mockHandler) SetEventLister(corev1lister.EventLister)                 {}
+func (m *mockHandler) ProcessDaemonSet(string, bool) error                     { return m.err }
+func (m *mockHandler) ProcessCronJob(string, bool) error                       { return m.err }
+func (m *mockHandler) ProcessDaemonSetObject(*appsv1.DaemonSet, bool) error    { return m.err }
+func (m *mockHandler) ProcessCronJobObject(*batchv1.CronJob, bool) error       { return m.err }
+func (m *mockHandler) SetCronJobLister(batchv1lister.CronJobLister)            {}
 func (m *mockHandler) SetSeen(map[string]int64)                                {}
 func (m *mockHandler) ClearSeen(string)                                        {}
 

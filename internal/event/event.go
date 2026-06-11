@@ -14,4 +14,5 @@ type Event struct {
 	OwnerKind     string
 	RestartCount  int
 	Hint          string // Pre-computed diagnostic hint; empty = auto-generate from Reason
+	Severity      string // Override severity; empty = let enricher decide from OwnerKind
 }

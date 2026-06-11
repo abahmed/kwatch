@@ -251,13 +251,13 @@ func TestFormatIncidentMessage(t *testing.T) {
 		Resources: map[string]bool{"pod-1": true, "pod-2": true},
 	}
 
-	msg := formatIncidentMessage(inc, model.ActionCreate)
+	msg := formatIncidentMessage(inc, model.ActionCreate, 100)
 	assert.Contains(t, msg, "Incident")
 	assert.Contains(t, msg, "deploy")
 	assert.Contains(t, msg, "CrashLoopBackOff")
 	assert.Contains(t, msg, "2 resource")
 
-	msgUpdate := formatIncidentMessage(inc, model.ActionUpdate)
+	msgUpdate := formatIncidentMessage(inc, model.ActionUpdate, 100)
 	assert.Contains(t, msgUpdate, "Update")
 }
 
@@ -277,7 +277,7 @@ func TestFormatIncidentMessageWithLogsEvents(t *testing.T) {
 		Events:    "[2024-01-01] Pulling image\n[2024-01-01] BackOff restart",
 	}
 
-	msg := formatIncidentMessage(inc, model.ActionCreate)
+	msg := formatIncidentMessage(inc, model.ActionCreate, 100)
 	assert.Contains(t, msg, "Logs:")
 	assert.Contains(t, msg, "line1")
 	assert.Contains(t, msg, "line2")
@@ -300,7 +300,7 @@ func TestFormatStaleMessageGolden(t *testing.T) {
 		Resources: map[string]bool{"pod-1": true, "pod-2": true},
 	}
 
-	msg := formatIncidentMessage(inc, model.ActionStale)
+	msg := formatIncidentMessage(inc, model.ActionStale, 100)
 	assert.Contains(t, msg, "Stale")
 	assert.Contains(t, msg, "deploy")
 	assert.Contains(t, msg, "CrashLoopBackOff")
@@ -322,7 +322,7 @@ func TestFormatResolvedMessageGolden(t *testing.T) {
 		Resources: map[string]bool{"pod-1": true},
 	}
 
-	msg := formatIncidentMessage(inc, model.ActionResolved)
+	msg := formatIncidentMessage(inc, model.ActionResolved, 100)
 	assert.Contains(t, msg, "Resolved")
 	assert.Contains(t, msg, "deploy")
 	assert.Contains(t, msg, "OOMKilled")

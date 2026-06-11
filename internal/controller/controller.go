@@ -30,6 +30,8 @@ type Controller struct {
 	nodeQueue              workqueue.TypedRateLimitingInterface[string]
 	deploymentQueue        workqueue.TypedRateLimitingInterface[string]
 	jobQueue               workqueue.TypedRateLimitingInterface[string]
+	daemonSetQueue         workqueue.TypedRateLimitingInterface[string]
+	cronJobQueue           workqueue.TypedRateLimitingInterface[string]
 	podLister              corev1lister.PodLister
 	podsSynced             []cache.InformerSynced
 	nodeLister             corev1lister.NodeLister
@@ -38,6 +40,8 @@ type Controller struct {
 	deploysSynced          []cache.InformerSynced
 	jobLister              batchv1lister.JobLister
 	jobsSynced             []cache.InformerSynced
+	cronJobLister          batchv1lister.CronJobLister
+	cronJobsSynced         []cache.InformerSynced
 	rsLister               appsv1lister.ReplicaSetLister
 	rsSynced               []cache.InformerSynced
 	dsLister               appsv1lister.DaemonSetLister
@@ -48,6 +52,8 @@ type Controller struct {
 	eventsSynced           []cache.InformerSynced
 	deploymentWatchEnabled bool
 	jobWatchEnabled        bool
+	daemonSetWatchEnabled  bool
+	cronJobWatchEnabled    bool
 }
 
 func newFactories(client kubernetes.Interface, cfg *config.Config, resync time.Duration) (factorySet, []informers.SharedInformerFactory) {
@@ -221,6 +227,28 @@ func (fs factorySet) jobInformers() []cache.SharedIndexInformer {
 	return out
 }
 
+func (fs factorySet) cronJobLister() batchv1lister.CronJobLister {
+	if fs.global != nil {
+		return fs.global.Batch().V1().CronJobs().Lister()
+	}
+	listers := make([]batchv1lister.CronJobLister, 0, len(fs.perNamespace))
+	for _, f := range fs.perNamespace {
+		listers = append(listers, f.Batch().V1().CronJobs().Lister())
+	}
+	return &multiCronJobLister{listers: listers}
+}
+
+func (fs factorySet) cronJobInformers() []cache.SharedIndexInformer {
+	if fs.global != nil {
+		return []cache.SharedIndexInformer{fs.global.Batch().V1().CronJobs().Informer()}
+	}
+	out := make([]cache.SharedIndexInformer, 0, len(fs.perNamespace))
+	for _, f := range fs.perNamespace {
+		out = append(out, f.Batch().V1().CronJobs().Informer())
+	}
+	return out
+}
+
 func New(
 	client kubernetes.Interface,
 	cfg *config.Config,
@@ -255,6 +283,14 @@ func New(
 		jobQueue: workqueue.NewTypedRateLimitingQueueWithConfig(
 			workqueue.DefaultTypedControllerRateLimiter[string](),
 			workqueue.TypedRateLimitingQueueConfig[string]{Name: "jobs"},
+		),
+		daemonSetQueue: workqueue.NewTypedRateLimitingQueueWithConfig(
+			workqueue.DefaultTypedControllerRateLimiter[string](),
+			workqueue.TypedRateLimitingQueueConfig[string]{Name: "daemonsets"},
+		),
+		cronJobQueue: workqueue.NewTypedRateLimitingQueueWithConfig(
+			workqueue.DefaultTypedControllerRateLimiter[string](),
+			workqueue.TypedRateLimitingQueueConfig[string]{Name: "cronjobs"},
 		),
 		podLister:  podLister,
 		podsSynced: podsSynced,
@@ -330,6 +366,52 @@ func New(
 				AddFunc:    c.enqueueJob,
 				UpdateFunc: func(old, new interface{}) { c.enqueueJob(new) },
 				DeleteFunc: c.enqueueJob,
+			})
+		}
+	}
+
+	if cfg.DaemonSetMonitor.Enabled {
+		dsLister := fs.dsLister()
+		dsInformers := fs.dsInformers()
+
+		c.daemonSetWatchEnabled = true
+
+		var dssSynced []cache.InformerSynced
+		for _, inf := range dsInformers {
+			dssSynced = append(dssSynced, inf.HasSynced)
+		}
+		c.dsSynced = dssSynced
+
+		h.SetDaemonSetLister(dsLister)
+
+		for _, inf := range dsInformers {
+			inf.AddEventHandler(cache.ResourceEventHandlerFuncs{
+				AddFunc:    c.enqueueDaemonSet,
+				UpdateFunc: func(old, new interface{}) { c.enqueueDaemonSet(new) },
+				DeleteFunc: c.enqueueDaemonSet,
+			})
+		}
+	}
+
+	if cfg.CronJobMonitor.Enabled {
+		cronJobLister := fs.cronJobLister()
+		cronJobInformers := fs.cronJobInformers()
+
+		c.cronJobWatchEnabled = true
+
+		var cjSynced []cache.InformerSynced
+		for _, inf := range cronJobInformers {
+			cjSynced = append(cjSynced, inf.HasSynced)
+		}
+		c.cronJobsSynced = cjSynced
+
+		h.SetCronJobLister(cronJobLister)
+
+		for _, inf := range cronJobInformers {
+			inf.AddEventHandler(cache.ResourceEventHandlerFuncs{
+				AddFunc:    c.enqueueCronJob,
+				UpdateFunc: func(old, new interface{}) { c.enqueueCronJob(new) },
+				DeleteFunc: c.enqueueCronJob,
 			})
 		}
 	}
@@ -458,17 +540,37 @@ func (c *Controller) enqueueJob(obj interface{}) {
 	c.jobQueue.Add(key)
 }
 
+func (c *Controller) enqueueDaemonSet(obj interface{}) {
+	key, err := cache.DeletionHandlingMetaNamespaceKeyFunc(obj)
+	if err != nil {
+		utilruntime.HandleError(err)
+		return
+	}
+	c.daemonSetQueue.Add(key)
+}
+
+func (c *Controller) enqueueCronJob(obj interface{}) {
+	key, err := cache.DeletionHandlingMetaNamespaceKeyFunc(obj)
+	if err != nil {
+		utilruntime.HandleError(err)
+		return
+	}
+	c.cronJobQueue.Add(key)
+}
+
 func (c *Controller) Run(ctx context.Context, workers int) error {
 	defer utilruntime.HandleCrash()
 	defer c.podQueue.ShutDown()
 	defer c.nodeQueue.ShutDown()
 	defer c.deploymentQueue.ShutDown()
 	defer c.jobQueue.ShutDown()
+	defer c.daemonSetQueue.ShutDown()
+	defer c.cronJobQueue.ShutDown()
 
 	klog.InfoS("starting controller")
 
 	klog.InfoS("waiting for informer caches to sync")
-	syncFns := make([]cache.InformerSynced, 0, 1+len(c.podsSynced)+len(c.rsSynced)+len(c.dsSynced)+len(c.ssSynced)+len(c.eventsSynced)+len(c.deploysSynced)+len(c.jobsSynced))
+	syncFns := make([]cache.InformerSynced, 0, 1+len(c.podsSynced)+len(c.rsSynced)+len(c.dsSynced)+len(c.ssSynced)+len(c.eventsSynced)+len(c.deploysSynced)+len(c.jobsSynced)+len(c.cronJobsSynced))
 	syncFns = append(syncFns, c.podsSynced...)
 	syncFns = append(syncFns, c.rsSynced...)
 	syncFns = append(syncFns, c.dsSynced...)
@@ -479,6 +581,7 @@ func (c *Controller) Run(ctx context.Context, workers int) error {
 	}
 	syncFns = append(syncFns, c.deploysSynced...)
 	syncFns = append(syncFns, c.jobsSynced...)
+	syncFns = append(syncFns, c.cronJobsSynced...)
 	if !cache.WaitForCacheSync(ctx.Done(), syncFns...) {
 		return fmt.Errorf("failed to wait for caches to sync")
 	}
@@ -496,6 +599,12 @@ func (c *Controller) Run(ctx context.Context, workers int) error {
 		}
 		if c.jobsSynced != nil {
 			go wait.UntilWithContext(ctx, c.runJobWorker, time.Second)
+		}
+		if c.daemonSetWatchEnabled {
+			go wait.UntilWithContext(ctx, c.runDaemonSetWorker, time.Second)
+		}
+		if c.cronJobWatchEnabled {
+			go wait.UntilWithContext(ctx, c.runCronJobWorker, time.Second)
 		}
 	}
 
@@ -521,6 +630,16 @@ func (c *Controller) runDeploymentWorker(ctx context.Context) {
 
 func (c *Controller) runJobWorker(ctx context.Context) {
 	for c.processNextJobItem() {
+	}
+}
+
+func (c *Controller) runDaemonSetWorker(ctx context.Context) {
+	for c.processNextDaemonSetItem() {
+	}
+}
+
+func (c *Controller) runCronJobWorker(ctx context.Context) {
+	for c.processNextCronJobItem() {
 	}
 }
 
@@ -723,6 +842,74 @@ func (c *Controller) syncDeployment(key string) error {
 	}
 
 	return c.handler.ProcessDeploymentObject(deploy, false)
+}
+
+func (c *Controller) processNextDaemonSetItem() bool {
+	key, quit := c.daemonSetQueue.Get()
+	if quit {
+		return false
+	}
+	defer c.daemonSetQueue.Done(key)
+
+	if err := c.syncDaemonSet(key); err != nil {
+		c.daemonSetQueue.AddRateLimited(key)
+		utilruntime.HandleError(fmt.Errorf("error syncing daemonset %q: %s, requeuing", key, err.Error()))
+		return true
+	}
+
+	c.daemonSetQueue.Forget(key)
+	return true
+}
+
+func (c *Controller) processNextCronJobItem() bool {
+	key, quit := c.cronJobQueue.Get()
+	if quit {
+		return false
+	}
+	defer c.cronJobQueue.Done(key)
+
+	if err := c.syncCronJob(key); err != nil {
+		c.cronJobQueue.AddRateLimited(key)
+		utilruntime.HandleError(fmt.Errorf("error syncing cronjob %q: %s, requeuing", key, err.Error()))
+		return true
+	}
+
+	c.cronJobQueue.Forget(key)
+	return true
+}
+
+func (c *Controller) syncDaemonSet(key string) error {
+	namespace, name, err := cache.SplitMetaNamespaceKey(key)
+	if err != nil {
+		return err
+	}
+
+	ds, err := c.dsLister.DaemonSets(namespace).Get(name)
+	if err != nil {
+		if errors.IsNotFound(err) {
+			return c.handler.ProcessDaemonSet(key, true)
+		}
+		return err
+	}
+
+	return c.handler.ProcessDaemonSetObject(ds, false)
+}
+
+func (c *Controller) syncCronJob(key string) error {
+	namespace, name, err := cache.SplitMetaNamespaceKey(key)
+	if err != nil {
+		return err
+	}
+
+	cj, err := c.cronJobLister.CronJobs(namespace).Get(name)
+	if err != nil {
+		if errors.IsNotFound(err) {
+			return c.handler.ProcessCronJob(key, true)
+		}
+		return err
+	}
+
+	return c.handler.ProcessCronJobObject(cj, false)
 }
 
 func (c *Controller) syncJob(key string) error {

@@ -7,9 +7,10 @@ func DefaultConfig() *Config {
 		},
 		IgnoreFailedGracefulShutdown: true,
 		PvcMonitor: PvcMonitor{
-			Enabled:   true,
-			Interval:  5,
-			Threshold: 80,
+			Enabled:           true,
+			Interval:          5,
+			Threshold:         80,
+			CriticalThreshold: 90,
 		},
 		NodeMonitor: NodeMonitor{
 			Enabled: true,
@@ -38,6 +39,13 @@ func DefaultConfig() *Config {
 		JobMonitor: JobMonitor{
 			Enabled: false,
 		},
-		Workers: 1,
+		DaemonSetMonitor: DaemonSetMonitor{
+			Enabled: false,
+		},
+		CronJobMonitor: CronJobMonitor{
+			Enabled: false,
+		},
+		Workers:          1,
+		MaxLogBlockLines: 50,
 	}
 }

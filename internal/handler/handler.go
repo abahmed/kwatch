@@ -21,10 +21,14 @@ type Handler interface {
 	ProcessNode(key string, deleted bool) error
 	ProcessDeployment(key string, deleted bool) error
 	ProcessJob(key string, deleted bool) error
+	ProcessDaemonSet(key string, deleted bool) error
+	ProcessCronJob(key string, deleted bool) error
 	ProcessPodObject(pod *corev1.Pod, deleted bool) error
 	ProcessNodeObject(node *corev1.Node, deleted bool) error
 	ProcessDeploymentObject(deploy *appsv1.Deployment, deleted bool) error
 	ProcessJobObject(job *batchv1.Job, deleted bool) error
+	ProcessDaemonSetObject(ds *appsv1.DaemonSet, deleted bool) error
+	ProcessCronJobObject(cj *batchv1.CronJob, deleted bool) error
 	SetPodLister(lister corev1lister.PodLister)
 	SetNodeLister(lister corev1lister.NodeLister)
 	SetDeploymentLister(lister appsv1lister.DeploymentLister)
@@ -33,6 +37,7 @@ type Handler interface {
 	SetDaemonSetLister(lister appsv1lister.DaemonSetLister)
 	SetStatefulSetLister(lister appsv1lister.StatefulSetLister)
 	SetEventLister(lister corev1lister.EventLister)
+	SetCronJobLister(lister batchv1lister.CronJobLister)
 	SetSeen(baseline map[string]int64)
 	ClearSeen(podKey string)
 }
@@ -50,6 +55,7 @@ type handler struct {
 	nodeLister            corev1lister.NodeLister
 	deployLister          appsv1lister.DeploymentLister
 	jobLister             batchv1lister.JobLister
+	cronJobLister         batchv1lister.CronJobLister
 	rsLister              appsv1lister.ReplicaSetLister
 	dsLister              appsv1lister.DaemonSetLister
 	ssLister              appsv1lister.StatefulSetLister
@@ -138,6 +144,10 @@ func (h *handler) SetStatefulSetLister(lister appsv1lister.StatefulSetLister) {
 
 func (h *handler) SetEventLister(lister corev1lister.EventLister) {
 	h.eventLister = lister
+}
+
+func (h *handler) SetCronJobLister(lister batchv1lister.CronJobLister) {
+	h.cronJobLister = lister
 }
 
 func (h *handler) SetSeen(baseline map[string]int64) {
