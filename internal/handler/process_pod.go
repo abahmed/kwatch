@@ -3,6 +3,7 @@ package handler
 import (
 	"fmt"
 
+	"github.com/abahmed/kwatch/internal/correlation"
 	"github.com/abahmed/kwatch/internal/filter"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
@@ -72,9 +73,9 @@ func (h *handler) ProcessPodObject(pod *corev1.Pod, deleted bool) error {
 	h.executeContainersFilters(&ctx)
 
 	if isPodHealthy(pod) {
-		owner := h.resolveOwnerName(pod)
+		owner := correlation.ResolveOwnerName(pod, h.rsLister, h.dsLister, h.ssLister)
 		if owner != "" {
-			h.correlator.ClearSeenByPrefix(pod.Namespace + ":" + owner + ":")
+			h.ClearSeenByOwner(pod.Namespace, owner)
 		}
 	}
 	return nil

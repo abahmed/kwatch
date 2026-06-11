@@ -97,7 +97,7 @@ func (m *mockHandler) SetHorizontalPodAutoscalerLister(autoscalingv2lister.Horiz
 func (m *mockHandler) ProcessHorizontalPodAutoscaler(string, bool) error       { return m.err }
 func (m *mockHandler) ProcessHorizontalPodAutoscalerObject(*autoscalingv2.HorizontalPodAutoscaler, bool) error { return m.err }
 func (m *mockHandler) SetSeen(map[string]int64)                                {}
-func (m *mockHandler) ClearSeen(string)                                        {}
+func (m *mockHandler) ClearSeenByOwner(string, string)                        {}
 func (m *mockHandler) ClearSeenByPrefix(string) bool                           { return false }
 
 func TestNewCreatesController(t *testing.T) {

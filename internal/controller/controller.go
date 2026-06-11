@@ -817,32 +817,11 @@ func (c *Controller) buildSeenSet() {
 	}
 }
 
-func resolveOwnerName(pod *corev1.Pod, rsLister appsv1lister.ReplicaSetLister, dsLister appsv1lister.DaemonSetLister, ssLister appsv1lister.StatefulSetLister) string {
-	if len(pod.OwnerReferences) == 0 {
-		return pod.Name
-	}
-	owner := pod.OwnerReferences[0]
-	if owner.Kind == "ReplicaSet" && rsLister != nil {
-		rs, err := rsLister.ReplicaSets(pod.Namespace).Get(owner.Name)
-		if err == nil && len(rs.OwnerReferences) > 0 {
-			return rs.OwnerReferences[0].Name
-		}
-	}
-	if owner.Kind == "DaemonSet" && dsLister != nil {
-		if ds, err := dsLister.DaemonSets(pod.Namespace).Get(owner.Name); err == nil && len(ds.OwnerReferences) > 0 {
-			return ds.OwnerReferences[0].Name
-		}
-	}
-	if owner.Kind == "StatefulSet" && ssLister != nil {
-		if ss, err := ssLister.StatefulSets(pod.Namespace).Get(owner.Name); err == nil && len(ss.OwnerReferences) > 0 {
-			return ss.OwnerReferences[0].Name
-		}
-	}
-	return owner.Name
-}
-
 func addPodKeys(baseline map[string]int64, pod *corev1.Pod, rsLister appsv1lister.ReplicaSetLister, dsLister appsv1lister.DaemonSetLister, ssLister appsv1lister.StatefulSetLister, now time.Time) {
-	owner := resolveOwnerName(pod, rsLister, dsLister, ssLister)
+	owner := correlation.ResolveOwnerName(pod, rsLister, dsLister, ssLister)
+	if owner == "" {
+		return
+	}
 	reason := string(pod.Status.Phase)
 	if len(pod.Status.Conditions) > 0 {
 		reason = pod.Status.Conditions[0].Reason
@@ -855,7 +834,10 @@ func addPodKeys(baseline map[string]int64, pod *corev1.Pod, rsLister appsv1liste
 }
 
 func addContainerKeys(baseline map[string]int64, pod *corev1.Pod, cs corev1.ContainerStatus, rsLister appsv1lister.ReplicaSetLister, dsLister appsv1lister.DaemonSetLister, ssLister appsv1lister.StatefulSetLister, now time.Time) {
-	owner := resolveOwnerName(pod, rsLister, dsLister, ssLister)
+	owner := correlation.ResolveOwnerName(pod, rsLister, dsLister, ssLister)
+	if owner == "" {
+		return
+	}
 	reason := ""
 	if cs.State.Waiting != nil {
 		reason = cs.State.Waiting.Reason

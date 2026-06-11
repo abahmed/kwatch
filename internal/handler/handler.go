@@ -44,7 +44,7 @@ type Handler interface {
 	SetCronJobLister(lister batchv1lister.CronJobLister)
 	SetHorizontalPodAutoscalerLister(lister autoscalingv2lister.HorizontalPodAutoscalerLister)
 	SetSeen(baseline map[string]int64)
-	ClearSeen(podKey string)
+	ClearSeenByOwner(namespace, owner string)
 	ClearSeenByPrefix(prefix string) bool
 }
 
@@ -165,38 +165,10 @@ func (h *handler) SetSeen(baseline map[string]int64) {
 	h.correlator.SetSeen(baseline)
 }
 
-func (h *handler) ClearSeen(podKey string) {
-	h.correlator.ClearSeen(podKey)
+func (h *handler) ClearSeenByOwner(namespace, owner string) {
+	h.correlator.ClearSeenByPrefix(namespace + ":" + owner + ":")
 }
 
 func (h *handler) ClearSeenByPrefix(prefix string) bool {
 	return h.correlator.ClearSeenByPrefix(prefix)
-}
-
-// resolveOwnerName resolves the owning controller name for a pod using
-// the available listers. Returns "" on failure — never guesses.
-func (h *handler) resolveOwnerName(pod *corev1.Pod) string {
-	if len(pod.OwnerReferences) == 0 {
-		return pod.Name
-	}
-	owner := pod.OwnerReferences[0]
-	if owner.Kind == "ReplicaSet" && h.rsLister != nil {
-		rs, err := h.rsLister.ReplicaSets(pod.Namespace).Get(owner.Name)
-		if err == nil && len(rs.OwnerReferences) > 0 {
-			return rs.OwnerReferences[0].Name
-		}
-	}
-	if owner.Kind == "DaemonSet" && h.dsLister != nil {
-		ds, err := h.dsLister.DaemonSets(pod.Namespace).Get(owner.Name)
-		if err == nil && len(ds.OwnerReferences) > 0 {
-			return ds.OwnerReferences[0].Name
-		}
-	}
-	if owner.Kind == "StatefulSet" && h.ssLister != nil {
-		ss, err := h.ssLister.StatefulSets(pod.Namespace).Get(owner.Name)
-		if err == nil && len(ss.OwnerReferences) > 0 {
-			return ss.OwnerReferences[0].Name
-		}
-	}
-	return owner.Name
 }
