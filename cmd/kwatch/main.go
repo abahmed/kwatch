@@ -89,8 +89,9 @@ func main() {
 		StartupQuiet:      time.Duration(startupQuiet) * time.Second,
 		Baseline:          baseline,
 		Enricher:          &enricher.DefaultEnricher{SeverityByOwnerKind: cfg.SeverityByOwnerKind},
-		EscalationEnabled: cfg.Correlation.Escalation.Enabled,
-		EscalationTiers:   cfg.Correlation.Escalation.Tiers,
+		EscalationEnabled:         cfg.Correlation.Escalation.Enabled,
+		EscalationTiers:           cfg.Correlation.Escalation.Tiers,
+		InhibitNodeSuppressesPods: cfg.Inhibition.NodeSuppressesPods,
 		LifecycleHook: func(inc *model.Incident, action model.IncidentAction) {
 			if action != model.ActionSkip {
 				alertManager.NotifyIncident(inc, action)

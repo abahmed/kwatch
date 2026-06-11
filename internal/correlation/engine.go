@@ -27,6 +27,7 @@ type Config struct {
 	OnBaselineChange  func(baseline map[string]int64)
 	EscalationEnabled bool
 	EscalationTiers   []int
+	InhibitNodeSuppressesPods bool
 }
 
 // BuildKey constructs the incident key used for dedup, grouping, and baseline.
@@ -61,11 +62,12 @@ func escalateSeverity(s string) string {
 const defaultBaselineTTL = 24 * time.Hour
 
 type Engine struct {
-	mu          sync.Mutex
-	state       map[string]*model.Incident
-	config      Config
-	startedAt   time.Time
-	seen        map[string]int64
+	mu                   sync.Mutex
+	state                map[string]*model.Incident
+	config               Config
+	startedAt            time.Time
+	seen                 map[string]int64
+	activeNodeIncidents  map[string]bool
 }
 
 func NewEngine(cfg Config) *Engine {
@@ -79,9 +81,10 @@ func NewEngine(cfg Config) *Engine {
 		cfg.BaselineTTL = defaultBaselineTTL
 	}
 	e := &Engine{
-		state:     make(map[string]*model.Incident),
-		config:    cfg,
-		startedAt: time.Now(),
+		state:               make(map[string]*model.Incident),
+		config:              cfg,
+		startedAt:           time.Now(),
+		activeNodeIncidents: make(map[string]bool),
 	}
 	if cfg.Baseline != nil {
 		e.SetSeen(cfg.Baseline)
@@ -180,6 +183,15 @@ func normalizeReason(reason string) string {
 	return reason
 }
 
+func (e *Engine) findNodeIncident(nodeName string) *model.Incident {
+	for _, inc := range e.state {
+		if inc.Resource == "node" && inc.Name == nodeName {
+			return inc
+		}
+	}
+	return nil
+}
+
 func (e *Engine) GetLastContainerState(namespace, podName, containerName string) *model.ContainerState {
 	e.mu.Lock()
 	defer e.mu.Unlock()
@@ -210,6 +222,25 @@ func (e *Engine) Process(ev event.Event, owner string, cs *model.ContainerState)
 	if e.isBaselined(key) {
 		return nil, model.ActionSkip
 	}
+
+	res := ev.Resource
+	if res == "" {
+		res = "pod"
+	}
+
+	// Track active node incidents for pod suppression
+	if res == "node" && ev.NodeName != "" {
+		e.activeNodeIncidents[ev.NodeName] = true
+	}
+
+	// Suppress pod incidents when the node has an active incident
+	if res == "pod" && ev.NodeName != "" && e.activeNodeIncidents[ev.NodeName] {
+		if nodeInc := e.findNodeIncident(ev.NodeName); nodeInc != nil {
+			nodeInc.SuppressedPods++
+		}
+		return nil, model.ActionSkip
+	}
+
 	now := time.Now()
 
 	if inc, ok := e.state[key]; ok {
@@ -250,11 +281,6 @@ func (e *Engine) Process(ev event.Event, owner string, cs *model.ContainerState)
 		}
 		e.config.Enricher.Enrich(&ev, inc)
 		return inc, model.ActionUpdate
-	}
-
-	res := ev.Resource
-	if res == "" {
-		res = "pod"
 	}
 
 	inc := &model.Incident{
@@ -354,6 +380,9 @@ func (e *Engine) ResolveByResource(resource, name string) {
 	var baselineChanged bool
 
 	e.mu.Lock()
+	if resource == "node" {
+		delete(e.activeNodeIncidents, name)
+	}
 	for key, inc := range e.state {
 		if inc.Resource == resource && inc.Name == name && inc.State != model.StateResolved && inc.State != model.StateStale {
 			inc.State = model.StateResolved

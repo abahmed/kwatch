@@ -48,5 +48,6 @@ type Incident struct {
 	State         IncidentState
 	LastUpdate    time.Time
 	LastContainerState *ContainerState
-	Severity      string
+	Severity           string
+	SuppressedPods     int
 }

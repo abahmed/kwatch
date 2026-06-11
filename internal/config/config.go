@@ -124,8 +124,18 @@ type Config struct {
 	// ordering across pods becomes non-deterministic (engine dedup unaffected).
 	Workers int `yaml:"workers"`
 
+	// Inhibition configures suppression rules between monitors.
+	Inhibition Inhibition `yaml:"inhibition"`
+
 	// CrdConfig configures the KwatchConfig CRD watcher.
 	CrdConfig CrdConfig `yaml:"crd"`
+}
+
+// Inhibition configures cross-monitor suppression rules.
+type Inhibition struct {
+	// NodeSuppressesPods if true, pod incidents on a node with an active
+	// node incident are suppressed to reduce noise. Default true.
+	NodeSuppressesPods bool `yaml:"nodeSuppressesPods"`
 }
 
 // HpaMonitor configures HPA-maxed-out detection.
