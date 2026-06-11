@@ -231,3 +231,142 @@ func (m *multiJobLister) GetPodJobs(pod *corev1.Pod) ([]batchv1.Job, error) {
 	}
 	return nil, fmt.Errorf("no jobs found for pod %s/%s", pod.Namespace, pod.Name)
 }
+
+type multiDaemonSetLister struct {
+	listers []appsv1lister.DaemonSetLister
+}
+
+func (m *multiDaemonSetLister) List(selector labels.Selector) ([]*appsv1.DaemonSet, error) {
+	var all []*appsv1.DaemonSet
+	for _, l := range m.listers {
+		items, err := l.List(selector)
+		if err != nil {
+			return nil, err
+		}
+		all = append(all, items...)
+	}
+	return all, nil
+}
+
+func (m *multiDaemonSetLister) DaemonSets(namespace string) appsv1lister.DaemonSetNamespaceLister {
+	nsl := make([]appsv1lister.DaemonSetNamespaceLister, 0, len(m.listers))
+	for _, l := range m.listers {
+		nsl = append(nsl, l.DaemonSets(namespace))
+	}
+	return &multiDaemonSetNamespaceLister{listers: nsl}
+}
+
+func (m *multiDaemonSetLister) GetPodDaemonSets(pod *corev1.Pod) ([]*appsv1.DaemonSet, error) {
+	for _, l := range m.listers {
+		dl, ok := interface{}(l).(interface{ GetPodDaemonSets(*corev1.Pod) ([]*appsv1.DaemonSet, error) })
+		if ok {
+			dss, err := dl.GetPodDaemonSets(pod)
+			if err == nil {
+				return dss, nil
+			}
+		}
+	}
+	return nil, fmt.Errorf("no daemonsets found for pod %s/%s", pod.Namespace, pod.Name)
+}
+
+func (m *multiDaemonSetLister) GetHistoryDaemonSets(history *appsv1.ControllerRevision) ([]*appsv1.DaemonSet, error) {
+	for _, l := range m.listers {
+		dl, ok := interface{}(l).(interface{ GetHistoryDaemonSets(*appsv1.ControllerRevision) ([]*appsv1.DaemonSet, error) })
+		if ok {
+			dss, err := dl.GetHistoryDaemonSets(history)
+			if err == nil {
+				return dss, nil
+			}
+		}
+	}
+	return nil, fmt.Errorf("no daemonsets found for history %s/%s", history.Namespace, history.Name)
+}
+
+type multiDaemonSetNamespaceLister struct {
+	listers []appsv1lister.DaemonSetNamespaceLister
+}
+
+func (m *multiDaemonSetNamespaceLister) List(selector labels.Selector) ([]*appsv1.DaemonSet, error) {
+	var all []*appsv1.DaemonSet
+	for _, l := range m.listers {
+		items, err := l.List(selector)
+		if err != nil {
+			return nil, err
+		}
+		all = append(all, items...)
+	}
+	return all, nil
+}
+
+func (m *multiDaemonSetNamespaceLister) Get(name string) (*appsv1.DaemonSet, error) {
+	for _, l := range m.listers {
+		item, err := l.Get(name)
+		if err == nil {
+			return item, nil
+		}
+	}
+	return nil, fmt.Errorf("daemonset %q not found in any namespace lister", name)
+}
+
+type multiStatefulSetLister struct {
+	listers []appsv1lister.StatefulSetLister
+}
+
+func (m *multiStatefulSetLister) List(selector labels.Selector) ([]*appsv1.StatefulSet, error) {
+	var all []*appsv1.StatefulSet
+	for _, l := range m.listers {
+		items, err := l.List(selector)
+		if err != nil {
+			return nil, err
+		}
+		all = append(all, items...)
+	}
+	return all, nil
+}
+
+func (m *multiStatefulSetLister) StatefulSets(namespace string) appsv1lister.StatefulSetNamespaceLister {
+	nsl := make([]appsv1lister.StatefulSetNamespaceLister, 0, len(m.listers))
+	for _, l := range m.listers {
+		nsl = append(nsl, l.StatefulSets(namespace))
+	}
+	return &multiStatefulSetNamespaceLister{listers: nsl}
+}
+
+func (m *multiStatefulSetLister) GetPodStatefulSets(pod *corev1.Pod) ([]*appsv1.StatefulSet, error) {
+	for _, l := range m.listers {
+		sl, ok := interface{}(l).(interface{ GetPodStatefulSets(*corev1.Pod) ([]*appsv1.StatefulSet, error) })
+		if ok {
+			ss, err := sl.GetPodStatefulSets(pod)
+			if err == nil {
+				return ss, nil
+			}
+		}
+	}
+	return nil, fmt.Errorf("no statefulsets found for pod %s/%s", pod.Namespace, pod.Name)
+}
+
+type multiStatefulSetNamespaceLister struct {
+	listers []appsv1lister.StatefulSetNamespaceLister
+}
+
+func (m *multiStatefulSetNamespaceLister) List(selector labels.Selector) ([]*appsv1.StatefulSet, error) {
+	var all []*appsv1.StatefulSet
+	for _, l := range m.listers {
+		items, err := l.List(selector)
+		if err != nil {
+			return nil, err
+		}
+		all = append(all, items...)
+	}
+	return all, nil
+}
+
+func (m *multiStatefulSetNamespaceLister) Get(name string) (*appsv1.StatefulSet, error) {
+	for _, l := range m.listers {
+		item, err := l.Get(name)
+		if err == nil {
+			return item, nil
+		}
+	}
+	return nil, fmt.Errorf("statefulset %q not found in any namespace lister", name)
+}

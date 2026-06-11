@@ -5,6 +5,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/abahmed/kwatch/internal/enricher"
 	"github.com/abahmed/kwatch/internal/event"
 	"github.com/abahmed/kwatch/internal/model"
 	"github.com/stretchr/testify/assert"
@@ -363,4 +364,37 @@ func TestStartupQuietSuppressesAllBeforeSeen(t *testing.T) {
 
 	_, action := e.Process(ev, "deploy-1", nil)
 	assert.Equal(t, model.ActionSkip, action)
+}
+
+func TestStsOwnedPodsGroupByStsName(t *testing.T) {
+	e := NewEngine(Config{
+		Window:   10 * time.Minute,
+		Cooldown: 1 * time.Nanosecond,
+		Enricher: &enricher.DefaultEnricher{SeverityByOwnerKind: map[string]string{"StatefulSet": "high"}},
+	})
+
+	ev1 := event.Event{
+		PodName:   "db-0",
+		Namespace: "default",
+		Reason:    "CrashLoopBackOff",
+		OwnerKind: "StatefulSet",
+	}
+	ev2 := event.Event{
+		PodName:   "db-1",
+		Namespace: "default",
+		Reason:    "CrashLoopBackOff",
+		OwnerKind: "StatefulSet",
+	}
+
+	inc1, action1 := e.Process(ev1, "my-sts", nil)
+	inc2, action2 := e.Process(ev2, "my-sts", nil)
+
+	assert.Equal(t, model.ActionCreate, action1)
+	assert.Equal(t, model.ActionUpdate, action2)
+	assert.Equal(t, inc1.Key, inc2.Key)
+	assert.Equal(t, "my-sts", inc1.Name)
+	assert.Equal(t, "high", inc1.Severity)
+	assert.True(t, inc1.Resources["db-0"])
+	assert.True(t, inc1.Resources["db-1"])
+	assert.Equal(t, 2, inc1.Count)
 }

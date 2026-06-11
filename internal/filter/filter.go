@@ -40,6 +40,8 @@ type Context struct {
 	Owner    *apiv1.OwnerReference
 	Events   *[]corev1.Event
 	RSLister appsv1lister.ReplicaSetLister
+	DSLister appsv1lister.DaemonSetLister
+	SSLister appsv1lister.StatefulSetLister
 
 	PodHasIssues        bool
 	ContainersHasIssues bool

@@ -83,6 +83,8 @@ func (m *mockHandler) SetNodeLister(corev1lister.NodeLister)                   {
 func (m *mockHandler) SetDeploymentLister(appsv1lister.DeploymentLister)       {}
 func (m *mockHandler) SetJobLister(batchv1lister.JobLister)                    {}
 func (m *mockHandler) SetReplicaLister(appsv1lister.ReplicaSetLister)          {}
+func (m *mockHandler) SetDaemonSetLister(appsv1lister.DaemonSetLister)         {}
+func (m *mockHandler) SetStatefulSetLister(appsv1lister.StatefulSetLister)     {}
 func (m *mockHandler) SetSeen([]string)                                        {}
 func (m *mockHandler) ClearSeen(string)                                        {}
 

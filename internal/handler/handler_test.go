@@ -395,6 +395,92 @@ func TestProcessPodIgnoredContainerName(t *testing.T) {
 	assert.NoError(t, h.ProcessPodObject(pod, false))
 }
 
+func TestHealthyPodZeroAPICalls(t *testing.T) {
+	client := fake.NewSimpleClientset()
+	cfg := &config.Config{}
+	e := testCorrelator()
+	h := NewHandler(client, cfg, e, testAlertMgr)
+
+	pod := &corev1.Pod{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "healthy",
+			Namespace: "default",
+		},
+		Spec: corev1.PodSpec{
+			NodeName: "node-1",
+		},
+		Status: corev1.PodStatus{
+			Phase: corev1.PodRunning,
+			Conditions: []corev1.PodCondition{
+				{Type: corev1.PodReady, Status: corev1.ConditionTrue},
+			},
+			ContainerStatuses: []corev1.ContainerStatus{
+				{
+					Name: "app",
+					State: corev1.ContainerState{
+						Running: &corev1.ContainerStateRunning{StartedAt: metav1.Now()},
+					},
+				},
+			},
+		},
+	}
+
+	startCount := len(client.Fake.Actions())
+	err := h.ProcessPodObject(pod, false)
+	assert.NoError(t, err)
+	endCount := len(client.Fake.Actions())
+
+	assert.Equal(t, startCount, endCount, "healthy pod should not trigger any API calls")
+}
+
+func TestBrokenPodMakesAPICalls(t *testing.T) {
+	client := fake.NewSimpleClientset()
+	cfg := &config.Config{
+		MaxRecentLogLines: 10,
+	}
+	e := testCorrelator()
+	h := NewHandler(client, cfg, e, testAlertMgr)
+
+	pod := &corev1.Pod{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "broken",
+			Namespace: "default",
+		},
+		Spec: corev1.PodSpec{
+			NodeName: "node-1",
+		},
+		Status: corev1.PodStatus{
+			Phase: corev1.PodRunning,
+			ContainerStatuses: []corev1.ContainerStatus{
+				{
+					Name:         "app",
+					RestartCount: 5,
+					LastTerminationState: corev1.ContainerState{
+						Terminated: &corev1.ContainerStateTerminated{
+							ExitCode: 137,
+							Reason:   "OOMKilled",
+							Message:  "memory limit exceeded",
+						},
+					},
+					State: corev1.ContainerState{
+						Waiting: &corev1.ContainerStateWaiting{
+							Reason:  "CrashLoopBackOff",
+							Message: "backoff restart",
+						},
+					},
+				},
+			},
+		},
+	}
+
+	startCount := len(client.Fake.Actions())
+	err := h.ProcessPodObject(pod, false)
+	assert.NoError(t, err)
+	endCount := len(client.Fake.Actions())
+
+	assert.Greater(t, endCount, startCount, "broken pod should trigger API calls (events, logs)")
+}
+
 func TestProcessPodSucceededPhase(t *testing.T) {
 	client := fake.NewSimpleClientset()
 	cfg := &config.Config{}

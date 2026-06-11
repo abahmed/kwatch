@@ -7,6 +7,7 @@ import (
 	"github.com/abahmed/kwatch/internal/config"
 	"github.com/abahmed/kwatch/internal/model"
 	"github.com/stretchr/testify/assert"
+	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes/fake"
@@ -1667,4 +1668,41 @@ func TestPodStatusFilterAlreadyKnown(t *testing.T) {
 	filter := PodStatusFilter{}
 	result := filter.Execute(ctx)
 	assert.True(result)
+}
+
+func TestPodOwnersFilterStatefulSet(t *testing.T) {
+	assert := assert.New(t)
+
+	sts := &appsv1.StatefulSet{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "my-sts",
+			Namespace: "default",
+		},
+	}
+	client := fake.NewSimpleClientset(sts)
+
+	ctx := &Context{
+		Client: client,
+		Config: &config.Config{},
+		Owner:  nil,
+		Pod: &corev1.Pod{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      "my-sts-0",
+				Namespace: "default",
+				OwnerReferences: []metav1.OwnerReference{
+					{
+						Name: "my-sts",
+						Kind: "StatefulSet",
+					},
+				},
+			},
+		},
+	}
+
+	filter := PodOwnersFilter{}
+	result := filter.Execute(ctx)
+	assert.False(result)
+	assert.NotNil(ctx.Owner)
+	assert.Equal("my-sts", ctx.Owner.Name)
+	assert.Equal("StatefulSet", ctx.Owner.Kind)
 }

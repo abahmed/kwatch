@@ -38,6 +38,10 @@ type Controller struct {
 	jobsSynced             []cache.InformerSynced
 	rsLister               appsv1lister.ReplicaSetLister
 	rsSynced               []cache.InformerSynced
+	dsLister               appsv1lister.DaemonSetLister
+	dsSynced               []cache.InformerSynced
+	ssLister               appsv1lister.StatefulSetLister
+	ssSynced               []cache.InformerSynced
 	deploymentWatchEnabled bool
 	jobWatchEnabled        bool
 }
@@ -154,6 +158,50 @@ func (fs factorySet) rsInformers() []cache.SharedIndexInformer {
 	out := make([]cache.SharedIndexInformer, 0, len(fs.perNamespace))
 	for _, f := range fs.perNamespace {
 		out = append(out, f.Apps().V1().ReplicaSets().Informer())
+	}
+	return out
+}
+
+func (fs factorySet) dsLister() appsv1lister.DaemonSetLister {
+	if fs.global != nil {
+		return fs.global.Apps().V1().DaemonSets().Lister()
+	}
+	listers := make([]appsv1lister.DaemonSetLister, 0, len(fs.perNamespace))
+	for _, f := range fs.perNamespace {
+		listers = append(listers, f.Apps().V1().DaemonSets().Lister())
+	}
+	return &multiDaemonSetLister{listers: listers}
+}
+
+func (fs factorySet) dsInformers() []cache.SharedIndexInformer {
+	if fs.global != nil {
+		return []cache.SharedIndexInformer{fs.global.Apps().V1().DaemonSets().Informer()}
+	}
+	out := make([]cache.SharedIndexInformer, 0, len(fs.perNamespace))
+	for _, f := range fs.perNamespace {
+		out = append(out, f.Apps().V1().DaemonSets().Informer())
+	}
+	return out
+}
+
+func (fs factorySet) ssLister() appsv1lister.StatefulSetLister {
+	if fs.global != nil {
+		return fs.global.Apps().V1().StatefulSets().Lister()
+	}
+	listers := make([]appsv1lister.StatefulSetLister, 0, len(fs.perNamespace))
+	for _, f := range fs.perNamespace {
+		listers = append(listers, f.Apps().V1().StatefulSets().Lister())
+	}
+	return &multiStatefulSetLister{listers: listers}
+}
+
+func (fs factorySet) ssInformers() []cache.SharedIndexInformer {
+	if fs.global != nil {
+		return []cache.SharedIndexInformer{fs.global.Apps().V1().StatefulSets().Informer()}
+	}
+	out := make([]cache.SharedIndexInformer, 0, len(fs.perNamespace))
+	for _, f := range fs.perNamespace {
+		out = append(out, f.Apps().V1().StatefulSets().Informer())
 	}
 	return out
 }
@@ -294,6 +342,30 @@ func New(
 		h.SetReplicaLister(c.rsLister)
 	}
 
+	{
+		c.dsLister = fs.dsLister()
+
+		var dsSynced []cache.InformerSynced
+		for _, inf := range fs.dsInformers() {
+			dsSynced = append(dsSynced, inf.HasSynced)
+		}
+		c.dsSynced = dsSynced
+
+		h.SetDaemonSetLister(c.dsLister)
+	}
+
+	{
+		c.ssLister = fs.ssLister()
+
+		var ssSynced []cache.InformerSynced
+		for _, inf := range fs.ssInformers() {
+			ssSynced = append(ssSynced, inf.HasSynced)
+		}
+		c.ssSynced = ssSynced
+
+		h.SetStatefulSetLister(c.ssLister)
+	}
+
 	stopCh := make(chan struct{})
 	for _, f := range factories {
 		f.Start(stopCh)
@@ -355,9 +427,11 @@ func (c *Controller) Run(ctx context.Context, workers int) error {
 	klog.InfoS("starting controller")
 
 	klog.InfoS("waiting for informer caches to sync")
-	syncFns := make([]cache.InformerSynced, 0, 1+len(c.podsSynced)+len(c.rsSynced)+len(c.deploysSynced)+len(c.jobsSynced))
+	syncFns := make([]cache.InformerSynced, 0, 1+len(c.podsSynced)+len(c.rsSynced)+len(c.dsSynced)+len(c.ssSynced)+len(c.deploysSynced)+len(c.jobsSynced))
 	syncFns = append(syncFns, c.podsSynced...)
 	syncFns = append(syncFns, c.rsSynced...)
+	syncFns = append(syncFns, c.dsSynced...)
+	syncFns = append(syncFns, c.ssSynced...)
 	if c.nodesSynced != nil {
 		syncFns = append(syncFns, c.nodesSynced)
 	}
