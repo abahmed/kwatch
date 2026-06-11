@@ -44,6 +44,8 @@ type Handler interface {
 	SetEventLister(lister corev1lister.EventLister)
 	SetCronJobLister(lister batchv1lister.CronJobLister)
 	SetHorizontalPodAutoscalerLister(lister autoscalingv2lister.HorizontalPodAutoscalerLister)
+	SetSecretLister(lister corev1lister.SecretLister)
+	SweepTLSSecrets()
 	SetSeen(baseline map[string]int64)
 	ClearSeenByOwner(namespace, owner string)
 	ClearSeenByPrefix(prefix string) bool
@@ -70,6 +72,7 @@ type handler struct {
 	hpaLister             autoscalingv2lister.HorizontalPodAutoscalerLister
 	firstMaxedHPAs       map[string]time.Time
 	hpaMu                sync.Mutex
+	secretLister         corev1lister.SecretLister
 }
 
 func NewHandler(
@@ -159,6 +162,10 @@ func (h *handler) SetEventLister(lister corev1lister.EventLister) {
 
 func (h *handler) SetHorizontalPodAutoscalerLister(lister autoscalingv2lister.HorizontalPodAutoscalerLister) {
 	h.hpaLister = lister
+}
+
+func (h *handler) SetSecretLister(lister corev1lister.SecretLister) {
+	h.secretLister = lister
 }
 
 func (h *handler) SetCronJobLister(lister batchv1lister.CronJobLister) {

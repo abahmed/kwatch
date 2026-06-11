@@ -59,6 +59,8 @@ type Controller struct {
 	hpaLister              autoscalingv2lister.HorizontalPodAutoscalerLister
 	hpaSynced              []cache.InformerSynced
 	hpaWatchEnabled        bool
+	secretLister           corev1lister.SecretLister
+	secretsSynced          []cache.InformerSynced
 }
 
 func newFactories(client kubernetes.Interface, cfg *config.Config, resync time.Duration) (factorySet, []informers.SharedInformerFactory) {
@@ -543,6 +545,42 @@ func New(
 		factories = append(factories, eventFactories...)
 	}
 
+	if cfg.TlsMonitor.Enabled {
+		var tlsFactories []informers.SharedInformerFactory
+		if len(cfg.AllowedNamespaces) <= 1 {
+			opts := []informers.SharedInformerOption{
+				informers.WithTweakListOptions(func(o *metav1.ListOptions) {
+					o.FieldSelector = "type=kubernetes.io/tls"
+				}),
+			}
+			if len(cfg.AllowedNamespaces) == 1 {
+				opts = append(opts, informers.WithNamespace(cfg.AllowedNamespaces[0]))
+			}
+			tf := informers.NewSharedInformerFactoryWithOptions(client, resync, opts...)
+			tlsFactories = append(tlsFactories, tf)
+			c.secretLister = tf.Core().V1().Secrets().Lister()
+			c.secretsSynced = append(c.secretsSynced, tf.Core().V1().Secrets().Informer().HasSynced)
+		} else {
+			listers := make([]corev1lister.SecretLister, 0, len(cfg.AllowedNamespaces))
+			for _, ns := range cfg.AllowedNamespaces {
+				ns := ns
+				opts := []informers.SharedInformerOption{
+					informers.WithTweakListOptions(func(o *metav1.ListOptions) {
+						o.FieldSelector = "type=kubernetes.io/tls"
+					}),
+					informers.WithNamespace(ns),
+				}
+				tf := informers.NewSharedInformerFactoryWithOptions(client, resync, opts...)
+				tlsFactories = append(tlsFactories, tf)
+				listers = append(listers, tf.Core().V1().Secrets().Lister())
+				c.secretsSynced = append(c.secretsSynced, tf.Core().V1().Secrets().Informer().HasSynced)
+			}
+			c.secretLister = &multiSecretLister{listers: listers}
+		}
+		h.SetSecretLister(c.secretLister)
+		factories = append(factories, tlsFactories...)
+	}
+
 	stopCh := make(chan struct{})
 	for _, f := range factories {
 		f.Start(stopCh)
@@ -634,7 +672,7 @@ func (c *Controller) Run(ctx context.Context, workers int) error {
 	klog.InfoS("starting controller")
 
 	klog.InfoS("waiting for informer caches to sync")
-	syncFns := make([]cache.InformerSynced, 0, 1+len(c.podsSynced)+len(c.rsSynced)+len(c.dsSynced)+len(c.ssSynced)+len(c.eventsSynced)+len(c.deploysSynced)+len(c.jobsSynced)+len(c.cronJobsSynced))
+	syncFns := make([]cache.InformerSynced, 0, 1+len(c.podsSynced)+len(c.rsSynced)+len(c.dsSynced)+len(c.ssSynced)+len(c.eventsSynced)+len(c.deploysSynced)+len(c.jobsSynced)+len(c.cronJobsSynced)+len(c.secretsSynced))
 	syncFns = append(syncFns, c.podsSynced...)
 	syncFns = append(syncFns, c.rsSynced...)
 	syncFns = append(syncFns, c.dsSynced...)
@@ -647,6 +685,7 @@ func (c *Controller) Run(ctx context.Context, workers int) error {
 	syncFns = append(syncFns, c.jobsSynced...)
 	syncFns = append(syncFns, c.cronJobsSynced...)
 	syncFns = append(syncFns, c.hpaSynced...)
+	syncFns = append(syncFns, c.secretsSynced...)
 	if !cache.WaitForCacheSync(ctx.Done(), syncFns...) {
 		return fmt.Errorf("failed to wait for caches to sync")
 	}
