@@ -1,14 +1,18 @@
 package main
 
 import (
+	"bufio"
 	"context"
+	"encoding/json"
 	"flag"
 	"fmt"
 	"os"
 	"os/signal"
+	"strings"
 	"syscall"
 	"time"
 
+	"github.com/abahmed/kwatch/internal/alert"
 	"github.com/abahmed/kwatch/internal/client"
 	"github.com/abahmed/kwatch/internal/config"
 	"github.com/abahmed/kwatch/internal/constant"
@@ -16,6 +20,7 @@ import (
 	"github.com/abahmed/kwatch/internal/correlation"
 	"github.com/abahmed/kwatch/internal/crdwatch"
 	"github.com/abahmed/kwatch/internal/enricher"
+	"github.com/abahmed/kwatch/internal/event"
 	"github.com/abahmed/kwatch/internal/handler"
 	"github.com/abahmed/kwatch/internal/health"
 	"github.com/abahmed/kwatch/internal/heartbeat"
@@ -38,6 +43,18 @@ func main() {
 	if *showVersion {
 		fmt.Println(version.Short())
 		os.Exit(0)
+	}
+
+	args := flag.Args()
+	if len(args) > 0 {
+		switch args[0] {
+		case "lint":
+			runLint()
+			return
+		case "replay":
+			runReplay()
+			return
+		}
 	}
 
 	ctx, cancel := context.WithCancel(context.Background())
@@ -217,4 +234,62 @@ func main() {
 	cancel()
 	healthServer.Stop(ctx)
 	os.Exit(0)
+}
+
+func runLint() {
+	cfg, err := config.LoadConfig()
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "ERROR: %v\n", err)
+		os.Exit(1)
+	}
+	var errs []string
+	if len(cfg.Alert) == 0 {
+		errs = append(errs, "no alert providers configured")
+	}
+	if cfg.HealthCheck.Enabled && cfg.HealthCheck.Port <= 0 {
+		errs = append(errs, "healthCheck.port must be > 0")
+	}
+	if cfg.MaxRecentLogLines < 0 {
+		errs = append(errs, "maxRecentLogLines must be >= 0")
+	}
+	if len(errs) > 0 {
+		for _, e := range errs {
+			fmt.Fprintf(os.Stderr, "  %s\n", e)
+		}
+		os.Exit(1)
+	}
+	fmt.Println("config OK")
+}
+
+func runReplay() {
+	cfg, err := config.LoadConfig()
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "ERROR: %v\n", err)
+		os.Exit(1)
+	}
+
+	am := &alert.AlertManager{}
+	am.Init(cfg.Alert, &cfg.App)
+	am.SetTemplates(cfg.Templates)
+	if cfg.MaxRecentLogLines > 0 {
+		am.SetMaxLogLines(int(cfg.MaxRecentLogLines))
+	}
+
+	scanner := bufio.NewScanner(os.Stdin)
+	for scanner.Scan() {
+		line := strings.TrimSpace(scanner.Text())
+		if line == "" || strings.HasPrefix(line, "#") {
+			continue
+		}
+		var ev event.Event
+		if err := json.Unmarshal([]byte(line), &ev); err != nil {
+			fmt.Fprintf(os.Stderr, "ERROR: invalid event line: %v\n  %s\n", err, line)
+			continue
+		}
+		am.Notify(fmt.Sprintf("[replay] %s/%s %s: %s", ev.Namespace, ev.PodName, ev.Reason, ev.Events))
+	}
+	if err := scanner.Err(); err != nil {
+		fmt.Fprintf(os.Stderr, "ERROR: reading stdin: %v\n", err)
+		os.Exit(1)
+	}
 }
