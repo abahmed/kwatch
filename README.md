@@ -27,6 +27,9 @@
   <a href="https://github.com/abahmed/kwatch">
     <img src="https://img.shields.io/github/go-mod/go-version/abahmed/kwatch" />
   </a>
+  <a href="https://artifacthub.io/packages/helm/kwatch/kwatch">
+    <img src="https://img.shields.io/endpoint?url=https://artifacthub.io/badge/repository/kwatch" />
+  </a>
   <a href="https://discord.gg/kzJszdKmJ7">
     <img src="https://img.shields.io/discord/911647396918870036?label=Discord&logo=discord">
   </a>

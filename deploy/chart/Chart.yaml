@@ -23,4 +23,11 @@ maintainers:
   - email: yaserkalali.work@gmail.com
     name: yaser
     url: github.com/yaskinny
+annotations:
+  artifacthub.io/links: |
+    - name: Documentation
+      url: https://kwatch.dev
+    - name: Source
+      url: https://github.com/abahmed/kwatch
+  artifacthub.io/license: MIT
 
