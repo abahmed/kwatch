@@ -92,6 +92,10 @@ func main() {
 		EscalationEnabled:         cfg.Correlation.Escalation.Enabled,
 		EscalationTiers:           cfg.Correlation.Escalation.Tiers,
 		InhibitNodeSuppressesPods: cfg.Inhibition.NodeSuppressesPods,
+		StormEnabled:              cfg.StormConfig.Enabled,
+		StormThreshold:            cfg.StormConfig.Threshold,
+		StormWindow:               time.Duration(cfg.StormConfig.WindowMinutes) * time.Minute,
+		StormDigestInterval:       time.Duration(cfg.StormConfig.DigestIntervalMinutes) * time.Minute,
 		LifecycleHook: func(inc *model.Incident, action model.IncidentAction) {
 			if action != model.ActionSkip {
 				alertManager.NotifyIncident(inc, action)

@@ -19,6 +19,8 @@ const (
 	ActionSkip
 	ActionStale
 	ActionResolved
+	ActionDigest
+	ActionDigestFlush
 )
 
 type IncidentState int

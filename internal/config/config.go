@@ -127,8 +127,23 @@ type Config struct {
 	// Inhibition configures suppression rules between monitors.
 	Inhibition Inhibition `yaml:"inhibition"`
 
+	// StormConfig configures digest aggregation for alert storms.
+	StormConfig StormConfig `yaml:"storm"`
+
 	// CrdConfig configures the KwatchConfig CRD watcher.
 	CrdConfig CrdConfig `yaml:"crd"`
+}
+
+// StormConfig configures digest aggregation for high-frequency incidents.
+type StormConfig struct {
+	// Enabled if set to true, excessive creates are batched into a digest.
+	Enabled bool `yaml:"enabled"`
+	// Threshold is the max creates per window before digest mode activates.
+	Threshold int `yaml:"threshold"`
+	// WindowMinutes is the sliding window for tracking create rate.
+	WindowMinutes int `yaml:"windowMinutes"`
+	// DigestIntervalMinutes is how often a digest summary is sent.
+	DigestIntervalMinutes int `yaml:"digestIntervalMinutes"`
 }
 
 // Inhibition configures cross-monitor suppression rules.

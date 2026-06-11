@@ -3,6 +3,7 @@ package correlation
 import (
 	"context"
 	"fmt"
+	"sort"
 	"strconv"
 	"strings"
 	"sync"
@@ -13,6 +14,12 @@ import (
 	"github.com/abahmed/kwatch/internal/model"
 	"k8s.io/klog/v2"
 )
+
+type digestEntry struct {
+	key     string
+	reason  string
+	ns      string
+}
 
 type Config struct {
 	Window            time.Duration
@@ -28,6 +35,10 @@ type Config struct {
 	EscalationEnabled bool
 	EscalationTiers   []int
 	InhibitNodeSuppressesPods bool
+	StormEnabled              bool
+	StormThreshold            int
+	StormWindow               time.Duration
+	StormDigestInterval       time.Duration
 }
 
 // BuildKey constructs the incident key used for dedup, grouping, and baseline.
@@ -68,6 +79,10 @@ type Engine struct {
 	startedAt            time.Time
 	seen                 map[string]int64
 	activeNodeIncidents  map[string]bool
+	recentCreates        []time.Time
+	stormUntil           time.Time
+	digestBuf            []digestEntry
+	lastDigestFlush      time.Time
 }
 
 func NewEngine(cfg Config) *Engine {
@@ -305,6 +320,27 @@ func (e *Engine) Process(ev event.Event, owner string, cs *model.ContainerState)
 	}
 	e.config.Enricher.Enrich(&ev, inc)
 	e.state[key] = inc
+
+	if e.config.StormEnabled {
+		e.recentCreates = append(e.recentCreates, now)
+		// prune outside window
+		cutoff := now.Add(-e.config.StormWindow)
+		kept := 0
+		for _, t := range e.recentCreates {
+			if t.After(cutoff) {
+				e.recentCreates[kept] = t
+				kept++
+			}
+		}
+		e.recentCreates = e.recentCreates[:kept]
+
+		if now.Before(e.stormUntil) || len(e.recentCreates) >= e.config.StormThreshold {
+			e.stormUntil = now.Add(e.config.StormWindow)
+			e.digestBuf = append(e.digestBuf, digestEntry{key: key, reason: ev.Reason, ns: ev.Namespace})
+			return inc, model.ActionDigest
+		}
+	}
+
 	return inc, model.ActionCreate
 }
 
@@ -453,11 +489,27 @@ func (e *Engine) checkLifecycle() {
 
 	e.mu.Lock()
 	now := time.Now()
+
+	// stale detection
 	for _, inc := range e.state {
 		if inc.State == model.StateActive && now.After(inc.LastUpdate.Add(e.config.StaleThreshold)) {
 			inc.State = model.StateStale
 			pending = append(pending, transition{inc, model.ActionStale})
 		}
+	}
+
+	// digest flush
+	if e.config.StormEnabled && len(e.digestBuf) > 0 && now.After(e.lastDigestFlush.Add(e.config.StormDigestInterval)) {
+		summary := e.buildDigestSummary()
+		e.digestBuf = nil
+		e.lastDigestFlush = now
+		digestInc := &model.Incident{
+			Key:    "digest:" + strconv.FormatInt(now.Unix(), 10),
+			Reason: "DigestSummary",
+			Count:  len(e.digestBuf),
+		}
+		digestInc.Hint = summary
+		pending = append(pending, transition{digestInc, model.ActionDigestFlush})
 	}
 	e.mu.Unlock()
 
@@ -466,4 +518,45 @@ func (e *Engine) checkLifecycle() {
 			hook(t.inc, t.action)
 		}
 	}
+}
+
+func (e *Engine) buildDigestSummary() string {
+	if len(e.digestBuf) == 0 {
+		return ""
+	}
+	byReason := make(map[string]map[string]int) // reason → ns → count
+	for _, d := range e.digestBuf {
+		if byReason[d.reason] == nil {
+			byReason[d.reason] = make(map[string]int)
+		}
+		byReason[d.reason][d.ns]++
+	}
+	var parts []string
+	for reason, nsMap := range byReason {
+		total := 0
+		for _, c := range nsMap {
+			total += c
+		}
+		if total <= 1 {
+			continue
+		}
+		nsList := make([]string, 0, len(nsMap))
+		for ns := range nsMap {
+			nsList = append(nsList, ns)
+		}
+		sort.Strings(nsList)
+		parts = append(parts, fmt.Sprintf("%s × %d (in %s)", reason, total, strings.Join(nsList, ", ")))
+	}
+	if len(parts) == 0 {
+		return ""
+	}
+	sort.Strings(parts)
+	var top []string
+	if len(parts) > 5 {
+		top = parts[:5]
+	} else {
+		top = parts
+	}
+	window := e.config.StormWindow
+	return fmt.Sprintf("⚡ %d new incidents in %s — %s", len(e.digestBuf), window.String(), strings.Join(top, "; "))
 }
