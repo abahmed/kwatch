@@ -39,6 +39,8 @@ type Config struct {
 	StormThreshold            int
 	StormWindow               time.Duration
 	StormDigestInterval       time.Duration
+	RenotifyInterval          time.Duration
+	RenotifyMaxPerIncident    int
 }
 
 // BuildKey constructs the incident key used for dedup, grouping, and baseline.
@@ -83,6 +85,8 @@ type Engine struct {
 	stormUntil           time.Time
 	digestBuf            []digestEntry
 	lastDigestFlush      time.Time
+	renotifyCount        map[string]int
+	lastRenotify         map[string]time.Time
 }
 
 func NewEngine(cfg Config) *Engine {
@@ -100,6 +104,8 @@ func NewEngine(cfg Config) *Engine {
 		config:              cfg,
 		startedAt:           time.Now(),
 		activeNodeIncidents: make(map[string]bool),
+		renotifyCount:       make(map[string]int),
+		lastRenotify:        make(map[string]time.Time),
 	}
 	if cfg.Baseline != nil {
 		e.SetSeen(cfg.Baseline)
@@ -516,6 +522,28 @@ func (e *Engine) checkLifecycle() {
 		if inc.State == model.StateActive && now.After(inc.LastUpdate.Add(e.config.StaleThreshold)) {
 			inc.State = model.StateStale
 			pending = append(pending, transition{inc, model.ActionStale})
+		}
+	}
+
+	// renotify — resend stale message periodically
+	if e.config.RenotifyInterval > 0 {
+		for _, inc := range e.state {
+			if inc.State != model.StateStale {
+				continue
+			}
+			maxPer := e.config.RenotifyMaxPerIncident
+			if maxPer <= 0 {
+				maxPer = 3
+			}
+			if e.renotifyCount[inc.Key] >= maxPer {
+				continue
+			}
+			last := e.lastRenotify[inc.Key]
+			if now.After(last.Add(e.config.RenotifyInterval)) {
+				e.renotifyCount[inc.Key]++
+				e.lastRenotify[inc.Key] = now
+				pending = append(pending, transition{inc, model.ActionStale})
+			}
 		}
 	}
 

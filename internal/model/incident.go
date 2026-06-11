@@ -23,6 +23,27 @@ const (
 	ActionDigestFlush
 )
 
+func (a IncidentAction) String() string {
+	switch a {
+	case ActionCreate:
+		return "create"
+	case ActionUpdate:
+		return "update"
+	case ActionSkip:
+		return "skip"
+	case ActionStale:
+		return "stale"
+	case ActionResolved:
+		return "resolved"
+	case ActionDigest:
+		return "digest"
+	case ActionDigestFlush:
+		return "digest_flush"
+	default:
+		return "unknown"
+	}
+}
+
 type IncidentState int
 
 const (

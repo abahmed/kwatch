@@ -132,6 +132,11 @@ type Config struct {
 
 	// CrdConfig configures the KwatchConfig CRD watcher.
 	CrdConfig CrdConfig `yaml:"crd"`
+
+	// Templates maps incident reason (lowercased) to Go text/template string.
+	// Available template keys: {{.Incident.Key}}, {{.Incident.Reason}},
+	// {{.Action}}, {{.Message}}. Missing keys render as empty string.
+	Templates map[string]string `yaml:"templates"`
 }
 
 // StormConfig configures digest aggregation for high-frequency incidents.
@@ -354,6 +359,18 @@ type Correlation struct {
 
 	// Escalation configures restart-count-based severity escalation.
 	Escalation EscalationConfig `yaml:"escalation"`
+
+	// Renotify configures periodic re-notification for active incidents.
+	Renotify RenotifyConfig `yaml:"renotify"`
+}
+
+// RenotifyConfig configures periodic re-notification for active incidents.
+type RenotifyConfig struct {
+	// Interval is the minimum time between renotifications (in minutes).
+	// 0 disables renotify. Default 0.
+	Interval int `yaml:"interval"`
+	// MaxPerIncident is the maximum number of renotifications per incident. Default 3.
+	MaxPerIncident int `yaml:"maxPerIncident"`
 }
 
 // EscalationConfig configures severity escalation when restart count

@@ -66,6 +66,7 @@ func main() {
 
 	alertManager := sm.GetAlertManager()
 	alertManager.SetSilences(cfg.Silences)
+	alertManager.SetTemplates(cfg.Templates)
 	if cfg.MaxRecentLogLines > 0 {
 		alertManager.SetMaxLogLines(int(cfg.MaxRecentLogLines))
 	}
@@ -96,6 +97,8 @@ func main() {
 		StormThreshold:            cfg.StormConfig.Threshold,
 		StormWindow:               time.Duration(cfg.StormConfig.WindowMinutes) * time.Minute,
 		StormDigestInterval:       time.Duration(cfg.StormConfig.DigestIntervalMinutes) * time.Minute,
+		RenotifyInterval:          time.Duration(cfg.Correlation.Renotify.Interval) * time.Minute,
+		RenotifyMaxPerIncident:    cfg.Correlation.Renotify.MaxPerIncident,
 		LifecycleHook: func(inc *model.Incident, action model.IncidentAction) {
 			if action != model.ActionSkip {
 				alertManager.NotifyIncident(inc, action)

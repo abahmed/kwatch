@@ -1,10 +1,12 @@
 package alert
 
 import (
+	"bytes"
 	"fmt"
 	"reflect"
 	"regexp"
 	"strings"
+	"text/template"
 	"time"
 
 	"github.com/abahmed/kwatch/internal/alert/dingtalk"
@@ -40,12 +42,29 @@ type providerEntry struct {
 type AlertManager struct {
 	entries      []providerEntry
 	silences     []silenceMatcher
-	maxLogLines int
+	maxLogLines  int
+	templates    map[string]*template.Template
 }
 
 func (a *AlertManager) SetMaxLogLines(n int) {
 	if n > 0 {
 		a.maxLogLines = n
+	}
+}
+
+func (a *AlertManager) SetTemplates(tpl map[string]string) {
+	if len(tpl) == 0 {
+		a.templates = nil
+		return
+	}
+	a.templates = make(map[string]*template.Template, len(tpl))
+	for reason, raw := range tpl {
+		t, err := template.New(reason).Option("missingkey=zero").Parse(raw)
+		if err != nil {
+			klog.ErrorS(err, "invalid template, skipping", "reason", reason)
+			continue
+		}
+		a.templates[strings.ToLower(reason)] = t
 	}
 }
 
@@ -396,7 +415,7 @@ func (a *AlertManager) NotifyIncident(inc *model.Incident, action model.Incident
 	if maxLines <= 0 {
 		maxLines = 100
 	}
-	msg := formatIncidentMessage(inc, action, maxLines)
+	msg := formatIncidentMessage(inc, action, maxLines, a.templates)
 	klog.InfoS("sending incident", "action", action, "key", inc.Key, "count", inc.Count)
 	for _, entry := range a.entries {
 		if !shouldDeliver(entry.routes, inc) {
@@ -422,19 +441,39 @@ func (a *AlertManager) NotifyIncident(inc *model.Incident, action model.Incident
 	}
 }
 
-func formatIncidentMessage(inc *model.Incident, action model.IncidentAction, maxLines int) string {
+type templateData struct {
+	Incident *model.Incident
+	Action   string
+	Message  string
+}
+
+func formatIncidentMessage(inc *model.Incident, action model.IncidentAction, maxLines int, templates map[string]*template.Template) string {
+	var defaultMsg string
 	switch action {
 	case model.ActionCreate:
-		return formatCreateMessage(inc, maxLines)
+		defaultMsg = formatCreateMessage(inc, maxLines)
 	case model.ActionUpdate:
-		return formatUpdateMessage(inc, maxLines)
+		defaultMsg = formatUpdateMessage(inc, maxLines)
 	case model.ActionStale:
-		return formatStaleMessage(inc)
+		defaultMsg = formatStaleMessage(inc)
 	case model.ActionResolved:
-		return formatResolvedMessage(inc)
+		defaultMsg = formatResolvedMessage(inc)
 	default:
 		return ""
 	}
+	if t, ok := templates[strings.ToLower(inc.Reason)]; ok {
+		var buf bytes.Buffer
+		err := t.Execute(&buf, templateData{
+			Incident: inc,
+			Action:   action.String(),
+			Message:  defaultMsg,
+		})
+		if err == nil {
+			return buf.String()
+		}
+		klog.ErrorS(err, "template render failed, falling back to default", "reason", inc.Reason)
+	}
+	return defaultMsg
 }
 
 func formatCreateMessage(inc *model.Incident, maxLines int) string {
