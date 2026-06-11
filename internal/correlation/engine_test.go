@@ -636,20 +636,28 @@ func TestStormBuffersCreatesOverThreshold(t *testing.T) {
 func TestStormFlushEmitsSummary(t *testing.T) {
 	e := stormEngine()
 	var flushActions int
+	var lastDigest *model.Incident
 	e.config.LifecycleHook = func(inc *model.Incident, action model.IncidentAction) {
 		if action == model.ActionDigestFlush {
 			flushActions++
+			lastDigest = inc
 		}
 	}
-	// fill storm buffer
+	// fill storm buffer — use same reason so summary groups them
 	for i := 0; i < 5; i++ {
 		e.Process(event.Event{
-			PodName: fmt.Sprintf("p%d", i), Namespace: "ns", Reason: fmt.Sprintf("R%d", i),
+			PodName: fmt.Sprintf("p%d", i), Namespace: "ns", Reason: "OOMKilled",
 		}, fmt.Sprintf("o%d", i), nil)
 	}
 	// trigger lifecycle
 	e.checkLifecycle()
 	assert.GreaterOrEqual(t, flushActions, 1)
+	if lastDigest != nil {
+		// threshold=3, so last 3 creates are buffered
+		assert.Equal(t, 3, lastDigest.Count)
+		assert.Equal(t, "DigestSummary", lastDigest.Reason)
+		assert.NotEmpty(t, lastDigest.Hint)
+	}
 }
 
 func TestStormDisabledNeverDigests(t *testing.T) {

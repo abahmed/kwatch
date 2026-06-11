@@ -552,14 +552,15 @@ func (e *Engine) checkLifecycle() {
 	// digest flush
 	if e.config.StormEnabled && len(e.digestBuf) > 0 && now.After(e.lastDigestFlush.Add(e.config.StormDigestInterval)) {
 		summary := e.buildDigestSummary()
+		n := len(e.digestBuf)
 		e.digestBuf = nil
 		e.lastDigestFlush = now
 		digestInc := &model.Incident{
 			Key:    "digest:" + strconv.FormatInt(now.Unix(), 10),
 			Reason: "DigestSummary",
-			Count:  len(e.digestBuf),
+			Count:  n,
+			Hint:   summary,
 		}
-		digestInc.Hint = summary
 		pending = append(pending, transition{digestInc, model.ActionDigestFlush})
 	}
 	e.mu.Unlock()

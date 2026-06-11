@@ -418,25 +418,35 @@ func (a *AlertManager) NotifyIncident(inc *model.Incident, action model.Incident
 	msg := formatIncidentMessage(inc, action, maxLines, a.templates)
 	klog.InfoS("sending incident", "action", action, "key", inc.Key, "count", inc.Count)
 	for _, entry := range a.entries {
-		if !shouldDeliver(entry.routes, inc) {
-			klog.V(4).InfoS("incident filtered by route",
-				"provider", entry.provider.Name(),
-				"key", inc.Key)
-			continue
-		}
 		p := entry.provider
 		var err error
-		if tp, ok := p.(ThreadProvider); ok {
-			err = sendWithRetry(func() error {
-				return tp.SendIncident(inc, action)
-			}, entry.maxAttempts, entry.retryDelay, p.Name())
-		} else {
+		if action == model.ActionDigestFlush {
+			// digests bypass route filtering (no namespace) and ThreadProvider
 			err = sendWithRetry(func() error {
 				return p.SendMessage(msg)
 			}, entry.maxAttempts, entry.retryDelay, p.Name())
+		} else {
+			if !shouldDeliver(entry.routes, inc) {
+				klog.V(4).InfoS("incident filtered by route",
+					"provider", p.Name(),
+					"key", inc.Key)
+				continue
+			}
+			if tp, ok := p.(ThreadProvider); ok {
+				err = sendWithRetry(func() error {
+					return tp.SendIncident(inc, action)
+				}, entry.maxAttempts, entry.retryDelay, p.Name())
+			} else {
+				err = sendWithRetry(func() error {
+					return p.SendMessage(msg)
+				}, entry.maxAttempts, entry.retryDelay, p.Name())
+			}
 		}
 		if err != nil && entry.fallback != nil {
-			entry.fallback.provider.SendMessage("[fallback — primary " + p.Name() + " failed] " + msg)
+			fbErr := entry.fallback.provider.SendMessage("[fallback — primary " + p.Name() + " failed] " + msg)
+			if fbErr != nil {
+				klog.ErrorS(fbErr, "fallback delivery failed", "provider", entry.fallback.provider.Name())
+			}
 		}
 	}
 }
@@ -458,6 +468,8 @@ func formatIncidentMessage(inc *model.Incident, action model.IncidentAction, max
 		defaultMsg = formatStaleMessage(inc)
 	case model.ActionResolved:
 		defaultMsg = formatResolvedMessage(inc)
+	case model.ActionDigestFlush:
+		defaultMsg = inc.Hint
 	default:
 		return ""
 	}

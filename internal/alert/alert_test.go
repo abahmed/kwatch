@@ -634,3 +634,25 @@ func TestSendWithRetrySuccess(t *testing.T) {
 		t.Fatalf("expected nil, got %v", err)
 	}
 }
+
+func TestNotifyIncidentDigestFlushDelivered(t *testing.T) {
+	fp := &fakeProvider{}
+	tp := &fakeThreadProvider{}
+	am := AlertManager{}
+	am.entries = append(am.entries,
+		providerEntry{provider: fp, maxAttempts: 1},
+		providerEntry{provider: tp, maxAttempts: 1},
+	)
+
+	inc := &model.Incident{
+		Key:    "digest:1234567890",
+		Reason: "DigestSummary",
+		Count:  5,
+		Hint:   "⚡ 5 new incidents in 1m0s — OOMKilled × 3 (ns1, ns2); CrashLoopBackOff × 2 (ns1)",
+	}
+
+	am.NotifyIncident(inc, model.ActionDigestFlush)
+
+	// ThreadProvider must NOT receive via SendIncident for digests
+	assert.Nil(t, tp.lastInc, "ThreadProvider should not receive digest via SendIncident")
+}
