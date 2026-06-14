@@ -132,7 +132,7 @@ spec:
           periodSeconds: 10
         resources:
           limits:
-            memory: "128Mi"
+            memory: "256Mi"
             cpu: "100m"
       volumes:
       - name: config-volume

@@ -549,14 +549,23 @@ func formatCreateMessage(inc *model.Incident, maxLines int) string {
 		eventsBlock = fmt.Sprintf("\nEvents:\n%s", truncateText(inc.Events, maxLines))
 	}
 
-	return fmt.Sprintf(
+	return truncateMsg(fmt.Sprintf(
 		"🚨 Incident: %s\nSeverity: %s\nOwner: %s (%s)\nNamespace: %s\nContainer: %s\nReason: %s\nRestarts: %d\nHint: %s%s%s\nAffected: %d resource(s)\nCount: %d\nDuration: %s",
 		inc.Name, severity, inc.OwnerKind, inc.Name,
 		inc.Namespace, containerName, inc.Reason,
 		inc.RestartCount, inc.Hint,
 		logsBlock, eventsBlock,
 		resources, inc.Count, duration,
-	)
+	))
+}
+
+const maxMessageLen = 4096 // conservative: Telegram is 4096, others are higher
+
+func truncateMsg(s string) string {
+	if len(s) <= maxMessageLen {
+		return s
+	}
+	return s[:maxMessageLen-20] + "\n…(truncated)"
 }
 
 func truncateText(s string, maxLines int) string {
@@ -576,17 +585,17 @@ func formatUpdateMessage(inc *model.Incident, _ int) string {
 		severity = "normal"
 	}
 
-	return fmt.Sprintf(
+	return truncateMsg(fmt.Sprintf(
 		"🔄 Update: %s | Severity: %s | Namespace: %s | Reason: %s | Count: %d | Duration: %s | Affected: %d resource(s)",
 		inc.Name, severity, inc.Namespace, inc.Reason, inc.Count, duration, resources,
-	)
+	))
 }
 
 func formatResolvedMessage(inc *model.Incident) string {
 	duration := inc.LastSeen.Sub(inc.FirstSeen).Round(time.Minute)
 
-	return fmt.Sprintf(
+	return truncateMsg(fmt.Sprintf(
 		"✅ Resolved: %s | Namespace: %s | Reason: %s | Duration: %s | Total events: %d",
 		inc.Name, inc.Namespace, inc.Reason, duration, inc.Count,
-	)
+	))
 }

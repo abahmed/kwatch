@@ -147,15 +147,13 @@ func TestGetCompiledIgnorePatterns(t *testing.T) {
 func TestConfigEnvInterpolation(t *testing.T) {
 	assert := assert.New(t)
 
-	defer os.Unsetenv("CONFIG_FILE")
-	defer os.Unsetenv("TEST_WEBHOOK")
-	defer os.Unsetenv("TEST_MISSING")
-	defer os.Unsetenv("A")
-	defer os.RemoveAll("config.yaml")
+	tmpDir := t.TempDir()
+	configPath := tmpDir + "/config.yaml"
+	t.Setenv("CONFIG_FILE", configPath)
 
-	os.Setenv("CONFIG_FILE", "config.yaml")
-	os.Setenv("TEST_WEBHOOK", "https://hooks.example.com/x")
-	os.Setenv("TEST_MISSING", "")
+	t.Setenv("TEST_WEBHOOK", "https://hooks.example.com/x")
+	t.Setenv("TEST_MISSING", "")
+	t.Setenv("A", "hello")
 
 	// YAML with ${VAR}, literal $, and bare $VAR
 	content := []byte(`
@@ -167,7 +165,7 @@ namespaces:
 reasons:
   - "pass$2a$10$xyz"
 `)
-	os.WriteFile("config.yaml", content, 0644)
+	os.WriteFile(configPath, content, 0644)
 
 	cfg, err := LoadConfig()
 	assert.Nil(err)
@@ -188,8 +186,7 @@ reasons:
 	assert.Equal("pass$2a$10$xyz", cfg.AllowedReasons[0])
 
 	// verify mixed {A}-$B case
-	os.Setenv("A", "hello")
-	os.WriteFile("config.yaml", []byte(`app:
+	os.WriteFile(configPath, []byte(`app:
   clusterName: "${A}-$B"
 `), 0644)
 	cfg2, err2 := LoadConfig()
