@@ -493,21 +493,18 @@ func TestPvcSeverityCriticalTier(t *testing.T) {
 	assert.Equal(t, "high", inc.Severity)
 }
 
-func TestPvcStartupQuietSeedsBaseline(t *testing.T) {
+func TestPvcOverThresholdFiresDuringStartupQuiet(t *testing.T) {
 	correlator := correlation.NewEngine(correlation.Config{
 		Window:       10 * time.Minute,
 		Cooldown:     5 * time.Minute,
 		StartupQuiet: 1 * time.Hour,
+		Enricher:     &enricher.DefaultEnricher{},
 	})
 
-	assert.True(t, correlator.InStartupQuiet(), "InStartupQuiet should return true")
+	// Pre-seed seen with a pod key to disable the blanket quiet
+	correlator.SetSeen(map[string]int64{"ns:dep:CrashLoopBackOff:": time.Now().Unix()})
 
-	key := correlation.BuildKey("default", "test-pv", "VolumeUsageHigh", "")
-	correlator.SeedBaseline(key)
-
-	snapshot := correlator.BaselineSnapshot()
-	assert.Contains(t, snapshot, key, "SeedBaseline should store the key")
-
+	// PVC is not baselined, so Process should create, not skip
 	ev := event.Event{
 		Resource:  "pvc",
 		PodName:   "test-pod",
@@ -516,8 +513,8 @@ func TestPvcStartupQuietSeedsBaseline(t *testing.T) {
 	}
 
 	_, action := correlator.Process(ev, "test-pv", nil)
-	assert.Equal(t, model.ActionSkip, action,
-		"Process should skip baselined PVC incident during startup-quiet")
+	assert.Equal(t, model.ActionCreate, action,
+		"PVC should alert during startup-quiet when not baselined and pod baseline exists")
 }
 
 func TestPvcSeverityUpgradeFromWarnToCritical(t *testing.T) {

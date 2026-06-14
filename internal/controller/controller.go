@@ -851,20 +851,6 @@ func (c *Controller) buildSeenSet() {
 		}
 	}
 
-	// Seed node conditions that are currently active
-	if c.nodeLister != nil {
-		nodes, err := c.nodeLister.List(labels.Everything())
-		if err == nil {
-			for _, n := range nodes {
-				for _, cond := range n.Status.Conditions {
-					if r := handler.NodeConditionReason(cond); r != "" {
-						baseline[correlation.BuildKey("", n.Name, r, "")] = now.Unix()
-					}
-				}
-			}
-		}
-	}
-
 	if len(baseline) > 0 {
 		klog.V(4).InfoS("Seen set built", "count", len(baseline))
 		c.handler.SetSeen(baseline)

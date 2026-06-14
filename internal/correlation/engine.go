@@ -183,23 +183,6 @@ func cloneBaseline(src map[string]int64) map[string]int64 {
 	return dst
 }
 
-func (e *Engine) InStartupQuiet() bool {
-	return e.config.StartupQuiet > 0 && time.Since(e.startedAt) < e.config.StartupQuiet
-}
-
-func (e *Engine) SeedBaseline(key string) {
-	e.mu.Lock()
-	if e.seen == nil {
-		e.seen = make(map[string]int64)
-	}
-	e.seen[key] = time.Now().Unix()
-	snapshot := cloneBaseline(e.seen)
-	e.mu.Unlock()
-	if hook := e.config.OnBaselineChange; hook != nil {
-		hook(snapshot)
-	}
-}
-
 func (e *Engine) BaselineSnapshot() map[string]int64 {
 	e.mu.Lock()
 	defer e.mu.Unlock()
@@ -391,7 +374,7 @@ func (e *Engine) Process(ev event.Event, owner string, cs *model.ContainerState)
 func (e *Engine) MarkResolved(key string) {
 	e.mu.Lock()
 	inc, ok := e.state[key]
-	if !ok {
+	if !ok || inc.State == model.StateResolved || inc.State == model.StateStale {
 		e.mu.Unlock()
 		return
 	}

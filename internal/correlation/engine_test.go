@@ -731,3 +731,63 @@ func TestStormResolvesStillNotify(t *testing.T) {
 	e.RemovePod("ns", "p1")
 	assert.GreaterOrEqual(t, resolves, 1)
 }
+
+func TestMarkResolvedIdempotent(t *testing.T) {
+	var resolves int
+	e := NewEngine(Config{
+		Window:   10 * time.Minute,
+		Cooldown: 5 * time.Minute,
+		LifecycleHook: func(inc *model.Incident, action model.IncidentAction) {
+			if action == model.ActionResolved {
+				resolves++
+			}
+		},
+	})
+	e.config.StartupQuiet = 0
+
+	ev := event.Event{PodName: "p1", Namespace: "ns", Reason: "CrashLoopBackOff"}
+	inc, action := e.Process(ev, "dep", nil)
+	assert.Equal(t, model.ActionCreate, action)
+	assert.NotNil(t, inc)
+
+	// First MarkResolved should fire the hook
+	e.MarkResolved(inc.Key)
+	assert.Equal(t, 1, resolves)
+
+	// Second MarkResolved (same key) must NOT fire again
+	e.MarkResolved(inc.Key)
+	assert.Equal(t, 1, resolves, "MarkResolved must be idempotent — hook fired twice")
+}
+
+func TestStartupQuietPreseededSeenDoesNotSuppressNodeEvent(t *testing.T) {
+	// Pre-seed seen with a pod key (simulates pod baseline from buildSeenSet).
+	// During startup-quiet, a fresh node event must NOT be suppressed.
+	e := NewEngine(Config{
+		Window:      10 * time.Minute,
+		Cooldown:    5 * time.Minute,
+		StartupQuiet: 1 * time.Hour,
+	})
+	e.SetSeen(map[string]int64{"ns:dep:CrashLoopBackOff:": time.Now().Unix()})
+
+	// The pod key makes len(seen) > 0, so the blanket quiet is disabled.
+	// A node event should create, not skip.
+	ev := event.Event{Resource: "node", PodName: "node-1", NodeName: "node-1", Reason: "NodeNotReady"}
+	_, action := e.Process(ev, "node-1", nil)
+	assert.Equal(t, model.ActionCreate, action,
+		"node event should create during startup-quiet when pod baseline is present")
+}
+
+func TestMarkResolvedNonexistentKeyNoOp(t *testing.T) {
+	var resolves int
+	e := NewEngine(Config{
+		Window:   10 * time.Minute,
+		Cooldown: 5 * time.Minute,
+		LifecycleHook: func(inc *model.Incident, action model.IncidentAction) {
+			if action == model.ActionResolved {
+				resolves++
+			}
+		},
+	})
+	e.MarkResolved("nonexistent")
+	assert.Equal(t, 0, resolves)
+}

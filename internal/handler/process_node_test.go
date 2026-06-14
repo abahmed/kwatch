@@ -131,3 +131,84 @@ func TestProcessNodeNotReadyUnknown(t *testing.T) {
 	}
 	assert.True(t, foundNodeNotReady, "NodeNotReady incident should exist")
 }
+
+func TestProcessNodeMemoryPressureResolveIdempotent(t *testing.T) {
+	var mu sync.Mutex
+	var resolves int
+
+	e := correlation.NewEngine(correlation.Config{
+		Window:   10 * time.Minute,
+		Cooldown: 5 * time.Minute,
+		LifecycleHook: func(inc *model.Incident, action model.IncidentAction) {
+			mu.Lock()
+			defer mu.Unlock()
+			if action == model.ActionResolved {
+				resolves++
+			}
+		},
+	})
+
+	h := NewHandler(fake.NewSimpleClientset(), &config.Config{}, e, testAlertMgr)
+
+	node := &corev1.Node{
+		ObjectMeta: metav1.ObjectMeta{Name: "test-node"},
+		Status: corev1.NodeStatus{
+			Conditions: []corev1.NodeCondition{
+				{Type: corev1.NodeMemoryPressure, Status: corev1.ConditionTrue},
+			},
+		},
+	}
+
+	// True → create incident
+	assert.NoError(t, h.ProcessNodeObject(node, false))
+
+	// False → resolve once
+	node.Status.Conditions[0].Status = corev1.ConditionFalse
+	assert.NoError(t, h.ProcessNodeObject(node, false))
+
+	// False again → MUST NOT resolve again (idempotency)
+	assert.NoError(t, h.ProcessNodeObject(node, false))
+
+	mu.Lock()
+	r := resolves
+	mu.Unlock()
+	assert.Equal(t, 1, r, "resolve must fire exactly once, not on every reconcile")
+}
+
+func TestProcessNodeHealthyNoResolve(t *testing.T) {
+	var mu sync.Mutex
+	var resolves int
+
+	e := correlation.NewEngine(correlation.Config{
+		Window:   10 * time.Minute,
+		Cooldown: 5 * time.Minute,
+		LifecycleHook: func(inc *model.Incident, action model.IncidentAction) {
+			mu.Lock()
+			defer mu.Unlock()
+			if action == model.ActionResolved {
+				resolves++
+			}
+		},
+	})
+
+	h := NewHandler(fake.NewSimpleClientset(), &config.Config{}, e, testAlertMgr)
+
+	node := &corev1.Node{
+		ObjectMeta: metav1.ObjectMeta{Name: "test-node"},
+		Status: corev1.NodeStatus{
+			Conditions: []corev1.NodeCondition{
+				{Type: corev1.NodeMemoryPressure, Status: corev1.ConditionFalse},
+			},
+		},
+	}
+
+	// Reconciled 3× with no pressure — never fires resolve (no incident existed)
+	assert.NoError(t, h.ProcessNodeObject(node, false))
+	assert.NoError(t, h.ProcessNodeObject(node, false))
+	assert.NoError(t, h.ProcessNodeObject(node, false))
+
+	mu.Lock()
+	r := resolves
+	mu.Unlock()
+	assert.Equal(t, 0, r, "no resolve should fire for a condition that was never True")
+}

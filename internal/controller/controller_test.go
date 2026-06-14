@@ -820,7 +820,7 @@ func TestMultiNamespaceListerSeesBothNamespaces(t *testing.T) {
 	}, 5*time.Second, 50*time.Millisecond)
 }
 
-func TestBuildSeenSetNodeBaseline(t *testing.T) {
+func TestBuildSeenSetSkipsNodeConditions(t *testing.T) {
 	assert := assert.New(t)
 
 	node := &corev1.Node{
@@ -847,9 +847,11 @@ func TestBuildSeenSetNodeBaseline(t *testing.T) {
 
 	ctrl.buildSeenSet()
 
-	expectedKey := correlation.BuildKey("", "worker-1", "MemoryPressure", "")
+	// Node conditions should NOT be seeded into baseline (infra is exempt)
 	h.mu.Lock()
 	baseline := h.seenBaseline
 	h.mu.Unlock()
-	assert.Contains(baseline, expectedKey, "buildSeenSet should seed MemoryPressure baseline key")
+
+	unwantedKey := correlation.BuildKey("", "worker-1", "MemoryPressure", "")
+	assert.NotContains(baseline, unwantedKey, "buildSeenSet must NOT seed node conditions")
 }

@@ -3,7 +3,6 @@ package pvc
 import (
 	"fmt"
 
-	"github.com/abahmed/kwatch/internal/correlation"
 	"github.com/abahmed/kwatch/internal/event"
 	"github.com/abahmed/kwatch/internal/k8s"
 	"github.com/abahmed/kwatch/internal/model"
@@ -45,12 +44,6 @@ func (p *PvcMonitor) checkUsage() {
 	for _, pvc := range pvcUsages {
 		if pvc.UsagePercentage >= p.config.Threshold {
 			currentNotified[pvc.PVName] = true
-
-			// During startup-quiet, seed the baseline instead of alerting
-			if p.correlator.InStartupQuiet() {
-				p.correlator.SeedBaseline(correlation.BuildKey(pvc.Namespace, pvc.PVName, "VolumeUsageHigh", ""))
-				continue
-			}
 
 			severity := "normal"
 			if pvc.UsagePercentage >= p.config.CriticalThreshold {
