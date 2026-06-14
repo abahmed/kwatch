@@ -77,26 +77,13 @@ func GetPodContainerLogs(
 	// get logs
 	logs, err := getContainerLogs(c, name, namespace, &options)
 	if err != nil {
-		klog.InfoS(
+		klog.V(2).InfoS(
 			"failed to get logs for container",
 			"name", name,
 			"container", container,
 			"namespace", namespace,
 			"error", err.Error())
-
-		// try to decode response
-		var status metav1.Status
-		parseErr := json.Unmarshal(logs, &status)
-		if parseErr == nil {
-			return status.Message
-		}
-
-		klog.InfoS(
-			"failed to parse logs for container",
-			"name", name,
-			"container", container,
-			"namespace", namespace,
-			"error", parseErr.Error())
+		return ""
 	}
 
 	return string(logs)

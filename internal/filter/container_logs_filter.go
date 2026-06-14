@@ -18,6 +18,14 @@ func (f ContainerLogsFilter) Enrich(ctx *Context) bool {
 		return false
 	}
 
+	// If the container terminated with ContainerStatusUnknown, logs are
+	// unavailable — skip the API call entirely.
+	if container.State.Terminated != nil &&
+		container.State.Terminated.Reason == "ContainerStatusUnknown" {
+		ctx.Container.Logs = ""
+		return false
+	}
+
 	previousLogs := container.RestartCount > 0 && container.State.Running == nil
 
 	logs := k8s.GetPodContainerLogs(

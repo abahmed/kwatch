@@ -5,6 +5,7 @@ import (
 	"sort"
 	"time"
 
+	"github.com/abahmed/kwatch/internal/correlation"
 	"github.com/abahmed/kwatch/internal/enricher"
 	"github.com/abahmed/kwatch/internal/event"
 	"github.com/abahmed/kwatch/internal/filter"
@@ -44,6 +45,10 @@ func (h *handler) executeContainersFilters(ctx *filter.Context) {
 		}
 
 		if !broken {
+			if th := h.config.ContainerRestartThreshold; th > 0 &&
+				int(container.RestartCount) >= th {
+				h.emitHighRestartAlert(ctx, container)
+			}
 			continue
 		}
 
@@ -224,4 +229,44 @@ func probeType(reason string) string {
 		return "startup"
 	}
 	return "probe"
+}
+
+func lastTermInfo(container *corev1.ContainerStatus) (reason string, exitCode int32) {
+	if last := container.LastTerminationState.Terminated; last != nil {
+		return last.Reason, last.ExitCode
+	}
+	return "", 0
+}
+
+func (h *handler) emitHighRestartAlert(ctx *filter.Context, container *corev1.ContainerStatus) {
+	owner := correlation.ResolveOwnerName(ctx.Pod, h.rsLister, h.dsLister, h.ssLister)
+	if owner == "" {
+		return
+	}
+
+	lastReason, lastEC := lastTermInfo(container)
+
+	ev := event.Event{
+		Resource:      "pod",
+		PodName:       ctx.Pod.Name,
+		ContainerName: container.Name,
+		Namespace:     ctx.Pod.Namespace,
+		NodeName:      ctx.Pod.Spec.NodeName,
+		Reason:        "HighRestartCount",
+		Labels:        ctx.Pod.Labels,
+		RestartCount:  int(container.RestartCount),
+		Hint: fmt.Sprintf("container restarted %d times (last exit: %s, code %d)",
+			container.RestartCount, lastReason, lastEC),
+	}
+
+	cs := &model.ContainerState{
+		RestartCount: container.RestartCount,
+		Reason:       lastReason,
+		ExitCode:     lastEC,
+	}
+
+	inc, action := h.correlator.Process(ev, owner, cs)
+	if action != model.ActionSkip {
+		h.alertManager.NotifyIncident(inc, action)
+	}
 }

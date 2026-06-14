@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/abahmed/kwatch/internal/correlation"
 	"github.com/abahmed/kwatch/internal/event"
 	"github.com/abahmed/kwatch/internal/model"
 	corev1 "k8s.io/api/core/v1"
@@ -31,7 +32,28 @@ func (h *handler) ProcessNode(key string, deleted bool) error {
 	return h.ProcessNodeObject(node, false)
 }
 
-func (h *handler) emitNodeAlert(node *corev1.Node, c corev1.NodeCondition) {
+// NodeConditionReason returns the stable incident reason for a node
+// condition, or "" if the condition is not one kwatch alerts on.
+func NodeConditionReason(c corev1.NodeCondition) string {
+	switch c.Type {
+	case corev1.NodeReady:
+		if c.Status != corev1.ConditionTrue {
+			return "NodeNotReady"
+		}
+	case corev1.NodeMemoryPressure, corev1.NodeDiskPressure,
+		corev1.NodePIDPressure, corev1.NodeNetworkUnavailable:
+		if c.Status == corev1.ConditionTrue {
+			return string(c.Type)
+		}
+	}
+	return ""
+}
+
+func (h *handler) resolveNodeCondition(nodeName, stableReason string) {
+	h.correlator.MarkResolved(correlation.BuildKey("", nodeName, stableReason, ""))
+}
+
+func (h *handler) emitNodeAlert(node *corev1.Node, c corev1.NodeCondition, stableReason string) {
 	for _, ignoreReason := range h.config.IgnoreNodeReasons {
 		if c.Reason == ignoreReason {
 			klog.V(4).InfoS("Skipping Notify for node due to ignored reason", "node", node.Name, "reason", c.Reason)
@@ -45,15 +67,21 @@ func (h *handler) emitNodeAlert(node *corev1.Node, c corev1.NodeCondition) {
 		}
 	}
 
+	hint := ""
+	if c.Reason != "" || c.Message != "" {
+		hint = c.Reason + ": " + c.Message
+	}
+
 	ev := event.Event{
 		Resource:  "node",
 		PodName:   node.Name,
 		Namespace: "",
 		NodeName:  node.Name,
-		Reason:    c.Reason,
+		Reason:    stableReason,
 		Events:    "",
 		Logs:      "",
 		Labels:    node.Labels,
+		Hint:      hint,
 	}
 
 	inc, action := h.correlator.Process(ev, node.Name, nil)
@@ -76,15 +104,16 @@ func (h *handler) ProcessNodeObject(node *corev1.Node, deleted bool) error {
 		switch c.Type {
 		case corev1.NodeReady:
 			if c.Status == corev1.ConditionTrue {
-				h.correlator.ResolveByResource("node", node.Name)
+				h.resolveNodeCondition(node.Name, "NodeNotReady")
 			} else {
-				h.emitNodeAlert(node, c)
+				h.emitNodeAlert(node, c, "NodeNotReady")
 			}
-		case corev1.NodeMemoryPressure, corev1.NodeDiskPressure, corev1.NodePIDPressure, corev1.NodeNetworkUnavailable:
+		case corev1.NodeMemoryPressure, corev1.NodeDiskPressure,
+			corev1.NodePIDPressure, corev1.NodeNetworkUnavailable:
 			if c.Status == corev1.ConditionTrue {
-				h.emitNodeAlert(node, c)
-			} else if c.Status == corev1.ConditionFalse {
-				h.correlator.MarkResolved(":" + node.Name + ":" + c.Reason + ":")
+				h.emitNodeAlert(node, c, string(c.Type))
+			} else {
+				h.resolveNodeCondition(node.Name, string(c.Type))
 			}
 		}
 	}

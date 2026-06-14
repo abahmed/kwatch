@@ -11,6 +11,11 @@ type Config struct {
 	// Upgrader configuration
 	Upgrader Upgrader `yaml:"upgrader"`
 
+	// ContainerRestartThreshold, when > 0, opens an incident for any container
+	// whose cumulative restart count reaches this threshold, even while
+	// currently Running. Default 0 (disabled).
+	ContainerRestartThreshold int `yaml:"containerRestartThreshold"`
+
 	// PvcMonitor configuration
 	PvcMonitor PvcMonitor `yaml:"pvcMonitor"`
 

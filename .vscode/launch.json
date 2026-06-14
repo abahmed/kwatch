@@ -6,10 +6,10 @@
             "type": "go",
             "request": "launch",
             "mode": "auto",
-            "program": "${workspaceRoot}",
+            "program": "${workspaceRoot}/cmd/kwatch",
             "showLog": true,
             "env": {
-                "CONFIG_FILE": "config.yaml"
+                "CONFIG_FILE": "${workspaceRoot}/config.yaml"
             }
         }
     ]
