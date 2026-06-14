@@ -118,7 +118,6 @@ func main() {
 		StormThreshold:            cfg.StormConfig.Threshold,
 		StormWindow:               time.Duration(cfg.StormConfig.WindowMinutes) * time.Minute,
 		StormDigestInterval:       time.Duration(cfg.StormConfig.DigestIntervalMinutes) * time.Minute,
-		RenotifyInterval:           time.Duration(cfg.Correlation.Renotify.Interval) * time.Minute,
 		RenotifyIntervalBySeverity: renotifyIntervalBySeverity(cfg.Correlation.Renotify.IntervalBySeverity),
 		RenotifyMaxPerIncident:     cfg.Correlation.Renotify.MaxPerIncident,
 		Runbooks:                  cfg.Runbooks,

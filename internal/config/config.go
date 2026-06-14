@@ -402,19 +402,16 @@ type Correlation struct {
 	// Escalation configures restart-count-based severity escalation.
 	Escalation EscalationConfig `yaml:"escalation"`
 
-	// Renotify configures periodic re-notification for active incidents.
+	// Renotify configures periodic re-notification via intervalBySeverity["default"].
 	Renotify RenotifyConfig `yaml:"renotify"`
 }
 
 // RenotifyConfig configures periodic re-notification for active incidents.
 type RenotifyConfig struct {
 	// IntervalBySeverity is the minimum time (in minutes) between renotifications,
-	// keyed by severity ("normal", "high", "critical"). Falls back to a flat
-	// interval when the field is zero or the severity key is missing.
+	// keyed by severity ("normal", "high", "critical"). Use "default" key as
+	// fallback when a severity has no entry. 0 disables renotify.
 	IntervalBySeverity map[string]int `yaml:"intervalBySeverity"`
-	// Interval (deprecated) is the minimum time between renotifications (in minutes).
-	// Prefer intervalBySeverity. 0 disables renotify. Default 0.
-	Interval int `yaml:"interval"`
 	// MaxPerIncident is the maximum number of renotifications per incident. Default 3.
 	MaxPerIncident int `yaml:"maxPerIncident"`
 }

@@ -458,12 +458,12 @@ func TestSnapshotEmpty(t *testing.T) {
 
 func TestRenotifyConfig(t *testing.T) {
 	e := NewEngine(Config{
-		Window:                 10 * time.Minute,
-		RenotifyInterval:       1 * time.Minute,
-		RenotifyMaxPerIncident: 3,
+		Window:                    10 * time.Minute,
+		RenotifyIntervalBySeverity: map[string]time.Duration{"default": 1 * time.Minute},
+		RenotifyMaxPerIncident:     3,
 	})
-	if e.config.RenotifyInterval != 1*time.Minute {
-		t.Errorf("unexpected renotify interval: %v", e.config.RenotifyInterval)
+	if v := e.config.RenotifyIntervalBySeverity["default"]; v != 1*time.Minute {
+		t.Errorf("unexpected renotify interval: %v", v)
 	}
 	if e.config.RenotifyMaxPerIncident != 3 {
 		t.Errorf("unexpected renotify max: %d", e.config.RenotifyMaxPerIncident)

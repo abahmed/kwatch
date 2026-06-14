@@ -38,7 +38,6 @@ type Config struct {
 	StormThreshold            int
 	StormWindow               time.Duration
 	StormDigestInterval       time.Duration
-	RenotifyInterval          time.Duration
 	RenotifyIntervalBySeverity map[string]time.Duration
 	RenotifyMaxPerIncident     int
 	ResolveHoldDown            time.Duration
@@ -693,7 +692,7 @@ func (e *Engine) checkLifecycle() {
 
 	// renotify — resend on time-based interval (not stale-gated)
 	renotifyBySev := e.config.RenotifyIntervalBySeverity
-	if e.config.RenotifyInterval > 0 || len(renotifyBySev) > 0 {
+	if len(renotifyBySev) > 0 {
 		for _, inc := range e.state {
 			if inc.State == model.StateResolved {
 				continue
@@ -705,15 +704,11 @@ func (e *Engine) checkLifecycle() {
 			if inc.RenotifyCount >= maxPer {
 				continue
 			}
-			interval := e.config.RenotifyInterval
-			if len(renotifyBySev) > 0 {
-				if sv, ok := renotifyBySev[inc.Severity]; ok && sv > 0 {
-					interval = sv
-				} else if sv, ok := renotifyBySev["default"]; ok && sv > 0 {
-					interval = sv
-				}
+			interval, ok := renotifyBySev[inc.Severity]
+			if !ok || interval <= 0 {
+				interval, ok = renotifyBySev["default"]
 			}
-			if interval <= 0 {
+			if !ok || interval <= 0 {
 				continue
 			}
 			if now.After(inc.LastNotifiedAt.Add(interval)) {
