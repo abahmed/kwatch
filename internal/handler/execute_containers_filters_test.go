@@ -16,8 +16,7 @@ import (
 
 func TestHighRestartCountIncident(t *testing.T) {
 	e := correlation.NewEngine(correlation.Config{
-		Window:   10 * time.Minute,
-		Cooldown: 5 * time.Minute,
+		Window: 10 * time.Minute,
 	})
 
 	cfg := &config.Config{

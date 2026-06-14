@@ -24,8 +24,6 @@ func DefaultConfig() *Config {
 		},
 		Correlation: Correlation{
 			Window:            10,
-			Cooldown:          5,
-			StaleThreshold:    15,
 			LifecycleInterval: 1,
 			StartupQuiet:      30,
 		},

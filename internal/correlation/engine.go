@@ -23,8 +23,6 @@ type digestEntry struct {
 
 type Config struct {
 	Window            time.Duration
-	Cooldown          time.Duration
-	StaleThreshold    time.Duration
 	LifecycleInterval time.Duration
 	StartupQuiet      time.Duration
 	Enricher          enricher.Enricher
@@ -57,7 +55,33 @@ func IncidentKey(ev event.Event, owner string, cs *model.ContainerState) string 
 	if r == "CrashLoopBackOff" && cs != nil && cs.RestartCount > 5 {
 		r = "CrashLoopHighFrequency"
 	}
-	return BuildKey(ev.Namespace, owner, r, ev.ContainerName)
+	return BuildKey(ev.Namespace, owner, r, "")
+}
+
+func notifSig(inc *model.Incident) string {
+	st := "firing"
+	if inc.State == model.StateResolved {
+		st = "resolved"
+	}
+	return st + "|" + inc.Severity
+}
+
+// edgeAction returns the action to notify, or ActionSkip if nothing changed.
+func (e *Engine) edgeAction(inc *model.Incident) model.IncidentAction {
+	sig := notifSig(inc)
+	if sig == inc.NotifiedSig {
+		return model.ActionSkip
+	}
+	prev := inc.NotifiedSig
+	inc.NotifiedSig = sig
+	inc.LastNotifiedAt = time.Now()
+	if inc.State == model.StateResolved {
+		return model.ActionResolved
+	}
+	if prev == "" {
+		return model.ActionCreate
+	}
+	return model.ActionUpdate
 }
 
 // crossedTier returns the highest index of a tier whose threshold was
@@ -97,8 +121,6 @@ type Engine struct {
 	stormUntil           time.Time
 	digestBuf            []digestEntry
 	lastDigestFlush      time.Time
-	renotifyCount        map[string]int
-	lastRenotify         map[string]time.Time
 }
 
 func NewEngine(cfg Config) *Engine {
@@ -116,8 +138,6 @@ func NewEngine(cfg Config) *Engine {
 		config:              cfg,
 		startedAt:           time.Now(),
 		activeNodeIncidents: make(map[string]bool),
-		renotifyCount:       make(map[string]int),
-		lastRenotify:        make(map[string]time.Time),
 	}
 	if cfg.Baseline != nil {
 		e.SetSeen(cfg.Baseline)
@@ -268,7 +288,7 @@ func (e *Engine) GetLastContainerState(namespace, podName, containerName string)
 	e.mu.Lock()
 	defer e.mu.Unlock()
 	for _, inc := range e.state {
-		if inc.Namespace == namespace && inc.ContainerName == containerName && inc.Resources[podName] {
+		if inc.Namespace == namespace && inc.Resources[podName] {
 			if inc.LastContainerState != nil {
 				cs := *inc.LastContainerState
 				return &cs
@@ -315,7 +335,7 @@ func (e *Engine) Process(ev event.Event, owner string, cs *model.ContainerState)
 		if inc.State == model.StateResolved {
 			newInc := e.newIncident(ev, owner, cs, key, res, now)
 			e.state[key] = newInc
-			return newInc, model.ActionCreate
+			return newInc, e.edgeAction(newInc)
 		}
 
 		// Pending resolve — revoke the scheduled resolve
@@ -325,18 +345,18 @@ func (e *Engine) Process(ev event.Event, owner string, cs *model.ContainerState)
 			if ev.PodName != "" {
 				inc.Resources[ev.PodName] = true
 			}
+			if ev.ContainerName != "" && ev.ContainerName != "." {
+				inc.Containers[ev.ContainerName] = true
+			}
 			inc.LastContainerState = cs
 			if cs != nil {
 				inc.RestartCount = int(cs.RestartCount)
-			}
-			if now.Before(inc.LastSeen.Add(e.config.Cooldown)) {
-				return inc, model.ActionSkip
 			}
 			inc.Count++
 			inc.LastSeen = now
 			inc.LastUpdate = now
 			e.config.Enricher.Enrich(&ev, inc)
-			return inc, model.ActionUpdate
+			return inc, e.edgeAction(inc)
 		}
 
 		if e.config.EscalationEnabled && cs != nil {
@@ -354,12 +374,12 @@ func (e *Engine) Process(ev event.Event, owner string, cs *model.ContainerState)
 				if ev.PodName != "" {
 					inc.Resources[ev.PodName] = true
 				}
+				if ev.ContainerName != "" && ev.ContainerName != "." {
+					inc.Containers[ev.ContainerName] = true
+				}
 				inc.LastContainerState = cs
-				return inc, model.ActionUpdate
+				return inc, e.edgeAction(inc)
 			}
-		}
-		if now.Before(inc.LastSeen.Add(e.config.Cooldown)) {
-			return inc, model.ActionSkip
 		}
 		inc.Count++
 		inc.LastSeen = now
@@ -368,12 +388,15 @@ func (e *Engine) Process(ev event.Event, owner string, cs *model.ContainerState)
 		if ev.PodName != "" {
 			inc.Resources[ev.PodName] = true
 		}
+		if ev.ContainerName != "" && ev.ContainerName != "." {
+			inc.Containers[ev.ContainerName] = true
+		}
 		inc.LastContainerState = cs
 		if cs != nil {
 			inc.RestartCount = int(cs.RestartCount)
 		}
 		e.config.Enricher.Enrich(&ev, inc)
-		return inc, model.ActionUpdate
+		return inc, e.edgeAction(inc)
 	}
 
 	inc := e.newIncident(ev, owner, cs, key, res, now)
@@ -394,11 +417,13 @@ func (e *Engine) Process(ev event.Event, owner string, cs *model.ContainerState)
 		if now.Before(e.stormUntil) || len(e.recentCreates) >= e.config.StormThreshold {
 			e.stormUntil = now.Add(e.config.StormWindow)
 			e.digestBuf = append(e.digestBuf, digestEntry{key: key, reason: ev.Reason, ns: ev.Namespace})
+			inc.NotifiedSig = notifSig(inc)
+			inc.LastNotifiedAt = now
 			return inc, model.ActionDigest
 		}
 	}
 
-	return inc, model.ActionCreate
+	return inc, e.edgeAction(inc)
 }
 
 func (e *Engine) newIncident(ev event.Event, owner string, cs *model.ContainerState, key, res string, now time.Time) *model.Incident {
@@ -413,10 +438,14 @@ func (e *Engine) newIncident(ev event.Event, owner string, cs *model.ContainerSt
 		LastSeen:  now,
 		LastUpdate: now,
 		State:     model.StateActive,
-		Resources: map[string]bool{},
+		Resources:  map[string]bool{},
+		Containers: map[string]bool{},
 	}
 	if ev.PodName != "" {
 		inc.Resources[ev.PodName] = true
+	}
+	if ev.ContainerName != "" && ev.ContainerName != "." {
+		inc.Containers[ev.ContainerName] = true
 	}
 	inc.LastContainerState = cs
 	if cs != nil {
@@ -429,7 +458,7 @@ func (e *Engine) newIncident(ev event.Event, owner string, cs *model.ContainerSt
 func (e *Engine) MarkResolved(key string) {
 	e.mu.Lock()
 	inc, ok := e.state[key]
-	if !ok || inc.State == model.StateResolved || inc.State == model.StateStale || inc.State == model.StatePendingResolve {
+	if !ok || inc.State == model.StateResolved || inc.State == model.StatePendingResolve {
 		e.mu.Unlock()
 		return
 	}
@@ -444,12 +473,13 @@ func (e *Engine) MarkResolved(key string) {
 		e.refreshNodeInhibition(inc.Name)
 	}
 	delete(e.seen, key)
-	delete(e.renotifyCount, key)
-	delete(e.lastRenotify, key)
+	action := e.edgeAction(inc)
 	e.mu.Unlock()
 
-	if hook := e.config.LifecycleHook; hook != nil {
-		hook(inc, model.ActionResolved)
+	if action != model.ActionSkip {
+		if hook := e.config.LifecycleHook; hook != nil {
+			hook(inc, action)
+		}
 	}
 	if hook := e.config.OnBaselineChange; hook != nil {
 		e.mu.Lock()
@@ -477,7 +507,7 @@ func (e *Engine) RemovePod(namespace, podName string) {
 			continue
 		}
 		delete(inc.Resources, podName)
-		if len(inc.Resources) == 0 && inc.State != model.StateResolved && inc.State != model.StateStale {
+		if len(inc.Resources) == 0 && inc.State != model.StateResolved {
 			if inc.State == model.StatePendingResolve {
 				continue
 			}
@@ -488,10 +518,9 @@ func (e *Engine) RemovePod(namespace, podName string) {
 			}
 			inc.State = model.StateResolved
 			delete(e.seen, key)
-			delete(e.renotifyCount, key)
-			delete(e.lastRenotify, key)
+			action := e.edgeAction(inc)
 			baselineChanged = true
-			pending = append(pending, transition{inc, model.ActionResolved})
+			pending = append(pending, transition{inc, action})
 		}
 	}
 	// Release per-pod baseline slots for this pod
@@ -535,7 +564,7 @@ func (e *Engine) ResolveByResource(resource, name string) {
 		delete(e.activeNodeIncidents, name)
 	}
 	for key, inc := range e.state {
-		if inc.Resource == resource && inc.Name == name && inc.State != model.StateResolved && inc.State != model.StateStale {
+		if inc.Resource == resource && inc.Name == name && inc.State != model.StateResolved {
 			if inc.State == model.StatePendingResolve {
 				continue
 			}
@@ -546,10 +575,9 @@ func (e *Engine) ResolveByResource(resource, name string) {
 			}
 			inc.State = model.StateResolved
 			delete(e.seen, key)
-			delete(e.renotifyCount, key)
-			delete(e.lastRenotify, key)
+			action := e.edgeAction(inc)
 			baselineChanged = true
-			pending = append(pending, transition{inc, model.ActionResolved})
+			pending = append(pending, transition{inc, action})
 		}
 	}
 	e.mu.Unlock()
@@ -604,8 +632,6 @@ func (e *Engine) cleanup() {
 				delete(e.activeNodeIncidents, inc.Name)
 			}
 			delete(e.state, key)
-			delete(e.renotifyCount, key)
-			delete(e.lastRenotify, key)
 		}
 	}
 }
@@ -621,14 +647,6 @@ func (e *Engine) checkLifecycle() {
 	e.mu.Lock()
 	now := time.Now()
 
-	// stale detection
-	for _, inc := range e.state {
-		if inc.State == model.StateActive && now.After(inc.LastUpdate.Add(e.config.StaleThreshold)) {
-			inc.State = model.StateStale
-			pending = append(pending, transition{inc, model.ActionStale})
-		}
-	}
-
 	// pending resolve finalization
 	for key, inc := range e.state {
 		if inc.State == model.StatePendingResolve && !inc.ResolveAt.IsZero() && now.After(inc.ResolveAt) {
@@ -637,40 +655,42 @@ func (e *Engine) checkLifecycle() {
 				e.refreshNodeInhibition(inc.Name)
 			}
 			delete(e.seen, key)
-			delete(e.renotifyCount, key)
-			delete(e.lastRenotify, key)
+			action := e.edgeAction(inc)
 			baselineChanged = true
-			pending = append(pending, transition{inc, model.ActionResolved})
+			pending = append(pending, transition{inc, action})
 		}
 	}
 
-	// renotify — resend stale message periodically
-	if e.config.RenotifyInterval > 0 || len(e.config.RenotifyIntervalBySeverity) > 0 {
+	// renotify — resend on time-based interval (not stale-gated)
+	renotifyBySev := e.config.RenotifyIntervalBySeverity
+	if e.config.RenotifyInterval > 0 || len(renotifyBySev) > 0 {
 		for _, inc := range e.state {
-			if inc.State != model.StateStale {
+			if inc.State == model.StateResolved {
 				continue
 			}
 			maxPer := e.config.RenotifyMaxPerIncident
 			if maxPer <= 0 {
 				maxPer = 3
 			}
-			if e.renotifyCount[inc.Key] >= maxPer {
+			if inc.RenotifyCount >= maxPer {
 				continue
 			}
 			interval := e.config.RenotifyInterval
-			if len(e.config.RenotifyIntervalBySeverity) > 0 {
-				if sv, ok := e.config.RenotifyIntervalBySeverity[inc.Severity]; ok && sv > 0 {
+			if len(renotifyBySev) > 0 {
+				if sv, ok := renotifyBySev[inc.Severity]; ok && sv > 0 {
+					interval = sv
+				} else if sv, ok := renotifyBySev["default"]; ok && sv > 0 {
 					interval = sv
 				}
 			}
 			if interval <= 0 {
 				continue
 			}
-			last := e.lastRenotify[inc.Key]
-			if now.After(last.Add(interval)) {
-				e.renotifyCount[inc.Key]++
-				e.lastRenotify[inc.Key] = now
-				pending = append(pending, transition{inc, model.ActionStale})
+			if now.After(inc.LastNotifiedAt.Add(interval)) {
+				inc.RenotifyCount++
+				inc.LastNotifiedAt = now
+				// For renotify we emit update
+				pending = append(pending, transition{inc, model.ActionUpdate})
 			}
 		}
 	}

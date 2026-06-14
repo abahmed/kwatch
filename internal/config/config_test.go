@@ -53,7 +53,6 @@ func TestEmptyConfig(t *testing.T) {
 	cfg, _ := LoadConfig()
 	assert.NotNil(cfg)
 	assert.Equal(10, cfg.Correlation.Window)
-	assert.Equal(5, cfg.Correlation.Cooldown)
 }
 
 func TestConfigInvalidFile(t *testing.T) {

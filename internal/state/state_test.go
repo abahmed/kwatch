@@ -517,7 +517,7 @@ func TestEngineBackedBaselineRoundTrip(t *testing.T) {
 
 	// Save a realistic baseline (same format as controller.buildSeenSet produces)
 	baseline := map[string]map[string]int64{
-		"default:dep-1:CrashLoopBackOff:app": {"pod-1": time.Now().Unix()},
+		"default:dep-1:CrashLoopBackOff:": {"pod-1": time.Now().Unix()},
 	}
 	err = sm.SaveBaseline(ctx, baseline)
 	assert.Nil(err)
@@ -529,8 +529,7 @@ func TestEngineBackedBaselineRoundTrip(t *testing.T) {
 
 	// Feed loaded baseline into correlation engine (as main.go does)
 	e := correlation.NewEngine(correlation.Config{
-		Window:      10 * time.Minute,
-		Cooldown:    5 * time.Minute,
+		Window:       10 * time.Minute,
 		StartupQuiet: 0,
 		Baseline:    loaded,
 	})

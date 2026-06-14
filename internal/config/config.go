@@ -377,14 +377,6 @@ type Correlation struct {
 	// Events outside this window start a new incident.
 	Window int `yaml:"window"`
 
-	// Cooldown is the minimum time (in minutes) between notifications
-	// for the same incident to prevent alert fatigue.
-	Cooldown int `yaml:"cooldown"`
-
-	// StaleThreshold is the time (in minutes) without updates before
-	// an incident is marked stale.
-	StaleThreshold int `yaml:"staleThreshold"`
-
 	// LifecycleInterval is the interval (in minutes) for checking
 	// lifecycle transitions (stale, resolved). Default 1.
 	LifecycleInterval int `yaml:"lifecycleInterval"`

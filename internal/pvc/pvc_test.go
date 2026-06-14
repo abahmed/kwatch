@@ -397,8 +397,7 @@ func TestPodStruct(t *testing.T) {
 
 func TestPvcStableReasonDedup(t *testing.T) {
 	correlator := correlation.NewEngine(correlation.Config{
-		Window:   10 * time.Minute,
-		Cooldown: 1 * time.Millisecond,
+		Window: 10 * time.Minute,
 	})
 
 	ev := event.Event{
@@ -413,16 +412,14 @@ func TestPvcStableReasonDedup(t *testing.T) {
 	_, action1 := correlator.Process(ev, owner, nil)
 	assert.Equal(t, model.ActionCreate, action1)
 
-	time.Sleep(2 * time.Millisecond)
-
+	// second call with same sig → skip (edge-triggered)
 	_, action2 := correlator.Process(ev, owner, nil)
-	assert.Equal(t, model.ActionUpdate, action2, "second call with stable reason should update, not create")
+	assert.Equal(t, model.ActionSkip, action2, "second call with stable reason should skip (edge-triggered)")
 }
 
 func TestPvcStableReasonDifferentPercentages(t *testing.T) {
 	correlator := correlation.NewEngine(correlation.Config{
-		Window:   10 * time.Minute,
-		Cooldown: 1 * time.Millisecond,
+		Window: 10 * time.Minute,
 	})
 
 	ev1 := event.Event{
@@ -437,8 +434,6 @@ func TestPvcStableReasonDifferentPercentages(t *testing.T) {
 	_, action1 := correlator.Process(ev1, owner, nil)
 	assert.Equal(t, model.ActionCreate, action1)
 
-	time.Sleep(2 * time.Millisecond)
-
 	ev2 := event.Event{
 		Resource:  "pvc",
 		PodName:   "test-pod",
@@ -448,13 +443,12 @@ func TestPvcStableReasonDifferentPercentages(t *testing.T) {
 	}
 
 	_, action2 := correlator.Process(ev2, owner, nil)
-	assert.Equal(t, model.ActionUpdate, action2, "different percentage, same stable reason should still dedup")
+	assert.Equal(t, model.ActionSkip, action2, "different percentage, same severity — edge-triggered skip")
 }
 
 func TestPvcSeverityWarnTier(t *testing.T) {
 	correlator := correlation.NewEngine(correlation.Config{
 		Window:   10 * time.Minute,
-		Cooldown: 1 * time.Nanosecond,
 		Enricher: &enricher.DefaultEnricher{},
 	})
 
@@ -475,7 +469,6 @@ func TestPvcSeverityWarnTier(t *testing.T) {
 func TestPvcSeverityCriticalTier(t *testing.T) {
 	correlator := correlation.NewEngine(correlation.Config{
 		Window:   10 * time.Minute,
-		Cooldown: 1 * time.Nanosecond,
 		Enricher: &enricher.DefaultEnricher{},
 	})
 
@@ -496,7 +489,6 @@ func TestPvcSeverityCriticalTier(t *testing.T) {
 func TestPvcOverThresholdFiresDuringStartupQuiet(t *testing.T) {
 	correlator := correlation.NewEngine(correlation.Config{
 		Window:       10 * time.Minute,
-		Cooldown:     5 * time.Minute,
 		StartupQuiet: 1 * time.Hour,
 		Enricher:     &enricher.DefaultEnricher{},
 	})
@@ -520,7 +512,6 @@ func TestPvcOverThresholdFiresDuringStartupQuiet(t *testing.T) {
 func TestPvcSeverityUpgradeFromWarnToCritical(t *testing.T) {
 	correlator := correlation.NewEngine(correlation.Config{
 		Window:   10 * time.Minute,
-		Cooldown: 1 * time.Nanosecond,
 		Enricher: &enricher.DefaultEnricher{},
 	})
 

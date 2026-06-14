@@ -289,28 +289,6 @@ func TestFormatIncidentMessageWithLogsEvents(t *testing.T) {
 	assert.Contains(t, msg, "BackOff restart")
 }
 
-func TestFormatStaleMessageGolden(t *testing.T) {
-	now := time.Now()
-	inc := &model.Incident{
-		Key:       "default:deploy:CrashLoopBackOff",
-		Name:      "deploy",
-		Namespace: "default",
-		Reason:    "CrashLoopBackOff",
-		Resource:  "pod",
-		Count:     5,
-		FirstSeen: now.Add(-30 * time.Minute),
-		LastSeen:  now,
-		Resources: map[string]bool{"pod-1": true, "pod-2": true},
-	}
-
-	msg := formatIncidentMessage(inc, model.ActionStale, 100, nil)
-	assert.Contains(t, msg, "Stale")
-	assert.Contains(t, msg, "deploy")
-	assert.Contains(t, msg, "CrashLoopBackOff")
-	assert.Contains(t, msg, "2 resource")
-	assert.Contains(t, msg, now.Format("15:04:05"))
-}
-
 func TestFormatResolvedMessageGolden(t *testing.T) {
 	now := time.Now()
 	inc := &model.Incident{

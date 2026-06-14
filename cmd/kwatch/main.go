@@ -105,8 +105,6 @@ func main() {
 
 	correlator := correlation.NewEngine(correlation.Config{
 		Window:            time.Duration(cfg.Correlation.Window) * time.Minute,
-		Cooldown:          time.Duration(cfg.Correlation.Cooldown) * time.Minute,
-		StaleThreshold:    time.Duration(cfg.Correlation.StaleThreshold) * time.Minute,
 		LifecycleInterval: time.Duration(cfg.Correlation.LifecycleInterval) * time.Minute,
 		StartupQuiet:      time.Duration(startupQuiet) * time.Second,
 		Baseline:          baseline,

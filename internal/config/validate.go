@@ -38,12 +38,6 @@ func ValidateConfig(cfg *Config) []string {
 	if cfg.Correlation.Window <= 0 {
 		errs = append(errs, "correlation.window must be > 0")
 	}
-	if cfg.Correlation.Cooldown <= 0 {
-		errs = append(errs, "correlation.cooldown must be > 0")
-	}
-	if cfg.Correlation.StaleThreshold <= 0 {
-		errs = append(errs, "correlation.staleThreshold must be > 0")
-	}
 	if cfg.Correlation.LifecycleInterval <= 0 {
 		errs = append(errs, "correlation.lifecycleInterval must be > 0")
 	}

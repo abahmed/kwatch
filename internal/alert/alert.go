@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"reflect"
 	"regexp"
+	"sort"
 	"strings"
 	"text/template"
 	"time"
@@ -495,8 +496,6 @@ func formatIncidentMessage(inc *model.Incident, action model.IncidentAction, max
 		defaultMsg = formatCreateMessage(inc, maxLines)
 	case model.ActionUpdate:
 		defaultMsg = formatUpdateMessage(inc, maxLines)
-	case model.ActionStale:
-		defaultMsg = formatStaleMessage(inc)
 	case model.ActionResolved:
 		defaultMsg = formatResolvedMessage(inc)
 	case model.ActionDigestFlush:
@@ -528,6 +527,16 @@ func formatCreateMessage(inc *model.Incident, maxLines int) string {
 		severity = "normal"
 	}
 
+	containerName := inc.ContainerName
+	if len(inc.Containers) > 1 {
+		names := make([]string, 0, len(inc.Containers))
+		for c := range inc.Containers {
+			names = append(names, c)
+		}
+		sort.Strings(names)
+		containerName = strings.Join(names, ", ")
+	}
+
 	logsBlock := ""
 	if inc.IncludeLogs && inc.Logs != "" {
 		logsBlock = fmt.Sprintf("\nLogs:\n%s", truncateText(inc.Logs, maxLines))
@@ -540,7 +549,7 @@ func formatCreateMessage(inc *model.Incident, maxLines int) string {
 	return fmt.Sprintf(
 		"🚨 Incident: %s\nSeverity: %s\nOwner: %s (%s)\nNamespace: %s\nContainer: %s\nReason: %s\nRestarts: %d\nHint: %s%s%s\nAffected: %d resource(s)\nCount: %d\nDuration: %s",
 		inc.Name, severity, inc.OwnerKind, inc.Name,
-		inc.Namespace, inc.ContainerName, inc.Reason,
+		inc.Namespace, containerName, inc.Reason,
 		inc.RestartCount, inc.Hint,
 		logsBlock, eventsBlock,
 		resources, inc.Count, duration,
@@ -567,17 +576,6 @@ func formatUpdateMessage(inc *model.Incident, _ int) string {
 	return fmt.Sprintf(
 		"🔄 Update: %s | Severity: %s | Namespace: %s | Reason: %s | Count: %d | Duration: %s | Affected: %d resource(s)",
 		inc.Name, severity, inc.Namespace, inc.Reason, inc.Count, duration, resources,
-	)
-}
-
-func formatStaleMessage(inc *model.Incident) string {
-	resources := len(inc.Resources)
-	duration := inc.LastSeen.Sub(inc.FirstSeen).Round(time.Minute)
-
-	return fmt.Sprintf(
-		"⚠️ Stale: %s | Namespace: %s | Reason: %s | Last seen: %s | Count: %d | Duration: %s | Affected: %d resource(s)",
-		inc.Name, inc.Namespace, inc.Reason,
-		inc.LastSeen.Format("15:04:05"), inc.Count, duration, resources,
 	)
 }
 

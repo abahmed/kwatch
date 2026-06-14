@@ -15,8 +15,7 @@ import (
 
 func newTestEngine() *Engine {
 	return NewEngine(Config{
-		Window:   10 * time.Minute,
-		Cooldown: 5 * time.Minute,
+		Window: 10 * time.Minute,
 	})
 }
 
@@ -50,7 +49,7 @@ func TestProcessCreateNew(t *testing.T) {
 	assert.True(t, inc.FirstSeen.Equal(inc.LastSeen))
 }
 
-func TestProcessUpdateAfterCooldown(t *testing.T) {
+func TestProcessRepeatedEventSkipsSameSig(t *testing.T) {
 	e := newTestEngine()
 	ev := event.Event{
 		PodName:   "pod-1",
@@ -62,22 +61,18 @@ func TestProcessUpdateAfterCooldown(t *testing.T) {
 	inc1, action1 := e.Process(ev, "deploy-1", nil)
 	assert.Equal(t, model.ActionCreate, action1)
 
-	// Wait for cooldown to pass
-	time.Sleep(1 * time.Millisecond)
-	e.config.Cooldown = 1 * time.Millisecond
-
-	// Second event should update
+	// Second event with identical sig → skip (edge-triggered), but Count still updates
 	ev.PodName = "pod-2"
 	inc2, action2 := e.Process(ev, "deploy-1", nil)
 
-	assert.Equal(t, model.ActionUpdate, action2)
+	assert.Equal(t, model.ActionSkip, action2)
 	assert.Equal(t, inc1.Key, inc2.Key)
 	assert.Equal(t, 2, inc2.Count)
 	assert.True(t, inc2.Resources["pod-1"])
 	assert.True(t, inc2.Resources["pod-2"])
 }
 
-func TestProcessSkipWithinCooldown(t *testing.T) {
+func TestProcessSkipSameSigSkipsButUpdatesCount(t *testing.T) {
 	e := newTestEngine()
 	ev := event.Event{
 		PodName:   "pod-1",
@@ -88,15 +83,15 @@ func TestProcessSkipWithinCooldown(t *testing.T) {
 	inc1, action1 := e.Process(ev, "deploy-1", nil)
 	assert.Equal(t, model.ActionCreate, action1)
 
-	// Second event within cooldown (0 time passed)
+	// Second event with same sig → skip (edge-triggered), Count and Resources still update
 	ev.PodName = "pod-2"
 	inc2, action2 := e.Process(ev, "deploy-1", nil)
 
 	assert.Equal(t, model.ActionSkip, action2)
 	assert.Equal(t, inc1.Key, inc2.Key)
-	assert.Equal(t, 1, inc2.Count) // unchanged
+	assert.Equal(t, 2, inc2.Count)
 	assert.True(t, inc2.Resources["pod-1"])
-	assert.False(t, inc2.Resources["pod-2"])
+	assert.True(t, inc2.Resources["pod-2"])
 }
 
 func TestProcessDifferentOwnerNewIncident(t *testing.T) {
@@ -232,7 +227,6 @@ func TestRemovePodMultiIncidentResolve(t *testing.T) {
 
 func TestProcessConcurrentSafe(t *testing.T) {
 	e := newTestEngine()
-	e.config.Cooldown = 0
 	e.config.Window = time.Hour
 
 	var wg sync.WaitGroup
@@ -332,8 +326,7 @@ func TestBaselineExpiredPrunes(t *testing.T) {
 
 func TestRemovePodClearsSeen(t *testing.T) {
 	e := NewEngine(Config{
-		Window:   10 * time.Minute,
-		Cooldown: 1 * time.Nanosecond,
+		Window: 10 * time.Minute,
 	})
 	e.config.StartupQuiet = 0
 
@@ -367,55 +360,6 @@ func TestRemovePodClearsSeen(t *testing.T) {
 	assert.Equal(t, model.ActionCreate, action)
 }
 
-func TestCheckLifecycleStale(t *testing.T) {
-	e := newTestEngine()
-	e.config.StaleThreshold = 1 * time.Millisecond
-
-	ev := event.Event{
-		PodName:   "pod-1",
-		Namespace: "default",
-		Reason:    "CrashLoopBackOff",
-	}
-
-	e.Process(ev, "deploy-1", nil)
-
-	var staleActions int
-	e.config.LifecycleHook = func(inc *model.Incident, action model.IncidentAction) {
-		if action == model.ActionStale {
-			staleActions++
-		}
-	}
-
-	time.Sleep(2 * time.Millisecond)
-	e.checkLifecycle()
-
-	assert.Equal(t, 1, staleActions)
-}
-
-func TestCheckLifecycleNotStale(t *testing.T) {
-	e := newTestEngine()
-	e.config.StaleThreshold = 1 * time.Hour
-
-	ev := event.Event{
-		PodName:   "pod-1",
-		Namespace: "default",
-		Reason:    "CrashLoopBackOff",
-	}
-
-	e.Process(ev, "deploy-1", nil)
-
-	var staleActions int
-	e.config.LifecycleHook = func(inc *model.Incident, action model.IncidentAction) {
-		if action == model.ActionStale {
-			staleActions++
-		}
-	}
-
-	e.checkLifecycle()
-
-	assert.Equal(t, 0, staleActions)
-}
-
 func TestStartupQuietSuppressesAllBeforeSeen(t *testing.T) {
 	e := newTestEngine()
 	e.config.StartupQuiet = 10 * time.Minute
@@ -432,8 +376,7 @@ func TestStartupQuietSuppressesAllBeforeSeen(t *testing.T) {
 
 func TestStsOwnedPodsGroupByStsName(t *testing.T) {
 	e := NewEngine(Config{
-		Window:   10 * time.Minute,
-		Cooldown: 1 * time.Nanosecond,
+		Window: 10 * time.Minute,
 		Enricher: &enricher.DefaultEnricher{SeverityByOwnerKind: map[string]string{"StatefulSet": "high"}},
 	})
 
@@ -454,7 +397,7 @@ func TestStsOwnedPodsGroupByStsName(t *testing.T) {
 	inc2, action2 := e.Process(ev2, "my-sts", nil)
 
 	assert.Equal(t, model.ActionCreate, action1)
-	assert.Equal(t, model.ActionUpdate, action2)
+	assert.Equal(t, model.ActionSkip, action2)
 	assert.Equal(t, inc1.Key, inc2.Key)
 	assert.Equal(t, "my-sts", inc1.Name)
 	assert.Equal(t, "high", inc1.Severity)
@@ -505,10 +448,8 @@ func TestSnapshotEmpty(t *testing.T) {
 
 func TestRenotifyConfig(t *testing.T) {
 	e := NewEngine(Config{
-		Window:                10 * time.Minute,
-		Cooldown:              5 * time.Minute,
-		StaleThreshold:        10 * time.Minute,
-		RenotifyInterval:      1 * time.Minute,
+		Window:                 10 * time.Minute,
+		RenotifyInterval:       1 * time.Minute,
 		RenotifyMaxPerIncident: 3,
 	})
 	if e.config.RenotifyInterval != 1*time.Minute {
@@ -524,7 +465,6 @@ func TestRenotifyConfig(t *testing.T) {
 func escTestEngine() *Engine {
 	return NewEngine(Config{
 		Window:            10 * time.Minute,
-		Cooldown:          5 * time.Minute,
 		EscalationEnabled: true,
 		EscalationTiers:   []int{3, 10, 50},
 	})
@@ -553,11 +493,11 @@ func TestEscalationSecondCrossingIsCritical(t *testing.T) {
 	assert.Equal(t, "critical", inc.Severity)
 }
 
-func TestEscalationSameTierRespectsCooldown(t *testing.T) {
+func TestEscalationSameTierSkips(t *testing.T) {
 	e := escTestEngine()
 	ev := event.Event{PodName: "p", Namespace: "ns", Reason: "OOMKilled"}
 	e.Process(ev, "dep", &model.ContainerState{RestartCount: 4})
-	_, action := e.Process(ev, "dep", &model.ContainerState{RestartCount: 5}) // 4→5: no tier
+	_, action := e.Process(ev, "dep", &model.ContainerState{RestartCount: 5}) // 4→5: no tier, same sig
 	assert.Equal(t, model.ActionSkip, action)
 }
 
@@ -566,7 +506,7 @@ func TestEscalationDisabledIsNoop(t *testing.T) {
 	ev := event.Event{PodName: "p", Namespace: "ns", Reason: "OOMKilled"}
 	e.Process(ev, "dep", &model.ContainerState{RestartCount: 2})
 	_, action := e.Process(ev, "dep", &model.ContainerState{RestartCount: 50})
-	assert.Equal(t, model.ActionSkip, action) // cooldown applies, no bypass
+	assert.Equal(t, model.ActionSkip, action) // no escalation, same sig
 }
 
 // ── BUG-2: inhibition ──────────────────────────────────────────────
@@ -574,7 +514,6 @@ func TestEscalationDisabledIsNoop(t *testing.T) {
 func TestInhibitionSuppressesPodOnBrokenNode(t *testing.T) {
 	e := NewEngine(Config{
 		Window:                    10 * time.Minute,
-		Cooldown:                  5 * time.Minute,
 		InhibitNodeSuppressesPods: true,
 	})
 	nodeEv := event.Event{Resource: "node", PodName: "node-1", NodeName: "node-1", Reason: "NodeNotReady"}
@@ -588,7 +527,6 @@ func TestInhibitionSuppressesPodOnBrokenNode(t *testing.T) {
 func TestInhibitionFlagOffDoesNotSuppress(t *testing.T) {
 	e := NewEngine(Config{
 		Window:                    10 * time.Minute,
-		Cooldown:                  5 * time.Minute,
 		InhibitNodeSuppressesPods: false,
 	})
 	e.Process(event.Event{Resource: "node", PodName: "node-1", NodeName: "node-1", Reason: "NodeNotReady"}, "node-1", nil)
@@ -599,7 +537,6 @@ func TestInhibitionFlagOffDoesNotSuppress(t *testing.T) {
 func TestInhibitionOtherNodeUnaffected(t *testing.T) {
 	e := NewEngine(Config{
 		Window:                    10 * time.Minute,
-		Cooldown:                  5 * time.Minute,
 		InhibitNodeSuppressesPods: true,
 	})
 	e.Process(event.Event{Resource: "node", PodName: "node-1", NodeName: "node-1", Reason: "NodeNotReady"}, "node-1", nil)
@@ -611,7 +548,6 @@ func TestInhibitionOtherNodeUnaffected(t *testing.T) {
 func TestInhibitionLiftsOnNodeResolve(t *testing.T) {
 	e := NewEngine(Config{
 		Window:                    10 * time.Minute,
-		Cooldown:                  5 * time.Minute,
 		InhibitNodeSuppressesPods: true,
 	})
 	e.Process(event.Event{Resource: "node", PodName: "node-1", NodeName: "node-1", Reason: "NodeNotReady"}, "node-1", nil)
@@ -624,7 +560,6 @@ func TestInhibitionLiftsOnNodeResolve(t *testing.T) {
 func TestInhibitionSuppressedCounter(t *testing.T) {
 	e := NewEngine(Config{
 		Window:                    10 * time.Minute,
-		Cooldown:                  5 * time.Minute,
 		InhibitNodeSuppressesPods: true,
 	})
 	e.Process(event.Event{Resource: "node", PodName: "node-1", NodeName: "node-1", Reason: "NodeNotReady"}, "node-1", nil)
@@ -640,7 +575,6 @@ func TestInhibitionSuppressedCounter(t *testing.T) {
 func stormEngine() *Engine {
 	return NewEngine(Config{
 		Window:               10 * time.Minute,
-		Cooldown:             time.Nanosecond,
 		StormEnabled:         true,
 		StormThreshold:       3,
 		StormWindow:          time.Minute,
@@ -701,8 +635,7 @@ func TestStormFlushEmitsSummary(t *testing.T) {
 
 func TestStormDisabledNeverDigests(t *testing.T) {
 	e := NewEngine(Config{
-		Window:  10 * time.Minute,
-		Cooldown: time.Nanosecond,
+		Window: 10 * time.Minute,
 	})
 	var digests int
 	e.config.LifecycleHook = func(inc *model.Incident, action model.IncidentAction) {
@@ -736,8 +669,7 @@ func TestStormResolvesStillNotify(t *testing.T) {
 func TestMarkResolvedIdempotent(t *testing.T) {
 	var resolves int
 	e := NewEngine(Config{
-		Window:   10 * time.Minute,
-		Cooldown: 5 * time.Minute,
+		Window: 10 * time.Minute,
 		LifecycleHook: func(inc *model.Incident, action model.IncidentAction) {
 			if action == model.ActionResolved {
 				resolves++
@@ -764,8 +696,7 @@ func TestStartupQuietPreseededSeenDoesNotSuppressNodeEvent(t *testing.T) {
 	// Pre-seed seen with a pod key (simulates pod baseline from buildSeenSet).
 	// During startup-quiet, a fresh node event must NOT be suppressed.
 	e := NewEngine(Config{
-		Window:      10 * time.Minute,
-		Cooldown:    5 * time.Minute,
+		Window:       10 * time.Minute,
 		StartupQuiet: 1 * time.Hour,
 	})
 	e.SetSeen(map[string]map[string]int64{"ns:dep:CrashLoopBackOff:": {"pod-1": time.Now().Unix()}})
@@ -781,8 +712,7 @@ func TestStartupQuietPreseededSeenDoesNotSuppressNodeEvent(t *testing.T) {
 func TestMarkResolvedNonexistentKeyNoOp(t *testing.T) {
 	var resolves int
 	e := NewEngine(Config{
-		Window:   10 * time.Minute,
-		Cooldown: 5 * time.Minute,
+		Window: 10 * time.Minute,
 		LifecycleHook: func(inc *model.Incident, action model.IncidentAction) {
 			if action == model.ActionResolved {
 				resolves++
@@ -797,7 +727,6 @@ func TestResolveHoldDownDelaysResolve(t *testing.T) {
 	var resolves int
 	e := NewEngine(Config{
 		Window:          10 * time.Minute,
-		Cooldown:        5 * time.Minute,
 		ResolveHoldDown: 10 * time.Minute,
 		LifecycleHook: func(inc *model.Incident, action model.IncidentAction) {
 			if action == model.ActionResolved {
@@ -822,7 +751,6 @@ func TestResolveHoldDownRevivesOnRecurrence(t *testing.T) {
 	var resolves int
 	e := NewEngine(Config{
 		Window:          10 * time.Minute,
-		Cooldown:        5 * time.Minute,
 		ResolveHoldDown: 10 * time.Minute,
 		LifecycleHook: func(inc *model.Incident, action model.IncidentAction) {
 			if action == model.ActionResolved {
@@ -919,7 +847,6 @@ func TestCheckLifecycleFinalizesPendingResolve(t *testing.T) {
 	var baselineChanged bool
 	e := NewEngine(Config{
 		Window:          10 * time.Minute,
-		Cooldown:        5 * time.Minute,
 		ResolveHoldDown: 1 * time.Millisecond,
 		LifecycleHook: func(inc *model.Incident, action model.IncidentAction) {
 			if action == model.ActionResolved {
@@ -1023,11 +950,10 @@ func TestResolvedIncidentRecreatesOnce(t *testing.T) {
 	assert.Equal(t, model.ActionSkip, action, "must respect cooldown on the re-created incident, NOT re-create again")
 }
 
-func TestPendingReviveRespectsCooldown(t *testing.T) {
+func TestPendingReviveSkips(t *testing.T) {
 	var resolved int
 	e := NewEngine(Config{
 		Window:          10 * time.Minute,
-		Cooldown:        5 * time.Minute,
 		ResolveHoldDown: 60 * time.Minute,
 		LifecycleHook: func(inc *model.Incident, action model.IncidentAction) {
 			if action == model.ActionResolved {
@@ -1046,7 +972,7 @@ func TestPendingReviveRespectsCooldown(t *testing.T) {
 	assert.Equal(t, model.StatePendingResolve, inc.State)
 	assert.Equal(t, 0, resolved)
 
-	// Revive within cooldown → skip, state back to active, no resolve emitted
+	// Revive → skip (edge-triggered, same sig), state back to active
 	inc2, action := e.Process(ev, "deploy-1", nil)
 	assert.Equal(t, model.ActionSkip, action)
 	assert.Equal(t, model.StateActive, inc2.State)

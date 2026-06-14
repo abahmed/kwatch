@@ -3,6 +3,7 @@ package slack
 import (
 	"context"
 	"fmt"
+	"sort"
 	"strings"
 	"sync"
 	"time"
@@ -258,14 +259,6 @@ func (s *Slack) sendIncidentWithToken(inc *model.Incident, action model.Incident
 		_, err := post(blocks, threadTS)
 		return err
 
-	case model.ActionStale:
-		s.mu.Lock()
-		threadTS, _ := s.threadMap[key]
-		s.mu.Unlock()
-		blocks := buildIncidentStaleBlocks(inc)
-		_, err := post(blocks, threadTS)
-		return err
-
 	case model.ActionResolved:
 		s.mu.Lock()
 		threadTS, _ := s.threadMap[key]
@@ -323,7 +316,7 @@ func buildIncidentBlocks(inc *model.Incident, appCfg *config.App) *slackClient.B
 				markdownF("*Name*\n%s", inc.Name),
 				markdownF("*Kind*\n%s", inc.OwnerKind),
 				markdownF("*Namespace*\n%s", inc.Namespace),
-				markdownF("*Container*\n%s", inc.ContainerName),
+				markdownF("*Container*\n%s", containerSummary(inc)),
 				markdownF("*Reason*\n%s", inc.Reason),
 				markdownF("*Restarts*\n%d", inc.RestartCount),
 				markdownF("*Count*\n%d", inc.Count),
@@ -407,21 +400,6 @@ func buildIncidentUpdateBlocks(inc *model.Incident) *slackClient.Blocks {
 	}
 }
 
-func buildIncidentStaleBlocks(inc *model.Incident) *slackClient.Blocks {
-	duration := inc.LastSeen.Sub(inc.FirstSeen).Round(time.Minute)
-
-	text := fmt.Sprintf(
-		"⚠️ *Stale* — No new events\nLast seen: %s | Count: %d | Duration: %s",
-		inc.LastSeen.Format("15:04:05"), inc.Count, duration,
-	)
-
-	return &slackClient.Blocks{
-		BlockSet: []slackClient.Block{
-			markdownSection(text),
-		},
-	}
-}
-
 func buildIncidentResolvedBlocks(inc *model.Incident) *slackClient.Blocks {
 	duration := inc.LastSeen.Sub(inc.FirstSeen).Round(time.Minute)
 
@@ -444,7 +422,7 @@ func formatIncidentText(inc *model.Incident, action model.IncidentAction) string
 		duration := inc.LastSeen.Sub(inc.FirstSeen).Round(time.Minute)
 		text := fmt.Sprintf(
 			"🚨 Incident: %s (%s)\nNamespace: %s\nContainer: %s\nReason: %s\nRestarts: %d\nHint: %s\nAffected: %d resource(s)\nCount: %d\nDuration: %s",
-			inc.Name, inc.OwnerKind, inc.Namespace, inc.ContainerName,
+			inc.Name, inc.OwnerKind, inc.Namespace, containerSummary(inc),
 			inc.Reason, inc.RestartCount, inc.Hint,
 			resources, inc.Count, duration,
 		)
@@ -477,12 +455,6 @@ func formatIncidentText(inc *model.Incident, action model.IncidentAction) string
 			}
 		}
 		return text
-	case model.ActionStale:
-		duration := inc.LastSeen.Sub(inc.FirstSeen).Round(time.Minute)
-		return fmt.Sprintf(
-			"⚠️ Stale: %s | Last seen: %s | Count: %d | Duration: %s",
-			inc.Name, inc.LastSeen.Format("15:04:05"), inc.Count, duration,
-		)
 	case model.ActionResolved:
 		duration := inc.LastSeen.Sub(inc.FirstSeen).Round(time.Minute)
 		return fmt.Sprintf(
@@ -492,6 +464,18 @@ func formatIncidentText(inc *model.Incident, action model.IncidentAction) string
 	default:
 		return ""
 	}
+}
+
+func containerSummary(inc *model.Incident) string {
+	if len(inc.Containers) > 1 {
+		names := make([]string, 0, len(inc.Containers))
+		for c := range inc.Containers {
+			names = append(names, c)
+		}
+		sort.Strings(names)
+		return strings.Join(names, ", ")
+	}
+	return inc.ContainerName
 }
 
 func chunks(s string, chunkSize int) []string {

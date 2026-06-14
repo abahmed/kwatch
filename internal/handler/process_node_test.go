@@ -19,8 +19,7 @@ func TestProcessNodeReadyAndMemoryPressure(t *testing.T) {
 	var resolves int
 
 	e := correlation.NewEngine(correlation.Config{
-		Window:   10 * time.Minute,
-		Cooldown: 5 * time.Minute,
+		Window: 10 * time.Minute,
 		LifecycleHook: func(inc *model.Incident, action model.IncidentAction) {
 			mu.Lock()
 			defer mu.Unlock()
@@ -62,8 +61,7 @@ func TestProcessNodeMemoryPressureResolve(t *testing.T) {
 	var resolves int
 
 	e := correlation.NewEngine(correlation.Config{
-		Window:   10 * time.Minute,
-		Cooldown: 5 * time.Minute,
+		Window: 10 * time.Minute,
 		LifecycleHook: func(inc *model.Incident, action model.IncidentAction) {
 			mu.Lock()
 			defer mu.Unlock()
@@ -137,8 +135,7 @@ func TestProcessNodeMemoryPressureResolveIdempotent(t *testing.T) {
 	var resolves int
 
 	e := correlation.NewEngine(correlation.Config{
-		Window:   10 * time.Minute,
-		Cooldown: 5 * time.Minute,
+		Window: 10 * time.Minute,
 		LifecycleHook: func(inc *model.Incident, action model.IncidentAction) {
 			mu.Lock()
 			defer mu.Unlock()
@@ -180,8 +177,7 @@ func TestProcessNodeHealthyNoResolve(t *testing.T) {
 	var resolves int
 
 	e := correlation.NewEngine(correlation.Config{
-		Window:   10 * time.Minute,
-		Cooldown: 5 * time.Minute,
+		Window: 10 * time.Minute,
 		LifecycleHook: func(inc *model.Incident, action model.IncidentAction) {
 			mu.Lock()
 			defer mu.Unlock()

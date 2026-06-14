@@ -895,7 +895,7 @@ func TestBuildSeenPerPodAndHealthySiblingKeepsBaseline(t *testing.T) {
 	h.mu.Unlock()
 
 	// The failed pod's key should be baselined
-	key := correlation.BuildKey("default", "dep", "Error", "c")
+	key := correlation.BuildKey("default", "dep", "Error", "")
 	_, ok := baseline[key]["failed-pod"]
 	assert.True(t, ok, "failed pod must be baselined")
 
@@ -940,7 +940,7 @@ func TestBuildSeenCrashLoopHighFreq(t *testing.T) {
 	h.mu.Unlock()
 
 	// Key should be CrashLoopHighFrequency (not CrashLoopBackOff) because restarts > 5
-	key := correlation.BuildKey("default", "dep", "CrashLoopHighFrequency", "app")
+	key := correlation.BuildKey("default", "dep", "CrashLoopHighFrequency", "")
 	_, ok := baseline[key]["cl-pod"]
 	assert.True(t, ok, "buildSeenSet must use CrashLoopHighFrequency for restarts > 5")
 }

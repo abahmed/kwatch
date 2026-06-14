@@ -17,7 +17,6 @@ const (
 	ActionCreate IncidentAction = iota
 	ActionUpdate
 	ActionSkip
-	ActionStale
 	ActionResolved
 	ActionDigest
 	ActionDigestFlush
@@ -31,8 +30,6 @@ func (a IncidentAction) String() string {
 		return "update"
 	case ActionSkip:
 		return "skip"
-	case ActionStale:
-		return "stale"
 	case ActionResolved:
 		return "resolved"
 	case ActionDigest:
@@ -48,7 +45,6 @@ type IncidentState int
 
 const (
 	StateActive IncidentState = iota
-	StateStale
 	StateResolved
 	StatePendingResolve
 )
@@ -76,6 +72,7 @@ type Incident struct {
 	FirstSeen     time.Time
 	LastSeen      time.Time
 	Resources     map[string]bool
+	Containers    map[string]bool
 	OwnerKind     string
 	ContainerName string
 	RestartCount  int
@@ -90,4 +87,7 @@ type Incident struct {
 	ResolveAt          time.Time
 	IncludeEvents      bool
 	IncludeLogs        bool
+	NotifiedSig        string
+	LastNotifiedAt     time.Time
+	RenotifyCount      int
 }

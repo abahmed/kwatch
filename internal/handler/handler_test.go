@@ -19,8 +19,7 @@ var testAlertMgr = &alert.AlertManager{}
 
 func testCorrelator() *correlation.Engine {
 	return correlation.NewEngine(correlation.Config{
-		Window:   10 * time.Minute,
-		Cooldown: 5 * time.Minute,
+		Window: 10 * time.Minute,
 	})
 }
 
@@ -489,8 +488,7 @@ func TestBrokenPodEventsFromCache(t *testing.T) {
 		MaxRecentLogLines: 10,
 	}
 	e := correlation.NewEngine(correlation.Config{
-		Window:   10 * time.Minute,
-		Cooldown: 1 * time.Nanosecond,
+		Window: 10 * time.Minute,
 	})
 	h := NewHandler(client, cfg, e, testAlertMgr)
 

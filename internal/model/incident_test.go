@@ -12,7 +12,6 @@ func TestIncidentActionString(t *testing.T) {
 		{ActionCreate, "create"},
 		{ActionUpdate, "update"},
 		{ActionSkip, "skip"},
-		{ActionStale, "stale"},
 		{ActionResolved, "resolved"},
 		{ActionDigest, "digest"},
 		{ActionDigestFlush, "digest_flush"},
