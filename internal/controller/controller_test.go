@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/abahmed/kwatch/internal/config"
+	"github.com/abahmed/kwatch/internal/correlation"
 	"github.com/stretchr/testify/assert"
 	appsv1 "k8s.io/api/apps/v1"
 	autoscalingv2 "k8s.io/api/autoscaling/v2"
@@ -26,12 +27,13 @@ import (
 )
 
 type mockHandler struct {
-	mu       sync.Mutex
-	podKeys  []string
-	podDel   []bool
-	nodeKeys []string
-	nodeDel  []bool
-	err      error
+	mu           sync.Mutex
+	podKeys      []string
+	podDel       []bool
+	nodeKeys     []string
+	nodeDel      []bool
+	err          error
+	seenBaseline map[string]int64
 }
 
 func (m *mockHandler) ProcessPod(key string, deleted bool) error {
@@ -98,7 +100,11 @@ func (m *mockHandler) ProcessHorizontalPodAutoscaler(string, bool) error       {
 func (m *mockHandler) ProcessHorizontalPodAutoscalerObject(*autoscalingv2.HorizontalPodAutoscaler, bool) error { return m.err }
 func (m *mockHandler) SetSecretLister(corev1lister.SecretLister)               {}
 func (m *mockHandler) SweepTLSSecrets()                                        {}
-func (m *mockHandler) SetSeen(map[string]int64)                                {}
+func (m *mockHandler) SetSeen(baseline map[string]int64) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	m.seenBaseline = baseline
+}
 func (m *mockHandler) ClearSeenByOwner(string, string)                        {}
 func (m *mockHandler) ClearSeenByPrefix(string) bool                           { return false }
 
@@ -812,4 +818,38 @@ func TestMultiNamespaceListerSeesBothNamespaces(t *testing.T) {
 		_, err2 := ctrl.podLister.Pods("ns2").Get("pod-2")
 		return err1 == nil && err2 == nil
 	}, 5*time.Second, 50*time.Millisecond)
+}
+
+func TestBuildSeenSetNodeBaseline(t *testing.T) {
+	assert := assert.New(t)
+
+	node := &corev1.Node{
+		ObjectMeta: metav1.ObjectMeta{Name: "worker-1"},
+		Status: corev1.NodeStatus{
+			Conditions: []corev1.NodeCondition{
+				{Type: corev1.NodeMemoryPressure, Status: corev1.ConditionTrue},
+			},
+		},
+	}
+	client := fake.NewSimpleClientset(node)
+	cfg := &config.Config{
+		NodeMonitor: config.NodeMonitor{Enabled: true},
+	}
+	h := &mockHandler{}
+
+	ctrl, cleanup := New(client, cfg, h)
+	defer cleanup()
+
+	assert.Eventually(func() bool {
+		_, err := ctrl.nodeLister.Get("worker-1")
+		return err == nil
+	}, 5*time.Second, 50*time.Millisecond)
+
+	ctrl.buildSeenSet()
+
+	expectedKey := correlation.BuildKey("", "worker-1", "MemoryPressure", "")
+	h.mu.Lock()
+	baseline := h.seenBaseline
+	h.mu.Unlock()
+	assert.Contains(baseline, expectedKey, "buildSeenSet should seed MemoryPressure baseline key")
 }

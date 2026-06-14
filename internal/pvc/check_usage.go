@@ -48,7 +48,7 @@ func (p *PvcMonitor) checkUsage() {
 
 			// During startup-quiet, seed the baseline instead of alerting
 			if p.correlator.InStartupQuiet() {
-				p.correlator.SeedBaseline(correlation.BuildKey("", pvc.PVName, "VolumeUsageHigh", ""))
+				p.correlator.SeedBaseline(correlation.BuildKey(pvc.Namespace, pvc.PVName, "VolumeUsageHigh", ""))
 				continue
 			}
 

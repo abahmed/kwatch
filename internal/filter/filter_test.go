@@ -1670,6 +1670,38 @@ func TestPodStatusFilterAlreadyKnown(t *testing.T) {
 	assert.True(result)
 }
 
+func TestContainerLogsFilterContainerStatusUnknown(t *testing.T) {
+	assert := assert.New(t)
+
+	ctx := &Context{
+		Client: fake.NewSimpleClientset(),
+		Config: &config.Config{},
+		Container: &ContainerContext{
+			Container: &corev1.ContainerStatus{
+				Name:         "test-container",
+				RestartCount: 3,
+				State: corev1.ContainerState{
+					Terminated: &corev1.ContainerStateTerminated{
+						Reason: "ContainerStatusUnknown",
+					},
+				},
+			},
+		},
+		Pod: &corev1.Pod{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      "test-pod",
+				Namespace: "default",
+			},
+		},
+	}
+
+	filter := ContainerLogsFilter{}
+	result := filter.Execute(ctx)
+	assert.False(result)
+	assert.Equal("", ctx.Container.Logs,
+		"ContainerStatusUnknown should result in empty logs")
+}
+
 func TestPodOwnersFilterStatefulSet(t *testing.T) {
 	assert := assert.New(t)
 

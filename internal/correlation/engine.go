@@ -189,6 +189,9 @@ func (e *Engine) InStartupQuiet() bool {
 
 func (e *Engine) SeedBaseline(key string) {
 	e.mu.Lock()
+	if e.seen == nil {
+		e.seen = make(map[string]int64)
+	}
 	e.seen[key] = time.Now().Unix()
 	snapshot := cloneBaseline(e.seen)
 	e.mu.Unlock()

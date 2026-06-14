@@ -493,6 +493,33 @@ func TestPvcSeverityCriticalTier(t *testing.T) {
 	assert.Equal(t, "high", inc.Severity)
 }
 
+func TestPvcStartupQuietSeedsBaseline(t *testing.T) {
+	correlator := correlation.NewEngine(correlation.Config{
+		Window:       10 * time.Minute,
+		Cooldown:     5 * time.Minute,
+		StartupQuiet: 1 * time.Hour,
+	})
+
+	assert.True(t, correlator.InStartupQuiet(), "InStartupQuiet should return true")
+
+	key := correlation.BuildKey("default", "test-pv", "VolumeUsageHigh", "")
+	correlator.SeedBaseline(key)
+
+	snapshot := correlator.BaselineSnapshot()
+	assert.Contains(t, snapshot, key, "SeedBaseline should store the key")
+
+	ev := event.Event{
+		Resource:  "pvc",
+		PodName:   "test-pod",
+		Namespace: "default",
+		Reason:    "VolumeUsageHigh",
+	}
+
+	_, action := correlator.Process(ev, "test-pv", nil)
+	assert.Equal(t, model.ActionSkip, action,
+		"Process should skip baselined PVC incident during startup-quiet")
+}
+
 func TestPvcSeverityUpgradeFromWarnToCritical(t *testing.T) {
 	correlator := correlation.NewEngine(correlation.Config{
 		Window:   10 * time.Minute,
