@@ -57,17 +57,16 @@ func (h *handler) checkTLSSecret(secret *corev1.Secret, now time.Time, warnWindo
 	cn := cert.Subject.CommonName
 
 	if remaining < 0 {
-		ev := h.eventWithConfig(event.Event{
-			Resource:  "secret",
-			PodName:   secret.Name,
+		h.signalEvent(&event.Signal{
+			Resource: "secret",
+			PodName:  secret.Name,
 			Namespace: secret.Namespace,
-			Reason:    "TLSCertExpiringSoon",
-			Logs:      "",
-			Labels:    secret.Labels,
-			Severity:  "high",
-			Hint:      fmt.Sprintf("expired %v ago; CN=%s", (-remaining).Round(time.Hour), cn),
+			Reason:   "TLSCertExpiringSoon",
+			Owner:    key,
+			Labels:   secret.Labels,
+			Severity: "high",
+			Hint:     fmt.Sprintf("expired %v ago; CN=%s", (-remaining).Round(time.Hour), cn),
 		})
-		h.report(ev, key, nil)
 	} else if remaining < warnWindow {
 		daysLeft := int(remaining.Hours() / 24)
 		severity := "normal"
@@ -78,17 +77,16 @@ func (h *handler) checkTLSSecret(secret *corev1.Secret, now time.Time, warnWindo
 		if daysLeft <= critical {
 			severity = "high"
 		}
-		ev := h.eventWithConfig(event.Event{
-			Resource:  "secret",
-			PodName:   secret.Name,
+		h.signalEvent(&event.Signal{
+			Resource: "secret",
+			PodName:  secret.Name,
 			Namespace: secret.Namespace,
-			Reason:    "TLSCertExpiringSoon",
-			Logs:      "",
-			Labels:    secret.Labels,
-			Severity:  severity,
-			Hint:      fmt.Sprintf("expires in %dd (%s); CN=%s", daysLeft, expiry.Format("2006-01-02"), cn),
+			Reason:   "TLSCertExpiringSoon",
+			Owner:    key,
+			Labels:   secret.Labels,
+			Severity: severity,
+			Hint:     fmt.Sprintf("expires in %dd (%s); CN=%s", daysLeft, expiry.Format("2006-01-02"), cn),
 		})
-		h.report(ev, key, nil)
 	} else {
 		h.correlator.ResolveByResource("secret", key)
 	}

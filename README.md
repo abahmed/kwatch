@@ -109,6 +109,23 @@ following WILL change behavior you may depend on:
   alert itself). Update any silences, routes, or webhook consumers that
   matched the old strings.
 
+### kwatch is now low-noise by default
+All monitors are enabled by default (pod, node, PVC, *deployment rollout*,
+*job*, *cronjob*, *daemonset*, *HPA*). Storm/digest aggregation, severity
+escalation, and node→pod inhibition are all on. `resolveHoldDown: 30s`
+prevents flap resolution storms. Health check (`/healthz`, `/readyz`) is
+also on. To restore the v0.10.x off-by-default behavior, explicitly set
+each monitor, storm, escalation, and inhibition to `false`.
+
+### Edge-triggered notification — no more cooldown/stale
+kwatch previously used a cooldown timer (minimum gap between updates) and
+a stale threshold (time before marking an incident stale). Both are
+**removed** — kwatch now compares a notification signature on every event
+and only sends when state, severity, or resolved-changed meaningfully.
+Existing config files mentioning `correlation.cooldown` or
+`correlation.staleThreshold` are silently ignored (the yaml parser ignores
+unknown fields).
+
 ### kwatch restarts no longer re-alert existing incidents
 kwatch now persists a baseline of already-broken workloads (in its state
 ConfigMap) and suppresses re-alerts for them across restarts. If you
@@ -139,13 +156,13 @@ the chart README for a namespace-scoped alternative), `crd.enabled`
 | PVC usage tiers (warn / critical) | **on** | Thresholds: 80% / 90% |
 | Job failures & suspension | **on** | Reason: `JobFailed` / `JobSuspended` |
 | Stuck rollouts (`ProgressDeadlineExceeded`) | **on** | Deployments only |
-| DaemonSet unavailability | off | By DaemonSet |
-| CronJob suspension / missed schedules | off | By CronJob |
-| HPA pinned at max replicas | off | Sustain window configurable |
+| DaemonSet unavailability | **on** | By DaemonSet |
+| CronJob suspension / missed schedules | **on** | By CronJob |
+| HPA pinned at max replicas | **on** | Sustain window configurable |
 | TLS certificates expiring | off | Threshold in days |
-| Node crash → pod inhibition | off | Controlled per-cluster |
+| Node crash → pod inhibition | **on** | Controlled per-cluster |
 
-Each signal beyond core pod/node/PVC is opt-in to keep baseline zero-config.
+All signals beyond TLS are enabled by default for low-noise zero-config.
 
 ## kwatch vs …
 
@@ -173,14 +190,21 @@ you something broke *right now*.
 
 | Parameter                      | Description   |
 |:-------------------------------|:-----------------------|
-| `maxRecentLogLines`            | Max tail log lines fetched from API and displayed in alert message blocks (default: 100) |
+| `maxRecentLogLines`            | Max tail log lines fetched from API and displayed in alert message blocks (default: 50) |
+| `resyncSeconds`                | Periodic informer resync interval in seconds (default: 600). 0 = event-driven only |
 | `workers`                     | Number of concurrent reconcile workers (default: 1). Raise for large clusters. |
 | `namespaces`                   | Optional list of namespaces that you want to watch or forbid, if it's not provided it will watch all namespaces. If you want to forbid a namespace, configure it with `!<namespace name>`. You can either set forbidden namespaces or allowed, not both. |
 | `reasons`                      | Optional list of reasons that you want to watch or forbid, if it's not provided it will watch all reasons. If you want to forbid a reason, configure it with `!<reason>`. You can either set forbidden reasons or allowed, not both.                     |
-| `ignoreFailedGracefulShutdown` | If set to true, containers which are forcefully killed during shutdown (as their graceful shutdown failed) are not reported as error     |
-| `ignoreContainerNames`         | Optional list of container names to ignore    |
+| `ignoreFailedGracefulShutdown` | If set to true, containers which are forcefully killed during shutdown (as their graceful shutdown failed) are not reported as error (default: true) |
+| `ignoreDisruptionTerminations` | If set to true, suppresses alerts for evicted/terminated pods during node drains (default: true) |
+| `ignoreContainerNames`         | Optional list of container names to ignore (deprecated — use silences) |
 | `ignorePodNames`               | Optional list of pod name regexp patterns to ignore    |
-| `IgnoreLogPatterns`            | Optional list of regexp patterns of logs to ignore     |
+| `ignoreLogPatterns`            | Optional list of regexp patterns of logs to ignore (deprecated — use silences) |
+| `ignoreContainerMessages`      | Optional list of container messages to ignore (deprecated — use silences) |
+| `ignoreNodeReasons`            | Optional list of node condition reasons to ignore (deprecated — use silences) |
+| `ignoreNodeMessages`           | Optional list of node condition messages to ignore (deprecated — use silences) |
+| `runbooks`                     | Optional map of reason → URL appended to incident hint (e.g. `ImagePullBackOff: "https://wiki/registry-auth"`) |
+| `containerRestartThreshold`    | Alert when a container exceeds this many restarts without a detect/enrich match (0 = off) |
 
 #### Namespace filter
 
@@ -230,22 +254,25 @@ reasons:
 | `app.clusterName` | used in notifications to indicate which cluster has issue |
 | `app.disableStartupMessage` | If set to true, welcome message will not be sent to notification channels |
 | `app.logFormatter` | used for setting custom formatter when app prints logs: text, json (default: text) |
+| `includeEvents` | Include Kubernetes events in alert messages (default: true) |
+| `includeLogs` | Include container logs in alert messages (default: true) |
 
 
 ### 💓 Health Check
 
 | Parameter                     | Description                                 |
 |:------------------------------|:------------------------------------------- |
-| `healthCheck.enabled` | If set to true, enables health check endpoints (default: false) |
+| `healthCheck.enabled` | If set to true, enables health check endpoints (default: true) |
 | `healthCheck.port` | Port for health check endpoints (default: 8060) |
 | `healthCheck.pprof` | Enable /debug/pprof/* endpoints (default: false) |
+| `healthCheck.diagnostics` | Enable /incidents and /test-alert endpoints (default: false) |
 
 **Endpoints:**
 - `GET /healthz` - Liveness probe (text/plain: "OK")
 - `GET /readyz` - Readiness probe (text/plain: "OK")
 - `GET /health` - Returns `{"status": "ok"}` (application/json)
-- `GET /incidents` - Returns all active incidents as JSON (requires correlation)
-- `POST /test-alert` - Sends a test alert through all configured providers
+- `GET /incidents` - Returns all active incidents as JSON (requires `healthCheck.diagnostics: true`)
+- `POST /test-alert` - Sends a test alert through all configured providers (requires `healthCheck.diagnostics: true`)
 - `GET /debug/pprof/` - Go pprof index (runtime profiling data, when enabled)
 - `--version` flag - Prints version and exits
 
@@ -284,7 +311,7 @@ Node monitoring alerts on `NotReady` and `Unknown` conditions, plus `MemoryPress
 
 | Parameter                       | Description                                                    |
 |:--------------------------------|:-------------------------------------------------------------- |
-| `daemonSetMonitor.enabled`      | Watch DaemonSets for unavailable pods (default: false)         |
+| `daemonSetMonitor.enabled`      | Watch DaemonSets for unavailable pods (default: true)          |
 
 Alerts when `status.numberUnavailable > 0`, resolves when all pods become available.
 
@@ -292,13 +319,15 @@ Alerts when `status.numberUnavailable > 0`, resolves when all pods become availa
 
 | Parameter                  | Description                                                 |
 |:---------------------------|:----------------------------------------------------------- |
-| `jobMonitor.enabled`       | Watch Jobs for failures and suspension (default: true)      |
+| `jobMonitor.enabled`       | Watch Jobs for failures and suspension (default: true)       |
+
+Alerts with `JobFailed` or `JobSuspended` reasons.
 
 ### ⏰ CronJob Monitor
 
 | Parameter                       | Description                                                    |
 |:--------------------------------|:-------------------------------------------------------------- |
-| `cronJobMonitor.enabled`        | Watch CronJobs for suspension or missed schedules (default: false) |
+| `cronJobMonitor.enabled`        | Watch CronJobs for suspension or missed schedules (default: true) |
 
 Alerts when a CronJob is suspended (`spec.suspend: true`) or has not been scheduled within the last 24 hours.
 
@@ -306,7 +335,8 @@ Alerts when a CronJob is suspended (`spec.suspend: true`) or has not been schedu
 
 | Parameter                       | Description                                                    |
 |:--------------------------------|:-------------------------------------------------------------- |
-| `hpaMonitor.enabled`            | Watch HPAs for maxed-out replicas (currentReplicas >= maxReplicas) (default: false) |
+| `hpaMonitor.enabled`            | Watch HPAs for maxed-out replicas (default: true)               |
+| `hpaMonitor.sustainedMinutes`   | Minutes an HPA must be maxed before alerting (default: 10)      |
 
 Alerts with reason `HPAMaxedOut` when an HPA has scaled to its maximum replica count.
 
@@ -316,8 +346,9 @@ Alerts with reason `HPAMaxedOut` when an HPA has scaled to its maximum replica c
 |:--------------------------------|:-------------------------------------------------------------- |
 | `tlsMonitor.enabled`            | Monitor TLS secret certificates for expiry (default: false)    |
 | `tlsMonitor.threshold`          | Days before expiry to start alerting (default: 30)             |
+| `tlsMonitor.criticalThreshold`  | Days before expiry for high severity (default: 3)              |
 
-Scans `kubernetes.io/tls` secrets daily. Alerts with `TlsCertExpired` or `TlsCertExpiringSoon` based on certificate `NotAfter`.
+TLS is the only monitor off by default; enable it and grant RBAC to `secrets` if needed.
 
 ### ⏳ Pending Pod Threshold
 
@@ -377,7 +408,7 @@ spec:
 
 | Parameter                          | Description                                                        |
 |:-----------------------------------|:------------------------------------------------------------------ |
-| `inhibition.nodeSuppressesPods`    | Suppress pod incidents on nodes with an active node incident (default: false) |
+| `inhibition.nodeSuppressesPods`    | Suppress pod incidents on nodes with an active node incident (default: true) |
 
 When a node-level incident (e.g. `NotReady`) is active, pod incidents on that same node are skipped to reduce noise during node outages.
 
@@ -387,10 +418,10 @@ Aggregate rapidly-firing incidents into periodic digests to prevent alert storms
 
 | Parameter                          | Description                                                        |
 |:-----------------------------------|:------------------------------------------------------------------ |
-| `storm.enabled`                    | Enable digest aggregation (default: false)                          |
-| `storm.threshold`                  | Max creates per window before digest mode activates                 |
-| `storm.windowMinutes`              | Sliding window (minutes) for rate tracking                          |
-| `storm.digestIntervalMinutes`      | How often (minutes) a digest summary is sent                        |
+| `storm.enabled`                    | Enable digest aggregation (default: true)                           |
+| `storm.threshold`                  | Max creates per window before digest mode activates (default: 10)   |
+| `storm.windowMinutes`              | Sliding window (minutes) for rate tracking (default: 5)             |
+| `storm.digestIntervalMinutes`      | How often (minutes) a digest summary is sent (default: 5)           |
 
 When the create rate exceeds `threshold` within `windowMinutes`, new incidents are silently buffered and a single summary message is sent every `digestIntervalMinutes`.
 
@@ -415,14 +446,14 @@ Incident grouping and lifecycle management. Events from the same owner/reason/co
 | Parameter                          | Description                                                        |
 |:-----------------------------------|:------------------------------------------------------------------ |
 | `correlation.window`               | Time window (minutes) to keep incidents in memory (default: 10)    |
-| `correlation.cooldown`             | Minimum gap (minutes) between incident updates (default: 5)        |
-| `correlation.staleThreshold`       | Minutes of inactivity before an incident is marked stale (default: 15) |
+| `correlation.resolveHoldDown`      | Seconds to wait before sending a resolved notification (default: 30) |
 | `correlation.lifecycleInterval`    | Interval (minutes) for lifecycle checks (default: 1)               |
 | `correlation.startupQuiet`         | Quiet period (seconds) after startup with no alerts (default: 30)  |
-| `correlation.escalation.enabled`   | Escalate severity based on container restart count (default: false) |
-| `correlation.escalation.tiers`     | Ordered restart thresholds, e.g. `[3, 10]` → 3+ "high", 10+ "critical" |
-| `correlation.renotify.interval`    | Resend stale messages periodically (minutes, 0 = off)               |
+| `correlation.escalation.enabled`   | Escalate severity based on container restart count (default: true) |
+| `correlation.escalation.tiers`     | Ordered restart thresholds, e.g. `[3, 10, 50]` → 3+ "high", 10+ "critical" |
 | `correlation.renotify.maxPerIncident` | Max renotifications per incident (default: 3)                    |
+
+⚠️ v0.10.x fields `cooldown` and `staleThreshold` are removed. `renotify.interval` per-severity overrides have replaced the flat `renotify.interval`.
 
 When Slack is configured with a bot token, incidents are sent as threaded messages: a root message on creation, with updates, stale, and resolved notifications as thread replies.
 

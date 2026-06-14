@@ -5,7 +5,6 @@ import (
 
 	"github.com/abahmed/kwatch/internal/event"
 	"github.com/abahmed/kwatch/internal/k8s"
-	"github.com/abahmed/kwatch/internal/model"
 	"k8s.io/klog/v2"
 )
 
@@ -50,22 +49,15 @@ func (p *PvcMonitor) checkUsage() {
 				severity = "high"
 			}
 
-			ev := event.Event{
-				Resource:  "pvc",
-				PodName:   pvc.PodName,
+			p.reportSignal(&event.Signal{
+				Resource: "pvc",
+				PodName:  pvc.PodName,
 				Namespace: pvc.Namespace,
-				NodeName:  "",
-				Reason:    "VolumeUsageHigh",
-				Logs:      "",
-				Labels:    nil,
-				Hint:      fmt.Sprintf("VolumeUsage(%.0f%%)", pvc.UsagePercentage),
-				Severity:  severity,
-			}
-
-			inc, action := p.correlator.Process(ev, pvc.PVName, nil)
-			if action != model.ActionSkip {
-				p.alertManager.NotifyIncident(inc, action)
-			}
+				Reason:   "VolumeUsageHigh",
+				Hint:     fmt.Sprintf("VolumeUsage(%.0f%%)", pvc.UsagePercentage),
+				Severity: severity,
+				Owner:    pvc.PVName,
+			})
 		}
 	}
 

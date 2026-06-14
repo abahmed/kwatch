@@ -47,16 +47,14 @@ func (h *handler) ProcessDeploymentObject(deploy *appsv1.Deployment, deleted boo
 		if c.Type == appsv1.DeploymentProgressing &&
 			c.Status == corev1.ConditionFalse &&
 			c.Reason == "ProgressDeadlineExceeded" {
-			ev := h.eventWithConfig(event.Event{
+			h.signalEvent(&event.Signal{
 				Resource:  "deployment",
 				PodName:   deploy.Name,
 				Namespace: deploy.Namespace,
 				Reason:    c.Reason,
-				Events:    "",
-				Logs:      "",
+				Owner:     deploy.Namespace + "/" + deploy.Name,
 				Labels:    deploy.Labels,
 			})
-			h.report(ev, deploy.Namespace+"/"+deploy.Name, nil)
 			return nil
 		}
 	}

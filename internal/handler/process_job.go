@@ -56,30 +56,26 @@ func (h *handler) ProcessJobObject(job *batchv1.Job, deleted bool) error {
 				if reason == "" {
 					reason = "JobFailed"
 				}
-				ev := h.eventWithConfig(event.Event{
+				h.signalEvent(&event.Signal{
 					Resource:  "job",
 					PodName:   job.Name,
 					Namespace: job.Namespace,
 					Reason:    reason,
-					Events:    "",
-					Logs:      "",
+					Owner:     job.Namespace + "/" + job.Name,
 					Labels:    job.Labels,
 				})
-				h.report(ev, job.Namespace+"/"+job.Name, nil)
 				return nil
 			}
 		case batchv1.JobSuspended:
 			if c.Status == corev1.ConditionTrue {
-				ev := h.eventWithConfig(event.Event{
+				h.signalEvent(&event.Signal{
 					Resource:  "job",
 					PodName:   job.Name,
 					Namespace: job.Namespace,
 					Reason:    "JobSuspended",
-					Events:    "",
-					Logs:      "",
+					Owner:     job.Namespace + "/" + job.Name,
 					Labels:    job.Labels,
 				})
-				h.report(ev, job.Namespace+"/"+job.Name, nil)
 				return nil
 			}
 		}

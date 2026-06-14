@@ -8,6 +8,8 @@ import (
 	"github.com/abahmed/kwatch/internal/alert"
 	"github.com/abahmed/kwatch/internal/config"
 	"github.com/abahmed/kwatch/internal/correlation"
+	"github.com/abahmed/kwatch/internal/event"
+	"github.com/abahmed/kwatch/internal/model"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/klog/v2"
 )
@@ -57,6 +59,21 @@ func (p *PvcMonitor) Start(ctx context.Context) {
 		case <-cleanupTicker.C:
 			p.cleanup()
 		}
+	}
+}
+
+func (p *PvcMonitor) reportSignal(s *event.Signal) {
+	ev := event.Event{
+		Resource:      s.Resource,
+		PodName:       s.PodName,
+		Namespace:     s.Namespace,
+		Reason:        s.Reason,
+		Hint:          s.Hint,
+		Severity:      s.Severity,
+	}
+	inc, action := p.correlator.Process(ev, s.Owner, nil)
+	if action != model.ActionSkip {
+		p.alertManager.NotifyIncident(inc, action)
 	}
 }
 

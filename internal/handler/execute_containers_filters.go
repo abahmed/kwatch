@@ -112,9 +112,10 @@ func (h *handler) executeContainersFilters(ctx *filter.Context) {
 		}
 
 		hint := buildContainerHint(ctx)
-		ev := h.eventWithConfig(event.Event{
+		h.signalEvent(&event.Signal{
+			Resource:      "pod",
 			PodName:       ctx.Pod.Name,
-			ContainerName: ctx.Container.Container.Name,
+			Container:     ctx.Container.Container.Name,
 			Namespace:     ctx.Pod.Namespace,
 			NodeName:      ctx.Pod.Spec.NodeName,
 			Reason:        ctx.Container.Reason,
@@ -122,19 +123,18 @@ func (h *handler) executeContainersFilters(ctx *filter.Context) {
 			Logs:          ctx.Container.Logs,
 			Labels:        ctx.Pod.Labels,
 			OwnerKind:     ownerKind,
-			RestartCount:  int(ctx.Container.Container.RestartCount),
+			RestartCount:  ctx.Container.Container.RestartCount,
 			Hint:          hint,
+			Owner:         ownerName,
+			ContainerState: &model.ContainerState{
+				RestartCount:     ctx.Container.Container.RestartCount,
+				LastTerminatedOn: ctx.Container.LastTerminatedOn,
+				Reason:           ctx.Container.Reason,
+				Msg:              ctx.Container.Msg,
+				ExitCode:         ctx.Container.ExitCode,
+				Status:           ctx.Container.Status,
+			},
 		})
-
-		cs := &model.ContainerState{
-			RestartCount:     ctx.Container.Container.RestartCount,
-			LastTerminatedOn: ctx.Container.LastTerminatedOn,
-			Reason:           ctx.Container.Reason,
-			Msg:              ctx.Container.Msg,
-			ExitCode:         ctx.Container.ExitCode,
-			Status:           ctx.Container.Status,
-		}
-		h.report(ev, ownerName, cs)
 	}
 }
 
@@ -243,24 +243,22 @@ func (h *handler) emitHighRestartAlert(ctx *filter.Context, container *corev1.Co
 
 	lastReason, lastEC := lastTermInfo(container)
 
-	ev := h.eventWithConfig(event.Event{
-		Resource:      "pod",
-		PodName:       ctx.Pod.Name,
-		ContainerName: container.Name,
-		Namespace:     ctx.Pod.Namespace,
-		NodeName:      ctx.Pod.Spec.NodeName,
-		Reason:        "HighRestartCount",
-		Labels:        ctx.Pod.Labels,
-		RestartCount:  int(container.RestartCount),
+	h.signalEvent(&event.Signal{
+		Resource:     "pod",
+		PodName:      ctx.Pod.Name,
+		Container:    container.Name,
+		Namespace:    ctx.Pod.Namespace,
+		NodeName:     ctx.Pod.Spec.NodeName,
+		Reason:       "HighRestartCount",
+		Labels:       ctx.Pod.Labels,
+		RestartCount: container.RestartCount,
 		Hint: fmt.Sprintf("container restarted %d times (last exit: %s, code %d)",
 			container.RestartCount, lastReason, lastEC),
+		Owner: owner,
+		ContainerState: &model.ContainerState{
+			RestartCount: container.RestartCount,
+			Reason:       lastReason,
+			ExitCode:     lastEC,
+		},
 	})
-
-	cs := &model.ContainerState{
-		RestartCount: container.RestartCount,
-		Reason:       lastReason,
-		ExitCode:     lastEC,
-	}
-
-	h.report(ev, owner, cs)
 }

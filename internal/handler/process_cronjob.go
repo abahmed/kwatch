@@ -44,30 +44,26 @@ func (h *handler) ProcessCronJobObject(cj *batchv1.CronJob, deleted bool) error 
 	}
 
 	if cj.Spec.Suspend != nil && *cj.Spec.Suspend {
-		ev := h.eventWithConfig(event.Event{
+		h.signalEvent(&event.Signal{
 			Resource:  "cronjob",
 			PodName:   cj.Name,
 			Namespace: cj.Namespace,
 			Reason:    "CronJobSuspended",
-			Events:    "",
-			Logs:      "",
+			Owner:     cj.Namespace + "/" + cj.Name,
 			Labels:    cj.Labels,
 		})
-		h.report(ev, cj.Namespace+"/"+cj.Name, nil)
 		return nil
 	}
 
 	if cj.Status.LastScheduleTime == nil || cj.Status.LastScheduleTime.Time.Before(time.Now().Add(-24*time.Hour)) {
-		ev := h.eventWithConfig(event.Event{
+		h.signalEvent(&event.Signal{
 			Resource:  "cronjob",
 			PodName:   cj.Name,
 			Namespace: cj.Namespace,
 			Reason:    "CronJobNotScheduled",
-			Events:    "",
-			Logs:      "",
+			Owner:     cj.Namespace + "/" + cj.Name,
 			Labels:    cj.Labels,
 		})
-		h.report(ev, cj.Namespace+"/"+cj.Name, nil)
 		return nil
 	}
 

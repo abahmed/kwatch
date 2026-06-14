@@ -79,23 +79,22 @@ func (h *handler) executePodFilters(ctx *filter.Context) {
 		ownerKind = ctx.Owner.Kind
 	}
 
-	ev := h.eventWithConfig(event.Event{
-		PodName:       ctx.Pod.Name,
-		ContainerName: ".",
-		Namespace:     ctx.Pod.Namespace,
-		NodeName:      ctx.Pod.Spec.NodeName,
-		Reason:        ctx.PodReason,
-		Events:        k8s.GetPodEventsStr(ctx.Events),
-		Logs:          "",
-		Labels:        ctx.Pod.Labels,
-		OwnerKind:     ownerKind,
-		Hint:          enricher.HintForReason(ctx.PodReason),
+	h.signalEvent(&event.Signal{
+		Resource:  "pod",
+		PodName:   ctx.Pod.Name,
+		Container: ".",
+		Namespace: ctx.Pod.Namespace,
+		NodeName:  ctx.Pod.Spec.NodeName,
+		Reason:    ctx.PodReason,
+		Events:    k8s.GetPodEventsStr(ctx.Events),
+		Labels:    ctx.Pod.Labels,
+		OwnerKind: ownerKind,
+		Hint:      enricher.HintForReason(ctx.PodReason),
+		Owner:     ownerName,
+		ContainerState: &model.ContainerState{
+			Reason: ctx.PodReason,
+			Msg:    ctx.PodMsg,
+			Status: "",
+		},
 	})
-
-	cs := &model.ContainerState{
-		Reason: ctx.PodReason,
-		Msg:    ctx.PodMsg,
-		Status: "",
-	}
-	h.report(ev, ownerName, cs)
 }
