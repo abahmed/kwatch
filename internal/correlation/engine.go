@@ -3,6 +3,7 @@ package correlation
 import (
 	"context"
 	"fmt"
+	"hash/crc32"
 	"sort"
 	"strconv"
 	"strings"
@@ -453,6 +454,7 @@ func (e *Engine) Process(ev event.Event, owner string, cs *model.ContainerState)
 
 func (e *Engine) newIncident(ev event.Event, owner string, cs *model.ContainerState, key, res string, now time.Time) *model.Incident {
 	inc := &model.Incident{
+		ID:        fmt.Sprintf("%08x", crc32.ChecksumIEEE([]byte(key))),
 		Key:       key,
 		Reason:    ev.Reason,
 		Namespace: ev.Namespace,
@@ -726,8 +728,10 @@ func (e *Engine) checkLifecycle() {
 		n := len(e.digestBuf)
 		e.digestBuf = nil
 		e.lastDigestFlush = now
+		digestKey := "digest:" + strconv.FormatInt(now.Unix(), 10)
 		digestInc := &model.Incident{
-			Key:    "digest:" + strconv.FormatInt(now.Unix(), 10),
+			ID:     fmt.Sprintf("%08x", crc32.ChecksumIEEE([]byte(digestKey))),
+			Key:    digestKey,
 			Reason: "DigestSummary",
 			Count:  n,
 			Hint:   summary,

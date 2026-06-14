@@ -11,6 +11,22 @@ import (
 	"k8s.io/klog/v2"
 )
 
+// strictDecoder wraps yaml.Decoder with KnownFields(true) to reject
+// unknown keys and catch typos early (NEW-5).
+type strictDecoder struct {
+	dec *yaml.Decoder
+}
+
+func newStrictDecoder(r *strings.Reader) *strictDecoder {
+	dec := yaml.NewDecoder(r)
+	dec.KnownFields(true)
+	return &strictDecoder{dec: dec}
+}
+
+func (d *strictDecoder) Decode(v interface{}) error {
+	return d.dec.Decode(v)
+}
+
 // LoadConfig loads yaml configuration from file if provided, otherwise
 // loads default configuration
 func LoadConfig() (*Config, error) {
@@ -45,10 +61,13 @@ func LoadConfig() (*Config, error) {
 		return os.Getenv(groups[1])
 	})
 
-	err = yaml.Unmarshal([]byte(expanded), config)
-	if err != nil {
-		klog.InfoS("unable to parse config file", "error", err.Error())
-		return nil, err
+	if strings.TrimSpace(expanded) != "" {
+		dec := newStrictDecoder(strings.NewReader(expanded))
+		err = dec.Decode(config)
+		if err != nil {
+			klog.InfoS("unable to parse config file", "error", err.Error())
+			return nil, err
+		}
 	}
 
 	var errs []error

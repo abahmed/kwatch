@@ -476,11 +476,11 @@ func (a *AlertManager) NotifyIncident(inc *model.Incident, action model.Incident
 
 	if a.isSilenced(inc) {
 		klog.V(4).InfoS("incident suppressed by silence rule",
-			"key", inc.Key, "reason", inc.Reason, "namespace", inc.Namespace)
+			"key", inc.Key, "id", inc.ID, "reason", inc.Reason, "namespace", inc.Namespace)
 		return
 	}
 
-	klog.InfoS("sending incident", "action", action, "key", inc.Key, "count", inc.Count)
+	klog.InfoS("sending incident", "action", action, "key", inc.Key, "id", inc.ID, "count", inc.Count)
 
 	if !a.started {
 		a.deliverAllSync(inc, action)
@@ -599,7 +599,7 @@ func (a *AlertManager) deliverOne(entry *providerEntry, inc *model.Incident, act
 	}
 	if err != nil {
 		metrics.Default.NotificationsDropped.Add(1)
-		klog.ErrorS(err, "failed to send", "provider", p.Name(), "key", inc.Key)
+		klog.ErrorS(err, "failed to send", "provider", p.Name(), "key", inc.Key, "id", inc.ID)
 		a.recordDeadLetter(entry, inc, action, err)
 		if entry.fallback != nil {
 			fbMsg := msg
@@ -629,7 +629,7 @@ func (a *AlertManager) deliverAllSync(inc *model.Incident, action model.Incident
 			if err := sendWithRetry(func() error {
 				return p.SendMessage(msg)
 			}, entry.maxAttempts, entry.retryDelay, 0, p.Name()); err != nil {
-				klog.ErrorS(err, "sync delivery failed", "provider", p.Name(), "key", inc.Key)
+				klog.ErrorS(err, "sync delivery failed", "provider", p.Name(), "key", inc.Key, "id", inc.ID)
 			}
 			return
 		}
@@ -648,7 +648,7 @@ func (a *AlertManager) deliverAllSync(inc *model.Incident, action model.Incident
 		}
 		if err != nil {
 			metrics.Default.NotificationsDropped.Add(1)
-			klog.ErrorS(err, "sync delivery failed", "provider", p.Name(), "key", inc.Key)
+			klog.ErrorS(err, "sync delivery failed", "provider", p.Name(), "key", inc.Key, "id", inc.ID)
 		}
 	}
 }

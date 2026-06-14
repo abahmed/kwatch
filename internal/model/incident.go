@@ -63,6 +63,7 @@ type IncidentView struct {
 }
 
 type Incident struct {
+	ID            string // stable short hash for log correlation
 	Key           string
 	Reason        string
 	Namespace     string
