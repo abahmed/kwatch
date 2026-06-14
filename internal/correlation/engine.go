@@ -52,7 +52,7 @@ func BuildKey(namespace, owner, reason, container string) string {
 // chain inside Process. It returns the same key that Process would compute.
 func IncidentKey(ev event.Event, owner string, cs *model.ContainerState) string {
 	r := normalizeReason(ev.Reason)
-	if r == "CrashLoopBackOff" && cs != nil && cs.RestartCount > 5 {
+	if r == "CrashLoopBackOff" && cs != nil && cs.RestartCount > defaultCrashLoopHighFreqThreshold {
 		r = "CrashLoopHighFrequency"
 	}
 	return BuildKey(ev.Namespace, owner, r, "")
@@ -74,7 +74,7 @@ func (e *Engine) edgeAction(inc *model.Incident) model.IncidentAction {
 	}
 	prev := inc.NotifiedSig
 	inc.NotifiedSig = sig
-	inc.LastNotifiedAt = time.Now()
+	inc.LastNotifiedAt = e.now()
 	if inc.State == model.StateResolved {
 		return model.ActionResolved
 	}
@@ -109,6 +109,7 @@ func escalateSeverity(s string) string {
 }
 
 const defaultBaselineTTL = 24 * time.Hour
+const defaultCrashLoopHighFreqThreshold = 5
 
 type Engine struct {
 	mu                   sync.Mutex
@@ -121,6 +122,7 @@ type Engine struct {
 	stormUntil           time.Time
 	digestBuf            []digestEntry
 	lastDigestFlush      time.Time
+	now                  func() time.Time
 }
 
 func NewEngine(cfg Config) *Engine {
@@ -136,9 +138,12 @@ func NewEngine(cfg Config) *Engine {
 	e := &Engine{
 		state:               make(map[string]*model.Incident),
 		config:              cfg,
-		startedAt:           time.Now(),
 		activeNodeIncidents: make(map[string]bool),
 	}
+	if e.now == nil {
+		e.now = time.Now
+	}
+	e.startedAt = e.now()
 	if cfg.Baseline != nil {
 		e.SetSeen(cfg.Baseline)
 	}
@@ -148,7 +153,7 @@ func NewEngine(cfg Config) *Engine {
 func (e *Engine) SetSeen(b map[string]map[string]int64) {
 	e.mu.Lock()
 	defer e.mu.Unlock()
-	now := time.Now()
+	now := e.now()
 	ttl := e.config.BaselineTTL
 	e.seen = make(map[string]map[string]int64, len(b))
 	for key, pods := range b {
@@ -166,7 +171,7 @@ func (e *Engine) SetSeen(b map[string]map[string]int64) {
 func (e *Engine) isBaselined(key, podName string) bool {
 	if pods, ok := e.seen[key]; ok {
 		if ts, ok := pods[podName]; ok {
-			if time.Since(time.Unix(ts, 0)) < e.config.BaselineTTL {
+			if e.now().Sub(time.Unix(ts, 0)) < e.config.BaselineTTL {
 				return true
 			}
 			delete(pods, podName)
@@ -175,7 +180,7 @@ func (e *Engine) isBaselined(key, podName string) bool {
 			}
 		}
 	}
-	if e.config.StartupQuiet > 0 && time.Since(e.startedAt) < e.config.StartupQuiet {
+	if e.config.StartupQuiet > 0 && e.now().Sub(e.startedAt) < e.config.StartupQuiet {
 		if len(e.seen) == 0 && len(e.state) == 0 {
 			return true
 		}
@@ -328,7 +333,7 @@ func (e *Engine) Process(ev event.Event, owner string, cs *model.ContainerState)
 		return nil, model.ActionSkip
 	}
 
-	now := time.Now()
+	now := e.now()
 
 	if inc, ok := e.state[key]; ok {
 		// Already resolved — re-create as fresh incident
@@ -464,7 +469,7 @@ func (e *Engine) MarkResolved(key string) {
 	}
 	if e.config.ResolveHoldDown > 0 {
 		inc.State = model.StatePendingResolve
-		inc.ResolveAt = time.Now().Add(e.config.ResolveHoldDown)
+		inc.ResolveAt = e.now().Add(e.config.ResolveHoldDown)
 		e.mu.Unlock()
 		return
 	}
@@ -498,7 +503,7 @@ func (e *Engine) RemovePod(namespace, podName string) {
 	var baselineChanged bool
 
 	e.mu.Lock()
-	now := time.Now()
+	now := e.now()
 	for key, inc := range e.state {
 		if inc.Namespace != namespace {
 			continue
@@ -559,7 +564,7 @@ func (e *Engine) ResolveByResource(resource, name string) {
 	var baselineChanged bool
 
 	e.mu.Lock()
-	now := time.Now()
+	now := e.now()
 	if resource == "node" {
 		delete(e.activeNodeIncidents, name)
 	}
@@ -625,7 +630,7 @@ func (e *Engine) cleanup() {
 	e.mu.Lock()
 	defer e.mu.Unlock()
 
-	now := time.Now()
+	now := e.now()
 	for key, inc := range e.state {
 		if now.After(inc.LastSeen.Add(e.config.Window)) {
 			if inc.Resource == "node" {
@@ -645,7 +650,7 @@ func (e *Engine) checkLifecycle() {
 	var baselineChanged bool
 
 	e.mu.Lock()
-	now := time.Now()
+	now := e.now()
 
 	// pending resolve finalization
 	for key, inc := range e.state {

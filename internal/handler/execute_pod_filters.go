@@ -97,8 +97,5 @@ func (h *handler) executePodFilters(ctx *filter.Context) {
 		Msg:    ctx.PodMsg,
 		Status: "",
 	}
-	inc, action := h.correlator.Process(ev, ownerName, cs)
-	if action != model.ActionSkip {
-		h.alertManager.NotifyIncident(inc, action)
-	}
+	h.report(ev, ownerName, cs)
 }

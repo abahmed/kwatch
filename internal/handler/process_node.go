@@ -6,7 +6,6 @@ import (
 
 	"github.com/abahmed/kwatch/internal/correlation"
 	"github.com/abahmed/kwatch/internal/event"
-	"github.com/abahmed/kwatch/internal/model"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/klog/v2"
@@ -84,10 +83,7 @@ func (h *handler) emitNodeAlert(node *corev1.Node, c corev1.NodeCondition, stabl
 		Hint:      hint,
 	})
 
-	inc, action := h.correlator.Process(ev, node.Name, nil)
-	if action != model.ActionSkip {
-		h.alertManager.NotifyIncident(inc, action)
-	}
+	h.report(ev, node.Name, nil)
 }
 
 func (h *handler) ProcessNodeObject(node *corev1.Node, deleted bool) error {

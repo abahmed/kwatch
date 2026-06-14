@@ -4,7 +4,6 @@ import (
 	"fmt"
 
 	"github.com/abahmed/kwatch/internal/event"
-	"github.com/abahmed/kwatch/internal/model"
 	appsv1 "k8s.io/api/apps/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/client-go/tools/cache"
@@ -62,10 +61,7 @@ func (h *handler) ProcessDaemonSetObject(ds *appsv1.DaemonSet, deleted bool) err
 			Labels:    ds.Labels,
 			Hint:      availabilityHint(ds),
 		})
-		inc, action := h.correlator.Process(ev, ds.Namespace+"/"+ds.Name, nil)
-		if action != model.ActionSkip {
-			h.alertManager.NotifyIncident(inc, action)
-		}
+		h.report(ev, ds.Namespace+"/"+ds.Name, nil)
 		return nil
 	}
 

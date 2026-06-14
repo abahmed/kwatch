@@ -13,6 +13,10 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
+func mockClock(t time.Time) func() time.Time {
+	return func() time.Time { return t }
+}
+
 func newTestEngine() *Engine {
 	return NewEngine(Config{
 		Window: 10 * time.Minute,
@@ -250,12 +254,14 @@ func TestProcessConcurrentSafe(t *testing.T) {
 }
 
 func TestBaselineSuppression(t *testing.T) {
+	fakeNow := time.Date(2025, 1, 1, 0, 0, 0, 0, time.UTC)
 	e := newTestEngine()
+	e.now = mockClock(fakeNow)
 	e.config.StartupQuiet = 0
 
 	incidentKey := BuildKey("default", "deploy-1", "CrashLoopBackOff", "")
 
-	e.SetSeen(map[string]map[string]int64{incidentKey: {"pod-1": time.Now().Unix()}})
+	e.SetSeen(map[string]map[string]int64{incidentKey: {"pod-1": fakeNow.Unix()}})
 
 	ev := event.Event{
 		PodName:   "pod-1",
@@ -287,13 +293,15 @@ func TestClearSeenUnsuppresses(t *testing.T) {
 }
 
 func TestBaselineSuppressesForFullTTL(t *testing.T) {
+	fakeNow := time.Date(2025, 1, 1, 0, 0, 0, 0, time.UTC)
 	e := newTestEngine()
+	e.now = mockClock(fakeNow)
 	e.config.StartupQuiet = 0
 	e.config.BaselineTTL = 24 * time.Hour
 
 	incidentKey := BuildKey("default", "deploy-1", "CrashLoopBackOff", "")
 	// entry created 1 hour ago — well within the 24h TTL
-	e.SetSeen(map[string]map[string]int64{incidentKey: {"pod-1": time.Now().Add(-1 * time.Hour).Unix()}})
+	e.SetSeen(map[string]map[string]int64{incidentKey: {"pod-1": fakeNow.Add(-1 * time.Hour).Unix()}})
 
 	ev := event.Event{
 		PodName: "pod-1", Namespace: "default", Reason: "CrashLoopBackOff",
@@ -303,13 +311,15 @@ func TestBaselineSuppressesForFullTTL(t *testing.T) {
 }
 
 func TestBaselineExpiredPrunes(t *testing.T) {
+	fakeNow := time.Date(2025, 1, 1, 0, 0, 0, 0, time.UTC)
 	e := newTestEngine()
+	e.now = mockClock(fakeNow)
 	e.config.StartupQuiet = 0
 	e.config.BaselineTTL = 24 * time.Hour
 
 	incidentKey := BuildKey("default", "deploy-1", "CrashLoopBackOff", "")
 	// entry created 25 hours ago — past the 24h TTL
-	e.SetSeen(map[string]map[string]int64{incidentKey: {"pod-1": time.Now().Add(-25 * time.Hour).Unix()}})
+	e.SetSeen(map[string]map[string]int64{incidentKey: {"pod-1": fakeNow.Add(-25 * time.Hour).Unix()}})
 
 	ev := event.Event{
 		PodName: "pod-1", Namespace: "default", Reason: "CrashLoopBackOff",
@@ -724,6 +734,7 @@ func TestMarkResolvedNonexistentKeyNoOp(t *testing.T) {
 }
 
 func TestResolveHoldDownDelaysResolve(t *testing.T) {
+	fakeNow := time.Date(2025, 1, 1, 0, 0, 0, 0, time.UTC)
 	var resolves int
 	e := NewEngine(Config{
 		Window:          10 * time.Minute,
@@ -734,6 +745,7 @@ func TestResolveHoldDownDelaysResolve(t *testing.T) {
 			}
 		},
 	})
+	e.now = mockClock(fakeNow)
 	e.config.StartupQuiet = 0
 
 	ev := event.Event{Namespace: "default", PodName: "pod-1", Reason: "CrashLoopBackOff"}
@@ -744,10 +756,11 @@ func TestResolveHoldDownDelaysResolve(t *testing.T) {
 	e.MarkResolved(inc.Key)
 	assert.Equal(t, 0, resolves)
 	assert.Equal(t, model.StatePendingResolve, inc.State)
-	assert.False(t, inc.ResolveAt.IsZero())
+	assert.Equal(t, fakeNow.Add(10*time.Minute), inc.ResolveAt)
 }
 
 func TestResolveHoldDownRevivesOnRecurrence(t *testing.T) {
+	fakeNow := time.Date(2025, 1, 1, 0, 0, 0, 0, time.UTC)
 	var resolves int
 	e := NewEngine(Config{
 		Window:          10 * time.Minute,
@@ -758,6 +771,7 @@ func TestResolveHoldDownRevivesOnRecurrence(t *testing.T) {
 			}
 		},
 	})
+	e.now = mockClock(fakeNow)
 	e.config.StartupQuiet = 0
 
 	ev := event.Event{Namespace: "default", PodName: "pod-1", Reason: "CrashLoopBackOff"}

@@ -5,7 +5,6 @@ import (
 	"time"
 
 	"github.com/abahmed/kwatch/internal/event"
-	"github.com/abahmed/kwatch/internal/model"
 	autoscalingv2 "k8s.io/api/autoscaling/v2"
 	"k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/client-go/tools/cache"
@@ -70,10 +69,7 @@ func (h *handler) ProcessHorizontalPodAutoscalerObject(hpa *autoscalingv2.Horizo
 			hpa.Spec.MaxReplicas, hpa.Status.DesiredReplicas,
 			hpa.Status.CurrentReplicas, time.Since(first).Round(time.Minute)),
 	})
-	inc, action := h.correlator.Process(ev, key, nil)
-	if action != model.ActionSkip {
-		h.alertManager.NotifyIncident(inc, action)
-	}
+	h.report(ev, key, nil)
 	return nil
 }
 

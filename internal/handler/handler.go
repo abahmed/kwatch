@@ -9,6 +9,7 @@ import (
 	"github.com/abahmed/kwatch/internal/correlation"
 	"github.com/abahmed/kwatch/internal/event"
 	"github.com/abahmed/kwatch/internal/filter"
+	"github.com/abahmed/kwatch/internal/model"
 	appsv1 "k8s.io/api/apps/v1"
 	autoscalingv2 "k8s.io/api/autoscaling/v2"
 	batchv1 "k8s.io/api/batch/v1"
@@ -188,6 +189,13 @@ func (h *handler) SetSeen(baseline map[string]map[string]int64) {
 
 func (h *handler) ClearSeenForPod(namespace, podName string) {
 	h.correlator.ClearSeenForPod(namespace, podName)
+}
+
+func (h *handler) report(ev event.Event, owner string, cs *model.ContainerState) {
+	inc, action := h.correlator.Process(ev, owner, cs)
+	if action != model.ActionSkip {
+		h.alertManager.NotifyIncident(inc, action)
+	}
 }
 
 func (h *handler) eventWithConfig(ev event.Event) event.Event {

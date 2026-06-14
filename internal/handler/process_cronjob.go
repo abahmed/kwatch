@@ -5,7 +5,6 @@ import (
 	"time"
 
 	"github.com/abahmed/kwatch/internal/event"
-	"github.com/abahmed/kwatch/internal/model"
 	batchv1 "k8s.io/api/batch/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/client-go/tools/cache"
@@ -54,10 +53,7 @@ func (h *handler) ProcessCronJobObject(cj *batchv1.CronJob, deleted bool) error 
 			Logs:      "",
 			Labels:    cj.Labels,
 		})
-		inc, action := h.correlator.Process(ev, cj.Namespace+"/"+cj.Name, nil)
-		if action != model.ActionSkip {
-			h.alertManager.NotifyIncident(inc, action)
-		}
+		h.report(ev, cj.Namespace+"/"+cj.Name, nil)
 		return nil
 	}
 
@@ -71,10 +67,7 @@ func (h *handler) ProcessCronJobObject(cj *batchv1.CronJob, deleted bool) error 
 			Logs:      "",
 			Labels:    cj.Labels,
 		})
-		inc, action := h.correlator.Process(ev, cj.Namespace+"/"+cj.Name, nil)
-		if action != model.ActionSkip {
-			h.alertManager.NotifyIncident(inc, action)
-		}
+		h.report(ev, cj.Namespace+"/"+cj.Name, nil)
 		return nil
 	}
 

@@ -4,7 +4,6 @@ import (
 	"fmt"
 
 	"github.com/abahmed/kwatch/internal/event"
-	"github.com/abahmed/kwatch/internal/model"
 	batchv1 "k8s.io/api/batch/v1"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
@@ -66,10 +65,7 @@ func (h *handler) ProcessJobObject(job *batchv1.Job, deleted bool) error {
 					Logs:      "",
 					Labels:    job.Labels,
 				})
-				inc, action := h.correlator.Process(ev, job.Namespace+"/"+job.Name, nil)
-				if action != model.ActionSkip {
-					h.alertManager.NotifyIncident(inc, action)
-				}
+				h.report(ev, job.Namespace+"/"+job.Name, nil)
 				return nil
 			}
 		case batchv1.JobSuspended:
@@ -83,10 +79,7 @@ func (h *handler) ProcessJobObject(job *batchv1.Job, deleted bool) error {
 					Logs:      "",
 					Labels:    job.Labels,
 				})
-				inc, action := h.correlator.Process(ev, job.Namespace+"/"+job.Name, nil)
-				if action != model.ActionSkip {
-					h.alertManager.NotifyIncident(inc, action)
-				}
+				h.report(ev, job.Namespace+"/"+job.Name, nil)
 				return nil
 			}
 		}

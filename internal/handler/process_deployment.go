@@ -4,7 +4,6 @@ import (
 	"fmt"
 
 	"github.com/abahmed/kwatch/internal/event"
-	"github.com/abahmed/kwatch/internal/model"
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
@@ -57,10 +56,7 @@ func (h *handler) ProcessDeploymentObject(deploy *appsv1.Deployment, deleted boo
 				Logs:      "",
 				Labels:    deploy.Labels,
 			})
-			inc, action := h.correlator.Process(ev, deploy.Namespace+"/"+deploy.Name, nil)
-			if action != model.ActionSkip {
-				h.alertManager.NotifyIncident(inc, action)
-			}
+			h.report(ev, deploy.Namespace+"/"+deploy.Name, nil)
 			return nil
 		}
 	}

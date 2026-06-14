@@ -7,7 +7,6 @@ import (
 	"time"
 
 	"github.com/abahmed/kwatch/internal/event"
-	"github.com/abahmed/kwatch/internal/model"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/klog/v2"
@@ -68,10 +67,7 @@ func (h *handler) checkTLSSecret(secret *corev1.Secret, now time.Time, warnWindo
 			Severity:  "high",
 			Hint:      fmt.Sprintf("expired %v ago; CN=%s", (-remaining).Round(time.Hour), cn),
 		})
-		inc, action := h.correlator.Process(ev, key, nil)
-		if action != model.ActionSkip {
-			h.alertManager.NotifyIncident(inc, action)
-		}
+		h.report(ev, key, nil)
 	} else if remaining < warnWindow {
 		daysLeft := int(remaining.Hours() / 24)
 		severity := "normal"
@@ -92,10 +88,7 @@ func (h *handler) checkTLSSecret(secret *corev1.Secret, now time.Time, warnWindo
 			Severity:  severity,
 			Hint:      fmt.Sprintf("expires in %dd (%s); CN=%s", daysLeft, expiry.Format("2006-01-02"), cn),
 		})
-		inc, action := h.correlator.Process(ev, key, nil)
-		if action != model.ActionSkip {
-			h.alertManager.NotifyIncident(inc, action)
-		}
+		h.report(ev, key, nil)
 	} else {
 		h.correlator.ResolveByResource("secret", key)
 	}

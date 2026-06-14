@@ -134,10 +134,7 @@ func (h *handler) executeContainersFilters(ctx *filter.Context) {
 			ExitCode:         ctx.Container.ExitCode,
 			Status:           ctx.Container.Status,
 		}
-		inc, action := h.correlator.Process(ev, ownerName, cs)
-		if action != model.ActionSkip {
-			h.alertManager.NotifyIncident(inc, action)
-		}
+		h.report(ev, ownerName, cs)
 	}
 }
 
@@ -265,8 +262,5 @@ func (h *handler) emitHighRestartAlert(ctx *filter.Context, container *corev1.Co
 		ExitCode:     lastEC,
 	}
 
-	inc, action := h.correlator.Process(ev, owner, cs)
-	if action != model.ActionSkip {
-		h.alertManager.NotifyIncident(inc, action)
-	}
+	h.report(ev, owner, cs)
 }
