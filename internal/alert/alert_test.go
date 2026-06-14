@@ -249,14 +249,15 @@ func TestFormatIncidentMessage(t *testing.T) {
 		Count:     2,
 		FirstSeen: now.Add(-10 * time.Minute),
 		LastSeen:  now,
-		Resources: map[string]bool{"pod-1": true, "pod-2": true},
+		Resources:     map[string]bool{"pod-1": true, "pod-2": true},
+		PeakResources: 2,
 	}
 
 	msg := formatIncidentMessage(inc, model.ActionCreate, 100, nil)
 	assert.Contains(t, msg, "Incident")
 	assert.Contains(t, msg, "deploy")
 	assert.Contains(t, msg, "CrashLoopBackOff")
-	assert.Contains(t, msg, "2 resource")
+	assert.Contains(t, msg, "Peak: 2 resource")
 
 	msgUpdate := formatIncidentMessage(inc, model.ActionUpdate, 100, nil)
 	assert.Contains(t, msgUpdate, "Update")

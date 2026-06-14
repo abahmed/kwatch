@@ -162,6 +162,10 @@ type Config struct {
 	// Available template keys: {{.Incident.Key}}, {{.Incident.Reason}},
 	// {{.Action}}, {{.Message}}. Missing keys render as empty string.
 	Templates map[string]string `yaml:"templates"`
+
+	// Runbooks maps Kubernetes event reasons to documentation URLs.
+	// When a reason matches, the URL is appended to the incident hint.
+	Runbooks map[string]string `yaml:"runbooks"`
 }
 
 // StormConfig configures digest aggregation for high-frequency incidents.

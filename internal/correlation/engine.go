@@ -42,6 +42,7 @@ type Config struct {
 	RenotifyIntervalBySeverity map[string]time.Duration
 	RenotifyMaxPerIncident     int
 	ResolveHoldDown            time.Duration
+	Runbooks                   map[string]string
 }
 
 // BuildKey constructs the incident key used for dedup, grouping, and baseline.
@@ -260,9 +261,15 @@ func (e *Engine) Snapshot() []model.IncidentView {
 var knownRetryReasons = map[string]bool{
 	"CrashLoopBackOff": true,
 	"BackOff":          true,
+	"ErrImagePull":     true,
+	"ImagePullBackOff": true,
 }
 
 func normalizeReason(reason string) string {
+	// Normalize ErrImagePull → ImagePullBackOff (same root cause)
+	if reason == "ErrImagePull" {
+		return "ImagePullBackOff"
+	}
 	idx := strings.LastIndex(reason, " ")
 	if idx > 0 {
 		base, suffix := reason[:idx], reason[idx+1:]
@@ -353,6 +360,9 @@ func (e *Engine) Process(ev event.Event, owner string, cs *model.ContainerState)
 			inc.ResolveAt = time.Time{}
 			if ev.PodName != "" {
 				inc.Resources[ev.PodName] = true
+				if len(inc.Resources) > inc.PeakResources {
+					inc.PeakResources = len(inc.Resources)
+				}
 			}
 			if ev.ContainerName != "" && ev.ContainerName != "." {
 				inc.Containers[ev.ContainerName] = true
@@ -382,6 +392,9 @@ func (e *Engine) Process(ev event.Event, owner string, cs *model.ContainerState)
 				inc.RestartCount = cur
 				if ev.PodName != "" {
 					inc.Resources[ev.PodName] = true
+					if len(inc.Resources) > inc.PeakResources {
+						inc.PeakResources = len(inc.Resources)
+					}
 				}
 				if ev.ContainerName != "" && ev.ContainerName != "." {
 					inc.Containers[ev.ContainerName] = true
@@ -396,6 +409,9 @@ func (e *Engine) Process(ev event.Event, owner string, cs *model.ContainerState)
 		inc.LastUpdate = now
 		if ev.PodName != "" {
 			inc.Resources[ev.PodName] = true
+			if len(inc.Resources) > inc.PeakResources {
+				inc.PeakResources = len(inc.Resources)
+			}
 		}
 		if ev.ContainerName != "" && ev.ContainerName != "." {
 			inc.Containers[ev.ContainerName] = true
@@ -454,12 +470,16 @@ func (e *Engine) newIncident(ev event.Event, owner string, cs *model.ContainerSt
 	if ev.PodName != "" {
 		inc.Resources[ev.PodName] = true
 	}
+	inc.PeakResources = len(inc.Resources)
 	if ev.ContainerName != "" && ev.ContainerName != "." {
 		inc.Containers[ev.ContainerName] = true
 	}
 	inc.LastContainerState = cs
 	if cs != nil {
 		inc.RestartCount = int(cs.RestartCount)
+	}
+	if url, ok := e.config.Runbooks[ev.Reason]; ok && inc.Hint == "" {
+		inc.Hint = "Runbook: " + url
 	}
 	e.config.Enricher.Enrich(&ev, inc)
 	return inc

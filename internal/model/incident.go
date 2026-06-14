@@ -72,6 +72,7 @@ type Incident struct {
 	FirstSeen     time.Time
 	LastSeen      time.Time
 	Resources     map[string]bool
+	PeakResources int
 	Containers    map[string]bool
 	OwnerKind     string
 	ContainerName string

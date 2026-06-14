@@ -121,6 +121,7 @@ func main() {
 		RenotifyInterval:           time.Duration(cfg.Correlation.Renotify.Interval) * time.Minute,
 		RenotifyIntervalBySeverity: renotifyIntervalBySeverity(cfg.Correlation.Renotify.IntervalBySeverity),
 		RenotifyMaxPerIncident:     cfg.Correlation.Renotify.MaxPerIncident,
+		Runbooks:                  cfg.Runbooks,
 		ResolveHoldDown:           time.Duration(cfg.Correlation.ResolveHoldDown) * time.Second,
 		LifecycleHook: func(inc *model.Incident, action model.IncidentAction) {
 			if action != model.ActionSkip {

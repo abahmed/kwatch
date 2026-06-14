@@ -320,7 +320,7 @@ func buildIncidentBlocks(inc *model.Incident, appCfg *config.App) *slackClient.B
 				markdownF("*Reason*\n%s", inc.Reason),
 				markdownF("*Restarts*\n%d", inc.RestartCount),
 				markdownF("*Count*\n%d", inc.Count),
-				markdownF("*Resources*\n%s", resourcesStr),
+				markdownF("*Resources (Peak: %d)*\n%s", inc.PeakResources, resourcesStr),
 				markdownF("*Duration*\n%s", duration),
 			},
 		},
@@ -404,8 +404,8 @@ func buildIncidentResolvedBlocks(inc *model.Incident) *slackClient.Blocks {
 	duration := inc.LastSeen.Sub(inc.FirstSeen).Round(time.Minute)
 
 	text := fmt.Sprintf(
-		"✅ *Resolved* — All pods recovered\nDuration: %s | Total events: %d",
-		duration, inc.Count,
+		"✅ *Resolved* — All pods recovered\nDuration: %s | Total events: %d | Peak resources: %d",
+		duration, inc.Count, inc.PeakResources,
 	)
 
 	return &slackClient.Blocks{
@@ -418,13 +418,12 @@ func buildIncidentResolvedBlocks(inc *model.Incident) *slackClient.Blocks {
 func formatIncidentText(inc *model.Incident, action model.IncidentAction) string {
 	switch action {
 	case model.ActionCreate:
-		resources := len(inc.Resources)
 		duration := inc.LastSeen.Sub(inc.FirstSeen).Round(time.Minute)
 		text := fmt.Sprintf(
-			"🚨 Incident: %s (%s)\nNamespace: %s\nContainer: %s\nReason: %s\nRestarts: %d\nHint: %s\nAffected: %d resource(s)\nCount: %d\nDuration: %s",
+			"🚨 Incident: %s (%s)\nNamespace: %s\nContainer: %s\nReason: %s\nRestarts: %d\nHint: %s\nPeak: %d resource(s)\nCount: %d\nDuration: %s",
 			inc.Name, inc.OwnerKind, inc.Namespace, containerSummary(inc),
 			inc.Reason, inc.RestartCount, inc.Hint,
-			resources, inc.Count, duration,
+			inc.PeakResources, inc.Count, duration,
 		)
 		if inc.IncludeEvents {
 			if ev := strings.TrimSpace(inc.Events); len(ev) > 0 {
@@ -438,11 +437,10 @@ func formatIncidentText(inc *model.Incident, action model.IncidentAction) string
 		}
 		return text
 	case model.ActionUpdate:
-		resources := len(inc.Resources)
 		duration := inc.LastSeen.Sub(inc.FirstSeen).Round(time.Minute)
 		text := fmt.Sprintf(
-			"🔄 Update: %s | Count: %d | Duration: %s | Affected: %d",
-			inc.Name, inc.Count, duration, resources,
+		"🔄 Update: %s | Count: %d | Duration: %s | Peak: %d",
+		inc.Name, inc.Count, duration, inc.PeakResources,
 		)
 		if inc.IncludeEvents {
 			if ev := strings.TrimSpace(inc.Events); len(ev) > 0 {
@@ -458,8 +456,8 @@ func formatIncidentText(inc *model.Incident, action model.IncidentAction) string
 	case model.ActionResolved:
 		duration := inc.LastSeen.Sub(inc.FirstSeen).Round(time.Minute)
 		return fmt.Sprintf(
-			"✅ Resolved: %s | Duration: %s | Total events: %d",
-			inc.Name, duration, inc.Count,
+		"✅ Resolved: %s | Duration: %s | Total events: %d | Peak resources: %d",
+		inc.Name, duration, inc.Count, inc.PeakResources,
 		)
 	default:
 		return ""

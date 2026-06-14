@@ -522,7 +522,6 @@ func formatIncidentMessage(inc *model.Incident, action model.IncidentAction, max
 }
 
 func formatCreateMessage(inc *model.Incident, maxLines int) string {
-	resources := len(inc.Resources)
 	duration := inc.LastSeen.Sub(inc.FirstSeen).Round(time.Minute)
 
 	severity := inc.Severity
@@ -550,12 +549,12 @@ func formatCreateMessage(inc *model.Incident, maxLines int) string {
 	}
 
 	return truncateMsg(fmt.Sprintf(
-		"🚨 Incident: %s\nSeverity: %s\nOwner: %s (%s)\nNamespace: %s\nContainer: %s\nReason: %s\nRestarts: %d\nHint: %s%s%s\nAffected: %d resource(s)\nCount: %d\nDuration: %s",
+		"🚨 Incident: %s\nSeverity: %s\nOwner: %s (%s)\nNamespace: %s\nContainer: %s\nReason: %s\nRestarts: %d\nHint: %s%s%s\nPeak: %d resource(s)\nCount: %d\nDuration: %s",
 		inc.Name, severity, inc.OwnerKind, inc.Name,
 		inc.Namespace, containerName, inc.Reason,
 		inc.RestartCount, inc.Hint,
 		logsBlock, eventsBlock,
-		resources, inc.Count, duration,
+		inc.PeakResources, inc.Count, duration,
 	))
 }
 
@@ -577,7 +576,6 @@ func truncateText(s string, maxLines int) string {
 }
 
 func formatUpdateMessage(inc *model.Incident, _ int) string {
-	resources := len(inc.Resources)
 	duration := inc.LastSeen.Sub(inc.FirstSeen).Round(time.Minute)
 
 	severity := inc.Severity
@@ -586,8 +584,8 @@ func formatUpdateMessage(inc *model.Incident, _ int) string {
 	}
 
 	return truncateMsg(fmt.Sprintf(
-		"🔄 Update: %s | Severity: %s | Namespace: %s | Reason: %s | Count: %d | Duration: %s | Affected: %d resource(s)",
-		inc.Name, severity, inc.Namespace, inc.Reason, inc.Count, duration, resources,
+		"🔄 Update: %s | Severity: %s | Namespace: %s | Reason: %s | Count: %d | Duration: %s | Peak: %d resource(s)",
+		inc.Name, severity, inc.Namespace, inc.Reason, inc.Count, duration, inc.PeakResources,
 	))
 }
 
@@ -595,7 +593,7 @@ func formatResolvedMessage(inc *model.Incident) string {
 	duration := inc.LastSeen.Sub(inc.FirstSeen).Round(time.Minute)
 
 	return truncateMsg(fmt.Sprintf(
-		"✅ Resolved: %s | Namespace: %s | Reason: %s | Duration: %s | Total events: %d",
-		inc.Name, inc.Namespace, inc.Reason, duration, inc.Count,
+		"✅ Resolved: %s | Namespace: %s | Reason: %s | Duration: %s | Total events: %d | Peak resources: %d",
+		inc.Name, inc.Namespace, inc.Reason, duration, inc.Count, inc.PeakResources,
 	))
 }
