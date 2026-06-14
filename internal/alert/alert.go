@@ -9,6 +9,7 @@ import (
 	"strings"
 	"text/template"
 	"time"
+	"unicode/utf8"
 
 	"github.com/abahmed/kwatch/internal/alert/dingtalk"
 	"github.com/abahmed/kwatch/internal/alert/discord"
@@ -40,6 +41,7 @@ type providerEntry struct {
 	fallback      *providerEntry
 	fallbackNamed string                   // resolved in second pass
 	templates     map[string]*template.Template
+	maxBytes      int                      // 0 = no limit (FIX-5)
 }
 
 type AlertManager struct {
@@ -213,15 +215,16 @@ func (a *AlertManager) Init(
 			if raw, ok := v["fallback"]; ok {
 				fbName, _ = raw.(string)
 			}
-			entries = append(entries, providerEntry{
-				provider:      pvdr,
-				routes:        extractRoutes(v),
-				maxAttempts:   maxAttempts,
-				retryDelay:    retryDelay,
-				fallback:      nil,
-				fallbackNamed: fbName,
-				templates:     extractTemplates(v),
-			})
+		entries = append(entries, providerEntry{
+			provider:      pvdr,
+			routes:        extractRoutes(v),
+			maxAttempts:   maxAttempts,
+			retryDelay:    retryDelay,
+			fallback:      nil,
+			fallbackNamed: fbName,
+			templates:     extractTemplates(v),
+			maxBytes:      defaultMaxBytes(pvdr.Name()),
+		})
 		}
 	}
 	// second pass: resolve fallback names to pointers
@@ -393,10 +396,11 @@ func (a *AlertManager) Notify(msg string) {
 
 	for _, entry := range a.entries {
 		p := entry.provider
+		truncMsg := truncateMsg(msg, entry.maxBytes)
 		if err := sendWithRetry(func() error {
-			return p.SendMessage(msg)
+			return p.SendMessage(truncMsg)
 		}, entry.maxAttempts, entry.retryDelay, p.Name()); err != nil && entry.fallback != nil {
-			entry.fallback.provider.SendMessage("[fallback — primary " + p.Name() + " failed] " + msg)
+			entry.fallback.provider.SendMessage("[fallback — primary " + p.Name() + " failed] " + truncMsg)
 		}
 	}
 }
@@ -449,7 +453,7 @@ func (a *AlertManager) NotifyIncident(inc *model.Incident, action model.Incident
 		if len(tpl) == 0 {
 			tpl = a.templates
 		}
-		msg := formatIncidentMessage(inc, action, maxLines, tpl)
+		msg := truncateMsg(formatIncidentMessage(inc, action, maxLines, tpl), entry.maxBytes)
 		if action == model.ActionDigestFlush {
 			// digests bypass route filtering (no namespace) and ThreadProvider
 			err = sendWithRetry(func() error {
@@ -548,23 +552,43 @@ func formatCreateMessage(inc *model.Incident, maxLines int) string {
 		eventsBlock = fmt.Sprintf("\nEvents:\n%s", truncateText(inc.Events, maxLines))
 	}
 
-	return truncateMsg(fmt.Sprintf(
+	return fmt.Sprintf(
 		"🚨 Incident: %s\nSeverity: %s\nOwner: %s (%s)\nNamespace: %s\nContainer: %s\nReason: %s\nRestarts: %d\nHint: %s%s%s\nPeak: %d resource(s)\nCount: %d\nDuration: %s",
 		inc.Name, severity, inc.OwnerKind, inc.Name,
 		inc.Namespace, containerName, inc.Reason,
 		inc.RestartCount, inc.Hint,
 		logsBlock, eventsBlock,
 		inc.PeakResources, inc.Count, duration,
-	))
+	)
 }
 
-const maxMessageLen = 4096 // conservative: Telegram is 4096, others are higher
-
-func truncateMsg(s string) string {
-	if len(s) <= maxMessageLen {
+func truncateMsg(s string, maxLen int) string {
+	if maxLen <= 0 || len(s) <= maxLen {
 		return s
 	}
-	return s[:maxMessageLen-20] + "\n…(truncated)"
+	suffix := "\n…(truncated)"
+	cut := maxLen - len(suffix)
+	if cut <= 0 {
+		return suffix
+	}
+	// back up to a valid rune boundary (FIX-4)
+	for cut > 0 && !utf8.RuneStart(s[cut]) {
+		cut--
+	}
+	return s[:cut] + suffix
+}
+
+func defaultMaxBytes(providerName string) int {
+	switch strings.ToLower(providerName) {
+	case "telegram":
+		return 4096
+	case "teams":
+		return 28000
+	case "slack":
+		return 40000
+	default:
+		return 0 // unlimited
+	}
 }
 
 func truncateText(s string, maxLines int) string {
@@ -593,10 +617,10 @@ func formatUpdateMessage(inc *model.Incident, _ int) string {
 		containerName = strings.Join(names, ", ")
 	}
 
-	return truncateMsg(fmt.Sprintf(
+	return fmt.Sprintf(
 		"🔄 Update: %s | Severity: %s | Namespace: %s | Container: %s | Reason: %s | Count: %d | Duration: %s | Peak: %d resource(s)",
 		inc.Name, severity, inc.Namespace, containerName, inc.Reason, inc.Count, duration, inc.PeakResources,
-	))
+	)
 }
 
 func formatResolvedMessage(inc *model.Incident) string {
@@ -612,8 +636,8 @@ func formatResolvedMessage(inc *model.Incident) string {
 		containerName = strings.Join(names, ", ")
 	}
 
-	return truncateMsg(fmt.Sprintf(
+	return fmt.Sprintf(
 		"✅ Resolved: %s | Namespace: %s | Container: %s | Reason: %s | Duration: %s | Total events: %d | Peak resources: %d",
 		inc.Name, inc.Namespace, containerName, inc.Reason, duration, inc.Count, inc.PeakResources,
-	))
+	)
 }
