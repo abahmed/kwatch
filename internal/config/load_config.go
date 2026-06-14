@@ -95,6 +95,23 @@ func LoadConfig() (*Config, error) {
 		return nil, errors.Join(errs...)
 	}
 
+	// Deprecation warnings for suppression knobs being consolidated into Silences
+	if len(config.IgnoreContainerNames) > 0 {
+		klog.Warning("ignoreContainerNames is deprecated; use silences instead")
+	}
+	if len(config.IgnoreLogPatterns) > 0 {
+		klog.Warning("ignoreLogPatterns is deprecated; use silences instead")
+	}
+	if len(config.IgnoreContainerMessages) > 0 {
+		klog.Warning("ignoreContainerMessages is deprecated; use silences instead")
+	}
+	if len(config.IgnoreNodeReasons) > 0 {
+		klog.Warning("ignoreNodeReasons is deprecated; use silences instead")
+	}
+	if len(config.IgnoreNodeMessages) > 0 {
+		klog.Warning("ignoreNodeMessages is deprecated; use silences instead")
+	}
+
 	return config, nil
 }
 

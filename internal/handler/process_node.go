@@ -71,19 +71,15 @@ func (h *handler) emitNodeAlert(node *corev1.Node, c corev1.NodeCondition, stabl
 		hint = c.Reason + ": " + c.Message
 	}
 
-	ev := h.eventWithConfig(event.Event{
-		Resource:  "node",
-		PodName:   node.Name,
-		Namespace: "",
-		NodeName:  node.Name,
-		Reason:    stableReason,
-		Events:    "",
-		Logs:      "",
-		Labels:    node.Labels,
-		Hint:      hint,
+	h.signalEvent(&event.Signal{
+		Resource: "node",
+		PodName:  node.Name,
+		NodeName: node.Name,
+		Reason:   stableReason,
+		Owner:    node.Name,
+		Labels:   node.Labels,
+		Hint:     hint,
 	})
-
-	h.report(ev, node.Name, nil)
 }
 
 func (h *handler) ProcessNodeObject(node *corev1.Node, deleted bool) error {

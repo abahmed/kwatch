@@ -11,8 +11,7 @@ func TestShort(t *testing.T) {
 	assert := assert.New(t)
 
 	result := Short()
-	assert.NotEmpty(result)
-	assert.Equal("dev", result)
+	assert.Equal("v0.11.0", result)
 }
 
 func TestVersion(t *testing.T) {
@@ -24,7 +23,7 @@ func TestVersion(t *testing.T) {
 	var info Info
 	err := json.Unmarshal([]byte(result), &info)
 	assert.Nil(err)
-	assert.Equal("dev", info.Version)
+	assert.Equal("v0.11.0", info.Version)
 	assert.Equal("none", info.GitCommit)
 	assert.Equal("unknown", info.BuildDate)
 }
@@ -32,7 +31,7 @@ func TestVersion(t *testing.T) {
 func TestVersionConstants(t *testing.T) {
 	assert := assert.New(t)
 
-	assert.Equal("dev", version)
+	assert.Equal("v0.11.0", version)
 	assert.Equal("none", gitCommitID)
 	assert.Equal("unknown", buildDate)
 }
@@ -58,8 +57,8 @@ func TestShortMultipleCalls(t *testing.T) {
 	result2 := Short()
 
 	assert.Equal(result1, result2)
-	assert.Equal("dev", result1)
-	assert.Equal("dev", result2)
+	assert.Equal("v0.11.0", result1)
+	assert.Equal("v0.11.0", result2)
 }
 
 func TestVersionMultipleCalls(t *testing.T) {

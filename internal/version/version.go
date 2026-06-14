@@ -5,7 +5,7 @@ import (
 )
 
 // Version is the current versions of kwatch
-const version = "dev"
+const version = "v0.11.0"
 
 // GitCommitID git commit id of the release
 const gitCommitID = "none"

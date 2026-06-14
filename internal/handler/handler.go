@@ -198,6 +198,45 @@ func (h *handler) report(ev event.Event, owner string, cs *model.ContainerState)
 	}
 }
 
+// signalEvent converts a Signal to an Event and sends it through the
+// correlation engine. It applies eventWithConfig and builds a minimal
+// ContainerState from the restart count.
+func (h *handler) signalEvent(s *event.Signal) {
+	ev := event.Event{
+		Resource:      s.Resource,
+		PodName:       s.PodName,
+		Namespace:     s.Namespace,
+		NodeName:      s.NodeName,
+		ContainerName: s.Container,
+		Reason:        s.Reason,
+		Events:        s.Events,
+		Logs:          s.Logs,
+		Labels:        s.Labels,
+		OwnerKind:     s.OwnerKind,
+		RestartCount:  int(s.RestartCount),
+		Hint:          s.Hint,
+		Severity:      s.Severity,
+		IncludeEvents: s.IncludeEvents,
+		IncludeLogs:   s.IncludeLogs,
+	}
+
+	// Merge Message into Hint if Hint is empty
+	if s.Message != "" && ev.Hint == "" {
+		ev.Hint = s.Message
+	}
+
+	ev = h.eventWithConfig(ev)
+
+	var cs *model.ContainerState
+	if s.RestartCount > 0 {
+		cs = &model.ContainerState{
+			RestartCount: s.RestartCount,
+		}
+	}
+
+	h.report(ev, s.Owner, cs)
+}
+
 func (h *handler) eventWithConfig(ev event.Event) event.Event {
 	ev.IncludeEvents = h.config.IncludeEvents == nil || *h.config.IncludeEvents
 	ev.IncludeLogs = h.config.IncludeLogs == nil || *h.config.IncludeLogs
