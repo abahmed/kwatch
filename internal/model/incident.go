@@ -93,3 +93,21 @@ type Incident struct {
 	LastNotifiedAt     time.Time
 	RenotifyCount      int
 }
+
+// Clone returns a deep copy of the incident, safe for concurrent use.
+func (inc *Incident) Clone() *Incident {
+	c := *inc
+	c.Resources = make(map[string]bool, len(inc.Resources))
+	for k, v := range inc.Resources {
+		c.Resources[k] = v
+	}
+	c.Containers = make(map[string]bool, len(inc.Containers))
+	for k, v := range inc.Containers {
+		c.Containers[k] = v
+	}
+	if inc.LastContainerState != nil {
+		cs := *inc.LastContainerState
+		c.LastContainerState = &cs
+	}
+	return &c
+}

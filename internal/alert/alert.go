@@ -184,6 +184,13 @@ func extractRetry(cfg map[string]interface{}) (maxAttempts int, delay time.Durat
 	return
 }
 
+var knownProviders = map[string]bool{
+	"slack": true, "pagerduty": true, "discord": true, "telegram": true,
+	"teams": true, "email": true, "rocketchat": true, "mattermost": true,
+	"opsgenie": true, "matrix": true, "dingtalk": true, "feishu": true,
+	"webhook": true, "zenduty": true, "googlechat": true,
+}
+
 // Init initializes AlertManager with provided config
 func (a *AlertManager) Init(
 	alertCfg map[string]map[string]interface{},
@@ -229,7 +236,11 @@ func (a *AlertManager) Init(
 		}
 
 		if pvdr == nil {
-			klog.InfoS("unknown alert provider, skipping", "name", k)
+			if knownProviders[lowerCaseKey] {
+				klog.InfoS("alert provider has missing or invalid credentials, skipping", "name", k)
+			} else {
+				klog.InfoS("unknown alert provider, skipping", "name", k)
+			}
 			continue
 		}
 		if !reflect.ValueOf(pvdr).IsNil() {
@@ -487,12 +498,12 @@ func (a *AlertManager) NotifyIncident(inc *model.Incident, action model.Incident
 		return
 	}
 
-	job := deliverJob{inc: inc, action: action}
+	snap := inc.Clone()
+	job := deliverJob{inc: snap, action: action}
 	for _, entry := range a.entries {
 		select {
 		case entry.ch <- job:
 		default:
-			// channel full — drop oldest (pop one then re-send)
 			<-entry.ch
 			metrics.Default.NotificationsDropped.Add(1)
 			select {
@@ -631,7 +642,7 @@ func (a *AlertManager) deliverAllSync(inc *model.Incident, action model.Incident
 			}, entry.maxAttempts, entry.retryDelay, 0, p.Name()); err != nil {
 				klog.ErrorS(err, "sync delivery failed", "provider", p.Name(), "key", inc.Key, "id", inc.ID)
 			}
-			return
+			continue
 		}
 		if !shouldDeliver(entry.routes, inc) {
 			continue
