@@ -456,7 +456,7 @@ func New(
 	}
 
 	if cfg.CronJobMonitor.Enabled {
-		cronJobLister := fs.cronJobLister()
+		c.cronJobLister = fs.cronJobLister()
 		cronJobInformers := fs.cronJobInformers()
 
 		c.cronJobWatchEnabled = true
@@ -467,7 +467,7 @@ func New(
 		}
 		c.cronJobsSynced = cjSynced
 
-		h.SetCronJobLister(cronJobLister)
+		h.SetCronJobLister(c.cronJobLister)
 
 		for _, inf := range cronJobInformers {
 			inf.AddEventHandler(cache.ResourceEventHandlerFuncs{
@@ -479,7 +479,7 @@ func New(
 	}
 
 	if cfg.HpaMonitor.Enabled {
-		hpaLister := fs.hpaLister()
+		c.hpaLister = fs.hpaLister()
 		hpaInformers := fs.hpaInformers()
 
 		c.hpaWatchEnabled = true
@@ -490,7 +490,7 @@ func New(
 		}
 		c.hpaSynced = hpaSynced
 
-		h.SetHorizontalPodAutoscalerLister(hpaLister)
+		h.SetHorizontalPodAutoscalerLister(c.hpaLister)
 
 		for _, inf := range hpaInformers {
 			inf.AddEventHandler(cache.ResourceEventHandlerFuncs{
