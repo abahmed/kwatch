@@ -72,7 +72,7 @@ func (h *handler) emitNodeAlert(node *corev1.Node, c corev1.NodeCondition, stabl
 		hint = c.Reason + ": " + c.Message
 	}
 
-	ev := event.Event{
+	ev := h.eventWithConfig(event.Event{
 		Resource:  "node",
 		PodName:   node.Name,
 		Namespace: "",
@@ -82,7 +82,7 @@ func (h *handler) emitNodeAlert(node *corev1.Node, c corev1.NodeCondition, stabl
 		Logs:      "",
 		Labels:    node.Labels,
 		Hint:      hint,
-	}
+	})
 
 	inc, action := h.correlator.Process(ev, node.Name, nil)
 	if action != model.ActionSkip {

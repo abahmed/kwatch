@@ -112,7 +112,7 @@ func (h *handler) executeContainersFilters(ctx *filter.Context) {
 		}
 
 		hint := buildContainerHint(ctx)
-		ev := event.Event{
+		ev := h.eventWithConfig(event.Event{
 			PodName:       ctx.Pod.Name,
 			ContainerName: ctx.Container.Container.Name,
 			Namespace:     ctx.Pod.Namespace,
@@ -124,7 +124,7 @@ func (h *handler) executeContainersFilters(ctx *filter.Context) {
 			OwnerKind:     ownerKind,
 			RestartCount:  int(ctx.Container.Container.RestartCount),
 			Hint:          hint,
-		}
+		})
 
 		cs := &model.ContainerState{
 			RestartCount:     ctx.Container.Container.RestartCount,
@@ -246,7 +246,7 @@ func (h *handler) emitHighRestartAlert(ctx *filter.Context, container *corev1.Co
 
 	lastReason, lastEC := lastTermInfo(container)
 
-	ev := event.Event{
+	ev := h.eventWithConfig(event.Event{
 		Resource:      "pod",
 		PodName:       ctx.Pod.Name,
 		ContainerName: container.Name,
@@ -257,7 +257,7 @@ func (h *handler) emitHighRestartAlert(ctx *filter.Context, container *corev1.Co
 		RestartCount:  int(container.RestartCount),
 		Hint: fmt.Sprintf("container restarted %d times (last exit: %s, code %d)",
 			container.RestartCount, lastReason, lastEC),
-	}
+	})
 
 	cs := &model.ContainerState{
 		RestartCount: container.RestartCount,

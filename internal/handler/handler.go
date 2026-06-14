@@ -7,6 +7,7 @@ import (
 	"github.com/abahmed/kwatch/internal/alert"
 	"github.com/abahmed/kwatch/internal/config"
 	"github.com/abahmed/kwatch/internal/correlation"
+	"github.com/abahmed/kwatch/internal/event"
 	"github.com/abahmed/kwatch/internal/filter"
 	appsv1 "k8s.io/api/apps/v1"
 	autoscalingv2 "k8s.io/api/autoscaling/v2"
@@ -108,6 +109,16 @@ func NewHandler(
 		filter.NoiseFilter{},
 	}
 
+	if len(cfg.IgnoreContainerMessages) > 0 {
+		containerDetectors = append(containerDetectors,
+			filter.ContainerMessageFilter{Messages: cfg.IgnoreContainerMessages})
+	}
+
+	if cfg.IgnoreDisruptionTerminations == nil || *cfg.IgnoreDisruptionTerminations {
+		podDetectors = append([]filter.Detector{filter.DisruptionFilter{}}, podDetectors...)
+		containerDetectors = append([]filter.Detector{filter.DisruptionFilter{}}, containerDetectors...)
+	}
+
 	containerEnrichers := []filter.Enricher{
 		filter.ContainerKillingFilter{},
 		filter.PodOwnersFilter{},
@@ -177,4 +188,10 @@ func (h *handler) SetSeen(baseline map[string]map[string]int64) {
 
 func (h *handler) ClearSeenForPod(namespace, podName string) {
 	h.correlator.ClearSeenForPod(namespace, podName)
+}
+
+func (h *handler) eventWithConfig(ev event.Event) event.Event {
+	ev.IncludeEvents = h.config.IncludeEvents == nil || *h.config.IncludeEvents
+	ev.IncludeLogs = h.config.IncludeLogs == nil || *h.config.IncludeLogs
+	return ev
 }

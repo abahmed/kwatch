@@ -4,7 +4,11 @@ import (
 	"context"
 	"errors"
 	"testing"
+	"time"
 
+	"github.com/abahmed/kwatch/internal/correlation"
+	"github.com/abahmed/kwatch/internal/event"
+	"github.com/abahmed/kwatch/internal/model"
 	"github.com/stretchr/testify/assert"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -493,4 +497,57 @@ func TestSaveBaselineOverwrites(t *testing.T) {
 	err = sm.SaveBaseline(context.Background(), map[string]map[string]int64{"key-2": {"q": 200}})
 	assert.Nil(err)
 	assert.Equal(map[string]map[string]int64{"key-2": {"q": 200}}, sm.GetBaseline(context.Background()))
+}
+
+func TestEngineBackedBaselineRoundTrip(t *testing.T) {
+	assert := assert.New(t)
+	ctx := context.Background()
+	client := fake.NewSimpleClientset()
+	sm := NewStateManager(client, "kwatch")
+
+	cm := &corev1.ConfigMap{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      stateConfigMapName,
+			Namespace: "kwatch",
+		},
+		Data: map[string]string{},
+	}
+	_, err := client.CoreV1().ConfigMaps("kwatch").Create(ctx, cm, metav1.CreateOptions{})
+	assert.Nil(err)
+
+	// Save a realistic baseline (same format as controller.buildSeenSet produces)
+	baseline := map[string]map[string]int64{
+		"default:dep-1:CrashLoopBackOff:app": {"pod-1": time.Now().Unix()},
+	}
+	err = sm.SaveBaseline(ctx, baseline)
+	assert.Nil(err)
+
+	// Load baseline — simulates startup reload from ConfigMap
+	loaded := sm.GetBaseline(ctx)
+	assert.NotNil(loaded)
+	assert.Equal(baseline, loaded)
+
+	// Feed loaded baseline into correlation engine (as main.go does)
+	e := correlation.NewEngine(correlation.Config{
+		Window:      10 * time.Minute,
+		Cooldown:    5 * time.Minute,
+		StartupQuiet: 0,
+		Baseline:    loaded,
+	})
+
+	// Previously seen pod+container should be suppressed
+	ev1 := event.Event{
+		PodName: "pod-1", Namespace: "default",
+		Reason: "CrashLoopBackOff", ContainerName: "app",
+	}
+	_, action := e.Process(ev1, "dep-1", &model.ContainerState{RestartCount: 1})
+	assert.Equal(model.ActionSkip, action, "baselined pod must be suppressed")
+
+	// A new pod for the same owner+reason should create an incident
+	ev2 := event.Event{
+		PodName: "pod-2", Namespace: "default",
+		Reason: "CrashLoopBackOff", ContainerName: "app",
+	}
+	_, action = e.Process(ev2, "dep-1", &model.ContainerState{RestartCount: 1})
+	assert.Equal(model.ActionCreate, action, "unseen pod must create incident")
 }

@@ -15,4 +15,6 @@ type Event struct {
 	RestartCount  int
 	Hint          string // Pre-computed diagnostic hint; empty = auto-generate from Reason
 	Severity      string // Override severity; empty = let enricher decide from OwnerKind
+	IncludeEvents bool   // If false, omit events section from output
+	IncludeLogs   bool   // If false, omit logs section from output
 }

@@ -82,6 +82,43 @@ func TestSendEventWebhook(t *testing.T) {
 	assert.Nil(s.SendEvent(ev))
 }
 
+func TestSendEventWebhookCompact(t *testing.T) {
+	assert := assert.New(t)
+
+	s := NewSlack(map[string]interface{}{
+		"webhook": "testtest",
+		"compact": true,
+	}, &config.App{ClusterName: "dev"})
+	assert.NotNil(s)
+	assert.True(s.compact)
+
+	var lastText string
+	s.send = func(_ string, msg *slackClient.WebhookMessage) error {
+		lastText = msg.Text
+		return nil
+	}
+
+	ev := &event.Event{
+		PodName:       "test-pod",
+		ContainerName: "test-container",
+		Namespace:     "default",
+		Reason:        "OOMKILLED",
+	}
+	assert.Nil(s.SendEvent(ev))
+	assert.Equal("K8s Alert: test-pod - OOMKILLED (default)", lastText)
+}
+
+func TestSendEventWebhookCompactFalse(t *testing.T) {
+	assert := assert.New(t)
+
+	s := NewSlack(map[string]interface{}{
+		"webhook": "testtest",
+		"compact": false,
+	}, &config.App{ClusterName: "dev"})
+	assert.NotNil(s)
+	assert.False(s.compact)
+}
+
 func TestSendEventWebhookWithLargeLogs(t *testing.T) {
 	assert := assert.New(t)
 
@@ -275,6 +312,29 @@ func TestSendIncidentWebhookUpdate(t *testing.T) {
 	assert.Contains(lastMsg, "Update")
 }
 
+func TestSendIncidentWebhookCompact(t *testing.T) {
+	assert := assert.New(t)
+
+	s := NewSlack(map[string]interface{}{
+		"webhook": "testtest",
+		"compact": true,
+	}, &config.App{ClusterName: "dev"})
+	assert.NotNil(s)
+	assert.True(s.compact)
+
+	var lastText string
+	s.send = func(_ string, msg *slackClient.WebhookMessage) error {
+		lastText = msg.Text
+		return nil
+	}
+
+	err := s.SendIncident(testIncident(), model.ActionCreate)
+	assert.Nil(err)
+	assert.Contains(lastText, "Incident")
+	assert.Contains(lastText, "deploy-1")
+	assert.Contains(lastText, "CrashLoopBackOff")
+}
+
 func TestSendIncidentWebhookSkip(t *testing.T) {
 	assert := assert.New(t)
 
@@ -427,6 +487,8 @@ func TestBuildIncidentBlocksWithLogsEvents(t *testing.T) {
 	inc := testIncident()
 	inc.Events = "Warning Unhealthy pod-1 liveness probe failed"
 	inc.Logs = "Error: connection refused"
+	inc.IncludeEvents = true
+	inc.IncludeLogs = true
 
 	blocks := buildIncidentBlocks(inc, &config.App{ClusterName: "prod-cluster"})
 
@@ -453,6 +515,8 @@ func TestBuildIncidentUpdateBlocksWithLogsEvents(t *testing.T) {
 	inc := testIncident()
 	inc.Events = "Warning BackOff restarting container"
 	inc.Logs = "Error: server closed connection"
+	inc.IncludeEvents = true
+	inc.IncludeLogs = true
 
 	blocks := buildIncidentUpdateBlocks(inc)
 
@@ -466,6 +530,8 @@ func TestFormatIncidentTextWithLogsEvents(t *testing.T) {
 	inc := testIncident()
 	inc.Events = "Warning Unhealthy"
 	inc.Logs = "Error: timeout"
+	inc.IncludeEvents = true
+	inc.IncludeLogs = true
 
 	text := formatIncidentText(inc, model.ActionCreate)
 	assert.Contains(text, "Events:")
@@ -480,6 +546,8 @@ func TestFormatIncidentTextUpdateWithLogsEvents(t *testing.T) {
 	inc := testIncident()
 	inc.Events = "Warning BackOff"
 	inc.Logs = "Error: crash"
+	inc.IncludeEvents = true
+	inc.IncludeLogs = true
 
 	text := formatIncidentText(inc, model.ActionUpdate)
 	assert.Contains(text, "Events:")

@@ -58,6 +58,13 @@ func TestEmptyConfig(t *testing.T) {
 
 func TestConfigInvalidFile(t *testing.T) {
 	assert := assert.New(t)
+
+	os.Setenv("CONFIG_FILE", "bad-config.yaml")
+	defer os.Unsetenv("CONFIG_FILE")
+
+	os.WriteFile("bad-config.yaml", []byte("test"), 0644)
+	defer os.RemoveAll("bad-config.yaml")
+
 	cfg, err := LoadConfig()
 	assert.Nil(cfg)
 	assert.NotNil(err)

@@ -68,6 +68,8 @@ func main() {
 
 	klog.InfoS(fmt.Sprintf(constant.WelcomeMsg, version.Short()))
 
+	k8s.InitHTTPClient(&cfg.App)
+
 	k8sClient := client.Create(&cfg.App)
 
 	sm := startup.NewStartupManager(

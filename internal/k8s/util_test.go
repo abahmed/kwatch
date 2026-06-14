@@ -5,7 +5,6 @@ import (
 	"math/rand"
 	"os"
 	"testing"
-	"time"
 
 	"github.com/stretchr/testify/assert"
 	v1 "k8s.io/api/core/v1"
@@ -471,17 +470,10 @@ func TestGetPodEventsSuccess(t *testing.T) {
 	assert.Equal(1, len(result.Items))
 }
 
-func TestNewHTTPClientWithTimeout(t *testing.T) {
+func TestNewHTTPClient(t *testing.T) {
 	assert := assert.New(t)
 
-	client := NewHTTPClient(10 * time.Second)
-	assert.NotNil(client)
-}
-
-func TestNewHTTPClientWithZeroTimeout(t *testing.T) {
-	assert := assert.New(t)
-
-	client := NewHTTPClient(0)
+	client := NewHTTPClient()
 	assert.NotNil(client)
 	assert.Equal(DefaultHTTPTimeout, client.Timeout)
 }

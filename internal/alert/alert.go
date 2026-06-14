@@ -529,11 +529,11 @@ func formatCreateMessage(inc *model.Incident, maxLines int) string {
 	}
 
 	logsBlock := ""
-	if inc.Logs != "" {
+	if inc.IncludeLogs && inc.Logs != "" {
 		logsBlock = fmt.Sprintf("\nLogs:\n%s", truncateText(inc.Logs, maxLines))
 	}
 	eventsBlock := ""
-	if inc.Events != "" {
+	if inc.IncludeEvents && inc.Events != "" {
 		eventsBlock = fmt.Sprintf("\nEvents:\n%s", truncateText(inc.Events, maxLines))
 	}
 

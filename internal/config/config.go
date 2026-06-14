@@ -61,6 +61,26 @@ type Config struct {
 	// IgnoreLogPatterns optional list of regexp patterns to ignore
 	IgnoreLogPatterns []string `yaml:"ignoreLogPatterns"`
 
+	// IgnoreContainerMessages optional list of substring patterns; if a
+	// container status Waiting/Terminated Message contains any entry the
+	// incident is suppressed.
+	IgnoreContainerMessages []string `yaml:"ignoreContainerMessages"`
+
+	// IgnoreDisruptionTerminations if true (default), pods with a
+	// DeletionTimestamp or DisruptionTarget condition (eviction, scale-down,
+	// preemption, taint-based termination, etc.) are not alerted.
+	IgnoreDisruptionTerminations *bool `yaml:"ignoreDisruptionTerminations"`
+
+	// NamespaceSelector is a Kubernetes label selector to discover namespaces
+	// to watch. Mutually exclusive with Namespaces.
+	NamespaceSelector string `yaml:"namespaceSelector"`
+
+	// IncludeEvents if false, events section is omitted from alert messages.
+	IncludeEvents *bool `yaml:"includeEvents"`
+
+	// IncludeLogs if false, logs section is omitted from alert messages.
+	IncludeLogs *bool `yaml:"includeLogs"`
+
 	// Alert is a map contains a map of each provider configuration
 	// e.g. {"slack": {"webhook": "URL"}}
 	Alert map[string]map[string]interface{} `yaml:"alert"`
@@ -201,6 +221,14 @@ type App struct {
 
 	// LogFormatter used for setting custom formatter when app prints logs
 	LogFormatter string `yaml:"logFormatter"`
+
+	// InsecureSkipTLSVerify if true, skips TLS certificate verification
+	// on outbound HTTP calls (providers). Default false.
+	InsecureSkipTLSVerify bool `yaml:"insecureSkipTLSVerify"`
+
+	// CABundlePath is an optional path to a PEM file for custom CA
+	// certificates used in outbound HTTP calls.
+	CABundlePath string `yaml:"caBundlePath"`
 }
 
 // Upgrader confing struct

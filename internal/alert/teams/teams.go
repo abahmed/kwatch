@@ -176,7 +176,8 @@ func (t *Teams) buildRequestBodyTeams(e *event.Event) []byte {
 				"$schema": "http://adaptivecards.io/schemas/adaptive-card.json",
 				"type":    "AdaptiveCard",
 				"version": "1.2",
-				"body": []map[string]interface{}{
+			"body": func() []map[string]interface{} {
+				body := []map[string]interface{}{
 					{
 						"type": "TextBlock",
 						"text": title,
@@ -197,21 +198,27 @@ func (t *Teams) buildRequestBodyTeams(e *event.Event) []byte {
 						"type": "TextBlock",
 						"text": fmt.Sprintf("Reason: %s", e.Reason),
 					},
-					{
+				}
+				if e.IncludeLogs {
+					body = append(body, map[string]interface{}{
 						"type": "TextBlock",
 						"text": fmt.Sprintf("Logs: %s", e.Logs),
-					},
-					{
+					})
+				}
+				if e.IncludeEvents {
+					body = append(body, map[string]interface{}{
 						"type": "TextBlock",
 						"text": fmt.Sprintf("Events: \n%s", e.Events),
-					},
-					{
-						"type": "TextBlock",
-						"text": fmt.Sprintf(
-							"Time: %s",
-							time.Now().Format(time.RFC1123)),
-					},
-				},
+					})
+				}
+				body = append(body, map[string]interface{}{
+					"type": "TextBlock",
+					"text": fmt.Sprintf(
+						"Time: %s",
+						time.Now().Format(time.RFC1123)),
+				})
+				return body
+			}(),
 			},
 		},
 	}

@@ -8,20 +8,6 @@ import (
 )
 
 func (e *Event) FormatMarkdown(clusterName, text, delimiter string) string {
-	// add events part if it exists
-	eventsText := constant.DefaultEvents
-	events := strings.TrimSpace(e.Events)
-	if len(events) > 0 {
-		eventsText = e.Events
-	}
-
-	// add logs part if it exist
-	logsText := constant.DefaultLogs
-	logs := strings.TrimSpace(e.Logs)
-	if len(logs) > 0 {
-		logsText = e.Logs
-	}
-
 	// use custom text if it's provided, otherwise use default
 	if len(text) == 0 {
 		text = constant.DefaultText
@@ -29,6 +15,26 @@ func (e *Event) FormatMarkdown(clusterName, text, delimiter string) string {
 
 	if len(delimiter) == 0 {
 		delimiter = "\n"
+	}
+
+	eventsBlock := ""
+	if e.IncludeEvents {
+		eventsText := constant.DefaultEvents
+		events := strings.TrimSpace(e.Events)
+		if len(events) > 0 {
+			eventsText = e.Events
+		}
+		eventsBlock = "**Events:**\n```\n" + eventsText + "\n```"
+	}
+
+	logsBlock := ""
+	if e.IncludeLogs {
+		logsText := constant.DefaultLogs
+		logs := strings.TrimSpace(e.Logs)
+		if len(logs) > 0 {
+			logsText = e.Logs
+		}
+		logsBlock = "**Logs:**\n```\n" + logsText + "\n```"
 	}
 
 	msg := fmt.Sprintf(
@@ -39,40 +45,45 @@ func (e *Event) FormatMarkdown(clusterName, text, delimiter string) string {
 			"**Namespace:** %s"+delimiter+
 			"**Node:** %s"+delimiter+
 			"**Reason:** %s"+delimiter+
-			"**Events:**\n```\n%s\n```"+delimiter+
-			"**Logs:**\n```\n%s\n```",
+			"%s"+delimiter+
+			"%s",
 		text,
 		clusterName, e.PodName,
 		e.ContainerName,
 		e.Namespace,
 		e.NodeName,
 		e.Reason,
-		eventsText,
-		logsText,
+		eventsBlock,
+		logsBlock,
 	)
 
 	return msg
 }
 
 func (e *Event) FormatHtml(clusterName, text string) string {
-	eventsText := constant.DefaultEvents
-	logsText := constant.DefaultLogs
-
-	// add events part if it exists
-	events := strings.TrimSpace(e.Events)
-	if len(events) > 0 {
-		eventsText = e.Events
-	}
-
-	// add logs part if it exists
-	logs := strings.TrimSpace(e.Logs)
-	if len(logs) > 0 {
-		logsText = e.Logs
-	}
-
 	// use custom text if it's provided, otherwise use default
 	if len(text) == 0 {
 		text = constant.DefaultText
+	}
+
+	eventsBlock := ""
+	if e.IncludeEvents {
+		eventsText := constant.DefaultEvents
+		events := strings.TrimSpace(e.Events)
+		if len(events) > 0 {
+			eventsText = e.Events
+		}
+		eventsBlock = "<b>Events:</b><br/><blockquote>" + strings.ReplaceAll(eventsText, "\n", "<br/>") + "</blockquote>"
+	}
+
+	logsBlock := ""
+	if e.IncludeLogs {
+		logsText := constant.DefaultLogs
+		logs := strings.TrimSpace(e.Logs)
+		if len(logs) > 0 {
+			logsText = e.Logs
+		}
+		logsBlock = "<b>Logs:</b> <br/><blockquote>" + strings.ReplaceAll(logsText, "\n", "<br/>") + "</blockquote>"
 	}
 
 	msg := fmt.Sprintf(
@@ -83,8 +94,8 @@ func (e *Event) FormatHtml(clusterName, text string) string {
 			"<b>Namespace:</b> %s<br/>"+
 			"<b>Node:</b> %s<br/>"+
 			"<b>Reason:</b> %s<br/>"+
-			"<b>Events:</b><br/><blockquote>%s</blockquote>"+
-			"<b>Logs:</b> <br/><blockquote>%s</blockquote>",
+			"%s"+
+			"%s",
 		text,
 		clusterName,
 		e.PodName,
@@ -92,32 +103,37 @@ func (e *Event) FormatHtml(clusterName, text string) string {
 		e.Namespace,
 		e.NodeName,
 		e.Reason,
-		strings.ReplaceAll(eventsText, "\n", "<br/>"),
-		strings.ReplaceAll(logsText, "\n", "<br/>"),
+		eventsBlock,
+		logsBlock,
 	)
 
 	return msg
 }
 
 func (e *Event) FormatText(clusterName, text string) string {
-	eventsText := constant.DefaultEvents
-	logsText := constant.DefaultLogs
-
-	// add events part if it exists
-	events := strings.TrimSpace(e.Events)
-	if len(events) > 0 {
-		eventsText = e.Events
-	}
-
-	// add logs part if it exists
-	logs := strings.TrimSpace(e.Logs)
-	if len(logs) > 0 {
-		logsText = e.Logs
-	}
-
 	// use custom text if it's provided, otherwise use default
 	if len(text) == 0 {
 		text = constant.DefaultText
+	}
+
+	eventsBlock := ""
+	if e.IncludeEvents {
+		eventsText := constant.DefaultEvents
+		events := strings.TrimSpace(e.Events)
+		if len(events) > 0 {
+			eventsText = e.Events
+		}
+		eventsBlock = "Events:\n" + eventsText + "\n\n"
+	}
+
+	logsBlock := ""
+	if e.IncludeLogs {
+		logsText := constant.DefaultLogs
+		logs := strings.TrimSpace(e.Logs)
+		if len(logs) > 0 {
+			logsText = e.Logs
+		}
+		logsBlock = "Logs:\n" + logsText + "\n\n"
 	}
 
 	msg := fmt.Sprintf(
@@ -128,16 +144,16 @@ func (e *Event) FormatText(clusterName, text string) string {
 			"Namespace: %s\n"+
 			"Node: %s\n"+
 			"Reason: %s\n\n"+
-			"Events:\n%s\n\n"+
-			"Logs:\n%s\n\n",
+			"%s"+
+			"%s",
 		clusterName,
 		e.PodName,
 		e.ContainerName,
 		e.Namespace,
 		e.NodeName,
 		e.Reason,
-		eventsText,
-		logsText,
+		eventsBlock,
+		logsBlock,
 	)
 
 	return msg

@@ -48,7 +48,7 @@ func (h *handler) ProcessDeploymentObject(deploy *appsv1.Deployment, deleted boo
 		if c.Type == appsv1.DeploymentProgressing &&
 			c.Status == corev1.ConditionFalse &&
 			c.Reason == "ProgressDeadlineExceeded" {
-			ev := event.Event{
+			ev := h.eventWithConfig(event.Event{
 				Resource:  "deployment",
 				PodName:   deploy.Name,
 				Namespace: deploy.Namespace,
@@ -56,7 +56,7 @@ func (h *handler) ProcessDeploymentObject(deploy *appsv1.Deployment, deleted boo
 				Events:    "",
 				Logs:      "",
 				Labels:    deploy.Labels,
-			}
+			})
 			inc, action := h.correlator.Process(ev, deploy.Namespace+"/"+deploy.Name, nil)
 			if action != model.ActionSkip {
 				h.alertManager.NotifyIncident(inc, action)

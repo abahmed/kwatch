@@ -3,6 +3,7 @@ package controller
 import (
 	"context"
 	"fmt"
+	"os"
 	"time"
 
 	"github.com/abahmed/kwatch/internal/config"
@@ -65,18 +66,38 @@ type Controller struct {
 	secretsSynced          []cache.InformerSynced
 }
 
-func newFactories(client kubernetes.Interface, cfg *config.Config, resync time.Duration) (factorySet, []informers.SharedInformerFactory) {
-	if len(cfg.AllowedNamespaces) <= 1 {
+// resolveNamespaces decides which namespaces to watch.
+// If NamespaceSelector is set, it lists namespaces via k8s API using the label
+// selector. Otherwise it uses the static AllowedNamespaces/ForbiddenNamespaces.
+func resolveNamespaces(cfg *config.Config, clientset kubernetes.Interface) ([]string, error) {
+	if cfg.NamespaceSelector != "" {
+		list, err := clientset.CoreV1().Namespaces().List(context.Background(), metav1.ListOptions{
+			LabelSelector: cfg.NamespaceSelector,
+		})
+		if err != nil {
+			return nil, fmt.Errorf("namespaceSelector list failed: %w", err)
+		}
+		ns := make([]string, 0, len(list.Items))
+		for _, n := range list.Items {
+			ns = append(ns, n.Name)
+		}
+		return ns, nil
+	}
+	return cfg.AllowedNamespaces, nil
+}
+
+func newFactories(client kubernetes.Interface, namespaces []string, resync time.Duration) (factorySet, []informers.SharedInformerFactory) {
+	if len(namespaces) <= 1 {
 		var opts []informers.SharedInformerOption
-		if len(cfg.AllowedNamespaces) == 1 {
-			opts = append(opts, informers.WithNamespace(cfg.AllowedNamespaces[0]))
+		if len(namespaces) == 1 {
+			opts = append(opts, informers.WithNamespace(namespaces[0]))
 		}
 		factory := informers.NewSharedInformerFactoryWithOptions(client, resync, opts...)
 		return factorySet{global: factory}, []informers.SharedInformerFactory{factory}
 	}
 
-	factories := make([]informers.SharedInformerFactory, 0, len(cfg.AllowedNamespaces))
-	for _, ns := range cfg.AllowedNamespaces {
+	factories := make([]informers.SharedInformerFactory, 0, len(namespaces))
+	for _, ns := range namespaces {
 		opts := []informers.SharedInformerOption{informers.WithNamespace(ns)}
 		factories = append(factories, informers.NewSharedInformerFactoryWithOptions(client, resync, opts...))
 	}
@@ -287,7 +308,13 @@ func New(
 ) (*Controller, func()) {
 	resync := time.Duration(cfg.ResyncSeconds) * time.Second
 
-	fs, factories := newFactories(client, cfg, resync)
+	namespaces, err := resolveNamespaces(cfg, client)
+	if err != nil {
+		klog.ErrorS(err, "failed to resolve namespaces")
+		os.Exit(1)
+	}
+
+	fs, factories := newFactories(client, namespaces, resync)
 
 	podLister := fs.podLister()
 	podInformers := fs.podInformers()
@@ -513,22 +540,22 @@ func New(
 	// Events informer uses a dedicated factory with field selector to only cache Pod events
 	{
 		var eventFactories []informers.SharedInformerFactory
-		if len(cfg.AllowedNamespaces) <= 1 {
+		if len(namespaces) <= 1 {
 			opts := []informers.SharedInformerOption{
 				informers.WithTweakListOptions(func(o *metav1.ListOptions) {
 					o.FieldSelector = "involvedObject.kind=Pod"
 				}),
 			}
-			if len(cfg.AllowedNamespaces) == 1 {
-				opts = append(opts, informers.WithNamespace(cfg.AllowedNamespaces[0]))
+			if len(namespaces) == 1 {
+				opts = append(opts, informers.WithNamespace(namespaces[0]))
 			}
 			ef := informers.NewSharedInformerFactoryWithOptions(client, resync, opts...)
 			eventFactories = append(eventFactories, ef)
 			c.eventLister = ef.Core().V1().Events().Lister()
 			c.eventsSynced = append(c.eventsSynced, ef.Core().V1().Events().Informer().HasSynced)
 		} else {
-			listers := make([]corev1lister.EventLister, 0, len(cfg.AllowedNamespaces))
-			for _, ns := range cfg.AllowedNamespaces {
+			listers := make([]corev1lister.EventLister, 0, len(namespaces))
+			for _, ns := range namespaces {
 				ns := ns
 				opts := []informers.SharedInformerOption{
 					informers.WithTweakListOptions(func(o *metav1.ListOptions) {
@@ -549,22 +576,22 @@ func New(
 
 	if cfg.TlsMonitor.Enabled {
 		var tlsFactories []informers.SharedInformerFactory
-		if len(cfg.AllowedNamespaces) <= 1 {
+		if len(namespaces) <= 1 {
 			opts := []informers.SharedInformerOption{
 				informers.WithTweakListOptions(func(o *metav1.ListOptions) {
 					o.FieldSelector = "type=kubernetes.io/tls"
 				}),
 			}
-			if len(cfg.AllowedNamespaces) == 1 {
-				opts = append(opts, informers.WithNamespace(cfg.AllowedNamespaces[0]))
+			if len(namespaces) == 1 {
+				opts = append(opts, informers.WithNamespace(namespaces[0]))
 			}
 			tf := informers.NewSharedInformerFactoryWithOptions(client, resync, opts...)
 			tlsFactories = append(tlsFactories, tf)
 			c.secretLister = tf.Core().V1().Secrets().Lister()
 			c.secretsSynced = append(c.secretsSynced, tf.Core().V1().Secrets().Informer().HasSynced)
 		} else {
-			listers := make([]corev1lister.SecretLister, 0, len(cfg.AllowedNamespaces))
-			for _, ns := range cfg.AllowedNamespaces {
+			listers := make([]corev1lister.SecretLister, 0, len(namespaces))
+			for _, ns := range namespaces {
 				ns := ns
 				opts := []informers.SharedInformerOption{
 					informers.WithTweakListOptions(func(o *metav1.ListOptions) {

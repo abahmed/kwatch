@@ -41,6 +41,8 @@ func TestFormatMarkdown(t *testing.T) {
 		Reason:        "OOMKILLED",
 		Events:        "test events",
 		Logs:          "test logs",
+		IncludeEvents: true,
+		IncludeLogs:   true,
 	}
 
 	result := e.FormatMarkdown("test-cluster", "", "")
@@ -65,6 +67,8 @@ func TestFormatMarkdownWithCustomText(t *testing.T) {
 		Reason:        "OOMKILLED",
 		Events:        "test events",
 		Logs:          "test logs",
+		IncludeEvents: true,
+		IncludeLogs:   true,
 	}
 
 	result := e.FormatMarkdown("test-cluster", "Custom alert message", "")
@@ -82,6 +86,8 @@ func TestFormatMarkdownWithCustomDelimiter(t *testing.T) {
 		Reason:        "OOMKILLED",
 		Events:        "test events",
 		Logs:          "test logs",
+		IncludeEvents: true,
+		IncludeLogs:   true,
 	}
 
 	result := e.FormatMarkdown("test-cluster", "", "\n\n")
@@ -117,6 +123,8 @@ func TestFormatHtml(t *testing.T) {
 		Reason:        "OOMKILLED",
 		Events:        "test events",
 		Logs:          "test logs",
+		IncludeEvents: true,
+		IncludeLogs:   true,
 	}
 
 	result := e.FormatHtml("test-cluster", "")
@@ -141,6 +149,8 @@ func TestFormatHtmlWithCustomText(t *testing.T) {
 		Reason:        "OOMKILLED",
 		Events:        "test events",
 		Logs:          "test logs",
+		IncludeEvents: true,
+		IncludeLogs:   true,
 	}
 
 	result := e.FormatHtml("test-cluster", "Custom HTML alert")
@@ -175,6 +185,8 @@ func TestFormatText(t *testing.T) {
 		Reason:        "OOMKILLED",
 		Events:        "test events",
 		Logs:          "test logs",
+		IncludeEvents: true,
+		IncludeLogs:   true,
 	}
 
 	result := e.FormatText("test-cluster", "")
@@ -199,6 +211,8 @@ func TestFormatTextWithCustomText(t *testing.T) {
 		Reason:        "OOMKILLED",
 		Events:        "test events",
 		Logs:          "test logs",
+		IncludeEvents: true,
+		IncludeLogs:   true,
 	}
 
 	result := e.FormatText("test-cluster", "Custom text alert")

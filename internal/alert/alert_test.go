@@ -276,6 +276,8 @@ func TestFormatIncidentMessageWithLogsEvents(t *testing.T) {
 		Resources: map[string]bool{"pod-1": true, "pod-2": true},
 		Logs:      "line1\nline2\nline3",
 		Events:    "[2024-01-01] Pulling image\n[2024-01-01] BackOff restart",
+		IncludeEvents: true,
+		IncludeLogs:   true,
 	}
 
 	msg := formatIncidentMessage(inc, model.ActionCreate, 100, nil)

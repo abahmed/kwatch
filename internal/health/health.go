@@ -147,10 +147,12 @@ func (h *HealthServer) testAlertHandler(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 	ev := event.Event{
-		PodName:   "test-pod",
-		Namespace: "default",
-		Reason:    "TestAlert",
-		Events:    "this is a test alert from kwatch",
+		PodName:       "test-pod",
+		Namespace:     "default",
+		Reason:        "TestAlert",
+		Events:        "this is a test alert from kwatch",
+		IncludeEvents: true,
+		IncludeLogs:   true,
 	}
 	h.alertManager.NotifyEvent(ev)
 	h.alertManager.Notify("[test-alert] kwatch test alert sent")

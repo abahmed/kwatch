@@ -88,4 +88,6 @@ type Incident struct {
 	Severity           string
 	SuppressedPods     int
 	ResolveAt          time.Time
+	IncludeEvents      bool
+	IncludeLogs        bool
 }

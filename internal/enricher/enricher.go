@@ -31,6 +31,8 @@ func (e *DefaultEnricher) Enrich(ev *event.Event, inc *model.Incident) {
 	}
 	inc.Logs = ev.Logs
 	inc.Events = ev.Events
+	inc.IncludeEvents = ev.IncludeEvents
+	inc.IncludeLogs = ev.IncludeLogs
 	if ev.Severity != "" {
 		inc.Severity = ev.Severity
 	} else {

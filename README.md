@@ -182,6 +182,45 @@ you something broke *right now*.
 | `ignorePodNames`               | Optional list of pod name regexp patterns to ignore    |
 | `IgnoreLogPatterns`            | Optional list of regexp patterns of logs to ignore     |
 
+#### Namespace filter
+
+Use the `namespaces` option to restrict which namespaces are monitored:
+
+```yaml
+# Watch only these namespaces
+namespaces:
+  - default
+  - kube-system
+```
+
+Prefix with `!` to exclude namespaces (cannot mix allow and forbid):
+
+```yaml
+# Watch all namespaces except those listed
+namespaces:
+  - !kube-system
+  - !monitoring
+```
+
+#### Reason filter
+
+Use the `reasons` option to filter by Kubernetes event reason:
+
+```yaml
+# Only alert on these reasons
+reasons:
+  - CrashLoopBackOff
+  - ImagePullBackOff
+```
+
+Prefix with `!` to exclude reasons:
+
+```yaml
+# Alert on everything except these reasons
+reasons:
+  - !Started
+  - !Killing
+```
 
 ### 📱 App
 
@@ -407,6 +446,7 @@ If you want to enable Slack, provide either a webhook URL or a bot token with ch
 | `alert.slack.channel`            | Used by legacy webhooks to send messages to specific channel instead of default one |
 | `alert.slack.title`              | Customized title in slack message           |
 | `alert.slack.text`               | Customized text in slack message            |
+| `alert.slack.compact`            | Single-line message instead of rich embed (`true`/`false`) |
 
 **Bot Token mode:**
 
@@ -416,6 +456,18 @@ If you want to enable Slack, provide either a webhook URL or a bot token with ch
 | `alert.slack.channel`            | Channel to post to (e.g. #alerts)           |
 | `alert.slack.title`              | Customized title in slack message           |
 | `alert.slack.text`               | Customized text in slack message            |
+| `alert.slack.compact`            | Single-line message instead of rich embed (`true`/`false`) |
+
+#### Compact mode
+
+Set `compact: true` to send a single-line message instead of the rich embed:
+
+```yaml
+alert:
+  slack:
+    webhook: "https://hooks.slack.com/..."
+    compact: true
+```
 
 > **Incident mode** — When correlation is enabled and Slack is in bot token mode, alerts are sent as threaded conversations. A root message is created on the first occurrence, with updates, stale, and resolved notifications posted as thread replies. The incident message includes enriched fields: Owner Kind, Container Name, Restart Count, Severity, and Hint (e.g. "Memory pressure", "Registry/Auth").
 

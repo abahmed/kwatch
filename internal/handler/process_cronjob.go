@@ -45,7 +45,7 @@ func (h *handler) ProcessCronJobObject(cj *batchv1.CronJob, deleted bool) error 
 	}
 
 	if cj.Spec.Suspend != nil && *cj.Spec.Suspend {
-		ev := event.Event{
+		ev := h.eventWithConfig(event.Event{
 			Resource:  "cronjob",
 			PodName:   cj.Name,
 			Namespace: cj.Namespace,
@@ -53,7 +53,7 @@ func (h *handler) ProcessCronJobObject(cj *batchv1.CronJob, deleted bool) error 
 			Events:    "",
 			Logs:      "",
 			Labels:    cj.Labels,
-		}
+		})
 		inc, action := h.correlator.Process(ev, cj.Namespace+"/"+cj.Name, nil)
 		if action != model.ActionSkip {
 			h.alertManager.NotifyIncident(inc, action)
@@ -62,7 +62,7 @@ func (h *handler) ProcessCronJobObject(cj *batchv1.CronJob, deleted bool) error 
 	}
 
 	if cj.Status.LastScheduleTime == nil || cj.Status.LastScheduleTime.Time.Before(time.Now().Add(-24*time.Hour)) {
-		ev := event.Event{
+		ev := h.eventWithConfig(event.Event{
 			Resource:  "cronjob",
 			PodName:   cj.Name,
 			Namespace: cj.Namespace,
@@ -70,7 +70,7 @@ func (h *handler) ProcessCronJobObject(cj *batchv1.CronJob, deleted bool) error 
 			Events:    "",
 			Logs:      "",
 			Labels:    cj.Labels,
-		}
+		})
 		inc, action := h.correlator.Process(ev, cj.Namespace+"/"+cj.Name, nil)
 		if action != model.ActionSkip {
 			h.alertManager.NotifyIncident(inc, action)

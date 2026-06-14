@@ -57,7 +57,7 @@ func (h *handler) ProcessJobObject(job *batchv1.Job, deleted bool) error {
 				if reason == "" {
 					reason = "JobFailed"
 				}
-				ev := event.Event{
+				ev := h.eventWithConfig(event.Event{
 					Resource:  "job",
 					PodName:   job.Name,
 					Namespace: job.Namespace,
@@ -65,7 +65,7 @@ func (h *handler) ProcessJobObject(job *batchv1.Job, deleted bool) error {
 					Events:    "",
 					Logs:      "",
 					Labels:    job.Labels,
-				}
+				})
 				inc, action := h.correlator.Process(ev, job.Namespace+"/"+job.Name, nil)
 				if action != model.ActionSkip {
 					h.alertManager.NotifyIncident(inc, action)
@@ -74,7 +74,7 @@ func (h *handler) ProcessJobObject(job *batchv1.Job, deleted bool) error {
 			}
 		case batchv1.JobSuspended:
 			if c.Status == corev1.ConditionTrue {
-				ev := event.Event{
+				ev := h.eventWithConfig(event.Event{
 					Resource:  "job",
 					PodName:   job.Name,
 					Namespace: job.Namespace,
@@ -82,7 +82,7 @@ func (h *handler) ProcessJobObject(job *batchv1.Job, deleted bool) error {
 					Events:    "",
 					Logs:      "",
 					Labels:    job.Labels,
-				}
+				})
 				inc, action := h.correlator.Process(ev, job.Namespace+"/"+job.Name, nil)
 				if action != model.ActionSkip {
 					h.alertManager.NotifyIncident(inc, action)

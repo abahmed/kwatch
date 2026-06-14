@@ -14,17 +14,29 @@ import (
 // LoadConfig loads yaml configuration from file if provided, otherwise
 // loads default configuration
 func LoadConfig() (*Config, error) {
-	// initialize configuration
 	configFile := os.Getenv("CONFIG_FILE")
 
 	config := DefaultConfig()
+
+	if configFile == "" {
+		klog.Warning("no CONFIG_FILE set; using default (no alert providers)")
+		return config, nil
+	}
+
 	yamlFile, err := os.ReadFile(configFile)
 	if err != nil {
+		if os.IsNotExist(err) {
+			klog.Warning("config file not found; using default (no alert providers)", "path", configFile)
+			return config, nil
+		}
 		klog.InfoS("unable to load config file", "error", err.Error())
 		return nil, err
 	}
 
-	err = yaml.Unmarshal(yamlFile, config)
+	// B1: env-var interpolation — ${VAR} is replaced from environment
+	expanded := os.Expand(string(yamlFile), func(k string) string { return os.Getenv(k) })
+
+	err = yaml.Unmarshal([]byte(expanded), config)
 	if err != nil {
 		klog.InfoS("unable to parse config file", "error", err.Error())
 		return nil, err
@@ -39,6 +51,10 @@ func LoadConfig() (*Config, error) {
 		len(config.ForbiddenNamespaces) > 0 {
 		errs = append(errs,
 			errors.New("either allowed or forbidden namespaces must be set, can't set both"))
+	}
+	if config.NamespaceSelector != "" && len(config.Namespaces) > 0 {
+		errs = append(errs,
+			errors.New("namespaceSelector and namespaces are mutually exclusive"))
 	}
 
 	// Parse reason allow/forbid lists
@@ -71,7 +87,6 @@ func LoadConfig() (*Config, error) {
 	return config, nil
 }
 
-// getAllowForbidSlices split input slice into two slices by items start with !
 func getAllowForbidSlices(items []string) (allow []string, forbid []string) {
 	allow = make([]string, 0)
 	forbid = make([]string, 0)
@@ -90,11 +105,9 @@ func getCompiledIgnorePatterns(patterns []string) (compiledPatterns []*regexp.Re
 
 	for _, pattern := range patterns {
 		compiledPattern, err := regexp.Compile(pattern)
-
 		if err != nil {
 			return nil, fmt.Errorf("failed to compile pattern '%s'", pattern)
 		}
-
 		compiledPatterns = append(compiledPatterns, compiledPattern)
 	}
 

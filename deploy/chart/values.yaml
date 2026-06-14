@@ -49,5 +49,10 @@ config:
   #   enabled: false
   #   threshold: 30
 
+# -- Configure the upgrader/update checker
+upgrader:
+  # -- Disable the update check at startup
+  disableUpdateCheck: false
+
 
 

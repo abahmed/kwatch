@@ -38,6 +38,9 @@ type Slack struct {
 	threadMap map[string]string
 	mu        sync.Mutex
 
+	// compact mode sends single-line messages instead of rich embeds
+	compact bool
+
 	// overridable in tests
 	postBlocksFn func(blocks *slackClient.Blocks, threadTS string) (string, error)
 }
@@ -46,6 +49,7 @@ type Slack struct {
 func NewSlack(config map[string]interface{}, appCfg *config.App) *Slack {
 	title, _ := config["title"].(string)
 	text, _ := config["text"].(string)
+	compact, _ := config["compact"].(bool)
 
 	// token mode: requires token + channel
 	token, hasToken := config["token"].(string)
@@ -61,6 +65,7 @@ func NewSlack(config map[string]interface{}, appCfg *config.App) *Slack {
 			channel:   channel,
 			title:     title,
 			text:      text,
+			compact:   compact,
 			appCfg:    appCfg,
 			apiClient: slackClient.New(token),
 		}
@@ -80,6 +85,7 @@ func NewSlack(config map[string]interface{}, appCfg *config.App) *Slack {
 		channel: channel,
 		title:   title,
 		text:    text,
+		compact: compact,
 		appCfg:  appCfg,
 		send:    slackClient.PostWebhook,
 	}
@@ -93,6 +99,17 @@ func (s *Slack) Name() string {
 // SendEvent sends event to the provider
 func (s *Slack) SendEvent(ev *event.Event) error {
 	klog.InfoS("sending to slack event", "event", ev)
+
+	// compact mode: single-line text message
+	if s.compact {
+		text := fmt.Sprintf(
+			"K8s Alert: %s - %s (%s)",
+			ev.PodName, ev.Reason, ev.Namespace,
+		)
+		return s.sendAPI(&slackClient.WebhookMessage{
+			Text: text,
+		})
+	}
 
 	// use custom title if it's provided, otherwise use default
 	title := s.title
@@ -123,26 +140,30 @@ func (s *Slack) SendEvent(ev *event.Event) error {
 	}
 
 	// add events part if it exists
-	events := strings.TrimSpace(ev.Events)
-	if len(events) > 0 {
-		blocks = append(blocks,
-			markdownSection(":mag: *Events*"))
-
-		for _, chunk := range chunks(events, chunkSize) {
+	if ev.IncludeEvents {
+		events := strings.TrimSpace(ev.Events)
+		if len(events) > 0 {
 			blocks = append(blocks,
-				markdownSectionF("```%s```", chunk))
+				markdownSection(":mag: *Events*"))
+
+			for _, chunk := range chunks(events, chunkSize) {
+				blocks = append(blocks,
+					markdownSectionF("```%s```", chunk))
+			}
 		}
 	}
 
 	// add logs part if it exists
-	logs := strings.TrimSpace(ev.Logs)
-	if len(logs) > 0 {
-		blocks = append(blocks,
-			markdownSection(":memo: *Logs*"))
-
-		for _, chunk := range chunks(logs, chunkSize) {
+	if ev.IncludeLogs {
+		logs := strings.TrimSpace(ev.Logs)
+		if len(logs) > 0 {
 			blocks = append(blocks,
-				markdownSectionF("```%s```", chunk))
+				markdownSection(":memo: *Logs*"))
+
+			for _, chunk := range chunks(logs, chunkSize) {
+				blocks = append(blocks,
+					markdownSectionF("```%s```", chunk))
+			}
 		}
 	}
 
@@ -193,6 +214,9 @@ func (s *Slack) sendAPIWithToken(msg *slackClient.WebhookMessage) error {
 func (s *Slack) SendIncident(inc *model.Incident, action model.IncidentAction) error {
 	if action == model.ActionSkip {
 		return nil
+	}
+	if s.compact {
+		return s.SendMessage(formatIncidentText(inc, action))
 	}
 	if s.postBlocksFn != nil || s.apiClient != nil {
 		return s.sendIncidentWithToken(inc, action)
@@ -312,19 +336,23 @@ func buildIncidentBlocks(inc *model.Incident, appCfg *config.App) *slackClient.B
 		blocks = append(blocks, markdownSection(hint))
 	}
 
-	events := strings.TrimSpace(inc.Events)
-	if len(events) > 0 {
-		blocks = append(blocks, markdownSection(":mag: *Events*"))
-		for _, chunk := range chunks(events, chunkSize) {
-			blocks = append(blocks, markdownSectionF("```%s```", chunk))
+	if inc.IncludeEvents {
+		events := strings.TrimSpace(inc.Events)
+		if len(events) > 0 {
+			blocks = append(blocks, markdownSection(":mag: *Events*"))
+			for _, chunk := range chunks(events, chunkSize) {
+				blocks = append(blocks, markdownSectionF("```%s```", chunk))
+			}
 		}
 	}
 
-	logs := strings.TrimSpace(inc.Logs)
-	if len(logs) > 0 {
-		blocks = append(blocks, markdownSection(":memo: *Logs*"))
-		for _, chunk := range chunks(logs, chunkSize) {
-			blocks = append(blocks, markdownSectionF("```%s```", chunk))
+	if inc.IncludeLogs {
+		logs := strings.TrimSpace(inc.Logs)
+		if len(logs) > 0 {
+			blocks = append(blocks, markdownSection(":memo: *Logs*"))
+			for _, chunk := range chunks(logs, chunkSize) {
+				blocks = append(blocks, markdownSectionF("```%s```", chunk))
+			}
 		}
 	}
 
@@ -353,19 +381,23 @@ func buildIncidentUpdateBlocks(inc *model.Incident) *slackClient.Blocks {
 		markdownSection(text),
 	}
 
-	events := strings.TrimSpace(inc.Events)
-	if len(events) > 0 {
-		blocks = append(blocks, markdownSection(":mag: *Events*"))
-		for _, chunk := range chunks(events, chunkSize) {
-			blocks = append(blocks, markdownSectionF("```%s```", chunk))
+	if inc.IncludeEvents {
+		events := strings.TrimSpace(inc.Events)
+		if len(events) > 0 {
+			blocks = append(blocks, markdownSection(":mag: *Events*"))
+			for _, chunk := range chunks(events, chunkSize) {
+				blocks = append(blocks, markdownSectionF("```%s```", chunk))
+			}
 		}
 	}
 
-	logs := strings.TrimSpace(inc.Logs)
-	if len(logs) > 0 {
-		blocks = append(blocks, markdownSection(":memo: *Logs*"))
-		for _, chunk := range chunks(logs, chunkSize) {
-			blocks = append(blocks, markdownSectionF("```%s```", chunk))
+	if inc.IncludeLogs {
+		logs := strings.TrimSpace(inc.Logs)
+		if len(logs) > 0 {
+			blocks = append(blocks, markdownSection(":memo: *Logs*"))
+			for _, chunk := range chunks(logs, chunkSize) {
+				blocks = append(blocks, markdownSectionF("```%s```", chunk))
+			}
 		}
 	}
 
@@ -415,11 +447,15 @@ func formatIncidentText(inc *model.Incident, action model.IncidentAction) string
 			inc.Reason, inc.RestartCount, inc.Hint,
 			resources, inc.Count, duration,
 		)
-		if ev := strings.TrimSpace(inc.Events); len(ev) > 0 {
-			text += "\n\nEvents:\n" + ev
+		if inc.IncludeEvents {
+			if ev := strings.TrimSpace(inc.Events); len(ev) > 0 {
+				text += "\n\nEvents:\n" + ev
+			}
 		}
-		if logs := strings.TrimSpace(inc.Logs); len(logs) > 0 {
-			text += "\n\nLogs:\n" + logs
+		if inc.IncludeLogs {
+			if logs := strings.TrimSpace(inc.Logs); len(logs) > 0 {
+				text += "\n\nLogs:\n" + logs
+			}
 		}
 		return text
 	case model.ActionUpdate:
@@ -429,11 +465,15 @@ func formatIncidentText(inc *model.Incident, action model.IncidentAction) string
 			"🔄 Update: %s | Count: %d | Duration: %s | Affected: %d",
 			inc.Name, inc.Count, duration, resources,
 		)
-		if ev := strings.TrimSpace(inc.Events); len(ev) > 0 {
-			text += "\n\nEvents:\n" + ev
+		if inc.IncludeEvents {
+			if ev := strings.TrimSpace(inc.Events); len(ev) > 0 {
+				text += "\n\nEvents:\n" + ev
+			}
 		}
-		if logs := strings.TrimSpace(inc.Logs); len(logs) > 0 {
-			text += "\n\nLogs:\n" + logs
+		if inc.IncludeLogs {
+			if logs := strings.TrimSpace(inc.Logs); len(logs) > 0 {
+				text += "\n\nLogs:\n" + logs
+			}
 		}
 		return text
 	case model.ActionStale:

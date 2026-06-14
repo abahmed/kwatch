@@ -220,11 +220,13 @@ func TestBuildRequestBodyTeams(t *testing.T) {
 	teams := NewTeams(configMap, appCfg)
 
 	e := &event.Event{
-		PodName:   "test-pod",
-		Namespace: "test-namespace",
-		Reason:    "test-reason",
-		Logs:      "test-logs",
-		Events:    "test-events",
+		PodName:       "test-pod",
+		Namespace:     "test-namespace",
+		Reason:        "test-reason",
+		Logs:          "test-logs",
+		Events:        "test-events",
+		IncludeEvents: true,
+		IncludeLogs:   true,
 	}
 
 	payload := teams.buildRequestBodyTeams(e)
@@ -268,6 +270,25 @@ func TestNewTeamsWithCustomRetrySettings(t *testing.T) {
 	assert.Equal(t, 10, teams.retryDelay)
 }
 
+func TestBuildRequestBodyTeamsGolden(t *testing.T) {
+	configMap := map[string]interface{}{
+		"webhook": "http://example.com",
+	}
+	appCfg := &config.App{ClusterName: "production"}
+	teams := NewTeams(configMap, appCfg)
+
+	e := &event.Event{
+		PodName:   "my-pod",
+		Namespace: "my-namespace",
+		Reason:    "OOMKilled",
+	}
+
+	payload := string(teams.buildRequestBodyTeams(e))
+	assert.Contains(t, payload, "my-pod")
+	assert.Contains(t, payload, "my-namespace")
+	assert.Contains(t, payload, "OOMKilled")
+}
+
 func TestBuildRequestBodyTeamsDefaultTitle(t *testing.T) {
 	configMap := map[string]interface{}{
 		"webhook": "http://example.com",
@@ -276,12 +297,14 @@ func TestBuildRequestBodyTeamsDefaultTitle(t *testing.T) {
 	teams := NewTeams(configMap, appCfg)
 
 	e := &event.Event{
-		PodName:   "test-pod",
-		Namespace: "test-namespace",
-		Reason:    "test-reason",
-		Logs:      "test-logs",
-		Events:    "test-events",
-		NodeName:  "test-node",
+		PodName:       "test-pod",
+		Namespace:     "test-namespace",
+		Reason:        "test-reason",
+		Logs:          "test-logs",
+		Events:        "test-events",
+		NodeName:      "test-node",
+		IncludeEvents: true,
+		IncludeLogs:   true,
 	}
 
 	payload := teams.buildRequestBodyTeams(e)
@@ -301,11 +324,13 @@ func TestSendEventWithCustomTitle(t *testing.T) {
 	teams := NewTeams(configMap, appCfg)
 
 	e := &event.Event{
-		PodName:   "test-pod",
-		Namespace: "test-namespace",
-		Reason:    "test-reason",
-		Logs:      "test-logs",
-		Events:    "test-events",
+		PodName:       "test-pod",
+		Namespace:     "test-namespace",
+		Reason:        "test-reason",
+		Logs:          "test-logs",
+		Events:        "test-events",
+		IncludeEvents: true,
+		IncludeLogs:   true,
 	}
 
 	server := httptest.NewServer(

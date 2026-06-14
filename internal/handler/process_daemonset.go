@@ -52,7 +52,7 @@ func (h *handler) ProcessDaemonSetObject(ds *appsv1.DaemonSet, deleted bool) err
 	}
 
 	if ds.Status.DesiredNumberScheduled > 0 && ds.Status.NumberUnavailable > 0 {
-		ev := event.Event{
+		ev := h.eventWithConfig(event.Event{
 			Resource:  "daemonset",
 			PodName:   ds.Name,
 			Namespace: ds.Namespace,
@@ -61,7 +61,7 @@ func (h *handler) ProcessDaemonSetObject(ds *appsv1.DaemonSet, deleted bool) err
 			Logs:      "",
 			Labels:    ds.Labels,
 			Hint:      availabilityHint(ds),
-		}
+		})
 		inc, action := h.correlator.Process(ev, ds.Namespace+"/"+ds.Name, nil)
 		if action != model.ActionSkip {
 			h.alertManager.NotifyIncident(inc, action)

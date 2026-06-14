@@ -58,7 +58,7 @@ func (h *handler) ProcessHorizontalPodAutoscalerObject(hpa *autoscalingv2.Horizo
 		return nil
 	}
 
-	ev := event.Event{
+	ev := h.eventWithConfig(event.Event{
 		Resource:  "horizontalpodautoscaler",
 		PodName:   hpa.Name,
 		Namespace: hpa.Namespace,
@@ -69,7 +69,7 @@ func (h *handler) ProcessHorizontalPodAutoscalerObject(hpa *autoscalingv2.Horizo
 		Hint: fmt.Sprintf("pinned at max=%d (desired=%d current=%d) for %s — raise maxReplicas or investigate load",
 			hpa.Spec.MaxReplicas, hpa.Status.DesiredReplicas,
 			hpa.Status.CurrentReplicas, time.Since(first).Round(time.Minute)),
-	}
+	})
 	inc, action := h.correlator.Process(ev, key, nil)
 	if action != model.ActionSkip {
 		h.alertManager.NotifyIncident(inc, action)

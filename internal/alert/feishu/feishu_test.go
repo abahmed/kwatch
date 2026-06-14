@@ -51,6 +51,8 @@ func TestBuildRequestBodyFeiShu(t *testing.T) {
 		Reason:        "OOMKILLED",
 		Logs:          "test\ntestlogs",
 		Events:        "test",
+		IncludeEvents: true,
+		IncludeLogs:   true,
 	}
 	formattedMsg := ev.FormatMarkdown(c.appCfg.ClusterName, "", "")
 

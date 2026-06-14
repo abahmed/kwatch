@@ -1,6 +1,7 @@
 package discord
 
 import (
+	"fmt"
 	"strings"
 
 	"github.com/abahmed/kwatch/internal/config"
@@ -107,29 +108,45 @@ func (s *Discord) SendEvent(ev *event.Event) error {
 	}
 
 	// add events part if it exists
-	events := strings.TrimSpace(ev.Events)
-	if len(events) > 0 {
-		for _, chunk := range chunks(events, chunkSize) {
-			fields = append(fields, &discordgo.MessageEmbedField{
-				Name:  ":mag: Events",
-				Value: "```\n" + chunk + "```",
-			})
+	if ev.IncludeEvents {
+		events := strings.TrimSpace(ev.Events)
+		if len(events) > 0 {
+			for _, chunk := range chunks(events, chunkSize) {
+				fields = append(fields, &discordgo.MessageEmbedField{
+					Name:  ":mag: Events",
+					Value: "```\n" + chunk + "```",
+				})
+			}
 		}
 	}
 
 	// add logs part if it exists
-	logs := strings.TrimSpace(ev.Logs)
-	if len(logs) > 0 {
-		logData := logs
+	if ev.IncludeLogs {
+		logs := strings.TrimSpace(ev.Logs)
+		if len(logs) > 0 {
+			logData := logs
 
-		if len(logData) > 1024 {
-			logData = logs[:1024]
+			const maxFields = 25
+			var totalFields int
+			for _, chunk := range chunks(logData, chunkSize) {
+				name := ":memo: Logs"
+				totalFields++
+				if len(chunks(logData, chunkSize)) > 1 {
+					name = fmt.Sprintf(":memo: Logs (%d/%d)", totalFields, len(chunks(logData, chunkSize)))
+				}
+				if totalFields > maxFields {
+					fields = append(fields, &discordgo.MessageEmbedField{
+						Name:  ":memo: Logs",
+						Value: fmt.Sprintf("… (truncated, %d more lines)", (len(logData)-len(chunk))/80),
+					})
+					break
+				}
+				fields = append(fields, &discordgo.MessageEmbedField{
+					Name:  name,
+					Value: "```\n" + chunk + "```",
+				})
+			}
 		}
-
-		fields = append(fields, &discordgo.MessageEmbedField{
-			Name:  ":memo: Logs",
-			Value: "```\n" + logData + "```",
-		})
 	}
 
 	// use custom title if it's provided, otherwise use default

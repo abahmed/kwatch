@@ -69,6 +69,9 @@ func (u *Upgrader) SetStateManager(stateMgr VersionTracker) {
 func (u *Upgrader) CheckUpdates(ctx context.Context) {
 	if u.config.DisableUpdateCheck ||
 		version.Short() == "dev" {
+		if u.config.DisableUpdateCheck {
+			klog.Infof("update check disabled")
+		}
 		return
 	}
 

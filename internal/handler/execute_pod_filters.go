@@ -79,7 +79,7 @@ func (h *handler) executePodFilters(ctx *filter.Context) {
 		ownerKind = ctx.Owner.Kind
 	}
 
-	ev := event.Event{
+	ev := h.eventWithConfig(event.Event{
 		PodName:       ctx.Pod.Name,
 		ContainerName: ".",
 		Namespace:     ctx.Pod.Namespace,
@@ -90,7 +90,7 @@ func (h *handler) executePodFilters(ctx *filter.Context) {
 		Labels:        ctx.Pod.Labels,
 		OwnerKind:     ownerKind,
 		Hint:          enricher.HintForReason(ctx.PodReason),
-	}
+	})
 
 	cs := &model.ContainerState{
 		Reason: ctx.PodReason,
