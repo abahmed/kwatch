@@ -269,6 +269,7 @@ func (s *Slack) sendIncidentWithToken(inc *model.Incident, action model.Incident
 	case model.ActionResolved:
 		s.mu.Lock()
 		threadTS, _ := s.threadMap[key]
+		delete(s.threadMap, key)
 		s.mu.Unlock()
 		blocks := buildIncidentResolvedBlocks(inc)
 		_, err := post(blocks, threadTS)

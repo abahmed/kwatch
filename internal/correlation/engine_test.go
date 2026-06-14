@@ -280,7 +280,7 @@ func TestClearSeenUnsuppresses(t *testing.T) {
 	incidentKey := BuildKey("default", "deploy-1", "CrashLoopBackOff", "")
 
 	e.SetSeen(map[string]map[string]int64{incidentKey: {"pod-1": time.Now().Unix()}})
-	e.ClearSeen(incidentKey)
+	e.ClearSeenForPod("default", "pod-1")
 
 	ev := event.Event{
 		PodName:   "pod-1",

@@ -163,15 +163,6 @@ func (e *Engine) isBaselined(key, podName string) bool {
 	return false
 }
 
-func (e *Engine) ClearSeen(key string) {
-	e.mu.Lock()
-	defer e.mu.Unlock()
-	delete(e.seen, key)
-	if hook := e.config.OnBaselineChange; hook != nil {
-		hook(cloneBaseline(e.seen))
-	}
-}
-
 // ClearSeenForPod removes all baseline entries for the given pod.
 func (e *Engine) ClearSeenForPod(namespace, podName string) {
 	e.mu.Lock()
@@ -260,6 +251,17 @@ func (e *Engine) findNodeIncident(nodeName string) *model.Incident {
 		}
 	}
 	return nil
+}
+
+// refreshNodeInhibition clears the node inhibition flag if no non-resolved
+// node incidents remain for this node. Caller must hold e.mu.
+func (e *Engine) refreshNodeInhibition(nodeName string) {
+	for _, inc := range e.state {
+		if inc.Resource == "node" && inc.Name == nodeName && inc.State != model.StateResolved {
+			return
+		}
+	}
+	delete(e.activeNodeIncidents, nodeName)
 }
 
 func (e *Engine) GetLastContainerState(namespace, podName, containerName string) *model.ContainerState {
@@ -438,6 +440,9 @@ func (e *Engine) MarkResolved(key string) {
 		return
 	}
 	inc.State = model.StateResolved
+	if inc.Resource == "node" {
+		e.refreshNodeInhibition(inc.Name)
+	}
 	delete(e.seen, key)
 	delete(e.renotifyCount, key)
 	delete(e.lastRenotify, key)
@@ -628,6 +633,9 @@ func (e *Engine) checkLifecycle() {
 	for key, inc := range e.state {
 		if inc.State == model.StatePendingResolve && !inc.ResolveAt.IsZero() && now.After(inc.ResolveAt) {
 			inc.State = model.StateResolved
+			if inc.Resource == "node" {
+				e.refreshNodeInhibition(inc.Name)
+			}
 			delete(e.seen, key)
 			delete(e.renotifyCount, key)
 			delete(e.lastRenotify, key)
