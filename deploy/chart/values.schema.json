@@ -232,6 +232,7 @@
               "staleThreshold": { "type": "integer" },
               "lifecycleInterval": { "type": "integer" },
               "startupQuiet": { "type": "integer" },
+              "resolveHoldDown": { "type": "integer" },
               "escalation": {
                 "type": "object",
                 "properties": {

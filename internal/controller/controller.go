@@ -831,23 +831,50 @@ func (c *Controller) buildSeenSet() {
 	}
 	now := time.Now()
 	baseline := make(map[string]int64)
+
 	for _, pod := range pods {
+		// skip healthy running / succeeded pods
 		if pod.Status.Phase == corev1.PodRunning || pod.Status.Phase == corev1.PodSucceeded {
 			continue
 		}
-		if pod.Status.Phase == corev1.PodPending || pod.Status.Phase == corev1.PodFailed {
-			addPodKeys(baseline, pod, c.rsLister, c.dsLister, c.ssLister, now)
+
+		owner := correlation.ResolveOwnerName(pod, c.rsLister, c.dsLister, c.ssLister)
+		if owner == "" {
 			continue
 		}
-		for _, cs := range pod.Status.ContainerStatuses {
-			if cs.State.Waiting != nil && cs.State.Waiting.Reason != "ContainerCreating" && cs.State.Waiting.Reason != "PodInitializing" {
-				addContainerKeys(baseline, pod, cs, c.rsLister, c.dsLister, c.ssLister, now)
-				break
+
+		// Pod-level reason for pending / failed
+		if pod.Status.Phase == corev1.PodPending || pod.Status.Phase == corev1.PodFailed {
+			reason := string(pod.Status.Phase)
+			if len(pod.Status.Conditions) > 0 {
+				if r := pod.Status.Conditions[0].Reason; r != "" {
+					reason = r
+				}
 			}
-			if cs.State.Terminated != nil && cs.State.Terminated.ExitCode != 0 && cs.State.Terminated.Reason != "Completed" {
-				addContainerKeys(baseline, pod, cs, c.rsLister, c.dsLister, c.ssLister, now)
-				break
+			key := correlation.BuildKey(pod.Namespace, owner, reason, ".")
+			baseline[key] = now.Unix()
+		}
+
+		// Container-level reasons — regular + init containers
+		allStatuses := append(pod.Status.ContainerStatuses, pod.Status.InitContainerStatuses...)
+		for _, cs := range allStatuses {
+			var reason string
+			if cs.State.Waiting != nil {
+				if cs.State.Waiting.Reason == "ContainerCreating" || cs.State.Waiting.Reason == "PodInitializing" {
+					continue
+				}
+				reason = cs.State.Waiting.Reason
+			} else if cs.State.Terminated != nil {
+				if cs.State.Terminated.ExitCode == 0 || cs.State.Terminated.Reason == "Completed" {
+					continue
+				}
+				reason = cs.State.Terminated.Reason
 			}
+			if reason == "" {
+				continue
+			}
+			key := correlation.BuildKey(pod.Namespace, owner, reason, cs.Name)
+			baseline[key] = now.Unix()
 		}
 	}
 
@@ -855,40 +882,6 @@ func (c *Controller) buildSeenSet() {
 		klog.V(4).InfoS("Seen set built", "count", len(baseline))
 		c.handler.SetSeen(baseline)
 	}
-}
-
-func addPodKeys(baseline map[string]int64, pod *corev1.Pod, rsLister appsv1lister.ReplicaSetLister, dsLister appsv1lister.DaemonSetLister, ssLister appsv1lister.StatefulSetLister, now time.Time) {
-	owner := correlation.ResolveOwnerName(pod, rsLister, dsLister, ssLister)
-	if owner == "" {
-		return
-	}
-	reason := string(pod.Status.Phase)
-	if len(pod.Status.Conditions) > 0 {
-		reason = pod.Status.Conditions[0].Reason
-		if reason == "" {
-			reason = string(pod.Status.Phase)
-		}
-	}
-	key := correlation.BuildKey(pod.Namespace, owner, reason, ".")
-	baseline[key] = now.Unix()
-}
-
-func addContainerKeys(baseline map[string]int64, pod *corev1.Pod, cs corev1.ContainerStatus, rsLister appsv1lister.ReplicaSetLister, dsLister appsv1lister.DaemonSetLister, ssLister appsv1lister.StatefulSetLister, now time.Time) {
-	owner := correlation.ResolveOwnerName(pod, rsLister, dsLister, ssLister)
-	if owner == "" {
-		return
-	}
-	reason := ""
-	if cs.State.Waiting != nil {
-		reason = cs.State.Waiting.Reason
-	} else if cs.State.Terminated != nil {
-		reason = cs.State.Terminated.Reason
-	}
-	if reason == "" {
-		return
-	}
-	key := correlation.BuildKey(pod.Namespace, owner, reason, cs.Name)
-	baseline[key] = now.Unix()
 }
 
 func (c *Controller) syncPod(key string) error {

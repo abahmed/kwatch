@@ -52,6 +52,7 @@ data:
       staleThreshold: 15
       lifecycleInterval: 1
       startupQuiet: 30
+      # resolveHoldDown: 30    # Seconds to wait before resolving (flap dampening)
 
     # ── Monitors ──────────────────────────────────────────
     nodeMonitor:

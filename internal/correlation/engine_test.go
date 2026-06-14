@@ -10,6 +10,7 @@ import (
 	"github.com/abahmed/kwatch/internal/event"
 	"github.com/abahmed/kwatch/internal/model"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 func newTestEngine() *Engine {
@@ -363,7 +364,7 @@ func TestRemovePodClearsSeen(t *testing.T) {
 	}
 
 	_, action = e.Process(ev2, "deploy-1", nil)
-	assert.Equal(t, model.ActionUpdate, action)
+	assert.Equal(t, model.ActionCreate, action)
 }
 
 func TestCheckLifecycleStale(t *testing.T) {
@@ -790,4 +791,158 @@ func TestMarkResolvedNonexistentKeyNoOp(t *testing.T) {
 	})
 	e.MarkResolved("nonexistent")
 	assert.Equal(t, 0, resolves)
+}
+
+func TestResolveHoldDownDelaysResolve(t *testing.T) {
+	var resolves int
+	e := NewEngine(Config{
+		Window:          10 * time.Minute,
+		Cooldown:        5 * time.Minute,
+		ResolveHoldDown: 10 * time.Minute,
+		LifecycleHook: func(inc *model.Incident, action model.IncidentAction) {
+			if action == model.ActionResolved {
+				resolves++
+			}
+		},
+	})
+	e.config.StartupQuiet = 0
+
+	ev := event.Event{Namespace: "default", PodName: "pod-1", Reason: "CrashLoopBackOff"}
+	inc, action := e.Process(ev, "deploy-1", nil)
+	assert.Equal(t, model.ActionCreate, action)
+
+	// MarkResolved should NOT fire the hook immediately
+	e.MarkResolved(inc.Key)
+	assert.Equal(t, 0, resolves)
+	assert.Equal(t, model.StatePendingResolve, inc.State)
+	assert.False(t, inc.ResolveAt.IsZero())
+}
+
+func TestResolveHoldDownRevivesOnRecurrence(t *testing.T) {
+	var resolves int
+	e := NewEngine(Config{
+		Window:          10 * time.Minute,
+		Cooldown:        5 * time.Minute,
+		ResolveHoldDown: 10 * time.Minute,
+		LifecycleHook: func(inc *model.Incident, action model.IncidentAction) {
+			if action == model.ActionResolved {
+				resolves++
+			}
+		},
+	})
+	e.config.StartupQuiet = 0
+
+	ev := event.Event{Namespace: "default", PodName: "pod-1", Reason: "CrashLoopBackOff"}
+	inc, action := e.Process(ev, "deploy-1", nil)
+	assert.Equal(t, model.ActionCreate, action)
+
+	// Pending resolve
+	e.MarkResolved(inc.Key)
+	assert.Equal(t, 0, resolves)
+	assert.Equal(t, model.StatePendingResolve, inc.State)
+
+	// Recurrence — should revive (update) and cancel the pending resolve
+	inc2, action := e.Process(ev, "deploy-1", nil)
+	assert.Equal(t, model.ActionUpdate, action)
+	assert.Equal(t, model.StateActive, inc2.State)
+	assert.True(t, inc2.ResolveAt.IsZero())
+	assert.Equal(t, 0, resolves, "hook must not fire")
+}
+
+func TestProcessResolvedIncidentCreatesFresh(t *testing.T) {
+	e := newTestEngine()
+	e.config.StartupQuiet = 0
+
+	ev := event.Event{Namespace: "default", PodName: "pod-1", Reason: "CrashLoopBackOff"}
+	inc, action := e.Process(ev, "deploy-1", nil)
+	assert.Equal(t, model.ActionCreate, action)
+	key := inc.Key
+
+	// Immediately resolve
+	e.MarkResolved(key)
+	assert.Equal(t, model.StateResolved, inc.State)
+
+	// Process again — should create fresh (not update)
+	inc2, action := e.Process(ev, "deploy-1", nil)
+	assert.Equal(t, model.ActionCreate, action)
+	assert.NotEqual(t, inc, inc2, "must be a new incident object")
+	assert.Equal(t, key, inc2.Key)
+}
+
+func TestIncidentKeyMatchesProcess(t *testing.T) {
+	tests := []struct {
+		name    string
+		ev      event.Event
+		owner   string
+		cs      *model.ContainerState
+	}{
+		{
+			name:    "CrashLoopBackOff with cs",
+			ev:      event.Event{Namespace: "default", Reason: "CrashLoopBackOff"},
+			owner:   "deploy-1",
+			cs:      &model.ContainerState{RestartCount: 3},
+		},
+		{
+			name:    "CrashLoopBackOff high frequency",
+			ev:      event.Event{Namespace: "default", Reason: "CrashLoopBackOff"},
+			owner:   "deploy-1",
+			cs:      &model.ContainerState{RestartCount: 10},
+		},
+		{
+			name:    "normalized reason",
+			ev:      event.Event{Namespace: "default", Reason: "CrashLoopBackOff 42"},
+			owner:   "deploy-1",
+			cs:      &model.ContainerState{RestartCount: 1},
+		},
+		{
+			name:    "empty container",
+			ev:      event.Event{Namespace: "default", Reason: "OOMKilled"},
+			owner:   "deploy-1",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			key1 := IncidentKey(tt.ev, tt.owner, tt.cs)
+
+			e := newTestEngine()
+			e.config.StartupQuiet = 0
+			inc, _ := e.Process(tt.ev, tt.owner, tt.cs)
+			require.NotNil(t, inc, "Process must produce an incident")
+			assert.Equal(t, key1, inc.Key, "IncidentKey must match Process key")
+		})
+	}
+}
+
+func TestCheckLifecycleFinalizesPendingResolve(t *testing.T) {
+	var resolved int
+	var baselineChanged bool
+	e := NewEngine(Config{
+		Window:          10 * time.Minute,
+		Cooldown:        5 * time.Minute,
+		ResolveHoldDown: 1 * time.Millisecond,
+		LifecycleHook: func(inc *model.Incident, action model.IncidentAction) {
+			if action == model.ActionResolved {
+				resolved++
+			}
+		},
+		OnBaselineChange: func(_ map[string]int64) {
+			baselineChanged = true
+		},
+	})
+	e.config.StartupQuiet = 0
+
+	ev := event.Event{Namespace: "default", PodName: "pod-1", Reason: "CrashLoopBackOff"}
+	inc, action := e.Process(ev, "deploy-1", nil)
+	assert.Equal(t, model.ActionCreate, action)
+
+	e.MarkResolved(inc.Key)
+	assert.Equal(t, model.StatePendingResolve, inc.State)
+
+	time.Sleep(2 * time.Millisecond)
+	e.checkLifecycle()
+
+	assert.Equal(t, 1, resolved)
+	assert.True(t, baselineChanged, "OnBaselineChange must fire when pending resolve finalizes")
+	assert.Equal(t, model.StateResolved, inc.State)
 }

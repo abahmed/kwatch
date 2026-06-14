@@ -50,6 +50,7 @@ const (
 	StateActive IncidentState = iota
 	StateStale
 	StateResolved
+	StatePendingResolve
 )
 
 type IncidentView struct {
@@ -86,4 +87,5 @@ type Incident struct {
 	LastContainerState *ContainerState
 	Severity           string
 	SuppressedPods     int
+	ResolveAt          time.Time
 }

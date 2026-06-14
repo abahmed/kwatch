@@ -366,6 +366,11 @@ type Correlation struct {
 	// pre-existing breakage after a restart. Default 30.
 	StartupQuiet int `yaml:"startupQuiet"`
 
+	// ResolveHoldDown is the seconds to wait after a condition clears before
+	// emitting "resolved". If it recurs within this window the incident stays
+	// open (flap dampening). Default 0 = resolve immediately.
+	ResolveHoldDown int `yaml:"resolveHoldDown"`
+
 	// Escalation configures restart-count-based severity escalation.
 	Escalation EscalationConfig `yaml:"escalation"`
 

@@ -42,12 +42,25 @@ type Config struct {
 	RenotifyInterval          time.Duration
 	RenotifyIntervalBySeverity map[string]time.Duration
 	RenotifyMaxPerIncident     int
+	ResolveHoldDown            time.Duration
 }
 
 // BuildKey constructs the incident key used for dedup, grouping, and baseline.
 func BuildKey(namespace, owner, reason, container string) string {
 	return namespace + ":" + owner + ":" + reason + ":" + container
 }
+
+// IncidentKey derives a dedup key from an event, mirroring the exact normalisation
+// chain inside Process. It returns the same key that Process would compute.
+func IncidentKey(ev event.Event, owner string, cs *model.ContainerState) string {
+	r := normalizeReason(ev.Reason)
+	if r == "CrashLoopBackOff" && cs != nil && cs.RestartCount > 5 {
+		r = "CrashLoopHighFrequency"
+	}
+	return BuildKey(ev.Namespace, owner, r, ev.ContainerName)
+}
+
+
 
 // crossedTier returns the highest index of a tier whose threshold was
 // crossed when moving from prev to new restarts, or -1.
@@ -254,13 +267,7 @@ func (e *Engine) Process(ev event.Event, owner string, cs *model.ContainerState)
 	e.mu.Lock()
 	defer e.mu.Unlock()
 
-	r := normalizeReason(ev.Reason)
-
-	if r == "CrashLoopBackOff" && cs != nil && cs.RestartCount > 5 {
-		r = "CrashLoopHighFrequency"
-	}
-
-	key := BuildKey(ev.Namespace, owner, r, ev.ContainerName)
+	key := IncidentKey(ev, owner, cs)
 
 	if e.isBaselined(key) {
 		return nil, model.ActionSkip
@@ -288,6 +295,29 @@ func (e *Engine) Process(ev event.Event, owner string, cs *model.ContainerState)
 	now := time.Now()
 
 	if inc, ok := e.state[key]; ok {
+		// Already resolved — re-create as fresh incident
+		if inc.State == model.StateResolved {
+			return e.newIncident(ev, owner, cs, key, res, now), model.ActionCreate
+		}
+
+		// Pending resolve — revoke the scheduled resolve
+		if inc.State == model.StatePendingResolve {
+			inc.State = model.StateActive
+			inc.ResolveAt = time.Time{}
+			inc.Count++
+			inc.LastSeen = now
+			inc.LastUpdate = now
+			if ev.PodName != "" {
+				inc.Resources[ev.PodName] = true
+			}
+			inc.LastContainerState = cs
+			if cs != nil {
+				inc.RestartCount = int(cs.RestartCount)
+			}
+			e.config.Enricher.Enrich(&ev, inc)
+			return inc, model.ActionUpdate
+		}
+
 		if e.config.EscalationEnabled && cs != nil {
 			prev := inc.RestartCount
 			cur := int(cs.RestartCount)
@@ -325,27 +355,7 @@ func (e *Engine) Process(ev event.Event, owner string, cs *model.ContainerState)
 		return inc, model.ActionUpdate
 	}
 
-	inc := &model.Incident{
-		Key:       key,
-		Reason:    ev.Reason,
-		Namespace: ev.Namespace,
-		Resource:  res,
-		Name:      owner,
-		Count:     1,
-		FirstSeen: now,
-		LastSeen:  now,
-		LastUpdate: now,
-		State:     model.StateActive,
-		Resources: map[string]bool{},
-	}
-	if ev.PodName != "" {
-		inc.Resources[ev.PodName] = true
-	}
-	inc.LastContainerState = cs
-	if cs != nil {
-		inc.RestartCount = int(cs.RestartCount)
-	}
-	e.config.Enricher.Enrich(&ev, inc)
+	inc := e.newIncident(ev, owner, cs, key, res, now)
 	e.state[key] = inc
 
 	if e.config.StormEnabled {
@@ -371,10 +381,41 @@ func (e *Engine) Process(ev event.Event, owner string, cs *model.ContainerState)
 	return inc, model.ActionCreate
 }
 
+func (e *Engine) newIncident(ev event.Event, owner string, cs *model.ContainerState, key, res string, now time.Time) *model.Incident {
+	inc := &model.Incident{
+		Key:       key,
+		Reason:    ev.Reason,
+		Namespace: ev.Namespace,
+		Resource:  res,
+		Name:      owner,
+		Count:     1,
+		FirstSeen: now,
+		LastSeen:  now,
+		LastUpdate: now,
+		State:     model.StateActive,
+		Resources: map[string]bool{},
+	}
+	if ev.PodName != "" {
+		inc.Resources[ev.PodName] = true
+	}
+	inc.LastContainerState = cs
+	if cs != nil {
+		inc.RestartCount = int(cs.RestartCount)
+	}
+	e.config.Enricher.Enrich(&ev, inc)
+	return inc
+}
+
 func (e *Engine) MarkResolved(key string) {
 	e.mu.Lock()
 	inc, ok := e.state[key]
-	if !ok || inc.State == model.StateResolved || inc.State == model.StateStale {
+	if !ok || inc.State == model.StateResolved || inc.State == model.StateStale || inc.State == model.StatePendingResolve {
+		e.mu.Unlock()
+		return
+	}
+	if e.config.ResolveHoldDown > 0 {
+		inc.State = model.StatePendingResolve
+		inc.ResolveAt = time.Now().Add(e.config.ResolveHoldDown)
 		e.mu.Unlock()
 		return
 	}
@@ -404,6 +445,7 @@ func (e *Engine) RemovePod(namespace, podName string) {
 	var baselineChanged bool
 
 	e.mu.Lock()
+	now := time.Now()
 	for key, inc := range e.state {
 		if inc.Namespace != namespace {
 			continue
@@ -411,8 +453,16 @@ func (e *Engine) RemovePod(namespace, podName string) {
 		if !inc.Resources[podName] {
 			continue
 		}
-			delete(inc.Resources, podName)
+		delete(inc.Resources, podName)
 		if len(inc.Resources) == 0 && inc.State != model.StateResolved && inc.State != model.StateStale {
+			if inc.State == model.StatePendingResolve {
+				continue
+			}
+			if e.config.ResolveHoldDown > 0 {
+				inc.State = model.StatePendingResolve
+				inc.ResolveAt = now.Add(e.config.ResolveHoldDown)
+				continue
+			}
 			inc.State = model.StateResolved
 			delete(e.seen, key)
 			delete(e.renotifyCount, key)
@@ -447,11 +497,20 @@ func (e *Engine) ResolveByResource(resource, name string) {
 	var baselineChanged bool
 
 	e.mu.Lock()
+	now := time.Now()
 	if resource == "node" {
 		delete(e.activeNodeIncidents, name)
 	}
 	for key, inc := range e.state {
 		if inc.Resource == resource && inc.Name == name && inc.State != model.StateResolved && inc.State != model.StateStale {
+			if inc.State == model.StatePendingResolve {
+				continue
+			}
+			if e.config.ResolveHoldDown > 0 {
+				inc.State = model.StatePendingResolve
+				inc.ResolveAt = now.Add(e.config.ResolveHoldDown)
+				continue
+			}
 			inc.State = model.StateResolved
 			delete(e.seen, key)
 			delete(e.renotifyCount, key)
@@ -524,6 +583,7 @@ func (e *Engine) checkLifecycle() {
 		action model.IncidentAction
 	}
 	var pending []transition
+	var baselineChanged bool
 
 	e.mu.Lock()
 	now := time.Now()
@@ -533,6 +593,18 @@ func (e *Engine) checkLifecycle() {
 		if inc.State == model.StateActive && now.After(inc.LastUpdate.Add(e.config.StaleThreshold)) {
 			inc.State = model.StateStale
 			pending = append(pending, transition{inc, model.ActionStale})
+		}
+	}
+
+	// pending resolve finalization
+	for key, inc := range e.state {
+		if inc.State == model.StatePendingResolve && !inc.ResolveAt.IsZero() && now.After(inc.ResolveAt) {
+			inc.State = model.StateResolved
+			delete(e.seen, key)
+			delete(e.renotifyCount, key)
+			delete(e.lastRenotify, key)
+			baselineChanged = true
+			pending = append(pending, transition{inc, model.ActionResolved})
 		}
 	}
 
@@ -586,6 +658,14 @@ func (e *Engine) checkLifecycle() {
 	for _, t := range pending {
 		if hook := e.config.LifecycleHook; hook != nil {
 			hook(t.inc, t.action)
+		}
+	}
+	if baselineChanged {
+		if hook := e.config.OnBaselineChange; hook != nil {
+			e.mu.Lock()
+			snapshot := cloneBaseline(e.seen)
+			e.mu.Unlock()
+			hook(snapshot)
 		}
 	}
 }
