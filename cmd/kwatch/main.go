@@ -98,7 +98,7 @@ func main() {
 		startupQuiet = 30
 	}
 
-	baselineCh := make(chan map[string]int64, 1)
+	baselineCh := make(chan map[string]map[string]int64, 1)
 	go startBaselineSaver(ctx, stateMgr, baselineCh, 0)
 
 	correlator := correlation.NewEngine(correlation.Config{
@@ -125,7 +125,7 @@ func main() {
 				alertManager.NotifyIncident(inc, action)
 			}
 		},
-		OnBaselineChange: func(b map[string]int64) {
+		OnBaselineChange: func(b map[string]map[string]int64) {
 			select {
 			case baselineCh <- b:
 			default:
@@ -298,11 +298,11 @@ func runReplay() {
 // startBaselineSaver coalesces baseline writes: at most one ConfigMap write
 // every interval. The latest snapshot always wins. Use 0 for the default
 // interval (10 seconds).
-func startBaselineSaver(ctx context.Context, stateMgr interface{ SaveBaseline(context.Context, map[string]int64) error }, ch <-chan map[string]int64, interval time.Duration) {
+func startBaselineSaver(ctx context.Context, stateMgr interface{ SaveBaseline(context.Context, map[string]map[string]int64) error }, ch <-chan map[string]map[string]int64, interval time.Duration) {
 	if interval <= 0 {
 		interval = 10 * time.Second
 	}
-	var pending map[string]int64
+	var pending map[string]map[string]int64
 	var timer *time.Timer
 	var timerC <-chan time.Time
 	for {

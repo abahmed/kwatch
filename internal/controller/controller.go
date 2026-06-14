@@ -7,7 +7,9 @@ import (
 
 	"github.com/abahmed/kwatch/internal/config"
 	"github.com/abahmed/kwatch/internal/correlation"
+	"github.com/abahmed/kwatch/internal/event"
 	"github.com/abahmed/kwatch/internal/handler"
+	"github.com/abahmed/kwatch/internal/model"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/labels"
@@ -830,51 +832,68 @@ func (c *Controller) buildSeenSet() {
 		return
 	}
 	now := time.Now()
-	baseline := make(map[string]int64)
+	baseline := make(map[string]map[string]int64)
+
+	total := 0
+	const maxBaseline = 2000
+	add := func(key, pod string) {
+		if total >= maxBaseline {
+			return
+		}
+		if baseline[key] == nil {
+			baseline[key] = map[string]int64{}
+		}
+		if _, exists := baseline[key][pod]; !exists {
+			total++
+		}
+		baseline[key][pod] = now.Unix()
+	}
 
 	for _, pod := range pods {
-		// skip healthy running / succeeded pods
 		if pod.Status.Phase == corev1.PodRunning || pod.Status.Phase == corev1.PodSucceeded {
 			continue
 		}
-
 		owner := correlation.ResolveOwnerName(pod, c.rsLister, c.dsLister, c.ssLister)
 		if owner == "" {
 			continue
 		}
 
-		// Pod-level reason for pending / failed
-		if pod.Status.Phase == corev1.PodPending || pod.Status.Phase == corev1.PodFailed {
-			reason := string(pod.Status.Phase)
-			if len(pod.Status.Conditions) > 0 {
-				if r := pod.Status.Conditions[0].Reason; r != "" {
-					reason = r
-				}
-			}
-			key := correlation.BuildKey(pod.Namespace, owner, reason, ".")
-			baseline[key] = now.Unix()
-		}
+		statuses := make([]corev1.ContainerStatus, 0,
+			len(pod.Status.ContainerStatuses)+len(pod.Status.InitContainerStatuses))
+		statuses = append(statuses, pod.Status.ContainerStatuses...)
+		statuses = append(statuses, pod.Status.InitContainerStatuses...)
 
-		// Container-level reasons — regular + init containers
-		allStatuses := append(pod.Status.ContainerStatuses, pod.Status.InitContainerStatuses...)
-		for _, cs := range allStatuses {
+		hadContainerIssue := false
+		for _, cs := range statuses {
 			var reason string
-			if cs.State.Waiting != nil {
-				if cs.State.Waiting.Reason == "ContainerCreating" || cs.State.Waiting.Reason == "PodInitializing" {
+			if w := cs.State.Waiting; w != nil {
+				if w.Reason == "ContainerCreating" || w.Reason == "PodInitializing" {
 					continue
 				}
-				reason = cs.State.Waiting.Reason
-			} else if cs.State.Terminated != nil {
-				if cs.State.Terminated.ExitCode == 0 || cs.State.Terminated.Reason == "Completed" {
+				reason = w.Reason
+			} else if t := cs.State.Terminated; t != nil {
+				if t.ExitCode == 0 || t.Reason == "Completed" {
 					continue
 				}
-				reason = cs.State.Terminated.Reason
+				reason = t.Reason
 			}
 			if reason == "" {
 				continue
 			}
-			key := correlation.BuildKey(pod.Namespace, owner, reason, cs.Name)
-			baseline[key] = now.Unix()
+			ev := event.Event{Namespace: pod.Namespace, Reason: reason, ContainerName: cs.Name}
+			key := correlation.IncidentKey(ev, owner, &model.ContainerState{RestartCount: cs.RestartCount})
+			add(key, pod.Name)
+			hadContainerIssue = true
+		}
+
+		if !hadContainerIssue {
+			for _, cond := range pod.Status.Conditions {
+				if cond.Type == corev1.PodScheduled && cond.Status == corev1.ConditionFalse {
+					ev := event.Event{Namespace: pod.Namespace, Reason: cond.Reason, ContainerName: "."}
+					add(correlation.IncidentKey(ev, owner, nil), pod.Name)
+					break
+				}
+			}
 		}
 	}
 

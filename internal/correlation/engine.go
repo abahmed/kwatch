@@ -30,8 +30,8 @@ type Config struct {
 	Enricher          enricher.Enricher
 	LifecycleHook     func(inc *model.Incident, action model.IncidentAction)
 	BaselineTTL      time.Duration
-	Baseline         map[string]int64
-	OnBaselineChange  func(baseline map[string]int64)
+	Baseline         map[string]map[string]int64
+	OnBaselineChange  func(baseline map[string]map[string]int64)
 	EscalationEnabled bool
 	EscalationTiers   []int
 	InhibitNodeSuppressesPods bool
@@ -59,8 +59,6 @@ func IncidentKey(ev event.Event, owner string, cs *model.ContainerState) string 
 	}
 	return BuildKey(ev.Namespace, owner, r, ev.ContainerName)
 }
-
-
 
 // crossedTier returns the highest index of a tier whose threshold was
 // crossed when moving from prev to new restarts, or -1.
@@ -93,7 +91,7 @@ type Engine struct {
 	state                map[string]*model.Incident
 	config               Config
 	startedAt            time.Time
-	seen                 map[string]int64
+	seen                 map[string]map[string]int64
 	activeNodeIncidents  map[string]bool
 	recentCreates        []time.Time
 	stormUntil           time.Time
@@ -127,25 +125,35 @@ func NewEngine(cfg Config) *Engine {
 	return e
 }
 
-func (e *Engine) SetSeen(baseline map[string]int64) {
+func (e *Engine) SetSeen(b map[string]map[string]int64) {
 	e.mu.Lock()
 	defer e.mu.Unlock()
 	now := time.Now()
 	ttl := e.config.BaselineTTL
-	e.seen = make(map[string]int64, len(baseline))
-	for k, ts := range baseline {
-		if now.Sub(time.Unix(ts, 0)) < ttl {
-			e.seen[k] = ts
+	e.seen = make(map[string]map[string]int64, len(b))
+	for key, pods := range b {
+		for pod, ts := range pods {
+			if now.Sub(time.Unix(ts, 0)) < ttl {
+				if e.seen[key] == nil {
+					e.seen[key] = map[string]int64{}
+				}
+				e.seen[key][pod] = ts
+			}
 		}
 	}
 }
 
-func (e *Engine) isBaselined(incidentKey string) bool {
-	if ts, ok := e.seen[incidentKey]; ok {
-		if time.Since(time.Unix(ts, 0)) < e.config.BaselineTTL {
-			return true
+func (e *Engine) isBaselined(key, podName string) bool {
+	if pods, ok := e.seen[key]; ok {
+		if ts, ok := pods[podName]; ok {
+			if time.Since(time.Unix(ts, 0)) < e.config.BaselineTTL {
+				return true
+			}
+			delete(pods, podName)
+			if len(pods) == 0 {
+				delete(e.seen, key)
+			}
 		}
-		delete(e.seen, incidentKey)
 	}
 	if e.config.StartupQuiet > 0 && time.Since(e.startedAt) < e.config.StartupQuiet {
 		if len(e.seen) == 0 && len(e.state) == 0 {
@@ -164,39 +172,45 @@ func (e *Engine) ClearSeen(key string) {
 	}
 }
 
-// ClearSeenByPrefix removes all baseline entries whose key starts with
-// prefix (e.g. "ns:owner:"). Returns true if anything was removed.
-func (e *Engine) ClearSeenByPrefix(prefix string) bool {
+// ClearSeenForPod removes all baseline entries for the given pod.
+func (e *Engine) ClearSeenForPod(namespace, podName string) {
 	e.mu.Lock()
 	changed := false
-	for k := range e.seen {
-		if strings.HasPrefix(k, prefix) {
-			delete(e.seen, k)
+	for key, pods := range e.seen {
+		if !strings.HasPrefix(key, namespace+":") {
+			continue
+		}
+		if _, ok := pods[podName]; ok {
+			delete(pods, podName)
 			changed = true
+			if len(pods) == 0 {
+				delete(e.seen, key)
+			}
 		}
 	}
-	var snapshot map[string]int64
+	var snap map[string]map[string]int64
 	if changed {
-		snapshot = cloneBaseline(e.seen)
+		snap = cloneBaseline(e.seen)
 	}
 	e.mu.Unlock()
-	if changed {
-		if hook := e.config.OnBaselineChange; hook != nil {
-			hook(snapshot)
-		}
+	if changed && e.config.OnBaselineChange != nil {
+		e.config.OnBaselineChange(snap)
 	}
-	return changed
 }
 
-func cloneBaseline(src map[string]int64) map[string]int64 {
-	dst := make(map[string]int64, len(src))
-	for k, v := range src {
-		dst[k] = v
+func cloneBaseline(src map[string]map[string]int64) map[string]map[string]int64 {
+	dst := make(map[string]map[string]int64, len(src))
+	for k, pods := range src {
+		m := make(map[string]int64, len(pods))
+		for p, ts := range pods {
+			m[p] = ts
+		}
+		dst[k] = m
 	}
 	return dst
 }
 
-func (e *Engine) BaselineSnapshot() map[string]int64 {
+func (e *Engine) BaselineSnapshot() map[string]map[string]int64 {
 	e.mu.Lock()
 	defer e.mu.Unlock()
 	return cloneBaseline(e.seen)
@@ -269,7 +283,7 @@ func (e *Engine) Process(ev event.Event, owner string, cs *model.ContainerState)
 
 	key := IncidentKey(ev, owner, cs)
 
-	if e.isBaselined(key) {
+	if e.isBaselined(key, ev.PodName) {
 		return nil, model.ActionSkip
 	}
 
@@ -297,16 +311,15 @@ func (e *Engine) Process(ev event.Event, owner string, cs *model.ContainerState)
 	if inc, ok := e.state[key]; ok {
 		// Already resolved — re-create as fresh incident
 		if inc.State == model.StateResolved {
-			return e.newIncident(ev, owner, cs, key, res, now), model.ActionCreate
+			newInc := e.newIncident(ev, owner, cs, key, res, now)
+			e.state[key] = newInc
+			return newInc, model.ActionCreate
 		}
 
 		// Pending resolve — revoke the scheduled resolve
 		if inc.State == model.StatePendingResolve {
 			inc.State = model.StateActive
 			inc.ResolveAt = time.Time{}
-			inc.Count++
-			inc.LastSeen = now
-			inc.LastUpdate = now
 			if ev.PodName != "" {
 				inc.Resources[ev.PodName] = true
 			}
@@ -314,6 +327,12 @@ func (e *Engine) Process(ev event.Event, owner string, cs *model.ContainerState)
 			if cs != nil {
 				inc.RestartCount = int(cs.RestartCount)
 			}
+			if now.Before(inc.LastSeen.Add(e.config.Cooldown)) {
+				return inc, model.ActionSkip
+			}
+			inc.Count++
+			inc.LastSeen = now
+			inc.LastUpdate = now
 			e.config.Enricher.Enrich(&ev, inc)
 			return inc, model.ActionUpdate
 		}
@@ -360,7 +379,6 @@ func (e *Engine) Process(ev event.Event, owner string, cs *model.ContainerState)
 
 	if e.config.StormEnabled {
 		e.recentCreates = append(e.recentCreates, now)
-		// prune outside window
 		cutoff := now.Add(-e.config.StormWindow)
 		kept := 0
 		for _, t := range e.recentCreates {
@@ -469,6 +487,16 @@ func (e *Engine) RemovePod(namespace, podName string) {
 			delete(e.lastRenotify, key)
 			baselineChanged = true
 			pending = append(pending, transition{inc, model.ActionResolved})
+		}
+	}
+	// Release per-pod baseline slots for this pod
+	for key, pods := range e.seen {
+		if _, ok := pods[podName]; ok {
+			delete(pods, podName)
+			baselineChanged = true
+			if len(pods) == 0 {
+				delete(e.seen, key)
+			}
 		}
 	}
 	e.mu.Unlock()
@@ -674,7 +702,7 @@ func (e *Engine) buildDigestSummary() string {
 	if len(e.digestBuf) == 0 {
 		return ""
 	}
-	byReason := make(map[string]map[string]int) // reason → ns → count
+	byReason := make(map[string]map[string]int)
 	for _, d := range e.digestBuf {
 		if byReason[d.reason] == nil {
 			byReason[d.reason] = make(map[string]int)

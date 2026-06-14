@@ -33,7 +33,7 @@ type mockHandler struct {
 	nodeKeys     []string
 	nodeDel      []bool
 	err          error
-	seenBaseline map[string]int64
+	seenBaseline map[string]map[string]int64
 }
 
 func (m *mockHandler) ProcessPod(key string, deleted bool) error {
@@ -100,13 +100,12 @@ func (m *mockHandler) ProcessHorizontalPodAutoscaler(string, bool) error       {
 func (m *mockHandler) ProcessHorizontalPodAutoscalerObject(*autoscalingv2.HorizontalPodAutoscaler, bool) error { return m.err }
 func (m *mockHandler) SetSecretLister(corev1lister.SecretLister)               {}
 func (m *mockHandler) SweepTLSSecrets()                                        {}
-func (m *mockHandler) SetSeen(baseline map[string]int64) {
+func (m *mockHandler) SetSeen(baseline map[string]map[string]int64) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	m.seenBaseline = baseline
 }
-func (m *mockHandler) ClearSeenByOwner(string, string)                        {}
-func (m *mockHandler) ClearSeenByPrefix(string) bool                           { return false }
+func (m *mockHandler) ClearSeenForPod(string, string)                          {}
 
 func TestNewCreatesController(t *testing.T) {
 	assert := assert.New(t)
@@ -854,4 +853,94 @@ func TestBuildSeenSetSkipsNodeConditions(t *testing.T) {
 
 	unwantedKey := correlation.BuildKey("", "worker-1", "MemoryPressure", "")
 	assert.NotContains(baseline, unwantedKey, "buildSeenSet must NOT seed node conditions")
+}
+
+func TestBuildSeenPerPodAndHealthySiblingKeepsBaseline(t *testing.T) {
+	client := fake.NewSimpleClientset(
+		&corev1.Pod{
+			ObjectMeta: metav1.ObjectMeta{Name: "healthy-pod", Namespace: "default",
+				OwnerReferences: []metav1.OwnerReference{{Kind: "Deployment", Name: "dep", APIVersion: "apps/v1"}}},
+			Status: corev1.PodStatus{
+				Phase: corev1.PodRunning,
+				ContainerStatuses: []corev1.ContainerStatus{{
+					Name: "c", State: corev1.ContainerState{Running: &corev1.ContainerStateRunning{}}}},
+			},
+		},
+		&corev1.Pod{
+			ObjectMeta: metav1.ObjectMeta{Name: "failed-pod", Namespace: "default",
+				OwnerReferences: []metav1.OwnerReference{{Kind: "Deployment", Name: "dep", APIVersion: "apps/v1"}}},
+			Status: corev1.PodStatus{
+				Phase: corev1.PodFailed,
+				ContainerStatuses: []corev1.ContainerStatus{{
+					Name: "c", State: corev1.ContainerState{
+						Waiting: &corev1.ContainerStateWaiting{Reason: "Error"}}}},
+			},
+		},
+	)
+	cfg := &config.Config{}
+	h := &mockHandler{}
+
+	ctrl, cleanup := New(client, cfg, h)
+	defer cleanup()
+
+	assert.Eventually(t, func() bool {
+		_, err := ctrl.podLister.Pods("default").Get("healthy-pod")
+		return err == nil
+	}, 5*time.Second, 50*time.Millisecond)
+
+	ctrl.buildSeenSet()
+
+	h.mu.Lock()
+	baseline := h.seenBaseline
+	h.mu.Unlock()
+
+	// The failed pod's key should be baselined
+	key := correlation.BuildKey("default", "dep", "Error", "c")
+	_, ok := baseline[key]["failed-pod"]
+	assert.True(t, ok, "failed pod must be baselined")
+
+	// The healthy pod should NOT be in the baseline
+	assert.NotContains(t, baseline[key], "healthy-pod", "healthy pod must NOT be baselined")
+
+	// Simulate ClearSeenForPod for the healthy pod — should NOT affect the failed pod's entry
+	h.ClearSeenForPod("default", "healthy-pod")
+
+	_, ok = baseline[key]["failed-pod"]
+	assert.True(t, ok, "ClearSeenForPod for healthy sibling must not clear failed pod's baseline")
+}
+
+func TestBuildSeenCrashLoopHighFreq(t *testing.T) {
+	client := fake.NewSimpleClientset(
+		&corev1.Pod{
+			ObjectMeta: metav1.ObjectMeta{Name: "cl-pod", Namespace: "default",
+				OwnerReferences: []metav1.OwnerReference{{Kind: "Deployment", Name: "dep", APIVersion: "apps/v1"}}},
+			Status: corev1.PodStatus{
+				ContainerStatuses: []corev1.ContainerStatus{{
+					Name: "app", RestartCount: 7,
+					State: corev1.ContainerState{
+						Waiting: &corev1.ContainerStateWaiting{Reason: "CrashLoopBackOff"}}}},
+			},
+		},
+	)
+	cfg := &config.Config{}
+	h := &mockHandler{}
+
+	ctrl, cleanup := New(client, cfg, h)
+	defer cleanup()
+
+	assert.Eventually(t, func() bool {
+		_, err := ctrl.podLister.Pods("default").Get("cl-pod")
+		return err == nil
+	}, 5*time.Second, 50*time.Millisecond)
+
+	ctrl.buildSeenSet()
+
+	h.mu.Lock()
+	baseline := h.seenBaseline
+	h.mu.Unlock()
+
+	// Key should be CrashLoopHighFrequency (not CrashLoopBackOff) because restarts > 5
+	key := correlation.BuildKey("default", "dep", "CrashLoopHighFrequency", "app")
+	_, ok := baseline[key]["cl-pod"]
+	assert.True(t, ok, "buildSeenSet must use CrashLoopHighFrequency for restarts > 5")
 }

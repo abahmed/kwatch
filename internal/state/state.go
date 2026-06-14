@@ -111,7 +111,7 @@ func (s *StateManager) MarkAsInitialized(ctx context.Context, clusterID, version
 	})
 }
 
-func (s *StateManager) GetBaseline(ctx context.Context) map[string]int64 {
+func (s *StateManager) GetBaseline(ctx context.Context) map[string]map[string]int64 {
 	cm, err := s.client.CoreV1().ConfigMaps(s.namespace).Get(ctx, stateConfigMapName, metav1.GetOptions{})
 	if err != nil {
 		return nil
@@ -120,7 +120,7 @@ func (s *StateManager) GetBaseline(ctx context.Context) map[string]int64 {
 	if !ok || raw == "" {
 		return nil
 	}
-	var result map[string]int64
+	var result map[string]map[string]int64
 	if err := json.Unmarshal([]byte(raw), &result); err != nil {
 		klog.ErrorS(err, "failed to unmarshal baseline")
 		return nil
@@ -128,7 +128,7 @@ func (s *StateManager) GetBaseline(ctx context.Context) map[string]int64 {
 	return result
 }
 
-func (s *StateManager) SaveBaseline(ctx context.Context, baseline map[string]int64) error {
+func (s *StateManager) SaveBaseline(ctx context.Context, baseline map[string]map[string]int64) error {
 	return s.retryMgr.UpdateWithRetry(ctx, func(cm *corev1.ConfigMap) error {
 		data, err := json.Marshal(baseline)
 		if err != nil {

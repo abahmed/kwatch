@@ -458,9 +458,9 @@ func TestSaveAndGetBaseline(t *testing.T) {
 
 	sm := NewStateManager(client, "kwatch")
 
-	baseline := map[string]int64{
-		"default:deploy-1:CrashLoopBackOff:app": 1718064000,
-		"default:sts-0:OOMKilled:web":           1718065000,
+	baseline := map[string]map[string]int64{
+		"default:deploy-1:CrashLoopBackOff:app": {"pod-1": 1718064000},
+		"default:sts-0:OOMKilled:web":          {"pod-2": 1718065000},
 	}
 	err = sm.SaveBaseline(context.Background(), baseline)
 	assert.Nil(err)
@@ -486,11 +486,11 @@ func TestSaveBaselineOverwrites(t *testing.T) {
 
 	sm := NewStateManager(client, "kwatch")
 
-	err = sm.SaveBaseline(context.Background(), map[string]int64{"key-1": 100})
+	err = sm.SaveBaseline(context.Background(), map[string]map[string]int64{"key-1": {"p": 100}})
 	assert.Nil(err)
-	assert.Equal(map[string]int64{"key-1": 100}, sm.GetBaseline(context.Background()))
+	assert.Equal(map[string]map[string]int64{"key-1": {"p": 100}}, sm.GetBaseline(context.Background()))
 
-	err = sm.SaveBaseline(context.Background(), map[string]int64{"key-2": 200})
+	err = sm.SaveBaseline(context.Background(), map[string]map[string]int64{"key-2": {"q": 200}})
 	assert.Nil(err)
-	assert.Equal(map[string]int64{"key-2": 200}, sm.GetBaseline(context.Background()))
+	assert.Equal(map[string]map[string]int64{"key-2": {"q": 200}}, sm.GetBaseline(context.Background()))
 }

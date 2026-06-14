@@ -46,9 +46,8 @@ type Handler interface {
 	SetHorizontalPodAutoscalerLister(lister autoscalingv2lister.HorizontalPodAutoscalerLister)
 	SetSecretLister(lister corev1lister.SecretLister)
 	SweepTLSSecrets()
-	SetSeen(baseline map[string]int64)
-	ClearSeenByOwner(namespace, owner string)
-	ClearSeenByPrefix(prefix string) bool
+	SetSeen(baseline map[string]map[string]int64)
+	ClearSeenForPod(namespace, podName string)
 }
 
 type handler struct {
@@ -172,14 +171,10 @@ func (h *handler) SetCronJobLister(lister batchv1lister.CronJobLister) {
 	h.cronJobLister = lister
 }
 
-func (h *handler) SetSeen(baseline map[string]int64) {
+func (h *handler) SetSeen(baseline map[string]map[string]int64) {
 	h.correlator.SetSeen(baseline)
 }
 
-func (h *handler) ClearSeenByOwner(namespace, owner string) {
-	h.correlator.ClearSeenByPrefix(namespace + ":" + owner + ":")
-}
-
-func (h *handler) ClearSeenByPrefix(prefix string) bool {
-	return h.correlator.ClearSeenByPrefix(prefix)
+func (h *handler) ClearSeenForPod(namespace, podName string) {
+	h.correlator.ClearSeenForPod(namespace, podName)
 }

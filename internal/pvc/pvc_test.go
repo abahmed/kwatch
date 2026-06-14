@@ -502,7 +502,7 @@ func TestPvcOverThresholdFiresDuringStartupQuiet(t *testing.T) {
 	})
 
 	// Pre-seed seen with a pod key to disable the blanket quiet
-	correlator.SetSeen(map[string]int64{"ns:dep:CrashLoopBackOff:": time.Now().Unix()})
+	correlator.SetSeen(map[string]map[string]int64{"ns:dep:CrashLoopBackOff:": {"pod-1": time.Now().Unix()}})
 
 	// PVC is not baselined, so Process should create, not skip
 	ev := event.Event{

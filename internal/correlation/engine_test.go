@@ -261,7 +261,7 @@ func TestBaselineSuppression(t *testing.T) {
 
 	incidentKey := BuildKey("default", "deploy-1", "CrashLoopBackOff", "")
 
-	e.SetSeen(map[string]int64{incidentKey: time.Now().Unix()})
+	e.SetSeen(map[string]map[string]int64{incidentKey: {"pod-1": time.Now().Unix()}})
 
 	ev := event.Event{
 		PodName:   "pod-1",
@@ -279,7 +279,7 @@ func TestClearSeenUnsuppresses(t *testing.T) {
 
 	incidentKey := BuildKey("default", "deploy-1", "CrashLoopBackOff", "")
 
-	e.SetSeen(map[string]int64{incidentKey: time.Now().Unix()})
+	e.SetSeen(map[string]map[string]int64{incidentKey: {"pod-1": time.Now().Unix()}})
 	e.ClearSeen(incidentKey)
 
 	ev := event.Event{
@@ -299,7 +299,7 @@ func TestBaselineSuppressesForFullTTL(t *testing.T) {
 
 	incidentKey := BuildKey("default", "deploy-1", "CrashLoopBackOff", "")
 	// entry created 1 hour ago — well within the 24h TTL
-	e.SetSeen(map[string]int64{incidentKey: time.Now().Add(-1 * time.Hour).Unix()})
+	e.SetSeen(map[string]map[string]int64{incidentKey: {"pod-1": time.Now().Add(-1 * time.Hour).Unix()}})
 
 	ev := event.Event{
 		PodName: "pod-1", Namespace: "default", Reason: "CrashLoopBackOff",
@@ -315,7 +315,7 @@ func TestBaselineExpiredPrunes(t *testing.T) {
 
 	incidentKey := BuildKey("default", "deploy-1", "CrashLoopBackOff", "")
 	// entry created 25 hours ago — past the 24h TTL
-	e.SetSeen(map[string]int64{incidentKey: time.Now().Add(-25 * time.Hour).Unix()})
+	e.SetSeen(map[string]map[string]int64{incidentKey: {"pod-1": time.Now().Add(-25 * time.Hour).Unix()}})
 
 	ev := event.Event{
 		PodName: "pod-1", Namespace: "default", Reason: "CrashLoopBackOff",
@@ -350,7 +350,7 @@ func TestRemovePodClearsSeen(t *testing.T) {
 	incidentKey := inc.Key
 
 	// Now baseline the incident key
-	e.SetSeen(map[string]int64{incidentKey: time.Now().Unix()})
+	e.SetSeen(map[string]map[string]int64{incidentKey: {"pod-1": time.Now().Unix()}})
 
 	// RemovePod should clear the baseline when the incident empties
 	e.RemovePod("default", "pod-1")
@@ -768,7 +768,7 @@ func TestStartupQuietPreseededSeenDoesNotSuppressNodeEvent(t *testing.T) {
 		Cooldown:    5 * time.Minute,
 		StartupQuiet: 1 * time.Hour,
 	})
-	e.SetSeen(map[string]int64{"ns:dep:CrashLoopBackOff:": time.Now().Unix()})
+	e.SetSeen(map[string]map[string]int64{"ns:dep:CrashLoopBackOff:": {"pod-1": time.Now().Unix()}})
 
 	// The pod key makes len(seen) > 0, so the blanket quiet is disabled.
 	// A node event should create, not skip.
@@ -841,11 +841,11 @@ func TestResolveHoldDownRevivesOnRecurrence(t *testing.T) {
 	assert.Equal(t, 0, resolves)
 	assert.Equal(t, model.StatePendingResolve, inc.State)
 
-	// Recurrence — should revive (update) and cancel the pending resolve
+	// Recurrence within cooldown — should revive (skip) and cancel the pending resolve
 	inc2, action := e.Process(ev, "deploy-1", nil)
-	assert.Equal(t, model.ActionUpdate, action)
-	assert.Equal(t, model.StateActive, inc2.State)
-	assert.True(t, inc2.ResolveAt.IsZero())
+	assert.Equal(t, model.ActionSkip, action, "revive within cooldown must skip, not update")
+	assert.Equal(t, model.StateActive, inc2.State, "pending resolve must be revoked")
+	assert.True(t, inc2.ResolveAt.IsZero(), "ResolveAt must be cleared")
 	assert.Equal(t, 0, resolves, "hook must not fire")
 }
 
@@ -926,7 +926,7 @@ func TestCheckLifecycleFinalizesPendingResolve(t *testing.T) {
 				resolved++
 			}
 		},
-		OnBaselineChange: func(_ map[string]int64) {
+		OnBaselineChange: func(_ map[string]map[string]int64) {
 			baselineChanged = true
 		},
 	})
@@ -945,4 +945,111 @@ func TestCheckLifecycleFinalizesPendingResolve(t *testing.T) {
 	assert.Equal(t, 1, resolved)
 	assert.True(t, baselineChanged, "OnBaselineChange must fire when pending resolve finalizes")
 	assert.Equal(t, model.StateResolved, inc.State)
+}
+
+func TestPerPodBaselineNewPodAlerts(t *testing.T) {
+	e := newTestEngine()
+	e.config.StartupQuiet = 0
+
+	key := BuildKey("default", "deploy-1", "CrashLoopBackOff", "")
+	e.SetSeen(map[string]map[string]int64{key: {"pod-1": time.Now().Unix()}})
+
+	// pod-1 is baselined — should skip
+	ev1 := event.Event{Namespace: "default", PodName: "pod-1", Reason: "CrashLoopBackOff"}
+	_, action := e.Process(ev1, "deploy-1", nil)
+	assert.Equal(t, model.ActionSkip, action)
+
+	// pod-2 is new — should alert
+	ev2 := event.Event{Namespace: "default", PodName: "pod-2", Reason: "CrashLoopBackOff"}
+	_, action = e.Process(ev2, "deploy-1", nil)
+	assert.Equal(t, model.ActionCreate, action)
+}
+
+func TestClearSeenForPodIsPerPod(t *testing.T) {
+	e := newTestEngine()
+	e.config.StartupQuiet = 0
+
+	key := BuildKey("default", "deploy-1", "CrashLoopBackOff", "")
+	e.SetSeen(map[string]map[string]int64{key: {"pod-1": time.Now().Unix(), "pod-2": time.Now().Unix()}})
+
+	e.ClearSeenForPod("default", "pod-1")
+
+	// pod-1 un-baselined → create
+	ev1 := event.Event{Namespace: "default", PodName: "pod-1", Reason: "CrashLoopBackOff"}
+	_, action := e.Process(ev1, "deploy-1", nil)
+	assert.Equal(t, model.ActionCreate, action)
+
+	// pod-2 still baselined → skip
+	ev2 := event.Event{Namespace: "default", PodName: "pod-2", Reason: "CrashLoopBackOff"}
+	_, action = e.Process(ev2, "deploy-1", nil)
+	assert.Equal(t, model.ActionSkip, action)
+}
+
+func TestRemovePodReleasesBaseline(t *testing.T) {
+	e := newTestEngine()
+	e.config.StartupQuiet = 0
+
+	key := BuildKey("default", "deploy-1", "CrashLoopBackOff", "")
+	e.SetSeen(map[string]map[string]int64{key: {"pod-1": time.Now().Unix()}})
+
+	// RemovePod should release the baseline slot for pod-1
+	e.RemovePod("default", "pod-1")
+
+	ev := event.Event{Namespace: "default", PodName: "pod-1", Reason: "CrashLoopBackOff"}
+	_, action := e.Process(ev, "deploy-1", nil)
+	assert.Equal(t, model.ActionCreate, action)
+}
+
+func TestResolvedIncidentRecreatesOnce(t *testing.T) {
+	e := newTestEngine()
+	e.config.StartupQuiet = 0
+
+	ev := event.Event{Namespace: "default", PodName: "pod-1", Reason: "CrashLoopBackOff"}
+	inc, action := e.Process(ev, "deploy-1", nil)
+	assert.Equal(t, model.ActionCreate, action)
+	key := inc.Key
+
+	// Resolve
+	e.MarkResolved(key)
+	assert.Equal(t, model.StateResolved, inc.State)
+
+	// First recurrence → ActionCreate and stored
+	ev2 := event.Event{Namespace: "default", PodName: "pod-2", Reason: "CrashLoopBackOff"}
+	_, action = e.Process(ev2, "deploy-1", nil)
+	assert.Equal(t, model.ActionCreate, action)
+
+	// Second recurrence within cooldown → ActionSkip (cooldown on the new incident)
+	_, action = e.Process(ev2, "deploy-1", nil)
+	assert.Equal(t, model.ActionSkip, action, "must respect cooldown on the re-created incident, NOT re-create again")
+}
+
+func TestPendingReviveRespectsCooldown(t *testing.T) {
+	var resolved int
+	e := NewEngine(Config{
+		Window:          10 * time.Minute,
+		Cooldown:        5 * time.Minute,
+		ResolveHoldDown: 60 * time.Minute,
+		LifecycleHook: func(inc *model.Incident, action model.IncidentAction) {
+			if action == model.ActionResolved {
+				resolved++
+			}
+		},
+	})
+	e.config.StartupQuiet = 0
+
+	ev := event.Event{Namespace: "default", PodName: "pod-1", Reason: "CrashLoopBackOff"}
+	inc, action := e.Process(ev, "deploy-1", nil)
+	assert.Equal(t, model.ActionCreate, action)
+
+	// Mark pending resolve
+	e.MarkResolved(inc.Key)
+	assert.Equal(t, model.StatePendingResolve, inc.State)
+	assert.Equal(t, 0, resolved)
+
+	// Revive within cooldown → skip, state back to active, no resolve emitted
+	inc2, action := e.Process(ev, "deploy-1", nil)
+	assert.Equal(t, model.ActionSkip, action)
+	assert.Equal(t, model.StateActive, inc2.State)
+	assert.True(t, inc2.ResolveAt.IsZero())
+	assert.Equal(t, 0, resolved, "no ActionResolved should be emitted")
 }
