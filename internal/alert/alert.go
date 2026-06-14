@@ -583,17 +583,37 @@ func formatUpdateMessage(inc *model.Incident, _ int) string {
 		severity = "normal"
 	}
 
+	containerName := inc.ContainerName
+	if len(inc.Containers) > 1 {
+		names := make([]string, 0, len(inc.Containers))
+		for c := range inc.Containers {
+			names = append(names, c)
+		}
+		sort.Strings(names)
+		containerName = strings.Join(names, ", ")
+	}
+
 	return truncateMsg(fmt.Sprintf(
-		"🔄 Update: %s | Severity: %s | Namespace: %s | Reason: %s | Count: %d | Duration: %s | Peak: %d resource(s)",
-		inc.Name, severity, inc.Namespace, inc.Reason, inc.Count, duration, inc.PeakResources,
+		"🔄 Update: %s | Severity: %s | Namespace: %s | Container: %s | Reason: %s | Count: %d | Duration: %s | Peak: %d resource(s)",
+		inc.Name, severity, inc.Namespace, containerName, inc.Reason, inc.Count, duration, inc.PeakResources,
 	))
 }
 
 func formatResolvedMessage(inc *model.Incident) string {
 	duration := inc.LastSeen.Sub(inc.FirstSeen).Round(time.Minute)
 
+	containerName := inc.ContainerName
+	if len(inc.Containers) > 1 {
+		names := make([]string, 0, len(inc.Containers))
+		for c := range inc.Containers {
+			names = append(names, c)
+		}
+		sort.Strings(names)
+		containerName = strings.Join(names, ", ")
+	}
+
 	return truncateMsg(fmt.Sprintf(
-		"✅ Resolved: %s | Namespace: %s | Reason: %s | Duration: %s | Total events: %d | Peak resources: %d",
-		inc.Name, inc.Namespace, inc.Reason, duration, inc.Count, inc.PeakResources,
+		"✅ Resolved: %s | Namespace: %s | Container: %s | Reason: %s | Duration: %s | Total events: %d | Peak resources: %d",
+		inc.Name, inc.Namespace, containerName, inc.Reason, duration, inc.Count, inc.PeakResources,
 	))
 }

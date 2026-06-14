@@ -367,8 +367,8 @@ func buildIncidentUpdateBlocks(inc *model.Incident) *slackClient.Blocks {
 	duration := inc.LastSeen.Sub(inc.FirstSeen).Round(time.Minute)
 
 	text := fmt.Sprintf(
-		"🔄 Update — Count: %d | Restarts: %d | Resources: %s | Duration: %s",
-		inc.Count, inc.RestartCount, resourcesStr, duration,
+		"🔄 Update — Container: %s | Count: %d | Restarts: %d | Resources: %s | Duration: %s",
+		containerSummary(inc), inc.Count, inc.RestartCount, resourcesStr, duration,
 	)
 
 	blocks := []slackClient.Block{
@@ -404,8 +404,8 @@ func buildIncidentResolvedBlocks(inc *model.Incident) *slackClient.Blocks {
 	duration := inc.LastSeen.Sub(inc.FirstSeen).Round(time.Minute)
 
 	text := fmt.Sprintf(
-		"✅ *Resolved* — All pods recovered\nDuration: %s | Total events: %d | Peak resources: %d",
-		duration, inc.Count, inc.PeakResources,
+		"✅ *Resolved* — Container: %s\nDuration: %s | Total events: %d | Peak resources: %d",
+		containerSummary(inc), duration, inc.Count, inc.PeakResources,
 	)
 
 	return &slackClient.Blocks{
@@ -439,8 +439,8 @@ func formatIncidentText(inc *model.Incident, action model.IncidentAction) string
 	case model.ActionUpdate:
 		duration := inc.LastSeen.Sub(inc.FirstSeen).Round(time.Minute)
 		text := fmt.Sprintf(
-		"🔄 Update: %s | Count: %d | Duration: %s | Peak: %d",
-		inc.Name, inc.Count, duration, inc.PeakResources,
+		"🔄 Update: %s | Container: %s | Count: %d | Duration: %s | Peak: %d",
+		inc.Name, containerSummary(inc), inc.Count, duration, inc.PeakResources,
 		)
 		if inc.IncludeEvents {
 			if ev := strings.TrimSpace(inc.Events); len(ev) > 0 {
@@ -456,8 +456,8 @@ func formatIncidentText(inc *model.Incident, action model.IncidentAction) string
 	case model.ActionResolved:
 		duration := inc.LastSeen.Sub(inc.FirstSeen).Round(time.Minute)
 		return fmt.Sprintf(
-		"✅ Resolved: %s | Duration: %s | Total events: %d | Peak resources: %d",
-		inc.Name, duration, inc.Count, inc.PeakResources,
+		"✅ Resolved: %s | Container: %s | Duration: %s | Total events: %d | Peak resources: %d",
+		inc.Name, containerSummary(inc), duration, inc.Count, inc.PeakResources,
 		)
 	default:
 		return ""
