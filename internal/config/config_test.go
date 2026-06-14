@@ -133,6 +133,60 @@ func TestGetCompiledIgnorePatterns(t *testing.T) {
 	assert.NotNil(err)
 }
 
+func TestConfigEnvInterpolation(t *testing.T) {
+	assert := assert.New(t)
+
+	defer os.Unsetenv("CONFIG_FILE")
+	defer os.Unsetenv("TEST_WEBHOOK")
+	defer os.Unsetenv("TEST_MISSING")
+	defer os.Unsetenv("A")
+	defer os.RemoveAll("config.yaml")
+
+	os.Setenv("CONFIG_FILE", "config.yaml")
+	os.Setenv("TEST_WEBHOOK", "https://hooks.example.com/x")
+	os.Setenv("TEST_MISSING", "")
+
+	// YAML with ${VAR}, literal $, and bare $VAR
+	content := []byte(`
+app:
+  clusterName: "${TEST_WEBHOOK}"
+  proxyURL: "$HOME"
+namespaces:
+  - "${TEST_MISSING}"
+reasons:
+  - "pass$2a$10$xyz"
+`)
+	os.WriteFile("config.yaml", content, 0644)
+
+	cfg, err := LoadConfig()
+	assert.Nil(err)
+	assert.NotNil(cfg)
+
+	// ${TEST_WEBHOOK} → expanded
+	assert.Equal("https://hooks.example.com/x", cfg.App.ClusterName)
+
+	// bare $HOME → NOT expanded (left as literal)
+	assert.Equal("$HOME", cfg.App.ProxyURL)
+
+	// ${TEST_MISSING} (unset) → empty string
+	assert.Len(cfg.AllowedNamespaces, 1)
+	assert.Equal("", cfg.AllowedNamespaces[0])
+
+	// literal $ in bcrypt-like value → unchanged
+	assert.Len(cfg.AllowedReasons, 1)
+	assert.Equal("pass$2a$10$xyz", cfg.AllowedReasons[0])
+
+	// verify mixed {A}-$B case
+	os.Setenv("A", "hello")
+	os.WriteFile("config.yaml", []byte(`app:
+  clusterName: "${A}-$B"
+`), 0644)
+	cfg2, err2 := LoadConfig()
+	assert.Nil(err2)
+	assert.NotNil(cfg2)
+	assert.Equal("hello-$B", cfg2.App.ClusterName)
+}
+
 func TestIgnoreNodeReasonsLoading(t *testing.T) {
 	assert := assert.New(t)
 

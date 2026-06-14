@@ -26,15 +26,24 @@ func LoadConfig() (*Config, error) {
 	yamlFile, err := os.ReadFile(configFile)
 	if err != nil {
 		if os.IsNotExist(err) {
-			klog.Warning("config file not found; using default (no alert providers)", "path", configFile)
+			klog.InfoS("config file not found; using default (no alert providers)", "path", configFile)
 			return config, nil
 		}
 		klog.InfoS("unable to load config file", "error", err.Error())
 		return nil, err
 	}
 
-	// B1: env-var interpolation — ${VAR} is replaced from environment
-	expanded := os.Expand(string(yamlFile), func(k string) string { return os.Getenv(k) })
+	// B1: env-var interpolation — only ${VAR} is replaced from environment.
+	// Uses regex to match only the braced form, leaving a bare $ (e.g. in
+	// passwords or bcrypt hashes) untouched.
+	envVarRe := regexp.MustCompile(`\$\{(\w+)\}`)
+	expanded := envVarRe.ReplaceAllStringFunc(string(yamlFile), func(m string) string {
+		groups := envVarRe.FindStringSubmatch(m)
+		if groups == nil {
+			return m
+		}
+		return os.Getenv(groups[1])
+	})
 
 	err = yaml.Unmarshal([]byte(expanded), config)
 	if err != nil {
