@@ -11,6 +11,7 @@ import (
 
 	"github.com/abahmed/kwatch/internal/enricher"
 	"github.com/abahmed/kwatch/internal/event"
+	"github.com/abahmed/kwatch/internal/metrics"
 	"github.com/abahmed/kwatch/internal/model"
 	"k8s.io/klog/v2"
 )
@@ -76,11 +77,14 @@ func (e *Engine) edgeAction(inc *model.Incident) model.IncidentAction {
 	inc.NotifiedSig = sig
 	inc.LastNotifiedAt = e.now()
 	if inc.State == model.StateResolved {
+		metrics.Default.IncidentsResolved.Add(1)
 		return model.ActionResolved
 	}
 	if prev == "" {
+		metrics.Default.IncidentsCreate.Add(1)
 		return model.ActionCreate
 	}
+	metrics.Default.IncidentsUpdate.Add(1)
 	return model.ActionUpdate
 }
 
@@ -424,6 +428,7 @@ func (e *Engine) Process(ev event.Event, owner string, cs *model.ContainerState)
 			e.digestBuf = append(e.digestBuf, digestEntry{key: key, reason: ev.Reason, ns: ev.Namespace})
 			inc.NotifiedSig = notifSig(inc)
 			inc.LastNotifiedAt = now
+			metrics.Default.IncidentsDigest.Add(1)
 			return inc, model.ActionDigest
 		}
 	}

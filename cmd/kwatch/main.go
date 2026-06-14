@@ -22,6 +22,7 @@ import (
 	"github.com/abahmed/kwatch/internal/event"
 	"github.com/abahmed/kwatch/internal/handler"
 	"github.com/abahmed/kwatch/internal/health"
+	"github.com/abahmed/kwatch/internal/metrics"
 	"github.com/abahmed/kwatch/internal/heartbeat"
 	"github.com/abahmed/kwatch/internal/k8s"
 	"github.com/abahmed/kwatch/internal/model"
@@ -103,7 +104,8 @@ func main() {
 	baselineCh := make(chan map[string]map[string]int64, 1)
 	go startBaselineSaver(ctx, stateMgr, baselineCh, 0)
 
-	correlator := correlation.NewEngine(correlation.Config{
+	var correlator *correlation.Engine
+	correlator = correlation.NewEngine(correlation.Config{
 		Window:            time.Duration(cfg.Correlation.Window) * time.Minute,
 		LifecycleInterval: time.Duration(cfg.Correlation.LifecycleInterval) * time.Minute,
 		StartupQuiet:      time.Duration(startupQuiet) * time.Second,
@@ -124,8 +126,14 @@ func main() {
 			if action != model.ActionSkip {
 				alertManager.NotifyIncident(inc, action)
 			}
+			metrics.Default.ActiveIncidents.Store(int64(len(correlator.Snapshot())))
 		},
 		OnBaselineChange: func(b map[string]map[string]int64) {
+			total := 0
+			for _, pods := range b {
+				total += len(pods)
+			}
+			metrics.Default.BaselineSize.Store(int64(total))
 			select {
 			case baselineCh <- b:
 			default:

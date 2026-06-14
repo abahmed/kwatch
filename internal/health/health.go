@@ -10,6 +10,7 @@ import (
 
 	"github.com/abahmed/kwatch/internal/config"
 	"github.com/abahmed/kwatch/internal/event"
+	"github.com/abahmed/kwatch/internal/metrics"
 	"github.com/abahmed/kwatch/internal/model"
 	"k8s.io/klog/v2"
 )
@@ -68,6 +69,8 @@ func (h *HealthServer) Start(ctx context.Context) error {
 		mux.HandleFunc("/incidents", h.incidentsHandler)
 		mux.HandleFunc("/test-alert", h.testAlertHandler)
 	}
+
+	mux.Handle("/metrics", metrics.Default.Handler())
 
 	if h.pprof {
 		mux.HandleFunc("/debug/pprof/", pprof.Index)

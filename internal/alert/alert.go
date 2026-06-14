@@ -27,6 +27,7 @@ import (
 	"github.com/abahmed/kwatch/internal/alert/zenduty"
 	"github.com/abahmed/kwatch/internal/config"
 	"github.com/abahmed/kwatch/internal/event"
+	"github.com/abahmed/kwatch/internal/metrics"
 	"github.com/abahmed/kwatch/internal/model"
 	"k8s.io/klog/v2"
 )
@@ -441,6 +442,7 @@ func (a *AlertManager) NotifyIncident(inc *model.Incident, action model.Incident
 	klog.InfoS("sending incident", "action", action, "key", inc.Key, "count", inc.Count)
 	for _, entry := range a.entries {
 		p := entry.provider
+		metrics.Default.NotificationsTotal.Add(1)
 		var err error
 		// per-provider templates fall back to global
 		tpl := entry.templates
@@ -471,6 +473,7 @@ func (a *AlertManager) NotifyIncident(inc *model.Incident, action model.Incident
 			}
 		}
 		if err != nil {
+			metrics.Default.NotificationsDropped.Add(1)
 			klog.ErrorS(err, "failed to send", "provider", p.Name(), "key", inc.Key)
 			if entry.fallback != nil {
 				fbMsg := msg
