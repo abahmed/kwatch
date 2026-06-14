@@ -43,11 +43,11 @@ func TestGetAllowForbidSlices(t *testing.T) {
 func TestEmptyConfig(t *testing.T) {
 	assert := assert.New(t)
 
-	os.Setenv("CONFIG_FILE", "config.yaml")
-	defer os.Unsetenv("CONFIG_FILE")
+	tmpDir := t.TempDir()
+	configPath := tmpDir + "/config.yaml"
+	t.Setenv("CONFIG_FILE", configPath)
 
-	os.WriteFile("config.yaml", []byte{}, 0644)
-	defer os.RemoveAll("config.yaml")
+	os.WriteFile(configPath, []byte{}, 0644)
 
 	cfg, _ := LoadConfig()
 	assert.NotNil(cfg)
@@ -66,11 +66,11 @@ func TestEmptyConfig(t *testing.T) {
 func TestConfigInvalidFile(t *testing.T) {
 	assert := assert.New(t)
 
-	os.Setenv("CONFIG_FILE", "bad-config.yaml")
-	defer os.Unsetenv("CONFIG_FILE")
+	tmpDir := t.TempDir()
+	configPath := tmpDir + "/config.yaml"
+	t.Setenv("CONFIG_FILE", configPath)
 
-	os.WriteFile("bad-config.yaml", []byte("test"), 0644)
-	defer os.RemoveAll("bad-config.yaml")
+	os.WriteFile(configPath, []byte("test"), 0644)
 
 	cfg, err := LoadConfig()
 	assert.Nil(cfg)
@@ -80,10 +80,9 @@ func TestConfigInvalidFile(t *testing.T) {
 func TestConfigFromFile(t *testing.T) {
 	assert := assert.New(t)
 
-	defer os.Unsetenv("CONFIG_FILE")
-	defer os.RemoveAll("config.yaml")
-
-	os.Setenv("CONFIG_FILE", "config.yaml")
+	tmpDir := t.TempDir()
+	configPath := tmpDir + "/config.yaml"
+	t.Setenv("CONFIG_FILE", configPath)
 
 	yamlContent := `
 maxRecentLogLines: 20
@@ -101,7 +100,7 @@ app:
   proxyURL: https://localhost
   clusterName: development
 `
-	os.WriteFile("config.yaml", []byte(yamlContent), 0644)
+	os.WriteFile(configPath, []byte(yamlContent), 0644)
 
 	cfg, err := LoadConfig()
 	assert.Nil(err)
@@ -116,7 +115,7 @@ app:
 	assert.Len(cfg.ForbiddenNamespaces, 0)
 	assert.Len(cfg.ForbiddenReasons, 0)
 
-	os.WriteFile("config.yaml", []byte("maxRecentLogLines: test"), 0644)
+	os.WriteFile(configPath, []byte("maxRecentLogLines: test"), 0644)
 	_, err = LoadConfig()
 	assert.NotNil(err)
 }
@@ -195,63 +194,44 @@ reasons:
 	assert.Equal("hello-$B", cfg2.App.ClusterName)
 }
 
+func testConfigFile(t *testing.T, content string) (*Config, error) {
+	tmpDir := t.TempDir()
+	configPath := tmpDir + "/config.yaml"
+	t.Setenv("CONFIG_FILE", configPath)
+	os.WriteFile(configPath, []byte(content), 0644)
+	return LoadConfig()
+}
+
 func TestIgnoreNodeReasonsLoading(t *testing.T) {
-	assert := assert.New(t)
-
-	defer os.Unsetenv("CONFIG_FILE")
-	defer os.RemoveAll("config.yaml")
-
-	os.Setenv("CONFIG_FILE", "config.yaml")
-
-	os.WriteFile("config.yaml", []byte(`
+	cfg, err := testConfigFile(t, `
 ignoreNodeReasons:
   - NotReady
   - KubeletNotReady
   - custom-reason
-`), 0644)
-
-	cfg, err := LoadConfig()
-	assert.Nil(err)
-	assert.NotNil(cfg)
-	assert.Equal([]string{"NotReady", "KubeletNotReady", "custom-reason"}, cfg.IgnoreNodeReasons)
+`)
+	assert.Nil(t, err)
+	assert.NotNil(t, cfg)
+	assert.Equal(t, []string{"NotReady", "KubeletNotReady", "custom-reason"}, cfg.IgnoreNodeReasons)
 }
 
 func TestIgnoreNodeReasonsEmpty(t *testing.T) {
-	assert := assert.New(t)
-
-	defer os.Unsetenv("CONFIG_FILE")
-	defer os.RemoveAll("config.yaml")
-
-	os.Setenv("CONFIG_FILE", "config.yaml")
-
-	os.WriteFile("config.yaml", []byte(`
+	cfg, err := testConfigFile(t, `
 ignoreNodeReasons: []
-`), 0644)
-
-	cfg, err := LoadConfig()
-	assert.Nil(err)
-	assert.NotNil(cfg)
-	assert.Equal([]string{}, cfg.IgnoreNodeReasons)
+`)
+	assert.Nil(t, err)
+	assert.NotNil(t, cfg)
+	assert.Equal(t, []string{}, cfg.IgnoreNodeReasons)
 }
 
 func TestIgnoreNodeReasonsSpecialChars(t *testing.T) {
-	assert := assert.New(t)
-
-	defer os.Unsetenv("CONFIG_FILE")
-	defer os.RemoveAll("config.yaml")
-
-	os.Setenv("CONFIG_FILE", "config.yaml")
-
-	os.WriteFile("config.yaml", []byte(`
+	cfg, err := testConfigFile(t, `
 ignoreNodeReasons:
   - reason-1
   - reason_2
   - reason.with.dot
   - reason/with/slash
-`), 0644)
-
-	cfg, err := LoadConfig()
-	assert.Nil(err)
-	assert.NotNil(cfg)
-	assert.Equal([]string{"reason-1", "reason_2", "reason.with.dot", "reason/with/slash"}, cfg.IgnoreNodeReasons)
+`)
+	assert.Nil(t, err)
+	assert.NotNil(t, cfg)
+	assert.Equal(t, []string{"reason-1", "reason_2", "reason.with.dot", "reason/with/slash"}, cfg.IgnoreNodeReasons)
 }
