@@ -53,7 +53,7 @@ func (h *handler) ProcessHorizontalPodAutoscalerObject(hpa *autoscalingv2.Horizo
 
 	first := h.markFirstMaxed(key)
 	sustained := time.Duration(h.config.HpaMonitor.SustainedMinutes) * time.Minute
-	if sustained > 0 && time.Since(first) < sustained {
+	if sustained > 0 && h.now().Sub(first) < sustained {
 		return nil
 	}
 
@@ -66,7 +66,7 @@ func (h *handler) ProcessHorizontalPodAutoscalerObject(hpa *autoscalingv2.Horizo
 		Labels:   hpa.Labels,
 		Hint: fmt.Sprintf("pinned at max=%d (desired=%d current=%d) for %s — raise maxReplicas or investigate load",
 			hpa.Spec.MaxReplicas, hpa.Status.DesiredReplicas,
-			hpa.Status.CurrentReplicas, time.Since(first).Round(time.Minute)),
+			hpa.Status.CurrentReplicas, h.now().Sub(first).Round(time.Minute)),
 	})
 	return nil
 }
@@ -77,7 +77,7 @@ func (h *handler) markFirstMaxed(key string) time.Time {
 	if t, ok := h.firstMaxedHPAs[key]; ok {
 		return t
 	}
-	h.firstMaxedHPAs[key] = time.Now()
+	h.firstMaxedHPAs[key] = h.now()
 	return h.firstMaxedHPAs[key]
 }
 

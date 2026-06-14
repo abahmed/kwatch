@@ -28,9 +28,8 @@ func (h *handler) SweepTLSSecrets() {
 		return
 	}
 
-	now := time.Now()
 	for _, secret := range secrets {
-		h.checkTLSSecret(secret, now, warnWindow)
+		h.checkTLSSecret(secret, h.now(), warnWindow)
 	}
 }
 

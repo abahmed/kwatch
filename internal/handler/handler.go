@@ -74,6 +74,7 @@ type handler struct {
 	firstMaxedHPAs       map[string]time.Time
 	hpaMu                sync.Mutex
 	secretLister         corev1lister.SecretLister
+	now                  func() time.Time
 }
 
 func NewHandler(
@@ -136,6 +137,7 @@ func NewHandler(
 		correlator:         correlator,
 		alertManager:       alertManager,
 		firstMaxedHPAs:     make(map[string]time.Time),
+		now:                time.Now,
 	}
 }
 
