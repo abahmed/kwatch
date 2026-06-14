@@ -89,6 +89,8 @@ func LoadConfig() (*Config, error) {
 		errs = append(errs, fmt.Errorf("failed to compile log pattern: %w", err))
 	}
 
+	errs = append(errs, Validate(config)...)
+
 	if len(errs) > 0 {
 		return nil, errors.Join(errs...)
 	}

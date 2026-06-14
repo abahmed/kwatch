@@ -2,47 +2,27 @@ package config
 
 func DefaultConfig() *Config {
 	return &Config{
-		App: App{
-			LogFormatter: "text",
-		},
+		App:                          App{LogFormatter: "text"},
 		IgnoreFailedGracefulShutdown: true,
-		PvcMonitor: PvcMonitor{
-			Enabled:           true,
-			Interval:          5,
-			Threshold:         80,
-			CriticalThreshold: 90,
-		},
-		NodeMonitor: NodeMonitor{
-			Enabled: true,
-		},
-		Upgrader: Upgrader{
-			DisableUpdateCheck: false,
-		},
-		HealthCheck: HealthCheck{
-			Enabled: false,
-			Port:    8060,
-		},
+		MaxRecentLogLines:            50,
+		ResyncSeconds:                600,
+		Workers:                      1,
+		PvcMonitor:        PvcMonitor{Enabled: true, Interval: 5, Threshold: 80, CriticalThreshold: 90},
+		NodeMonitor:       NodeMonitor{Enabled: true},
+		PendingPodMonitor: PendingPodMonitor{Enabled: true, Threshold: 300},
+		RolloutMonitor:    RolloutMonitor{Enabled: true},
+		JobMonitor:        JobMonitor{Enabled: true},
+		CronJobMonitor:    CronJobMonitor{Enabled: true},
+		DaemonSetMonitor:  DaemonSetMonitor{Enabled: true},
+		HpaMonitor:        HpaMonitor{Enabled: true, SustainedMinutes: 10},
+		Upgrader:          Upgrader{DisableUpdateCheck: false},
+		HealthCheck:       HealthCheck{Enabled: true, Port: 8060, Pprof: false, Diagnostics: false},
+		Inhibition:        Inhibition{NodeSuppressesPods: true},
+		StormConfig:       StormConfig{Enabled: true, Threshold: 10, WindowMinutes: 5, DigestIntervalMinutes: 5},
 		Correlation: Correlation{
-			Window:            10,
-			LifecycleInterval: 1,
-			StartupQuiet:      30,
+			Window: 10, LifecycleInterval: 1, StartupQuiet: 30,
+			ResolveHoldDown: 30,
+			Escalation: EscalationConfig{Enabled: true, Tiers: []int{3, 10, 50}},
 		},
-		PendingPodMonitor: PendingPodMonitor{
-			Enabled:   false,
-			Threshold: 300,
-		},
-		RolloutMonitor: RolloutMonitor{
-			Enabled: false,
-		},
-		JobMonitor: JobMonitor{
-			Enabled: false,
-		},
-		DaemonSetMonitor: DaemonSetMonitor{
-			Enabled: false,
-		},
-		CronJobMonitor: CronJobMonitor{
-			Enabled: false,
-		},
-		Workers: 1,
 	}
 }

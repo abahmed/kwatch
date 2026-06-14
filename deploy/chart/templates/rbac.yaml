@@ -12,14 +12,18 @@ rules:
 - apiGroups: ["apps"]
   resources: ["daemonsets", "statefulsets", "deployments", "replicasets"]
   verbs: ["get", "watch", "list"]
+{{- if and .Values.config.tlsMonitor .Values.config.tlsMonitor.enabled }}
+- apiGroups: [""]
+  resources: ["secrets"]
+  verbs: ["get", "list", "watch"]
+{{- end }}
+{{- if and .Values.config.crd .Values.config.crd.enabled }}
 - apiGroups: ["kwatch.abahmed.dev"]
   resources: ["kwatchconfigs"]
   verbs: ["get", "watch", "list"]
+{{- end }}
 - apiGroups: ["autoscaling"]
   resources: ["horizontalpodautoscalers"]
-  verbs: ["get", "watch", "list"]
-- apiGroups: [""]
-  resources: ["secrets"]
   verbs: ["get", "watch", "list"]
 - apiGroups: ["batch"]
   resources: ["jobs", "cronjobs"]
@@ -47,9 +51,11 @@ rules:
 - apiGroups: [""]
   resources: ["configmaps"]
   verbs: ["get", "create", "update", "patch"]
+{{- if gt (int .Values.replicaCount) 1 }}
 - apiGroups: ["coordination.k8s.io"]
   resources: ["leases"]
   verbs: ["get", "create", "update"]
+{{- end }}
 ---
 apiVersion: rbac.authorization.k8s.io/v1
 kind: RoleBinding

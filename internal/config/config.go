@@ -346,6 +346,10 @@ type HealthCheck struct {
 	// Pprof if set to true, enables /debug/pprof/* profiling endpoints.
 	// Disabled by default — enabling exposes runtime profiling data.
 	Pprof bool `yaml:"pprof"`
+
+	// Diagnostics if set to true, enables /incidents and /test-alert endpoints.
+	// Disabled by default.
+	Diagnostics bool `yaml:"diagnostics"`
 }
 
 // SilenceRule defines an alert suppression rule.

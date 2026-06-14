@@ -28,6 +28,7 @@ type HealthServer struct {
 	port         int
 	enabled      bool
 	pprof        bool
+	diagnostics  bool
 	incidentAPI  IncidentLister
 	alertManager TestAlertSender
 }
@@ -38,9 +39,10 @@ type HealthResponse struct {
 
 func NewHealthServer(cfg config.HealthCheck) *HealthServer {
 	return &HealthServer{
-		port:    cfg.Port,
-		enabled: cfg.Enabled,
-		pprof:   cfg.Pprof,
+		port:        cfg.Port,
+		enabled:     cfg.Enabled,
+		pprof:       cfg.Pprof,
+		diagnostics: cfg.Diagnostics,
 	}
 }
 
@@ -62,8 +64,10 @@ func (h *HealthServer) Start(ctx context.Context) error {
 	mux.HandleFunc("/healthz", h.healthzHandler)
 	mux.HandleFunc("/health", h.healthHandler)
 	mux.HandleFunc("/readyz", h.readyzHandler)
-	mux.HandleFunc("/incidents", h.incidentsHandler)
-	mux.HandleFunc("/test-alert", h.testAlertHandler)
+	if h.diagnostics {
+		mux.HandleFunc("/incidents", h.incidentsHandler)
+		mux.HandleFunc("/test-alert", h.testAlertHandler)
+	}
 
 	if h.pprof {
 		mux.HandleFunc("/debug/pprof/", pprof.Index)

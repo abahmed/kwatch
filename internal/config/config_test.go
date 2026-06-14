@@ -5,7 +5,6 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
-	"gopkg.in/yaml.v3"
 )
 
 func TestGetAllowForbidSlices(t *testing.T) {
@@ -52,7 +51,16 @@ func TestEmptyConfig(t *testing.T) {
 
 	cfg, _ := LoadConfig()
 	assert.NotNil(cfg)
-	assert.Equal(10, cfg.Correlation.Window)
+	assert.Equal(int64(50), cfg.MaxRecentLogLines)
+	assert.Equal(600, cfg.ResyncSeconds)
+	assert.Equal(true, cfg.PendingPodMonitor.Enabled)
+	assert.Equal(true, cfg.RolloutMonitor.Enabled)
+	assert.Equal(true, cfg.JobMonitor.Enabled)
+	assert.Equal(true, cfg.CronJobMonitor.Enabled)
+	assert.Equal(true, cfg.DaemonSetMonitor.Enabled)
+	assert.Equal(true, cfg.HpaMonitor.Enabled)
+	assert.Equal(true, cfg.HealthCheck.Enabled)
+	assert.Equal(8060, cfg.HealthCheck.Port)
 }
 
 func TestConfigInvalidFile(t *testing.T) {
@@ -77,19 +85,23 @@ func TestConfigFromFile(t *testing.T) {
 
 	os.Setenv("CONFIG_FILE", "config.yaml")
 
-	n := Config{
-		MaxRecentLogLines: 20,
-		Namespaces:        []string{"default", "kwatch"},
-		Reasons:           []string{"CrashLoopBackOff", "OOMKilling"},
-		IgnorePodNames:    []string{"my-fancy-pod-.*"},
-		IgnoreLogPatterns: []string{"leader-election-.*"},
-		App: App{
-			ProxyURL:    "https://localhost",
-			ClusterName: "development",
-		},
-	}
-	yamlData, _ := yaml.Marshal(&n)
-	os.WriteFile("config.yaml", yamlData, 0644)
+	yamlContent := `
+maxRecentLogLines: 20
+namespaces:
+  - default
+  - kwatch
+reasons:
+  - CrashLoopBackOff
+  - OOMKilling
+ignorePodNames:
+  - my-fancy-pod-.*
+ignoreLogPatterns:
+  - leader-election-.*
+app:
+  proxyURL: https://localhost
+  clusterName: development
+`
+	os.WriteFile("config.yaml", []byte(yamlContent), 0644)
 
 	cfg, err := LoadConfig()
 	assert.Nil(err)
@@ -194,11 +206,12 @@ func TestIgnoreNodeReasonsLoading(t *testing.T) {
 
 	os.Setenv("CONFIG_FILE", "config.yaml")
 
-	n := Config{
-		IgnoreNodeReasons: []string{"NotReady", "KubeletNotReady", "custom-reason"},
-	}
-	yamlData, _ := yaml.Marshal(&n)
-	os.WriteFile("config.yaml", yamlData, 0644)
+	os.WriteFile("config.yaml", []byte(`
+ignoreNodeReasons:
+  - NotReady
+  - KubeletNotReady
+  - custom-reason
+`), 0644)
 
 	cfg, err := LoadConfig()
 	assert.Nil(err)
@@ -214,11 +227,9 @@ func TestIgnoreNodeReasonsEmpty(t *testing.T) {
 
 	os.Setenv("CONFIG_FILE", "config.yaml")
 
-	n := Config{
-		IgnoreNodeReasons: []string{},
-	}
-	yamlData, _ := yaml.Marshal(&n)
-	os.WriteFile("config.yaml", yamlData, 0644)
+	os.WriteFile("config.yaml", []byte(`
+ignoreNodeReasons: []
+`), 0644)
 
 	cfg, err := LoadConfig()
 	assert.Nil(err)
@@ -234,11 +245,13 @@ func TestIgnoreNodeReasonsSpecialChars(t *testing.T) {
 
 	os.Setenv("CONFIG_FILE", "config.yaml")
 
-	n := Config{
-		IgnoreNodeReasons: []string{"reason-1", "reason_2", "reason.with.dot", "reason/with/slash"},
-	}
-	yamlData, _ := yaml.Marshal(&n)
-	os.WriteFile("config.yaml", yamlData, 0644)
+	os.WriteFile("config.yaml", []byte(`
+ignoreNodeReasons:
+  - reason-1
+  - reason_2
+  - reason.with.dot
+  - reason/with/slash
+`), 0644)
 
 	cfg, err := LoadConfig()
 	assert.Nil(err)

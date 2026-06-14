@@ -1,6 +1,9 @@
 package config
 
-import "fmt"
+import (
+	"errors"
+	"fmt"
+)
 
 // ValidateConfig checks the config for common misconfiguration issues and
 // returns a list of human-readable problems.
@@ -70,5 +73,42 @@ func ValidateConfig(cfg *Config) []string {
 		errs = append(errs, "workers must be >= 1")
 	}
 
+	return errs
+}
+
+// Validate validates the config for semantic correctness and returns a list
+// of errors suitable for use in LoadConfig.
+func Validate(cfg *Config) []error {
+	var errs []error
+	if cfg.StormConfig.Enabled {
+		if cfg.StormConfig.Threshold <= 0 {
+			errs = append(errs, errors.New("storm.threshold must be > 0"))
+		}
+		if cfg.StormConfig.WindowMinutes <= 0 {
+			errs = append(errs, errors.New("storm.windowMinutes must be > 0"))
+		}
+	}
+	if cfg.Correlation.Escalation.Enabled {
+		for i, t := range cfg.Correlation.Escalation.Tiers {
+			if t <= 0 {
+				errs = append(errs, fmt.Errorf("escalation.tiers[%d] must be > 0", i))
+			}
+			if i > 0 && t <= cfg.Correlation.Escalation.Tiers[i-1] {
+				errs = append(errs, fmt.Errorf("escalation.tiers must be strictly ascending (tiers[%d]=%d <= tiers[%d]=%d)", i, t, i-1, cfg.Correlation.Escalation.Tiers[i-1]))
+			}
+		}
+	}
+	if cfg.Correlation.ResolveHoldDown < 0 {
+		errs = append(errs, errors.New("correlation.resolveHoldDown must be >= 0"))
+	}
+	if cfg.PendingPodMonitor.Enabled && cfg.PendingPodMonitor.Threshold <= 0 {
+		errs = append(errs, errors.New("pendingPodMonitor.threshold must be > 0"))
+	}
+	if cfg.PvcMonitor.Threshold <= 0 || cfg.PvcMonitor.Threshold > cfg.PvcMonitor.CriticalThreshold {
+		errs = append(errs, errors.New("pvcMonitor requires 0 < threshold <= criticalThreshold"))
+	}
+	if cfg.PvcMonitor.CriticalThreshold > 100 {
+		errs = append(errs, errors.New("pvcMonitor.criticalThreshold must be <= 100"))
+	}
 	return errs
 }

@@ -245,3 +245,66 @@ func TestTestAlertHandler(t *testing.T) {
 		t.Fatalf("expected 1 sent message, got %d", len(am.msgs))
 	}
 }
+
+func TestDiagnosticsDisabled(t *testing.T) {
+	h := &HealthServer{diagnostics: false}
+	mux := http.NewServeMux()
+	mux.HandleFunc("/healthz", h.healthzHandler)
+	mux.HandleFunc("/health", h.healthHandler)
+	mux.HandleFunc("/readyz", h.readyzHandler)
+	// /incidents and /test-alert NOT registered when diagnostics is false
+
+	ts := httptest.NewServer(mux)
+	defer ts.Close()
+
+	// /healthz always works
+	resp, err := http.Get(ts.URL + "/healthz")
+	assert.Nil(t, err)
+	assert.Equal(t, http.StatusOK, resp.StatusCode)
+	resp.Body.Close()
+
+	// /incidents returns 404 when diagnostics disabled
+	resp, err = http.Get(ts.URL + "/incidents")
+	assert.Nil(t, err)
+	assert.Equal(t, http.StatusNotFound, resp.StatusCode)
+	resp.Body.Close()
+
+	// /test-alert returns 404 when diagnostics disabled
+	resp, err = http.Post(ts.URL+"/test-alert", "text/plain", nil)
+	assert.Nil(t, err)
+	assert.Equal(t, http.StatusNotFound, resp.StatusCode)
+	resp.Body.Close()
+}
+
+func TestDiagnosticsEnabled(t *testing.T) {
+	h := &HealthServer{diagnostics: true}
+	h.SetIncidentAPI(&fakeIncidentLister{snap: []model.IncidentView{}})
+	h.SetAlertManager(&fakeAlertSender{})
+	mux := http.NewServeMux()
+	mux.HandleFunc("/healthz", h.healthzHandler)
+	mux.HandleFunc("/health", h.healthHandler)
+	mux.HandleFunc("/readyz", h.readyzHandler)
+	mux.HandleFunc("/incidents", h.incidentsHandler)
+	mux.HandleFunc("/test-alert", h.testAlertHandler)
+
+	ts := httptest.NewServer(mux)
+	defer ts.Close()
+
+	// /healthz always works
+	resp, err := http.Get(ts.URL + "/healthz")
+	assert.Nil(t, err)
+	assert.Equal(t, http.StatusOK, resp.StatusCode)
+	resp.Body.Close()
+
+	// /incidents returns 200 when diagnostics enabled
+	resp, err = http.Get(ts.URL + "/incidents")
+	assert.Nil(t, err)
+	assert.Equal(t, http.StatusOK, resp.StatusCode)
+	resp.Body.Close()
+
+	// /test-alert returns 200 when diagnostics enabled
+	resp, err = http.Post(ts.URL+"/test-alert", "text/plain", nil)
+	assert.Nil(t, err)
+	assert.Equal(t, http.StatusOK, resp.StatusCode)
+	resp.Body.Close()
+}
