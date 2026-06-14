@@ -7,6 +7,7 @@ import (
 	"regexp"
 	"sort"
 	"strings"
+	"sync"
 	"text/template"
 	"time"
 	"unicode/utf8"
@@ -33,6 +34,22 @@ import (
 	"k8s.io/klog/v2"
 )
 
+type deliverJob struct {
+	inc    *model.Incident
+	action model.IncidentAction
+}
+
+type DeadLetterEntry struct {
+	Provider  string               `json:"provider"`
+	Key       string               `json:"key"`
+	Action    model.IncidentAction `json:"action"`
+	Error     string               `json:"error"`
+	Timestamp time.Time            `json:"timestamp"`
+}
+
+const channelCap = 256
+const dlqCap = 100
+
 type providerEntry struct {
 	provider      Provider
 	routes        []config.AlertRoute
@@ -42,6 +59,7 @@ type providerEntry struct {
 	fallbackNamed string                   // resolved in second pass
 	templates     map[string]*template.Template
 	maxBytes      int                      // 0 = no limit (FIX-5)
+	ch            chan deliverJob
 }
 
 type AlertManager struct {
@@ -49,6 +67,11 @@ type AlertManager struct {
 	silences     []silenceMatcher
 	maxLogLines  int
 	templates    map[string]*template.Template
+	started      bool
+	wg           sync.WaitGroup
+	dlqMu        sync.Mutex
+	dlqRing      [dlqCap]DeadLetterEntry
+	dlqHead      int
 }
 
 func (a *AlertManager) SetMaxLogLines(n int) {
@@ -224,6 +247,7 @@ func (a *AlertManager) Init(
 			fallbackNamed: fbName,
 			templates:     extractTemplates(v),
 			maxBytes:      defaultMaxBytes(pvdr.Name()),
+			ch:            make(chan deliverJob, channelCap),
 		})
 		}
 	}
@@ -368,17 +392,33 @@ func shouldDeliver(routes []config.AlertRoute, inc *model.Incident) bool {
 	return false
 }
 
-func sendWithRetry(sendFn func() error, maxAttempts int, delay time.Duration, providerName string) error {
+func backoffFor(attempt int, baseDelay, maxBackoff time.Duration) time.Duration {
+	d := baseDelay * time.Duration(1<<(attempt-1))
+	if maxBackoff > 0 && d > maxBackoff {
+		d = maxBackoff
+	}
+	if d < baseDelay {
+		d = baseDelay
+	}
+	return d
+}
+
+func sendWithRetry(sendFn func() error, maxAttempts int, delay, maxBackoff time.Duration, providerName string) error {
 	var lastErr error
 	for attempt := 1; attempt <= maxAttempts; attempt++ {
 		if err := sendFn(); err != nil {
 			lastErr = err
 			if attempt < maxAttempts {
+				sleepDur := delay
+				if maxBackoff > 0 {
+					sleepDur = backoffFor(attempt, delay, maxBackoff)
+				}
 				klog.V(4).InfoS("retrying provider delivery",
 					"provider", providerName,
 					"attempt", attempt,
-					"maxAttempts", maxAttempts)
-				time.Sleep(delay)
+					"maxAttempts", maxAttempts,
+					"backoff", sleepDur)
+				time.Sleep(sleepDur)
 			}
 			continue
 		}
@@ -399,7 +439,7 @@ func (a *AlertManager) Notify(msg string) {
 		truncMsg := truncateMsg(msg, entry.maxBytes)
 		if err := sendWithRetry(func() error {
 			return p.SendMessage(truncMsg)
-		}, entry.maxAttempts, entry.retryDelay, p.Name()); err != nil && entry.fallback != nil {
+		}, entry.maxAttempts, entry.retryDelay, 0, p.Name()); err != nil && entry.fallback != nil {
 			entry.fallback.provider.SendMessage("[fallback — primary " + p.Name() + " failed] " + truncMsg)
 		}
 	}
@@ -413,7 +453,7 @@ func (a *AlertManager) NotifyEvent(event event.Event) {
 		p := entry.provider
 		if err := sendWithRetry(func() error {
 			return p.SendEvent(&event)
-		}, entry.maxAttempts, entry.retryDelay, p.Name()); err != nil && entry.fallback != nil {
+		}, entry.maxAttempts, entry.retryDelay, 0, p.Name()); err != nil && entry.fallback != nil {
 			entry.fallback.provider.SendMessage("[fallback — primary " + p.Name() + " failed] " + event.Reason + " in " + event.Namespace + "/" + event.PodName)
 		}
 	}
@@ -425,9 +465,10 @@ type ThreadProvider interface {
 	SendIncident(inc *model.Incident, action model.IncidentAction) error
 }
 
-// NotifyIncident sends incident summary to all providers.
-// Providers implementing ThreadProvider receive structured incident data;
-// others fall back to plain text.
+// NotifyIncident enqueues an incident for delivery to all providers.
+// When Start has been called, delivery is asynchronous via per-provider
+// buffered channels (non-blocking; drops oldest on full).
+// Before Start, delivery is synchronous (deliverAllSync).
 func (a *AlertManager) NotifyIncident(inc *model.Incident, action model.IncidentAction) {
 	if action == model.ActionSkip {
 		return
@@ -439,53 +480,175 @@ func (a *AlertManager) NotifyIncident(inc *model.Incident, action model.Incident
 		return
 	}
 
+	klog.InfoS("sending incident", "action", action, "key", inc.Key, "count", inc.Count)
+
+	if !a.started {
+		a.deliverAllSync(inc, action)
+		return
+	}
+
+	job := deliverJob{inc: inc, action: action}
+	for _, entry := range a.entries {
+		select {
+		case entry.ch <- job:
+		default:
+			// channel full — drop oldest (pop one then re-send)
+			<-entry.ch
+			metrics.Default.NotificationsDropped.Add(1)
+			select {
+			case entry.ch <- job:
+			default:
+			}
+		}
+	}
+}
+
+// Start launches a worker goroutine for each provider that processes
+// queued deliveries. Returns immediately; workers stop when channels close.
+func (a *AlertManager) Start() {
+	a.started = true
+	for i := range a.entries {
+		entry := &a.entries[i]
+		a.wg.Add(1)
+		go func() {
+			defer a.wg.Done()
+			for job := range entry.ch {
+				a.deliverOne(entry, job.inc, job.action)
+			}
+		}()
+	}
+}
+
+// shutdown waits for all delivery workers to finish (used in tests).
+func (a *AlertManager) shutdown() {
+	for i := range a.entries {
+		close(a.entries[i].ch)
+	}
+	a.wg.Wait()
+}
+
+// DeadLetters returns a copy of the dead-letter ring buffer.
+func (a *AlertManager) DeadLetters() interface{} {
+	a.dlqMu.Lock()
+	defer a.dlqMu.Unlock()
+	n := 0
+	for i := range a.dlqRing {
+		if a.dlqRing[i].Timestamp.IsZero() {
+			break
+		}
+		n++
+	}
+	out := make([]DeadLetterEntry, n)
+	for i := 0; i < n; i++ {
+		idx := (a.dlqHead - n + i + dlqCap) % dlqCap
+		out[i] = a.dlqRing[idx]
+	}
+	return out
+}
+
+func (a *AlertManager) recordDeadLetter(entry *providerEntry, inc *model.Incident, action model.IncidentAction, err error) {
+	a.dlqMu.Lock()
+	defer a.dlqMu.Unlock()
+	a.dlqRing[a.dlqHead] = DeadLetterEntry{
+		Provider:  entry.provider.Name(),
+		Key:       inc.Key,
+		Action:    action,
+		Error:     err.Error(),
+		Timestamp: time.Now(),
+	}
+	a.dlqHead = (a.dlqHead + 1) % dlqCap
+}
+
+// deliverOne handles the full send+retry for a single (entry, incident) pair.
+func (a *AlertManager) deliverOne(entry *providerEntry, inc *model.Incident, action model.IncidentAction) {
+	p := entry.provider
+	metrics.Default.NotificationsTotal.Add(1)
+
 	maxLines := a.maxLogLines
 	if maxLines <= 0 {
 		maxLines = 100
 	}
-	klog.InfoS("sending incident", "action", action, "key", inc.Key, "count", inc.Count)
+	tpl := entry.templates
+	if len(tpl) == 0 {
+		tpl = a.templates
+	}
+	msg := truncateMsg(formatIncidentMessage(inc, action, maxLines, tpl), entry.maxBytes)
+	maxBackoff := 30 * time.Second
+
+	var err error
+	if action == model.ActionDigestFlush {
+		err = sendWithRetry(func() error {
+			return p.SendMessage(msg)
+		}, entry.maxAttempts, entry.retryDelay, maxBackoff, p.Name())
+	} else {
+		if !shouldDeliver(entry.routes, inc) {
+			klog.V(4).InfoS("incident filtered by route",
+				"provider", p.Name(),
+				"key", inc.Key)
+			return
+		}
+		if tp, ok := p.(ThreadProvider); ok {
+			err = sendWithRetry(func() error {
+				return tp.SendIncident(inc, action)
+			}, entry.maxAttempts, entry.retryDelay, maxBackoff, p.Name())
+		} else {
+			err = sendWithRetry(func() error {
+				return p.SendMessage(msg)
+			}, entry.maxAttempts, entry.retryDelay, maxBackoff, p.Name())
+		}
+	}
+	if err != nil {
+		metrics.Default.NotificationsDropped.Add(1)
+		klog.ErrorS(err, "failed to send", "provider", p.Name(), "key", inc.Key)
+		a.recordDeadLetter(entry, inc, action, err)
+		if entry.fallback != nil {
+			fbMsg := msg
+			fbErr := entry.fallback.provider.SendMessage("[fallback — primary " + p.Name() + " failed] " + fbMsg)
+			if fbErr != nil {
+				klog.ErrorS(fbErr, "fallback delivery failed", "provider", entry.fallback.provider.Name())
+			}
+		}
+	}
+}
+
+// deliverAllSync sends directly to every provider (synchronous).
+// Used before Start() is called (e.g. kwatch replay).
+func (a *AlertManager) deliverAllSync(inc *model.Incident, action model.IncidentAction) {
+	maxLines := a.maxLogLines
+	if maxLines <= 0 {
+		maxLines = 100
+	}
 	for _, entry := range a.entries {
 		p := entry.provider
-		metrics.Default.NotificationsTotal.Add(1)
-		var err error
-		// per-provider templates fall back to global
 		tpl := entry.templates
 		if len(tpl) == 0 {
 			tpl = a.templates
 		}
 		msg := truncateMsg(formatIncidentMessage(inc, action, maxLines, tpl), entry.maxBytes)
 		if action == model.ActionDigestFlush {
-			// digests bypass route filtering (no namespace) and ThreadProvider
+			if err := sendWithRetry(func() error {
+				return p.SendMessage(msg)
+			}, entry.maxAttempts, entry.retryDelay, 0, p.Name()); err != nil {
+				klog.ErrorS(err, "sync delivery failed", "provider", p.Name(), "key", inc.Key)
+			}
+			return
+		}
+		if !shouldDeliver(entry.routes, inc) {
+			continue
+		}
+		var err error
+		if tp, ok := p.(ThreadProvider); ok {
+			err = sendWithRetry(func() error {
+				return tp.SendIncident(inc, action)
+			}, entry.maxAttempts, entry.retryDelay, 0, p.Name())
+		} else {
 			err = sendWithRetry(func() error {
 				return p.SendMessage(msg)
-			}, entry.maxAttempts, entry.retryDelay, p.Name())
-		} else {
-			if !shouldDeliver(entry.routes, inc) {
-				klog.V(4).InfoS("incident filtered by route",
-					"provider", p.Name(),
-					"key", inc.Key)
-				continue
-			}
-			if tp, ok := p.(ThreadProvider); ok {
-				err = sendWithRetry(func() error {
-					return tp.SendIncident(inc, action)
-				}, entry.maxAttempts, entry.retryDelay, p.Name())
-			} else {
-				err = sendWithRetry(func() error {
-					return p.SendMessage(msg)
-				}, entry.maxAttempts, entry.retryDelay, p.Name())
-			}
+			}, entry.maxAttempts, entry.retryDelay, 0, p.Name())
 		}
 		if err != nil {
 			metrics.Default.NotificationsDropped.Add(1)
-			klog.ErrorS(err, "failed to send", "provider", p.Name(), "key", inc.Key)
-			if entry.fallback != nil {
-				fbMsg := msg
-				fbErr := entry.fallback.provider.SendMessage("[fallback — primary " + p.Name() + " failed] " + fbMsg)
-				if fbErr != nil {
-					klog.ErrorS(fbErr, "fallback delivery failed", "provider", entry.fallback.provider.Name())
-				}
-			}
+			klog.ErrorS(err, "sync delivery failed", "provider", p.Name(), "key", inc.Key)
 		}
 	}
 }

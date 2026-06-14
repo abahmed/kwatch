@@ -89,6 +89,7 @@ func main() {
 	if cfg.MaxRecentLogLines > 0 {
 		alertManager.SetMaxLogLines(int(cfg.MaxRecentLogLines))
 	}
+	alertManager.Start()
 
 	up := upgrader.NewUpgrader(&cfg.Upgrader, alertManager, sm.GetStateManager())
 	go up.CheckUpdates(ctx)
@@ -148,6 +149,7 @@ func main() {
 
 	healthServer.SetIncidentAPI(correlator)
 	healthServer.SetAlertManager(alertManager)
+	healthServer.SetDeadLetterLister(alertManager)
 	healthServer.Start(ctx)
 
 	pvcMonitor := pvc.NewPvcMonitor(k8sClient, &cfg.PvcMonitor, alertManager, correlator)

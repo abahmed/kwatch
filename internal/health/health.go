@@ -24,14 +24,19 @@ type TestAlertSender interface {
 	Notify(msg string)
 }
 
+type DeadLetterLister interface {
+	DeadLetters() interface{}
+}
+
 type HealthServer struct {
-	server       *http.Server
-	port         int
-	enabled      bool
-	pprof        bool
-	diagnostics  bool
-	incidentAPI  IncidentLister
-	alertManager TestAlertSender
+	server          *http.Server
+	port            int
+	enabled         bool
+	pprof           bool
+	diagnostics     bool
+	incidentAPI     IncidentLister
+	alertManager    TestAlertSender
+	deadLetterLister DeadLetterLister
 }
 
 type HealthResponse struct {
@@ -55,6 +60,10 @@ func (h *HealthServer) SetAlertManager(a TestAlertSender) {
 	h.alertManager = a
 }
 
+func (h *HealthServer) SetDeadLetterLister(l DeadLetterLister) {
+	h.deadLetterLister = l
+}
+
 func (h *HealthServer) Start(ctx context.Context) error {
 	if !h.enabled {
 		klog.V(4).InfoS("health check is disabled")
@@ -68,6 +77,7 @@ func (h *HealthServer) Start(ctx context.Context) error {
 	if h.diagnostics {
 		mux.HandleFunc("/incidents", h.incidentsHandler)
 		mux.HandleFunc("/test-alert", h.testAlertHandler)
+		mux.HandleFunc("/deadletters", h.deadLettersHandler)
 	}
 
 	mux.Handle("/metrics", metrics.Default.Handler())
@@ -166,4 +176,16 @@ func (h *HealthServer) testAlertHandler(w http.ResponseWriter, r *http.Request) 
 	w.Header().Set("Content-Type", "text/plain")
 	w.WriteHeader(http.StatusOK)
 	w.Write([]byte("test alert sent"))
+}
+
+func (h *HealthServer) deadLettersHandler(w http.ResponseWriter, r *http.Request) {
+	if h.deadLetterLister == nil {
+		w.Header().Set("Content-Type", "text/plain")
+		w.WriteHeader(http.StatusServiceUnavailable)
+		w.Write([]byte("dead letter lister not available"))
+		return
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusOK)
+	json.NewEncoder(w).Encode(h.deadLetterLister.DeadLetters())
 }
