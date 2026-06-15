@@ -17,8 +17,6 @@ type Signal struct {
 	Severity       string
 	Logs           string
 	Events         string
-	IncludeEvents  bool
-	IncludeLogs    bool
 	PodName        string // specific pod (empty for owner-level signals)
 	Hint           string
 	OwnerKind      string // "Deployment", "StatefulSet", etc.

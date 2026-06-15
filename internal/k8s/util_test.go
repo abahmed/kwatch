@@ -1,6 +1,7 @@
 package k8s
 
 import (
+	"context"
 	"errors"
 	"math/rand"
 	"os"
@@ -21,6 +22,7 @@ func TestGetPodContainerLogs(t *testing.T) {
 
 	client := fake.NewSimpleClientset()
 	logs := GetPodContainerLogs(
+		context.Background(),
 		client,
 		"test",
 		"test",
@@ -43,6 +45,7 @@ func TestGetPodContainerLogsError(t *testing.T) {
 	})
 
 	logs := GetPodContainerLogs(
+		context.Background(),
 		client,
 		"test-pod",
 		"test-container",
@@ -198,7 +201,7 @@ func TestGetNodes(t *testing.T) {
 			}, nil
 		})
 
-	result, err := GetNodes(cli)
+	result, err := GetNodes(context.Background(), cli)
 	assert.NoError(err)
 	assert.NotNil(result)
 	assert.Equal(len(result.Items), 1)
@@ -219,7 +222,7 @@ func TestGetPVNameFromPVC(t *testing.T) {
 			}, nil
 		})
 
-	result, err := GetPVNameFromPVC(cli, "test", "test")
+	result, err := GetPVNameFromPVC(context.Background(), cli, "test", "test")
 	assert.NoError(err)
 	assert.Equal(result, "test")
 }
@@ -235,7 +238,7 @@ func TestGetPVNameFromPVCError(t *testing.T) {
 			return true, nil, errors.New("failed")
 		})
 
-	result, err := GetPVNameFromPVC(cli, "test", "test")
+	result, err := GetPVNameFromPVC(context.Background(), cli, "test", "test")
 	assert.Error(err, "failed")
 	assert.Equal(result, "")
 }
@@ -255,7 +258,7 @@ func TestGetPVNameFromPVCEmpty(t *testing.T) {
 			}, nil
 		})
 
-	result, err := GetPVNameFromPVC(cli, "test", "test")
+	result, err := GetPVNameFromPVC(context.Background(), cli, "test", "test")
 	assert.NoError(err)
 	assert.Equal("", result)
 }
@@ -273,7 +276,7 @@ func TestGetNodesEmpty(t *testing.T) {
 			}, nil
 		})
 
-	result, err := GetNodes(cli)
+	result, err := GetNodes(context.Background(), cli)
 	assert.NoError(err)
 	assert.NotNil(result)
 	assert.Equal(0, len(result.Items))
@@ -421,7 +424,7 @@ func TestGetPodEventsWithFieldSelector(t *testing.T) {
 			}, nil
 		})
 
-	result, err := GetPodEvents(cli, "my-pod", "test-namespace")
+	result, err := GetPodEvents(context.Background(), cli, "my-pod", "test-namespace")
 	assert.NoError(err)
 	assert.NotNil(result)
 	assert.Equal(0, len(result.Items))
@@ -464,7 +467,7 @@ func TestGetPodEventsSuccess(t *testing.T) {
 			}, nil
 		})
 
-	result, err := GetPodEvents(cli, "test-pod", "default")
+	result, err := GetPodEvents(context.Background(), cli, "test-pod", "default")
 	assert.NoError(err)
 	assert.NotNil(result)
 	assert.Equal(1, len(result.Items))

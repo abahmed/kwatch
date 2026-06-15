@@ -267,7 +267,7 @@ func TestCheckUsageNoNodes(t *testing.T) {
 	alertMgr := &alert.AlertManager{}
 
 	pvc := NewPvcMonitor(client, cfg, alertMgr, nil)
-	pvc.checkUsage()
+	pvc.checkUsage(context.Background())
 
 	assert.Equal(0, len(pvc.notifiedPvc))
 }
@@ -484,29 +484,6 @@ func TestPvcSeverityCriticalTier(t *testing.T) {
 	inc, action := correlator.Process(ev, "test-pv", nil)
 	assert.Equal(t, model.ActionCreate, action)
 	assert.Equal(t, "high", inc.Severity)
-}
-
-func TestPvcOverThresholdFiresDuringStartupQuiet(t *testing.T) {
-	correlator := correlation.NewEngine(correlation.Config{
-		Window:       10 * time.Minute,
-		StartupQuiet: 1 * time.Hour,
-		Enricher:     &enricher.DefaultEnricher{},
-	})
-
-	// Pre-seed seen with a pod key to disable the blanket quiet
-	correlator.SetSeen(map[string]map[string]int64{"ns:dep:CrashLoopBackOff:": {"pod-1": time.Now().Unix()}})
-
-	// PVC is not baselined, so Process should create, not skip
-	ev := event.Event{
-		Resource:  "pvc",
-		PodName:   "test-pod",
-		Namespace: "default",
-		Reason:    "VolumeUsageHigh",
-	}
-
-	_, action := correlator.Process(ev, "test-pv", nil)
-	assert.Equal(t, model.ActionCreate, action,
-		"PVC should alert during startup-quiet when not baselined and pod baseline exists")
 }
 
 func TestPvcSeverityUpgradeFromWarnToCritical(t *testing.T) {

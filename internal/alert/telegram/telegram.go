@@ -9,6 +9,7 @@ import (
 
 	"github.com/abahmed/kwatch/internal/config"
 	"github.com/abahmed/kwatch/internal/event"
+	"github.com/abahmed/kwatch/internal/k8s"
 	"k8s.io/klog/v2"
 )
 
@@ -74,7 +75,7 @@ func (t *Telegram) Name() string {
 
 // Verify checks credentials via Telegram getMe API.
 func (t *Telegram) Verify() error {
-	client := &http.Client{}
+	client := k8s.GetDefaultClient()
 	url := fmt.Sprintf(telegramGetMeURL, t.token)
 	resp, err := client.Get(url)
 	if err != nil {
@@ -163,7 +164,7 @@ func (t *Telegram) buildRequestBodyTelegram(
 }
 
 func (t *Telegram) sendByTelegramApi(reqBody string) error {
-	client := &http.Client{}
+	client := k8s.GetDefaultClient()
 	buffer := bytes.NewBuffer([]byte(reqBody))
 	url := fmt.Sprintf(t.url, t.token)
 

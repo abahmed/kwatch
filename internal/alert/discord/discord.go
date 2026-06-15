@@ -8,6 +8,7 @@ import (
 	"github.com/abahmed/kwatch/internal/config"
 	"github.com/abahmed/kwatch/internal/constant"
 	"github.com/abahmed/kwatch/internal/event"
+	"github.com/abahmed/kwatch/internal/k8s"
 
 	discordgo "github.com/bwmarrin/discordgo"
 	"k8s.io/klog/v2"
@@ -72,7 +73,7 @@ func (s *Discord) Name() string {
 
 // Verify checks webhook credentials by issuing a GET to the webhook URL.
 func (s *Discord) Verify() error {
-	client := &http.Client{}
+	client := k8s.GetDefaultClient()
 	url := fmt.Sprintf("https://discord.com/api/webhooks/%s/%s", s.id, s.token)
 	resp, err := client.Get(url)
 	if err != nil {

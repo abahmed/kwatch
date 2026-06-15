@@ -449,7 +449,7 @@ Incident grouping and lifecycle management. Events from the same owner/reason/co
 | `correlation.window`               | Time window (minutes) to keep incidents in memory (default: 10)    |
 | `correlation.resolveHoldDown`      | Seconds to wait before sending a resolved notification (default: 30) |
 | `correlation.lifecycleInterval`    | Interval (minutes) for lifecycle checks (default: 1)               |
-| `correlation.startupQuiet`         | Quiet period (seconds) after startup with no alerts (default: 30)  |
+| `correlation.startupQuiet`         | **Removed** — no longer supported. Previously a quiet period (seconds) after startup with no alerts (default: 30). In-cluster state restore via `buildSeenSet` replaces this feature. |
 | `correlation.escalation.enabled`   | Escalate severity based on container restart count (default: true) |
 | `correlation.escalation.tiers`     | Ordered restart thresholds, e.g. `[3, 10, 50]` → 3+ "high", 10+ "critical" |
 | `correlation.renotify.maxPerIncident` | Max renotifications per incident (default: 3)                    |
@@ -782,6 +782,39 @@ kwatch lint --check
 Set the environment variable `SKIP_UPGRADE_CHECK=1` or the config field
 `upgrader.disableUpdateCheck: true` to suppress kwatch's release-check on
 startup (#438).
+
+#### v0.(x+1): Phase 0 bug fixes
+
+**`correlation.startupQuiet` removed** — The `startupQuiet` field is removed
+from both the YAML config and the `KwatchConfig` CRD. The engine now relies on
+`buildSeenSet` (in-cluster state restore) instead. Configs that include
+`startupQuiet` will be silently ignored (permissive decode) or rejected by
+`kwatch lint --strict`.
+
+**Init container alerts improved** — Init container failures now use reason
+`InitContainerError` instead of the container's underlying state reason
+(e.g. `CrashLoopBackOff`). This affects routing rules, silences, and templates
+that match on reason strings — update any such rules.
+
+**OOMKilled alerts without memory limits** — When a container is OOMKilled but
+has no memory limit set, the hint now says *"OOMKilled with no memory limit set
+— node-level memory pressure; set/raise container memory limits"* instead of a
+generic OOM message.
+
+**Discord/Telegram use shared HTTP client** — Both providers now use the
+kwatch shared HTTP client with proper timeout instead of a bare
+`&http.Client{}`. No config change needed, but socket exhaustion on very large
+clusters may decrease slightly.
+
+**`/readyz` lags during startup** — The readiness endpoint returns 503 until
+leader-elected tasks (informers synced, baseline built) complete. Previously it
+returned 200 immediately. Add a `readinessProbe.initialDelaySeconds` if your
+orchestrator probes `/readyz` before the leader is elected.
+
+**`maxRecentLogLines: 0` now capped** — When `maxRecentLogLines` is set to 0
+(or omitted), log fetch now defaults to a tail of 500 lines with a 1 MB
+`LimitBytes` cap. Previously, 0 meant "unbounded" — the handler could fetch
+megabytes of logs for a single incident.
 
 ### 📋 Guarantees
 

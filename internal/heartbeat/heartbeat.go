@@ -45,13 +45,18 @@ func (m *HeartbeatMonitor) Start(ctx context.Context) {
 			klog.InfoS("heartbeat monitor stopped")
 			return
 		case <-ticker.C:
-			m.ping()
+			m.ping(ctx)
 		}
 	}
 }
 
-func (m *HeartbeatMonitor) ping() {
-	resp, err := m.client.Get(m.config.URL)
+func (m *HeartbeatMonitor) ping(ctx context.Context) {
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, m.config.URL, nil)
+	if err != nil {
+		klog.ErrorS(err, "heartbeat ping: failed to create request", "url", m.config.URL)
+		return
+	}
+	resp, err := m.client.Do(req)
 	if err != nil {
 		klog.ErrorS(err, "heartbeat ping failed", "url", m.config.URL)
 		return

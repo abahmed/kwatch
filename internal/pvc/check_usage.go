@@ -1,10 +1,12 @@
 package pvc
 
 import (
+	"context"
 	"fmt"
 
 	"github.com/abahmed/kwatch/internal/event"
 	"github.com/abahmed/kwatch/internal/k8s"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/klog/v2"
 )
 
@@ -16,8 +18,8 @@ type PvcUsage struct {
 	UsagePercentage float64
 }
 
-func (p *PvcMonitor) checkUsage() {
-	nodes, err := k8s.GetNodes(p.client)
+func (p *PvcMonitor) checkUsage(ctx context.Context) {
+	nodes, err := k8s.GetNodes(ctx, p.client)
 	if err != nil {
 		klog.ErrorS(err, "pvc monitor: failed to get nodes")
 		return
@@ -28,10 +30,27 @@ func (p *PvcMonitor) checkUsage() {
 		nodeNames = append(nodeNames, node.Name)
 	}
 
+	// Build PVC→PV name map once per cycle instead of N+1 Get calls
+	pvByPVC := make(map[string]string)
+	if pvcs, err := p.client.CoreV1().PersistentVolumeClaims("").List(ctx, metav1.ListOptions{}); err == nil {
+		for i := range pvcs.Items {
+			c := &pvcs.Items[i]
+			pvByPVC[c.Namespace+"/"+c.Name] = c.Spec.VolumeName
+		}
+	} else {
+		klog.ErrorS(err, "pvc monitor: failed to list PVCs")
+	}
+
 	var pvcUsages []*PvcUsage
+	incomplete := false
 
 	for _, nodeName := range nodeNames {
-		nodePvcUsage, _ := p.getNodeUsage(nodeName)
+		nodePvcUsage, err := p.getNodeUsage(ctx, nodeName, pvByPVC)
+		if err != nil {
+			klog.ErrorS(err, "pvc monitor: node usage failed", "node", nodeName)
+			incomplete = true
+			continue
+		}
 		pvcUsages = append(pvcUsages, nodePvcUsage...)
 	}
 
@@ -70,9 +89,12 @@ func (p *PvcMonitor) checkUsage() {
 	}
 
 	// Resolve previously notified PVCs that are now under threshold
-	for pvName := range p.notifiedPvc {
-		if !currentNotified[pvName] {
-			p.correlator.ResolveByResource("pvc", pvName)
+	// Only when this cycle's data is complete (no per-node failures)
+	if !incomplete {
+		for pvName := range p.notifiedPvc {
+			if !currentNotified[pvName] {
+				p.correlator.ResolveByResource("pvc", pvName)
+			}
 		}
 	}
 

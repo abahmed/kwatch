@@ -537,11 +537,6 @@ type Correlation struct {
 	// lifecycle transitions (stale, resolved). Default 1.
 	LifecycleInterval int `yaml:"lifecycleInterval"`
 
-	// StartupQuiet is the quiet period (in seconds) after startup
-	// during which no alerts are sent. This prevents re-alerting
-	// pre-existing breakage after a restart. Default 30.
-	StartupQuiet int `yaml:"startupQuiet"`
-
 	// ResolveHoldDown is the seconds to wait after a condition clears before
 	// emitting "resolved". If it recurs within this window the incident stays
 	// open (flap dampening). Default 0 = resolve immediately.

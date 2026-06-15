@@ -530,7 +530,6 @@ func TestEngineBackedBaselineRoundTrip(t *testing.T) {
 	// Feed loaded baseline into correlation engine (as main.go does)
 	e := correlation.NewEngine(correlation.Config{
 		Window:       10 * time.Minute,
-		StartupQuiet: 0,
 		Baseline:    loaded,
 	})
 

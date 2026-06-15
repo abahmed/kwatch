@@ -1,6 +1,8 @@
 package filter
 
 import (
+	"strings"
+
 	"golang.org/x/exp/slices"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/klog/v2"
@@ -15,7 +17,7 @@ func (f PodStatusFilter) Detect(ctx *Context) Status {
 		return StatusSkip
 	}
 
-	if ctx.EvType == "Added" && len(ctx.Pod.Status.Conditions) == 0 {
+	if strings.EqualFold(ctx.EvType, "Added") && len(ctx.Pod.Status.Conditions) == 0 {
 		ctx.PodHasIssues = false
 		ctx.ContainersHasIssues = false
 		return StatusSkip

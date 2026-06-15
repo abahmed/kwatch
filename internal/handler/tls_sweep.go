@@ -52,7 +52,7 @@ func (h *handler) checkTLSSecret(secret *corev1.Secret, now time.Time, warnWindo
 
 	key := secret.Namespace + "/" + secret.Name
 	expiry := cert.NotAfter
-	remaining := time.Until(expiry)
+	remaining := expiry.Sub(now)
 	cn := cert.Subject.CommonName
 
 	if remaining < 0 {

@@ -55,7 +55,20 @@ func (h *handler) ProcessCronJobObject(cj *batchv1.CronJob, deleted bool) error 
 		return nil
 	}
 
-	if cj.Status.LastScheduleTime == nil || cj.Status.LastScheduleTime.Time.Before(h.now().Add(-24*time.Hour)) {
+	if cj.Status.LastScheduleTime == nil {
+		// New CronJob — only alert if it's been around long enough to miss a schedule
+		if cj.CreationTimestamp.Time.Before(h.now().Add(-24 * time.Hour)) {
+			h.signalEvent(&event.Signal{
+				Resource:  "cronjob",
+				PodName:   cj.Name,
+				Namespace: cj.Namespace,
+				Reason:    "CronJobNotScheduled",
+				Owner:     cj.Namespace + "/" + cj.Name,
+				Labels:    cj.Labels,
+			})
+			return nil
+		}
+	} else if cj.Status.LastScheduleTime.Time.Before(h.now().Add(-24 * time.Hour)) {
 		h.signalEvent(&event.Signal{
 			Resource:  "cronjob",
 			PodName:   cj.Name,

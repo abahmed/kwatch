@@ -42,7 +42,7 @@ func (p *PvcMonitor) Start(ctx context.Context) {
 		return
 	}
 
-	p.checkUsage()
+	p.checkUsage(ctx)
 
 	ticker := time.NewTicker(time.Duration(p.config.Interval) * time.Minute)
 	cleanupTicker := time.NewTicker(1 * time.Hour)
@@ -55,7 +55,7 @@ func (p *PvcMonitor) Start(ctx context.Context) {
 			klog.InfoS("pvc monitor stopped")
 			return
 		case <-ticker.C:
-			p.checkUsage()
+			p.checkUsage(ctx)
 		case <-cleanupTicker.C:
 			p.cleanup()
 		}

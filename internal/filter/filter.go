@@ -66,4 +66,5 @@ type ContainerContext struct {
 	State            string
 	Status           string
 	LastState        *model.ContainerState
+	IsInit           bool
 }

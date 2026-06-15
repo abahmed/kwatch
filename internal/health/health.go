@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"net/http/pprof"
 	"strconv"
+	"sync/atomic"
 	"time"
 
 	"github.com/abahmed/kwatch/internal/config"
@@ -37,6 +38,7 @@ type HealthServer struct {
 	incidentAPI     IncidentLister
 	alertManager    TestAlertSender
 	deadLetterLister DeadLetterLister
+	ready           atomic.Bool
 }
 
 type HealthResponse struct {
@@ -131,8 +133,17 @@ func (h *HealthServer) healthHandler(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(HealthResponse{Status: "ok"})
 }
 
+func (h *HealthServer) SetReady(v bool) {
+	h.ready.Store(v)
+}
+
 func (h *HealthServer) readyzHandler(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "text/plain")
+	if !h.ready.Load() {
+		w.WriteHeader(http.StatusServiceUnavailable)
+		w.Write([]byte("not ready"))
+		return
+	}
 	w.WriteHeader(http.StatusOK)
 	w.Write([]byte("OK"))
 }

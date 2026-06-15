@@ -72,6 +72,8 @@ func main() {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
+	stop := make(chan struct{})
+
 	cfg, err := config.LoadConfig()
 	if err != nil {
 		klog.ErrorS(err, "failed to load config")
@@ -108,11 +110,6 @@ func main() {
 	stateMgr := sm.GetStateManager()
 	baseline := stateMgr.GetBaseline(ctx)
 
-	startupQuiet := cfg.Correlation.StartupQuiet
-	if startupQuiet <= 0 {
-		startupQuiet = 30
-	}
-
 	baselineCh := make(chan map[string]map[string]int64, 1)
 	go startBaselineSaver(ctx, stateMgr, baselineCh, 0)
 
@@ -120,7 +117,6 @@ func main() {
 	correlator = correlation.NewEngine(correlation.Config{
 		Window:                     time.Duration(cfg.Correlation.Window) * time.Minute,
 		LifecycleInterval:          time.Duration(cfg.Correlation.LifecycleInterval) * time.Minute,
-		StartupQuiet:               time.Duration(startupQuiet) * time.Second,
 		Baseline:                   baseline,
 		Enricher:                   &enricher.DefaultEnricher{SeverityByOwnerKind: cfg.SeverityByOwnerKind, SeverityByReason: cfg.SeverityByReason},
 		EscalationEnabled:          cfg.Correlation.Escalation.Enabled,
@@ -250,7 +246,7 @@ func main() {
 				},
 				OnStoppedLeading: func() {
 					klog.ErrorS(nil, "lost leadership, exiting for clean re-election")
-					os.Exit(0)
+					close(stop)
 				},
 			},
 		})
@@ -260,12 +256,19 @@ func main() {
 
 	sigCh := make(chan os.Signal, 1)
 	signal.Notify(sigCh, os.Interrupt, syscall.SIGTERM)
-	<-sigCh
+	exitCode := 0
+	select {
+	case <-sigCh:
+	case <-stop:
+		exitCode = 1
+	}
 
 	klog.InfoS("shutting down gracefully...")
 	cancel()
-	healthServer.Stop(ctx)
-	os.Exit(0)
+	shutdownCtx, sc := context.WithTimeout(context.Background(), 10*time.Second)
+	healthServer.Stop(shutdownCtx)
+	sc()
+	os.Exit(exitCode)
 }
 
 func runLint(strict, check bool) {

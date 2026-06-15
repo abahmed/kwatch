@@ -43,7 +43,6 @@ type CorrelationConfig struct {
 	Cooldown          int `json:"cooldown,omitempty"`
 	StaleThreshold    int `json:"staleThreshold,omitempty"`
 	LifecycleInterval int `json:"lifecycleInterval,omitempty"`
-	StartupQuiet      int `json:"startupQuiet,omitempty"`
 }
 
 type PvcMonitorConfig struct {

@@ -18,7 +18,6 @@ func defaultStormConfig(rec *recordingAlertManager) correlation.Config {
 	return correlation.Config{
 		Window:              10 * time.Minute,
 		LifecycleInterval:   1 * time.Minute,
-		StartupQuiet:        0,
 		ResolveHoldDown:     0,
 		Enricher:            &enricher.DefaultEnricher{},
 		StormEnabled:        true,
@@ -74,7 +73,6 @@ func newTestEngine(rec *recordingAlertManager) *correlation.Engine {
 	return correlation.NewEngine(correlation.Config{
 		Window:            10 * time.Minute,
 		LifecycleInterval: 1 * time.Minute,
-		StartupQuiet:      0,
 		ResolveHoldDown:   0,
 		Enricher:          &enricher.DefaultEnricher{},
 		LifecycleHook: func(inc *model.Incident, action model.IncidentAction) {
@@ -209,7 +207,6 @@ func TestInhibitionSuppressesPodsDuringNodeFailure(t *testing.T) {
 	eng := correlation.NewEngine(correlation.Config{
 		Window:                    10 * time.Minute,
 		LifecycleInterval:         1 * time.Minute,
-		StartupQuiet:              0,
 		ResolveHoldDown:           0,
 		Enricher:                  &enricher.DefaultEnricher{},
 		InhibitNodeSuppressesPods: true,

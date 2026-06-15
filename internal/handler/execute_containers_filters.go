@@ -1,6 +1,7 @@
 package handler
 
 import (
+	"context"
 	"fmt"
 	"sort"
 	"time"
@@ -18,8 +19,11 @@ import (
 
 func (h *handler) executeContainersFilters(ctx *filter.Context) {
 	containers := make([]*corev1.ContainerStatus, 0)
+	containerIsInit := make(map[string]bool)
 	for idx := range ctx.Pod.Status.InitContainerStatuses {
-		containers = append(containers, &ctx.Pod.Status.InitContainerStatuses[idx])
+		c := &ctx.Pod.Status.InitContainerStatuses[idx]
+		containers = append(containers, c)
+		containerIsInit[c.Name] = true
 	}
 	for idx := range ctx.Pod.Status.ContainerStatuses {
 		containers = append(containers, &ctx.Pod.Status.ContainerStatuses[idx])
@@ -32,6 +36,7 @@ func (h *handler) executeContainersFilters(ctx *filter.Context) {
 			LastTerminatedOn: time.Time{},
 			LastState: h.correlator.GetLastContainerState(
 				ctx.Pod.Namespace, ctx.Pod.Name, container.Name),
+			IsInit: containerIsInit[container.Name],
 		}
 
 		// Phase 1: Detect (pure, no I/O)
@@ -71,7 +76,7 @@ func (h *handler) executeContainersFilters(ctx *filter.Context) {
 				ctx.Events = &items
 			}
 			} else {
-				podEvents, err := k8s.GetPodEvents(ctx.Client, ctx.Pod.Name, ctx.Pod.Namespace)
+				podEvents, err := k8s.GetPodEvents(context.Background(), ctx.Client, ctx.Pod.Name, ctx.Pod.Namespace)
 				if err != nil {
 					klog.ErrorS(err, "failed to fetch pod events", "pod", ctx.Pod.Name)
 				}
@@ -97,7 +102,7 @@ func (h *handler) executeContainersFilters(ctx *filter.Context) {
 			ownerName = ctx.Owner.Name
 		}
 
-		klog.InfoS(
+		klog.V(2).InfoS(
 			"container only issue",
 			"container", ctx.Container.Container.Name,
 			"pod", ctx.Pod.Name,
@@ -160,7 +165,12 @@ func buildContainerHint(ctx *filter.Context) string {
 
 	hint := enricher.HintForReason(reason)
 
-	if exitCode != 0 {
+	if ctx.Container.IsInit && exitCode != 0 {
+		hint = enricher.HintForReason("InitContainerError")
+		if ecHint := enricher.HintForExitCode(exitCode); ecHint != "" {
+			hint = enricher.CombineHints(hint, ecHint)
+		}
+	} else if exitCode != 0 {
 		ecHint := enricher.HintForExitCode(exitCode)
 		hint = enricher.CombineHints(hint, ecHint)
 	}
@@ -172,7 +182,11 @@ func buildContainerHint(ctx *filter.Context) string {
 			mem := spec.Resources.Limits.Memory()
 			if mem != nil && !mem.IsZero() {
 				hint = fmt.Sprintf("OOMKilled (memory limit: %s) — consider increasing memory limits", mem.String())
+			} else {
+				hint = "OOMKilled with no memory limit set — node-level memory pressure; set/raise container memory limits"
 			}
+		} else {
+			hint = "OOMKilled with no memory limit set — node-level memory pressure; set/raise container memory limits"
 		}
 	}
 

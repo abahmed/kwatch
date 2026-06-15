@@ -257,7 +257,6 @@ func TestBaselineSuppression(t *testing.T) {
 	fakeNow := time.Date(2025, 1, 1, 0, 0, 0, 0, time.UTC)
 	e := newTestEngine()
 	e.now = mockClock(fakeNow)
-	e.config.StartupQuiet = 0
 
 	incidentKey := BuildKey("default", "deploy-1", "CrashLoopBackOff", "")
 
@@ -275,7 +274,6 @@ func TestBaselineSuppression(t *testing.T) {
 
 func TestClearSeenUnsuppresses(t *testing.T) {
 	e := newTestEngine()
-	e.config.StartupQuiet = 0
 
 	incidentKey := BuildKey("default", "deploy-1", "CrashLoopBackOff", "")
 
@@ -296,7 +294,6 @@ func TestBaselineSuppressesForFullTTL(t *testing.T) {
 	fakeNow := time.Date(2025, 1, 1, 0, 0, 0, 0, time.UTC)
 	e := newTestEngine()
 	e.now = mockClock(fakeNow)
-	e.config.StartupQuiet = 0
 	e.config.BaselineTTL = 24 * time.Hour
 
 	incidentKey := BuildKey("default", "deploy-1", "CrashLoopBackOff", "")
@@ -314,7 +311,6 @@ func TestBaselineExpiredPrunes(t *testing.T) {
 	fakeNow := time.Date(2025, 1, 1, 0, 0, 0, 0, time.UTC)
 	e := newTestEngine()
 	e.now = mockClock(fakeNow)
-	e.config.StartupQuiet = 0
 	e.config.BaselineTTL = 24 * time.Hour
 
 	incidentKey := BuildKey("default", "deploy-1", "CrashLoopBackOff", "")
@@ -338,7 +334,6 @@ func TestRemovePodClearsSeen(t *testing.T) {
 	e := NewEngine(Config{
 		Window: 10 * time.Minute,
 	})
-	e.config.StartupQuiet = 0
 
 	// First, create an incident (not baselined)
 	ev := event.Event{
@@ -368,20 +363,6 @@ func TestRemovePodClearsSeen(t *testing.T) {
 
 	_, action = e.Process(ev2, "deploy-1", nil)
 	assert.Equal(t, model.ActionCreate, action)
-}
-
-func TestStartupQuietSuppressesAllBeforeSeen(t *testing.T) {
-	e := newTestEngine()
-	e.config.StartupQuiet = 10 * time.Minute
-
-	ev := event.Event{
-		PodName:   "pod-1",
-		Namespace: "default",
-		Reason:    "CrashLoopBackOff",
-	}
-
-	_, action := e.Process(ev, "deploy-1", nil)
-	assert.Equal(t, model.ActionSkip, action)
 }
 
 func TestStsOwnedPodsGroupByStsName(t *testing.T) {
@@ -686,7 +667,6 @@ func TestMarkResolvedIdempotent(t *testing.T) {
 			}
 		},
 	})
-	e.config.StartupQuiet = 0
 
 	ev := event.Event{PodName: "p1", Namespace: "ns", Reason: "CrashLoopBackOff"}
 	inc, action := e.Process(ev, "dep", nil)
@@ -700,23 +680,6 @@ func TestMarkResolvedIdempotent(t *testing.T) {
 	// Second MarkResolved (same key) must NOT fire again
 	e.MarkResolved(inc.Key)
 	assert.Equal(t, 1, resolves, "MarkResolved must be idempotent — hook fired twice")
-}
-
-func TestStartupQuietPreseededSeenDoesNotSuppressNodeEvent(t *testing.T) {
-	// Pre-seed seen with a pod key (simulates pod baseline from buildSeenSet).
-	// During startup-quiet, a fresh node event must NOT be suppressed.
-	e := NewEngine(Config{
-		Window:       10 * time.Minute,
-		StartupQuiet: 1 * time.Hour,
-	})
-	e.SetSeen(map[string]map[string]int64{"ns:dep:CrashLoopBackOff:": {"pod-1": time.Now().Unix()}})
-
-	// The pod key makes len(seen) > 0, so the blanket quiet is disabled.
-	// A node event should create, not skip.
-	ev := event.Event{Resource: "node", PodName: "node-1", NodeName: "node-1", Reason: "NodeNotReady"}
-	_, action := e.Process(ev, "node-1", nil)
-	assert.Equal(t, model.ActionCreate, action,
-		"node event should create during startup-quiet when pod baseline is present")
 }
 
 func TestMarkResolvedNonexistentKeyNoOp(t *testing.T) {
@@ -746,7 +709,6 @@ func TestResolveHoldDownDelaysResolve(t *testing.T) {
 		},
 	})
 	e.now = mockClock(fakeNow)
-	e.config.StartupQuiet = 0
 
 	ev := event.Event{Namespace: "default", PodName: "pod-1", Reason: "CrashLoopBackOff"}
 	inc, action := e.Process(ev, "deploy-1", nil)
@@ -772,7 +734,6 @@ func TestResolveHoldDownRevivesOnRecurrence(t *testing.T) {
 		},
 	})
 	e.now = mockClock(fakeNow)
-	e.config.StartupQuiet = 0
 
 	ev := event.Event{Namespace: "default", PodName: "pod-1", Reason: "CrashLoopBackOff"}
 	inc, action := e.Process(ev, "deploy-1", nil)
@@ -793,7 +754,6 @@ func TestResolveHoldDownRevivesOnRecurrence(t *testing.T) {
 
 func TestProcessResolvedIncidentCreatesFresh(t *testing.T) {
 	e := newTestEngine()
-	e.config.StartupQuiet = 0
 
 	ev := event.Event{Namespace: "default", PodName: "pod-1", Reason: "CrashLoopBackOff"}
 	inc, action := e.Process(ev, "deploy-1", nil)
@@ -848,7 +808,6 @@ func TestIncidentKeyMatchesProcess(t *testing.T) {
 			key1 := IncidentKey(tt.ev, tt.owner, tt.cs)
 
 			e := newTestEngine()
-			e.config.StartupQuiet = 0
 			inc, _ := e.Process(tt.ev, tt.owner, tt.cs)
 			require.NotNil(t, inc, "Process must produce an incident")
 			assert.Equal(t, key1, inc.Key, "IncidentKey must match Process key")
@@ -871,7 +830,6 @@ func TestCheckLifecycleFinalizesPendingResolve(t *testing.T) {
 			baselineChanged = true
 		},
 	})
-	e.config.StartupQuiet = 0
 
 	ev := event.Event{Namespace: "default", PodName: "pod-1", Reason: "CrashLoopBackOff"}
 	inc, action := e.Process(ev, "deploy-1", nil)
@@ -890,7 +848,6 @@ func TestCheckLifecycleFinalizesPendingResolve(t *testing.T) {
 
 func TestPerPodBaselineNewPodAlerts(t *testing.T) {
 	e := newTestEngine()
-	e.config.StartupQuiet = 0
 
 	key := BuildKey("default", "deploy-1", "CrashLoopBackOff", "")
 	e.SetSeen(map[string]map[string]int64{key: {"pod-1": time.Now().Unix()}})
@@ -908,7 +865,6 @@ func TestPerPodBaselineNewPodAlerts(t *testing.T) {
 
 func TestClearSeenForPodIsPerPod(t *testing.T) {
 	e := newTestEngine()
-	e.config.StartupQuiet = 0
 
 	key := BuildKey("default", "deploy-1", "CrashLoopBackOff", "")
 	e.SetSeen(map[string]map[string]int64{key: {"pod-1": time.Now().Unix(), "pod-2": time.Now().Unix()}})
@@ -928,7 +884,6 @@ func TestClearSeenForPodIsPerPod(t *testing.T) {
 
 func TestRemovePodReleasesBaseline(t *testing.T) {
 	e := newTestEngine()
-	e.config.StartupQuiet = 0
 
 	key := BuildKey("default", "deploy-1", "CrashLoopBackOff", "")
 	e.SetSeen(map[string]map[string]int64{key: {"pod-1": time.Now().Unix()}})
@@ -943,7 +898,6 @@ func TestRemovePodReleasesBaseline(t *testing.T) {
 
 func TestResolvedIncidentRecreatesOnce(t *testing.T) {
 	e := newTestEngine()
-	e.config.StartupQuiet = 0
 
 	ev := event.Event{Namespace: "default", PodName: "pod-1", Reason: "CrashLoopBackOff"}
 	inc, action := e.Process(ev, "deploy-1", nil)
@@ -975,7 +929,6 @@ func TestPendingReviveSkips(t *testing.T) {
 			}
 		},
 	})
-	e.config.StartupQuiet = 0
 
 	ev := event.Event{Namespace: "default", PodName: "pod-1", Reason: "CrashLoopBackOff"}
 	inc, action := e.Process(ev, "deploy-1", nil)

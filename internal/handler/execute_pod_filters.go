@@ -1,6 +1,7 @@
 package handler
 
 import (
+	"context"
 	"sort"
 
 	"github.com/abahmed/kwatch/internal/enricher"
@@ -47,7 +48,7 @@ func (h *handler) executePodFilters(ctx *filter.Context) {
 				ctx.Events = &items
 			}
 		} else {
-			podEvents, err := k8s.GetPodEvents(ctx.Client, ctx.Pod.Name, ctx.Pod.Namespace)
+			podEvents, err := k8s.GetPodEvents(context.Background(), ctx.Client, ctx.Pod.Name, ctx.Pod.Namespace)
 			if err != nil {
 				klog.ErrorS(err, "failed to fetch pod events", "pod", ctx.Pod.Name)
 			}

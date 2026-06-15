@@ -44,7 +44,7 @@ func TestHeartbeatPing(t *testing.T) {
 	m := NewHeartbeatMonitor(cfg)
 
 	// call ping directly (not via ticker)
-	m.ping()
+	m.ping(context.Background())
 
 	assert.Equal(t, int32(1), pingCount.Load(), "should have sent one ping")
 }
@@ -58,5 +58,5 @@ func TestHeartbeatPingHTTPerror(t *testing.T) {
 	cfg := &config.HeartbeatMonitor{Enabled: true, URL: srv.URL}
 	m := NewHeartbeatMonitor(cfg)
 
-	m.ping()
+	m.ping(context.Background())
 }

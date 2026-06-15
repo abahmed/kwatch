@@ -20,7 +20,7 @@ func DefaultConfig() *Config {
 		Inhibition:                   Inhibition{NodeSuppressesPods: true},
 		StormConfig:                  StormConfig{Enabled: true, Threshold: 10, WindowMinutes: 5, DigestIntervalMinutes: 5},
 		Correlation: Correlation{
-			Window: 10, LifecycleInterval: 1, StartupQuiet: 30,
+			Window: 10, LifecycleInterval: 1,
 			ResolveHoldDown: 30,
 			Escalation:      EscalationConfig{Enabled: true, Tiers: []int{3, 10, 50}},
 		},

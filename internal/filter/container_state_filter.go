@@ -26,7 +26,8 @@ func (f ContainerStateFilter) Detect(ctx *Context) Status {
 	if container.State.Terminated != nil &&
 		(container.State.Terminated.Reason == "Completed" ||
 			container.State.Terminated.ExitCode == 143 ||
-			container.State.Terminated.ExitCode == 0) {
+			container.State.Terminated.ExitCode == 0) &&
+		!ctx.Container.HasRestarts {
 		return StatusSkip
 	}
 

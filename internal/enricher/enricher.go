@@ -9,6 +9,11 @@ var defaultSeverityByOwnerKind = map[string]string{
 	"StatefulSet": "high",
 }
 
+var defaultSeverityByReason = map[string]string{
+	"Evicted":          "medium",
+	"ImagePullBackOff": "medium",
+}
+
 type Enricher interface {
 	Enrich(ev *event.Event, inc *model.Incident)
 }
@@ -46,6 +51,9 @@ func (e *DefaultEnricher) resolveSeverity(ownerKind, reason string) string {
 		if s, ok := e.SeverityByReason[reason]; ok {
 			return s
 		}
+	}
+	if s, ok := defaultSeverityByReason[reason]; ok {
+		return s
 	}
 	if e.SeverityByOwnerKind != nil {
 		if s, ok := e.SeverityByOwnerKind[ownerKind]; ok {

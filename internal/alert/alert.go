@@ -72,6 +72,8 @@ type AlertManager struct {
 	maxLogLines int
 	templates   map[string]*template.Template
 	started     bool
+	stopped     bool
+	mu          sync.Mutex
 	wg          sync.WaitGroup
 	dlqMu       sync.Mutex
 	dlqRing     [dlqCap]DeadLetterEntry
@@ -570,7 +572,12 @@ func (a *AlertManager) VerifyAll() map[string]error {
 func (a *AlertManager) Notify(msg string) {
 	klog.InfoS("sending message", "msg", msg)
 
-	for _, entry := range a.entries {
+	a.mu.Lock()
+	entries := make([]providerEntry, len(a.entries))
+	copy(entries, a.entries)
+	a.mu.Unlock()
+
+	for _, entry := range entries {
 		p := entry.provider
 		truncMsg := truncateMsg(msg, entry.maxBytes)
 		if err := sendWithRetry(func() error {
@@ -585,7 +592,12 @@ func (a *AlertManager) Notify(msg string) {
 func (a *AlertManager) NotifyEvent(event event.Event) {
 	klog.InfoS("sending event", "event", event)
 
-	for _, entry := range a.entries {
+	a.mu.Lock()
+	entries := make([]providerEntry, len(a.entries))
+	copy(entries, a.entries)
+	a.mu.Unlock()
+
+	for _, entry := range entries {
 		p := entry.provider
 		if err := sendWithRetry(func() error {
 			return p.SendEvent(&event)
@@ -625,12 +637,19 @@ func (a *AlertManager) NotifyIncident(inc *model.Incident, action model.Incident
 
 	snap := inc.Clone()
 	job := deliverJob{inc: snap, action: action}
-	for _, entry := range a.entries {
+	a.mu.Lock()
+	entries := make([]providerEntry, len(a.entries))
+	copy(entries, a.entries)
+	a.mu.Unlock()
+	for _, entry := range entries {
 		select {
 		case entry.ch <- job:
 		default:
-			<-entry.ch
-			metrics.Default.NotificationsDropped.Add(1)
+			select {
+			case <-entry.ch:
+				metrics.Default.NotificationsDropped.Add(1)
+			default:
+			}
 			select {
 			case entry.ch <- job:
 			default:
@@ -642,9 +661,15 @@ func (a *AlertManager) NotifyIncident(inc *model.Incident, action model.Incident
 // Start launches a worker goroutine for each provider that processes
 // queued deliveries. Workers drain and stop when ctx is cancelled.
 func (a *AlertManager) Start(ctx context.Context) {
+	a.mu.Lock()
 	a.started = true
-	for i := range a.entries {
-		entry := &a.entries[i]
+	a.stopped = false
+	entries := make([]providerEntry, len(a.entries))
+	copy(entries, a.entries)
+	a.mu.Unlock()
+
+	for i := range entries {
+		entry := &entries[i]
 		a.wg.Add(1)
 		go func() {
 			defer a.wg.Done()
@@ -661,8 +686,18 @@ func (a *AlertManager) Start(ctx context.Context) {
 
 // shutdown waits for all delivery workers to finish (used in tests).
 func (a *AlertManager) shutdown() {
-	for i := range a.entries {
-		close(a.entries[i].ch)
+	a.mu.Lock()
+	if a.stopped {
+		a.mu.Unlock()
+		return
+	}
+	a.stopped = true
+	entries := make([]providerEntry, len(a.entries))
+	copy(entries, a.entries)
+	a.mu.Unlock()
+
+	for i := range entries {
+		close(entries[i].ch)
 	}
 	a.wg.Wait()
 }

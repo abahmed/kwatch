@@ -1,6 +1,8 @@
 package filter
 
 import (
+	"context"
+
 	"github.com/abahmed/kwatch/internal/k8s"
 	"k8s.io/klog/v2"
 )
@@ -29,6 +31,7 @@ func (f ContainerLogsFilter) Enrich(ctx *Context) bool {
 	previousLogs := container.RestartCount > 0 && container.State.Running == nil
 
 	logs := k8s.GetPodContainerLogs(
+		context.Background(),
 		ctx.Client,
 		ctx.Pod.Name,
 		container.Name,

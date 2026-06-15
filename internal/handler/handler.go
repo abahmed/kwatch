@@ -216,8 +216,6 @@ func (h *handler) signalEvent(s *event.Signal) {
 		RestartCount:  int(s.RestartCount),
 		Hint:          s.Hint,
 		Severity:      s.Severity,
-		IncludeEvents: s.IncludeEvents,
-		IncludeLogs:   s.IncludeLogs,
 	}
 
 	if s.Message != "" && ev.Hint == "" {

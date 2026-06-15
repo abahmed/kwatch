@@ -26,7 +26,6 @@ type digestEntry struct {
 type Config struct {
 	Window            time.Duration
 	LifecycleInterval time.Duration
-	StartupQuiet      time.Duration
 	Enricher          enricher.Enricher
 	LifecycleHook     func(inc *model.Incident, action model.IncidentAction)
 	BaselineTTL      time.Duration
@@ -101,6 +100,37 @@ func crossedTier(prev, new int, tiers []int) int {
 	return hit
 }
 
+// severityForTier returns the severity for the given escalation tier index,
+// preferring the higher of the tier-based severity and the current severity.
+func severityForTier(tierIdx int, current string) string {
+	sev := ""
+	switch tierIdx {
+	case 0:
+		sev = "high"
+	default:
+		sev = "critical"
+	}
+	if severityRank(current) > severityRank(sev) {
+		return current
+	}
+	return sev
+}
+
+func severityRank(s string) int {
+	switch s {
+	case "critical":
+		return 3
+	case "high":
+		return 2
+	case "medium":
+		return 1
+	case "normal", "":
+		return 0
+	default:
+		return 0
+	}
+}
+
 // escalateSeverity moves severity one level up: "" → "high", "high" → "critical", "critical" → "critical".
 func escalateSeverity(s string) string {
 	switch s {
@@ -120,7 +150,6 @@ type Engine struct {
 	mu                   sync.Mutex
 	state                map[string]*model.Incident
 	config               Config
-	startedAt            time.Time
 	seen                 map[string]map[string]int64
 	activeNodeIncidents  map[string]bool
 	recentCreates        []time.Time
@@ -148,7 +177,6 @@ func NewEngine(cfg Config) *Engine {
 	if e.now == nil {
 		e.now = time.Now
 	}
-	e.startedAt = e.now()
 	if cfg.Baseline != nil {
 		e.SetSeen(cfg.Baseline)
 	}
@@ -183,11 +211,6 @@ func (e *Engine) isBaselined(key, podName string) bool {
 			if len(pods) == 0 {
 				delete(e.seen, key)
 			}
-		}
-	}
-	if e.config.StartupQuiet > 0 && e.now().Sub(e.startedAt) < e.config.StartupQuiet {
-		if len(e.seen) == 0 && len(e.state) == 0 {
-			return true
 		}
 	}
 	return false
@@ -240,7 +263,13 @@ func (e *Engine) BaselineSnapshot() map[string]map[string]int64 {
 func (e *Engine) ActiveCount() int {
 	e.mu.Lock()
 	defer e.mu.Unlock()
-	return len(e.state)
+	n := 0
+	for _, inc := range e.state {
+		if inc.State != model.StateResolved {
+			n++
+		}
+	}
+	return n
 }
 
 func (e *Engine) Snapshot() []model.IncidentView {
@@ -388,7 +417,7 @@ func (e *Engine) Process(ev event.Event, owner string, cs *model.ContainerState)
 			prev := inc.RestartCount
 			cur := int(cs.RestartCount)
 			if t := crossedTier(prev, cur, e.config.EscalationTiers); t >= 0 {
-				ev.Severity = escalateSeverity(inc.Severity)
+				ev.Severity = severityForTier(t, inc.Severity)
 				e.config.Enricher.Enrich(&ev, inc)
 				inc.Hint = fmt.Sprintf("restart count crossed %d", e.config.EscalationTiers[t])
 				inc.Count++
@@ -511,11 +540,12 @@ func (e *Engine) MarkResolved(key string) {
 	}
 	delete(e.seen, key)
 	action := e.edgeAction(inc)
+	snap := inc.Clone()
 	e.mu.Unlock()
 
 	if action != model.ActionSkip {
 		if hook := e.config.LifecycleHook; hook != nil {
-			hook(inc, action)
+			hook(snap, action)
 		}
 	}
 	if hook := e.config.OnBaselineChange; hook != nil {
@@ -557,7 +587,7 @@ func (e *Engine) RemovePod(namespace, podName string) {
 			delete(e.seen, key)
 			action := e.edgeAction(inc)
 			baselineChanged = true
-			pending = append(pending, transition{inc, action})
+			pending = append(pending, transition{inc.Clone(), action})
 		}
 	}
 	// Release per-pod baseline slots for this pod
@@ -597,9 +627,6 @@ func (e *Engine) ResolveByResource(resource, name string) {
 
 	e.mu.Lock()
 	now := e.now()
-	if resource == "node" {
-		delete(e.activeNodeIncidents, name)
-	}
 	for key, inc := range e.state {
 		if inc.Resource == resource && inc.Name == name && inc.State != model.StateResolved {
 			if inc.State == model.StatePendingResolve {
@@ -611,10 +638,13 @@ func (e *Engine) ResolveByResource(resource, name string) {
 				continue
 			}
 			inc.State = model.StateResolved
+			if inc.Resource == "node" {
+				e.refreshNodeInhibition(inc.Name)
+			}
 			delete(e.seen, key)
 			action := e.edgeAction(inc)
 			baselineChanged = true
-			pending = append(pending, transition{inc, action})
+			pending = append(pending, transition{inc.Clone(), action})
 		}
 	}
 	e.mu.Unlock()
@@ -694,7 +724,7 @@ func (e *Engine) checkLifecycle() {
 			delete(e.seen, key)
 			action := e.edgeAction(inc)
 			baselineChanged = true
-			pending = append(pending, transition{inc, action})
+			pending = append(pending, transition{inc.Clone(), action})
 		}
 	}
 
@@ -723,7 +753,7 @@ func (e *Engine) checkLifecycle() {
 				inc.RenotifyCount++
 				inc.LastNotifiedAt = now
 				// For renotify we emit update
-				pending = append(pending, transition{inc, model.ActionUpdate})
+				pending = append(pending, transition{inc.Clone(), model.ActionUpdate})
 			}
 		}
 	}
