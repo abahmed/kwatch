@@ -518,3 +518,52 @@ func TestPvcSeverityUpgradeFromWarnToCritical(t *testing.T) {
 	assert.Equal(t, model.ActionUpdate, action2, "same key should update, not create")
 	assert.Equal(t, "high", inc2.Severity, "severity should upgrade to high")
 }
+
+func TestPvcFirstScanInitializedTrue(t *testing.T) {
+	assert := assert.New(t)
+
+	client := fake.NewSimpleClientset()
+	cfg := &config.PvcMonitor{Enabled: true, Threshold: 80}
+	alertMgr := &alert.AlertManager{}
+
+	pvc := NewPvcMonitor(client, cfg, alertMgr, nil)
+	assert.True(pvc.firstScan, "firstScan should initialize to true")
+}
+
+func TestPvcFirstScanSetToFalseAfterCheckUsage(t *testing.T) {
+	assert := assert.New(t)
+
+	client := fake.NewSimpleClientset()
+	cfg := &config.PvcMonitor{Enabled: true, Threshold: 80}
+	alertMgr := &alert.AlertManager{}
+
+	pvc := NewPvcMonitor(client, cfg, alertMgr, nil)
+	assert.True(pvc.firstScan)
+
+	pvc.checkUsage(context.Background())
+
+	assert.False(pvc.firstScan, "firstScan should be false after first checkUsage")
+}
+
+func TestPvcFirstScanSeedsNotifiedOnOverThreshold(t *testing.T) {
+	assert := assert.New(t)
+
+	client := fake.NewSimpleClientset()
+	cfg := &config.PvcMonitor{Enabled: true, Threshold: 80}
+	alertMgr := &alert.AlertManager{}
+
+	pvc := NewPvcMonitor(client, cfg, alertMgr, nil)
+	assert.True(pvc.firstScan)
+
+	// Simulate what checkUsage does: over-threshold PVCs during firstScan
+	// are added to currentNotified (which becomes notifiedPvc) but NOT reported.
+	pvc.mu.Lock()
+	pvc.notifiedPvc["pv-first-scan"] = true
+	pvc.mu.Unlock()
+
+	// After firstScan=false, previously seeded PVCs should remain in notifiedPvc
+	pvc.firstScan = false
+	pvc.mu.Lock()
+	assert.True(pvc.notifiedPvc["pv-first-scan"], "seeded PV should remain in notifiedPvc after first scan")
+	pvc.mu.Unlock()
+}

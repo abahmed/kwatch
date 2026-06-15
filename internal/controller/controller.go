@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"os"
+	"strings"
 	"time"
 
 	"github.com/abahmed/kwatch/internal/config"
@@ -861,6 +862,7 @@ func (c *Controller) buildSeenSet() {
 	now := time.Now()
 	baseline := make(map[string]map[string]int64)
 
+	suppressed := map[string]int{}
 	total := 0
 	const maxBaseline = 2000
 	add := func(key, pod string) {
@@ -874,6 +876,18 @@ func (c *Controller) buildSeenSet() {
 			total++
 		}
 		baseline[key][pod] = now.Unix()
+
+		// Derive owner/reason key for the suppressed count from the incident key.
+		// Incident key format: namespace:owner:reason:container
+		if i1 := strings.IndexByte(key, ':'); i1 >= 0 {
+			if i2 := strings.LastIndexByte(key, ':'); i2 > i1 {
+				ownerReason := key[i1+1:i2]
+				// Replace middle colon with slash: "owner:reason" → "owner/reason"
+				if j := strings.IndexByte(ownerReason, ':'); j >= 0 {
+					suppressed[ownerReason[:j]+"/"+ownerReason[j+1:]]++
+				}
+			}
+		}
 	}
 
 	for _, pod := range pods {
@@ -917,8 +931,24 @@ func (c *Controller) buildSeenSet() {
 			for _, cond := range pod.Status.Conditions {
 				if cond.Type == corev1.PodScheduled && cond.Status == corev1.ConditionFalse {
 					ev := event.Event{Namespace: pod.Namespace, Reason: cond.Reason, ContainerName: "."}
-					add(correlation.IncidentKey(ev, owner, nil), pod.Name)
+					key := correlation.IncidentKey(ev, owner, nil)
+					add(key, pod.Name)
 					break
+				}
+			}
+		}
+	}
+
+	// Seed alerting node conditions into the baseline
+	if c.nodeLister != nil {
+		if nodes, err := c.nodeLister.List(labels.Everything()); err == nil {
+			for _, n := range nodes {
+				for _, cond := range n.Status.Conditions {
+					if reason := handler.NodeConditionReason(cond); reason != "" {
+						ev := event.Event{Reason: reason}
+						key := correlation.IncidentKey(ev, n.Name, nil)
+						add(key, n.Name)
+					}
 				}
 			}
 		}
@@ -928,6 +958,7 @@ func (c *Controller) buildSeenSet() {
 		klog.V(4).InfoS("Seen set built", "count", len(baseline))
 		c.handler.SetSeen(baseline)
 	}
+	c.handler.ReportStartupSummary(suppressed)
 }
 
 func (c *Controller) syncPod(key string) error {

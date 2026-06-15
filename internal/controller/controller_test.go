@@ -27,13 +27,14 @@ import (
 )
 
 type mockHandler struct {
-	mu           sync.Mutex
-	podKeys      []string
-	podDel       []bool
-	nodeKeys     []string
-	nodeDel      []bool
-	err          error
-	seenBaseline map[string]map[string]int64
+	mu             sync.Mutex
+	podKeys        []string
+	podDel         []bool
+	nodeKeys       []string
+	nodeDel        []bool
+	err            error
+	seenBaseline   map[string]map[string]int64
+	startupSummary map[string]int
 }
 
 func (m *mockHandler) ProcessPod(key string, deleted bool) error {
@@ -106,6 +107,11 @@ func (m *mockHandler) SetSeen(baseline map[string]map[string]int64) {
 	m.seenBaseline = baseline
 }
 func (m *mockHandler) ClearSeenForPod(string, string)                          {}
+func (m *mockHandler) ReportStartupSummary(suppressed map[string]int) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	m.startupSummary = suppressed
+}
 
 func TestNewCreatesController(t *testing.T) {
 	assert := assert.New(t)
@@ -819,7 +825,7 @@ func TestMultiNamespaceListerSeesBothNamespaces(t *testing.T) {
 	}, 5*time.Second, 50*time.Millisecond)
 }
 
-func TestBuildSeenSetSkipsNodeConditions(t *testing.T) {
+func TestBuildSeenSetSeedsNodeConditions(t *testing.T) {
 	assert := assert.New(t)
 
 	node := &corev1.Node{
@@ -846,13 +852,13 @@ func TestBuildSeenSetSkipsNodeConditions(t *testing.T) {
 
 	ctrl.buildSeenSet()
 
-	// Node conditions should NOT be seeded into baseline (infra is exempt)
+	// Node conditions SHOULD be seeded into baseline (BASE-1b)
 	h.mu.Lock()
 	baseline := h.seenBaseline
 	h.mu.Unlock()
 
-	unwantedKey := correlation.BuildKey("", "worker-1", "MemoryPressure", "")
-	assert.NotContains(baseline, unwantedKey, "buildSeenSet must NOT seed node conditions")
+	expectedKey := correlation.BuildKey("", "worker-1", "MemoryPressure", "")
+	assert.Contains(baseline, expectedKey, "buildSeenSet must seed node conditions")
 }
 
 func TestBuildSeenPerPodAndHealthySiblingKeepsBaseline(t *testing.T) {
@@ -943,4 +949,118 @@ func TestBuildSeenCrashLoopHighFreq(t *testing.T) {
 	key := correlation.BuildKey("default", "dep", "CrashLoopHighFrequency", "")
 	_, ok := baseline[key]["cl-pod"]
 	assert.True(t, ok, "buildSeenSet must use CrashLoopHighFrequency for restarts > 5")
+}
+
+func TestBuildSeenSetReportsStartupSummary(t *testing.T) {
+	a := assert.New(t)
+
+	pod := &corev1.Pod{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "broken-pod",
+			Namespace: "default",
+			OwnerReferences: []metav1.OwnerReference{
+				{Kind: "ReplicaSet", Name: "broken-rs"},
+			},
+		},
+		Status: corev1.PodStatus{
+			Phase: corev1.PodPending,
+			ContainerStatuses: []corev1.ContainerStatus{
+				{
+					Name: "app",
+					State: corev1.ContainerState{
+						Waiting: &corev1.ContainerStateWaiting{
+							Reason: "ImagePullBackOff",
+						},
+					},
+				},
+			},
+		},
+	}
+
+	client := fake.NewSimpleClientset(pod,
+		// Need a ReplicaSet for owner resolution
+		&appsv1.ReplicaSet{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      "broken-rs",
+				Namespace: "default",
+				OwnerReferences: []metav1.OwnerReference{
+					{Kind: "Deployment", Name: "broken-deploy"},
+				},
+			},
+		},
+	)
+
+	cfg := &config.Config{}
+	h := &mockHandler{}
+
+	ctrl, cleanup := New(client, cfg, h)
+	defer cleanup()
+
+	a.Eventually(func() bool {
+		_, err := ctrl.podLister.Pods("default").Get("broken-pod")
+		return err == nil
+	}, 5*time.Second, 50*time.Millisecond)
+
+	ctrl.buildSeenSet()
+
+	// Must have called ReportStartupSummary with non-empty suppressed counts
+	h.mu.Lock()
+	summary := h.startupSummary
+	h.mu.Unlock()
+
+	a.NotNil(summary, "ReportStartupSummary should have been called")
+	a.Greater(len(summary), 0, "suppressed map should have entries for broken pods")
+
+	// Verify the suppressed key format: owner/reason
+	found := false
+	for key, count := range summary {
+		if count > 0 {
+			found = true
+			a.Contains(key, "/", "suppressed key should use owner/reason format")
+		}
+	}
+	a.True(found, "at least one suppressed entry should exist")
+}
+
+func TestBuildSeenSetReportsEmptySummaryOnNoBrokenPods(t *testing.T) {
+	a := assert.New(t)
+
+	pod := &corev1.Pod{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "healthy-pod",
+			Namespace: "default",
+		},
+		Status: corev1.PodStatus{
+			Phase: corev1.PodRunning,
+			ContainerStatuses: []corev1.ContainerStatus{
+				{
+					Name: "app",
+					State: corev1.ContainerState{
+						Running: &corev1.ContainerStateRunning{},
+					},
+				},
+			},
+		},
+	}
+
+	client := fake.NewSimpleClientset(pod)
+	cfg := &config.Config{}
+	h := &mockHandler{}
+
+	ctrl, cleanup := New(client, cfg, h)
+	defer cleanup()
+
+	a.Eventually(func() bool {
+		_, err := ctrl.podLister.Pods("default").Get("healthy-pod")
+		return err == nil
+	}, 5*time.Second, 50*time.Millisecond)
+
+	ctrl.buildSeenSet()
+
+	h.mu.Lock()
+	summary := h.startupSummary
+	h.mu.Unlock()
+
+	// Must be empty or nil (no broken pods to suppress)
+	a.Empty(summary, "no broken pods means empty startup summary")
 }

@@ -4,8 +4,10 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/abahmed/kwatch/internal/correlation"
 	"github.com/abahmed/kwatch/internal/event"
 	autoscalingv2 "k8s.io/api/autoscaling/v2"
+	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/client-go/tools/cache"
 )
@@ -43,11 +45,37 @@ func (h *handler) ProcessHorizontalPodAutoscalerObject(hpa *autoscalingv2.Horizo
 	}
 
 	key := hpa.Namespace + "/" + hpa.Name
+
+	// (1) scaling-error detection — independent of maxed
+	var scalingErr *autoscalingv2.HorizontalPodAutoscalerCondition
+	for i := range hpa.Status.Conditions {
+		c := &hpa.Status.Conditions[i]
+		if (c.Type == autoscalingv2.AbleToScale || c.Type == autoscalingv2.ScalingActive) &&
+			c.Status == corev1.ConditionFalse {
+			scalingErr = c
+			break
+		}
+	}
+	if scalingErr != nil {
+		h.signalEvent(&event.Signal{
+			Resource:  "horizontalpodautoscaler",
+			PodName:   hpa.Name,
+			Namespace: hpa.Namespace,
+			Reason:    "HPAScalingError",
+			Owner:     key,
+			Labels:    hpa.Labels,
+			Hint:      fmt.Sprintf("%s: %s — %s", scalingErr.Type, scalingErr.Reason, scalingErr.Message),
+		})
+	} else {
+		h.correlator.MarkResolved(correlation.BuildKey(hpa.Namespace, key, "HPAScalingError", ""))
+	}
+
+	// (2) existing maxed logic — but reason-specific resolve
 	maxed := hpa.Status.DesiredReplicas >= hpa.Spec.MaxReplicas &&
 		hpa.Status.CurrentReplicas < hpa.Status.DesiredReplicas
 	if !maxed {
 		h.clearFirstMaxed(key)
-		h.correlator.ResolveByResource("horizontalpodautoscaler", key)
+		h.correlator.MarkResolved(correlation.BuildKey(hpa.Namespace, key, "HPAMaxedOut", ""))
 		return nil
 	}
 

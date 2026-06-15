@@ -21,6 +21,7 @@ type PvcMonitor struct {
 	correlator   *correlation.Engine
 	notifiedPvc  map[string]bool
 	mu           sync.RWMutex
+	firstScan    bool
 }
 
 func NewPvcMonitor(
@@ -34,6 +35,7 @@ func NewPvcMonitor(
 		alertManager: alertManager,
 		correlator:   correlator,
 		notifiedPvc:  make(map[string]bool),
+		firstScan:    true,
 	}
 }
 

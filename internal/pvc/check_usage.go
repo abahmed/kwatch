@@ -68,6 +68,10 @@ func (p *PvcMonitor) checkUsage(ctx context.Context) {
 		if pvc.UsagePercentage >= p.config.Threshold {
 			currentNotified[pvc.PVName] = true
 
+			if p.firstScan {
+				continue
+			}
+
 			severity := "normal"
 			if pvc.UsagePercentage >= p.config.CriticalThreshold {
 				severity = "high"
@@ -86,6 +90,10 @@ func (p *PvcMonitor) checkUsage(ctx context.Context) {
 			// HOLD: between clear and threshold — still firing, no re-signal
 			currentNotified[pvc.PVName] = true
 		}
+	}
+
+	if p.firstScan {
+		p.firstScan = false
 	}
 
 	// Resolve previously notified PVCs that are now under threshold

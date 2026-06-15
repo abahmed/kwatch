@@ -1,6 +1,9 @@
 package handler
 
 import (
+	"fmt"
+	"sort"
+	"strings"
 	"sync"
 	"time"
 
@@ -50,6 +53,7 @@ type Handler interface {
 	SweepTLSSecrets()
 	SetSeen(baseline map[string]map[string]int64)
 	ClearSeenForPod(namespace, podName string)
+	ReportStartupSummary(suppressed map[string]int)
 }
 
 type handler struct {
@@ -189,6 +193,26 @@ func (h *handler) SetSeen(baseline map[string]map[string]int64) {
 
 func (h *handler) ClearSeenForPod(namespace, podName string) {
 	h.correlator.ClearSeenForPod(namespace, podName)
+}
+
+func (h *handler) ReportStartupSummary(suppressed map[string]int) {
+	if !h.config.ReportStartupBaseline || len(suppressed) == 0 {
+		return
+	}
+	parts := make([]string, 0, len(suppressed))
+	total := 0
+	for k, n := range suppressed {
+		parts = append(parts, fmt.Sprintf("%s ×%d", k, n))
+		total += n
+	}
+	sort.Strings(parts)
+	inc := &model.Incident{
+		ID: "startup-baseline", Key: "startup:baseline", Reason: "PreExistingAtStartup",
+		Severity: "normal", Count: total,
+		Hint: fmt.Sprintf("kwatch started with %d pre-existing issue(s), suppressed from per-incident alerts: %s",
+			total, strings.Join(parts, ", ")),
+	}
+	h.alertManager.NotifyIncident(inc, model.ActionCreate)
 }
 
 func (h *handler) report(ev event.Event, owner string, cs *model.ContainerState) {
