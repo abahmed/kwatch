@@ -36,7 +36,7 @@ func (f ContainerLogsFilter) Enrich(ctx *Context) bool {
 		previousLogs,
 		ctx.Config.MaxRecentLogLines)
 
-	for _, pattern := range ctx.Config.IgnoreLogPatternsCompiled {
+	for _, pattern := range ctx.Config.Suppression.LogPatterns {
 		if pattern.MatchString(logs) {
 			klog.InfoS(
 				"skipping container logs as it matches the ignore log pattern",

@@ -15,6 +15,7 @@ type Enricher interface {
 
 type DefaultEnricher struct {
 	SeverityByOwnerKind map[string]string
+	SeverityByReason    map[string]string
 }
 
 func (e *DefaultEnricher) SetSeverityMap(m map[string]string) {
@@ -36,11 +37,16 @@ func (e *DefaultEnricher) Enrich(ev *event.Event, inc *model.Incident) {
 	if ev.Severity != "" {
 		inc.Severity = ev.Severity
 	} else {
-		inc.Severity = e.resolveSeverity(ev.OwnerKind)
+		inc.Severity = e.resolveSeverity(ev.OwnerKind, ev.Reason)
 	}
 }
 
-func (e *DefaultEnricher) resolveSeverity(ownerKind string) string {
+func (e *DefaultEnricher) resolveSeverity(ownerKind, reason string) string {
+	if e.SeverityByReason != nil {
+		if s, ok := e.SeverityByReason[reason]; ok {
+			return s
+		}
+	}
 	if e.SeverityByOwnerKind != nil {
 		if s, ok := e.SeverityByOwnerKind[ownerKind]; ok {
 			return s

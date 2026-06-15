@@ -3,6 +3,7 @@ package upgrader
 import (
 	"context"
 	"fmt"
+	"os"
 	"time"
 
 	"github.com/abahmed/kwatch/internal/alert"
@@ -42,12 +43,18 @@ type Upgrader struct {
 }
 
 func NewUpgrader(
-	config *config.Upgrader,
+	upCfg *config.Upgrader,
 	alertManager *alert.AlertManager,
 	stateManager *state.StateManager,
 ) *Upgrader {
+	if upCfg == nil {
+		upCfg = &config.Upgrader{}
+	}
+	if os.Getenv("SKIP_UPGRADE_CHECK") == "1" || os.Getenv("SKIP_UPGRADE_CHECK") == "true" {
+		upCfg.DisableUpdateCheck = true
+	}
 	return &Upgrader{
-		config:       config,
+		config:       upCfg,
 		alertManager: alertManager,
 		stateManager: stateManager,
 		githubClient: &GitHubClient{},

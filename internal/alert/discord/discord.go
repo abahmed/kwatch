@@ -2,6 +2,7 @@ package discord
 
 import (
 	"fmt"
+	"net/http"
 	"strings"
 
 	"github.com/abahmed/kwatch/internal/config"
@@ -67,6 +68,21 @@ func NewDiscord(config map[string]interface{}, appCfg *config.App) *Discord {
 // Name returns name of the provider
 func (s *Discord) Name() string {
 	return "Discord"
+}
+
+// Verify checks webhook credentials by issuing a GET to the webhook URL.
+func (s *Discord) Verify() error {
+	client := &http.Client{}
+	url := fmt.Sprintf("https://discord.com/api/webhooks/%s/%s", s.id, s.token)
+	resp, err := client.Get(url)
+	if err != nil {
+		return err
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		return fmt.Errorf("discord webhook GET returned status %d", resp.StatusCode)
+	}
+	return nil
 }
 
 // SendEvent sends event to the provider

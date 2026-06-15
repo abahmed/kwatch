@@ -1,6 +1,7 @@
 package integration
 
 import (
+	"fmt"
 	"sync"
 	"testing"
 	"time"
@@ -10,6 +11,25 @@ import (
 	"github.com/abahmed/kwatch/internal/event"
 	"github.com/abahmed/kwatch/internal/model"
 )
+
+// defaultStormConfig returns a Config suitable for load tests that exercise
+// storm collapse.
+func defaultStormConfig(rec *recordingAlertManager) correlation.Config {
+	return correlation.Config{
+		Window:              10 * time.Minute,
+		LifecycleInterval:   1 * time.Minute,
+		StartupQuiet:        0,
+		ResolveHoldDown:     0,
+		Enricher:            &enricher.DefaultEnricher{},
+		StormEnabled:        true,
+		StormThreshold:      10,
+		StormWindow:         5 * time.Minute,
+		StormDigestInterval: 5 * time.Minute,
+		LifecycleHook: func(inc *model.Incident, action model.IncidentAction) {
+			rec.NotifyIncident(inc, action)
+		},
+	}
+}
 
 // alertEntry holds a single (incident, action) notification captured by the
 // recording alert manager.
@@ -305,5 +325,99 @@ func TestOwnerGroupingSameReason(t *testing.T) {
 	// Expect 2 notifications: the create we recorded + the resolved from hook
 	if rec.Len() != 2 {
 		t.Fatalf("expected 2 notifications, got %d", rec.Len())
+	}
+}
+
+// --------------------------------------------------------------------------
+// Load tests & benchmarks
+// --------------------------------------------------------------------------
+
+// TestStormCollapseUnderLoad verifies that 1000 consecutive events for the
+// same (ns,owner,reason) key produce a bounded number of notifications rather
+// than generating 1000 separate alerts. Under storm detection, the tenth+
+// create within the storm window is absorbed into a digest; edge-triggering
+// in steady state also suppresses repeats.
+func TestStormCollapseUnderLoad(t *testing.T) {
+	rec := &recordingAlertManager{}
+	eng := correlation.NewEngine(defaultStormConfig(rec))
+
+	owner := "dep-storm"
+	cs := makeContainerState(1, "CrashLoopBackOff", 137)
+
+	n := 1000
+	lastAction := model.ActionSkip
+	for i := 0; i < n; i++ {
+		podName := fmt.Sprintf("pod-%d", i)
+		ev := makeEvent("pod", podName, "storm-ns", "CrashLoopBackOff", "main", "")
+		_, action := eng.Process(ev, owner, cs)
+		if action != model.ActionSkip {
+			lastAction = action
+			if action == model.ActionCreate || action == model.ActionDigest {
+				rec.NotifyIncident(nil, action)
+			}
+		}
+	}
+
+	// Under storm collapse we should never have more than a handful of
+	// notifications out of 1000 events. The exact count depends on
+	// StormThreshold, but it must be << n.
+	if rec.Len() > 50 {
+		t.Fatalf("storm collapse expected <= 50 notifications from %d events, got %d (lastAction=%s)",
+			n, rec.Len(), lastAction)
+	}
+}
+
+// TestBoundedStateUnderLoad verifies that the engine's internal state map
+// grows only with distinct (ns,owner,reason) keys, not with each event.
+func TestBoundedStateUnderLoad(t *testing.T) {
+	rec := &recordingAlertManager{}
+	eng := correlation.NewEngine(defaultStormConfig(rec))
+
+	// 10 distinct owners × 100 events each = 1000 total events
+	distinctOwners := 10
+	eventsPerOwner := 100
+
+	cs := makeContainerState(1, "OOMKill", 137)
+
+	for o := 0; o < distinctOwners; o++ {
+		owner := fmt.Sprintf("dep-%d", o)
+		for i := 0; i < eventsPerOwner; i++ {
+			podName := fmt.Sprintf("pod-%d", i)
+			ev := makeEvent("pod", podName, "load-ns", "OOMKill", "main", "")
+			eng.Process(ev, owner, cs)
+		}
+	}
+
+	// The engine should hold exactly distinctOwners entries (one per owner)
+	// in its active state. We can't access state directly, but we can verify
+	// indirectly: resolving each triggers a single notification.
+	for o := 0; o < distinctOwners; o++ {
+		key := correlation.BuildKey("load-ns", fmt.Sprintf("dep-%d", o), "OOMKill", "")
+		eng.MarkResolved(key)
+	}
+
+	// DistinctOwners creates + distinctOwners resolves = 2*distinctOwners in
+	// best case; storm playbook may add extra. Sanity: << 1000.
+	if rec.Len() > 100 {
+		t.Fatalf("expected bounded notifications <= 100, got %d", rec.Len())
+	}
+}
+
+// BenchmarkProcessStorm measures allocation and throughput of engine.Process
+// under a bulk-load scenario simulating storm collapse.
+func BenchmarkProcessStorm(b *testing.B) {
+	rec := &recordingAlertManager{}
+	eng := correlation.NewEngine(defaultStormConfig(rec))
+
+	owner := "dep-bench"
+	cs := makeContainerState(1, "CrashLoopBackOff", 137)
+
+	ev := makeEvent("pod", "pod", "bench-ns", "CrashLoopBackOff", "main", "")
+
+	b.ResetTimer()
+	b.ReportAllocs()
+
+	for i := 0; i < b.N; i++ {
+		eng.Process(ev, owner, cs)
 	}
 }

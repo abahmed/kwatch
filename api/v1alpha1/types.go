@@ -14,28 +14,28 @@ type KwatchConfig struct {
 
 // KwatchConfigSpec defines the desired kwatch configuration.
 type KwatchConfigSpec struct {
-	MaxRecentLogLines          int64                  `json:"maxRecentLogLines,omitempty"`
-	IgnoreFailedGracefulShutdown bool                 `json:"ignoreFailedGracefulShutdown,omitempty"`
-	Namespaces                 []string               `json:"namespaces,omitempty"`
-	Reasons                    []string               `json:"reasons,omitempty"`
-	IgnoreContainerNames       []string               `json:"ignoreContainerNames,omitempty"`
-	IgnorePodNames             []string               `json:"ignorePodNames,omitempty"`
-	IgnoreLogPatterns          []string               `json:"ignoreLogPatterns,omitempty"`
-	SeverityByOwnerKind        map[string]string      `json:"severityByOwnerKind,omitempty"`
-	PendingPodThreshold        int                    `json:"pendingPodThreshold,omitempty"`
-	ResyncSeconds              int                    `json:"resyncSeconds,omitempty"`
-	Silences                   []SilenceRule          `json:"silences,omitempty"`
-	Correlation                CorrelationConfig      `json:"correlation,omitempty"`
-	PvcMonitor                 PvcMonitorConfig       `json:"pvcMonitor,omitempty"`
-	NodeMonitor                NodeMonitorConfig      `json:"nodeMonitor,omitempty"`
-	RolloutMonitor             RolloutMonitorConfig   `json:"rolloutMonitor,omitempty"`
-	DaemonSetMonitor           DaemonSetMonitorConfig `json:"daemonSetMonitor,omitempty"`
-	JobMonitor                 JobMonitorConfig       `json:"jobMonitor,omitempty"`
-	CronJobMonitor             CronJobMonitorConfig   `json:"cronJobMonitor,omitempty"`
-	HeartbeatMonitor           HeartbeatMonitorConfig `json:"heartbeatMonitor,omitempty"`
-	HealthCheck                HealthCheckConfig      `json:"healthCheck,omitempty"`
-	App                        AppConfig              `json:"app,omitempty"`
-	Workers                    int                    `json:"workers,omitempty"`
+	MaxRecentLogLines            int64                  `json:"maxRecentLogLines,omitempty"`
+	IgnoreFailedGracefulShutdown bool                   `json:"ignoreFailedGracefulShutdown,omitempty"`
+	Namespaces                   []string               `json:"namespaces,omitempty"`
+	Reasons                      []string               `json:"reasons,omitempty"`
+	IgnoreContainerNames         []string               `json:"ignoreContainerNames,omitempty"`
+	IgnorePodNames               []string               `json:"ignorePodNames,omitempty"`
+	IgnoreLogPatterns            []string               `json:"ignoreLogPatterns,omitempty"`
+	SeverityByOwnerKind          map[string]string      `json:"severityByOwnerKind,omitempty"`
+	PendingPodThreshold          int                    `json:"pendingPodThreshold,omitempty"`
+	ResyncSeconds                int                    `json:"resyncSeconds,omitempty"`
+	Silences                     []SilenceRule          `json:"silences,omitempty"`
+	Correlation                  CorrelationConfig      `json:"correlation,omitempty"`
+	PvcMonitor                   PvcMonitorConfig       `json:"pvcMonitor,omitempty"`
+	NodeMonitor                  NodeMonitorConfig      `json:"nodeMonitor,omitempty"`
+	RolloutMonitor               RolloutMonitorConfig   `json:"rolloutMonitor,omitempty"`
+	DaemonSetMonitor             DaemonSetMonitorConfig `json:"daemonSetMonitor,omitempty"`
+	JobMonitor                   JobMonitorConfig       `json:"jobMonitor,omitempty"`
+	CronJobMonitor               CronJobMonitorConfig   `json:"cronJobMonitor,omitempty"`
+	HeartbeatMonitor             HeartbeatMonitorConfig `json:"heartbeatMonitor,omitempty"`
+	HealthCheck                  HealthCheckConfig      `json:"healthCheck,omitempty"`
+	App                          AppConfig              `json:"app,omitempty"`
+	Workers                      int                    `json:"workers,omitempty"`
 }
 
 type CorrelationConfig struct {
@@ -92,9 +92,14 @@ type AppConfig struct {
 }
 
 type SilenceRule struct {
-	Namespaces      []string `json:"namespaces,omitempty"`
-	Reasons         []string `json:"reasons,omitempty"`
-	PodNamePatterns []string `json:"podNamePatterns,omitempty"`
+	Namespaces        []string `json:"namespaces,omitempty"`
+	Reasons           []string `json:"reasons,omitempty"`
+	PodNamePatterns   []string `json:"podNamePatterns,omitempty"`
+	ContainerNames    []string `json:"containerNames,omitempty"`
+	LogPatterns       []string `json:"logPatterns,omitempty"`
+	ContainerMessages []string `json:"containerMessages,omitempty"`
+	NodeReasons       []string `json:"nodeReasons,omitempty"`
+	NodeMessages      []string `json:"nodeMessages,omitempty"`
 }
 
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object

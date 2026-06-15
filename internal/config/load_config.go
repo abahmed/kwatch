@@ -11,20 +11,40 @@ import (
 	"k8s.io/klog/v2"
 )
 
-// strictDecoder wraps yaml.Decoder with KnownFields(true) to reject
-// unknown keys and catch typos early (NEW-5).
-type strictDecoder struct {
-	dec *yaml.Decoder
-}
-
-func newStrictDecoder(r *strings.Reader) *strictDecoder {
-	dec := yaml.NewDecoder(r)
+// LintStrict re-decodes the config file with KnownFields(true) to reject
+// unknown keys, catching typos and removed fields. Used by kwatch lint --strict.
+// Runtime LoadConfig stays lenient for back-compat.
+func LintStrict() error {
+	configFile := os.Getenv("CONFIG_FILE")
+	if configFile == "" {
+		return nil
+	}
+	raw, err := os.ReadFile(configFile)
+	if err != nil {
+		return err
+	}
+	expanded := expandEnv(string(raw))
+	if strings.TrimSpace(expanded) == "" {
+		return nil
+	}
+	dec := yaml.NewDecoder(strings.NewReader(expanded))
 	dec.KnownFields(true)
-	return &strictDecoder{dec: dec}
+	var tmp Config
+	return dec.Decode(&tmp)
 }
 
-func (d *strictDecoder) Decode(v interface{}) error {
-	return d.dec.Decode(v)
+// expandEnv replaces ${VAR} with the environment value (braced-only;
+// bare $ is preserved for passwords/hashes).
+var envVarRe = regexp.MustCompile(`\$\{(\w+)\}`)
+
+func expandEnv(s string) string {
+	return envVarRe.ReplaceAllStringFunc(s, func(m string) string {
+		groups := envVarRe.FindStringSubmatch(m)
+		if groups == nil {
+			return m
+		}
+		return os.Getenv(groups[1])
+	})
 }
 
 // LoadConfig loads yaml configuration from file if provided, otherwise
@@ -49,22 +69,10 @@ func LoadConfig() (*Config, error) {
 		return nil, err
 	}
 
-	// B1: env-var interpolation — only ${VAR} is replaced from environment.
-	// Uses regex to match only the braced form, leaving a bare $ (e.g. in
-	// passwords or bcrypt hashes) untouched.
-	envVarRe := regexp.MustCompile(`\$\{(\w+)\}`)
-	expanded := envVarRe.ReplaceAllStringFunc(string(yamlFile), func(m string) string {
-		groups := envVarRe.FindStringSubmatch(m)
-		if groups == nil {
-			return m
-		}
-		return os.Getenv(groups[1])
-	})
+	expanded := expandEnv(string(yamlFile))
 
 	if strings.TrimSpace(expanded) != "" {
-		dec := newStrictDecoder(strings.NewReader(expanded))
-		err = dec.Decode(config)
-		if err != nil {
+		if err = yaml.Unmarshal([]byte(expanded), config); err != nil {
 			klog.InfoS("unable to parse config file", "error", err.Error())
 			return nil, err
 		}
@@ -94,19 +102,27 @@ func LoadConfig() (*Config, error) {
 			errors.New("either allowed or forbidden reasons must be set, can't set both"))
 	}
 
-	// Prepare ignored pod name patters
+	// Prepare ignored pod name patters (compiled for back-compat)
 	config.IgnorePodNamePatterns, err =
 		getCompiledIgnorePatterns(config.IgnorePodNames)
 	if err != nil {
 		errs = append(errs, fmt.Errorf("failed to compile pod name pattern: %w", err))
 	}
 
-	// Prepare ignored log patterns
+	// Prepare ignored log patterns (compiled for back-compat)
 	config.IgnoreLogPatternsCompiled, err =
 		getCompiledIgnorePatterns(config.IgnoreLogPatterns)
 	if err != nil {
 		errs = append(errs, fmt.Errorf("failed to compile log pattern: %w", err))
 	}
+
+	// Consolidation: convert deprecated ignore* fields into synthetic
+	// SilenceRules so detect-time and post-detect filters both read from
+	// the unified Silences / SuppressionIndex.
+	config.Silences = appendIgnoreFieldSilences(config)
+
+	// Build suppression index for detect-time filters
+	config.Suppression = config.BuildSuppressionIndex()
 
 	errs = append(errs, Validate(config)...)
 
@@ -159,4 +175,33 @@ func getCompiledIgnorePatterns(patterns []string) (compiledPatterns []*regexp.Re
 	}
 
 	return compiledPatterns, nil
+}
+
+// appendIgnoreFieldSilences converts deprecated ignore* config fields into
+// synthetic SilenceRules and appends them to the existing silences list.
+// This ensures all suppression is consolidated under Silences for unified
+// detect-time and post-detect filtering.
+func appendIgnoreFieldSilences(c *Config) []SilenceRule {
+	var extra []SilenceRule
+
+	if len(c.IgnoreContainerNames) > 0 {
+		extra = append(extra, SilenceRule{ContainerNames: c.IgnoreContainerNames})
+	}
+	if len(c.IgnorePodNames) > 0 {
+		extra = append(extra, SilenceRule{PodNamePatterns: c.IgnorePodNames})
+	}
+	if len(c.IgnoreLogPatterns) > 0 {
+		extra = append(extra, SilenceRule{LogPatterns: c.IgnoreLogPatterns})
+	}
+	if len(c.IgnoreContainerMessages) > 0 {
+		extra = append(extra, SilenceRule{ContainerMessages: c.IgnoreContainerMessages})
+	}
+	if len(c.IgnoreNodeReasons) > 0 {
+		extra = append(extra, SilenceRule{NodeReasons: c.IgnoreNodeReasons})
+	}
+	if len(c.IgnoreNodeMessages) > 0 {
+		extra = append(extra, SilenceRule{NodeMessages: c.IgnoreNodeMessages})
+	}
+
+	return append(c.Silences, extra...)
 }

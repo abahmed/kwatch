@@ -29,6 +29,13 @@ func (d DisruptionFilter) Detect(ctx *Context) Status {
 		}
 	}
 
+	// classic kubelet node-pressure eviction: phase=Failed, reason=Evicted,
+	// no DeletionTimestamp / DisruptionTarget condition. The root cause is a
+	// node condition (NodeMonitor reports it); the per-pod symptom is noise.
+	if string(ctx.Pod.Status.Phase) == "Failed" && ctx.Pod.Status.Reason == "Evicted" {
+		return StatusSkip
+	}
+
 	return StatusAlert
 }
 

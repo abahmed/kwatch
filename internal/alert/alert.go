@@ -2,6 +2,7 @@ package alert
 
 import (
 	"bytes"
+	"context"
 	"fmt"
 	"reflect"
 	"regexp"
@@ -50,28 +51,31 @@ type DeadLetterEntry struct {
 const channelCap = 256
 const dlqCap = 100
 
+const defaultMaxBackoff = 30 * time.Second
+
 type providerEntry struct {
 	provider      Provider
 	routes        []config.AlertRoute
 	maxAttempts   int
 	retryDelay    time.Duration
+	maxBackoff    time.Duration
 	fallback      *providerEntry
-	fallbackNamed string                   // resolved in second pass
+	fallbackNamed string // resolved in second pass
 	templates     map[string]*template.Template
-	maxBytes      int                      // 0 = no limit (FIX-5)
+	maxBytes      int // 0 = no limit (FIX-5)
 	ch            chan deliverJob
 }
 
 type AlertManager struct {
-	entries      []providerEntry
-	silences     []silenceMatcher
-	maxLogLines  int
-	templates    map[string]*template.Template
-	started      bool
-	wg           sync.WaitGroup
-	dlqMu        sync.Mutex
-	dlqRing      [dlqCap]DeadLetterEntry
-	dlqHead      int
+	entries     []providerEntry
+	silences    []silenceMatcher
+	maxLogLines int
+	templates   map[string]*template.Template
+	started     bool
+	wg          sync.WaitGroup
+	dlqMu       sync.Mutex
+	dlqRing     [dlqCap]DeadLetterEntry
+	dlqHead     int
 }
 
 func (a *AlertManager) SetMaxLogLines(n int) {
@@ -97,9 +101,14 @@ func (a *AlertManager) SetTemplates(tpl map[string]string) {
 }
 
 type silenceMatcher struct {
-	namespaces []string
-	reasons    []string
-	podPattern []*regexp.Regexp
+	namespaces     []string
+	reasons        []string
+	podPattern     []*regexp.Regexp
+	containerNames []string
+	logPatterns    []*regexp.Regexp
+	containerMsgs  []string
+	nodeReasons    []string
+	nodeMessages   []string
 }
 
 // Provider interface
@@ -107,6 +116,12 @@ type Provider interface {
 	Name() string
 	SendEvent(*event.Event) error
 	SendMessage(string) error
+}
+
+// VerifiableProvider is an optional interface for providers that support
+// credential pre-flight verification (kwatch lint --check).
+type VerifiableProvider interface {
+	Verify() error
 }
 
 func extractRoutes(cfg map[string]interface{}) []config.AlertRoute {
@@ -162,9 +177,10 @@ func extractTemplates(cfg map[string]interface{}) map[string]*template.Template 
 	return nil
 }
 
-func extractRetry(cfg map[string]interface{}) (maxAttempts int, delay time.Duration) {
+func extractRetry(cfg map[string]interface{}) (maxAttempts int, delay, maxBackoff time.Duration) {
 	maxAttempts = 1
 	delay = time.Second
+	maxBackoff = defaultMaxBackoff
 	if r, ok := cfg["retry"]; ok {
 		if rm, ok := r.(map[string]interface{}); ok {
 			if a, ok := rm["maxAttempts"]; ok {
@@ -179,6 +195,13 @@ func extractRetry(cfg map[string]interface{}) (maxAttempts int, delay time.Durat
 					}
 				}
 			}
+			if b, ok := rm["maxBackoff"]; ok {
+				if s, ok := b.(string); ok {
+					if parsed, err := time.ParseDuration(s); err == nil {
+						maxBackoff = parsed
+					}
+				}
+			}
 		}
 	}
 	return
@@ -186,26 +209,23 @@ func extractRetry(cfg map[string]interface{}) (maxAttempts int, delay time.Durat
 
 // ProviderNames returns the set of known alert provider names.
 func ProviderNames() []string {
-	names := make([]string, 0, len(knownProviders))
-	for n := range knownProviders {
+	names := make([]string, 0, len(config.KnownProviders))
+	for n := range config.KnownProviders {
 		names = append(names, n)
 	}
 	sort.Strings(names)
 	return names
 }
 
-var knownProviders = map[string]bool{
-	"slack": true, "pagerduty": true, "discord": true, "telegram": true,
-	"teams": true, "email": true, "rocketchat": true, "mattermost": true,
-	"opsgenie": true, "matrix": true, "dingtalk": true, "feishu": true,
-	"webhook": true, "zenduty": true, "googlechat": true,
-}
-
-// Init initializes AlertManager with provided config
+// Init initializes AlertManager with provided config.
+// Safe to call multiple times: shuts down existing workers before re-init.
 func (a *AlertManager) Init(
 	alertCfg map[string]map[string]interface{},
 	appCfg *config.App,
 ) {
+	if a.started {
+		a.shutdown()
+	}
 	a.entries = make([]providerEntry, 0)
 	a.silences = nil
 
@@ -246,7 +266,7 @@ func (a *AlertManager) Init(
 		}
 
 		if pvdr == nil {
-			if knownProviders[lowerCaseKey] {
+			if config.KnownProviders[lowerCaseKey] {
 				klog.InfoS("alert provider has missing or invalid credentials, skipping", "name", k)
 			} else {
 				klog.InfoS("unknown alert provider, skipping", "name", k)
@@ -254,22 +274,23 @@ func (a *AlertManager) Init(
 			continue
 		}
 		if !reflect.ValueOf(pvdr).IsNil() {
-			maxAttempts, retryDelay := extractRetry(v)
+			maxAttempts, retryDelay, maxBackoff := extractRetry(v)
 			fbName := ""
 			if raw, ok := v["fallback"]; ok {
 				fbName, _ = raw.(string)
 			}
-		entries = append(entries, providerEntry{
-			provider:      pvdr,
-			routes:        extractRoutes(v),
-			maxAttempts:   maxAttempts,
-			retryDelay:    retryDelay,
-			fallback:      nil,
-			fallbackNamed: fbName,
-			templates:     extractTemplates(v),
-			maxBytes:      defaultMaxBytes(pvdr.Name()),
-			ch:            make(chan deliverJob, channelCap),
-		})
+			entries = append(entries, providerEntry{
+				provider:      pvdr,
+				routes:        extractRoutes(v),
+				maxAttempts:   maxAttempts,
+				retryDelay:    retryDelay,
+				maxBackoff:    maxBackoff,
+				fallback:      nil,
+				fallbackNamed: fbName,
+				templates:     extractTemplates(v),
+				maxBytes:      defaultMaxBytes(pvdr.Name()),
+				ch:            make(chan deliverJob, channelCap),
+			})
 		}
 	}
 	// second pass: resolve fallback names to pointers
@@ -296,14 +317,25 @@ func (a *AlertManager) SetSilences(rules []config.SilenceRule) {
 	a.silences = make([]silenceMatcher, 0, len(rules))
 	for _, sr := range rules {
 		sm := silenceMatcher{
-			namespaces: sr.Namespaces,
-			reasons:    sr.Reasons,
+			namespaces:     sr.Namespaces,
+			reasons:        sr.Reasons,
+			containerNames: sr.ContainerNames,
+			containerMsgs:  sr.ContainerMessages,
+			nodeReasons:    sr.NodeReasons,
+			nodeMessages:   sr.NodeMessages,
 		}
 		for _, p := range sr.PodNamePatterns {
 			if re, err := regexp.Compile(p); err == nil {
 				sm.podPattern = append(sm.podPattern, re)
 			} else {
 				klog.ErrorS(err, "invalid silence pod name pattern", "pattern", p)
+			}
+		}
+		for _, p := range sr.LogPatterns {
+			if re, err := regexp.Compile(p); err == nil {
+				sm.logPatterns = append(sm.logPatterns, re)
+			} else {
+				klog.ErrorS(err, "invalid silence log pattern", "pattern", p)
 			}
 		}
 		a.silences = append(a.silences, sm)
@@ -348,6 +380,75 @@ func matchesSilence(sm silenceMatcher, inc *model.Incident) bool {
 		found := false
 		for _, re := range sm.podPattern {
 			if re.MatchString(inc.Name) {
+				found = true
+				break
+			}
+		}
+		if !found {
+			return false
+		}
+	}
+	if len(sm.containerNames) > 0 {
+		found := false
+		for _, cn := range sm.containerNames {
+			if cn == inc.ContainerName || inc.Containers[cn] {
+				found = true
+				break
+			}
+		}
+		if !found {
+			return false
+		}
+	}
+	if len(sm.logPatterns) > 0 {
+		if inc.Logs == "" {
+			return false
+		}
+		found := false
+		for _, re := range sm.logPatterns {
+			if re.MatchString(inc.Logs) {
+				found = true
+				break
+			}
+		}
+		if !found {
+			return false
+		}
+	}
+	if len(sm.containerMsgs) > 0 {
+		if inc.LastContainerState == nil || inc.LastContainerState.Msg == "" {
+			return false
+		}
+		found := false
+		for _, m := range sm.containerMsgs {
+			if strings.Contains(inc.LastContainerState.Msg, m) {
+				found = true
+				break
+			}
+		}
+		if !found {
+			return false
+		}
+	}
+	if len(sm.nodeReasons) > 0 {
+		found := false
+		for _, r := range sm.nodeReasons {
+			if r == inc.Reason {
+				found = true
+				break
+			}
+		}
+		if !found {
+			return false
+		}
+	}
+	if len(sm.nodeMessages) > 0 {
+		if inc.Hint == "" {
+			return false
+		}
+		found := false
+		for _, m := range sm.nodeMessages {
+			if strings.Contains(inc.Hint, m) {
 				found = true
 				break
 			}
@@ -451,6 +552,20 @@ func sendWithRetry(sendFn func() error, maxAttempts int, delay, maxBackoff time.
 	return lastErr
 }
 
+// VerifyAll runs credential pre-flight on all providers that support it.
+// Returns a map of provider name → error (nil = verified OK).
+func (a *AlertManager) VerifyAll() map[string]error {
+	result := make(map[string]error)
+	for _, entry := range a.entries {
+		if v, ok := entry.provider.(VerifiableProvider); ok {
+			result[entry.provider.Name()] = v.Verify()
+		} else {
+			result[entry.provider.Name()] = nil // no verifier = skip
+		}
+	}
+	return result
+}
+
 // Notify sends string msg to all providers
 func (a *AlertManager) Notify(msg string) {
 	klog.InfoS("sending message", "msg", msg)
@@ -460,7 +575,7 @@ func (a *AlertManager) Notify(msg string) {
 		truncMsg := truncateMsg(msg, entry.maxBytes)
 		if err := sendWithRetry(func() error {
 			return p.SendMessage(truncMsg)
-		}, entry.maxAttempts, entry.retryDelay, 0, p.Name()); err != nil && entry.fallback != nil {
+		}, entry.maxAttempts, entry.retryDelay, entry.maxBackoff, p.Name()); err != nil && entry.fallback != nil {
 			entry.fallback.provider.SendMessage("[fallback — primary " + p.Name() + " failed] " + truncMsg)
 		}
 	}
@@ -474,7 +589,7 @@ func (a *AlertManager) NotifyEvent(event event.Event) {
 		p := entry.provider
 		if err := sendWithRetry(func() error {
 			return p.SendEvent(&event)
-		}, entry.maxAttempts, entry.retryDelay, 0, p.Name()); err != nil && entry.fallback != nil {
+		}, entry.maxAttempts, entry.retryDelay, entry.maxBackoff, p.Name()); err != nil && entry.fallback != nil {
 			entry.fallback.provider.SendMessage("[fallback — primary " + p.Name() + " failed] " + event.Reason + " in " + event.Namespace + "/" + event.PodName)
 		}
 	}
@@ -525,8 +640,8 @@ func (a *AlertManager) NotifyIncident(inc *model.Incident, action model.Incident
 }
 
 // Start launches a worker goroutine for each provider that processes
-// queued deliveries. Returns immediately; workers stop when channels close.
-func (a *AlertManager) Start() {
+// queued deliveries. Workers drain and stop when ctx is cancelled.
+func (a *AlertManager) Start(ctx context.Context) {
 	a.started = true
 	for i := range a.entries {
 		entry := &a.entries[i]
@@ -538,6 +653,10 @@ func (a *AlertManager) Start() {
 			}
 		}()
 	}
+	go func() {
+		<-ctx.Done()
+		a.shutdown()
+	}()
 }
 
 // shutdown waits for all delivery workers to finish (used in tests).
@@ -594,13 +713,12 @@ func (a *AlertManager) deliverOne(entry *providerEntry, inc *model.Incident, act
 		tpl = a.templates
 	}
 	msg := truncateMsg(formatIncidentMessage(inc, action, maxLines, tpl), entry.maxBytes)
-	maxBackoff := 30 * time.Second
 
 	var err error
 	if action == model.ActionDigestFlush {
 		err = sendWithRetry(func() error {
 			return p.SendMessage(msg)
-		}, entry.maxAttempts, entry.retryDelay, maxBackoff, p.Name())
+		}, entry.maxAttempts, entry.retryDelay, entry.maxBackoff, p.Name())
 	} else {
 		if !shouldDeliver(entry.routes, inc) {
 			klog.V(4).InfoS("incident filtered by route",
@@ -611,11 +729,11 @@ func (a *AlertManager) deliverOne(entry *providerEntry, inc *model.Incident, act
 		if tp, ok := p.(ThreadProvider); ok {
 			err = sendWithRetry(func() error {
 				return tp.SendIncident(inc, action)
-			}, entry.maxAttempts, entry.retryDelay, maxBackoff, p.Name())
+			}, entry.maxAttempts, entry.retryDelay, entry.maxBackoff, p.Name())
 		} else {
 			err = sendWithRetry(func() error {
 				return p.SendMessage(msg)
-			}, entry.maxAttempts, entry.retryDelay, maxBackoff, p.Name())
+			}, entry.maxAttempts, entry.retryDelay, entry.maxBackoff, p.Name())
 		}
 	}
 	if err != nil {
@@ -649,7 +767,7 @@ func (a *AlertManager) deliverAllSync(inc *model.Incident, action model.Incident
 		if action == model.ActionDigestFlush {
 			if err := sendWithRetry(func() error {
 				return p.SendMessage(msg)
-			}, entry.maxAttempts, entry.retryDelay, 0, p.Name()); err != nil {
+			}, entry.maxAttempts, entry.retryDelay, entry.maxBackoff, p.Name()); err != nil {
 				klog.ErrorS(err, "sync delivery failed", "provider", p.Name(), "key", inc.Key, "id", inc.ID)
 			}
 			continue
@@ -661,11 +779,11 @@ func (a *AlertManager) deliverAllSync(inc *model.Incident, action model.Incident
 		if tp, ok := p.(ThreadProvider); ok {
 			err = sendWithRetry(func() error {
 				return tp.SendIncident(inc, action)
-			}, entry.maxAttempts, entry.retryDelay, 0, p.Name())
+			}, entry.maxAttempts, entry.retryDelay, entry.maxBackoff, p.Name())
 		} else {
 			err = sendWithRetry(func() error {
 				return p.SendMessage(msg)
-			}, entry.maxAttempts, entry.retryDelay, 0, p.Name())
+			}, entry.maxAttempts, entry.retryDelay, entry.maxBackoff, p.Name())
 		}
 		if err != nil {
 			metrics.Default.NotificationsDropped.Add(1)

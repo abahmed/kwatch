@@ -40,6 +40,11 @@ func (p *PvcMonitor) checkUsage() {
 
 	currentNotified := make(map[string]bool, len(pvcUsages))
 
+	clear := p.config.ClearThreshold
+	if clear <= 0 || clear > p.config.Threshold {
+		clear = p.config.Threshold // back-compat: 0 = no hysteresis
+	}
+
 	for _, pvc := range pvcUsages {
 		if pvc.UsagePercentage >= p.config.Threshold {
 			currentNotified[pvc.PVName] = true
@@ -50,14 +55,17 @@ func (p *PvcMonitor) checkUsage() {
 			}
 
 			p.reportSignal(&event.Signal{
-				Resource: "pvc",
-				PodName:  pvc.PodName,
+				Resource:  "pvc",
+				PodName:   pvc.PodName,
 				Namespace: pvc.Namespace,
-				Reason:   "VolumeUsageHigh",
-				Hint:     fmt.Sprintf("VolumeUsage(%.0f%%)", pvc.UsagePercentage),
-				Severity: severity,
-				Owner:    pvc.PVName,
+				Reason:    "VolumeUsageHigh",
+				Hint:      fmt.Sprintf("VolumeUsage(%.0f%%)", pvc.UsagePercentage),
+				Severity:  severity,
+				Owner:     pvc.PVName,
 			})
+		} else if p.notifiedPvc[pvc.PVName] && pvc.UsagePercentage >= clear {
+			// HOLD: between clear and threshold — still firing, no re-signal
+			currentNotified[pvc.PVName] = true
 		}
 	}
 

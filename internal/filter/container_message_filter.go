@@ -2,12 +2,10 @@ package filter
 
 import "strings"
 
-type ContainerMessageFilter struct {
-	Messages []string
-}
+type ContainerMessageFilter struct{}
 
 func (f ContainerMessageFilter) Detect(ctx *Context) Status {
-	if len(f.Messages) == 0 || ctx.Container == nil || ctx.Container.Container == nil {
+	if ctx.Container == nil || ctx.Container.Container == nil {
 		return StatusAlert
 	}
 
@@ -23,7 +21,7 @@ func (f ContainerMessageFilter) Detect(ctx *Context) Status {
 		return StatusAlert
 	}
 
-	for _, pattern := range f.Messages {
+	for _, pattern := range ctx.Config.Suppression.ContainerMessages {
 		if strings.Contains(msg, pattern) {
 			return StatusSkip
 		}

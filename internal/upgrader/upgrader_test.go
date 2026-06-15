@@ -155,7 +155,7 @@ func TestUpgraderNilConfigNilStateManager(t *testing.T) {
 
 	u := NewUpgrader(nil, alertMgr, nil)
 	assert.NotNil(u)
-	assert.Nil(u.config)
+	assert.NotNil(u.config)
 	assert.Nil(u.stateManager)
 }
 

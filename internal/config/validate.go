@@ -38,6 +38,9 @@ func ValidateConfig(cfg *Config) []string {
 			cfg.PvcMonitor.CriticalThreshold < cfg.PvcMonitor.Threshold {
 			errs = append(errs, "pvcMonitor.criticalThreshold should be >= threshold")
 		}
+		if cfg.PvcMonitor.ClearThreshold < 0 || cfg.PvcMonitor.ClearThreshold > cfg.PvcMonitor.Threshold {
+			errs = append(errs, "pvcMonitor.clearThreshold must be between 0 and threshold")
+		}
 	}
 
 	if cfg.Correlation.Window <= 0 {
@@ -82,17 +85,10 @@ func ValidateConfig(cfg *Config) []string {
 	return errs
 }
 
-var knownProviderNames = map[string]bool{
-	"slack": true, "pagerduty": true, "discord": true, "telegram": true,
-	"teams": true, "email": true, "rocketchat": true, "mattermost": true,
-	"opsgenie": true, "matrix": true, "dingtalk": true, "feishu": true,
-	"webhook": true, "zenduty": true, "googlechat": true,
-}
-
 func unknownProviders(cfg *Config) []string {
 	var unknown []string
 	for name := range cfg.Alert {
-		if !knownProviderNames[strings.ToLower(name)] {
+		if !KnownProviders[strings.ToLower(name)] {
 			unknown = append(unknown, name)
 		}
 	}
@@ -133,6 +129,9 @@ func Validate(cfg *Config) []error {
 	}
 	if cfg.PvcMonitor.CriticalThreshold > 100 {
 		errs = append(errs, errors.New("pvcMonitor.criticalThreshold must be <= 100"))
+	}
+	if cfg.PvcMonitor.ClearThreshold < 0 || cfg.PvcMonitor.ClearThreshold > cfg.PvcMonitor.Threshold {
+		errs = append(errs, errors.New("pvcMonitor.clearThreshold must be between 0 and threshold"))
 	}
 	for _, name := range unknownProviders(cfg) {
 		errs = append(errs, fmt.Errorf("unknown alert provider %q", name))

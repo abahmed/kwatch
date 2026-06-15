@@ -53,28 +53,28 @@ type Handler interface {
 }
 
 type handler struct {
-	kclient               kubernetes.Interface
-	config                *config.Config
-	podDetectors          []filter.Detector
-	podEnrichers          []filter.Enricher
-	containerDetectors    []filter.Detector
-	containerEnrichers    []filter.Enricher
-	correlator            *correlation.Engine
-	alertManager          *alert.AlertManager
-	podLister             corev1lister.PodLister
-	nodeLister            corev1lister.NodeLister
-	deployLister          appsv1lister.DeploymentLister
-	jobLister             batchv1lister.JobLister
-	cronJobLister         batchv1lister.CronJobLister
-	rsLister              appsv1lister.ReplicaSetLister
-	dsLister              appsv1lister.DaemonSetLister
-	ssLister              appsv1lister.StatefulSetLister
-	eventLister           corev1lister.EventLister
-	hpaLister             autoscalingv2lister.HorizontalPodAutoscalerLister
-	firstMaxedHPAs       map[string]time.Time
-	hpaMu                sync.Mutex
-	secretLister         corev1lister.SecretLister
-	now                  func() time.Time
+	kclient            kubernetes.Interface
+	config             *config.Config
+	podDetectors       []filter.Detector
+	podEnrichers       []filter.Enricher
+	containerDetectors []filter.Detector
+	containerEnrichers []filter.Enricher
+	correlator         *correlation.Engine
+	alertManager       *alert.AlertManager
+	podLister          corev1lister.PodLister
+	nodeLister         corev1lister.NodeLister
+	deployLister       appsv1lister.DeploymentLister
+	jobLister          batchv1lister.JobLister
+	cronJobLister      batchv1lister.CronJobLister
+	rsLister           appsv1lister.ReplicaSetLister
+	dsLister           appsv1lister.DaemonSetLister
+	ssLister           appsv1lister.StatefulSetLister
+	eventLister        corev1lister.EventLister
+	hpaLister          autoscalingv2lister.HorizontalPodAutoscalerLister
+	firstMaxedHPAs     map[string]time.Time
+	hpaMu              sync.Mutex
+	secretLister       corev1lister.SecretLister
+	now                func() time.Time
 }
 
 func NewHandler(
@@ -111,10 +111,8 @@ func NewHandler(
 		filter.NoiseFilter{},
 	}
 
-	if len(cfg.IgnoreContainerMessages) > 0 {
-		containerDetectors = append(containerDetectors,
-			filter.ContainerMessageFilter{Messages: cfg.IgnoreContainerMessages})
-	}
+	containerDetectors = append(containerDetectors,
+		filter.ContainerMessageFilter{})
 
 	if cfg.IgnoreDisruptionTerminations == nil || *cfg.IgnoreDisruptionTerminations {
 		podDetectors = append([]filter.Detector{filter.DisruptionFilter{}}, podDetectors...)

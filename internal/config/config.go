@@ -117,6 +117,10 @@ type Config struct {
 	// Default: StatefulSet → "high", everything else → "normal"
 	SeverityByOwnerKind map[string]string `yaml:"severityByOwnerKind"`
 
+	// SeverityByReason maps event reasons to severity levels, checked before
+	// owner-kind. e.g. {"OOMKilled": "high", "CrashLoopBackOff": "high"}
+	SeverityByReason map[string]string `yaml:"severityByReason"`
+
 	// PendingPodMonitor configures Pending-phase pod detection.
 	PendingPodMonitor PendingPodMonitor `yaml:"pendingPodMonitor"`
 
@@ -140,6 +144,10 @@ type Config struct {
 
 	// Silences is an optional list of silence rules that suppress matching incidents.
 	Silences []SilenceRule `yaml:"silences"`
+
+	// SuppressionIndex is compiled from both Silences and deprecated ignore*
+	// fields for efficient detect-time lookup. Populated by LoadConfig.
+	Suppression SuppressionIndex
 
 	// LeaderElection config for high-availability deployments.
 	LeaderElection LeaderElection `yaml:"leaderElection"`
@@ -166,6 +174,15 @@ type Config struct {
 	// Runbooks maps Kubernetes event reasons to documentation URLs.
 	// When a reason matches, the URL is appended to the incident hint.
 	Runbooks map[string]string `yaml:"runbooks"`
+}
+
+// KnownProviders is the canonical set of known alert provider names.
+// Both alert.Init and config validation reference this to prevent drift.
+var KnownProviders = map[string]bool{
+	"slack": true, "pagerduty": true, "discord": true, "telegram": true,
+	"teams": true, "email": true, "rocketchat": true, "mattermost": true,
+	"opsgenie": true, "matrix": true, "dingtalk": true, "feishu": true,
+	"webhook": true, "zenduty": true, "googlechat": true,
 }
 
 // StormConfig configures digest aggregation for high-frequency incidents.
@@ -260,6 +277,10 @@ type PvcMonitor struct {
 	// CriticalThreshold is the percentage above which severity is "high".
 	// By default, this value is 90
 	CriticalThreshold float64 `yaml:"criticalThreshold"`
+
+	// ClearThreshold is the percentage below which an alerted PVC is resolved.
+	// Must be <= Threshold. 0 (default 75) means no hysteresis — uses Threshold.
+	ClearThreshold float64 `yaml:"clearThreshold"`
 }
 
 // NodeMonitor confing struct
@@ -365,6 +386,133 @@ type SilenceRule struct {
 	Reasons []string `yaml:"reasons"`
 	// PodNamePatterns is an optional list of regex patterns for pod names to silence.
 	PodNamePatterns []string `yaml:"podNamePatterns"`
+	// ContainerNames is an optional list of container names to silence.
+	ContainerNames []string `yaml:"containerNames"`
+	// LogPatterns is an optional list of regex patterns for log content to silence.
+	LogPatterns []string `yaml:"logPatterns"`
+	// ContainerMessages is an optional list of substrings; if a container
+	// status message contains any entry, the incident is suppressed.
+	ContainerMessages []string `yaml:"containerMessages"`
+	// NodeReasons is an optional list of node reasons to silence.
+	NodeReasons []string `yaml:"nodeReasons"`
+	// NodeMessages is an optional list of substrings; if a node condition
+	// message contains any entry, the incident is suppressed.
+	NodeMessages []string `yaml:"nodeMessages"`
+}
+
+// SuppressionIndex is a flat compiled view of all suppression rules (both from
+// explicit Silences and deprecated ignore* fields) for efficient detect-time
+// filtering.
+type SuppressionIndex struct {
+	ContainerNames    []string
+	PodNamePatterns   []*regexp.Regexp
+	LogPatterns       []*regexp.Regexp
+	ContainerMessages []string
+	NodeReasons       []string
+	NodeMessages      []string
+}
+
+// BuildSuppressionIndex merges deprecated ignore* fields with explicit
+// SilenceRules and returns a flat SuppressionIndex for detect-time filters.
+func (c *Config) BuildSuppressionIndex() SuppressionIndex {
+	idx := SuppressionIndex{}
+	seenContainer := map[string]bool{}
+	seenPodPat := map[string]bool{}
+	seenLogPat := map[string]bool{}
+	seenMsg := map[string]bool{}
+	seenNodeReasons := map[string]bool{}
+	seenNodeMsg := map[string]bool{}
+
+	add := func(sr SilenceRule) {
+		for _, n := range sr.ContainerNames {
+			if !seenContainer[n] {
+				idx.ContainerNames = append(idx.ContainerNames, n)
+				seenContainer[n] = true
+			}
+		}
+		for _, p := range sr.PodNamePatterns {
+			if !seenPodPat[p] {
+				if re, err := regexp.Compile(p); err == nil {
+					idx.PodNamePatterns = append(idx.PodNamePatterns, re)
+					seenPodPat[p] = true
+				}
+			}
+		}
+		for _, p := range sr.LogPatterns {
+			if !seenLogPat[p] {
+				if re, err := regexp.Compile(p); err == nil {
+					idx.LogPatterns = append(idx.LogPatterns, re)
+					seenLogPat[p] = true
+				}
+			}
+		}
+		for _, m := range sr.ContainerMessages {
+			if !seenMsg[m] {
+				idx.ContainerMessages = append(idx.ContainerMessages, m)
+				seenMsg[m] = true
+			}
+		}
+		for _, r := range sr.NodeReasons {
+			if !seenNodeReasons[r] {
+				idx.NodeReasons = append(idx.NodeReasons, r)
+				seenNodeReasons[r] = true
+			}
+		}
+		for _, m := range sr.NodeMessages {
+			if !seenNodeMsg[m] {
+				idx.NodeMessages = append(idx.NodeMessages, m)
+				seenNodeMsg[m] = true
+			}
+		}
+	}
+
+	for _, sr := range c.Silences {
+		add(sr)
+	}
+	// Also include deprecated ignore* fields directly (they may also appear as
+	// synthetic SilenceRules, but this ensures they're present regardless).
+	for _, n := range c.IgnoreContainerNames {
+		if !seenContainer[n] {
+			idx.ContainerNames = append(idx.ContainerNames, n)
+			seenContainer[n] = true
+		}
+	}
+	// Compile these if not already covered by silences
+	for _, p := range c.IgnorePodNames {
+		if !seenPodPat[p] {
+			if re, err := regexp.Compile(p); err == nil {
+				idx.PodNamePatterns = append(idx.PodNamePatterns, re)
+				seenPodPat[p] = true
+			}
+		}
+	}
+	for _, p := range c.IgnoreLogPatterns {
+		if !seenLogPat[p] {
+			if re, err := regexp.Compile(p); err == nil {
+				idx.LogPatterns = append(idx.LogPatterns, re)
+				seenLogPat[p] = true
+			}
+		}
+	}
+	for _, m := range c.IgnoreContainerMessages {
+		if !seenMsg[m] {
+			idx.ContainerMessages = append(idx.ContainerMessages, m)
+			seenMsg[m] = true
+		}
+	}
+	for _, r := range c.IgnoreNodeReasons {
+		if !seenNodeReasons[r] {
+			idx.NodeReasons = append(idx.NodeReasons, r)
+			seenNodeReasons[r] = true
+		}
+	}
+	for _, m := range c.IgnoreNodeMessages {
+		if !seenNodeMsg[m] {
+			idx.NodeMessages = append(idx.NodeMessages, m)
+			seenNodeMsg[m] = true
+		}
+	}
+	return idx
 }
 
 // AlertRoute defines routing filters for a provider.

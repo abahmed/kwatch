@@ -12,6 +12,7 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/abahmed/kwatch/internal/alert"
 	"github.com/abahmed/kwatch/internal/client"
 	"github.com/abahmed/kwatch/internal/config"
 	"github.com/abahmed/kwatch/internal/constant"
@@ -22,9 +23,9 @@ import (
 	"github.com/abahmed/kwatch/internal/event"
 	"github.com/abahmed/kwatch/internal/handler"
 	"github.com/abahmed/kwatch/internal/health"
-	"github.com/abahmed/kwatch/internal/metrics"
 	"github.com/abahmed/kwatch/internal/heartbeat"
 	"github.com/abahmed/kwatch/internal/k8s"
+	"github.com/abahmed/kwatch/internal/metrics"
 	"github.com/abahmed/kwatch/internal/model"
 	"github.com/abahmed/kwatch/internal/pvc"
 	"github.com/abahmed/kwatch/internal/startup"
@@ -50,7 +51,17 @@ func main() {
 	if len(args) > 0 {
 		switch args[0] {
 		case "lint":
-			runLint()
+			strict := false
+			check := false
+			for _, a := range args[1:] {
+				if a == "--strict" || a == "strict" {
+					strict = true
+				}
+				if a == "--check" || a == "check" {
+					check = true
+				}
+			}
+			runLint(strict, check)
 			return
 		case "replay":
 			runReplay()
@@ -89,7 +100,7 @@ func main() {
 	if cfg.MaxRecentLogLines > 0 {
 		alertManager.SetMaxLogLines(int(cfg.MaxRecentLogLines))
 	}
-	alertManager.Start()
+	alertManager.Start(ctx)
 
 	up := upgrader.NewUpgrader(&cfg.Upgrader, alertManager, sm.GetStateManager())
 	go up.CheckUpdates(ctx)
@@ -107,22 +118,22 @@ func main() {
 
 	var correlator *correlation.Engine
 	correlator = correlation.NewEngine(correlation.Config{
-		Window:            time.Duration(cfg.Correlation.Window) * time.Minute,
-		LifecycleInterval: time.Duration(cfg.Correlation.LifecycleInterval) * time.Minute,
-		StartupQuiet:      time.Duration(startupQuiet) * time.Second,
-		Baseline:          baseline,
-		Enricher:          &enricher.DefaultEnricher{SeverityByOwnerKind: cfg.SeverityByOwnerKind},
-		EscalationEnabled:         cfg.Correlation.Escalation.Enabled,
-		EscalationTiers:           cfg.Correlation.Escalation.Tiers,
-		InhibitNodeSuppressesPods: cfg.Inhibition.NodeSuppressesPods,
-		StormEnabled:              cfg.StormConfig.Enabled,
-		StormThreshold:            cfg.StormConfig.Threshold,
-		StormWindow:               time.Duration(cfg.StormConfig.WindowMinutes) * time.Minute,
-		StormDigestInterval:       time.Duration(cfg.StormConfig.DigestIntervalMinutes) * time.Minute,
+		Window:                     time.Duration(cfg.Correlation.Window) * time.Minute,
+		LifecycleInterval:          time.Duration(cfg.Correlation.LifecycleInterval) * time.Minute,
+		StartupQuiet:               time.Duration(startupQuiet) * time.Second,
+		Baseline:                   baseline,
+		Enricher:                   &enricher.DefaultEnricher{SeverityByOwnerKind: cfg.SeverityByOwnerKind, SeverityByReason: cfg.SeverityByReason},
+		EscalationEnabled:          cfg.Correlation.Escalation.Enabled,
+		EscalationTiers:            cfg.Correlation.Escalation.Tiers,
+		InhibitNodeSuppressesPods:  cfg.Inhibition.NodeSuppressesPods,
+		StormEnabled:               cfg.StormConfig.Enabled,
+		StormThreshold:             cfg.StormConfig.Threshold,
+		StormWindow:                time.Duration(cfg.StormConfig.WindowMinutes) * time.Minute,
+		StormDigestInterval:        time.Duration(cfg.StormConfig.DigestIntervalMinutes) * time.Minute,
 		RenotifyIntervalBySeverity: renotifyIntervalBySeverity(cfg.Correlation.Renotify.IntervalBySeverity),
 		RenotifyMaxPerIncident:     cfg.Correlation.Renotify.MaxPerIncident,
-		Runbooks:                  cfg.Runbooks,
-		ResolveHoldDown:           time.Duration(cfg.Correlation.ResolveHoldDown) * time.Second,
+		Runbooks:                   cfg.Runbooks,
+		ResolveHoldDown:            time.Duration(cfg.Correlation.ResolveHoldDown) * time.Second,
 		LifecycleHook: func(inc *model.Incident, action model.IncidentAction) {
 			if action != model.ActionSkip {
 				alertManager.NotifyIncident(inc, action)
@@ -257,7 +268,7 @@ func main() {
 	os.Exit(0)
 }
 
-func runLint() {
+func runLint(strict, check bool) {
 	cfg, err := config.LoadConfig()
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "ERROR: %v\n", err)
@@ -269,6 +280,29 @@ func runLint() {
 			fmt.Fprintf(os.Stderr, "  %s\n", e)
 		}
 		os.Exit(1)
+	}
+	if strict {
+		if err := config.LintStrict(); err != nil {
+			fmt.Fprintf(os.Stderr, "STRICT ERROR: %v\n", err)
+			os.Exit(1)
+		}
+	}
+	if check {
+		am := &alert.AlertManager{}
+		am.Init(cfg.Alert, &cfg.App)
+		results := am.VerifyAll()
+		hasErr := false
+		for name, err := range results {
+			if err != nil {
+				fmt.Fprintf(os.Stderr, "  %s: FAIL — %v\n", name, err)
+				hasErr = true
+			} else {
+				fmt.Printf("  %s: OK\n", name)
+			}
+		}
+		if hasErr {
+			os.Exit(1)
+		}
 	}
 	fmt.Println("config OK")
 }
@@ -308,7 +342,9 @@ func runReplay() {
 // startBaselineSaver coalesces baseline writes: at most one ConfigMap write
 // every interval. The latest snapshot always wins. Use 0 for the default
 // interval (10 seconds).
-func startBaselineSaver(ctx context.Context, stateMgr interface{ SaveBaseline(context.Context, map[string]map[string]int64) error }, ch <-chan map[string]map[string]int64, interval time.Duration) {
+func startBaselineSaver(ctx context.Context, stateMgr interface {
+	SaveBaseline(context.Context, map[string]map[string]int64) error
+}, ch <-chan map[string]map[string]int64, interval time.Duration) {
 	if interval <= 0 {
 		interval = 10 * time.Second
 	}

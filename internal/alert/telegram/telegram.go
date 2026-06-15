@@ -13,7 +13,8 @@ import (
 )
 
 const (
-	telegramAPIURL = "https://api.telegram.org/bot%s/sendMessage"
+	telegramAPIURL   = "https://api.telegram.org/bot%s/sendMessage"
+	telegramGetMeURL = "https://api.telegram.org/bot%s/getMe"
 )
 
 func maskString(s string) string {
@@ -69,6 +70,21 @@ func NewTelegram(config map[string]interface{}, appCfg *config.App) *Telegram {
 // Name returns name of the provider
 func (t *Telegram) Name() string {
 	return "Telegram"
+}
+
+// Verify checks credentials via Telegram getMe API.
+func (t *Telegram) Verify() error {
+	client := &http.Client{}
+	url := fmt.Sprintf(telegramGetMeURL, t.token)
+	resp, err := client.Get(url)
+	if err != nil {
+		return err
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		return fmt.Errorf("telegram getMe returned status %d", resp.StatusCode)
+	}
+	return nil
 }
 
 // SendEvent sends event to the provider

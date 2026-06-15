@@ -7,7 +7,7 @@ import (
 type PodNameFilter struct{}
 
 func (f PodNameFilter) Detect(ctx *Context) Status {
-	for _, pattern := range ctx.Config.IgnorePodNamePatterns {
+	for _, pattern := range ctx.Config.Suppression.PodNamePatterns {
 		if pattern.MatchString(ctx.Pod.Name) {
 			klog.InfoS(
 				"skipping pod as it is in the ignore pod name list",

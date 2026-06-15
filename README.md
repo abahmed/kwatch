@@ -729,12 +729,87 @@ basic auth
 | `kwatch`                       | Run the main monitoring daemon                                    |
 | `kwatch --version`             | Print version and exit                                            |
 | `kwatch lint`                  | Validate config file and print errors to stderr (exit 1 on failure) |
+| `kwatch lint --strict`         | Strict decode — rejects unknown YAML keys (typos, removed fields) |
+| `kwatch lint --check`          | Validate config + verify provider credentials (pre-flight)        |
 | `kwatch replay < events.jsonl` | Replay JSONL events from stdin through the alert pipeline         |
 
 `kwatch replay` reads JSON lines from stdin in the following format:
 
 ```json
 {"podName": "test-pod", "namespace": "default", "reason": "CrashLoopBackOff", "events": "Back-off restarting failed container"}
+```
+
+### ⚠️ Upgrading
+
+#### v0.x → v0.(x+1): Silences consolidation
+
+Deprecated `ignore*` fields (`ignoreContainerNames`, `ignoreLogPatterns`,
+`ignoreContainerMessages`, `ignoreNodeReasons`, `ignoreNodeMessages`) still
+work but emit a startup warning. Migrate to the unified `silences:` block:
+
+```yaml
+# Old (still works):
+ignoreContainerNames: ["sidecar-proxy"]
+
+# New:
+silences:
+  - containerNames: ["sidecar-proxy"]
+```
+
+`SilenceRule` now supports all the same fields: `containerNames`,
+`logPatterns`, `containerMessages`, `nodeReasons`, `nodeMessages`.
+
+#### Strict config validation
+
+`kwatch lint --strict` re-decodes the config file with `yaml.KnownFields(true)`
+to catch typos and removed keys. Add it to your CI pipeline:
+
+```shell
+kwatch lint --strict
+```
+
+#### Provider credential pre-flight
+
+`kwatch lint --check` loads the config and calls `Verify()` on each provider
+that supports it (Telegram: `getMe`, Discord: webhook GET, Slack: `auth.test`):
+
+```shell
+kwatch lint --check
+```
+
+#### Upgrader `--skip-upgrade` flag
+
+Set the environment variable `SKIP_UPGRADE_CHECK=1` or the config field
+`upgrader.disableUpdateCheck: true` to suppress kwatch's release-check on
+startup (#438).
+
+### 📋 Guarantees
+
+kwatch follows semver. Within the same major version:
+
+- **Config schema** is additive-only. New optional fields may be added; existing
+  fields will not be removed or change type without a major version bump.
+- **Alert message format** is considered informative (not machine-parsable).
+  Fields may be added to messages in minor releases.
+- **`kwatch lint --strict`** catches unknown YAML keys, guarding against typos
+  on new fields.
+- **CRD shape** (`KwatchConfig`) follows the same additive policy.
+
+### 📖 Recipes
+
+#### Silence noisy sidecars (#82)
+
+```yaml
+silences:
+  - containerNames: ["istio-proxy", "envoy"]
+```
+
+#### Silence all CrashLoopBackOff in CI namespaces (#140)
+
+```yaml
+silences:
+  - namespaces: ["ci", "staging"]
+    reasons: ["CrashLoopBackOff"]
 ```
 
 ### 🧹 Cleanup

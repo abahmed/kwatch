@@ -53,13 +53,13 @@ func (h *handler) resolveNodeCondition(nodeName, stableReason string) {
 }
 
 func (h *handler) emitNodeAlert(node *corev1.Node, c corev1.NodeCondition, stableReason string) {
-	for _, ignoreReason := range h.config.IgnoreNodeReasons {
+	for _, ignoreReason := range h.config.Suppression.NodeReasons {
 		if c.Reason == ignoreReason {
 			klog.V(4).InfoS("Skipping Notify for node due to ignored reason", "node", node.Name, "reason", c.Reason)
 			return
 		}
 	}
-	for _, ignoreMessage := range h.config.IgnoreNodeMessages {
+	for _, ignoreMessage := range h.config.Suppression.NodeMessages {
 		if strings.Contains(c.Message, ignoreMessage) {
 			klog.V(4).InfoS("Skipping Notify for node due to ignored message", "node", node.Name, "message", c.Message)
 			return

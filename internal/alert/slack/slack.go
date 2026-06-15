@@ -97,6 +97,18 @@ func (s *Slack) Name() string {
 	return "Slack"
 }
 
+// Verify checks credentials via Slack auth.test (token mode) or webhook URL.
+func (s *Slack) Verify() error {
+	if s.apiClient != nil {
+		_, err := s.apiClient.AuthTest()
+		return err
+	}
+	if s.webhook == "" {
+		return fmt.Errorf("slack: no webhook or token configured")
+	}
+	return nil
+}
+
 // SendEvent sends event to the provider
 func (s *Slack) SendEvent(ev *event.Event) error {
 	klog.InfoS("sending to slack event", "event", ev)
@@ -439,8 +451,8 @@ func formatIncidentText(inc *model.Incident, action model.IncidentAction) string
 	case model.ActionUpdate:
 		duration := inc.LastSeen.Sub(inc.FirstSeen).Round(time.Minute)
 		text := fmt.Sprintf(
-		"🔄 Update: %s | Container: %s | Count: %d | Duration: %s | Peak: %d",
-		inc.Name, containerSummary(inc), inc.Count, duration, inc.PeakResources,
+			"🔄 Update: %s | Container: %s | Count: %d | Duration: %s | Peak: %d",
+			inc.Name, containerSummary(inc), inc.Count, duration, inc.PeakResources,
 		)
 		if inc.IncludeEvents {
 			if ev := strings.TrimSpace(inc.Events); len(ev) > 0 {
@@ -456,8 +468,8 @@ func formatIncidentText(inc *model.Incident, action model.IncidentAction) string
 	case model.ActionResolved:
 		duration := inc.LastSeen.Sub(inc.FirstSeen).Round(time.Minute)
 		return fmt.Sprintf(
-		"✅ Resolved: %s | Container: %s | Duration: %s | Total events: %d | Peak resources: %d",
-		inc.Name, containerSummary(inc), duration, inc.Count, inc.PeakResources,
+			"✅ Resolved: %s | Container: %s | Duration: %s | Total events: %d | Peak resources: %d",
+			inc.Name, containerSummary(inc), duration, inc.Count, inc.PeakResources,
 		)
 	default:
 		return ""

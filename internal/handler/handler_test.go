@@ -27,7 +27,6 @@ func TestNewHandler(t *testing.T) {
 	client := fake.NewSimpleClientset()
 	cfg := &config.Config{}
 
-
 	h := NewHandler(client, cfg, testCorrelator(), testAlertMgr)
 	assert.NotNil(t, h)
 }
@@ -36,7 +35,6 @@ func TestProcessPodNilObject(t *testing.T) {
 	client := fake.NewSimpleClientset()
 	cfg := &config.Config{}
 
-
 	h := NewHandler(client, cfg, testCorrelator(), testAlertMgr)
 	assert.NoError(t, h.ProcessPodObject(nil, false))
 }
@@ -44,7 +42,6 @@ func TestProcessPodNilObject(t *testing.T) {
 func TestProcessPodDeleted(t *testing.T) {
 	client := fake.NewSimpleClientset()
 	cfg := &config.Config{}
-
 
 	h := NewHandler(client, cfg, testCorrelator(), testAlertMgr)
 
@@ -55,14 +52,12 @@ func TestProcessPodDeleted(t *testing.T) {
 		},
 	}
 
-
 	assert.NoError(t, h.ProcessPodObject(pod, true))
 }
 
 func TestProcessNodeNilObject(t *testing.T) {
 	client := fake.NewSimpleClientset()
 	cfg := &config.Config{}
-
 
 	h := NewHandler(client, cfg, testCorrelator(), testAlertMgr)
 	assert.NoError(t, h.ProcessNodeObject(nil, false))
@@ -71,7 +66,6 @@ func TestProcessNodeNilObject(t *testing.T) {
 func TestProcessNodeDeleted(t *testing.T) {
 	client := fake.NewSimpleClientset()
 	cfg := &config.Config{}
-
 
 	h := NewHandler(client, cfg, testCorrelator(), testAlertMgr)
 
@@ -86,11 +80,11 @@ func TestProcessNodeDeleted(t *testing.T) {
 
 func TestProcessNodeNotReadyNoAlert(t *testing.T) {
 	client := fake.NewSimpleClientset()
-	cfg := &config.Config{
-		IgnoreNodeReasons:  []string{"KubeletNotReady"},
-		IgnoreNodeMessages: []string{"specific message"},
+	cfg := &config.Config{}
+	cfg.Suppression = config.SuppressionIndex{
+		NodeReasons:  []string{"KubeletNotReady"},
+		NodeMessages: []string{"specific message"},
 	}
-
 
 	h := NewHandler(client, cfg, testCorrelator(), testAlertMgr)
 
@@ -117,8 +111,6 @@ func TestProcessNodeReadyRecovery(t *testing.T) {
 	client := fake.NewSimpleClientset()
 	cfg := &config.Config{}
 
-
-
 	h := NewHandler(client, cfg, testCorrelator(), testAlertMgr)
 
 	node := &corev1.Node{
@@ -143,7 +135,6 @@ func TestProcessNodeNotReadyAlert(t *testing.T) {
 	client := fake.NewSimpleClientset()
 	cfg := &config.Config{}
 
-
 	h := NewHandler(client, cfg, testCorrelator(), testAlertMgr)
 
 	node := &corev1.Node{
@@ -167,10 +158,10 @@ func TestProcessNodeNotReadyAlert(t *testing.T) {
 
 func TestProcessNodeNotReadyWithIgnoredMessage(t *testing.T) {
 	client := fake.NewSimpleClientset()
-	cfg := &config.Config{
-		IgnoreNodeMessages: []string{"draining"},
+	cfg := &config.Config{}
+	cfg.Suppression = config.SuppressionIndex{
+		NodeMessages: []string{"draining"},
 	}
-
 
 	h := NewHandler(client, cfg, testCorrelator(), testAlertMgr)
 
@@ -197,8 +188,6 @@ func TestProcessNodeAlreadyKnownNotReady(t *testing.T) {
 	client := fake.NewSimpleClientset()
 	cfg := &config.Config{}
 
-
-
 	h := NewHandler(client, cfg, testCorrelator(), testAlertMgr)
 
 	node := &corev1.Node{
@@ -223,7 +212,6 @@ func TestProcessNodeAlreadyKnownNotReady(t *testing.T) {
 func TestProcessPodWithPodIssues(t *testing.T) {
 	client := fake.NewSimpleClientset()
 	cfg := &config.Config{}
-
 
 	h := NewHandler(client, cfg, testCorrelator(), testAlertMgr)
 
@@ -253,7 +241,6 @@ func TestProcessPodWithContainersIssues(t *testing.T) {
 	cfg := &config.Config{
 		MaxRecentLogLines: 10,
 	}
-
 
 	h := NewHandler(client, cfg, testCorrelator(), testAlertMgr)
 
@@ -297,7 +284,6 @@ func TestProcessPodIgnoredNamespace(t *testing.T) {
 		ForbiddenNamespaces: []string{"kube-system"},
 	}
 
-
 	h := NewHandler(client, cfg, testCorrelator(), testAlertMgr)
 
 	pod := &corev1.Pod{
@@ -323,10 +309,10 @@ func TestProcessPodIgnoredNamespace(t *testing.T) {
 
 func TestProcessPodIgnoredPodName(t *testing.T) {
 	client := fake.NewSimpleClientset()
-	cfg := &config.Config{
-		IgnorePodNamePatterns: []*regexp.Regexp{regexp.MustCompile("^test-.*")},
+	cfg := &config.Config{}
+	cfg.Suppression = config.SuppressionIndex{
+		PodNamePatterns: []*regexp.Regexp{regexp.MustCompile("^test-.*")},
 	}
-
 
 	h := NewHandler(client, cfg, testCorrelator(), testAlertMgr)
 
@@ -353,11 +339,10 @@ func TestProcessPodIgnoredPodName(t *testing.T) {
 
 func TestProcessPodIgnoredContainerName(t *testing.T) {
 	client := fake.NewSimpleClientset()
-	cfg := &config.Config{
-		MaxRecentLogLines:    10,
-		IgnoreContainerNames: []string{"test-container"},
+	cfg := &config.Config{MaxRecentLogLines: 10}
+	cfg.Suppression = config.SuppressionIndex{
+		ContainerNames: []string{"test-container"},
 	}
-
 
 	h := NewHandler(client, cfg, testCorrelator(), testAlertMgr)
 
@@ -541,7 +526,6 @@ func TestProcessPodSucceededPhase(t *testing.T) {
 	client := fake.NewSimpleClientset()
 	cfg := &config.Config{}
 
-
 	h := NewHandler(client, cfg, testCorrelator(), testAlertMgr)
 
 	pod := &corev1.Pod{
@@ -560,7 +544,6 @@ func TestProcessPodSucceededPhase(t *testing.T) {
 func TestProcessPodCompletedStatus(t *testing.T) {
 	client := fake.NewSimpleClientset()
 	cfg := &config.Config{}
-
 
 	h := NewHandler(client, cfg, testCorrelator(), testAlertMgr)
 

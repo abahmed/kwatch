@@ -33,14 +33,14 @@ type SeveritySetter interface {
 }
 
 type Watcher struct {
-	cfg           *config.Config
-	alertManager  *alert.AlertManager
-	engine        SeveritySetter
-	restConfig    *rest.Config
-	namespace     string
-	resync        time.Duration
-	mu            sync.Mutex
-	fallbackCfg   *config.Config // boot-time values restored on CR delete
+	cfg          *config.Config
+	alertManager *alert.AlertManager
+	engine       SeveritySetter
+	restConfig   *rest.Config
+	namespace    string
+	resync       time.Duration
+	mu           sync.Mutex
+	fallbackCfg  *config.Config // boot-time values restored on CR delete
 }
 
 func New(cfg *config.Config, alertManager *alert.AlertManager, engine SeveritySetter, restConfig *rest.Config, namespace string, resync time.Duration) *Watcher {
@@ -128,9 +128,14 @@ func (w *Watcher) reload(obj interface{}) {
 		silences := make([]config.SilenceRule, 0, len(spec.Silences))
 		for _, s := range spec.Silences {
 			silences = append(silences, config.SilenceRule{
-				Namespaces:      s.Namespaces,
-				Reasons:         s.Reasons,
-				PodNamePatterns: s.PodNamePatterns,
+				Namespaces:        s.Namespaces,
+				Reasons:           s.Reasons,
+				PodNamePatterns:   s.PodNamePatterns,
+				ContainerNames:    s.ContainerNames,
+				LogPatterns:       s.LogPatterns,
+				ContainerMessages: s.ContainerMessages,
+				NodeReasons:       s.NodeReasons,
+				NodeMessages:      s.NodeMessages,
 			})
 		}
 		w.alertManager.SetSilences(silences)

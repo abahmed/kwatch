@@ -72,7 +72,7 @@ func (h *handler) executePodFilters(ctx *filter.Context) {
 		ownerName = ctx.Owner.Name
 	}
 
-	klog.InfoS("pod only issue", "pod", ctx.Pod.Name, "owner", ownerName, "reason", ctx.PodReason, "message", ctx.PodMsg)
+	klog.V(2).InfoS("pod only issue", "pod", ctx.Pod.Name, "owner", ownerName, "reason", ctx.PodReason, "message", ctx.PodMsg)
 
 	ownerKind := ""
 	if ctx.Owner != nil {

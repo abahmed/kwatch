@@ -115,8 +115,9 @@ func TestPodNameFilter(t *testing.T) {
 	assert := assert.New(t)
 
 	client := fake.NewSimpleClientset()
-	cfg := &config.Config{
-		IgnorePodNamePatterns: []*regexp.Regexp{
+	cfg := &config.Config{}
+	cfg.Suppression = config.SuppressionIndex{
+		PodNamePatterns: []*regexp.Regexp{
 			regexp.MustCompile("^test-.*"),
 		},
 	}
@@ -142,8 +143,9 @@ func TestPodNameFilterNoMatch(t *testing.T) {
 	assert := assert.New(t)
 
 	client := fake.NewSimpleClientset()
-	cfg := &config.Config{
-		IgnorePodNamePatterns: []*regexp.Regexp{
+	cfg := &config.Config{}
+	cfg.Suppression = config.SuppressionIndex{
+		PodNamePatterns: []*regexp.Regexp{
 			regexp.MustCompile("^skip-.*"),
 		},
 	}
@@ -743,9 +745,7 @@ func TestContainerNameFilterIgnored(t *testing.T) {
 	assert := assert.New(t)
 
 	ctx := &Context{
-		Config: &config.Config{
-			IgnoreContainerNames: []string{"test-container"},
-		},
+		Config: &config.Config{},
 		Container: &ContainerContext{
 			Container: &corev1.ContainerStatus{
 				Name: "test-container",
@@ -759,6 +759,9 @@ func TestContainerNameFilterIgnored(t *testing.T) {
 			},
 		},
 	}
+	ctx.Config.Suppression = config.SuppressionIndex{
+		ContainerNames: []string{"test-container"},
+	}
 
 	filter := ContainerNameFilter{}
 	result := filter.Execute(ctx)
@@ -769,9 +772,7 @@ func TestContainerNameFilterNoMatch(t *testing.T) {
 	assert := assert.New(t)
 
 	ctx := &Context{
-		Config: &config.Config{
-			IgnoreContainerNames: []string{"skip-container"},
-		},
+		Config: &config.Config{},
 		Container: &ContainerContext{
 			Container: &corev1.ContainerStatus{
 				Name: "test-container",
@@ -784,6 +785,9 @@ func TestContainerNameFilterNoMatch(t *testing.T) {
 				Namespace: "default",
 			},
 		},
+	}
+	ctx.Config.Suppression = config.SuppressionIndex{
+		ContainerNames: []string{"skip-container"},
 	}
 
 	filter := ContainerNameFilter{}
@@ -846,7 +850,7 @@ func TestNoiseFilterNoiseReason(t *testing.T) {
 					Container: &corev1.ContainerStatus{},
 					Reason:    reason,
 				},
-		
+
 				Pod: &corev1.Pod{
 					ObjectMeta: metav1.ObjectMeta{
 						Name:      "test-pod",
@@ -1230,12 +1234,13 @@ func TestContainerLogsFilterWithRestarts(t *testing.T) {
 func TestContainerLogsFilterIgnoredPattern(t *testing.T) {
 	assert := assert.New(t)
 
+	cfg := &config.Config{MaxRecentLogLines: 10}
+	cfg.Suppression = config.SuppressionIndex{
+		LogPatterns: []*regexp.Regexp{regexp.MustCompile("fake logs")},
+	}
 	ctx := &Context{
 		Client: fake.NewSimpleClientset(),
-		Config: &config.Config{
-			MaxRecentLogLines:         10,
-			IgnoreLogPatternsCompiled: []*regexp.Regexp{regexp.MustCompile("fake logs")},
-		},
+		Config: cfg,
 		Container: &ContainerContext{
 			Container: &corev1.ContainerStatus{
 				Name:         "test-container",
