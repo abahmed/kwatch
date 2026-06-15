@@ -265,7 +265,7 @@ reasons:
 | `healthCheck.enabled` | If set to true, enables health check endpoints (default: true) |
 | `healthCheck.port` | Port for health check endpoints (default: 8060) |
 | `healthCheck.pprof` | Enable /debug/pprof/* endpoints (default: false) |
-| `healthCheck.diagnostics` | Enable /incidents and /test-alert endpoints (default: false) |
+| `healthCheck.diagnostics` | Enable /incidents, /test-alert, and /deadletters endpoints (default: false) |
 
 **Endpoints:**
 - `GET /healthz` - Liveness probe (text/plain: "OK")
@@ -273,6 +273,7 @@ reasons:
 - `GET /health` - Returns `{"status": "ok"}` (application/json)
 - `GET /incidents` - Returns all active incidents as JSON (requires `healthCheck.diagnostics: true`)
 - `POST /test-alert` - Sends a test alert through all configured providers (requires `healthCheck.diagnostics: true`)
+- `GET /deadletters` - Returns recent delivery failures (last 100) as JSON (requires `healthCheck.diagnostics: true`)
 - `GET /debug/pprof/` - Go pprof index (runtime profiling data, when enabled)
 - `--version` flag - Prints version and exits
 
@@ -453,7 +454,7 @@ Incident grouping and lifecycle management. Events from the same owner/reason/co
 | `correlation.escalation.tiers`     | Ordered restart thresholds, e.g. `[3, 10, 50]` → 3+ "high", 10+ "critical" |
 | `correlation.renotify.maxPerIncident` | Max renotifications per incident (default: 3)                    |
 
-⚠️ v0.10.x fields `cooldown` and `staleThreshold` are removed. `renotify.interval` per-severity overrides have replaced the flat `renotify.interval`.
+⚠️ v0.10.x fields `cooldown` and `staleThreshold` are removed. Flat `renotify.interval` removed; use `renotify.intervalBySeverity["default"]` instead.
 
 When Slack is configured with a bot token, incidents are sent as threaded messages: a root message on creation, with updates, stale, and resolved notifications as thread replies.
 

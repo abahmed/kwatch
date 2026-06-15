@@ -184,6 +184,16 @@ func extractRetry(cfg map[string]interface{}) (maxAttempts int, delay time.Durat
 	return
 }
 
+// ProviderNames returns the set of known alert provider names.
+func ProviderNames() []string {
+	names := make([]string, 0, len(knownProviders))
+	for n := range knownProviders {
+		names = append(names, n)
+	}
+	sort.Strings(names)
+	return names
+}
+
 var knownProviders = map[string]bool{
 	"slack": true, "pagerduty": true, "discord": true, "telegram": true,
 	"teams": true, "email": true, "rocketchat": true, "mattermost": true,
@@ -699,6 +709,26 @@ func formatIncidentMessage(inc *model.Incident, action model.IncidentAction, max
 	return defaultMsg
 }
 
+func containerDisplayName(inc *model.Incident) string {
+	if inc.ContainerName != "" {
+		return inc.ContainerName
+	}
+	if len(inc.Containers) == 1 {
+		for c := range inc.Containers {
+			return c
+		}
+	}
+	if len(inc.Containers) > 1 {
+		names := make([]string, 0, len(inc.Containers))
+		for c := range inc.Containers {
+			names = append(names, c)
+		}
+		sort.Strings(names)
+		return strings.Join(names, ", ")
+	}
+	return ""
+}
+
 func formatCreateMessage(inc *model.Incident, maxLines int) string {
 	duration := inc.LastSeen.Sub(inc.FirstSeen).Round(time.Minute)
 
@@ -707,15 +737,7 @@ func formatCreateMessage(inc *model.Incident, maxLines int) string {
 		severity = "normal"
 	}
 
-	containerName := inc.ContainerName
-	if len(inc.Containers) > 1 {
-		names := make([]string, 0, len(inc.Containers))
-		for c := range inc.Containers {
-			names = append(names, c)
-		}
-		sort.Strings(names)
-		containerName = strings.Join(names, ", ")
-	}
+	containerName := containerDisplayName(inc)
 
 	logsBlock := ""
 	if inc.IncludeLogs && inc.Logs != "" {
@@ -781,15 +803,7 @@ func formatUpdateMessage(inc *model.Incident, _ int) string {
 		severity = "normal"
 	}
 
-	containerName := inc.ContainerName
-	if len(inc.Containers) > 1 {
-		names := make([]string, 0, len(inc.Containers))
-		for c := range inc.Containers {
-			names = append(names, c)
-		}
-		sort.Strings(names)
-		containerName = strings.Join(names, ", ")
-	}
+	containerName := containerDisplayName(inc)
 
 	return fmt.Sprintf(
 		"🔄 Update: %s | Severity: %s | Namespace: %s | Container: %s | Reason: %s | Count: %d | Duration: %s | Peak: %d resource(s)",
@@ -800,15 +814,7 @@ func formatUpdateMessage(inc *model.Incident, _ int) string {
 func formatResolvedMessage(inc *model.Incident) string {
 	duration := inc.LastSeen.Sub(inc.FirstSeen).Round(time.Minute)
 
-	containerName := inc.ContainerName
-	if len(inc.Containers) > 1 {
-		names := make([]string, 0, len(inc.Containers))
-		for c := range inc.Containers {
-			names = append(names, c)
-		}
-		sort.Strings(names)
-		containerName = strings.Join(names, ", ")
-	}
+	containerName := containerDisplayName(inc)
 
 	return fmt.Sprintf(
 		"✅ Resolved: %s | Namespace: %s | Container: %s | Reason: %s | Duration: %s | Total events: %d | Peak resources: %d",

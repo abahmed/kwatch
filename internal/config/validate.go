@@ -3,6 +3,8 @@ package config
 import (
 	"errors"
 	"fmt"
+	"sort"
+	"strings"
 )
 
 // ValidateConfig checks the config for common misconfiguration issues and
@@ -73,7 +75,29 @@ func ValidateConfig(cfg *Config) []string {
 		errs = append(errs, "workers must be >= 1")
 	}
 
+	for _, name := range unknownProviders(cfg) {
+		errs = append(errs, fmt.Sprintf("unknown alert provider %q", name))
+	}
+
 	return errs
+}
+
+var knownProviderNames = map[string]bool{
+	"slack": true, "pagerduty": true, "discord": true, "telegram": true,
+	"teams": true, "email": true, "rocketchat": true, "mattermost": true,
+	"opsgenie": true, "matrix": true, "dingtalk": true, "feishu": true,
+	"webhook": true, "zenduty": true, "googlechat": true,
+}
+
+func unknownProviders(cfg *Config) []string {
+	var unknown []string
+	for name := range cfg.Alert {
+		if !knownProviderNames[strings.ToLower(name)] {
+			unknown = append(unknown, name)
+		}
+	}
+	sort.Strings(unknown)
+	return unknown
 }
 
 // Validate validates the config for semantic correctness and returns a list
@@ -109,6 +133,9 @@ func Validate(cfg *Config) []error {
 	}
 	if cfg.PvcMonitor.CriticalThreshold > 100 {
 		errs = append(errs, errors.New("pvcMonitor.criticalThreshold must be <= 100"))
+	}
+	for _, name := range unknownProviders(cfg) {
+		errs = append(errs, fmt.Errorf("unknown alert provider %q", name))
 	}
 	return errs
 }

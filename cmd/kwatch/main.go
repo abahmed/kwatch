@@ -127,7 +127,7 @@ func main() {
 			if action != model.ActionSkip {
 				alertManager.NotifyIncident(inc, action)
 			}
-			metrics.Default.ActiveIncidents.Store(int64(len(correlator.Snapshot())))
+			metrics.Default.ActiveIncidents.Store(int64(correlator.ActiveCount()))
 		},
 		OnBaselineChange: func(b map[string]map[string]int64) {
 			total := 0

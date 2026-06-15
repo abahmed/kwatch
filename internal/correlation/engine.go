@@ -237,6 +237,12 @@ func (e *Engine) BaselineSnapshot() map[string]map[string]int64 {
 	return cloneBaseline(e.seen)
 }
 
+func (e *Engine) ActiveCount() int {
+	e.mu.Lock()
+	defer e.mu.Unlock()
+	return len(e.state)
+}
+
 func (e *Engine) Snapshot() []model.IncidentView {
 	e.mu.Lock()
 	defer e.mu.Unlock()
