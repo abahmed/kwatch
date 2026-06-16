@@ -13,7 +13,7 @@ helm repo update
 ## Install Chart
 
 ```console
-helm install [RELEASE_NAME] kwatch/kwatch --version 0.10.5
+helm install [RELEASE_NAME] kwatch/kwatch --version 0.11.0
 ```
 
 ## Uninstall Chart
@@ -33,7 +33,9 @@ helm delete --purge [RELEASE_NAME]
 | `securityContext.runAsGroup` | Container processes' GID to run the entrypoint | 1000 |
 | `securityContext.readOnlyRootFilesystem` | Container's root filesystem is read-only | true |
 | `service.port` | Health check port | 8060 |
-| `resources` | CPU/Memory resource requests/limits | {limits: memory: 128Mi cpu: 100m} |
+| `resources` | CPU/Memory resource requests/limits | {limits: memory: 256Mi cpu: 100m} |
+| `llm.nativeSidecar` | Use K8s ≥1.29 native sidecar (initContainer restartPolicy:Always) vs plain container | false |
+| `config.llm.enabled` | Enable AI enrichment via kwatch-llm sidecar (requires `replicaCount=1`; also deploy the sidecar — either via `llm.nativeSidecar` or manually) | false |
 | `nodeSelector` | Node labels for pod assignment | {} |
 | `tolerations` | Tolerations for pod assignment | [] |
 | `affinity` | affinity for pod | {} |

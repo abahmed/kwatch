@@ -102,6 +102,7 @@ func main() {
 	if cfg.MaxRecentLogLines > 0 {
 		alertManager.SetMaxLogLines(int(cfg.MaxRecentLogLines))
 	}
+	alertManager.SetLLM(cfg.LLM)
 	alertManager.Start(ctx)
 
 	up := upgrader.NewUpgrader(&cfg.Upgrader, alertManager, sm.GetStateManager())

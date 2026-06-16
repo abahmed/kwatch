@@ -99,3 +99,7 @@ docker-build:
 # Docker build with latest tag
 docker-build-latest:
 	docker build -t kwatch:latest -t kwatch:$(VERSION) .
+
+# Build LLM sidecar image
+llm-image:
+	PUSH=$(PUSH) TAG=$(TAG) deploy/llm/build.sh

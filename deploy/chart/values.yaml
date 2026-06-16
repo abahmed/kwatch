@@ -42,6 +42,11 @@ podLabels: {}
 #   threshold: 30
 config: {}
 
+# -- LLM sidecar configuration (opt-in AI enrichment)
+llm:
+  # -- Use K8s ≥1.29 native sidecar (initContainer restartPolicy:Always) vs plain container
+  nativeSidecar: false
+
 # -- Configure the upgrader/update checker
 upgrader:
   # -- Disable the update check at startup

@@ -4,6 +4,30 @@ All notable changes to this project are documented in this file.
 
 ## [Unreleased]
 
+### Added
+
+- **AI incident enrichment (opt-in, default-off)**: self-hosted LLM sidecar
+  (`kwatch-llm` — Qwen2.5-Coder-1.5B-Instruct via Ollama) appends root-cause
+  analysis to incident alerts. Everything runs in-cluster; no external API
+  calls. Configuration: `llm.enabled` (default `false`). Circuit breaker
+  (3-failure / 60s cooldown), single-flight enrich channel, 15s timeout.
+  - `internal/llm/` — client, prompt builder with CD-1 grounding,
+    `selectRelevant` log extraction, `redact` (password/token/JWT scrubbing)
+  - Baked model image at `deploy/llm/` with Makefile target & CI
+    (`publish-llm.yml`)
+  - Helm: `config.llm.enabled`, `llm.nativeSidecar`, replica guard
+  - Metrics: `kwatch_llm_enrich_total`, `kwatch_llm_enrich_failed_total`,
+    `kwatch_llm_enrich_skipped_total`
+
+- **Cheap-depth enhancements (always-on, no LLM needed)**:
+  | ID | What |
+  |----|------|
+  | CD-1 | Grounding fields in enrichment (occurrences, affected pods, duration) |
+  | CD-2 | Correlation surfaces affected-pod count + per-node breakdown |
+  | CD-3 | Built-in signature hints (Postgres OOM, TLS handshake, disk-full, timeout, RBAC, OOM-without-limit) |
+  | CD-4 | `runbooks:` URL appended to incident hint |
+  | CD-5 | Investigate commands (`kubectl logs`/`kubectl describe`) + dashboard deep-link |
+
 ### Fixed
 
 #### Phase 0 bugs

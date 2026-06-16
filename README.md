@@ -66,7 +66,7 @@
 
 ```shell
 helm repo add kwatch https://kwatch.dev/charts
-helm install [RELEASE_NAME] kwatch/kwatch --namespace kwatch --create-namespace --version 0.10.5
+helm install [RELEASE_NAME] kwatch/kwatch --namespace kwatch --create-namespace --version 0.11.0
 ```
 
 To get more details, please check [chart's configuration](https://github.com/abahmed/kwatch/blob/main/deploy/chart/README.md)
@@ -76,7 +76,7 @@ To get more details, please check [chart's configuration](https://github.com/aba
 You need to get config template to add your configs
 
 ```shell
-curl  -L https://raw.githubusercontent.com/abahmed/kwatch/v0.10.5/deploy/config.yaml -o config.yaml
+curl  -L https://raw.githubusercontent.com/abahmed/kwatch/v0.11.0/deploy/config.yaml -o config.yaml
 ```
 
 Then edit `config.yaml` file and apply your configuration
@@ -88,7 +88,7 @@ kubectl apply -f config.yaml
 To deploy **kwatch**, execute following command:
 
 ```shell
-kubectl apply -f https://raw.githubusercontent.com/abahmed/kwatch/v0.10.5/deploy/deploy.yaml
+kubectl apply -f https://raw.githubusercontent.com/abahmed/kwatch/v0.11.0/deploy/deploy.yaml
 ```
 
 ## ⬆️ Upgrading from v0.10.x
@@ -204,6 +204,7 @@ you something broke *right now*.
 | `ignoreNodeReasons`            | Optional list of node condition reasons to ignore (deprecated — use silences) |
 | `ignoreNodeMessages`           | Optional list of node condition messages to ignore (deprecated — use silences) |
 | `runbooks`                     | Optional map of reason → URL appended to incident hint (e.g. `ImagePullBackOff: "https://wiki/registry-auth"`) |
+| `llm.enabled`                  | Enable AI incident enrichment via self-hosted LLM sidecar (default: false) |
 | `containerRestartThreshold`    | Alert when a container exceeds this many restarts without a detect/enrich match (0 = off) |
 
 #### Namespace filter
@@ -459,6 +460,16 @@ Incident grouping and lifecycle management. Events from the same owner/reason/co
 When Slack is configured with a bot token, incidents are sent as threaded messages: a root message on creation, with updates, stale, and resolved notifications as thread replies.
 
 Noise filter automatically skips `Normal`/`Scheduled`/`Pulled`/`Pulling` events before correlation to reduce alert fatigue.
+
+### 🤖 AI Enrichment
+
+kwatch can optionally append a root-cause analysis to incident alerts using a
+self-hosted LLM sidecar. Everything runs inside your cluster — no external API
+call, no data leaves the cluster.
+
+| Parameter               | Description                                                        |
+|:------------------------|:-------------------------------------------------------------------|
+| `llm.enabled`           | Enable AI enrichment via the built-in LLM sidecar (default: false) |
 
 ### 🔔 Alerts
 
@@ -848,8 +859,8 @@ silences:
 ### 🧹 Cleanup
 
 ```shell
-kubectl delete -f https://raw.githubusercontent.com/abahmed/kwatch/v0.10.5/deploy/config.yaml
-kubectl delete -f https://raw.githubusercontent.com/abahmed/kwatch/v0.10.5/deploy/deploy.yaml
+kubectl delete -f https://raw.githubusercontent.com/abahmed/kwatch/v0.11.0/deploy/config.yaml
+kubectl delete -f https://raw.githubusercontent.com/abahmed/kwatch/v0.11.0/deploy/deploy.yaml
 ```
 
 ## 👍 Contribute & Support

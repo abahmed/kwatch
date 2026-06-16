@@ -514,8 +514,11 @@ func (e *Engine) newIncident(ev event.Event, owner string, cs *model.ContainerSt
 	if cs != nil {
 		inc.RestartCount = int(cs.RestartCount)
 	}
-	if url, ok := e.config.Runbooks[ev.Reason]; ok && inc.Hint == "" {
-		inc.Hint = "Runbook: " + url
+	if url, ok := e.config.Runbooks[ev.Reason]; ok {
+		inc.Runbook = url
+		if inc.Hint == "" {
+			inc.Hint = "Runbook: " + url
+		}
 	}
 	e.config.Enricher.Enrich(&ev, inc)
 	return inc

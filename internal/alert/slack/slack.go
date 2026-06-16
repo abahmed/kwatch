@@ -342,6 +342,10 @@ func buildIncidentBlocks(inc *model.Incident, appCfg *config.App) *slackClient.B
 		blocks = append(blocks, markdownSection(hint))
 	}
 
+	if inc.Analysis != "" {
+		blocks = append(blocks, markdownSection("*🤖 Likely cause:* "+inc.Analysis))
+	}
+
 	if inc.IncludeEvents {
 		events := strings.TrimSpace(inc.Events)
 		if len(events) > 0 {
@@ -431,10 +435,14 @@ func formatIncidentText(inc *model.Incident, action model.IncidentAction) string
 	switch action {
 	case model.ActionCreate:
 		duration := inc.LastSeen.Sub(inc.FirstSeen).Round(time.Minute)
+		analysis := ""
+		if inc.Analysis != "" {
+			analysis = "\n🤖 Likely cause: " + inc.Analysis
+		}
 		text := fmt.Sprintf(
-			"🚨 Incident: %s (%s)\nNamespace: %s\nContainer: %s\nReason: %s\nRestarts: %d\nHint: %s\nPeak: %d resource(s)\nCount: %d\nDuration: %s",
+			"🚨 Incident: %s (%s)\nNamespace: %s\nContainer: %s\nReason: %s\nRestarts: %d\nHint: %s%s\nPeak: %d resource(s)\nCount: %d\nDuration: %s",
 			inc.Name, inc.OwnerKind, inc.Namespace, containerSummary(inc),
-			inc.Reason, inc.RestartCount, inc.Hint,
+			inc.Reason, inc.RestartCount, inc.Hint, analysis,
 			inc.PeakResources, inc.Count, duration,
 		)
 		if inc.IncludeEvents {

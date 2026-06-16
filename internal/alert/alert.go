@@ -30,6 +30,7 @@ import (
 	"github.com/abahmed/kwatch/internal/alert/zenduty"
 	"github.com/abahmed/kwatch/internal/config"
 	"github.com/abahmed/kwatch/internal/event"
+	"github.com/abahmed/kwatch/internal/llm"
 	"github.com/abahmed/kwatch/internal/metrics"
 	"github.com/abahmed/kwatch/internal/model"
 	"k8s.io/klog/v2"
@@ -52,6 +53,37 @@ const channelCap = 256
 const dlqCap = 100
 
 const defaultMaxBackoff = 30 * time.Second
+
+const (
+	enrichTimeout   = 15 * time.Second
+	breakerThreshold = 3
+	breakerCooldown  = 60 * time.Second
+	maxAnalysisChars = 600
+)
+
+// localEndpoint is the in-pod sidecar address (loopback only).
+const localEndpoint = "http://localhost:11434"
+
+type breaker struct {
+	fails    int
+	openUntil time.Time
+}
+
+func (b *breaker) allow(now time.Time) bool {
+	return now.After(b.openUntil)
+}
+
+func (b *breaker) record(now time.Time, ok bool) {
+	if ok {
+		b.fails = 0
+		return
+	}
+	b.fails++
+	if b.fails >= breakerThreshold {
+		b.openUntil = now.Add(breakerCooldown)
+		b.fails = 0
+	}
+}
 
 type providerEntry struct {
 	provider      Provider
@@ -78,12 +110,24 @@ type AlertManager struct {
 	dlqMu       sync.Mutex
 	dlqRing     [dlqCap]DeadLetterEntry
 	dlqHead     int
+
+	llm      *llm.Client
+	enrichCh chan deliverJob
+	brk      breaker
 }
 
 func (a *AlertManager) SetMaxLogLines(n int) {
 	if n > 0 {
 		a.maxLogLines = n
 	}
+}
+
+func (a *AlertManager) SetLLM(cfg config.LLMConfig) {
+	if !cfg.Enabled {
+		return
+	}
+	a.llm = llm.New(localEndpoint)
+	a.enrichCh = make(chan deliverJob, 1)
 }
 
 func (a *AlertManager) SetTemplates(tpl map[string]string) {
@@ -637,25 +681,19 @@ func (a *AlertManager) NotifyIncident(inc *model.Incident, action model.Incident
 
 	snap := inc.Clone()
 	job := deliverJob{inc: snap, action: action}
-	a.mu.Lock()
-	entries := make([]providerEntry, len(a.entries))
-	copy(entries, a.entries)
-	a.mu.Unlock()
-	for _, entry := range entries {
+	if a.started && a.llm != nil && action == model.ActionCreate {
 		select {
-		case entry.ch <- job:
+		case a.enrichCh <- job:
 		default:
-			select {
-			case <-entry.ch:
-				metrics.Default.NotificationsDropped.Add(1)
-			default:
-			}
-			select {
-			case entry.ch <- job:
-			default:
-			}
+			a.fanOut(job)
 		}
+		return
 	}
+	if !a.started {
+		a.deliverAllSync(inc, action)
+		return
+	}
+	a.fanOut(job)
 }
 
 // Start launches a worker goroutine for each provider that processes
@@ -675,6 +713,16 @@ func (a *AlertManager) Start(ctx context.Context) {
 			defer a.wg.Done()
 			for job := range entry.ch {
 				a.deliverOne(entry, job.inc, job.action)
+			}
+		}()
+	}
+	// Launch the enrich worker if LLM is enabled.
+	if a.llm != nil {
+		a.wg.Add(1)
+		go func() {
+			defer a.wg.Done()
+			for job := range a.enrichCh {
+				a.enrichOne(ctx, job)
 			}
 		}()
 	}
@@ -698,6 +746,9 @@ func (a *AlertManager) shutdown() {
 
 	for i := range entries {
 		close(entries[i].ch)
+	}
+	if a.enrichCh != nil {
+		close(a.enrichCh)
 	}
 	a.wg.Wait()
 }
@@ -732,6 +783,49 @@ func (a *AlertManager) recordDeadLetter(entry *providerEntry, inc *model.Inciden
 		Timestamp: time.Now(),
 	}
 	a.dlqHead = (a.dlqHead + 1) % dlqCap
+}
+
+// enrichOne runs LLM enrichment for a single job, then fans out.
+// Always fans out, even on panic (best-effort enrichment).
+func (a *AlertManager) enrichOne(ctx context.Context, job deliverJob) {
+	defer a.fanOut(job)
+	defer func() {
+		if r := recover(); r != nil {
+			metrics.Default.LLMEnrichFailed.Add(1)
+			klog.ErrorS(fmt.Errorf("%v", r), "llm enrichment panic recovered", "key", job.inc.Key)
+		}
+	}()
+	if !a.brk.allow(time.Now()) {
+		metrics.Default.LLMEnrichSkipped.Add(1)
+		return
+	}
+	cctx, cancel := context.WithTimeout(ctx, enrichTimeout)
+	out, err := a.llm.Analyze(cctx, job.inc)
+	cancel()
+	a.brk.record(time.Now(), err == nil)
+	metrics.Default.LLMEnrichTotal.Add(1)
+	if err != nil {
+		metrics.Default.LLMEnrichFailed.Add(1)
+		klog.V(2).InfoS("llm enrichment skipped", "key", job.inc.Key, "error", err)
+	} else if s := sanitizeAnalysis(out); s != "" {
+		job.inc.Analysis = s
+	}
+}
+
+func sanitizeAnalysis(s string) string {
+	s = strings.Map(func(r rune) rune {
+		if r == '\n' || r == '\t' {
+			return r
+		}
+		if r < 0x20 || r == 0x7f {
+			return -1
+		}
+		return r
+	}, strings.TrimSpace(s))
+	if len(s) > maxAnalysisChars {
+		s = s[:maxAnalysisChars] + "…"
+	}
+	return s
 }
 
 // deliverOne handles the full send+retry for a single (entry, incident) pair.
@@ -780,6 +874,29 @@ func (a *AlertManager) deliverOne(entry *providerEntry, inc *model.Incident, act
 			fbErr := entry.fallback.provider.SendMessage("[fallback — primary " + p.Name() + " failed] " + fbMsg)
 			if fbErr != nil {
 				klog.ErrorS(fbErr, "fallback delivery failed", "provider", entry.fallback.provider.Name())
+			}
+		}
+	}
+}
+
+// fanOut delivers a job to every registered provider channel (non-blocking).
+func (a *AlertManager) fanOut(job deliverJob) {
+	a.mu.Lock()
+	entries := make([]providerEntry, len(a.entries))
+	copy(entries, a.entries)
+	a.mu.Unlock()
+	for _, entry := range entries {
+		select {
+		case entry.ch <- job:
+		default:
+			select {
+			case <-entry.ch:
+				metrics.Default.NotificationsDropped.Add(1)
+			default:
+			}
+			select {
+			case entry.ch <- job:
+			default:
 			}
 		}
 	}
@@ -901,12 +1018,50 @@ func formatCreateMessage(inc *model.Incident, maxLines int) string {
 		eventsBlock = fmt.Sprintf("\nEvents:\n%s", truncateText(inc.Events, maxLines))
 	}
 
+	// CD-2: correlation info
+	correlationBlock := ""
+	if n := len(inc.Resources); n > 1 {
+		correlationBlock = fmt.Sprintf("\nAffected: %d pods", n)
+	}
+	if inc.Resource == "node" && inc.SuppressedPods > 0 {
+		correlationBlock += fmt.Sprintf("\nImpact: %d dependent pod error(s) suppressed — this node is the likely root cause", inc.SuppressedPods)
+	}
+
+	analysis := ""
+	if inc.Analysis != "" {
+		analysis = "\n🤖 Likely cause: " + inc.Analysis
+	}
+
+	// CD-4: runbook link
+	runbookBlock := ""
+	if inc.Runbook != "" {
+		runbookBlock = "\nRunbook: " + inc.Runbook
+	}
+
+	// CD-5: investigate command + dashboard deep-link (dashboard is not on incident, it's config-level;
+	// we add the investigate command here, dashboard is added in deploy/config)
+	investigateBlock := ""
+	if inc.Resource == "pod" && len(inc.Resources) > 0 {
+		var pod string
+		for p := range inc.Resources {
+			pod = p
+			break
+		}
+		containerFlag := ""
+		if inc.ContainerName != "" {
+			containerFlag = " -c " + inc.ContainerName
+		}
+		investigateBlock = fmt.Sprintf("\nInvestigate: kubectl -n %s logs %s%s --previous | kubectl -n %s describe pod %s",
+			inc.Namespace, pod, containerFlag, inc.Namespace, pod)
+	}
+
 	return fmt.Sprintf(
-		"🚨 Incident: %s\nSeverity: %s\nOwner: %s (%s)\nNamespace: %s\nContainer: %s\nReason: %s\nRestarts: %d\nHint: %s%s%s\nPeak: %d resource(s)\nCount: %d\nDuration: %s",
+		"🚨 Incident: %s\nSeverity: %s\nOwner: %s (%s)\nNamespace: %s\nContainer: %s\nReason: %s\nRestarts: %d\nHint: %s%s%s%s%s%s%s\nPeak: %d resource(s)\nCount: %d\nDuration: %s",
 		inc.Name, severity, inc.OwnerKind, inc.Name,
 		inc.Namespace, containerName, inc.Reason,
 		inc.RestartCount, inc.Hint,
-		logsBlock, eventsBlock,
+		logsBlock, eventsBlock, correlationBlock,
+		analysis, runbookBlock, investigateBlock,
 		inc.PeakResources, inc.Count, duration,
 	)
 }

@@ -19,6 +19,9 @@ type Registry struct {
 	BaselineSize        atomic.Int64
 	ActiveIncidents     atomic.Int64
 	WorkQueueDepth      atomic.Int64
+	LLMEnrichTotal      atomic.Int64
+	LLMEnrichFailed     atomic.Int64
+	LLMEnrichSkipped    atomic.Int64
 }
 
 var Default = &Registry{}
@@ -53,6 +56,18 @@ func (r *Registry) Handler() http.Handler {
 		lines = append(lines, "# HELP kwatch_baseline_size Baseline entries (seen pods)")
 		lines = append(lines, "# TYPE kwatch_baseline_size gauge")
 		lines = append(lines, fmt.Sprintf("kwatch_baseline_size %d", r.BaselineSize.Load()))
+		lines = append(lines, "")
+		lines = append(lines, "# HELP kwatch_llm_enrich_total Total LLM enrichment calls")
+		lines = append(lines, "# TYPE kwatch_llm_enrich_total counter")
+		lines = append(lines, fmt.Sprintf("kwatch_llm_enrich_total %d", r.LLMEnrichTotal.Load()))
+		lines = append(lines, "")
+		lines = append(lines, "# HELP kwatch_llm_enrich_failed_total Failed LLM enrichment calls")
+		lines = append(lines, "# TYPE kwatch_llm_enrich_failed_total counter")
+		lines = append(lines, fmt.Sprintf("kwatch_llm_enrich_failed_total %d", r.LLMEnrichFailed.Load()))
+		lines = append(lines, "")
+		lines = append(lines, "# HELP kwatch_llm_enrich_skipped_total Skipped LLM enrichment (breaker open)")
+		lines = append(lines, "# TYPE kwatch_llm_enrich_skipped_total counter")
+		lines = append(lines, fmt.Sprintf("kwatch_llm_enrich_skipped_total %d", r.LLMEnrichSkipped.Load()))
 		sort.Strings(lines)
 		fmt.Fprint(w, strings.Join(lines, "\n")+"\n")
 	})

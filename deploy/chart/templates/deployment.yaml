@@ -25,6 +25,21 @@ spec:
     spec:
       restartPolicy: Always
       serviceAccountName:  {{ .Release.Name }}
+      {{- $llmEnabled := false }}
+      {{- with .Values.config }}
+        {{- with .llm }}
+          {{- $llmEnabled = .enabled | default false }}
+        {{- end }}
+      {{- end }}
+      {{- if and $llmEnabled (gt (int (.Values.replicaCount | default 1)) 1) }}
+        {{- fail "LLM sidecar is a singleton; set replicaCount=1 when config.llm.enabled=true" }}
+      {{- end }}
+  {{- if and $llmEnabled .Values.llm.nativeSidecar }}
+      initContainers:
+        - name: llm
+          restartPolicy: Always
+          {{- include "kwatch.llmContainer" . | nindent 10 }}
+      {{- end }}
       containers:
         - name: {{ .Chart.Name }}
           securityContext:
@@ -46,6 +61,11 @@ spec:
               valueFrom:
                 fieldRef:
                   fieldPath: metadata.namespace
+            - name: GOMEMLIMIT
+              valueFrom:
+                resourceFieldRef:
+                  resource: limits.memory
+                  divisor: "1"
           livenessProbe:
             httpGet:
               path: /healthz
@@ -60,6 +80,10 @@ spec:
             periodSeconds: 10
           resources:
             {{- toYaml .Values.resources | nindent 12 }}
+        {{- if and $llmEnabled (not .Values.llm.nativeSidecar) }}
+        - name: llm
+          {{- include "kwatch.llmContainer" . | nindent 10 }}
+        {{- end }}
       {{- with .Values.nodeSelector }}
       nodeSelector:
         {{- toYaml . | nindent 8 }}
@@ -72,7 +96,17 @@ spec:
       tolerations:
         {{- toYaml . | nindent 8 }}
       {{- end }}
+      {{- if $llmEnabled }}
       volumes:
         - name: config-volume
           configMap:
             name: {{ .Release.Name }}
+        - name: llm-scratch
+          emptyDir:
+            sizeLimit: 1Gi
+      {{- else }}
+      volumes:
+        - name: config-volume
+          configMap:
+            name: {{ .Release.Name }}
+      {{- end }}

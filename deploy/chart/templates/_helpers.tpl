@@ -60,3 +60,38 @@ Create the name of the service account to use
 {{- default "default" .Values.serviceAccount.name }}
 {{- end }}
 {{- end }}
+
+{{/*
+Shared LLM sidecar container spec used by both plain-container and native-sidecar forms.
+*/}}
+{{- define "kwatch.llmContainer" -}}
+image: "ghcr.io/abahmed/kwatch-llm:{{ .Chart.AppVersion }}"
+imagePullPolicy: IfNotPresent
+env:
+  - { name: OLLAMA_HOST, value: "127.0.0.1:11434" }
+  - { name: OLLAMA_MODELS, value: /models }
+  - { name: OLLAMA_NUM_PARALLEL, value: "1" }
+  - { name: OLLAMA_MAX_LOADED_MODELS, value: "1" }
+  - { name: OLLAMA_KEEP_ALIVE, value: "5m" }
+startupProbe:
+  exec: { command: ["/bin/sh","-c","ollama list >/dev/null 2>&1"] }
+  failureThreshold: 30
+  periodSeconds: 2
+readinessProbe:
+  exec: { command: ["/bin/sh","-c","ollama list | grep -q kwatch-triage"] }
+  periodSeconds: 10
+livenessProbe:
+  exec: { command: ["/bin/sh","-c","ollama list >/dev/null 2>&1"] }
+  periodSeconds: 30
+  failureThreshold: 3
+resources:
+  requests: { cpu: "500m", memory: "1Gi" }
+  limits:   { cpu: "2", memory: "2Gi" }
+securityContext:
+  runAsNonRoot: true
+  allowPrivilegeEscalation: false
+  readOnlyRootFilesystem: false
+  capabilities: { drop: ["ALL"] }
+  seccompProfile: { type: RuntimeDefault }
+volumeMounts: [{ name: llm-scratch, mountPath: /tmp }]
+{{- end -}}

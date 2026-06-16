@@ -109,15 +109,22 @@
           }
         }
       },
-      "nodeSelector": {
-        "type": [
-          "string",
-          "boolean",
-          "number",
-          "object",
-          "array"
-        ]
-      },
+  "nodeSelector": {
+    "type": [
+      "string",
+      "boolean",
+      "number",
+      "object",
+      "array"
+    ]
+  },
+  "llm": {
+    "type": "object",
+    "description": "LLM sidecar deployment configuration",
+    "properties": {
+      "nativeSidecar": { "type": "boolean", "description": "Use K8s >=1.29 native sidecar (initContainer with restartPolicy:Always)" }
+    }
+  },
       "tolerations": {
         "type": [
           "string",
@@ -285,6 +292,17 @@
                 "podNamePatterns": { "type": "array", "items": { "type": "string" } }
               }
             }
+          },
+          "llm": {
+            "type": "object",
+            "description": "AI enrichment configuration",
+            "properties": {
+              "enabled": { "type": "boolean", "description": "Enable the LLM sidecar for AI root-cause analysis (default false)" }
+            }
+          },
+          "dashboardURLTemplate": {
+            "type": "string",
+            "description": "Dashboard URL template with {namespace}/{owner}/{pod} placeholders"
           },
           "alert": {
             "type": "object",
