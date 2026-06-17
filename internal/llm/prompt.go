@@ -11,7 +11,7 @@ import (
 
 const (
 	modelName      = "kwatch-triage"
-	defaultTimeout = 15 * time.Second
+	RequestTimeout = 15 * time.Second
 	maxLogChars    = 6000
 	maxEventChars  = 2000
 )

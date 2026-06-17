@@ -109,22 +109,24 @@
           }
         }
       },
-  "nodeSelector": {
-    "type": [
-      "string",
-      "boolean",
-      "number",
-      "object",
-      "array"
-    ]
-  },
-  "llm": {
-    "type": "object",
-    "description": "LLM sidecar deployment configuration",
-    "properties": {
-      "nativeSidecar": { "type": "boolean", "description": "Use K8s >=1.29 native sidecar (initContainer with restartPolicy:Always)" }
-    }
-  },
+      "nodeSelector": {
+        "type": [
+          "string",
+          "boolean",
+          "number",
+          "object",
+          "array"
+        ]
+      },
+      "llm": {
+        "type": "object",
+        "description": "LLM sidecar deployment configuration",
+        "properties": {
+          "repository": { "type": "string", "description": "model image repository" },
+          "tag": { "type": "string", "description": "model image version tag" },
+          "nativeSidecar": { "type": "boolean", "description": "Use K8s >=1.29 native sidecar (initContainer with restartPolicy:Always)" }
+        }
+      },
       "tolerations": {
         "type": [
           "string",

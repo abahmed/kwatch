@@ -88,25 +88,28 @@ spec:
       nodeSelector:
         {{- toYaml . | nindent 8 }}
       {{- end }}
+      {{- if $llmEnabled }}
+      affinity:
+        nodeAffinity:
+          preferredDuringSchedulingIgnoredDuringExecution:
+            - weight: 100
+              preference:
+                matchExpressions:
+                  - { key: kubernetes.io/arch, operator: In, values: [amd64, arm64] }
+        {{- with .Values.affinity }}
+          {{- toYaml . | nindent 8 }}
+        {{- end }}
+      {{- else }}
       {{- with .Values.affinity }}
       affinity:
         {{- toYaml . | nindent 8 }}
+      {{- end }}
       {{- end }}
       {{- with .Values.tolerations }}
       tolerations:
         {{- toYaml . | nindent 8 }}
       {{- end }}
-      {{- if $llmEnabled }}
       volumes:
         - name: config-volume
           configMap:
             name: {{ .Release.Name }}
-        - name: llm-scratch
-          emptyDir:
-            sizeLimit: 1Gi
-      {{- else }}
-      volumes:
-        - name: config-volume
-          configMap:
-            name: {{ .Release.Name }}
-      {{- end }}

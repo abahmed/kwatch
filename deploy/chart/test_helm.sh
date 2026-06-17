@@ -22,9 +22,6 @@ fi
 if echo "$OUT1" | grep -q "kwatch-llm"; then
   echo "FAIL: LLM sidecar present at default (should be absent)"; exit 1
 fi
-if echo "$OUT1" | grep -q "llm-scratch"; then
-  echo "FAIL: llm-scratch volume present at default (should be absent)"; exit 1
-fi
 echo "PASS: replicaCount=1"
 
 echo "=== replicaCount=2 ==="
@@ -40,7 +37,7 @@ echo "$OUT1" | grep -q "memory: 256Mi" || { echo "FAIL: memory limit not 256Mi";
 echo "PASS: memory limit"
 
 echo "=== LLM disabled (default) ==="
-if echo "$OUT1" | grep -qi "kwatch-llm\|kwatch_triage\|llm-scratch"; then
+if echo "$OUT1" | grep -qi "kwatch-llm\|kwatch-triage"; then
   echo "FAIL: LLM artefacts found with LLM disabled"; exit 1
 fi
 echo "PASS: LLM disabled"
@@ -48,7 +45,6 @@ echo "PASS: LLM disabled"
 echo "=== LLM enabled (plain container) ==="
 OUT3=$(helm template test3 . --set config.llm.enabled=true --set llm.nativeSidecar=false --set replicaCount=1 2>&1)
 echo "$OUT3" | grep -q "kwatch-llm" || { echo "FAIL: LLM sidecar missing when enabled"; exit 1; }
-echo "$OUT3" | grep -q "llm-scratch" || { echo "FAIL: llm-scratch volume missing when enabled"; exit 1; }
 echo "$OUT3" | grep -q "OLLAMA_HOST" || { echo "FAIL: OLLAMA_HOST env missing"; exit 1; }
 echo "$OUT3" | grep -A2 "config.yaml:" | grep -q "llm:" || { echo "FAIL: llm: not in ConfigMap"; exit 1; }
 echo "$OUT3" | grep -A3 "config.yaml:" | grep -q "enabled: true" || { echo "FAIL: llm.enabled: true not in ConfigMap"; exit 1; }

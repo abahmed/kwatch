@@ -1,13 +1,17 @@
 package alert
 
 import (
+	"context"
 	"errors"
+	"net/http"
+	"net/http/httptest"
 	"strings"
 	"testing"
 	"time"
 
 	"github.com/abahmed/kwatch/internal/config"
 	"github.com/abahmed/kwatch/internal/event"
+	"github.com/abahmed/kwatch/internal/llm"
 	"github.com/abahmed/kwatch/internal/model"
 	"github.com/stretchr/testify/assert"
 )
@@ -636,4 +640,94 @@ func TestNotifyIncidentDigestFlushDelivered(t *testing.T) {
 
 	// ThreadProvider must NOT receive via SendIncident for digests
 	assert.Nil(t, tp.lastInc, "ThreadProvider should not receive digest via SendIncident")
+}
+
+// countingProvider signals each delivery so tests can synchronize without
+// poking shutdown internals.
+type countingProvider struct{ delivered chan struct{} }
+
+func (p *countingProvider) Name() string                  { return "Slack" }
+func (p *countingProvider) SendMessage(string) error      { p.delivered <- struct{}{}; return nil }
+func (p *countingProvider) SendEvent(*event.Event) error  { return nil }
+
+// P2: in-flight enrichment must finish its fanOut on OPEN provider channels
+// during shutdown — no send-on-closed panic, and the alert is still delivered.
+func TestShutdownNoPanicWithInflightEnrichment(t *testing.T) {
+	// Stub Ollama: the handler blocks long enough for shutdown to start
+	// closing channels, then returns (causing a JSON decode failure in
+	// Analyze — the enrichment completes with error and fans out).
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		time.Sleep(300 * time.Millisecond)
+	}))
+	defer srv.Close()
+
+	delivered := make(chan struct{}, 8)
+	am := &AlertManager{}
+	am.entries = []providerEntry{{
+		provider:    &countingProvider{delivered: delivered},
+		maxAttempts: 1,
+		ch:          make(chan deliverJob, channelCap),
+	}}
+	am.llm = llm.New(srv.URL)
+	am.enrichCh = make(chan deliverJob, 1)
+
+	ctx, cancel := context.WithCancel(context.Background())
+	am.Start(ctx)
+
+	am.NotifyIncident(&model.Incident{Key: "k", Name: "n", Reason: "OOMKilled"}, model.ActionCreate)
+	time.Sleep(50 * time.Millisecond) // let the enrich worker enter Analyze
+	cancel()                          // triggers shutdown (enrichCh closed)
+
+	select {
+	case <-delivered: // alert delivered even though enrichment was cut short
+	case <-time.After(2 * time.Second):
+		t.Fatal("incident was not delivered after shutdown")
+	}
+}
+
+// P2 (second case): a late NotifyIncident after shutdown closed enrichCh must
+// be a no-op, not a send-on-closed panic (Fix 2e).
+func TestNotifyIncidentAfterShutdownIsNoop(t *testing.T) {
+	am := &AlertManager{}
+	am.entries = []providerEntry{{
+		provider:    &fakeProvider{},
+		maxAttempts: 1,
+		ch:          make(chan deliverJob, channelCap),
+	}}
+	am.llm = llm.New("http://127.0.0.1:0")
+	am.enrichCh = make(chan deliverJob, 1)
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	am.Start(ctx)
+	am.shutdown() // deterministic: closes enrichCh + provider channels, waits
+
+	// enrichCh is now closed; without Fix 2e this would panic.
+	am.NotifyIncident(&model.Incident{Key: "k", Name: "n", Reason: "OOMKilled"}, model.ActionCreate)
+}
+
+// P3: the breaker is a true single-probe half-open (Fix 3). Tested directly —
+// record/allow take an explicit `now`; enrichOne's time.Now() is not injectable.
+func TestBreakerSingleProbe(t *testing.T) {
+	var b breaker
+	t0 := time.Now()
+
+	b.record(t0, false)
+	b.record(t0, false)
+	b.record(t0, false) // threshold reached → open
+	assert.False(t, b.allow(t0))
+	assert.False(t, b.allow(t0.Add(breakerCooldown-time.Second)))
+
+	probeAt := t0.Add(breakerCooldown + time.Second)
+	assert.True(t, b.allow(probeAt)) // exactly one probe after cooldown
+
+	b.record(probeAt, false) // failed probe re-opens for a full cooldown
+	assert.False(t, b.allow(probeAt.Add(time.Second)))
+	assert.False(t, b.allow(probeAt.Add(breakerCooldown-time.Second)))
+
+	closeAt := probeAt.Add(breakerCooldown + time.Second)
+	assert.True(t, b.allow(closeAt))
+	b.record(closeAt, true) // successful probe closes
+	assert.True(t, b.allow(closeAt))
+	assert.Equal(t, 0, b.fails)
 }

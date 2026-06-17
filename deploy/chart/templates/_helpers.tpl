@@ -65,7 +65,7 @@ Create the name of the service account to use
 Shared LLM sidecar container spec used by both plain-container and native-sidecar forms.
 */}}
 {{- define "kwatch.llmContainer" -}}
-image: "ghcr.io/abahmed/kwatch-llm:{{ .Chart.AppVersion }}"
+image: "{{ .Values.llm.repository }}:{{ .Values.llm.tag }}"
 imagePullPolicy: IfNotPresent
 env:
   - { name: OLLAMA_HOST, value: "127.0.0.1:11434" }
@@ -89,9 +89,10 @@ resources:
   limits:   { cpu: "2", memory: "2Gi" }
 securityContext:
   runAsNonRoot: true
+  runAsUser: 1000
+  runAsGroup: 1000
   allowPrivilegeEscalation: false
   readOnlyRootFilesystem: false
   capabilities: { drop: ["ALL"] }
   seccompProfile: { type: RuntimeDefault }
-volumeMounts: [{ name: llm-scratch, mountPath: /tmp }]
 {{- end -}}

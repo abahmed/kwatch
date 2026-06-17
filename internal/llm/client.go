@@ -21,7 +21,7 @@ type Client struct {
 
 func New(endpoint string) *Client {
 	return &Client{
-		http:     &http.Client{Timeout: defaultTimeout},
+		http:     &http.Client{Timeout: RequestTimeout},
 		endpoint: endpoint,
 		redactor: newRedactor(),
 	}

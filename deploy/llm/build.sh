@@ -3,7 +3,7 @@ set -eu
 
 DIR="$(dirname "$0")"
 IMAGE="${IMAGE:-ghcr.io/abahmed/kwatch-llm}"
-TAG="${TAG:-dev}"
+TAG="${TAG:-$(cat "$DIR/VERSION")}"
 PLATFORMS="${PLATFORMS:-linux/amd64,linux/arm64}"
 
 docker buildx build --platform "$PLATFORMS" -f "$DIR/Dockerfile" \

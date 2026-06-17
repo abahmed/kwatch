@@ -55,7 +55,6 @@ const dlqCap = 100
 const defaultMaxBackoff = 30 * time.Second
 
 const (
-	enrichTimeout   = 15 * time.Second
 	breakerThreshold = 3
 	breakerCooldown  = 60 * time.Second
 	maxAnalysisChars = 600
@@ -76,12 +75,12 @@ func (b *breaker) allow(now time.Time) bool {
 func (b *breaker) record(now time.Time, ok bool) {
 	if ok {
 		b.fails = 0
+		b.openUntil = time.Time{}
 		return
 	}
 	b.fails++
 	if b.fails >= breakerThreshold {
 		b.openUntil = now.Add(breakerCooldown)
-		b.fails = 0
 	}
 }
 
@@ -106,7 +105,8 @@ type AlertManager struct {
 	started     bool
 	stopped     bool
 	mu          sync.Mutex
-	wg          sync.WaitGroup
+	providerWg  sync.WaitGroup
+	enrichWg    sync.WaitGroup
 	dlqMu       sync.Mutex
 	dlqRing     [dlqCap]DeadLetterEntry
 	dlqHead     int
@@ -682,18 +682,40 @@ func (a *AlertManager) NotifyIncident(inc *model.Incident, action model.Incident
 	snap := inc.Clone()
 	job := deliverJob{inc: snap, action: action}
 	if a.started && a.llm != nil && action == model.ActionCreate {
-		select {
-		case a.enrichCh <- job:
-		default:
+		a.mu.Lock()
+		enqueued := false
+		if !a.stopped {
+			select {
+			case a.enrichCh <- job:
+				enqueued = true
+			default:
+			}
+		}
+		a.mu.Unlock()
+		if enqueued {
+			return
+		}
+		// stopped, or queue full → deliver without enrichment.
+		// Guard against calls that arrive after shutdown has closed
+		// provider channels (in-flight enrichment from enrichOne's
+		// deferred fanOut is not affected — it runs before shutdown
+		// closes provider channels).
+		a.mu.Lock()
+		stopped := a.stopped
+		a.mu.Unlock()
+		if !stopped {
 			a.fanOut(job)
 		}
 		return
 	}
-	if !a.started {
-		a.deliverAllSync(inc, action)
-		return
+	// Non-enrich path (update / resolve / no LLM). Guard against calls
+	// after shutdown.
+	a.mu.Lock()
+	stopped := a.stopped
+	a.mu.Unlock()
+	if !stopped {
+		a.fanOut(job)
 	}
-	a.fanOut(job)
 }
 
 // Start launches a worker goroutine for each provider that processes
@@ -708,9 +730,9 @@ func (a *AlertManager) Start(ctx context.Context) {
 
 	for i := range entries {
 		entry := &entries[i]
-		a.wg.Add(1)
+		a.providerWg.Add(1)
 		go func() {
-			defer a.wg.Done()
+			defer a.providerWg.Done()
 			for job := range entry.ch {
 				a.deliverOne(entry, job.inc, job.action)
 			}
@@ -718,9 +740,9 @@ func (a *AlertManager) Start(ctx context.Context) {
 	}
 	// Launch the enrich worker if LLM is enabled.
 	if a.llm != nil {
-		a.wg.Add(1)
+		a.enrichWg.Add(1)
 		go func() {
-			defer a.wg.Done()
+			defer a.enrichWg.Done()
 			for job := range a.enrichCh {
 				a.enrichOne(ctx, job)
 			}
@@ -744,13 +766,17 @@ func (a *AlertManager) shutdown() {
 	copy(entries, a.entries)
 	a.mu.Unlock()
 
+	// 1) stop new enrich work and let the in-flight enrichment finish its
+	//    deferred fanOut while provider channels are STILL OPEN.
+	if a.enrichCh != nil {
+		close(a.enrichCh)
+		a.enrichWg.Wait()
+	}
+	// 2) now it is safe to close provider channels and drain their workers.
 	for i := range entries {
 		close(entries[i].ch)
 	}
-	if a.enrichCh != nil {
-		close(a.enrichCh)
-	}
-	a.wg.Wait()
+	a.providerWg.Wait()
 }
 
 // DeadLetters returns a copy of the dead-letter ring buffer.
@@ -799,7 +825,7 @@ func (a *AlertManager) enrichOne(ctx context.Context, job deliverJob) {
 		metrics.Default.LLMEnrichSkipped.Add(1)
 		return
 	}
-	cctx, cancel := context.WithTimeout(ctx, enrichTimeout)
+	cctx, cancel := context.WithTimeout(ctx, llm.RequestTimeout)
 	out, err := a.llm.Analyze(cctx, job.inc)
 	cancel()
 	a.brk.record(time.Now(), err == nil)

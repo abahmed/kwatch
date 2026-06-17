@@ -516,9 +516,6 @@ func (e *Engine) newIncident(ev event.Event, owner string, cs *model.ContainerSt
 	}
 	if url, ok := e.config.Runbooks[ev.Reason]; ok {
 		inc.Runbook = url
-		if inc.Hint == "" {
-			inc.Hint = "Runbook: " + url
-		}
 	}
 	e.config.Enricher.Enrich(&ev, inc)
 	return inc
