@@ -39,10 +39,11 @@ func GetPodEventsStr(events *[]v1.Event) string {
 // with "Killing Stopping container" which indicates that a container could not
 // be gracefully shutdown
 func ContainsKillingStoppingContainerEvents(
+	ctx context.Context,
 	c kubernetes.Interface,
 	name,
 	namespace string) bool {
-	events, err := GetPodEvents(context.Background(), c, name, namespace)
+	events, err := GetPodEvents(ctx, c, name, namespace)
 	if err != nil {
 		return false
 	}
@@ -115,9 +116,11 @@ func GetPodEvents(
 	c kubernetes.Interface,
 	name,
 	namespace string) (*v1.EventList, error) {
+	cctx, cancel := context.WithTimeout(ctx, 10*time.Second)
+	defer cancel()
 	return c.CoreV1().
 		Events(namespace).
-		List(ctx, metav1.ListOptions{
+		List(cctx, metav1.ListOptions{
 			FieldSelector: "involvedObject.name=" + name,
 		})
 }
@@ -151,10 +154,12 @@ func GetPVNameFromPVC(
 	ctx context.Context,
 	c kubernetes.Interface,
 	namespace, pvcName string) (string, error) {
+	cctx, cancel := context.WithTimeout(ctx, 10*time.Second)
+	defer cancel()
 	pvc, err :=
 		c.CoreV1().
 			PersistentVolumeClaims(namespace).
-			Get(ctx, pvcName, metav1.GetOptions{})
+			Get(cctx, pvcName, metav1.GetOptions{})
 	if err != nil {
 		return "", err
 	}

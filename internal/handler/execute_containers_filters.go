@@ -1,7 +1,6 @@
 package handler
 
 import (
-	"context"
 	"fmt"
 	"sort"
 	"time"
@@ -76,7 +75,7 @@ func (h *handler) executeContainersFilters(ctx *filter.Context) {
 				ctx.Events = &items
 			}
 			} else {
-				podEvents, err := k8s.GetPodEvents(context.Background(), ctx.Client, ctx.Pod.Name, ctx.Pod.Namespace)
+				podEvents, err := k8s.GetPodEvents(ctx.Ctx, ctx.Client, ctx.Pod.Name, ctx.Pod.Namespace)
 				if err != nil {
 					klog.ErrorS(err, "failed to fetch pod events", "pod", ctx.Pod.Name)
 				}

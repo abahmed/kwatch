@@ -129,6 +129,7 @@ func TestContainsKillingStoppingContainerEvents(t *testing.T) {
 
 	result :=
 		ContainsKillingStoppingContainerEvents(
+			context.Background(),
 			cli,
 			"dummy-app-579f7cd745-t6fdg",
 			"test")
@@ -149,6 +150,7 @@ func TestContainsKillingStoppingContainerEventsError(t *testing.T) {
 
 	result :=
 		ContainsKillingStoppingContainerEvents(
+			context.Background(),
 			cli,
 			"dummy-app-579f7cd745-t6fdg",
 			"test")
@@ -171,6 +173,7 @@ func TestContainsKillingStoppingContainerEmpty(t *testing.T) {
 
 	result :=
 		ContainsKillingStoppingContainerEvents(
+			context.Background(),
 			cli,
 			"dummy-app-579f7cd745-t6fdg",
 			"test")
@@ -323,7 +326,7 @@ func TestContainsKillingStoppingContainerDifferentCase(t *testing.T) {
 			}, nil
 		})
 
-	result := ContainsKillingStoppingContainerEvents(cli, "test", "default")
+	result := ContainsKillingStoppingContainerEvents(context.Background(), cli, "test", "default")
 	assert.True(result)
 }
 
@@ -344,7 +347,7 @@ func TestContainsKillingStoppingContainerNoMatch(t *testing.T) {
 			}, nil
 		})
 
-	result := ContainsKillingStoppingContainerEvents(cli, "test", "default")
+	result := ContainsKillingStoppingContainerEvents(context.Background(), cli, "test", "default")
 	assert.False(result)
 }
 
