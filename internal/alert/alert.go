@@ -105,6 +105,7 @@ type AlertManager struct {
 	started     bool
 	stopped     bool
 	mu          sync.Mutex
+	cfgMu       sync.RWMutex
 	providerWg  sync.WaitGroup
 	enrichWg    sync.WaitGroup
 	dlqMu       sync.Mutex
@@ -118,7 +119,9 @@ type AlertManager struct {
 
 func (a *AlertManager) SetMaxLogLines(n int) {
 	if n > 0 {
+		a.cfgMu.Lock()
 		a.maxLogLines = n
+		a.cfgMu.Unlock()
 	}
 }
 
@@ -177,21 +180,27 @@ func extractRoutes(cfg map[string]interface{}) []config.AlertRoute {
 			for _, ri := range routes {
 				if rm, ok := ri.(map[string]interface{}); ok {
 					route := config.AlertRoute{}
-					if ns, ok := rm["namespaces"]; ok {
-						for _, n := range ns.([]interface{}) {
+				if ns, ok := rm["namespaces"]; ok {
+					if arr, ok := ns.([]interface{}); ok {
+						for _, n := range arr {
 							route.Namespaces = append(route.Namespaces, fmt.Sprint(n))
 						}
 					}
-					if sev, ok := rm["severities"]; ok {
-						for _, s := range sev.([]interface{}) {
+				}
+				if sev, ok := rm["severities"]; ok {
+					if arr, ok := sev.([]interface{}); ok {
+						for _, s := range arr {
 							route.Severities = append(route.Severities, fmt.Sprint(s))
 						}
 					}
-					if rea, ok := rm["reasons"]; ok {
-						for _, r := range rea.([]interface{}) {
+				}
+				if rea, ok := rm["reasons"]; ok {
+					if arr, ok := rea.([]interface{}); ok {
+						for _, r := range arr {
 							route.Reasons = append(route.Reasons, fmt.Sprint(r))
 						}
 					}
+				}
 					if len(route.Namespaces) > 0 || len(route.Severities) > 0 || len(route.Reasons) > 0 {
 						out = append(out, route)
 					}
@@ -360,7 +369,7 @@ func (a *AlertManager) Init(
 // SetSilences configures silence rules on the alert manager.
 // Must be called after Init.
 func (a *AlertManager) SetSilences(rules []config.SilenceRule) {
-	a.silences = make([]silenceMatcher, 0, len(rules))
+	built := make([]silenceMatcher, 0, len(rules))
 	for _, sr := range rules {
 		sm := silenceMatcher{
 			namespaces:     sr.Namespaces,
@@ -384,12 +393,18 @@ func (a *AlertManager) SetSilences(rules []config.SilenceRule) {
 				klog.ErrorS(err, "invalid silence log pattern", "pattern", p)
 			}
 		}
-		a.silences = append(a.silences, sm)
+		built = append(built, sm)
 	}
+	a.cfgMu.Lock()
+	a.silences = built
+	a.cfgMu.Unlock()
 }
 
 func (a *AlertManager) isSilenced(inc *model.Incident) bool {
-	for _, sm := range a.silences {
+	a.cfgMu.RLock()
+	silences := a.silences
+	a.cfgMu.RUnlock()
+	for _, sm := range silences {
 		if matchesSilence(sm, inc) {
 			return true
 		}
@@ -696,26 +711,23 @@ func (a *AlertManager) NotifyIncident(inc *model.Incident, action model.Incident
 			return
 		}
 		// stopped, or queue full → deliver without enrichment.
-		// Guard against calls that arrive after shutdown has closed
-		// provider channels (in-flight enrichment from enrichOne's
-		// deferred fanOut is not affected — it runs before shutdown
-		// closes provider channels).
+		// fanOut runs under a.mu so it is atomic w.r.t. shutdown's channel closes.
 		a.mu.Lock()
 		stopped := a.stopped
-		a.mu.Unlock()
 		if !stopped {
 			a.fanOut(job)
 		}
+		a.mu.Unlock()
 		return
 	}
 	// Non-enrich path (update / resolve / no LLM). Guard against calls
 	// after shutdown.
 	a.mu.Lock()
 	stopped := a.stopped
-	a.mu.Unlock()
 	if !stopped {
 		a.fanOut(job)
 	}
+	a.mu.Unlock()
 }
 
 // Start launches a worker goroutine for each provider that processes
@@ -772,10 +784,13 @@ func (a *AlertManager) shutdown() {
 		close(a.enrichCh)
 		a.enrichWg.Wait()
 	}
-	// 2) now it is safe to close provider channels and drain their workers.
+	// 2) close provider channels under a.mu so fanOut (also under a.mu) never
+	//    sends on a closed channel.
+	a.mu.Lock()
 	for i := range entries {
 		close(entries[i].ch)
 	}
+	a.mu.Unlock()
 	a.providerWg.Wait()
 }
 
@@ -814,7 +829,11 @@ func (a *AlertManager) recordDeadLetter(entry *providerEntry, inc *model.Inciden
 // enrichOne runs LLM enrichment for a single job, then fans out.
 // Always fans out, even on panic (best-effort enrichment).
 func (a *AlertManager) enrichOne(ctx context.Context, job deliverJob) {
-	defer a.fanOut(job)
+	defer func() {
+		a.mu.Lock()
+		a.fanOut(job)
+		a.mu.Unlock()
+	}()
 	defer func() {
 		if r := recover(); r != nil {
 			metrics.Default.LLMEnrichFailed.Add(1)
@@ -859,7 +878,9 @@ func (a *AlertManager) deliverOne(entry *providerEntry, inc *model.Incident, act
 	p := entry.provider
 	metrics.Default.NotificationsTotal.Add(1)
 
+	a.cfgMu.RLock()
 	maxLines := a.maxLogLines
+	a.cfgMu.RUnlock()
 	if maxLines <= 0 {
 		maxLines = 100
 	}
@@ -906,12 +927,9 @@ func (a *AlertManager) deliverOne(entry *providerEntry, inc *model.Incident, act
 }
 
 // fanOut delivers a job to every registered provider channel (non-blocking).
+// Must be called with a.mu held (caller must Lock/Unlock).
 func (a *AlertManager) fanOut(job deliverJob) {
-	a.mu.Lock()
-	entries := make([]providerEntry, len(a.entries))
-	copy(entries, a.entries)
-	a.mu.Unlock()
-	for _, entry := range entries {
+	for _, entry := range a.entries {
 		select {
 		case entry.ch <- job:
 		default:
@@ -931,7 +949,9 @@ func (a *AlertManager) fanOut(job deliverJob) {
 // deliverAllSync sends directly to every provider (synchronous).
 // Used before Start() is called (e.g. kwatch replay).
 func (a *AlertManager) deliverAllSync(inc *model.Incident, action model.IncidentAction) {
+	a.cfgMu.RLock()
 	maxLines := a.maxLogLines
+	a.cfgMu.RUnlock()
 	if maxLines <= 0 {
 		maxLines = 100
 	}

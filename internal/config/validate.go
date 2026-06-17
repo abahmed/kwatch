@@ -107,6 +107,9 @@ func Validate(cfg *Config) []error {
 		if cfg.StormConfig.WindowMinutes <= 0 {
 			errs = append(errs, errors.New("storm.windowMinutes must be > 0"))
 		}
+		if cfg.StormConfig.DigestIntervalMinutes <= 0 {
+			errs = append(errs, errors.New("storm.digestIntervalMinutes must be > 0"))
+		}
 	}
 	if cfg.Correlation.Escalation.Enabled {
 		for i, t := range cfg.Correlation.Escalation.Tiers {
@@ -124,14 +127,19 @@ func Validate(cfg *Config) []error {
 	if cfg.PendingPodMonitor.Enabled && cfg.PendingPodMonitor.Threshold <= 0 {
 		errs = append(errs, errors.New("pendingPodMonitor.threshold must be > 0"))
 	}
-	if cfg.PvcMonitor.Threshold <= 0 || cfg.PvcMonitor.Threshold > cfg.PvcMonitor.CriticalThreshold {
-		errs = append(errs, errors.New("pvcMonitor requires 0 < threshold <= criticalThreshold"))
-	}
-	if cfg.PvcMonitor.CriticalThreshold > 100 {
-		errs = append(errs, errors.New("pvcMonitor.criticalThreshold must be <= 100"))
-	}
-	if cfg.PvcMonitor.ClearThreshold < 0 || cfg.PvcMonitor.ClearThreshold > cfg.PvcMonitor.Threshold {
-		errs = append(errs, errors.New("pvcMonitor.clearThreshold must be between 0 and threshold"))
+	if cfg.PvcMonitor.Enabled {
+		if cfg.PvcMonitor.Interval <= 0 {
+			errs = append(errs, errors.New("pvcMonitor.interval must be > 0"))
+		}
+		if cfg.PvcMonitor.Threshold <= 0 || cfg.PvcMonitor.Threshold > cfg.PvcMonitor.CriticalThreshold {
+			errs = append(errs, errors.New("pvcMonitor requires 0 < threshold <= criticalThreshold"))
+		}
+		if cfg.PvcMonitor.CriticalThreshold > 100 {
+			errs = append(errs, errors.New("pvcMonitor.criticalThreshold must be <= 100"))
+		}
+		if cfg.PvcMonitor.ClearThreshold < 0 || cfg.PvcMonitor.ClearThreshold > cfg.PvcMonitor.Threshold {
+			errs = append(errs, errors.New("pvcMonitor.clearThreshold must be between 0 and threshold"))
+		}
 	}
 	for _, name := range unknownProviders(cfg) {
 		errs = append(errs, fmt.Errorf("unknown alert provider %q", name))

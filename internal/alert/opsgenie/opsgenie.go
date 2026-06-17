@@ -71,7 +71,11 @@ func (m *Opsgenie) SendMessage(msg string) error {
 
 // SendEvent sends event to the provider
 func (m *Opsgenie) SendEvent(e *event.Event) error {
-	return m.sendAPI(m.buildMessage(e))
+	b, err := m.buildMessage(e)
+	if err != nil {
+		return err
+	}
+	return m.sendAPI(b)
 }
 
 // sendAPI sends http request to Opsgenie API
@@ -104,7 +108,7 @@ func (m *Opsgenie) sendAPI(content []byte) error {
 	return nil
 }
 
-func (m *Opsgenie) buildMessage(e *event.Event) []byte {
+func (m *Opsgenie) buildMessage(e *event.Event) ([]byte, error) {
 	payload := ogPayload{
 		Priority: "P1",
 	}
@@ -146,8 +150,7 @@ func (m *Opsgenie) buildMessage(e *event.Event) []byte {
 
 	str, err := json.Marshal(payload)
 	if err != nil {
-		klog.ErrorS(err, "failed to marshal opsgenie payload")
-		return nil
+		return nil, fmt.Errorf("failed to marshal opsgenie payload: %w", err)
 	}
-	return str
+	return str, nil
 }

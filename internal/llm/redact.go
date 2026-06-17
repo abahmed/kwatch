@@ -3,8 +3,9 @@ package llm
 import "regexp"
 
 var defaultRedactions = []*regexp.Regexp{
-	regexp.MustCompile(`(?i)(password|passwd|secret|token|api[-_]?key|bearer)\s*[:=]\s*\S+`),
-	regexp.MustCompile(`(?i)authorization:\s*\S+`),
+	regexp.MustCompile(`(?i)(password|passwd|secret|token|api[-_]?key)\s*[:=]\s*\S+`),
+	regexp.MustCompile(`(?i)\bbearer\s+\S+`),
+	regexp.MustCompile(`(?i)authorization\s*:\s*.+`),
 	regexp.MustCompile(`eyJ[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+`),
 }
 

@@ -43,10 +43,25 @@ func (e *DefaultEnricher) Enrich(ev *event.Event, inc *model.Incident) {
 	inc.Events = ev.Events
 	inc.IncludeEvents = ev.IncludeEvents
 	inc.IncludeLogs = ev.IncludeLogs
-	if ev.Severity != "" {
-		inc.Severity = ev.Severity
-	} else {
-		inc.Severity = e.resolveSeverity(ev.OwnerKind, ev.Reason)
+	newSev := ev.Severity
+	if newSev == "" {
+		newSev = e.resolveSeverity(ev.OwnerKind, ev.Reason)
+	}
+	if severityRank(newSev) >= severityRank(inc.Severity) {
+		inc.Severity = newSev
+	}
+}
+
+func severityRank(s string) int {
+	switch s {
+	case "critical":
+		return 3
+	case "high":
+		return 2
+	case "medium":
+		return 1
+	default:
+		return 0
 	}
 }
 

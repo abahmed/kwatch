@@ -46,7 +46,11 @@ func (p *PvcMonitor) Start(ctx context.Context) {
 
 	p.checkUsage(ctx)
 
-	ticker := time.NewTicker(time.Duration(p.config.Interval) * time.Minute)
+	interval := time.Duration(p.config.Interval) * time.Minute
+	if interval <= 0 {
+		interval = 5 * time.Minute
+	}
+	ticker := time.NewTicker(interval)
 	cleanupTicker := time.NewTicker(1 * time.Hour)
 	defer ticker.Stop()
 	defer cleanupTicker.Stop()

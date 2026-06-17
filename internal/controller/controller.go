@@ -65,6 +65,8 @@ type Controller struct {
 	hpaWatchEnabled        bool
 	secretLister           corev1lister.SecretLister
 	secretsSynced          []cache.InformerSynced
+
+	readyFn                func()
 }
 
 // resolveNamespaces decides which namespaces to watch.
@@ -626,6 +628,8 @@ func New(
 	return c, cleanup
 }
 
+func (c *Controller) SetReadyFunc(fn func()) { c.readyFn = fn }
+
 func (c *Controller) enqueuePod(obj interface{}) {
 	key, err := cache.DeletionHandlingMetaNamespaceKeyFunc(obj)
 	if err != nil {
@@ -718,6 +722,9 @@ func (c *Controller) Run(ctx context.Context, workers int) error {
 	syncFns = append(syncFns, c.secretsSynced...)
 	if !cache.WaitForCacheSync(ctx.Done(), syncFns...) {
 		return fmt.Errorf("failed to wait for caches to sync")
+	}
+	if c.readyFn != nil {
+		c.readyFn()
 	}
 
 	c.buildSeenSet()

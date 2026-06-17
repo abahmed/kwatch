@@ -95,6 +95,7 @@ type Incident struct {
 	NotifiedSig        string
 	LastNotifiedAt     time.Time
 	RenotifyCount      int
+	Digested           bool // created via storm digest; suppress resolve/renotify edge
 }
 
 // Clone returns a deep copy of the incident, safe for concurrent use.

@@ -229,9 +229,10 @@ func TestBuildRequestBodyTeams(t *testing.T) {
 		IncludeLogs:   true,
 	}
 
-	payload := teams.buildRequestBodyTeams(e)
+	payload, err := teams.buildRequestBodyTeams(e)
+	assert.NoError(t, err)
 	var result teamsFlowPayload
-	err := json.Unmarshal(payload, &result)
+	err = json.Unmarshal(payload, &result)
 	assert.NoError(t, err)
 	assert.Equal(t, "Test Title", result.Title)
 	assert.Contains(t, result.Text, "test-pod")
@@ -248,9 +249,10 @@ func TestBuildRequestBodyMessage(t *testing.T) {
 	appCfg := &config.App{}
 	teams := NewTeams(configMap, appCfg)
 
-	payload := teams.buildRequestBodyMessage("test message")
+	payload, err := teams.buildRequestBodyMessage("test message")
+	assert.NoError(t, err)
 	var result teamsFlowPayload
-	err := json.Unmarshal(payload, &result)
+	err = json.Unmarshal(payload, &result)
 	assert.NoError(t, err)
 	assert.Equal(t, "New Alert", result.Title)
 	assert.Equal(t, "test message", result.Text)
@@ -283,7 +285,9 @@ func TestBuildRequestBodyTeamsGolden(t *testing.T) {
 		Reason:    "OOMKilled",
 	}
 
-	payload := string(teams.buildRequestBodyTeams(e))
+	b, err := teams.buildRequestBodyTeams(e)
+	assert.NoError(t, err)
+	payload := string(b)
 	assert.Contains(t, payload, "my-pod")
 	assert.Contains(t, payload, "my-namespace")
 	assert.Contains(t, payload, "OOMKilled")
@@ -307,9 +311,10 @@ func TestBuildRequestBodyTeamsDefaultTitle(t *testing.T) {
 		IncludeLogs:   true,
 	}
 
-	payload := teams.buildRequestBodyTeams(e)
+	payload, err := teams.buildRequestBodyTeams(e)
+	assert.NoError(t, err)
 	var result teamsFlowPayload
-	err := json.Unmarshal(payload, &result)
+	err = json.Unmarshal(payload, &result)
 	assert.NoError(t, err)
 	assert.Contains(t, result.Title, "Kwatch")
 }

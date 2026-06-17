@@ -171,6 +171,7 @@ func main() {
 	)
 
 	ctrl, cleanup := controller.New(k8sClient, cfg, h)
+	ctrl.SetReadyFunc(func() { healthServer.SetReady(true) })
 	defer cleanup()
 
 	runLeaderTasks := func(ctx context.Context) {
@@ -267,8 +268,10 @@ func main() {
 	klog.InfoS("shutting down gracefully...")
 	cancel()
 	shutdownCtx, sc := context.WithTimeout(context.Background(), 10*time.Second)
+	healthServer.SetReady(false)
 	healthServer.Stop(shutdownCtx)
 	sc()
+	cleanup()
 	os.Exit(exitCode)
 }
 

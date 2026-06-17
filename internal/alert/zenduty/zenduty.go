@@ -82,7 +82,11 @@ func (m *Zenduty) SendMessage(msg string) error {
 
 // SendEvent sends event to the provider
 func (m *Zenduty) SendEvent(e *event.Event) error {
-	return m.sendAPI(m.buildMessage(e))
+	b, err := m.buildMessage(e)
+	if err != nil {
+		return err
+	}
+	return m.sendAPI(b)
 }
 
 // sendAPI sends http request to Zenduty API
@@ -114,7 +118,7 @@ func (m *Zenduty) sendAPI(content []byte) error {
 	return nil
 }
 
-func (m *Zenduty) buildMessage(e *event.Event) []byte {
+func (m *Zenduty) buildMessage(e *event.Event) ([]byte, error) {
 	payload := zendutyPayload{
 		AlertType: m.alertType,
 	}
@@ -152,8 +156,7 @@ func (m *Zenduty) buildMessage(e *event.Event) []byte {
 
 	str, err := json.Marshal(payload)
 	if err != nil {
-		klog.ErrorS(err, "failed to marshal zenduty payload")
-		return nil
+		return nil, fmt.Errorf("failed to marshal zenduty payload: %w", err)
 	}
-	return str
+	return str, nil
 }

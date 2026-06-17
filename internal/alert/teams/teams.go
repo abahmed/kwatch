@@ -79,14 +79,20 @@ func (t *Teams) Name() string {
 
 // SendEvent sends event to the Power Automate flow
 func (t *Teams) SendEvent(e *event.Event) error {
-	payload := t.buildRequestBodyTeams(e)
-	return t.sendAPI(payload)
+	b, err := t.buildRequestBodyTeams(e)
+	if err != nil {
+		return err
+	}
+	return t.sendAPI(b)
 }
 
 // SendMessage sends plain text message to the Power Automate flow
 func (t *Teams) SendMessage(msg string) error {
-	payload := t.buildRequestBodyMessage(msg)
-	return t.sendAPI(payload)
+	b, err := t.buildRequestBodyMessage(msg)
+	if err != nil {
+		return err
+	}
+	return t.sendAPI(b)
 }
 
 // SendApi send the given payload to the Power Automate flow with retry logic
@@ -109,15 +115,15 @@ func (t *Teams) sendAPI(payload []byte) error {
 		if err != nil {
 			return fmt.Errorf("failed to create HTTP response: %w", err)
 		}
-		defer resp.Body.Close()
-
 		if resp.StatusCode == http.StatusOK {
+			resp.Body.Close()
 			return nil
 		}
 
 		if resp.StatusCode == http.StatusBadRequest {
-			body, err := io.ReadAll(resp.Body)
-			if err != nil {
+			body, readErr := io.ReadAll(resp.Body)
+			resp.Body.Close()
+			if readErr != nil {
 				return fmt.Errorf("call to power automate flow returned status %d", resp.StatusCode)
 			}
 			if strings.Contains(string(body), "TriggerInputSchemaMismatch") {
@@ -132,12 +138,14 @@ func (t *Teams) sendAPI(payload []byte) error {
 		}
 
 		if resp.StatusCode == http.StatusAccepted {
+			resp.Body.Close()
 			klog.InfoS("Request accepted by Power Automate flow, but not processed immediately",
 				"attempt", attempts+1,
 				"maxRetries", t.maxRetries)
 		} else {
-			body, err := io.ReadAll(resp.Body)
-			if err != nil {
+			body, readErr := io.ReadAll(resp.Body)
+			resp.Body.Close()
+			if readErr != nil {
 				return fmt.Errorf(
 					"call to power automate flow returned status %d", resp.StatusCode)
 			}
@@ -158,7 +166,7 @@ func (t *Teams) sendAPI(payload []byte) error {
 }
 
 // buildRequestBodyTeams builds the request body for the Power Automate flow
-func (t *Teams) buildRequestBodyTeams(e *event.Event) []byte {
+func (t *Teams) buildRequestBodyTeams(e *event.Event) ([]byte, error) {
 	// Use custom title if it's provided, otherwise use the default title
 	title := t.title
 	if len(title) == 0 {
@@ -232,16 +240,15 @@ func (t *Teams) buildRequestBodyTeams(e *event.Event) []byte {
 
 	jsonBytes, err := json.Marshal(payload)
 	if err != nil {
-		klog.ErrorS(err, "failed to marshal teams event payload")
-		return nil
+		return nil, fmt.Errorf("failed to marshal teams event payload: %w", err)
 	}
 
-	return jsonBytes
+	return jsonBytes, nil
 }
 
 // buildRequestBodyMessage builds plain message payload for the Power
 // Automate flow
-func (t *Teams) buildRequestBodyMessage(msg string) []byte {
+func (t *Teams) buildRequestBodyMessage(msg string) ([]byte, error) {
 	payload := &teamsFlowPayload{
 		Title: "New Alert",
 		Text:  msg,
@@ -251,9 +258,8 @@ func (t *Teams) buildRequestBodyMessage(msg string) []byte {
 
 	jsonBytes, err := json.Marshal(payload)
 	if err != nil {
-		klog.ErrorS(err, "failed to marshal teams message payload")
-		return nil
+		return nil, fmt.Errorf("failed to marshal teams message payload: %w", err)
 	}
 
-	return jsonBytes
+	return jsonBytes, nil
 }

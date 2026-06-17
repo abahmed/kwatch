@@ -71,14 +71,22 @@ func (m *Mattermost) Name() string {
 func (m *Mattermost) SendMessage(msg string) error {
 	klog.V(4).InfoS("sending to mattermost msg", "msg", msg)
 
-	return m.sendAPI(m.buildMessage(nil, &msg))
+	b, err := m.buildMessage(nil, &msg)
+	if err != nil {
+		return err
+	}
+	return m.sendAPI(b)
 }
 
 // SendEvent sends event to the provider
 func (m *Mattermost) SendEvent(e *event.Event) error {
 	klog.V(4).InfoS("sending to mattermost event", "event", e)
 
-	return m.sendAPI(m.buildMessage(e, nil))
+	b, err := m.buildMessage(e, nil)
+	if err != nil {
+		return err
+	}
+	return m.sendAPI(b)
 }
 
 func (m *Mattermost) sendAPI(content []byte) error {
@@ -108,7 +116,7 @@ func (m *Mattermost) sendAPI(content []byte) error {
 	return nil
 }
 
-func (m *Mattermost) buildMessage(e *event.Event, msg *string) []byte {
+func (m *Mattermost) buildMessage(e *event.Event, msg *string) ([]byte, error) {
 	payload := mmPayload{}
 
 	if msg != nil && len(*msg) > 0 {
@@ -190,8 +198,7 @@ func (m *Mattermost) buildMessage(e *event.Event, msg *string) []byte {
 
 	str, err := json.Marshal(payload)
 	if err != nil {
-		klog.ErrorS(err, "failed to marshal mattermost payload")
-		return nil
+		return nil, fmt.Errorf("failed to marshal mattermost payload: %w", err)
 	}
-	return str
+	return str, nil
 }

@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/abahmed/kwatch/internal/config"
+	"k8s.io/klog/v2"
 )
 
 const (
@@ -50,6 +51,9 @@ func InitHTTPClient(cfg *config.App) {
 
 	tlsCfg := &tls.Config{
 		InsecureSkipVerify: cfg.InsecureSkipTLSVerify, // #nosec G402
+	}
+	if cfg.InsecureSkipTLSVerify {
+		klog.Warning("InsecureSkipTLSVerify is enabled — outbound TLS certificate verification DISABLED")
 	}
 
 	if cfg.CABundlePath != "" {

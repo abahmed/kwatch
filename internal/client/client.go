@@ -49,6 +49,10 @@ func CreateClient(appConfig *config.App) (kubernetes.Interface, error) {
 		}
 	}
 
+	// Raise QPS/Burst from client-go defaults (5/10) to reduce throttling on large clusters
+	clientConfig.QPS = 50
+	clientConfig.Burst = 100
+
 	// creates the clientset
 	clientset, err := kubernetes.NewForConfig(clientConfig)
 	if err != nil {

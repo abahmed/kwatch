@@ -21,7 +21,7 @@ func (c *Client) userPrompt(inc *model.Incident) string {
 	events := c.redactor.scrub(tailChars(inc.Events, maxEventChars))
 	var b strings.Builder
 	fmt.Fprintf(&b, "Reason: %s\n", inc.Reason)
-	fmt.Fprintf(&b, "Owner: %s (%s)\nNamespace: %s\n", inc.Name, inc.OwnerKind, inc.Namespace)
+	fmt.Fprintf(&b, "Workload: %s\nOwnerKind: %s\nNamespace: %s\n", inc.Name, inc.OwnerKind, inc.Namespace)
 	if inc.ContainerName != "" {
 		fmt.Fprintf(&b, "Container: %s\n", inc.ContainerName)
 	}

@@ -2,6 +2,7 @@ package health
 
 import (
 	"context"
+	"crypto/subtle"
 	"encoding/json"
 	"net/http"
 	"net/http/pprof"
@@ -30,15 +31,16 @@ type DeadLetterLister interface {
 }
 
 type HealthServer struct {
-	server          *http.Server
-	port            int
-	enabled         bool
-	pprof           bool
-	diagnostics     bool
-	incidentAPI     IncidentLister
-	alertManager    TestAlertSender
+	server           *http.Server
+	port             int
+	enabled          bool
+	pprof            bool
+	diagnostics      bool
+	diagnosticsToken string
+	incidentAPI      IncidentLister
+	alertManager     TestAlertSender
 	deadLetterLister DeadLetterLister
-	ready           atomic.Bool
+	ready            atomic.Bool
 }
 
 type HealthResponse struct {
@@ -46,12 +48,30 @@ type HealthResponse struct {
 }
 
 func NewHealthServer(cfg config.HealthCheck) *HealthServer {
-	return &HealthServer{
+	h := &HealthServer{
 		port:        cfg.Port,
 		enabled:     cfg.Enabled,
 		pprof:       cfg.Pprof,
 		diagnostics: cfg.Diagnostics,
 	}
+	if h.diagnostics {
+		h.diagnosticsToken = cfg.DiagnosticsToken
+	}
+	return h
+}
+
+func (h *HealthServer) requireDiagnosticsAuth(w http.ResponseWriter, r *http.Request) bool {
+	if h.diagnosticsToken == "" {
+		return true
+	}
+	token := r.Header.Get("Authorization")
+	if subtle.ConstantTimeCompare([]byte(token), []byte("Bearer "+h.diagnosticsToken)) == 1 {
+		return true
+	}
+	w.Header().Set("Content-Type", "text/plain")
+	w.WriteHeader(http.StatusUnauthorized)
+	w.Write([]byte("unauthorized"))
+	return false
 }
 
 func (h *HealthServer) SetIncidentAPI(lister IncidentLister) {
@@ -98,10 +118,12 @@ func (h *HealthServer) Start(ctx context.Context) error {
 	}
 
 	h.server = &http.Server{
-		Addr:         ":" + strconv.Itoa(h.port),
-		Handler:      mux,
-		ReadTimeout:  5 * time.Second,
-		WriteTimeout: 10 * time.Second,
+		Addr:              ":" + strconv.Itoa(h.port),
+		Handler:           mux,
+		ReadHeaderTimeout: 5 * time.Second,
+		ReadTimeout:       5 * time.Second,
+		WriteTimeout:      10 * time.Second,
+		IdleTimeout:       60 * time.Second,
 	}
 
 	go func() {
@@ -149,6 +171,9 @@ func (h *HealthServer) readyzHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *HealthServer) incidentsHandler(w http.ResponseWriter, r *http.Request) {
+	if !h.requireDiagnosticsAuth(w, r) {
+		return
+	}
 	if h.incidentAPI == nil {
 		w.Header().Set("Content-Type", "text/plain")
 		w.WriteHeader(http.StatusServiceUnavailable)
@@ -162,6 +187,9 @@ func (h *HealthServer) incidentsHandler(w http.ResponseWriter, r *http.Request) 
 }
 
 func (h *HealthServer) testAlertHandler(w http.ResponseWriter, r *http.Request) {
+	if !h.requireDiagnosticsAuth(w, r) {
+		return
+	}
 	if r.Method != http.MethodPost {
 		w.Header().Set("Content-Type", "text/plain")
 		w.WriteHeader(http.StatusMethodNotAllowed)
@@ -190,6 +218,9 @@ func (h *HealthServer) testAlertHandler(w http.ResponseWriter, r *http.Request) 
 }
 
 func (h *HealthServer) deadLettersHandler(w http.ResponseWriter, r *http.Request) {
+	if !h.requireDiagnosticsAuth(w, r) {
+		return
+	}
 	if h.deadLetterLister == nil {
 		w.Header().Set("Content-Type", "text/plain")
 		w.WriteHeader(http.StatusServiceUnavailable)

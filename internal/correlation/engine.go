@@ -69,6 +69,12 @@ func notifSig(inc *model.Incident) string {
 
 // edgeAction returns the action to notify, or ActionSkip if nothing changed.
 func (e *Engine) edgeAction(inc *model.Incident) model.IncidentAction {
+	// Suppress resolve for incidents that were only ever digested (operator never saw the create)
+	if inc.Digested && inc.State == model.StateResolved {
+		inc.NotifiedSig = notifSig(inc)
+		inc.LastNotifiedAt = e.now()
+		return model.ActionSkip
+	}
 	sig := notifSig(inc)
 	if sig == inc.NotifiedSig {
 		return model.ActionSkip
@@ -344,15 +350,19 @@ func (e *Engine) GetLastContainerState(namespace, podName, containerName string)
 				cs := *inc.LastContainerState
 				return &cs
 			}
-			return nil
 		}
 	}
 	return nil
 }
 
-func (e *Engine) Process(ev event.Event, owner string, cs *model.ContainerState) (*model.Incident, model.IncidentAction) {
+func (e *Engine) Process(ev event.Event, owner string, cs *model.ContainerState) (incident *model.Incident, action model.IncidentAction) {
 	e.mu.Lock()
 	defer e.mu.Unlock()
+	defer func() {
+		if incident != nil {
+			incident = incident.Clone()
+		}
+	}()
 
 	key := IncidentKey(ev, owner, cs)
 
@@ -477,6 +487,7 @@ func (e *Engine) Process(ev event.Event, owner string, cs *model.ContainerState)
 		if now.Before(e.stormUntil) || len(e.recentCreates) >= e.config.StormThreshold {
 			e.stormUntil = now.Add(e.config.StormWindow)
 			e.digestBuf = append(e.digestBuf, digestEntry{key: key, reason: ev.Reason, ns: ev.Namespace})
+			inc.Digested = true
 			inc.NotifiedSig = notifSig(inc)
 			inc.LastNotifiedAt = now
 			metrics.Default.IncidentsDigest.Add(1)
@@ -516,6 +527,20 @@ func (e *Engine) newIncident(ev event.Event, owner string, cs *model.ContainerSt
 	}
 	if url, ok := e.config.Runbooks[ev.Reason]; ok {
 		inc.Runbook = url
+	}
+	if e.config.EscalationEnabled && cs != nil {
+		cur := int(cs.RestartCount)
+		if t := crossedTier(-1, cur, e.config.EscalationTiers); t >= 0 {
+			ev.Severity = severityForTier(t, inc.Severity)
+		} else if ev.Severity == "" {
+			// seed from the absolute threshold when no tier is crossed at startup
+			for i := len(e.config.EscalationTiers) - 1; i >= 0; i-- {
+				if cur >= e.config.EscalationTiers[i] {
+					ev.Severity = severityForTier(i, inc.Severity)
+					break
+				}
+			}
+		}
 	}
 	e.config.Enricher.Enrich(&ev, inc)
 	return inc
@@ -732,7 +757,7 @@ func (e *Engine) checkLifecycle() {
 	renotifyBySev := e.config.RenotifyIntervalBySeverity
 	if len(renotifyBySev) > 0 {
 		for _, inc := range e.state {
-			if inc.State == model.StateResolved {
+			if inc.State == model.StateResolved || inc.Digested {
 				continue
 			}
 			maxPer := e.config.RenotifyMaxPerIncident
@@ -764,15 +789,17 @@ func (e *Engine) checkLifecycle() {
 		n := len(e.digestBuf)
 		e.digestBuf = nil
 		e.lastDigestFlush = now
-		digestKey := "digest:" + strconv.FormatInt(now.Unix(), 10)
-		digestInc := &model.Incident{
-			ID:     fmt.Sprintf("%08x", crc32.ChecksumIEEE([]byte(digestKey))),
-			Key:    digestKey,
-			Reason: "DigestSummary",
-			Count:  n,
-			Hint:   summary,
+		if summary != "" {
+			digestKey := "digest:" + strconv.FormatInt(now.Unix(), 10)
+			digestInc := &model.Incident{
+				ID:     fmt.Sprintf("%08x", crc32.ChecksumIEEE([]byte(digestKey))),
+				Key:    digestKey,
+				Reason: "DigestSummary",
+				Count:  n,
+				Hint:   summary,
+			}
+			pending = append(pending, transition{digestInc, model.ActionDigestFlush})
 		}
-		pending = append(pending, transition{digestInc, model.ActionDigestFlush})
 	}
 	e.mu.Unlock()
 

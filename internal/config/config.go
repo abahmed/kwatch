@@ -398,6 +398,11 @@ type HealthCheck struct {
 	// Diagnostics if set to true, enables /incidents and /test-alert endpoints.
 	// Disabled by default.
 	Diagnostics bool `yaml:"diagnostics"`
+
+	// DiagnosticsToken is an optional Bearer token required to access
+	// diagnostic endpoints (/incidents, /test-alert, /deadletters).
+	// When empty, diagnostic endpoints are unauthenticated.
+	DiagnosticsToken string `yaml:"diagnosticsToken"`
 }
 
 // SilenceRule defines an alert suppression rule.

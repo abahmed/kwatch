@@ -62,10 +62,7 @@ spec:
                 fieldRef:
                   fieldPath: metadata.namespace
             - name: GOMEMLIMIT
-              valueFrom:
-                resourceFieldRef:
-                  resource: limits.memory
-                  divisor: "1"
+              value: "230MiB"
           livenessProbe:
             httpGet:
               path: /healthz
@@ -89,6 +86,10 @@ spec:
         {{- toYaml . | nindent 8 }}
       {{- end }}
       {{- if $llmEnabled }}
+      {{- if .Values.affinity }}
+      affinity:
+        {{- toYaml .Values.affinity | nindent 8 }}
+      {{- else }}
       affinity:
         nodeAffinity:
           preferredDuringSchedulingIgnoredDuringExecution:
@@ -96,9 +97,7 @@ spec:
               preference:
                 matchExpressions:
                   - { key: kubernetes.io/arch, operator: In, values: [amd64, arm64] }
-        {{- with .Values.affinity }}
-          {{- toYaml . | nindent 8 }}
-        {{- end }}
+      {{- end }}
       {{- else }}
       {{- with .Values.affinity }}
       affinity:

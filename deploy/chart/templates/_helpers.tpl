@@ -51,17 +51,6 @@ app.kubernetes.io/instance: {{ .Release.Name }}
 {{- end }}
 
 {{/*
-Create the name of the service account to use
-*/}}
-{{- define "kwatch.serviceAccountName" -}}
-{{- if .Values.serviceAccount.create }}
-{{- default (include "kwatch.fullname" .) .Values.serviceAccount.name }}
-{{- else }}
-{{- default "default" .Values.serviceAccount.name }}
-{{- end }}
-{{- end }}
-
-{{/*
 Shared LLM sidecar container spec used by both plain-container and native-sidecar forms.
 */}}
 {{- define "kwatch.llmContainer" -}}

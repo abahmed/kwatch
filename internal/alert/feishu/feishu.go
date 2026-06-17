@@ -109,8 +109,12 @@ func (r *FeiShu) buildRequestBodyFeiShu(
 		return "", fmt.Errorf("failed to marshal feishu content: %w", err)
 	}
 
-	body := "{\"msg_type\": \"interactive\",\"card\": {\"config\": {\"wide_screen_mode\": true},\"header\": {\"title\": {\"tag\": \"plain_text\",\"content\": \"" +
-		r.title +
-		"\"},\"template\": \"blue\"},\"elements\": " + string(jsonBytes) + "}}"
+	titleJSON, err := json.Marshal(r.title)
+	if err != nil {
+		return "", fmt.Errorf("failed to marshal feishu title: %w", err)
+	}
+	body := `{"msg_type":"interactive","card":{"config":{"wide_screen_mode":true},` +
+		`"header":{"title":{"tag":"plain_text","content":` + string(titleJSON) +
+		`},"template":"blue"},"elements":` + string(jsonBytes) + `}}`
 	return body, nil
 }
