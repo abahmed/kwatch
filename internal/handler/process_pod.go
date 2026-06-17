@@ -1,6 +1,7 @@
 package handler
 
 import (
+	"context"
 	"fmt"
 
 	"github.com/abahmed/kwatch/internal/filter"
@@ -58,6 +59,7 @@ func (h *handler) ProcessPodObject(pod *corev1.Pod, deleted bool) error {
 	}
 
 	ctx := filter.Context{
+		Ctx:       context.Background(),
 		Client:   h.kclient,
 		Config:   h.config,
 		Pod:      pod,

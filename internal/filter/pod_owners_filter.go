@@ -1,8 +1,6 @@
 package filter
 
 import (
-	"context"
-
 	apiv1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/klog/v2"
 )
@@ -36,7 +34,7 @@ func (f PodOwnersFilter) Enrich(ctx *Context) bool {
 		} else {
 			rs, err :=
 				ctx.Client.AppsV1().ReplicaSets(ctx.Pod.Namespace).Get(
-					context.TODO(),
+					ctx.Ctx,
 					owner.Name,
 					apiv1.GetOptions{})
 			if err != nil {
@@ -58,7 +56,7 @@ func (f PodOwnersFilter) Enrich(ctx *Context) bool {
 		} else {
 			ds, err :=
 				ctx.Client.AppsV1().DaemonSets(ctx.Pod.Namespace).Get(
-					context.TODO(),
+					ctx.Ctx,
 					owner.Name,
 					apiv1.GetOptions{})
 			if err != nil {
@@ -80,7 +78,7 @@ func (f PodOwnersFilter) Enrich(ctx *Context) bool {
 		} else {
 			ss, err :=
 				ctx.Client.AppsV1().StatefulSets(ctx.Pod.Namespace).Get(
-					context.TODO(),
+					ctx.Ctx,
 					owner.Name,
 					apiv1.GetOptions{})
 			if err != nil {

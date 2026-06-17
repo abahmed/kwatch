@@ -1,6 +1,7 @@
 package handler
 
 import (
+	"context"
 	"testing"
 	"time"
 
@@ -49,6 +50,7 @@ func TestHighRestartCountIncident(t *testing.T) {
 	}
 
 	ctx := &filter.Context{
+		Ctx:    context.Background(),
 		Client: fake.NewSimpleClientset(),
 		Config: cfg,
 		Pod:    pod,

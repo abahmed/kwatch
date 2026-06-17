@@ -1,6 +1,7 @@
 package filter
 
 import (
+	"context"
 	"time"
 
 	"github.com/abahmed/kwatch/internal/config"
@@ -32,6 +33,7 @@ type Filter interface {
 }
 
 type Context struct {
+	Ctx    context.Context
 	Client kubernetes.Interface
 	Config *config.Config
 
