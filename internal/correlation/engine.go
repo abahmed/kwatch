@@ -18,26 +18,26 @@ import (
 )
 
 type digestEntry struct {
-	key     string
-	reason  string
-	ns      string
+	key    string
+	reason string
+	ns     string
 }
 
 type Config struct {
-	Window            time.Duration
-	LifecycleInterval time.Duration
-	Enricher          enricher.Enricher
-	LifecycleHook     func(inc *model.Incident, action model.IncidentAction)
-	BaselineTTL      time.Duration
-	Baseline         map[string]map[string]int64
-	OnBaselineChange  func(baseline map[string]map[string]int64)
-	EscalationEnabled bool
-	EscalationTiers   []int
-	InhibitNodeSuppressesPods bool
-	StormEnabled              bool
-	StormThreshold            int
-	StormWindow               time.Duration
-	StormDigestInterval       time.Duration
+	Window                     time.Duration
+	LifecycleInterval          time.Duration
+	Enricher                   enricher.Enricher
+	LifecycleHook              func(inc *model.Incident, action model.IncidentAction)
+	BaselineTTL                time.Duration
+	Baseline                   map[string]map[string]int64
+	OnBaselineChange           func(baseline map[string]map[string]int64)
+	EscalationEnabled          bool
+	EscalationTiers            []int
+	InhibitNodeSuppressesPods  bool
+	StormEnabled               bool
+	StormThreshold             int
+	StormWindow                time.Duration
+	StormDigestInterval        time.Duration
 	RenotifyIntervalBySeverity map[string]time.Duration
 	RenotifyMaxPerIncident     int
 	ResolveHoldDown            time.Duration
@@ -86,6 +86,7 @@ func (e *Engine) edgeAction(inc *model.Incident) model.IncidentAction {
 		metrics.Default.IncidentsResolved.Add(1)
 		return model.ActionResolved
 	}
+	inc.Digested = false // real create/update edge firing → operator now has visibility; allow future renotify and resolve
 	if prev == "" {
 		metrics.Default.IncidentsCreate.Add(1)
 		return model.ActionCreate
@@ -153,16 +154,16 @@ const defaultBaselineTTL = 24 * time.Hour
 const defaultCrashLoopHighFreqThreshold = 5
 
 type Engine struct {
-	mu                   sync.Mutex
-	state                map[string]*model.Incident
-	config               Config
-	seen                 map[string]map[string]int64
-	activeNodeIncidents  map[string]bool
-	recentCreates        []time.Time
-	stormUntil           time.Time
-	digestBuf            []digestEntry
-	lastDigestFlush      time.Time
-	now                  func() time.Time
+	mu                  sync.Mutex
+	state               map[string]*model.Incident
+	config              Config
+	seen                map[string]map[string]int64
+	activeNodeIncidents map[string]bool
+	recentCreates       []time.Time
+	stormUntil          time.Time
+	digestBuf           []digestEntry
+	lastDigestFlush     time.Time
+	now                 func() time.Time
 }
 
 func NewEngine(cfg Config) *Engine {
@@ -500,17 +501,17 @@ func (e *Engine) Process(ev event.Event, owner string, cs *model.ContainerState)
 
 func (e *Engine) newIncident(ev event.Event, owner string, cs *model.ContainerState, key, res string, now time.Time) *model.Incident {
 	inc := &model.Incident{
-		ID:        fmt.Sprintf("%08x", crc32.ChecksumIEEE([]byte(key))),
-		Key:       key,
-		Reason:    ev.Reason,
-		Namespace: ev.Namespace,
-		Resource:  res,
-		Name:      owner,
-		Count:     1,
-		FirstSeen: now,
-		LastSeen:  now,
+		ID:         fmt.Sprintf("%08x", crc32.ChecksumIEEE([]byte(key))),
+		Key:        key,
+		Reason:     ev.Reason,
+		Namespace:  ev.Namespace,
+		Resource:   res,
+		Name:       owner,
+		Count:      1,
+		FirstSeen:  now,
+		LastSeen:   now,
 		LastUpdate: now,
-		State:     model.StateActive,
+		State:      model.StateActive,
 		Resources:  map[string]bool{},
 		Containers: map[string]bool{},
 	}
@@ -785,21 +786,23 @@ func (e *Engine) checkLifecycle() {
 
 	// digest flush
 	if e.config.StormEnabled && len(e.digestBuf) > 0 && now.After(e.lastDigestFlush.Add(e.config.StormDigestInterval)) {
-		summary := e.buildDigestSummary()
 		n := len(e.digestBuf)
+		summary := e.buildDigestSummary()
 		e.digestBuf = nil
 		e.lastDigestFlush = now
-		if summary != "" {
-			digestKey := "digest:" + strconv.FormatInt(now.Unix(), 10)
-			digestInc := &model.Incident{
-				ID:     fmt.Sprintf("%08x", crc32.ChecksumIEEE([]byte(digestKey))),
-				Key:    digestKey,
-				Reason: "DigestSummary",
-				Count:  n,
-				Hint:   summary,
-			}
-			pending = append(pending, transition{digestInc, model.ActionDigestFlush})
+		if summary == "" {
+			summary = fmt.Sprintf("⚡ %d new incident(s) during storm window (%s)",
+				n, e.config.StormWindow.String())
 		}
+		digestKey := "digest:" + strconv.FormatInt(now.Unix(), 10)
+		digestInc := &model.Incident{
+			ID:     fmt.Sprintf("%08x", crc32.ChecksumIEEE([]byte(digestKey))),
+			Key:    digestKey,
+			Reason: "DigestSummary",
+			Count:  n,
+			Hint:   summary,
+		}
+		pending = append(pending, transition{digestInc, model.ActionDigestFlush})
 	}
 	e.mu.Unlock()
 

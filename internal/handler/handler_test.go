@@ -1,6 +1,7 @@
 package handler
 
 import (
+	"context"
 	"regexp"
 	"testing"
 	"time"
@@ -36,7 +37,7 @@ func TestProcessPodNilObject(t *testing.T) {
 	cfg := &config.Config{}
 
 	h := NewHandler(client, cfg, testCorrelator(), testAlertMgr)
-	assert.NoError(t, h.ProcessPodObject(nil, false))
+	assert.NoError(t, h.ProcessPodObject(context.Background(), nil, false))
 }
 
 func TestProcessPodDeleted(t *testing.T) {
@@ -52,7 +53,7 @@ func TestProcessPodDeleted(t *testing.T) {
 		},
 	}
 
-	assert.NoError(t, h.ProcessPodObject(pod, true))
+	assert.NoError(t, h.ProcessPodObject(context.Background(), pod, true))
 }
 
 func TestProcessNodeNilObject(t *testing.T) {
@@ -233,7 +234,7 @@ func TestProcessPodWithPodIssues(t *testing.T) {
 		},
 	}
 
-	assert.NoError(t, h.ProcessPodObject(pod, false))
+	assert.NoError(t, h.ProcessPodObject(context.Background(), pod, false))
 }
 
 func TestProcessPodWithContainersIssues(t *testing.T) {
@@ -275,7 +276,7 @@ func TestProcessPodWithContainersIssues(t *testing.T) {
 		},
 	}
 
-	assert.NoError(t, h.ProcessPodObject(pod, false))
+	assert.NoError(t, h.ProcessPodObject(context.Background(), pod, false))
 }
 
 func TestProcessPodIgnoredNamespace(t *testing.T) {
@@ -304,7 +305,7 @@ func TestProcessPodIgnoredNamespace(t *testing.T) {
 		},
 	}
 
-	assert.NoError(t, h.ProcessPodObject(pod, false))
+	assert.NoError(t, h.ProcessPodObject(context.Background(), pod, false))
 }
 
 func TestProcessPodIgnoredPodName(t *testing.T) {
@@ -334,7 +335,7 @@ func TestProcessPodIgnoredPodName(t *testing.T) {
 		},
 	}
 
-	assert.NoError(t, h.ProcessPodObject(pod, false))
+	assert.NoError(t, h.ProcessPodObject(context.Background(), pod, false))
 }
 
 func TestProcessPodIgnoredContainerName(t *testing.T) {
@@ -377,7 +378,7 @@ func TestProcessPodIgnoredContainerName(t *testing.T) {
 		},
 	}
 
-	assert.NoError(t, h.ProcessPodObject(pod, false))
+	assert.NoError(t, h.ProcessPodObject(context.Background(), pod, false))
 }
 
 func TestHealthyPodZeroAPICalls(t *testing.T) {
@@ -411,7 +412,7 @@ func TestHealthyPodZeroAPICalls(t *testing.T) {
 	}
 
 	startCount := len(client.Fake.Actions())
-	err := h.ProcessPodObject(pod, false)
+	err := h.ProcessPodObject(context.Background(), pod, false)
 	assert.NoError(t, err)
 	endCount := len(client.Fake.Actions())
 
@@ -459,7 +460,7 @@ func TestBrokenPodMakesAPICalls(t *testing.T) {
 	}
 
 	startCount := len(client.Fake.Actions())
-	err := h.ProcessPodObject(pod, false)
+	err := h.ProcessPodObject(context.Background(), pod, false)
 	assert.NoError(t, err)
 	endCount := len(client.Fake.Actions())
 
@@ -514,7 +515,7 @@ func TestBrokenPodEventsFromCache(t *testing.T) {
 	}
 
 	startCount := len(client.Fake.Actions())
-	err := h.ProcessPodObject(pod, false)
+	err := h.ProcessPodObject(context.Background(), pod, false)
 	assert.NoError(t, err)
 	endCount := len(client.Fake.Actions())
 
@@ -538,7 +539,7 @@ func TestProcessPodSucceededPhase(t *testing.T) {
 		},
 	}
 
-	assert.NoError(t, h.ProcessPodObject(pod, false))
+	assert.NoError(t, h.ProcessPodObject(context.Background(), pod, false))
 }
 
 func TestProcessPodCompletedStatus(t *testing.T) {
@@ -564,5 +565,5 @@ func TestProcessPodCompletedStatus(t *testing.T) {
 		},
 	}
 
-	assert.NoError(t, h.ProcessPodObject(pod, false))
+	assert.NoError(t, h.ProcessPodObject(context.Background(), pod, false))
 }

@@ -9,6 +9,7 @@ import (
 	"os"
 	"os/signal"
 	"strings"
+	"sync"
 	"syscall"
 	"time"
 
@@ -172,7 +173,9 @@ func main() {
 
 	ctrl, cleanup := controller.New(k8sClient, cfg, h)
 	ctrl.SetReadyFunc(func() { healthServer.SetReady(true) })
-	defer cleanup()
+	var cleanupOnce sync.Once
+	cleanupSafe := func() { cleanupOnce.Do(cleanup) }
+	defer cleanupSafe()
 
 	runLeaderTasks := func(ctx context.Context) {
 		go correlator.StartCleanup(ctx)
@@ -271,7 +274,7 @@ func main() {
 	healthServer.SetReady(false)
 	healthServer.Stop(shutdownCtx)
 	sc()
-	cleanup()
+	cleanupSafe()
 	os.Exit(exitCode)
 }
 

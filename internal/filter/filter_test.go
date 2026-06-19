@@ -1,6 +1,7 @@
 package filter
 
 import (
+	"context"
 	"regexp"
 	"testing"
 
@@ -1167,6 +1168,7 @@ func TestContainerLogsFilterCrashLoopBackOff(t *testing.T) {
 	assert := assert.New(t)
 
 	ctx := &Context{
+		Ctx:    context.Background(),
 		Client: fake.NewSimpleClientset(),
 		Config: &config.Config{
 			MaxRecentLogLines: 10,
@@ -1203,6 +1205,7 @@ func TestContainerLogsFilterWithRestarts(t *testing.T) {
 	assert := assert.New(t)
 
 	ctx := &Context{
+		Ctx:    context.Background(),
 		Client: fake.NewSimpleClientset(),
 		Config: &config.Config{
 			MaxRecentLogLines: 10,
@@ -1239,6 +1242,7 @@ func TestContainerLogsFilterIgnoredPattern(t *testing.T) {
 		LogPatterns: []*regexp.Regexp{regexp.MustCompile("fake logs")},
 	}
 	ctx := &Context{
+		Ctx:    context.Background(),
 		Client: fake.NewSimpleClientset(),
 		Config: cfg,
 		Container: &ContainerContext{

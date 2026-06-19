@@ -1,6 +1,7 @@
 package handler
 
 import (
+	"context"
 	"fmt"
 	"sort"
 	"strings"
@@ -25,13 +26,13 @@ import (
 )
 
 type Handler interface {
-	ProcessPod(key string, deleted bool) error
+	ProcessPod(ctx context.Context, key string, deleted bool) error
 	ProcessNode(key string, deleted bool) error
 	ProcessDeployment(key string, deleted bool) error
 	ProcessJob(key string, deleted bool) error
 	ProcessDaemonSet(key string, deleted bool) error
 	ProcessCronJob(key string, deleted bool) error
-	ProcessPodObject(pod *corev1.Pod, deleted bool) error
+	ProcessPodObject(ctx context.Context, pod *corev1.Pod, deleted bool) error
 	ProcessNodeObject(node *corev1.Node, deleted bool) error
 	ProcessDeploymentObject(deploy *appsv1.Deployment, deleted bool) error
 	ProcessJobObject(job *batchv1.Job, deleted bool) error

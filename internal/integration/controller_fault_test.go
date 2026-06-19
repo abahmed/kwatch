@@ -94,7 +94,7 @@ func TestControllerPodEvent(t *testing.T) {
 
 	time.Sleep(500 * time.Millisecond)
 
-	err := h.ProcessPodObject(pod, false)
+	err := h.ProcessPodObject(ctrlCtx, pod, false)
 	if err != nil {
 		t.Fatalf("ProcessPodObject failed: %v", err)
 	}

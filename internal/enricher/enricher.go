@@ -47,6 +47,10 @@ func (e *DefaultEnricher) Enrich(ev *event.Event, inc *model.Incident) {
 	if newSev == "" {
 		newSev = e.resolveSeverity(ev.OwnerKind, ev.Reason)
 	}
+	// severity is strictly monotonic (sticky escalation): once raised, it never
+	// downgrades until the incident resolves. This is intentional — a runtime
+	// config change via CRD watcher that lowers SeverityByReason or
+	// SeverityByOwnerKind will not take effect on already-open incidents.
 	if severityRank(newSev) >= severityRank(inc.Severity) {
 		inc.Severity = newSev
 	}

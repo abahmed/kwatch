@@ -14,8 +14,8 @@ import (
 	"github.com/abahmed/kwatch/internal/model"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
-	"k8s.io/apimachinery/pkg/labels"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/labels"
 	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
 	"k8s.io/apimachinery/pkg/util/wait"
 	"k8s.io/client-go/informers"
@@ -66,7 +66,7 @@ type Controller struct {
 	secretLister           corev1lister.SecretLister
 	secretsSynced          []cache.InformerSynced
 
-	readyFn                func()
+	readyFn func()
 }
 
 // resolveNamespaces decides which namespaces to watch.
@@ -758,7 +758,7 @@ func (c *Controller) Run(ctx context.Context, workers int) error {
 }
 
 func (c *Controller) runPodWorker(ctx context.Context) {
-	for c.processNextPodItem() {
+	for c.processNextPodItem(ctx) {
 	}
 }
 
@@ -792,14 +792,14 @@ func (c *Controller) runHorizontalPodAutoscalerWorker(ctx context.Context) {
 	}
 }
 
-func (c *Controller) processNextPodItem() bool {
+func (c *Controller) processNextPodItem(ctx context.Context) bool {
 	key, quit := c.podQueue.Get()
 	if quit {
 		return false
 	}
 	defer c.podQueue.Done(key)
 
-	if err := c.syncPod(key); err != nil {
+	if err := c.syncPod(ctx, key); err != nil {
 		c.podQueue.AddRateLimited(key)
 		utilruntime.HandleError(fmt.Errorf("error syncing pod %q: %s, requeuing", key, err.Error()))
 		return true
@@ -888,7 +888,7 @@ func (c *Controller) buildSeenSet() {
 		// Incident key format: namespace:owner:reason:container
 		if i1 := strings.IndexByte(key, ':'); i1 >= 0 {
 			if i2 := strings.LastIndexByte(key, ':'); i2 > i1 {
-				ownerReason := key[i1+1:i2]
+				ownerReason := key[i1+1 : i2]
 				// Replace middle colon with slash: "owner:reason" → "owner/reason"
 				if j := strings.IndexByte(ownerReason, ':'); j >= 0 {
 					suppressed[ownerReason[:j]+"/"+ownerReason[j+1:]]++
@@ -968,7 +968,7 @@ func (c *Controller) buildSeenSet() {
 	c.handler.ReportStartupSummary(suppressed)
 }
 
-func (c *Controller) syncPod(key string) error {
+func (c *Controller) syncPod(ctx context.Context, key string) error {
 	namespace, name, err := cache.SplitMetaNamespaceKey(key)
 	if err != nil {
 		return err
@@ -977,12 +977,12 @@ func (c *Controller) syncPod(key string) error {
 	pod, err := c.podLister.Pods(namespace).Get(name)
 	if err != nil {
 		if errors.IsNotFound(err) {
-			return c.handler.ProcessPod(key, true)
+			return c.handler.ProcessPod(ctx, key, true)
 		}
 		return err
 	}
 
-	return c.handler.ProcessPodObject(pod, false)
+	return c.handler.ProcessPodObject(ctx, pod, false)
 }
 
 func (c *Controller) syncNode(key string) error {

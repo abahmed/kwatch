@@ -25,7 +25,7 @@ func isPodHealthy(pod *corev1.Pod) bool {
 	return false
 }
 
-func (h *handler) ProcessPod(key string, deleted bool) error {
+func (h *handler) ProcessPod(ctx context.Context, key string, deleted bool) error {
 	namespace, name, err := cache.SplitMetaNamespaceKey(key)
 	if err != nil {
 		return fmt.Errorf("invalid pod key %q: %w", key, err)
@@ -45,10 +45,10 @@ func (h *handler) ProcessPod(key string, deleted bool) error {
 		return fmt.Errorf("failed to get pod %s/%s from cache: %w", namespace, name, err)
 	}
 
-	return h.ProcessPodObject(pod, false)
+	return h.ProcessPodObject(ctx, pod, false)
 }
 
-func (h *handler) ProcessPodObject(pod *corev1.Pod, deleted bool) error {
+func (h *handler) ProcessPodObject(parent context.Context, pod *corev1.Pod, deleted bool) error {
 	if pod == nil {
 		return nil
 	}
@@ -58,20 +58,20 @@ func (h *handler) ProcessPodObject(pod *corev1.Pod, deleted bool) error {
 		return nil
 	}
 
-	ctx := filter.Context{
-		Ctx:       context.Background(),
-		Client:   h.kclient,
-		Config:   h.config,
-		Pod:      pod,
-		EvType:   "ADDED",
-		RSLister:   h.rsLister,
-		DSLister:   h.dsLister,
-		SSLister:   h.ssLister,
+	ctxF := filter.Context{
+		Ctx:         parent,
+		Client:      h.kclient,
+		Config:      h.config,
+		Pod:         pod,
+		EvType:      "ADDED",
+		RSLister:    h.rsLister,
+		DSLister:    h.dsLister,
+		SSLister:    h.ssLister,
 		EventLister: h.eventLister,
 	}
 
-	h.executePodFilters(&ctx)
-	h.executeContainersFilters(&ctx)
+	h.executePodFilters(&ctxF)
+	h.executeContainersFilters(&ctxF)
 
 	if isPodHealthy(pod) {
 		h.ClearSeenForPod(pod.Namespace, pod.Name)

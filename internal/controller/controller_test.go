@@ -37,7 +37,7 @@ type mockHandler struct {
 	startupSummary map[string]int
 }
 
-func (m *mockHandler) ProcessPod(key string, deleted bool) error {
+func (m *mockHandler) ProcessPod(_ context.Context, key string, deleted bool) error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	m.podKeys = append(m.podKeys, key)
@@ -71,42 +71,45 @@ func (m *mockHandler) nodeEntry(i int) (string, bool) {
 	defer m.mu.Unlock()
 	return m.nodeKeys[i], m.nodeDel[i]
 }
-func (m *mockHandler) ProcessPodObject(pod *corev1.Pod, deleted bool) error {
+func (m *mockHandler) ProcessPodObject(_ context.Context, pod *corev1.Pod, deleted bool) error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	m.podKeys = append(m.podKeys, pod.Namespace+"/"+pod.Name)
 	m.podDel = append(m.podDel, deleted)
 	return m.err
 }
-func (m *mockHandler) ProcessNodeObject(*corev1.Node, bool) error   { return m.err }
-func (m *mockHandler) ProcessDeployment(string, bool) error         { return m.err }
-func (m *mockHandler) ProcessJob(string, bool) error                { return m.err }
+func (m *mockHandler) ProcessNodeObject(*corev1.Node, bool) error             { return m.err }
+func (m *mockHandler) ProcessDeployment(string, bool) error                   { return m.err }
+func (m *mockHandler) ProcessJob(string, bool) error                          { return m.err }
 func (m *mockHandler) ProcessDeploymentObject(*appsv1.Deployment, bool) error { return m.err }
-func (m *mockHandler) ProcessJobObject(*batchv1.Job, bool) error               { return m.err }
-func (m *mockHandler) SetPodLister(corev1lister.PodLister)                     {}
-func (m *mockHandler) SetNodeLister(corev1lister.NodeLister)                   {}
-func (m *mockHandler) SetDeploymentLister(appsv1lister.DeploymentLister)       {}
-func (m *mockHandler) SetJobLister(batchv1lister.JobLister)                    {}
-func (m *mockHandler) SetReplicaLister(appsv1lister.ReplicaSetLister)          {}
-func (m *mockHandler) SetDaemonSetLister(appsv1lister.DaemonSetLister)         {}
-func (m *mockHandler) SetStatefulSetLister(appsv1lister.StatefulSetLister)     {}
-func (m *mockHandler) SetEventLister(corev1lister.EventLister)                 {}
-func (m *mockHandler) ProcessDaemonSet(string, bool) error                     { return m.err }
-func (m *mockHandler) ProcessCronJob(string, bool) error                       { return m.err }
-func (m *mockHandler) ProcessDaemonSetObject(*appsv1.DaemonSet, bool) error    { return m.err }
-func (m *mockHandler) ProcessCronJobObject(*batchv1.CronJob, bool) error       { return m.err }
-func (m *mockHandler) SetCronJobLister(batchv1lister.CronJobLister)            {}
-func (m *mockHandler) SetHorizontalPodAutoscalerLister(autoscalingv2lister.HorizontalPodAutoscalerLister) {}
-func (m *mockHandler) ProcessHorizontalPodAutoscaler(string, bool) error       { return m.err }
-func (m *mockHandler) ProcessHorizontalPodAutoscalerObject(*autoscalingv2.HorizontalPodAutoscaler, bool) error { return m.err }
-func (m *mockHandler) SetSecretLister(corev1lister.SecretLister)               {}
-func (m *mockHandler) SweepTLSSecrets()                                        {}
+func (m *mockHandler) ProcessJobObject(*batchv1.Job, bool) error              { return m.err }
+func (m *mockHandler) SetPodLister(corev1lister.PodLister)                    {}
+func (m *mockHandler) SetNodeLister(corev1lister.NodeLister)                  {}
+func (m *mockHandler) SetDeploymentLister(appsv1lister.DeploymentLister)      {}
+func (m *mockHandler) SetJobLister(batchv1lister.JobLister)                   {}
+func (m *mockHandler) SetReplicaLister(appsv1lister.ReplicaSetLister)         {}
+func (m *mockHandler) SetDaemonSetLister(appsv1lister.DaemonSetLister)        {}
+func (m *mockHandler) SetStatefulSetLister(appsv1lister.StatefulSetLister)    {}
+func (m *mockHandler) SetEventLister(corev1lister.EventLister)                {}
+func (m *mockHandler) ProcessDaemonSet(string, bool) error                    { return m.err }
+func (m *mockHandler) ProcessCronJob(string, bool) error                      { return m.err }
+func (m *mockHandler) ProcessDaemonSetObject(*appsv1.DaemonSet, bool) error   { return m.err }
+func (m *mockHandler) ProcessCronJobObject(*batchv1.CronJob, bool) error      { return m.err }
+func (m *mockHandler) SetCronJobLister(batchv1lister.CronJobLister)           {}
+func (m *mockHandler) SetHorizontalPodAutoscalerLister(autoscalingv2lister.HorizontalPodAutoscalerLister) {
+}
+func (m *mockHandler) ProcessHorizontalPodAutoscaler(string, bool) error { return m.err }
+func (m *mockHandler) ProcessHorizontalPodAutoscalerObject(*autoscalingv2.HorizontalPodAutoscaler, bool) error {
+	return m.err
+}
+func (m *mockHandler) SetSecretLister(corev1lister.SecretLister) {}
+func (m *mockHandler) SweepTLSSecrets()                          {}
 func (m *mockHandler) SetSeen(baseline map[string]map[string]int64) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	m.seenBaseline = baseline
 }
-func (m *mockHandler) ClearSeenForPod(string, string)                          {}
+func (m *mockHandler) ClearSeenForPod(string, string) {}
 func (m *mockHandler) ReportStartupSummary(suppressed map[string]int) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
@@ -267,7 +270,7 @@ func TestProcessNextPodItemQuit(t *testing.T) {
 	}
 
 	ctrl.podQueue.ShutDown()
-	result := ctrl.processNextPodItem()
+	result := ctrl.processNextPodItem(context.Background())
 	assert.False(result)
 	assert.Empty(h.podKeys)
 }
@@ -298,7 +301,7 @@ func TestProcessNextPodItemProcessesKey(t *testing.T) {
 	defer cleanup()
 
 	ctrl.podQueue.Add("default/test-pod")
-	result := ctrl.processNextPodItem()
+	result := ctrl.processNextPodItem(context.Background())
 	assert.True(result)
 	assert.Equal([]string{"default/test-pod"}, h.podKeys)
 	assert.Equal([]bool{true}, h.podDel)
@@ -343,7 +346,7 @@ func TestSyncPodExistingPod(t *testing.T) {
 		return err == nil
 	}, 5*time.Second, 50*time.Millisecond)
 
-	err := ctrl.syncPod("default/my-pod")
+	err := ctrl.syncPod(context.Background(), "default/my-pod")
 	assert.NoError(err)
 	assert.Equal([]string{"default/my-pod"}, h.podKeys)
 	assert.Equal([]bool{false}, h.podDel)
@@ -359,7 +362,7 @@ func TestSyncPodDeletedPod(t *testing.T) {
 	ctrl, cleanup := New(client, cfg, h)
 	defer cleanup()
 
-	err := ctrl.syncPod("default/nonexistent")
+	err := ctrl.syncPod(context.Background(), "default/nonexistent")
 	assert.NoError(err)
 	assert.Equal([]string{"default/nonexistent"}, h.podKeys)
 	assert.Equal([]bool{true}, h.podDel)
@@ -375,7 +378,7 @@ func TestSyncPodInvalidKey(t *testing.T) {
 	ctrl, cleanup := New(client, cfg, h)
 	defer cleanup()
 
-	err := ctrl.syncPod("invalid-key-without-namespace/extra/segments")
+	err := ctrl.syncPod(context.Background(), "invalid-key-without-namespace/extra/segments")
 	assert.Error(err)
 	assert.Empty(h.podKeys)
 }
@@ -390,7 +393,7 @@ func TestSyncPodHandlerError(t *testing.T) {
 	ctrl, cleanup := New(client, cfg, h)
 	defer cleanup()
 
-	err := ctrl.syncPod("default/nonexistent")
+	err := ctrl.syncPod(context.Background(), "default/nonexistent")
 	assert.Error(err)
 	assert.Equal("handler failed", err.Error())
 }
@@ -652,10 +655,10 @@ func TestRunPodDeduplication(t *testing.T) {
 
 	assert.Equal(1, q.Len())
 
-	assert.True(ctrl.processNextPodItem())
+	assert.True(ctrl.processNextPodItem(context.Background()))
 
 	q.ShutDown()
-	assert.False(ctrl.processNextPodItem())
+	assert.False(ctrl.processNextPodItem(context.Background()))
 
 	assert.Equal(1, ctrl.handler.(*mockHandler).podCount())
 }
@@ -681,7 +684,7 @@ func TestMultipleWorkers(t *testing.T) {
 	}
 
 	for i := 0; i < 10; i++ {
-		ctrl.processNextPodItem()
+		ctrl.processNextPodItem(context.Background())
 	}
 
 	assert.Equal(10, ctrl.handler.(*mockHandler).podCount())
@@ -747,7 +750,7 @@ func TestProcessNextPodItemForgetsOnSuccess(t *testing.T) {
 
 	ctrl.podQueue.Add("default/forgotten")
 
-	ctrl.processNextPodItem()
+	ctrl.processNextPodItem(context.Background())
 
 	assert.Equal(0, ctrl.podQueue.Len())
 }

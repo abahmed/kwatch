@@ -145,11 +145,12 @@ func (s *Discord) SendEvent(ev *event.Event) error {
 
 			const maxFields = 25
 			var totalFields int
-			for _, chunk := range chunks(logData, chunkSize) {
+			parts := chunks(logData, chunkSize)
+			for _, chunk := range parts {
 				name := ":memo: Logs"
 				totalFields++
-				if len(chunks(logData, chunkSize)) > 1 {
-					name = fmt.Sprintf(":memo: Logs (%d/%d)", totalFields, len(chunks(logData, chunkSize)))
+				if len(parts) > 1 {
+					name = fmt.Sprintf(":memo: Logs (%d/%d)", totalFields, len(parts))
 				}
 				if totalFields > maxFields {
 					fields = append(fields, &discordgo.MessageEmbedField{

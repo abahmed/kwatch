@@ -49,15 +49,22 @@ type HealthResponse struct {
 
 func NewHealthServer(cfg config.HealthCheck) *HealthServer {
 	h := &HealthServer{
-		port:        cfg.Port,
-		enabled:     cfg.Enabled,
-		pprof:       cfg.Pprof,
-		diagnostics: cfg.Diagnostics,
-	}
-	if h.diagnostics {
-		h.diagnosticsToken = cfg.DiagnosticsToken
+		port:             cfg.Port,
+		enabled:          cfg.Enabled,
+		pprof:            cfg.Pprof,
+		diagnostics:      cfg.Diagnostics,
+		diagnosticsToken: cfg.DiagnosticsToken,
 	}
 	return h
+}
+
+func (h *HealthServer) guard(next http.HandlerFunc) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		if !h.requireDiagnosticsAuth(w, r) {
+			return
+		}
+		next(w, r)
+	}
 }
 
 func (h *HealthServer) requireDiagnosticsAuth(w http.ResponseWriter, r *http.Request) bool {
@@ -105,16 +112,16 @@ func (h *HealthServer) Start(ctx context.Context) error {
 	mux.Handle("/metrics", metrics.Default.Handler())
 
 	if h.pprof {
-		mux.HandleFunc("/debug/pprof/", pprof.Index)
-		mux.HandleFunc("/debug/pprof/cmdline", pprof.Cmdline)
-		mux.HandleFunc("/debug/pprof/profile", pprof.Profile)
-		mux.HandleFunc("/debug/pprof/symbol", pprof.Symbol)
-		mux.HandleFunc("/debug/pprof/trace", pprof.Trace)
-		mux.Handle("/debug/pprof/heap", pprof.Handler("heap"))
-		mux.Handle("/debug/pprof/goroutine", pprof.Handler("goroutine"))
-		mux.Handle("/debug/pprof/block", pprof.Handler("block"))
-		mux.Handle("/debug/pprof/threadcreate", pprof.Handler("threadcreate"))
-		mux.Handle("/debug/pprof/mutex", pprof.Handler("mutex"))
+		mux.HandleFunc("/debug/pprof/", h.guard(pprof.Index))
+		mux.HandleFunc("/debug/pprof/cmdline", h.guard(pprof.Cmdline))
+		mux.HandleFunc("/debug/pprof/profile", h.guard(pprof.Profile))
+		mux.HandleFunc("/debug/pprof/symbol", h.guard(pprof.Symbol))
+		mux.HandleFunc("/debug/pprof/trace", h.guard(pprof.Trace))
+		mux.HandleFunc("/debug/pprof/heap", h.guard(pprof.Handler("heap").ServeHTTP))
+		mux.HandleFunc("/debug/pprof/goroutine", h.guard(pprof.Handler("goroutine").ServeHTTP))
+		mux.HandleFunc("/debug/pprof/block", h.guard(pprof.Handler("block").ServeHTTP))
+		mux.HandleFunc("/debug/pprof/threadcreate", h.guard(pprof.Handler("threadcreate").ServeHTTP))
+		mux.HandleFunc("/debug/pprof/mutex", h.guard(pprof.Handler("mutex").ServeHTTP))
 	}
 
 	h.server = &http.Server{

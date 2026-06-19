@@ -246,6 +246,126 @@ func TestTestAlertHandler(t *testing.T) {
 	}
 }
 
+func TestRequireDiagnosticsAuthEmptyToken(t *testing.T) {
+	h := &HealthServer{diagnosticsToken: ""}
+	req := httptest.NewRequest(http.MethodGet, "/debug/pprof/", nil)
+	w := httptest.NewRecorder()
+	assert.True(t, h.requireDiagnosticsAuth(w, req), "empty token must allow all requests")
+}
+
+func TestRequireDiagnosticsAuthValidToken(t *testing.T) {
+	h := &HealthServer{diagnosticsToken: "secret123"}
+	req := httptest.NewRequest(http.MethodGet, "/debug/pprof/", nil)
+	req.Header.Set("Authorization", "Bearer secret123")
+	w := httptest.NewRecorder()
+	assert.True(t, h.requireDiagnosticsAuth(w, req), "valid Bearer token must authenticate")
+}
+
+func TestRequireDiagnosticsAuthInvalidToken(t *testing.T) {
+	h := &HealthServer{diagnosticsToken: "secret123"}
+	req := httptest.NewRequest(http.MethodGet, "/debug/pprof/", nil)
+	req.Header.Set("Authorization", "Bearer wrong")
+	w := httptest.NewRecorder()
+	assert.False(t, h.requireDiagnosticsAuth(w, req), "wrong token must reject")
+
+	resp := w.Result()
+	assert.Equal(t, http.StatusUnauthorized, resp.StatusCode)
+
+	body := make([]byte, 32)
+	n, _ := resp.Body.Read(body)
+	assert.Equal(t, "unauthorized", string(body[:n]))
+}
+
+func TestRequireDiagnosticsAuthMissingHeader(t *testing.T) {
+	h := &HealthServer{diagnosticsToken: "secret123"}
+	req := httptest.NewRequest(http.MethodGet, "/debug/pprof/", nil)
+	w := httptest.NewRecorder()
+	assert.False(t, h.requireDiagnosticsAuth(w, req), "missing Authorization must reject")
+
+	resp := w.Result()
+	assert.Equal(t, http.StatusUnauthorized, resp.StatusCode)
+}
+
+func TestGuardWithoutTokenCallsHandler(t *testing.T) {
+	h := &HealthServer{diagnosticsToken: ""}
+	called := false
+	handler := h.guard(func(w http.ResponseWriter, r *http.Request) {
+		called = true
+	})
+	req := httptest.NewRequest(http.MethodGet, "/debug/pprof/", nil)
+	w := httptest.NewRecorder()
+	handler(w, req)
+	assert.True(t, called, "handler must be called when no token is set")
+}
+
+func TestGuardWithValidTokenCallsHandler(t *testing.T) {
+	h := &HealthServer{diagnosticsToken: "secret123"}
+	called := false
+	handler := h.guard(func(w http.ResponseWriter, r *http.Request) {
+		called = true
+	})
+	req := httptest.NewRequest(http.MethodGet, "/debug/pprof/", nil)
+	req.Header.Set("Authorization", "Bearer secret123")
+	w := httptest.NewRecorder()
+	handler(w, req)
+	assert.True(t, called, "handler must be called with valid token")
+}
+
+func TestGuardWithInvalidTokenReturns401(t *testing.T) {
+	h := &HealthServer{diagnosticsToken: "secret123"}
+	handler := h.guard(func(w http.ResponseWriter, r *http.Request) {
+		t.Error("handler must not be called with invalid token")
+	})
+	req := httptest.NewRequest(http.MethodGet, "/debug/pprof/", nil)
+	req.Header.Set("Authorization", "Bearer wrong")
+	w := httptest.NewRecorder()
+	handler(w, req)
+
+	resp := w.Result()
+	assert.Equal(t, http.StatusUnauthorized, resp.StatusCode)
+}
+
+func TestPprofEndpointsRegisteredWithGuard(t *testing.T) {
+	h := &HealthServer{diagnostics: true, pprof: true, diagnosticsToken: "tok"}
+	h.SetIncidentAPI(&fakeIncidentLister{snap: []model.IncidentView{}})
+	mux := http.NewServeMux()
+	mux.HandleFunc("/healthz", h.healthzHandler)
+	mux.HandleFunc("/incidents", h.incidentsHandler)
+	if h.pprof {
+		mux.HandleFunc("/debug/pprof/", h.guard(http.NotFound))
+	}
+	ts := httptest.NewServer(mux)
+	defer ts.Close()
+
+	// Without token — pprof should reject
+	req, _ := http.NewRequest(http.MethodGet, ts.URL+"/debug/pprof/", nil)
+	resp, err := http.DefaultClient.Do(req)
+	assert.Nil(t, err)
+	assert.Equal(t, http.StatusUnauthorized, resp.StatusCode)
+	resp.Body.Close()
+
+	// Without token — non-pprof endpoints still work
+	req, _ = http.NewRequest(http.MethodGet, ts.URL+"/healthz", nil)
+	resp, err = http.DefaultClient.Do(req)
+	assert.Nil(t, err)
+	assert.Equal(t, http.StatusOK, resp.StatusCode)
+	resp.Body.Close()
+}
+
+func TestPprofEndpointsNotRegisteredWhenDisabled(t *testing.T) {
+	h := &HealthServer{pprof: false}
+	mux := http.NewServeMux()
+	mux.HandleFunc("/healthz", h.healthzHandler)
+	// pprof NOT registered
+	ts := httptest.NewServer(mux)
+	defer ts.Close()
+
+	resp, err := http.Get(ts.URL + "/debug/pprof/")
+	assert.Nil(t, err)
+	assert.Equal(t, http.StatusNotFound, resp.StatusCode)
+	resp.Body.Close()
+}
+
 func TestDiagnosticsDisabled(t *testing.T) {
 	h := &HealthServer{diagnostics: false}
 	mux := http.NewServeMux()

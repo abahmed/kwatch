@@ -3,25 +3,24 @@ package metrics
 import (
 	"fmt"
 	"net/http"
-	"sort"
 	"strings"
 	"sync/atomic"
 )
 
 type Registry struct {
-	IncidentsTotal      atomic.Int64
-	IncidentsCreate     atomic.Int64
-	IncidentsUpdate     atomic.Int64
-	IncidentsResolved   atomic.Int64
-	IncidentsDigest     atomic.Int64
-	NotificationsTotal  atomic.Int64
+	IncidentsTotal       atomic.Int64
+	IncidentsCreate      atomic.Int64
+	IncidentsUpdate      atomic.Int64
+	IncidentsResolved    atomic.Int64
+	IncidentsDigest      atomic.Int64
+	NotificationsTotal   atomic.Int64
 	NotificationsDropped atomic.Int64
-	BaselineSize        atomic.Int64
-	ActiveIncidents     atomic.Int64
-	WorkQueueDepth      atomic.Int64
-	LLMEnrichTotal      atomic.Int64
-	LLMEnrichFailed     atomic.Int64
-	LLMEnrichSkipped    atomic.Int64
+	BaselineSize         atomic.Int64
+	ActiveIncidents      atomic.Int64
+	WorkQueueDepth       atomic.Int64
+	LLMEnrichTotal       atomic.Int64
+	LLMEnrichFailed      atomic.Int64
+	LLMEnrichSkipped     atomic.Int64
 }
 
 var Default = &Registry{}
@@ -68,7 +67,6 @@ func (r *Registry) Handler() http.Handler {
 		lines = append(lines, "# HELP kwatch_llm_enrich_skipped_total Skipped LLM enrichment (breaker open)")
 		lines = append(lines, "# TYPE kwatch_llm_enrich_skipped_total counter")
 		lines = append(lines, fmt.Sprintf("kwatch_llm_enrich_skipped_total %d", r.LLMEnrichSkipped.Load()))
-		sort.Strings(lines)
 		fmt.Fprint(w, strings.Join(lines, "\n")+"\n")
 	})
 }

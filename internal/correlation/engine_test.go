@@ -367,7 +367,7 @@ func TestRemovePodClearsSeen(t *testing.T) {
 
 func TestStsOwnedPodsGroupByStsName(t *testing.T) {
 	e := NewEngine(Config{
-		Window: 10 * time.Minute,
+		Window:   10 * time.Minute,
 		Enricher: &enricher.DefaultEnricher{SeverityByOwnerKind: map[string]string{"StatefulSet": "high"}},
 	})
 
@@ -440,7 +440,7 @@ func TestSnapshotEmpty(t *testing.T) {
 
 func TestRenotifyConfig(t *testing.T) {
 	e := NewEngine(Config{
-		Window:                    10 * time.Minute,
+		Window:                     10 * time.Minute,
 		RenotifyIntervalBySeverity: map[string]time.Duration{"default": 1 * time.Minute},
 		RenotifyMaxPerIncident:     3,
 	})
@@ -566,11 +566,11 @@ func TestInhibitionSuppressedCounter(t *testing.T) {
 
 func stormEngine() *Engine {
 	return NewEngine(Config{
-		Window:               10 * time.Minute,
-		StormEnabled:         true,
-		StormThreshold:       3,
-		StormWindow:          time.Minute,
-		StormDigestInterval:  time.Nanosecond,
+		Window:              10 * time.Minute,
+		StormEnabled:        true,
+		StormThreshold:      3,
+		StormWindow:         time.Minute,
+		StormDigestInterval: time.Nanosecond,
 	})
 }
 
@@ -656,6 +656,67 @@ func TestStormResolvesStillNotify(t *testing.T) {
 	e.Process(ev, "dep", nil)
 	e.RemovePod("ns", "p1")
 	assert.GreaterOrEqual(t, resolves, 1)
+}
+
+func TestStormFlushWithDistinctReasons(t *testing.T) {
+	e := stormEngine()
+	var flushActions int
+	var lastDigest *model.Incident
+	e.config.LifecycleHook = func(inc *model.Incident, action model.IncidentAction) {
+		if action == model.ActionDigestFlush {
+			flushActions++
+			lastDigest = inc
+		}
+	}
+	// Use distinct reasons so buildDigestSummary returns "" — the flush must
+	// still emit with a count-only fallback message.
+	// Storm threshold is 3, so only the last 3 events (indices 2,3,4) are buffered.
+	for i := 0; i < 5; i++ {
+		e.Process(event.Event{
+			PodName: fmt.Sprintf("p%d", i), Namespace: "ns", Reason: fmt.Sprintf("R%d", i),
+		}, fmt.Sprintf("o%d", i), nil)
+	}
+	e.checkLifecycle()
+	assert.GreaterOrEqual(t, flushActions, 1)
+	if lastDigest != nil {
+		assert.Equal(t, 3, lastDigest.Count)
+		assert.Equal(t, "DigestSummary", lastDigest.Reason)
+		assert.Contains(t, lastDigest.Hint, "3 new incident")
+	}
+}
+
+func TestDigestedIncidentResolvesAfterRealEdge(t *testing.T) {
+	e := stormEngine()
+	// Fill storm buffer — last 3 (i=2,3,4) are digested (threshold=3)
+	for i := 0; i < 5; i++ {
+		e.Process(event.Event{
+			PodName: fmt.Sprintf("p%d", i), Namespace: "ns", Reason: fmt.Sprintf("R%d", i),
+		}, fmt.Sprintf("o%d", i), nil)
+	}
+	// Use p2 — it was digested (i=2 is the 3rd event, which met the threshold)
+	key := "ns:o2:R2:"
+	inc, ok := e.state[key]
+	require.True(t, ok, "p2 must exist in state")
+	require.True(t, inc.Digested, "p2 must be digested")
+
+	// Process the same incident with a different severity → sig changes,
+	// edgeAction clears Digested and returns ActionUpdate.
+	inc, action := e.Process(event.Event{
+		PodName: "p2", Namespace: "ns", Reason: "R2", Severity: "high",
+	}, "o2", nil)
+	require.NotNil(t, inc)
+	assert.Equal(t, model.ActionUpdate, action)
+	assert.False(t, inc.Digested, "Digested must be cleared after a real edge fires")
+
+	// Now resolve — should emit ActionResolved (not suppressed)
+	var resolved bool
+	e.config.LifecycleHook = func(inc *model.Incident, action model.IncidentAction) {
+		if action == model.ActionResolved {
+			resolved = true
+		}
+	}
+	e.MarkResolved(key)
+	assert.True(t, resolved, "digested incident must resolve when Digested was cleared")
 }
 
 func TestMarkResolvedIdempotent(t *testing.T) {
@@ -785,33 +846,33 @@ func TestProcessResolvedIncidentCreatesFresh(t *testing.T) {
 
 func TestIncidentKeyMatchesProcess(t *testing.T) {
 	tests := []struct {
-		name    string
-		ev      event.Event
-		owner   string
-		cs      *model.ContainerState
+		name  string
+		ev    event.Event
+		owner string
+		cs    *model.ContainerState
 	}{
 		{
-			name:    "CrashLoopBackOff with cs",
-			ev:      event.Event{Namespace: "default", Reason: "CrashLoopBackOff"},
-			owner:   "deploy-1",
-			cs:      &model.ContainerState{RestartCount: 3},
+			name:  "CrashLoopBackOff with cs",
+			ev:    event.Event{Namespace: "default", Reason: "CrashLoopBackOff"},
+			owner: "deploy-1",
+			cs:    &model.ContainerState{RestartCount: 3},
 		},
 		{
-			name:    "CrashLoopBackOff high frequency",
-			ev:      event.Event{Namespace: "default", Reason: "CrashLoopBackOff"},
-			owner:   "deploy-1",
-			cs:      &model.ContainerState{RestartCount: 10},
+			name:  "CrashLoopBackOff high frequency",
+			ev:    event.Event{Namespace: "default", Reason: "CrashLoopBackOff"},
+			owner: "deploy-1",
+			cs:    &model.ContainerState{RestartCount: 10},
 		},
 		{
-			name:    "normalized reason",
-			ev:      event.Event{Namespace: "default", Reason: "CrashLoopBackOff 42"},
-			owner:   "deploy-1",
-			cs:      &model.ContainerState{RestartCount: 1},
+			name:  "normalized reason",
+			ev:    event.Event{Namespace: "default", Reason: "CrashLoopBackOff 42"},
+			owner: "deploy-1",
+			cs:    &model.ContainerState{RestartCount: 1},
 		},
 		{
-			name:    "empty container",
-			ev:      event.Event{Namespace: "default", Reason: "OOMKilled"},
-			owner:   "deploy-1",
+			name:  "empty container",
+			ev:    event.Event{Namespace: "default", Reason: "OOMKilled"},
+			owner: "deploy-1",
 		},
 	}
 
