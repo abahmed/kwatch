@@ -26,6 +26,31 @@ type feiShuWebhookContent struct {
 	Content string `json:"content"`
 }
 
+type feiShuCardConfig struct {
+	WideScreenMode bool `json:"wide_screen_mode"`
+}
+
+type feiShuHeaderTitle struct {
+	Tag     string `json:"tag"`
+	Content string `json:"content"`
+}
+
+type feiShuHeader struct {
+	Title    feiShuHeaderTitle `json:"title"`
+	Template string            `json:"template"`
+}
+
+type feiShuCard struct {
+	Config   feiShuCardConfig    `json:"config"`
+	Header   feiShuHeader        `json:"header"`
+	Elements []feiShuWebhookContent `json:"elements"`
+}
+
+type feiShuRequestBody struct {
+	MsgType string    `json:"msg_type"`
+	Card    feiShuCard `json:"card"`
+}
+
 // NewFeiShu returns new feishu web bot instance
 func NewFeiShu(config map[string]interface{}, appCfg *config.App) *FeiShu {
 	webhook, ok := config["webhook"].(string)
@@ -98,23 +123,30 @@ func (r *FeiShu) SendMessage(msg string) error {
 
 func (r *FeiShu) buildRequestBodyFeiShu(
 	text string) (string, error) {
-	var content = []feiShuWebhookContent{
-		{
-			Tag:     "markdown",
-			Content: text,
+	body := feiShuRequestBody{
+		MsgType: "interactive",
+		Card: feiShuCard{
+			Config: feiShuCardConfig{
+				WideScreenMode: true,
+			},
+			Header: feiShuHeader{
+				Title: feiShuHeaderTitle{
+					Tag:     "plain_text",
+					Content: r.title,
+				},
+				Template: "blue",
+			},
+			Elements: []feiShuWebhookContent{
+				{
+					Tag:     "markdown",
+					Content: text,
+				},
+			},
 		},
 	}
-	jsonBytes, err := json.Marshal(content)
+	jsonBytes, err := json.Marshal(body)
 	if err != nil {
-		return "", fmt.Errorf("failed to marshal feishu content: %w", err)
+		return "", fmt.Errorf("failed to marshal feishu body: %w", err)
 	}
-
-	titleJSON, err := json.Marshal(r.title)
-	if err != nil {
-		return "", fmt.Errorf("failed to marshal feishu title: %w", err)
-	}
-	body := `{"msg_type":"interactive","card":{"config":{"wide_screen_mode":true},` +
-		`"header":{"title":{"tag":"plain_text","content":` + string(titleJSON) +
-		`},"template":"blue"},"elements":` + string(jsonBytes) + `}}`
-	return body, nil
+	return string(jsonBytes), nil
 }
