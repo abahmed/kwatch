@@ -38,6 +38,7 @@ type Config struct {
 	StormThreshold             int
 	StormWindow                time.Duration
 	StormDigestInterval        time.Duration
+	MaxBaseline                int
 	RenotifyIntervalBySeverity map[string]time.Duration
 	RenotifyMaxPerIncident     int
 	ResolveHoldDown            time.Duration
@@ -152,6 +153,7 @@ func escalateSeverity(s string) string {
 
 const defaultBaselineTTL = 24 * time.Hour
 const defaultCrashLoopHighFreqThreshold = 5
+const defaultMaxBaseline = 2000
 
 type Engine struct {
 	mu                  sync.Mutex
@@ -176,6 +178,9 @@ func NewEngine(cfg Config) *Engine {
 	if cfg.BaselineTTL <= 0 {
 		cfg.BaselineTTL = defaultBaselineTTL
 	}
+	if cfg.MaxBaseline <= 0 {
+		cfg.MaxBaseline = defaultMaxBaseline
+	}
 	e := &Engine{
 		state:               make(map[string]*model.Incident),
 		config:              cfg,
@@ -192,7 +197,6 @@ func NewEngine(cfg Config) *Engine {
 
 func (e *Engine) SetSeen(b map[string]map[string]int64) {
 	e.mu.Lock()
-	defer e.mu.Unlock()
 	now := e.now()
 	ttl := e.config.BaselineTTL
 	e.seen = make(map[string]map[string]int64, len(b))
@@ -203,6 +207,49 @@ func (e *Engine) SetSeen(b map[string]map[string]int64) {
 					e.seen[key] = map[string]int64{}
 				}
 				e.seen[key][pod] = ts
+			}
+		}
+	}
+	e.evictToLimit()
+	snap := cloneBaseline(e.seen)
+	e.mu.Unlock()
+	if e.config.OnBaselineChange != nil {
+		e.config.OnBaselineChange(snap)
+	}
+}
+
+type seenEntry struct {
+	key string
+	pod string
+	ts  int64
+}
+
+func (e *Engine) evictToLimit() {
+	limit := e.config.MaxBaseline
+	total := 0
+	for _, pods := range e.seen {
+		total += len(pods)
+	}
+	if total <= limit {
+		return
+	}
+
+	var all []seenEntry
+	for key, pods := range e.seen {
+		for pod, ts := range pods {
+			all = append(all, seenEntry{key, pod, ts})
+		}
+	}
+	sort.Slice(all, func(i, j int) bool {
+		return all[i].ts < all[j].ts
+	})
+
+	toRemove := total - limit
+	for _, entry := range all[:toRemove] {
+		if pods, ok := e.seen[entry.key]; ok {
+			delete(pods, entry.pod)
+			if len(pods) == 0 {
+				delete(e.seen, entry.key)
 			}
 		}
 	}
