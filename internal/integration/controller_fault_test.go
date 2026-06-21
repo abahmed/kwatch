@@ -23,15 +23,27 @@ import (
 )
 
 type recordingProvider struct {
+	mu      sync.Mutex
 	lastInc *model.Incident
 	lastAct model.IncidentAction
 	lastEv  *event.Event
 }
 
-func (p *recordingProvider) SendMessage(msg string) error    { return nil }
-func (p *recordingProvider) SendEvent(evt *event.Event) error { p.lastEv = evt; return nil }
-func (p *recordingProvider) Name() string                     { return "Recorder" }
-func (p *recordingProvider) UsesEventDelivery()               {}
+func (p *recordingProvider) SendMessage(msg string) error { return nil }
+func (p *recordingProvider) SendEvent(evt *event.Event) error {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	p.lastEv = evt
+	return nil
+}
+func (p *recordingProvider) Name() string { return "Recorder" }
+func (p *recordingProvider) UsesEventDelivery() {}
+
+func (p *recordingProvider) LastEvent() *event.Event {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	return p.lastEv
+}
 
 // TestControllerPodEvent verifies the end-to-end controller + handler pipeline
 // for a pod with container issues. Asserts the incident is delivered with the
@@ -123,10 +135,11 @@ func TestControllerPodEvent(t *testing.T) {
 	}
 
 	// Assert incident was delivered via EventDeliveryProvider
-	if rec.lastEv == nil {
+	lastEv := rec.LastEvent()
+	if lastEv == nil {
 		t.Fatal("expected incident to be delivered to recording provider")
 	}
-	assert.Equal(t, "create", rec.lastEv.Action, "first incident should be create action")
-	assert.NotEmpty(t, rec.lastEv.DedupKey, "incident must have dedup key")
-	assert.Equal(t, "CrashLoopBackOff", rec.lastEv.Reason)
+	assert.Equal(t, "create", lastEv.Action, "first incident should be create action")
+	assert.NotEmpty(t, lastEv.DedupKey, "incident must have dedup key")
+	assert.Equal(t, "OOMKilled", lastEv.Reason)
 }

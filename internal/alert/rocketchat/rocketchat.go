@@ -10,6 +10,7 @@ import (
 	"github.com/abahmed/kwatch/internal/config"
 	"github.com/abahmed/kwatch/internal/event"
 	"github.com/abahmed/kwatch/internal/k8s"
+	"github.com/abahmed/kwatch/internal/ratelimit"
 	"k8s.io/klog/v2"
 )
 
@@ -75,6 +76,13 @@ func (r *RocketChat) sendByRocketChatApi(reqBody []byte) error {
 	}
 	defer response.Body.Close()
 
+	if response.StatusCode == http.StatusTooManyRequests {
+		return &ratelimit.Error{
+			Provider:   "RocketChat",
+			StatusCode: http.StatusTooManyRequests,
+			RetryAfter: ratelimit.ParseRetryAfter(response),
+		}
+	}
 	if response.StatusCode != 200 {
 		body, _ := io.ReadAll(response.Body)
 		return fmt.Errorf(

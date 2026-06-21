@@ -4,12 +4,15 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
+	"io"
 	"net/http"
 	"strings"
+	"time"
 
 	"github.com/abahmed/kwatch/internal/config"
 	"github.com/abahmed/kwatch/internal/event"
 	"github.com/abahmed/kwatch/internal/k8s"
+	"github.com/abahmed/kwatch/internal/ratelimit"
 	"k8s.io/klog/v2"
 )
 
@@ -181,6 +184,25 @@ func (t *Telegram) sendByTelegramApi(reqBody string) error {
 	}
 	defer response.Body.Close()
 
+	if response.StatusCode == http.StatusTooManyRequests {
+		d := ratelimit.ParseRetryAfter(response)
+		if d == 0 {
+			body, _ := io.ReadAll(response.Body)
+			var p struct {
+				Parameters *struct {
+					RetryAfter int `json:"retry_after"`
+				} `json:"parameters"`
+			}
+			if json.Unmarshal(body, &p) == nil && p.Parameters != nil && p.Parameters.RetryAfter > 0 {
+				d = time.Duration(p.Parameters.RetryAfter) * time.Second
+			}
+		}
+		return &ratelimit.Error{
+			Provider:   "Telegram",
+			StatusCode: http.StatusTooManyRequests,
+			RetryAfter: d,
+		}
+	}
 	if response.StatusCode > 202 {
 		return fmt.Errorf(
 			"call to telegram alert returned status code %d",

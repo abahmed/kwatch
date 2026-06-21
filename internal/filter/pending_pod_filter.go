@@ -12,15 +12,15 @@ type PendingPodFilter struct {
 
 func (f PendingPodFilter) Detect(ctx *Context) Status {
 	if ctx.Pod.Status.Phase != corev1.PodPending {
-		return StatusSkip
+		return StatusContinue
 	}
 
 	if time.Since(ctx.Pod.CreationTimestamp.Time) < f.Threshold {
-		return StatusSkip
+		return StatusContinue
 	}
 
 	if ctx.PodLastState != nil && ctx.PodLastState.Reason == ctx.PodReason {
-		return StatusSkip
+		return StatusContinue
 	}
 
 	ctx.PodHasIssues = true

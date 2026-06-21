@@ -38,8 +38,10 @@ func ValidateConfig(cfg *Config) []string {
 			cfg.PvcMonitor.CriticalThreshold < cfg.PvcMonitor.Threshold {
 			errs = append(errs, "pvcMonitor.criticalThreshold should be >= threshold")
 		}
-		if cfg.PvcMonitor.ClearThreshold < 0 || cfg.PvcMonitor.ClearThreshold > cfg.PvcMonitor.Threshold {
-			errs = append(errs, "pvcMonitor.clearThreshold must be between 0 and threshold")
+		if cfg.PvcMonitor.ClearThreshold < 0 {
+			errs = append(errs, "pvcMonitor.clearThreshold must be >= 0")
+		} else if cfg.PvcMonitor.ClearThreshold > cfg.PvcMonitor.Threshold {
+			cfg.PvcMonitor.ClearThreshold = cfg.PvcMonitor.Threshold
 		}
 	}
 
@@ -120,17 +122,11 @@ func Validate(cfg *Config) []error {
 	if cfg.Correlation.LifecycleInterval <= 0 {
 		errs = append(errs, errors.New("correlation.lifecycleInterval must be > 0"))
 	}
-	if cfg.HeartbeatMonitor.Enabled && cfg.HeartbeatMonitor.Interval <= 0 {
-		errs = append(errs, errors.New("heartbeatMonitor.interval must be > 0"))
+	if cfg.HeartbeatMonitor.Enabled && cfg.HeartbeatMonitor.Interval < 0 {
+		errs = append(errs, errors.New("heartbeatMonitor.interval must be >= 0"))
 	}
-	if cfg.TlsMonitor.Enabled && cfg.TlsMonitor.Threshold <= 0 {
-		errs = append(errs, errors.New("tlsMonitor.threshold must be > 0"))
-	}
-	if cfg.HpaMonitor.Enabled && cfg.HpaMonitor.SustainedMinutes <= 0 {
-		errs = append(errs, errors.New("hpaMonitor.sustainedMinutes must be > 0"))
-	}
-	if cfg.DaemonSetMonitor.Enabled && cfg.DaemonSetMonitor.SustainedMinutes <= 0 {
-		errs = append(errs, errors.New("daemonSetMonitor.sustainedMinutes must be > 0"))
+	if cfg.TlsMonitor.Enabled && cfg.TlsMonitor.Threshold < 0 {
+		errs = append(errs, errors.New("tlsMonitor.threshold must be >= 0"))
 	}
 	if cfg.Correlation.Escalation.Enabled {
 		for i, t := range cfg.Correlation.Escalation.Tiers {
@@ -151,6 +147,10 @@ func Validate(cfg *Config) []error {
 	if cfg.Correlation.MaxBaseline < 0 {
 		errs = append(errs, errors.New("correlation.maxBaseline must be >= 0"))
 	}
+	const maxBaselineEntries = 3600
+	if cfg.Correlation.MaxBaseline > maxBaselineEntries {
+		errs = append(errs, fmt.Errorf("correlation.maxBaseline=%d risks exceeding the ~1MB ConfigMap limit (max ~%d, or gzip)", cfg.Correlation.MaxBaseline, maxBaselineEntries))
+	}
 	if cfg.PendingPodMonitor.Enabled && cfg.PendingPodMonitor.Threshold <= 0 {
 		errs = append(errs, errors.New("pendingPodMonitor.threshold must be > 0"))
 	}
@@ -165,7 +165,7 @@ func Validate(cfg *Config) []error {
 			errs = append(errs, errors.New("pvcMonitor.criticalThreshold must be <= 100"))
 		}
 		if cfg.PvcMonitor.ClearThreshold < 0 || cfg.PvcMonitor.ClearThreshold > cfg.PvcMonitor.Threshold {
-			errs = append(errs, errors.New("pvcMonitor.clearThreshold must be between 0 and threshold"))
+			cfg.PvcMonitor.ClearThreshold = cfg.PvcMonitor.Threshold
 		}
 	}
 	for _, name := range unknownProviders(cfg) {

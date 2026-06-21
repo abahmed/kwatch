@@ -19,8 +19,11 @@ func (h *handler) executePodFilters(ctx *filter.Context) {
 
 	// Phase 1: Detect (pure, no I/O)
 	for i := range h.podDetectors {
-		if h.podDetectors[i].Detect(ctx) == filter.StatusSkip {
+		switch h.podDetectors[i].Detect(ctx) {
+		case filter.StatusSkip:
 			return
+		case filter.StatusContinue:
+			continue
 		}
 	}
 

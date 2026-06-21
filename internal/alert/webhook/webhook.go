@@ -10,6 +10,7 @@ import (
 	"github.com/abahmed/kwatch/internal/config"
 	"github.com/abahmed/kwatch/internal/event"
 	"github.com/abahmed/kwatch/internal/k8s"
+	"github.com/abahmed/kwatch/internal/ratelimit"
 
 	"k8s.io/klog/v2"
 )
@@ -115,6 +116,13 @@ func (w *Webhook) SendEvent(ev *event.Event) error {
 	}
 	defer response.Body.Close()
 
+	if response.StatusCode == http.StatusTooManyRequests {
+		return &ratelimit.Error{
+			Provider:   "Webhook",
+			StatusCode: http.StatusTooManyRequests,
+			RetryAfter: ratelimit.ParseRetryAfter(response),
+		}
+	}
 	if response.StatusCode > 202 {
 		return fmt.Errorf(
 			"call to webhook returned status code %d",

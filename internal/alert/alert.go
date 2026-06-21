@@ -34,6 +34,7 @@ import (
 	"github.com/abahmed/kwatch/internal/llm"
 	"github.com/abahmed/kwatch/internal/metrics"
 	"github.com/abahmed/kwatch/internal/model"
+	"github.com/abahmed/kwatch/internal/ratelimit"
 	"k8s.io/klog/v2"
 )
 
@@ -116,6 +117,7 @@ type AlertManager struct {
 	llm      *llm.Client
 	enrichCh chan deliverJob
 	brk      breaker
+	done     chan struct{}
 }
 
 func (a *AlertManager) SetMaxLogLines(n int) {
@@ -618,6 +620,10 @@ func sendWithRetry(ctx context.Context, sendFn func() error, maxAttempts int, de
 				if errors.As(err, &rae) && rae.RetryAfter > 0 {
 					sleepDur = rae.RetryAfter
 				}
+				var rle *ratelimit.Error
+				if errors.As(err, &rle) && rle.RetryAfter > 0 {
+					sleepDur = rle.RetryAfter
+				}
 				klog.V(4).InfoS("retrying provider delivery",
 					"provider", providerName,
 					"attempt", attempt,
@@ -675,6 +681,18 @@ func (a *AlertManager) Notify(msg string) {
 
 	for _, entry := range entries {
 		p := entry.provider
+		if _, ok := p.(EventDeliveryProvider); ok {
+			ev := &event.Event{
+				PodName: msg,
+				Reason:  "notify",
+			}
+			if err := sendWithRetry(context.Background(), func() error {
+				return p.SendEvent(ev)
+			}, entry.maxAttempts, entry.retryDelay, entry.maxBackoff, p.Name()); err != nil && entry.fallback != nil {
+				entry.fallback.provider.SendMessage("[fallback — primary " + p.Name() + " failed] " + msg)
+			}
+			continue
+		}
 		truncMsg := truncateMsg(msg, entry.maxBytes)
 		if err := sendWithRetry(context.Background(), func() error {
 			return p.SendMessage(truncMsg)
@@ -698,7 +716,9 @@ func (a *AlertManager) NotifyEvent(event event.Event) {
 		if err := sendWithRetry(context.Background(), func() error {
 			return p.SendEvent(&event)
 		}, entry.maxAttempts, entry.retryDelay, entry.maxBackoff, p.Name()); err != nil && entry.fallback != nil {
-			entry.fallback.provider.SendMessage("[fallback — primary " + p.Name() + " failed] " + event.Reason + " in " + event.Namespace + "/" + event.PodName)
+			if ferr := entry.fallback.provider.SendMessage("[fallback — primary " + p.Name() + " failed] " + event.Reason + " in " + event.Namespace + "/" + event.PodName); ferr != nil {
+				klog.ErrorS(ferr, "fallback provider send failed", "primary", p.Name(), "fallback", entry.fallback.provider.Name())
+			}
 		}
 	}
 }
@@ -806,11 +826,19 @@ func (a *AlertManager) AddProvider(p Provider) {
 	entry := providerEntry{
 		provider:    p,
 		maxAttempts: 1,
-	}
-	if a.started {
-		entry.ch = make(chan deliverJob, channelCap)
+		ch:          make(chan deliverJob, channelCap),
 	}
 	a.entries = append(a.entries, entry)
+	if a.started {
+		// Late registration: this entry missed Start's worker loop, launch one.
+		a.providerWg.Add(1)
+		go func() {
+			defer a.providerWg.Done()
+			for job := range entry.ch {
+				a.deliverOne(&entry, job.inc, job.action)
+			}
+		}()
+	}
 }
 
 // Start launches a worker goroutine for each provider that processes
@@ -819,6 +847,7 @@ func (a *AlertManager) Start(ctx context.Context) {
 	a.mu.Lock()
 	a.started = true
 	a.stopped = false
+	a.done = make(chan struct{})
 	entries := make([]providerEntry, len(a.entries))
 	copy(entries, a.entries)
 	a.mu.Unlock()
@@ -871,10 +900,26 @@ func (a *AlertManager) shutdown() {
 	//    sends on a closed channel.
 	a.mu.Lock()
 	for i := range entries {
-		close(entries[i].ch)
+		if entries[i].ch != nil {
+			close(entries[i].ch)
+		}
 	}
 	a.mu.Unlock()
 	a.providerWg.Wait()
+	close(a.done)
+}
+
+// Done returns a channel that is closed when the AlertManager has fully
+// drained and shut down (all provider workers and enrichment finished).
+func (a *AlertManager) Done() <-chan struct{} {
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	if a.done != nil {
+		return a.done
+	}
+	ch := make(chan struct{})
+	close(ch)
+	return ch
 }
 
 // DeadLetters returns a copy of the dead-letter ring buffer.

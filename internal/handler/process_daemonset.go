@@ -14,16 +14,6 @@ import (
 // pods that would trigger an alert. Used for baseline seeding at startup.
 func DetectDaemonSetIssue(ds *appsv1.DaemonSet) *event.Signal {
 	if ds.Status.DesiredNumberScheduled > 0 && ds.Status.NumberUnavailable > 0 {
-		settled := ds.Status.ObservedGeneration >= ds.Generation &&
-			ds.Status.UpdatedNumberScheduled == ds.Status.DesiredNumberScheduled
-		// For baseline, only seed settled-unavailable or stuck-past-grace.
-		// (startup baseline doesn't have timing info, so we seed unsettled
-		// too — the engine's BaselineTTL will age them out before the grace
-		// window matters.)
-		if !settled {
-			// Still seed it — the baseline TTL will handle expiry before
-			// the grace window matters for a genuinely new rollout.
-		}
 		return &event.Signal{
 			Resource:  "daemonset",
 			Reason:    "DaemonSetUnavailable",

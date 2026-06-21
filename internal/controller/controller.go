@@ -540,8 +540,18 @@ func New(
 			}
 			ef := informers.NewSharedInformerFactoryWithOptions(client, resync, opts...)
 			eventFactories = append(eventFactories, ef)
+			eventInformer := ef.Core().V1().Events().Informer()
+			eventInformer.AddIndexers(cache.Indexers{
+				"byPod": func(obj interface{}) ([]string, error) {
+					ev, ok := obj.(*corev1.Event)
+					if !ok {
+						return nil, nil
+					}
+					return []string{ev.InvolvedObject.Name}, nil
+				},
+			})
 			c.eventLister = ef.Core().V1().Events().Lister()
-			c.eventsSynced = append(c.eventsSynced, ef.Core().V1().Events().Informer().HasSynced)
+			c.eventsSynced = append(c.eventsSynced, eventInformer.HasSynced)
 		} else {
 			listers := make([]corev1lister.EventLister, 0, len(namespaces))
 			for _, ns := range namespaces {
@@ -554,8 +564,18 @@ func New(
 				}
 				ef := informers.NewSharedInformerFactoryWithOptions(client, resync, opts...)
 				eventFactories = append(eventFactories, ef)
+				eventInformer := ef.Core().V1().Events().Informer()
+				eventInformer.AddIndexers(cache.Indexers{
+					"byPod": func(obj interface{}) ([]string, error) {
+						ev, ok := obj.(*corev1.Event)
+						if !ok {
+							return nil, nil
+						}
+						return []string{ev.InvolvedObject.Name}, nil
+					},
+				})
 				listers = append(listers, ef.Core().V1().Events().Lister())
-				c.eventsSynced = append(c.eventsSynced, ef.Core().V1().Events().Informer().HasSynced)
+				c.eventsSynced = append(c.eventsSynced, eventInformer.HasSynced)
 			}
 			c.eventLister = &multiEventLister{listers: listers}
 		}
@@ -997,17 +1017,6 @@ func (c *Controller) buildSeenSet() {
 			for _, cj := range cjs {
 				if sig := handler.DetectCronJobIssue(cj); sig != nil {
 					seedSignal(sig, cj.Name)
-				}
-			}
-		}
-	}
-
-	// StatefulSets
-	if c.ssLister != nil {
-		if sss, err := c.ssLister.List(labels.Everything()); err == nil {
-			for _, ss := range sss {
-				if sig := handler.DetectStatefulSetIssue(ss); sig != nil {
-					seedSignal(sig, ss.Name)
 				}
 			}
 		}

@@ -10,6 +10,7 @@ import (
 	"k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/tools/cache"
+	"k8s.io/klog/v2"
 )
 
 // DefaultCronNotScheduledGrace is the grace period added after the expected
@@ -108,6 +109,8 @@ func NextFireAfter(schedule string, lastSchedule *metav1.Time, creation time.Tim
 		loc, err := time.LoadLocation(*timeZone)
 		if err == nil {
 			ref = ref.In(loc)
+		} else {
+			klog.ErrorS(err, "cronjob has invalid timezone, using UTC", "timeZone", *timeZone)
 		}
 	}
 	return sched.Next(ref)

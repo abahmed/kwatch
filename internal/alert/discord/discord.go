@@ -1,6 +1,7 @@
 package discord
 
 import (
+	"errors"
 	"fmt"
 	"net/http"
 	"strings"
@@ -9,6 +10,7 @@ import (
 	"github.com/abahmed/kwatch/internal/constant"
 	"github.com/abahmed/kwatch/internal/event"
 	"github.com/abahmed/kwatch/internal/k8s"
+	"github.com/abahmed/kwatch/internal/ratelimit"
 
 	discordgo "github.com/bwmarrin/discordgo"
 	"k8s.io/klog/v2"
@@ -153,9 +155,10 @@ func (s *Discord) SendEvent(ev *event.Event) error {
 					name = fmt.Sprintf(":memo: Logs (%d/%d)", totalFields, len(parts))
 				}
 				if totalFields > maxFields {
+					remaining := len(parts) - (totalFields - 1)
 					fields = append(fields, &discordgo.MessageEmbedField{
 						Name:  ":memo: Logs",
-						Value: fmt.Sprintf("… (truncated, %d more lines)", (len(logData)-len(chunk))/80),
+						Value: fmt.Sprintf("… (truncated, %d more chunk(s))", remaining),
 					})
 					break
 				}
@@ -197,7 +200,7 @@ func (s *Discord) SendEvent(ev *event.Event) error {
 				},
 			},
 		})
-	return err
+	return wrapDiscordRateLimit(err)
 }
 
 // SendMessage sends text message to the provider
@@ -210,6 +213,21 @@ func (s *Discord) SendMessage(msg string) error {
 		&discordgo.WebhookParams{
 			Content: msg,
 		})
+	return wrapDiscordRateLimit(err)
+}
+
+func wrapDiscordRateLimit(err error) error {
+	if err == nil {
+		return nil
+	}
+	var rle *discordgo.RateLimitError
+	if errors.As(err, &rle) {
+		return &ratelimit.Error{
+			Provider:   "Discord",
+			StatusCode: http.StatusTooManyRequests,
+			RetryAfter: rle.RetryAfter,
+		}
+	}
 	return err
 }
 

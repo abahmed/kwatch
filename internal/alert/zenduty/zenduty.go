@@ -99,6 +99,7 @@ func (m *Zenduty) resolveAlert(entityID string) error {
 	payload := zendutyPayload{
 		AlertType: "resolved",
 		EntityID:  entityID,
+		Message:   "resolved",
 	}
 	body, err := json.Marshal(payload)
 	if err != nil {

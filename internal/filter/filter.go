@@ -18,6 +18,7 @@ type Status int
 const (
 	StatusSkip Status = iota
 	StatusAlert
+	StatusContinue
 )
 
 type Detector interface {

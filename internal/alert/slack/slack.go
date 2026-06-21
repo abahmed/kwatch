@@ -2,7 +2,9 @@ package slack
 
 import (
 	"context"
+	"errors"
 	"fmt"
+	"net/http"
 	"sort"
 	"strings"
 	"sync"
@@ -12,6 +14,7 @@ import (
 	"github.com/abahmed/kwatch/internal/constant"
 	"github.com/abahmed/kwatch/internal/event"
 	"github.com/abahmed/kwatch/internal/model"
+	"github.com/abahmed/kwatch/internal/ratelimit"
 
 	slackClient "github.com/slack-go/slack"
 	"k8s.io/klog/v2"
@@ -225,6 +228,21 @@ func (s *Slack) sendAPIWithToken(msg *slackClient.WebhookMessage) error {
 		s.channel,
 		opts...,
 	)
+	return wrapSlackRateLimit(err)
+}
+
+func wrapSlackRateLimit(err error) error {
+	if err == nil {
+		return nil
+	}
+	var rle *slackClient.RateLimitedError
+	if errors.As(err, &rle) {
+		return &ratelimit.Error{
+			Provider:   "Slack",
+			StatusCode: http.StatusTooManyRequests,
+			RetryAfter: rle.RetryAfter,
+		}
+	}
 	return err
 }
 
@@ -306,7 +324,7 @@ func (s *Slack) postBlocks(blocks *slackClient.Blocks, threadTS string) (string,
 		s.channel,
 		opts...,
 	)
-	return ts, err
+	return ts, wrapSlackRateLimit(err)
 }
 
 func buildIncidentBlocks(inc *model.Incident, appCfg *config.App) *slackClient.Blocks {

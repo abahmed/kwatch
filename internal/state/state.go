@@ -3,6 +3,7 @@ package state
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"time"
 
 	"github.com/google/uuid"
@@ -137,9 +138,9 @@ func (s *StateManager) SaveBaseline(ctx context.Context, baseline map[string]map
 			return err
 		}
 		if len(data) > baselineMaxBytes {
-			klog.ErrorS(nil, "baseline too large for ConfigMap, truncating",
+			klog.ErrorS(nil, "baseline too large for ConfigMap, skipping save (persistence stale)",
 				"size", len(data), "max", baselineMaxBytes)
-			return nil
+			return fmt.Errorf("baseline %d bytes exceeds ConfigMap budget %d", len(data), baselineMaxBytes)
 		}
 		cm.Data[baselineKey] = string(data)
 		return nil

@@ -12,6 +12,7 @@ import (
 	"github.com/abahmed/kwatch/internal/config"
 	"github.com/abahmed/kwatch/internal/event"
 	"github.com/abahmed/kwatch/internal/k8s"
+	"github.com/abahmed/kwatch/internal/ratelimit"
 	"k8s.io/klog/v2"
 )
 
@@ -114,6 +115,19 @@ func (t *Teams) sendAPI(payload []byte) error {
 		resp, err := client.Do(request)
 		if err != nil {
 			return fmt.Errorf("failed to create HTTP response: %w", err)
+		}
+		if resp.StatusCode == http.StatusTooManyRequests {
+			d := ratelimit.ParseRetryAfter(resp)
+			resp.Body.Close()
+			if d > 0 {
+				time.Sleep(d)
+				continue
+			}
+			return &ratelimit.Error{
+				Provider:   "Teams",
+				StatusCode: http.StatusTooManyRequests,
+				RetryAfter: d,
+			}
 		}
 		if resp.StatusCode == http.StatusOK {
 			resp.Body.Close()

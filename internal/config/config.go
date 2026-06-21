@@ -117,6 +117,7 @@ type Config struct {
 
 	// ResyncSeconds is the interval (in seconds) for periodic informer resyncs.
 	// If 0, no periodic resync occurs (event-driven only).
+	// On large clusters with 200+ pods, raise Workers (below) to match;
 	ResyncSeconds int `yaml:"resyncSeconds"`
 
 	// SeverityByOwnerKind maps owner kinds to severity levels.

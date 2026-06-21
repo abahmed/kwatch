@@ -1004,6 +1004,11 @@ func TestBuildSeenSetReportsStartupSummary(t *testing.T) {
 		return err == nil
 	}, 5*time.Second, 50*time.Millisecond)
 
+	a.Eventually(func() bool {
+		_, err := ctrl.rsLister.ReplicaSets("default").Get("broken-rs")
+		return err == nil
+	}, 5*time.Second, 50*time.Millisecond)
+
 	ctrl.buildSeenSet()
 
 	// Must have called ReportStartupSummary with non-empty suppressed counts

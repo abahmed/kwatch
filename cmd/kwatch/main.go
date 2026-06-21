@@ -271,6 +271,11 @@ func main() {
 
 	klog.InfoS("shutting down gracefully...")
 	cancel()
+	select {
+	case <-alertManager.Done():
+	case <-time.After(10 * time.Second):
+		klog.InfoS("timed out waiting for alert manager to drain")
+	}
 	shutdownCtx, sc := context.WithTimeout(context.Background(), 10*time.Second)
 	healthServer.SetReady(false)
 	healthServer.Stop(shutdownCtx)

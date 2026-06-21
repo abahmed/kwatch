@@ -7,7 +7,9 @@ import (
 	autoscalingv2 "k8s.io/api/autoscaling/v2"
 	batchv1 "k8s.io/api/batch/v1"
 	corev1 "k8s.io/api/core/v1"
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/labels"
+	"k8s.io/apimachinery/pkg/runtime/schema"
 	appsv1lister "k8s.io/client-go/listers/apps/v1"
 	autoscalingv2lister "k8s.io/client-go/listers/autoscaling/v2"
 	batchv1lister "k8s.io/client-go/listers/batch/v1"
@@ -61,7 +63,7 @@ func (m *multiPodNamespaceLister) Get(name string) (*corev1.Pod, error) {
 			return pod, nil
 		}
 	}
-	return nil, fmt.Errorf("pod %q not found in any namespace lister", name)
+	return nil, apierrors.NewNotFound(schema.GroupResource{Resource: "pods"}, name)
 }
 
 type multiReplicaSetLister struct {
@@ -121,7 +123,7 @@ func (m *multiReplicaSetNamespaceLister) Get(name string) (*appsv1.ReplicaSet, e
 			return item, nil
 		}
 	}
-	return nil, fmt.Errorf("replicaset %q not found in any namespace lister", name)
+	return nil, apierrors.NewNotFound(schema.GroupResource{Group: "apps", Resource: "replicasets"}, name)
 }
 
 type multiDeploymentLister struct {
@@ -171,7 +173,7 @@ func (m *multiDeploymentNamespaceLister) Get(name string) (*appsv1.Deployment, e
 			return item, nil
 		}
 	}
-	return nil, fmt.Errorf("deployment %q not found in any namespace lister", name)
+	return nil, apierrors.NewNotFound(schema.GroupResource{Group: "apps", Resource: "deployments"}, name)
 }
 
 type multiJobLister struct {
@@ -221,7 +223,7 @@ func (m *multiJobNamespaceLister) Get(name string) (*batchv1.Job, error) {
 			return item, nil
 		}
 	}
-	return nil, fmt.Errorf("job %q not found in any namespace lister", name)
+	return nil, apierrors.NewNotFound(schema.GroupResource{Group: "batch", Resource: "jobs"}, name)
 }
 
 func (m *multiJobLister) GetPodJobs(pod *corev1.Pod) ([]batchv1.Job, error) {
@@ -311,7 +313,7 @@ func (m *multiDaemonSetNamespaceLister) Get(name string) (*appsv1.DaemonSet, err
 			return item, nil
 		}
 	}
-	return nil, fmt.Errorf("daemonset %q not found in any namespace lister", name)
+	return nil, apierrors.NewNotFound(schema.GroupResource{Group: "apps", Resource: "daemonsets"}, name)
 }
 
 type multiStatefulSetLister struct {
@@ -376,7 +378,7 @@ func (m *multiStatefulSetNamespaceLister) Get(name string) (*appsv1.StatefulSet,
 			return item, nil
 		}
 	}
-	return nil, fmt.Errorf("statefulset %q not found in any namespace lister", name)
+	return nil, apierrors.NewNotFound(schema.GroupResource{Group: "apps", Resource: "statefulsets"}, name)
 }
 
 type multiEventLister struct {
@@ -426,7 +428,7 @@ func (m *multiEventNamespaceLister) Get(name string) (*corev1.Event, error) {
 			return item, nil
 		}
 	}
-	return nil, fmt.Errorf("event %q not found in any namespace lister", name)
+	return nil, apierrors.NewNotFound(schema.GroupResource{Resource: "events"}, name)
 }
 
 type multiCronJobLister struct {
@@ -516,7 +518,7 @@ func (m *multiSecretNamespaceLister) Get(name string) (*corev1.Secret, error) {
 			return item, nil
 		}
 	}
-	return nil, fmt.Errorf("secret %q not found in any namespace lister", name)
+	return nil, apierrors.NewNotFound(schema.GroupResource{Resource: "secrets"}, name)
 }
 
 func (m *multiCronJobNamespaceLister) Get(name string) (*batchv1.CronJob, error) {
@@ -526,7 +528,7 @@ func (m *multiCronJobNamespaceLister) Get(name string) (*batchv1.CronJob, error)
 			return item, nil
 		}
 	}
-	return nil, fmt.Errorf("cronjob %q not found in any namespace lister", name)
+	return nil, apierrors.NewNotFound(schema.GroupResource{Group: "batch", Resource: "cronjobs"}, name)
 }
 
 type multiHorizontalPodAutoscalerLister struct {
@@ -576,5 +578,5 @@ func (m *multiHorizontalPodAutoscalerNamespaceLister) Get(name string) (*autosca
 			return item, nil
 		}
 	}
-	return nil, fmt.Errorf("hpa %q not found in any namespace lister", name)
+	return nil, apierrors.NewNotFound(schema.GroupResource{Group: "autoscaling", Resource: "horizontalpodautoscalers"}, name)
 }
