@@ -24,10 +24,15 @@ func GetPodEventsStr(events *[]v1.Event) string {
 	eventsString := ""
 
 	for _, ev := range *events {
+		ts := ev.LastTimestamp.Time
+		if ts.IsZero() {
+			ts = ev.EventTime.Time
+		}
+
 		eventsString +=
 			fmt.Sprintf(
 				"[%s] %s %s\n",
-				ev.LastTimestamp.String(),
+				ts.String(),
 				ev.Reason,
 				ev.Message)
 	}

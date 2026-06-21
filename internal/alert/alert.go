@@ -64,7 +64,7 @@ const (
 const localEndpoint = "http://localhost:11434"
 
 type breaker struct {
-	fails    int
+	fails     int
 	openUntil time.Time
 }
 
@@ -180,27 +180,27 @@ func extractRoutes(cfg map[string]interface{}) []config.AlertRoute {
 			for _, ri := range routes {
 				if rm, ok := ri.(map[string]interface{}); ok {
 					route := config.AlertRoute{}
-				if ns, ok := rm["namespaces"]; ok {
-					if arr, ok := ns.([]interface{}); ok {
-						for _, n := range arr {
-							route.Namespaces = append(route.Namespaces, fmt.Sprint(n))
+					if ns, ok := rm["namespaces"]; ok {
+						if arr, ok := ns.([]interface{}); ok {
+							for _, n := range arr {
+								route.Namespaces = append(route.Namespaces, fmt.Sprint(n))
+							}
 						}
 					}
-				}
-				if sev, ok := rm["severities"]; ok {
-					if arr, ok := sev.([]interface{}); ok {
-						for _, s := range arr {
-							route.Severities = append(route.Severities, fmt.Sprint(s))
+					if sev, ok := rm["severities"]; ok {
+						if arr, ok := sev.([]interface{}); ok {
+							for _, s := range arr {
+								route.Severities = append(route.Severities, fmt.Sprint(s))
+							}
 						}
 					}
-				}
-				if rea, ok := rm["reasons"]; ok {
-					if arr, ok := rea.([]interface{}); ok {
-						for _, r := range arr {
-							route.Reasons = append(route.Reasons, fmt.Sprint(r))
+					if rea, ok := rm["reasons"]; ok {
+						if arr, ok := rea.([]interface{}); ok {
+							for _, r := range arr {
+								route.Reasons = append(route.Reasons, fmt.Sprint(r))
+							}
 						}
 					}
-				}
 					if len(route.Namespaces) > 0 || len(route.Severities) > 0 || len(route.Reasons) > 0 {
 						out = append(out, route)
 					}

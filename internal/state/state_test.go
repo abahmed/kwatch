@@ -464,7 +464,7 @@ func TestSaveAndGetBaseline(t *testing.T) {
 
 	baseline := map[string]map[string]int64{
 		"default:deploy-1:CrashLoopBackOff:app": {"pod-1": 1718064000},
-		"default:sts-0:OOMKilled:web":          {"pod-2": 1718065000},
+		"default:sts-0:OOMKilled:web":           {"pod-2": 1718065000},
 	}
 	err = sm.SaveBaseline(context.Background(), baseline)
 	assert.Nil(err)
@@ -529,8 +529,8 @@ func TestEngineBackedBaselineRoundTrip(t *testing.T) {
 
 	// Feed loaded baseline into correlation engine (as main.go does)
 	e := correlation.NewEngine(correlation.Config{
-		Window:       10 * time.Minute,
-		Baseline:    loaded,
+		Window:   10 * time.Minute,
+		Baseline: loaded,
 	})
 
 	// Previously seen pod+container should be suppressed

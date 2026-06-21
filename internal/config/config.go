@@ -575,6 +575,10 @@ type Correlation struct {
 
 	// Renotify configures periodic re-notification via intervalBySeverity["default"].
 	Renotify RenotifyConfig `yaml:"renotify"`
+
+	// MaxBaseline is the maximum number of baseline entries to keep.
+	// Default 2000.
+	MaxBaseline int `yaml:"maxBaseline"`
 }
 
 // RenotifyConfig configures periodic re-notification for active incidents.

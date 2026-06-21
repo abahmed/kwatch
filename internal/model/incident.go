@@ -50,42 +50,42 @@ const (
 )
 
 type IncidentView struct {
-	Key       string         `json:"key"`
-	Reason    string         `json:"reason"`
-	Namespace string         `json:"namespace"`
-	Name      string         `json:"name"`
-	State     IncidentState  `json:"state"`
-	Severity  string         `json:"severity"`
-	Count     int            `json:"count"`
-	FirstSeen time.Time      `json:"firstSeen"`
-	LastSeen  time.Time      `json:"lastSeen"`
-	Hint      string         `json:"hint,omitempty"`
-	Analysis  string         `json:"analysis,omitempty"`
+	Key       string        `json:"key"`
+	Reason    string        `json:"reason"`
+	Namespace string        `json:"namespace"`
+	Name      string        `json:"name"`
+	State     IncidentState `json:"state"`
+	Severity  string        `json:"severity"`
+	Count     int           `json:"count"`
+	FirstSeen time.Time     `json:"firstSeen"`
+	LastSeen  time.Time     `json:"lastSeen"`
+	Hint      string        `json:"hint,omitempty"`
+	Analysis  string        `json:"analysis,omitempty"`
 }
 
 type Incident struct {
-	ID            string // stable short hash for log correlation
-	Key           string
-	Reason        string
-	Namespace     string
-	Resource      string
-	Name          string
-	Count         int
-	FirstSeen     time.Time
-	LastSeen      time.Time
-	Resources     map[string]bool
-	PeakResources int
-	Containers    map[string]bool
-	OwnerKind     string
-	ContainerName string
-	RestartCount  int
-	Hint          string
-	Analysis      string
-	Runbook       string
-	Logs          string
-	Events        string
-	State         IncidentState
-	LastUpdate    time.Time
+	ID                 string // stable short hash for log correlation
+	Key                string
+	Reason             string
+	Namespace          string
+	Resource           string
+	Name               string
+	Count              int
+	FirstSeen          time.Time
+	LastSeen           time.Time
+	Resources          map[string]bool
+	PeakResources      int
+	Containers         map[string]bool
+	OwnerKind          string
+	ContainerName      string
+	RestartCount       int
+	Hint               string
+	Analysis           string
+	Runbook            string
+	Logs               string
+	Events             string
+	State              IncidentState
+	LastUpdate         time.Time
 	LastContainerState *ContainerState
 	Severity           string
 	SuppressedPods     int

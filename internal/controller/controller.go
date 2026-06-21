@@ -65,6 +65,7 @@ type Controller struct {
 	hpaWatchEnabled        bool
 	secretLister           corev1lister.SecretLister
 	secretsSynced          []cache.InformerSynced
+	maxBaseline            int
 
 	readyFn func()
 }
@@ -328,37 +329,17 @@ func New(
 	}
 
 	c := &Controller{
-		handler: h,
-		podQueue: workqueue.NewTypedRateLimitingQueueWithConfig(
-			workqueue.DefaultTypedControllerRateLimiter[string](),
-			workqueue.TypedRateLimitingQueueConfig[string]{Name: "pods"},
-		),
-		nodeQueue: workqueue.NewTypedRateLimitingQueueWithConfig(
-			workqueue.DefaultTypedControllerRateLimiter[string](),
-			workqueue.TypedRateLimitingQueueConfig[string]{Name: "nodes"},
-		),
-		deploymentQueue: workqueue.NewTypedRateLimitingQueueWithConfig(
-			workqueue.DefaultTypedControllerRateLimiter[string](),
-			workqueue.TypedRateLimitingQueueConfig[string]{Name: "deployments"},
-		),
-		jobQueue: workqueue.NewTypedRateLimitingQueueWithConfig(
-			workqueue.DefaultTypedControllerRateLimiter[string](),
-			workqueue.TypedRateLimitingQueueConfig[string]{Name: "jobs"},
-		),
-		daemonSetQueue: workqueue.NewTypedRateLimitingQueueWithConfig(
-			workqueue.DefaultTypedControllerRateLimiter[string](),
-			workqueue.TypedRateLimitingQueueConfig[string]{Name: "daemonsets"},
-		),
-		cronJobQueue: workqueue.NewTypedRateLimitingQueueWithConfig(
-			workqueue.DefaultTypedControllerRateLimiter[string](),
-			workqueue.TypedRateLimitingQueueConfig[string]{Name: "cronjobs"},
-		),
-		hpaQueue: workqueue.NewTypedRateLimitingQueueWithConfig(
-			workqueue.DefaultTypedControllerRateLimiter[string](),
-			workqueue.TypedRateLimitingQueueConfig[string]{Name: "horizontalpodautoscalers"},
-		),
-		podLister:  podLister,
-		podsSynced: podsSynced,
+		handler:         h,
+		podQueue:        workqueue.NewTypedRateLimitingQueueWithConfig(workqueue.DefaultTypedControllerRateLimiter[string](), workqueue.TypedRateLimitingQueueConfig[string]{Name: "pods"}),
+		nodeQueue:       workqueue.NewTypedRateLimitingQueueWithConfig(workqueue.DefaultTypedControllerRateLimiter[string](), workqueue.TypedRateLimitingQueueConfig[string]{Name: "nodes"}),
+		deploymentQueue: workqueue.NewTypedRateLimitingQueueWithConfig(workqueue.DefaultTypedControllerRateLimiter[string](), workqueue.TypedRateLimitingQueueConfig[string]{Name: "deployments"}),
+		jobQueue:        workqueue.NewTypedRateLimitingQueueWithConfig(workqueue.DefaultTypedControllerRateLimiter[string](), workqueue.TypedRateLimitingQueueConfig[string]{Name: "jobs"}),
+		daemonSetQueue:  workqueue.NewTypedRateLimitingQueueWithConfig(workqueue.DefaultTypedControllerRateLimiter[string](), workqueue.TypedRateLimitingQueueConfig[string]{Name: "daemonsets"}),
+		cronJobQueue:    workqueue.NewTypedRateLimitingQueueWithConfig(workqueue.DefaultTypedControllerRateLimiter[string](), workqueue.TypedRateLimitingQueueConfig[string]{Name: "cronjobs"}),
+		hpaQueue:        workqueue.NewTypedRateLimitingQueueWithConfig(workqueue.DefaultTypedControllerRateLimiter[string](), workqueue.TypedRateLimitingQueueConfig[string]{Name: "horizontalpodautoscalers"}),
+		podLister:       podLister,
+		podsSynced:      podsSynced,
+		maxBaseline:     cfg.Correlation.MaxBaseline,
 	}
 
 	h.SetPodLister(podLister)
@@ -871,9 +852,8 @@ func (c *Controller) buildSeenSet() {
 
 	suppressed := map[string]int{}
 	total := 0
-	const maxBaseline = 2000
 	add := func(key, pod string) {
-		if total >= maxBaseline {
+		if total >= c.maxBaseline {
 			return
 		}
 		if baseline[key] == nil {

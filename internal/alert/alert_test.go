@@ -204,9 +204,9 @@ type fakeThreadProvider struct {
 	lastAct model.IncidentAction
 }
 
-func (p *fakeThreadProvider) SendMessage(msg string) error  { return nil }
+func (p *fakeThreadProvider) SendMessage(msg string) error     { return nil }
 func (p *fakeThreadProvider) SendEvent(evt *event.Event) error { return nil }
-func (p *fakeThreadProvider) Name() string                   { return "ThreadSlack" }
+func (p *fakeThreadProvider) Name() string                     { return "ThreadSlack" }
 func (p *fakeThreadProvider) SendIncident(inc *model.Incident, action model.IncidentAction) error {
 	p.lastInc = inc
 	p.lastAct = action
@@ -245,14 +245,14 @@ func TestNotifyIncidentThreadProviderWithSkip(t *testing.T) {
 func TestFormatIncidentMessage(t *testing.T) {
 	now := time.Now()
 	inc := &model.Incident{
-		Key:       "default:deploy:CrashLoopBackOff",
-		Name:      "deploy",
-		Namespace: "default",
-		Reason:    "CrashLoopBackOff",
-		Resource:  "pod",
-		Count:     2,
-		FirstSeen: now.Add(-10 * time.Minute),
-		LastSeen:  now,
+		Key:           "default:deploy:CrashLoopBackOff",
+		Name:          "deploy",
+		Namespace:     "default",
+		Reason:        "CrashLoopBackOff",
+		Resource:      "pod",
+		Count:         2,
+		FirstSeen:     now.Add(-10 * time.Minute),
+		LastSeen:      now,
 		Resources:     map[string]bool{"pod-1": true, "pod-2": true},
 		PeakResources: 2,
 	}
@@ -270,17 +270,17 @@ func TestFormatIncidentMessage(t *testing.T) {
 func TestFormatIncidentMessageWithLogsEvents(t *testing.T) {
 	now := time.Now()
 	inc := &model.Incident{
-		Key:       "default:deploy:CrashLoopBackOff",
-		Name:      "deploy",
-		Namespace: "default",
-		Reason:    "CrashLoopBackOff",
-		Resource:  "pod",
-		Count:     2,
-		FirstSeen: now.Add(-10 * time.Minute),
-		LastSeen:  now,
-		Resources: map[string]bool{"pod-1": true, "pod-2": true},
-		Logs:      "line1\nline2\nline3",
-		Events:    "[2024-01-01] Pulling image\n[2024-01-01] BackOff restart",
+		Key:           "default:deploy:CrashLoopBackOff",
+		Name:          "deploy",
+		Namespace:     "default",
+		Reason:        "CrashLoopBackOff",
+		Resource:      "pod",
+		Count:         2,
+		FirstSeen:     now.Add(-10 * time.Minute),
+		LastSeen:      now,
+		Resources:     map[string]bool{"pod-1": true, "pod-2": true},
+		Logs:          "line1\nline2\nline3",
+		Events:        "[2024-01-01] Pulling image\n[2024-01-01] BackOff restart",
 		IncludeEvents: true,
 		IncludeLogs:   true,
 	}
@@ -646,9 +646,9 @@ func TestNotifyIncidentDigestFlushDelivered(t *testing.T) {
 // poking shutdown internals.
 type countingProvider struct{ delivered chan struct{} }
 
-func (p *countingProvider) Name() string                  { return "Slack" }
-func (p *countingProvider) SendMessage(string) error      { p.delivered <- struct{}{}; return nil }
-func (p *countingProvider) SendEvent(*event.Event) error  { return nil }
+func (p *countingProvider) Name() string                 { return "Slack" }
+func (p *countingProvider) SendMessage(string) error     { p.delivered <- struct{}{}; return nil }
+func (p *countingProvider) SendEvent(*event.Event) error { return nil }
 
 // P2: in-flight enrichment must finish its fanOut on OPEN provider channels
 // during shutdown — no send-on-closed panic, and the alert is still delivered.

@@ -16,7 +16,7 @@ import (
 type Status int
 
 const (
-	StatusSkip  Status = iota
+	StatusSkip Status = iota
 	StatusAlert
 )
 
@@ -40,11 +40,11 @@ type Context struct {
 	Pod    *corev1.Pod
 	EvType string
 
-	Owner    *apiv1.OwnerReference
-	Events   *[]corev1.Event
-	RSLister appsv1lister.ReplicaSetLister
-	DSLister appsv1lister.DaemonSetLister
-	SSLister appsv1lister.StatefulSetLister
+	Owner       *apiv1.OwnerReference
+	Events      *[]corev1.Event
+	RSLister    appsv1lister.ReplicaSetLister
+	DSLister    appsv1lister.DaemonSetLister
+	SSLister    appsv1lister.StatefulSetLister
 	EventLister corev1lister.EventLister
 
 	PodHasIssues        bool

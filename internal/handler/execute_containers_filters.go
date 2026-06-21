@@ -62,18 +62,18 @@ func (h *handler) executeContainersFilters(ctx *filter.Context) {
 				all, err := ctx.EventLister.Events(ctx.Pod.Namespace).List(labels.Everything())
 				if err != nil {
 					klog.ErrorS(err, "event lister failed", "pod", ctx.Pod.Name)
-			} else {
-				items := make([]corev1.Event, 0, len(all))
-				for _, e := range all {
-					if e.InvolvedObject.Kind == "Pod" && e.InvolvedObject.Name == ctx.Pod.Name {
-						items = append(items, *e)
+				} else {
+					items := make([]corev1.Event, 0, len(all))
+					for _, e := range all {
+						if e.InvolvedObject.Kind == "Pod" && e.InvolvedObject.Name == ctx.Pod.Name {
+							items = append(items, *e)
+						}
 					}
+					sort.Slice(items, func(i, j int) bool {
+						return items[i].LastTimestamp.Before(&items[j].LastTimestamp)
+					})
+					ctx.Events = &items
 				}
-				sort.Slice(items, func(i, j int) bool {
-					return items[i].LastTimestamp.Before(&items[j].LastTimestamp)
-				})
-				ctx.Events = &items
-			}
 			} else {
 				podEvents, err := k8s.GetPodEvents(ctx.Ctx, ctx.Client, ctx.Pod.Name, ctx.Pod.Namespace)
 				if err != nil {
@@ -117,19 +117,19 @@ func (h *handler) executeContainersFilters(ctx *filter.Context) {
 
 		hint := buildContainerHint(ctx)
 		h.signalEvent(&event.Signal{
-			Resource:      "pod",
-			PodName:       ctx.Pod.Name,
-			Container:     ctx.Container.Container.Name,
-			Namespace:     ctx.Pod.Namespace,
-			NodeName:      ctx.Pod.Spec.NodeName,
-			Reason:        ctx.Container.Reason,
-			Events:        k8s.GetPodEventsStr(ctx.Events),
-			Logs:          ctx.Container.Logs,
-			Labels:        ctx.Pod.Labels,
-			OwnerKind:     ownerKind,
-			RestartCount:  ctx.Container.Container.RestartCount,
-			Hint:          hint,
-			Owner:         ownerName,
+			Resource:     "pod",
+			PodName:      ctx.Pod.Name,
+			Container:    ctx.Container.Container.Name,
+			Namespace:    ctx.Pod.Namespace,
+			NodeName:     ctx.Pod.Spec.NodeName,
+			Reason:       ctx.Container.Reason,
+			Events:       k8s.GetPodEventsStr(ctx.Events),
+			Logs:         ctx.Container.Logs,
+			Labels:       ctx.Pod.Labels,
+			OwnerKind:    ownerKind,
+			RestartCount: ctx.Container.Container.RestartCount,
+			Hint:         hint,
+			Owner:        ownerName,
 			ContainerState: &model.ContainerState{
 				RestartCount:     ctx.Container.Container.RestartCount,
 				LastTerminatedOn: ctx.Container.LastTerminatedOn,

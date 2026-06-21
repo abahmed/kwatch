@@ -41,13 +41,13 @@ type feiShuHeader struct {
 }
 
 type feiShuCard struct {
-	Config   feiShuCardConfig    `json:"config"`
-	Header   feiShuHeader        `json:"header"`
+	Config   feiShuCardConfig       `json:"config"`
+	Header   feiShuHeader           `json:"header"`
 	Elements []feiShuWebhookContent `json:"elements"`
 }
 
 type feiShuRequestBody struct {
-	MsgType string    `json:"msg_type"`
+	MsgType string     `json:"msg_type"`
 	Card    feiShuCard `json:"card"`
 }
 
@@ -104,7 +104,7 @@ func (r *FeiShu) sendByFeiShuApi(reqBody string) error {
 	if response.StatusCode != 200 {
 		body, _ := io.ReadAll(response.Body)
 		return fmt.Errorf(
-			"call to rocket chat alert returned status code %d: %s",
+			"call to feishu alert returned status code %d: %s",
 			response.StatusCode,
 			string(body))
 	}

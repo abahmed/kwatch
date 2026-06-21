@@ -184,49 +184,49 @@ func (t *Teams) buildRequestBodyTeams(e *event.Event) ([]byte, error) {
 				"$schema": "http://adaptivecards.io/schemas/adaptive-card.json",
 				"type":    "AdaptiveCard",
 				"version": "1.2",
-			"body": func() []map[string]interface{} {
-				body := []map[string]interface{}{
-					{
-						"type": "TextBlock",
-						"text": title,
-					},
-					{
-						"type": "TextBlock",
-						"text": fmt.Sprintf("Pod Name: %s", e.PodName),
-					},
-					{
-						"type": "TextBlock",
-						"text": fmt.Sprintf("Namespace: %s", e.Namespace),
-					},
-					{
-						"type": "TextBlock",
-						"text": fmt.Sprintf("Node: %s", e.NodeName),
-					},
-					{
-						"type": "TextBlock",
-						"text": fmt.Sprintf("Reason: %s", e.Reason),
-					},
-				}
-				if e.IncludeLogs {
+				"body": func() []map[string]interface{} {
+					body := []map[string]interface{}{
+						{
+							"type": "TextBlock",
+							"text": title,
+						},
+						{
+							"type": "TextBlock",
+							"text": fmt.Sprintf("Pod Name: %s", e.PodName),
+						},
+						{
+							"type": "TextBlock",
+							"text": fmt.Sprintf("Namespace: %s", e.Namespace),
+						},
+						{
+							"type": "TextBlock",
+							"text": fmt.Sprintf("Node: %s", e.NodeName),
+						},
+						{
+							"type": "TextBlock",
+							"text": fmt.Sprintf("Reason: %s", e.Reason),
+						},
+					}
+					if e.IncludeLogs {
+						body = append(body, map[string]interface{}{
+							"type": "TextBlock",
+							"text": fmt.Sprintf("Logs: %s", e.Logs),
+						})
+					}
+					if e.IncludeEvents {
+						body = append(body, map[string]interface{}{
+							"type": "TextBlock",
+							"text": fmt.Sprintf("Events: \n%s", e.Events),
+						})
+					}
 					body = append(body, map[string]interface{}{
 						"type": "TextBlock",
-						"text": fmt.Sprintf("Logs: %s", e.Logs),
+						"text": fmt.Sprintf(
+							"Time: %s",
+							time.Now().Format(time.RFC1123)),
 					})
-				}
-				if e.IncludeEvents {
-					body = append(body, map[string]interface{}{
-						"type": "TextBlock",
-						"text": fmt.Sprintf("Events: \n%s", e.Events),
-					})
-				}
-				body = append(body, map[string]interface{}{
-					"type": "TextBlock",
-					"text": fmt.Sprintf(
-						"Time: %s",
-						time.Now().Format(time.RFC1123)),
-				})
-				return body
-			}(),
+					return body
+				}(),
 			},
 		},
 	}

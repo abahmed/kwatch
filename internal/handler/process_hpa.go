@@ -86,12 +86,12 @@ func (h *handler) ProcessHorizontalPodAutoscalerObject(hpa *autoscalingv2.Horizo
 	}
 
 	h.signalEvent(&event.Signal{
-		Resource: "horizontalpodautoscaler",
-		PodName:  hpa.Name,
+		Resource:  "horizontalpodautoscaler",
+		PodName:   hpa.Name,
 		Namespace: hpa.Namespace,
-		Reason:   "HPAMaxedOut",
-		Owner:    key,
-		Labels:   hpa.Labels,
+		Reason:    "HPAMaxedOut",
+		Owner:     key,
+		Labels:    hpa.Labels,
 		Hint: fmt.Sprintf("pinned at max=%d (desired=%d current=%d) for %s — raise maxReplicas or investigate load",
 			hpa.Spec.MaxReplicas, hpa.Status.DesiredReplicas,
 			hpa.Status.CurrentReplicas, h.now().Sub(first).Round(time.Minute)),

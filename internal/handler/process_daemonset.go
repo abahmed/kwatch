@@ -52,13 +52,13 @@ func (h *handler) ProcessDaemonSetObject(ds *appsv1.DaemonSet, deleted bool) err
 
 	if ds.Status.DesiredNumberScheduled > 0 && ds.Status.NumberUnavailable > 0 {
 		h.signalEvent(&event.Signal{
-			Resource: "daemonset",
-			PodName:  ds.Name,
+			Resource:  "daemonset",
+			PodName:   ds.Name,
 			Namespace: ds.Namespace,
-			Reason:   "DaemonSetUnavailable",
-			Owner:    ds.Namespace + "/" + ds.Name,
-			Labels:   ds.Labels,
-			Hint:     availabilityHint(ds),
+			Reason:    "DaemonSetUnavailable",
+			Owner:     ds.Namespace + "/" + ds.Name,
+			Labels:    ds.Labels,
+			Hint:      availabilityHint(ds),
 		})
 		return nil
 	}

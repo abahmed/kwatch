@@ -147,6 +147,21 @@ func LoadConfig() (*Config, error) {
 		klog.Warning("ignoreNodeMessages is deprecated; use silences instead")
 	}
 
+	// Normalize SeverityByOwnerKind keys to PascalCase (expected by enricher)
+	normalizeSeverityMap := func(m map[string]string) map[string]string {
+		if m == nil {
+			return nil
+		}
+		result := make(map[string]string, len(m))
+		for k, v := range m {
+			normalized := strings.Title(strings.ToLower(k))
+			result[normalized] = v
+		}
+		return result
+	}
+	config.SeverityByOwnerKind = normalizeSeverityMap(config.SeverityByOwnerKind)
+	config.SeverityByReason = normalizeSeverityMap(config.SeverityByReason)
+
 	return config, nil
 }
 

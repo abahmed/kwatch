@@ -260,7 +260,9 @@ func (m *multiDaemonSetLister) DaemonSets(namespace string) appsv1lister.DaemonS
 
 func (m *multiDaemonSetLister) GetPodDaemonSets(pod *corev1.Pod) ([]*appsv1.DaemonSet, error) {
 	for _, l := range m.listers {
-		dl, ok := interface{}(l).(interface{ GetPodDaemonSets(*corev1.Pod) ([]*appsv1.DaemonSet, error) })
+		dl, ok := interface{}(l).(interface {
+			GetPodDaemonSets(*corev1.Pod) ([]*appsv1.DaemonSet, error)
+		})
 		if ok {
 			dss, err := dl.GetPodDaemonSets(pod)
 			if err == nil {
@@ -273,7 +275,9 @@ func (m *multiDaemonSetLister) GetPodDaemonSets(pod *corev1.Pod) ([]*appsv1.Daem
 
 func (m *multiDaemonSetLister) GetHistoryDaemonSets(history *appsv1.ControllerRevision) ([]*appsv1.DaemonSet, error) {
 	for _, l := range m.listers {
-		dl, ok := interface{}(l).(interface{ GetHistoryDaemonSets(*appsv1.ControllerRevision) ([]*appsv1.DaemonSet, error) })
+		dl, ok := interface{}(l).(interface {
+			GetHistoryDaemonSets(*appsv1.ControllerRevision) ([]*appsv1.DaemonSet, error)
+		})
 		if ok {
 			dss, err := dl.GetHistoryDaemonSets(history)
 			if err == nil {
@@ -336,7 +340,9 @@ func (m *multiStatefulSetLister) StatefulSets(namespace string) appsv1lister.Sta
 
 func (m *multiStatefulSetLister) GetPodStatefulSets(pod *corev1.Pod) ([]*appsv1.StatefulSet, error) {
 	for _, l := range m.listers {
-		sl, ok := interface{}(l).(interface{ GetPodStatefulSets(*corev1.Pod) ([]*appsv1.StatefulSet, error) })
+		sl, ok := interface{}(l).(interface {
+			GetPodStatefulSets(*corev1.Pod) ([]*appsv1.StatefulSet, error)
+		})
 		if ok {
 			ss, err := sl.GetPodStatefulSets(pod)
 			if err == nil {

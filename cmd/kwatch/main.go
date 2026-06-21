@@ -132,6 +132,7 @@ func main() {
 		RenotifyMaxPerIncident:     cfg.Correlation.Renotify.MaxPerIncident,
 		Runbooks:                   cfg.Runbooks,
 		ResolveHoldDown:            time.Duration(cfg.Correlation.ResolveHoldDown) * time.Second,
+		MaxBaseline:                cfg.Correlation.MaxBaseline,
 		LifecycleHook: func(inc *model.Incident, action model.IncidentAction) {
 			if action != model.ActionSkip {
 				alertManager.NotifyIncident(inc, action)

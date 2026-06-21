@@ -49,6 +49,9 @@ func ValidateConfig(cfg *Config) []string {
 	if cfg.Correlation.LifecycleInterval <= 0 {
 		errs = append(errs, "correlation.lifecycleInterval must be > 0")
 	}
+	if cfg.Correlation.MaxBaseline < 0 {
+		errs = append(errs, "correlation.maxBaseline must be >= 0")
+	}
 
 	if cfg.Correlation.Escalation.Enabled {
 		for i, t := range cfg.Correlation.Escalation.Tiers {
@@ -123,6 +126,9 @@ func Validate(cfg *Config) []error {
 	}
 	if cfg.Correlation.ResolveHoldDown < 0 {
 		errs = append(errs, errors.New("correlation.resolveHoldDown must be >= 0"))
+	}
+	if cfg.Correlation.MaxBaseline < 0 {
+		errs = append(errs, errors.New("correlation.maxBaseline must be >= 0"))
 	}
 	if cfg.PendingPodMonitor.Enabled && cfg.PendingPodMonitor.Threshold <= 0 {
 		errs = append(errs, errors.New("pendingPodMonitor.threshold must be > 0"))

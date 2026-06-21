@@ -70,12 +70,12 @@ func (p *PvcMonitor) Start(ctx context.Context) {
 
 func (p *PvcMonitor) reportSignal(s *event.Signal) {
 	ev := event.Event{
-		Resource:      s.Resource,
-		PodName:       s.PodName,
-		Namespace:     s.Namespace,
-		Reason:        s.Reason,
-		Hint:          s.Hint,
-		Severity:      s.Severity,
+		Resource:  s.Resource,
+		PodName:   s.PodName,
+		Namespace: s.Namespace,
+		Reason:    s.Reason,
+		Hint:      s.Hint,
+		Severity:  s.Severity,
 	}
 	inc, action := p.correlator.Process(ev, s.Owner, nil)
 	if action != model.ActionSkip {
