@@ -2,6 +2,8 @@ package config
 
 import (
 	"regexp"
+
+	"k8s.io/klog/v2"
 )
 
 type Config struct {
@@ -467,6 +469,8 @@ func (c *Config) BuildSuppressionIndex() SuppressionIndex {
 				if re, err := regexp.Compile(p); err == nil {
 					idx.PodNamePatterns = append(idx.PodNamePatterns, re)
 					seenPodPat[p] = true
+				} else {
+					klog.ErrorS(err, "invalid suppression pod name pattern", "pattern", p)
 				}
 			}
 		}
@@ -475,6 +479,8 @@ func (c *Config) BuildSuppressionIndex() SuppressionIndex {
 				if re, err := regexp.Compile(p); err == nil {
 					idx.LogPatterns = append(idx.LogPatterns, re)
 					seenLogPat[p] = true
+				} else {
+					klog.ErrorS(err, "invalid suppression log pattern", "pattern", p)
 				}
 			}
 		}
@@ -515,6 +521,8 @@ func (c *Config) BuildSuppressionIndex() SuppressionIndex {
 			if re, err := regexp.Compile(p); err == nil {
 				idx.PodNamePatterns = append(idx.PodNamePatterns, re)
 				seenPodPat[p] = true
+			} else {
+				klog.ErrorS(err, "invalid ignorePodName pattern", "pattern", p)
 			}
 		}
 	}
@@ -523,6 +531,8 @@ func (c *Config) BuildSuppressionIndex() SuppressionIndex {
 			if re, err := regexp.Compile(p); err == nil {
 				idx.LogPatterns = append(idx.LogPatterns, re)
 				seenLogPat[p] = true
+			} else {
+				klog.ErrorS(err, "invalid ignoreLogPattern", "pattern", p)
 			}
 		}
 	}

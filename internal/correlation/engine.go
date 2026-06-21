@@ -158,9 +158,11 @@ const DefaultMaxBaseline = 2000
 type Engine struct {
 	mu                  sync.Mutex
 	state               map[string]*model.Incident
+	namespaceIndex      map[string]map[string]*model.Incident // ns → key → inc
 	config              Config
 	seen                map[string]map[string]int64
 	activeNodeIncidents map[string]bool
+	lastContainerIndex  map[string]*model.ContainerState // key: namespace/podName
 	recentCreates       []time.Time
 	stormUntil          time.Time
 	digestBuf           []digestEntry
@@ -183,8 +185,10 @@ func NewEngine(cfg Config) *Engine {
 	}
 	e := &Engine{
 		state:               make(map[string]*model.Incident),
+		namespaceIndex:      make(map[string]map[string]*model.Incident),
 		config:              cfg,
 		activeNodeIncidents: make(map[string]bool),
+		lastContainerIndex:  make(map[string]*model.ContainerState),
 	}
 	if e.now == nil {
 		e.now = time.Now
@@ -397,18 +401,68 @@ func (e *Engine) refreshNodeInhibition(nodeName string) {
 	delete(e.activeNodeIncidents, nodeName)
 }
 
-func (e *Engine) GetLastContainerState(namespace, podName, containerName string) *model.ContainerState {
+func (e *Engine) GetLastContainerState(namespace, podName, _ string) *model.ContainerState {
 	e.mu.Lock()
 	defer e.mu.Unlock()
-	for _, inc := range e.state {
-		if inc.Namespace == namespace && inc.Resources[podName] {
-			if inc.LastContainerState != nil {
-				cs := *inc.LastContainerState
-				return &cs
-			}
-		}
+	cs, ok := e.lastContainerIndex[namespace+"/"+podName]
+	if !ok || cs == nil {
+		return nil
 	}
-	return nil
+	cp := *cs
+	return &cp
+}
+
+// GetIncidentsByNamespace returns incident views filtered to a single namespace.
+func (e *Engine) GetIncidentsByNamespace(ns string) []model.IncidentView {
+	e.mu.Lock()
+	defer e.mu.Unlock()
+	byNS := e.namespaceIndex[ns]
+	out := make([]model.IncidentView, 0, len(byNS))
+	for _, inc := range byNS {
+		out = append(out, model.IncidentView{
+			Key:       inc.Key,
+			Reason:    inc.Reason,
+			Namespace: inc.Namespace,
+			Name:      inc.Name,
+			State:     inc.State,
+			Severity:  inc.Severity,
+			Count:     inc.Count,
+			FirstSeen: inc.FirstSeen,
+			LastSeen:  inc.LastSeen,
+			Hint:      inc.Hint,
+		})
+	}
+	return out
+}
+
+func (e *Engine) indexLastContainerState(namespace, podName string, cs *model.ContainerState) {
+	if podName == "" || cs == nil {
+		return
+	}
+	cp := *cs
+	e.lastContainerIndex[namespace+"/"+podName] = &cp
+}
+
+func (e *Engine) indexIncidentByNamespace(inc *model.Incident) {
+	ns, key := inc.Namespace, inc.Key
+	if ns == "" {
+		return
+	}
+	if e.namespaceIndex[ns] == nil {
+		e.namespaceIndex[ns] = make(map[string]*model.Incident)
+	}
+	e.namespaceIndex[ns][key] = inc
+}
+
+func (e *Engine) removeIncidentFromNamespaceIndex(inc *model.Incident) {
+	ns, key := inc.Namespace, inc.Key
+	if ns == "" {
+		return
+	}
+	delete(e.namespaceIndex[ns], key)
+	if len(e.namespaceIndex[ns]) == 0 {
+		delete(e.namespaceIndex, ns)
+	}
 }
 
 func (e *Engine) Process(ev event.Event, owner string, cs *model.ContainerState) (incident *model.Incident, action model.IncidentAction) {
@@ -452,6 +506,7 @@ func (e *Engine) Process(ev event.Event, owner string, cs *model.ContainerState)
 		if inc.State == model.StateResolved {
 			newInc := e.newIncident(ev, owner, cs, key, res, now)
 			e.state[key] = newInc
+			e.indexIncidentByNamespace(newInc)
 			return newInc, e.edgeAction(newInc)
 		}
 
@@ -469,6 +524,7 @@ func (e *Engine) Process(ev event.Event, owner string, cs *model.ContainerState)
 				inc.Containers[ev.ContainerName] = true
 			}
 			inc.LastContainerState = cs
+			e.indexLastContainerState(ev.Namespace, ev.PodName, cs)
 			if cs != nil {
 				inc.RestartCount = int(cs.RestartCount)
 			}
@@ -501,6 +557,7 @@ func (e *Engine) Process(ev event.Event, owner string, cs *model.ContainerState)
 					inc.Containers[ev.ContainerName] = true
 				}
 				inc.LastContainerState = cs
+				e.indexLastContainerState(ev.Namespace, ev.PodName, cs)
 				return inc, e.edgeAction(inc)
 			}
 		}
@@ -518,6 +575,7 @@ func (e *Engine) Process(ev event.Event, owner string, cs *model.ContainerState)
 			inc.Containers[ev.ContainerName] = true
 		}
 		inc.LastContainerState = cs
+		e.indexLastContainerState(ev.Namespace, ev.PodName, cs)
 		if cs != nil {
 			inc.RestartCount = int(cs.RestartCount)
 		}
@@ -527,6 +585,7 @@ func (e *Engine) Process(ev event.Event, owner string, cs *model.ContainerState)
 
 	inc := e.newIncident(ev, owner, cs, key, res, now)
 	e.state[key] = inc
+	e.indexIncidentByNamespace(inc)
 
 	if e.config.StormEnabled {
 		e.recentCreates = append(e.recentCreates, now)
@@ -562,6 +621,7 @@ func (e *Engine) newIncident(ev event.Event, owner string, cs *model.ContainerSt
 		Namespace:  ev.Namespace,
 		Resource:   res,
 		Name:       owner,
+		NodeName:   ev.NodeName,
 		Count:      1,
 		FirstSeen:  now,
 		LastSeen:   now,
@@ -578,6 +638,7 @@ func (e *Engine) newIncident(ev event.Event, owner string, cs *model.ContainerSt
 		inc.Containers[ev.ContainerName] = true
 	}
 	inc.LastContainerState = cs
+	e.indexLastContainerState(ev.Namespace, ev.PodName, cs)
 	if cs != nil {
 		inc.RestartCount = int(cs.RestartCount)
 	}
@@ -795,6 +856,7 @@ func (e *Engine) cleanup() {
 			delete(e.activeNodeIncidents, inc.Name)
 		}
 		delete(e.seen, key)
+		e.removeIncidentFromNamespaceIndex(inc)
 		delete(e.state, key)
 	}
 	e.mu.Unlock()

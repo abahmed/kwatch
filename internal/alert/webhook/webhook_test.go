@@ -164,11 +164,11 @@ func TestInvaildHttpRequest(t *testing.T) {
 			"event3\nevent5\nevent6-event8-event11-event12",
 	}
 
-	assert.NotNil(assert.NotNil(c.SendEvent(&ev)))
+	assert.Error(c.SendEvent(&ev))
 
 	c = NewWebhook(configMap, &config.App{ClusterName: "dev"})
 	assert.NotNil(c)
 	c.webhook = "http://localhost:132323"
 
-	assert.NotNil(assert.NotNil(c.SendEvent(&ev)))
+	assert.Error(c.SendEvent(&ev))
 }

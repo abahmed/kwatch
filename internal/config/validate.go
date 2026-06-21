@@ -114,6 +114,24 @@ func Validate(cfg *Config) []error {
 			errs = append(errs, errors.New("storm.digestIntervalMinutes must be > 0"))
 		}
 	}
+	if cfg.Correlation.Window <= 0 {
+		errs = append(errs, errors.New("correlation.window must be > 0"))
+	}
+	if cfg.Correlation.LifecycleInterval <= 0 {
+		errs = append(errs, errors.New("correlation.lifecycleInterval must be > 0"))
+	}
+	if cfg.HeartbeatMonitor.Enabled && cfg.HeartbeatMonitor.Interval <= 0 {
+		errs = append(errs, errors.New("heartbeatMonitor.interval must be > 0"))
+	}
+	if cfg.TlsMonitor.Enabled && cfg.TlsMonitor.Threshold <= 0 {
+		errs = append(errs, errors.New("tlsMonitor.threshold must be > 0"))
+	}
+	if cfg.HpaMonitor.Enabled && cfg.HpaMonitor.SustainedMinutes <= 0 {
+		errs = append(errs, errors.New("hpaMonitor.sustainedMinutes must be > 0"))
+	}
+	if cfg.DaemonSetMonitor.Enabled && cfg.DaemonSetMonitor.SustainedMinutes <= 0 {
+		errs = append(errs, errors.New("daemonSetMonitor.sustainedMinutes must be > 0"))
+	}
 	if cfg.Correlation.Escalation.Enabled {
 		for i, t := range cfg.Correlation.Escalation.Tiers {
 			if t <= 0 {

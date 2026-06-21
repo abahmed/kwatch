@@ -18,13 +18,15 @@ const (
 	defaultOpsgenieTitle = "kwatch detected a crash in pod: %s"
 	defaultOpsgenieText  = "There is an issue with container (%s) in pod (%s)"
 	opsgenieAPIURL       = "https://api.opsgenie.com/v2/alerts"
+	opsgenieCloseURL     = "https://api.opsgenie.com/v2/alerts/%s/close?identifierType=alias"
 )
 
 type Opsgenie struct {
-	apikey string
-	url    string
-	title  string
-	text   string
+	apikey   string
+	url      string
+	closeURL string
+	title    string
+	text     string
 
 	// reference for general app configuration
 	appCfg *config.App
@@ -35,6 +37,7 @@ type ogPayload struct {
 	Description string      `json:"description"`
 	Details     interface{} `json:"details"`
 	Priority    string      `json:"priority"`
+	Alias       string      `json:"alias,omitempty"`
 }
 
 // NewOpsgenie returns new opsgenie instance
@@ -51,11 +54,12 @@ func NewOpsgenie(config map[string]interface{}, appCfg *config.App) *Opsgenie {
 	text, _ := config["text"].(string)
 
 	return &Opsgenie{
-		apikey: apiKey,
-		url:    opsgenieAPIURL,
-		title:  title,
-		text:   text,
-		appCfg: appCfg,
+		apikey:   apiKey,
+		url:      opsgenieAPIURL,
+		closeURL: opsgenieCloseURL,
+		title:    title,
+		text:     text,
+		appCfg:   appCfg,
 	}
 }
 
@@ -73,11 +77,45 @@ func (m *Opsgenie) SendMessage(msg string) error {
 
 // SendEvent sends event to the provider
 func (m *Opsgenie) SendEvent(e *event.Event) error {
+	if e.Action == "resolved" && e.DedupKey != "" {
+		return m.closeAlert(e.DedupKey)
+	}
 	b, err := m.buildMessage(e)
 	if err != nil {
 		return err
 	}
 	return m.sendAPI(b)
+}
+
+func (m *Opsgenie) closeAlert(alias string) error {
+	client := k8s.GetDefaultClient()
+	url := fmt.Sprintf(m.closeURL, alias)
+	body := []byte(`{}`)
+	buffer := bytes.NewBuffer(body)
+	request, err := http.NewRequest(http.MethodPost, url, buffer)
+	if err != nil {
+		return err
+	}
+	request.Header.Set("Content-Type", "application/json")
+	request.Header.Set("Authorization", "GenieKey "+m.apikey)
+
+	response, err := client.Do(request)
+	if err != nil {
+		return err
+	}
+	defer response.Body.Close()
+
+	if response.StatusCode != 202 {
+		if response.StatusCode == http.StatusTooManyRequests {
+			return event.CheckHTTPResponse(response, "opsgenie")
+		}
+		body, _ := io.ReadAll(response.Body)
+		return fmt.Errorf(
+			"call to opsgenie close alert returned status code %d: %s",
+			response.StatusCode,
+			string(body))
+	}
+	return nil
 }
 
 // sendAPI sends http request to Opsgenie API
@@ -100,6 +138,9 @@ func (m *Opsgenie) sendAPI(content []byte) error {
 	defer response.Body.Close()
 
 	if response.StatusCode != 202 {
+		if response.StatusCode == http.StatusTooManyRequests {
+			return event.CheckHTTPResponse(response, "opsgenie")
+		}
 		body, _ := io.ReadAll(response.Body)
 		return fmt.Errorf(
 			"call to opsgenie alert returned status code %d: %s",
@@ -139,6 +180,7 @@ func (m *Opsgenie) buildMessage(e *event.Event) ([]byte, error) {
 	}
 
 	payload.Description = text
+	payload.Alias = e.DedupKey
 	payload.Details = map[string]string{
 		"Cluster":   m.appCfg.ClusterName,
 		"Name":      e.PodName,

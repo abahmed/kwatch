@@ -1025,6 +1025,53 @@ func TestBuildSeenSetReportsStartupSummary(t *testing.T) {
 	a.True(found, "at least one suppressed entry should exist")
 }
 
+func TestBuildSeenSeedsDaemonSetBaselineWithEmptyKey(t *testing.T) {
+	a := assert.New(t)
+
+	ds := &appsv1.DaemonSet{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "test-ds",
+			Namespace: "default",
+		},
+		Spec: appsv1.DaemonSetSpec{
+			Template: corev1.PodTemplateSpec{
+				ObjectMeta: metav1.ObjectMeta{Labels: map[string]string{"app": "test"}},
+				Spec:       corev1.PodSpec{Containers: []corev1.Container{{Name: "app"}}},
+			},
+		},
+		Status: appsv1.DaemonSetStatus{
+			DesiredNumberScheduled: 3,
+			NumberUnavailable:      1,
+			NumberAvailable:        2,
+		},
+	}
+	client := fake.NewSimpleClientset(ds)
+	cfg := &config.Config{
+		DaemonSetMonitor: config.DaemonSetMonitor{Enabled: true},
+	}
+	h := &mockHandler{}
+
+	ctrl, cleanup := New(client, cfg, h)
+	defer cleanup()
+
+	a.Eventually(func() bool {
+		_, err := ctrl.dsLister.DaemonSets("default").Get("test-ds")
+		return err == nil
+	}, 5*time.Second, 50*time.Millisecond)
+
+	ctrl.buildSeenSet()
+
+	h.mu.Lock()
+	baseline := h.seenBaseline
+	h.mu.Unlock()
+
+	key := correlation.BuildKey("default", "default/test-ds", "DaemonSetUnavailable", "")
+	a.Contains(baseline, key, "buildSeenSet must seed DaemonSet issues into baseline")
+
+	_, hasEmpty := baseline[key][""]
+	a.True(hasEmpty, "controller resource baseline must map under empty pod key")
+}
+
 func TestBuildSeenSetReportsEmptySummaryOnNoBrokenPods(t *testing.T) {
 	a := assert.New(t)
 

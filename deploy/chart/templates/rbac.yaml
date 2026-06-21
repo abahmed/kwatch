@@ -5,7 +5,7 @@ metadata:
 rules:
 - apiGroups: [""]
   resources: ["events", "nodes", "nodes/proxy", "pods", "pods/log", "persistentvolumeclaims"]
-  verbs: ["get", "watch", "list", "create", "update"]
+  verbs: ["get", "watch", "list"]
 - apiGroups: [""]
   resources: ["namespaces"]
   verbs: ["get", "list", "watch"]

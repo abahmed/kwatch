@@ -128,8 +128,6 @@ Incident grouping and lifecycle management. Events from the same owner/reason/co
 | Parameter                          | Description                                                        |
 |:-----------------------------------|:------------------------------------------------------------------ |
 | `correlation.window`               | Time window (minutes) to keep incidents in memory (default: 10)    |
-| `correlation.cooldown`             | Minimum gap (minutes) between incident updates (default: 5)        |
-| `correlation.staleThreshold`       | Minutes of inactivity before an incident is marked stale (default: 15) |
 | `correlation.lifecycleInterval`    | Interval (minutes) for lifecycle checks (default: 1)               |
 
 When Slack is configured with a bot token, incidents are sent as threaded messages: a root message on creation, with updates, stale, and resolved notifications as thread replies.

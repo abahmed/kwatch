@@ -18,6 +18,11 @@ type PvcUsage struct {
 	UsagePercentage float64
 }
 
+// checkUsage iterates all nodes and queries the kubelet summary API for
+// volume usage. Only PVCs that are actively mounted by a pod on the node
+// appear in the summary. PVCs that are Bound but not yet mounted (e.g. a
+// newly created PVC whose consumer pod hasn't scheduled) are invisible to
+// this check and will not trigger alerts until a pod mounts them.
 func (p *PvcMonitor) checkUsage(ctx context.Context) {
 	nodes, err := k8s.GetNodes(ctx, p.client)
 	if err != nil {

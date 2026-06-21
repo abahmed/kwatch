@@ -92,6 +92,7 @@ type Incident struct {
 	ResolveAt          time.Time
 	IncludeEvents      bool
 	IncludeLogs        bool
+	NodeName           string
 	NotifiedSig        string
 	LastNotifiedAt     time.Time
 	RenotifyCount      int

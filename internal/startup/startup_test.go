@@ -113,7 +113,7 @@ func TestHandleStartupUpgrade(t *testing.T) {
 		context.Background(), "kwatch-state", metav1.GetOptions{})
 	assert.NotNil(updatedCM)
 	assert.Equal("existing-cluster-id", updatedCM.Data["cluster-id"])
-	assert.Equal("v0.11.0", updatedCM.Data["version"])
+	assert.Equal("dev", updatedCM.Data["version"])
 }
 
 func TestHandleStartupPreservesClusterID(t *testing.T) {
@@ -185,7 +185,7 @@ func TestHandleStartupSameVersion(t *testing.T) {
 
 	updatedCM, _ := client.CoreV1().ConfigMaps(namespace).Get(
 		context.Background(), "kwatch-state", metav1.GetOptions{})
-	assert.Equal("v0.11.0", updatedCM.Data["version"])
+	assert.Equal("dev", updatedCM.Data["version"])
 }
 
 func TestGetStateManager(t *testing.T) {

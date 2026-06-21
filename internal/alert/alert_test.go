@@ -602,6 +602,57 @@ func TestFallbackUsedOnExhaustion(t *testing.T) {
 	}
 }
 
+func TestExtractRetryYAMLInt(t *testing.T) {
+	// YAML v3 unmarshals integers as int, not float64.
+	cfg := map[string]interface{}{
+		"retry": map[string]interface{}{
+			"maxAttempts": 3,
+			"delay":       "2s",
+			"maxBackoff":  "10s",
+		},
+	}
+	attempts, delay, maxBackoff := extractRetry(cfg)
+	assert.Equal(t, 3, attempts)
+	assert.Equal(t, 2*time.Second, delay)
+	assert.Equal(t, 10*time.Second, maxBackoff)
+}
+
+func TestExtractRetryJSONFloat(t *testing.T) {
+	// JSON/CRD paths unmarshal numbers as float64.
+	cfg := map[string]interface{}{
+		"retry": map[string]interface{}{
+			"maxAttempts": float64(5),
+		},
+	}
+	attempts, _, _ := extractRetry(cfg)
+	assert.Equal(t, 5, attempts)
+}
+
+func TestExtractRetryClamps(t *testing.T) {
+	cfg := map[string]interface{}{
+		"retry": map[string]interface{}{
+			"maxAttempts": 0,
+		},
+	}
+	attempts, _, _ := extractRetry(cfg)
+	assert.Equal(t, 1, attempts)
+
+	cfg = map[string]interface{}{
+		"retry": map[string]interface{}{
+			"maxAttempts": 100,
+		},
+	}
+	attempts, _, _ = extractRetry(cfg)
+	assert.Equal(t, 20, attempts)
+}
+
+func TestExtractRetryDefaults(t *testing.T) {
+	attempts, delay, maxBackoff := extractRetry(map[string]interface{}{})
+	assert.Equal(t, 1, attempts)
+	assert.Equal(t, time.Second, delay)
+	assert.Equal(t, defaultMaxBackoff, maxBackoff)
+}
+
 func TestSendWithRetryReturnsError(t *testing.T) {
 	err := sendWithRetry(context.Background(), func() error {
 		return errors.New("fail")
@@ -618,6 +669,33 @@ func TestSendWithRetrySuccess(t *testing.T) {
 	if err != nil {
 		t.Fatalf("expected nil, got %v", err)
 	}
+}
+
+func TestNotifyIncidentEventDeliveryProviderPropagatesActionAndDedup(t *testing.T) {
+	fp := &fakeRecordingEventProvider{}
+	am := AlertManager{}
+	am.entries = append(am.entries, providerEntry{provider: fp, maxAttempts: 1})
+
+	inc := &model.Incident{
+		Key:       "default:deploy:CrashLoopBackOff",
+		Name:      "deploy",
+		Namespace: "default",
+		Reason:    "CrashLoopBackOff",
+		Resource:  "pod",
+		ID:        "abc123",
+		Count:     1,
+		FirstSeen: time.Now().Add(-5 * time.Minute),
+		LastSeen:  time.Now(),
+		Resources: map[string]bool{"pod-1": true},
+	}
+
+	am.NotifyIncident(inc, model.ActionResolved)
+
+	if fp.lastEvent == nil {
+		t.Fatal("expected SendEvent to be called")
+	}
+	assert.Equal(t, "resolved", fp.lastEvent.Action)
+	assert.Equal(t, "abc123", fp.lastEvent.DedupKey)
 }
 
 func TestNotifyIncidentDigestFlushDelivered(t *testing.T) {
@@ -641,6 +719,18 @@ func TestNotifyIncidentDigestFlushDelivered(t *testing.T) {
 	// ThreadProvider must NOT receive via SendIncident for digests
 	assert.Nil(t, tp.lastInc, "ThreadProvider should not receive digest via SendIncident")
 }
+
+type fakeRecordingEventProvider struct {
+	lastEvent *event.Event
+}
+
+func (p *fakeRecordingEventProvider) SendMessage(msg string) error { return nil }
+func (p *fakeRecordingEventProvider) SendEvent(evt *event.Event) error {
+	p.lastEvent = evt
+	return nil
+}
+func (p *fakeRecordingEventProvider) Name() string             { return "Recording" }
+func (p *fakeRecordingEventProvider) UsesEventDelivery()       {}
 
 // countingProvider signals each delivery so tests can synchronize without
 // poking shutdown internals.

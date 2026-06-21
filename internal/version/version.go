@@ -4,14 +4,15 @@ import (
 	"encoding/json"
 )
 
-// Version is the current versions of kwatch
-const version = "v0.11.0"
+// Version is the current versions of kwatch.
+// Overridden at build time with -ldflags -X for releases.
+var version = "dev"
 
 // GitCommitID git commit id of the release
-const gitCommitID = "none"
+var gitCommitID = "none"
 
 // BuildDate date for the release
-const buildDate = "unknown"
+var buildDate = "unknown"
 
 type Info struct {
 	Version   string

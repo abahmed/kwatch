@@ -3,6 +3,7 @@ package alert
 import (
 	"bytes"
 	"context"
+	"errors"
 	"fmt"
 	"reflect"
 	"regexp"
@@ -239,13 +240,22 @@ func extractRetry(cfg map[string]interface{}) (maxAttempts int, delay, maxBackof
 	if r, ok := cfg["retry"]; ok {
 		if rm, ok := r.(map[string]interface{}); ok {
 			if a, ok := rm["maxAttempts"]; ok {
-				if f, ok := a.(float64); ok {
-					if n := int(f); n > 20 {
-						maxAttempts = 20
-					} else {
-						maxAttempts = n
-					}
+				n := 0
+				switch v := a.(type) {
+				case int:
+					n = v
+				case int64:
+					n = int(v)
+				case float64:
+					n = int(v) // tolerate JSON/CRD paths
 				}
+				if n > 20 {
+					n = 20
+				}
+				if n < 1 {
+					n = 1
+				}
+				maxAttempts = n
 			}
 			if d, ok := rm["delay"]; ok {
 				if s, ok := d.(string); ok {
@@ -604,6 +614,10 @@ func sendWithRetry(ctx context.Context, sendFn func() error, maxAttempts int, de
 				if maxBackoff > 0 {
 					sleepDur = backoffFor(attempt, delay, maxBackoff)
 				}
+				var rae *event.RetryAfterError
+				if errors.As(err, &rae) && rae.RetryAfter > 0 {
+					sleepDur = rae.RetryAfter
+				}
 				klog.V(4).InfoS("retrying provider delivery",
 					"provider", providerName,
 					"attempt", attempt,
@@ -706,12 +720,13 @@ type EventDeliveryProvider interface {
 
 // incidentToEvent maps a delivered incident to the legacy event.Event shape
 // these EventDeliveryProvider providers' SendEvent expects.
-func incidentToEvent(inc *model.Incident) *event.Event {
+func incidentToEvent(inc *model.Incident, action model.IncidentAction) *event.Event {
 	return &event.Event{
 		Resource:      inc.Resource,
 		PodName:       inc.Name,
 		ContainerName: inc.ContainerName,
 		Namespace:     inc.Namespace,
+		NodeName:      inc.NodeName,
 		Reason:        inc.Reason,
 		Events:        inc.Events,
 		Logs:          inc.Logs,
@@ -721,6 +736,8 @@ func incidentToEvent(inc *model.Incident) *event.Event {
 		Severity:      inc.Severity,
 		IncludeEvents: inc.IncludeEvents,
 		IncludeLogs:   inc.IncludeLogs,
+		Action:        action.String(),
+		DedupKey:      inc.ID,
 	}
 }
 
@@ -780,6 +797,20 @@ func (a *AlertManager) NotifyIncident(inc *model.Incident, action model.Incident
 		a.fanOut(job)
 	}
 	a.mu.Unlock()
+}
+
+// AddProvider appends a provider entry for testing or late registration.
+func (a *AlertManager) AddProvider(p Provider) {
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	entry := providerEntry{
+		provider:    p,
+		maxAttempts: 1,
+	}
+	if a.started {
+		entry.ch = make(chan deliverJob, channelCap)
+	}
+	a.entries = append(a.entries, entry)
 }
 
 // Start launches a worker goroutine for each provider that processes
@@ -949,7 +980,7 @@ func (a *AlertManager) deliverOne(entry *providerEntry, inc *model.Incident, act
 	var err error
 	if action == model.ActionDigestFlush {
 		if _, ok := p.(EventDeliveryProvider); ok {
-			ev := incidentToEvent(inc)
+			ev := incidentToEvent(inc, action)
 			err = sendWithRetry(context.Background(), func() error {
 				return p.SendEvent(ev)
 			}, entry.maxAttempts, entry.retryDelay, entry.maxBackoff, p.Name())
@@ -970,7 +1001,7 @@ func (a *AlertManager) deliverOne(entry *providerEntry, inc *model.Incident, act
 				return tp.SendIncident(inc, action)
 			}, entry.maxAttempts, entry.retryDelay, entry.maxBackoff, p.Name())
 		} else if _, ok := p.(EventDeliveryProvider); ok {
-			ev := incidentToEvent(inc)
+			ev := incidentToEvent(inc, action)
 			err = sendWithRetry(context.Background(), func() error {
 				return p.SendEvent(ev)
 			}, entry.maxAttempts, entry.retryDelay, entry.maxBackoff, p.Name())
@@ -1033,7 +1064,7 @@ func (a *AlertManager) deliverAllSync(inc *model.Incident, action model.Incident
 		if action == model.ActionDigestFlush {
 			var err error
 			if _, ok := p.(EventDeliveryProvider); ok {
-				ev := incidentToEvent(inc)
+				ev := incidentToEvent(inc, action)
 				err = sendWithRetry(context.Background(), func() error {
 					return p.SendEvent(ev)
 				}, entry.maxAttempts, entry.retryDelay, entry.maxBackoff, p.Name())
@@ -1056,7 +1087,7 @@ func (a *AlertManager) deliverAllSync(inc *model.Incident, action model.Incident
 				return tp.SendIncident(inc, action)
 			}, entry.maxAttempts, entry.retryDelay, entry.maxBackoff, p.Name())
 		} else if _, ok := p.(EventDeliveryProvider); ok {
-			ev := incidentToEvent(inc)
+			ev := incidentToEvent(inc, action)
 			err = sendWithRetry(context.Background(), func() error {
 				return p.SendEvent(ev)
 			}, entry.maxAttempts, entry.retryDelay, entry.maxBackoff, p.Name())

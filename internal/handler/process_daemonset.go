@@ -14,6 +14,16 @@ import (
 // pods that would trigger an alert. Used for baseline seeding at startup.
 func DetectDaemonSetIssue(ds *appsv1.DaemonSet) *event.Signal {
 	if ds.Status.DesiredNumberScheduled > 0 && ds.Status.NumberUnavailable > 0 {
+		settled := ds.Status.ObservedGeneration >= ds.Generation &&
+			ds.Status.UpdatedNumberScheduled == ds.Status.DesiredNumberScheduled
+		// For baseline, only seed settled-unavailable or stuck-past-grace.
+		// (startup baseline doesn't have timing info, so we seed unsettled
+		// too — the engine's BaselineTTL will age them out before the grace
+		// window matters.)
+		if !settled {
+			// Still seed it — the baseline TTL will handle expiry before
+			// the grace window matters for a genuinely new rollout.
+		}
 		return &event.Signal{
 			Resource:  "daemonset",
 			Reason:    "DaemonSetUnavailable",
@@ -80,15 +90,22 @@ func (h *handler) ProcessDaemonSetObject(ds *appsv1.DaemonSet, deleted bool) err
 			return nil
 		}
 
+		first := h.markFirstUnavailableDS(key)
+
 		// Only alert on sustained unavailability — rolling updates and brief
 		// node blips have transient unavailability that should not page.
+		// A DaemonSet stuck mid-rollout (unsettled) is given a grace window
+		// before alerting; after the grace expires we assume it's stuck.
 		settled := ds.Status.ObservedGeneration >= ds.Generation &&
 			ds.Status.UpdatedNumberScheduled == ds.Status.DesiredNumberScheduled
 		if !settled {
-			return nil
+			rolloutGrace := 15 * time.Minute
+			if h.now().Sub(first) < rolloutGrace {
+				return nil // genuinely mid-rollout — give it time
+			}
+			// still unsettled past the grace → stuck rollout; fall through
 		}
 
-		first := h.markFirstUnavailableDS(key)
 		sustained := time.Duration(h.config.DaemonSetMonitor.SustainedMinutes) * time.Minute
 		if sustained > 0 && h.now().Sub(first) < sustained {
 			return nil

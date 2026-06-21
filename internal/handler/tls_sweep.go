@@ -60,7 +60,7 @@ func (h *handler) checkTLSSecret(secret *corev1.Secret, now time.Time, warnWindo
 			Resource:  "secret",
 			PodName:   secret.Name,
 			Namespace: secret.Namespace,
-			Reason:    "TLSCertExpiringSoon",
+			Reason:    "TLSCertExpired",
 			Owner:     key,
 			Labels:    secret.Labels,
 			Severity:  "high",

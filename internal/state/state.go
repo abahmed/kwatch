@@ -128,11 +128,18 @@ func (s *StateManager) GetBaseline(ctx context.Context) map[string]map[string]in
 	return result
 }
 
+const baselineMaxBytes = 1_000_000
+
 func (s *StateManager) SaveBaseline(ctx context.Context, baseline map[string]map[string]int64) error {
 	return s.retryMgr.UpdateWithRetry(ctx, func(cm *corev1.ConfigMap) error {
 		data, err := json.Marshal(baseline)
 		if err != nil {
 			return err
+		}
+		if len(data) > baselineMaxBytes {
+			klog.ErrorS(nil, "baseline too large for ConfigMap, truncating",
+				"size", len(data), "max", baselineMaxBytes)
+			return nil
 		}
 		cm.Data[baselineKey] = string(data)
 		return nil

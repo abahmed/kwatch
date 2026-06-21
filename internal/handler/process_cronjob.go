@@ -52,7 +52,7 @@ func DetectCronJobIssue(cj *batchv1.CronJob) *event.Signal {
 		}
 	}
 
-	nextExpected := NextFireAfter(cj.Spec.Schedule, cj.Status.LastScheduleTime, cj.CreationTimestamp.Time)
+	nextExpected := NextFireAfter(cj.Spec.Schedule, cj.Status.LastScheduleTime, cj.CreationTimestamp.Time, cj.Spec.TimeZone)
 	if nextExpected.IsZero() {
 		nextExpected = DefaultNextFire(cj.Status.LastScheduleTime, cj.CreationTimestamp.Time)
 	}
@@ -94,7 +94,8 @@ func (h *handler) ProcessCronJobObject(cj *batchv1.CronJob, deleted bool) error 
 // NextFireAfter returns the time the CronJob should have next fired, based on
 // its schedule. If LastScheduleTime is nil, it uses CreationTimestamp as the
 // reference point. Returns zero time if the schedule cannot be parsed.
-func NextFireAfter(schedule string, lastSchedule *metav1.Time, creation time.Time) time.Time {
+// timeZone is the optional IANA timezone from cj.Spec.TimeZone (k8s >=1.27).
+func NextFireAfter(schedule string, lastSchedule *metav1.Time, creation time.Time, timeZone *string) time.Time {
 	sched, err := cron.ParseStandard(schedule)
 	if err != nil {
 		return time.Time{}
@@ -102,6 +103,12 @@ func NextFireAfter(schedule string, lastSchedule *metav1.Time, creation time.Tim
 	ref := creation
 	if lastSchedule != nil {
 		ref = lastSchedule.Time
+	}
+	if timeZone != nil && *timeZone != "" {
+		loc, err := time.LoadLocation(*timeZone)
+		if err == nil {
+			ref = ref.In(loc)
+		}
 	}
 	return sched.Next(ref)
 }

@@ -947,13 +947,15 @@ func (c *Controller) buildSeenSet() {
 	}
 
 	// Seed controller resource issues into the baseline.
+	// Live owner-level signals set PodName="" (no PodName in process_*.go signals),
+	// so we seed under the empty pod key for the baseline match.
 	seedSignal := func(sig *event.Signal, name string) {
 		ev := event.Event{
 			Namespace: sig.Namespace,
 			Reason:    sig.Reason,
 		}
 		key := correlation.IncidentKey(ev, sig.Owner, nil)
-		add(key, name)
+		add(key, "") // match the live isBaselined(key, "") lookup
 	}
 
 	// DaemonSets
@@ -1000,11 +1002,22 @@ func (c *Controller) buildSeenSet() {
 		}
 	}
 
-	// HPAs
+	// StatefulSets
+	if c.ssLister != nil {
+		if sss, err := c.ssLister.List(labels.Everything()); err == nil {
+			for _, ss := range sss {
+				if sig := handler.DetectStatefulSetIssue(ss); sig != nil {
+					seedSignal(sig, ss.Name)
+				}
+			}
+		}
+	}
+
+	// HPAs — seed both scaling errors and maxed-out conditions
 	if c.hpaLister != nil {
 		if hpas, err := c.hpaLister.List(labels.Everything()); err == nil {
 			for _, hpa := range hpas {
-				if sig := handler.DetectHPAIssue(hpa); sig != nil {
+				for _, sig := range handler.DetectHPAIssues(hpa) {
 					seedSignal(sig, hpa.Name)
 				}
 			}

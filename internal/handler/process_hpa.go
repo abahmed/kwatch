@@ -34,42 +34,72 @@ func (h *handler) ProcessHorizontalPodAutoscaler(key string, deleted bool) error
 	return h.ProcessHorizontalPodAutoscalerObject(hpa, false)
 }
 
-// DetectHPAIssue returns a Signal if the HPA has a scaling error or is
-// maxed out. Used for baseline seeding at startup.
-func DetectHPAIssue(hpa *autoscalingv2.HorizontalPodAutoscaler) *event.Signal {
+// hpaAtMax returns true when the HPA is genuinely maxed out (at the upper
+// replica bound). k8s sets ScalingLimited=True with reason=TooManyReplicas
+// (at max — a real capacity problem) or reason=TooFewReplicas (at min —
+// idle/under-utilized, the opposite of "maxed"). Only the upper bound counts.
+func hpaAtMax(hpa *autoscalingv2.HorizontalPodAutoscaler) bool {
+	if hpa.Spec.MaxReplicas <= 1 {
+		return false // min==max==1 etc. — can't scale, not actionable
+	}
+	hasScalingLimited := false
+	for i := range hpa.Status.Conditions {
+		c := &hpa.Status.Conditions[i]
+		if c.Type == autoscalingv2.ScalingLimited && c.Status == corev1.ConditionTrue {
+			hasScalingLimited = true
+			if c.Reason == "TooManyReplicas" {
+				return true
+			}
+		}
+	}
+	// If ScalingLimited is not set, fall through to the desired/replicas
+	// check (the HPA wants to scale but hasn't set the condition yet).
+	if !hasScalingLimited {
+		return hpa.Spec.MaxReplicas > 0 &&
+			hpa.Status.DesiredReplicas >= hpa.Spec.MaxReplicas &&
+			hpa.Status.CurrentReplicas < hpa.Status.DesiredReplicas
+	}
+	return false
+}
+
+// DetectHPAIssues returns signals for both scaling errors and maxed-out
+// conditions. Used for baseline seeding at startup. Returns multiple signals
+// so that both conditions are seeded independently.
+func DetectHPAIssues(hpa *autoscalingv2.HorizontalPodAutoscaler) []*event.Signal {
 	key := hpa.Namespace + "/" + hpa.Name
+	var out []*event.Signal
 
 	for i := range hpa.Status.Conditions {
 		c := &hpa.Status.Conditions[i]
 		if (c.Type == autoscalingv2.AbleToScale || c.Type == autoscalingv2.ScalingActive) &&
 			c.Status == corev1.ConditionFalse {
-			return &event.Signal{
+			if c.Reason == "ScalingDisabled" {
+				continue // target intentionally at 0 replicas — not an error
+			}
+			out = append(out, &event.Signal{
 				Resource:  "horizontalpodautoscaler",
 				Reason:    "HPAScalingError",
 				Namespace: hpa.Namespace,
 				Owner:     key,
 				Labels:    hpa.Labels,
 				Hint:      fmt.Sprintf("%s: %s — %s", c.Type, c.Reason, c.Message),
-			}
+			})
+			break
 		}
 	}
 
-	maxed := hpaHasCondition(hpa, autoscalingv2.ScalingLimited, corev1.ConditionTrue) ||
-		(hpa.Spec.MaxReplicas > 0 &&
-			hpa.Status.DesiredReplicas >= hpa.Spec.MaxReplicas &&
-			hpa.Status.CurrentReplicas < hpa.Status.DesiredReplicas)
-	if maxed {
-		return &event.Signal{
+	if hpaAtMax(hpa) {
+		out = append(out, &event.Signal{
 			Resource:  "horizontalpodautoscaler",
 			Reason:    "HPAMaxedOut",
 			Namespace: hpa.Namespace,
 			Owner:     key,
 			Labels:    hpa.Labels,
 			Hint:      fmt.Sprintf("pinned at max=%d (current=%d)", hpa.Spec.MaxReplicas, hpa.Status.CurrentReplicas),
-		}
+		})
 	}
 
-	return nil
+	return out
 }
 
 func (h *handler) ProcessHorizontalPodAutoscalerObject(hpa *autoscalingv2.HorizontalPodAutoscaler, deleted bool) error {
@@ -85,18 +115,20 @@ func (h *handler) ProcessHorizontalPodAutoscalerObject(hpa *autoscalingv2.Horizo
 	key := hpa.Namespace + "/" + hpa.Name
 
 	// (1) scaling-error detection — independent of maxed
-	if sig := DetectHPAIssue(hpa); sig != nil && sig.Reason == "HPAScalingError" {
-		h.signalEvent(sig)
-	} else {
+	sigs := DetectHPAIssues(hpa)
+	hadError := false
+	for _, sig := range sigs {
+		if sig.Reason == "HPAScalingError" {
+			h.signalEvent(sig)
+			hadError = true
+		}
+	}
+	if !hadError {
 		h.correlator.MarkResolved(correlation.BuildKey(hpa.Namespace, key, "HPAScalingError", ""))
 	}
 
-	// (2) existing maxed logic — but reason-specific resolve
-	maxed := hpaHasCondition(hpa, autoscalingv2.ScalingLimited, corev1.ConditionTrue) ||
-		(hpa.Spec.MaxReplicas > 0 &&
-			hpa.Status.DesiredReplicas >= hpa.Spec.MaxReplicas &&
-			hpa.Status.CurrentReplicas < hpa.Status.DesiredReplicas)
-	if !maxed {
+	// (2) maxed detection
+	if !hpaAtMax(hpa) {
 		h.clearFirstMaxed(key)
 		h.correlator.MarkResolved(correlation.BuildKey(hpa.Namespace, key, "HPAMaxedOut", ""))
 		return nil

@@ -11,20 +11,22 @@ jobs:
     runs-on: ubuntu-latest
     steps:
     - name: Checkout code
-      uses: actions/checkout@v4
+      uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
       with:
           ref: ${{ github.ref }}
     - name: Install Go
-      uses: actions/setup-go@v5
+      uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5
       with:
         go-version: '1.26'
     - name: Build
       run: go build -o kwatch ./cmd/kwatch
     - name: Test
       run: go test -race --coverprofile=coverage.txt --covermode=atomic ./...
+    - name: Integration tests
+      run: go test -race -tags integration ./internal/integration/...
     - name: Upload coverage to Codecov
       if: success() && github.ref == 'refs/heads/main'
-      uses: codecov/codecov-action@v5
+      uses: codecov/codecov-action@04b047e8bb82a0c002c8312c1c880fbc6a999d45 # v5
       with:
         token: ${{ secrets.CODECOV_TOKEN }}
         fail_ci_if_error: false

@@ -48,10 +48,7 @@ data:
     # ── Correlation (incident dedup & lifecycle) ──────────
     correlation:
       window: 10
-      cooldown: 5
-      staleThreshold: 15
       lifecycleInterval: 1
-      startupQuiet: 30
       # resolveHoldDown: 30    # Seconds to wait before resolving (flap dampening)
 
     # ── Monitors ──────────────────────────────────────────
@@ -63,6 +60,7 @@ data:
 
     daemonSetMonitor:
       enabled: false
+      # sustainedMinutes: 5    # Debounce before alerting (default 5)
 
     jobMonitor:
       enabled: true

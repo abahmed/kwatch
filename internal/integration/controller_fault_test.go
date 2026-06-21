@@ -13,16 +13,29 @@ import (
 	"github.com/abahmed/kwatch/internal/controller"
 	"github.com/abahmed/kwatch/internal/correlation"
 	"github.com/abahmed/kwatch/internal/enricher"
+	"github.com/abahmed/kwatch/internal/event"
 	"github.com/abahmed/kwatch/internal/handler"
+	"github.com/abahmed/kwatch/internal/model"
+	"github.com/stretchr/testify/assert"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes/fake"
 )
 
+type recordingProvider struct {
+	lastInc *model.Incident
+	lastAct model.IncidentAction
+	lastEv  *event.Event
+}
+
+func (p *recordingProvider) SendMessage(msg string) error    { return nil }
+func (p *recordingProvider) SendEvent(evt *event.Event) error { p.lastEv = evt; return nil }
+func (p *recordingProvider) Name() string                     { return "Recorder" }
+func (p *recordingProvider) UsesEventDelivery()               {}
+
 // TestControllerPodEvent verifies the end-to-end controller + handler pipeline
-// for a pod with container issues. The alert manager has no providers, which
-// tests fault tolerance at the delivery boundary. Asserts the controller does
-// not panic and shuts down cleanly.
+// for a pod with container issues. Asserts the incident is delivered with the
+// correct action and dedup key.
 func TestControllerPodEvent(t *testing.T) {
 	cfg := &config.Config{
 		App: config.App{DisableStartupMessage: true},
@@ -67,10 +80,12 @@ func TestControllerPodEvent(t *testing.T) {
 		Enricher:          &enricher.DefaultEnricher{},
 	})
 
+	rec := &recordingProvider{}
 	alertMgr := &alert.AlertManager{}
 	alertMgr.Init(map[string]map[string]interface{}{}, &config.App{
 		DisableStartupMessage: true,
 	})
+	alertMgr.AddProvider(rec)
 
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
@@ -106,4 +121,12 @@ func TestControllerPodEvent(t *testing.T) {
 	if runErr != nil {
 		t.Errorf("controller.Run returned error: %v", runErr)
 	}
+
+	// Assert incident was delivered via EventDeliveryProvider
+	if rec.lastEv == nil {
+		t.Fatal("expected incident to be delivered to recording provider")
+	}
+	assert.Equal(t, "create", rec.lastEv.Action, "first incident should be create action")
+	assert.NotEmpty(t, rec.lastEv.DedupKey, "incident must have dedup key")
+	assert.Equal(t, "CrashLoopBackOff", rec.lastEv.Reason)
 }

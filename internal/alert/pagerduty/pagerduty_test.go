@@ -1,6 +1,7 @@
 package pagerduty
 
 import (
+	"encoding/json"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -39,6 +40,38 @@ func TestSendMessage(t *testing.T) {
 	assert.NotNil(c)
 
 	assert.Nil(c.SendMessage("test"))
+}
+
+func TestSendEventResolveActionAndDedupKey(t *testing.T) {
+	a := assert.New(t)
+
+	var captured pagerdutyPayload
+	s := httptest.NewServer(http.HandlerFunc(
+		func(w http.ResponseWriter, r *http.Request) {
+			json.NewDecoder(r.Body).Decode(&captured)
+			w.Write([]byte(`{"isOk": true}`))
+		}))
+	defer s.Close()
+
+	configMap := map[string]interface{}{
+		"integrationKey": "test",
+	}
+	c := NewPagerDuty(configMap, &config.App{ClusterName: "dev"})
+	c.url = s.URL
+	a.NotNil(c)
+
+	ev := event.Event{
+		PodName:       "test-pod",
+		ContainerName: "test-container",
+		Namespace:     "default",
+		Reason:        "OOMKILLED",
+		Action:        "resolved",
+		DedupKey:      "incident-hash-12345",
+	}
+	a.Nil(c.SendEvent(&ev))
+
+	a.Equal("resolve", captured.EventAction, "resolved action must map to 'resolve'")
+	a.Equal("incident-hash-12345", captured.DedupKey, "DedupKey must be passed through")
 }
 
 func TestSendEvent(t *testing.T) {
@@ -119,11 +152,11 @@ func TestInvaildHttpRequest(t *testing.T) {
 			"event3\nevent5\nevent6-event8-event11-event12",
 	}
 
-	assert.NotNil(assert.NotNil(c.SendEvent(&ev)))
+	assert.Error(c.SendEvent(&ev))
 
 	c = NewPagerDuty(configMap, &config.App{ClusterName: "dev"})
 	assert.NotNil(c)
 	c.url = "http://localhost:132323"
 
-	assert.NotNil(assert.NotNil(c.SendEvent(&ev)))
+	assert.Error(c.SendEvent(&ev))
 }

@@ -169,13 +169,15 @@
               "enabled": { "type": "boolean" },
               "interval": { "type": "integer" },
               "threshold": { "type": "number" },
-              "criticalThreshold": { "type": "number" }
+              "criticalThreshold": { "type": "number" },
+              "clearThreshold": { "type": "number" }
             }
           },
           "daemonSetMonitor": {
             "type": "object",
             "properties": {
-              "enabled": { "type": "boolean" }
+              "enabled": { "type": "boolean" },
+              "sustainedMinutes": { "type": "integer" }
             }
           },
           "cronJobMonitor": {
@@ -195,7 +197,8 @@
             "type": "object",
             "properties": {
               "enabled": { "type": "boolean" },
-              "threshold": { "type": "integer" }
+              "threshold": { "type": "integer" },
+              "criticalThreshold": { "type": "integer" }
             }
           },
           "jobMonitor": {
@@ -230,17 +233,17 @@
             "properties": {
               "enabled": { "type": "boolean" },
               "port": { "type": "integer" },
-              "pprof": { "type": "boolean" }
+              "pprof": { "type": "boolean" },
+              "diagnostics": { "type": "boolean" },
+              "diagnosticsToken": { "type": "string" }
             }
           },
           "correlation": {
             "type": "object",
             "properties": {
               "window": { "type": "integer" },
-              "cooldown": { "type": "integer" },
-              "staleThreshold": { "type": "integer" },
               "lifecycleInterval": { "type": "integer" },
-              "startupQuiet": { "type": "integer" },
+              "maxBaseline": { "type": "integer" },
               "resolveHoldDown": { "type": "integer" },
               "escalation": {
                 "type": "object",
@@ -291,7 +294,12 @@
               "properties": {
                 "namespaces": { "type": "array", "items": { "type": "string" } },
                 "reasons": { "type": "array", "items": { "type": "string" } },
-                "podNamePatterns": { "type": "array", "items": { "type": "string" } }
+                "podNamePatterns": { "type": "array", "items": { "type": "string" } },
+                "containerNames": { "type": "array", "items": { "type": "string" } },
+                "logPatterns": { "type": "array", "items": { "type": "string" } },
+                "containerMessages": { "type": "array", "items": { "type": "string" } },
+                "nodeReasons": { "type": "array", "items": { "type": "string" } },
+                "nodeMessages": { "type": "array", "items": { "type": "string" } }
               }
             }
           },

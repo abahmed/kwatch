@@ -79,13 +79,7 @@ spec:
                   properties:
                     window:
                       type: integer
-                    cooldown:
-                      type: integer
-                    staleThreshold:
-                      type: integer
                     lifecycleInterval:
-                      type: integer
-                    startupQuiet:
                       type: integer
                 pvcMonitor:
                   type: object
