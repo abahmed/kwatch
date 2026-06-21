@@ -10,6 +10,15 @@ import (
 	"k8s.io/client-go/tools/cache"
 )
 
+func podMountsPVC(pod *corev1.Pod) bool {
+	for _, v := range pod.Spec.Volumes {
+		if v.PersistentVolumeClaim != nil {
+			return true
+		}
+	}
+	return false
+}
+
 func isPodHealthy(pod *corev1.Pod) bool {
 	if pod.Status.Phase == corev1.PodRunning || pod.Status.Phase == corev1.PodSucceeded {
 		for _, cs := range pod.Status.ContainerStatuses {
@@ -72,6 +81,11 @@ func (h *handler) ProcessPodObject(parent context.Context, pod *corev1.Pod, dele
 
 	h.executePodFilters(&ctxF)
 	h.executeContainersFilters(&ctxF)
+
+	if h.pvcSampler != nil && pod.Status.Phase == corev1.PodRunning &&
+		pod.Spec.NodeName != "" && podMountsPVC(pod) {
+		h.pvcSampler(pod.Spec.NodeName)
+	}
 
 	if isPodHealthy(pod) {
 		h.ClearSeenForPod(pod.Namespace, pod.Name)

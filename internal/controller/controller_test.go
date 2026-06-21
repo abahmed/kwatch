@@ -115,6 +115,7 @@ func (m *mockHandler) ReportStartupSummary(suppressed map[string]int) {
 	defer m.mu.Unlock()
 	m.startupSummary = suppressed
 }
+func (m *mockHandler) SetPvcSampler(func(nodeName string)) {}
 
 func TestNewCreatesController(t *testing.T) {
 	assert := assert.New(t)

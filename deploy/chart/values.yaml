@@ -36,6 +36,8 @@ podLabels: {}
 
 # kwatch configuration
 # All detection monitors are ON by default; see docs.
+# resyncSeconds defaults to 0 (event-driven). workers defaults to 1 — raise on large
+# clusters (≈1 per few-thousand pods); each worker fans out to ≤7 goroutines.
 # To enable TLS monitoring (reads Secrets):
 # tlsMonitor:
 #   enabled: true

@@ -147,9 +147,9 @@ func Validate(cfg *Config) []error {
 	if cfg.Correlation.MaxBaseline < 0 {
 		errs = append(errs, errors.New("correlation.maxBaseline must be >= 0"))
 	}
-	const maxBaselineEntries = 3600
+	const maxBaselineEntries = 20000
 	if cfg.Correlation.MaxBaseline > maxBaselineEntries {
-		errs = append(errs, fmt.Errorf("correlation.maxBaseline=%d risks exceeding the ~1MB ConfigMap limit (max ~%d, or gzip)", cfg.Correlation.MaxBaseline, maxBaselineEntries))
+		errs = append(errs, fmt.Errorf("correlation.maxBaseline=%d may exceed the ~1MB ConfigMap limit (max ~%d)", cfg.Correlation.MaxBaseline, maxBaselineEntries))
 	}
 	if cfg.PendingPodMonitor.Enabled && cfg.PendingPodMonitor.Threshold <= 0 {
 		errs = append(errs, errors.New("pendingPodMonitor.threshold must be > 0"))

@@ -55,6 +55,7 @@ type Handler interface {
 	SetSeen(baseline map[string]map[string]int64)
 	ClearSeenForPod(namespace, podName string)
 	ReportStartupSummary(suppressed map[string]int)
+	SetPvcSampler(f func(nodeName string))
 }
 
 type handler struct {
@@ -81,6 +82,7 @@ type handler struct {
 	firstUnavailableDS map[string]time.Time
 	dsMu               sync.Mutex
 	secretLister       corev1lister.SecretLister
+	pvcSampler         func(nodeName string) // optional; set when pvcMonitor is enabled
 	now                func() time.Time
 }
 
@@ -185,6 +187,10 @@ func (h *handler) SetHorizontalPodAutoscalerLister(lister autoscalingv2lister.Ho
 
 func (h *handler) SetSecretLister(lister corev1lister.SecretLister) {
 	h.secretLister = lister
+}
+
+func (h *handler) SetPvcSampler(f func(nodeName string)) {
+	h.pvcSampler = f
 }
 
 func (h *handler) SetCronJobLister(lister batchv1lister.CronJobLister) {

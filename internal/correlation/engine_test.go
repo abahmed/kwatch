@@ -1034,3 +1034,27 @@ func TestPendingReviveSkips(t *testing.T) {
 	}
 	assert.Equal(t, 0, resolved, "no ActionResolved should be emitted")
 }
+
+func TestRemovePodEvictsLastContainerIndex(t *testing.T) {
+	e := newTestEngine()
+
+	cs := &model.ContainerState{RestartCount: 3, Reason: "CrashLoopBackOff", Status: "waiting"}
+	ev := event.Event{
+		PodName:   "pod-1",
+		Namespace: "default",
+		Reason:    "CrashLoopBackOff",
+	}
+	e.Process(ev, "deploy-1", cs)
+
+	key := "default/pod-1"
+	assert.Contains(t, e.lastContainerIndex, key)
+	assert.NotNil(t, e.lastContainerIndex[key])
+	assert.Equal(t, int32(3), e.lastContainerIndex[key].RestartCount)
+
+	before := len(e.lastContainerIndex)
+	e.RemovePod("default", "pod-1")
+
+	assert.NotContains(t, e.lastContainerIndex, key)
+	assert.Equal(t, before-1, len(e.lastContainerIndex))
+	assert.Nil(t, e.GetLastContainerState("default", "pod-1", "."))
+}

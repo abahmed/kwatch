@@ -52,7 +52,7 @@ func TestEmptyConfig(t *testing.T) {
 	cfg, _ := LoadConfig()
 	assert.NotNil(cfg)
 	assert.Equal(int64(50), cfg.MaxRecentLogLines)
-	assert.Equal(600, cfg.ResyncSeconds)
+	assert.Equal(0, cfg.ResyncSeconds)
 	assert.Equal(true, cfg.PendingPodMonitor.Enabled)
 	assert.Equal(true, cfg.RolloutMonitor.Enabled)
 	assert.Equal(true, cfg.JobMonitor.Enabled)

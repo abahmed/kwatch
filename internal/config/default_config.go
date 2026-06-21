@@ -6,7 +6,7 @@ func DefaultConfig() *Config {
 		IgnoreFailedGracefulShutdown: true,
 		ReportStartupBaseline:        true,
 		MaxRecentLogLines:            50,
-		ResyncSeconds:                600,
+		ResyncSeconds:                0,
 		Workers:                      1,
 		PvcMonitor:                   PvcMonitor{Enabled: true, Interval: 5, Threshold: 80, CriticalThreshold: 90, ClearThreshold: 75},
 		NodeMonitor:                  NodeMonitor{Enabled: true},

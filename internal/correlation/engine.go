@@ -742,6 +742,7 @@ func (e *Engine) RemovePod(namespace, podName string) {
 			}
 		}
 	}
+	delete(e.lastContainerIndex, namespace+"/"+podName)
 	e.mu.Unlock()
 
 	for _, t := range pending {

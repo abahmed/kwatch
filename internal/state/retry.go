@@ -6,28 +6,30 @@ import (
 	"time"
 
 	corev1 "k8s.io/api/core/v1"
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/klog/v2"
 )
 
 const (
-	maxRetries    = 3
-	retryDelay    = 100 * time.Millisecond
-	configMapName = "kwatch-state"
+	maxRetries = 3
+	retryDelay = 100 * time.Millisecond
 )
 
 type ConfigMapUpdater func(cm *corev1.ConfigMap) error
 
 type RetryConfigMapManager struct {
-	client    kubernetes.Interface
-	namespace string
+	client     kubernetes.Interface
+	namespace  string
+	configName string
 }
 
-func NewRetryConfigMapManager(client kubernetes.Interface, namespace string) *RetryConfigMapManager {
+func NewRetryConfigMapManager(client kubernetes.Interface, namespace, configName string) *RetryConfigMapManager {
 	return &RetryConfigMapManager{
-		client:    client,
-		namespace: namespace,
+		client:     client,
+		namespace:  namespace,
+		configName: configName,
 	}
 }
 
@@ -38,7 +40,26 @@ func (r *RetryConfigMapManager) UpdateWithRetry(
 	for i := 0; i < maxRetries; i++ {
 		cm, err := r.client.CoreV1().
 			ConfigMaps(r.namespace).
-			Get(ctx, configMapName, metav1.GetOptions{})
+			Get(ctx, r.configName, metav1.GetOptions{})
+		if apierrors.IsNotFound(err) {
+			cm = &corev1.ConfigMap{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      r.configName,
+					Namespace: r.namespace,
+				},
+				Data: map[string]string{},
+			}
+			if updErr := updater(cm); updErr != nil {
+				return updErr
+			}
+			if _, cErr := r.client.CoreV1().ConfigMaps(r.namespace).Create(ctx, cm, metav1.CreateOptions{}); cErr != nil {
+				if apierrors.IsAlreadyExists(cErr) {
+					continue
+				}
+				return cErr
+			}
+			return nil
+		}
 		if err != nil {
 			return err
 		}

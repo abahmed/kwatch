@@ -30,6 +30,10 @@ type Ref struct {
 
 // getNodeUsage gets list of pvc usage for specific node
 func (p *PvcMonitor) getNodeUsage(ctx context.Context, nodeName string, pvByPVC map[string]string) ([]*PvcUsage, error) {
+	if p.getNodeUsageFn != nil {
+		return p.getNodeUsageFn(ctx, nodeName, pvByPVC)
+	}
+
 	result := make([]*PvcUsage, 0)
 
 	summaryResponse, err := k8s.GetNodeSummary(ctx, p.client, nodeName)

@@ -162,7 +162,7 @@ func main() {
 	healthServer.SetDeadLetterLister(alertManager)
 	healthServer.Start(ctx)
 
-	pvcMonitor := pvc.NewPvcMonitor(k8sClient, &cfg.PvcMonitor, alertManager, correlator)
+	pvcMonitor := pvc.NewPvcMonitor(k8sClient, &cfg.PvcMonitor, alertManager, correlator, stateMgr)
 	hbMonitor := heartbeat.NewHeartbeatMonitor(&cfg.HeartbeatMonitor)
 
 	h := handler.NewHandler(
@@ -171,6 +171,9 @@ func main() {
 		correlator,
 		alertManager,
 	)
+	if cfg.PvcMonitor.Enabled {
+		h.SetPvcSampler(func(nodeName string) { go pvcMonitor.SampleNode(ctx, nodeName) })
+	}
 
 	ctrl, cleanup := controller.New(k8sClient, cfg, h)
 	ctrl.SetReadyFunc(func() { healthServer.SetReady(true) })

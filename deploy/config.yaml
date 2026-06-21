@@ -17,7 +17,8 @@ data:
     # Pods stuck in Pending beyond this threshold (seconds) trigger an alert
     pendingPodThreshold: 300
 
-    # Optional periodic resync (0 = event-driven only)
+    # Optional periodic resync (0 = event-driven only); raise to e.g. 600 only if a
+    # periodic full-reconcile safety net is wanted
     resyncSeconds: 0
 
     # ── Namespace / Reason / Container filtering ──────────
@@ -69,6 +70,11 @@ data:
       enabled: false
 
     pvcMonitor:
+      # NOTE: usage is read from each node's kubelet stats/summary, which only reports
+      # volumes that are currently MOUNTED by a running pod. A Bound-but-unmounted PVC
+      # (e.g. before its consumer pod schedules) has no usage data and is not checked
+      # until a pod mounts it. Volumes mounted only during CronJob/Job runs are handled
+      # by the last-known-usage cache (retained across unmounts).
       enabled: true
       interval: 5
       threshold: 80
