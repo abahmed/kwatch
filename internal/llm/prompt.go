@@ -20,10 +20,11 @@ func (c *Client) userPrompt(inc *model.Incident) string {
 	logs := c.redactor.scrub(selectRelevant(inc.Logs, maxLogChars))
 	events := c.redactor.scrub(tailChars(inc.Events, maxEventChars))
 	var b strings.Builder
-	fmt.Fprintf(&b, "Reason: %s\n", inc.Reason)
-	fmt.Fprintf(&b, "Workload: %s\nOwnerKind: %s\nNamespace: %s\n", inc.Name, inc.OwnerKind, inc.Namespace)
+	fmt.Fprintf(&b, "Reason: %s\n", c.redactor.scrub(inc.Reason))
+	fmt.Fprintf(&b, "Workload: %s\nOwnerKind: %s\nNamespace: %s\n",
+		c.redactor.scrub(inc.Name), c.redactor.scrub(inc.OwnerKind), inc.Namespace)
 	if inc.ContainerName != "" {
-		fmt.Fprintf(&b, "Container: %s\n", inc.ContainerName)
+		fmt.Fprintf(&b, "Container: %s\n", c.redactor.scrub(inc.ContainerName))
 	}
 	fmt.Fprintf(&b, "RestartCount: %d\n", inc.RestartCount)
 	// CD-1: ground with facts kwatch already has
@@ -41,10 +42,10 @@ func (c *Client) userPrompt(inc *model.Incident) string {
 	}
 	// Runbook link (CD-4)
 	if inc.Runbook != "" {
-		fmt.Fprintf(&b, "Runbook: %s\n", inc.Runbook)
+		fmt.Fprintf(&b, "Runbook: %s\n", c.redactor.scrub(inc.Runbook))
 	}
 	if inc.Hint != "" {
-		fmt.Fprintf(&b, "Rule-based hint: %s\n", inc.Hint)
+		fmt.Fprintf(&b, "Rule-based hint: %s\n", c.redactor.scrub(inc.Hint))
 	}
 	if events != "" {
 		fmt.Fprintf(&b, "\nEvents:\n%s\n", events)

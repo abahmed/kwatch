@@ -157,9 +157,6 @@ type Config struct {
 	// fields for efficient detect-time lookup. Populated by LoadConfig.
 	Suppression SuppressionIndex
 
-	// LeaderElection config for high-availability deployments.
-	LeaderElection LeaderElection `yaml:"leaderElection"`
-
 	// Workers is the number of concurrent reconcile workers per queue.
 	// Default 1. Raising it increases throughput on large clusters; alert
 	// ordering across pods becomes non-deterministic (engine dedup unaffected).
@@ -364,18 +361,6 @@ type CronJobMonitor struct {
 type CrdConfig struct {
 	// Enabled if set to true, watches KwatchConfig CRs for live config changes.
 	Enabled bool `yaml:"enabled"`
-}
-
-// LeaderElection config for high-availability deployments
-type LeaderElection struct {
-	// Enabled if set to true, leader election between replicas is enabled.
-	Enabled bool `yaml:"enabled"`
-
-	// LeaseName is the name of the Lease object used for leader election.
-	LeaseName string `yaml:"leaseName"`
-
-	// Namespace where the Lease object is created.
-	Namespace string `yaml:"namespace"`
 }
 
 // PendingPodMonitor config struct

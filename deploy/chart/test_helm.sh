@@ -12,11 +12,13 @@ OUT1=$(helm template test1 . 2>&1)
 echo "$OUT1" | grep -q "livenessProbe" || { echo "FAIL: probes missing"; exit 1; }
 echo "$OUT1" | grep -q "readinessProbe" || { echo "FAIL: readinessProbe missing"; exit 1; }
 echo "$OUT1" | grep -q "replicas: 1" || { echo "FAIL: replicas not 1"; exit 1; }
-if echo "$OUT1" | grep -q "leaderElection"; then
-  echo "FAIL: leaderElection present at replicaCount=1"; exit 1
-fi
+echo "$OUT1" | grep -q "strategy:" || { echo "FAIL: strategy missing"; exit 1; }
+echo "$OUT1" | grep -q "type: Recreate" || { echo "FAIL: strategy not Recreate"; exit 1; }
 if echo "$OUT1" | grep -q "coordination.k8s.io"; then
   echo "FAIL: leases RBAC present at replicaCount=1"; exit 1
+fi
+if echo "$OUT1" | grep -q "leaderElection"; then
+  echo "FAIL: leaderElection present"; exit 1
 fi
 # LLM must be absent by default
 if echo "$OUT1" | grep -q "kwatch-llm"; then
@@ -24,13 +26,12 @@ if echo "$OUT1" | grep -q "kwatch-llm"; then
 fi
 echo "PASS: replicaCount=1"
 
-echo "=== replicaCount=2 ==="
-OUT2=$(helm template test2 . --set replicaCount=2 2>&1)
-
-echo "$OUT2" | grep -q "leaderElection" || { echo "FAIL: leaderElection missing at replicaCount=2"; exit 1; }
-echo "$OUT2" | grep -q "coordination.k8s.io" || { echo "FAIL: leases RBAC missing at replicaCount=2"; exit 1; }
-echo "$OUT2" | grep -q "replicas: 2" || { echo "FAIL: replicas not 2"; exit 1; }
-echo "PASS: replicaCount=2"
+echo "=== replicaCount=2 (must fail) ==="
+OUT2=$(helm template test2 . --set replicaCount=2 2>&1) && {
+  echo "FAIL: expected error but template succeeded"; exit 1
+} || true
+echo "$OUT2" | grep -q "must run a single replica" || { echo "FAIL: expected replica guard message"; exit 1; }
+echo "PASS: replicaCount=2 rejected"
 
 echo "=== memory limit ==="
 echo "$OUT1" | grep -q "memory: 256Mi" || { echo "FAIL: memory limit not 256Mi"; exit 1; }
@@ -67,13 +68,10 @@ OUT5=$(helm template test5 . --set config.llm.enabled=true --set replicaCount=2 
 } || true
 echo "PASS: replica guard rejected replicaCount>1"
 
-echo "=== LLM disabled + replicaCount > 1 (must succeed) ==="
-OUT6=$(helm template test6 . --set replicaCount=2 2>&1)
-echo "$OUT6" | grep -q "replicas: 2" || { echo "FAIL: replicas not 2"; exit 1; }
-echo "$OUT6" | grep -q "leaderElection" || { echo "FAIL: leaderElection missing"; exit 1; }
-if echo "$OUT6" | grep -q "kwatch-llm"; then
-  echo "FAIL: LLM sidecar present when disabled at replicaCount=2"; exit 1
-fi
-echo "PASS: LLM disabled + replicaCount>1"
+echo "=== LLM disabled + replicaCount > 1 (must fail due to replica guard) ==="
+OUT6=$(helm template test6 . --set replicaCount=2 2>&1) && {
+  echo "FAIL: expected error but template succeeded"; exit 1
+} || true
+echo "PASS: replica guard rejected replicaCount>1 (LLM disabled)"
 
 echo "All helm template tests passed."

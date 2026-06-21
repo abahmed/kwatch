@@ -28,6 +28,8 @@ const (
 	notifiedVersionKey    = "notified-version"
 	baselineKey           = "baseline"
 	pvcUsageKey           = "pvc-usage"
+	pvcNotifiedKey        = "pvc-notified"
+	pvcNodeSamplesKey     = "pvc-node-samples"
 )
 
 // PvcSample is the persisted representation of a single PVC usage observation.
@@ -35,6 +37,7 @@ type PvcSample struct {
 	Pct       float64   `json:"pct"`
 	Namespace string    `json:"ns"`
 	Name      string    `json:"name"`
+	PodName   string    `json:"pod"`    // last mounting pod (for incident parity with the live path)
 	Seen      time.Time `json:"seen"`
 }
 
@@ -270,6 +273,132 @@ func (s *StateManager) SavePvcUsage(ctx context.Context, usage map[string]PvcSam
 		delete(cm.Data, pvcUsageKey)
 		return nil
 	})
+}
+
+// ── PVC notified set persistence ──────────────────────────────
+
+func (s *StateManager) GetPvcNotified(ctx context.Context) map[string]bool {
+	cm, err := s.client.CoreV1().ConfigMaps(s.namespace).Get(ctx, pvcConfigMapName, metav1.GetOptions{})
+	if err != nil {
+		return nil
+	}
+	if gz, ok := cm.BinaryData[pvcNotifiedKey]; ok && len(gz) > 0 {
+		var result map[string]bool
+		if err := gunzipJSON(gz, &result); err != nil {
+			klog.ErrorS(err, "failed to gunzip pvc notified")
+			return nil
+		}
+		return result
+	}
+	raw, ok := cm.Data[pvcNotifiedKey]
+	if !ok || raw == "" {
+		return nil
+	}
+	var result map[string]bool
+	if err := json.Unmarshal([]byte(raw), &result); err != nil {
+		klog.ErrorS(err, "failed to unmarshal pvc notified")
+		return nil
+	}
+	return result
+}
+
+func (s *StateManager) SavePvcNotified(ctx context.Context, notified map[string]bool) error {
+	return s.pvcMgr.UpdateWithRetry(ctx, func(cm *corev1.ConfigMap) error {
+		data, err := gzJSON(notified)
+		if err != nil {
+			return err
+		}
+		if cm.BinaryData == nil {
+			cm.BinaryData = map[string][]byte{}
+		}
+		cm.BinaryData[pvcNotifiedKey] = data
+		delete(cm.Data, pvcNotifiedKey)
+		return nil
+	})
+}
+
+// ── PVC node sample timestamps persistence ─────────────────────
+
+func (s *StateManager) GetPvcNodeSamples(ctx context.Context) map[string]time.Time {
+	cm, err := s.client.CoreV1().ConfigMaps(s.namespace).Get(ctx, pvcConfigMapName, metav1.GetOptions{})
+	if err != nil {
+		return nil
+	}
+	if gz, ok := cm.BinaryData[pvcNodeSamplesKey]; ok && len(gz) > 0 {
+		var result map[string]time.Time
+		if err := gunzipJSON(gz, &result); err != nil {
+			klog.ErrorS(err, "failed to gunzip pvc node samples")
+			return nil
+		}
+		return result
+	}
+	raw, ok := cm.Data[pvcNodeSamplesKey]
+	if !ok || raw == "" {
+		return nil
+	}
+	var result map[string]time.Time
+	if err := json.Unmarshal([]byte(raw), &result); err != nil {
+		klog.ErrorS(err, "failed to unmarshal pvc node samples")
+		return nil
+	}
+	return result
+}
+
+func (s *StateManager) SavePvcNodeSamples(ctx context.Context, samples map[string]time.Time) error {
+	return s.pvcMgr.UpdateWithRetry(ctx, func(cm *corev1.ConfigMap) error {
+		data, err := gzJSON(samples)
+		if err != nil {
+			return err
+		}
+		if cm.BinaryData == nil {
+			cm.BinaryData = map[string][]byte{}
+		}
+		cm.BinaryData[pvcNodeSamplesKey] = data
+		delete(cm.Data, pvcNodeSamplesKey)
+		return nil
+	})
+}
+
+// ── Legacy baseline migration ─────────────────────────────────
+
+// MigrateLegacyBaseline moves baseline data from kwatch-state.data[baseline]
+// to the dedicated kwatch-baseline ConfigMap, then clears the legacy key.
+// Idempotent — safe to call every startup.
+func (s *StateManager) MigrateLegacyBaseline(ctx context.Context) {
+	// Already in the dedicated CM? nothing to migrate.
+	if cm, err := s.client.CoreV1().ConfigMaps(s.namespace).Get(ctx, baselineConfigMapName, metav1.GetOptions{}); err == nil {
+		if len(cm.BinaryData[baselineKey]) > 0 || cm.Data[baselineKey] != "" {
+			s.clearLegacyBaseline(ctx)
+			return
+		}
+	}
+	old, err := s.client.CoreV1().ConfigMaps(s.namespace).Get(ctx, stateConfigMapName, metav1.GetOptions{})
+	if err != nil {
+		return
+	}
+	raw, ok := old.Data[baselineKey]
+	if !ok || raw == "" {
+		return
+	}
+	var b map[string]map[string]int64
+	if err := json.Unmarshal([]byte(raw), &b); err != nil {
+		klog.ErrorS(err, "migrate: bad legacy baseline json")
+		return
+	}
+	if err := s.SaveBaseline(ctx, b); err != nil {
+		klog.ErrorS(err, "migrate: save baseline to dedicated CM")
+		return
+	}
+	s.clearLegacyBaseline(ctx)
+}
+
+func (s *StateManager) clearLegacyBaseline(ctx context.Context) {
+	if err := s.stateMgr.UpdateWithRetry(ctx, func(cm *corev1.ConfigMap) error {
+		delete(cm.Data, baselineKey)
+		return nil
+	}); err != nil {
+		klog.ErrorS(err, "migrate: clear legacy baseline from kwatch-state")
+	}
 }
 
 // ── helpers ───────────────────────────────────────────────────

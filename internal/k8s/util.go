@@ -130,6 +130,16 @@ func GetPodEvents(
 		})
 }
 
+// IsNodeReady returns true if the node's Ready condition is True.
+func IsNodeReady(n *v1.Node) bool {
+	for _, c := range n.Status.Conditions {
+		if c.Type == v1.NodeReady {
+			return c.Status == v1.ConditionTrue
+		}
+	}
+	return false
+}
+
 // GetNodes gets a list of nodes
 func GetNodes(ctx context.Context, c kubernetes.Interface) (*v1.NodeList, error) {
 	cctx, cancel := context.WithTimeout(ctx, 10*time.Second)

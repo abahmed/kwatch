@@ -6,7 +6,12 @@ metadata:
   labels:
     {{- include "kwatch.labels" . | nindent 4 }}
 spec:
+  {{- if gt (int .Values.replicaCount) 1 }}
+  {{- fail "kwatch must run a single replica: it is the sole writer of the kwatch-baseline/kwatch-pvc ConfigMaps" }}
+  {{- end }}
   replicas: {{ .Values.replicaCount | default 1 }}
+  strategy:
+    type: Recreate
   selector:
     matchLabels:
       {{- include "kwatch.selectorLabels" . | nindent 6 }}

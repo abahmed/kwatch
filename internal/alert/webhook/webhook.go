@@ -56,7 +56,10 @@ func NewWebhook(config map[string]interface{}, appCfg *config.App) *Webhook {
 					continue
 				}
 				var k KeyValue
-				json.Unmarshal(headerJson, &k)
+				if err := json.Unmarshal(headerJson, &k); err != nil {
+					klog.InfoS("skipping invalid webhook header", "error", err)
+					continue
+				}
 				headers = append(headers, k)
 			}
 		}
@@ -70,7 +73,10 @@ func NewWebhook(config map[string]interface{}, appCfg *config.App) *Webhook {
 	}
 
 	var a Authentication
-	json.Unmarshal(basicAuthJson, &a)
+	if err := json.Unmarshal(basicAuthJson, &a); err != nil {
+		klog.InfoS("invalid webhook basicAuth, ignoring", "error", err)
+		a = Authentication{}
+	}
 
 	klog.InfoS("initializing webhook",
 		"url", url,

@@ -32,9 +32,6 @@ import (
 	"github.com/abahmed/kwatch/internal/startup"
 	"github.com/abahmed/kwatch/internal/upgrader"
 	"github.com/abahmed/kwatch/internal/version"
-	apiv1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/client-go/tools/leaderelection"
-	"k8s.io/client-go/tools/leaderelection/resourcelock"
 	"k8s.io/klog/v2"
 )
 
@@ -73,8 +70,6 @@ func main() {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
-	stop := make(chan struct{})
-
 	cfg, err := config.LoadConfig()
 	if err != nil {
 		klog.ErrorS(err, "failed to load config")
@@ -111,6 +106,7 @@ func main() {
 
 	stateMgr := sm.GetStateManager()
 	baseline := stateMgr.GetBaseline(ctx)
+	stateMgr.MigrateLegacyBaseline(ctx)
 
 	baselineCh := make(chan map[string]map[string]int64, 1)
 	go startBaselineSaver(ctx, stateMgr, baselineCh, 0)
@@ -222,55 +218,11 @@ func main() {
 		}
 	}
 
-	if cfg.LeaderElection.Enabled {
-		leaseName := cfg.LeaderElection.LeaseName
-		if leaseName == "" {
-			leaseName = "kwatch-leader"
-		}
-		leaseNS := cfg.LeaderElection.Namespace
-		if leaseNS == "" {
-			leaseNS = k8s.GetNamespace()
-		}
-		podName := os.Getenv("HOSTNAME")
-		if podName == "" {
-			podName, _ = os.Hostname()
-		}
-
-		lock := &resourcelock.LeaseLock{
-			LeaseMeta:  apiv1.ObjectMeta{Name: leaseName, Namespace: leaseNS},
-			Client:     k8sClient.CoordinationV1(),
-			LockConfig: resourcelock.ResourceLockConfig{Identity: podName},
-		}
-
-		go leaderelection.RunOrDie(ctx, leaderelection.LeaderElectionConfig{
-			Lock:            lock,
-			ReleaseOnCancel: true,
-			LeaseDuration:   15 * time.Second,
-			RenewDeadline:   10 * time.Second,
-			RetryPeriod:     2 * time.Second,
-			Callbacks: leaderelection.LeaderCallbacks{
-				OnStartedLeading: func(ctx context.Context) {
-					klog.InfoS("became leader, starting tasks")
-					runLeaderTasks(ctx)
-				},
-				OnStoppedLeading: func() {
-					klog.ErrorS(nil, "lost leadership, exiting for clean re-election")
-					close(stop)
-				},
-			},
-		})
-	} else {
-		go runLeaderTasks(ctx)
-	}
+	go runLeaderTasks(ctx)
 
 	sigCh := make(chan os.Signal, 1)
 	signal.Notify(sigCh, os.Interrupt, syscall.SIGTERM)
-	exitCode := 0
-	select {
-	case <-sigCh:
-	case <-stop:
-		exitCode = 1
-	}
+	<-sigCh
 
 	klog.InfoS("shutting down gracefully...")
 	cancel()
@@ -284,7 +236,7 @@ func main() {
 	healthServer.Stop(shutdownCtx)
 	sc()
 	cleanupSafe()
-	os.Exit(exitCode)
+	os.Exit(0)
 }
 
 func runLint(strict, check bool) {
@@ -388,6 +340,11 @@ func startBaselineSaver(ctx context.Context, stateMgr interface {
 		case <-ctx.Done():
 			if timer != nil {
 				timer.Stop()
+			}
+			if pending != nil {
+				fctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+				_ = stateMgr.SaveBaseline(fctx, pending)
+				cancel()
 			}
 			return
 		}

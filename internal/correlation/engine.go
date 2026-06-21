@@ -853,12 +853,12 @@ func (e *Engine) cleanup() {
 				pending = append(pending, transition{inc.Clone(), a})
 			}
 		}
-		if inc.Resource == "node" {
-			delete(e.activeNodeIncidents, inc.Name)
-		}
 		delete(e.seen, key)
 		e.removeIncidentFromNamespaceIndex(inc)
 		delete(e.state, key)
+		if inc.Resource == "node" {
+			e.refreshNodeInhibition(inc.Name)
+		}
 	}
 	e.mu.Unlock()
 	for _, t := range pending {
@@ -897,7 +897,7 @@ func (e *Engine) checkLifecycle() {
 	renotifyBySev := e.config.RenotifyIntervalBySeverity
 	if len(renotifyBySev) > 0 {
 		for _, inc := range e.state {
-			if inc.State == model.StateResolved || inc.Digested {
+			if inc.State == model.StateResolved || inc.State == model.StatePendingResolve || inc.Digested {
 				continue
 			}
 			maxPer := e.config.RenotifyMaxPerIncident

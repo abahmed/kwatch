@@ -6,7 +6,3 @@ metadata:
 data:
   config.yaml: |
     {{- toYaml .Values.config | nindent 4 }}
-    {{- if gt (int .Values.replicaCount) 1 }}
-    leaderElection:
-      enabled: true
-    {{- end }}

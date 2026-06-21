@@ -3,12 +3,12 @@ package pvc
 import (
 	"context"
 	"fmt"
+	"sync"
 	"time"
 
 	"github.com/abahmed/kwatch/internal/event"
 	"github.com/abahmed/kwatch/internal/k8s"
 	"github.com/abahmed/kwatch/internal/state"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/klog/v2"
 )
 
@@ -33,44 +33,59 @@ func (p *PvcMonitor) checkUsage(ctx context.Context) {
 	}
 
 	nodeNames := make([]string, 0)
-	for _, node := range nodes.Items {
+	for i := range nodes.Items {
+		node := &nodes.Items[i]
+		if !k8s.IsNodeReady(node) {
+			continue
+		}
 		nodeNames = append(nodeNames, node.Name)
 	}
 
-	// Build PVC→PV name map once per cycle instead of N+1 Get calls
-	pvByPVC := make(map[string]string)
-	if pvcs, err := p.client.CoreV1().PersistentVolumeClaims("").List(ctx, metav1.ListOptions{}); err == nil {
-		for i := range pvcs.Items {
-			c := &pvcs.Items[i]
-			pvByPVC[c.Namespace+"/"+c.Name] = c.Spec.VolumeName
-		}
-	} else {
-		klog.ErrorS(err, "pvc monitor: failed to list PVCs")
+	pvByPVC := p.pvcMap(ctx)
+
+	type nodeResult struct {
+		usages []*PvcUsage
+		err    error
 	}
+	results := make([]nodeResult, len(nodeNames))
+
+	var wg sync.WaitGroup
+	for i, nodeName := range nodeNames {
+		p.sem <- struct{}{}
+		wg.Add(1)
+		go func(idx int, nn string) {
+			defer wg.Done()
+			defer func() { <-p.sem }()
+			u, err := p.getNodeUsage(ctx, nn, pvByPVC)
+			results[idx] = nodeResult{u, err}
+		}(i, nodeName)
+	}
+	wg.Wait()
 
 	var pvcUsages []*PvcUsage
 	incomplete := false
-
-	for _, nodeName := range nodeNames {
-		nodePvcUsage, err := p.getNodeUsage(ctx, nodeName, pvByPVC)
-		if err != nil {
-			klog.ErrorS(err, "pvc monitor: node usage failed", "node", nodeName)
+	for _, r := range results {
+		if r.err != nil {
+			klog.ErrorS(r.err, "pvc monitor: node usage failed")
 			incomplete = true
 			continue
 		}
-		pvcUsages = append(pvcUsages, nodePvcUsage...)
+		pvcUsages = append(pvcUsages, r.usages...)
 	}
 
-	p.apply(pvcUsages, pvByPVC, incomplete)
+	p.apply(pvcUsages, pvByPVC, incomplete, true /*isSweep*/)
 }
 
 // SampleNode reads stats/summary for ONE node out-of-cycle and folds the result
 // into the cache + correlator. Called from the pod informer when a tracked PVC's
 // pod goes Running. Debounces to ≤1 kubelet read per node per window.
+// Back-pressure: drops the sample when the concurrent-sample limit is reached.
 func (p *PvcMonitor) SampleNode(ctx context.Context, nodeName string) {
 	if !p.config.Enabled || nodeName == "" {
 		return
 	}
+
+	// Fast path: debounce check first (no API call, no semaphore).
 	now := time.Now()
 	p.mu.Lock()
 	if p.lastNodeSample == nil {
@@ -83,16 +98,33 @@ func (p *PvcMonitor) SampleNode(ctx context.Context, nodeName string) {
 	p.lastNodeSample[nodeName] = now
 	p.mu.Unlock()
 
-	pvByPVC := make(map[string]string)
-	if pvcs, err := p.client.CoreV1().PersistentVolumeClaims("").List(ctx, metav1.ListOptions{}); err == nil {
-		for i := range pvcs.Items {
-			c := &pvcs.Items[i]
-			pvByPVC[c.Namespace+"/"+c.Name] = c.Spec.VolumeName
-		}
-	} else {
-		klog.ErrorS(err, "pvc monitor: SampleNode failed to list PVCs")
+	// B9: bounded concurrency — drop if the burst limit is reached.
+	select {
+	case p.sem <- struct{}{}:
+	default:
+		klog.V(4).InfoS("pvc monitor: dropping SampleNode, burst limit reached", "node", nodeName)
 		return
 	}
+	defer func() { <-p.sem }()
+
+	// Skip NotReady nodes — their kubelet can't serve stats/summary anyway.
+	if nodes, err := k8s.GetNodes(ctx, p.client); err == nil {
+		found := false
+		for i := range nodes.Items {
+			if nodes.Items[i].Name == nodeName {
+				if !k8s.IsNodeReady(&nodes.Items[i]) {
+					return
+				}
+				found = true
+				break
+			}
+		}
+		if !found {
+			return
+		}
+	}
+
+	pvByPVC := p.pvcMap(ctx)
 
 	usages, err := p.getNodeUsage(ctx, nodeName, pvByPVC)
 	if err != nil {
@@ -102,14 +134,16 @@ func (p *PvcMonitor) SampleNode(ctx context.Context, nodeName string) {
 
 	// incomplete=true: single-node view is partial, so update+signal but DON'T
 	// run cluster-wide resolves (those stay with the periodic full sweep).
-	p.apply(usages, pvByPVC, true)
+	p.apply(usages, pvByPVC, true, false /*isSweep*/)
 }
 
 // apply folds one batch of observations into the cache + correlator under p.mu.
 // Pure in-memory — no K8s writes. incomplete=true means "partial view" (single
 // node / per-node error): update+signal but skip the cluster-wide unmounted/deleted
-// resolve pass (only the full sweep owns resolves).
-func (p *PvcMonitor) apply(pvcUsages []*PvcUsage, pvByPVC map[string]string, incomplete bool) {
+// resolve pass (only the full sweep owns resolves). isSweep=true for the periodic
+// full sweep, false for event-driven SampleNode (only the sweep clears firstScan
+// and the sweep re-signals unconditionally for edgeAction dedup).
+func (p *PvcMonitor) apply(pvcUsages []*PvcUsage, pvByPVC map[string]string, incomplete bool, isSweep bool) {
 	p.mu.Lock()
 	defer p.mu.Unlock()
 
@@ -125,31 +159,42 @@ func (p *PvcMonitor) apply(pvcUsages []*PvcUsage, pvByPVC map[string]string, inc
 
 	for _, pvc := range pvcUsages {
 		seen[pvc.PVName] = true
-		p.lastUsage[pvc.PVName] = state.PvcSample{
-			Pct: pvc.UsagePercentage, Namespace: pvc.Namespace,
-			Name: pvc.Name, Seen: now,
+		// B1: only cache entries that can keep an incident alive (>= clear)
+		if pvc.UsagePercentage >= clear {
+			p.lastUsage[pvc.PVName] = state.PvcSample{
+				Pct: pvc.UsagePercentage, Namespace: pvc.Namespace,
+				Name: pvc.Name, PodName: pvc.PodName, Seen: now,
+			}
+		} else {
+			delete(p.lastUsage, pvc.PVName)
 		}
 
 		if pvc.UsagePercentage >= p.config.Threshold {
+			wasNotified := p.notifiedPvc[pvc.PVName]
 			currentNotified[pvc.PVName] = true
 			if p.firstScan {
 				continue
 			}
-			severity := "normal"
-			if pvc.UsagePercentage >= p.config.CriticalThreshold {
-				severity = "high"
+			// B8: SampleNode (isSweep=false) only signals the rising edge;
+			// the sweep re-signals unconditionally (edgeAction dedups).
+			if isSweep || !wasNotified {
+				severity := "normal"
+				if pvc.UsagePercentage >= p.config.CriticalThreshold {
+					severity = "high"
+				}
+				p.reportSignal(&event.Signal{
+					Resource: "pvc", PodName: pvc.PodName, Namespace: pvc.Namespace,
+					Reason: "VolumeUsageHigh", Hint: fmt.Sprintf("VolumeUsage(%.0f%%)", pvc.UsagePercentage),
+					Severity: severity, Owner: pvc.PVName,
+				})
 			}
-			p.reportSignal(&event.Signal{
-				Resource: "pvc", PodName: pvc.PodName, Namespace: pvc.Namespace,
-				Reason: "VolumeUsageHigh", Hint: fmt.Sprintf("VolumeUsage(%.0f%%)", pvc.UsagePercentage),
-				Severity: severity, Owner: pvc.PVName,
-			})
 		} else if p.notifiedPvc[pvc.PVName] && pvc.UsagePercentage >= clear {
 			currentNotified[pvc.PVName] = true
 		}
 	}
 
-	if p.firstScan {
+	// B5: only the full sweep clears firstScan (SampleNode must not consume it)
+	if isSweep && p.firstScan {
 		p.firstScan = false
 	}
 

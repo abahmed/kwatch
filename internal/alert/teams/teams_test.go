@@ -146,7 +146,7 @@ func TestSendMessageErrorAccepted(t *testing.T) {
 	c := NewTeams(configMap, appCfg)
 	assert.NotNil(c)
 
-	assert.NotNil(c.SendMessage("test"))
+	assert.Nil(c.SendMessage("test"), "202 Accepted is now success")
 }
 
 func TestSendMessageErrorServer(t *testing.T) {
@@ -368,7 +368,7 @@ func TestSendMessageBadRequestWithBody(t *testing.T) {
 	assert.Error(t, err)
 }
 
-func TestSendMessageMultipleRetries(t *testing.T) {
+func TestSendMessage202AcceptedSucceeds(t *testing.T) {
 	configMap := map[string]interface{}{
 		"webhook":    "http://example.com",
 		"maxRetries": 3,
@@ -385,5 +385,5 @@ func TestSendMessageMultipleRetries(t *testing.T) {
 
 	teams.webhook = server.URL
 	err := teams.SendMessage("test message")
-	assert.Error(t, err)
+	assert.NoError(t, err, "202 Accepted is now treated as success")
 }

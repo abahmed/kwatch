@@ -129,50 +129,20 @@ func (t *Teams) sendAPI(payload []byte) error {
 				RetryAfter: d,
 			}
 		}
-		if resp.StatusCode == http.StatusOK {
+		if resp.StatusCode == http.StatusOK || resp.StatusCode == http.StatusAccepted {
 			resp.Body.Close()
 			return nil
 		}
 
-		if resp.StatusCode == http.StatusBadRequest {
-			body, readErr := io.ReadAll(resp.Body)
-			resp.Body.Close()
-			if readErr != nil {
-				return fmt.Errorf("call to power automate flow returned status %d", resp.StatusCode)
-			}
-			if strings.Contains(string(body), "TriggerInputSchemaMismatch") {
-				return fmt.Errorf(
-					"failed to send message due to schema mismatch: %s",
-					string(body))
-			}
-			return fmt.Errorf(
-				"call to power automate flow returned status %d: %s",
-				resp.StatusCode,
-				string(body))
+		body, readErr := io.ReadAll(resp.Body)
+		resp.Body.Close()
+		if readErr != nil {
+			return fmt.Errorf("call to power automate flow returned status %d", resp.StatusCode)
 		}
-
-		if resp.StatusCode == http.StatusAccepted {
-			resp.Body.Close()
-			klog.InfoS("Request accepted by Power Automate flow, but not processed immediately",
-				"attempt", attempts+1,
-				"maxRetries", t.maxRetries)
-		} else {
-			body, readErr := io.ReadAll(resp.Body)
-			resp.Body.Close()
-			if readErr != nil {
-				return fmt.Errorf(
-					"call to power automate flow returned status %d", resp.StatusCode)
-			}
-			return fmt.Errorf(
-				"call to power automate flow returned status %d: %s",
-				resp.StatusCode,
-				string(body))
+		if resp.StatusCode == http.StatusBadRequest && strings.Contains(string(body), "TriggerInputSchemaMismatch") {
+			return fmt.Errorf("failed to send message due to schema mismatch: %s", string(body))
 		}
-
-		// Wait for a delay before retrying
-		if attempts < t.maxRetries-1 {
-			time.Sleep(time.Duration(t.retryDelay) * time.Second)
-		}
+		return fmt.Errorf("call to power automate flow returned status %d: %s", resp.StatusCode, string(body))
 	}
 
 	// After all retries, return an error
