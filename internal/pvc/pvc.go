@@ -101,29 +101,18 @@ func (p *PvcMonitor) Start(ctx context.Context) {
 
 	// Seed the in-memory cache from persisted state so a restart keeps
 	// firing on high-but-unmounted PVCs without waiting for a re-mount.
+	// notifiedPvc is re-derived from lastUsage rather than persisted separately
+	// — avoids the phantom held-state problem (B2) and saves a ConfigMap key.
 	if p.state != nil {
+		seed := p.state.GetPvcUsage(ctx)
 		p.mu.Lock()
-		if seed := p.state.GetPvcUsage(ctx); seed != nil {
+		if seed != nil {
 			p.lastUsage = seed
-		}
-		if notified := p.state.GetPvcNotified(ctx); notified != nil {
-			p.notifiedPvc = notified
-		}
-		if samples := p.state.GetPvcNodeSamples(ctx); samples != nil {
-			if p.lastNodeSample == nil {
-				p.lastNodeSample = make(map[string]time.Time, len(samples))
-			}
-			for k, v := range samples {
-				p.lastNodeSample[k] = v
-			}
 		}
 		var restore []*event.Signal
 		for pv, s := range p.lastUsage {
 			if s.Pct >= p.config.Threshold {
-				if !p.notifiedPvc[pv] {
-					// Persisted notifiedPvc may have been cleaned up; re-assert
-					p.notifiedPvc[pv] = true
-				}
+				p.notifiedPvc[pv] = true
 				sev := "normal"
 				if s.Pct >= p.config.CriticalThreshold {
 					sev = "high"
@@ -182,11 +171,14 @@ func (p *PvcMonitor) reportSignal(s *event.Signal) {
 	}
 }
 
-// persist snapshots lastUsage, notifiedPvc and lastNodeSample to the kwatch-pvc
-// ConfigMap. Called ONLY from the periodic sweep, not from SampleNode — otherwise
-// a burst of Running pods would write etcd on every sample (write-amplification).
-// A crash loses at most the SampleNode deltas since the last sweep (≤ interval),
-// and the next sweep re-observes every mounted volume anyway.
+// persist snapshots lastUsage to the kwatch-pvc ConfigMap. Called ONLY from the
+// periodic sweep, not from SampleNode — otherwise a burst of Running pods would
+// write etcd on every sample (write-amplification). A crash loses at most the
+// SampleNode deltas since the last sweep (≤ interval), and the next sweep
+// re-observes every mounted volume anyway.
+// notifiedPvc and lastNodeSample are intentionally not persisted — the former
+// is re-derived from lastUsage on seed and the latter is a debounce timestamp
+// that is stale on restart.
 func (p *PvcMonitor) persist(ctx context.Context) {
 	if p.state == nil {
 		return
@@ -196,23 +188,9 @@ func (p *PvcMonitor) persist(ctx context.Context) {
 	for k, v := range p.lastUsage {
 		usage[k] = v
 	}
-	notified := make(map[string]bool, len(p.notifiedPvc))
-	for k, v := range p.notifiedPvc {
-		notified[k] = v
-	}
-	samples := make(map[string]time.Time, len(p.lastNodeSample))
-	for k, v := range p.lastNodeSample {
-		samples[k] = v
-	}
 	p.mu.RUnlock()
 	if err := p.state.SavePvcUsage(ctx, usage); err != nil {
 		klog.ErrorS(err, "pvc monitor: persist usage failed")
-	}
-	if err := p.state.SavePvcNotified(ctx, notified); err != nil {
-		klog.ErrorS(err, "pvc monitor: persist notified failed")
-	}
-	if err := p.state.SavePvcNodeSamples(ctx, samples); err != nil {
-		klog.ErrorS(err, "pvc monitor: persist node samples failed")
 	}
 }
 

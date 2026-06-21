@@ -9,6 +9,7 @@ import (
 	"github.com/abahmed/kwatch/internal/event"
 	"github.com/abahmed/kwatch/internal/k8s"
 	"github.com/abahmed/kwatch/internal/state"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/klog/v2"
 )
 
@@ -108,18 +109,8 @@ func (p *PvcMonitor) SampleNode(ctx context.Context, nodeName string) {
 	defer func() { <-p.sem }()
 
 	// Skip NotReady nodes — their kubelet can't serve stats/summary anyway.
-	if nodes, err := k8s.GetNodes(ctx, p.client); err == nil {
-		found := false
-		for i := range nodes.Items {
-			if nodes.Items[i].Name == nodeName {
-				if !k8s.IsNodeReady(&nodes.Items[i]) {
-					return
-				}
-				found = true
-				break
-			}
-		}
-		if !found {
+	if node, err := p.client.CoreV1().Nodes().Get(ctx, nodeName, metav1.GetOptions{}); err == nil {
+		if !k8s.IsNodeReady(node) {
 			return
 		}
 	}
