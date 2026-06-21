@@ -43,6 +43,10 @@ func (r *RetryConfigMapManager) UpdateWithRetry(
 			return err
 		}
 
+		if cm.Data == nil {
+			cm.Data = map[string]string{}
+		}
+
 		if err := updater(cm); err != nil {
 			return err
 		}

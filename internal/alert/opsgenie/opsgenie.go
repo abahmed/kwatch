@@ -64,6 +64,8 @@ func (m *Opsgenie) Name() string {
 	return "Opsgenie"
 }
 
+func (m *Opsgenie) UsesEventDelivery() {}
+
 // SendMessage sends text message to the provider
 func (m *Opsgenie) SendMessage(msg string) error {
 	return nil

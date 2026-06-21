@@ -5,10 +5,16 @@ import (
 	"time"
 
 	"github.com/abahmed/kwatch/internal/event"
+	"github.com/robfig/cron/v3"
 	batchv1 "k8s.io/api/batch/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/tools/cache"
 )
+
+// DefaultCronNotScheduledGrace is the grace period added after the expected
+// next fire time before alerting, to account for scheduling lag and clock skew.
+const DefaultCronNotScheduledGrace = 5 * time.Minute
 
 func (h *handler) ProcessCronJob(key string, deleted bool) error {
 	namespace, name, err := cache.SplitMetaNamespaceKey(key)
@@ -33,6 +39,39 @@ func (h *handler) ProcessCronJob(key string, deleted bool) error {
 	return h.ProcessCronJobObject(cj, false)
 }
 
+// DetectCronJobIssue returns a Signal if the CronJob has a problem
+// (suspended or not scheduled). Used for baseline seeding at startup.
+func DetectCronJobIssue(cj *batchv1.CronJob) *event.Signal {
+	if cj.Spec.Suspend != nil && *cj.Spec.Suspend {
+		return &event.Signal{
+			Resource:  "cronjob",
+			Reason:    "CronJobSuspended",
+			Namespace: cj.Namespace,
+			Owner:     cj.Namespace + "/" + cj.Name,
+			Labels:    cj.Labels,
+		}
+	}
+
+	nextExpected := NextFireAfter(cj.Spec.Schedule, cj.Status.LastScheduleTime, cj.CreationTimestamp.Time)
+	if nextExpected.IsZero() {
+		nextExpected = DefaultNextFire(cj.Status.LastScheduleTime, cj.CreationTimestamp.Time)
+	}
+
+	threshold := nextExpected.Add(DefaultCronNotScheduledGrace)
+
+	if time.Now().After(threshold) {
+		return &event.Signal{
+			Resource:  "cronjob",
+			Reason:    "CronJobNotScheduled",
+			Namespace: cj.Namespace,
+			Owner:     cj.Namespace + "/" + cj.Name,
+			Labels:    cj.Labels,
+		}
+	}
+
+	return nil
+}
+
 func (h *handler) ProcessCronJobObject(cj *batchv1.CronJob, deleted bool) error {
 	if cj == nil {
 		return nil
@@ -43,43 +82,35 @@ func (h *handler) ProcessCronJobObject(cj *batchv1.CronJob, deleted bool) error 
 		return nil
 	}
 
-	if cj.Spec.Suspend != nil && *cj.Spec.Suspend {
-		h.signalEvent(&event.Signal{
-			Resource:  "cronjob",
-			PodName:   cj.Name,
-			Namespace: cj.Namespace,
-			Reason:    "CronJobSuspended",
-			Owner:     cj.Namespace + "/" + cj.Name,
-			Labels:    cj.Labels,
-		})
-		return nil
-	}
-
-	if cj.Status.LastScheduleTime == nil {
-		// New CronJob — only alert if it's been around long enough to miss a schedule
-		if cj.CreationTimestamp.Time.Before(h.now().Add(-24 * time.Hour)) {
-			h.signalEvent(&event.Signal{
-				Resource:  "cronjob",
-				PodName:   cj.Name,
-				Namespace: cj.Namespace,
-				Reason:    "CronJobNotScheduled",
-				Owner:     cj.Namespace + "/" + cj.Name,
-				Labels:    cj.Labels,
-			})
-			return nil
-		}
-	} else if cj.Status.LastScheduleTime.Time.Before(h.now().Add(-24 * time.Hour)) {
-		h.signalEvent(&event.Signal{
-			Resource:  "cronjob",
-			PodName:   cj.Name,
-			Namespace: cj.Namespace,
-			Reason:    "CronJobNotScheduled",
-			Owner:     cj.Namespace + "/" + cj.Name,
-			Labels:    cj.Labels,
-		})
+	if sig := DetectCronJobIssue(cj); sig != nil {
+		h.signalEvent(sig)
 		return nil
 	}
 
 	h.correlator.ResolveByResource("cronjob", cj.Namespace+"/"+cj.Name)
 	return nil
+}
+
+// NextFireAfter returns the time the CronJob should have next fired, based on
+// its schedule. If LastScheduleTime is nil, it uses CreationTimestamp as the
+// reference point. Returns zero time if the schedule cannot be parsed.
+func NextFireAfter(schedule string, lastSchedule *metav1.Time, creation time.Time) time.Time {
+	sched, err := cron.ParseStandard(schedule)
+	if err != nil {
+		return time.Time{}
+	}
+	ref := creation
+	if lastSchedule != nil {
+		ref = lastSchedule.Time
+	}
+	return sched.Next(ref)
+}
+
+// DefaultNextFire is a fallback when the schedule cannot be parsed. It mimics
+// the original 24h heuristic.
+func DefaultNextFire(lastSchedule *metav1.Time, creation time.Time) time.Time {
+	if lastSchedule == nil {
+		return creation.Add(24 * time.Hour)
+	}
+	return lastSchedule.Time.Add(24 * time.Hour)
 }

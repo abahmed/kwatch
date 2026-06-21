@@ -603,7 +603,7 @@ func TestFallbackUsedOnExhaustion(t *testing.T) {
 }
 
 func TestSendWithRetryReturnsError(t *testing.T) {
-	err := sendWithRetry(func() error {
+	err := sendWithRetry(context.Background(), func() error {
 		return errors.New("fail")
 	}, 1, time.Millisecond, 0, "test")
 	if err == nil {
@@ -612,7 +612,7 @@ func TestSendWithRetryReturnsError(t *testing.T) {
 }
 
 func TestSendWithRetrySuccess(t *testing.T) {
-	err := sendWithRetry(func() error {
+	err := sendWithRetry(context.Background(), func() error {
 		return nil
 	}, 3, time.Millisecond, 0, "test")
 	if err != nil {

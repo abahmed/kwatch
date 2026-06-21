@@ -33,6 +33,25 @@ func (h *handler) ProcessDeployment(key string, deleted bool) error {
 	return h.ProcessDeploymentObject(deploy, false)
 }
 
+// DetectDeploymentIssue returns a Signal if the Deployment has a stuck
+// rollout. Used for baseline seeding at startup.
+func DetectDeploymentIssue(deploy *appsv1.Deployment) *event.Signal {
+	for _, c := range deploy.Status.Conditions {
+		if c.Type == appsv1.DeploymentProgressing &&
+			c.Status == corev1.ConditionFalse &&
+			c.Reason == "ProgressDeadlineExceeded" {
+			return &event.Signal{
+				Resource:  "deployment",
+				Reason:    c.Reason,
+				Namespace: deploy.Namespace,
+				Owner:     deploy.Namespace + "/" + deploy.Name,
+				Labels:    deploy.Labels,
+			}
+		}
+	}
+	return nil
+}
+
 func (h *handler) ProcessDeploymentObject(deploy *appsv1.Deployment, deleted bool) error {
 	if deploy == nil {
 		return nil
@@ -43,20 +62,9 @@ func (h *handler) ProcessDeploymentObject(deploy *appsv1.Deployment, deleted boo
 		return nil
 	}
 
-	for _, c := range deploy.Status.Conditions {
-		if c.Type == appsv1.DeploymentProgressing &&
-			c.Status == corev1.ConditionFalse &&
-			c.Reason == "ProgressDeadlineExceeded" {
-			h.signalEvent(&event.Signal{
-				Resource:  "deployment",
-				PodName:   deploy.Name,
-				Namespace: deploy.Namespace,
-				Reason:    c.Reason,
-				Owner:     deploy.Namespace + "/" + deploy.Name,
-				Labels:    deploy.Labels,
-			})
-			return nil
-		}
+	if sig := DetectDeploymentIssue(deploy); sig != nil {
+		h.signalEvent(sig)
+		return nil
 	}
 
 	h.correlator.ResolveByResource("deployment", deploy.Namespace+"/"+deploy.Name)

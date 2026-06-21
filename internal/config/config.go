@@ -345,6 +345,10 @@ type JobMonitor struct {
 type DaemonSetMonitor struct {
 	// Enabled if set to true, it will watch DaemonSets for stuck rollouts.
 	Enabled bool `yaml:"enabled"`
+
+	// SustainedMinutes is how long the DaemonSet must be unavailable before
+	// alerting, to avoid noise from rolling updates and brief node blips.
+	SustainedMinutes int `yaml:"sustainedMinutes"`
 }
 
 // CronJobMonitor configures failed/suspended CronJob detection.

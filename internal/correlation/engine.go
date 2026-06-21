@@ -153,7 +153,7 @@ func escalateSeverity(s string) string {
 
 const defaultBaselineTTL = 24 * time.Hour
 const defaultCrashLoopHighFreqThreshold = 5
-const defaultMaxBaseline = 2000
+const DefaultMaxBaseline = 2000
 
 type Engine struct {
 	mu                  sync.Mutex
@@ -179,7 +179,7 @@ func NewEngine(cfg Config) *Engine {
 		cfg.BaselineTTL = defaultBaselineTTL
 	}
 	if cfg.MaxBaseline <= 0 {
-		cfg.MaxBaseline = defaultMaxBaseline
+		cfg.MaxBaseline = DefaultMaxBaseline
 	}
 	e := &Engine{
 		state:               make(map[string]*model.Incident),
@@ -376,6 +376,14 @@ func (e *Engine) findNodeIncident(nodeName string) *model.Incident {
 		}
 	}
 	return nil
+}
+
+// CountActiveNodeIncidents returns the number of nodes with active
+// (non-resolved) incidents. Used for node→resource inhibition decisions.
+func (e *Engine) CountActiveNodeIncidents() int {
+	e.mu.Lock()
+	defer e.mu.Unlock()
+	return len(e.activeNodeIncidents)
 }
 
 // refreshNodeInhibition clears the node inhibition flag if no non-resolved
@@ -763,15 +771,36 @@ func (e *Engine) StartCleanup(ctx context.Context) {
 
 func (e *Engine) cleanup() {
 	e.mu.Lock()
-	defer e.mu.Unlock()
-
 	now := e.now()
+	type transition struct {
+		inc    *model.Incident
+		action model.IncidentAction
+	}
+	var pending []transition
 	for key, inc := range e.state {
-		if now.After(inc.LastSeen.Add(e.config.Window)) {
-			if inc.Resource == "node" {
-				delete(e.activeNodeIncidents, inc.Name)
+		if !now.After(inc.LastSeen.Add(e.config.Window)) {
+			continue
+		}
+		// Finalize active/digested incidents with a resolve so the
+		// LifecycleHook emits a resolved notification and Slack's
+		// threadMap is pruned. Skip StatePendingResolve — that state is
+		// owned by checkLifecycle.
+		if inc.State != model.StateResolved && inc.State != model.StatePendingResolve {
+			inc.State = model.StateResolved
+			if a := e.edgeAction(inc); a != model.ActionSkip {
+				pending = append(pending, transition{inc.Clone(), a})
 			}
-			delete(e.state, key)
+		}
+		if inc.Resource == "node" {
+			delete(e.activeNodeIncidents, inc.Name)
+		}
+		delete(e.seen, key)
+		delete(e.state, key)
+	}
+	e.mu.Unlock()
+	for _, t := range pending {
+		if h := e.config.LifecycleHook; h != nil {
+			h(t.inc, t.action)
 		}
 	}
 }

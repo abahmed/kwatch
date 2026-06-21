@@ -328,6 +328,11 @@ func New(
 		podsSynced = append(podsSynced, inf.HasSynced)
 	}
 
+	maxBaseline := cfg.Correlation.MaxBaseline
+	if maxBaseline <= 0 {
+		maxBaseline = correlation.DefaultMaxBaseline
+	}
+
 	c := &Controller{
 		handler:         h,
 		podQueue:        workqueue.NewTypedRateLimitingQueueWithConfig(workqueue.DefaultTypedControllerRateLimiter[string](), workqueue.TypedRateLimitingQueueConfig[string]{Name: "pods"}),
@@ -339,7 +344,7 @@ func New(
 		hpaQueue:        workqueue.NewTypedRateLimitingQueueWithConfig(workqueue.DefaultTypedControllerRateLimiter[string](), workqueue.TypedRateLimitingQueueConfig[string]{Name: "horizontalpodautoscalers"}),
 		podLister:       podLister,
 		podsSynced:      podsSynced,
-		maxBaseline:     cfg.Correlation.MaxBaseline,
+		maxBaseline:     maxBaseline,
 	}
 
 	h.SetPodLister(podLister)
@@ -936,6 +941,71 @@ func (c *Controller) buildSeenSet() {
 						key := correlation.IncidentKey(ev, n.Name, nil)
 						add(key, n.Name)
 					}
+				}
+			}
+		}
+	}
+
+	// Seed controller resource issues into the baseline.
+	seedSignal := func(sig *event.Signal, name string) {
+		ev := event.Event{
+			Namespace: sig.Namespace,
+			Reason:    sig.Reason,
+		}
+		key := correlation.IncidentKey(ev, sig.Owner, nil)
+		add(key, name)
+	}
+
+	// DaemonSets
+	if c.dsLister != nil {
+		if dss, err := c.dsLister.List(labels.Everything()); err == nil {
+			for _, ds := range dss {
+				if sig := handler.DetectDaemonSetIssue(ds); sig != nil {
+					seedSignal(sig, ds.Name)
+				}
+			}
+		}
+	}
+
+	// Deployments
+	if c.deployLister != nil {
+		if deploys, err := c.deployLister.List(labels.Everything()); err == nil {
+			for _, deploy := range deploys {
+				if sig := handler.DetectDeploymentIssue(deploy); sig != nil {
+					seedSignal(sig, deploy.Name)
+				}
+			}
+		}
+	}
+
+	// Jobs
+	if c.jobLister != nil {
+		if jobs, err := c.jobLister.List(labels.Everything()); err == nil {
+			for _, job := range jobs {
+				if sig := handler.DetectJobIssue(job); sig != nil {
+					seedSignal(sig, job.Name)
+				}
+			}
+		}
+	}
+
+	// CronJobs
+	if c.cronJobLister != nil {
+		if cjs, err := c.cronJobLister.List(labels.Everything()); err == nil {
+			for _, cj := range cjs {
+				if sig := handler.DetectCronJobIssue(cj); sig != nil {
+					seedSignal(sig, cj.Name)
+				}
+			}
+		}
+	}
+
+	// HPAs
+	if c.hpaLister != nil {
+		if hpas, err := c.hpaLister.List(labels.Everything()); err == nil {
+			for _, hpa := range hpas {
+				if sig := handler.DetectHPAIssue(hpa); sig != nil {
+					seedSignal(sig, hpa.Name)
 				}
 			}
 		}

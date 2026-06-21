@@ -240,7 +240,11 @@ func extractRetry(cfg map[string]interface{}) (maxAttempts int, delay, maxBackof
 		if rm, ok := r.(map[string]interface{}); ok {
 			if a, ok := rm["maxAttempts"]; ok {
 				if f, ok := a.(float64); ok {
-					maxAttempts = int(f)
+					if n := int(f); n > 20 {
+						maxAttempts = 20
+					} else {
+						maxAttempts = n
+					}
 				}
 			}
 			if d, ok := rm["delay"]; ok {
@@ -576,8 +580,12 @@ func shouldDeliver(routes []config.AlertRoute, inc *model.Incident) bool {
 }
 
 func backoffFor(attempt int, baseDelay, maxBackoff time.Duration) time.Duration {
-	d := baseDelay * time.Duration(1<<(attempt-1))
-	if maxBackoff > 0 && d > maxBackoff {
+	shift := attempt - 1
+	if shift > 30 {
+		return maxBackoff
+	}
+	d := baseDelay * time.Duration(1<<shift)
+	if maxBackoff > 0 && (d > maxBackoff || d <= 0) {
 		d = maxBackoff
 	}
 	if d < baseDelay {
@@ -586,7 +594,7 @@ func backoffFor(attempt int, baseDelay, maxBackoff time.Duration) time.Duration 
 	return d
 }
 
-func sendWithRetry(sendFn func() error, maxAttempts int, delay, maxBackoff time.Duration, providerName string) error {
+func sendWithRetry(ctx context.Context, sendFn func() error, maxAttempts int, delay, maxBackoff time.Duration, providerName string) error {
 	var lastErr error
 	for attempt := 1; attempt <= maxAttempts; attempt++ {
 		if err := sendFn(); err != nil {
@@ -601,7 +609,9 @@ func sendWithRetry(sendFn func() error, maxAttempts int, delay, maxBackoff time.
 					"attempt", attempt,
 					"maxAttempts", maxAttempts,
 					"backoff", sleepDur)
-				time.Sleep(sleepDur)
+				if err := sleepWithContext(ctx, sleepDur); err != nil {
+					return err
+				}
 			}
 			continue
 		}
@@ -611,6 +621,19 @@ func sendWithRetry(sendFn func() error, maxAttempts int, delay, maxBackoff time.
 		"provider", providerName,
 		"maxAttempts", maxAttempts)
 	return lastErr
+}
+
+func sleepWithContext(ctx context.Context, d time.Duration) error {
+	if ctx == nil {
+		time.Sleep(d)
+		return nil
+	}
+	select {
+	case <-ctx.Done():
+		return ctx.Err()
+	case <-time.After(d):
+		return nil
+	}
 }
 
 // VerifyAll runs credential pre-flight on all providers that support it.
@@ -639,7 +662,7 @@ func (a *AlertManager) Notify(msg string) {
 	for _, entry := range entries {
 		p := entry.provider
 		truncMsg := truncateMsg(msg, entry.maxBytes)
-		if err := sendWithRetry(func() error {
+		if err := sendWithRetry(context.Background(), func() error {
 			return p.SendMessage(truncMsg)
 		}, entry.maxAttempts, entry.retryDelay, entry.maxBackoff, p.Name()); err != nil && entry.fallback != nil {
 			entry.fallback.provider.SendMessage("[fallback — primary " + p.Name() + " failed] " + truncMsg)
@@ -658,7 +681,7 @@ func (a *AlertManager) NotifyEvent(event event.Event) {
 
 	for _, entry := range entries {
 		p := entry.provider
-		if err := sendWithRetry(func() error {
+		if err := sendWithRetry(context.Background(), func() error {
 			return p.SendEvent(&event)
 		}, entry.maxAttempts, entry.retryDelay, entry.maxBackoff, p.Name()); err != nil && entry.fallback != nil {
 			entry.fallback.provider.SendMessage("[fallback — primary " + p.Name() + " failed] " + event.Reason + " in " + event.Namespace + "/" + event.PodName)
@@ -670,6 +693,35 @@ func (a *AlertManager) NotifyEvent(event event.Event) {
 // incident-aware messaging (e.g., Slack threads).
 type ThreadProvider interface {
 	SendIncident(inc *model.Incident, action model.IncidentAction) error
+}
+
+// EventDeliveryProvider is a marker interface for providers whose real
+// delivery is implemented in SendEvent (not SendMessage). PagerDuty,
+// Opsgenie, Zenduty, and Email all stub SendMessage to return nil — the
+// routing layer must call SendEvent instead for these providers.
+type EventDeliveryProvider interface {
+	Provider
+	UsesEventDelivery()
+}
+
+// incidentToEvent maps a delivered incident to the legacy event.Event shape
+// these EventDeliveryProvider providers' SendEvent expects.
+func incidentToEvent(inc *model.Incident) *event.Event {
+	return &event.Event{
+		Resource:      inc.Resource,
+		PodName:       inc.Name,
+		ContainerName: inc.ContainerName,
+		Namespace:     inc.Namespace,
+		Reason:        inc.Reason,
+		Events:        inc.Events,
+		Logs:          inc.Logs,
+		OwnerKind:     inc.OwnerKind,
+		RestartCount:  inc.RestartCount,
+		Hint:          inc.Hint,
+		Severity:      inc.Severity,
+		IncludeEvents: inc.IncludeEvents,
+		IncludeLogs:   inc.IncludeLogs,
+	}
 }
 
 // NotifyIncident enqueues an incident for delivery to all providers.
@@ -868,7 +920,11 @@ func sanitizeAnalysis(s string) string {
 		return r
 	}, strings.TrimSpace(s))
 	if len(s) > maxAnalysisChars {
-		s = s[:maxAnalysisChars] + "…"
+		cut := maxAnalysisChars
+		for cut > 0 && !utf8.RuneStart(s[cut]) {
+			cut--
+		}
+		s = s[:cut] + "…"
 	}
 	return s
 }
@@ -892,9 +948,16 @@ func (a *AlertManager) deliverOne(entry *providerEntry, inc *model.Incident, act
 
 	var err error
 	if action == model.ActionDigestFlush {
-		err = sendWithRetry(func() error {
-			return p.SendMessage(msg)
-		}, entry.maxAttempts, entry.retryDelay, entry.maxBackoff, p.Name())
+		if _, ok := p.(EventDeliveryProvider); ok {
+			ev := incidentToEvent(inc)
+			err = sendWithRetry(context.Background(), func() error {
+				return p.SendEvent(ev)
+			}, entry.maxAttempts, entry.retryDelay, entry.maxBackoff, p.Name())
+		} else {
+			err = sendWithRetry(context.Background(), func() error {
+				return p.SendMessage(msg)
+			}, entry.maxAttempts, entry.retryDelay, entry.maxBackoff, p.Name())
+		}
 	} else {
 		if !shouldDeliver(entry.routes, inc) {
 			klog.V(4).InfoS("incident filtered by route",
@@ -903,11 +966,16 @@ func (a *AlertManager) deliverOne(entry *providerEntry, inc *model.Incident, act
 			return
 		}
 		if tp, ok := p.(ThreadProvider); ok {
-			err = sendWithRetry(func() error {
+			err = sendWithRetry(context.Background(), func() error {
 				return tp.SendIncident(inc, action)
 			}, entry.maxAttempts, entry.retryDelay, entry.maxBackoff, p.Name())
+		} else if _, ok := p.(EventDeliveryProvider); ok {
+			ev := incidentToEvent(inc)
+			err = sendWithRetry(context.Background(), func() error {
+				return p.SendEvent(ev)
+			}, entry.maxAttempts, entry.retryDelay, entry.maxBackoff, p.Name())
 		} else {
-			err = sendWithRetry(func() error {
+			err = sendWithRetry(context.Background(), func() error {
 				return p.SendMessage(msg)
 			}, entry.maxAttempts, entry.retryDelay, entry.maxBackoff, p.Name())
 		}
@@ -963,9 +1031,18 @@ func (a *AlertManager) deliverAllSync(inc *model.Incident, action model.Incident
 		}
 		msg := truncateMsg(formatIncidentMessage(inc, action, maxLines, tpl), entry.maxBytes)
 		if action == model.ActionDigestFlush {
-			if err := sendWithRetry(func() error {
-				return p.SendMessage(msg)
-			}, entry.maxAttempts, entry.retryDelay, entry.maxBackoff, p.Name()); err != nil {
+			var err error
+			if _, ok := p.(EventDeliveryProvider); ok {
+				ev := incidentToEvent(inc)
+				err = sendWithRetry(context.Background(), func() error {
+					return p.SendEvent(ev)
+				}, entry.maxAttempts, entry.retryDelay, entry.maxBackoff, p.Name())
+			} else {
+				err = sendWithRetry(context.Background(), func() error {
+					return p.SendMessage(msg)
+				}, entry.maxAttempts, entry.retryDelay, entry.maxBackoff, p.Name())
+			}
+			if err != nil {
 				klog.ErrorS(err, "sync delivery failed", "provider", p.Name(), "key", inc.Key, "id", inc.ID)
 			}
 			continue
@@ -975,11 +1052,16 @@ func (a *AlertManager) deliverAllSync(inc *model.Incident, action model.Incident
 		}
 		var err error
 		if tp, ok := p.(ThreadProvider); ok {
-			err = sendWithRetry(func() error {
+			err = sendWithRetry(context.Background(), func() error {
 				return tp.SendIncident(inc, action)
 			}, entry.maxAttempts, entry.retryDelay, entry.maxBackoff, p.Name())
+		} else if _, ok := p.(EventDeliveryProvider); ok {
+			ev := incidentToEvent(inc)
+			err = sendWithRetry(context.Background(), func() error {
+				return p.SendEvent(ev)
+			}, entry.maxAttempts, entry.retryDelay, entry.maxBackoff, p.Name())
 		} else {
-			err = sendWithRetry(func() error {
+			err = sendWithRetry(context.Background(), func() error {
 				return p.SendMessage(msg)
 			}, entry.maxAttempts, entry.retryDelay, entry.maxBackoff, p.Name())
 		}

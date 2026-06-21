@@ -223,7 +223,7 @@ func TestCheckReleaseGitHubError(t *testing.T) {
 	u := NewUpgrader(&config.Upgrader{}, &alert.AlertManager{}, nil)
 	u.SetGitHubClient(mockGithub)
 
-	u.checkRelease()
+	u.checkRelease(context.Background())
 
 	mockGithub.AssertExpectations(t)
 }
@@ -236,7 +236,7 @@ func TestCheckReleaseNilTagName(t *testing.T) {
 	u := NewUpgrader(&config.Upgrader{}, &alert.AlertManager{}, nil)
 	u.SetGitHubClient(mockGithub)
 
-	u.checkRelease()
+	u.checkRelease(context.Background())
 
 	mockGithub.AssertExpectations(t)
 }
@@ -250,7 +250,7 @@ func TestCheckReleaseSameVersion(t *testing.T) {
 	u := NewUpgrader(&config.Upgrader{}, &alert.AlertManager{}, nil)
 	u.SetGitHubClient(mockGithub)
 
-	u.checkRelease()
+	u.checkRelease(context.Background())
 
 	mockGithub.AssertExpectations(t)
 }
@@ -279,7 +279,7 @@ func TestCheckReleaseAlreadyNotified(t *testing.T) {
 	u := NewUpgrader(&config.Upgrader{}, &alert.AlertManager{}, stateMgr)
 	u.SetGitHubClient(mockGithub)
 
-	u.checkRelease()
+	u.checkRelease(context.Background())
 
 	mockGithub.AssertExpectations(t)
 }
@@ -299,7 +299,7 @@ func TestCheckReleaseNewVersionNotifies(t *testing.T) {
 	u.SetGitHubClient(mockGithub)
 	u.SetAlertManager(mockAlert)
 
-	u.checkRelease()
+	u.checkRelease(context.Background())
 
 	mockGithub.AssertExpectations(t)
 	mockAlert.AssertExpectations(t)
@@ -332,7 +332,7 @@ func TestCheckReleaseNewVersionSetsState(t *testing.T) {
 	u.SetGitHubClient(mockGithub)
 	u.SetAlertManager(mockAlert)
 
-	u.checkRelease()
+	u.checkRelease(context.Background())
 
 	mockGithub.AssertExpectations(t)
 	mockAlert.AssertExpectations(t)

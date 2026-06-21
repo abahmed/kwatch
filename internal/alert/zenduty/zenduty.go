@@ -75,6 +75,8 @@ func (m *Zenduty) Name() string {
 	return "Zenduty"
 }
 
+func (m *Zenduty) UsesEventDelivery() {}
+
 // SendMessage sends text message to the provider
 func (m *Zenduty) SendMessage(msg string) error {
 	return nil

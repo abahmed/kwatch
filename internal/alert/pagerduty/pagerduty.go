@@ -72,6 +72,8 @@ func (s *Pagerduty) Name() string {
 	return "PagerDuty"
 }
 
+func (s *Pagerduty) UsesEventDelivery() {}
+
 // SendEvent sends event to the provider
 func (s *Pagerduty) SendEvent(ev *event.Event) error {
 	client := k8s.GetDefaultClient()

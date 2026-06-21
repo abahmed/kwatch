@@ -127,6 +127,9 @@ func Validate(cfg *Config) []error {
 	if cfg.Correlation.ResolveHoldDown < 0 {
 		errs = append(errs, errors.New("correlation.resolveHoldDown must be >= 0"))
 	}
+	if cfg.Correlation.ResolveHoldDown > cfg.Correlation.Window*60 {
+		errs = append(errs, errors.New("correlation.resolveHoldDown must be <= correlation.window (in seconds)"))
+	}
 	if cfg.Correlation.MaxBaseline < 0 {
 		errs = append(errs, errors.New("correlation.maxBaseline must be >= 0"))
 	}

@@ -33,6 +33,40 @@ func (h *handler) ProcessJob(key string, deleted bool) error {
 	return h.ProcessJobObject(job, false)
 }
 
+// DetectJobIssue returns a Signal if the Job has a failed or suspended
+// condition. Used for baseline seeding at startup.
+func DetectJobIssue(job *batchv1.Job) *event.Signal {
+	for _, c := range job.Status.Conditions {
+		switch c.Type {
+		case batchv1.JobFailed:
+			if c.Status == corev1.ConditionTrue {
+				reason := c.Reason
+				if reason == "" {
+					reason = "JobFailed"
+				}
+				return &event.Signal{
+					Resource:  "job",
+					Reason:    reason,
+					Namespace: job.Namespace,
+					Owner:     job.Namespace + "/" + job.Name,
+					Labels:    job.Labels,
+				}
+			}
+		case batchv1.JobSuspended:
+			if c.Status == corev1.ConditionTrue {
+				return &event.Signal{
+					Resource:  "job",
+					Reason:    "JobSuspended",
+					Namespace: job.Namespace,
+					Owner:     job.Namespace + "/" + job.Name,
+					Labels:    job.Labels,
+				}
+			}
+		}
+	}
+	return nil
+}
+
 func (h *handler) ProcessJobObject(job *batchv1.Job, deleted bool) error {
 	if job == nil {
 		return nil
@@ -44,42 +78,19 @@ func (h *handler) ProcessJobObject(job *batchv1.Job, deleted bool) error {
 	}
 
 	for _, c := range job.Status.Conditions {
-		switch c.Type {
-		case batchv1.JobComplete:
-			if c.Status == corev1.ConditionTrue {
-				h.correlator.ResolveByResource("job", job.Namespace+"/"+job.Name)
-				return nil
-			}
-		case batchv1.JobFailed:
-			if c.Status == corev1.ConditionTrue {
-				reason := c.Reason
-				if reason == "" {
-					reason = "JobFailed"
-				}
-				h.signalEvent(&event.Signal{
-					Resource:  "job",
-					PodName:   job.Name,
-					Namespace: job.Namespace,
-					Reason:    reason,
-					Owner:     job.Namespace + "/" + job.Name,
-					Labels:    job.Labels,
-				})
-				return nil
-			}
-		case batchv1.JobSuspended:
-			if c.Status == corev1.ConditionTrue {
-				h.signalEvent(&event.Signal{
-					Resource:  "job",
-					PodName:   job.Name,
-					Namespace: job.Namespace,
-					Reason:    "JobSuspended",
-					Owner:     job.Namespace + "/" + job.Name,
-					Labels:    job.Labels,
-				})
-				return nil
-			}
+		if c.Type == batchv1.JobComplete && c.Status == corev1.ConditionTrue {
+			h.correlator.ResolveByResource("job", job.Namespace+"/"+job.Name)
+			return nil
 		}
 	}
 
+	if sig := DetectJobIssue(job); sig != nil {
+		h.signalEvent(sig)
+		return nil
+	}
+
+	// No active failing or suspended condition → ensure any prior Job
+	// incident (including JobSuspended) resolves.
+	h.correlator.ResolveByResource("job", job.Namespace+"/"+job.Name)
 	return nil
 }

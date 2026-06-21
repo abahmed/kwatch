@@ -34,6 +34,44 @@ func (h *handler) ProcessHorizontalPodAutoscaler(key string, deleted bool) error
 	return h.ProcessHorizontalPodAutoscalerObject(hpa, false)
 }
 
+// DetectHPAIssue returns a Signal if the HPA has a scaling error or is
+// maxed out. Used for baseline seeding at startup.
+func DetectHPAIssue(hpa *autoscalingv2.HorizontalPodAutoscaler) *event.Signal {
+	key := hpa.Namespace + "/" + hpa.Name
+
+	for i := range hpa.Status.Conditions {
+		c := &hpa.Status.Conditions[i]
+		if (c.Type == autoscalingv2.AbleToScale || c.Type == autoscalingv2.ScalingActive) &&
+			c.Status == corev1.ConditionFalse {
+			return &event.Signal{
+				Resource:  "horizontalpodautoscaler",
+				Reason:    "HPAScalingError",
+				Namespace: hpa.Namespace,
+				Owner:     key,
+				Labels:    hpa.Labels,
+				Hint:      fmt.Sprintf("%s: %s — %s", c.Type, c.Reason, c.Message),
+			}
+		}
+	}
+
+	maxed := hpaHasCondition(hpa, autoscalingv2.ScalingLimited, corev1.ConditionTrue) ||
+		(hpa.Spec.MaxReplicas > 0 &&
+			hpa.Status.DesiredReplicas >= hpa.Spec.MaxReplicas &&
+			hpa.Status.CurrentReplicas < hpa.Status.DesiredReplicas)
+	if maxed {
+		return &event.Signal{
+			Resource:  "horizontalpodautoscaler",
+			Reason:    "HPAMaxedOut",
+			Namespace: hpa.Namespace,
+			Owner:     key,
+			Labels:    hpa.Labels,
+			Hint:      fmt.Sprintf("pinned at max=%d (current=%d)", hpa.Spec.MaxReplicas, hpa.Status.CurrentReplicas),
+		}
+	}
+
+	return nil
+}
+
 func (h *handler) ProcessHorizontalPodAutoscalerObject(hpa *autoscalingv2.HorizontalPodAutoscaler, deleted bool) error {
 	if hpa == nil {
 		return nil
@@ -47,32 +85,17 @@ func (h *handler) ProcessHorizontalPodAutoscalerObject(hpa *autoscalingv2.Horizo
 	key := hpa.Namespace + "/" + hpa.Name
 
 	// (1) scaling-error detection — independent of maxed
-	var scalingErr *autoscalingv2.HorizontalPodAutoscalerCondition
-	for i := range hpa.Status.Conditions {
-		c := &hpa.Status.Conditions[i]
-		if (c.Type == autoscalingv2.AbleToScale || c.Type == autoscalingv2.ScalingActive) &&
-			c.Status == corev1.ConditionFalse {
-			scalingErr = c
-			break
-		}
-	}
-	if scalingErr != nil {
-		h.signalEvent(&event.Signal{
-			Resource:  "horizontalpodautoscaler",
-			PodName:   hpa.Name,
-			Namespace: hpa.Namespace,
-			Reason:    "HPAScalingError",
-			Owner:     key,
-			Labels:    hpa.Labels,
-			Hint:      fmt.Sprintf("%s: %s — %s", scalingErr.Type, scalingErr.Reason, scalingErr.Message),
-		})
+	if sig := DetectHPAIssue(hpa); sig != nil && sig.Reason == "HPAScalingError" {
+		h.signalEvent(sig)
 	} else {
 		h.correlator.MarkResolved(correlation.BuildKey(hpa.Namespace, key, "HPAScalingError", ""))
 	}
 
 	// (2) existing maxed logic — but reason-specific resolve
-	maxed := hpa.Status.DesiredReplicas >= hpa.Spec.MaxReplicas &&
-		hpa.Status.CurrentReplicas < hpa.Status.DesiredReplicas
+	maxed := hpaHasCondition(hpa, autoscalingv2.ScalingLimited, corev1.ConditionTrue) ||
+		(hpa.Spec.MaxReplicas > 0 &&
+			hpa.Status.DesiredReplicas >= hpa.Spec.MaxReplicas &&
+			hpa.Status.CurrentReplicas < hpa.Status.DesiredReplicas)
 	if !maxed {
 		h.clearFirstMaxed(key)
 		h.correlator.MarkResolved(correlation.BuildKey(hpa.Namespace, key, "HPAMaxedOut", ""))
@@ -87,7 +110,6 @@ func (h *handler) ProcessHorizontalPodAutoscalerObject(hpa *autoscalingv2.Horizo
 
 	h.signalEvent(&event.Signal{
 		Resource:  "horizontalpodautoscaler",
-		PodName:   hpa.Name,
 		Namespace: hpa.Namespace,
 		Reason:    "HPAMaxedOut",
 		Owner:     key,
@@ -113,4 +135,13 @@ func (h *handler) clearFirstMaxed(key string) {
 	h.hpaMu.Lock()
 	defer h.hpaMu.Unlock()
 	delete(h.firstMaxedHPAs, key)
+}
+
+func hpaHasCondition(hpa *autoscalingv2.HorizontalPodAutoscaler, condType autoscalingv2.HorizontalPodAutoscalerConditionType, status corev1.ConditionStatus) bool {
+	for _, c := range hpa.Status.Conditions {
+		if c.Type == condType && c.Status == status {
+			return true
+		}
+	}
+	return false
 }

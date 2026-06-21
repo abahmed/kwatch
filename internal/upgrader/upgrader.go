@@ -3,6 +3,7 @@ package upgrader
 import (
 	"context"
 	"fmt"
+	"net/http"
 	"os"
 	"time"
 
@@ -22,7 +23,8 @@ type GitHubReleaseChecker interface {
 type GitHubClient struct{}
 
 func (c *GitHubClient) GetLatestRelease(ctx context.Context, owner, repo string) (*github.RepositoryRelease, *github.Response, error) {
-	client := github.NewClient(nil)
+	httpClient := &http.Client{Timeout: 30 * time.Second}
+	client := github.NewClient(httpClient)
 	return client.Repositories.GetLatestRelease(ctx, owner, repo)
 }
 
@@ -82,7 +84,7 @@ func (u *Upgrader) CheckUpdates(ctx context.Context) {
 		return
 	}
 
-	u.checkRelease()
+	u.checkRelease(ctx)
 
 	ticker := time.NewTicker(24 * time.Hour)
 	defer ticker.Stop()
@@ -93,14 +95,12 @@ func (u *Upgrader) CheckUpdates(ctx context.Context) {
 			klog.InfoS("upgrader stopped")
 			return
 		case <-ticker.C:
-			u.checkRelease()
+			u.checkRelease(ctx)
 		}
 	}
 }
 
-func (u *Upgrader) checkRelease() {
-	ctx := context.Background()
-
+func (u *Upgrader) checkRelease(ctx context.Context) {
 	r, _, err := u.githubClient.GetLatestRelease(
 		ctx,
 		"abahmed",

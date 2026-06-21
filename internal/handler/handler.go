@@ -78,6 +78,8 @@ type handler struct {
 	hpaLister          autoscalingv2lister.HorizontalPodAutoscalerLister
 	firstMaxedHPAs     map[string]time.Time
 	hpaMu              sync.Mutex
+	firstUnavailableDS map[string]time.Time
+	dsMu               sync.Mutex
 	secretLister       corev1lister.SecretLister
 	now                func() time.Time
 }
@@ -140,6 +142,7 @@ func NewHandler(
 		correlator:         correlator,
 		alertManager:       alertManager,
 		firstMaxedHPAs:     make(map[string]time.Time),
+		firstUnavailableDS: make(map[string]time.Time),
 		now:                time.Now,
 	}
 }

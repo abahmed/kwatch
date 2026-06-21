@@ -39,6 +39,11 @@ type Slack struct {
 	threadMap map[string]string
 	mu        sync.Mutex
 
+	// maxThreadMapSize bounds the thread map to prevent unbounded growth.
+	// When exceeded, new threads are not tracked (updates/resolves still work
+	// without threading, just not threaded).
+	maxThreadMapSize int
+
 	// compact mode sends single-line messages instead of rich embeds
 	compact bool
 
@@ -62,13 +67,14 @@ func NewSlack(config map[string]interface{}, appCfg *config.App) *Slack {
 		}
 		klog.InfoS("initializing slack with token and channel", "channel", channel)
 		return &Slack{
-			token:     token,
-			channel:   channel,
-			title:     title,
-			text:      text,
-			compact:   compact,
-			appCfg:    appCfg,
-			apiClient: slackClient.New(token),
+			token:            token,
+			channel:          channel,
+			title:            title,
+			text:             text,
+			compact:          compact,
+			appCfg:           appCfg,
+			apiClient:        slackClient.New(token),
+			maxThreadMapSize: 1000,
 		}
 	}
 
@@ -82,11 +88,12 @@ func NewSlack(config map[string]interface{}, appCfg *config.App) *Slack {
 	klog.InfoS("initializing slack with webhook url", "webhook", webhook)
 
 	return &Slack{
-		webhook: webhook,
-		channel: channel,
-		title:   title,
-		text:    text,
-		compact: compact,
+		webhook:          webhook,
+		channel:          channel,
+		title:            title,
+		text:             text,
+		compact:          compact,
+		maxThreadMapSize: 1000,
 		appCfg:  appCfg,
 		send:    slackClient.PostWebhook,
 	}
@@ -256,7 +263,9 @@ func (s *Slack) sendIncidentWithToken(inc *model.Incident, action model.Incident
 		if s.threadMap == nil {
 			s.threadMap = make(map[string]string)
 		}
-		s.threadMap[key] = ts
+		if s.maxThreadMapSize <= 0 || len(s.threadMap) < s.maxThreadMapSize {
+			s.threadMap[key] = ts
+		}
 		s.mu.Unlock()
 		return nil
 
