@@ -10,6 +10,7 @@ import (
 	"github.com/abahmed/kwatch/internal/config"
 	"github.com/abahmed/kwatch/internal/event"
 	"github.com/abahmed/kwatch/internal/k8s"
+	"github.com/abahmed/kwatch/internal/ratelimit"
 	"k8s.io/klog/v2"
 )
 
@@ -52,12 +53,16 @@ func (r *GoogleChat) Name() string {
 // SendEvent sends event to the provider
 func (r *GoogleChat) SendEvent(e *event.Event) error {
 	formattedMsg := e.FormatText(r.appCfg.ClusterName, r.text)
-	return r.sendAPI(r.buildRequestBody(formattedMsg))
+	b, err := r.buildRequestBody(formattedMsg)
+	if err != nil {
+		return err
+	}
+	return r.sendAPI(b)
 }
 
-func (r *GoogleChat) sendAPI(reqBody string) error {
+func (r *GoogleChat) sendAPI(reqBody []byte) error {
 	client := k8s.GetDefaultClient()
-	buffer := bytes.NewBuffer([]byte(reqBody))
+	buffer := bytes.NewBuffer(reqBody)
 	request, err := http.NewRequest(http.MethodPost, r.webhook, buffer)
 	if err != nil {
 		return err
@@ -71,6 +76,13 @@ func (r *GoogleChat) sendAPI(reqBody string) error {
 	}
 	defer response.Body.Close()
 
+	if response.StatusCode == http.StatusTooManyRequests {
+		return &ratelimit.Error{
+			Provider:   "GoogleChat",
+			StatusCode: http.StatusTooManyRequests,
+			RetryAfter: ratelimit.ParseRetryAfter(response),
+		}
+	}
 	if response.StatusCode != 200 {
 		body, _ := io.ReadAll(response.Body)
 		return fmt.Errorf(
@@ -84,18 +96,21 @@ func (r *GoogleChat) sendAPI(reqBody string) error {
 
 // SendMessage sends text message to the provider
 func (r *GoogleChat) SendMessage(msg string) error {
-	return r.sendAPI(r.buildRequestBody(msg))
+	b, err := r.buildRequestBody(msg)
+	if err != nil {
+		return err
+	}
+	return r.sendAPI(b)
 }
 
-func (r *GoogleChat) buildRequestBody(text string) string {
+func (r *GoogleChat) buildRequestBody(text string) ([]byte, error) {
 	msgPayload := &payload{
 		Text: text,
 	}
 
 	jsonBytes, err := json.Marshal(msgPayload)
 	if err != nil {
-		klog.ErrorS(err, "failed to marshal google chat payload")
-		return ""
+		return nil, fmt.Errorf("failed to marshal google chat payload: %w", err)
 	}
-	return string(jsonBytes)
+	return jsonBytes, nil
 }

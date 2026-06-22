@@ -7,7 +7,7 @@ import (
 
 type ContainerReasonsFilter struct{}
 
-func (f ContainerReasonsFilter) Execute(ctx *Context) bool {
+func (f ContainerReasonsFilter) Detect(ctx *Context) Status {
 	container := ctx.Container.Container
 
 	if container.State.Waiting != nil {
@@ -38,7 +38,7 @@ func (f ContainerReasonsFilter) Execute(ctx *Context) bool {
 		klog.InfoS(
 			"skipping reason as it is not in the reason allow list",
 			"reason", ctx.Container.Reason)
-		return true
+		return StatusSkip
 	}
 
 	if len(ctx.Config.ForbiddenReasons) > 0 &&
@@ -46,24 +46,26 @@ func (f ContainerReasonsFilter) Execute(ctx *Context) bool {
 		klog.InfoS(
 			"skipping reason as it is in the reason forbid list",
 			"reason", ctx.Container.Reason)
-		return true
+		return StatusSkip
 	}
 
-	lastState := ctx.Memory.GetPodContainer(ctx.Pod.Namespace,
-		ctx.Pod.Name,
-		container.Name)
+	lastState := ctx.Container.LastState
 
 	if lastState != nil {
-		if lastState.LastTerminatedOn == ctx.Container.LastTerminatedOn {
-			return true
+		if lastState.LastTerminatedOn.Equal(ctx.Container.LastTerminatedOn) {
+			return StatusSkip
 		}
 
 		if lastState.Reason == ctx.Container.Reason &&
 			lastState.Msg == ctx.Container.Msg &&
 			lastState.ExitCode == ctx.Container.ExitCode {
-			return true
+			return StatusSkip
 		}
 	}
 
-	return false
+	return StatusAlert
+}
+
+func (f ContainerReasonsFilter) Execute(ctx *Context) bool {
+	return f.Detect(ctx) == StatusSkip
 }

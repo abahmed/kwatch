@@ -11,7 +11,6 @@ func TestShort(t *testing.T) {
 	assert := assert.New(t)
 
 	result := Short()
-	assert.NotEmpty(result)
 	assert.Equal("dev", result)
 }
 

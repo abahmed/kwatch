@@ -1,7 +1,7 @@
 apiVersion: v2
 name: kwatch
-version: "0.10.5"
-appVersion: "v0.10.5"
+version: "0.11.0"
+appVersion: "v0.11.0"
 description: monitor all changes in your Kubernetes(K8s) cluster, detects crashes
   in your running apps in realtime, and publishes notifications to your channels (Slack,
   Discord, etc.) instantly
@@ -16,6 +16,8 @@ keywords:
   - monitoring
   - crash-reporting
   - event-notifier
+  - ai
+  - llm
 maintainers:
   - email: a.ahmed1026@gmail.com
     name: Abdelrahman Ahmed
@@ -23,4 +25,18 @@ maintainers:
   - email: yaserkalali.work@gmail.com
     name: yaser
     url: github.com/yaskinny
+annotations:
+  artifacthub.io/links: |
+    - name: Documentation
+      url: https://kwatch.dev
+    - name: Source
+      url: https://github.com/abahmed/kwatch
+  artifacthub.io/license: MIT
+  artifacthub.io/changes: |
+    - kind: added
+      description: "AI incident enrichment (opt-in, default-off): self-hosted LLM sidecar (Qwen2.5-Coder-1.5B via Ollama) appends likely cause to alerts — no data leaves the cluster, deterministic hints remain the backbone."
+    - kind: added
+      description: "Cheap-depth enhancements (LLM-free): signature-based hints, correlation surfaces affected-pod count and node root-cause, runbook links, investigate commands, and dashboard deep-links."
+    - kind: added
+      description: "GOMEMLIMIT env on kwatch container for improved OOM protection."
 

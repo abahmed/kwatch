@@ -43,7 +43,7 @@
               "object",
               "array"
             ],
-            "default": "101"
+            "default": "1000"
           },
           "runAsGroup": {
             "type": [
@@ -53,7 +53,7 @@
               "object",
               "array"
             ],
-            "default": "101"
+            "default": "1000"
           },
           "runAsNonRoot": {
             "type": [
@@ -118,6 +118,15 @@
           "array"
         ]
       },
+      "llm": {
+        "type": "object",
+        "description": "LLM sidecar deployment configuration",
+        "properties": {
+          "repository": { "type": "string", "description": "model image repository" },
+          "tag": { "type": "string", "description": "model image version tag" },
+          "nativeSidecar": { "type": "boolean", "description": "Use K8s >=1.29 native sidecar (initContainer with restartPolicy:Always)" }
+        }
+      },
       "tolerations": {
         "type": [
           "string",
@@ -137,14 +146,194 @@
         ]
       },
       "config": {
-        "type": [
-          "string",
-          "boolean",
-          "number",
-          "object",
-          "array"
-        ],
-        "description": "kwatch configuration"
+        "type": "object",
+        "description": "kwatch configuration (see deploy/config.yaml for full reference)",
+        "properties": {
+          "workers": { "type": "integer", "description": "number of reconcile workers" },
+          "maxRecentLogLines": { "type": "integer", "description": "max log lines in alerts" },
+          "ignoreFailedGracefulShutdown": { "type": "boolean" },
+          "resyncSeconds": { "type": "integer" },
+          "namespaces": { "type": "array", "items": { "type": "string" } },
+          "reasons": { "type": "array", "items": { "type": "string" } },
+          "ignorePodNames": { "type": "array", "items": { "type": "string" } },
+          "severityByOwnerKind": { "type": "object", "additionalProperties": { "type": "string" } },
+          "nodeMonitor": {
+            "type": "object",
+            "properties": {
+              "enabled": { "type": "boolean" }
+            }
+          },
+          "pvcMonitor": {
+            "type": "object",
+            "properties": {
+              "enabled": { "type": "boolean" },
+              "interval": { "type": "integer" },
+              "threshold": { "type": "number" },
+              "criticalThreshold": { "type": "number" },
+              "clearThreshold": { "type": "number" }
+            }
+          },
+          "daemonSetMonitor": {
+            "type": "object",
+            "properties": {
+              "enabled": { "type": "boolean" },
+              "sustainedMinutes": { "type": "integer" }
+            }
+          },
+          "cronJobMonitor": {
+            "type": "object",
+            "properties": {
+              "enabled": { "type": "boolean" }
+            }
+          },
+          "hpaMonitor": {
+            "type": "object",
+            "properties": {
+              "enabled": { "type": "boolean" },
+              "sustainedMinutes": { "type": "integer" }
+            }
+          },
+          "tlsMonitor": {
+            "type": "object",
+            "properties": {
+              "enabled": { "type": "boolean" },
+              "threshold": { "type": "integer" },
+              "criticalThreshold": { "type": "integer" }
+            }
+          },
+          "jobMonitor": {
+            "type": "object",
+            "properties": {
+              "enabled": { "type": "boolean" }
+            }
+          },
+          "rolloutMonitor": {
+            "type": "object",
+            "properties": {
+              "enabled": { "type": "boolean" }
+            }
+          },
+          "pendingPodMonitor": {
+            "type": "object",
+            "properties": {
+              "enabled": { "type": "boolean" },
+              "threshold": { "type": "integer" }
+            }
+          },
+          "heartbeatMonitor": {
+            "type": "object",
+            "properties": {
+              "enabled": { "type": "boolean" },
+              "interval": { "type": "integer" },
+              "url": { "type": "string" }
+            }
+          },
+          "healthCheck": {
+            "type": "object",
+            "properties": {
+              "enabled": { "type": "boolean" },
+              "port": { "type": "integer" },
+              "pprof": { "type": "boolean" },
+              "diagnostics": { "type": "boolean" },
+              "diagnosticsToken": { "type": "string" }
+            }
+          },
+          "correlation": {
+            "type": "object",
+            "properties": {
+              "window": { "type": "integer" },
+              "lifecycleInterval": { "type": "integer" },
+              "maxBaseline": { "type": "integer" },
+              "resolveHoldDown": { "type": "integer" },
+              "escalation": {
+                "type": "object",
+                "properties": {
+                  "enabled": { "type": "boolean" },
+                  "tiers": { "type": "array", "items": { "type": "integer" } }
+                }
+              },
+              "renotify": {
+                "type": "object",
+                "properties": {
+                  "intervalBySeverity": { "type": "object" },
+                  "maxPerIncident": { "type": "integer" }
+                }
+              }
+            }
+          },
+          "inhibition": {
+            "type": "object",
+            "properties": {
+              "nodeSuppressesPods": { "type": "boolean" }
+            }
+          },
+          "storm": {
+            "type": "object",
+            "properties": {
+              "enabled": { "type": "boolean" },
+              "threshold": { "type": "integer" },
+              "windowMinutes": { "type": "integer" },
+              "digestIntervalMinutes": { "type": "integer" }
+            }
+          },
+          "crd": {
+            "type": "object",
+            "properties": {
+              "enabled": { "type": "boolean" }
+            }
+          },
+          "templates": {
+            "type": "object",
+            "description": "Go text/template overrides per incident reason",
+            "additionalProperties": { "type": "string" }
+          },
+          "silences": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "namespaces": { "type": "array", "items": { "type": "string" } },
+                "reasons": { "type": "array", "items": { "type": "string" } },
+                "podNamePatterns": { "type": "array", "items": { "type": "string" } },
+                "containerNames": { "type": "array", "items": { "type": "string" } },
+                "logPatterns": { "type": "array", "items": { "type": "string" } },
+                "containerMessages": { "type": "array", "items": { "type": "string" } },
+                "nodeReasons": { "type": "array", "items": { "type": "string" } },
+                "nodeMessages": { "type": "array", "items": { "type": "string" } }
+              }
+            }
+          },
+          "llm": {
+            "type": "object",
+            "description": "AI enrichment configuration",
+            "properties": {
+              "enabled": { "type": "boolean", "description": "Enable the LLM sidecar for AI root-cause analysis (default false)" }
+            }
+          },
+          "dashboardURLTemplate": {
+            "type": "string",
+            "description": "Dashboard URL template with {namespace}/{owner}/{pod} placeholders"
+          },
+          "alert": {
+            "type": "object",
+            "description": "Provider-specific alert configuration"
+          },
+          "app": {
+            "type": "object",
+            "properties": {
+              "clusterName": { "type": "string" },
+              "proxyURL": { "type": "string" },
+              "disableStartupMessage": { "type": "boolean" },
+              "logFormatter": { "type": "string" }
+            }
+          },
+          "upgrader": {
+            "type": "object",
+            "properties": {
+              "disableUpdateCheck": { "type": "boolean" }
+            }
+          }
+        }
       }
     }
   }

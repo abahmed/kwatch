@@ -2,7 +2,7 @@ package filter
 
 type ContainerStateFilter struct{}
 
-func (f ContainerStateFilter) Execute(ctx *Context) bool {
+func (f ContainerStateFilter) Detect(ctx *Context) Status {
 	container := ctx.Container.Container
 
 	if container.State.Running != nil {
@@ -14,23 +14,26 @@ func (f ContainerStateFilter) Execute(ctx *Context) bool {
 	}
 
 	if !ctx.Container.HasRestarts && container.State.Running != nil {
-		return true
+		return StatusSkip
 	}
 
 	if container.State.Waiting != nil &&
 		(container.State.Waiting.Reason == "ContainerCreating" ||
 			container.State.Waiting.Reason == "PodInitializing") {
-		return true
+		return StatusSkip
 	}
 
 	if container.State.Terminated != nil &&
 		(container.State.Terminated.Reason == "Completed" ||
-			// 143 is the exit code for graceful termination
 			container.State.Terminated.ExitCode == 143 ||
-			// 0 is the exit code for purpose stop
-			container.State.Terminated.ExitCode == 0) {
-		return true
+			container.State.Terminated.ExitCode == 0) &&
+		!ctx.Container.HasRestarts {
+		return StatusSkip
 	}
 
-	return false
+	return StatusAlert
+}
+
+func (f ContainerStateFilter) Execute(ctx *Context) bool {
+	return f.Detect(ctx) == StatusSkip
 }

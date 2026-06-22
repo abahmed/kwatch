@@ -146,7 +146,7 @@ func TestSendMessageErrorAccepted(t *testing.T) {
 	c := NewTeams(configMap, appCfg)
 	assert.NotNil(c)
 
-	assert.NotNil(c.SendMessage("test"))
+	assert.Nil(c.SendMessage("test"), "202 Accepted is now success")
 }
 
 func TestSendMessageErrorServer(t *testing.T) {
@@ -220,16 +220,19 @@ func TestBuildRequestBodyTeams(t *testing.T) {
 	teams := NewTeams(configMap, appCfg)
 
 	e := &event.Event{
-		PodName:   "test-pod",
-		Namespace: "test-namespace",
-		Reason:    "test-reason",
-		Logs:      "test-logs",
-		Events:    "test-events",
+		PodName:       "test-pod",
+		Namespace:     "test-namespace",
+		Reason:        "test-reason",
+		Logs:          "test-logs",
+		Events:        "test-events",
+		IncludeEvents: true,
+		IncludeLogs:   true,
 	}
 
-	payload := teams.buildRequestBodyTeams(e)
+	payload, err := teams.buildRequestBodyTeams(e)
+	assert.NoError(t, err)
 	var result teamsFlowPayload
-	err := json.Unmarshal(payload, &result)
+	err = json.Unmarshal(payload, &result)
 	assert.NoError(t, err)
 	assert.Equal(t, "Test Title", result.Title)
 	assert.Contains(t, result.Text, "test-pod")
@@ -246,9 +249,10 @@ func TestBuildRequestBodyMessage(t *testing.T) {
 	appCfg := &config.App{}
 	teams := NewTeams(configMap, appCfg)
 
-	payload := teams.buildRequestBodyMessage("test message")
+	payload, err := teams.buildRequestBodyMessage("test message")
+	assert.NoError(t, err)
 	var result teamsFlowPayload
-	err := json.Unmarshal(payload, &result)
+	err = json.Unmarshal(payload, &result)
 	assert.NoError(t, err)
 	assert.Equal(t, "New Alert", result.Title)
 	assert.Equal(t, "test message", result.Text)
@@ -268,6 +272,27 @@ func TestNewTeamsWithCustomRetrySettings(t *testing.T) {
 	assert.Equal(t, 10, teams.retryDelay)
 }
 
+func TestBuildRequestBodyTeamsGolden(t *testing.T) {
+	configMap := map[string]interface{}{
+		"webhook": "http://example.com",
+	}
+	appCfg := &config.App{ClusterName: "production"}
+	teams := NewTeams(configMap, appCfg)
+
+	e := &event.Event{
+		PodName:   "my-pod",
+		Namespace: "my-namespace",
+		Reason:    "OOMKilled",
+	}
+
+	b, err := teams.buildRequestBodyTeams(e)
+	assert.NoError(t, err)
+	payload := string(b)
+	assert.Contains(t, payload, "my-pod")
+	assert.Contains(t, payload, "my-namespace")
+	assert.Contains(t, payload, "OOMKilled")
+}
+
 func TestBuildRequestBodyTeamsDefaultTitle(t *testing.T) {
 	configMap := map[string]interface{}{
 		"webhook": "http://example.com",
@@ -276,17 +301,20 @@ func TestBuildRequestBodyTeamsDefaultTitle(t *testing.T) {
 	teams := NewTeams(configMap, appCfg)
 
 	e := &event.Event{
-		PodName:   "test-pod",
-		Namespace: "test-namespace",
-		Reason:    "test-reason",
-		Logs:      "test-logs",
-		Events:    "test-events",
-		NodeName:  "test-node",
+		PodName:       "test-pod",
+		Namespace:     "test-namespace",
+		Reason:        "test-reason",
+		Logs:          "test-logs",
+		Events:        "test-events",
+		NodeName:      "test-node",
+		IncludeEvents: true,
+		IncludeLogs:   true,
 	}
 
-	payload := teams.buildRequestBodyTeams(e)
+	payload, err := teams.buildRequestBodyTeams(e)
+	assert.NoError(t, err)
 	var result teamsFlowPayload
-	err := json.Unmarshal(payload, &result)
+	err = json.Unmarshal(payload, &result)
 	assert.NoError(t, err)
 	assert.Contains(t, result.Title, "Kwatch")
 }
@@ -301,11 +329,13 @@ func TestSendEventWithCustomTitle(t *testing.T) {
 	teams := NewTeams(configMap, appCfg)
 
 	e := &event.Event{
-		PodName:   "test-pod",
-		Namespace: "test-namespace",
-		Reason:    "test-reason",
-		Logs:      "test-logs",
-		Events:    "test-events",
+		PodName:       "test-pod",
+		Namespace:     "test-namespace",
+		Reason:        "test-reason",
+		Logs:          "test-logs",
+		Events:        "test-events",
+		IncludeEvents: true,
+		IncludeLogs:   true,
 	}
 
 	server := httptest.NewServer(
@@ -338,7 +368,7 @@ func TestSendMessageBadRequestWithBody(t *testing.T) {
 	assert.Error(t, err)
 }
 
-func TestSendMessageMultipleRetries(t *testing.T) {
+func TestSendMessage202AcceptedSucceeds(t *testing.T) {
 	configMap := map[string]interface{}{
 		"webhook":    "http://example.com",
 		"maxRetries": 3,
@@ -355,5 +385,5 @@ func TestSendMessageMultipleRetries(t *testing.T) {
 
 	teams.webhook = server.URL
 	err := teams.SendMessage("test message")
-	assert.Error(t, err)
+	assert.NoError(t, err, "202 Accepted is now treated as success")
 }

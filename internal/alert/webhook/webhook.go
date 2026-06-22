@@ -10,6 +10,7 @@ import (
 	"github.com/abahmed/kwatch/internal/config"
 	"github.com/abahmed/kwatch/internal/event"
 	"github.com/abahmed/kwatch/internal/k8s"
+	"github.com/abahmed/kwatch/internal/ratelimit"
 
 	"k8s.io/klog/v2"
 )
@@ -55,7 +56,10 @@ func NewWebhook(config map[string]interface{}, appCfg *config.App) *Webhook {
 					continue
 				}
 				var k KeyValue
-				json.Unmarshal(headerJson, &k)
+				if err := json.Unmarshal(headerJson, &k); err != nil {
+					klog.InfoS("skipping invalid webhook header", "error", err)
+					continue
+				}
 				headers = append(headers, k)
 			}
 		}
@@ -69,7 +73,10 @@ func NewWebhook(config map[string]interface{}, appCfg *config.App) *Webhook {
 	}
 
 	var a Authentication
-	json.Unmarshal(basicAuthJson, &a)
+	if err := json.Unmarshal(basicAuthJson, &a); err != nil {
+		klog.InfoS("invalid webhook basicAuth, ignoring", "error", err)
+		a = Authentication{}
+	}
 
 	klog.InfoS("initializing webhook",
 		"url", url,
@@ -115,6 +122,13 @@ func (w *Webhook) SendEvent(ev *event.Event) error {
 	}
 	defer response.Body.Close()
 
+	if response.StatusCode == http.StatusTooManyRequests {
+		return &ratelimit.Error{
+			Provider:   "Webhook",
+			StatusCode: http.StatusTooManyRequests,
+			RetryAfter: ratelimit.ParseRetryAfter(response),
+		}
+	}
 	if response.StatusCode > 202 {
 		return fmt.Errorf(
 			"call to webhook returned status code %d",
@@ -158,4 +172,5 @@ func (w *Webhook) buildRequestBody(
 	}
 
 	return postBody
+
 }

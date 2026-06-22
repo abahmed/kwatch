@@ -16,6 +16,7 @@ import (
 	"github.com/abahmed/kwatch/internal/constant"
 	"github.com/abahmed/kwatch/internal/event"
 	"github.com/abahmed/kwatch/internal/k8s"
+	"github.com/abahmed/kwatch/internal/ratelimit"
 	"k8s.io/klog/v2"
 )
 
@@ -139,6 +140,14 @@ func (d *DingTalk) sendAPI(msg string) error {
 		return err
 	}
 	defer response.Body.Close()
+
+	if response.StatusCode == http.StatusTooManyRequests {
+		return &ratelimit.Error{
+			Provider:   "DingTalk",
+			StatusCode: http.StatusTooManyRequests,
+			RetryAfter: ratelimit.ParseRetryAfter(response),
+		}
+	}
 
 	data, err := io.ReadAll(response.Body)
 	if err != nil {

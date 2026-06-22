@@ -43,6 +43,7 @@ type zendutyPayload struct {
 	Message   string `json:"message"`
 	Summary   string `json:"summary"`
 	AlertType string `json:"alert_type"`
+	EntityID  string `json:"entity_id,omitempty"`
 }
 
 // NewZenduty returns new zenduty instance
@@ -75,6 +76,8 @@ func (m *Zenduty) Name() string {
 	return "Zenduty"
 }
 
+func (m *Zenduty) UsesEventDelivery() {}
+
 // SendMessage sends text message to the provider
 func (m *Zenduty) SendMessage(msg string) error {
 	return nil
@@ -82,7 +85,27 @@ func (m *Zenduty) SendMessage(msg string) error {
 
 // SendEvent sends event to the provider
 func (m *Zenduty) SendEvent(e *event.Event) error {
-	return m.sendAPI(m.buildMessage(e))
+	if e.Action == "resolved" {
+		return m.resolveAlert(e.DedupKey)
+	}
+	b, err := m.buildMessage(e)
+	if err != nil {
+		return err
+	}
+	return m.sendAPI(b)
+}
+
+func (m *Zenduty) resolveAlert(entityID string) error {
+	payload := zendutyPayload{
+		AlertType: "resolved",
+		EntityID:  entityID,
+		Message:   "resolved",
+	}
+	body, err := json.Marshal(payload)
+	if err != nil {
+		return fmt.Errorf("failed to marshal zenduty resolve payload: %w", err)
+	}
+	return m.sendAPI(body)
 }
 
 // sendAPI sends http request to Zenduty API
@@ -104,6 +127,9 @@ func (m *Zenduty) sendAPI(content []byte) error {
 	defer response.Body.Close()
 
 	if response.StatusCode != 201 {
+		if response.StatusCode == http.StatusTooManyRequests {
+			return event.CheckHTTPResponse(response, "zenduty")
+		}
 		body, _ := io.ReadAll(response.Body)
 		return fmt.Errorf(
 			"call to zenduty alert returned status code %d: %s",
@@ -114,9 +140,10 @@ func (m *Zenduty) sendAPI(content []byte) error {
 	return nil
 }
 
-func (m *Zenduty) buildMessage(e *event.Event) []byte {
+func (m *Zenduty) buildMessage(e *event.Event) ([]byte, error) {
 	payload := zendutyPayload{
 		AlertType: m.alertType,
+		EntityID:  e.DedupKey,
 	}
 
 	logs := constant.DefaultLogs
@@ -152,8 +179,7 @@ func (m *Zenduty) buildMessage(e *event.Event) []byte {
 
 	str, err := json.Marshal(payload)
 	if err != nil {
-		klog.ErrorS(err, "failed to marshal zenduty payload")
-		return nil
+		return nil, fmt.Errorf("failed to marshal zenduty payload: %w", err)
 	}
-	return str
+	return str, nil
 }

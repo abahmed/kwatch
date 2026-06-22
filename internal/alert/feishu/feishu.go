@@ -10,6 +10,7 @@ import (
 	"github.com/abahmed/kwatch/internal/config"
 	"github.com/abahmed/kwatch/internal/event"
 	"github.com/abahmed/kwatch/internal/k8s"
+	"github.com/abahmed/kwatch/internal/ratelimit"
 	"k8s.io/klog/v2"
 )
 
@@ -24,6 +25,31 @@ type FeiShu struct {
 type feiShuWebhookContent struct {
 	Tag     string `json:"tag"`
 	Content string `json:"content"`
+}
+
+type feiShuCardConfig struct {
+	WideScreenMode bool `json:"wide_screen_mode"`
+}
+
+type feiShuHeaderTitle struct {
+	Tag     string `json:"tag"`
+	Content string `json:"content"`
+}
+
+type feiShuHeader struct {
+	Title    feiShuHeaderTitle `json:"title"`
+	Template string            `json:"template"`
+}
+
+type feiShuCard struct {
+	Config   feiShuCardConfig       `json:"config"`
+	Header   feiShuHeader           `json:"header"`
+	Elements []feiShuWebhookContent `json:"elements"`
+}
+
+type feiShuRequestBody struct {
+	MsgType string     `json:"msg_type"`
+	Card    feiShuCard `json:"card"`
 }
 
 // NewFeiShu returns new feishu web bot instance
@@ -76,10 +102,17 @@ func (r *FeiShu) sendByFeiShuApi(reqBody string) error {
 	}
 	defer response.Body.Close()
 
+	if response.StatusCode == http.StatusTooManyRequests {
+		return &ratelimit.Error{
+			Provider:   "Feishu",
+			StatusCode: http.StatusTooManyRequests,
+			RetryAfter: ratelimit.ParseRetryAfter(response),
+		}
+	}
 	if response.StatusCode != 200 {
 		body, _ := io.ReadAll(response.Body)
 		return fmt.Errorf(
-			"call to rocket chat alert returned status code %d: %s",
+			"call to feishu alert returned status code %d: %s",
 			response.StatusCode,
 			string(body))
 	}
@@ -98,19 +131,30 @@ func (r *FeiShu) SendMessage(msg string) error {
 
 func (r *FeiShu) buildRequestBodyFeiShu(
 	text string) (string, error) {
-	var content = []feiShuWebhookContent{
-		{
-			Tag:     "markdown",
-			Content: text,
+	body := feiShuRequestBody{
+		MsgType: "interactive",
+		Card: feiShuCard{
+			Config: feiShuCardConfig{
+				WideScreenMode: true,
+			},
+			Header: feiShuHeader{
+				Title: feiShuHeaderTitle{
+					Tag:     "plain_text",
+					Content: r.title,
+				},
+				Template: "blue",
+			},
+			Elements: []feiShuWebhookContent{
+				{
+					Tag:     "markdown",
+					Content: text,
+				},
+			},
 		},
 	}
-	jsonBytes, err := json.Marshal(content)
+	jsonBytes, err := json.Marshal(body)
 	if err != nil {
-		return "", fmt.Errorf("failed to marshal feishu content: %w", err)
+		return "", fmt.Errorf("failed to marshal feishu body: %w", err)
 	}
-
-	body := "{\"msg_type\": \"interactive\",\"card\": {\"config\": {\"wide_screen_mode\": true},\"header\": {\"title\": {\"tag\": \"plain_text\",\"content\": \"" +
-		r.title +
-		"\"},\"template\": \"blue\"},\"elements\": " + string(jsonBytes) + "}}"
-	return body, nil
+	return string(jsonBytes), nil
 }

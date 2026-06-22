@@ -1,11 +1,11 @@
 package k8s
 
 import (
+	"context"
 	"errors"
 	"math/rand"
 	"os"
 	"testing"
-	"time"
 
 	"github.com/stretchr/testify/assert"
 	v1 "k8s.io/api/core/v1"
@@ -22,6 +22,7 @@ func TestGetPodContainerLogs(t *testing.T) {
 
 	client := fake.NewSimpleClientset()
 	logs := GetPodContainerLogs(
+		context.Background(),
 		client,
 		"test",
 		"test",
@@ -30,6 +31,29 @@ func TestGetPodContainerLogs(t *testing.T) {
 		20)
 
 	assert.Equal(logs, "fake logs")
+}
+
+func TestGetPodContainerLogsError(t *testing.T) {
+	assert := assert.New(t)
+
+	client := fake.NewSimpleClientset()
+	client.PrependReactor("get", "pods", func(action k8stesting.Action) (bool, runtime.Object, error) {
+		if action.GetSubresource() == "log" {
+			return true, nil, errors.New("log fetch error")
+		}
+		return false, nil, nil
+	})
+
+	logs := GetPodContainerLogs(
+		context.Background(),
+		client,
+		"test-pod",
+		"test-container",
+		"default",
+		false,
+		20)
+
+	assert.Equal("", logs, "GetPodContainerLogs should return empty string on error")
 }
 
 func TestJsonEscape(t *testing.T) {
@@ -105,6 +129,7 @@ func TestContainsKillingStoppingContainerEvents(t *testing.T) {
 
 	result :=
 		ContainsKillingStoppingContainerEvents(
+			context.Background(),
 			cli,
 			"dummy-app-579f7cd745-t6fdg",
 			"test")
@@ -125,6 +150,7 @@ func TestContainsKillingStoppingContainerEventsError(t *testing.T) {
 
 	result :=
 		ContainsKillingStoppingContainerEvents(
+			context.Background(),
 			cli,
 			"dummy-app-579f7cd745-t6fdg",
 			"test")
@@ -147,6 +173,7 @@ func TestContainsKillingStoppingContainerEmpty(t *testing.T) {
 
 	result :=
 		ContainsKillingStoppingContainerEvents(
+			context.Background(),
 			cli,
 			"dummy-app-579f7cd745-t6fdg",
 			"test")
@@ -177,7 +204,7 @@ func TestGetNodes(t *testing.T) {
 			}, nil
 		})
 
-	result, err := GetNodes(cli)
+	result, err := GetNodes(context.Background(), cli)
 	assert.NoError(err)
 	assert.NotNil(result)
 	assert.Equal(len(result.Items), 1)
@@ -198,7 +225,7 @@ func TestGetPVNameFromPVC(t *testing.T) {
 			}, nil
 		})
 
-	result, err := GetPVNameFromPVC(cli, "test", "test")
+	result, err := GetPVNameFromPVC(context.Background(), cli, "test", "test")
 	assert.NoError(err)
 	assert.Equal(result, "test")
 }
@@ -214,7 +241,7 @@ func TestGetPVNameFromPVCError(t *testing.T) {
 			return true, nil, errors.New("failed")
 		})
 
-	result, err := GetPVNameFromPVC(cli, "test", "test")
+	result, err := GetPVNameFromPVC(context.Background(), cli, "test", "test")
 	assert.Error(err, "failed")
 	assert.Equal(result, "")
 }
@@ -234,7 +261,7 @@ func TestGetPVNameFromPVCEmpty(t *testing.T) {
 			}, nil
 		})
 
-	result, err := GetPVNameFromPVC(cli, "test", "test")
+	result, err := GetPVNameFromPVC(context.Background(), cli, "test", "test")
 	assert.NoError(err)
 	assert.Equal("", result)
 }
@@ -252,7 +279,7 @@ func TestGetNodesEmpty(t *testing.T) {
 			}, nil
 		})
 
-	result, err := GetNodes(cli)
+	result, err := GetNodes(context.Background(), cli)
 	assert.NoError(err)
 	assert.NotNil(result)
 	assert.Equal(0, len(result.Items))
@@ -299,7 +326,7 @@ func TestContainsKillingStoppingContainerDifferentCase(t *testing.T) {
 			}, nil
 		})
 
-	result := ContainsKillingStoppingContainerEvents(cli, "test", "default")
+	result := ContainsKillingStoppingContainerEvents(context.Background(), cli, "test", "default")
 	assert.True(result)
 }
 
@@ -320,7 +347,7 @@ func TestContainsKillingStoppingContainerNoMatch(t *testing.T) {
 			}, nil
 		})
 
-	result := ContainsKillingStoppingContainerEvents(cli, "test", "default")
+	result := ContainsKillingStoppingContainerEvents(context.Background(), cli, "test", "default")
 	assert.False(result)
 }
 
@@ -400,7 +427,7 @@ func TestGetPodEventsWithFieldSelector(t *testing.T) {
 			}, nil
 		})
 
-	result, err := GetPodEvents(cli, "my-pod", "test-namespace")
+	result, err := GetPodEvents(context.Background(), cli, "my-pod", "test-namespace")
 	assert.NoError(err)
 	assert.NotNil(result)
 	assert.Equal(0, len(result.Items))
@@ -443,23 +470,16 @@ func TestGetPodEventsSuccess(t *testing.T) {
 			}, nil
 		})
 
-	result, err := GetPodEvents(cli, "test-pod", "default")
+	result, err := GetPodEvents(context.Background(), cli, "test-pod", "default")
 	assert.NoError(err)
 	assert.NotNil(result)
 	assert.Equal(1, len(result.Items))
 }
 
-func TestNewHTTPClientWithTimeout(t *testing.T) {
+func TestNewHTTPClient(t *testing.T) {
 	assert := assert.New(t)
 
-	client := NewHTTPClient(10 * time.Second)
-	assert.NotNil(client)
-}
-
-func TestNewHTTPClientWithZeroTimeout(t *testing.T) {
-	assert := assert.New(t)
-
-	client := NewHTTPClient(0)
+	client := NewHTTPClient()
 	assert.NotNil(client)
 	assert.Equal(DefaultHTTPTimeout, client.Timeout)
 }

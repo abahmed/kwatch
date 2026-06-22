@@ -7,19 +7,29 @@ import (
 
 type ContainerLogsFilter struct{}
 
-func (f ContainerLogsFilter) Execute(ctx *Context) bool {
+func (f ContainerLogsFilter) Detect(ctx *Context) Status {
+	return StatusAlert
+}
+
+func (f ContainerLogsFilter) Enrich(ctx *Context) bool {
 	container := ctx.Container.Container
 
 	if container.RestartCount == 0 && container.State.Waiting != nil {
 		return false
 	}
 
-	previousLogs := false
-	if ctx.Container.HasRestarts && container.State.Running != nil {
-		previousLogs = true
+	// If the container terminated with ContainerStatusUnknown, logs are
+	// unavailable — skip the API call entirely.
+	if container.State.Terminated != nil &&
+		container.State.Terminated.Reason == "ContainerStatusUnknown" {
+		ctx.Container.Logs = ""
+		return false
 	}
 
+	previousLogs := container.RestartCount > 0 && container.State.Running == nil
+
 	logs := k8s.GetPodContainerLogs(
+		ctx.Ctx,
 		ctx.Client,
 		ctx.Pod.Name,
 		container.Name,
@@ -27,7 +37,7 @@ func (f ContainerLogsFilter) Execute(ctx *Context) bool {
 		previousLogs,
 		ctx.Config.MaxRecentLogLines)
 
-	for _, pattern := range ctx.Config.IgnoreLogPatternsCompiled {
+	for _, pattern := range ctx.Config.Suppression.LogPatterns {
 		if pattern.MatchString(logs) {
 			klog.InfoS(
 				"skipping container logs as it matches the ignore log pattern",
@@ -38,4 +48,8 @@ func (f ContainerLogsFilter) Execute(ctx *Context) bool {
 
 	ctx.Container.Logs = logs
 	return false
+}
+
+func (f ContainerLogsFilter) Execute(ctx *Context) bool {
+	return f.Enrich(ctx)
 }

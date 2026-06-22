@@ -3,6 +3,8 @@ package upgrader
 import (
 	"context"
 	"fmt"
+	"net/http"
+	"os"
 	"time"
 
 	"github.com/abahmed/kwatch/internal/alert"
@@ -21,7 +23,8 @@ type GitHubReleaseChecker interface {
 type GitHubClient struct{}
 
 func (c *GitHubClient) GetLatestRelease(ctx context.Context, owner, repo string) (*github.RepositoryRelease, *github.Response, error) {
-	client := github.NewClient(nil)
+	httpClient := &http.Client{Timeout: 30 * time.Second}
+	client := github.NewClient(httpClient)
 	return client.Repositories.GetLatestRelease(ctx, owner, repo)
 }
 
@@ -42,12 +45,18 @@ type Upgrader struct {
 }
 
 func NewUpgrader(
-	config *config.Upgrader,
+	upCfg *config.Upgrader,
 	alertManager *alert.AlertManager,
 	stateManager *state.StateManager,
 ) *Upgrader {
+	if upCfg == nil {
+		upCfg = &config.Upgrader{}
+	}
+	if os.Getenv("SKIP_UPGRADE_CHECK") == "1" || os.Getenv("SKIP_UPGRADE_CHECK") == "true" {
+		upCfg.DisableUpdateCheck = true
+	}
 	return &Upgrader{
-		config:       config,
+		config:       upCfg,
 		alertManager: alertManager,
 		stateManager: stateManager,
 		githubClient: &GitHubClient{},
@@ -69,10 +78,13 @@ func (u *Upgrader) SetStateManager(stateMgr VersionTracker) {
 func (u *Upgrader) CheckUpdates(ctx context.Context) {
 	if u.config.DisableUpdateCheck ||
 		version.Short() == "dev" {
+		if u.config.DisableUpdateCheck {
+			klog.Infof("update check disabled")
+		}
 		return
 	}
 
-	u.checkRelease()
+	u.checkRelease(ctx)
 
 	ticker := time.NewTicker(24 * time.Hour)
 	defer ticker.Stop()
@@ -83,14 +95,12 @@ func (u *Upgrader) CheckUpdates(ctx context.Context) {
 			klog.InfoS("upgrader stopped")
 			return
 		case <-ticker.C:
-			u.checkRelease()
+			u.checkRelease(ctx)
 		}
 	}
 }
 
-func (u *Upgrader) checkRelease() {
-	ctx := context.Background()
-
+func (u *Upgrader) checkRelease(ctx context.Context) {
 	r, _, err := u.githubClient.GetLatestRelease(
 		ctx,
 		"abahmed",

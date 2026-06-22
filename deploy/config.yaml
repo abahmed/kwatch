@@ -10,39 +10,144 @@ metadata:
   namespace: kwatch
 data:
   config.yaml: |
-    maxRecentLogLines: <optional_number_of_lines>
-    ignoreFailedGracefulShutdown: <optional_boolean>
-    healthCheck:
-      enabled: true
-      port: 8060
-    alert:
-      slack:
-        webhook: <webhook_url>
-      pagerduty:
-        integrationKey: <integration_key>
-      discord:
-        webhook: <webhook_url>
-      telegram:
-          token: <token_key>
-          chatId: <chat_id>
-      email:
-        form: <from_mail>
-        to: <to_mail>
-        password: <password>
-        host: <host>
-        port: <port_number>
-      teams:
-          webhook: <webhook_url>
-      rocketchat:
-          webhook: <webhook_url>
-      mattermost:
-          webhook: <webhook_url>
-      opsgenie:
-        apiKey: <api_key>
+    # ── General ──────────────────────────────────────────────
+    maxRecentLogLines: <optional_number_of_lines>    # also caps logs/events in alert message blocks (default 100)
+    ignoreFailedGracefulShutdown: true
+
+    # Pods stuck in Pending beyond this threshold (seconds) trigger an alert
+    pendingPodThreshold: 300
+
+    # Optional periodic resync (0 = event-driven only); raise to e.g. 600 only if a
+    # periodic full-reconcile safety net is wanted
+    resyncSeconds: 0
+
+    # ── Namespace / Reason / Container filtering ──────────
     namespaces:
       - <optional_namespace>
     reasons:
       - <optional_reason>
     ignoreContainerNames:
       - <optional_container_name>
+    ignorePodNames:
+      - "<optional_regex_pattern>"
+    ignoreLogPatterns:
+      - "<optional_log_regex>"
+
+    # ── Severity ──────────────────────────────────────────
+    # Map owner kinds to severity levels
+    severityByOwnerKind:
+      StatefulSet: "high"
+      # DaemonSet: "low"
+      # default: "normal"
+
+    # ── Silences (suppress matching incidents entirely) ──
+    silences:
+      # - namespaces: ["kube-system", "monitoring"]
+      # - reasons: ["BackOff"]
+      # - podNamePatterns: ["my-fancy-pod-.*"]
+
+    # ── Correlation (incident dedup & lifecycle) ──────────
+    correlation:
+      window: 10
+      lifecycleInterval: 1
+      # resolveHoldDown: 30    # Seconds to wait before resolving (flap dampening)
+
+    # ── Monitors ──────────────────────────────────────────
+    nodeMonitor:
+      enabled: true
+
+    rolloutMonitor:
+      enabled: true
+
+    daemonSetMonitor:
+      enabled: false
+      # sustainedMinutes: 5    # Debounce before alerting (default 5)
+
+    jobMonitor:
+      enabled: true
+
+    cronJobMonitor:
+      enabled: false
+
+    pvcMonitor:
+      # NOTE: usage is read from each node's kubelet stats/summary, which only reports
+      # volumes that are currently MOUNTED by a running pod. A Bound-but-unmounted PVC
+      # (e.g. before its consumer pod schedules) has no usage data and is not checked
+      # until a pod mounts it. Volumes mounted only during CronJob/Job runs are handled
+      # by the last-known-usage cache (retained across unmounts).
+      enabled: true
+      interval: 5
+      threshold: 80
+      criticalThreshold: 90
+
+    # ── Node alert suppression ────────────────────────────
+    ignoreNodeReasons:
+      - "KubeletNotReady"
+    ignoreNodeMessages:
+      - "kubelet has no node IP"
+
+    # ── AI enrichment (opt-in, self-hosted) ──────────────
+    # llm:
+    #   enabled: true     # the only knob — model/endpoint/redaction are fixed in code
+
+    # ── Dashboard URL template (optional) ─────────────────
+    # dashboardURLTemplate: "https://grafana.example.com/d/abc?var-ns={namespace}&var-pod={pod}"
+
+    # ── Health check ──────────────────────────────────────
+    healthCheck:
+      enabled: true
+      port: 8060
+      # pprof: false      # set true to enable /debug/pprof/* profiling endpoints
+
+    # ── App ───────────────────────────────────────────────
+    app:
+      clusterName: "<cluster_name>"
+      # proxyURL: "https://proxy.example.com"
+      # disableStartupMessage: false
+      # logFormatter: "text"
+
+    # ── Upgrader ──────────────────────────────────────────
+    upgrader:
+      disableUpdateCheck: false
+
+    # ── Alert providers ───────────────────────────────────
+    alert:
+      slack:
+        webhook: <webhook_url>
+        # Optional routing + retry:
+        # routes:
+        #   - namespaces: ["production"]
+        #     severities: ["high"]
+        # retry:
+        #   maxAttempts: 3
+        #   delay: 5s
+
+      pagerduty:
+        integrationKey: <integration_key>
+
+      discord:
+        webhook: <webhook_url>
+
+      telegram:
+        token: <token_key>
+        chatId: <chat_id>
+
+      email:
+        from: <from_mail>
+        to: <to_mail>
+        password: <password>
+        host: <host>
+        port: <port_number>
+
+      teams:
+        webhook: <webhook_url>
+
+      rocketchat:
+        webhook: <webhook_url>
+
+      mattermost:
+        webhook: <webhook_url>
+
+      opsgenie:
+        apiKey: <api_key>
 

@@ -1,12 +1,47 @@
 package enricher
 
+import "fmt"
+
 var defaultHints = map[string]string{
-	"OOMKilled":        "Memory pressure — consider increasing memory limits",
-	"ImagePullBackOff": "Registry or authentication issue — check image name and pull secret",
-	"CrashLoopBackOff": "Application crash — check logs for startup errors",
-	"Error":            "Container exited with error — check logs",
-	"NodeNotReady":     "Node not ready — check kubelet and node resources",
-	"Unschedulable":    "No available node — check cluster capacity and resource requests",
+	"OOMKilled":                "Memory pressure — consider increasing memory limits",
+	"ImagePullBackOff":         "Registry or authentication issue — check image name and pull secret",
+	"ErrImagePull":             "Registry or authentication issue — check image name and pull secret",
+	"CrashLoopBackOff":         "Application crash — check logs for startup errors",
+	"Error":                    "Container exited with error — check logs",
+	"NodeNotReady":             "Node not ready — check kubelet and node resources",
+	"Unschedulable":            "No available node — check cluster capacity and resource requests",
+	"ContainerCreating":        "Container still being created — may be pulling image or waiting for resources",
+	"PodInitializing":          "Init containers still running — check init container logs",
+	"InitContainerError":       "Init container failed — check init container logs",
+	"PostStartHookError":       "PostStart lifecycle hook failed — check container configuration",
+	"PreStopHookError":         "PreStop lifecycle hook failed — check container configuration",
+	"ProbeError":               "Probe execution failed — check probe command, port, or endpoint",
+	"StartupProbeFailed":       "Startup probe failing — application is not starting within probe period",
+	"ReadinessProbeFailed":     "Readiness probe failing — application is not ready to serve traffic",
+	"LivenessProbeFailed":      "Liveness probe failing — application may be deadlocked or hung",
+	"NodeMemoryPressure":       "Node under memory pressure — consider reducing pod replicas or adding nodes",
+	"NodeDiskPressure":         "Node under disk pressure — free up disk space or add storage",
+	"NodePIDPressure":          "Node under PID pressure — too many processes running",
+	"NodeNetworkUnavailable":   "Node network not available — check network plugin and connectivity",
+	"ProgressDeadlineExceeded": "Rollout stuck — check pod template, resource limits, and deployment strategy",
+	"JobFailed":                "Job failed — check job logs and exit code",
+	"JobSuspended":             "Job suspended — check suspension request or cronjob configuration",
+	"PodPending":               "Pod stuck in Pending — check scheduler, resources, and persistent volumes",
+	"DaemonSetUnavailable":     "DaemonSet has unavailable pods — check node capacity and pod status",
+	"CronJobSuspended":         "CronJob is suspended — check suspension request or schedule configuration",
+	"CronJobNotScheduled":      "CronJob has not been scheduled recently — check schedule expression and job history",
+}
+
+var exitCodeHints = map[int32]string{
+	1:   "General error — check application logs for details",
+	2:   "Misuse of shell builtins — check command and arguments",
+	126: "Command cannot execute — check file permissions on binary",
+	127: "Command not found — check PATH or container image includes the binary",
+	130: "Terminated by Ctrl+C (SIGINT)",
+	137: "Out of memory (SIGKILL) — container exceeded memory limit",
+	139: "Segmentation fault (SIGSEGV) — null pointer or buffer overflow",
+	143: "Graceful shutdown (SIGTERM)",
+	255: "Exit status out of range — check entrypoint script",
 }
 
 func hintForReason(reason string) string {
@@ -14,4 +49,37 @@ func hintForReason(reason string) string {
 		return h
 	}
 	return ""
+}
+
+func HintForReason(reason string) string {
+	return hintForReason(reason)
+}
+
+func hintForExitCode(code int32) string {
+	if h, ok := exitCodeHints[code]; ok {
+		return h
+	}
+	if code > 0 {
+		return fmt.Sprintf("Non-zero exit code %d — check application logs", code)
+	}
+	return ""
+}
+
+func HintForExitCode(code int32) string {
+	return hintForExitCode(code)
+}
+
+// combineHints appends a secondary hint to a primary hint when both are non-empty.
+func combineHints(primary, secondary string) string {
+	if primary == "" {
+		return secondary
+	}
+	if secondary == "" {
+		return primary
+	}
+	return primary + "; " + secondary
+}
+
+func CombineHints(primary, secondary string) string {
+	return combineHints(primary, secondary)
 }

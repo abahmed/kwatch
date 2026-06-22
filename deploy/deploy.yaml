@@ -10,9 +10,26 @@ metadata:
 rules:
 - apiGroups: [""]
   resources: ["events", "nodes", "nodes/proxy", "pods", "pods/log", "persistentvolumeclaims"]
-  verbs: ["get", "watch", "list", "create", "update"]
+  verbs: ["get", "watch", "list"]
+- apiGroups: [""]
+  resources: ["namespaces"]
+  verbs: ["get", "list", "watch"]
 - apiGroups: ["apps"]
   resources: ["daemonsets", "statefulsets", "deployments", "replicasets"]
+  verbs: ["get", "watch", "list"]
+# - apiGroups: ["kwatch.abahmed.dev"]
+#   resources: ["kwatchconfigs"]
+#   verbs: ["get", "watch", "list"]
+#   # uncomment if you enable crd
+- apiGroups: ["autoscaling"]
+  resources: ["horizontalpodautoscalers"]
+  verbs: ["get", "watch", "list"]
+# - apiGroups: [""]
+#   resources: ["secrets"]
+#   verbs: ["get", "list", "watch"]
+#   # uncomment if you enable tlsMonitor
+- apiGroups: ["batch"]
+  resources: ["jobs", "cronjobs"]
   verbs: ["get", "watch", "list"]
 ---
 apiVersion: v1
@@ -43,6 +60,7 @@ rules:
 - apiGroups: [""]
   resources: ["configmaps"]
   verbs: ["get", "create", "update", "patch"]
+
 ---
 apiVersion: rbac.authorization.k8s.io/v1
 kind: RoleBinding
@@ -64,6 +82,9 @@ metadata:
   name: kwatch
   namespace: kwatch
 spec:
+  replicas: 1
+  strategy:
+    type: Recreate
   selector:
     matchLabels:
       app: kwatch
@@ -76,7 +97,7 @@ spec:
       serviceAccountName: kwatch
       containers:
       - name: kwatch
-        image: ghcr.io/abahmed/kwatch:v0.10.5
+        image: ghcr.io/abahmed/kwatch:v0.11.0
         imagePullPolicy: Always
         securityContext:
           runAsNonRoot: true
@@ -96,10 +117,61 @@ spec:
             valueFrom:
               fieldRef:
                 fieldPath: metadata.namespace
+          - name: GOMEMLIMIT
+            valueFrom:
+              resourceFieldRef:
+                resource: limits.memory
+                divisor: "1"
+        livenessProbe:
+          httpGet:
+            path: /healthz
+            port: health
+          initialDelaySeconds: 10
+          periodSeconds: 15
+        readinessProbe:
+          httpGet:
+            path: /readyz
+            port: health
+          initialDelaySeconds: 5
+          periodSeconds: 10
         resources:
           limits:
-            memory: "128Mi"
+            memory: "256Mi"
             cpu: "100m"
+      # LLM sidecar — uncomment to enable AI enrichment (+ set llm.enabled in config).
+      # NOTE: AI enrichment needs a 64-bit (amd64/arm64) node — see the affinity below.
+      # On a 32-bit-only cluster the sidecar is un-pullable (pod 1/2) but kwatch keeps
+      # alerting; don't enable it there.
+      # - name: llm
+      #   image: ghcr.io/abahmed/kwatch-llm:v1
+      #   env:
+      #     - { name: OLLAMA_HOST, value: "127.0.0.1:11434" }
+      #     - { name: OLLAMA_MODELS, value: /models }
+      #     - { name: OLLAMA_NUM_PARALLEL, value: "1" }
+      #     - { name: OLLAMA_MAX_LOADED_MODELS, value: "1" }
+      #     - { name: OLLAMA_KEEP_ALIVE, value: "5m" }
+      #   readinessProbe:
+      #     exec:
+      #       command: ["/bin/sh","-c","ollama list | grep -q kwatch-triage"]
+      #     initialDelaySeconds: 5
+      #     periodSeconds: 10
+      #   resources:
+      #     requests: { cpu: "500m", memory: "1Gi" }
+      #     limits: { cpu: "2", memory: "2Gi" }
+      #   securityContext:
+      #     allowPrivilegeEscalation: false
+      #     runAsNonRoot: true
+      #     runAsUser: 1000          # matches image USER (Fix 1)
+      #     runAsGroup: 1000
+      #     capabilities: { drop: ["ALL"] }
+      #     seccompProfile: { type: RuntimeDefault }
+      # affinity:                    # uncomment with the LLM sidecar — keep it on 64-bit nodes
+      #   nodeAffinity:
+      #     preferredDuringSchedulingIgnoredDuringExecution:
+      #       - weight: 100
+      #         preference:
+      #           matchExpressions:
+      #             - { key: kubernetes.io/arch, operator: In, values: [amd64, arm64] }
       volumes:
       - name: config-volume
         configMap:

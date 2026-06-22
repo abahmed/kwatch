@@ -2,6 +2,8 @@
 # This is a YAML-formatted file.
 # Declare variables to be passed into your templates.
 
+replicaCount: 1   # MUST stay 1 — kwatch is the sole writer of the kwatch-baseline/kwatch-pvc ConfigMaps. Do NOT scale.
+
 image:
   repository: ghcr.io/abahmed/kwatch
   pullPolicy: Always
@@ -17,7 +19,7 @@ service:
 
 resources:
   limits:
-    memory: 128Mi
+    memory: 256Mi
     cpu: 100m
 
 nodeSelector: {}
@@ -33,7 +35,28 @@ sacAnnotations: {}
 podLabels: {}
 
 # kwatch configuration
-config:
+# All detection monitors are ON by default; see docs.
+# resyncSeconds defaults to 0 (event-driven). workers defaults to 1 — raise on large
+# clusters (≈1 per few-thousand pods); each worker fans out to ≤7 goroutines.
+# To enable TLS monitoring (reads Secrets):
+# tlsMonitor:
+#   enabled: true
+#   threshold: 30
+config: {}
+
+# -- LLM sidecar configuration (opt-in AI enrichment)
+llm:
+  # -- model image (published manually via .github/workflows/publish-llm.yml)
+  repository: ghcr.io/abahmed/kwatch-llm
+  # -- model image version; bump AFTER publishing a new tag (Fix 6a). Independent of appVersion.
+  tag: "v1"
+  # -- Use K8s ≥1.29 native sidecar (initContainer restartPolicy:Always) vs plain container
+  nativeSidecar: false
+
+# -- Configure the upgrader/update checker
+upgrader:
+  # -- Disable the update check at startup
+  disableUpdateCheck: false
 
 
 

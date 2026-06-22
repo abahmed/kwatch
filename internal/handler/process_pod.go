@@ -1,23 +1,46 @@
 package handler
 
 import (
+	"context"
 	"fmt"
 
 	"github.com/abahmed/kwatch/internal/filter"
-	"github.com/abahmed/kwatch/internal/k8s"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/client-go/tools/cache"
 )
 
-func (h *handler) ProcessPod(key string, deleted bool) error {
+func podMountsPVC(pod *corev1.Pod) bool {
+	for _, v := range pod.Spec.Volumes {
+		if v.PersistentVolumeClaim != nil {
+			return true
+		}
+	}
+	return false
+}
+
+func isPodHealthy(pod *corev1.Pod) bool {
+	if pod.Status.Phase == corev1.PodRunning || pod.Status.Phase == corev1.PodSucceeded {
+		for _, cs := range pod.Status.ContainerStatuses {
+			if cs.State.Waiting != nil && cs.State.Waiting.Reason != "ContainerCreating" && cs.State.Waiting.Reason != "PodInitializing" {
+				return false
+			}
+			if cs.State.Terminated != nil && cs.State.Terminated.ExitCode != 0 && cs.State.Terminated.Reason != "Completed" {
+				return false
+			}
+		}
+		return true
+	}
+	return false
+}
+
+func (h *handler) ProcessPod(ctx context.Context, key string, deleted bool) error {
 	namespace, name, err := cache.SplitMetaNamespaceKey(key)
 	if err != nil {
 		return fmt.Errorf("invalid pod key %q: %w", key, err)
 	}
 
 	if deleted {
-		h.memory.DelPod(namespace, name)
 		h.correlator.RemovePod(namespace, name)
 		return nil
 	}
@@ -25,48 +48,47 @@ func (h *handler) ProcessPod(key string, deleted bool) error {
 	pod, err := h.podLister.Pods(namespace).Get(name)
 	if err != nil {
 		if errors.IsNotFound(err) {
-			h.memory.DelPod(namespace, name)
+			h.correlator.RemovePod(namespace, name)
 			return nil
 		}
 		return fmt.Errorf("failed to get pod %s/%s from cache: %w", namespace, name, err)
 	}
 
-	return h.ProcessPodObject(pod, false)
+	return h.ProcessPodObject(ctx, pod, false)
 }
 
-func (h *handler) ProcessPodObject(pod *corev1.Pod, deleted bool) error {
+func (h *handler) ProcessPodObject(parent context.Context, pod *corev1.Pod, deleted bool) error {
 	if pod == nil {
 		return nil
 	}
 
 	if deleted {
-		h.memory.DelPod(pod.Namespace, pod.Name)
 		h.correlator.RemovePod(pod.Namespace, pod.Name)
 		return nil
 	}
 
-	ctx := filter.Context{
-		Client: h.kclient,
-		Config: h.config,
-		Memory: h.memory,
-		Pod:    pod,
-		EvType: "ADDED",
+	ctxF := filter.Context{
+		Ctx:         parent,
+		Client:      h.kclient,
+		Config:      h.config,
+		Pod:         pod,
+		EvType:      "ADDED",
+		RSLister:    h.rsLister,
+		DSLister:    h.dsLister,
+		SSLister:    h.ssLister,
+		EventLister: h.eventLister,
 	}
 
-	podEvents, err := k8s.GetPodEvents(ctx.Client, ctx.Pod.Name, ctx.Pod.Namespace)
-	if err != nil {
-		return fmt.Errorf(
-			"failed to get events for pod %s(%s): %w",
-			ctx.Pod.Name,
-			ctx.Pod.Namespace,
-			err)
+	h.executePodFilters(&ctxF)
+	h.executeContainersFilters(&ctxF)
+
+	if h.pvcSampler != nil && pod.Status.Phase == corev1.PodRunning &&
+		pod.Spec.NodeName != "" && podMountsPVC(pod) {
+		h.pvcSampler(pod.Spec.NodeName)
 	}
 
-	if podEvents != nil {
-		ctx.Events = &podEvents.Items
+	if isPodHealthy(pod) {
+		h.ClearSeenForPod(pod.Namespace, pod.Name)
 	}
-
-	h.executePodFilters(&ctx)
-	h.executeContainersFilters(&ctx)
 	return nil
 }

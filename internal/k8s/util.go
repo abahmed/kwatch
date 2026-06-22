@@ -24,10 +24,15 @@ func GetPodEventsStr(events *[]v1.Event) string {
 	eventsString := ""
 
 	for _, ev := range *events {
+		ts := ev.LastTimestamp.Time
+		if ts.IsZero() {
+			ts = ev.EventTime.Time
+		}
+
 		eventsString +=
 			fmt.Sprintf(
 				"[%s] %s %s\n",
-				ev.LastTimestamp.String(),
+				ts.String(),
 				ev.Reason,
 				ev.Message)
 	}
@@ -39,10 +44,11 @@ func GetPodEventsStr(events *[]v1.Event) string {
 // with "Killing Stopping container" which indicates that a container could not
 // be gracefully shutdown
 func ContainsKillingStoppingContainerEvents(
+	ctx context.Context,
 	c kubernetes.Interface,
 	name,
 	namespace string) bool {
-	events, err := GetPodEvents(c, name, namespace)
+	events, err := GetPodEvents(ctx, c, name, namespace)
 	if err != nil {
 		return false
 	}
@@ -61,6 +67,7 @@ func ContainsKillingStoppingContainerEvents(
 
 // GetPodContainerLogs returns logs for specified container in pod
 func GetPodContainerLogs(
+	ctx context.Context,
 	c kubernetes.Interface, name, container, namespace string,
 	previous bool,
 	maxRecentLogLines int64) string {
@@ -72,68 +79,80 @@ func GetPodContainerLogs(
 	// get max recent log lines
 	if maxRecentLogLines != 0 {
 		options.TailLines = &maxRecentLogLines
+	} else {
+		defaultTail := int64(500)
+		options.TailLines = &defaultTail
 	}
+	limitBytes := int64(1024 * 1024)
+	options.LimitBytes = &limitBytes
 
 	// get logs
-	logs, err := getContainerLogs(c, name, namespace, &options)
+	logs, err := getContainerLogs(ctx, c, name, namespace, &options)
 	if err != nil {
-		klog.InfoS(
+		klog.V(2).InfoS(
 			"failed to get logs for container",
 			"name", name,
 			"container", container,
 			"namespace", namespace,
 			"error", err.Error())
-
-		// try to decode response
-		var status metav1.Status
-		parseErr := json.Unmarshal(logs, &status)
-		if parseErr == nil {
-			return status.Message
-		}
-
-		klog.InfoS(
-			"failed to parse logs for container",
-			"name", name,
-			"container", container,
-			"namespace", namespace,
-			"error", parseErr.Error())
+		return ""
 	}
 
 	return string(logs)
 }
 
 func getContainerLogs(
+	ctx context.Context,
 	c kubernetes.Interface,
 	name string,
 	namespace string,
 	options *v1.PodLogOptions) ([]byte, error) {
+	cctx, cancel := context.WithTimeout(ctx, 10*time.Second)
+	defer cancel()
 	return c.CoreV1().
 		Pods(namespace).
 		GetLogs(name, options).
-		DoRaw(context.TODO())
+		DoRaw(cctx)
 }
 
 // GetPodEvents retrieves the events for a specific pod
 func GetPodEvents(
+	ctx context.Context,
 	c kubernetes.Interface,
 	name,
 	namespace string) (*v1.EventList, error) {
+	cctx, cancel := context.WithTimeout(ctx, 10*time.Second)
+	defer cancel()
 	return c.CoreV1().
 		Events(namespace).
-		List(context.TODO(), metav1.ListOptions{
+		List(cctx, metav1.ListOptions{
 			FieldSelector: "involvedObject.name=" + name,
 		})
 }
 
+// IsNodeReady returns true if the node's Ready condition is True.
+func IsNodeReady(n *v1.Node) bool {
+	for _, c := range n.Status.Conditions {
+		if c.Type == v1.NodeReady {
+			return c.Status == v1.ConditionTrue
+		}
+	}
+	return false
+}
+
 // GetNodes gets a list of nodes
-func GetNodes(c kubernetes.Interface) (*v1.NodeList, error) {
+func GetNodes(ctx context.Context, c kubernetes.Interface) (*v1.NodeList, error) {
+	cctx, cancel := context.WithTimeout(ctx, 10*time.Second)
+	defer cancel()
 	return c.CoreV1().
 		Nodes().
-		List(context.TODO(), metav1.ListOptions{})
+		List(cctx, metav1.ListOptions{})
 }
 
 // GetNodeSummary gets a list of nodes
-func GetNodeSummary(c kubernetes.Interface, name string) ([]byte, error) {
+func GetNodeSummary(ctx context.Context, c kubernetes.Interface, name string) ([]byte, error) {
+	cctx, cancel := context.WithTimeout(ctx, 10*time.Second)
+	defer cancel()
 	return c.CoreV1().
 		RESTClient().
 		Get().
@@ -141,18 +160,21 @@ func GetNodeSummary(c kubernetes.Interface, name string) ([]byte, error) {
 		Name(name).
 		SubResource("proxy").
 		Suffix("stats/summary").
-		DoRaw(context.TODO())
+		DoRaw(cctx)
 }
 
 // GetPVNameFromPVC returns the name of persistent volume given a namespace and
 // persistent volume claim name
 func GetPVNameFromPVC(
+	ctx context.Context,
 	c kubernetes.Interface,
 	namespace, pvcName string) (string, error) {
+	cctx, cancel := context.WithTimeout(ctx, 10*time.Second)
+	defer cancel()
 	pvc, err :=
 		c.CoreV1().
 			PersistentVolumeClaims(namespace).
-			Get(context.TODO(), pvcName, metav1.GetOptions{})
+			Get(cctx, pvcName, metav1.GetOptions{})
 	if err != nil {
 		return "", err
 	}

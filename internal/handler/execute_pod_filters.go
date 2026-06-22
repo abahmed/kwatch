@@ -1,26 +1,72 @@
 package handler
 
 import (
+	"sort"
+
+	"github.com/abahmed/kwatch/internal/enricher"
 	"github.com/abahmed/kwatch/internal/event"
 	"github.com/abahmed/kwatch/internal/filter"
 	"github.com/abahmed/kwatch/internal/k8s"
 	"github.com/abahmed/kwatch/internal/model"
-	"github.com/abahmed/kwatch/internal/storage"
+	corev1 "k8s.io/api/core/v1"
+	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/klog/v2"
 )
 
 func (h *handler) executePodFilters(ctx *filter.Context) {
-	isPodOk := false
-	for i := range h.podFilters {
-		if shouldStop := h.podFilters[i].Execute(ctx); shouldStop {
-			isPodOk = true
-			break
+	ctx.PodLastState = h.correlator.GetLastContainerState(
+		ctx.Pod.Namespace, ctx.Pod.Name, ".")
+
+	// Phase 1: Detect (pure, no I/O)
+	for i := range h.podDetectors {
+		switch h.podDetectors[i].Detect(ctx) {
+		case filter.StatusSkip:
+			return
+		case filter.StatusContinue:
+			continue
 		}
 	}
 
-	if isPodOk ||
-		ctx.ContainersHasIssues ||
-		!ctx.PodHasIssues {
+	if !ctx.PodHasIssues || ctx.ContainersHasIssues {
+		return
+	}
+
+	// Phase 2: Enrich (I/O: events, owner)
+	if ctx.Events == nil {
+		if ctx.EventLister != nil {
+			all, err := ctx.EventLister.Events(ctx.Pod.Namespace).List(labels.Everything())
+			if err != nil {
+				klog.ErrorS(err, "event lister failed", "pod", ctx.Pod.Name)
+			} else {
+				items := make([]corev1.Event, 0, len(all))
+				for _, e := range all {
+					if e.InvolvedObject.Kind == "Pod" && e.InvolvedObject.Name == ctx.Pod.Name {
+						items = append(items, *e)
+					}
+				}
+				sort.Slice(items, func(i, j int) bool {
+					return items[i].LastTimestamp.Before(&items[j].LastTimestamp)
+				})
+				ctx.Events = &items
+			}
+		} else {
+			podEvents, err := k8s.GetPodEvents(ctx.Ctx, ctx.Client, ctx.Pod.Name, ctx.Pod.Namespace)
+			if err != nil {
+				klog.ErrorS(err, "failed to fetch pod events", "pod", ctx.Pod.Name)
+			}
+			if podEvents != nil {
+				ctx.Events = &podEvents.Items
+			}
+		}
+	}
+
+	for i := range h.podEnrichers {
+		if h.podEnrichers[i].Enrich(ctx) {
+			return
+		}
+	}
+
+	if !ctx.PodHasIssues {
 		return
 	}
 
@@ -29,38 +75,29 @@ func (h *handler) executePodFilters(ctx *filter.Context) {
 		ownerName = ctx.Owner.Name
 	}
 
-	ctx.Memory.AddPodContainer(
-		ctx.Pod.Namespace,
-		ctx.Pod.Name,
-		".",
-		&storage.ContainerState{
-			Reason: ctx.PodReason,
-			Msg:    ctx.PodMsg,
-			Status: "",
-		},
-	)
-
-	klog.InfoS("pod only issue", "pod", ctx.Pod.Name, "owner", ownerName, "reason", ctx.PodReason, "message", ctx.PodMsg)
+	klog.V(2).InfoS("pod only issue", "pod", ctx.Pod.Name, "owner", ownerName, "reason", ctx.PodReason, "message", ctx.PodMsg)
 
 	ownerKind := ""
 	if ctx.Owner != nil {
 		ownerKind = ctx.Owner.Kind
 	}
 
-	ev := event.Event{
-		PodName:       ctx.Pod.Name,
-		ContainerName: "",
-		Namespace:     ctx.Pod.Namespace,
-		NodeName:      ctx.Pod.Spec.NodeName,
-		Reason:        ctx.PodReason,
-		Events:        k8s.GetPodEventsStr(ctx.Events),
-		Logs:          "",
-		Labels:        ctx.Pod.Labels,
-		OwnerKind:     ownerKind,
-	}
-
-	inc, action := h.correlator.Process(ev, ownerName)
-	if action != model.ActionSkip {
-		h.alertManager.NotifyIncident(inc, action)
-	}
+	h.signalEvent(&event.Signal{
+		Resource:  "pod",
+		PodName:   ctx.Pod.Name,
+		Container: ".",
+		Namespace: ctx.Pod.Namespace,
+		NodeName:  ctx.Pod.Spec.NodeName,
+		Reason:    ctx.PodReason,
+		Events:    k8s.GetPodEventsStr(ctx.Events),
+		Labels:    ctx.Pod.Labels,
+		OwnerKind: ownerKind,
+		Hint:      enricher.HintForReason(ctx.PodReason),
+		Owner:     ownerName,
+		ContainerState: &model.ContainerState{
+			Reason: ctx.PodReason,
+			Msg:    ctx.PodMsg,
+			Status: "",
+		},
+	})
 }

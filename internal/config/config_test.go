@@ -5,7 +5,6 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
-	"gopkg.in/yaml.v3"
 )
 
 func TestGetAllowForbidSlices(t *testing.T) {
@@ -44,20 +43,35 @@ func TestGetAllowForbidSlices(t *testing.T) {
 func TestEmptyConfig(t *testing.T) {
 	assert := assert.New(t)
 
-	os.Setenv("CONFIG_FILE", "config.yaml")
-	defer os.Unsetenv("CONFIG_FILE")
+	tmpDir := t.TempDir()
+	configPath := tmpDir + "/config.yaml"
+	t.Setenv("CONFIG_FILE", configPath)
 
-	os.WriteFile("config.yaml", []byte{}, 0644)
-	defer os.RemoveAll("config.yaml")
+	os.WriteFile(configPath, []byte{}, 0644)
 
 	cfg, _ := LoadConfig()
 	assert.NotNil(cfg)
-	assert.Equal(10, cfg.Correlation.Window)
-	assert.Equal(5, cfg.Correlation.Cooldown)
+	assert.Equal(int64(50), cfg.MaxRecentLogLines)
+	assert.Equal(0, cfg.ResyncSeconds)
+	assert.Equal(true, cfg.PendingPodMonitor.Enabled)
+	assert.Equal(true, cfg.RolloutMonitor.Enabled)
+	assert.Equal(true, cfg.JobMonitor.Enabled)
+	assert.Equal(true, cfg.CronJobMonitor.Enabled)
+	assert.Equal(true, cfg.DaemonSetMonitor.Enabled)
+	assert.Equal(true, cfg.HpaMonitor.Enabled)
+	assert.Equal(true, cfg.HealthCheck.Enabled)
+	assert.Equal(8060, cfg.HealthCheck.Port)
 }
 
 func TestConfigInvalidFile(t *testing.T) {
 	assert := assert.New(t)
+
+	tmpDir := t.TempDir()
+	configPath := tmpDir + "/config.yaml"
+	t.Setenv("CONFIG_FILE", configPath)
+
+	os.WriteFile(configPath, []byte("test"), 0644)
+
 	cfg, err := LoadConfig()
 	assert.Nil(cfg)
 	assert.NotNil(err)
@@ -66,24 +80,27 @@ func TestConfigInvalidFile(t *testing.T) {
 func TestConfigFromFile(t *testing.T) {
 	assert := assert.New(t)
 
-	defer os.Unsetenv("CONFIG_FILE")
-	defer os.RemoveAll("config.yaml")
+	tmpDir := t.TempDir()
+	configPath := tmpDir + "/config.yaml"
+	t.Setenv("CONFIG_FILE", configPath)
 
-	os.Setenv("CONFIG_FILE", "config.yaml")
-
-	n := Config{
-		MaxRecentLogLines: 20,
-		Namespaces:        []string{"default", "kwatch"},
-		Reasons:           []string{"CrashLoopBackOff", "OOMKilling"},
-		IgnorePodNames:    []string{"my-fancy-pod-.*"},
-		IgnoreLogPatterns: []string{"leader-election-.*"},
-		App: App{
-			ProxyURL:    "https://localhost",
-			ClusterName: "development",
-		},
-	}
-	yamlData, _ := yaml.Marshal(&n)
-	os.WriteFile("config.yaml", yamlData, 0644)
+	yamlContent := `
+maxRecentLogLines: 20
+namespaces:
+  - default
+  - kwatch
+reasons:
+  - CrashLoopBackOff
+  - OOMKilling
+ignorePodNames:
+  - my-fancy-pod-.*
+ignoreLogPatterns:
+  - leader-election-.*
+app:
+  proxyURL: https://localhost
+  clusterName: development
+`
+	os.WriteFile(configPath, []byte(yamlContent), 0644)
 
 	cfg, err := LoadConfig()
 	assert.Nil(err)
@@ -98,7 +115,7 @@ func TestConfigFromFile(t *testing.T) {
 	assert.Len(cfg.ForbiddenNamespaces, 0)
 	assert.Len(cfg.ForbiddenReasons, 0)
 
-	os.WriteFile("config.yaml", []byte("maxRecentLogLines: test"), 0644)
+	os.WriteFile(configPath, []byte("maxRecentLogLines: test"), 0644)
 	_, err = LoadConfig()
 	assert.NotNil(err)
 }
@@ -126,62 +143,95 @@ func TestGetCompiledIgnorePatterns(t *testing.T) {
 	assert.NotNil(err)
 }
 
-func TestIgnoreNodeReasonsLoading(t *testing.T) {
+func TestConfigEnvInterpolation(t *testing.T) {
 	assert := assert.New(t)
 
-	defer os.Unsetenv("CONFIG_FILE")
-	defer os.RemoveAll("config.yaml")
+	tmpDir := t.TempDir()
+	configPath := tmpDir + "/config.yaml"
+	t.Setenv("CONFIG_FILE", configPath)
 
-	os.Setenv("CONFIG_FILE", "config.yaml")
+	t.Setenv("TEST_WEBHOOK", "https://hooks.example.com/x")
+	t.Setenv("TEST_MISSING", "")
+	t.Setenv("A", "hello")
 
-	n := Config{
-		IgnoreNodeReasons: []string{"NotReady", "KubeletNotReady", "custom-reason"},
-	}
-	yamlData, _ := yaml.Marshal(&n)
-	os.WriteFile("config.yaml", yamlData, 0644)
+	// YAML with ${VAR}, literal $, and bare $VAR
+	content := []byte(`
+app:
+  clusterName: "${TEST_WEBHOOK}"
+  proxyURL: "$HOME"
+namespaces:
+  - "${TEST_MISSING}"
+reasons:
+  - "pass$2a$10$xyz"
+`)
+	os.WriteFile(configPath, content, 0644)
 
 	cfg, err := LoadConfig()
 	assert.Nil(err)
 	assert.NotNil(cfg)
-	assert.Equal([]string{"NotReady", "KubeletNotReady", "custom-reason"}, cfg.IgnoreNodeReasons)
+
+	// ${TEST_WEBHOOK} → expanded
+	assert.Equal("https://hooks.example.com/x", cfg.App.ClusterName)
+
+	// bare $HOME → NOT expanded (left as literal)
+	assert.Equal("$HOME", cfg.App.ProxyURL)
+
+	// ${TEST_MISSING} (unset) → empty string
+	assert.Len(cfg.AllowedNamespaces, 1)
+	assert.Equal("", cfg.AllowedNamespaces[0])
+
+	// literal $ in bcrypt-like value → unchanged
+	assert.Len(cfg.AllowedReasons, 1)
+	assert.Equal("pass$2a$10$xyz", cfg.AllowedReasons[0])
+
+	// verify mixed {A}-$B case
+	os.WriteFile(configPath, []byte(`app:
+  clusterName: "${A}-$B"
+`), 0644)
+	cfg2, err2 := LoadConfig()
+	assert.Nil(err2)
+	assert.NotNil(cfg2)
+	assert.Equal("hello-$B", cfg2.App.ClusterName)
+}
+
+func testConfigFile(t *testing.T, content string) (*Config, error) {
+	tmpDir := t.TempDir()
+	configPath := tmpDir + "/config.yaml"
+	t.Setenv("CONFIG_FILE", configPath)
+	os.WriteFile(configPath, []byte(content), 0644)
+	return LoadConfig()
+}
+
+func TestIgnoreNodeReasonsLoading(t *testing.T) {
+	cfg, err := testConfigFile(t, `
+ignoreNodeReasons:
+  - NotReady
+  - KubeletNotReady
+  - custom-reason
+`)
+	assert.Nil(t, err)
+	assert.NotNil(t, cfg)
+	assert.Equal(t, []string{"NotReady", "KubeletNotReady", "custom-reason"}, cfg.IgnoreNodeReasons)
 }
 
 func TestIgnoreNodeReasonsEmpty(t *testing.T) {
-	assert := assert.New(t)
-
-	defer os.Unsetenv("CONFIG_FILE")
-	defer os.RemoveAll("config.yaml")
-
-	os.Setenv("CONFIG_FILE", "config.yaml")
-
-	n := Config{
-		IgnoreNodeReasons: []string{},
-	}
-	yamlData, _ := yaml.Marshal(&n)
-	os.WriteFile("config.yaml", yamlData, 0644)
-
-	cfg, err := LoadConfig()
-	assert.Nil(err)
-	assert.NotNil(cfg)
-	assert.Equal([]string{}, cfg.IgnoreNodeReasons)
+	cfg, err := testConfigFile(t, `
+ignoreNodeReasons: []
+`)
+	assert.Nil(t, err)
+	assert.NotNil(t, cfg)
+	assert.Equal(t, []string{}, cfg.IgnoreNodeReasons)
 }
 
 func TestIgnoreNodeReasonsSpecialChars(t *testing.T) {
-	assert := assert.New(t)
-
-	defer os.Unsetenv("CONFIG_FILE")
-	defer os.RemoveAll("config.yaml")
-
-	os.Setenv("CONFIG_FILE", "config.yaml")
-
-	n := Config{
-		IgnoreNodeReasons: []string{"reason-1", "reason_2", "reason.with.dot", "reason/with/slash"},
-	}
-	yamlData, _ := yaml.Marshal(&n)
-	os.WriteFile("config.yaml", yamlData, 0644)
-
-	cfg, err := LoadConfig()
-	assert.Nil(err)
-	assert.NotNil(cfg)
-	assert.Equal([]string{"reason-1", "reason_2", "reason.with.dot", "reason/with/slash"}, cfg.IgnoreNodeReasons)
+	cfg, err := testConfigFile(t, `
+ignoreNodeReasons:
+  - reason-1
+  - reason_2
+  - reason.with.dot
+  - reason/with/slash
+`)
+	assert.Nil(t, err)
+	assert.NotNil(t, cfg)
+	assert.Equal(t, []string{"reason-1", "reason_2", "reason.with.dot", "reason/with/slash"}, cfg.IgnoreNodeReasons)
 }

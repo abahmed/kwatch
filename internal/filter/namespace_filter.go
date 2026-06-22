@@ -7,14 +7,13 @@ import (
 
 type NamespaceFilter struct{}
 
-func (f NamespaceFilter) Execute(ctx *Context) bool {
-	// filter by namespaces in config if specified
+func (f NamespaceFilter) Detect(ctx *Context) Status {
 	if len(ctx.Config.AllowedNamespaces) > 0 &&
 		!slices.Contains(ctx.Config.AllowedNamespaces, ctx.Pod.Namespace) {
 		klog.InfoS(
 			"skipping namespace as it is not in the namespace allow list",
 			"namespace", ctx.Pod.Namespace)
-		return true
+		return StatusSkip
 	}
 
 	if len(ctx.Config.ForbiddenNamespaces) > 0 &&
@@ -22,8 +21,12 @@ func (f NamespaceFilter) Execute(ctx *Context) bool {
 		klog.InfoS(
 			"skipping namespace as it is in the namespace forbid list",
 			"namespace", ctx.Pod.Namespace)
-		return true
+		return StatusSkip
 	}
 
-	return false
+	return StatusAlert
+}
+
+func (f NamespaceFilter) Execute(ctx *Context) bool {
+	return f.Detect(ctx) == StatusSkip
 }

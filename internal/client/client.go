@@ -3,6 +3,7 @@ package client
 import (
 	"fmt"
 	"net/http"
+	"net/url"
 	"os"
 	"path/filepath"
 
@@ -43,8 +44,14 @@ func CreateClient(appConfig *config.App) (kubernetes.Interface, error) {
 
 	// avoid using default app proxy if it's set
 	if len(appConfig.ProxyURL) > 0 && clientConfig.Proxy == nil {
-		clientConfig.Proxy = http.ProxyURL(nil)
+		if p, err := url.Parse(appConfig.ProxyURL); err == nil {
+			clientConfig.Proxy = http.ProxyURL(p)
+		}
 	}
+
+	// Raise QPS/Burst from client-go defaults (5/10) to reduce throttling on large clusters
+	clientConfig.QPS = 50
+	clientConfig.Burst = 100
 
 	// creates the clientset
 	clientset, err := kubernetes.NewForConfig(clientConfig)
@@ -64,6 +71,24 @@ func getKubeconfigPath() string {
 		kubeconfigPath = filepath.Join(home, ".kube", "config")
 	}
 	return kubeconfigPath
+}
+
+func GetRestConfig(appConfig *config.App) (*rest.Config, error) {
+	clientConfig, err := rest.InClusterConfig()
+	if err != nil {
+		klog.InfoS("cannot get kubernetes in cluster config", "error", err)
+		kubeconfigPath := getKubeconfigPath()
+		clientConfig, err = clientcmd.BuildConfigFromFlags("", kubeconfigPath)
+		if err != nil {
+			return nil, fmt.Errorf("cannot build kubernetes out of cluster config: %w", err)
+		}
+	}
+	if len(appConfig.ProxyURL) > 0 && clientConfig.Proxy == nil {
+		if p, err := url.Parse(appConfig.ProxyURL); err == nil {
+			clientConfig.Proxy = http.ProxyURL(p)
+		}
+	}
+	return clientConfig, nil
 }
 
 func GetNamespace() string {

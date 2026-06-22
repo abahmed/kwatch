@@ -6,15 +6,19 @@ import (
 
 type PodNameFilter struct{}
 
-func (f PodNameFilter) Execute(ctx *Context) bool {
-	for _, pattern := range ctx.Config.IgnorePodNamePatterns {
+func (f PodNameFilter) Detect(ctx *Context) Status {
+	for _, pattern := range ctx.Config.Suppression.PodNamePatterns {
 		if pattern.MatchString(ctx.Pod.Name) {
 			klog.InfoS(
 				"skipping pod as it is in the ignore pod name list",
 				"pod", ctx.Pod.Name)
-			return true
+			return StatusSkip
 		}
 	}
 
-	return false
+	return StatusAlert
+}
+
+func (f PodNameFilter) Execute(ctx *Context) bool {
+	return f.Detect(ctx) == StatusSkip
 }

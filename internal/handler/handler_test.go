@@ -1,6 +1,7 @@
 package handler
 
 import (
+	"context"
 	"regexp"
 	"testing"
 	"time"
@@ -8,48 +9,42 @@ import (
 	"github.com/abahmed/kwatch/internal/alert"
 	"github.com/abahmed/kwatch/internal/config"
 	"github.com/abahmed/kwatch/internal/correlation"
-	"github.com/abahmed/kwatch/internal/storage"
-	"github.com/abahmed/kwatch/internal/storage/memory"
 	"github.com/stretchr/testify/assert"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/client-go/informers"
 	"k8s.io/client-go/kubernetes/fake"
 )
 
+var testAlertMgr = &alert.AlertManager{}
+
 func testCorrelator() *correlation.Engine {
 	return correlation.NewEngine(correlation.Config{
-		Window:   10 * time.Minute,
-		Cooldown: 5 * time.Minute,
+		Window: 10 * time.Minute,
 	})
 }
 
 func TestNewHandler(t *testing.T) {
 	client := fake.NewSimpleClientset()
 	cfg := &config.Config{}
-	mem := memory.NewMemory()
-	alertMgr := &alert.AlertManager{}
 
-	h := NewHandler(client, cfg, mem, testCorrelator(), alertMgr)
+	h := NewHandler(client, cfg, testCorrelator(), testAlertMgr)
 	assert.NotNil(t, h)
 }
 
 func TestProcessPodNilObject(t *testing.T) {
 	client := fake.NewSimpleClientset()
 	cfg := &config.Config{}
-	mem := memory.NewMemory()
-	alertMgr := &alert.AlertManager{}
 
-	h := NewHandler(client, cfg, mem, testCorrelator(), alertMgr)
-	assert.NoError(t, h.ProcessPodObject(nil, false))
+	h := NewHandler(client, cfg, testCorrelator(), testAlertMgr)
+	assert.NoError(t, h.ProcessPodObject(context.Background(), nil, false))
 }
 
 func TestProcessPodDeleted(t *testing.T) {
 	client := fake.NewSimpleClientset()
 	cfg := &config.Config{}
-	mem := memory.NewMemory()
-	alertMgr := &alert.AlertManager{}
 
-	h := NewHandler(client, cfg, mem, testCorrelator(), alertMgr)
+	h := NewHandler(client, cfg, testCorrelator(), testAlertMgr)
 
 	pod := &corev1.Pod{
 		ObjectMeta: metav1.ObjectMeta{
@@ -58,28 +53,22 @@ func TestProcessPodDeleted(t *testing.T) {
 		},
 	}
 
-	mem.AddPodContainer("default", "test-pod", "test-container", &storage.ContainerState{})
-
-	assert.NoError(t, h.ProcessPodObject(pod, true))
+	assert.NoError(t, h.ProcessPodObject(context.Background(), pod, true))
 }
 
 func TestProcessNodeNilObject(t *testing.T) {
 	client := fake.NewSimpleClientset()
 	cfg := &config.Config{}
-	mem := memory.NewMemory()
-	alertMgr := &alert.AlertManager{}
 
-	h := NewHandler(client, cfg, mem, testCorrelator(), alertMgr)
+	h := NewHandler(client, cfg, testCorrelator(), testAlertMgr)
 	assert.NoError(t, h.ProcessNodeObject(nil, false))
 }
 
 func TestProcessNodeDeleted(t *testing.T) {
 	client := fake.NewSimpleClientset()
 	cfg := &config.Config{}
-	mem := memory.NewMemory()
-	alertMgr := &alert.AlertManager{}
 
-	h := NewHandler(client, cfg, mem, testCorrelator(), alertMgr)
+	h := NewHandler(client, cfg, testCorrelator(), testAlertMgr)
 
 	node := &corev1.Node{
 		ObjectMeta: metav1.ObjectMeta{
@@ -87,20 +76,18 @@ func TestProcessNodeDeleted(t *testing.T) {
 		},
 	}
 
-	mem.AddNode("test-node")
 	assert.NoError(t, h.ProcessNodeObject(node, true))
 }
 
 func TestProcessNodeNotReadyNoAlert(t *testing.T) {
 	client := fake.NewSimpleClientset()
-	cfg := &config.Config{
-		IgnoreNodeReasons:  []string{"KubeletNotReady"},
-		IgnoreNodeMessages: []string{"specific message"},
+	cfg := &config.Config{}
+	cfg.Suppression = config.SuppressionIndex{
+		NodeReasons:  []string{"KubeletNotReady"},
+		NodeMessages: []string{"specific message"},
 	}
-	mem := memory.NewMemory()
-	alertMgr := &alert.AlertManager{}
 
-	h := NewHandler(client, cfg, mem, testCorrelator(), alertMgr)
+	h := NewHandler(client, cfg, testCorrelator(), testAlertMgr)
 
 	node := &corev1.Node{
 		ObjectMeta: metav1.ObjectMeta{
@@ -124,12 +111,8 @@ func TestProcessNodeNotReadyNoAlert(t *testing.T) {
 func TestProcessNodeReadyRecovery(t *testing.T) {
 	client := fake.NewSimpleClientset()
 	cfg := &config.Config{}
-	mem := memory.NewMemory()
-	alertMgr := &alert.AlertManager{}
 
-	mem.AddNode("test-node")
-
-	h := NewHandler(client, cfg, mem, testCorrelator(), alertMgr)
+	h := NewHandler(client, cfg, testCorrelator(), testAlertMgr)
 
 	node := &corev1.Node{
 		ObjectMeta: metav1.ObjectMeta{
@@ -152,10 +135,8 @@ func TestProcessNodeReadyRecovery(t *testing.T) {
 func TestProcessNodeNotReadyAlert(t *testing.T) {
 	client := fake.NewSimpleClientset()
 	cfg := &config.Config{}
-	mem := memory.NewMemory()
-	alertMgr := &alert.AlertManager{}
 
-	h := NewHandler(client, cfg, mem, testCorrelator(), alertMgr)
+	h := NewHandler(client, cfg, testCorrelator(), testAlertMgr)
 
 	node := &corev1.Node{
 		ObjectMeta: metav1.ObjectMeta{
@@ -178,13 +159,12 @@ func TestProcessNodeNotReadyAlert(t *testing.T) {
 
 func TestProcessNodeNotReadyWithIgnoredMessage(t *testing.T) {
 	client := fake.NewSimpleClientset()
-	cfg := &config.Config{
-		IgnoreNodeMessages: []string{"draining"},
+	cfg := &config.Config{}
+	cfg.Suppression = config.SuppressionIndex{
+		NodeMessages: []string{"draining"},
 	}
-	mem := memory.NewMemory()
-	alertMgr := &alert.AlertManager{}
 
-	h := NewHandler(client, cfg, mem, testCorrelator(), alertMgr)
+	h := NewHandler(client, cfg, testCorrelator(), testAlertMgr)
 
 	node := &corev1.Node{
 		ObjectMeta: metav1.ObjectMeta{
@@ -208,12 +188,8 @@ func TestProcessNodeNotReadyWithIgnoredMessage(t *testing.T) {
 func TestProcessNodeAlreadyKnownNotReady(t *testing.T) {
 	client := fake.NewSimpleClientset()
 	cfg := &config.Config{}
-	mem := memory.NewMemory()
-	alertMgr := &alert.AlertManager{}
 
-	mem.AddNode("test-node")
-
-	h := NewHandler(client, cfg, mem, testCorrelator(), alertMgr)
+	h := NewHandler(client, cfg, testCorrelator(), testAlertMgr)
 
 	node := &corev1.Node{
 		ObjectMeta: metav1.ObjectMeta{
@@ -237,10 +213,8 @@ func TestProcessNodeAlreadyKnownNotReady(t *testing.T) {
 func TestProcessPodWithPodIssues(t *testing.T) {
 	client := fake.NewSimpleClientset()
 	cfg := &config.Config{}
-	mem := memory.NewMemory()
-	alertMgr := &alert.AlertManager{}
 
-	h := NewHandler(client, cfg, mem, testCorrelator(), alertMgr)
+	h := NewHandler(client, cfg, testCorrelator(), testAlertMgr)
 
 	pod := &corev1.Pod{
 		ObjectMeta: metav1.ObjectMeta{
@@ -260,7 +234,7 @@ func TestProcessPodWithPodIssues(t *testing.T) {
 		},
 	}
 
-	assert.NoError(t, h.ProcessPodObject(pod, false))
+	assert.NoError(t, h.ProcessPodObject(context.Background(), pod, false))
 }
 
 func TestProcessPodWithContainersIssues(t *testing.T) {
@@ -268,10 +242,8 @@ func TestProcessPodWithContainersIssues(t *testing.T) {
 	cfg := &config.Config{
 		MaxRecentLogLines: 10,
 	}
-	mem := memory.NewMemory()
-	alertMgr := &alert.AlertManager{}
 
-	h := NewHandler(client, cfg, mem, testCorrelator(), alertMgr)
+	h := NewHandler(client, cfg, testCorrelator(), testAlertMgr)
 
 	pod := &corev1.Pod{
 		ObjectMeta: metav1.ObjectMeta{
@@ -304,7 +276,7 @@ func TestProcessPodWithContainersIssues(t *testing.T) {
 		},
 	}
 
-	assert.NoError(t, h.ProcessPodObject(pod, false))
+	assert.NoError(t, h.ProcessPodObject(context.Background(), pod, false))
 }
 
 func TestProcessPodIgnoredNamespace(t *testing.T) {
@@ -312,10 +284,8 @@ func TestProcessPodIgnoredNamespace(t *testing.T) {
 	cfg := &config.Config{
 		ForbiddenNamespaces: []string{"kube-system"},
 	}
-	mem := memory.NewMemory()
-	alertMgr := &alert.AlertManager{}
 
-	h := NewHandler(client, cfg, mem, testCorrelator(), alertMgr)
+	h := NewHandler(client, cfg, testCorrelator(), testAlertMgr)
 
 	pod := &corev1.Pod{
 		ObjectMeta: metav1.ObjectMeta{
@@ -335,18 +305,17 @@ func TestProcessPodIgnoredNamespace(t *testing.T) {
 		},
 	}
 
-	assert.NoError(t, h.ProcessPodObject(pod, false))
+	assert.NoError(t, h.ProcessPodObject(context.Background(), pod, false))
 }
 
 func TestProcessPodIgnoredPodName(t *testing.T) {
 	client := fake.NewSimpleClientset()
-	cfg := &config.Config{
-		IgnorePodNamePatterns: []*regexp.Regexp{regexp.MustCompile("^test-.*")},
+	cfg := &config.Config{}
+	cfg.Suppression = config.SuppressionIndex{
+		PodNamePatterns: []*regexp.Regexp{regexp.MustCompile("^test-.*")},
 	}
-	mem := memory.NewMemory()
-	alertMgr := &alert.AlertManager{}
 
-	h := NewHandler(client, cfg, mem, testCorrelator(), alertMgr)
+	h := NewHandler(client, cfg, testCorrelator(), testAlertMgr)
 
 	pod := &corev1.Pod{
 		ObjectMeta: metav1.ObjectMeta{
@@ -366,19 +335,17 @@ func TestProcessPodIgnoredPodName(t *testing.T) {
 		},
 	}
 
-	assert.NoError(t, h.ProcessPodObject(pod, false))
+	assert.NoError(t, h.ProcessPodObject(context.Background(), pod, false))
 }
 
 func TestProcessPodIgnoredContainerName(t *testing.T) {
 	client := fake.NewSimpleClientset()
-	cfg := &config.Config{
-		MaxRecentLogLines:    10,
-		IgnoreContainerNames: []string{"test-container"},
+	cfg := &config.Config{MaxRecentLogLines: 10}
+	cfg.Suppression = config.SuppressionIndex{
+		ContainerNames: []string{"test-container"},
 	}
-	mem := memory.NewMemory()
-	alertMgr := &alert.AlertManager{}
 
-	h := NewHandler(client, cfg, mem, testCorrelator(), alertMgr)
+	h := NewHandler(client, cfg, testCorrelator(), testAlertMgr)
 
 	pod := &corev1.Pod{
 		ObjectMeta: metav1.ObjectMeta{
@@ -411,16 +378,156 @@ func TestProcessPodIgnoredContainerName(t *testing.T) {
 		},
 	}
 
-	assert.NoError(t, h.ProcessPodObject(pod, false))
+	assert.NoError(t, h.ProcessPodObject(context.Background(), pod, false))
+}
+
+func TestHealthyPodZeroAPICalls(t *testing.T) {
+	client := fake.NewSimpleClientset()
+	cfg := &config.Config{}
+	e := testCorrelator()
+	h := NewHandler(client, cfg, e, testAlertMgr)
+
+	pod := &corev1.Pod{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "healthy",
+			Namespace: "default",
+		},
+		Spec: corev1.PodSpec{
+			NodeName: "node-1",
+		},
+		Status: corev1.PodStatus{
+			Phase: corev1.PodRunning,
+			Conditions: []corev1.PodCondition{
+				{Type: corev1.PodReady, Status: corev1.ConditionTrue},
+			},
+			ContainerStatuses: []corev1.ContainerStatus{
+				{
+					Name: "app",
+					State: corev1.ContainerState{
+						Running: &corev1.ContainerStateRunning{StartedAt: metav1.Now()},
+					},
+				},
+			},
+		},
+	}
+
+	startCount := len(client.Fake.Actions())
+	err := h.ProcessPodObject(context.Background(), pod, false)
+	assert.NoError(t, err)
+	endCount := len(client.Fake.Actions())
+
+	assert.Equal(t, startCount, endCount, "healthy pod should not trigger any API calls")
+}
+
+func TestBrokenPodMakesAPICalls(t *testing.T) {
+	client := fake.NewSimpleClientset()
+	cfg := &config.Config{
+		MaxRecentLogLines: 10,
+	}
+	e := testCorrelator()
+	h := NewHandler(client, cfg, e, testAlertMgr)
+
+	pod := &corev1.Pod{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "broken",
+			Namespace: "default",
+		},
+		Spec: corev1.PodSpec{
+			NodeName: "node-1",
+		},
+		Status: corev1.PodStatus{
+			Phase: corev1.PodRunning,
+			ContainerStatuses: []corev1.ContainerStatus{
+				{
+					Name:         "app",
+					RestartCount: 5,
+					LastTerminationState: corev1.ContainerState{
+						Terminated: &corev1.ContainerStateTerminated{
+							ExitCode: 137,
+							Reason:   "OOMKilled",
+							Message:  "memory limit exceeded",
+						},
+					},
+					State: corev1.ContainerState{
+						Waiting: &corev1.ContainerStateWaiting{
+							Reason:  "CrashLoopBackOff",
+							Message: "backoff restart",
+						},
+					},
+				},
+			},
+		},
+	}
+
+	startCount := len(client.Fake.Actions())
+	err := h.ProcessPodObject(context.Background(), pod, false)
+	assert.NoError(t, err)
+	endCount := len(client.Fake.Actions())
+
+	// Without event lister: 1 event LIST + 1 log GET = 2 API calls
+	assert.Equal(t, 2, endCount-startCount, "broken pod should trigger exactly 2 API calls (1 event LIST + 1 log GET)")
+}
+
+func TestBrokenPodEventsFromCache(t *testing.T) {
+	client := fake.NewSimpleClientset()
+	cfg := &config.Config{
+		MaxRecentLogLines: 10,
+	}
+	e := correlation.NewEngine(correlation.Config{
+		Window: 10 * time.Minute,
+	})
+	h := NewHandler(client, cfg, e, testAlertMgr)
+
+	// Seed event lister with an event for this pod
+	f := informers.NewSharedInformerFactory(client, 0)
+	h.SetEventLister(f.Core().V1().Events().Lister())
+
+	pod := &corev1.Pod{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "broken",
+			Namespace: "default",
+		},
+		Spec: corev1.PodSpec{
+			NodeName: "node-1",
+		},
+		Status: corev1.PodStatus{
+			Phase: corev1.PodRunning,
+			ContainerStatuses: []corev1.ContainerStatus{
+				{
+					Name:         "app",
+					RestartCount: 5,
+					LastTerminationState: corev1.ContainerState{
+						Terminated: &corev1.ContainerStateTerminated{
+							ExitCode: 137,
+							Reason:   "OOMKilled",
+							Message:  "memory limit exceeded",
+						},
+					},
+					State: corev1.ContainerState{
+						Waiting: &corev1.ContainerStateWaiting{
+							Reason:  "CrashLoopBackOff",
+							Message: "backoff restart",
+						},
+					},
+				},
+			},
+		},
+	}
+
+	startCount := len(client.Fake.Actions())
+	err := h.ProcessPodObject(context.Background(), pod, false)
+	assert.NoError(t, err)
+	endCount := len(client.Fake.Actions())
+
+	// With event lister: 0 event LISTs + 1 log GET = 1 API call
+	assert.Equal(t, 1, endCount-startCount, "broken pod with event lister should trigger exactly 1 API call (log GET only)")
 }
 
 func TestProcessPodSucceededPhase(t *testing.T) {
 	client := fake.NewSimpleClientset()
 	cfg := &config.Config{}
-	mem := memory.NewMemory()
-	alertMgr := &alert.AlertManager{}
 
-	h := NewHandler(client, cfg, mem, testCorrelator(), alertMgr)
+	h := NewHandler(client, cfg, testCorrelator(), testAlertMgr)
 
 	pod := &corev1.Pod{
 		ObjectMeta: metav1.ObjectMeta{
@@ -432,16 +539,14 @@ func TestProcessPodSucceededPhase(t *testing.T) {
 		},
 	}
 
-	assert.NoError(t, h.ProcessPodObject(pod, false))
+	assert.NoError(t, h.ProcessPodObject(context.Background(), pod, false))
 }
 
 func TestProcessPodCompletedStatus(t *testing.T) {
 	client := fake.NewSimpleClientset()
 	cfg := &config.Config{}
-	mem := memory.NewMemory()
-	alertMgr := &alert.AlertManager{}
 
-	h := NewHandler(client, cfg, mem, testCorrelator(), alertMgr)
+	h := NewHandler(client, cfg, testCorrelator(), testAlertMgr)
 
 	pod := &corev1.Pod{
 		ObjectMeta: metav1.ObjectMeta{
@@ -460,5 +565,5 @@ func TestProcessPodCompletedStatus(t *testing.T) {
 		},
 	}
 
-	assert.NoError(t, h.ProcessPodObject(pod, false))
+	assert.NoError(t, h.ProcessPodObject(context.Background(), pod, false))
 }

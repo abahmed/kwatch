@@ -2,21 +2,22 @@ package filter
 
 type ContainerRestartsFilter struct{}
 
-func (f ContainerRestartsFilter) Execute(ctx *Context) bool {
+func (f ContainerRestartsFilter) Detect(ctx *Context) Status {
 	container := ctx.Container.Container
-
-	lastState := ctx.Memory.GetPodContainer(ctx.Pod.Namespace,
-		ctx.Pod.Name,
-		container.Name)
+	lastState := ctx.Container.LastState
 
 	ctx.Container.HasRestarts = false
 	if lastState == nil {
-		return false
+		return StatusAlert
 	}
 
 	if container.RestartCount > lastState.RestartCount {
 		ctx.Container.HasRestarts = true
 	}
 
-	return false
+	return StatusAlert
+}
+
+func (f ContainerRestartsFilter) Execute(ctx *Context) bool {
+	return f.Detect(ctx) == StatusSkip
 }

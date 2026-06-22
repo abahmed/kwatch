@@ -4,16 +4,21 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
+	"io"
 	"net/http"
 	"strings"
+	"time"
 
 	"github.com/abahmed/kwatch/internal/config"
 	"github.com/abahmed/kwatch/internal/event"
+	"github.com/abahmed/kwatch/internal/k8s"
+	"github.com/abahmed/kwatch/internal/ratelimit"
 	"k8s.io/klog/v2"
 )
 
 const (
-	telegramAPIURL = "https://api.telegram.org/bot%s/sendMessage"
+	telegramAPIURL   = "https://api.telegram.org/bot%s/sendMessage"
+	telegramGetMeURL = "https://api.telegram.org/bot%s/getMe"
 )
 
 func maskString(s string) string {
@@ -69,6 +74,21 @@ func NewTelegram(config map[string]interface{}, appCfg *config.App) *Telegram {
 // Name returns name of the provider
 func (t *Telegram) Name() string {
 	return "Telegram"
+}
+
+// Verify checks credentials via Telegram getMe API.
+func (t *Telegram) Verify() error {
+	client := k8s.GetDefaultClient()
+	url := fmt.Sprintf(telegramGetMeURL, t.token)
+	resp, err := client.Get(url)
+	if err != nil {
+		return err
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		return fmt.Errorf("telegram getMe returned status %d", resp.StatusCode)
+	}
+	return nil
 }
 
 // SendEvent sends event to the provider
@@ -147,7 +167,7 @@ func (t *Telegram) buildRequestBodyTelegram(
 }
 
 func (t *Telegram) sendByTelegramApi(reqBody string) error {
-	client := &http.Client{}
+	client := k8s.GetDefaultClient()
 	buffer := bytes.NewBuffer([]byte(reqBody))
 	url := fmt.Sprintf(t.url, t.token)
 
@@ -164,6 +184,25 @@ func (t *Telegram) sendByTelegramApi(reqBody string) error {
 	}
 	defer response.Body.Close()
 
+	if response.StatusCode == http.StatusTooManyRequests {
+		d := ratelimit.ParseRetryAfter(response)
+		if d == 0 {
+			body, _ := io.ReadAll(response.Body)
+			var p struct {
+				Parameters *struct {
+					RetryAfter int `json:"retry_after"`
+				} `json:"parameters"`
+			}
+			if json.Unmarshal(body, &p) == nil && p.Parameters != nil && p.Parameters.RetryAfter > 0 {
+				d = time.Duration(p.Parameters.RetryAfter) * time.Second
+			}
+		}
+		return &ratelimit.Error{
+			Provider:   "Telegram",
+			StatusCode: http.StatusTooManyRequests,
+			RetryAfter: d,
+		}
+	}
 	if response.StatusCode > 202 {
 		return fmt.Errorf(
 			"call to telegram alert returned status code %d",

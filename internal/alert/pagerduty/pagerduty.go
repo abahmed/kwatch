@@ -21,6 +21,7 @@ const (
 type pagerdutyPayload struct {
 	RoutingKey  string                  `json:"routing_key"`
 	EventAction string                  `json:"event_action"`
+	DedupKey    string                  `json:"dedup_key,omitempty"`
 	Payload     pagerdutyPayloadDetails `json:"payload"`
 }
 
@@ -72,6 +73,8 @@ func (s *Pagerduty) Name() string {
 	return "PagerDuty"
 }
 
+func (s *Pagerduty) UsesEventDelivery() {}
+
 // SendEvent sends event to the provider
 func (s *Pagerduty) SendEvent(ev *event.Event) error {
 	client := k8s.GetDefaultClient()
@@ -95,13 +98,7 @@ func (s *Pagerduty) SendEvent(ev *event.Event) error {
 	}
 	defer response.Body.Close()
 
-	if response.StatusCode > 202 {
-		return fmt.Errorf(
-			"call to teams alert returned status code %d",
-			response.StatusCode)
-	}
-
-	return nil
+	return event.CheckHTTPResponse(response, "pagerduty")
 }
 
 // SendMessage sends text message to the provider
@@ -125,9 +122,15 @@ func (s *Pagerduty) buildRequestBodyPagerDuty(
 		logsText = ev.Logs
 	}
 
+	eventAction := "trigger"
+	if ev.Action == "resolved" {
+		eventAction = "resolve"
+	}
+
 	payload := pagerdutyPayload{
 		RoutingKey:  key,
-		EventAction: "trigger",
+		EventAction: eventAction,
+		DedupKey:    ev.DedupKey,
 		Payload: pagerdutyPayloadDetails{
 			Summary:  fmt.Sprintf(defaultEventTitle, ev.ContainerName),
 			Source:   ev.ContainerName,

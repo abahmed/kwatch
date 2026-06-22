@@ -1,10 +1,10 @@
 package pvc
 
 import (
+	"context"
 	"encoding/json"
 
 	"github.com/abahmed/kwatch/internal/k8s"
-	"k8s.io/klog/v2"
 )
 
 type SummaryResponse struct {
@@ -29,10 +29,14 @@ type Ref struct {
 }
 
 // getNodeUsage gets list of pvc usage for specific node
-func (p *PvcMonitor) getNodeUsage(nodeName string) ([]*PvcUsage, error) {
+func (p *PvcMonitor) getNodeUsage(ctx context.Context, nodeName string, pvByPVC map[string]string) ([]*PvcUsage, error) {
+	if p.getNodeUsageFn != nil {
+		return p.getNodeUsageFn(ctx, nodeName, pvByPVC)
+	}
+
 	result := make([]*PvcUsage, 0)
 
-	summaryResponse, err := k8s.GetNodeSummary(p.client, nodeName)
+	summaryResponse, err := k8s.GetNodeSummary(ctx, p.client, nodeName)
 	if err != nil {
 		return result, err
 
@@ -45,20 +49,19 @@ func (p *PvcMonitor) getNodeUsage(nodeName string) ([]*PvcUsage, error) {
 	}
 
 	for _, pod := range summaryObj.Pods {
+		if pod.PodRef == nil {
+			continue
+		}
 		for _, vol := range pod.Volume {
 			if vol.PvcRef == nil || len(vol.PvcRef.Name) == 0 {
 				continue
 			}
+			if vol.CapacityBytes <= 0 {
+				continue
+			}
 
-			pvName, err :=
-				k8s.GetPVNameFromPVC(
-					p.client,
-					pod.PodRef.Namespace,
-					vol.PvcRef.Name)
-			if err != nil {
-				klog.ErrorS(err,
-					"failed to get pv name for pvc",
-					"pvc", vol.PvcRef.Name)
+			pvName := pvByPVC[pod.PodRef.Namespace+"/"+vol.PvcRef.Name]
+			if pvName == "" {
 				continue
 			}
 

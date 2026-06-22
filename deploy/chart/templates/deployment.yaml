@@ -6,7 +6,12 @@ metadata:
   labels:
     {{- include "kwatch.labels" . | nindent 4 }}
 spec:
-  replicas: {{ default 1 }}
+  {{- if gt (int .Values.replicaCount) 1 }}
+  {{- fail "kwatch must run a single replica: it is the sole writer of the kwatch-baseline/kwatch-pvc ConfigMaps" }}
+  {{- end }}
+  replicas: {{ .Values.replicaCount | default 1 }}
+  strategy:
+    type: Recreate
   selector:
     matchLabels:
       {{- include "kwatch.selectorLabels" . | nindent 6 }}
@@ -25,6 +30,21 @@ spec:
     spec:
       restartPolicy: Always
       serviceAccountName:  {{ .Release.Name }}
+      {{- $llmEnabled := false }}
+      {{- with .Values.config }}
+        {{- with .llm }}
+          {{- $llmEnabled = .enabled | default false }}
+        {{- end }}
+      {{- end }}
+      {{- if and $llmEnabled (gt (int (.Values.replicaCount | default 1)) 1) }}
+        {{- fail "LLM sidecar is a singleton; set replicaCount=1 when config.llm.enabled=true" }}
+      {{- end }}
+  {{- if and $llmEnabled .Values.llm.nativeSidecar }}
+      initContainers:
+        - name: llm
+          restartPolicy: Always
+          {{- include "kwatch.llmContainer" . | nindent 10 }}
+      {{- end }}
       containers:
         - name: {{ .Chart.Name }}
           securityContext:
@@ -46,15 +66,48 @@ spec:
               valueFrom:
                 fieldRef:
                   fieldPath: metadata.namespace
+            - name: GOMEMLIMIT
+              value: "230MiB"
+          livenessProbe:
+            httpGet:
+              path: /healthz
+              port: health
+            initialDelaySeconds: 10
+            periodSeconds: 15
+          readinessProbe:
+            httpGet:
+              path: /readyz
+              port: health
+            initialDelaySeconds: 5
+            periodSeconds: 10
           resources:
             {{- toYaml .Values.resources | nindent 12 }}
+        {{- if and $llmEnabled (not .Values.llm.nativeSidecar) }}
+        - name: llm
+          {{- include "kwatch.llmContainer" . | nindent 10 }}
+        {{- end }}
       {{- with .Values.nodeSelector }}
       nodeSelector:
         {{- toYaml . | nindent 8 }}
       {{- end }}
+      {{- if $llmEnabled }}
+      {{- if .Values.affinity }}
+      affinity:
+        {{- toYaml .Values.affinity | nindent 8 }}
+      {{- else }}
+      affinity:
+        nodeAffinity:
+          preferredDuringSchedulingIgnoredDuringExecution:
+            - weight: 100
+              preference:
+                matchExpressions:
+                  - { key: kubernetes.io/arch, operator: In, values: [amd64, arm64] }
+      {{- end }}
+      {{- else }}
       {{- with .Values.affinity }}
       affinity:
         {{- toYaml . | nindent 8 }}
+      {{- end }}
       {{- end }}
       {{- with .Values.tolerations }}
       tolerations:

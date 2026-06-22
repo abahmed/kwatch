@@ -1,6 +1,8 @@
 package filter
 
 import (
+	"strings"
+
 	"golang.org/x/exp/slices"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/klog/v2"
@@ -8,17 +10,17 @@ import (
 
 type PodStatusFilter struct{}
 
-func (f PodStatusFilter) Execute(ctx *Context) bool {
+func (f PodStatusFilter) Detect(ctx *Context) Status {
 	if ctx.Pod.Status.Phase == corev1.PodSucceeded {
 		ctx.PodHasIssues = false
 		ctx.ContainersHasIssues = false
-		return true
+		return StatusSkip
 	}
 
-	if ctx.EvType == "Added" && len(ctx.Pod.Status.Conditions) == 0 {
+	if strings.EqualFold(ctx.EvType, "Added") && len(ctx.Pod.Status.Conditions) == 0 {
 		ctx.PodHasIssues = false
 		ctx.ContainersHasIssues = false
-		return true
+		return StatusSkip
 	}
 
 	issueInContainers := true
@@ -28,7 +30,7 @@ func (f PodStatusFilter) Execute(ctx *Context) bool {
 			if c.Status == corev1.ConditionFalse && c.Reason == "PodCompleted" {
 				ctx.PodHasIssues = false
 				ctx.ContainersHasIssues = false
-				return true
+				return StatusSkip
 			}
 
 			issueInPod = false
@@ -57,7 +59,7 @@ func (f PodStatusFilter) Execute(ctx *Context) bool {
 			"skipping reason for pod as it is not in the reason allow list",
 			"reason", ctx.PodReason,
 			"pod", ctx.Pod.Name)
-		return true
+		return StatusSkip
 	}
 
 	if len(ctx.PodReason) > 0 &&
@@ -67,16 +69,16 @@ func (f PodStatusFilter) Execute(ctx *Context) bool {
 			"skipping reason for pod as it is in the reason forbid list",
 			"reason", ctx.PodReason,
 			"pod", ctx.Pod.Name)
-		return true
+		return StatusSkip
 	}
 
-	lastState := ctx.Memory.GetPodContainer(ctx.Pod.Namespace,
-		ctx.Pod.Name,
-		".")
-
-	if ctx.PodHasIssues && lastState != nil {
-		return true
+	if ctx.PodHasIssues && ctx.PodLastState != nil {
+		return StatusSkip
 	}
 
-	return false
+	return StatusAlert
+}
+
+func (f PodStatusFilter) Execute(ctx *Context) bool {
+	return f.Detect(ctx) == StatusSkip
 }

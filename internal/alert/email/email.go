@@ -65,6 +65,7 @@ func NewEmail(config map[string]interface{}, appCfg *config.App) *Email {
 	}
 
 	d := gomail.NewDialer(host, portNumber, from, password)
+	d.StartTLSPolicy = gomail.MandatoryStartTLS
 
 	return &Email{
 		from:   from,
@@ -78,6 +79,8 @@ func NewEmail(config map[string]interface{}, appCfg *config.App) *Email {
 func (e *Email) Name() string {
 	return "Email"
 }
+
+func (e *Email) UsesEventDelivery() {}
 
 // SendEvent sends event to the provider
 func (e *Email) SendEvent(event *event.Event) error {

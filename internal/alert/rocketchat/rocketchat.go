@@ -10,6 +10,7 @@ import (
 	"github.com/abahmed/kwatch/internal/config"
 	"github.com/abahmed/kwatch/internal/event"
 	"github.com/abahmed/kwatch/internal/k8s"
+	"github.com/abahmed/kwatch/internal/ratelimit"
 	"k8s.io/klog/v2"
 )
 
@@ -52,12 +53,16 @@ func (r *RocketChat) Name() string {
 // SendEvent sends event to the provider
 func (r *RocketChat) SendEvent(e *event.Event) error {
 	formattedMsg := e.FormatMarkdown(r.appCfg.ClusterName, r.text, "")
-	return r.sendByRocketChatApi(r.buildRequestBodyRocketChat(formattedMsg))
+	b, err := r.buildRequestBodyRocketChat(formattedMsg)
+	if err != nil {
+		return err
+	}
+	return r.sendByRocketChatApi(b)
 }
 
-func (r *RocketChat) sendByRocketChatApi(reqBody string) error {
+func (r *RocketChat) sendByRocketChatApi(reqBody []byte) error {
 	client := k8s.GetDefaultClient()
-	buffer := bytes.NewBuffer([]byte(reqBody))
+	buffer := bytes.NewBuffer(reqBody)
 	request, err := http.NewRequest(http.MethodPost, r.webhook, buffer)
 	if err != nil {
 		return err
@@ -71,6 +76,13 @@ func (r *RocketChat) sendByRocketChatApi(reqBody string) error {
 	}
 	defer response.Body.Close()
 
+	if response.StatusCode == http.StatusTooManyRequests {
+		return &ratelimit.Error{
+			Provider:   "RocketChat",
+			StatusCode: http.StatusTooManyRequests,
+			RetryAfter: ratelimit.ParseRetryAfter(response),
+		}
+	}
 	if response.StatusCode != 200 {
 		body, _ := io.ReadAll(response.Body)
 		return fmt.Errorf(
@@ -84,18 +96,21 @@ func (r *RocketChat) sendByRocketChatApi(reqBody string) error {
 
 // SendMessage sends text message to the provider
 func (r *RocketChat) SendMessage(msg string) error {
-	return r.sendByRocketChatApi(r.buildRequestBodyRocketChat(msg))
+	b, err := r.buildRequestBodyRocketChat(msg)
+	if err != nil {
+		return err
+	}
+	return r.sendByRocketChatApi(b)
 }
 
-func (r *RocketChat) buildRequestBodyRocketChat(text string) string {
+func (r *RocketChat) buildRequestBodyRocketChat(text string) ([]byte, error) {
 	msgPayload := &rocketChatWebhookPayload{
 		Text: text,
 	}
 
 	jsonBytes, err := json.Marshal(msgPayload)
 	if err != nil {
-		klog.ErrorS(err, "failed to marshal rocketchat payload")
-		return ""
+		return nil, fmt.Errorf("failed to marshal rocketchat payload: %w", err)
 	}
-	return string(jsonBytes)
+	return jsonBytes, nil
 }
