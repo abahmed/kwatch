@@ -18,9 +18,9 @@ import (
 )
 
 const (
-	nodeSampleDebounce     = 30 * time.Second
-	maxConcurrentSamples   = 10
-	maxConcurrentNodeOps   = 5
+	nodeSampleDebounce   = 30 * time.Second
+	maxConcurrentSamples = 10
+	maxConcurrentNodeOps = 5
 )
 
 type PvcMonitor struct {
@@ -36,7 +36,7 @@ type PvcMonitor struct {
 	pvByPVCAt      time.Time                  // when pvByPVC was last refreshed
 	mu             sync.RWMutex
 	firstScan      bool
-	sem            chan struct{} // bounds concurrent SampleNode / getNodeUsage calls
+	sem            chan struct{}                                                                              // bounds concurrent SampleNode / getNodeUsage calls
 	getNodeUsageFn func(ctx context.Context, nodeName string, pvByPVC map[string]string) ([]*PvcUsage, error) // test override
 }
 

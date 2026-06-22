@@ -97,8 +97,8 @@ func NewSlack(config map[string]interface{}, appCfg *config.App) *Slack {
 		text:             text,
 		compact:          compact,
 		maxThreadMapSize: 1000,
-		appCfg:  appCfg,
-		send:    slackClient.PostWebhook,
+		appCfg:           appCfg,
+		send:             slackClient.PostWebhook,
 	}
 }
 

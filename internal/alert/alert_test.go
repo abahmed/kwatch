@@ -729,8 +729,8 @@ func (p *fakeRecordingEventProvider) SendEvent(evt *event.Event) error {
 	p.lastEvent = evt
 	return nil
 }
-func (p *fakeRecordingEventProvider) Name() string             { return "Recording" }
-func (p *fakeRecordingEventProvider) UsesEventDelivery()       {}
+func (p *fakeRecordingEventProvider) Name() string       { return "Recording" }
+func (p *fakeRecordingEventProvider) UsesEventDelivery() {}
 
 // countingProvider signals each delivery so tests can synchronize without
 // poking shutdown internals.

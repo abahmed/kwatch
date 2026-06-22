@@ -1070,7 +1070,7 @@ func TestCleanupPrunesStaleLastNodeSample(t *testing.T) {
 	// Seed with an old entry (well past the 10 min cutoff)
 	m.mu.Lock()
 	m.lastNodeSample = map[string]time.Time{
-		"old-node":  time.Now().Add(-30 * time.Minute),
+		"old-node":   time.Now().Add(-30 * time.Minute),
 		"fresh-node": time.Now().Add(-1 * time.Minute),
 	}
 	m.mu.Unlock()

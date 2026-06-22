@@ -35,7 +35,7 @@ type PvcSample struct {
 	Pct       float64   `json:"pct"`
 	Namespace string    `json:"ns"`
 	Name      string    `json:"name"`
-	PodName   string    `json:"pod"`    // last mounting pod (for incident parity with the live path)
+	PodName   string    `json:"pod"` // last mounting pod (for incident parity with the live path)
 	Seen      time.Time `json:"seen"`
 }
 
@@ -168,7 +168,7 @@ func gunzipJSON(b []byte, out any) error {
 
 // ── Baseline persistence ──────────────────────────────────────
 
-const configMapDataLimit = 1 << 20          // 1,048,576 — K8s ConfigMap data hard cap (MaxSecretSize)
+const configMapDataLimit = 1 << 20                    // 1,048,576 — K8s ConfigMap data hard cap (MaxSecretSize)
 const baselineMaxBytes = configMapDataLimit - 16*1024 // ~1,032,192; 16 KiB reserve for safety
 
 func (s *StateManager) GetBaseline(ctx context.Context) map[string]map[string]int64 {

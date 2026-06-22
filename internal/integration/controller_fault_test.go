@@ -36,7 +36,7 @@ func (p *recordingProvider) SendEvent(evt *event.Event) error {
 	p.lastEv = evt
 	return nil
 }
-func (p *recordingProvider) Name() string { return "Recorder" }
+func (p *recordingProvider) Name() string       { return "Recorder" }
 func (p *recordingProvider) UsesEventDelivery() {}
 
 func (p *recordingProvider) LastEvent() *event.Event {
