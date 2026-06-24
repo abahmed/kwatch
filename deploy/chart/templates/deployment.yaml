@@ -33,7 +33,7 @@ spec:
       {{- $llmEnabled := false }}
       {{- with .Values.config }}
         {{- with .llm }}
-          {{- $llmEnabled = .enabled | default false }}
+          {{- $llmEnabled = .enabled | default true }}
         {{- end }}
       {{- end }}
       {{- if and $llmEnabled (gt (int (.Values.replicaCount | default 1)) 1) }}

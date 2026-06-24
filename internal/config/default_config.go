@@ -20,7 +20,7 @@ func DefaultConfig() *Config {
 		HealthCheck:                  HealthCheck{Enabled: true, Port: 8060, Pprof: false, Diagnostics: false},
 		Inhibition:                   Inhibition{NodeSuppressesPods: true},
 		StormConfig:                  StormConfig{Enabled: true, Threshold: 10, WindowMinutes: 5, DigestIntervalMinutes: 5},
-		LLM:                          LLMConfig{Enabled: false},
+		LLM:                          LLMConfig{Enabled: true},
 		Correlation: Correlation{
 			MaxBaseline: 2000,
 			Window:      10, LifecycleInterval: 1,

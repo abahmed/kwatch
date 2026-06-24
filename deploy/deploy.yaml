@@ -138,40 +138,40 @@ spec:
           limits:
             memory: "256Mi"
             cpu: "100m"
-      # LLM sidecar — uncomment to enable AI enrichment (+ set llm.enabled in config).
+      # LLM sidecar — AI enrichment (enabled by default).
       # NOTE: AI enrichment needs a 64-bit (amd64/arm64) node — see the affinity below.
       # On a 32-bit-only cluster the sidecar is un-pullable (pod 1/2) but kwatch keeps
       # alerting; don't enable it there.
-      # - name: llm
-      #   image: ghcr.io/abahmed/kwatch-llm:v1
-      #   env:
-      #     - { name: OLLAMA_HOST, value: "127.0.0.1:11434" }
-      #     - { name: OLLAMA_MODELS, value: /models }
-      #     - { name: OLLAMA_NUM_PARALLEL, value: "1" }
-      #     - { name: OLLAMA_MAX_LOADED_MODELS, value: "1" }
-      #     - { name: OLLAMA_KEEP_ALIVE, value: "5m" }
-      #   readinessProbe:
-      #     exec:
-      #       command: ["/bin/sh","-c","ollama list | grep -q kwatch-triage"]
-      #     initialDelaySeconds: 5
-      #     periodSeconds: 10
-      #   resources:
-      #     requests: { cpu: "500m", memory: "1Gi" }
-      #     limits: { cpu: "2", memory: "2Gi" }
-      #   securityContext:
-      #     allowPrivilegeEscalation: false
-      #     runAsNonRoot: true
-      #     runAsUser: 1000          # matches image USER (Fix 1)
-      #     runAsGroup: 1000
-      #     capabilities: { drop: ["ALL"] }
-      #     seccompProfile: { type: RuntimeDefault }
-      # affinity:                    # uncomment with the LLM sidecar — keep it on 64-bit nodes
-      #   nodeAffinity:
-      #     preferredDuringSchedulingIgnoredDuringExecution:
-      #       - weight: 100
-      #         preference:
-      #           matchExpressions:
-      #             - { key: kubernetes.io/arch, operator: In, values: [amd64, arm64] }
+      - name: llm
+        image: ghcr.io/abahmed/kwatch-llm:v1
+        env:
+          - { name: OLLAMA_HOST, value: "127.0.0.1:11434" }
+          - { name: OLLAMA_MODELS, value: /models }
+          - { name: OLLAMA_NUM_PARALLEL, value: "1" }
+          - { name: OLLAMA_MAX_LOADED_MODELS, value: "1" }
+          - { name: OLLAMA_KEEP_ALIVE, value: "5m" }
+        readinessProbe:
+          exec:
+            command: ["/bin/sh","-c","ollama list | grep -q kwatch-triage"]
+          initialDelaySeconds: 5
+          periodSeconds: 10
+        resources:
+          requests: { cpu: "500m", memory: "1Gi" }
+          limits: { cpu: "2", memory: "2Gi" }
+        securityContext:
+          allowPrivilegeEscalation: false
+          runAsNonRoot: true
+          runAsUser: 1000          # matches image USER (Fix 1)
+          runAsGroup: 1000
+          capabilities: { drop: ["ALL"] }
+          seccompProfile: { type: RuntimeDefault }
+      affinity:                    # keep LLM on 64-bit nodes
+        nodeAffinity:
+          preferredDuringSchedulingIgnoredDuringExecution:
+            - weight: 100
+              preference:
+                matchExpressions:
+                  - { key: kubernetes.io/arch, operator: In, values: [amd64, arm64] }
       volumes:
       - name: config-volume
         configMap:

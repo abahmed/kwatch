@@ -86,9 +86,9 @@ data:
     ignoreNodeMessages:
       - "kubelet has no node IP"
 
-    # ── AI enrichment (opt-in, self-hosted) ──────────────
-    # llm:
-    #   enabled: true     # the only knob — model/endpoint/redaction are fixed in code
+    # ── AI enrichment (self-hosted) ──────────────────────
+    llm:
+      enabled: true     # the only knob — model/endpoint/redaction are fixed in code
 
     # ── Dashboard URL template (optional) ─────────────────
     # dashboardURLTemplate: "https://grafana.example.com/d/abc?var-ns={namespace}&var-pod={pod}"

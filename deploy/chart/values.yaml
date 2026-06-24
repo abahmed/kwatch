@@ -44,7 +44,7 @@ podLabels: {}
 #   threshold: 30
 config: {}
 
-# -- LLM sidecar configuration (opt-in AI enrichment)
+# -- LLM sidecar configuration (AI enrichment, enabled by default)
 llm:
   # -- model image (published manually via .github/workflows/publish-llm.yml)
   repository: ghcr.io/abahmed/kwatch-llm
