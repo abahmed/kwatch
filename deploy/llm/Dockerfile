@@ -1,29 +1,40 @@
-FROM --platform=$BUILDPLATFORM ollama/ollama AS bake
+ # ── Stage 1: bake the model (full ollama image, build-time only) ──
+  FROM --platform=$BUILDPLATFORM ollama/ollama AS bake
+  ARG MODEL_VERSION="dev"
+  ENV OLLAMA_MODELS=/models
+  COPY Modelfile /build/Modelfile
+  RUN ollama serve & sleep 3 && \
+      ollama pull qwen2.5-coder:1.5b-instruct-q4_K_M && \
+      ollama create kwatch-triage -f /build/Modelfile && \
+      pkill ollama
 
-ARG MODEL_VERSION="v1"
+  # ── Stage 2: strip GPU runners from the ollama runtime (CPU-only) ──
+  FROM ollama/ollama AS prune
+  RUN rm -rf /usr/lib/ollama/cuda_* /usr/lib/ollama/*jetpack* /usr/lib/ollama/rocm*
 
-ENV OLLAMA_MODELS=/models
+  # ── Stage 3: slim final — CUDA libs never land in these layers ──
+  FROM debian:bookworm-slim
+  ARG MODEL_VERSION="v1"
+  LABEL model.version="$MODEL_VERSION" \
+        model.name="kwatch-triage" \
+        model.base="qwen2.5-coder:1.5b-instruct-q4_K_M" \
+        description="kwatch-triage over Qwen2.5-Coder-1.5B (CPU-only slim)"
 
-COPY Modelfile /build/Modelfile
+  RUN apt-get update && \
+      apt-get install -y --no-install-recommends ca-certificates libgomp1 libstdc++6 && \
+      rm -rf /var/lib/apt/lists/*
 
-RUN ollama serve & sleep 3 && \
-    ollama pull qwen2.5-coder:1.5b-instruct-q4_K_M && \
-    ollama create kwatch-triage -f /build/Modelfile && \
-    pkill ollama
+  ENV OLLAMA_MODELS=/models HOME=/home/nonroot
 
-FROM ollama/ollama
+  COPY --from=prune /bin/ollama /bin/ollama
+  COPY --from=prune /usr/lib/ollama /usr/lib/ollama
 
-ARG MODEL_VERSION="v1"
+  RUN mkdir -p /home/nonroot/.ollama && \
+      echo "nonroot:x:1000:1000:nonroot:/home/nonroot:/bin/sh" >> /etc/passwd && \
+      echo "nonroot:x:1000:" >> /etc/group && \
+      chown -R 1000:1000 /home/nonroot
+  COPY --from=bake --chown=1000:1000 /models /models
+  USER 1000:1000
 
-LABEL model.version="$MODEL_VERSION"
-LABEL model.name="kwatch-triage"
-LABEL model.base="qwen2.5-coder:1.5b-instruct-q4_K_M"
-LABEL description="Kubernetes incident triage model — baked Modelfile over Qwen2.5-Coder-1.5B"
-
-ENV OLLAMA_MODELS=/models HOME=/home/nonroot
-
-RUN mkdir -p /home/nonroot && \
-    echo "nonroot:x:1000:1000:nonroot:/home/nonroot:/bin/sh" >> /etc/passwd && \
-    echo "nonroot:x:1000:" >> /etc/group
-COPY --from=bake --chown=1000:1000 /models /models
-USER 1000:1000
+  ENTRYPOINT ["/bin/ollama"]
+  CMD ["serve"]

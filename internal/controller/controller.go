@@ -903,7 +903,7 @@ func (c *Controller) buildSeenSet() {
 	}
 
 	for _, pod := range pods {
-		if pod.Status.Phase == corev1.PodRunning || pod.Status.Phase == corev1.PodSucceeded {
+		if pod.Status.Phase == corev1.PodSucceeded {
 			continue
 		}
 		owner := correlation.ResolveOwnerName(pod, c.rsLister, c.dsLister, c.ssLister)
