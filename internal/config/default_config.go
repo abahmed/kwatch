@@ -4,7 +4,7 @@ func DefaultConfig() *Config {
 	return &Config{
 		App:                          App{LogFormatter: "text"},
 		IgnoreFailedGracefulShutdown: true,
-		ReportStartupBaseline:        true,
+		ReportStartupBaseline:        false,
 		MaxRecentLogLines:            50,
 		ResyncSeconds:                0,
 		Workers:                      1,
