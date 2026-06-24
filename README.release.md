@@ -191,7 +191,7 @@ you something broke *right now*.
 | Parameter                      | Description   |
 |:-------------------------------|:-----------------------|
 | `maxRecentLogLines`            | Max tail log lines fetched from API and displayed in alert message blocks (default: 50) |
-| `resyncSeconds`                | Periodic informer resync interval in seconds (default: 600). 0 = event-driven only |
+| `resyncSeconds`                | Periodic informer resync interval in seconds (default: 0). 0 = event-driven only |
 | `workers`                     | Number of concurrent reconcile workers (default: 1). Raise for large clusters. |
 | `namespaces`                   | Optional list of namespaces that you want to watch or forbid, if it's not provided it will watch all namespaces. If you want to forbid a namespace, configure it with `!<namespace name>`. You can either set forbidden namespaces or allowed, not both. |
 | `reasons`                      | Optional list of reasons that you want to watch or forbid, if it's not provided it will watch all reasons. If you want to forbid a reason, configure it with `!<reason>`. You can either set forbidden reasons or allowed, not both.                     |
@@ -204,8 +204,9 @@ you something broke *right now*.
 | `ignoreNodeReasons`            | Optional list of node condition reasons to ignore (deprecated — use silences) |
 | `ignoreNodeMessages`           | Optional list of node condition messages to ignore (deprecated — use silences) |
 | `runbooks`                     | Optional map of reason → URL appended to incident hint (e.g. `ImagePullBackOff: "https://wiki/registry-auth"`) |
-| `llm.enabled`                  | Enable AI incident enrichment via self-hosted LLM sidecar (default: false) |
+| `llm.enabled`                  | Enable AI incident enrichment via self-hosted LLM sidecar (default: true) |
 | `containerRestartThreshold`    | Alert when a container exceeds this many restarts without a detect/enrich match (0 = off) |
+| `reportStartupBaseline`        | If true, emits a single informational notification at startup summarizing pre-existing issues suppressed by the baseline (default: false) |
 
 #### Namespace filter
 
@@ -290,9 +291,10 @@ reasons:
 | Parameter                    | Description                                 |
 |:-----------------------------|:------------------------------------------- |
 | `pvcMonitor.enabled`         | to enable or disable this module (default: true) |
-| `pvcMonitor.interval`        | the frequency (in minutes) to check pvc usage in the cluster  (default: 15) |
+| `pvcMonitor.interval`        | the frequency (in minutes) to check pvc usage in the cluster  (default: 5) |
 | `pvcMonitor.threshold`       | the percentage of accepted pvc usage (warn tier). if current usage exceeds this value, it will send a notification with normal severity (default: 80) |
 | `pvcMonitor.criticalThreshold` | the percentage above which severity is "high" (default: 90) |
+| `pvcMonitor.clearThreshold`    | the percentage below which a PVC alert is resolved (default: 75) |
 
 
 ### 🖥️ Node Monitor
@@ -338,9 +340,19 @@ Alerts when a CronJob is suspended (`spec.suspend: true`) or has not been schedu
 | Parameter                       | Description                                                    |
 |:--------------------------------|:-------------------------------------------------------------- |
 | `hpaMonitor.enabled`            | Watch HPAs for maxed-out replicas (default: true)               |
-| `hpaMonitor.sustainedMinutes`   | Minutes an HPA must be maxed before alerting (default: 10)      |
+| `hpaMonitor.sustainedMinutes`   | Minutes an HPA must be maxed before alerting (default: 20)      |
 
 Alerts with reason `HPAMaxedOut` when an HPA has scaled to its maximum replica count.
+
+### 💓 Heartbeat Monitor (dead man's switch)
+
+| Parameter                       | Description                                                    |
+|:--------------------------------|:-------------------------------------------------------------- |
+| `heartbeatMonitor.enabled`      | Send periodic pings to an external health-check endpoint (default: false) |
+| `heartbeatMonitor.interval`     | Seconds between pings (default: 300)                            |
+| `heartbeatMonitor.url`          | External URL to ping (e.g. Healthchecks.io)                     |
+
+When enabled, kwatch sends a GET request to the configured URL every interval. If kwatch stops or crashes, the external monitor stops receiving pings and alerts.
 
 ### 🔒 TLS Certificate Monitor
 
@@ -469,7 +481,7 @@ call, no data leaves the cluster.
 
 | Parameter               | Description                                                        |
 |:------------------------|:-------------------------------------------------------------------|
-| `llm.enabled`           | Enable AI enrichment via the built-in LLM sidecar (default: false) |
+| `llm.enabled`           | Enable AI enrichment via the built-in LLM sidecar (default: true) |
 
 ### 🔔 Alerts
 
