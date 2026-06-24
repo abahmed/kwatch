@@ -15,7 +15,7 @@ func DefaultConfig() *Config {
 		JobMonitor:                   JobMonitor{Enabled: true},
 		CronJobMonitor:               CronJobMonitor{Enabled: true},
 		DaemonSetMonitor:             DaemonSetMonitor{Enabled: true, SustainedMinutes: 5},
-		HpaMonitor:                   HpaMonitor{Enabled: true, SustainedMinutes: 10},
+		HpaMonitor:                   HpaMonitor{Enabled: true, SustainedMinutes: 20},
 		Upgrader:                     Upgrader{DisableUpdateCheck: false},
 		HealthCheck:                  HealthCheck{Enabled: true, Port: 8060, Pprof: false, Diagnostics: false},
 		Inhibition:                   Inhibition{NodeSuppressesPods: true},
