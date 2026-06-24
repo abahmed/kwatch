@@ -30,12 +30,7 @@ spec:
     spec:
       restartPolicy: Always
       serviceAccountName:  {{ .Release.Name }}
-      {{- $llmEnabled := false }}
-      {{- with .Values.config }}
-        {{- with .llm }}
-          {{- $llmEnabled = .enabled | default true }}
-        {{- end }}
-      {{- end }}
+      {{- $llmEnabled := .Values.config.llm.enabled | default true }}
       {{- if and $llmEnabled (gt (int (.Values.replicaCount | default 1)) 1) }}
         {{- fail "LLM sidecar is a singleton; set replicaCount=1 when config.llm.enabled=true" }}
       {{- end }}
@@ -67,7 +62,10 @@ spec:
                 fieldRef:
                   fieldPath: metadata.namespace
             - name: GOMEMLIMIT
-              value: "230MiB"
+              valueFrom:
+                resourceFieldRef:
+                  resource: limits.memory
+                  divisor: "1"
           livenessProbe:
             httpGet:
               path: /healthz

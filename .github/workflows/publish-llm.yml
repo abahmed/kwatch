@@ -31,7 +31,7 @@ jobs:
         id: meta
         uses: docker/metadata-action@v6
         with:
-          images: ghcr.io/abahmed/test2-llm
+          images: ghcr.io/abahmed/kwatch
           tags: |
             type=raw,value=${{ inputs.version }}
             type=raw,value=latest
