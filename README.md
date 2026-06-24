@@ -35,352 +35,264 @@
   </a>
 </p>
 
-> **Kubernetes alerts that tell you what broke — and why.**
-> kwatch monitors your cluster and sends one clear, self-explaining
-> notification the moment something crashes — 60 seconds to install, no
-> backend, no dashboards.
+> **👋 New to Kubernetes? No problem.**  
+> kwatch watches your cluster and sends you a friendly alert the moment something breaks — with a plain-English explanation of what went wrong and how to fix it.  
+> ✨ **60 seconds to install. No backend. No dashboards. No YAML spaghetti.**
 
-## Why kwatch
+---
 
-- **Self-explaining** — OOMKilled → "hit 512Mi limit; raise limits.memory";
-  probe failures include which probe and port; exit codes decoded.
-- **Low-noise** — incident grouping, cooldown, node→pod inhibition,
-  storm digests, silences, and routing rules keep your channels clean.
-- **GitOps-native** — config as a `KwatchConfig` CR, live-reloaded without
-  a restart.
-- Built on four promises: **never miss** · **never lie** · **never flood** ·
-  **never silently die**.
+## 🧐 What is kwatch?
 
-## The smart alert (before → after)
+kwatch is like a **smart friend** for your Kubernetes cluster:
 
-| Raw kubectl | kwatch |
+- 💥 Something crashes → you get a message that says *why* (not just "pod is broken")
+- 🔇 Smart about noise — groups related issues, ignores flapping, sends a digest when things get crazy
+- 🧠 Optional AI that reads the logs and tells you what's likely wrong
+- ⚡ Works in **under a minute** — just one command and a config file
+
+No Prometheus. No Grafana. No 50-step setup. Just alerts that **make sense**.
+
+---
+
+## 🆚 kwatch vs the scary stuff
+
+| | ✨ kwatch | 😰 DIY Prometheus + Alertmanager | 💸 Heavy SaaS |
+|---|---|---|---|
+| ⏱️ Setup time | **~5 minutes** | hours of YAML | agent + backend setup |
+| 📦 Size | ~20 MB single binary | whole monitoring stack | per-node agents + cloud costs |
+| 💬 Alerts | Self-explaining ("OOMKilled — raise memory limit") | Rule-defined message | Depends on configuration |
+| 🗄️ Storage | None (stateless) | Prometheus TSDB | Full retention (costly) |
+| 📚 Learning curve | One ConfigMap | PromQL + alert rules | Platform-specific DSL |
+
+---
+
+## 🚨 Before vs After
+
+| Raw kubectl output 🤷 | kwatch tells you 💡 |
 |---|---|
-| `CrashLoopBackOff` | 🚨 OOMKilled (memory limit: 512Mi) — consider raising limits.memory · previous logs + events inline |
-| `Error` | 🚨 HTTP probe failing on :8080/healthz (exit code 137) — container OOM-killed |
+| `CrashLoopBackOff` | 🚨 **OOMKilled** (memory limit: 512Mi) — try raising `limits.memory` · here are the logs + events |
+| `Error` | 🚨 **HTTP probe** failing on `:8080/healthz` (exit 137) — container ran out of memory |
+
+---
 
 ## ⚡️ 60-second install
 
-### 📦 Install
-
-#### ⎈ Using Helm
+### 📦 Helm (easiest 🏆)
 
 ```shell
 helm repo add kwatch https://kwatch.dev/charts
 helm install [RELEASE_NAME] kwatch/kwatch --namespace kwatch --create-namespace --version 0.11.0
 ```
 
-To get more details, please check [chart's configuration](https://github.com/abahmed/kwatch/blob/main/deploy/chart/README.md)
+More details in the [chart docs](https://github.com/abahmed/kwatch/blob/main/deploy/chart/README.md)
 
-#### 🐙 Using kubectl
-
-You need to get config template to add your configs
+### 🐙 kubectl
 
 ```shell
-curl  -L https://raw.githubusercontent.com/abahmed/kwatch/v0.11.0/deploy/config.yaml -o config.yaml
-```
-
-Then edit `config.yaml` file and apply your configuration
-
-```shell
+curl -L https://raw.githubusercontent.com/abahmed/kwatch/v0.11.0/deploy/config.yaml -o config.yaml
+# ✏️ Edit config.yaml with your Slack/Discord/email webhook
 kubectl apply -f config.yaml
-```
-
-To deploy **kwatch**, execute following command:
-
-```shell
 kubectl apply -f https://raw.githubusercontent.com/abahmed/kwatch/v0.11.0/deploy/deploy.yaml
 ```
 
-## ⬆️ Upgrading from v0.10.x
+---
 
-Most changes in this release are additive and off-by-default. The
-following WILL change behavior you may depend on:
+## 🎯 What does it catch?
 
-### Alert formats changed — update anything that parses kwatch messages
-- **Incident messages** now include a `Severity:` line and `Logs:` /
-  `Events:` blocks on creation, and there are new update / stale /
-  resolved / digest message shapes.
-- **Node alerts** were a single plain string
-  (`Node <name> is not ready: <reason> - <message>`). They are now full
-  incidents with lifecycle messages (🚨 create → ✅ resolve), deduplication
-  and cooldown — expect different text and fewer repeats.
-- **PVC alerts** now use the stable reason `VolumeUsageHigh` with the
-  live percentage in the hint (previously the percentage was part of the
-  alert itself). Update any silences, routes, or webhook consumers that
-  matched the old strings.
+Every monitor below is **on by default** — zero config needed:
 
-### kwatch is now low-noise by default
-All monitors are enabled by default (pod, node, PVC, *deployment rollout*,
-*job*, *cronjob*, *daemonset*, *HPA*). Storm/digest aggregation, severity
-escalation, and node→pod inhibition are all on. `resolveHoldDown: 30s`
-prevents flap resolution storms. Health check (`/healthz`, `/readyz`) is
-also on. To restore the v0.10.x off-by-default behavior, explicitly set
-each monitor, storm, escalation, and inhibition to `false`.
+| Signal | Default | What you get |
+|--------|---------|-------------|
+| 🟥 Pod crashes (CrashLoop, OOM, ImagePull, Error) | ✅ **on** | Container state + previous logs + events — tells you *why* |
+| ⏳ Pending pods (stuck Unschedulable) | ✅ **on** | Alerts after 300s stuck |
+| 🖥️ Node issues (NotReady, Disk/Memory pressure) | ✅ **on** | Per-condition severity |
+| 💾 PVC running out of space | ✅ **on** | Warn at 80%, critical at 90% |
+| ❌ Failed Jobs | ✅ **on** | `JobFailed` / `JobSuspended` |
+| 🚀 Stuck rollouts | ✅ **on** | `ProgressDeadlineExceeded` — deployment didn't finish |
+| 📡 DaemonSet pods not running | ✅ **on** | Unavailable pods detected |
+| ⏰ CronJob suspended or missing runs | ✅ **on** | Not scheduled in 24h? Alert. |
+| 📈 HPA stuck at max replicas | ✅ **on** | After 20 minutes sustained |
+| 🔒 TLS certs expiring | ❌ off | Enable if you want cert expiry warnings |
 
-### Edge-triggered notification — no more cooldown/stale
-kwatch previously used a cooldown timer (minimum gap between updates) and
-a stale threshold (time before marking an incident stale). Both are
-**removed** — kwatch now compares a notification signature on every event
-and only sends when state, severity, or resolved-changed meaningfully.
-Existing config files mentioning `correlation.cooldown` or
-`correlation.staleThreshold` are silently ignored (the yaml parser ignores
-unknown fields).
+✅ **TLS is the only one off** — everything else just works out of the box.
 
-### kwatch restarts no longer re-alert existing incidents
-kwatch now persists a baseline of already-broken workloads (in its state
-ConfigMap) and suppresses re-alerts for them across restarts. If you
-relied on restarting kwatch to re-page open issues, configure
-`correlation.renotify` instead.
+---
 
-### Custom container args are now parsed
-The binary accepts flags and subcommands (`--version`, `lint`, `replay`).
-Unrecognized flags now fail at startup instead of being silently ignored —
-review any custom `args:` in your Deployment. Standard klog flags
-(`-v`, `-logtostderr`, …) remain supported.
+## 🤖 AI-powered troubleshooting (optional, on by default)
 
-### RBAC — required only for newly enabled features
-The default path needs no new permissions. Apply the updated
-chart/manifests BEFORE enabling any of: `leaderElection`
-(coordination.k8s.io/leases), `jobMonitor` / `cronJobMonitor` (batch),
-`hpaMonitor` (autoscaling), `tlsMonitor` (secrets — read-widening; see
-the chart README for a namespace-scoped alternative), `crd.enabled`
-(kwatch.abahmed.dev/kwatchconfigs + installing `deploy/crd.yaml`).
+kwatch ships with a **built-in AI sidecar** (runs inside your cluster — zero data leaves):
 
-## What it catches
+```yaml
+llm:
+  enabled: true   # ✅ on by default!
+```
 
-| Signal | Default | Details |
-|--------|---------|---------|
-| Pod crashes (CrashLoop, OOM, ImagePull, Error) | **on** | Container-state + previous logs + events inline |
-| Pending pods (incl. `Unschedulable`) | **on** | Threshold: 300s |
-| Node conditions (NotReady, Unknown, pressure) | **on** | Per-condition severity |
-| PVC usage tiers (warn / critical) | **on** | Thresholds: 80% / 90% |
-| Job failures & suspension | **on** | Reason: `JobFailed` / `JobSuspended` |
-| Stuck rollouts (`ProgressDeadlineExceeded`) | **on** | Deployments only |
-| DaemonSet unavailability | **on** | By DaemonSet |
-| CronJob suspension / missed schedules | **on** | By CronJob |
-| HPA pinned at max replicas | **on** | Sustain window configurable |
-| TLS certificates expiring | off | Threshold in days |
-| Node crash → pod inhibition | **on** | Controlled per-cluster |
+When a crash happens, the AI reads the logs and tells you the **most likely cause** and **what to do next**. Like having a senior SRE on-call with you.
 
-All signals beyond TLS are enabled by default for low-noise zero-config.
+---
 
-## kwatch vs …
-
-| | kwatch | DIY Prometheus + Alertmanager | Heavy SaaS |
-|---|---|---|---|
-| Install time | ~5 minutes | hours of YAML | agent + backend setup |
-| Footprint | ~20 MB single binary | whole monitoring stack | per-node agents + cloud costs |
-| Alert content | Self-explaining (hint + logs + events) | Rule-defined message | Depends on configuration |
-| Data storage | None (stateless) | Prometheus TSDB | Full retention (costly) |
-| Learning curve | One ConfigMap | PromQL + alert rules | Platform-specific DSL |
-
-## Not a monitoring platform
-
-kwatch is not a metrics collector, dashboard, or observability backend.
-There is no metrics/TSDB storage, no dashboards, no log storage, and no
-query language. kwatch is the alarm — your existing platform is the archive.
-
-For full observability, pair kwatch with Prometheus + Grafana for metrics,
-or Loki for logs. kwatch handles the one thing a dashboard cannot: telling
-you something broke *right now*.
-
-## ⚙️ Configuration
+## ⚙️ Configuration (simple)
 
 ### 🔧 General
 
-| Parameter                      | Description   |
-|:-------------------------------|:-----------------------|
-| `maxRecentLogLines`            | Max tail log lines fetched from API and displayed in alert message blocks (default: 50) |
-| `resyncSeconds`                | Periodic informer resync interval in seconds (default: 0). 0 = event-driven only |
-| `workers`                     | Number of concurrent reconcile workers (default: 1). Raise for large clusters. |
-| `namespaces`                   | Optional list of namespaces that you want to watch or forbid, if it's not provided it will watch all namespaces. If you want to forbid a namespace, configure it with `!<namespace name>`. You can either set forbidden namespaces or allowed, not both. |
-| `reasons`                      | Optional list of reasons that you want to watch or forbid, if it's not provided it will watch all reasons. If you want to forbid a reason, configure it with `!<reason>`. You can either set forbidden reasons or allowed, not both.                     |
-| `ignoreFailedGracefulShutdown` | If set to true, containers which are forcefully killed during shutdown (as their graceful shutdown failed) are not reported as error (default: true) |
-| `ignoreDisruptionTerminations` | If set to true, suppresses alerts for evicted/terminated pods during node drains (default: true) |
-| `ignoreContainerNames`         | Optional list of container names to ignore (deprecated — use silences) |
-| `ignorePodNames`               | Optional list of pod name regexp patterns to ignore    |
-| `ignoreLogPatterns`            | Optional list of regexp patterns of logs to ignore (deprecated — use silences) |
-| `ignoreContainerMessages`      | Optional list of container messages to ignore (deprecated — use silences) |
-| `ignoreNodeReasons`            | Optional list of node condition reasons to ignore (deprecated — use silences) |
-| `ignoreNodeMessages`           | Optional list of node condition messages to ignore (deprecated — use silences) |
-| `runbooks`                     | Optional map of reason → URL appended to incident hint (e.g. `ImagePullBackOff: "https://wiki/registry-auth"`) |
-| `llm.enabled`                  | Enable AI incident enrichment via self-hosted LLM sidecar (default: true) |
-| `containerRestartThreshold`    | Alert when a container exceeds this many restarts without a detect/enrich match (0 = off) |
-| `reportStartupBaseline`        | If true, emits a single informational notification at startup summarizing pre-existing issues suppressed by the baseline (default: false) |
+| Parameter | What it does |
+|:---|---|
+| `maxRecentLogLines` | How many log lines to include in alerts (default: 50) |
+| `resyncSeconds` | Check for problems periodically (0 = only on events, recommended) |
+| `workers` | How many parallel workers (default: 1, raise for big clusters) |
+| `namespaces` | 🔽 Limit to specific namespaces, or use `!kube-system` to exclude |
+| `reasons` | 🔽 Only alert on specific reasons, or exclude some with `!` |
+| `ignoreFailedGracefulShutdown` | ✅ Skip containers killed during graceful shutdown (default: true) |
+| `ignoreDisruptionTerminations` | ✅ Skip pods evicted during node drains (default: true) |
+| `runbooks` | 📚 Add links to your runbooks per error reason |
+| `llm.enabled` | 🤖 AI enrichment (default: true) |
+| `containerRestartThreshold` | Alert if a container restarts this many times (0 = off) |
+| `reportStartupBaseline` | 📋 Send one startup summary of pre-existing issues (default: false) |
 
-#### Namespace filter
-
-Use the `namespaces` option to restrict which namespaces are monitored:
+#### 🔽 Filter by namespace
 
 ```yaml
 # Watch only these namespaces
 namespaces:
   - default
-  - kube-system
-```
+  - production
 
-Prefix with `!` to exclude namespaces (cannot mix allow and forbid):
-
-```yaml
-# Watch all namespaces except those listed
+# Or exclude some (can't mix both)
 namespaces:
   - !kube-system
   - !monitoring
 ```
 
-#### Reason filter
-
-Use the `reasons` option to filter by Kubernetes event reason:
+#### 🔽 Filter by reason
 
 ```yaml
-# Only alert on these reasons
+# Only these reasons trigger alerts
 reasons:
   - CrashLoopBackOff
   - ImagePullBackOff
-```
 
-Prefix with `!` to exclude reasons:
-
-```yaml
-# Alert on everything except these reasons
+# Or exclude some
 reasons:
   - !Started
   - !Killing
 ```
 
-### 📱 App
+### 📱 App settings
 
-| Parameter                     | Description                                 |
-|:------------------------------|:------------------------------------------- |
-| `app.proxyURL` | used in outgoing http(s) requests except Kubernetes requests to cluster optionally |
-| `app.clusterName` | used in notifications to indicate which cluster has issue |
-| `app.disableStartupMessage` | If set to true, welcome message will not be sent to notification channels |
-| `app.logFormatter` | used for setting custom formatter when app prints logs: text, json (default: text) |
-| `includeEvents` | Include Kubernetes events in alert messages (default: true) |
-| `includeLogs` | Include container logs in alert messages (default: true) |
+| Parameter | What it does |
+|:---|---|
+| `app.proxyURL` | 🔗 Proxy for outgoing HTTP requests |
+| `app.clusterName` | 🏷️ Name shown in alerts so you know which cluster |
+| `app.disableStartupMessage` | Silence the "kwatch is alive" welcome message |
+| `app.logFormatter` | Log format: `text` (default) or `json` |
+| `includeEvents` | 📋 Include K8s events in alerts (default: true) |
+| `includeLogs` | 📋 Include container logs in alerts (default: true) |
 
+### 💓 Health checks
 
-### 💓 Health Check
-
-| Parameter                     | Description                                 |
-|:------------------------------|:------------------------------------------- |
-| `healthCheck.enabled` | If set to true, enables health check endpoints (default: true) |
-| `healthCheck.port` | Port for health check endpoints (default: 8060) |
-| `healthCheck.pprof` | Enable /debug/pprof/* endpoints (default: false) |
-| `healthCheck.diagnostics` | Enable /incidents, /test-alert, and /deadletters endpoints (default: false) |
+| Parameter | What it does |
+|:---|---|
+| `healthCheck.enabled` | ✅ Health endpoints (default: true) |
+| `healthCheck.port` | Port to serve health on (default: 8060) |
+| `healthCheck.pprof` | 🔬 Go profiling endpoints (default: false) |
+| `healthCheck.diagnostics` | 🩺 Extra endpoints: `/incidents`, `/test-alert`, `/deadletters` |
 
 **Endpoints:**
-- `GET /healthz` - Liveness probe (text/plain: "OK")
-- `GET /readyz` - Readiness probe (text/plain: "OK")
-- `GET /health` - Returns `{"status": "ok"}` (application/json)
-- `GET /incidents` - Returns all active incidents as JSON (requires `healthCheck.diagnostics: true`)
-- `POST /test-alert` - Sends a test alert through all configured providers (requires `healthCheck.diagnostics: true`)
-- `GET /deadletters` - Returns recent delivery failures (last 100) as JSON (requires `healthCheck.diagnostics: true`)
-- `GET /debug/pprof/` - Go pprof index (runtime profiling data, when enabled)
-- `--version` flag - Prints version and exits
-
+- `GET /healthz` — ✅ Liveness
+- `GET /readyz` — ✅ Readiness
+- `GET /health` — `{"status": "ok"}`
+- `GET /incidents` — 📋 All active incidents (requires `diagnostics: true`)
+- `POST /test-alert` — 📤 Send a test alert (requires `diagnostics: true`)
+- `GET /deadletters` — 💀 Recent delivery failures (requires `diagnostics: true`)
 
 ### 🔄 Upgrader
 
-| Parameter                     | Description                                 |
-|:------------------------------|:------------------------------------------- |
-| `upgrader.disableUpdateCheck` | If set to true, does not check for and notify about kwatch updates |
+| Parameter | What it does |
+|:---|---|
+| `upgrader.disableUpdateCheck` | 🔕 Don't check for new kwatch versions |
 
-### 💾 PVC Monitor
+---
 
-| Parameter                    | Description                                 |
-|:-----------------------------|:------------------------------------------- |
-| `pvcMonitor.enabled`         | to enable or disable this module (default: true) |
-| `pvcMonitor.interval`        | the frequency (in minutes) to check pvc usage in the cluster  (default: 5) |
-| `pvcMonitor.threshold`       | the percentage of accepted pvc usage (warn tier). if current usage exceeds this value, it will send a notification with normal severity (default: 80) |
-| `pvcMonitor.criticalThreshold` | the percentage above which severity is "high" (default: 90) |
-| `pvcMonitor.clearThreshold`    | the percentage below which a PVC alert is resolved (default: 75) |
+## 📊 Monitors (all on by default)
 
+### 💾 PVC Monitor — disk space alerts
+
+| Parameter | What it does |
+|:---|---|
+| `pvcMonitor.enabled` | ✅ Monitor disk usage (default: true) |
+| `pvcMonitor.interval` | Check every N minutes (default: 5) |
+| `pvcMonitor.threshold` | ⚠️ Warn at this % (default: 80) |
+| `pvcMonitor.criticalThreshold` | 🚨 Critical at this % (default: 90) |
+| `pvcMonitor.clearThreshold` | ✅ Resolve below this % (default: 75) |
 
 ### 🖥️ Node Monitor
 
-| Parameter                    | Description                                 |
-|:-----------------------------|:------------------------------------------- |
-| `nodeMonitor.enabled`        | to enable or disable node monitoring (default: true) |
+| Parameter | What it does |
+|:---|---|
+| `nodeMonitor.enabled` | ✅ Watch for node problems (default: true) |
 
-Node monitoring alerts on `NotReady` and `Unknown` conditions, plus `MemoryPressure`, `DiskPressure`, `PIDPressure`, and `NetworkUnavailable`. Node-specific suppression is available via `ignoreNodeReasons` and `ignoreNodeMessages`.
+Catches: `NotReady`, `Unknown`, `MemoryPressure`, `DiskPressure`, `PIDPressure`, `NetworkUnavailable`.
 
 ### 🚀 Rollout Monitor
 
-| Parameter                       | Description                                                    |
-|:--------------------------------|:-------------------------------------------------------------- |
-| `rolloutMonitor.enabled`        | Watch Deployments for stuck rollouts (`ProgressDeadlineExceeded`) (default: true) |
+| Parameter | What it does |
+|:---|---|
+| `rolloutMonitor.enabled` | ✅ Watch for stuck deployments (default: true) |
 
-### 🖥️ DaemonSet Monitor
+### 📡 DaemonSet Monitor
 
-| Parameter                       | Description                                                    |
-|:--------------------------------|:-------------------------------------------------------------- |
-| `daemonSetMonitor.enabled`      | Watch DaemonSets for unavailable pods (default: true)          |
-
-Alerts when `status.numberUnavailable > 0`, resolves when all pods become available.
+| Parameter | What it does |
+|:---|---|
+| `daemonSetMonitor.enabled` | ✅ Watch for unavailable DaemonSet pods (default: true) |
 
 ### 🧑‍💼 Job Monitor
 
-| Parameter                  | Description                                                 |
-|:---------------------------|:----------------------------------------------------------- |
-| `jobMonitor.enabled`       | Watch Jobs for failures and suspension (default: true)       |
-
-Alerts with `JobFailed` or `JobSuspended` reasons.
+| Parameter | What it does |
+|:---|---|
+| `jobMonitor.enabled` | ✅ Watch for failed/suspended Jobs (default: true) |
 
 ### ⏰ CronJob Monitor
 
-| Parameter                       | Description                                                    |
-|:--------------------------------|:-------------------------------------------------------------- |
-| `cronJobMonitor.enabled`        | Watch CronJobs for suspension or missed schedules (default: true) |
-
-Alerts when a CronJob is suspended (`spec.suspend: true`) or has not been scheduled within the last 24 hours.
+| Parameter | What it does |
+|:---|---|
+| `cronJobMonitor.enabled` | ✅ Watch for suspended CronJobs or missed schedules (default: true) |
 
 ### 📈 HPA Monitor
 
-| Parameter                       | Description                                                    |
-|:--------------------------------|:-------------------------------------------------------------- |
-| `hpaMonitor.enabled`            | Watch HPAs for maxed-out replicas (default: true)               |
-| `hpaMonitor.sustainedMinutes`   | Minutes an HPA must be maxed before alerting (default: 20)      |
-
-Alerts with reason `HPAMaxedOut` when an HPA has scaled to its maximum replica count.
+| Parameter | What it does |
+|:---|---|
+| `hpaMonitor.enabled` | ✅ Watch HPAs stuck at max replicas (default: true) |
+| `hpaMonitor.sustainedMinutes` | ⏱️ How long before alerting (default: 20 min) |
 
 ### 💓 Heartbeat Monitor (dead man's switch)
 
-| Parameter                       | Description                                                    |
-|:--------------------------------|:-------------------------------------------------------------- |
-| `heartbeatMonitor.enabled`      | Send periodic pings to an external health-check endpoint (default: false) |
-| `heartbeatMonitor.interval`     | Seconds between pings (default: 300)                            |
-| `heartbeatMonitor.url`          | External URL to ping (e.g. Healthchecks.io)                     |
+| Parameter | What it does |
+|:---|---|
+| `heartbeatMonitor.enabled` | Send pings to a health-check URL (default: false) |
+| `heartbeatMonitor.interval` | ⏱️ Seconds between pings (default: 300) |
+| `heartbeatMonitor.url` | 🔗 External URL (e.g. Healthchecks.io) |
 
-When enabled, kwatch sends a GET request to the configured URL every interval. If kwatch stops or crashes, the external monitor stops receiving pings and alerts.
+If kwatch stops or crashes, the external monitor stops getting pings and pages you. 🔔
 
 ### 🔒 TLS Certificate Monitor
 
-| Parameter                       | Description                                                    |
-|:--------------------------------|:-------------------------------------------------------------- |
-| `tlsMonitor.enabled`            | Monitor TLS secret certificates for expiry (default: false)    |
-| `tlsMonitor.threshold`          | Days before expiry to start alerting (default: 30)             |
-| `tlsMonitor.criticalThreshold`  | Days before expiry for high severity (default: 3)              |
+| Parameter | What it does |
+|:---|---|
+| `tlsMonitor.enabled` | 🔐 Watch for expiring certs (default: false) |
+| `tlsMonitor.threshold` | 📅 Days before warning (default: 30) |
+| `tlsMonitor.criticalThreshold` | 🚨 Days before critical (default: 3) |
 
-TLS is the only monitor off by default; enable it and grant RBAC to `secrets` if needed.
-
-### ⏳ Pending Pod Threshold
-
-| Parameter                       | Description                                                        |
-|:--------------------------------|:------------------------------------------------------------------ |
-| `pendingPodThreshold`           | Seconds a pod can stay in Pending before alerting (default: 300)   |
+⏳ **Pending Pod Threshold** — alert after N seconds stuck in Pending (default: 300s)
 
 ### 🎯 Severity
 
-| Parameter                          | Description                                                        |
-|:-----------------------------------|:------------------------------------------------------------------ |
-| `severityByOwnerKind`              | Map owner kinds to severity levels, e.g. `{"StatefulSet": "high", "default": "normal"}` |
+| Parameter | What it does |
+|:---|---|
+| `severityByOwnerKind` | Set severity per resource type, e.g. `StatefulSet: "high"` |
 
-Built-in defaults: `StatefulSet` → `high`, all others → `normal`.
+Defaults: `StatefulSet` → 🔴 high, everything else → 🟡 normal
 
-### 🔇 Silences
-
-Suppress alerts matching namespace, reason, or pod name patterns:
+### 🔇 Silences — stop the noise
 
 ```yaml
 silences:
@@ -389,21 +301,45 @@ silences:
   - podNamePatterns: ["my-fancy-pod-.*"]
 ```
 
-### 🔄 Resync
+### 🚫 Inhibition — no double alerts
 
-| Parameter                | Description                                                           |
-|:-------------------------|:--------------------------------------------------------------------- |
-| `resyncSeconds`          | Periodic informer resync interval in seconds (0 = event-driven only)  |
+| Parameter | What it does |
+|:---|---|
+| `inhibition.nodeSuppressesPods` | ✅ Don't alert on pod issues if the node itself is down (default: true) |
 
-### 📋 CRD Configuration
+### ⛈️ Storm / Digest — when everything breaks at once
 
-| Parameter                | Description                                                           |
-|:-------------------------|:--------------------------------------------------------------------- |
-| `crd.enabled`            | Watch KwatchConfig CRs for live config changes (default: false)       |
+| Parameter | What it does |
+|:---|---|
+| `storm.enabled` | ✅ Bundle rapid alerts into a summary (default: true) |
+| `storm.threshold` | Max alerts per window before digest mode (default: 10) |
+| `storm.windowMinutes` | ⏱️ Sliding window (default: 5 min) |
+| `storm.digestIntervalMinutes` | ⏱️ How often to send the summary (default: 5 min) |
 
-Hot-applied: `maxRecentLogLines`, `silences`, `severityByOwnerKind`. Restart-only fields are logged and skipped. CR deletion restores boot-time ConfigMap snapshot.
+### 📝 Custom message templates
 
-**Example KwatchConfig CR:**
+```yaml
+templates:
+  CrashLoopBackOff: "{{.Incident.Name}} — {{.Action}} — {{.Incident.Hint}}"
+```
+
+### 🧠 Correlation — smart incident grouping
+
+| Parameter | What it does |
+|:---|---|
+| `correlation.window` | ⏱️ Keep incidents in memory (default: 10 min) |
+| `correlation.resolveHoldDown` | ⏱️ Wait before sending "resolved" (default: 30s) |
+| `correlation.lifecycleInterval` | ⏱️ Lifecycle check frequency (default: 1 min) |
+| `correlation.escalation.enabled` | ✅ Escalate severity on repeated crashes (default: true) |
+| `correlation.escalation.tiers` | 📊 Restart thresholds: `[3, 10, 50]` |
+| `correlation.renotify.maxPerIncident` | 🔔 Max re-alerts per incident (default: 3) |
+
+### 📋 CRD — live config changes
+
+| Parameter | What it does |
+|:---|---|
+| `crd.enabled` | Watch `KwatchConfig` CRs for live config updates (default: false) |
+
 ```yaml
 apiVersion: kwatch.abahmed.dev/v1alpha1
 kind: KwatchConfig
@@ -414,107 +350,33 @@ spec:
   maxRecentLogLines: 100
   silences:
     - namespaces: ["kube-system"]
-  severityByOwnerKind:
-    StatefulSet: "high"
 ```
 
-### 🚫 Inhibition
+---
 
-| Parameter                          | Description                                                        |
-|:-----------------------------------|:------------------------------------------------------------------ |
-| `inhibition.nodeSuppressesPods`    | Suppress pod incidents on nodes with an active node incident (default: true) |
+## 🔔 Alert providers
 
-When a node-level incident (e.g. `NotReady`) is active, pod incidents on that same node are skipped to reduce noise during node outages.
-
-### ⛈️ Storm / Digest
-
-Aggregate rapidly-firing incidents into periodic digests to prevent alert storms.
-
-| Parameter                          | Description                                                        |
-|:-----------------------------------|:------------------------------------------------------------------ |
-| `storm.enabled`                    | Enable digest aggregation (default: true)                           |
-| `storm.threshold`                  | Max creates per window before digest mode activates (default: 10)   |
-| `storm.windowMinutes`              | Sliding window (minutes) for rate tracking (default: 5)             |
-| `storm.digestIntervalMinutes`      | How often (minutes) a digest summary is sent (default: 5)           |
-
-When the create rate exceeds `threshold` within `windowMinutes`, new incidents are silently buffered and a single summary message is sent every `digestIntervalMinutes`.
-
-### 📝 Templates
-
-Override alert message formatting per incident reason using Go `text/template`:
-
-```yaml
-templates:
-  CrashLoopBackOff: "{{.Incident.Name}} — {{.Action}} — {{.Incident.Hint}}"
-```
-
-Available template keys:
-- `{{.Incident.Key}}`, `{{.Incident.Reason}}`, `{{.Incident.Name}}`, `{{.Incident.Namespace}}`, `{{.Incident.Hint}}`
-- `{{.Action}}` — `create`, `update`, `stale`, `resolved`
-- `{{.Message}}` — the default formatted message
-
-### 🧠 Correlation
-
-Incident grouping and lifecycle management. Events from the same owner/reason/container are grouped into incidents, with stale detection and auto-resolution.
-
-| Parameter                          | Description                                                        |
-|:-----------------------------------|:------------------------------------------------------------------ |
-| `correlation.window`               | Time window (minutes) to keep incidents in memory (default: 10)    |
-| `correlation.resolveHoldDown`      | Seconds to wait before sending a resolved notification (default: 30) |
-| `correlation.lifecycleInterval`    | Interval (minutes) for lifecycle checks (default: 1)               |
-| `correlation.startupQuiet`         | **Removed** — no longer supported. Previously a quiet period (seconds) after startup with no alerts (default: 30). In-cluster state restore via `buildSeenSet` replaces this feature. |
-| `correlation.escalation.enabled`   | Escalate severity based on container restart count (default: true) |
-| `correlation.escalation.tiers`     | Ordered restart thresholds, e.g. `[3, 10, 50]` → 3+ "high", 10+ "critical" |
-| `correlation.renotify.maxPerIncident` | Max renotifications per incident (default: 3)                    |
-
-⚠️ v0.10.x fields `cooldown` and `staleThreshold` are removed. Flat `renotify.interval` removed; use `renotify.intervalBySeverity["default"]` instead.
-
-When Slack is configured with a bot token, incidents are sent as threaded messages: a root message on creation, with updates, stale, and resolved notifications as thread replies.
-
-Noise filter automatically skips `Normal`/`Scheduled`/`Pulled`/`Pulling` events before correlation to reduce alert fatigue.
-
-### 🤖 AI Enrichment
-
-kwatch can optionally append a root-cause analysis to incident alerts using a
-self-hosted LLM sidecar. Everything runs inside your cluster — no external API
-call, no data leaves the cluster.
-
-| Parameter               | Description                                                        |
-|:------------------------|:-------------------------------------------------------------------|
-| `llm.enabled`           | Enable AI enrichment via the built-in LLM sidecar (default: true) |
-
-### 🔔 Alerts
-
-#### Slack
-
-
-
-If you want to enable Slack, provide either a webhook URL or a bot token with channel
+### 💬 Slack
 
 **Webhook mode:**
-
-| Parameter                        | Description                                 |
-|:---------------------------------|:------------------------------------------- |
-| `alert.slack.webhook`            | Slack webhook URL                           |
-| `alert.slack.channel`            | Used by legacy webhooks to send messages to specific channel instead of default one |
-| `alert.slack.title`              | Customized title in slack message           |
-| `alert.slack.text`               | Customized text in slack message            |
-| `alert.slack.compact`            | Single-line message instead of rich embed (`true`/`false`) |
+| Parameter | What it does |
+|:---|---|
+| `alert.slack.webhook` | 🔗 Slack webhook URL |
+| `alert.slack.channel` | 📢 Override channel |
+| `alert.slack.title` | ✏️ Custom title |
+| `alert.slack.text` | ✏️ Custom text |
+| `alert.slack.compact` | 📏 Single-line mode |
 
 **Bot Token mode:**
+| Parameter | What it does |
+|:---|---|
+| `alert.slack.token` | 🔑 Bot token (`xoxb-...`) |
+| `alert.slack.channel` | 📢 Channel to post to |
+| `alert.slack.title` | ✏️ Custom title |
+| `alert.slack.text` | ✏️ Custom text |
+| `alert.slack.compact` | 📏 Single-line mode |
 
-| Parameter                        | Description                                 |
-|:---------------------------------|:------------------------------------------- |
-| `alert.slack.token`              | Slack bot token (xoxb-...)                  |
-| `alert.slack.channel`            | Channel to post to (e.g. #alerts)           |
-| `alert.slack.title`              | Customized title in slack message           |
-| `alert.slack.text`               | Customized text in slack message            |
-| `alert.slack.compact`            | Single-line message instead of rich embed (`true`/`false`) |
-
-#### Compact mode
-
-Set `compact: true` to send a single-line message instead of the rich embed:
-
+**Compact mode:**
 ```yaml
 alert:
   slack:
@@ -522,11 +384,9 @@ alert:
     compact: true
 ```
 
-> **Incident mode** — When correlation is enabled and Slack is in bot token mode, alerts are sent as threaded conversations. A root message is created on the first occurrence, with updates, stale, and resolved notifications posted as thread replies. The incident message includes enriched fields: Owner Kind, Container Name, Restart Count, Severity, and Hint (e.g. "Memory pressure", "Registry/Auth").
+> 💡 **Pro tip:** When using bot token mode, alerts become threaded conversations — root message on first alert, updates as replies. Clean and organized! 🧹
 
-#### Provider Routing & Retry
-
-Each provider supports optional routing and retry:
+#### 📮 Provider Routing & Retry
 
 ```yaml
 alert:
@@ -540,330 +400,176 @@ alert:
       delay: 5s
 ```
 
-When `routes` are configured, only matching incidents are delivered to that provider. When omitted, all incidents are delivered (default). Retry is configurable per provider with `maxAttempts` (default 1) and `delay` (default 1s).
-
-**Fallback provider** — When `maxAttempts` is exhausted, a fallback provider can be called as a last resort. Configure with the `fallback` key:
-
+Need a backup? Set a fallback:
 ```yaml
 alert:
   slack:
     webhook: "<url>"
-    fallback: "pagerduty"    # name of another provider entry
+    fallback: "pagerduty"    # 🆘 tries PagerDuty if Slack fails
     retry:
       maxAttempts: 3
-      delay: 5s
 ```
 
-The fallback sends a single prefixed message (no further retry or fallback recursion).
+### 💬 Discord
 
-#### Discord
+| Parameter | What it does |
+|:---|---|
+| `alert.discord.webhook` | 🔗 Discord webhook URL |
+| `alert.discord.title` | ✏️ Custom title |
+| `alert.discord.text` | ✏️ Custom text |
 
+### 📧 Email
 
+| Parameter | What it does |
+|:---|---|
+| `alert.email.from` | 📤 From address |
+| `alert.email.password` | 🔑 From password |
+| `alert.email.host` | 🖥️ SMTP host |
+| `alert.email.port` | 🔌 SMTP port |
+| `alert.email.to` | 📥 Receiver email |
 
-If you want to enable Discord, provide the webhook with optional text and title
+### 🚨 PagerDuty
 
-| Parameter                        | Description                                 |
-|:---------------------------------|:------------------------------------------- |
-| `alert.discord.webhook`          | Discord webhook URL                         |
-| `alert.discord.title`            | Customized title in discord message         |
-| `alert.discord.text`             | Customized text in discord message          |
+| Parameter | What it does |
+|:---|---|
+| `alert.pagerduty.integrationKey` | 🔑 PagerDuty integration key |
 
-#### Email
+### ✈️ Telegram
 
+| Parameter | What it does |
+|:---|---|
+| `alert.telegram.token` | 🔑 Bot token |
+| `alert.telegram.chatId` | 💬 Chat ID |
 
+### 💼 Microsoft Teams
 
-If you want to enable Email, provide the from and to emails with host and the port
+| Parameter | What it does |
+|:---|---|
+| `alert.teams.webhook` | 🔗 Webhook URL |
+| `alert.teams.title` | ✏️ Custom title |
+| `alert.teams.text` | ✏️ Custom text |
 
-| Parameter                        | Description                                 |
-|:---------------------------------|:------------------------------------------- |
-| `alert.email.from`               | From email                                  |
-| `alert.email.password`           | From email Password                         |
-| `alert.email.host`               | provide the host                            |
-| `alert.email.port`               | provide the port                            |
-| `alert.email.to`                 | the receiver email                          |
+### 🚀 Rocket Chat
 
-#### PagerDuty
+| Parameter | What it does |
+|:---|---|
+| `alert.rocketchat.webhook` | 🔗 Webhook URL |
+| `alert.rocketchat.text` | ✏️ Custom text |
 
+### 🌐 Mattermost
 
+| Parameter | What it does |
+|:---|---|
+| `alert.mattermost.webhook` | 🔗 Webhook URL |
+| `alert.mattermost.title` | ✏️ Custom title |
+| `alert.mattermost.text` | ✏️ Custom text |
 
-If you want to enable PagerDuty, provide the integration key
+### 🔔 Opsgenie
 
-| Parameter                        | Description                                 |
-|:---------------------------------|:------------------------------------------- |
-| `alert.pagerduty.integrationKey` | PagerDuty integration key [more info](https://support.pagerduty.com/docs/services-and-integrations) |
+| Parameter | What it does |
+|:---|---|
+| `alert.opsgenie.apiKey` | 🔑 API Key |
+| `alert.opsgenie.title` | ✏️ Custom title |
+| `alert.opsgenie.text` | ✏️ Custom text |
 
-#### Telegram
+### 🏗️ Matrix
 
+| Parameter | What it does |
+|:---|---|
+| `alert.matrix.homeServer` | 🖥️ HomeServer URL |
+| `alert.matrix.accessToken` | 🔑 Access token |
+| `alert.matrix.internalRoomID` | 🆔 Room ID |
+| `alert.matrix.title` | ✏️ Custom title |
+| `alert.matrix.text` | ✏️ Custom text |
 
+### 🔔 DingTalk
 
-If you want to enable Telegram, provide a valid token and the chat Id.
+| Parameter | What it does |
+|:---|---|
+| `alert.dingtalk.accessToken` | 🔑 Access token |
+| `alert.dingtalk.secret` | 🔐 Signing secret |
+| `alert.dingtalk.title` | ✏️ Custom title |
 
-| Parameter                        | Description                                     |
-|:---------------------------------|:------------------------------------------------|
-| `alert.telegram.token`           | Telegram token                                  |
-| `alert.telegram.chatId`          | Telegram chat id                                |
+### 🐦 FeiShu
 
-#### Microsoft Teams
+| Parameter | What it does |
+|:---|---|
+| `alert.feishu.webhook` | 🔗 Webhook URL |
+| `alert.feishu.title` | ✏️ Custom title |
 
+### 🛡️ Zenduty
 
+| Parameter | What it does |
+|:---|---|
+| `alert.zenduty.integrationKey` | 🔑 Integration Key |
+| `alert.zenduty.alertType` | 🏷️ Alert type (default: critical) |
 
-If you want to enable Microsoft Teams, provide the channel webhook.
+### 💬 Google Chat
 
-| Parameter                        | Description                                     |
-|:---------------------------------|:------------------------------------------------|
-| `alert.teams.webhook`            |  webhook Microsoft team                         |
-| `alert.teams.title`              | Customized title in Microsoft teams message     |
-| `alert.teams.text`               | Customized title in Microsoft teams message     |
+| Parameter | What it does |
+|:---|---|
+| `alert.googlechat.webhook` | 🔗 Webhook URL |
+| `alert.googlechat.text` | ✏️ Custom text |
 
-#### Rocket Chat
+### 🔗 Custom Webhook
 
+| Parameter | What it does |
+|:---|---|
+| `alert.webhook.url` | 🔗 Webhook URL |
+| `alert.webhook.headers` | 📋 Custom headers |
+| `alert.webhook.basicAuth` | 🔐 Username + password |
 
+---
 
-If you want to enable Rocket Chat, provide the webhook with optional text
+## 🛠️ CLI commands
 
-| Parameter                  | Description                            |
-|:---------------------------|:---------------------------------------|
-| `alert.rocketchat.webhook` | Rocket Chat webhook URL                |
-| `alert.rocketchat.text`    | Customized text in rocket chat message |
+| Command | What it does |
+|:---|---|
+| `kwatch` | ▶️ Run the main monitor |
+| `kwatch --version` | ℹ️ Print version |
+| `kwatch lint` | ✅ Validate your config |
+| `kwatch lint --strict` | ✅✅ Strict check (catches typos!) |
+| `kwatch lint --check` | ✅✅✅ Validate + test provider credentials |
+| `kwatch replay < events.jsonl` | 🎬 Replay past events to test |
 
-#### Mattermost
+---
 
-
-
-If you want to enable Mattermost, provide the webhook with optional text and title
-
-| Parameter                             | Description                               |
-|:--------------------------------------|:----------------------------------------- |
-| `alert.mattermost.webhook`            | Mattermost webhook URL                    |
-| `alert.mattermost.title`              | Customized title in Mattermost message    |
-| `alert.mattermost.text`               | Customized text in Mattermost message     |
-
-#### Opsgenie
-
-
-
-If you want to enable Opsgenie, provide the API key with optional text and title
-
-| Parameter                             | Description                             |
-|:--------------------------------------|:--------------------------------------- |
-| `alert.opsgenie.apiKey`               | Opsgenie API Key                        |
-| `alert.opsgenie.title`                | Customized title in Opsgenie message    |
-| `alert.opsgenie.text`                 | Customized text in Opsgenie message     |
-
-#### Matrix
-
-
-
-If you want to enable Matrix, provide homeServer, accessToken and internalRoomID
-with optional text and title
-
-| Parameter                           | Description                            |
-|:------------------------------------|:-------------------------------------- |
-| `alert.matrix.homeServer`           | HomeServer URL                         |
-| `alert.matrix.accessToken`          | Account access token                   |
-| `alert.matrix.internalRoomID`       | Internal room ID                       |
-| `alert.matrix.title`                | Customized title in message            |
-| `alert.matrix.text`                 | Customized text in message             |
-
-#### DingTalk
-
-If you want to enable DingTalk, provide accessToken with optional secret and
-title
-
-| Parameter                           | Description                            |
-|:------------------------------------|:-------------------------------------- |
-| `alert.dingtalk.accessToken`        | Chat access token                      |
-| `alert.dingtalk.secret`             | Optional secret used to sign requests  |
-| `alert.dingtalk.title`              | Customized title in message            |
-
-#### FeiShu
-
-
-If you want to enable FeiShu, provide accessToken with optional secret and
-title
-
-| Parameter                | Description                 |
-|:-------------------------|:----------------------------|
-| `alert.feishu.webhook`   | FeiShu bot webhook URL      |
-| `alert.feishu.title`     | Customized title in message |
-
-#### Zenduty
-
-
-If you want to enable Zenduty, provide IntegrationKey with optional alert type
-
-| Parameter                      | Description                 |
-|:-------------------------------|:----------------------------|
-| `alert.zenduty.integrationKey` | Zenduty integration Key     |
-| `alert.zenduty.alertType`      | Optional alert type of incident: critical, acknowledged, resolved, error, warning, info (default: critical) |
-
-#### Google Chat
-
-
-
-If you want to enable Google Chat, provide the webhook with optional text
-
-| Parameter                  | Description                            |
-|:---------------------------|:---------------------------------------|
-| `alert.googlechat.webhook` | Google Chat webhook URL                |
-| `alert.googlechat.text`    | Customized text in Google Chat message |
-
-#### Custom webhook
-
-If you want to enable custom webhook, provide url with optional headers and
-basic auth
-
-| Parameter                 | Description                     |
-|:--------------------------|:--------------------------------|
-| `alert.webhook.url`       | Webhook URL                     |
-| `alert.webhook.headers`   | optional list of name and value |
-| `alert.webhook.basicAuth` | optional username and password  |
-
-### 🛠️ CLI
-
-| Command                        | Description                                                       |
-|:-------------------------------|:----------------------------------------------------------------- |
-| `kwatch`                       | Run the main monitoring daemon                                    |
-| `kwatch --version`             | Print version and exit                                            |
-| `kwatch lint`                  | Validate config file and print errors to stderr (exit 1 on failure) |
-| `kwatch lint --strict`         | Strict decode — rejects unknown YAML keys (typos, removed fields) |
-| `kwatch lint --check`          | Validate config + verify provider credentials (pre-flight)        |
-| `kwatch replay < events.jsonl` | Replay JSONL events from stdin through the alert pipeline         |
-
-`kwatch replay` reads JSON lines from stdin in the following format:
-
-```json
-{"podName": "test-pod", "namespace": "default", "reason": "CrashLoopBackOff", "events": "Back-off restarting failed container"}
-```
-
-### ⚠️ Upgrading
-
-#### v0.x → v0.(x+1): Silences consolidation
-
-Deprecated `ignore*` fields (`ignoreContainerNames`, `ignoreLogPatterns`,
-`ignoreContainerMessages`, `ignoreNodeReasons`, `ignoreNodeMessages`) still
-work but emit a startup warning. Migrate to the unified `silences:` block:
-
-```yaml
-# Old (still works):
-ignoreContainerNames: ["sidecar-proxy"]
-
-# New:
-silences:
-  - containerNames: ["sidecar-proxy"]
-```
-
-`SilenceRule` now supports all the same fields: `containerNames`,
-`logPatterns`, `containerMessages`, `nodeReasons`, `nodeMessages`.
-
-#### Strict config validation
-
-`kwatch lint --strict` re-decodes the config file with `yaml.KnownFields(true)`
-to catch typos and removed keys. Add it to your CI pipeline:
-
-```shell
-kwatch lint --strict
-```
-
-#### Provider credential pre-flight
-
-`kwatch lint --check` loads the config and calls `Verify()` on each provider
-that supports it (Telegram: `getMe`, Discord: webhook GET, Slack: `auth.test`):
-
-```shell
-kwatch lint --check
-```
-
-#### Upgrader `--skip-upgrade` flag
-
-Set the environment variable `SKIP_UPGRADE_CHECK=1` or the config field
-`upgrader.disableUpdateCheck: true` to suppress kwatch's release-check on
-startup (#438).
-
-#### v0.(x+1): Phase 0 bug fixes
-
-**`correlation.startupQuiet` removed** — The `startupQuiet` field is removed
-from both the YAML config and the `KwatchConfig` CRD. The engine now relies on
-`buildSeenSet` (in-cluster state restore) instead. Configs that include
-`startupQuiet` will be silently ignored (permissive decode) or rejected by
-`kwatch lint --strict`.
-
-**Init container alerts improved** — Init container failures now use reason
-`InitContainerError` instead of the container's underlying state reason
-(e.g. `CrashLoopBackOff`). This affects routing rules, silences, and templates
-that match on reason strings — update any such rules.
-
-**OOMKilled alerts without memory limits** — When a container is OOMKilled but
-has no memory limit set, the hint now says *"OOMKilled with no memory limit set
-— node-level memory pressure; set/raise container memory limits"* instead of a
-generic OOM message.
-
-**Discord/Telegram use shared HTTP client** — Both providers now use the
-kwatch shared HTTP client with proper timeout instead of a bare
-`&http.Client{}`. No config change needed, but socket exhaustion on very large
-clusters may decrease slightly.
-
-**`/readyz` lags during startup** — The readiness endpoint returns 503 until
-leader-elected tasks (informers synced, baseline built) complete. Previously it
-returned 200 immediately. Add a `readinessProbe.initialDelaySeconds` if your
-orchestrator probes `/readyz` before the leader is elected.
-
-**`maxRecentLogLines: 0` now capped** — When `maxRecentLogLines` is set to 0
-(or omitted), log fetch now defaults to a tail of 500 lines with a 1 MB
-`LimitBytes` cap. Previously, 0 meant "unbounded" — the handler could fetch
-megabytes of logs for a single incident.
-
-### 📋 Guarantees
-
-kwatch follows semver. Within the same major version:
-
-- **Config schema** is additive-only. New optional fields may be added; existing
-  fields will not be removed or change type without a major version bump.
-- **Alert message format** is considered informative (not machine-parsable).
-  Fields may be added to messages in minor releases.
-- **`kwatch lint --strict`** catches unknown YAML keys, guarding against typos
-  on new fields.
-- **CRD shape** (`KwatchConfig`) follows the same additive policy.
-
-### 📖 Recipes
-
-#### Silence noisy sidecars (#82)
-
-```yaml
-silences:
-  - containerNames: ["istio-proxy", "envoy"]
-```
-
-#### Silence all CrashLoopBackOff in CI namespaces (#140)
-
-```yaml
-silences:
-  - namespaces: ["ci", "staging"]
-    reasons: ["CrashLoopBackOff"]
-```
-
-### 🧹 Cleanup
+## 🧹 Clean up
 
 ```shell
 kubectl delete -f https://raw.githubusercontent.com/abahmed/kwatch/v0.11.0/deploy/config.yaml
 kubectl delete -f https://raw.githubusercontent.com/abahmed/kwatch/v0.11.0/deploy/deploy.yaml
 ```
 
+---
+
+## 📖 Not a monitoring platform — and proud of it! 🎉
+
+kwatch is **not** a metrics collector, dashboard, or observability backend.
+No TSDB, no dashboards, no log storage, no query language.
+kwatch is the **alarm** — your existing tools are the archive.
+
+Need full observability? Pair kwatch with Prometheus + Grafana for metrics,
+or Loki for logs. kwatch handles the one thing a dashboard cannot: telling
+you something broke **right now**. ⏰
+
+---
+
 ## 👍 Contribute & Support
 
-+ Add a [GitHub Star](https://github.com/abahmed/kwatch/stargazers)
-+ [Suggest new features, ideas and optimizations](https://github.com/abahmed/kwatch/issues)
-+ [Report issues](https://github.com/abahmed/kwatch/issues)
++ ⭐ [Give us a star](https://github.com/abahmed/kwatch/stargazers) — it really helps!
++ 💡 [Suggest features](https://github.com/abahmed/kwatch/issues)
++ 🐛 [Report bugs](https://github.com/abahmed/kwatch/issues)
 
 ## 🚀 Who uses kwatch?
 
-**kwatch** is being used by multiple entities including, but not limited to
+**kwatch** is trusted by:
 
 [<img src="./assets/users/trella.png"/>](https://www.trella.app)
 [<img src="./assets/users/ibec-systems.svg" width="50%"/>](https://ibecsystems.com/en#/)
 [<img src="./assets/users/justwatch.png" width="50%"/>](https://www.justwatch.com/us/talent)
 
-If you want to add your entity, [open issue](https://github.com/abahmed/kwatch/issues) to add it
+Want to add your company? [Open an issue!](https://github.com/abahmed/kwatch/issues)
 
 ## 💻 Contributors
 
@@ -877,8 +583,8 @@ If you want to add your entity, [open issue](https://github.com/abahmed/kwatch/i
 
 ## 👋 Get in touch
 
-Feel free to chat with us on [Discord](https://discord.gg/kzJszdKmJ7) if you have questions, or suggestions
+Questions? Suggestions? [Chat with us on Discord](https://discord.gg/kzJszdKmJ7) — we're friendly! 🎉
 
 ## ⚠️ License
 
-kwatch is licensed under [MIT License](LICENSE)
+kwatch is [MIT Licensed](LICENSE) — use it, fork it, share it! 🎊
