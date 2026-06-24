@@ -6,7 +6,7 @@ replicaCount: 1   # MUST stay 1 — kwatch is the sole writer of the kwatch-base
 
 image:
   repository: ghcr.io/abahmed/kwatch
-  pullPolicy: Always
+  pullPolicy: IfNotPresent
 
 securityContext:
   runAsUser: 1000
@@ -20,6 +20,9 @@ service:
 resources:
   limits:
     memory: 256Mi
+    cpu: 100m
+  requests:
+    memory: 128Mi
     cpu: 100m
 
 nodeSelector: {}

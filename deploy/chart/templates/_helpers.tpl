@@ -61,7 +61,7 @@ env:
   - { name: OLLAMA_MODELS, value: /models }
   - { name: OLLAMA_NUM_PARALLEL, value: "1" }
   - { name: OLLAMA_MAX_LOADED_MODELS, value: "1" }
-  - { name: OLLAMA_KEEP_ALIVE, value: "5m" }
+  - { name: OLLAMA_KEEP_ALIVE, value: "-1" }
 startupProbe:
   exec: { command: ["/bin/sh","-c","ollama list >/dev/null 2>&1"] }
   failureThreshold: 30
@@ -74,8 +74,8 @@ livenessProbe:
   periodSeconds: 30
   failureThreshold: 3
 resources:
-  requests: { cpu: "500m", memory: "1Gi" }
-  limits:   { cpu: "2", memory: "2Gi" }
+  requests: { cpu: "1", memory: "1750Mi" }
+  limits:   { cpu: "1", memory: "1750Mi" }
 securityContext:
   runAsNonRoot: true
   runAsUser: 1000

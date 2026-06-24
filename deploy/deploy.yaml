@@ -98,7 +98,7 @@ spec:
       containers:
       - name: kwatch
         image: ghcr.io/abahmed/kwatch:v0.11.0
-        imagePullPolicy: Always
+        imagePullPolicy: IfNotPresent
         securityContext:
           runAsNonRoot: true
           runAsUser: 1000
@@ -138,40 +138,33 @@ spec:
           limits:
             memory: "256Mi"
             cpu: "100m"
-      # LLM sidecar — AI enrichment (enabled by default).
-      # NOTE: AI enrichment needs a 64-bit (amd64/arm64) node — see the affinity below.
-      # On a 32-bit-only cluster the sidecar is un-pullable (pod 1/2) but kwatch keeps
-      # alerting; don't enable it there.
+          requests:
+            memory: "128Mi"
+            cpu: "100m"
       - name: llm
         image: ghcr.io/abahmed/kwatch-llm:v1
+        imagePullPolicy: IfNotPresent
         env:
           - { name: OLLAMA_HOST, value: "127.0.0.1:11434" }
           - { name: OLLAMA_MODELS, value: /models }
           - { name: OLLAMA_NUM_PARALLEL, value: "1" }
           - { name: OLLAMA_MAX_LOADED_MODELS, value: "1" }
-          - { name: OLLAMA_KEEP_ALIVE, value: "5m" }
+          - { name: OLLAMA_KEEP_ALIVE, value: "-1" }
         readinessProbe:
           exec:
             command: ["/bin/sh","-c","ollama list | grep -q kwatch-triage"]
           initialDelaySeconds: 5
           periodSeconds: 10
         resources:
-          requests: { cpu: "500m", memory: "1Gi" }
-          limits: { cpu: "2", memory: "2Gi" }
+          requests: { cpu: "1", memory: "1750Mi" }
+          limits: { cpu: "1", memory: "1750Mi" }
         securityContext:
           allowPrivilegeEscalation: false
           runAsNonRoot: true
-          runAsUser: 1000          # matches image USER (Fix 1)
+          runAsUser: 1000
           runAsGroup: 1000
           capabilities: { drop: ["ALL"] }
           seccompProfile: { type: RuntimeDefault }
-      affinity:                    # keep LLM on 64-bit nodes
-        nodeAffinity:
-          preferredDuringSchedulingIgnoredDuringExecution:
-            - weight: 100
-              preference:
-                matchExpressions:
-                  - { key: kubernetes.io/arch, operator: In, values: [amd64, arm64] }
       volumes:
       - name: config-volume
         configMap:
