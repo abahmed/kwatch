@@ -487,9 +487,7 @@ call, no data leaves the cluster.
 
 #### Slack
 
-<p>
-  <img src="./assets/slack.png" width="30%"/>
-</p>
+
 
 If you want to enable Slack, provide either a webhook URL or a bot token with channel
 
@@ -560,9 +558,7 @@ The fallback sends a single prefixed message (no further retry or fallback recur
 
 #### Discord
 
-<p>
-  <img src="./assets/discord.png" width="30%"/>
-</p>
+
 
 If you want to enable Discord, provide the webhook with optional text and title
 
@@ -574,9 +570,7 @@ If you want to enable Discord, provide the webhook with optional text and title
 
 #### Email
 
-<p>
-  <img src="./assets/email.png" width="50%"/>
-</p>
+
 
 If you want to enable Email, provide the from and to emails with host and the port
 
@@ -590,9 +584,7 @@ If you want to enable Email, provide the from and to emails with host and the po
 
 #### PagerDuty
 
-<p>
-  <img src="./assets/pagerduty.png" width="50%"/>
-</p>
+
 
 If you want to enable PagerDuty, provide the integration key
 
@@ -602,9 +594,7 @@ If you want to enable PagerDuty, provide the integration key
 
 #### Telegram
 
-<p>
-  <img src="./assets/telegram.png" width="50%"/>
-</p>
+
 
 If you want to enable Telegram, provide a valid token and the chat Id.
 
@@ -615,9 +605,7 @@ If you want to enable Telegram, provide a valid token and the chat Id.
 
 #### Microsoft Teams
 
-<p>
-  <img src="./assets/teams.png" width="50%"/>
-</p>
+
 
 If you want to enable Microsoft Teams, provide the channel webhook.
 
@@ -629,9 +617,7 @@ If you want to enable Microsoft Teams, provide the channel webhook.
 
 #### Rocket Chat
 
-<p>
-  <img src="./assets/rocketchat.png" width="50%"/>
-</p>
+
 
 If you want to enable Rocket Chat, provide the webhook with optional text
 
@@ -642,9 +628,7 @@ If you want to enable Rocket Chat, provide the webhook with optional text
 
 #### Mattermost
 
-<p>
-  <img src="./assets/mattermost.png" width="45%"/>
-</p>
+
 
 If you want to enable Mattermost, provide the webhook with optional text and title
 
@@ -656,9 +640,7 @@ If you want to enable Mattermost, provide the webhook with optional text and tit
 
 #### Opsgenie
 
-<p>
-  <img src="./assets/opsgenie.png" width="45%"/>
-</p>
+
 
 If you want to enable Opsgenie, provide the API key with optional text and title
 
@@ -670,9 +652,7 @@ If you want to enable Opsgenie, provide the API key with optional text and title
 
 #### Matrix
 
-<p>
-  <img src="./assets/matrix.png" width="45%"/>
-</p>
+
 
 If you want to enable Matrix, provide homeServer, accessToken and internalRoomID
 with optional text and title
@@ -698,9 +678,7 @@ title
 
 #### FeiShu
 
-<p>
-  <img src="./assets/feishu.png" width="45%"/>
-</p>
+
 If you want to enable FeiShu, provide accessToken with optional secret and
 title
 
@@ -711,9 +689,7 @@ title
 
 #### Zenduty
 
-<p>
-  <img src="./assets/zenduty.png" width="45%"/>
-</p>
+
 If you want to enable Zenduty, provide IntegrationKey with optional alert type
 
 | Parameter                      | Description                 |
@@ -723,9 +699,7 @@ If you want to enable Zenduty, provide IntegrationKey with optional alert type
 
 #### Google Chat
 
-<p>
-  <img src="./assets/googlechat.png" width="50%"/>
-</p>
+
 
 If you want to enable Google Chat, provide the webhook with optional text
 
