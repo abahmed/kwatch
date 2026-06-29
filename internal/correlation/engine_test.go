@@ -272,6 +272,47 @@ func TestBaselineSuppression(t *testing.T) {
 	assert.Equal(t, model.ActionSkip, action)
 }
 
+func TestSetSeenMergesNotReplaces(t *testing.T) {
+	fakeNow := time.Date(2025, 1, 1, 0, 0, 0, 0, time.UTC)
+	e := newTestEngine()
+	e.now = mockClock(fakeNow)
+
+	key1 := BuildKey("default", "dep-1", "CrashLoopBackOff", "")
+	key2 := BuildKey("default", "dep-1", "OOMKilled", "")
+	key3 := BuildKey("default", "dep-2", "CrashLoopBackOff", "")
+
+	// First call: seed key1 and key2
+	e.SetSeen(map[string]map[string]int64{
+		key1: {"pod-a": fakeNow.Unix()},
+		key2: {"pod-b": fakeNow.Unix()},
+	})
+
+	// Second call: same key1 with fresher timestamp, plus new key3
+	later := fakeNow.Add(1 * time.Hour)
+	e.SetSeen(map[string]map[string]int64{
+		key1: {"pod-a": later.Unix()},
+		key3: {"pod-c": later.Unix()},
+	})
+
+	// All keys should be present (key1 and key2 preserved from first call,
+	// key3 from second call, key1 timestamp updated)
+	e.mu.Lock()
+	defer e.mu.Unlock()
+
+	_, ok1 := e.seen[key1]["pod-a"]
+	assert.True(t, ok1, "key1 from first SetSeen must survive after second SetSeen")
+
+	_, ok2 := e.seen[key2]["pod-b"]
+	assert.True(t, ok2, "key2 from first SetSeen must survive after second SetSeen (merge)")
+
+	_, ok3 := e.seen[key3]["pod-c"]
+	assert.True(t, ok3, "key3 from second SetSeen must be present")
+
+	// Timestamp for key1/pod-a must reflect the later value (was updated, not stuck)
+	assert.Equal(t, later.Unix(), e.seen[key1]["pod-a"],
+		"SetSeen must update timestamp for existing entry")
+}
+
 func TestClearSeenUnsuppresses(t *testing.T) {
 	e := newTestEngine()
 

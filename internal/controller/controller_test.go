@@ -955,6 +955,47 @@ func TestBuildSeenCrashLoopHighFreq(t *testing.T) {
 	assert.True(t, ok, "buildSeenSet must use CrashLoopHighFrequency for restarts > 5")
 }
 
+func TestBuildSeenRunningWithRestarts(t *testing.T) {
+	client := fake.NewSimpleClientset(
+		&corev1.Pod{
+			ObjectMeta: metav1.ObjectMeta{Name: "restarted-pod", Namespace: "default",
+				OwnerReferences: []metav1.OwnerReference{{Kind: "Deployment", Name: "dep", APIVersion: "apps/v1"}}},
+			Status: corev1.PodStatus{
+				Phase: corev1.PodRunning,
+				ContainerStatuses: []corev1.ContainerStatus{{
+					Name:         "app",
+					RestartCount: 3,
+					State:        corev1.ContainerState{Running: &corev1.ContainerStateRunning{}},
+					LastTerminationState: corev1.ContainerState{
+						Terminated: &corev1.ContainerStateTerminated{Reason: "Error"},
+					},
+				}},
+			},
+		},
+	)
+	cfg := &config.Config{}
+	h := &mockHandler{}
+
+	ctrl, cleanup := New(client, cfg, h)
+	defer cleanup()
+
+	assert.Eventually(t, func() bool {
+		_, err := ctrl.podLister.Pods("default").Get("restarted-pod")
+		return err == nil
+	}, 5*time.Second, 50*time.Millisecond)
+
+	ctrl.buildSeenSet()
+
+	h.mu.Lock()
+	baseline := h.seenBaseline
+	h.mu.Unlock()
+
+	// Must use LastTerminationState.Terminated.Reason ("Error"), not skip the pod
+	key := correlation.BuildKey("default", "dep", "Error", "")
+	_, ok := baseline[key]["restarted-pod"]
+	assert.True(t, ok, "Running container with restarts must be baselined using LastTerminationState.Reason")
+}
+
 func TestBuildSeenSetReportsStartupSummary(t *testing.T) {
 	a := assert.New(t)
 

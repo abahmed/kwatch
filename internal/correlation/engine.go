@@ -203,7 +203,9 @@ func (e *Engine) SetSeen(b map[string]map[string]int64) {
 	e.mu.Lock()
 	now := e.now()
 	ttl := e.config.BaselineTTL
-	e.seen = make(map[string]map[string]int64, len(b))
+	if e.seen == nil {
+		e.seen = make(map[string]map[string]int64)
+	}
 	for key, pods := range b {
 		for pod, ts := range pods {
 			if now.Sub(time.Unix(ts, 0)) < ttl {

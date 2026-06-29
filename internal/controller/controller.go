@@ -929,6 +929,8 @@ func (c *Controller) buildSeenSet() {
 					continue
 				}
 				reason = t.Reason
+			} else if cs.State.Running != nil && cs.RestartCount > 0 && cs.LastTerminationState.Terminated != nil {
+				reason = cs.LastTerminationState.Terminated.Reason
 			}
 			if reason == "" {
 				continue
