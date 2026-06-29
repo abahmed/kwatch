@@ -13,6 +13,10 @@ data:
     # ── General ──────────────────────────────────────────────
     maxRecentLogLines: <number>    # also caps logs/events in alert message blocks (default 100)
     ignoreFailedGracefulShutdown: <boolean>
+    ignoreDisruptionTerminations: <boolean>    # skip pods evicted during node drains (default true)
+    reportStartupBaseline: <boolean>           # send one startup summary of pre-existing issues (default false)
+    containerRestartThreshold: <number>        # alert if a container restarts this many times (0 = off, default 0)
+    workers: <number>                          # parallel reconcile workers (default 1)
 
     # Optional periodic resync (0 = event-driven only); raise to e.g. 600 only if a
     # periodic full-reconcile safety net is wanted
@@ -29,11 +33,19 @@ data:
       - "<optional_regex_pattern>"
     ignoreLogPatterns:
       - "<optional_log_regex>"
+    ignoreContainerMessages:
+      - "<optional_substring>"
+    namespaceSelector:
+      "<label_selector>"     # k8s label selector, mutually exclusive with namespaces
+    includeEvents: <boolean>  # include events section in alerts (default true)
+    includeLogs: <boolean>    # include logs section in alerts (default true)
 
     # ── Severity ──────────────────────────────────────────
     # Map owner kinds to severity levels
     severityByOwnerKind:
       <owner_kind>: "<severity>"
+    severityByReason:
+      <reason>: "<severity>"     # checked before owner-kind
 
     # ── Silences (suppress matching incidents entirely) ──
     silences:
@@ -42,14 +54,29 @@ data:
       # - namespaces: ["<namespace>"]
       # - reasons: ["<reason>"]
       # - podNamePatterns: ["<regex>"]
+      # - containerNames: ["<container>"]
+      # - logPatterns: ["<regex>"]
+      # - containerMessages: ["<substring>"]
 
     # ── Correlation (incident dedup & lifecycle) ──────────
     correlation:
       window: <minutes>
       lifecycleInterval: <minutes>
       # resolveHoldDown: <seconds>    # Seconds to wait before resolving (flap dampening)
+      # maxBaseline: 2000            # max baseline entries (default 2000)
+      # escalation:
+      #   enabled: <boolean>
+      #   tiers: [<count>, <count>]  # restart count thresholds: [3, 10] → high, critical
+      # renotify:
+      #   intervalBySeverity:
+      #     default: <minutes>       # renotify interval per severity (0 = off)
+      #   maxPerIncident: <number>
 
     # ── Monitors ──────────────────────────────────────────
+    pendingPodMonitor:
+      enabled: <boolean>     # detect pods stuck in Pending
+      threshold: <seconds>   # seconds before alerting (default 300)
+
     nodeMonitor:
       enabled: <boolean>
 
@@ -66,6 +93,20 @@ data:
     cronJobMonitor:
       enabled: <boolean>
 
+    hpaMonitor:
+      enabled: <boolean>
+      # sustainedMinutes: <minutes>
+
+    tlsMonitor:
+      enabled: <boolean>
+      # threshold: <days>              # alert before expiry (default 30)
+      # criticalThreshold: <days>      # high severity before expiry (default 3)
+
+    heartbeatMonitor:
+      enabled: <boolean>
+      # interval: <seconds>            # ping interval (default 300)
+      # url: "<url>"                   # external endpoint to ping
+
     pvcMonitor:
       # NOTE: usage is read from each node's kubelet stats/summary, which only reports
       # volumes that are currently MOUNTED by a running pod. A Bound-but-unmounted PVC
@@ -76,10 +117,17 @@ data:
       interval: <minutes>
       threshold: <percentage>
       criticalThreshold: <percentage>
+      # clearThreshold: <percentage>   # resolve below this (default 75)
 
     # ── AI enrichment (self-hosted) ──────────────────────
     llm:
       enabled: <boolean>     # the only knob — model/endpoint/redaction are fixed in code
+
+    # ── Templates / Runbooks ──────────────────────────────
+    # templates:
+    #   <reason>: "<go_template_string>"
+    # runbooks:
+    #   <reason>: "<url>"
 
     # ── Dashboard URL template (optional) ─────────────────
     # dashboardURLTemplate: "https://grafana.example.com/d/abc?var-ns={namespace}&var-pod={pod}"
@@ -88,7 +136,9 @@ data:
     healthCheck:
       enabled: <boolean>
       port: <port>
-      # pprof: <boolean>      # set true to enable /debug/pprof/* profiling endpoints
+      # pprof: <boolean>           # set true to enable /debug/pprof/* profiling endpoints
+      # diagnostics: <boolean>     # set true to enable /incidents, /test-alert endpoints
+      # diagnosticsToken: "<token>" # optional Bearer token for diagnostic endpoints
 
     # ── App ───────────────────────────────────────────────
     app:
@@ -96,10 +146,25 @@ data:
       # proxyURL: "<url>"
       # disableStartupMessage: <boolean>
       # logFormatter: "<text|json>"
+      # insecureSkipTLSVerify: <boolean>
+      # caBundlePath: "<path>"
 
     # ── Upgrader ──────────────────────────────────────────
     upgrader:
       disableUpdateCheck: <boolean>
+
+    # ── Inhibition / Storm ────────────────────────────────
+    # inhibition:
+    #   nodeSuppressesPods: <boolean>  # suppress pod alerts on unhealthy nodes (default true)
+    # storm:
+    #   enabled: <boolean>
+    #   threshold: <number>
+    #   windowMinutes: <minutes>
+    #   digestIntervalMinutes: <minutes>
+
+    # ── CRD watcher ───────────────────────────────────────
+    # crd:
+    #   enabled: <boolean>   # watch KwatchConfig CRs for live config changes
 
     # ── Alert providers ───────────────────────────────────
     alert:
@@ -141,4 +206,27 @@ data:
 
       opsgenie:
         apiKey: <api_key>
+
+      # matrix:
+      #   homeserverUrl: "<url>"
+      #   userId: "<user>"
+      #   accessToken: "<token>"
+      #   roomId: "<room>"
+
+      # dingtalk:
+      #   webhook: <webhook_url>
+
+      # feishu:
+      #   webhook: <webhook_url>
+
+      # webhook:
+      #   url: "<url>"
+      #   headers:
+      #     Authorization: "<token>"
+
+      # zenduty:
+      #   integrationKey: <integration_key>
+
+      # googlechat:
+      #   webhook: <webhook_url>
 
