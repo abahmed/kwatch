@@ -129,6 +129,8 @@ llm:
 
 When a crash happens, the AI reads the logs and tells you the **most likely cause** and **what to do next**. Like having a senior SRE on-call with you.
 
+> **📌 Architecture note:** The AI sidecar is available for **linux/amd64** and **linux/arm64** only. It does not support `arm/v6` or `arm/v7` (the main kwatch image supports all four).
+
 ---
 
 ## ⚙️ Configuration (simple)
