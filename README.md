@@ -1,6 +1,6 @@
 <p align="center">
   <a href="https://kwatch.dev">
-    <img src="./assets/logo.png" width="30%"/>
+    <img src="./assets/logo.svg" width="30%"/>
   </a>
   <br />
   <a href="https://kwatch.dev">
@@ -36,7 +36,7 @@
 </p>
 
 > **👋 New to Kubernetes? No problem.**  
-> kwatch watches your cluster and sends you a friendly alert the moment something breaks — with a plain-English explanation of what went wrong and how to fix it.  
+> kwatch watches your cluster 24/7. When something fails, it tells you **what broke and why** — with the error reason, diagnostic hints, logs, and events — straight to your team chat.  
 > ✨ **60 seconds to install. No backend. No dashboards. No YAML spaghetti.**
 
 ---
