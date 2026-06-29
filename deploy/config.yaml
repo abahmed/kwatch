@@ -14,8 +14,6 @@ data:
     maxRecentLogLines: <optional_number_of_lines>    # also caps logs/events in alert message blocks (default 100)
     ignoreFailedGracefulShutdown: true
 
-    # Pods stuck in Pending beyond this threshold (seconds) trigger an alert
-    pendingPodThreshold: 300
 
     # Optional periodic resync (0 = event-driven only); raise to e.g. 600 only if a
     # periodic full-reconcile safety net is wanted
@@ -42,6 +40,8 @@ data:
 
     # ── Silences (suppress matching incidents entirely) ──
     silences:
+      - nodeReasons: ["KubeletNotReady"]
+        nodeMessages: ["kubelet has no node IP"]
       # - namespaces: ["kube-system", "monitoring"]
       # - reasons: ["BackOff"]
       # - podNamePatterns: ["my-fancy-pod-.*"]
@@ -79,12 +79,6 @@ data:
       interval: 5
       threshold: 80
       criticalThreshold: 90
-
-    # ── Node alert suppression ────────────────────────────
-    ignoreNodeReasons:
-      - "KubeletNotReady"
-    ignoreNodeMessages:
-      - "kubelet has no node IP"
 
     # ── AI enrichment (self-hosted) ──────────────────────
     llm:
