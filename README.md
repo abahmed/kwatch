@@ -120,7 +120,7 @@ Every monitor below is **on by default** — zero config needed:
 
 ## 🤖 AI-powered troubleshooting (optional, on by default)
 
-kwatch ships with a **built-in AI sidecar** (runs inside your cluster — zero data leaves):
+kwatch ships with **built-in AI** (runs inside your cluster — zero data leaves):
 
 ```yaml
 llm:
@@ -129,7 +129,7 @@ llm:
 
 When a crash happens, the AI reads the logs and tells you the **most likely cause** and **what to do next**. Like having a senior SRE on-call with you.
 
-> **📌 Architecture note:** The AI sidecar is available for **linux/amd64** and **linux/arm64** only. It does not support `arm/v6` or `arm/v7` (the main kwatch image supports all four).
+> **📌 Architecture note:** AI is available for **linux/amd64** and **linux/arm64** only. It does not support `arm/v6` or `arm/v7` (the main kwatch image supports all four).
 
 ---
 
