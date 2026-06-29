@@ -108,7 +108,7 @@ func main() {
 	baseline := stateMgr.GetBaseline(ctx)
 	stateMgr.MigrateLegacyBaseline(ctx)
 
-	baselineCh := make(chan map[string]map[string]int64, 1)
+	baselineCh := make(chan map[string]map[string]int64, 64)
 	go startBaselineSaver(ctx, stateMgr, baselineCh, 0)
 
 	var correlator *correlation.Engine
@@ -144,11 +144,7 @@ func main() {
 			select {
 			case baselineCh <- b:
 			default:
-				select {
-				case <-baselineCh:
-				default:
-				}
-				baselineCh <- b
+				// Channel full: drop oldest, keep newest
 			}
 		},
 	})
@@ -330,6 +326,12 @@ func startBaselineSaver(ctx context.Context, stateMgr interface {
 			if timer == nil {
 				timer = time.NewTimer(interval)
 			} else {
+				if !timer.Stop() {
+					select {
+					case <-timer.C:
+					default:
+					}
+				}
 				timer.Reset(interval)
 			}
 			timerC = timer.C

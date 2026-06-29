@@ -120,6 +120,7 @@ type AlertManager struct {
 	done           chan struct{}
 
 	analysisWriter func(key, analysis string)
+	ctx            context.Context
 }
 
 func (a *AlertManager) SetMaxLogLines(n int) {
@@ -650,10 +651,6 @@ func sendWithRetry(ctx context.Context, sendFn func() error, maxAttempts int, de
 }
 
 func sleepWithContext(ctx context.Context, d time.Duration) error {
-	if ctx == nil {
-		time.Sleep(d)
-		return nil
-	}
 	select {
 	case <-ctx.Done():
 		return ctx.Err()
@@ -687,12 +684,16 @@ func (a *AlertManager) Notify(msg string) {
 
 	for _, entry := range entries {
 		p := entry.provider
+		ctx := a.ctx
+		if ctx == nil {
+			ctx = context.Background()
+		}
 		if _, ok := p.(EventDeliveryProvider); ok {
 			ev := &event.Event{
 				PodName: msg,
 				Reason:  "notify",
 			}
-			if err := sendWithRetry(context.Background(), func() error {
+			if err := sendWithRetry(ctx, func() error {
 				return p.SendEvent(ev)
 			}, entry.maxAttempts, entry.retryDelay, entry.maxBackoff, p.Name()); err != nil && entry.fallback != nil {
 				entry.fallback.provider.SendMessage("[fallback — primary " + p.Name() + " failed] " + msg)
@@ -700,7 +701,7 @@ func (a *AlertManager) Notify(msg string) {
 			continue
 		}
 		truncMsg := truncateMsg(msg, entry.maxBytes)
-		if err := sendWithRetry(context.Background(), func() error {
+		if err := sendWithRetry(ctx, func() error {
 			return p.SendMessage(truncMsg)
 		}, entry.maxAttempts, entry.retryDelay, entry.maxBackoff, p.Name()); err != nil && entry.fallback != nil {
 			entry.fallback.provider.SendMessage("[fallback — primary " + p.Name() + " failed] " + truncMsg)
@@ -717,9 +718,13 @@ func (a *AlertManager) NotifyEvent(event event.Event) {
 	copy(entries, a.entries)
 	a.mu.Unlock()
 
+	ctx := a.ctx
+	if ctx == nil {
+		ctx = context.Background()
+	}
 	for _, entry := range entries {
 		p := entry.provider
-		if err := sendWithRetry(context.Background(), func() error {
+		if err := sendWithRetry(ctx, func() error {
 			return p.SendEvent(&event)
 		}, entry.maxAttempts, entry.retryDelay, entry.maxBackoff, p.Name()); err != nil && entry.fallback != nil {
 			if ferr := entry.fallback.provider.SendMessage("[fallback — primary " + p.Name() + " failed] " + event.Reason + " in " + event.Namespace + "/" + event.PodName); ferr != nil {
@@ -841,7 +846,7 @@ func (a *AlertManager) AddProvider(p Provider) {
 		go func() {
 			defer a.providerWg.Done()
 			for job := range entry.ch {
-				a.deliverOne(&entry, job.inc, job.action)
+				a.deliverOne(a.ctx, &entry, job.inc, job.action)
 			}
 		}()
 	}
@@ -853,6 +858,7 @@ func (a *AlertManager) Start(ctx context.Context) {
 	a.mu.Lock()
 	a.started = true
 	a.stopped = false
+	a.ctx = ctx
 	a.done = make(chan struct{})
 	entries := make([]providerEntry, len(a.entries))
 	copy(entries, a.entries)
@@ -864,7 +870,7 @@ func (a *AlertManager) Start(ctx context.Context) {
 		go func() {
 			defer a.providerWg.Done()
 			for job := range entry.ch {
-				a.deliverOne(entry, job.inc, job.action)
+				a.deliverOne(a.ctx, entry, job.inc, job.action)
 			}
 		}()
 	}
@@ -1015,7 +1021,7 @@ func sanitizeAnalysis(s string) string {
 }
 
 // deliverOne handles the full send+retry for a single (entry, incident) pair.
-func (a *AlertManager) deliverOne(entry *providerEntry, inc *model.Incident, action model.IncidentAction) {
+func (a *AlertManager) deliverOne(ctx context.Context, entry *providerEntry, inc *model.Incident, action model.IncidentAction) {
 	p := entry.provider
 	metrics.Default.NotificationsTotal.Add(1)
 
@@ -1035,11 +1041,11 @@ func (a *AlertManager) deliverOne(entry *providerEntry, inc *model.Incident, act
 	if action == model.ActionDigestFlush {
 		if _, ok := p.(EventDeliveryProvider); ok {
 			ev := incidentToEvent(inc, action)
-			err = sendWithRetry(context.Background(), func() error {
+			err = sendWithRetry(ctx, func() error {
 				return p.SendEvent(ev)
 			}, entry.maxAttempts, entry.retryDelay, entry.maxBackoff, p.Name())
 		} else {
-			err = sendWithRetry(context.Background(), func() error {
+			err = sendWithRetry(ctx, func() error {
 				return p.SendMessage(msg)
 			}, entry.maxAttempts, entry.retryDelay, entry.maxBackoff, p.Name())
 		}
@@ -1051,16 +1057,16 @@ func (a *AlertManager) deliverOne(entry *providerEntry, inc *model.Incident, act
 			return
 		}
 		if tp, ok := p.(ThreadProvider); ok {
-			err = sendWithRetry(context.Background(), func() error {
+			err = sendWithRetry(ctx, func() error {
 				return tp.SendIncident(inc, action)
 			}, entry.maxAttempts, entry.retryDelay, entry.maxBackoff, p.Name())
 		} else if _, ok := p.(EventDeliveryProvider); ok {
 			ev := incidentToEvent(inc, action)
-			err = sendWithRetry(context.Background(), func() error {
+			err = sendWithRetry(ctx, func() error {
 				return p.SendEvent(ev)
 			}, entry.maxAttempts, entry.retryDelay, entry.maxBackoff, p.Name())
 		} else {
-			err = sendWithRetry(context.Background(), func() error {
+			err = sendWithRetry(ctx, func() error {
 				return p.SendMessage(msg)
 			}, entry.maxAttempts, entry.retryDelay, entry.maxBackoff, p.Name())
 		}

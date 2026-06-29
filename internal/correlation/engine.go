@@ -230,6 +230,7 @@ type seenEntry struct {
 	ts  int64
 }
 
+// Caller must hold e.mu.
 func (e *Engine) evictToLimit() {
 	limit := e.config.MaxBaseline
 	total := 0
@@ -261,6 +262,7 @@ func (e *Engine) evictToLimit() {
 	}
 }
 
+// Caller must hold e.mu.
 func (e *Engine) isBaselined(key, podName string) bool {
 	if pods, ok := e.seen[key]; ok {
 		if ts, ok := pods[podName]; ok {
@@ -375,6 +377,7 @@ func normalizeReason(reason string) string {
 	return reason
 }
 
+// Caller must hold e.mu.
 func (e *Engine) findNodeIncident(nodeName string) *model.Incident {
 	for _, inc := range e.state {
 		if inc.Resource == "node" && inc.Name == nodeName {
@@ -437,6 +440,7 @@ func (e *Engine) GetIncidentsByNamespace(ns string) []model.IncidentView {
 	return out
 }
 
+// Caller must hold e.mu.
 func (e *Engine) indexLastContainerState(namespace, podName string, cs *model.ContainerState) {
 	if podName == "" || cs == nil {
 		return
@@ -445,6 +449,7 @@ func (e *Engine) indexLastContainerState(namespace, podName string, cs *model.Co
 	e.lastContainerIndex[namespace+"/"+podName] = &cp
 }
 
+// Caller must hold e.mu.
 func (e *Engine) indexIncidentByNamespace(inc *model.Incident) {
 	ns, key := inc.Namespace, inc.Key
 	if ns == "" {
@@ -456,6 +461,7 @@ func (e *Engine) indexIncidentByNamespace(inc *model.Incident) {
 	e.namespaceIndex[ns][key] = inc
 }
 
+// Caller must hold e.mu.
 func (e *Engine) removeIncidentFromNamespaceIndex(inc *model.Incident) {
 	ns, key := inc.Namespace, inc.Key
 	if ns == "" {
@@ -623,6 +629,7 @@ func (e *Engine) Process(ev event.Event, owner string, cs *model.ContainerState)
 	return inc, e.edgeAction(inc)
 }
 
+// Caller must hold e.mu.
 func (e *Engine) newIncident(ev event.Event, owner string, cs *model.ContainerState, key, res string, now time.Time) *model.Incident {
 	inc := &model.Incident{
 		ID:         fmt.Sprintf("%08x", crc32.ChecksumIEEE([]byte(key))),
@@ -970,6 +977,7 @@ func (e *Engine) checkLifecycle() {
 	}
 }
 
+// Caller must hold e.mu.
 func (e *Engine) buildDigestSummary() string {
 	if len(e.digestBuf) == 0 {
 		return ""
