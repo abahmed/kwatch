@@ -16,6 +16,23 @@ const (
 	maxEventChars  = 2000
 )
 
+const systemPrompt = `You are a Kubernetes root cause analysis (RCA) assistant. Given incident details including reason, exit code, container status, restart count, events, and logs, determine the most likely root cause.
+
+Reply in 2-3 sentences with:
+1. The most likely root cause based on the evidence
+2. One concrete next step to resolve or investigate
+
+Base your analysis ONLY on the facts provided. Prefer evidence over guesses. If the logs and events are insufficient to determine a cause, reply exactly: "Cause unclear from available logs."
+
+Do not invent details, secrets, or kubectl commands you are not sure about.`
+
+func (c *Client) buildMessages(inc *model.Incident) []chatMessage {
+	return []chatMessage{
+		{Role: "system", Content: systemPrompt},
+		{Role: "user", Content: c.userPrompt(inc)},
+	}
+}
+
 func (c *Client) userPrompt(inc *model.Incident) string {
 	logs := c.redactor.scrub(selectRelevant(inc.Logs, maxLogChars))
 	events := c.redactor.scrub(tailChars(inc.Events, maxEventChars))
@@ -27,7 +44,18 @@ func (c *Client) userPrompt(inc *model.Incident) string {
 		fmt.Fprintf(&b, "Container: %s\n", c.redactor.scrub(inc.ContainerName))
 	}
 	fmt.Fprintf(&b, "RestartCount: %d\n", inc.RestartCount)
-	// CD-1: ground with facts kwatch already has
+	if inc.LastContainerState != nil {
+		fmt.Fprintf(&b, "ExitCode: %d\n", inc.LastContainerState.ExitCode)
+		if inc.LastContainerState.Reason != "" {
+			fmt.Fprintf(&b, "ContainerStatus: %s\n", inc.LastContainerState.Reason)
+		}
+		if inc.LastContainerState.Status != "" {
+			fmt.Fprintf(&b, "ContainerState: %s\n", inc.LastContainerState.Status)
+		}
+		if inc.LastContainerState.Msg != "" {
+			fmt.Fprintf(&b, "ContainerMessage: %s\n", inc.LastContainerState.Msg)
+		}
+	}
 	fmt.Fprintf(&b, "Occurrences: %d\nAffectedPods: %d\nDurationMin: %.0f\n",
 		inc.Count, len(inc.Resources), inc.LastSeen.Sub(inc.FirstSeen).Minutes())
 	if inc.PeakResources > 0 {
@@ -40,12 +68,14 @@ func (c *Client) userPrompt(inc *model.Incident) string {
 		}
 		fmt.Fprintf(&b, "Containers: %s\n", strings.Join(names, ", "))
 	}
-	// Runbook link (CD-4)
 	if inc.Runbook != "" {
 		fmt.Fprintf(&b, "Runbook: %s\n", c.redactor.scrub(inc.Runbook))
 	}
 	if inc.Hint != "" {
 		fmt.Fprintf(&b, "Rule-based hint: %s\n", c.redactor.scrub(inc.Hint))
+	}
+	if inc.SuppressedPods > 0 {
+		fmt.Fprintf(&b, "SuppressedPods: %d — dependent pod alerts hidden; this incident may be the root cause\n", inc.SuppressedPods)
 	}
 	if events != "" {
 		fmt.Fprintf(&b, "\nEvents:\n%s\n", events)

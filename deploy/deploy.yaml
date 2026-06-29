@@ -142,22 +142,17 @@ spec:
             memory: "128Mi"
             cpu: "100m"
       - name: llm
-        image: ghcr.io/abahmed/kwatch-llm:v1
+        image: ghcr.io/abahmed/kwatch-llm:v2
         imagePullPolicy: IfNotPresent
-        env:
-          - { name: OLLAMA_HOST, value: "127.0.0.1:11434" }
-          - { name: OLLAMA_MODELS, value: /models }
-          - { name: OLLAMA_NUM_PARALLEL, value: "1" }
-          - { name: OLLAMA_MAX_LOADED_MODELS, value: "1" }
-          - { name: OLLAMA_KEEP_ALIVE, value: "-1" }
         readinessProbe:
-          exec:
-            command: ["/bin/sh","-c","ollama list | grep -q kwatch-triage"]
+          httpGet:
+            path: /health
+            port: 8080
           initialDelaySeconds: 5
           periodSeconds: 10
         resources:
-          requests: { cpu: "1", memory: "1750Mi" }
-          limits: { cpu: "1", memory: "1750Mi" }
+          requests: { cpu: "500m", memory: "1Gi" }
+          limits: { cpu: "500m", memory: "1Gi" }
         securityContext:
           allowPrivilegeEscalation: false
           runAsNonRoot: true

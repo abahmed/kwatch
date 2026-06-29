@@ -46,7 +46,8 @@ echo "PASS: LLM disabled"
 echo "=== LLM enabled (plain container) ==="
 OUT3=$(helm template test3 . --set config.llm.enabled=true --set llm.nativeSidecar=false --set replicaCount=1 2>&1)
 echo "$OUT3" | grep -q "kwatch-llm" || { echo "FAIL: LLM sidecar missing when enabled"; exit 1; }
-echo "$OUT3" | grep -q "OLLAMA_HOST" || { echo "FAIL: OLLAMA_HOST env missing"; exit 1; }
+echo "$OUT3" | grep -q "/health" || { echo "FAIL: health probe missing"; exit 1; }
+echo "$OUT3" | grep -q "8080" || { echo "FAIL: port 8080 missing"; exit 1; }
 echo "$OUT3" | grep -A2 "config.yaml:" | grep -q "llm:" || { echo "FAIL: llm: not in ConfigMap"; exit 1; }
 echo "$OUT3" | grep -A3 "config.yaml:" | grep -q "enabled: true" || { echo "FAIL: llm.enabled: true not in ConfigMap"; exit 1; }
 # Must NOT appear in initContainers (plain container)

@@ -52,7 +52,7 @@ llm:
   # -- model image (published manually via .github/workflows/publish-llm.yml)
   repository: ghcr.io/abahmed/kwatch-llm
   # -- model image version; bump AFTER publishing a new tag (Fix 6a). Independent of appVersion.
-  tag: "v1"
+  tag: "v2"
   # -- Use K8s ≥1.29 native sidecar (initContainer restartPolicy:Always) vs plain container
   nativeSidecar: false
 

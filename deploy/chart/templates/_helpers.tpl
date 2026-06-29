@@ -16,8 +16,6 @@ If release name contains chart name it will be used as a full name.
 {{- else }}
 {{- $name := default .Chart.Name .Values.nameOverride }}
 {{- if contains $name .Release.Name }}
-{{- .Release.Name | trunc 63 | trimSuffix "-" }}
-{{- else }}
 {{- printf "%s-%s" .Release.Name $name | trunc 63 | trimSuffix "-" }}
 {{- end }}
 {{- end }}
@@ -56,26 +54,24 @@ Shared LLM sidecar container spec used by both plain-container and native-sideca
 {{- define "kwatch.llmContainer" -}}
 image: "{{ .Values.llm.repository }}:{{ .Values.llm.tag }}"
 imagePullPolicy: IfNotPresent
-env:
-  - { name: OLLAMA_HOST, value: "127.0.0.1:11434" }
-  - { name: OLLAMA_MODELS, value: /models }
-  - { name: OLLAMA_NUM_PARALLEL, value: "1" }
-  - { name: OLLAMA_MAX_LOADED_MODELS, value: "1" }
-  - { name: OLLAMA_KEEP_ALIVE, value: "-1" }
+ports:
+  - name: llm
+    containerPort: 8080
+    protocol: TCP
 startupProbe:
-  exec: { command: ["/bin/sh","-c","ollama list >/dev/null 2>&1"] }
+  httpGet: { path: /health, port: 8080 }
   failureThreshold: 30
   periodSeconds: 2
 readinessProbe:
-  exec: { command: ["/bin/sh","-c","ollama list | grep -q kwatch-triage"] }
+  httpGet: { path: /health, port: 8080 }
   periodSeconds: 10
 livenessProbe:
-  exec: { command: ["/bin/sh","-c","ollama list >/dev/null 2>&1"] }
+  httpGet: { path: /health, port: 8080 }
   periodSeconds: 30
   failureThreshold: 3
 resources:
-  requests: { cpu: "1", memory: "1750Mi" }
-  limits:   { cpu: "1", memory: "1750Mi" }
+  requests: { cpu: "500m", memory: "1Gi" }
+  limits:   { cpu: "500m", memory: "1Gi" }
 securityContext:
   runAsNonRoot: true
   runAsUser: 1000

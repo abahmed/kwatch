@@ -30,7 +30,8 @@ spec:
     spec:
       restartPolicy: Always
       serviceAccountName:  {{ .Release.Name }}
-      {{- $llmEnabled := .Values.config.llm.enabled | default true }}
+      {{- $llmCfg := default (dict "enabled" false) .Values.config.llm }}
+      {{- $llmEnabled := $llmCfg.enabled }}
       {{- if and $llmEnabled (gt (int (.Values.replicaCount | default 1)) 1) }}
         {{- fail "LLM sidecar is a singleton; set replicaCount=1 when config.llm.enabled=true" }}
       {{- end }}

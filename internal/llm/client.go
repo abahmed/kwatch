@@ -38,20 +38,22 @@ type chatRequest struct {
 	Stream   bool          `json:"stream"`
 }
 
-type chatResponse struct {
+type chatChoice struct {
 	Message chatMessage `json:"message"`
-	Done    bool        `json:"done"`
+}
+
+type chatResponse struct {
+	Choices []chatChoice `json:"choices"`
 }
 
 func (c *Client) Analyze(ctx context.Context, inc *model.Incident) (string, error) {
-	msgs := []chatMessage{{Role: "user", Content: c.userPrompt(inc)}}
-	reqBody := chatRequest{Model: modelName, Stream: false, Messages: msgs}
+	reqBody := chatRequest{Model: modelName, Stream: false, Messages: c.buildMessages(inc)}
 	b, err := json.Marshal(reqBody)
 	if err != nil {
 		return "", err
 	}
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost,
-		c.endpoint+"/api/chat", bytes.NewReader(b))
+		c.endpoint+"/v1/chat/completions", bytes.NewReader(b))
 	if err != nil {
 		return "", err
 	}
@@ -69,8 +71,8 @@ func (c *Client) Analyze(ctx context.Context, inc *model.Incident) (string, erro
 	if err := json.NewDecoder(io.LimitReader(resp.Body, maxResponseBytes)).Decode(&out); err != nil {
 		return "", err
 	}
-	if out.Message.Content == "" {
+	if len(out.Choices) == 0 || out.Choices[0].Message.Content == "" {
 		return "", fmt.Errorf("llm: empty response")
 	}
-	return out.Message.Content, nil
+	return out.Choices[0].Message.Content, nil
 }

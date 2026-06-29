@@ -13,12 +13,11 @@ import (
 
 func TestAnalyze(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Path != "/api/chat" {
+		if r.URL.Path != "/v1/chat/completions" {
 			t.Fatalf("unexpected path %s", r.URL.Path)
 		}
 		json.NewEncoder(w).Encode(chatResponse{
-			Message: chatMessage{Role: "assistant", Content: "likely cause: X"},
-			Done:    true,
+			Choices: []chatChoice{{Message: chatMessage{Role: "assistant", Content: "likely cause: X"}}},
 		})
 	}))
 	defer srv.Close()

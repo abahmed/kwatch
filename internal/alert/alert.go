@@ -63,7 +63,7 @@ const (
 )
 
 // localEndpoint is the in-pod sidecar address (loopback only).
-const localEndpoint = "http://localhost:11434"
+const localEndpoint = "http://localhost:8080"
 
 type breaker struct {
 	fails     int
@@ -114,10 +114,12 @@ type AlertManager struct {
 	dlqRing     [dlqCap]DeadLetterEntry
 	dlqHead     int
 
-	llm      *llm.Client
-	enrichCh chan deliverJob
-	brk      breaker
-	done     chan struct{}
+	llm            *llm.Client
+	enrichCh       chan deliverJob
+	brk            breaker
+	done           chan struct{}
+
+	analysisWriter func(key, analysis string)
 }
 
 func (a *AlertManager) SetMaxLogLines(n int) {
@@ -128,12 +130,16 @@ func (a *AlertManager) SetMaxLogLines(n int) {
 	}
 }
 
+func (a *AlertManager) SetAnalysisWriter(fn func(key, analysis string)) {
+	a.analysisWriter = fn
+}
+
 func (a *AlertManager) SetLLM(cfg config.LLMConfig) {
 	if !cfg.Enabled {
 		return
 	}
 	a.llm = llm.New(localEndpoint)
-	a.enrichCh = make(chan deliverJob, 1)
+	a.enrichCh = make(chan deliverJob, 8)
 }
 
 func (a *AlertManager) SetTemplates(tpl map[string]string) {
@@ -982,6 +988,9 @@ func (a *AlertManager) enrichOne(ctx context.Context, job deliverJob) {
 		klog.V(2).InfoS("llm enrichment skipped", "key", job.inc.Key, "error", err)
 	} else if s := sanitizeAnalysis(out); s != "" {
 		job.inc.Analysis = s
+		if w := a.analysisWriter; w != nil {
+			w(job.inc.Key, s)
+		}
 	}
 }
 

@@ -153,6 +153,7 @@ func main() {
 		},
 	})
 
+	alertManager.SetAnalysisWriter(correlator.SetAnalysis)
 	healthServer.SetIncidentAPI(correlator)
 	healthServer.SetAlertManager(alertManager)
 	healthServer.SetDeadLetterLister(alertManager)

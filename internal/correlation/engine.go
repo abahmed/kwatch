@@ -465,6 +465,14 @@ func (e *Engine) removeIncidentFromNamespaceIndex(inc *model.Incident) {
 	}
 }
 
+func (e *Engine) SetAnalysis(key, analysis string) {
+	e.mu.Lock()
+	defer e.mu.Unlock()
+	if inc, ok := e.state[key]; ok {
+		inc.Analysis = analysis
+	}
+}
+
 func (e *Engine) Process(ev event.Event, owner string, cs *model.ContainerState) (incident *model.Incident, action model.IncidentAction) {
 	e.mu.Lock()
 	defer e.mu.Unlock()

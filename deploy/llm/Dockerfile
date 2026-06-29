@@ -1,40 +1,55 @@
- # ── Stage 1: bake the model (full ollama image, build-time only) ──
-  FROM --platform=$BUILDPLATFORM ollama/ollama AS bake
-  ARG MODEL_VERSION="dev"
-  ENV OLLAMA_MODELS=/models
-  COPY Modelfile /build/Modelfile
-  RUN ollama serve & sleep 3 && \
-      ollama pull qwen2.5:1.5b-instruct-q4_K_M && \
-      ollama create kwatch-triage -f /build/Modelfile && \
-      pkill ollama
+# ── Stage 1: download artifacts ──
+FROM --platform=$BUILDPLATFORM debian:bookworm-slim AS download
 
-  # ── Stage 2: strip GPU runners from the ollama runtime (CPU-only) ──
-  FROM ollama/ollama AS prune
-  RUN rm -rf /usr/lib/ollama/cuda_* /usr/lib/ollama/*jetpack* /usr/lib/ollama/rocm*
+RUN apt-get update && apt-get install -y --no-install-recommends curl ca-certificates && \
+    rm -rf /var/lib/apt/lists/*
 
-  # ── Stage 3: slim final — CUDA libs never land in these layers ──
-  FROM debian:bookworm-slim
-  ARG MODEL_VERSION="v1"
-  LABEL model.version="$MODEL_VERSION" \
-        model.name="kwatch-triage" \
-        model.base="qwen2.5:1.5b-instruct-q4_K_M" \
-        description="kwatch-triage over Qwen2.5-1.5B (CPU-only slim)"
+ARG TARGETOS TARGETARCH
+ARG LLAMACPP_VERSION="b5098"
 
-  RUN apt-get update && \
-      apt-get install -y --no-install-recommends ca-certificates libgomp1 libstdc++6 && \
-      rm -rf /var/lib/apt/lists/*
+# Map arch to llama.cpp release asset suffix
+RUN case "$TARGETARCH" in \
+      amd64)  ASSET="ubuntu-x64" ;; \
+      arm64)  ASSET="ubuntu-arm64" ;; \
+      *)      echo "unsupported arch: $TARGETARCH"; exit 1 ;; \
+    esac && \
+    curl -fsSL "https://github.com/ggml-org/llama.cpp/releases/download/${LLAMACPP_VERSION}/llama-b${LLAMACPP_VERSION}-bin-${ASSET}.tar.gz" \
+    | tar -xz --strip=1 -C /usr/local/bin/ "llama-server"
 
-  ENV OLLAMA_MODELS=/models HOME=/home/nonroot
+# MiniCPM5-1B Q4_K_M GGUF from OpenBMB HF repo
+RUN mkdir -p /models && \
+    curl -fsSL -o /models/model.gguf \
+    "https://huggingface.co/openbmb/MiniCPM5-1B-GGUF/resolve/main/MiniCPM5-1B-Q4_K_M.gguf"
 
-  COPY --from=prune /bin/ollama /bin/ollama
-  COPY --from=prune /usr/lib/ollama /usr/lib/ollama
+# ── Stage 2: slim final ──
+FROM debian:bookworm-slim
 
-  RUN mkdir -p /home/nonroot/.ollama && \
-      echo "nonroot:x:1000:1000:nonroot:/home/nonroot:/bin/sh" >> /etc/passwd && \
-      echo "nonroot:x:1000:" >> /etc/group && \
-      chown -R 1000:1000 /home/nonroot
-  COPY --from=bake --chown=1000:1000 /models /models
-  USER 1000:1000
+ARG MODEL_VERSION="v1"
+LABEL model.version="$MODEL_VERSION" \
+      model.name="kwatch-triage" \
+      model.base="minicpm5:1b-instruct-q4_K_M" \
+      description="kwatch-triage over MiniCPM5-1B (llama-server CPU)"
 
-  ENTRYPOINT ["/bin/ollama"]
-  CMD ["serve"]
+RUN apt-get update && \
+    apt-get install -y --no-install-recommends libstdc++6 libgomp1 ca-certificates && \
+    rm -rf /var/lib/apt/lists/* && \
+    adduser --uid 1000 --disabled-password --gecos "" nonroot
+
+COPY --from=download /usr/local/bin/llama-server /usr/local/bin/llama-server
+COPY --from=download /models/model.gguf /models/model.gguf
+
+USER nonroot
+
+EXPOSE 8080
+
+ENTRYPOINT ["llama-server"]
+CMD ["--host", "127.0.0.1", \
+     "--port", "8080", \
+     "--model", "/models/model.gguf", \
+     "--threads", "1", \
+     "--ctx-size", "8192", \
+     "--jinja", \
+     "--temp", "0.7", \
+     "--top-p", "0.95", \
+     "--repeat-penalty", "1.1", \
+     "--n-predict", "256"]
