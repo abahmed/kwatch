@@ -11,13 +11,12 @@ metadata:
 data:
   config.yaml: |
     # ── General ──────────────────────────────────────────────
-    maxRecentLogLines: <optional_number_of_lines>    # also caps logs/events in alert message blocks (default 100)
-    ignoreFailedGracefulShutdown: true
-
+    maxRecentLogLines: <number>    # also caps logs/events in alert message blocks (default 100)
+    ignoreFailedGracefulShutdown: <boolean>
 
     # Optional periodic resync (0 = event-driven only); raise to e.g. 600 only if a
     # periodic full-reconcile safety net is wanted
-    resyncSeconds: 0
+    resyncSeconds: <seconds>
 
     # ── Namespace / Reason / Container filtering ──────────
     namespaces:
@@ -34,40 +33,38 @@ data:
     # ── Severity ──────────────────────────────────────────
     # Map owner kinds to severity levels
     severityByOwnerKind:
-      StatefulSet: "high"
-      # DaemonSet: "low"
-      # default: "normal"
+      <owner_kind>: "<severity>"
 
     # ── Silences (suppress matching incidents entirely) ──
     silences:
-      - nodeReasons: ["KubeletNotReady"]
-        nodeMessages: ["kubelet has no node IP"]
-      # - namespaces: ["kube-system", "monitoring"]
-      # - reasons: ["BackOff"]
-      # - podNamePatterns: ["my-fancy-pod-.*"]
+      - nodeReasons: ["<reason>"]
+        nodeMessages: ["<message>"]
+      # - namespaces: ["<namespace>"]
+      # - reasons: ["<reason>"]
+      # - podNamePatterns: ["<regex>"]
 
     # ── Correlation (incident dedup & lifecycle) ──────────
     correlation:
-      window: 10
-      lifecycleInterval: 1
-      # resolveHoldDown: 30    # Seconds to wait before resolving (flap dampening)
+      window: <minutes>
+      lifecycleInterval: <minutes>
+      # resolveHoldDown: <seconds>    # Seconds to wait before resolving (flap dampening)
 
     # ── Monitors ──────────────────────────────────────────
     nodeMonitor:
-      enabled: true
+      enabled: <boolean>
 
     rolloutMonitor:
-      enabled: true
+      enabled: <boolean>
 
     daemonSetMonitor:
-      enabled: false
-      # sustainedMinutes: 5    # Debounce before alerting (default 5)
+      enabled: <boolean>
+      # sustainedMinutes: <minutes>    # Debounce before alerting (default 5)
 
     jobMonitor:
-      enabled: true
+      enabled: <boolean>
 
     cronJobMonitor:
-      enabled: false
+      enabled: <boolean>
 
     pvcMonitor:
       # NOTE: usage is read from each node's kubelet stats/summary, which only reports
@@ -75,34 +72,34 @@ data:
       # (e.g. before its consumer pod schedules) has no usage data and is not checked
       # until a pod mounts it. Volumes mounted only during CronJob/Job runs are handled
       # by the last-known-usage cache (retained across unmounts).
-      enabled: true
-      interval: 5
-      threshold: 80
-      criticalThreshold: 90
+      enabled: <boolean>
+      interval: <minutes>
+      threshold: <percentage>
+      criticalThreshold: <percentage>
 
     # ── AI enrichment (self-hosted) ──────────────────────
     llm:
-      enabled: true     # the only knob — model/endpoint/redaction are fixed in code
+      enabled: <boolean>     # the only knob — model/endpoint/redaction are fixed in code
 
     # ── Dashboard URL template (optional) ─────────────────
     # dashboardURLTemplate: "https://grafana.example.com/d/abc?var-ns={namespace}&var-pod={pod}"
 
     # ── Health check ──────────────────────────────────────
     healthCheck:
-      enabled: true
-      port: 8060
-      # pprof: false      # set true to enable /debug/pprof/* profiling endpoints
+      enabled: <boolean>
+      port: <port>
+      # pprof: <boolean>      # set true to enable /debug/pprof/* profiling endpoints
 
     # ── App ───────────────────────────────────────────────
     app:
       clusterName: "<cluster_name>"
-      # proxyURL: "https://proxy.example.com"
-      # disableStartupMessage: false
-      # logFormatter: "text"
+      # proxyURL: "<url>"
+      # disableStartupMessage: <boolean>
+      # logFormatter: "<text|json>"
 
     # ── Upgrader ──────────────────────────────────────────
     upgrader:
-      disableUpdateCheck: false
+      disableUpdateCheck: <boolean>
 
     # ── Alert providers ───────────────────────────────────
     alert:
