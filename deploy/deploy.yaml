@@ -142,7 +142,7 @@ spec:
             memory: "128Mi"
             cpu: "100m"
       - name: llm
-        image: ghcr.io/abahmed/kwatch-llm:v2
+        image: ghcr.io/abahmed/kwatch-llm:dev
         imagePullPolicy: IfNotPresent
         readinessProbe:
           httpGet:
