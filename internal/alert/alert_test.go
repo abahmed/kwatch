@@ -743,7 +743,7 @@ func (p *countingProvider) SendEvent(*event.Event) error { return nil }
 // P2: in-flight enrichment must finish its fanOut on OPEN provider channels
 // during shutdown — no send-on-closed panic, and the alert is still delivered.
 func TestShutdownNoPanicWithInflightEnrichment(t *testing.T) {
-	// Stub Ollama: the handler blocks long enough for shutdown to start
+	// Stub LLM sidecar: the handler blocks long enough for shutdown to start
 	// closing channels, then returns (causing a JSON decode failure in
 	// Analyze — the enrichment completes with error and fans out).
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {

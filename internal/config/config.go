@@ -190,7 +190,7 @@ type Config struct {
 
 // LLMConfig controls the optional AI enrichment sidecar.
 // When enabled, a kwatch-llm sidecar is deployed alongside kwatch in the pod.
-// The model (kwatch-triage), endpoint (localhost:11434), redaction, and timeouts
+// The model (kwatch-triage), endpoint (localhost:8080), redaction, and timeouts
 // are baked into the sidecar image and code constants — no other knobs.
 type LLMConfig struct {
 	// Enabled toggles the AI enrichment feature. Default false.
