@@ -600,6 +600,9 @@ func TestInhibitionSuppressedCounter(t *testing.T) {
 	nodeInc := e.findNodeIncident("node-1")
 	if nodeInc != nil {
 		assert.Equal(t, 1, nodeInc.SuppressedPods)
+		if assert.NotNil(t, nodeInc.SuppressedOwners) {
+			assert.Equal(t, 1, nodeInc.SuppressedOwners["dep"])
+		}
 	}
 }
 
@@ -1098,4 +1101,179 @@ func TestRemovePodEvictsLastContainerIndex(t *testing.T) {
 	assert.NotContains(t, e.lastContainerIndex, key)
 	assert.Equal(t, before-1, len(e.lastContainerIndex))
 	assert.Nil(t, e.GetLastContainerState("default", "pod-1", "."))
+}
+
+// ── Node baseline / cooldown / suppression tests ──────────────────
+
+func TestNodeEventSkipsBaseline(t *testing.T) {
+	fakeNow := time.Date(2025, 1, 1, 0, 0, 0, 0, time.UTC)
+	e := NewEngine(Config{
+		Window: 10 * time.Minute,
+	})
+	e.now = mockClock(fakeNow)
+	e.config.BaselineTTL = 24 * time.Hour
+
+	// Seed a baseline entry for the node condition (simulating buildSeenSet)
+	incidentKey := BuildKey("", "node-1", "NodeNotReady", "")
+	e.SetSeen(map[string]map[string]int64{incidentKey: {"node-1": fakeNow.Unix()}})
+
+	// Node event with same key — should NOT be baselined
+	ev := event.Event{Resource: "node", PodName: "node-1", NodeName: "node-1", Reason: "NodeNotReady"}
+	inc, action := e.Process(ev, "node-1", nil)
+	assert.Equal(t, model.ActionCreate, action)
+	assert.NotNil(t, inc)
+	assert.Equal(t, "node", inc.Resource)
+
+	// activeNodeIncidents should be populated
+	assert.True(t, e.activeNodeIncidents["node-1"])
+}
+
+func TestNodeBaselineDoesNotBlockPodSuppression(t *testing.T) {
+	fakeNow := time.Date(2025, 1, 1, 0, 0, 0, 0, time.UTC)
+	e := NewEngine(Config{
+		Window:                    10 * time.Minute,
+		InhibitNodeSuppressesPods: true,
+	})
+	e.now = mockClock(fakeNow)
+	e.config.BaselineTTL = 24 * time.Hour
+
+	// Pre-populate activeNodeIncidents (simulating buildSeenSet)
+	e.activeNodeIncidents["node-1"] = true
+
+	// Pod event on that node — should be suppressed
+	podEv := event.Event{PodName: "p1", Namespace: "ns", NodeName: "node-1", Reason: "CrashLoopBackOff"}
+	_, action := e.Process(podEv, "dep", nil)
+	assert.Equal(t, model.ActionSkip, action)
+}
+
+func TestCleanupCooldownSuppressesRecreate(t *testing.T) {
+	fakeNow := time.Date(2025, 1, 1, 0, 0, 0, 0, time.UTC)
+	e := NewEngine(Config{
+		Window: 10 * time.Minute,
+	})
+	e.now = mockClock(fakeNow)
+
+	// Create incident
+	ev := event.Event{PodName: "pod-1", Namespace: "ns", Reason: "CrashLoopBackOff"}
+	_, action := e.Process(ev, "dep", nil)
+	assert.Equal(t, model.ActionCreate, action)
+
+	// Advance past Window so cleanup fires
+	fakeNow = fakeNow.Add(11 * time.Minute)
+	e.now = mockClock(fakeNow)
+
+	// Store the key for later
+	key := BuildKey("ns", "dep", "CrashLoopBackOff", "")
+
+	// Run cleanup — should resolve and add cooldown
+	e.cleanup()
+
+	// Cooldown should exist
+	e.mu.Lock()
+	expiry, hasCooldown := e.cleanupCooldown[key]
+	e.mu.Unlock()
+	assert.True(t, hasCooldown)
+	assert.True(t, expiry.After(fakeNow))
+
+	// Same event re-arrives — should be suppressed by cooldown
+	_, action = e.Process(ev, "dep", nil)
+	assert.Equal(t, model.ActionSkip, action)
+}
+
+func TestCleanupCooldownExpires(t *testing.T) {
+	fakeNow := time.Date(2025, 1, 1, 0, 0, 0, 0, time.UTC)
+	e := NewEngine(Config{
+		Window: 10 * time.Minute,
+	})
+	e.now = mockClock(fakeNow)
+
+	// Create incident
+	ev := event.Event{PodName: "pod-1", Namespace: "ns", Reason: "CrashLoopBackOff"}
+	_, action := e.Process(ev, "dep", nil)
+	assert.Equal(t, model.ActionCreate, action)
+
+	// Advance past Window + 1s so cooldown expires
+	fakeNow = fakeNow.Add(11*time.Minute + 1*time.Second)
+	e.now = mockClock(fakeNow)
+
+	// Cleanup
+	e.cleanup()
+
+	// Advance past Window again (cooldown = Window = 10 min)
+	fakeNow = fakeNow.Add(11 * time.Minute)
+	e.now = mockClock(fakeNow)
+
+	// Same event — should create new incident (cooldown expired)
+	inc, action := e.Process(ev, "dep", nil)
+	assert.Equal(t, model.ActionCreate, action)
+	assert.NotNil(t, inc)
+}
+
+func TestSuppressedOwnersTracked(t *testing.T) {
+	e := NewEngine(Config{
+		Window:                    10 * time.Minute,
+		InhibitNodeSuppressesPods: true,
+	})
+
+	// Create node incident and populate inhibition
+	e.Process(event.Event{Resource: "node", PodName: "node-1", NodeName: "node-1", Reason: "NodeNotReady"}, "node-1", nil)
+
+	// Suppress pods from different owners on the same node
+	e.Process(event.Event{PodName: "p1", Namespace: "ns", NodeName: "node-1", Reason: "CrashLoopBackOff"}, "deploy-1", nil)
+	e.Process(event.Event{PodName: "p2", Namespace: "ns", NodeName: "node-1", Reason: "OOMKilled"}, "deploy-1", nil)
+	e.Process(event.Event{PodName: "p3", Namespace: "ns", NodeName: "node-1", Reason: "CrashLoopBackOff"}, "statefulset-1", nil)
+
+	// Verify SuppressedOwners on the node incident
+	nodeInc := e.findNodeIncident("node-1")
+	if assert.NotNil(t, nodeInc) {
+		assert.Equal(t, 3, nodeInc.SuppressedPods)
+		assert.Equal(t, 2, nodeInc.SuppressedOwners["deploy-1"])
+		assert.Equal(t, 1, nodeInc.SuppressedOwners["statefulset-1"])
+	}
+}
+
+func TestUnschedulableSuppressedDuringNodeIncident(t *testing.T) {
+	e := NewEngine(Config{
+		Window:                    10 * time.Minute,
+		InhibitNodeSuppressesPods: true,
+	})
+
+	// Create node incident
+	e.Process(event.Event{Resource: "node", PodName: "node-1", NodeName: "node-1", Reason: "NodeNotReady"}, "node-1", nil)
+
+	// Unschedulable pod (empty NodeName) — should be suppressed
+	ev := event.Event{PodName: "p1", Namespace: "ns", NodeName: "", Reason: "Unschedulable"}
+	_, action := e.Process(ev, "deploy-1", nil)
+	assert.Equal(t, model.ActionSkip, action)
+
+	// Verify SuppressedPods incremented on the node incident
+	nodeInc := e.findNodeIncident("node-1")
+	if assert.NotNil(t, nodeInc) {
+		assert.Equal(t, 1, nodeInc.SuppressedPods)
+		assert.Equal(t, 1, nodeInc.SuppressedOwners["deploy-1"])
+	}
+}
+
+func TestClearSeenForPodClearsCooldown(t *testing.T) {
+	fakeNow := time.Date(2025, 1, 1, 0, 0, 0, 0, time.UTC)
+	e := NewEngine(Config{
+		Window: 10 * time.Minute,
+	})
+	e.now = mockClock(fakeNow)
+
+	key := BuildKey("ns", "dep", "CrashLoopBackOff", "")
+
+	// Manually add cooldown entry
+	e.mu.Lock()
+	e.cleanupCooldown[key] = fakeNow.Add(10 * time.Minute)
+	e.mu.Unlock()
+
+	// ClearSeenForPod for the pod's namespace
+	e.ClearSeenForPod("ns", "pod-1")
+
+	// Cooldown should be cleared
+	e.mu.Lock()
+	_, exists := e.cleanupCooldown[key]
+	e.mu.Unlock()
+	assert.False(t, exists, "cooldown should be cleared by ClearSeenForPod")
 }

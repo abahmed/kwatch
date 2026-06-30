@@ -53,6 +53,7 @@ type Handler interface {
 	SetSecretLister(lister corev1lister.SecretLister)
 	SweepTLSSecrets()
 	SetSeen(baseline map[string]map[string]int64)
+	SetActiveNodeIncidents(nodeNames []string)
 	ClearSeenForPod(namespace, podName string)
 	ReportStartupSummary(suppressed map[string]int)
 	SetPvcSampler(f func(nodeName string))
@@ -199,6 +200,10 @@ func (h *handler) SetCronJobLister(lister batchv1lister.CronJobLister) {
 
 func (h *handler) SetSeen(baseline map[string]map[string]int64) {
 	h.correlator.SetSeen(baseline)
+}
+
+func (h *handler) SetActiveNodeIncidents(nodeNames []string) {
+	h.correlator.SetActiveNodeIncidents(nodeNames)
 }
 
 func (h *handler) ClearSeenForPod(namespace, podName string) {

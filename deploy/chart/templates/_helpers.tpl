@@ -70,8 +70,8 @@ livenessProbe:
   periodSeconds: 30
   failureThreshold: 3
 resources:
-  requests: { cpu: "500m", memory: "1Gi" }
-  limits:   { cpu: "500m", memory: "1Gi" }
+  requests: { cpu: "1000m", memory: "1Gi" }
+  limits:   { cpu: "1000m", memory: "1Gi" }
 securityContext:
   runAsNonRoot: true
   runAsUser: 1000

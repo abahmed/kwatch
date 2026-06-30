@@ -2,6 +2,7 @@ package config
 
 import (
 	"regexp"
+	"time"
 
 	"k8s.io/klog/v2"
 )
@@ -156,6 +157,10 @@ type Config struct {
 	// SuppressionIndex is compiled from both Silences and deprecated ignore*
 	// fields for efficient detect-time lookup. Populated by LoadConfig.
 	Suppression SuppressionIndex
+
+	// WatchStartTime is set once at startup and used by filters to measure
+	// resource age relative to when kwatch began watching (not pod birth).
+	WatchStartTime time.Time `yaml:"-"`
 
 	// Workers is the number of concurrent reconcile workers per queue.
 	// Default 1. Raising it increases throughput on large clusters; alert

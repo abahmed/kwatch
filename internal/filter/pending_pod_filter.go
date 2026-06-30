@@ -15,7 +15,11 @@ func (f PendingPodFilter) Detect(ctx *Context) Status {
 		return StatusContinue
 	}
 
-	if time.Since(ctx.Pod.CreationTimestamp.Time) < f.Threshold {
+	refTime := ctx.Pod.CreationTimestamp.Time
+	if !ctx.Config.WatchStartTime.IsZero() && ctx.Config.WatchStartTime.After(refTime) {
+		refTime = ctx.Config.WatchStartTime
+	}
+	if time.Since(refTime) < f.Threshold {
 		return StatusContinue
 	}
 

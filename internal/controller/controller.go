@@ -954,18 +954,31 @@ func (c *Controller) buildSeenSet() {
 	}
 
 	// Seed alerting node conditions into the baseline
+	// and collect broken node names for pre-populating activeNodeIncidents
+	var activeNodeIncidents []string
 	if c.nodeLister != nil {
 		if nodes, err := c.nodeLister.List(labels.Everything()); err == nil {
 			for _, n := range nodes {
+				hasIssue := false
 				for _, cond := range n.Status.Conditions {
 					if reason := handler.NodeConditionReason(cond); reason != "" {
 						ev := event.Event{Reason: reason}
 						key := correlation.IncidentKey(ev, n.Name, nil)
 						add(key, n.Name)
+						hasIssue = true
 					}
+				}
+				if hasIssue {
+					activeNodeIncidents = append(activeNodeIncidents, n.Name)
 				}
 			}
 		}
+	}
+
+	// Pre-populate activeNodeIncidents so pod suppression is active
+	// before any worker starts (timing race prevention).
+	if len(activeNodeIncidents) > 0 {
+		c.handler.SetActiveNodeIncidents(activeNodeIncidents)
 	}
 
 	// Seed controller resource issues into the baseline.

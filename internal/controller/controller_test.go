@@ -109,6 +109,7 @@ func (m *mockHandler) SetSeen(baseline map[string]map[string]int64) {
 	defer m.mu.Unlock()
 	m.seenBaseline = baseline
 }
+func (m *mockHandler) SetActiveNodeIncidents([]string) {}
 func (m *mockHandler) ClearSeenForPod(string, string) {}
 func (m *mockHandler) ReportStartupSummary(suppressed map[string]int) {
 	m.mu.Lock()

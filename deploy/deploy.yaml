@@ -142,7 +142,7 @@ spec:
             memory: "128Mi"
             cpu: "100m"
       - name: llm
-        image: ghcr.io/abahmed/kwatch-llm:dev
+        image: ghcr.io/abahmed/kwatch-llm:latest
         imagePullPolicy: IfNotPresent
         readinessProbe:
           httpGet:
@@ -151,8 +151,8 @@ spec:
           initialDelaySeconds: 5
           periodSeconds: 10
         resources:
-          requests: { cpu: "500m", memory: "1Gi" }
-          limits: { cpu: "500m", memory: "1Gi" }
+          requests: { cpu: "1000m", memory: "1Gi" }
+          limits: { cpu: "1000m", memory: "1Gi" }
         securityContext:
           allowPrivilegeEscalation: false
           runAsNonRoot: true

@@ -75,6 +75,7 @@ func main() {
 		klog.ErrorS(err, "failed to load config")
 		os.Exit(1)
 	}
+	cfg.WatchStartTime = time.Now()
 
 	klog.InfoS(fmt.Sprintf(constant.WelcomeMsg, version.Short()))
 

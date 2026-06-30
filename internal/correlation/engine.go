@@ -167,6 +167,7 @@ type Engine struct {
 	stormUntil          time.Time
 	digestBuf           []digestEntry
 	lastDigestFlush     time.Time
+	cleanupCooldown     map[string]time.Time // key → cooldown expiry; prevents resolve→recreate cycle
 	now                 func() time.Time
 }
 
@@ -189,6 +190,7 @@ func NewEngine(cfg Config) *Engine {
 		config:              cfg,
 		activeNodeIncidents: make(map[string]bool),
 		lastContainerIndex:  make(map[string]*model.ContainerState),
+		cleanupCooldown:     make(map[string]time.Time),
 	}
 	if e.now == nil {
 		e.now = time.Now
@@ -278,7 +280,7 @@ func (e *Engine) isBaselined(key, podName string) bool {
 	return false
 }
 
-// ClearSeenForPod removes all baseline entries for the given pod.
+// ClearSeenForPod removes all baseline entries and cooldowns for the given pod.
 func (e *Engine) ClearSeenForPod(namespace, podName string) {
 	e.mu.Lock()
 	changed := false
@@ -292,6 +294,14 @@ func (e *Engine) ClearSeenForPod(namespace, podName string) {
 			if len(pods) == 0 {
 				delete(e.seen, key)
 			}
+		}
+	}
+	// Clear any cleanup cooldown entries for this namespace so a recovered
+	// pod that re-crashes isn't suppressed by a stale cooldown.
+	nsPrefix := namespace + ":"
+	for key := range e.cleanupCooldown {
+		if strings.HasPrefix(key, nsPrefix) {
+			delete(e.cleanupCooldown, key)
 		}
 	}
 	var snap map[string]map[string]int64
@@ -387,12 +397,37 @@ func (e *Engine) findNodeIncident(nodeName string) *model.Incident {
 	return nil
 }
 
+// findMostConstrainedNodeIncident returns the node incident with the most
+// suppressed pods, used as a target for unschedulable-pod suppression.
+// Caller must hold e.mu.
+func (e *Engine) findMostConstrainedNodeIncident() *model.Incident {
+	var best *model.Incident
+	for _, inc := range e.state {
+		if inc.Resource == "node" && inc.State != model.StateResolved {
+			if best == nil || inc.SuppressedPods > best.SuppressedPods {
+				best = inc
+			}
+		}
+	}
+	return best
+}
+
 // CountActiveNodeIncidents returns the number of nodes with active
 // (non-resolved) incidents. Used for node→resource inhibition decisions.
 func (e *Engine) CountActiveNodeIncidents() int {
 	e.mu.Lock()
 	defer e.mu.Unlock()
 	return len(e.activeNodeIncidents)
+}
+
+// SetActiveNodeIncidents marks the given nodes as having active incidents.
+// Used at startup to pre-populate inhibition before any worker runs.
+func (e *Engine) SetActiveNodeIncidents(nodeNames []string) {
+	e.mu.Lock()
+	defer e.mu.Unlock()
+	for _, n := range nodeNames {
+		e.activeNodeIncidents[n] = true
+	}
 }
 
 // refreshNodeInhibition clears the node inhibition flag if no non-resolved
@@ -492,27 +527,57 @@ func (e *Engine) Process(ev event.Event, owner string, cs *model.ContainerState)
 
 	key := IncidentKey(ev, owner, cs)
 
-	if e.isBaselined(key, ev.PodName) {
-		return nil, model.ActionSkip
-	}
-
 	res := ev.Resource
 	if res == "" {
 		res = "pod"
 	}
 
-	// Track active node incidents for pod suppression
+	// Track active node incidents for pod suppression — must happen before
+	// baseline check so node events always populate the inhibition map.
 	if res == "node" && ev.NodeName != "" {
 		e.activeNodeIncidents[ev.NodeName] = true
 	}
 
-	// Suppress pod incidents when the node has an active incident
-	if e.config.InhibitNodeSuppressesPods &&
-		res == "pod" && ev.NodeName != "" && e.activeNodeIncidents[ev.NodeName] {
-		if nodeInc := e.findNodeIncident(ev.NodeName); nodeInc != nil {
-			nodeInc.SuppressedPods++
-		}
+	// Baseline — skip for node events so the incident is always created
+	if res != "node" && e.isBaselined(key, ev.PodName) {
 		return nil, model.ActionSkip
+	}
+
+	// Suppress pod incidents when the node has an active incident
+	if e.config.InhibitNodeSuppressesPods && res == "pod" {
+		if ev.NodeName != "" && e.activeNodeIncidents[ev.NodeName] {
+			if nodeInc := e.findNodeIncident(ev.NodeName); nodeInc != nil {
+				nodeInc.SuppressedPods++
+				if owner != "" {
+					if nodeInc.SuppressedOwners == nil {
+						nodeInc.SuppressedOwners = make(map[string]int)
+					}
+					nodeInc.SuppressedOwners[owner]++
+				}
+			}
+			return nil, model.ActionSkip
+		}
+		// Unschedulable pods (empty NodeName) — suppress when any node incident is active
+		if ev.NodeName == "" && len(e.activeNodeIncidents) > 0 {
+			if nodeInc := e.findMostConstrainedNodeIncident(); nodeInc != nil {
+				nodeInc.SuppressedPods++
+				if owner != "" {
+					if nodeInc.SuppressedOwners == nil {
+						nodeInc.SuppressedOwners = make(map[string]int)
+					}
+					nodeInc.SuppressedOwners[owner]++
+				}
+			}
+			return nil, model.ActionSkip
+		}
+	}
+
+	// Cooldown check — suppress re-creation after cleanup for still-broken resources
+	if expiry, ok := e.cleanupCooldown[key]; ok {
+		if e.now().Before(expiry) {
+			return nil, model.ActionSkip
+		}
+		delete(e.cleanupCooldown, key)
 	}
 
 	now := e.now()
@@ -870,6 +935,8 @@ func (e *Engine) cleanup() {
 				pending = append(pending, transition{inc.Clone(), a})
 			}
 		}
+		// Add cooldown to prevent resolve→recreate cycle for still-broken resources
+		e.cleanupCooldown[key] = now.Add(e.config.Window)
 		delete(e.seen, key)
 		e.removeIncidentFromNamespaceIndex(inc)
 		delete(e.state, key)

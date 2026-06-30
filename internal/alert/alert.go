@@ -1243,7 +1243,19 @@ func formatCreateMessage(inc *model.Incident, maxLines int) string {
 		correlationBlock = fmt.Sprintf("\nAffected: %d pods", n)
 	}
 	if inc.Resource == "node" && inc.SuppressedPods > 0 {
-		correlationBlock += fmt.Sprintf("\nImpact: %d dependent pod error(s) suppressed — this node is the likely root cause", inc.SuppressedPods)
+		correlationBlock += fmt.Sprintf("\nImpact: %d dependent pod error(s) suppressed", inc.SuppressedPods)
+		if len(inc.SuppressedOwners) > 0 {
+			owners := make([]string, 0, len(inc.SuppressedOwners))
+			for o := range inc.SuppressedOwners {
+				owners = append(owners, o)
+			}
+			sort.Strings(owners)
+			correlationBlock += fmt.Sprintf(" across %d service(s):", len(owners))
+			for _, o := range owners {
+				correlationBlock += fmt.Sprintf("\n  • %s (%d pods)", o, inc.SuppressedOwners[o])
+			}
+		}
+		correlationBlock += "\n  — this node is the likely root cause"
 	}
 
 	analysis := ""

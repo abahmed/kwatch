@@ -3,6 +3,7 @@ package llm
 import (
 	"fmt"
 	"regexp"
+	"sort"
 	"strings"
 	"time"
 
@@ -11,16 +12,15 @@ import (
 
 const (
 	modelName      = "kwatch-triage"
-	RequestTimeout = 60 * time.Second
+	RequestTimeout = 120 * time.Second
 	maxLogChars    = 6000
 	maxEventChars  = 2000
 )
 
 const systemPrompt = `You are a Kubernetes root cause analysis (RCA) assistant. Given incident details including reason, exit code, container status, restart count, events, and logs, determine the most likely root cause.
 
-Reply in 2-3 sentences with:
+Reply in 1-2 sentences with: 
 1. The most likely root cause based on the evidence
-2. One concrete next step to resolve or investigate
 
 Base your analysis ONLY on the facts provided. Prefer evidence over guesses. If the logs and events are insufficient to determine a cause, reply exactly: "Cause unclear from available logs."
 
@@ -75,7 +75,17 @@ func (c *Client) userPrompt(inc *model.Incident) string {
 		fmt.Fprintf(&b, "Rule-based hint: %s\n", c.redactor.scrub(inc.Hint))
 	}
 	if inc.SuppressedPods > 0 {
-		fmt.Fprintf(&b, "SuppressedPods: %d — dependent pod alerts hidden; this incident may be the root cause\n", inc.SuppressedPods)
+		s := fmt.Sprintf("SuppressedPods: %d", inc.SuppressedPods)
+		if len(inc.SuppressedOwners) > 0 {
+			parts := make([]string, 0, len(inc.SuppressedOwners))
+			for o, c := range inc.SuppressedOwners {
+				parts = append(parts, fmt.Sprintf("%s (%d)", o, c))
+			}
+			sort.Strings(parts)
+			s += " across: " + strings.Join(parts, ", ")
+		}
+		s += " — dependent pod alerts hidden; this incident may be the root cause\n"
+		fmt.Fprint(&b, s)
 	}
 	if events != "" {
 		fmt.Fprintf(&b, "\nEvents:\n%s\n", events)
