@@ -54,9 +54,18 @@ func BuildKey(namespace, owner, reason, container string) string {
 // chain inside Process. It returns the same key that Process would compute.
 func IncidentKey(ev event.Event, owner string, cs *model.ContainerState) string {
 	r := normalizeReason(ev.Reason)
-	if r == "CrashLoopBackOff" && cs != nil && cs.RestartCount > defaultCrashLoopHighFreqThreshold {
-		r = "CrashLoopHighFrequency"
-	}
+	// A crash-looping container reports different reasons across its cycle:
+  	// "Error"/"OOMKilled" when it terminates, "CrashLoopBackOff" while backing off.
+  	// Once it's established as looping, fold them all into ONE canonical key so the key
+  	// is stable regardless of the container's momentary state. This makes the startup
+  	// baseline (captured in whatever state the container was in) match the live alert
+  	// (fired from a possibly-different state), and treats the loop as a single incident.
+  	if cs != nil && cs.RestartCount > defaultCrashLoopHighFreqThreshold {
+		switch r {
+		case "Error", "OOMKilled", "CrashLoopBackOff", "CrashLoopHighFrequency":
+			r = "CrashLoopHighFrequency"
+		}
+  	}
 	return BuildKey(ev.Namespace, owner, r, "")
 }
 
