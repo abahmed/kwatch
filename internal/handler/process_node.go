@@ -97,7 +97,12 @@ func (h *handler) ProcessNodeObject(node *corev1.Node, deleted bool) error {
 		case corev1.NodeReady:
 			if c.Status == corev1.ConditionTrue {
 				h.resolveNodeCondition(node.Name, "NodeNotReady")
-			} else {
+			} else if node.DeletionTimestamp != nil || node.Spec.Unschedulable {
+                // Node is being intentionally removed (deleting or cordoned) — NodeReady
+                // going false is an expected graceful shutdown, not a failure. Uses core
+                // Kubernetes signals only (autoscaler-agnostic). Clear any incident, don't alert.
+                h.resolveNodeCondition(node.Name, "NodeNotReady")
+            } else {
 				h.emitNodeAlert(node, c, "NodeNotReady")
 			}
 		case corev1.NodeMemoryPressure, corev1.NodeDiskPressure,
