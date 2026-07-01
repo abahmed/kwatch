@@ -22,9 +22,10 @@ func DefaultConfig() *Config {
 		StormConfig:                  StormConfig{Enabled: true, Threshold: 10, WindowMinutes: 5, DigestIntervalMinutes: 5},
 		LLM:                          LLMConfig{Enabled: true},
 		Correlation: Correlation{
-			MaxBaseline: 2000,
-			Window:      10, LifecycleInterval: 1,
-			ResolveHoldDown: 30,
+			MaxBaseline: 5000,
+			Window:      10, 
+			LifecycleInterval: 1,
+			ResolveHoldDown: 120,
 			Escalation:      EscalationConfig{Enabled: true, Tiers: []int{3, 10, 50}},
 		},
 	}
