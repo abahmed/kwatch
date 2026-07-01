@@ -971,6 +971,7 @@ func (e *Engine) checkLifecycle() {
 				e.refreshNodeInhibition(inc.Name)
 			}
 			delete(e.seen, key)
+			e.cleanupCooldown[key] = now.Add(e.config.Window)
 			action := e.edgeAction(inc)
 			baselineChanged = true
 			pending = append(pending, transition{inc.Clone(), action})
