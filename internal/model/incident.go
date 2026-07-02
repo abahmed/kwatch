@@ -89,6 +89,7 @@ type Incident struct {
 	LastContainerState *ContainerState
 	Severity           string
 	SuppressedPods     int
+	SuppressedOwners   map[string]int // owner → count of suppressed pods
 	ResolveAt          time.Time
 	IncludeEvents      bool
 	IncludeLogs        bool
@@ -113,6 +114,12 @@ func (inc *Incident) Clone() *Incident {
 	if inc.LastContainerState != nil {
 		cs := *inc.LastContainerState
 		c.LastContainerState = &cs
+	}
+	if inc.SuppressedOwners != nil {
+		c.SuppressedOwners = make(map[string]int, len(inc.SuppressedOwners))
+		for k, v := range inc.SuppressedOwners {
+			c.SuppressedOwners[k] = v
+		}
 	}
 	return &c
 }

@@ -1,29 +1,32 @@
-FROM --platform=$BUILDPLATFORM ollama/ollama AS bake
+# syntax=docker/dockerfile:1
 
-ARG MODEL_VERSION="v1"
+FROM debian:bookworm-slim AS model
 
-ENV OLLAMA_MODELS=/models
+RUN apt-get update && \
+    apt-get install -y --no-install-recommends \
+        curl \
+        ca-certificates && \
+    rm -rf /var/lib/apt/lists/*
 
-COPY Modelfile /build/Modelfile
+RUN mkdir -p /models && \
+    curl -fL \
+      "https://huggingface.co/openbmb/MiniCPM5-1B-GGUF/resolve/main/MiniCPM5-1B-Q4_K_M.gguf" \
+      -o /models/model.gguf
 
-RUN ollama serve & sleep 3 && \
-    ollama pull qwen2.5-coder:1.5b-instruct-q4_K_M && \
-    ollama create kwatch-triage -f /build/Modelfile && \
-    pkill ollama
 
-FROM ollama/ollama
+FROM ghcr.io/ggml-org/llama.cpp:server
 
-ARG MODEL_VERSION="v1"
+ARG MODEL_VERSION=v1
 
-LABEL model.version="$MODEL_VERSION"
-LABEL model.name="kwatch-triage"
-LABEL model.base="qwen2.5-coder:1.5b-instruct-q4_K_M"
-LABEL description="Kubernetes incident triage model — baked Modelfile over Qwen2.5-Coder-1.5B"
+LABEL model.version="${MODEL_VERSION}" \
+      model.name="kwatch-triage" \
+      model.base="MiniCPM5-1B-Q4_K_M" \
+      description="kwatch-triage over MiniCPM5-1B using llama.cpp"
 
-ENV OLLAMA_MODELS=/models HOME=/home/nonroot
+COPY --from=model /models/model.gguf /models/model.gguf
 
-RUN mkdir -p /home/nonroot && \
-    echo "nonroot:x:1000:1000:nonroot:/home/nonroot:/bin/sh" >> /etc/passwd && \
-    echo "nonroot:x:1000:" >> /etc/group
-COPY --from=bake --chown=1000:1000 /models /models
-USER 1000:1000
+EXPOSE 8080
+
+ENTRYPOINT ["/app/llama-server"]
+
+CMD ["--host","0.0.0.0","--port","8080","--model","/models/model.gguf","--threads","1","--ctx-size","4096","--temp","0.3","--top-p","0.9","--repeat-penalty","1.1","--n-predict","256","--no-penalize-nl"]

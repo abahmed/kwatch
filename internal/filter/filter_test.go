@@ -4,6 +4,7 @@ import (
 	"context"
 	"regexp"
 	"testing"
+	"time"
 
 	"github.com/abahmed/kwatch/internal/config"
 	"github.com/abahmed/kwatch/internal/model"
@@ -1645,6 +1646,122 @@ func TestPodStatusFilterForbiddenReason(t *testing.T) {
 	filter := PodStatusFilter{}
 	result := filter.Execute(ctx)
 	assert.True(result)
+}
+
+func TestPendingPodFilterNewPod(t *testing.T) {
+	assert := assert.New(t)
+
+	ctx := &Context{
+		Config: &config.Config{},
+		Pod: &corev1.Pod{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:              "test-pod",
+				Namespace:         "default",
+				CreationTimestamp: metav1.NewTime(time.Now().Add(-1 * time.Minute)),
+			},
+			Status: corev1.PodStatus{
+				Phase: corev1.PodPending,
+			},
+		},
+	}
+
+	filter := PendingPodFilter{Threshold: 5 * time.Minute}
+	result := filter.Execute(ctx)
+	assert.False(result)
+	assert.False(ctx.PodHasIssues)
+}
+
+func TestPendingPodFilterOldPodNoWatchStart(t *testing.T) {
+	assert := assert.New(t)
+
+	ctx := &Context{
+		Config: &config.Config{},
+		Pod: &corev1.Pod{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:              "test-pod",
+				Namespace:         "default",
+				CreationTimestamp: metav1.NewTime(time.Now().Add(-1 * time.Hour)),
+			},
+			Status: corev1.PodStatus{
+				Phase: corev1.PodPending,
+				Conditions: []corev1.PodCondition{
+					{
+						Type:   corev1.PodScheduled,
+						Status: corev1.ConditionFalse,
+						Reason: "Unschedulable",
+					},
+				},
+			},
+		},
+	}
+
+	filter := PendingPodFilter{Threshold: 5 * time.Minute}
+	result := filter.Detect(ctx)
+	assert.Equal(StatusAlert, result)
+	assert.True(ctx.PodHasIssues)
+	assert.Equal("Unschedulable", ctx.PodReason)
+}
+
+func TestPendingPodFilterRestartGracePeriod(t *testing.T) {
+	assert := assert.New(t)
+
+	watchStart := time.Now().Add(-1 * time.Minute)
+	ctx := &Context{
+		Config: &config.Config{
+			WatchStartTime: watchStart,
+		},
+		Pod: &corev1.Pod{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:              "test-pod",
+				Namespace:         "default",
+				CreationTimestamp: metav1.NewTime(time.Now().Add(-24 * time.Hour)),
+			},
+			Status: corev1.PodStatus{
+				Phase: corev1.PodPending,
+			},
+		},
+	}
+
+	// With 5min threshold and only 1min since watch start, the filter should skip
+	filter := PendingPodFilter{Threshold: 5 * time.Minute}
+	result := filter.Execute(ctx)
+	assert.False(result)
+	assert.False(ctx.PodHasIssues)
+}
+
+func TestPendingPodFilterRestartAfterGracePeriod(t *testing.T) {
+	assert := assert.New(t)
+
+	watchStart := time.Now().Add(-10 * time.Minute)
+	ctx := &Context{
+		Config: &config.Config{
+			WatchStartTime: watchStart,
+		},
+		Pod: &corev1.Pod{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:              "test-pod",
+				Namespace:         "default",
+				CreationTimestamp: metav1.NewTime(time.Now().Add(-24 * time.Hour)),
+			},
+			Status: corev1.PodStatus{
+				Phase: corev1.PodPending,
+				Conditions: []corev1.PodCondition{
+					{
+						Type:   corev1.PodScheduled,
+						Status: corev1.ConditionFalse,
+						Reason: "Unschedulable",
+					},
+				},
+			},
+		},
+	}
+
+	// 10min since watch start, threshold is 5min → should alert
+	filter := PendingPodFilter{Threshold: 5 * time.Minute}
+	result := filter.Detect(ctx)
+	assert.Equal(StatusAlert, result)
+	assert.True(ctx.PodHasIssues)
+	assert.Equal("Unschedulable", ctx.PodReason)
 }
 
 func TestPodStatusFilterAlreadyKnown(t *testing.T) {

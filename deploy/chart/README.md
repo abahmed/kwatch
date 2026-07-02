@@ -34,9 +34,9 @@ helm delete --purge [RELEASE_NAME]
 | `securityContext.readOnlyRootFilesystem` | Container's root filesystem is read-only | true |
 | `service.port` | Health check port | 8060 |
 | `resources` | CPU/Memory resource requests/limits | {limits: memory: 256Mi cpu: 100m} |
-| `llm.nativeSidecar` | Use K8s ≥1.29 native sidecar (initContainer restartPolicy:Always) vs plain container | false |
-| `config.llm.enabled` | Enable AI enrichment via kwatch-llm sidecar (requires `replicaCount=1`; also deploy the sidecar — either via `llm.nativeSidecar` or manually) | false |
+| `config.llm.enabled` | Enable AI enrichment via kwatch-llm sidecar | false |
 | `nodeSelector` | Node labels for pod assignment | {} |
 | `tolerations` | Tolerations for pod assignment | [] |
 | `affinity` | affinity for pod | {} |
 | `config` | [kwatch configuration](https://github.com/abahmed/kwatch#configuration) | {} |
+| `upgrader.disableUpdateCheck` | Disable startup update check | `false` |

@@ -24,6 +24,7 @@ func (h *handler) ProcessCronJob(key string, deleted bool) error {
 	}
 
 	if deleted {
+		h.clearFirstSuspendedCJ(namespace + "/" + name)
 		h.correlator.ResolveByResource("cronjob", namespace+"/"+name)
 		return nil
 	}
@@ -31,6 +32,7 @@ func (h *handler) ProcessCronJob(key string, deleted bool) error {
 	cj, err := h.cronJobLister.CronJobs(namespace).Get(name)
 	if err != nil {
 		if errors.IsNotFound(err) {
+			h.clearFirstSuspendedCJ(namespace + "/" + name)
 			h.correlator.ResolveByResource("cronjob", namespace+"/"+name)
 			return nil
 		}
@@ -79,17 +81,51 @@ func (h *handler) ProcessCronJobObject(cj *batchv1.CronJob, deleted bool) error 
 	}
 
 	if deleted {
+		h.clearFirstSuspendedCJ(cj.Namespace + "/" + cj.Name)
 		h.correlator.ResolveByResource("cronjob", cj.Namespace+"/"+cj.Name)
 		return nil
 	}
 
-	if sig := DetectCronJobIssue(cj); sig != nil {
+	key := cj.Namespace + "/" + cj.Name
+	sig := DetectCronJobIssue(cj)
+
+	if sig != nil && sig.Reason == "CronJobSuspended" {
+		// Sustained check: avoid noise from intentional suspension during
+		// incident response or maintenance windows.
+		first := h.markFirstSuspendedCJ(key)
+		sustained := time.Duration(h.config.CronJobMonitor.SustainedMinutes) * time.Minute
+		if sustained > 0 && h.now().Sub(first) < sustained {
+			return nil
+		}
 		h.signalEvent(sig)
 		return nil
 	}
 
-	h.correlator.ResolveByResource("cronjob", cj.Namespace+"/"+cj.Name)
+	if sig != nil {
+		h.clearFirstSuspendedCJ(key)
+		h.signalEvent(sig)
+		return nil
+	}
+
+	h.clearFirstSuspendedCJ(key)
+	h.correlator.ResolveByResource("cronjob", key)
 	return nil
+}
+
+func (h *handler) markFirstSuspendedCJ(key string) time.Time {
+	h.cjMu.Lock()
+	defer h.cjMu.Unlock()
+	if t, ok := h.firstSuspendedCJs[key]; ok {
+		return t
+	}
+	h.firstSuspendedCJs[key] = h.now()
+	return h.firstSuspendedCJs[key]
+}
+
+func (h *handler) clearFirstSuspendedCJ(key string) {
+	h.cjMu.Lock()
+	defer h.cjMu.Unlock()
+	delete(h.firstSuspendedCJs, key)
 }
 
 // NextFireAfter returns the time the CronJob should have next fired, based on

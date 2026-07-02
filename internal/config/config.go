@@ -2,6 +2,7 @@ package config
 
 import (
 	"regexp"
+	"time"
 
 	"k8s.io/klog/v2"
 )
@@ -157,6 +158,10 @@ type Config struct {
 	// fields for efficient detect-time lookup. Populated by LoadConfig.
 	Suppression SuppressionIndex
 
+	// WatchStartTime is set once at startup and used by filters to measure
+	// resource age relative to when kwatch began watching (not pod birth).
+	WatchStartTime time.Time `yaml:"-"`
+
 	// Workers is the number of concurrent reconcile workers per queue.
 	// Default 1. Raising it increases throughput on large clusters; alert
 	// ordering across pods becomes non-deterministic (engine dedup unaffected).
@@ -190,7 +195,7 @@ type Config struct {
 
 // LLMConfig controls the optional AI enrichment sidecar.
 // When enabled, a kwatch-llm sidecar is deployed alongside kwatch in the pod.
-// The model (kwatch-triage), endpoint (localhost:11434), redaction, and timeouts
+// The model (kwatch-triage), endpoint (localhost:8080), redaction, and timeouts
 // are baked into the sidecar image and code constants — no other knobs.
 type LLMConfig struct {
 	// Enabled toggles the AI enrichment feature. Default false.
@@ -311,6 +316,11 @@ type NodeMonitor struct {
 	// Enabled if set to true, it will enable node watcher
 	// By default, this value is true
 	Enabled bool `yaml:"enabled"`
+
+	// SustainedMinutes is how long a node condition (MemoryPressure,
+	// DiskPressure, PIDPressure, NetworkUnavailable) must persist before
+	// alerting, to avoid noise from brief metric spikes. Default 3.
+	SustainedMinutes int `yaml:"sustainedMinutes"`
 }
 
 // HeartbeatMonitor config for dead man's switch
@@ -355,6 +365,10 @@ type DaemonSetMonitor struct {
 type CronJobMonitor struct {
 	// Enabled if set to true, it will watch CronJobs for failures or suspension.
 	Enabled bool `yaml:"enabled"`
+
+	// SustainedMinutes is how long the CronJob must be suspended before alerting,
+	// to avoid noise from intentional suspension during incident response. Default 5.
+	SustainedMinutes int `yaml:"sustainedMinutes"`
 }
 
 // CrdConfig configures the KwatchConfig CRD watcher.
@@ -577,7 +591,7 @@ type Correlation struct {
 	Renotify RenotifyConfig `yaml:"renotify"`
 
 	// MaxBaseline is the maximum number of baseline entries to keep.
-	// Default 2000.
+	// Default 5000.
 	MaxBaseline int `yaml:"maxBaseline"`
 }
 

@@ -82,6 +82,29 @@ func (h *handler) executePodFilters(ctx *filter.Context) {
 		ownerKind = ctx.Owner.Kind
 	}
 
+	hint := enricher.HintForReason(ctx.PodReason)
+	if ctx.PodMsg != "" {
+		hint = ctx.PodMsg + " — " + hint
+	}
+	if ctx.PodReason == "Unschedulable" && ctx.Pod != nil {
+		// Add pod resource requests so the user can compare against node capacity
+		for _, c := range ctx.Pod.Spec.Containers {
+			req := c.Resources.Requests
+			if req != nil {
+				cpu, mem := req.Cpu(), req.Memory()
+				if cpu != nil || mem != nil {
+					r := c.Name + " requests:"
+					if cpu != nil && !cpu.IsZero() {
+						r += " cpu=" + cpu.String()
+					}
+					if mem != nil && !mem.IsZero() {
+						r += " mem=" + mem.String()
+					}
+					hint = hint + "; " + r
+				}
+			}
+		}
+	}
 	h.signalEvent(&event.Signal{
 		Resource:  "pod",
 		PodName:   ctx.Pod.Name,
@@ -92,7 +115,7 @@ func (h *handler) executePodFilters(ctx *filter.Context) {
 		Events:    k8s.GetPodEventsStr(ctx.Events),
 		Labels:    ctx.Pod.Labels,
 		OwnerKind: ownerKind,
-		Hint:      enricher.HintForReason(ctx.PodReason),
+		Hint:      hint,
 		Owner:     ownerName,
 		ContainerState: &model.ContainerState{
 			Reason: ctx.PodReason,

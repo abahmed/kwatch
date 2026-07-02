@@ -2,11 +2,9 @@
 # This is a YAML-formatted file.
 # Declare variables to be passed into your templates.
 
-replicaCount: 1   # MUST stay 1 — kwatch is the sole writer of the kwatch-baseline/kwatch-pvc ConfigMaps. Do NOT scale.
-
 image:
   repository: ghcr.io/abahmed/kwatch
-  pullPolicy: Always
+  pullPolicy: IfNotPresent
 
 securityContext:
   runAsUser: 1000
@@ -20,6 +18,9 @@ service:
 resources:
   limits:
     memory: 256Mi
+    cpu: 100m
+  requests:
+    memory: 128Mi
     cpu: 100m
 
 nodeSelector: {}
@@ -44,14 +45,12 @@ podLabels: {}
 #   threshold: 30
 config: {}
 
-# -- LLM sidecar configuration (opt-in AI enrichment)
+# -- LLM sidecar configuration (AI enrichment, enabled by default)
 llm:
   # -- model image (published manually via .github/workflows/publish-llm.yml)
   repository: ghcr.io/abahmed/kwatch-llm
   # -- model image version; bump AFTER publishing a new tag (Fix 6a). Independent of appVersion.
-  tag: "v1"
-  # -- Use K8s ≥1.29 native sidecar (initContainer restartPolicy:Always) vs plain container
-  nativeSidecar: false
+  tag: "latest"
 
 # -- Configure the upgrader/update checker
 upgrader:

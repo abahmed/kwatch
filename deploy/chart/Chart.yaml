@@ -34,7 +34,7 @@ annotations:
   artifacthub.io/license: MIT
   artifacthub.io/changes: |
     - kind: added
-      description: "AI incident enrichment (opt-in, default-off): self-hosted LLM sidecar (Qwen2.5-Coder-1.5B via Ollama) appends likely cause to alerts — no data leaves the cluster, deterministic hints remain the backbone."
+      description: "AI incident enrichment (opt-in, default-off): self-hosted LLM sidecar (MiniCPM5-1B via llama.cpp) appends likely cause to alerts — no data leaves the cluster, deterministic hints remain the backbone."
     - kind: added
       description: "Cheap-depth enhancements (LLM-free): signature-based hints, correlation surfaces affected-pod count and node root-cause, runbook links, investigate commands, and dashboard deep-links."
     - kind: added

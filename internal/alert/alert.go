@@ -38,6 +38,92 @@ import (
 	"k8s.io/klog/v2"
 )
 
+// obviousReasons are incident reasons where the root cause is fully
+// self-explanatory from the reason + message alone.  LLM enrichment
+// (log/event analysis) adds no actionable insight for these — the fix
+// is either deterministic (e.g. "increase memory limit") or is an
+// infrastructure concern outside the application's control.
+//
+// Reasons NOT in this list (Error, CrashLoopHighFrequency,
+// HighRestartCount, custom job failures, etc.) still get LLM analysis
+// because the crash pattern or log signal is needed to find the
+// root cause.
+var obviousReasons = map[string]bool{
+	// Container resource limits
+	"OOMKilled": true,
+
+	// Container runtime errors — self-evident from message
+	"ContainerCannotRun":   true,
+	"CreateContainerError": true,
+
+	// Image pull / registry
+	"ImagePullBackOff":   true,
+	"ErrImagePull":       true,
+	"ImageInspectError":  true,
+	"RegistryUnavailable": true,
+	"InvalidImageName":   true,
+	"CreateContainerConfigError": true,
+
+	// Probe failures — app not responding, self-evident
+	"LivenessProbeFailed":  true,
+	"ReadinessProbeFailed": true,
+	"StartupProbeFailed":   true,
+	"ProbeError":           true,
+
+	// Lifecycle hooks — command/config error, self-evident
+	"PostStartHookError": true,
+	"PreStopHookError":   true,
+
+	// Node-level conditions (infrastructure, not application)
+	"NodeNotReady":         true,
+	"MemoryPressure":       true,
+	"DiskPressure":         true,
+	"PIDPressure":          true,
+	"NetworkUnavailable":   true,
+	"ContainerStatusUnknown": true,
+
+	// Scheduling / placement
+	"Unschedulable": true,
+	"PodPending":    true,
+	"NodeAffinity":  true,
+
+	// Kubelet backoff — self-evident (container crashing, retrying)
+	"BackOff": true,
+
+	// Eviction / preemption — DisruptionFilter catches most, but
+	// container termination events can fire before the pod's
+	// Failed/Evicted status is visible in the informer cache.
+	"Evicted":    true,
+	"Preempting": true,
+
+	// Horizontal Pod Autoscaler
+	"HPAMaxedOut":      true,
+	"HPAScalingError":  true,
+
+	// Rollout / DaemonSet
+	"ProgressDeadlineExceeded": true,
+	"DaemonSetUnavailable":     true,
+
+	// Jobs / CronJobs
+	"JobSuspended":        true,
+	"CronJobSuspended":    true,
+	"CronJobNotScheduled": true,
+
+	// TLS certificates
+	"TLSCertExpired":     true,
+	"TLSCertExpiringSoon": true,
+
+	// Startup summary (not a real incident)
+	"PreExistingAtStartup": true,
+
+	// Context deadline / timeout — self-evident
+	"DeadlineExceeded": true,
+}
+
+func isObviousReason(reason string) bool {
+	return obviousReasons[reason]
+}
+
 type deliverJob struct {
 	inc    *model.Incident
 	action model.IncidentAction
@@ -63,7 +149,7 @@ const (
 )
 
 // localEndpoint is the in-pod sidecar address (loopback only).
-const localEndpoint = "http://localhost:11434"
+const localEndpoint = "http://localhost:8080"
 
 type breaker struct {
 	fails     int
@@ -114,10 +200,13 @@ type AlertManager struct {
 	dlqRing     [dlqCap]DeadLetterEntry
 	dlqHead     int
 
-	llm      *llm.Client
-	enrichCh chan deliverJob
-	brk      breaker
-	done     chan struct{}
+	llm            *llm.Client
+	enrichCh       chan deliverJob
+	brk            breaker
+	done           chan struct{}
+
+	analysisWriter func(key, analysis string)
+	ctx            context.Context
 }
 
 func (a *AlertManager) SetMaxLogLines(n int) {
@@ -128,12 +217,16 @@ func (a *AlertManager) SetMaxLogLines(n int) {
 	}
 }
 
+func (a *AlertManager) SetAnalysisWriter(fn func(key, analysis string)) {
+	a.analysisWriter = fn
+}
+
 func (a *AlertManager) SetLLM(cfg config.LLMConfig) {
 	if !cfg.Enabled {
 		return
 	}
 	a.llm = llm.New(localEndpoint)
-	a.enrichCh = make(chan deliverJob, 1)
+	a.enrichCh = make(chan deliverJob, 8)
 }
 
 func (a *AlertManager) SetTemplates(tpl map[string]string) {
@@ -644,10 +737,6 @@ func sendWithRetry(ctx context.Context, sendFn func() error, maxAttempts int, de
 }
 
 func sleepWithContext(ctx context.Context, d time.Duration) error {
-	if ctx == nil {
-		time.Sleep(d)
-		return nil
-	}
 	select {
 	case <-ctx.Done():
 		return ctx.Err()
@@ -681,12 +770,16 @@ func (a *AlertManager) Notify(msg string) {
 
 	for _, entry := range entries {
 		p := entry.provider
+		ctx := a.ctx
+		if ctx == nil {
+			ctx = context.Background()
+		}
 		if _, ok := p.(EventDeliveryProvider); ok {
 			ev := &event.Event{
 				PodName: msg,
 				Reason:  "notify",
 			}
-			if err := sendWithRetry(context.Background(), func() error {
+			if err := sendWithRetry(ctx, func() error {
 				return p.SendEvent(ev)
 			}, entry.maxAttempts, entry.retryDelay, entry.maxBackoff, p.Name()); err != nil && entry.fallback != nil {
 				entry.fallback.provider.SendMessage("[fallback — primary " + p.Name() + " failed] " + msg)
@@ -694,7 +787,7 @@ func (a *AlertManager) Notify(msg string) {
 			continue
 		}
 		truncMsg := truncateMsg(msg, entry.maxBytes)
-		if err := sendWithRetry(context.Background(), func() error {
+		if err := sendWithRetry(ctx, func() error {
 			return p.SendMessage(truncMsg)
 		}, entry.maxAttempts, entry.retryDelay, entry.maxBackoff, p.Name()); err != nil && entry.fallback != nil {
 			entry.fallback.provider.SendMessage("[fallback — primary " + p.Name() + " failed] " + truncMsg)
@@ -711,9 +804,13 @@ func (a *AlertManager) NotifyEvent(event event.Event) {
 	copy(entries, a.entries)
 	a.mu.Unlock()
 
+	ctx := a.ctx
+	if ctx == nil {
+		ctx = context.Background()
+	}
 	for _, entry := range entries {
 		p := entry.provider
-		if err := sendWithRetry(context.Background(), func() error {
+		if err := sendWithRetry(ctx, func() error {
 			return p.SendEvent(&event)
 		}, entry.maxAttempts, entry.retryDelay, entry.maxBackoff, p.Name()); err != nil && entry.fallback != nil {
 			if ferr := entry.fallback.provider.SendMessage("[fallback — primary " + p.Name() + " failed] " + event.Reason + " in " + event.Namespace + "/" + event.PodName); ferr != nil {
@@ -785,7 +882,7 @@ func (a *AlertManager) NotifyIncident(inc *model.Incident, action model.Incident
 
 	snap := inc.Clone()
 	job := deliverJob{inc: snap, action: action}
-	if a.started && a.llm != nil && action == model.ActionCreate {
+	if a.started && a.llm != nil && action == model.ActionCreate && !isObviousReason(inc.Reason) {
 		a.mu.Lock()
 		enqueued := false
 		if !a.stopped {
@@ -835,7 +932,7 @@ func (a *AlertManager) AddProvider(p Provider) {
 		go func() {
 			defer a.providerWg.Done()
 			for job := range entry.ch {
-				a.deliverOne(&entry, job.inc, job.action)
+				a.deliverOne(a.ctx, &entry, job.inc, job.action)
 			}
 		}()
 	}
@@ -847,6 +944,7 @@ func (a *AlertManager) Start(ctx context.Context) {
 	a.mu.Lock()
 	a.started = true
 	a.stopped = false
+	a.ctx = ctx
 	a.done = make(chan struct{})
 	entries := make([]providerEntry, len(a.entries))
 	copy(entries, a.entries)
@@ -858,7 +956,7 @@ func (a *AlertManager) Start(ctx context.Context) {
 		go func() {
 			defer a.providerWg.Done()
 			for job := range entry.ch {
-				a.deliverOne(entry, job.inc, job.action)
+				a.deliverOne(a.ctx, entry, job.inc, job.action)
 			}
 		}()
 	}
@@ -982,6 +1080,9 @@ func (a *AlertManager) enrichOne(ctx context.Context, job deliverJob) {
 		klog.V(2).InfoS("llm enrichment skipped", "key", job.inc.Key, "error", err)
 	} else if s := sanitizeAnalysis(out); s != "" {
 		job.inc.Analysis = s
+		if w := a.analysisWriter; w != nil {
+			w(job.inc.Key, s)
+		}
 	}
 }
 
@@ -1006,7 +1107,7 @@ func sanitizeAnalysis(s string) string {
 }
 
 // deliverOne handles the full send+retry for a single (entry, incident) pair.
-func (a *AlertManager) deliverOne(entry *providerEntry, inc *model.Incident, action model.IncidentAction) {
+func (a *AlertManager) deliverOne(ctx context.Context, entry *providerEntry, inc *model.Incident, action model.IncidentAction) {
 	p := entry.provider
 	metrics.Default.NotificationsTotal.Add(1)
 
@@ -1026,11 +1127,11 @@ func (a *AlertManager) deliverOne(entry *providerEntry, inc *model.Incident, act
 	if action == model.ActionDigestFlush {
 		if _, ok := p.(EventDeliveryProvider); ok {
 			ev := incidentToEvent(inc, action)
-			err = sendWithRetry(context.Background(), func() error {
+			err = sendWithRetry(ctx, func() error {
 				return p.SendEvent(ev)
 			}, entry.maxAttempts, entry.retryDelay, entry.maxBackoff, p.Name())
 		} else {
-			err = sendWithRetry(context.Background(), func() error {
+			err = sendWithRetry(ctx, func() error {
 				return p.SendMessage(msg)
 			}, entry.maxAttempts, entry.retryDelay, entry.maxBackoff, p.Name())
 		}
@@ -1042,16 +1143,16 @@ func (a *AlertManager) deliverOne(entry *providerEntry, inc *model.Incident, act
 			return
 		}
 		if tp, ok := p.(ThreadProvider); ok {
-			err = sendWithRetry(context.Background(), func() error {
+			err = sendWithRetry(ctx, func() error {
 				return tp.SendIncident(inc, action)
 			}, entry.maxAttempts, entry.retryDelay, entry.maxBackoff, p.Name())
 		} else if _, ok := p.(EventDeliveryProvider); ok {
 			ev := incidentToEvent(inc, action)
-			err = sendWithRetry(context.Background(), func() error {
+			err = sendWithRetry(ctx, func() error {
 				return p.SendEvent(ev)
 			}, entry.maxAttempts, entry.retryDelay, entry.maxBackoff, p.Name())
 		} else {
-			err = sendWithRetry(context.Background(), func() error {
+			err = sendWithRetry(ctx, func() error {
 				return p.SendMessage(msg)
 			}, entry.maxAttempts, entry.retryDelay, entry.maxBackoff, p.Name())
 		}
@@ -1228,7 +1329,19 @@ func formatCreateMessage(inc *model.Incident, maxLines int) string {
 		correlationBlock = fmt.Sprintf("\nAffected: %d pods", n)
 	}
 	if inc.Resource == "node" && inc.SuppressedPods > 0 {
-		correlationBlock += fmt.Sprintf("\nImpact: %d dependent pod error(s) suppressed — this node is the likely root cause", inc.SuppressedPods)
+		correlationBlock += fmt.Sprintf("\nImpact: %d dependent pod error(s) suppressed", inc.SuppressedPods)
+		if len(inc.SuppressedOwners) > 0 {
+			owners := make([]string, 0, len(inc.SuppressedOwners))
+			for o := range inc.SuppressedOwners {
+				owners = append(owners, o)
+			}
+			sort.Strings(owners)
+			correlationBlock += fmt.Sprintf(" across %d service(s):", len(owners))
+			for _, o := range owners {
+				correlationBlock += fmt.Sprintf("\n  • %s (%d pods)", o, inc.SuppressedOwners[o])
+			}
+		}
+		correlationBlock += "\n  — this node is the likely root cause"
 	}
 
 	analysis := ""

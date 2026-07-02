@@ -123,8 +123,7 @@
         "description": "LLM sidecar deployment configuration",
         "properties": {
           "repository": { "type": "string", "description": "model image repository" },
-          "tag": { "type": "string", "description": "model image version tag" },
-          "nativeSidecar": { "type": "boolean", "description": "Use K8s >=1.29 native sidecar (initContainer with restartPolicy:Always)" }
+          "tag": { "type": "string", "description": "model image version tag" }
         }
       },
       "tolerations": {

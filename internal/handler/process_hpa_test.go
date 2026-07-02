@@ -209,8 +209,15 @@ func TestHpaScalingErrorOnlyResolvedWhenConditionClears(t *testing.T) {
 		},
 	}
 
-	// First pass: both incidents created
+	// First pass: neither incident fires (within 10 min sustained window)
 	err := h.ProcessHorizontalPodAutoscalerObject(hpa, false)
+	assert.NoError(t, err)
+
+	// Advance time past the sustained window
+	h.(*handler).now = func() time.Time { return now.Add(11 * time.Minute) }
+
+	// Second pass: both incidents now fire (sustained passed)
+	err = h.ProcessHorizontalPodAutoscalerObject(hpa, false)
 	assert.NoError(t, err)
 
 	// Clear only the scaling error, HPA stays maxed

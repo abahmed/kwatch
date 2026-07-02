@@ -54,9 +54,18 @@ func BuildKey(namespace, owner, reason, container string) string {
 // chain inside Process. It returns the same key that Process would compute.
 func IncidentKey(ev event.Event, owner string, cs *model.ContainerState) string {
 	r := normalizeReason(ev.Reason)
-	if r == "CrashLoopBackOff" && cs != nil && cs.RestartCount > defaultCrashLoopHighFreqThreshold {
-		r = "CrashLoopHighFrequency"
-	}
+	// A crash-looping container reports different reasons across its cycle:
+  	// "Error"/"OOMKilled" when it terminates, "CrashLoopBackOff" while backing off.
+  	// Once it's established as looping, fold them all into ONE canonical key so the key
+  	// is stable regardless of the container's momentary state. This makes the startup
+  	// baseline (captured in whatever state the container was in) match the live alert
+  	// (fired from a possibly-different state), and treats the loop as a single incident.
+  	if cs != nil && cs.RestartCount > defaultCrashLoopHighFreqThreshold {
+		switch r {
+		case "Error", "OOMKilled", "CrashLoopBackOff", "CrashLoopHighFrequency":
+			r = "CrashLoopHighFrequency"
+		}
+  	}
 	return BuildKey(ev.Namespace, owner, r, "")
 }
 
@@ -167,6 +176,7 @@ type Engine struct {
 	stormUntil          time.Time
 	digestBuf           []digestEntry
 	lastDigestFlush     time.Time
+	cleanupCooldown     map[string]time.Time // key → cooldown expiry; prevents resolve→recreate cycle
 	now                 func() time.Time
 }
 
@@ -189,6 +199,7 @@ func NewEngine(cfg Config) *Engine {
 		config:              cfg,
 		activeNodeIncidents: make(map[string]bool),
 		lastContainerIndex:  make(map[string]*model.ContainerState),
+		cleanupCooldown:     make(map[string]time.Time),
 	}
 	if e.now == nil {
 		e.now = time.Now
@@ -203,7 +214,9 @@ func (e *Engine) SetSeen(b map[string]map[string]int64) {
 	e.mu.Lock()
 	now := e.now()
 	ttl := e.config.BaselineTTL
-	e.seen = make(map[string]map[string]int64, len(b))
+	if e.seen == nil {
+		e.seen = make(map[string]map[string]int64)
+	}
 	for key, pods := range b {
 		for pod, ts := range pods {
 			if now.Sub(time.Unix(ts, 0)) < ttl {
@@ -228,6 +241,7 @@ type seenEntry struct {
 	ts  int64
 }
 
+// Caller must hold e.mu.
 func (e *Engine) evictToLimit() {
 	limit := e.config.MaxBaseline
 	total := 0
@@ -259,6 +273,7 @@ func (e *Engine) evictToLimit() {
 	}
 }
 
+// Caller must hold e.mu.
 func (e *Engine) isBaselined(key, podName string) bool {
 	if pods, ok := e.seen[key]; ok {
 		if ts, ok := pods[podName]; ok {
@@ -274,7 +289,7 @@ func (e *Engine) isBaselined(key, podName string) bool {
 	return false
 }
 
-// ClearSeenForPod removes all baseline entries for the given pod.
+// ClearSeenForPod removes all baseline entries and cooldowns for the given pod.
 func (e *Engine) ClearSeenForPod(namespace, podName string) {
 	e.mu.Lock()
 	changed := false
@@ -288,6 +303,14 @@ func (e *Engine) ClearSeenForPod(namespace, podName string) {
 			if len(pods) == 0 {
 				delete(e.seen, key)
 			}
+		}
+	}
+	// Clear any cleanup cooldown entries for this namespace so a recovered
+	// pod that re-crashes isn't suppressed by a stale cooldown.
+	nsPrefix := namespace + ":"
+	for key := range e.cleanupCooldown {
+		if strings.HasPrefix(key, nsPrefix) {
+			delete(e.cleanupCooldown, key)
 		}
 	}
 	var snap map[string]map[string]int64
@@ -373,6 +396,7 @@ func normalizeReason(reason string) string {
 	return reason
 }
 
+// Caller must hold e.mu.
 func (e *Engine) findNodeIncident(nodeName string) *model.Incident {
 	for _, inc := range e.state {
 		if inc.Resource == "node" && inc.Name == nodeName {
@@ -382,12 +406,37 @@ func (e *Engine) findNodeIncident(nodeName string) *model.Incident {
 	return nil
 }
 
+// findMostConstrainedNodeIncident returns the node incident with the most
+// suppressed pods, used as a target for unschedulable-pod suppression.
+// Caller must hold e.mu.
+func (e *Engine) findMostConstrainedNodeIncident() *model.Incident {
+	var best *model.Incident
+	for _, inc := range e.state {
+		if inc.Resource == "node" && inc.State != model.StateResolved {
+			if best == nil || inc.SuppressedPods > best.SuppressedPods {
+				best = inc
+			}
+		}
+	}
+	return best
+}
+
 // CountActiveNodeIncidents returns the number of nodes with active
 // (non-resolved) incidents. Used for node→resource inhibition decisions.
 func (e *Engine) CountActiveNodeIncidents() int {
 	e.mu.Lock()
 	defer e.mu.Unlock()
 	return len(e.activeNodeIncidents)
+}
+
+// SetActiveNodeIncidents marks the given nodes as having active incidents.
+// Used at startup to pre-populate inhibition before any worker runs.
+func (e *Engine) SetActiveNodeIncidents(nodeNames []string) {
+	e.mu.Lock()
+	defer e.mu.Unlock()
+	for _, n := range nodeNames {
+		e.activeNodeIncidents[n] = true
+	}
 }
 
 // refreshNodeInhibition clears the node inhibition flag if no non-resolved
@@ -435,6 +484,7 @@ func (e *Engine) GetIncidentsByNamespace(ns string) []model.IncidentView {
 	return out
 }
 
+// Caller must hold e.mu.
 func (e *Engine) indexLastContainerState(namespace, podName string, cs *model.ContainerState) {
 	if podName == "" || cs == nil {
 		return
@@ -443,6 +493,7 @@ func (e *Engine) indexLastContainerState(namespace, podName string, cs *model.Co
 	e.lastContainerIndex[namespace+"/"+podName] = &cp
 }
 
+// Caller must hold e.mu.
 func (e *Engine) indexIncidentByNamespace(inc *model.Incident) {
 	ns, key := inc.Namespace, inc.Key
 	if ns == "" {
@@ -454,6 +505,7 @@ func (e *Engine) indexIncidentByNamespace(inc *model.Incident) {
 	e.namespaceIndex[ns][key] = inc
 }
 
+// Caller must hold e.mu.
 func (e *Engine) removeIncidentFromNamespaceIndex(inc *model.Incident) {
 	ns, key := inc.Namespace, inc.Key
 	if ns == "" {
@@ -462,6 +514,14 @@ func (e *Engine) removeIncidentFromNamespaceIndex(inc *model.Incident) {
 	delete(e.namespaceIndex[ns], key)
 	if len(e.namespaceIndex[ns]) == 0 {
 		delete(e.namespaceIndex, ns)
+	}
+}
+
+func (e *Engine) SetAnalysis(key, analysis string) {
+	e.mu.Lock()
+	defer e.mu.Unlock()
+	if inc, ok := e.state[key]; ok {
+		inc.Analysis = analysis
 	}
 }
 
@@ -476,27 +536,57 @@ func (e *Engine) Process(ev event.Event, owner string, cs *model.ContainerState)
 
 	key := IncidentKey(ev, owner, cs)
 
-	if e.isBaselined(key, ev.PodName) {
-		return nil, model.ActionSkip
-	}
-
 	res := ev.Resource
 	if res == "" {
 		res = "pod"
 	}
 
-	// Track active node incidents for pod suppression
+	// Track active node incidents for pod suppression — must happen before
+	// baseline check so node events always populate the inhibition map.
 	if res == "node" && ev.NodeName != "" {
 		e.activeNodeIncidents[ev.NodeName] = true
 	}
 
-	// Suppress pod incidents when the node has an active incident
-	if e.config.InhibitNodeSuppressesPods &&
-		res == "pod" && ev.NodeName != "" && e.activeNodeIncidents[ev.NodeName] {
-		if nodeInc := e.findNodeIncident(ev.NodeName); nodeInc != nil {
-			nodeInc.SuppressedPods++
-		}
+	// Baseline — skip for node events so the incident is always created
+	if res != "node" && e.isBaselined(key, ev.PodName) {
 		return nil, model.ActionSkip
+	}
+
+	// Suppress pod incidents when the node has an active incident
+	if e.config.InhibitNodeSuppressesPods && res == "pod" {
+		if ev.NodeName != "" && e.activeNodeIncidents[ev.NodeName] {
+			if nodeInc := e.findNodeIncident(ev.NodeName); nodeInc != nil {
+				nodeInc.SuppressedPods++
+				if owner != "" {
+					if nodeInc.SuppressedOwners == nil {
+						nodeInc.SuppressedOwners = make(map[string]int)
+					}
+					nodeInc.SuppressedOwners[owner]++
+				}
+			}
+			return nil, model.ActionSkip
+		}
+		// Unschedulable pods (empty NodeName) — suppress when any node incident is active
+		if ev.NodeName == "" && len(e.activeNodeIncidents) > 0 {
+			if nodeInc := e.findMostConstrainedNodeIncident(); nodeInc != nil {
+				nodeInc.SuppressedPods++
+				if owner != "" {
+					if nodeInc.SuppressedOwners == nil {
+						nodeInc.SuppressedOwners = make(map[string]int)
+					}
+					nodeInc.SuppressedOwners[owner]++
+				}
+			}
+			return nil, model.ActionSkip
+		}
+	}
+
+	// Cooldown check — suppress re-creation after cleanup for still-broken resources
+	if expiry, ok := e.cleanupCooldown[key]; ok {
+		if e.now().Before(expiry) {
+			return nil, model.ActionSkip
+		}
+		delete(e.cleanupCooldown, key)
 	}
 
 	now := e.now()
@@ -583,6 +673,26 @@ func (e *Engine) Process(ev event.Event, owner string, cs *model.ContainerState)
 		return inc, e.edgeAction(inc)
 	}
 
+	// When RestartCount crosses the CrashLoopHighFrequency threshold, the
+	// incident key changes from the raw reason (e.g. "Error") to
+	// "CrashLoopHighFrequency", orphaning the old incident in the state map.
+	// Silently resolve any orphaned incidents with the same ns:owner: prefix
+	// so the state map doesn't accumulate stale entries for the same pod.
+	if cs != nil && int(cs.RestartCount) > defaultCrashLoopHighFreqThreshold {
+		prefix := ev.Namespace + ":" + owner + ":"
+		for k, oldInc := range e.state {
+			if strings.HasPrefix(k, prefix) && k != key &&
+				oldInc.State != model.StateResolved &&
+				oldInc.State != model.StatePendingResolve &&
+				oldInc.Resource == res {
+				oldInc.State = model.StateResolved
+				e.removeIncidentFromNamespaceIndex(oldInc)
+				delete(e.state, k)
+				delete(e.seen, k)
+			}
+		}
+	}
+
 	inc := e.newIncident(ev, owner, cs, key, res, now)
 	e.state[key] = inc
 	e.indexIncidentByNamespace(inc)
@@ -613,6 +723,7 @@ func (e *Engine) Process(ev event.Event, owner string, cs *model.ContainerState)
 	return inc, e.edgeAction(inc)
 }
 
+// Caller must hold e.mu.
 func (e *Engine) newIncident(ev event.Event, owner string, cs *model.ContainerState, key, res string, now time.Time) *model.Incident {
 	inc := &model.Incident{
 		ID:         fmt.Sprintf("%08x", crc32.ChecksumIEEE([]byte(key))),
@@ -778,6 +889,7 @@ func (e *Engine) ResolveByResource(resource, name string) {
 			if e.config.ResolveHoldDown > 0 {
 				inc.State = model.StatePendingResolve
 				inc.ResolveAt = now.Add(e.config.ResolveHoldDown)
+				e.cleanupCooldown[key] = now.Add(e.config.Window)
 				continue
 			}
 			inc.State = model.StateResolved
@@ -785,6 +897,7 @@ func (e *Engine) ResolveByResource(resource, name string) {
 				e.refreshNodeInhibition(inc.Name)
 			}
 			delete(e.seen, key)
+			e.cleanupCooldown[key] = now.Add(e.config.Window)
 			action := e.edgeAction(inc)
 			baselineChanged = true
 			pending = append(pending, transition{inc.Clone(), action})
@@ -853,6 +966,8 @@ func (e *Engine) cleanup() {
 				pending = append(pending, transition{inc.Clone(), a})
 			}
 		}
+		// Add cooldown to prevent resolve→recreate cycle for still-broken resources
+		e.cleanupCooldown[key] = now.Add(e.config.Window)
 		delete(e.seen, key)
 		e.removeIncidentFromNamespaceIndex(inc)
 		delete(e.state, key)
@@ -887,6 +1002,7 @@ func (e *Engine) checkLifecycle() {
 				e.refreshNodeInhibition(inc.Name)
 			}
 			delete(e.seen, key)
+			e.cleanupCooldown[key] = now.Add(e.config.Window)
 			action := e.edgeAction(inc)
 			baselineChanged = true
 			pending = append(pending, transition{inc.Clone(), action})
@@ -960,6 +1076,7 @@ func (e *Engine) checkLifecycle() {
 	}
 }
 
+// Caller must hold e.mu.
 func (e *Engine) buildDigestSummary() string {
 	if len(e.digestBuf) == 0 {
 		return ""

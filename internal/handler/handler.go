@@ -53,6 +53,7 @@ type Handler interface {
 	SetSecretLister(lister corev1lister.SecretLister)
 	SweepTLSSecrets()
 	SetSeen(baseline map[string]map[string]int64)
+	SetActiveNodeIncidents(nodeNames []string)
 	ClearSeenForPod(namespace, podName string)
 	ReportStartupSummary(suppressed map[string]int)
 	SetPvcSampler(f func(nodeName string))
@@ -77,10 +78,15 @@ type handler struct {
 	ssLister           appsv1lister.StatefulSetLister
 	eventLister        corev1lister.EventLister
 	hpaLister          autoscalingv2lister.HorizontalPodAutoscalerLister
-	firstMaxedHPAs     map[string]time.Time
-	hpaMu              sync.Mutex
+	firstMaxedHPAs         map[string]time.Time
+	firstScalingErrorHPAs  map[string]time.Time
+	hpaMu                  sync.Mutex
 	firstUnavailableDS map[string]time.Time
 	dsMu               sync.Mutex
+	firstSuspendedCJs  map[string]time.Time
+	cjMu               sync.Mutex
+	firstNodePressure  map[string]time.Time
+	npMu               sync.Mutex
 	secretLister       corev1lister.SecretLister
 	pvcSampler         func(nodeName string) // optional; set when pvcMonitor is enabled
 	now                func() time.Time
@@ -143,8 +149,11 @@ func NewHandler(
 		containerEnrichers: containerEnrichers,
 		correlator:         correlator,
 		alertManager:       alertManager,
-		firstMaxedHPAs:     make(map[string]time.Time),
+		firstMaxedHPAs:         make(map[string]time.Time),
+		firstScalingErrorHPAs:  make(map[string]time.Time),
 		firstUnavailableDS: make(map[string]time.Time),
+		firstSuspendedCJs:  make(map[string]time.Time),
+		firstNodePressure:  make(map[string]time.Time),
 		now:                time.Now,
 	}
 }
@@ -199,6 +208,10 @@ func (h *handler) SetCronJobLister(lister batchv1lister.CronJobLister) {
 
 func (h *handler) SetSeen(baseline map[string]map[string]int64) {
 	h.correlator.SetSeen(baseline)
+}
+
+func (h *handler) SetActiveNodeIncidents(nodeNames []string) {
+	h.correlator.SetActiveNodeIncidents(nodeNames)
 }
 
 func (h *handler) ClearSeenForPod(namespace, podName string) {

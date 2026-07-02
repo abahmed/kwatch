@@ -6,10 +6,7 @@ metadata:
   labels:
     {{- include "kwatch.labels" . | nindent 4 }}
 spec:
-  {{- if gt (int .Values.replicaCount) 1 }}
-  {{- fail "kwatch must run a single replica: it is the sole writer of the kwatch-baseline/kwatch-pvc ConfigMaps" }}
-  {{- end }}
-  replicas: {{ .Values.replicaCount | default 1 }}
+  replicas: 1
   strategy:
     type: Recreate
   selector:
@@ -30,21 +27,8 @@ spec:
     spec:
       restartPolicy: Always
       serviceAccountName:  {{ .Release.Name }}
-      {{- $llmEnabled := false }}
-      {{- with .Values.config }}
-        {{- with .llm }}
-          {{- $llmEnabled = .enabled | default false }}
-        {{- end }}
-      {{- end }}
-      {{- if and $llmEnabled (gt (int (.Values.replicaCount | default 1)) 1) }}
-        {{- fail "LLM sidecar is a singleton; set replicaCount=1 when config.llm.enabled=true" }}
-      {{- end }}
-  {{- if and $llmEnabled .Values.llm.nativeSidecar }}
-      initContainers:
-        - name: llm
-          restartPolicy: Always
-          {{- include "kwatch.llmContainer" . | nindent 10 }}
-      {{- end }}
+      {{- $llmCfg := default (dict "enabled" false) .Values.config.llm }}
+      {{- $llmEnabled := $llmCfg.enabled }}
       containers:
         - name: {{ .Chart.Name }}
           securityContext:
@@ -67,7 +51,10 @@ spec:
                 fieldRef:
                   fieldPath: metadata.namespace
             - name: GOMEMLIMIT
-              value: "230MiB"
+              valueFrom:
+                resourceFieldRef:
+                  resource: limits.memory
+                  divisor: "1"
           livenessProbe:
             httpGet:
               path: /healthz
@@ -82,7 +69,7 @@ spec:
             periodSeconds: 10
           resources:
             {{- toYaml .Values.resources | nindent 12 }}
-        {{- if and $llmEnabled (not .Values.llm.nativeSidecar) }}
+        {{- if $llmEnabled }}
         - name: llm
           {{- include "kwatch.llmContainer" . | nindent 10 }}
         {{- end }}

@@ -903,7 +903,7 @@ func (c *Controller) buildSeenSet() {
 	}
 
 	for _, pod := range pods {
-		if pod.Status.Phase == corev1.PodRunning || pod.Status.Phase == corev1.PodSucceeded {
+		if pod.Status.Phase == corev1.PodSucceeded {
 			continue
 		}
 		owner := correlation.ResolveOwnerName(pod, c.rsLister, c.dsLister, c.ssLister)
@@ -923,12 +923,21 @@ func (c *Controller) buildSeenSet() {
 				if w.Reason == "ContainerCreating" || w.Reason == "PodInitializing" {
 					continue
 				}
-				reason = w.Reason
+				// Match ContainerReasonsFilter: normalize CrashLoopBackOff
+				// to LastTerminationState reason so the baseline key matches
+				// the live signal key.
+				if w.Reason == "CrashLoopBackOff" && cs.LastTerminationState.Terminated != nil {
+					reason = cs.LastTerminationState.Terminated.Reason
+				} else {
+					reason = w.Reason
+				}
 			} else if t := cs.State.Terminated; t != nil {
 				if t.ExitCode == 0 || t.Reason == "Completed" {
 					continue
 				}
 				reason = t.Reason
+			} else if cs.State.Running != nil && cs.RestartCount > 0 && cs.LastTerminationState.Terminated != nil {
+				reason = cs.LastTerminationState.Terminated.Reason
 			}
 			if reason == "" {
 				continue
@@ -952,18 +961,31 @@ func (c *Controller) buildSeenSet() {
 	}
 
 	// Seed alerting node conditions into the baseline
+	// and collect broken node names for pre-populating activeNodeIncidents
+	var activeNodeIncidents []string
 	if c.nodeLister != nil {
 		if nodes, err := c.nodeLister.List(labels.Everything()); err == nil {
 			for _, n := range nodes {
+				hasIssue := false
 				for _, cond := range n.Status.Conditions {
 					if reason := handler.NodeConditionReason(cond); reason != "" {
 						ev := event.Event{Reason: reason}
 						key := correlation.IncidentKey(ev, n.Name, nil)
 						add(key, n.Name)
+						hasIssue = true
 					}
+				}
+				if hasIssue {
+					activeNodeIncidents = append(activeNodeIncidents, n.Name)
 				}
 			}
 		}
+	}
+
+	// Pre-populate activeNodeIncidents so pod suppression is active
+	// before any worker starts (timing race prevention).
+	if len(activeNodeIncidents) > 0 {
+		c.handler.SetActiveNodeIncidents(activeNodeIncidents)
 	}
 
 	// Seed controller resource issues into the baseline.

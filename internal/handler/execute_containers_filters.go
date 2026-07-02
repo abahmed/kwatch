@@ -3,6 +3,7 @@ package handler
 import (
 	"fmt"
 	"sort"
+	"strings"
 	"time"
 
 	"github.com/abahmed/kwatch/internal/correlation"
@@ -50,7 +51,8 @@ func (h *handler) executeContainersFilters(ctx *filter.Context) {
 
 		if !broken {
 			if th := h.config.ContainerRestartThreshold; th > 0 &&
-				int(container.RestartCount) >= th {
+				int(container.RestartCount) >= th &&
+				!isPodTerminatingOrDisrupted(ctx.Pod) {
 				h.emitHighRestartAlert(ctx, container)
 			}
 			continue
@@ -197,6 +199,33 @@ func buildContainerHint(ctx *filter.Context) string {
 		}
 	}
 
+	// Prepend the K8s container message when available — it has the
+	// most specific diagnostic info (e.g., "Back-off pulling image ...").
+	if ctx.Container.Msg != "" {
+		hint = ctx.Container.Msg + " — " + hint
+	}
+
+	// Smart diagnostics for obvious reasons (no LLM needed).
+	if (reason == "ImagePullBackOff" || reason == "ErrImagePull") && ctx.Pod != nil {
+		hasSecrets := len(ctx.Pod.Spec.ImagePullSecrets) > 0
+
+		// Try to match well-known registry error patterns first.
+		if m := imagePullMsgHint(ctx.Container.Msg, hasSecrets); m != "" {
+			hint = hint + "; " + m
+		} else if !hasSecrets {
+			// No specific pattern — check if registry likely needs auth.
+			for _, c := range ctx.Pod.Spec.Containers {
+				if c.Name == ctx.Container.Container.Name && needsRegistryAuth(c.Image) {
+					hint = hint + "; this image is from a registry that typically requires " +
+						"authentication — add imagePullSecrets to the pod spec"
+					break
+				}
+			}
+		} else {
+			hint = hint + "; imagePullSecrets is configured — check the image name/tag or secret validity"
+		}
+	}
+
 	return hint
 }
 
@@ -246,6 +275,77 @@ func lastTermInfo(container *corev1.ContainerStatus) (reason string, exitCode in
 		return last.Reason, last.ExitCode
 	}
 	return "", 0
+}
+
+// imagePullMsgHint returns a targeted fix suggestion when the image-pull
+// error message matches a well-known pattern such as rate limiting or
+// authentication failure.  Returns "" when no pattern matches.
+func imagePullMsgHint(msg string, hasSecrets bool) string {
+	msg = strings.ToLower(msg)
+
+	switch {
+	case strings.Contains(msg, "toomanyrequests") || strings.Contains(msg, "rate limit"):
+		return "Docker Hub rate limit exceeded — add imagePullSecrets for authenticated pulls or configure a mirror registry"
+	case strings.Contains(msg, "pull qps"):
+		return "Kubelet image pull QPS limit exceeded — consider increasing registryPullQPS in kubelet config or reducing concurrent pod starts"
+	case strings.Contains(msg, "authentication required") || strings.Contains(msg, "unauthorized") || strings.Contains(msg, "denied") || strings.Contains(msg, "no pull access"):
+		return "Registry authentication failed — check imagePullSecrets validity"
+	case strings.Contains(msg, "not found") || strings.Contains(msg, "manifest unknown") || strings.Contains(msg, "does not exist"):
+		if hasSecrets {
+			return "Image not found — check the image name/tag, or the image may not exist in this registry"
+		}
+		return "Image not found — check the image name/tag"
+	case strings.Contains(msg, "context deadline exceeded") || strings.Contains(msg, "i/o timeout"):
+		return "Registry connection timed out — check network connectivity to the registry and DNS resolution"
+	case strings.Contains(msg, "connection refused") || strings.Contains(msg, "connection reset"):
+		return "Registry connection refused — check that the registry is running and not blocked by a firewall"
+	case strings.Contains(msg, "no route to host") || strings.Contains(msg, "network is unreachable"):
+		return "No network route to registry — check firewall rules and network connectivity"
+	case strings.Contains(msg, "no such host") || strings.Contains(msg, "dial tcp"):
+		return "Registry unreachable — check cluster network connectivity and DNS"
+	case strings.Contains(msg, "tls") || strings.Contains(msg, "certificate"):
+		return "Registry TLS error — check registry certificate or configure insecure-registries"
+	}
+	return ""
+}
+
+// needsRegistryAuth returns true when the image is hosted on a registry that
+// almost always requires pull credentials (gcr.io, ECR, ACR, Quay, GHCR, etc.).
+// Official Docker Hub images (e.g., "nginx", "nginx:latest") have no "/" and
+// never need auth.  User images ("user/repo:tag") are ambiguous but common
+// public repos don't need credentials, so only explicit-registry images
+// (host contains "." or ":") are flagged.
+func needsRegistryAuth(image string) bool {
+	// Images without "/" are always official Docker Hub (library/) — no auth.
+	slash := strings.IndexByte(image, '/')
+	if slash < 0 {
+		return false
+	}
+	host := image[:slash]
+	return strings.Contains(host, ".") || strings.Contains(host, ":")
+}
+
+// isPodTerminatingOrDisrupted returns true when the pod is in a terminal or
+// terminating state where restart-count alerts should be suppressed
+// (eviction, deletion, disruption target). Matches the same conditions as
+// the DisruptionFilter to avoid firing HighRestartCount for intentionally
+// terminated pods.
+func isPodTerminatingOrDisrupted(pod *corev1.Pod) bool {
+	if pod == nil {
+		return false
+	}
+	if pod.DeletionTimestamp != nil {
+		return true
+	}
+	if pod.Status.Phase == corev1.PodFailed && pod.Status.Reason == "Evicted" {
+		return true
+	}
+	for _, c := range pod.Status.Conditions {
+		if c.Type == "DisruptionTarget" {
+			return true
+		}
+	}
+	return false
 }
 
 func (h *handler) emitHighRestartAlert(ctx *filter.Context, container *corev1.ContainerStatus) {

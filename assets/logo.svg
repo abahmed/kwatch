@@ -1,0 +1,75 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+  <defs>
+    <radialGradient id="screenGlow" cx="0.5" cy="0.5" r="0.5">
+      <stop offset="0%" stop-color="white"/>
+      <stop offset="85%" stop-color="white"/>
+      <stop offset="100%" stop-color="#e8f0fe"/>
+    </radialGradient>
+
+    <linearGradient id="brand" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#326CE5"/>
+      <stop offset="100%" stop-color="#00ACD7"/>
+    </linearGradient>
+
+    <linearGradient id="sweepFill" x1="0" y1="0" x2="0.6" y2="1">
+      <stop offset="0%" stop-color="#00ACD7" stop-opacity="0"/>
+      <stop offset="100%" stop-color="#00ACD7" stop-opacity="0.2"/>
+    </linearGradient>
+
+    <filter id="glow" x="-30%" y="-30%" width="160%" height="160%">
+      <feGaussianBlur stdDeviation="2.5" result="blur"/>
+      <feMerge>
+        <feMergeNode in="blur"/>
+        <feMergeNode in="SourceGraphic"/>
+      </feMerge>
+    </filter>
+
+    <filter id="shadow" x="-10%" y="-10%" width="130%" height="130%">
+      <feDropShadow dx="0" dy="6" stdDeviation="10" flood-color="#326CE5" flood-opacity="0.25"/>
+    </filter>
+  </defs>
+
+  <!-- hexagon frame (Kubernetes) -->
+  <polygon points="256,36 442,145 442,367 256,476 70,367 70,145" fill="url(#brand)" filter="url(#shadow)"/>
+
+  <!-- circular screen (radar scope) inside hexagon -->
+  <circle cx="256" cy="256" r="170" fill="url(#screenGlow)"/>
+  <circle cx="256" cy="256" r="170" fill="none" stroke="white" stroke-width="1.5"/>
+
+  <!-- radar rings (centered with everything else) -->
+  <g fill="none" stroke="#326CE5">
+    <circle cx="256" cy="256" r="148" stroke-width="1.2" opacity="0.10"/>
+    <circle cx="256" cy="256" r="110" stroke-width="1" opacity="0.07"/>
+  </g>
+
+  <!-- sweep from center -->
+  <g filter="url(#glow)">
+    <path d="M 256 256 L 256 104 A 152 152 0 0 1 408 256 Z" fill="url(#sweepFill)"/>
+    <path d="M 256 104 A 152 152 0 0 1 408 256" fill="none" stroke="#00ACD7" stroke-width="3" stroke-linecap="round" opacity="0.5"/>
+  </g>
+
+  <!-- 8 resource dots -->
+  <g fill="#326CE5" opacity="0.25">
+    <circle cx="256" cy="108" r="4"/>
+    <circle cx="360" cy="150" r="4"/>
+    <circle cx="404" cy="256" r="4"/>
+    <circle cx="360" cy="362" r="4"/>
+    <circle cx="256" cy="404" r="4"/>
+    <circle cx="152" cy="362" r="4"/>
+    <circle cx="108" cy="256" r="4"/>
+    <circle cx="152" cy="150" r="4"/>
+  </g>
+
+  <!-- detection -->
+  <g filter="url(#glow)">
+    <circle cx="345" cy="167" r="3" fill="#00ACD7"/>
+    <circle cx="345" cy="167" r="7" fill="none" stroke="#00ACD7" stroke-width="1.2" opacity="0.35"/>
+  </g>
+
+  <!-- K letterform -->
+  <g stroke="#326CE5" stroke-width="28" stroke-linecap="round" stroke-linejoin="round" fill="none">
+    <line x1="230" y1="158" x2="230" y2="354"/>
+    <line x1="230" y1="256" x2="296" y2="194"/>
+    <line x1="230" y1="256" x2="296" y2="318"/>
+  </g>
+</svg>

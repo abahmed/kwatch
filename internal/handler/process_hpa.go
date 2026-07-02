@@ -19,6 +19,7 @@ func (h *handler) ProcessHorizontalPodAutoscaler(key string, deleted bool) error
 	}
 	if deleted {
 		h.clearFirstMaxed(namespace + "/" + name)
+		h.clearFirstScalingError(namespace + "/" + name)
 		h.correlator.ResolveByResource("horizontalpodautoscaler", namespace+"/"+name)
 		return nil
 	}
@@ -26,6 +27,7 @@ func (h *handler) ProcessHorizontalPodAutoscaler(key string, deleted bool) error
 	if err != nil {
 		if errors.IsNotFound(err) {
 			h.clearFirstMaxed(namespace + "/" + name)
+			h.clearFirstScalingError(namespace + "/" + name)
 			h.correlator.ResolveByResource("horizontalpodautoscaler", namespace+"/"+name)
 			return nil
 		}
@@ -108,22 +110,28 @@ func (h *handler) ProcessHorizontalPodAutoscalerObject(hpa *autoscalingv2.Horizo
 	}
 	if deleted {
 		h.clearFirstMaxed(hpa.Namespace + "/" + hpa.Name)
+		h.clearFirstScalingError(hpa.Namespace + "/" + hpa.Name)
 		h.correlator.ResolveByResource("horizontalpodautoscaler", hpa.Namespace+"/"+hpa.Name)
 		return nil
 	}
 
 	key := hpa.Namespace + "/" + hpa.Name
 
-	// (1) scaling-error detection — independent of maxed
+	// (1) scaling-error detection — sustained check to avoid transient noise
 	sigs := DetectHPAIssues(hpa)
 	hadError := false
 	for _, sig := range sigs {
 		if sig.Reason == "HPAScalingError" {
-			h.signalEvent(sig)
+			first := h.markFirstScalingError(key)
+			sustained := time.Duration(h.config.HpaMonitor.SustainedMinutes) * time.Minute
+			if sustained <= 0 || h.now().Sub(first) >= sustained {
+				h.signalEvent(sig)
+			}
 			hadError = true
 		}
 	}
 	if !hadError {
+		h.clearFirstScalingError(key)
 		h.correlator.MarkResolved(correlation.BuildKey(hpa.Namespace, key, "HPAScalingError", ""))
 	}
 
@@ -167,6 +175,22 @@ func (h *handler) clearFirstMaxed(key string) {
 	h.hpaMu.Lock()
 	defer h.hpaMu.Unlock()
 	delete(h.firstMaxedHPAs, key)
+}
+
+func (h *handler) markFirstScalingError(key string) time.Time {
+	h.hpaMu.Lock()
+	defer h.hpaMu.Unlock()
+	if t, ok := h.firstScalingErrorHPAs[key]; ok {
+		return t
+	}
+	h.firstScalingErrorHPAs[key] = h.now()
+	return h.firstScalingErrorHPAs[key]
+}
+
+func (h *handler) clearFirstScalingError(key string) {
+	h.hpaMu.Lock()
+	defer h.hpaMu.Unlock()
+	delete(h.firstScalingErrorHPAs, key)
 }
 
 func hpaHasCondition(hpa *autoscalingv2.HorizontalPodAutoscaler, condType autoscalingv2.HorizontalPodAutoscalerConditionType, status corev1.ConditionStatus) bool {
