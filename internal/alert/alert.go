@@ -38,6 +38,92 @@ import (
 	"k8s.io/klog/v2"
 )
 
+// obviousReasons are incident reasons where the root cause is fully
+// self-explanatory from the reason + message alone.  LLM enrichment
+// (log/event analysis) adds no actionable insight for these — the fix
+// is either deterministic (e.g. "increase memory limit") or is an
+// infrastructure concern outside the application's control.
+//
+// Reasons NOT in this list (Error, CrashLoopHighFrequency,
+// HighRestartCount, custom job failures, etc.) still get LLM analysis
+// because the crash pattern or log signal is needed to find the
+// root cause.
+var obviousReasons = map[string]bool{
+	// Container resource limits
+	"OOMKilled": true,
+
+	// Container runtime errors — self-evident from message
+	"ContainerCannotRun":   true,
+	"CreateContainerError": true,
+
+	// Image pull / registry
+	"ImagePullBackOff":   true,
+	"ErrImagePull":       true,
+	"ImageInspectError":  true,
+	"RegistryUnavailable": true,
+	"InvalidImageName":   true,
+	"CreateContainerConfigError": true,
+
+	// Probe failures — app not responding, self-evident
+	"LivenessProbeFailed":  true,
+	"ReadinessProbeFailed": true,
+	"StartupProbeFailed":   true,
+	"ProbeError":           true,
+
+	// Lifecycle hooks — command/config error, self-evident
+	"PostStartHookError": true,
+	"PreStopHookError":   true,
+
+	// Node-level conditions (infrastructure, not application)
+	"NodeNotReady":         true,
+	"MemoryPressure":       true,
+	"DiskPressure":         true,
+	"PIDPressure":          true,
+	"NetworkUnavailable":   true,
+	"ContainerStatusUnknown": true,
+
+	// Scheduling / placement
+	"Unschedulable": true,
+	"PodPending":    true,
+	"NodeAffinity":  true,
+
+	// Kubelet backoff — self-evident (container crashing, retrying)
+	"BackOff": true,
+
+	// Eviction / preemption — DisruptionFilter catches most, but
+	// container termination events can fire before the pod's
+	// Failed/Evicted status is visible in the informer cache.
+	"Evicted":    true,
+	"Preempting": true,
+
+	// Horizontal Pod Autoscaler
+	"HPAMaxedOut":      true,
+	"HPAScalingError":  true,
+
+	// Rollout / DaemonSet
+	"ProgressDeadlineExceeded": true,
+	"DaemonSetUnavailable":     true,
+
+	// Jobs / CronJobs
+	"JobSuspended":        true,
+	"CronJobSuspended":    true,
+	"CronJobNotScheduled": true,
+
+	// TLS certificates
+	"TLSCertExpired":     true,
+	"TLSCertExpiringSoon": true,
+
+	// Startup summary (not a real incident)
+	"PreExistingAtStartup": true,
+
+	// Context deadline / timeout — self-evident
+	"DeadlineExceeded": true,
+}
+
+func isObviousReason(reason string) bool {
+	return obviousReasons[reason]
+}
+
 type deliverJob struct {
 	inc    *model.Incident
 	action model.IncidentAction
@@ -796,7 +882,7 @@ func (a *AlertManager) NotifyIncident(inc *model.Incident, action model.Incident
 
 	snap := inc.Clone()
 	job := deliverJob{inc: snap, action: action}
-	if a.started && a.llm != nil && action == model.ActionCreate {
+	if a.started && a.llm != nil && action == model.ActionCreate && !isObviousReason(inc.Reason) {
 		a.mu.Lock()
 		enqueued := false
 		if !a.stopped {

@@ -673,6 +673,26 @@ func (e *Engine) Process(ev event.Event, owner string, cs *model.ContainerState)
 		return inc, e.edgeAction(inc)
 	}
 
+	// When RestartCount crosses the CrashLoopHighFrequency threshold, the
+	// incident key changes from the raw reason (e.g. "Error") to
+	// "CrashLoopHighFrequency", orphaning the old incident in the state map.
+	// Silently resolve any orphaned incidents with the same ns:owner: prefix
+	// so the state map doesn't accumulate stale entries for the same pod.
+	if cs != nil && int(cs.RestartCount) > defaultCrashLoopHighFreqThreshold {
+		prefix := ev.Namespace + ":" + owner + ":"
+		for k, oldInc := range e.state {
+			if strings.HasPrefix(k, prefix) && k != key &&
+				oldInc.State != model.StateResolved &&
+				oldInc.State != model.StatePendingResolve &&
+				oldInc.Resource == res {
+				oldInc.State = model.StateResolved
+				e.removeIncidentFromNamespaceIndex(oldInc)
+				delete(e.state, k)
+				delete(e.seen, k)
+			}
+		}
+	}
+
 	inc := e.newIncident(ev, owner, cs, key, res, now)
 	e.state[key] = inc
 	e.indexIncidentByNamespace(inc)
@@ -869,6 +889,7 @@ func (e *Engine) ResolveByResource(resource, name string) {
 			if e.config.ResolveHoldDown > 0 {
 				inc.State = model.StatePendingResolve
 				inc.ResolveAt = now.Add(e.config.ResolveHoldDown)
+				e.cleanupCooldown[key] = now.Add(e.config.Window)
 				continue
 			}
 			inc.State = model.StateResolved
@@ -876,6 +897,7 @@ func (e *Engine) ResolveByResource(resource, name string) {
 				e.refreshNodeInhibition(inc.Name)
 			}
 			delete(e.seen, key)
+			e.cleanupCooldown[key] = now.Add(e.config.Window)
 			action := e.edgeAction(inc)
 			baselineChanged = true
 			pending = append(pending, transition{inc.Clone(), action})

@@ -78,10 +78,15 @@ type handler struct {
 	ssLister           appsv1lister.StatefulSetLister
 	eventLister        corev1lister.EventLister
 	hpaLister          autoscalingv2lister.HorizontalPodAutoscalerLister
-	firstMaxedHPAs     map[string]time.Time
-	hpaMu              sync.Mutex
+	firstMaxedHPAs         map[string]time.Time
+	firstScalingErrorHPAs  map[string]time.Time
+	hpaMu                  sync.Mutex
 	firstUnavailableDS map[string]time.Time
 	dsMu               sync.Mutex
+	firstSuspendedCJs  map[string]time.Time
+	cjMu               sync.Mutex
+	firstNodePressure  map[string]time.Time
+	npMu               sync.Mutex
 	secretLister       corev1lister.SecretLister
 	pvcSampler         func(nodeName string) // optional; set when pvcMonitor is enabled
 	now                func() time.Time
@@ -144,8 +149,11 @@ func NewHandler(
 		containerEnrichers: containerEnrichers,
 		correlator:         correlator,
 		alertManager:       alertManager,
-		firstMaxedHPAs:     make(map[string]time.Time),
+		firstMaxedHPAs:         make(map[string]time.Time),
+		firstScalingErrorHPAs:  make(map[string]time.Time),
 		firstUnavailableDS: make(map[string]time.Time),
+		firstSuspendedCJs:  make(map[string]time.Time),
+		firstNodePressure:  make(map[string]time.Time),
 		now:                time.Now,
 	}
 }

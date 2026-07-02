@@ -18,7 +18,7 @@ func (f ContainerKillingFilter) Enrich(ctx *Context) bool {
 		// Graceful shutdown did not work and container was killed during
 		// shutdown. Not really an error
 		if ev.Reason == "Killing" &&
-			strings.Contains(ev.Message, "Stopping container "+container.Name) {
+			strings.TrimSpace(ev.Message) == "Stopping container "+container.Name {
 			return true
 		}
 	}

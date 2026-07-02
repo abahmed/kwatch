@@ -923,7 +923,14 @@ func (c *Controller) buildSeenSet() {
 				if w.Reason == "ContainerCreating" || w.Reason == "PodInitializing" {
 					continue
 				}
-				reason = w.Reason
+				// Match ContainerReasonsFilter: normalize CrashLoopBackOff
+				// to LastTerminationState reason so the baseline key matches
+				// the live signal key.
+				if w.Reason == "CrashLoopBackOff" && cs.LastTerminationState.Terminated != nil {
+					reason = cs.LastTerminationState.Terminated.Reason
+				} else {
+					reason = w.Reason
+				}
 			} else if t := cs.State.Terminated; t != nil {
 				if t.ExitCode == 0 || t.Reason == "Completed" {
 					continue

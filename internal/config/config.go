@@ -316,6 +316,11 @@ type NodeMonitor struct {
 	// Enabled if set to true, it will enable node watcher
 	// By default, this value is true
 	Enabled bool `yaml:"enabled"`
+
+	// SustainedMinutes is how long a node condition (MemoryPressure,
+	// DiskPressure, PIDPressure, NetworkUnavailable) must persist before
+	// alerting, to avoid noise from brief metric spikes. Default 3.
+	SustainedMinutes int `yaml:"sustainedMinutes"`
 }
 
 // HeartbeatMonitor config for dead man's switch
@@ -360,6 +365,10 @@ type DaemonSetMonitor struct {
 type CronJobMonitor struct {
 	// Enabled if set to true, it will watch CronJobs for failures or suspension.
 	Enabled bool `yaml:"enabled"`
+
+	// SustainedMinutes is how long the CronJob must be suspended before alerting,
+	// to avoid noise from intentional suspension during incident response. Default 5.
+	SustainedMinutes int `yaml:"sustainedMinutes"`
 }
 
 // CrdConfig configures the KwatchConfig CRD watcher.
@@ -582,7 +591,7 @@ type Correlation struct {
 	Renotify RenotifyConfig `yaml:"renotify"`
 
 	// MaxBaseline is the maximum number of baseline entries to keep.
-	// Default 2000.
+	// Default 5000.
 	MaxBaseline int `yaml:"maxBaseline"`
 }
 

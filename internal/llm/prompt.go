@@ -17,19 +17,34 @@ const (
 	maxEventChars  = 2000
 )
 
-const systemPrompt = `You are a Kubernetes root cause analysis (RCA) assistant. An incident may concern a pod/container, a node, or a workload controller. You are given whatever signals are available — reason, exit code, container or node status, restart count, events, and logs; any may be missing.
+const systemPrompt = `You are a Kubernetes root cause analysis assistant.
+Identify the root cause and a next step from the incident below.
 
-Find the single most likely root cause, in this priority:
-1. If the logs contain an error, exception, or stack trace, that IS the root cause — quote it. The exit code, restart count, OOM hints, and probe failures are downstream symptoms of it, not the cause.
-2. Otherwise use the most specific signal available: the event, the container/node status or waiting reason, or the exit code.
+Example:
+  Incident: CrashLoopBackOff, exit code 137, container OOMKilled
+  Logs: "java.lang.OutOfMemoryError: Java heap space"
+  Root cause: Java heap exhausted (OutOfMemoryError) causing OOM kill
+  Next step: Increase -Xmx JVM arg and review application memory usage
 
-Treat failed liveness/readiness probes and connection errors to a pod's own address as symptoms of the app not starting — never the root cause; look to the logs for why.
+Analyze in this order (stop at first match):
+1. Log errors, exceptions, stack traces — these ARE the root cause, quote the error
+2. ContainerStatus (OOMKilled, ImagePullBackOff, CrashLoopBackOff, Error) and exit code
+3. Kubernetes events if logs and status are not informative
+4. Restart count as supporting context only
 
-Reply in 2-3 plain sentences, not a list: the most likely root cause, then one concrete next step to fix or investigate it.
+Important: Liveness/readiness probe failures and "connection refused" to a pod's own address are symptoms — the app never started. Never report them as root cause. Find the real reason in logs.
 
-Use only the facts provided. Do not invent details you cannot see — permissions, memory, configuration, secrets, or commands.
+Root cause explains WHY it failed (memory leak, nil pointer, missing dependency), not WHAT happened (pod crashed, container restarted).
 
-Only when there is no error and no informative signal, reply with exactly this line and nothing else: Cause unclear from available signals.`
+Output exactly two lines:
+Root cause: <cause with supporting evidence>
+Next step: <specific investigation or fix>
+
+If no useful signal exists:
+Root cause: Unclear from available signals
+Next step: Inspect complete logs, recent changes, and cluster events
+
+Base your analysis only on the evidence shown below.`
 
 func (c *Client) buildMessages(inc *model.Incident) []chatMessage {
 	return []chatMessage{
@@ -42,27 +57,30 @@ func (c *Client) userPrompt(inc *model.Incident) string {
 	logs := c.redactor.scrub(selectRelevant(inc.Logs, maxLogChars))
 	events := c.redactor.scrub(tailChars(inc.Events, maxEventChars))
 	var b strings.Builder
+
+	fmt.Fprintf(&b, "--- Summary ---\n")
 	fmt.Fprintf(&b, "Reason: %s\n", c.redactor.scrub(inc.Reason))
-	fmt.Fprintf(&b, "Workload: %s\nOwnerKind: %s\nNamespace: %s\n",
+	fmt.Fprintf(&b, "Workload: %s\nKind: %s\nNamespace: %s\n",
 		c.redactor.scrub(inc.Name), c.redactor.scrub(inc.OwnerKind), inc.Namespace)
+	if inc.NodeName != "" {
+		fmt.Fprintf(&b, "Node: %s\n", inc.NodeName)
+	}
 	if inc.ContainerName != "" {
 		fmt.Fprintf(&b, "Container: %s\n", c.redactor.scrub(inc.ContainerName))
 	}
-	fmt.Fprintf(&b, "RestartCount: %d\n", inc.RestartCount)
+	fmt.Fprintf(&b, "Restarts: %d | Duration: %.0f min | Occurrences: %d | AffectedPods: %d\n",
+		inc.RestartCount, inc.LastSeen.Sub(inc.FirstSeen).Minutes(), inc.Count, len(inc.Resources))
 	if inc.LastContainerState != nil {
-		fmt.Fprintf(&b, "ExitCode: %d\n", inc.LastContainerState.ExitCode)
+		if inc.LastContainerState.ExitCode != 0 {
+			fmt.Fprintf(&b, "ExitCode: %d\n", inc.LastContainerState.ExitCode)
+		}
 		if inc.LastContainerState.Reason != "" {
 			fmt.Fprintf(&b, "ContainerStatus: %s\n", inc.LastContainerState.Reason)
-		}
-		if inc.LastContainerState.Status != "" {
-			fmt.Fprintf(&b, "ContainerState: %s\n", inc.LastContainerState.Status)
 		}
 		if inc.LastContainerState.Msg != "" {
 			fmt.Fprintf(&b, "ContainerMessage: %s\n", inc.LastContainerState.Msg)
 		}
 	}
-	fmt.Fprintf(&b, "Occurrences: %d\nAffectedPods: %d\nDurationMin: %.0f\n",
-		inc.Count, len(inc.Resources), inc.LastSeen.Sub(inc.FirstSeen).Minutes())
 	if inc.PeakResources > 0 {
 		fmt.Fprintf(&b, "PeakAffected: %d\n", inc.PeakResources)
 	}
@@ -77,7 +95,7 @@ func (c *Client) userPrompt(inc *model.Incident) string {
 		fmt.Fprintf(&b, "Runbook: %s\n", c.redactor.scrub(inc.Runbook))
 	}
 	if inc.Hint != "" {
-		fmt.Fprintf(&b, "Rule-based hint: %s\n", c.redactor.scrub(inc.Hint))
+		fmt.Fprintf(&b, "Hint: %s\n", c.redactor.scrub(inc.Hint))
 	}
 	if inc.SuppressedPods > 0 {
 		s := fmt.Sprintf("SuppressedPods: %d", inc.SuppressedPods)
@@ -89,14 +107,14 @@ func (c *Client) userPrompt(inc *model.Incident) string {
 			sort.Strings(parts)
 			s += " across: " + strings.Join(parts, ", ")
 		}
-		s += " — dependent pod alerts hidden; this incident may be the root cause\n"
+		s += " — dependent pod alerts hidden\n"
 		fmt.Fprint(&b, s)
 	}
 	if events != "" {
-		fmt.Fprintf(&b, "\nEvents:\n%s\n", events)
+		fmt.Fprintf(&b, "\n--- Events ---\n%s\n", events)
 	}
 	if logs != "" {
-		fmt.Fprintf(&b, "\nLogs:\n%s\n", logs)
+		fmt.Fprintf(&b, "\n--- Logs ---\n%s\n", logs)
 	}
 	return b.String()
 }

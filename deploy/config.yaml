@@ -11,10 +11,10 @@ metadata:
 data:
   config.yaml: |
     # ── General ──────────────────────────────────────────────
-    maxRecentLogLines: <number>    # also caps logs/events in alert message blocks (default 100)
+    maxRecentLogLines: <number>    # also caps logs/events in alert message blocks (default 50)
     ignoreFailedGracefulShutdown: <boolean>
     ignoreDisruptionTerminations: <boolean>    # skip pods evicted during node drains (default true)
-    reportStartupBaseline: <boolean>           # send one startup summary of pre-existing issues (default false)
+    reportStartupBaseline: <boolean>           # send one startup summary of pre-existing issues (default true)
     containerRestartThreshold: <number>        # alert if a container restarts this many times (0 = off, default 0)
     workers: <number>                          # parallel reconcile workers (default 1)
 
@@ -60,16 +60,16 @@ data:
 
     # ── Correlation (incident dedup & lifecycle) ──────────
     correlation:
-      window: <minutes>
-      lifecycleInterval: <minutes>
-      # resolveHoldDown: <seconds>    # Seconds to wait before resolving (flap dampening)
-      # maxBaseline: 2000            # max baseline entries (default 2000)
-      # escalation:
-      #   enabled: <boolean>
-      #   tiers: [<count>, <count>]  # restart count thresholds: [3, 10] → high, critical
+      window: <minutes>                # correlation window (default 10 min)
+      lifecycleInterval: <minutes>     # stale-incident check interval (default 1 min)
+      resolveHoldDown: <seconds>       # flap dampening before resolve (default 300)
+      maxBaseline: 5000                # max baseline entries (default 5000)
+      escalation:
+        enabled: <boolean>             # auto-escalate severity by restart count (default true)
+        tiers: [3, 10, 50]             # restart thresholds: 3→"high", 10→"critical"
       # renotify:
       #   intervalBySeverity:
-      #     default: <minutes>       # renotify interval per severity (0 = off)
+      #     default: <minutes>         # renotify interval per severity (0 = off)
       #   maxPerIncident: <number>
 
     # ── Monitors ──────────────────────────────────────────
@@ -79,6 +79,7 @@ data:
 
     nodeMonitor:
       enabled: <boolean>
+      # sustainedMinutes: <minutes>    # Debounce for pressure conditions (default 3)
 
     rolloutMonitor:
       enabled: <boolean>
@@ -92,6 +93,7 @@ data:
 
     cronJobMonitor:
       enabled: <boolean>
+      # sustainedMinutes: <minutes>    # Debounce for suspension alert (default 5)
 
     hpaMonitor:
       enabled: <boolean>
@@ -113,15 +115,15 @@ data:
       # (e.g. before its consumer pod schedules) has no usage data and is not checked
       # until a pod mounts it. Volumes mounted only during CronJob/Job runs are handled
       # by the last-known-usage cache (retained across unmounts).
-      enabled: <boolean>
-      interval: <minutes>
-      threshold: <percentage>
-      criticalThreshold: <percentage>
-      # clearThreshold: <percentage>   # resolve below this (default 75)
+      enabled: <boolean>           # default true
+      interval: 5                  # check interval (minutes, default 5)
+      threshold: 80                # warn at this % (default 80)
+      criticalThreshold: 90        # critical at this % (default 90)
+      clearThreshold: 75           # resolve below this % (default 75)
 
     # ── AI enrichment (self-hosted) ──────────────────────
     llm:
-      enabled: <boolean>     # the only knob — model/endpoint/redaction are fixed in code
+      enabled: <boolean>     # enabled by default; deploy kwatch-llm sidecar for RCA
 
     # ── Templates / Runbooks ──────────────────────────────
     # templates:
@@ -134,8 +136,8 @@ data:
 
     # ── Health check ──────────────────────────────────────
     healthCheck:
-      enabled: <boolean>
-      port: <port>
+      enabled: <boolean>           # default true
+      port: 8060                   # listen port (default 8060)
       # pprof: <boolean>           # set true to enable /debug/pprof/* profiling endpoints
       # diagnostics: <boolean>     # set true to enable /incidents, /test-alert endpoints
       # diagnosticsToken: "<token>" # optional Bearer token for diagnostic endpoints
@@ -156,11 +158,11 @@ data:
     # ── Inhibition / Storm ────────────────────────────────
     # inhibition:
     #   nodeSuppressesPods: <boolean>  # suppress pod alerts on unhealthy nodes (default true)
-    # storm:
-    #   enabled: <boolean>
-    #   threshold: <number>
-    #   windowMinutes: <minutes>
-    #   digestIntervalMinutes: <minutes>
+    # storm:                           # enabled by default; batches rapid alerts into digests
+    #   enabled: <boolean>             # (default true)
+    #   threshold: 10                  # max creates per window before digest mode
+    #   windowMinutes: 5               # sliding window (minutes)
+    #   digestIntervalMinutes: 5       # digest summary interval (minutes)
 
     # ── CRD watcher ───────────────────────────────────────
     # crd:
