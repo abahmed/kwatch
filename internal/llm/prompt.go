@@ -3,7 +3,6 @@ package llm
 import (
 	"fmt"
 	"regexp"
-	"sort"
 	"strings"
 	"time"
 
@@ -17,32 +16,23 @@ const (
 	maxEventChars  = 2000
 )
 
-const systemPrompt = `You are a Kubernetes root cause analysis assistant.
-Identify the root cause and a next step from the incident below.
+const systemPrompt = `You are a Kubernetes root cause analysis assistant. You are called for a new incident whose reason alone is not sufficiently self-explanatory — logs and events are the primary signal.
 
 Example:
-  Incident: CrashLoopBackOff, exit code 137, container OOMKilled
-  Logs: "java.lang.OutOfMemoryError: Java heap space"
-  Root cause: Java heap exhausted (OutOfMemoryError) causing OOM kill
-  Next step: Increase -Xmx JVM arg and review application memory usage
+  Logs: "panic: runtime error: invalid memory address or nil pointer dereference"
+  Nil pointer dereference in application code
 
 Analyze in this order (stop at first match):
 1. Log errors, exceptions, stack traces — these ARE the root cause, quote the error
-2. ContainerStatus (OOMKilled, ImagePullBackOff, CrashLoopBackOff, Error) and exit code
-3. Kubernetes events if logs and status are not informative
-4. Restart count as supporting context only
+2. Kubernetes events if logs are not informative
 
 Important: Liveness/readiness probe failures and "connection refused" to a pod's own address are symptoms — the app never started. Never report them as root cause. Find the real reason in logs.
 
-Root cause explains WHY it failed (memory leak, nil pointer, missing dependency), not WHAT happened (pod crashed, container restarted).
+Root cause explains WHY it failed (bug, config error, dependency issue), not WHAT happened (pod crashed, container restarted).
 
-Output exactly two lines:
-Root cause: <cause with supporting evidence>
-Next step: <specific investigation or fix>
+Output exactly 1-2 sentences describing the root cause without any prefix or label. Nothing else.
 
-If no useful signal exists:
-Root cause: Unclear from available signals
-Next step: Inspect complete logs, recent changes, and cluster events
+If no useful signal exists respond with: Unclear from available signals
 
 Base your analysis only on the evidence shown below.`
 
@@ -58,7 +48,6 @@ func (c *Client) userPrompt(inc *model.Incident) string {
 	events := c.redactor.scrub(tailChars(inc.Events, maxEventChars))
 	var b strings.Builder
 
-	fmt.Fprintf(&b, "--- Summary ---\n")
 	fmt.Fprintf(&b, "Reason: %s\n", c.redactor.scrub(inc.Reason))
 	fmt.Fprintf(&b, "Workload: %s\nKind: %s\nNamespace: %s\n",
 		c.redactor.scrub(inc.Name), c.redactor.scrub(inc.OwnerKind), inc.Namespace)
@@ -67,48 +56,6 @@ func (c *Client) userPrompt(inc *model.Incident) string {
 	}
 	if inc.ContainerName != "" {
 		fmt.Fprintf(&b, "Container: %s\n", c.redactor.scrub(inc.ContainerName))
-	}
-	fmt.Fprintf(&b, "Restarts: %d | Duration: %.0f min | Occurrences: %d | AffectedPods: %d\n",
-		inc.RestartCount, inc.LastSeen.Sub(inc.FirstSeen).Minutes(), inc.Count, len(inc.Resources))
-	if inc.LastContainerState != nil {
-		if inc.LastContainerState.ExitCode != 0 {
-			fmt.Fprintf(&b, "ExitCode: %d\n", inc.LastContainerState.ExitCode)
-		}
-		if inc.LastContainerState.Reason != "" {
-			fmt.Fprintf(&b, "ContainerStatus: %s\n", inc.LastContainerState.Reason)
-		}
-		if inc.LastContainerState.Msg != "" {
-			fmt.Fprintf(&b, "ContainerMessage: %s\n", inc.LastContainerState.Msg)
-		}
-	}
-	if inc.PeakResources > 0 {
-		fmt.Fprintf(&b, "PeakAffected: %d\n", inc.PeakResources)
-	}
-	if len(inc.Containers) > 1 {
-		names := make([]string, 0, len(inc.Containers))
-		for n := range inc.Containers {
-			names = append(names, n)
-		}
-		fmt.Fprintf(&b, "Containers: %s\n", strings.Join(names, ", "))
-	}
-	if inc.Runbook != "" {
-		fmt.Fprintf(&b, "Runbook: %s\n", c.redactor.scrub(inc.Runbook))
-	}
-	if inc.Hint != "" {
-		fmt.Fprintf(&b, "Hint: %s\n", c.redactor.scrub(inc.Hint))
-	}
-	if inc.SuppressedPods > 0 {
-		s := fmt.Sprintf("SuppressedPods: %d", inc.SuppressedPods)
-		if len(inc.SuppressedOwners) > 0 {
-			parts := make([]string, 0, len(inc.SuppressedOwners))
-			for o, c := range inc.SuppressedOwners {
-				parts = append(parts, fmt.Sprintf("%s (%d)", o, c))
-			}
-			sort.Strings(parts)
-			s += " across: " + strings.Join(parts, ", ")
-		}
-		s += " — dependent pod alerts hidden\n"
-		fmt.Fprint(&b, s)
 	}
 	if events != "" {
 		fmt.Fprintf(&b, "\n--- Events ---\n%s\n", events)

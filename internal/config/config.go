@@ -130,6 +130,12 @@ type Config struct {
 	// owner-kind. e.g. {"OOMKilled": "high", "CrashLoopBackOff": "high"}
 	SeverityByReason map[string]string `yaml:"severityByReason"`
 
+	// ScheduleMonitor configures scheduling delay diagnostics.
+	ScheduleMonitor ScheduleMonitor `yaml:"scheduleMonitor"`
+
+	// OomMonitor configures OOM pattern / memory leak detection.
+	OomMonitor OomMonitor `yaml:"oomMonitor"`
+
 	// PendingPodMonitor configures Pending-phase pod detection.
 	PendingPodMonitor PendingPodMonitor `yaml:"pendingPodMonitor"`
 
@@ -138,6 +144,15 @@ type Config struct {
 
 	// JobMonitor configures failed/suspended Job detection.
 	JobMonitor JobMonitor `yaml:"jobMonitor"`
+
+	// StatefulSetMonitor configures rollout-stuck detection for StatefulSets.
+	StatefulSetMonitor StatefulSetMonitor `yaml:"statefulSetMonitor"`
+
+	// PdbMonitor configures PDB violation detection.
+	PdbMonitor PdbMonitor `yaml:"pdbMonitor"`
+
+	// NodeResourceMonitor configures node resource overcommit prediction.
+	NodeResourceMonitor NodeResourceMonitor `yaml:"nodeResourceMonitor"`
 
 	// DaemonSetMonitor configures rollout-stuck detection for DaemonSets.
 	DaemonSetMonitor DaemonSetMonitor `yaml:"daemonSetMonitor"`
@@ -150,6 +165,21 @@ type Config struct {
 
 	// TlsMonitor configures TLS certificate expiry monitoring.
 	TlsMonitor TlsMonitor `yaml:"tlsMonitor"`
+
+	// ServiceMonitor configures service endpoint health monitoring.
+	ServiceMonitor ServiceMonitor `yaml:"serviceMonitor"`
+
+	// AdmissionWebhookMonitor configures admission webhook failure monitoring.
+	AdmissionWebhookMonitor AdmissionWebhookMonitor `yaml:"admissionWebhookMonitor"`
+
+	// ControlPlaneMonitor configures control-plane health monitoring.
+	ControlPlaneMonitor ControlPlaneMonitor `yaml:"controlPlaneMonitor"`
+
+	// IngressMonitor configures ingress backend health monitoring.
+	IngressMonitor IngressMonitor `yaml:"ingressMonitor"`
+
+	// NetworkPolicyMonitor configures network policy issue monitoring.
+	NetworkPolicyMonitor NetworkPolicyMonitor `yaml:"networkPolicyMonitor"`
 
 	// Silences is an optional list of silence rules that suppress matching incidents.
 	Silences []SilenceRule `yaml:"silences"`
@@ -170,8 +200,9 @@ type Config struct {
 	// Inhibition configures suppression rules between monitors.
 	Inhibition Inhibition `yaml:"inhibition"`
 
-	// StormConfig configures digest aggregation for alert storms.
-	StormConfig StormConfig `yaml:"storm"`
+	// SmartGrouping configures coalescing same-reason incidents across
+	// owners into a single notification within a time window.
+	SmartGrouping SmartGrouping `yaml:"smartGrouping"`
 
 	// CrdConfig configures the KwatchConfig CRD watcher.
 	CrdConfig CrdConfig `yaml:"crd"`
@@ -213,18 +244,6 @@ var KnownProviders = map[string]bool{
 	"webhook": true, "zenduty": true, "googlechat": true,
 }
 
-// StormConfig configures digest aggregation for high-frequency incidents.
-type StormConfig struct {
-	// Enabled if set to true, excessive creates are batched into a digest.
-	Enabled bool `yaml:"enabled"`
-	// Threshold is the max creates per window before digest mode activates.
-	Threshold int `yaml:"threshold"`
-	// WindowMinutes is the sliding window for tracking create rate.
-	WindowMinutes int `yaml:"windowMinutes"`
-	// DigestIntervalMinutes is how often a digest summary is sent.
-	DigestIntervalMinutes int `yaml:"digestIntervalMinutes"`
-}
-
 // Inhibition configures cross-monitor suppression rules.
 type Inhibition struct {
 	// NodeSuppressesPods if true, pod incidents on a node with an active
@@ -252,6 +271,36 @@ type TlsMonitor struct {
 	// CriticalThreshold is the number of days before expiry at which severity
 	// is raised to "high". Default 3.
 	CriticalThreshold int `yaml:"criticalThreshold"`
+}
+
+// ServiceMonitor configures service endpoint health monitoring.
+type ServiceMonitor struct {
+	// Enabled if set to true, it will monitor service endpoint health.
+	Enabled bool `yaml:"enabled"`
+}
+
+// AdmissionWebhookMonitor configures admission webhook failure monitoring.
+type AdmissionWebhookMonitor struct {
+	// Enabled if set to true, it will monitor admission webhook failures.
+	Enabled bool `yaml:"enabled"`
+}
+
+// ControlPlaneMonitor configures control-plane health monitoring.
+type ControlPlaneMonitor struct {
+	// Enabled if set to true, it will monitor control-plane health.
+	Enabled bool `yaml:"enabled"`
+}
+
+// IngressMonitor configures ingress backend health monitoring.
+type IngressMonitor struct {
+	// Enabled if set to true, it will monitor ingress backend health.
+	Enabled bool `yaml:"enabled"`
+}
+
+// NetworkPolicyMonitor configures network policy issue monitoring.
+type NetworkPolicyMonitor struct {
+	// Enabled if set to true, it will monitor network policy issues.
+	Enabled bool `yaml:"enabled"`
 }
 
 // App confing struct
@@ -342,6 +391,10 @@ type RolloutMonitor struct {
 	// Enabled if set to true, it will watch Deployments for stuck rollouts
 	// By default, this value is true
 	Enabled bool `yaml:"enabled"`
+
+	// SustainedMinutes is how long deployment pods must be unavailable
+	// before alerting, to avoid noise from rolling updates. Default 2.
+	SustainedMinutes int `yaml:"sustainedMinutes"`
 }
 
 // JobMonitor config struct
@@ -349,6 +402,46 @@ type JobMonitor struct {
 	// Enabled if set to true, it will watch Jobs for failures
 	// By default, this value is true
 	Enabled bool `yaml:"enabled"`
+}
+
+// StatefulSetMonitor configures rollout-stuck detection for StatefulSets.
+type StatefulSetMonitor struct {
+	// Enabled if set to true, it will watch StatefulSets for stuck rollouts.
+	Enabled bool `yaml:"enabled"`
+
+	// SustainedMinutes is how long the StatefulSet must be unavailable before
+	// alerting, to avoid noise from rolling updates and brief node blips.
+	SustainedMinutes int `yaml:"sustainedMinutes"`
+}
+
+// PdbMonitor configures PDB violation detection.
+type PdbMonitor struct {
+	// Enabled if set to true, it will watch PodDisruptionBudgets for violations.
+	Enabled bool `yaml:"enabled"`
+
+	// SustainedMinutes is how long the PDB must be blocking before alerting.
+	SustainedMinutes int `yaml:"sustainedMinutes"`
+}
+
+// NodeResourceMonitor configures node resource overcommit prediction.
+type NodeResourceMonitor struct {
+	// Enabled if set to true, periodically checks node resource overcommit levels.
+	Enabled bool `yaml:"enabled"`
+
+	// IntervalSeconds is how often to check node resource usage. Default 300.
+	IntervalSeconds int `yaml:"intervalSeconds"`
+
+	// CpuWarning is the CPU overcommit ratio for warning (e.g. 2.0 = 200%).
+	CpuWarning float64 `yaml:"cpuWarning"`
+
+	// CpuCritical is the CPU overcommit ratio for critical.
+	CpuCritical float64 `yaml:"cpuCritical"`
+
+	// MemWarning is the memory overcommit ratio for warning.
+	MemWarning float64 `yaml:"memWarning"`
+
+	// MemCritical is the memory overcommit ratio for critical.
+	MemCritical float64 `yaml:"memCritical"`
 }
 
 // DaemonSetMonitor configures rollout-stuck detection for DaemonSets.
@@ -375,6 +468,32 @@ type CronJobMonitor struct {
 type CrdConfig struct {
 	// Enabled if set to true, watches KwatchConfig CRs for live config changes.
 	Enabled bool `yaml:"enabled"`
+}
+
+// SmartGrouping configures coalescing same-reason incidents across
+// different owners into a single notification within a time window.
+type SmartGrouping struct {
+	// WindowSeconds is the time window in seconds for grouping same-reason
+	// incidents together. Default 60. Set to 0 to disable grouping.
+	WindowSeconds int `yaml:"windowSeconds"`
+}
+
+// ScheduleMonitor configures scheduling delay diagnostics.
+type ScheduleMonitor struct {
+	// Enabled if set to true, adds scheduling duration to Unschedulable hints.
+	Enabled bool `yaml:"enabled"`
+}
+
+// OomMonitor configures OOM pattern / memory leak detection.
+type OomMonitor struct {
+	// Enabled if set to true, tracks OOM frequency per container.
+	Enabled bool `yaml:"enabled"`
+
+	// Threshold is the number of OOMs within WindowMinutes to flag as repeating.
+	Threshold int `yaml:"threshold"`
+
+	// WindowMinutes is the sliding window for OOM tracking.
+	WindowMinutes int `yaml:"windowMinutes"`
 }
 
 // PendingPodMonitor config struct

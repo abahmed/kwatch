@@ -38,6 +38,11 @@ var defaultHints = map[string]string{
 	"DaemonSetUnavailable":     "DaemonSet has unavailable pods — check node capacity and pod status",
 	"CronJobSuspended":         "CronJob is suspended — check suspension request or schedule configuration",
 	"CronJobNotScheduled":      "CronJob has not been scheduled recently — check schedule expression and job history",
+	"OOMRepeating":             "Container repeatedly OOM-killed — potential memory leak; consider increasing memory limits or investigating memory growth",
+	"StsUnavailable":           "StatefulSet has unavailable pods — check PVC, pod status, or rollout progress",
+	"PdbViolation":             "PodDisruptionBudget is blocking voluntary disruptions — check pod health or reduce replica count",
+	"NodeResourceHigh":         "Node resource overcommit is high — CPU or memory requests exceed allocatable by a significant margin",
+	"NodeResourceCritical":     "Node resource overcommit is critical — CPU or memory requests far exceed allocatable; risk of resource starvation",
 }
 
 var exitCodeHints = map[int32]string{

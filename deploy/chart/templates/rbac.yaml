@@ -12,6 +12,15 @@ rules:
 - apiGroups: ["apps"]
   resources: ["daemonsets", "statefulsets", "deployments", "replicasets"]
   verbs: ["get", "watch", "list"]
+- apiGroups: [""]
+  resources: ["services", "endpoints"]
+  verbs: ["get", "watch", "list"]
+- apiGroups: ["admissionregistration.k8s.io"]
+  resources: ["mutatingwebhookconfigurations", "validatingwebhookconfigurations"]
+  verbs: ["get", "watch", "list"]
+- apiGroups: ["networking.k8s.io"]
+  resources: ["ingresses", "networkpolicies"]
+  verbs: ["get", "watch", "list"]
 {{- if and .Values.config.tlsMonitor .Values.config.tlsMonitor.enabled }}
 - apiGroups: [""]
   resources: ["secrets"]
@@ -27,6 +36,9 @@ rules:
   verbs: ["get", "watch", "list"]
 - apiGroups: ["batch"]
   resources: ["jobs", "cronjobs"]
+  verbs: ["get", "watch", "list"]
+- apiGroups: ["policy"]
+  resources: ["poddisruptionbudgets"]
   verbs: ["get", "watch", "list"]
 ---
 apiVersion: rbac.authorization.k8s.io/v1

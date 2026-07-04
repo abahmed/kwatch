@@ -44,6 +44,8 @@ type Event struct {
 	Resource      string // "pod", "node", "pvc"
 	PodName       string
 	ContainerName string
+	Image         string
+	Message       string
 	Namespace     string
 	NodeName      string
 	Reason        string

@@ -2,6 +2,7 @@ package correlation
 
 import (
 	"fmt"
+	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -11,6 +12,12 @@ import (
 	"github.com/abahmed/kwatch/internal/model"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	appsv1 "k8s.io/api/apps/v1"
+	corev1 "k8s.io/api/core/v1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/labels"
+	appsv1lister "k8s.io/client-go/listers/apps/v1"
+	corev1lister "k8s.io/client-go/listers/core/v1"
 )
 
 func mockClock(t time.Time) func() time.Time {
@@ -517,11 +524,15 @@ func TestEscalationFirstCrossingIsHigh(t *testing.T) {
 }
 
 func TestEscalationSecondCrossingIsCritical(t *testing.T) {
-	e := escTestEngine()
+	e := NewEngine(Config{
+		Window:            10 * time.Minute,
+		EscalationEnabled: true,
+		EscalationTiers:   []int{1, 3, 5},
+	})
 	ev := event.Event{PodName: "p", Namespace: "ns", Reason: "OOMKilled"}
-	e.Process(ev, "dep", &model.ContainerState{RestartCount: 2})
-	e.Process(ev, "dep", &model.ContainerState{RestartCount: 4}) // → high
-	inc, action := e.Process(ev, "dep", &model.ContainerState{RestartCount: 11})
+	e.Process(ev, "dep", &model.ContainerState{RestartCount: 0})
+	e.Process(ev, "dep", &model.ContainerState{RestartCount: 2}) // crosses tier 1 → high
+	inc, action := e.Process(ev, "dep", &model.ContainerState{RestartCount: 4}) // crosses tier 3 → critical
 	assert.Equal(t, model.ActionUpdate, action)
 	assert.Equal(t, "critical", inc.Severity)
 }
@@ -538,7 +549,7 @@ func TestEscalationDisabledIsNoop(t *testing.T) {
 	e := newTestEngine() // escalation off
 	ev := event.Event{PodName: "p", Namespace: "ns", Reason: "OOMKilled"}
 	e.Process(ev, "dep", &model.ContainerState{RestartCount: 2})
-	_, action := e.Process(ev, "dep", &model.ContainerState{RestartCount: 50})
+	_, action := e.Process(ev, "dep", &model.ContainerState{RestartCount: 4})
 	assert.Equal(t, model.ActionSkip, action) // no escalation, same sig
 }
 
@@ -604,163 +615,6 @@ func TestInhibitionSuppressedCounter(t *testing.T) {
 			assert.Equal(t, 1, nodeInc.SuppressedOwners["dep"])
 		}
 	}
-}
-
-// ── Storm tests ───────────────────────────────────────────────────
-
-func stormEngine() *Engine {
-	return NewEngine(Config{
-		Window:              10 * time.Minute,
-		StormEnabled:        true,
-		StormThreshold:      3,
-		StormWindow:         time.Minute,
-		StormDigestInterval: time.Nanosecond,
-	})
-}
-
-func TestStormBuffersCreatesOverThreshold(t *testing.T) {
-	e := stormEngine()
-	var digests int
-	e.config.LifecycleHook = func(inc *model.Incident, action model.IncidentAction) {
-		if action == model.ActionDigestFlush {
-			digests++
-		}
-	}
-	for i := 0; i < 5; i++ {
-		ev := event.Event{
-			PodName:   fmt.Sprintf("p%d", i),
-			Namespace: "ns",
-			Reason:    fmt.Sprintf("R%d", i),
-		}
-		_, action := e.Process(ev, fmt.Sprintf("o%d", i), nil)
-		if action == model.ActionDigest {
-			digests++
-		}
-	}
-	assert.GreaterOrEqual(t, digests, 1)
-	assert.NotEmpty(t, e.digestBuf)
-	assert.Equal(t, 5, len(e.state))
-}
-
-func TestStormFlushEmitsSummary(t *testing.T) {
-	e := stormEngine()
-	var flushActions int
-	var lastDigest *model.Incident
-	e.config.LifecycleHook = func(inc *model.Incident, action model.IncidentAction) {
-		if action == model.ActionDigestFlush {
-			flushActions++
-			lastDigest = inc
-		}
-	}
-	// fill storm buffer — use same reason so summary groups them
-	for i := 0; i < 5; i++ {
-		e.Process(event.Event{
-			PodName: fmt.Sprintf("p%d", i), Namespace: "ns", Reason: "OOMKilled",
-		}, fmt.Sprintf("o%d", i), nil)
-	}
-	// trigger lifecycle
-	e.checkLifecycle()
-	assert.GreaterOrEqual(t, flushActions, 1)
-	if lastDigest != nil {
-		// threshold=3, so last 3 creates are buffered
-		assert.Equal(t, 3, lastDigest.Count)
-		assert.Equal(t, "DigestSummary", lastDigest.Reason)
-		assert.NotEmpty(t, lastDigest.Hint)
-	}
-}
-
-func TestStormDisabledNeverDigests(t *testing.T) {
-	e := NewEngine(Config{
-		Window: 10 * time.Minute,
-	})
-	var digests int
-	e.config.LifecycleHook = func(inc *model.Incident, action model.IncidentAction) {
-		if action == model.ActionDigestFlush || action == model.ActionDigest {
-			digests++
-		}
-	}
-	for i := 0; i < 20; i++ {
-		e.Process(event.Event{
-			PodName: fmt.Sprintf("p%d", i), Namespace: "ns", Reason: fmt.Sprintf("R%d", i),
-		}, fmt.Sprintf("o%d", i), nil)
-	}
-	assert.Equal(t, 0, digests)
-}
-
-func TestStormResolvesStillNotify(t *testing.T) {
-	e := stormEngine()
-	var resolves int
-	e.config.LifecycleHook = func(inc *model.Incident, action model.IncidentAction) {
-		if action == model.ActionResolved {
-			resolves++
-		}
-	}
-	// create an incident then remove the pod
-	ev := event.Event{PodName: "p1", Namespace: "ns", Reason: "CrashLoopBackOff"}
-	e.Process(ev, "dep", nil)
-	e.RemovePod("ns", "p1")
-	assert.GreaterOrEqual(t, resolves, 1)
-}
-
-func TestStormFlushWithDistinctReasons(t *testing.T) {
-	e := stormEngine()
-	var flushActions int
-	var lastDigest *model.Incident
-	e.config.LifecycleHook = func(inc *model.Incident, action model.IncidentAction) {
-		if action == model.ActionDigestFlush {
-			flushActions++
-			lastDigest = inc
-		}
-	}
-	// Use distinct reasons so buildDigestSummary returns "" — the flush must
-	// still emit with a count-only fallback message.
-	// Storm threshold is 3, so only the last 3 events (indices 2,3,4) are buffered.
-	for i := 0; i < 5; i++ {
-		e.Process(event.Event{
-			PodName: fmt.Sprintf("p%d", i), Namespace: "ns", Reason: fmt.Sprintf("R%d", i),
-		}, fmt.Sprintf("o%d", i), nil)
-	}
-	e.checkLifecycle()
-	assert.GreaterOrEqual(t, flushActions, 1)
-	if lastDigest != nil {
-		assert.Equal(t, 3, lastDigest.Count)
-		assert.Equal(t, "DigestSummary", lastDigest.Reason)
-		assert.Contains(t, lastDigest.Hint, "3 new incident")
-	}
-}
-
-func TestDigestedIncidentResolvesAfterRealEdge(t *testing.T) {
-	e := stormEngine()
-	// Fill storm buffer — last 3 (i=2,3,4) are digested (threshold=3)
-	for i := 0; i < 5; i++ {
-		e.Process(event.Event{
-			PodName: fmt.Sprintf("p%d", i), Namespace: "ns", Reason: fmt.Sprintf("R%d", i),
-		}, fmt.Sprintf("o%d", i), nil)
-	}
-	// Use p2 — it was digested (i=2 is the 3rd event, which met the threshold)
-	key := "ns:o2:R2:"
-	inc, ok := e.state[key]
-	require.True(t, ok, "p2 must exist in state")
-	require.True(t, inc.Digested, "p2 must be digested")
-
-	// Process the same incident with a different severity → sig changes,
-	// edgeAction clears Digested and returns ActionUpdate.
-	inc, action := e.Process(event.Event{
-		PodName: "p2", Namespace: "ns", Reason: "R2", Severity: "high",
-	}, "o2", nil)
-	require.NotNil(t, inc)
-	assert.Equal(t, model.ActionUpdate, action)
-	assert.False(t, inc.Digested, "Digested must be cleared after a real edge fires")
-
-	// Now resolve — should emit ActionResolved (not suppressed)
-	var resolved bool
-	e.config.LifecycleHook = func(inc *model.Incident, action model.IncidentAction) {
-		if action == model.ActionResolved {
-			resolved = true
-		}
-	}
-	e.MarkResolved(key)
-	assert.True(t, resolved, "digested incident must resolve when Digested was cleared")
 }
 
 func TestMarkResolvedIdempotent(t *testing.T) {
@@ -1254,6 +1108,320 @@ func TestUnschedulableSuppressedDuringNodeIncident(t *testing.T) {
 	}
 }
 
+// ── mock listers for isOwnerHealthy tests ─────────────────────
+
+type mockDeployLister struct {
+	appsv1lister.DeploymentLister
+	getFn func(ns, name string) (*appsv1.Deployment, error)
+}
+
+func (m *mockDeployLister) Deployments(namespace string) appsv1lister.DeploymentNamespaceLister {
+	return &mockDeployNsLister{getFn: func(name string) (*appsv1.Deployment, error) {
+		return m.getFn(namespace, name)
+	}}
+}
+
+type mockDeployNsLister struct {
+	appsv1lister.DeploymentNamespaceLister
+	getFn func(name string) (*appsv1.Deployment, error)
+}
+
+func (m *mockDeployNsLister) Get(name string) (*appsv1.Deployment, error) {
+	return m.getFn(name)
+}
+func (m *mockDeployNsLister) List(selector labels.Selector) ([]*appsv1.Deployment, error) {
+	return nil, nil
+}
+
+type mockSSLister struct {
+	appsv1lister.StatefulSetLister
+	getFn func(ns, name string) (*appsv1.StatefulSet, error)
+}
+
+func (m *mockSSLister) StatefulSets(namespace string) appsv1lister.StatefulSetNamespaceLister {
+	return &mockSSNsLister{getFn: func(name string) (*appsv1.StatefulSet, error) {
+		return m.getFn(namespace, name)
+	}}
+}
+
+type mockSSNsLister struct {
+	appsv1lister.StatefulSetNamespaceLister
+	getFn func(name string) (*appsv1.StatefulSet, error)
+}
+
+func (m *mockSSNsLister) Get(name string) (*appsv1.StatefulSet, error) {
+	return m.getFn(name)
+}
+func (m *mockSSNsLister) List(selector labels.Selector) ([]*appsv1.StatefulSet, error) {
+	return nil, nil
+}
+
+type mockDSLister struct {
+	appsv1lister.DaemonSetLister
+	getFn func(ns, name string) (*appsv1.DaemonSet, error)
+}
+
+func (m *mockDSLister) DaemonSets(namespace string) appsv1lister.DaemonSetNamespaceLister {
+	return &mockDSNsLister{getFn: func(name string) (*appsv1.DaemonSet, error) {
+		return m.getFn(namespace, name)
+	}}
+}
+
+type mockDSNsLister struct {
+	appsv1lister.DaemonSetNamespaceLister
+	getFn func(name string) (*appsv1.DaemonSet, error)
+}
+
+func (m *mockDSNsLister) Get(name string) (*appsv1.DaemonSet, error) {
+	return m.getFn(name)
+}
+func (m *mockDSNsLister) List(selector labels.Selector) ([]*appsv1.DaemonSet, error) {
+	return nil, nil
+}
+
+func TestSnapshotAllRestoreIncidentsRoundTrip(t *testing.T) {
+	e := NewEngine(Config{
+		Window: 10 * time.Minute,
+	})
+	ev := event.Event{PodName: "pod-1", Namespace: "ns", Reason: "CrashLoopBackOff"}
+	inc, _ := e.Process(ev, "dep", &model.ContainerState{RestartCount: 2})
+	require.NotNil(t, inc)
+	require.NotEmpty(t, inc.Key)
+
+	// Snapshot
+	snap := e.SnapshotAll()
+	require.NotNil(t, snap)
+	require.Contains(t, snap, inc.Key)
+
+	snapped := snap[inc.Key]
+	assert.Equal(t, inc.Reason, snapped.Reason)
+	assert.Equal(t, inc.Count, snapped.Count)
+	assert.Equal(t, inc.State, snapped.State)
+
+	// Restore into a fresh engine with matching baseline
+	e2 := NewEngine(Config{
+		Window:   10 * time.Minute,
+		Baseline: map[string]map[string]int64{inc.Key: {"pod-1": time.Now().Unix()}},
+	})
+	e2.RestoreIncidents(snap)
+	assert.Equal(t, 1, e2.ActiveCount())
+
+	// Verify restored incidents are accessible
+	e2.mu.Lock()
+	restored, exists := e2.state[inc.Key]
+	e2.mu.Unlock()
+	assert.True(t, exists)
+	assert.Equal(t, inc.Reason, restored.Reason)
+	assert.Equal(t, inc.Namespace, restored.Namespace)
+	assert.False(t, restored.LastSeen.IsZero())
+}
+
+func TestSnapshotAllEmpty(t *testing.T) {
+	e := NewEngine(Config{
+		Window: 10 * time.Minute,
+	})
+	snap := e.SnapshotAll()
+	assert.NotNil(t, snap)
+	assert.Equal(t, 0, len(snap))
+}
+
+func TestRestoreIncidentsBumpsLastSeen(t *testing.T) {
+	e := NewEngine(Config{
+		Window: 10 * time.Minute,
+	})
+	ev := event.Event{PodName: "pod-1", Namespace: "ns", Reason: "OOMKilled"}
+	inc, _ := e.Process(ev, "dep", &model.ContainerState{RestartCount: 1})
+	require.NotNil(t, inc)
+	originalLastSeen := inc.LastSeen
+
+	time.Sleep(time.Millisecond)
+
+	snap := e.SnapshotAll()
+	e2 := NewEngine(Config{
+		Window:   10 * time.Minute,
+		Baseline: map[string]map[string]int64{inc.Key: {"pod-1": time.Now().Unix()}},
+	})
+	e2.RestoreIncidents(snap)
+
+	e2.mu.Lock()
+	restored, exists := e2.state[inc.Key]
+	e2.mu.Unlock()
+	assert.True(t, exists, "restored incident must exist in state")
+	assert.True(t, restored.LastSeen.After(originalLastSeen),
+		"expected restored LastSeen (%v) to be after original (%v)", restored.LastSeen, originalLastSeen)
+}
+
+func TestIsOwnerHealthyDeploymentHealthy(t *testing.T) {
+	e := NewEngine(Config{
+		Window: 10 * time.Minute,
+	})
+	e.SetDeployLister(&mockDeployLister{
+		getFn: func(ns, name string) (*appsv1.Deployment, error) {
+			return &appsv1.Deployment{
+				ObjectMeta: metav1.ObjectMeta{Generation: 2},
+				Status: appsv1.DeploymentStatus{
+					ObservedGeneration:  2,
+					Replicas:            3,
+					ReadyReplicas:       3,
+					UnavailableReplicas: 0,
+				},
+			}, nil
+		},
+	})
+
+	inc := &model.Incident{
+		Namespace: "ns",
+		Name:      "my-deploy",
+		OwnerKind: "Deployment",
+		Resource:  "pod",
+	}
+	assert.True(t, e.isOwnerHealthy(inc))
+}
+
+func TestIsOwnerHealthyDeploymentUnhealthy(t *testing.T) {
+	e := NewEngine(Config{
+		Window: 10 * time.Minute,
+	})
+	e.SetDeployLister(&mockDeployLister{
+		getFn: func(ns, name string) (*appsv1.Deployment, error) {
+			return &appsv1.Deployment{
+				ObjectMeta: metav1.ObjectMeta{Generation: 2},
+				Status: appsv1.DeploymentStatus{
+					ObservedGeneration:  2,
+					Replicas:            3,
+					ReadyReplicas:       2,
+					UnavailableReplicas: 1,
+				},
+			}, nil
+		},
+	})
+
+	inc := &model.Incident{Namespace: "ns", Name: "my-deploy", OwnerKind: "Deployment", Resource: "pod"}
+	assert.False(t, e.isOwnerHealthy(inc))
+}
+
+func TestIsOwnerHealthyDeploymentNotObserved(t *testing.T) {
+	e := NewEngine(Config{
+		Window: 10 * time.Minute,
+	})
+	e.SetDeployLister(&mockDeployLister{
+		getFn: func(ns, name string) (*appsv1.Deployment, error) {
+			return &appsv1.Deployment{
+				ObjectMeta: metav1.ObjectMeta{Generation: 2},
+				Status: appsv1.DeploymentStatus{
+					ObservedGeneration:  1,
+					Replicas:            3,
+					ReadyReplicas:       3,
+					UnavailableReplicas: 0,
+				},
+			}, nil
+		},
+	})
+
+	inc := &model.Incident{Namespace: "ns", Name: "my-deploy", OwnerKind: "Deployment", Resource: "pod"}
+	assert.False(t, e.isOwnerHealthy(inc))
+}
+
+func TestIsOwnerHealthyDeploymentNotFound(t *testing.T) {
+	e := NewEngine(Config{
+		Window: 10 * time.Minute,
+	})
+	e.SetDeployLister(&mockDeployLister{
+		getFn: func(ns, name string) (*appsv1.Deployment, error) {
+			return nil, fmt.Errorf("not found")
+		},
+	})
+
+	// With resources → unhealthy (keep incident open)
+	inc := &model.Incident{Namespace: "ns", Name: "my-deploy", OwnerKind: "Deployment", Resource: "pod", Resources: map[string]bool{"p": true}}
+	assert.False(t, e.isOwnerHealthy(inc))
+
+	// Without resources → healthy (safe to resolve)
+	inc2 := &model.Incident{Namespace: "ns", Name: "my-deploy", OwnerKind: "Deployment", Resource: "pod"}
+	assert.True(t, e.isOwnerHealthy(inc2))
+}
+
+func TestIsOwnerHealthyNonPodResource(t *testing.T) {
+	e := NewEngine(Config{
+		Window: 10 * time.Minute,
+	})
+
+	inc := &model.Incident{Namespace: "ns", Name: "my-node", OwnerKind: "", Resource: "node"}
+	assert.True(t, e.isOwnerHealthy(inc))
+}
+
+func TestIsOwnerHealthyNilListers(t *testing.T) {
+	e := NewEngine(Config{
+		Window: 10 * time.Minute,
+	})
+
+	inc := &model.Incident{Namespace: "ns", Name: "my-deploy", OwnerKind: "Deployment", Resource: "pod"}
+	assert.True(t, e.isOwnerHealthy(inc))
+}
+
+func TestIsOwnerHealthyStatefulSet(t *testing.T) {
+	e := NewEngine(Config{
+		Window: 10 * time.Minute,
+	})
+	e.SetStatefulSetLister(&mockSSLister{
+		getFn: func(ns, name string) (*appsv1.StatefulSet, error) {
+			return &appsv1.StatefulSet{
+				ObjectMeta: metav1.ObjectMeta{Generation: 2},
+				Status: appsv1.StatefulSetStatus{
+					ObservedGeneration: 2,
+					Replicas:           3,
+					ReadyReplicas:      3,
+					CurrentRevision:    "rev-2",
+					UpdateRevision:     "rev-2",
+				},
+			}, nil
+		},
+	})
+
+	inc := &model.Incident{Namespace: "ns", Name: "my-ss", OwnerKind: "StatefulSet", Resource: "pod"}
+	assert.True(t, e.isOwnerHealthy(inc))
+}
+
+func TestIsOwnerHealthyDaemonSet(t *testing.T) {
+	e := NewEngine(Config{
+		Window: 10 * time.Minute,
+	})
+	e.SetDaemonSetLister(&mockDSLister{
+		getFn: func(ns, name string) (*appsv1.DaemonSet, error) {
+			return &appsv1.DaemonSet{
+				Status: appsv1.DaemonSetStatus{
+					DesiredNumberScheduled: 3,
+					NumberUnavailable:      0,
+					UpdatedNumberScheduled: 3,
+				},
+			}, nil
+		},
+	})
+
+	inc := &model.Incident{Namespace: "ns", Name: "my-ds", OwnerKind: "DaemonSet", Resource: "pod"}
+	assert.True(t, e.isOwnerHealthy(inc))
+}
+
+func TestIsOwnerHealthyDaemonSetUnhealthy(t *testing.T) {
+	e := NewEngine(Config{
+		Window: 10 * time.Minute,
+	})
+	e.SetDaemonSetLister(&mockDSLister{
+		getFn: func(ns, name string) (*appsv1.DaemonSet, error) {
+			return &appsv1.DaemonSet{
+				Status: appsv1.DaemonSetStatus{
+					DesiredNumberScheduled: 3,
+					NumberUnavailable:      1,
+					UpdatedNumberScheduled: 2,
+				},
+			}, nil
+		},
+	})
+
+	inc := &model.Incident{Namespace: "ns", Name: "my-ds", OwnerKind: "DaemonSet", Resource: "pod"}
+	assert.False(t, e.isOwnerHealthy(inc))
+}
+
 func TestClearSeenForPodClearsCooldown(t *testing.T) {
 	fakeNow := time.Date(2025, 1, 1, 0, 0, 0, 0, time.UTC)
 	e := NewEngine(Config{
@@ -1276,4 +1444,664 @@ func TestClearSeenForPodClearsCooldown(t *testing.T) {
 	_, exists := e.cleanupCooldown[key]
 	e.mu.Unlock()
 	assert.False(t, exists, "cooldown should be cleared by ClearSeenForPod")
+}
+
+// ── Smart grouping (reason-adaptive) tests ─────────────────────────
+
+func newSmartGroupingEngine() *Engine {
+	return NewEngine(Config{
+		Window:              10 * time.Minute,
+		SmartGroupingWindow: 60 * time.Second,
+	})
+}
+
+func TestSmartGroupingBuffersSameReason(t *testing.T) {
+	e := newSmartGroupingEngine()
+
+	_, action := e.Process(event.Event{PodName: "p1", Namespace: "ns", Reason: "CrashLoopBackOff"}, "dep1", nil)
+	assert.Equal(t, model.ActionSkip, action)
+	assert.Equal(t, 1, len(e.state), "incident must still be added to state")
+
+	_, action = e.Process(event.Event{PodName: "p2", Namespace: "ns", Reason: "CrashLoopBackOff"}, "dep2", nil)
+	assert.Equal(t, model.ActionSkip, action)
+	assert.Equal(t, 2, len(e.state))
+
+	var hooks int
+	e.config.LifecycleHook = func(inc *model.Incident, action model.IncidentAction) { hooks++ }
+	e.checkLifecycle()
+	assert.Equal(t, 0, hooks, "no hooks before window expiry")
+}
+
+func TestSmartGroupingFlushAfterWindow(t *testing.T) {
+	now := time.Date(2025, 1, 1, 0, 0, 0, 0, time.UTC)
+	e := newSmartGroupingEngine()
+	e.now = mockClock(now)
+
+	sigLog := "connection refused:5432"
+	e.Process(event.Event{PodName: "p1", Namespace: "ns", Reason: "CrashLoopBackOff", Logs: sigLog}, "dep1", nil)
+	e.Process(event.Event{PodName: "p2", Namespace: "ns", Reason: "CrashLoopBackOff", Logs: sigLog}, "dep2", nil)
+
+	var groupInc *model.Incident
+	e.config.LifecycleHook = func(inc *model.Incident, action model.IncidentAction) {
+		if strings.HasPrefix(inc.Key, "__group__") {
+			groupInc = inc
+		}
+	}
+
+	e.now = mockClock(now.Add(61 * time.Second))
+	e.checkLifecycle()
+
+	require.NotNil(t, groupInc, "group summary must be emitted")
+	assert.Equal(t, "CrashLoopBackOff", groupInc.Reason)
+	assert.Equal(t, 2, groupInc.Count)
+	assert.Contains(t, groupInc.Hint, "dep1")
+	assert.Contains(t, groupInc.Hint, "dep2")
+}
+
+func TestSmartGroupingDifferentReasonsSeparate(t *testing.T) {
+	e := newSmartGroupingEngine()
+	e.Process(event.Event{PodName: "p1", Namespace: "ns", Reason: "CrashLoopBackOff"}, "dep1", nil)
+	e.Process(event.Event{PodName: "p2", Namespace: "ns", Reason: "OOMKilled"}, "dep1", nil)
+
+	var groups int
+	e.config.LifecycleHook = func(inc *model.Incident, action model.IncidentAction) {
+		if strings.HasPrefix(inc.Key, "__group__") { groups++ }
+	}
+	e.checkLifecycle()
+	assert.Equal(t, 0, groups)
+}
+
+func TestSmartGroupingResolvedNotIncluded(t *testing.T) {
+	now := time.Date(2025, 1, 1, 0, 0, 0, 0, time.UTC)
+	e := newSmartGroupingEngine()
+	e.now = mockClock(now)
+
+	e.Process(event.Event{PodName: "p1", Namespace: "ns", Reason: "CrashLoopBackOff"}, "dep1", nil)
+	e.Process(event.Event{PodName: "p2", Namespace: "ns", Reason: "CrashLoopBackOff"}, "dep2", nil)
+
+	e.MarkResolved("ns:dep1:CrashLoopBackOff:")
+
+	var groupCount int
+	e.config.LifecycleHook = func(inc *model.Incident, action model.IncidentAction) {
+		if strings.HasPrefix(inc.Key, "__group__") { groupCount++ }
+	}
+
+	e.now = mockClock(now.Add(61 * time.Second))
+	e.checkLifecycle()
+
+	require.Equal(t, 1, groupCount)
+}
+
+func TestBuildGroupSummary(t *testing.T) {
+	e := newSmartGroupingEngine()
+	now := time.Date(2025, 1, 1, 0, 0, 0, 0, time.UTC)
+	e.now = mockClock(now)
+	entries := []groupEntry{
+		{namespace: "ns", owner: "dep1", reason: "CrashLoopBackOff", podName: "p1"},
+		{namespace: "ns", owner: "dep2", reason: "CrashLoopBackOff", podName: "p2"},
+		{namespace: "ns", owner: "dep1", reason: "CrashLoopBackOff", podName: "p3"},
+	}
+	summary := e.buildGroupSummary(entries, now)
+	assert.Contains(t, summary, "CrashLoopBackOff")
+	assert.Contains(t, summary, "total 3")
+	assert.Contains(t, summary, "dep1")
+	assert.Contains(t, summary, "dep2")
+}
+
+func TestBuildGroupSummaryEmpty(t *testing.T) {
+	e := newSmartGroupingEngine()
+	assert.Equal(t, "", e.buildGroupSummary(nil, time.Time{}))
+	assert.Equal(t, "", e.buildGroupSummary([]groupEntry{}, time.Time{}))
+}
+
+func TestSmartGroupingWindowConfigZeroDisabled(t *testing.T) {
+	e := NewEngine(Config{
+		Window:              10 * time.Minute,
+		SmartGroupingWindow: 0,
+	})
+	_, action := e.Process(event.Event{PodName: "p1", Namespace: "ns", Reason: "CrashLoopBackOff"}, "dep1", nil)
+	assert.Equal(t, model.ActionCreate, action, "window=0 should disable buffering")
+}
+
+func TestSmartGroupingPendingGroupCleanedAfterFlush(t *testing.T) {
+	now := time.Date(2025, 1, 1, 0, 0, 0, 0, time.UTC)
+	e := newSmartGroupingEngine()
+	e.now = mockClock(now)
+
+	e.Process(event.Event{PodName: "p1", Namespace: "ns", Reason: "CrashLoopBackOff"}, "dep1", nil)
+
+	e.now = mockClock(now.Add(61 * time.Second))
+	e.checkLifecycle()
+
+	e.mu.Lock()
+	pg, exists := e.pendingGroups["CrashLoopBackOff|ns|dep1"]
+	e.mu.Unlock()
+	assert.False(t, exists, "pending group must be deleted after flush")
+	require.Nil(t, pg)
+}
+
+func TestSmartGroupingIncidentHasNotifiedSig(t *testing.T) {
+	e := newSmartGroupingEngine()
+	inc, action := e.Process(event.Event{PodName: "p1", Namespace: "ns", Reason: "CrashLoopBackOff"}, "dep1", nil)
+	assert.Equal(t, model.ActionSkip, action)
+	require.NotNil(t, inc)
+	assert.NotZero(t, inc.NotifiedSig, "NotifiedSig must be set")
+	assert.NotZero(t, inc.LastNotifiedAt, "LastNotifiedAt must be set")
+}
+
+// ── Reason-adaptive scope tests ────────────────────────────────────
+
+func TestSmartGroupingOwnerScope(t *testing.T) {
+	e := newSmartGroupingEngine()
+	e.Process(event.Event{PodName: "p1", Namespace: "ns", Reason: "OOMKilled"}, "dep1", nil)
+	e.Process(event.Event{PodName: "p2", Namespace: "ns", Reason: "OOMKilled"}, "dep2", nil)
+
+	e.mu.Lock()
+	_, has1 := e.pendingGroups["OOMKilled|ns|dep1"]
+	_, has2 := e.pendingGroups["OOMKilled|ns|dep2"]
+	e.mu.Unlock()
+	assert.True(t, has1, "dep1 owner-scoped group must exist")
+	assert.True(t, has2, "dep2 owner-scoped group must exist")
+}
+
+func TestSmartGroupingNodeScope(t *testing.T) {
+	e := newSmartGroupingEngine()
+	e.Process(event.Event{PodName: "node-1", Resource: "node", NodeName: "node-1", Reason: "DiskPressure"}, "node-1", nil)
+	e.Process(event.Event{PodName: "node-2", Resource: "node", NodeName: "node-2", Reason: "DiskPressure"}, "node-2", nil)
+
+	e.mu.Lock()
+	_, has1 := e.pendingGroups["DiskPressure|node|node-1"]
+	_, has2 := e.pendingGroups["DiskPressure|node|node-2"]
+	e.mu.Unlock()
+	assert.True(t, has1, "node-1 group must exist")
+	assert.True(t, has2, "node-2 group must exist")
+}
+
+func TestSmartGroupingSignatureScope(t *testing.T) {
+	e := newSmartGroupingEngine()
+	sigLog := "connection refused:5432"
+	e.Process(event.Event{PodName: "p1", Namespace: "ns1", Reason: "CrashLoopBackOff", Logs: sigLog}, "dep1", nil)
+	e.Process(event.Event{PodName: "p2", Namespace: "ns2", Reason: "CrashLoopBackOff", Logs: sigLog}, "dep2", nil)
+
+	gk := "CrashLoopBackOff|sig|Postgres unreachable — check the DB Service/endpoints + connection string."
+	e.mu.Lock()
+	pg, ok := e.pendingGroups[gk]
+	e.mu.Unlock()
+	require.True(t, ok, "signature-scoped group must exist")
+	assert.Equal(t, 2, len(pg.entries), "both owners in same signature group")
+}
+
+func TestSmartGroupingSignatureFallback(t *testing.T) {
+	e := newSmartGroupingEngine()
+	// No logs set → no signature match → owner-scoped fallback
+	e.Process(event.Event{PodName: "p1", Namespace: "ns", Reason: "CrashLoopBackOff"}, "dep1", nil)
+	e.Process(event.Event{PodName: "p2", Namespace: "ns", Reason: "CrashLoopBackOff"}, "dep2", nil)
+
+	e.mu.Lock()
+	_, has1 := e.pendingGroups["CrashLoopBackOff|ns|dep1"]
+	_, has2 := e.pendingGroups["CrashLoopBackOff|ns|dep2"]
+	_, hasSig := e.pendingGroups["CrashLoopBackOff|sig|"]
+	e.mu.Unlock()
+	assert.True(t, has1, "dep1 owner-scoped fallback must exist")
+	assert.True(t, has2, "dep2 owner-scoped fallback must exist")
+	assert.False(t, hasSig, "no signature-scoped group for empty logs")
+}
+
+func TestSmartGroupingImagePerImage(t *testing.T) {
+	e := newSmartGroupingEngine()
+	msg := "not found: nginx:latest"
+	ev := event.Event{
+		PodName: "p1", Namespace: "ns", Reason: "ImagePullBackOff",
+		Image: "nginx:latest", Message: msg,
+	}
+	e.Process(ev, "dep1", nil)
+	ev2 := event.Event{
+		PodName: "p2", Namespace: "ns", Reason: "ImagePullBackOff",
+		Image: "nginx:latest", Message: msg,
+	}
+	e.Process(ev2, "dep2", nil)
+
+	e.mu.Lock()
+	gk := "ImagePullBackOff|img|nginx:latest|ns|ns"
+	pg, ok := e.pendingGroups[gk]
+	e.mu.Unlock()
+	require.True(t, ok, "image-scoped group must exist")
+	assert.Equal(t, 2, len(pg.entries))
+}
+
+func TestSmartGroupingImageGlobal(t *testing.T) {
+	e := newSmartGroupingEngine()
+	msg := "toomanyrequests: rate limit"
+	ev := event.Event{
+		PodName: "p1", Namespace: "ns1", Reason: "ImagePullBackOff",
+		Image: "nginx:latest", Message: msg,
+	}
+	e.Process(ev, "dep1", nil)
+	ev2 := event.Event{
+		PodName: "p2", Namespace: "ns2", Reason: "ImagePullBackOff",
+		Image: "alpine:latest", Message: msg,
+	}
+	e.Process(ev2, "dep2", nil)
+
+	e.mu.Lock()
+	gk := "ImagePullBackOff|global|rate_limit"
+	pg, ok := e.pendingGroups[gk]
+	e.mu.Unlock()
+	require.True(t, ok, "global rate_limit group must exist")
+	assert.Equal(t, 2, len(pg.entries))
+}
+
+func TestSmartGroupingImageAuth(t *testing.T) {
+	e := newSmartGroupingEngine()
+	msg := "unauthorized: authentication required"
+	ev := event.Event{
+		PodName: "p1", Namespace: "ns", Reason: "ImagePullBackOff",
+		Image: "nginx:latest", Message: msg,
+	}
+	e.Process(ev, "dep1", nil)
+	ev2 := event.Event{
+		PodName: "p2", Namespace: "ns", Reason: "ImagePullBackOff",
+		Image: "alpine:latest", Message: msg,
+	}
+	e.Process(ev2, "dep2", nil)
+
+	e.mu.Lock()
+	gk := "ImagePullBackOff|ns|ns"
+	pg, ok := e.pendingGroups[gk]
+	e.mu.Unlock()
+	require.True(t, ok, "auth ns-scoped group must exist")
+	assert.Equal(t, 2, len(pg.entries))
+}
+
+func TestSmartGroupingNamespaceScope(t *testing.T) {
+	e := newSmartGroupingEngine()
+	e.Process(event.Event{PodName: "p1", Namespace: "ns", Reason: "CreateContainerConfigError"}, "dep1", nil)
+	e.Process(event.Event{PodName: "p2", Namespace: "ns2", Reason: "CreateContainerConfigError"}, "dep2", nil)
+
+	e.mu.Lock()
+	_, has1 := e.pendingGroups["CreateContainerConfigError|ns|ns"]
+	_, has2 := e.pendingGroups["CreateContainerConfigError|ns|ns2"]
+	e.mu.Unlock()
+	assert.True(t, has1, "ns group must exist")
+	assert.True(t, has2, "ns2 group must exist")
+}
+
+func TestSmartGroupingCrossNamespace(t *testing.T) {
+	e := newSmartGroupingEngine()
+	e.Process(event.Event{PodName: "p1", Namespace: "ns1", Reason: "OOMKilled"}, "dep1", nil)
+	e.Process(event.Event{PodName: "p2", Namespace: "ns2", Reason: "OOMKilled"}, "dep1", nil)
+
+	e.mu.Lock()
+	_, has1 := e.pendingGroups["OOMKilled|ns1|dep1"]
+	_, has2 := e.pendingGroups["OOMKilled|ns2|dep1"]
+	e.mu.Unlock()
+	assert.True(t, has1, "ns1 group must exist")
+	assert.True(t, has2, "ns2 group must exist")
+}
+
+func TestSmartGroupingEntryLimit(t *testing.T) {
+	e := newSmartGroupingEngine()
+	sigLog := "connection refused:5432"
+	gk := "CrashLoopBackOff|sig|Postgres unreachable — check the DB Service/endpoints + connection string."
+
+	for i := 0; i < 1002; i++ {
+		ev := event.Event{
+			PodName:   fmt.Sprintf("p%d", i),
+			Namespace: "ns",
+			Reason:    "CrashLoopBackOff",
+			Logs:      sigLog,
+		}
+		e.Process(ev, fmt.Sprintf("dep%d", i), nil)
+	}
+
+	e.mu.Lock()
+	pg, ok := e.pendingGroups[gk]
+	e.mu.Unlock()
+	require.True(t, ok, "pending group must exist")
+	assert.Equal(t, maxGroupEntries, len(pg.entries), "entries must be capped")
+	assert.Equal(t, 2, pg.overflowCount, "1 entry from first overflow + 1 from second")
+}
+
+func TestSmartGroupingSeverityInheritance(t *testing.T) {
+	now := time.Date(2025, 1, 1, 0, 0, 0, 0, time.UTC)
+	e := newSmartGroupingEngine()
+	e.now = mockClock(now)
+
+	sigLog := "connection refused:5432"
+	e.Process(event.Event{
+		PodName: "p1", Namespace: "ns", Reason: "CrashLoopBackOff",
+		Logs: sigLog, Severity: "normal",
+	}, "dep1", nil)
+	e.Process(event.Event{
+		PodName: "p2", Namespace: "ns", Reason: "CrashLoopBackOff",
+		Logs: sigLog, Severity: "critical",
+	}, "dep2", nil)
+
+	var groupInc *model.Incident
+	e.config.LifecycleHook = func(inc *model.Incident, action model.IncidentAction) {
+		if strings.HasPrefix(inc.Key, "__group__") {
+			groupInc = inc
+		}
+	}
+
+	e.now = mockClock(now.Add(61 * time.Second))
+	e.checkLifecycle()
+
+	require.NotNil(t, groupInc, "group summary must be emitted")
+	assert.Equal(t, "critical", groupInc.Severity, "group must inherit highest severity")
+}
+
+// --- mock service lister ---
+
+type mockServiceLister struct {
+	corev1lister.ServiceLister
+	listFn func(ns string) ([]*corev1.Service, error)
+}
+
+func (m *mockServiceLister) Services(namespace string) corev1lister.ServiceNamespaceLister {
+	return &mockSvcNsLister{listFn: func() ([]*corev1.Service, error) {
+		return m.listFn(namespace)
+	}}
+}
+
+type mockSvcNsLister struct {
+	corev1lister.ServiceNamespaceLister
+	listFn func() ([]*corev1.Service, error)
+}
+
+func (m *mockSvcNsLister) List(selector labels.Selector) ([]*corev1.Service, error) {
+	return m.listFn()
+}
+func (m *mockSvcNsLister) Get(name string) (*corev1.Service, error) {
+	return nil, nil
+}
+
+func TestFindDependentServicesNoLister(t *testing.T) {
+	e := newTestEngine()
+	got := e.findDependentServices("ns", map[string]string{"app": "myapp"})
+	assert.Nil(t, got)
+}
+
+func TestFindDependentServicesNoLabels(t *testing.T) {
+	e := newTestEngine()
+	e.SetServiceLister(&mockServiceLister{})
+	got := e.findDependentServices("ns", nil)
+	assert.Nil(t, got)
+}
+
+func TestFindDependentServicesMatch(t *testing.T) {
+	e := newTestEngine()
+	e.SetServiceLister(&mockServiceLister{
+		listFn: func(ns string) ([]*corev1.Service, error) {
+			return []*corev1.Service{
+				{
+					ObjectMeta: metav1.ObjectMeta{Name: "svc-api", Namespace: "ns"},
+					Spec:       corev1.ServiceSpec{Selector: map[string]string{"app": "api"}},
+				},
+			}, nil
+		},
+	})
+	got := e.findDependentServices("ns", map[string]string{"app": "api"})
+	assert.Equal(t, []string{"svc-api"}, got)
+}
+
+func TestFindDependentServicesNoMatch(t *testing.T) {
+	e := newTestEngine()
+	e.SetServiceLister(&mockServiceLister{
+		listFn: func(ns string) ([]*corev1.Service, error) {
+			return []*corev1.Service{
+				{
+					ObjectMeta: metav1.ObjectMeta{Name: "svc-api", Namespace: "ns"},
+					Spec:       corev1.ServiceSpec{Selector: map[string]string{"app": "api"}},
+				},
+			}, nil
+		},
+	})
+	got := e.findDependentServices("ns", map[string]string{"app": "web"})
+	assert.Empty(t, got)
+}
+
+func TestFindDependentServicesMultiple(t *testing.T) {
+	e := newTestEngine()
+	e.SetServiceLister(&mockServiceLister{
+		listFn: func(ns string) ([]*corev1.Service, error) {
+			return []*corev1.Service{
+				{ObjectMeta: metav1.ObjectMeta{Name: "svc-api", Namespace: "ns"}, Spec: corev1.ServiceSpec{Selector: map[string]string{"app": "api"}}},
+				{ObjectMeta: metav1.ObjectMeta{Name: "svc-grpc", Namespace: "ns"}, Spec: corev1.ServiceSpec{Selector: map[string]string{"app": "api"}}},
+				{ObjectMeta: metav1.ObjectMeta{Name: "svc-other", Namespace: "ns"}, Spec: corev1.ServiceSpec{Selector: map[string]string{"app": "other"}}},
+			}, nil
+		},
+	})
+	got := e.findDependentServices("ns", map[string]string{"app": "api"})
+	assert.Len(t, got, 2)
+	assert.Contains(t, got, "svc-api")
+	assert.Contains(t, got, "svc-grpc")
+}
+
+func TestFindDependentServicesEmptySelector(t *testing.T) {
+	e := newTestEngine()
+	e.SetServiceLister(&mockServiceLister{
+		listFn: func(ns string) ([]*corev1.Service, error) {
+			return []*corev1.Service{
+				{ObjectMeta: metav1.ObjectMeta{Name: "svc-headless", Namespace: "ns"}, Spec: corev1.ServiceSpec{Selector: nil}},
+			}, nil
+		},
+	})
+	got := e.findDependentServices("ns", map[string]string{"app": "api"})
+	assert.Empty(t, got)
+}
+
+// --- cascading suppression ---
+
+func TestCascadingSuppressionSuppressesPodWhenDeploymentUnavailable(t *testing.T) {
+	e := NewEngine(Config{
+		Window: 10 * time.Minute,
+	})
+	e.SetDeployLister(&mockDeployLister{
+		getFn: func(ns, name string) (*appsv1.Deployment, error) {
+			return &appsv1.Deployment{
+				ObjectMeta: metav1.ObjectMeta{Generation: 2},
+				Status: appsv1.DeploymentStatus{
+					ObservedGeneration:  2,
+					Replicas:            3,
+					ReadyReplicas:       2,
+					UnavailableReplicas: 1,
+				},
+			}, nil
+		},
+	})
+
+	// First, create a deployment-level incident
+	depEv := event.Event{
+		Resource:  "deployment",
+		Namespace: "ns",
+		PodName:   "myapp",
+		Reason:    "DeploymentUnavailable",
+	}
+	depInc, depAction := e.Process(depEv, "myapp", nil)
+	assert.Equal(t, model.ActionCreate, depAction)
+	assert.NotNil(t, depInc)
+
+	// Now process a pod incident for the same owner
+	podEv := event.Event{
+		Resource:      "pod",
+		Namespace:     "ns",
+		PodName:       "myapp-7d8f9-abc",
+		ContainerName: "app",
+		Reason:        "CrashLoopBackOff",
+	}
+	podInc, podAction := e.Process(podEv, "myapp", &model.ContainerState{RestartCount: 1})
+	assert.Equal(t, model.ActionSkip, podAction, "pod incident should be suppressed")
+	assert.Nil(t, podInc)
+
+	// Verify the deployment incident was attributed
+	assert.Equal(t, 2, e.state[depInc.Key].Count)
+	assert.True(t, e.state[depInc.Key].Resources["myapp-7d8f9-abc"])
+}
+
+func TestCascadingSuppressionNoSuppressionWhenDeploymentHealthy(t *testing.T) {
+	e := NewEngine(Config{
+		Window: 10 * time.Minute,
+	})
+	e.SetDeployLister(&mockDeployLister{
+		getFn: func(ns, name string) (*appsv1.Deployment, error) {
+			return &appsv1.Deployment{
+				ObjectMeta: metav1.ObjectMeta{Generation: 2},
+				Status: appsv1.DeploymentStatus{
+					ObservedGeneration:  2,
+					Replicas:            3,
+					ReadyReplicas:       3,
+					UnavailableReplicas: 0,
+				},
+			}, nil
+		},
+	})
+
+	// Create a pod incident (no parent incident exists)
+	ev := event.Event{
+		Resource:  "pod",
+		Namespace: "ns",
+		PodName:   "myapp-7d8f9-abc",
+		Reason:    "CrashLoopBackOff",
+	}
+	inc, action := e.Process(ev, "myapp", nil)
+	assert.Equal(t, model.ActionCreate, action)
+	assert.NotNil(t, inc)
+}
+
+func TestCascadingSuppressionNoSuppressionForDifferentOwner(t *testing.T) {
+	e := newTestEngine()
+
+	// Create deployment incident for owner "dep-a"
+	depEv := event.Event{
+		Resource:  "deployment",
+		Namespace: "ns",
+		PodName:   "dep-a",
+		Reason:    "DeploymentUnavailable",
+	}
+	e.Process(depEv, "dep-a", nil)
+
+	// Pod incident for different owner "dep-b"
+	podEv := event.Event{
+		Resource:  "pod",
+		Namespace: "ns",
+		PodName:   "dep-b-xyz",
+		Reason:    "CrashLoopBackOff",
+	}
+	inc, action := e.Process(podEv, "dep-b", nil)
+	assert.Equal(t, model.ActionCreate, action, "different owner should not be suppressed")
+	assert.NotNil(t, inc)
+}
+
+func TestCascadingSuppressionNoSuppressionForResolvedParent(t *testing.T) {
+	e := newTestEngine()
+
+	// Create and resolve a deployment incident
+	depEv := event.Event{
+		Resource:  "deployment",
+		Namespace: "ns",
+		PodName:   "myapp",
+		Reason:    "DeploymentUnavailable",
+	}
+	depInc, _ := e.Process(depEv, "myapp", nil)
+	e.MarkResolved(depInc.Key)
+
+	// Pod incident should not be suppressed (parent is resolved)
+	podEv := event.Event{
+		Resource:  "pod",
+		Namespace: "ns",
+		PodName:   "myapp-abc",
+		Reason:    "CrashLoopBackOff",
+	}
+	inc, action := e.Process(podEv, "myapp", nil)
+	assert.Equal(t, model.ActionCreate, action, "pod should alert when parent is resolved")
+	assert.NotNil(t, inc)
+}
+
+func TestNewIncidentAnnotatesDependentServices(t *testing.T) {
+	e := NewEngine(Config{
+		Window: 10 * time.Minute,
+	})
+	e.SetServiceLister(&mockServiceLister{
+		listFn: func(ns string) ([]*corev1.Service, error) {
+			return []*corev1.Service{
+				{ObjectMeta: metav1.ObjectMeta{Name: "svc-api", Namespace: "ns"}, Spec: corev1.ServiceSpec{Selector: map[string]string{"app": "myapp"}}},
+			}, nil
+		},
+	})
+
+	ev := event.Event{
+		Resource:  "pod",
+		Namespace: "ns",
+		PodName:   "myapp-abc",
+		Reason:    "CrashLoopBackOff",
+		Labels:    map[string]string{"app": "myapp"},
+		OwnerKind: "Deployment",
+	}
+	inc, action := e.Process(ev, "myapp", nil)
+	assert.Equal(t, model.ActionCreate, action)
+	assert.NotNil(t, inc)
+	assert.Contains(t, inc.Hint, "affects service(s): svc-api")
+}
+
+func TestNewIncidentAnnotatesParentUnhealthy(t *testing.T) {
+	e := NewEngine(Config{
+		Window: 10 * time.Minute,
+	})
+	e.SetDeployLister(&mockDeployLister{
+		getFn: func(ns, name string) (*appsv1.Deployment, error) {
+			return &appsv1.Deployment{
+				ObjectMeta: metav1.ObjectMeta{Generation: 2},
+				Status: appsv1.DeploymentStatus{
+					ObservedGeneration:  2,
+					Replicas:            3,
+					ReadyReplicas:       2,
+					UnavailableReplicas: 1,
+				},
+			}, nil
+		},
+	})
+
+	ev := event.Event{
+		Resource:  "pod",
+		Namespace: "ns",
+		PodName:   "myapp-abc",
+		Reason:    "CrashLoopBackOff",
+		OwnerKind: "Deployment",
+	}
+	inc, action := e.Process(ev, "myapp", nil)
+	assert.Equal(t, model.ActionCreate, action)
+	assert.NotNil(t, inc)
+	assert.Contains(t, inc.Hint, "owning Deployment myapp is also unhealthy")
+}
+
+func TestNewIncidentDoesNotAnnotateParentWhenHealthy(t *testing.T) {
+	e := NewEngine(Config{
+		Window: 10 * time.Minute,
+	})
+	e.SetDeployLister(&mockDeployLister{
+		getFn: func(ns, name string) (*appsv1.Deployment, error) {
+			return &appsv1.Deployment{
+				ObjectMeta: metav1.ObjectMeta{Generation: 2},
+				Status: appsv1.DeploymentStatus{
+					ObservedGeneration:  2,
+					Replicas:            3,
+					ReadyReplicas:       3,
+					UnavailableReplicas: 0,
+				},
+			}, nil
+		},
+	})
+
+	ev := event.Event{
+		Resource:  "pod",
+		Namespace: "ns",
+		PodName:   "myapp-abc",
+		Reason:    "CrashLoopBackOff",
+		OwnerKind: "Deployment",
+	}
+	inc, action := e.Process(ev, "myapp", nil)
+	assert.Equal(t, model.ActionCreate, action)
+	assert.NotNil(t, inc)
+	assert.NotContains(t, inc.Hint, "owning")
 }

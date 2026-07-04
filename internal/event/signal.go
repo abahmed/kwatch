@@ -13,6 +13,7 @@ type Signal struct {
 	Message        string
 	NodeName       string
 	Container      string
+	Image          string
 	RestartCount   int32
 	Severity       string
 	Logs           string

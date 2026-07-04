@@ -1,7 +1,9 @@
 package handler
 
 import (
+	"fmt"
 	"sort"
+	"time"
 
 	"github.com/abahmed/kwatch/internal/enricher"
 	"github.com/abahmed/kwatch/internal/event"
@@ -87,6 +89,21 @@ func (h *handler) executePodFilters(ctx *filter.Context) {
 		hint = ctx.PodMsg + " — " + hint
 	}
 	if ctx.PodReason == "Unschedulable" && ctx.Pod != nil {
+		if h.config.ScheduleMonitor.Enabled {
+			var delay time.Duration
+			for _, c := range ctx.Pod.Status.Conditions {
+				if c.Type == corev1.PodScheduled && c.Status == corev1.ConditionFalse {
+					delay = h.now().Sub(c.LastTransitionTime.Time)
+					break
+				}
+			}
+			if delay <= 0 {
+				delay = h.now().Sub(ctx.Pod.CreationTimestamp.Time)
+			}
+			if delay > 30*time.Second {
+				hint = fmt.Sprintf("unschedulable for %s — ", roundDuration(delay)) + hint
+			}
+		}
 		// Add pod resource requests so the user can compare against node capacity
 		for _, c := range ctx.Pod.Spec.Containers {
 			req := c.Resources.Requests
@@ -123,4 +140,16 @@ func (h *handler) executePodFilters(ctx *filter.Context) {
 			Status: "",
 		},
 	})
+}
+
+// roundDuration formats a duration for human display: "5m30s", "2h15m", etc.
+func roundDuration(d time.Duration) string {
+	d = d.Round(time.Second)
+	if d < time.Minute {
+		return fmt.Sprintf("%ds", int(d.Seconds()))
+	}
+	if d < time.Hour {
+		return fmt.Sprintf("%dm%ds", int(d.Minutes()), int(d.Seconds())%60)
+	}
+	return fmt.Sprintf("%dh%dm", int(d.Hours()), int(d.Minutes())%60)
 }

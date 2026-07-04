@@ -29,4 +29,4 @@ EXPOSE 8080
 
 ENTRYPOINT ["/app/llama-server"]
 
-CMD ["--host","0.0.0.0","--port","8080","--model","/models/model.gguf","--threads","1","--ctx-size","4096","--temp","0.3","--top-p","0.9","--repeat-penalty","1.1","--n-predict","256","--no-penalize-nl"]
+CMD ["--host","0.0.0.0","--port","8080","--model","/models/model.gguf","--threads","1","--ctx-size","4096","--temp","0.3","--top-p","0.9","--repeat-penalty","1.1","--n-predict","256","--reasoning","off"]

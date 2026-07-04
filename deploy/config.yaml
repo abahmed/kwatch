@@ -83,10 +83,35 @@ data:
 
     rolloutMonitor:
       enabled: <boolean>
+      # sustainedMinutes: <minutes>    # Debounce before alerting (default 2)
 
     daemonSetMonitor:
       enabled: <boolean>
       # sustainedMinutes: <minutes>    # Debounce before alerting (default 5)
+
+    statefulSetMonitor:
+      enabled: <boolean>
+      # sustainedMinutes: <minutes>    # Debounce before alerting (default 5)
+
+    pdbMonitor:
+      enabled: <boolean>
+      # sustainedMinutes: <minutes>    # Debounce before alerting (default 5)
+
+    oomMonitor:
+      enabled: <boolean>
+      # threshold: <count>             # OOM count within window (default 3)
+      # windowMinutes: <minutes>       # Sliding window (default 60)
+
+    scheduleMonitor:
+      enabled: <boolean>   # compute scheduling delay for Unschedulable pods (default true)
+
+    nodeResourceMonitor:
+      enabled: <boolean>
+      # intervalSeconds: <seconds>     # Check interval (default 300)
+      # cpuWarning: <float>            # CPU overcommit warning ratio (default 2.0)
+      # cpuCritical: <float>           # CPU overcommit critical ratio (default 4.0)
+      # memWarning: <float>            # Memory overcommit warning ratio (default 2.0)
+      # memCritical: <float>           # Memory overcommit critical ratio (default 4.0)
 
     jobMonitor:
       enabled: <boolean>
@@ -103,6 +128,21 @@ data:
       enabled: <boolean>
       # threshold: <days>              # alert before expiry (default 30)
       # criticalThreshold: <days>      # high severity before expiry (default 3)
+
+    serviceMonitor:
+      enabled: <boolean>       # detect services with zero ready endpoints (default true)
+
+    admissionWebhookMonitor:
+      enabled: <boolean>       # detect webhooks with unreachable backends (default true)
+
+    controlPlaneMonitor:
+      enabled: <boolean>       # detect broken control-plane pods (default true)
+
+    ingressMonitor:
+      enabled: <boolean>       # detect ingress backends with no ready endpoints (default true)
+
+    networkPolicyMonitor:
+      enabled: <boolean>       # detect overly restrictive network policies (default true)
 
     heartbeatMonitor:
       enabled: <boolean>
@@ -123,7 +163,14 @@ data:
 
     # ── AI enrichment (self-hosted) ──────────────────────
     llm:
-      enabled: <boolean>     # enabled by default; deploy kwatch-llm sidecar for RCA
+      enabled: <boolean>     # disabled by default; deploy kwatch-llm sidecar for RCA
+
+    # ── Smart grouping ──────────────────────────────────
+    # smart grouping: coalesces duplicate incidents with the same reason across
+    # different workload owners within a time window into a single notification.
+    # Enabled by default; disable by setting windowSeconds to 0.
+    smartGrouping:
+      windowSeconds: <int>   # grouping window in seconds (default 60)
 
     # ── Templates / Runbooks ──────────────────────────────
     # templates:
@@ -155,14 +202,9 @@ data:
     upgrader:
       disableUpdateCheck: <boolean>
 
-    # ── Inhibition / Storm ────────────────────────────────
+    # ── Inhibition ──────────────────────────────────────────
     # inhibition:
     #   nodeSuppressesPods: <boolean>  # suppress pod alerts on unhealthy nodes (default true)
-    # storm:                           # enabled by default; batches rapid alerts into digests
-    #   enabled: <boolean>             # (default true)
-    #   threshold: 10                  # max creates per window before digest mode
-    #   windowMinutes: 5               # sliding window (minutes)
-    #   digestIntervalMinutes: 5       # digest summary interval (minutes)
 
     # ── CRD watcher ───────────────────────────────────────
     # crd:

@@ -36,7 +36,7 @@ func (e *DefaultEnricher) Enrich(ev *event.Event, inc *model.Incident) {
 		inc.Hint = hintForReason(ev.Reason)
 	}
 	// CD-3: signature-based hints for common patterns
-	if sh := signatureHint(ev.Logs); sh != "" {
+	if sh := SignatureHint(ev.Logs); sh != "" {
 		inc.Hint = combineHints(inc.Hint, sh)
 	}
 	inc.Logs = ev.Logs

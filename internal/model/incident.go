@@ -78,6 +78,7 @@ type Incident struct {
 	Containers         map[string]bool
 	OwnerKind          string
 	ContainerName      string
+	Image              string
 	RestartCount       int
 	Hint               string
 	Analysis           string
@@ -98,6 +99,56 @@ type Incident struct {
 	LastNotifiedAt     time.Time
 	RenotifyCount      int
 	Digested           bool // created via storm digest; suppress resolve/renotify edge
+}
+
+// PersistedIncident is a lightweight serializable subset of Incident,
+// stored in the kwatch-incidents ConfigMap to survive restarts.
+type PersistedIncident struct {
+	Key            string            `json:"key"`
+	Reason         string            `json:"reason"`
+	Namespace      string            `json:"namespace"`
+	Name           string            `json:"name"`
+	Resource       string            `json:"resource"`
+	Count          int               `json:"count"`
+	FirstSeen      time.Time         `json:"firstSeen"`
+	LastSeen       time.Time         `json:"lastSeen"`
+	Resources      map[string]bool   `json:"resources"`
+	PeakResources  int               `json:"peakResources"`
+	OwnerKind      string            `json:"ownerKind"`
+	RestartCount   int               `json:"restartCount"`
+	Hint           string            `json:"hint"`
+	Severity       string            `json:"severity"`
+	State          IncidentState     `json:"state"`
+	NotifiedSig    string            `json:"notifiedSig"`
+	LastNotifiedAt time.Time         `json:"lastNotifiedAt"`
+	RenotifyCount  int               `json:"renotifyCount"`
+}
+
+// ToIncident converts a PersistedIncident back to a full Incident.
+func (pi *PersistedIncident) ToIncident() *Incident {
+	return &Incident{
+		Key:            pi.Key,
+		Reason:         pi.Reason,
+		Namespace:      pi.Namespace,
+		Name:           pi.Name,
+		Resource:       pi.Resource,
+		Count:          pi.Count,
+		FirstSeen:      pi.FirstSeen,
+		LastSeen:       pi.LastSeen,
+		Resources:      pi.Resources,
+		PeakResources:  pi.PeakResources,
+		OwnerKind:      pi.OwnerKind,
+		RestartCount:   pi.RestartCount,
+		Hint:           pi.Hint,
+		Severity:       pi.Severity,
+		State:          pi.State,
+		NotifiedSig:    pi.NotifiedSig,
+		LastNotifiedAt: pi.LastNotifiedAt,
+		RenotifyCount:  pi.RenotifyCount,
+		Containers:     make(map[string]bool),
+		ResolveAt:      time.Time{},
+		LastUpdate:     pi.LastSeen,
+	}
 }
 
 // Clone returns a deep copy of the incident, safe for concurrent use.

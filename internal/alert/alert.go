@@ -31,7 +31,9 @@ import (
 	"github.com/abahmed/kwatch/internal/alert/zenduty"
 	"github.com/abahmed/kwatch/internal/config"
 	"github.com/abahmed/kwatch/internal/event"
+	"github.com/abahmed/kwatch/internal/insight"
 	"github.com/abahmed/kwatch/internal/llm"
+	"github.com/abahmed/kwatch/internal/message"
 	"github.com/abahmed/kwatch/internal/metrics"
 	"github.com/abahmed/kwatch/internal/model"
 	"github.com/abahmed/kwatch/internal/ratelimit"
@@ -39,18 +41,18 @@ import (
 )
 
 // obviousReasons are incident reasons where the root cause is fully
-// self-explanatory from the reason + message alone.  LLM enrichment
-// (log/event analysis) adds no actionable insight for these — the fix
-// is either deterministic (e.g. "increase memory limit") or is an
-// infrastructure concern outside the application's control.
+// self-explanatory from the reason alone. LLM enrichment (log/event
+// analysis) adds no actionable insight for these — the fix is either
+// deterministic (e.g. "increase memory limit") or is an infrastructure
+// concern outside the application's control.
 //
-// Reasons NOT in this list (Error, CrashLoopHighFrequency,
-// HighRestartCount, custom job failures, etc.) still get LLM analysis
-// because the crash pattern or log signal is needed to find the
-// root cause.
+// Only ActionCreate incidents with NON-obvious reasons reach the LLM
+// (e.g. Error, CrashLoopBackOff, CrashLoopHighFrequency,
+// HighRestartCount, custom job failures).
 var obviousReasons = map[string]bool{
 	// Container resource limits
-	"OOMKilled": true,
+	"OOMKilled":   true,
+	"OOMRepeating": true,
 
 	// Container runtime errors — self-evident from message
 	"ContainerCannotRun":   true,
@@ -103,6 +105,10 @@ var obviousReasons = map[string]bool{
 	// Rollout / DaemonSet
 	"ProgressDeadlineExceeded": true,
 	"DaemonSetUnavailable":     true,
+	"StsUnavailable":           true,
+	"PdbViolation":             true,
+	"NodeResourceHigh":         true,
+	"NodeResourceCritical":     true,
 
 	// Jobs / CronJobs
 	"JobSuspended":        true,
@@ -125,8 +131,9 @@ func isObviousReason(reason string) bool {
 }
 
 type deliverJob struct {
-	inc    *model.Incident
-	action model.IncidentAction
+	inc     *model.Incident
+	action  model.IncidentAction
+	insight *insight.Insight
 }
 
 type DeadLetterEntry struct {
@@ -862,7 +869,8 @@ func incidentToEvent(inc *model.Incident, action model.IncidentAction) *event.Ev
 // When Start has been called, delivery is asynchronous via per-provider
 // buffered channels (non-blocking; drops oldest on full).
 // Before Start, delivery is synchronous (deliverAllSync).
-func (a *AlertManager) NotifyIncident(inc *model.Incident, action model.IncidentAction) {
+// insight is optional; nil means no structured analysis available.
+func (a *AlertManager) NotifyIncident(inc *model.Incident, action model.IncidentAction, insight *insight.Insight) {
 	if action == model.ActionSkip {
 		return
 	}
@@ -876,13 +884,19 @@ func (a *AlertManager) NotifyIncident(inc *model.Incident, action model.Incident
 	klog.InfoS("sending incident", "action", action, "key", inc.Key, "id", inc.ID, "count", inc.Count)
 
 	if !a.started {
-		a.deliverAllSync(inc, action)
+		a.deliverAllSync(inc, action, insight)
 		return
 	}
 
 	snap := inc.Clone()
-	job := deliverJob{inc: snap, action: action}
-	if a.started && a.llm != nil && action == model.ActionCreate && !isObviousReason(inc.Reason) {
+	ins := insight
+	if ins != nil {
+		cp := *ins
+		ins = &cp
+	}
+	job := deliverJob{inc: snap, action: action, insight: ins}
+
+	if a.llm != nil && action == model.ActionCreate && !isObviousReason(inc.Reason) {
 		a.mu.Lock()
 		enqueued := false
 		if !a.stopped {
@@ -896,8 +910,6 @@ func (a *AlertManager) NotifyIncident(inc *model.Incident, action model.Incident
 		if enqueued {
 			return
 		}
-		// stopped, or queue full → deliver without enrichment.
-		// fanOut runs under a.mu so it is atomic w.r.t. shutdown's channel closes.
 		a.mu.Lock()
 		stopped := a.stopped
 		if !stopped {
@@ -906,8 +918,6 @@ func (a *AlertManager) NotifyIncident(inc *model.Incident, action model.Incident
 		a.mu.Unlock()
 		return
 	}
-	// Non-enrich path (update / resolve / no LLM). Guard against calls
-	// after shutdown.
 	a.mu.Lock()
 	stopped := a.stopped
 	if !stopped {
@@ -932,7 +942,7 @@ func (a *AlertManager) AddProvider(p Provider) {
 		go func() {
 			defer a.providerWg.Done()
 			for job := range entry.ch {
-				a.deliverOne(a.ctx, &entry, job.inc, job.action)
+				a.deliverOne(a.ctx, &entry, job.inc, job.action, job.insight)
 			}
 		}()
 	}
@@ -956,7 +966,7 @@ func (a *AlertManager) Start(ctx context.Context) {
 		go func() {
 			defer a.providerWg.Done()
 			for job := range entry.ch {
-				a.deliverOne(a.ctx, entry, job.inc, job.action)
+				a.deliverOne(a.ctx, entry, job.inc, job.action, job.insight)
 			}
 		}()
 	}
@@ -1107,7 +1117,7 @@ func sanitizeAnalysis(s string) string {
 }
 
 // deliverOne handles the full send+retry for a single (entry, incident) pair.
-func (a *AlertManager) deliverOne(ctx context.Context, entry *providerEntry, inc *model.Incident, action model.IncidentAction) {
+func (a *AlertManager) deliverOne(ctx context.Context, entry *providerEntry, inc *model.Incident, action model.IncidentAction, ins *insight.Insight) {
 	p := entry.provider
 	metrics.Default.NotificationsTotal.Add(1)
 
@@ -1121,28 +1131,16 @@ func (a *AlertManager) deliverOne(ctx context.Context, entry *providerEntry, inc
 	if len(tpl) == 0 {
 		tpl = a.templates
 	}
-	msg := truncateMsg(formatIncidentMessage(inc, action, maxLines, tpl), entry.maxBytes)
+	msg := truncateMsg(a.buildMessage(inc, action, ins, maxLines, tpl), entry.maxBytes)
 
 	var err error
-	if action == model.ActionDigestFlush {
-		if _, ok := p.(EventDeliveryProvider); ok {
-			ev := incidentToEvent(inc, action)
-			err = sendWithRetry(ctx, func() error {
-				return p.SendEvent(ev)
-			}, entry.maxAttempts, entry.retryDelay, entry.maxBackoff, p.Name())
-		} else {
-			err = sendWithRetry(ctx, func() error {
-				return p.SendMessage(msg)
-			}, entry.maxAttempts, entry.retryDelay, entry.maxBackoff, p.Name())
-		}
-	} else {
-		if !shouldDeliver(entry.routes, inc) {
-			klog.V(4).InfoS("incident filtered by route",
-				"provider", p.Name(),
-				"key", inc.Key)
-			return
-		}
-		if tp, ok := p.(ThreadProvider); ok {
+	if !shouldDeliver(entry.routes, inc) {
+		klog.V(4).InfoS("incident filtered by route",
+			"provider", p.Name(),
+			"key", inc.Key)
+		return
+	}
+	if tp, ok := p.(ThreadProvider); ok {
 			err = sendWithRetry(ctx, func() error {
 				return tp.SendIncident(inc, action)
 			}, entry.maxAttempts, entry.retryDelay, entry.maxBackoff, p.Name())
@@ -1155,7 +1153,6 @@ func (a *AlertManager) deliverOne(ctx context.Context, entry *providerEntry, inc
 			err = sendWithRetry(ctx, func() error {
 				return p.SendMessage(msg)
 			}, entry.maxAttempts, entry.retryDelay, entry.maxBackoff, p.Name())
-		}
 	}
 	if err != nil {
 		metrics.Default.NotificationsDropped.Add(1)
@@ -1169,6 +1166,17 @@ func (a *AlertManager) deliverOne(ctx context.Context, entry *providerEntry, inc
 			}
 		}
 	}
+}
+
+// buildMessage wraps formatIncidentMessage with optional insight-based
+// message builder. When insight is present, uses the structured message
+// builder; otherwise falls back to the existing formatIncidentMessage.
+func (a *AlertManager) buildMessage(inc *model.Incident, action model.IncidentAction, ins *insight.Insight, maxLines int, templates map[string]*template.Template) string {
+	if ins != nil {
+		b := message.NewBuilder()
+		return b.Build(inc, action, ins)
+	}
+	return formatIncidentMessage(inc, action, maxLines, templates)
 }
 
 // fanOut delivers a job to every registered provider channel (non-blocking).
@@ -1193,7 +1201,7 @@ func (a *AlertManager) fanOut(job deliverJob) {
 
 // deliverAllSync sends directly to every provider (synchronous).
 // Used before Start() is called (e.g. kwatch replay).
-func (a *AlertManager) deliverAllSync(inc *model.Incident, action model.IncidentAction) {
+func (a *AlertManager) deliverAllSync(inc *model.Incident, action model.IncidentAction, ins *insight.Insight) {
 	a.cfgMu.RLock()
 	maxLines := a.maxLogLines
 	a.cfgMu.RUnlock()
@@ -1206,24 +1214,8 @@ func (a *AlertManager) deliverAllSync(inc *model.Incident, action model.Incident
 		if len(tpl) == 0 {
 			tpl = a.templates
 		}
-		msg := truncateMsg(formatIncidentMessage(inc, action, maxLines, tpl), entry.maxBytes)
-		if action == model.ActionDigestFlush {
-			var err error
-			if _, ok := p.(EventDeliveryProvider); ok {
-				ev := incidentToEvent(inc, action)
-				err = sendWithRetry(context.Background(), func() error {
-					return p.SendEvent(ev)
-				}, entry.maxAttempts, entry.retryDelay, entry.maxBackoff, p.Name())
-			} else {
-				err = sendWithRetry(context.Background(), func() error {
-					return p.SendMessage(msg)
-				}, entry.maxAttempts, entry.retryDelay, entry.maxBackoff, p.Name())
-			}
-			if err != nil {
-				klog.ErrorS(err, "sync delivery failed", "provider", p.Name(), "key", inc.Key, "id", inc.ID)
-			}
-			continue
-		}
+		msg := a.buildMessage(inc, action, ins, maxLines, tpl)
+		msg = truncateMsg(msg, entry.maxBytes)
 		if !shouldDeliver(entry.routes, inc) {
 			continue
 		}
@@ -1264,8 +1256,6 @@ func formatIncidentMessage(inc *model.Incident, action model.IncidentAction, max
 		defaultMsg = formatUpdateMessage(inc, maxLines)
 	case model.ActionResolved:
 		defaultMsg = formatResolvedMessage(inc)
-	case model.ActionDigestFlush:
-		defaultMsg = inc.Hint
 	default:
 		return ""
 	}

@@ -12,7 +12,7 @@ type Registry struct {
 	IncidentsCreate      atomic.Int64
 	IncidentsUpdate      atomic.Int64
 	IncidentsResolved    atomic.Int64
-	IncidentsDigest      atomic.Int64
+	IncidentsGrouped     atomic.Int64
 	NotificationsTotal   atomic.Int64
 	NotificationsDropped atomic.Int64
 	BaselineSize         atomic.Int64
@@ -35,7 +35,7 @@ func (r *Registry) Handler() http.Handler {
 			"create":   r.IncidentsCreate.Load(),
 			"update":   r.IncidentsUpdate.Load(),
 			"resolved": r.IncidentsResolved.Load(),
-			"digest":   r.IncidentsDigest.Load(),
+			"grouped":  r.IncidentsGrouped.Load(),
 		} {
 			lines = append(lines, fmt.Sprintf(`kwatch_incidents_total{action="%s"} %d`, action, count))
 		}

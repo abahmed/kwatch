@@ -46,7 +46,7 @@
 kwatch is like a **smart friend** for your Kubernetes cluster:
 
 - 💥 Something crashes → you get a message that says *why* (not just "pod is broken")
-- 🔇 Smart about noise — groups related issues, ignores flapping, sends a digest when things get crazy
+- 🔇 Smart about noise — groups related issues into a single notification, ignores flapping
 - 🧠 Optional AI that reads the logs and tells you what's likely wrong
 - ⚡ Works in **under a minute** — just one command and a config file
 
@@ -104,27 +104,56 @@ Every monitor below is **on by default** — zero config needed:
 | Signal | Default | What you get |
 |--------|---------|-------------|
 | 🟥 Pod crashes (CrashLoop, OOM, ImagePull, Error) | ✅ **on** | Container state + previous logs + events — tells you *why* |
-| ⏳ Pending pods (stuck Unschedulable) | ✅ **on** | Alerts after 300s stuck |
+| ⏳ Pending pods (stuck Unschedulable) | ✅ **on** | Alerts after 300s stuck; includes scheduling delay in hint |
+| 🎯 Scheduling delay diagnostics | ✅ **on** | Prepends `"unschedulable for XmYs"` duration to Unschedulable hints |
 | 🖥️ Node issues (NotReady, Disk/Memory pressure) | ✅ **on** | Per-condition severity |
 | 💾 PVC running out of space | ✅ **on** | Warn at 80%, critical at 90% |
 | ❌ Failed Jobs | ✅ **on** | `JobFailed` / `JobSuspended` |
 | 🚀 Stuck rollouts | ✅ **on** | `ProgressDeadlineExceeded` — deployment didn't finish |
+| 🚦 Deployment unavailable | ✅ **on** | `DeploymentUnavailable` — unavailable replicas for `rolloutMonitor.sustainedMinutes` consecutive minutes |
 | 📡 DaemonSet pods not running | ✅ **on** | Unavailable pods detected |
 | ⏰ CronJob suspended or missing runs | ✅ **on** | Not scheduled in 24h? Alert. |
 | 📈 HPA stuck at max replicas | ✅ **on** | After 20 minutes sustained |
+| 🔗 Service endpoint health | ✅ **on** | Detects endpoints with zero ready addresses |
+| 🧩 Admission webhook backends | ✅ **on** | Alerts when a webhook's backing service has no ready endpoints |
+| 🏛️ Control-plane component health | ✅ **on** | Detects broken control-plane pods (apiserver, scheduler, etc.) |
+| 🧩 StatefulSet unavailable | ✅ **on** | `StsUnavailable` — pods not ready for `statefulSetMonitor.sustainedMinutes` minutes |
+| 🔄 PDB blocking disruptions | ✅ **on** | `PdbViolation` — PodDisruptionBudget has `disruptionsAllowed=0` and unhealthy pods |
+| 🏭 Node overcommit prediction | ✅ **on** | `NodeResourceHigh/Critical` — warning at 2×, critical at 4× CPU/mem overcommit |
+| 💥 OOM pattern detection | ✅ **on** | `OOMRepeating` — 3+ OOM kills in 60-minute sliding window flags potential memory leak |
+| 🌐 Ingress backend health | ✅ **on** | Alerts when ingress backend services have no ready endpoints |
+| 🚧 NetworkPolicy over-restriction | ✅ **on** | Detects policies that may block all ingress traffic |
 | 🔒 TLS certs expiring | ❌ off | Enable if you want cert expiry warnings |
+| 🧠 Context-aware intelligence (dependency analysis) | ✅ **on** | Links incidents to root causes — unhealthy nodes, bad rollouts, misconfigured ConfigMaps/Secrets |
+| 📊 Mass failure detection | ✅ **on** | Detects when 30%+ of dependents sharing a node/configmap/secret fail simultaneously |
 
 ✅ **TLS is the only one off** — everything else just works out of the box.
 
 ---
 
-## 🤖 AI-powered troubleshooting (optional, on by default)
+### 🧠 Context-aware intelligence
 
-kwatch ships with **built-in AI** (runs inside your cluster — zero data leaves):
+kwatch builds a **dependency graph** of your cluster from pod informers — mapping pods to their nodes, owners (Deployments/StatefulSets/DaemonSets), and referenced ConfigMaps/Secrets. When an incident fires, the insight engine analyzes it against the graph and answers:
+
+- **What likely caused this?** — unhealthy node, failed rollout, or misconfigured resources
+- **What's the impact?** — how many pods, services, or dependents are affected
+- **Recent changes?** — correlated changes on the same resource or namespace
+
+The graph is built at startup from the informer cache and updated incrementally as pods come and go. No configuration needed.
+
+#### Mass failure detection
+
+The correlation engine periodically scans all active incidents for shared dependencies. If more than 30% of dependents sharing a node, ConfigMap, or Secret are in failure, a mass failure alert fires. The threshold is dynamic — computed per dependency based on the current scope. Mass failures automatically resolve when the underlying incidents clear.
+
+---
+
+## 🤖 AI-powered troubleshooting (optional, off by default)
+
+kwatch ships with **built-in AI** (runs inside your cluster — zero data leaves). It is disabled by default; set `enabled: true` to use it:
 
 ```yaml
 llm:
-  enabled: true   # ✅ on by default!
+  enabled: false   # ❌ off by default!
 ```
 
 When a crash happens, the AI reads the logs and tells you the **most likely cause** and **what to do next**. Like having a senior SRE on-call with you.
@@ -147,7 +176,7 @@ When a crash happens, the AI reads the logs and tells you the **most likely caus
 | `ignoreFailedGracefulShutdown` | ✅ Skip containers killed during graceful shutdown (default: true) |
 | `ignoreDisruptionTerminations` | ✅ Skip pods evicted during node drains (default: true) |
 | `runbooks` | 📚 Add links to your runbooks per error reason |
-| `llm.enabled` | 🤖 AI enrichment (default: true) |
+| `llm.enabled` | 🤖 AI enrichment (default: false) |
 | `containerRestartThreshold` | Alert if a container restarts this many times (0 = off) |
 | `reportStartupBaseline` | 📋 Send one startup summary of pre-existing issues (default: false) |
 
@@ -215,7 +244,7 @@ reasons:
 
 ---
 
-## 📊 Monitors (all on by default)
+## 📊 Monitors
 
 ### 💾 PVC Monitor — disk space alerts
 
@@ -240,6 +269,7 @@ Catches: `NotReady`, `Unknown`, `MemoryPressure`, `DiskPressure`, `PIDPressure`,
 | Parameter | What it does |
 |:---|---|
 | `rolloutMonitor.enabled` | ✅ Watch for stuck deployments (default: true) |
+| `rolloutMonitor.sustainedMinutes` | ⏱️ Minutes of unavailability before alerting (default: 2) |
 
 ### 📡 DaemonSet Monitor
 
@@ -284,6 +314,95 @@ If kwatch stops or crashes, the external monitor stops getting pings and pages y
 | `tlsMonitor.threshold` | 📅 Days before warning (default: 30) |
 | `tlsMonitor.criticalThreshold` | 🚨 Days before critical (default: 3) |
 
+### 🔗 Service Endpoint Monitor
+
+| Parameter | What it does |
+|:---|---|
+| `serviceMonitor.enabled` | 🔗 Watch for services with zero ready endpoints (default: true) |
+
+Detects when a Service's backing Endpoints object has zero ready addresses, indicating no healthy pods are available to serve traffic.
+
+### 🧩 Admission Webhook Monitor
+
+| Parameter | What it does |
+|:---|---|
+| `admissionWebhookMonitor.enabled` | 🧩 Watch for webhooks with unreachable backends (default: true) |
+
+Monitors `MutatingWebhookConfiguration` and `ValidatingWebhookConfiguration` resources. Alerts when a webhook's backing service has no ready endpoints, meaning admission requests may fail or timeout.
+
+### 🏛️ Control-Plane Monitor
+
+| Parameter | What it does |
+|:---|---|
+| `controlPlaneMonitor.enabled` | 🏛️ Watch for broken control-plane components (default: true) |
+
+Detects container issues (CrashLoopBackOff, Error, OOMKilled, etc.) in control-plane pods (kube-apiserver, kube-scheduler, kube-controller-manager, etcd, kube-proxy, coredns). Runs a dedicated sweep at startup to catch pre-existing failures.
+
+### 🌐 Ingress Backend Monitor
+
+| Parameter | What it does |
+|:---|---|
+| `ingressMonitor.enabled` | 🌐 Watch for ingress backends with no ready endpoints (default: true) |
+
+Alerts when an Ingress rule references a backend service that has zero ready endpoints, meaning traffic to that host/path would return an error.
+
+### 🚧 Network Policy Monitor
+
+| Parameter | What it does |
+|:---|---|
+| `networkPolicyMonitor.enabled` | 🚧 Detect overly restrictive network policies (default: true) |
+
+Detects `NetworkPolicy` resources that deny all ingress traffic (no ingress rules defined). Helps identify policies that may unintentionally block legitimate traffic.
+
+### 🧩 StatefulSet Monitor
+
+| Parameter | What it does |
+|:---|---|
+| `statefulSetMonitor.enabled` | ✅ Watch for unavailable StatefulSet pods (default: true) |
+| `statefulSetMonitor.sustainedMinutes` | ⏱️ Minutes of unavailability before alerting, plus 15-minute rollout grace (default: 5) |
+
+Monitors StatefulSets where `readyReplicas < replicas` for a sustained period, with a 15-minute grace window during rollouts to avoid alerting mid-update.
+
+### 🔄 PDB Monitor
+
+| Parameter | What it does |
+|:---|---|
+| `pdbMonitor.enabled` | ✅ Watch for PDBs blocking voluntary disruptions (default: true) |
+| `pdbMonitor.sustainedMinutes` | ⏱️ Minutes of blocking before alerting (default: 5) |
+
+Alerts when a PodDisruptionBudget has `disruptionsAllowed=0` and `currentHealthy < desiredHealthy`, meaning voluntary disruptions (rollouts, node drains) are blocked.
+
+### 🏭 Node Resource Monitor
+
+| Parameter | What it does |
+|:---|---|
+| `nodeResourceMonitor.enabled` | ✅ Check node overcommit levels (default: true) |
+| `nodeResourceMonitor.intervalSeconds` | ⏱️ How often to check (default: 300) |
+| `nodeResourceMonitor.cpuWarning` | ⚠️ CPU overcommit ratio for warning (default: 2.0) |
+| `nodeResourceMonitor.cpuCritical` | 🚨 CPU overcommit ratio for critical (default: 4.0) |
+| `nodeResourceMonitor.memWarning` | ⚠️ Memory overcommit ratio for warning (default: 2.0) |
+| `nodeResourceMonitor.memCritical` | 🚨 Memory overcommit ratio for critical (default: 4.0) |
+
+Periodically computes the ratio of pod resource requests vs node allocatable for CPU and memory. Data is purely in-memory — no TSDB or persistent storage needed.
+
+### 💥 OOM Pattern Monitor
+
+| Parameter | What it does |
+|:---|---|
+| `oomMonitor.enabled` | ✅ Track repeating OOMs (default: true) |
+| `oomMonitor.threshold` | 🔢 OOM count within window to flag (default: 3) |
+| `oomMonitor.windowMinutes` | ⏱️ Sliding window in minutes (default: 60) |
+
+Tracks OOMKilled events per container in a sliding window. When the threshold is exceeded, the reason changes from `OOMKilled` to `OOMRepeating` with a hint suggesting a potential memory leak.
+
+### 🎯 Scheduling Delay Diagnostics
+
+| Parameter | What it does |
+|:---|---|
+| `scheduleMonitor.enabled` | ✅ Compute unschedulable delay (default: true) |
+
+When a pod is stuck Unschedulable, computes `now - PodScheduled.LastTransitionTime` and prepends the delay to the hint (e.g., `"unschedulable for 5m30s — ..."`).
+
 ⏳ **Pending Pod Threshold** — alert after N seconds stuck in Pending (default: 300s)
 
 ### 🎯 Severity
@@ -309,15 +428,6 @@ silences:
 |:---|---|
 | `inhibition.nodeSuppressesPods` | ✅ Don't alert on pod issues if the node itself is down (default: true) |
 
-### ⛈️ Storm / Digest — when everything breaks at once
-
-| Parameter | What it does |
-|:---|---|
-| `storm.enabled` | ✅ Bundle rapid alerts into a summary (default: true) |
-| `storm.threshold` | Max alerts per window before digest mode (default: 10) |
-| `storm.windowMinutes` | ⏱️ Sliding window (default: 5 min) |
-| `storm.digestIntervalMinutes` | ⏱️ How often to send the summary (default: 5 min) |
-
 ### 📝 Custom message templates
 
 ```yaml
@@ -335,6 +445,14 @@ templates:
 | `correlation.escalation.enabled` | ✅ Escalate severity on repeated crashes (default: true) |
 | `correlation.escalation.tiers` | 📊 Restart thresholds: `[3, 10, 50]` |
 | `correlation.renotify.maxPerIncident` | 🔔 Max re-alerts per incident (default: 3) |
+
+### 🧹 Smart Grouping — coalesce duplicate notifications
+
+| Parameter | What it does |
+|:---|---|
+| `smartGrouping.windowSeconds` | ⏱ Grouping window in seconds (default: 60). Set to 0 to disable. |
+
+kwatch groups related incidents by the dimension that best captures each failure type's root cause. For example, OOMKilled and probe failures group by owner+namespace, node conditions group by node, image pull errors group by image (or globally for rate limits), and CrashLoopBackOff with a matching log signature (e.g. Postgres unreachable) bridges across owners. Each group notification shows affected pods, owners, nodes, or images depending on scope, with overflow counting above 1,000 entries. Always enabled by default.
 
 ### 📋 CRD — live config changes
 

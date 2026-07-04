@@ -167,7 +167,7 @@ func (p *PvcMonitor) reportSignal(s *event.Signal) {
 	}
 	inc, action := p.correlator.Process(ev, s.Owner, nil)
 	if action != model.ActionSkip {
-		p.alertManager.NotifyIncident(inc, action)
+		p.alertManager.NotifyIncident(inc, action, nil)
 	}
 }
 

@@ -117,11 +117,13 @@ func (h *handler) executeContainersFilters(ctx *filter.Context) {
 			ownerKind = ctx.Owner.Kind
 		}
 
-		hint := buildContainerHint(ctx)
+		hint := h.buildContainerHint(ctx)
 		h.signalEvent(&event.Signal{
 			Resource:     "pod",
 			PodName:      ctx.Pod.Name,
 			Container:    ctx.Container.Container.Name,
+			Image:        ctx.Container.Container.Image,
+			Message:      ctx.Container.Msg,
 			Namespace:    ctx.Pod.Namespace,
 			NodeName:     ctx.Pod.Spec.NodeName,
 			Reason:       ctx.Container.Reason,
@@ -160,7 +162,7 @@ func findContainerSpec(pod *corev1.Pod, name string) *corev1.Container {
 }
 
 // buildContainerHint computes a rich diagnostic hint from container state + spec.
-func buildContainerHint(ctx *filter.Context) string {
+func (h *handler) buildContainerHint(ctx *filter.Context) string {
 	reason := ctx.Container.Reason
 	exitCode := ctx.Container.ExitCode
 
@@ -177,6 +179,14 @@ func buildContainerHint(ctx *filter.Context) string {
 	}
 
 	spec := findContainerSpec(ctx.Pod, ctx.Container.Container.Name)
+
+	if (reason == "OOMKilled" || exitCode == 137) && h.oomTracker != nil {
+		key := ctx.Pod.Namespace + "/" + ctx.Pod.Name + "/" + ctx.Container.Container.Name
+		if count, repeating := h.oomTracker.record(key); repeating {
+			ctx.Container.Reason = "OOMRepeating"
+			return fmt.Sprintf("OOMKilled %d times in %dm — potential memory leak", count, h.config.OomMonitor.WindowMinutes)
+		}
+	}
 
 	if reason == "OOMKilled" || exitCode == 137 {
 		if spec != nil && spec.Resources.Limits != nil {
@@ -360,6 +370,7 @@ func (h *handler) emitHighRestartAlert(ctx *filter.Context, container *corev1.Co
 		Resource:     "pod",
 		PodName:      ctx.Pod.Name,
 		Container:    container.Name,
+		Image:        container.Image,
 		Namespace:    ctx.Pod.Namespace,
 		NodeName:     ctx.Pod.Spec.NodeName,
 		Reason:       "HighRestartCount",

@@ -1,0 +1,105 @@
+package context
+
+import (
+	"sync"
+	"time"
+)
+
+type ChangeType int
+
+const (
+	ChangeCreate ChangeType = iota
+	ChangeUpdate
+	ChangeDelete
+)
+
+func (t ChangeType) String() string {
+	switch t {
+	case ChangeCreate:
+		return "created"
+	case ChangeUpdate:
+		return "updated"
+	case ChangeDelete:
+		return "deleted"
+	default:
+		return "unknown"
+	}
+}
+
+type Change struct {
+	Resource  string
+	Namespace string
+	Name      string
+	Type      ChangeType
+	Timestamp time.Time
+	Detail    string
+}
+
+type ChangeTracker struct {
+	mu     sync.RWMutex
+	buffer []Change
+	head   int
+	count  int
+}
+
+const defaultTrackedChanges = 1000
+
+func NewChangeTracker(capacity int) *ChangeTracker {
+	if capacity <= 0 {
+		capacity = defaultTrackedChanges
+	}
+	return &ChangeTracker{
+		buffer: make([]Change, capacity),
+	}
+}
+
+func (t *ChangeTracker) Record(c Change) {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	t.buffer[t.head] = c
+	t.head = (t.head + 1) % len(t.buffer)
+	if t.count < len(t.buffer) {
+		t.count++
+	}
+}
+
+func (t *ChangeTracker) Recent(n int) []Change {
+	t.mu.RLock()
+	defer t.mu.RUnlock()
+	if n <= 0 || n > t.count {
+		n = t.count
+	}
+	out := make([]Change, n)
+	for i := 0; i < n; i++ {
+		idx := (t.head - n + i + len(t.buffer)) % len(t.buffer)
+		out[i] = t.buffer[idx]
+	}
+	return out
+}
+
+func (t *ChangeTracker) RecentByResource(resource string, n int) []Change {
+	t.mu.RLock()
+	defer t.mu.RUnlock()
+	var out []Change
+	for i := 0; i < t.count && len(out) < n; i++ {
+		idx := (t.head - 1 - i + len(t.buffer)) % len(t.buffer)
+		if t.buffer[idx].Resource == resource {
+			out = append(out, t.buffer[idx])
+		}
+	}
+	return out
+}
+
+func (t *ChangeTracker) RecentChangesBefore(age time.Duration) []Change {
+	t.mu.RLock()
+	defer t.mu.RUnlock()
+	cutoff := time.Now().Add(-age)
+	var out []Change
+	for i := 0; i < t.count; i++ {
+		idx := (t.head - 1 - i + len(t.buffer)) % len(t.buffer)
+		if t.buffer[idx].Timestamp.After(cutoff) {
+			out = append(out, t.buffer[idx])
+		}
+	}
+	return out
+}

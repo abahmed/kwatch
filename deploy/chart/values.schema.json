@@ -200,6 +200,36 @@
               "criticalThreshold": { "type": "integer" }
             }
           },
+          "serviceMonitor": {
+            "type": "object",
+            "properties": {
+              "enabled": { "type": "boolean" }
+            }
+          },
+          "admissionWebhookMonitor": {
+            "type": "object",
+            "properties": {
+              "enabled": { "type": "boolean" }
+            }
+          },
+          "controlPlaneMonitor": {
+            "type": "object",
+            "properties": {
+              "enabled": { "type": "boolean" }
+            }
+          },
+          "ingressMonitor": {
+            "type": "object",
+            "properties": {
+              "enabled": { "type": "boolean" }
+            }
+          },
+          "networkPolicyMonitor": {
+            "type": "object",
+            "properties": {
+              "enabled": { "type": "boolean" }
+            }
+          },
           "jobMonitor": {
             "type": "object",
             "properties": {
@@ -209,7 +239,14 @@
           "rolloutMonitor": {
             "type": "object",
             "properties": {
-              "enabled": { "type": "boolean" }
+              "enabled": { "type": "boolean" },
+              "sustainedMinutes": { "type": "integer", "default": 2, "minimum": 0 }
+            }
+          },
+          "smartGrouping": {
+            "type": "object",
+            "properties": {
+              "windowSeconds": { "type": "integer", "default": 60, "minimum": 0 }
             }
           },
           "pendingPodMonitor": {
@@ -264,15 +301,6 @@
             "type": "object",
             "properties": {
               "nodeSuppressesPods": { "type": "boolean" }
-            }
-          },
-          "storm": {
-            "type": "object",
-            "properties": {
-              "enabled": { "type": "boolean" },
-              "threshold": { "type": "integer" },
-              "windowMinutes": { "type": "integer" },
-              "digestIntervalMinutes": { "type": "integer" }
             }
           },
           "crd": {

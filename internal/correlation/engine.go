@@ -14,35 +14,52 @@ import (
 	"github.com/abahmed/kwatch/internal/event"
 	"github.com/abahmed/kwatch/internal/metrics"
 	"github.com/abahmed/kwatch/internal/model"
+	appsv1lister "k8s.io/client-go/listers/apps/v1"
+	corev1lister "k8s.io/client-go/listers/core/v1"
+	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/klog/v2"
 )
 
-type digestEntry struct {
-	key    string
-	reason string
-	ns     string
+type groupEntry struct {
+	key           string
+	namespace     string
+	owner         string
+	reason        string
+	kind          string // "pod", "node", "deployment", etc.
+
+	podName       string
+	containerName string
+	image         string
+	nodeName      string
+	logSignature  string
 }
+
+type pendingGroup struct {
+	firstSeen     time.Time
+	entries       []groupEntry
+	overflowCount int
+}
+
+const maxGroupEntries = 1000
 
 type Config struct {
 	Window                     time.Duration
 	LifecycleInterval          time.Duration
 	Enricher                   enricher.Enricher
 	LifecycleHook              func(inc *model.Incident, action model.IncidentAction)
+	MassFailureHook            func() // called during lifecycle tick; reports mass failures
 	BaselineTTL                time.Duration
 	Baseline                   map[string]map[string]int64
 	OnBaselineChange           func(baseline map[string]map[string]int64)
 	EscalationEnabled          bool
 	EscalationTiers            []int
 	InhibitNodeSuppressesPods  bool
-	StormEnabled               bool
-	StormThreshold             int
-	StormWindow                time.Duration
-	StormDigestInterval        time.Duration
 	MaxBaseline                int
 	RenotifyIntervalBySeverity map[string]time.Duration
 	RenotifyMaxPerIncident     int
 	ResolveHoldDown            time.Duration
 	Runbooks                   map[string]string
+	SmartGroupingWindow        time.Duration
 }
 
 // BuildKey constructs the incident key used for dedup, grouping, and baseline.
@@ -79,12 +96,6 @@ func notifSig(inc *model.Incident) string {
 
 // edgeAction returns the action to notify, or ActionSkip if nothing changed.
 func (e *Engine) edgeAction(inc *model.Incident) model.IncidentAction {
-	// Suppress resolve for incidents that were only ever digested (operator never saw the create)
-	if inc.Digested && inc.State == model.StateResolved {
-		inc.NotifiedSig = notifSig(inc)
-		inc.LastNotifiedAt = e.now()
-		return model.ActionSkip
-	}
 	sig := notifSig(inc)
 	if sig == inc.NotifiedSig {
 		return model.ActionSkip
@@ -96,7 +107,6 @@ func (e *Engine) edgeAction(inc *model.Incident) model.IncidentAction {
 		metrics.Default.IncidentsResolved.Add(1)
 		return model.ActionResolved
 	}
-	inc.Digested = false // real create/update edge firing → operator now has visibility; allow future renotify and resolve
 	if prev == "" {
 		metrics.Default.IncidentsCreate.Add(1)
 		return model.ActionCreate
@@ -170,13 +180,14 @@ type Engine struct {
 	namespaceIndex      map[string]map[string]*model.Incident // ns → key → inc
 	config              Config
 	seen                map[string]map[string]int64
+	deployLister        appsv1lister.DeploymentLister
+	ssLister            appsv1lister.StatefulSetLister
+	dsLister            appsv1lister.DaemonSetLister
 	activeNodeIncidents map[string]bool
 	lastContainerIndex  map[string]*model.ContainerState // key: namespace/podName
-	recentCreates       []time.Time
-	stormUntil          time.Time
-	digestBuf           []digestEntry
-	lastDigestFlush     time.Time
+	serviceLister       corev1lister.ServiceLister
 	cleanupCooldown     map[string]time.Time // key → cooldown expiry; prevents resolve→recreate cycle
+	pendingGroups       map[string]*pendingGroup // computeGroupKey output → group buffer
 	now                 func() time.Time
 }
 
@@ -200,6 +211,7 @@ func NewEngine(cfg Config) *Engine {
 		activeNodeIncidents: make(map[string]bool),
 		lastContainerIndex:  make(map[string]*model.ContainerState),
 		cleanupCooldown:     make(map[string]time.Time),
+		pendingGroups:       make(map[string]*pendingGroup),
 	}
 	if e.now == nil {
 		e.now = time.Now
@@ -382,7 +394,6 @@ var knownRetryReasons = map[string]bool{
 }
 
 func normalizeReason(reason string) string {
-	// Normalize ErrImagePull → ImagePullBackOff (same root cause)
 	if reason == "ErrImagePull" {
 		return "ImagePullBackOff"
 	}
@@ -390,10 +401,110 @@ func normalizeReason(reason string) string {
 	if idx > 0 {
 		base, suffix := reason[:idx], reason[idx+1:]
 		if _, err := strconv.Atoi(suffix); err == nil && knownRetryReasons[base] {
+			if base == "ErrImagePull" {
+				return "ImagePullBackOff"
+			}
 			return base
 		}
 	}
 	return reason
+}
+
+func containsAny(s string, substrs ...string) bool {
+	s = strings.ToLower(s)
+	for _, sub := range substrs {
+		if strings.Contains(s, sub) {
+			return true
+		}
+	}
+	return false
+}
+
+func classifyImagePullScope(msg string) string {
+	switch {
+	case containsAny(msg, "toomanyrequests", "rate limit"):
+		return "rate_limit"
+	case containsAny(msg, "pull qps"):
+		return "pull_qps"
+	case containsAny(msg, "authentication required", "unauthorized",
+		"denied", "no pull access"):
+		return "auth"
+	case containsAny(msg, "not found", "manifest unknown", "does not exist"):
+		return "image_not_found"
+	case containsAny(msg, "context deadline exceeded", "i/o timeout"):
+		return "timeout"
+	case containsAny(msg, "connection refused", "connection reset"):
+		return "conn_refused"
+	case containsAny(msg, "no route to host", "network is unreachable"):
+		return "net_unreachable"
+	case containsAny(msg, "no such host", "dial tcp"):
+		return "dns"
+	case containsAny(msg, "tls", "certificate"):
+		return "tls"
+	default:
+		return ""
+	}
+}
+
+func computeGroupKey(r string, ev event.Event, owner string) string {
+	switch r {
+	case "OOMKilled", "OOMRepeating", "CrashLoopHighFrequency", "HighRestartCount",
+		"InitContainerError",
+		"ContainerCannotRun", "CreateContainerError",
+		"DeadlineExceeded",
+		"StartupProbeFailed", "LivenessProbeFailed",
+		"ReadinessProbeFailed", "ProbeError",
+		"PostStartHookError", "PreStopHookError",
+		"NodeAffinity",
+		"ProgressDeadlineExceeded", "DeploymentUnavailable",
+		"DaemonSetUnavailable",
+		"StsUnavailable",
+		"PdbViolation",
+		"HPAMaxedOut", "HPAScalingError",
+		"JobFailed", "JobSuspended",
+		"CronJobSuspended", "CronJobNotScheduled",
+		"VolumeUsageHigh",
+		"PreExistingAtStartup":
+		return r + "|" + ev.Namespace + "|" + owner
+
+	case "CrashLoopBackOff", "BackOff", "Error":
+		if sig := enricher.SignatureHint(ev.Logs); sig != "" {
+			return r + "|sig|" + sig
+		}
+		return r + "|" + ev.Namespace + "|" + owner
+
+	case "ImagePullBackOff", "ErrImagePull":
+		scope := classifyImagePullScope(ev.Message)
+		switch scope {
+		case "rate_limit", "pull_qps", "timeout", "conn_refused",
+			"net_unreachable", "dns", "tls":
+			return r + "|global|" + scope
+		case "auth":
+			return r + "|ns|" + ev.Namespace
+		case "image_not_found":
+			return r + "|img|" + ev.Image + "|ns|" + ev.Namespace
+		default:
+			return r + "|img|" + ev.Image + "|ns|" + ev.Namespace
+		}
+
+	case "ImageInspectError", "InvalidImageName":
+		return r + "|img|" + ev.Image + "|ns|" + ev.Namespace
+
+	case "NodeNotReady", "MemoryPressure", "DiskPressure",
+		"PIDPressure", "NetworkUnavailable",
+		"ContainerStatusUnknown", "Evicted", "Preempting",
+		"NodeResourceHigh", "NodeResourceCritical":
+		return r + "|node|" + ev.NodeName
+
+	case "CreateContainerConfigError", "Unschedulable", "PodPending",
+		"SchedulingGated",
+		"RegistryUnavailable",
+		"TLSCertExpired", "TLSCertExpiringSoon":
+		return r + "|ns|" + ev.Namespace
+
+	default:
+		return r + "|" + ev.Namespace + "|" + owner
+	}
 }
 
 // Caller must hold e.mu.
@@ -525,6 +636,161 @@ func (e *Engine) SetAnalysis(key, analysis string) {
 	}
 }
 
+func (e *Engine) SetDeployLister(l appsv1lister.DeploymentLister) {
+	e.mu.Lock()
+	defer e.mu.Unlock()
+	e.deployLister = l
+}
+
+func (e *Engine) SetStatefulSetLister(l appsv1lister.StatefulSetLister) {
+	e.mu.Lock()
+	defer e.mu.Unlock()
+	e.ssLister = l
+}
+
+func (e *Engine) SetDaemonSetLister(l appsv1lister.DaemonSetLister) {
+	e.mu.Lock()
+	defer e.mu.Unlock()
+	e.dsLister = l
+}
+
+func (e *Engine) SetServiceLister(l corev1lister.ServiceLister) {
+	e.mu.Lock()
+	defer e.mu.Unlock()
+	e.serviceLister = l
+}
+
+// SnapshotAll returns a deep copy of all non-resolved incidents keyed by ID.
+func (e *Engine) SnapshotAll() map[string]*model.Incident {
+	e.mu.Lock()
+	defer e.mu.Unlock()
+	out := make(map[string]*model.Incident, len(e.state))
+	for key, inc := range e.state {
+		if inc.State == model.StateResolved {
+			continue
+		}
+		out[key] = inc.Clone()
+	}
+	return out
+}
+
+// RestoreIncidents loads previously persisted incidents into the state map.
+// Only incidents whose key still exists in the seen (baseline) set are
+// restored, to avoid re-alerting for issues that were resolved while down.
+// LastSeen is bumped to now to prevent immediate cleanup-loop resolution.
+func (e *Engine) RestoreIncidents(incidents map[string]*model.Incident) {
+	e.mu.Lock()
+	defer e.mu.Unlock()
+	if len(incidents) == 0 {
+		return
+	}
+	now := e.now()
+	restored := 0
+	for key, inc := range incidents {
+		if _, ok := e.seen[key]; !ok || len(e.seen[key]) == 0 {
+			continue
+		}
+		if _, exists := e.state[key]; exists {
+			continue
+		}
+		inc.LastSeen = now
+		inc.LastUpdate = now
+		inc.NotifiedSig = notifSig(inc)
+		e.state[key] = inc
+		e.indexIncidentByNamespace(inc)
+		restored++
+	}
+	if restored > 0 {
+		klog.InfoS("restored incidents from ConfigMap", "count", restored)
+	}
+}
+
+// findDependentServices returns the names of Services in the given namespace
+// whose selectors match the provided pod labels. Returns nil if no service
+// lister is configured or no matches are found.
+func (e *Engine) findDependentServices(namespace string, podLabels map[string]string) []string {
+	if e.serviceLister == nil || len(podLabels) == 0 {
+		return nil
+	}
+	svcs, err := e.serviceLister.Services(namespace).List(labels.Everything())
+	if err != nil {
+		return nil
+	}
+	var result []string
+	for _, svc := range svcs {
+		if len(svc.Spec.Selector) == 0 {
+			continue
+		}
+		match := true
+		for k, v := range svc.Spec.Selector {
+			if podLabels[k] != v {
+				match = false
+				break
+			}
+		}
+		if match {
+			result = append(result, svc.Name)
+		}
+	}
+	return result
+}
+
+func (e *Engine) isOwnerHealthy(inc *model.Incident) bool {
+	if inc.Resource != "pod" {
+		return true
+	}
+	ns := inc.Namespace
+	name := inc.Name
+	if ns == "" || name == "" {
+		return true
+	}
+
+	switch inc.OwnerKind {
+	case "Deployment":
+		if e.deployLister == nil {
+			return true
+		}
+		d, err := e.deployLister.Deployments(ns).Get(name)
+		if err != nil {
+			return len(inc.Resources) == 0
+		}
+		if d.Status.ObservedGeneration < d.Generation {
+			return false
+		}
+		return d.Status.ReadyReplicas >= d.Status.Replicas &&
+			d.Status.UnavailableReplicas == 0
+
+	case "StatefulSet":
+		if e.ssLister == nil {
+			return true
+		}
+		ss, err := e.ssLister.StatefulSets(ns).Get(name)
+		if err != nil {
+			return len(inc.Resources) == 0
+		}
+		if ss.Status.ObservedGeneration < ss.Generation {
+			return false
+		}
+		return ss.Status.ReadyReplicas >= ss.Status.Replicas &&
+			ss.Status.CurrentRevision == ss.Status.UpdateRevision
+
+	case "DaemonSet":
+		if e.dsLister == nil {
+			return true
+		}
+		ds, err := e.dsLister.DaemonSets(ns).Get(name)
+		if err != nil {
+			return len(inc.Resources) == 0
+		}
+		return ds.Status.DesiredNumberScheduled > 0 &&
+			ds.Status.NumberUnavailable == 0 &&
+			ds.Status.UpdatedNumberScheduled == ds.Status.DesiredNumberScheduled
+
+	default:
+		return true
+	}
+}
+
 func (e *Engine) Process(ev event.Event, owner string, cs *model.ContainerState) (incident *model.Incident, action model.IncidentAction) {
 	e.mu.Lock()
 	defer e.mu.Unlock()
@@ -590,6 +856,32 @@ func (e *Engine) Process(ev event.Event, owner string, cs *model.ContainerState)
 	}
 
 	now := e.now()
+
+	// Cascading suppression: if a pod incident fires and its owning workload
+	// already has an active (non-pod) incident, suppress the pod as a symptom.
+	if res == "pod" && owner != "" {
+		prefix := ev.Namespace + ":" + owner + ":"
+		for _, existing := range e.state {
+			if existing.State == model.StateResolved ||
+				existing.State == model.StatePendingResolve {
+				continue
+			}
+			if existing.Resource != "pod" &&
+				existing.Namespace == ev.Namespace &&
+				existing.Name == owner &&
+				strings.HasPrefix(existing.Key, prefix) {
+				existing.Count++
+				if ev.PodName != "" {
+					existing.Resources[ev.PodName] = true
+					if len(existing.Resources) > existing.PeakResources {
+						existing.PeakResources = len(existing.Resources)
+					}
+				}
+				existing.LastSeen = now
+				return nil, model.ActionSkip
+			}
+		}
+	}
 
 	if inc, ok := e.state[key]; ok {
 		// Already resolved — re-create as fresh incident
@@ -697,27 +989,42 @@ func (e *Engine) Process(ev event.Event, owner string, cs *model.ContainerState)
 	e.state[key] = inc
 	e.indexIncidentByNamespace(inc)
 
-	if e.config.StormEnabled {
-		e.recentCreates = append(e.recentCreates, now)
-		cutoff := now.Add(-e.config.StormWindow)
-		kept := 0
-		for _, t := range e.recentCreates {
-			if t.After(cutoff) {
-				e.recentCreates[kept] = t
-				kept++
-			}
+	// Smart grouping: buffer same-reason incidents, suppress individual
+	// notification until the group window expires. Group key varies by
+	// reason and content (owner, node, signature, image, namespace).
+	if e.config.SmartGroupingWindow > 0 {
+		r := normalizeReason(ev.Reason)
+		gk := computeGroupKey(r, ev, owner)
+		pg, ok := e.pendingGroups[gk]
+		if !ok {
+			pg = &pendingGroup{firstSeen: now}
+			e.pendingGroups[gk] = pg
 		}
-		e.recentCreates = e.recentCreates[:kept]
-
-		if now.Before(e.stormUntil) || len(e.recentCreates) >= e.config.StormThreshold {
-			e.stormUntil = now.Add(e.config.StormWindow)
-			e.digestBuf = append(e.digestBuf, digestEntry{key: key, reason: ev.Reason, ns: ev.Namespace})
-			inc.Digested = true
-			inc.NotifiedSig = notifSig(inc)
-			inc.LastNotifiedAt = now
-			metrics.Default.IncidentsDigest.Add(1)
-			return inc, model.ActionDigest
+		sig := ""
+		if r == "CrashLoopBackOff" || r == "BackOff" || r == "Error" {
+			sig = enricher.SignatureHint(ev.Logs)
 		}
+		entry := groupEntry{
+			key:           key,
+			namespace:     ev.Namespace,
+			owner:         owner,
+			reason:        r,
+			kind:          ev.Resource,
+			podName:       ev.PodName,
+			containerName: ev.ContainerName,
+			image:         ev.Image,
+			nodeName:      ev.NodeName,
+			logSignature:  sig,
+		}
+		pg.entries = append(pg.entries, entry)
+		if len(pg.entries) > maxGroupEntries {
+			pg.entries = pg.entries[1:]
+			pg.overflowCount++
+		}
+		inc.NotifiedSig = notifSig(inc)
+		inc.LastNotifiedAt = now
+		metrics.Default.IncidentsGrouped.Add(1)
+		return inc, model.ActionSkip
 	}
 
 	return inc, e.edgeAction(inc)
@@ -771,6 +1078,19 @@ func (e *Engine) newIncident(ev event.Event, owner string, cs *model.ContainerSt
 		}
 	}
 	e.config.Enricher.Enrich(&ev, inc)
+
+	// Topological annotation: dependent services
+	if deps := e.findDependentServices(ev.Namespace, ev.Labels); len(deps) > 0 {
+		inc.Hint = enricher.CombineHints(inc.Hint,
+			fmt.Sprintf("affects service(s): %s", strings.Join(deps, ", ")))
+	}
+
+	// Topological annotation: parent workload health
+	if res == "pod" && owner != "" && !e.isOwnerHealthy(inc) {
+		inc.Hint = enricher.CombineHints(inc.Hint,
+			fmt.Sprintf("owning %s %s is also unhealthy", ev.OwnerKind, owner))
+	}
+
 	return inc
 }
 
@@ -778,6 +1098,11 @@ func (e *Engine) MarkResolved(key string) {
 	e.mu.Lock()
 	inc, ok := e.state[key]
 	if !ok || inc.State == model.StateResolved || inc.State == model.StatePendingResolve {
+		e.mu.Unlock()
+		return
+	}
+	// Do not resolve if the owning workload is still unhealthy.
+	if !e.isOwnerHealthy(inc) {
 		e.mu.Unlock()
 		return
 	}
@@ -829,6 +1154,12 @@ func (e *Engine) RemovePod(namespace, podName string) {
 		delete(inc.Resources, podName)
 		if len(inc.Resources) == 0 && inc.State != model.StateResolved {
 			if inc.State == model.StatePendingResolve {
+				continue
+			}
+			// Before resolving, check if the owning workload is healthy.
+			// This prevents resolve→re-alert cycling for broken rollouts
+			// where pods keep being replaced.
+			if !e.isOwnerHealthy(inc) {
 				continue
 			}
 			if e.config.ResolveHoldDown > 0 {
@@ -884,6 +1215,10 @@ func (e *Engine) ResolveByResource(resource, name string) {
 	for key, inc := range e.state {
 		if inc.Resource == resource && inc.Name == name && inc.State != model.StateResolved {
 			if inc.State == model.StatePendingResolve {
+				continue
+			}
+			// For pod incidents owned by a workload, gate on workload health.
+			if !e.isOwnerHealthy(inc) {
 				continue
 			}
 			if e.config.ResolveHoldDown > 0 {
@@ -956,6 +1291,10 @@ func (e *Engine) cleanup() {
 		if !now.After(inc.LastSeen.Add(e.config.Window)) {
 			continue
 		}
+		// Do not clean up pod incidents whose owning workload is still unhealthy.
+		if !e.isOwnerHealthy(inc) {
+			continue
+		}
 		// Finalize active/digested incidents with a resolve so the
 		// LifecycleHook emits a resolved notification and Slack's
 		// threadMap is pruned. Skip StatePendingResolve — that state is
@@ -997,6 +1336,12 @@ func (e *Engine) checkLifecycle() {
 	// pending resolve finalization
 	for key, inc := range e.state {
 		if inc.State == model.StatePendingResolve && !inc.ResolveAt.IsZero() && now.After(inc.ResolveAt) {
+			// Do not finalize if the owning workload is still unhealthy.
+			if !e.isOwnerHealthy(inc) {
+				inc.State = model.StateActive
+				inc.ResolveAt = time.Time{}
+				continue
+			}
 			inc.State = model.StateResolved
 			if inc.Resource == "node" {
 				e.refreshNodeInhibition(inc.Name)
@@ -1013,7 +1358,7 @@ func (e *Engine) checkLifecycle() {
 	renotifyBySev := e.config.RenotifyIntervalBySeverity
 	if len(renotifyBySev) > 0 {
 		for _, inc := range e.state {
-			if inc.State == model.StateResolved || inc.State == model.StatePendingResolve || inc.Digested {
+			if inc.State == model.StateResolved || inc.State == model.StatePendingResolve {
 				continue
 			}
 			maxPer := e.config.RenotifyMaxPerIncident
@@ -1039,32 +1384,50 @@ func (e *Engine) checkLifecycle() {
 		}
 	}
 
-	// digest flush
-	if e.config.StormEnabled && len(e.digestBuf) > 0 && now.After(e.lastDigestFlush.Add(e.config.StormDigestInterval)) {
-		n := len(e.digestBuf)
-		summary := e.buildDigestSummary()
-		e.digestBuf = nil
-		e.lastDigestFlush = now
-		if summary == "" {
-			summary = fmt.Sprintf("⚡ %d new incident(s) during storm window (%s)",
-				n, e.config.StormWindow.String())
+	// smart grouping flush
+	if e.config.SmartGroupingWindow > 0 {
+		for gk, pg := range e.pendingGroups {
+			if len(pg.entries) > 0 && now.After(pg.firstSeen.Add(e.config.SmartGroupingWindow)) {
+				var active []groupEntry
+				for _, ge := range pg.entries {
+					if inc, ok := e.state[ge.key]; ok && inc.State != model.StateResolved && inc.State != model.StatePendingResolve {
+						active = append(active, ge)
+					}
+				}
+				if len(active) > 0 {
+					summary := e.buildGroupSummary(active, pg.firstSeen)
+					if pg.overflowCount > 0 {
+						summary += fmt.Sprintf(" +%d more", pg.overflowCount)
+					}
+					groupIncKey := "__group__:" + gk + ":" + strconv.FormatInt(now.Unix(), 10)
+					sev := e.groupSeverity(active)
+					groupInc := &model.Incident{
+						ID:        fmt.Sprintf("%08x", crc32.ChecksumIEEE([]byte(groupIncKey))),
+						Key:       groupIncKey,
+						Reason:    active[0].reason,
+						Name:      gk,
+						Count:     len(active),
+						FirstSeen: pg.firstSeen,
+						LastSeen:  now,
+						Hint:      summary,
+						Severity:  sev,
+					}
+					pending = append(pending, transition{groupInc, model.ActionCreate})
+				}
+				delete(e.pendingGroups, gk)
+			}
 		}
-		digestKey := "digest:" + strconv.FormatInt(now.Unix(), 10)
-		digestInc := &model.Incident{
-			ID:     fmt.Sprintf("%08x", crc32.ChecksumIEEE([]byte(digestKey))),
-			Key:    digestKey,
-			Reason: "DigestSummary",
-			Count:  n,
-			Hint:   summary,
-		}
-		pending = append(pending, transition{digestInc, model.ActionDigestFlush})
 	}
+
 	e.mu.Unlock()
 
 	for _, t := range pending {
 		if hook := e.config.LifecycleHook; hook != nil {
 			hook(t.inc, t.action)
 		}
+	}
+	if hook := e.config.MassFailureHook; hook != nil {
+		hook()
 	}
 	if baselineChanged {
 		if hook := e.config.OnBaselineChange; hook != nil {
@@ -1077,45 +1440,223 @@ func (e *Engine) checkLifecycle() {
 }
 
 // Caller must hold e.mu.
-func (e *Engine) buildDigestSummary() string {
-	if len(e.digestBuf) == 0 {
+// buildGroupSummary produces a human-readable summary for a smart grouping
+// flush using scope-adapted format.
+func (e *Engine) buildGroupSummary(entries []groupEntry, firstSeen time.Time) string {
+	if len(entries) == 0 {
 		return ""
 	}
-	byReason := make(map[string]map[string]int)
-	for _, d := range e.digestBuf {
-		if byReason[d.reason] == nil {
-			byReason[d.reason] = make(map[string]int)
-		}
-		byReason[d.reason][d.ns]++
+	scope := detectGroupScope(entries)
+	r := entries[0].reason
+	timeAgo := ""
+	if d := e.now().Sub(firstSeen).Round(time.Second); d > 0 {
+		timeAgo = fmt.Sprintf(" — %s", timeAgoStr(d))
 	}
-	var parts []string
-	for reason, nsMap := range byReason {
-		total := 0
-		for _, c := range nsMap {
-			total += c
-		}
-		if total <= 1 {
-			continue
-		}
-		nsList := make([]string, 0, len(nsMap))
-		for ns := range nsMap {
-			nsList = append(nsList, ns)
-		}
-		sort.Strings(nsList)
-		parts = append(parts, fmt.Sprintf("%s × %d (in %s)", reason, total, strings.Join(nsList, ", ")))
+	switch scope {
+	case "node":
+		return e.buildNodeSummary(r, entries, timeAgo)
+	case "signature":
+		return e.buildSignatureSummary(r, entries, timeAgo)
+	case "image":
+		return e.buildImageSummary(r, entries, timeAgo)
+	case "owner":
+		return e.buildOwnerSummary(r, entries, timeAgo)
+	case "namespace":
+		return e.buildNamespaceSummary(r, entries, timeAgo)
+	default:
+		return e.buildGenericSummary(r, entries, timeAgo)
 	}
-	if len(parts) == 0 {
-		return ""
+}
+
+func timeAgoStr(d time.Duration) string {
+	if d < time.Minute {
+		return fmt.Sprintf("%ds", int(d.Seconds()))
 	}
-	sort.Strings(parts)
-	var top []string
-	if len(parts) > 5 {
-		top = parts[:5]
-	} else {
-		top = parts
+	if d < time.Hour {
+		return fmt.Sprintf("%dm", int(d.Minutes()))
 	}
-	window := e.config.StormWindow
-	return fmt.Sprintf("⚡ %d new incidents in %s — %s", len(e.digestBuf), window.String(), strings.Join(top, "; "))
+	return fmt.Sprintf("%dh", int(d.Hours()))
+}
+
+func pluralize(s string, n int) string {
+	if n == 1 {
+		return s
+	}
+	return s + "s"
+}
+
+func detectGroupScope(entries []groupEntry) string {
+	nodes := uniqueNonEmptyStr(entries, func(e groupEntry) string { return e.nodeName })
+	if len(nodes) == 1 {
+		return "node"
+	}
+	sigs := uniqueNonEmptyStr(entries, func(e groupEntry) string { return e.logSignature })
+	if len(sigs) == 1 {
+		return "signature"
+	}
+	imgs := uniqueNonEmptyStr(entries, func(e groupEntry) string { return e.image })
+	if len(imgs) == 1 {
+		return "image"
+	}
+	owners := uniqueNonEmptyStr(entries, func(e groupEntry) string { return e.owner })
+	if len(owners) == 1 {
+		return "owner"
+	}
+	return "generic"
+}
+
+func uniqueNonEmptyStr[T any](entries []T, fn func(T) string) []string {
+	m := make(map[string]bool)
+	for _, e := range entries {
+		if v := fn(e); v != "" {
+			m[v] = true
+		}
+	}
+	out := make([]string, 0, len(m))
+	for v := range m {
+		out = append(out, v)
+	}
+	return out
+}
+
+func (e *Engine) buildOwnerSummary(r string, entries []groupEntry, timeAgo string) string {
+	byPod := make(map[string]int)
+	for _, ge := range entries {
+		byPod[ge.podName]++
+	}
+	podList := make([]string, 0, len(byPod))
+	for p := range byPod {
+		podList = append(podList, p)
+	}
+	sort.Strings(podList)
+	owner := entries[0].namespace + "/" + entries[0].owner
+	total := len(entries)
+	return fmt.Sprintf("%s — %d %s in %s (total %d)%s",
+		r, len(byPod), pluralize("pod", len(byPod)), owner, total, timeAgo)
+}
+
+func (e *Engine) buildNodeSummary(r string, entries []groupEntry, timeAgo string) string {
+	node := entries[0].nodeName
+	byPod := make(map[string]int)
+	for _, ge := range entries {
+		byPod[ge.podName]++
+	}
+	podCount := len(byPod)
+	total := len(entries)
+	return fmt.Sprintf("%s — node: %s, %d %s affected (total %d)%s",
+		r, node, podCount, pluralize("pod", podCount), total, timeAgo)
+}
+
+func (e *Engine) buildSignatureSummary(r string, entries []groupEntry, timeAgo string) string {
+	sig := entries[0].logSignature
+	byOwner := make(map[string]int)
+	for _, ge := range entries {
+		o := ge.namespace + "/" + ge.owner
+		byOwner[o]++
+	}
+	owners := make([]string, 0, len(byOwner))
+	for o, c := range byOwner {
+		if c > 1 {
+			owners = append(owners, fmt.Sprintf("%s (%d)", o, c))
+		} else {
+			owners = append(owners, o)
+		}
+	}
+	sort.Strings(owners)
+	total := len(entries)
+	return fmt.Sprintf("%s — %s, %s: %s (total %d)%s",
+		r, sig, pluralize("deployment", len(byOwner)), strings.Join(owners, ", "), total, timeAgo)
+}
+
+func (e *Engine) buildImageSummary(r string, entries []groupEntry, timeAgo string) string {
+	img := entries[0].image
+	isGlobal := strings.Contains(entries[0].key, "|global|")
+	if img == "" {
+		img = "unknown"
+	}
+	if isGlobal {
+		byOwner := make(map[string]int)
+		for _, ge := range entries {
+			o := ge.namespace + "/" + ge.owner
+			byOwner[o]++
+		}
+		ownerCount := len(byOwner)
+		total := len(entries)
+		return fmt.Sprintf("%s — %d %s affected (total %d)%s",
+			r, ownerCount, pluralize("deployment", ownerCount), total, timeAgo)
+	}
+	byOwner := make(map[string]int)
+	for _, ge := range entries {
+		byOwner[ge.owner]++
+	}
+	owners := make([]string, 0, len(byOwner))
+	for o, c := range byOwner {
+		if c > 1 {
+			owners = append(owners, fmt.Sprintf("%s (%d)", o, c))
+		} else {
+			owners = append(owners, o)
+		}
+	}
+	sort.Strings(owners)
+	total := len(entries)
+	ns := entries[0].namespace
+	if ns != "" {
+		ns = " (" + ns + ")"
+	}
+	return fmt.Sprintf("%s — image %q%s, %s: %s (total %d)%s",
+		r, img, ns, pluralize("deployment", len(byOwner)), strings.Join(owners, ", "), total, timeAgo)
+}
+
+func (e *Engine) buildNamespaceSummary(r string, entries []groupEntry, timeAgo string) string {
+	ns := entries[0].namespace
+	byOwner := make(map[string]int)
+	for _, ge := range entries {
+		byOwner[ge.owner]++
+	}
+	owners := make([]string, 0, len(byOwner))
+	for o, c := range byOwner {
+		if c > 1 {
+			owners = append(owners, fmt.Sprintf("%s (%d)", o, c))
+		} else {
+			owners = append(owners, o)
+		}
+	}
+	sort.Strings(owners)
+	total := len(entries)
+	return fmt.Sprintf("%s — namespace: %s, %s: %s (total %d)%s",
+		r, ns, pluralize("deployment", len(byOwner)), strings.Join(owners, ", "), total, timeAgo)
+}
+
+func (e *Engine) buildGenericSummary(r string, entries []groupEntry, timeAgo string) string {
+	byOwner := make(map[string]int)
+	for _, ge := range entries {
+		o := ge.namespace + "/" + ge.owner
+		byOwner[o]++
+	}
+	owners := make([]string, 0, len(byOwner))
+	for o, c := range byOwner {
+		if c > 1 {
+			owners = append(owners, fmt.Sprintf("%s (%d)", o, c))
+		} else {
+			owners = append(owners, o)
+		}
+	}
+	sort.Strings(owners)
+	total := len(entries)
+	return fmt.Sprintf("%s — affected: %s (total %d)%s",
+		r, strings.Join(owners, ", "), total, timeAgo)
+}
+
+func (e *Engine) groupSeverity(entries []groupEntry) string {
+	best := "normal"
+	for _, ge := range entries {
+		if inc, ok := e.state[ge.key]; ok {
+			if r := severityRank(inc.Severity); r > severityRank(best) {
+				best = inc.Severity
+			}
+		}
+	}
+	return best
 }
 
 func (e *Engine) SetSeverityMap(m map[string]string) {

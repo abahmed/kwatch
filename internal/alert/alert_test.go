@@ -164,7 +164,7 @@ func TestNotifyIncidentCreate(t *testing.T) {
 		Resources: map[string]bool{"pod-1": true},
 	}
 
-	am.NotifyIncident(inc, model.ActionCreate)
+	am.NotifyIncident(inc, model.ActionCreate, nil)
 }
 
 func TestNotifyIncidentUpdate(t *testing.T) {
@@ -183,7 +183,7 @@ func TestNotifyIncidentUpdate(t *testing.T) {
 		Resources: map[string]bool{"pod-1": true, "pod-2": true},
 	}
 
-	am.NotifyIncident(inc, model.ActionUpdate)
+	am.NotifyIncident(inc, model.ActionUpdate, nil)
 }
 
 func TestNotifyIncidentSkip(t *testing.T) {
@@ -195,7 +195,7 @@ func TestNotifyIncidentSkip(t *testing.T) {
 		Name: "deploy",
 	}
 
-	am.NotifyIncident(inc, model.ActionSkip)
+	am.NotifyIncident(inc, model.ActionSkip, nil)
 }
 
 // fakeThreadProvider implements both Provider and ThreadProvider
@@ -222,7 +222,7 @@ func TestNotifyIncidentCallsThreadProvider(t *testing.T) {
 		Key:  "default:deploy:OOMKilled",
 		Name: "deploy",
 	}
-	am.NotifyIncident(inc, model.ActionCreate)
+	am.NotifyIncident(inc, model.ActionCreate, nil)
 
 	assert.Equal(t, inc, tp.lastInc)
 	assert.Equal(t, model.ActionCreate, tp.lastAct)
@@ -237,7 +237,7 @@ func TestNotifyIncidentThreadProviderWithSkip(t *testing.T) {
 		Key:  "default:deploy:OOMKilled",
 		Name: "deploy",
 	}
-	am.NotifyIncident(inc, model.ActionSkip)
+	am.NotifyIncident(inc, model.ActionSkip, nil)
 
 	assert.Nil(t, tp.lastInc)
 }
@@ -689,35 +689,13 @@ func TestNotifyIncidentEventDeliveryProviderPropagatesActionAndDedup(t *testing.
 		Resources: map[string]bool{"pod-1": true},
 	}
 
-	am.NotifyIncident(inc, model.ActionResolved)
+	am.NotifyIncident(inc, model.ActionResolved, nil)
 
 	if fp.lastEvent == nil {
 		t.Fatal("expected SendEvent to be called")
 	}
 	assert.Equal(t, "resolved", fp.lastEvent.Action)
 	assert.Equal(t, "abc123", fp.lastEvent.DedupKey)
-}
-
-func TestNotifyIncidentDigestFlushDelivered(t *testing.T) {
-	fp := &fakeProvider{}
-	tp := &fakeThreadProvider{}
-	am := AlertManager{}
-	am.entries = append(am.entries,
-		providerEntry{provider: fp, maxAttempts: 1},
-		providerEntry{provider: tp, maxAttempts: 1},
-	)
-
-	inc := &model.Incident{
-		Key:    "digest:1234567890",
-		Reason: "DigestSummary",
-		Count:  5,
-		Hint:   "⚡ 5 new incidents in 1m0s — OOMKilled × 3 (ns1, ns2); CrashLoopBackOff × 2 (ns1)",
-	}
-
-	am.NotifyIncident(inc, model.ActionDigestFlush)
-
-	// ThreadProvider must NOT receive via SendIncident for digests
-	assert.Nil(t, tp.lastInc, "ThreadProvider should not receive digest via SendIncident")
 }
 
 type fakeRecordingEventProvider struct {
@@ -764,7 +742,7 @@ func TestShutdownNoPanicWithInflightEnrichment(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	am.Start(ctx)
 
-	am.NotifyIncident(&model.Incident{Key: "k", Name: "n", Reason: "OOMKilled"}, model.ActionCreate)
+	am.NotifyIncident(&model.Incident{Key: "k", Name: "n", Reason: "OOMKilled"}, model.ActionCreate, nil)
 	time.Sleep(50 * time.Millisecond) // let the enrich worker enter Analyze
 	cancel()                          // triggers shutdown (enrichCh closed)
 
@@ -793,7 +771,7 @@ func TestNotifyIncidentAfterShutdownIsNoop(t *testing.T) {
 	am.shutdown() // deterministic: closes enrichCh + provider channels, waits
 
 	// enrichCh is now closed; without Fix 2e this would panic.
-	am.NotifyIncident(&model.Incident{Key: "k", Name: "n", Reason: "OOMKilled"}, model.ActionCreate)
+	am.NotifyIncident(&model.Incident{Key: "k", Name: "n", Reason: "OOMKilled"}, model.ActionCreate, nil)
 }
 
 // P3: the breaker is a true single-probe half-open (Fix 3). Tested directly —

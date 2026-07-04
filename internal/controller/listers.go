@@ -7,13 +7,17 @@ import (
 	autoscalingv2 "k8s.io/api/autoscaling/v2"
 	batchv1 "k8s.io/api/batch/v1"
 	corev1 "k8s.io/api/core/v1"
+	networkingv1 "k8s.io/api/networking/v1"
+	policyv1 "k8s.io/api/policy/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/apimachinery/pkg/runtime/schema"
+	policyv1lister "k8s.io/client-go/listers/policy/v1"
 	appsv1lister "k8s.io/client-go/listers/apps/v1"
 	autoscalingv2lister "k8s.io/client-go/listers/autoscaling/v2"
 	batchv1lister "k8s.io/client-go/listers/batch/v1"
 	corev1lister "k8s.io/client-go/listers/core/v1"
+	networkingv1lister "k8s.io/client-go/listers/networking/v1"
 )
 
 type multiPodLister struct {
@@ -579,4 +583,314 @@ func (m *multiHorizontalPodAutoscalerNamespaceLister) Get(name string) (*autosca
 		}
 	}
 	return nil, apierrors.NewNotFound(schema.GroupResource{Group: "autoscaling", Resource: "horizontalpodautoscalers"}, name)
+}
+
+type multiServiceLister struct {
+	listers []corev1lister.ServiceLister
+}
+
+func (m *multiServiceLister) List(selector labels.Selector) ([]*corev1.Service, error) {
+	var all []*corev1.Service
+	for _, l := range m.listers {
+		items, err := l.List(selector)
+		if err != nil {
+			return nil, err
+		}
+		all = append(all, items...)
+	}
+	return all, nil
+}
+
+func (m *multiServiceLister) Services(namespace string) corev1lister.ServiceNamespaceLister {
+	nsl := make([]corev1lister.ServiceNamespaceLister, 0, len(m.listers))
+	for _, l := range m.listers {
+		nsl = append(nsl, l.Services(namespace))
+	}
+	return &multiServiceNamespaceLister{listers: nsl}
+}
+
+type multiServiceNamespaceLister struct {
+	listers []corev1lister.ServiceNamespaceLister
+}
+
+func (m *multiServiceNamespaceLister) List(selector labels.Selector) ([]*corev1.Service, error) {
+	var all []*corev1.Service
+	for _, l := range m.listers {
+		items, err := l.List(selector)
+		if err != nil {
+			return nil, err
+		}
+		all = append(all, items...)
+	}
+	return all, nil
+}
+
+func (m *multiServiceNamespaceLister) Get(name string) (*corev1.Service, error) {
+	for _, l := range m.listers {
+		item, err := l.Get(name)
+		if err == nil {
+			return item, nil
+		}
+	}
+	return nil, apierrors.NewNotFound(schema.GroupResource{Resource: "services"}, name)
+}
+
+type multiEndpointLister struct {
+	listers []corev1lister.EndpointsLister
+}
+
+func (m *multiEndpointLister) List(selector labels.Selector) ([]*corev1.Endpoints, error) {
+	var all []*corev1.Endpoints
+	for _, l := range m.listers {
+		items, err := l.List(selector)
+		if err != nil {
+			return nil, err
+		}
+		all = append(all, items...)
+	}
+	return all, nil
+}
+
+func (m *multiEndpointLister) Endpoints(namespace string) corev1lister.EndpointsNamespaceLister {
+	nsl := make([]corev1lister.EndpointsNamespaceLister, 0, len(m.listers))
+	for _, l := range m.listers {
+		nsl = append(nsl, l.Endpoints(namespace))
+	}
+	return &multiEndpointNamespaceLister{listers: nsl}
+}
+
+type multiEndpointNamespaceLister struct {
+	listers []corev1lister.EndpointsNamespaceLister
+}
+
+func (m *multiEndpointNamespaceLister) List(selector labels.Selector) ([]*corev1.Endpoints, error) {
+	var all []*corev1.Endpoints
+	for _, l := range m.listers {
+		items, err := l.List(selector)
+		if err != nil {
+			return nil, err
+		}
+		all = append(all, items...)
+	}
+	return all, nil
+}
+
+func (m *multiEndpointNamespaceLister) Get(name string) (*corev1.Endpoints, error) {
+	for _, l := range m.listers {
+		item, err := l.Get(name)
+		if err == nil {
+			return item, nil
+		}
+	}
+	return nil, apierrors.NewNotFound(schema.GroupResource{Resource: "endpoints"}, name)
+}
+
+type multiIngressLister struct {
+	listers []networkingv1lister.IngressLister
+}
+
+func (m *multiIngressLister) List(selector labels.Selector) ([]*networkingv1.Ingress, error) {
+	var all []*networkingv1.Ingress
+	for _, l := range m.listers {
+		items, err := l.List(selector)
+		if err != nil {
+			return nil, err
+		}
+		all = append(all, items...)
+	}
+	return all, nil
+}
+
+func (m *multiIngressLister) Ingresses(namespace string) networkingv1lister.IngressNamespaceLister {
+	nsl := make([]networkingv1lister.IngressNamespaceLister, 0, len(m.listers))
+	for _, l := range m.listers {
+		nsl = append(nsl, l.Ingresses(namespace))
+	}
+	return &multiIngressNamespaceLister{listers: nsl}
+}
+
+type multiIngressNamespaceLister struct {
+	listers []networkingv1lister.IngressNamespaceLister
+}
+
+func (m *multiIngressNamespaceLister) List(selector labels.Selector) ([]*networkingv1.Ingress, error) {
+	var all []*networkingv1.Ingress
+	for _, l := range m.listers {
+		items, err := l.List(selector)
+		if err != nil {
+			return nil, err
+		}
+		all = append(all, items...)
+	}
+	return all, nil
+}
+
+func (m *multiIngressNamespaceLister) Get(name string) (*networkingv1.Ingress, error) {
+	for _, l := range m.listers {
+		item, err := l.Get(name)
+		if err == nil {
+			return item, nil
+		}
+	}
+	return nil, apierrors.NewNotFound(schema.GroupResource{Group: "networking.k8s.io", Resource: "ingresses"}, name)
+}
+
+type multiNetpolLister struct {
+	listers []networkingv1lister.NetworkPolicyLister
+}
+
+func (m *multiNetpolLister) List(selector labels.Selector) ([]*networkingv1.NetworkPolicy, error) {
+	var all []*networkingv1.NetworkPolicy
+	for _, l := range m.listers {
+		items, err := l.List(selector)
+		if err != nil {
+			return nil, err
+		}
+		all = append(all, items...)
+	}
+	return all, nil
+}
+
+func (m *multiNetpolLister) NetworkPolicies(namespace string) networkingv1lister.NetworkPolicyNamespaceLister {
+	nsl := make([]networkingv1lister.NetworkPolicyNamespaceLister, 0, len(m.listers))
+	for _, l := range m.listers {
+		nsl = append(nsl, l.NetworkPolicies(namespace))
+	}
+	return &multiNetpolNamespaceLister{listers: nsl}
+}
+
+type multiNetpolNamespaceLister struct {
+	listers []networkingv1lister.NetworkPolicyNamespaceLister
+}
+
+func (m *multiNetpolNamespaceLister) List(selector labels.Selector) ([]*networkingv1.NetworkPolicy, error) {
+	var all []*networkingv1.NetworkPolicy
+	for _, l := range m.listers {
+		items, err := l.List(selector)
+		if err != nil {
+			return nil, err
+		}
+		all = append(all, items...)
+	}
+	return all, nil
+}
+
+func (m *multiNetpolNamespaceLister) Get(name string) (*networkingv1.NetworkPolicy, error) {
+	for _, l := range m.listers {
+		item, err := l.Get(name)
+		if err == nil {
+			return item, nil
+		}
+	}
+	return nil, apierrors.NewNotFound(schema.GroupResource{Group: "networking.k8s.io", Resource: "networkpolicies"}, name)
+}
+
+type multiPodDisruptionBudgetLister struct {
+	listers []policyv1lister.PodDisruptionBudgetLister
+}
+
+func (m *multiPodDisruptionBudgetLister) List(selector labels.Selector) ([]*policyv1.PodDisruptionBudget, error) {
+	var all []*policyv1.PodDisruptionBudget
+	for _, l := range m.listers {
+		items, err := l.List(selector)
+		if err != nil {
+			return nil, err
+		}
+		all = append(all, items...)
+	}
+	return all, nil
+}
+
+func (m *multiPodDisruptionBudgetLister) GetPodPodDisruptionBudgets(pod *corev1.Pod) ([]*policyv1.PodDisruptionBudget, error) {
+	for _, l := range m.listers {
+		pdbs, err := l.GetPodPodDisruptionBudgets(pod)
+		if err == nil {
+			return pdbs, nil
+		}
+	}
+	return nil, apierrors.NewNotFound(schema.GroupResource{Group: "policy", Resource: "poddisruptionbudgets"}, pod.Name)
+}
+
+func (m *multiPodDisruptionBudgetLister) PodDisruptionBudgets(namespace string) policyv1lister.PodDisruptionBudgetNamespaceLister {
+	nsl := make([]policyv1lister.PodDisruptionBudgetNamespaceLister, 0, len(m.listers))
+	for _, l := range m.listers {
+		nsl = append(nsl, l.PodDisruptionBudgets(namespace))
+	}
+	return &multiPodDisruptionBudgetNamespaceLister{listers: nsl}
+}
+
+type multiPodDisruptionBudgetNamespaceLister struct {
+	listers []policyv1lister.PodDisruptionBudgetNamespaceLister
+}
+
+func (m *multiPodDisruptionBudgetNamespaceLister) List(selector labels.Selector) ([]*policyv1.PodDisruptionBudget, error) {
+	var all []*policyv1.PodDisruptionBudget
+	for _, l := range m.listers {
+		items, err := l.List(selector)
+		if err != nil {
+			return nil, err
+		}
+		all = append(all, items...)
+	}
+	return all, nil
+}
+
+func (m *multiPodDisruptionBudgetNamespaceLister) Get(name string) (*policyv1.PodDisruptionBudget, error) {
+	for _, l := range m.listers {
+		item, err := l.Get(name)
+		if err == nil {
+			return item, nil
+		}
+	}
+	return nil, apierrors.NewNotFound(schema.GroupResource{Group: "policy", Resource: "poddisruptionbudgets"}, name)
+}
+
+type multiConfigMapLister struct {
+	listers []corev1lister.ConfigMapLister
+}
+
+func (m *multiConfigMapLister) List(selector labels.Selector) ([]*corev1.ConfigMap, error) {
+	var all []*corev1.ConfigMap
+	for _, l := range m.listers {
+		cms, err := l.List(selector)
+		if err != nil {
+			return nil, err
+		}
+		all = append(all, cms...)
+	}
+	return all, nil
+}
+
+func (m *multiConfigMapLister) ConfigMaps(namespace string) corev1lister.ConfigMapNamespaceLister {
+	nsl := make([]corev1lister.ConfigMapNamespaceLister, 0, len(m.listers))
+	for _, l := range m.listers {
+		nsl = append(nsl, l.ConfigMaps(namespace))
+	}
+	return &multiConfigMapNamespaceLister{listers: nsl}
+}
+
+type multiConfigMapNamespaceLister struct {
+	listers []corev1lister.ConfigMapNamespaceLister
+}
+
+func (m *multiConfigMapNamespaceLister) List(selector labels.Selector) ([]*corev1.ConfigMap, error) {
+	var all []*corev1.ConfigMap
+	for _, l := range m.listers {
+		items, err := l.List(selector)
+		if err != nil {
+			return nil, err
+		}
+		all = append(all, items...)
+	}
+	return all, nil
+}
+
+func (m *multiConfigMapNamespaceLister) Get(name string) (*corev1.ConfigMap, error) {
+	for _, l := range m.listers {
+		item, err := l.Get(name)
+		if err == nil {
+			return item, nil
+		}
+	}
+	return nil, apierrors.NewNotFound(schema.GroupResource{Group: "", Resource: "configmaps"}, name)
 }

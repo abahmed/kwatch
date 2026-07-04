@@ -10,18 +10,24 @@ import (
 
 	"github.com/abahmed/kwatch/internal/config"
 	"github.com/abahmed/kwatch/internal/correlation"
+	"github.com/abahmed/kwatch/internal/insight"
 	"github.com/stretchr/testify/assert"
+	admissionregistrationv1 "k8s.io/api/admissionregistration/v1"
 	appsv1 "k8s.io/api/apps/v1"
 	autoscalingv2 "k8s.io/api/autoscaling/v2"
 	batchv1 "k8s.io/api/batch/v1"
 	corev1 "k8s.io/api/core/v1"
+	networkingv1 "k8s.io/api/networking/v1"
+	policyv1 "k8s.io/api/policy/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/informers"
 	"k8s.io/client-go/kubernetes/fake"
+	admissionregistrationv1lister "k8s.io/client-go/listers/admissionregistration/v1"
 	appsv1lister "k8s.io/client-go/listers/apps/v1"
 	autoscalingv2lister "k8s.io/client-go/listers/autoscaling/v2"
 	batchv1lister "k8s.io/client-go/listers/batch/v1"
 	corev1lister "k8s.io/client-go/listers/core/v1"
+	networkingv1lister "k8s.io/client-go/listers/networking/v1"
 	"k8s.io/client-go/tools/cache"
 	"k8s.io/client-go/util/workqueue"
 )
@@ -116,7 +122,40 @@ func (m *mockHandler) ReportStartupSummary(suppressed map[string]int) {
 	defer m.mu.Unlock()
 	m.startupSummary = suppressed
 }
-func (m *mockHandler) SetPvcSampler(func(nodeName string)) {}
+func (m *mockHandler) SetPvcSampler(func(nodeName string))                      {}
+func (m *mockHandler) ProcessMutatingWebhookConfiguration(string, bool) error   { return m.err }
+func (m *mockHandler) ProcessMutatingWebhookConfigurationObject(*admissionregistrationv1.MutatingWebhookConfiguration, bool) error {
+	return m.err
+}
+func (m *mockHandler) ProcessValidatingWebhookConfiguration(string, bool) error { return m.err }
+func (m *mockHandler) ProcessValidatingWebhookConfigurationObject(*admissionregistrationv1.ValidatingWebhookConfiguration, bool) error {
+	return m.err
+}
+func (m *mockHandler) ProcessService(string, bool) error              { return m.err }
+func (m *mockHandler) ProcessServiceObject(*corev1.Service, bool) error { return m.err }
+func (m *mockHandler) ProcessNetworkPolicy(string, bool) error        { return m.err }
+func (m *mockHandler) ProcessNetworkPolicyObject(*networkingv1.NetworkPolicy, bool) error {
+	return m.err
+}
+func (m *mockHandler) ProcessIngress(string, bool) error        { return m.err }
+func (m *mockHandler) ProcessIngressObject(*networkingv1.Ingress, bool) error { return m.err }
+func (m *mockHandler) ProcessControlPlanePod(*corev1.Pod) error              { return m.err }
+func (m *mockHandler) SweepControlPlane()                                     {}
+func (m *mockHandler) SetServiceLister(corev1lister.ServiceLister)            {}
+func (m *mockHandler) SetEndpointLister(corev1lister.EndpointsLister)         {}
+func (m *mockHandler) SetMwCLister(admissionregistrationv1lister.MutatingWebhookConfigurationLister) {
+}
+func (m *mockHandler) SetVwCLister(admissionregistrationv1lister.ValidatingWebhookConfigurationLister) {
+}
+func (m *mockHandler) SetIngressLister(networkingv1lister.IngressLister)     {}
+func (m *mockHandler) SetNetpolLister(networkingv1lister.NetworkPolicyLister) {}
+func (m *mockHandler) SetCpPodLister(corev1lister.PodLister)                  {}
+func (m *mockHandler) ProcessStatefulSet(string, bool) error                  { return m.err }
+func (m *mockHandler) ProcessStatefulSetObject(*appsv1.StatefulSet, bool) error { return m.err }
+func (m *mockHandler) ProcessPdb(string, bool) error                          { return m.err }
+func (m *mockHandler) ProcessPdbObject(*policyv1.PodDisruptionBudget, bool) error { return m.err }
+func (m *mockHandler) SetInsightEngine(_ *insight.Engine)                     {}
+func (m *mockHandler) ProcessNodeResourceOvercommit(string, string, string)   {}
 
 func TestNewCreatesController(t *testing.T) {
 	assert := assert.New(t)

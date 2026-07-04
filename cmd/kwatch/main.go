@@ -17,6 +17,7 @@ import (
 	"github.com/abahmed/kwatch/internal/client"
 	"github.com/abahmed/kwatch/internal/config"
 	"github.com/abahmed/kwatch/internal/constant"
+	kwcontext "github.com/abahmed/kwatch/internal/context"
 	"github.com/abahmed/kwatch/internal/controller"
 	"github.com/abahmed/kwatch/internal/correlation"
 	"github.com/abahmed/kwatch/internal/crdwatch"
@@ -25,6 +26,7 @@ import (
 	"github.com/abahmed/kwatch/internal/handler"
 	"github.com/abahmed/kwatch/internal/health"
 	"github.com/abahmed/kwatch/internal/heartbeat"
+	"github.com/abahmed/kwatch/internal/insight"
 	"github.com/abahmed/kwatch/internal/k8s"
 	"github.com/abahmed/kwatch/internal/metrics"
 	"github.com/abahmed/kwatch/internal/model"
@@ -112,6 +114,18 @@ func main() {
 	baselineCh := make(chan map[string]map[string]int64, 64)
 	go startBaselineSaver(ctx, stateMgr, baselineCh, 0)
 
+	incidentCh := make(chan map[string]*model.Incident, 1)
+	go startIncidentSaver(ctx, stateMgr, incidentCh)
+
+	tracker := kwcontext.NewChangeTracker(0)
+	graph := kwcontext.NewResourceGraph()
+
+	type massFailureTracker struct {
+		mu      sync.Mutex
+		pending map[string]insight.MassFailure
+	}
+	mfTracker := &massFailureTracker{pending: make(map[string]insight.MassFailure)}
+
 	var correlator *correlation.Engine
 	correlator = correlation.NewEngine(correlation.Config{
 		Window:                     time.Duration(cfg.Correlation.Window) * time.Minute,
@@ -121,20 +135,65 @@ func main() {
 		EscalationEnabled:          cfg.Correlation.Escalation.Enabled,
 		EscalationTiers:            cfg.Correlation.Escalation.Tiers,
 		InhibitNodeSuppressesPods:  cfg.Inhibition.NodeSuppressesPods,
-		StormEnabled:               cfg.StormConfig.Enabled,
-		StormThreshold:             cfg.StormConfig.Threshold,
-		StormWindow:                time.Duration(cfg.StormConfig.WindowMinutes) * time.Minute,
-		StormDigestInterval:        time.Duration(cfg.StormConfig.DigestIntervalMinutes) * time.Minute,
 		RenotifyIntervalBySeverity: renotifyIntervalBySeverity(cfg.Correlation.Renotify.IntervalBySeverity),
 		RenotifyMaxPerIncident:     cfg.Correlation.Renotify.MaxPerIncident,
 		Runbooks:                   cfg.Runbooks,
 		ResolveHoldDown:            time.Duration(cfg.Correlation.ResolveHoldDown) * time.Second,
 		MaxBaseline:                cfg.Correlation.MaxBaseline,
+		SmartGroupingWindow:        time.Duration(cfg.SmartGrouping.WindowSeconds) * time.Second,
 		LifecycleHook: func(inc *model.Incident, action model.IncidentAction) {
 			if action != model.ActionSkip {
-				alertManager.NotifyIncident(inc, action)
+				alertManager.NotifyIncident(inc, action, nil)
 			}
 			metrics.Default.ActiveIncidents.Store(int64(correlator.ActiveCount()))
+		},
+		MassFailureHook: func() {
+			allIncidents := correlator.SnapshotAll()
+			incList := make([]*model.Incident, 0, len(allIncidents))
+			for _, inc := range allIncidents {
+				incList = append(incList, inc)
+			}
+			mfs := insight.ScanMassFailures(incList, graph)
+
+			current := make(map[string]insight.MassFailure, len(mfs))
+			for _, mf := range mfs {
+				current[mf.SharedDependency] = mf
+			}
+
+			mfTracker.mu.Lock()
+			for key, mf := range current {
+				if _, exists := mfTracker.pending[key]; exists {
+					continue
+				}
+				klog.V(2).InfoS("mass failure detected", "message", mf.Describe())
+				inc := &model.Incident{
+					Key:       "mass-failure/" + key,
+					Reason:    mf.Reason,
+					Namespace: mf.Namespace,
+					Resource:  mf.ResourceKind,
+					Name:      key,
+					State:     model.StateActive,
+				}
+				alertManager.NotifyIncident(inc, model.ActionCreate, nil)
+				mfTracker.pending[key] = mf
+			}
+			for key, mf := range mfTracker.pending {
+				if _, exists := current[key]; exists {
+					continue
+				}
+				klog.V(2).InfoS("mass failure resolved", "dependency", key)
+				inc := &model.Incident{
+					Key:       "mass-failure/" + key,
+					Reason:    mf.Reason,
+					Namespace: mf.Namespace,
+					Resource:  mf.ResourceKind,
+					Name:      key,
+					State:     model.StateResolved,
+				}
+				alertManager.NotifyIncident(inc, model.ActionResolved, nil)
+				delete(mfTracker.pending, key)
+			}
+			mfTracker.mu.Unlock()
 		},
 		OnBaselineChange: func(b map[string]map[string]int64) {
 			total := 0
@@ -149,6 +208,19 @@ func main() {
 			}
 		},
 	})
+
+	var persisted []model.PersistedIncident
+	if err := stateMgr.GetIncidents(ctx, &persisted); err != nil {
+		klog.ErrorS(err, "failed to restore incidents from configmap")
+	} else if len(persisted) > 0 {
+		restored := make(map[string]*model.Incident, len(persisted))
+		for i := range persisted {
+			inc := persisted[i].ToIncident()
+			restored[inc.ID] = inc
+		}
+		correlator.RestoreIncidents(restored)
+		klog.InfoS("restored incidents from configmap", "count", len(persisted))
+	}
 
 	alertManager.SetAnalysisWriter(correlator.SetAnalysis)
 	healthServer.SetIncidentAPI(correlator)
@@ -169,7 +241,12 @@ func main() {
 		h.SetPvcSampler(func(nodeName string) { go pvcMonitor.SampleNode(ctx, nodeName) })
 	}
 
+	insightEngine := insight.NewEngine(graph, tracker)
+	h.SetInsightEngine(insightEngine)
+
 	ctrl, cleanup := controller.New(k8sClient, cfg, h)
+	ctrl.SetTracker(tracker)
+	ctrl.SetGraph(graph)
 	ctrl.SetReadyFunc(func() { healthServer.SetReady(true) })
 	var cleanupOnce sync.Once
 	cleanupSafe := func() { cleanupOnce.Do(cleanup) }
@@ -179,6 +256,20 @@ func main() {
 		go correlator.StartCleanup(ctx)
 		go pvcMonitor.Start(ctx)
 		go hbMonitor.Start(ctx)
+		go func() {
+			interval := 60 * time.Second
+			ticker := time.NewTicker(interval)
+			defer ticker.Stop()
+			for {
+				select {
+				case <-ctx.Done():
+					incidentCh <- correlator.SnapshotAll()
+					return
+				case <-ticker.C:
+					incidentCh <- correlator.SnapshotAll()
+				}
+			}
+		}()
 		if cfg.TlsMonitor.Enabled {
 			go func() {
 				h.SweepTLSSecrets()
@@ -348,6 +439,33 @@ func startBaselineSaver(ctx context.Context, stateMgr interface {
 			if pending != nil {
 				fctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 				_ = stateMgr.SaveBaseline(fctx, pending)
+				cancel()
+			}
+			return
+		}
+	}
+}
+
+// startIncidentSaver saves incident snapshots to the ConfigMap whenever a
+// snapshot arrives on the channel. On ctx cancellation it saves the final
+// snapshot before returning.
+func startIncidentSaver(ctx context.Context, stateMgr interface {
+	SaveIncidents(context.Context, any) error
+}, ch <-chan map[string]*model.Incident) {
+	var pending map[string]*model.Incident
+	for {
+		select {
+		case snap := <-ch:
+			pending = snap
+			fctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+			if err := stateMgr.SaveIncidents(fctx, pending); err != nil {
+				klog.ErrorS(err, "failed to save incidents")
+			}
+			cancel()
+		case <-ctx.Done():
+			if len(pending) > 0 {
+				fctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+				_ = stateMgr.SaveIncidents(fctx, pending)
 				cancel()
 			}
 			return

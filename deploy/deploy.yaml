@@ -14,8 +14,17 @@ rules:
 - apiGroups: [""]
   resources: ["namespaces"]
   verbs: ["get", "list", "watch"]
+- apiGroups: [""]
+  resources: ["services", "endpoints"]
+  verbs: ["get", "watch", "list"]
 - apiGroups: ["apps"]
   resources: ["daemonsets", "statefulsets", "deployments", "replicasets"]
+  verbs: ["get", "watch", "list"]
+- apiGroups: ["admissionregistration.k8s.io"]
+  resources: ["mutatingwebhookconfigurations", "validatingwebhookconfigurations"]
+  verbs: ["get", "watch", "list"]
+- apiGroups: ["networking.k8s.io"]
+  resources: ["ingresses", "networkpolicies"]
   verbs: ["get", "watch", "list"]
 # - apiGroups: ["kwatch.abahmed.dev"]
 #   resources: ["kwatchconfigs"]
@@ -30,6 +39,9 @@ rules:
 #   # uncomment if you enable tlsMonitor
 - apiGroups: ["batch"]
   resources: ["jobs", "cronjobs"]
+  verbs: ["get", "watch", "list"]
+- apiGroups: ["policy"]
+  resources: ["poddisruptionbudgets"]
   verbs: ["get", "watch", "list"]
 ---
 apiVersion: v1
@@ -141,25 +153,25 @@ spec:
           requests:
             memory: "128Mi"
             cpu: "100m"
-      - name: llm
-        image: ghcr.io/abahmed/kwatch-llm:latest
-        imagePullPolicy: IfNotPresent
-        readinessProbe:
-          httpGet:
-            path: /health
-            port: 8080
-          initialDelaySeconds: 5
-          periodSeconds: 10
-        resources:
-          requests: { cpu: "1000m", memory: "1Gi" }
-          limits: { cpu: "1000m", memory: "1Gi" }
-        securityContext:
-          allowPrivilegeEscalation: false
-          runAsNonRoot: true
-          runAsUser: 1000
-          runAsGroup: 1000
-          capabilities: { drop: ["ALL"] }
-          seccompProfile: { type: RuntimeDefault }
+      # - name: llm
+      #   image: ghcr.io/abahmed/kwatch-llm:latest
+      #   imagePullPolicy: IfNotPresent
+      #   readinessProbe:
+      #     httpGet:
+      #       path: /health
+      #       port: 8080
+      #     initialDelaySeconds: 5
+      #     periodSeconds: 10
+      #   resources:
+      #     requests: { cpu: "1000m", memory: "1Gi" }
+      #     limits: { cpu: "1000m", memory: "1Gi" }
+      #   securityContext:
+      #     allowPrivilegeEscalation: false
+      #     runAsNonRoot: true
+      #     runAsUser: 1000
+      #     runAsGroup: 1000
+      #     capabilities: { drop: ["ALL"] }
+      #     seccompProfile: { type: RuntimeDefault }
       volumes:
       - name: config-volume
         configMap:

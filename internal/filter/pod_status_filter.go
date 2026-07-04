@@ -46,6 +46,11 @@ func (f PodStatusFilter) Detect(ctx *Context) Status {
 		} else if c.Type == corev1.ContainersReady && c.Status == corev1.ConditionFalse {
 			issueInContainers = true
 			issueInPod = false
+		} else if c.Type == corev1.PodReadyToStartContainers && c.Status == corev1.ConditionFalse {
+			issueInPod = true
+			issueInContainers = false
+			ctx.PodReason = c.Reason
+			ctx.PodMsg = c.Message
 		}
 	}
 

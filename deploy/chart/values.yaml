@@ -43,9 +43,12 @@ podLabels: {}
 # tlsMonitor:
 #   enabled: true
 #   threshold: 30
+#
+# smartGrouping:
+#   windowSeconds: 60
 config: {}
 
-# -- LLM sidecar configuration (AI enrichment, enabled by default)
+# -- LLM sidecar configuration (AI enrichment, disabled by default)
 llm:
   # -- model image (published manually via .github/workflows/publish-llm.yml)
   repository: ghcr.io/abahmed/kwatch-llm

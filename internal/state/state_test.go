@@ -588,6 +588,82 @@ func TestEngineBackedBaselineRoundTrip(t *testing.T) {
 	assert.Equal(model.ActionCreate, action, "unseen pod must create incident")
 }
 
+func TestSaveAndGetIncidents(t *testing.T) {
+	assert := assert.New(t)
+	ctx := context.Background()
+	client := fake.NewSimpleClientset()
+	sm := NewStateManager(client, "kwatch")
+
+	incidents := []map[string]interface{}{
+		{
+			"key":       "default:dep-1:OOMKilled:",
+			"reason":    "OOMKilled",
+			"namespace": "default",
+			"name":      "dep-1",
+			"resource":  "pod",
+			"count":     3,
+			"severity":  "high",
+		},
+	}
+	err := sm.SaveIncidents(ctx, incidents)
+	assert.Nil(err)
+
+	var loaded []map[string]interface{}
+	err = sm.GetIncidents(ctx, &loaded)
+	assert.Nil(err)
+	assert.Equal(1, len(loaded))
+	assert.Equal("default:dep-1:OOMKilled:", loaded[0]["key"])
+	assert.Equal(float64(3), loaded[0]["count"])
+	assert.Equal("high", loaded[0]["severity"])
+
+	cm, err := client.CoreV1().ConfigMaps("kwatch").Get(ctx, incidentsConfigMapName, metav1.GetOptions{})
+	assert.Nil(err)
+	assert.NotNil(cm.BinaryData[incidentsKey])
+}
+
+func TestGetIncidentsNoConfigMap(t *testing.T) {
+	assert := assert.New(t)
+	ctx := context.Background()
+	client := fake.NewSimpleClientset()
+	sm := NewStateManager(client, "kwatch")
+
+	var loaded []map[string]interface{}
+	err := sm.GetIncidents(ctx, &loaded)
+	assert.Nil(err)
+	assert.Nil(loaded)
+}
+
+func TestSaveIncidentsOverwrites(t *testing.T) {
+	assert := assert.New(t)
+	ctx := context.Background()
+	client := fake.NewSimpleClientset()
+	sm := NewStateManager(client, "kwatch")
+
+	first := []map[string]interface{}{
+		{"key": "ns:dep-1:Error:", "count": 1},
+	}
+	err := sm.SaveIncidents(ctx, first)
+	assert.Nil(err)
+
+	var loaded []map[string]interface{}
+	err = sm.GetIncidents(ctx, &loaded)
+	assert.Nil(err)
+	assert.Equal(1, len(loaded))
+	assert.Equal("ns:dep-1:Error:", loaded[0]["key"])
+
+	second := []map[string]interface{}{
+		{"key": "ns:dep-2:OOMKilled:", "count": 5},
+	}
+	err = sm.SaveIncidents(ctx, second)
+	assert.Nil(err)
+
+	loaded = nil
+	err = sm.GetIncidents(ctx, &loaded)
+	assert.Nil(err)
+	assert.Equal(1, len(loaded))
+	assert.Equal("ns:dep-2:OOMKilled:", loaded[0]["key"])
+}
+
 func TestSaveBaselineTooLarge(t *testing.T) {
 	assert := assert.New(t)
 	client := fake.NewSimpleClientset()

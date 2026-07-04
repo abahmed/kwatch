@@ -63,18 +63,6 @@ func ValidateConfig(cfg *Config) []string {
 		}
 	}
 
-	if cfg.StormConfig.Enabled {
-		if cfg.StormConfig.Threshold <= 0 {
-			errs = append(errs, "stormConfig.threshold must be > 0")
-		}
-		if cfg.StormConfig.WindowMinutes <= 0 {
-			errs = append(errs, "stormConfig.windowMinutes must be > 0")
-		}
-		if cfg.StormConfig.DigestIntervalMinutes <= 0 {
-			errs = append(errs, "stormConfig.digestIntervalMinutes must be > 0")
-		}
-	}
-
 	if cfg.PendingPodMonitor.Enabled && cfg.PendingPodMonitor.Threshold <= 0 {
 		errs = append(errs, "pendingPodMonitor.threshold must be > 0")
 	}
@@ -105,17 +93,6 @@ func unknownProviders(cfg *Config) []string {
 // of errors suitable for use in LoadConfig.
 func Validate(cfg *Config) []error {
 	var errs []error
-	if cfg.StormConfig.Enabled {
-		if cfg.StormConfig.Threshold <= 0 {
-			errs = append(errs, errors.New("storm.threshold must be > 0"))
-		}
-		if cfg.StormConfig.WindowMinutes <= 0 {
-			errs = append(errs, errors.New("storm.windowMinutes must be > 0"))
-		}
-		if cfg.StormConfig.DigestIntervalMinutes <= 0 {
-			errs = append(errs, errors.New("storm.digestIntervalMinutes must be > 0"))
-		}
-	}
 	if cfg.Correlation.Window <= 0 {
 		errs = append(errs, errors.New("correlation.window must be > 0"))
 	}

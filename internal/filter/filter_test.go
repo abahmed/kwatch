@@ -1796,6 +1796,40 @@ func TestPodStatusFilterAlreadyKnown(t *testing.T) {
 	assert.True(result)
 }
 
+func TestPodStatusFilterPodReadyToStartContainersFalse(t *testing.T) {
+	assert := assert.New(t)
+
+	ctx := &Context{
+		Client: fake.NewSimpleClientset(),
+		Config: &config.Config{},
+
+		Pod: &corev1.Pod{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      "test-pod",
+				Namespace: "default",
+			},
+			Status: corev1.PodStatus{
+				Phase: corev1.PodPending,
+				Conditions: []corev1.PodCondition{
+					{
+						Type:    corev1.PodReadyToStartContainers,
+						Status:  corev1.ConditionFalse,
+						Reason:  "SandboxError",
+						Message: "network plugin error",
+					},
+				},
+			},
+		},
+	}
+
+	filter := PodStatusFilter{}
+	result := filter.Execute(ctx)
+	assert.False(result)
+	assert.True(ctx.PodHasIssues)
+	assert.Equal("SandboxError", ctx.PodReason)
+	assert.Equal("network plugin error", ctx.PodMsg)
+}
+
 func TestContainerLogsFilterContainerStatusUnknown(t *testing.T) {
 	assert := assert.New(t)
 
