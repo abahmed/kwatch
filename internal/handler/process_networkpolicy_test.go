@@ -224,3 +224,19 @@ func TestProcessNetworkPolicyObjectNil(t *testing.T) {
 	h := NewHandler(fake.NewSimpleClientset(), &config.Config{}, testCorrelator(), testAlertMgr)
 	assert.NoError(t, h.ProcessNetworkPolicyObject(nil, false))
 }
+
+func TestProcessNetworkPolicyInvalidKey(t *testing.T) {
+	h := NewHandler(fake.NewSimpleClientset(), &config.Config{}, testCorrelator(), testAlertMgr)
+	assert.Error(t, h.ProcessNetworkPolicy("a/b/c", false))
+}
+
+func TestProcessNetworkPolicyObjectDeletedPath(t *testing.T) {
+	e := testCorrelator()
+	h := NewHandler(fake.NewSimpleClientset(), &config.Config{}, e, testAlertMgr)
+
+	policy := &networkingv1.NetworkPolicy{
+		ObjectMeta: metav1.ObjectMeta{Name: "test-netpol", Namespace: "default"},
+	}
+	assert.NoError(t, h.ProcessNetworkPolicyObject(policy, true))
+	assert.Equal(t, 0, e.ActiveCount())
+}

@@ -125,6 +125,63 @@ func TestBuildResolved(t *testing.T) {
 	assert.Contains(t, msg, "CrashLoopBackOff")
 }
 
+func TestBuildCreateWithHint(t *testing.T) {
+	b := NewBuilder()
+	inc := &model.Incident{
+		Name:      "p1",
+		Namespace: "ns1",
+		Resource:  "pod",
+		Reason:    "Error",
+		Hint:      "OOMKill",
+	}
+
+	msg := b.Build(inc, model.ActionCreate, nil)
+	assert.Contains(t, msg, "Hint: OOMKill")
+}
+
+func TestBuildCreateWithRunbook(t *testing.T) {
+	b := NewBuilder()
+	inc := &model.Incident{
+		Name:      "p1",
+		Namespace: "ns1",
+		Resource:  "pod",
+		Reason:    "Error",
+		Runbook:   "https://runbook.example.com",
+	}
+
+	msg := b.Build(inc, model.ActionCreate, nil)
+	assert.Contains(t, msg, "Runbook: https://runbook.example.com")
+}
+
+func TestBuildCreateWithContainerName(t *testing.T) {
+	b := NewBuilder()
+	inc := &model.Incident{
+		Name:          "p1",
+		Namespace:     "ns1",
+		Resource:      "pod",
+		Reason:        "Error",
+		Resources:     map[string]bool{"p1": true},
+		ContainerName: "c1",
+	}
+
+	msg := b.Build(inc, model.ActionCreate, nil)
+	assert.Contains(t, msg, "-c c1")
+}
+
+func TestBuildCreateWithAffectedCount(t *testing.T) {
+	b := NewBuilder()
+	inc := &model.Incident{
+		Name:      "p1",
+		Namespace: "ns1",
+		Resource:  "pod",
+		Reason:    "Error",
+	}
+	ins := &insight.Insight{AffectedCount: 5}
+
+	msg := b.Build(inc, model.ActionCreate, ins)
+	assert.Contains(t, msg, "Affected resources: 5")
+}
+
 func TestBuildSkip(t *testing.T) {
 	b := NewBuilder()
 	msg := b.Build(&model.Incident{}, model.ActionSkip, nil)

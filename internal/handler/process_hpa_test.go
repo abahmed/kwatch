@@ -12,6 +12,7 @@ import (
 	autoscalingv2 "k8s.io/api/autoscaling/v2"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/client-go/informers"
 	"k8s.io/client-go/kubernetes/fake"
 )
 
@@ -252,4 +253,128 @@ func TestHpaNilAndDeleted(t *testing.T) {
 		},
 	}
 	assert.NoError(t, h.ProcessHorizontalPodAutoscalerObject(hpa, true))
+}
+
+func TestProcessHorizontalPodAutoscalerInvalidKey(t *testing.T) {
+	h := NewHandler(fake.NewSimpleClientset(), &config.Config{}, testCorrelator(), testAlertMgr)
+	assert.Error(t, h.ProcessHorizontalPodAutoscaler("a/b/c", false))
+}
+
+func TestProcessHorizontalPodAutoscalerDeleted(t *testing.T) {
+	h := NewHandler(fake.NewSimpleClientset(), &config.Config{}, testCorrelator(), testAlertMgr)
+	assert.NoError(t, h.ProcessHorizontalPodAutoscaler("default/test-hpa", true))
+}
+
+func TestProcessHorizontalPodAutoscalerNotFound(t *testing.T) {
+	e := testCorrelator()
+	h := NewHandler(fake.NewSimpleClientset(), &config.Config{}, e, testAlertMgr)
+
+	f := informers.NewSharedInformerFactory(fake.NewSimpleClientset(), 0)
+	h.SetHorizontalPodAutoscalerLister(f.Autoscaling().V2().HorizontalPodAutoscalers().Lister())
+
+	assert.NoError(t, h.ProcessHorizontalPodAutoscaler("default/missing", false))
+	assert.Equal(t, 0, e.ActiveCount())
+}
+
+func TestProcessHorizontalPodAutoscalerKeyValid(t *testing.T) {
+	e := correlation.NewEngine(correlation.Config{Window: 10 * time.Minute})
+	h := NewHandler(fake.NewSimpleClientset(), &config.Config{}, e, testAlertMgr)
+
+	f := informers.NewSharedInformerFactory(fake.NewSimpleClientset(), 0)
+	h.SetHorizontalPodAutoscalerLister(f.Autoscaling().V2().HorizontalPodAutoscalers().Lister())
+
+	hpa := &autoscalingv2.HorizontalPodAutoscaler{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "test-hpa",
+			Namespace: "default",
+		},
+		Spec: autoscalingv2.HorizontalPodAutoscalerSpec{
+			MaxReplicas: 10,
+		},
+		Status: autoscalingv2.HorizontalPodAutoscalerStatus{
+			Conditions: []autoscalingv2.HorizontalPodAutoscalerCondition{
+				{
+					Type:    autoscalingv2.ScalingActive,
+					Status:  corev1.ConditionFalse,
+					Reason:  "FailedGetScale",
+					Message: "deployment not found",
+				},
+			},
+		},
+	}
+	f.Autoscaling().V2().HorizontalPodAutoscalers().Informer().GetIndexer().Add(hpa)
+
+	assert.NoError(t, h.ProcessHorizontalPodAutoscaler("default/test-hpa", false))
+
+	snap := e.Snapshot()
+	var found bool
+	for _, v := range snap {
+		if v.Reason == "HPAScalingError" {
+			found = true
+		}
+	}
+	assert.True(t, found, "key-based ProcessHorizontalPodAutoscaler should create incident")
+}
+
+func TestHpaAtMaxMaxReplicasOne(t *testing.T) {
+	hpa := &autoscalingv2.HorizontalPodAutoscaler{
+		Spec: autoscalingv2.HorizontalPodAutoscalerSpec{MaxReplicas: 1},
+	}
+	assert.False(t, hpaAtMax(hpa))
+}
+
+func TestHpaAtMaxScalingLimitedOtherReason(t *testing.T) {
+	hpa := &autoscalingv2.HorizontalPodAutoscaler{
+		Spec: autoscalingv2.HorizontalPodAutoscalerSpec{MaxReplicas: 10},
+		Status: autoscalingv2.HorizontalPodAutoscalerStatus{
+			Conditions: []autoscalingv2.HorizontalPodAutoscalerCondition{
+				{
+					Type:   autoscalingv2.ScalingLimited,
+					Status: corev1.ConditionTrue,
+					Reason: "SomeOtherReason",
+				},
+			},
+		},
+	}
+	assert.False(t, hpaAtMax(hpa))
+}
+
+func TestHpaAtMaxTooManyReplicas(t *testing.T) {
+	hpa := &autoscalingv2.HorizontalPodAutoscaler{
+		Spec: autoscalingv2.HorizontalPodAutoscalerSpec{MaxReplicas: 10},
+		Status: autoscalingv2.HorizontalPodAutoscalerStatus{
+			Conditions: []autoscalingv2.HorizontalPodAutoscalerCondition{
+				{
+					Type:   autoscalingv2.ScalingLimited,
+					Status: corev1.ConditionTrue,
+					Reason: "TooManyReplicas",
+				},
+			},
+		},
+	}
+	assert.True(t, hpaAtMax(hpa))
+}
+
+func TestHpaAtMaxScalingLimitedFalse(t *testing.T) {
+	hpa := &autoscalingv2.HorizontalPodAutoscaler{
+		Spec: autoscalingv2.HorizontalPodAutoscalerSpec{MaxReplicas: 10},
+	}
+	assert.False(t, hpaAtMax(hpa))
+}
+
+func TestDetectHPAIssuesScalingDisabled(t *testing.T) {
+	hpa := &autoscalingv2.HorizontalPodAutoscaler{
+		ObjectMeta: metav1.ObjectMeta{Name: "hpa1", Namespace: "ns1"},
+		Status: autoscalingv2.HorizontalPodAutoscalerStatus{
+			Conditions: []autoscalingv2.HorizontalPodAutoscalerCondition{
+				{
+					Type:   autoscalingv2.ScalingActive,
+					Status: corev1.ConditionFalse,
+					Reason: "ScalingDisabled",
+				},
+			},
+		},
+	}
+	sigs := DetectHPAIssues(hpa)
+	assert.Empty(t, sigs, "ScalingDisabled should not produce signals")
 }

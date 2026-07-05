@@ -59,6 +59,16 @@ func TestRemoveNode(t *testing.T) {
 	assert.Equal(t, "pod/ns1/p2", deps[0])
 }
 
+func TestRemoveNodeWithDependents(t *testing.T) {
+	g := NewResourceGraph()
+	g.AddEdge("pod", "ns1", "p1", "node", "", "n1", "scheduled_on")
+
+	g.RemoveNode("node", "", "n1")
+
+	assert.Empty(t, g.DependenciesOf("pod", "ns1", "p1"))
+	assert.Empty(t, g.DependentsOf("node", "", "n1"))
+}
+
 func TestClear(t *testing.T) {
 	g := NewResourceGraph()
 	g.AddEdge("pod", "ns1", "p1", "node", "", "n1", "scheduled_on")

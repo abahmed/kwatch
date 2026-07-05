@@ -73,6 +73,15 @@ func TestRecentChangesBefore(t *testing.T) {
 	assert.Len(t, recent, 2)
 }
 
+func TestChangeTypeString(t *testing.T) {
+	assert.Equal(t, "created", ChangeCreate.String())
+	assert.Equal(t, "updated", ChangeUpdate.String())
+	assert.Equal(t, "deleted", ChangeDelete.String())
+
+	var unknown ChangeType = 99
+	assert.Equal(t, "unknown", unknown.String())
+}
+
 func TestRecordConcurrency(t *testing.T) {
 	tr := NewChangeTracker(100)
 	done := make(chan struct{})

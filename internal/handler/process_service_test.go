@@ -93,7 +93,7 @@ func TestDetectServiceEndpointIssueExternalName(t *testing.T) {
 		Spec: corev1.ServiceSpec{
 			Type:      corev1.ServiceTypeExternalName,
 			Selector:  map[string]string{"app": "test"},
-			ClusterIP: "",
+			ClusterIP: "192.168.1.1",
 		},
 	}
 	eps := &corev1.Endpoints{
@@ -240,6 +240,50 @@ func TestProcessServiceObjectDeleted(t *testing.T) {
 func TestProcessServiceObjectNil(t *testing.T) {
 	h := NewHandler(fake.NewSimpleClientset(), &config.Config{}, testCorrelator(), testAlertMgr)
 	assert.NoError(t, h.ProcessServiceObject(nil, false))
+}
+
+func TestProcessServiceInvalidKey(t *testing.T) {
+	h := NewHandler(fake.NewSimpleClientset(), &config.Config{}, testCorrelator(), testAlertMgr)
+	assert.Error(t, h.ProcessService("a/b/c", false))
+}
+
+func TestProcessServiceObjectEndpointsNotFound(t *testing.T) {
+	e := testCorrelator()
+	h := NewHandler(fake.NewSimpleClientset(), &config.Config{}, e, testAlertMgr)
+
+	f := informers.NewSharedInformerFactory(fake.NewSimpleClientset(), 0)
+	h.SetEndpointLister(f.Core().V1().Endpoints().Lister())
+
+	svc := &corev1.Service{
+		ObjectMeta: metav1.ObjectMeta{Name: "test-svc", Namespace: "default"},
+		Spec: corev1.ServiceSpec{ClusterIP: "10.0.0.1"},
+	}
+
+	assert.NoError(t, h.ProcessServiceObject(svc, false))
+	assert.Equal(t, 0, e.ActiveCount(), "endpoints not found should not create incident")
+}
+
+func TestProcessServiceObjectClusterIPEmpty(t *testing.T) {
+	e := testCorrelator()
+	h := NewHandler(fake.NewSimpleClientset(), &config.Config{}, e, testAlertMgr)
+
+	svc := &corev1.Service{
+		ObjectMeta: metav1.ObjectMeta{Name: "test-svc", Namespace: "default"},
+		Spec: corev1.ServiceSpec{
+			Selector:  map[string]string{"app": "test"},
+			ClusterIP: "",
+		},
+	}
+	eps := &corev1.Endpoints{
+		ObjectMeta: metav1.ObjectMeta{Name: "test-svc", Namespace: "default"},
+	}
+
+	f := informers.NewSharedInformerFactory(fake.NewSimpleClientset(), 0)
+	f.Core().V1().Endpoints().Informer().GetIndexer().Add(eps)
+	h.SetEndpointLister(f.Core().V1().Endpoints().Lister())
+
+	assert.NoError(t, h.ProcessServiceObject(svc, false))
+	assert.Equal(t, 0, e.ActiveCount(), "service with empty ClusterIP should not create incident")
 }
 
 func TestProcessServiceObjectNoSelectorNoIncident(t *testing.T) {

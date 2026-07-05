@@ -122,7 +122,6 @@ func (m *mockHandler) ReportStartupSummary(suppressed map[string]int) {
 	defer m.mu.Unlock()
 	m.startupSummary = suppressed
 }
-func (m *mockHandler) SetPvcSampler(func(nodeName string))                    {}
 func (m *mockHandler) ProcessMutatingWebhookConfiguration(string, bool) error { return m.err }
 func (m *mockHandler) ProcessMutatingWebhookConfigurationObject(*admissionregistrationv1.MutatingWebhookConfiguration, bool) error {
 	return m.err

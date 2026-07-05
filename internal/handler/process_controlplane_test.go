@@ -101,6 +101,28 @@ func TestSweepControlPlaneWithLister(t *testing.T) {
 	assert.True(t, found, "ControlPlaneComponentFailure incident should exist for broken pod")
 }
 
+func TestDetectControlPlanePodPodCompletedReason(t *testing.T) {
+	pod := &corev1.Pod{
+		ObjectMeta: metav1.ObjectMeta{Name: "kube-apiserver", Namespace: "kube-system"},
+		Status: corev1.PodStatus{
+			Phase: corev1.PodRunning,
+			Conditions: []corev1.PodCondition{
+				{Type: corev1.PodReady, Status: corev1.ConditionFalse, Reason: "PodCompleted"},
+			},
+			ContainerStatuses: []corev1.ContainerStatus{
+				{
+					Name: "apiserver",
+					State: corev1.ContainerState{
+						Running: &corev1.ContainerStateRunning{},
+					},
+				},
+			},
+		},
+	}
+	sig := DetectControlPlanePodIssue(pod)
+	assert.Nil(t, sig, "PodCompleted should be skipped")
+}
+
 func TestDetectControlPlanePodSucceeded(t *testing.T) {
 	pod := &corev1.Pod{
 		ObjectMeta: metav1.ObjectMeta{Name: "kube-apiserver", Namespace: "kube-system"},
@@ -132,6 +154,28 @@ func TestDetectControlPlanePodRunningAndReady(t *testing.T) {
 	}
 	sig := DetectControlPlanePodIssue(pod)
 	assert.Nil(t, sig, "running and ready pod should not produce a signal")
+}
+
+func TestDetectControlPlanePodNotReadyNoContainerIssue(t *testing.T) {
+	pod := &corev1.Pod{
+		ObjectMeta: metav1.ObjectMeta{Name: "kube-apiserver", Namespace: "kube-system"},
+		Status: corev1.PodStatus{
+			Phase: corev1.PodPending,
+			Conditions: []corev1.PodCondition{
+				{Type: corev1.PodReady, Status: corev1.ConditionFalse, Reason: "ContainersNotReady"},
+			},
+			ContainerStatuses: []corev1.ContainerStatus{
+				{
+					Name: "apiserver",
+					State: corev1.ContainerState{
+						Running: &corev1.ContainerStateRunning{},
+					},
+				},
+			},
+		},
+	}
+	sig := DetectControlPlanePodIssue(pod)
+	assert.Nil(t, sig, "not ready with all containers running should not produce a signal")
 }
 
 func TestDetectControlPlanePodCrashLoopBackOff(t *testing.T) {

@@ -61,6 +61,31 @@ func TestDynamicThresholdSecret(t *testing.T) {
 	assert.Equal(t, 6, th) // 20 * 30% = 6
 }
 
+func TestScanMassFailuresNilGraph(t *testing.T) {
+	mfs := ScanMassFailures([]*model.Incident{{}}, nil)
+	assert.Empty(t, mfs)
+}
+
+func TestScanMassFailuresBelowThreshold(t *testing.T) {
+	graph := context.NewResourceGraph()
+	for i := 0; i < 14; i++ {
+		graph.AddEdge("pod", "ns", fmt.Sprintf("p%d", i), "configmap", "ns", "cm1", "mounts")
+	}
+
+	incidents := make([]*model.Incident, 0)
+	for i := 0; i < 3; i++ {
+		incidents = append(incidents, &model.Incident{
+			Resource:  "pod",
+			Namespace: "ns",
+			Name:      fmt.Sprintf("p%d", i),
+			State:     model.StateActive,
+		})
+	}
+
+	mfs := ScanMassFailures(incidents, graph)
+	assert.Empty(t, mfs) // 3 incidents < threshold of 4 (14*30%=4)
+}
+
 func TestScanMassFailuresNoIncidents(t *testing.T) {
 	graph := context.NewResourceGraph()
 	mfs := ScanMassFailures(nil, graph)
@@ -142,6 +167,42 @@ func TestScanMassFailuresMultipleSharedDeps(t *testing.T) {
 
 	mfs := ScanMassFailures(incidents, graph)
 	assert.GreaterOrEqual(t, len(mfs), 1) // at least one shared dep found
+}
+
+func TestDynamicThresholdNodeInnerIf(t *testing.T) {
+	graph := context.NewResourceGraph()
+	graph.AddEdge("pod", "ns", "p1", "node", "", "n1", "scheduled_on")
+	graph.AddEdge("pod", "ns", "p2", "node", "", "n1", "scheduled_on")
+	graph.AddEdge("pod", "ns", "p3", "node", "", "n1", "scheduled_on")
+	graph.AddEdge("pod", "ns", "p4", "node", "", "n1", "scheduled_on")
+
+	th := dynamicThreshold("node//n1", graph)
+	assert.Equal(t, 3, th) // 4*30% = 1, bumped to min 3
+}
+
+func TestDynamicThresholdConfigMapInnerIf(t *testing.T) {
+	graph := context.NewResourceGraph()
+	graph.AddEdge("pod", "ns", "p1", "configmap", "ns", "cm1", "mounts")
+	graph.AddEdge("pod", "ns", "p2", "configmap", "ns", "cm1", "mounts")
+	graph.AddEdge("pod", "ns", "p3", "configmap", "ns", "cm1", "mounts")
+	graph.AddEdge("pod", "ns", "p4", "configmap", "ns", "cm1", "mounts")
+
+	th := dynamicThreshold("configmap/ns/cm1", graph)
+	assert.Equal(t, 3, th) // 4*30% = 1, bumped to min 3
+}
+
+func TestDynamicThresholdUnknownPrefix(t *testing.T) {
+	graph := context.NewResourceGraph()
+	th := dynamicThreshold("foo//bar", graph)
+	assert.Equal(t, minMassFailThreshold, th)
+}
+
+func TestDynamicThresholdConfigMapBelowMin(t *testing.T) {
+	graph := context.NewResourceGraph()
+	graph.AddEdge("pod", "ns", "p1", "configmap", "ns", "cm1", "mounts")
+
+	th := dynamicThreshold("configmap/ns/cm1", graph)
+	assert.Equal(t, minMassFailThreshold, th)
 }
 
 func TestMassFailureDescribe(t *testing.T) {

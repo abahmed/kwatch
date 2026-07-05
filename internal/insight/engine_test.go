@@ -1,6 +1,7 @@
 package insight
 
 import (
+	"fmt"
 	"testing"
 	"time"
 
@@ -161,6 +162,38 @@ func TestAnalyzeImpactPVC(t *testing.T) {
 	ins := e.Analyze(inc)
 
 	assert.Contains(t, ins.Impact, "3 pod")
+}
+
+func TestAnalyzeRecentChangesNamespaceFallback(t *testing.T) {
+	tracker := context.NewChangeTracker(100)
+	tracker.Record(context.Change{
+		Resource: "pod", Namespace: "ns1", Name: "p2",
+		Type: context.ChangeDelete, Timestamp: time.Now(),
+	})
+
+	e := NewEngine(nil, tracker)
+	inc := &model.Incident{Resource: "pod", Namespace: "ns1", Name: "p1"}
+	ins := e.Analyze(inc)
+
+	assert.Len(t, ins.RecentChanges, 1)
+	assert.Equal(t, "p2", ins.RecentChanges[0].Name)
+}
+
+func TestAnalyzeRecentChangesCap(t *testing.T) {
+	tracker := context.NewChangeTracker(100)
+	now := time.Now()
+	for i := 0; i < 5; i++ {
+		tracker.Record(context.Change{
+			Resource: "pod", Namespace: "ns1", Name: fmt.Sprintf("p%d", i),
+			Type: context.ChangeCreate, Timestamp: now,
+		})
+	}
+
+	e := NewEngine(nil, tracker)
+	inc := &model.Incident{Resource: "deploy", Namespace: "ns1", Name: "dep1"}
+	ins := e.Analyze(inc)
+
+	assert.Len(t, ins.RecentChanges, 3)
 }
 
 func TestAnalyzeNoDeps(t *testing.T) {

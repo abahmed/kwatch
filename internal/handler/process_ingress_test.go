@@ -394,3 +394,19 @@ func TestProcessIngressObjectNil(t *testing.T) {
 	h := NewHandler(fake.NewSimpleClientset(), &config.Config{}, testCorrelator(), testAlertMgr)
 	assert.NoError(t, h.ProcessIngressObject(nil, false))
 }
+
+func TestProcessIngressInvalidKey(t *testing.T) {
+	h := NewHandler(fake.NewSimpleClientset(), &config.Config{}, testCorrelator(), testAlertMgr)
+	assert.Error(t, h.ProcessIngress("a/b/c", false))
+}
+
+func TestProcessIngressObjectDeletedPath(t *testing.T) {
+	e := testCorrelator()
+	h := NewHandler(fake.NewSimpleClientset(), &config.Config{}, e, testAlertMgr)
+
+	ing := &networkingv1.Ingress{
+		ObjectMeta: metav1.ObjectMeta{Name: "test-ing", Namespace: "default"},
+	}
+	assert.NoError(t, h.ProcessIngressObject(ing, true))
+	assert.Equal(t, 0, e.ActiveCount())
+}

@@ -2109,3 +2109,169 @@ func TestNewIncidentDoesNotAnnotateParentWhenHealthy(t *testing.T) {
 	assert.NotNil(t, inc)
 	assert.NotContains(t, inc.Hint, "owning")
 }
+
+func TestClassifyImagePullScope(t *testing.T) {
+	tests := []struct {
+		msg      string
+		expected string
+	}{
+		{"toomanyrequests: pull limit", "rate_limit"},
+		{"rate limit exceeded", "rate_limit"},
+		{"pull qps exceeded", "pull_qps"},
+		{"authentication required", "auth"},
+		{"unauthorized: access denied", "auth"},
+		{"denied: access forbidden", "auth"},
+		{"no pull access", "auth"},
+		{"not found: nginx:latest", "image_not_found"},
+		{"manifest unknown", "image_not_found"},
+		{"does not exist", "image_not_found"},
+		{"context deadline exceeded", "timeout"},
+		{"i/o timeout", "timeout"},
+		{"connection refused", "conn_refused"},
+		{"connection reset", "conn_refused"},
+		{"no route to host", "net_unreachable"},
+		{"network is unreachable", "net_unreachable"},
+		{"no such host", "dns"},
+		{"dial tcp: lookup registry.example.com", "dns"},
+		{"tls handshake error", "tls"},
+		{"certificate expired", "tls"},
+		{"some random error", ""},
+		{"", ""},
+	}
+	for _, tc := range tests {
+		assert.Equal(t, tc.expected, classifyImagePullScope(tc.msg), "classifyImagePullScope(%q)", tc.msg)
+	}
+}
+
+func TestSeverityRank(t *testing.T) {
+	assert.Equal(t, 3, severityRank("critical"))
+	assert.Equal(t, 2, severityRank("high"))
+	assert.Equal(t, 1, severityRank("medium"))
+	assert.Equal(t, 0, severityRank("normal"))
+	assert.Equal(t, 0, severityRank(""))
+	assert.Equal(t, 0, severityRank("unknown"))
+}
+
+func TestBaselineSnapshot(t *testing.T) {
+	e := NewEngine(Config{
+		Window:      10 * time.Minute,
+		BaselineTTL: 10 * time.Minute,
+	})
+	snap := e.BaselineSnapshot()
+	assert.NotNil(t, snap)
+
+	ts := time.Now().Unix()
+	e.SetSeen(map[string]map[string]int64{
+		"ns:dep:Err:": {"sig-1": ts},
+	})
+	snap = e.BaselineSnapshot()
+	assert.Equal(t, ts, snap["ns:dep:Err:"]["sig-1"])
+
+	// Verify isolation: mutate returned map's inner entry
+	snap["ns:dep:Err:"]["sig-1"] = 999
+	snap2 := e.BaselineSnapshot()
+	assert.Equal(t, ts, snap2["ns:dep:Err:"]["sig-1"])
+}
+
+func TestCountActiveNodeIncidents(t *testing.T) {
+	e := newTestEngine()
+	assert.Equal(t, 0, e.CountActiveNodeIncidents())
+
+	e.SetActiveNodeIncidents([]string{"node-1", "node-2"})
+	assert.Equal(t, 2, e.CountActiveNodeIncidents())
+
+	e2 := newTestEngine()
+	assert.Equal(t, 0, e2.CountActiveNodeIncidents())
+}
+
+func TestSetAnalysis(t *testing.T) {
+	e := newTestEngine()
+	ev := event.Event{PodName: "p1", Namespace: "ns", Reason: "CrashLoopBackOff"}
+	inc, _ := e.Process(ev, "dep1", nil)
+
+	e.SetAnalysis(inc.Key, "root cause found")
+	e.mu.Lock()
+	assert.Equal(t, "root cause found", e.state[inc.Key].Analysis)
+	e.mu.Unlock()
+
+	// No-op for non-existent key
+	e.SetAnalysis("nonexistent", "should not panic")
+}
+
+func TestGetIncidentsByNamespace(t *testing.T) {
+	e := newTestEngine()
+	e.Process(event.Event{PodName: "p1", Namespace: "ns-a", Reason: "Err1"}, "dep1", nil)
+	e.Process(event.Event{PodName: "p2", Namespace: "ns-b", Reason: "Err2"}, "dep2", nil)
+
+	nsA := e.GetIncidentsByNamespace("ns-a")
+	assert.Len(t, nsA, 1)
+	assert.Equal(t, "Err1", nsA[0].Reason)
+
+	nsB := e.GetIncidentsByNamespace("ns-b")
+	assert.Len(t, nsB, 1)
+	assert.Equal(t, "Err2", nsB[0].Reason)
+
+	nsC := e.GetIncidentsByNamespace("ns-c")
+	assert.Len(t, nsC, 0)
+}
+
+func TestBuildNodeSummary(t *testing.T) {
+	e := newTestEngine()
+	entries := []groupEntry{
+		{reason: "DiskPressure", nodeName: "node-1", podName: "p1"},
+		{reason: "DiskPressure", nodeName: "node-1", podName: "p2"},
+	}
+	summary := e.buildNodeSummary("DiskPressure", entries, " 5m ago")
+	assert.Contains(t, summary, "DiskPressure")
+	assert.Contains(t, summary, "node-1")
+	assert.Contains(t, summary, "2 pods")
+	assert.Contains(t, summary, "(total 2)")
+	assert.Contains(t, summary, "5m ago")
+}
+
+func TestBuildImageSummaryPerImage(t *testing.T) {
+	e := newTestEngine()
+	entries := []groupEntry{
+		{reason: "ImagePullBackOff", image: "nginx:latest", namespace: "ns", owner: "dep1", key: "ImagePullBackOff|img|nginx:latest|ns|ns"},
+		{reason: "ImagePullBackOff", image: "nginx:latest", namespace: "ns", owner: "dep2", key: "ImagePullBackOff|img|nginx:latest|ns|ns"},
+	}
+	summary := e.buildImageSummary("ImagePullBackOff", entries, " 2m ago")
+	assert.Contains(t, summary, "nginx")
+	assert.Contains(t, summary, "dep1")
+	assert.Contains(t, summary, "dep2")
+	assert.Contains(t, summary, "(total 2)")
+}
+
+func TestBuildImageSummaryGlobal(t *testing.T) {
+	e := newTestEngine()
+	entries := []groupEntry{
+		{reason: "ImagePullBackOff", image: "nginx:latest", namespace: "ns1", owner: "dep1", key: "ImagePullBackOff|global|rate_limit"},
+		{reason: "ImagePullBackOff", image: "alpine:latest", namespace: "ns2", owner: "dep2", key: "ImagePullBackOff|global|rate_limit"},
+	}
+	summary := e.buildImageSummary("ImagePullBackOff", entries, " 2m ago")
+	assert.Contains(t, summary, "2 deployments")
+	assert.Contains(t, summary, "(total 2)")
+	assert.NotContains(t, summary, "nginx")
+}
+
+func TestBuildImageSummaryEmptyImage(t *testing.T) {
+	e := newTestEngine()
+	entries := []groupEntry{
+		{reason: "ImagePullBackOff", image: "", namespace: "ns", owner: "dep1", key: "img"},
+	}
+	summary := e.buildImageSummary("ImagePullBackOff", entries, "")
+	assert.Contains(t, summary, "unknown")
+}
+
+func TestSetSeverityMap(t *testing.T) {
+	e := NewEngine(Config{
+		Window:   10 * time.Minute,
+		Enricher: &enricher.DefaultEnricher{},
+	})
+	sm := map[string]string{"CrashLoopBackOff": "critical"}
+	e.SetSeverityMap(sm)
+
+	// Engine with non-DefaultEnricher should not panic
+	e2 := NewEngine(Config{Window: 10 * time.Minute})
+	e2.SetSeverityMap(sm)
+}

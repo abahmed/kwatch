@@ -237,10 +237,6 @@ func main() {
 		correlator,
 		alertManager,
 	)
-	if cfg.PvcMonitor.Enabled {
-		h.SetPvcSampler(func(nodeName string) { go pvcMonitor.SampleNode(ctx, nodeName) })
-	}
-
 	insightEngine := insight.NewEngine(graph, tracker)
 	h.SetInsightEngine(insightEngine)
 

@@ -86,7 +86,6 @@ type Handler interface {
 	SetActiveNodeIncidents(nodeNames []string)
 	ClearSeenForPod(namespace, podName string)
 	ReportStartupSummary(suppressed map[string]int)
-	SetPvcSampler(f func(nodeName string))
 	ProcessNodeResourceOvercommit(reason, nodeName, hint string)
 }
 
@@ -133,7 +132,6 @@ type handler struct {
 	netpolLister           networkingv1lister.NetworkPolicyLister
 	ingressLister          networkingv1lister.IngressLister
 	cpPodLister            corev1lister.PodLister
-	pvcSampler             func(nodeName string) // optional; set when pvcMonitor is enabled
 	oomTracker             *oomTracker
 	now                    func() time.Time
 }
@@ -208,6 +206,7 @@ func NewHandler(
 		firstUnavailableSts:    make(map[string]time.Time),
 		firstPdbViolation:      make(map[string]time.Time),
 		firstUnavailableDeploy: make(map[string]time.Time),
+		firstUnavailableDS:     make(map[string]time.Time),
 		firstSuspendedCJs:      make(map[string]time.Time),
 		firstNodePressure:      make(map[string]time.Time),
 		oomTracker:             oomTr,
@@ -289,10 +288,6 @@ func (h *handler) SetNetpolLister(lister networkingv1lister.NetworkPolicyLister)
 
 func (h *handler) SetCpPodLister(lister corev1lister.PodLister) {
 	h.cpPodLister = lister
-}
-
-func (h *handler) SetPvcSampler(f func(nodeName string)) {
-	h.pvcSampler = f
 }
 
 func (h *handler) ProcessNodeResourceOvercommit(reason, nodeName, hint string) {

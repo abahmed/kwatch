@@ -340,3 +340,163 @@ func TestProcessMutatingWebhookObjectNoServiceRefNoIncident(t *testing.T) {
 	assert.NoError(t, h.ProcessMutatingWebhookConfigurationObject(mwc, false))
 	assert.Equal(t, 0, e.ActiveCount())
 }
+
+func TestProcessMutatingWebhookConfigurationKeyNotFound(t *testing.T) {
+	e := testCorrelator()
+	h := NewHandler(fake.NewSimpleClientset(), &config.Config{}, e, testAlertMgr)
+
+	f := informers.NewSharedInformerFactory(fake.NewSimpleClientset(), 0)
+	h.SetMwCLister(f.Admissionregistration().V1().MutatingWebhookConfigurations().Lister())
+
+	assert.NoError(t, h.ProcessMutatingWebhookConfiguration("missing-mwc", false))
+	assert.Equal(t, 0, e.ActiveCount())
+}
+
+func TestProcessMutatingWebhookConfigurationKeyValid(t *testing.T) {
+	e := correlation.NewEngine(correlation.Config{Window: 10 * time.Minute})
+	h := NewHandler(fake.NewSimpleClientset(), &config.Config{}, e, testAlertMgr)
+
+	f := informers.NewSharedInformerFactory(fake.NewSimpleClientset(), 0)
+	h.SetMwCLister(f.Admissionregistration().V1().MutatingWebhookConfigurations().Lister())
+	h.SetServiceLister(f.Core().V1().Services().Lister())
+
+	mwc := &admissionregistrationv1.MutatingWebhookConfiguration{
+		ObjectMeta: metav1.ObjectMeta{Name: "test-mwc"},
+		Webhooks: []admissionregistrationv1.MutatingWebhook{
+			{
+				Name: "hook.example.com",
+				ClientConfig: admissionregistrationv1.WebhookClientConfig{
+					Service: &admissionregistrationv1.ServiceReference{
+						Namespace: "default",
+						Name:      "missing-svc",
+					},
+				},
+			},
+		},
+	}
+	f.Admissionregistration().V1().MutatingWebhookConfigurations().Informer().GetIndexer().Add(mwc)
+
+	assert.NoError(t, h.ProcessMutatingWebhookConfiguration("test-mwc", false))
+
+	snap := e.Snapshot()
+	var found bool
+	for _, v := range snap {
+		if v.Reason == "WebhookBackendNotFound" {
+			found = true
+		}
+	}
+	assert.True(t, found, "key-based ProcessMutatingWebhookConfiguration should create incident")
+}
+
+func TestProcessValidatingWebhookConfigurationKeyNotFound(t *testing.T) {
+	e := testCorrelator()
+	h := NewHandler(fake.NewSimpleClientset(), &config.Config{}, e, testAlertMgr)
+
+	f := informers.NewSharedInformerFactory(fake.NewSimpleClientset(), 0)
+	h.SetVwCLister(f.Admissionregistration().V1().ValidatingWebhookConfigurations().Lister())
+
+	assert.NoError(t, h.ProcessValidatingWebhookConfiguration("missing-vwc", false))
+	assert.Equal(t, 0, e.ActiveCount())
+}
+
+func TestProcessValidatingWebhookConfigurationKeyValid(t *testing.T) {
+	e := correlation.NewEngine(correlation.Config{Window: 10 * time.Minute})
+	h := NewHandler(fake.NewSimpleClientset(), &config.Config{}, e, testAlertMgr)
+
+	f := informers.NewSharedInformerFactory(fake.NewSimpleClientset(), 0)
+	h.SetVwCLister(f.Admissionregistration().V1().ValidatingWebhookConfigurations().Lister())
+	h.SetServiceLister(f.Core().V1().Services().Lister())
+
+	vwc := &admissionregistrationv1.ValidatingWebhookConfiguration{
+		ObjectMeta: metav1.ObjectMeta{Name: "test-vwc"},
+		Webhooks: []admissionregistrationv1.ValidatingWebhook{
+			{
+				Name: "hook.example.com",
+				ClientConfig: admissionregistrationv1.WebhookClientConfig{
+					Service: &admissionregistrationv1.ServiceReference{
+						Namespace: "default",
+						Name:      "missing-svc",
+					},
+				},
+			},
+		},
+	}
+	f.Admissionregistration().V1().ValidatingWebhookConfigurations().Informer().GetIndexer().Add(vwc)
+
+	assert.NoError(t, h.ProcessValidatingWebhookConfiguration("test-vwc", false))
+
+	snap := e.Snapshot()
+	var found bool
+	for _, v := range snap {
+		if v.Reason == "WebhookBackendNotFound" {
+			found = true
+		}
+	}
+	assert.True(t, found, "key-based ProcessValidatingWebhookConfiguration should create incident")
+}
+
+func TestProcessMutatingWebhookConfigurationObjectDeleted(t *testing.T) {
+	e := testCorrelator()
+	h := NewHandler(fake.NewSimpleClientset(), &config.Config{}, e, testAlertMgr)
+
+	mwc := &admissionregistrationv1.MutatingWebhookConfiguration{
+		ObjectMeta: metav1.ObjectMeta{Name: "test-mwc"},
+	}
+	assert.NoError(t, h.ProcessMutatingWebhookConfigurationObject(mwc, true))
+	assert.Equal(t, 0, e.ActiveCount())
+}
+
+func TestProcessValidatingWebhookConfigurationObjectDeleted(t *testing.T) {
+	e := testCorrelator()
+	h := NewHandler(fake.NewSimpleClientset(), &config.Config{}, e, testAlertMgr)
+
+	vwc := &admissionregistrationv1.ValidatingWebhookConfiguration{
+		ObjectMeta: metav1.ObjectMeta{Name: "test-vwc"},
+	}
+	assert.NoError(t, h.ProcessValidatingWebhookConfigurationObject(vwc, true))
+	assert.Equal(t, 0, e.ActiveCount())
+}
+
+func TestProcessMutatingWebhookConfigurationObjectNoServiceLister(t *testing.T) {
+	e := testCorrelator()
+	h := NewHandler(fake.NewSimpleClientset(), &config.Config{}, e, testAlertMgr)
+
+	mwc := &admissionregistrationv1.MutatingWebhookConfiguration{
+		ObjectMeta: metav1.ObjectMeta{Name: "test-mwc"},
+		Webhooks: []admissionregistrationv1.MutatingWebhook{
+			{
+				Name: "hook.example.com",
+				ClientConfig: admissionregistrationv1.WebhookClientConfig{
+					Service: &admissionregistrationv1.ServiceReference{
+						Namespace: "default",
+						Name:      "some-svc",
+					},
+				},
+			},
+		},
+	}
+	assert.NoError(t, h.ProcessMutatingWebhookConfigurationObject(mwc, false))
+	assert.Equal(t, 0, e.ActiveCount(), "no service lister assumes ok, no incident")
+}
+
+func TestProcessValidatingWebhookConfigurationObjectNoServiceLister(t *testing.T) {
+	e := testCorrelator()
+	h := NewHandler(fake.NewSimpleClientset(), &config.Config{}, e, testAlertMgr)
+
+	vwc := &admissionregistrationv1.ValidatingWebhookConfiguration{
+		ObjectMeta: metav1.ObjectMeta{Name: "test-vwc"},
+		Webhooks: []admissionregistrationv1.ValidatingWebhook{
+			{
+				Name: "hook.example.com",
+				ClientConfig: admissionregistrationv1.WebhookClientConfig{
+					Service: &admissionregistrationv1.ServiceReference{
+						Namespace: "default",
+						Name:      "some-svc",
+					},
+				},
+			},
+		},
+	}
+	assert.NoError(t, h.ProcessValidatingWebhookConfigurationObject(vwc, false))
+	assert.Equal(t, 0, e.ActiveCount(), "no service lister assumes ok, no incident")
+}

@@ -82,11 +82,6 @@ func (h *handler) ProcessPodObject(parent context.Context, pod *corev1.Pod, dele
 	h.executePodFilters(&ctxF)
 	h.executeContainersFilters(&ctxF)
 
-	if h.pvcSampler != nil && pod.Status.Phase == corev1.PodRunning &&
-		pod.Spec.NodeName != "" && podMountsPVC(pod) {
-		h.pvcSampler(pod.Spec.NodeName)
-	}
-
 	if isPodHealthy(pod) {
 		h.ClearSeenForPod(pod.Namespace, pod.Name)
 	}
