@@ -18,18 +18,18 @@ import (
 )
 
 const (
-	stateConfigMapName    = "kwatch-state"
-	baselineConfigMapName = "kwatch-baseline"
+	stateConfigMapName     = "kwatch-state"
+	baselineConfigMapName  = "kwatch-baseline"
 	incidentsConfigMapName = "kwatch-incidents"
-	pvcConfigMapName      = "kwatch-pvc"
-	initKey               = "kwatch-init"
-	clusterIDKey          = "cluster-id"
-	versionKey            = "version"
-	firstRunKey           = "first-run"
-	notifiedVersionKey    = "notified-version"
-	baselineKey           = "baseline"
-	incidentsKey          = "incidents"
-	pvcUsageKey           = "pvc-usage"
+	pvcConfigMapName       = "kwatch-pvc"
+	initKey                = "kwatch-init"
+	clusterIDKey           = "cluster-id"
+	versionKey             = "version"
+	firstRunKey            = "first-run"
+	notifiedVersionKey     = "notified-version"
+	baselineKey            = "baseline"
+	incidentsKey           = "incidents"
+	pvcUsageKey            = "pvc-usage"
 )
 
 // PvcSample is the persisted representation of a single PVC usage observation.
@@ -42,22 +42,22 @@ type PvcSample struct {
 }
 
 type StateManager struct {
-	client        kubernetes.Interface
-	namespace     string
-	stateMgr      *RetryConfigMapManager // kwatch-state
-	baselineMgr   *RetryConfigMapManager // kwatch-baseline
-	incidentsMgr  *RetryConfigMapManager // kwatch-incidents
-	pvcMgr        *RetryConfigMapManager // kwatch-pvc
+	client       kubernetes.Interface
+	namespace    string
+	stateMgr     *RetryConfigMapManager // kwatch-state
+	baselineMgr  *RetryConfigMapManager // kwatch-baseline
+	incidentsMgr *RetryConfigMapManager // kwatch-incidents
+	pvcMgr       *RetryConfigMapManager // kwatch-pvc
 }
 
 func NewStateManager(client kubernetes.Interface, namespace string) *StateManager {
 	return &StateManager{
-		client:        client,
-		namespace:     namespace,
-		stateMgr:      NewRetryConfigMapManager(client, namespace, stateConfigMapName),
-		baselineMgr:   NewRetryConfigMapManager(client, namespace, baselineConfigMapName),
-		incidentsMgr:  NewRetryConfigMapManager(client, namespace, incidentsConfigMapName),
-		pvcMgr:        NewRetryConfigMapManager(client, namespace, pvcConfigMapName),
+		client:       client,
+		namespace:    namespace,
+		stateMgr:     NewRetryConfigMapManager(client, namespace, stateConfigMapName),
+		baselineMgr:  NewRetryConfigMapManager(client, namespace, baselineConfigMapName),
+		incidentsMgr: NewRetryConfigMapManager(client, namespace, incidentsConfigMapName),
+		pvcMgr:       NewRetryConfigMapManager(client, namespace, pvcConfigMapName),
 	}
 }
 

@@ -7,6 +7,9 @@ import (
 type PodNameFilter struct{}
 
 func (f PodNameFilter) Detect(ctx *Context) Status {
+	if ctx.Pod == nil {
+		return StatusAlert
+	}
 	for _, pattern := range ctx.Config.Suppression.PodNamePatterns {
 		if pattern.MatchString(ctx.Pod.Name) {
 			klog.InfoS(

@@ -252,26 +252,44 @@ func main() {
 	cleanupSafe := func() { cleanupOnce.Do(cleanup) }
 	defer cleanupSafe()
 
+	var wg sync.WaitGroup
+
 	runLeaderTasks := func(ctx context.Context) {
-		go correlator.StartCleanup(ctx)
-		go pvcMonitor.Start(ctx)
-		go hbMonitor.Start(ctx)
+		wg.Add(1)
 		go func() {
+			defer wg.Done()
+			correlator.StartCleanup(ctx)
+		}()
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			pvcMonitor.Start(ctx)
+		}()
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			hbMonitor.Start(ctx)
+		}()
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
 			interval := 60 * time.Second
 			ticker := time.NewTicker(interval)
 			defer ticker.Stop()
 			for {
 				select {
 				case <-ctx.Done():
-					incidentCh <- correlator.SnapshotAll()
+					trySendIncidentSnapshot(incidentCh, correlator.SnapshotAll())
 					return
 				case <-ticker.C:
-					incidentCh <- correlator.SnapshotAll()
+					trySendIncidentSnapshot(incidentCh, correlator.SnapshotAll())
 				}
 			}
 		}()
 		if cfg.TlsMonitor.Enabled {
+			wg.Add(1)
 			go func() {
+				defer wg.Done()
 				h.SweepTLSSecrets()
 				ticker := time.NewTicker(24 * time.Hour)
 				defer ticker.Stop()
@@ -315,6 +333,18 @@ func main() {
 
 	klog.InfoS("shutting down gracefully...")
 	cancel()
+
+	doneCh := make(chan struct{})
+	go func() {
+		wg.Wait()
+		close(doneCh)
+	}()
+	select {
+	case <-doneCh:
+	case <-time.After(10 * time.Second):
+		klog.InfoS("timed out waiting for background tasks")
+	}
+
 	select {
 	case <-alertManager.Done():
 	case <-time.After(10 * time.Second):
@@ -449,6 +479,14 @@ func startBaselineSaver(ctx context.Context, stateMgr interface {
 // startIncidentSaver saves incident snapshots to the ConfigMap whenever a
 // snapshot arrives on the channel. On ctx cancellation it saves the final
 // snapshot before returning.
+func trySendIncidentSnapshot(ch chan<- map[string]*model.Incident, snap map[string]*model.Incident) {
+	select {
+	case ch <- snap:
+	default:
+		klog.V(4).InfoS("incident snapshot channel full, dropping")
+	}
+}
+
 func startIncidentSaver(ctx context.Context, stateMgr interface {
 	SaveIncidents(context.Context, any) error
 }, ch <-chan map[string]*model.Incident) {

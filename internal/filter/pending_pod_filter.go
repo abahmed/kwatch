@@ -11,6 +11,9 @@ type PendingPodFilter struct {
 }
 
 func (f PendingPodFilter) Detect(ctx *Context) Status {
+	if ctx.Pod == nil {
+		return StatusContinue
+	}
 	if ctx.Pod.Status.Phase != corev1.PodPending {
 		return StatusContinue
 	}

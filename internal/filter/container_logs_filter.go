@@ -12,6 +12,9 @@ func (f ContainerLogsFilter) Detect(ctx *Context) Status {
 }
 
 func (f ContainerLogsFilter) Enrich(ctx *Context) bool {
+	if ctx.Container == nil || ctx.Pod == nil {
+		return false
+	}
 	container := ctx.Container.Container
 
 	if container.RestartCount == 0 && container.State.Waiting != nil {

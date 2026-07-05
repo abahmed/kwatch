@@ -120,7 +120,7 @@ func TestDetectIngressIssueNoServiceBackend(t *testing.T) {
 								{
 									Path: "/",
 									Backend: networkingv1.IngressBackend{
-										Service: nil,
+										Service:  nil,
 										Resource: nil,
 									},
 								},

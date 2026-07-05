@@ -531,7 +531,7 @@ func TestEscalationSecondCrossingIsCritical(t *testing.T) {
 	})
 	ev := event.Event{PodName: "p", Namespace: "ns", Reason: "OOMKilled"}
 	e.Process(ev, "dep", &model.ContainerState{RestartCount: 0})
-	e.Process(ev, "dep", &model.ContainerState{RestartCount: 2}) // crosses tier 1 → high
+	e.Process(ev, "dep", &model.ContainerState{RestartCount: 2})                // crosses tier 1 → high
 	inc, action := e.Process(ev, "dep", &model.ContainerState{RestartCount: 4}) // crosses tier 3 → critical
 	assert.Equal(t, model.ActionUpdate, action)
 	assert.Equal(t, "critical", inc.Severity)
@@ -1505,7 +1505,9 @@ func TestSmartGroupingDifferentReasonsSeparate(t *testing.T) {
 
 	var groups int
 	e.config.LifecycleHook = func(inc *model.Incident, action model.IncidentAction) {
-		if strings.HasPrefix(inc.Key, "__group__") { groups++ }
+		if strings.HasPrefix(inc.Key, "__group__") {
+			groups++
+		}
 	}
 	e.checkLifecycle()
 	assert.Equal(t, 0, groups)
@@ -1523,7 +1525,9 @@ func TestSmartGroupingResolvedNotIncluded(t *testing.T) {
 
 	var groupCount int
 	e.config.LifecycleHook = func(inc *model.Incident, action model.IncidentAction) {
-		if strings.HasPrefix(inc.Key, "__group__") { groupCount++ }
+		if strings.HasPrefix(inc.Key, "__group__") {
+			groupCount++
+		}
 	}
 
 	e.now = mockClock(now.Add(61 * time.Second))

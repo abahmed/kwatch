@@ -133,17 +133,17 @@ Every monitor below is **on by default** — zero config needed:
 
 ### 🧠 Context-aware intelligence
 
-kwatch builds a **dependency graph** of your cluster from pod informers — mapping pods to their nodes, owners (Deployments/StatefulSets/DaemonSets), and referenced ConfigMaps/Secrets. When an incident fires, the insight engine analyzes it against the graph and answers:
+kwatch builds a **dependency graph** of your cluster from pod informers — mapping pods to their nodes, owners (Deployments/StatefulSets/DaemonSets), Services, PVCs, and referenced ConfigMaps/Secrets. When an incident fires, the insight engine analyzes it against the graph and answers:
 
-- **What likely caused this?** — unhealthy node, failed rollout, or misconfigured resources
+- **What likely caused this?** — unhealthy node, failed rollout, or misconfigured resources (ConfigMap, Secret, PVC)
 - **What's the impact?** — how many pods, services, or dependents are affected
 - **Recent changes?** — correlated changes on the same resource or namespace
 
-The graph is built at startup from the informer cache and updated incrementally as pods come and go. No configuration needed.
+The graph is built at startup from the informer cache, rebuilt periodically, and updated incrementally as pods come and go. No configuration needed.
 
 #### Mass failure detection
 
-The correlation engine periodically scans all active incidents for shared dependencies. If more than 30% of dependents sharing a node, ConfigMap, or Secret are in failure, a mass failure alert fires. The threshold is dynamic — computed per dependency based on the current scope. Mass failures automatically resolve when the underlying incidents clear.
+The correlation engine periodically scans all active incidents for shared dependencies. If more than 30% of dependents sharing a node, ConfigMap, Secret, or PVC are in failure, a mass failure alert fires. The threshold is dynamic — computed per dependency based on the current scope. Mass failures automatically resolve when the underlying incidents clear.
 
 ---
 

@@ -91,5 +91,3 @@ func (h *handler) ProcessServiceObject(svc *corev1.Service, deleted bool) error 
 	}
 	return nil
 }
-
-

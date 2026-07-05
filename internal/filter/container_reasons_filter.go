@@ -8,6 +8,9 @@ import (
 type ContainerReasonsFilter struct{}
 
 func (f ContainerReasonsFilter) Detect(ctx *Context) Status {
+	if ctx.Container == nil {
+		return StatusAlert
+	}
 	container := ctx.Container.Container
 
 	if container.State.Waiting != nil {

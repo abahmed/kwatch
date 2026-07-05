@@ -12,7 +12,7 @@ func (f PodOwnersFilter) Detect(ctx *Context) Status {
 }
 
 func (f PodOwnersFilter) Enrich(ctx *Context) bool {
-	if ctx.Owner != nil {
+	if ctx.Owner != nil || ctx.Pod == nil {
 		return false
 	}
 	if len(ctx.Pod.OwnerReferences) == 0 {

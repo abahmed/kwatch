@@ -12,8 +12,8 @@ import (
 	"github.com/abahmed/kwatch/internal/config"
 	"github.com/abahmed/kwatch/internal/correlation"
 	"github.com/abahmed/kwatch/internal/event"
-	"github.com/abahmed/kwatch/internal/insight"
 	"github.com/abahmed/kwatch/internal/filter"
+	"github.com/abahmed/kwatch/internal/insight"
 	"github.com/abahmed/kwatch/internal/model"
 	admissionregistrationv1 "k8s.io/api/admissionregistration/v1"
 	appsv1 "k8s.io/api/apps/v1"
@@ -91,29 +91,29 @@ type Handler interface {
 }
 
 type handler struct {
-	kclient            kubernetes.Interface
-	config             *config.Config
-	podDetectors       []filter.Detector
-	podEnrichers       []filter.Enricher
-	containerDetectors []filter.Detector
-	containerEnrichers []filter.Enricher
-	correlator    *correlation.Engine
-	alertManager  *alert.AlertManager
-	insightEngine *insight.Engine
-	podLister          corev1lister.PodLister
-	nodeLister         corev1lister.NodeLister
-	deployLister       appsv1lister.DeploymentLister
-	jobLister          batchv1lister.JobLister
-	cronJobLister      batchv1lister.CronJobLister
-	rsLister           appsv1lister.ReplicaSetLister
-	dsLister           appsv1lister.DaemonSetLister
-	ssLister           appsv1lister.StatefulSetLister
-	eventLister        corev1lister.EventLister
-	hpaLister          autoscalingv2lister.HorizontalPodAutoscalerLister
-	mwcLister          admissionregistrationv1lister.MutatingWebhookConfigurationLister
-	vwcLister          admissionregistrationv1lister.ValidatingWebhookConfigurationLister
-	serviceLister      corev1lister.ServiceLister
-	endpointLister     corev1lister.EndpointsLister
+	kclient                kubernetes.Interface
+	config                 *config.Config
+	podDetectors           []filter.Detector
+	podEnrichers           []filter.Enricher
+	containerDetectors     []filter.Detector
+	containerEnrichers     []filter.Enricher
+	correlator             *correlation.Engine
+	alertManager           *alert.AlertManager
+	insightEngine          *insight.Engine
+	podLister              corev1lister.PodLister
+	nodeLister             corev1lister.NodeLister
+	deployLister           appsv1lister.DeploymentLister
+	jobLister              batchv1lister.JobLister
+	cronJobLister          batchv1lister.CronJobLister
+	rsLister               appsv1lister.ReplicaSetLister
+	dsLister               appsv1lister.DaemonSetLister
+	ssLister               appsv1lister.StatefulSetLister
+	eventLister            corev1lister.EventLister
+	hpaLister              autoscalingv2lister.HorizontalPodAutoscalerLister
+	mwcLister              admissionregistrationv1lister.MutatingWebhookConfigurationLister
+	vwcLister              admissionregistrationv1lister.ValidatingWebhookConfigurationLister
+	serviceLister          corev1lister.ServiceLister
+	endpointLister         corev1lister.EndpointsLister
 	firstMaxedHPAs         map[string]time.Time
 	firstScalingErrorHPAs  map[string]time.Time
 	hpaMu                  sync.Mutex
@@ -121,21 +121,21 @@ type handler struct {
 	stsMu                  sync.Mutex
 	firstPdbViolation      map[string]time.Time
 	pdbMu                  sync.Mutex
-	firstUnavailableDS    map[string]time.Time
-	dsMu                  sync.Mutex
+	firstUnavailableDS     map[string]time.Time
+	dsMu                   sync.Mutex
 	firstUnavailableDeploy map[string]time.Time
-	deployMu              sync.Mutex
-	firstSuspendedCJs     map[string]time.Time
-	cjMu               sync.Mutex
-	firstNodePressure  map[string]time.Time
-	npMu               sync.Mutex
-	secretLister       corev1lister.SecretLister
-	netpolLister       networkingv1lister.NetworkPolicyLister
-	ingressLister      networkingv1lister.IngressLister
-	cpPodLister        corev1lister.PodLister
-	pvcSampler         func(nodeName string) // optional; set when pvcMonitor is enabled
-	oomTracker         *oomTracker
-	now                func() time.Time
+	deployMu               sync.Mutex
+	firstSuspendedCJs      map[string]time.Time
+	cjMu                   sync.Mutex
+	firstNodePressure      map[string]time.Time
+	npMu                   sync.Mutex
+	secretLister           corev1lister.SecretLister
+	netpolLister           networkingv1lister.NetworkPolicyLister
+	ingressLister          networkingv1lister.IngressLister
+	cpPodLister            corev1lister.PodLister
+	pvcSampler             func(nodeName string) // optional; set when pvcMonitor is enabled
+	oomTracker             *oomTracker
+	now                    func() time.Time
 }
 
 func NewHandler(
@@ -195,14 +195,14 @@ func NewHandler(
 	}
 
 	return &handler{
-		kclient:            cli,
-		config:             cfg,
-		podDetectors:       podDetectors,
-		podEnrichers:       podEnrichers,
-		containerDetectors: containerDetectors,
-		containerEnrichers: containerEnrichers,
-		correlator:         correlator,
-		alertManager:       alertManager,
+		kclient:                cli,
+		config:                 cfg,
+		podDetectors:           podDetectors,
+		podEnrichers:           podEnrichers,
+		containerDetectors:     containerDetectors,
+		containerEnrichers:     containerEnrichers,
+		correlator:             correlator,
+		alertManager:           alertManager,
 		firstMaxedHPAs:         make(map[string]time.Time),
 		firstScalingErrorHPAs:  make(map[string]time.Time),
 		firstUnavailableSts:    make(map[string]time.Time),

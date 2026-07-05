@@ -11,6 +11,9 @@ import (
 type PodStatusFilter struct{}
 
 func (f PodStatusFilter) Detect(ctx *Context) Status {
+	if ctx.Pod == nil {
+		return StatusAlert
+	}
 	if ctx.Pod.Status.Phase == corev1.PodSucceeded {
 		ctx.PodHasIssues = false
 		ctx.ContainersHasIssues = false

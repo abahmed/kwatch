@@ -20,15 +20,10 @@ type Insight struct {
 type Engine struct {
 	graph   *context.ResourceGraph
 	tracker *context.ChangeTracker
-	now     func() time.Time
 }
 
 func NewEngine(graph *context.ResourceGraph, tracker *context.ChangeTracker) *Engine {
-	return &Engine{
-		graph:   graph,
-		tracker: tracker,
-		now:     time.Now,
-	}
+	return &Engine{graph: graph, tracker: tracker}
 }
 
 func (e *Engine) Analyze(inc *model.Incident) *Insight {
@@ -77,17 +72,16 @@ func (e *Engine) determineCause(inc *model.Incident, ins *Insight) {
 	}
 
 	for _, d := range deps {
-		if len(d) > 9 && d[:9] == "configmap" {
+		switch {
+		case strings.HasPrefix(d, "configmap/"):
 			ins.Cause = "referenced ConfigMap may have changed or is misconfigured"
 			ins.Pattern = "config_error"
 			return
-		}
-		if len(d) > 6 && d[:6] == "secret" {
+		case strings.HasPrefix(d, "secret/"):
 			ins.Cause = "referenced Secret may have changed or is misconfigured"
 			ins.Pattern = "config_error"
 			return
-		}
-		if len(d) > 3 && d[:3] == "pvc" {
+		case strings.HasPrefix(d, "pvc/"):
 			ins.Cause = "referenced PVC may be unavailable"
 			ins.Pattern = "config_error"
 			return

@@ -35,84 +35,84 @@ import (
 )
 
 type Controller struct {
-	handler                handler.Handler
-	podQueue               workqueue.TypedRateLimitingInterface[string]
-	nodeQueue              workqueue.TypedRateLimitingInterface[string]
-	deploymentQueue        workqueue.TypedRateLimitingInterface[string]
-	jobQueue               workqueue.TypedRateLimitingInterface[string]
-	daemonSetQueue         workqueue.TypedRateLimitingInterface[string]
-	statefulSetQueue       workqueue.TypedRateLimitingInterface[string]
-	pdbQueue               workqueue.TypedRateLimitingInterface[string]
-	cronJobQueue           workqueue.TypedRateLimitingInterface[string]
-	podLister              corev1lister.PodLister
-	podsSynced             []cache.InformerSynced
-	nodeLister             corev1lister.NodeLister
-	nodesSynced            cache.InformerSynced
-	deployLister           appsv1lister.DeploymentLister
-	deploysSynced          []cache.InformerSynced
-	jobLister              batchv1lister.JobLister
-	jobsSynced             []cache.InformerSynced
-	cronJobLister          batchv1lister.CronJobLister
-	cronJobsSynced         []cache.InformerSynced
-	rsLister               appsv1lister.ReplicaSetLister
-	rsSynced               []cache.InformerSynced
-	dsLister               appsv1lister.DaemonSetLister
-	dsSynced               []cache.InformerSynced
-	ssLister               appsv1lister.StatefulSetLister
-	ssSynced               []cache.InformerSynced
-	pdbLister              policyv1lister.PodDisruptionBudgetLister
-	pdbSynced              cache.InformerSynced
-	eventLister            corev1lister.EventLister
-	eventsSynced           []cache.InformerSynced
-	deploymentWatchEnabled bool
-	jobWatchEnabled        bool
-	daemonSetWatchEnabled  bool
+	handler                 handler.Handler
+	podQueue                workqueue.TypedRateLimitingInterface[string]
+	nodeQueue               workqueue.TypedRateLimitingInterface[string]
+	deploymentQueue         workqueue.TypedRateLimitingInterface[string]
+	jobQueue                workqueue.TypedRateLimitingInterface[string]
+	daemonSetQueue          workqueue.TypedRateLimitingInterface[string]
+	statefulSetQueue        workqueue.TypedRateLimitingInterface[string]
+	pdbQueue                workqueue.TypedRateLimitingInterface[string]
+	cronJobQueue            workqueue.TypedRateLimitingInterface[string]
+	podLister               corev1lister.PodLister
+	podsSynced              []cache.InformerSynced
+	nodeLister              corev1lister.NodeLister
+	nodesSynced             cache.InformerSynced
+	deployLister            appsv1lister.DeploymentLister
+	deploysSynced           []cache.InformerSynced
+	jobLister               batchv1lister.JobLister
+	jobsSynced              []cache.InformerSynced
+	cronJobLister           batchv1lister.CronJobLister
+	cronJobsSynced          []cache.InformerSynced
+	rsLister                appsv1lister.ReplicaSetLister
+	rsSynced                []cache.InformerSynced
+	dsLister                appsv1lister.DaemonSetLister
+	dsSynced                []cache.InformerSynced
+	ssLister                appsv1lister.StatefulSetLister
+	ssSynced                []cache.InformerSynced
+	pdbLister               policyv1lister.PodDisruptionBudgetLister
+	pdbSynced               cache.InformerSynced
+	eventLister             corev1lister.EventLister
+	eventsSynced            []cache.InformerSynced
+	deploymentWatchEnabled  bool
+	jobWatchEnabled         bool
+	daemonSetWatchEnabled   bool
 	statefulSetWatchEnabled bool
-	pdbWatchEnabled        bool
-	cronJobWatchEnabled    bool
-	hpaQueue               workqueue.TypedRateLimitingInterface[string]
-	hpaLister              autoscalingv2lister.HorizontalPodAutoscalerLister
-	hpaSynced              []cache.InformerSynced
-	hpaWatchEnabled        bool
-	secretLister           corev1lister.SecretLister
-	secretsSynced          []cache.InformerSynced
-	maxBaseline            int
+	pdbWatchEnabled         bool
+	cronJobWatchEnabled     bool
+	hpaQueue                workqueue.TypedRateLimitingInterface[string]
+	hpaLister               autoscalingv2lister.HorizontalPodAutoscalerLister
+	hpaSynced               []cache.InformerSynced
+	hpaWatchEnabled         bool
+	secretLister            corev1lister.SecretLister
+	secretsSynced           []cache.InformerSynced
+	maxBaseline             int
 
-	tracker                *kwcontext.ChangeTracker
-	graph                  *kwcontext.ResourceGraph
-	configMapLister        corev1lister.ConfigMapLister
-	configMapSynced        []cache.InformerSynced
+	tracker         *kwcontext.ChangeTracker
+	graph           *kwcontext.ResourceGraph
+	configMapLister corev1lister.ConfigMapLister
+	configMapSynced []cache.InformerSynced
 
-	serviceQueue            workqueue.TypedRateLimitingInterface[string]
-	endpointQueue           workqueue.TypedRateLimitingInterface[string]
-	mwcQueue                workqueue.TypedRateLimitingInterface[string]
-	vwcQueue                workqueue.TypedRateLimitingInterface[string]
-	ingressQueue            workqueue.TypedRateLimitingInterface[string]
-	netpolQueue             workqueue.TypedRateLimitingInterface[string]
-	cpPodQueue              workqueue.TypedRateLimitingInterface[string]
-	serviceLister           corev1lister.ServiceLister
-	svcSynced               []cache.InformerSynced
-	endpointLister          corev1lister.EndpointsLister
-	endpointSynced          []cache.InformerSynced
-	mwcLister               admissionregistrationv1lister.MutatingWebhookConfigurationLister
-	mwcSynced               cache.InformerSynced
-	vwcLister               admissionregistrationv1lister.ValidatingWebhookConfigurationLister
-	vwcSynced               cache.InformerSynced
-	ingressLister           networkingv1lister.IngressLister
-	ingressSynced           []cache.InformerSynced
-	netpolLister            networkingv1lister.NetworkPolicyLister
-	netpolSynced            []cache.InformerSynced
-	cpPodLister             corev1lister.PodLister
-	cpSynced                cache.InformerSynced
-	serviceWatchEnabled     bool
-	endpointWatchEnabled    bool
-	mwcWatchEnabled         bool
-	vwcWatchEnabled         bool
-	ingressWatchEnabled     bool
-	netpolWatchEnabled      bool
-	cpWatchEnabled          bool
+	serviceQueue         workqueue.TypedRateLimitingInterface[string]
+	endpointQueue        workqueue.TypedRateLimitingInterface[string]
+	mwcQueue             workqueue.TypedRateLimitingInterface[string]
+	vwcQueue             workqueue.TypedRateLimitingInterface[string]
+	ingressQueue         workqueue.TypedRateLimitingInterface[string]
+	netpolQueue          workqueue.TypedRateLimitingInterface[string]
+	cpPodQueue           workqueue.TypedRateLimitingInterface[string]
+	serviceLister        corev1lister.ServiceLister
+	svcSynced            []cache.InformerSynced
+	endpointLister       corev1lister.EndpointsLister
+	endpointSynced       []cache.InformerSynced
+	mwcLister            admissionregistrationv1lister.MutatingWebhookConfigurationLister
+	mwcSynced            cache.InformerSynced
+	vwcLister            admissionregistrationv1lister.ValidatingWebhookConfigurationLister
+	vwcSynced            cache.InformerSynced
+	ingressLister        networkingv1lister.IngressLister
+	ingressSynced        []cache.InformerSynced
+	netpolLister         networkingv1lister.NetworkPolicyLister
+	netpolSynced         []cache.InformerSynced
+	cpPodLister          corev1lister.PodLister
+	cpSynced             cache.InformerSynced
+	serviceWatchEnabled  bool
+	endpointWatchEnabled bool
+	mwcWatchEnabled      bool
+	vwcWatchEnabled      bool
+	ingressWatchEnabled  bool
+	netpolWatchEnabled   bool
+	cpWatchEnabled       bool
 
-	nodeResourceCfg        *config.NodeResourceMonitor
+	nodeResourceCfg *config.NodeResourceMonitor
 
 	readyFn func()
 }
@@ -541,26 +541,26 @@ func New(
 	}
 
 	c := &Controller{
-		handler:         h,
-		podQueue:        workqueue.NewTypedRateLimitingQueueWithConfig(workqueue.DefaultTypedControllerRateLimiter[string](), workqueue.TypedRateLimitingQueueConfig[string]{Name: "pods"}),
-		nodeQueue:       workqueue.NewTypedRateLimitingQueueWithConfig(workqueue.DefaultTypedControllerRateLimiter[string](), workqueue.TypedRateLimitingQueueConfig[string]{Name: "nodes"}),
-		deploymentQueue: workqueue.NewTypedRateLimitingQueueWithConfig(workqueue.DefaultTypedControllerRateLimiter[string](), workqueue.TypedRateLimitingQueueConfig[string]{Name: "deployments"}),
-		jobQueue:        workqueue.NewTypedRateLimitingQueueWithConfig(workqueue.DefaultTypedControllerRateLimiter[string](), workqueue.TypedRateLimitingQueueConfig[string]{Name: "jobs"}),
-		daemonSetQueue:  workqueue.NewTypedRateLimitingQueueWithConfig(workqueue.DefaultTypedControllerRateLimiter[string](), workqueue.TypedRateLimitingQueueConfig[string]{Name: "daemonsets"}),
+		handler:          h,
+		podQueue:         workqueue.NewTypedRateLimitingQueueWithConfig(workqueue.DefaultTypedControllerRateLimiter[string](), workqueue.TypedRateLimitingQueueConfig[string]{Name: "pods"}),
+		nodeQueue:        workqueue.NewTypedRateLimitingQueueWithConfig(workqueue.DefaultTypedControllerRateLimiter[string](), workqueue.TypedRateLimitingQueueConfig[string]{Name: "nodes"}),
+		deploymentQueue:  workqueue.NewTypedRateLimitingQueueWithConfig(workqueue.DefaultTypedControllerRateLimiter[string](), workqueue.TypedRateLimitingQueueConfig[string]{Name: "deployments"}),
+		jobQueue:         workqueue.NewTypedRateLimitingQueueWithConfig(workqueue.DefaultTypedControllerRateLimiter[string](), workqueue.TypedRateLimitingQueueConfig[string]{Name: "jobs"}),
+		daemonSetQueue:   workqueue.NewTypedRateLimitingQueueWithConfig(workqueue.DefaultTypedControllerRateLimiter[string](), workqueue.TypedRateLimitingQueueConfig[string]{Name: "daemonsets"}),
 		statefulSetQueue: workqueue.NewTypedRateLimitingQueueWithConfig(workqueue.DefaultTypedControllerRateLimiter[string](), workqueue.TypedRateLimitingQueueConfig[string]{Name: "statefulsets"}),
-		pdbQueue:        workqueue.NewTypedRateLimitingQueueWithConfig(workqueue.DefaultTypedControllerRateLimiter[string](), workqueue.TypedRateLimitingQueueConfig[string]{Name: "poddisruptionbudgets"}),
-		cronJobQueue:    workqueue.NewTypedRateLimitingQueueWithConfig(workqueue.DefaultTypedControllerRateLimiter[string](), workqueue.TypedRateLimitingQueueConfig[string]{Name: "cronjobs"}),
-		hpaQueue:        workqueue.NewTypedRateLimitingQueueWithConfig(workqueue.DefaultTypedControllerRateLimiter[string](), workqueue.TypedRateLimitingQueueConfig[string]{Name: "horizontalpodautoscalers"}),
-		serviceQueue:    workqueue.NewTypedRateLimitingQueueWithConfig(workqueue.DefaultTypedControllerRateLimiter[string](), workqueue.TypedRateLimitingQueueConfig[string]{Name: "services"}),
-		endpointQueue:   workqueue.NewTypedRateLimitingQueueWithConfig(workqueue.DefaultTypedControllerRateLimiter[string](), workqueue.TypedRateLimitingQueueConfig[string]{Name: "endpoints"}),
-		mwcQueue:        workqueue.NewTypedRateLimitingQueueWithConfig(workqueue.DefaultTypedControllerRateLimiter[string](), workqueue.TypedRateLimitingQueueConfig[string]{Name: "mutatingwebhookconfigurations"}),
-		vwcQueue:        workqueue.NewTypedRateLimitingQueueWithConfig(workqueue.DefaultTypedControllerRateLimiter[string](), workqueue.TypedRateLimitingQueueConfig[string]{Name: "validatingwebhookconfigurations"}),
-		ingressQueue:    workqueue.NewTypedRateLimitingQueueWithConfig(workqueue.DefaultTypedControllerRateLimiter[string](), workqueue.TypedRateLimitingQueueConfig[string]{Name: "ingresses"}),
-		netpolQueue:     workqueue.NewTypedRateLimitingQueueWithConfig(workqueue.DefaultTypedControllerRateLimiter[string](), workqueue.TypedRateLimitingQueueConfig[string]{Name: "networkpolicies"}),
-		cpPodQueue:      workqueue.NewTypedRateLimitingQueueWithConfig(workqueue.DefaultTypedControllerRateLimiter[string](), workqueue.TypedRateLimitingQueueConfig[string]{Name: "controlplanepods"}),
-		podLister:       podLister,
-		podsSynced:      podsSynced,
-		maxBaseline:     maxBaseline,
+		pdbQueue:         workqueue.NewTypedRateLimitingQueueWithConfig(workqueue.DefaultTypedControllerRateLimiter[string](), workqueue.TypedRateLimitingQueueConfig[string]{Name: "poddisruptionbudgets"}),
+		cronJobQueue:     workqueue.NewTypedRateLimitingQueueWithConfig(workqueue.DefaultTypedControllerRateLimiter[string](), workqueue.TypedRateLimitingQueueConfig[string]{Name: "cronjobs"}),
+		hpaQueue:         workqueue.NewTypedRateLimitingQueueWithConfig(workqueue.DefaultTypedControllerRateLimiter[string](), workqueue.TypedRateLimitingQueueConfig[string]{Name: "horizontalpodautoscalers"}),
+		serviceQueue:     workqueue.NewTypedRateLimitingQueueWithConfig(workqueue.DefaultTypedControllerRateLimiter[string](), workqueue.TypedRateLimitingQueueConfig[string]{Name: "services"}),
+		endpointQueue:    workqueue.NewTypedRateLimitingQueueWithConfig(workqueue.DefaultTypedControllerRateLimiter[string](), workqueue.TypedRateLimitingQueueConfig[string]{Name: "endpoints"}),
+		mwcQueue:         workqueue.NewTypedRateLimitingQueueWithConfig(workqueue.DefaultTypedControllerRateLimiter[string](), workqueue.TypedRateLimitingQueueConfig[string]{Name: "mutatingwebhookconfigurations"}),
+		vwcQueue:         workqueue.NewTypedRateLimitingQueueWithConfig(workqueue.DefaultTypedControllerRateLimiter[string](), workqueue.TypedRateLimitingQueueConfig[string]{Name: "validatingwebhookconfigurations"}),
+		ingressQueue:     workqueue.NewTypedRateLimitingQueueWithConfig(workqueue.DefaultTypedControllerRateLimiter[string](), workqueue.TypedRateLimitingQueueConfig[string]{Name: "ingresses"}),
+		netpolQueue:      workqueue.NewTypedRateLimitingQueueWithConfig(workqueue.DefaultTypedControllerRateLimiter[string](), workqueue.TypedRateLimitingQueueConfig[string]{Name: "networkpolicies"}),
+		cpPodQueue:       workqueue.NewTypedRateLimitingQueueWithConfig(workqueue.DefaultTypedControllerRateLimiter[string](), workqueue.TypedRateLimitingQueueConfig[string]{Name: "controlplanepods"}),
+		podLister:        podLister,
+		podsSynced:       podsSynced,
+		maxBaseline:      maxBaseline,
 	}
 
 	h.SetPodLister(podLister)
@@ -856,7 +856,7 @@ func New(
 			ef := informers.NewSharedInformerFactoryWithOptions(client, resync, opts...)
 			eventFactories = append(eventFactories, ef)
 			eventInformer := ef.Core().V1().Events().Informer()
-			eventInformer.AddIndexers(cache.Indexers{
+			utilruntime.Must(eventInformer.AddIndexers(cache.Indexers{
 				"byPod": func(obj interface{}) ([]string, error) {
 					ev, ok := obj.(*corev1.Event)
 					if !ok {
@@ -864,7 +864,7 @@ func New(
 					}
 					return []string{ev.InvolvedObject.Name}, nil
 				},
-			})
+			}))
 			c.eventLister = ef.Core().V1().Events().Lister()
 			c.eventsSynced = append(c.eventsSynced, eventInformer.HasSynced)
 		} else {
@@ -880,7 +880,7 @@ func New(
 				ef := informers.NewSharedInformerFactoryWithOptions(client, resync, opts...)
 				eventFactories = append(eventFactories, ef)
 				eventInformer := ef.Core().V1().Events().Informer()
-				eventInformer.AddIndexers(cache.Indexers{
+				utilruntime.Must(eventInformer.AddIndexers(cache.Indexers{
 					"byPod": func(obj interface{}) ([]string, error) {
 						ev, ok := obj.(*corev1.Event)
 						if !ok {
@@ -888,7 +888,7 @@ func New(
 						}
 						return []string{ev.InvolvedObject.Name}, nil
 					},
-				})
+				}))
 				listers = append(listers, ef.Core().V1().Events().Lister())
 				c.eventsSynced = append(c.eventsSynced, eventInformer.HasSynced)
 			}
@@ -1118,24 +1118,10 @@ func (c *Controller) addPodToGraph(pod *corev1.Pod) {
 		}
 	}
 	for _, ctr := range pod.Spec.Containers {
-		for _, envFrom := range ctr.EnvFrom {
-			if cm := envFrom.ConfigMapRef; cm != nil {
-				c.graph.AddEdge("pod", ns, name, "configmap", ns, cm.Name, "env_from")
-			}
-			if s := envFrom.SecretRef; s != nil {
-				c.graph.AddEdge("pod", ns, name, "secret", ns, s.Name, "env_from")
-			}
-		}
-		for _, env := range ctr.Env {
-			if env.ValueFrom != nil {
-				if cm := env.ValueFrom.ConfigMapKeyRef; cm != nil {
-					c.graph.AddEdge("pod", ns, name, "configmap", ns, cm.Name, "env_ref")
-				}
-				if s := env.ValueFrom.SecretKeyRef; s != nil {
-					c.graph.AddEdge("pod", ns, name, "secret", ns, s.Name, "env_ref")
-				}
-			}
-		}
+		c.addContainerEnvToGraph(ns, name, ctr)
+	}
+	for _, ctr := range pod.Spec.InitContainers {
+		c.addContainerEnvToGraph(ns, name, ctr)
 	}
 
 	if c.serviceLister == nil {
@@ -1160,6 +1146,27 @@ func (c *Controller) removePodFromGraph(pod *corev1.Pod) {
 		return
 	}
 	c.graph.RemoveNode("pod", pod.Namespace, pod.Name)
+}
+
+func (c *Controller) addContainerEnvToGraph(ns, podName string, ctr corev1.Container) {
+	for _, envFrom := range ctr.EnvFrom {
+		if cm := envFrom.ConfigMapRef; cm != nil {
+			c.graph.AddEdge("pod", ns, podName, "configmap", ns, cm.Name, "env_from")
+		}
+		if s := envFrom.SecretRef; s != nil {
+			c.graph.AddEdge("pod", ns, podName, "secret", ns, s.Name, "env_from")
+		}
+	}
+	for _, env := range ctr.Env {
+		if env.ValueFrom != nil {
+			if cm := env.ValueFrom.ConfigMapKeyRef; cm != nil {
+				c.graph.AddEdge("pod", ns, podName, "configmap", ns, cm.Name, "env_ref")
+			}
+			if s := env.ValueFrom.SecretKeyRef; s != nil {
+				c.graph.AddEdge("pod", ns, podName, "secret", ns, s.Name, "env_ref")
+			}
+		}
+	}
 }
 
 func (c *Controller) buildGraph() {

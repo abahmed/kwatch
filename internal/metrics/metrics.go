@@ -8,7 +8,6 @@ import (
 )
 
 type Registry struct {
-	IncidentsTotal       atomic.Int64
 	IncidentsCreate      atomic.Int64
 	IncidentsUpdate      atomic.Int64
 	IncidentsResolved    atomic.Int64
@@ -17,7 +16,6 @@ type Registry struct {
 	NotificationsDropped atomic.Int64
 	BaselineSize         atomic.Int64
 	ActiveIncidents      atomic.Int64
-	WorkQueueDepth       atomic.Int64
 	LLMEnrichTotal       atomic.Int64
 	LLMEnrichFailed      atomic.Int64
 	LLMEnrichSkipped     atomic.Int64

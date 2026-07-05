@@ -104,24 +104,24 @@ type Incident struct {
 // PersistedIncident is a lightweight serializable subset of Incident,
 // stored in the kwatch-incidents ConfigMap to survive restarts.
 type PersistedIncident struct {
-	Key            string            `json:"key"`
-	Reason         string            `json:"reason"`
-	Namespace      string            `json:"namespace"`
-	Name           string            `json:"name"`
-	Resource       string            `json:"resource"`
-	Count          int               `json:"count"`
-	FirstSeen      time.Time         `json:"firstSeen"`
-	LastSeen       time.Time         `json:"lastSeen"`
-	Resources      map[string]bool   `json:"resources"`
-	PeakResources  int               `json:"peakResources"`
-	OwnerKind      string            `json:"ownerKind"`
-	RestartCount   int               `json:"restartCount"`
-	Hint           string            `json:"hint"`
-	Severity       string            `json:"severity"`
-	State          IncidentState     `json:"state"`
-	NotifiedSig    string            `json:"notifiedSig"`
-	LastNotifiedAt time.Time         `json:"lastNotifiedAt"`
-	RenotifyCount  int               `json:"renotifyCount"`
+	Key            string          `json:"key"`
+	Reason         string          `json:"reason"`
+	Namespace      string          `json:"namespace"`
+	Name           string          `json:"name"`
+	Resource       string          `json:"resource"`
+	Count          int             `json:"count"`
+	FirstSeen      time.Time       `json:"firstSeen"`
+	LastSeen       time.Time       `json:"lastSeen"`
+	Resources      map[string]bool `json:"resources"`
+	PeakResources  int             `json:"peakResources"`
+	OwnerKind      string          `json:"ownerKind"`
+	RestartCount   int             `json:"restartCount"`
+	Hint           string          `json:"hint"`
+	Severity       string          `json:"severity"`
+	State          IncidentState   `json:"state"`
+	NotifiedSig    string          `json:"notifiedSig"`
+	LastNotifiedAt time.Time       `json:"lastNotifiedAt"`
+	RenotifyCount  int             `json:"renotifyCount"`
 }
 
 // ToIncident converts a PersistedIncident back to a full Incident.

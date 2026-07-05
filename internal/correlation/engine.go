@@ -14,18 +14,18 @@ import (
 	"github.com/abahmed/kwatch/internal/event"
 	"github.com/abahmed/kwatch/internal/metrics"
 	"github.com/abahmed/kwatch/internal/model"
+	"k8s.io/apimachinery/pkg/labels"
 	appsv1lister "k8s.io/client-go/listers/apps/v1"
 	corev1lister "k8s.io/client-go/listers/core/v1"
-	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/klog/v2"
 )
 
 type groupEntry struct {
-	key           string
-	namespace     string
-	owner         string
-	reason        string
-	kind          string // "pod", "node", "deployment", etc.
+	key       string
+	namespace string
+	owner     string
+	reason    string
+	kind      string // "pod", "node", "deployment", etc.
 
 	podName       string
 	containerName string
@@ -72,17 +72,17 @@ func BuildKey(namespace, owner, reason, container string) string {
 func IncidentKey(ev event.Event, owner string, cs *model.ContainerState) string {
 	r := normalizeReason(ev.Reason)
 	// A crash-looping container reports different reasons across its cycle:
-  	// "Error"/"OOMKilled" when it terminates, "CrashLoopBackOff" while backing off.
-  	// Once it's established as looping, fold them all into ONE canonical key so the key
-  	// is stable regardless of the container's momentary state. This makes the startup
-  	// baseline (captured in whatever state the container was in) match the live alert
-  	// (fired from a possibly-different state), and treats the loop as a single incident.
-  	if cs != nil && cs.RestartCount > defaultCrashLoopHighFreqThreshold {
+	// "Error"/"OOMKilled" when it terminates, "CrashLoopBackOff" while backing off.
+	// Once it's established as looping, fold them all into ONE canonical key so the key
+	// is stable regardless of the container's momentary state. This makes the startup
+	// baseline (captured in whatever state the container was in) match the live alert
+	// (fired from a possibly-different state), and treats the loop as a single incident.
+	if cs != nil && cs.RestartCount > defaultCrashLoopHighFreqThreshold {
 		switch r {
 		case "Error", "OOMKilled", "CrashLoopBackOff", "CrashLoopHighFrequency":
 			r = "CrashLoopHighFrequency"
 		}
-  	}
+	}
 	return BuildKey(ev.Namespace, owner, r, "")
 }
 
@@ -186,7 +186,7 @@ type Engine struct {
 	activeNodeIncidents map[string]bool
 	lastContainerIndex  map[string]*model.ContainerState // key: namespace/podName
 	serviceLister       corev1lister.ServiceLister
-	cleanupCooldown     map[string]time.Time // key → cooldown expiry; prevents resolve→recreate cycle
+	cleanupCooldown     map[string]time.Time     // key → cooldown expiry; prevents resolve→recreate cycle
 	pendingGroups       map[string]*pendingGroup // computeGroupKey output → group buffer
 	now                 func() time.Time
 }

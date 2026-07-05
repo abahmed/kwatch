@@ -8,6 +8,9 @@ import (
 type ContainerNameFilter struct{}
 
 func (f ContainerNameFilter) Detect(ctx *Context) Status {
+	if ctx.Container == nil {
+		return StatusAlert
+	}
 	container := ctx.Container.Container
 	if len(ctx.Config.Suppression.ContainerNames) > 0 &&
 		slices.Contains(ctx.Config.Suppression.ContainerNames, container.Name) {

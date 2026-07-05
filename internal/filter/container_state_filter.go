@@ -3,6 +3,9 @@ package filter
 type ContainerStateFilter struct{}
 
 func (f ContainerStateFilter) Detect(ctx *Context) Status {
+	if ctx.Container == nil {
+		return StatusAlert
+	}
 	container := ctx.Container.Container
 
 	if container.State.Running != nil {

@@ -32,11 +32,11 @@ func DefaultConfig() *Config {
 		NetworkPolicyMonitor:         NetworkPolicyMonitor{Enabled: true},
 		SmartGrouping:                SmartGrouping{WindowSeconds: 60},
 		Correlation: Correlation{
-			MaxBaseline: 5000,
-			Window:      10, 
+			MaxBaseline:       5000,
+			Window:            10,
 			LifecycleInterval: 1,
-			ResolveHoldDown: 300,
-			Escalation:      EscalationConfig{Enabled: true, Tiers: []int{3, 10, 50}},
+			ResolveHoldDown:   300,
+			Escalation:        EscalationConfig{Enabled: true, Tiers: []int{3, 10, 50}},
 		},
 	}
 }

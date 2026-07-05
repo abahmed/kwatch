@@ -116,14 +116,14 @@ func (m *mockHandler) SetSeen(baseline map[string]map[string]int64) {
 	m.seenBaseline = baseline
 }
 func (m *mockHandler) SetActiveNodeIncidents([]string) {}
-func (m *mockHandler) ClearSeenForPod(string, string) {}
+func (m *mockHandler) ClearSeenForPod(string, string)  {}
 func (m *mockHandler) ReportStartupSummary(suppressed map[string]int) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	m.startupSummary = suppressed
 }
-func (m *mockHandler) SetPvcSampler(func(nodeName string))                      {}
-func (m *mockHandler) ProcessMutatingWebhookConfiguration(string, bool) error   { return m.err }
+func (m *mockHandler) SetPvcSampler(func(nodeName string))                    {}
+func (m *mockHandler) ProcessMutatingWebhookConfiguration(string, bool) error { return m.err }
 func (m *mockHandler) ProcessMutatingWebhookConfigurationObject(*admissionregistrationv1.MutatingWebhookConfiguration, bool) error {
 	return m.err
 }
@@ -131,15 +131,15 @@ func (m *mockHandler) ProcessValidatingWebhookConfiguration(string, bool) error 
 func (m *mockHandler) ProcessValidatingWebhookConfigurationObject(*admissionregistrationv1.ValidatingWebhookConfiguration, bool) error {
 	return m.err
 }
-func (m *mockHandler) ProcessService(string, bool) error              { return m.err }
+func (m *mockHandler) ProcessService(string, bool) error                { return m.err }
 func (m *mockHandler) ProcessServiceObject(*corev1.Service, bool) error { return m.err }
-func (m *mockHandler) ProcessNetworkPolicy(string, bool) error        { return m.err }
+func (m *mockHandler) ProcessNetworkPolicy(string, bool) error          { return m.err }
 func (m *mockHandler) ProcessNetworkPolicyObject(*networkingv1.NetworkPolicy, bool) error {
 	return m.err
 }
-func (m *mockHandler) ProcessIngress(string, bool) error        { return m.err }
+func (m *mockHandler) ProcessIngress(string, bool) error                      { return m.err }
 func (m *mockHandler) ProcessIngressObject(*networkingv1.Ingress, bool) error { return m.err }
-func (m *mockHandler) ProcessControlPlanePod(*corev1.Pod) error              { return m.err }
+func (m *mockHandler) ProcessControlPlanePod(*corev1.Pod) error               { return m.err }
 func (m *mockHandler) SweepControlPlane()                                     {}
 func (m *mockHandler) SetServiceLister(corev1lister.ServiceLister)            {}
 func (m *mockHandler) SetEndpointLister(corev1lister.EndpointsLister)         {}
@@ -147,15 +147,15 @@ func (m *mockHandler) SetMwCLister(admissionregistrationv1lister.MutatingWebhook
 }
 func (m *mockHandler) SetVwCLister(admissionregistrationv1lister.ValidatingWebhookConfigurationLister) {
 }
-func (m *mockHandler) SetIngressLister(networkingv1lister.IngressLister)     {}
-func (m *mockHandler) SetNetpolLister(networkingv1lister.NetworkPolicyLister) {}
-func (m *mockHandler) SetCpPodLister(corev1lister.PodLister)                  {}
-func (m *mockHandler) ProcessStatefulSet(string, bool) error                  { return m.err }
-func (m *mockHandler) ProcessStatefulSetObject(*appsv1.StatefulSet, bool) error { return m.err }
-func (m *mockHandler) ProcessPdb(string, bool) error                          { return m.err }
+func (m *mockHandler) SetIngressLister(networkingv1lister.IngressLister)          {}
+func (m *mockHandler) SetNetpolLister(networkingv1lister.NetworkPolicyLister)     {}
+func (m *mockHandler) SetCpPodLister(corev1lister.PodLister)                      {}
+func (m *mockHandler) ProcessStatefulSet(string, bool) error                      { return m.err }
+func (m *mockHandler) ProcessStatefulSetObject(*appsv1.StatefulSet, bool) error   { return m.err }
+func (m *mockHandler) ProcessPdb(string, bool) error                              { return m.err }
 func (m *mockHandler) ProcessPdbObject(*policyv1.PodDisruptionBudget, bool) error { return m.err }
-func (m *mockHandler) SetInsightEngine(_ *insight.Engine)                     {}
-func (m *mockHandler) ProcessNodeResourceOvercommit(string, string, string)   {}
+func (m *mockHandler) SetInsightEngine(_ *insight.Engine)                         {}
+func (m *mockHandler) ProcessNodeResourceOvercommit(string, string, string)       {}
 
 func TestNewCreatesController(t *testing.T) {
 	assert := assert.New(t)

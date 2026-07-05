@@ -65,17 +65,17 @@ func DetectControlPlanePodIssue(pod *corev1.Pod) *event.Signal {
 		if reason != "" {
 			key := pod.Namespace + "/" + pod.Name
 			return &event.Signal{
-				Resource:      "controlplane",
-				Namespace:     pod.Namespace,
-				PodName:       pod.Name,
-				Container:     cs.Name,
-				Image:         cs.Image,
-				RestartCount:  cs.RestartCount,
-				Reason:        "ControlPlaneComponentFailure",
-				Owner:         key,
-				Labels:        pod.Labels,
-				Severity:      "high",
-				Hint:          fmt.Sprintf("control-plane component %s/%s: container %s has issue: %s", pod.Namespace, pod.Name, cs.Name, reason),
+				Resource:     "controlplane",
+				Namespace:    pod.Namespace,
+				PodName:      pod.Name,
+				Container:    cs.Name,
+				Image:        cs.Image,
+				RestartCount: cs.RestartCount,
+				Reason:       "ControlPlaneComponentFailure",
+				Owner:        key,
+				Labels:       pod.Labels,
+				Severity:     "high",
+				Hint:         fmt.Sprintf("control-plane component %s/%s: container %s has issue: %s", pod.Namespace, pod.Name, cs.Name, reason),
 			}
 		}
 	}

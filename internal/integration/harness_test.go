@@ -15,10 +15,10 @@ import (
 // defaultConfig returns a basic Config suitable for integration tests.
 func defaultConfig(rec *recordingAlertManager) correlation.Config {
 	return correlation.Config{
-		Window:              10 * time.Minute,
-		LifecycleInterval:   1 * time.Minute,
-		ResolveHoldDown:     0,
-		Enricher:            &enricher.DefaultEnricher{},
+		Window:            10 * time.Minute,
+		LifecycleInterval: 1 * time.Minute,
+		ResolveHoldDown:   0,
+		Enricher:          &enricher.DefaultEnricher{},
 		LifecycleHook: func(inc *model.Incident, action model.IncidentAction) {
 			rec.NotifyIncident(inc, action)
 		},

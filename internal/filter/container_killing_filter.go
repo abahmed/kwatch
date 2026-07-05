@@ -7,7 +7,7 @@ import (
 type ContainerKillingFilter struct{}
 
 func (f ContainerKillingFilter) Enrich(ctx *Context) bool {
-	if !ctx.Config.IgnoreFailedGracefulShutdown || ctx.Events == nil {
+	if !ctx.Config.IgnoreFailedGracefulShutdown || ctx.Events == nil || ctx.Container == nil {
 		return false
 	}
 	container := ctx.Container.Container

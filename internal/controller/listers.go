@@ -12,12 +12,12 @@ import (
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/apimachinery/pkg/runtime/schema"
-	policyv1lister "k8s.io/client-go/listers/policy/v1"
 	appsv1lister "k8s.io/client-go/listers/apps/v1"
 	autoscalingv2lister "k8s.io/client-go/listers/autoscaling/v2"
 	batchv1lister "k8s.io/client-go/listers/batch/v1"
 	corev1lister "k8s.io/client-go/listers/core/v1"
 	networkingv1lister "k8s.io/client-go/listers/networking/v1"
+	policyv1lister "k8s.io/client-go/listers/policy/v1"
 )
 
 type multiPodLister struct {

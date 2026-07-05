@@ -51,7 +51,7 @@ import (
 // HighRestartCount, custom job failures).
 var obviousReasons = map[string]bool{
 	// Container resource limits
-	"OOMKilled":   true,
+	"OOMKilled":    true,
 	"OOMRepeating": true,
 
 	// Container runtime errors — self-evident from message
@@ -59,11 +59,11 @@ var obviousReasons = map[string]bool{
 	"CreateContainerError": true,
 
 	// Image pull / registry
-	"ImagePullBackOff":   true,
-	"ErrImagePull":       true,
-	"ImageInspectError":  true,
-	"RegistryUnavailable": true,
-	"InvalidImageName":   true,
+	"ImagePullBackOff":           true,
+	"ErrImagePull":               true,
+	"ImageInspectError":          true,
+	"RegistryUnavailable":        true,
+	"InvalidImageName":           true,
 	"CreateContainerConfigError": true,
 
 	// Probe failures — app not responding, self-evident
@@ -77,11 +77,11 @@ var obviousReasons = map[string]bool{
 	"PreStopHookError":   true,
 
 	// Node-level conditions (infrastructure, not application)
-	"NodeNotReady":         true,
-	"MemoryPressure":       true,
-	"DiskPressure":         true,
-	"PIDPressure":          true,
-	"NetworkUnavailable":   true,
+	"NodeNotReady":           true,
+	"MemoryPressure":         true,
+	"DiskPressure":           true,
+	"PIDPressure":            true,
+	"NetworkUnavailable":     true,
 	"ContainerStatusUnknown": true,
 
 	// Scheduling / placement
@@ -99,8 +99,8 @@ var obviousReasons = map[string]bool{
 	"Preempting": true,
 
 	// Horizontal Pod Autoscaler
-	"HPAMaxedOut":      true,
-	"HPAScalingError":  true,
+	"HPAMaxedOut":     true,
+	"HPAScalingError": true,
 
 	// Rollout / DaemonSet
 	"ProgressDeadlineExceeded": true,
@@ -116,7 +116,7 @@ var obviousReasons = map[string]bool{
 	"CronJobNotScheduled": true,
 
 	// TLS certificates
-	"TLSCertExpired":     true,
+	"TLSCertExpired":      true,
 	"TLSCertExpiringSoon": true,
 
 	// Startup summary (not a real incident)
@@ -207,10 +207,10 @@ type AlertManager struct {
 	dlqRing     [dlqCap]DeadLetterEntry
 	dlqHead     int
 
-	llm            *llm.Client
-	enrichCh       chan deliverJob
-	brk            breaker
-	done           chan struct{}
+	llm      *llm.Client
+	enrichCh chan deliverJob
+	brk      breaker
+	done     chan struct{}
 
 	analysisWriter func(key, analysis string)
 	ctx            context.Context
@@ -1141,18 +1141,18 @@ func (a *AlertManager) deliverOne(ctx context.Context, entry *providerEntry, inc
 		return
 	}
 	if tp, ok := p.(ThreadProvider); ok {
-			err = sendWithRetry(ctx, func() error {
-				return tp.SendIncident(inc, action)
-			}, entry.maxAttempts, entry.retryDelay, entry.maxBackoff, p.Name())
-		} else if _, ok := p.(EventDeliveryProvider); ok {
-			ev := incidentToEvent(inc, action)
-			err = sendWithRetry(ctx, func() error {
-				return p.SendEvent(ev)
-			}, entry.maxAttempts, entry.retryDelay, entry.maxBackoff, p.Name())
-		} else {
-			err = sendWithRetry(ctx, func() error {
-				return p.SendMessage(msg)
-			}, entry.maxAttempts, entry.retryDelay, entry.maxBackoff, p.Name())
+		err = sendWithRetry(ctx, func() error {
+			return tp.SendIncident(inc, action)
+		}, entry.maxAttempts, entry.retryDelay, entry.maxBackoff, p.Name())
+	} else if _, ok := p.(EventDeliveryProvider); ok {
+		ev := incidentToEvent(inc, action)
+		err = sendWithRetry(ctx, func() error {
+			return p.SendEvent(ev)
+		}, entry.maxAttempts, entry.retryDelay, entry.maxBackoff, p.Name())
+	} else {
+		err = sendWithRetry(ctx, func() error {
+			return p.SendMessage(msg)
+		}, entry.maxAttempts, entry.retryDelay, entry.maxBackoff, p.Name())
 	}
 	if err != nil {
 		metrics.Default.NotificationsDropped.Add(1)

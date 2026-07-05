@@ -91,9 +91,9 @@ func TestDetectServiceEndpointIssueExternalName(t *testing.T) {
 	svc := &corev1.Service{
 		ObjectMeta: metav1.ObjectMeta{Name: "test-svc", Namespace: "default"},
 		Spec: corev1.ServiceSpec{
-			Type:       corev1.ServiceTypeExternalName,
-			Selector:   map[string]string{"app": "test"},
-			ClusterIP:  "",
+			Type:      corev1.ServiceTypeExternalName,
+			Selector:  map[string]string{"app": "test"},
+			ClusterIP: "",
 		},
 	}
 	eps := &corev1.Endpoints{
@@ -107,7 +107,7 @@ func TestDetectServiceEndpointIssueReady(t *testing.T) {
 	svc := &corev1.Service{
 		ObjectMeta: metav1.ObjectMeta{Name: "test-svc", Namespace: "default"},
 		Spec: corev1.ServiceSpec{
-			Selector: map[string]string{"app": "test"},
+			Selector:  map[string]string{"app": "test"},
 			ClusterIP: "10.0.0.1",
 		},
 	}
@@ -125,7 +125,7 @@ func TestDetectServiceEndpointIssueNoReadyEndpoints(t *testing.T) {
 	svc := &corev1.Service{
 		ObjectMeta: metav1.ObjectMeta{Name: "test-svc", Namespace: "default"},
 		Spec: corev1.ServiceSpec{
-			Selector: map[string]string{"app": "test"},
+			Selector:  map[string]string{"app": "test"},
 			ClusterIP: "10.0.0.1",
 		},
 	}
@@ -143,7 +143,7 @@ func TestDetectServiceEndpointIssueOnlyNotReadyAddresses(t *testing.T) {
 	svc := &corev1.Service{
 		ObjectMeta: metav1.ObjectMeta{Name: "test-svc", Namespace: "default"},
 		Spec: corev1.ServiceSpec{
-			Selector: map[string]string{"app": "test"},
+			Selector:  map[string]string{"app": "test"},
 			ClusterIP: "10.0.0.1",
 		},
 	}

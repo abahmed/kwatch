@@ -26,10 +26,10 @@ type Config struct {
 }
 
 type Monitor struct {
-	cfg       Config
+	cfg        Config
 	nodeLister corev1lister.NodeLister
 	podLister  corev1lister.PodLister
-	interval  time.Duration
+	interval   time.Duration
 }
 
 func NewMonitor(cfg Config, nodeLister corev1lister.NodeLister, podLister corev1lister.PodLister) *Monitor {
@@ -106,27 +106,33 @@ func (m *Monitor) checkNode(node *corev1.Node, pods []*corev1.Pod) *event.Signal
 	cpuRatio := float64(cpuReq) / float64(cpuAlloc)
 	memRatio := float64(memReq) / float64(memAlloc)
 
-	var reason, hint string
+	var reason, hint, severity string
 
 	switch {
 	case cpuRatio >= m.cfg.CpuCritical && memRatio >= m.cfg.MemCritical:
 		reason = "NodeResourceCritical"
 		hint = overcommitHint(node.Name, cpuRatio, memRatio, "critical")
+		severity = "critical"
 	case cpuRatio >= m.cfg.CpuCritical:
 		reason = "NodeResourceCritical"
 		hint = overcommitHint(node.Name, cpuRatio, memRatio, "critical")
+		severity = "critical"
 	case memRatio >= m.cfg.MemCritical:
 		reason = "NodeResourceCritical"
 		hint = overcommitHint(node.Name, cpuRatio, memRatio, "critical")
+		severity = "critical"
 	case cpuRatio >= m.cfg.CpuWarning && memRatio >= m.cfg.MemWarning:
 		reason = "NodeResourceHigh"
 		hint = overcommitHint(node.Name, cpuRatio, memRatio, "high")
+		severity = "warning"
 	case cpuRatio >= m.cfg.CpuWarning:
 		reason = "NodeResourceHigh"
 		hint = overcommitHint(node.Name, cpuRatio, memRatio, "high")
+		severity = "warning"
 	case memRatio >= m.cfg.MemWarning:
 		reason = "NodeResourceHigh"
 		hint = overcommitHint(node.Name, cpuRatio, memRatio, "high")
+		severity = "warning"
 	default:
 		return nil
 	}
@@ -138,7 +144,7 @@ func (m *Monitor) checkNode(node *corev1.Node, pods []*corev1.Pod) *event.Signal
 		NodeName: node.Name,
 		Owner:    node.Name,
 		Labels:   node.Labels,
-		Severity: "warning",
+		Severity: severity,
 	}
 }
 

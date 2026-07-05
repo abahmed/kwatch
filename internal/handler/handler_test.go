@@ -540,11 +540,11 @@ func TestProcessDeploymentObjectUnavailable(t *testing.T) {
 			Generation: 2,
 		},
 		Status: appsv1.DeploymentStatus{
-			ObservedGeneration: 2,
-			Replicas:           3,
-			ReadyReplicas:      2,
+			ObservedGeneration:  2,
+			Replicas:            3,
+			ReadyReplicas:       2,
 			UnavailableReplicas: 1,
-			UpdatedReplicas:    2,
+			UpdatedReplicas:     2,
 			Conditions: []appsv1.DeploymentCondition{
 				{
 					Type:   appsv1.DeploymentProgressing,
@@ -581,11 +581,11 @@ func TestProcessDeploymentObjectUnavailableSustained(t *testing.T) {
 			Generation: 2,
 		},
 		Status: appsv1.DeploymentStatus{
-			ObservedGeneration:   2,
-			Replicas:             3,
-			ReadyReplicas:        2,
-			UnavailableReplicas:  1,
-			UpdatedReplicas:      2,
+			ObservedGeneration:  2,
+			Replicas:            3,
+			ReadyReplicas:       2,
+			UnavailableReplicas: 1,
+			UpdatedReplicas:     2,
 		},
 	}
 	f := informers.NewSharedInformerFactory(client, 0)
@@ -619,12 +619,12 @@ func TestProcessDeploymentObjectHealthy(t *testing.T) {
 			Generation: 2,
 		},
 		Status: appsv1.DeploymentStatus{
-			ObservedGeneration:   2,
-			Replicas:             3,
-			ReadyReplicas:        3,
-			AvailableReplicas:    3,
-			UnavailableReplicas:  0,
-			UpdatedReplicas:      3,
+			ObservedGeneration:  2,
+			Replicas:            3,
+			ReadyReplicas:       3,
+			AvailableReplicas:   3,
+			UnavailableReplicas: 0,
+			UpdatedReplicas:     3,
 		},
 	}
 	f := informers.NewSharedInformerFactory(client, 0)
@@ -694,9 +694,9 @@ func TestProcessDeploymentObjectNotYetObserved(t *testing.T) {
 			Generation: 3,
 		},
 		Status: appsv1.DeploymentStatus{
-			ObservedGeneration:   2,
-			Replicas:             3,
-			UnavailableReplicas:  3,
+			ObservedGeneration:  2,
+			Replicas:            3,
+			UnavailableReplicas: 3,
 		},
 	}
 	f := informers.NewSharedInformerFactory(client, 0)
