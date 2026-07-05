@@ -90,6 +90,7 @@ func TestControllerPodEvent(t *testing.T) {
 		Window:            10 * time.Minute,
 		LifecycleInterval: 1 * time.Minute,
 		Enricher:          &enricher.DefaultEnricher{},
+		BaselineTTL:       1 * time.Nanosecond,
 	})
 
 	rec := &recordingProvider{}
