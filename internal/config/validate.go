@@ -71,8 +71,25 @@ func ValidateConfig(cfg *Config) []string {
 		errs = append(errs, "workers must be >= 1")
 	}
 
+	if cfg.AuditLog.Enabled && cfg.AuditLog.Output == "" {
+		errs = append(errs, "auditLog.output must be \"stdout\" or a valid file path when auditLog.enabled is true")
+	}
+
 	for _, name := range unknownProviders(cfg) {
 		errs = append(errs, fmt.Sprintf("unknown alert provider %q", name))
+	}
+
+	for name, p := range cfg.Alert {
+		if r, ok := p["retry"]; ok {
+			if rm, ok := r.(map[string]interface{}); ok {
+				if jf, ok := rm["jitterFactor"]; ok {
+					f, _ := jf.(float64)
+					if f < 0 || f > 1 {
+						errs = append(errs, fmt.Sprintf("alert.%s.retry.jitterFactor must be between 0 and 1", name))
+					}
+				}
+			}
+		}
 	}
 
 	return errs
@@ -130,6 +147,9 @@ func Validate(cfg *Config) []error {
 	}
 	if cfg.PendingPodMonitor.Enabled && cfg.PendingPodMonitor.Threshold <= 0 {
 		errs = append(errs, errors.New("pendingPodMonitor.threshold must be > 0"))
+	}
+	if cfg.AuditLog.Enabled && cfg.AuditLog.Output == "" {
+		errs = append(errs, errors.New("auditLog.output must be \"stdout\" or a valid file path when auditLog.enabled is true"))
 	}
 	if cfg.PvcMonitor.Enabled {
 		if cfg.PvcMonitor.Interval <= 0 {

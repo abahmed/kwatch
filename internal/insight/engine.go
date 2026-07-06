@@ -145,6 +145,39 @@ func (e *Engine) checkRecentChanges(inc *model.Incident, ins *Insight) {
 		return
 	}
 
+	// Dependency-filtered pass: check if any dependency of this resource changed
+	if e.graph != nil {
+		deps := e.graph.DependenciesOf(inc.Resource, inc.Namespace, inc.Name)
+		if len(deps) > 0 {
+			depChanges := make([]context.Change, 0, len(recent))
+			for _, c := range recent {
+				depKey := c.Resource + "/" + c.Namespace + "/" + c.Name
+				for _, d := range deps {
+					if d == depKey && c.Type == context.ChangeUpdate {
+						depChanges = append(depChanges, c)
+						break
+					}
+				}
+			}
+			if len(depChanges) > 0 {
+				if len(depChanges) > 3 {
+					depChanges = depChanges[:3]
+				}
+				ins.RecentChanges = depChanges
+				// Enhance cause with dependency change info
+				c := depChanges[0]
+				delta := time.Since(c.Timestamp).Round(time.Second)
+				if delta < 0 {
+					delta = 0
+				}
+				ins.Cause = fmt.Sprintf("%s %s/%s was updated %s before this incident",
+					c.Resource, c.Namespace, c.Name, delta)
+				ins.Pattern = "dependency_change"
+				return
+			}
+		}
+	}
+
 	for _, c := range recent {
 		if c.Namespace == inc.Namespace {
 			filtered = append(filtered, c)

@@ -178,7 +178,7 @@ When a crash happens, the AI reads the logs and tells you the **most likely caus
 | `runbooks` | 📚 Add links to your runbooks per error reason |
 | `llm.enabled` | 🤖 AI enrichment (default: false) |
 | `containerRestartThreshold` | Alert if a container restarts this many times (0 = off) |
-| `reportStartupBaseline` | 📋 Send one startup summary of pre-existing issues (default: false) |
+| `reportStartupBaseline` | 📋 Send one startup summary of pre-existing issues (default: true) |
 
 #### 🔽 Filter by namespace
 
@@ -320,7 +320,7 @@ If kwatch stops or crashes, the external monitor stops getting pings and pages y
 |:---|---|
 | `serviceMonitor.enabled` | 🔗 Watch for services with zero ready endpoints (default: true) |
 
-Detects when a Service's backing Endpoints object has zero ready addresses, indicating no healthy pods are available to serve traffic.
+Detects when a Service's backing Endpoints object has zero ready addresses, indicating no healthy pods are available to serve traffic. Includes a 60-second debounce to avoid flapping during rolling updates or brief endpoint transitions.
 
 ### 🧩 Admission Webhook Monitor
 
@@ -452,7 +452,7 @@ templates:
 |:---|---|
 | `smartGrouping.windowSeconds` | ⏱ Grouping window in seconds (default: 60). Set to 0 to disable. |
 
-kwatch groups related incidents by the dimension that best captures each failure type's root cause. For example, OOMKilled and probe failures group by owner+namespace, node conditions group by node, image pull errors group by image (or globally for rate limits), and CrashLoopBackOff with a matching log signature (e.g. Postgres unreachable) bridges across owners. Each group notification shows affected pods, owners, nodes, or images depending on scope, with overflow counting above 1,000 entries. Always enabled by default.
+kwatch groups related incidents by the dimension that best captures each failure type's root cause. For example, OOMKilled and probe failures group by owner+namespace, node conditions group by node (not pod errors on the same node), image pull errors group by image (or globally for rate limits), and CrashLoopBackOff with a matching log signature bridges across owners. Each group notification shows affected pods, owners, nodes, or images depending on scope, with overflow counting above 1,000 entries. After a group notification is sent, the same condition will not re-notify until the underlying incident is resolved and re-occurs, preventing periodic flooding.
 
 ### 📋 CRD — live config changes
 

@@ -2,6 +2,7 @@ package context
 
 import (
 	"sort"
+	"strings"
 	"sync"
 )
 
@@ -118,4 +119,64 @@ func (g *ResourceGraph) Clear() {
 	g.dependencies = make(map[string]map[string]bool)
 	g.dependents = make(map[string]map[string]bool)
 	g.edges = nil
+}
+
+// Prune removes all nodes of the given kind whose key is not present in the
+// active set. The active set should contain resource keys in "kind/ns/name"
+// format. This is a mark-and-sweep for a specific resource type.
+func (g *ResourceGraph) Prune(kind string, active map[string]bool) {
+	g.mu.Lock()
+	defer g.mu.Unlock()
+	prefix := kind + "/"
+	for key := range g.dependencies {
+		if strings.HasPrefix(key, prefix) && !active[key] {
+			for dep := range g.dependencies[key] {
+				delete(g.dependents[dep], key)
+			}
+			delete(g.dependencies, key)
+		}
+	}
+	for key := range g.dependents {
+		if strings.HasPrefix(key, prefix) && !active[key] {
+			for dep := range g.dependents[key] {
+				delete(g.dependencies[dep], key)
+			}
+			delete(g.dependents, key)
+		}
+	}
+	// Prune edges referencing removed nodes
+	kept := g.edges[:0]
+	for _, e := range g.edges {
+		if (strings.HasPrefix(e.From, prefix) && !active[e.From]) ||
+			(strings.HasPrefix(e.To, prefix) && !active[e.To]) {
+			continue
+		}
+		kept = append(kept, e)
+	}
+	g.edges = kept
+}
+
+// NodeCount returns the number of nodes for the given kind.
+func (g *ResourceGraph) NodeCount(kind string) int {
+	g.mu.RLock()
+	defer g.mu.RUnlock()
+	prefix := kind + "/"
+	count := 0
+	for key := range g.dependencies {
+		if strings.HasPrefix(key, prefix) {
+			count++
+		}
+	}
+	for key := range g.dependents {
+		if strings.HasPrefix(key, prefix) && !strings.HasPrefix(key, prefix) {
+			// Already counted key if it was in dependencies
+		}
+		// Only count if not already counted
+		if strings.HasPrefix(key, prefix) {
+			if _, ok := g.dependencies[key]; !ok {
+				count++
+			}
+		}
+	}
+	return count
 }

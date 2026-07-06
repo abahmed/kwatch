@@ -132,8 +132,8 @@ func TestSendProvidersEvent(t *testing.T) {
 	am := AlertManager{}
 	am.entries = append(
 		am.entries,
-		providerEntry{provider: &fakeProvider{}, maxAttempts: 1},
-		providerEntry{provider: &fakeProviderWithError{}, maxAttempts: 1},
+		providerEntry{provider: &fakeProvider{}, retry: retryConfig{maxAttempts: 1}},
+		providerEntry{provider: &fakeProviderWithError{}, retry: retryConfig{maxAttempts: 1}},
 	)
 	am.NotifyEvent(event.Event{})
 }
@@ -142,15 +142,15 @@ func TestSendProvidersMsg(t *testing.T) {
 	am := AlertManager{}
 	am.entries = append(
 		am.entries,
-		providerEntry{provider: &fakeProvider{}, maxAttempts: 1},
-		providerEntry{provider: &fakeProviderWithError{}, maxAttempts: 1},
+		providerEntry{provider: &fakeProvider{}, retry: retryConfig{maxAttempts: 1}},
+		providerEntry{provider: &fakeProviderWithError{}, retry: retryConfig{maxAttempts: 1}},
 	)
 	am.Notify("hello world!")
 }
 
 func TestNotifyIncidentCreate(t *testing.T) {
 	am := AlertManager{}
-	am.entries = append(am.entries, providerEntry{provider: &fakeProvider{}, maxAttempts: 1})
+	am.entries = append(am.entries, providerEntry{provider: &fakeProvider{}, retry: retryConfig{maxAttempts: 1}})
 
 	inc := &model.Incident{
 		Key:       "default:deploy:CrashLoopBackOff",
@@ -169,7 +169,7 @@ func TestNotifyIncidentCreate(t *testing.T) {
 
 func TestNotifyIncidentUpdate(t *testing.T) {
 	am := AlertManager{}
-	am.entries = append(am.entries, providerEntry{provider: &fakeProvider{}, maxAttempts: 1}, providerEntry{provider: &fakeProviderWithError{}, maxAttempts: 1})
+	am.entries = append(am.entries, providerEntry{provider: &fakeProvider{}, retry: retryConfig{maxAttempts: 1}}, providerEntry{provider: &fakeProviderWithError{}, retry: retryConfig{maxAttempts: 1}})
 
 	inc := &model.Incident{
 		Key:       "default:deploy:OOMKilled",
@@ -188,7 +188,7 @@ func TestNotifyIncidentUpdate(t *testing.T) {
 
 func TestNotifyIncidentSkip(t *testing.T) {
 	am := AlertManager{}
-	am.entries = append(am.entries, providerEntry{provider: &fakeProvider{}, maxAttempts: 1})
+	am.entries = append(am.entries, providerEntry{provider: &fakeProvider{}, retry: retryConfig{maxAttempts: 1}})
 
 	inc := &model.Incident{
 		Key:  "default:deploy:OOMKilled",
@@ -216,7 +216,7 @@ func (p *fakeThreadProvider) SendIncident(inc *model.Incident, action model.Inci
 func TestNotifyIncidentCallsThreadProvider(t *testing.T) {
 	tp := &fakeThreadProvider{}
 	am := AlertManager{}
-	am.entries = append(am.entries, providerEntry{provider: tp, maxAttempts: 1})
+	am.entries = append(am.entries, providerEntry{provider: tp, retry: retryConfig{maxAttempts: 1}})
 
 	inc := &model.Incident{
 		Key:  "default:deploy:OOMKilled",
@@ -231,7 +231,7 @@ func TestNotifyIncidentCallsThreadProvider(t *testing.T) {
 func TestNotifyIncidentThreadProviderWithSkip(t *testing.T) {
 	tp := &fakeThreadProvider{}
 	am := AlertManager{}
-	am.entries = append(am.entries, providerEntry{provider: tp, maxAttempts: 1})
+	am.entries = append(am.entries, providerEntry{provider: tp, retry: retryConfig{maxAttempts: 1}})
 
 	inc := &model.Incident{
 		Key:  "default:deploy:OOMKilled",
@@ -579,10 +579,9 @@ func TestFallbackUsedOnExhaustion(t *testing.T) {
 
 	am := AlertManager{}
 	am.entries = append(am.entries, providerEntry{
-		provider:    primary,
-		maxAttempts: 1,
-		retryDelay:  time.Millisecond,
-		fallback:    &providerEntry{provider: fb},
+		provider: primary,
+		retry:    retryConfig{maxAttempts: 1, delay: time.Millisecond},
+		fallback: &providerEntry{provider: fb},
 	})
 
 	// primary succeeds — fallback should NOT be called
@@ -611,10 +610,10 @@ func TestExtractRetryYAMLInt(t *testing.T) {
 			"maxBackoff":  "10s",
 		},
 	}
-	attempts, delay, maxBackoff := extractRetry(cfg)
-	assert.Equal(t, 3, attempts)
-	assert.Equal(t, 2*time.Second, delay)
-	assert.Equal(t, 10*time.Second, maxBackoff)
+	rc := extractRetry(cfg)
+	assert.Equal(t, 3, rc.maxAttempts)
+	assert.Equal(t, 2*time.Second, rc.delay)
+	assert.Equal(t, 10*time.Second, rc.maxBackoff)
 }
 
 func TestExtractRetryJSONFloat(t *testing.T) {
@@ -624,8 +623,8 @@ func TestExtractRetryJSONFloat(t *testing.T) {
 			"maxAttempts": float64(5),
 		},
 	}
-	attempts, _, _ := extractRetry(cfg)
-	assert.Equal(t, 5, attempts)
+	rc := extractRetry(cfg)
+	assert.Equal(t, 5, rc.maxAttempts)
 }
 
 func TestExtractRetryClamps(t *testing.T) {
@@ -634,29 +633,31 @@ func TestExtractRetryClamps(t *testing.T) {
 			"maxAttempts": 0,
 		},
 	}
-	attempts, _, _ := extractRetry(cfg)
-	assert.Equal(t, 1, attempts)
+	rc := extractRetry(cfg)
+	assert.Equal(t, 1, rc.maxAttempts)
 
 	cfg = map[string]interface{}{
 		"retry": map[string]interface{}{
 			"maxAttempts": 100,
 		},
 	}
-	attempts, _, _ = extractRetry(cfg)
-	assert.Equal(t, 20, attempts)
+	rc = extractRetry(cfg)
+	assert.Equal(t, 20, rc.maxAttempts)
 }
 
 func TestExtractRetryDefaults(t *testing.T) {
-	attempts, delay, maxBackoff := extractRetry(map[string]interface{}{})
-	assert.Equal(t, 1, attempts)
-	assert.Equal(t, time.Second, delay)
-	assert.Equal(t, defaultMaxBackoff, maxBackoff)
+	rc := extractRetry(map[string]interface{}{})
+	assert.Equal(t, 1, rc.maxAttempts)
+	assert.Equal(t, time.Second, rc.delay)
+	assert.Equal(t, defaultMaxBackoff, rc.maxBackoff)
+	assert.False(t, rc.jitterEnabled)
+	assert.Equal(t, 0.25, rc.jitterFactor)
 }
 
 func TestSendWithRetryReturnsError(t *testing.T) {
 	err := sendWithRetry(context.Background(), func() error {
 		return errors.New("fail")
-	}, 1, time.Millisecond, 0, "test")
+	}, retryConfig{maxAttempts: 1, delay: time.Millisecond}, "test")
 	if err == nil {
 		t.Fatal("expected error from sendWithRetry")
 	}
@@ -665,7 +666,7 @@ func TestSendWithRetryReturnsError(t *testing.T) {
 func TestSendWithRetrySuccess(t *testing.T) {
 	err := sendWithRetry(context.Background(), func() error {
 		return nil
-	}, 3, time.Millisecond, 0, "test")
+	}, retryConfig{maxAttempts: 3, delay: time.Millisecond}, "test")
 	if err != nil {
 		t.Fatalf("expected nil, got %v", err)
 	}
@@ -674,7 +675,7 @@ func TestSendWithRetrySuccess(t *testing.T) {
 func TestNotifyIncidentEventDeliveryProviderPropagatesActionAndDedup(t *testing.T) {
 	fp := &fakeRecordingEventProvider{}
 	am := AlertManager{}
-	am.entries = append(am.entries, providerEntry{provider: fp, maxAttempts: 1})
+	am.entries = append(am.entries, providerEntry{provider: fp, retry: retryConfig{maxAttempts: 1}})
 
 	inc := &model.Incident{
 		Key:       "default:deploy:CrashLoopBackOff",
@@ -732,9 +733,9 @@ func TestShutdownNoPanicWithInflightEnrichment(t *testing.T) {
 	delivered := make(chan struct{}, 8)
 	am := &AlertManager{}
 	am.entries = []providerEntry{{
-		provider:    &countingProvider{delivered: delivered},
-		maxAttempts: 1,
-		ch:          make(chan deliverJob, channelCap),
+		provider: &countingProvider{delivered: delivered},
+		retry:    retryConfig{maxAttempts: 1},
+		ch:       make(chan deliverJob, channelCap),
 	}}
 	am.llm = llm.New(srv.URL)
 	am.enrichCh = make(chan deliverJob, 1)
@@ -758,9 +759,9 @@ func TestShutdownNoPanicWithInflightEnrichment(t *testing.T) {
 func TestNotifyIncidentAfterShutdownIsNoop(t *testing.T) {
 	am := &AlertManager{}
 	am.entries = []providerEntry{{
-		provider:    &fakeProvider{},
-		maxAttempts: 1,
-		ch:          make(chan deliverJob, channelCap),
+		provider: &fakeProvider{},
+		retry:    retryConfig{maxAttempts: 1},
+		ch:       make(chan deliverJob, channelCap),
 	}}
 	am.llm = llm.New("http://127.0.0.1:0")
 	am.enrichCh = make(chan deliverJob, 1)

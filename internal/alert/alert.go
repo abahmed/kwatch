@@ -5,6 +5,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"math/rand"
 	"reflect"
 	"regexp"
 	"sort"
@@ -115,6 +116,9 @@ var obviousReasons = map[string]bool{
 	"CronJobSuspended":    true,
 	"CronJobNotScheduled": true,
 
+	// Service / endpoint issues (self-explanatory from reason alone)
+	"ServiceNoEndpoints": true,
+
 	// TLS certificates
 	"TLSCertExpired":      true,
 	"TLSCertExpiringSoon": true,
@@ -182,9 +186,7 @@ func (b *breaker) record(now time.Time, ok bool) {
 type providerEntry struct {
 	provider      Provider
 	routes        []config.AlertRoute
-	maxAttempts   int
-	retryDelay    time.Duration
-	maxBackoff    time.Duration
+	retry         retryConfig
 	fallback      *providerEntry
 	fallbackNamed string // resolved in second pass
 	templates     map[string]*template.Template
@@ -335,10 +337,22 @@ func extractTemplates(cfg map[string]interface{}) map[string]*template.Template 
 	return nil
 }
 
-func extractRetry(cfg map[string]interface{}) (maxAttempts int, delay, maxBackoff time.Duration) {
-	maxAttempts = 1
-	delay = time.Second
-	maxBackoff = defaultMaxBackoff
+type retryConfig struct {
+	maxAttempts   int
+	delay         time.Duration
+	maxBackoff    time.Duration
+	jitterEnabled bool
+	jitterFactor  float64
+}
+
+func extractRetry(cfg map[string]interface{}) retryConfig {
+	rc := retryConfig{
+		maxAttempts:   1,
+		delay:         time.Second,
+		maxBackoff:    defaultMaxBackoff,
+		jitterEnabled: false,
+		jitterFactor:  0.25,
+	}
 	if r, ok := cfg["retry"]; ok {
 		if rm, ok := r.(map[string]interface{}); ok {
 			if a, ok := rm["maxAttempts"]; ok {
@@ -357,25 +371,44 @@ func extractRetry(cfg map[string]interface{}) (maxAttempts int, delay, maxBackof
 				if n < 1 {
 					n = 1
 				}
-				maxAttempts = n
+				rc.maxAttempts = n
 			}
 			if d, ok := rm["delay"]; ok {
 				if s, ok := d.(string); ok {
 					if parsed, err := time.ParseDuration(s); err == nil {
-						delay = parsed
+						rc.delay = parsed
 					}
 				}
 			}
 			if b, ok := rm["maxBackoff"]; ok {
 				if s, ok := b.(string); ok {
 					if parsed, err := time.ParseDuration(s); err == nil {
-						maxBackoff = parsed
+						rc.maxBackoff = parsed
 					}
+				}
+			}
+			if j, ok := rm["jitterEnabled"]; ok {
+				if b, ok := j.(bool); ok {
+					rc.jitterEnabled = b
+				}
+			}
+			if jf, ok := rm["jitterFactor"]; ok {
+				switch v := jf.(type) {
+				case float64:
+					rc.jitterFactor = v
+				case int:
+					rc.jitterFactor = float64(v)
+				}
+				if rc.jitterFactor < 0 {
+					rc.jitterFactor = 0
+				}
+				if rc.jitterFactor > 1 {
+					rc.jitterFactor = 1
 				}
 			}
 		}
 	}
-	return
+	return rc
 }
 
 // ProviderNames returns the set of known alert provider names.
@@ -445,7 +478,7 @@ func (a *AlertManager) Init(
 			continue
 		}
 		if !reflect.ValueOf(pvdr).IsNil() {
-			maxAttempts, retryDelay, maxBackoff := extractRetry(v)
+			rc := extractRetry(v)
 			fbName := ""
 			if raw, ok := v["fallback"]; ok {
 				fbName, _ = raw.(string)
@@ -453,9 +486,7 @@ func (a *AlertManager) Init(
 			entries = append(entries, providerEntry{
 				provider:      pvdr,
 				routes:        extractRoutes(v),
-				maxAttempts:   maxAttempts,
-				retryDelay:    retryDelay,
-				maxBackoff:    maxBackoff,
+				retry:         rc,
 				fallback:      nil,
 				fallbackNamed: fbName,
 				templates:     extractTemplates(v),
@@ -706,15 +737,23 @@ func backoffFor(attempt int, baseDelay, maxBackoff time.Duration) time.Duration 
 	return d
 }
 
-func sendWithRetry(ctx context.Context, sendFn func() error, maxAttempts int, delay, maxBackoff time.Duration, providerName string) error {
+func applyJitter(d time.Duration, factor float64) time.Duration {
+	if factor <= 0 {
+		return d
+	}
+	jitter := time.Duration(float64(d) * factor * (rand.Float64()*2 - 1))
+	return d + jitter
+}
+
+func sendWithRetry(ctx context.Context, sendFn func() error, rc retryConfig, providerName string) error {
 	var lastErr error
-	for attempt := 1; attempt <= maxAttempts; attempt++ {
+	for attempt := 1; attempt <= rc.maxAttempts; attempt++ {
 		if err := sendFn(); err != nil {
 			lastErr = err
-			if attempt < maxAttempts {
-				sleepDur := delay
-				if maxBackoff > 0 {
-					sleepDur = backoffFor(attempt, delay, maxBackoff)
+			if attempt < rc.maxAttempts {
+				sleepDur := rc.delay
+				if rc.maxBackoff > 0 {
+					sleepDur = backoffFor(attempt, rc.delay, rc.maxBackoff)
 				}
 				var rae *event.RetryAfterError
 				if errors.As(err, &rae) && rae.RetryAfter > 0 {
@@ -724,10 +763,16 @@ func sendWithRetry(ctx context.Context, sendFn func() error, maxAttempts int, de
 				if errors.As(err, &rle) && rle.RetryAfter > 0 {
 					sleepDur = rle.RetryAfter
 				}
+				if rc.jitterEnabled {
+					sleepDur = applyJitter(sleepDur, rc.jitterFactor)
+					if sleepDur <= 0 {
+						sleepDur = rc.delay
+					}
+				}
 				klog.V(4).InfoS("retrying provider delivery",
 					"provider", providerName,
 					"attempt", attempt,
-					"maxAttempts", maxAttempts,
+					"maxAttempts", rc.maxAttempts,
 					"backoff", sleepDur)
 				if err := sleepWithContext(ctx, sleepDur); err != nil {
 					return err
@@ -739,7 +784,7 @@ func sendWithRetry(ctx context.Context, sendFn func() error, maxAttempts int, de
 	}
 	klog.ErrorS(lastErr, "failed to deliver after retries",
 		"provider", providerName,
-		"maxAttempts", maxAttempts)
+		"maxAttempts", rc.maxAttempts)
 	return lastErr
 }
 
@@ -788,7 +833,7 @@ func (a *AlertManager) Notify(msg string) {
 			}
 			if err := sendWithRetry(ctx, func() error {
 				return p.SendEvent(ev)
-			}, entry.maxAttempts, entry.retryDelay, entry.maxBackoff, p.Name()); err != nil && entry.fallback != nil {
+			}, entry.retry, p.Name()); err != nil && entry.fallback != nil {
 				entry.fallback.provider.SendMessage("[fallback — primary " + p.Name() + " failed] " + msg)
 			}
 			continue
@@ -796,7 +841,7 @@ func (a *AlertManager) Notify(msg string) {
 		truncMsg := truncateMsg(msg, entry.maxBytes)
 		if err := sendWithRetry(ctx, func() error {
 			return p.SendMessage(truncMsg)
-		}, entry.maxAttempts, entry.retryDelay, entry.maxBackoff, p.Name()); err != nil && entry.fallback != nil {
+		}, entry.retry, p.Name()); err != nil && entry.fallback != nil {
 			entry.fallback.provider.SendMessage("[fallback — primary " + p.Name() + " failed] " + truncMsg)
 		}
 	}
@@ -819,7 +864,7 @@ func (a *AlertManager) NotifyEvent(event event.Event) {
 		p := entry.provider
 		if err := sendWithRetry(ctx, func() error {
 			return p.SendEvent(&event)
-		}, entry.maxAttempts, entry.retryDelay, entry.maxBackoff, p.Name()); err != nil && entry.fallback != nil {
+		}, entry.retry, p.Name()); err != nil && entry.fallback != nil {
 			if ferr := entry.fallback.provider.SendMessage("[fallback — primary " + p.Name() + " failed] " + event.Reason + " in " + event.Namespace + "/" + event.PodName); ferr != nil {
 				klog.ErrorS(ferr, "fallback provider send failed", "primary", p.Name(), "fallback", entry.fallback.provider.Name())
 			}
@@ -931,9 +976,9 @@ func (a *AlertManager) AddProvider(p Provider) {
 	a.mu.Lock()
 	defer a.mu.Unlock()
 	entry := providerEntry{
-		provider:    p,
-		maxAttempts: 1,
-		ch:          make(chan deliverJob, channelCap),
+		provider: p,
+		retry:    retryConfig{maxAttempts: 1, delay: time.Second, maxBackoff: defaultMaxBackoff},
+		ch:       make(chan deliverJob, channelCap),
 	}
 	a.entries = append(a.entries, entry)
 	if a.started {
@@ -1143,16 +1188,16 @@ func (a *AlertManager) deliverOne(ctx context.Context, entry *providerEntry, inc
 	if tp, ok := p.(ThreadProvider); ok {
 		err = sendWithRetry(ctx, func() error {
 			return tp.SendIncident(inc, action)
-		}, entry.maxAttempts, entry.retryDelay, entry.maxBackoff, p.Name())
+		}, entry.retry, p.Name())
 	} else if _, ok := p.(EventDeliveryProvider); ok {
 		ev := incidentToEvent(inc, action)
 		err = sendWithRetry(ctx, func() error {
 			return p.SendEvent(ev)
-		}, entry.maxAttempts, entry.retryDelay, entry.maxBackoff, p.Name())
+		}, entry.retry, p.Name())
 	} else {
 		err = sendWithRetry(ctx, func() error {
 			return p.SendMessage(msg)
-		}, entry.maxAttempts, entry.retryDelay, entry.maxBackoff, p.Name())
+		}, entry.retry, p.Name())
 	}
 	if err != nil {
 		metrics.Default.NotificationsDropped.Add(1)
@@ -1223,16 +1268,16 @@ func (a *AlertManager) deliverAllSync(inc *model.Incident, action model.Incident
 		if tp, ok := p.(ThreadProvider); ok {
 			err = sendWithRetry(context.Background(), func() error {
 				return tp.SendIncident(inc, action)
-			}, entry.maxAttempts, entry.retryDelay, entry.maxBackoff, p.Name())
+			}, entry.retry, p.Name())
 		} else if _, ok := p.(EventDeliveryProvider); ok {
 			ev := incidentToEvent(inc, action)
 			err = sendWithRetry(context.Background(), func() error {
 				return p.SendEvent(ev)
-			}, entry.maxAttempts, entry.retryDelay, entry.maxBackoff, p.Name())
+			}, entry.retry, p.Name())
 		} else {
 			err = sendWithRetry(context.Background(), func() error {
 				return p.SendMessage(msg)
-			}, entry.maxAttempts, entry.retryDelay, entry.maxBackoff, p.Name())
+			}, entry.retry, p.Name())
 		}
 		if err != nil {
 			metrics.Default.NotificationsDropped.Add(1)

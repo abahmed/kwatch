@@ -160,6 +160,9 @@ type Config struct {
 	// CronJobMonitor configures failed/suspended CronJob detection.
 	CronJobMonitor CronJobMonitor `yaml:"cronJobMonitor"`
 
+	// ClusterAutoscalerMonitor configures cluster-autoscaler event monitoring.
+	ClusterAutoscalerMonitor ClusterAutoscalerMonitor `yaml:"clusterAutoscalerMonitor"`
+
 	// HpaMonitor configures HPA-maxed-out detection.
 	HpaMonitor HpaMonitor `yaml:"hpaMonitor"`
 
@@ -222,6 +225,9 @@ type Config struct {
 	// DashboardURLTemplate is an optional URL template with {namespace}/{owner}/{pod}
 	// placeholders, rendered in alerts as a deep-link to a dashboard.
 	DashboardURLTemplate string `yaml:"dashboardURLTemplate"`
+
+	// AuditLog configures structured JSON audit logging for all incidents.
+	AuditLog AuditLogConfig `yaml:"auditLog"`
 }
 
 // LLMConfig controls the optional AI enrichment sidecar.
@@ -249,6 +255,15 @@ type Inhibition struct {
 	// NodeSuppressesPods if true, pod incidents on a node with an active
 	// node incident are suppressed to reduce noise. Default true.
 	NodeSuppressesPods bool `yaml:"nodeSuppressesPods"`
+}
+
+// ClusterAutoscalerMonitor configures cluster-autoscaler event monitoring.
+// Watches cluster-autoscaler events (TriggeredScaleUp, FailedToScaleUp,
+// ScaleDown, etc.) and alerts when the autoscaler cannot scale or
+// detects resource constraints.
+type ClusterAutoscalerMonitor struct {
+	// Enabled toggles cluster-autoscaler event monitoring.
+	Enabled bool `yaml:"enabled"`
 }
 
 // HpaMonitor configures HPA-maxed-out detection.
@@ -722,6 +737,14 @@ type RenotifyConfig struct {
 	IntervalBySeverity map[string]int `yaml:"intervalBySeverity"`
 	// MaxPerIncident is the maximum number of renotifications per incident. Default 3.
 	MaxPerIncident int `yaml:"maxPerIncident"`
+}
+
+// AuditLogConfig configures structured audit logging for all incidents.
+type AuditLogConfig struct {
+	// Enabled toggles audit logging. Default false.
+	Enabled bool `yaml:"enabled"`
+	// Output is the destination for audit log entries: "stdout" (default) or a file path.
+	Output string `yaml:"output"`
 }
 
 // EscalationConfig configures severity escalation when restart count

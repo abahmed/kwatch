@@ -13,6 +13,9 @@ import (
 )
 
 func TestProcessServiceCreatesIncident(t *testing.T) {
+	defaultServiceSustainedSeconds = 0
+	defer func() { defaultServiceSustainedSeconds = 60 }()
+
 	e := testCorrelator()
 	h := NewHandler(fake.NewSimpleClientset(), &config.Config{}, e, testAlertMgr)
 
@@ -158,6 +161,9 @@ func TestDetectServiceEndpointIssueOnlyNotReadyAddresses(t *testing.T) {
 }
 
 func TestProcessServiceObjectNoEndpointsIncident(t *testing.T) {
+	defaultServiceSustainedSeconds = 0
+	defer func() { defaultServiceSustainedSeconds = 60 }()
+
 	e := testCorrelator()
 	h := NewHandler(fake.NewSimpleClientset(), &config.Config{}, e, testAlertMgr)
 
@@ -190,6 +196,9 @@ func TestProcessServiceObjectNoEndpointsIncident(t *testing.T) {
 }
 
 func TestProcessServiceObjectResolve(t *testing.T) {
+	defaultServiceSustainedSeconds = 0
+	defer func() { defaultServiceSustainedSeconds = 60 }()
+
 	e := testCorrelator()
 	h := NewHandler(fake.NewSimpleClientset(), &config.Config{}, e, testAlertMgr)
 

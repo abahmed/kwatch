@@ -184,11 +184,20 @@ func (h *handler) buildContainerHint(ctx *filter.Context) string {
 		key := ctx.Pod.Namespace + "/" + ctx.Pod.Name + "/" + ctx.Container.Container.Name
 		if count, repeating := h.oomTracker.record(key); repeating {
 			ctx.Container.Reason = "OOMRepeating"
+			timeline := h.oomTracker.History(key)
+			if timeline != "" {
+				return fmt.Sprintf("OOMKilled %d times in %dm — potential memory leak [%s]", count, h.config.OomMonitor.WindowMinutes, timeline)
+			}
 			return fmt.Sprintf("OOMKilled %d times in %dm — potential memory leak", count, h.config.OomMonitor.WindowMinutes)
 		}
 	}
 
 	if reason == "OOMKilled" || exitCode == 137 {
+		oomTimeline := ""
+		if h.oomTracker != nil {
+			key := ctx.Pod.Namespace + "/" + ctx.Pod.Name + "/" + ctx.Container.Container.Name
+			oomTimeline = h.oomTracker.History(key)
+		}
 		if spec != nil && spec.Resources.Limits != nil {
 			mem := spec.Resources.Limits.Memory()
 			if mem != nil && !mem.IsZero() {
@@ -198,6 +207,9 @@ func (h *handler) buildContainerHint(ctx *filter.Context) string {
 			}
 		} else {
 			hint = "OOMKilled with no memory limit set — node-level memory pressure; set/raise container memory limits"
+		}
+		if oomTimeline != "" {
+			hint = hint + " [" + oomTimeline + "]"
 		}
 	}
 

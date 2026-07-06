@@ -21,6 +21,7 @@ func DefaultConfig() *Config {
 		NodeResourceMonitor:          NodeResourceMonitor{Enabled: true, IntervalSeconds: 300, CpuWarning: 2.0, CpuCritical: 4.0, MemWarning: 2.0, MemCritical: 4.0},
 		DaemonSetMonitor:             DaemonSetMonitor{Enabled: true, SustainedMinutes: 5},
 		HpaMonitor:                   HpaMonitor{Enabled: true, SustainedMinutes: 20},
+		ClusterAutoscalerMonitor:     ClusterAutoscalerMonitor{Enabled: true},
 		Upgrader:                     Upgrader{DisableUpdateCheck: false},
 		HealthCheck:                  HealthCheck{Enabled: true, Port: 8060, Pprof: false, Diagnostics: false},
 		Inhibition:                   Inhibition{NodeSuppressesPods: true},
@@ -38,5 +39,6 @@ func DefaultConfig() *Config {
 			ResolveHoldDown:   300,
 			Escalation:        EscalationConfig{Enabled: true, Tiers: []int{3, 10, 50}},
 		},
+		AuditLog: AuditLogConfig{Enabled: true, Output: "stdout"},
 	}
 }

@@ -130,7 +130,7 @@ data:
       # criticalThreshold: <days>      # high severity before expiry (default 3)
 
     serviceMonitor:
-      enabled: <boolean>       # detect services with zero ready endpoints (default true)
+      enabled: <boolean>       # detect services with zero ready endpoints (default true); includes a 60-second debounce
 
     admissionWebhookMonitor:
       enabled: <boolean>       # detect webhooks with unreachable backends (default true)

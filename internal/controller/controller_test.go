@@ -154,7 +154,8 @@ func (m *mockHandler) ProcessStatefulSetObject(*appsv1.StatefulSet, bool) error 
 func (m *mockHandler) ProcessPdb(string, bool) error                              { return m.err }
 func (m *mockHandler) ProcessPdbObject(*policyv1.PodDisruptionBudget, bool) error { return m.err }
 func (m *mockHandler) SetInsightEngine(_ *insight.Engine)                         {}
-func (m *mockHandler) ProcessNodeResourceOvercommit(string, string, string)       {}
+func (m *mockHandler) ProcessNodeResourceOvercommit(string, string, string) {}
+func (m *mockHandler) ProcessClusterAutoscalerEvent(*corev1.Event)           {}
 
 func TestNewCreatesController(t *testing.T) {
 	assert := assert.New(t)

@@ -142,6 +142,13 @@ func newFactories(client kubernetes.Interface, namespaces []string, resync time.
 		var opts []informers.SharedInformerOption
 		if len(namespaces) == 1 {
 			opts = append(opts, informers.WithNamespace(namespaces[0]))
+		} else {
+			// Exclude kube-system from non-control-plane informers to reduce
+			// memory and network overhead. The control-plane monitor uses a
+			// dedicated kube-system-scoped factory.
+			opts = append(opts, informers.WithTweakListOptions(func(o *metav1.ListOptions) {
+				o.FieldSelector = "metadata.namespace!=kube-system"
+			}))
 		}
 		factory := informers.NewSharedInformerFactoryWithOptions(client, resync, opts...)
 		return factorySet{global: factory}, []informers.SharedInformerFactory{factory}
@@ -898,6 +905,41 @@ func New(
 		factories = append(factories, eventFactories...)
 	}
 
+	if cfg.ClusterAutoscalerMonitor.Enabled {
+		caOpts := []informers.SharedInformerOption{
+			informers.WithTweakListOptions(func(o *metav1.ListOptions) {
+				o.FieldSelector = "source=cluster-autoscaler"
+			}),
+			informers.WithNamespace("kube-system"),
+		}
+		caFactory := informers.NewSharedInformerFactoryWithOptions(client, resync, caOpts...)
+		caEventInformer := caFactory.Core().V1().Events().Informer()
+		utilruntime.Must(caEventInformer.AddIndexers(cache.Indexers{
+			"byReason": func(obj interface{}) ([]string, error) {
+				ev, ok := obj.(*corev1.Event)
+				if !ok {
+					return nil, nil
+				}
+				return []string{ev.Reason}, nil
+			},
+		}))
+		c.eventsSynced = append(c.eventsSynced, caEventInformer.HasSynced)
+		factories = append(factories, caFactory)
+
+		caEventInformer.AddEventHandler(cache.ResourceEventHandlerFuncs{
+			AddFunc: func(obj interface{}) {
+				if ev, ok := obj.(*corev1.Event); ok {
+					h.ProcessClusterAutoscalerEvent(ev)
+				}
+			},
+			UpdateFunc: func(_, obj interface{}) {
+				if ev, ok := obj.(*corev1.Event); ok {
+					h.ProcessClusterAutoscalerEvent(ev)
+				}
+			},
+		})
+	}
+
 	// ConfigMap informer — always watches monitored namespaces for dependency tracking
 	{
 		cmLister := fs.configMapLister()
@@ -906,9 +948,22 @@ func New(
 		c.configMapLister = cmLister
 		for _, inf := range cmInformers {
 			c.configMapSynced = append(c.configMapSynced, inf.HasSynced)
-			inf.AddEventHandler(c.changeRecordingHandler("configmap", func(obj interface{}) {
-				// ConfigMaps are tracked for dependency analysis only; no queue processing needed
-			}))
+			inf.AddEventHandler(cache.ResourceEventHandlerFuncs{
+				AddFunc: func(obj interface{}) {
+					c.recordChange(kwcontext.ChangeCreate, "configmap", obj)
+				},
+				UpdateFunc: func(old, new interface{}) {
+					c.recordChange(kwcontext.ChangeUpdate, "configmap", new)
+				},
+				DeleteFunc: func(obj interface{}) {
+					c.recordChange(kwcontext.ChangeDelete, "configmap", obj)
+					if c.graph != nil {
+						if cm, ok := obj.(*corev1.ConfigMap); ok {
+							c.graph.RemoveNode("configmap", cm.Namespace, cm.Name)
+						}
+					}
+				},
+			})
 		}
 	}
 
@@ -1187,6 +1242,54 @@ func (c *Controller) buildGraph() {
 	klog.V(4).InfoS("dependency graph built from informer cache", "edges", len(c.graph.Edges()))
 }
 
+// pruneGraph performs mark-and-sweep on the resource graph: removes
+// ConfigMap, Secret, and Service nodes that no longer exist in the
+// informer cache. This prevents stale entries from accumulating
+// between full rebuilds.
+func (c *Controller) pruneGraph() {
+	if c.graph == nil {
+		return
+	}
+
+	active := make(map[string]bool)
+
+	if cmLister := c.configMapLister; cmLister != nil {
+		cms, err := cmLister.List(labels.Everything())
+		if err == nil {
+			for _, cm := range cms {
+				active["configmap/"+cm.Namespace+"/"+cm.Name] = true
+			}
+		}
+	}
+
+	if secretLister := c.secretLister; secretLister != nil {
+		secrets, err := secretLister.List(labels.Everything())
+		if err == nil {
+			for _, s := range secrets {
+				active["secret/"+s.Namespace+"/"+s.Name] = true
+			}
+		}
+	}
+
+	if svcLister := c.serviceLister; svcLister != nil {
+		svcs, err := svcLister.List(labels.Everything())
+		if err == nil {
+			for _, svc := range svcs {
+				active["service/"+svc.Namespace+"/"+svc.Name] = true
+			}
+		}
+	}
+
+	pre := len(c.graph.Edges())
+	c.graph.Prune("configmap", active)
+	c.graph.Prune("secret", active)
+	c.graph.Prune("service", active)
+	post := len(c.graph.Edges())
+	if pruned := pre - post; pruned > 0 {
+		klog.V(4).InfoS("graph pruned", "removed", pruned, "remaining", post)
+	}
+}
+
 func (c *Controller) podEventHandler() cache.ResourceEventHandlerFuncs {
 	return cache.ResourceEventHandlerFuncs{
 		AddFunc: func(obj interface{}) {
@@ -1279,14 +1382,18 @@ func (c *Controller) Run(ctx context.Context, workers int) error {
 
 	c.buildGraph()
 	go func() {
-		ticker := time.NewTicker(15 * time.Minute)
-		defer ticker.Stop()
+		rebuildTicker := time.NewTicker(60 * time.Minute)
+		defer rebuildTicker.Stop()
+		pruneTicker := time.NewTicker(5 * time.Minute)
+		defer pruneTicker.Stop()
 		for {
 			select {
 			case <-ctx.Done():
 				return
-			case <-ticker.C:
+			case <-rebuildTicker.C:
 				c.buildGraph()
+			case <-pruneTicker.C:
+				c.pruneGraph()
 			}
 		}
 	}()

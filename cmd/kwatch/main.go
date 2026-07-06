@@ -14,6 +14,7 @@ import (
 	"time"
 
 	"github.com/abahmed/kwatch/internal/alert"
+	"github.com/abahmed/kwatch/internal/audit"
 	"github.com/abahmed/kwatch/internal/client"
 	"github.com/abahmed/kwatch/internal/config"
 	"github.com/abahmed/kwatch/internal/constant"
@@ -126,6 +127,11 @@ func main() {
 	}
 	mfTracker := &massFailureTracker{pending: make(map[string]insight.MassFailure)}
 
+	auditLogger := audit.NewLogger(audit.Config{
+		Enabled: cfg.AuditLog.Enabled,
+		Output:  cfg.AuditLog.Output,
+	})
+
 	var correlator *correlation.Engine
 	correlator = correlation.NewEngine(correlation.Config{
 		Window:                     time.Duration(cfg.Correlation.Window) * time.Minute,
@@ -143,6 +149,7 @@ func main() {
 		SmartGroupingWindow:        time.Duration(cfg.SmartGrouping.WindowSeconds) * time.Second,
 		LifecycleHook: func(inc *model.Incident, action model.IncidentAction) {
 			if action != model.ActionSkip {
+				auditLogger.LogIncident(inc, action)
 				alertManager.NotifyIncident(inc, action, nil)
 			}
 			metrics.Default.ActiveIncidents.Store(int64(correlator.ActiveCount()))
@@ -223,6 +230,8 @@ func main() {
 	}
 
 	alertManager.SetAnalysisWriter(correlator.SetAnalysis)
+	correlator.SetAuditLogger(auditLogger)
+
 	healthServer.SetIncidentAPI(correlator)
 	healthServer.SetAlertManager(alertManager)
 	healthServer.SetDeadLetterLister(alertManager)
@@ -275,10 +284,14 @@ func main() {
 			for {
 				select {
 				case <-ctx.Done():
-					trySendIncidentSnapshot(incidentCh, correlator.SnapshotAll())
+					if snap := correlator.SnapshotAll(); len(snap) > 0 {
+						trySendIncidentSnapshot(incidentCh, snap)
+					}
 					return
 				case <-ticker.C:
-					trySendIncidentSnapshot(incidentCh, correlator.SnapshotAll())
+					if snap := correlator.SnapshotAll(); len(snap) > 0 {
+						trySendIncidentSnapshot(incidentCh, snap)
+					}
 				}
 			}
 		}()

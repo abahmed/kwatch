@@ -1221,8 +1221,8 @@ func TestSnapshotAllEmpty(t *testing.T) {
 		Window: 10 * time.Minute,
 	})
 	snap := e.SnapshotAll()
-	assert.NotNil(t, snap)
-	assert.Equal(t, 0, len(snap))
+	// No incidents processed so dirty=false and SnapshotAll returns nil
+	assert.Nil(t, snap)
 }
 
 func TestRestoreIncidentsBumpsLastSeen(t *testing.T) {
@@ -1692,7 +1692,8 @@ func TestSmartGroupingImageGlobal(t *testing.T) {
 	pg, ok := e.pendingGroups[gk]
 	e.mu.Unlock()
 	require.True(t, ok, "global rate_limit group must exist")
-	assert.Equal(t, 2, len(pg.entries))
+	// Both pods map to the same global key => single entry
+	assert.Equal(t, 1, len(pg.entries))
 }
 
 func TestSmartGroupingImageAuth(t *testing.T) {

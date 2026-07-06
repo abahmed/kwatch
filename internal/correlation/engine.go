@@ -10,6 +10,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/abahmed/kwatch/internal/audit"
 	"github.com/abahmed/kwatch/internal/enricher"
 	"github.com/abahmed/kwatch/internal/event"
 	"github.com/abahmed/kwatch/internal/metrics"
@@ -81,6 +82,17 @@ func IncidentKey(ev event.Event, owner string, cs *model.ContainerState) string 
 		switch r {
 		case "Error", "OOMKilled", "CrashLoopBackOff", "CrashLoopHighFrequency":
 			r = "CrashLoopHighFrequency"
+		}
+	}
+	// Cross-namespace dedup: for ImagePullBackOff with global scope (rate limits,
+	// timeouts, DNS, TLS errors), use the group key so the same underlying issue
+	// maps to a single incident regardless of namespace.
+	if r == "ImagePullBackOff" || r == "ErrImagePull" {
+		scope := classifyImagePullScope(ev.Message)
+		switch scope {
+		case "rate_limit", "pull_qps", "timeout", "conn_refused",
+			"net_unreachable", "dns", "tls":
+			return r + "|global|" + scope
 		}
 	}
 	return BuildKey(ev.Namespace, owner, r, "")
@@ -188,6 +200,8 @@ type Engine struct {
 	serviceLister       corev1lister.ServiceLister
 	cleanupCooldown     map[string]time.Time     // key → cooldown expiry; prevents resolve→recreate cycle
 	pendingGroups       map[string]*pendingGroup // computeGroupKey output → group buffer
+	auditLogger         *audit.AuditLogger
+	dirty               bool // true when state has changed since last SnapshotAll
 	now                 func() time.Time
 }
 
@@ -224,6 +238,7 @@ func NewEngine(cfg Config) *Engine {
 
 func (e *Engine) SetSeen(b map[string]map[string]int64) {
 	e.mu.Lock()
+	e.dirty = true
 	now := e.now()
 	ttl := e.config.BaselineTTL
 	if e.seen == nil {
@@ -304,6 +319,7 @@ func (e *Engine) isBaselined(key, podName string) bool {
 // ClearSeenForPod removes all baseline entries and cooldowns for the given pod.
 func (e *Engine) ClearSeenForPod(namespace, podName string) {
 	e.mu.Lock()
+	e.dirty = true
 	changed := false
 	for key, pods := range e.seen {
 		if !strings.HasPrefix(key, namespace+":") {
@@ -496,6 +512,9 @@ func computeGroupKey(r string, ev event.Event, owner string) string {
 		"NodeResourceHigh", "NodeResourceCritical":
 		return r + "|node|" + ev.NodeName
 
+	case "ServiceNoEndpoints":
+		return r + "|svc|" + ev.Namespace + "/" + ev.PodName
+
 	case "CreateContainerConfigError", "Unschedulable", "PodPending",
 		"SchedulingGated",
 		"RegistryUnavailable",
@@ -660,10 +679,19 @@ func (e *Engine) SetServiceLister(l corev1lister.ServiceLister) {
 	e.serviceLister = l
 }
 
+func (e *Engine) SetAuditLogger(l *audit.AuditLogger) {
+	e.mu.Lock()
+	defer e.mu.Unlock()
+	e.auditLogger = l
+}
+
 // SnapshotAll returns a deep copy of all non-resolved incidents keyed by ID.
 func (e *Engine) SnapshotAll() map[string]*model.Incident {
 	e.mu.Lock()
 	defer e.mu.Unlock()
+	if !e.dirty {
+		return nil
+	}
 	out := make(map[string]*model.Incident, len(e.state))
 	for key, inc := range e.state {
 		if inc.State == model.StateResolved {
@@ -671,6 +699,7 @@ func (e *Engine) SnapshotAll() map[string]*model.Incident {
 		}
 		out[key] = inc.Clone()
 	}
+	e.dirty = false
 	return out
 }
 
@@ -681,6 +710,7 @@ func (e *Engine) SnapshotAll() map[string]*model.Incident {
 func (e *Engine) RestoreIncidents(incidents map[string]*model.Incident) {
 	e.mu.Lock()
 	defer e.mu.Unlock()
+	e.dirty = true
 	if len(incidents) == 0 {
 		return
 	}
@@ -794,6 +824,7 @@ func (e *Engine) isOwnerHealthy(inc *model.Incident) bool {
 func (e *Engine) Process(ev event.Event, owner string, cs *model.ContainerState) (incident *model.Incident, action model.IncidentAction) {
 	e.mu.Lock()
 	defer e.mu.Unlock()
+	e.dirty = true
 	defer func() {
 		if incident != nil {
 			incident = incident.Clone()
@@ -815,6 +846,9 @@ func (e *Engine) Process(ev event.Event, owner string, cs *model.ContainerState)
 
 	// Baseline — skip for node events so the incident is always created
 	if res != "node" && e.isBaselined(key, ev.PodName) {
+		if e.auditLogger != nil {
+			e.auditLogger.LogSkip(&model.Incident{Key: key, Namespace: ev.Namespace, Reason: ev.Reason, ID: key}, "baseline")
+		}
 		return nil, model.ActionSkip
 	}
 
@@ -830,6 +864,9 @@ func (e *Engine) Process(ev event.Event, owner string, cs *model.ContainerState)
 					nodeInc.SuppressedOwners[owner]++
 				}
 			}
+			if e.auditLogger != nil {
+				e.auditLogger.LogSkip(&model.Incident{Key: key, Namespace: ev.Namespace, Reason: ev.Reason, ID: key, NodeName: ev.NodeName}, "node_inhibition")
+			}
 			return nil, model.ActionSkip
 		}
 		// Unschedulable pods (empty NodeName) — suppress when any node incident is active
@@ -843,6 +880,9 @@ func (e *Engine) Process(ev event.Event, owner string, cs *model.ContainerState)
 					nodeInc.SuppressedOwners[owner]++
 				}
 			}
+			if e.auditLogger != nil {
+				e.auditLogger.LogSkip(&model.Incident{Key: key, Namespace: ev.Namespace, Reason: ev.Reason, ID: key}, "node_inhibition")
+			}
 			return nil, model.ActionSkip
 		}
 	}
@@ -850,6 +890,9 @@ func (e *Engine) Process(ev event.Event, owner string, cs *model.ContainerState)
 	// Cooldown check — suppress re-creation after cleanup for still-broken resources
 	if expiry, ok := e.cleanupCooldown[key]; ok {
 		if e.now().Before(expiry) {
+			if e.auditLogger != nil {
+				e.auditLogger.LogSkip(&model.Incident{Key: key, Namespace: ev.Namespace, Reason: ev.Reason, ID: key}, "cooldown")
+			}
 			return nil, model.ActionSkip
 		}
 		delete(e.cleanupCooldown, key)
@@ -878,6 +921,9 @@ func (e *Engine) Process(ev event.Event, owner string, cs *model.ContainerState)
 					}
 				}
 				existing.LastSeen = now
+				if e.auditLogger != nil {
+					e.auditLogger.LogSkip(&model.Incident{Key: key, Namespace: ev.Namespace, Reason: ev.Reason, ID: key}, "cascading_suppression")
+				}
 				return nil, model.ActionSkip
 			}
 		}
@@ -992,7 +1038,12 @@ func (e *Engine) Process(ev event.Event, owner string, cs *model.ContainerState)
 	// Smart grouping: buffer same-reason incidents, suppress individual
 	// notification until the group window expires. Group key varies by
 	// reason and content (owner, node, signature, image, namespace).
-	if e.config.SmartGroupingWindow > 0 {
+	//
+	// If the incident has already been grouped once (NotifiedSig is set),
+	// skip re-grouping to avoid periodic re-notification for the same
+	// underlying condition (e.g. a service with no endpoints that keeps
+	// triggering on every informer resync).
+	if e.config.SmartGroupingWindow > 0 && inc.NotifiedSig == "" {
 		r := normalizeReason(ev.Reason)
 		gk := computeGroupKey(r, ev, owner)
 		pg, ok := e.pendingGroups[gk]
@@ -1096,6 +1147,7 @@ func (e *Engine) newIncident(ev event.Event, owner string, cs *model.ContainerSt
 
 func (e *Engine) MarkResolved(key string) {
 	e.mu.Lock()
+	e.dirty = true
 	inc, ok := e.state[key]
 	if !ok || inc.State == model.StateResolved || inc.State == model.StatePendingResolve {
 		e.mu.Unlock()
@@ -1143,6 +1195,7 @@ func (e *Engine) RemovePod(namespace, podName string) {
 	var baselineChanged bool
 
 	e.mu.Lock()
+	e.dirty = true
 	now := e.now()
 	for key, inc := range e.state {
 		if inc.Namespace != namespace {
@@ -1211,6 +1264,7 @@ func (e *Engine) ResolveByResource(resource, name string) {
 	var baselineChanged bool
 
 	e.mu.Lock()
+	e.dirty = true
 	now := e.now()
 	for key, inc := range e.state {
 		if inc.Resource == resource && inc.Name == name && inc.State != model.StateResolved {
@@ -1281,6 +1335,7 @@ func (e *Engine) StartCleanup(ctx context.Context) {
 
 func (e *Engine) cleanup() {
 	e.mu.Lock()
+	e.dirty = true
 	now := e.now()
 	type transition struct {
 		inc    *model.Incident
@@ -1331,6 +1386,7 @@ func (e *Engine) checkLifecycle() {
 	var baselineChanged bool
 
 	e.mu.Lock()
+	e.dirty = true
 	now := e.now()
 
 	// pending resolve finalization
@@ -1485,9 +1541,31 @@ func pluralize(s string, n int) string {
 	return s + "s"
 }
 
+// nodeLevelReasons are incident reasons that indicate a node-level problem.
+// Pod-level reasons (Error, CrashLoopBackOff, etc.) should NOT be scoped
+// as "node" even when all entries share the same node, because the message
+// would misleadingly imply the node is the root cause.
+var nodeLevelReasons = map[string]bool{
+	"NodeNotReady":       true,
+	"MemoryPressure":     true,
+	"DiskPressure":       true,
+	"PIDPressure":        true,
+	"NetworkUnavailable": true,
+	"NodeResourceHigh":   true,
+	"NodeResourceCritical": true,
+	"ContainerStatusUnknown": true,
+	"Evicted":            true,
+	"Preempting":         true,
+}
+
+func isNodeLevelReason(r string) bool {
+	return nodeLevelReasons[r]
+}
+
 func detectGroupScope(entries []groupEntry) string {
+	r := entries[0].reason
 	nodes := uniqueNonEmptyStr(entries, func(e groupEntry) string { return e.nodeName })
-	if len(nodes) == 1 {
+	if len(nodes) == 1 && isNodeLevelReason(r) {
 		return "node"
 	}
 	sigs := uniqueNonEmptyStr(entries, func(e groupEntry) string { return e.logSignature })

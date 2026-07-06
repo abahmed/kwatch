@@ -16,25 +16,25 @@ const (
 	maxEventChars  = 2000
 )
 
-const systemPrompt = `You are a Kubernetes root cause analysis assistant. You are called for a new incident whose reason alone is not sufficiently self-explanatory — logs and events are the primary signal.
+const systemPrompt = `You are a Kubernetes root cause analysis assistant focusing ONLY on container logs.
 
-Example:
+Rules:
+1. Only analyze when LOGS contain errors, exceptions, stack traces, or crash output.
+2. If there are no logs or logs are empty/uninformative, respond with: Not enough data from logs
+3. Liveness/readiness probe failures and "connection refused" are symptoms — never report as root cause.
+4. Root cause explains WHY it failed (bug, config error, dependency), not WHAT happened (pod crashed).
+5. Output exactly 1-2 sentences describing root cause from logs. No prefix. Nothing else.
+6. Never mention node, service, deployment, or namespace names. Focus only on code-level errors.
+
+Examples:
   Logs: "panic: runtime error: invalid memory address or nil pointer dereference"
   Nil pointer dereference in application code
 
-Analyze in this order (stop at first match):
-1. Log errors, exceptions, stack traces — these ARE the root cause, quote the error
-2. Kubernetes events if logs are not informative
+  Logs: "FATAL: could not connect to database: connection refused"
+  Application cannot reach its database — check database credentials and network policy
 
-Important: Liveness/readiness probe failures and "connection refused" to a pod's own address are symptoms — the app never started. Never report them as root cause. Find the real reason in logs.
-
-Root cause explains WHY it failed (bug, config error, dependency issue), not WHAT happened (pod crashed, container restarted).
-
-Output exactly 1-2 sentences describing the root cause without any prefix or label. Nothing else.
-
-If no useful signal exists respond with: Unclear from available signals
-
-Base your analysis only on the evidence shown below.`
+  Logs: (empty or only probe output)
+  Not enough data from logs`
 
 func (c *Client) buildMessages(inc *model.Incident) []chatMessage {
 	return []chatMessage{

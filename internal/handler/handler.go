@@ -87,6 +87,7 @@ type Handler interface {
 	ClearSeenForPod(namespace, podName string)
 	ReportStartupSummary(suppressed map[string]int)
 	ProcessNodeResourceOvercommit(reason, nodeName, hint string)
+	ProcessClusterAutoscalerEvent(ev *corev1.Event)
 }
 
 type handler struct {
@@ -128,6 +129,10 @@ type handler struct {
 	cjMu                   sync.Mutex
 	firstNodePressure      map[string]time.Time
 	npMu                   sync.Mutex
+	serviceNoEndpointSince map[string]time.Time
+	serviceMu              sync.Mutex
+	firstCaBlocked         map[string]time.Time
+	caMu                   sync.Mutex
 	secretLister           corev1lister.SecretLister
 	netpolLister           networkingv1lister.NetworkPolicyLister
 	ingressLister          networkingv1lister.IngressLister
@@ -201,14 +206,16 @@ func NewHandler(
 		containerEnrichers:     containerEnrichers,
 		correlator:             correlator,
 		alertManager:           alertManager,
-		firstMaxedHPAs:         make(map[string]time.Time),
-		firstScalingErrorHPAs:  make(map[string]time.Time),
-		firstUnavailableSts:    make(map[string]time.Time),
-		firstPdbViolation:      make(map[string]time.Time),
-		firstUnavailableDeploy: make(map[string]time.Time),
-		firstUnavailableDS:     make(map[string]time.Time),
-		firstSuspendedCJs:      make(map[string]time.Time),
-		firstNodePressure:      make(map[string]time.Time),
+		firstMaxedHPAs:          make(map[string]time.Time),
+		firstScalingErrorHPAs:   make(map[string]time.Time),
+		firstUnavailableSts:     make(map[string]time.Time),
+		firstPdbViolation:       make(map[string]time.Time),
+		firstUnavailableDeploy:  make(map[string]time.Time),
+		firstUnavailableDS:      make(map[string]time.Time),
+		firstSuspendedCJs:       make(map[string]time.Time),
+		firstNodePressure:       make(map[string]time.Time),
+		serviceNoEndpointSince:  make(map[string]time.Time),
+		firstCaBlocked:         make(map[string]time.Time),
 		oomTracker:             oomTr,
 		now:                    time.Now,
 	}
