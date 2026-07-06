@@ -93,37 +93,36 @@ func (s *Discord) SendEvent(ev *event.Event) error {
 	klog.V(4).InfoS("sending to discord event", "event", ev)
 
 	// initialize fields with basic info
-	fields := []*discordgo.MessageEmbedField{
-		{
-			Name:   "Cluster",
-			Value:  s.appCfg.ClusterName,
-			Inline: true,
-		},
-		{
-			Name:   "Name",
-			Value:  ev.PodName,
-			Inline: true,
-		},
-		{
-			Name:   "Container",
-			Value:  ev.ContainerName,
-			Inline: true,
-		},
-		{
-			Name:   "Namespace",
-			Value:  ev.Namespace,
-			Inline: true,
-		},
-		{
-			Name:   "Node",
-			Value:  ev.NodeName,
-			Inline: true,
-		},
-		{
-			Name:   "Reason",
-			Value:  ev.Reason,
-			Inline: true,
-		},
+	fields := []*discordgo.MessageEmbedField{}
+	if s.appCfg.ClusterName != "" {
+		fields = append(fields, &discordgo.MessageEmbedField{
+			Name: "Cluster", Value: s.appCfg.ClusterName, Inline: true,
+		})
+	}
+	if ev.PodName != "" {
+		fields = append(fields, &discordgo.MessageEmbedField{
+			Name: "Name", Value: ev.PodName, Inline: true,
+		})
+	}
+	if ev.ContainerName != "" {
+		fields = append(fields, &discordgo.MessageEmbedField{
+			Name: "Container", Value: ev.ContainerName, Inline: true,
+		})
+	}
+	if ev.Namespace != "" {
+		fields = append(fields, &discordgo.MessageEmbedField{
+			Name: "Namespace", Value: ev.Namespace, Inline: true,
+		})
+	}
+	if ev.NodeName != "" {
+		fields = append(fields, &discordgo.MessageEmbedField{
+			Name: "Node", Value: ev.NodeName, Inline: true,
+		})
+	}
+	if ev.Reason != "" {
+		fields = append(fields, &discordgo.MessageEmbedField{
+			Name: "Reason", Value: ev.Reason, Inline: true,
+		})
 	}
 
 	// add events part if it exists

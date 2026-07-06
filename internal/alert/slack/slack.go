@@ -277,38 +277,52 @@ func (s *Slack) sendIncidentWithToken(inc *model.Incident, action model.Incident
 		if err != nil {
 			return err
 		}
-		s.mu.Lock()
-		if s.threadMap == nil {
-			s.threadMap = make(map[string]string)
-		}
-		if s.maxThreadMapSize <= 0 || len(s.threadMap) < s.maxThreadMapSize {
-			s.threadMap[key] = ts
-		}
-		s.mu.Unlock()
+		s.saveThread(key, ts)
 		return nil
 
 	case model.ActionUpdate:
-		s.mu.Lock()
-		threadTS, ok := s.threadMap[key]
-		s.mu.Unlock()
-		if !ok {
-			threadTS = ""
-		}
+		threadTS := s.loadThread(key)
 		blocks := buildIncidentUpdateBlocks(inc)
 		_, err := post(blocks, threadTS)
 		return err
 
 	case model.ActionResolved:
-		s.mu.Lock()
-		threadTS, _ := s.threadMap[key]
-		delete(s.threadMap, key)
-		s.mu.Unlock()
+		threadTS := s.popThread(key)
 		blocks := buildIncidentResolvedBlocks(inc)
 		_, err := post(blocks, threadTS)
 		return err
 	}
 
 	return nil
+}
+
+func (s *Slack) saveThread(key, ts string) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.threadMap == nil {
+		s.threadMap = make(map[string]string)
+	}
+	if s.maxThreadMapSize <= 0 || len(s.threadMap) < s.maxThreadMapSize {
+		s.threadMap[key] = ts
+	}
+}
+
+func (s *Slack) loadThread(key string) string {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	ts, ok := s.threadMap[key]
+	if !ok {
+		return ""
+	}
+	return ts
+}
+
+func (s *Slack) popThread(key string) string {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	ts, _ := s.threadMap[key]
+	delete(s.threadMap, key)
+	return ts
 }
 
 func (s *Slack) postBlocks(blocks *slackClient.Blocks, threadTS string) (string, error) {
@@ -328,6 +342,32 @@ func (s *Slack) postBlocks(blocks *slackClient.Blocks, threadTS string) (string,
 }
 
 func buildIncidentBlocks(inc *model.Incident, appCfg *config.App) *slackClient.Blocks {
+	duration := inc.LastSeen.Sub(inc.FirstSeen).Round(time.Minute)
+
+	blocks := []slackClient.Block{
+		markdownSection(fmt.Sprintf("🚨 *%s*", inc.Reason)),
+	}
+
+	fields := []*slackClient.TextBlockObject{
+		markdownF("*Cluster*\n%s", appCfg.ClusterName),
+		markdownF("*Name*\n%s", inc.Name),
+	}
+	if inc.OwnerKind != "" {
+		fields = append(fields, markdownF("*Kind*\n%s", inc.OwnerKind))
+	}
+	if inc.Namespace != "" {
+		fields = append(fields, markdownF("*Namespace*\n%s", inc.Namespace))
+	}
+	containerName := containerSummary(inc)
+	if containerName != "" {
+		fields = append(fields, markdownF("*Container*\n%s", containerName))
+	}
+	fields = append(fields, markdownF("*Reason*\n%s", inc.Reason))
+	if inc.RestartCount > 0 {
+		fields = append(fields, markdownF("*Restarts*\n%d", inc.RestartCount))
+	}
+	fields = append(fields, markdownF("*Count*\n%d", inc.Count))
+
 	resources := make([]string, 0, len(inc.Resources))
 	for r := range inc.Resources {
 		resources = append(resources, r)
@@ -336,37 +376,23 @@ func buildIncidentBlocks(inc *model.Incident, appCfg *config.App) *slackClient.B
 	if len(resourcesStr) > 200 {
 		resourcesStr = resourcesStr[:200] + "..."
 	}
-	duration := inc.LastSeen.Sub(inc.FirstSeen).Round(time.Minute)
-	hint := inc.Hint
-	if hint != "" {
-		hint = "\n💡 " + hint
+	if len(resources) > 0 || inc.PeakResources > 0 {
+		peak := ""
+		if inc.PeakResources > 0 {
+			peak = fmt.Sprintf(" (Peak: %d)", inc.PeakResources)
+		}
+		fields = append(fields, markdownF("*Resources%s*\n%s", peak, resourcesStr))
 	}
 
-	title := "🚨 Incident"
-	text := constant.DefaultText
+	fields = append(fields, markdownF("*Duration*\n%s", duration))
 
-	blocks := []slackClient.Block{
-		markdownSection(title),
-		plainSection(text),
-		slackClient.SectionBlock{
-			Type: "section",
-			Fields: []*slackClient.TextBlockObject{
-				markdownF("*Cluster*\n%s", appCfg.ClusterName),
-				markdownF("*Name*\n%s", inc.Name),
-				markdownF("*Kind*\n%s", inc.OwnerKind),
-				markdownF("*Namespace*\n%s", inc.Namespace),
-				markdownF("*Container*\n%s", containerSummary(inc)),
-				markdownF("*Reason*\n%s", inc.Reason),
-				markdownF("*Restarts*\n%d", inc.RestartCount),
-				markdownF("*Count*\n%d", inc.Count),
-				markdownF("*Resources (Peak: %d)*\n%s", inc.PeakResources, resourcesStr),
-				markdownF("*Duration*\n%s", duration),
-			},
-		},
-	}
+	blocks = append(blocks, slackClient.SectionBlock{
+		Type:   "section",
+		Fields: fields,
+	})
 
-	if hint != "" {
-		blocks = append(blocks, markdownSection(hint))
+	if inc.Hint != "" {
+		blocks = append(blocks, markdownSection("💡 "+inc.Hint))
 	}
 
 	if inc.Analysis != "" {
@@ -399,23 +425,29 @@ func buildIncidentBlocks(inc *model.Incident, appCfg *config.App) *slackClient.B
 }
 
 func buildIncidentUpdateBlocks(inc *model.Incident) *slackClient.Blocks {
-	resources := make([]string, 0, len(inc.Resources))
-	for r := range inc.Resources {
-		resources = append(resources, r)
-	}
-	resourcesStr := strings.Join(resources, ", ")
-	if len(resourcesStr) > 200 {
-		resourcesStr = resourcesStr[:200] + "..."
-	}
 	duration := inc.LastSeen.Sub(inc.FirstSeen).Round(time.Minute)
 
-	text := fmt.Sprintf(
-		"🔄 Update — Container: %s | Count: %d | Restarts: %d | Resources: %s | Duration: %s",
-		containerSummary(inc), inc.Count, inc.RestartCount, resourcesStr, duration,
-	)
+	header := fmt.Sprintf("🔄 *%s*", inc.Reason)
+	if inc.Name != "" {
+		header += " — " + inc.Name
+	}
+	if inc.Namespace != "" {
+		header += fmt.Sprintf(" (%s)", inc.Namespace)
+	}
+
+	var infoParts []string
+	containerName := containerSummary(inc)
+	if containerName != "" {
+		infoParts = append(infoParts, fmt.Sprintf("Container: %s", containerName))
+	}
+	infoParts = append(infoParts, fmt.Sprintf("Count: %d", inc.Count))
+	infoParts = append(infoParts, fmt.Sprintf("Duration: %s", duration))
+	if inc.PeakResources > 0 {
+		infoParts = append(infoParts, fmt.Sprintf("Peak: %d %s", inc.PeakResources, resourcePlural(inc)))
+	}
 
 	blocks := []slackClient.Block{
-		markdownSection(text),
+		markdownSection(header + "\n" + strings.Join(infoParts, " · ")),
 	}
 
 	if inc.IncludeEvents {
@@ -446,10 +478,24 @@ func buildIncidentUpdateBlocks(inc *model.Incident) *slackClient.Blocks {
 func buildIncidentResolvedBlocks(inc *model.Incident) *slackClient.Blocks {
 	duration := inc.LastSeen.Sub(inc.FirstSeen).Round(time.Minute)
 
-	text := fmt.Sprintf(
-		"✅ *Resolved* — Container: %s\nDuration: %s | Total events: %d | Peak resources: %d",
-		containerSummary(inc), duration, inc.Count, inc.PeakResources,
-	)
+	header := fmt.Sprintf("✅ *Resolved* — *%s*", inc.Reason)
+	if inc.Resource != "" && inc.Name != "" {
+		header += fmt.Sprintf(" in %s/%s", inc.Resource, inc.Name)
+	} else if inc.Name != "" {
+		header += " — " + inc.Name
+	}
+	if inc.Namespace != "" {
+		header += fmt.Sprintf(" (%s)", inc.Namespace)
+	}
+
+	var infoParts []string
+	infoParts = append(infoParts, fmt.Sprintf("Duration: %s", duration))
+	infoParts = append(infoParts, fmt.Sprintf("Total events: %d", inc.Count))
+	if inc.PeakResources > 0 {
+		infoParts = append(infoParts, fmt.Sprintf("Peak: %d %s", inc.PeakResources, resourcePlural(inc)))
+	}
+
+	text := header + "\n" + strings.Join(infoParts, " · ")
 
 	return &slackClient.Blocks{
 		BlockSet: []slackClient.Block{
@@ -461,54 +507,139 @@ func buildIncidentResolvedBlocks(inc *model.Incident) *slackClient.Blocks {
 func formatIncidentText(inc *model.Incident, action model.IncidentAction) string {
 	switch action {
 	case model.ActionCreate:
-		duration := inc.LastSeen.Sub(inc.FirstSeen).Round(time.Minute)
-		analysis := ""
-		if inc.Analysis != "" {
-			analysis = "\n🤖 Likely cause: " + inc.Analysis
-		}
-		text := fmt.Sprintf(
-			"🚨 Incident: %s (%s)\nNamespace: %s\nContainer: %s\nReason: %s\nRestarts: %d\nHint: %s%s\nPeak: %d resource(s)\nCount: %d\nDuration: %s",
-			inc.Name, inc.OwnerKind, inc.Namespace, containerSummary(inc),
-			inc.Reason, inc.RestartCount, inc.Hint, analysis,
-			inc.PeakResources, inc.Count, duration,
-		)
-		if inc.IncludeEvents {
-			if ev := strings.TrimSpace(inc.Events); len(ev) > 0 {
-				text += "\n\nEvents:\n" + ev
-			}
-		}
-		if inc.IncludeLogs {
-			if logs := strings.TrimSpace(inc.Logs); len(logs) > 0 {
-				text += "\n\nLogs:\n" + logs
-			}
-		}
-		return text
+		return formatCreateText(inc)
 	case model.ActionUpdate:
-		duration := inc.LastSeen.Sub(inc.FirstSeen).Round(time.Minute)
-		text := fmt.Sprintf(
-			"🔄 Update: %s | Container: %s | Count: %d | Duration: %s | Peak: %d",
-			inc.Name, containerSummary(inc), inc.Count, duration, inc.PeakResources,
-		)
-		if inc.IncludeEvents {
-			if ev := strings.TrimSpace(inc.Events); len(ev) > 0 {
-				text += "\n\nEvents:\n" + ev
-			}
-		}
-		if inc.IncludeLogs {
-			if logs := strings.TrimSpace(inc.Logs); len(logs) > 0 {
-				text += "\n\nLogs:\n" + logs
-			}
-		}
-		return text
+		return formatUpdateText(inc)
 	case model.ActionResolved:
-		duration := inc.LastSeen.Sub(inc.FirstSeen).Round(time.Minute)
-		return fmt.Sprintf(
-			"✅ Resolved: %s | Container: %s | Duration: %s | Total events: %d | Peak resources: %d",
-			inc.Name, containerSummary(inc), duration, inc.Count, inc.PeakResources,
-		)
+		return formatResolvedText(inc)
 	default:
 		return ""
 	}
+}
+
+func formatCreateText(inc *model.Incident) string {
+	duration := inc.LastSeen.Sub(inc.FirstSeen).Round(time.Minute)
+
+	var parts []string
+
+	header := fmt.Sprintf("🚨 %s", inc.Reason)
+	if inc.Resource != "" && inc.Name != "" {
+		header += fmt.Sprintf(" in %s/%s", inc.Resource, inc.Name)
+	} else if inc.Name != "" {
+		header += " — " + inc.Name
+	}
+	if inc.Namespace != "" {
+		header += fmt.Sprintf(" (%s)", inc.Namespace)
+	}
+	parts = append(parts, header)
+
+	var infoParts []string
+	containerName := containerSummary(inc)
+	if containerName != "" {
+		infoParts = append(infoParts, fmt.Sprintf("Container: %s", containerName))
+	}
+	if inc.RestartCount > 0 {
+		infoParts = append(infoParts, fmt.Sprintf("Restarts: %d", inc.RestartCount))
+	}
+	infoParts = append(infoParts, fmt.Sprintf("Duration: %s", duration))
+	parts = append(parts, strings.Join(infoParts, " · "))
+
+	var countParts []string
+	countParts = append(countParts, fmt.Sprintf("Count: %d", inc.Count))
+	if inc.PeakResources > 0 {
+		countParts = append(countParts, fmt.Sprintf("Peak: %d %s", inc.PeakResources, resourcePlural(inc)))
+	}
+	parts = append(parts, strings.Join(countParts, " · "))
+
+	if inc.Hint != "" {
+		parts = append(parts, "💡 "+inc.Hint)
+	}
+
+	if inc.IncludeLogs {
+		if logs := strings.TrimSpace(inc.Logs); len(logs) > 0 {
+			parts = append(parts, "\nLogs:\n"+logs)
+		}
+	}
+
+	if inc.IncludeEvents {
+		if ev := strings.TrimSpace(inc.Events); len(ev) > 0 {
+			parts = append(parts, "\nEvents:\n"+ev)
+		}
+	}
+
+	if inc.Analysis != "" {
+		parts = append(parts, "🤖 "+inc.Analysis)
+	}
+
+	return strings.Join(parts, "\n")
+}
+
+func formatUpdateText(inc *model.Incident) string {
+	duration := inc.LastSeen.Sub(inc.FirstSeen).Round(time.Minute)
+
+	var parts []string
+
+	header := fmt.Sprintf("🔄 %s", inc.Reason)
+	if inc.Name != "" {
+		header += " — " + inc.Name
+	}
+	if inc.Namespace != "" {
+		header += fmt.Sprintf(" (%s)", inc.Namespace)
+	}
+	parts = append(parts, header)
+
+	var infoParts []string
+	containerName := containerSummary(inc)
+	if containerName != "" {
+		infoParts = append(infoParts, fmt.Sprintf("Container: %s", containerName))
+	}
+	infoParts = append(infoParts, fmt.Sprintf("Count: %d", inc.Count))
+	infoParts = append(infoParts, fmt.Sprintf("Duration: %s", duration))
+	if inc.PeakResources > 0 {
+		infoParts = append(infoParts, fmt.Sprintf("Peak: %d %s", inc.PeakResources, resourcePlural(inc)))
+	}
+	parts = append(parts, strings.Join(infoParts, " · "))
+
+	if inc.IncludeLogs {
+		if logs := strings.TrimSpace(inc.Logs); len(logs) > 0 {
+			parts = append(parts, "\nLogs:\n"+logs)
+		}
+	}
+
+	if inc.IncludeEvents {
+		if ev := strings.TrimSpace(inc.Events); len(ev) > 0 {
+			parts = append(parts, "\nEvents:\n"+ev)
+		}
+	}
+
+	return strings.Join(parts, "\n")
+}
+
+func formatResolvedText(inc *model.Incident) string {
+	duration := inc.LastSeen.Sub(inc.FirstSeen).Round(time.Minute)
+
+	var parts []string
+
+	header := fmt.Sprintf("✅ Resolved — %s", inc.Reason)
+	if inc.Resource != "" && inc.Name != "" {
+		header += fmt.Sprintf(" in %s/%s", inc.Resource, inc.Name)
+	} else if inc.Name != "" {
+		header += " — " + inc.Name
+	}
+	if inc.Namespace != "" {
+		header += fmt.Sprintf(" (%s)", inc.Namespace)
+	}
+	parts = append(parts, header)
+
+	var infoParts []string
+	infoParts = append(infoParts, fmt.Sprintf("Duration: %s", duration))
+	infoParts = append(infoParts, fmt.Sprintf("Total events: %d", inc.Count))
+	if inc.PeakResources > 0 {
+		infoParts = append(infoParts, fmt.Sprintf("Peak: %d %s", inc.PeakResources, resourcePlural(inc)))
+	}
+	parts = append(parts, strings.Join(infoParts, " · "))
+
+	return strings.Join(parts, "\n")
 }
 
 func containerSummary(inc *model.Incident) string {
@@ -521,6 +652,13 @@ func containerSummary(inc *model.Incident) string {
 		return strings.Join(names, ", ")
 	}
 	return inc.ContainerName
+}
+
+func resourcePlural(inc *model.Incident) string {
+	if inc.Resource != "" {
+		return inc.Resource + "s"
+	}
+	return "resources"
 }
 
 func chunks(s string, chunkSize int) []string {

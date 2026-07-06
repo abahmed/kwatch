@@ -5,8 +5,8 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
-
 	"net/http"
+	"strings"
 
 	"github.com/abahmed/kwatch/internal/config"
 	"github.com/abahmed/kwatch/internal/constant"
@@ -132,15 +132,8 @@ func (m *Mattermost) buildMessage(e *event.Event, msg *string) ([]byte, error) {
 	}
 
 	if e != nil {
-		logs := constant.DefaultLogs
-		if len(e.Logs) > 0 {
-			logs = (e.Logs)
-		}
-
-		events := constant.DefaultEvents
-		if len(e.Events) > 0 {
-			events = (e.Events)
-		}
+		logs := strings.TrimSpace(e.Logs)
+		events := strings.TrimSpace(e.Events)
 
 		// use custom title if it's provided, otherwise use default
 		title := m.title
@@ -154,52 +147,37 @@ func (m *Mattermost) buildMessage(e *event.Event, msg *string) ([]byte, error) {
 			text = constant.DefaultText
 		}
 
+		mmFields := []mmField{}
+		if m.appCfg.ClusterName != "" {
+			mmFields = append(mmFields, mmField{Title: "Cluster", Value: m.appCfg.ClusterName, Short: true})
+		}
+		if e.PodName != "" {
+			mmFields = append(mmFields, mmField{Title: "Name", Value: e.PodName, Short: true})
+		}
+		if e.ContainerName != "" {
+			mmFields = append(mmFields, mmField{Title: "Container", Value: e.ContainerName, Short: true})
+		}
+		if e.Namespace != "" {
+			mmFields = append(mmFields, mmField{Title: "Namespace", Value: e.Namespace, Short: true})
+		}
+		if e.NodeName != "" {
+			mmFields = append(mmFields, mmField{Title: "Node", Value: e.NodeName, Short: true})
+		}
+		if e.Reason != "" {
+			mmFields = append(mmFields, mmField{Title: "Reason", Value: e.Reason, Short: true})
+		}
+		if logs != "" {
+			mmFields = append(mmFields, mmField{Title: ":memo: Logs", Value: "```\n" + logs + "\n```", Short: false})
+		}
+		if events != "" {
+			mmFields = append(mmFields, mmField{Title: ":mag: Events", Value: "```\n" + events + " \n```", Short: false})
+		}
+
 		payload.Attachments = []mmAttachment{
 			{
-				Title: title,
-				Text:  text,
-				Fields: []mmField{
-					{
-						Title: "Cluster",
-						Value: m.appCfg.ClusterName,
-						Short: true,
-					},
-					{
-						Title: "Name",
-						Value: e.PodName,
-						Short: true,
-					},
-					{
-						Title: "Container",
-						Value: e.ContainerName,
-						Short: true,
-					},
-					{
-						Title: "Namespace",
-						Value: e.Namespace,
-						Short: true,
-					},
-					{
-						Title: "Node",
-						Value: e.NodeName,
-						Short: true,
-					},
-					{
-						Title: "Reason",
-						Value: e.Reason,
-						Short: true,
-					},
-					{
-						Title: ":mag: Events",
-						Value: "```\n" + events + " \n```",
-						Short: false,
-					},
-					{
-						Title: ":memo: Logs",
-						Value: "```\n" + logs + "\n```",
-						Short: false,
-					},
-				},
+				Title:  title,
+				Text:   text,
+				Fields: mmFields,
 			},
 		}
 	}

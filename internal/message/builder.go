@@ -35,17 +35,27 @@ func (b *Builder) Build(inc *model.Incident, action model.IncidentAction, ins *i
 func (b *Builder) buildCreate(inc *model.Incident, ins *insight.Insight) string {
 	var sections []string
 
-	sections = append(sections, fmt.Sprintf("Incident: %s | Severity: %s",
-		inc.Name, severityLabel(inc.Severity)))
+	header := fmt.Sprintf("%s", inc.Reason)
+	if inc.Resource != "" && inc.Name != "" {
+		header += fmt.Sprintf(" in %s/%s", inc.Resource, inc.Name)
+	} else if inc.Name != "" {
+		header += " — " + inc.Name
+	}
+	if inc.Namespace != "" {
+		header += fmt.Sprintf(" (%s)", inc.Namespace)
+	}
+	if s := severityLabel(inc.Severity); s != "normal" {
+		header += " · " + s
+	}
+	sections = append(sections, header)
 
-	sections = append(sections, fmt.Sprintf("Namespace: %s | Resource: %s | Reason: %s",
-		inc.Namespace, inc.Resource, inc.Reason))
-
-	sections = append(sections, fmt.Sprintf("Count: %d | Duration: %s",
-		inc.Count, durationStr(inc.FirstSeen, inc.LastSeen)))
+	var infoParts []string
+	infoParts = append(infoParts, fmt.Sprintf("Count: %d", inc.Count))
+	infoParts = append(infoParts, fmt.Sprintf("Duration: %s", durationStr(inc.FirstSeen, inc.LastSeen)))
+	sections = append(sections, strings.Join(infoParts, " · "))
 
 	if inc.Hint != "" {
-		sections = append(sections, "Hint: "+inc.Hint)
+		sections = append(sections, "💡 "+inc.Hint)
 	}
 
 	if ins != nil {
@@ -67,7 +77,7 @@ func (b *Builder) buildCreate(inc *model.Incident, ins *insight.Insight) string 
 	}
 
 	if inc.Runbook != "" {
-		sections = append(sections, "Runbook: "+inc.Runbook)
+		sections = append(sections, "📖 Runbook: "+inc.Runbook)
 	}
 
 	if inc.Resource == "pod" && len(inc.Resources) > 0 {
@@ -76,7 +86,7 @@ func (b *Builder) buildCreate(inc *model.Incident, ins *insight.Insight) string 
 		if inc.ContainerName != "" {
 			cmd = fmt.Sprintf("kubectl -n %s logs %s -c %s --previous", inc.Namespace, pod, inc.ContainerName)
 		}
-		sections = append(sections, "Investigate: "+cmd)
+		sections = append(sections, "🔍 "+cmd)
 	}
 
 	return strings.Join(sections, "\n")
@@ -85,14 +95,19 @@ func (b *Builder) buildCreate(inc *model.Incident, ins *insight.Insight) string 
 func (b *Builder) buildUpdate(inc *model.Incident, ins *insight.Insight) string {
 	var sections []string
 
-	sections = append(sections, fmt.Sprintf("Update: %s | Severity: %s",
-		inc.Name, severityLabel(inc.Severity)))
+	header := fmt.Sprintf("Update — %s", inc.Reason)
+	if inc.Name != "" {
+		header += " — " + inc.Name
+	}
+	if inc.Namespace != "" {
+		header += fmt.Sprintf(" (%s)", inc.Namespace)
+	}
+	sections = append(sections, header)
 
-	sections = append(sections, fmt.Sprintf("Namespace: %s | Resource: %s | Reason: %s",
-		inc.Namespace, inc.Resource, inc.Reason))
-
-	sections = append(sections, fmt.Sprintf("Count: %d | Duration: %s",
-		inc.Count, durationStr(inc.FirstSeen, inc.LastSeen)))
+	var infoParts []string
+	infoParts = append(infoParts, fmt.Sprintf("Count: %d", inc.Count))
+	infoParts = append(infoParts, fmt.Sprintf("Duration: %s", durationStr(inc.FirstSeen, inc.LastSeen)))
+	sections = append(sections, strings.Join(infoParts, " · "))
 
 	if ins != nil && ins.Cause != "" {
 		sections = append(sections, "Likely cause: "+ins.Cause)
@@ -102,8 +117,18 @@ func (b *Builder) buildUpdate(inc *model.Incident, ins *insight.Insight) string 
 }
 
 func (b *Builder) buildResolved(inc *model.Incident) string {
-	return fmt.Sprintf("Resolved: %s | Namespace: %s | Resource: %s | Reason: %s | Duration: %s | Events: %d",
-		inc.Name, inc.Namespace, inc.Resource, inc.Reason,
+	header := fmt.Sprintf("Resolved — %s", inc.Reason)
+	if inc.Resource != "" && inc.Name != "" {
+		header += fmt.Sprintf(" in %s/%s", inc.Resource, inc.Name)
+	} else if inc.Name != "" {
+		header += " — " + inc.Name
+	}
+	if inc.Namespace != "" {
+		header += fmt.Sprintf(" (%s)", inc.Namespace)
+	}
+
+	return fmt.Sprintf("%s\nDuration: %s · Total events: %d",
+		header,
 		durationStr(inc.FirstSeen, inc.LastSeen), inc.Count)
 }
 

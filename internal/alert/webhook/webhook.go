@@ -141,19 +141,14 @@ func (w *Webhook) SendEvent(ev *event.Event) error {
 func (w *Webhook) buildRequestBody(
 	ev *event.Event,
 ) []byte {
-	eventsText := "No events captured"
-	logsText := "No logs captured"
-
-	// add events part if it exists
-	events := strings.TrimSpace(ev.Events)
-	if len(events) > 0 {
-		eventsText = k8s.JsonEscape(ev.Events)
+	eventsText := ""
+	if ev.IncludeEvents {
+		eventsText = strings.TrimSpace(ev.Events)
 	}
 
-	// add logs part if it exists
-	logs := strings.TrimSpace(ev.Logs)
-	if len(logs) > 0 {
-		logsText = k8s.JsonEscape(ev.Logs)
+	logsText := ""
+	if ev.IncludeLogs {
+		logsText = strings.TrimSpace(ev.Logs)
 	}
 
 	postBody, err := json.Marshal(map[string]interface{}{

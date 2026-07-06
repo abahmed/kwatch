@@ -258,13 +258,14 @@ func TestFormatIncidentMessage(t *testing.T) {
 	}
 
 	msg := formatIncidentMessage(inc, model.ActionCreate, 100, nil)
-	assert.Contains(t, msg, "Incident")
-	assert.Contains(t, msg, "deploy")
 	assert.Contains(t, msg, "CrashLoopBackOff")
-	assert.Contains(t, msg, "Peak: 2 resource")
+	assert.Contains(t, msg, "deploy")
+	assert.Contains(t, msg, "pod")
+	assert.Contains(t, msg, "Peak: 2 pods")
 
 	msgUpdate := formatIncidentMessage(inc, model.ActionUpdate, 100, nil)
-	assert.Contains(t, msgUpdate, "Update")
+	assert.Contains(t, msgUpdate, "CrashLoopBackOff")
+	assert.Contains(t, msgUpdate, "Count: 2")
 }
 
 func TestFormatIncidentMessageWithLogsEvents(t *testing.T) {

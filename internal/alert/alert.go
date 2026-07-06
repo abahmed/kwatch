@@ -1339,6 +1339,13 @@ func containerDisplayName(inc *model.Incident) string {
 	return ""
 }
 
+func resourcePlural(inc *model.Incident) string {
+	if inc.Resource != "" {
+		return inc.Resource + "s"
+	}
+	return "resources"
+}
+
 func formatCreateMessage(inc *model.Incident, maxLines int) string {
 	duration := inc.LastSeen.Sub(inc.FirstSeen).Round(time.Minute)
 
@@ -1347,52 +1354,85 @@ func formatCreateMessage(inc *model.Incident, maxLines int) string {
 		severity = "normal"
 	}
 
+	parts := buildCreateSections(inc, duration, severity, maxLines)
+	return strings.Join(parts, "\n")
+}
+
+func buildCreateSections(inc *model.Incident, duration time.Duration, severity string, maxLines int) []string {
+	var parts []string
+
+	header := fmt.Sprintf("🚨 %s", inc.Reason)
+	if inc.Resource != "" && inc.Name != "" {
+		header += fmt.Sprintf(" in %s/%s", inc.Resource, inc.Name)
+	} else if inc.Name != "" {
+		header += " — " + inc.Name
+	}
+	if inc.Namespace != "" {
+		header += fmt.Sprintf(" (%s)", inc.Namespace)
+	}
+	if severity != "normal" {
+		header += " — " + severity
+	}
+	parts = append(parts, header)
+
+	var infoParts []string
 	containerName := containerDisplayName(inc)
+	if containerName != "" {
+		infoParts = append(infoParts, fmt.Sprintf("Container: %s", containerName))
+	}
+	if inc.RestartCount > 0 {
+		infoParts = append(infoParts, fmt.Sprintf("Restarts: %d", inc.RestartCount))
+	}
+	infoParts = append(infoParts, fmt.Sprintf("Duration: %s", duration))
+	parts = append(parts, strings.Join(infoParts, " · "))
 
-	logsBlock := ""
+	var countParts []string
+	countParts = append(countParts, fmt.Sprintf("Count: %d", inc.Count))
+	if inc.PeakResources > 0 {
+		countParts = append(countParts, fmt.Sprintf("Peak: %d %s", inc.PeakResources, resourcePlural(inc)))
+	}
+	parts = append(parts, strings.Join(countParts, " · "))
+
+	if inc.Hint != "" {
+		parts = append(parts, "💡 "+inc.Hint)
+	}
+
 	if inc.IncludeLogs && inc.Logs != "" {
-		logsBlock = fmt.Sprintf("\nLogs:\n%s", truncateText(inc.Logs, maxLines))
-	}
-	eventsBlock := ""
-	if inc.IncludeEvents && inc.Events != "" {
-		eventsBlock = fmt.Sprintf("\nEvents:\n%s", truncateText(inc.Events, maxLines))
+		parts = append(parts, "\nLogs:\n"+truncateText(inc.Logs, maxLines))
 	}
 
-	// CD-2: correlation info
-	correlationBlock := ""
+	if inc.IncludeEvents && inc.Events != "" {
+		parts = append(parts, "\nEvents:\n"+truncateText(inc.Events, maxLines))
+	}
+
 	if n := len(inc.Resources); n > 1 {
-		correlationBlock = fmt.Sprintf("\nAffected: %d pods", n)
+		parts = append(parts, fmt.Sprintf("Affected: %d pods", n))
 	}
 	if inc.Resource == "node" && inc.SuppressedPods > 0 {
-		correlationBlock += fmt.Sprintf("\nImpact: %d dependent pod error(s) suppressed", inc.SuppressedPods)
+		impact := fmt.Sprintf("Impact: %d dependent pod error(s) suppressed", inc.SuppressedPods)
 		if len(inc.SuppressedOwners) > 0 {
 			owners := make([]string, 0, len(inc.SuppressedOwners))
 			for o := range inc.SuppressedOwners {
 				owners = append(owners, o)
 			}
 			sort.Strings(owners)
-			correlationBlock += fmt.Sprintf(" across %d service(s):", len(owners))
+			impact += fmt.Sprintf(" across %d service(s):", len(owners))
 			for _, o := range owners {
-				correlationBlock += fmt.Sprintf("\n  • %s (%d pods)", o, inc.SuppressedOwners[o])
+				impact += fmt.Sprintf("\n  • %s (%d pods)", o, inc.SuppressedOwners[o])
 			}
 		}
-		correlationBlock += "\n  — this node is the likely root cause"
+		impact += "\n  — this node is the likely root cause"
+		parts = append(parts, impact)
 	}
 
-	analysis := ""
 	if inc.Analysis != "" {
-		analysis = "\n🤖 Likely cause: " + inc.Analysis
+		parts = append(parts, "🤖 "+inc.Analysis)
 	}
 
-	// CD-4: runbook link
-	runbookBlock := ""
 	if inc.Runbook != "" {
-		runbookBlock = "\nRunbook: " + inc.Runbook
+		parts = append(parts, "📖 Runbook: "+inc.Runbook)
 	}
 
-	// CD-5: investigate command + dashboard deep-link (dashboard is not on incident, it's config-level;
-	// we add the investigate command here, dashboard is added in deploy/config)
-	investigateBlock := ""
 	if inc.Resource == "pod" && len(inc.Resources) > 0 {
 		var pod string
 		for p := range inc.Resources {
@@ -1403,19 +1443,11 @@ func formatCreateMessage(inc *model.Incident, maxLines int) string {
 		if inc.ContainerName != "" {
 			containerFlag = " -c " + inc.ContainerName
 		}
-		investigateBlock = fmt.Sprintf("\nInvestigate: kubectl -n %s logs %s%s --previous | kubectl -n %s describe pod %s",
-			inc.Namespace, pod, containerFlag, inc.Namespace, pod)
+		parts = append(parts, fmt.Sprintf("🔍 kubectl -n %s logs %s%s --previous",
+			inc.Namespace, pod, containerFlag))
 	}
 
-	return fmt.Sprintf(
-		"🚨 Incident: %s\nSeverity: %s\nOwner: %s (%s)\nNamespace: %s\nContainer: %s\nReason: %s\nRestarts: %d\nHint: %s%s%s%s%s%s%s\nPeak: %d resource(s)\nCount: %d\nDuration: %s",
-		inc.Name, severity, inc.OwnerKind, inc.Name,
-		inc.Namespace, containerName, inc.Reason,
-		inc.RestartCount, inc.Hint,
-		logsBlock, eventsBlock, correlationBlock,
-		analysis, runbookBlock, investigateBlock,
-		inc.PeakResources, inc.Count, duration,
-	)
+	return parts
 }
 
 func truncateMsg(s string, maxLen int) string {
@@ -1458,26 +1490,55 @@ func truncateText(s string, maxLines int) string {
 func formatUpdateMessage(inc *model.Incident, _ int) string {
 	duration := inc.LastSeen.Sub(inc.FirstSeen).Round(time.Minute)
 
-	severity := inc.Severity
-	if severity == "" {
-		severity = "normal"
+	var parts []string
+
+	header := fmt.Sprintf("🔄 %s", inc.Reason)
+	if inc.Name != "" {
+		header += " — " + inc.Name
 	}
+	if inc.Namespace != "" {
+		header += fmt.Sprintf(" (%s)", inc.Namespace)
+	}
+	parts = append(parts, header)
 
+	var infoParts []string
 	containerName := containerDisplayName(inc)
+	if containerName != "" {
+		infoParts = append(infoParts, fmt.Sprintf("Container: %s", containerName))
+	}
+	infoParts = append(infoParts, fmt.Sprintf("Count: %d", inc.Count))
+	infoParts = append(infoParts, fmt.Sprintf("Duration: %s", duration))
+	if inc.PeakResources > 0 {
+		infoParts = append(infoParts, fmt.Sprintf("Peak: %d %s", inc.PeakResources, resourcePlural(inc)))
+	}
+	parts = append(parts, strings.Join(infoParts, " · "))
 
-	return fmt.Sprintf(
-		"🔄 Update: %s | Severity: %s | Namespace: %s | Container: %s | Reason: %s | Count: %d | Duration: %s | Peak: %d resource(s)",
-		inc.Name, severity, inc.Namespace, containerName, inc.Reason, inc.Count, duration, inc.PeakResources,
-	)
+	return strings.Join(parts, "\n")
 }
 
 func formatResolvedMessage(inc *model.Incident) string {
 	duration := inc.LastSeen.Sub(inc.FirstSeen).Round(time.Minute)
 
-	containerName := containerDisplayName(inc)
+	var parts []string
 
-	return fmt.Sprintf(
-		"✅ Resolved: %s | Namespace: %s | Container: %s | Reason: %s | Duration: %s | Total events: %d | Peak resources: %d",
-		inc.Name, inc.Namespace, containerName, inc.Reason, duration, inc.Count, inc.PeakResources,
-	)
+	header := fmt.Sprintf("✅ Resolved — %s", inc.Reason)
+	if inc.Resource != "" && inc.Name != "" {
+		header += fmt.Sprintf(" in %s/%s", inc.Resource, inc.Name)
+	} else if inc.Name != "" {
+		header += " — " + inc.Name
+	}
+	if inc.Namespace != "" {
+		header += fmt.Sprintf(" (%s)", inc.Namespace)
+	}
+	parts = append(parts, header)
+
+	var infoParts []string
+	infoParts = append(infoParts, fmt.Sprintf("Duration: %s", duration))
+	infoParts = append(infoParts, fmt.Sprintf("Total events: %d", inc.Count))
+	if inc.PeakResources > 0 {
+		infoParts = append(infoParts, fmt.Sprintf("Peak: %d %s", inc.PeakResources, resourcePlural(inc)))
+	}
+	parts = append(parts, strings.Join(infoParts, " · "))
+
+	return strings.Join(parts, "\n")
 }

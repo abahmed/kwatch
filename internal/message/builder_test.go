@@ -27,9 +27,9 @@ func TestBuildCreate(t *testing.T) {
 	}
 
 	msg := b.Build(inc, model.ActionCreate, nil)
-	assert.Contains(t, msg, "Incident: p1")
-	assert.Contains(t, msg, "ns1")
 	assert.Contains(t, msg, "CrashLoopBackOff")
+	assert.Contains(t, msg, "p1")
+	assert.Contains(t, msg, "ns1")
 	assert.Contains(t, msg, "critical")
 	assert.Contains(t, msg, "kubectl")
 }
@@ -89,7 +89,7 @@ func TestBuildUpdate(t *testing.T) {
 	}
 
 	msg := b.Build(inc, model.ActionUpdate, nil)
-	assert.Contains(t, msg, "Update: p1")
+	assert.Contains(t, msg, "Update —")
 	assert.Contains(t, msg, "5")
 }
 
@@ -120,9 +120,9 @@ func TestBuildResolved(t *testing.T) {
 	}
 
 	msg := b.Build(inc, model.ActionResolved, nil)
-	assert.Contains(t, msg, "Resolved: p1")
-	assert.Contains(t, msg, "ns1")
+	assert.Contains(t, msg, "Resolved —")
 	assert.Contains(t, msg, "CrashLoopBackOff")
+	assert.Contains(t, msg, "ns1")
 }
 
 func TestBuildCreateWithHint(t *testing.T) {
@@ -136,7 +136,7 @@ func TestBuildCreateWithHint(t *testing.T) {
 	}
 
 	msg := b.Build(inc, model.ActionCreate, nil)
-	assert.Contains(t, msg, "Hint: OOMKill")
+	assert.Contains(t, msg, "💡 OOMKill")
 }
 
 func TestBuildCreateWithRunbook(t *testing.T) {
@@ -150,7 +150,7 @@ func TestBuildCreateWithRunbook(t *testing.T) {
 	}
 
 	msg := b.Build(inc, model.ActionCreate, nil)
-	assert.Contains(t, msg, "Runbook: https://runbook.example.com")
+	assert.Contains(t, msg, "📖 Runbook: https://runbook.example.com")
 }
 
 func TestBuildCreateWithContainerName(t *testing.T) {

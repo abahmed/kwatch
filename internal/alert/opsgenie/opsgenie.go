@@ -6,9 +6,9 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"strings"
 
 	"github.com/abahmed/kwatch/internal/config"
-	"github.com/abahmed/kwatch/internal/constant"
 	"github.com/abahmed/kwatch/internal/event"
 	"github.com/abahmed/kwatch/internal/k8s"
 	"k8s.io/klog/v2"
@@ -156,15 +156,8 @@ func (m *Opsgenie) buildMessage(e *event.Event) ([]byte, error) {
 		Priority: "P1",
 	}
 
-	logs := constant.DefaultLogs
-	if len(e.Logs) > 0 {
-		logs = (e.Logs)
-	}
-
-	events := constant.DefaultEvents
-	if len(e.Events) > 0 {
-		events = (e.Events)
-	}
+	logs := strings.TrimSpace(e.Logs)
+	events := strings.TrimSpace(e.Events)
 
 	// use custom title if it's provided, otherwise use default
 	title := m.title
@@ -181,16 +174,32 @@ func (m *Opsgenie) buildMessage(e *event.Event) ([]byte, error) {
 
 	payload.Description = text
 	payload.Alias = e.DedupKey
-	payload.Details = map[string]string{
-		"Cluster":   m.appCfg.ClusterName,
-		"Name":      e.PodName,
-		"Container": e.ContainerName,
-		"Namespace": e.Namespace,
-		"Node":      e.NodeName,
-		"Reason":    e.Reason,
-		"Events":    events,
-		"Logs":      logs,
+	details := map[string]string{}
+	if m.appCfg.ClusterName != "" {
+		details["Cluster"] = m.appCfg.ClusterName
 	}
+	if e.PodName != "" {
+		details["Name"] = e.PodName
+	}
+	if e.ContainerName != "" {
+		details["Container"] = e.ContainerName
+	}
+	if e.Namespace != "" {
+		details["Namespace"] = e.Namespace
+	}
+	if e.NodeName != "" {
+		details["Node"] = e.NodeName
+	}
+	if e.Reason != "" {
+		details["Reason"] = e.Reason
+	}
+	if len(events) > 0 {
+		details["Events"] = events
+	}
+	if len(logs) > 0 {
+		details["Logs"] = logs
+	}
+	payload.Details = details
 
 	str, err := json.Marshal(payload)
 	if err != nil {

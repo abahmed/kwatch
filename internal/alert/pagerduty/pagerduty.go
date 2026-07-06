@@ -5,13 +5,19 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
-	"strings"
 
 	"github.com/abahmed/kwatch/internal/config"
 	"github.com/abahmed/kwatch/internal/event"
 	"github.com/abahmed/kwatch/internal/k8s"
 	"k8s.io/klog/v2"
 )
+
+func orDefault(s, def string) string {
+	if s == "" {
+		return def
+	}
+	return s
+}
 
 const (
 	pagerdutyAPIURL   = "https://events.pagerduty.com/v2/enqueue"
@@ -109,31 +115,25 @@ func (s *Pagerduty) SendMessage(msg string) error {
 func (s *Pagerduty) buildRequestBodyPagerDuty(
 	ev *event.Event,
 	key string) (string, error) {
-	eventsText := "No events captured"
-	logsText := "No logs captured"
-
-	events := strings.TrimSpace(ev.Events)
-	if len(events) > 0 {
-		eventsText = ev.Events
-	}
-
-	logs := strings.TrimSpace(ev.Logs)
-	if len(logs) > 0 {
-		logsText = ev.Logs
-	}
-
 	eventAction := "trigger"
 	if ev.Action == "resolved" {
 		eventAction = "resolve"
 	}
+
+	summary := fmt.Sprintf("Alert: %s", orDefault(ev.Reason, "unknown"))
+	if ev.ContainerName != "" {
+		summary = fmt.Sprintf(defaultEventTitle, ev.ContainerName)
+	}
+
+	source := orDefault(ev.ContainerName, orDefault(ev.PodName, "unknown"))
 
 	payload := pagerdutyPayload{
 		RoutingKey:  key,
 		EventAction: eventAction,
 		DedupKey:    ev.DedupKey,
 		Payload: pagerdutyPayloadDetails{
-			Summary:  fmt.Sprintf(defaultEventTitle, ev.ContainerName),
-			Source:   ev.ContainerName,
+			Summary:  summary,
+			Source:   source,
 			Severity: "critical",
 			CustomDetail: pagerdutyCustomDetails{
 				Cluster:   s.appCfg.ClusterName,
@@ -142,8 +142,8 @@ func (s *Pagerduty) buildRequestBodyPagerDuty(
 				Namespace: ev.Namespace,
 				Node:      ev.NodeName,
 				Reason:    ev.Reason,
-				Events:    eventsText,
-				Logs:      logsText,
+				Events:    orDefault(ev.Events, ""),
+				Logs:      orDefault(ev.Logs, ""),
 			},
 		},
 	}

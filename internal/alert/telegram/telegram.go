@@ -21,6 +21,13 @@ const (
 	telegramGetMeURL = "https://api.telegram.org/bot%s/getMe"
 )
 
+func orDefault(s, def string) string {
+	if s == "" {
+		return def
+	}
+	return s
+}
+
 func maskString(s string) string {
 	if len(s) <= 4 {
 		return "****"
@@ -111,51 +118,50 @@ func (t *Telegram) buildRequestBodyTelegram(
 	e *event.Event,
 	chatId string,
 	customMsg string) string {
-	eventsText := "No events captured"
-	logsText := "No logs captured"
-
-	// add events part if it exists
-	events := strings.TrimSpace(e.Events)
-	if len(events) > 0 {
-		eventsText = e.Events
-	}
-
-	// add logs part if it exists
-	logs := strings.TrimSpace(e.Logs)
-	if len(logs) > 0 {
-		logsText = e.Logs
-	}
-
 	// build text will be sent in the message
 	txt := ""
 	if len(customMsg) <= 0 {
-		txt = fmt.Sprintf(
-			"An alert for Cluster: *%s* Name: *%s*  "+
-				"Container: *%s* "+
-				"Namespace: *%s* "+
-				"Node: *%s* has been triggered:\n—\n "+
-				"Logs: *%s* \n "+
-				"Events: *%s* ",
-			t.appCfg.ClusterName,
-			e.PodName,
-			e.ContainerName,
-			e.Namespace,
-			e.NodeName,
-			logsText,
-			eventsText,
-		)
+		var parts []string
+		parts = append(parts, fmt.Sprintf("*Reason:* %s", orDefault(e.Reason, "unknown")))
+
+		if e.PodName != "" {
+			parts = append(parts, fmt.Sprintf("*Pod:* %s", e.PodName))
+		}
+		if e.ContainerName != "" {
+			parts = append(parts, fmt.Sprintf("*Container:* %s", e.ContainerName))
+		}
+		if e.Namespace != "" {
+			parts = append(parts, fmt.Sprintf("*Namespace:* %s", e.Namespace))
+		}
+		if e.NodeName != "" {
+			parts = append(parts, fmt.Sprintf("*Node:* %s", e.NodeName))
+		}
+		if t.appCfg.ClusterName != "" {
+			parts = append(parts, fmt.Sprintf("*Cluster:* %s", t.appCfg.ClusterName))
+		}
+
+		txt = "⛑ Kwatch alert\n" + strings.Join(parts, "\n")
+
+		if e.IncludeLogs {
+			logs := strings.TrimSpace(e.Logs)
+			if len(logs) > 0 {
+				txt += "\n\n*Logs:*\n" + logs
+			}
+		}
+
+		if e.IncludeEvents {
+			events := strings.TrimSpace(e.Events)
+			if len(events) > 0 {
+				txt += "\n\n*Events:*\n" + events
+			}
+		}
 	} else {
 		txt = customMsg
 	}
 
-	msg := fmt.Sprintf(
-		"⛑ Kwatch detected a crash in pod \\n%s ",
-		txt,
-	)
-
 	payload := telegramPayload{
 		ChatID:    chatId,
-		Text:      msg,
+		Text:      txt,
 		ParseMode: "MARKDOWN",
 	}
 

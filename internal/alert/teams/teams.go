@@ -169,38 +169,45 @@ func (t *Teams) buildRequestBodyTeams(e *event.Event) ([]byte, error) {
 				"type":    "AdaptiveCard",
 				"version": "1.2",
 				"body": func() []map[string]interface{} {
-					body := []map[string]interface{}{
-						{
-							"type": "TextBlock",
-							"text": title,
-						},
-						{
+					body := []map[string]interface{}{}
+					body = append(body, map[string]interface{}{
+						"type": "TextBlock",
+						"text": title,
+					})
+					if e.PodName != "" {
+						body = append(body, map[string]interface{}{
 							"type": "TextBlock",
 							"text": fmt.Sprintf("Pod Name: %s", e.PodName),
-						},
-						{
-							"type": "TextBlock",
-							"text": fmt.Sprintf("Namespace: %s", e.Namespace),
-						},
-						{
-							"type": "TextBlock",
-							"text": fmt.Sprintf("Node: %s", e.NodeName),
-						},
-						{
-							"type": "TextBlock",
-							"text": fmt.Sprintf("Reason: %s", e.Reason),
-						},
-					}
-					if e.IncludeLogs {
-						body = append(body, map[string]interface{}{
-							"type": "TextBlock",
-							"text": fmt.Sprintf("Logs: %s", e.Logs),
 						})
 					}
-					if e.IncludeEvents {
+					if e.Namespace != "" {
 						body = append(body, map[string]interface{}{
 							"type": "TextBlock",
-							"text": fmt.Sprintf("Events: \n%s", e.Events),
+							"text": fmt.Sprintf("Namespace: %s", e.Namespace),
+						})
+					}
+					if e.NodeName != "" {
+						body = append(body, map[string]interface{}{
+							"type": "TextBlock",
+							"text": fmt.Sprintf("Node: %s", e.NodeName),
+						})
+					}
+					if e.Reason != "" {
+						body = append(body, map[string]interface{}{
+							"type": "TextBlock",
+							"text": fmt.Sprintf("Reason: %s", e.Reason),
+						})
+					}
+					if e.IncludeLogs && strings.TrimSpace(e.Logs) != "" {
+						body = append(body, map[string]interface{}{
+							"type": "TextBlock",
+							"text": fmt.Sprintf("Logs: %s", strings.TrimSpace(e.Logs)),
+						})
+					}
+					if e.IncludeEvents && strings.TrimSpace(e.Events) != "" {
+						body = append(body, map[string]interface{}{
+							"type": "TextBlock",
+							"text": fmt.Sprintf("Events: \n%s", strings.TrimSpace(e.Events)),
 						})
 					}
 					body = append(body, map[string]interface{}{

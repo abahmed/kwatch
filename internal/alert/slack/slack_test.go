@@ -288,9 +288,8 @@ func TestSendIncidentWebhookCreate(t *testing.T) {
 
 	err := s.SendIncident(testIncident(), model.ActionCreate)
 	assert.Nil(err)
-	assert.Contains(lastMsg, "Incident")
-	assert.Contains(lastMsg, "deploy-1")
 	assert.Contains(lastMsg, "CrashLoopBackOff")
+	assert.Contains(lastMsg, "deploy-1")
 }
 
 func TestSendIncidentWebhookUpdate(t *testing.T) {
@@ -309,7 +308,7 @@ func TestSendIncidentWebhookUpdate(t *testing.T) {
 
 	err := s.SendIncident(testIncident(), model.ActionUpdate)
 	assert.Nil(err)
-	assert.Contains(lastMsg, "Update")
+	assert.Contains(lastMsg, "CrashLoopBackOff")
 }
 
 func TestSendIncidentWebhookCompact(t *testing.T) {
@@ -330,9 +329,8 @@ func TestSendIncidentWebhookCompact(t *testing.T) {
 
 	err := s.SendIncident(testIncident(), model.ActionCreate)
 	assert.Nil(err)
-	assert.Contains(lastText, "Incident")
-	assert.Contains(lastText, "deploy-1")
 	assert.Contains(lastText, "CrashLoopBackOff")
+	assert.Contains(lastText, "deploy-1")
 }
 
 func TestSendIncidentWebhookSkip(t *testing.T) {
@@ -474,11 +472,11 @@ func TestFormatIncidentText(t *testing.T) {
 
 	inc := testIncident()
 	text := formatIncidentText(inc, model.ActionCreate)
-	assert.Contains(text, "Incident")
+	assert.Contains(text, "CrashLoopBackOff")
 	assert.Contains(text, "deploy-1")
 
 	textUpdate := formatIncidentText(inc, model.ActionUpdate)
-	assert.Contains(textUpdate, "Update")
+	assert.Contains(textUpdate, "CrashLoopBackOff")
 }
 
 func TestBuildIncidentBlocksWithLogsEvents(t *testing.T) {

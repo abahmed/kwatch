@@ -7,9 +7,9 @@ import (
 	"io"
 	"net/http"
 	"slices"
+	"strings"
 
 	"github.com/abahmed/kwatch/internal/config"
-	"github.com/abahmed/kwatch/internal/constant"
 	"github.com/abahmed/kwatch/internal/event"
 	"github.com/abahmed/kwatch/internal/k8s"
 	"k8s.io/klog/v2"
@@ -20,6 +20,13 @@ const (
 	defaultZendutyText  = "There is an issue with container (%s) in pod (%s)"
 	zendutyAPIURL       = "https://www.zenduty.com/api/events"
 )
+
+func orDefault(s, def string) string {
+	if s == "" {
+		return def
+	}
+	return s
+}
 
 var AlertTypes = []string{
 	"critical",
@@ -146,36 +153,47 @@ func (m *Zenduty) buildMessage(e *event.Event) ([]byte, error) {
 		EntityID:  e.DedupKey,
 	}
 
-	logs := constant.DefaultLogs
-	if len(e.Logs) > 0 {
-		logs = (e.Logs)
+	msg := defaultZendutyTitle
+	if e.PodName != "" {
+		msg = fmt.Sprintf(defaultZendutyTitle, e.PodName)
+	}
+	payload.Message = msg
+
+	var summaryParts []string
+	summaryParts = append(summaryParts, fmt.Sprintf("Reason: %s", orDefault(e.Reason, "unknown")))
+	if e.PodName != "" {
+		summaryParts = append(summaryParts, fmt.Sprintf("Pod: %s", e.PodName))
+	}
+	if e.ContainerName != "" {
+		summaryParts = append(summaryParts, fmt.Sprintf("Container: %s", e.ContainerName))
+	}
+	if e.Namespace != "" {
+		summaryParts = append(summaryParts, fmt.Sprintf("Namespace: %s", e.Namespace))
+	}
+	if e.NodeName != "" {
+		summaryParts = append(summaryParts, fmt.Sprintf("Node: %s", e.NodeName))
+	}
+	if m.appCfg.ClusterName != "" {
+		summaryParts = append(summaryParts, fmt.Sprintf("Cluster: %s", m.appCfg.ClusterName))
 	}
 
-	events := constant.DefaultEvents
-	if len(e.Events) > 0 {
-		events = (e.Events)
+	summary := strings.Join(summaryParts, " · ")
+
+	if e.IncludeLogs {
+		logs := strings.TrimSpace(e.Logs)
+		if len(logs) > 0 {
+			summary += "\n\nLogs:\n" + logs
+		}
 	}
 
-	payload.Message = fmt.Sprintf(defaultZendutyTitle, e.PodName)
-	payload.Summary = fmt.Sprintf(
-		"An alert has been triggered for\n\n"+
-			"cluster: %s\n"+
-			"Node Name: %s\n"+
-			"Pod Name: %s\n"+
-			"Container: %s\n"+
-			"Namespace: %s\n"+
-			"Reason: %s\n\n"+
-			"Events:\n%s\n\n"+
-			"Logs:\n%s\n\n",
-		m.appCfg.ClusterName,
-		e.NodeName,
-		e.PodName,
-		e.ContainerName,
-		e.Namespace,
-		e.Reason,
-		events,
-		logs,
-	)
+	if e.IncludeEvents {
+		events := strings.TrimSpace(e.Events)
+		if len(events) > 0 {
+			summary += "\n\nEvents:\n" + events
+		}
+	}
+
+	payload.Summary = summary
 
 	str, err := json.Marshal(payload)
 	if err != nil {

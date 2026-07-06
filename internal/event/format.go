@@ -3,158 +3,152 @@ package event
 import (
 	"fmt"
 	"strings"
-
-	"github.com/abahmed/kwatch/internal/constant"
 )
 
 func (e *Event) FormatMarkdown(clusterName, text, delimiter string) string {
-	// use custom text if it's provided, otherwise use default
-	if len(text) == 0 {
-		text = constant.DefaultText
+	if text == "" {
+		text = defaultEventText(e)
 	}
-
-	if len(delimiter) == 0 {
+	if delimiter == "" {
 		delimiter = "\n"
 	}
 
-	eventsBlock := ""
+	var parts []string
+	parts = append(parts, text)
+
+	if clusterName != "" {
+		parts = append(parts, fmt.Sprintf("**Cluster:** %s", clusterName))
+	}
+	if e.PodName != "" {
+		parts = append(parts, fmt.Sprintf("**Pod:** %s", e.PodName))
+	}
+	if e.ContainerName != "" {
+		parts = append(parts, fmt.Sprintf("**Container:** %s", e.ContainerName))
+	}
+	if e.Namespace != "" {
+		parts = append(parts, fmt.Sprintf("**Namespace:** %s", e.Namespace))
+	}
+	if e.NodeName != "" {
+		parts = append(parts, fmt.Sprintf("**Node:** %s", e.NodeName))
+	}
+	if e.Reason != "" {
+		parts = append(parts, fmt.Sprintf("**Reason:** %s", e.Reason))
+	}
+
 	if e.IncludeEvents {
-		eventsText := constant.DefaultEvents
 		events := strings.TrimSpace(e.Events)
 		if len(events) > 0 {
-			eventsText = e.Events
+			parts = append(parts, "**Events:**\n```\n"+events+"\n```")
 		}
-		eventsBlock = "**Events:**\n```\n" + eventsText + "\n```"
 	}
 
-	logsBlock := ""
 	if e.IncludeLogs {
-		logsText := constant.DefaultLogs
 		logs := strings.TrimSpace(e.Logs)
 		if len(logs) > 0 {
-			logsText = e.Logs
+			parts = append(parts, "**Logs:**\n```\n"+logs+"\n```")
 		}
-		logsBlock = "**Logs:**\n```\n" + logsText + "\n```"
 	}
 
-	msg := fmt.Sprintf(
-		"%s"+delimiter+
-			"**Cluster:** %s"+delimiter+
-			"**Pod:** %s"+delimiter+
-			"**Container:** %s"+delimiter+
-			"**Namespace:** %s"+delimiter+
-			"**Node:** %s"+delimiter+
-			"**Reason:** %s"+delimiter+
-			"%s"+delimiter+
-			"%s",
-		text,
-		clusterName, e.PodName,
-		e.ContainerName,
-		e.Namespace,
-		e.NodeName,
-		e.Reason,
-		eventsBlock,
-		logsBlock,
-	)
-
-	return msg
+	return strings.Join(parts, delimiter)
 }
 
 func (e *Event) FormatHtml(clusterName, text string) string {
-	// use custom text if it's provided, otherwise use default
-	if len(text) == 0 {
-		text = constant.DefaultText
+	if text == "" {
+		text = defaultEventText(e)
 	}
 
-	eventsBlock := ""
+	var parts []string
+	parts = append(parts, text)
+
+	if clusterName != "" {
+		parts = append(parts, fmt.Sprintf("<b>Cluster:</b> %s", clusterName))
+	}
+	if e.PodName != "" {
+		parts = append(parts, fmt.Sprintf("<b>Pod:</b> %s", e.PodName))
+	}
+	if e.ContainerName != "" {
+		parts = append(parts, fmt.Sprintf("<b>Container:</b> %s", e.ContainerName))
+	}
+	if e.Namespace != "" {
+		parts = append(parts, fmt.Sprintf("<b>Namespace:</b> %s", e.Namespace))
+	}
+	if e.NodeName != "" {
+		parts = append(parts, fmt.Sprintf("<b>Node:</b> %s", e.NodeName))
+	}
+	if e.Reason != "" {
+		parts = append(parts, fmt.Sprintf("<b>Reason:</b> %s", e.Reason))
+	}
+
 	if e.IncludeEvents {
-		eventsText := constant.DefaultEvents
 		events := strings.TrimSpace(e.Events)
 		if len(events) > 0 {
-			eventsText = e.Events
+			parts = append(parts, "<b>Events:</b><br/><blockquote>"+strings.ReplaceAll(events, "\n", "<br/>")+"</blockquote>")
 		}
-		eventsBlock = "<b>Events:</b><br/><blockquote>" + strings.ReplaceAll(eventsText, "\n", "<br/>") + "</blockquote>"
 	}
 
-	logsBlock := ""
 	if e.IncludeLogs {
-		logsText := constant.DefaultLogs
 		logs := strings.TrimSpace(e.Logs)
 		if len(logs) > 0 {
-			logsText = e.Logs
+			parts = append(parts, "<b>Logs:</b><br/><blockquote>"+strings.ReplaceAll(logs, "\n", "<br/>")+"</blockquote>")
 		}
-		logsBlock = "<b>Logs:</b> <br/><blockquote>" + strings.ReplaceAll(logsText, "\n", "<br/>") + "</blockquote>"
 	}
 
-	msg := fmt.Sprintf(
-		"%s<br/>"+
-			"<b>Cluster:</b> %s <br/>"+
-			"<b>Pod:</b> %s <br/>"+
-			"<b>Container:</b> %s<br/>"+
-			"<b>Namespace:</b> %s<br/>"+
-			"<b>Node:</b> %s<br/>"+
-			"<b>Reason:</b> %s<br/>"+
-			"%s"+
-			"%s",
-		text,
-		clusterName,
-		e.PodName,
-		e.ContainerName,
-		e.Namespace,
-		e.NodeName,
-		e.Reason,
-		eventsBlock,
-		logsBlock,
-	)
-
-	return msg
+	return strings.Join(parts, "<br/>")
 }
 
 func (e *Event) FormatText(clusterName, text string) string {
-	// use custom text if it's provided, otherwise use default
-	if len(text) == 0 {
-		text = constant.DefaultText
+	if text == "" {
+		text = defaultEventText(e)
 	}
 
-	eventsBlock := ""
+	var parts []string
+	parts = append(parts, text)
+	parts = append(parts, "")
+
+	if clusterName != "" {
+		parts = append(parts, fmt.Sprintf("cluster: %s", clusterName))
+	}
+	if e.PodName != "" {
+		parts = append(parts, fmt.Sprintf("Pod Name: %s", e.PodName))
+	}
+	if e.ContainerName != "" {
+		parts = append(parts, fmt.Sprintf("Container: %s", e.ContainerName))
+	}
+	if e.Namespace != "" {
+		parts = append(parts, fmt.Sprintf("Namespace: %s", e.Namespace))
+	}
+	if e.NodeName != "" {
+		parts = append(parts, fmt.Sprintf("Node: %s", e.NodeName))
+	}
+	if e.Reason != "" {
+		parts = append(parts, fmt.Sprintf("Reason: %s", e.Reason))
+	}
+
+	parts = append(parts, "")
+
 	if e.IncludeEvents {
-		eventsText := constant.DefaultEvents
 		events := strings.TrimSpace(e.Events)
 		if len(events) > 0 {
-			eventsText = e.Events
+			parts = append(parts, "Events:\n"+events)
 		}
-		eventsBlock = "Events:\n" + eventsText + "\n\n"
 	}
 
-	logsBlock := ""
 	if e.IncludeLogs {
-		logsText := constant.DefaultLogs
 		logs := strings.TrimSpace(e.Logs)
 		if len(logs) > 0 {
-			logsText = e.Logs
+			parts = append(parts, "Logs:\n"+logs)
 		}
-		logsBlock = "Logs:\n" + logsText + "\n\n"
 	}
 
-	msg := fmt.Sprintf(
-		"There is an issue with container in a pod!\n\n"+
-			"cluster: %s\n"+
-			"Pod Name: %s\n"+
-			"Container: %s\n"+
-			"Namespace: %s\n"+
-			"Node: %s\n"+
-			"Reason: %s\n\n"+
-			"%s"+
-			"%s",
-		clusterName,
-		e.PodName,
-		e.ContainerName,
-		e.Namespace,
-		e.NodeName,
-		e.Reason,
-		eventsBlock,
-		logsBlock,
-	)
+	return strings.Join(parts, "\n")
+}
 
-	return msg
+func defaultEventText(e *Event) string {
+	if e.Reason != "" && e.PodName != "" {
+		return fmt.Sprintf("Alert: %s in %s", e.Reason, e.PodName)
+	}
+	if e.Reason != "" {
+		return fmt.Sprintf("Alert: %s", e.Reason)
+	}
+	return "Alert: container issue detected"
 }
