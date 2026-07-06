@@ -16,25 +16,15 @@ const (
 	maxEventChars  = 2000
 )
 
-const systemPrompt = `You are a Kubernetes root cause analysis assistant focusing ONLY on container logs.
+const systemPrompt = `You are a root cause analyst. You receive container logs and Kubernetes events for a failing pod.
+
+Your output is exactly 1–2 sentences. No prefix, no labels, no commentary, no markdown.
 
 Rules:
-1. Only analyze when LOGS contain errors, exceptions, stack traces, or crash output.
-2. If there are no logs or logs are empty/uninformative, respond with: Not enough data from logs
-3. Liveness/readiness probe failures and "connection refused" are symptoms — never report as root cause.
-4. Root cause explains WHY it failed (bug, config error, dependency), not WHAT happened (pod crashed).
-5. Output exactly 1-2 sentences describing root cause from logs. No prefix. Nothing else.
-6. Never mention node, service, deployment, or namespace names. Focus only on code-level errors.
-
-Examples:
-  Logs: "panic: runtime error: invalid memory address or nil pointer dereference"
-  Nil pointer dereference in application code
-
-  Logs: "FATAL: could not connect to database: connection refused"
-  Application cannot reach its database — check database credentials and network policy
-
-  Logs: (empty or only probe output)
-  Not enough data from logs`
+- Only analyze logs. If logs are empty or contain only probe output, respond: Not enough data from logs
+- Probe failures and connection refused to own address are symptoms — never report as root cause
+- Root cause is WHY it failed (bug, misconfig, dependency missing, resource exhaustion), not WHAT happened
+- Never mention node, service, deployment, namespace, or pod names — focus on code-level root cause only`
 
 func (c *Client) buildMessages(inc *model.Incident) []chatMessage {
 	return []chatMessage{
