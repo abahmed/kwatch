@@ -7,13 +7,15 @@ import (
 	"github.com/abahmed/kwatch/internal/correlation"
 	"github.com/abahmed/kwatch/internal/event"
 	corev1 "k8s.io/api/core/v1"
+	discoveryv1 "k8s.io/api/discovery/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
+	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/client-go/tools/cache"
 )
 
 var defaultServiceSustainedSeconds float64 = 60
 
-func DetectServiceEndpointIssue(svc *corev1.Service, eps *corev1.Endpoints) *event.Signal {
+func DetectServiceEndpointIssue(svc *corev1.Service, epSlices []*discoveryv1.EndpointSlice) *event.Signal {
 	if svc.Spec.Selector == nil || len(svc.Spec.Selector) == 0 {
 		return nil
 	}
@@ -25,9 +27,14 @@ func DetectServiceEndpointIssue(svc *corev1.Service, eps *corev1.Endpoints) *eve
 	}
 
 	hasReady := false
-	for _, subset := range eps.Subsets {
-		if len(subset.Addresses) > 0 {
-			hasReady = true
+	for _, slice := range epSlices {
+		for _, ep := range slice.Endpoints {
+			if ep.Conditions.Ready != nil && *ep.Conditions.Ready {
+				hasReady = true
+				break
+			}
+		}
+		if hasReady {
 			break
 		}
 	}
@@ -66,6 +73,7 @@ func (h *handler) ProcessService(key string, deleted bool) error {
 	}
 	return h.ProcessServiceObject(svc, false)
 }
+
 func (h *handler) ProcessServiceObject(svc *corev1.Service, deleted bool) error {
 	if svc == nil {
 		return nil
@@ -77,21 +85,15 @@ func (h *handler) ProcessServiceObject(svc *corev1.Service, deleted bool) error 
 		return nil
 	}
 
-	eps, err := h.endpointLister.Endpoints(svc.Namespace).Get(svc.Name)
+	sel := labels.Set{"kubernetes.io/service-name": svc.Name}.AsSelector()
+	epSlices, err := h.endpointSliceLister.EndpointSlices(svc.Namespace).List(sel)
 	if err != nil {
-		if errors.IsNotFound(err) {
-			h.clearServiceNoEndpoints(svc.Namespace, svc.Name)
-			return nil
-		}
-		return fmt.Errorf("failed to get endpoints %s/%s from cache: %w", svc.Namespace, svc.Name, err)
+		return fmt.Errorf("failed to list endpoint slices for %s/%s: %w", svc.Namespace, svc.Name, err)
 	}
 
-	sig := DetectServiceEndpointIssue(svc, eps)
+	sig := DetectServiceEndpointIssue(svc, epSlices)
 	key := svc.Namespace + "/" + svc.Name
 	if sig != nil {
-		// Debounce: only alert after the service has been without endpoints
-		// for at least the sustained period, to avoid flapping on brief
-		// endpoint transitions (e.g. during rolling updates).
 		first := h.markServiceNoEndpoints(key)
 		sustained := time.Duration(defaultServiceSustainedSeconds) * time.Second
 		if h.now().Sub(first) < sustained {

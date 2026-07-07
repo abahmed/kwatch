@@ -27,6 +27,7 @@ import (
 	autoscalingv2lister "k8s.io/client-go/listers/autoscaling/v2"
 	batchv1lister "k8s.io/client-go/listers/batch/v1"
 	corev1lister "k8s.io/client-go/listers/core/v1"
+	discoveryv1lister "k8s.io/client-go/listers/discovery/v1"
 	networkingv1lister "k8s.io/client-go/listers/networking/v1"
 	"k8s.io/client-go/tools/cache"
 	"k8s.io/client-go/util/workqueue"
@@ -141,7 +142,7 @@ func (m *mockHandler) ProcessIngressObject(*networkingv1.Ingress, bool) error { 
 func (m *mockHandler) ProcessControlPlanePod(*corev1.Pod) error               { return m.err }
 func (m *mockHandler) SweepControlPlane()                                     {}
 func (m *mockHandler) SetServiceLister(corev1lister.ServiceLister)            {}
-func (m *mockHandler) SetEndpointLister(corev1lister.EndpointsLister)         {}
+func (m *mockHandler) SetEndpointSliceLister(discoveryv1lister.EndpointSliceLister) {}
 func (m *mockHandler) SetMwCLister(admissionregistrationv1lister.MutatingWebhookConfigurationLister) {
 }
 func (m *mockHandler) SetVwCLister(admissionregistrationv1lister.ValidatingWebhookConfigurationLister) {

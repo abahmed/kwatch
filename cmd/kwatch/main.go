@@ -259,88 +259,98 @@ func main() {
 
 	var wg sync.WaitGroup
 
-	runLeaderTasks := func(ctx context.Context) {
+	errCh := make(chan error, 1)
+
+	wg.Add(4)
+	if cfg.TlsMonitor.Enabled {
 		wg.Add(1)
+	}
+
+	go func() {
+		defer wg.Done()
+		correlator.StartCleanup(ctx)
+	}()
+	go func() {
+		defer wg.Done()
+		pvcMonitor.Start(ctx)
+	}()
+	go func() {
+		defer wg.Done()
+		hbMonitor.Start(ctx)
+	}()
+	go func() {
+		defer wg.Done()
+		interval := 60 * time.Second
+		ticker := time.NewTicker(interval)
+		defer ticker.Stop()
+		for {
+			select {
+			case <-ctx.Done():
+				if snap := correlator.SnapshotAll(); len(snap) > 0 {
+					trySendIncidentSnapshot(incidentCh, snap)
+				}
+				return
+			case <-ticker.C:
+				if snap := correlator.SnapshotAll(); len(snap) > 0 {
+					trySendIncidentSnapshot(incidentCh, snap)
+				}
+			}
+		}
+	}()
+	if cfg.TlsMonitor.Enabled {
 		go func() {
 			defer wg.Done()
-			correlator.StartCleanup(ctx)
-		}()
-		wg.Add(1)
-		go func() {
-			defer wg.Done()
-			pvcMonitor.Start(ctx)
-		}()
-		wg.Add(1)
-		go func() {
-			defer wg.Done()
-			hbMonitor.Start(ctx)
-		}()
-		wg.Add(1)
-		go func() {
-			defer wg.Done()
-			interval := 60 * time.Second
-			ticker := time.NewTicker(interval)
+			h.SweepTLSSecrets()
+			ticker := time.NewTicker(24 * time.Hour)
 			defer ticker.Stop()
 			for {
 				select {
 				case <-ctx.Done():
-					if snap := correlator.SnapshotAll(); len(snap) > 0 {
-						trySendIncidentSnapshot(incidentCh, snap)
-					}
 					return
 				case <-ticker.C:
-					if snap := correlator.SnapshotAll(); len(snap) > 0 {
-						trySendIncidentSnapshot(incidentCh, snap)
-					}
+					h.SweepTLSSecrets()
 				}
 			}
 		}()
-		if cfg.TlsMonitor.Enabled {
-			wg.Add(1)
-			go func() {
-				defer wg.Done()
-				h.SweepTLSSecrets()
-				ticker := time.NewTicker(24 * time.Hour)
-				defer ticker.Stop()
-				for {
-					select {
-					case <-ctx.Done():
-						return
-					case <-ticker.C:
-						h.SweepTLSSecrets()
-					}
-				}
-			}()
-		}
-		if cfg.CrdConfig.Enabled {
-			restCfg, err := client.GetRestConfig(&cfg.App)
-			if err != nil {
-				klog.ErrorS(err, "failed to get rest config for CRD watcher")
-			} else {
-				resync := time.Duration(cfg.ResyncSeconds) * time.Second
-				w := crdwatch.New(cfg, alertManager, correlator, restCfg, k8s.GetNamespace(), resync)
-				if err := w.Start(ctx); err != nil {
-					klog.ErrorS(err, "CRD watcher error")
-				}
+	}
+	if cfg.CrdConfig.Enabled {
+		restCfg, err := client.GetRestConfig(&cfg.App)
+		if err != nil {
+			klog.ErrorS(err, "failed to get rest config for CRD watcher")
+		} else {
+			resync := time.Duration(cfg.ResyncSeconds) * time.Second
+			w := crdwatch.New(cfg, alertManager, correlator, restCfg, k8s.GetNamespace(), resync)
+			if err := w.Start(ctx); err != nil {
+				klog.ErrorS(err, "CRD watcher error")
 			}
 		}
+	}
+
+	go func() {
 		sm.NotifyStartup()
+
 		workers := cfg.Workers
 		if workers < 1 {
 			workers = 1
 		}
 		if err := ctrl.Run(ctx, workers); err != nil {
-			klog.ErrorS(err, "controller error")
+			errCh <- err
+			return
 		}
-	}
-
-	go runLeaderTasks(ctx)
+		errCh <- nil
+	}()
 
 	sigCh := make(chan os.Signal, 1)
 	signal.Notify(sigCh, os.Interrupt, syscall.SIGTERM)
-	<-sigCh
 
-	klog.InfoS("shutting down gracefully...")
+	select {
+	case <-sigCh:
+		klog.InfoS("shutting down gracefully...")
+	case err := <-errCh:
+		if err != nil {
+			klog.ErrorS(err, "controller startup failed, shutting down")
+		}
+	}
 	cancel()
 
 	doneCh := make(chan struct{})

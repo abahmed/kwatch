@@ -28,6 +28,7 @@ import (
 	autoscalingv2lister "k8s.io/client-go/listers/autoscaling/v2"
 	batchv1lister "k8s.io/client-go/listers/batch/v1"
 	corev1lister "k8s.io/client-go/listers/core/v1"
+	discoveryv1lister "k8s.io/client-go/listers/discovery/v1"
 	networkingv1lister "k8s.io/client-go/listers/networking/v1"
 )
 
@@ -66,7 +67,7 @@ type Handler interface {
 	SetCpPodLister(lister corev1lister.PodLister)
 	SetNetpolLister(lister networkingv1lister.NetworkPolicyLister)
 	SetServiceLister(lister corev1lister.ServiceLister)
-	SetEndpointLister(lister corev1lister.EndpointsLister)
+	SetEndpointSliceLister(lister discoveryv1lister.EndpointSliceLister)
 	SetMwCLister(lister admissionregistrationv1lister.MutatingWebhookConfigurationLister)
 	SetVwCLister(lister admissionregistrationv1lister.ValidatingWebhookConfigurationLister)
 	SetPodLister(lister corev1lister.PodLister)
@@ -113,7 +114,7 @@ type handler struct {
 	mwcLister              admissionregistrationv1lister.MutatingWebhookConfigurationLister
 	vwcLister              admissionregistrationv1lister.ValidatingWebhookConfigurationLister
 	serviceLister          corev1lister.ServiceLister
-	endpointLister         corev1lister.EndpointsLister
+	endpointSliceLister    discoveryv1lister.EndpointSliceLister
 	firstMaxedHPAs         map[string]time.Time
 	firstScalingErrorHPAs  map[string]time.Time
 	hpaMu                  sync.Mutex
@@ -273,8 +274,8 @@ func (h *handler) SetServiceLister(lister corev1lister.ServiceLister) {
 	h.correlator.SetServiceLister(lister)
 }
 
-func (h *handler) SetEndpointLister(lister corev1lister.EndpointsLister) {
-	h.endpointLister = lister
+func (h *handler) SetEndpointSliceLister(lister discoveryv1lister.EndpointSliceLister) {
+	h.endpointSliceLister = lister
 }
 
 func (h *handler) SetSecretLister(lister corev1lister.SecretLister) {

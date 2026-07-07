@@ -8,12 +8,14 @@ import (
 	autoscalingv2 "k8s.io/api/autoscaling/v2"
 	batchv1 "k8s.io/api/batch/v1"
 	corev1 "k8s.io/api/core/v1"
+	discoveryv1 "k8s.io/api/discovery/v1"
 	networkingv1 "k8s.io/api/networking/v1"
 	admissionregistrationv1lister "k8s.io/client-go/listers/admissionregistration/v1"
 	appsv1lister "k8s.io/client-go/listers/apps/v1"
 	autoscalingv2lister "k8s.io/client-go/listers/autoscaling/v2"
 	batchv1lister "k8s.io/client-go/listers/batch/v1"
 	corev1lister "k8s.io/client-go/listers/core/v1"
+	discoveryv1lister "k8s.io/client-go/listers/discovery/v1"
 	networkingv1lister "k8s.io/client-go/listers/networking/v1"
 	"k8s.io/apimachinery/pkg/labels"
 )
@@ -129,17 +131,21 @@ func (e *errorServiceNSLister) Get(name string) (*corev1.Service, error) {
 	return nil, fmt.Errorf("mock service lister error")
 }
 
-// errorEndpointLister wraps a real EndpointsLister but returns errors from Get
-type errorEndpointLister struct{ corev1lister.EndpointsLister }
+// errorEndpointSliceLister wraps a real EndpointSliceLister but returns errors from Get
+type errorEndpointSliceLister struct{ discoveryv1lister.EndpointSliceLister }
 
-func (e *errorEndpointLister) Endpoints(ns string) corev1lister.EndpointsNamespaceLister {
-	return &errorEndpointNSLister{EndpointsNamespaceLister: e.EndpointsLister.Endpoints(ns)}
+func (e *errorEndpointSliceLister) EndpointSlices(ns string) discoveryv1lister.EndpointSliceNamespaceLister {
+	return &errorEndpointSliceNSLister{EndpointSliceNamespaceLister: e.EndpointSliceLister.EndpointSlices(ns)}
 }
 
-type errorEndpointNSLister struct{ corev1lister.EndpointsNamespaceLister }
+type errorEndpointSliceNSLister struct{ discoveryv1lister.EndpointSliceNamespaceLister }
 
-func (e *errorEndpointNSLister) Get(name string) (*corev1.Endpoints, error) {
-	return nil, fmt.Errorf("mock endpoint lister error")
+func (e *errorEndpointSliceNSLister) Get(name string) (*discoveryv1.EndpointSlice, error) {
+	return nil, fmt.Errorf("mock endpoint slice lister error")
+}
+
+func (e *errorEndpointSliceNSLister) List(selector labels.Selector) ([]*discoveryv1.EndpointSlice, error) {
+	return nil, fmt.Errorf("mock endpoint slice lister error")
 }
 
 // errorNetpolLister wraps a real NetworkPolicyLister but returns errors from Get

@@ -27,6 +27,7 @@ import (
 	autoscalingv2lister "k8s.io/client-go/listers/autoscaling/v2"
 	batchv1lister "k8s.io/client-go/listers/batch/v1"
 	corev1lister "k8s.io/client-go/listers/core/v1"
+	discoveryv1lister "k8s.io/client-go/listers/discovery/v1"
 	networkingv1lister "k8s.io/client-go/listers/networking/v1"
 	policyv1lister "k8s.io/client-go/listers/policy/v1"
 	"k8s.io/client-go/tools/cache"
@@ -83,30 +84,30 @@ type Controller struct {
 	configMapLister corev1lister.ConfigMapLister
 	configMapSynced []cache.InformerSynced
 
-	serviceQueue         workqueue.TypedRateLimitingInterface[string]
-	endpointQueue        workqueue.TypedRateLimitingInterface[string]
-	mwcQueue             workqueue.TypedRateLimitingInterface[string]
-	vwcQueue             workqueue.TypedRateLimitingInterface[string]
-	ingressQueue         workqueue.TypedRateLimitingInterface[string]
-	netpolQueue          workqueue.TypedRateLimitingInterface[string]
-	cpPodQueue           workqueue.TypedRateLimitingInterface[string]
-	serviceLister        corev1lister.ServiceLister
-	svcSynced            []cache.InformerSynced
-	endpointLister       corev1lister.EndpointsLister
-	endpointSynced       []cache.InformerSynced
-	mwcLister            admissionregistrationv1lister.MutatingWebhookConfigurationLister
-	mwcSynced            cache.InformerSynced
-	vwcLister            admissionregistrationv1lister.ValidatingWebhookConfigurationLister
-	vwcSynced            cache.InformerSynced
+	serviceQueue          workqueue.TypedRateLimitingInterface[string]
+	endpointSliceQueue    workqueue.TypedRateLimitingInterface[string]
+	mwcQueue              workqueue.TypedRateLimitingInterface[string]
+	vwcQueue              workqueue.TypedRateLimitingInterface[string]
+	ingressQueue          workqueue.TypedRateLimitingInterface[string]
+	netpolQueue           workqueue.TypedRateLimitingInterface[string]
+	cpPodQueue            workqueue.TypedRateLimitingInterface[string]
+	serviceLister         corev1lister.ServiceLister
+	svcSynced             []cache.InformerSynced
+	endpointSliceLister   discoveryv1lister.EndpointSliceLister
+	endpointSliceSynced   []cache.InformerSynced
+	mwcLister             admissionregistrationv1lister.MutatingWebhookConfigurationLister
+	mwcSynced             cache.InformerSynced
+	vwcLister             admissionregistrationv1lister.ValidatingWebhookConfigurationLister
+	vwcSynced             cache.InformerSynced
 	ingressLister        networkingv1lister.IngressLister
 	ingressSynced        []cache.InformerSynced
 	netpolLister         networkingv1lister.NetworkPolicyLister
 	netpolSynced         []cache.InformerSynced
 	cpPodLister          corev1lister.PodLister
 	cpSynced             cache.InformerSynced
-	serviceWatchEnabled  bool
-	endpointWatchEnabled bool
-	mwcWatchEnabled      bool
+	serviceWatchEnabled       bool
+	endpointSliceWatchEnabled bool
+	mwcWatchEnabled           bool
 	vwcWatchEnabled      bool
 	ingressWatchEnabled  bool
 	netpolWatchEnabled   bool
@@ -151,7 +152,11 @@ func newFactories(client kubernetes.Interface, namespaces []string, resync time.
 			}))
 		}
 		factory := informers.NewSharedInformerFactoryWithOptions(client, resync, opts...)
-		return factorySet{global: factory}, []informers.SharedInformerFactory{factory}
+		// Create a separate factory for cluster-scoped resources (Nodes,
+		// MutatingWebhookConfigurations, ValidatingWebhookConfigurations) that
+		// must NOT inherit the namespace field selector.
+		clusterFactory := informers.NewSharedInformerFactoryWithOptions(client, resync)
+		return factorySet{global: factory, clusterScoped: clusterFactory}, []informers.SharedInformerFactory{factory, clusterFactory}
 	}
 
 	factories := make([]informers.SharedInformerFactory, 0, len(namespaces))
@@ -163,8 +168,9 @@ func newFactories(client kubernetes.Interface, namespaces []string, resync time.
 }
 
 type factorySet struct {
-	global       informers.SharedInformerFactory
-	perNamespace []informers.SharedInformerFactory
+	global        informers.SharedInformerFactory
+	perNamespace  []informers.SharedInformerFactory
+	clusterScoped informers.SharedInformerFactory
 }
 
 func (fs factorySet) hasMultiple() bool { return len(fs.perNamespace) > 0 }
@@ -192,6 +198,9 @@ func (fs factorySet) podInformers() []cache.SharedIndexInformer {
 }
 
 func (fs factorySet) nodeLister() corev1lister.NodeLister {
+	if fs.clusterScoped != nil {
+		return fs.clusterScoped.Core().V1().Nodes().Lister()
+	}
 	if fs.global != nil {
 		return fs.global.Core().V1().Nodes().Lister()
 	}
@@ -199,6 +208,9 @@ func (fs factorySet) nodeLister() corev1lister.NodeLister {
 }
 
 func (fs factorySet) nodeInformer() cache.SharedIndexInformer {
+	if fs.clusterScoped != nil {
+		return fs.clusterScoped.Core().V1().Nodes().Informer()
+	}
 	if fs.global != nil {
 		return fs.global.Core().V1().Nodes().Informer()
 	}
@@ -403,24 +415,24 @@ func (fs factorySet) serviceInformers() []cache.SharedIndexInformer {
 	return out
 }
 
-func (fs factorySet) endpointLister() corev1lister.EndpointsLister {
+func (fs factorySet) endpointSliceLister() discoveryv1lister.EndpointSliceLister {
 	if fs.global != nil {
-		return fs.global.Core().V1().Endpoints().Lister()
+		return fs.global.Discovery().V1().EndpointSlices().Lister()
 	}
-	listers := make([]corev1lister.EndpointsLister, 0, len(fs.perNamespace))
+	listers := make([]discoveryv1lister.EndpointSliceLister, 0, len(fs.perNamespace))
 	for _, f := range fs.perNamespace {
-		listers = append(listers, f.Core().V1().Endpoints().Lister())
+		listers = append(listers, f.Discovery().V1().EndpointSlices().Lister())
 	}
-	return &multiEndpointLister{listers: listers}
+	return &multiEndpointSliceLister{listers: listers}
 }
 
-func (fs factorySet) endpointInformers() []cache.SharedIndexInformer {
+func (fs factorySet) endpointSliceInformers() []cache.SharedIndexInformer {
 	if fs.global != nil {
-		return []cache.SharedIndexInformer{fs.global.Core().V1().Endpoints().Informer()}
+		return []cache.SharedIndexInformer{fs.global.Discovery().V1().EndpointSlices().Informer()}
 	}
 	out := make([]cache.SharedIndexInformer, 0, len(fs.perNamespace))
 	for _, f := range fs.perNamespace {
-		out = append(out, f.Core().V1().Endpoints().Informer())
+		out = append(out, f.Discovery().V1().EndpointSlices().Informer())
 	}
 	return out
 }
@@ -492,6 +504,9 @@ func (fs factorySet) configMapInformers() []cache.SharedIndexInformer {
 }
 
 func (fs factorySet) mwcLister() admissionregistrationv1lister.MutatingWebhookConfigurationLister {
+	if fs.clusterScoped != nil {
+		return fs.clusterScoped.Admissionregistration().V1().MutatingWebhookConfigurations().Lister()
+	}
 	if fs.global != nil {
 		return fs.global.Admissionregistration().V1().MutatingWebhookConfigurations().Lister()
 	}
@@ -499,6 +514,9 @@ func (fs factorySet) mwcLister() admissionregistrationv1lister.MutatingWebhookCo
 }
 
 func (fs factorySet) mwcInformer() cache.SharedIndexInformer {
+	if fs.clusterScoped != nil {
+		return fs.clusterScoped.Admissionregistration().V1().MutatingWebhookConfigurations().Informer()
+	}
 	if fs.global != nil {
 		return fs.global.Admissionregistration().V1().MutatingWebhookConfigurations().Informer()
 	}
@@ -506,6 +524,9 @@ func (fs factorySet) mwcInformer() cache.SharedIndexInformer {
 }
 
 func (fs factorySet) vwcLister() admissionregistrationv1lister.ValidatingWebhookConfigurationLister {
+	if fs.clusterScoped != nil {
+		return fs.clusterScoped.Admissionregistration().V1().ValidatingWebhookConfigurations().Lister()
+	}
 	if fs.global != nil {
 		return fs.global.Admissionregistration().V1().ValidatingWebhookConfigurations().Lister()
 	}
@@ -513,6 +534,9 @@ func (fs factorySet) vwcLister() admissionregistrationv1lister.ValidatingWebhook
 }
 
 func (fs factorySet) vwcInformer() cache.SharedIndexInformer {
+	if fs.clusterScoped != nil {
+		return fs.clusterScoped.Admissionregistration().V1().ValidatingWebhookConfigurations().Informer()
+	}
 	if fs.global != nil {
 		return fs.global.Admissionregistration().V1().ValidatingWebhookConfigurations().Informer()
 	}
@@ -558,8 +582,8 @@ func New(
 		pdbQueue:         workqueue.NewTypedRateLimitingQueueWithConfig(workqueue.DefaultTypedControllerRateLimiter[string](), workqueue.TypedRateLimitingQueueConfig[string]{Name: "poddisruptionbudgets"}),
 		cronJobQueue:     workqueue.NewTypedRateLimitingQueueWithConfig(workqueue.DefaultTypedControllerRateLimiter[string](), workqueue.TypedRateLimitingQueueConfig[string]{Name: "cronjobs"}),
 		hpaQueue:         workqueue.NewTypedRateLimitingQueueWithConfig(workqueue.DefaultTypedControllerRateLimiter[string](), workqueue.TypedRateLimitingQueueConfig[string]{Name: "horizontalpodautoscalers"}),
-		serviceQueue:     workqueue.NewTypedRateLimitingQueueWithConfig(workqueue.DefaultTypedControllerRateLimiter[string](), workqueue.TypedRateLimitingQueueConfig[string]{Name: "services"}),
-		endpointQueue:    workqueue.NewTypedRateLimitingQueueWithConfig(workqueue.DefaultTypedControllerRateLimiter[string](), workqueue.TypedRateLimitingQueueConfig[string]{Name: "endpoints"}),
+		serviceQueue:       workqueue.NewTypedRateLimitingQueueWithConfig(workqueue.DefaultTypedControllerRateLimiter[string](), workqueue.TypedRateLimitingQueueConfig[string]{Name: "services"}),
+		endpointSliceQueue: workqueue.NewTypedRateLimitingQueueWithConfig(workqueue.DefaultTypedControllerRateLimiter[string](), workqueue.TypedRateLimitingQueueConfig[string]{Name: "endpointslices"}),
 		mwcQueue:         workqueue.NewTypedRateLimitingQueueWithConfig(workqueue.DefaultTypedControllerRateLimiter[string](), workqueue.TypedRateLimitingQueueConfig[string]{Name: "mutatingwebhookconfigurations"}),
 		vwcQueue:         workqueue.NewTypedRateLimitingQueueWithConfig(workqueue.DefaultTypedControllerRateLimiter[string](), workqueue.TypedRateLimitingQueueConfig[string]{Name: "validatingwebhookconfigurations"}),
 		ingressQueue:     workqueue.NewTypedRateLimitingQueueWithConfig(workqueue.DefaultTypedControllerRateLimiter[string](), workqueue.TypedRateLimitingQueueConfig[string]{Name: "ingresses"}),
@@ -688,32 +712,32 @@ func New(
 	if cfg.ServiceMonitor.Enabled {
 		svcLister := fs.serviceLister()
 		svcInformers := fs.serviceInformers()
-		epLister := fs.endpointLister()
-		epInformers := fs.endpointInformers()
+		epSliceLister := fs.endpointSliceLister()
+		epSliceInformers := fs.endpointSliceInformers()
 
 		c.serviceLister = svcLister
-		c.endpointLister = epLister
+		c.endpointSliceLister = epSliceLister
 		c.serviceWatchEnabled = true
-		c.endpointWatchEnabled = true
+		c.endpointSliceWatchEnabled = true
 
-		var svcSynced, epSynced []cache.InformerSynced
+		var svcSynced, epSliceSynced []cache.InformerSynced
 		for _, inf := range svcInformers {
 			svcSynced = append(svcSynced, inf.HasSynced)
 		}
-		for _, inf := range epInformers {
-			epSynced = append(epSynced, inf.HasSynced)
+		for _, inf := range epSliceInformers {
+			epSliceSynced = append(epSliceSynced, inf.HasSynced)
 		}
 		c.svcSynced = svcSynced
-		c.endpointSynced = epSynced
+		c.endpointSliceSynced = epSliceSynced
 
 		h.SetServiceLister(svcLister)
-		h.SetEndpointLister(epLister)
+		h.SetEndpointSliceLister(epSliceLister)
 
 		for _, inf := range svcInformers {
 			inf.AddEventHandler(c.changeRecordingHandler("service", c.enqueueService))
 		}
-		for _, inf := range epInformers {
-			inf.AddEventHandler(c.changeRecordingHandler("endpoint", c.enqueueEndpoint))
+		for _, inf := range epSliceInformers {
+			inf.AddEventHandler(c.changeRecordingHandler("endpointslice", c.enqueueEndpointSlice))
 		}
 	}
 
@@ -1329,7 +1353,7 @@ func (c *Controller) Run(ctx context.Context, workers int) error {
 	defer c.cronJobQueue.ShutDown()
 	defer c.hpaQueue.ShutDown()
 	defer c.serviceQueue.ShutDown()
-	defer c.endpointQueue.ShutDown()
+	defer c.endpointSliceQueue.ShutDown()
 	defer c.mwcQueue.ShutDown()
 	defer c.vwcQueue.ShutDown()
 	defer c.ingressQueue.ShutDown()
@@ -1342,7 +1366,7 @@ func (c *Controller) Run(ctx context.Context, workers int) error {
 	syncFns := make([]cache.InformerSynced, 0,
 		1+len(c.podsSynced)+len(c.rsSynced)+len(c.dsSynced)+len(c.ssSynced)+len(c.eventsSynced)+
 			len(c.deploysSynced)+len(c.jobsSynced)+len(c.cronJobsSynced)+len(c.secretsSynced)+
-			len(c.svcSynced)+len(c.endpointSynced)+len(c.ingressSynced)+len(c.netpolSynced)+3)
+			len(c.svcSynced)+len(c.endpointSliceSynced)+len(c.ingressSynced)+len(c.netpolSynced)+3)
 	syncFns = append(syncFns, c.podsSynced...)
 	syncFns = append(syncFns, c.rsSynced...)
 	syncFns = append(syncFns, c.dsSynced...)
@@ -1358,7 +1382,7 @@ func (c *Controller) Run(ctx context.Context, workers int) error {
 	syncFns = append(syncFns, c.hpaSynced...)
 	syncFns = append(syncFns, c.secretsSynced...)
 	syncFns = append(syncFns, c.svcSynced...)
-	syncFns = append(syncFns, c.endpointSynced...)
+	syncFns = append(syncFns, c.endpointSliceSynced...)
 	if c.mwcSynced != nil {
 		syncFns = append(syncFns, c.mwcSynced)
 	}
@@ -1449,8 +1473,8 @@ func (c *Controller) Run(ctx context.Context, workers int) error {
 		if c.serviceWatchEnabled {
 			go wait.UntilWithContext(ctx, c.runServiceWorker, time.Second)
 		}
-		if c.endpointWatchEnabled {
-			go wait.UntilWithContext(ctx, c.runEndpointWorker, time.Second)
+		if c.endpointSliceWatchEnabled {
+			go wait.UntilWithContext(ctx, c.runEndpointSliceWorker, time.Second)
 		}
 		if c.mwcWatchEnabled {
 			go wait.UntilWithContext(ctx, c.runMwcWorker, time.Second)
@@ -1524,8 +1548,8 @@ func (c *Controller) runServiceWorker(ctx context.Context) {
 	}
 }
 
-func (c *Controller) runEndpointWorker(ctx context.Context) {
-	for c.processNextEndpointItem() {
+func (c *Controller) runEndpointSliceWorker(ctx context.Context) {
+	for c.processNextEndpointSliceItem() {
 	}
 }
 
@@ -1834,14 +1858,15 @@ func (c *Controller) buildSeenSet() {
 	}
 
 	// Services — seed service-endpoint issues
-	if c.serviceLister != nil && c.endpointLister != nil {
+	if c.serviceLister != nil && c.endpointSliceLister != nil {
 		if svcs, err := c.serviceLister.List(labels.Everything()); err == nil {
 			for _, svc := range svcs {
-				eps, err := c.endpointLister.Endpoints(svc.Namespace).Get(svc.Name)
+				sel := labels.Set{"kubernetes.io/service-name": svc.Name}.AsSelector()
+				epSlices, err := c.endpointSliceLister.EndpointSlices(svc.Namespace).List(sel)
 				if err != nil {
 					continue
 				}
-				if sig := handler.DetectServiceEndpointIssue(svc, eps); sig != nil {
+				if sig := handler.DetectServiceEndpointIssue(svc, epSlices); sig != nil {
 					seedSignal(sig, svc.Name)
 				}
 			}
@@ -2180,13 +2205,13 @@ func (c *Controller) enqueueService(obj interface{}) {
 	c.serviceQueue.Add(key)
 }
 
-func (c *Controller) enqueueEndpoint(obj interface{}) {
+func (c *Controller) enqueueEndpointSlice(obj interface{}) {
 	key, err := cache.DeletionHandlingMetaNamespaceKeyFunc(obj)
 	if err != nil {
 		utilruntime.HandleError(err)
 		return
 	}
-	c.endpointQueue.Add(key)
+	c.endpointSliceQueue.Add(key)
 }
 
 func (c *Controller) enqueueMwc(obj interface{}) {
@@ -2251,7 +2276,7 @@ func (c *Controller) syncService(key string) error {
 	return c.handler.ProcessServiceObject(svc, false)
 }
 
-func (c *Controller) syncEndpoint(key string) error {
+func (c *Controller) syncEndpointSlice(key string) error {
 	namespace, name, err := cache.SplitMetaNamespaceKey(key)
 	if err != nil {
 		return err
@@ -2360,20 +2385,20 @@ func (c *Controller) processNextServiceItem() bool {
 	return true
 }
 
-func (c *Controller) processNextEndpointItem() bool {
-	key, quit := c.endpointQueue.Get()
+func (c *Controller) processNextEndpointSliceItem() bool {
+	key, quit := c.endpointSliceQueue.Get()
 	if quit {
 		return false
 	}
-	defer c.endpointQueue.Done(key)
+	defer c.endpointSliceQueue.Done(key)
 
-	if err := c.syncEndpoint(key); err != nil {
-		c.endpointQueue.AddRateLimited(key)
-		utilruntime.HandleError(fmt.Errorf("error syncing endpoint %q: %s, requeuing", key, err.Error()))
+	if err := c.syncEndpointSlice(key); err != nil {
+		c.endpointSliceQueue.AddRateLimited(key)
+		utilruntime.HandleError(fmt.Errorf("error syncing endpointslice %q: %s, requeuing", key, err.Error()))
 		return true
 	}
 
-	c.endpointQueue.Forget(key)
+	c.endpointSliceQueue.Forget(key)
 	return true
 }
 

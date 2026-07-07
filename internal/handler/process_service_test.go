@@ -7,10 +7,41 @@ import (
 	"github.com/abahmed/kwatch/internal/model"
 	"github.com/stretchr/testify/assert"
 	corev1 "k8s.io/api/core/v1"
+	discoveryv1 "k8s.io/api/discovery/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/client-go/informers"
 	"k8s.io/client-go/kubernetes/fake"
 )
+
+func epSliceForSvc(name, ns string, ready bool) *discoveryv1.EndpointSlice {
+	eps := &discoveryv1.EndpointSlice{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      name + "-slice",
+			Namespace: ns,
+			Labels:    map[string]string{"kubernetes.io/service-name": name},
+		},
+		Endpoints: []discoveryv1.Endpoint{
+			{
+				Addresses: []string{"10.0.0.2"},
+				Conditions: discoveryv1.EndpointConditions{
+					Ready: &ready,
+				},
+			},
+		},
+	}
+	return eps
+}
+
+func emptyEpSlice(name, ns string) *discoveryv1.EndpointSlice {
+	return &discoveryv1.EndpointSlice{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      name + "-slice",
+			Namespace: ns,
+			Labels:    map[string]string{"kubernetes.io/service-name": name},
+		},
+	}
+}
 
 func TestProcessServiceCreatesIncident(t *testing.T) {
 	defaultServiceSustainedSeconds = 0
@@ -26,15 +57,12 @@ func TestProcessServiceCreatesIncident(t *testing.T) {
 			ClusterIP: "10.0.0.1",
 		},
 	}
-	eps := &corev1.Endpoints{
-		ObjectMeta: metav1.ObjectMeta{Name: "test-svc", Namespace: "default"},
-	}
 
 	f := informers.NewSharedInformerFactory(fake.NewSimpleClientset(), 0)
 	f.Core().V1().Services().Informer().GetIndexer().Add(svc)
-	f.Core().V1().Endpoints().Informer().GetIndexer().Add(eps)
+	f.Discovery().V1().EndpointSlices().Informer().GetIndexer().Add(emptyEpSlice("test-svc", "default"))
 	h.SetServiceLister(f.Core().V1().Services().Lister())
-	h.SetEndpointLister(f.Core().V1().Endpoints().Lister())
+	h.SetEndpointSliceLister(f.Discovery().V1().EndpointSlices().Lister())
 
 	assert.NoError(t, h.ProcessService("default/test-svc", false))
 
@@ -68,10 +96,7 @@ func TestDetectServiceEndpointIssueNoSelector(t *testing.T) {
 	svc := &corev1.Service{
 		ObjectMeta: metav1.ObjectMeta{Name: "test-svc", Namespace: "default"},
 	}
-	eps := &corev1.Endpoints{
-		ObjectMeta: metav1.ObjectMeta{Name: "test-svc", Namespace: "default"},
-	}
-	sig := DetectServiceEndpointIssue(svc, eps)
+	sig := DetectServiceEndpointIssue(svc, nil)
 	assert.Nil(t, sig, "service without selectors should not produce a signal")
 }
 
@@ -83,10 +108,7 @@ func TestDetectServiceEndpointIssueHeadless(t *testing.T) {
 			Selector:  map[string]string{"app": "test"},
 		},
 	}
-	eps := &corev1.Endpoints{
-		ObjectMeta: metav1.ObjectMeta{Name: "test-svc", Namespace: "default"},
-	}
-	sig := DetectServiceEndpointIssue(svc, eps)
+	sig := DetectServiceEndpointIssue(svc, nil)
 	assert.Nil(t, sig, "headless service should not produce a signal")
 }
 
@@ -99,10 +121,7 @@ func TestDetectServiceEndpointIssueExternalName(t *testing.T) {
 			ClusterIP: "192.168.1.1",
 		},
 	}
-	eps := &corev1.Endpoints{
-		ObjectMeta: metav1.ObjectMeta{Name: "test-svc", Namespace: "default"},
-	}
-	sig := DetectServiceEndpointIssue(svc, eps)
+	sig := DetectServiceEndpointIssue(svc, nil)
 	assert.Nil(t, sig, "ExternalName service should not produce a signal")
 }
 
@@ -114,13 +133,8 @@ func TestDetectServiceEndpointIssueReady(t *testing.T) {
 			ClusterIP: "10.0.0.1",
 		},
 	}
-	eps := &corev1.Endpoints{
-		ObjectMeta: metav1.ObjectMeta{Name: "test-svc", Namespace: "default"},
-		Subsets: []corev1.EndpointSubset{
-			{Addresses: []corev1.EndpointAddress{{IP: "10.0.0.2"}}},
-		},
-	}
-	sig := DetectServiceEndpointIssue(svc, eps)
+	epSlices := []*discoveryv1.EndpointSlice{epSliceForSvc("test-svc", "default", true)}
+	sig := DetectServiceEndpointIssue(svc, epSlices)
 	assert.Nil(t, sig, "service with ready endpoints should not produce a signal")
 }
 
@@ -132,17 +146,15 @@ func TestDetectServiceEndpointIssueNoReadyEndpoints(t *testing.T) {
 			ClusterIP: "10.0.0.1",
 		},
 	}
-	eps := &corev1.Endpoints{
-		ObjectMeta: metav1.ObjectMeta{Name: "test-svc", Namespace: "default"},
-	}
-	sig := DetectServiceEndpointIssue(svc, eps)
+	epSlices := []*discoveryv1.EndpointSlice{emptyEpSlice("test-svc", "default")}
+	sig := DetectServiceEndpointIssue(svc, epSlices)
 	assert.NotNil(t, sig)
 	assert.Equal(t, "ServiceNoEndpoints", sig.Reason)
 	assert.Equal(t, "service", sig.Resource)
 	assert.Equal(t, "default/test-svc", sig.Owner)
 }
 
-func TestDetectServiceEndpointIssueOnlyNotReadyAddresses(t *testing.T) {
+func TestDetectServiceEndpointIssueOnlyNotReady(t *testing.T) {
 	svc := &corev1.Service{
 		ObjectMeta: metav1.ObjectMeta{Name: "test-svc", Namespace: "default"},
 		Spec: corev1.ServiceSpec{
@@ -150,14 +162,32 @@ func TestDetectServiceEndpointIssueOnlyNotReadyAddresses(t *testing.T) {
 			ClusterIP: "10.0.0.1",
 		},
 	}
-	eps := &corev1.Endpoints{
+	epSlices := []*discoveryv1.EndpointSlice{epSliceForSvc("test-svc", "default", false)}
+	sig := DetectServiceEndpointIssue(svc, epSlices)
+	assert.NotNil(t, sig, "service with only not-ready addresses should produce a signal")
+}
+
+func TestDetectServiceEndpointIssueMultipleNotReady(t *testing.T) {
+	svc := &corev1.Service{
 		ObjectMeta: metav1.ObjectMeta{Name: "test-svc", Namespace: "default"},
-		Subsets: []corev1.EndpointSubset{
-			{NotReadyAddresses: []corev1.EndpointAddress{{IP: "10.0.0.2"}}},
+		Spec: corev1.ServiceSpec{
+			Selector:  map[string]string{"app": "test"},
+			ClusterIP: "10.0.0.1",
 		},
 	}
-	sig := DetectServiceEndpointIssue(svc, eps)
-	assert.NotNil(t, sig, "service with only not-ready addresses should produce a signal")
+	notReady := false
+	epSlices := []*discoveryv1.EndpointSlice{{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "ep",
+			Namespace: "default",
+			Labels:    map[string]string{"kubernetes.io/service-name": "test-svc"},
+		},
+		Endpoints: []discoveryv1.Endpoint{
+			{Addresses: []string{"10.0.0.2"}, Conditions: discoveryv1.EndpointConditions{Ready: &notReady}},
+		},
+	}}
+	sig := DetectServiceEndpointIssue(svc, epSlices)
+	assert.NotNil(t, sig, "service with only not-ready endpoint conditions should produce a signal")
 }
 
 func TestProcessServiceObjectNoEndpointsIncident(t *testing.T) {
@@ -174,13 +204,12 @@ func TestProcessServiceObjectNoEndpointsIncident(t *testing.T) {
 			ClusterIP: "10.0.0.1",
 		},
 	}
-	eps := &corev1.Endpoints{
-		ObjectMeta: metav1.ObjectMeta{Name: "test-svc", Namespace: "default"},
-	}
 
 	f := informers.NewSharedInformerFactory(fake.NewSimpleClientset(), 0)
-	f.Core().V1().Endpoints().Informer().GetIndexer().Add(eps)
-	h.SetEndpointLister(f.Core().V1().Endpoints().Lister())
+	sel := labels.SelectorFromSet(map[string]string{"kubernetes.io/service-name": "test-svc"})
+	_ = sel
+	f.Discovery().V1().EndpointSlices().Informer().GetIndexer().Add(emptyEpSlice("test-svc", "default"))
+	h.SetEndpointSliceLister(f.Discovery().V1().EndpointSlices().Lister())
 
 	assert.NoError(t, h.ProcessServiceObject(svc, false))
 
@@ -211,25 +240,18 @@ func TestProcessServiceObjectResolve(t *testing.T) {
 	}
 
 	f := informers.NewSharedInformerFactory(fake.NewSimpleClientset(), 0)
-	indexer := f.Core().V1().Endpoints().Informer().GetIndexer()
+	indexer := f.Discovery().V1().EndpointSlices().Informer().GetIndexer()
 
-	epsNoReady := &corev1.Endpoints{
-		ObjectMeta: metav1.ObjectMeta{Name: "test-svc", Namespace: "default"},
-	}
-	indexer.Add(epsNoReady)
-	h.SetEndpointLister(f.Core().V1().Endpoints().Lister())
+	epNoReady := emptyEpSlice("test-svc", "default")
+	indexer.Add(epNoReady)
+	h.SetEndpointSliceLister(f.Discovery().V1().EndpointSlices().Lister())
 
 	assert.NoError(t, h.ProcessServiceObject(svc, false))
 	assert.Equal(t, 1, e.ActiveCount(), "incident should be created for no endpoints")
 
-	indexer.Delete(epsNoReady)
-	epsReady := &corev1.Endpoints{
-		ObjectMeta: metav1.ObjectMeta{Name: "test-svc", Namespace: "default"},
-		Subsets: []corev1.EndpointSubset{
-			{Addresses: []corev1.EndpointAddress{{IP: "10.0.0.2"}}},
-		},
-	}
-	indexer.Add(epsReady)
+	indexer.Delete(epNoReady)
+	epReady := epSliceForSvc("test-svc", "default", true)
+	indexer.Add(epReady)
 
 	assert.NoError(t, h.ProcessServiceObject(svc, false))
 	assert.Equal(t, 0, e.ActiveCount(), "incident should be resolved when endpoints are ready")
@@ -256,12 +278,12 @@ func TestProcessServiceInvalidKey(t *testing.T) {
 	assert.Error(t, h.ProcessService("a/b/c", false))
 }
 
-func TestProcessServiceObjectEndpointsNotFound(t *testing.T) {
+func TestProcessServiceObjectSliceNotFound(t *testing.T) {
 	e := testCorrelator()
 	h := NewHandler(fake.NewSimpleClientset(), &config.Config{}, e, testAlertMgr)
 
 	f := informers.NewSharedInformerFactory(fake.NewSimpleClientset(), 0)
-	h.SetEndpointLister(f.Core().V1().Endpoints().Lister())
+	h.SetEndpointSliceLister(f.Discovery().V1().EndpointSlices().Lister())
 
 	svc := &corev1.Service{
 		ObjectMeta: metav1.ObjectMeta{Name: "test-svc", Namespace: "default"},
@@ -283,13 +305,10 @@ func TestProcessServiceObjectClusterIPEmpty(t *testing.T) {
 			ClusterIP: "",
 		},
 	}
-	eps := &corev1.Endpoints{
-		ObjectMeta: metav1.ObjectMeta{Name: "test-svc", Namespace: "default"},
-	}
 
 	f := informers.NewSharedInformerFactory(fake.NewSimpleClientset(), 0)
-	f.Core().V1().Endpoints().Informer().GetIndexer().Add(eps)
-	h.SetEndpointLister(f.Core().V1().Endpoints().Lister())
+	f.Discovery().V1().EndpointSlices().Informer().GetIndexer().Add(emptyEpSlice("test-svc", "default"))
+	h.SetEndpointSliceLister(f.Discovery().V1().EndpointSlices().Lister())
 
 	assert.NoError(t, h.ProcessServiceObject(svc, false))
 	assert.Equal(t, 0, e.ActiveCount(), "service with empty ClusterIP should not create incident")
@@ -305,14 +324,71 @@ func TestProcessServiceObjectNoSelectorNoIncident(t *testing.T) {
 			ClusterIP: "10.0.0.1",
 		},
 	}
-	eps := &corev1.Endpoints{
-		ObjectMeta: metav1.ObjectMeta{Name: "test-svc", Namespace: "default"},
-	}
 
 	f := informers.NewSharedInformerFactory(fake.NewSimpleClientset(), 0)
-	f.Core().V1().Endpoints().Informer().GetIndexer().Add(eps)
-	h.SetEndpointLister(f.Core().V1().Endpoints().Lister())
+	f.Discovery().V1().EndpointSlices().Informer().GetIndexer().Add(emptyEpSlice("test-svc", "default"))
+	h.SetEndpointSliceLister(f.Discovery().V1().EndpointSlices().Lister())
 
 	assert.NoError(t, h.ProcessServiceObject(svc, false))
 	assert.Equal(t, 0, e.ActiveCount(), "service without selectors should not create incident")
+}
+
+func TestDetectServiceEndpointIssueEmptySlice(t *testing.T) {
+	svc := &corev1.Service{
+		ObjectMeta: metav1.ObjectMeta{Name: "test-svc", Namespace: "default"},
+		Spec: corev1.ServiceSpec{
+			Selector:  map[string]string{"app": "test"},
+			ClusterIP: "10.0.0.1",
+		},
+	}
+	sig := DetectServiceEndpointIssue(svc, []*discoveryv1.EndpointSlice{})
+	assert.NotNil(t, sig, "empty slice list should produce a signal")
+}
+
+func TestDetectServiceEndpointIssueNilSlice(t *testing.T) {
+	svc := &corev1.Service{
+		ObjectMeta: metav1.ObjectMeta{Name: "test-svc", Namespace: "default"},
+		Spec: corev1.ServiceSpec{
+			Selector:  map[string]string{"app": "test"},
+			ClusterIP: "10.0.0.1",
+		},
+	}
+	sig := DetectServiceEndpointIssue(svc, nil)
+	assert.NotNil(t, sig, "nil slices should produce a signal")
+}
+
+func TestDetectServiceEndpointIssueReadyInSecondSlice(t *testing.T) {
+	svc := &corev1.Service{
+		ObjectMeta: metav1.ObjectMeta{Name: "test-svc", Namespace: "default"},
+		Spec: corev1.ServiceSpec{
+			Selector:  map[string]string{"app": "test"},
+			ClusterIP: "10.0.0.1",
+		},
+	}
+	notReady := false
+	ready := true
+	epSlices := []*discoveryv1.EndpointSlice{
+		{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      "a",
+				Namespace: "default",
+				Labels:    map[string]string{"kubernetes.io/service-name": "test-svc"},
+			},
+			Endpoints: []discoveryv1.Endpoint{
+				{Addresses: []string{"10.0.0.2"}, Conditions: discoveryv1.EndpointConditions{Ready: &notReady}},
+			},
+		},
+		{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      "b",
+				Namespace: "default",
+				Labels:    map[string]string{"kubernetes.io/service-name": "test-svc"},
+			},
+			Endpoints: []discoveryv1.Endpoint{
+				{Addresses: []string{"10.0.0.3"}, Conditions: discoveryv1.EndpointConditions{Ready: &ready}},
+			},
+		},
+	}
+	sig := DetectServiceEndpointIssue(svc, epSlices)
+	assert.Nil(t, sig, "ready endpoint in second slice should not produce a signal")
 }

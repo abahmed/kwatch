@@ -42,12 +42,12 @@ func TestProcessPodListerSuccess(t *testing.T) {
 	assert.NoError(t, h.ProcessPod(context.Background(), "ns1/p1", false))
 }
 
-// --- ProcessServiceObject endpoint lister error ---
+// --- ProcessServiceObject endpoint slice lister error ---
 
-func TestProcessServiceObjectEndpointListerError(t *testing.T) {
+func TestProcessServiceObjectEndpointSliceListerError(t *testing.T) {
 	h := NewHandler(fake.NewSimpleClientset(), &config.Config{}, testCorrelator(), testAlertMgr)
 	f := informers.NewSharedInformerFactory(fake.NewSimpleClientset(), 0)
-	h.SetEndpointLister(&errorEndpointLister{f.Core().V1().Endpoints().Lister()})
+	h.SetEndpointSliceLister(&errorEndpointSliceLister{f.Discovery().V1().EndpointSlices().Lister()})
 	h.SetServiceLister(f.Core().V1().Services().Lister())
 
 	svc := &corev1.Service{

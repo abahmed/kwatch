@@ -7,6 +7,7 @@ import (
 	autoscalingv2 "k8s.io/api/autoscaling/v2"
 	batchv1 "k8s.io/api/batch/v1"
 	corev1 "k8s.io/api/core/v1"
+	discoveryv1 "k8s.io/api/discovery/v1"
 	networkingv1 "k8s.io/api/networking/v1"
 	policyv1 "k8s.io/api/policy/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
@@ -16,6 +17,7 @@ import (
 	autoscalingv2lister "k8s.io/client-go/listers/autoscaling/v2"
 	batchv1lister "k8s.io/client-go/listers/batch/v1"
 	corev1lister "k8s.io/client-go/listers/core/v1"
+	discoveryv1lister "k8s.io/client-go/listers/discovery/v1"
 	networkingv1lister "k8s.io/client-go/listers/networking/v1"
 	policyv1lister "k8s.io/client-go/listers/policy/v1"
 )
@@ -635,12 +637,12 @@ func (m *multiServiceNamespaceLister) Get(name string) (*corev1.Service, error) 
 	return nil, apierrors.NewNotFound(schema.GroupResource{Resource: "services"}, name)
 }
 
-type multiEndpointLister struct {
-	listers []corev1lister.EndpointsLister
+type multiEndpointSliceLister struct {
+	listers []discoveryv1lister.EndpointSliceLister
 }
 
-func (m *multiEndpointLister) List(selector labels.Selector) ([]*corev1.Endpoints, error) {
-	var all []*corev1.Endpoints
+func (m *multiEndpointSliceLister) List(selector labels.Selector) ([]*discoveryv1.EndpointSlice, error) {
+	var all []*discoveryv1.EndpointSlice
 	for _, l := range m.listers {
 		items, err := l.List(selector)
 		if err != nil {
@@ -651,20 +653,20 @@ func (m *multiEndpointLister) List(selector labels.Selector) ([]*corev1.Endpoint
 	return all, nil
 }
 
-func (m *multiEndpointLister) Endpoints(namespace string) corev1lister.EndpointsNamespaceLister {
-	nsl := make([]corev1lister.EndpointsNamespaceLister, 0, len(m.listers))
+func (m *multiEndpointSliceLister) EndpointSlices(namespace string) discoveryv1lister.EndpointSliceNamespaceLister {
+	nsl := make([]discoveryv1lister.EndpointSliceNamespaceLister, 0, len(m.listers))
 	for _, l := range m.listers {
-		nsl = append(nsl, l.Endpoints(namespace))
+		nsl = append(nsl, l.EndpointSlices(namespace))
 	}
-	return &multiEndpointNamespaceLister{listers: nsl}
+	return &multiEndpointSliceNamespaceLister{listers: nsl}
 }
 
-type multiEndpointNamespaceLister struct {
-	listers []corev1lister.EndpointsNamespaceLister
+type multiEndpointSliceNamespaceLister struct {
+	listers []discoveryv1lister.EndpointSliceNamespaceLister
 }
 
-func (m *multiEndpointNamespaceLister) List(selector labels.Selector) ([]*corev1.Endpoints, error) {
-	var all []*corev1.Endpoints
+func (m *multiEndpointSliceNamespaceLister) List(selector labels.Selector) ([]*discoveryv1.EndpointSlice, error) {
+	var all []*discoveryv1.EndpointSlice
 	for _, l := range m.listers {
 		items, err := l.List(selector)
 		if err != nil {
@@ -675,14 +677,14 @@ func (m *multiEndpointNamespaceLister) List(selector labels.Selector) ([]*corev1
 	return all, nil
 }
 
-func (m *multiEndpointNamespaceLister) Get(name string) (*corev1.Endpoints, error) {
+func (m *multiEndpointSliceNamespaceLister) Get(name string) (*discoveryv1.EndpointSlice, error) {
 	for _, l := range m.listers {
 		item, err := l.Get(name)
 		if err == nil {
 			return item, nil
 		}
 	}
-	return nil, apierrors.NewNotFound(schema.GroupResource{Resource: "endpoints"}, name)
+	return nil, apierrors.NewNotFound(schema.GroupResource{Resource: "endpointslices"}, name)
 }
 
 type multiIngressLister struct {
