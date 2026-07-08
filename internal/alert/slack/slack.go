@@ -362,7 +362,19 @@ func buildIncidentBlocks(inc *model.Incident, appCfg *config.App) *slackClient.B
 	if containerName != "" {
 		fields = append(fields, markdownF("*Container*\n%s", containerName))
 	}
+	if inc.Image != "" {
+		fields = append(fields, markdownF("*Image*\n%s", inc.Image))
+	}
 	fields = append(fields, markdownF("*Reason*\n%s", inc.Reason))
+	if inc.NodeName != "" {
+		fields = append(fields, markdownF("*Node*\n%s", inc.NodeName))
+	}
+	if inc.LastContainerState != nil && inc.LastContainerState.ExitCode > 0 {
+		fields = append(fields, markdownF("*Exit Code*\n%d", inc.LastContainerState.ExitCode))
+	}
+	if inc.LastContainerState != nil && inc.LastContainerState.Msg != "" {
+		fields = append(fields, markdownF("*Message*\n%s", inc.LastContainerState.Msg))
+	}
 	if inc.RestartCount > 0 {
 		fields = append(fields, markdownF("*Restarts*\n%d", inc.RestartCount))
 	}
@@ -440,14 +452,36 @@ func buildIncidentUpdateBlocks(inc *model.Incident) *slackClient.Blocks {
 	if containerName != "" {
 		infoParts = append(infoParts, fmt.Sprintf("Container: %s", containerName))
 	}
+	if inc.Image != "" {
+		infoParts = append(infoParts, fmt.Sprintf("Image: %s", inc.Image))
+	}
+	if inc.NodeName != "" {
+		infoParts = append(infoParts, fmt.Sprintf("Node: %s", inc.NodeName))
+	}
+	if inc.LastContainerState != nil && inc.LastContainerState.Msg != "" {
+		infoParts = append(infoParts, fmt.Sprintf("Message: %s", inc.LastContainerState.Msg))
+	}
+	if inc.LastContainerState != nil && inc.LastContainerState.ExitCode > 0 {
+		infoParts = append(infoParts, fmt.Sprintf("Exit Code: %d", inc.LastContainerState.ExitCode))
+	}
+	if inc.OwnerKind != "" {
+		infoParts = append(infoParts, fmt.Sprintf("Kind: %s", inc.OwnerKind))
+	}
 	infoParts = append(infoParts, fmt.Sprintf("Count: %d", inc.Count))
 	infoParts = append(infoParts, fmt.Sprintf("Duration: %s", duration))
+	if inc.RestartCount > 0 {
+		infoParts = append(infoParts, fmt.Sprintf("Restarts: %d", inc.RestartCount))
+	}
 	if inc.PeakResources > 0 {
 		infoParts = append(infoParts, fmt.Sprintf("Peak: %d %s", inc.PeakResources, resourcePlural(inc)))
 	}
 
 	blocks := []slackClient.Block{
 		markdownSection(header + "\n" + strings.Join(infoParts, " · ")),
+	}
+
+	if inc.Hint != "" {
+		blocks = append(blocks, markdownSection("💡 "+inc.Hint))
 	}
 
 	if inc.IncludeEvents {
@@ -490,6 +524,9 @@ func buildIncidentResolvedBlocks(inc *model.Incident) *slackClient.Blocks {
 
 	var infoParts []string
 	infoParts = append(infoParts, fmt.Sprintf("Duration: %s", duration))
+	if inc.NodeName != "" {
+		infoParts = append(infoParts, fmt.Sprintf("Node: %s", inc.NodeName))
+	}
 	infoParts = append(infoParts, fmt.Sprintf("Total events: %d", inc.Count))
 	if inc.PeakResources > 0 {
 		infoParts = append(infoParts, fmt.Sprintf("Peak: %d %s", inc.PeakResources, resourcePlural(inc)))
@@ -537,6 +574,21 @@ func formatCreateText(inc *model.Incident) string {
 	containerName := containerSummary(inc)
 	if containerName != "" {
 		infoParts = append(infoParts, fmt.Sprintf("Container: %s", containerName))
+	}
+	if inc.Image != "" {
+		infoParts = append(infoParts, fmt.Sprintf("Image: %s", inc.Image))
+	}
+	if inc.NodeName != "" {
+		infoParts = append(infoParts, fmt.Sprintf("Node: %s", inc.NodeName))
+	}
+	if inc.LastContainerState != nil && inc.LastContainerState.Msg != "" {
+		infoParts = append(infoParts, fmt.Sprintf("Message: %s", inc.LastContainerState.Msg))
+	}
+	if inc.LastContainerState != nil && inc.LastContainerState.ExitCode > 0 {
+		infoParts = append(infoParts, fmt.Sprintf("Exit Code: %d", inc.LastContainerState.ExitCode))
+	}
+	if inc.OwnerKind != "" {
+		infoParts = append(infoParts, fmt.Sprintf("Kind: %s", inc.OwnerKind))
 	}
 	if inc.RestartCount > 0 {
 		infoParts = append(infoParts, fmt.Sprintf("Restarts: %d", inc.RestartCount))
@@ -593,12 +645,34 @@ func formatUpdateText(inc *model.Incident) string {
 	if containerName != "" {
 		infoParts = append(infoParts, fmt.Sprintf("Container: %s", containerName))
 	}
+	if inc.Image != "" {
+		infoParts = append(infoParts, fmt.Sprintf("Image: %s", inc.Image))
+	}
+	if inc.NodeName != "" {
+		infoParts = append(infoParts, fmt.Sprintf("Node: %s", inc.NodeName))
+	}
+	if inc.LastContainerState != nil && inc.LastContainerState.Msg != "" {
+		infoParts = append(infoParts, fmt.Sprintf("Message: %s", inc.LastContainerState.Msg))
+	}
+	if inc.LastContainerState != nil && inc.LastContainerState.ExitCode > 0 {
+		infoParts = append(infoParts, fmt.Sprintf("Exit Code: %d", inc.LastContainerState.ExitCode))
+	}
+	if inc.OwnerKind != "" {
+		infoParts = append(infoParts, fmt.Sprintf("Kind: %s", inc.OwnerKind))
+	}
+	if inc.RestartCount > 0 {
+		infoParts = append(infoParts, fmt.Sprintf("Restarts: %d", inc.RestartCount))
+	}
 	infoParts = append(infoParts, fmt.Sprintf("Count: %d", inc.Count))
 	infoParts = append(infoParts, fmt.Sprintf("Duration: %s", duration))
 	if inc.PeakResources > 0 {
 		infoParts = append(infoParts, fmt.Sprintf("Peak: %d %s", inc.PeakResources, resourcePlural(inc)))
 	}
 	parts = append(parts, strings.Join(infoParts, " · "))
+
+	if inc.Hint != "" {
+		parts = append(parts, "💡 "+inc.Hint)
+	}
 
 	if inc.IncludeLogs {
 		if logs := strings.TrimSpace(inc.Logs); len(logs) > 0 {
@@ -633,6 +707,15 @@ func formatResolvedText(inc *model.Incident) string {
 
 	var infoParts []string
 	infoParts = append(infoParts, fmt.Sprintf("Duration: %s", duration))
+	if inc.NodeName != "" {
+		infoParts = append(infoParts, fmt.Sprintf("Node: %s", inc.NodeName))
+	}
+	if inc.LastContainerState != nil && inc.LastContainerState.ExitCode > 0 {
+		infoParts = append(infoParts, fmt.Sprintf("Exit Code: %d", inc.LastContainerState.ExitCode))
+	}
+	if inc.OwnerKind != "" {
+		infoParts = append(infoParts, fmt.Sprintf("Kind: %s", inc.OwnerKind))
+	}
 	infoParts = append(infoParts, fmt.Sprintf("Total events: %d", inc.Count))
 	if inc.PeakResources > 0 {
 		infoParts = append(infoParts, fmt.Sprintf("Peak: %d %s", inc.PeakResources, resourcePlural(inc)))
@@ -651,7 +734,10 @@ func containerSummary(inc *model.Incident) string {
 		sort.Strings(names)
 		return strings.Join(names, ", ")
 	}
-	return inc.ContainerName
+	if inc.ContainerName != "" && inc.ContainerName != "." {
+		return inc.ContainerName
+	}
+	return ""
 }
 
 func resourcePlural(inc *model.Incident) string {
@@ -713,7 +799,8 @@ func markdownF(format string, a ...interface{}) *slackClient.TextBlockObject {
 func markdownSectionF(
 	format string, a ...interface{}) slackClient.SectionBlock {
 	return slackClient.SectionBlock{
-		Type: "section",
 		Text: markdownF(format, a...),
 	}
 }
+
+

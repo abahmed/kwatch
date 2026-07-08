@@ -41,6 +41,17 @@ type pendingGroup struct {
 	overflowCount int
 }
 
+type groupResolveTracker struct {
+	groupIncKey string
+	members     map[string]bool
+	totalCount  int
+	summary     string
+	reason      string
+	firstSeen   time.Time
+	lastSeen    time.Time
+	severity    string
+}
+
 const maxGroupEntries = 1000
 
 type Config struct {
@@ -187,7 +198,8 @@ type Engine struct {
 	lastContainerIndex  map[string]*model.ContainerState // key: namespace/podName
 	serviceLister       corev1lister.ServiceLister
 	cleanupCooldown     map[string]time.Time     // key → cooldown expiry; prevents resolve→recreate cycle
-	pendingGroups       map[string]*pendingGroup // computeGroupKey output → group buffer
+	pendingGroups       map[string]*pendingGroup         // computeGroupKey output → group buffer
+	groupMembers        map[string]*groupResolveTracker   // gk → batch resolve tracker
 	auditLogger         *audit.AuditLogger
 	dirty               bool // true when state has changed since last SnapshotAll
 	now                 func() time.Time
@@ -214,6 +226,7 @@ func NewEngine(cfg Config) *Engine {
 		lastContainerIndex:  make(map[string]*model.ContainerState),
 		cleanupCooldown:     make(map[string]time.Time),
 		pendingGroups:       make(map[string]*pendingGroup),
+		groupMembers:        make(map[string]*groupResolveTracker),
 	}
 	if e.now == nil {
 		e.now = time.Now
@@ -496,6 +509,9 @@ func computeGroupKey(r string, ev event.Event, owner string) string {
 
 	case "ServiceNoEndpoints":
 		return r + "|svc|" + ev.Namespace + "/" + ev.PodName
+
+	case "ControlPlaneComponentFailure":
+		return r + "|cp|" + ev.Namespace
 
 	case "CreateContainerConfigError", "Unschedulable", "PodPending",
 		"SchedulingGated",
@@ -780,6 +796,47 @@ func (e *Engine) isOwnerHealthy(inc *model.Incident) bool {
 	}
 }
 
+// Caller must hold e.mu.
+// tryGroupIncident attempts to add an event to the smart grouping buffer.
+// Returns true if the incident was grouped (caller should return ActionSkip).
+func (e *Engine) tryGroupIncident(inc *model.Incident, ev event.Event, owner string, now time.Time) bool {
+	if e.config.SmartGroupingWindow <= 0 || inc.NotifiedSig != "" {
+		return false
+	}
+	r := normalizeReason(ev.Reason)
+	gk := computeGroupKey(r, ev, owner)
+	pg, ok := e.pendingGroups[gk]
+	if !ok {
+		pg = &pendingGroup{firstSeen: now}
+		e.pendingGroups[gk] = pg
+	}
+	sig := ""
+	if r == "CrashLoopBackOff" || r == "BackOff" || r == "Error" {
+		sig = enricher.SignatureHint(ev.Logs)
+	}
+	entry := groupEntry{
+		key:           inc.Key,
+		namespace:     ev.Namespace,
+		owner:         owner,
+		reason:        r,
+		kind:          ev.Resource,
+		podName:       ev.PodName,
+		containerName: ev.ContainerName,
+		image:         ev.Image,
+		nodeName:      ev.NodeName,
+		logSignature:  sig,
+	}
+	pg.entries = append(pg.entries, entry)
+	if len(pg.entries) > maxGroupEntries {
+		pg.entries = pg.entries[1:]
+		pg.overflowCount++
+	}
+	inc.NotifiedSig = notifSig(inc)
+	inc.LastNotifiedAt = now
+	metrics.Default.IncidentsGrouped.Add(1)
+	return true
+}
+
 func (e *Engine) Process(ev event.Event, owner string, cs *model.ContainerState) (incident *model.Incident, action model.IncidentAction) {
 	e.mu.Lock()
 	defer e.mu.Unlock()
@@ -889,12 +946,35 @@ func (e *Engine) Process(ev event.Event, owner string, cs *model.ContainerState)
 	}
 
 	if inc, ok := e.state[key]; ok {
-		// Already resolved — re-create as fresh incident
+		// Already resolved — silently revive instead of re-creating.
+		// Re-creating would emit a CREATE notification, causing a
+		// resolved→CREATE→resolved flip-flop cycle. Silent revival
+		// keeps the existing incident active and returns ActionUpdate.
 		if inc.State == model.StateResolved {
-			newInc := e.newIncident(ev, owner, cs, key, res, now)
-			e.state[key] = newInc
-			e.indexIncidentByNamespace(newInc)
-			return newInc, e.edgeAction(newInc)
+			inc.State = model.StateActive
+			inc.ResolveAt = time.Time{}
+			if ev.PodName != "" {
+				inc.Resources[ev.PodName] = true
+				if len(inc.Resources) > inc.PeakResources {
+					inc.PeakResources = len(inc.Resources)
+				}
+			}
+			if ev.ContainerName != "" && ev.ContainerName != "." {
+				inc.Containers[ev.ContainerName] = true
+			}
+			inc.LastContainerState = cs
+			e.indexLastContainerState(ev.Namespace, ev.PodName, cs)
+			if cs != nil {
+				inc.RestartCount = int(cs.RestartCount)
+			}
+			inc.Count++
+			inc.LastSeen = now
+			inc.LastUpdate = now
+			e.config.Enricher.Enrich(&ev, inc)
+			if e.tryGroupIncident(inc, ev, owner, now) {
+				return inc, model.ActionSkip
+			}
+			return inc, e.edgeAction(inc)
 		}
 
 		// Pending resolve — revoke the scheduled resolve
@@ -919,6 +999,9 @@ func (e *Engine) Process(ev event.Event, owner string, cs *model.ContainerState)
 			inc.LastSeen = now
 			inc.LastUpdate = now
 			e.config.Enricher.Enrich(&ev, inc)
+			if e.tryGroupIncident(inc, ev, owner, now) {
+				return inc, model.ActionSkip
+			}
 			return inc, e.edgeAction(inc)
 		}
 
@@ -967,6 +1050,9 @@ func (e *Engine) Process(ev event.Event, owner string, cs *model.ContainerState)
 			inc.RestartCount = int(cs.RestartCount)
 		}
 		e.config.Enricher.Enrich(&ev, inc)
+		if e.tryGroupIncident(inc, ev, owner, now) {
+			return inc, model.ActionSkip
+		}
 		return inc, e.edgeAction(inc)
 	}
 
@@ -995,45 +1081,8 @@ func (e *Engine) Process(ev event.Event, owner string, cs *model.ContainerState)
 	e.indexIncidentByNamespace(inc)
 
 	// Smart grouping: buffer same-reason incidents, suppress individual
-	// notification until the group window expires. Group key varies by
-	// reason and content (owner, node, signature, image, namespace).
-	//
-	// If the incident has already been grouped once (NotifiedSig is set),
-	// skip re-grouping to avoid periodic re-notification for the same
-	// underlying condition (e.g. a service with no endpoints that keeps
-	// triggering on every informer resync).
-	if e.config.SmartGroupingWindow > 0 && inc.NotifiedSig == "" {
-		r := normalizeReason(ev.Reason)
-		gk := computeGroupKey(r, ev, owner)
-		pg, ok := e.pendingGroups[gk]
-		if !ok {
-			pg = &pendingGroup{firstSeen: now}
-			e.pendingGroups[gk] = pg
-		}
-		sig := ""
-		if r == "CrashLoopBackOff" || r == "BackOff" || r == "Error" {
-			sig = enricher.SignatureHint(ev.Logs)
-		}
-		entry := groupEntry{
-			key:           key,
-			namespace:     ev.Namespace,
-			owner:         owner,
-			reason:        r,
-			kind:          ev.Resource,
-			podName:       ev.PodName,
-			containerName: ev.ContainerName,
-			image:         ev.Image,
-			nodeName:      ev.NodeName,
-			logSignature:  sig,
-		}
-		pg.entries = append(pg.entries, entry)
-		if len(pg.entries) > maxGroupEntries {
-			pg.entries = pg.entries[1:]
-			pg.overflowCount++
-		}
-		inc.NotifiedSig = notifSig(inc)
-		inc.LastNotifiedAt = now
-		metrics.Default.IncidentsGrouped.Add(1)
+	// notification until the group window expires.
+	if e.tryGroupIncident(inc, ev, owner, now) {
 		return inc, model.ActionSkip
 	}
 
@@ -1123,6 +1172,29 @@ func (e *Engine) MarkResolved(key string) {
 		e.mu.Unlock()
 		return
 	}
+	// Smart group batch resolve: check if this incident is a member of a
+	// tracked smart group. If so, buffer the resolve and only emit one
+	// notification when all members have resolved.
+	if groupInc, groupAction, tracked := e.tryConsumeGroupResolve(key); tracked {
+		inc.State = model.StateResolved
+		if inc.Resource == "node" {
+			e.refreshNodeInhibition(inc.Name)
+		}
+		delete(e.seen, key)
+		e.mu.Unlock()
+		if groupAction != model.ActionSkip {
+			if hook := e.config.LifecycleHook; hook != nil {
+				hook(groupInc.Clone(), groupAction)
+			}
+		}
+		if hook := e.config.OnBaselineChange; hook != nil {
+			e.mu.Lock()
+			snapshot := cloneBaseline(e.seen)
+			e.mu.Unlock()
+			hook(snapshot)
+		}
+		return
+	}
 	inc.State = model.StateResolved
 	if inc.Resource == "node" {
 		e.refreshNodeInhibition(inc.Name)
@@ -1146,17 +1218,11 @@ func (e *Engine) MarkResolved(key string) {
 }
 
 func (e *Engine) RemovePod(namespace, podName string) {
-	type transition struct {
-		inc    *model.Incident
-		action model.IncidentAction
-	}
-	var pending []transition
 	var baselineChanged bool
 
 	e.mu.Lock()
 	e.dirty = true
-	now := e.now()
-	for key, inc := range e.state {
+	for _, inc := range e.state {
 		if inc.Namespace != namespace {
 			continue
 		}
@@ -1164,27 +1230,11 @@ func (e *Engine) RemovePod(namespace, podName string) {
 			continue
 		}
 		delete(inc.Resources, podName)
-		if len(inc.Resources) == 0 && inc.State != model.StateResolved {
-			if inc.State == model.StatePendingResolve {
-				continue
-			}
-			// Before resolving, check if the owning workload is healthy.
-			// This prevents resolve→re-alert cycling for broken rollouts
-			// where pods keep being replaced.
-			if !e.isOwnerHealthy(inc) {
-				continue
-			}
-			if e.config.ResolveHoldDown > 0 {
-				inc.State = model.StatePendingResolve
-				inc.ResolveAt = now.Add(e.config.ResolveHoldDown)
-				continue
-			}
-			inc.State = model.StateResolved
-			delete(e.seen, key)
-			action := e.edgeAction(inc)
-			baselineChanged = true
-			pending = append(pending, transition{inc.Clone(), action})
-		}
+		// Pod removal does NOT resolve incidents. During a crash loop, the
+		// ReplicaSet replaces pods continuously and each deletion would
+		// resolve the incident, then the new pod would re-create it, causing
+		// a flip-flop cycle. Resolution is handled solely by cleanup(),
+		// checkLifecycle(), and MarkResolved().
 	}
 	// Release per-pod baseline slots for this pod
 	for key, pods := range e.seen {
@@ -1199,11 +1249,6 @@ func (e *Engine) RemovePod(namespace, podName string) {
 	delete(e.lastContainerIndex, namespace+"/"+podName)
 	e.mu.Unlock()
 
-	for _, t := range pending {
-		if hook := e.config.LifecycleHook; hook != nil {
-			hook(t.inc, t.action)
-		}
-	}
 	if baselineChanged {
 		if hook := e.config.OnBaselineChange; hook != nil {
 			e.mu.Lock()
@@ -1315,7 +1360,12 @@ func (e *Engine) cleanup() {
 		// owned by checkLifecycle.
 		if inc.State != model.StateResolved && inc.State != model.StatePendingResolve {
 			inc.State = model.StateResolved
-			if a := e.edgeAction(inc); a != model.ActionSkip {
+			// Smart group batch resolve
+			if groupInc, groupAction, tracked := e.tryConsumeGroupResolve(key); tracked {
+				if groupAction != model.ActionSkip {
+					pending = append(pending, transition{groupInc, groupAction})
+				}
+			} else if a := e.edgeAction(inc); a != model.ActionSkip {
 				pending = append(pending, transition{inc.Clone(), a})
 			}
 		}
@@ -1363,9 +1413,17 @@ func (e *Engine) checkLifecycle() {
 			}
 			delete(e.seen, key)
 			e.cleanupCooldown[key] = now.Add(e.config.Window)
-			action := e.edgeAction(inc)
-			baselineChanged = true
-			pending = append(pending, transition{inc.Clone(), action})
+			// Smart group batch resolve
+			if groupInc, groupAction, tracked := e.tryConsumeGroupResolve(key); tracked {
+				baselineChanged = true
+				if groupAction != model.ActionSkip {
+					pending = append(pending, transition{groupInc, groupAction})
+				}
+			} else {
+				action := e.edgeAction(inc)
+				baselineChanged = true
+				pending = append(pending, transition{inc.Clone(), action})
+			}
 		}
 	}
 
@@ -1416,20 +1474,85 @@ func (e *Engine) checkLifecycle() {
 					}
 					groupIncKey := "__group__:" + gk + ":" + strconv.FormatInt(now.Unix(), 10)
 					sev := e.groupSeverity(active)
-					groupInc := &model.Incident{
-						ID:        fmt.Sprintf("%08x", crc32.ChecksumIEEE([]byte(groupIncKey))),
-						Key:       groupIncKey,
-						Reason:    active[0].reason,
-						Name:      gk,
-						Count:     len(active),
-						FirstSeen: pg.firstSeen,
-						LastSeen:  now,
-						Hint:      summary,
-						Severity:  sev,
+				// Copy rich data (logs, events, analysis, runbook) from the first
+				// member incident so the group notification includes diagnostics.
+				resources := make(map[string]bool)
+				for _, ge := range active {
+					if ge.podName != "" {
+						resources[ge.podName] = true
 					}
-					pending = append(pending, transition{groupInc, model.ActionCreate})
 				}
-				delete(e.pendingGroups, gk)
+				groupInc := &model.Incident{
+					ID:        fmt.Sprintf("%08x", crc32.ChecksumIEEE([]byte(groupIncKey))),
+					Key:       groupIncKey,
+					Reason:    active[0].reason,
+					Name:      summary,
+					Namespace: active[0].namespace,
+					Resource:  active[0].kind,
+					Resources: resources,
+					PeakResources: len(resources),
+					Count:     len(active),
+					FirstSeen: pg.firstSeen,
+					LastSeen:  now,
+					Hint:      summary,
+					Severity:  sev,
+				}
+				if mem, ok := e.state[active[0].key]; ok {
+					// Carry forward rich diagnostic data from the first member
+					// so the group notification includes actionable details
+					// (memory limits for OOM, log signatures, etc.).
+					if mem.Hint != "" && !strings.Contains(mem.Hint, summary) {
+						groupInc.Hint = enricher.CombineHints(groupInc.Hint, mem.Hint)
+					}
+					groupInc.Logs = mem.Logs
+					groupInc.IncludeLogs = mem.IncludeLogs
+					groupInc.Events = mem.Events
+					groupInc.IncludeEvents = mem.IncludeEvents
+					groupInc.ContainerName = mem.ContainerName
+					groupInc.OwnerKind = mem.OwnerKind
+					groupInc.Runbook = mem.Runbook
+					groupInc.Analysis = mem.Analysis
+					groupInc.Image = mem.Image
+					groupInc.NodeName = mem.NodeName
+					groupInc.RestartCount = mem.RestartCount
+					if mem.LastContainerState != nil {
+						cs := *mem.LastContainerState
+						groupInc.LastContainerState = &cs
+					}
+					groupInc.Containers = make(map[string]bool)
+					for c := range mem.Containers {
+						groupInc.Containers[c] = true
+					}
+				}
+				pending = append(pending, transition{groupInc, model.ActionCreate})
+
+				// Replace any stale tracker for the same key
+				delete(e.groupMembers, gk)
+
+				// Track group members for batch resolve
+				tracker := &groupResolveTracker{
+					groupIncKey: groupIncKey,
+					members:     make(map[string]bool),
+					totalCount:  len(active),
+					summary:     summary,
+					reason:      active[0].reason,
+					firstSeen:   pg.firstSeen,
+					lastSeen:    now,
+					severity:    sev,
+				}
+				for _, ge := range active {
+					tracker.members[ge.key] = false
+				}
+				e.groupMembers[gk] = tracker
+
+				// Reset NotifiedSig on active entries so subsequent events can be re-grouped
+				for _, ge := range active {
+					if inc, ok := e.state[ge.key]; ok {
+						inc.NotifiedSig = ""
+					}
+				}
+			}
+			delete(e.pendingGroups, gk)
 			}
 		}
 	}
@@ -1694,6 +1817,40 @@ func (e *Engine) groupSeverity(entries []groupEntry) string {
 		}
 	}
 	return best
+}
+
+// Caller must hold e.mu.
+func (e *Engine) tryConsumeGroupResolve(key string) (groupInc *model.Incident, action model.IncidentAction, tracked bool) {
+	for gk, tracker := range e.groupMembers {
+		if _, ok := tracker.members[key]; ok {
+			tracker.members[key] = true
+			allResolved := true
+			for _, resolved := range tracker.members {
+				if !resolved {
+					allResolved = false
+					break
+				}
+			}
+			if allResolved {
+				delete(e.groupMembers, gk)
+				groupInc := &model.Incident{
+					ID:        fmt.Sprintf("%08x", crc32.ChecksumIEEE([]byte(tracker.groupIncKey))),
+					Key:       tracker.groupIncKey,
+					Reason:    tracker.reason,
+					Name:      tracker.summary,
+					Count:     tracker.totalCount,
+					FirstSeen: tracker.firstSeen,
+					LastSeen:  tracker.lastSeen,
+					State:     model.StateResolved,
+					Severity:  tracker.severity,
+					Hint:      tracker.summary,
+				}
+				return groupInc, model.ActionResolved, true
+			}
+			return nil, model.ActionSkip, true
+		}
+	}
+	return nil, model.ActionSkip, false
 }
 
 func (e *Engine) SetSeverityMap(m map[string]string) {

@@ -203,7 +203,7 @@ func TestCleanupKeepsRecent(t *testing.T) {
 	assert.Equal(t, 1, len(e.state))
 }
 
-func TestRemovePodMultiIncidentResolve(t *testing.T) {
+func TestRemovePodNoResolve(t *testing.T) {
 	e := newTestEngine()
 
 	ev1 := event.Event{
@@ -222,16 +222,13 @@ func TestRemovePodMultiIncidentResolve(t *testing.T) {
 
 	assert.Equal(t, 2, len(e.state))
 
-	var resolvedKeys []string
-	e.config.LifecycleHook = func(inc *model.Incident, action model.IncidentAction) {
-		if action == model.ActionResolved {
-			resolvedKeys = append(resolvedKeys, inc.Key)
-		}
-	}
-
+	// RemovePod must NOT resolve incidents — just remove the pod from resources
 	e.RemovePod("default", "pod-1")
 
-	assert.Equal(t, 2, len(resolvedKeys), "both incidents should resolve")
+	assert.Equal(t, model.StateActive, e.state["default:deploy-1:CrashLoopBackOff:"].State,
+		"incident must stay active after RemovePod")
+	assert.Equal(t, model.StateActive, e.state["default:deploy-1:OOMKilled:"].State,
+		"incident must stay active after RemovePod")
 	assert.Equal(t, 0, len(e.state["default:deploy-1:CrashLoopBackOff:"].Resources))
 	assert.Equal(t, 0, len(e.state["default:deploy-1:OOMKilled:"].Resources))
 }
@@ -398,11 +395,11 @@ func TestRemovePodClearsSeen(t *testing.T) {
 	// Now baseline the incident key
 	e.SetSeen(map[string]map[string]int64{incidentKey: {"pod-1": time.Now().Unix()}})
 
-	// RemovePod should clear the baseline when the incident empties
+	// RemovePod clears the baseline for the removed pod
 	e.RemovePod("default", "pod-1")
 
-	// A new event for the same key should now fire (update, since the resolved
-	// incident is still in state and gets reactivated)
+	// A new event for a different pod with the same key — incident is still
+	// active (RemovePod does NOT resolve), so the update is silent
 	ev2 := event.Event{
 		PodName:   "pod-2",
 		Namespace: "default",
@@ -410,7 +407,7 @@ func TestRemovePodClearsSeen(t *testing.T) {
 	}
 
 	_, action = e.Process(ev2, "deploy-1", nil)
-	assert.Equal(t, model.ActionCreate, action)
+	assert.Equal(t, model.ActionSkip, action)
 }
 
 func TestStsOwnedPodsGroupByStsName(t *testing.T) {
@@ -721,7 +718,7 @@ func TestResolveHoldDownRevivesOnRecurrence(t *testing.T) {
 	assert.Equal(t, 0, resolves, "hook must not fire")
 }
 
-func TestProcessResolvedIncidentCreatesFresh(t *testing.T) {
+func TestProcessResolvedIncidentSilentlyRevives(t *testing.T) {
 	e := newTestEngine()
 
 	ev := event.Event{Namespace: "default", PodName: "pod-1", Reason: "CrashLoopBackOff"}
@@ -736,10 +733,11 @@ func TestProcessResolvedIncidentCreatesFresh(t *testing.T) {
 		assert.Equal(t, model.StateResolved, live.State)
 	}
 
-	// Process again — should create fresh (not update)
+	// Process again — should silently revive (ActionUpdate, not ActionCreate)
 	inc2, action := e.Process(ev, "deploy-1", nil)
-	assert.Equal(t, model.ActionCreate, action)
+	assert.Equal(t, model.ActionUpdate, action)
 	assert.Equal(t, key, inc2.Key)
+	assert.Equal(t, model.StateActive, inc2.State)
 }
 
 func TestIncidentKeyMatchesProcess(t *testing.T) {
@@ -873,7 +871,7 @@ func TestRemovePodReleasesBaseline(t *testing.T) {
 	assert.Equal(t, model.ActionCreate, action)
 }
 
-func TestResolvedIncidentRecreatesOnce(t *testing.T) {
+func TestResolvedIncidentSilentlyRevives(t *testing.T) {
 	e := newTestEngine()
 
 	ev := event.Event{Namespace: "default", PodName: "pod-1", Reason: "CrashLoopBackOff"}
@@ -888,14 +886,14 @@ func TestResolvedIncidentRecreatesOnce(t *testing.T) {
 		assert.Equal(t, model.StateResolved, live.State)
 	}
 
-	// First recurrence → ActionCreate and stored
+	// First recurrence → ActionUpdate (silent revival, not re-create)
 	ev2 := event.Event{Namespace: "default", PodName: "pod-2", Reason: "CrashLoopBackOff"}
 	_, action = e.Process(ev2, "deploy-1", nil)
-	assert.Equal(t, model.ActionCreate, action)
+	assert.Equal(t, model.ActionUpdate, action)
 
-	// Second recurrence within cooldown → ActionSkip (cooldown on the new incident)
+	// Second recurrence → ActionSkip (same sig, no change)
 	_, action = e.Process(ev2, "deploy-1", nil)
-	assert.Equal(t, model.ActionSkip, action, "must respect cooldown on the re-created incident, NOT re-create again")
+	assert.Equal(t, model.ActionSkip, action)
 }
 
 func TestPendingReviveSkips(t *testing.T) {

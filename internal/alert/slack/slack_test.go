@@ -464,6 +464,7 @@ func TestBuildIncidentUpdateBlocks(t *testing.T) {
 	blocks := buildIncidentUpdateBlocks(inc)
 
 	assert.NotNil(blocks)
+	// header (pod has Resources)
 	assert.Equal(1, len(blocks.BlockSet))
 }
 

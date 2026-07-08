@@ -29,7 +29,15 @@ func (e *DefaultEnricher) SetSeverityMap(m map[string]string) {
 
 func (e *DefaultEnricher) Enrich(ev *event.Event, inc *model.Incident) {
 	inc.OwnerKind = ev.OwnerKind
-	inc.ContainerName = ev.ContainerName
+	if ev.ContainerName != "" && ev.ContainerName != "." {
+		inc.ContainerName = ev.ContainerName
+	}
+	if ev.Image != "" {
+		inc.Image = ev.Image
+	}
+	if ev.NodeName != "" {
+		inc.NodeName = ev.NodeName
+	}
 	if ev.Hint != "" {
 		inc.Hint = ev.Hint
 	} else {

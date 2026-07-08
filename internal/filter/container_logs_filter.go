@@ -29,7 +29,10 @@ func (f ContainerLogsFilter) Enrich(ctx *Context) bool {
 		return false
 	}
 
-	previousLogs := container.RestartCount > 0 && container.State.Running == nil
+	// Always fetch previous container logs when restarts exist so that
+	// the crash output (not the current container's possibly-empty startup)
+	// is included in the notification.
+	previousLogs := container.RestartCount > 0
 
 	logs := k8s.GetPodContainerLogs(
 		ctx.Ctx,

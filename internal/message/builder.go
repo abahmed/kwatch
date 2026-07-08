@@ -50,8 +50,32 @@ func (b *Builder) buildCreate(inc *model.Incident, ins *insight.Insight) string 
 	sections = append(sections, header)
 
 	var infoParts []string
+	if inc.ContainerName != "" && inc.ContainerName != "." {
+		infoParts = append(infoParts, fmt.Sprintf("Container: %s", inc.ContainerName))
+	}
+	if inc.Image != "" {
+		infoParts = append(infoParts, fmt.Sprintf("Image: %s", inc.Image))
+	}
+	if inc.NodeName != "" {
+		infoParts = append(infoParts, fmt.Sprintf("Node: %s", inc.NodeName))
+	}
+	if inc.LastContainerState != nil && inc.LastContainerState.Msg != "" {
+		infoParts = append(infoParts, fmt.Sprintf("Message: %s", inc.LastContainerState.Msg))
+	}
+	if inc.LastContainerState != nil && inc.LastContainerState.ExitCode > 0 {
+		infoParts = append(infoParts, fmt.Sprintf("Exit Code: %d", inc.LastContainerState.ExitCode))
+	}
+	if inc.OwnerKind != "" {
+		infoParts = append(infoParts, fmt.Sprintf("Kind: %s", inc.OwnerKind))
+	}
+	if inc.RestartCount > 0 {
+		infoParts = append(infoParts, fmt.Sprintf("Restarts: %d", inc.RestartCount))
+	}
 	infoParts = append(infoParts, fmt.Sprintf("Count: %d", inc.Count))
 	infoParts = append(infoParts, fmt.Sprintf("Duration: %s", durationStr(inc.FirstSeen, inc.LastSeen)))
+	if inc.PeakResources > 0 {
+		infoParts = append(infoParts, fmt.Sprintf("Peak: %d", inc.PeakResources))
+	}
 	sections = append(sections, strings.Join(infoParts, " · "))
 
 	if inc.Hint != "" {
@@ -76,17 +100,16 @@ func (b *Builder) buildCreate(inc *model.Incident, ins *insight.Insight) string 
 		}
 	}
 
-	if inc.Runbook != "" {
-		sections = append(sections, "📖 Runbook: "+inc.Runbook)
+	if inc.IncludeLogs && inc.Logs != "" {
+		sections = append(sections, "\nLogs:\n"+inc.Logs)
 	}
 
-	if inc.Resource == "pod" && len(inc.Resources) > 0 {
-		pod := firstKey(inc.Resources)
-		cmd := fmt.Sprintf("kubectl -n %s logs %s --previous", inc.Namespace, pod)
-		if inc.ContainerName != "" {
-			cmd = fmt.Sprintf("kubectl -n %s logs %s -c %s --previous", inc.Namespace, pod, inc.ContainerName)
-		}
-		sections = append(sections, "🔍 "+cmd)
+	if inc.IncludeEvents && inc.Events != "" {
+		sections = append(sections, "\nEvents:\n"+inc.Events)
+	}
+
+	if inc.Runbook != "" {
+		sections = append(sections, "📖 Runbook: "+inc.Runbook)
 	}
 
 	return strings.Join(sections, "\n")
@@ -105,12 +128,48 @@ func (b *Builder) buildUpdate(inc *model.Incident, ins *insight.Insight) string 
 	sections = append(sections, header)
 
 	var infoParts []string
+	if inc.Resource == "pod" && inc.ContainerName != "" && inc.ContainerName != "." {
+		infoParts = append(infoParts, fmt.Sprintf("Container: %s", inc.ContainerName))
+	}
+	if inc.Image != "" {
+		infoParts = append(infoParts, fmt.Sprintf("Image: %s", inc.Image))
+	}
+	if inc.NodeName != "" {
+		infoParts = append(infoParts, fmt.Sprintf("Node: %s", inc.NodeName))
+	}
+	if inc.LastContainerState != nil && inc.LastContainerState.Msg != "" {
+		infoParts = append(infoParts, fmt.Sprintf("Message: %s", inc.LastContainerState.Msg))
+	}
+	if inc.LastContainerState != nil && inc.LastContainerState.ExitCode > 0 {
+		infoParts = append(infoParts, fmt.Sprintf("Exit Code: %d", inc.LastContainerState.ExitCode))
+	}
+	if inc.OwnerKind != "" {
+		infoParts = append(infoParts, fmt.Sprintf("Kind: %s", inc.OwnerKind))
+	}
+	if inc.RestartCount > 0 {
+		infoParts = append(infoParts, fmt.Sprintf("Restarts: %d", inc.RestartCount))
+	}
 	infoParts = append(infoParts, fmt.Sprintf("Count: %d", inc.Count))
 	infoParts = append(infoParts, fmt.Sprintf("Duration: %s", durationStr(inc.FirstSeen, inc.LastSeen)))
+	if inc.PeakResources > 0 {
+		infoParts = append(infoParts, fmt.Sprintf("Peak: %d", inc.PeakResources))
+	}
 	sections = append(sections, strings.Join(infoParts, " · "))
+
+	if inc.Hint != "" {
+		sections = append(sections, "💡 "+inc.Hint)
+	}
 
 	if ins != nil && ins.Cause != "" {
 		sections = append(sections, "Likely cause: "+ins.Cause)
+	}
+
+	if inc.IncludeLogs && inc.Logs != "" {
+		sections = append(sections, "\nLogs:\n"+inc.Logs)
+	}
+
+	if inc.IncludeEvents && inc.Events != "" {
+		sections = append(sections, "\nEvents:\n"+inc.Events)
 	}
 
 	return strings.Join(sections, "\n")
@@ -127,9 +186,22 @@ func (b *Builder) buildResolved(inc *model.Incident) string {
 		header += fmt.Sprintf(" (%s)", inc.Namespace)
 	}
 
-	return fmt.Sprintf("%s\nDuration: %s · Total events: %d",
-		header,
-		durationStr(inc.FirstSeen, inc.LastSeen), inc.Count)
+	var infoParts []string
+	infoParts = append(infoParts, fmt.Sprintf("Duration: %s", durationStr(inc.FirstSeen, inc.LastSeen)))
+	if inc.NodeName != "" {
+		infoParts = append(infoParts, fmt.Sprintf("Node: %s", inc.NodeName))
+	}
+	if inc.LastContainerState != nil && inc.LastContainerState.ExitCode > 0 {
+		infoParts = append(infoParts, fmt.Sprintf("Exit Code: %d", inc.LastContainerState.ExitCode))
+	}
+	if inc.OwnerKind != "" {
+		infoParts = append(infoParts, fmt.Sprintf("Kind: %s", inc.OwnerKind))
+	}
+	infoParts = append(infoParts, fmt.Sprintf("Total events: %d", inc.Count))
+	if inc.PeakResources > 0 {
+		infoParts = append(infoParts, fmt.Sprintf("Peak: %d", inc.PeakResources))
+	}
+	return fmt.Sprintf("%s\n%s", header, strings.Join(infoParts, " · "))
 }
 
 func severityLabel(s string) string {

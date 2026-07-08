@@ -31,7 +31,6 @@ func TestBuildCreate(t *testing.T) {
 	assert.Contains(t, msg, "p1")
 	assert.Contains(t, msg, "ns1")
 	assert.Contains(t, msg, "critical")
-	assert.Contains(t, msg, "kubectl")
 }
 
 func TestBuildCreateWithInsight(t *testing.T) {
@@ -165,7 +164,7 @@ func TestBuildCreateWithContainerName(t *testing.T) {
 	}
 
 	msg := b.Build(inc, model.ActionCreate, nil)
-	assert.Contains(t, msg, "-c c1")
+	assert.Contains(t, msg, "Container: c1")
 }
 
 func TestBuildCreateWithAffectedCount(t *testing.T) {

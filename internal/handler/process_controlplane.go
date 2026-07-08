@@ -32,6 +32,8 @@ func DetectControlPlanePodIssue(pod *corev1.Pod) *event.Signal {
 			if c.Reason == "PodCompleted" {
 				continue
 			}
+			// PodReady=False alone (no failing containers) is not actionable
+			// here — fall through to the container status check below.
 			break
 		}
 	}
