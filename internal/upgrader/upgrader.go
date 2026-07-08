@@ -63,18 +63,6 @@ func NewUpgrader(
 	}
 }
 
-func (u *Upgrader) SetGitHubClient(client GitHubReleaseChecker) {
-	u.githubClient = client
-}
-
-func (u *Upgrader) SetAlertManager(alertMgr Notifier) {
-	u.alertManager = alertMgr
-}
-
-func (u *Upgrader) SetStateManager(stateMgr VersionTracker) {
-	u.stateManager = stateMgr
-}
-
 func (u *Upgrader) CheckUpdates(ctx context.Context) {
 	if u.config.DisableUpdateCheck ||
 		version.Short() == "dev" {

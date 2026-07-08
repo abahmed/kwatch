@@ -18,7 +18,6 @@ import (
 )
 
 const (
-	nodeSampleDebounce   = 30 * time.Second
 	maxConcurrentSamples = 10
 	maxConcurrentNodeOps = 5
 )
@@ -31,19 +30,18 @@ type PvcMonitor struct {
 	state          *state.StateManager // persistence; nil only in unit tests
 	notifiedPvc    map[string]bool
 	lastUsage      map[string]state.PvcSample // last observed sample per PV name (survives unmount)
-	lastNodeSample map[string]time.Time       // per-node SampleNode debounce
-	pvByPVC        map[string]string          // cached PVC→PV map (shared by sweep + SampleNode)
+	pvByPVC        map[string]string          // cached PVC→PV map (shared by sweep + per-node sample)
 	pvByPVCAt      time.Time                  // when pvByPVC was last refreshed
 	mu             sync.RWMutex
 	firstScan      bool
-	sem            chan struct{}                                                                              // bounds concurrent SampleNode / getNodeUsage calls
+	sem            chan struct{}              // bounds concurrent getNodeUsage calls
 	getNodeUsageFn func(ctx context.Context, nodeName string, pvByPVC map[string]string) ([]*PvcUsage, error) // test override
 }
 
 const pvByPVCTTL = 60 * time.Second
 
 // pvcMap returns the PVC→PV name map, refreshing from the API server at most
-// once per pvByPVCTTL. Shared by checkUsage (sweep) and SampleNode (event-driven).
+// once per pvByPVCTTL. Shared by checkUsage (sweep) and per-node sample (event-driven).
 func (p *PvcMonitor) pvcMap(ctx context.Context) map[string]string {
 	p.mu.RLock()
 	if p.pvByPVC != nil && time.Since(p.pvByPVCAt) < pvByPVCTTL {
@@ -172,13 +170,11 @@ func (p *PvcMonitor) reportSignal(s *event.Signal) {
 }
 
 // persist snapshots lastUsage to the kwatch-pvc ConfigMap. Called ONLY from the
-// periodic sweep, not from SampleNode — otherwise a burst of Running pods would
-// write etcd on every sample (write-amplification). A crash loses at most the
-// SampleNode deltas since the last sweep (≤ interval), and the next sweep
+// periodic sweep only, not from per-node samples — otherwise a burst of Running
+// pods would write etcd on every sample (write-amplification). A crash loses at
+// most the deltas since the last sweep (≤ interval), and the next sweep
 // re-observes every mounted volume anyway.
-// notifiedPvc and lastNodeSample are intentionally not persisted — the former
-// is re-derived from lastUsage on seed and the latter is a debounce timestamp
-// that is stale on restart.
+// notifiedPvc is intentionally not persisted — it is re-derived from lastUsage on seed.
 func (p *PvcMonitor) persist(ctx context.Context) {
 	if p.state == nil {
 		return
@@ -202,13 +198,5 @@ func (p *PvcMonitor) cleanup() {
 	if count > 1000 {
 		klog.V(4).InfoS("pvc monitor: clearing stale entries from notifiedPvc cache", "count", count)
 		p.notifiedPvc = make(map[string]bool)
-	}
-
-	// B4: prune stale node sample timestamps (≫ nodeSampleDebounce)
-	cutoff := time.Now().Add(-10 * time.Minute)
-	for node, t := range p.lastNodeSample {
-		if t.Before(cutoff) {
-			delete(p.lastNodeSample, node)
-		}
 	}
 }

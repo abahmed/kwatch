@@ -170,18 +170,6 @@ func severityRank(s string) int {
 	}
 }
 
-// escalateSeverity moves severity one level up: "" → "high", "high" → "critical", "critical" → "critical".
-func escalateSeverity(s string) string {
-	switch s {
-	case "", "normal":
-		return "high"
-	case "high":
-		return "critical"
-	default:
-		return s
-	}
-}
-
 const defaultBaselineTTL = 24 * time.Hour
 const defaultCrashLoopHighFreqThreshold = 5
 const DefaultMaxBaseline = 2000
@@ -361,12 +349,6 @@ func cloneBaseline(src map[string]map[string]int64) map[string]map[string]int64 
 		dst[k] = m
 	}
 	return dst
-}
-
-func (e *Engine) BaselineSnapshot() map[string]map[string]int64 {
-	e.mu.Lock()
-	defer e.mu.Unlock()
-	return cloneBaseline(e.seen)
 }
 
 func (e *Engine) ActiveCount() int {
@@ -589,29 +571,6 @@ func (e *Engine) GetLastContainerState(namespace, podName, _ string) *model.Cont
 	}
 	cp := *cs
 	return &cp
-}
-
-// GetIncidentsByNamespace returns incident views filtered to a single namespace.
-func (e *Engine) GetIncidentsByNamespace(ns string) []model.IncidentView {
-	e.mu.Lock()
-	defer e.mu.Unlock()
-	byNS := e.namespaceIndex[ns]
-	out := make([]model.IncidentView, 0, len(byNS))
-	for _, inc := range byNS {
-		out = append(out, model.IncidentView{
-			Key:       inc.Key,
-			Reason:    inc.Reason,
-			Namespace: inc.Namespace,
-			Name:      inc.Name,
-			State:     inc.State,
-			Severity:  inc.Severity,
-			Count:     inc.Count,
-			FirstSeen: inc.FirstSeen,
-			LastSeen:  inc.LastSeen,
-			Hint:      inc.Hint,
-		})
-	}
-	return out
 }
 
 // Caller must hold e.mu.

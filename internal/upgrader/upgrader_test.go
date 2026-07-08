@@ -221,7 +221,7 @@ func TestCheckReleaseGitHubError(t *testing.T) {
 		Return(nil, nil, errors.New("rate limit exceeded"))
 
 	u := NewUpgrader(&config.Upgrader{}, &alert.AlertManager{}, nil)
-	u.SetGitHubClient(mockGithub)
+	u.githubClient = mockGithub
 
 	u.checkRelease(context.Background())
 
@@ -234,7 +234,7 @@ func TestCheckReleaseNilTagName(t *testing.T) {
 		Return(&github.RepositoryRelease{}, nil, nil)
 
 	u := NewUpgrader(&config.Upgrader{}, &alert.AlertManager{}, nil)
-	u.SetGitHubClient(mockGithub)
+	u.githubClient = mockGithub
 
 	u.checkRelease(context.Background())
 
@@ -248,7 +248,7 @@ func TestCheckReleaseSameVersion(t *testing.T) {
 		Return(&github.RepositoryRelease{TagName: &currentVersion}, nil, nil)
 
 	u := NewUpgrader(&config.Upgrader{}, &alert.AlertManager{}, nil)
-	u.SetGitHubClient(mockGithub)
+	u.githubClient = mockGithub
 
 	u.checkRelease(context.Background())
 
@@ -277,7 +277,7 @@ func TestCheckReleaseAlreadyNotified(t *testing.T) {
 	stateMgr := state.NewStateManager(client, "kwatch")
 
 	u := NewUpgrader(&config.Upgrader{}, &alert.AlertManager{}, stateMgr)
-	u.SetGitHubClient(mockGithub)
+	u.githubClient = mockGithub
 
 	u.checkRelease(context.Background())
 
@@ -296,8 +296,8 @@ func TestCheckReleaseNewVersionNotifies(t *testing.T) {
 	stateMgr := state.NewStateManager(fake.NewSimpleClientset(), "kwatch")
 
 	u := NewUpgrader(&config.Upgrader{}, &alert.AlertManager{}, stateMgr)
-	u.SetGitHubClient(mockGithub)
-	u.SetAlertManager(mockAlert)
+	u.githubClient = mockGithub
+	u.alertManager = mockAlert
 
 	u.checkRelease(context.Background())
 
@@ -329,8 +329,8 @@ func TestCheckReleaseNewVersionSetsState(t *testing.T) {
 	stateMgr := state.NewStateManager(client, "kwatch")
 
 	u := NewUpgrader(&config.Upgrader{}, &alert.AlertManager{}, stateMgr)
-	u.SetGitHubClient(mockGithub)
-	u.SetAlertManager(mockAlert)
+	u.githubClient = mockGithub
+	u.alertManager = mockAlert
 
 	u.checkRelease(context.Background())
 

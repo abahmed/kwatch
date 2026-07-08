@@ -193,11 +193,4 @@ func (h *handler) clearFirstScalingError(key string) {
 	delete(h.firstScalingErrorHPAs, key)
 }
 
-func hpaHasCondition(hpa *autoscalingv2.HorizontalPodAutoscaler, condType autoscalingv2.HorizontalPodAutoscalerConditionType, status corev1.ConditionStatus) bool {
-	for _, c := range hpa.Status.Conditions {
-		if c.Type == condType && c.Status == status {
-			return true
-		}
-	}
-	return false
-}
+

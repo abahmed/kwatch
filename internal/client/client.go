@@ -91,10 +91,4 @@ func GetRestConfig(appConfig *config.App) (*rest.Config, error) {
 	return clientConfig, nil
 }
 
-func GetNamespace() string {
-	namespace := os.Getenv("POD_NAMESPACE")
-	if namespace == "" {
-		return "kwatch"
-	}
-	return namespace
-}
+

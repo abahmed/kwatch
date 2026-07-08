@@ -1,7 +1,6 @@
 package version
 
 import (
-	"encoding/json"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -12,20 +11,6 @@ func TestShort(t *testing.T) {
 
 	result := Short()
 	assert.Equal("dev", result)
-}
-
-func TestVersion(t *testing.T) {
-	assert := assert.New(t)
-
-	result := Version()
-	assert.NotEmpty(result)
-
-	var info Info
-	err := json.Unmarshal([]byte(result), &info)
-	assert.Nil(err)
-	assert.Equal("dev", info.Version)
-	assert.Equal("none", info.GitCommit)
-	assert.Equal("unknown", info.BuildDate)
 }
 
 func TestVersionConstants(t *testing.T) {
@@ -61,11 +46,4 @@ func TestShortMultipleCalls(t *testing.T) {
 	assert.Equal("dev", result2)
 }
 
-func TestVersionMultipleCalls(t *testing.T) {
-	assert := assert.New(t)
 
-	result1 := Version()
-	result2 := Version()
-
-	assert.Equal(result1, result2)
-}

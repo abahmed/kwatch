@@ -1,8 +1,6 @@
 package version
 
-import (
-	"encoding/json"
-)
+
 
 // Version is the current versions of kwatch.
 // Overridden at build time with -ldflags -X for releases.
@@ -24,12 +22,4 @@ func Short() string {
 	return version
 }
 
-func Version() string {
-	ver, _ := json.Marshal(Info{
-		Version:   version,
-		GitCommit: gitCommitID,
-		BuildDate: buildDate,
-	})
 
-	return string(ver)
-}

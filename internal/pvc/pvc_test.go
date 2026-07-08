@@ -729,58 +729,6 @@ func TestApplyFirstScanSuppressesSignal(t *testing.T) {
 	assert.Equal(t, 0, len(snap), "no incidents should exist after first scan")
 }
 
-// ── SampleNode / persist tests ────────────────────────────────
-
-func TestSampleNodeDebounce(t *testing.T) {
-	ctx := context.Background()
-	cfg := &config.PvcMonitor{Enabled: true, Threshold: 80}
-	corr := newTestCorrelator()
-	m := newTestPvcMonitor(cfg, corr)
-	m.getNodeUsageFn = func(_ context.Context, _ string, _ map[string]string) ([]*PvcUsage, error) {
-		return nil, nil
-	}
-
-	// Create a fake Ready node so SampleNode doesn't bail early
-	node := &v1.Node{
-		ObjectMeta: metav1.ObjectMeta{Name: "node-1"},
-		Status: v1.NodeStatus{
-			Conditions: []v1.NodeCondition{{Type: v1.NodeReady, Status: v1.ConditionTrue}},
-		},
-	}
-	_, err := m.client.CoreV1().Nodes().Create(ctx, node, metav1.CreateOptions{})
-	assert.Nil(t, err)
-
-	m.SampleNode(ctx, "node-1")
-	// Second call within debounce window should be skipped
-	// We can verify by checking lastNodeSample timestamp
-	m.mu.RLock()
-	_, exists := m.lastNodeSample["node-1"]
-	m.mu.RUnlock()
-	assert.True(t, exists, "node-1 should be tracked after first SampleNode")
-
-	// Call again — should hit debounce, not panic
-	m.SampleNode(ctx, "node-1")
-}
-
-func TestSampleNodeEmptyNodeName(t *testing.T) {
-	cfg := &config.PvcMonitor{Enabled: true, Threshold: 80}
-	corr := newTestCorrelator()
-	m := newTestPvcMonitor(cfg, corr)
-
-	m.SampleNode(context.Background(), "")
-	// no panic, no entry
-	assert.Nil(t, m.lastNodeSample)
-}
-
-func TestSampleNodeDisabled(t *testing.T) {
-	cfg := &config.PvcMonitor{Enabled: false}
-	corr := newTestCorrelator()
-	m := newTestPvcMonitor(cfg, corr)
-
-	m.SampleNode(context.Background(), "node-1")
-	assert.Nil(t, m.lastNodeSample)
-}
-
 func TestPersistWritesToConfigMap(t *testing.T) {
 	client := fake.NewSimpleClientset()
 	sm := state.NewStateManager(client, "kwatch")
@@ -822,36 +770,6 @@ func TestPersistNilStateDoesNothing(t *testing.T) {
 
 	m.persist(context.Background())
 	// no panic, no ConfigMap written (verified by the lack of error)
-}
-
-func TestPersistOnlyOnSweepNotOnSampleNode(t *testing.T) {
-	client := fake.NewSimpleClientset()
-	sm := state.NewStateManager(client, "kwatch")
-
-	cfg := &config.PvcMonitor{Enabled: true, Threshold: 80}
-	corr := newTestCorrelator()
-	m := NewPvcMonitor(client, cfg, &alert.AlertManager{}, corr, sm)
-
-	// Apply some data
-	m.apply([]*PvcUsage{
-		{Name: "pvc-1", PVName: "pv-1", Namespace: "default", PodName: "pod-1", UsagePercentage: 95},
-	}, map[string]string{"default/pvc-1": "pv-1"}, false, true)
-
-	// Apply again (simulating SampleNode calling apply with incomplete=true)
-	m.apply([]*PvcUsage{
-		{Name: "pvc-1", PVName: "pv-1", Namespace: "default", PodName: "pod-1", UsagePercentage: 96},
-	}, map[string]string{"default/pvc-1": "pv-1"}, true, false)
-
-	// No persist called yet — ConfigMap should not exist
-	_, err := client.CoreV1().ConfigMaps("kwatch").Get(context.Background(), "kwatch-pvc", metav1.GetOptions{})
-	assert.True(t, len(err.Error()) > 0, "ConfigMap should not exist before persist")
-
-	// Now persist (only the sweep does this)
-	m.persist(context.Background())
-
-	cm, err := client.CoreV1().ConfigMaps("kwatch").Get(context.Background(), "kwatch-pvc", metav1.GetOptions{})
-	assert.Nil(t, err)
-	assert.NotNil(t, cm)
 }
 
 // ── Persistence round-trip (restart survival) ─────────────────
@@ -952,52 +870,6 @@ func TestPersistenceRoundTripNoPreviousState(t *testing.T) {
 	assert.Equal(t, 0, len(m.notifiedPvc))
 }
 
-// ── Persist write-count test ──────────────────────────────────
-
-func TestPersistWriteCountSampleNodeDoesNotPersist(t *testing.T) {
-	client := fake.NewSimpleClientset()
-	sm := state.NewStateManager(client, "kwatch")
-
-	cfg := &config.PvcMonitor{Enabled: true, Threshold: 80, ClearThreshold: 75}
-	corr := newTestCorrelator()
-	m := NewPvcMonitor(client, cfg, &alert.AlertManager{}, corr, sm)
-
-	// Apply data (simulating what SampleNode does — incomplete=true)
-	// SampleNode calls apply with incomplete=true, which should NOT persist
-	m.apply([]*PvcUsage{
-		{Name: "pvc-1", PVName: "pv-1", Namespace: "default", PodName: "pod-1", UsagePercentage: 95},
-	}, map[string]string{"default/pvc-1": "pv-1"}, true, false)
-
-	// Verify no ConfigMap was created (SampleNode should not persist)
-	_, err := client.CoreV1().ConfigMaps("kwatch").Get(context.Background(), "kwatch-pvc", metav1.GetOptions{})
-	assert.NotNil(t, err, "no ConfigMap should exist before persist is called")
-
-	// Now call persist - should create the ConfigMap
-	m.persist(context.Background())
-
-	cm, err := client.CoreV1().ConfigMaps("kwatch").Get(context.Background(), "kwatch-pvc", metav1.GetOptions{})
-	assert.Nil(t, err)
-	assert.NotNil(t, cm)
-
-	// Apply another sample and persist again
-	m.apply([]*PvcUsage{
-		{Name: "pvc-1", PVName: "pv-1", Namespace: "default", PodName: "pod-1", UsagePercentage: 96},
-	}, map[string]string{"default/pvc-1": "pv-1"}, true, false)
-	m.persist(context.Background())
-
-	// Simulate SampleNode calls (apply only, no persist) — these should not create extra writes
-	m.apply([]*PvcUsage{
-		{Name: "pvc-1", PVName: "pv-1", Namespace: "default", PodName: "pod-1", UsagePercentage: 97},
-	}, map[string]string{"default/pvc-1": "pv-1"}, true, false)
-	m.apply([]*PvcUsage{
-		{Name: "pvc-1", PVName: "pv-1", Namespace: "default", PodName: "pod-1", UsagePercentage: 98},
-	}, map[string]string{"default/pvc-1": "pv-1"}, true, false)
-
-	// Verify ConfigMap has the value from the LAST persist, not the intermediate SampleNode calls
-	loaded := sm.GetPvcUsage(context.Background())
-	assert.Equal(t, 96.0, loaded["pv-1"].Pct, "last persisted value should be from the persist call, not SampleNode")
-}
-
 // ── B1: lastUsage eviction tests ──────────────────────────────
 
 func TestApplySubThresholdDoesNotCache(t *testing.T) {
@@ -1062,58 +934,6 @@ func TestApplyBetweenClearAndThresholdHolds(t *testing.T) {
 	assert.True(t, m.notifiedPvc["pv-1"], "hold-band PVC must remain firing")
 }
 
-// ── B4: cleanup prunes stale lastNodeSample ───────────────────
-
-func TestCleanupPrunesStaleLastNodeSample(t *testing.T) {
-	m := newTestPvcMonitor(&config.PvcMonitor{Enabled: true, Threshold: 80}, nil)
-
-	// Seed with an old entry (well past the 10 min cutoff)
-	m.mu.Lock()
-	m.lastNodeSample = map[string]time.Time{
-		"old-node":   time.Now().Add(-30 * time.Minute),
-		"fresh-node": time.Now().Add(-1 * time.Minute),
-	}
-	m.mu.Unlock()
-
-	m.cleanup()
-
-	m.mu.RLock()
-	assert.NotContains(t, m.lastNodeSample, "old-node", "stale entry must be pruned")
-	assert.Contains(t, m.lastNodeSample, "fresh-node", "recent entry must survive")
-	m.mu.RUnlock()
-}
-
-func TestCleanupEmptyLastNodeSampleNoPanic(t *testing.T) {
-	m := newTestPvcMonitor(&config.PvcMonitor{Enabled: true, Threshold: 80}, nil)
-
-	// lastNodeSample is nil
-	m.cleanup()
-	// no panic
-
-	m.mu.Lock()
-	m.lastNodeSample = make(map[string]time.Time)
-	m.mu.Unlock()
-	m.cleanup()
-	// no panic, nothing to prune
-}
-
-// ── B5/B8: isSweep + firstScan + SampleNode signal gating ────
-
-func TestApplySampleNodeDoesNotClearFirstScan(t *testing.T) {
-	cfg := &config.PvcMonitor{Enabled: true, Threshold: 80}
-	corr := newTestCorrelator()
-	m := newTestPvcMonitor(cfg, corr)
-	m.firstScan = true
-
-	// SampleNode calls apply with isSweep=false
-	m.apply([]*PvcUsage{
-		{Name: "pvc-1", PVName: "pv-1", Namespace: "default", PodName: "pod-1", UsagePercentage: 95},
-	}, map[string]string{"default/pvc-1": "pv-1"}, true, false)
-
-	assert.True(t, m.firstScan, "SampleNode must NOT clear firstScan")
-	assert.True(t, m.notifiedPvc["pv-1"], "high PVC must be tracked even in SampleNode")
-}
-
 func TestApplySweepClearsFirstScan(t *testing.T) {
 	cfg := &config.PvcMonitor{Enabled: true, Threshold: 80}
 	corr := newTestCorrelator()
@@ -1126,51 +946,6 @@ func TestApplySweepClearsFirstScan(t *testing.T) {
 	}, map[string]string{"default/pvc-1": "pv-1"}, false, true)
 
 	assert.False(t, m.firstScan, "full sweep must clear firstScan")
-}
-
-func TestApplyFirstScanSuppressesSampleNodeSignal(t *testing.T) {
-	corr := newTestCorrelator()
-	cfg := &config.PvcMonitor{Enabled: true, Threshold: 80}
-	m := newTestPvcMonitor(cfg, corr)
-	m.firstScan = true
-
-	// SampleNode with firstScan=true: should suppress signal AND keep firstScan=true
-	m.apply([]*PvcUsage{
-		{Name: "pvc-1", PVName: "pv-1", Namespace: "default", PodName: "pod-1", UsagePercentage: 95},
-	}, map[string]string{"default/pvc-1": "pv-1"}, true, false)
-
-	assert.True(t, m.firstScan, "firstScan must survive SampleNode call")
-
-	// No incident in correlator
-	snap := corr.Snapshot()
-	assert.Equal(t, 0, len(snap), "no incident should exist in correlator during firstScan even from SampleNode")
-}
-
-func TestApplySampleNodeOnlySignalsRisingEdge(t *testing.T) {
-	corr := newTestCorrelator()
-	cfg := &config.PvcMonitor{Enabled: true, Threshold: 80}
-	m := newTestPvcMonitor(cfg, corr)
-
-	// First SampleNode: rising edge → should create incident
-	m.apply([]*PvcUsage{
-		{Name: "pvc-1", PVName: "pv-1", Namespace: "default", PodName: "pod-1", UsagePercentage: 95},
-	}, map[string]string{"default/pvc-1": "pv-1"}, true, false)
-
-	snap := corr.Snapshot()
-	assert.Equal(t, 1, len(snap), "first SampleNode call should create incident")
-	assert.Equal(t, 1, snap[0].Count, "Count should be 1 after first signal")
-
-	// Subsequent SampleNode calls on same high PVC: must NOT increment Count
-	// (isSweep=false, wasNotified=true → edgeAction dedup)
-	for i := 0; i < 5; i++ {
-		m.apply([]*PvcUsage{
-			{Name: "pvc-1", PVName: "pv-1", Namespace: "default", PodName: "pod-1", UsagePercentage: 96},
-		}, map[string]string{"default/pvc-1": "pv-1"}, true, false)
-	}
-
-	snap = corr.Snapshot()
-	assert.Equal(t, 1, len(snap), "incident should still be the only one")
-	assert.Equal(t, 1, snap[0].Count, "Count must NOT inflate from repeated SampleNode calls")
 }
 
 func TestApplySweepReSignalsUnconditionally(t *testing.T) {

@@ -2,7 +2,6 @@ package k8s
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"math/rand"
 	"os"
@@ -38,31 +37,6 @@ func GetPodEventsStr(events *[]v1.Event) string {
 	}
 
 	return strings.TrimSpace(eventsString)
-}
-
-// ContainsKillingStoppingContainerEvents checks if the events contain an event
-// with "Killing Stopping container" which indicates that a container could not
-// be gracefully shutdown
-func ContainsKillingStoppingContainerEvents(
-	ctx context.Context,
-	c kubernetes.Interface,
-	name,
-	namespace string) bool {
-	events, err := GetPodEvents(ctx, c, name, namespace)
-	if err != nil {
-		return false
-	}
-
-	for _, ev := range events.Items {
-		if strings.ToLower(ev.Reason) == "killing" &&
-			strings.Contains(
-				strings.ToLower(ev.Message),
-				"stopping container") {
-			return true
-		}
-	}
-
-	return false
 }
 
 // GetPodContainerLogs returns logs for specified container in pod
@@ -163,33 +137,6 @@ func GetNodeSummary(ctx context.Context, c kubernetes.Interface, name string) ([
 		DoRaw(cctx)
 }
 
-// GetPVNameFromPVC returns the name of persistent volume given a namespace and
-// persistent volume claim name
-func GetPVNameFromPVC(
-	ctx context.Context,
-	c kubernetes.Interface,
-	namespace, pvcName string) (string, error) {
-	cctx, cancel := context.WithTimeout(ctx, 10*time.Second)
-	defer cancel()
-	pvc, err :=
-		c.CoreV1().
-			PersistentVolumeClaims(namespace).
-			Get(cctx, pvcName, metav1.GetOptions{})
-	if err != nil {
-		return "", err
-	}
-
-	return pvc.Spec.VolumeName, nil
-}
-
-// JsonEscape escapes the json special characters in a string
-func JsonEscape(i string) string {
-	jm, _ := json.Marshal(i)
-
-	s := string(jm)
-	return s[1 : len(s)-1]
-}
-
 // RandomString generates random string with provided n size
 func RandomString(n int) string {
 	const availableCharacterBytes = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLM" +
@@ -202,25 +149,6 @@ func RandomString(n int) string {
 	}
 
 	return string(b)
-}
-
-// SafeMarshalJSON marshals v to JSON, returning an error on failure
-func SafeMarshalJSON(v interface{}) (string, error) {
-	data, err := json.Marshal(v)
-	if err != nil {
-		return "", fmt.Errorf("failed to marshal json: %w", err)
-	}
-	return string(data), nil
-}
-
-// SetLogFormatter sets the log formatter based on the provided format string
-func SetLogFormatter(formatter string) {
-	switch formatter {
-	case "json":
-		klog.LogToStderr(false)
-	default:
-		klog.LogToStderr(true)
-	}
 }
 
 // GetNamespace returns the namespace where kwatch is running.

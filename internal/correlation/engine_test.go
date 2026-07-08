@@ -2153,27 +2153,6 @@ func TestSeverityRank(t *testing.T) {
 	assert.Equal(t, 0, severityRank("unknown"))
 }
 
-func TestBaselineSnapshot(t *testing.T) {
-	e := NewEngine(Config{
-		Window:      10 * time.Minute,
-		BaselineTTL: 10 * time.Minute,
-	})
-	snap := e.BaselineSnapshot()
-	assert.NotNil(t, snap)
-
-	ts := time.Now().Unix()
-	e.SetSeen(map[string]map[string]int64{
-		"ns:dep:Err:": {"sig-1": ts},
-	})
-	snap = e.BaselineSnapshot()
-	assert.Equal(t, ts, snap["ns:dep:Err:"]["sig-1"])
-
-	// Verify isolation: mutate returned map's inner entry
-	snap["ns:dep:Err:"]["sig-1"] = 999
-	snap2 := e.BaselineSnapshot()
-	assert.Equal(t, ts, snap2["ns:dep:Err:"]["sig-1"])
-}
-
 func TestCountActiveNodeIncidents(t *testing.T) {
 	e := newTestEngine()
 	assert.Equal(t, 0, e.CountActiveNodeIncidents())
@@ -2197,23 +2176,6 @@ func TestSetAnalysis(t *testing.T) {
 
 	// No-op for non-existent key
 	e.SetAnalysis("nonexistent", "should not panic")
-}
-
-func TestGetIncidentsByNamespace(t *testing.T) {
-	e := newTestEngine()
-	e.Process(event.Event{PodName: "p1", Namespace: "ns-a", Reason: "Err1"}, "dep1", nil)
-	e.Process(event.Event{PodName: "p2", Namespace: "ns-b", Reason: "Err2"}, "dep2", nil)
-
-	nsA := e.GetIncidentsByNamespace("ns-a")
-	assert.Len(t, nsA, 1)
-	assert.Equal(t, "Err1", nsA[0].Reason)
-
-	nsB := e.GetIncidentsByNamespace("ns-b")
-	assert.Len(t, nsB, 1)
-	assert.Equal(t, "Err2", nsB[0].Reason)
-
-	nsC := e.GetIncidentsByNamespace("ns-c")
-	assert.Len(t, nsC, 0)
 }
 
 func TestBuildNodeSummary(t *testing.T) {

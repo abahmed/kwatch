@@ -29,10 +29,6 @@ type Enricher interface {
 	Enrich(ctx *Context) (shouldSkip bool)
 }
 
-type Filter interface {
-	Execute(ctx *Context) (ShouldStop bool)
-}
-
 type Context struct {
 	Ctx    context.Context
 	Client kubernetes.Interface

@@ -173,8 +173,6 @@ type factorySet struct {
 	clusterScoped informers.SharedInformerFactory
 }
 
-func (fs factorySet) hasMultiple() bool { return len(fs.perNamespace) > 0 }
-
 func (fs factorySet) podLister() corev1lister.PodLister {
 	if fs.global != nil {
 		return fs.global.Core().V1().Pods().Lister()

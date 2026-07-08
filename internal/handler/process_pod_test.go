@@ -13,20 +13,6 @@ import (
 	"k8s.io/client-go/kubernetes/fake"
 )
 
-func TestPodMountsPVCFalse(t *testing.T) {
-	pod := &corev1.Pod{Spec: corev1.PodSpec{Volumes: []corev1.Volume{
-		{Name: "v1", VolumeSource: corev1.VolumeSource{EmptyDir: &corev1.EmptyDirVolumeSource{}}},
-	}}}
-	assert.False(t, podMountsPVC(pod))
-}
-
-func TestPodMountsPVCTrue(t *testing.T) {
-	pod := &corev1.Pod{Spec: corev1.PodSpec{Volumes: []corev1.Volume{
-		{Name: "v1", VolumeSource: corev1.VolumeSource{PersistentVolumeClaim: &corev1.PersistentVolumeClaimVolumeSource{ClaimName: "pvc1"}}},
-	}}}
-	assert.True(t, podMountsPVC(pod))
-}
-
 func TestIsPodHealthyRunningNoIssues(t *testing.T) {
 	pod := &corev1.Pod{
 		Status: corev1.PodStatus{

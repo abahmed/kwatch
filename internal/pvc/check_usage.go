@@ -9,7 +9,6 @@ import (
 	"github.com/abahmed/kwatch/internal/event"
 	"github.com/abahmed/kwatch/internal/k8s"
 	"github.com/abahmed/kwatch/internal/state"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/klog/v2"
 )
 
@@ -77,63 +76,12 @@ func (p *PvcMonitor) checkUsage(ctx context.Context) {
 	p.apply(pvcUsages, pvByPVC, incomplete, true /*isSweep*/)
 }
 
-// SampleNode reads stats/summary for ONE node out-of-cycle and folds the result
-// into the cache + correlator. Called from the pod informer when a tracked PVC's
-// pod goes Running. Debounces to ≤1 kubelet read per node per window.
-// Back-pressure: drops the sample when the concurrent-sample limit is reached.
-func (p *PvcMonitor) SampleNode(ctx context.Context, nodeName string) {
-	if !p.config.Enabled || nodeName == "" {
-		return
-	}
-
-	// Fast path: debounce check first (no API call, no semaphore).
-	now := time.Now()
-	p.mu.Lock()
-	if p.lastNodeSample == nil {
-		p.lastNodeSample = make(map[string]time.Time)
-	}
-	if last, ok := p.lastNodeSample[nodeName]; ok && now.Sub(last) < nodeSampleDebounce {
-		p.mu.Unlock()
-		return
-	}
-	p.lastNodeSample[nodeName] = now
-	p.mu.Unlock()
-
-	// B9: bounded concurrency — drop if the burst limit is reached.
-	select {
-	case p.sem <- struct{}{}:
-	default:
-		klog.V(4).InfoS("pvc monitor: dropping SampleNode, burst limit reached", "node", nodeName)
-		return
-	}
-	defer func() { <-p.sem }()
-
-	// Skip NotReady nodes — their kubelet can't serve stats/summary anyway.
-	if node, err := p.client.CoreV1().Nodes().Get(ctx, nodeName, metav1.GetOptions{}); err == nil {
-		if !k8s.IsNodeReady(node) {
-			return
-		}
-	}
-
-	pvByPVC := p.pvcMap(ctx)
-
-	usages, err := p.getNodeUsage(ctx, nodeName, pvByPVC)
-	if err != nil {
-		klog.ErrorS(err, "pvc monitor: SampleNode usage failed", "node", nodeName)
-		return
-	}
-
-	// incomplete=true: single-node view is partial, so update+signal but DON'T
-	// run cluster-wide resolves (those stay with the periodic full sweep).
-	p.apply(usages, pvByPVC, true, false /*isSweep*/)
-}
-
 // apply folds one batch of observations into the cache + correlator under p.mu.
 // Pure in-memory — no K8s writes. incomplete=true means "partial view" (single
 // node / per-node error): update+signal but skip the cluster-wide unmounted/deleted
 // resolve pass (only the full sweep owns resolves). isSweep=true for the periodic
-// full sweep, false for event-driven SampleNode (only the sweep clears firstScan
-// and the sweep re-signals unconditionally for edgeAction dedup).
+// full sweep (only the sweep clears firstScan and the sweep re-signals
+// unconditionally for edgeAction dedup).
 func (p *PvcMonitor) apply(pvcUsages []*PvcUsage, pvByPVC map[string]string, incomplete bool, isSweep bool) {
 	p.mu.Lock()
 	defer p.mu.Unlock()

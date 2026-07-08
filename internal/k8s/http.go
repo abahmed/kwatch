@@ -68,14 +68,6 @@ func InitHTTPClient(cfg *config.App) {
 	defaultClient.Transport = transport
 }
 
-// NewHTTPClient returns an *http.Client using the shared transport.
-func NewHTTPClient() *http.Client {
-	return &http.Client{
-		Timeout:   DefaultHTTPTimeout,
-		Transport: defaultClient.Transport,
-	}
-}
-
 // GetDefaultClient returns the shared default HTTP client.
 func GetDefaultClient() *http.Client {
 	return defaultClient

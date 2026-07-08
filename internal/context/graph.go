@@ -155,28 +155,3 @@ func (g *ResourceGraph) Prune(kind string, active map[string]bool) {
 	}
 	g.edges = kept
 }
-
-// NodeCount returns the number of nodes for the given kind.
-func (g *ResourceGraph) NodeCount(kind string) int {
-	g.mu.RLock()
-	defer g.mu.RUnlock()
-	prefix := kind + "/"
-	count := 0
-	for key := range g.dependencies {
-		if strings.HasPrefix(key, prefix) {
-			count++
-		}
-	}
-	for key := range g.dependents {
-		if strings.HasPrefix(key, prefix) && !strings.HasPrefix(key, prefix) {
-			// Already counted key if it was in dependencies
-		}
-		// Only count if not already counted
-		if strings.HasPrefix(key, prefix) {
-			if _, ok := g.dependencies[key]; !ok {
-				count++
-			}
-		}
-	}
-	return count
-}

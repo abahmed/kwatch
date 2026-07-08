@@ -38,10 +38,8 @@ func ValidateConfig(cfg *Config) []string {
 			cfg.PvcMonitor.CriticalThreshold < cfg.PvcMonitor.Threshold {
 			errs = append(errs, "pvcMonitor.criticalThreshold should be >= threshold")
 		}
-		if cfg.PvcMonitor.ClearThreshold < 0 {
-			errs = append(errs, "pvcMonitor.clearThreshold must be >= 0")
-		} else if cfg.PvcMonitor.ClearThreshold > cfg.PvcMonitor.Threshold {
-			cfg.PvcMonitor.ClearThreshold = cfg.PvcMonitor.Threshold
+		if cfg.PvcMonitor.ClearThreshold < 0 || cfg.PvcMonitor.ClearThreshold > cfg.PvcMonitor.Threshold {
+			errs = append(errs, "pvcMonitor.clearThreshold must be between 0 and threshold")
 		}
 	}
 
@@ -116,8 +114,66 @@ func Validate(cfg *Config) []error {
 	if cfg.Correlation.LifecycleInterval <= 0 {
 		errs = append(errs, errors.New("correlation.lifecycleInterval must be > 0"))
 	}
-	if cfg.HeartbeatMonitor.Enabled && cfg.HeartbeatMonitor.Interval < 0 {
-		errs = append(errs, errors.New("heartbeatMonitor.interval must be >= 0"))
+	if cfg.HeartbeatMonitor.Enabled && cfg.HeartbeatMonitor.Interval <= 0 {
+		errs = append(errs, errors.New("heartbeatMonitor.interval must be > 0 when heartbeatMonitor.enabled is true"))
+	}
+	if cfg.HeartbeatMonitor.Enabled && cfg.HeartbeatMonitor.URL == "" {
+		errs = append(errs, errors.New("heartbeatMonitor.url must not be empty when heartbeatMonitor.enabled is true"))
+	}
+	if cfg.SmartGrouping.WindowSeconds < 0 {
+		errs = append(errs, errors.New("smartGrouping.windowSeconds must be >= 0"))
+	}
+	if cfg.NodeResourceMonitor.Enabled && cfg.NodeResourceMonitor.IntervalSeconds <= 0 {
+		errs = append(errs, errors.New("nodeResourceMonitor.intervalSeconds must be > 0"))
+	}
+	if cfg.NodeResourceMonitor.Enabled {
+		if cfg.NodeResourceMonitor.CpuWarning <= 0 {
+			errs = append(errs, errors.New("nodeResourceMonitor.cpuWarning must be > 0"))
+		}
+		if cfg.NodeResourceMonitor.CpuCritical < cfg.NodeResourceMonitor.CpuWarning {
+			errs = append(errs, errors.New("nodeResourceMonitor.cpuCritical must be >= cpuWarning"))
+		}
+		if cfg.NodeResourceMonitor.MemWarning <= 0 {
+			errs = append(errs, errors.New("nodeResourceMonitor.memWarning must be > 0"))
+		}
+		if cfg.NodeResourceMonitor.MemCritical < cfg.NodeResourceMonitor.MemWarning {
+			errs = append(errs, errors.New("nodeResourceMonitor.memCritical must be >= memWarning"))
+		}
+	}
+	if cfg.OomMonitor.Enabled {
+		if cfg.OomMonitor.Threshold <= 0 {
+			errs = append(errs, errors.New("oomMonitor.threshold must be > 0"))
+		}
+		if cfg.OomMonitor.WindowMinutes <= 0 {
+			errs = append(errs, errors.New("oomMonitor.windowMinutes must be > 0"))
+		}
+	}
+	if cfg.DaemonSetMonitor.Enabled && cfg.DaemonSetMonitor.SustainedMinutes < 0 {
+		errs = append(errs, errors.New("daemonSetMonitor.sustainedMinutes must be >= 0"))
+	}
+	if cfg.StatefulSetMonitor.Enabled && cfg.StatefulSetMonitor.SustainedMinutes < 0 {
+		errs = append(errs, errors.New("statefulSetMonitor.sustainedMinutes must be >= 0"))
+	}
+	if cfg.PdbMonitor.Enabled && cfg.PdbMonitor.SustainedMinutes < 0 {
+		errs = append(errs, errors.New("pdbMonitor.sustainedMinutes must be >= 0"))
+	}
+	if cfg.CronJobMonitor.Enabled && cfg.CronJobMonitor.SustainedMinutes < 0 {
+		errs = append(errs, errors.New("cronJobMonitor.sustainedMinutes must be >= 0"))
+	}
+	if cfg.HpaMonitor.Enabled && cfg.HpaMonitor.SustainedMinutes < 0 {
+		errs = append(errs, errors.New("hpaMonitor.sustainedMinutes must be >= 0"))
+	}
+	if cfg.RolloutMonitor.Enabled && cfg.RolloutMonitor.SustainedMinutes < 0 {
+		errs = append(errs, errors.New("rolloutMonitor.sustainedMinutes must be >= 0"))
+	}
+	if cfg.NodeMonitor.Enabled && cfg.NodeMonitor.SustainedMinutes < 0 {
+		errs = append(errs, errors.New("nodeMonitor.sustainedMinutes must be >= 0"))
+	}
+	if cfg.TlsMonitor.Enabled && cfg.TlsMonitor.CriticalThreshold < 0 {
+		errs = append(errs, errors.New("tlsMonitor.criticalThreshold must be >= 0"))
+	}
+	if cfg.TlsMonitor.Enabled && cfg.TlsMonitor.Threshold > 0 && cfg.TlsMonitor.CriticalThreshold > cfg.TlsMonitor.Threshold {
+		errs = append(errs, errors.New("tlsMonitor.criticalThreshold must be <= threshold"))
 	}
 	if cfg.TlsMonitor.Enabled && cfg.TlsMonitor.Threshold < 0 {
 		errs = append(errs, errors.New("tlsMonitor.threshold must be >= 0"))
@@ -162,7 +218,7 @@ func Validate(cfg *Config) []error {
 			errs = append(errs, errors.New("pvcMonitor.criticalThreshold must be <= 100"))
 		}
 		if cfg.PvcMonitor.ClearThreshold < 0 || cfg.PvcMonitor.ClearThreshold > cfg.PvcMonitor.Threshold {
-			cfg.PvcMonitor.ClearThreshold = cfg.PvcMonitor.Threshold
+			errs = append(errs, errors.New("pvcMonitor.clearThreshold must be between 0 and threshold"))
 		}
 	}
 	for _, name := range unknownProviders(cfg) {

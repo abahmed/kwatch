@@ -5,6 +5,16 @@
       "config"
     ],
     "properties": {
+      "nameOverride": {
+        "type": "string",
+        "default": "",
+        "description": "Override the base name used in templates"
+      },
+      "fullnameOverride": {
+        "type": "string",
+        "default": "",
+        "description": "Override the full app name used in templates"
+      },
       "image": {
         "type": "object",
         "required": [],
@@ -19,6 +29,11 @@
             ],
             "default": "ghcr.io/abahmed/kwatch"
           },
+          "tag": {
+            "type": "string",
+            "default": "",
+            "description": "Overrides the image tag (defaults to .Chart.AppVersion)"
+          },
           "pullPolicy": {
             "type": [
               "string",
@@ -27,7 +42,7 @@
               "object",
               "array"
             ],
-            "default": "Always"
+            "default": "IfNotPresent"
           }
         }
       },
@@ -185,6 +200,13 @@
               "enabled": { "type": "boolean" }
             }
           },
+          "clusterAutoscalerMonitor": {
+            "type": "object",
+            "description": "Cluster-autoscaler event monitoring",
+            "properties": {
+              "enabled": { "type": "boolean", "description": "Detect cluster-autoscaler scale failures (default true)" }
+            }
+          },
           "hpaMonitor": {
             "type": "object",
             "properties": {
@@ -337,9 +359,13 @@
               "enabled": { "type": "boolean", "description": "Enable the LLM sidecar for AI root-cause analysis (default false)" }
             }
           },
-          "dashboardURLTemplate": {
-            "type": "string",
-            "description": "Dashboard URL template with {namespace}/{owner}/{pod} placeholders"
+          "auditLog": {
+            "type": "object",
+            "description": "Audit logging configuration",
+            "properties": {
+              "enabled": { "type": "boolean", "description": "Stream all incidents as JSON (default true)" },
+              "output": { "type": "string", "description": "Destination: stdout or file path (default stdout)" }
+            }
           },
           "alert": {
             "type": "object",

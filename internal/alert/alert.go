@@ -411,16 +411,6 @@ func extractRetry(cfg map[string]interface{}) retryConfig {
 	return rc
 }
 
-// ProviderNames returns the set of known alert provider names.
-func ProviderNames() []string {
-	names := make([]string, 0, len(config.KnownProviders))
-	for n := range config.KnownProviders {
-		names = append(names, n)
-	}
-	sort.Strings(names)
-	return names
-}
-
 // Init initializes AlertManager with provided config.
 // Safe to call multiple times: shuts down existing workers before re-init.
 func (a *AlertManager) Init(
@@ -982,7 +972,6 @@ func (a *AlertManager) AddProvider(p Provider) {
 	}
 	a.entries = append(a.entries, entry)
 	if a.started {
-		// Late registration: this entry missed Start's worker loop, launch one.
 		a.providerWg.Add(1)
 		go func() {
 			defer a.providerWg.Done()

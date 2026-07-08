@@ -222,10 +222,6 @@ type Config struct {
 	// LLM configures the self-hosted AI enrichment sidecar.
 	LLM LLMConfig `yaml:"llm"`
 
-	// DashboardURLTemplate is an optional URL template with {namespace}/{owner}/{pod}
-	// placeholders, rendered in alerts as a deep-link to a dashboard.
-	DashboardURLTemplate string `yaml:"dashboardURLTemplate"`
-
 	// AuditLog configures structured JSON audit logging for all incidents.
 	AuditLog AuditLogConfig `yaml:"auditLog"`
 }

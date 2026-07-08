@@ -56,36 +56,6 @@ func TestGetPodContainerLogsError(t *testing.T) {
 	assert.Equal("", logs, "GetPodContainerLogs should return empty string on error")
 }
 
-func TestJsonEscape(t *testing.T) {
-	assert := assert.New(t)
-
-	testCases := []struct {
-		Input  string
-		Output string
-	}{
-		{
-			Input:  "test",
-			Output: "test",
-		},
-		{
-			Input:  "te\bst",
-			Output: "te\\bst",
-		},
-		{
-			Input:  "\b",
-			Output: "\\b",
-		},
-		{
-			Input:  "\"",
-			Output: "\\\"",
-		},
-	}
-
-	for _, tc := range testCases {
-		assert.Equal(JsonEscape(tc.Input), tc.Output)
-	}
-}
-
 func TestGetPodEventsStr(t *testing.T) {
 	assert := assert.New(t)
 
@@ -108,77 +78,6 @@ func TestGetPodEventsStrNil(t *testing.T) {
 	result := GetPodEventsStr(nil)
 	expectedOutput := ""
 	assert.Equal(result, expectedOutput)
-}
-
-func TestContainsKillingStoppingContainerEvents(t *testing.T) {
-	assert := assert.New(t)
-
-	cli := fake.NewSimpleClientset()
-	cli.PrependReactor(
-		"list",
-		"events",
-		func(action k8stesting.Action) (bool, runtime.Object, error) {
-			return true, &v1.EventList{
-				Items: []v1.Event{{
-					Reason:        "killing",
-					Message:       "test stopping container",
-					LastTimestamp: metav1.Now(),
-				}},
-			}, nil
-		})
-
-	result :=
-		ContainsKillingStoppingContainerEvents(
-			context.Background(),
-			cli,
-			"dummy-app-579f7cd745-t6fdg",
-			"test")
-
-	assert.True(result)
-}
-
-func TestContainsKillingStoppingContainerEventsError(t *testing.T) {
-	assert := assert.New(t)
-
-	cli := fake.NewSimpleClientset()
-	cli.PrependReactor(
-		"list",
-		"events",
-		func(action k8stesting.Action) (bool, runtime.Object, error) {
-			return true, nil, errors.New("ssss")
-		})
-
-	result :=
-		ContainsKillingStoppingContainerEvents(
-			context.Background(),
-			cli,
-			"dummy-app-579f7cd745-t6fdg",
-			"test")
-
-	assert.False(result)
-}
-
-func TestContainsKillingStoppingContainerEmpty(t *testing.T) {
-	assert := assert.New(t)
-
-	cli := fake.NewSimpleClientset()
-	cli.PrependReactor(
-		"list",
-		"events",
-		func(action k8stesting.Action) (bool, runtime.Object, error) {
-			return true, &v1.EventList{
-				Items: []v1.Event{},
-			}, nil
-		})
-
-	result :=
-		ContainsKillingStoppingContainerEvents(
-			context.Background(),
-			cli,
-			"dummy-app-579f7cd745-t6fdg",
-			"test")
-
-	assert.False(result)
 }
 
 func TestRandomString(t *testing.T) {
@@ -208,62 +107,6 @@ func TestGetNodes(t *testing.T) {
 	assert.NoError(err)
 	assert.NotNil(result)
 	assert.Equal(len(result.Items), 1)
-}
-
-func TestGetPVNameFromPVC(t *testing.T) {
-	assert := assert.New(t)
-
-	cli := fake.NewSimpleClientset()
-	cli.PrependReactor(
-		"get",
-		"persistentvolumeclaims",
-		func(action k8stesting.Action) (bool, runtime.Object, error) {
-			return true, &v1.PersistentVolumeClaim{
-				Spec: v1.PersistentVolumeClaimSpec{
-					VolumeName: "test",
-				},
-			}, nil
-		})
-
-	result, err := GetPVNameFromPVC(context.Background(), cli, "test", "test")
-	assert.NoError(err)
-	assert.Equal(result, "test")
-}
-
-func TestGetPVNameFromPVCError(t *testing.T) {
-	assert := assert.New(t)
-
-	cli := fake.NewSimpleClientset()
-	cli.PrependReactor(
-		"get",
-		"persistentvolumeclaims",
-		func(action k8stesting.Action) (bool, runtime.Object, error) {
-			return true, nil, errors.New("failed")
-		})
-
-	result, err := GetPVNameFromPVC(context.Background(), cli, "test", "test")
-	assert.Error(err, "failed")
-	assert.Equal(result, "")
-}
-
-func TestGetPVNameFromPVCEmpty(t *testing.T) {
-	assert := assert.New(t)
-
-	cli := fake.NewSimpleClientset()
-	cli.PrependReactor(
-		"get",
-		"persistentvolumeclaims",
-		func(action k8stesting.Action) (bool, runtime.Object, error) {
-			return true, &v1.PersistentVolumeClaim{
-				Spec: v1.PersistentVolumeClaimSpec{
-					VolumeName: "",
-				},
-			}, nil
-		})
-
-	result, err := GetPVNameFromPVC(context.Background(), cli, "test", "test")
-	assert.NoError(err)
-	assert.Equal("", result)
 }
 
 func TestGetNodesEmpty(t *testing.T) {
@@ -309,48 +152,6 @@ func TestGetPodEventsStrMultipleEvents(t *testing.T) {
 	assert.Contains(result, "Container killed")
 }
 
-func TestContainsKillingStoppingContainerDifferentCase(t *testing.T) {
-	assert := assert.New(t)
-
-	cli := fake.NewSimpleClientset()
-	cli.PrependReactor(
-		"list",
-		"events",
-		func(action k8stesting.Action) (bool, runtime.Object, error) {
-			return true, &v1.EventList{
-				Items: []v1.Event{{
-					Reason:        "KILLING",
-					Message:       "Stopping Container",
-					LastTimestamp: metav1.Now(),
-				}},
-			}, nil
-		})
-
-	result := ContainsKillingStoppingContainerEvents(context.Background(), cli, "test", "default")
-	assert.True(result)
-}
-
-func TestContainsKillingStoppingContainerNoMatch(t *testing.T) {
-	assert := assert.New(t)
-
-	cli := fake.NewSimpleClientset()
-	cli.PrependReactor(
-		"list",
-		"events",
-		func(action k8stesting.Action) (bool, runtime.Object, error) {
-			return true, &v1.EventList{
-				Items: []v1.Event{{
-					Reason:        "Started",
-					Message:       "Container started normally",
-					LastTimestamp: metav1.Now(),
-				}},
-			}, nil
-		})
-
-	result := ContainsKillingStoppingContainerEvents(context.Background(), cli, "test", "default")
-	assert.False(result)
-}
-
 func TestRandomStringZero(t *testing.T) {
 	assert := assert.New(t)
 
@@ -377,41 +178,6 @@ func TestRandomStringUniqueness(t *testing.T) {
 		results[result] = true
 	}
 	assert.Equal(100, len(results))
-}
-
-func TestJsonEscapeEmpty(t *testing.T) {
-	assert := assert.New(t)
-
-	result := JsonEscape("")
-	assert.Equal("", result)
-}
-
-func TestJsonEscapeMultipleSpecialChars(t *testing.T) {
-	assert := assert.New(t)
-
-	result := JsonEscape("test\"with\\special\nchars")
-	assert.NotEqual("test\"with\\special\nchars", result)
-}
-
-func TestSetLogFormatterDefault(t *testing.T) {
-	assert := assert.New(t)
-
-	SetLogFormatter("text")
-	assert.NotNil(t)
-}
-
-func TestSetLogFormatterJSON(t *testing.T) {
-	assert := assert.New(t)
-
-	SetLogFormatter("json")
-	assert.NotNil(t)
-}
-
-func TestSetLogFormatterUnknown(t *testing.T) {
-	assert := assert.New(t)
-
-	SetLogFormatter("unknown")
-	assert.NotNil(t)
 }
 
 func TestGetPodEventsWithFieldSelector(t *testing.T) {
@@ -474,14 +240,6 @@ func TestGetPodEventsSuccess(t *testing.T) {
 	assert.NoError(err)
 	assert.NotNil(result)
 	assert.Equal(1, len(result.Items))
-}
-
-func TestNewHTTPClient(t *testing.T) {
-	assert := assert.New(t)
-
-	client := NewHTTPClient()
-	assert.NotNil(client)
-	assert.Equal(DefaultHTTPTimeout, client.Timeout)
 }
 
 func TestGetDefaultClient(t *testing.T) {

@@ -47,6 +47,12 @@ data:
     severityByReason:
       <reason>: "<severity>"     # checked before owner-kind
 
+    # ── Deprecated ignore fields (use silences instead) ──
+    # ignoreNodeReasons:
+    #   - "<reason>"
+    # ignoreNodeMessages:
+    #   - "<message>"
+
     # ── Silences (suppress matching incidents entirely) ──
     silences:
       - nodeReasons: ["<reason>"]
@@ -124,6 +130,9 @@ data:
       enabled: <boolean>
       # sustainedMinutes: <minutes>
 
+    clusterAutoscalerMonitor:
+      enabled: <boolean>     # detect cluster-autoscaler events (scale failures, unschedulable pods)
+
     tlsMonitor:
       enabled: <boolean>
       # threshold: <days>              # alert before expiry (default 30)
@@ -160,6 +169,11 @@ data:
       threshold: 80                # warn at this % (default 80)
       criticalThreshold: 90        # critical at this % (default 90)
       clearThreshold: 75           # resolve below this % (default 75)
+
+    # ── Audit log (JSON incident stream) ─────────────────
+    auditLog:
+      enabled: <boolean>     # stream all incidents as JSON (default true)
+      # output: "stdout"     # "stdout" or a file path (default "stdout")
 
     # ── AI enrichment (self-hosted) ──────────────────────
     llm:

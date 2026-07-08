@@ -15,7 +15,6 @@ import (
 	"github.com/abahmed/kwatch/internal/model"
 	"github.com/stretchr/testify/assert"
 	appsv1 "k8s.io/api/apps/v1"
-	autoscalingv2 "k8s.io/api/autoscaling/v2"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -1411,20 +1410,6 @@ func TestLastTermInfo(t *testing.T) {
 	})
 	assert.Equal(t, "OOMKilled", reason)
 	assert.Equal(t, int32(137), code)
-}
-
-func TestHpaHasCondition(t *testing.T) {
-	hpa := &autoscalingv2.HorizontalPodAutoscaler{
-		Status: autoscalingv2.HorizontalPodAutoscalerStatus{
-			Conditions: []autoscalingv2.HorizontalPodAutoscalerCondition{
-				{Type: autoscalingv2.ScalingActive, Status: corev1.ConditionTrue},
-				{Type: autoscalingv2.ScalingLimited, Status: corev1.ConditionFalse},
-			},
-		},
-	}
-	assert.True(t, hpaHasCondition(hpa, autoscalingv2.ScalingActive, corev1.ConditionTrue))
-	assert.False(t, hpaHasCondition(hpa, autoscalingv2.ScalingLimited, corev1.ConditionTrue))
-	assert.False(t, hpaHasCondition(hpa, autoscalingv2.AbleToScale, corev1.ConditionTrue))
 }
 
 func TestProcessPodCompletedStatus(t *testing.T) {

@@ -11,12 +11,6 @@ import (
 	corev1lister "k8s.io/client-go/listers/core/v1"
 )
 
-type OvercommitSignal struct {
-	NodeName string
-	Reason   string
-	Hint     string
-}
-
 type Config struct {
 	CpuWarning  float64
 	CpuCritical float64
