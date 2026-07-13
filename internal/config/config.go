@@ -723,6 +723,13 @@ type Correlation struct {
 	// MaxBaseline is the maximum number of baseline entries to keep.
 	// Default 5000.
 	MaxBaseline int `yaml:"maxBaseline"`
+
+	// CooldownMinutes is the minimum time (in minutes) between re-alerts
+	// for the same container crash reason. When a container crashes with
+	// the same reason/message/exit code, subsequent alerts are suppressed
+	// until this cooldown expires. Default 10. Set to 0 to disable the
+	// cooldown (always re-alert on identical crashes).
+	CooldownMinutes int `yaml:"cooldownMinutes"`
 }
 
 // RenotifyConfig configures periodic re-notification for active incidents.

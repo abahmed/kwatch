@@ -43,6 +43,10 @@ func (f ContainerLogsFilter) Enrich(ctx *Context) bool {
 		previousLogs,
 		ctx.Config.MaxRecentLogLines)
 
+	if logs == "" {
+		logs = "[logs unavailable — kubelet timeout or container not yet logged]"
+	}
+
 	for _, pattern := range ctx.Config.Suppression.LogPatterns {
 		if pattern.MatchString(logs) {
 			klog.InfoS(

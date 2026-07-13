@@ -21,20 +21,6 @@ func TestVersionConstants(t *testing.T) {
 	assert.Equal("unknown", buildDate)
 }
 
-func TestInfoStruct(t *testing.T) {
-	assert := assert.New(t)
-
-	info := Info{
-		Version:   "v0.10.0",
-		GitCommit: "abc123",
-		BuildDate: "2024-01-01",
-	}
-
-	assert.Equal("v0.10.0", info.Version)
-	assert.Equal("abc123", info.GitCommit)
-	assert.Equal("2024-01-01", info.BuildDate)
-}
-
 func TestShortMultipleCalls(t *testing.T) {
 	assert := assert.New(t)
 

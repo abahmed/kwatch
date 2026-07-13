@@ -37,6 +37,7 @@ func DefaultConfig() *Config {
 			Window:            10,
 			LifecycleInterval: 1,
 			ResolveHoldDown:   300,
+			CooldownMinutes:   10,
 			Escalation:        EscalationConfig{Enabled: true, Tiers: []int{3, 10, 50}},
 		},
 		AuditLog: AuditLogConfig{Enabled: true, Output: "stdout"},

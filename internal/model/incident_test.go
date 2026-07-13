@@ -14,8 +14,6 @@ func TestIncidentActionString(t *testing.T) {
 		{ActionUpdate, "update"},
 		{ActionSkip, "skip"},
 		{ActionResolved, "resolved"},
-		{ActionDigest, "digest"},
-		{ActionDigestFlush, "digest_flush"},
 		{IncidentAction(99), "unknown"},
 	}
 	for _, tt := range tests {

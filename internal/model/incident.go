@@ -11,6 +11,16 @@ type ContainerState struct {
 	Msg              string
 	ExitCode         int32
 	Status           string
+	LastAlertAt      time.Time
+}
+
+// PodSummary is a lightweight representation of a suppressed pod,
+// attached to the parent node incident for context.
+type PodSummary struct {
+	Namespace    string
+	PodName      string
+	Reason       string
+	RestartCount int
 }
 
 type IncidentAction int
@@ -20,8 +30,6 @@ const (
 	ActionUpdate
 	ActionSkip
 	ActionResolved
-	ActionDigest
-	ActionDigestFlush
 )
 
 func (a IncidentAction) String() string {
@@ -34,10 +42,6 @@ func (a IncidentAction) String() string {
 		return "skip"
 	case ActionResolved:
 		return "resolved"
-	case ActionDigest:
-		return "digest"
-	case ActionDigestFlush:
-		return "digest_flush"
 	default:
 		return "unknown"
 	}
@@ -93,6 +97,7 @@ type Incident struct {
 	Severity           string
 	SuppressedPods     int
 	SuppressedOwners   map[string]int // owner → count of suppressed pods
+	SuppressedPodSummaries []PodSummary
 	ResolveAt          time.Time
 	IncludeEvents      bool
 	IncludeLogs        bool
@@ -100,7 +105,6 @@ type Incident struct {
 	NotifiedSig        string
 	LastNotifiedAt     time.Time
 	RenotifyCount      int
-	Digested           bool // created via storm digest; suppress resolve/renotify edge
 }
 
 // PersistedIncident is a lightweight serializable subset of Incident,
@@ -173,6 +177,10 @@ func (inc *Incident) Clone() *Incident {
 		for k, v := range inc.SuppressedOwners {
 			c.SuppressedOwners[k] = v
 		}
+	}
+	if len(inc.SuppressedPodSummaries) > 0 {
+		c.SuppressedPodSummaries = make([]PodSummary, len(inc.SuppressedPodSummaries))
+		copy(c.SuppressedPodSummaries, inc.SuppressedPodSummaries)
 	}
 	return &c
 }

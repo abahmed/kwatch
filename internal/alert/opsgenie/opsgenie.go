@@ -64,32 +64,32 @@ func NewOpsgenie(config map[string]interface{}, appCfg *config.App) *Opsgenie {
 }
 
 // Name returns name of the provider
-func (m *Opsgenie) Name() string {
+func (o *Opsgenie) Name() string {
 	return "Opsgenie"
 }
 
-func (m *Opsgenie) UsesEventDelivery() {}
+func (o *Opsgenie) UsesEventDelivery() {}
 
 // SendMessage sends text message to the provider
-func (m *Opsgenie) SendMessage(msg string) error {
+func (o *Opsgenie) SendMessage(msg string) error {
 	return nil
 }
 
 // SendEvent sends event to the provider
-func (m *Opsgenie) SendEvent(e *event.Event) error {
+func (o *Opsgenie) SendEvent(e *event.Event) error {
 	if e.Action == "resolved" && e.DedupKey != "" {
-		return m.closeAlert(e.DedupKey)
+		return o.closeAlert(e.DedupKey)
 	}
-	b, err := m.buildMessage(e)
+	b, err := o.buildMessage(e)
 	if err != nil {
 		return err
 	}
-	return m.sendAPI(b)
+	return o.sendAPI(b)
 }
 
-func (m *Opsgenie) closeAlert(alias string) error {
+func (o *Opsgenie) closeAlert(alias string) error {
 	client := k8s.GetDefaultClient()
-	url := fmt.Sprintf(m.closeURL, alias)
+	url := fmt.Sprintf(o.closeURL, alias)
 	body := []byte(`{}`)
 	buffer := bytes.NewBuffer(body)
 	request, err := http.NewRequest(http.MethodPost, url, buffer)
@@ -97,7 +97,7 @@ func (m *Opsgenie) closeAlert(alias string) error {
 		return err
 	}
 	request.Header.Set("Content-Type", "application/json")
-	request.Header.Set("Authorization", "GenieKey "+m.apikey)
+	request.Header.Set("Authorization", "GenieKey "+o.apikey)
 
 	response, err := client.Do(request)
 	if err != nil {
@@ -119,17 +119,17 @@ func (m *Opsgenie) closeAlert(alias string) error {
 }
 
 // sendAPI sends http request to Opsgenie API
-func (m *Opsgenie) sendAPI(content []byte) error {
+func (o *Opsgenie) sendAPI(content []byte) error {
 	client := k8s.GetDefaultClient()
 	buffer := bytes.NewBuffer(content)
-	request, err := http.NewRequest(http.MethodPost, m.url, buffer)
+	request, err := http.NewRequest(http.MethodPost, o.url, buffer)
 	if err != nil {
 		return err
 	}
 
 	// set request headers
 	request.Header.Set("Content-Type", "application/json")
-	request.Header.Set("Authorization", "GenieKey "+m.apikey)
+	request.Header.Set("Authorization", "GenieKey "+o.apikey)
 
 	response, err := client.Do(request)
 	if err != nil {
@@ -151,7 +151,7 @@ func (m *Opsgenie) sendAPI(content []byte) error {
 	return nil
 }
 
-func (m *Opsgenie) buildMessage(e *event.Event) ([]byte, error) {
+func (o *Opsgenie) buildMessage(e *event.Event) ([]byte, error) {
 	payload := ogPayload{
 		Priority: "P1",
 	}
@@ -160,14 +160,14 @@ func (m *Opsgenie) buildMessage(e *event.Event) ([]byte, error) {
 	events := strings.TrimSpace(e.Events)
 
 	// use custom title if it's provided, otherwise use default
-	title := m.title
+	title := o.title
 	if len(title) == 0 {
 		title = fmt.Sprintf(defaultOpsgenieTitle, e.PodName)
 	}
 	payload.Message = title
 
 	// use custom text if it's provided, otherwise use default
-	text := m.text
+	text := o.text
 	if len(text) == 0 {
 		text = fmt.Sprintf(defaultOpsgenieText, e.ContainerName, e.PodName)
 	}
@@ -175,8 +175,8 @@ func (m *Opsgenie) buildMessage(e *event.Event) ([]byte, error) {
 	payload.Description = text
 	payload.Alias = e.DedupKey
 	details := map[string]string{}
-	if m.appCfg.ClusterName != "" {
-		details["Cluster"] = m.appCfg.ClusterName
+	if o.appCfg.ClusterName != "" {
+		details["Cluster"] = o.appCfg.ClusterName
 	}
 	if e.PodName != "" {
 		details["Name"] = e.PodName

@@ -4,6 +4,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/abahmed/kwatch/internal/alert/util"
 	"github.com/abahmed/kwatch/internal/config"
 	"github.com/abahmed/kwatch/internal/event"
 	"github.com/abahmed/kwatch/internal/model"
@@ -231,13 +232,13 @@ func TestSendMessageWebhookMode(t *testing.T) {
 func TestChunks(t *testing.T) {
 	assert := assert.New(t)
 
-	result := chunks("abc", 5)
+	result := util.Chunks("abc", 5)
 	assert.Equal([]string{"abc"}, result)
 
-	result = chunks("abcdef", 3)
+	result = util.Chunks("abcdef", 3)
 	assert.Equal([]string{"abc", "def"}, result)
 
-	result = chunks("abcdefg", 3)
+	result = util.Chunks("abcdefg", 3)
 	assert.Equal([]string{"abc", "def", "g"}, result)
 }
 

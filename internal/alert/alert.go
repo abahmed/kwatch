@@ -8,7 +8,6 @@ import (
 	"math/rand"
 	"reflect"
 	"regexp"
-	"sort"
 	"strings"
 	"sync"
 	"text/template"
@@ -199,6 +198,7 @@ type AlertManager struct {
 	silences    []silenceMatcher
 	maxLogLines int
 	templates   map[string]*template.Template
+	clusterName string
 	started     bool
 	stopped     bool
 	mu          sync.Mutex
@@ -422,6 +422,9 @@ func (a *AlertManager) Init(
 	}
 	a.entries = make([]providerEntry, 0)
 	a.silences = nil
+	if appCfg != nil {
+		a.clusterName = appCfg.ClusterName
+	}
 
 	entries := make([]providerEntry, 0, len(alertCfg))
 	for k, v := range alertCfg {
@@ -1202,15 +1205,27 @@ func (a *AlertManager) deliverOne(ctx context.Context, entry *providerEntry, inc
 	}
 }
 
-// buildMessage wraps formatIncidentMessage with optional insight-based
-// message builder. When insight is present, uses the structured message
-// builder; otherwise falls back to the existing formatIncidentMessage.
+// buildMessage produces a formatted message string for the given incident.
+// Uses the context-adaptive ReportBuilder and PlainTextRenderer.
 func (a *AlertManager) buildMessage(inc *model.Incident, action model.IncidentAction, ins *insight.Insight, maxLines int, templates map[string]*template.Template) string {
-	if ins != nil {
-		b := message.NewBuilder()
-		return b.Build(inc, action, ins)
+	rb := message.NewReportBuilder(a.clusterName)
+	report := rb.Build(inc, action, ins)
+	renderer := message.NewPlainTextRenderer()
+	msg := message.RenderAction(renderer, report)
+
+	if t, ok := templates[strings.ToLower(inc.Reason)]; ok {
+		var buf bytes.Buffer
+		err := t.Execute(&buf, templateData{
+			Incident: inc,
+			Action:   action.String(),
+			Message:  msg,
+		})
+		if err == nil && buf.Len() > 0 {
+			return buf.String()
+		}
 	}
-	return formatIncidentMessage(inc, action, maxLines, templates)
+
+	return msg
 }
 
 // fanOut delivers a job to every registered provider channel (non-blocking).
@@ -1281,165 +1296,6 @@ type templateData struct {
 	Message  string
 }
 
-func formatIncidentMessage(inc *model.Incident, action model.IncidentAction, maxLines int, templates map[string]*template.Template) string {
-	var defaultMsg string
-	switch action {
-	case model.ActionCreate:
-		defaultMsg = formatCreateMessage(inc, maxLines)
-	case model.ActionUpdate:
-		defaultMsg = formatUpdateMessage(inc, maxLines)
-	case model.ActionResolved:
-		defaultMsg = formatResolvedMessage(inc)
-	default:
-		return ""
-	}
-	if t, ok := templates[strings.ToLower(inc.Reason)]; ok {
-		var buf bytes.Buffer
-		err := t.Execute(&buf, templateData{
-			Incident: inc,
-			Action:   action.String(),
-			Message:  defaultMsg,
-		})
-		if err == nil {
-			return buf.String()
-		}
-		klog.ErrorS(err, "template render failed, falling back to default", "reason", inc.Reason)
-	}
-	return defaultMsg
-}
-
-func containerDisplayName(inc *model.Incident) string {
-	if inc.ContainerName != "" && inc.ContainerName != "." {
-		return inc.ContainerName
-	}
-	if len(inc.Containers) == 1 {
-		for c := range inc.Containers {
-			return c
-		}
-	}
-	if len(inc.Containers) > 1 {
-		names := make([]string, 0, len(inc.Containers))
-		for c := range inc.Containers {
-			names = append(names, c)
-		}
-		sort.Strings(names)
-		return strings.Join(names, ", ")
-	}
-	return ""
-}
-
-func resourcePlural(inc *model.Incident) string {
-	if inc.Resource != "" {
-		return inc.Resource + "s"
-	}
-	return "resources"
-}
-
-func formatCreateMessage(inc *model.Incident, maxLines int) string {
-	duration := inc.LastSeen.Sub(inc.FirstSeen).Round(time.Minute)
-
-	severity := inc.Severity
-	if severity == "" {
-		severity = "normal"
-	}
-
-	parts := buildCreateSections(inc, duration, severity, maxLines)
-	return strings.Join(parts, "\n")
-}
-
-func buildCreateSections(inc *model.Incident, duration time.Duration, severity string, maxLines int) []string {
-	var parts []string
-
-	header := fmt.Sprintf("🚨 %s", inc.Reason)
-	if inc.Resource != "" && inc.Name != "" {
-		header += fmt.Sprintf(" in %s/%s", inc.Resource, inc.Name)
-	} else if inc.Name != "" {
-		header += " — " + inc.Name
-	}
-	if inc.Namespace != "" {
-		header += fmt.Sprintf(" (%s)", inc.Namespace)
-	}
-	if severity != "normal" {
-		header += " — " + severity
-	}
-	parts = append(parts, header)
-
-	var infoParts []string
-	containerName := containerDisplayName(inc)
-	if containerName != "" {
-		infoParts = append(infoParts, fmt.Sprintf("Container: %s", containerName))
-	}
-	if inc.Image != "" {
-		infoParts = append(infoParts, fmt.Sprintf("Image: %s", inc.Image))
-	}
-	if inc.NodeName != "" {
-		infoParts = append(infoParts, fmt.Sprintf("Node: %s", inc.NodeName))
-	}
-	if inc.LastContainerState != nil && inc.LastContainerState.Msg != "" {
-		infoParts = append(infoParts, fmt.Sprintf("Message: %s", inc.LastContainerState.Msg))
-	}
-	if inc.LastContainerState != nil && inc.LastContainerState.ExitCode > 0 {
-		infoParts = append(infoParts, fmt.Sprintf("Exit Code: %d", inc.LastContainerState.ExitCode))
-	}
-	if inc.OwnerKind != "" {
-		infoParts = append(infoParts, fmt.Sprintf("Kind: %s", inc.OwnerKind))
-	}
-	if inc.RestartCount > 0 {
-		infoParts = append(infoParts, fmt.Sprintf("Restarts: %d", inc.RestartCount))
-	}
-	infoParts = append(infoParts, fmt.Sprintf("Duration: %s", duration))
-	parts = append(parts, strings.Join(infoParts, " · "))
-
-	var countParts []string
-	countParts = append(countParts, fmt.Sprintf("Count: %d", inc.Count))
-	if inc.PeakResources > 0 {
-		countParts = append(countParts, fmt.Sprintf("Peak: %d %s", inc.PeakResources, resourcePlural(inc)))
-	}
-	parts = append(parts, strings.Join(countParts, " · "))
-
-	if inc.Hint != "" {
-		parts = append(parts, "💡 "+inc.Hint)
-	}
-
-	if inc.IncludeLogs && inc.Logs != "" {
-		parts = append(parts, "\nLogs:\n"+truncateText(inc.Logs, maxLines))
-	}
-
-	if inc.IncludeEvents && inc.Events != "" {
-		parts = append(parts, "\nEvents:\n"+truncateText(inc.Events, maxLines))
-	}
-
-	if n := len(inc.Resources); n > 1 {
-		parts = append(parts, fmt.Sprintf("Affected: %d pods", n))
-	}
-	if inc.Resource == "node" && inc.SuppressedPods > 0 {
-		impact := fmt.Sprintf("Impact: %d dependent pod error(s) suppressed", inc.SuppressedPods)
-		if len(inc.SuppressedOwners) > 0 {
-			owners := make([]string, 0, len(inc.SuppressedOwners))
-			for o := range inc.SuppressedOwners {
-				owners = append(owners, o)
-			}
-			sort.Strings(owners)
-			impact += fmt.Sprintf(" across %d service(s):", len(owners))
-			for _, o := range owners {
-				impact += fmt.Sprintf("\n  • %s (%d pods)", o, inc.SuppressedOwners[o])
-			}
-		}
-		impact += "\n  — this node is the likely root cause"
-		parts = append(parts, impact)
-	}
-
-	if inc.Analysis != "" {
-		parts = append(parts, "🤖 "+inc.Analysis)
-	}
-
-	if inc.Runbook != "" {
-		parts = append(parts, "📖 Runbook: "+inc.Runbook)
-	}
-
-	return parts
-}
-
 func truncateMsg(s string, maxLen int) string {
 	if maxLen <= 0 || len(s) <= maxLen {
 		return s
@@ -1469,105 +1325,4 @@ func defaultMaxBytes(providerName string) int {
 	}
 }
 
-func truncateText(s string, maxLines int) string {
-	lines := strings.Split(s, "\n")
-	if len(lines) > maxLines {
-		lines = lines[:maxLines]
-	}
-	return strings.Join(lines, "\n")
-}
 
-func formatUpdateMessage(inc *model.Incident, _ int) string {
-	duration := inc.LastSeen.Sub(inc.FirstSeen).Round(time.Minute)
-
-	var parts []string
-
-	header := fmt.Sprintf("🔄 %s", inc.Reason)
-	if inc.Name != "" {
-		header += " — " + inc.Name
-	}
-	if inc.Namespace != "" {
-		header += fmt.Sprintf(" (%s)", inc.Namespace)
-	}
-	parts = append(parts, header)
-
-	var infoParts []string
-	containerName := containerDisplayName(inc)
-	if containerName != "" {
-		infoParts = append(infoParts, fmt.Sprintf("Container: %s", containerName))
-	}
-	if inc.Image != "" {
-		infoParts = append(infoParts, fmt.Sprintf("Image: %s", inc.Image))
-	}
-	if inc.NodeName != "" {
-		infoParts = append(infoParts, fmt.Sprintf("Node: %s", inc.NodeName))
-	}
-	if inc.LastContainerState != nil && inc.LastContainerState.Msg != "" {
-		infoParts = append(infoParts, fmt.Sprintf("Message: %s", inc.LastContainerState.Msg))
-	}
-	if inc.LastContainerState != nil && inc.LastContainerState.ExitCode > 0 {
-		infoParts = append(infoParts, fmt.Sprintf("Exit Code: %d", inc.LastContainerState.ExitCode))
-	}
-	if inc.OwnerKind != "" {
-		infoParts = append(infoParts, fmt.Sprintf("Kind: %s", inc.OwnerKind))
-	}
-	if inc.RestartCount > 0 {
-		infoParts = append(infoParts, fmt.Sprintf("Restarts: %d", inc.RestartCount))
-	}
-	infoParts = append(infoParts, fmt.Sprintf("Count: %d", inc.Count))
-	infoParts = append(infoParts, fmt.Sprintf("Duration: %s", duration))
-	if inc.PeakResources > 0 {
-		infoParts = append(infoParts, fmt.Sprintf("Peak: %d %s", inc.PeakResources, resourcePlural(inc)))
-	}
-	parts = append(parts, strings.Join(infoParts, " · "))
-
-	if inc.Hint != "" {
-		parts = append(parts, "💡 "+inc.Hint)
-	}
-
-	if inc.IncludeLogs && inc.Logs != "" {
-		parts = append(parts, "\nLogs:\n"+inc.Logs)
-	}
-
-	if inc.IncludeEvents && inc.Events != "" {
-		parts = append(parts, "\nEvents:\n"+inc.Events)
-	}
-
-	return strings.Join(parts, "\n")
-}
-
-func formatResolvedMessage(inc *model.Incident) string {
-	duration := inc.LastSeen.Sub(inc.FirstSeen).Round(time.Minute)
-
-	var parts []string
-
-	header := fmt.Sprintf("✅ Resolved — %s", inc.Reason)
-	if inc.Resource != "" && inc.Name != "" {
-		header += fmt.Sprintf(" in %s/%s", inc.Resource, inc.Name)
-	} else if inc.Name != "" {
-		header += " — " + inc.Name
-	}
-	if inc.Namespace != "" {
-		header += fmt.Sprintf(" (%s)", inc.Namespace)
-	}
-	parts = append(parts, header)
-
-	var infoParts []string
-	infoParts = append(infoParts, fmt.Sprintf("Duration: %s", duration))
-	if inc.NodeName != "" {
-		infoParts = append(infoParts, fmt.Sprintf("Node: %s", inc.NodeName))
-	}
-	if inc.LastContainerState != nil && inc.LastContainerState.ExitCode > 0 {
-		infoParts = append(infoParts, fmt.Sprintf("Exit Code: %d", inc.LastContainerState.ExitCode))
-	}
-	if inc.OwnerKind != "" {
-		infoParts = append(infoParts, fmt.Sprintf("Kind: %s", inc.OwnerKind))
-	}
-	infoParts = append(infoParts, fmt.Sprintf("Total events: %d", inc.Count))
-	if inc.PeakResources > 0 {
-		infoParts = append(infoParts, fmt.Sprintf("Peak: %d %s", inc.PeakResources, resourcePlural(inc)))
-	}
-	parts = append(parts, strings.Join(infoParts, " · "))
-
-	return strings.Join(parts, "\n")
-}

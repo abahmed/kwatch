@@ -14,7 +14,7 @@ var disruptionReasons = map[string]bool{
 
 type DisruptionFilter struct{}
 
-func (d DisruptionFilter) Detect(ctx *Context) Status {
+func (f DisruptionFilter) Detect(ctx *Context) Status {
 	if ctx.Pod == nil {
 		return StatusAlert
 	}
@@ -39,6 +39,6 @@ func (d DisruptionFilter) Detect(ctx *Context) Status {
 	return StatusAlert
 }
 
-func (d DisruptionFilter) Execute(ctx *Context) bool {
-	return d.Detect(ctx) == StatusSkip
+func (f DisruptionFilter) Execute(ctx *Context) bool {
+	return f.Detect(ctx) == StatusSkip
 }

@@ -7,9 +7,12 @@ import (
 	"net/http"
 	"strings"
 
+	"github.com/abahmed/kwatch/internal/alert/util"
 	"github.com/abahmed/kwatch/internal/config"
 	"github.com/abahmed/kwatch/internal/event"
 	"github.com/abahmed/kwatch/internal/k8s"
+	"github.com/abahmed/kwatch/internal/message"
+	"github.com/abahmed/kwatch/internal/model"
 	"github.com/abahmed/kwatch/internal/ratelimit"
 
 	"k8s.io/klog/v2"
@@ -101,7 +104,10 @@ func (w *Webhook) Name() string {
 func (w *Webhook) SendEvent(ev *event.Event) error {
 	client := k8s.GetDefaultClient()
 
-	reqBody := w.buildRequestBody(ev)
+	reqBody, err := w.buildRequestBody(ev)
+	if err != nil {
+		return err
+	}
 	buffer := bytes.NewBuffer(reqBody)
 
 	request, err := http.NewRequest(http.MethodPost, w.webhook, buffer)
@@ -138,9 +144,64 @@ func (w *Webhook) SendEvent(ev *event.Event) error {
 	return nil
 }
 
+// SendIncident implements alert.ThreadProvider.
+// It renders the incident using the Report model and PlaintextRenderer,
+// producing a context-adaptive text message, then POSTs it as JSON.
+func (w *Webhook) SendIncident(inc *model.Incident, action model.IncidentAction) error {
+	text := util.RenderIncident(inc, action, message.NewPlainTextRenderer(), w.appCfg.ClusterName)
+	if text == "" {
+		return nil
+	}
+
+	client := k8s.GetDefaultClient()
+
+	payload, err := json.Marshal(map[string]interface{}{
+		"Cluster": w.appCfg.ClusterName,
+		"Name":    inc.Name,
+		"Reason":  inc.Reason,
+		"Message": text,
+	})
+	if err != nil {
+		return fmt.Errorf("failed to marshal webhook incident payload: %w", err)
+	}
+
+	request, err := http.NewRequest(http.MethodPost, w.webhook, bytes.NewBuffer(payload))
+	if err != nil {
+		return err
+	}
+
+	for _, header := range w.headers {
+		request.Header.Set(header.Name, header.Value)
+	}
+	if len(w.username) > 0 && len(w.password) > 0 {
+		request.SetBasicAuth(w.username, w.password)
+	}
+
+	response, err := client.Do(request)
+	if err != nil {
+		return err
+	}
+	defer response.Body.Close()
+
+	if response.StatusCode == http.StatusTooManyRequests {
+		return &ratelimit.Error{
+			Provider:   "Webhook",
+			StatusCode: http.StatusTooManyRequests,
+			RetryAfter: ratelimit.ParseRetryAfter(response),
+		}
+	}
+	if response.StatusCode > 202 {
+		return fmt.Errorf(
+			"call to webhook returned status code %d",
+			response.StatusCode)
+	}
+
+	return nil
+}
+
 func (w *Webhook) buildRequestBody(
 	ev *event.Event,
-) []byte {
+) ([]byte, error) {
 	eventsText := ""
 	if ev.IncludeEvents {
 		eventsText = strings.TrimSpace(ev.Events)
@@ -163,9 +224,9 @@ func (w *Webhook) buildRequestBody(
 		"Labels":    ev.Labels,
 	})
 	if err != nil {
-		return nil
+		return nil, fmt.Errorf("failed to marshal request body: %w", err)
 	}
 
-	return postBody
+	return postBody, nil
 
 }

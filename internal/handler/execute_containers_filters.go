@@ -87,11 +87,18 @@ func (h *handler) executeContainersFilters(ctx *filter.Context) {
 			}
 		}
 
-		for i := range h.containerEnrichers {
-			if h.containerEnrichers[i].Enrich(ctx) {
+		for i := range h.containerSuppressionEnrichers {
+			if h.containerSuppressionEnrichers[i].Enrich(ctx) {
 				broken = false
 				break
 			}
+		}
+
+		// Data enrichers always run — logs and owner info are needed
+		// even when the suppression enricher suppresses alerting, so
+		// the next notification (after cooldown expires) has fresh data.
+		for i := range h.containerDataEnrichers {
+			h.containerDataEnrichers[i].Enrich(ctx)
 		}
 
 		if !broken {

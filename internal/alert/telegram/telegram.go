@@ -9,9 +9,12 @@ import (
 	"strings"
 	"time"
 
+	"github.com/abahmed/kwatch/internal/alert/util"
 	"github.com/abahmed/kwatch/internal/config"
 	"github.com/abahmed/kwatch/internal/event"
 	"github.com/abahmed/kwatch/internal/k8s"
+	"github.com/abahmed/kwatch/internal/message"
+	"github.com/abahmed/kwatch/internal/model"
 	"github.com/abahmed/kwatch/internal/ratelimit"
 	"k8s.io/klog/v2"
 )
@@ -20,13 +23,6 @@ const (
 	telegramAPIURL   = "https://api.telegram.org/bot%s/sendMessage"
 	telegramGetMeURL = "https://api.telegram.org/bot%s/getMe"
 )
-
-func orDefault(s, def string) string {
-	if s == "" {
-		return def
-	}
-	return s
-}
 
 func maskString(s string) string {
 	if len(s) <= 4 {
@@ -114,6 +110,17 @@ func (t *Telegram) SendMessage(msg string) error {
 	return t.sendByTelegramApi(reqBody)
 }
 
+// SendIncident implements alert.ThreadProvider.
+// It renders the incident using the Report model and PlaintextRenderer,
+// producing a context-adaptive text message.
+func (t *Telegram) SendIncident(inc *model.Incident, action model.IncidentAction) error {
+	text := util.RenderIncident(inc, action, message.NewPlainTextRenderer(), t.appCfg.ClusterName)
+	if text == "" {
+		return nil
+	}
+	return t.SendMessage(text)
+}
+
 func (t *Telegram) buildRequestBodyTelegram(
 	e *event.Event,
 	chatId string,
@@ -122,7 +129,7 @@ func (t *Telegram) buildRequestBodyTelegram(
 	txt := ""
 	if len(customMsg) <= 0 {
 		var parts []string
-		parts = append(parts, fmt.Sprintf("*Reason:* %s", orDefault(e.Reason, "unknown")))
+		parts = append(parts, fmt.Sprintf("*Reason:* %s", util.OrDefault(e.Reason, "unknown")))
 
 		if e.PodName != "" {
 			parts = append(parts, fmt.Sprintf("*Pod:* %s", e.PodName))

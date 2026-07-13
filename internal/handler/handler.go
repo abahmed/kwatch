@@ -97,7 +97,8 @@ type handler struct {
 	podDetectors           []filter.Detector
 	podEnrichers           []filter.Enricher
 	containerDetectors     []filter.Detector
-	containerEnrichers     []filter.Enricher
+	containerSuppressionEnrichers []filter.Enricher
+	containerDataEnrichers       []filter.Enricher
 	correlator             *correlation.Engine
 	alertManager           *alert.AlertManager
 	insightEngine          *insight.Engine
@@ -184,8 +185,10 @@ func NewHandler(
 		containerDetectors = append([]filter.Detector{filter.DisruptionFilter{}}, containerDetectors...)
 	}
 
-	containerEnrichers := []filter.Enricher{
+	containerSuppressionEnrichers := []filter.Enricher{
 		filter.ContainerKillingFilter{},
+	}
+	containerDataEnrichers := []filter.Enricher{
 		filter.PodOwnersFilter{},
 		filter.ContainerLogsFilter{},
 	}
@@ -204,7 +207,8 @@ func NewHandler(
 		podDetectors:           podDetectors,
 		podEnrichers:           podEnrichers,
 		containerDetectors:     containerDetectors,
-		containerEnrichers:     containerEnrichers,
+		containerSuppressionEnrichers: containerSuppressionEnrichers,
+		containerDataEnrichers:       containerDataEnrichers,
 		correlator:             correlator,
 		alertManager:           alertManager,
 		firstMaxedHPAs:          make(map[string]time.Time),

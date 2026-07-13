@@ -12,10 +12,13 @@ import (
 	"net/url"
 	"time"
 
+	"github.com/abahmed/kwatch/internal/alert/util"
 	"github.com/abahmed/kwatch/internal/config"
 	"github.com/abahmed/kwatch/internal/constant"
 	"github.com/abahmed/kwatch/internal/event"
 	"github.com/abahmed/kwatch/internal/k8s"
+	"github.com/abahmed/kwatch/internal/message"
+	"github.com/abahmed/kwatch/internal/model"
 	"github.com/abahmed/kwatch/internal/ratelimit"
 	"k8s.io/klog/v2"
 )
@@ -113,6 +116,17 @@ func (d *DingTalk) SendMessage(msg string) error {
 	}
 
 	return d.sendAPI(string(bodyBytes))
+}
+
+// SendIncident implements alert.ThreadProvider.
+// It renders the incident using the Report model and PlaintextRenderer,
+// producing a context-adaptive text message.
+func (d *DingTalk) SendIncident(inc *model.Incident, action model.IncidentAction) error {
+	text := util.RenderIncident(inc, action, message.NewPlainTextRenderer(), d.appCfg.ClusterName)
+	if text == "" {
+		return nil
+	}
+	return d.SendMessage(text)
 }
 
 func (d *DingTalk) sendAPI(msg string) error {

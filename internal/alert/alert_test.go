@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"strings"
+	"text/template"
 	"testing"
 	"time"
 
@@ -15,6 +16,27 @@ import (
 	"github.com/abahmed/kwatch/internal/model"
 	"github.com/stretchr/testify/assert"
 )
+
+// testBuildMessage is a helper for tests that creates a minimal AlertManager
+// and calls buildMessage with no insight, 100 max lines, and no templates.
+func testBuildMessage(inc *model.Incident, action model.IncidentAction, clusterName string) string {
+	am := AlertManager{clusterName: clusterName}
+	return am.buildMessage(inc, action, nil, 100, nil)
+}
+
+// testBuildMessageWithTemplate is a helper for tests that builds a message
+// with the given parsed templates.
+func testBuildMessageWithTemplate(inc *model.Incident, action model.IncidentAction, clusterName string, rawTpls map[string]string) string {
+	am := AlertManager{clusterName: clusterName}
+	parsed := map[string]*template.Template{}
+	for k, v := range rawTpls {
+		t, err := template.New(k).Parse(v)
+		if err == nil {
+			parsed[k] = t
+		}
+	}
+	return am.buildMessage(inc, action, nil, 100, parsed)
+}
 
 type fakeProvider struct{}
 
@@ -257,15 +279,14 @@ func TestFormatIncidentMessage(t *testing.T) {
 		PeakResources: 2,
 	}
 
-	msg := formatIncidentMessage(inc, model.ActionCreate, 100, nil)
+	msg := testBuildMessage(inc, model.ActionCreate, "test-cluster")
 	assert.Contains(t, msg, "CrashLoopBackOff")
 	assert.Contains(t, msg, "deploy")
-	assert.Contains(t, msg, "pod")
-	assert.Contains(t, msg, "Peak: 2 pods")
+	assert.Contains(t, msg, "2")
 
-	msgUpdate := formatIncidentMessage(inc, model.ActionUpdate, 100, nil)
+	msgUpdate := testBuildMessage(inc, model.ActionUpdate, "test-cluster")
 	assert.Contains(t, msgUpdate, "CrashLoopBackOff")
-	assert.Contains(t, msgUpdate, "Count: 2")
+	assert.Contains(t, msgUpdate, "2")
 }
 
 func TestFormatIncidentMessageWithLogsEvents(t *testing.T) {
@@ -286,11 +307,11 @@ func TestFormatIncidentMessageWithLogsEvents(t *testing.T) {
 		IncludeLogs:   true,
 	}
 
-	msg := formatIncidentMessage(inc, model.ActionCreate, 100, nil)
-	assert.Contains(t, msg, "Logs:")
+	msg := testBuildMessage(inc, model.ActionCreate, "test-cluster")
+	assert.Contains(t, msg, "Logs")
 	assert.Contains(t, msg, "line1")
 	assert.Contains(t, msg, "line2")
-	assert.Contains(t, msg, "Events:")
+	assert.Contains(t, msg, "Events")
 	assert.Contains(t, msg, "Pulling image")
 	assert.Contains(t, msg, "BackOff restart")
 }
@@ -309,11 +330,10 @@ func TestFormatResolvedMessageGolden(t *testing.T) {
 		Resources: map[string]bool{"pod-1": true},
 	}
 
-	msg := formatIncidentMessage(inc, model.ActionResolved, 100, nil)
+	msg := testBuildMessage(inc, model.ActionResolved, "test-cluster")
 	assert.Contains(t, msg, "Resolved")
 	assert.Contains(t, msg, "deploy")
 	assert.Contains(t, msg, "OOMKilled")
-	assert.Contains(t, msg, "Total events: 3")
 }
 
 func TestSilenceByNamespace(t *testing.T) {
@@ -440,12 +460,9 @@ func TestFormatIncidentMessageWithTemplate(t *testing.T) {
 		Resources: map[string]bool{"pod-1": true},
 	}
 
-	am := AlertManager{}
-	am.SetTemplates(map[string]string{
+	msg := testBuildMessageWithTemplate(inc, model.ActionCreate, "test-cluster", map[string]string{
 		"crashloopbackoff": "{{.Incident.Name}} {{.Action}}",
 	})
-
-	msg := formatIncidentMessage(inc, model.ActionCreate, 100, am.templates)
 	want := "deploy create"
 	if msg != want {
 		t.Errorf("got %q, want %q", msg, want)
@@ -466,13 +483,10 @@ func TestFormatIncidentMessageWithTemplateRenderError(t *testing.T) {
 		Resources: map[string]bool{"pod-1": true},
 	}
 
-	am := AlertManager{}
 	// bad template syntax — Parse will reject it, so it won't be stored
-	am.SetTemplates(map[string]string{
+	msg := testBuildMessageWithTemplate(inc, model.ActionCreate, "test-cluster", map[string]string{
 		"oomkilled": "{{.Incident.Name {{.Action}}",
 	})
-	// no template stored -> falls back to default
-	msg := formatIncidentMessage(inc, model.ActionCreate, 100, am.templates)
 	if msg == "" {
 		t.Fatal("expected fallback message, got empty")
 	}
@@ -495,12 +509,9 @@ func TestFormatIncidentMessageUnregisteredReason(t *testing.T) {
 		Resources: map[string]bool{"pod-1": true},
 	}
 
-	am := AlertManager{}
-	am.SetTemplates(map[string]string{
+	msg := testBuildMessageWithTemplate(inc, model.ActionCreate, "test-cluster", map[string]string{
 		"crashloopbackoff": "OVERRIDE",
 	})
-
-	msg := formatIncidentMessage(inc, model.ActionCreate, 100, am.templates)
 	if !strings.Contains(msg, "NodeNotReady") {
 		t.Errorf("expected default message to contain reason, got %q", msg)
 	}

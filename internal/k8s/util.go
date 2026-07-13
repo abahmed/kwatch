@@ -81,12 +81,35 @@ func getContainerLogs(
 	name string,
 	namespace string,
 	options *v1.PodLogOptions) ([]byte, error) {
-	cctx, cancel := context.WithTimeout(ctx, 10*time.Second)
-	defer cancel()
-	return c.CoreV1().
-		Pods(namespace).
-		GetLogs(name, options).
-		DoRaw(cctx)
+	// Attempt with 15s timeout; retry once on timeout if context allows.
+	for attempt := 0; attempt < 2; attempt++ {
+		cctx, cancel := context.WithTimeout(ctx, 15*time.Second)
+		logs, err := c.CoreV1().
+			Pods(namespace).
+			GetLogs(name, options).
+			DoRaw(cctx)
+		cancel()
+
+		if err == nil {
+			return logs, nil
+		}
+		if attempt == 0 && cctx.Err() == nil && isTimeoutError(err) {
+			klog.V(2).InfoS("log fetch timeout, retrying",
+				"container", name, "namespace", namespace)
+			continue
+		}
+		return nil, err
+	}
+	return nil, fmt.Errorf("log fetch failed after retries for container %s", name)
+}
+
+func isTimeoutError(err error) bool {
+	if err == nil {
+		return false
+	}
+	s := err.Error()
+	return strings.Contains(s, "context deadline exceeded") ||
+		strings.Contains(s, "i/o timeout")
 }
 
 // GetPodEvents retrieves the events for a specific pod

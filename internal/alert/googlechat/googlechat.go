@@ -7,9 +7,12 @@ import (
 	"io"
 	"net/http"
 
+	"github.com/abahmed/kwatch/internal/alert/util"
 	"github.com/abahmed/kwatch/internal/config"
 	"github.com/abahmed/kwatch/internal/event"
 	"github.com/abahmed/kwatch/internal/k8s"
+	"github.com/abahmed/kwatch/internal/message"
+	"github.com/abahmed/kwatch/internal/model"
 	"github.com/abahmed/kwatch/internal/ratelimit"
 	"k8s.io/klog/v2"
 )
@@ -46,24 +49,24 @@ func NewGoogleChat(config map[string]interface{}, appCfg *config.App) *GoogleCha
 }
 
 // Name returns name of the provider
-func (r *GoogleChat) Name() string {
+func (g *GoogleChat) Name() string {
 	return "Google Chat"
 }
 
 // SendEvent sends event to the provider
-func (r *GoogleChat) SendEvent(e *event.Event) error {
-	formattedMsg := e.FormatText(r.appCfg.ClusterName, r.text)
-	b, err := r.buildRequestBody(formattedMsg)
+func (g *GoogleChat) SendEvent(e *event.Event) error {
+	formattedMsg := e.FormatText(g.appCfg.ClusterName, g.text)
+	b, err := g.buildRequestBody(formattedMsg)
 	if err != nil {
 		return err
 	}
-	return r.sendAPI(b)
+	return g.sendAPI(b)
 }
 
-func (r *GoogleChat) sendAPI(reqBody []byte) error {
+func (g *GoogleChat) sendAPI(reqBody []byte) error {
 	client := k8s.GetDefaultClient()
 	buffer := bytes.NewBuffer(reqBody)
-	request, err := http.NewRequest(http.MethodPost, r.webhook, buffer)
+	request, err := http.NewRequest(http.MethodPost, g.webhook, buffer)
 	if err != nil {
 		return err
 	}
@@ -95,15 +98,26 @@ func (r *GoogleChat) sendAPI(reqBody []byte) error {
 }
 
 // SendMessage sends text message to the provider
-func (r *GoogleChat) SendMessage(msg string) error {
-	b, err := r.buildRequestBody(msg)
+func (g *GoogleChat) SendMessage(msg string) error {
+	b, err := g.buildRequestBody(msg)
 	if err != nil {
 		return err
 	}
-	return r.sendAPI(b)
+	return g.sendAPI(b)
 }
 
-func (r *GoogleChat) buildRequestBody(text string) ([]byte, error) {
+// SendIncident implements alert.ThreadProvider.
+// It renders the incident using the Report model and PlaintextRenderer,
+// producing a context-adaptive text message.
+func (g *GoogleChat) SendIncident(inc *model.Incident, action model.IncidentAction) error {
+	text := util.RenderIncident(inc, action, message.NewPlainTextRenderer(), g.appCfg.ClusterName)
+	if text == "" {
+		return nil
+	}
+	return g.SendMessage(text)
+}
+
+func (g *GoogleChat) buildRequestBody(text string) ([]byte, error) {
 	msgPayload := &payload{
 		Text: text,
 	}

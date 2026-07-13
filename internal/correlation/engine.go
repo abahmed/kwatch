@@ -879,6 +879,14 @@ func (e *Engine) Process(ev event.Event, owner string, cs *model.ContainerState)
 					}
 					nodeInc.SuppressedOwners[owner]++
 				}
+				if len(nodeInc.SuppressedPodSummaries) < 20 {
+					nodeInc.SuppressedPodSummaries = append(nodeInc.SuppressedPodSummaries, model.PodSummary{
+						Namespace:    ev.Namespace,
+						PodName:      ev.PodName,
+						Reason:       ev.Reason,
+						RestartCount: ev.RestartCount,
+					})
+				}
 			}
 			if e.auditLogger != nil {
 				e.auditLogger.LogSkip(&model.Incident{Key: key, Namespace: ev.Namespace, Reason: ev.Reason, ID: key, NodeName: ev.NodeName}, "node_inhibition")
@@ -894,6 +902,14 @@ func (e *Engine) Process(ev event.Event, owner string, cs *model.ContainerState)
 						nodeInc.SuppressedOwners = make(map[string]int)
 					}
 					nodeInc.SuppressedOwners[owner]++
+				}
+				if len(nodeInc.SuppressedPodSummaries) < 20 {
+					nodeInc.SuppressedPodSummaries = append(nodeInc.SuppressedPodSummaries, model.PodSummary{
+						Namespace:    ev.Namespace,
+						PodName:      ev.PodName,
+						Reason:       ev.Reason,
+						RestartCount: ev.RestartCount,
+					})
 				}
 			}
 			if e.auditLogger != nil {

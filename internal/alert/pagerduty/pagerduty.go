@@ -6,18 +6,12 @@ import (
 	"fmt"
 	"net/http"
 
+	"github.com/abahmed/kwatch/internal/alert/util"
 	"github.com/abahmed/kwatch/internal/config"
 	"github.com/abahmed/kwatch/internal/event"
 	"github.com/abahmed/kwatch/internal/k8s"
 	"k8s.io/klog/v2"
 )
-
-func orDefault(s, def string) string {
-	if s == "" {
-		return def
-	}
-	return s
-}
 
 const (
 	pagerdutyAPIURL   = "https://events.pagerduty.com/v2/enqueue"
@@ -75,23 +69,23 @@ func NewPagerDuty(config map[string]interface{}, appCfg *config.App) *Pagerduty 
 }
 
 // Name returns name of the provider
-func (s *Pagerduty) Name() string {
+func (p *Pagerduty) Name() string {
 	return "PagerDuty"
 }
 
-func (s *Pagerduty) UsesEventDelivery() {}
+func (p *Pagerduty) UsesEventDelivery() {}
 
 // SendEvent sends event to the provider
-func (s *Pagerduty) SendEvent(ev *event.Event) error {
+func (p *Pagerduty) SendEvent(ev *event.Event) error {
 	client := k8s.GetDefaultClient()
 
-	reqBody, err := s.buildRequestBodyPagerDuty(ev, s.integrationKey)
+	reqBody, err := p.buildRequestBodyPagerDuty(ev, p.integrationKey)
 	if err != nil {
 		return err
 	}
 	buffer := bytes.NewBuffer([]byte(reqBody))
 
-	request, err := http.NewRequest(http.MethodPost, s.url, buffer)
+	request, err := http.NewRequest(http.MethodPost, p.url, buffer)
 	if err != nil {
 		return err
 	}
@@ -108,11 +102,11 @@ func (s *Pagerduty) SendEvent(ev *event.Event) error {
 }
 
 // SendMessage sends text message to the provider
-func (s *Pagerduty) SendMessage(msg string) error {
+func (p *Pagerduty) SendMessage(msg string) error {
 	return nil
 }
 
-func (s *Pagerduty) buildRequestBodyPagerDuty(
+func (p *Pagerduty) buildRequestBodyPagerDuty(
 	ev *event.Event,
 	key string) (string, error) {
 	eventAction := "trigger"
@@ -120,12 +114,12 @@ func (s *Pagerduty) buildRequestBodyPagerDuty(
 		eventAction = "resolve"
 	}
 
-	summary := fmt.Sprintf("Alert: %s", orDefault(ev.Reason, "unknown"))
+	summary := fmt.Sprintf("Alert: %s", util.OrDefault(ev.Reason, "unknown"))
 	if ev.ContainerName != "" {
 		summary = fmt.Sprintf(defaultEventTitle, ev.ContainerName)
 	}
 
-	source := orDefault(ev.ContainerName, orDefault(ev.PodName, "unknown"))
+	source := util.OrDefault(ev.ContainerName, util.OrDefault(ev.PodName, "unknown"))
 
 	payload := pagerdutyPayload{
 		RoutingKey:  key,
@@ -136,14 +130,14 @@ func (s *Pagerduty) buildRequestBodyPagerDuty(
 			Source:   source,
 			Severity: "critical",
 			CustomDetail: pagerdutyCustomDetails{
-				Cluster:   s.appCfg.ClusterName,
+				Cluster:   p.appCfg.ClusterName,
 				Name:      ev.PodName,
 				Container: ev.ContainerName,
 				Namespace: ev.Namespace,
 				Node:      ev.NodeName,
 				Reason:    ev.Reason,
-				Events:    orDefault(ev.Events, ""),
-				Logs:      orDefault(ev.Logs, ""),
+				Events:    util.OrDefault(ev.Events, ""),
+				Logs:      util.OrDefault(ev.Logs, ""),
 			},
 		},
 	}
