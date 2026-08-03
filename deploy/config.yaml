@@ -288,3 +288,120 @@ data:
       # googlechat:
       #   webhook: <webhook_url>
 
+      # gotify:
+      #   url: <url>
+      #   token: <token>
+
+      # ntfy:
+      #   topic: <topic>
+      #   url: "https://ntfy.sh"
+      #   token: <token>
+      #   priority: 4
+
+      # pushover:
+      #   token: <app_token>
+      #   user: <user_key>
+
+      # webex:
+      #   accessToken: <token>
+      #   roomId: <room_id>
+
+      # github:
+      #   token: <token>
+      #   owner: <owner>
+      #   repo: <repo>
+
+      # gitlab:
+      #   token: <token>
+      #   projectId: <project_id>
+
+      # teamsworkflow:
+      #   webhook: <workflow_url>
+
+      # zulip:
+      #   email: <bot_email>
+      #   token: <api_key>
+      #   channel: <stream>
+
+      # splunk:
+      #   url: <hec_url>
+      #   token: <hec_token>
+
+      # datadog:
+      #   apiKey: <api_key>
+
+      # newrelic:
+      #   apiKey: <user_api_key>
+      #   accountId: <account_id>
+
+      # ilert:
+      #   integrationKey: <integration_key>
+
+      # squadcast:
+      #   serviceKey: <service_key>
+
+      # signl4:
+      #   teamSecret: <team_secret>
+
+      # twilio:
+      #   accountSid: <account_sid>
+      #   authToken: <auth_token>
+      #   from: <sender_number>
+      #   to: <recipient_number>
+
+      # ses:
+      #   accessKeyId: <access_key_id>
+      #   secretAccessKey: <secret_access_key>
+      #   region: "us-east-1"
+      #   from: <sender>
+      #   to: <recipient>
+
+      # sns:
+      #   accessKeyId: <access_key_id>
+      #   secretAccessKey: <secret_access_key>
+      #   region: "us-east-1"
+      #   topicArn: <topic_arn>
+
+      # jira:
+      #   url: <jira_url>
+      #   user: <user>
+      #   apiToken: <api_token>
+      #   projectKey: <project_key>
+
+      # wecom:
+      #   webhook: <group_robot_webhook_url>
+
+      # mailgun:
+      #   apiKey: <api_key>
+      #   domain: <domain>
+      #   from: <sender>
+      #   to: <recipient>
+
+      # resend:
+      #   apiKey: <api_key>
+      #   from: <sender>
+      #   to: <recipient>
+
+      # goalert:
+      #   token: <api_token>
+      #   serviceId: <service_id>
+
+      # alerta:
+      #   url: <alerta_url>
+      #   apiKey: <api_key>
+
+      # threema:
+      #   gatewayId: <gateway_id>
+      #   secret: <gateway_secret>
+      #   to: <threema_id>
+
+      # flock:
+      #   webhook: <webhook_url>
+
+      # pushbullet:
+      #   accessToken: <access_token>
+
+      # sensugo:
+      #   url: <sensu_url>
+      #   apiKey: <api_key>
+

@@ -18,21 +18,62 @@ import (
 
 	"k8s.io/klog/v2"
 
+	"github.com/abahmed/kwatch/internal/alert/alerta"
+	"github.com/abahmed/kwatch/internal/alert/clickup"
+	"github.com/abahmed/kwatch/internal/alert/datadog"
 	"github.com/abahmed/kwatch/internal/alert/dingtalk"
 	"github.com/abahmed/kwatch/internal/alert/discord"
 	"github.com/abahmed/kwatch/internal/alert/email"
 	"github.com/abahmed/kwatch/internal/alert/feishu"
+	"github.com/abahmed/kwatch/internal/alert/flock"
+	"github.com/abahmed/kwatch/internal/alert/gitea"
+	"github.com/abahmed/kwatch/internal/alert/github"
+	"github.com/abahmed/kwatch/internal/alert/gitlab"
+	"github.com/abahmed/kwatch/internal/alert/goalert"
 	"github.com/abahmed/kwatch/internal/alert/googlechat"
+	"github.com/abahmed/kwatch/internal/alert/gotify"
+	"github.com/abahmed/kwatch/internal/alert/homeassistant"
+	"github.com/abahmed/kwatch/internal/alert/ifttt"
+	"github.com/abahmed/kwatch/internal/alert/ilert"
+	"github.com/abahmed/kwatch/internal/alert/incidentio"
+	"github.com/abahmed/kwatch/internal/alert/jira"
+	"github.com/abahmed/kwatch/internal/alert/line"
+	"github.com/abahmed/kwatch/internal/alert/mailgun"
 	"github.com/abahmed/kwatch/internal/alert/matrix"
 	"github.com/abahmed/kwatch/internal/alert/mattermost"
+	"github.com/abahmed/kwatch/internal/alert/messagebird"
+	"github.com/abahmed/kwatch/internal/alert/n8n"
+	"github.com/abahmed/kwatch/internal/alert/newrelic"
+	"github.com/abahmed/kwatch/internal/alert/ntfy"
 	"github.com/abahmed/kwatch/internal/alert/opsgenie"
 	"github.com/abahmed/kwatch/internal/alert/pagerduty"
+	"github.com/abahmed/kwatch/internal/alert/plivo"
+	"github.com/abahmed/kwatch/internal/alert/pushbullet"
+	"github.com/abahmed/kwatch/internal/alert/pushover"
+	"github.com/abahmed/kwatch/internal/alert/resend"
 	"github.com/abahmed/kwatch/internal/alert/rocketchat"
+	"github.com/abahmed/kwatch/internal/alert/sendgrid"
+	"github.com/abahmed/kwatch/internal/alert/sensugo"
+	"github.com/abahmed/kwatch/internal/alert/ses"
+	"github.com/abahmed/kwatch/internal/alert/signal"
+	"github.com/abahmed/kwatch/internal/alert/signl4"
 	"github.com/abahmed/kwatch/internal/alert/slack"
+	"github.com/abahmed/kwatch/internal/alert/sns"
+	"github.com/abahmed/kwatch/internal/alert/splunk"
+	"github.com/abahmed/kwatch/internal/alert/splunkoncall"
+	"github.com/abahmed/kwatch/internal/alert/squadcast"
 	"github.com/abahmed/kwatch/internal/alert/teams"
+	"github.com/abahmed/kwatch/internal/alert/teamsworkflow"
 	"github.com/abahmed/kwatch/internal/alert/telegram"
+	"github.com/abahmed/kwatch/internal/alert/threema"
+	"github.com/abahmed/kwatch/internal/alert/twilio"
+	"github.com/abahmed/kwatch/internal/alert/vonage"
+	"github.com/abahmed/kwatch/internal/alert/webex"
 	"github.com/abahmed/kwatch/internal/alert/webhook"
+	"github.com/abahmed/kwatch/internal/alert/wecom"
+	"github.com/abahmed/kwatch/internal/alert/zapier"
 	"github.com/abahmed/kwatch/internal/alert/zenduty"
+	"github.com/abahmed/kwatch/internal/alert/zulip"
 	"github.com/abahmed/kwatch/internal/config"
 	"github.com/abahmed/kwatch/internal/event"
 	"github.com/abahmed/kwatch/internal/insight"
@@ -463,6 +504,88 @@ func (a *AlertManager) Init(
 			pvdr = zenduty.NewZenduty(v, appCfg)
 		} else if lowerCaseKey == "googlechat" {
 			pvdr = googlechat.NewGoogleChat(v, appCfg)
+		} else if lowerCaseKey == "gotify" {
+			pvdr = gotify.NewGotify(v, appCfg)
+		} else if lowerCaseKey == "ntfy" {
+			pvdr = ntfy.NewNtfy(v, appCfg)
+		} else if lowerCaseKey == "pushover" {
+			pvdr = pushover.NewPushover(v, appCfg)
+		} else if lowerCaseKey == "webex" {
+			pvdr = webex.NewWebex(v, appCfg)
+		} else if lowerCaseKey == "github" {
+			pvdr = github.NewGithub(v, appCfg)
+		} else if lowerCaseKey == "line" {
+			pvdr = line.NewLine(v, appCfg)
+		} else if lowerCaseKey == "gitlab" {
+			pvdr = gitlab.NewGitlab(v, appCfg)
+		} else if lowerCaseKey == "gitea" {
+			pvdr = gitea.NewGitea(v, appCfg)
+		} else if lowerCaseKey == "zapier" {
+			pvdr = zapier.NewZapier(v, appCfg)
+		} else if lowerCaseKey == "n8n" {
+			pvdr = n8n.NewN8n(v, appCfg)
+		} else if lowerCaseKey == "ifttt" {
+			pvdr = ifttt.NewIfttt(v, appCfg)
+		} else if lowerCaseKey == "teamsworkflow" {
+			pvdr = teamsworkflow.NewTeamsWorkflow(v, appCfg)
+		} else if lowerCaseKey == "zulip" {
+			pvdr = zulip.NewZulip(v, appCfg)
+		} else if lowerCaseKey == "homeassistant" {
+			pvdr = homeassistant.NewHomeAssistant(v, appCfg)
+		} else if lowerCaseKey == "splunk" {
+			pvdr = splunk.NewSplunk(v, appCfg)
+		} else if lowerCaseKey == "datadog" {
+			pvdr = datadog.NewDatadog(v, appCfg)
+		} else if lowerCaseKey == "newrelic" {
+			pvdr = newrelic.NewNewRelic(v, appCfg)
+		} else if lowerCaseKey == "clickup" {
+			pvdr = clickup.NewClickup(v, appCfg)
+		} else if lowerCaseKey == "ilert" {
+			pvdr = ilert.NewIlert(v, appCfg)
+		} else if lowerCaseKey == "incidentio" || lowerCaseKey == "incident.io" {
+			pvdr = incidentio.NewIncidentio(v, appCfg)
+		} else if lowerCaseKey == "squadcast" {
+			pvdr = squadcast.NewSquadcast(v, appCfg)
+		} else if lowerCaseKey == "signl4" {
+			pvdr = signl4.NewSignl4(v, appCfg)
+		} else if lowerCaseKey == "twilio" {
+			pvdr = twilio.NewTwilio(v, appCfg)
+		} else if lowerCaseKey == "vonage" {
+			pvdr = vonage.NewVonage(v, appCfg)
+		} else if lowerCaseKey == "plivo" {
+			pvdr = plivo.NewPlivo(v, appCfg)
+		} else if lowerCaseKey == "messagebird" {
+			pvdr = messagebird.NewMessagebird(v, appCfg)
+		} else if lowerCaseKey == "signal" {
+			pvdr = signal.NewSignal(v, appCfg)
+		} else if lowerCaseKey == "sendgrid" {
+			pvdr = sendgrid.NewSendgrid(v, appCfg)
+		} else if lowerCaseKey == "ses" {
+			pvdr = ses.NewSes(v, appCfg)
+		} else if lowerCaseKey == "sns" {
+			pvdr = sns.NewSns(v, appCfg)
+		} else if lowerCaseKey == "jira" {
+			pvdr = jira.NewJira(v, appCfg)
+		} else if lowerCaseKey == "wecom" {
+			pvdr = wecom.NewWecom(v, appCfg)
+		} else if lowerCaseKey == "splunkoncall" {
+			pvdr = splunkoncall.NewSplunkOncall(v, appCfg)
+		} else if lowerCaseKey == "mailgun" {
+			pvdr = mailgun.NewMailgun(v, appCfg)
+		} else if lowerCaseKey == "resend" {
+			pvdr = resend.NewResend(v, appCfg)
+		} else if lowerCaseKey == "goalert" {
+			pvdr = goalert.NewGoalert(v, appCfg)
+		} else if lowerCaseKey == "alerta" {
+			pvdr = alerta.NewAlerta(v, appCfg)
+		} else if lowerCaseKey == "threema" {
+			pvdr = threema.NewThreema(v, appCfg)
+		} else if lowerCaseKey == "flock" {
+			pvdr = flock.NewFlock(v, appCfg)
+		} else if lowerCaseKey == "pushbullet" {
+			pvdr = pushbullet.NewPushbullet(v, appCfg)
+		} else if lowerCaseKey == "sensugo" {
+			pvdr = sensugo.NewSensugo(v, appCfg)
 		}
 
 		if pvdr == nil {
