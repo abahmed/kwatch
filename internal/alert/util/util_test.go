@@ -1,6 +1,8 @@
 package util
 
 import (
+	"net/http"
+	"net/http/httptest"
 	"strings"
 	"testing"
 
@@ -78,5 +80,46 @@ func TestRenderIncidentCreate(t *testing.T) {
 	}
 	if !strings.Contains(got, "OOMKilled") {
 		t.Errorf("expected output to contain OOMKilled, got %q", got)
+	}
+}
+
+func TestPostAcceptsAny2xx(t *testing.T) {
+	for _, code := range []int{http.StatusOK, http.StatusAccepted, http.StatusNoContent} {
+		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			w.WriteHeader(code)
+		}))
+		_, err := Post("test", srv.URL, []byte(`{}`), "application/json", nil)
+		srv.Close()
+		if err != nil {
+			t.Errorf("Post with status %d returned error: %v", code, err)
+		}
+	}
+}
+
+func TestPostRejectsNon2xx(t *testing.T) {
+	for _, code := range []int{http.StatusBadRequest, http.StatusInternalServerError} {
+		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			w.WriteHeader(code)
+		}))
+		_, err := Post("test", srv.URL, []byte(`{}`), "application/json", nil)
+		srv.Close()
+		if err == nil {
+			t.Errorf("Post with status %d expected error", code)
+		}
+	}
+}
+
+func TestPostRateLimit(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Retry-After", "10")
+		w.WriteHeader(http.StatusTooManyRequests)
+	}))
+	defer srv.Close()
+	_, err := Post("test", srv.URL, []byte(`{}`), "application/json", nil)
+	if err == nil {
+		t.Fatal("Post with 429 expected error")
+	}
+	if !strings.Contains(err.Error(), "retry after") {
+		t.Errorf("expected rate limit error to mention retry after, got %v", err)
 	}
 }

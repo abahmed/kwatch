@@ -44,6 +44,22 @@ func TestResolveSeverityCaseInsensitive(t *testing.T) {
 	assert.Equal(t, model.SeverityMedium, e.resolveSeverity("Deployment", "ImagePullBackOff"))
 }
 
+func TestResolveSeverityValueCaseInsensitive(t *testing.T) {
+	// Values (not just keys) may be mixed-case; they must still rank.
+	e := &DefaultEnricher{
+		SeverityByOwnerKind: map[string]string{
+			"StatefulSet": "High",
+		},
+		SeverityByReason: map[string]string{
+			"ImagePullBackOff": "CRITICAL",
+			"Evicted":          "warning",
+		},
+	}
+	assert.Equal(t, model.SeverityHigh, e.resolveSeverity("StatefulSet", "Error"))
+	assert.Equal(t, model.SeverityCritical, e.resolveSeverity("Deployment", "ImagePullBackOff"))
+	assert.Equal(t, model.SeverityWarning, e.resolveSeverity("Deployment", "Evicted"))
+}
+
 func TestEnrichSeverityNotCorruptedByConfig(t *testing.T) {
 	e := &DefaultEnricher{
 		SeverityByOwnerKind: map[string]string{"StatefulSet": "high"},

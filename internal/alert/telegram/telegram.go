@@ -217,7 +217,7 @@ func (t *Telegram) sendByTelegramApi(reqBody string) error {
 			RetryAfter: d,
 		}
 	}
-	if response.StatusCode > 202 {
+	if response.StatusCode > 299 {
 		return fmt.Errorf(
 			"call to telegram alert returned status code %d",
 			response.StatusCode)

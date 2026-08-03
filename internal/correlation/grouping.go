@@ -34,6 +34,14 @@ type pendingGroup struct {
 	overflowCount int
 }
 
+// groupFlushState records the last notification for a group key so repeated
+// flushes of the same group re-notify on a stable key (update-not-create)
+// and are throttled by a cooldown instead of flooding notifications.
+type groupFlushState struct {
+	notified       bool
+	lastNotifiedAt time.Time
+}
+
 type groupResolveTracker struct {
 	groupIncKey string
 	members     map[string]bool
@@ -168,6 +176,22 @@ func computeGroupKey(r string, ev event.Event, owner string) string {
 	default:
 		return r + "|" + ev.Namespace + "|" + owner
 	}
+}
+
+// groupRenotifyCooldown returns the minimum interval between notifications
+// for the same smart group. Re-flushes within the interval silently refresh
+// the group's state without notifying, so a busy group can't spam updates on
+// every flush window.
+func (e *Engine) groupRenotifyCooldown() time.Duration {
+	w := e.config.SmartGroupingWindow
+	cd := 4 * w
+	if cd < 5*time.Minute {
+		cd = 5 * time.Minute
+	}
+	if cd > 30*time.Minute {
+		cd = 30 * time.Minute
+	}
+	return cd
 }
 
 // Caller must hold e.mu.
@@ -432,8 +456,13 @@ func (e *Engine) groupSeverity(entries []groupEntry) model.Severity {
 	return best
 }
 
-// Caller must hold e.mu.
-func (e *Engine) tryConsumeGroupResolve(key string) (groupInc *model.Incident, action model.IncidentAction, tracked bool) {
+// groupMemberResolved marks key as resolved within its group tracker and
+// returns the group's resolved notification once every member has resolved.
+// Caller must hold e.mu. tracked reports whether key belonged to a group.
+// Members removed from state outside MarkResolved (orphan folding, resource
+// resolution) must go through here so the group isn't left waiting forever
+// on a member that no longer exists.
+func (e *Engine) groupMemberResolved(key string) (groupInc *model.Incident, action model.IncidentAction, tracked bool) {
 	for gk, tracker := range e.groupMembers {
 		if _, ok := tracker.members[key]; ok {
 			tracker.members[key] = true
@@ -444,24 +473,33 @@ func (e *Engine) tryConsumeGroupResolve(key string) (groupInc *model.Incident, a
 					break
 				}
 			}
-			if allResolved {
-				delete(e.groupMembers, gk)
-				groupInc := &model.Incident{
-					ID:        fmt.Sprintf("%08x", crc32.ChecksumIEEE([]byte(tracker.groupIncKey))),
-					Key:       tracker.groupIncKey,
-					Reason:    tracker.reason,
-					Name:      tracker.summary,
-					Count:     tracker.totalCount,
-					FirstSeen: tracker.firstSeen,
-					LastSeen:  tracker.lastSeen,
-					State:     model.StateResolved,
-					Severity:  tracker.severity,
-					Hint:      tracker.summary,
-				}
-				return groupInc, model.ActionResolved, true
+			if !allResolved {
+				return nil, model.ActionSkip, true
 			}
-			return nil, model.ActionSkip, true
+			delete(e.groupMembers, gk)
+			// Reset the flush state so a genuinely new occurrence of the
+			// same group creates a fresh incident (a stable-key UPDATE
+			// after RESOLVED would otherwise re-open a closed incident).
+			delete(e.groupFlush, gk)
+			groupInc := &model.Incident{
+				ID:        fmt.Sprintf("%08x", crc32.ChecksumIEEE([]byte(tracker.groupIncKey))),
+				Key:       tracker.groupIncKey,
+				Reason:    tracker.reason,
+				Name:      tracker.summary,
+				Count:     tracker.totalCount,
+				FirstSeen: tracker.firstSeen,
+				LastSeen:  tracker.lastSeen,
+				State:     model.StateResolved,
+				Severity:  tracker.severity,
+				Hint:      tracker.summary,
+			}
+			return groupInc, model.ActionResolved, true
 		}
 	}
 	return nil, model.ActionSkip, false
+}
+
+// Caller must hold e.mu.
+func (e *Engine) tryConsumeGroupResolve(key string) (groupInc *model.Incident, action model.IncidentAction, tracked bool) {
+	return e.groupMemberResolved(key)
 }

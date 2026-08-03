@@ -144,7 +144,7 @@ func (t *Teams) sendAPI(payload []byte) error {
 				RetryAfter: d,
 			}
 		}
-		if resp.StatusCode == http.StatusOK || resp.StatusCode == http.StatusAccepted {
+		if resp.StatusCode >= http.StatusOK && resp.StatusCode < http.StatusMultipleChoices {
 			resp.Body.Close()
 			return nil
 		}

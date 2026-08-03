@@ -189,13 +189,9 @@ func (rb *ReportBuilder) populateSuppressed(r *Report, inc *model.Incident) {
 
 func (rb *ReportBuilder) populateTypeSpecific(r *Report, inc *model.Incident) {
 	reason := inc.Reason
-	exitCode := int32(0)
-	if inc.LastContainerState != nil {
-		exitCode = inc.LastContainerState.ExitCode
-	}
 
 	switch {
-	case reason == constant.ReasonOOMKilled || exitCode == 137:
+	case reason == constant.ReasonOOMKilled || reason == constant.ReasonOOMRepeating:
 		leakCount, windowMin := extractOOMLeakStats(inc.Hint)
 		r.OOM = &OOMSection{
 			MemoryLimit: extractMemoryLimit(inc),

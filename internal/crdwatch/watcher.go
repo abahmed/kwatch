@@ -143,7 +143,12 @@ func (w *Watcher) reload(obj interface{}) {
 	}
 
 	if spec.SeverityByOwnerKind != nil {
-		w.engine.SetSeverityMap(spec.SeverityByOwnerKind)
+		if bad := config.InvalidSeverityKeys(spec.SeverityByOwnerKind); len(bad) > 0 {
+			klog.ErrorS(nil, "crdwatch: severityByOwnerKind has invalid severity values, ignoring map",
+				"keys", bad, "crd", cr.Name)
+		} else {
+			w.engine.SetSeverityMap(spec.SeverityByOwnerKind)
+		}
 	}
 
 	// Log restart-only fields that can't be hot-applied

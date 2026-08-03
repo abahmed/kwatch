@@ -55,7 +55,7 @@ var exitCodeHints = map[int32]string{
 	126: "Command cannot execute — check file permissions on binary",
 	127: "Command not found — check PATH or container image includes the binary",
 	130: "Terminated by Ctrl+C (SIGINT)",
-	137: "Out of memory (SIGKILL) — container exceeded memory limit",
+	137: "Terminated by SIGKILL (exit 137) — may be OOM-killed, evicted, or killed by a liveness probe",
 	139: "Segmentation fault (SIGSEGV) — null pointer or buffer overflow",
 	143: "Graceful shutdown (SIGTERM)",
 	255: "Exit status out of range — check entrypoint script",

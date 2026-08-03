@@ -3,14 +3,17 @@ package alert
 import (
 	"context"
 	"errors"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"strings"
+	"sync"
 	"testing"
 	"text/template"
 	"time"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 
 	"github.com/abahmed/kwatch/internal/config"
 	"github.com/abahmed/kwatch/internal/event"
@@ -263,6 +266,47 @@ func TestNotifyIncidentThreadProviderWithSkip(t *testing.T) {
 	am.NotifyIncident(inc, model.ActionSkip, nil)
 
 	assert.Nil(t, tp.lastInc)
+}
+
+func TestNotifyIncidentThreadProviderClamped(t *testing.T) {
+	tp := &fakeThreadProvider{}
+	am := AlertManager{}
+	am.entries = append(am.entries, providerEntry{
+		provider: tp,
+		retry:    retryConfig{maxAttempts: 1, delay: time.Second, maxBackoff: defaultMaxBackoff},
+		maxBytes: 2000,
+	})
+
+	bigLog := strings.Repeat("error: something failed\n", 300)
+	inc := &model.Incident{
+		Key:         "default:deploy:CrashLoopBackOff",
+		Name:        "deploy",
+		Namespace:   "default",
+		Reason:      "CrashLoopBackOff",
+		Resource:    "pod",
+		Count:       2,
+		Logs:        bigLog,
+		IncludeLogs: true,
+		FirstSeen:   time.Now().Add(-5 * time.Minute),
+		LastSeen:    time.Now(),
+		Resources:   map[string]bool{"pod-1": true},
+	}
+	am.NotifyIncident(inc, model.ActionCreate, nil)
+
+	assert.NotNil(t, tp.lastInc)
+	assert.Less(t, len(tp.lastInc.Logs), len(bigLog))
+	assert.Contains(t, tp.lastInc.Logs, "truncated")
+
+	rendered := testBuildMessage(tp.lastInc, model.ActionCreate, "")
+	assert.LessOrEqual(t, len(rendered), 2000)
+}
+
+func TestDefaultMaxBytes(t *testing.T) {
+	assert.Equal(t, 2000, defaultMaxBytes("discord"))
+	assert.Equal(t, 4096, defaultMaxBytes("telegram"))
+	assert.Equal(t, 28000, defaultMaxBytes("teams"))
+	assert.Equal(t, 40000, defaultMaxBytes("slack"))
+	assert.Equal(t, 0, defaultMaxBytes("webhook"))
 }
 
 func TestFormatIncidentMessage(t *testing.T) {
@@ -614,6 +658,28 @@ func TestFallbackUsedOnExhaustion(t *testing.T) {
 	}
 }
 
+// The fallback message must respect the fallback provider's own maxBytes
+// limit, not just the primary's.
+func TestFallbackMessageTruncatedToFallbackMaxBytes(t *testing.T) {
+	primary := &errorRecorderProvider{name: "Primary", err: nil}
+	fb := &errorRecorderProvider{name: "Fallback", err: nil}
+
+	am := AlertManager{}
+	am.entries = append(am.entries, providerEntry{
+		provider: primary,
+		retry:    retryConfig{maxAttempts: 1, delay: time.Millisecond},
+		fallback: &providerEntry{provider: fb, maxBytes: 64},
+	})
+
+	primary.err = errors.New("fail")
+	am.Notify(strings.Repeat("x", 500))
+
+	require.Equal(t, 1, fb.callCount)
+	assert.LessOrEqual(t, len(fb.msg), 64, "fallback message must respect the fallback provider's maxBytes")
+	assert.Contains(t, fb.msg, "(truncated)")
+	assert.Contains(t, fb.msg, "fallback")
+}
+
 func TestExtractRetryYAMLInt(t *testing.T) {
 	// YAML v3 unmarshals integers as int, not float64.
 	cfg := map[string]interface{}{
@@ -660,7 +726,7 @@ func TestExtractRetryClamps(t *testing.T) {
 
 func TestExtractRetryDefaults(t *testing.T) {
 	rc := extractRetry(map[string]interface{}{})
-	assert.Equal(t, 1, rc.maxAttempts)
+	assert.Equal(t, 3, rc.maxAttempts)
 	assert.Equal(t, time.Second, rc.delay)
 	assert.Equal(t, defaultMaxBackoff, rc.maxBackoff)
 	assert.False(t, rc.jitterEnabled)
@@ -812,4 +878,109 @@ func TestBreakerSingleProbe(t *testing.T) {
 	b.record(closeAt, true) // successful probe closes
 	assert.True(t, b.allow(closeAt))
 	assert.Equal(t, 0, b.fails)
+}
+
+// Saturation: when a provider channel is full, fanOut drops the oldest queued
+// job to make room and records it in the dead-letter queue instead of silently
+// losing it.
+func TestFanOutSaturatedQueueRecordsDeadLetter(t *testing.T) {
+	am := &AlertManager{}
+	ch := make(chan deliverJob, channelCap)
+	inc := &model.Incident{Key: "old-job", Name: "n1", Reason: "Error"}
+	for i := 0; i < channelCap; i++ {
+		ch <- deliverJob{inc: &model.Incident{Key: fmt.Sprintf("stale-%d", i)}}
+	}
+	am.entries = []providerEntry{{
+		provider: &fakeProvider{},
+		ch:       ch,
+	}}
+
+	am.mu.Lock()
+	am.fanOut(deliverJob{inc: inc, action: model.ActionCreate})
+	am.mu.Unlock()
+
+	// The new job must be queued (oldest drained out) and the drained job
+	// recorded as a dead letter.
+	assert.Len(t, ch, channelCap)
+	dl := am.DeadLetters()
+	dlList, ok := dl.([]DeadLetterEntry)
+	require.True(t, ok)
+	assert.Len(t, dlList, 1)
+	assert.Equal(t, "stale-0", dlList[0].Key)
+	assert.Contains(t, dlList[0].Error, "queue saturated")
+}
+
+// orderingProvider records the (action, key) delivery sequence.
+type orderingProvider struct {
+	mu  sync.Mutex
+	seq []string
+}
+
+func (p *orderingProvider) Name() string                 { return "Ordering" }
+func (p *orderingProvider) SendMessage(string) error     { return nil }
+func (p *orderingProvider) SendEvent(*event.Event) error { return nil }
+func (p *orderingProvider) SendIncident(inc *model.Incident, action model.IncidentAction) error {
+	p.mu.Lock()
+	p.seq = append(p.seq, fmt.Sprintf("%s-%s", action, inc.Key))
+	p.mu.Unlock()
+	return nil
+}
+
+// A create that is still in-flight behind LLM enrichment must not be overtaken
+// by an update for the same incident — both are routed through the single FIFO
+// enrichment queue so the provider sees create-before-update.
+func TestUpdateDoesNotOvertakeCreateBehindLLM(t *testing.T) {
+	release := make(chan struct{})
+	var mu sync.Mutex
+	var calls int
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		mu.Lock()
+		first := calls == 0
+		calls++
+		mu.Unlock()
+		if first {
+			<-release
+		}
+		w.Header().Set("Content-Type", "application/json")
+		fmt.Fprint(w, `{"choices":[{"message":{"role":"assistant","content":"analysis text"}}]}`)
+	}))
+	defer srv.Close()
+
+	rec := &orderingProvider{}
+	am := &AlertManager{}
+	am.entries = []providerEntry{{
+		provider: rec,
+		retry:    retryConfig{maxAttempts: 1},
+		ch:       make(chan deliverJob, channelCap),
+	}}
+	am.llm = llm.New(srv.URL)
+	am.enrichCh = make(chan deliverJob, 1)
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	am.Start(ctx)
+
+	inc := &model.Incident{Key: "k", Name: "n", Reason: "CrashLoopBackOff"}
+	am.NotifyIncident(inc, model.ActionCreate, nil)
+	time.Sleep(50 * time.Millisecond) // worker enters Analyze (blocked)
+
+	am.NotifyIncident(inc, model.ActionUpdate, nil)
+	time.Sleep(50 * time.Millisecond)
+
+	rec.mu.Lock()
+	assert.Empty(t, rec.seq, "update must not overtake the in-flight create")
+	rec.mu.Unlock()
+
+	close(release) // let the create's LLM finish
+
+	require.Eventually(t, func() bool {
+		rec.mu.Lock()
+		defer rec.mu.Unlock()
+		return len(rec.seq) >= 2
+	}, 3*time.Second, 10*time.Millisecond)
+
+	rec.mu.Lock()
+	defer rec.mu.Unlock()
+	assert.Equal(t, "create-k", rec.seq[0])
+	assert.Equal(t, "update-k", rec.seq[1])
 }

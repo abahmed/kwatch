@@ -534,6 +534,61 @@ func TestRenotifyConfig(t *testing.T) {
 	}
 }
 
+func TestRevivedIncidentResetsRenotifyBudget(t *testing.T) {
+	fakeNow := time.Date(2025, 1, 1, 0, 0, 0, 0, time.UTC)
+	e := NewEngine(Config{
+		Window:                     10 * time.Minute,
+		RenotifyIntervalBySeverity: map[string]time.Duration{"default": 1 * time.Minute},
+		RenotifyMaxPerIncident:     3,
+	})
+	e.now = mockClock(fakeNow)
+
+	var updates int
+	e.config.LifecycleHook = func(inc *model.Incident, action model.IncidentAction) {
+		if action == model.ActionUpdate {
+			updates++
+		}
+	}
+
+	ev := event.Event{Namespace: "default", PodName: "pod-1", Reason: "CrashLoopBackOff"}
+	inc, action := e.Process(ev, "deploy-1", nil)
+	assert.Equal(t, model.ActionCreate, action)
+	require.Zero(t, inc.RenotifyCount)
+
+	// Exhaust the renotify budget: 3 renotifies at 61s intervals.
+	for i := 0; i < 3; i++ {
+		fakeNow = fakeNow.Add(61 * time.Second)
+		e.now = mockClock(fakeNow)
+		e.checkLifecycle()
+		require.Equal(t, i+1, e.state[inc.Key].RenotifyCount, "renotify %d must fire", i+1)
+	}
+	require.Equal(t, 3, updates)
+
+	// A 4th cycle past the interval is capped: no more renotifies.
+	fakeNow = fakeNow.Add(61 * time.Second)
+	e.now = mockClock(fakeNow)
+	e.checkLifecycle()
+	require.Equal(t, 3, e.state[inc.Key].RenotifyCount, "renotify budget must cap at maxPer")
+	require.Equal(t, 3, updates, "renotify must not exceed maxPer")
+
+	// Resolve, wait out the cooldown, then revive.
+	e.MarkResolved(inc.Key)
+	require.Equal(t, model.StateResolved, e.state[inc.Key].State)
+
+	fakeNow = fakeNow.Add(11 * time.Minute)
+	e.now = mockClock(fakeNow)
+	revived, action := e.Process(ev, "deploy-1", nil)
+	require.Equal(t, model.ActionUpdate, action, "revival must be a silent update, not a create")
+	require.Equal(t, model.StateActive, revived.State)
+	assert.Zero(t, revived.RenotifyCount, "revival must reset the renotify budget")
+
+	// The revived incident gets a fresh renotify budget.
+	e.now = mockClock(fakeNow.Add(61 * time.Second))
+	e.checkLifecycle()
+	require.Equal(t, 1, e.state[inc.Key].RenotifyCount, "revived incident must renotify again")
+	require.Equal(t, 4, updates)
+}
+
 // ── BUG-1: escalation ──────────────────────────────────────────────
 
 func escTestEngine() *Engine {
@@ -1877,6 +1932,193 @@ func TestSmartGroupingIncidentHasNotifiedSig(t *testing.T) {
 	require.NotNil(t, inc)
 	assert.NotZero(t, inc.NotifiedSig, "NotifiedSig must be set")
 	assert.NotZero(t, inc.LastNotifiedAt, "LastNotifiedAt must be set")
+}
+
+func TestSmartGroupingReFlushUpdateNotCreate(t *testing.T) {
+	now := time.Date(2025, 1, 1, 0, 0, 0, 0, time.UTC)
+	e := newSmartGroupingEngine()
+	e.now = mockClock(now)
+
+	e.Process(event.Event{PodName: "p1", Namespace: "ns", Reason: "CrashLoopBackOff"}, "dep1", nil)
+
+	var groupInc *model.Incident
+	var groupAction model.IncidentAction
+	var groupActions int
+	e.config.LifecycleHook = func(inc *model.Incident, action model.IncidentAction) {
+		if strings.HasPrefix(inc.Key, "__group__") {
+			groupInc = inc
+			groupAction = action
+			groupActions++
+		}
+	}
+
+	e.now = mockClock(now.Add(61 * time.Second))
+	e.checkLifecycle()
+	require.Equal(t, 1, groupActions)
+	require.Equal(t, model.ActionCreate, groupAction)
+	key := groupInc.Key
+
+	// Re-arm the buffer with more events on the same group.
+	e.Process(event.Event{PodName: "p2", Namespace: "ns", Reason: "CrashLoopBackOff"}, "dep1", nil)
+
+	// Flush again past the renotify cooldown: same key, UPDATE not CREATE.
+	e.now = mockClock(now.Add(7 * time.Minute))
+	e.checkLifecycle()
+
+	require.Equal(t, 2, groupActions)
+	assert.Equal(t, key, groupInc.Key, "re-flush must keep the stable group key")
+	assert.Equal(t, model.ActionUpdate, groupAction, "re-flush must emit an update, not a create")
+}
+
+func TestSmartGroupingReFlushCooldownSuppresses(t *testing.T) {
+	now := time.Date(2025, 1, 1, 0, 0, 0, 0, time.UTC)
+	e := newSmartGroupingEngine()
+	e.now = mockClock(now)
+
+	e.Process(event.Event{PodName: "p1", Namespace: "ns", Reason: "CrashLoopBackOff"}, "dep1", nil)
+
+	var groupCalls int
+	e.config.LifecycleHook = func(inc *model.Incident, action model.IncidentAction) {
+		if strings.HasPrefix(inc.Key, "__group__") {
+			groupCalls++
+		}
+	}
+
+	e.now = mockClock(now.Add(61 * time.Second))
+	e.checkLifecycle()
+	assert.Equal(t, 1, groupCalls)
+
+	// Re-arm the buffer and flush within the cooldown: no re-notification.
+	e.Process(event.Event{PodName: "p2", Namespace: "ns", Reason: "CrashLoopBackOff"}, "dep1", nil)
+	e.now = mockClock(now.Add(122 * time.Second))
+	e.checkLifecycle()
+	assert.Equal(t, 1, groupCalls, "re-flush within the cooldown must not re-notify")
+}
+
+func TestSmartGroupingFoldReleasesMember(t *testing.T) {
+	now := time.Date(2025, 1, 1, 0, 0, 0, 0, time.UTC)
+	e := newSmartGroupingEngine()
+	e.now = mockClock(now)
+
+	sigLog := "connection refused:5432"
+	e.Process(event.Event{PodName: "p1", Namespace: "ns", Reason: "CrashLoopBackOff", Logs: sigLog}, "dep1", nil)
+	e.Process(event.Event{PodName: "p2", Namespace: "ns", Reason: "CrashLoopBackOff", Logs: sigLog}, "dep2", nil)
+
+	var actions []model.IncidentAction
+	e.config.LifecycleHook = func(inc *model.Incident, action model.IncidentAction) {
+		if strings.HasPrefix(inc.Key, "__group__") {
+			actions = append(actions, action)
+		}
+	}
+
+	e.now = mockClock(now.Add(61 * time.Second))
+	e.checkLifecycle()
+	require.Equal(t, []model.IncidentAction{model.ActionCreate}, actions)
+
+	// Member dep1 crosses the high-frequency threshold → folded into a new
+	// key and silently removed from state. Without releasing it from the
+	// group tracker, the group would be stuck waiting for it forever.
+	cs := &model.ContainerState{RestartCount: 6}
+	e.Process(event.Event{PodName: "p1", Namespace: "ns", Reason: "CrashLoopBackOff", Logs: sigLog}, "dep1", cs)
+
+	// Resolving the remaining member must resolve the whole group.
+	e.MarkResolved("ns:dep2:CrashLoopBackOff:")
+
+	require.Equal(t, []model.IncidentAction{model.ActionCreate, model.ActionResolved}, actions)
+}
+
+func TestSmartGroupingFoldFullyResolvedDefers(t *testing.T) {
+	now := time.Date(2025, 1, 1, 0, 0, 0, 0, time.UTC)
+	e := newSmartGroupingEngine()
+	e.now = mockClock(now)
+
+	sigLog := "connection refused:5432"
+	e.Process(event.Event{PodName: "p1", Namespace: "ns", Reason: "CrashLoopBackOff", Logs: sigLog}, "dep1", nil)
+	e.Process(event.Event{PodName: "p2", Namespace: "ns", Reason: "CrashLoopBackOff", Logs: sigLog}, "dep2", nil)
+
+	var actions []model.IncidentAction
+	e.config.LifecycleHook = func(inc *model.Incident, action model.IncidentAction) {
+		if strings.HasPrefix(inc.Key, "__group__") {
+			actions = append(actions, action)
+		}
+	}
+
+	e.now = mockClock(now.Add(61 * time.Second))
+	e.checkLifecycle()
+	require.Equal(t, []model.IncidentAction{model.ActionCreate}, actions)
+
+	// Both members fold → the whole group resolves via fold, which must be
+	// deferred (Process holds the lock) and drained on the next tick.
+	cs := &model.ContainerState{RestartCount: 6}
+	e.Process(event.Event{PodName: "p1", Namespace: "ns", Reason: "CrashLoopBackOff", Logs: sigLog}, "dep1", cs)
+	e.Process(event.Event{PodName: "p2", Namespace: "ns", Reason: "CrashLoopBackOff", Logs: sigLog}, "dep2", cs)
+	require.Equal(t, []model.IncidentAction{model.ActionCreate}, actions, "deferred resolve must not fire synchronously")
+
+	e.now = mockClock(now.Add(90 * time.Second))
+	e.checkLifecycle()
+	require.Equal(t, []model.IncidentAction{model.ActionCreate, model.ActionResolved}, actions)
+}
+
+func TestResolveByResourceReleasesGroupMember(t *testing.T) {
+	now := time.Date(2025, 1, 1, 0, 0, 0, 0, time.UTC)
+	e := newSmartGroupingEngine()
+	e.now = mockClock(now)
+
+	sigLog := "connection refused:5432"
+	e.Process(event.Event{PodName: "p1", Namespace: "ns", Reason: "CrashLoopBackOff", Logs: sigLog}, "dep1", nil)
+	e.Process(event.Event{PodName: "p2", Namespace: "ns", Reason: "CrashLoopBackOff", Logs: sigLog}, "dep2", nil)
+
+	var actions []model.IncidentAction
+	e.config.LifecycleHook = func(inc *model.Incident, action model.IncidentAction) {
+		if strings.HasPrefix(inc.Key, "__group__") {
+			actions = append(actions, action)
+		}
+	}
+
+	e.now = mockClock(now.Add(61 * time.Second))
+	e.checkLifecycle()
+	require.Equal(t, []model.IncidentAction{model.ActionCreate}, actions)
+
+	// Resolving one member via ResolveByResource must not emit a group
+	// resolve until every member has resolved.
+	e.ResolveByResource("pod", "dep2")
+	require.Equal(t, []model.IncidentAction{model.ActionCreate}, actions, "group not fully resolved yet")
+
+	e.ResolveByResource("pod", "dep1")
+	require.Equal(t, []model.IncidentAction{model.ActionCreate, model.ActionResolved}, actions)
+}
+
+func TestSmartGroupingNewOccurrenceCreatesAgain(t *testing.T) {
+	now := time.Date(2025, 1, 1, 0, 0, 0, 0, time.UTC)
+	e := newSmartGroupingEngine()
+	e.now = mockClock(now)
+
+	e.Process(event.Event{PodName: "p1", Namespace: "ns", Reason: "CrashLoopBackOff"}, "dep1", nil)
+
+	var actions []model.IncidentAction
+	e.config.LifecycleHook = func(inc *model.Incident, action model.IncidentAction) {
+		if strings.HasPrefix(inc.Key, "__group__") {
+			actions = append(actions, action)
+		}
+	}
+
+	e.now = mockClock(now.Add(61 * time.Second))
+	e.checkLifecycle()
+	require.Equal(t, []model.IncidentAction{model.ActionCreate}, actions)
+
+	// All members resolve → batch group resolve resets the flush state.
+	e.MarkResolved("ns:dep1:CrashLoopBackOff:")
+	require.Equal(t, []model.IncidentAction{model.ActionCreate, model.ActionResolved}, actions)
+
+	// A new occurrence of the same group (after the member cooldown) must
+	// CREATE again rather than updating the previously-resolved key.
+	e.now = mockClock(now.Add(11*time.Minute + 2*time.Second))
+	e.Process(event.Event{PodName: "p2", Namespace: "ns", Reason: "CrashLoopBackOff"}, "dep1", nil)
+	e.now = mockClock(now.Add(12*time.Minute + 5*time.Second))
+	e.checkLifecycle()
+
+	require.Len(t, actions, 3)
+	assert.Equal(t, model.ActionCreate, actions[2])
 }
 
 // ── Reason-adaptive scope tests ────────────────────────────────────

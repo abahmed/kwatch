@@ -70,22 +70,22 @@ func (e *DefaultEnricher) Enrich(ev *event.Event, inc *model.Incident) {
 func (e *DefaultEnricher) resolveSeverity(ownerKind, reason string) model.Severity {
 	if e.SeverityByReason != nil {
 		if s, ok := lookupCaseInsensitive(e.SeverityByReason, reason); ok {
-			return model.SeverityFromString(s)
+			return model.NormalizeSeverity(s)
 		}
 	}
 	if s, ok := defaultSeverityByReason[reason]; ok {
-		return model.SeverityFromString(s)
+		return model.NormalizeSeverity(s)
 	}
 	if e.SeverityByOwnerKind != nil {
 		if s, ok := lookupCaseInsensitive(e.SeverityByOwnerKind, ownerKind); ok {
-			return model.SeverityFromString(s)
+			return model.NormalizeSeverity(s)
 		}
 		if s, ok := e.SeverityByOwnerKind["default"]; ok {
-			return model.SeverityFromString(s)
+			return model.NormalizeSeverity(s)
 		}
 	}
 	if s, ok := defaultSeverityByOwnerKind[ownerKind]; ok {
-		return model.SeverityFromString(s)
+		return model.NormalizeSeverity(s)
 	}
 	return model.SeverityNormal
 }

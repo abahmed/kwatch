@@ -4,7 +4,6 @@ import (
 	"context"
 	"fmt"
 	"hash/crc32"
-	"strconv"
 	"strings"
 	"time"
 
@@ -22,8 +21,16 @@ import (
 // a pending resolve, and a routine update to an already-active incident.
 // Caller must hold e.mu.
 func (e *Engine) refreshIncident(inc *model.Incident, ev event.Event, cs *model.ContainerState, owner string, now time.Time) (*model.Incident, model.IncidentAction) {
+	// A revival starts a fresh renotify budget. Otherwise an incident that
+	// resolved after maxing out renotify would never be re-notified again
+	// when the same problem recurs.
+	revived := inc.State == model.StateResolved || inc.State == model.StatePendingResolve
 	inc.State = model.StateActive
 	inc.ResolveAt = time.Time{}
+	if revived {
+		inc.RenotifyCount = 0
+		inc.LastNotifiedAt = time.Time{}
+	}
 	if ev.PodName != "" {
 		inc.Resources[ev.PodName] = true
 		if len(inc.Resources) > inc.PeakResources {
@@ -202,9 +209,16 @@ func (e *Engine) ResolveByResource(resource, name string) {
 			}
 			delete(e.seen, key)
 			e.cleanupCooldown[key] = now.Add(e.config.Window)
-			action := e.edgeAction(inc)
-			baselineChanged = true
-			pending = append(pending, transition{inc.Clone(), action})
+			// Smart group batch resolve: when the incident is a group member,
+			// the group RESOLVED replaces the individual notification.
+			if groupInc, groupAction, tracked := e.groupMemberResolved(key); tracked {
+				if groupAction != model.ActionSkip {
+					pending = append(pending, transition{groupInc, groupAction})
+				}
+			} else if action := e.edgeAction(inc); action != model.ActionSkip {
+				baselineChanged = true
+				pending = append(pending, transition{inc.Clone(), action})
+			}
 		}
 	}
 	e.mu.Unlock()
@@ -290,6 +304,12 @@ func (e *Engine) cleanup() {
 			e.refreshNodeInhibition(inc.Name)
 		}
 	}
+	// Drain group resolves deferred from Process (e.g. orphan folding) where
+	// the lock prevented a synchronous hook call.
+	for _, gi := range e.deferredResolves {
+		pending = append(pending, transition{gi, model.ActionResolved})
+	}
+	e.deferredResolves = nil
 	e.mu.Unlock()
 	for _, t := range pending {
 		if h := e.config.LifecycleHook; h != nil {
@@ -384,7 +404,9 @@ func (e *Engine) checkLifecycle() {
 					if pg.overflowCount > 0 {
 						summary += fmt.Sprintf(" +%d more", pg.overflowCount)
 					}
-					groupIncKey := "__group__:" + gk + ":" + strconv.FormatInt(now.Unix(), 10)
+					// Stable key per group so re-flushes update the same
+					// incident instead of creating a new one each cycle.
+					groupIncKey := "__group__:" + gk
 					sev := e.groupSeverity(active)
 					// Copy rich data (logs, events, analysis, runbook) from the first
 					// member incident so the group notification includes diagnostics.
@@ -436,7 +458,26 @@ func (e *Engine) checkLifecycle() {
 							groupInc.Containers[c] = true
 						}
 					}
-					pending = append(pending, transition{groupInc, model.ActionCreate})
+					// Update-not-create: once a group has been notified, re-flushes
+					// carry the same stable key and emit an UPDATE, throttled by a
+					// cooldown so a busy group can't spam every flush window.
+					action := model.ActionCreate
+					if fs, ok := e.groupFlush[gk]; ok && fs.notified {
+						if now.After(fs.lastNotifiedAt.Add(e.groupRenotifyCooldown())) {
+							fs.lastNotifiedAt = now
+							action = model.ActionUpdate
+						} else {
+							action = model.ActionSkip
+						}
+					} else {
+						e.groupFlush[gk] = &groupFlushState{
+							notified:       true,
+							lastNotifiedAt: now,
+						}
+					}
+					if action != model.ActionSkip {
+						pending = append(pending, transition{groupInc, action})
+					}
 
 					// Replace any stale tracker for the same key
 					delete(e.groupMembers, gk)
@@ -468,6 +509,13 @@ func (e *Engine) checkLifecycle() {
 			}
 		}
 	}
+
+	// Drain group resolves deferred from Process (e.g. orphan folding) where
+	// the lock prevented a synchronous hook call.
+	for _, gi := range e.deferredResolves {
+		pending = append(pending, transition{gi, model.ActionResolved})
+	}
+	e.deferredResolves = nil
 
 	e.mu.Unlock()
 

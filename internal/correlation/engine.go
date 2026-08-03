@@ -129,6 +129,8 @@ type Engine struct {
 	cleanupCooldown     map[string]time.Time            // key → cooldown expiry; prevents resolve→recreate cycle
 	pendingGroups       map[string]*pendingGroup        // computeGroupKey output → group buffer
 	groupMembers        map[string]*groupResolveTracker // gk → batch resolve tracker
+	groupFlush          map[string]*groupFlushState     // gk → last notification state
+	deferredResolves    []*model.Incident               // group resolves awaiting the next lifecycle tick
 	auditLogger         *audit.AuditLogger
 	dirty               bool // true when state has changed since last SnapshotAll
 	now                 func() time.Time
@@ -156,6 +158,7 @@ func NewEngine(cfg Config) *Engine {
 		cleanupCooldown:     make(map[string]time.Time),
 		pendingGroups:       make(map[string]*pendingGroup),
 		groupMembers:        make(map[string]*groupResolveTracker),
+		groupFlush:          make(map[string]*groupFlushState),
 	}
 	if e.now == nil {
 		e.now = time.Now
@@ -413,6 +416,14 @@ func (e *Engine) Process(ev event.Event, owner string, cs *model.ContainerState)
 				e.removeIncidentFromNamespaceIndex(oldInc)
 				delete(e.state, k)
 				delete(e.seen, k)
+				// Release the folded incident from any smart-group tracker so
+				// the group isn't stuck waiting on a member that no longer
+				// exists. If that resolves the whole group, defer the RESOLVED
+				// notification to the next lifecycle tick (Process holds the
+				// lock, so hooks cannot run here).
+				if groupInc, groupAction, tracked := e.groupMemberResolved(k); tracked && groupAction == model.ActionResolved {
+					e.deferredResolves = append(e.deferredResolves, groupInc)
+				}
 			}
 		}
 	}

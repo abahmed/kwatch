@@ -139,6 +139,9 @@ type Config struct {
 	// PendingPodMonitor configures Pending-phase pod detection.
 	PendingPodMonitor PendingPodMonitor `yaml:"pendingPodMonitor"`
 
+	// NotReadyMonitor configures sustained not-ready pod detection.
+	NotReadyMonitor NotReadyMonitor `yaml:"notReadyMonitor"`
+
 	// RolloutMonitor configures stuck-rollout detection for Deployments.
 	RolloutMonitor RolloutMonitor `yaml:"rolloutMonitor"`
 
@@ -526,6 +529,19 @@ type PendingPodMonitor struct {
 
 	// Threshold is the duration (in seconds) a pod can remain
 	// in Pending phase before an alert is raised. Default 300 (5 min).
+	Threshold int `yaml:"threshold"`
+}
+
+// NotReadyMonitor configures sustained not-ready pod detection.
+// It alerts when a pod has been not ready (e.g. failing readiness probe)
+// for longer than Threshold even though its containers are running and
+// have not crashed — a case the container detectors intentionally skip.
+type NotReadyMonitor struct {
+	// Enabled if set to true, it will watch pods stuck not ready.
+	Enabled bool `yaml:"enabled"`
+
+	// Threshold is the duration (in seconds) a pod can remain
+	// not ready before an alert is raised. Default 60.
 	Threshold int `yaml:"threshold"`
 }
 

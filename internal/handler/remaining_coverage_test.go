@@ -583,6 +583,70 @@ func TestBuildHintOOMKilledNoMemLimit(t *testing.T) {
 	assert.Contains(t, hint, "OOMKilled with no memory limit set")
 }
 
+// Exit code 137 without an OOMKilled reason is a plain SIGKILL, not an OOM
+// kill — the hint must not claim memory pressure.
+func TestBuildHintExit137NonOOMKilled(t *testing.T) {
+	h := NewHandler(fake.NewSimpleClientset(), &config.Config{}, testCorrelator(), testAlertMgr)
+
+	ctx := &filter.Context{
+		Pod: &corev1.Pod{
+			ObjectMeta: metav1.ObjectMeta{Name: "p1", Namespace: "ns1"},
+			Spec: corev1.PodSpec{
+				Containers: []corev1.Container{
+					{Name: "app"},
+				},
+			},
+		},
+		Container: &filter.ContainerContext{
+			Container: &corev1.ContainerStatus{
+				Name: "app",
+			},
+			Reason:   "Error",
+			ExitCode: 137,
+		},
+	}
+	hint := h.buildContainerHint(ctx)
+	assert.Contains(t, hint, "Killed (SIGKILL")
+	assert.NotContains(t, hint, "OOMKilled")
+	assert.NotContains(t, hint, "memory")
+}
+
+// A 137 exit from a non-OOM reason must not be recorded as an OOM kill, so it
+// can never escalate to the repeating-OOM reason.
+func TestBuildHintExit137NonOOMNotTrackedAsOOM(t *testing.T) {
+	cfg := &config.Config{
+		OomMonitor: config.OomMonitor{Enabled: true, Threshold: 3, WindowMinutes: 10},
+	}
+	h := NewHandler(fake.NewSimpleClientset(), cfg, testCorrelator(), testAlertMgr)
+
+	ctx := &filter.Context{
+		Pod: &corev1.Pod{
+			ObjectMeta: metav1.ObjectMeta{Name: "p1", Namespace: "ns1"},
+			Spec: corev1.PodSpec{
+				Containers: []corev1.Container{
+					{Name: "app"},
+				},
+			},
+		},
+		Container: &filter.ContainerContext{
+			Container: &corev1.ContainerStatus{
+				Name: "app",
+			},
+			Reason:   "Error",
+			ExitCode: 137,
+		},
+	}
+
+	// Cross the repeating threshold with non-OOM 137 exits.
+	for i := 0; i < 5; i++ {
+		ctx.Container.Reason = "Error"
+		ctx.Container.ExitCode = 137
+		hint := h.buildContainerHint(ctx)
+		assert.Equal(t, "Error", ctx.Container.Reason, "non-OOM 137 exit must not flip reason to OOMRepeating")
+		assert.Contains(t, hint, "Killed (SIGKILL")
+	}
+}
+
 // --- buildContainerHint: CrashLoopBackOff with LivenessProbe ---
 
 func TestBuildHintCrashLoopBackOffLiveness(t *testing.T) {

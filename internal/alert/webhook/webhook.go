@@ -135,7 +135,7 @@ func (w *Webhook) SendEvent(ev *event.Event) error {
 			RetryAfter: ratelimit.ParseRetryAfter(response),
 		}
 	}
-	if response.StatusCode > 202 {
+	if response.StatusCode > 299 {
 		return fmt.Errorf(
 			"call to webhook returned status code %d",
 			response.StatusCode)
@@ -190,7 +190,7 @@ func (w *Webhook) SendIncident(inc *model.Incident, action model.IncidentAction)
 			RetryAfter: ratelimit.ParseRetryAfter(response),
 		}
 	}
-	if response.StatusCode > 202 {
+	if response.StatusCode > 299 {
 		return fmt.Errorf(
 			"call to webhook returned status code %d",
 			response.StatusCode)

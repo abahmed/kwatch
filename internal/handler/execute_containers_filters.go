@@ -2,6 +2,7 @@ package handler
 
 import (
 	"fmt"
+	"slices"
 	"sort"
 	"strings"
 	"time"
@@ -55,40 +56,15 @@ func (h *handler) executeContainersFilters(ctx *filter.Context) {
 		if !broken {
 			if th := h.config.ContainerRestartThreshold; th > 0 &&
 				int(container.RestartCount) >= th &&
-				!isPodTerminatingOrDisrupted(ctx.Pod) {
+				!isPodTerminatingOrDisrupted(ctx.Pod) &&
+				!h.highRestartSuppressed(ctx) {
 				h.emitHighRestartAlert(ctx, container)
 			}
 			continue
 		}
 
 		// Phase 2: Enrich (I/O: events, owner, logs)
-		if ctx.Events == nil {
-			if ctx.EventLister != nil {
-				all, err := ctx.EventLister.Events(ctx.Pod.Namespace).List(labels.Everything())
-				if err != nil {
-					klog.ErrorS(err, "event lister failed", "pod", ctx.Pod.Name)
-				} else {
-					items := make([]corev1.Event, 0, len(all))
-					for _, e := range all {
-						if e.InvolvedObject.Kind == "Pod" && e.InvolvedObject.Name == ctx.Pod.Name {
-							items = append(items, *e)
-						}
-					}
-					sort.Slice(items, func(i, j int) bool {
-						return items[i].LastTimestamp.Before(&items[j].LastTimestamp)
-					})
-					ctx.Events = &items
-				}
-			} else {
-				podEvents, err := k8s.GetPodEvents(ctx.Ctx, ctx.Client, ctx.Pod.Name, ctx.Pod.Namespace)
-				if err != nil {
-					klog.ErrorS(err, "failed to fetch pod events", "pod", ctx.Pod.Name)
-				}
-				if podEvents != nil {
-					ctx.Events = &podEvents.Items
-				}
-			}
-		}
+		h.loadPodEvents(ctx)
 
 		for i := range h.containerSuppressionEnrichers {
 			if h.containerSuppressionEnrichers[i].Enrich(ctx) {
@@ -156,6 +132,86 @@ func (h *handler) executeContainersFilters(ctx *filter.Context) {
 	}
 }
 
+// loadPodEvents populates ctx.Events with the pod's events (oldest first)
+// when they are not already loaded. No-op when ctx.Events is already set or
+// when the event source is unavailable.
+func (h *handler) loadPodEvents(ctx *filter.Context) {
+	if ctx.Events != nil || ctx.Pod == nil {
+		return
+	}
+	if ctx.EventLister != nil {
+		all, err := ctx.EventLister.Events(ctx.Pod.Namespace).List(labels.Everything())
+		if err != nil {
+			klog.ErrorS(err, "event lister failed", "pod", ctx.Pod.Name)
+			return
+		}
+		items := make([]corev1.Event, 0, len(all))
+		for _, e := range all {
+			if e.InvolvedObject.Kind == "Pod" && e.InvolvedObject.Name == ctx.Pod.Name {
+				items = append(items, *e)
+			}
+		}
+		sort.Slice(items, func(i, j int) bool {
+			return items[i].LastTimestamp.Before(&items[j].LastTimestamp)
+		})
+		ctx.Events = &items
+		return
+	}
+	podEvents, err := k8s.GetPodEvents(ctx.Ctx, ctx.Client, ctx.Pod.Name, ctx.Pod.Namespace)
+	if err != nil {
+		klog.ErrorS(err, "failed to fetch pod events", "pod", ctx.Pod.Name)
+		return
+	}
+	if podEvents != nil {
+		ctx.Events = &podEvents.Items
+	}
+}
+
+// highRestartSuppressed reports whether the HighRestartCount alert must be
+// suppressed for this container. The high-restart path only runs when the
+// container detectors all returned skip — which includes the reason
+// allow/forbid filter — so without these checks it would bypass the user's
+// reason allow/forbid configuration and the suppression enrichers (silences,
+// log patterns, graceful-shutdown killing) that apply to normal incidents.
+func (h *handler) highRestartSuppressed(ctx *filter.Context) bool {
+	if ctx.Container == nil {
+		return true
+	}
+
+	// Use the last termination reason for the allow/forbid check — it is the
+	// failure that produced the restart history the alert reports. The
+	// detectors leave it empty for a currently-Running container.
+	reason := ctx.Container.Reason
+	if reason == "" {
+		if last := ctx.Container.Container.LastTerminationState.Terminated; last != nil {
+			reason = last.Reason
+		}
+	}
+
+	if len(h.config.AllowedReasons) > 0 &&
+		!slices.Contains(h.config.AllowedReasons, reason) {
+		klog.InfoS(
+			"skipping high-restart-count alert as reason is not in the reason allow list",
+			"reason", reason)
+		return true
+	}
+	if len(h.config.ForbiddenReasons) > 0 &&
+		slices.Contains(h.config.ForbiddenReasons, reason) {
+		klog.InfoS(
+			"skipping high-restart-count alert as reason is in the reason forbid list",
+			"reason", reason)
+		return true
+	}
+
+	h.loadPodEvents(ctx)
+	for i := range h.containerSuppressionEnrichers {
+		if h.containerSuppressionEnrichers[i].Enrich(ctx) {
+			return true
+		}
+	}
+	return false
+}
+
 // findContainerSpec returns the matching container spec (including init containers) by name.
 func findContainerSpec(pod *corev1.Pod, name string) *corev1.Container {
 	for i := range pod.Spec.Containers {
@@ -171,13 +227,23 @@ func findContainerSpec(pod *corev1.Pod, name string) *corev1.Container {
 	return nil
 }
 
+// oomKey returns a workload-scoped tracker key so OOM frequency is counted
+// across pod restarts. ReplicaSet/DaemonSet pods get a new name on every
+// crash, so a pod-scoped key would never reach the repeating threshold for
+// crash-looping workloads. Falls back to the pod name for bare pods.
+func (h *handler) oomKey(ctx *filter.Context) string {
+	if ctx.Owner != nil && ctx.Owner.Name != "" {
+		return ctx.Pod.Namespace + "/" + ctx.Owner.Name + "/" + ctx.Container.Container.Name
+	}
+	return ctx.Pod.Namespace + "/" + ctx.Pod.Name + "/" + ctx.Container.Container.Name
+}
+
 // buildContainerHint computes a rich diagnostic hint from container state + spec.
 func (h *handler) buildContainerHint(ctx *filter.Context) string {
 	reason := ctx.Container.Reason
 	exitCode := ctx.Container.ExitCode
 
 	hint := enricher.HintForReason(reason)
-
 	if ctx.Container.IsInit && exitCode != 0 {
 		hint = enricher.HintForReason(constant.ReasonInitContainerError)
 		if ecHint := enricher.HintForExitCode(exitCode); ecHint != "" {
@@ -190,8 +256,14 @@ func (h *handler) buildContainerHint(ctx *filter.Context) string {
 
 	spec := findContainerSpec(ctx.Pod, ctx.Container.Container.Name)
 
-	if (reason == constant.ReasonOOMKilled || exitCode == 137) && h.oomTracker != nil {
-		key := ctx.Pod.Namespace + "/" + ctx.Pod.Name + "/" + ctx.Container.Container.Name
+	// Exit code 137 alone is not proof of an OOM kill — SIGKILL (manual kill,
+	// eviction, liveness-probe kill) produces the same code. Only the kubelet's
+	// OOMKilled reason is treated as memory pressure; 137 with any other reason
+	// is labeled as a plain SIGKILL ("Killed").
+	isOOM := reason == constant.ReasonOOMKilled
+
+	if isOOM && h.oomTracker != nil {
+		key := h.oomKey(ctx)
 		if count, repeating := h.oomTracker.record(key); repeating {
 			ctx.Container.Reason = constant.ReasonOOMRepeating
 			timeline := h.oomTracker.History(key)
@@ -202,10 +274,10 @@ func (h *handler) buildContainerHint(ctx *filter.Context) string {
 		}
 	}
 
-	if reason == constant.ReasonOOMKilled || exitCode == 137 {
+	if isOOM {
 		oomTimeline := ""
 		if h.oomTracker != nil {
-			key := ctx.Pod.Namespace + "/" + ctx.Pod.Name + "/" + ctx.Container.Container.Name
+			key := h.oomKey(ctx)
 			oomTimeline = h.oomTracker.History(key)
 		}
 		if spec != nil && spec.Resources.Limits != nil {
@@ -221,6 +293,8 @@ func (h *handler) buildContainerHint(ctx *filter.Context) string {
 		if oomTimeline != "" {
 			hint = hint + " [" + oomTimeline + "]"
 		}
+	} else if exitCode == 137 {
+		hint = "Killed (SIGKILL, exit 137) — terminated by something other than the OOM killer (check evictions, liveness probes, or manual termination)"
 	}
 
 	if spec != nil {

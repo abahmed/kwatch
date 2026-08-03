@@ -1,5 +1,7 @@
 package model
 
+import "strings"
+
 // Severity is the alert escalation level for an incident.
 type Severity string
 
@@ -10,6 +12,25 @@ const (
 	SeverityWarning  Severity = "warning"
 	SeverityNormal   Severity = "normal"
 )
+
+// IsValidSeverity reports whether s is a recognized severity level,
+// compared case-insensitively. Config maps (SeverityByReason,
+// SeverityByOwnerKind) and CRD severityByOwnerKind values are validated
+// against this so a typo is rejected instead of silently ranking as normal.
+func IsValidSeverity(s string) bool {
+	switch Severity(strings.ToLower(strings.TrimSpace(s))) {
+	case SeverityCritical, SeverityHigh, SeverityMedium, SeverityWarning, SeverityNormal:
+		return true
+	default:
+		return false
+	}
+}
+
+// NormalizeSeverity lowercases s (e.g. "High" → "high") so case variants of
+// user-supplied config values still rank correctly.
+func NormalizeSeverity(s string) Severity {
+	return Severity(strings.ToLower(strings.TrimSpace(s)))
+}
 
 // Rank orders severities for escalation decisions; higher is more severe.
 // medium and warning share a rank; unknown or empty values rank as normal.

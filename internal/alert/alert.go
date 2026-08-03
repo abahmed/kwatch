@@ -391,7 +391,7 @@ type retryConfig struct {
 
 func extractRetry(cfg map[string]interface{}) retryConfig {
 	rc := retryConfig{
-		maxAttempts:   1,
+		maxAttempts:   3,
 		delay:         time.Second,
 		maxBackoff:    defaultMaxBackoff,
 		jitterEnabled: false,
@@ -874,15 +874,20 @@ func sendWithRetry(ctx context.Context, sendFn func() error, rc retryConfig, pro
 				if rc.maxBackoff > 0 {
 					sleepDur = backoffFor(attempt, rc.delay, rc.maxBackoff)
 				}
+				// When the server specifies a Retry-After, honor it exactly;
+				// jitter must never shrink the wait below the server's request.
+				serverSpecified := false
 				var rae *event.RetryAfterError
 				if errors.As(err, &rae) && rae.RetryAfter > 0 {
 					sleepDur = rae.RetryAfter
+					serverSpecified = true
 				}
 				var rle *ratelimit.Error
 				if errors.As(err, &rle) && rle.RetryAfter > 0 {
 					sleepDur = rle.RetryAfter
+					serverSpecified = true
 				}
-				if rc.jitterEnabled {
+				if rc.jitterEnabled && !serverSpecified {
 					sleepDur = applyJitter(sleepDur, rc.jitterFactor)
 					if sleepDur <= 0 {
 						sleepDur = rc.delay
@@ -961,7 +966,8 @@ func (a *AlertManager) Notify(msg string) {
 		if err := sendWithRetry(ctx, func() error {
 			return p.SendMessage(truncMsg)
 		}, entry.retry, p.Name()); err != nil && entry.fallback != nil {
-			entry.fallback.provider.SendMessage("[fallback — primary " + p.Name() + " failed] " + truncMsg)
+			fbMsg := truncateMsg("[fallback — primary "+p.Name()+" failed] "+truncMsg, entry.fallback.maxBytes)
+			entry.fallback.provider.SendMessage(fbMsg)
 		}
 	}
 }
@@ -1060,7 +1066,8 @@ func (a *AlertManager) NotifyIncident(inc *model.Incident, action model.Incident
 	}
 	job := deliverJob{inc: snap, action: action, insight: ins}
 
-	if a.llm != nil && action == model.ActionCreate && !isObviousReason(inc.Reason) {
+	if a.llm != nil && !isObviousReason(inc.Reason) &&
+		(action == model.ActionCreate || action == model.ActionUpdate) {
 		a.mu.Lock()
 		enqueued := false
 		if !a.stopped {
@@ -1239,6 +1246,13 @@ func (a *AlertManager) enrichOne(ctx context.Context, job deliverJob) {
 			klog.ErrorS(fmt.Errorf("%v", r), "llm enrichment panic recovered", "key", job.inc.Key)
 		}
 	}()
+	// Creates and updates share the single FIFO enrich channel so an update
+	// can never overtake its own create. Incidents that already carry analysis
+	// (an earlier create/update succeeded) and obvious reasons skip the LLM
+	// call entirely — they only pass through the queue for ordering.
+	if job.inc.Analysis != "" || isObviousReason(job.inc.Reason) {
+		return
+	}
 	if !a.brk.allow(time.Now()) {
 		metrics.Default.LLMEnrichSkipped.Add(1)
 		return
@@ -1294,18 +1308,27 @@ func (a *AlertManager) deliverOne(ctx context.Context, entry *providerEntry, inc
 	if len(tpl) == 0 {
 		tpl = a.templates
 	}
-	msg := truncateMsg(a.buildMessage(inc, action, ins, maxLines, tpl), entry.maxBytes)
 
-	var err error
+	// Evaluate routes before rendering so route-filtered incidents don't pay
+	// for message building (routes depend only on the incident, not the message).
 	if !shouldDeliver(entry.routes, inc) {
 		klog.V(4).InfoS("incident filtered by route",
 			"provider", p.Name(),
 			"key", inc.Key)
 		return
 	}
+
+	raw := a.buildMessage(inc, action, ins, maxLines, tpl)
+	msg := truncateMsg(raw, entry.maxBytes)
+
+	var err error
 	if tp, ok := p.(ThreadProvider); ok {
+		sendInc := inc
+		if entry.maxBytes > 0 {
+			sendInc = a.clampIncidentForProvider(inc, action, ins, entry.maxBytes, maxLines, tpl, len(raw))
+		}
 		err = sendWithRetry(ctx, func() error {
-			return tp.SendIncident(inc, action)
+			return tp.SendIncident(sendInc, action)
 		}, entry.retry, p.Name())
 	} else if _, ok := p.(EventDeliveryProvider); ok {
 		ev := incidentToEvent(inc, action)
@@ -1322,8 +1345,8 @@ func (a *AlertManager) deliverOne(ctx context.Context, entry *providerEntry, inc
 		klog.ErrorS(err, "failed to send", "provider", p.Name(), "key", inc.Key, "id", inc.ID)
 		a.recordDeadLetter(entry, inc, action, err)
 		if entry.fallback != nil {
-			fbMsg := msg
-			fbErr := entry.fallback.provider.SendMessage("[fallback — primary " + p.Name() + " failed] " + fbMsg)
+			fbMsg := truncateMsg("[fallback — primary "+p.Name()+" failed] "+msg, entry.fallback.maxBytes)
+			fbErr := entry.fallback.provider.SendMessage(fbMsg)
 			if fbErr != nil {
 				klog.ErrorS(fbErr, "fallback delivery failed", "provider", entry.fallback.provider.Name())
 			}
@@ -1361,14 +1384,20 @@ func (a *AlertManager) fanOut(job deliverJob) {
 		select {
 		case entry.ch <- job:
 		default:
+			// Channel is saturated — drop the oldest queued job to make room
+			// and record it in the dead-letter queue so a saturated provider
+			// doesn't silently lose it.
 			select {
-			case <-entry.ch:
+			case dropped := <-entry.ch:
 				metrics.Default.NotificationsDropped.Add(1)
+				a.recordDeadLetter(&entry, dropped.inc, dropped.action, fmt.Errorf("delivery queue saturated"))
 			default:
 			}
 			select {
 			case entry.ch <- job:
 			default:
+				metrics.Default.NotificationsDropped.Add(1)
+				a.recordDeadLetter(&entry, job.inc, job.action, fmt.Errorf("delivery queue saturated"))
 			}
 		}
 	}
@@ -1389,15 +1418,19 @@ func (a *AlertManager) deliverAllSync(inc *model.Incident, action model.Incident
 		if len(tpl) == 0 {
 			tpl = a.templates
 		}
-		msg := a.buildMessage(inc, action, ins, maxLines, tpl)
-		msg = truncateMsg(msg, entry.maxBytes)
 		if !shouldDeliver(entry.routes, inc) {
 			continue
 		}
+		raw := a.buildMessage(inc, action, ins, maxLines, tpl)
+		msg := truncateMsg(raw, entry.maxBytes)
 		var err error
 		if tp, ok := p.(ThreadProvider); ok {
+			sendInc := inc
+			if entry.maxBytes > 0 {
+				sendInc = a.clampIncidentForProvider(inc, action, ins, entry.maxBytes, maxLines, tpl, len(raw))
+			}
 			err = sendWithRetry(context.Background(), func() error {
-				return tp.SendIncident(inc, action)
+				return tp.SendIncident(sendInc, action)
 			}, entry.retry, p.Name())
 		} else if _, ok := p.(EventDeliveryProvider); ok {
 			ev := incidentToEvent(inc, action)
@@ -1438,6 +1471,66 @@ func truncateMsg(s string, maxLen int) string {
 	return s[:cut] + suffix
 }
 
+// providerRenderMargin is reserved when sizing evidence so that provider
+// renderers with extra formatting overhead (e.g. Discord code fences) still
+// produce output within the provider's message limit.
+const providerRenderMargin = 64
+
+// clampIncidentForProvider returns a copy of inc with Logs/Events trimmed so
+// that the rendered message fits within maxBytes for ThreadProvider delivery
+// (whose renderers post a single message with no chunking). It returns the
+// original incident when maxBytes <= 0, when the message already fits, or
+// when the overflow cannot be attributed to evidence. fullLen is the length
+// of the pre-rendered message and avoids a redundant render on the fast path.
+func (a *AlertManager) clampIncidentForProvider(inc *model.Incident, action model.IncidentAction, ins *insight.Insight, maxBytes, maxLines int, tpl map[string]*template.Template, fullLen int) *model.Incident {
+	if maxBytes <= 0 || fullLen <= maxBytes || (inc.Logs == "" && inc.Events == "") {
+		return inc
+	}
+
+	// Render without evidence to learn the exact fixed-size overhead.
+	fixed := inc.Clone()
+	fixed.Logs = ""
+	fixed.Events = ""
+	fixedLen := len(a.buildMessage(fixed, action, ins, maxLines, tpl))
+	budget := maxBytes - fixedLen - providerRenderMargin
+	if budget <= 0 {
+		return inc
+	}
+
+	clamped := inc.Clone()
+	trimEvidence(clamped, budget)
+	return clamped
+}
+
+// trimEvidence truncates inc.Logs and inc.Events (with a marker suffix) so
+// their rendered sections fit within budget bytes.
+func trimEvidence(inc *model.Incident, budget int) {
+	if budget <= 0 {
+		inc.Logs = ""
+		inc.Events = ""
+		return
+	}
+	logs := inc.Logs
+	events := inc.Events
+	const logHeader = "Logs:\n"
+	const evHeader = "Events:\n"
+	switch {
+	case logs == "":
+		inc.Events = truncateMsg(events, budget-len(evHeader))
+	case events == "":
+		inc.Logs = truncateMsg(logs, budget-len(logHeader))
+	default:
+		total := len(logs) + len(events)
+		if total <= 0 {
+			return
+		}
+		logBudget := int(int64(budget) * int64(len(logs)) / int64(total))
+		evBudget := budget - logBudget
+		inc.Logs = truncateMsg(logs, logBudget-len(logHeader))
+		inc.Events = truncateMsg(events, evBudget-len(evHeader))
+	}
+}
+
 func defaultMaxBytes(providerName string) int {
 	switch strings.ToLower(providerName) {
 	case "telegram":
@@ -1446,6 +1539,8 @@ func defaultMaxBytes(providerName string) int {
 		return 28000
 	case "slack":
 		return 40000
+	case "discord":
+		return 2000
 	default:
 		return 0 // unlimited
 	}

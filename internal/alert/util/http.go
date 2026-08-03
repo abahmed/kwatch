@@ -12,9 +12,9 @@ import (
 )
 
 // Post sends an HTTP POST to url with the given body, content type and extra
-// headers, returning the response body on success. A status code up to 202 is
-// treated as success. 429 responses return a *ratelimit.Error honoring the
-// Retry-After header; any other non-2xx status returns a descriptive error.
+// headers, returning the response body on success. Any 2xx status is treated
+// as success. 429 responses return a *ratelimit.Error honoring the Retry-After
+// header; any other non-2xx status returns a descriptive error.
 // The provider name is used in error messages and ratelimit reporting.
 func Post(provider, url string, body []byte, contentType string, headers map[string]string) ([]byte, error) {
 	client := k8s.GetDefaultClient()
@@ -45,7 +45,7 @@ func Post(provider, url string, body []byte, contentType string, headers map[str
 			RetryAfter: ratelimit.ParseRetryAfter(resp),
 		}
 	}
-	if resp.StatusCode > 202 {
+	if resp.StatusCode > 299 {
 		return respBody, fmt.Errorf(
 			"call to %s returned status code %d: %s",
 			provider, resp.StatusCode, strings.TrimSpace(string(respBody)))

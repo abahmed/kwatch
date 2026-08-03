@@ -5,7 +5,28 @@ import (
 	"fmt"
 	"sort"
 	"strings"
+
+	"github.com/abahmed/kwatch/internal/model"
 )
+
+// InvalidSeverityKeys returns the keys of m whose values are not recognized
+// severity levels (critical/high/medium/warning/normal, case-insensitive),
+// sorted for stable output. Shared by config.yaml validation and the CRD
+// watcher so a typo'd severity is rejected instead of silently ranking normal.
+func InvalidSeverityKeys(m map[string]string) []string {
+	var keys []string
+	for k, v := range m {
+		if !model.IsValidSeverity(v) {
+			keys = append(keys, k)
+		}
+	}
+	sort.Strings(keys)
+	return keys
+}
+
+func severityValueError(mapName, key, value string) string {
+	return fmt.Sprintf("%s[%q] has invalid severity %q (expected one of critical, high, medium, warning, normal)", mapName, key, value)
+}
 
 // ValidateConfig checks the config for common misconfiguration issues and
 // returns a list of human-readable problems.
@@ -65,6 +86,10 @@ func ValidateConfig(cfg *Config) []string {
 		errs = append(errs, "pendingPodMonitor.threshold must be > 0")
 	}
 
+	if cfg.NotReadyMonitor.Enabled && cfg.NotReadyMonitor.Threshold <= 0 {
+		errs = append(errs, "notReadyMonitor.threshold must be > 0")
+	}
+
 	if cfg.Workers < 1 {
 		errs = append(errs, "workers must be >= 1")
 	}
@@ -88,6 +113,13 @@ func ValidateConfig(cfg *Config) []string {
 				}
 			}
 		}
+	}
+
+	for _, k := range InvalidSeverityKeys(cfg.SeverityByReason) {
+		errs = append(errs, severityValueError("severityByReason", k, cfg.SeverityByReason[k]))
+	}
+	for _, k := range InvalidSeverityKeys(cfg.SeverityByOwnerKind) {
+		errs = append(errs, severityValueError("severityByOwnerKind", k, cfg.SeverityByOwnerKind[k]))
 	}
 
 	return errs
@@ -204,6 +236,9 @@ func Validate(cfg *Config) []error {
 	if cfg.PendingPodMonitor.Enabled && cfg.PendingPodMonitor.Threshold <= 0 {
 		errs = append(errs, errors.New("pendingPodMonitor.threshold must be > 0"))
 	}
+	if cfg.NotReadyMonitor.Enabled && cfg.NotReadyMonitor.Threshold <= 0 {
+		errs = append(errs, errors.New("notReadyMonitor.threshold must be > 0"))
+	}
 	if cfg.AuditLog.Enabled && cfg.AuditLog.Output == "" {
 		errs = append(errs, errors.New("auditLog.output must be \"stdout\" or a valid file path when auditLog.enabled is true"))
 	}
@@ -223,6 +258,12 @@ func Validate(cfg *Config) []error {
 	}
 	for _, name := range unknownProviders(cfg) {
 		errs = append(errs, fmt.Errorf("unknown alert provider %q", name))
+	}
+	for _, k := range InvalidSeverityKeys(cfg.SeverityByReason) {
+		errs = append(errs, fmt.Errorf("%s", severityValueError("severityByReason", k, cfg.SeverityByReason[k])))
+	}
+	for _, k := range InvalidSeverityKeys(cfg.SeverityByOwnerKind) {
+		errs = append(errs, fmt.Errorf("%s", severityValueError("severityByOwnerKind", k, cfg.SeverityByOwnerKind[k])))
 	}
 	return errs
 }
