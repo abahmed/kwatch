@@ -8,20 +8,9 @@ import (
 	"sync"
 	"time"
 
-	"github.com/abahmed/kwatch/internal/alert"
-	"github.com/abahmed/kwatch/internal/config"
-	"github.com/abahmed/kwatch/internal/correlation"
-	"github.com/abahmed/kwatch/internal/event"
-	"github.com/abahmed/kwatch/internal/filter"
-	"github.com/abahmed/kwatch/internal/insight"
-	"github.com/abahmed/kwatch/internal/model"
-	admissionregistrationv1 "k8s.io/api/admissionregistration/v1"
-	appsv1 "k8s.io/api/apps/v1"
-	autoscalingv2 "k8s.io/api/autoscaling/v2"
-	batchv1 "k8s.io/api/batch/v1"
+	"github.com/abahmed/kwatch/internal/constant"
+
 	corev1 "k8s.io/api/core/v1"
-	networkingv1 "k8s.io/api/networking/v1"
-	policyv1 "k8s.io/api/policy/v1"
 	"k8s.io/client-go/kubernetes"
 	admissionregistrationv1lister "k8s.io/client-go/listers/admissionregistration/v1"
 	appsv1lister "k8s.io/client-go/listers/apps/v1"
@@ -30,6 +19,15 @@ import (
 	corev1lister "k8s.io/client-go/listers/core/v1"
 	discoveryv1lister "k8s.io/client-go/listers/discovery/v1"
 	networkingv1lister "k8s.io/client-go/listers/networking/v1"
+	policyv1lister "k8s.io/client-go/listers/policy/v1"
+
+	"github.com/abahmed/kwatch/internal/alert"
+	"github.com/abahmed/kwatch/internal/config"
+	"github.com/abahmed/kwatch/internal/correlation"
+	"github.com/abahmed/kwatch/internal/event"
+	"github.com/abahmed/kwatch/internal/filter"
+	"github.com/abahmed/kwatch/internal/insight"
+	"github.com/abahmed/kwatch/internal/model"
 )
 
 type Handler interface {
@@ -39,28 +37,14 @@ type Handler interface {
 	ProcessJob(key string, deleted bool) error
 	ProcessDaemonSet(key string, deleted bool) error
 	ProcessCronJob(key string, deleted bool) error
-	ProcessPodObject(ctx context.Context, pod *corev1.Pod, deleted bool) error
-	ProcessNodeObject(node *corev1.Node, deleted bool) error
-	ProcessDeploymentObject(deploy *appsv1.Deployment, deleted bool) error
-	ProcessJobObject(job *batchv1.Job, deleted bool) error
-	ProcessDaemonSetObject(ds *appsv1.DaemonSet, deleted bool) error
-	ProcessCronJobObject(cj *batchv1.CronJob, deleted bool) error
 	ProcessStatefulSet(key string, deleted bool) error
-	ProcessStatefulSetObject(ss *appsv1.StatefulSet, deleted bool) error
 	ProcessPdb(key string, deleted bool) error
-	ProcessPdbObject(pdb *policyv1.PodDisruptionBudget, deleted bool) error
 	ProcessHorizontalPodAutoscaler(key string, deleted bool) error
-	ProcessHorizontalPodAutoscalerObject(hpa *autoscalingv2.HorizontalPodAutoscaler, deleted bool) error
 	ProcessMutatingWebhookConfiguration(key string, deleted bool) error
-	ProcessMutatingWebhookConfigurationObject(mwc *admissionregistrationv1.MutatingWebhookConfiguration, deleted bool) error
 	ProcessValidatingWebhookConfiguration(key string, deleted bool) error
-	ProcessValidatingWebhookConfigurationObject(vwc *admissionregistrationv1.ValidatingWebhookConfiguration, deleted bool) error
 	ProcessService(key string, deleted bool) error
-	ProcessServiceObject(svc *corev1.Service, deleted bool) error
 	ProcessNetworkPolicy(key string, deleted bool) error
-	ProcessNetworkPolicyObject(policy *networkingv1.NetworkPolicy, deleted bool) error
 	ProcessIngress(key string, deleted bool) error
-	ProcessIngressObject(ing *networkingv1.Ingress, deleted bool) error
 	ProcessControlPlanePod(pod *corev1.Pod) error
 	SweepControlPlane()
 	SetIngressLister(lister networkingv1lister.IngressLister)
@@ -77,6 +61,7 @@ type Handler interface {
 	SetReplicaLister(lister appsv1lister.ReplicaSetLister)
 	SetDaemonSetLister(lister appsv1lister.DaemonSetLister)
 	SetStatefulSetLister(lister appsv1lister.StatefulSetLister)
+	SetPdbLister(lister policyv1lister.PodDisruptionBudgetLister)
 	SetEventLister(lister corev1lister.EventLister)
 	SetCronJobLister(lister batchv1lister.CronJobLister)
 	SetHorizontalPodAutoscalerLister(lister autoscalingv2lister.HorizontalPodAutoscalerLister)
@@ -87,67 +72,68 @@ type Handler interface {
 	SetActiveNodeIncidents(nodeNames []string)
 	ClearSeenForPod(namespace, podName string)
 	ReportStartupSummary(suppressed map[string]int)
-	ProcessNodeResourceOvercommit(reason, nodeName, hint string)
+	ProcessNodeResourceOvercommit(reason, nodeName, hint string, severity model.Severity)
 	ProcessClusterAutoscalerEvent(ev *corev1.Event)
 }
 
 type handler struct {
-	kclient                kubernetes.Interface
-	config                 *config.Config
-	podDetectors           []filter.Detector
-	podEnrichers           []filter.Enricher
-	containerDetectors     []filter.Detector
+	kclient                       kubernetes.Interface
+	config                        *config.Config
+	podDetectors                  []filter.Detector
+	podEnrichers                  []filter.Enricher
+	containerDetectors            []filter.Detector
 	containerSuppressionEnrichers []filter.Enricher
-	containerDataEnrichers       []filter.Enricher
-	correlator             *correlation.Engine
-	alertManager           *alert.AlertManager
-	insightEngine          *insight.Engine
-	podLister              corev1lister.PodLister
-	nodeLister             corev1lister.NodeLister
-	deployLister           appsv1lister.DeploymentLister
-	jobLister              batchv1lister.JobLister
-	cronJobLister          batchv1lister.CronJobLister
-	rsLister               appsv1lister.ReplicaSetLister
-	dsLister               appsv1lister.DaemonSetLister
-	ssLister               appsv1lister.StatefulSetLister
-	eventLister            corev1lister.EventLister
-	hpaLister              autoscalingv2lister.HorizontalPodAutoscalerLister
-	mwcLister              admissionregistrationv1lister.MutatingWebhookConfigurationLister
-	vwcLister              admissionregistrationv1lister.ValidatingWebhookConfigurationLister
-	serviceLister          corev1lister.ServiceLister
-	endpointSliceLister    discoveryv1lister.EndpointSliceLister
-	firstMaxedHPAs         map[string]time.Time
-	firstScalingErrorHPAs  map[string]time.Time
-	hpaMu                  sync.Mutex
-	firstUnavailableSts    map[string]time.Time
-	stsMu                  sync.Mutex
-	firstPdbViolation      map[string]time.Time
-	pdbMu                  sync.Mutex
-	firstUnavailableDS     map[string]time.Time
-	dsMu                   sync.Mutex
-	firstUnavailableDeploy map[string]time.Time
-	deployMu               sync.Mutex
-	firstSuspendedCJs      map[string]time.Time
-	cjMu                   sync.Mutex
-	firstNodePressure      map[string]time.Time
-	npMu                   sync.Mutex
-	serviceNoEndpointSince map[string]time.Time
-	serviceMu              sync.Mutex
-	firstCaBlocked         map[string]time.Time
-	caMu                   sync.Mutex
-	secretLister           corev1lister.SecretLister
-	netpolLister           networkingv1lister.NetworkPolicyLister
-	ingressLister          networkingv1lister.IngressLister
-	cpPodLister            corev1lister.PodLister
-	oomTracker             *oomTracker
-	now                    func() time.Time
+	containerDataEnrichers        []filter.Enricher
+	correlator                    *correlation.Engine
+	alertManager                  *alert.AlertManager
+	insightEngine                 *insight.Engine
+	podLister                     corev1lister.PodLister
+	nodeLister                    corev1lister.NodeLister
+	deployLister                  appsv1lister.DeploymentLister
+	jobLister                     batchv1lister.JobLister
+	cronJobLister                 batchv1lister.CronJobLister
+	rsLister                      appsv1lister.ReplicaSetLister
+	dsLister                      appsv1lister.DaemonSetLister
+	ssLister                      appsv1lister.StatefulSetLister
+	pdbLister                     policyv1lister.PodDisruptionBudgetLister
+	eventLister                   corev1lister.EventLister
+	hpaLister                     autoscalingv2lister.HorizontalPodAutoscalerLister
+	mwcLister                     admissionregistrationv1lister.MutatingWebhookConfigurationLister
+	vwcLister                     admissionregistrationv1lister.ValidatingWebhookConfigurationLister
+	serviceLister                 corev1lister.ServiceLister
+	endpointSliceLister           discoveryv1lister.EndpointSliceLister
+	firstMaxedHPAs                map[string]time.Time
+	firstScalingErrorHPAs         map[string]time.Time
+	hpaMu                         sync.Mutex
+	firstUnavailableSts           map[string]time.Time
+	stsMu                         sync.Mutex
+	firstPdbViolation             map[string]time.Time
+	pdbMu                         sync.Mutex
+	firstUnavailableDS            map[string]time.Time
+	dsMu                          sync.Mutex
+	firstUnavailableDeploy        map[string]time.Time
+	deployMu                      sync.Mutex
+	firstSuspendedCJs             map[string]time.Time
+	cjMu                          sync.Mutex
+	firstNodePressure             map[string]time.Time
+	npMu                          sync.Mutex
+	serviceNoEndpointSince        map[string]time.Time
+	serviceMu                     sync.Mutex
+	firstCaBlocked                map[string]time.Time
+	caMu                          sync.Mutex
+	secretLister                  corev1lister.SecretLister
+	netpolLister                  networkingv1lister.NetworkPolicyLister
+	ingressLister                 networkingv1lister.IngressLister
+	cpPodLister                   corev1lister.PodLister
+	oomTracker                    *oomTracker
+	now                           func() time.Time
 }
 
 func NewHandler(
 	cli kubernetes.Interface,
 	cfg *config.Config,
 	correlator *correlation.Engine,
-	alertManager *alert.AlertManager) Handler {
+	alertManager *alert.AlertManager) *handler {
 	podDetectors := []filter.Detector{
 		filter.NamespaceFilter{},
 		filter.PodNameFilter{},
@@ -187,10 +173,10 @@ func NewHandler(
 
 	containerSuppressionEnrichers := []filter.Enricher{
 		filter.ContainerKillingFilter{},
+		filter.ContainerLogsFilter{},
 	}
 	containerDataEnrichers := []filter.Enricher{
 		filter.PodOwnersFilter{},
-		filter.ContainerLogsFilter{},
 	}
 
 	var oomTr *oomTracker
@@ -202,27 +188,27 @@ func NewHandler(
 	}
 
 	return &handler{
-		kclient:                cli,
-		config:                 cfg,
-		podDetectors:           podDetectors,
-		podEnrichers:           podEnrichers,
-		containerDetectors:     containerDetectors,
+		kclient:                       cli,
+		config:                        cfg,
+		podDetectors:                  podDetectors,
+		podEnrichers:                  podEnrichers,
+		containerDetectors:            containerDetectors,
 		containerSuppressionEnrichers: containerSuppressionEnrichers,
-		containerDataEnrichers:       containerDataEnrichers,
-		correlator:             correlator,
-		alertManager:           alertManager,
-		firstMaxedHPAs:          make(map[string]time.Time),
-		firstScalingErrorHPAs:   make(map[string]time.Time),
-		firstUnavailableSts:     make(map[string]time.Time),
-		firstPdbViolation:       make(map[string]time.Time),
-		firstUnavailableDeploy:  make(map[string]time.Time),
-		firstUnavailableDS:      make(map[string]time.Time),
-		firstSuspendedCJs:       make(map[string]time.Time),
-		firstNodePressure:       make(map[string]time.Time),
-		serviceNoEndpointSince:  make(map[string]time.Time),
-		firstCaBlocked:         make(map[string]time.Time),
-		oomTracker:             oomTr,
-		now:                    time.Now,
+		containerDataEnrichers:        containerDataEnrichers,
+		correlator:                    correlator,
+		alertManager:                  alertManager,
+		firstMaxedHPAs:                make(map[string]time.Time),
+		firstScalingErrorHPAs:         make(map[string]time.Time),
+		firstUnavailableSts:           make(map[string]time.Time),
+		firstPdbViolation:             make(map[string]time.Time),
+		firstUnavailableDeploy:        make(map[string]time.Time),
+		firstUnavailableDS:            make(map[string]time.Time),
+		firstSuspendedCJs:             make(map[string]time.Time),
+		firstNodePressure:             make(map[string]time.Time),
+		serviceNoEndpointSince:        make(map[string]time.Time),
+		firstCaBlocked:                make(map[string]time.Time),
+		oomTracker:                    oomTr,
+		now:                           time.Now,
 	}
 }
 
@@ -259,6 +245,10 @@ func (h *handler) SetStatefulSetLister(lister appsv1lister.StatefulSetLister) {
 
 func (h *handler) SetEventLister(lister corev1lister.EventLister) {
 	h.eventLister = lister
+}
+
+func (h *handler) SetPdbLister(lister policyv1lister.PodDisruptionBudgetLister) {
+	h.pdbLister = lister
 }
 
 func (h *handler) SetHorizontalPodAutoscalerLister(lister autoscalingv2lister.HorizontalPodAutoscalerLister) {
@@ -302,14 +292,17 @@ func (h *handler) SetCpPodLister(lister corev1lister.PodLister) {
 	h.cpPodLister = lister
 }
 
-func (h *handler) ProcessNodeResourceOvercommit(reason, nodeName, hint string) {
+func (h *handler) ProcessNodeResourceOvercommit(reason, nodeName, hint string, severity model.Severity) {
+	if severity == "" {
+		severity = model.SeverityWarning
+	}
 	h.signalEvent(&event.Signal{
 		Resource: "node",
 		Reason:   reason,
 		Hint:     hint,
 		NodeName: nodeName,
 		Owner:    nodeName,
-		Severity: "warning",
+		Severity: severity,
 	})
 }
 
@@ -341,8 +334,8 @@ func (h *handler) ReportStartupSummary(suppressed map[string]int) {
 	}
 	sort.Strings(parts)
 	inc := &model.Incident{
-		ID: "startup-baseline", Key: "startup:baseline", Reason: "PreExistingAtStartup",
-		Severity: "normal", Count: total,
+		ID: "startup-baseline", Key: "startup:baseline", Reason: constant.ReasonPreExistingAtStartup,
+		Severity: model.SeverityNormal, Count: total,
 		Hint: fmt.Sprintf("kwatch started with %d pre-existing issue(s), suppressed from per-incident alerts: %s",
 			total, strings.Join(parts, ", ")),
 	}

@@ -4,13 +4,14 @@ import (
 	"testing"
 	"time"
 
-	"github.com/abahmed/kwatch/internal/config"
-	"github.com/abahmed/kwatch/internal/correlation"
 	"github.com/stretchr/testify/assert"
 	appsv1 "k8s.io/api/apps/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/informers"
 	"k8s.io/client-go/kubernetes/fake"
+
+	"github.com/abahmed/kwatch/internal/config"
+	"github.com/abahmed/kwatch/internal/correlation"
 )
 
 func TestDetectStatefulSetIssueUnavailable(t *testing.T) {
@@ -86,14 +87,14 @@ func TestProcessStatefulSetObjectRolloutGrace(t *testing.T) {
 	e := testCorrelator()
 	now := time.Now()
 	h := NewHandler(fake.NewSimpleClientset(), &config.Config{}, e, testAlertMgr)
-	h.(*handler).now = func() time.Time { return now }
+	h.now = func() time.Time { return now }
 
 	ss := &appsv1.StatefulSet{
 		ObjectMeta: metav1.ObjectMeta{Name: "ss1", Namespace: "ns1"},
 		Status: appsv1.StatefulSetStatus{
-			Replicas:       3,
-			ReadyReplicas:  1,
-			CurrentReplicas: 1,
+			Replicas:           3,
+			ReadyReplicas:      1,
+			CurrentReplicas:    1,
 			ObservedGeneration: 0,
 		},
 	}
@@ -111,9 +112,9 @@ func TestProcessStatefulSetObjectSustained(t *testing.T) {
 	ss := &appsv1.StatefulSet{
 		ObjectMeta: metav1.ObjectMeta{Name: "ss1", Namespace: "ns1"},
 		Status: appsv1.StatefulSetStatus{
-			Replicas:       3,
-			ReadyReplicas:  1,
-			CurrentReplicas: 3,
+			Replicas:           3,
+			ReadyReplicas:      1,
+			CurrentReplicas:    3,
 			ObservedGeneration: 1,
 		},
 	}
@@ -124,7 +125,7 @@ func TestProcessStatefulSetObjectSustained(t *testing.T) {
 
 func TestMarkFirstUnavailableStsHit(t *testing.T) {
 	e := testCorrelator()
-	h := NewHandler(fake.NewSimpleClientset(), &config.Config{}, e, testAlertMgr).(*handler)
+	h := NewHandler(fake.NewSimpleClientset(), &config.Config{}, e, testAlertMgr)
 	t1 := h.markFirstUnavailableSts("ns1/ss1")
 	t2 := h.markFirstUnavailableSts("ns1/ss1")
 	assert.Equal(t, t1, t2, "second call should return existing entry")

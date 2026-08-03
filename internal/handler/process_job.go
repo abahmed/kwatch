@@ -3,11 +3,14 @@ package handler
 import (
 	"fmt"
 
-	"github.com/abahmed/kwatch/internal/event"
+	"github.com/abahmed/kwatch/internal/constant"
+
 	batchv1 "k8s.io/api/batch/v1"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/client-go/tools/cache"
+
+	"github.com/abahmed/kwatch/internal/event"
 )
 
 func (h *handler) ProcessJob(key string, deleted bool) error {
@@ -42,7 +45,7 @@ func DetectJobIssue(job *batchv1.Job) *event.Signal {
 			if c.Status == corev1.ConditionTrue {
 				reason := c.Reason
 				if reason == "" {
-					reason = "JobFailed"
+					reason = constant.ReasonJobFailed
 				}
 				return &event.Signal{
 					Resource:  "job",
@@ -56,7 +59,7 @@ func DetectJobIssue(job *batchv1.Job) *event.Signal {
 			if c.Status == corev1.ConditionTrue {
 				return &event.Signal{
 					Resource:  "job",
-					Reason:    "JobSuspended",
+					Reason:    constant.ReasonJobSuspended,
 					Namespace: job.Namespace,
 					Owner:     job.Namespace + "/" + job.Name,
 					Labels:    job.Labels,

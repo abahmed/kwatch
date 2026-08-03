@@ -3,11 +3,14 @@ package handler
 import (
 	"fmt"
 
-	"github.com/abahmed/kwatch/internal/correlation"
-	"github.com/abahmed/kwatch/internal/event"
+	"github.com/abahmed/kwatch/internal/constant"
+
 	networkingv1 "k8s.io/api/networking/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/client-go/tools/cache"
+
+	"github.com/abahmed/kwatch/internal/correlation"
+	"github.com/abahmed/kwatch/internal/event"
 )
 
 // DetectIngressIssue checks an Ingress for backends referencing non-existent services.
@@ -28,7 +31,7 @@ func DetectIngressIssue(ing *networkingv1.Ingress, hasService func(ns, name stri
 				sigs = append(sigs, &event.Signal{
 					Resource:  "ingress",
 					Namespace: ing.Namespace,
-					Reason:    "IngressBackendNotFound",
+					Reason:    constant.ReasonIngressBackendNotFound,
 					Owner:     ing.Namespace + "/" + ing.Name,
 					PodName:   ing.Name,
 					Labels:    ing.Labels,
@@ -45,7 +48,7 @@ func DetectIngressIssue(ing *networkingv1.Ingress, hasService func(ns, name stri
 			sigs = append(sigs, &event.Signal{
 				Resource:  "ingress",
 				Namespace: ing.Namespace,
-				Reason:    "IngressBackendNotFound",
+				Reason:    constant.ReasonIngressBackendNotFound,
 				Owner:     ing.Namespace + "/" + ing.Name,
 				PodName:   ing.Name,
 				Labels:    ing.Labels,
@@ -99,7 +102,7 @@ func (h *handler) ProcessIngressObject(ing *networkingv1.Ingress, deleted bool) 
 		h.signalEvent(sig)
 	}
 	if len(sigs) == 0 {
-		h.correlator.MarkResolved(correlation.BuildKey(ing.Namespace, ing.Namespace+"/"+ing.Name, "IngressBackendNotFound", ""))
+		h.correlator.MarkResolved(correlation.BuildKey(ing.Namespace, ing.Namespace+"/"+ing.Name, constant.ReasonIngressBackendNotFound, ""))
 	}
 	return nil
 }

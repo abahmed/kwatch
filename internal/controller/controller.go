@@ -7,13 +7,6 @@ import (
 	"strings"
 	"time"
 
-	"github.com/abahmed/kwatch/internal/config"
-	kwcontext "github.com/abahmed/kwatch/internal/context"
-	"github.com/abahmed/kwatch/internal/correlation"
-	"github.com/abahmed/kwatch/internal/event"
-	"github.com/abahmed/kwatch/internal/handler"
-	"github.com/abahmed/kwatch/internal/model"
-	"github.com/abahmed/kwatch/internal/resource"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -33,6 +26,14 @@ import (
 	"k8s.io/client-go/tools/cache"
 	"k8s.io/client-go/util/workqueue"
 	"k8s.io/klog/v2"
+
+	"github.com/abahmed/kwatch/internal/config"
+	kwcontext "github.com/abahmed/kwatch/internal/context"
+	"github.com/abahmed/kwatch/internal/correlation"
+	"github.com/abahmed/kwatch/internal/event"
+	"github.com/abahmed/kwatch/internal/handler"
+	"github.com/abahmed/kwatch/internal/model"
+	"github.com/abahmed/kwatch/internal/resource"
 )
 
 type Controller struct {
@@ -84,34 +85,34 @@ type Controller struct {
 	configMapLister corev1lister.ConfigMapLister
 	configMapSynced []cache.InformerSynced
 
-	serviceQueue          workqueue.TypedRateLimitingInterface[string]
-	endpointSliceQueue    workqueue.TypedRateLimitingInterface[string]
-	mwcQueue              workqueue.TypedRateLimitingInterface[string]
-	vwcQueue              workqueue.TypedRateLimitingInterface[string]
-	ingressQueue          workqueue.TypedRateLimitingInterface[string]
-	netpolQueue           workqueue.TypedRateLimitingInterface[string]
-	cpPodQueue            workqueue.TypedRateLimitingInterface[string]
-	serviceLister         corev1lister.ServiceLister
-	svcSynced             []cache.InformerSynced
-	endpointSliceLister   discoveryv1lister.EndpointSliceLister
-	endpointSliceSynced   []cache.InformerSynced
-	mwcLister             admissionregistrationv1lister.MutatingWebhookConfigurationLister
-	mwcSynced             cache.InformerSynced
-	vwcLister             admissionregistrationv1lister.ValidatingWebhookConfigurationLister
-	vwcSynced             cache.InformerSynced
-	ingressLister        networkingv1lister.IngressLister
-	ingressSynced        []cache.InformerSynced
-	netpolLister         networkingv1lister.NetworkPolicyLister
-	netpolSynced         []cache.InformerSynced
-	cpPodLister          corev1lister.PodLister
-	cpSynced             cache.InformerSynced
+	serviceQueue              workqueue.TypedRateLimitingInterface[string]
+	endpointSliceQueue        workqueue.TypedRateLimitingInterface[string]
+	mwcQueue                  workqueue.TypedRateLimitingInterface[string]
+	vwcQueue                  workqueue.TypedRateLimitingInterface[string]
+	ingressQueue              workqueue.TypedRateLimitingInterface[string]
+	netpolQueue               workqueue.TypedRateLimitingInterface[string]
+	cpPodQueue                workqueue.TypedRateLimitingInterface[string]
+	serviceLister             corev1lister.ServiceLister
+	svcSynced                 []cache.InformerSynced
+	endpointSliceLister       discoveryv1lister.EndpointSliceLister
+	endpointSliceSynced       []cache.InformerSynced
+	mwcLister                 admissionregistrationv1lister.MutatingWebhookConfigurationLister
+	mwcSynced                 cache.InformerSynced
+	vwcLister                 admissionregistrationv1lister.ValidatingWebhookConfigurationLister
+	vwcSynced                 cache.InformerSynced
+	ingressLister             networkingv1lister.IngressLister
+	ingressSynced             []cache.InformerSynced
+	netpolLister              networkingv1lister.NetworkPolicyLister
+	netpolSynced              []cache.InformerSynced
+	cpPodLister               corev1lister.PodLister
+	cpSynced                  cache.InformerSynced
 	serviceWatchEnabled       bool
 	endpointSliceWatchEnabled bool
 	mwcWatchEnabled           bool
-	vwcWatchEnabled      bool
-	ingressWatchEnabled  bool
-	netpolWatchEnabled   bool
-	cpWatchEnabled       bool
+	vwcWatchEnabled           bool
+	ingressWatchEnabled       bool
+	netpolWatchEnabled        bool
+	cpWatchEnabled            bool
 
 	nodeResourceCfg *config.NodeResourceMonitor
 
@@ -570,26 +571,26 @@ func New(
 	}
 
 	c := &Controller{
-		handler:          h,
-		podQueue:         workqueue.NewTypedRateLimitingQueueWithConfig(workqueue.DefaultTypedControllerRateLimiter[string](), workqueue.TypedRateLimitingQueueConfig[string]{Name: "pods"}),
-		nodeQueue:        workqueue.NewTypedRateLimitingQueueWithConfig(workqueue.DefaultTypedControllerRateLimiter[string](), workqueue.TypedRateLimitingQueueConfig[string]{Name: "nodes"}),
-		deploymentQueue:  workqueue.NewTypedRateLimitingQueueWithConfig(workqueue.DefaultTypedControllerRateLimiter[string](), workqueue.TypedRateLimitingQueueConfig[string]{Name: "deployments"}),
-		jobQueue:         workqueue.NewTypedRateLimitingQueueWithConfig(workqueue.DefaultTypedControllerRateLimiter[string](), workqueue.TypedRateLimitingQueueConfig[string]{Name: "jobs"}),
-		daemonSetQueue:   workqueue.NewTypedRateLimitingQueueWithConfig(workqueue.DefaultTypedControllerRateLimiter[string](), workqueue.TypedRateLimitingQueueConfig[string]{Name: "daemonsets"}),
-		statefulSetQueue: workqueue.NewTypedRateLimitingQueueWithConfig(workqueue.DefaultTypedControllerRateLimiter[string](), workqueue.TypedRateLimitingQueueConfig[string]{Name: "statefulsets"}),
-		pdbQueue:         workqueue.NewTypedRateLimitingQueueWithConfig(workqueue.DefaultTypedControllerRateLimiter[string](), workqueue.TypedRateLimitingQueueConfig[string]{Name: "poddisruptionbudgets"}),
-		cronJobQueue:     workqueue.NewTypedRateLimitingQueueWithConfig(workqueue.DefaultTypedControllerRateLimiter[string](), workqueue.TypedRateLimitingQueueConfig[string]{Name: "cronjobs"}),
-		hpaQueue:         workqueue.NewTypedRateLimitingQueueWithConfig(workqueue.DefaultTypedControllerRateLimiter[string](), workqueue.TypedRateLimitingQueueConfig[string]{Name: "horizontalpodautoscalers"}),
+		handler:            h,
+		podQueue:           workqueue.NewTypedRateLimitingQueueWithConfig(workqueue.DefaultTypedControllerRateLimiter[string](), workqueue.TypedRateLimitingQueueConfig[string]{Name: "pods"}),
+		nodeQueue:          workqueue.NewTypedRateLimitingQueueWithConfig(workqueue.DefaultTypedControllerRateLimiter[string](), workqueue.TypedRateLimitingQueueConfig[string]{Name: "nodes"}),
+		deploymentQueue:    workqueue.NewTypedRateLimitingQueueWithConfig(workqueue.DefaultTypedControllerRateLimiter[string](), workqueue.TypedRateLimitingQueueConfig[string]{Name: "deployments"}),
+		jobQueue:           workqueue.NewTypedRateLimitingQueueWithConfig(workqueue.DefaultTypedControllerRateLimiter[string](), workqueue.TypedRateLimitingQueueConfig[string]{Name: "jobs"}),
+		daemonSetQueue:     workqueue.NewTypedRateLimitingQueueWithConfig(workqueue.DefaultTypedControllerRateLimiter[string](), workqueue.TypedRateLimitingQueueConfig[string]{Name: "daemonsets"}),
+		statefulSetQueue:   workqueue.NewTypedRateLimitingQueueWithConfig(workqueue.DefaultTypedControllerRateLimiter[string](), workqueue.TypedRateLimitingQueueConfig[string]{Name: "statefulsets"}),
+		pdbQueue:           workqueue.NewTypedRateLimitingQueueWithConfig(workqueue.DefaultTypedControllerRateLimiter[string](), workqueue.TypedRateLimitingQueueConfig[string]{Name: "poddisruptionbudgets"}),
+		cronJobQueue:       workqueue.NewTypedRateLimitingQueueWithConfig(workqueue.DefaultTypedControllerRateLimiter[string](), workqueue.TypedRateLimitingQueueConfig[string]{Name: "cronjobs"}),
+		hpaQueue:           workqueue.NewTypedRateLimitingQueueWithConfig(workqueue.DefaultTypedControllerRateLimiter[string](), workqueue.TypedRateLimitingQueueConfig[string]{Name: "horizontalpodautoscalers"}),
 		serviceQueue:       workqueue.NewTypedRateLimitingQueueWithConfig(workqueue.DefaultTypedControllerRateLimiter[string](), workqueue.TypedRateLimitingQueueConfig[string]{Name: "services"}),
 		endpointSliceQueue: workqueue.NewTypedRateLimitingQueueWithConfig(workqueue.DefaultTypedControllerRateLimiter[string](), workqueue.TypedRateLimitingQueueConfig[string]{Name: "endpointslices"}),
-		mwcQueue:         workqueue.NewTypedRateLimitingQueueWithConfig(workqueue.DefaultTypedControllerRateLimiter[string](), workqueue.TypedRateLimitingQueueConfig[string]{Name: "mutatingwebhookconfigurations"}),
-		vwcQueue:         workqueue.NewTypedRateLimitingQueueWithConfig(workqueue.DefaultTypedControllerRateLimiter[string](), workqueue.TypedRateLimitingQueueConfig[string]{Name: "validatingwebhookconfigurations"}),
-		ingressQueue:     workqueue.NewTypedRateLimitingQueueWithConfig(workqueue.DefaultTypedControllerRateLimiter[string](), workqueue.TypedRateLimitingQueueConfig[string]{Name: "ingresses"}),
-		netpolQueue:      workqueue.NewTypedRateLimitingQueueWithConfig(workqueue.DefaultTypedControllerRateLimiter[string](), workqueue.TypedRateLimitingQueueConfig[string]{Name: "networkpolicies"}),
-		cpPodQueue:       workqueue.NewTypedRateLimitingQueueWithConfig(workqueue.DefaultTypedControllerRateLimiter[string](), workqueue.TypedRateLimitingQueueConfig[string]{Name: "controlplanepods"}),
-		podLister:        podLister,
-		podsSynced:       podsSynced,
-		maxBaseline:      maxBaseline,
+		mwcQueue:           workqueue.NewTypedRateLimitingQueueWithConfig(workqueue.DefaultTypedControllerRateLimiter[string](), workqueue.TypedRateLimitingQueueConfig[string]{Name: "mutatingwebhookconfigurations"}),
+		vwcQueue:           workqueue.NewTypedRateLimitingQueueWithConfig(workqueue.DefaultTypedControllerRateLimiter[string](), workqueue.TypedRateLimitingQueueConfig[string]{Name: "validatingwebhookconfigurations"}),
+		ingressQueue:       workqueue.NewTypedRateLimitingQueueWithConfig(workqueue.DefaultTypedControllerRateLimiter[string](), workqueue.TypedRateLimitingQueueConfig[string]{Name: "ingresses"}),
+		netpolQueue:        workqueue.NewTypedRateLimitingQueueWithConfig(workqueue.DefaultTypedControllerRateLimiter[string](), workqueue.TypedRateLimitingQueueConfig[string]{Name: "networkpolicies"}),
+		cpPodQueue:         workqueue.NewTypedRateLimitingQueueWithConfig(workqueue.DefaultTypedControllerRateLimiter[string](), workqueue.TypedRateLimitingQueueConfig[string]{Name: "controlplanepods"}),
+		podLister:          podLister,
+		podsSynced:         podsSynced,
+		maxBaseline:        maxBaseline,
 	}
 
 	h.SetPodLister(podLister)
@@ -598,16 +599,17 @@ func New(
 		inf.AddEventHandler(c.podEventHandler())
 	}
 
-	if cfg.NodeMonitor.Enabled {
+	if cfg.NodeMonitor.Enabled || cfg.NodeResourceMonitor.Enabled {
 		nodeInformer := fs.nodeInformer()
 		nodeLister := fs.nodeLister()
 
 		c.nodeLister = nodeLister
-		c.nodesSynced = nodeInformer.HasSynced
 
-		h.SetNodeLister(nodeLister)
-
-		nodeInformer.AddEventHandler(c.changeRecordingHandler("node", c.enqueueNode))
+		if cfg.NodeMonitor.Enabled {
+			c.nodesSynced = nodeInformer.HasSynced
+			h.SetNodeLister(nodeLister)
+			nodeInformer.AddEventHandler(c.changeRecordingHandler("node", c.enqueueNode))
+		}
 	}
 
 	if cfg.RolloutMonitor.Enabled {
@@ -864,6 +866,8 @@ func New(
 
 		c.pdbWatchEnabled = true
 		c.pdbSynced = pdbInformers[0].HasSynced
+
+		h.SetPdbLister(c.pdbLister)
 
 		for _, inf := range pdbInformers {
 			inf.AddEventHandler(c.changeRecordingHandler("poddisruptionbudget", c.enqueuePdb))
@@ -1206,6 +1210,7 @@ func (c *Controller) addPodToGraph(pod *corev1.Pod) {
 	}
 	svcs, err := c.serviceLister.Services(ns).List(labels.Everything())
 	if err != nil {
+		klog.ErrorS(err, "failed to list services for graph edge", "namespace", ns)
 		return
 	}
 	for _, svc := range svcs {
@@ -1277,7 +1282,9 @@ func (c *Controller) pruneGraph() {
 
 	if cmLister := c.configMapLister; cmLister != nil {
 		cms, err := cmLister.List(labels.Everything())
-		if err == nil {
+		if err != nil {
+			klog.ErrorS(err, "failed to list configmaps for graph pruning")
+		} else {
 			for _, cm := range cms {
 				active["configmap/"+cm.Namespace+"/"+cm.Name] = true
 			}
@@ -1286,7 +1293,9 @@ func (c *Controller) pruneGraph() {
 
 	if secretLister := c.secretLister; secretLister != nil {
 		secrets, err := secretLister.List(labels.Everything())
-		if err == nil {
+		if err != nil {
+			klog.ErrorS(err, "failed to list secrets for graph pruning")
+		} else {
 			for _, s := range secrets {
 				active["secret/"+s.Namespace+"/"+s.Name] = true
 			}
@@ -1295,7 +1304,9 @@ func (c *Controller) pruneGraph() {
 
 	if svcLister := c.serviceLister; svcLister != nil {
 		svcs, err := svcLister.List(labels.Everything())
-		if err == nil {
+		if err != nil {
+			klog.ErrorS(err, "failed to list services for graph pruning")
+		} else {
 			for _, svc := range svcs {
 				active["service/"+svc.Namespace+"/"+svc.Name] = true
 			}
@@ -1436,7 +1447,7 @@ func (c *Controller) Run(ctx context.Context, workers int) error {
 				MemWarning: cfg.MemWarning, MemCritical: cfg.MemCritical,
 			}, c.nodeLister, c.podLister)
 			mon.Run(ctx, func(sig *event.Signal) {
-				c.handler.ProcessNodeResourceOvercommit(sig.Reason, sig.NodeName, sig.Hint)
+				c.handler.ProcessNodeResourceOvercommit(sig.Reason, sig.NodeName, sig.Hint, sig.Severity)
 			})
 		}(c.nodeResourceCfg)
 	}
@@ -1741,8 +1752,11 @@ func (c *Controller) buildSeenSet() {
 	// Seed alerting node conditions into the baseline
 	// and collect broken node names for pre-populating activeNodeIncidents
 	var activeNodeIncidents []string
-	if c.nodeLister != nil {
-		if nodes, err := c.nodeLister.List(labels.Everything()); err == nil {
+	if c.nodesSynced != nil && c.nodeLister != nil {
+		nodes, err := c.nodeLister.List(labels.Everything())
+		if err != nil {
+			klog.ErrorS(err, "failed to list nodes for baseline seeding")
+		} else {
 			for _, n := range nodes {
 				hasIssue := false
 				for _, cond := range n.Status.Conditions {
@@ -1767,20 +1781,24 @@ func (c *Controller) buildSeenSet() {
 	}
 
 	// Seed controller resource issues into the baseline.
-	// Live owner-level signals set PodName="" (no PodName in process_*.go signals),
-	// so we seed under the empty pod key for the baseline match.
+	// Live owner-level signals may carry a PodName (services and webhooks set
+	// it to the resource name), so seed under the same key that the live
+	// isBaselined(key, ev.PodName) lookup will use.
 	seedSignal := func(sig *event.Signal, name string) {
 		ev := event.Event{
 			Namespace: sig.Namespace,
 			Reason:    sig.Reason,
 		}
 		key := correlation.IncidentKey(ev, sig.Owner, nil)
-		add(key, "") // match the live isBaselined(key, "") lookup
+		add(key, sig.PodName)
 	}
 
 	// DaemonSets
 	if c.dsLister != nil {
-		if dss, err := c.dsLister.List(labels.Everything()); err == nil {
+		dss, err := c.dsLister.List(labels.Everything())
+		if err != nil {
+			klog.ErrorS(err, "failed to list daemonsets for baseline seeding")
+		} else {
 			for _, ds := range dss {
 				if sig := handler.DetectDaemonSetIssue(ds); sig != nil {
 					seedSignal(sig, ds.Name)
@@ -1791,7 +1809,10 @@ func (c *Controller) buildSeenSet() {
 
 	// StatefulSets
 	if c.ssLister != nil {
-		if sss, err := c.ssLister.List(labels.Everything()); err == nil {
+		sss, err := c.ssLister.List(labels.Everything())
+		if err != nil {
+			klog.ErrorS(err, "failed to list statefulsets for baseline seeding")
+		} else {
 			for _, ss := range sss {
 				if sig := handler.DetectStatefulSetIssue(ss); sig != nil {
 					seedSignal(sig, ss.Name)
@@ -1802,7 +1823,10 @@ func (c *Controller) buildSeenSet() {
 
 	// PodDisruptionBudgets
 	if c.pdbLister != nil {
-		if pdbs, err := c.pdbLister.List(labels.Everything()); err == nil {
+		pdbs, err := c.pdbLister.List(labels.Everything())
+		if err != nil {
+			klog.ErrorS(err, "failed to list pod disruption budgets for baseline seeding")
+		} else {
 			for _, pdb := range pdbs {
 				if sig := handler.DetectPdbIssue(pdb); sig != nil {
 					seedSignal(sig, pdb.Name)
@@ -1813,9 +1837,14 @@ func (c *Controller) buildSeenSet() {
 
 	// Deployments
 	if c.deployLister != nil {
-		if deploys, err := c.deployLister.List(labels.Everything()); err == nil {
+		deploys, err := c.deployLister.List(labels.Everything())
+		if err != nil {
+			klog.ErrorS(err, "failed to list deployments for baseline seeding")
+		} else {
 			for _, deploy := range deploys {
 				if sig := handler.DetectDeploymentIssue(deploy); sig != nil {
+					seedSignal(sig, deploy.Name)
+				} else if sig := handler.DetectDeploymentUnavailable(deploy); sig != nil {
 					seedSignal(sig, deploy.Name)
 				}
 			}
@@ -1824,7 +1853,10 @@ func (c *Controller) buildSeenSet() {
 
 	// Jobs
 	if c.jobLister != nil {
-		if jobs, err := c.jobLister.List(labels.Everything()); err == nil {
+		jobs, err := c.jobLister.List(labels.Everything())
+		if err != nil {
+			klog.ErrorS(err, "failed to list jobs for baseline seeding")
+		} else {
 			for _, job := range jobs {
 				if sig := handler.DetectJobIssue(job); sig != nil {
 					seedSignal(sig, job.Name)
@@ -1835,7 +1867,10 @@ func (c *Controller) buildSeenSet() {
 
 	// CronJobs
 	if c.cronJobLister != nil {
-		if cjs, err := c.cronJobLister.List(labels.Everything()); err == nil {
+		cjs, err := c.cronJobLister.List(labels.Everything())
+		if err != nil {
+			klog.ErrorS(err, "failed to list cronjobs for baseline seeding")
+		} else {
 			for _, cj := range cjs {
 				if sig := handler.DetectCronJobIssue(cj); sig != nil {
 					seedSignal(sig, cj.Name)
@@ -1846,7 +1881,10 @@ func (c *Controller) buildSeenSet() {
 
 	// HPAs — seed both scaling errors and maxed-out conditions
 	if c.hpaLister != nil {
-		if hpas, err := c.hpaLister.List(labels.Everything()); err == nil {
+		hpas, err := c.hpaLister.List(labels.Everything())
+		if err != nil {
+			klog.ErrorS(err, "failed to list horizontal pod autoscalers for baseline seeding")
+		} else {
 			for _, hpa := range hpas {
 				for _, sig := range handler.DetectHPAIssues(hpa) {
 					seedSignal(sig, hpa.Name)
@@ -1857,11 +1895,15 @@ func (c *Controller) buildSeenSet() {
 
 	// Services — seed service-endpoint issues
 	if c.serviceLister != nil && c.endpointSliceLister != nil {
-		if svcs, err := c.serviceLister.List(labels.Everything()); err == nil {
+		svcs, err := c.serviceLister.List(labels.Everything())
+		if err != nil {
+			klog.ErrorS(err, "failed to list services for baseline seeding")
+		} else {
 			for _, svc := range svcs {
 				sel := labels.Set{"kubernetes.io/service-name": svc.Name}.AsSelector()
 				epSlices, err := c.endpointSliceLister.EndpointSlices(svc.Namespace).List(sel)
 				if err != nil {
+					klog.ErrorS(err, "failed to list endpoint slices for baseline seeding", "service", svc.Name, "namespace", svc.Namespace)
 					continue
 				}
 				if sig := handler.DetectServiceEndpointIssue(svc, epSlices); sig != nil {
@@ -1880,7 +1922,10 @@ func (c *Controller) buildSeenSet() {
 			_, err := c.serviceLister.Services(ns).Get(name)
 			return err == nil
 		}
-		if mwcs, err := c.mwcLister.List(labels.Everything()); err == nil {
+		mwcs, err := c.mwcLister.List(labels.Everything())
+		if err != nil {
+			klog.ErrorS(err, "failed to list mutating webhook configurations for baseline seeding")
+		} else {
 			for _, mwc := range mwcs {
 				for _, sig := range handler.DetectMutatingWebhookIssue(mwc, hasSvc) {
 					seedSignal(sig, mwc.Name)
@@ -1896,7 +1941,10 @@ func (c *Controller) buildSeenSet() {
 			_, err := c.serviceLister.Services(ns).Get(name)
 			return err == nil
 		}
-		if vwcs, err := c.vwcLister.List(labels.Everything()); err == nil {
+		vwcs, err := c.vwcLister.List(labels.Everything())
+		if err != nil {
+			klog.ErrorS(err, "failed to list validating webhook configurations for baseline seeding")
+		} else {
 			for _, vwc := range vwcs {
 				for _, sig := range handler.DetectValidatingWebhookIssue(vwc, hasSvc) {
 					seedSignal(sig, vwc.Name)
@@ -1914,7 +1962,10 @@ func (c *Controller) buildSeenSet() {
 			_, err := c.serviceLister.Services(ns).Get(name)
 			return err == nil
 		}
-		if ings, err := c.ingressLister.List(labels.Everything()); err == nil {
+		ings, err := c.ingressLister.List(labels.Everything())
+		if err != nil {
+			klog.ErrorS(err, "failed to list ingresses for baseline seeding")
+		} else {
 			for _, ing := range ings {
 				for _, sig := range handler.DetectIngressIssue(ing, hasSvc) {
 					seedSignal(sig, ing.Name)
@@ -1925,7 +1976,10 @@ func (c *Controller) buildSeenSet() {
 
 	// NetworkPolicies — seed restrictive-policy issues
 	if c.netpolLister != nil {
-		if policies, err := c.netpolLister.List(labels.Everything()); err == nil {
+		policies, err := c.netpolLister.List(labels.Everything())
+		if err != nil {
+			klog.ErrorS(err, "failed to list network policies for baseline seeding")
+		} else {
 			for _, policy := range policies {
 				if sig := handler.DetectNetworkPolicyIssue(policy); sig != nil {
 					seedSignal(sig, policy.Name)
@@ -1938,7 +1992,10 @@ func (c *Controller) buildSeenSet() {
 	// Unlike other owner-level signals, CP signals carry PodName, so we
 	// seed with the actual pod name (not "") to match the live lookup.
 	if c.cpWatchEnabled && c.cpPodLister != nil {
-		if pods, err := c.cpPodLister.List(labels.Everything()); err == nil {
+		pods, err := c.cpPodLister.List(labels.Everything())
+		if err != nil {
+			klog.ErrorS(err, "failed to list control-plane pods for baseline seeding")
+		} else {
 			for _, pod := range pods {
 				if sig := handler.DetectControlPlanePodIssue(pod); sig != nil {
 					ev := event.Event{
@@ -1960,51 +2017,15 @@ func (c *Controller) buildSeenSet() {
 }
 
 func (c *Controller) syncPod(ctx context.Context, key string) error {
-	namespace, name, err := cache.SplitMetaNamespaceKey(key)
-	if err != nil {
-		return err
-	}
-
-	pod, err := c.podLister.Pods(namespace).Get(name)
-	if err != nil {
-		if errors.IsNotFound(err) {
-			return c.handler.ProcessPod(ctx, key, true)
-		}
-		return err
-	}
-
-	return c.handler.ProcessPodObject(ctx, pod, false)
+	return c.handler.ProcessPod(ctx, key, false)
 }
 
 func (c *Controller) syncNode(key string) error {
-	deleted := false
-	_, err := c.nodeLister.Get(key)
-	if err != nil {
-		if errors.IsNotFound(err) {
-			deleted = true
-		} else {
-			return err
-		}
-	}
-
-	return c.handler.ProcessNode(key, deleted)
+	return c.handler.ProcessNode(key, false)
 }
 
 func (c *Controller) syncDeployment(key string) error {
-	namespace, name, err := cache.SplitMetaNamespaceKey(key)
-	if err != nil {
-		return err
-	}
-
-	deploy, err := c.deployLister.Deployments(namespace).Get(name)
-	if err != nil {
-		if errors.IsNotFound(err) {
-			return c.handler.ProcessDeployment(key, true)
-		}
-		return err
-	}
-
-	return c.handler.ProcessDeploymentObject(deploy, false)
+	return c.handler.ProcessDeployment(key, false)
 }
 
 func (c *Controller) processNextDaemonSetItem() bool {
@@ -2076,71 +2097,19 @@ func (c *Controller) processNextCronJobItem() bool {
 }
 
 func (c *Controller) syncDaemonSet(key string) error {
-	namespace, name, err := cache.SplitMetaNamespaceKey(key)
-	if err != nil {
-		return err
-	}
-
-	ds, err := c.dsLister.DaemonSets(namespace).Get(name)
-	if err != nil {
-		if errors.IsNotFound(err) {
-			return c.handler.ProcessDaemonSet(key, true)
-		}
-		return err
-	}
-
-	return c.handler.ProcessDaemonSetObject(ds, false)
+	return c.handler.ProcessDaemonSet(key, false)
 }
 
 func (c *Controller) syncStatefulSet(key string) error {
-	namespace, name, err := cache.SplitMetaNamespaceKey(key)
-	if err != nil {
-		return err
-	}
-
-	ss, err := c.ssLister.StatefulSets(namespace).Get(name)
-	if err != nil {
-		if errors.IsNotFound(err) {
-			return c.handler.ProcessStatefulSet(key, true)
-		}
-		return err
-	}
-
-	return c.handler.ProcessStatefulSetObject(ss, false)
+	return c.handler.ProcessStatefulSet(key, false)
 }
 
 func (c *Controller) syncPdb(key string) error {
-	namespace, name, err := cache.SplitMetaNamespaceKey(key)
-	if err != nil {
-		return err
-	}
-
-	pdb, err := c.pdbLister.PodDisruptionBudgets(namespace).Get(name)
-	if err != nil {
-		if errors.IsNotFound(err) {
-			return c.handler.ProcessPdb(key, true)
-		}
-		return err
-	}
-
-	return c.handler.ProcessPdbObject(pdb, false)
+	return c.handler.ProcessPdb(key, false)
 }
 
 func (c *Controller) syncCronJob(key string) error {
-	namespace, name, err := cache.SplitMetaNamespaceKey(key)
-	if err != nil {
-		return err
-	}
-
-	cj, err := c.cronJobLister.CronJobs(namespace).Get(name)
-	if err != nil {
-		if errors.IsNotFound(err) {
-			return c.handler.ProcessCronJob(key, true)
-		}
-		return err
-	}
-
-	return c.handler.ProcessCronJobObject(cj, false)
+	return c.handler.ProcessCronJob(key, false)
 }
 
 func (c *Controller) processNextHorizontalPodAutoscalerItem() bool {
@@ -2161,37 +2130,11 @@ func (c *Controller) processNextHorizontalPodAutoscalerItem() bool {
 }
 
 func (c *Controller) syncHorizontalPodAutoscaler(key string) error {
-	namespace, name, err := cache.SplitMetaNamespaceKey(key)
-	if err != nil {
-		return err
-	}
-
-	hpa, err := c.hpaLister.HorizontalPodAutoscalers(namespace).Get(name)
-	if err != nil {
-		if errors.IsNotFound(err) {
-			return c.handler.ProcessHorizontalPodAutoscaler(key, true)
-		}
-		return err
-	}
-
-	return c.handler.ProcessHorizontalPodAutoscalerObject(hpa, false)
+	return c.handler.ProcessHorizontalPodAutoscaler(key, false)
 }
 
 func (c *Controller) syncJob(key string) error {
-	namespace, name, err := cache.SplitMetaNamespaceKey(key)
-	if err != nil {
-		return err
-	}
-
-	job, err := c.jobLister.Jobs(namespace).Get(name)
-	if err != nil {
-		if errors.IsNotFound(err) {
-			return c.handler.ProcessJob(key, true)
-		}
-		return err
-	}
-
-	return c.handler.ProcessJobObject(job, false)
+	return c.handler.ProcessJob(key, false)
 }
 
 func (c *Controller) enqueueService(obj interface{}) {
@@ -2258,20 +2201,7 @@ func (c *Controller) enqueueCpPod(obj interface{}) {
 }
 
 func (c *Controller) syncService(key string) error {
-	namespace, name, err := cache.SplitMetaNamespaceKey(key)
-	if err != nil {
-		return err
-	}
-
-	svc, err := c.serviceLister.Services(namespace).Get(name)
-	if err != nil {
-		if errors.IsNotFound(err) {
-			return c.handler.ProcessService(key, true)
-		}
-		return err
-	}
-
-	return c.handler.ProcessServiceObject(svc, false)
+	return c.handler.ProcessService(key, false)
 }
 
 func (c *Controller) syncEndpointSlice(key string) error {
@@ -2280,73 +2210,37 @@ func (c *Controller) syncEndpointSlice(key string) error {
 		return err
 	}
 
-	svc, err := c.serviceLister.Services(namespace).Get(name)
+	// EndpointSlice names are "<service-name>-<hash>"; resolve the owning
+	// Service via the kubernetes.io/service-name label, not the slice name.
+	epSlice, err := c.endpointSliceLister.EndpointSlices(namespace).Get(name)
 	if err != nil {
 		if errors.IsNotFound(err) {
 			return nil
 		}
 		return err
 	}
+	serviceName := epSlice.Labels["kubernetes.io/service-name"]
+	if serviceName == "" {
+		return nil
+	}
 
-	return c.handler.ProcessServiceObject(svc, false)
+	return c.handler.ProcessService(namespace+"/"+serviceName, false)
 }
 
 func (c *Controller) syncMwc(key string) error {
-	mwc, err := c.mwcLister.Get(key)
-	if err != nil {
-		if errors.IsNotFound(err) {
-			return c.handler.ProcessMutatingWebhookConfiguration(key, true)
-		}
-		return err
-	}
-
-	return c.handler.ProcessMutatingWebhookConfigurationObject(mwc, false)
+	return c.handler.ProcessMutatingWebhookConfiguration(key, false)
 }
 
 func (c *Controller) syncVwc(key string) error {
-	vwc, err := c.vwcLister.Get(key)
-	if err != nil {
-		if errors.IsNotFound(err) {
-			return c.handler.ProcessValidatingWebhookConfiguration(key, true)
-		}
-		return err
-	}
-
-	return c.handler.ProcessValidatingWebhookConfigurationObject(vwc, false)
+	return c.handler.ProcessValidatingWebhookConfiguration(key, false)
 }
 
 func (c *Controller) syncIngress(key string) error {
-	namespace, name, err := cache.SplitMetaNamespaceKey(key)
-	if err != nil {
-		return err
-	}
-
-	ing, err := c.ingressLister.Ingresses(namespace).Get(name)
-	if err != nil {
-		if errors.IsNotFound(err) {
-			return c.handler.ProcessIngress(key, true)
-		}
-		return err
-	}
-
-	return c.handler.ProcessIngressObject(ing, false)
+	return c.handler.ProcessIngress(key, false)
 }
 
 func (c *Controller) syncNetpol(key string) error {
-	namespace, name, err := cache.SplitMetaNamespaceKey(key)
-	if err != nil {
-		return err
-	}
-
-	policy, err := c.netpolLister.NetworkPolicies(namespace).Get(name)
-	if err != nil {
-		if errors.IsNotFound(err) {
-			return c.handler.ProcessNetworkPolicy(key, true)
-		}
-		return err
-	}
-
-	return c.handler.ProcessNetworkPolicyObject(policy, false)
+	return c.handler.ProcessNetworkPolicy(key, false)
 }
 
 func (c *Controller) syncCpPod(key string) error {

@@ -1,6 +1,7 @@
 package model
 
 import (
+	"encoding/json"
 	"testing"
 	"time"
 )
@@ -121,5 +122,51 @@ func TestPersistedIncidentToIncidentEmptyFields(t *testing.T) {
 	}
 	if inc.Containers == nil {
 		t.Errorf("Containers should not be nil after conversion")
+	}
+}
+
+func TestPersistedIncidentJSONRoundTripPreservesResolveAt(t *testing.T) {
+	now := time.Now().Truncate(time.Second)
+	inc := &Incident{
+		Key:         "ns:dep:OOMKilled:",
+		Reason:      "OOMKilled",
+		Namespace:   "ns",
+		Name:        "dep",
+		Resource:    "pod",
+		Count:       5,
+		FirstSeen:   now.Add(-time.Hour),
+		LastSeen:    now,
+		Resources:   map[string]bool{"pod-1": true},
+		OwnerKind:   "Deployment",
+		Severity:    "high",
+		State:       StatePendingResolve,
+		ResolveAt:   now.Add(2 * time.Minute),
+		NotifiedSig: "firing|high",
+		Containers:  map[string]bool{"app": true},
+		LastUpdate:  now,
+	}
+
+	data, err := json.Marshal(inc.ToPersisted())
+	if err != nil {
+		t.Fatalf("marshal: %v", err)
+	}
+
+	var pi PersistedIncident
+	if err := json.Unmarshal(data, &pi); err != nil {
+		t.Fatalf("unmarshal: %v", err)
+	}
+	got := pi.ToIncident()
+
+	if got.Key != inc.Key || got.Reason != inc.Reason {
+		t.Errorf("round trip lost identity: %+v", got)
+	}
+	if got.State != StatePendingResolve {
+		t.Errorf("State = %d, want %d (pending-resolve must survive restart)", got.State, StatePendingResolve)
+	}
+	if !got.ResolveAt.Equal(now.Add(2 * time.Minute)) {
+		t.Errorf("ResolveAt = %v, want %v (must survive restart to finalize)", got.ResolveAt, now.Add(2*time.Minute))
+	}
+	if !got.LastSeen.Equal(now) {
+		t.Errorf("LastSeen = %v, want %v", got.LastSeen, now)
 	}
 }

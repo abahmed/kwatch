@@ -2,9 +2,12 @@ package message
 
 import (
 	"fmt"
+	"regexp"
+	"strconv"
 	"strings"
 	"time"
 
+	"github.com/abahmed/kwatch/internal/constant"
 	"github.com/abahmed/kwatch/internal/insight"
 	"github.com/abahmed/kwatch/internal/model"
 )
@@ -28,7 +31,7 @@ func (rb *ReportBuilder) Build(inc *model.Incident, action model.IncidentAction,
 	r := &Report{
 		Action:    actionString(action),
 		Reason:    inc.Reason,
-		Severity:  inc.Severity,
+		Severity:  string(inc.Severity),
 		Resource:  inc.Resource,
 		Name:      inc.Name,
 		Namespace: inc.Namespace,
@@ -60,7 +63,7 @@ func (rb *ReportBuilder) buildSummary(inc *model.Incident, action model.Incident
 
 func (rb *ReportBuilder) populateIdentity(r *Report, inc *model.Incident) {
 	// Pending/Unschedulable: no container identity
-	if r.Reason == "Unschedulable" || r.Reason == "Pending" {
+	if r.Reason == constant.ReasonUnschedulable || r.Reason == "Pending" {
 		return
 	}
 
@@ -90,7 +93,7 @@ func (rb *ReportBuilder) populateIdentity(r *Report, inc *model.Incident) {
 
 func (rb *ReportBuilder) populateState(r *Report, inc *model.Incident) {
 	// Pending: no container state
-	if r.Reason == "Unschedulable" || r.Reason == "Pending" {
+	if r.Reason == constant.ReasonUnschedulable || r.Reason == "Pending" {
 		return
 	}
 
@@ -192,11 +195,14 @@ func (rb *ReportBuilder) populateTypeSpecific(r *Report, inc *model.Incident) {
 	}
 
 	switch {
-	case reason == "OOMKilled" || exitCode == 137:
+	case reason == constant.ReasonOOMKilled || exitCode == 137:
+		leakCount, windowMin := extractOOMLeakStats(inc.Hint)
 		r.OOM = &OOMSection{
 			MemoryLimit: extractMemoryLimit(inc),
 			Timeline:    extractOOMTimeline(inc),
 			IsLeak:      strings.Contains(inc.Hint, "memory leak"),
+			LeakCount:   leakCount,
+			WindowMin:   windowMin,
 		}
 		// Hide exit code (always 137) and image (irrelevant for OOM)
 		if r.State != nil {
@@ -206,7 +212,7 @@ func (rb *ReportBuilder) populateTypeSpecific(r *Report, inc *model.Incident) {
 			r.Identity.Image = ""
 		}
 
-	case reason == "ImagePullBackOff" || reason == "ErrImagePull":
+	case reason == constant.ReasonImagePullBackOff || reason == constant.ReasonErrImagePull:
 		r.Image = &ImageSection{
 			RegistryHint: extractRegistryHint(inc),
 			PullSecrets:  extractPullSecrets(inc),
@@ -219,16 +225,16 @@ func (rb *ReportBuilder) populateTypeSpecific(r *Report, inc *model.Incident) {
 			r.State.ExitCode = 0
 		}
 
-	case reason == "LivenessProbeFailed" || reason == "ReadinessProbeFailed" || reason == "StartupProbeFailed":
+	case reason == constant.ReasonLivenessProbeFailed || reason == constant.ReasonReadinessProbeFailed || reason == constant.ReasonStartupProbeFailed:
 		r.Probe = &ProbeSection{
 			ProbeType: probeTypeFromReason(reason),
 			Endpoint:  extractProbeEndpoint(inc),
 		}
 
-	case reason == "Unschedulable" || reason == "Pending":
+	case reason == constant.ReasonUnschedulable || reason == "Pending":
 		r.Pending = &PendingSection{
-			Delay:             extractSchedulingDelay(inc),
-			ResourceRequests:  extractResourceRequestStrings(inc),
+			Delay:            extractSchedulingDelay(inc),
+			ResourceRequests: extractResourceRequestStrings(inc),
 		}
 		// No container identity or evidence for pending pods
 		r.Identity = nil
@@ -262,7 +268,7 @@ func actionString(a model.IncidentAction) string {
 	}
 }
 
-func actionEmoji(action model.IncidentAction, severity string) string {
+func actionEmoji(action model.IncidentAction, severity model.Severity) string {
 	switch action {
 	case model.ActionResolved:
 		return "✅"
@@ -270,11 +276,11 @@ func actionEmoji(action model.IncidentAction, severity string) string {
 		return "🔄"
 	default:
 		switch severity {
-		case "critical":
+		case model.SeverityCritical:
 			return "🔴"
-		case "high":
+		case model.SeverityHigh:
 			return "🟠"
-		case "warning":
+		case model.SeverityWarning, model.SeverityMedium:
 			return "🟡"
 		default:
 			return "🔴"
@@ -284,11 +290,11 @@ func actionEmoji(action model.IncidentAction, severity string) string {
 
 func probeTypeFromReason(reason string) string {
 	switch reason {
-	case "LivenessProbeFailed":
+	case constant.ReasonLivenessProbeFailed:
 		return "liveness"
-	case "ReadinessProbeFailed":
+	case constant.ReasonReadinessProbeFailed:
 		return "readiness"
-	case "StartupProbeFailed":
+	case constant.ReasonStartupProbeFailed:
 		return "startup"
 	}
 	return "probe"
@@ -296,35 +302,35 @@ func probeTypeFromReason(reason string) string {
 
 func reasonLabel(reason string) string {
 	switch reason {
-	case "OOMKilled":
+	case constant.ReasonOOMKilled:
 		return "Out of memory"
-	case "CrashLoopBackOff":
+	case constant.ReasonCrashLoopBackOff:
 		return "Container keeps crashing"
-	case "ImagePullBackOff", "ErrImagePull":
+	case constant.ReasonImagePullBackOff, constant.ReasonErrImagePull:
 		return "Failed to download image"
-	case "LivenessProbeFailed":
+	case constant.ReasonLivenessProbeFailed:
 		return "Health check failed"
-	case "ReadinessProbeFailed":
+	case constant.ReasonReadinessProbeFailed:
 		return "Not ready for traffic"
-	case "StartupProbeFailed":
+	case constant.ReasonStartupProbeFailed:
 		return "Startup check failed"
-	case "Unschedulable":
+	case constant.ReasonUnschedulable:
 		return "No capacity available"
 	case "Pending":
 		return "Waiting for resources"
-	case "NodeNotReady":
+	case constant.ReasonNodeNotReady:
 		return "Node is not ready"
-	case "BackOff":
+	case constant.ReasonBackOff:
 		return "Backing off after crash"
-	case "Error":
+	case constant.ReasonError:
 		return "Container error"
-	case "HighRestartCount":
+	case constant.ReasonHighRestartCount:
 		return "Frequent restarts"
-	case "InitContainerError":
+	case constant.ReasonInitContainerError:
 		return "Init container failed"
-	case "OOMRepeating":
+	case constant.ReasonOOMRepeating:
 		return "Repeated out of memory"
-	case "Evicted":
+	case constant.ReasonEvicted:
 		return "Pod was evicted"
 	}
 	return reason
@@ -355,6 +361,18 @@ func extractOOMTimeline(inc *model.Incident) string {
 	}
 	return ""
 }
+
+// extractOOMLeakStats parses "OOMKilled N times in Xm ..." from the hint,
+// returning the kill count and the observation window in minutes.
+func extractOOMLeakStats(hint string) (count, windowMin int) {
+	if m := oomTimesRe.FindStringSubmatch(hint); len(m) == 3 {
+		count, _ = strconv.Atoi(m[1])
+		windowMin, _ = strconv.Atoi(m[2])
+	}
+	return count, windowMin
+}
+
+var oomTimesRe = regexp.MustCompile(`(\d+)\s+times in\s+(\d+)m`)
 
 func extractRegistryHint(inc *model.Incident) string {
 	msg := inc.LastContainerState

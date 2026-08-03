@@ -59,9 +59,9 @@ No Prometheus. No Grafana. No 50-step setup. Just alerts that **make sense**.
 | | ✨ kwatch | 😰 DIY Prometheus + Alertmanager | 💸 Heavy SaaS |
 |---|---|---|---|
 | ⏱️ Setup time | **~5 minutes** | hours of YAML | agent + backend setup |
-| 📦 Size | ~20 MB single binary | whole monitoring stack | per-node agents + cloud costs |
+| 📦 Size | ~70 MB single binary | whole monitoring stack | per-node agents + cloud costs |
 | 💬 Alerts | Self-explaining ("OOMKilled — raise memory limit") | Rule-defined message | Depends on configuration |
-| 🗄️ Storage | None (stateless) | Prometheus TSDB | Full retention (costly) |
+| 🗄️ Storage | No backend — state lives in a ConfigMap (incidents survive restarts) | Prometheus TSDB | Full retention (costly) |
 | 📚 Learning curve | One ConfigMap | PromQL + alert rules | Platform-specific DSL |
 
 ---
@@ -114,6 +114,7 @@ Every monitor below is **on by default** — zero config needed:
 | 📡 DaemonSet pods not running | ✅ **on** | Unavailable pods detected |
 | ⏰ CronJob suspended or missing runs | ✅ **on** | Not scheduled in 24h? Alert. |
 | 📈 HPA stuck at max replicas | ✅ **on** | After 20 minutes sustained |
+| 🚀 Cluster-autoscaler scale failures | ✅ **on** | `FailedToScaleUp` / `NotTriggerScaleUp` sustained 5 min |
 | 🔗 Service endpoint health | ✅ **on** | Detects endpoints with zero ready addresses |
 | 🧩 Admission webhook backends | ✅ **on** | Alerts when a webhook's backing service has no ready endpoints |
 | 🏛️ Control-plane component health | ✅ **on** | Detects broken control-plane pods (apiserver, scheduler, etc.) |
@@ -127,7 +128,7 @@ Every monitor below is **on by default** — zero config needed:
 | 🧠 Context-aware intelligence (dependency analysis) | ✅ **on** | Links incidents to root causes — unhealthy nodes, bad rollouts, misconfigured ConfigMaps/Secrets |
 | 📊 Mass failure detection | ✅ **on** | Detects when 30%+ of dependents sharing a node/configmap/secret fail simultaneously |
 
-✅ **TLS is the only one off** — everything else just works out of the box.
+✅ **TLS and heartbeat are the only ones off** — everything else just works out of the box.
 
 ---
 
@@ -144,6 +145,10 @@ The graph is built at startup from the informer cache, rebuilt periodically, and
 #### Mass failure detection
 
 The correlation engine periodically scans all active incidents for shared dependencies. If more than 30% of dependents sharing a node, ConfigMap, Secret, or PVC are in failure, a mass failure alert fires. The threshold is dynamic — computed per dependency based on the current scope. Mass failures automatically resolve when the underlying incidents clear.
+
+#### 💾 Crash-safe state (ConfigMap)
+
+kwatch keeps its state in plain ConfigMaps in its own namespace — no database or storage backend to run. Active incidents and the startup baseline are written to `kwatch-incidents` / `kwatch-baseline` ConfigMaps (plus `kwatch-state` for cluster identity and `kwatch-pvc` for PVC usage), so after a restart or pod reschedule kwatch resumes alerting where it left off instead of treating everything as brand new.
 
 ---
 
@@ -172,6 +177,7 @@ When a crash happens, the AI reads the logs and tells you the **most likely caus
 | `resyncSeconds` | Check for problems periodically (0 = only on events, recommended) |
 | `workers` | How many parallel workers (default: 1, raise for big clusters) |
 | `namespaces` | 🔽 Limit to specific namespaces, or use `!kube-system` to exclude |
+| `namespaceSelector` | 🏷️ K8s label selector to pick namespaces to watch (mutually exclusive with `namespaces`) |
 | `reasons` | 🔽 Only alert on specific reasons, or exclude some with `!` |
 | `ignoreFailedGracefulShutdown` | ✅ Skip containers killed during graceful shutdown (default: true) |
 | `ignoreDisruptionTerminations` | ✅ Skip pods evicted during node drains (default: true) |
@@ -179,6 +185,7 @@ When a crash happens, the AI reads the logs and tells you the **most likely caus
 | `llm.enabled` | 🤖 AI enrichment (default: false) |
 | `containerRestartThreshold` | Alert if a container restarts this many times (0 = off) |
 | `reportStartupBaseline` | 📋 Send one startup summary of pre-existing issues (default: true) |
+| `ignore*` fields | 🔕 Deprecated filters (`ignoreContainerNames`, `ignorePodNames`, `ignoreLogPatterns`, `ignoreContainerMessages`, `ignoreNodeReasons`, `ignoreNodeMessages`) — prefer `silences` below |
 
 #### 🔽 Filter by namespace
 
@@ -216,6 +223,8 @@ reasons:
 | `app.clusterName` | 🏷️ Name shown in alerts so you know which cluster |
 | `app.disableStartupMessage` | Silence the "kwatch is alive" welcome message |
 | `app.logFormatter` | Log format: `text` (default) or `json` |
+| `app.insecureSkipTLSVerify` | 🔓 Skip TLS verification on outbound HTTP (default: false) |
+| `app.caBundlePath` | 📜 Path to a PEM CA bundle for outbound HTTP |
 | `includeEvents` | 📋 Include K8s events in alerts (default: true) |
 | `includeLogs` | 📋 Include container logs in alerts (default: true) |
 
@@ -227,11 +236,13 @@ reasons:
 | `healthCheck.port` | Port to serve health on (default: 8060) |
 | `healthCheck.pprof` | 🔬 Go profiling endpoints (default: false) |
 | `healthCheck.diagnostics` | 🩺 Extra endpoints: `/incidents`, `/test-alert`, `/deadletters` |
+| `healthCheck.diagnosticsToken` | 🔑 Optional Bearer token for diagnostic endpoints (empty = unauthenticated) |
 
 **Endpoints:**
 - `GET /healthz` — ✅ Liveness
 - `GET /readyz` — ✅ Readiness
 - `GET /health` — `{"status": "ok"}`
+- `GET /metrics` — 📊 Prometheus metrics (incidents, notifications, baseline, LLM counters)
 - `GET /incidents` — 📋 All active incidents (requires `diagnostics: true`)
 - `POST /test-alert` — 📤 Send a test alert (requires `diagnostics: true`)
 - `GET /deadletters` — 💀 Recent delivery failures (requires `diagnostics: true`)
@@ -261,6 +272,7 @@ reasons:
 | Parameter | What it does |
 |:---|---|
 | `nodeMonitor.enabled` | ✅ Watch for node problems (default: true) |
+| `nodeMonitor.sustainedMinutes` | ⏱️ Minutes a node condition must persist before alerting (default: 3) |
 
 Catches: `NotReady`, `Unknown`, `MemoryPressure`, `DiskPressure`, `PIDPressure`, `NetworkUnavailable`.
 
@@ -276,6 +288,7 @@ Catches: `NotReady`, `Unknown`, `MemoryPressure`, `DiskPressure`, `PIDPressure`,
 | Parameter | What it does |
 |:---|---|
 | `daemonSetMonitor.enabled` | ✅ Watch for unavailable DaemonSet pods (default: true) |
+| `daemonSetMonitor.sustainedMinutes` | ⏱️ Minutes of unavailability before alerting (default: 5) |
 
 ### 🧑‍💼 Job Monitor
 
@@ -288,6 +301,7 @@ Catches: `NotReady`, `Unknown`, `MemoryPressure`, `DiskPressure`, `PIDPressure`,
 | Parameter | What it does |
 |:---|---|
 | `cronJobMonitor.enabled` | ✅ Watch for suspended CronJobs or missed schedules (default: true) |
+| `cronJobMonitor.sustainedMinutes` | ⏱️ Minutes a CronJob must stay suspended before alerting (default: 5) |
 
 ### 📈 HPA Monitor
 
@@ -295,6 +309,14 @@ Catches: `NotReady`, `Unknown`, `MemoryPressure`, `DiskPressure`, `PIDPressure`,
 |:---|---|
 | `hpaMonitor.enabled` | ✅ Watch HPAs stuck at max replicas (default: true) |
 | `hpaMonitor.sustainedMinutes` | ⏱️ How long before alerting (default: 20 min) |
+
+### 🚀 Cluster Autoscaler Monitor
+
+| Parameter | What it does |
+|:---|---|
+| `clusterAutoscalerMonitor.enabled` | ✅ Watch cluster-autoscaler events (default: true) |
+
+Alerts when the cluster autoscaler reports `FailedToScaleUp` or `NotTriggerScaleUp` for a sustained 5 minutes, meaning pods can't be scheduled because the autoscaler can't add capacity.
 
 ### 💓 Heartbeat Monitor (dead man's switch)
 
@@ -400,16 +422,17 @@ Tracks OOMKilled events per container in a sliding window. When the threshold is
 | Parameter | What it does |
 |:---|---|
 | `scheduleMonitor.enabled` | ✅ Compute unschedulable delay (default: true) |
+| `pendingPodMonitor.enabled` | ✅ Watch pods stuck in Pending (default: true) |
+| `pendingPodMonitor.threshold` | ⏱️ Seconds stuck in Pending before alerting (default: 300) |
 
 When a pod is stuck Unschedulable, computes `now - PodScheduled.LastTransitionTime` and prepends the delay to the hint (e.g., `"unschedulable for 5m30s — ..."`).
-
-⏳ **Pending Pod Threshold** — alert after N seconds stuck in Pending (default: 300s)
 
 ### 🎯 Severity
 
 | Parameter | What it does |
 |:---|---|
 | `severityByOwnerKind` | Set severity per resource type, e.g. `StatefulSet: "high"` |
+| `severityByReason` | Set severity per event reason, checked before owner kind, e.g. `OOMKilled: "high"` |
 
 Defaults: `StatefulSet` → 🔴 high, everything else → 🟡 normal
 
@@ -421,6 +444,8 @@ silences:
   - reasons: ["BackOff"]
   - podNamePatterns: ["my-fancy-pod-.*"]
 ```
+
+Each rule can also filter by `containerNames`, `logPatterns`, `containerMessages`, `nodeReasons`, and `nodeMessages` (message substrings). An incident matching any rule is suppressed entirely. The deprecated top-level `ignore*` fields map onto these rules.
 
 ### 🚫 Inhibition — no double alerts
 
@@ -440,10 +465,13 @@ templates:
 | Parameter | What it does |
 |:---|---|
 | `correlation.window` | ⏱️ Keep incidents in memory (default: 10 min) |
-| `correlation.resolveHoldDown` | ⏱️ Wait before sending "resolved" (default: 30s) |
+| `correlation.resolveHoldDown` | ⏱️ Wait before sending "resolved" (default: 300s) |
 | `correlation.lifecycleInterval` | ⏱️ Lifecycle check frequency (default: 1 min) |
+| `correlation.cooldownMinutes` | ⏱️ Min time between identical crash re-alerts (default: 10; 0 = off) |
+| `correlation.maxBaseline` | 📈 Max baseline entries kept for startup comparison (default: 5000) |
 | `correlation.escalation.enabled` | ✅ Escalate severity on repeated crashes (default: true) |
 | `correlation.escalation.tiers` | 📊 Restart thresholds: `[3, 10, 50]` |
+| `correlation.renotify.intervalBySeverity` | 🔔 Re-alert interval per severity (e.g. `high: 60`), `default` key as fallback; unset = off |
 | `correlation.renotify.maxPerIncident` | 🔔 Max re-alerts per incident (default: 3) |
 
 ### 🧹 Smart Grouping — coalesce duplicate notifications
@@ -453,6 +481,15 @@ templates:
 | `smartGrouping.windowSeconds` | ⏱ Grouping window in seconds (default: 60). Set to 0 to disable. |
 
 kwatch groups related incidents by the dimension that best captures each failure type's root cause. For example, OOMKilled and probe failures group by owner+namespace, node conditions group by node (not pod errors on the same node), image pull errors group by image (or globally for rate limits), and CrashLoopBackOff with a matching log signature bridges across owners. Each group notification shows affected pods, owners, nodes, or images depending on scope, with overflow counting above 1,000 entries. After a group notification is sent, the same condition will not re-notify until the underlying incident is resolved and re-occurs, preventing periodic flooding.
+
+### 📝 Audit log
+
+| Parameter | What it does |
+|:---|---|
+| `auditLog.enabled` | Write one structured JSON entry per incident transition (default: true) |
+| `auditLog.output` | Destination: `stdout` (default) or a file path |
+
+Emits `create`/`update`/`resolved`/`skip` entries (with `incidentKey`, `namespace`, `reason`, `severity`, `count`, `duration`, `skipReason`) to stdout or a file for feeding into your log pipeline.
 
 ### 📋 CRD — live config changes
 

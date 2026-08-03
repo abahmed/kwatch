@@ -4,11 +4,12 @@ import (
 	"strings"
 	"testing"
 
+	discordgo "github.com/bwmarrin/discordgo"
+	"github.com/stretchr/testify/assert"
+
 	"github.com/abahmed/kwatch/internal/alert/util"
 	"github.com/abahmed/kwatch/internal/config"
 	"github.com/abahmed/kwatch/internal/event"
-	discordgo "github.com/bwmarrin/discordgo"
-	"github.com/stretchr/testify/assert"
 )
 
 func mockedSend(

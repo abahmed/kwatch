@@ -2,6 +2,7 @@ package insight
 
 import (
 	"fmt"
+	"sort"
 	"strings"
 	"time"
 
@@ -41,9 +42,8 @@ func (e *Engine) determineCause(inc *model.Incident, ins *Insight) {
 		return
 	}
 	ns := inc.Namespace
-	name := inc.Name
 
-	deps := e.graph.DependenciesOf(inc.Resource, ns, name)
+	deps := e.dependenciesFor(inc)
 	if len(deps) == 0 {
 		return
 	}
@@ -101,13 +101,24 @@ func (e *Engine) describeImpact(inc *model.Incident, ins *Insight) {
 		}
 	case "pod":
 		if inc.NodeName != "" {
-			deps := e.graph.DependentsByType("pod", inc.Namespace, inc.Name, "service")
-			if len(deps) > 0 {
-				ins.Impact = fmt.Sprintf("affects %d service(s)", len(deps))
+			count := 0
+			seen := make(map[string]bool)
+			for _, k := range e.graphKeysForIncident(inc) {
+				parts := strings.SplitN(k, "/", 3)
+				for _, svc := range e.graph.DependentsByType("pod", parts[1], parts[2], "service") {
+					if !seen[svc] {
+						seen[svc] = true
+						count++
+					}
+				}
+			}
+			if count > 0 {
+				ins.Impact = fmt.Sprintf("affects %d service(s)", count)
 			}
 		}
 	case "deployment", "statefulset", "daemonset":
-		allDeps := e.graph.DependentsOf(inc.Resource, inc.Namespace, inc.Name)
+		name := strings.TrimPrefix(inc.Name, inc.Namespace+"/")
+		allDeps := e.graph.DependentsOf(inc.Resource, inc.Namespace, name)
 		if len(allDeps) > 0 {
 			ins.Impact = fmt.Sprintf("%d dependent resource(s)", len(allDeps))
 		}
@@ -135,8 +146,16 @@ func (e *Engine) checkRecentChanges(inc *model.Incident, ins *Insight) {
 	}
 	recent := e.tracker.RecentChangesBefore(5 * time.Minute)
 	filtered := make([]context.Change, 0, len(recent))
+	matchingNames := make(map[string]bool)
+	for _, k := range e.graphKeysForIncident(inc) {
+		parts := strings.SplitN(k, "/", 3)
+		matchingNames[parts[2]] = true
+	}
+	if len(matchingNames) == 0 {
+		matchingNames[inc.Name] = true
+	}
 	for _, c := range recent {
-		if c.Resource == inc.Resource && c.Namespace == inc.Namespace && c.Name == inc.Name {
+		if c.Resource == inc.Resource && c.Namespace == inc.Namespace && matchingNames[c.Name] {
 			filtered = append(filtered, c)
 		}
 	}
@@ -147,7 +166,7 @@ func (e *Engine) checkRecentChanges(inc *model.Incident, ins *Insight) {
 
 	// Dependency-filtered pass: check if any dependency of this resource changed
 	if e.graph != nil {
-		deps := e.graph.DependenciesOf(inc.Resource, inc.Namespace, inc.Name)
+		deps := e.dependenciesFor(inc)
 		if len(deps) > 0 {
 			depChanges := make([]context.Change, 0, len(recent))
 			for _, c := range recent {
@@ -189,4 +208,48 @@ func (e *Engine) checkRecentChanges(inc *model.Incident, ins *Insight) {
 	if len(filtered) > 0 {
 		ins.RecentChanges = filtered
 	}
+}
+
+// graphKeysForIncident resolves the graph node keys for an incident. Pod
+// incidents are keyed by their owner while the graph stores real pod names,
+// so the affected pod set (inc.Resources) must be used to reach the right
+// nodes. Workload incidents store Name as "namespace/name".
+func (e *Engine) graphKeysForIncident(inc *model.Incident) []string {
+	switch inc.Resource {
+	case "pod":
+		if len(inc.Resources) > 0 {
+			keys := make([]string, 0, len(inc.Resources))
+			for podName := range inc.Resources {
+				keys = append(keys, "pod/"+inc.Namespace+"/"+podName)
+			}
+			return keys
+		}
+		if inc.Name != "" {
+			return []string{"pod/" + inc.Namespace + "/" + inc.Name}
+		}
+	case "node":
+		return []string{"node//" + inc.NodeName}
+	default:
+		name := strings.TrimPrefix(inc.Name, inc.Namespace+"/")
+		return []string{inc.Resource + "/" + inc.Namespace + "/" + name}
+	}
+	return nil
+}
+
+// dependenciesFor unions the dependencies of all graph nodes belonging to the
+// incident, deduplicating results.
+func (e *Engine) dependenciesFor(inc *model.Incident) []string {
+	seen := make(map[string]bool)
+	var deps []string
+	for _, k := range e.graphKeysForIncident(inc) {
+		parts := strings.SplitN(k, "/", 3)
+		for _, d := range e.graph.DependenciesOf(parts[0], parts[1], parts[2]) {
+			if !seen[d] {
+				seen[d] = true
+				deps = append(deps, d)
+			}
+		}
+	}
+	sort.Strings(deps)
+	return deps
 }

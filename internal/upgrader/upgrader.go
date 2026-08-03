@@ -7,13 +7,14 @@ import (
 	"os"
 	"time"
 
+	"github.com/google/go-github/v41/github"
+	"k8s.io/klog/v2"
+
 	"github.com/abahmed/kwatch/internal/alert"
 	"github.com/abahmed/kwatch/internal/config"
 	"github.com/abahmed/kwatch/internal/constant"
 	"github.com/abahmed/kwatch/internal/state"
 	"github.com/abahmed/kwatch/internal/version"
-	"github.com/google/go-github/v41/github"
-	"k8s.io/klog/v2"
 )
 
 type GitHubReleaseChecker interface {

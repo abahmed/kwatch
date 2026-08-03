@@ -5,15 +5,16 @@ import (
 	"testing"
 	"time"
 
-	"github.com/abahmed/kwatch/internal/config"
-	"github.com/abahmed/kwatch/internal/correlation"
-	"github.com/abahmed/kwatch/internal/model"
 	"github.com/stretchr/testify/assert"
 	autoscalingv2 "k8s.io/api/autoscaling/v2"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/informers"
 	"k8s.io/client-go/kubernetes/fake"
+
+	"github.com/abahmed/kwatch/internal/config"
+	"github.com/abahmed/kwatch/internal/correlation"
+	"github.com/abahmed/kwatch/internal/model"
 )
 
 func TestHpaScalingErrorCreateAndResolve(t *testing.T) {
@@ -87,7 +88,7 @@ func TestHpaMaxedOutStillWorksIndependently(t *testing.T) {
 	h := NewHandler(fake.NewSimpleClientset(), &config.Config{
 		HpaMonitor: config.HpaMonitor{SustainedMinutes: 0},
 	}, e, testAlertMgr)
-	h.(*handler).now = func() time.Time { return now }
+	h.now = func() time.Time { return now }
 
 	hpa := &autoscalingv2.HorizontalPodAutoscaler{
 		ObjectMeta: metav1.ObjectMeta{
@@ -125,7 +126,7 @@ func TestHpaScalingErrorAndMaxedCoexist(t *testing.T) {
 	h := NewHandler(fake.NewSimpleClientset(), &config.Config{
 		HpaMonitor: config.HpaMonitor{SustainedMinutes: 0},
 	}, e, testAlertMgr)
-	h.(*handler).now = func() time.Time { return now }
+	h.now = func() time.Time { return now }
 
 	hpa := &autoscalingv2.HorizontalPodAutoscaler{
 		ObjectMeta: metav1.ObjectMeta{
@@ -185,7 +186,7 @@ func TestHpaScalingErrorOnlyResolvedWhenConditionClears(t *testing.T) {
 	h := NewHandler(fake.NewSimpleClientset(), &config.Config{
 		HpaMonitor: config.HpaMonitor{SustainedMinutes: 10},
 	}, e, testAlertMgr)
-	h.(*handler).now = func() time.Time { return now }
+	h.now = func() time.Time { return now }
 
 	// HPA that is maxed AND has a scaling error
 	hpa := &autoscalingv2.HorizontalPodAutoscaler{
@@ -215,7 +216,7 @@ func TestHpaScalingErrorOnlyResolvedWhenConditionClears(t *testing.T) {
 	assert.NoError(t, err)
 
 	// Advance time past the sustained window
-	h.(*handler).now = func() time.Time { return now.Add(11 * time.Minute) }
+	h.now = func() time.Time { return now.Add(11 * time.Minute) }
 
 	// Second pass: both incidents now fire (sustained passed)
 	err = h.ProcessHorizontalPodAutoscalerObject(hpa, false)

@@ -176,7 +176,7 @@ reasons:
 	// bare $HOME → NOT expanded (left as literal)
 	assert.Equal("$HOME", cfg.App.ProxyURL)
 
-	// ${TEST_MISSING} (unset) → empty string
+	// ${TEST_MISSING} (set to empty) → empty string
 	assert.Len(cfg.AllowedNamespaces, 1)
 	assert.Equal("", cfg.AllowedNamespaces[0])
 
@@ -192,6 +192,22 @@ reasons:
 	assert.Nil(err2)
 	assert.NotNil(cfg2)
 	assert.Equal("hello-$B", cfg2.App.ClusterName)
+}
+
+func TestConfigEnvInterpolationUnsetVarErrors(t *testing.T) {
+	tmpDir := t.TempDir()
+	configPath := tmpDir + "/config.yaml"
+	t.Setenv("CONFIG_FILE", configPath)
+
+	// A truly unset variable must fail loudly instead of silently
+	// expanding to an empty string.
+	os.WriteFile(configPath, []byte(`app:
+  clusterName: "${TEST_UNSET_VAR}"
+`), 0644)
+	cfg, err := LoadConfig()
+	assert.Nil(t, cfg)
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "TEST_UNSET_VAR")
 }
 
 func testConfigFile(t *testing.T, content string) (*Config, error) {

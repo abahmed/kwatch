@@ -6,15 +6,18 @@ import (
 	"sync"
 	"time"
 
+	"github.com/abahmed/kwatch/internal/constant"
+
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/client-go/kubernetes"
+	"k8s.io/klog/v2"
+
 	"github.com/abahmed/kwatch/internal/alert"
 	"github.com/abahmed/kwatch/internal/config"
 	"github.com/abahmed/kwatch/internal/correlation"
 	"github.com/abahmed/kwatch/internal/event"
 	"github.com/abahmed/kwatch/internal/model"
 	"github.com/abahmed/kwatch/internal/state"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/client-go/kubernetes"
-	"k8s.io/klog/v2"
 )
 
 const (
@@ -34,7 +37,7 @@ type PvcMonitor struct {
 	pvByPVCAt      time.Time                  // when pvByPVC was last refreshed
 	mu             sync.RWMutex
 	firstScan      bool
-	sem            chan struct{}              // bounds concurrent getNodeUsage calls
+	sem            chan struct{}                                                                              // bounds concurrent getNodeUsage calls
 	getNodeUsageFn func(ctx context.Context, nodeName string, pvByPVC map[string]string) ([]*PvcUsage, error) // test override
 }
 
@@ -111,13 +114,13 @@ func (p *PvcMonitor) Start(ctx context.Context) {
 		for pv, s := range p.lastUsage {
 			if s.Pct >= p.config.Threshold {
 				p.notifiedPvc[pv] = true
-				sev := "normal"
+				sev := model.SeverityNormal
 				if s.Pct >= p.config.CriticalThreshold {
-					sev = "high"
+					sev = model.SeverityHigh
 				}
 				restore = append(restore, &event.Signal{
 					Resource: "pvc", PodName: s.PodName, Namespace: s.Namespace,
-					Reason: "VolumeUsageHigh", Hint: fmt.Sprintf("VolumeUsage(%.0f%%)", s.Pct),
+					Reason: constant.ReasonVolumeUsageHigh, Hint: fmt.Sprintf("VolumeUsage(%.0f%%)", s.Pct),
 					Severity: sev, Owner: pv,
 				})
 			}

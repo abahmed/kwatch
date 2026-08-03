@@ -16,18 +16,23 @@ type ResourceGraph struct {
 	mu           sync.RWMutex
 	dependents   map[string]map[string]bool
 	dependencies map[string]map[string]bool
-	edges        []Edge
+	edges        map[string]Edge
 }
 
 func NewResourceGraph() *ResourceGraph {
 	return &ResourceGraph{
 		dependents:   make(map[string]map[string]bool),
 		dependencies: make(map[string]map[string]bool),
+		edges:        make(map[string]Edge),
 	}
 }
 
 func resourceKey(kind, namespace, name string) string {
 	return kind + "/" + namespace + "/" + name
+}
+
+func edgeKey(from, to string) string {
+	return from + "\x00" + to
 }
 
 func (g *ResourceGraph) AddEdge(fromKind, fromNS, fromName, toKind, toNS, toName, edgeType string) {
@@ -46,7 +51,7 @@ func (g *ResourceGraph) AddEdge(fromKind, fromNS, fromName, toKind, toNS, toName
 		g.dependents[to] = make(map[string]bool)
 	}
 	g.dependents[to][from] = true
-	g.edges = append(g.edges, Edge{From: from, To: to, Type: edgeType})
+	g.edges[edgeKey(from, to)] = Edge{From: from, To: to, Type: edgeType}
 }
 
 func (g *ResourceGraph) RemoveNode(kind, namespace, name string) {
@@ -55,9 +60,11 @@ func (g *ResourceGraph) RemoveNode(kind, namespace, name string) {
 	key := resourceKey(kind, namespace, name)
 	for dep := range g.dependents[key] {
 		delete(g.dependencies[dep], key)
+		delete(g.edges, edgeKey(dep, key))
 	}
 	for dep := range g.dependencies[key] {
 		delete(g.dependents[dep], key)
+		delete(g.edges, edgeKey(key, dep))
 	}
 	delete(g.dependencies, key)
 	delete(g.dependents, key)
@@ -108,8 +115,16 @@ func (g *ResourceGraph) DependentsByType(kind, namespace, name, depKind string) 
 func (g *ResourceGraph) Edges() []Edge {
 	g.mu.RLock()
 	defer g.mu.RUnlock()
-	out := make([]Edge, len(g.edges))
-	copy(out, g.edges)
+	out := make([]Edge, 0, len(g.edges))
+	for _, e := range g.edges {
+		out = append(out, e)
+	}
+	sort.Slice(out, func(i, j int) bool {
+		if out[i].From != out[j].From {
+			return out[i].From < out[j].From
+		}
+		return out[i].To < out[j].To
+	})
 	return out
 }
 
@@ -118,7 +133,7 @@ func (g *ResourceGraph) Clear() {
 	defer g.mu.Unlock()
 	g.dependencies = make(map[string]map[string]bool)
 	g.dependents = make(map[string]map[string]bool)
-	g.edges = nil
+	g.edges = make(map[string]Edge)
 }
 
 // Prune removes all nodes of the given kind whose key is not present in the
@@ -132,6 +147,7 @@ func (g *ResourceGraph) Prune(kind string, active map[string]bool) {
 		if strings.HasPrefix(key, prefix) && !active[key] {
 			for dep := range g.dependencies[key] {
 				delete(g.dependents[dep], key)
+				delete(g.edges, edgeKey(key, dep))
 			}
 			delete(g.dependencies, key)
 		}
@@ -140,18 +156,9 @@ func (g *ResourceGraph) Prune(kind string, active map[string]bool) {
 		if strings.HasPrefix(key, prefix) && !active[key] {
 			for dep := range g.dependents[key] {
 				delete(g.dependencies[dep], key)
+				delete(g.edges, edgeKey(dep, key))
 			}
 			delete(g.dependents, key)
 		}
 	}
-	// Prune edges referencing removed nodes
-	kept := g.edges[:0]
-	for _, e := range g.edges {
-		if (strings.HasPrefix(e.From, prefix) && !active[e.From]) ||
-			(strings.HasPrefix(e.To, prefix) && !active[e.To]) {
-			continue
-		}
-		kept = append(kept, e)
-	}
-	g.edges = kept
 }

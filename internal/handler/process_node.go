@@ -5,11 +5,14 @@ import (
 	"strings"
 	"time"
 
-	"github.com/abahmed/kwatch/internal/correlation"
-	"github.com/abahmed/kwatch/internal/event"
+	"github.com/abahmed/kwatch/internal/constant"
+
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/klog/v2"
+
+	"github.com/abahmed/kwatch/internal/correlation"
+	"github.com/abahmed/kwatch/internal/event"
 )
 
 // newNodeGracePeriod is how long a newly-created node is allowed to stay
@@ -52,7 +55,7 @@ func NodeConditionReason(c corev1.NodeCondition) string {
 	switch c.Type {
 	case corev1.NodeReady:
 		if c.Status != corev1.ConditionTrue {
-			return "NodeNotReady"
+			return constant.ReasonNodeNotReady
 		}
 	case corev1.NodeMemoryPressure, corev1.NodeDiskPressure,
 		corev1.NodePIDPressure, corev1.NodeNetworkUnavailable:
@@ -65,6 +68,9 @@ func NodeConditionReason(c corev1.NodeCondition) string {
 
 func (h *handler) resolveNodeCondition(nodeName, stableReason string) {
 	h.correlator.MarkResolved(correlation.BuildKey("", nodeName, stableReason, ""))
+	// Refresh the inhibition flag even when no incident existed to resolve
+	// (e.g. a baselined NodeNotReady recovered) so pods stop being suppressed.
+	h.correlator.RefreshNodeInhibition(nodeName)
 }
 
 func (h *handler) emitNodeAlert(node *corev1.Node, c corev1.NodeCondition, stableReason string) {
@@ -112,13 +118,13 @@ func (h *handler) ProcessNodeObject(node *corev1.Node, deleted bool) error {
 		switch c.Type {
 		case corev1.NodeReady:
 			if c.Status == corev1.ConditionTrue {
-				h.resolveNodeCondition(node.Name, "NodeNotReady")
+				h.resolveNodeCondition(node.Name, constant.ReasonNodeNotReady)
 			} else if node.DeletionTimestamp != nil || node.Spec.Unschedulable {
-				h.resolveNodeCondition(node.Name, "NodeNotReady")
+				h.resolveNodeCondition(node.Name, constant.ReasonNodeNotReady)
 			} else if isNewNode(node) {
-				h.resolveNodeCondition(node.Name, "NodeNotReady")
+				h.resolveNodeCondition(node.Name, constant.ReasonNodeNotReady)
 			} else {
-				h.emitNodeAlert(node, c, "NodeNotReady")
+				h.emitNodeAlert(node, c, constant.ReasonNodeNotReady)
 			}
 		case corev1.NodeMemoryPressure, corev1.NodeDiskPressure,
 			corev1.NodePIDPressure, corev1.NodeNetworkUnavailable:

@@ -4,12 +4,13 @@ import (
 	"testing"
 	"time"
 
+	slackClient "github.com/slack-go/slack"
+	"github.com/stretchr/testify/assert"
+
 	"github.com/abahmed/kwatch/internal/alert/util"
 	"github.com/abahmed/kwatch/internal/config"
 	"github.com/abahmed/kwatch/internal/event"
 	"github.com/abahmed/kwatch/internal/model"
-	slackClient "github.com/slack-go/slack"
-	"github.com/stretchr/testify/assert"
 )
 
 func mockedSend(url string, msg *slackClient.WebhookMessage) error {

@@ -7,8 +7,9 @@ import (
 	"sync/atomic"
 	"testing"
 
-	"github.com/abahmed/kwatch/internal/config"
 	"github.com/stretchr/testify/assert"
+
+	"github.com/abahmed/kwatch/internal/config"
 )
 
 func TestHeartbeatDisabled(t *testing.T) {

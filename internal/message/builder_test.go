@@ -4,10 +4,11 @@ import (
 	"testing"
 	"time"
 
+	"github.com/stretchr/testify/assert"
+
 	"github.com/abahmed/kwatch/internal/context"
 	"github.com/abahmed/kwatch/internal/insight"
 	"github.com/abahmed/kwatch/internal/model"
-	"github.com/stretchr/testify/assert"
 )
 
 func TestReportBuilderCreate(t *testing.T) {
@@ -118,15 +119,15 @@ func TestReportBuilderResolved(t *testing.T) {
 func TestReportBuilderOOMTypeSpecific(t *testing.T) {
 	rb := NewReportBuilder("test-cluster")
 	inc := &model.Incident{
-		Name:      "p1",
-		Namespace: "ns1",
-		Resource:  "pod",
-		Reason:    "OOMKilled",
-		ContainerName: "c1",
+		Name:               "p1",
+		Namespace:          "ns1",
+		Resource:           "pod",
+		Reason:             "OOMKilled",
+		ContainerName:      "c1",
 		LastContainerState: &model.ContainerState{ExitCode: 137},
-		Hint:       "OOMKilled (memory limit: 256Mi) — consider increasing memory limits",
-		FirstSeen:  time.Now().Add(-5 * time.Minute),
-		LastSeen:   time.Now(),
+		Hint:               "OOMKilled (memory limit: 256Mi) — consider increasing memory limits",
+		FirstSeen:          time.Now().Add(-5 * time.Minute),
+		LastSeen:           time.Now(),
 	}
 
 	report := rb.Build(inc, model.ActionCreate, nil)
@@ -142,20 +143,22 @@ func TestReportBuilderOOMTypeSpecific(t *testing.T) {
 func TestReportBuilderOOMLeak(t *testing.T) {
 	rb := NewReportBuilder("test-cluster")
 	inc := &model.Incident{
-		Name:      "p1",
-		Namespace: "ns1",
-		Resource:  "pod",
-		Reason:    "OOMRepeating",
+		Name:               "p1",
+		Namespace:          "ns1",
+		Resource:           "pod",
+		Reason:             "OOMRepeating",
 		LastContainerState: &model.ContainerState{ExitCode: 137},
-		Hint:       "OOMKilled 5 times in 60m — potential memory leak [1,2,3,4,5]",
-		FirstSeen:  time.Now().Add(-5 * time.Minute),
-		LastSeen:   time.Now(),
+		Hint:               "OOMKilled 5 times in 60m — potential memory leak [1,2,3,4,5]",
+		FirstSeen:          time.Now().Add(-5 * time.Minute),
+		LastSeen:           time.Now(),
 	}
 
 	report := rb.Build(inc, model.ActionCreate, nil)
 	assert.NotNil(t, report.OOM)
 	assert.True(t, report.OOM.IsLeak)
 	assert.Equal(t, "[1,2,3,4,5]", report.OOM.Timeline)
+	assert.Equal(t, 5, report.OOM.LeakCount, "leak count must be parsed from the hint")
+	assert.Equal(t, 60, report.OOM.WindowMin, "leak window must be parsed from the hint")
 }
 
 func TestReportBuilderImageTypeSpecific(t *testing.T) {
@@ -169,9 +172,9 @@ func TestReportBuilderImageTypeSpecific(t *testing.T) {
 			Msg: "Back-off pulling image \"myimage:latest\"",
 		},
 		IncludeLogs: true,
-		Logs:         "some logs",
-		FirstSeen:    time.Now().Add(-5 * time.Minute),
-		LastSeen:     time.Now(),
+		Logs:        "some logs",
+		FirstSeen:   time.Now().Add(-5 * time.Minute),
+		LastSeen:    time.Now(),
 	}
 
 	report := rb.Build(inc, model.ActionCreate, nil)
@@ -205,11 +208,11 @@ func TestReportBuilderPendingTypeSpecific(t *testing.T) {
 func TestReportBuilderSuppressedPods(t *testing.T) {
 	rb := NewReportBuilder("test-cluster")
 	inc := &model.Incident{
-		Name:              "node1",
-		Namespace:         "",
-		Resource:          "node",
-		Reason:            "NotReady",
-		SuppressedPods:    3,
+		Name:           "node1",
+		Namespace:      "",
+		Resource:       "node",
+		Reason:         "NotReady",
+		SuppressedPods: 3,
 		SuppressedPodSummaries: []model.PodSummary{
 			{Namespace: "ns1", PodName: "p1", Reason: "CrashLoopBackOff"},
 			{Namespace: "ns2", PodName: "p2", Reason: "OOMKilled"},
@@ -239,9 +242,9 @@ func TestDurationStr(t *testing.T) {
 func TestRenderAction(t *testing.T) {
 	renderer := NewPlainTextRenderer()
 	report := &Report{
-		Action: "create",
-		Reason: "CrashLoopBackOff",
-		Name:   "p1",
+		Action:  "create",
+		Reason:  "CrashLoopBackOff",
+		Name:    "p1",
 		Summary: SummarySection{Emoji: "🔴"},
 	}
 	msg := RenderAction(renderer, report)
@@ -259,14 +262,14 @@ func TestRenderActionUnknown(t *testing.T) {
 func TestSlackRendererCreate(t *testing.T) {
 	renderer := NewSlackRenderer()
 	report := &Report{
-		Action:   "create",
-		Reason:   "CrashLoopBackOff",
-		Name:     "p1",
+		Action:    "create",
+		Reason:    "CrashLoopBackOff",
+		Name:      "p1",
 		Namespace: "ns1",
-		Severity: "critical",
-		Summary:  SummarySection{Emoji: "🔴"},
-		Identity: &IdentitySection{Container: "c1", Node: "n1"},
-		State:    &StateSection{Message: "error", Restarts: 3, Duration: "5m"},
+		Severity:  "critical",
+		Summary:   SummarySection{Emoji: "🔴"},
+		Identity:  &IdentitySection{Container: "c1", Node: "n1"},
+		State:     &StateSection{Message: "error", Restarts: 3, Duration: "5m"},
 		Diagnosis: &DiagnosisSection{Hint: "OOMKill"},
 	}
 	msg := renderer.RenderCreate(report)
@@ -281,12 +284,12 @@ func TestSlackRendererCreate(t *testing.T) {
 func TestSlackRendererResolved(t *testing.T) {
 	renderer := NewSlackRenderer()
 	report := &Report{
-		Action:   "resolved",
-		Reason:   "CrashLoopBackOff",
-		Name:     "p1",
+		Action:    "resolved",
+		Reason:    "CrashLoopBackOff",
+		Name:      "p1",
 		Namespace: "ns1",
-		Summary:  SummarySection{Emoji: "✅", Duration: "5m"},
-		Identity: &IdentitySection{Node: "n1"},
+		Summary:   SummarySection{Emoji: "✅", Duration: "5m"},
+		Identity:  &IdentitySection{Node: "n1"},
 	}
 	msg := renderer.RenderResolved(report)
 	assert.Contains(t, msg, "✅")
@@ -297,12 +300,12 @@ func TestSlackRendererResolved(t *testing.T) {
 func TestPlainTextRendererCreate(t *testing.T) {
 	renderer := NewPlainTextRenderer()
 	report := &Report{
-		Action:   "create",
-		Reason:   "OOMKilled",
-		Name:     "p1",
+		Action:    "create",
+		Reason:    "OOMKilled",
+		Name:      "p1",
 		Namespace: "ns1",
-		Summary:  SummarySection{Emoji: "🔴"},
-		OOM:      &OOMSection{MemoryLimit: "256Mi"},
+		Summary:   SummarySection{Emoji: "🔴"},
+		OOM:       &OOMSection{MemoryLimit: "256Mi"},
 	}
 	msg := renderer.RenderCreate(report)
 	assert.Contains(t, msg, "OOMKilled")

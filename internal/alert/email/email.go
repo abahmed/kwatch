@@ -6,11 +6,12 @@ import (
 	"strconv"
 	"strings"
 
+	gomail "gopkg.in/mail.v2"
+	"k8s.io/klog/v2"
+
 	"github.com/abahmed/kwatch/internal/alert/util"
 	"github.com/abahmed/kwatch/internal/config"
 	"github.com/abahmed/kwatch/internal/event"
-	gomail "gopkg.in/mail.v2"
-	"k8s.io/klog/v2"
 )
 
 type Email struct {

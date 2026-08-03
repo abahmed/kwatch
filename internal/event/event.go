@@ -6,6 +6,8 @@ import (
 	"net/http"
 	"strconv"
 	"time"
+
+	"github.com/abahmed/kwatch/internal/model"
 )
 
 // RetryAfterError wraps an error with an optional Retry-After duration.
@@ -54,10 +56,10 @@ type Event struct {
 	Labels        map[string]string
 	OwnerKind     string
 	RestartCount  int
-	Hint          string // Pre-computed diagnostic hint; empty = auto-generate from Reason
-	Severity      string // Override severity; empty = let enricher decide from OwnerKind
-	IncludeEvents bool   // If false, omit events section from output
-	IncludeLogs   bool   // If false, omit logs section from output
-	Action        string // Incident action: "create", "update", "resolved"; "" = legacy event path
-	DedupKey      string // Stable per-incident key for trigger↔resolve correlation
+	Hint          string         // Pre-computed diagnostic hint; empty = auto-generate from Reason
+	Severity      model.Severity // Override severity; empty = let enricher decide from OwnerKind
+	IncludeEvents bool           // If false, omit events section from output
+	IncludeLogs   bool           // If false, omit logs section from output
+	Action        string         // Incident action: "create", "update", "resolved"; "" = legacy event path
+	DedupKey      string         // Stable per-incident key for trigger↔resolve correlation
 }

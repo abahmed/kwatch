@@ -31,5 +31,3 @@ func TestShortMultipleCalls(t *testing.T) {
 	assert.Equal("dev", result1)
 	assert.Equal("dev", result2)
 }
-
-

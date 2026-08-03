@@ -6,10 +6,14 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/abahmed/kwatch/internal/event"
+	"github.com/abahmed/kwatch/internal/constant"
+
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/klog/v2"
+
+	"github.com/abahmed/kwatch/internal/event"
+	"github.com/abahmed/kwatch/internal/model"
 )
 
 func (h *handler) SweepTLSSecrets() {
@@ -60,7 +64,7 @@ func (h *handler) checkTLSSecret(secret *corev1.Secret, now time.Time, warnWindo
 			Resource:  "secret",
 			PodName:   secret.Name,
 			Namespace: secret.Namespace,
-			Reason:    "TLSCertExpired",
+			Reason:    constant.ReasonTLSCertExpired,
 			Owner:     key,
 			Labels:    secret.Labels,
 			Severity:  "high",
@@ -68,19 +72,19 @@ func (h *handler) checkTLSSecret(secret *corev1.Secret, now time.Time, warnWindo
 		})
 	} else if remaining < warnWindow {
 		daysLeft := int(remaining.Hours() / 24)
-		severity := "normal"
+		severity := model.SeverityNormal
 		critical := h.config.TlsMonitor.CriticalThreshold
 		if critical <= 0 {
 			critical = 3
 		}
 		if daysLeft <= critical {
-			severity = "high"
+			severity = model.SeverityHigh
 		}
 		h.signalEvent(&event.Signal{
 			Resource:  "secret",
 			PodName:   secret.Name,
 			Namespace: secret.Namespace,
-			Reason:    "TLSCertExpiringSoon",
+			Reason:    constant.ReasonTLSCertExpiringSoon,
 			Owner:     key,
 			Labels:    secret.Labels,
 			Severity:  severity,

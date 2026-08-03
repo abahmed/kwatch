@@ -7,12 +7,13 @@ import (
 	"os"
 	"path/filepath"
 
-	"github.com/abahmed/kwatch/internal/config"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/clientcmd"
 	"k8s.io/client-go/util/homedir"
 	"k8s.io/klog/v2"
+
+	"github.com/abahmed/kwatch/internal/config"
 )
 
 // Create returns kubernetes client after initializing it with in-cluster, or
@@ -90,5 +91,3 @@ func GetRestConfig(appConfig *config.App) (*rest.Config, error) {
 	}
 	return clientConfig, nil
 }
-
-

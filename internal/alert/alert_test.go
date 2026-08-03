@@ -6,15 +6,16 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"strings"
-	"text/template"
 	"testing"
+	"text/template"
 	"time"
+
+	"github.com/stretchr/testify/assert"
 
 	"github.com/abahmed/kwatch/internal/config"
 	"github.com/abahmed/kwatch/internal/event"
 	"github.com/abahmed/kwatch/internal/llm"
 	"github.com/abahmed/kwatch/internal/model"
-	"github.com/stretchr/testify/assert"
 )
 
 // testBuildMessage is a helper for tests that creates a minimal AlertManager

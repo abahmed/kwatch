@@ -5,16 +5,17 @@ import (
 	"errors"
 	"testing"
 
-	"github.com/abahmed/kwatch/internal/alert"
-	"github.com/abahmed/kwatch/internal/config"
-	"github.com/abahmed/kwatch/internal/state"
-	"github.com/abahmed/kwatch/internal/version"
 	"github.com/google/go-github/v41/github"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes/fake"
+
+	"github.com/abahmed/kwatch/internal/alert"
+	"github.com/abahmed/kwatch/internal/config"
+	"github.com/abahmed/kwatch/internal/state"
+	"github.com/abahmed/kwatch/internal/version"
 )
 
 type MockGitHubClient struct {

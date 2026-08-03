@@ -27,6 +27,17 @@ func GetPodEventsStr(events *[]v1.Event) string {
 		if ts.IsZero() {
 			ts = ev.EventTime.Time
 		}
+		if ts.IsZero() {
+			ts = ev.FirstTimestamp.Time
+		}
+		if ts.IsZero() {
+			ts = ev.CreationTimestamp.Time
+		}
+
+		if ts.IsZero() {
+			eventsString += fmt.Sprintf("%s %s\n", ev.Reason, ev.Message)
+			continue
+		}
 
 		eventsString +=
 			fmt.Sprintf(

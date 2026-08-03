@@ -4,13 +4,14 @@ import (
 	"context"
 	"fmt"
 
+	"k8s.io/client-go/kubernetes"
+	"k8s.io/klog/v2"
+
 	"github.com/abahmed/kwatch/internal/alert"
 	"github.com/abahmed/kwatch/internal/config"
 	"github.com/abahmed/kwatch/internal/constant"
 	"github.com/abahmed/kwatch/internal/state"
 	"github.com/abahmed/kwatch/internal/version"
-	"k8s.io/client-go/kubernetes"
-	"k8s.io/klog/v2"
 )
 
 type StartupManager struct {

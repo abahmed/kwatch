@@ -9,10 +9,11 @@ import (
 	"testing"
 	"time"
 
+	"github.com/stretchr/testify/assert"
+
 	"github.com/abahmed/kwatch/internal/config"
 	"github.com/abahmed/kwatch/internal/event"
 	"github.com/abahmed/kwatch/internal/model"
-	"github.com/stretchr/testify/assert"
 )
 
 type fakeIncidentLister struct {
@@ -241,8 +242,8 @@ func TestTestAlertHandler(t *testing.T) {
 	if len(am.events) != 1 {
 		t.Fatalf("expected 1 sent event, got %d", len(am.events))
 	}
-	if len(am.msgs) != 1 {
-		t.Fatalf("expected 1 sent message, got %d", len(am.msgs))
+	if len(am.msgs) != 0 {
+		t.Fatalf("expected no plain message (NotifyEvent is the single notification), got %d", len(am.msgs))
 	}
 }
 

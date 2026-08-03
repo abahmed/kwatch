@@ -1,8 +1,9 @@
 package filter
 
 import (
-	"github.com/abahmed/kwatch/internal/k8s"
 	"k8s.io/klog/v2"
+
+	"github.com/abahmed/kwatch/internal/k8s"
 )
 
 type ContainerLogsFilter struct{}

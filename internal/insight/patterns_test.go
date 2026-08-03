@@ -4,9 +4,10 @@ import (
 	"fmt"
 	"testing"
 
+	"github.com/stretchr/testify/assert"
+
 	"github.com/abahmed/kwatch/internal/context"
 	"github.com/abahmed/kwatch/internal/model"
-	"github.com/stretchr/testify/assert"
 )
 
 func TestDynamicThresholdNilGraph(t *testing.T) {

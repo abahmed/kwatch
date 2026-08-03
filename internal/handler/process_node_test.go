@@ -5,14 +5,15 @@ import (
 	"testing"
 	"time"
 
-	"github.com/abahmed/kwatch/internal/config"
-	"github.com/abahmed/kwatch/internal/correlation"
-	"github.com/abahmed/kwatch/internal/model"
 	"github.com/stretchr/testify/assert"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/informers"
 	"k8s.io/client-go/kubernetes/fake"
+
+	"github.com/abahmed/kwatch/internal/config"
+	"github.com/abahmed/kwatch/internal/correlation"
+	"github.com/abahmed/kwatch/internal/model"
 )
 
 func TestProcessNodeReadyAndMemoryPressure(t *testing.T) {
@@ -438,7 +439,7 @@ func TestProcessNodeHealthyNoResolve(t *testing.T) {
 
 func TestMarkFirstNodePressureHit(t *testing.T) {
 	e := testCorrelator()
-	h := NewHandler(fake.NewSimpleClientset(), &config.Config{}, e, testAlertMgr).(*handler)
+	h := NewHandler(fake.NewSimpleClientset(), &config.Config{}, e, testAlertMgr)
 	t1 := h.markFirstNodePressure("node1/DiskPressure")
 	t2 := h.markFirstNodePressure("node1/DiskPressure")
 	assert.Equal(t, t1, t2, "second call should return existing entry")
@@ -446,7 +447,7 @@ func TestMarkFirstNodePressureHit(t *testing.T) {
 
 func TestClearAllNodePressureNoMatch(t *testing.T) {
 	e := testCorrelator()
-	h := NewHandler(fake.NewSimpleClientset(), &config.Config{}, e, testAlertMgr).(*handler)
+	h := NewHandler(fake.NewSimpleClientset(), &config.Config{}, e, testAlertMgr)
 	h.firstNodePressure["node1/DiskPressure"] = time.Now()
 	h.firstNodePressure["node1/PIDPressure"] = time.Now()
 	h.clearAllNodePressure("other-node")
@@ -455,7 +456,7 @@ func TestClearAllNodePressureNoMatch(t *testing.T) {
 
 func TestClearAllNodePressureWithMatch(t *testing.T) {
 	e := testCorrelator()
-	h := NewHandler(fake.NewSimpleClientset(), &config.Config{}, e, testAlertMgr).(*handler)
+	h := NewHandler(fake.NewSimpleClientset(), &config.Config{}, e, testAlertMgr)
 	h.firstNodePressure["node1/DiskPressure"] = time.Now()
 	h.firstNodePressure["node1/PIDPressure"] = time.Now()
 	h.firstNodePressure["node2/MemoryPressure"] = time.Now()

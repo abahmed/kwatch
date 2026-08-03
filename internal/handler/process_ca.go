@@ -1,11 +1,12 @@
 package handler
 
 import (
-	"strings"
 	"time"
 
-	"github.com/abahmed/kwatch/internal/event"
 	corev1 "k8s.io/api/core/v1"
+
+	"github.com/abahmed/kwatch/internal/event"
+	"github.com/abahmed/kwatch/internal/model"
 )
 
 const caSustainedMinutes = 5
@@ -44,19 +45,18 @@ func (h *handler) ProcessClusterAutoscalerEvent(ev *corev1.Event) {
 			Reason:   ev.Reason,
 			Hint:     hint,
 			Owner:    "cluster-autoscaler",
-			Severity: "warning",
+			Severity: model.SeverityWarning,
 			NodeName: ev.InvolvedObject.Name,
 		})
 
 	default:
-		// TriggeredScaleUp, ScaleDown, etc. — informational, reset
-		// any previous blocked state for this reason
+		// TriggeredScaleUp, ScaleDown, etc. — informational. Any non-failure
+		// CA event means the autoscaler is functioning again, so clear the
+		// sustained gates for the failure reasons; otherwise a later failure
+		// would alert immediately without a fresh sustain window.
 		h.caMu.Lock()
-		key := ev.Reason
-		if strings.HasPrefix(ev.Reason, "FailedTo") || strings.HasPrefix(ev.Reason, "NotTrigger") {
-			key = ev.Reason
-		}
-		delete(h.firstCaBlocked, key)
+		delete(h.firstCaBlocked, "FailedToScaleUp")
+		delete(h.firstCaBlocked, "NotTriggerScaleUp")
 		h.caMu.Unlock()
 	}
 }

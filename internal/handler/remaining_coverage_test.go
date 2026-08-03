@@ -5,20 +5,21 @@ import (
 	"testing"
 	"time"
 
-	"github.com/abahmed/kwatch/internal/config"
-	"github.com/abahmed/kwatch/internal/filter"
 	"github.com/stretchr/testify/assert"
 	appsv1 "k8s.io/api/apps/v1"
 	batchv1 "k8s.io/api/batch/v1"
 	corev1 "k8s.io/api/core/v1"
 	networkingv1 "k8s.io/api/networking/v1"
+	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/util/intstr"
 	"k8s.io/client-go/informers"
 	"k8s.io/client-go/kubernetes/fake"
-	"k8s.io/apimachinery/pkg/api/resource"
-	"k8s.io/apimachinery/pkg/runtime"
 	clienttesting "k8s.io/client-go/testing"
+
+	"github.com/abahmed/kwatch/internal/config"
+	"github.com/abahmed/kwatch/internal/filter"
 )
 
 // --- ProcessPod success path ---
@@ -554,7 +555,7 @@ func TestProcessContainerOwnerResolved(t *testing.T) {
 // --- buildContainerHint: OOMKilled with spec but no memory limit ---
 
 func TestBuildHintOOMKilledNoMemLimit(t *testing.T) {
-	h := NewHandler(fake.NewSimpleClientset(), &config.Config{}, testCorrelator(), testAlertMgr).(*handler)
+	h := NewHandler(fake.NewSimpleClientset(), &config.Config{}, testCorrelator(), testAlertMgr)
 
 	ctx := &filter.Context{
 		Pod: &corev1.Pod{
@@ -585,7 +586,7 @@ func TestBuildHintOOMKilledNoMemLimit(t *testing.T) {
 // --- buildContainerHint: CrashLoopBackOff with LivenessProbe ---
 
 func TestBuildHintCrashLoopBackOffLiveness(t *testing.T) {
-	h := NewHandler(fake.NewSimpleClientset(), &config.Config{}, testCorrelator(), testAlertMgr).(*handler)
+	h := NewHandler(fake.NewSimpleClientset(), &config.Config{}, testCorrelator(), testAlertMgr)
 
 	ctx := &filter.Context{
 		Pod: &corev1.Pod{
@@ -621,7 +622,7 @@ func TestBuildHintCrashLoopBackOffLiveness(t *testing.T) {
 // --- buildContainerHint: ImagePullBackOff with imagePullSecrets ---
 
 func TestBuildHintImagePullBackOffWithSecrets(t *testing.T) {
-	h := NewHandler(fake.NewSimpleClientset(), &config.Config{}, testCorrelator(), testAlertMgr).(*handler)
+	h := NewHandler(fake.NewSimpleClientset(), &config.Config{}, testCorrelator(), testAlertMgr)
 
 	ctx := &filter.Context{
 		Pod: &corev1.Pod{
@@ -653,7 +654,7 @@ func TestBuildHintImagePullBackOffWithSecrets(t *testing.T) {
 // --- buildContainerHint: ImagePullBackOff with well-known error message ---
 
 func TestBuildHintImagePullBackOffRateLimit(t *testing.T) {
-	h := NewHandler(fake.NewSimpleClientset(), &config.Config{}, testCorrelator(), testAlertMgr).(*handler)
+	h := NewHandler(fake.NewSimpleClientset(), &config.Config{}, testCorrelator(), testAlertMgr)
 
 	ctx := &filter.Context{
 		Pod: &corev1.Pod{
@@ -822,7 +823,7 @@ func TestProcessPodUnschedulableWithResources(t *testing.T) {
 // --- OOMKilled with memory limit set (buildContainerHint line 195) ---
 
 func TestBuildHintOOMKilledWithLimit(t *testing.T) {
-	h := NewHandler(fake.NewSimpleClientset(), &config.Config{}, testCorrelator(), testAlertMgr).(*handler)
+	h := NewHandler(fake.NewSimpleClientset(), &config.Config{}, testCorrelator(), testAlertMgr)
 
 	ctx := &filter.Context{
 		Pod: &corev1.Pod{
@@ -855,7 +856,7 @@ func TestBuildHintOOMKilledWithLimit(t *testing.T) {
 // --- buildContainerHint: CrashLoopBackOff without LivenessProbe ---
 
 func TestBuildHintCrashLoopBackOffNoLiveness(t *testing.T) {
-	h := NewHandler(fake.NewSimpleClientset(), &config.Config{}, testCorrelator(), testAlertMgr).(*handler)
+	h := NewHandler(fake.NewSimpleClientset(), &config.Config{}, testCorrelator(), testAlertMgr)
 
 	ctx := &filter.Context{
 		Pod: &corev1.Pod{
@@ -951,7 +952,7 @@ func TestProcessCronJobNotScheduledPath(t *testing.T) {
 
 // --- Container no spec found for buildContainerHint (spec != nil false in probe section) ---
 func TestBuildHintNoSpecFound(t *testing.T) {
-	h := NewHandler(fake.NewSimpleClientset(), &config.Config{}, testCorrelator(), testAlertMgr).(*handler)
+	h := NewHandler(fake.NewSimpleClientset(), &config.Config{}, testCorrelator(), testAlertMgr)
 
 	ctx := &filter.Context{
 		Pod: &corev1.Pod{
@@ -972,7 +973,7 @@ func TestBuildHintNoSpecFound(t *testing.T) {
 
 // --- Init container error ---
 func TestBuildHintInitContainerError(t *testing.T) {
-	h := NewHandler(fake.NewSimpleClientset(), &config.Config{}, testCorrelator(), testAlertMgr).(*handler)
+	h := NewHandler(fake.NewSimpleClientset(), &config.Config{}, testCorrelator(), testAlertMgr)
 
 	ctx := &filter.Context{
 		Pod: &corev1.Pod{
@@ -1245,7 +1246,7 @@ func TestProcessContainerEventListerMultiEvents(t *testing.T) {
 
 // --- buildContainerHint: LivenessProbeFailed with spec ---
 func TestBuildHintLivenessProbeFailed(t *testing.T) {
-	h := NewHandler(fake.NewSimpleClientset(), &config.Config{}, testCorrelator(), testAlertMgr).(*handler)
+	h := NewHandler(fake.NewSimpleClientset(), &config.Config{}, testCorrelator(), testAlertMgr)
 
 	ctx := &filter.Context{
 		Pod: &corev1.Pod{
@@ -1286,7 +1287,7 @@ func TestBuildHintOOMRepeating(t *testing.T) {
 			Threshold:     2,
 			WindowMinutes: 10,
 		},
-	}, testCorrelator(), testAlertMgr).(*handler)
+	}, testCorrelator(), testAlertMgr)
 
 	// Prime the tracker with one record so the next call repeats
 	h.oomTracker.record("ns1/p1/app")
@@ -1328,7 +1329,7 @@ func TestProcessPodUnschedulableDelayFallback(t *testing.T) {
 		ScheduleMonitor: config.ScheduleMonitor{Enabled: true},
 	}
 	h := NewHandler(client, cfg, e, testAlertMgr)
-	hh := h.(*handler)
+	hh := h
 	hh.now = func() time.Time { return time.Now().Add(-1 * time.Minute) }
 
 	pod := &corev1.Pod{
@@ -1422,7 +1423,7 @@ func TestProcessPodNoIssuesAfterPodEnricher(t *testing.T) {
 		PendingPodMonitor: config.PendingPodMonitor{Enabled: true, Threshold: 600},
 	}
 	h := NewHandler(client, cfg, e, testAlertMgr)
-	hh := h.(*handler)
+	hh := h
 	hh.podEnrichers = []filter.Enricher{clearPodIssuesEnricher{}}
 
 	pod := &corev1.Pod{

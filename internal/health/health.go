@@ -10,11 +10,14 @@ import (
 	"sync/atomic"
 	"time"
 
+	"github.com/abahmed/kwatch/internal/constant"
+
+	"k8s.io/klog/v2"
+
 	"github.com/abahmed/kwatch/internal/config"
 	"github.com/abahmed/kwatch/internal/event"
 	"github.com/abahmed/kwatch/internal/metrics"
 	"github.com/abahmed/kwatch/internal/model"
-	"k8s.io/klog/v2"
 )
 
 type IncidentLister interface {
@@ -226,13 +229,12 @@ func (h *HealthServer) testAlertHandler(w http.ResponseWriter, r *http.Request) 
 	ev := event.Event{
 		PodName:       "test-pod",
 		Namespace:     "default",
-		Reason:        "TestAlert",
+		Reason:        constant.ReasonTestAlert,
 		Events:        "this is a test alert from kwatch",
 		IncludeEvents: true,
 		IncludeLogs:   true,
 	}
 	h.alertManager.NotifyEvent(ev)
-	h.alertManager.Notify("[test-alert] kwatch test alert sent")
 	w.Header().Set("Content-Type", "text/plain")
 	w.WriteHeader(http.StatusOK)
 	if _, err := w.Write([]byte("test alert sent")); err != nil {

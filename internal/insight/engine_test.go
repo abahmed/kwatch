@@ -5,9 +5,10 @@ import (
 	"testing"
 	"time"
 
+	"github.com/stretchr/testify/assert"
+
 	"github.com/abahmed/kwatch/internal/context"
 	"github.com/abahmed/kwatch/internal/model"
-	"github.com/stretchr/testify/assert"
 )
 
 func TestAnalyzeNoGraph(t *testing.T) {
@@ -205,4 +206,36 @@ func TestAnalyzeNoDeps(t *testing.T) {
 	assert.Empty(t, ins.Cause)
 	assert.Empty(t, ins.Impact)
 	assert.Empty(t, ins.Pattern)
+}
+
+func TestAnalyzePodIncidentKeyedByOwnerName(t *testing.T) {
+	graph := context.NewResourceGraph()
+	graph.AddEdge("pod", "ns1", "dep1-7d8d7", "node", "", "n1", "scheduled_on")
+	graph.AddEdge("pod", "ns1", "dep1-7d8d7", "deployment", "ns1", "dep1", "owned_by")
+	graph.AddEdge("pod", "ns1", "dep1-9c2a1", "node", "", "n1", "scheduled_on")
+	graph.AddEdge("pod", "ns1", "dep1-9c2a1", "deployment", "ns1", "dep1", "owned_by")
+
+	e := NewEngine(graph, context.NewChangeTracker(10))
+	inc := &model.Incident{
+		Resource: "pod", Namespace: "ns1",
+		Name: "dep1", OwnerKind: "Deployment", NodeName: "n1",
+		Resources: map[string]bool{"dep1-7d8d7": true, "dep1-9c2a1": true},
+	}
+	ins := e.Analyze(inc)
+
+	assert.Contains(t, ins.Cause, "node n1")
+	assert.Equal(t, "node_failure", ins.Pattern)
+}
+
+func TestAnalyzeWorkloadIncidentNamespaceName(t *testing.T) {
+	graph := context.NewResourceGraph()
+	graph.AddEdge("pod", "ns1", "p1", "deployment", "ns1", "dep1", "owned_by")
+	graph.AddEdge("pod", "ns1", "p2", "deployment", "ns1", "dep1", "owned_by")
+	graph.AddEdge("service", "ns1", "svc1", "pod", "ns1", "p1", "selects")
+
+	e := NewEngine(graph, context.NewChangeTracker(10))
+	inc := &model.Incident{Resource: "deployment", Namespace: "ns1", Name: "ns1/dep1"}
+	ins := e.Analyze(inc)
+
+	assert.Contains(t, ins.Impact, "2 dependent")
 }

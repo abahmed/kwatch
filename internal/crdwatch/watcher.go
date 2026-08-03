@@ -6,9 +6,6 @@ import (
 	"sync"
 	"time"
 
-	"github.com/abahmed/kwatch/api/v1alpha1"
-	"github.com/abahmed/kwatch/internal/alert"
-	"github.com/abahmed/kwatch/internal/config"
 	"k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
@@ -19,6 +16,10 @@ import (
 	"k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/cache"
 	"k8s.io/klog/v2"
+
+	"github.com/abahmed/kwatch/api/v1alpha1"
+	"github.com/abahmed/kwatch/internal/alert"
+	"github.com/abahmed/kwatch/internal/config"
 )
 
 var gvr = schema.GroupVersionResource{

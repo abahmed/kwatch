@@ -6,13 +6,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/abahmed/kwatch/internal/alert"
-	"github.com/abahmed/kwatch/internal/config"
-	"github.com/abahmed/kwatch/internal/correlation"
-	"github.com/abahmed/kwatch/internal/event"
-	"github.com/abahmed/kwatch/internal/filter"
-	"github.com/abahmed/kwatch/internal/insight"
-	"github.com/abahmed/kwatch/internal/model"
 	"github.com/stretchr/testify/assert"
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
@@ -21,6 +14,14 @@ import (
 	"k8s.io/apimachinery/pkg/util/intstr"
 	"k8s.io/client-go/informers"
 	"k8s.io/client-go/kubernetes/fake"
+
+	"github.com/abahmed/kwatch/internal/alert"
+	"github.com/abahmed/kwatch/internal/config"
+	"github.com/abahmed/kwatch/internal/correlation"
+	"github.com/abahmed/kwatch/internal/event"
+	"github.com/abahmed/kwatch/internal/filter"
+	"github.com/abahmed/kwatch/internal/insight"
+	"github.com/abahmed/kwatch/internal/model"
 )
 
 var testAlertMgr = &alert.AlertManager{}
@@ -63,7 +64,7 @@ func TestNewHandlerPendingPodMonitorZeroThreshold(t *testing.T) {
 func TestSignalEventWithRestartCountOnly(t *testing.T) {
 	e := testCorrelator()
 	h := NewHandler(fake.NewSimpleClientset(), &config.Config{}, e, testAlertMgr)
-	h.(*handler).signalEvent(&event.Signal{
+	h.signalEvent(&event.Signal{
 		Resource:     "pod",
 		Reason:       "CrashLoopBackOff",
 		PodName:      "p1",
@@ -156,7 +157,7 @@ func TestEmitHighRestartAlertWithOwner(t *testing.T) {
 	h := NewHandler(fake.NewSimpleClientset(), &config.Config{
 		ContainerRestartThreshold: 3,
 	}, e, testAlertMgr)
-	hh := h.(*handler)
+	hh := h
 
 	// Create a pod owned by a ReplicaSet to ensure owner resolution succeeds
 	rs := &appsv1.ReplicaSet{
@@ -200,7 +201,7 @@ func TestProcessPodUnschedulableWithDelayAndResources(t *testing.T) {
 	h := NewHandler(fake.NewSimpleClientset(), &config.Config{
 		ScheduleMonitor: config.ScheduleMonitor{Enabled: true},
 	}, e, testAlertMgr)
-	hh := h.(*handler)
+	hh := h
 	hh.now = func() time.Time { return time.Now().Add(2 * time.Minute) }
 
 	pod := &corev1.Pod{
@@ -482,7 +483,7 @@ func TestProcessPodUnschedulableWithEventLister(t *testing.T) {
 		ScheduleMonitor: config.ScheduleMonitor{Enabled: true},
 	}
 	h := NewHandler(client, cfg, e, testAlertMgr)
-	hh := h.(*handler)
+	hh := h
 	hh.now = func() time.Time { return time.Now().Add(2 * time.Minute) }
 
 	// Set event lister to exercise that branch in executePodFilters
@@ -649,6 +650,37 @@ func TestProcessNodeNotReadyAlert(t *testing.T) {
 	}
 
 	assert.NoError(t, h.ProcessNodeObject(node, false))
+}
+
+func TestProcessNodeRecoveryClearsStaleInhibition(t *testing.T) {
+	client := fake.NewSimpleClientset()
+	cfg := &config.Config{}
+
+	e := correlation.NewEngine(correlation.Config{
+		Window:                    10 * time.Minute,
+		InhibitNodeSuppressesPods: true,
+	})
+	h := NewHandler(client, cfg, e, testAlertMgr)
+
+	// Node was NotReady before startup — baselined, flag pre-seeded, no incident.
+	e.SetActiveNodeIncidents([]string{"test-node"})
+
+	// Node recovers — the handler must clear the stale inhibition flag even
+	// though there is no incident in state to resolve.
+	healthy := &corev1.Node{
+		ObjectMeta: metav1.ObjectMeta{Name: "test-node"},
+		Status: corev1.NodeStatus{
+			Conditions: []corev1.NodeCondition{
+				{Type: corev1.NodeReady, Status: corev1.ConditionTrue},
+			},
+		},
+	}
+	assert.NoError(t, h.ProcessNodeObject(healthy, false))
+
+	// A subsequent pod incident on that node must alert normally.
+	inc, action := e.Process(event.Event{PodName: "p", Namespace: "ns", NodeName: "test-node", Reason: "CrashLoopBackOff"}, "dep", nil)
+	assert.Equal(t, model.ActionCreate, action)
+	assert.NotNil(t, inc)
 }
 
 func TestProcessNodeNotReadyWithIgnoredMessage(t *testing.T) {
@@ -1455,21 +1487,21 @@ func TestProcessDeploymentNotFound(t *testing.T) {
 }
 
 func TestSetReplicaLister(t *testing.T) {
-	h := NewHandler(fake.NewSimpleClientset(), &config.Config{}, testCorrelator(), testAlertMgr).(*handler)
+	h := NewHandler(fake.NewSimpleClientset(), &config.Config{}, testCorrelator(), testAlertMgr)
 	f := informers.NewSharedInformerFactory(fake.NewSimpleClientset(), 0)
 	h.SetReplicaLister(f.Apps().V1().ReplicaSets().Lister())
 	assert.NotNil(t, h.rsLister)
 }
 
 func TestSetSecretLister(t *testing.T) {
-	h := NewHandler(fake.NewSimpleClientset(), &config.Config{}, testCorrelator(), testAlertMgr).(*handler)
+	h := NewHandler(fake.NewSimpleClientset(), &config.Config{}, testCorrelator(), testAlertMgr)
 	f := informers.NewSharedInformerFactory(fake.NewSimpleClientset(), 0)
 	h.SetSecretLister(f.Core().V1().Secrets().Lister())
 	assert.NotNil(t, h.secretLister)
 }
 
 func TestSetInsightEngine(t *testing.T) {
-	h := NewHandler(fake.NewSimpleClientset(), &config.Config{}, testCorrelator(), testAlertMgr).(*handler)
+	h := NewHandler(fake.NewSimpleClientset(), &config.Config{}, testCorrelator(), testAlertMgr)
 	h.SetInsightEngine(nil)
 	assert.Nil(t, h.insightEngine)
 }
@@ -1477,7 +1509,7 @@ func TestSetInsightEngine(t *testing.T) {
 func TestProcessNodeResourceOvercommit(t *testing.T) {
 	e := testCorrelator()
 	h := NewHandler(fake.NewSimpleClientset(), &config.Config{}, e, testAlertMgr)
-	h.ProcessNodeResourceOvercommit("NodeMemoryPressure", "node1", "high memory usage")
+	h.ProcessNodeResourceOvercommit("NodeMemoryPressure", "node1", "high memory usage", "critical")
 	assert.Equal(t, 1, e.ActiveCount())
 }
 
@@ -1504,7 +1536,7 @@ func TestReportStartupSummaryWithData(t *testing.T) {
 }
 
 func TestEmitHighRestartAlertNoOwner(t *testing.T) {
-	h := NewHandler(fake.NewSimpleClientset(), &config.Config{}, testCorrelator(), testAlertMgr).(*handler)
+	h := NewHandler(fake.NewSimpleClientset(), &config.Config{}, testCorrelator(), testAlertMgr)
 
 	ctx := &filter.Context{
 		Pod: &corev1.Pod{
@@ -1542,13 +1574,13 @@ func TestProcessPodUnschedulableWithScheduleMonitor(t *testing.T) {
 	}
 	e := testCorrelator()
 	h := NewHandler(client, cfg, e, testAlertMgr)
-	h.(*handler).now = func() time.Time { return time.Now().Add(time.Minute) }
+	h.now = func() time.Time { return time.Now().Add(time.Minute) }
 
 	pod := &corev1.Pod{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:              "unscheduled",
 			Namespace:         "default",
-			CreationTimestamp:  metav1.Now(),
+			CreationTimestamp: metav1.Now(),
 		},
 		Spec: corev1.PodSpec{NodeName: ""},
 		Status: corev1.PodStatus{
@@ -1613,7 +1645,7 @@ func TestSignalEventWithInsightEngine(t *testing.T) {
 	ie := insight.Engine{}
 	h := NewHandler(fake.NewSimpleClientset(), &config.Config{}, e, testAlertMgr)
 	h.SetInsightEngine(&ie)
-	h.(*handler).signalEvent(&event.Signal{
+	h.signalEvent(&event.Signal{
 		Resource:  "pod",
 		Reason:    "TestReason",
 		PodName:   "p1",
@@ -1625,7 +1657,7 @@ func TestSignalEventWithInsightEngine(t *testing.T) {
 func TestSignalEventWithMessageHintFallback(t *testing.T) {
 	e := testCorrelator()
 	h := NewHandler(fake.NewSimpleClientset(), &config.Config{}, e, testAlertMgr)
-	h.(*handler).signalEvent(&event.Signal{
+	h.signalEvent(&event.Signal{
 		Resource:  "pod",
 		Reason:    "TestReason",
 		PodName:   "p1",
@@ -1639,7 +1671,7 @@ func TestSignalEventWithContainerState(t *testing.T) {
 	e := testCorrelator()
 	h := NewHandler(fake.NewSimpleClientset(), &config.Config{}, e, testAlertMgr)
 
-	h.(*handler).signalEvent(&event.Signal{
+	h.signalEvent(&event.Signal{
 		Resource:     "pod",
 		Reason:       "TestReason",
 		PodName:      "p1",

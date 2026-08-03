@@ -3,13 +3,14 @@ package handler
 import (
 	"testing"
 
-	"github.com/abahmed/kwatch/internal/config"
-	"github.com/abahmed/kwatch/internal/model"
 	"github.com/stretchr/testify/assert"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/informers"
 	"k8s.io/client-go/kubernetes/fake"
+
+	"github.com/abahmed/kwatch/internal/config"
+	"github.com/abahmed/kwatch/internal/model"
 )
 
 func TestSweepControlPlaneWithLister(t *testing.T) {
@@ -209,7 +210,7 @@ func TestDetectControlPlanePodCrashLoopBackOff(t *testing.T) {
 	assert.NotNil(t, sig)
 	assert.Equal(t, "ControlPlaneComponentFailure", sig.Reason)
 	assert.Equal(t, "controlplane", sig.Resource)
-	assert.Equal(t, "high", sig.Severity)
+	assert.Equal(t, model.SeverityHigh, sig.Severity)
 	assert.Equal(t, "apiserver", sig.Container)
 }
 

@@ -101,6 +101,29 @@ func TestMultipleEdges(t *testing.T) {
 	assert.Contains(t, deps, "deployment/ns1/dep1")
 }
 
+func TestEdgesDoNotGrowOnRepeatedAdd(t *testing.T) {
+	g := NewResourceGraph()
+	for i := 0; i < 1000; i++ {
+		g.AddEdge("pod", "ns1", "p1", "node", "", "n1", "scheduled_on")
+		g.AddEdge("pod", "ns1", "p1", "deployment", "ns1", "dep1", "owned_by")
+	}
+	// Repeated updates (pod relists/rebuilds) must not accumulate edges.
+	assert.Len(t, g.Edges(), 2)
+	assert.Len(t, g.DependenciesOf("pod", "ns1", "p1"), 2)
+}
+
+func TestRemoveNodeCleansEdges(t *testing.T) {
+	g := NewResourceGraph()
+	g.AddEdge("pod", "ns1", "p1", "node", "", "n1", "scheduled_on")
+	g.AddEdge("pod", "ns1", "p1", "deployment", "ns1", "dep1", "owned_by")
+
+	g.RemoveNode("pod", "ns1", "p1")
+
+	assert.Empty(t, g.Edges())
+	assert.Empty(t, g.DependentsOf("node", "", "n1"))
+	assert.Empty(t, g.DependentsOf("deployment", "ns1", "dep1"))
+}
+
 func TestConcurrency(t *testing.T) {
 	g := NewResourceGraph()
 	done := make(chan struct{})

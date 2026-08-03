@@ -35,5 +35,3 @@ func TestChangeTypeString(t *testing.T) {
 	var unknown ChangeType = 99
 	assert.Equal(t, "unknown", unknown.String())
 }
-
-

@@ -1,25 +1,21 @@
 package controller
 
 import (
+	"bytes"
 	"context"
 	"errors"
 	"fmt"
+	"os"
 	"sync"
 	"testing"
 	"time"
 
-	"github.com/abahmed/kwatch/internal/config"
-	"github.com/abahmed/kwatch/internal/correlation"
-	"github.com/abahmed/kwatch/internal/insight"
 	"github.com/stretchr/testify/assert"
-	admissionregistrationv1 "k8s.io/api/admissionregistration/v1"
 	appsv1 "k8s.io/api/apps/v1"
-	autoscalingv2 "k8s.io/api/autoscaling/v2"
-	batchv1 "k8s.io/api/batch/v1"
 	corev1 "k8s.io/api/core/v1"
-	networkingv1 "k8s.io/api/networking/v1"
-	policyv1 "k8s.io/api/policy/v1"
+	discoveryv1 "k8s.io/api/discovery/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/client-go/informers"
 	"k8s.io/client-go/kubernetes/fake"
 	admissionregistrationv1lister "k8s.io/client-go/listers/admissionregistration/v1"
@@ -29,8 +25,15 @@ import (
 	corev1lister "k8s.io/client-go/listers/core/v1"
 	discoveryv1lister "k8s.io/client-go/listers/discovery/v1"
 	networkingv1lister "k8s.io/client-go/listers/networking/v1"
+	policyv1lister "k8s.io/client-go/listers/policy/v1"
 	"k8s.io/client-go/tools/cache"
 	"k8s.io/client-go/util/workqueue"
+	"k8s.io/klog/v2"
+
+	"github.com/abahmed/kwatch/internal/config"
+	"github.com/abahmed/kwatch/internal/correlation"
+	"github.com/abahmed/kwatch/internal/insight"
+	"github.com/abahmed/kwatch/internal/model"
 )
 
 type mockHandler struct {
@@ -78,39 +81,25 @@ func (m *mockHandler) nodeEntry(i int) (string, bool) {
 	defer m.mu.Unlock()
 	return m.nodeKeys[i], m.nodeDel[i]
 }
-func (m *mockHandler) ProcessPodObject(_ context.Context, pod *corev1.Pod, deleted bool) error {
-	m.mu.Lock()
-	defer m.mu.Unlock()
-	m.podKeys = append(m.podKeys, pod.Namespace+"/"+pod.Name)
-	m.podDel = append(m.podDel, deleted)
-	return m.err
-}
-func (m *mockHandler) ProcessNodeObject(*corev1.Node, bool) error             { return m.err }
-func (m *mockHandler) ProcessDeployment(string, bool) error                   { return m.err }
-func (m *mockHandler) ProcessJob(string, bool) error                          { return m.err }
-func (m *mockHandler) ProcessDeploymentObject(*appsv1.Deployment, bool) error { return m.err }
-func (m *mockHandler) ProcessJobObject(*batchv1.Job, bool) error              { return m.err }
-func (m *mockHandler) SetPodLister(corev1lister.PodLister)                    {}
-func (m *mockHandler) SetNodeLister(corev1lister.NodeLister)                  {}
-func (m *mockHandler) SetDeploymentLister(appsv1lister.DeploymentLister)      {}
-func (m *mockHandler) SetJobLister(batchv1lister.JobLister)                   {}
-func (m *mockHandler) SetReplicaLister(appsv1lister.ReplicaSetLister)         {}
-func (m *mockHandler) SetDaemonSetLister(appsv1lister.DaemonSetLister)        {}
-func (m *mockHandler) SetStatefulSetLister(appsv1lister.StatefulSetLister)    {}
-func (m *mockHandler) SetEventLister(corev1lister.EventLister)                {}
-func (m *mockHandler) ProcessDaemonSet(string, bool) error                    { return m.err }
-func (m *mockHandler) ProcessCronJob(string, bool) error                      { return m.err }
-func (m *mockHandler) ProcessDaemonSetObject(*appsv1.DaemonSet, bool) error   { return m.err }
-func (m *mockHandler) ProcessCronJobObject(*batchv1.CronJob, bool) error      { return m.err }
-func (m *mockHandler) SetCronJobLister(batchv1lister.CronJobLister)           {}
+func (m *mockHandler) ProcessDeployment(string, bool) error                  { return m.err }
+func (m *mockHandler) ProcessJob(string, bool) error                         { return m.err }
+func (m *mockHandler) SetPodLister(corev1lister.PodLister)                   {}
+func (m *mockHandler) SetNodeLister(corev1lister.NodeLister)                 {}
+func (m *mockHandler) SetDeploymentLister(appsv1lister.DeploymentLister)     {}
+func (m *mockHandler) SetJobLister(batchv1lister.JobLister)                  {}
+func (m *mockHandler) SetReplicaLister(appsv1lister.ReplicaSetLister)        {}
+func (m *mockHandler) SetDaemonSetLister(appsv1lister.DaemonSetLister)       {}
+func (m *mockHandler) SetStatefulSetLister(appsv1lister.StatefulSetLister)   {}
+func (m *mockHandler) SetPdbLister(policyv1lister.PodDisruptionBudgetLister) {}
+func (m *mockHandler) SetEventLister(corev1lister.EventLister)               {}
+func (m *mockHandler) ProcessDaemonSet(string, bool) error                   { return m.err }
+func (m *mockHandler) ProcessCronJob(string, bool) error                     { return m.err }
+func (m *mockHandler) SetCronJobLister(batchv1lister.CronJobLister)          {}
 func (m *mockHandler) SetHorizontalPodAutoscalerLister(autoscalingv2lister.HorizontalPodAutoscalerLister) {
 }
 func (m *mockHandler) ProcessHorizontalPodAutoscaler(string, bool) error { return m.err }
-func (m *mockHandler) ProcessHorizontalPodAutoscalerObject(*autoscalingv2.HorizontalPodAutoscaler, bool) error {
-	return m.err
-}
-func (m *mockHandler) SetSecretLister(corev1lister.SecretLister) {}
-func (m *mockHandler) SweepTLSSecrets()                          {}
+func (m *mockHandler) SetSecretLister(corev1lister.SecretLister)         {}
+func (m *mockHandler) SweepTLSSecrets()                                  {}
 func (m *mockHandler) SetSeen(baseline map[string]map[string]int64) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
@@ -123,40 +112,28 @@ func (m *mockHandler) ReportStartupSummary(suppressed map[string]int) {
 	defer m.mu.Unlock()
 	m.startupSummary = suppressed
 }
-func (m *mockHandler) ProcessMutatingWebhookConfiguration(string, bool) error { return m.err }
-func (m *mockHandler) ProcessMutatingWebhookConfigurationObject(*admissionregistrationv1.MutatingWebhookConfiguration, bool) error {
-	return m.err
-}
+func (m *mockHandler) ProcessMutatingWebhookConfiguration(string, bool) error   { return m.err }
 func (m *mockHandler) ProcessValidatingWebhookConfiguration(string, bool) error { return m.err }
-func (m *mockHandler) ProcessValidatingWebhookConfigurationObject(*admissionregistrationv1.ValidatingWebhookConfiguration, bool) error {
-	return m.err
+func (m *mockHandler) ProcessService(string, bool) error                        { return m.err }
+func (m *mockHandler) ProcessNetworkPolicy(string, bool) error                  { return m.err }
+func (m *mockHandler) ProcessIngress(string, bool) error                        { return m.err }
+func (m *mockHandler) ProcessControlPlanePod(*corev1.Pod) error                 { return m.err }
+func (m *mockHandler) SweepControlPlane()                                       {}
+func (m *mockHandler) SetServiceLister(corev1lister.ServiceLister)              {}
+func (m *mockHandler) SetEndpointSliceLister(discoveryv1lister.EndpointSliceLister) {
 }
-func (m *mockHandler) ProcessService(string, bool) error                { return m.err }
-func (m *mockHandler) ProcessServiceObject(*corev1.Service, bool) error { return m.err }
-func (m *mockHandler) ProcessNetworkPolicy(string, bool) error          { return m.err }
-func (m *mockHandler) ProcessNetworkPolicyObject(*networkingv1.NetworkPolicy, bool) error {
-	return m.err
-}
-func (m *mockHandler) ProcessIngress(string, bool) error                      { return m.err }
-func (m *mockHandler) ProcessIngressObject(*networkingv1.Ingress, bool) error { return m.err }
-func (m *mockHandler) ProcessControlPlanePod(*corev1.Pod) error               { return m.err }
-func (m *mockHandler) SweepControlPlane()                                     {}
-func (m *mockHandler) SetServiceLister(corev1lister.ServiceLister)            {}
-func (m *mockHandler) SetEndpointSliceLister(discoveryv1lister.EndpointSliceLister) {}
 func (m *mockHandler) SetMwCLister(admissionregistrationv1lister.MutatingWebhookConfigurationLister) {
 }
 func (m *mockHandler) SetVwCLister(admissionregistrationv1lister.ValidatingWebhookConfigurationLister) {
 }
-func (m *mockHandler) SetIngressLister(networkingv1lister.IngressLister)          {}
-func (m *mockHandler) SetNetpolLister(networkingv1lister.NetworkPolicyLister)     {}
-func (m *mockHandler) SetCpPodLister(corev1lister.PodLister)                      {}
-func (m *mockHandler) ProcessStatefulSet(string, bool) error                      { return m.err }
-func (m *mockHandler) ProcessStatefulSetObject(*appsv1.StatefulSet, bool) error   { return m.err }
-func (m *mockHandler) ProcessPdb(string, bool) error                              { return m.err }
-func (m *mockHandler) ProcessPdbObject(*policyv1.PodDisruptionBudget, bool) error { return m.err }
-func (m *mockHandler) SetInsightEngine(_ *insight.Engine)                         {}
-func (m *mockHandler) ProcessNodeResourceOvercommit(string, string, string) {}
-func (m *mockHandler) ProcessClusterAutoscalerEvent(*corev1.Event)           {}
+func (m *mockHandler) SetIngressLister(networkingv1lister.IngressLister)                    {}
+func (m *mockHandler) SetNetpolLister(networkingv1lister.NetworkPolicyLister)               {}
+func (m *mockHandler) SetCpPodLister(corev1lister.PodLister)                                {}
+func (m *mockHandler) ProcessStatefulSet(string, bool) error                                { return m.err }
+func (m *mockHandler) ProcessPdb(string, bool) error                                        { return m.err }
+func (m *mockHandler) SetInsightEngine(_ *insight.Engine)                                   {}
+func (m *mockHandler) ProcessNodeResourceOvercommit(string, string, string, model.Severity) {}
+func (m *mockHandler) ProcessClusterAutoscalerEvent(*corev1.Event)                          {}
 
 func TestNewCreatesController(t *testing.T) {
 	assert := assert.New(t)
@@ -194,6 +171,28 @@ func TestNewWithNodeMonitor(t *testing.T) {
 	assert.NotNil(ctrl.nodeLister)
 }
 
+func TestNewWithNodeResourceMonitorOnly(t *testing.T) {
+	assert := assert.New(t)
+
+	client := fake.NewSimpleClientset()
+	cfg := &config.Config{
+		NodeResourceMonitor: config.NodeResourceMonitor{
+			Enabled:         true,
+			IntervalSeconds: 60,
+		},
+	}
+	h := &mockHandler{}
+
+	ctrl, cleanup := New(client, cfg, h)
+	defer cleanup()
+
+	// Node resource monitoring needs the node lister even when the node
+	// event monitor is disabled — a nil lister would panic on first tick.
+	assert.NotNil(ctrl.nodeLister)
+	// But the node event worker must stay off.
+	assert.Nil(ctrl.nodesSynced)
+}
+
 func TestNewWithSingleNamespace(t *testing.T) {
 	assert := assert.New(t)
 
@@ -208,6 +207,51 @@ func TestNewWithSingleNamespace(t *testing.T) {
 
 	assert.NotNil(ctrl)
 	assert.NotNil(ctrl.podLister)
+}
+
+func TestSyncEndpointSliceResolvesServiceByLabel(t *testing.T) {
+	assert := assert.New(t)
+
+	svc := &corev1.Service{
+		ObjectMeta: metav1.ObjectMeta{Name: "web", Namespace: "ns"},
+		Spec:       corev1.ServiceSpec{ClusterIP: "10.0.0.1", Selector: map[string]string{"app": "web"}},
+	}
+	epSlice := &discoveryv1.EndpointSlice{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "web-hash",
+			Namespace: "ns",
+			Labels:    map[string]string{"kubernetes.io/service-name": "web"},
+		},
+	}
+	client := fake.NewSimpleClientset(svc, epSlice)
+	cfg := &config.Config{
+		ServiceMonitor: config.ServiceMonitor{Enabled: true},
+	}
+	h := &mockHandler{}
+	ctrl, cleanup := New(client, cfg, h)
+	defer cleanup()
+
+	// The slice name ("web-hash") must NOT be looked up as the service name.
+	err := ctrl.syncEndpointSlice("ns/web-hash")
+	assert.Nil(err)
+}
+
+func TestSyncEndpointSliceIgnoresUnlabeled(t *testing.T) {
+	assert := assert.New(t)
+
+	epSlice := &discoveryv1.EndpointSlice{
+		ObjectMeta: metav1.ObjectMeta{Name: "web-hash", Namespace: "ns"},
+	}
+	client := fake.NewSimpleClientset(epSlice)
+	cfg := &config.Config{
+		ServiceMonitor: config.ServiceMonitor{Enabled: true},
+	}
+	h := &mockHandler{}
+	ctrl, cleanup := New(client, cfg, h)
+	defer cleanup()
+
+	err := ctrl.syncEndpointSlice("ns/web-hash")
+	assert.Nil(err)
 }
 
 func TestNewWithResync(t *testing.T) {
@@ -346,7 +390,7 @@ func TestProcessNextPodItemProcessesKey(t *testing.T) {
 	result := ctrl.processNextPodItem(context.Background())
 	assert.True(result)
 	assert.Equal([]string{"default/test-pod"}, h.podKeys)
-	assert.Equal([]bool{true}, h.podDel)
+	assert.Equal([]bool{false}, h.podDel)
 }
 
 func TestProcessNextNodeItemProcessesKey(t *testing.T) {
@@ -364,7 +408,7 @@ func TestProcessNextNodeItemProcessesKey(t *testing.T) {
 	result := ctrl.processNextNodeItem()
 	assert.True(result)
 	assert.Equal([]string{"worker-1"}, h.nodeKeys)
-	assert.Equal([]bool{true}, h.nodeDel)
+	assert.Equal([]bool{false}, h.nodeDel)
 }
 
 func TestSyncPodExistingPod(t *testing.T) {
@@ -407,7 +451,7 @@ func TestSyncPodDeletedPod(t *testing.T) {
 	err := ctrl.syncPod(context.Background(), "default/nonexistent")
 	assert.NoError(err)
 	assert.Equal([]string{"default/nonexistent"}, h.podKeys)
-	assert.Equal([]bool{true}, h.podDel)
+	assert.Equal([]bool{false}, h.podDel)
 }
 
 func TestSyncPodInvalidKey(t *testing.T) {
@@ -420,9 +464,12 @@ func TestSyncPodInvalidKey(t *testing.T) {
 	ctrl, cleanup := New(client, cfg, h)
 	defer cleanup()
 
+	// The key is forwarded to the handler, which is responsible for parsing
+	// and validating it; the controller is a thin dispatch layer.
 	err := ctrl.syncPod(context.Background(), "invalid-key-without-namespace/extra/segments")
-	assert.Error(err)
-	assert.Empty(h.podKeys)
+	assert.NoError(err)
+	assert.Equal([]string{"invalid-key-without-namespace/extra/segments"}, h.podKeys)
+	assert.Equal([]bool{false}, h.podDel)
 }
 
 func TestSyncPodHandlerError(t *testing.T) {
@@ -483,7 +530,7 @@ func TestSyncNodeDeletedNode(t *testing.T) {
 	err := ctrl.syncNode("nonexistent-node")
 	assert.NoError(err)
 	assert.Equal([]string{"nonexistent-node"}, h.nodeKeys)
-	assert.Equal([]bool{true}, h.nodeDel)
+	assert.Equal([]bool{false}, h.nodeDel)
 }
 
 func TestSyncNodeHandlerError(t *testing.T) {
@@ -607,7 +654,7 @@ func TestRunEndToEndPodDelete(t *testing.T) {
 
 	key, del := h.podEntry(0)
 	assert.Equal("default/ephemeral", key)
-	assert.True(del)
+	assert.False(del)
 }
 
 func TestRunEndToEndNodeAdd(t *testing.T) {
@@ -906,6 +953,87 @@ func TestBuildSeenSetSeedsNodeConditions(t *testing.T) {
 	assert.Contains(baseline, expectedKey, "buildSeenSet must seed node conditions")
 }
 
+// errDaemonSetLister is a DaemonSetLister whose List always fails,
+// simulating a broken informer cache.
+type errDaemonSetLister struct {
+	appsv1lister.DaemonSetLister
+}
+
+func (e *errDaemonSetLister) List(selector labels.Selector) ([]*appsv1.DaemonSet, error) {
+	return nil, errors.New("cache not synced")
+}
+
+// lockedBuffer is a goroutine-safe writer used to capture klog output.
+type lockedBuffer struct {
+	mu  sync.Mutex
+	buf bytes.Buffer
+}
+
+func (b *lockedBuffer) Write(p []byte) (int, error) {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	return b.buf.Write(p)
+}
+
+func (b *lockedBuffer) String() string {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	return b.buf.String()
+}
+
+func TestBuildSeenSetSurfacesListerErrors(t *testing.T) {
+	node := &corev1.Node{
+		ObjectMeta: metav1.ObjectMeta{Name: "worker-1"},
+		Status: corev1.NodeStatus{
+			Conditions: []corev1.NodeCondition{
+				{Type: corev1.NodeMemoryPressure, Status: corev1.ConditionTrue},
+			},
+		},
+	}
+	client := fake.NewSimpleClientset(node)
+	cfg := &config.Config{
+		NodeMonitor: config.NodeMonitor{Enabled: true},
+	}
+	h := &mockHandler{}
+
+	ctrl, cleanup := New(client, cfg, h)
+	defer cleanup()
+
+	assert.Eventually(t, func() bool {
+		_, err := ctrl.nodeLister.Get("worker-1")
+		return err == nil
+	}, 5*time.Second, 50*time.Millisecond)
+
+	// Simulate a broken informer cache for DaemonSets: the List error
+	// must be surfaced via logging, not silently swallowed.
+	ctrl.dsLister = &errDaemonSetLister{}
+
+	var buf lockedBuffer
+	klog.LogToStderr(false)
+	klog.SetOutput(&buf)
+	klog.SetOutputBySeverity("WARNING", &buf)
+	klog.SetOutputBySeverity("ERROR", &buf)
+	defer func() {
+		klog.LogToStderr(true)
+		klog.SetOutput(os.Stderr)
+		klog.SetOutputBySeverity("WARNING", nil)
+		klog.SetOutputBySeverity("ERROR", nil)
+	}()
+
+	ctrl.buildSeenSet()
+
+	out := buf.String()
+	assert.Contains(t, out, "failed to list daemonsets for baseline seeding")
+	assert.Contains(t, out, "cache not synced")
+
+	// A failing lister must not prevent other categories from seeding.
+	h.mu.Lock()
+	baseline := h.seenBaseline
+	h.mu.Unlock()
+	expectedKey := correlation.BuildKey("", "worker-1", "MemoryPressure", "")
+	assert.Contains(t, baseline, expectedKey, "other baseline categories must still be seeded")
+}
+
 func TestBuildSeenPerPodAndHealthySiblingKeepsBaseline(t *testing.T) {
 	client := fake.NewSimpleClientset(
 		&corev1.Pod{
@@ -1158,6 +1286,54 @@ func TestBuildSeenSeedsDaemonSetBaselineWithEmptyKey(t *testing.T) {
 
 	_, hasEmpty := baseline[key][""]
 	a.True(hasEmpty, "controller resource baseline must map under empty pod key")
+}
+
+func TestBuildSeenSeedsDeploymentUnavailableBaseline(t *testing.T) {
+	a := assert.New(t)
+
+	deploy := &appsv1.Deployment{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:       "test-dep",
+			Namespace:  "default",
+			Generation: 1,
+		},
+		Spec: appsv1.DeploymentSpec{
+			Template: corev1.PodTemplateSpec{
+				ObjectMeta: metav1.ObjectMeta{Labels: map[string]string{"app": "test"}},
+				Spec:       corev1.PodSpec{Containers: []corev1.Container{{Name: "app"}}},
+			},
+		},
+		Status: appsv1.DeploymentStatus{
+			Replicas:            3,
+			UnavailableReplicas: 1,
+			ObservedGeneration:  1,
+		},
+	}
+	client := fake.NewSimpleClientset(deploy)
+	cfg := &config.Config{
+		RolloutMonitor: config.RolloutMonitor{Enabled: true},
+	}
+	h := &mockHandler{}
+
+	ctrl, cleanup := New(client, cfg, h)
+	defer cleanup()
+
+	a.Eventually(func() bool {
+		_, err := ctrl.deployLister.Deployments("default").Get("test-dep")
+		return err == nil
+	}, 5*time.Second, 50*time.Millisecond)
+
+	ctrl.buildSeenSet()
+
+	h.mu.Lock()
+	baseline := h.seenBaseline
+	h.mu.Unlock()
+
+	key := correlation.BuildKey("default", "default/test-dep", "DeploymentUnavailable", "")
+	a.Contains(baseline, key, "buildSeenSet must seed DeploymentUnavailable issues into baseline")
+
+	_, hasEmpty := baseline[key][""]
+	a.True(hasEmpty, "deployment resource baseline must map under empty pod key")
 }
 
 func TestBuildSeenSetReportsEmptySummaryOnNoBrokenPods(t *testing.T) {

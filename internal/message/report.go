@@ -30,7 +30,7 @@ type Report struct {
 	Pending *PendingSection
 
 	// Node-specific
-	SuppressedPods     int
+	SuppressedPods         int
 	SuppressedPodSummaries []PodSummaryEntry
 }
 
@@ -111,7 +111,7 @@ type ImageSection struct {
 
 // PendingSection holds scheduling-specific diagnostics.
 type PendingSection struct {
-	Delay             string
+	Delay            string
 	ResourceRequests []string
 }
 

@@ -4,10 +4,11 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/abahmed/kwatch/internal/filter"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/client-go/tools/cache"
+
+	"github.com/abahmed/kwatch/internal/filter"
 )
 
 func isPodHealthy(pod *corev1.Pod) bool {

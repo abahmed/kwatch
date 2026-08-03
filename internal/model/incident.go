@@ -61,7 +61,7 @@ type IncidentView struct {
 	Namespace string        `json:"namespace"`
 	Name      string        `json:"name"`
 	State     IncidentState `json:"state"`
-	Severity  string        `json:"severity"`
+	Severity  Severity      `json:"severity"`
 	Count     int           `json:"count"`
 	FirstSeen time.Time     `json:"firstSeen"`
 	LastSeen  time.Time     `json:"lastSeen"`
@@ -70,41 +70,41 @@ type IncidentView struct {
 }
 
 type Incident struct {
-	ID                 string // stable short hash for log correlation
-	Key                string
-	Reason             string
-	Namespace          string
-	Resource           string
-	Name               string
-	Count              int
-	FirstSeen          time.Time
-	LastSeen           time.Time
-	Resources          map[string]bool
-	PeakResources      int
-	Containers         map[string]bool
-	OwnerKind          string
-	ContainerName      string
-	Image              string
-	RestartCount       int
-	Hint               string
-	Analysis           string
-	Runbook            string
-	Logs               string
-	Events             string
-	State              IncidentState
-	LastUpdate         time.Time
-	LastContainerState *ContainerState
-	Severity           string
-	SuppressedPods     int
-	SuppressedOwners   map[string]int // owner → count of suppressed pods
+	ID                     string // stable short hash for log correlation
+	Key                    string
+	Reason                 string
+	Namespace              string
+	Resource               string
+	Name                   string
+	Count                  int
+	FirstSeen              time.Time
+	LastSeen               time.Time
+	Resources              map[string]bool
+	PeakResources          int
+	Containers             map[string]bool
+	OwnerKind              string
+	ContainerName          string
+	Image                  string
+	RestartCount           int
+	Hint                   string
+	Analysis               string
+	Runbook                string
+	Logs                   string
+	Events                 string
+	State                  IncidentState
+	LastUpdate             time.Time
+	LastContainerState     *ContainerState
+	Severity               Severity
+	SuppressedPods         int
+	SuppressedOwners       map[string]int // owner → count of suppressed pods
 	SuppressedPodSummaries []PodSummary
-	ResolveAt          time.Time
-	IncludeEvents      bool
-	IncludeLogs        bool
-	NodeName           string
-	NotifiedSig        string
-	LastNotifiedAt     time.Time
-	RenotifyCount      int
+	ResolveAt              time.Time
+	IncludeEvents          bool
+	IncludeLogs            bool
+	NodeName               string
+	NotifiedSig            string
+	LastNotifiedAt         time.Time
+	RenotifyCount          int
 }
 
 // PersistedIncident is a lightweight serializable subset of Incident,
@@ -123,11 +123,37 @@ type PersistedIncident struct {
 	OwnerKind      string          `json:"ownerKind"`
 	RestartCount   int             `json:"restartCount"`
 	Hint           string          `json:"hint"`
-	Severity       string          `json:"severity"`
+	Severity       Severity        `json:"severity"`
 	State          IncidentState   `json:"state"`
+	ResolveAt      time.Time       `json:"resolveAt,omitempty"`
 	NotifiedSig    string          `json:"notifiedSig"`
 	LastNotifiedAt time.Time       `json:"lastNotifiedAt"`
 	RenotifyCount  int             `json:"renotifyCount"`
+}
+
+// ToPersisted converts an Incident into its serializable subset.
+func (inc *Incident) ToPersisted() PersistedIncident {
+	return PersistedIncident{
+		Key:            inc.Key,
+		Reason:         inc.Reason,
+		Namespace:      inc.Namespace,
+		Name:           inc.Name,
+		Resource:       inc.Resource,
+		Count:          inc.Count,
+		FirstSeen:      inc.FirstSeen,
+		LastSeen:       inc.LastSeen,
+		Resources:      inc.Resources,
+		PeakResources:  inc.PeakResources,
+		OwnerKind:      inc.OwnerKind,
+		RestartCount:   inc.RestartCount,
+		Hint:           inc.Hint,
+		Severity:       inc.Severity,
+		State:          inc.State,
+		ResolveAt:      inc.ResolveAt,
+		NotifiedSig:    inc.NotifiedSig,
+		LastNotifiedAt: inc.LastNotifiedAt,
+		RenotifyCount:  inc.RenotifyCount,
+	}
 }
 
 // ToIncident converts a PersistedIncident back to a full Incident.
@@ -151,8 +177,8 @@ func (pi *PersistedIncident) ToIncident() *Incident {
 		NotifiedSig:    pi.NotifiedSig,
 		LastNotifiedAt: pi.LastNotifiedAt,
 		RenotifyCount:  pi.RenotifyCount,
+		ResolveAt:      pi.ResolveAt,
 		Containers:     make(map[string]bool),
-		ResolveAt:      time.Time{},
 		LastUpdate:     pi.LastSeen,
 	}
 }

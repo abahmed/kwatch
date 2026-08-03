@@ -3,10 +3,13 @@ package handler
 import (
 	"fmt"
 
-	"github.com/abahmed/kwatch/internal/correlation"
-	"github.com/abahmed/kwatch/internal/event"
+	"github.com/abahmed/kwatch/internal/constant"
+
 	admissionregistrationv1 "k8s.io/api/admissionregistration/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
+
+	"github.com/abahmed/kwatch/internal/correlation"
+	"github.com/abahmed/kwatch/internal/event"
 )
 
 // serviceRef returns "namespace/name" for a webhook's ServiceReference, or "".
@@ -31,7 +34,7 @@ func DetectMutatingWebhookIssue(mwc *admissionregistrationv1.MutatingWebhookConf
 			sigs = append(sigs, &event.Signal{
 				Resource:  "mutatingwebhookconfiguration",
 				Namespace: mwc.Namespace,
-				Reason:    "WebhookBackendNotFound",
+				Reason:    constant.ReasonWebhookBackendNotFound,
 				Owner:     mwc.Name,
 				PodName:   mwc.Name,
 				Labels:    mwc.Labels,
@@ -56,7 +59,7 @@ func DetectValidatingWebhookIssue(vwc *admissionregistrationv1.ValidatingWebhook
 			sigs = append(sigs, &event.Signal{
 				Resource:  "validatingwebhookconfiguration",
 				Namespace: vwc.Namespace,
-				Reason:    "WebhookBackendNotFound",
+				Reason:    constant.ReasonWebhookBackendNotFound,
 				Owner:     vwc.Name,
 				PodName:   vwc.Name,
 				Labels:    vwc.Labels,
@@ -105,7 +108,7 @@ func (h *handler) ProcessMutatingWebhookConfigurationObject(mwc *admissionregist
 		h.signalEvent(sig)
 	}
 	if len(sigs) == 0 {
-		h.correlator.MarkResolved(correlation.BuildKey("", mwc.Name, "WebhookBackendNotFound", ""))
+		h.correlator.MarkResolved(correlation.BuildKey("", mwc.Name, constant.ReasonWebhookBackendNotFound, ""))
 	}
 	return nil
 }
@@ -148,7 +151,7 @@ func (h *handler) ProcessValidatingWebhookConfigurationObject(vwc *admissionregi
 		h.signalEvent(sig)
 	}
 	if len(sigs) == 0 {
-		h.correlator.MarkResolved(correlation.BuildKey("", vwc.Name, "WebhookBackendNotFound", ""))
+		h.correlator.MarkResolved(correlation.BuildKey("", vwc.Name, constant.ReasonWebhookBackendNotFound, ""))
 	}
 	return nil
 }

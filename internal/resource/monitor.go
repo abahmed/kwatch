@@ -5,10 +5,14 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/abahmed/kwatch/internal/event"
+	"github.com/abahmed/kwatch/internal/constant"
+
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/labels"
 	corev1lister "k8s.io/client-go/listers/core/v1"
+
+	"github.com/abahmed/kwatch/internal/event"
+	"github.com/abahmed/kwatch/internal/model"
 )
 
 type Config struct {
@@ -100,33 +104,34 @@ func (m *Monitor) checkNode(node *corev1.Node, pods []*corev1.Pod) *event.Signal
 	cpuRatio := float64(cpuReq) / float64(cpuAlloc)
 	memRatio := float64(memReq) / float64(memAlloc)
 
-	var reason, hint, severity string
+	var reason, hint string
+	var severity model.Severity
 
 	switch {
 	case cpuRatio >= m.cfg.CpuCritical && memRatio >= m.cfg.MemCritical:
-		reason = "NodeResourceCritical"
+		reason = constant.ReasonNodeResourceCritical
 		hint = overcommitHint(node.Name, cpuRatio, memRatio, "critical")
-		severity = "critical"
+		severity = model.SeverityCritical
 	case cpuRatio >= m.cfg.CpuCritical:
-		reason = "NodeResourceCritical"
+		reason = constant.ReasonNodeResourceCritical
 		hint = overcommitHint(node.Name, cpuRatio, memRatio, "critical")
-		severity = "critical"
+		severity = model.SeverityCritical
 	case memRatio >= m.cfg.MemCritical:
-		reason = "NodeResourceCritical"
+		reason = constant.ReasonNodeResourceCritical
 		hint = overcommitHint(node.Name, cpuRatio, memRatio, "critical")
-		severity = "critical"
+		severity = model.SeverityCritical
 	case cpuRatio >= m.cfg.CpuWarning && memRatio >= m.cfg.MemWarning:
-		reason = "NodeResourceHigh"
+		reason = constant.ReasonNodeResourceHigh
 		hint = overcommitHint(node.Name, cpuRatio, memRatio, "high")
-		severity = "warning"
+		severity = model.SeverityWarning
 	case cpuRatio >= m.cfg.CpuWarning:
-		reason = "NodeResourceHigh"
+		reason = constant.ReasonNodeResourceHigh
 		hint = overcommitHint(node.Name, cpuRatio, memRatio, "high")
-		severity = "warning"
+		severity = model.SeverityWarning
 	case memRatio >= m.cfg.MemWarning:
-		reason = "NodeResourceHigh"
+		reason = constant.ReasonNodeResourceHigh
 		hint = overcommitHint(node.Name, cpuRatio, memRatio, "high")
-		severity = "warning"
+		severity = model.SeverityWarning
 	default:
 		return nil
 	}

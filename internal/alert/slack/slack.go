@@ -607,5 +607,3 @@ func markdownSectionF(
 		Text: markdownF(format, a...),
 	}
 }
-
-

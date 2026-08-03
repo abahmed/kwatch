@@ -4,13 +4,16 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/abahmed/kwatch/internal/correlation"
-	"github.com/abahmed/kwatch/internal/event"
+	"github.com/abahmed/kwatch/internal/constant"
+
 	corev1 "k8s.io/api/core/v1"
 	discoveryv1 "k8s.io/api/discovery/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/client-go/tools/cache"
+
+	"github.com/abahmed/kwatch/internal/correlation"
+	"github.com/abahmed/kwatch/internal/event"
 )
 
 var defaultServiceSustainedSeconds float64 = 60
@@ -44,7 +47,7 @@ func DetectServiceEndpointIssue(svc *corev1.Service, epSlices []*discoveryv1.End
 		return &event.Signal{
 			Resource:  "service",
 			Namespace: svc.Namespace,
-			Reason:    "ServiceNoEndpoints",
+			Reason:    constant.ReasonServiceNoEndpoints,
 			Owner:     key,
 			PodName:   svc.Name,
 			Labels:    svc.Labels,
@@ -103,7 +106,7 @@ func (h *handler) ProcessServiceObject(svc *corev1.Service, deleted bool) error 
 	} else {
 		h.clearServiceNoEndpoints(svc.Namespace, svc.Name)
 		h.correlator.MarkResolved(
-			correlation.BuildKey(svc.Namespace, svc.Namespace+"/"+svc.Name, "ServiceNoEndpoints", ""),
+			correlation.BuildKey(svc.Namespace, svc.Namespace+"/"+svc.Name, constant.ReasonServiceNoEndpoints, ""),
 		)
 	}
 	return nil

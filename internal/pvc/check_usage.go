@@ -6,10 +6,14 @@ import (
 	"sync"
 	"time"
 
+	"github.com/abahmed/kwatch/internal/constant"
+
+	"k8s.io/klog/v2"
+
 	"github.com/abahmed/kwatch/internal/event"
 	"github.com/abahmed/kwatch/internal/k8s"
+	"github.com/abahmed/kwatch/internal/model"
 	"github.com/abahmed/kwatch/internal/state"
-	"k8s.io/klog/v2"
 )
 
 type PvcUsage struct {
@@ -117,13 +121,13 @@ func (p *PvcMonitor) apply(pvcUsages []*PvcUsage, pvByPVC map[string]string, inc
 			// B8: SampleNode (isSweep=false) only signals the rising edge;
 			// the sweep re-signals unconditionally (edgeAction dedups).
 			if isSweep || !wasNotified {
-				severity := "normal"
+				severity := model.SeverityNormal
 				if pvc.UsagePercentage >= p.config.CriticalThreshold {
-					severity = "high"
+					severity = model.SeverityHigh
 				}
 				p.reportSignal(&event.Signal{
 					Resource: "pvc", PodName: pvc.PodName, Namespace: pvc.Namespace,
-					Reason: "VolumeUsageHigh", Hint: fmt.Sprintf("VolumeUsage(%.0f%%)", pvc.UsagePercentage),
+					Reason: constant.ReasonVolumeUsageHigh, Hint: fmt.Sprintf("VolumeUsage(%.0f%%)", pvc.UsagePercentage),
 					Severity: severity, Owner: pvc.PVName,
 				})
 			}

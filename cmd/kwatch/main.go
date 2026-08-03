@@ -13,6 +13,8 @@ import (
 	"syscall"
 	"time"
 
+	"k8s.io/klog/v2"
+
 	"github.com/abahmed/kwatch/internal/alert"
 	"github.com/abahmed/kwatch/internal/audit"
 	"github.com/abahmed/kwatch/internal/client"
@@ -35,7 +37,6 @@ import (
 	"github.com/abahmed/kwatch/internal/startup"
 	"github.com/abahmed/kwatch/internal/upgrader"
 	"github.com/abahmed/kwatch/internal/version"
-	"k8s.io/klog/v2"
 )
 
 func main() {
@@ -115,7 +116,7 @@ func main() {
 	baselineCh := make(chan map[string]map[string]int64, 64)
 	go startBaselineSaver(ctx, stateMgr, baselineCh, 0)
 
-	incidentCh := make(chan map[string]*model.Incident, 1)
+	incidentCh := make(chan []model.PersistedIncident, 1)
 	go startIncidentSaver(ctx, stateMgr, incidentCh)
 
 	tracker := kwcontext.NewChangeTracker(0)
@@ -223,7 +224,7 @@ func main() {
 		restored := make(map[string]*model.Incident, len(persisted))
 		for i := range persisted {
 			inc := persisted[i].ToIncident()
-			restored[inc.ID] = inc
+			restored[inc.Key] = inc
 		}
 		correlator.RestoreIncidents(restored)
 		klog.InfoS("restored incidents from configmap", "count", len(persisted))
@@ -286,12 +287,12 @@ func main() {
 		for {
 			select {
 			case <-ctx.Done():
-				if snap := correlator.SnapshotAll(); len(snap) > 0 {
+				if snap := correlator.SnapshotPersisted(); len(snap) > 0 {
 					trySendIncidentSnapshot(incidentCh, snap)
 				}
 				return
 			case <-ticker.C:
-				if snap := correlator.SnapshotAll(); len(snap) > 0 {
+				if snap := correlator.SnapshotPersisted(); len(snap) > 0 {
 					trySendIncidentSnapshot(incidentCh, snap)
 				}
 			}
@@ -498,7 +499,7 @@ func startBaselineSaver(ctx context.Context, stateMgr interface {
 // startIncidentSaver saves incident snapshots to the ConfigMap whenever a
 // snapshot arrives on the channel. On ctx cancellation it saves the final
 // snapshot before returning.
-func trySendIncidentSnapshot(ch chan<- map[string]*model.Incident, snap map[string]*model.Incident) {
+func trySendIncidentSnapshot(ch chan<- []model.PersistedIncident, snap []model.PersistedIncident) {
 	select {
 	case ch <- snap:
 	default:
@@ -508,8 +509,8 @@ func trySendIncidentSnapshot(ch chan<- map[string]*model.Incident, snap map[stri
 
 func startIncidentSaver(ctx context.Context, stateMgr interface {
 	SaveIncidents(context.Context, any) error
-}, ch <-chan map[string]*model.Incident) {
-	var pending map[string]*model.Incident
+}, ch <-chan []model.PersistedIncident) {
+	var pending []model.PersistedIncident
 	for {
 		select {
 		case snap := <-ch:

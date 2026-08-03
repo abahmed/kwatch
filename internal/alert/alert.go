@@ -14,6 +14,10 @@ import (
 	"time"
 	"unicode/utf8"
 
+	"github.com/abahmed/kwatch/internal/constant"
+
+	"k8s.io/klog/v2"
+
 	"github.com/abahmed/kwatch/internal/alert/dingtalk"
 	"github.com/abahmed/kwatch/internal/alert/discord"
 	"github.com/abahmed/kwatch/internal/alert/email"
@@ -37,7 +41,6 @@ import (
 	"github.com/abahmed/kwatch/internal/metrics"
 	"github.com/abahmed/kwatch/internal/model"
 	"github.com/abahmed/kwatch/internal/ratelimit"
-	"k8s.io/klog/v2"
 )
 
 // obviousReasons are incident reasons where the root cause is fully
@@ -51,82 +54,82 @@ import (
 // HighRestartCount, custom job failures).
 var obviousReasons = map[string]bool{
 	// Container resource limits
-	"OOMKilled":    true,
-	"OOMRepeating": true,
+	constant.ReasonOOMKilled:    true,
+	constant.ReasonOOMRepeating: true,
 
 	// Container runtime errors — self-evident from message
-	"ContainerCannotRun":   true,
-	"CreateContainerError": true,
+	constant.ReasonContainerCannotRun:   true,
+	constant.ReasonCreateContainerError: true,
 
 	// Image pull / registry
-	"ImagePullBackOff":           true,
-	"ErrImagePull":               true,
-	"ImageInspectError":          true,
-	"RegistryUnavailable":        true,
-	"InvalidImageName":           true,
-	"CreateContainerConfigError": true,
+	constant.ReasonImagePullBackOff:    true,
+	constant.ReasonErrImagePull:        true,
+	constant.ReasonImageInspectError:   true,
+	constant.ReasonRegistryUnavailable: true,
+	constant.ReasonInvalidImageName:    true,
+	constant.ReasonCreateConfigError:   true,
 
 	// Probe failures — app not responding, self-evident
-	"LivenessProbeFailed":  true,
-	"ReadinessProbeFailed": true,
-	"StartupProbeFailed":   true,
-	"ProbeError":           true,
+	constant.ReasonLivenessProbeFailed:  true,
+	constant.ReasonReadinessProbeFailed: true,
+	constant.ReasonStartupProbeFailed:   true,
+	constant.ReasonProbeError:           true,
 
 	// Lifecycle hooks — command/config error, self-evident
-	"PostStartHookError": true,
-	"PreStopHookError":   true,
+	constant.ReasonPostStartHookError: true,
+	constant.ReasonPreStopHookError:   true,
 
 	// Node-level conditions (infrastructure, not application)
-	"NodeNotReady":           true,
-	"MemoryPressure":         true,
-	"DiskPressure":           true,
-	"PIDPressure":            true,
-	"NetworkUnavailable":     true,
-	"ContainerStatusUnknown": true,
+	constant.ReasonNodeNotReady:         true,
+	constant.ReasonMemoryPressure:       true,
+	constant.ReasonDiskPressure:         true,
+	constant.ReasonPIDPressure:          true,
+	constant.ReasonNetworkUnavailable:   true,
+	constant.ReasonContainerStatusKnown: true,
 
 	// Scheduling / placement
-	"Unschedulable": true,
-	"PodPending":    true,
-	"NodeAffinity":  true,
+	constant.ReasonUnschedulable: true,
+	constant.ReasonPodPending:    true,
+	constant.ReasonNodeAffinity:  true,
 
 	// Kubelet backoff — self-evident (container crashing, retrying)
-	"BackOff": true,
+	constant.ReasonBackOff: true,
 
 	// Eviction / preemption — DisruptionFilter catches most, but
 	// container termination events can fire before the pod's
 	// Failed/Evicted status is visible in the informer cache.
-	"Evicted":    true,
-	"Preempting": true,
+	constant.ReasonEvicted:    true,
+	constant.ReasonPreempting: true,
 
 	// Horizontal Pod Autoscaler
-	"HPAMaxedOut":     true,
-	"HPAScalingError": true,
+	constant.ReasonHPAMaxedOut:     true,
+	constant.ReasonHPAScalingError: true,
 
 	// Rollout / DaemonSet
-	"ProgressDeadlineExceeded": true,
-	"DaemonSetUnavailable":     true,
-	"StsUnavailable":           true,
-	"PdbViolation":             true,
-	"NodeResourceHigh":         true,
-	"NodeResourceCritical":     true,
+	constant.ReasonProgressDeadlineExceeded: true,
+	constant.ReasonDaemonSetUnavailable:     true,
+	constant.ReasonStsUnavailable:           true,
+	constant.ReasonPdbViolation:             true,
+	constant.ReasonNodeResourceHigh:         true,
+	constant.ReasonNodeResourceCritical:     true,
 
 	// Jobs / CronJobs
-	"JobSuspended":        true,
-	"CronJobSuspended":    true,
-	"CronJobNotScheduled": true,
+	constant.ReasonJobSuspended:        true,
+	constant.ReasonCronJobSuspended:    true,
+	constant.ReasonCronJobNotScheduled: true,
 
 	// Service / endpoint issues (self-explanatory from reason alone)
-	"ServiceNoEndpoints": true,
+	constant.ReasonServiceNoEndpoints: true,
 
 	// TLS certificates
-	"TLSCertExpired":      true,
-	"TLSCertExpiringSoon": true,
+	constant.ReasonTLSCertExpired:      true,
+	constant.ReasonTLSCertExpiringSoon: true,
 
 	// Startup summary (not a real incident)
-	"PreExistingAtStartup": true,
+	constant.ReasonPreExistingAtStartup: true,
 
 	// Context deadline / timeout — self-evident
-	"DeadlineExceeded": true,
+	constant.ReasonDeadlineExceeded: true,
 }
 
 func isObviousReason(reason string) bool {
@@ -677,7 +680,7 @@ func matchesRoute(route config.AlertRoute, inc *model.Incident) bool {
 	if len(route.Severities) > 0 {
 		found := false
 		for _, s := range route.Severities {
-			if s == inc.Severity {
+			if model.SeverityFromString(s) == inc.Severity {
 				found = true
 				break
 			}
@@ -822,7 +825,7 @@ func (a *AlertManager) Notify(msg string) {
 		if _, ok := p.(EventDeliveryProvider); ok {
 			ev := &event.Event{
 				PodName: msg,
-				Reason:  "notify",
+				Reason:  constant.ReasonNotify,
 			}
 			if err := sendWithRetry(ctx, func() error {
 				return p.SendEvent(ev)
@@ -1324,5 +1327,3 @@ func defaultMaxBytes(providerName string) int {
 		return 0 // unlimited
 	}
 }
-
-

@@ -8,8 +8,9 @@ import (
 	"sync"
 	"time"
 
-	"github.com/abahmed/kwatch/internal/model"
 	"k8s.io/klog/v2"
+
+	"github.com/abahmed/kwatch/internal/model"
 )
 
 type Action string
@@ -106,7 +107,7 @@ func (l *AuditLogger) LogIncident(inc *model.Incident, action model.IncidentActi
 		IncidentID:  inc.ID,
 		Namespace:   inc.Namespace,
 		Reason:      inc.Reason,
-		Severity:    inc.Severity,
+		Severity:    string(inc.Severity),
 		Name:        inc.Name,
 		Count:       inc.Count,
 		Duration:    duration,

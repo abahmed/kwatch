@@ -8,10 +8,11 @@ import (
 	"net/http"
 	"strings"
 
+	"k8s.io/klog/v2"
+
 	"github.com/abahmed/kwatch/internal/config"
 	"github.com/abahmed/kwatch/internal/event"
 	"github.com/abahmed/kwatch/internal/k8s"
-	"k8s.io/klog/v2"
 )
 
 const (

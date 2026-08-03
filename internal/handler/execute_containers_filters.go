@@ -6,15 +6,18 @@ import (
 	"strings"
 	"time"
 
+	"github.com/abahmed/kwatch/internal/constant"
+
+	corev1 "k8s.io/api/core/v1"
+	"k8s.io/apimachinery/pkg/labels"
+	"k8s.io/klog/v2"
+
 	"github.com/abahmed/kwatch/internal/correlation"
 	"github.com/abahmed/kwatch/internal/enricher"
 	"github.com/abahmed/kwatch/internal/event"
 	"github.com/abahmed/kwatch/internal/filter"
 	"github.com/abahmed/kwatch/internal/k8s"
 	"github.com/abahmed/kwatch/internal/model"
-	corev1 "k8s.io/api/core/v1"
-	"k8s.io/apimachinery/pkg/labels"
-	"k8s.io/klog/v2"
 )
 
 func (h *handler) executeContainersFilters(ctx *filter.Context) {
@@ -176,7 +179,7 @@ func (h *handler) buildContainerHint(ctx *filter.Context) string {
 	hint := enricher.HintForReason(reason)
 
 	if ctx.Container.IsInit && exitCode != 0 {
-		hint = enricher.HintForReason("InitContainerError")
+		hint = enricher.HintForReason(constant.ReasonInitContainerError)
 		if ecHint := enricher.HintForExitCode(exitCode); ecHint != "" {
 			hint = enricher.CombineHints(hint, ecHint)
 		}
@@ -187,10 +190,10 @@ func (h *handler) buildContainerHint(ctx *filter.Context) string {
 
 	spec := findContainerSpec(ctx.Pod, ctx.Container.Container.Name)
 
-	if (reason == "OOMKilled" || exitCode == 137) && h.oomTracker != nil {
+	if (reason == constant.ReasonOOMKilled || exitCode == 137) && h.oomTracker != nil {
 		key := ctx.Pod.Namespace + "/" + ctx.Pod.Name + "/" + ctx.Container.Container.Name
 		if count, repeating := h.oomTracker.record(key); repeating {
-			ctx.Container.Reason = "OOMRepeating"
+			ctx.Container.Reason = constant.ReasonOOMRepeating
 			timeline := h.oomTracker.History(key)
 			if timeline != "" {
 				return fmt.Sprintf("OOMKilled %d times in %dm — potential memory leak [%s]", count, h.config.OomMonitor.WindowMinutes, timeline)
@@ -199,7 +202,7 @@ func (h *handler) buildContainerHint(ctx *filter.Context) string {
 		}
 	}
 
-	if reason == "OOMKilled" || exitCode == 137 {
+	if reason == constant.ReasonOOMKilled || exitCode == 137 {
 		oomTimeline := ""
 		if h.oomTracker != nil {
 			key := ctx.Pod.Namespace + "/" + ctx.Pod.Name + "/" + ctx.Container.Container.Name
@@ -221,9 +224,9 @@ func (h *handler) buildContainerHint(ctx *filter.Context) string {
 	}
 
 	if spec != nil {
-		if reason == "LivenessProbeFailed" || reason == "ReadinessProbeFailed" || reason == "StartupProbeFailed" {
+		if reason == constant.ReasonLivenessProbeFailed || reason == constant.ReasonReadinessProbeFailed || reason == constant.ReasonStartupProbeFailed {
 			hint = buildProbeHint(reason, spec)
-		} else if reason == "CrashLoopBackOff" && spec.LivenessProbe != nil {
+		} else if reason == constant.ReasonCrashLoopBackOff && spec.LivenessProbe != nil {
 			hint = hint + "; check liveness probe configuration"
 		}
 	}
@@ -235,7 +238,7 @@ func (h *handler) buildContainerHint(ctx *filter.Context) string {
 	}
 
 	// Smart diagnostics for obvious reasons (no LLM needed).
-	if (reason == "ImagePullBackOff" || reason == "ErrImagePull") && ctx.Pod != nil {
+	if (reason == constant.ReasonImagePullBackOff || reason == constant.ReasonErrImagePull) && ctx.Pod != nil {
 		hasSecrets := len(ctx.Pod.Spec.ImagePullSecrets) > 0
 
 		// Try to match well-known registry error patterns first.
@@ -261,11 +264,11 @@ func (h *handler) buildContainerHint(ctx *filter.Context) string {
 func buildProbeHint(reason string, spec *corev1.Container) string {
 	var probe *corev1.Probe
 	switch reason {
-	case "LivenessProbeFailed":
+	case constant.ReasonLivenessProbeFailed:
 		probe = spec.LivenessProbe
-	case "ReadinessProbeFailed":
+	case constant.ReasonReadinessProbeFailed:
 		probe = spec.ReadinessProbe
-	case "StartupProbeFailed":
+	case constant.ReasonStartupProbeFailed:
 		probe = spec.StartupProbe
 	}
 	if probe == nil {
@@ -289,11 +292,11 @@ func buildProbeHint(reason string, spec *corev1.Container) string {
 
 func probeType(reason string) string {
 	switch reason {
-	case "LivenessProbeFailed":
+	case constant.ReasonLivenessProbeFailed:
 		return "liveness"
-	case "ReadinessProbeFailed":
+	case constant.ReasonReadinessProbeFailed:
 		return "readiness"
-	case "StartupProbeFailed":
+	case constant.ReasonStartupProbeFailed:
 		return "startup"
 	}
 	return "probe"
@@ -366,7 +369,7 @@ func isPodTerminatingOrDisrupted(pod *corev1.Pod) bool {
 	if pod.DeletionTimestamp != nil {
 		return true
 	}
-	if pod.Status.Phase == corev1.PodFailed && pod.Status.Reason == "Evicted" {
+	if pod.Status.Phase == corev1.PodFailed && pod.Status.Reason == constant.ReasonEvicted {
 		return true
 	}
 	for _, c := range pod.Status.Conditions {
@@ -392,7 +395,7 @@ func (h *handler) emitHighRestartAlert(ctx *filter.Context, container *corev1.Co
 		Image:        container.Image,
 		Namespace:    ctx.Pod.Namespace,
 		NodeName:     ctx.Pod.Spec.NodeName,
-		Reason:       "HighRestartCount",
+		Reason:       constant.ReasonHighRestartCount,
 		Labels:       ctx.Pod.Labels,
 		RestartCount: container.RestartCount,
 		Hint: fmt.Sprintf("container restarted %d times (last exit: %s, code %d)",

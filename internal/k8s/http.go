@@ -9,8 +9,9 @@ import (
 	"os"
 	"time"
 
-	"github.com/abahmed/kwatch/internal/config"
 	"k8s.io/klog/v2"
+
+	"github.com/abahmed/kwatch/internal/config"
 )
 
 const (

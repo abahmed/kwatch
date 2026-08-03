@@ -4,9 +4,12 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/abahmed/kwatch/internal/event"
 	policyv1 "k8s.io/api/policy/v1"
+	"k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/client-go/tools/cache"
+
+	"github.com/abahmed/kwatch/internal/constant"
+	"github.com/abahmed/kwatch/internal/event"
 )
 
 // DetectPdbIssue returns a Signal if the PDB is blocking disruptions.
@@ -14,7 +17,7 @@ func DetectPdbIssue(pdb *policyv1.PodDisruptionBudget) *event.Signal {
 	if isPdbBlocking(pdb) {
 		return &event.Signal{
 			Resource:  "poddisruptionbudget",
-			Reason:    "PdbViolation",
+			Reason:    constant.ReasonPdbViolation,
 			Namespace: pdb.Namespace,
 			Owner:     pdb.Namespace + "/" + pdb.Name,
 			Labels:    pdb.Labels,
@@ -48,10 +51,17 @@ func (h *handler) ProcessPdb(key string, deleted bool) error {
 		return nil
 	}
 
-	// PDB lister is not stored on handler; the controller handles cache access.
-	// This function is called by the controller's syncPdb which already resolved the object.
-	// If called directly, we need the lister — but in practice the controller calls ProcessPdbObject.
-	return nil
+	pdb, err := h.pdbLister.PodDisruptionBudgets(namespace).Get(name)
+	if err != nil {
+		if errors.IsNotFound(err) {
+			h.clearFirstPdbViolation(namespace + "/" + name)
+			h.correlator.ResolveByResource("poddisruptionbudget", namespace+"/"+name)
+			return nil
+		}
+		return fmt.Errorf("failed to get pdb %s/%s from cache: %w", namespace, name, err)
+	}
+
+	return h.ProcessPdbObject(pdb, false)
 }
 
 func (h *handler) ProcessPdbObject(pdb *policyv1.PodDisruptionBudget, deleted bool) error {
@@ -78,7 +88,7 @@ func (h *handler) ProcessPdbObject(pdb *policyv1.PodDisruptionBudget, deleted bo
 		h.signalEvent(&event.Signal{
 			Resource:  "poddisruptionbudget",
 			Namespace: pdb.Namespace,
-			Reason:    "PdbViolation",
+			Reason:    constant.ReasonPdbViolation,
 			Owner:     key,
 			Labels:    pdb.Labels,
 			Hint:      pdbHint(pdb),

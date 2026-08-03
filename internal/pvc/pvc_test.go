@@ -8,6 +8,11 @@ import (
 	"testing"
 	"time"
 
+	"github.com/stretchr/testify/assert"
+	v1 "k8s.io/api/core/v1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/client-go/kubernetes/fake"
+
 	"github.com/abahmed/kwatch/internal/alert"
 	"github.com/abahmed/kwatch/internal/config"
 	"github.com/abahmed/kwatch/internal/correlation"
@@ -15,10 +20,6 @@ import (
 	"github.com/abahmed/kwatch/internal/event"
 	"github.com/abahmed/kwatch/internal/model"
 	"github.com/abahmed/kwatch/internal/state"
-	"github.com/stretchr/testify/assert"
-	v1 "k8s.io/api/core/v1"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/client-go/kubernetes/fake"
 )
 
 func TestNewPvcMonitor(t *testing.T) {
@@ -466,7 +467,7 @@ func TestPvcSeverityWarnTier(t *testing.T) {
 
 	inc, action := correlator.Process(ev, "test-pv", nil)
 	assert.Equal(t, model.ActionCreate, action)
-	assert.Equal(t, "normal", inc.Severity)
+	assert.Equal(t, model.SeverityNormal, inc.Severity)
 }
 
 func TestPvcSeverityCriticalTier(t *testing.T) {
@@ -486,7 +487,7 @@ func TestPvcSeverityCriticalTier(t *testing.T) {
 
 	inc, action := correlator.Process(ev, "test-pv", nil)
 	assert.Equal(t, model.ActionCreate, action)
-	assert.Equal(t, "high", inc.Severity)
+	assert.Equal(t, model.SeverityHigh, inc.Severity)
 }
 
 func TestPvcSeverityUpgradeFromWarnToCritical(t *testing.T) {
@@ -506,7 +507,7 @@ func TestPvcSeverityUpgradeFromWarnToCritical(t *testing.T) {
 
 	inc1, action1 := correlator.Process(ev1, "test-pv", nil)
 	assert.Equal(t, model.ActionCreate, action1)
-	assert.Equal(t, "normal", inc1.Severity)
+	assert.Equal(t, model.SeverityNormal, inc1.Severity)
 
 	ev2 := event.Event{
 		Resource:  "pvc",
@@ -519,7 +520,7 @@ func TestPvcSeverityUpgradeFromWarnToCritical(t *testing.T) {
 
 	inc2, action2 := correlator.Process(ev2, "test-pv", nil)
 	assert.Equal(t, model.ActionUpdate, action2, "same key should update, not create")
-	assert.Equal(t, "high", inc2.Severity, "severity should upgrade to high")
+	assert.Equal(t, model.SeverityHigh, inc2.Severity, "severity should upgrade to high")
 }
 
 func TestPvcFirstScanInitializedTrue(t *testing.T) {

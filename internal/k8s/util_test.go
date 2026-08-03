@@ -72,6 +72,53 @@ func TestGetPodEventsStr(t *testing.T) {
 	assert.Equal(result, expectedOutput)
 }
 
+func TestGetPodEventsStrFallsBackToFirstTimestamp(t *testing.T) {
+	assert := assert.New(t)
+
+	ts := metav1.Now()
+	event := v1.Event{
+		Reason:         "Started",
+		Message:        "Container started",
+		FirstTimestamp: ts,
+	}
+
+	result := GetPodEventsStr(&[]v1.Event{event})
+	expectedOutput :=
+		"[" + ts.Time.String() + "] Started Container started"
+	assert.Equal(expectedOutput, result)
+}
+
+func TestGetPodEventsStrFallsBackToCreationTimestamp(t *testing.T) {
+	assert := assert.New(t)
+
+	ts := metav1.Now()
+	event := v1.Event{
+		ObjectMeta: metav1.ObjectMeta{CreationTimestamp: ts},
+		Reason:     "Pulled",
+		Message:    "Pulled image",
+	}
+
+	result := GetPodEventsStr(&[]v1.Event{event})
+	expectedOutput :=
+		"[" + ts.Time.String() + "] Pulled Pulled image"
+	assert.Equal(expectedOutput, result)
+}
+
+func TestGetPodEventsStrZeroTimestampOmitted(t *testing.T) {
+	assert := assert.New(t)
+
+	// No timestamp fields set at all: must not render the zero
+	// timestamp (0001-01-01 ...) into the notification.
+	event := v1.Event{
+		Reason:  "Scheduled",
+		Message: "Successfully assigned pod",
+	}
+
+	result := GetPodEventsStr(&[]v1.Event{event})
+	assert.Equal("Scheduled Successfully assigned pod", result)
+	assert.NotContains(result, "0001-01-01")
+}
+
 func TestGetPodEventsStrNil(t *testing.T) {
 	assert := assert.New(t)
 

@@ -7,6 +7,8 @@ import (
 	"io"
 	"net/http"
 
+	"k8s.io/klog/v2"
+
 	"github.com/abahmed/kwatch/internal/alert/util"
 	"github.com/abahmed/kwatch/internal/config"
 	"github.com/abahmed/kwatch/internal/event"
@@ -14,7 +16,6 @@ import (
 	"github.com/abahmed/kwatch/internal/message"
 	"github.com/abahmed/kwatch/internal/model"
 	"github.com/abahmed/kwatch/internal/ratelimit"
-	"k8s.io/klog/v2"
 )
 
 type RocketChat struct {
