@@ -102,17 +102,9 @@ func (h *handler) ProcessPdbObject(pdb *policyv1.PodDisruptionBudget, deleted bo
 }
 
 func (h *handler) markFirstPdbViolation(key string) time.Time {
-	h.pdbMu.Lock()
-	defer h.pdbMu.Unlock()
-	if t, ok := h.firstPdbViolation[key]; ok {
-		return t
-	}
-	h.firstPdbViolation[key] = h.now()
-	return h.firstPdbViolation[key]
+	return h.firstPdbViolation.mark(key, h.now())
 }
 
 func (h *handler) clearFirstPdbViolation(key string) {
-	h.pdbMu.Lock()
-	defer h.pdbMu.Unlock()
-	delete(h.firstPdbViolation, key)
+	h.firstPdbViolation.clear(key)
 }

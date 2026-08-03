@@ -100,13 +100,13 @@ func (m *mockHandler) SetHorizontalPodAutoscalerLister(autoscalingv2lister.Horiz
 func (m *mockHandler) ProcessHorizontalPodAutoscaler(string, bool) error { return m.err }
 func (m *mockHandler) SetSecretLister(corev1lister.SecretLister)         {}
 func (m *mockHandler) SweepTLSSecrets()                                  {}
-func (m *mockHandler) SetSeen(baseline map[string]map[string]int64) {
+func (m *mockHandler) SetBaseline(baseline map[string]map[string]int64) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	m.seenBaseline = baseline
 }
-func (m *mockHandler) SetActiveNodeIncidents([]string) {}
-func (m *mockHandler) ClearSeenForPod(string, string)  {}
+func (m *mockHandler) SetActiveNodeIncidents([]string)    {}
+func (m *mockHandler) ClearBaselineForPod(string, string) {}
 func (m *mockHandler) ReportStartupSummary(suppressed map[string]int) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
@@ -950,7 +950,7 @@ func TestBuildSeenSetSeedsNodeConditions(t *testing.T) {
 	h.mu.Unlock()
 
 	expectedKey := correlation.BuildKey("", "worker-1", "MemoryPressure", "")
-	assert.Contains(baseline, expectedKey, "buildSeenSet must seed node conditions")
+	assert.Contains(baseline, string(expectedKey), "buildSeenSet must seed node conditions")
 }
 
 // errDaemonSetLister is a DaemonSetLister whose List always fails,
@@ -1031,7 +1031,7 @@ func TestBuildSeenSetSurfacesListerErrors(t *testing.T) {
 	baseline := h.seenBaseline
 	h.mu.Unlock()
 	expectedKey := correlation.BuildKey("", "worker-1", "MemoryPressure", "")
-	assert.Contains(t, baseline, expectedKey, "other baseline categories must still be seeded")
+	assert.Contains(t, baseline, string(expectedKey), "other baseline categories must still be seeded")
 }
 
 func TestBuildSeenPerPodAndHealthySiblingKeepsBaseline(t *testing.T) {
@@ -1075,17 +1075,17 @@ func TestBuildSeenPerPodAndHealthySiblingKeepsBaseline(t *testing.T) {
 
 	// The failed pod's key should be baselined
 	key := correlation.BuildKey("default", "dep", "Error", "")
-	_, ok := baseline[key]["failed-pod"]
+	_, ok := baseline[string(key)]["failed-pod"]
 	assert.True(t, ok, "failed pod must be baselined")
 
 	// The healthy pod should NOT be in the baseline
-	assert.NotContains(t, baseline[key], "healthy-pod", "healthy pod must NOT be baselined")
+	assert.NotContains(t, baseline[string(key)], "healthy-pod", "healthy pod must NOT be baselined")
 
-	// Simulate ClearSeenForPod for the healthy pod — should NOT affect the failed pod's entry
-	h.ClearSeenForPod("default", "healthy-pod")
+	// Simulate ClearBaselineForPod for the healthy pod — should NOT affect the failed pod's entry
+	h.ClearBaselineForPod("default", "healthy-pod")
 
-	_, ok = baseline[key]["failed-pod"]
-	assert.True(t, ok, "ClearSeenForPod for healthy sibling must not clear failed pod's baseline")
+	_, ok = baseline[string(key)]["failed-pod"]
+	assert.True(t, ok, "ClearBaselineForPod for healthy sibling must not clear failed pod's baseline")
 }
 
 func TestBuildSeenCrashLoopHighFreq(t *testing.T) {
@@ -1120,7 +1120,7 @@ func TestBuildSeenCrashLoopHighFreq(t *testing.T) {
 
 	// Key should be CrashLoopHighFrequency (not CrashLoopBackOff) because restarts > 5
 	key := correlation.BuildKey("default", "dep", "CrashLoopHighFrequency", "")
-	_, ok := baseline[key]["cl-pod"]
+	_, ok := baseline[string(key)]["cl-pod"]
 	assert.True(t, ok, "buildSeenSet must use CrashLoopHighFrequency for restarts > 5")
 }
 
@@ -1161,7 +1161,7 @@ func TestBuildSeenRunningWithRestarts(t *testing.T) {
 
 	// Must use LastTerminationState.Terminated.Reason ("Error"), not skip the pod
 	key := correlation.BuildKey("default", "dep", "Error", "")
-	_, ok := baseline[key]["restarted-pod"]
+	_, ok := baseline[string(key)]["restarted-pod"]
 	assert.True(t, ok, "Running container with restarts must be baselined using LastTerminationState.Reason")
 }
 
@@ -1282,9 +1282,9 @@ func TestBuildSeenSeedsDaemonSetBaselineWithEmptyKey(t *testing.T) {
 	h.mu.Unlock()
 
 	key := correlation.BuildKey("default", "default/test-ds", "DaemonSetUnavailable", "")
-	a.Contains(baseline, key, "buildSeenSet must seed DaemonSet issues into baseline")
+	a.Contains(baseline, string(key), "buildSeenSet must seed DaemonSet issues into baseline")
 
-	_, hasEmpty := baseline[key][""]
+	_, hasEmpty := baseline[string(key)][""]
 	a.True(hasEmpty, "controller resource baseline must map under empty pod key")
 }
 
@@ -1330,9 +1330,9 @@ func TestBuildSeenSeedsDeploymentUnavailableBaseline(t *testing.T) {
 	h.mu.Unlock()
 
 	key := correlation.BuildKey("default", "default/test-dep", "DeploymentUnavailable", "")
-	a.Contains(baseline, key, "buildSeenSet must seed DeploymentUnavailable issues into baseline")
+	a.Contains(baseline, string(key), "buildSeenSet must seed DeploymentUnavailable issues into baseline")
 
-	_, hasEmpty := baseline[key][""]
+	_, hasEmpty := baseline[string(key)][""]
 	a.True(hasEmpty, "deployment resource baseline must map under empty pod key")
 }
 

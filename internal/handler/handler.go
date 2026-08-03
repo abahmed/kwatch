@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"sort"
 	"strings"
-	"sync"
 	"time"
 
 	"github.com/abahmed/kwatch/internal/constant"
@@ -68,9 +67,9 @@ type Handler interface {
 	SetSecretLister(lister corev1lister.SecretLister)
 	SetInsightEngine(engine *insight.Engine)
 	SweepTLSSecrets()
-	SetSeen(baseline map[string]map[string]int64)
+	SetBaseline(baseline map[string]map[string]int64)
 	SetActiveNodeIncidents(nodeNames []string)
-	ClearSeenForPod(namespace, podName string)
+	ClearBaselineForPod(namespace, podName string)
 	ReportStartupSummary(suppressed map[string]int)
 	ProcessNodeResourceOvercommit(reason, nodeName, hint string, severity model.Severity)
 	ProcessClusterAutoscalerEvent(ev *corev1.Event)
@@ -102,25 +101,16 @@ type handler struct {
 	vwcLister                     admissionregistrationv1lister.ValidatingWebhookConfigurationLister
 	serviceLister                 corev1lister.ServiceLister
 	endpointSliceLister           discoveryv1lister.EndpointSliceLister
-	firstMaxedHPAs                map[string]time.Time
-	firstScalingErrorHPAs         map[string]time.Time
-	hpaMu                         sync.Mutex
-	firstUnavailableSts           map[string]time.Time
-	stsMu                         sync.Mutex
-	firstPdbViolation             map[string]time.Time
-	pdbMu                         sync.Mutex
-	firstUnavailableDS            map[string]time.Time
-	dsMu                          sync.Mutex
-	firstUnavailableDeploy        map[string]time.Time
-	deployMu                      sync.Mutex
-	firstSuspendedCJs             map[string]time.Time
-	cjMu                          sync.Mutex
-	firstNodePressure             map[string]time.Time
-	npMu                          sync.Mutex
-	serviceNoEndpointSince        map[string]time.Time
-	serviceMu                     sync.Mutex
-	firstCaBlocked                map[string]time.Time
-	caMu                          sync.Mutex
+	firstMaxedHPAs                *firstSeen
+	firstScalingErrorHPAs         *firstSeen
+	firstUnavailableSts           *firstSeen
+	firstPdbViolation             *firstSeen
+	firstUnavailableDS            *firstSeen
+	firstUnavailableDeploy        *firstSeen
+	firstSuspendedCJs             *firstSeen
+	firstNodePressure             *firstSeen
+	serviceNoEndpointSince        *firstSeen
+	firstCaBlocked                *firstSeen
 	secretLister                  corev1lister.SecretLister
 	netpolLister                  networkingv1lister.NetworkPolicyLister
 	ingressLister                 networkingv1lister.IngressLister
@@ -205,16 +195,16 @@ func NewHandler(
 		containerDataEnrichers:        containerDataEnrichers,
 		correlator:                    correlator,
 		alertManager:                  alertManager,
-		firstMaxedHPAs:                make(map[string]time.Time),
-		firstScalingErrorHPAs:         make(map[string]time.Time),
-		firstUnavailableSts:           make(map[string]time.Time),
-		firstPdbViolation:             make(map[string]time.Time),
-		firstUnavailableDeploy:        make(map[string]time.Time),
-		firstUnavailableDS:            make(map[string]time.Time),
-		firstSuspendedCJs:             make(map[string]time.Time),
-		firstNodePressure:             make(map[string]time.Time),
-		serviceNoEndpointSince:        make(map[string]time.Time),
-		firstCaBlocked:                make(map[string]time.Time),
+		firstMaxedHPAs:                newFirstSeen(),
+		firstScalingErrorHPAs:         newFirstSeen(),
+		firstUnavailableSts:           newFirstSeen(),
+		firstPdbViolation:             newFirstSeen(),
+		firstUnavailableDeploy:        newFirstSeen(),
+		firstUnavailableDS:            newFirstSeen(),
+		firstSuspendedCJs:             newFirstSeen(),
+		firstNodePressure:             newFirstSeen(),
+		serviceNoEndpointSince:        newFirstSeen(),
+		firstCaBlocked:                newFirstSeen(),
 		oomTracker:                    oomTr,
 		now:                           time.Now,
 	}
@@ -318,16 +308,16 @@ func (h *handler) SetCronJobLister(lister batchv1lister.CronJobLister) {
 	h.cronJobLister = lister
 }
 
-func (h *handler) SetSeen(baseline map[string]map[string]int64) {
-	h.correlator.SetSeen(baseline)
+func (h *handler) SetBaseline(baseline map[string]map[string]int64) {
+	h.correlator.SetBaseline(baseline)
 }
 
 func (h *handler) SetActiveNodeIncidents(nodeNames []string) {
 	h.correlator.SetActiveNodeIncidents(nodeNames)
 }
 
-func (h *handler) ClearSeenForPod(namespace, podName string) {
-	h.correlator.ClearSeenForPod(namespace, podName)
+func (h *handler) ClearBaselineForPod(namespace, podName string) {
+	h.correlator.ClearBaselineForPod(namespace, podName)
 }
 
 func (h *handler) ReportStartupSummary(suppressed map[string]int) {

@@ -15,7 +15,7 @@ import (
 )
 
 type groupEntry struct {
-	key       string
+	key       model.IncidentKey
 	namespace string
 	owner     string
 	reason    string
@@ -43,8 +43,8 @@ type groupFlushState struct {
 }
 
 type groupResolveTracker struct {
-	groupIncKey string
-	members     map[string]bool
+	groupIncKey model.IncidentKey
+	members     map[model.IncidentKey]bool
 	totalCount  int
 	summary     string
 	reason      string
@@ -194,6 +194,46 @@ func (e *Engine) groupRenotifyCooldown() time.Duration {
 	return cd
 }
 
+// groupedKeys returns the set of incident keys currently absorbed into a
+// smart group (buffered in a pending group or tracked as a flushed group
+// member). Renotify skips these — the group notification is the single
+// re-notification channel for grouped incidents, so per-member renotify
+// would duplicate the group alert. Caller must hold e.mu.
+func (e *Engine) groupedKeys() map[model.IncidentKey]bool {
+	keys := make(map[model.IncidentKey]bool)
+	for _, pg := range e.groupBuffers {
+		for _, ge := range pg.entries {
+			keys[ge.key] = true
+		}
+	}
+	for _, tracker := range e.groupResolveTrackers {
+		for k := range tracker.members {
+			keys[k] = true
+		}
+	}
+	return keys
+}
+
+// rekeyGroupReferences moves any smart-group membership for an incident from
+// oldKey to newKey. Used when the crash-loop fold re-keys an incident so the
+// group keeps tracking it (otherwise the group would wait forever on a member
+// that no longer exists). Caller must hold e.mu.
+func (e *Engine) rekeyGroupReferences(oldKey, newKey model.IncidentKey) {
+	for _, pg := range e.groupBuffers {
+		for i := range pg.entries {
+			if pg.entries[i].key == oldKey {
+				pg.entries[i].key = newKey
+			}
+		}
+	}
+	for _, tracker := range e.groupResolveTrackers {
+		if _, ok := tracker.members[oldKey]; ok {
+			delete(tracker.members, oldKey)
+			tracker.members[newKey] = false
+		}
+	}
+}
+
 // Caller must hold e.mu.
 // tryGroupIncident attempts to add an event to the smart grouping buffer.
 // Returns true if the incident was grouped (caller should return ActionSkip).
@@ -203,10 +243,10 @@ func (e *Engine) tryGroupIncident(inc *model.Incident, ev event.Event, owner str
 	}
 	r := normalizeReason(ev.Reason)
 	gk := computeGroupKey(r, ev, owner)
-	pg, ok := e.pendingGroups[gk]
+	pg, ok := e.groupBuffers[gk]
 	if !ok {
 		pg = &pendingGroup{firstSeen: now}
-		e.pendingGroups[gk] = pg
+		e.groupBuffers[gk] = pg
 	}
 	sig := ""
 	if r == constant.ReasonCrashLoopBackOff || r == constant.ReasonBackOff || r == constant.ReasonError {
@@ -367,7 +407,7 @@ func (e *Engine) buildSignatureSummary(r string, entries []groupEntry, timeAgo s
 
 func (e *Engine) buildImageSummary(r string, entries []groupEntry, timeAgo string) string {
 	img := entries[0].image
-	isGlobal := strings.Contains(entries[0].key, "|global|")
+	isGlobal := IsGlobalKey(entries[0].key)
 	if img == "" {
 		img = "unknown"
 	}
@@ -462,8 +502,8 @@ func (e *Engine) groupSeverity(entries []groupEntry) model.Severity {
 // Members removed from state outside MarkResolved (orphan folding, resource
 // resolution) must go through here so the group isn't left waiting forever
 // on a member that no longer exists.
-func (e *Engine) groupMemberResolved(key string) (groupInc *model.Incident, action model.IncidentAction, tracked bool) {
-	for gk, tracker := range e.groupMembers {
+func (e *Engine) groupMemberResolved(key model.IncidentKey) (groupInc *model.Incident, action model.IncidentAction, tracked bool) {
+	for gk, tracker := range e.groupResolveTrackers {
 		if _, ok := tracker.members[key]; ok {
 			tracker.members[key] = true
 			allResolved := true
@@ -476,11 +516,11 @@ func (e *Engine) groupMemberResolved(key string) (groupInc *model.Incident, acti
 			if !allResolved {
 				return nil, model.ActionSkip, true
 			}
-			delete(e.groupMembers, gk)
+			delete(e.groupResolveTrackers, gk)
 			// Reset the flush state so a genuinely new occurrence of the
 			// same group creates a fresh incident (a stable-key UPDATE
 			// after RESOLVED would otherwise re-open a closed incident).
-			delete(e.groupFlush, gk)
+			delete(e.groupFlushStates, gk)
 			groupInc := &model.Incident{
 				ID:        fmt.Sprintf("%08x", crc32.ChecksumIEEE([]byte(tracker.groupIncKey))),
 				Key:       tracker.groupIncKey,
@@ -500,6 +540,6 @@ func (e *Engine) groupMemberResolved(key string) (groupInc *model.Incident, acti
 }
 
 // Caller must hold e.mu.
-func (e *Engine) tryConsumeGroupResolve(key string) (groupInc *model.Incident, action model.IncidentAction, tracked bool) {
+func (e *Engine) tryConsumeGroupResolve(key model.IncidentKey) (groupInc *model.Incident, action model.IncidentAction, tracked bool) {
 	return e.groupMemberResolved(key)
 }

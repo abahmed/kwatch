@@ -77,7 +77,7 @@ func (e *Engine) indexIncidentByNamespace(inc *model.Incident) {
 		return
 	}
 	if e.namespaceIndex[ns] == nil {
-		e.namespaceIndex[ns] = make(map[string]*model.Incident)
+		e.namespaceIndex[ns] = make(map[model.IncidentKey]*model.Incident)
 	}
 	e.namespaceIndex[ns][key] = inc
 }
@@ -94,7 +94,7 @@ func (e *Engine) removeIncidentFromNamespaceIndex(inc *model.Incident) {
 	}
 }
 
-func (e *Engine) SetAnalysis(key, analysis string) {
+func (e *Engine) SetAnalysis(key model.IncidentKey, analysis string) {
 	e.mu.Lock()
 	defer e.mu.Unlock()
 	if inc, ok := e.state[key]; ok {
@@ -132,14 +132,15 @@ func (e *Engine) SetAuditLogger(l *audit.AuditLogger) {
 	e.auditLogger = l
 }
 
-// SnapshotAll returns a deep copy of all non-resolved incidents keyed by ID.
-func (e *Engine) SnapshotAll() map[string]*model.Incident {
+// SnapshotAll returns a deep copy of all non-resolved incidents keyed by
+// incident key.
+func (e *Engine) SnapshotAll() map[model.IncidentKey]*model.Incident {
 	e.mu.Lock()
 	defer e.mu.Unlock()
 	if !e.dirty {
 		return nil
 	}
-	out := make(map[string]*model.Incident, len(e.state))
+	out := make(map[model.IncidentKey]*model.Incident, len(e.state))
 	for key, inc := range e.state {
 		if inc.State == model.StateResolved {
 			continue
@@ -169,7 +170,7 @@ func (e *Engine) SnapshotPersisted() []model.PersistedIncident {
 // Only incidents whose key still exists in the seen (baseline) set are
 // restored, to avoid re-alerting for issues that were resolved while down.
 // LastSeen is bumped to now to prevent immediate cleanup-loop resolution.
-func (e *Engine) RestoreIncidents(incidents map[string]*model.Incident) {
+func (e *Engine) RestoreIncidents(incidents map[model.IncidentKey]*model.Incident) {
 	e.mu.Lock()
 	defer e.mu.Unlock()
 	e.dirty = true
@@ -179,7 +180,7 @@ func (e *Engine) RestoreIncidents(incidents map[string]*model.Incident) {
 	now := e.now()
 	restored := 0
 	for key, inc := range incidents {
-		if _, ok := e.seen[key]; !ok || len(e.seen[key]) == 0 {
+		if _, ok := e.baseline[string(key)]; !ok || len(e.baseline[string(key)]) == 0 {
 			continue
 		}
 		if _, exists := e.state[key]; exists {

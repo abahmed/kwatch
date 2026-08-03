@@ -126,17 +126,9 @@ func (h *handler) ProcessDeploymentObject(deploy *appsv1.Deployment, deleted boo
 }
 
 func (h *handler) markFirstUnavailableDeploy(key string) time.Time {
-	h.deployMu.Lock()
-	defer h.deployMu.Unlock()
-	if t, ok := h.firstUnavailableDeploy[key]; ok {
-		return t
-	}
-	h.firstUnavailableDeploy[key] = h.now()
-	return h.firstUnavailableDeploy[key]
+	return h.firstUnavailableDeploy.mark(key, h.now())
 }
 
 func (h *handler) clearFirstUnavailableDeploy(key string) {
-	h.deployMu.Lock()
-	defer h.deployMu.Unlock()
-	delete(h.firstUnavailableDeploy, key)
+	h.firstUnavailableDeploy.clear(key)
 }

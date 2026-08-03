@@ -154,7 +154,7 @@ func TestProcessPdbObjectExistingEntry(t *testing.T) {
 	hh := h
 
 	// Seed an existing entry so markFirstPdbViolation returns the stored time
-	hh.firstPdbViolation["ns1/pdb1"] = time.Now().Add(-1 * time.Hour)
+	hh.firstPdbViolation.seed("ns1/pdb1", time.Now().Add(-1*time.Hour))
 
 	pdb := &policyv1.PodDisruptionBudget{
 		ObjectMeta: metav1.ObjectMeta{Name: "pdb1", Namespace: "ns1"},

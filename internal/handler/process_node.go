@@ -147,28 +147,13 @@ func (h *handler) ProcessNodeObject(node *corev1.Node, deleted bool) error {
 }
 
 func (h *handler) markFirstNodePressure(key string) time.Time {
-	h.npMu.Lock()
-	defer h.npMu.Unlock()
-	if t, ok := h.firstNodePressure[key]; ok {
-		return t
-	}
-	h.firstNodePressure[key] = h.now()
-	return h.firstNodePressure[key]
+	return h.firstNodePressure.mark(key, h.now())
 }
 
 func (h *handler) clearFirstNodePressure(key string) {
-	h.npMu.Lock()
-	defer h.npMu.Unlock()
-	delete(h.firstNodePressure, key)
+	h.firstNodePressure.clear(key)
 }
 
 func (h *handler) clearAllNodePressure(nodeName string) {
-	h.npMu.Lock()
-	defer h.npMu.Unlock()
-	prefix := nodeName + "/"
-	for k := range h.firstNodePressure {
-		if strings.HasPrefix(k, prefix) {
-			delete(h.firstNodePressure, k)
-		}
-	}
+	h.firstNodePressure.clearPrefix(nodeName + "/")
 }

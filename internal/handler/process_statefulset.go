@@ -106,17 +106,9 @@ func (h *handler) ProcessStatefulSetObject(ss *appsv1.StatefulSet, deleted bool)
 }
 
 func (h *handler) markFirstUnavailableSts(key string) time.Time {
-	h.stsMu.Lock()
-	defer h.stsMu.Unlock()
-	if t, ok := h.firstUnavailableSts[key]; ok {
-		return t
-	}
-	h.firstUnavailableSts[key] = h.now()
-	return h.firstUnavailableSts[key]
+	return h.firstUnavailableSts.mark(key, h.now())
 }
 
 func (h *handler) clearFirstUnavailableSts(key string) {
-	h.stsMu.Lock()
-	defer h.stsMu.Unlock()
-	delete(h.firstUnavailableSts, key)
+	h.firstUnavailableSts.clear(key)
 }

@@ -55,7 +55,7 @@ func (e *Engine) refreshIncident(inc *model.Incident, ev event.Event, cs *model.
 	return inc, e.edgeAction(inc)
 }
 
-func (e *Engine) MarkResolved(key string) {
+func (e *Engine) MarkResolved(key model.IncidentKey) {
 	e.mu.Lock()
 	e.dirty = true
 	inc, ok := e.state[key]
@@ -82,7 +82,7 @@ func (e *Engine) MarkResolved(key string) {
 		if inc.Resource == "node" {
 			e.refreshNodeInhibition(inc.Name)
 		}
-		delete(e.seen, key)
+		e.removeBaselineForIncident(key, inc)
 		e.cleanupCooldown[key] = e.now().Add(e.config.Window)
 		e.mu.Unlock()
 		if groupAction != model.ActionSkip {
@@ -92,7 +92,7 @@ func (e *Engine) MarkResolved(key string) {
 		}
 		if hook := e.config.OnBaselineChange; hook != nil {
 			e.mu.Lock()
-			snapshot := cloneBaseline(e.seen)
+			snapshot := cloneBaseline(e.baseline)
 			e.mu.Unlock()
 			hook(snapshot)
 		}
@@ -102,7 +102,7 @@ func (e *Engine) MarkResolved(key string) {
 	if inc.Resource == "node" {
 		e.refreshNodeInhibition(inc.Name)
 	}
-	delete(e.seen, key)
+	e.removeBaselineForIncident(key, inc)
 	// Arm the cooldown so a recurrence within the window is suppressed
 	// (preventing a resolved→CREATE→resolved flip-flop), then revives
 	// silently once the cooldown expires.
@@ -118,7 +118,7 @@ func (e *Engine) MarkResolved(key string) {
 	}
 	if hook := e.config.OnBaselineChange; hook != nil {
 		e.mu.Lock()
-		snapshot := cloneBaseline(e.seen)
+		snapshot := cloneBaseline(e.baseline)
 		e.mu.Unlock()
 		hook(snapshot)
 	}
@@ -146,7 +146,7 @@ func (e *Engine) RemovePod(namespace, podName string) {
 	// Release per-pod baseline slots for this pod, scoped to the namespace
 	// so an identically-named pod in another namespace keeps its baseline.
 	nsPrefix := namespace + ":"
-	for key, pods := range e.seen {
+	for key, pods := range e.baseline {
 		if !strings.HasPrefix(key, nsPrefix) {
 			continue
 		}
@@ -154,7 +154,7 @@ func (e *Engine) RemovePod(namespace, podName string) {
 			delete(pods, podName)
 			baselineChanged = true
 			if len(pods) == 0 {
-				delete(e.seen, key)
+				delete(e.baseline, key)
 			}
 		}
 	}
@@ -170,7 +170,7 @@ func (e *Engine) RemovePod(namespace, podName string) {
 	if baselineChanged {
 		if hook := e.config.OnBaselineChange; hook != nil {
 			e.mu.Lock()
-			snapshot := cloneBaseline(e.seen)
+			snapshot := cloneBaseline(e.baseline)
 			e.mu.Unlock()
 			hook(snapshot)
 		}
@@ -207,7 +207,7 @@ func (e *Engine) ResolveByResource(resource, name string) {
 			if inc.Resource == "node" {
 				e.refreshNodeInhibition(inc.Name)
 			}
-			delete(e.seen, key)
+			e.removeBaselineForIncident(key, inc)
 			e.cleanupCooldown[key] = now.Add(e.config.Window)
 			// Smart group batch resolve: when the incident is a group member,
 			// the group RESOLVED replaces the individual notification.
@@ -231,7 +231,7 @@ func (e *Engine) ResolveByResource(resource, name string) {
 	if baselineChanged {
 		if hook := e.config.OnBaselineChange; hook != nil {
 			e.mu.Lock()
-			snapshot := cloneBaseline(e.seen)
+			snapshot := cloneBaseline(e.baseline)
 			e.mu.Unlock()
 			hook(snapshot)
 		}
@@ -297,7 +297,7 @@ func (e *Engine) cleanup() {
 		}
 		// Add cooldown to prevent resolve→recreate cycle for still-broken resources
 		e.cleanupCooldown[key] = now.Add(e.config.Window)
-		delete(e.seen, key)
+		e.removeBaselineForIncident(key, inc)
 		e.removeIncidentFromNamespaceIndex(inc)
 		delete(e.state, key)
 		if inc.Resource == "node" {
@@ -343,7 +343,7 @@ func (e *Engine) checkLifecycle() {
 			if inc.Resource == "node" {
 				e.refreshNodeInhibition(inc.Name)
 			}
-			delete(e.seen, key)
+			e.removeBaselineForIncident(key, inc)
 			e.cleanupCooldown[key] = now.Add(e.config.Window)
 			// Smart group batch resolve
 			if groupInc, groupAction, tracked := e.tryConsumeGroupResolve(key); tracked {
@@ -359,11 +359,18 @@ func (e *Engine) checkLifecycle() {
 		}
 	}
 
-	// renotify — resend on time-based interval (not stale-gated)
+	// renotify — resend on time-based interval (not stale-gated).
+	// Incidents absorbed into a smart group are skipped: the group flush
+	// (and its cooldown-gated re-flush) is their re-notification channel,
+	// so individual renotify would duplicate the group alert.
 	renotifyBySev := e.config.RenotifyIntervalBySeverity
 	if len(renotifyBySev) > 0 {
+		grouped := e.groupedKeys()
 		for _, inc := range e.state {
 			if inc.State == model.StateResolved || inc.State == model.StatePendingResolve {
+				continue
+			}
+			if grouped[inc.Key] {
 				continue
 			}
 			maxPer := e.config.RenotifyMaxPerIncident
@@ -391,7 +398,7 @@ func (e *Engine) checkLifecycle() {
 
 	// smart grouping flush
 	if e.config.SmartGroupingWindow > 0 {
-		for gk, pg := range e.pendingGroups {
+		for gk, pg := range e.groupBuffers {
 			if len(pg.entries) > 0 && now.After(pg.firstSeen.Add(e.config.SmartGroupingWindow)) {
 				var active []groupEntry
 				for _, ge := range pg.entries {
@@ -406,7 +413,7 @@ func (e *Engine) checkLifecycle() {
 					}
 					// Stable key per group so re-flushes update the same
 					// incident instead of creating a new one each cycle.
-					groupIncKey := "__group__:" + gk
+					groupIncKey := model.IncidentKey(groupKeyPrefix + gk)
 					sev := e.groupSeverity(active)
 					// Copy rich data (logs, events, analysis, runbook) from the first
 					// member incident so the group notification includes diagnostics.
@@ -462,7 +469,7 @@ func (e *Engine) checkLifecycle() {
 					// carry the same stable key and emit an UPDATE, throttled by a
 					// cooldown so a busy group can't spam every flush window.
 					action := model.ActionCreate
-					if fs, ok := e.groupFlush[gk]; ok && fs.notified {
+					if fs, ok := e.groupFlushStates[gk]; ok && fs.notified {
 						if now.After(fs.lastNotifiedAt.Add(e.groupRenotifyCooldown())) {
 							fs.lastNotifiedAt = now
 							action = model.ActionUpdate
@@ -470,7 +477,7 @@ func (e *Engine) checkLifecycle() {
 							action = model.ActionSkip
 						}
 					} else {
-						e.groupFlush[gk] = &groupFlushState{
+						e.groupFlushStates[gk] = &groupFlushState{
 							notified:       true,
 							lastNotifiedAt: now,
 						}
@@ -480,12 +487,12 @@ func (e *Engine) checkLifecycle() {
 					}
 
 					// Replace any stale tracker for the same key
-					delete(e.groupMembers, gk)
+					delete(e.groupResolveTrackers, gk)
 
 					// Track group members for batch resolve
 					tracker := &groupResolveTracker{
 						groupIncKey: groupIncKey,
-						members:     make(map[string]bool),
+						members:     make(map[model.IncidentKey]bool),
 						totalCount:  len(active),
 						summary:     summary,
 						reason:      active[0].reason,
@@ -496,7 +503,7 @@ func (e *Engine) checkLifecycle() {
 					for _, ge := range active {
 						tracker.members[ge.key] = false
 					}
-					e.groupMembers[gk] = tracker
+					e.groupResolveTrackers[gk] = tracker
 
 					// Reset NotifiedSig on active entries so subsequent events can be re-grouped
 					for _, ge := range active {
@@ -505,7 +512,7 @@ func (e *Engine) checkLifecycle() {
 						}
 					}
 				}
-				delete(e.pendingGroups, gk)
+				delete(e.groupBuffers, gk)
 			}
 		}
 	}
@@ -530,7 +537,7 @@ func (e *Engine) checkLifecycle() {
 	if baselineChanged {
 		if hook := e.config.OnBaselineChange; hook != nil {
 			e.mu.Lock()
-			snapshot := cloneBaseline(e.seen)
+			snapshot := cloneBaseline(e.baseline)
 			e.mu.Unlock()
 			hook(snapshot)
 		}

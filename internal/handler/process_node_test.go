@@ -448,19 +448,19 @@ func TestMarkFirstNodePressureHit(t *testing.T) {
 func TestClearAllNodePressureNoMatch(t *testing.T) {
 	e := testCorrelator()
 	h := NewHandler(fake.NewSimpleClientset(), &config.Config{}, e, testAlertMgr)
-	h.firstNodePressure["node1/DiskPressure"] = time.Now()
-	h.firstNodePressure["node1/PIDPressure"] = time.Now()
+	h.firstNodePressure.seed("node1/DiskPressure", time.Now())
+	h.firstNodePressure.seed("node1/PIDPressure", time.Now())
 	h.clearAllNodePressure("other-node")
-	assert.Len(t, h.firstNodePressure, 2, "should not clear entries for other node")
+	assert.Len(t, h.firstNodePressure.dump(), 2, "should not clear entries for other node")
 }
 
 func TestClearAllNodePressureWithMatch(t *testing.T) {
 	e := testCorrelator()
 	h := NewHandler(fake.NewSimpleClientset(), &config.Config{}, e, testAlertMgr)
-	h.firstNodePressure["node1/DiskPressure"] = time.Now()
-	h.firstNodePressure["node1/PIDPressure"] = time.Now()
-	h.firstNodePressure["node2/MemoryPressure"] = time.Now()
+	h.firstNodePressure.seed("node1/DiskPressure", time.Now())
+	h.firstNodePressure.seed("node1/PIDPressure", time.Now())
+	h.firstNodePressure.seed("node2/MemoryPressure", time.Now())
 	h.clearAllNodePressure("node1")
-	assert.Len(t, h.firstNodePressure, 1, "should clear node1 entries only")
-	assert.Contains(t, h.firstNodePressure, "node2/MemoryPressure")
+	assert.Len(t, h.firstNodePressure.dump(), 1, "should clear node1 entries only")
+	assert.Contains(t, h.firstNodePressure.dump(), "node2/MemoryPressure")
 }

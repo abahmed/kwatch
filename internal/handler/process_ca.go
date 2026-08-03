@@ -22,15 +22,7 @@ func (h *handler) ProcessClusterAutoscalerEvent(ev *corev1.Event) {
 	switch ev.Reason {
 	case "FailedToScaleUp", "NotTriggerScaleUp":
 		// sustain check: only alert if the same reason persists
-		h.caMu.Lock()
-		first, ok := h.firstCaBlocked[ev.Reason]
-		if !ok {
-			h.firstCaBlocked[ev.Reason] = h.now()
-			h.caMu.Unlock()
-			return
-		}
-		h.caMu.Unlock()
-
+		first := h.firstCaBlocked.mark(ev.Reason, h.now())
 		if h.now().Sub(first) < caSustainedMinutes*time.Minute {
 			return
 		}
@@ -54,9 +46,7 @@ func (h *handler) ProcessClusterAutoscalerEvent(ev *corev1.Event) {
 		// CA event means the autoscaler is functioning again, so clear the
 		// sustained gates for the failure reasons; otherwise a later failure
 		// would alert immediately without a fresh sustain window.
-		h.caMu.Lock()
-		delete(h.firstCaBlocked, "FailedToScaleUp")
-		delete(h.firstCaBlocked, "NotTriggerScaleUp")
-		h.caMu.Unlock()
+		h.firstCaBlocked.clear("FailedToScaleUp")
+		h.firstCaBlocked.clear("NotTriggerScaleUp")
 	}
 }

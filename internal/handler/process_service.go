@@ -113,17 +113,9 @@ func (h *handler) ProcessServiceObject(svc *corev1.Service, deleted bool) error 
 }
 
 func (h *handler) markServiceNoEndpoints(key string) time.Time {
-	h.serviceMu.Lock()
-	defer h.serviceMu.Unlock()
-	if t, ok := h.serviceNoEndpointSince[key]; ok {
-		return t
-	}
-	h.serviceNoEndpointSince[key] = h.now()
-	return h.serviceNoEndpointSince[key]
+	return h.serviceNoEndpointSince.mark(key, h.now())
 }
 
 func (h *handler) clearServiceNoEndpoints(namespace, name string) {
-	h.serviceMu.Lock()
-	defer h.serviceMu.Unlock()
-	delete(h.serviceNoEndpointSince, namespace+"/"+name)
+	h.serviceNoEndpointSince.clear(correlation.OwnerPath(namespace, name))
 }

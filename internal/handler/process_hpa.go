@@ -165,33 +165,17 @@ func (h *handler) ProcessHorizontalPodAutoscalerObject(hpa *autoscalingv2.Horizo
 }
 
 func (h *handler) markFirstMaxed(key string) time.Time {
-	h.hpaMu.Lock()
-	defer h.hpaMu.Unlock()
-	if t, ok := h.firstMaxedHPAs[key]; ok {
-		return t
-	}
-	h.firstMaxedHPAs[key] = h.now()
-	return h.firstMaxedHPAs[key]
+	return h.firstMaxedHPAs.mark(key, h.now())
 }
 
 func (h *handler) clearFirstMaxed(key string) {
-	h.hpaMu.Lock()
-	defer h.hpaMu.Unlock()
-	delete(h.firstMaxedHPAs, key)
+	h.firstMaxedHPAs.clear(key)
 }
 
 func (h *handler) markFirstScalingError(key string) time.Time {
-	h.hpaMu.Lock()
-	defer h.hpaMu.Unlock()
-	if t, ok := h.firstScalingErrorHPAs[key]; ok {
-		return t
-	}
-	h.firstScalingErrorHPAs[key] = h.now()
-	return h.firstScalingErrorHPAs[key]
+	return h.firstScalingErrorHPAs.mark(key, h.now())
 }
 
 func (h *handler) clearFirstScalingError(key string) {
-	h.hpaMu.Lock()
-	defer h.hpaMu.Unlock()
-	delete(h.firstScalingErrorHPAs, key)
+	h.firstScalingErrorHPAs.clear(key)
 }

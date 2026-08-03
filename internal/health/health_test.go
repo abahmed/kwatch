@@ -179,7 +179,7 @@ func TestIncidentsHandler(t *testing.T) {
 	err := json.NewDecoder(resp.Body).Decode(&got)
 	assert.Nil(err)
 	assert.Len(got, 1)
-	assert.Equal("ns:deploy:Err", got[0].Key)
+	assert.Equal("ns:deploy:Err", string(got[0].Key))
 }
 
 func TestIncidentsHandlerEmpty(t *testing.T) {

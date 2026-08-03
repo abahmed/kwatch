@@ -702,7 +702,7 @@ func TestSaveAndGetPersistedIncidentsRoundTrip(t *testing.T) {
 	err = sm.GetIncidents(ctx, &loaded)
 	assert.Nil(err)
 	assert.Equal(1, len(loaded))
-	assert.Equal("pod/ns/dep-1", loaded[0].Key)
+	assert.Equal("pod/ns/dep-1", string(loaded[0].Key))
 	assert.Equal("OOMKilled", loaded[0].Reason)
 	assert.Equal(float64(3), float64(loaded[0].Count))
 	assert.Equal(model.SeverityHigh, loaded[0].Severity)

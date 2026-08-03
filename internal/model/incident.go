@@ -56,7 +56,7 @@ const (
 )
 
 type IncidentView struct {
-	Key       string        `json:"key"`
+	Key       IncidentKey   `json:"key"`
 	Reason    string        `json:"reason"`
 	Namespace string        `json:"namespace"`
 	Name      string        `json:"name"`
@@ -70,11 +70,19 @@ type IncidentView struct {
 }
 
 type Incident struct {
-	ID                     string // stable short hash for log correlation
-	Key                    string
-	Reason                 string
-	Namespace              string
-	Resource               string
+	ID        string // stable short hash for log correlation
+	Key       IncidentKey
+	Reason    string
+	Namespace string
+	Resource  string
+	// Name identifies the subject of the incident; its encoding depends on the
+	// resource kind, so compare via ParseKey/OwnerPath rather than raw equality:
+	//   - pod incidents: bare owning-workload name, or the pod's own name when
+	//     the pod is ownerless (set in correlation.newIncident).
+	//   - workload-object incidents (deployment, statefulset, job, ingress,
+	//     service, networkpolicy, ...): fully-qualified "namespace/name".
+	//   - node incidents: the node name.
+	//   - smart-group incidents: a human-readable member summary.
 	Name                   string
 	Count                  int
 	FirstSeen              time.Time
@@ -110,7 +118,7 @@ type Incident struct {
 // PersistedIncident is a lightweight serializable subset of Incident,
 // stored in the kwatch-incidents ConfigMap to survive restarts.
 type PersistedIncident struct {
-	Key            string          `json:"key"`
+	Key            IncidentKey     `json:"key"`
 	Reason         string          `json:"reason"`
 	Namespace      string          `json:"namespace"`
 	Name           string          `json:"name"`

@@ -116,19 +116,11 @@ func (h *handler) ProcessCronJobObject(cj *batchv1.CronJob, deleted bool) error 
 }
 
 func (h *handler) markFirstSuspendedCJ(key string) time.Time {
-	h.cjMu.Lock()
-	defer h.cjMu.Unlock()
-	if t, ok := h.firstSuspendedCJs[key]; ok {
-		return t
-	}
-	h.firstSuspendedCJs[key] = h.now()
-	return h.firstSuspendedCJs[key]
+	return h.firstSuspendedCJs.mark(key, h.now())
 }
 
 func (h *handler) clearFirstSuspendedCJ(key string) {
-	h.cjMu.Lock()
-	defer h.cjMu.Unlock()
-	delete(h.firstSuspendedCJs, key)
+	h.firstSuspendedCJs.clear(key)
 }
 
 // NextFireAfter returns the time the CronJob should have next fired, based on

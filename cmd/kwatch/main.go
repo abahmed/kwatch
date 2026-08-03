@@ -175,7 +175,7 @@ func main() {
 				}
 				klog.V(2).InfoS("mass failure detected", "message", mf.Describe())
 				inc := &model.Incident{
-					Key:       "mass-failure/" + key,
+					Key:       model.IncidentKey("mass-failure/" + key),
 					Reason:    mf.Reason,
 					Namespace: mf.Namespace,
 					Resource:  mf.ResourceKind,
@@ -191,7 +191,7 @@ func main() {
 				}
 				klog.V(2).InfoS("mass failure resolved", "dependency", key)
 				inc := &model.Incident{
-					Key:       "mass-failure/" + key,
+					Key:       model.IncidentKey("mass-failure/" + key),
 					Reason:    mf.Reason,
 					Namespace: mf.Namespace,
 					Resource:  mf.ResourceKind,
@@ -221,7 +221,7 @@ func main() {
 	if err := stateMgr.GetIncidents(ctx, &persisted); err != nil {
 		klog.ErrorS(err, "failed to restore incidents from configmap")
 	} else if len(persisted) > 0 {
-		restored := make(map[string]*model.Incident, len(persisted))
+		restored := make(map[model.IncidentKey]*model.Incident, len(persisted))
 		for i := range persisted {
 			inc := persisted[i].ToIncident()
 			restored[inc.Key] = inc
@@ -230,7 +230,9 @@ func main() {
 		klog.InfoS("restored incidents from configmap", "count", len(persisted))
 	}
 
-	alertManager.SetAnalysisWriter(correlator.SetAnalysis)
+	alertManager.SetAnalysisWriter(func(key, analysis string) {
+		correlator.SetAnalysis(model.IncidentKey(key), analysis)
+	})
 	correlator.SetAuditLogger(auditLogger)
 
 	healthServer.SetIncidentAPI(correlator)

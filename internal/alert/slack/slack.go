@@ -265,7 +265,7 @@ func (s *Slack) SendIncident(inc *model.Incident, action model.IncidentAction) e
 }
 
 func (s *Slack) sendIncidentWithToken(inc *model.Incident, action model.IncidentAction) error {
-	key := inc.Key
+	key := string(inc.Key)
 
 	post := s.postBlocks
 	if s.postBlocksFn != nil {

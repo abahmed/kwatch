@@ -238,7 +238,7 @@ func TestInhibitionSuppressesPodsDuringNodeFailure(t *testing.T) {
 }
 
 // TestBaselineSuppressesRestartRepage verifies that a pod whose owner+reason
-// was previously seen (seeded via SetSeen) is suppressed on first contact,
+// was previously seen (seeded via SetBaseline) is suppressed on first contact,
 // preventing re-paging after restart.
 func TestBaselineSuppressesRestartRepage(t *testing.T) {
 	rec := &recordingAlertManager{}
@@ -247,8 +247,8 @@ func TestBaselineSuppressesRestartRepage(t *testing.T) {
 	key := correlation.BuildKey("default", "my-deployment", "CrashLoopBackOff", "")
 
 	// Seed a baseline entry so the engine treats the pod as previously seen
-	eng.SetSeen(map[string]map[string]int64{
-		key: {"my-pod": time.Now().Unix()},
+	eng.SetBaseline(map[string]map[string]int64{
+		string(key): {"my-pod": time.Now().Unix()},
 	})
 
 	ev := makeEvent("pod", "my-pod", "default", "CrashLoopBackOff", "main", "")

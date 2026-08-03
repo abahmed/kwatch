@@ -75,7 +75,7 @@ func (h *handler) ProcessPodObject(parent context.Context, pod *corev1.Pod, dele
 	h.executeContainersFilters(&ctxF)
 
 	if isPodHealthy(pod) {
-		h.ClearSeenForPod(pod.Namespace, pod.Name)
+		h.ClearBaselineForPod(pod.Namespace, pod.Name)
 	}
 	return nil
 }

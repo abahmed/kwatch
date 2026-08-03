@@ -1224,7 +1224,7 @@ func (a *AlertManager) recordDeadLetter(entry *providerEntry, inc *model.Inciden
 	defer a.dlqMu.Unlock()
 	a.dlqRing[a.dlqHead] = DeadLetterEntry{
 		Provider:  entry.provider.Name(),
-		Key:       inc.Key,
+		Key:       string(inc.Key),
 		Action:    action,
 		Error:     err.Error(),
 		Timestamp: time.Now(),
@@ -1268,7 +1268,7 @@ func (a *AlertManager) enrichOne(ctx context.Context, job deliverJob) {
 	} else if s := sanitizeAnalysis(out); s != "" {
 		job.inc.Analysis = s
 		if w := a.analysisWriter; w != nil {
-			w(job.inc.Key, s)
+			w(string(job.inc.Key), s)
 		}
 	}
 }

@@ -888,7 +888,7 @@ func TestFanOutSaturatedQueueRecordsDeadLetter(t *testing.T) {
 	ch := make(chan deliverJob, channelCap)
 	inc := &model.Incident{Key: "old-job", Name: "n1", Reason: "Error"}
 	for i := 0; i < channelCap; i++ {
-		ch <- deliverJob{inc: &model.Incident{Key: fmt.Sprintf("stale-%d", i)}}
+		ch <- deliverJob{inc: &model.Incident{Key: model.IncidentKey(fmt.Sprintf("stale-%d", i))}}
 	}
 	am.entries = []providerEntry{{
 		provider: &fakeProvider{},

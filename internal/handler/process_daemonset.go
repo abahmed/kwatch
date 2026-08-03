@@ -121,17 +121,9 @@ func (h *handler) ProcessDaemonSetObject(ds *appsv1.DaemonSet, deleted bool) err
 }
 
 func (h *handler) markFirstUnavailableDS(key string) time.Time {
-	h.dsMu.Lock()
-	defer h.dsMu.Unlock()
-	if t, ok := h.firstUnavailableDS[key]; ok {
-		return t
-	}
-	h.firstUnavailableDS[key] = h.now()
-	return h.firstUnavailableDS[key]
+	return h.firstUnavailableDS.mark(key, h.now())
 }
 
 func (h *handler) clearFirstUnavailableDS(key string) {
-	h.dsMu.Lock()
-	defer h.dsMu.Unlock()
-	delete(h.firstUnavailableDS, key)
+	h.firstUnavailableDS.clear(key)
 }

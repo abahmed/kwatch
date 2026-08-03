@@ -37,18 +37,18 @@ func recordSuppressedPod(nodeInc *model.Incident, ev event.Event, owner string) 
 
 // logNodeInhibitionSkip records an audit skip for a pod suppressed by an
 // active node incident. nodeName is set only when the pod was bound to a node.
-func (e *Engine) logNodeInhibitionSkip(ev event.Event, key, nodeName string) {
+func (e *Engine) logNodeInhibitionSkip(ev event.Event, key model.IncidentKey, nodeName string) {
 	if e.auditLogger == nil {
 		return
 	}
-	e.auditLogger.LogSkip(&model.Incident{Key: key, Namespace: ev.Namespace, Reason: ev.Reason, ID: key, NodeName: nodeName}, "node_inhibition")
+	e.auditLogger.LogSkip(&model.Incident{Key: key, Namespace: ev.Namespace, Reason: ev.Reason, ID: string(key), NodeName: nodeName}, "node_inhibition")
 }
 
 // suppressedByNodeIncident reports whether the pod event should be suppressed
 // because its node has an active incident, or (for unschedulable pods with no
 // node) because any node incident is active. Records suppression stats on the
 // owning node incident. Caller must hold e.mu.
-func (e *Engine) suppressedByNodeIncident(ev event.Event, owner, key string) bool {
+func (e *Engine) suppressedByNodeIncident(ev event.Event, owner string, key model.IncidentKey) bool {
 	if ev.NodeName != "" && e.activeNodeIncidents[ev.NodeName] {
 		if nodeInc := e.findNodeIncident(ev.NodeName); nodeInc != nil {
 			recordSuppressedPod(nodeInc, ev, owner)

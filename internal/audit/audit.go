@@ -103,7 +103,7 @@ func (l *AuditLogger) LogIncident(inc *model.Incident, action model.IncidentActi
 	l.log(Entry{
 		Timestamp:   time.Now(),
 		Action:      l.actionFromIncidentAction(action),
-		IncidentKey: inc.Key,
+		IncidentKey: string(inc.Key),
 		IncidentID:  inc.ID,
 		Namespace:   inc.Namespace,
 		Reason:      inc.Reason,
@@ -121,7 +121,7 @@ func (l *AuditLogger) LogSkip(inc *model.Incident, skipReason string) {
 	l.log(Entry{
 		Timestamp:   time.Now(),
 		Action:      ActionSkip,
-		IncidentKey: inc.Key,
+		IncidentKey: string(inc.Key),
 		IncidentID:  inc.ID,
 		Namespace:   inc.Namespace,
 		Reason:      inc.Reason,

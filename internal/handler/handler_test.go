@@ -1513,9 +1513,9 @@ func TestProcessNodeResourceOvercommit(t *testing.T) {
 	assert.Equal(t, 1, e.ActiveCount())
 }
 
-func TestSetSeen(t *testing.T) {
+func TestSetBaseline(t *testing.T) {
 	h := NewHandler(fake.NewSimpleClientset(), &config.Config{}, testCorrelator(), testAlertMgr)
-	h.SetSeen(map[string]map[string]int64{"default/test-pod": {"CrashLoopBackOff": 100}})
+	h.SetBaseline(map[string]map[string]int64{"default/test-pod": {"CrashLoopBackOff": 100}})
 }
 
 func TestSetActiveNodeIncidents(t *testing.T) {

@@ -20,14 +20,9 @@ import (
 	"github.com/abahmed/kwatch/internal/model"
 )
 
-// BuildKey constructs the incident key used for dedup, grouping, and baseline.
-func BuildKey(namespace, owner, reason, container string) string {
-	return namespace + ":" + owner + ":" + reason + ":" + container
-}
-
 // IncidentKey derives a dedup key from an event, mirroring the exact normalisation
 // chain inside Process. It returns the same key that Process would compute.
-func IncidentKey(ev event.Event, owner string, cs *model.ContainerState) string {
+func IncidentKey(ev event.Event, owner string, cs *model.ContainerState) model.IncidentKey {
 	r := normalizeReason(ev.Reason)
 	// A crash-looping container reports different reasons across its cycle:
 	// constant.ReasonError/constant.ReasonOOMKilled when it terminates, constant.ReasonCrashLoopBackOff while backing off.
@@ -49,7 +44,7 @@ func IncidentKey(ev event.Event, owner string, cs *model.ContainerState) string 
 		switch scope {
 		case "rate_limit", "pull_qps", "timeout", "conn_refused",
 			"net_unreachable", "dns", "tls":
-			return r + "|global|" + scope
+			return GlobalKey(r, scope)
 		}
 	}
 	return BuildKey(ev.Namespace, owner, r, "")
@@ -115,25 +110,29 @@ const defaultCrashLoopHighFreqThreshold = 5
 const DefaultMaxBaseline = 2000
 
 type Engine struct {
-	mu                  sync.Mutex
-	state               map[string]*model.Incident
-	namespaceIndex      map[string]map[string]*model.Incident // ns → key → inc
-	config              Config
-	seen                map[string]map[string]int64
-	deployLister        appsv1lister.DeploymentLister
-	ssLister            appsv1lister.StatefulSetLister
-	dsLister            appsv1lister.DaemonSetLister
-	activeNodeIncidents map[string]bool
-	lastContainerIndex  map[string]*model.ContainerState // key: namespace/podName
-	serviceLister       corev1lister.ServiceLister
-	cleanupCooldown     map[string]time.Time            // key → cooldown expiry; prevents resolve→recreate cycle
-	pendingGroups       map[string]*pendingGroup        // computeGroupKey output → group buffer
-	groupMembers        map[string]*groupResolveTracker // gk → batch resolve tracker
-	groupFlush          map[string]*groupFlushState     // gk → last notification state
-	deferredResolves    []*model.Incident               // group resolves awaiting the next lifecycle tick
-	auditLogger         *audit.AuditLogger
-	dirty               bool // true when state has changed since last SnapshotAll
-	now                 func() time.Time
+	mu             sync.Mutex
+	state          map[model.IncidentKey]*model.Incident
+	namespaceIndex map[string]map[model.IncidentKey]*model.Incident // ns → key → inc
+	config         Config
+	// baseline is the startup baseline: incident key (BuildKey string form) →
+	// pod name → first-seen unix ts. The keys intentionally stay raw strings:
+	// this map crosses the ConfigMap persistence layer (controller/state),
+	// which treats it as an opaque serialized blob.
+	baseline             map[string]map[string]int64
+	deployLister         appsv1lister.DeploymentLister
+	ssLister             appsv1lister.StatefulSetLister
+	dsLister             appsv1lister.DaemonSetLister
+	activeNodeIncidents  map[string]bool                  // node name → has active incident
+	lastContainerIndex   map[string]*model.ContainerState // key: namespace/podName
+	serviceLister        corev1lister.ServiceLister
+	cleanupCooldown      map[model.IncidentKey]time.Time // key → cooldown expiry; prevents resolve→recreate cycle
+	groupBuffers         map[string]*pendingGroup        // computeGroupKey output → group buffer
+	groupResolveTrackers map[string]*groupResolveTracker // gk → batch resolve tracker
+	groupFlushStates     map[string]*groupFlushState     // gk → last notification state
+	deferredResolves     []*model.Incident               // group resolves awaiting the next lifecycle tick
+	auditLogger          *audit.AuditLogger
+	dirty                bool // true when state has changed since last SnapshotAll
+	now                  func() time.Time
 }
 
 func NewEngine(cfg Config) *Engine {
@@ -150,21 +149,21 @@ func NewEngine(cfg Config) *Engine {
 		cfg.MaxBaseline = DefaultMaxBaseline
 	}
 	e := &Engine{
-		state:               make(map[string]*model.Incident),
-		namespaceIndex:      make(map[string]map[string]*model.Incident),
-		config:              cfg,
-		activeNodeIncidents: make(map[string]bool),
-		lastContainerIndex:  make(map[string]*model.ContainerState),
-		cleanupCooldown:     make(map[string]time.Time),
-		pendingGroups:       make(map[string]*pendingGroup),
-		groupMembers:        make(map[string]*groupResolveTracker),
-		groupFlush:          make(map[string]*groupFlushState),
+		state:                make(map[model.IncidentKey]*model.Incident),
+		namespaceIndex:       make(map[string]map[model.IncidentKey]*model.Incident),
+		config:               cfg,
+		activeNodeIncidents:  make(map[string]bool),
+		lastContainerIndex:   make(map[string]*model.ContainerState),
+		cleanupCooldown:      make(map[model.IncidentKey]time.Time),
+		groupBuffers:         make(map[string]*pendingGroup),
+		groupResolveTrackers: make(map[string]*groupResolveTracker),
+		groupFlushStates:     make(map[string]*groupFlushState),
 	}
 	if e.now == nil {
 		e.now = time.Now
 	}
 	if cfg.Baseline != nil {
-		e.SetSeen(cfg.Baseline)
+		e.SetBaseline(cfg.Baseline)
 	}
 	return e
 }
@@ -303,7 +302,7 @@ func (e *Engine) Process(ev event.Event, owner string, cs *model.ContainerState)
 	// Baseline — skip for node events so the incident is always created
 	if res != "node" && e.isBaselined(key, ev.PodName) {
 		if e.auditLogger != nil {
-			e.auditLogger.LogSkip(&model.Incident{Key: key, Namespace: ev.Namespace, Reason: ev.Reason, ID: key}, "baseline")
+			e.auditLogger.LogSkip(&model.Incident{Key: key, Namespace: ev.Namespace, Reason: ev.Reason, ID: string(key)}, "baseline")
 		}
 		return nil, model.ActionSkip
 	}
@@ -319,7 +318,7 @@ func (e *Engine) Process(ev event.Event, owner string, cs *model.ContainerState)
 	if expiry, ok := e.cleanupCooldown[key]; ok {
 		if e.now().Before(expiry) {
 			if e.auditLogger != nil {
-				e.auditLogger.LogSkip(&model.Incident{Key: key, Namespace: ev.Namespace, Reason: ev.Reason, ID: key}, "cooldown")
+				e.auditLogger.LogSkip(&model.Incident{Key: key, Namespace: ev.Namespace, Reason: ev.Reason, ID: string(key)}, "cooldown")
 			}
 			return nil, model.ActionSkip
 		}
@@ -330,30 +329,42 @@ func (e *Engine) Process(ev event.Event, owner string, cs *model.ContainerState)
 
 	// Cascading suppression: if a pod incident fires and its owning workload
 	// already has an active (non-pod) incident, suppress the pod as a symptom.
+	// Workload incidents may carry their owner as either a bare name (pod path)
+	// or "ns/name" (workload-object detectors), so accept both encodings —
+	// otherwise a stuck Deployment would never suppress its own pod symptoms.
 	if res == "pod" && owner != "" {
-		prefix := ev.Namespace + ":" + owner + ":"
+		ownerFull := OwnerPath(ev.Namespace, owner)
 		for _, existing := range e.state {
 			if existing.State == model.StateResolved ||
 				existing.State == model.StatePendingResolve {
 				continue
 			}
-			if existing.Resource != "pod" &&
-				existing.Namespace == ev.Namespace &&
-				existing.Name == owner &&
-				strings.HasPrefix(existing.Key, prefix) {
-				existing.Count++
-				if ev.PodName != "" {
-					existing.Resources[ev.PodName] = true
-					if len(existing.Resources) > existing.PeakResources {
-						existing.PeakResources = len(existing.Resources)
-					}
-				}
-				existing.LastSeen = now
-				if e.auditLogger != nil {
-					e.auditLogger.LogSkip(&model.Incident{Key: key, Namespace: ev.Namespace, Reason: ev.Reason, ID: key}, "cascading_suppression")
-				}
-				return nil, model.ActionSkip
+			if existing.Resource == "pod" ||
+				existing.Namespace != ev.Namespace {
+				continue
 			}
+			// The owner must match in the incident's Name field and in the
+			// owner slot of its key — the key check guards against two
+			// distinct owners sharing one namespace prefix.
+			pk := ParseKey(existing.Key)
+			if existing.Name != owner && existing.Name != ownerFull {
+				continue
+			}
+			if pk.Owner != owner && pk.Owner != ownerFull {
+				continue
+			}
+			existing.Count++
+			if ev.PodName != "" {
+				existing.Resources[ev.PodName] = true
+				if len(existing.Resources) > existing.PeakResources {
+					existing.PeakResources = len(existing.Resources)
+				}
+			}
+			existing.LastSeen = now
+			if e.auditLogger != nil {
+				e.auditLogger.LogSkip(&model.Incident{Key: key, Namespace: ev.Namespace, Reason: ev.Reason, ID: string(key)}, "cascading_suppression")
+			}
+			return nil, model.ActionSkip
 		}
 	}
 
@@ -402,29 +413,50 @@ func (e *Engine) Process(ev event.Event, owner string, cs *model.ContainerState)
 
 	// When RestartCount crosses the CrashLoopHighFrequency threshold, the
 	// incident key changes from the raw reason (e.g. constant.ReasonError) to
-	// constant.ReasonCrashLoopHighFreq, orphaning the old incident in the state map.
-	// Silently resolve any orphaned incidents with the same ns:owner: prefix
-	// so the state map doesn't accumulate stale entries for the same pod.
+	// constant.ReasonCrashLoopHighFreq. Rather than orphaning the old incident
+	// (which silently dropped it without a RESOLVED and fired a duplicate
+	// CREATE for the same ongoing crash loop), migrate the existing incident
+	// to the folded key: same ID (alert thread continuity), same FirstSeen,
+	// no notification churn. Baseline entries are carried over so a startup-
+	// baselined loop stays suppressed after the fold.
 	if cs != nil && int(cs.RestartCount) > defaultCrashLoopHighFreqThreshold {
-		prefix := ev.Namespace + ":" + owner + ":"
+		var orphan *model.Incident
 		for k, oldInc := range e.state {
-			if strings.HasPrefix(k, prefix) && k != key &&
-				oldInc.State != model.StateResolved &&
-				oldInc.State != model.StatePendingResolve &&
-				oldInc.Resource == res {
-				oldInc.State = model.StateResolved
-				e.removeIncidentFromNamespaceIndex(oldInc)
-				delete(e.state, k)
-				delete(e.seen, k)
-				// Release the folded incident from any smart-group tracker so
-				// the group isn't stuck waiting on a member that no longer
-				// exists. If that resolves the whole group, defer the RESOLVED
-				// notification to the next lifecycle tick (Process holds the
-				// lock, so hooks cannot run here).
-				if groupInc, groupAction, tracked := e.groupMemberResolved(k); tracked && groupAction == model.ActionResolved {
-					e.deferredResolves = append(e.deferredResolves, groupInc)
-				}
+			if k == key ||
+				oldInc.State == model.StateResolved ||
+				oldInc.State == model.StatePendingResolve ||
+				oldInc.Resource != res {
+				continue
 			}
+			pk := ParseKey(k)
+			if pk.Namespace != ev.Namespace || pk.Owner != owner {
+				continue
+			}
+			orphan = oldInc
+			e.removeIncidentFromNamespaceIndex(oldInc)
+			delete(e.state, k)
+			if pods, ok := e.baseline[string(k)]; ok {
+				if e.baseline[string(key)] == nil {
+					e.baseline[string(key)] = make(map[string]int64, len(pods))
+				}
+				for pod, ts := range pods {
+					e.baseline[string(key)][pod] = ts
+				}
+				delete(e.baseline, string(k))
+			}
+			// Follow any smart-group membership onto the new key so the
+			// group isn't left waiting on a member that no longer exists.
+			e.rekeyGroupReferences(k, key)
+			break
+		}
+		if orphan != nil {
+			orphan.Key = key
+			orphan.Reason = normalizeReason(ev.Reason)
+			orphan.State = model.StateActive
+			orphan.ResolveAt = time.Time{}
+			e.state[key] = orphan
+			e.indexIncidentByNamespace(orphan)
+			return e.refreshIncident(orphan, ev, cs, owner, now)
 		}
 	}
 
@@ -442,7 +474,7 @@ func (e *Engine) Process(ev event.Event, owner string, cs *model.ContainerState)
 }
 
 // Caller must hold e.mu.
-func (e *Engine) newIncident(ev event.Event, owner string, cs *model.ContainerState, key, res string, now time.Time) *model.Incident {
+func (e *Engine) newIncident(ev event.Event, owner string, cs *model.ContainerState, key model.IncidentKey, res string, now time.Time) *model.Incident {
 	inc := &model.Incident{
 		ID:         fmt.Sprintf("%08x", crc32.ChecksumIEEE([]byte(key))),
 		Key:        key,
