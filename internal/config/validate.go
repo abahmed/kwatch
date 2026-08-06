@@ -86,10 +86,6 @@ func ValidateConfig(cfg *Config) []string {
 		errs = append(errs, "pendingPodMonitor.threshold must be > 0")
 	}
 
-	if cfg.NotReadyMonitor.Enabled && cfg.NotReadyMonitor.Threshold <= 0 {
-		errs = append(errs, "notReadyMonitor.threshold must be > 0")
-	}
-
 	if cfg.Workers < 1 {
 		errs = append(errs, "workers must be >= 1")
 	}
@@ -235,9 +231,6 @@ func Validate(cfg *Config) []error {
 	}
 	if cfg.PendingPodMonitor.Enabled && cfg.PendingPodMonitor.Threshold <= 0 {
 		errs = append(errs, errors.New("pendingPodMonitor.threshold must be > 0"))
-	}
-	if cfg.NotReadyMonitor.Enabled && cfg.NotReadyMonitor.Threshold <= 0 {
-		errs = append(errs, errors.New("notReadyMonitor.threshold must be > 0"))
 	}
 	if cfg.AuditLog.Enabled && cfg.AuditLog.Output == "" {
 		errs = append(errs, errors.New("auditLog.output must be \"stdout\" or a valid file path when auditLog.enabled is true"))

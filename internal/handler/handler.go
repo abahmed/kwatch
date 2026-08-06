@@ -139,11 +139,7 @@ func NewHandler(
 	}
 
 	if cfg.NotReadyMonitor.Enabled {
-		notReadyThreshold := time.Duration(cfg.NotReadyMonitor.Threshold) * time.Second
-		if notReadyThreshold <= 0 {
-			notReadyThreshold = 60 * time.Second
-		}
-		podDetectors = append(podDetectors, filter.NotReadyFilter{Threshold: notReadyThreshold})
+		podDetectors = append(podDetectors, filter.NotReadyFilter{Threshold: filter.DefaultNotReadyThreshold})
 	}
 
 	podEnrichers := []filter.Enricher{

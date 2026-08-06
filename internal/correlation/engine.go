@@ -129,7 +129,6 @@ type Engine struct {
 	groupBuffers         map[string]*pendingGroup        // computeGroupKey output → group buffer
 	groupResolveTrackers map[string]*groupResolveTracker // gk → batch resolve tracker
 	groupFlushStates     map[string]*groupFlushState     // gk → last notification state
-	deferredResolves     []*model.Incident               // group resolves awaiting the next lifecycle tick
 	auditLogger          *audit.AuditLogger
 	dirty                bool // true when state has changed since last SnapshotAll
 	now                  func() time.Time

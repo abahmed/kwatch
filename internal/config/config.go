@@ -534,15 +534,11 @@ type PendingPodMonitor struct {
 
 // NotReadyMonitor configures sustained not-ready pod detection.
 // It alerts when a pod has been not ready (e.g. failing readiness probe)
-// for longer than Threshold even though its containers are running and
-// have not crashed — a case the container detectors intentionally skip.
+// for longer than the built-in threshold even though its containers are
+// running and have not crashed — a case the container detectors skip.
 type NotReadyMonitor struct {
 	// Enabled if set to true, it will watch pods stuck not ready.
 	Enabled bool `yaml:"enabled"`
-
-	// Threshold is the duration (in seconds) a pod can remain
-	// not ready before an alert is raised. Default 60.
-	Threshold int `yaml:"threshold"`
 }
 
 // HealthCheck config struct

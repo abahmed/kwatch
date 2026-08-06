@@ -13,7 +13,7 @@ func DefaultConfig() *Config {
 		ScheduleMonitor:              ScheduleMonitor{Enabled: true},
 		OomMonitor:                   OomMonitor{Enabled: true, Threshold: 3, WindowMinutes: 60},
 		PendingPodMonitor:            PendingPodMonitor{Enabled: true, Threshold: 300},
-		NotReadyMonitor:              NotReadyMonitor{Enabled: true, Threshold: 60},
+		NotReadyMonitor:              NotReadyMonitor{Enabled: true},
 		RolloutMonitor:               RolloutMonitor{Enabled: true, SustainedMinutes: 2},
 		JobMonitor:                   JobMonitor{Enabled: true},
 		CronJobMonitor:               CronJobMonitor{Enabled: true, SustainedMinutes: 5},

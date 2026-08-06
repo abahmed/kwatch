@@ -105,6 +105,7 @@ Every monitor below is **on by default** — zero config needed:
 |--------|---------|-------------|
 | 🟥 Pod crashes (CrashLoop, OOM, ImagePull, Error) | ✅ **on** | Container state + previous logs + events — tells you *why* |
 | ⏳ Pending pods (stuck Unschedulable) | ✅ **on** | Alerts after 300s stuck; includes scheduling delay in hint |
+| 🟡 Pods stuck NotReady | ✅ **on** | `ContainersNotReady` — Running pods with `Ready=False` for 60s |
 | 🎯 Scheduling delay diagnostics | ✅ **on** | Prepends `"unschedulable for XmYs"` duration to Unschedulable hints |
 | 🖥️ Node issues (NotReady, Disk/Memory pressure) | ✅ **on** | Per-condition severity |
 | 💾 PVC running out of space | ✅ **on** | Warn at 80%, critical at 90% |
@@ -427,6 +428,14 @@ Tracks OOMKilled events per container in a sliding window. When the threshold is
 
 When a pod is stuck Unschedulable, computes `now - PodScheduled.LastTransitionTime` and prepends the delay to the hint (e.g., `"unschedulable for 5m30s — ..."`).
 
+### 🟡 Not Ready Monitor
+
+| Parameter | What it does |
+|:---|---|
+| `notReadyMonitor.enabled` | ✅ Watch Running pods stuck NotReady (default: true) |
+
+Alerts with `ContainersNotReady` when a Running pod's Ready condition stays false for 60 seconds. Container-level failures (crashes, waits, non-zero terminations) are handled by the container pipeline, so this fires for otherwise-healthy containers whose pod never becomes ready.
+
 ### 🎯 Severity
 
 | Parameter | What it does |
@@ -452,6 +461,8 @@ Each rule can also filter by `containerNames`, `logPatterns`, `containerMessages
 | Parameter | What it does |
 |:---|---|
 | `inhibition.nodeSuppressesPods` | ✅ Don't alert on pod issues if the node itself is down (default: true) |
+
+Pods are suppressed **only while the node is actually down** — once the node recovers, suppression lifts immediately, even during the resolve hold-down window (it doesn't wait for the "resolved" notification to be sent).
 
 ### 📝 Custom message templates
 

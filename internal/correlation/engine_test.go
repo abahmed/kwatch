@@ -704,6 +704,41 @@ func TestInhibitionLiftsOnNodeResolve(t *testing.T) {
 	assert.Equal(t, model.ActionCreate, action)
 }
 
+func TestInhibitionLiftsOnNodeResolveDuringHoldDown(t *testing.T) {
+	e := NewEngine(Config{
+		Window:                    10 * time.Minute,
+		ResolveHoldDown:           5 * time.Minute,
+		InhibitNodeSuppressesPods: true,
+	})
+	e.Process(event.Event{Resource: "node", PodName: "node-1", NodeName: "node-1", Reason: "NodeNotReady"}, "node-1", nil)
+	assert.True(t, e.activeNodeIncidents["node-1"])
+
+	// Node recovers: the incident enters PendingResolve (hold-down), but the
+	// recovered node must stop suppressing pods immediately, not after the
+	// hold-down finalizes.
+	e.ResolveByResource("node", "node-1")
+	assert.False(t, e.activeNodeIncidents["node-1"], "recovered node must stop suppressing pods during hold-down")
+
+	podEv := event.Event{PodName: "p", Namespace: "ns", NodeName: "node-1", Reason: "CrashLoopBackOff"}
+	_, action := e.Process(podEv, "dep", nil)
+	assert.Equal(t, model.ActionCreate, action)
+}
+
+func TestInhibitionMarkResolvedHoldDownClearsFlag(t *testing.T) {
+	e := NewEngine(Config{
+		Window:                    10 * time.Minute,
+		ResolveHoldDown:           5 * time.Minute,
+		InhibitNodeSuppressesPods: true,
+	})
+	e.Process(event.Event{Resource: "node", PodName: "node-1", NodeName: "node-1", Reason: "NodeNotReady"}, "node-1", nil)
+	assert.True(t, e.activeNodeIncidents["node-1"])
+
+	// MarkResolved with hold-down enabled must clear the flag the same way
+	// the immediate-resolve branch does.
+	e.MarkResolved(BuildKey("", "node-1", "NodeNotReady", ""))
+	assert.False(t, e.activeNodeIncidents["node-1"], "recovered node must stop suppressing pods during hold-down")
+}
+
 func TestInhibitionSuppressedCounter(t *testing.T) {
 	e := NewEngine(Config{
 		Window:                    10 * time.Minute,

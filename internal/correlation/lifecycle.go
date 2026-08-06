@@ -71,6 +71,11 @@ func (e *Engine) MarkResolved(key model.IncidentKey) {
 	if e.config.ResolveHoldDown > 0 {
 		inc.State = model.StatePendingResolve
 		inc.ResolveAt = e.now().Add(e.config.ResolveHoldDown)
+		// The node condition has already recovered; un-suppress pods now
+		// instead of waiting for the hold-down to finalize.
+		if inc.Resource == "node" {
+			e.refreshNodeInhibition(inc.Name)
+		}
 		e.mu.Unlock()
 		return
 	}
@@ -201,6 +206,11 @@ func (e *Engine) ResolveByResource(resource, name string) {
 				inc.State = model.StatePendingResolve
 				inc.ResolveAt = now.Add(e.config.ResolveHoldDown)
 				e.cleanupCooldown[key] = now.Add(e.config.Window)
+				// The node condition has already recovered; un-suppress pods
+				// now instead of waiting for the hold-down to finalize.
+				if inc.Resource == "node" {
+					e.refreshNodeInhibition(inc.Name)
+				}
 				continue
 			}
 			inc.State = model.StateResolved
@@ -304,12 +314,6 @@ func (e *Engine) cleanup() {
 			e.refreshNodeInhibition(inc.Name)
 		}
 	}
-	// Drain group resolves deferred from Process (e.g. orphan folding) where
-	// the lock prevented a synchronous hook call.
-	for _, gi := range e.deferredResolves {
-		pending = append(pending, transition{gi, model.ActionResolved})
-	}
-	e.deferredResolves = nil
 	e.mu.Unlock()
 	for _, t := range pending {
 		if h := e.config.LifecycleHook; h != nil {
@@ -516,13 +520,6 @@ func (e *Engine) checkLifecycle() {
 			}
 		}
 	}
-
-	// Drain group resolves deferred from Process (e.g. orphan folding) where
-	// the lock prevented a synchronous hook call.
-	for _, gi := range e.deferredResolves {
-		pending = append(pending, transition{gi, model.ActionResolved})
-	}
-	e.deferredResolves = nil
 
 	e.mu.Unlock()
 

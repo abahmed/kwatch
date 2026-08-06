@@ -79,11 +79,12 @@ func (e *Engine) findNodeIncident(nodeName string) *model.Incident {
 
 // findMostConstrainedNodeIncident returns the node incident with the most
 // suppressed pods, used as a target for unschedulable-pod suppression.
+// PendingResolve incidents (recovered conditions) are not targets.
 // Caller must hold e.mu.
 func (e *Engine) findMostConstrainedNodeIncident() *model.Incident {
 	var best *model.Incident
 	for _, inc := range e.state {
-		if inc.Resource == "node" && inc.State != model.StateResolved {
+		if inc.Resource == "node" && inc.State != model.StateResolved && inc.State != model.StatePendingResolve {
 			if best == nil || inc.SuppressedPods > best.SuppressedPods {
 				best = inc
 			}
@@ -110,11 +111,13 @@ func (e *Engine) SetActiveNodeIncidents(nodeNames []string) {
 	}
 }
 
-// refreshNodeInhibition clears the node inhibition flag if no non-resolved
-// node incidents remain for this node. Caller must hold e.mu.
+// refreshNodeInhibition clears the node inhibition flag if no active node
+// incidents remain for this node. A StatePendingResolve incident does not
+// inhibit pods: its condition has already recovered and the hold-down only
+// delays the "resolved" notification. Caller must hold e.mu.
 func (e *Engine) refreshNodeInhibition(nodeName string) {
 	for _, inc := range e.state {
-		if inc.Resource == "node" && inc.Name == nodeName && inc.State != model.StateResolved {
+		if inc.Resource == "node" && inc.Name == nodeName && inc.State != model.StateResolved && inc.State != model.StatePendingResolve {
 			return
 		}
 	}

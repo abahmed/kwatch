@@ -2,11 +2,9 @@ package handler
 
 import (
 	"fmt"
-	"sort"
 	"time"
 
 	corev1 "k8s.io/api/core/v1"
-	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/klog/v2"
 
 	"github.com/abahmed/kwatch/internal/enricher"
@@ -35,33 +33,7 @@ func (h *handler) executePodFilters(ctx *filter.Context) {
 	}
 
 	// Phase 2: Enrich (I/O: events, owner)
-	if ctx.Events == nil {
-		if ctx.EventLister != nil {
-			all, err := ctx.EventLister.Events(ctx.Pod.Namespace).List(labels.Everything())
-			if err != nil {
-				klog.ErrorS(err, "event lister failed", "pod", ctx.Pod.Name)
-			} else {
-				items := make([]corev1.Event, 0, len(all))
-				for _, e := range all {
-					if e.InvolvedObject.Kind == "Pod" && e.InvolvedObject.Name == ctx.Pod.Name {
-						items = append(items, *e)
-					}
-				}
-				sort.Slice(items, func(i, j int) bool {
-					return items[i].LastTimestamp.Before(&items[j].LastTimestamp)
-				})
-				ctx.Events = &items
-			}
-		} else {
-			podEvents, err := k8s.GetPodEvents(ctx.Ctx, ctx.Client, ctx.Pod.Name, ctx.Pod.Namespace)
-			if err != nil {
-				klog.ErrorS(err, "failed to fetch pod events", "pod", ctx.Pod.Name)
-			}
-			if podEvents != nil {
-				ctx.Events = &podEvents.Items
-			}
-		}
-	}
+	h.loadPodEvents(ctx)
 
 	for i := range h.podEnrichers {
 		if h.podEnrichers[i].Enrich(ctx) {

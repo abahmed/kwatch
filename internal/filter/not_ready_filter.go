@@ -9,6 +9,11 @@ import (
 	"github.com/abahmed/kwatch/internal/constant"
 )
 
+// DefaultNotReadyThreshold is the built-in duration a pod must stay not
+// ready before an alert fires. It is intentionally not configurable — the
+// detection should just work out of the box.
+const DefaultNotReadyThreshold = 60 * time.Second
+
 // NotReadyFilter alerts when a pod has been not ready (PodReady=False) for
 // longer than Threshold even though all its containers are running and have
 // not crashed. The container detectors intentionally skip running containers
