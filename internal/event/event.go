@@ -22,7 +22,7 @@ func (e *RetryAfterError) Unwrap() error { return e.Err }
 // CheckHTTPResponse returns an error for non-successful HTTP responses.
 // For 429 status it returns a RetryAfterError that respects the Retry-After header.
 func CheckHTTPResponse(resp *http.Response, provider string) error {
-	defer io.Copy(io.Discard, resp.Body) // drain so the caller's deferred Close() returns the conn to the pool
+	_, _ = io.Copy(io.Discard, resp.Body) // best-effort drain; frees the conn on Close()
 	if resp.StatusCode < 300 {
 		return nil
 	}

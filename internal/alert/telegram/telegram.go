@@ -128,7 +128,7 @@ func (t *Telegram) buildRequestBodyTelegram(
 	customMsg string) string {
 	// build text will be sent in the message
 	txt := ""
-	if len(customMsg) <= 0 {
+	if len(customMsg) == 0 {
 		var parts []string
 		parts = append(parts, fmt.Sprintf("*Reason:* %s", util.OrDefault(e.Reason, "unknown")))
 

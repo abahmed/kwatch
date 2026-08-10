@@ -301,7 +301,7 @@ func (h *handler) buildContainerHint(ctx *filter.Context) string {
 		if reason == constant.ReasonLivenessProbeFailed || reason == constant.ReasonReadinessProbeFailed || reason == constant.ReasonStartupProbeFailed {
 			hint = buildProbeHint(reason, spec)
 		} else if reason == constant.ReasonCrashLoopBackOff && spec.LivenessProbe != nil {
-			hint = hint + "; check liveness probe configuration"
+			hint += "; check liveness probe configuration"
 		}
 	}
 
@@ -328,7 +328,7 @@ func (h *handler) buildContainerHint(ctx *filter.Context) string {
 				}
 			}
 		} else {
-			hint = hint + "; imagePullSecrets is configured — check the image name/tag or secret validity"
+			hint += "; imagePullSecrets is configured — check the image name/tag or secret validity"
 		}
 	}
 
@@ -350,11 +350,12 @@ func buildProbeHint(reason string, spec *corev1.Container) string {
 	}
 
 	detail := reason
-	if probe.HTTPGet != nil {
+	switch {
+	case probe.HTTPGet != nil:
 		detail = fmt.Sprintf("%s (HTTP GET http://%s%s:%d%s)", reason, spec.Name, probe.HTTPGet.Host, probe.HTTPGet.Port.IntValue(), probe.HTTPGet.Path)
-	} else if probe.TCPSocket != nil {
+	case probe.TCPSocket != nil:
 		detail = fmt.Sprintf("%s (TCP check :%d)", reason, probe.TCPSocket.Port.IntValue())
-	} else if probe.Exec != nil {
+	case probe.Exec != nil:
 		cmd := ""
 		if len(probe.Exec.Command) > 0 {
 			cmd = probe.Exec.Command[0]

@@ -16,6 +16,7 @@ import (
 	discoveryv1lister "k8s.io/client-go/listers/discovery/v1"
 	networkingv1lister "k8s.io/client-go/listers/networking/v1"
 	policyv1lister "k8s.io/client-go/listers/policy/v1"
+	storagev1lister "k8s.io/client-go/listers/storage/v1"
 	"k8s.io/client-go/tools/cache"
 
 	"github.com/abahmed/kwatch/internal/config"
@@ -399,6 +400,79 @@ func (fs factorySet) configMapInformers() []cache.SharedIndexInformer {
 		out = append(out, f.Core().V1().ConfigMaps().Informer())
 	}
 	return out
+}
+
+func (fs factorySet) pvcInformers() []cache.SharedIndexInformer {
+	if fs.global != nil {
+		return []cache.SharedIndexInformer{fs.global.Core().V1().PersistentVolumeClaims().Informer()}
+	}
+	out := make([]cache.SharedIndexInformer, 0, len(fs.perNamespace))
+	for _, f := range fs.perNamespace {
+		out = append(out, f.Core().V1().PersistentVolumeClaims().Informer())
+	}
+	return out
+}
+
+func (fs factorySet) pvcLister() corev1lister.PersistentVolumeClaimLister {
+	if fs.global != nil {
+		return fs.global.Core().V1().PersistentVolumeClaims().Lister()
+	}
+	listers := make([]corev1lister.PersistentVolumeClaimLister, 0, len(fs.perNamespace))
+	for _, f := range fs.perNamespace {
+		listers = append(listers, f.Core().V1().PersistentVolumeClaims().Lister())
+	}
+	return &multiPVCListLister{listers: listers}
+}
+
+func (fs factorySet) serviceAccountLister() corev1lister.ServiceAccountLister {
+	if fs.global != nil {
+		return fs.global.Core().V1().ServiceAccounts().Lister()
+	}
+	listers := make([]corev1lister.ServiceAccountLister, 0, len(fs.perNamespace))
+	for _, f := range fs.perNamespace {
+		listers = append(listers, f.Core().V1().ServiceAccounts().Lister())
+	}
+	return &multiServiceAccountLister{listers: listers}
+}
+
+func (fs factorySet) persistentVolumeLister() corev1lister.PersistentVolumeLister {
+	if fs.clusterScoped != nil {
+		return fs.clusterScoped.Core().V1().PersistentVolumes().Lister()
+	}
+	if fs.global != nil {
+		return fs.global.Core().V1().PersistentVolumes().Lister()
+	}
+	return nil
+}
+
+func (fs factorySet) persistentVolumeInformers() []cache.SharedIndexInformer {
+	if fs.clusterScoped != nil {
+		return []cache.SharedIndexInformer{fs.clusterScoped.Core().V1().PersistentVolumes().Informer()}
+	}
+	if fs.global != nil {
+		return []cache.SharedIndexInformer{fs.global.Core().V1().PersistentVolumes().Informer()}
+	}
+	return nil
+}
+
+func (fs factorySet) storageClassLister() storagev1lister.StorageClassLister {
+	if fs.clusterScoped != nil {
+		return fs.clusterScoped.Storage().V1().StorageClasses().Lister()
+	}
+	if fs.global != nil {
+		return fs.global.Storage().V1().StorageClasses().Lister()
+	}
+	return nil
+}
+
+func (fs factorySet) storageClassInformers() []cache.SharedIndexInformer {
+	if fs.clusterScoped != nil {
+		return []cache.SharedIndexInformer{fs.clusterScoped.Storage().V1().StorageClasses().Informer()}
+	}
+	if fs.global != nil {
+		return []cache.SharedIndexInformer{fs.global.Storage().V1().StorageClasses().Informer()}
+	}
+	return nil
 }
 
 func (fs factorySet) mwcLister() admissionregistrationv1lister.MutatingWebhookConfigurationLister {

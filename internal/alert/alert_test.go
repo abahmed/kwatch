@@ -25,7 +25,7 @@ import (
 // and calls buildMessage with no insight, 100 max lines, and no templates.
 func testBuildMessage(inc *model.Incident, action model.IncidentAction, clusterName string) string {
 	am := AlertManager{clusterName: clusterName}
-	return am.buildMessage(inc, action, nil, 100, nil)
+	return am.buildMessage(inc, action, nil, nil)
 }
 
 // testBuildMessageWithTemplate is a helper for tests that builds a message
@@ -39,7 +39,7 @@ func testBuildMessageWithTemplate(inc *model.Incident, action model.IncidentActi
 			parsed[k] = t
 		}
 	}
-	return am.buildMessage(inc, action, nil, 100, parsed)
+	return am.buildMessage(inc, action, nil, parsed)
 }
 
 type fakeProvider struct{}

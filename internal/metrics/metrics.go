@@ -5,6 +5,8 @@ import (
 	"net/http"
 	"strings"
 	"sync/atomic"
+
+	"k8s.io/klog/v2"
 )
 
 type Registry struct {
@@ -65,6 +67,7 @@ func (r *Registry) Handler() http.Handler {
 		lines = append(lines, "# HELP kwatch_llm_enrich_skipped_total Skipped LLM enrichment (breaker open)")
 		lines = append(lines, "# TYPE kwatch_llm_enrich_skipped_total counter")
 		lines = append(lines, fmt.Sprintf("kwatch_llm_enrich_skipped_total %d", r.LLMEnrichSkipped.Load()))
-		fmt.Fprint(w, strings.Join(lines, "\n")+"\n")
+		_, err := fmt.Fprint(w, strings.Join(lines, "\n")+"\n")
+		klog.ErrorS(err, "metrics: write prometheus output")
 	})
 }

@@ -22,7 +22,8 @@ func (f PodOwnersFilter) Enrich(ctx *Context) bool {
 	owner := ctx.Pod.OwnerReferences[0]
 	resolved := true
 
-	if owner.Kind == "ReplicaSet" {
+	switch owner.Kind {
+	case "ReplicaSet":
 		if ctx.RSLister != nil {
 			rs, err := ctx.RSLister.ReplicaSets(ctx.Pod.Namespace).Get(owner.Name)
 			if err != nil {
@@ -44,7 +45,7 @@ func (f PodOwnersFilter) Enrich(ctx *Context) bool {
 				owner = rs.ObjectMeta.OwnerReferences[0]
 			}
 		}
-	} else if owner.Kind == "DaemonSet" {
+	case "DaemonSet":
 		if ctx.DSLister != nil {
 			ds, err := ctx.DSLister.DaemonSets(ctx.Pod.Namespace).Get(owner.Name)
 			if err != nil {
@@ -66,7 +67,7 @@ func (f PodOwnersFilter) Enrich(ctx *Context) bool {
 				owner = ds.ObjectMeta.OwnerReferences[0]
 			}
 		}
-	} else if owner.Kind == "StatefulSet" {
+	case "StatefulSet":
 		if ctx.SSLister != nil {
 			ss, err := ctx.SSLister.StatefulSets(ctx.Pod.Namespace).Get(owner.Name)
 			if err != nil {

@@ -117,13 +117,14 @@ func (h *handler) ProcessNodeObject(node *corev1.Node, deleted bool) error {
 	for _, c := range node.Status.Conditions {
 		switch c.Type {
 		case corev1.NodeReady:
-			if c.Status == corev1.ConditionTrue {
+			switch {
+			case c.Status == corev1.ConditionTrue:
 				h.resolveNodeCondition(node.Name, constant.ReasonNodeNotReady)
-			} else if node.DeletionTimestamp != nil || node.Spec.Unschedulable {
+			case node.DeletionTimestamp != nil || node.Spec.Unschedulable:
 				h.resolveNodeCondition(node.Name, constant.ReasonNodeNotReady)
-			} else if isNewNode(node) {
+			case isNewNode(node):
 				h.resolveNodeCondition(node.Name, constant.ReasonNodeNotReady)
-			} else {
+			default:
 				h.emitNodeAlert(node, c, constant.ReasonNodeNotReady)
 			}
 		case corev1.NodeMemoryPressure, corev1.NodeDiskPressure,

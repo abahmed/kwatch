@@ -1591,6 +1591,74 @@ func TestSnapshotPersistedRoundTrip(t *testing.T) {
 	assert.Equal(t, 1, e2.ActiveCount())
 }
 
+func TestMassFailurePersistenceRoundTrip(t *testing.T) {
+	e := NewEngine(Config{
+		Window: 10 * time.Minute,
+	})
+	mfKey := MassFailureKey("configmap/ns/app-cfg")
+	created := e.AddMassFailure(&model.Incident{
+		Key:       mfKey,
+		Reason:    "CrashLoopBackOff",
+		Namespace: "ns",
+		Resource:  "pod",
+		Name:      "configmap/ns/app-cfg",
+		State:     model.StateActive,
+	})
+	assert.True(t, created)
+	assert.True(t, e.HasMassFailure(mfKey))
+	// Duplicate add is a no-op.
+	assert.False(t, e.AddMassFailure(&model.Incident{Key: mfKey}))
+
+	snap := e.SnapshotPersisted()
+	require.NotNil(t, snap)
+	keys := make([]model.IncidentKey, 0, len(snap))
+	for i := range snap {
+		keys = append(keys, snap[i].Key)
+	}
+	assert.Contains(t, keys, mfKey)
+
+	// Restore into a fresh engine WITHOUT any baseline: mass failures bypass
+	// the baseline gate, so they survive restarts.
+	e2 := NewEngine(Config{Window: 10 * time.Minute})
+	restored := make(map[model.IncidentKey]*model.Incident, len(snap))
+	for i := range snap {
+		restored[snap[i].Key] = snap[i].ToIncident()
+	}
+	e2.RestoreIncidents(restored)
+	assert.True(t, e2.HasMassFailure(mfKey))
+
+	// Removing it clears the store.
+	assert.True(t, e2.RemoveMassFailure(mfKey))
+	assert.False(t, e2.HasMassFailure(mfKey))
+	assert.False(t, e2.RemoveMassFailure(mfKey))
+}
+
+func TestMassFailureKeyHelpers(t *testing.T) {
+	assert.True(t, IsMassFailureKey(MassFailureKey("node//n1")))
+	assert.False(t, IsMassFailureKey("ns:dep:CrashLoopBackOff:"))
+
+	parts := ParseKey(MassFailureKey("configmap/ns/app-cfg"))
+	assert.True(t, parts.IsMassFailure)
+	assert.Equal(t, "configmap/ns/app-cfg", parts.MassDependencyKey)
+
+	// Non mass-failure keys parse as before.
+	normal := ParseKey("ns:dep:CrashLoopBackOff:")
+	assert.False(t, normal.IsMassFailure)
+}
+
+func TestMassFailureSetClone(t *testing.T) {
+	e := NewEngine(Config{Window: 10 * time.Minute})
+	e.AddMassFailure(&model.Incident{Key: MassFailureKey("node//n1"), Reason: "NotReady", Resource: "node", State: model.StateActive})
+
+	snap := e.MassFailureSet()
+	require.Len(t, snap, 1)
+	// Mutating the snapshot must not corrupt the store.
+	for _, inc := range snap {
+		inc.State = model.StateResolved
+	}
+	assert.True(t, e.HasMassFailure(MassFailureKey("node//n1")))
+}
+
 func TestSnapshotAllEmpty(t *testing.T) {
 	e := NewEngine(Config{
 		Window: 10 * time.Minute,
@@ -1598,6 +1666,25 @@ func TestSnapshotAllEmpty(t *testing.T) {
 	snap := e.SnapshotAll()
 	// No incidents processed so dirty=false and SnapshotAll returns nil
 	assert.Nil(t, snap)
+}
+
+func TestActiveIncidentsDoesNotClearDirty(t *testing.T) {
+	e := NewEngine(Config{
+		Window: 10 * time.Minute,
+	})
+	ev := event.Event{PodName: "pod-1", Namespace: "ns", Reason: "CrashLoopBackOff"}
+	_, _ = e.Process(ev, "dep", &model.ContainerState{RestartCount: 1})
+
+	// Multiple consumers within a tick: ActiveIncidents must behave the same
+	// for every call AND leave SnapshotAll able to report the incident.
+	first := e.ActiveIncidents()
+	require.Len(t, first, 1)
+	second := e.ActiveIncidents()
+	require.Len(t, second, 1)
+	assert.Equal(t, first, second)
+
+	snap := e.SnapshotAll()
+	require.Len(t, snap, 1)
 }
 
 func TestRestoreIncidentsBumpsLastSeen(t *testing.T) {
@@ -2027,6 +2114,41 @@ func TestSmartGroupingReFlushCooldownSuppresses(t *testing.T) {
 	e.now = mockClock(now.Add(122 * time.Second))
 	e.checkLifecycle()
 	assert.Equal(t, 1, groupCalls, "re-flush within the cooldown must not re-notify")
+}
+
+func TestSmartGroupingReGroupAfterCooldownSkip(t *testing.T) {
+	now := time.Date(2025, 1, 1, 0, 0, 0, 0, time.UTC)
+	e := newSmartGroupingEngine()
+	e.now = mockClock(now)
+
+	e.Process(event.Event{PodName: "p1", Namespace: "ns", Reason: "CrashLoopBackOff"}, "dep1", nil)
+
+	var groupCalls int
+	e.config.LifecycleHook = func(inc *model.Incident, action model.IncidentAction) {
+		if IsGroupKey(inc.Key) {
+			groupCalls++
+		}
+	}
+
+	// First flush emits CREATE and resets the member's NotifiedSig.
+	e.now = mockClock(now.Add(61 * time.Second))
+	e.checkLifecycle()
+	require.Equal(t, 1, groupCalls)
+
+	// Re-arm with the same member and flush within the renotify cooldown:
+	// suppressed, but the member must remain re-groupable afterward.
+	e.Process(event.Event{PodName: "p1", Namespace: "ns", Reason: "CrashLoopBackOff"}, "dep1", nil)
+	e.now = mockClock(now.Add(122 * time.Second))
+	e.checkLifecycle()
+	require.Equal(t, 1, groupCalls, "re-flush within the cooldown must not re-notify")
+
+	// The suppressed flush must reset NotifiedSig so the member can re-enter
+	// the buffer; once the cooldown lapses the recurring flush must emit an
+	// UPDATE rather than staying silent forever.
+	e.Process(event.Event{PodName: "p1", Namespace: "ns", Reason: "CrashLoopBackOff"}, "dep1", nil)
+	e.now = mockClock(now.Add(400 * time.Second))
+	e.checkLifecycle()
+	assert.Equal(t, 2, groupCalls, "group must resume UPDATE notifications after the cooldown lapses")
 }
 
 func TestSmartGroupingFoldRekeysMember(t *testing.T) {

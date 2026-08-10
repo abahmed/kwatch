@@ -36,6 +36,9 @@ type KeyParts struct {
 
 	IsGroup  bool // key is a smart-group incident ("__group__:<group key>")
 	GroupKey string
+
+	IsMassFailure     bool // key is a mass-failure incident (mass-failure/<dependency>)
+	MassDependencyKey string
 }
 
 // ParseKey decomposes an incident key. Global and group keys do not follow
@@ -45,6 +48,9 @@ func ParseKey(key model.IncidentKey) KeyParts {
 	s := string(key)
 	if strings.HasPrefix(s, groupKeyPrefix) {
 		return KeyParts{IsGroup: true, GroupKey: strings.TrimPrefix(s, groupKeyPrefix)}
+	}
+	if strings.HasPrefix(s, massFailureKeyPrefix) {
+		return KeyParts{IsMassFailure: true, MassDependencyKey: strings.TrimPrefix(s, massFailureKeyPrefix)}
 	}
 	if i := strings.Index(s, globalSeparator); i >= 0 {
 		return KeyParts{IsGlobal: true, Reason: s[:i], Scope: s[i+len(globalSeparator):]}
@@ -77,8 +83,25 @@ func IsGroupKey(key model.IncidentKey) bool {
 	return strings.HasPrefix(string(key), groupKeyPrefix)
 }
 
+// IsMassFailureKey reports whether the key identifies a mass-failure incident.
+func IsMassFailureKey(key model.IncidentKey) bool {
+	return strings.HasPrefix(string(key), massFailureKeyPrefix)
+}
+
+// MassFailureKey builds the incident key for a mass-failure on the given
+// shared dependency ("kind/namespace/name"). The stable key lets the engine
+// dedup, persist, and resume mass-failure alerts across restarts.
+func MassFailureKey(dependencyKey string) model.IncidentKey {
+	return model.IncidentKey(massFailureKeyPrefix + dependencyKey)
+}
+
 // groupKeyPrefix marks incident keys synthesized by smart grouping.
 const groupKeyPrefix = "__group__:"
+
+// massFailureKeyPrefix marks incident keys synthesized by the mass-failure
+// detector. They are persisted alongside real incidents but kept out of the
+// normal lifecycle (no renotify, no baseline participation).
+const massFailureKeyPrefix = "mass-failure/"
 
 // globalSeparator delimits the cluster-scoped key form "<reason>|global|<scope>".
 const globalSeparator = "|global|"

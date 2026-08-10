@@ -37,184 +37,59 @@ func (e *Engine) Analyze(inc *model.Incident) *Insight {
 	return ins
 }
 
-func (e *Engine) determineCause(inc *model.Incident, ins *Insight) {
-	if e.graph == nil {
-		return
-	}
-	ns := inc.Namespace
-
-	deps := e.dependenciesFor(inc)
-	if len(deps) == 0 {
-		return
-	}
-
-	nodeKey := "node//" + inc.NodeName
-	if inc.NodeName != "" {
-		for _, d := range deps {
-			if d == nodeKey {
-				ins.Cause = fmt.Sprintf("node %s may be unhealthy", inc.NodeName)
-				ins.Pattern = "node_failure"
-				return
-			}
-		}
+// EnrichMassFailure fills in the root-cause sentence and recent-changes for a
+// detected mass failure. The shared dependency is treated as the "incident"
+// node so its transitive dependencies and change history explain why so many
+// resources are failing at once.
+func (e *Engine) EnrichMassFailure(mf MassFailure) MassFailure {
+	parts := strings.SplitN(mf.SharedDependency, "/", 3)
+	if len(parts) != 3 {
+		return mf
 	}
 
-	if inc.Resource == "pod" && inc.OwnerKind != "" {
-		ownerPrefix := strings.ToLower(inc.OwnerKind) + "/" + ns + "/"
-		for _, d := range deps {
-			if strings.HasPrefix(d, ownerPrefix) {
-				ownerName := d[len(ownerPrefix):]
-				ins.Cause = fmt.Sprintf("owning %s %s is unhealthy", inc.OwnerKind, ownerName)
-				ins.Pattern = "rollout_failure"
-				return
-			}
-		}
-	}
-
-	for _, d := range deps {
-		switch {
-		case strings.HasPrefix(d, "configmap/"):
-			ins.Cause = "referenced ConfigMap may have changed or is misconfigured"
-			ins.Pattern = "config_error"
-			return
-		case strings.HasPrefix(d, "secret/"):
-			ins.Cause = "referenced Secret may have changed or is misconfigured"
-			ins.Pattern = "config_error"
-			return
-		case strings.HasPrefix(d, "pvc/"):
-			ins.Cause = "referenced PVC may be unavailable"
-			ins.Pattern = "config_error"
-			return
-		}
-	}
-}
-
-func (e *Engine) describeImpact(inc *model.Incident, ins *Insight) {
-	if e.graph == nil {
-		return
-	}
-	switch inc.Resource {
-	case "node":
-		deps := e.graph.DependentsByType("node", "", inc.NodeName, "pod")
-		if len(deps) > 0 {
-			ins.Impact = fmt.Sprintf("%d pods on this node", len(deps))
-		}
-	case "pod":
-		if inc.NodeName != "" {
-			count := 0
-			seen := make(map[string]bool)
-			for _, k := range e.graphKeysForIncident(inc) {
-				parts := strings.SplitN(k, "/", 3)
-				for _, svc := range e.graph.DependentsByType("pod", parts[1], parts[2], "service") {
-					if !seen[svc] {
-						seen[svc] = true
-						count++
-					}
-				}
-			}
-			if count > 0 {
-				ins.Impact = fmt.Sprintf("affects %d service(s)", count)
-			}
-		}
-	case "deployment", "statefulset", "daemonset":
-		name := strings.TrimPrefix(inc.Name, inc.Namespace+"/")
-		allDeps := e.graph.DependentsOf(inc.Resource, inc.Namespace, name)
-		if len(allDeps) > 0 {
-			ins.Impact = fmt.Sprintf("%d dependent resource(s)", len(allDeps))
-		}
-	case "configmap":
-		deps := e.graph.DependentsByType("configmap", inc.Namespace, inc.Name, "pod")
-		if len(deps) > 0 {
-			ins.Impact = fmt.Sprintf("%d pod(s) reference this configmap", len(deps))
-		}
-	case "secret":
-		deps := e.graph.DependentsByType("secret", inc.Namespace, inc.Name, "pod")
-		if len(deps) > 0 {
-			ins.Impact = fmt.Sprintf("%d pod(s) reference this secret", len(deps))
-		}
-	case "pvc":
-		deps := e.graph.DependentsByType("pvc", inc.Namespace, inc.Name, "pod")
-		if len(deps) > 0 {
-			ins.Impact = fmt.Sprintf("%d pod(s) use this pvc", len(deps))
-		}
-	}
-}
-
-func (e *Engine) checkRecentChanges(inc *model.Incident, ins *Insight) {
-	if e.tracker == nil {
-		return
-	}
-	recent := e.tracker.RecentChangesBefore(5 * time.Minute)
-	filtered := make([]context.Change, 0, len(recent))
-	matchingNames := make(map[string]bool)
-	for _, k := range e.graphKeysForIncident(inc) {
-		parts := strings.SplitN(k, "/", 3)
-		matchingNames[parts[2]] = true
-	}
-	if len(matchingNames) == 0 {
-		matchingNames[inc.Name] = true
-	}
-	for _, c := range recent {
-		if c.Resource == inc.Resource && c.Namespace == inc.Namespace && matchingNames[c.Name] {
-			filtered = append(filtered, c)
-		}
-	}
-	if len(filtered) > 0 {
-		ins.RecentChanges = filtered
-		return
-	}
-
-	// Dependency-filtered pass: check if any dependency of this resource changed
 	if e.graph != nil {
-		deps := e.dependenciesFor(inc)
-		if len(deps) > 0 {
-			depChanges := make([]context.Change, 0, len(recent))
-			for _, c := range recent {
-				depKey := c.Resource + "/" + c.Namespace + "/" + c.Name
-				for _, d := range deps {
-					if d == depKey && c.Type == context.ChangeUpdate {
-						depChanges = append(depChanges, c)
-						break
-					}
-				}
-			}
-			if len(depChanges) > 0 {
-				if len(depChanges) > 3 {
-					depChanges = depChanges[:3]
-				}
-				ins.RecentChanges = depChanges
-				// Enhance cause with dependency change info
-				c := depChanges[0]
-				delta := time.Since(c.Timestamp).Round(time.Second)
-				if delta < 0 {
-					delta = 0
-				}
-				ins.Cause = fmt.Sprintf("%s %s/%s was updated %s before this incident",
-					c.Resource, c.Namespace, c.Name, delta)
-				ins.Pattern = "dependency_change"
-				return
-			}
+		if cause, pattern := e.rootCauseOfRef(parts[0], parts[1], parts[2]); cause != "" {
+			mf.RootCause = cause + fmt.Sprintf(" (pattern: %s)", pattern)
 		}
 	}
 
-	for _, c := range recent {
-		if c.Namespace == inc.Namespace {
-			filtered = append(filtered, c)
+	if e.tracker != nil {
+		recent := e.tracker.RecentChangesBefore(15 * time.Minute)
+		depKey := parts[0] + "/" + parts[1] + "/" + parts[2]
+		var changes []context.Change
+		for _, c := range recent {
+			if c.Resource+"/"+c.Namespace+"/"+c.Name == depKey && c.Type == context.ChangeUpdate {
+				changes = append(changes, c)
+				if len(changes) >= 3 {
+					break
+				}
+			}
 		}
+		mf.RecentChanges = changes
 	}
-	if len(filtered) > 3 {
-		filtered = filtered[:3]
+
+	return mf
+}
+
+// rootCauseOfRef resolves the deepest dependencies of a resource key without
+// needing a full incident struct.
+func (e *Engine) rootCauseOfRef(kind, ns, name string) (string, string) {
+	if e.graph == nil {
+		return "", ""
 	}
-	if len(filtered) > 0 {
-		ins.RecentChanges = filtered
+	roots := walkBackToRoots(e.graph, kind+"/"+ns+"/"+name)
+	if len(roots) == 0 {
+		return "", ""
 	}
+	sortRoots(roots)
+	return describeRootCauses(roots)
 }
 
 // graphKeysForIncident resolves the graph node keys for an incident. Pod
 // incidents are keyed by their owner while the graph stores real pod names,
 // so the affected pod set (inc.Resources) must be used to reach the right
 // nodes. Workload incidents store Name as "namespace/name".
-func (e *Engine) graphKeysForIncident(inc *model.Incident) []string {
+func graphKeysForIncident(inc *model.Incident) []string {
 	switch inc.Resource {
 	case "pod":
 		if len(inc.Resources) > 0 {
@@ -238,12 +113,12 @@ func (e *Engine) graphKeysForIncident(inc *model.Incident) []string {
 
 // dependenciesFor unions the dependencies of all graph nodes belonging to the
 // incident, deduplicating results.
-func (e *Engine) dependenciesFor(inc *model.Incident) []string {
+func dependenciesFor(graph *context.ResourceGraph, inc *model.Incident) []string {
 	seen := make(map[string]bool)
 	var deps []string
-	for _, k := range e.graphKeysForIncident(inc) {
+	for _, k := range graphKeysForIncident(inc) {
 		parts := strings.SplitN(k, "/", 3)
-		for _, d := range e.graph.DependenciesOf(parts[0], parts[1], parts[2]) {
+		for _, d := range graph.DependenciesOf(parts[0], parts[1], parts[2]) {
 			if !seen[d] {
 				seen[d] = true
 				deps = append(deps, d)

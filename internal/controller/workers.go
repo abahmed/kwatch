@@ -14,77 +14,77 @@ func (c *Controller) runPodWorker(ctx context.Context) {
 	}
 }
 
-func (c *Controller) runNodeWorker(ctx context.Context) {
+func (c *Controller) runNodeWorker(_ context.Context) {
 	for c.processNextNodeItem() {
 	}
 }
 
-func (c *Controller) runDeploymentWorker(ctx context.Context) {
+func (c *Controller) runDeploymentWorker(_ context.Context) {
 	for c.processNextDeploymentItem() {
 	}
 }
 
-func (c *Controller) runJobWorker(ctx context.Context) {
+func (c *Controller) runJobWorker(_ context.Context) {
 	for c.processNextJobItem() {
 	}
 }
 
-func (c *Controller) runDaemonSetWorker(ctx context.Context) {
+func (c *Controller) runDaemonSetWorker(_ context.Context) {
 	for c.processNextDaemonSetItem() {
 	}
 }
 
-func (c *Controller) runStatefulSetWorker(ctx context.Context) {
+func (c *Controller) runStatefulSetWorker(_ context.Context) {
 	for c.processNextStatefulSetItem() {
 	}
 }
 
-func (c *Controller) runPdbWorker(ctx context.Context) {
+func (c *Controller) runPdbWorker(_ context.Context) {
 	for c.processNextPdbItem() {
 	}
 }
 
-func (c *Controller) runCronJobWorker(ctx context.Context) {
+func (c *Controller) runCronJobWorker(_ context.Context) {
 	for c.processNextCronJobItem() {
 	}
 }
 
-func (c *Controller) runHorizontalPodAutoscalerWorker(ctx context.Context) {
+func (c *Controller) runHorizontalPodAutoscalerWorker(_ context.Context) {
 	for c.processNextHorizontalPodAutoscalerItem() {
 	}
 }
 
-func (c *Controller) runServiceWorker(ctx context.Context) {
+func (c *Controller) runServiceWorker(_ context.Context) {
 	for c.processNextServiceItem() {
 	}
 }
 
-func (c *Controller) runEndpointSliceWorker(ctx context.Context) {
+func (c *Controller) runEndpointSliceWorker(_ context.Context) {
 	for c.processNextEndpointSliceItem() {
 	}
 }
 
-func (c *Controller) runMwcWorker(ctx context.Context) {
+func (c *Controller) runMwcWorker(_ context.Context) {
 	for c.processNextMwcItem() {
 	}
 }
 
-func (c *Controller) runVwcWorker(ctx context.Context) {
+func (c *Controller) runVwcWorker(_ context.Context) {
 	for c.processNextVwcItem() {
 	}
 }
 
-func (c *Controller) runIngressWorker(ctx context.Context) {
+func (c *Controller) runIngressWorker(_ context.Context) {
 	for c.processNextIngressItem() {
 	}
 }
 
-func (c *Controller) runNetpolWorker(ctx context.Context) {
+func (c *Controller) runNetpolWorker(_ context.Context) {
 	for c.processNextNetpolItem() {
 	}
 }
 
-func (c *Controller) runCpPodWorker(ctx context.Context) {
+func (c *Controller) runCpPodWorker(_ context.Context) {
 	for c.processNextCpPodItem() {
 	}
 }

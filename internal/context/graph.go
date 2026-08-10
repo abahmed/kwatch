@@ -70,6 +70,28 @@ func (g *ResourceGraph) RemoveNode(kind, namespace, name string) {
 	delete(g.dependents, key)
 }
 
+// RemoveEdgesFrom removes every outgoing edge of the given type from the node,
+// leaving the node and its other edges intact. Resources rebuild their
+// outgoing edges on update; without this, replaced dependencies would leave
+// stale edges behind once RemoveNode is too destructive (it would also drop
+// edges contributed by other nodes).
+func (g *ResourceGraph) RemoveEdgesFrom(kind, namespace, name, edgeType string) {
+	g.mu.Lock()
+	defer g.mu.Unlock()
+	from := resourceKey(kind, namespace, name)
+	if froms, ok := g.dependencies[from]; ok {
+		for to := range froms {
+			if e, ok := g.edges[edgeKey(from, to)]; ok && e.Type == edgeType {
+				delete(g.edges, edgeKey(from, to))
+				delete(froms, to)
+				if toDeps, ok := g.dependents[to]; ok {
+					delete(toDeps, from)
+				}
+			}
+		}
+	}
+}
+
 func (g *ResourceGraph) DependenciesOf(kind, namespace, name string) []string {
 	g.mu.RLock()
 	defer g.mu.RUnlock()
@@ -78,6 +100,58 @@ func (g *ResourceGraph) DependenciesOf(kind, namespace, name string) []string {
 	out := make([]string, 0, len(deps))
 	for d := range deps {
 		out = append(out, d)
+	}
+	sort.Strings(out)
+	return out
+}
+
+// TraverseDependents returns every node reachable from the given node by
+// following dependents edges (BFS), including indirect ("transitive")
+// dependents. The starting node itself is never included.
+func (g *ResourceGraph) TraverseDependents(kind, namespace, name string) []string {
+	g.mu.RLock()
+	defer g.mu.RUnlock()
+	root := resourceKey(kind, namespace, name)
+	visited := map[string]bool{root: true}
+	queue := []string{root}
+	var out []string
+	for len(queue) > 0 {
+		cur := queue[0]
+		queue = queue[1:]
+		for dep := range g.dependents[cur] {
+			if visited[dep] {
+				continue
+			}
+			visited[dep] = true
+			out = append(out, dep)
+			queue = append(queue, dep)
+		}
+	}
+	sort.Strings(out)
+	return out
+}
+
+// TraverseDependencies returns every node reachable from the given node by
+// following dependency edges (BFS), including indirect ("transitive")
+// dependencies. This walks backwards from an incident toward its root causes.
+func (g *ResourceGraph) TraverseDependencies(kind, namespace, name string) []string {
+	g.mu.RLock()
+	defer g.mu.RUnlock()
+	root := resourceKey(kind, namespace, name)
+	visited := map[string]bool{root: true}
+	queue := []string{root}
+	var out []string
+	for len(queue) > 0 {
+		cur := queue[0]
+		queue = queue[1:]
+		for dep := range g.dependencies[cur] {
+			if visited[dep] {
+				continue
+			}
+			visited[dep] = true
+			out = append(out, dep)
+			queue = append(queue, dep)
+		}
 	}
 	sort.Strings(out)
 	return out

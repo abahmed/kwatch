@@ -166,7 +166,9 @@ func (h *HealthServer) healthzHandler(w http.ResponseWriter, r *http.Request) {
 func (h *HealthServer) healthHandler(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusOK)
-	json.NewEncoder(w).Encode(HealthResponse{Status: "ok"})
+	if err := json.NewEncoder(w).Encode(HealthResponse{Status: "ok"}); err != nil {
+		klog.ErrorS(err, "health: encode health response")
+	}
 }
 
 func (h *HealthServer) SetReady(v bool) {
@@ -203,7 +205,9 @@ func (h *HealthServer) incidentsHandler(w http.ResponseWriter, r *http.Request) 
 	snap := h.incidentAPI.Snapshot()
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusOK)
-	json.NewEncoder(w).Encode(snap)
+	if err := json.NewEncoder(w).Encode(snap); err != nil {
+		klog.ErrorS(err, "health: encode incidents snapshot")
+	}
 }
 
 func (h *HealthServer) testAlertHandler(w http.ResponseWriter, r *http.Request) {
@@ -256,5 +260,7 @@ func (h *HealthServer) deadLettersHandler(w http.ResponseWriter, r *http.Request
 	}
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusOK)
-	json.NewEncoder(w).Encode(h.deadLetterLister.DeadLetters())
+	if err := json.NewEncoder(w).Encode(h.deadLetterLister.DeadLetters()); err != nil {
+		klog.ErrorS(err, "health: encode dead letters")
+	}
 }

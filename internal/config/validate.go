@@ -45,24 +45,7 @@ func ValidateConfig(cfg *Config) []string {
 		errs = append(errs, "maxRecentLogLines must be >= 0")
 	}
 
-	if cfg.PvcMonitor.Enabled {
-		if cfg.PvcMonitor.Interval <= 0 {
-			errs = append(errs, "pvcMonitor.interval must be > 0")
-		}
-		if cfg.PvcMonitor.Threshold < 0 || cfg.PvcMonitor.Threshold > 100 {
-			errs = append(errs, "pvcMonitor.threshold must be between 0 and 100")
-		}
-		if cfg.PvcMonitor.CriticalThreshold < 0 || cfg.PvcMonitor.CriticalThreshold > 100 {
-			errs = append(errs, "pvcMonitor.criticalThreshold must be between 0 and 100")
-		}
-		if cfg.PvcMonitor.CriticalThreshold > 0 && cfg.PvcMonitor.Threshold > 0 &&
-			cfg.PvcMonitor.CriticalThreshold < cfg.PvcMonitor.Threshold {
-			errs = append(errs, "pvcMonitor.criticalThreshold should be >= threshold")
-		}
-		if cfg.PvcMonitor.ClearThreshold < 0 || cfg.PvcMonitor.ClearThreshold > cfg.PvcMonitor.Threshold {
-			errs = append(errs, "pvcMonitor.clearThreshold must be between 0 and threshold")
-		}
-	}
+	errs = append(errs, validatePvcWatch(cfg)...)
 
 	if cfg.Correlation.Window <= 0 {
 		errs = append(errs, "correlation.window must be > 0")
@@ -98,6 +81,21 @@ func ValidateConfig(cfg *Config) []string {
 		errs = append(errs, fmt.Sprintf("unknown alert provider %q", name))
 	}
 
+	errs = append(errs, validateRetryJitter(cfg)...)
+
+	for _, k := range InvalidSeverityKeys(cfg.SeverityByReason) {
+		errs = append(errs, severityValueError("severityByReason", k, cfg.SeverityByReason[k]))
+	}
+	for _, k := range InvalidSeverityKeys(cfg.SeverityByOwnerKind) {
+		errs = append(errs, severityValueError("severityByOwnerKind", k, cfg.SeverityByOwnerKind[k]))
+	}
+
+	return errs
+}
+
+// validateRetryJitter checks that every configured retry.jitterFactor is in [0,1].
+func validateRetryJitter(cfg *Config) []string {
+	var errs []string
 	for name, p := range cfg.Alert {
 		if r, ok := p["retry"]; ok {
 			if rm, ok := r.(map[string]interface{}); ok {
@@ -110,15 +108,35 @@ func ValidateConfig(cfg *Config) []string {
 			}
 		}
 	}
-
-	for _, k := range InvalidSeverityKeys(cfg.SeverityByReason) {
-		errs = append(errs, severityValueError("severityByReason", k, cfg.SeverityByReason[k]))
-	}
-	for _, k := range InvalidSeverityKeys(cfg.SeverityByOwnerKind) {
-		errs = append(errs, severityValueError("severityByOwnerKind", k, cfg.SeverityByOwnerKind[k]))
-	}
-
 	return errs
+}
+
+// pvcWatchConfigErrors validates the PvcMonitor watch thresholds.
+func pvcConfigErrors(m *PvcMonitor) []string {
+	var errs []string
+	if m.Interval <= 0 {
+		errs = append(errs, "pvcMonitor.interval must be > 0")
+	}
+	if m.Threshold < 0 || m.Threshold > 100 {
+		errs = append(errs, "pvcMonitor.threshold must be between 0 and 100")
+	}
+	if m.CriticalThreshold < 0 || m.CriticalThreshold > 100 {
+		errs = append(errs, "pvcMonitor.criticalThreshold must be between 0 and 100")
+	}
+	if m.CriticalThreshold > 0 && m.Threshold > 0 && m.CriticalThreshold < m.Threshold {
+		errs = append(errs, "pvcMonitor.criticalThreshold should be >= threshold")
+	}
+	if m.ClearThreshold < 0 || m.ClearThreshold > m.Threshold {
+		errs = append(errs, "pvcMonitor.clearThreshold must be between 0 and threshold")
+	}
+	return errs
+}
+
+func validatePvcWatch(cfg *Config) []string {
+	if !cfg.PvcMonitor.Enabled {
+		return nil
+	}
+	return pvcConfigErrors(&cfg.PvcMonitor)
 }
 
 func unknownProviders(cfg *Config) []string {
@@ -136,12 +154,65 @@ func unknownProviders(cfg *Config) []string {
 // of errors suitable for use in LoadConfig.
 func Validate(cfg *Config) []error {
 	var errs []error
+	errs = append(errs, validateCorrelation(cfg)...)
+	errs = append(errs, validateMonitors(cfg)...)
+	errs = append(errs, validatePvc(cfg)...)
+	if cfg.PendingPodMonitor.Enabled && cfg.PendingPodMonitor.Threshold <= 0 {
+		errs = append(errs, errors.New("pendingPodMonitor.threshold must be > 0"))
+	}
+	if cfg.AuditLog.Enabled && cfg.AuditLog.Output == "" {
+		errs = append(errs, errors.New("auditLog.output must be \"stdout\" or a valid file path when auditLog.enabled is true"))
+	}
+	for _, name := range unknownProviders(cfg) {
+		errs = append(errs, fmt.Errorf("unknown alert provider %q", name))
+	}
+	for _, k := range InvalidSeverityKeys(cfg.SeverityByReason) {
+		errs = append(errs, fmt.Errorf("%s", severityValueError("severityByReason", k, cfg.SeverityByReason[k])))
+	}
+	for _, k := range InvalidSeverityKeys(cfg.SeverityByOwnerKind) {
+		errs = append(errs, fmt.Errorf("%s", severityValueError("severityByOwnerKind", k, cfg.SeverityByOwnerKind[k])))
+	}
+	return errs
+}
+
+// validateCorrelation checks the shared correlation tuning knobs.
+func validateCorrelation(cfg *Config) []error {
+	var errs []error
 	if cfg.Correlation.Window <= 0 {
 		errs = append(errs, errors.New("correlation.window must be > 0"))
 	}
 	if cfg.Correlation.LifecycleInterval <= 0 {
 		errs = append(errs, errors.New("correlation.lifecycleInterval must be > 0"))
 	}
+	if cfg.Correlation.Escalation.Enabled {
+		for i, t := range cfg.Correlation.Escalation.Tiers {
+			if t <= 0 {
+				errs = append(errs, fmt.Errorf("escalation.tiers[%d] must be > 0", i))
+			}
+			if i > 0 && t <= cfg.Correlation.Escalation.Tiers[i-1] {
+				errs = append(errs, fmt.Errorf("escalation.tiers must be strictly ascending (tiers[%d]=%d <= tiers[%d]=%d)", i, t, i-1, cfg.Correlation.Escalation.Tiers[i-1]))
+			}
+		}
+	}
+	if cfg.Correlation.ResolveHoldDown < 0 {
+		errs = append(errs, errors.New("correlation.resolveHoldDown must be >= 0"))
+	}
+	if cfg.Correlation.ResolveHoldDown > cfg.Correlation.Window*60 {
+		errs = append(errs, errors.New("correlation.resolveHoldDown must be <= correlation.window (in seconds)"))
+	}
+	if cfg.Correlation.MaxBaseline < 0 {
+		errs = append(errs, errors.New("correlation.maxBaseline must be >= 0"))
+	}
+	const maxBaselineEntries = 20000
+	if cfg.Correlation.MaxBaseline > maxBaselineEntries {
+		errs = append(errs, fmt.Errorf("correlation.maxBaseline=%d may exceed the ~1MB ConfigMap limit (max ~%d)", cfg.Correlation.MaxBaseline, maxBaselineEntries))
+	}
+	return errs
+}
+
+// validateMonitors checks the per-monitor sustain/interval defaults.
+func validateMonitors(cfg *Config) []error {
+	var errs []error
 	if cfg.HeartbeatMonitor.Enabled && cfg.HeartbeatMonitor.Interval <= 0 {
 		errs = append(errs, errors.New("heartbeatMonitor.interval must be > 0 when heartbeatMonitor.enabled is true"))
 	}
@@ -176,27 +247,6 @@ func Validate(cfg *Config) []error {
 			errs = append(errs, errors.New("oomMonitor.windowMinutes must be > 0"))
 		}
 	}
-	if cfg.DaemonSetMonitor.Enabled && cfg.DaemonSetMonitor.SustainedMinutes < 0 {
-		errs = append(errs, errors.New("daemonSetMonitor.sustainedMinutes must be >= 0"))
-	}
-	if cfg.StatefulSetMonitor.Enabled && cfg.StatefulSetMonitor.SustainedMinutes < 0 {
-		errs = append(errs, errors.New("statefulSetMonitor.sustainedMinutes must be >= 0"))
-	}
-	if cfg.PdbMonitor.Enabled && cfg.PdbMonitor.SustainedMinutes < 0 {
-		errs = append(errs, errors.New("pdbMonitor.sustainedMinutes must be >= 0"))
-	}
-	if cfg.CronJobMonitor.Enabled && cfg.CronJobMonitor.SustainedMinutes < 0 {
-		errs = append(errs, errors.New("cronJobMonitor.sustainedMinutes must be >= 0"))
-	}
-	if cfg.HpaMonitor.Enabled && cfg.HpaMonitor.SustainedMinutes < 0 {
-		errs = append(errs, errors.New("hpaMonitor.sustainedMinutes must be >= 0"))
-	}
-	if cfg.RolloutMonitor.Enabled && cfg.RolloutMonitor.SustainedMinutes < 0 {
-		errs = append(errs, errors.New("rolloutMonitor.sustainedMinutes must be >= 0"))
-	}
-	if cfg.NodeMonitor.Enabled && cfg.NodeMonitor.SustainedMinutes < 0 {
-		errs = append(errs, errors.New("nodeMonitor.sustainedMinutes must be >= 0"))
-	}
 	if cfg.TlsMonitor.Enabled && cfg.TlsMonitor.CriticalThreshold < 0 {
 		errs = append(errs, errors.New("tlsMonitor.criticalThreshold must be >= 0"))
 	}
@@ -206,57 +256,41 @@ func Validate(cfg *Config) []error {
 	if cfg.TlsMonitor.Enabled && cfg.TlsMonitor.Threshold < 0 {
 		errs = append(errs, errors.New("tlsMonitor.threshold must be >= 0"))
 	}
-	if cfg.Correlation.Escalation.Enabled {
-		for i, t := range cfg.Correlation.Escalation.Tiers {
-			if t <= 0 {
-				errs = append(errs, fmt.Errorf("escalation.tiers[%d] must be > 0", i))
-			}
-			if i > 0 && t <= cfg.Correlation.Escalation.Tiers[i-1] {
-				errs = append(errs, fmt.Errorf("escalation.tiers must be strictly ascending (tiers[%d]=%d <= tiers[%d]=%d)", i, t, i-1, cfg.Correlation.Escalation.Tiers[i-1]))
-			}
-		}
+	errs = append(errs, validateSustainedMinutes(cfg, "daemonSetMonitor", cfg.DaemonSetMonitor.Enabled, cfg.DaemonSetMonitor.SustainedMinutes)...)
+	errs = append(errs, validateSustainedMinutes(cfg, "statefulSetMonitor", cfg.StatefulSetMonitor.Enabled, cfg.StatefulSetMonitor.SustainedMinutes)...)
+	errs = append(errs, validateSustainedMinutes(cfg, "pdbMonitor", cfg.PdbMonitor.Enabled, cfg.PdbMonitor.SustainedMinutes)...)
+	errs = append(errs, validateSustainedMinutes(cfg, "cronJobMonitor", cfg.CronJobMonitor.Enabled, cfg.CronJobMonitor.SustainedMinutes)...)
+	errs = append(errs, validateSustainedMinutes(cfg, "hpaMonitor", cfg.HpaMonitor.Enabled, cfg.HpaMonitor.SustainedMinutes)...)
+	errs = append(errs, validateSustainedMinutes(cfg, "rolloutMonitor", cfg.RolloutMonitor.Enabled, cfg.RolloutMonitor.SustainedMinutes)...)
+	errs = append(errs, validateSustainedMinutes(cfg, "nodeMonitor", cfg.NodeMonitor.Enabled, cfg.NodeMonitor.SustainedMinutes)...)
+	return errs
+}
+
+// validateSustainedMinutes checks a monitor's sustain threshold when enabled.
+func validateSustainedMinutes(_ *Config, name string, enabled bool, minutes int) []error {
+	if enabled && minutes < 0 {
+		return []error{fmt.Errorf("%s.sustainedMinutes must be >= 0", name)}
 	}
-	if cfg.Correlation.ResolveHoldDown < 0 {
-		errs = append(errs, errors.New("correlation.resolveHoldDown must be >= 0"))
+	return nil
+}
+
+// validatePvc checks PvcMonitor thresholds when enabled.
+func validatePvc(cfg *Config) []error {
+	if !cfg.PvcMonitor.Enabled {
+		return nil
 	}
-	if cfg.Correlation.ResolveHoldDown > cfg.Correlation.Window*60 {
-		errs = append(errs, errors.New("correlation.resolveHoldDown must be <= correlation.window (in seconds)"))
+	var errs []error
+	if cfg.PvcMonitor.Interval <= 0 {
+		errs = append(errs, errors.New("pvcMonitor.interval must be > 0"))
 	}
-	if cfg.Correlation.MaxBaseline < 0 {
-		errs = append(errs, errors.New("correlation.maxBaseline must be >= 0"))
+	if cfg.PvcMonitor.Threshold <= 0 || cfg.PvcMonitor.Threshold > cfg.PvcMonitor.CriticalThreshold {
+		errs = append(errs, errors.New("pvcMonitor requires 0 < threshold <= criticalThreshold"))
 	}
-	const maxBaselineEntries = 20000
-	if cfg.Correlation.MaxBaseline > maxBaselineEntries {
-		errs = append(errs, fmt.Errorf("correlation.maxBaseline=%d may exceed the ~1MB ConfigMap limit (max ~%d)", cfg.Correlation.MaxBaseline, maxBaselineEntries))
+	if cfg.PvcMonitor.CriticalThreshold > 100 {
+		errs = append(errs, errors.New("pvcMonitor.criticalThreshold must be <= 100"))
 	}
-	if cfg.PendingPodMonitor.Enabled && cfg.PendingPodMonitor.Threshold <= 0 {
-		errs = append(errs, errors.New("pendingPodMonitor.threshold must be > 0"))
-	}
-	if cfg.AuditLog.Enabled && cfg.AuditLog.Output == "" {
-		errs = append(errs, errors.New("auditLog.output must be \"stdout\" or a valid file path when auditLog.enabled is true"))
-	}
-	if cfg.PvcMonitor.Enabled {
-		if cfg.PvcMonitor.Interval <= 0 {
-			errs = append(errs, errors.New("pvcMonitor.interval must be > 0"))
-		}
-		if cfg.PvcMonitor.Threshold <= 0 || cfg.PvcMonitor.Threshold > cfg.PvcMonitor.CriticalThreshold {
-			errs = append(errs, errors.New("pvcMonitor requires 0 < threshold <= criticalThreshold"))
-		}
-		if cfg.PvcMonitor.CriticalThreshold > 100 {
-			errs = append(errs, errors.New("pvcMonitor.criticalThreshold must be <= 100"))
-		}
-		if cfg.PvcMonitor.ClearThreshold < 0 || cfg.PvcMonitor.ClearThreshold > cfg.PvcMonitor.Threshold {
-			errs = append(errs, errors.New("pvcMonitor.clearThreshold must be between 0 and threshold"))
-		}
-	}
-	for _, name := range unknownProviders(cfg) {
-		errs = append(errs, fmt.Errorf("unknown alert provider %q", name))
-	}
-	for _, k := range InvalidSeverityKeys(cfg.SeverityByReason) {
-		errs = append(errs, fmt.Errorf("%s", severityValueError("severityByReason", k, cfg.SeverityByReason[k])))
-	}
-	for _, k := range InvalidSeverityKeys(cfg.SeverityByOwnerKind) {
-		errs = append(errs, fmt.Errorf("%s", severityValueError("severityByOwnerKind", k, cfg.SeverityByOwnerKind[k])))
+	if cfg.PvcMonitor.ClearThreshold < 0 || cfg.PvcMonitor.ClearThreshold > cfg.PvcMonitor.Threshold {
+		errs = append(errs, errors.New("pvcMonitor.clearThreshold must be between 0 and threshold"))
 	}
 	return errs
 }

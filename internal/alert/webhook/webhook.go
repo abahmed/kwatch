@@ -68,7 +68,7 @@ func NewWebhook(config map[string]interface{}, appCfg *config.App) *Webhook {
 		}
 	}
 
-	basicAuth, ok := config["basicAuth"]
+	basicAuth := config["basicAuth"]
 	basicAuthJson, err := json.Marshal(basicAuth)
 	if err != nil {
 		klog.InfoS("invalid basic auth config", "error", err)

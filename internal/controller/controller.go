@@ -6,11 +6,8 @@ import (
 	"os"
 	"time"
 
-	corev1 "k8s.io/api/core/v1"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
 	"k8s.io/apimachinery/pkg/util/wait"
-	"k8s.io/client-go/informers"
 	"k8s.io/client-go/kubernetes"
 	admissionregistrationv1lister "k8s.io/client-go/listers/admissionregistration/v1"
 	appsv1lister "k8s.io/client-go/listers/apps/v1"
@@ -20,6 +17,7 @@ import (
 	discoveryv1lister "k8s.io/client-go/listers/discovery/v1"
 	networkingv1lister "k8s.io/client-go/listers/networking/v1"
 	policyv1lister "k8s.io/client-go/listers/policy/v1"
+	storagev1lister "k8s.io/client-go/listers/storage/v1"
 	"k8s.io/client-go/tools/cache"
 	"k8s.io/client-go/util/workqueue"
 	"k8s.io/klog/v2"
@@ -76,10 +74,14 @@ type Controller struct {
 	secretsSynced           []cache.InformerSynced
 	maxBaseline             int
 
-	tracker         *kwcontext.ChangeTracker
-	graph           *kwcontext.ResourceGraph
-	configMapLister corev1lister.ConfigMapLister
-	configMapSynced []cache.InformerSynced
+	tracker              *kwcontext.ChangeTracker
+	graph                *kwcontext.ResourceGraph
+	configMapLister      corev1lister.ConfigMapLister
+	configMapSynced      []cache.InformerSynced
+	pvcLister            corev1lister.PersistentVolumeClaimLister
+	pvLister             corev1lister.PersistentVolumeLister
+	serviceAccountLister corev1lister.ServiceAccountLister
+	storageClassLister   storagev1lister.StorageClassLister
 
 	serviceQueue              workqueue.TypedRateLimitingInterface[string]
 	endpointSliceQueue        workqueue.TypedRateLimitingInterface[string]
@@ -176,434 +178,32 @@ func New(
 		inf.AddEventHandler(c.podEventHandler())
 	}
 
-	if cfg.NodeMonitor.Enabled || cfg.NodeResourceMonitor.Enabled {
-		nodeInformer := fs.nodeInformer()
-		nodeLister := fs.nodeLister()
-
-		c.nodeLister = nodeLister
-
-		if cfg.NodeMonitor.Enabled {
-			c.nodesSynced = nodeInformer.HasSynced
-			h.SetNodeLister(nodeLister)
-			nodeInformer.AddEventHandler(c.changeRecordingHandler("node", c.enqueueNode))
-		}
-	}
-
-	if cfg.RolloutMonitor.Enabled {
-		deployLister := fs.deployLister()
-		deployInformers := fs.deployInformers()
-
-		c.deployLister = deployLister
-		c.deploymentWatchEnabled = true
-
-		var deploysSynced []cache.InformerSynced
-		for _, inf := range deployInformers {
-			deploysSynced = append(deploysSynced, inf.HasSynced)
-		}
-		c.deploysSynced = deploysSynced
-
-		h.SetDeploymentLister(deployLister)
-
-		for _, inf := range deployInformers {
-			inf.AddEventHandler(c.changeRecordingHandler("deployment", c.enqueueDeployment))
-		}
-	}
-
-	if cfg.JobMonitor.Enabled {
-		jobLister := fs.jobLister()
-		jobInformers := fs.jobInformers()
-
-		c.jobLister = jobLister
-		c.jobWatchEnabled = true
-
-		var jobsSynced []cache.InformerSynced
-		for _, inf := range jobInformers {
-			jobsSynced = append(jobsSynced, inf.HasSynced)
-		}
-		c.jobsSynced = jobsSynced
-
-		h.SetJobLister(jobLister)
-
-		for _, inf := range jobInformers {
-			inf.AddEventHandler(c.changeRecordingHandler("job", c.enqueueJob))
-		}
-	}
-
-	if cfg.DaemonSetMonitor.Enabled {
-		dsLister := fs.dsLister()
-		dsInformers := fs.dsInformers()
-
-		c.daemonSetWatchEnabled = true
-
-		var dssSynced []cache.InformerSynced
-		for _, inf := range dsInformers {
-			dssSynced = append(dssSynced, inf.HasSynced)
-		}
-		c.dsSynced = dssSynced
-
-		h.SetDaemonSetLister(dsLister)
-
-		for _, inf := range dsInformers {
-			inf.AddEventHandler(c.changeRecordingHandler("daemonset", c.enqueueDaemonSet))
-		}
-	}
-
-	if cfg.CronJobMonitor.Enabled {
-		c.cronJobLister = fs.cronJobLister()
-		cronJobInformers := fs.cronJobInformers()
-
-		c.cronJobWatchEnabled = true
-
-		var cjSynced []cache.InformerSynced
-		for _, inf := range cronJobInformers {
-			cjSynced = append(cjSynced, inf.HasSynced)
-		}
-		c.cronJobsSynced = cjSynced
-
-		h.SetCronJobLister(c.cronJobLister)
-
-		for _, inf := range cronJobInformers {
-			inf.AddEventHandler(c.changeRecordingHandler("cronjob", c.enqueueCronJob))
-		}
-	}
-
-	if cfg.HpaMonitor.Enabled {
-		c.hpaLister = fs.hpaLister()
-		hpaInformers := fs.hpaInformers()
-
-		c.hpaWatchEnabled = true
-
-		var hpaSynced []cache.InformerSynced
-		for _, inf := range hpaInformers {
-			hpaSynced = append(hpaSynced, inf.HasSynced)
-		}
-		c.hpaSynced = hpaSynced
-
-		h.SetHorizontalPodAutoscalerLister(c.hpaLister)
-
-		for _, inf := range hpaInformers {
-			inf.AddEventHandler(c.changeRecordingHandler("horizontalpodautoscaler", c.enqueueHorizontalPodAutoscaler))
-		}
-	}
-
-	if cfg.ServiceMonitor.Enabled {
-		svcLister := fs.serviceLister()
-		svcInformers := fs.serviceInformers()
-		epSliceLister := fs.endpointSliceLister()
-		epSliceInformers := fs.endpointSliceInformers()
-
-		c.serviceLister = svcLister
-		c.endpointSliceLister = epSliceLister
-		c.serviceWatchEnabled = true
-		c.endpointSliceWatchEnabled = true
-
-		var svcSynced, epSliceSynced []cache.InformerSynced
-		for _, inf := range svcInformers {
-			svcSynced = append(svcSynced, inf.HasSynced)
-		}
-		for _, inf := range epSliceInformers {
-			epSliceSynced = append(epSliceSynced, inf.HasSynced)
-		}
-		c.svcSynced = svcSynced
-		c.endpointSliceSynced = epSliceSynced
-
-		h.SetServiceLister(svcLister)
-		h.SetEndpointSliceLister(epSliceLister)
-
-		for _, inf := range svcInformers {
-			inf.AddEventHandler(c.changeRecordingHandler("service", c.enqueueService))
-		}
-		for _, inf := range epSliceInformers {
-			inf.AddEventHandler(c.changeRecordingHandler("endpointslice", c.enqueueEndpointSlice))
-		}
-	}
-
-	if cfg.AdmissionWebhookMonitor.Enabled {
-		mwcLister := fs.mwcLister()
-		mwcInformer := fs.mwcInformer()
-		vwcLister := fs.vwcLister()
-		vwcInformer := fs.vwcInformer()
-
-		c.mwcLister = mwcLister
-		c.mwcSynced = mwcInformer.HasSynced
-		c.vwcLister = vwcLister
-		c.vwcSynced = vwcInformer.HasSynced
-		c.mwcWatchEnabled = true
-		c.vwcWatchEnabled = true
-
-		h.SetMwCLister(mwcLister)
-		h.SetVwCLister(vwcLister)
-
-		mwcInformer.AddEventHandler(c.changeRecordingHandler("mutatingwebhookconfiguration", c.enqueueMwc))
-		vwcInformer.AddEventHandler(c.changeRecordingHandler("validatingwebhookconfiguration", c.enqueueVwc))
-	}
-
-	if cfg.IngressMonitor.Enabled {
-		ingressLister := fs.ingressLister()
-		ingressInformers := fs.ingressInformers()
-
-		c.ingressLister = ingressLister
-		c.ingressWatchEnabled = true
-
-		var ingressSynced []cache.InformerSynced
-		for _, inf := range ingressInformers {
-			ingressSynced = append(ingressSynced, inf.HasSynced)
-		}
-		c.ingressSynced = ingressSynced
-
-		h.SetIngressLister(ingressLister)
-
-		for _, inf := range ingressInformers {
-			inf.AddEventHandler(c.changeRecordingHandler("ingress", c.enqueueIngress))
-		}
-	}
-
-	if cfg.NetworkPolicyMonitor.Enabled {
-		netpolLister := fs.netpolLister()
-		netpolInformers := fs.netpolInformers()
-
-		c.netpolLister = netpolLister
-		c.netpolWatchEnabled = true
-
-		var netpolSynced []cache.InformerSynced
-		for _, inf := range netpolInformers {
-			netpolSynced = append(netpolSynced, inf.HasSynced)
-		}
-		c.netpolSynced = netpolSynced
-
-		h.SetNetpolLister(netpolLister)
-
-		for _, inf := range netpolInformers {
-			inf.AddEventHandler(c.changeRecordingHandler("networkpolicy", c.enqueueNetpol))
-		}
-	}
-
+	c.wireNode(h, cfg, fs)
+	c.wireRollout(h, cfg, fs)
+	c.wireJobs(h, cfg, fs)
+	c.wireDaemonSetMonitor(h, cfg, fs)
+	c.wireCronJobs(h, cfg, fs)
+	c.wireHPA(h, cfg, fs)
+	c.wireService(h, cfg, fs)
+	c.wireAdmissionWebhooks(h, cfg, fs)
+	c.wireIngress(h, cfg, fs)
+	c.wireNetpol(h, cfg, fs)
 	if cfg.ControlPlaneMonitor.Enabled {
-		cpFactory := informers.NewSharedInformerFactoryWithOptions(client, resync, informers.WithNamespace("kube-system"))
-		cpPodInformer := cpFactory.Core().V1().Pods().Informer()
-		cpPodLister := cpFactory.Core().V1().Pods().Lister()
-
-		c.cpPodLister = cpPodLister
-		c.cpSynced = cpPodInformer.HasSynced
-		c.cpWatchEnabled = true
-
-		h.SetCpPodLister(cpPodLister)
-
-		cpPodInformer.AddEventHandler(c.changeRecordingHandler("pod", c.enqueueCpPod))
-
-		factories = append(factories, cpFactory)
+		factories = append(factories, c.wireControlPlane(h, client, resync))
 	}
-
-	{
-		c.rsLister = fs.rsLister()
-
-		var rsSynced []cache.InformerSynced
-		for _, inf := range fs.rsInformers() {
-			rsSynced = append(rsSynced, inf.HasSynced)
-		}
-		c.rsSynced = rsSynced
-
-		h.SetReplicaLister(c.rsLister)
-	}
-
-	{
-		c.dsLister = fs.dsLister()
-
-		var dsSynced []cache.InformerSynced
-		for _, inf := range fs.dsInformers() {
-			dsSynced = append(dsSynced, inf.HasSynced)
-		}
-		c.dsSynced = dsSynced
-
-		h.SetDaemonSetLister(c.dsLister)
-	}
-
-	{
-		c.ssLister = fs.ssLister()
-
-		var ssSynced []cache.InformerSynced
-		for _, inf := range fs.ssInformers() {
-			ssSynced = append(ssSynced, inf.HasSynced)
-		}
-		c.ssSynced = ssSynced
-
-		h.SetStatefulSetLister(c.ssLister)
-
-		if cfg.StatefulSetMonitor.Enabled {
-			c.statefulSetWatchEnabled = true
-			for _, inf := range fs.ssInformers() {
-				inf.AddEventHandler(c.changeRecordingHandler("statefulset", c.enqueueStatefulSet))
-			}
-		}
-	}
-
-	if cfg.PdbMonitor.Enabled {
-		c.pdbLister = fs.pdbLister()
-		pdbInformers := fs.pdbInformers()
-
-		c.pdbWatchEnabled = true
-		c.pdbSynced = pdbInformers[0].HasSynced
-
-		h.SetPdbLister(c.pdbLister)
-
-		for _, inf := range pdbInformers {
-			inf.AddEventHandler(c.changeRecordingHandler("poddisruptionbudget", c.enqueuePdb))
-		}
-	}
-
-	// Events informer uses a dedicated factory with field selector to only cache Pod events
-	{
-		var eventFactories []informers.SharedInformerFactory
-		if len(namespaces) <= 1 {
-			opts := []informers.SharedInformerOption{
-				informers.WithTweakListOptions(func(o *metav1.ListOptions) {
-					o.FieldSelector = "involvedObject.kind=Pod"
-				}),
-			}
-			if len(namespaces) == 1 {
-				opts = append(opts, informers.WithNamespace(namespaces[0]))
-			}
-			ef := informers.NewSharedInformerFactoryWithOptions(client, resync, opts...)
-			eventFactories = append(eventFactories, ef)
-			eventInformer := ef.Core().V1().Events().Informer()
-			utilruntime.Must(eventInformer.AddIndexers(cache.Indexers{
-				"byPod": func(obj interface{}) ([]string, error) {
-					ev, ok := obj.(*corev1.Event)
-					if !ok {
-						return nil, nil
-					}
-					return []string{ev.InvolvedObject.Name}, nil
-				},
-			}))
-			c.eventLister = ef.Core().V1().Events().Lister()
-			c.eventsSynced = append(c.eventsSynced, eventInformer.HasSynced)
-		} else {
-			listers := make([]corev1lister.EventLister, 0, len(namespaces))
-			for _, ns := range namespaces {
-				ns := ns
-				opts := []informers.SharedInformerOption{
-					informers.WithTweakListOptions(func(o *metav1.ListOptions) {
-						o.FieldSelector = "involvedObject.kind=Pod"
-					}),
-					informers.WithNamespace(ns),
-				}
-				ef := informers.NewSharedInformerFactoryWithOptions(client, resync, opts...)
-				eventFactories = append(eventFactories, ef)
-				eventInformer := ef.Core().V1().Events().Informer()
-				utilruntime.Must(eventInformer.AddIndexers(cache.Indexers{
-					"byPod": func(obj interface{}) ([]string, error) {
-						ev, ok := obj.(*corev1.Event)
-						if !ok {
-							return nil, nil
-						}
-						return []string{ev.InvolvedObject.Name}, nil
-					},
-				}))
-				listers = append(listers, ef.Core().V1().Events().Lister())
-				c.eventsSynced = append(c.eventsSynced, eventInformer.HasSynced)
-			}
-			c.eventLister = &multiEventLister{listers: listers}
-		}
-		h.SetEventLister(c.eventLister)
-		factories = append(factories, eventFactories...)
-	}
-
+	c.wireReplicaSet(h, fs)
+	c.wireDaemonSetLister(h, fs)
+	c.wireStatefulSet(h, cfg, fs)
+	c.wirePDB(h, cfg, fs)
+	factories = append(factories, c.wireEvents(h, client, resync, namespaces)...)
 	if cfg.ClusterAutoscalerMonitor.Enabled {
-		caOpts := []informers.SharedInformerOption{
-			informers.WithTweakListOptions(func(o *metav1.ListOptions) {
-				o.FieldSelector = "source=cluster-autoscaler"
-			}),
-			informers.WithNamespace("kube-system"),
-		}
-		caFactory := informers.NewSharedInformerFactoryWithOptions(client, resync, caOpts...)
-		caEventInformer := caFactory.Core().V1().Events().Informer()
-		utilruntime.Must(caEventInformer.AddIndexers(cache.Indexers{
-			"byReason": func(obj interface{}) ([]string, error) {
-				ev, ok := obj.(*corev1.Event)
-				if !ok {
-					return nil, nil
-				}
-				return []string{ev.Reason}, nil
-			},
-		}))
-		c.eventsSynced = append(c.eventsSynced, caEventInformer.HasSynced)
-		factories = append(factories, caFactory)
-
-		caEventInformer.AddEventHandler(cache.ResourceEventHandlerFuncs{
-			AddFunc: func(obj interface{}) {
-				if ev, ok := obj.(*corev1.Event); ok {
-					h.ProcessClusterAutoscalerEvent(ev)
-				}
-			},
-			UpdateFunc: func(_, obj interface{}) {
-				if ev, ok := obj.(*corev1.Event); ok {
-					h.ProcessClusterAutoscalerEvent(ev)
-				}
-			},
-		})
+		factories = append(factories, wireClusterAutoscaler(h, client, resync))
 	}
-
-	// ConfigMap informer — always watches monitored namespaces for dependency tracking
-	{
-		cmLister := fs.configMapLister()
-		cmInformers := fs.configMapInformers()
-
-		c.configMapLister = cmLister
-		for _, inf := range cmInformers {
-			c.configMapSynced = append(c.configMapSynced, inf.HasSynced)
-			inf.AddEventHandler(cache.ResourceEventHandlerFuncs{
-				AddFunc: func(obj interface{}) {
-					c.recordChange(kwcontext.ChangeCreate, "configmap", obj)
-				},
-				UpdateFunc: func(old, new interface{}) {
-					c.recordChange(kwcontext.ChangeUpdate, "configmap", new)
-				},
-				DeleteFunc: func(obj interface{}) {
-					c.recordChange(kwcontext.ChangeDelete, "configmap", obj)
-					if c.graph != nil {
-						if cm, ok := obj.(*corev1.ConfigMap); ok {
-							c.graph.RemoveNode("configmap", cm.Namespace, cm.Name)
-						}
-					}
-				},
-			})
-		}
-	}
-
+	c.wireConfigMap(fs)
+	c.wireGraphSupport(fs)
+	c.wireGraphHandlers(fs, cfg)
 	if cfg.TlsMonitor.Enabled {
-		var tlsFactories []informers.SharedInformerFactory
-		if len(namespaces) <= 1 {
-			opts := []informers.SharedInformerOption{
-				informers.WithTweakListOptions(func(o *metav1.ListOptions) {
-					o.FieldSelector = "type=kubernetes.io/tls"
-				}),
-			}
-			if len(namespaces) == 1 {
-				opts = append(opts, informers.WithNamespace(namespaces[0]))
-			}
-			tf := informers.NewSharedInformerFactoryWithOptions(client, resync, opts...)
-			tlsFactories = append(tlsFactories, tf)
-			c.secretLister = tf.Core().V1().Secrets().Lister()
-			c.secretsSynced = append(c.secretsSynced, tf.Core().V1().Secrets().Informer().HasSynced)
-		} else {
-			listers := make([]corev1lister.SecretLister, 0, len(namespaces))
-			for _, ns := range namespaces {
-				ns := ns
-				opts := []informers.SharedInformerOption{
-					informers.WithTweakListOptions(func(o *metav1.ListOptions) {
-						o.FieldSelector = "type=kubernetes.io/tls"
-					}),
-					informers.WithNamespace(ns),
-				}
-				tf := informers.NewSharedInformerFactoryWithOptions(client, resync, opts...)
-				tlsFactories = append(tlsFactories, tf)
-				listers = append(listers, tf.Core().V1().Secrets().Lister())
-				c.secretsSynced = append(c.secretsSynced, tf.Core().V1().Secrets().Informer().HasSynced)
-			}
-			c.secretLister = &multiSecretLister{listers: listers}
-		}
-		h.SetSecretLister(c.secretLister)
-		factories = append(factories, tlsFactories...)
+		factories = append(factories, c.wireTLS(h, client, resync, namespaces)...)
 	}
 
 	stopCh := make(chan struct{})

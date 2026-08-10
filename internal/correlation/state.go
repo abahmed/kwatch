@@ -133,7 +133,9 @@ func (e *Engine) SetAuditLogger(l *audit.AuditLogger) {
 }
 
 // SnapshotAll returns a deep copy of all non-resolved incidents keyed by
-// incident key.
+// incident key. It clears the dirty flag, so callers that must observe the
+// state without consuming the dirty flag (e.g. the mass-failure hook, which
+// may run alongside other SnapshotAll consumers) should use ActiveIncidents.
 func (e *Engine) SnapshotAll() map[model.IncidentKey]*model.Incident {
 	e.mu.Lock()
 	defer e.mu.Unlock()
@@ -151,13 +153,35 @@ func (e *Engine) SnapshotAll() map[model.IncidentKey]*model.Incident {
 	return out
 }
 
+// ActiveIncidents returns a deep copy of every non-resolved incident keyed by
+// key, without touching the dirty flag. It is safe to call from multiple
+// consumers within a single lifecycle tick.
+func (e *Engine) ActiveIncidents() map[model.IncidentKey]*model.Incident {
+	e.mu.Lock()
+	defer e.mu.Unlock()
+	out := make(map[model.IncidentKey]*model.Incident, len(e.state))
+	for key, inc := range e.state {
+		if inc.State == model.StateResolved {
+			continue
+		}
+		out[key] = inc.Clone()
+	}
+	return out
+}
+
 // SnapshotPersisted returns all non-resolved incidents in their serializable
 // form so the controller can persist them across restarts.
 func (e *Engine) SnapshotPersisted() []model.PersistedIncident {
 	e.mu.Lock()
 	defer e.mu.Unlock()
-	out := make([]model.PersistedIncident, 0, len(e.state))
+	out := make([]model.PersistedIncident, 0, len(e.state)+len(e.massFailures))
 	for _, inc := range e.state {
+		if inc.State == model.StateResolved {
+			continue
+		}
+		out = append(out, inc.ToPersisted())
+	}
+	for _, inc := range e.massFailures {
 		if inc.State == model.StateResolved {
 			continue
 		}
@@ -170,6 +194,9 @@ func (e *Engine) SnapshotPersisted() []model.PersistedIncident {
 // Only incidents whose key still exists in the seen (baseline) set are
 // restored, to avoid re-alerting for issues that were resolved while down.
 // LastSeen is bumped to now to prevent immediate cleanup-loop resolution.
+// Mass-failure incidents (mass-failure/<dependency> keys) are restored into
+// the dedicated massFailures store regardless of the baseline so an ongoing
+// mass failure is not re-alerted after a restart.
 func (e *Engine) RestoreIncidents(incidents map[model.IncidentKey]*model.Incident) {
 	e.mu.Lock()
 	defer e.mu.Unlock()
@@ -180,6 +207,17 @@ func (e *Engine) RestoreIncidents(incidents map[model.IncidentKey]*model.Inciden
 	now := e.now()
 	restored := 0
 	for key, inc := range incidents {
+		if IsMassFailureKey(key) {
+			if _, exists := e.massFailures[key]; exists {
+				continue
+			}
+			inc.LastSeen = now
+			inc.LastUpdate = now
+			inc.NotifiedSig = notifSig(inc)
+			e.massFailures[key] = inc
+			restored++
+			continue
+		}
 		if _, ok := e.baseline[string(key)]; !ok || len(e.baseline[string(key)]) == 0 {
 			continue
 		}
@@ -196,6 +234,55 @@ func (e *Engine) RestoreIncidents(incidents map[model.IncidentKey]*model.Inciden
 	if restored > 0 {
 		klog.InfoS("restored incidents from ConfigMap", "count", restored)
 	}
+}
+
+// MassFailureSet returns a snapshot of the currently tracked mass-failure
+// incidents keyed by their incident key.
+func (e *Engine) MassFailureSet() map[model.IncidentKey]*model.Incident {
+	e.mu.Lock()
+	defer e.mu.Unlock()
+	out := make(map[model.IncidentKey]*model.Incident, len(e.massFailures))
+	for key, inc := range e.massFailures {
+		out[key] = inc.Clone()
+	}
+	return out
+}
+
+// HasMassFailure reports whether a mass-failure incident with the given key is
+// already being tracked (used to avoid duplicate alerts).
+func (e *Engine) HasMassFailure(key model.IncidentKey) bool {
+	e.mu.Lock()
+	defer e.mu.Unlock()
+	_, ok := e.massFailures[key]
+	return ok
+}
+
+// AddMassFailure registers a synthetic mass-failure incident so it survives
+// restarts without re-alerting. Returns true if it was newly tracked.
+func (e *Engine) AddMassFailure(inc *model.Incident) bool {
+	e.mu.Lock()
+	defer e.mu.Unlock()
+	if _, exists := e.massFailures[inc.Key]; exists {
+		return false
+	}
+	inc.FirstSeen = e.now()
+	inc.LastSeen = inc.FirstSeen
+	e.massFailures[inc.Key] = inc
+	e.dirty = true
+	return true
+}
+
+// RemoveMassFailure drops a previously tracked mass-failure incident. Returns
+// true if it was tracked at all.
+func (e *Engine) RemoveMassFailure(key model.IncidentKey) bool {
+	e.mu.Lock()
+	defer e.mu.Unlock()
+	if _, exists := e.massFailures[key]; !exists {
+		return false
+	}
+	delete(e.massFailures, key)
+	e.dirty = true
+	return true
 }
 
 func (e *Engine) SetSeverityMap(m map[string]string) {

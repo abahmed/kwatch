@@ -8,11 +8,12 @@ func (f ContainerStateFilter) Detect(ctx *Context) Status {
 	}
 	container := ctx.Container.Container
 
-	if container.State.Running != nil {
+	switch {
+	case container.State.Running != nil:
 		ctx.Container.Status = "running"
-	} else if container.State.Waiting != nil {
+	case container.State.Waiting != nil:
 		ctx.Container.Status = "waiting"
-	} else if container.State.Terminated != nil {
+	case container.State.Terminated != nil:
 		ctx.Container.Status = "terminated"
 	}
 

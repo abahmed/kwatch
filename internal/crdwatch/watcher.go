@@ -79,11 +79,13 @@ func (w *Watcher) Start(ctx context.Context) error {
 	factory := dynamicinformer.NewFilteredDynamicSharedInformerFactory(dc, w.resync, w.namespace, nil)
 	inf := factory.ForResource(gvr).Informer()
 
-	inf.AddEventHandler(cache.ResourceEventHandlerFuncs{
+	if _, err := inf.AddEventHandler(cache.ResourceEventHandlerFuncs{
 		AddFunc:    func(obj interface{}) { w.reload(obj) },
 		UpdateFunc: func(_, newObj interface{}) { w.reload(newObj) },
 		DeleteFunc: func(_ interface{}) { w.restore() },
-	})
+	}); err != nil {
+		return fmt.Errorf("crdwatch: failed to register event handler: %w", err)
+	}
 
 	factory.Start(ctx.Done())
 	if !cache.WaitForCacheSync(ctx.Done(), inf.HasSynced) {

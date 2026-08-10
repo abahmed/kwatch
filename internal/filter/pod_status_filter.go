@@ -29,7 +29,8 @@ func (f PodStatusFilter) Detect(ctx *Context) Status {
 	issueInContainers := true
 	issueInPod := true
 	for _, c := range ctx.Pod.Status.Conditions {
-		if c.Type == corev1.PodReady {
+		switch c.Type {
+		case corev1.PodReady:
 			if c.Status == corev1.ConditionFalse && c.Reason == "PodCompleted" {
 				ctx.PodHasIssues = false
 				ctx.ContainersHasIssues = false
@@ -41,19 +42,25 @@ func (f PodStatusFilter) Detect(ctx *Context) Status {
 			if c.Status != corev1.ConditionTrue {
 				issueInContainers = true
 			}
-		} else if c.Type == corev1.PodScheduled && c.Status == corev1.ConditionFalse {
-			issueInPod = true
-			issueInContainers = false
-			ctx.PodReason = c.Reason
-			ctx.PodMsg = c.Message
-		} else if c.Type == corev1.ContainersReady && c.Status == corev1.ConditionFalse {
-			issueInContainers = true
-			issueInPod = false
-		} else if c.Type == corev1.PodReadyToStartContainers && c.Status == corev1.ConditionFalse {
-			issueInPod = true
-			issueInContainers = false
-			ctx.PodReason = c.Reason
-			ctx.PodMsg = c.Message
+		case corev1.PodScheduled:
+			if c.Status == corev1.ConditionFalse {
+				issueInPod = true
+				issueInContainers = false
+				ctx.PodReason = c.Reason
+				ctx.PodMsg = c.Message
+			}
+		case corev1.ContainersReady:
+			if c.Status == corev1.ConditionFalse {
+				issueInContainers = true
+				issueInPod = false
+			}
+		case corev1.PodReadyToStartContainers:
+			if c.Status == corev1.ConditionFalse {
+				issueInPod = true
+				issueInContainers = false
+				ctx.PodReason = c.Reason
+				ctx.PodMsg = c.Message
+			}
 		}
 	}
 

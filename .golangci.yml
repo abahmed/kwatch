@@ -3,11 +3,39 @@ version: "2"
 linters:
   default: none
   enable:
+    - errcheck
+    - gocritic
+    - gocyclo
     - govet
+    - ineffassign
+    - unparam
+    - unused
   settings:
     govet:
       disable:
         - inline
+    gocyclo:
+      min-complexity: 35
+    errcheck:
+      exclude-functions:
+        - "(*compress/gzip.Reader).Close"
+        - "(*compress/gzip.Writer).Close"
+        - "(*os.File).Close"
+        - "(io.Closer).Close"
+        - "(*bytes.Buffer).Write"
+        - "(strings.Builder).WriteString"
+        - "(fmt.Stringer).String"
+  exclusions:
+    generated: lax
+    rules:
+      # Test-only helpers that intentionally ignore errors (e.g. seeding store/indexers).
+      - path: "_test.go"
+        linters: [errcheck, unparam, gocritic]
+      # Informer wiring is declarative; ignoring AddEventHandler is noise.
+      - path: "internal/controller"
+        linters: [errcheck]
+      - path: "internal/audit"
+        linters: [revive]
 
 formatters:
   enable:

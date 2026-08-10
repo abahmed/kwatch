@@ -95,8 +95,7 @@ func crossedTier(prev, new int, tiers []int) int {
 // preferring the higher of the tier-based severity and the current severity.
 func severityForTier(tierIdx int, current model.Severity) model.Severity {
 	sev := model.SeverityCritical
-	switch tierIdx {
-	case 0:
+	if tierIdx == 0 {
 		sev = model.SeverityHigh
 	}
 	if current.Rank() > sev.Rank() {
@@ -132,6 +131,7 @@ type Engine struct {
 	auditLogger          *audit.AuditLogger
 	dirty                bool // true when state has changed since last SnapshotAll
 	now                  func() time.Time
+	massFailures         map[model.IncidentKey]*model.Incident // synthetic incidents, persisted + restored across restarts
 }
 
 func NewEngine(cfg Config) *Engine {
@@ -157,6 +157,7 @@ func NewEngine(cfg Config) *Engine {
 		groupBuffers:         make(map[string]*pendingGroup),
 		groupResolveTrackers: make(map[string]*groupResolveTracker),
 		groupFlushStates:     make(map[string]*groupFlushState),
+		massFailures:         make(map[model.IncidentKey]*model.Incident),
 	}
 	if e.now == nil {
 		e.now = time.Now
@@ -299,29 +300,18 @@ func (e *Engine) Process(ev event.Event, owner string, cs *model.ContainerState)
 	e.trackNodeIncident(res, ev.NodeName, ev.Reason)
 
 	// Baseline — skip for node events so the incident is always created
-	if res != "node" && e.isBaselined(key, ev.PodName) {
-		if e.auditLogger != nil {
-			e.auditLogger.LogSkip(&model.Incident{Key: key, Namespace: ev.Namespace, Reason: ev.Reason, ID: string(key)}, "baseline")
-		}
+	if e.skipByBaseline(res, key, ev) {
 		return nil, model.ActionSkip
 	}
 
 	// Suppress pod incidents when the node has an active incident
-	if e.config.InhibitNodeSuppressesPods && res == "pod" {
-		if e.suppressedByNodeIncident(ev, owner, key) {
-			return nil, model.ActionSkip
-		}
+	if e.suppressedByNode(ev, owner, key, res) {
+		return nil, model.ActionSkip
 	}
 
 	// Cooldown check — suppress re-creation after cleanup for still-broken resources
-	if expiry, ok := e.cleanupCooldown[key]; ok {
-		if e.now().Before(expiry) {
-			if e.auditLogger != nil {
-				e.auditLogger.LogSkip(&model.Incident{Key: key, Namespace: ev.Namespace, Reason: ev.Reason, ID: string(key)}, "cooldown")
-			}
-			return nil, model.ActionSkip
-		}
-		delete(e.cleanupCooldown, key)
+	if e.skipByCooldown(key, ev) {
+		return nil, model.ActionSkip
 	}
 
 	now := e.now()
@@ -331,40 +321,8 @@ func (e *Engine) Process(ev event.Event, owner string, cs *model.ContainerState)
 	// Workload incidents may carry their owner as either a bare name (pod path)
 	// or "ns/name" (workload-object detectors), so accept both encodings —
 	// otherwise a stuck Deployment would never suppress its own pod symptoms.
-	if res == "pod" && owner != "" {
-		ownerFull := OwnerPath(ev.Namespace, owner)
-		for _, existing := range e.state {
-			if existing.State == model.StateResolved ||
-				existing.State == model.StatePendingResolve {
-				continue
-			}
-			if existing.Resource == "pod" ||
-				existing.Namespace != ev.Namespace {
-				continue
-			}
-			// The owner must match in the incident's Name field and in the
-			// owner slot of its key — the key check guards against two
-			// distinct owners sharing one namespace prefix.
-			pk := ParseKey(existing.Key)
-			if existing.Name != owner && existing.Name != ownerFull {
-				continue
-			}
-			if pk.Owner != owner && pk.Owner != ownerFull {
-				continue
-			}
-			existing.Count++
-			if ev.PodName != "" {
-				existing.Resources[ev.PodName] = true
-				if len(existing.Resources) > existing.PeakResources {
-					existing.PeakResources = len(existing.Resources)
-				}
-			}
-			existing.LastSeen = now
-			if e.auditLogger != nil {
-				e.auditLogger.LogSkip(&model.Incident{Key: key, Namespace: ev.Namespace, Reason: ev.Reason, ID: string(key)}, "cascading_suppression")
-			}
-			return nil, model.ActionSkip
-		}
+	if res == "pod" && owner != "" && e.suppressCascading(ev, owner, key, now) {
+		return nil, model.ActionSkip
 	}
 
 	if inc, ok := e.state[key]; ok {
@@ -372,40 +330,12 @@ func (e *Engine) Process(ev event.Event, owner string, cs *model.ContainerState)
 		// Re-creating would emit a CREATE notification, causing a
 		// resolved→CREATE→resolved flip-flop cycle. Silent revival
 		// keeps the existing incident active and returns ActionUpdate.
-		if inc.State == model.StateResolved {
+		if inc.State == model.StateResolved || inc.State == model.StatePendingResolve {
 			return e.refreshIncident(inc, ev, cs, owner, now)
 		}
 
-		// Pending resolve — revoke the scheduled resolve
-		if inc.State == model.StatePendingResolve {
-			return e.refreshIncident(inc, ev, cs, owner, now)
-		}
-
-		if e.config.EscalationEnabled && cs != nil {
-			prev := inc.RestartCount
-			cur := int(cs.RestartCount)
-			if t := crossedTier(prev, cur, e.config.EscalationTiers); t >= 0 {
-				ev.Severity = severityForTier(t, inc.Severity)
-				e.config.Enricher.Enrich(&ev, inc)
-				inc.Hint = fmt.Sprintf("restart count crossed %d", e.config.EscalationTiers[t])
-				inc.Count++
-				inc.LastSeen = now
-				inc.State = model.StateActive
-				inc.LastUpdate = now
-				inc.RestartCount = cur
-				if ev.PodName != "" {
-					inc.Resources[ev.PodName] = true
-					if len(inc.Resources) > inc.PeakResources {
-						inc.PeakResources = len(inc.Resources)
-					}
-				}
-				if ev.ContainerName != "" && ev.ContainerName != "." {
-					inc.Containers[ev.ContainerName] = true
-				}
-				inc.LastContainerState = cs
-				e.indexLastContainerState(ev.Namespace, ev.PodName, ev.ContainerName, cs)
-				return inc, e.edgeAction(inc)
-			}
+		if e.config.EscalationEnabled && cs != nil && e.escalateRestartCount(inc, ev, cs, now) {
+			return inc, e.edgeAction(inc)
 		}
 		return e.refreshIncident(inc, ev, cs, owner, now)
 	}
@@ -419,42 +349,7 @@ func (e *Engine) Process(ev event.Event, owner string, cs *model.ContainerState)
 	// no notification churn. Baseline entries are carried over so a startup-
 	// baselined loop stays suppressed after the fold.
 	if cs != nil && int(cs.RestartCount) > defaultCrashLoopHighFreqThreshold {
-		var orphan *model.Incident
-		for k, oldInc := range e.state {
-			if k == key ||
-				oldInc.State == model.StateResolved ||
-				oldInc.State == model.StatePendingResolve ||
-				oldInc.Resource != res {
-				continue
-			}
-			pk := ParseKey(k)
-			if pk.Namespace != ev.Namespace || pk.Owner != owner {
-				continue
-			}
-			orphan = oldInc
-			e.removeIncidentFromNamespaceIndex(oldInc)
-			delete(e.state, k)
-			if pods, ok := e.baseline[string(k)]; ok {
-				if e.baseline[string(key)] == nil {
-					e.baseline[string(key)] = make(map[string]int64, len(pods))
-				}
-				for pod, ts := range pods {
-					e.baseline[string(key)][pod] = ts
-				}
-				delete(e.baseline, string(k))
-			}
-			// Follow any smart-group membership onto the new key so the
-			// group isn't left waiting on a member that no longer exists.
-			e.rekeyGroupReferences(k, key)
-			break
-		}
-		if orphan != nil {
-			orphan.Key = key
-			orphan.Reason = normalizeReason(ev.Reason)
-			orphan.State = model.StateActive
-			orphan.ResolveAt = time.Time{}
-			e.state[key] = orphan
-			e.indexIncidentByNamespace(orphan)
+		if orphan, ok := e.foldCrashLoopIncident(ev, owner, key, res); ok {
 			return e.refreshIncident(orphan, ev, cs, owner, now)
 		}
 	}
@@ -470,6 +365,163 @@ func (e *Engine) Process(ev event.Event, owner string, cs *model.ContainerState)
 	}
 
 	return inc, e.edgeAction(inc)
+}
+
+// skipByBaseline reports whether the event is covered by the startup baseline
+// and should not create an incident. Node events are never baselined so the
+// incident is always created. Caller must hold e.mu.
+func (e *Engine) skipByBaseline(res string, key model.IncidentKey, ev event.Event) bool {
+	if res == "node" || !e.isBaselined(key, ev.PodName) {
+		return false
+	}
+	if e.auditLogger != nil {
+		e.auditLogger.LogSkip(&model.Incident{Key: key, Namespace: ev.Namespace, Reason: ev.Reason, ID: string(key)}, "baseline")
+	}
+	return true
+}
+
+// suppressedByNode reports whether the event should be suppressed because a
+// node incident is already inhibiting pod alerts. Caller must hold e.mu.
+func (e *Engine) suppressedByNode(ev event.Event, owner string, key model.IncidentKey, res string) bool {
+	if !e.config.InhibitNodeSuppressesPods || res != "pod" {
+		return false
+	}
+	return e.suppressedByNodeIncident(ev, owner, key)
+}
+
+// skipByCooldown reports whether re-creation is suppressed by the cleanup
+// cooldown, cleaning up expired entries. Caller must hold e.mu.
+func (e *Engine) skipByCooldown(key model.IncidentKey, ev event.Event) bool {
+	expiry, ok := e.cleanupCooldown[key]
+	if !ok {
+		return false
+	}
+	if !e.now().Before(expiry) {
+		delete(e.cleanupCooldown, key)
+		return false
+	}
+	if e.auditLogger != nil {
+		e.auditLogger.LogSkip(&model.Incident{Key: key, Namespace: ev.Namespace, Reason: ev.Reason, ID: string(key)}, "cooldown")
+	}
+	return true
+}
+
+// suppressCascading suppresses a pod incident whose owning workload already
+// has an active non-pod incident, attributing the pod to the workload
+// incident instead. Caller must hold e.mu.
+func (e *Engine) suppressCascading(ev event.Event, owner string, key model.IncidentKey, now time.Time) bool {
+	ownerFull := OwnerPath(ev.Namespace, owner)
+	for _, existing := range e.state {
+		if existing.State == model.StateResolved ||
+			existing.State == model.StatePendingResolve {
+			continue
+		}
+		if existing.Resource == "pod" ||
+			existing.Namespace != ev.Namespace {
+			continue
+		}
+		// The owner must match in the incident's Name field and in the
+		// owner slot of its key — the key check guards against two
+		// distinct owners sharing one namespace prefix.
+		pk := ParseKey(existing.Key)
+		if existing.Name != owner && existing.Name != ownerFull {
+			continue
+		}
+		if pk.Owner != owner && pk.Owner != ownerFull {
+			continue
+		}
+		existing.Count++
+		if ev.PodName != "" {
+			existing.Resources[ev.PodName] = true
+			if len(existing.Resources) > existing.PeakResources {
+				existing.PeakResources = len(existing.Resources)
+			}
+		}
+		existing.LastSeen = now
+		if e.auditLogger != nil {
+			e.auditLogger.LogSkip(&model.Incident{Key: key, Namespace: ev.Namespace, Reason: ev.Reason, ID: string(key)}, "cascading_suppression")
+		}
+		return true
+	}
+	return false
+}
+
+// escalateRestartCount applies escalation tiers when the incident's restart
+// count crosses a configured threshold, bumping severity and re-enriching.
+// Caller must hold e.mu.
+func (e *Engine) escalateRestartCount(inc *model.Incident, ev event.Event, cs *model.ContainerState, now time.Time) bool {
+	prev := inc.RestartCount
+	cur := int(cs.RestartCount)
+	t := crossedTier(prev, cur, e.config.EscalationTiers)
+	if t < 0 {
+		return false
+	}
+	ev.Severity = severityForTier(t, inc.Severity)
+	e.config.Enricher.Enrich(&ev, inc)
+	inc.Hint = fmt.Sprintf("restart count crossed %d", e.config.EscalationTiers[t])
+	inc.Count++
+	inc.LastSeen = now
+	inc.State = model.StateActive
+	inc.LastUpdate = now
+	inc.RestartCount = cur
+	if ev.PodName != "" {
+		inc.Resources[ev.PodName] = true
+		if len(inc.Resources) > inc.PeakResources {
+			inc.PeakResources = len(inc.Resources)
+		}
+	}
+	if ev.ContainerName != "" && ev.ContainerName != "." {
+		inc.Containers[ev.ContainerName] = true
+	}
+	inc.LastContainerState = cs
+	e.indexLastContainerState(ev.Namespace, ev.PodName, ev.ContainerName, cs)
+	return true
+}
+
+// foldCrashLoopIncident migrates an existing incident to the high-frequency
+// crash-loop key when the container's restart count crosses the threshold,
+// carrying over baseline entries and group membership. Caller must hold
+// e.mu.
+func (e *Engine) foldCrashLoopIncident(ev event.Event, owner string, key model.IncidentKey, res string) (*model.Incident, bool) {
+	var orphan *model.Incident
+	for k, oldInc := range e.state {
+		if k == key ||
+			oldInc.State == model.StateResolved ||
+			oldInc.State == model.StatePendingResolve ||
+			oldInc.Resource != res {
+			continue
+		}
+		pk := ParseKey(k)
+		if pk.Namespace != ev.Namespace || pk.Owner != owner {
+			continue
+		}
+		orphan = oldInc
+		e.removeIncidentFromNamespaceIndex(oldInc)
+		delete(e.state, k)
+		if pods, ok := e.baseline[string(k)]; ok {
+			if e.baseline[string(key)] == nil {
+				e.baseline[string(key)] = make(map[string]int64, len(pods))
+			}
+			for pod, ts := range pods {
+				e.baseline[string(key)][pod] = ts
+			}
+			delete(e.baseline, string(k))
+		}
+		// Follow any smart-group membership onto the new key so the
+		// group isn't left waiting on a member that no longer exists.
+		e.rekeyGroupReferences(k, key)
+		break
+	}
+	if orphan == nil {
+		return nil, false
+	}
+	orphan.Key = key
+	orphan.Reason = normalizeReason(ev.Reason)
+	orphan.State = model.StateActive
+	orphan.ResolveAt = time.Time{}
+	e.state[key] = orphan
+	e.indexIncidentByNamespace(orphan)
+	return orphan, true
 }
 
 // Caller must hold e.mu.

@@ -173,7 +173,7 @@ func (s *Slack) SendEvent(ev *event.Event) error {
 
 			for _, chunk := range util.Chunks(events, chunkSize) {
 				blocks = append(blocks,
-					markdownSectionF("```%s```", chunk))
+					markdownSection("```"+chunk+"```"))
 			}
 		}
 	}
@@ -187,7 +187,7 @@ func (s *Slack) SendEvent(ev *event.Event) error {
 
 			for _, chunk := range util.Chunks(logs, chunkSize) {
 				blocks = append(blocks,
-					markdownSectionF("```%s```", chunk))
+					markdownSection("```"+chunk+"```"))
 			}
 		}
 	}
@@ -418,7 +418,7 @@ func buildIncidentBlocks(inc *model.Incident, appCfg *config.App) *slackClient.B
 		if len(events) > 0 {
 			blocks = append(blocks, markdownSection(":mag: *Events*"))
 			for _, chunk := range util.Chunks(events, chunkSize) {
-				blocks = append(blocks, markdownSectionF("```%s```", chunk))
+				blocks = append(blocks, markdownSection("```"+chunk+"```"))
 			}
 		}
 	}
@@ -428,7 +428,7 @@ func buildIncidentBlocks(inc *model.Incident, appCfg *config.App) *slackClient.B
 		if len(logs) > 0 {
 			blocks = append(blocks, markdownSection(":memo: *Logs*"))
 			for _, chunk := range util.Chunks(logs, chunkSize) {
-				blocks = append(blocks, markdownSectionF("```%s```", chunk))
+				blocks = append(blocks, markdownSection("```"+chunk+"```"))
 			}
 		}
 	}
@@ -491,7 +491,7 @@ func buildIncidentUpdateBlocks(inc *model.Incident) *slackClient.Blocks {
 		if len(events) > 0 {
 			blocks = append(blocks, markdownSection(":mag: *Events*"))
 			for _, chunk := range util.Chunks(events, chunkSize) {
-				blocks = append(blocks, markdownSectionF("```%s```", chunk))
+				blocks = append(blocks, markdownSection("```"+chunk+"```"))
 			}
 		}
 	}
@@ -501,7 +501,7 @@ func buildIncidentUpdateBlocks(inc *model.Incident) *slackClient.Blocks {
 		if len(logs) > 0 {
 			blocks = append(blocks, markdownSection(":memo: *Logs*"))
 			for _, chunk := range util.Chunks(logs, chunkSize) {
-				blocks = append(blocks, markdownSectionF("```%s```", chunk))
+				blocks = append(blocks, markdownSection("```"+chunk+"```"))
 			}
 		}
 	}
@@ -599,11 +599,4 @@ func markdownF(format string, a ...interface{}) *slackClient.TextBlockObject {
 		fmt.Sprintf(format, a...),
 		false,
 		true)
-}
-
-func markdownSectionF(
-	format string, a ...interface{}) slackClient.SectionBlock {
-	return slackClient.SectionBlock{
-		Text: markdownF(format, a...),
-	}
 }

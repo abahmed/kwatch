@@ -142,6 +142,8 @@ func (h *handler) SweepControlPlane() {
 		return
 	}
 	for _, pod := range pods {
-		h.ProcessControlPlanePod(pod)
+		if err := h.ProcessControlPlanePod(pod); err != nil {
+			klog.ErrorS(err, "controlplane sweep: failed to process pod", "pod", klog.KObj(pod))
+		}
 	}
 }

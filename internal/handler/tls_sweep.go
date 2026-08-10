@@ -59,7 +59,8 @@ func (h *handler) checkTLSSecret(secret *corev1.Secret, now time.Time, warnWindo
 	remaining := expiry.Sub(now)
 	cn := cert.Subject.CommonName
 
-	if remaining < 0 {
+	switch {
+	case remaining < 0:
 		h.signalEvent(&event.Signal{
 			Resource:  "secret",
 			PodName:   secret.Name,
@@ -70,7 +71,7 @@ func (h *handler) checkTLSSecret(secret *corev1.Secret, now time.Time, warnWindo
 			Severity:  "high",
 			Hint:      fmt.Sprintf("expired %v ago; CN=%s", (-remaining).Round(time.Hour), cn),
 		})
-	} else if remaining < warnWindow {
+	case remaining < warnWindow:
 		daysLeft := int(remaining.Hours() / 24)
 		severity := model.SeverityNormal
 		critical := h.config.TlsMonitor.CriticalThreshold
@@ -90,7 +91,7 @@ func (h *handler) checkTLSSecret(secret *corev1.Secret, now time.Time, warnWindo
 			Severity:  severity,
 			Hint:      fmt.Sprintf("expires in %dd (%s); CN=%s", daysLeft, expiry.Format("2006-01-02"), cn),
 		})
-	} else {
+	default:
 		h.correlator.ResolveByResource("secret", key)
 	}
 }

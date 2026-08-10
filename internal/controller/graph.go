@@ -18,6 +18,9 @@ func (c *Controller) addPodToGraph(pod *corev1.Pod) {
 	if pod.Spec.NodeName != "" {
 		c.graph.AddEdge("pod", ns, name, "node", "", pod.Spec.NodeName, "scheduled_on")
 	}
+	if pod.Spec.ServiceAccountName != "" {
+		c.graph.AddEdge("pod", ns, name, "serviceaccount", ns, pod.Spec.ServiceAccountName, "uses_sa")
+	}
 	for _, ref := range pod.OwnerReferences {
 		ownerKind := strings.ToLower(ref.Kind)
 		c.graph.AddEdge("pod", ns, name, ownerKind, ns, ref.Name, "owned_by")
@@ -101,6 +104,8 @@ func (c *Controller) buildGraph() {
 		c.addPodToGraph(pod)
 	}
 
+	c.buildResourceGraph()
+
 	klog.V(4).InfoS("dependency graph built from informer cache", "edges", len(c.graph.Edges()))
 }
 
@@ -148,10 +153,58 @@ func (c *Controller) pruneGraph() {
 		}
 	}
 
+	if saLister := c.serviceAccountLister; saLister != nil {
+		sas, err := saLister.List(labels.Everything())
+		if err != nil {
+			klog.ErrorS(err, "failed to list serviceaccounts for graph pruning")
+		} else {
+			for _, sa := range sas {
+				active["serviceaccount/"+sa.Namespace+"/"+sa.Name] = true
+			}
+		}
+	}
+
+	if scLister := c.storageClassLister; scLister != nil {
+		scs, err := scLister.List(labels.Everything())
+		if err != nil {
+			klog.ErrorS(err, "failed to list storageclasses for graph pruning")
+		} else {
+			for _, sc := range scs {
+				active["storageclass//"+sc.Name] = true
+			}
+		}
+	}
+
+	if pvLister := c.pvLister; pvLister != nil {
+		pvs, err := pvLister.List(labels.Everything())
+		if err != nil {
+			klog.ErrorS(err, "failed to list persistentvolumes for graph pruning")
+		} else {
+			for _, pv := range pvs {
+				active["persistentvolume//"+pv.Name] = true
+			}
+		}
+	}
+
+	if pvcLister := c.pvcLister; pvcLister != nil {
+		pvcs, err := pvcLister.List(labels.Everything())
+		if err != nil {
+			klog.ErrorS(err, "failed to list pvcs for graph pruning")
+		} else {
+			for _, pvc := range pvcs {
+				active["pvc/"+pvc.Namespace+"/"+pvc.Name] = true
+			}
+		}
+	}
+
 	pre := len(c.graph.Edges())
 	c.graph.Prune("configmap", active)
 	c.graph.Prune("secret", active)
 	c.graph.Prune("service", active)
+	c.graph.Prune("serviceaccount", active)
+	c.graph.Prune("storageclass", active)
+	c.graph.Prune("persistentvolume", active)
+	c.graph.Prune("pvc", active)
 	post := len(c.graph.Edges())
 	if pruned := pre - post; pruned > 0 {
 		klog.V(4).InfoS("graph pruned", "removed", pruned, "remaining", post)

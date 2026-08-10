@@ -141,6 +141,7 @@ func TestGetCompiledIgnorePatterns(t *testing.T) {
 	compiledPatterns, err = getCompiledIgnorePatterns(invalidPatterns)
 
 	assert.NotNil(err)
+	assert.Empty(compiledPatterns)
 }
 
 func TestConfigEnvInterpolation(t *testing.T) {
