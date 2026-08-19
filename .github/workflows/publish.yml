@@ -29,6 +29,9 @@ jobs:
         uses: docker/metadata-action@v6
         with:
           images: ghcr.io/abahmed/kwatch
+          tags: |
+            type=semver,pattern={{raw}}
+            type=raw,value=latest,enable=${{ github.event.release.prerelease != true }}
       - name: Build and push Docker image
         uses: docker/build-push-action@v7
         with:
@@ -37,4 +40,7 @@ jobs:
           push: true
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
-          build-args: RELEASE_VERSION=${{ steps.meta.outputs.version }}
+          build-args: |
+            RELEASE_VERSION=${{ steps.meta.outputs.version }}
+            GIT_COMMIT=${{ github.sha }}
+            BUILD_DATE=${{ github.event.release.published_at }}

@@ -9,7 +9,7 @@
   <a href="https://pkg.go.dev/github.com/abahmed/kwatch">
     <img src="https://pkg.go.dev/badge/github.com/abahmed/kwatch" />
   </a>
-  <a href="https://github.com/abahmed/kwatch/actions/workflows/check.yaml">
+  <a href="https://github.com/abahmed/kwatch/actions/workflows/check.yml">
     <img src="https://github.com/abahmed/kwatch/workflows/Check/badge.svg?branch=main" />
   </a>
   <a href="https://goreportcard.com/report/github.com/abahmed/kwatch">
@@ -578,6 +578,18 @@ alert:
 | `alert.email.host` | 🖥️ SMTP host |
 | `alert.email.port` | 🔌 SMTP port |
 | `alert.email.to` | 📥 Receiver email |
+
+### 💬 LINE
+
+| Parameter | What it does |
+|:---|---|
+| `alert.line.token` | 🔑 LINE Notify access token |
+
+```yaml
+alert:
+  line:
+    token: "YOUR_LINE_NOTIFY_TOKEN"
+```
 
 ### 🚨 PagerDuty
 

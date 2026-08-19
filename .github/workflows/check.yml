@@ -36,3 +36,28 @@ jobs:
       with:
         token: ${{ secrets.CODECOV_TOKEN }}
         fail_ci_if_error: false
+
+  chart:
+    name: Chart
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v7
+    - name: Detect chart changes
+      id: changes
+      uses: dorny/paths-filter@v3
+      with:
+        filters: |
+          chart:
+            - 'deploy/chart/**'
+    - name: Install Helm
+      if: steps.changes.outputs.chart == 'true'
+      uses: azure/setup-helm@v4
+    - name: Lint chart
+      if: steps.changes.outputs.chart == 'true'
+      run: helm lint deploy/chart
+    - name: Template tests
+      if: steps.changes.outputs.chart == 'true'
+      run: ./deploy/chart/test_helm.sh
