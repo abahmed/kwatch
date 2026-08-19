@@ -222,22 +222,8 @@ type Config struct {
 	// When a reason matches, the URL is appended to the incident hint.
 	Runbooks map[string]string `yaml:"runbooks"`
 
-	// LLM configures the self-hosted AI enrichment sidecar.
-	LLM LLMConfig `yaml:"llm"`
-
 	// AuditLog configures structured JSON audit logging for all incidents.
 	AuditLog AuditLogConfig `yaml:"auditLog"`
-}
-
-// LLMConfig controls the optional AI enrichment sidecar.
-// When enabled, a kwatch-llm sidecar is deployed alongside kwatch in the pod.
-// The model (kwatch-triage), endpoint (localhost:8080), redaction, and timeouts
-// are baked into the sidecar image and code constants — no other knobs.
-type LLMConfig struct {
-	// Enabled toggles the AI enrichment feature. Default false.
-	// When true, the kwatch-llm sidecar container is rendered in the pod spec
-	// and kwatch enriches incidents with AI root-cause analysis.
-	Enabled bool `yaml:"enabled"`
 }
 
 // KnownProviders is the canonical set of known alert provider names.

@@ -31,9 +31,6 @@ func (sr *SlackRenderer) RenderCreate(r *Report) string {
 	if r.Diagnosis != nil && r.Diagnosis.Pattern != "" {
 		s = append(s, "Pattern: "+r.Diagnosis.Pattern)
 	}
-	if r.Diagnosis != nil && r.Diagnosis.Analysis != "" {
-		s = append(s, "🤖 "+r.Diagnosis.Analysis)
-	}
 
 	s = append(s, sr.renderTypeSpecific(r))
 	s = append(s, sr.renderSuppressed(r))

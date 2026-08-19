@@ -12,95 +12,10 @@ import (
 	"k8s.io/klog/v2"
 
 	"github.com/abahmed/kwatch/internal/config"
-	"github.com/abahmed/kwatch/internal/constant"
 	"github.com/abahmed/kwatch/internal/event"
 	"github.com/abahmed/kwatch/internal/model"
 	"github.com/abahmed/kwatch/internal/ratelimit"
 )
-
-var obviousReasons = map[string]bool{
-	// Container resource limits
-	constant.ReasonOOMKilled:    true,
-	constant.ReasonOOMRepeating: true,
-
-	// Container runtime errors — self-evident from message
-	constant.ReasonContainerCannotRun:   true,
-	constant.ReasonCreateContainerError: true,
-
-	// Image pull / registry
-	constant.ReasonImagePullBackOff:    true,
-	constant.ReasonErrImagePull:        true,
-	constant.ReasonImageInspectError:   true,
-	constant.ReasonRegistryUnavailable: true,
-	constant.ReasonInvalidImageName:    true,
-	constant.ReasonCreateConfigError:   true,
-
-	// Probe failures — app not responding, self-evident
-	constant.ReasonLivenessProbeFailed:  true,
-	constant.ReasonReadinessProbeFailed: true,
-	constant.ReasonStartupProbeFailed:   true,
-	constant.ReasonProbeError:           true,
-
-	// Lifecycle hooks — command/config error, self-evident
-	constant.ReasonPostStartHookError: true,
-	constant.ReasonPreStopHookError:   true,
-
-	// Node-level conditions (infrastructure, not application)
-	constant.ReasonNodeNotReady:         true,
-	constant.ReasonMemoryPressure:       true,
-	constant.ReasonDiskPressure:         true,
-	constant.ReasonPIDPressure:          true,
-	constant.ReasonNetworkUnavailable:   true,
-	constant.ReasonContainerStatusKnown: true,
-
-	// Scheduling / placement
-	constant.ReasonUnschedulable: true,
-	constant.ReasonPodPending:    true,
-	constant.ReasonNodeAffinity:  true,
-
-	// Kubelet backoff — self-evident (container crashing, retrying)
-	constant.ReasonBackOff: true,
-
-	// Eviction / preemption — DisruptionFilter catches most, but
-	// container termination events can fire before the pod's
-	// Failed/Evicted status is visible in the informer cache.
-	constant.ReasonEvicted:    true,
-	constant.ReasonPreempting: true,
-
-	// Horizontal Pod Autoscaler
-	constant.ReasonHPAMaxedOut:     true,
-	constant.ReasonHPAScalingError: true,
-
-	// Rollout / DaemonSet
-	constant.ReasonProgressDeadlineExceeded: true,
-	constant.ReasonDaemonSetUnavailable:     true,
-	constant.ReasonStsUnavailable:           true,
-	constant.ReasonPdbViolation:             true,
-	constant.ReasonNodeResourceHigh:         true,
-	constant.ReasonNodeResourceCritical:     true,
-
-	// Jobs / CronJobs
-	constant.ReasonJobSuspended:        true,
-	constant.ReasonCronJobSuspended:    true,
-	constant.ReasonCronJobNotScheduled: true,
-
-	// Service / endpoint issues (self-explanatory from reason alone)
-	constant.ReasonServiceNoEndpoints: true,
-
-	// TLS certificates
-	constant.ReasonTLSCertExpired:      true,
-	constant.ReasonTLSCertExpiringSoon: true,
-
-	// Startup summary (not a real incident)
-	constant.ReasonPreExistingAtStartup: true,
-
-	// Context deadline / timeout — self-evident
-	constant.ReasonDeadlineExceeded: true,
-}
-
-func isObviousReason(reason string) bool {
-	return obviousReasons[reason]
-}
 
 func extractRoutes(cfg map[string]interface{}) []config.AlertRoute {
 	if r, ok := cfg["routes"]; ok {

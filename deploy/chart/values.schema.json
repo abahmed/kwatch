@@ -133,14 +133,6 @@
           "array"
         ]
       },
-      "llm": {
-        "type": "object",
-        "description": "LLM sidecar deployment configuration",
-        "properties": {
-          "repository": { "type": "string", "description": "model image repository" },
-          "tag": { "type": "string", "description": "model image version tag" }
-        }
-      },
       "tolerations": {
         "type": [
           "string",
@@ -350,13 +342,6 @@
                 "nodeReasons": { "type": "array", "items": { "type": "string" } },
                 "nodeMessages": { "type": "array", "items": { "type": "string" } }
               }
-            }
-          },
-          "llm": {
-            "type": "object",
-            "description": "AI enrichment configuration",
-            "properties": {
-              "enabled": { "type": "boolean", "description": "Enable the LLM sidecar for AI root-cause analysis (default false)" }
             }
           },
           "auditLog": {

@@ -16,8 +16,6 @@ keywords:
   - monitoring
   - crash-reporting
   - event-notifier
-  - ai
-  - llm
 maintainers:
   - email: a.ahmed1026@gmail.com
     name: Abdelrahman Ahmed
@@ -34,9 +32,7 @@ annotations:
   artifacthub.io/license: MIT
   artifacthub.io/changes: |
     - kind: added
-      description: "AI incident enrichment (opt-in, default-off): self-hosted LLM sidecar (MiniCPM5-1B via llama.cpp) appends likely cause to alerts — no data leaves the cluster, deterministic hints remain the backbone."
-    - kind: added
-      description: "Cheap-depth enhancements (LLM-free): signature-based hints, correlation surfaces affected-pod count and node root-cause, runbook links, investigate commands, and dashboard deep-links."
+      description: "Cheap-depth enhancements: signature-based hints, correlation surfaces affected-pod count and node root-cause, runbook links, investigate commands, and dashboard deep-links."
     - kind: added
       description: "GOMEMLIMIT env on kwatch container for improved OOM protection."
 

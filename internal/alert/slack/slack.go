@@ -409,10 +409,6 @@ func buildIncidentBlocks(inc *model.Incident, appCfg *config.App) *slackClient.B
 		blocks = append(blocks, markdownSection("💡 "+inc.Hint))
 	}
 
-	if inc.Analysis != "" {
-		blocks = append(blocks, markdownSection("*🤖 Likely cause:* "+inc.Analysis))
-	}
-
 	if inc.IncludeEvents {
 		events := strings.TrimSpace(inc.Events)
 		if len(events) > 0 {

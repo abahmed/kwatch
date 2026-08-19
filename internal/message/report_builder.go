@@ -110,8 +110,7 @@ func (rb *ReportBuilder) populateState(r *Report, inc *model.Incident) {
 
 func (rb *ReportBuilder) populateDiagnosis(r *Report, inc *model.Incident, ins *insight.Insight) {
 	d := &DiagnosisSection{
-		Hint:     inc.Hint,
-		Analysis: inc.Analysis,
+		Hint: inc.Hint,
 	}
 	if ins != nil {
 		d.Cause = ins.Cause

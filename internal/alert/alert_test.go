@@ -4,10 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"net/http"
-	"net/http/httptest"
 	"strings"
-	"sync"
 	"testing"
 	"text/template"
 	"time"
@@ -17,7 +14,6 @@ import (
 
 	"github.com/abahmed/kwatch/internal/config"
 	"github.com/abahmed/kwatch/internal/event"
-	"github.com/abahmed/kwatch/internal/llm"
 	"github.com/abahmed/kwatch/internal/model"
 )
 
@@ -790,51 +786,9 @@ func (p *fakeRecordingEventProvider) SendEvent(evt *event.Event) error {
 func (p *fakeRecordingEventProvider) Name() string       { return "Recording" }
 func (p *fakeRecordingEventProvider) UsesEventDelivery() {}
 
-// countingProvider signals each delivery so tests can synchronize without
-// poking shutdown internals.
-type countingProvider struct{ delivered chan struct{} }
-
-func (p *countingProvider) Name() string                 { return "Slack" }
-func (p *countingProvider) SendMessage(string) error     { p.delivered <- struct{}{}; return nil }
-func (p *countingProvider) SendEvent(*event.Event) error { return nil }
-
-// P2: in-flight enrichment must finish its fanOut on OPEN provider channels
-// during shutdown — no send-on-closed panic, and the alert is still delivered.
-func TestShutdownNoPanicWithInflightEnrichment(t *testing.T) {
-	// Stub LLM sidecar: the handler blocks long enough for shutdown to start
-	// closing channels, then returns (causing a JSON decode failure in
-	// Analyze — the enrichment completes with error and fans out).
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		time.Sleep(300 * time.Millisecond)
-	}))
-	defer srv.Close()
-
-	delivered := make(chan struct{}, 8)
-	am := &AlertManager{}
-	am.entries = []providerEntry{{
-		provider: &countingProvider{delivered: delivered},
-		retry:    retryConfig{maxAttempts: 1},
-		ch:       make(chan deliverJob, channelCap),
-	}}
-	am.llm = llm.New(srv.URL)
-	am.enrichCh = make(chan deliverJob, 1)
-
-	ctx, cancel := context.WithCancel(context.Background())
-	am.Start(ctx)
-
-	am.NotifyIncident(&model.Incident{Key: "k", Name: "n", Reason: "OOMKilled"}, model.ActionCreate, nil)
-	time.Sleep(50 * time.Millisecond) // let the enrich worker enter Analyze
-	cancel()                          // triggers shutdown (enrichCh closed)
-
-	select {
-	case <-delivered: // alert delivered even though enrichment was cut short
-	case <-time.After(2 * time.Second):
-		t.Fatal("incident was not delivered after shutdown")
-	}
-}
-
-// P2 (second case): a late NotifyIncident after shutdown closed enrichCh must
-// be a no-op, not a send-on-closed panic (Fix 2e).
+// A late NotifyIncident after shutdown must be a no-op, not a send-on-closed
+// panic: shutdown closes the provider channels and fanOut must never send on
+// a closed channel (Fix 2e).
 func TestNotifyIncidentAfterShutdownIsNoop(t *testing.T) {
 	am := &AlertManager{}
 	am.entries = []providerEntry{{
@@ -842,42 +796,13 @@ func TestNotifyIncidentAfterShutdownIsNoop(t *testing.T) {
 		retry:    retryConfig{maxAttempts: 1},
 		ch:       make(chan deliverJob, channelCap),
 	}}
-	am.llm = llm.New("http://127.0.0.1:0")
-	am.enrichCh = make(chan deliverJob, 1)
 
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 	am.Start(ctx)
-	am.shutdown() // deterministic: closes enrichCh + provider channels, waits
+	am.shutdown() // deterministic: closes provider channels, waits
 
-	// enrichCh is now closed; without Fix 2e this would panic.
 	am.NotifyIncident(&model.Incident{Key: "k", Name: "n", Reason: "OOMKilled"}, model.ActionCreate, nil)
-}
-
-// P3: the breaker is a true single-probe half-open (Fix 3). Tested directly —
-// record/allow take an explicit `now`; enrichOne's time.Now() is not injectable.
-func TestBreakerSingleProbe(t *testing.T) {
-	var b breaker
-	t0 := time.Now()
-
-	b.record(t0, false)
-	b.record(t0, false)
-	b.record(t0, false) // threshold reached → open
-	assert.False(t, b.allow(t0))
-	assert.False(t, b.allow(t0.Add(breakerCooldown-time.Second)))
-
-	probeAt := t0.Add(breakerCooldown + time.Second)
-	assert.True(t, b.allow(probeAt)) // exactly one probe after cooldown
-
-	b.record(probeAt, false) // failed probe re-opens for a full cooldown
-	assert.False(t, b.allow(probeAt.Add(time.Second)))
-	assert.False(t, b.allow(probeAt.Add(breakerCooldown-time.Second)))
-
-	closeAt := probeAt.Add(breakerCooldown + time.Second)
-	assert.True(t, b.allow(closeAt))
-	b.record(closeAt, true) // successful probe closes
-	assert.True(t, b.allow(closeAt))
-	assert.Equal(t, 0, b.fails)
 }
 
 // Saturation: when a provider channel is full, fanOut drops the oldest queued
@@ -908,79 +833,4 @@ func TestFanOutSaturatedQueueRecordsDeadLetter(t *testing.T) {
 	assert.Len(t, dlList, 1)
 	assert.Equal(t, "stale-0", dlList[0].Key)
 	assert.Contains(t, dlList[0].Error, "queue saturated")
-}
-
-// orderingProvider records the (action, key) delivery sequence.
-type orderingProvider struct {
-	mu  sync.Mutex
-	seq []string
-}
-
-func (p *orderingProvider) Name() string                 { return "Ordering" }
-func (p *orderingProvider) SendMessage(string) error     { return nil }
-func (p *orderingProvider) SendEvent(*event.Event) error { return nil }
-func (p *orderingProvider) SendIncident(inc *model.Incident, action model.IncidentAction) error {
-	p.mu.Lock()
-	p.seq = append(p.seq, fmt.Sprintf("%s-%s", action, inc.Key))
-	p.mu.Unlock()
-	return nil
-}
-
-// A create that is still in-flight behind LLM enrichment must not be overtaken
-// by an update for the same incident — both are routed through the single FIFO
-// enrichment queue so the provider sees create-before-update.
-func TestUpdateDoesNotOvertakeCreateBehindLLM(t *testing.T) {
-	release := make(chan struct{})
-	var mu sync.Mutex
-	var calls int
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		mu.Lock()
-		first := calls == 0
-		calls++
-		mu.Unlock()
-		if first {
-			<-release
-		}
-		w.Header().Set("Content-Type", "application/json")
-		fmt.Fprint(w, `{"choices":[{"message":{"role":"assistant","content":"analysis text"}}]}`)
-	}))
-	defer srv.Close()
-
-	rec := &orderingProvider{}
-	am := &AlertManager{}
-	am.entries = []providerEntry{{
-		provider: rec,
-		retry:    retryConfig{maxAttempts: 1},
-		ch:       make(chan deliverJob, channelCap),
-	}}
-	am.llm = llm.New(srv.URL)
-	am.enrichCh = make(chan deliverJob, 1)
-
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
-	am.Start(ctx)
-
-	inc := &model.Incident{Key: "k", Name: "n", Reason: "CrashLoopBackOff"}
-	am.NotifyIncident(inc, model.ActionCreate, nil)
-	time.Sleep(50 * time.Millisecond) // worker enters Analyze (blocked)
-
-	am.NotifyIncident(inc, model.ActionUpdate, nil)
-	time.Sleep(50 * time.Millisecond)
-
-	rec.mu.Lock()
-	assert.Empty(t, rec.seq, "update must not overtake the in-flight create")
-	rec.mu.Unlock()
-
-	close(release) // let the create's LLM finish
-
-	require.Eventually(t, func() bool {
-		rec.mu.Lock()
-		defer rec.mu.Unlock()
-		return len(rec.seq) >= 2
-	}, 3*time.Second, 10*time.Millisecond)
-
-	rec.mu.Lock()
-	defer rec.mu.Unlock()
-	assert.Equal(t, "create-k", rec.seq[0])
-	assert.Equal(t, "update-k", rec.seq[1])
 }

@@ -26,7 +26,6 @@ func DefaultConfig() *Config {
 		Upgrader:                     Upgrader{DisableUpdateCheck: false},
 		HealthCheck:                  HealthCheck{Enabled: true, Port: 8060, Pprof: false, Diagnostics: false},
 		Inhibition:                   Inhibition{NodeSuppressesPods: true},
-		LLM:                          LLMConfig{Enabled: false},
 		ServiceMonitor:               ServiceMonitor{Enabled: true},
 		AdmissionWebhookMonitor:      AdmissionWebhookMonitor{Enabled: true},
 		ControlPlaneMonitor:          ControlPlaneMonitor{Enabled: true},

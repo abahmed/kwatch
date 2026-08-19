@@ -47,7 +47,6 @@ kwatch is like a **smart friend** for your Kubernetes cluster:
 
 - 💥 Something crashes → you get a message that says *why* (not just "pod is broken")
 - 🔇 Smart about noise — groups related issues into a single notification, ignores flapping
-- 🧠 Optional AI that reads the logs and tells you what's likely wrong
 - ⚡ Works in **under a minute** — just one command and a config file
 
 No Prometheus. No Grafana. No 50-step setup. Just alerts that **make sense**.
@@ -153,21 +152,6 @@ kwatch keeps its state in plain ConfigMaps in its own namespace — no database 
 
 ---
 
-## 🤖 AI-powered troubleshooting (optional, off by default)
-
-kwatch ships with **built-in AI** (runs inside your cluster — zero data leaves). It is disabled by default; set `enabled: true` to use it:
-
-```yaml
-llm:
-  enabled: false   # ❌ off by default!
-```
-
-When a crash happens, the AI reads the logs and tells you the **most likely cause** and **what to do next**. Like having a senior SRE on-call with you.
-
-> **📌 Architecture note:** AI is available for **linux/amd64** and **linux/arm64** only. It does not support `arm/v6` or `arm/v7` (the main kwatch image supports all four).
-
----
-
 ## ⚙️ Configuration (simple)
 
 ### 🔧 General
@@ -183,7 +167,6 @@ When a crash happens, the AI reads the logs and tells you the **most likely caus
 | `ignoreFailedGracefulShutdown` | ✅ Skip containers killed during graceful shutdown (default: true) |
 | `ignoreDisruptionTerminations` | ✅ Skip pods evicted during node drains (default: true) |
 | `runbooks` | 📚 Add links to your runbooks per error reason |
-| `llm.enabled` | 🤖 AI enrichment (default: false) |
 | `containerRestartThreshold` | Alert if a container restarts this many times (0 = off) |
 | `reportStartupBaseline` | 📋 Send one startup summary of pre-existing issues (default: true) |
 | `ignore*` fields | 🔕 Deprecated filters (`ignoreContainerNames`, `ignorePodNames`, `ignoreLogPatterns`, `ignoreContainerMessages`, `ignoreNodeReasons`, `ignoreNodeMessages`) — prefer `silences` below |
@@ -243,7 +226,7 @@ reasons:
 - `GET /healthz` — ✅ Liveness
 - `GET /readyz` — ✅ Readiness
 - `GET /health` — `{"status": "ok"}`
-- `GET /metrics` — 📊 Prometheus metrics (incidents, notifications, baseline, LLM counters)
+- `GET /metrics` — 📊 Prometheus metrics (incidents, notifications, baseline)
 - `GET /incidents` — 📋 All active incidents (requires `diagnostics: true`)
 - `POST /test-alert` — 📤 Send a test alert (requires `diagnostics: true`)
 - `GET /deadletters` — 💀 Recent delivery failures (requires `diagnostics: true`)

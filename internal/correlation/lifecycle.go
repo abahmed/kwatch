@@ -522,7 +522,7 @@ func (e *Engine) flushOneGroup(gk string, pg *pendingGroup, now time.Time) (tran
 }
 
 // buildGroupIncident assembles the synthetic incident for a flushed group,
-// copying rich data (logs, events, analysis, runbook) from the first member.
+// copying rich data (logs, events, runbook) from the first member.
 // Caller must hold e.mu.
 func (e *Engine) buildGroupIncident(gk string, pg *pendingGroup, active []groupEntry, now time.Time) *model.Incident {
 	summary := e.buildGroupSummary(active, pg.firstSeen)
@@ -573,7 +573,6 @@ func (e *Engine) carryGroupMemberData(groupInc, mem *model.Incident, summary str
 	groupInc.ContainerName = mem.ContainerName
 	groupInc.OwnerKind = mem.OwnerKind
 	groupInc.Runbook = mem.Runbook
-	groupInc.Analysis = mem.Analysis
 	groupInc.Image = mem.Image
 	groupInc.NodeName = mem.NodeName
 	groupInc.RestartCount = mem.RestartCount

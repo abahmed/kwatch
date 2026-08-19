@@ -31,9 +31,6 @@ func (dr *DiscordRenderer) RenderCreate(r *Report) string {
 	if r.Diagnosis != nil && r.Diagnosis.Pattern != "" {
 		s = append(s, "**Pattern:** "+r.Diagnosis.Pattern)
 	}
-	if r.Diagnosis != nil && r.Diagnosis.Analysis != "" {
-		s = append(s, "**🤖 Analysis:** "+r.Diagnosis.Analysis)
-	}
 
 	s = append(s, dr.renderTypeSpecific(r))
 	s = append(s, dr.renderSuppressed(r))

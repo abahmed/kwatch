@@ -32,9 +32,6 @@ func (pr *PlainTextRenderer) RenderCreate(r *Report) string {
 	if r.Diagnosis != nil && r.Diagnosis.Pattern != "" {
 		s = append(s, "Pattern: "+r.Diagnosis.Pattern)
 	}
-	if r.Diagnosis != nil && r.Diagnosis.Analysis != "" {
-		s = append(s, "Analysis: "+r.Diagnosis.Analysis)
-	}
 
 	s = append(s, pr.renderTypeSpecific(r))
 	s = append(s, pr.renderSuppressed(r))

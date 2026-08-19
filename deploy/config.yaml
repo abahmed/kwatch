@@ -175,10 +175,6 @@ data:
       enabled: <boolean>     # stream all incidents as JSON (default true)
       # output: "stdout"     # "stdout" or a file path (default "stdout")
 
-    # ── AI enrichment (self-hosted) ──────────────────────
-    llm:
-      enabled: <boolean>     # disabled by default; deploy kwatch-llm sidecar for RCA
-
     # ── Smart grouping ──────────────────────────────────
     # smart grouping: coalesces duplicate incidents with the same reason across
     # different workload owners within a time window into a single notification.

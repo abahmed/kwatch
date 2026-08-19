@@ -49,37 +49,3 @@ Selector labels
 app.kubernetes.io/name: {{ include "kwatch.name" . }}
 app.kubernetes.io/instance: {{ .Release.Name }}
 {{- end }}
-
-{{/*
-Shared LLM sidecar container spec used by both plain-container and native-sidecar forms.
-*/}}
-{{- define "kwatch.llmContainer" -}}
-image: "{{ .Values.llm.repository }}:{{ .Values.llm.tag }}"
-imagePullPolicy: IfNotPresent
-ports:
-  - name: llm
-    containerPort: 8080
-    protocol: TCP
-startupProbe:
-  httpGet: { path: /health, port: 8080 }
-  failureThreshold: 30
-  periodSeconds: 2
-readinessProbe:
-  httpGet: { path: /health, port: 8080 }
-  periodSeconds: 10
-livenessProbe:
-  httpGet: { path: /health, port: 8080 }
-  periodSeconds: 30
-  failureThreshold: 3
-resources:
-  requests: { cpu: "1000m", memory: "1Gi" }
-  limits:   { cpu: "1000m", memory: "1Gi" }
-securityContext:
-  runAsNonRoot: true
-  runAsUser: 1000
-  runAsGroup: 1000
-  allowPrivilegeEscalation: false
-  readOnlyRootFilesystem: false
-  capabilities: { drop: ["ALL"] }
-  seccompProfile: { type: RuntimeDefault }
-{{- end -}}

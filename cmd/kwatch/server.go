@@ -111,9 +111,6 @@ func runServer() int {
 	correlator := newCorrelator(cfg, baseline, am, auditLogger, graph, baselineCh)
 	restoreIncidents(ctx, stateMgr, correlator)
 
-	am.SetAnalysisWriter(func(key, analysis string) {
-		correlator.SetAnalysis(model.IncidentKey(key), analysis)
-	})
 	correlator.SetAuditLogger(auditLogger)
 
 	healthServer.SetIncidentAPI(correlator)
@@ -159,14 +156,13 @@ func runServer() int {
 	return serve(ctx, deps)
 }
 
-// configureAlertManager applies silences, templates, LLM, and starts delivery.
+// configureAlertManager applies silences, templates, and starts delivery.
 func configureAlertManager(ctx context.Context, cfg *config.Config, am *alert.AlertManager) {
 	am.SetSilences(cfg.Silences)
 	am.SetTemplates(cfg.Templates)
 	if cfg.MaxRecentLogLines > 0 {
 		am.SetMaxLogLines(int(cfg.MaxRecentLogLines))
 	}
-	am.SetLLM(cfg.LLM)
 	am.Start(ctx)
 }
 

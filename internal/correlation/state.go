@@ -94,14 +94,6 @@ func (e *Engine) removeIncidentFromNamespaceIndex(inc *model.Incident) {
 	}
 }
 
-func (e *Engine) SetAnalysis(key model.IncidentKey, analysis string) {
-	e.mu.Lock()
-	defer e.mu.Unlock()
-	if inc, ok := e.state[key]; ok {
-		inc.Analysis = analysis
-	}
-}
-
 func (e *Engine) SetDeployLister(l appsv1lister.DeploymentLister) {
 	e.mu.Lock()
 	defer e.mu.Unlock()

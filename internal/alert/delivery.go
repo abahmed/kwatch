@@ -3,14 +3,11 @@ package alert
 import (
 	"context"
 	"fmt"
-	"strings"
 	"time"
-	"unicode/utf8"
 
 	"k8s.io/klog/v2"
 
 	"github.com/abahmed/kwatch/internal/insight"
-	"github.com/abahmed/kwatch/internal/llm"
 	"github.com/abahmed/kwatch/internal/metrics"
 	"github.com/abahmed/kwatch/internal/model"
 )
@@ -34,16 +31,6 @@ const dlqCap = 100
 
 const defaultMaxBackoff = 30 * time.Second
 
-const (
-	breakerThreshold = 3
-	breakerCooldown  = 60 * time.Second
-	maxAnalysisChars = 600
-)
-
-// localEndpoint is the in-pod sidecar address (loopback only).
-
-const localEndpoint = "http://localhost:8080"
-
 func (a *AlertManager) recordDeadLetter(entry *providerEntry, inc *model.Incident, action model.IncidentAction, err error) {
 	a.dlqMu.Lock()
 	defer a.dlqMu.Unlock()
@@ -55,68 +42,6 @@ func (a *AlertManager) recordDeadLetter(entry *providerEntry, inc *model.Inciden
 		Timestamp: time.Now(),
 	}
 	a.dlqHead = (a.dlqHead + 1) % dlqCap
-}
-
-// enrichOne runs LLM enrichment for a single job, then fans out.
-// Always fans out, even on panic (best-effort enrichment).
-
-func (a *AlertManager) enrichOne(ctx context.Context, job deliverJob) {
-	defer func() {
-		a.mu.Lock()
-		a.fanOut(job)
-		a.mu.Unlock()
-	}()
-	defer func() {
-		if r := recover(); r != nil {
-			metrics.Default.LLMEnrichFailed.Add(1)
-			klog.ErrorS(fmt.Errorf("%v", r), "llm enrichment panic recovered", "key", job.inc.Key)
-		}
-	}()
-	// Creates and updates share the single FIFO enrich channel so an update
-	// can never overtake its own create. Incidents that already carry analysis
-	// (an earlier create/update succeeded) and obvious reasons skip the LLM
-	// call entirely — they only pass through the queue for ordering.
-	if job.inc.Analysis != "" || isObviousReason(job.inc.Reason) {
-		return
-	}
-	if !a.brk.allow(time.Now()) {
-		metrics.Default.LLMEnrichSkipped.Add(1)
-		return
-	}
-	cctx, cancel := context.WithTimeout(ctx, llm.RequestTimeout)
-	out, err := a.llm.Analyze(cctx, job.inc)
-	cancel()
-	a.brk.record(time.Now(), err == nil)
-	metrics.Default.LLMEnrichTotal.Add(1)
-	if err != nil {
-		metrics.Default.LLMEnrichFailed.Add(1)
-		klog.V(2).InfoS("llm enrichment skipped", "key", job.inc.Key, "error", err)
-	} else if s := sanitizeAnalysis(out); s != "" {
-		job.inc.Analysis = s
-		if w := a.analysisWriter; w != nil {
-			w(string(job.inc.Key), s)
-		}
-	}
-}
-
-func sanitizeAnalysis(s string) string {
-	s = strings.Map(func(r rune) rune {
-		if r == '\n' || r == '\t' {
-			return r
-		}
-		if r < 0x20 || r == 0x7f {
-			return -1
-		}
-		return r
-	}, strings.TrimSpace(s))
-	if len(s) > maxAnalysisChars {
-		cut := maxAnalysisChars
-		for cut > 0 && !utf8.RuneStart(s[cut]) {
-			cut--
-		}
-		s = s[:cut] + "…"
-	}
-	return s
 }
 
 // deliverOne handles the full send+retry for a single (entry, incident) pair.

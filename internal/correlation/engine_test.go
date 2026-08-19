@@ -2862,20 +2862,6 @@ func TestCountActiveNodeIncidents(t *testing.T) {
 	assert.Equal(t, 0, e2.CountActiveNodeIncidents())
 }
 
-func TestSetAnalysis(t *testing.T) {
-	e := newTestEngine()
-	ev := event.Event{PodName: "p1", Namespace: "ns", Reason: "CrashLoopBackOff"}
-	inc, _ := e.Process(ev, "dep1", nil)
-
-	e.SetAnalysis(inc.Key, "root cause found")
-	e.mu.Lock()
-	assert.Equal(t, "root cause found", e.state[inc.Key].Analysis)
-	e.mu.Unlock()
-
-	// No-op for non-existent key
-	e.SetAnalysis("nonexistent", "should not panic")
-}
-
 func TestBuildNodeSummary(t *testing.T) {
 	e := newTestEngine()
 	entries := []groupEntry{

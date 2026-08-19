@@ -66,7 +66,6 @@ type IncidentView struct {
 	FirstSeen time.Time     `json:"firstSeen"`
 	LastSeen  time.Time     `json:"lastSeen"`
 	Hint      string        `json:"hint,omitempty"`
-	Analysis  string        `json:"analysis,omitempty"`
 }
 
 type Incident struct {
@@ -95,7 +94,6 @@ type Incident struct {
 	Image                  string
 	RestartCount           int
 	Hint                   string
-	Analysis               string
 	Runbook                string
 	Logs                   string
 	Events                 string

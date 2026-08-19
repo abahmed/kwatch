@@ -311,7 +311,7 @@ func (h *handler) buildContainerHint(ctx *filter.Context) string {
 		hint = ctx.Container.Msg + " — " + hint
 	}
 
-	// Smart diagnostics for obvious reasons (no LLM needed).
+	// Smart diagnostics with actionable fix hints for well-known reasons.
 	if (reason == constant.ReasonImagePullBackOff || reason == constant.ReasonErrImagePull) && ctx.Pod != nil {
 		hasSecrets := len(ctx.Pod.Spec.ImagePullSecrets) > 0
 

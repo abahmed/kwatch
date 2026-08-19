@@ -14,30 +14,8 @@ import (
 	"github.com/abahmed/kwatch/internal/constant"
 	"github.com/abahmed/kwatch/internal/event"
 	"github.com/abahmed/kwatch/internal/insight"
-	"github.com/abahmed/kwatch/internal/llm"
 	"github.com/abahmed/kwatch/internal/model"
 )
-
-type breaker struct {
-	fails     int
-	openUntil time.Time
-}
-
-func (b *breaker) allow(now time.Time) bool {
-	return now.After(b.openUntil)
-}
-
-func (b *breaker) record(now time.Time, ok bool) {
-	if ok {
-		b.fails = 0
-		b.openUntil = time.Time{}
-		return
-	}
-	b.fails++
-	if b.fails >= breakerThreshold {
-		b.openUntil = now.Add(breakerCooldown)
-	}
-}
 
 type providerEntry struct {
 	provider      Provider
@@ -61,18 +39,13 @@ type AlertManager struct {
 	mu          sync.Mutex
 	cfgMu       sync.RWMutex
 	providerWg  sync.WaitGroup
-	enrichWg    sync.WaitGroup
 	dlqMu       sync.Mutex
 	dlqRing     [dlqCap]DeadLetterEntry
 	dlqHead     int
 
-	llm      *llm.Client
-	enrichCh chan deliverJob
-	brk      breaker
-	done     chan struct{}
+	done chan struct{}
 
-	analysisWriter func(key, analysis string)
-	ctx            context.Context
+	ctx context.Context
 }
 
 func (a *AlertManager) SetMaxLogLines(n int) {
@@ -81,18 +54,6 @@ func (a *AlertManager) SetMaxLogLines(n int) {
 		a.maxLogLines = n
 		a.cfgMu.Unlock()
 	}
-}
-
-func (a *AlertManager) SetAnalysisWriter(fn func(key, analysis string)) {
-	a.analysisWriter = fn
-}
-
-func (a *AlertManager) SetLLM(cfg config.LLMConfig) {
-	if !cfg.Enabled {
-		return
-	}
-	a.llm = llm.New(localEndpoint)
-	a.enrichCh = make(chan deliverJob, 8)
 }
 
 func (a *AlertManager) SetTemplates(tpl map[string]string) {
@@ -314,29 +275,6 @@ func (a *AlertManager) NotifyIncident(inc *model.Incident, action model.Incident
 	}
 	job := deliverJob{inc: snap, action: action, insight: ins}
 
-	if a.llm != nil && !isObviousReason(inc.Reason) &&
-		(action == model.ActionCreate || action == model.ActionUpdate) {
-		a.mu.Lock()
-		enqueued := false
-		if !a.stopped {
-			select {
-			case a.enrichCh <- job:
-				enqueued = true
-			default:
-			}
-		}
-		a.mu.Unlock()
-		if enqueued {
-			return
-		}
-		a.mu.Lock()
-		stopped := a.stopped
-		if !stopped {
-			a.fanOut(job)
-		}
-		a.mu.Unlock()
-		return
-	}
 	a.mu.Lock()
 	stopped := a.stopped
 	if !stopped {
@@ -390,16 +328,6 @@ func (a *AlertManager) Start(ctx context.Context) {
 			}
 		}()
 	}
-	// Launch the enrich worker if LLM is enabled.
-	if a.llm != nil {
-		a.enrichWg.Add(1)
-		go func() {
-			defer a.enrichWg.Done()
-			for job := range a.enrichCh {
-				a.enrichOne(ctx, job)
-			}
-		}()
-	}
 	go func() {
 		<-ctx.Done()
 		a.shutdown()
@@ -419,13 +347,7 @@ func (a *AlertManager) shutdown() {
 	copy(entries, a.entries)
 	a.mu.Unlock()
 
-	// 1) stop new enrich work and let the in-flight enrichment finish its
-	//    deferred fanOut while provider channels are STILL OPEN.
-	if a.enrichCh != nil {
-		close(a.enrichCh)
-		a.enrichWg.Wait()
-	}
-	// 2) close provider channels under a.mu so fanOut (also under a.mu) never
+	// 1) close provider channels under a.mu so fanOut (also under a.mu) never
 	//    sends on a closed channel.
 	a.mu.Lock()
 	for i := range entries {
@@ -439,7 +361,7 @@ func (a *AlertManager) shutdown() {
 }
 
 // Done returns a channel that is closed when the AlertManager has fully
-// drained and shut down (all provider workers and enrichment finished).
+// drained and shut down (all provider workers finished).
 
 func (a *AlertManager) Done() <-chan struct{} {
 	a.mu.Lock()
