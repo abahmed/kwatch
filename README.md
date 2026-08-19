@@ -12,9 +12,6 @@
   <a href="https://github.com/abahmed/kwatch/actions/workflows/check.yml">
     <img src="https://github.com/abahmed/kwatch/workflows/Check/badge.svg?branch=main" />
   </a>
-  <a href="https://goreportcard.com/report/github.com/abahmed/kwatch">
-    <img src="https://goreportcard.com/badge/github.com/abahmed/kwatch" />
-  </a>
   <a href="https://codecov.io/gh/abahmed/kwatch">
     <img src="https://codecov.io/gh/abahmed/kwatch/branch/main/graph/badge.svg?token=ZMCU75JJO7"/>
   </a>
@@ -34,6 +31,8 @@
     <img src="https://img.shields.io/discord/911647396918870036?label=Discord&logo=discord">
   </a>
 </p>
+
+> **🚧 Unreleased** — documents the **v0.11.0-rc** dev build. Latest stable is **v0.10.5** (every install snippet below already uses it). Removed automatically at release.
 
 > **👋 New to Kubernetes? No problem.**  
 > kwatch watches your cluster 24/7. When something fails, it tells you **what broke and why** — with the error reason, diagnostic hints, logs, and events — straight to your team chat.  
@@ -1202,6 +1201,7 @@ you something broke **right now**. ⏰
 + ⭐ [Give us a star](https://github.com/abahmed/kwatch/stargazers) — it really helps!
 + 💡 [Suggest features](https://github.com/abahmed/kwatch/issues)
 + 🐛 [Report bugs](https://github.com/abahmed/kwatch/issues)
++ 🔖 How versioning and releases work — see [RELEASES.md](./RELEASES.md)
 
 ## 🚀 Who uses kwatch?
 

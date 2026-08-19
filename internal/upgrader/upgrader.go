@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"net/http"
 	"os"
+	"strings"
 	"time"
 
 	"github.com/google/go-github/v41/github"
@@ -73,6 +74,11 @@ func (u *Upgrader) CheckUpdates(ctx context.Context) {
 		return
 	}
 
+	if u.isPrerelease(version.Short()) {
+		klog.Infof("prerelease build (%s), skipping update check", version.Short())
+		return
+	}
+
 	u.checkRelease(ctx)
 
 	ticker := time.NewTicker(24 * time.Hour)
@@ -87,6 +93,13 @@ func (u *Upgrader) CheckUpdates(ctx context.Context) {
 			u.checkRelease(ctx)
 		}
 	}
+}
+
+// isPrerelease reports whether the baked version string denotes a prerelease
+// (e.g. v0.11.0-rc.1). RC builds opt into the dev channel, so their users are
+// never nagged with notices for the latest stable release.
+func (u *Upgrader) isPrerelease(version string) bool {
+	return strings.Contains(version, "-rc")
 }
 
 func (u *Upgrader) checkRelease(ctx context.Context) {

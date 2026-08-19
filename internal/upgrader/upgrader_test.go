@@ -109,6 +109,17 @@ func TestVersionComparison(t *testing.T) {
 	assert.NotEmpty(currentVersion)
 }
 
+func TestIsPrerelease(t *testing.T) {
+	assert := assert.New(t)
+
+	u := &Upgrader{}
+	assert.True(u.isPrerelease("v0.11.0-rc.1"))
+	assert.True(u.isPrerelease("v0.11.0-rc.17"))
+	assert.False(u.isPrerelease("v0.10.5"))
+	assert.False(u.isPrerelease("v0.11.0"))
+	assert.False(u.isPrerelease("dev"))
+}
+
 func TestUpgraderWithDisabledConfig(t *testing.T) {
 	assert := assert.New(t)
 

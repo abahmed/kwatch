@@ -139,6 +139,42 @@ jobs:
           See the [full diff]($GITHUB_SERVER_URL/$GITHUB_REPOSITORY/compare/$PREV...$VERSION) since \`$PREV\`."
           echo "$BODY" > /tmp/release-notes.md
 
+      - name: Bump chart and README versions
+        id: bump
+        if: ${{ inputs.command == 'stable' || inputs.command == 'patch' }}
+        env:
+          VERSION: ${{ steps.meta.outputs.version }}
+        run: |
+          set -euo pipefail
+
+          CHART_VER=$(echo "$VERSION" | sed -E 's/^v//')
+          export VERSION CHART_VER
+          perl -pi -e 's/^version: .*/version: "$ENV{CHART_VER}"/' deploy/chart/Chart.yaml
+          perl -pi -e 's/^appVersion: .*/appVersion: "$ENV{VERSION}"/' deploy/chart/Chart.yaml
+          perl -pi -e 's/--version [0-9]+\.[0-9]+\.[0-9]+/--version $ENV{CHART_VER}/' README.md deploy/chart/README.md
+          perl -pi -e 's#kwatch/v[0-9]+\.[0-9]+\.[0-9]+/#kwatch/$ENV{VERSION}/#g' README.md
+          perl -pi -e 's#image: ghcr\.io/abahmed/kwatch:[^\n]*#image: ghcr.io/abahmed/kwatch:$ENV{VERSION}#' deploy/deploy.yaml
+          if [ "${{ inputs.command }}" = "stable" ]; then
+            perl -ni -e 'print unless /^>\s*\*\*[^*]*Unreleased\*\*/' README.md
+          fi
+
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add deploy/chart/Chart.yaml deploy/chart/README.md deploy/deploy.yaml README.md
+          if git diff --cached --quiet; then
+            echo "no version changes to commit; the tag will point at main HEAD"
+            echo "bumped=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          git commit -m "chore: release $VERSION - bump chart and README versions"
+          if ! git push origin HEAD:main; then
+            echo "::error::could not push the version bump to main. RELEASE_TOKEN must be a classic PAT with repo scope, allowed to bypass branch protection. Push it manually and re-run:"
+            echo "::error::  git push origin HEAD:main"
+            exit 1
+          fi
+          echo "bumped=true" >> "$GITHUB_OUTPUT"
+
       - name: Resolve target
         id: target
         env:
@@ -181,30 +217,3 @@ jobs:
             --notes-file /tmp/release-notes.md \
             $PRERELEASE_ARGS \
             --target "$SHA"
-
-      - name: Bump chart and README versions
-        if: ${{ inputs.command == 'stable' }}
-        env:
-          VERSION: ${{ steps.meta.outputs.version }}
-        run: |
-          set -euo pipefail
-
-          CHART_VER=$(echo "$VERSION" | sed -E 's/^v//')
-          export VERSION CHART_VER
-          perl -pi -e 's/^version: .*/version: "$ENV{CHART_VER}"/' deploy/chart/Chart.yaml
-          perl -pi -e 's/^appVersion: .*/appVersion: "$ENV{VERSION}"/' deploy/chart/Chart.yaml
-          perl -pi -e 's/--version [0-9]+\.[0-9]+\.[0-9]+/--version $ENV{CHART_VER}/' README.md deploy/chart/README.md
-          perl -pi -e 's#kwatch/v[0-9]+\.[0-9]+\.[0-9]+/#kwatch/$ENV{VERSION}/#g' README.md
-          perl -pi -e 's#image: ghcr\.io/abahmed/kwatch:[^\n]*#image: ghcr.io/abahmed/kwatch:$ENV{VERSION}#' deploy/deploy.yaml
-          perl -ni -e 'print unless /^>\s*\*\*[^*]*Unreleased\*\*/' README.md
-
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add deploy/chart/Chart.yaml deploy/chart/README.md deploy/deploy.yaml README.md
-          git commit -m "chore: release $VERSION - bump chart and README versions" \
-            || { echo "no changes to commit"; exit 0; }
-
-          if ! git push origin HEAD:main; then
-            echo "::warning::could not push version bump to main (branch protection). Push it manually:"
-            echo "::warning::  git push origin HEAD:main"
-          fi

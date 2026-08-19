@@ -45,33 +45,40 @@ Run `rc` as often as needed until the candidate stabilizes.
 
 1. Verifies the newest RC points at the current `main` tip; otherwise it fails and you must
    cut a fresh RC first.
-2. Creates `v<X>.<Y>.<Z>`, opens a normal GitHub Release (gets `latest`).
-3. Bumps every pinned version reference to the new version and commits them to `main`:
+2. Bumps every pinned version reference to the new version, strips `🚧 Unreleased` banners,
+   commits them to `main`, and pushes (`RELEASE_TOKEN` required; see below):
    `deploy/chart/Chart.yaml` (`version`, `appVersion`), `deploy/chart/README.md`,
    `deploy/deploy.yaml` (image tag), and the `README.md` install snippets
    (`helm install --version`, `/kwatch/vX.Y.Z/deploy/...`).
+3. Creates the `v<X>.<Y>.<Z>` tag **on that bump commit** and opens a normal GitHub Release
+   (gets `latest`). Because the tag commit carries the bumped files, the raw
+   `/kwatch/vX.Y.Z/deploy/...` refs and the chart at the tag match the released version.
 
 > **Pinned-version invariant:** on `main`, the chart version, `deploy.yaml` image tag, chart
 > README, and README install snippets always point at the **latest released version** — what
-> a visitor reads is what they can actually install. They are bumped by the `stable` command
-> and never by feature PRs.
+> a visitor reads is what they can actually install. They are bumped by the `stable` and
+> `patch` commands and never by feature PRs.
 
 ### `patch` — hotfix tagged on `main`
 
 1. Merge the fix to `main`.
-2. Run the workflow with `command: patch`. By default the tag points at `main` HEAD.
-3. Computes `v<X>.<Y>.<Z+1>` from the highest stable tag, opens a normal release.
+2. Run the workflow with `command: patch`. By default it computes `v<X>.<Y>.<Z+1>` from the
+   highest stable tag.
+3. Bumps the pinned references to the patch version and pushes to `main` (same commit/step
+   as `stable`, banners are **not** stripped — the next minor's features are still pending).
+4. Creates the tag on that bump commit and opens a normal release.
 
 > **Hotfix isolation:** tagging `main` HEAD also bundles any unreleased minor work already
 > merged. If the hotfix must ship exactly on top of the previous stable, set `target` to the
 > hotfix commit sha (a detached one-off tag). For a strictly isolated hotfix line you can
 > also create a throwaway branch locally, cherry-pick, and pass its sha as `target` — no
-> persistent release branches are ever kept.
+> persistent release branches are ever kept. Note that the bump still lands on `main`, so a
+> `target`-based tag's files stay at the previous version by design.
 
-> Pushing the version-bump commit to the protected `main` branch requires a
-> `RELEASE_TOKEN` secret (a maintainer classic PAT with `repo` scope, allowed to bypass
-> branch protection). If the secret is absent the workflow still cuts the release and prints
-> the manual `git push` command.
+> The version-bump commit is pushed to the protected `main` branch, so `stable` and `patch`
+> require a **`RELEASE_TOKEN`** secret (a maintainer classic PAT with `repo` scope, allowed
+> to bypass branch protection). If the secret is missing or the push fails, the workflow
+> stops **before** tagging and prints the manual `git push` command to run.
 
 ## RC → stable gates
 
@@ -94,6 +101,9 @@ immediately, but under a banner while unreleased:
 ```
 
 - Unreleased sections stay visible on `main` with the banner, so docs don't drift.
+- When a whole milestone rewrite is unreleased (e.g. the current `v0.11.0-rc` build), one
+  top-of-file banner marks the entire README as documenting the dev build. Same `🚧 Unreleased`
+  marker, stripped the same way.
 - The `stable` command strips every banner line and bumps the pinned version references
   (`helm install --version`, `/kwatch/vX.Y.Z/deploy/...`, `deploy.yaml` image, chart files)
   in the same commit.
@@ -115,7 +125,11 @@ helm package deploy/chart   # uses Chart.yaml version, e.g. kwatch-0.11.0.tgz
 
 ## Upgrader notes
 
-The in-app upgrader compares the baked version against the latest **non-pre-release**
-GitHub Release. The container image bakes the full tag (e.g. `v0.11.0-rc.1`), so RC images
-never report "an update is available" for an RC. Keep this in mind: the baked version must
-equal the release tag name (`v`-prefixed).
+The container image bakes the full version string (the release tag name, `v`-prefixed). The
+in-app upgrader only runs on **stable and patch** images: it compares the baked version
+against the latest **non-pre-release** GitHub Release and notifies on a newer one, recording
+the notified version in a ConfigMap so users are nudged once. **RC builds skip the check
+entirely** (`CheckUpdates` returns early when the baked version contains `-rc`) — RC users
+opted into the dev channel and are never nagged toward stable. Keep this in mind: the baked
+version must equal the release tag name (`v`-prefixed), or the equality comparison in the
+upgrader never matches.
