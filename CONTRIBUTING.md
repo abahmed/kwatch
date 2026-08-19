@@ -31,5 +31,11 @@ Contributions to kwatch should be made in the form of pull requests to the **mai
   The banner is stripped automatically when a stable release is cut (see `RELEASES.md`), so
   the README on `main` always tells users exactly what has shipped versus what is pending.
 
+- **Never touch pinned version references in a feature/bug PR.** `README.md` install
+  snippets, the `deploy.yaml` image tag, `deploy/chart/Chart.yaml`, and
+  `deploy/chart/README.md` always point at the **latest released version** (e.g. `v0.10.5`);
+  the `stable` workflow bumps them at release time. If a snippet looks stale, bump it in a
+  PR, but do not pre-stamp the next version (e.g. `v0.11.0`) before it ships.
+
 ### Code of Conduct
 We expect everyone to follow the [Code Of Conduct](./CODE_OF_CONDUCT.md)

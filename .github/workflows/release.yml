@@ -193,13 +193,14 @@ jobs:
           export VERSION CHART_VER
           perl -pi -e 's/^version: .*/version: "$ENV{CHART_VER}"/' deploy/chart/Chart.yaml
           perl -pi -e 's/^appVersion: .*/appVersion: "$ENV{VERSION}"/' deploy/chart/Chart.yaml
-          perl -pi -e 's/--version [0-9]+\.[0-9]+\.[0-9]+/--version $ENV{CHART_VER}/' README.md
+          perl -pi -e 's/--version [0-9]+\.[0-9]+\.[0-9]+/--version $ENV{CHART_VER}/' README.md deploy/chart/README.md
           perl -pi -e 's#kwatch/v[0-9]+\.[0-9]+\.[0-9]+/#kwatch/$ENV{VERSION}/#g' README.md
+          perl -pi -e 's#image: ghcr\.io/abahmed/kwatch:[^\n]*#image: ghcr.io/abahmed/kwatch:$ENV{VERSION}#' deploy/deploy.yaml
           perl -ni -e 'print unless /^>\s*\*\*[^*]*Unreleased\*\*/' README.md
 
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add deploy/chart/Chart.yaml README.md
+          git add deploy/chart/Chart.yaml deploy/chart/README.md deploy/deploy.yaml README.md
           git commit -m "chore: release $VERSION - bump chart and README versions" \
             || { echo "no changes to commit"; exit 0; }
 

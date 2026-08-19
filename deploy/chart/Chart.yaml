@@ -1,7 +1,7 @@
 apiVersion: v2
 name: kwatch
-version: "0.11.0"
-appVersion: "v0.11.0"
+version: "0.10.5"
+appVersion: "v0.10.5"
 description: monitor all changes in your Kubernetes(K8s) cluster, detects crashes
   in your running apps in realtime, and publishes notifications to your channels (Slack,
   Discord, etc.) instantly
@@ -31,8 +31,6 @@ annotations:
       url: https://github.com/abahmed/kwatch
   artifacthub.io/license: MIT
   artifacthub.io/changes: |
-    - kind: added
-      description: "Cheap-depth enhancements: signature-based hints, correlation surfaces affected-pod count and node root-cause, runbook links, investigate commands, and dashboard deep-links."
-    - kind: added
-      description: "GOMEMLIMIT env on kwatch container for improved OOM protection."
+    - kind: fixed
+      description: "Bug fixes and stability improvements — see the GitHub release notes."
 

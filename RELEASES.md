@@ -36,7 +36,8 @@ optionally set `target` (a commit sha/ref; defaults to `main` HEAD).
 2. Creates the tag and opens a GitHub Release marked **pre-release**.
 3. `publish.yml` pushes `ghcr.io/abahmed/kwatch:<X>.<Y>.<Z>-rc.<N>` only — **no `latest`**,
    and the in-app upgrader does not nag RC users.
-4. Chart and README versions are untouched (they track the next stable).
+4. Chart and README versions are untouched (they stay pinned to the latest released version,
+   e.g. `v0.10.5`).
 
 Run `rc` as often as needed until the candidate stabilizes.
 
@@ -45,8 +46,15 @@ Run `rc` as often as needed until the candidate stabilizes.
 1. Verifies the newest RC points at the current `main` tip; otherwise it fails and you must
    cut a fresh RC first.
 2. Creates `v<X>.<Y>.<Z>`, opens a normal GitHub Release (gets `latest`).
-3. Bumps `deploy/chart/Chart.yaml` (`version`, `appVersion`) and the version references in
-   `README.md`, and commits them to `main`.
+3. Bumps every pinned version reference to the new version and commits them to `main`:
+   `deploy/chart/Chart.yaml` (`version`, `appVersion`), `deploy/chart/README.md`,
+   `deploy/deploy.yaml` (image tag), and the `README.md` install snippets
+   (`helm install --version`, `/kwatch/vX.Y.Z/deploy/...`).
+
+> **Pinned-version invariant:** on `main`, the chart version, `deploy.yaml` image tag, chart
+> README, and README install snippets always point at the **latest released version** — what
+> a visitor reads is what they can actually install. They are bumped by the `stable` command
+> and never by feature PRs.
 
 ### `patch` — hotfix tagged on `main`
 
@@ -87,19 +95,22 @@ immediately, but under a banner while unreleased:
 
 - Unreleased sections stay visible on `main` with the banner, so docs don't drift.
 - The `stable` command strips every banner line and bumps the pinned version references
-  (`helm install --version`, `/kwatch/vX.Y.Z/deploy/...`) in the same commit.
-- Maintainers never touch README version numbers by hand; the convention is enforced by
-  `CONTRIBUTING.md` and the gate checklist above.
+  (`helm install --version`, `/kwatch/vX.Y.Z/deploy/...`, `deploy.yaml` image, chart files)
+  in the same commit.
+- Maintainers never touch version numbers by hand; the pinned-version invariant and the
+  banner convention are enforced by `CONTRIBUTING.md` and the gate checklist above.
 
 ## Releasing the Helm chart (manual)
 
 The chart (`deploy/chart`) is published to the ArtifactHub **kwatch** repository. After a
-stable release, upload `deploy/chart` manually:
+stable release, package and upload it manually — always from `main` HEAD **after** the
+`stable` workflow's version-bump commit, so `Chart.yaml` carries the released version:
 
 ```sh
+# Update the artifacthub.io/changes annotation in Chart.yaml to describe this release first
 helm lint deploy/chart
-helm package deploy/chart --version 0.11.0
-# upload the resulting kwatch-0.11.0.tgz to the ArtifactHub kwatch repository
+helm package deploy/chart   # uses Chart.yaml version, e.g. kwatch-0.11.0.tgz
+# upload the resulting .tgz to the ArtifactHub kwatch repository
 ```
 
 ## Upgrader notes

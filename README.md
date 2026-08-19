@@ -80,7 +80,7 @@ No Prometheus. No Grafana. No 50-step setup. Just alerts that **make sense**.
 
 ```shell
 helm repo add kwatch https://kwatch.dev/charts
-helm install [RELEASE_NAME] kwatch/kwatch --namespace kwatch --create-namespace --version 0.11.0
+helm install [RELEASE_NAME] kwatch/kwatch --namespace kwatch --create-namespace --version 0.10.5
 ```
 
 More details in the [chart docs](https://github.com/abahmed/kwatch/blob/main/deploy/chart/README.md)
@@ -88,10 +88,10 @@ More details in the [chart docs](https://github.com/abahmed/kwatch/blob/main/dep
 ### 🐙 kubectl
 
 ```shell
-curl -L https://raw.githubusercontent.com/abahmed/kwatch/v0.11.0/deploy/config.yaml -o config.yaml
+curl -L https://raw.githubusercontent.com/abahmed/kwatch/v0.10.5/deploy/config.yaml -o config.yaml
 # ✏️ Edit config.yaml with your Slack/Discord/email webhook
 kubectl apply -f config.yaml
-kubectl apply -f https://raw.githubusercontent.com/abahmed/kwatch/v0.11.0/deploy/deploy.yaml
+kubectl apply -f https://raw.githubusercontent.com/abahmed/kwatch/v0.10.5/deploy/deploy.yaml
 ```
 
 ---
@@ -1179,8 +1179,8 @@ alert:
 ## 🧹 Clean up
 
 ```shell
-kubectl delete -f https://raw.githubusercontent.com/abahmed/kwatch/v0.11.0/deploy/config.yaml
-kubectl delete -f https://raw.githubusercontent.com/abahmed/kwatch/v0.11.0/deploy/deploy.yaml
+kubectl delete -f https://raw.githubusercontent.com/abahmed/kwatch/v0.10.5/deploy/config.yaml
+kubectl delete -f https://raw.githubusercontent.com/abahmed/kwatch/v0.10.5/deploy/deploy.yaml
 ```
 
 ---
