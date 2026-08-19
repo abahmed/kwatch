@@ -29,6 +29,8 @@ jobs:
         uses: docker/metadata-action@v6
         with:
           images: ghcr.io/abahmed/kwatch
+          flavor: |
+            latest=false
           tags: |
             type=semver,pattern={{raw}}
             type=raw,value=latest,enable=${{ github.event.release.prerelease != true }}
@@ -41,6 +43,6 @@ jobs:
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
           build-args: |
-            RELEASE_VERSION=${{ steps.meta.outputs.version }}
+            RELEASE_VERSION=${{ github.event.release.tag_name }}
             GIT_COMMIT=${{ github.sha }}
             BUILD_DATE=${{ github.event.release.published_at }}
