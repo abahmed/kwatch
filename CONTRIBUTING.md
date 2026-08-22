@@ -19,27 +19,38 @@ If you wish to work on an issue, please comment on the issue that you want to wo
 
 Contributions to kwatch should be made in the form of pull requests to the **main** branch. Each pull request will be reviewed by someone with permission to land patches. After reviewing the patch, it could be landed in the main branch or given feedback for changes.
 
-### Documenting features in the README
+### Documenting features
+
+Feature documentation lives in the right place: the landing-page **README** gets a short
+section and a link; the detail goes into a page under `docs/`
+([configuration](./docs/configuration.md), [providers](./docs/providers.md),
+[architecture](./docs/architecture.md)). Docs pages keep the **same banner convention** as
+the README but never carry version pins.
 
 - **Released features:** document them normally, no marker.
-- **Unreleased features:** merge the code and the README section, but mark the section with the official banner:
+- **Unreleased features:** merge the code and the doc section, but mark the section with the
+  official banner:
 
   ```
   > **🚧 Unreleased** — ships in `v0.12.0`. Not available in stable installs yet.
   ```
 
-  The banner is stripped automatically when a stable release is cut (see `RELEASES.md`), so
-  the README on `main` always tells users exactly what has shipped versus what is pending.
+  The banner is stripped automatically when a stable release is cut (see `RELEASES.md` —
+  from `README.md` and every `docs/*.md`), so the docs on `main` always tell users exactly
+  what has shipped versus what is pending.
 
   When a whole milestone rewrite is still unreleased, a single top-of-file banner instead
-  marks the entire README as documenting the dev build (e.g. `v0.11.0-rc`), with the stable
-  version named. It uses the same `🚧 Unreleased` marker and is stripped the same way.
+  marks the entire README as documenting the dev build (e.g. `v0.11.0-rc`). Keep it
+  version-free about the stable — a patch release during the window would otherwise make it
+  stale. It uses the same `🚧 Unreleased` marker and is stripped the same way.
 
 - **Never touch pinned version references in a feature/bug PR.** `README.md` install
   snippets, the `deploy.yaml` image tag, `deploy/chart/Chart.yaml`, and
   `deploy/chart/README.md` always point at the **latest released version** (e.g. `v0.10.5`);
-  the `stable` workflow bumps them at release time. If a snippet looks stale, bump it in a
-  PR, but do not pre-stamp the next version (e.g. `v0.11.0`) before it ships.
+  the `stable` workflow bumps them at release time. Keep `docs/` pages **free of version
+  pins** — if a reference page needs an install command, link to the README instead. If a
+  pinned snippet looks stale, bump it in a PR, but do not pre-stamp the next version
+  (e.g. `v0.11.0`) before it ships.
 
 - The `stable` and `patch` release commands push the version-bump commit to protected
   `main`, so they need the `RELEASE_TOKEN` secret (see `RELEASES.md`). Without it the

@@ -37,5 +37,5 @@ helm delete --purge [RELEASE_NAME]
 | `nodeSelector` | Node labels for pod assignment | {} |
 | `tolerations` | Tolerations for pod assignment | [] |
 | `affinity` | affinity for pod | {} |
-| `config` | [kwatch configuration](https://github.com/abahmed/kwatch#configuration) | {} |
+| `config` | [kwatch configuration](../../docs/configuration.md) | {} |
 | `upgrader.disableUpdateCheck` | Disable startup update check | `false` |

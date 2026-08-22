@@ -32,7 +32,10 @@ optionally set `target` (a commit sha/ref; defaults to `main` HEAD).
 
 ### `rc` — pre-release
 
-1. Computes the next `v<X>.<Y>.<Z>-rc.<N>` from the newest RC tag.
+1. Computes the next `v<X>.<Y>.<Z>-rc.<N>` from the newest RC tag. An RC whose base version
+   already exists as a stable tag counts as **consumed** (it was promoted), so the next RC
+   branches from the newest stable instead — e.g. after promoting `v0.11.0`, the next RC is
+   `v0.12.0-rc.1`, never `v0.11.0-rc.<N+1>`.
 2. Creates the tag and opens a GitHub Release marked **pre-release**.
 3. `publish.yml` pushes `ghcr.io/abahmed/kwatch:<X>.<Y>.<Z>-rc.<N>` only — **no `latest`**,
    and the in-app upgrader does not nag RC users.
@@ -45,8 +48,9 @@ Run `rc` as often as needed until the candidate stabilizes.
 
 1. Verifies the newest RC points at the current `main` tip; otherwise it fails and you must
    cut a fresh RC first.
-2. Bumps every pinned version reference to the new version, strips `🚧 Unreleased` banners,
-   commits them to `main`, and pushes (`RELEASE_TOKEN` required; see below):
+2. Bumps every pinned version reference to the new version, strips `🚧 Unreleased` banners
+   from `README.md` and every `docs/*.md`, commits them to `main`, and pushes
+   (`RELEASE_TOKEN` required; see below):
    `deploy/chart/Chart.yaml` (`version`, `appVersion`), `deploy/chart/README.md`,
    `deploy/deploy.yaml` (image tag), and the `README.md` install snippets
    (`helm install --version`, `/kwatch/vX.Y.Z/deploy/...`).
@@ -57,7 +61,8 @@ Run `rc` as often as needed until the candidate stabilizes.
 > **Pinned-version invariant:** on `main`, the chart version, `deploy.yaml` image tag, chart
 > README, and README install snippets always point at the **latest released version** — what
 > a visitor reads is what they can actually install. They are bumped by the `stable` and
-> `patch` commands and never by feature PRs.
+> `patch` commands and never by feature PRs. The `docs/` reference pages carry **no version
+> pins**; a reference page that needs an install command links to the README instead.
 
 ### `patch` — hotfix tagged on `main`
 
@@ -89,9 +94,9 @@ An RC should not be promoted until all of these hold:
 - [ ] `check` workflow is green on `main` (lint, build, unit tests with `-race`, integration tests).
 - [ ] `helm lint` + `test_helm.sh` pass for the released chart.
 - [ ] Release notes reviewed (generated automatically from merged commit titles).
-- [ ] README contains no `🚧 Unreleased` banners (stripped automatically on stable).
+- [ ] README and `docs/` contain no `🚧 Unreleased` banners (stripped automatically on stable).
 
-## README and unreleased features
+## README, docs, and unreleased features
 
 Feature **code** merges to `main` immediately. A feature's **README section** also merges
 immediately, but under a banner while unreleased:
@@ -104,9 +109,9 @@ immediately, but under a banner while unreleased:
 - When a whole milestone rewrite is unreleased (e.g. the current `v0.11.0-rc` build), one
   top-of-file banner marks the entire README as documenting the dev build. Same `🚧 Unreleased`
   marker, stripped the same way.
-- The `stable` command strips every banner line and bumps the pinned version references
-  (`helm install --version`, `/kwatch/vX.Y.Z/deploy/...`, `deploy.yaml` image, chart files)
-  in the same commit.
+- The `stable` command strips every banner line from `README.md` and `docs/*.md` and bumps
+  the pinned version references (`helm install --version`, `/kwatch/vX.Y.Z/deploy/...`,
+  `deploy.yaml` image, chart files) in the same commit.
 - Maintainers never touch version numbers by hand; the pinned-version invariant and the
   banner convention are enforced by `CONTRIBUTING.md` and the gate checklist above.
 
