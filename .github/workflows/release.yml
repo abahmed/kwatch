@@ -49,7 +49,14 @@ jobs:
 
           case "$COMMAND" in
             rc)
+              RC_CONSUMED=false
               if [ -n "$LATEST_RC" ]; then
+                RC_BASE=$(strip_rc "$LATEST_RC")
+                if git rev-parse -q --verify "refs/tags/$RC_BASE" >/dev/null; then
+                  RC_CONSUMED=true
+                fi
+              fi
+              if [ -n "$LATEST_RC" ] && [ "$RC_CONSUMED" = false ]; then
                 BASE=$(strip_rc "$LATEST_RC")
                 LAST_N=$(rc_num "$LATEST_RC")
               elif [ -n "$LATEST_STABLE" ]; then
@@ -155,12 +162,12 @@ jobs:
           perl -pi -e 's#kwatch/v[0-9]+\.[0-9]+\.[0-9]+/#kwatch/$ENV{VERSION}/#g' README.md
           perl -pi -e 's#image: ghcr\.io/abahmed/kwatch:[^\n]*#image: ghcr.io/abahmed/kwatch:$ENV{VERSION}#' deploy/deploy.yaml
           if [ "${{ inputs.command }}" = "stable" ]; then
-            perl -ni -e 'print unless /^>\s*\*\*[^*]*Unreleased\*\*/' README.md
+            perl -ni -e 'print unless /^>\s*\*\*[^*]*Unreleased\*\*/' README.md docs/*.md
           fi
 
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add deploy/chart/Chart.yaml deploy/chart/README.md deploy/deploy.yaml README.md
+          git add deploy/chart/Chart.yaml deploy/chart/README.md deploy/deploy.yaml README.md docs/
           if git diff --cached --quiet; then
             echo "no version changes to commit; the tag will point at main HEAD"
             echo "bumped=false" >> "$GITHUB_OUTPUT"
