@@ -211,7 +211,7 @@ func validateCorrelation(cfg *Config) []error {
 }
 
 // validateMonitors checks the per-monitor sustain/interval defaults.
-func validateMonitors(cfg *Config) []error {
+func validateHeartbeatMonitor(cfg *Config) []error {
 	var errs []error
 	if cfg.HeartbeatMonitor.Enabled && cfg.HeartbeatMonitor.Interval <= 0 {
 		errs = append(errs, errors.New("heartbeatMonitor.interval must be > 0 when heartbeatMonitor.enabled is true"))
@@ -219,43 +219,72 @@ func validateMonitors(cfg *Config) []error {
 	if cfg.HeartbeatMonitor.Enabled && cfg.HeartbeatMonitor.URL == "" {
 		errs = append(errs, errors.New("heartbeatMonitor.url must not be empty when heartbeatMonitor.enabled is true"))
 	}
+	return errs
+}
+
+func validateNodeResourceMonitor(cfg *Config) []error {
+	var errs []error
+	if !cfg.NodeResourceMonitor.Enabled {
+		return errs
+	}
+	if cfg.NodeResourceMonitor.IntervalSeconds <= 0 {
+		errs = append(errs, errors.New("nodeResourceMonitor.intervalSeconds must be > 0"))
+	}
+	if cfg.NodeResourceMonitor.CpuWarning <= 0 {
+		errs = append(errs, errors.New("nodeResourceMonitor.cpuWarning must be > 0"))
+	}
+	if cfg.NodeResourceMonitor.CpuCritical < cfg.NodeResourceMonitor.CpuWarning {
+		errs = append(errs, errors.New("nodeResourceMonitor.cpuCritical must be >= cpuWarning"))
+	}
+	if cfg.NodeResourceMonitor.MemWarning <= 0 {
+		errs = append(errs, errors.New("nodeResourceMonitor.memWarning must be > 0"))
+	}
+	if cfg.NodeResourceMonitor.MemCritical < cfg.NodeResourceMonitor.MemWarning {
+		errs = append(errs, errors.New("nodeResourceMonitor.memCritical must be >= memWarning"))
+	}
+	return errs
+}
+
+func validateOomMonitor(cfg *Config) []error {
+	var errs []error
+	if !cfg.OomMonitor.Enabled {
+		return errs
+	}
+	if cfg.OomMonitor.Threshold <= 0 {
+		errs = append(errs, errors.New("oomMonitor.threshold must be > 0"))
+	}
+	if cfg.OomMonitor.WindowMinutes <= 0 {
+		errs = append(errs, errors.New("oomMonitor.windowMinutes must be > 0"))
+	}
+	return errs
+}
+
+func validateTlsMonitor(cfg *Config) []error {
+	var errs []error
+	if !cfg.TlsMonitor.Enabled {
+		return errs
+	}
+	if cfg.TlsMonitor.CriticalThreshold < 0 {
+		errs = append(errs, errors.New("tlsMonitor.criticalThreshold must be >= 0"))
+	}
+	if cfg.TlsMonitor.Threshold > 0 && cfg.TlsMonitor.CriticalThreshold > cfg.TlsMonitor.Threshold {
+		errs = append(errs, errors.New("tlsMonitor.criticalThreshold must be <= threshold"))
+	}
+	if cfg.TlsMonitor.Threshold < 0 {
+		errs = append(errs, errors.New("tlsMonitor.threshold must be >= 0"))
+	}
+	return errs
+}
+
+func validateMonitors(cfg *Config) []error {
+	var errs []error
+	errs = append(errs, validateHeartbeatMonitor(cfg)...)
 	if cfg.SmartGrouping.WindowSeconds < 0 {
 		errs = append(errs, errors.New("smartGrouping.windowSeconds must be >= 0"))
 	}
-	if cfg.NodeResourceMonitor.Enabled && cfg.NodeResourceMonitor.IntervalSeconds <= 0 {
-		errs = append(errs, errors.New("nodeResourceMonitor.intervalSeconds must be > 0"))
-	}
-	if cfg.NodeResourceMonitor.Enabled {
-		if cfg.NodeResourceMonitor.CpuWarning <= 0 {
-			errs = append(errs, errors.New("nodeResourceMonitor.cpuWarning must be > 0"))
-		}
-		if cfg.NodeResourceMonitor.CpuCritical < cfg.NodeResourceMonitor.CpuWarning {
-			errs = append(errs, errors.New("nodeResourceMonitor.cpuCritical must be >= cpuWarning"))
-		}
-		if cfg.NodeResourceMonitor.MemWarning <= 0 {
-			errs = append(errs, errors.New("nodeResourceMonitor.memWarning must be > 0"))
-		}
-		if cfg.NodeResourceMonitor.MemCritical < cfg.NodeResourceMonitor.MemWarning {
-			errs = append(errs, errors.New("nodeResourceMonitor.memCritical must be >= memWarning"))
-		}
-	}
-	if cfg.OomMonitor.Enabled {
-		if cfg.OomMonitor.Threshold <= 0 {
-			errs = append(errs, errors.New("oomMonitor.threshold must be > 0"))
-		}
-		if cfg.OomMonitor.WindowMinutes <= 0 {
-			errs = append(errs, errors.New("oomMonitor.windowMinutes must be > 0"))
-		}
-	}
-	if cfg.TlsMonitor.Enabled && cfg.TlsMonitor.CriticalThreshold < 0 {
-		errs = append(errs, errors.New("tlsMonitor.criticalThreshold must be >= 0"))
-	}
-	if cfg.TlsMonitor.Enabled && cfg.TlsMonitor.Threshold > 0 && cfg.TlsMonitor.CriticalThreshold > cfg.TlsMonitor.Threshold {
-		errs = append(errs, errors.New("tlsMonitor.criticalThreshold must be <= threshold"))
-	}
-	if cfg.TlsMonitor.Enabled && cfg.TlsMonitor.Threshold < 0 {
-		errs = append(errs, errors.New("tlsMonitor.threshold must be >= 0"))
-	}
+	errs = append(errs, validateNodeResourceMonitor(cfg)...)
+	errs = append(errs, validateOomMonitor(cfg)...)
+	errs = append(errs, validateTlsMonitor(cfg)...)
 	errs = append(errs, validateSustainedMinutes(cfg, "daemonSetMonitor", cfg.DaemonSetMonitor.Enabled, cfg.DaemonSetMonitor.SustainedMinutes)...)
 	errs = append(errs, validateSustainedMinutes(cfg, "statefulSetMonitor", cfg.StatefulSetMonitor.Enabled, cfg.StatefulSetMonitor.SustainedMinutes)...)
 	errs = append(errs, validateSustainedMinutes(cfg, "pdbMonitor", cfg.PdbMonitor.Enabled, cfg.PdbMonitor.SustainedMinutes)...)

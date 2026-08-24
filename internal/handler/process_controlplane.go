@@ -133,10 +133,10 @@ func (h *handler) ProcessControlPlanePod(pod *corev1.Pod) error {
 
 // SweepControlPlane lists all pods in the cpPodLister cache and checks them.
 func (h *handler) SweepControlPlane() {
-	if h.cpPodLister == nil {
+	if h.listers.cpPod == nil {
 		return
 	}
-	pods, err := h.cpPodLister.List(labels.Everything())
+	pods, err := h.listers.cpPod.List(labels.Everything())
 	if err != nil {
 		klog.ErrorS(err, "controlplane sweep: failed to list pods from cache")
 		return

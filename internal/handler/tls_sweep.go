@@ -17,7 +17,7 @@ import (
 )
 
 func (h *handler) SweepTLSSecrets() {
-	if h.secretLister == nil {
+	if h.listers.secret == nil {
 		return
 	}
 	threshold := h.config.TlsMonitor.Threshold
@@ -26,7 +26,7 @@ func (h *handler) SweepTLSSecrets() {
 	}
 	warnWindow := time.Duration(threshold) * 24 * time.Hour
 
-	secrets, err := h.secretLister.List(labels.Everything())
+	secrets, err := h.listers.secret.List(labels.Everything())
 	if err != nil {
 		klog.ErrorS(err, "tls sweep: failed to list secrets from cache")
 		return

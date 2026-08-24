@@ -2,6 +2,7 @@ package model
 
 import (
 	"encoding/json"
+	"reflect"
 	"testing"
 	"time"
 )
@@ -49,62 +50,33 @@ func TestPersistedIncidentToIncident(t *testing.T) {
 
 	inc := pi.ToIncident()
 
-	if inc.Key != pi.Key {
-		t.Errorf("Key = %q, want %q", inc.Key, pi.Key)
+	want := &Incident{
+		Key:            pi.Key,
+		Reason:         pi.Reason,
+		Namespace:      pi.Namespace,
+		Name:           pi.Name,
+		Resource:       pi.Resource,
+		Count:          pi.Count,
+		FirstSeen:      pi.FirstSeen,
+		LastSeen:       pi.LastSeen,
+		Resources:      map[string]bool{"pod-1": true},
+		PeakResources:  pi.PeakResources,
+		OwnerKind:      pi.OwnerKind,
+		RestartCount:   pi.RestartCount,
+		Hint:           pi.Hint,
+		Severity:       pi.Severity,
+		State:          pi.State,
+		NotifiedSig:    pi.NotifiedSig,
+		LastNotifiedAt: pi.LastNotifiedAt,
+		RenotifyCount:  pi.RenotifyCount,
+		// ToIncident initializes an empty container set, stamps LastUpdate
+		// from LastSeen, and leaves ID empty until the engine assigns one.
+		Containers: map[string]bool{},
+		LastUpdate: pi.LastSeen,
+		ID:         "",
 	}
-	if inc.Reason != pi.Reason {
-		t.Errorf("Reason = %q, want %q", inc.Reason, pi.Reason)
-	}
-	if inc.Namespace != pi.Namespace {
-		t.Errorf("Namespace = %q, want %q", inc.Namespace, pi.Namespace)
-	}
-	if inc.Resource != pi.Resource {
-		t.Errorf("Resource = %q, want %q", inc.Resource, pi.Resource)
-	}
-	if inc.Count != pi.Count {
-		t.Errorf("Count = %d, want %d", inc.Count, pi.Count)
-	}
-	if !inc.FirstSeen.Equal(pi.FirstSeen) {
-		t.Errorf("FirstSeen = %v, want %v", inc.FirstSeen, pi.FirstSeen)
-	}
-	if !inc.LastSeen.Equal(pi.LastSeen) {
-		t.Errorf("LastSeen = %v, want %v", inc.LastSeen, pi.LastSeen)
-	}
-	if len(inc.Resources) != 1 || !inc.Resources["pod-1"] {
-		t.Errorf("Resources = %v, want map[pod-1:true]", inc.Resources)
-	}
-	if inc.PeakResources != pi.PeakResources {
-		t.Errorf("PeakResources = %d, want %d", inc.PeakResources, pi.PeakResources)
-	}
-	if inc.OwnerKind != pi.OwnerKind {
-		t.Errorf("OwnerKind = %q, want %q", inc.OwnerKind, pi.OwnerKind)
-	}
-	if inc.RestartCount != pi.RestartCount {
-		t.Errorf("RestartCount = %d, want %d", inc.RestartCount, pi.RestartCount)
-	}
-	if inc.Hint != pi.Hint {
-		t.Errorf("Hint = %q, want %q", inc.Hint, pi.Hint)
-	}
-	if inc.Severity != pi.Severity {
-		t.Errorf("Severity = %q, want %q", inc.Severity, pi.Severity)
-	}
-	if inc.State != pi.State {
-		t.Errorf("State = %d, want %d", inc.State, pi.State)
-	}
-	if inc.NotifiedSig != pi.NotifiedSig {
-		t.Errorf("NotifiedSig = %q, want %q", inc.NotifiedSig, pi.NotifiedSig)
-	}
-	if !inc.LastNotifiedAt.Equal(pi.LastNotifiedAt) {
-		t.Errorf("LastNotifiedAt = %v, want %v", inc.LastNotifiedAt, pi.LastNotifiedAt)
-	}
-	if inc.RenotifyCount != pi.RenotifyCount {
-		t.Errorf("RenotifyCount = %d, want %d", inc.RenotifyCount, pi.RenotifyCount)
-	}
-	if inc.Containers == nil {
-		t.Errorf("Containers should not be nil")
-	}
-	if inc.ID != "" {
-		t.Errorf("ID should be empty after conversion, got %q", inc.ID)
+	if !reflect.DeepEqual(inc, want) {
+		t.Errorf("ToIncident mismatch:\n got %+v\nwant %+v", inc, want)
 	}
 }
 

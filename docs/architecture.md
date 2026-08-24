@@ -191,8 +191,7 @@ Groups don't spam either:
 ## 💾 Crash-safe state: no database, nothing to lose
 
 kwatch keeps its state in **plain ConfigMaps** in its own namespace — there is no database,
-no volume, no backend to run (customizable `volume` state storage is available for clusters
-that want it). It writes the things it can't afford to forget:
+no volume, no backend to run. It writes the things it can't afford to forget:
 
 | ConfigMap | What it holds |
 |:--|:--|

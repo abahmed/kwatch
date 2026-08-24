@@ -47,7 +47,7 @@ func (h *handler) ProcessStatefulSet(key string, deleted bool) error {
 		return nil
 	}
 
-	ss, err := h.ssLister.StatefulSets(namespace).Get(name)
+	ss, err := h.listers.ss.StatefulSets(namespace).Get(name)
 	if err != nil {
 		if errors.IsNotFound(err) {
 			h.correlator.ResolveByResource("statefulset", namespace+"/"+name)
@@ -106,9 +106,9 @@ func (h *handler) ProcessStatefulSetObject(ss *appsv1.StatefulSet, deleted bool)
 }
 
 func (h *handler) markFirstUnavailableSts(key string) time.Time {
-	return h.firstUnavailableSts.mark(key, h.now())
+	return h.fs.unavailableSts.mark(key, h.now())
 }
 
 func (h *handler) clearFirstUnavailableSts(key string) {
-	h.firstUnavailableSts.clear(key)
+	h.fs.unavailableSts.clear(key)
 }

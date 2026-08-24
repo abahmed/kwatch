@@ -16,6 +16,9 @@ Before making changes, please first discuss the change you want to make through 
 
 If you wish to work on an issue, please comment on the issue that you want to work on it. This is to prevent duplicated efforts on the same issue.
 
+Before you start coding, read [AGENTS.md](./AGENTS.md) — it documents the build/test gate,
+package layout, naming conventions, and the checklist for adding a new monitored resource.
+
 
 Contributions to kwatch should be made in the form of pull requests to the **main** branch. Each pull request will be reviewed by someone with permission to land patches. After reviewing the patch, it could be landed in the main branch or given feedback for changes.
 

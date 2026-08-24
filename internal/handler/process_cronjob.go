@@ -32,7 +32,7 @@ func (h *handler) ProcessCronJob(key string, deleted bool) error {
 		return nil
 	}
 
-	cj, err := h.cronJobLister.CronJobs(namespace).Get(name)
+	cj, err := h.listers.cronJob.CronJobs(namespace).Get(name)
 	if err != nil {
 		if errors.IsNotFound(err) {
 			h.clearFirstSuspendedCJ(namespace + "/" + name)
@@ -116,11 +116,11 @@ func (h *handler) ProcessCronJobObject(cj *batchv1.CronJob, deleted bool) error 
 }
 
 func (h *handler) markFirstSuspendedCJ(key string) time.Time {
-	return h.firstSuspendedCJs.mark(key, h.now())
+	return h.fs.suspendedCJs.mark(key, h.now())
 }
 
 func (h *handler) clearFirstSuspendedCJ(key string) {
-	h.firstSuspendedCJs.clear(key)
+	h.fs.suspendedCJs.clear(key)
 }
 
 // NextFireAfter returns the time the CronJob should have next fired, based on

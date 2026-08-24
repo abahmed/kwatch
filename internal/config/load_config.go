@@ -70,7 +70,9 @@ func expandEnv(s string) (string, error) {
 
 // LoadConfig loads yaml configuration from file if provided, otherwise
 // loads default configuration
-func LoadConfig() (*Config, error) {
+// parseConfigFile reads CONFIG_FILE and unmarshals it over a fresh default
+// config. A missing or unset file yields the defaults with no error.
+func parseConfigFile() (*Config, error) {
 	configFile := os.Getenv("CONFIG_FILE")
 
 	config := DefaultConfig()
@@ -103,8 +105,12 @@ func LoadConfig() (*Config, error) {
 		}
 	}
 
-	var errs []error
+	return config, nil
+}
 
+// prepareAllowForbidLists splits namespace and reason lists and validates that
+// allow and forbid sides are mutually exclusive.
+func prepareAllowForbidLists(config *Config, errs []error) []error {
 	// Parse namespace allow/forbid lists
 	config.AllowedNamespaces, config.ForbiddenNamespaces =
 		getAllowForbidSlices(config.Namespaces)
@@ -126,6 +132,18 @@ func LoadConfig() (*Config, error) {
 		errs = append(errs,
 			errors.New("either allowed or forbidden reasons must be set, can't set both"))
 	}
+
+	return errs
+}
+
+// prepareConfig normalizes parsed config: splits lists, compiles back-compat
+// patterns, consolidates suppression state, and runs full validation.
+func prepareConfig(config *Config) []error {
+	var errs []error
+
+	errs = prepareAllowForbidLists(config, errs)
+
+	var err error
 
 	// Prepare ignored pod name patters (compiled for back-compat)
 	config.IgnorePodNamePatterns, err =
@@ -149,13 +167,12 @@ func LoadConfig() (*Config, error) {
 	// Build suppression index for detect-time filters
 	config.Suppression = config.BuildSuppressionIndex()
 
-	errs = append(errs, Validate(config)...)
+	return append(errs, Validate(config)...)
+}
 
-	if len(errs) > 0 {
-		return nil, errors.Join(errs...)
-	}
-
-	// Deprecation warnings for suppression knobs being consolidated into Silences
+// warnDeprecatedIgnoreFields logs deprecation warnings for suppression knobs
+// consolidated into Silences.
+func warnDeprecatedIgnoreFields(config *Config) {
 	if len(config.IgnoreContainerNames) > 0 {
 		klog.Warning("ignoreContainerNames is deprecated; use silences instead")
 	}
@@ -171,6 +188,19 @@ func LoadConfig() (*Config, error) {
 	if len(config.IgnoreNodeMessages) > 0 {
 		klog.Warning("ignoreNodeMessages is deprecated; use silences instead")
 	}
+}
+
+func LoadConfig() (*Config, error) {
+	config, err := parseConfigFile()
+	if err != nil {
+		return nil, err
+	}
+
+	if errs := prepareConfig(config); len(errs) > 0 {
+		return nil, errors.Join(errs...)
+	}
+
+	warnDeprecatedIgnoreFields(config)
 
 	// SeverityByOwnerKind and SeverityByReason keys must match Kubernetes
 	// kinds (e.g. "StatefulSet", "DaemonSet") and event reasons

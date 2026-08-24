@@ -37,7 +37,7 @@ optionally set `target` (a commit sha/ref; defaults to `main` HEAD).
    branches from the newest stable instead — e.g. after promoting `v0.11.0`, the next RC is
    `v0.12.0-rc.1`, never `v0.11.0-rc.<N+1>`.
 2. Creates the tag and opens a GitHub Release marked **pre-release**.
-3. `publish.yml` pushes `ghcr.io/abahmed/kwatch:<X>.<Y>.<Z>-rc.<N>` only — **no `latest`**,
+3. `publish.yml` pushes `ghcr.io/abahmed/kwatch:v<X>.<Y>.<Z>-rc.<N>` only — **no `latest`**,
    and the in-app upgrader does not nag RC users.
 4. Chart and README versions are untouched (they stay pinned to the latest released version,
    e.g. `v0.10.5`).

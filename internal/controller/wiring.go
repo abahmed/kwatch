@@ -10,6 +10,7 @@ import (
 	"k8s.io/client-go/kubernetes"
 	corev1lister "k8s.io/client-go/listers/core/v1"
 	"k8s.io/client-go/tools/cache"
+	"k8s.io/klog/v2"
 
 	"github.com/abahmed/kwatch/internal/config"
 	kwcontext "github.com/abahmed/kwatch/internal/context"
@@ -19,15 +20,11 @@ import (
 // wireNode sets up the node informer when either monitor is enabled.
 func (c *Controller) wireNode(h handler.Handler, cfg *config.Config, fs factorySet) {
 	if cfg.NodeMonitor.Enabled || cfg.NodeResourceMonitor.Enabled {
-		nodeInformer := fs.nodeInformer()
-		nodeLister := fs.nodeLister()
-
-		c.nodeLister = nodeLister
+		c.nodeLister = fs.nodeLister()
 
 		if cfg.NodeMonitor.Enabled {
-			c.nodesSynced = nodeInformer.HasSynced
-			h.SetNodeLister(nodeLister)
-			nodeInformer.AddEventHandler(c.changeRecordingHandler("node", c.enqueueNode))
+			h.SetNodeLister(c.nodeLister)
+			c.watch(c.node, fs.nodeInformer())
 		}
 	}
 }
@@ -36,210 +33,93 @@ func (c *Controller) wireRollout(h handler.Handler, cfg *config.Config, fs facto
 	if !cfg.RolloutMonitor.Enabled {
 		return
 	}
-	deployLister := fs.deployLister()
-	deployInformers := fs.deployInformers()
-
-	c.deployLister = deployLister
-	c.deploymentWatchEnabled = true
-
-	var deploysSynced []cache.InformerSynced
-	for _, inf := range deployInformers {
-		deploysSynced = append(deploysSynced, inf.HasSynced)
-	}
-	c.deploysSynced = deploysSynced
-
-	h.SetDeploymentLister(deployLister)
-
-	for _, inf := range deployInformers {
-		inf.AddEventHandler(c.changeRecordingHandler("deployment", c.enqueueDeployment))
-	}
+	c.deployLister = fs.deployLister()
+	h.SetDeploymentLister(c.deployLister)
+	c.watch(c.deployment, fs.deployInformers()...)
 }
 
 func (c *Controller) wireJobs(h handler.Handler, cfg *config.Config, fs factorySet) {
 	if !cfg.JobMonitor.Enabled {
 		return
 	}
-	jobLister := fs.jobLister()
-	jobInformers := fs.jobInformers()
-
-	c.jobLister = jobLister
-	c.jobWatchEnabled = true
-
-	var jobsSynced []cache.InformerSynced
-	for _, inf := range jobInformers {
-		jobsSynced = append(jobsSynced, inf.HasSynced)
-	}
-	c.jobsSynced = jobsSynced
-
-	h.SetJobLister(jobLister)
-
-	for _, inf := range jobInformers {
-		inf.AddEventHandler(c.changeRecordingHandler("job", c.enqueueJob))
-	}
+	c.jobLister = fs.jobLister()
+	h.SetJobLister(c.jobLister)
+	c.watch(c.job, fs.jobInformers()...)
 }
 
 func (c *Controller) wireDaemonSetMonitor(h handler.Handler, cfg *config.Config, fs factorySet) {
 	if !cfg.DaemonSetMonitor.Enabled {
 		return
 	}
-	dsLister := fs.dsLister()
-	dsInformers := fs.dsInformers()
-
-	c.daemonSetWatchEnabled = true
-
-	var dssSynced []cache.InformerSynced
-	for _, inf := range dsInformers {
-		dssSynced = append(dssSynced, inf.HasSynced)
-	}
-	c.dsSynced = dssSynced
-
-	h.SetDaemonSetLister(dsLister)
-
-	for _, inf := range dsInformers {
-		inf.AddEventHandler(c.changeRecordingHandler("daemonset", c.enqueueDaemonSet))
-	}
+	h.SetDaemonSetLister(fs.dsLister())
+	c.watch(c.daemonSet, fs.dsInformers()...)
 }
 
 func (c *Controller) wireCronJobs(h handler.Handler, cfg *config.Config, fs factorySet) {
-	if cfg.CronJobMonitor.Enabled {
-		c.cronJobLister = fs.cronJobLister()
-		cronJobInformers := fs.cronJobInformers()
-
-		c.cronJobWatchEnabled = true
-
-		var cjSynced []cache.InformerSynced
-		for _, inf := range cronJobInformers {
-			cjSynced = append(cjSynced, inf.HasSynced)
-		}
-		c.cronJobsSynced = cjSynced
-
-		h.SetCronJobLister(c.cronJobLister)
-
-		for _, inf := range cronJobInformers {
-			inf.AddEventHandler(c.changeRecordingHandler("cronjob", c.enqueueCronJob))
-		}
+	if !cfg.CronJobMonitor.Enabled {
+		return
 	}
+	c.cronJobLister = fs.cronJobLister()
+	h.SetCronJobLister(c.cronJobLister)
+	c.watch(c.cronJob, fs.cronJobInformers()...)
 }
 
 func (c *Controller) wireHPA(h handler.Handler, cfg *config.Config, fs factorySet) {
-	if cfg.HpaMonitor.Enabled {
-		c.hpaLister = fs.hpaLister()
-		hpaInformers := fs.hpaInformers()
-
-		c.hpaWatchEnabled = true
-
-		var hpaSynced []cache.InformerSynced
-		for _, inf := range hpaInformers {
-			hpaSynced = append(hpaSynced, inf.HasSynced)
-		}
-		c.hpaSynced = hpaSynced
-
-		h.SetHorizontalPodAutoscalerLister(c.hpaLister)
-
-		for _, inf := range hpaInformers {
-			inf.AddEventHandler(c.changeRecordingHandler("horizontalpodautoscaler", c.enqueueHorizontalPodAutoscaler))
-		}
+	if !cfg.HpaMonitor.Enabled {
+		return
 	}
+	c.hpaLister = fs.hpaLister()
+	h.SetHorizontalPodAutoscalerLister(c.hpaLister)
+	c.watch(c.hpa, fs.hpaInformers()...)
 }
 
 func (c *Controller) wireService(h handler.Handler, cfg *config.Config, fs factorySet) {
-	if cfg.ServiceMonitor.Enabled {
-		svcLister := fs.serviceLister()
-		svcInformers := fs.serviceInformers()
-		epSliceLister := fs.endpointSliceLister()
-		epSliceInformers := fs.endpointSliceInformers()
-
-		c.serviceLister = svcLister
-		c.endpointSliceLister = epSliceLister
-		c.serviceWatchEnabled = true
-		c.endpointSliceWatchEnabled = true
-
-		var svcSynced, epSliceSynced []cache.InformerSynced
-		for _, inf := range svcInformers {
-			svcSynced = append(svcSynced, inf.HasSynced)
-		}
-		for _, inf := range epSliceInformers {
-			epSliceSynced = append(epSliceSynced, inf.HasSynced)
-		}
-		c.svcSynced = svcSynced
-		c.endpointSliceSynced = epSliceSynced
-
-		h.SetServiceLister(svcLister)
-		h.SetEndpointSliceLister(epSliceLister)
-
-		for _, inf := range svcInformers {
-			inf.AddEventHandler(c.changeRecordingHandler("service", c.enqueueService))
-		}
-		for _, inf := range epSliceInformers {
-			inf.AddEventHandler(c.changeRecordingHandler("endpointslice", c.enqueueEndpointSlice))
-		}
+	if !cfg.ServiceMonitor.Enabled {
+		return
 	}
+	c.serviceLister = fs.serviceLister()
+	c.endpointSliceLister = fs.endpointSliceLister()
+
+	h.SetServiceLister(c.serviceLister)
+	h.SetEndpointSliceLister(c.endpointSliceLister)
+
+	c.watch(c.service, fs.serviceInformers()...)
+	c.watch(c.endpointSlice, fs.endpointSliceInformers()...)
 }
 
 func (c *Controller) wireAdmissionWebhooks(h handler.Handler, cfg *config.Config, fs factorySet) {
-	if cfg.AdmissionWebhookMonitor.Enabled {
-		mwcLister := fs.mwcLister()
-		mwcInformer := fs.mwcInformer()
-		vwcLister := fs.vwcLister()
-		vwcInformer := fs.vwcInformer()
-
-		c.mwcLister = mwcLister
-		c.mwcSynced = mwcInformer.HasSynced
-		c.vwcLister = vwcLister
-		c.vwcSynced = vwcInformer.HasSynced
-		c.mwcWatchEnabled = true
-		c.vwcWatchEnabled = true
-
-		h.SetMwCLister(mwcLister)
-		h.SetVwCLister(vwcLister)
-
-		mwcInformer.AddEventHandler(c.changeRecordingHandler("mutatingwebhookconfiguration", c.enqueueMwc))
-		vwcInformer.AddEventHandler(c.changeRecordingHandler("validatingwebhookconfiguration", c.enqueueVwc))
+	if !cfg.AdmissionWebhookMonitor.Enabled {
+		return
 	}
+	mwcLister := fs.mwcLister()
+	vwcLister := fs.vwcLister()
+
+	c.mwcLister = mwcLister
+	c.vwcLister = vwcLister
+
+	h.SetMwCLister(mwcLister)
+	h.SetVwCLister(vwcLister)
+
+	c.watch(c.mwc, fs.mwcInformer())
+	c.watch(c.vwc, fs.vwcInformer())
 }
 
 func (c *Controller) wireIngress(h handler.Handler, cfg *config.Config, fs factorySet) {
-	if cfg.IngressMonitor.Enabled {
-		ingressLister := fs.ingressLister()
-		ingressInformers := fs.ingressInformers()
-
-		c.ingressLister = ingressLister
-		c.ingressWatchEnabled = true
-
-		var ingressSynced []cache.InformerSynced
-		for _, inf := range ingressInformers {
-			ingressSynced = append(ingressSynced, inf.HasSynced)
-		}
-		c.ingressSynced = ingressSynced
-
-		h.SetIngressLister(ingressLister)
-
-		for _, inf := range ingressInformers {
-			inf.AddEventHandler(c.changeRecordingHandler("ingress", c.enqueueIngress))
-		}
+	if !cfg.IngressMonitor.Enabled {
+		return
 	}
+	c.ingressLister = fs.ingressLister()
+	h.SetIngressLister(c.ingressLister)
+	c.watch(c.ingress, fs.ingressInformers()...)
 }
 
 func (c *Controller) wireNetpol(h handler.Handler, cfg *config.Config, fs factorySet) {
-	if cfg.NetworkPolicyMonitor.Enabled {
-		netpolLister := fs.netpolLister()
-		netpolInformers := fs.netpolInformers()
-
-		c.netpolLister = netpolLister
-		c.netpolWatchEnabled = true
-
-		var netpolSynced []cache.InformerSynced
-		for _, inf := range netpolInformers {
-			netpolSynced = append(netpolSynced, inf.HasSynced)
-		}
-		c.netpolSynced = netpolSynced
-
-		h.SetNetpolLister(netpolLister)
-
-		for _, inf := range netpolInformers {
-			inf.AddEventHandler(c.changeRecordingHandler("networkpolicy", c.enqueueNetpol))
-		}
+	if !cfg.NetworkPolicyMonitor.Enabled {
+		return
 	}
+	c.netpolLister = fs.netpolLister()
+	h.SetNetpolLister(c.netpolLister)
+	c.watch(c.netpol, fs.netpolInformers()...)
 }
 
 // wireControlPlane wires the kube-system pod informer and returns the dedicated
@@ -247,18 +127,50 @@ func (c *Controller) wireNetpol(h handler.Handler, cfg *config.Config, fs factor
 func (c *Controller) wireControlPlane(h handler.Handler, client kubernetes.Interface, resync time.Duration) informers.SharedInformerFactory {
 	cpFactory := informers.NewSharedInformerFactoryWithOptions(client, resync, informers.WithNamespace("kube-system"))
 	cpPodInformer := cpFactory.Core().V1().Pods().Informer()
-	cpPodLister := cpFactory.Core().V1().Pods().Lister()
 
-	c.cpPodLister = cpPodLister
-	c.cpSynced = cpPodInformer.HasSynced
-	c.cpWatchEnabled = true
+	c.cpPodLister = cpFactory.Core().V1().Pods().Lister()
+	h.SetCpPodLister(c.cpPodLister)
+	c.watch(c.cpPod, cpPodInformer)
 
-	h.SetCpPodLister(cpPodLister)
-
-	cpPodInformer.AddEventHandler(c.changeRecordingHandler("pod", c.enqueueCpPod))
 	return cpFactory
 }
 
+// wireStatefulSet always wires the lister for graph support; queue handlers are
+// only attached when the statefulset monitor is enabled.
+func (c *Controller) wireStatefulSet(h handler.Handler, cfg *config.Config, fs factorySet) {
+	ssInformers := fs.ssInformers()
+
+	c.ssLister = fs.ssLister()
+
+	var ssSynced []cache.InformerSynced
+	for _, inf := range ssInformers {
+		ssSynced = append(ssSynced, inf.HasSynced)
+	}
+	c.ssSynced = ssSynced
+
+	h.SetStatefulSetLister(c.ssLister)
+
+	if cfg.StatefulSetMonitor.Enabled {
+		c.listen(c.statefulSet, ssInformers...)
+	}
+}
+
+// wirePDB wires the pdb monitor. Only the first informer's HasSynced is
+// awaited, matching the historical single-sync behavior.
+func (c *Controller) wirePDB(h handler.Handler, cfg *config.Config, fs factorySet) {
+	if !cfg.PdbMonitor.Enabled {
+		return
+	}
+	pdbInformers := fs.pdbInformers()
+
+	c.pdbLister = fs.pdbLister()
+	c.pdb.synced = []cache.InformerSynced{pdbInformers[0].HasSynced}
+
+	h.SetPdbLister(c.pdbLister)
+	c.listen(c.pdb, pdbInformers...)
+}
+
+// wireReplicaSet wires the replicaset lister used by owner resolution.
 func (c *Controller) wireReplicaSet(h handler.Handler, fs factorySet) {
 	c.rsLister = fs.rsLister()
 
@@ -271,6 +183,8 @@ func (c *Controller) wireReplicaSet(h handler.Handler, fs factorySet) {
 	h.SetReplicaLister(c.rsLister)
 }
 
+// wireDaemonSetLister wires the daemonset lister used by owner resolution;
+// queue handlers live in wireDaemonSetMonitor when the monitor is enabled.
 func (c *Controller) wireDaemonSetLister(h handler.Handler, fs factorySet) {
 	c.dsLister = fs.dsLister()
 
@@ -281,41 +195,6 @@ func (c *Controller) wireDaemonSetLister(h handler.Handler, fs factorySet) {
 	c.dsSynced = dsSynced
 
 	h.SetDaemonSetLister(c.dsLister)
-}
-
-func (c *Controller) wireStatefulSet(h handler.Handler, cfg *config.Config, fs factorySet) {
-	c.ssLister = fs.ssLister()
-
-	var ssSynced []cache.InformerSynced
-	for _, inf := range fs.ssInformers() {
-		ssSynced = append(ssSynced, inf.HasSynced)
-	}
-	c.ssSynced = ssSynced
-
-	h.SetStatefulSetLister(c.ssLister)
-
-	if cfg.StatefulSetMonitor.Enabled {
-		c.statefulSetWatchEnabled = true
-		for _, inf := range fs.ssInformers() {
-			inf.AddEventHandler(c.changeRecordingHandler("statefulset", c.enqueueStatefulSet))
-		}
-	}
-}
-
-func (c *Controller) wirePDB(h handler.Handler, cfg *config.Config, fs factorySet) {
-	if cfg.PdbMonitor.Enabled {
-		c.pdbLister = fs.pdbLister()
-		pdbInformers := fs.pdbInformers()
-
-		c.pdbWatchEnabled = true
-		c.pdbSynced = pdbInformers[0].HasSynced
-
-		h.SetPdbLister(c.pdbLister)
-
-		for _, inf := range pdbInformers {
-			inf.AddEventHandler(c.changeRecordingHandler("poddisruptionbudget", c.enqueuePdb))
-		}
-	}
 }
 
 // wireEvents wires the pod-event informers. It returns the additional factory
@@ -442,6 +321,11 @@ func (c *Controller) wireGraphSupport(fs factorySet) {
 	c.pvLister = fs.persistentVolumeLister()
 	c.serviceAccountLister = fs.serviceAccountLister()
 	c.storageClassLister = fs.storageClassLister()
+	// Cluster-scoped listers only exist when a global/cluster factory was
+	// created; watching multiple namespaces skips PV and storage class edges.
+	if c.pvLister == nil || c.storageClassLister == nil {
+		klog.InfoS("multi-namespace watch: persistentvolume and storageclass graph edges are unavailable")
+	}
 }
 
 // wireTLS wires the TLS secret informer and returns the factories it creates.

@@ -69,7 +69,7 @@ func (h *handler) ProcessIngress(key string, deleted bool) error {
 		h.correlator.ResolveByResource("ingress", namespace+"/"+name)
 		return nil
 	}
-	ing, err := h.ingressLister.Ingresses(namespace).Get(name)
+	ing, err := h.listers.ingress.Ingresses(namespace).Get(name)
 	if err != nil {
 		if errors.IsNotFound(err) {
 			h.correlator.ResolveByResource("ingress", namespace+"/"+name)
@@ -90,10 +90,10 @@ func (h *handler) ProcessIngressObject(ing *networkingv1.Ingress, deleted bool) 
 	}
 
 	hasService := func(ns, name string) bool {
-		if h.serviceLister == nil {
+		if h.listers.service == nil {
 			return true
 		}
-		_, err := h.serviceLister.Services(ns).Get(name)
+		_, err := h.listers.service.Services(ns).Get(name)
 		return err == nil
 	}
 

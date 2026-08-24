@@ -56,7 +56,7 @@ func (h *handler) ProcessNetworkPolicy(key string, deleted bool) error {
 		h.correlator.ResolveByResource("networkpolicy", namespace+"/"+name)
 		return nil
 	}
-	policy, err := h.netpolLister.NetworkPolicies(namespace).Get(name)
+	policy, err := h.listers.netpol.NetworkPolicies(namespace).Get(name)
 	if err != nil {
 		if errors.IsNotFound(err) {
 			h.correlator.ResolveByResource("networkpolicy", namespace+"/"+name)

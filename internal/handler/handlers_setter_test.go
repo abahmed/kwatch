@@ -14,14 +14,14 @@ func TestSetReplicaLister(t *testing.T) {
 	h := NewHandler(fake.NewSimpleClientset(), &config.Config{}, testCorrelator(), testAlertMgr)
 	f := informers.NewSharedInformerFactory(fake.NewSimpleClientset(), 0)
 	h.SetReplicaLister(f.Apps().V1().ReplicaSets().Lister())
-	assert.NotNil(t, h.rsLister)
+	assert.NotNil(t, h.listers.rs)
 }
 
 func TestSetSecretLister(t *testing.T) {
 	h := NewHandler(fake.NewSimpleClientset(), &config.Config{}, testCorrelator(), testAlertMgr)
 	f := informers.NewSharedInformerFactory(fake.NewSimpleClientset(), 0)
 	h.SetSecretLister(f.Core().V1().Secrets().Lister())
-	assert.NotNil(t, h.secretLister)
+	assert.NotNil(t, h.listers.secret)
 }
 
 func TestSetInsightEngine(t *testing.T) {

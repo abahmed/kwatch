@@ -66,7 +66,7 @@ func (h *handler) ProcessService(key string, deleted bool) error {
 		h.correlator.ResolveByResource("service", namespace+"/"+name)
 		return nil
 	}
-	svc, err := h.serviceLister.Services(namespace).Get(name)
+	svc, err := h.listers.service.Services(namespace).Get(name)
 	if err != nil {
 		if errors.IsNotFound(err) {
 			h.correlator.ResolveByResource("service", namespace+"/"+name)
@@ -89,7 +89,7 @@ func (h *handler) ProcessServiceObject(svc *corev1.Service, deleted bool) error 
 	}
 
 	sel := labels.Set{"kubernetes.io/service-name": svc.Name}.AsSelector()
-	epSlices, err := h.endpointSliceLister.EndpointSlices(svc.Namespace).List(sel)
+	epSlices, err := h.listers.endpointSlice.EndpointSlices(svc.Namespace).List(sel)
 	if err != nil {
 		return fmt.Errorf("failed to list endpoint slices for %s/%s: %w", svc.Namespace, svc.Name, err)
 	}
@@ -113,9 +113,9 @@ func (h *handler) ProcessServiceObject(svc *corev1.Service, deleted bool) error 
 }
 
 func (h *handler) markServiceNoEndpoints(key string) time.Time {
-	return h.serviceNoEndpointSince.mark(key, h.now())
+	return h.fs.serviceNoEndpoint.mark(key, h.now())
 }
 
 func (h *handler) clearServiceNoEndpoints(namespace, name string) {
-	h.serviceNoEndpointSince.clear(correlation.OwnerPath(namespace, name))
+	h.fs.serviceNoEndpoint.clear(correlation.OwnerPath(namespace, name))
 }

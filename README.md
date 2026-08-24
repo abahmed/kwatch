@@ -168,7 +168,7 @@ Nearly everything, **out of the box — zero config**. Highlights:
 | 🌐 Service/Ingress backends with no healthy pods | ✅ on | Traffic would fail — alerted before users notice |
 | 🏛️ Broken control-plane components | ✅ on | apiserver, scheduler, etcd, coredns |
 | 🔒 TLS certs expiring | ❌ off | Enable this one if you want |
-| 💓 Heartbeat | ❌ off | Periodic "still alive" ping (default: once a day) |
+| 💓 Heartbeat | ❌ off | Periodic "still alive" ping (default: every 5 min) |
 
 ✅ **TLS and heartbeat are the only ones off** — everything else just works. The full list —
 failed Jobs, stuck CronJobs, admission webhooks, PDBs, network-policy blocks, node

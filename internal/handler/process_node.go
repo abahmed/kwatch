@@ -36,7 +36,7 @@ func (h *handler) ProcessNode(key string, deleted bool) error {
 		return nil
 	}
 
-	node, err := h.nodeLister.Get(name)
+	node, err := h.listers.node.Get(name)
 	if err != nil {
 		if errors.IsNotFound(err) {
 			h.clearAllNodePressure(name)
@@ -148,13 +148,13 @@ func (h *handler) ProcessNodeObject(node *corev1.Node, deleted bool) error {
 }
 
 func (h *handler) markFirstNodePressure(key string) time.Time {
-	return h.firstNodePressure.mark(key, h.now())
+	return h.fs.nodePressure.mark(key, h.now())
 }
 
 func (h *handler) clearFirstNodePressure(key string) {
-	h.firstNodePressure.clear(key)
+	h.fs.nodePressure.clear(key)
 }
 
 func (h *handler) clearAllNodePressure(nodeName string) {
-	h.firstNodePressure.clearPrefix(nodeName + "/")
+	h.fs.nodePressure.clearPrefix(nodeName + "/")
 }

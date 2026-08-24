@@ -48,7 +48,7 @@ func (h *handler) ProcessDaemonSet(key string, deleted bool) error {
 		return nil
 	}
 
-	ds, err := h.dsLister.DaemonSets(namespace).Get(name)
+	ds, err := h.listers.ds.DaemonSets(namespace).Get(name)
 	if err != nil {
 		if errors.IsNotFound(err) {
 			h.correlator.ResolveByResource("daemonset", namespace+"/"+name)
@@ -121,9 +121,9 @@ func (h *handler) ProcessDaemonSetObject(ds *appsv1.DaemonSet, deleted bool) err
 }
 
 func (h *handler) markFirstUnavailableDS(key string) time.Time {
-	return h.firstUnavailableDS.mark(key, h.now())
+	return h.fs.unavailableDS.mark(key, h.now())
 }
 
 func (h *handler) clearFirstUnavailableDS(key string) {
-	h.firstUnavailableDS.clear(key)
+	h.fs.unavailableDS.clear(key)
 }

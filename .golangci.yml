@@ -15,7 +15,7 @@ linters:
       disable:
         - inline
     gocyclo:
-      min-complexity: 35
+      min-complexity: 20
     errcheck:
       exclude-functions:
         - "(*compress/gzip.Reader).Close"
@@ -28,14 +28,12 @@ linters:
   exclusions:
     generated: lax
     rules:
-      # Test-only helpers that intentionally ignore errors (e.g. seeding store/indexers).
+      # Tests intentionally ignore errors (e.g. seeding store/indexers).
       - path: "_test.go"
         linters: [errcheck, unparam, gocritic]
       # Informer wiring is declarative; ignoring AddEventHandler is noise.
       - path: "internal/controller"
         linters: [errcheck]
-      - path: "internal/audit"
-        linters: [revive]
 
 formatters:
   enable:

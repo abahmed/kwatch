@@ -146,12 +146,12 @@ func TestNewCreatesController(t *testing.T) {
 	defer cleanup()
 
 	assert.NotNil(ctrl)
-	assert.NotNil(ctrl.podQueue)
-	assert.NotNil(ctrl.nodeQueue)
+	assert.NotNil(ctrl.pod.queue)
+	assert.NotNil(ctrl.node.queue)
 	assert.NotNil(ctrl.podLister)
-	assert.Len(ctrl.podsSynced, 1)
+	assert.Len(ctrl.pod.synced, 1)
 	// Node monitor disabled by default — no node informer
-	assert.Nil(ctrl.nodesSynced)
+	assert.Nil(ctrl.node.synced)
 	assert.Nil(ctrl.nodeLister)
 }
 
@@ -167,7 +167,7 @@ func TestNewWithNodeMonitor(t *testing.T) {
 	ctrl, cleanup := New(client, cfg, h)
 	defer cleanup()
 
-	assert.NotNil(ctrl.nodesSynced)
+	assert.NotEmpty(ctrl.node.synced)
 	assert.NotNil(ctrl.nodeLister)
 }
 
@@ -190,7 +190,7 @@ func TestNewWithNodeResourceMonitorOnly(t *testing.T) {
 	// event monitor is disabled — a nil lister would panic on first tick.
 	assert.NotNil(ctrl.nodeLister)
 	// But the node event worker must stay off.
-	assert.Nil(ctrl.nodesSynced)
+	assert.Nil(ctrl.node.synced)
 }
 
 func TestNewWithSingleNamespace(t *testing.T) {
@@ -232,7 +232,7 @@ func TestSyncEndpointSliceResolvesServiceByLabel(t *testing.T) {
 	defer cleanup()
 
 	// The slice name ("web-hash") must NOT be looked up as the service name.
-	err := ctrl.syncEndpointSlice("ns/web-hash")
+	err := ctrl.syncEndpointSlice(context.Background(), "ns/web-hash")
 	assert.Nil(err)
 }
 
@@ -250,7 +250,7 @@ func TestSyncEndpointSliceIgnoresUnlabeled(t *testing.T) {
 	ctrl, cleanup := New(client, cfg, h)
 	defer cleanup()
 
-	err := ctrl.syncEndpointSlice("ns/web-hash")
+	err := ctrl.syncEndpointSlice(context.Background(), "ns/web-hash")
 	assert.Nil(err)
 }
 
@@ -274,11 +274,9 @@ func TestEnqueuePod(t *testing.T) {
 	assert := assert.New(t)
 
 	ctrl := &Controller{
-		podQueue: workqueue.NewTypedRateLimitingQueue(
-			workqueue.DefaultTypedControllerRateLimiter[string](),
-		),
+		pod: newResourcePipeline("pod", "pods"),
 	}
-	defer ctrl.podQueue.ShutDown()
+	defer ctrl.pod.shutdown()
 
 	pod := &corev1.Pod{
 		ObjectMeta: metav1.ObjectMeta{
@@ -287,24 +285,22 @@ func TestEnqueuePod(t *testing.T) {
 		},
 	}
 
-	ctrl.enqueuePod(pod)
-	assert.Equal(1, ctrl.podQueue.Len())
+	ctrl.pod.enqueue(pod)
+	assert.Equal(1, ctrl.pod.queue.Len())
 
-	key, quit := ctrl.podQueue.Get()
+	key, quit := ctrl.pod.queue.Get()
 	assert.False(quit)
 	assert.Equal("default/my-pod", key)
-	ctrl.podQueue.Done(key)
+	ctrl.pod.queue.Done(key)
 }
 
 func TestEnqueueNode(t *testing.T) {
 	assert := assert.New(t)
 
 	ctrl := &Controller{
-		nodeQueue: workqueue.NewTypedRateLimitingQueue(
-			workqueue.DefaultTypedControllerRateLimiter[string](),
-		),
+		node: newResourcePipeline("node", "nodes"),
 	}
-	defer ctrl.nodeQueue.ShutDown()
+	defer ctrl.node.shutdown()
 
 	node := &corev1.Node{
 		ObjectMeta: metav1.ObjectMeta{
@@ -312,36 +308,34 @@ func TestEnqueueNode(t *testing.T) {
 		},
 	}
 
-	ctrl.enqueueNode(node)
-	assert.Equal(1, ctrl.nodeQueue.Len())
+	ctrl.node.enqueue(node)
+	assert.Equal(1, ctrl.node.queue.Len())
 
-	key, quit := ctrl.nodeQueue.Get()
+	key, quit := ctrl.node.queue.Get()
 	assert.False(quit)
 	assert.Equal("worker-1", key)
-	ctrl.nodeQueue.Done(key)
+	ctrl.node.queue.Done(key)
 }
 
 func TestEnqueueNodeTombstone(t *testing.T) {
 	assert := assert.New(t)
 
 	ctrl := &Controller{
-		nodeQueue: workqueue.NewTypedRateLimitingQueue(
-			workqueue.DefaultTypedControllerRateLimiter[string](),
-		),
+		node: newResourcePipeline("node", "nodes"),
 	}
-	defer ctrl.nodeQueue.ShutDown()
+	defer ctrl.node.shutdown()
 
 	tombstone := &corev1.Node{
 		ObjectMeta: metav1.ObjectMeta{
 			Name: "worker-2",
 		},
 	}
-	ctrl.enqueueNode(tombstone)
-	assert.Equal(1, ctrl.nodeQueue.Len())
+	ctrl.node.enqueue(tombstone)
+	assert.Equal(1, ctrl.node.queue.Len())
 
-	key, _ := ctrl.nodeQueue.Get()
+	key, _ := ctrl.node.queue.Get()
 	assert.Equal("worker-2", key)
-	ctrl.nodeQueue.Done(key)
+	ctrl.node.queue.Done(key)
 }
 
 func TestProcessNextPodItemQuit(t *testing.T) {
@@ -349,14 +343,12 @@ func TestProcessNextPodItemQuit(t *testing.T) {
 
 	h := &mockHandler{}
 	ctrl := &Controller{
-		podQueue: workqueue.NewTypedRateLimitingQueue(
-			workqueue.DefaultTypedControllerRateLimiter[string](),
-		),
+		pod:     newResourcePipeline("pod", "pods"),
 		handler: h,
 	}
 
-	ctrl.podQueue.ShutDown()
-	result := ctrl.processNextPodItem(context.Background())
+	ctrl.pod.queue.ShutDown()
+	result := ctrl.pod.processNextItem(context.Background())
 	assert.False(result)
 	assert.Empty(h.podKeys)
 }
@@ -366,14 +358,12 @@ func TestProcessNextNodeItemQuit(t *testing.T) {
 
 	h := &mockHandler{}
 	ctrl := &Controller{
-		nodeQueue: workqueue.NewTypedRateLimitingQueue(
-			workqueue.DefaultTypedControllerRateLimiter[string](),
-		),
+		node:    newResourcePipeline("node", "nodes"),
 		handler: h,
 	}
 
-	ctrl.nodeQueue.ShutDown()
-	result := ctrl.processNextNodeItem()
+	ctrl.node.queue.ShutDown()
+	result := ctrl.node.processNextItem(context.Background())
 	assert.False(result)
 	assert.Empty(h.nodeKeys)
 }
@@ -386,8 +376,8 @@ func TestProcessNextPodItemProcessesKey(t *testing.T) {
 	ctrl, cleanup := New(client, &config.Config{}, h)
 	defer cleanup()
 
-	ctrl.podQueue.Add("default/test-pod")
-	result := ctrl.processNextPodItem(context.Background())
+	ctrl.pod.queue.Add("default/test-pod")
+	result := ctrl.pod.processNextItem(context.Background())
 	assert.True(result)
 	assert.Equal([]string{"default/test-pod"}, h.podKeys)
 	assert.Equal([]bool{false}, h.podDel)
@@ -404,8 +394,8 @@ func TestProcessNextNodeItemProcessesKey(t *testing.T) {
 	ctrl, cleanup := New(client, cfg, h)
 	defer cleanup()
 
-	ctrl.nodeQueue.Add("worker-1")
-	result := ctrl.processNextNodeItem()
+	ctrl.node.queue.Add("worker-1")
+	result := ctrl.node.processNextItem(context.Background())
 	assert.True(result)
 	assert.Equal([]string{"worker-1"}, h.nodeKeys)
 	assert.Equal([]bool{false}, h.nodeDel)
@@ -509,7 +499,7 @@ func TestSyncNodeExistingNode(t *testing.T) {
 		return err == nil
 	}, 5*time.Second, 50*time.Millisecond)
 
-	err := ctrl.syncNode("worker-1")
+	err := ctrl.syncNode(context.Background(), "worker-1")
 	assert.NoError(err)
 	assert.Equal([]string{"worker-1"}, h.nodeKeys)
 	assert.Equal([]bool{false}, h.nodeDel)
@@ -527,7 +517,7 @@ func TestSyncNodeDeletedNode(t *testing.T) {
 	ctrl, cleanup := New(client, cfg, h)
 	defer cleanup()
 
-	err := ctrl.syncNode("nonexistent-node")
+	err := ctrl.syncNode(context.Background(), "nonexistent-node")
 	assert.NoError(err)
 	assert.Equal([]string{"nonexistent-node"}, h.nodeKeys)
 	assert.Equal([]bool{false}, h.nodeDel)
@@ -545,7 +535,7 @@ func TestSyncNodeHandlerError(t *testing.T) {
 	ctrl, cleanup := New(client, cfg, h)
 	defer cleanup()
 
-	err := ctrl.syncNode("nonexistent-node")
+	err := ctrl.syncNode(context.Background(), "nonexistent-node")
 	assert.Error(err)
 	assert.Equal("node handler failed", err.Error())
 }
@@ -734,20 +724,22 @@ func TestRunPodDeduplication(t *testing.T) {
 	client := fake.NewSimpleClientset()
 	f := informers.NewSharedInformerFactory(client, 0)
 	ctrl := &Controller{
-		podQueue:  q,
 		handler:   &mockHandler{},
 		podLister: f.Core().V1().Pods().Lister(),
 	}
+	ctrl.pod = newResourcePipeline("pod", "pods")
+	ctrl.pod.queue = q
+	ctrl.pod.syncFn = ctrl.syncPod
 
 	q.Add("default/dup")
 	q.Add("default/dup")
 
 	assert.Equal(1, q.Len())
 
-	assert.True(ctrl.processNextPodItem(context.Background()))
+	assert.True(ctrl.pod.processNextItem(context.Background()))
 
 	q.ShutDown()
-	assert.False(ctrl.processNextPodItem(context.Background()))
+	assert.False(ctrl.pod.processNextItem(context.Background()))
 
 	assert.Equal(1, ctrl.handler.(*mockHandler).podCount())
 }
@@ -763,17 +755,19 @@ func TestMultipleWorkers(t *testing.T) {
 	client := fake.NewSimpleClientset()
 	f := informers.NewSharedInformerFactory(client, 0)
 	ctrl := &Controller{
-		podQueue:  q,
 		handler:   &mockHandler{},
 		podLister: f.Core().V1().Pods().Lister(),
 	}
+	ctrl.pod = newResourcePipeline("pod", "pods")
+	ctrl.pod.queue = q
+	ctrl.pod.syncFn = ctrl.syncPod
 
 	for i := 0; i < 10; i++ {
 		q.Add(fmt.Sprintf("default/pod-%d", i))
 	}
 
 	for i := 0; i < 10; i++ {
-		ctrl.processNextPodItem(context.Background())
+		ctrl.pod.processNextItem(context.Background())
 	}
 
 	assert.Equal(10, ctrl.handler.(*mockHandler).podCount())
@@ -784,11 +778,9 @@ func TestEnqueuePodWithTombstone(t *testing.T) {
 	assert := assert.New(t)
 
 	ctrl := &Controller{
-		podQueue: workqueue.NewTypedRateLimitingQueue(
-			workqueue.DefaultTypedControllerRateLimiter[string](),
-		),
+		pod: newResourcePipeline("pod", "pods"),
 	}
-	defer ctrl.podQueue.ShutDown()
+	defer ctrl.pod.shutdown()
 
 	tombstone := &corev1.Pod{
 		ObjectMeta: metav1.ObjectMeta{
@@ -796,23 +788,21 @@ func TestEnqueuePodWithTombstone(t *testing.T) {
 			Namespace: "kube-system",
 		},
 	}
-	ctrl.enqueuePod(tombstone)
-	assert.Equal(1, ctrl.podQueue.Len())
+	ctrl.pod.enqueue(tombstone)
+	assert.Equal(1, ctrl.pod.queue.Len())
 
-	key, _ := ctrl.podQueue.Get()
+	key, _ := ctrl.pod.queue.Get()
 	assert.Equal("kube-system/tombstone-pod", key)
-	ctrl.podQueue.Done(key)
+	ctrl.pod.queue.Done(key)
 }
 
 func TestEnqueuePodDeletedFinalStateUnknown(t *testing.T) {
 	assert := assert.New(t)
 
 	ctrl := &Controller{
-		podQueue: workqueue.NewTypedRateLimitingQueue(
-			workqueue.DefaultTypedControllerRateLimiter[string](),
-		),
+		pod: newResourcePipeline("pod", "pods"),
 	}
-	defer ctrl.podQueue.ShutDown()
+	defer ctrl.pod.shutdown()
 
 	pod := &corev1.Pod{
 		ObjectMeta: metav1.ObjectMeta{
@@ -821,12 +811,12 @@ func TestEnqueuePodDeletedFinalStateUnknown(t *testing.T) {
 		},
 	}
 	tombstone := cache.DeletedFinalStateUnknown{Key: "default/lost-pod", Obj: pod}
-	ctrl.enqueuePod(tombstone)
-	assert.Equal(1, ctrl.podQueue.Len())
+	ctrl.pod.enqueue(tombstone)
+	assert.Equal(1, ctrl.pod.queue.Len())
 
-	key, _ := ctrl.podQueue.Get()
+	key, _ := ctrl.pod.queue.Get()
 	assert.Equal("default/lost-pod", key)
-	ctrl.podQueue.Done(key)
+	ctrl.pod.queue.Done(key)
 }
 
 func TestProcessNextPodItemForgetsOnSuccess(t *testing.T) {
@@ -837,11 +827,11 @@ func TestProcessNextPodItemForgetsOnSuccess(t *testing.T) {
 	ctrl, cleanup := New(client, &config.Config{}, h)
 	defer cleanup()
 
-	ctrl.podQueue.Add("default/forgotten")
+	ctrl.pod.queue.Add("default/forgotten")
 
-	ctrl.processNextPodItem(context.Background())
+	ctrl.pod.processNextItem(context.Background())
 
-	assert.Equal(0, ctrl.podQueue.Len())
+	assert.Equal(0, ctrl.pod.queue.Len())
 }
 
 func TestNewMultiNamespaceHasMultipleSynced(t *testing.T) {
@@ -862,7 +852,7 @@ func TestNewMultiNamespaceHasMultipleSynced(t *testing.T) {
 	ctrl, cleanup := New(client, cfg, h)
 	defer cleanup()
 
-	assert.Len(ctrl.podsSynced, 2, "should have one synced fn per namespace")
+	assert.Len(ctrl.pod.synced, 2, "should have one synced fn per namespace")
 }
 
 func TestRunMultipleWorkers(t *testing.T) {
@@ -882,7 +872,7 @@ func TestRunMultipleWorkers(t *testing.T) {
 
 	// Add 20 pods via the pod queue
 	for i := 0; i < 20; i++ {
-		ctrl.podQueue.Add(fmt.Sprintf("default/pod-%d", i))
+		ctrl.pod.queue.Add(fmt.Sprintf("default/pod-%d", i))
 	}
 
 	assert.Eventually(func() bool {

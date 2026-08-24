@@ -34,14 +34,14 @@ func TestClusterAutoscalerSustainedGateResetOnSuccess(t *testing.T) {
 	// A successful scale event clears the gate.
 	now = now.Add(1 * time.Minute)
 	hh.ProcessClusterAutoscalerEvent(caEvent("TriggeredScaleUp"))
-	if _, ok := hh.firstCaBlocked.get("FailedToScaleUp"); ok {
+	if _, ok := hh.fs.caBlocked.get("FailedToScaleUp"); ok {
 		t.Fatal("TriggeredScaleUp must reset the FailedToScaleUp gate")
 	}
 
 	// A fresh failure needs a new sustain window before alerting again.
 	hh.ProcessClusterAutoscalerEvent(caEvent("FailedToScaleUp"))
 	assert.Equal(t, 1, e.ActiveCount(), "gate must re-arm, no immediate re-alert")
-	first, ok := hh.firstCaBlocked.get("FailedToScaleUp")
+	first, ok := hh.fs.caBlocked.get("FailedToScaleUp")
 	if !ok {
 		t.Fatal("fresh failure must re-arm the gate")
 	}

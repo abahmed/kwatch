@@ -69,6 +69,7 @@ data:
       window: <minutes>                # correlation window (default 10 min)
       lifecycleInterval: <minutes>     # stale-incident check interval (default 1 min)
       resolveHoldDown: <seconds>       # flap dampening before resolve (default 300)
+      # cooldownMinutes: <minutes>     # min time between identical crash re-alerts (default 10, 0 = off)
       maxBaseline: 5000                # max baseline entries (default 5000)
       escalation:
         enabled: <boolean>             # auto-escalate severity by restart count (default true)
@@ -188,9 +189,6 @@ data:
     # runbooks:
     #   <reason>: "<url>"
 
-    # ── Dashboard URL template (optional) ─────────────────
-    # dashboardURLTemplate: "https://grafana.example.com/d/abc?var-ns={namespace}&var-pod={pod}"
-
     # ── Health check ──────────────────────────────────────
     healthCheck:
       enabled: <boolean>           # default true
@@ -262,13 +260,13 @@ data:
         apiKey: <api_key>
 
       # matrix:
-      #   homeserverUrl: "<url>"
-      #   userId: "<user>"
+      #   homeServer: "<url>"
       #   accessToken: "<token>"
-      #   roomId: "<room>"
+      #   internalRoomId: "<room_id>"
 
       # dingtalk:
-      #   webhook: <webhook_url>
+      #   accessToken: <access_token>
+      #   # secret: <signing_secret>
 
       # feishu:
       #   webhook: <webhook_url>

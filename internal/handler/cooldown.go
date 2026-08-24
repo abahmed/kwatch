@@ -26,6 +26,37 @@ type firstSeen struct {
 const firstSeenMaxAge = 1 * time.Hour
 const firstSeenMaxEntries = 5000
 
+// firstSeenSet groups one firstSeen tracker per monitored resource kind.
+// Each tracker holds an independent sustainment window (e.g. "deployment has
+// been unavailable since X"); see the process_*.go files that own them.
+type firstSeenSet struct {
+	maxedHPAs         *firstSeen
+	scalingErrorHPAs  *firstSeen
+	unavailableSts    *firstSeen
+	pdbViolation      *firstSeen
+	unavailableDS     *firstSeen
+	unavailableDeploy *firstSeen
+	suspendedCJs      *firstSeen
+	nodePressure      *firstSeen
+	serviceNoEndpoint *firstSeen
+	caBlocked         *firstSeen
+}
+
+func newFirstSeenSet() firstSeenSet {
+	return firstSeenSet{
+		maxedHPAs:         newFirstSeen(),
+		scalingErrorHPAs:  newFirstSeen(),
+		unavailableSts:    newFirstSeen(),
+		pdbViolation:      newFirstSeen(),
+		unavailableDS:     newFirstSeen(),
+		unavailableDeploy: newFirstSeen(),
+		suspendedCJs:      newFirstSeen(),
+		nodePressure:      newFirstSeen(),
+		serviceNoEndpoint: newFirstSeen(),
+		caBlocked:         newFirstSeen(),
+	}
+}
+
 func newFirstSeen() *firstSeen {
 	return &firstSeen{
 		first:    make(map[string]time.Time),

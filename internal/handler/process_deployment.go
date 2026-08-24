@@ -26,7 +26,7 @@ func (h *handler) ProcessDeployment(key string, deleted bool) error {
 		return nil
 	}
 
-	deploy, err := h.deployLister.Deployments(namespace).Get(name)
+	deploy, err := h.listers.deploy.Deployments(namespace).Get(name)
 	if err != nil {
 		if errors.IsNotFound(err) {
 			h.clearFirstUnavailableDeploy(namespace + "/" + name)
@@ -126,9 +126,9 @@ func (h *handler) ProcessDeploymentObject(deploy *appsv1.Deployment, deleted boo
 }
 
 func (h *handler) markFirstUnavailableDeploy(key string) time.Time {
-	return h.firstUnavailableDeploy.mark(key, h.now())
+	return h.fs.unavailableDeploy.mark(key, h.now())
 }
 
 func (h *handler) clearFirstUnavailableDeploy(key string) {
-	h.firstUnavailableDeploy.clear(key)
+	h.fs.unavailableDeploy.clear(key)
 }

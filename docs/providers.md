@@ -187,7 +187,7 @@ Father to get a `token` and a `chatId`.
 |:---|---|
 | `alert.matrix.homeServer` | 🖥️ HomeServer URL |
 | `alert.matrix.accessToken` | 🔑 Access token |
-| `alert.matrix.internalRoomID` | 🆔 Room ID |
+| `alert.matrix.internalRoomId` | 🆔 Room ID |
 | `alert.matrix.title` | ✏️ Custom title |
 | `alert.matrix.text` | ✏️ Custom text |
 
@@ -226,6 +226,8 @@ Father to get a `token` and a `chatId`.
 |:---|---|
 | `alert.gotify.url` | 🔗 Gotify server URL |
 | `alert.gotify.token` | 🔑 App token |
+| `alert.gotify.priority` | 🎚️ Priority (optional) |
+| `alert.gotify.title` | ✏️ Custom title |
 
 ```yaml
 alert:
@@ -255,6 +257,8 @@ alert:
 |:---|---|
 | `alert.pushover.token` | 🔑 Application token |
 | `alert.pushover.user` | 👤 User or group key |
+| `alert.pushover.priority` | 🎚️ Priority (optional) |
+| `alert.pushover.title` | ✏️ Custom title |
 
 ### 🟣 Webex
 
@@ -271,6 +275,7 @@ alert:
 | `alert.github.token` | 🔑 Personal access token |
 | `alert.github.owner` | 👤 Repository owner |
 | `alert.github.repo` | 📦 Repository name |
+| `alert.github.url` | 🔗 Optional endpoint override (e.g. GitHub Enterprise) |
 
 ```yaml
 alert:
@@ -286,6 +291,7 @@ alert:
 |:---|---|
 | `alert.gitlab.token` | 🔑 Personal access token |
 | `alert.gitlab.projectId` | 🆔 Project ID |
+| `alert.gitlab.url` | 🔗 Optional endpoint override (e.g. self-hosted GitLab) |
 
 ```yaml
 alert:
@@ -301,6 +307,7 @@ alert:
 | `alert.gitea.token` | 🔑 Access token |
 | `alert.gitea.owner` | 👤 Repository owner |
 | `alert.gitea.repo` | 📦 Repository name |
+| `alert.gitea.url` | 🔗 Optional endpoint override (e.g. self-hosted Gitea) |
 
 ### 🧩 Zapier
 
@@ -438,6 +445,7 @@ alert:
 | `alert.signl4.teamSecret` | 🔑 Team secret |
 | `alert.signl4.title` | ✏️ Custom title |
 | `alert.signl4.user` | 👤 Optional alerting user |
+| `alert.signl4.url` | 🔗 Optional endpoint override |
 
 ### ✉️ Twilio
 
@@ -605,6 +613,7 @@ alert:
 | `alert.mailgun.from` | 📤 From address |
 | `alert.mailgun.to` | 📥 Recipients (comma-separated) |
 | `alert.mailgun.subject` | ✏️ Email subject |
+| `alert.mailgun.url` | 🔗 Optional endpoint override (e.g. EU region) |
 
 ```yaml
 alert:

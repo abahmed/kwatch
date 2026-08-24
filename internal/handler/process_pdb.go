@@ -51,7 +51,7 @@ func (h *handler) ProcessPdb(key string, deleted bool) error {
 		return nil
 	}
 
-	pdb, err := h.pdbLister.PodDisruptionBudgets(namespace).Get(name)
+	pdb, err := h.listers.pdb.PodDisruptionBudgets(namespace).Get(name)
 	if err != nil {
 		if errors.IsNotFound(err) {
 			h.clearFirstPdbViolation(namespace + "/" + name)
@@ -102,9 +102,9 @@ func (h *handler) ProcessPdbObject(pdb *policyv1.PodDisruptionBudget, deleted bo
 }
 
 func (h *handler) markFirstPdbViolation(key string) time.Time {
-	return h.firstPdbViolation.mark(key, h.now())
+	return h.fs.pdbViolation.mark(key, h.now())
 }
 
 func (h *handler) clearFirstPdbViolation(key string) {
-	h.firstPdbViolation.clear(key)
+	h.fs.pdbViolation.clear(key)
 }

@@ -24,7 +24,7 @@ func (h *handler) ProcessJob(key string, deleted bool) error {
 		return nil
 	}
 
-	job, err := h.jobLister.Jobs(namespace).Get(name)
+	job, err := h.listers.job.Jobs(namespace).Get(name)
 	if err != nil {
 		if errors.IsNotFound(err) {
 			h.correlator.ResolveByResource("job", namespace+"/"+name)

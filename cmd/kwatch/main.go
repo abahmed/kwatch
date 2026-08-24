@@ -7,6 +7,7 @@ import (
 
 	"k8s.io/klog/v2"
 
+	"github.com/abahmed/kwatch/internal/app"
 	"github.com/abahmed/kwatch/internal/version"
 )
 
@@ -52,5 +53,5 @@ func runWithFlags() int {
 		}
 	}
 
-	return runServer()
+	return app.Run()
 }

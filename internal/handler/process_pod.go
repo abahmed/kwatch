@@ -37,7 +37,7 @@ func (h *handler) ProcessPod(ctx context.Context, key string, deleted bool) erro
 		return nil
 	}
 
-	pod, err := h.podLister.Pods(namespace).Get(name)
+	pod, err := h.listers.pod.Pods(namespace).Get(name)
 	if err != nil {
 		if errors.IsNotFound(err) {
 			h.correlator.RemovePod(namespace, name)
@@ -65,10 +65,10 @@ func (h *handler) ProcessPodObject(parent context.Context, pod *corev1.Pod, dele
 		Config:      h.config,
 		Pod:         pod,
 		EvType:      "ADDED",
-		RSLister:    h.rsLister,
-		DSLister:    h.dsLister,
-		SSLister:    h.ssLister,
-		EventLister: h.eventLister,
+		RSLister:    h.listers.rs,
+		DSLister:    h.listers.ds,
+		SSLister:    h.listers.ss,
+		EventLister: h.listers.event,
 	}
 
 	h.executePodFilters(&ctxF)

@@ -1,7 +1,7 @@
 # Makefile for kwatch
 # Following Kubernetes community conventions
 
-.PHONY: build test test-short lint vet clean verify-fmt verify-unit verify-all help
+.PHONY: build test test-short lint vet clean verify-fmt verify-unit verify-all docker-build docker-build-latest help
 
 # Binary names
 BINARY_NAME := kwatch
@@ -12,7 +12,6 @@ GOCMD := go
 GOBUILD := CGO_ENABLED=0 $(GOCMD) build
 GOTEST := $(GOCMD) test
 GOVET := $(GOCMD) vet
-GOFMT := $(GOCMD) fmt
 
 # Build parameters
 VERSION := $(shell git describe --tags --always --dirty 2>/dev/null || echo "dev")

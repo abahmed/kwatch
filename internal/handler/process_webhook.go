@@ -75,7 +75,7 @@ func (h *handler) ProcessMutatingWebhookConfiguration(key string, deleted bool) 
 		h.correlator.ResolveByResource("mutatingwebhookconfiguration", key)
 		return nil
 	}
-	mwc, err := h.mwcLister.Get(key)
+	mwc, err := h.listers.mwc.Get(key)
 	if err != nil {
 		if errors.IsNotFound(err) {
 			h.correlator.ResolveByResource("mutatingwebhookconfiguration", key)
@@ -96,10 +96,10 @@ func (h *handler) ProcessMutatingWebhookConfigurationObject(mwc *admissionregist
 	}
 
 	hasService := func(ns, name string) bool {
-		if h.serviceLister == nil {
+		if h.listers.service == nil {
 			return true // can't check, assume ok
 		}
-		_, err := h.serviceLister.Services(ns).Get(name)
+		_, err := h.listers.service.Services(ns).Get(name)
 		return err == nil
 	}
 
@@ -118,7 +118,7 @@ func (h *handler) ProcessValidatingWebhookConfiguration(key string, deleted bool
 		h.correlator.ResolveByResource("validatingwebhookconfiguration", key)
 		return nil
 	}
-	vwc, err := h.vwcLister.Get(key)
+	vwc, err := h.listers.vwc.Get(key)
 	if err != nil {
 		if errors.IsNotFound(err) {
 			h.correlator.ResolveByResource("validatingwebhookconfiguration", key)
@@ -139,10 +139,10 @@ func (h *handler) ProcessValidatingWebhookConfigurationObject(vwc *admissionregi
 	}
 
 	hasService := func(ns, name string) bool {
-		if h.serviceLister == nil {
+		if h.listers.service == nil {
 			return true
 		}
-		_, err := h.serviceLister.Services(ns).Get(name)
+		_, err := h.listers.service.Services(ns).Get(name)
 		return err == nil
 	}
 

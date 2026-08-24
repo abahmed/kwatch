@@ -4,7 +4,6 @@ import (
 	"fmt"
 	"slices"
 	"sort"
-	"strings"
 	"time"
 
 	"github.com/abahmed/kwatch/internal/constant"
@@ -14,7 +13,6 @@ import (
 	"k8s.io/klog/v2"
 
 	"github.com/abahmed/kwatch/internal/correlation"
-	"github.com/abahmed/kwatch/internal/enricher"
 	"github.com/abahmed/kwatch/internal/event"
 	"github.com/abahmed/kwatch/internal/filter"
 	"github.com/abahmed/kwatch/internal/k8s"
@@ -238,200 +236,6 @@ func (h *handler) oomKey(ctx *filter.Context) string {
 	return ctx.Pod.Namespace + "/" + ctx.Pod.Name + "/" + ctx.Container.Container.Name
 }
 
-// buildContainerHint computes a rich diagnostic hint from container state + spec.
-func (h *handler) buildContainerHint(ctx *filter.Context) string {
-	reason := ctx.Container.Reason
-	exitCode := ctx.Container.ExitCode
-
-	hint := enricher.HintForReason(reason)
-	if ctx.Container.IsInit && exitCode != 0 {
-		hint = enricher.HintForReason(constant.ReasonInitContainerError)
-		if ecHint := enricher.HintForExitCode(exitCode); ecHint != "" {
-			hint = enricher.CombineHints(hint, ecHint)
-		}
-	} else if exitCode != 0 {
-		ecHint := enricher.HintForExitCode(exitCode)
-		hint = enricher.CombineHints(hint, ecHint)
-	}
-
-	spec := findContainerSpec(ctx.Pod, ctx.Container.Container.Name)
-
-	// Exit code 137 alone is not proof of an OOM kill — SIGKILL (manual kill,
-	// eviction, liveness-probe kill) produces the same code. Only the kubelet's
-	// OOMKilled reason is treated as memory pressure; 137 with any other reason
-	// is labeled as a plain SIGKILL ("Killed").
-	isOOM := reason == constant.ReasonOOMKilled
-
-	if isOOM && h.oomTracker != nil {
-		key := h.oomKey(ctx)
-		if count, repeating := h.oomTracker.record(key); repeating {
-			ctx.Container.Reason = constant.ReasonOOMRepeating
-			timeline := h.oomTracker.History(key)
-			if timeline != "" {
-				return fmt.Sprintf("OOMKilled %d times in %dm — potential memory leak [%s]", count, h.config.OomMonitor.WindowMinutes, timeline)
-			}
-			return fmt.Sprintf("OOMKilled %d times in %dm — potential memory leak", count, h.config.OomMonitor.WindowMinutes)
-		}
-	}
-
-	if isOOM {
-		oomTimeline := ""
-		if h.oomTracker != nil {
-			key := h.oomKey(ctx)
-			oomTimeline = h.oomTracker.History(key)
-		}
-		if spec != nil && spec.Resources.Limits != nil {
-			mem := spec.Resources.Limits.Memory()
-			if mem != nil && !mem.IsZero() {
-				hint = fmt.Sprintf("OOMKilled (memory limit: %s) — consider increasing memory limits", mem.String())
-			} else {
-				hint = "OOMKilled with no memory limit set — node-level memory pressure; set/raise container memory limits"
-			}
-		} else {
-			hint = "OOMKilled with no memory limit set — node-level memory pressure; set/raise container memory limits"
-		}
-		if oomTimeline != "" {
-			hint = hint + " [" + oomTimeline + "]"
-		}
-	} else if exitCode == 137 {
-		hint = "Killed (SIGKILL, exit 137) — terminated by something other than the OOM killer (check evictions, liveness probes, or manual termination)"
-	}
-
-	if spec != nil {
-		if reason == constant.ReasonLivenessProbeFailed || reason == constant.ReasonReadinessProbeFailed || reason == constant.ReasonStartupProbeFailed {
-			hint = buildProbeHint(reason, spec)
-		} else if reason == constant.ReasonCrashLoopBackOff && spec.LivenessProbe != nil {
-			hint += "; check liveness probe configuration"
-		}
-	}
-
-	// Prepend the K8s container message when available — it has the
-	// most specific diagnostic info (e.g., "Back-off pulling image ...").
-	if ctx.Container.Msg != "" {
-		hint = ctx.Container.Msg + " — " + hint
-	}
-
-	// Smart diagnostics with actionable fix hints for well-known reasons.
-	if (reason == constant.ReasonImagePullBackOff || reason == constant.ReasonErrImagePull) && ctx.Pod != nil {
-		hasSecrets := len(ctx.Pod.Spec.ImagePullSecrets) > 0
-
-		// Try to match well-known registry error patterns first.
-		if m := imagePullMsgHint(ctx.Container.Msg, hasSecrets); m != "" {
-			hint = hint + "; " + m
-		} else if !hasSecrets {
-			// No specific pattern — check if registry likely needs auth.
-			for _, c := range ctx.Pod.Spec.Containers {
-				if c.Name == ctx.Container.Container.Name && needsRegistryAuth(c.Image) {
-					hint = hint + "; this image is from a registry that typically requires " +
-						"authentication — add imagePullSecrets to the pod spec"
-					break
-				}
-			}
-		} else {
-			hint += "; imagePullSecrets is configured — check the image name/tag or secret validity"
-		}
-	}
-
-	return hint
-}
-
-func buildProbeHint(reason string, spec *corev1.Container) string {
-	var probe *corev1.Probe
-	switch reason {
-	case constant.ReasonLivenessProbeFailed:
-		probe = spec.LivenessProbe
-	case constant.ReasonReadinessProbeFailed:
-		probe = spec.ReadinessProbe
-	case constant.ReasonStartupProbeFailed:
-		probe = spec.StartupProbe
-	}
-	if probe == nil {
-		return enricher.HintForReason(reason)
-	}
-
-	detail := reason
-	switch {
-	case probe.HTTPGet != nil:
-		detail = fmt.Sprintf("%s (HTTP GET http://%s%s:%d%s)", reason, spec.Name, probe.HTTPGet.Host, probe.HTTPGet.Port.IntValue(), probe.HTTPGet.Path)
-	case probe.TCPSocket != nil:
-		detail = fmt.Sprintf("%s (TCP check :%d)", reason, probe.TCPSocket.Port.IntValue())
-	case probe.Exec != nil:
-		cmd := ""
-		if len(probe.Exec.Command) > 0 {
-			cmd = probe.Exec.Command[0]
-		}
-		detail = fmt.Sprintf("%s (exec %s)", reason, cmd)
-	}
-	return fmt.Sprintf("%s — application not responding to %s probe", detail, probeType(reason))
-}
-
-func probeType(reason string) string {
-	switch reason {
-	case constant.ReasonLivenessProbeFailed:
-		return "liveness"
-	case constant.ReasonReadinessProbeFailed:
-		return "readiness"
-	case constant.ReasonStartupProbeFailed:
-		return "startup"
-	}
-	return "probe"
-}
-
-func lastTermInfo(container *corev1.ContainerStatus) (reason string, exitCode int32) {
-	if last := container.LastTerminationState.Terminated; last != nil {
-		return last.Reason, last.ExitCode
-	}
-	return "", 0
-}
-
-// imagePullMsgHint returns a targeted fix suggestion when the image-pull
-// error message matches a well-known pattern such as rate limiting or
-// authentication failure.  Returns "" when no pattern matches.
-func imagePullMsgHint(msg string, hasSecrets bool) string {
-	msg = strings.ToLower(msg)
-
-	switch {
-	case strings.Contains(msg, "toomanyrequests") || strings.Contains(msg, "rate limit"):
-		return "Docker Hub rate limit exceeded — add imagePullSecrets for authenticated pulls or configure a mirror registry"
-	case strings.Contains(msg, "pull qps"):
-		return "Kubelet image pull QPS limit exceeded — consider increasing registryPullQPS in kubelet config or reducing concurrent pod starts"
-	case strings.Contains(msg, "authentication required") || strings.Contains(msg, "unauthorized") || strings.Contains(msg, "denied") || strings.Contains(msg, "no pull access"):
-		return "Registry authentication failed — check imagePullSecrets validity"
-	case strings.Contains(msg, "not found") || strings.Contains(msg, "manifest unknown") || strings.Contains(msg, "does not exist"):
-		if hasSecrets {
-			return "Image not found — check the image name/tag, or the image may not exist in this registry"
-		}
-		return "Image not found — check the image name/tag"
-	case strings.Contains(msg, "context deadline exceeded") || strings.Contains(msg, "i/o timeout"):
-		return "Registry connection timed out — check network connectivity to the registry and DNS resolution"
-	case strings.Contains(msg, "connection refused") || strings.Contains(msg, "connection reset"):
-		return "Registry connection refused — check that the registry is running and not blocked by a firewall"
-	case strings.Contains(msg, "no route to host") || strings.Contains(msg, "network is unreachable"):
-		return "No network route to registry — check firewall rules and network connectivity"
-	case strings.Contains(msg, "no such host") || strings.Contains(msg, "dial tcp"):
-		return "Registry unreachable — check cluster network connectivity and DNS"
-	case strings.Contains(msg, "tls") || strings.Contains(msg, "certificate"):
-		return "Registry TLS error — check registry certificate or configure insecure-registries"
-	}
-	return ""
-}
-
-// needsRegistryAuth returns true when the image is hosted on a registry that
-// almost always requires pull credentials (gcr.io, ECR, ACR, Quay, GHCR, etc.).
-// Official Docker Hub images (e.g., "nginx", "nginx:latest") have no "/" and
-// never need auth.  User images ("user/repo:tag") are ambiguous but common
-// public repos don't need credentials, so only explicit-registry images
-// (host contains "." or ":") are flagged.
-func needsRegistryAuth(image string) bool {
-	// Images without "/" are always official Docker Hub (library/) — no auth.
-	slash := strings.IndexByte(image, '/')
-	if slash < 0 {
-		return false
-	}
-	host := image[:slash]
-	return strings.Contains(host, ".") || strings.Contains(host, ":")
-}
-
 // isPodTerminatingOrDisrupted returns true when the pod is in a terminal or
 // terminating state where restart-count alerts should be suppressed
 // (eviction, deletion, disruption target). Matches the same conditions as
@@ -456,7 +260,7 @@ func isPodTerminatingOrDisrupted(pod *corev1.Pod) bool {
 }
 
 func (h *handler) emitHighRestartAlert(ctx *filter.Context, container *corev1.ContainerStatus) {
-	owner := correlation.ResolveOwnerName(ctx.Pod, h.rsLister, h.dsLister, h.ssLister)
+	owner := correlation.ResolveOwnerName(ctx.Pod, h.listers.rs, h.listers.ds, h.listers.ss)
 	if owner == "" {
 		return
 	}

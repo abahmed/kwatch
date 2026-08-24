@@ -26,7 +26,7 @@ func (h *handler) ProcessHorizontalPodAutoscaler(key string, deleted bool) error
 		h.correlator.ResolveByResource("horizontalpodautoscaler", namespace+"/"+name)
 		return nil
 	}
-	hpa, err := h.hpaLister.HorizontalPodAutoscalers(namespace).Get(name)
+	hpa, err := h.listers.hpa.HorizontalPodAutoscalers(namespace).Get(name)
 	if err != nil {
 		if errors.IsNotFound(err) {
 			h.clearFirstMaxed(namespace + "/" + name)
@@ -165,17 +165,17 @@ func (h *handler) ProcessHorizontalPodAutoscalerObject(hpa *autoscalingv2.Horizo
 }
 
 func (h *handler) markFirstMaxed(key string) time.Time {
-	return h.firstMaxedHPAs.mark(key, h.now())
+	return h.fs.maxedHPAs.mark(key, h.now())
 }
 
 func (h *handler) clearFirstMaxed(key string) {
-	h.firstMaxedHPAs.clear(key)
+	h.fs.maxedHPAs.clear(key)
 }
 
 func (h *handler) markFirstScalingError(key string) time.Time {
-	return h.firstScalingErrorHPAs.mark(key, h.now())
+	return h.fs.scalingErrorHPAs.mark(key, h.now())
 }
 
 func (h *handler) clearFirstScalingError(key string) {
-	h.firstScalingErrorHPAs.clear(key)
+	h.fs.scalingErrorHPAs.clear(key)
 }

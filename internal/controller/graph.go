@@ -4,6 +4,7 @@ import (
 	"strings"
 
 	corev1 "k8s.io/api/core/v1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/klog/v2"
 )
@@ -113,6 +114,18 @@ func (c *Controller) buildGraph() {
 // ConfigMap, Secret, and Service nodes that no longer exist in the
 // informer cache. This prevents stale entries from accumulating
 // between full rebuilds.
+// markActiveKeys records the graph node keys of a listed resource kind so
+// dependent edges can be pruned against them.
+func markActiveKeys[T metav1.Object](active map[string]bool, kind string, items []T, err error, logMsg string) {
+	if err != nil {
+		klog.ErrorS(err, logMsg)
+		return
+	}
+	for _, obj := range items {
+		active[kind+"/"+obj.GetNamespace()+"/"+obj.GetName()] = true
+	}
+}
+
 func (c *Controller) pruneGraph() {
 	if c.graph == nil {
 		return
@@ -122,79 +135,37 @@ func (c *Controller) pruneGraph() {
 
 	if cmLister := c.configMapLister; cmLister != nil {
 		cms, err := cmLister.List(labels.Everything())
-		if err != nil {
-			klog.ErrorS(err, "failed to list configmaps for graph pruning")
-		} else {
-			for _, cm := range cms {
-				active["configmap/"+cm.Namespace+"/"+cm.Name] = true
-			}
-		}
+		markActiveKeys(active, "configmap", cms, err, "failed to list configmaps for graph pruning")
 	}
 
 	if secretLister := c.secretLister; secretLister != nil {
 		secrets, err := secretLister.List(labels.Everything())
-		if err != nil {
-			klog.ErrorS(err, "failed to list secrets for graph pruning")
-		} else {
-			for _, s := range secrets {
-				active["secret/"+s.Namespace+"/"+s.Name] = true
-			}
-		}
+		markActiveKeys(active, "secret", secrets, err, "failed to list secrets for graph pruning")
 	}
 
 	if svcLister := c.serviceLister; svcLister != nil {
 		svcs, err := svcLister.List(labels.Everything())
-		if err != nil {
-			klog.ErrorS(err, "failed to list services for graph pruning")
-		} else {
-			for _, svc := range svcs {
-				active["service/"+svc.Namespace+"/"+svc.Name] = true
-			}
-		}
+		markActiveKeys(active, "service", svcs, err, "failed to list services for graph pruning")
 	}
 
 	if saLister := c.serviceAccountLister; saLister != nil {
 		sas, err := saLister.List(labels.Everything())
-		if err != nil {
-			klog.ErrorS(err, "failed to list serviceaccounts for graph pruning")
-		} else {
-			for _, sa := range sas {
-				active["serviceaccount/"+sa.Namespace+"/"+sa.Name] = true
-			}
-		}
+		markActiveKeys(active, "serviceaccount", sas, err, "failed to list serviceaccounts for graph pruning")
 	}
 
 	if scLister := c.storageClassLister; scLister != nil {
 		scs, err := scLister.List(labels.Everything())
-		if err != nil {
-			klog.ErrorS(err, "failed to list storageclasses for graph pruning")
-		} else {
-			for _, sc := range scs {
-				active["storageclass//"+sc.Name] = true
-			}
-		}
+		markActiveKeys(active, "storageclass", scs, err, "failed to list storageclasses for graph pruning")
 	}
 
 	if pvLister := c.pvLister; pvLister != nil {
 		pvs, err := pvLister.List(labels.Everything())
-		if err != nil {
-			klog.ErrorS(err, "failed to list persistentvolumes for graph pruning")
-		} else {
-			for _, pv := range pvs {
-				active["persistentvolume//"+pv.Name] = true
-			}
-		}
+		markActiveKeys(active, "persistentvolume", pvs, err, "failed to list persistentvolumes for graph pruning")
 	}
 
 	if pvcLister := c.pvcLister; pvcLister != nil {
 		pvcs, err := pvcLister.List(labels.Everything())
-		if err != nil {
-			klog.ErrorS(err, "failed to list pvcs for graph pruning")
-		} else {
-			for _, pvc := range pvcs {
-				active["pvc/"+pvc.Namespace+"/"+pvc.Name] = true
-			}
-		}
+		markActiveKeys(active, "pvc", pvcs, err, "failed to list pvcs for graph pruning")
 	}
 
 	pre := len(c.graph.Edges())

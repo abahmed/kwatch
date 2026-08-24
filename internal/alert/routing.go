@@ -84,6 +84,66 @@ type retryConfig struct {
 	jitterFactor  float64
 }
 
+// coerceInt tolerates the int, int64, and float64 encodings seen across
+// YAML, JSON, and CRD config paths.
+func coerceInt(v interface{}) int {
+	switch v := v.(type) {
+	case int:
+		return v
+	case int64:
+		return int(v)
+	case float64:
+		return int(v)
+	}
+	return 0
+}
+
+func applyRetryMaxAttempts(rm map[string]interface{}, rc *retryConfig) {
+	a, ok := rm["maxAttempts"]
+	if !ok {
+		return
+	}
+	n := coerceInt(a)
+	if n > 20 {
+		n = 20
+	}
+	if n < 1 {
+		n = 1
+	}
+	rc.maxAttempts = n
+}
+
+// applyRetryDuration parses a duration-string retry option into dst when valid.
+func applyRetryDuration(rm map[string]interface{}, key string, dst *time.Duration) {
+	s, ok := rm[key].(string)
+	if !ok {
+		return
+	}
+	if parsed, err := time.ParseDuration(s); err == nil {
+		*dst = parsed
+	}
+}
+
+func applyRetryJitter(rm map[string]interface{}, rc *retryConfig) {
+	if b, ok := rm["jitterEnabled"].(bool); ok {
+		rc.jitterEnabled = b
+	}
+	if _, ok := rm["jitterFactor"]; ok {
+		switch v := rm["jitterFactor"].(type) {
+		case float64:
+			rc.jitterFactor = v
+		case int:
+			rc.jitterFactor = float64(v)
+		}
+		if rc.jitterFactor < 0 {
+			rc.jitterFactor = 0
+		}
+		if rc.jitterFactor > 1 {
+			rc.jitterFactor = 1
+		}
+	}
+}
+
 func extractRetry(cfg map[string]interface{}) retryConfig {
 	rc := retryConfig{
 		maxAttempts:   3,
@@ -92,61 +152,14 @@ func extractRetry(cfg map[string]interface{}) retryConfig {
 		jitterEnabled: false,
 		jitterFactor:  0.25,
 	}
-	if r, ok := cfg["retry"]; ok {
-		if rm, ok := r.(map[string]interface{}); ok {
-			if a, ok := rm["maxAttempts"]; ok {
-				n := 0
-				switch v := a.(type) {
-				case int:
-					n = v
-				case int64:
-					n = int(v)
-				case float64:
-					n = int(v) // tolerate JSON/CRD paths
-				}
-				if n > 20 {
-					n = 20
-				}
-				if n < 1 {
-					n = 1
-				}
-				rc.maxAttempts = n
-			}
-			if d, ok := rm["delay"]; ok {
-				if s, ok := d.(string); ok {
-					if parsed, err := time.ParseDuration(s); err == nil {
-						rc.delay = parsed
-					}
-				}
-			}
-			if b, ok := rm["maxBackoff"]; ok {
-				if s, ok := b.(string); ok {
-					if parsed, err := time.ParseDuration(s); err == nil {
-						rc.maxBackoff = parsed
-					}
-				}
-			}
-			if j, ok := rm["jitterEnabled"]; ok {
-				if b, ok := j.(bool); ok {
-					rc.jitterEnabled = b
-				}
-			}
-			if jf, ok := rm["jitterFactor"]; ok {
-				switch v := jf.(type) {
-				case float64:
-					rc.jitterFactor = v
-				case int:
-					rc.jitterFactor = float64(v)
-				}
-				if rc.jitterFactor < 0 {
-					rc.jitterFactor = 0
-				}
-				if rc.jitterFactor > 1 {
-					rc.jitterFactor = 1
-				}
-			}
-		}
+	rm, ok := cfg["retry"].(map[string]interface{})
+	if !ok {
+		return rc
 	}
+	applyRetryMaxAttempts(rm, &rc)
+	applyRetryDuration(rm, "delay", &rc.delay)
+	applyRetryDuration(rm, "maxBackoff", &rc.maxBackoff)
+	applyRetryJitter(rm, &rc)
 	return rc
 }
 
