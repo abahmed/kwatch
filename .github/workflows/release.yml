@@ -11,11 +11,25 @@ on:
           - rc
           - stable
           - patch
+      bump:
+        description: 'For rc only, and only when it opens a NEW series: which part of the last stable moves. Ignored while an RC series is already open, and ignored by stable and patch.'
+        required: false
+        type: choice
+        options:
+          - minor
+          - major
+          - patch
+        default: minor
       target:
         description: 'Optional commit sha/ref to tag (defaults to main HEAD). Mainly useful for patch to isolate a hotfix.'
         required: false
         type: string
         default: ''
+      dry_run:
+        description: 'Work out the version and the notes, then stop. Nothing is tagged, released or built.'
+        required: false
+        type: boolean
+        default: false
 
 permissions:
   contents: write
@@ -27,7 +41,7 @@ concurrency:
 
 jobs:
   release:
-    name: Cut ${{ inputs.command }} release
+    name: ${{ inputs.dry_run && 'Preview' || 'Cut' }} ${{ inputs.command }} release
     runs-on: ubuntu-latest
     steps:
       - name: Guard branch
@@ -51,16 +65,51 @@ jobs:
         id: meta
         env:
           COMMAND: ${{ inputs.command }}
+          BUMP: ${{ inputs.bump }}
         run: |
           set -euo pipefail
 
-          STABLE_TAGS=$(git tag -l 'v[0-9]*' | grep -v -- '-rc' | sort -V || true)
+          BUMP="${BUMP:-minor}"
+          case "$BUMP" in
+            major|minor|patch) ;;
+            *)
+              echo "::error::unknown bump: $BUMP"
+              exit 1
+              ;;
+          esac
+
+          # Match the exact SemVer shapes. A loose "does not contain -rc"
+          # filter would treat v1.0.0-beta.1 as a stable tag, and every version
+          # computed from it would then be wrong.
+          STABLE_TAGS=$(git tag -l 'v[0-9]*' | grep -E '^v[0-9]+\.[0-9]+\.[0-9]+$' | sort -V || true)
           LATEST_STABLE=$(echo "$STABLE_TAGS" | tail -1)
-          RC_TAGS=$(git tag -l 'v*-rc*' | sort -V || true)
+          RC_TAGS=$(git tag -l 'v[0-9]*' | grep -E '^v[0-9]+\.[0-9]+\.[0-9]+-rc\.[0-9]+$' | sort -V || true)
           LATEST_RC=$(echo "$RC_TAGS" | tail -1)
 
           strip_rc() { echo "$1" | sed -E 's/-rc\.[0-9]+$//'; }
           rc_num()   { echo "$1" | sed -E 's/.*-rc\.([0-9]+)$/\1/'; }
+
+          # BUMP applied to the last stable. Only rc uses this, and only when
+          # it opens a new series.
+          bumped() {
+            if [ -z "$LATEST_STABLE" ]; then
+              case "$BUMP" in
+                major) echo "v1.0.0" ;;
+                minor) echo "v0.1.0" ;;
+                patch) echo "v0.0.1" ;;
+              esac
+              return
+            fi
+            local MAJOR MINOR PATCH
+            MAJOR=$(echo "$LATEST_STABLE" | sed -E 's/^v([0-9]+)\..*/\1/')
+            MINOR=$(echo "$LATEST_STABLE" | sed -E 's/^v[0-9]+\.([0-9]+)\..*/\1/')
+            PATCH=$(echo "$LATEST_STABLE" | sed -E 's/^v[0-9]+\.[0-9]+\.([0-9]+)$/\1/')
+            case "$BUMP" in
+              major) echo "v$((MAJOR + 1)).0.0" ;;
+              minor) echo "v$MAJOR.$((MINOR + 1)).0" ;;
+              patch) echo "v$MAJOR.$MINOR.$((PATCH + 1))" ;;
+            esac
+          }
 
           case "$COMMAND" in
             rc)
@@ -72,19 +121,21 @@ jobs:
                 fi
               fi
               if [ -n "$LATEST_RC" ] && [ "$RC_CONSUMED" = false ]; then
+                # Series already open, so just take the next number. Comparing
+                # against the previous RC keeps the notes to what actually
+                # changed, instead of repeating the whole series every time.
                 BASE=$(strip_rc "$LATEST_RC")
                 LAST_N=$(rc_num "$LATEST_RC")
-              elif [ -n "$LATEST_STABLE" ]; then
-                MAJOR=$(echo "$LATEST_STABLE" | sed -E 's/^v([0-9]+)\..*/\1/')
-                MINOR=$(echo "$LATEST_STABLE" | sed -E 's/^v[0-9]+\.([0-9]+)\..*/\1/')
-                BASE="v$MAJOR.$((MINOR + 1)).0"
-                LAST_N=0
+                PREV="$LATEST_RC"
+                echo "::notice::continuing the $BASE series, so the bump input is ignored"
               else
-                BASE="v0.1.0"
+                # Opening a new series. BUMP decides which part moves, so the
+                # release type is your call rather than always a minor.
+                BASE=$(bumped)
                 LAST_N=0
+                PREV="$LATEST_STABLE"
               fi
               VERSION="$BASE-rc.$((LAST_N + 1))"
-              PREV="$LATEST_STABLE"
               PRERELEASE=true
               ;;
             stable)
@@ -117,6 +168,14 @@ jobs:
               VERSION="$BASE.$((PATCH + 1))"
               PREV="$LATEST_STABLE"
               PRERELEASE=false
+              # A patch pushes a commit to main, which moves main past any RC
+              # tag still waiting to be promoted.
+              if [ -n "$LATEST_RC" ]; then
+                RC_BASE=$(strip_rc "$LATEST_RC")
+                if ! git rev-parse -q --verify "refs/tags/$RC_BASE" >/dev/null; then
+                  echo "::warning::$LATEST_RC is still waiting to be promoted. This patch moves main, so stable will refuse until you cut a fresh RC."
+                fi
+              fi
               ;;
             *)
               echo "::error::unknown command: $COMMAND"
@@ -134,9 +193,17 @@ jobs:
             exit 1
           fi
 
+          # Go needs a /vN suffix on the module path from major 2 on. Warn
+          # rather than block, so the release still goes out.
+          NEW_MAJOR=$(echo "$VERSION" | sed -E 's/^v([0-9]+)\..*/\1/')
+          if [ "$NEW_MAJOR" -ge 2 ] && ! grep -Eq "^module .*/v$NEW_MAJOR\$" go.mod; then
+            echo "::warning::go.mod has no /v$NEW_MAJOR suffix on the module path. Go needs it for major >= 2, so 'go install ...@$VERSION' will fail until go.mod and every internal import are updated."
+          fi
+
           echo "version=$VERSION" >> "$GITHUB_OUTPUT"
           echo "prev=$PREV" >> "$GITHUB_OUTPUT"
           echo "prerelease=$PRERELEASE" >> "$GITHUB_OUTPUT"
+          echo "$COMMAND -> $VERSION (notes compare against ${PREV:-nothing})"
 
       # Must run before the changelog and the bump, so both work on the
       # commit that actually gets tagged.
@@ -203,7 +270,7 @@ jobs:
 
       - name: Bump chart and README versions
         id: bump
-        if: ${{ inputs.command == 'stable' || inputs.command == 'patch' }}
+        if: ${{ !inputs.dry_run && (inputs.command == 'stable' || inputs.command == 'patch') }}
         env:
           VERSION: ${{ steps.meta.outputs.version }}
           TARGET: ${{ inputs.target }}
@@ -236,8 +303,8 @@ jobs:
           BUMP_SHA=$(git rev-parse HEAD)
 
           if [ -n "$TARGET" ]; then
-            # Hotfix off an older commit. The bump belongs to the tag only —
-            # pushing it to main would rewrite main's version to an older one.
+            # Hotfix off an older commit. The bump belongs to the tag only,
+            # since pushing it to main would rewrite main's version backwards.
             echo "::warning::target was set, so the version bump is on the tag only. Update main by hand if it should carry $VERSION."
           else
             if ! git push origin "$BUMP_SHA:refs/heads/main"; then
@@ -251,6 +318,7 @@ jobs:
           echo "bumped=true" >> "$GITHUB_OUTPUT"
 
       - name: Create tag
+        if: ${{ !inputs.dry_run }}
         env:
           VERSION: ${{ steps.meta.outputs.version }}
           SHA: ${{ steps.bump.outputs.sha || steps.target.outputs.sha }}
@@ -260,6 +328,7 @@ jobs:
           git push origin "$VERSION"
 
       - name: Create GitHub release
+        if: ${{ !inputs.dry_run }}
         env:
           VERSION: ${{ steps.meta.outputs.version }}
           PRERELEASE: ${{ steps.meta.outputs.prerelease }}
@@ -279,3 +348,39 @@ jobs:
             --notes-file /tmp/release-notes.md \
             $PRERELEASE_ARGS \
             --target "$SHA"
+
+      - name: Summary
+        if: ${{ always() && steps.meta.outputs.version != '' }}
+        env:
+          VERSION: ${{ steps.meta.outputs.version }}
+          PRERELEASE: ${{ steps.meta.outputs.prerelease }}
+          SHA: ${{ steps.bump.outputs.sha || steps.target.outputs.sha }}
+          DRY: ${{ inputs.dry_run }}
+        run: |
+          set -euo pipefail
+          {
+            if [ "$DRY" = "true" ]; then
+              echo "## Preview: $VERSION"
+              echo
+              echo "Nothing was tagged, released or built."
+            else
+              echo "## $VERSION"
+            fi
+            echo
+            echo "| | |"
+            echo "|---|---|"
+            echo "| version | \`$VERSION\` |"
+            echo "| pre-release | $PRERELEASE |"
+            echo "| commit | \`$SHA\` |"
+            echo "| image | \`ghcr.io/abahmed/kwatch:$VERSION\` |"
+            if [ "$PRERELEASE" != "true" ]; then
+              echo "| also tagged | \`ghcr.io/abahmed/kwatch:latest\` |"
+            fi
+            if [ "$DRY" != "true" ]; then
+              echo "| release | $GITHUB_SERVER_URL/$GITHUB_REPOSITORY/releases/tag/$VERSION |"
+            fi
+            echo
+            echo "### Notes"
+            echo
+            cat /tmp/release-notes.md
+          } >> "$GITHUB_STEP_SUMMARY"
