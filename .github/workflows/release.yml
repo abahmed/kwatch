@@ -224,7 +224,7 @@ jobs:
           [ "$PRERELEASE" = "true" ] && PRERELEASE_ARGS="--prerelease"
           gh release create "$VERSION" \
             --repo "$GITHUB_REPOSITORY" \
-            --title "kwatch $VERSION" \
+            --title "$VERSION" \
             --notes-file /tmp/release-notes.md \
             $PRERELEASE_ARGS \
             --target "$SHA"
