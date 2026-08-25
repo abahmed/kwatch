@@ -19,27 +19,60 @@ Semantic versioning, `v`-prefixed:
 
 | Stage | Example | How it is produced |
 |---|---|---|
-| RC (pre-release) | `v0.11.0-rc.1` | `rc` command, auto-incremented from the newest RC tag |
+| RC (pre-release) | `v0.11.0-rc.1` | `rc` command. Takes the next number while a series is open; otherwise opens a new series using `bump` |
 | Stable | `v0.11.0` | `stable` command, promotes the newest RC |
 | Patch | `v0.11.1` | `patch` command, increments the highest stable tag |
 
-Versions are always computed from existing tags — maintainers never type a version.
+Versions are always computed from existing tags — maintainers never type a version, they
+only choose which part moves.
+
+> **Tag hygiene:** only `-rc.<N>` pre-releases are recognised. The workflow matches
+> `vX.Y.Z` for stable tags and `vX.Y.Z-rc.<N>` for RCs, exactly. A tag like `v1.0.0-beta.1`
+> is ignored by both, so do not create other pre-release forms — the version computation
+> will behave as if it does not exist.
+
+> **Going to v2:** Go requires the module path to carry a `/v2` suffix from major 2 on. The
+> workflow warns when it computes a major ≥ 2 while `go.mod` still lacks the suffix, but it
+> does not block. Update `go.mod` and every internal import before shipping a v2, or
+> `go install ...@v2.0.0` will fail.
 
 ## Cutting a release
 
-Run the **Release** workflow (Actions → Release → Run workflow), pick a `command`, and
-optionally set `target` (a commit sha/ref; defaults to `main` HEAD).
+Run the **Release** workflow (Actions → Release → Run workflow) and set:
+
+| Input | Required | Meaning |
+|---|---|---|
+| `command` | yes | `rc`, `stable`, or `patch` |
+| `bump` | no | `minor` (default), `major`, or `patch`. Only used by `rc` when it opens a new series |
+| `target` | no | A commit sha/ref to tag. Defaults to `main` HEAD |
+| `dry_run` | no | Compute the version and notes, then stop. Nothing is tagged or built |
+
+Every run writes a **summary on the run page**: the version, whether it is a pre-release,
+the tagged commit, the image tags Publish will push, the release URL, and the full notes.
+You never need to read the logs to find out what was cut.
 
 ### `rc` — pre-release
 
-1. Computes the next `v<X>.<Y>.<Z>-rc.<N>` from the newest RC tag. An RC whose base version
-   already exists as a stable tag counts as **consumed** (it was promoted), so the next RC
-   branches from the newest stable instead — e.g. after promoting `v0.11.0`, the next RC is
-   `v0.12.0-rc.1`, never `v0.11.0-rc.<N+1>`.
-2. Creates the tag and opens a GitHub Release marked **pre-release**.
-3. `publish.yml` pushes `ghcr.io/abahmed/kwatch:v<X>.<Y>.<Z>-rc.<N>` only — **no `latest`**,
+1. **While a series is open** — an RC whose base version is not yet a stable tag — `rc`
+   simply takes the next number: `v0.11.0-rc.4` → `v0.11.0-rc.5`. The `bump` input is
+   ignored here, and the run logs a notice saying so.
+2. **When no series is open** — the newest RC was already promoted (it counts as
+   **consumed**), or there are no RC tags at all — `rc` opens a new series from the newest
+   stable, and `bump` decides which part moves:
+
+   | `bump` | From `v0.11.0` | Use for |
+   |---|---|---|
+   | `minor` (default) | `v0.12.0-rc.1` | new features |
+   | `patch` | `v0.11.1-rc.1` | a fix you want to soak before shipping |
+   | `major` | `v1.0.0-rc.1` | breaking changes |
+
+3. Creates the tag and opens a GitHub Release marked **pre-release**.
+4. Release notes compare against the **previous RC** while a series is open, so each RC
+   lists only what is new since the last one. The first RC of a series compares against the
+   newest stable.
+5. `publish.yml` pushes `ghcr.io/abahmed/kwatch:v<X>.<Y>.<Z>-rc.<N>` only — **no `latest`**,
    and the in-app upgrader does not nag RC users.
-4. Chart and README versions are untouched (they stay pinned to the latest released version,
+6. Chart and README versions are untouched (they stay pinned to the latest released version,
    e.g. `v0.10.5`).
 
 Run `rc` as often as needed until the candidate stabilizes.
@@ -67,23 +100,42 @@ Run `rc` as often as needed until the candidate stabilizes.
 ### `patch` — hotfix tagged on `main`
 
 1. Merge the fix to `main`.
-2. Run the workflow with `command: patch`. By default it computes `v<X>.<Y>.<Z+1>` from the
-   highest stable tag.
+2. Run the workflow with `command: patch`. It computes `v<X>.<Y>.<Z+1>` from the highest
+   stable tag. The `bump` input does not apply — `patch` always moves the patch number.
 3. Bumps the pinned references to the patch version and pushes to `main` (same commit/step
    as `stable`, banners are **not** stripped — the next minor's features are still pending).
 4. Creates the tag on that bump commit and opens a normal release.
+
+> **A patch blocks a pending promotion.** If an RC is still waiting to be promoted, `patch`
+> prints a warning: its bump commit moves `main` past the RC tag, so `stable` will refuse
+> until you cut a fresh RC. Cut the RC again after the patch, then promote.
 
 > **Hotfix isolation:** tagging `main` HEAD also bundles any unreleased minor work already
 > merged. If the hotfix must ship exactly on top of the previous stable, set `target` to the
 > hotfix commit sha (a detached one-off tag). For a strictly isolated hotfix line you can
 > also create a throwaway branch locally, cherry-pick, and pass its sha as `target` — no
-> persistent release branches are ever kept. Note that the bump still lands on `main`, so a
-> `target`-based tag's files stay at the previous version by design.
+> persistent release branches are ever kept. When `target` is set, the version bump is made
+> on that commit and carried by the tag, but it is **not** pushed to `main` — pushing it
+> would rewrite `main`'s pinned versions backwards. Update `main` by hand if it should
+> carry the new version.
 
 > The version-bump commit is pushed to the protected `main` branch, so `stable` and `patch`
 > require a **`RELEASE_TOKEN`** secret (a maintainer classic PAT with `repo` scope, allowed
 > to bypass branch protection). If the secret is missing or the push fails, the workflow
 > stops **before** tagging and prints the manual `git push` command to run.
+>
+> `RELEASE_TOKEN` is also what makes the image get built. A GitHub Release created with the
+> default `GITHUB_TOKEN` does **not** trigger other workflows, so `publish.yml` would never
+> run and the release would ship with no container image.
+
+### Previewing a release
+
+Set `dry_run: true` to work out the version and the release notes and then stop. Nothing is
+tagged, no release is opened, no image is built. The job is titled **Preview** and the run
+summary shows the version it would cut, the image tags it would push, and the full notes.
+
+Use it whenever you are unsure which version a command will produce — for example before a
+`rc` that opens a new series, where the answer depends on `bump`.
 
 ## RC → stable gates
 
@@ -127,6 +179,10 @@ helm lint deploy/chart
 helm package deploy/chart   # uses Chart.yaml version, e.g. kwatch-0.11.0.tgz
 # upload the resulting .tgz to the ArtifactHub kwatch repository
 ```
+
+Nothing in this repository publishes the chart. `Chart.yaml` is the source of truth for the
+version; the copy users install comes from ArtifactHub and only updates when someone runs
+the steps above.
 
 ## Upgrader notes
 
