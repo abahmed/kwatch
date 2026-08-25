@@ -73,32 +73,38 @@ You never need to read the logs to find out what was cut.
 5. `publish.yml` pushes `ghcr.io/abahmed/kwatch:v<X>.<Y>.<Z>-rc.<N>` only — **no `latest`**,
    and the in-app upgrader does not nag RC users.
 6. Updates the **preview install block** in `README.md` (between the `rc-install` markers) to
-   the new RC and pushes that commit to `main`. The chart, `deploy/deploy.yaml`, the chart
-   README, and the **stable** install snippets are left alone — they stay on the latest
-   stable, so a plain `kubectl apply` straight from `main` never ships a preview build.
+   the new RC and pushes that commit to `main`. The chart, the chart README, and the
+   **stable** install snippets are left alone.
+7. Adds a second commit — **not pushed to `main`** — that pins `deploy/deploy.yaml` to the RC
+   image, and puts the tag on it. So `kubectl apply` against the RC tag installs the
+   candidate, while `deploy/deploy.yaml` on `main` still points at the latest stable. See the
+   note below.
 
 Run `rc` as often as needed until the candidate stabilizes.
 
-> **Why installing an RC takes one extra command.** `deploy/deploy.yaml` stays pinned to the
-> latest **stable** image everywhere — on `main` and at every tag, RC tags included. The bump
-> commit is also the commit that gets tagged, so a single commit cannot carry a stable image
-> for `main` and an RC image for the tag. Breaking the pin would mean anyone copying
-> `deploy/deploy.yaml` out of the repo browser silently installs a preview build, so the
-> README's preview block instead tells users to apply the manifest and then
-> `kubectl -n kwatch set image deployment/kwatch kwatch=ghcr.io/abahmed/kwatch:<rc tag>`.
+> **Why an rc makes two commits.** `deploy/deploy.yaml` has to say two different things at
+> once: on `main` it must pin the latest **stable** image, so that copying it out of the repo
+> browser can never install a preview build; at the RC tag it must pin the **RC** image, so
+> that `kubectl apply` against the tag actually installs the candidate. One commit cannot do
+> both, so `rc` makes two:
 >
-> `stable` and `patch` need no such step: their bump commit **is** the tagged commit, so
-> `deploy.yaml` at the tag already carries the released image and a plain `kubectl apply`
-> is correct.
+> | Commit | Contains | Pushed to `main` | Tagged |
+> |---|---|---|---|
+> | 1 | `README.md` preview block → the new RC | ✅ | — |
+> | 2 | `deploy/deploy.yaml` image → the new RC | ❌ never | ✅ |
 >
-> If you ever change `rc` to bump `deploy/deploy.yaml`, drop the `set image` line from the
-> README preview block in the same PR — and be clear that you are trading it for a `main`
-> that ships preview builds to anyone who copies the manifest.
+> The second commit exists only on the tag. That is why an RC tag sits exactly one commit
+> ahead of `main`, and why the `stable` guard compares by reachability instead of by sha.
+>
+> `stable` and `patch` make a single commit — pushed and tagged — because they have no such
+> conflict: the released manifest and `main`'s manifest are the same thing.
 
 ### `stable` — promote the latest RC
 
-1. Verifies the newest RC points at the current `main` tip; otherwise it fails and you must
-   cut a fresh RC first.
+1. Verifies `main` carries **nothing the newest RC does not already have**
+   (`git rev-list --count <rc>..origin/main` must be 0); otherwise it fails and you must cut
+   a fresh RC first. This is a reachability check, not sha equality — an RC tag is one commit
+   ahead of `main` on purpose (see the note under `rc`), so comparing shas would always fail.
 2. Bumps every stable pin to the new version, resets the **preview** block to
    *"No release candidate right now."* (the RC it promotes has just shipped), strips
    `🚧 Unreleased` banners from `README.md` and every `docs/*.md`, commits them to `main`,
