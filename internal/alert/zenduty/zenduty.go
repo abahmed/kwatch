@@ -7,12 +7,14 @@ import (
 	"io"
 	"net/http"
 	"slices"
+	"strings"
 
+	"k8s.io/klog/v2"
+
+	"github.com/abahmed/kwatch/internal/alert/util"
 	"github.com/abahmed/kwatch/internal/config"
-	"github.com/abahmed/kwatch/internal/constant"
 	"github.com/abahmed/kwatch/internal/event"
 	"github.com/abahmed/kwatch/internal/k8s"
-	"k8s.io/klog/v2"
 )
 
 const (
@@ -72,30 +74,30 @@ func NewZenduty(config map[string]interface{}, appCfg *config.App) *Zenduty {
 }
 
 // Name returns name of the provider
-func (m *Zenduty) Name() string {
+func (z *Zenduty) Name() string {
 	return "Zenduty"
 }
 
-func (m *Zenduty) UsesEventDelivery() {}
+func (z *Zenduty) UsesEventDelivery() {}
 
 // SendMessage sends text message to the provider
-func (m *Zenduty) SendMessage(msg string) error {
+func (z *Zenduty) SendMessage(msg string) error {
 	return nil
 }
 
 // SendEvent sends event to the provider
-func (m *Zenduty) SendEvent(e *event.Event) error {
+func (z *Zenduty) SendEvent(e *event.Event) error {
 	if e.Action == "resolved" {
-		return m.resolveAlert(e.DedupKey)
+		return z.resolveAlert(e.DedupKey)
 	}
-	b, err := m.buildMessage(e)
+	b, err := z.buildMessage(e)
 	if err != nil {
 		return err
 	}
-	return m.sendAPI(b)
+	return z.sendAPI(b)
 }
 
-func (m *Zenduty) resolveAlert(entityID string) error {
+func (z *Zenduty) resolveAlert(entityID string) error {
 	payload := zendutyPayload{
 		AlertType: "resolved",
 		EntityID:  entityID,
@@ -105,14 +107,14 @@ func (m *Zenduty) resolveAlert(entityID string) error {
 	if err != nil {
 		return fmt.Errorf("failed to marshal zenduty resolve payload: %w", err)
 	}
-	return m.sendAPI(body)
+	return z.sendAPI(body)
 }
 
 // sendAPI sends http request to Zenduty API
-func (m *Zenduty) sendAPI(content []byte) error {
+func (z *Zenduty) sendAPI(content []byte) error {
 	client := k8s.GetDefaultClient()
 	buffer := bytes.NewBuffer(content)
-	url := m.url + "/" + m.integrationkey + "/"
+	url := z.url + "/" + z.integrationkey + "/"
 	request, err := http.NewRequest(http.MethodPost, url, buffer)
 	if err != nil {
 		return err
@@ -140,42 +142,53 @@ func (m *Zenduty) sendAPI(content []byte) error {
 	return nil
 }
 
-func (m *Zenduty) buildMessage(e *event.Event) ([]byte, error) {
+func (z *Zenduty) buildMessage(e *event.Event) ([]byte, error) {
 	payload := zendutyPayload{
-		AlertType: m.alertType,
+		AlertType: z.alertType,
 		EntityID:  e.DedupKey,
 	}
 
-	logs := constant.DefaultLogs
-	if len(e.Logs) > 0 {
-		logs = (e.Logs)
+	msg := defaultZendutyTitle
+	if e.PodName != "" {
+		msg = fmt.Sprintf(defaultZendutyTitle, e.PodName)
+	}
+	payload.Message = msg
+
+	var summaryParts []string
+	summaryParts = append(summaryParts, fmt.Sprintf("Reason: %s", util.OrDefault(e.Reason, "unknown")))
+	if e.PodName != "" {
+		summaryParts = append(summaryParts, fmt.Sprintf("Pod: %s", e.PodName))
+	}
+	if e.ContainerName != "" {
+		summaryParts = append(summaryParts, fmt.Sprintf("Container: %s", e.ContainerName))
+	}
+	if e.Namespace != "" {
+		summaryParts = append(summaryParts, fmt.Sprintf("Namespace: %s", e.Namespace))
+	}
+	if e.NodeName != "" {
+		summaryParts = append(summaryParts, fmt.Sprintf("Node: %s", e.NodeName))
+	}
+	if z.appCfg.ClusterName != "" {
+		summaryParts = append(summaryParts, fmt.Sprintf("Cluster: %s", z.appCfg.ClusterName))
 	}
 
-	events := constant.DefaultEvents
-	if len(e.Events) > 0 {
-		events = (e.Events)
+	summary := strings.Join(summaryParts, " · ")
+
+	if e.IncludeLogs {
+		logs := strings.TrimSpace(e.Logs)
+		if len(logs) > 0 {
+			summary += "\n\nLogs:\n" + logs
+		}
 	}
 
-	payload.Message = fmt.Sprintf(defaultZendutyTitle, e.PodName)
-	payload.Summary = fmt.Sprintf(
-		"An alert has been triggered for\n\n"+
-			"cluster: %s\n"+
-			"Node Name: %s\n"+
-			"Pod Name: %s\n"+
-			"Container: %s\n"+
-			"Namespace: %s\n"+
-			"Reason: %s\n\n"+
-			"Events:\n%s\n\n"+
-			"Logs:\n%s\n\n",
-		m.appCfg.ClusterName,
-		e.NodeName,
-		e.PodName,
-		e.ContainerName,
-		e.Namespace,
-		e.Reason,
-		events,
-		logs,
-	)
+	if e.IncludeEvents {
+		events := strings.TrimSpace(e.Events)
+		if len(events) > 0 {
+			summary += "\n\nEvents:\n" + events
+		}
+	}
+
+	payload.Summary = summary
 
 	str, err := json.Marshal(payload)
 	if err != nil {

@@ -11,8 +11,22 @@ func (f PodOwnersFilter) Detect(ctx *Context) Status {
 	return StatusAlert
 }
 
+// adoptGrandparent replaces owner with the first owner reference of the
+// workload fetched via get, reporting whether resolution still holds.
+func adoptGrandparent(owner *apiv1.OwnerReference, namespace, label string, get func() (apiv1.Object, error)) bool {
+	obj, err := get()
+	if err != nil {
+		klog.ErrorS(err, label, "name", owner.Name, "namespace", namespace)
+		return false
+	}
+	if refs := obj.GetOwnerReferences(); len(refs) > 0 {
+		*owner = refs[0]
+	}
+	return true
+}
+
 func (f PodOwnersFilter) Enrich(ctx *Context) bool {
-	if ctx.Owner != nil {
+	if ctx.Owner != nil || ctx.Pod == nil {
 		return false
 	}
 	if len(ctx.Pod.OwnerReferences) == 0 {
@@ -22,71 +36,45 @@ func (f PodOwnersFilter) Enrich(ctx *Context) bool {
 	owner := ctx.Pod.OwnerReferences[0]
 	resolved := true
 
-	if owner.Kind == "ReplicaSet" {
+	switch owner.Kind {
+	case "ReplicaSet":
 		if ctx.RSLister != nil {
-			rs, err := ctx.RSLister.ReplicaSets(ctx.Pod.Namespace).Get(owner.Name)
-			if err != nil {
-				klog.ErrorS(err, "failed to get ReplicaSet via lister", "name", owner.Name, "namespace", ctx.Pod.Namespace)
-				resolved = false
-			} else if len(rs.ObjectMeta.OwnerReferences) > 0 {
-				owner = rs.ObjectMeta.OwnerReferences[0]
-			}
+			resolved = adoptGrandparent(&owner, ctx.Pod.Namespace, "failed to get ReplicaSet via lister", func() (apiv1.Object, error) {
+				return ctx.RSLister.ReplicaSets(ctx.Pod.Namespace).Get(owner.Name)
+			})
 		} else {
-			rs, err :=
-				ctx.Client.AppsV1().ReplicaSets(ctx.Pod.Namespace).Get(
+			resolved = adoptGrandparent(&owner, ctx.Pod.Namespace, "failed to get ReplicaSet via API", func() (apiv1.Object, error) {
+				return ctx.Client.AppsV1().ReplicaSets(ctx.Pod.Namespace).Get(
 					ctx.Ctx,
 					owner.Name,
 					apiv1.GetOptions{})
-			if err != nil {
-				klog.ErrorS(err, "failed to get ReplicaSet via API", "name", owner.Name, "namespace", ctx.Pod.Namespace)
-				resolved = false
-			} else if len(rs.ObjectMeta.OwnerReferences) > 0 {
-				owner = rs.ObjectMeta.OwnerReferences[0]
-			}
+			})
 		}
-	} else if owner.Kind == "DaemonSet" {
+	case "DaemonSet":
 		if ctx.DSLister != nil {
-			ds, err := ctx.DSLister.DaemonSets(ctx.Pod.Namespace).Get(owner.Name)
-			if err != nil {
-				klog.ErrorS(err, "failed to get DaemonSet via lister", "name", owner.Name, "namespace", ctx.Pod.Namespace)
-				resolved = false
-			} else if len(ds.ObjectMeta.OwnerReferences) > 0 {
-				owner = ds.ObjectMeta.OwnerReferences[0]
-			}
+			resolved = adoptGrandparent(&owner, ctx.Pod.Namespace, "failed to get DaemonSet via lister", func() (apiv1.Object, error) {
+				return ctx.DSLister.DaemonSets(ctx.Pod.Namespace).Get(owner.Name)
+			})
 		} else {
-			ds, err :=
-				ctx.Client.AppsV1().DaemonSets(ctx.Pod.Namespace).Get(
+			resolved = adoptGrandparent(&owner, ctx.Pod.Namespace, "failed to get DaemonSet via API", func() (apiv1.Object, error) {
+				return ctx.Client.AppsV1().DaemonSets(ctx.Pod.Namespace).Get(
 					ctx.Ctx,
 					owner.Name,
 					apiv1.GetOptions{})
-			if err != nil {
-				klog.ErrorS(err, "failed to get DaemonSet via API", "name", owner.Name, "namespace", ctx.Pod.Namespace)
-				resolved = false
-			} else if len(ds.ObjectMeta.OwnerReferences) > 0 {
-				owner = ds.ObjectMeta.OwnerReferences[0]
-			}
+			})
 		}
-	} else if owner.Kind == "StatefulSet" {
+	case "StatefulSet":
 		if ctx.SSLister != nil {
-			ss, err := ctx.SSLister.StatefulSets(ctx.Pod.Namespace).Get(owner.Name)
-			if err != nil {
-				klog.ErrorS(err, "failed to get StatefulSet via lister", "name", owner.Name, "namespace", ctx.Pod.Namespace)
-				resolved = false
-			} else if len(ss.ObjectMeta.OwnerReferences) > 0 {
-				owner = ss.ObjectMeta.OwnerReferences[0]
-			}
+			resolved = adoptGrandparent(&owner, ctx.Pod.Namespace, "failed to get StatefulSet via lister", func() (apiv1.Object, error) {
+				return ctx.SSLister.StatefulSets(ctx.Pod.Namespace).Get(owner.Name)
+			})
 		} else {
-			ss, err :=
-				ctx.Client.AppsV1().StatefulSets(ctx.Pod.Namespace).Get(
+			resolved = adoptGrandparent(&owner, ctx.Pod.Namespace, "failed to get StatefulSet via API", func() (apiv1.Object, error) {
+				return ctx.Client.AppsV1().StatefulSets(ctx.Pod.Namespace).Get(
 					ctx.Ctx,
 					owner.Name,
 					apiv1.GetOptions{})
-			if err != nil {
-				klog.ErrorS(err, "failed to get StatefulSet via API", "name", owner.Name, "namespace", ctx.Pod.Namespace)
-				resolved = false
-			} else if len(ss.ObjectMeta.OwnerReferences) > 0 {
-				owner = ss.ObjectMeta.OwnerReferences[0]
-			}
+			})
 		}
 	}
 

@@ -1,0 +1,281 @@
+name: Release
+
+on:
+  workflow_dispatch:
+    inputs:
+      command:
+        description: 'What to cut: rc (pre-release), stable (promote latest RC), or patch (tag an in-main hotfix)'
+        required: true
+        type: choice
+        options:
+          - rc
+          - stable
+          - patch
+      target:
+        description: 'Optional commit sha/ref to tag (defaults to main HEAD). Mainly useful for patch to isolate a hotfix.'
+        required: false
+        type: string
+        default: ''
+
+permissions:
+  contents: write
+  packages: write
+
+concurrency:
+  group: release
+  cancel-in-progress: false
+
+jobs:
+  release:
+    name: Cut ${{ inputs.command }} release
+    runs-on: ubuntu-latest
+    steps:
+      - name: Guard branch
+        if: github.ref != 'refs/heads/main'
+        run: |
+          echo "::error::release must be dispatched from main, got ${{ github.ref }}"
+          exit 1
+
+      - name: Check out the repo
+        uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+          token: ${{ secrets.RELEASE_TOKEN || secrets.GITHUB_TOKEN }}
+
+      - name: Configure git user
+        run: |
+          git config --global user.name "github-actions[bot]"
+          git config --global user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+      - name: Compute version
+        id: meta
+        env:
+          COMMAND: ${{ inputs.command }}
+        run: |
+          set -euo pipefail
+
+          STABLE_TAGS=$(git tag -l 'v[0-9]*' | grep -v -- '-rc' | sort -V || true)
+          LATEST_STABLE=$(echo "$STABLE_TAGS" | tail -1)
+          RC_TAGS=$(git tag -l 'v*-rc*' | sort -V || true)
+          LATEST_RC=$(echo "$RC_TAGS" | tail -1)
+
+          strip_rc() { echo "$1" | sed -E 's/-rc\.[0-9]+$//'; }
+          rc_num()   { echo "$1" | sed -E 's/.*-rc\.([0-9]+)$/\1/'; }
+
+          case "$COMMAND" in
+            rc)
+              RC_CONSUMED=false
+              if [ -n "$LATEST_RC" ]; then
+                RC_BASE=$(strip_rc "$LATEST_RC")
+                if git rev-parse -q --verify "refs/tags/$RC_BASE" >/dev/null; then
+                  RC_CONSUMED=true
+                fi
+              fi
+              if [ -n "$LATEST_RC" ] && [ "$RC_CONSUMED" = false ]; then
+                BASE=$(strip_rc "$LATEST_RC")
+                LAST_N=$(rc_num "$LATEST_RC")
+              elif [ -n "$LATEST_STABLE" ]; then
+                MAJOR=$(echo "$LATEST_STABLE" | sed -E 's/^v([0-9]+)\..*/\1/')
+                MINOR=$(echo "$LATEST_STABLE" | sed -E 's/^v[0-9]+\.([0-9]+)\..*/\1/')
+                BASE="v$MAJOR.$((MINOR + 1)).0"
+                LAST_N=0
+              else
+                BASE="v0.1.0"
+                LAST_N=0
+              fi
+              VERSION="$BASE-rc.$((LAST_N + 1))"
+              PREV="$LATEST_STABLE"
+              PRERELEASE=true
+              ;;
+            stable)
+              if [ -z "$LATEST_RC" ]; then
+                echo "::error::no RC tags found to promote"
+                exit 1
+              fi
+              VERSION=$(strip_rc "$LATEST_RC")
+              PREV="$LATEST_STABLE"
+              PRERELEASE=false
+              if git rev-parse -q --verify "refs/tags/$VERSION" >/dev/null; then
+                echo "::error::$VERSION already exists"
+                exit 1
+              fi
+              RC_COMMIT=$(git rev-list -n 1 "$LATEST_RC")
+              MAIN_COMMIT=$(git rev-parse origin/main)
+              if [ "$RC_COMMIT" != "$MAIN_COMMIT" ]; then
+                COUNT=$(git rev-list --count "$LATEST_RC..origin/main")
+                echo "::error::main has $COUNT commit(s) beyond $LATEST_RC. Cut a fresh RC first."
+                exit 1
+              fi
+              ;;
+            patch)
+              if [ -z "$LATEST_STABLE" ]; then
+                echo "::error::no stable tag found to patch"
+                exit 1
+              fi
+              PATCH=$(echo "$LATEST_STABLE" | sed -E 's/.*\.([0-9]+)$/\1/')
+              BASE=$(echo "$LATEST_STABLE" | sed -E 's/\.[0-9]+$//')
+              VERSION="$BASE.$((PATCH + 1))"
+              PREV="$LATEST_STABLE"
+              PRERELEASE=false
+              ;;
+            *)
+              echo "::error::unknown command: $COMMAND"
+              exit 1
+              ;;
+          esac
+
+          if git rev-parse -q --verify "refs/tags/$VERSION" >/dev/null; then
+            echo "::error::tag $VERSION already exists"
+            exit 1
+          fi
+
+          if ! echo "$VERSION" | grep -Eq '^v[0-9]+\.[0-9]+\.[0-9]+(-rc\.[0-9]+)?$'; then
+            echo "::error::computed version $VERSION is not valid semver"
+            exit 1
+          fi
+
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+          echo "prev=$PREV" >> "$GITHUB_OUTPUT"
+          echo "prerelease=$PRERELEASE" >> "$GITHUB_OUTPUT"
+
+      # Must run before the changelog and the bump, so both work on the
+      # commit that actually gets tagged.
+      - name: Resolve target
+        id: target
+        env:
+          TARGET: ${{ inputs.target }}
+        run: |
+          set -euo pipefail
+          if [ -n "$TARGET" ]; then
+            if ! git rev-parse -q --verify "$TARGET^{commit}" >/dev/null; then
+              echo "::error::target '$TARGET' is not a valid commit, tag, or ref"
+              exit 1
+            fi
+            RESOLVED=$(git rev-parse "$TARGET^{commit}")
+          else
+            RESOLVED=$(git rev-parse HEAD)
+          fi
+          echo "sha=$RESOLVED" >> "$GITHUB_OUTPUT"
+          echo "tagging at $RESOLVED"
+
+      - name: Generate changelog
+        id: changelog
+        env:
+          VERSION: ${{ steps.meta.outputs.version }}
+          PREV: ${{ steps.meta.outputs.prev }}
+          SHA: ${{ steps.target.outputs.sha }}
+        run: |
+          set -euo pipefail
+
+          if [ -z "$PREV" ] || ! git rev-parse -q --verify "refs/tags/$PREV" >/dev/null; then
+            RANGE="$SHA"
+          else
+            RANGE="$PREV..$SHA"
+          fi
+
+          TOTAL=$(git rev-list --count "$RANGE")
+          LOG=$(git log --format='* %s (%h)' "$RANGE" | head -100)
+          if [ "$TOTAL" -gt 100 ]; then
+            LOG="$LOG
+          * ...and $((TOTAL - 100)) more commits."
+          fi
+          if [ -z "$LOG" ]; then
+            LOG="* No changes since $PREV."
+          fi
+
+          if [ -n "$PREV" ]; then
+            FOOTER="See the [full diff]($GITHUB_SERVER_URL/$GITHUB_REPOSITORY/compare/$PREV...$VERSION) since \`$PREV\`."
+          else
+            FOOTER="See the [commit history]($GITHUB_SERVER_URL/$GITHUB_REPOSITORY/commits/$VERSION)."
+          fi
+
+          # Built line by line so YAML block indentation can never leak in.
+          {
+            echo "## $VERSION"
+            echo
+            echo "$LOG"
+            echo
+            echo "---"
+            echo "$FOOTER"
+          } > /tmp/release-notes.md
+
+          cat /tmp/release-notes.md
+
+      - name: Bump chart and README versions
+        id: bump
+        if: ${{ inputs.command == 'stable' || inputs.command == 'patch' }}
+        env:
+          VERSION: ${{ steps.meta.outputs.version }}
+          TARGET: ${{ inputs.target }}
+          SHA: ${{ steps.target.outputs.sha }}
+        run: |
+          set -euo pipefail
+
+          # Make the bump on the commit being tagged, not on whatever main is.
+          git checkout --detach "$SHA"
+
+          CHART_VER=$(echo "$VERSION" | sed -E 's/^v//')
+          export VERSION CHART_VER
+          perl -pi -e 's/^version: .*/version: "$ENV{CHART_VER}"/' deploy/chart/Chart.yaml
+          perl -pi -e 's/^appVersion: .*/appVersion: "$ENV{VERSION}"/' deploy/chart/Chart.yaml
+          perl -pi -e 's/--version [0-9]+\.[0-9]+\.[0-9]+/--version $ENV{CHART_VER}/' README.md deploy/chart/README.md
+          perl -pi -e 's#kwatch/v[0-9]+\.[0-9]+\.[0-9]+/#kwatch/$ENV{VERSION}/#g' README.md
+          perl -pi -e 's#image: ghcr\.io/abahmed/kwatch:[^\n]*#image: ghcr.io/abahmed/kwatch:$ENV{VERSION}#' deploy/deploy.yaml
+          if [ "${{ inputs.command }}" = "stable" ]; then
+            perl -ni -e 'print unless /^>\s*\*\*[^*]*Unreleased\*\*/' README.md docs/*.md
+          fi
+
+          git add deploy/chart/Chart.yaml deploy/chart/README.md deploy/deploy.yaml README.md docs/
+          if git diff --cached --quiet; then
+            echo "no version changes to commit; the tag will point at $SHA"
+            echo "bumped=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          git commit -m "chore: release $VERSION - bump chart and README versions"
+          BUMP_SHA=$(git rev-parse HEAD)
+
+          if [ -n "$TARGET" ]; then
+            # Hotfix off an older commit. The bump belongs to the tag only —
+            # pushing it to main would rewrite main's version to an older one.
+            echo "::warning::target was set, so the version bump is on the tag only. Update main by hand if it should carry $VERSION."
+          else
+            if ! git push origin "$BUMP_SHA:refs/heads/main"; then
+              echo "::error::could not push the version bump to main. RELEASE_TOKEN must be a classic PAT with repo scope, allowed to bypass branch protection. Push it manually and re-run:"
+              echo "::error::  git push origin $BUMP_SHA:main"
+              exit 1
+            fi
+          fi
+
+          echo "sha=$BUMP_SHA" >> "$GITHUB_OUTPUT"
+          echo "bumped=true" >> "$GITHUB_OUTPUT"
+
+      - name: Create tag
+        env:
+          VERSION: ${{ steps.meta.outputs.version }}
+          SHA: ${{ steps.bump.outputs.sha || steps.target.outputs.sha }}
+        run: |
+          set -euo pipefail
+          git tag -a "$VERSION" -m "$VERSION" "$SHA"
+          git push origin "$VERSION"
+
+      - name: Create GitHub release
+        env:
+          VERSION: ${{ steps.meta.outputs.version }}
+          PRERELEASE: ${{ steps.meta.outputs.prerelease }}
+          SHA: ${{ steps.bump.outputs.sha || steps.target.outputs.sha }}
+          # Must NOT be the default GITHUB_TOKEN: releases it creates do not
+          # trigger the Publish workflow, so no Docker image gets built.
+          GH_TOKEN: ${{ secrets.RELEASE_TOKEN || github.token }}
+        run: |
+          set -euo pipefail
+          PRERELEASE_ARGS=""
+          if [ "$PRERELEASE" = "true" ]; then
+            PRERELEASE_ARGS="--prerelease"
+          fi
+          gh release create "$VERSION" \
+            --repo "$GITHUB_REPOSITORY" \
+            --title "$VERSION" \
+            --notes-file /tmp/release-notes.md \
+            $PRERELEASE_ARGS \
+            --target "$SHA"

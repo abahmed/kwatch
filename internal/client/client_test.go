@@ -5,8 +5,9 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/abahmed/kwatch/internal/config"
 	"github.com/stretchr/testify/assert"
+
+	"github.com/abahmed/kwatch/internal/config"
 )
 
 func TestGetKubeconfigPath(t *testing.T) {

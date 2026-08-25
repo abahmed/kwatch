@@ -6,6 +6,8 @@ import (
 	"net/http"
 	"strconv"
 	"time"
+
+	"github.com/abahmed/kwatch/internal/model"
 )
 
 // RetryAfterError wraps an error with an optional Retry-After duration.
@@ -20,7 +22,7 @@ func (e *RetryAfterError) Unwrap() error { return e.Err }
 // CheckHTTPResponse returns an error for non-successful HTTP responses.
 // For 429 status it returns a RetryAfterError that respects the Retry-After header.
 func CheckHTTPResponse(resp *http.Response, provider string) error {
-	defer io.Copy(io.Discard, resp.Body) // drain so the caller's deferred Close() returns the conn to the pool
+	_, _ = io.Copy(io.Discard, resp.Body) // best-effort drain; frees the conn on Close()
 	if resp.StatusCode < 300 {
 		return nil
 	}
@@ -44,6 +46,8 @@ type Event struct {
 	Resource      string // "pod", "node", "pvc"
 	PodName       string
 	ContainerName string
+	Image         string
+	Message       string
 	Namespace     string
 	NodeName      string
 	Reason        string
@@ -52,10 +56,10 @@ type Event struct {
 	Labels        map[string]string
 	OwnerKind     string
 	RestartCount  int
-	Hint          string // Pre-computed diagnostic hint; empty = auto-generate from Reason
-	Severity      string // Override severity; empty = let enricher decide from OwnerKind
-	IncludeEvents bool   // If false, omit events section from output
-	IncludeLogs   bool   // If false, omit logs section from output
-	Action        string // Incident action: "create", "update", "resolved"; "" = legacy event path
-	DedupKey      string // Stable per-incident key for trigger↔resolve correlation
+	Hint          string         // Pre-computed diagnostic hint; empty = auto-generate from Reason
+	Severity      model.Severity // Override severity; empty = let enricher decide from OwnerKind
+	IncludeEvents bool           // If false, omit events section from output
+	IncludeLogs   bool           // If false, omit logs section from output
+	Action        string         // Incident action: "create", "update", "resolved"; "" = legacy event path
+	DedupKey      string         // Stable per-incident key for trigger↔resolve correlation
 }

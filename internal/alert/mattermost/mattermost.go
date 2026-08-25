@@ -5,15 +5,19 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
-
 	"net/http"
+	"strings"
 
+	"k8s.io/klog/v2"
+
+	"github.com/abahmed/kwatch/internal/alert/util"
 	"github.com/abahmed/kwatch/internal/config"
 	"github.com/abahmed/kwatch/internal/constant"
 	"github.com/abahmed/kwatch/internal/event"
 	"github.com/abahmed/kwatch/internal/k8s"
+	"github.com/abahmed/kwatch/internal/message"
+	"github.com/abahmed/kwatch/internal/model"
 	"github.com/abahmed/kwatch/internal/ratelimit"
-	"k8s.io/klog/v2"
 )
 
 type Mattermost struct {
@@ -90,6 +94,17 @@ func (m *Mattermost) SendEvent(e *event.Event) error {
 	return m.sendAPI(b)
 }
 
+// SendIncident implements alert.ThreadProvider.
+// It renders the incident using the Report model and PlaintextRenderer,
+// producing a context-adaptive text message.
+func (m *Mattermost) SendIncident(inc *model.Incident, action model.IncidentAction) error {
+	text := util.RenderIncident(inc, action, message.NewPlainTextRenderer(), m.appCfg.ClusterName)
+	if text == "" {
+		return nil
+	}
+	return m.SendMessage(text)
+}
+
 func (m *Mattermost) sendAPI(content []byte) error {
 	client := k8s.GetDefaultClient()
 	buffer := bytes.NewBuffer(content)
@@ -132,15 +147,8 @@ func (m *Mattermost) buildMessage(e *event.Event, msg *string) ([]byte, error) {
 	}
 
 	if e != nil {
-		logs := constant.DefaultLogs
-		if len(e.Logs) > 0 {
-			logs = (e.Logs)
-		}
-
-		events := constant.DefaultEvents
-		if len(e.Events) > 0 {
-			events = (e.Events)
-		}
+		logs := strings.TrimSpace(e.Logs)
+		events := strings.TrimSpace(e.Events)
 
 		// use custom title if it's provided, otherwise use default
 		title := m.title
@@ -154,52 +162,37 @@ func (m *Mattermost) buildMessage(e *event.Event, msg *string) ([]byte, error) {
 			text = constant.DefaultText
 		}
 
+		mmFields := []mmField{}
+		if m.appCfg.ClusterName != "" {
+			mmFields = append(mmFields, mmField{Title: "Cluster", Value: m.appCfg.ClusterName, Short: true})
+		}
+		if e.PodName != "" {
+			mmFields = append(mmFields, mmField{Title: "Name", Value: e.PodName, Short: true})
+		}
+		if e.ContainerName != "" {
+			mmFields = append(mmFields, mmField{Title: "Container", Value: e.ContainerName, Short: true})
+		}
+		if e.Namespace != "" {
+			mmFields = append(mmFields, mmField{Title: "Namespace", Value: e.Namespace, Short: true})
+		}
+		if e.NodeName != "" {
+			mmFields = append(mmFields, mmField{Title: "Node", Value: e.NodeName, Short: true})
+		}
+		if e.Reason != "" {
+			mmFields = append(mmFields, mmField{Title: "Reason", Value: e.Reason, Short: true})
+		}
+		if logs != "" {
+			mmFields = append(mmFields, mmField{Title: ":memo: Logs", Value: "```\n" + logs + "\n```", Short: false})
+		}
+		if events != "" {
+			mmFields = append(mmFields, mmField{Title: ":mag: Events", Value: "```\n" + events + " \n```", Short: false})
+		}
+
 		payload.Attachments = []mmAttachment{
 			{
-				Title: title,
-				Text:  text,
-				Fields: []mmField{
-					{
-						Title: "Cluster",
-						Value: m.appCfg.ClusterName,
-						Short: true,
-					},
-					{
-						Title: "Name",
-						Value: e.PodName,
-						Short: true,
-					},
-					{
-						Title: "Container",
-						Value: e.ContainerName,
-						Short: true,
-					},
-					{
-						Title: "Namespace",
-						Value: e.Namespace,
-						Short: true,
-					},
-					{
-						Title: "Node",
-						Value: e.NodeName,
-						Short: true,
-					},
-					{
-						Title: "Reason",
-						Value: e.Reason,
-						Short: true,
-					},
-					{
-						Title: ":mag: Events",
-						Value: "```\n" + events + " \n```",
-						Short: false,
-					},
-					{
-						Title: ":memo: Logs",
-						Value: "```\n" + logs + "\n```",
-						Short: false,
-					},
-				},
+				Title:  title,
+				Text:   text,
+				Fields: mmFields,
 			},
 		}
 	}

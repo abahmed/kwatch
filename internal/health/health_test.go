@@ -9,10 +9,11 @@ import (
 	"testing"
 	"time"
 
+	"github.com/stretchr/testify/assert"
+
 	"github.com/abahmed/kwatch/internal/config"
 	"github.com/abahmed/kwatch/internal/event"
 	"github.com/abahmed/kwatch/internal/model"
-	"github.com/stretchr/testify/assert"
 )
 
 type fakeIncidentLister struct {
@@ -178,7 +179,7 @@ func TestIncidentsHandler(t *testing.T) {
 	err := json.NewDecoder(resp.Body).Decode(&got)
 	assert.Nil(err)
 	assert.Len(got, 1)
-	assert.Equal("ns:deploy:Err", got[0].Key)
+	assert.Equal("ns:deploy:Err", string(got[0].Key))
 }
 
 func TestIncidentsHandlerEmpty(t *testing.T) {
@@ -241,8 +242,8 @@ func TestTestAlertHandler(t *testing.T) {
 	if len(am.events) != 1 {
 		t.Fatalf("expected 1 sent event, got %d", len(am.events))
 	}
-	if len(am.msgs) != 1 {
-		t.Fatalf("expected 1 sent message, got %d", len(am.msgs))
+	if len(am.msgs) != 0 {
+		t.Fatalf("expected no plain message (NotifyEvent is the single notification), got %d", len(am.msgs))
 	}
 }
 
@@ -350,6 +351,88 @@ func TestPprofEndpointsRegisteredWithGuard(t *testing.T) {
 	assert.Nil(t, err)
 	assert.Equal(t, http.StatusOK, resp.StatusCode)
 	resp.Body.Close()
+}
+
+type fakeDeadLetterLister struct {
+	letters interface{}
+}
+
+func (f *fakeDeadLetterLister) DeadLetters() interface{} {
+	return f.letters
+}
+
+func TestSetDeadLetterLister(t *testing.T) {
+	h := &HealthServer{}
+	assert.Nil(t, h.deadLetterLister)
+	h.SetDeadLetterLister(&fakeDeadLetterLister{letters: []string{"a"}})
+	assert.NotNil(t, h.deadLetterLister)
+}
+
+func TestSetReady(t *testing.T) {
+	h := &HealthServer{}
+	assert.False(t, h.ready.Load())
+	h.SetReady(true)
+	assert.True(t, h.ready.Load())
+	h.SetReady(false)
+	assert.False(t, h.ready.Load())
+}
+
+func TestReadyzHandlerNotReady(t *testing.T) {
+	h := &HealthServer{}
+	req := httptest.NewRequest(http.MethodGet, "/readyz", nil)
+	w := httptest.NewRecorder()
+	h.readyzHandler(w, req)
+	resp := w.Result()
+	assert.Equal(t, http.StatusServiceUnavailable, resp.StatusCode)
+	body := make([]byte, 32)
+	n, _ := resp.Body.Read(body)
+	assert.Equal(t, "not ready", string(body[:n]))
+}
+
+func TestReadyzHandlerReady(t *testing.T) {
+	h := &HealthServer{}
+	h.SetReady(true)
+	req := httptest.NewRequest(http.MethodGet, "/readyz", nil)
+	w := httptest.NewRecorder()
+	h.readyzHandler(w, req)
+	resp := w.Result()
+	assert.Equal(t, http.StatusOK, resp.StatusCode)
+	body := make([]byte, 8)
+	n, _ := resp.Body.Read(body)
+	assert.Equal(t, "OK", string(body[:n]))
+}
+
+func TestDeadLettersHandlerNoLister(t *testing.T) {
+	h := &HealthServer{}
+	req := httptest.NewRequest(http.MethodGet, "/deadletters", nil)
+	w := httptest.NewRecorder()
+	h.deadLettersHandler(w, req)
+	resp := w.Result()
+	assert.Equal(t, http.StatusServiceUnavailable, resp.StatusCode)
+}
+
+func TestDeadLettersHandlerWithData(t *testing.T) {
+	expected := map[string]string{"key": "value"}
+	h := &HealthServer{deadLetterLister: &fakeDeadLetterLister{letters: expected}}
+	req := httptest.NewRequest(http.MethodGet, "/deadletters", nil)
+	w := httptest.NewRecorder()
+	h.deadLettersHandler(w, req)
+	resp := w.Result()
+	assert.Equal(t, http.StatusOK, resp.StatusCode)
+	assert.Equal(t, "application/json", resp.Header.Get("Content-Type"))
+	var got map[string]string
+	err := json.NewDecoder(resp.Body).Decode(&got)
+	assert.Nil(t, err)
+	assert.Equal(t, expected, got)
+}
+
+func TestDeadLettersHandlerAuthFails(t *testing.T) {
+	h := &HealthServer{diagnosticsToken: "secret"}
+	req := httptest.NewRequest(http.MethodGet, "/deadletters", nil)
+	w := httptest.NewRecorder()
+	h.deadLettersHandler(w, req)
+	resp := w.Result()
+	assert.Equal(t, http.StatusUnauthorized, resp.StatusCode)
 }
 
 func TestPprofEndpointsNotRegisteredWhenDisabled(t *testing.T) {

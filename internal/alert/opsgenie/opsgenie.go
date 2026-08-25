@@ -6,12 +6,13 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"strings"
+
+	"k8s.io/klog/v2"
 
 	"github.com/abahmed/kwatch/internal/config"
-	"github.com/abahmed/kwatch/internal/constant"
 	"github.com/abahmed/kwatch/internal/event"
 	"github.com/abahmed/kwatch/internal/k8s"
-	"k8s.io/klog/v2"
 )
 
 const (
@@ -64,32 +65,32 @@ func NewOpsgenie(config map[string]interface{}, appCfg *config.App) *Opsgenie {
 }
 
 // Name returns name of the provider
-func (m *Opsgenie) Name() string {
+func (o *Opsgenie) Name() string {
 	return "Opsgenie"
 }
 
-func (m *Opsgenie) UsesEventDelivery() {}
+func (o *Opsgenie) UsesEventDelivery() {}
 
 // SendMessage sends text message to the provider
-func (m *Opsgenie) SendMessage(msg string) error {
+func (o *Opsgenie) SendMessage(msg string) error {
 	return nil
 }
 
 // SendEvent sends event to the provider
-func (m *Opsgenie) SendEvent(e *event.Event) error {
+func (o *Opsgenie) SendEvent(e *event.Event) error {
 	if e.Action == "resolved" && e.DedupKey != "" {
-		return m.closeAlert(e.DedupKey)
+		return o.closeAlert(e.DedupKey)
 	}
-	b, err := m.buildMessage(e)
+	b, err := o.buildMessage(e)
 	if err != nil {
 		return err
 	}
-	return m.sendAPI(b)
+	return o.sendAPI(b)
 }
 
-func (m *Opsgenie) closeAlert(alias string) error {
+func (o *Opsgenie) closeAlert(alias string) error {
 	client := k8s.GetDefaultClient()
-	url := fmt.Sprintf(m.closeURL, alias)
+	url := fmt.Sprintf(o.closeURL, alias)
 	body := []byte(`{}`)
 	buffer := bytes.NewBuffer(body)
 	request, err := http.NewRequest(http.MethodPost, url, buffer)
@@ -97,7 +98,7 @@ func (m *Opsgenie) closeAlert(alias string) error {
 		return err
 	}
 	request.Header.Set("Content-Type", "application/json")
-	request.Header.Set("Authorization", "GenieKey "+m.apikey)
+	request.Header.Set("Authorization", "GenieKey "+o.apikey)
 
 	response, err := client.Do(request)
 	if err != nil {
@@ -119,17 +120,17 @@ func (m *Opsgenie) closeAlert(alias string) error {
 }
 
 // sendAPI sends http request to Opsgenie API
-func (m *Opsgenie) sendAPI(content []byte) error {
+func (o *Opsgenie) sendAPI(content []byte) error {
 	client := k8s.GetDefaultClient()
 	buffer := bytes.NewBuffer(content)
-	request, err := http.NewRequest(http.MethodPost, m.url, buffer)
+	request, err := http.NewRequest(http.MethodPost, o.url, buffer)
 	if err != nil {
 		return err
 	}
 
 	// set request headers
 	request.Header.Set("Content-Type", "application/json")
-	request.Header.Set("Authorization", "GenieKey "+m.apikey)
+	request.Header.Set("Authorization", "GenieKey "+o.apikey)
 
 	response, err := client.Do(request)
 	if err != nil {
@@ -151,46 +152,55 @@ func (m *Opsgenie) sendAPI(content []byte) error {
 	return nil
 }
 
-func (m *Opsgenie) buildMessage(e *event.Event) ([]byte, error) {
+func (o *Opsgenie) buildMessage(e *event.Event) ([]byte, error) {
 	payload := ogPayload{
 		Priority: "P1",
 	}
 
-	logs := constant.DefaultLogs
-	if len(e.Logs) > 0 {
-		logs = (e.Logs)
-	}
-
-	events := constant.DefaultEvents
-	if len(e.Events) > 0 {
-		events = (e.Events)
-	}
+	logs := strings.TrimSpace(e.Logs)
+	events := strings.TrimSpace(e.Events)
 
 	// use custom title if it's provided, otherwise use default
-	title := m.title
+	title := o.title
 	if len(title) == 0 {
 		title = fmt.Sprintf(defaultOpsgenieTitle, e.PodName)
 	}
 	payload.Message = title
 
 	// use custom text if it's provided, otherwise use default
-	text := m.text
+	text := o.text
 	if len(text) == 0 {
 		text = fmt.Sprintf(defaultOpsgenieText, e.ContainerName, e.PodName)
 	}
 
 	payload.Description = text
 	payload.Alias = e.DedupKey
-	payload.Details = map[string]string{
-		"Cluster":   m.appCfg.ClusterName,
-		"Name":      e.PodName,
-		"Container": e.ContainerName,
-		"Namespace": e.Namespace,
-		"Node":      e.NodeName,
-		"Reason":    e.Reason,
-		"Events":    events,
-		"Logs":      logs,
+	details := map[string]string{}
+	if o.appCfg.ClusterName != "" {
+		details["Cluster"] = o.appCfg.ClusterName
 	}
+	if e.PodName != "" {
+		details["Name"] = e.PodName
+	}
+	if e.ContainerName != "" {
+		details["Container"] = e.ContainerName
+	}
+	if e.Namespace != "" {
+		details["Namespace"] = e.Namespace
+	}
+	if e.NodeName != "" {
+		details["Node"] = e.NodeName
+	}
+	if e.Reason != "" {
+		details["Reason"] = e.Reason
+	}
+	if len(events) > 0 {
+		details["Events"] = events
+	}
+	if len(logs) > 0 {
+		details["Logs"] = logs
+	}
+	payload.Details = details
 
 	str, err := json.Marshal(payload)
 	if err != nil {

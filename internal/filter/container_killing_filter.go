@@ -7,7 +7,7 @@ import (
 type ContainerKillingFilter struct{}
 
 func (f ContainerKillingFilter) Enrich(ctx *Context) bool {
-	if !ctx.Config.IgnoreFailedGracefulShutdown || ctx.Events == nil {
+	if !ctx.Config.IgnoreFailedGracefulShutdown || ctx.Events == nil || ctx.Container == nil {
 		return false
 	}
 	container := ctx.Container.Container
@@ -18,7 +18,7 @@ func (f ContainerKillingFilter) Enrich(ctx *Context) bool {
 		// Graceful shutdown did not work and container was killed during
 		// shutdown. Not really an error
 		if ev.Reason == "Killing" &&
-			strings.Contains(ev.Message, "Stopping container "+container.Name) {
+			strings.TrimSpace(ev.Message) == "Stopping container "+container.Name {
 			return true
 		}
 	}

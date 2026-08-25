@@ -15,6 +15,9 @@ var noiseReasons = []string{
 }
 
 func (f NoiseFilter) Detect(ctx *Context) Status {
+	if ctx.Container == nil {
+		return StatusAlert
+	}
 	reason := ctx.Container.Reason
 	if len(reason) == 0 {
 		return StatusAlert

@@ -9,11 +9,15 @@ import (
 	"strings"
 	"time"
 
+	"k8s.io/klog/v2"
+
+	"github.com/abahmed/kwatch/internal/alert/util"
 	"github.com/abahmed/kwatch/internal/config"
 	"github.com/abahmed/kwatch/internal/event"
 	"github.com/abahmed/kwatch/internal/k8s"
+	"github.com/abahmed/kwatch/internal/message"
+	"github.com/abahmed/kwatch/internal/model"
 	"github.com/abahmed/kwatch/internal/ratelimit"
-	"k8s.io/klog/v2"
 )
 
 const (
@@ -107,55 +111,65 @@ func (t *Telegram) SendMessage(msg string) error {
 	return t.sendByTelegramApi(reqBody)
 }
 
+// SendIncident implements alert.ThreadProvider.
+// It renders the incident using the Report model and PlaintextRenderer,
+// producing a context-adaptive text message.
+func (t *Telegram) SendIncident(inc *model.Incident, action model.IncidentAction) error {
+	text := util.RenderIncident(inc, action, message.NewPlainTextRenderer(), t.appCfg.ClusterName)
+	if text == "" {
+		return nil
+	}
+	return t.SendMessage(text)
+}
+
 func (t *Telegram) buildRequestBodyTelegram(
 	e *event.Event,
 	chatId string,
 	customMsg string) string {
-	eventsText := "No events captured"
-	logsText := "No logs captured"
-
-	// add events part if it exists
-	events := strings.TrimSpace(e.Events)
-	if len(events) > 0 {
-		eventsText = e.Events
-	}
-
-	// add logs part if it exists
-	logs := strings.TrimSpace(e.Logs)
-	if len(logs) > 0 {
-		logsText = e.Logs
-	}
-
 	// build text will be sent in the message
 	txt := ""
-	if len(customMsg) <= 0 {
-		txt = fmt.Sprintf(
-			"An alert for Cluster: *%s* Name: *%s*  "+
-				"Container: *%s* "+
-				"Namespace: *%s* "+
-				"Node: *%s* has been triggered:\n—\n "+
-				"Logs: *%s* \n "+
-				"Events: *%s* ",
-			t.appCfg.ClusterName,
-			e.PodName,
-			e.ContainerName,
-			e.Namespace,
-			e.NodeName,
-			logsText,
-			eventsText,
-		)
+	if len(customMsg) == 0 {
+		var parts []string
+		parts = append(parts, fmt.Sprintf("*Reason:* %s", util.OrDefault(e.Reason, "unknown")))
+
+		if e.PodName != "" {
+			parts = append(parts, fmt.Sprintf("*Pod:* %s", e.PodName))
+		}
+		if e.ContainerName != "" {
+			parts = append(parts, fmt.Sprintf("*Container:* %s", e.ContainerName))
+		}
+		if e.Namespace != "" {
+			parts = append(parts, fmt.Sprintf("*Namespace:* %s", e.Namespace))
+		}
+		if e.NodeName != "" {
+			parts = append(parts, fmt.Sprintf("*Node:* %s", e.NodeName))
+		}
+		if t.appCfg.ClusterName != "" {
+			parts = append(parts, fmt.Sprintf("*Cluster:* %s", t.appCfg.ClusterName))
+		}
+
+		txt = "⛑ Kwatch alert\n" + strings.Join(parts, "\n")
+
+		if e.IncludeLogs {
+			logs := strings.TrimSpace(e.Logs)
+			if len(logs) > 0 {
+				txt += "\n\n*Logs:*\n" + logs
+			}
+		}
+
+		if e.IncludeEvents {
+			events := strings.TrimSpace(e.Events)
+			if len(events) > 0 {
+				txt += "\n\n*Events:*\n" + events
+			}
+		}
 	} else {
 		txt = customMsg
 	}
 
-	msg := fmt.Sprintf(
-		"⛑ Kwatch detected a crash in pod \\n%s ",
-		txt,
-	)
-
 	payload := telegramPayload{
 		ChatID:    chatId,
-		Text:      msg,
+		Text:      txt,
 		ParseMode: "MARKDOWN",
 	}
 
@@ -203,7 +217,7 @@ func (t *Telegram) sendByTelegramApi(reqBody string) error {
 			RetryAfter: d,
 		}
 	}
-	if response.StatusCode > 202 {
+	if response.StatusCode > 299 {
 		return fmt.Errorf(
 			"call to telegram alert returned status code %d",
 			response.StatusCode)

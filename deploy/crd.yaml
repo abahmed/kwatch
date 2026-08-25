@@ -74,10 +74,34 @@ spec:
                         type: array
                         items:
                           type: string
+                      containerNames:
+                        type: array
+                        items:
+                          type: string
+                      logPatterns:
+                        type: array
+                        items:
+                          type: string
+                      containerMessages:
+                        type: array
+                        items:
+                          type: string
+                      nodeReasons:
+                        type: array
+                        items:
+                          type: string
+                      nodeMessages:
+                        type: array
+                        items:
+                          type: string
                 correlation:
                   type: object
                   properties:
                     window:
+                      type: integer
+                    cooldown:
+                      type: integer
+                    staleThreshold:
                       type: integer
                     lifecycleInterval:
                       type: integer

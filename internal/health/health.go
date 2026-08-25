@@ -10,11 +10,14 @@ import (
 	"sync/atomic"
 	"time"
 
+	"github.com/abahmed/kwatch/internal/constant"
+
+	"k8s.io/klog/v2"
+
 	"github.com/abahmed/kwatch/internal/config"
 	"github.com/abahmed/kwatch/internal/event"
 	"github.com/abahmed/kwatch/internal/metrics"
 	"github.com/abahmed/kwatch/internal/model"
-	"k8s.io/klog/v2"
 )
 
 type IncidentLister interface {
@@ -77,7 +80,9 @@ func (h *HealthServer) requireDiagnosticsAuth(w http.ResponseWriter, r *http.Req
 	}
 	w.Header().Set("Content-Type", "text/plain")
 	w.WriteHeader(http.StatusUnauthorized)
-	w.Write([]byte("unauthorized"))
+	if _, err := w.Write([]byte("unauthorized")); err != nil {
+		klog.ErrorS(err, "health: write unauthorized response")
+	}
 	return false
 }
 
@@ -153,13 +158,17 @@ func (h *HealthServer) Stop(ctx context.Context) error {
 func (h *HealthServer) healthzHandler(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "text/plain")
 	w.WriteHeader(http.StatusOK)
-	w.Write([]byte("OK"))
+	if _, err := w.Write([]byte("OK")); err != nil {
+		klog.ErrorS(err, "health: write healthz response")
+	}
 }
 
 func (h *HealthServer) healthHandler(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusOK)
-	json.NewEncoder(w).Encode(HealthResponse{Status: "ok"})
+	if err := json.NewEncoder(w).Encode(HealthResponse{Status: "ok"}); err != nil {
+		klog.ErrorS(err, "health: encode health response")
+	}
 }
 
 func (h *HealthServer) SetReady(v bool) {
@@ -170,11 +179,15 @@ func (h *HealthServer) readyzHandler(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "text/plain")
 	if !h.ready.Load() {
 		w.WriteHeader(http.StatusServiceUnavailable)
-		w.Write([]byte("not ready"))
+		if _, err := w.Write([]byte("not ready")); err != nil {
+			klog.ErrorS(err, "health: write not-ready response")
+		}
 		return
 	}
 	w.WriteHeader(http.StatusOK)
-	w.Write([]byte("OK"))
+	if _, err := w.Write([]byte("OK")); err != nil {
+		klog.ErrorS(err, "health: write readyz response")
+	}
 }
 
 func (h *HealthServer) incidentsHandler(w http.ResponseWriter, r *http.Request) {
@@ -184,13 +197,17 @@ func (h *HealthServer) incidentsHandler(w http.ResponseWriter, r *http.Request) 
 	if h.incidentAPI == nil {
 		w.Header().Set("Content-Type", "text/plain")
 		w.WriteHeader(http.StatusServiceUnavailable)
-		w.Write([]byte("incident API not available"))
+		if _, err := w.Write([]byte("incident API not available")); err != nil {
+			klog.ErrorS(err, "health: write incident-not-available response")
+		}
 		return
 	}
 	snap := h.incidentAPI.Snapshot()
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusOK)
-	json.NewEncoder(w).Encode(snap)
+	if err := json.NewEncoder(w).Encode(snap); err != nil {
+		klog.ErrorS(err, "health: encode incidents snapshot")
+	}
 }
 
 func (h *HealthServer) testAlertHandler(w http.ResponseWriter, r *http.Request) {
@@ -200,28 +217,33 @@ func (h *HealthServer) testAlertHandler(w http.ResponseWriter, r *http.Request) 
 	if r.Method != http.MethodPost {
 		w.Header().Set("Content-Type", "text/plain")
 		w.WriteHeader(http.StatusMethodNotAllowed)
-		w.Write([]byte("use POST"))
+		if _, err := w.Write([]byte("use POST")); err != nil {
+			klog.ErrorS(err, "health: write use-POST response")
+		}
 		return
 	}
 	if h.alertManager == nil {
 		w.Header().Set("Content-Type", "text/plain")
 		w.WriteHeader(http.StatusServiceUnavailable)
-		w.Write([]byte("alert manager not available"))
+		if _, err := w.Write([]byte("alert manager not available")); err != nil {
+			klog.ErrorS(err, "health: write alertman-not-available response")
+		}
 		return
 	}
 	ev := event.Event{
 		PodName:       "test-pod",
 		Namespace:     "default",
-		Reason:        "TestAlert",
+		Reason:        constant.ReasonTestAlert,
 		Events:        "this is a test alert from kwatch",
 		IncludeEvents: true,
 		IncludeLogs:   true,
 	}
 	h.alertManager.NotifyEvent(ev)
-	h.alertManager.Notify("[test-alert] kwatch test alert sent")
 	w.Header().Set("Content-Type", "text/plain")
 	w.WriteHeader(http.StatusOK)
-	w.Write([]byte("test alert sent"))
+	if _, err := w.Write([]byte("test alert sent")); err != nil {
+		klog.ErrorS(err, "health: write test-alert-sent response")
+	}
 }
 
 func (h *HealthServer) deadLettersHandler(w http.ResponseWriter, r *http.Request) {
@@ -231,10 +253,14 @@ func (h *HealthServer) deadLettersHandler(w http.ResponseWriter, r *http.Request
 	if h.deadLetterLister == nil {
 		w.Header().Set("Content-Type", "text/plain")
 		w.WriteHeader(http.StatusServiceUnavailable)
-		w.Write([]byte("dead letter lister not available"))
+		if _, err := w.Write([]byte("dead letter lister not available")); err != nil {
+			klog.ErrorS(err, "health: write deadletter-not-available response")
+		}
 		return
 	}
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusOK)
-	json.NewEncoder(w).Encode(h.deadLetterLister.DeadLetters())
+	if err := json.NewEncoder(w).Encode(h.deadLetterLister.DeadLetters()); err != nil {
+		klog.ErrorS(err, "health: encode dead letters")
+	}
 }

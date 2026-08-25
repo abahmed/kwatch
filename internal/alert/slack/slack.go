@@ -5,11 +5,10 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
-	"sort"
 	"strings"
 	"sync"
-	"time"
 
+	"github.com/abahmed/kwatch/internal/alert/util"
 	"github.com/abahmed/kwatch/internal/config"
 	"github.com/abahmed/kwatch/internal/constant"
 	"github.com/abahmed/kwatch/internal/event"
@@ -169,9 +168,9 @@ func (s *Slack) SendEvent(ev *event.Event) error {
 			blocks = append(blocks,
 				markdownSection(":mag: *Events*"))
 
-			for _, chunk := range chunks(events, chunkSize) {
+			for _, chunk := range util.Chunks(events, chunkSize) {
 				blocks = append(blocks,
-					markdownSectionF("```%s```", chunk))
+					markdownSection("```"+chunk+"```"))
 			}
 		}
 	}
@@ -183,9 +182,9 @@ func (s *Slack) SendEvent(ev *event.Event) error {
 			blocks = append(blocks,
 				markdownSection(":memo: *Logs*"))
 
-			for _, chunk := range chunks(logs, chunkSize) {
+			for _, chunk := range util.Chunks(logs, chunkSize) {
 				blocks = append(blocks,
-					markdownSectionF("```%s```", chunk))
+					markdownSection("```"+chunk+"```"))
 			}
 		}
 	}
@@ -263,7 +262,7 @@ func (s *Slack) SendIncident(inc *model.Incident, action model.IncidentAction) e
 }
 
 func (s *Slack) sendIncidentWithToken(inc *model.Incident, action model.IncidentAction) error {
-	key := inc.Key
+	key := string(inc.Key)
 
 	post := s.postBlocks
 	if s.postBlocksFn != nil {
@@ -277,38 +276,52 @@ func (s *Slack) sendIncidentWithToken(inc *model.Incident, action model.Incident
 		if err != nil {
 			return err
 		}
-		s.mu.Lock()
-		if s.threadMap == nil {
-			s.threadMap = make(map[string]string)
-		}
-		if s.maxThreadMapSize <= 0 || len(s.threadMap) < s.maxThreadMapSize {
-			s.threadMap[key] = ts
-		}
-		s.mu.Unlock()
+		s.saveThread(key, ts)
 		return nil
 
 	case model.ActionUpdate:
-		s.mu.Lock()
-		threadTS, ok := s.threadMap[key]
-		s.mu.Unlock()
-		if !ok {
-			threadTS = ""
-		}
+		threadTS := s.loadThread(key)
 		blocks := buildIncidentUpdateBlocks(inc)
 		_, err := post(blocks, threadTS)
 		return err
 
 	case model.ActionResolved:
-		s.mu.Lock()
-		threadTS, _ := s.threadMap[key]
-		delete(s.threadMap, key)
-		s.mu.Unlock()
+		threadTS := s.popThread(key)
 		blocks := buildIncidentResolvedBlocks(inc)
 		_, err := post(blocks, threadTS)
 		return err
 	}
 
 	return nil
+}
+
+func (s *Slack) saveThread(key, ts string) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.threadMap == nil {
+		s.threadMap = make(map[string]string)
+	}
+	if s.maxThreadMapSize <= 0 || len(s.threadMap) < s.maxThreadMapSize {
+		s.threadMap[key] = ts
+	}
+}
+
+func (s *Slack) loadThread(key string) string {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	ts, ok := s.threadMap[key]
+	if !ok {
+		return ""
+	}
+	return ts
+}
+
+func (s *Slack) popThread(key string) string {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	ts, _ := s.threadMap[key]
+	delete(s.threadMap, key)
+	return ts
 }
 
 func (s *Slack) postBlocks(blocks *slackClient.Blocks, threadTS string) (string, error) {
@@ -325,257 +338,4 @@ func (s *Slack) postBlocks(blocks *slackClient.Blocks, threadTS string) (string,
 		opts...,
 	)
 	return ts, wrapSlackRateLimit(err)
-}
-
-func buildIncidentBlocks(inc *model.Incident, appCfg *config.App) *slackClient.Blocks {
-	resources := make([]string, 0, len(inc.Resources))
-	for r := range inc.Resources {
-		resources = append(resources, r)
-	}
-	resourcesStr := strings.Join(resources, ", ")
-	if len(resourcesStr) > 200 {
-		resourcesStr = resourcesStr[:200] + "..."
-	}
-	duration := inc.LastSeen.Sub(inc.FirstSeen).Round(time.Minute)
-	hint := inc.Hint
-	if hint != "" {
-		hint = "\n💡 " + hint
-	}
-
-	title := "🚨 Incident"
-	text := constant.DefaultText
-
-	blocks := []slackClient.Block{
-		markdownSection(title),
-		plainSection(text),
-		slackClient.SectionBlock{
-			Type: "section",
-			Fields: []*slackClient.TextBlockObject{
-				markdownF("*Cluster*\n%s", appCfg.ClusterName),
-				markdownF("*Name*\n%s", inc.Name),
-				markdownF("*Kind*\n%s", inc.OwnerKind),
-				markdownF("*Namespace*\n%s", inc.Namespace),
-				markdownF("*Container*\n%s", containerSummary(inc)),
-				markdownF("*Reason*\n%s", inc.Reason),
-				markdownF("*Restarts*\n%d", inc.RestartCount),
-				markdownF("*Count*\n%d", inc.Count),
-				markdownF("*Resources (Peak: %d)*\n%s", inc.PeakResources, resourcesStr),
-				markdownF("*Duration*\n%s", duration),
-			},
-		},
-	}
-
-	if hint != "" {
-		blocks = append(blocks, markdownSection(hint))
-	}
-
-	if inc.Analysis != "" {
-		blocks = append(blocks, markdownSection("*🤖 Likely cause:* "+inc.Analysis))
-	}
-
-	if inc.IncludeEvents {
-		events := strings.TrimSpace(inc.Events)
-		if len(events) > 0 {
-			blocks = append(blocks, markdownSection(":mag: *Events*"))
-			for _, chunk := range chunks(events, chunkSize) {
-				blocks = append(blocks, markdownSectionF("```%s```", chunk))
-			}
-		}
-	}
-
-	if inc.IncludeLogs {
-		logs := strings.TrimSpace(inc.Logs)
-		if len(logs) > 0 {
-			blocks = append(blocks, markdownSection(":memo: *Logs*"))
-			for _, chunk := range chunks(logs, chunkSize) {
-				blocks = append(blocks, markdownSectionF("```%s```", chunk))
-			}
-		}
-	}
-
-	return &slackClient.Blocks{
-		BlockSet: append(blocks, markdownSection(constant.Footer)),
-	}
-}
-
-func buildIncidentUpdateBlocks(inc *model.Incident) *slackClient.Blocks {
-	resources := make([]string, 0, len(inc.Resources))
-	for r := range inc.Resources {
-		resources = append(resources, r)
-	}
-	resourcesStr := strings.Join(resources, ", ")
-	if len(resourcesStr) > 200 {
-		resourcesStr = resourcesStr[:200] + "..."
-	}
-	duration := inc.LastSeen.Sub(inc.FirstSeen).Round(time.Minute)
-
-	text := fmt.Sprintf(
-		"🔄 Update — Container: %s | Count: %d | Restarts: %d | Resources: %s | Duration: %s",
-		containerSummary(inc), inc.Count, inc.RestartCount, resourcesStr, duration,
-	)
-
-	blocks := []slackClient.Block{
-		markdownSection(text),
-	}
-
-	if inc.IncludeEvents {
-		events := strings.TrimSpace(inc.Events)
-		if len(events) > 0 {
-			blocks = append(blocks, markdownSection(":mag: *Events*"))
-			for _, chunk := range chunks(events, chunkSize) {
-				blocks = append(blocks, markdownSectionF("```%s```", chunk))
-			}
-		}
-	}
-
-	if inc.IncludeLogs {
-		logs := strings.TrimSpace(inc.Logs)
-		if len(logs) > 0 {
-			blocks = append(blocks, markdownSection(":memo: *Logs*"))
-			for _, chunk := range chunks(logs, chunkSize) {
-				blocks = append(blocks, markdownSectionF("```%s```", chunk))
-			}
-		}
-	}
-
-	return &slackClient.Blocks{
-		BlockSet: blocks,
-	}
-}
-
-func buildIncidentResolvedBlocks(inc *model.Incident) *slackClient.Blocks {
-	duration := inc.LastSeen.Sub(inc.FirstSeen).Round(time.Minute)
-
-	text := fmt.Sprintf(
-		"✅ *Resolved* — Container: %s\nDuration: %s | Total events: %d | Peak resources: %d",
-		containerSummary(inc), duration, inc.Count, inc.PeakResources,
-	)
-
-	return &slackClient.Blocks{
-		BlockSet: []slackClient.Block{
-			markdownSection(text),
-		},
-	}
-}
-
-func formatIncidentText(inc *model.Incident, action model.IncidentAction) string {
-	switch action {
-	case model.ActionCreate:
-		duration := inc.LastSeen.Sub(inc.FirstSeen).Round(time.Minute)
-		analysis := ""
-		if inc.Analysis != "" {
-			analysis = "\n🤖 Likely cause: " + inc.Analysis
-		}
-		text := fmt.Sprintf(
-			"🚨 Incident: %s (%s)\nNamespace: %s\nContainer: %s\nReason: %s\nRestarts: %d\nHint: %s%s\nPeak: %d resource(s)\nCount: %d\nDuration: %s",
-			inc.Name, inc.OwnerKind, inc.Namespace, containerSummary(inc),
-			inc.Reason, inc.RestartCount, inc.Hint, analysis,
-			inc.PeakResources, inc.Count, duration,
-		)
-		if inc.IncludeEvents {
-			if ev := strings.TrimSpace(inc.Events); len(ev) > 0 {
-				text += "\n\nEvents:\n" + ev
-			}
-		}
-		if inc.IncludeLogs {
-			if logs := strings.TrimSpace(inc.Logs); len(logs) > 0 {
-				text += "\n\nLogs:\n" + logs
-			}
-		}
-		return text
-	case model.ActionUpdate:
-		duration := inc.LastSeen.Sub(inc.FirstSeen).Round(time.Minute)
-		text := fmt.Sprintf(
-			"🔄 Update: %s | Container: %s | Count: %d | Duration: %s | Peak: %d",
-			inc.Name, containerSummary(inc), inc.Count, duration, inc.PeakResources,
-		)
-		if inc.IncludeEvents {
-			if ev := strings.TrimSpace(inc.Events); len(ev) > 0 {
-				text += "\n\nEvents:\n" + ev
-			}
-		}
-		if inc.IncludeLogs {
-			if logs := strings.TrimSpace(inc.Logs); len(logs) > 0 {
-				text += "\n\nLogs:\n" + logs
-			}
-		}
-		return text
-	case model.ActionResolved:
-		duration := inc.LastSeen.Sub(inc.FirstSeen).Round(time.Minute)
-		return fmt.Sprintf(
-			"✅ Resolved: %s | Container: %s | Duration: %s | Total events: %d | Peak resources: %d",
-			inc.Name, containerSummary(inc), duration, inc.Count, inc.PeakResources,
-		)
-	default:
-		return ""
-	}
-}
-
-func containerSummary(inc *model.Incident) string {
-	if len(inc.Containers) > 1 {
-		names := make([]string, 0, len(inc.Containers))
-		for c := range inc.Containers {
-			names = append(names, c)
-		}
-		sort.Strings(names)
-		return strings.Join(names, ", ")
-	}
-	return inc.ContainerName
-}
-
-func chunks(s string, chunkSize int) []string {
-	if chunkSize >= len(s) {
-		return []string{s}
-	}
-	var chunks []string = make([]string, 0, (len(s)-1)/chunkSize+1)
-	currentLen := 0
-	currentStart := 0
-	for i := range s {
-		if currentLen == chunkSize {
-			chunks = append(chunks, s[currentStart:i])
-			currentLen = 0
-			currentStart = i
-		}
-		currentLen++
-	}
-	chunks = append(chunks, s[currentStart:])
-	return chunks
-}
-
-func plainSection(txt string) slackClient.SectionBlock {
-	return slackClient.SectionBlock{
-		Type: "section",
-		Text: slackClient.NewTextBlockObject(
-			slackClient.PlainTextType,
-			txt,
-			true,
-			false),
-	}
-}
-
-func markdownSection(txt string) slackClient.SectionBlock {
-	return slackClient.SectionBlock{
-		Type: "section",
-		Text: slackClient.NewTextBlockObject(
-			slackClient.MarkdownType,
-			txt,
-			false,
-			true),
-	}
-}
-
-func markdownF(format string, a ...interface{}) *slackClient.TextBlockObject {
-	return slackClient.NewTextBlockObject(
-		slackClient.MarkdownType,
-		fmt.Sprintf(format, a...),
-		false,
-		true)
-}
-
-func markdownSectionF(
-	format string, a ...interface{}) slackClient.SectionBlock {
-	return slackClient.SectionBlock{
-		Type: "section",
-		Text: markdownF(format, a...),
-	}
 }

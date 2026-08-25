@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"regexp"
+	"sort"
 	"strings"
 
 	"gopkg.in/yaml.v3"
@@ -23,7 +24,10 @@ func LintStrict() error {
 	if err != nil {
 		return err
 	}
-	expanded := expandEnv(string(raw))
+	expanded, err := expandEnv(string(raw))
+	if err != nil {
+		return err
+	}
 	if strings.TrimSpace(expanded) == "" {
 		return nil
 	}
@@ -34,22 +38,41 @@ func LintStrict() error {
 }
 
 // expandEnv replaces ${VAR} with the environment value (braced-only;
-// bare $ is preserved for passwords/hashes).
+// bare $ is preserved for passwords/hashes). A referenced variable that is
+// not set in the environment is reported as an error rather than silently
+// expanding to an empty string, which would corrupt the configuration.
 var envVarRe = regexp.MustCompile(`\$\{(\w+)\}`)
 
-func expandEnv(s string) string {
-	return envVarRe.ReplaceAllStringFunc(s, func(m string) string {
+func expandEnv(s string) (string, error) {
+	unset := map[string]bool{}
+	out := envVarRe.ReplaceAllStringFunc(s, func(m string) string {
 		groups := envVarRe.FindStringSubmatch(m)
 		if groups == nil {
 			return m
 		}
-		return os.Getenv(groups[1])
+		v, ok := os.LookupEnv(groups[1])
+		if !ok {
+			unset[groups[1]] = true
+			return m
+		}
+		return v
 	})
+	if len(unset) > 0 {
+		names := make([]string, 0, len(unset))
+		for n := range unset {
+			names = append(names, n)
+		}
+		sort.Strings(names)
+		return "", fmt.Errorf("environment variable(s) referenced in config are not set: %s", strings.Join(names, ", "))
+	}
+	return out, nil
 }
 
 // LoadConfig loads yaml configuration from file if provided, otherwise
 // loads default configuration
-func LoadConfig() (*Config, error) {
+// parseConfigFile reads CONFIG_FILE and unmarshals it over a fresh default
+// config. A missing or unset file yields the defaults with no error.
+func parseConfigFile() (*Config, error) {
 	configFile := os.Getenv("CONFIG_FILE")
 
 	config := DefaultConfig()
@@ -69,7 +92,11 @@ func LoadConfig() (*Config, error) {
 		return nil, err
 	}
 
-	expanded := expandEnv(string(yamlFile))
+	expanded, err := expandEnv(string(yamlFile))
+	if err != nil {
+		klog.ErrorS(err, "failed to expand environment variables in config", "file", configFile)
+		return nil, err
+	}
 
 	if strings.TrimSpace(expanded) != "" {
 		if err = yaml.Unmarshal([]byte(expanded), config); err != nil {
@@ -78,8 +105,12 @@ func LoadConfig() (*Config, error) {
 		}
 	}
 
-	var errs []error
+	return config, nil
+}
 
+// prepareAllowForbidLists splits namespace and reason lists and validates that
+// allow and forbid sides are mutually exclusive.
+func prepareAllowForbidLists(config *Config, errs []error) []error {
 	// Parse namespace allow/forbid lists
 	config.AllowedNamespaces, config.ForbiddenNamespaces =
 		getAllowForbidSlices(config.Namespaces)
@@ -101,6 +132,18 @@ func LoadConfig() (*Config, error) {
 		errs = append(errs,
 			errors.New("either allowed or forbidden reasons must be set, can't set both"))
 	}
+
+	return errs
+}
+
+// prepareConfig normalizes parsed config: splits lists, compiles back-compat
+// patterns, consolidates suppression state, and runs full validation.
+func prepareConfig(config *Config) []error {
+	var errs []error
+
+	errs = prepareAllowForbidLists(config, errs)
+
+	var err error
 
 	// Prepare ignored pod name patters (compiled for back-compat)
 	config.IgnorePodNamePatterns, err =
@@ -124,13 +167,12 @@ func LoadConfig() (*Config, error) {
 	// Build suppression index for detect-time filters
 	config.Suppression = config.BuildSuppressionIndex()
 
-	errs = append(errs, Validate(config)...)
+	return append(errs, Validate(config)...)
+}
 
-	if len(errs) > 0 {
-		return nil, errors.Join(errs...)
-	}
-
-	// Deprecation warnings for suppression knobs being consolidated into Silences
+// warnDeprecatedIgnoreFields logs deprecation warnings for suppression knobs
+// consolidated into Silences.
+func warnDeprecatedIgnoreFields(config *Config) {
 	if len(config.IgnoreContainerNames) > 0 {
 		klog.Warning("ignoreContainerNames is deprecated; use silences instead")
 	}
@@ -146,23 +188,41 @@ func LoadConfig() (*Config, error) {
 	if len(config.IgnoreNodeMessages) > 0 {
 		klog.Warning("ignoreNodeMessages is deprecated; use silences instead")
 	}
+}
 
-	// Normalize SeverityByOwnerKind keys to PascalCase (expected by enricher)
-	normalizeSeverityMap := func(m map[string]string) map[string]string {
-		if m == nil {
-			return nil
-		}
-		result := make(map[string]string, len(m))
-		for k, v := range m {
-			normalized := strings.Title(strings.ToLower(k))
-			result[normalized] = v
-		}
-		return result
+func LoadConfig() (*Config, error) {
+	config, err := parseConfigFile()
+	if err != nil {
+		return nil, err
 	}
-	config.SeverityByOwnerKind = normalizeSeverityMap(config.SeverityByOwnerKind)
-	config.SeverityByReason = normalizeSeverityMap(config.SeverityByReason)
+
+	if errs := prepareConfig(config); len(errs) > 0 {
+		return nil, errors.Join(errs...)
+	}
+
+	warnDeprecatedIgnoreFields(config)
+
+	// SeverityByOwnerKind and SeverityByReason keys must match Kubernetes
+	// kinds (e.g. "StatefulSet", "DaemonSet") and event reasons
+	// (e.g. "ImagePullBackOff", "Evicted") exactly. The enricher matches
+	// case-insensitively, so keys are preserved verbatim here. Do NOT
+	// reformat them with strings.Title — that corrupts multi-word kinds
+	// like DaemonSet → Daemonset and silently disables user severity config.
+	config.SeverityByOwnerKind = cloneMap(config.SeverityByOwnerKind)
+	config.SeverityByReason = cloneMap(config.SeverityByReason)
 
 	return config, nil
+}
+
+func cloneMap(m map[string]string) map[string]string {
+	if m == nil {
+		return nil
+	}
+	result := make(map[string]string, len(m))
+	for k, v := range m {
+		result[k] = v
+	}
+	return result
 }
 
 func getAllowForbidSlices(items []string) (allow []string, forbid []string) {

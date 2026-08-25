@@ -4,10 +4,12 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/abahmed/kwatch/internal/config"
-	"github.com/abahmed/kwatch/internal/event"
 	discordgo "github.com/bwmarrin/discordgo"
 	"github.com/stretchr/testify/assert"
+
+	"github.com/abahmed/kwatch/internal/alert/util"
+	"github.com/abahmed/kwatch/internal/config"
+	"github.com/abahmed/kwatch/internal/event"
 )
 
 func mockedSend(
@@ -104,17 +106,17 @@ func TestSendEvent(t *testing.T) {
 func TestChunks(t *testing.T) {
 	assert := assert.New(t)
 
-	result := chunks("short", 1024)
+	result := util.Chunks("short", 1024)
 	assert.Equal([]string{"short"}, result)
 
 	longString := strings.Repeat("a", 2000)
-	result = chunks(longString, 1024)
+	result = util.Chunks(longString, 1024)
 	assert.Equal(2, len(result))
 	assert.Equal(1024, len(result[0]))
 	assert.Equal(976, len(result[1]))
 
 	exactChunk := strings.Repeat("b", 1024)
-	result = chunks(exactChunk, 1024)
+	result = util.Chunks(exactChunk, 1024)
 	assert.Equal(1, len(result))
 	assert.Equal(1024, len(result[0]))
 }

@@ -6,10 +6,13 @@ import (
 	"net/http"
 	"strings"
 
+	"github.com/abahmed/kwatch/internal/alert/util"
 	"github.com/abahmed/kwatch/internal/config"
 	"github.com/abahmed/kwatch/internal/constant"
 	"github.com/abahmed/kwatch/internal/event"
 	"github.com/abahmed/kwatch/internal/k8s"
+	"github.com/abahmed/kwatch/internal/message"
+	"github.com/abahmed/kwatch/internal/model"
 	"github.com/abahmed/kwatch/internal/ratelimit"
 
 	discordgo "github.com/bwmarrin/discordgo"
@@ -69,14 +72,14 @@ func NewDiscord(config map[string]interface{}, appCfg *config.App) *Discord {
 }
 
 // Name returns name of the provider
-func (s *Discord) Name() string {
+func (d *Discord) Name() string {
 	return "Discord"
 }
 
 // Verify checks webhook credentials by issuing a GET to the webhook URL.
-func (s *Discord) Verify() error {
+func (d *Discord) Verify() error {
 	client := k8s.GetDefaultClient()
-	url := fmt.Sprintf("https://discord.com/api/webhooks/%s/%s", s.id, s.token)
+	url := fmt.Sprintf("https://discord.com/api/webhooks/%s/%s", d.id, d.token)
 	resp, err := client.Get(url)
 	if err != nil {
 		return err
@@ -89,48 +92,47 @@ func (s *Discord) Verify() error {
 }
 
 // SendEvent sends event to the provider
-func (s *Discord) SendEvent(ev *event.Event) error {
+func (d *Discord) SendEvent(ev *event.Event) error {
 	klog.V(4).InfoS("sending to discord event", "event", ev)
 
 	// initialize fields with basic info
-	fields := []*discordgo.MessageEmbedField{
-		{
-			Name:   "Cluster",
-			Value:  s.appCfg.ClusterName,
-			Inline: true,
-		},
-		{
-			Name:   "Name",
-			Value:  ev.PodName,
-			Inline: true,
-		},
-		{
-			Name:   "Container",
-			Value:  ev.ContainerName,
-			Inline: true,
-		},
-		{
-			Name:   "Namespace",
-			Value:  ev.Namespace,
-			Inline: true,
-		},
-		{
-			Name:   "Node",
-			Value:  ev.NodeName,
-			Inline: true,
-		},
-		{
-			Name:   "Reason",
-			Value:  ev.Reason,
-			Inline: true,
-		},
+	fields := []*discordgo.MessageEmbedField{}
+	if d.appCfg.ClusterName != "" {
+		fields = append(fields, &discordgo.MessageEmbedField{
+			Name: "Cluster", Value: d.appCfg.ClusterName, Inline: true,
+		})
+	}
+	if ev.PodName != "" {
+		fields = append(fields, &discordgo.MessageEmbedField{
+			Name: "Name", Value: ev.PodName, Inline: true,
+		})
+	}
+	if ev.ContainerName != "" {
+		fields = append(fields, &discordgo.MessageEmbedField{
+			Name: "Container", Value: ev.ContainerName, Inline: true,
+		})
+	}
+	if ev.Namespace != "" {
+		fields = append(fields, &discordgo.MessageEmbedField{
+			Name: "Namespace", Value: ev.Namespace, Inline: true,
+		})
+	}
+	if ev.NodeName != "" {
+		fields = append(fields, &discordgo.MessageEmbedField{
+			Name: "Node", Value: ev.NodeName, Inline: true,
+		})
+	}
+	if ev.Reason != "" {
+		fields = append(fields, &discordgo.MessageEmbedField{
+			Name: "Reason", Value: ev.Reason, Inline: true,
+		})
 	}
 
 	// add events part if it exists
 	if ev.IncludeEvents {
 		events := strings.TrimSpace(ev.Events)
 		if len(events) > 0 {
-			for _, chunk := range chunks(events, chunkSize) {
+			for _, chunk := range util.Chunks(events, chunkSize) {
 				fields = append(fields, &discordgo.MessageEmbedField{
 					Name:  ":mag: Events",
 					Value: "```\n" + chunk + "```",
@@ -147,7 +149,7 @@ func (s *Discord) SendEvent(ev *event.Event) error {
 
 			const maxFields = 25
 			var totalFields int
-			parts := chunks(logData, chunkSize)
+			parts := util.Chunks(logData, chunkSize)
 			for _, chunk := range parts {
 				name := ":memo: Logs"
 				totalFields++
@@ -171,21 +173,21 @@ func (s *Discord) SendEvent(ev *event.Event) error {
 	}
 
 	// use custom title if it's provided, otherwise use default
-	title := s.title
+	title := d.title
 	if len(title) == 0 {
 		title = constant.DefaultTitle
 	}
 
 	// use custom text if it's provided, otherwise use default
-	text := s.text
+	text := d.text
 	if len(text) == 0 {
 		text = constant.DefaultText
 	}
 
 	// send message
-	_, err := s.send(
-		s.id,
-		s.token,
+	_, err := d.send(
+		d.id,
+		d.token,
 		false,
 		&discordgo.WebhookParams{
 			Embeds: []*discordgo.MessageEmbed{
@@ -204,16 +206,27 @@ func (s *Discord) SendEvent(ev *event.Event) error {
 }
 
 // SendMessage sends text message to the provider
-func (s *Discord) SendMessage(msg string) error {
+func (d *Discord) SendMessage(msg string) error {
 	// send message
-	_, err := s.send(
-		s.id,
-		s.token,
+	_, err := d.send(
+		d.id,
+		d.token,
 		false,
 		&discordgo.WebhookParams{
 			Content: msg,
 		})
 	return wrapDiscordRateLimit(err)
+}
+
+// SendIncident implements alert.ThreadProvider.
+// It renders the incident using the Report model and DiscordRenderer,
+// producing a rich embed with context-adaptive fields.
+func (d *Discord) SendIncident(inc *model.Incident, action model.IncidentAction) error {
+	text := util.RenderIncident(inc, action, message.NewDiscordRenderer(), d.appCfg.ClusterName)
+	if text == "" {
+		return nil
+	}
+	return d.SendMessage(text)
 }
 
 func wrapDiscordRateLimit(err error) error {
@@ -229,26 +242,4 @@ func wrapDiscordRateLimit(err error) error {
 		}
 	}
 	return err
-}
-
-func chunks(s string, chunkSize int) []string {
-	if chunkSize >= len(s) {
-		return []string{s}
-	}
-
-	var chunks []string = make([]string, 0, (len(s)-1)/chunkSize+1)
-	currentLen := 0
-	currentStart := 0
-
-	for i := range s {
-		if currentLen == chunkSize {
-			chunks = append(chunks, s[currentStart:i])
-			currentLen = 0
-			currentStart = i
-		}
-		currentLen++
-	}
-
-	chunks = append(chunks, s[currentStart:])
-	return chunks
 }

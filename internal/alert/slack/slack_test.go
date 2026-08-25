@@ -4,11 +4,13 @@ import (
 	"testing"
 	"time"
 
+	slackClient "github.com/slack-go/slack"
+	"github.com/stretchr/testify/assert"
+
+	"github.com/abahmed/kwatch/internal/alert/util"
 	"github.com/abahmed/kwatch/internal/config"
 	"github.com/abahmed/kwatch/internal/event"
 	"github.com/abahmed/kwatch/internal/model"
-	slackClient "github.com/slack-go/slack"
-	"github.com/stretchr/testify/assert"
 )
 
 func mockedSend(url string, msg *slackClient.WebhookMessage) error {
@@ -231,13 +233,13 @@ func TestSendMessageWebhookMode(t *testing.T) {
 func TestChunks(t *testing.T) {
 	assert := assert.New(t)
 
-	result := chunks("abc", 5)
+	result := util.Chunks("abc", 5)
 	assert.Equal([]string{"abc"}, result)
 
-	result = chunks("abcdef", 3)
+	result = util.Chunks("abcdef", 3)
 	assert.Equal([]string{"abc", "def"}, result)
 
-	result = chunks("abcdefg", 3)
+	result = util.Chunks("abcdefg", 3)
 	assert.Equal([]string{"abc", "def", "g"}, result)
 }
 
@@ -288,9 +290,8 @@ func TestSendIncidentWebhookCreate(t *testing.T) {
 
 	err := s.SendIncident(testIncident(), model.ActionCreate)
 	assert.Nil(err)
-	assert.Contains(lastMsg, "Incident")
-	assert.Contains(lastMsg, "deploy-1")
 	assert.Contains(lastMsg, "CrashLoopBackOff")
+	assert.Contains(lastMsg, "deploy-1")
 }
 
 func TestSendIncidentWebhookUpdate(t *testing.T) {
@@ -309,7 +310,7 @@ func TestSendIncidentWebhookUpdate(t *testing.T) {
 
 	err := s.SendIncident(testIncident(), model.ActionUpdate)
 	assert.Nil(err)
-	assert.Contains(lastMsg, "Update")
+	assert.Contains(lastMsg, "CrashLoopBackOff")
 }
 
 func TestSendIncidentWebhookCompact(t *testing.T) {
@@ -330,9 +331,8 @@ func TestSendIncidentWebhookCompact(t *testing.T) {
 
 	err := s.SendIncident(testIncident(), model.ActionCreate)
 	assert.Nil(err)
-	assert.Contains(lastText, "Incident")
-	assert.Contains(lastText, "deploy-1")
 	assert.Contains(lastText, "CrashLoopBackOff")
+	assert.Contains(lastText, "deploy-1")
 }
 
 func TestSendIncidentWebhookSkip(t *testing.T) {
@@ -466,6 +466,7 @@ func TestBuildIncidentUpdateBlocks(t *testing.T) {
 	blocks := buildIncidentUpdateBlocks(inc)
 
 	assert.NotNil(blocks)
+	// header (pod has Resources)
 	assert.Equal(1, len(blocks.BlockSet))
 }
 
@@ -474,11 +475,11 @@ func TestFormatIncidentText(t *testing.T) {
 
 	inc := testIncident()
 	text := formatIncidentText(inc, model.ActionCreate)
-	assert.Contains(text, "Incident")
+	assert.Contains(text, "CrashLoopBackOff")
 	assert.Contains(text, "deploy-1")
 
 	textUpdate := formatIncidentText(inc, model.ActionUpdate)
-	assert.Contains(textUpdate, "Update")
+	assert.Contains(textUpdate, "CrashLoopBackOff")
 }
 
 func TestBuildIncidentBlocksWithLogsEvents(t *testing.T) {

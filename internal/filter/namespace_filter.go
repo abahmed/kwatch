@@ -8,6 +8,9 @@ import (
 type NamespaceFilter struct{}
 
 func (f NamespaceFilter) Detect(ctx *Context) Status {
+	if ctx.Pod == nil {
+		return StatusAlert
+	}
 	if len(ctx.Config.AllowedNamespaces) > 0 &&
 		!slices.Contains(ctx.Config.AllowedNamespaces, ctx.Pod.Namespace) {
 		klog.InfoS(

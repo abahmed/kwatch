@@ -3,6 +3,16 @@ name: Publish
 on:
   release:
     types: [published]
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: 'Existing tag to build, e.g. v0.11.0-rc.3'
+        required: true
+        type: string
+
+concurrency:
+  group: publish-${{ inputs.tag || github.event.release.tag_name }}
+  cancel-in-progress: false
 
 jobs:
   push_to_registry:
@@ -12,29 +22,88 @@ jobs:
       packages: write
       contents: read
     steps:
+      # Values come in through env, never inlined into the script, so a tag
+      # name can't be used to inject shell.
+      - name: Resolve release info
+        id: rel
+        env:
+          EVENT: ${{ github.event_name }}
+          TAG: ${{ inputs.tag || github.event.release.tag_name }}
+          REL_PRERELEASE: ${{ github.event.release.prerelease }}
+          REL_PUBLISHED: ${{ github.event.release.published_at }}
+        run: |
+          set -euo pipefail
+
+          if [ -z "$TAG" ]; then
+            echo "::error::no tag to build"
+            exit 1
+          fi
+
+          if [ "$EVENT" = "release" ]; then
+            PRERELEASE="$REL_PRERELEASE"
+            BUILD_DATE="$REL_PUBLISHED"
+          else
+            # Manual re-run: infer from the tag name, since there is no
+            # release payload to read.
+            if echo "$TAG" | grep -q -- '-rc'; then
+              PRERELEASE=true
+            else
+              PRERELEASE=false
+            fi
+            BUILD_DATE=$(date -u +%Y-%m-%dT%H:%M:%SZ)
+          fi
+
+          echo "tag=$TAG" >> "$GITHUB_OUTPUT"
+          echo "prerelease=$PRERELEASE" >> "$GITHUB_OUTPUT"
+          echo "build_date=$BUILD_DATE" >> "$GITHUB_OUTPUT"
+          echo "building $TAG (prerelease=$PRERELEASE)"
+
       - name: Check out the repo
         uses: actions/checkout@v7
+        with:
+          ref: ${{ steps.rel.outputs.tag }}
+
+      # github.sha points at the default branch on a manual run, so read the
+      # commit we actually checked out.
+      - name: Resolve commit
+        id: sha
+        run: echo "sha=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
+
       - name: Set up QEMU
         uses: docker/setup-qemu-action@v4
+
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v4
+
       - name: Login to GitHub Container Registry
         uses: docker/login-action@v4
         with:
           registry: ghcr.io
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
+
       - name: Extract metadata (tags, labels) for Docker
         id: meta
         uses: docker/metadata-action@v6
         with:
           images: ghcr.io/abahmed/kwatch
+          flavor: |
+            latest=false
+          tags: |
+            type=semver,pattern={{raw}},value=${{ steps.rel.outputs.tag }}
+            type=raw,value=latest,enable=${{ steps.rel.outputs.prerelease != 'true' }}
+
       - name: Build and push Docker image
         uses: docker/build-push-action@v7
         with:
-          platforms: linux/amd64,linux/arm64,linux/arm/v6,linux/arm/v7
+          platforms: linux/amd64,linux/arm64,linux/arm/v7,linux/arm/v6
           context: .
           push: true
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
-          build-args: RELEASE_VERSION=${{ steps.meta.outputs.version }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+          build-args: |
+            RELEASE_VERSION=${{ steps.rel.outputs.tag }}
+            GIT_COMMIT=${{ steps.sha.outputs.sha }}
+            BUILD_DATE=${{ steps.rel.outputs.build_date }}

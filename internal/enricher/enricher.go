@@ -1,6 +1,9 @@
 package enricher
 
 import (
+	"strings"
+
+	"github.com/abahmed/kwatch/internal/constant"
 	"github.com/abahmed/kwatch/internal/event"
 	"github.com/abahmed/kwatch/internal/model"
 )
@@ -10,8 +13,8 @@ var defaultSeverityByOwnerKind = map[string]string{
 }
 
 var defaultSeverityByReason = map[string]string{
-	"Evicted":          "medium",
-	"ImagePullBackOff": "medium",
+	constant.ReasonEvicted:          "medium",
+	constant.ReasonImagePullBackOff: "medium",
 }
 
 type Enricher interface {
@@ -29,14 +32,22 @@ func (e *DefaultEnricher) SetSeverityMap(m map[string]string) {
 
 func (e *DefaultEnricher) Enrich(ev *event.Event, inc *model.Incident) {
 	inc.OwnerKind = ev.OwnerKind
-	inc.ContainerName = ev.ContainerName
+	if ev.ContainerName != "" && ev.ContainerName != "." {
+		inc.ContainerName = ev.ContainerName
+	}
+	if ev.Image != "" {
+		inc.Image = ev.Image
+	}
+	if ev.NodeName != "" {
+		inc.NodeName = ev.NodeName
+	}
 	if ev.Hint != "" {
 		inc.Hint = ev.Hint
 	} else {
 		inc.Hint = hintForReason(ev.Reason)
 	}
 	// CD-3: signature-based hints for common patterns
-	if sh := signatureHint(ev.Logs); sh != "" {
+	if sh := SignatureHint(ev.Logs); sh != "" {
 		inc.Hint = combineHints(inc.Hint, sh)
 	}
 	inc.Logs = ev.Logs
@@ -51,43 +62,46 @@ func (e *DefaultEnricher) Enrich(ev *event.Event, inc *model.Incident) {
 	// downgrades until the incident resolves. This is intentional — a runtime
 	// config change via CRD watcher that lowers SeverityByReason or
 	// SeverityByOwnerKind will not take effect on already-open incidents.
-	if severityRank(newSev) >= severityRank(inc.Severity) {
+	if newSev.Rank() >= inc.Severity.Rank() {
 		inc.Severity = newSev
 	}
 }
 
-func severityRank(s string) int {
-	switch s {
-	case "critical":
-		return 3
-	case "high":
-		return 2
-	case "medium":
-		return 1
-	default:
-		return 0
-	}
-}
-
-func (e *DefaultEnricher) resolveSeverity(ownerKind, reason string) string {
+func (e *DefaultEnricher) resolveSeverity(ownerKind, reason string) model.Severity {
 	if e.SeverityByReason != nil {
-		if s, ok := e.SeverityByReason[reason]; ok {
-			return s
+		if s, ok := lookupCaseInsensitive(e.SeverityByReason, reason); ok {
+			return model.NormalizeSeverity(s)
 		}
 	}
 	if s, ok := defaultSeverityByReason[reason]; ok {
-		return s
+		return model.NormalizeSeverity(s)
 	}
 	if e.SeverityByOwnerKind != nil {
-		if s, ok := e.SeverityByOwnerKind[ownerKind]; ok {
-			return s
+		if s, ok := lookupCaseInsensitive(e.SeverityByOwnerKind, ownerKind); ok {
+			return model.NormalizeSeverity(s)
 		}
 		if s, ok := e.SeverityByOwnerKind["default"]; ok {
-			return s
+			return model.NormalizeSeverity(s)
 		}
 	}
 	if s, ok := defaultSeverityByOwnerKind[ownerKind]; ok {
-		return s
+		return model.NormalizeSeverity(s)
 	}
-	return "normal"
+	return model.SeverityNormal
+}
+
+// lookupCaseInsensitive matches a map key regardless of case. K8s kinds and
+// reasons arrive canonically capitalized while user config keys may use any
+// casing.
+func lookupCaseInsensitive(m map[string]string, key string) (string, bool) {
+	if v, ok := m[key]; ok {
+		return v, true
+	}
+	lk := strings.ToLower(key)
+	for k, v := range m {
+		if strings.ToLower(k) == lk {
+			return v, true
+		}
+	}
+	return "", false
 }

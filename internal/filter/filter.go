@@ -4,13 +4,14 @@ import (
 	"context"
 	"time"
 
-	"github.com/abahmed/kwatch/internal/config"
-	"github.com/abahmed/kwatch/internal/model"
 	corev1 "k8s.io/api/core/v1"
 	apiv1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes"
 	appsv1lister "k8s.io/client-go/listers/apps/v1"
 	corev1lister "k8s.io/client-go/listers/core/v1"
+
+	"github.com/abahmed/kwatch/internal/config"
+	"github.com/abahmed/kwatch/internal/model"
 )
 
 type Status int
@@ -27,10 +28,6 @@ type Detector interface {
 
 type Enricher interface {
 	Enrich(ctx *Context) (shouldSkip bool)
-}
-
-type Filter interface {
-	Execute(ctx *Context) (ShouldStop bool)
 }
 
 type Context struct {

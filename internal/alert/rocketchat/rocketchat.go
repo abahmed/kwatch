@@ -7,11 +7,15 @@ import (
 	"io"
 	"net/http"
 
+	"k8s.io/klog/v2"
+
+	"github.com/abahmed/kwatch/internal/alert/util"
 	"github.com/abahmed/kwatch/internal/config"
 	"github.com/abahmed/kwatch/internal/event"
 	"github.com/abahmed/kwatch/internal/k8s"
+	"github.com/abahmed/kwatch/internal/message"
+	"github.com/abahmed/kwatch/internal/model"
 	"github.com/abahmed/kwatch/internal/ratelimit"
-	"k8s.io/klog/v2"
 )
 
 type RocketChat struct {
@@ -101,6 +105,17 @@ func (r *RocketChat) SendMessage(msg string) error {
 		return err
 	}
 	return r.sendByRocketChatApi(b)
+}
+
+// SendIncident implements alert.ThreadProvider.
+// It renders the incident using the Report model and PlaintextRenderer,
+// producing a context-adaptive text message.
+func (r *RocketChat) SendIncident(inc *model.Incident, action model.IncidentAction) error {
+	text := util.RenderIncident(inc, action, message.NewPlainTextRenderer(), r.appCfg.ClusterName)
+	if text == "" {
+		return nil
+	}
+	return r.SendMessage(text)
 }
 
 func (r *RocketChat) buildRequestBodyRocketChat(text string) ([]byte, error) {

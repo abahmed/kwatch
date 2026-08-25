@@ -1,6 +1,8 @@
 package filter
 
 import (
+	"time"
+
 	"golang.org/x/exp/slices"
 	"k8s.io/klog/v2"
 )
@@ -8,6 +10,9 @@ import (
 type ContainerReasonsFilter struct{}
 
 func (f ContainerReasonsFilter) Detect(ctx *Context) Status {
+	if ctx.Container == nil {
+		return StatusAlert
+	}
 	container := ctx.Container.Container
 
 	if container.State.Waiting != nil {
@@ -59,7 +64,15 @@ func (f ContainerReasonsFilter) Detect(ctx *Context) Status {
 		if lastState.Reason == ctx.Container.Reason &&
 			lastState.Msg == ctx.Container.Msg &&
 			lastState.ExitCode == ctx.Container.ExitCode {
-			return StatusSkip
+
+			cooldown := time.Duration(ctx.Config.Correlation.CooldownMinutes) * time.Minute
+			if cooldown <= 0 {
+				// cooldownMinutes=0 means disable cooldown — always re-alert
+				return StatusAlert
+			}
+			if time.Since(lastState.LastTerminatedOn) < cooldown {
+				return StatusSkip
+			}
 		}
 	}
 

@@ -11,15 +11,16 @@ metadata:
 data:
   config.yaml: |
     # ── General ──────────────────────────────────────────────
-    maxRecentLogLines: <optional_number_of_lines>    # also caps logs/events in alert message blocks (default 100)
-    ignoreFailedGracefulShutdown: true
-
-    # Pods stuck in Pending beyond this threshold (seconds) trigger an alert
-    pendingPodThreshold: 300
+    maxRecentLogLines: <number>    # also caps logs/events in alert message blocks (default 50)
+    ignoreFailedGracefulShutdown: <boolean>
+    ignoreDisruptionTerminations: <boolean>    # skip pods evicted during node drains (default true)
+    reportStartupBaseline: <boolean>           # send one startup summary of pre-existing issues (default true)
+    containerRestartThreshold: <number>        # alert if a container restarts this many times (0 = off, default 0)
+    workers: <number>                          # parallel reconcile workers (default 1)
 
     # Optional periodic resync (0 = event-driven only); raise to e.g. 600 only if a
     # periodic full-reconcile safety net is wanted
-    resyncSeconds: 0
+    resyncSeconds: <seconds>
 
     # ── Namespace / Reason / Container filtering ──────────
     namespaces:
@@ -32,42 +33,131 @@ data:
       - "<optional_regex_pattern>"
     ignoreLogPatterns:
       - "<optional_log_regex>"
+    ignoreContainerMessages:
+      - "<optional_substring>"
+    namespaceSelector:
+      "<label_selector>"     # k8s label selector, mutually exclusive with namespaces
+    includeEvents: <boolean>  # include events section in alerts (default true)
+    includeLogs: <boolean>    # include logs section in alerts (default true)
 
     # ── Severity ──────────────────────────────────────────
     # Map owner kinds to severity levels
     severityByOwnerKind:
-      StatefulSet: "high"
-      # DaemonSet: "low"
-      # default: "normal"
+      <owner_kind>: "<severity>"
+    severityByReason:
+      <reason>: "<severity>"     # checked before owner-kind
+
+    # ── Deprecated ignore fields (use silences instead) ──
+    # ignoreNodeReasons:
+    #   - "<reason>"
+    # ignoreNodeMessages:
+    #   - "<message>"
 
     # ── Silences (suppress matching incidents entirely) ──
     silences:
-      # - namespaces: ["kube-system", "monitoring"]
-      # - reasons: ["BackOff"]
-      # - podNamePatterns: ["my-fancy-pod-.*"]
+      - nodeReasons: ["<reason>"]
+        nodeMessages: ["<message>"]
+      # - namespaces: ["<namespace>"]
+      # - reasons: ["<reason>"]
+      # - podNamePatterns: ["<regex>"]
+      # - containerNames: ["<container>"]
+      # - logPatterns: ["<regex>"]
+      # - containerMessages: ["<substring>"]
 
     # ── Correlation (incident dedup & lifecycle) ──────────
     correlation:
-      window: 10
-      lifecycleInterval: 1
-      # resolveHoldDown: 30    # Seconds to wait before resolving (flap dampening)
+      window: <minutes>                # correlation window (default 10 min)
+      lifecycleInterval: <minutes>     # stale-incident check interval (default 1 min)
+      resolveHoldDown: <seconds>       # flap dampening before resolve (default 300)
+      # cooldownMinutes: <minutes>     # min time between identical crash re-alerts (default 10, 0 = off)
+      maxBaseline: 5000                # max baseline entries (default 5000)
+      escalation:
+        enabled: <boolean>             # auto-escalate severity by restart count (default true)
+        tiers: [3, 10, 50]             # restart thresholds: 3→"high", 10→"critical"
+      # renotify:
+      #   intervalBySeverity:
+      #     default: <minutes>         # renotify interval per severity (0 = off)
+      #   maxPerIncident: <number>
 
     # ── Monitors ──────────────────────────────────────────
+    pendingPodMonitor:
+      enabled: <boolean>     # detect pods stuck in Pending
+      threshold: <seconds>   # seconds before alerting (default 300)
+
     nodeMonitor:
-      enabled: true
+      enabled: <boolean>
+      # sustainedMinutes: <minutes>    # Debounce for pressure conditions (default 3)
 
     rolloutMonitor:
-      enabled: true
+      enabled: <boolean>
+      # sustainedMinutes: <minutes>    # Debounce before alerting (default 2)
 
     daemonSetMonitor:
-      enabled: false
-      # sustainedMinutes: 5    # Debounce before alerting (default 5)
+      enabled: <boolean>
+      # sustainedMinutes: <minutes>    # Debounce before alerting (default 5)
+
+    statefulSetMonitor:
+      enabled: <boolean>
+      # sustainedMinutes: <minutes>    # Debounce before alerting (default 5)
+
+    pdbMonitor:
+      enabled: <boolean>
+      # sustainedMinutes: <minutes>    # Debounce before alerting (default 5)
+
+    oomMonitor:
+      enabled: <boolean>
+      # threshold: <count>             # OOM count within window (default 3)
+      # windowMinutes: <minutes>       # Sliding window (default 60)
+
+    scheduleMonitor:
+      enabled: <boolean>   # compute scheduling delay for Unschedulable pods (default true)
+
+    nodeResourceMonitor:
+      enabled: <boolean>
+      # intervalSeconds: <seconds>     # Check interval (default 300)
+      # cpuWarning: <float>            # CPU overcommit warning ratio (default 2.0)
+      # cpuCritical: <float>           # CPU overcommit critical ratio (default 4.0)
+      # memWarning: <float>            # Memory overcommit warning ratio (default 2.0)
+      # memCritical: <float>           # Memory overcommit critical ratio (default 4.0)
 
     jobMonitor:
-      enabled: true
+      enabled: <boolean>
 
     cronJobMonitor:
-      enabled: false
+      enabled: <boolean>
+      # sustainedMinutes: <minutes>    # Debounce for suspension alert (default 5)
+
+    hpaMonitor:
+      enabled: <boolean>
+      # sustainedMinutes: <minutes>
+
+    clusterAutoscalerMonitor:
+      enabled: <boolean>     # detect cluster-autoscaler events (scale failures, unschedulable pods)
+
+    tlsMonitor:
+      enabled: <boolean>
+      # threshold: <days>              # alert before expiry (default 30)
+      # criticalThreshold: <days>      # high severity before expiry (default 3)
+
+    serviceMonitor:
+      enabled: <boolean>       # detect services with zero ready endpoints (default true); includes a 60-second debounce
+
+    admissionWebhookMonitor:
+      enabled: <boolean>       # detect webhooks with unreachable backends (default true)
+
+    controlPlaneMonitor:
+      enabled: <boolean>       # detect broken control-plane pods (default true)
+
+    ingressMonitor:
+      enabled: <boolean>       # detect ingress backends with no ready endpoints (default true)
+
+    networkPolicyMonitor:
+      enabled: <boolean>       # detect overly restrictive network policies (default true)
+
+    heartbeatMonitor:
+      enabled: <boolean>
+      # interval: <seconds>            # ping interval (default 300)
+      # url: "<url>"                   # external endpoint to ping
 
     pvcMonitor:
       # NOTE: usage is read from each node's kubelet stats/summary, which only reports
@@ -75,40 +165,58 @@ data:
       # (e.g. before its consumer pod schedules) has no usage data and is not checked
       # until a pod mounts it. Volumes mounted only during CronJob/Job runs are handled
       # by the last-known-usage cache (retained across unmounts).
-      enabled: true
-      interval: 5
-      threshold: 80
-      criticalThreshold: 90
+      enabled: <boolean>           # default true
+      interval: 5                  # check interval (minutes, default 5)
+      threshold: 80                # warn at this % (default 80)
+      criticalThreshold: 90        # critical at this % (default 90)
+      clearThreshold: 75           # resolve below this % (default 75)
 
-    # ── Node alert suppression ────────────────────────────
-    ignoreNodeReasons:
-      - "KubeletNotReady"
-    ignoreNodeMessages:
-      - "kubelet has no node IP"
+    # ── Audit log (JSON incident stream) ─────────────────
+    auditLog:
+      enabled: <boolean>     # stream all incidents as JSON (default true)
+      # output: "stdout"     # "stdout" or a file path (default "stdout")
 
-    # ── AI enrichment (opt-in, self-hosted) ──────────────
-    # llm:
-    #   enabled: true     # the only knob — model/endpoint/redaction are fixed in code
+    # ── Smart grouping ──────────────────────────────────
+    # smart grouping: coalesces duplicate incidents with the same reason across
+    # different workload owners within a time window into a single notification.
+    # Enabled by default; disable by setting windowSeconds to 0.
+    smartGrouping:
+      windowSeconds: <int>   # grouping window in seconds (default 60)
 
-    # ── Dashboard URL template (optional) ─────────────────
-    # dashboardURLTemplate: "https://grafana.example.com/d/abc?var-ns={namespace}&var-pod={pod}"
+    # ── Templates / Runbooks ──────────────────────────────
+    # templates:
+    #   <reason>: "<go_template_string>"
+    # runbooks:
+    #   <reason>: "<url>"
 
     # ── Health check ──────────────────────────────────────
     healthCheck:
-      enabled: true
-      port: 8060
-      # pprof: false      # set true to enable /debug/pprof/* profiling endpoints
+      enabled: <boolean>           # default true
+      port: 8060                   # listen port (default 8060)
+      # pprof: <boolean>           # set true to enable /debug/pprof/* profiling endpoints
+      # diagnostics: <boolean>     # set true to enable /incidents, /test-alert endpoints
+      # diagnosticsToken: "<token>" # optional Bearer token for diagnostic endpoints
 
     # ── App ───────────────────────────────────────────────
     app:
       clusterName: "<cluster_name>"
-      # proxyURL: "https://proxy.example.com"
-      # disableStartupMessage: false
-      # logFormatter: "text"
+      # proxyURL: "<url>"
+      # disableStartupMessage: <boolean>
+      # logFormatter: "<text|json>"
+      # insecureSkipTLSVerify: <boolean>
+      # caBundlePath: "<path>"
 
     # ── Upgrader ──────────────────────────────────────────
     upgrader:
-      disableUpdateCheck: false
+      disableUpdateCheck: <boolean>
+
+    # ── Inhibition ──────────────────────────────────────────
+    # inhibition:
+    #   nodeSuppressesPods: <boolean>  # suppress pod alerts on unhealthy nodes (default true)
+
+    # ── CRD watcher ───────────────────────────────────────
+    # crd:
+    #   enabled: <boolean>   # watch KwatchConfig CRs for live config changes
 
     # ── Alert providers ───────────────────────────────────
     alert:
@@ -150,4 +258,144 @@ data:
 
       opsgenie:
         apiKey: <api_key>
+
+      # matrix:
+      #   homeServer: "<url>"
+      #   accessToken: "<token>"
+      #   internalRoomId: "<room_id>"
+
+      # dingtalk:
+      #   accessToken: <access_token>
+      #   # secret: <signing_secret>
+
+      # feishu:
+      #   webhook: <webhook_url>
+
+      # webhook:
+      #   url: "<url>"
+      #   headers:
+      #     Authorization: "<token>"
+
+      # zenduty:
+      #   integrationKey: <integration_key>
+
+      # googlechat:
+      #   webhook: <webhook_url>
+
+      # gotify:
+      #   url: <url>
+      #   token: <token>
+
+      # ntfy:
+      #   topic: <topic>
+      #   url: "https://ntfy.sh"
+      #   token: <token>
+      #   priority: 4
+
+      # pushover:
+      #   token: <app_token>
+      #   user: <user_key>
+
+      # webex:
+      #   accessToken: <token>
+      #   roomId: <room_id>
+
+      # github:
+      #   token: <token>
+      #   owner: <owner>
+      #   repo: <repo>
+
+      # gitlab:
+      #   token: <token>
+      #   projectId: <project_id>
+
+      # teamsworkflow:
+      #   webhook: <workflow_url>
+
+      # zulip:
+      #   email: <bot_email>
+      #   token: <api_key>
+      #   channel: <stream>
+
+      # splunk:
+      #   url: <hec_url>
+      #   token: <hec_token>
+
+      # datadog:
+      #   apiKey: <api_key>
+
+      # newrelic:
+      #   apiKey: <user_api_key>
+      #   accountId: <account_id>
+
+      # ilert:
+      #   integrationKey: <integration_key>
+
+      # squadcast:
+      #   serviceKey: <service_key>
+
+      # signl4:
+      #   teamSecret: <team_secret>
+
+      # twilio:
+      #   accountSid: <account_sid>
+      #   authToken: <auth_token>
+      #   from: <sender_number>
+      #   to: <recipient_number>
+
+      # ses:
+      #   accessKeyId: <access_key_id>
+      #   secretAccessKey: <secret_access_key>
+      #   region: "us-east-1"
+      #   from: <sender>
+      #   to: <recipient>
+
+      # sns:
+      #   accessKeyId: <access_key_id>
+      #   secretAccessKey: <secret_access_key>
+      #   region: "us-east-1"
+      #   topicArn: <topic_arn>
+
+      # jira:
+      #   url: <jira_url>
+      #   user: <user>
+      #   apiToken: <api_token>
+      #   projectKey: <project_key>
+
+      # wecom:
+      #   webhook: <group_robot_webhook_url>
+
+      # mailgun:
+      #   apiKey: <api_key>
+      #   domain: <domain>
+      #   from: <sender>
+      #   to: <recipient>
+
+      # resend:
+      #   apiKey: <api_key>
+      #   from: <sender>
+      #   to: <recipient>
+
+      # goalert:
+      #   token: <api_token>
+      #   serviceId: <service_id>
+
+      # alerta:
+      #   url: <alerta_url>
+      #   apiKey: <api_key>
+
+      # threema:
+      #   gatewayId: <gateway_id>
+      #   secret: <gateway_secret>
+      #   to: <threema_id>
+
+      # flock:
+      #   webhook: <webhook_url>
+
+      # pushbullet:
+      #   accessToken: <access_token>
+
+      # sensugo:
+      #   url: <sensu_url>
+      #   apiKey: <api_key>
 

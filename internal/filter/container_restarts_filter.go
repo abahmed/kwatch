@@ -3,6 +3,9 @@ package filter
 type ContainerRestartsFilter struct{}
 
 func (f ContainerRestartsFilter) Detect(ctx *Context) Status {
+	if ctx.Container == nil {
+		return StatusAlert
+	}
 	container := ctx.Container.Container
 	lastState := ctx.Container.LastState
 

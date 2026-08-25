@@ -10,9 +10,7 @@ const KwatchUpdateMsg = ":tada: A newer version " +
 	"is available! Please update to the latest version."
 
 const (
-	Footer        = "<https://github.com/abahmed/kwatch|kwatch>"
-	DefaultTitle  = ":red_circle: kwatch detected a crash in pod"
-	DefaultText   = "There is an issue with container in a pod!"
-	DefaultLogs   = "No logs captured"
-	DefaultEvents = "No events captured"
+	Footer       = "<https://github.com/abahmed/kwatch|kwatch>"
+	DefaultTitle = ":red_circle: kwatch detected a crash in pod"
+	DefaultText  = "There is an issue with container in a pod!"
 )

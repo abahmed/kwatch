@@ -4,13 +4,16 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/abahmed/kwatch/internal/event"
+	"github.com/abahmed/kwatch/internal/constant"
+
 	"github.com/robfig/cron/v3"
 	batchv1 "k8s.io/api/batch/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/tools/cache"
 	"k8s.io/klog/v2"
+
+	"github.com/abahmed/kwatch/internal/event"
 )
 
 // DefaultCronNotScheduledGrace is the grace period added after the expected
@@ -24,13 +27,15 @@ func (h *handler) ProcessCronJob(key string, deleted bool) error {
 	}
 
 	if deleted {
+		h.clearFirstSuspendedCJ(namespace + "/" + name)
 		h.correlator.ResolveByResource("cronjob", namespace+"/"+name)
 		return nil
 	}
 
-	cj, err := h.cronJobLister.CronJobs(namespace).Get(name)
+	cj, err := h.listers.cronJob.CronJobs(namespace).Get(name)
 	if err != nil {
 		if errors.IsNotFound(err) {
+			h.clearFirstSuspendedCJ(namespace + "/" + name)
 			h.correlator.ResolveByResource("cronjob", namespace+"/"+name)
 			return nil
 		}
@@ -46,7 +51,7 @@ func DetectCronJobIssue(cj *batchv1.CronJob) *event.Signal {
 	if cj.Spec.Suspend != nil && *cj.Spec.Suspend {
 		return &event.Signal{
 			Resource:  "cronjob",
-			Reason:    "CronJobSuspended",
+			Reason:    constant.ReasonCronJobSuspended,
 			Namespace: cj.Namespace,
 			Owner:     cj.Namespace + "/" + cj.Name,
 			Labels:    cj.Labels,
@@ -63,7 +68,7 @@ func DetectCronJobIssue(cj *batchv1.CronJob) *event.Signal {
 	if time.Now().After(threshold) {
 		return &event.Signal{
 			Resource:  "cronjob",
-			Reason:    "CronJobNotScheduled",
+			Reason:    constant.ReasonCronJobNotScheduled,
 			Namespace: cj.Namespace,
 			Owner:     cj.Namespace + "/" + cj.Name,
 			Labels:    cj.Labels,
@@ -79,17 +84,43 @@ func (h *handler) ProcessCronJobObject(cj *batchv1.CronJob, deleted bool) error 
 	}
 
 	if deleted {
+		h.clearFirstSuspendedCJ(cj.Namespace + "/" + cj.Name)
 		h.correlator.ResolveByResource("cronjob", cj.Namespace+"/"+cj.Name)
 		return nil
 	}
 
-	if sig := DetectCronJobIssue(cj); sig != nil {
+	key := cj.Namespace + "/" + cj.Name
+	sig := DetectCronJobIssue(cj)
+
+	if sig != nil && sig.Reason == constant.ReasonCronJobSuspended {
+		// Sustained check: avoid noise from intentional suspension during
+		// incident response or maintenance windows.
+		first := h.markFirstSuspendedCJ(key)
+		sustained := time.Duration(h.config.CronJobMonitor.SustainedMinutes) * time.Minute
+		if sustained > 0 && h.now().Sub(first) < sustained {
+			return nil
+		}
 		h.signalEvent(sig)
 		return nil
 	}
 
-	h.correlator.ResolveByResource("cronjob", cj.Namespace+"/"+cj.Name)
+	if sig != nil {
+		h.clearFirstSuspendedCJ(key)
+		h.signalEvent(sig)
+		return nil
+	}
+
+	h.clearFirstSuspendedCJ(key)
+	h.correlator.ResolveByResource("cronjob", key)
 	return nil
+}
+
+func (h *handler) markFirstSuspendedCJ(key string) time.Time {
+	return h.fs.suspendedCJs.mark(key, h.now())
+}
+
+func (h *handler) clearFirstSuspendedCJ(key string) {
+	h.fs.suspendedCJs.clear(key)
 }
 
 // NextFireAfter returns the time the CronJob should have next fired, based on

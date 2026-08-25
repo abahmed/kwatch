@@ -6,11 +6,12 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/abahmed/kwatch/internal/config"
-	"github.com/abahmed/kwatch/internal/event"
-	"github.com/abahmed/kwatch/internal/k8s"
 	gomail "gopkg.in/mail.v2"
 	"k8s.io/klog/v2"
+
+	"github.com/abahmed/kwatch/internal/alert/util"
+	"github.com/abahmed/kwatch/internal/config"
+	"github.com/abahmed/kwatch/internal/event"
 )
 
 type Email struct {
@@ -102,35 +103,47 @@ func (e *Email) SendMessage(s string) error {
 
 func (e *Email) buildMessageSubjectAndBody(
 	ev *event.Event) (string, string) {
-	eventsText := "No events captured"
-	logsText := "No logs captured"
-
-	// add events part if it exists
-	events := strings.TrimSpace(ev.Events)
-	if len(events) > 0 {
-		eventsText = k8s.JsonEscape(ev.Events)
+	subject := "⛑ Kwatch alert"
+	if ev.ContainerName != "" {
+		subject = fmt.Sprintf("⛑ Kwatch detected a crash in pod %s", ev.ContainerName)
+	} else if ev.PodName != "" {
+		subject = fmt.Sprintf("⛑ Kwatch detected a crash in pod %s", ev.PodName)
 	}
 
-	// add logs part if it exists
-	logs := strings.TrimSpace(ev.Logs)
-	if len(logs) > 0 {
-		logsText = k8s.JsonEscape(ev.Logs)
+	var parts []string
+	parts = append(parts, fmt.Sprintf("Reason: %s", util.OrDefault(ev.Reason, "unknown")))
+
+	if ev.PodName != "" {
+		parts = append(parts, fmt.Sprintf("Pod: %s", ev.PodName))
+	}
+	if ev.ContainerName != "" {
+		parts = append(parts, fmt.Sprintf("Container: %s", ev.ContainerName))
+	}
+	if ev.Namespace != "" {
+		parts = append(parts, fmt.Sprintf("Namespace: %s", ev.Namespace))
+	}
+	if ev.NodeName != "" {
+		parts = append(parts, fmt.Sprintf("Node: %s", ev.NodeName))
+	}
+	if e.appCfg.ClusterName != "" {
+		parts = append(parts, fmt.Sprintf("Cluster: %s", e.appCfg.ClusterName))
 	}
 
-	subject := fmt.Sprintf("⛑ Kwatch detected a crash in pod %s ", ev.ContainerName)
-	body := fmt.Sprintf(
-		"An alert for cluster: *%s* Node: *%s* Name: *%s*  "+
-			"Container: *%s* Namespace: *%s* "+
-			"has been triggered:\n—\n "+
-			"Logs: *%s* \n "+
-			"Events: *%s* ",
-		e.appCfg.ClusterName,
-		ev.NodeName,
-		ev.PodName,
-		ev.ContainerName,
-		ev.Namespace,
-		logsText,
-		eventsText,
-	)
+	body := strings.Join(parts, "\n")
+
+	if ev.IncludeLogs {
+		logs := strings.TrimSpace(ev.Logs)
+		if len(logs) > 0 {
+			body += "\n\nLogs:\n" + logs
+		}
+	}
+
+	if ev.IncludeEvents {
+		events := strings.TrimSpace(ev.Events)
+		if len(events) > 0 {
+			body += "\n\nEvents:\n" + events
+		}
+	}
+
 	return subject, body
 }

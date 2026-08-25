@@ -5,12 +5,13 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
-	"strings"
 
+	"k8s.io/klog/v2"
+
+	"github.com/abahmed/kwatch/internal/alert/util"
 	"github.com/abahmed/kwatch/internal/config"
 	"github.com/abahmed/kwatch/internal/event"
 	"github.com/abahmed/kwatch/internal/k8s"
-	"k8s.io/klog/v2"
 )
 
 const (
@@ -69,23 +70,23 @@ func NewPagerDuty(config map[string]interface{}, appCfg *config.App) *Pagerduty 
 }
 
 // Name returns name of the provider
-func (s *Pagerduty) Name() string {
+func (p *Pagerduty) Name() string {
 	return "PagerDuty"
 }
 
-func (s *Pagerduty) UsesEventDelivery() {}
+func (p *Pagerduty) UsesEventDelivery() {}
 
 // SendEvent sends event to the provider
-func (s *Pagerduty) SendEvent(ev *event.Event) error {
+func (p *Pagerduty) SendEvent(ev *event.Event) error {
 	client := k8s.GetDefaultClient()
 
-	reqBody, err := s.buildRequestBodyPagerDuty(ev, s.integrationKey)
+	reqBody, err := p.buildRequestBodyPagerDuty(ev, p.integrationKey)
 	if err != nil {
 		return err
 	}
 	buffer := bytes.NewBuffer([]byte(reqBody))
 
-	request, err := http.NewRequest(http.MethodPost, s.url, buffer)
+	request, err := http.NewRequest(http.MethodPost, p.url, buffer)
 	if err != nil {
 		return err
 	}
@@ -102,48 +103,42 @@ func (s *Pagerduty) SendEvent(ev *event.Event) error {
 }
 
 // SendMessage sends text message to the provider
-func (s *Pagerduty) SendMessage(msg string) error {
+func (p *Pagerduty) SendMessage(msg string) error {
 	return nil
 }
 
-func (s *Pagerduty) buildRequestBodyPagerDuty(
+func (p *Pagerduty) buildRequestBodyPagerDuty(
 	ev *event.Event,
 	key string) (string, error) {
-	eventsText := "No events captured"
-	logsText := "No logs captured"
-
-	events := strings.TrimSpace(ev.Events)
-	if len(events) > 0 {
-		eventsText = ev.Events
-	}
-
-	logs := strings.TrimSpace(ev.Logs)
-	if len(logs) > 0 {
-		logsText = ev.Logs
-	}
-
 	eventAction := "trigger"
 	if ev.Action == "resolved" {
 		eventAction = "resolve"
 	}
+
+	summary := fmt.Sprintf("Alert: %s", util.OrDefault(ev.Reason, "unknown"))
+	if ev.ContainerName != "" {
+		summary = fmt.Sprintf(defaultEventTitle, ev.ContainerName)
+	}
+
+	source := util.OrDefault(ev.ContainerName, util.OrDefault(ev.PodName, "unknown"))
 
 	payload := pagerdutyPayload{
 		RoutingKey:  key,
 		EventAction: eventAction,
 		DedupKey:    ev.DedupKey,
 		Payload: pagerdutyPayloadDetails{
-			Summary:  fmt.Sprintf(defaultEventTitle, ev.ContainerName),
-			Source:   ev.ContainerName,
+			Summary:  summary,
+			Source:   source,
 			Severity: "critical",
 			CustomDetail: pagerdutyCustomDetails{
-				Cluster:   s.appCfg.ClusterName,
+				Cluster:   p.appCfg.ClusterName,
 				Name:      ev.PodName,
 				Container: ev.ContainerName,
 				Namespace: ev.Namespace,
 				Node:      ev.NodeName,
 				Reason:    ev.Reason,
-				Events:    eventsText,
-				Logs:      logsText,
+				Events:    util.OrDefault(ev.Events, ""),
+				Logs:      util.OrDefault(ev.Logs, ""),
 			},
 		},
 	}

@@ -3,25 +3,43 @@ package handler
 import (
 	"fmt"
 	"strings"
+	"time"
 
-	"github.com/abahmed/kwatch/internal/correlation"
-	"github.com/abahmed/kwatch/internal/event"
+	"github.com/abahmed/kwatch/internal/constant"
+
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/klog/v2"
+
+	"github.com/abahmed/kwatch/internal/correlation"
+	"github.com/abahmed/kwatch/internal/event"
 )
+
+// newNodeGracePeriod is how long a newly-created node is allowed to stay
+// NotReady without triggering an alert. Cluster autoscaler / Karpenter
+// create nodes that take 1–4 minutes to bootstrap and register as ready;
+// alerting during that window is noise.
+const newNodeGracePeriod = 5 * time.Minute
+
+// isNewNode returns true when the Node resource was created recently enough
+// that NotReady is likely transient (autoscaler bootstrap).
+func isNewNode(node *corev1.Node) bool {
+	return time.Since(node.CreationTimestamp.Time) < newNodeGracePeriod
+}
 
 func (h *handler) ProcessNode(key string, deleted bool) error {
 	name := key
 
 	if deleted {
+		h.clearAllNodePressure(name)
 		h.correlator.ResolveByResource("node", name)
 		return nil
 	}
 
-	node, err := h.nodeLister.Get(name)
+	node, err := h.listers.node.Get(name)
 	if err != nil {
 		if errors.IsNotFound(err) {
+			h.clearAllNodePressure(name)
 			h.correlator.ResolveByResource("node", name)
 			return nil
 		}
@@ -37,7 +55,7 @@ func NodeConditionReason(c corev1.NodeCondition) string {
 	switch c.Type {
 	case corev1.NodeReady:
 		if c.Status != corev1.ConditionTrue {
-			return "NodeNotReady"
+			return constant.ReasonNodeNotReady
 		}
 	case corev1.NodeMemoryPressure, corev1.NodeDiskPressure,
 		corev1.NodePIDPressure, corev1.NodeNetworkUnavailable:
@@ -50,6 +68,9 @@ func NodeConditionReason(c corev1.NodeCondition) string {
 
 func (h *handler) resolveNodeCondition(nodeName, stableReason string) {
 	h.correlator.MarkResolved(correlation.BuildKey("", nodeName, stableReason, ""))
+	// Refresh the inhibition flag even when no incident existed to resolve
+	// (e.g. a baselined NodeNotReady recovered) so pods stop being suppressed.
+	h.correlator.RefreshNodeInhibition(nodeName)
 }
 
 func (h *handler) emitNodeAlert(node *corev1.Node, c corev1.NodeCondition, stableReason string) {
@@ -88,6 +109,7 @@ func (h *handler) ProcessNodeObject(node *corev1.Node, deleted bool) error {
 	}
 
 	if deleted {
+		h.clearAllNodePressure(node.Name)
 		h.correlator.ResolveByResource("node", node.Name)
 		return nil
 	}
@@ -95,19 +117,44 @@ func (h *handler) ProcessNodeObject(node *corev1.Node, deleted bool) error {
 	for _, c := range node.Status.Conditions {
 		switch c.Type {
 		case corev1.NodeReady:
-			if c.Status == corev1.ConditionTrue {
-				h.resolveNodeCondition(node.Name, "NodeNotReady")
-			} else {
-				h.emitNodeAlert(node, c, "NodeNotReady")
+			switch {
+			case c.Status == corev1.ConditionTrue:
+				h.resolveNodeCondition(node.Name, constant.ReasonNodeNotReady)
+			case node.DeletionTimestamp != nil || node.Spec.Unschedulable:
+				h.resolveNodeCondition(node.Name, constant.ReasonNodeNotReady)
+			case isNewNode(node):
+				h.resolveNodeCondition(node.Name, constant.ReasonNodeNotReady)
+			default:
+				h.emitNodeAlert(node, c, constant.ReasonNodeNotReady)
 			}
 		case corev1.NodeMemoryPressure, corev1.NodeDiskPressure,
 			corev1.NodePIDPressure, corev1.NodeNetworkUnavailable:
 			if c.Status == corev1.ConditionTrue {
+				// Sustained check: brief metric spikes should not page.
+				key := node.Name + "/" + string(c.Type)
+				first := h.markFirstNodePressure(key)
+				sustained := time.Duration(h.config.NodeMonitor.SustainedMinutes) * time.Minute
+				if sustained > 0 && h.now().Sub(first) < sustained {
+					break
+				}
 				h.emitNodeAlert(node, c, string(c.Type))
 			} else {
+				h.clearFirstNodePressure(node.Name + "/" + string(c.Type))
 				h.resolveNodeCondition(node.Name, string(c.Type))
 			}
 		}
 	}
 	return nil
+}
+
+func (h *handler) markFirstNodePressure(key string) time.Time {
+	return h.fs.nodePressure.mark(key, h.now())
+}
+
+func (h *handler) clearFirstNodePressure(key string) {
+	h.fs.nodePressure.clear(key)
+}
+
+func (h *handler) clearAllNodePressure(nodeName string) {
+	h.fs.nodePressure.clearPrefix(nodeName + "/")
 }

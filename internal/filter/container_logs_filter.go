@@ -1,8 +1,9 @@
 package filter
 
 import (
-	"github.com/abahmed/kwatch/internal/k8s"
 	"k8s.io/klog/v2"
+
+	"github.com/abahmed/kwatch/internal/k8s"
 )
 
 type ContainerLogsFilter struct{}
@@ -12,6 +13,9 @@ func (f ContainerLogsFilter) Detect(ctx *Context) Status {
 }
 
 func (f ContainerLogsFilter) Enrich(ctx *Context) bool {
+	if ctx.Container == nil || ctx.Pod == nil {
+		return false
+	}
 	container := ctx.Container.Container
 
 	if container.RestartCount == 0 && container.State.Waiting != nil {
@@ -26,7 +30,10 @@ func (f ContainerLogsFilter) Enrich(ctx *Context) bool {
 		return false
 	}
 
-	previousLogs := container.RestartCount > 0 && container.State.Running == nil
+	// Always fetch previous container logs when restarts exist so that
+	// the crash output (not the current container's possibly-empty startup)
+	// is included in the notification.
+	previousLogs := container.RestartCount > 0
 
 	logs := k8s.GetPodContainerLogs(
 		ctx.Ctx,
@@ -36,6 +43,10 @@ func (f ContainerLogsFilter) Enrich(ctx *Context) bool {
 		ctx.Pod.Namespace,
 		previousLogs,
 		ctx.Config.MaxRecentLogLines)
+
+	if logs == "" {
+		logs = "[logs unavailable — kubelet timeout or container not yet logged]"
+	}
 
 	for _, pattern := range ctx.Config.Suppression.LogPatterns {
 		if pattern.MatchString(logs) {

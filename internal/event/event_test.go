@@ -216,7 +216,7 @@ func TestFormatTextWithCustomText(t *testing.T) {
 	}
 
 	result := e.FormatText("test-cluster", "Custom text alert")
-	assert.Contains(result, "There is an issue with container in a pod!")
+	assert.Contains(result, "Custom text alert")
 }
 
 func TestFormatTextEmptyEventsLogs(t *testing.T) {

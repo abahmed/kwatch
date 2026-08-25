@@ -5,24 +5,27 @@ import (
 	"fmt"
 	"sort"
 	"strings"
-	"sync"
 	"time"
 
-	"github.com/abahmed/kwatch/internal/alert"
-	"github.com/abahmed/kwatch/internal/config"
-	"github.com/abahmed/kwatch/internal/correlation"
-	"github.com/abahmed/kwatch/internal/event"
-	"github.com/abahmed/kwatch/internal/filter"
-	"github.com/abahmed/kwatch/internal/model"
-	appsv1 "k8s.io/api/apps/v1"
-	autoscalingv2 "k8s.io/api/autoscaling/v2"
-	batchv1 "k8s.io/api/batch/v1"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/client-go/kubernetes"
+	admissionregistrationv1lister "k8s.io/client-go/listers/admissionregistration/v1"
 	appsv1lister "k8s.io/client-go/listers/apps/v1"
 	autoscalingv2lister "k8s.io/client-go/listers/autoscaling/v2"
 	batchv1lister "k8s.io/client-go/listers/batch/v1"
 	corev1lister "k8s.io/client-go/listers/core/v1"
+	discoveryv1lister "k8s.io/client-go/listers/discovery/v1"
+	networkingv1lister "k8s.io/client-go/listers/networking/v1"
+	policyv1lister "k8s.io/client-go/listers/policy/v1"
+
+	"github.com/abahmed/kwatch/internal/alert"
+	"github.com/abahmed/kwatch/internal/config"
+	"github.com/abahmed/kwatch/internal/constant"
+	"github.com/abahmed/kwatch/internal/correlation"
+	"github.com/abahmed/kwatch/internal/event"
+	"github.com/abahmed/kwatch/internal/filter"
+	"github.com/abahmed/kwatch/internal/insight"
+	"github.com/abahmed/kwatch/internal/model"
 )
 
 type Handler interface {
@@ -32,14 +35,23 @@ type Handler interface {
 	ProcessJob(key string, deleted bool) error
 	ProcessDaemonSet(key string, deleted bool) error
 	ProcessCronJob(key string, deleted bool) error
-	ProcessPodObject(ctx context.Context, pod *corev1.Pod, deleted bool) error
-	ProcessNodeObject(node *corev1.Node, deleted bool) error
-	ProcessDeploymentObject(deploy *appsv1.Deployment, deleted bool) error
-	ProcessJobObject(job *batchv1.Job, deleted bool) error
-	ProcessDaemonSetObject(ds *appsv1.DaemonSet, deleted bool) error
-	ProcessCronJobObject(cj *batchv1.CronJob, deleted bool) error
+	ProcessStatefulSet(key string, deleted bool) error
+	ProcessPdb(key string, deleted bool) error
 	ProcessHorizontalPodAutoscaler(key string, deleted bool) error
-	ProcessHorizontalPodAutoscalerObject(hpa *autoscalingv2.HorizontalPodAutoscaler, deleted bool) error
+	ProcessMutatingWebhookConfiguration(key string, deleted bool) error
+	ProcessValidatingWebhookConfiguration(key string, deleted bool) error
+	ProcessService(key string, deleted bool) error
+	ProcessNetworkPolicy(key string, deleted bool) error
+	ProcessIngress(key string, deleted bool) error
+	ProcessControlPlanePod(pod *corev1.Pod) error
+	SweepControlPlane()
+	SetIngressLister(lister networkingv1lister.IngressLister)
+	SetCpPodLister(lister corev1lister.PodLister)
+	SetNetpolLister(lister networkingv1lister.NetworkPolicyLister)
+	SetServiceLister(lister corev1lister.ServiceLister)
+	SetEndpointSliceLister(lister discoveryv1lister.EndpointSliceLister)
+	SetMwCLister(lister admissionregistrationv1lister.MutatingWebhookConfigurationLister)
+	SetVwCLister(lister admissionregistrationv1lister.ValidatingWebhookConfigurationLister)
 	SetPodLister(lister corev1lister.PodLister)
 	SetNodeLister(lister corev1lister.NodeLister)
 	SetDeploymentLister(lister appsv1lister.DeploymentLister)
@@ -47,162 +59,87 @@ type Handler interface {
 	SetReplicaLister(lister appsv1lister.ReplicaSetLister)
 	SetDaemonSetLister(lister appsv1lister.DaemonSetLister)
 	SetStatefulSetLister(lister appsv1lister.StatefulSetLister)
+	SetPdbLister(lister policyv1lister.PodDisruptionBudgetLister)
 	SetEventLister(lister corev1lister.EventLister)
 	SetCronJobLister(lister batchv1lister.CronJobLister)
 	SetHorizontalPodAutoscalerLister(lister autoscalingv2lister.HorizontalPodAutoscalerLister)
 	SetSecretLister(lister corev1lister.SecretLister)
+	SetInsightEngine(engine *insight.Engine)
 	SweepTLSSecrets()
-	SetSeen(baseline map[string]map[string]int64)
-	ClearSeenForPod(namespace, podName string)
+	SetBaseline(baseline map[string]map[string]int64)
+	SetActiveNodeIncidents(nodeNames []string)
+	ClearBaselineForPod(namespace, podName string)
 	ReportStartupSummary(suppressed map[string]int)
-	SetPvcSampler(f func(nodeName string))
+	ProcessNodeResourceOvercommit(reason, nodeName, hint string, severity model.Severity)
+	ProcessClusterAutoscalerEvent(ev *corev1.Event)
 }
 
+// handler is the central event processor: informers call its Process*
+// methods, which run detectors/enrichers (filter package) over observed
+// objects and forward resulting signals through the correlation engine to
+// the alert manager.
 type handler struct {
-	kclient            kubernetes.Interface
-	config             *config.Config
-	podDetectors       []filter.Detector
-	podEnrichers       []filter.Enricher
-	containerDetectors []filter.Detector
-	containerEnrichers []filter.Enricher
-	correlator         *correlation.Engine
-	alertManager       *alert.AlertManager
-	podLister          corev1lister.PodLister
-	nodeLister         corev1lister.NodeLister
-	deployLister       appsv1lister.DeploymentLister
-	jobLister          batchv1lister.JobLister
-	cronJobLister      batchv1lister.CronJobLister
-	rsLister           appsv1lister.ReplicaSetLister
-	dsLister           appsv1lister.DaemonSetLister
-	ssLister           appsv1lister.StatefulSetLister
-	eventLister        corev1lister.EventLister
-	hpaLister          autoscalingv2lister.HorizontalPodAutoscalerLister
-	firstMaxedHPAs     map[string]time.Time
-	hpaMu              sync.Mutex
-	firstUnavailableDS map[string]time.Time
-	dsMu               sync.Mutex
-	secretLister       corev1lister.SecretLister
-	pvcSampler         func(nodeName string) // optional; set when pvcMonitor is enabled
-	now                func() time.Time
+	kclient       kubernetes.Interface
+	config        *config.Config
+	correlator    *correlation.Engine
+	alertManager  *alert.AlertManager
+	insightEngine *insight.Engine
+	oomTracker    *oomTracker
+	now           func() time.Time
+
+	podDetectors                  []filter.Detector
+	podEnrichers                  []filter.Enricher
+	containerDetectors            []filter.Detector
+	containerSuppressionEnrichers []filter.Enricher
+	containerDataEnrichers        []filter.Enricher
+
+	listers listerSet
+
+	fs firstSeenSet
 }
 
 func NewHandler(
 	cli kubernetes.Interface,
 	cfg *config.Config,
 	correlator *correlation.Engine,
-	alertManager *alert.AlertManager) Handler {
-	podDetectors := []filter.Detector{
-		filter.NamespaceFilter{},
-		filter.PodNameFilter{},
-		filter.PodStatusFilter{},
-	}
-
-	if cfg.PendingPodMonitor.Enabled {
-		pendingThreshold := time.Duration(cfg.PendingPodMonitor.Threshold) * time.Second
-		if pendingThreshold <= 0 {
-			pendingThreshold = 300 * time.Second
-		}
-		podDetectors = append(podDetectors, filter.PendingPodFilter{Threshold: pendingThreshold})
-	}
-
-	podEnrichers := []filter.Enricher{
-		filter.PodEventsFilter{},
-		filter.PodOwnersFilter{},
-	}
-
-	containerDetectors := []filter.Detector{
-		filter.NamespaceFilter{},
-		filter.PodNameFilter{},
-		filter.ContainerNameFilter{},
-		filter.ContainerRestartsFilter{},
-		filter.ContainerStateFilter{},
-		filter.ContainerReasonsFilter{},
-		filter.NoiseFilter{},
-	}
-
-	containerDetectors = append(containerDetectors,
-		filter.ContainerMessageFilter{})
-
-	if cfg.IgnoreDisruptionTerminations == nil || *cfg.IgnoreDisruptionTerminations {
-		podDetectors = append([]filter.Detector{filter.DisruptionFilter{}}, podDetectors...)
-		containerDetectors = append([]filter.Detector{filter.DisruptionFilter{}}, containerDetectors...)
-	}
-
-	containerEnrichers := []filter.Enricher{
-		filter.ContainerKillingFilter{},
-		filter.PodOwnersFilter{},
-		filter.ContainerLogsFilter{},
+	alertManager *alert.AlertManager) *handler {
+	var oomTr *oomTracker
+	if cfg.OomMonitor.Enabled {
+		oomTr = newOomTracker(
+			cfg.OomMonitor.Threshold,
+			time.Duration(cfg.OomMonitor.WindowMinutes)*time.Minute,
+		)
 	}
 
 	return &handler{
-		kclient:            cli,
-		config:             cfg,
-		podDetectors:       podDetectors,
-		podEnrichers:       podEnrichers,
-		containerDetectors: containerDetectors,
-		containerEnrichers: containerEnrichers,
-		correlator:         correlator,
-		alertManager:       alertManager,
-		firstMaxedHPAs:     make(map[string]time.Time),
-		firstUnavailableDS: make(map[string]time.Time),
-		now:                time.Now,
+		kclient:      cli,
+		config:       cfg,
+		correlator:   correlator,
+		alertManager: alertManager,
+		fs:           newFirstSeenSet(),
+		oomTracker:   oomTr,
+		now:          time.Now,
+
+		podDetectors:                  buildPodDetectors(cfg),
+		podEnrichers:                  buildPodEnrichers(),
+		containerDetectors:            buildContainerDetectors(cfg),
+		containerSuppressionEnrichers: buildContainerSuppressionEnrichers(),
+		containerDataEnrichers:        buildContainerDataEnrichers(),
 	}
 }
 
-func (h *handler) SetPodLister(lister corev1lister.PodLister) {
-	h.podLister = lister
-}
-
-func (h *handler) SetNodeLister(lister corev1lister.NodeLister) {
-	h.nodeLister = lister
-}
-
-func (h *handler) SetDeploymentLister(lister appsv1lister.DeploymentLister) {
-	h.deployLister = lister
-}
-
-func (h *handler) SetJobLister(lister batchv1lister.JobLister) {
-	h.jobLister = lister
-}
-
-func (h *handler) SetReplicaLister(lister appsv1lister.ReplicaSetLister) {
-	h.rsLister = lister
-}
-
-func (h *handler) SetDaemonSetLister(lister appsv1lister.DaemonSetLister) {
-	h.dsLister = lister
-}
-
-func (h *handler) SetStatefulSetLister(lister appsv1lister.StatefulSetLister) {
-	h.ssLister = lister
-}
-
-func (h *handler) SetEventLister(lister corev1lister.EventLister) {
-	h.eventLister = lister
-}
-
-func (h *handler) SetHorizontalPodAutoscalerLister(lister autoscalingv2lister.HorizontalPodAutoscalerLister) {
-	h.hpaLister = lister
-}
-
-func (h *handler) SetSecretLister(lister corev1lister.SecretLister) {
-	h.secretLister = lister
-}
-
-func (h *handler) SetPvcSampler(f func(nodeName string)) {
-	h.pvcSampler = f
-}
-
-func (h *handler) SetCronJobLister(lister batchv1lister.CronJobLister) {
-	h.cronJobLister = lister
-}
-
-func (h *handler) SetSeen(baseline map[string]map[string]int64) {
-	h.correlator.SetSeen(baseline)
-}
-
-func (h *handler) ClearSeenForPod(namespace, podName string) {
-	h.correlator.ClearSeenForPod(namespace, podName)
+func (h *handler) ProcessNodeResourceOvercommit(reason, nodeName, hint string, severity model.Severity) {
+	if severity == "" {
+		severity = model.SeverityWarning
+	}
+	h.signalEvent(&event.Signal{
+		Resource: "node",
+		Reason:   reason,
+		Hint:     hint,
+		NodeName: nodeName,
+		Owner:    nodeName,
+		Severity: severity,
+	})
 }
 
 func (h *handler) ReportStartupSummary(suppressed map[string]int) {
@@ -217,18 +154,22 @@ func (h *handler) ReportStartupSummary(suppressed map[string]int) {
 	}
 	sort.Strings(parts)
 	inc := &model.Incident{
-		ID: "startup-baseline", Key: "startup:baseline", Reason: "PreExistingAtStartup",
-		Severity: "normal", Count: total,
+		ID: "startup-baseline", Key: "startup:baseline", Reason: constant.ReasonPreExistingAtStartup,
+		Severity: model.SeverityNormal, Count: total,
 		Hint: fmt.Sprintf("kwatch started with %d pre-existing issue(s), suppressed from per-incident alerts: %s",
 			total, strings.Join(parts, ", ")),
 	}
-	h.alertManager.NotifyIncident(inc, model.ActionCreate)
+	h.alertManager.NotifyIncident(inc, model.ActionCreate, nil)
 }
 
 func (h *handler) report(ev event.Event, owner string, cs *model.ContainerState) {
 	inc, action := h.correlator.Process(ev, owner, cs)
 	if action != model.ActionSkip {
-		h.alertManager.NotifyIncident(inc, action)
+		var ins *insight.Insight
+		if h.insightEngine != nil {
+			ins = h.insightEngine.Analyze(inc)
+		}
+		h.alertManager.NotifyIncident(inc, action, ins)
 	}
 }
 
@@ -242,6 +183,8 @@ func (h *handler) signalEvent(s *event.Signal) {
 		Namespace:     s.Namespace,
 		NodeName:      s.NodeName,
 		ContainerName: s.Container,
+		Image:         s.Image,
+		Message:       s.Message,
 		Reason:        s.Reason,
 		Events:        s.Events,
 		Logs:          s.Logs,

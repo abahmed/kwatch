@@ -4,10 +4,13 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/abahmed/kwatch/internal/event"
+	"github.com/abahmed/kwatch/internal/constant"
+
 	appsv1 "k8s.io/api/apps/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/client-go/tools/cache"
+
+	"github.com/abahmed/kwatch/internal/event"
 )
 
 // DetectDaemonSetIssue returns a Signal if the DaemonSet has unavailable
@@ -16,7 +19,7 @@ func DetectDaemonSetIssue(ds *appsv1.DaemonSet) *event.Signal {
 	if ds.Status.DesiredNumberScheduled > 0 && ds.Status.NumberUnavailable > 0 {
 		return &event.Signal{
 			Resource:  "daemonset",
-			Reason:    "DaemonSetUnavailable",
+			Reason:    constant.ReasonDaemonSetUnavailable,
 			Namespace: ds.Namespace,
 			Owner:     ds.Namespace + "/" + ds.Name,
 			Labels:    ds.Labels,
@@ -45,7 +48,7 @@ func (h *handler) ProcessDaemonSet(key string, deleted bool) error {
 		return nil
 	}
 
-	ds, err := h.dsLister.DaemonSets(namespace).Get(name)
+	ds, err := h.listers.ds.DaemonSets(namespace).Get(name)
 	if err != nil {
 		if errors.IsNotFound(err) {
 			h.correlator.ResolveByResource("daemonset", namespace+"/"+name)
@@ -104,7 +107,7 @@ func (h *handler) ProcessDaemonSetObject(ds *appsv1.DaemonSet, deleted bool) err
 		h.signalEvent(&event.Signal{
 			Resource:  "daemonset",
 			Namespace: ds.Namespace,
-			Reason:    "DaemonSetUnavailable",
+			Reason:    constant.ReasonDaemonSetUnavailable,
 			Owner:     key,
 			Labels:    ds.Labels,
 			Hint:      availabilityHint(ds),
@@ -118,17 +121,9 @@ func (h *handler) ProcessDaemonSetObject(ds *appsv1.DaemonSet, deleted bool) err
 }
 
 func (h *handler) markFirstUnavailableDS(key string) time.Time {
-	h.dsMu.Lock()
-	defer h.dsMu.Unlock()
-	if t, ok := h.firstUnavailableDS[key]; ok {
-		return t
-	}
-	h.firstUnavailableDS[key] = h.now()
-	return h.firstUnavailableDS[key]
+	return h.fs.unavailableDS.mark(key, h.now())
 }
 
 func (h *handler) clearFirstUnavailableDS(key string) {
-	h.dsMu.Lock()
-	defer h.dsMu.Unlock()
-	delete(h.firstUnavailableDS, key)
+	h.fs.unavailableDS.clear(key)
 }

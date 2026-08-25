@@ -5,22 +5,19 @@ import (
 	"net/http"
 	"strings"
 	"sync/atomic"
+
+	"k8s.io/klog/v2"
 )
 
 type Registry struct {
-	IncidentsTotal       atomic.Int64
 	IncidentsCreate      atomic.Int64
 	IncidentsUpdate      atomic.Int64
 	IncidentsResolved    atomic.Int64
-	IncidentsDigest      atomic.Int64
+	IncidentsGrouped     atomic.Int64
 	NotificationsTotal   atomic.Int64
 	NotificationsDropped atomic.Int64
 	BaselineSize         atomic.Int64
 	ActiveIncidents      atomic.Int64
-	WorkQueueDepth       atomic.Int64
-	LLMEnrichTotal       atomic.Int64
-	LLMEnrichFailed      atomic.Int64
-	LLMEnrichSkipped     atomic.Int64
 }
 
 var Default = &Registry{}
@@ -35,7 +32,7 @@ func (r *Registry) Handler() http.Handler {
 			"create":   r.IncidentsCreate.Load(),
 			"update":   r.IncidentsUpdate.Load(),
 			"resolved": r.IncidentsResolved.Load(),
-			"digest":   r.IncidentsDigest.Load(),
+			"grouped":  r.IncidentsGrouped.Load(),
 		} {
 			lines = append(lines, fmt.Sprintf(`kwatch_incidents_total{action="%s"} %d`, action, count))
 		}
@@ -55,18 +52,7 @@ func (r *Registry) Handler() http.Handler {
 		lines = append(lines, "# HELP kwatch_baseline_size Baseline entries (seen pods)")
 		lines = append(lines, "# TYPE kwatch_baseline_size gauge")
 		lines = append(lines, fmt.Sprintf("kwatch_baseline_size %d", r.BaselineSize.Load()))
-		lines = append(lines, "")
-		lines = append(lines, "# HELP kwatch_llm_enrich_total Total LLM enrichment calls")
-		lines = append(lines, "# TYPE kwatch_llm_enrich_total counter")
-		lines = append(lines, fmt.Sprintf("kwatch_llm_enrich_total %d", r.LLMEnrichTotal.Load()))
-		lines = append(lines, "")
-		lines = append(lines, "# HELP kwatch_llm_enrich_failed_total Failed LLM enrichment calls")
-		lines = append(lines, "# TYPE kwatch_llm_enrich_failed_total counter")
-		lines = append(lines, fmt.Sprintf("kwatch_llm_enrich_failed_total %d", r.LLMEnrichFailed.Load()))
-		lines = append(lines, "")
-		lines = append(lines, "# HELP kwatch_llm_enrich_skipped_total Skipped LLM enrichment (breaker open)")
-		lines = append(lines, "# TYPE kwatch_llm_enrich_skipped_total counter")
-		lines = append(lines, fmt.Sprintf("kwatch_llm_enrich_skipped_total %d", r.LLMEnrichSkipped.Load()))
-		fmt.Fprint(w, strings.Join(lines, "\n")+"\n")
+		_, err := fmt.Fprint(w, strings.Join(lines, "\n")+"\n")
+		klog.ErrorS(err, "metrics: write prometheus output")
 	})
 }

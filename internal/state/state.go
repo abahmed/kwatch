@@ -18,16 +18,18 @@ import (
 )
 
 const (
-	stateConfigMapName    = "kwatch-state"
-	baselineConfigMapName = "kwatch-baseline"
-	pvcConfigMapName      = "kwatch-pvc"
-	initKey               = "kwatch-init"
-	clusterIDKey          = "cluster-id"
-	versionKey            = "version"
-	firstRunKey           = "first-run"
-	notifiedVersionKey    = "notified-version"
-	baselineKey           = "baseline"
-	pvcUsageKey           = "pvc-usage"
+	stateConfigMapName     = "kwatch-state"
+	baselineConfigMapName  = "kwatch-baseline"
+	incidentsConfigMapName = "kwatch-incidents"
+	pvcConfigMapName       = "kwatch-pvc"
+	initKey                = "kwatch-init"
+	clusterIDKey           = "cluster-id"
+	versionKey             = "version"
+	firstRunKey            = "first-run"
+	notifiedVersionKey     = "notified-version"
+	baselineKey            = "baseline"
+	incidentsKey           = "incidents"
+	pvcUsageKey            = "pvc-usage"
 )
 
 // PvcSample is the persisted representation of a single PVC usage observation.
@@ -40,20 +42,22 @@ type PvcSample struct {
 }
 
 type StateManager struct {
-	client      kubernetes.Interface
-	namespace   string
-	stateMgr    *RetryConfigMapManager // kwatch-state
-	baselineMgr *RetryConfigMapManager // kwatch-baseline
-	pvcMgr      *RetryConfigMapManager // kwatch-pvc
+	client       kubernetes.Interface
+	namespace    string
+	stateMgr     *RetryConfigMapManager // kwatch-state
+	baselineMgr  *RetryConfigMapManager // kwatch-baseline
+	incidentsMgr *RetryConfigMapManager // kwatch-incidents
+	pvcMgr       *RetryConfigMapManager // kwatch-pvc
 }
 
 func NewStateManager(client kubernetes.Interface, namespace string) *StateManager {
 	return &StateManager{
-		client:      client,
-		namespace:   namespace,
-		stateMgr:    NewRetryConfigMapManager(client, namespace, stateConfigMapName),
-		baselineMgr: NewRetryConfigMapManager(client, namespace, baselineConfigMapName),
-		pvcMgr:      NewRetryConfigMapManager(client, namespace, pvcConfigMapName),
+		client:       client,
+		namespace:    namespace,
+		stateMgr:     NewRetryConfigMapManager(client, namespace, stateConfigMapName),
+		baselineMgr:  NewRetryConfigMapManager(client, namespace, baselineConfigMapName),
+		incidentsMgr: NewRetryConfigMapManager(client, namespace, incidentsConfigMapName),
+		pvcMgr:       NewRetryConfigMapManager(client, namespace, pvcConfigMapName),
 	}
 }
 
@@ -106,14 +110,13 @@ func (s *StateManager) EnsureClusterID(ctx context.Context) (string, error) {
 }
 
 func (s *StateManager) MarkAsInitialized(ctx context.Context, clusterID, version string) error {
-	cm, err := s.client.CoreV1().ConfigMaps(s.namespace).Get(ctx, stateConfigMapName, metav1.GetOptions{})
+	_, err := s.client.CoreV1().ConfigMaps(s.namespace).Get(ctx, stateConfigMapName, metav1.GetOptions{})
 	if err != nil {
 		if !apierrors.IsNotFound(err) {
 			return err
 		}
-		cm = s.createConfigMap(clusterID, version)
-		_, err = s.client.CoreV1().ConfigMaps(s.namespace).Create(ctx, cm, metav1.CreateOptions{})
-		if err != nil {
+		cm := s.createConfigMap(clusterID, version)
+		if _, err := s.client.CoreV1().ConfigMaps(s.namespace).Create(ctx, cm, metav1.CreateOptions{}); err != nil {
 			return err
 		}
 		klog.InfoS("created state configmap with cluster ID", "clusterID", clusterID)
@@ -224,6 +227,41 @@ func (s *StateManager) SaveBaseline(ctx context.Context, baseline map[string]map
 		delete(cm.Data, baselineKey)
 		return nil
 	})
+}
+
+// ── Incident persistence ─────────────────────────────────────
+
+func (s *StateManager) SaveIncidents(ctx context.Context, incidents any) error {
+	return s.incidentsMgr.UpdateWithRetry(ctx, func(cm *corev1.ConfigMap) error {
+		data, err := gzJSON(incidents)
+		if err != nil {
+			return err
+		}
+		if len(data) > baselineMaxBytes {
+			klog.ErrorS(nil, "incidents too large for ConfigMap, skipping save",
+				"size", len(data), "max", baselineMaxBytes)
+			return fmt.Errorf("incidents %d bytes exceeds ConfigMap budget %d", len(data), baselineMaxBytes)
+		}
+		if cm.BinaryData == nil {
+			cm.BinaryData = map[string][]byte{}
+		}
+		cm.BinaryData[incidentsKey] = data
+		return nil
+	})
+}
+
+func (s *StateManager) GetIncidents(ctx context.Context, out any) error {
+	cm, err := s.client.CoreV1().ConfigMaps(s.namespace).Get(ctx, incidentsConfigMapName, metav1.GetOptions{})
+	if err != nil {
+		if apierrors.IsNotFound(err) {
+			return nil // nothing saved yet
+		}
+		return err
+	}
+	if gz, ok := cm.BinaryData[incidentsKey]; ok && len(gz) > 0 {
+		return gunzipJSON(gz, out)
+	}
+	return nil
 }
 
 // ── PVC usage persistence ─────────────────────────────────────

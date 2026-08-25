@@ -4,12 +4,15 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/abahmed/kwatch/internal/correlation"
-	"github.com/abahmed/kwatch/internal/event"
+	"github.com/abahmed/kwatch/internal/constant"
+
 	autoscalingv2 "k8s.io/api/autoscaling/v2"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/client-go/tools/cache"
+
+	"github.com/abahmed/kwatch/internal/correlation"
+	"github.com/abahmed/kwatch/internal/event"
 )
 
 func (h *handler) ProcessHorizontalPodAutoscaler(key string, deleted bool) error {
@@ -19,13 +22,15 @@ func (h *handler) ProcessHorizontalPodAutoscaler(key string, deleted bool) error
 	}
 	if deleted {
 		h.clearFirstMaxed(namespace + "/" + name)
+		h.clearFirstScalingError(namespace + "/" + name)
 		h.correlator.ResolveByResource("horizontalpodautoscaler", namespace+"/"+name)
 		return nil
 	}
-	hpa, err := h.hpaLister.HorizontalPodAutoscalers(namespace).Get(name)
+	hpa, err := h.listers.hpa.HorizontalPodAutoscalers(namespace).Get(name)
 	if err != nil {
 		if errors.IsNotFound(err) {
 			h.clearFirstMaxed(namespace + "/" + name)
+			h.clearFirstScalingError(namespace + "/" + name)
 			h.correlator.ResolveByResource("horizontalpodautoscaler", namespace+"/"+name)
 			return nil
 		}
@@ -47,7 +52,7 @@ func hpaAtMax(hpa *autoscalingv2.HorizontalPodAutoscaler) bool {
 		c := &hpa.Status.Conditions[i]
 		if c.Type == autoscalingv2.ScalingLimited && c.Status == corev1.ConditionTrue {
 			hasScalingLimited = true
-			if c.Reason == "TooManyReplicas" {
+			if c.Reason == constant.ReasonTooManyReplicas {
 				return true
 			}
 		}
@@ -73,12 +78,12 @@ func DetectHPAIssues(hpa *autoscalingv2.HorizontalPodAutoscaler) []*event.Signal
 		c := &hpa.Status.Conditions[i]
 		if (c.Type == autoscalingv2.AbleToScale || c.Type == autoscalingv2.ScalingActive) &&
 			c.Status == corev1.ConditionFalse {
-			if c.Reason == "ScalingDisabled" {
+			if c.Reason == constant.ReasonScalingDisabled {
 				continue // target intentionally at 0 replicas — not an error
 			}
 			out = append(out, &event.Signal{
 				Resource:  "horizontalpodautoscaler",
-				Reason:    "HPAScalingError",
+				Reason:    constant.ReasonHPAScalingError,
 				Namespace: hpa.Namespace,
 				Owner:     key,
 				Labels:    hpa.Labels,
@@ -91,7 +96,7 @@ func DetectHPAIssues(hpa *autoscalingv2.HorizontalPodAutoscaler) []*event.Signal
 	if hpaAtMax(hpa) {
 		out = append(out, &event.Signal{
 			Resource:  "horizontalpodautoscaler",
-			Reason:    "HPAMaxedOut",
+			Reason:    constant.ReasonHPAMaxedOut,
 			Namespace: hpa.Namespace,
 			Owner:     key,
 			Labels:    hpa.Labels,
@@ -108,29 +113,35 @@ func (h *handler) ProcessHorizontalPodAutoscalerObject(hpa *autoscalingv2.Horizo
 	}
 	if deleted {
 		h.clearFirstMaxed(hpa.Namespace + "/" + hpa.Name)
+		h.clearFirstScalingError(hpa.Namespace + "/" + hpa.Name)
 		h.correlator.ResolveByResource("horizontalpodautoscaler", hpa.Namespace+"/"+hpa.Name)
 		return nil
 	}
 
 	key := hpa.Namespace + "/" + hpa.Name
 
-	// (1) scaling-error detection — independent of maxed
+	// (1) scaling-error detection — sustained check to avoid transient noise
 	sigs := DetectHPAIssues(hpa)
 	hadError := false
 	for _, sig := range sigs {
-		if sig.Reason == "HPAScalingError" {
-			h.signalEvent(sig)
+		if sig.Reason == constant.ReasonHPAScalingError {
+			first := h.markFirstScalingError(key)
+			sustained := time.Duration(h.config.HpaMonitor.SustainedMinutes) * time.Minute
+			if sustained <= 0 || h.now().Sub(first) >= sustained {
+				h.signalEvent(sig)
+			}
 			hadError = true
 		}
 	}
 	if !hadError {
-		h.correlator.MarkResolved(correlation.BuildKey(hpa.Namespace, key, "HPAScalingError", ""))
+		h.clearFirstScalingError(key)
+		h.correlator.MarkResolved(correlation.BuildKey(hpa.Namespace, key, constant.ReasonHPAScalingError, ""))
 	}
 
 	// (2) maxed detection
 	if !hpaAtMax(hpa) {
 		h.clearFirstMaxed(key)
-		h.correlator.MarkResolved(correlation.BuildKey(hpa.Namespace, key, "HPAMaxedOut", ""))
+		h.correlator.MarkResolved(correlation.BuildKey(hpa.Namespace, key, constant.ReasonHPAMaxedOut, ""))
 		return nil
 	}
 
@@ -143,7 +154,7 @@ func (h *handler) ProcessHorizontalPodAutoscalerObject(hpa *autoscalingv2.Horizo
 	h.signalEvent(&event.Signal{
 		Resource:  "horizontalpodautoscaler",
 		Namespace: hpa.Namespace,
-		Reason:    "HPAMaxedOut",
+		Reason:    constant.ReasonHPAMaxedOut,
 		Owner:     key,
 		Labels:    hpa.Labels,
 		Hint: fmt.Sprintf("pinned at max=%d (desired=%d current=%d) for %s — raise maxReplicas or investigate load",
@@ -154,26 +165,17 @@ func (h *handler) ProcessHorizontalPodAutoscalerObject(hpa *autoscalingv2.Horizo
 }
 
 func (h *handler) markFirstMaxed(key string) time.Time {
-	h.hpaMu.Lock()
-	defer h.hpaMu.Unlock()
-	if t, ok := h.firstMaxedHPAs[key]; ok {
-		return t
-	}
-	h.firstMaxedHPAs[key] = h.now()
-	return h.firstMaxedHPAs[key]
+	return h.fs.maxedHPAs.mark(key, h.now())
 }
 
 func (h *handler) clearFirstMaxed(key string) {
-	h.hpaMu.Lock()
-	defer h.hpaMu.Unlock()
-	delete(h.firstMaxedHPAs, key)
+	h.fs.maxedHPAs.clear(key)
 }
 
-func hpaHasCondition(hpa *autoscalingv2.HorizontalPodAutoscaler, condType autoscalingv2.HorizontalPodAutoscalerConditionType, status corev1.ConditionStatus) bool {
-	for _, c := range hpa.Status.Conditions {
-		if c.Type == condType && c.Status == status {
-			return true
-		}
-	}
-	return false
+func (h *handler) markFirstScalingError(key string) time.Time {
+	return h.fs.scalingErrorHPAs.mark(key, h.now())
+}
+
+func (h *handler) clearFirstScalingError(key string) {
+	h.fs.scalingErrorHPAs.clear(key)
 }

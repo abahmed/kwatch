@@ -4,14 +4,16 @@ import (
 	"context"
 	"regexp"
 	"testing"
+	"time"
 
-	"github.com/abahmed/kwatch/internal/config"
-	"github.com/abahmed/kwatch/internal/model"
 	"github.com/stretchr/testify/assert"
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes/fake"
+
+	"github.com/abahmed/kwatch/internal/config"
+	"github.com/abahmed/kwatch/internal/model"
 )
 
 func TestNamespaceFilterAllowed(t *testing.T) {
@@ -437,6 +439,98 @@ func TestContainerStateFilterTerminatedExitCode0(t *testing.T) {
 	filter := ContainerStateFilter{}
 	result := filter.Execute(ctx)
 	assert.True(result)
+}
+
+func TestContainerStateFilterTerminatedCompletedWithRestarts(t *testing.T) {
+	assert := assert.New(t)
+
+	ctx := &Context{
+		Container: &ContainerContext{
+			HasRestarts: true,
+			Container: &corev1.ContainerStatus{
+				State: corev1.ContainerState{
+					Terminated: &corev1.ContainerStateTerminated{
+						Reason:   "Completed",
+						ExitCode: 0,
+					},
+				},
+			},
+		},
+
+		Pod: &corev1.Pod{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      "test-pod",
+				Namespace: "default",
+			},
+		},
+	}
+
+	// A cleanly-terminated container is not a failure even when the
+	// restart count is non-zero (e.g. init container that failed once
+	// then succeeded). It must be skipped, not alerted.
+	filter := ContainerStateFilter{}
+	result := filter.Execute(ctx)
+	assert.True(result)
+}
+
+func TestContainerStateFilterTerminatedGracefulWithRestarts(t *testing.T) {
+	assert := assert.New(t)
+
+	ctx := &Context{
+		Container: &ContainerContext{
+			HasRestarts: true,
+			Container: &corev1.ContainerStatus{
+				State: corev1.ContainerState{
+					Terminated: &corev1.ContainerStateTerminated{
+						Reason:   "Error",
+						ExitCode: 143,
+					},
+				},
+			},
+		},
+
+		Pod: &corev1.Pod{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      "test-pod",
+				Namespace: "default",
+			},
+		},
+	}
+
+	// Graceful SIGTERM shutdown must still be skipped with restarts,
+	// while a genuine crash (non-zero, non-143 exit) still alerts.
+	filter := ContainerStateFilter{}
+	result := filter.Execute(ctx)
+	assert.True(result)
+}
+
+func TestContainerStateFilterTerminatedCrashWithRestarts(t *testing.T) {
+	assert := assert.New(t)
+
+	ctx := &Context{
+		Container: &ContainerContext{
+			HasRestarts: true,
+			Container: &corev1.ContainerStatus{
+				State: corev1.ContainerState{
+					Terminated: &corev1.ContainerStateTerminated{
+						Reason:   "Error",
+						ExitCode: 137,
+					},
+				},
+			},
+		},
+
+		Pod: &corev1.Pod{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      "test-pod",
+				Namespace: "default",
+			},
+		},
+	}
+
+	filter := ContainerStateFilter{}
+	result := filter.Execute(ctx)
+	assert.False(result)
 }
 
 func TestContainerRestartsFilterNoState(t *testing.T) {
@@ -1647,6 +1741,122 @@ func TestPodStatusFilterForbiddenReason(t *testing.T) {
 	assert.True(result)
 }
 
+func TestPendingPodFilterNewPod(t *testing.T) {
+	assert := assert.New(t)
+
+	ctx := &Context{
+		Config: &config.Config{},
+		Pod: &corev1.Pod{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:              "test-pod",
+				Namespace:         "default",
+				CreationTimestamp: metav1.NewTime(time.Now().Add(-1 * time.Minute)),
+			},
+			Status: corev1.PodStatus{
+				Phase: corev1.PodPending,
+			},
+		},
+	}
+
+	filter := PendingPodFilter{Threshold: 5 * time.Minute}
+	result := filter.Execute(ctx)
+	assert.False(result)
+	assert.False(ctx.PodHasIssues)
+}
+
+func TestPendingPodFilterOldPodNoWatchStart(t *testing.T) {
+	assert := assert.New(t)
+
+	ctx := &Context{
+		Config: &config.Config{},
+		Pod: &corev1.Pod{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:              "test-pod",
+				Namespace:         "default",
+				CreationTimestamp: metav1.NewTime(time.Now().Add(-1 * time.Hour)),
+			},
+			Status: corev1.PodStatus{
+				Phase: corev1.PodPending,
+				Conditions: []corev1.PodCondition{
+					{
+						Type:   corev1.PodScheduled,
+						Status: corev1.ConditionFalse,
+						Reason: "Unschedulable",
+					},
+				},
+			},
+		},
+	}
+
+	filter := PendingPodFilter{Threshold: 5 * time.Minute}
+	result := filter.Detect(ctx)
+	assert.Equal(StatusAlert, result)
+	assert.True(ctx.PodHasIssues)
+	assert.Equal("Unschedulable", ctx.PodReason)
+}
+
+func TestPendingPodFilterRestartGracePeriod(t *testing.T) {
+	assert := assert.New(t)
+
+	watchStart := time.Now().Add(-1 * time.Minute)
+	ctx := &Context{
+		Config: &config.Config{
+			WatchStartTime: watchStart,
+		},
+		Pod: &corev1.Pod{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:              "test-pod",
+				Namespace:         "default",
+				CreationTimestamp: metav1.NewTime(time.Now().Add(-24 * time.Hour)),
+			},
+			Status: corev1.PodStatus{
+				Phase: corev1.PodPending,
+			},
+		},
+	}
+
+	// With 5min threshold and only 1min since watch start, the filter should skip
+	filter := PendingPodFilter{Threshold: 5 * time.Minute}
+	result := filter.Execute(ctx)
+	assert.False(result)
+	assert.False(ctx.PodHasIssues)
+}
+
+func TestPendingPodFilterRestartAfterGracePeriod(t *testing.T) {
+	assert := assert.New(t)
+
+	watchStart := time.Now().Add(-10 * time.Minute)
+	ctx := &Context{
+		Config: &config.Config{
+			WatchStartTime: watchStart,
+		},
+		Pod: &corev1.Pod{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:              "test-pod",
+				Namespace:         "default",
+				CreationTimestamp: metav1.NewTime(time.Now().Add(-24 * time.Hour)),
+			},
+			Status: corev1.PodStatus{
+				Phase: corev1.PodPending,
+				Conditions: []corev1.PodCondition{
+					{
+						Type:   corev1.PodScheduled,
+						Status: corev1.ConditionFalse,
+						Reason: "Unschedulable",
+					},
+				},
+			},
+		},
+	}
+
+	// 10min since watch start, threshold is 5min → should alert
+	filter := PendingPodFilter{Threshold: 5 * time.Minute}
+	result := filter.Detect(ctx)
+	assert.Equal(StatusAlert, result)
+	assert.True(ctx.PodHasIssues)
+	assert.Equal("Unschedulable", ctx.PodReason)
+}
+
 func TestPodStatusFilterAlreadyKnown(t *testing.T) {
 	assert := assert.New(t)
 
@@ -1677,6 +1887,40 @@ func TestPodStatusFilterAlreadyKnown(t *testing.T) {
 	filter := PodStatusFilter{}
 	result := filter.Execute(ctx)
 	assert.True(result)
+}
+
+func TestPodStatusFilterPodReadyToStartContainersFalse(t *testing.T) {
+	assert := assert.New(t)
+
+	ctx := &Context{
+		Client: fake.NewSimpleClientset(),
+		Config: &config.Config{},
+
+		Pod: &corev1.Pod{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      "test-pod",
+				Namespace: "default",
+			},
+			Status: corev1.PodStatus{
+				Phase: corev1.PodPending,
+				Conditions: []corev1.PodCondition{
+					{
+						Type:    corev1.PodReadyToStartContainers,
+						Status:  corev1.ConditionFalse,
+						Reason:  "SandboxError",
+						Message: "network plugin error",
+					},
+				},
+			},
+		},
+	}
+
+	filter := PodStatusFilter{}
+	result := filter.Execute(ctx)
+	assert.False(result)
+	assert.True(ctx.PodHasIssues)
+	assert.Equal("SandboxError", ctx.PodReason)
+	assert.Equal("network plugin error", ctx.PodMsg)
 }
 
 func TestContainerLogsFilterContainerStatusUnknown(t *testing.T) {

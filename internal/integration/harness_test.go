@@ -12,18 +12,13 @@ import (
 	"github.com/abahmed/kwatch/internal/model"
 )
 
-// defaultStormConfig returns a Config suitable for load tests that exercise
-// storm collapse.
-func defaultStormConfig(rec *recordingAlertManager) correlation.Config {
+// defaultConfig returns a basic Config suitable for integration tests.
+func defaultConfig(rec *recordingAlertManager) correlation.Config {
 	return correlation.Config{
-		Window:              10 * time.Minute,
-		LifecycleInterval:   1 * time.Minute,
-		ResolveHoldDown:     0,
-		Enricher:            &enricher.DefaultEnricher{},
-		StormEnabled:        true,
-		StormThreshold:      10,
-		StormWindow:         5 * time.Minute,
-		StormDigestInterval: 5 * time.Minute,
+		Window:            10 * time.Minute,
+		LifecycleInterval: 1 * time.Minute,
+		ResolveHoldDown:   0,
+		Enricher:          &enricher.DefaultEnricher{},
 		LifecycleHook: func(inc *model.Incident, action model.IncidentAction) {
 			rec.NotifyIncident(inc, action)
 		},
@@ -45,7 +40,7 @@ type recordingAlertManager struct {
 	notified []alertEntry
 }
 
-func (r *recordingAlertManager) NotifyIncident(inc *model.Incident, action model.IncidentAction) {
+func (r *recordingAlertManager) NotifyIncident(inc *model.Incident, action model.IncidentAction, _ ...interface{}) {
 	r.mu.Lock()
 	r.notified = append(r.notified, alertEntry{inc: inc, action: action})
 	r.mu.Unlock()
@@ -243,7 +238,7 @@ func TestInhibitionSuppressesPodsDuringNodeFailure(t *testing.T) {
 }
 
 // TestBaselineSuppressesRestartRepage verifies that a pod whose owner+reason
-// was previously seen (seeded via SetSeen) is suppressed on first contact,
+// was previously seen (seeded via SetBaseline) is suppressed on first contact,
 // preventing re-paging after restart.
 func TestBaselineSuppressesRestartRepage(t *testing.T) {
 	rec := &recordingAlertManager{}
@@ -252,8 +247,8 @@ func TestBaselineSuppressesRestartRepage(t *testing.T) {
 	key := correlation.BuildKey("default", "my-deployment", "CrashLoopBackOff", "")
 
 	// Seed a baseline entry so the engine treats the pod as previously seen
-	eng.SetSeen(map[string]map[string]int64{
-		key: {"my-pod": time.Now().Unix()},
+	eng.SetBaseline(map[string]map[string]int64{
+		string(key): {"my-pod": time.Now().Unix()},
 	})
 
 	ev := makeEvent("pod", "my-pod", "default", "CrashLoopBackOff", "main", "")
@@ -329,46 +324,11 @@ func TestOwnerGroupingSameReason(t *testing.T) {
 // Load tests & benchmarks
 // --------------------------------------------------------------------------
 
-// TestStormCollapseUnderLoad verifies that 1000 consecutive events for the
-// same (ns,owner,reason) key produce a bounded number of notifications rather
-// than generating 1000 separate alerts. Under storm detection, the tenth+
-// create within the storm window is absorbed into a digest; edge-triggering
-// in steady state also suppresses repeats.
-func TestStormCollapseUnderLoad(t *testing.T) {
-	rec := &recordingAlertManager{}
-	eng := correlation.NewEngine(defaultStormConfig(rec))
-
-	owner := "dep-storm"
-	cs := makeContainerState(1, "CrashLoopBackOff", 137)
-
-	n := 1000
-	lastAction := model.ActionSkip
-	for i := 0; i < n; i++ {
-		podName := fmt.Sprintf("pod-%d", i)
-		ev := makeEvent("pod", podName, "storm-ns", "CrashLoopBackOff", "main", "")
-		_, action := eng.Process(ev, owner, cs)
-		if action != model.ActionSkip {
-			lastAction = action
-			if action == model.ActionCreate || action == model.ActionDigest {
-				rec.NotifyIncident(nil, action)
-			}
-		}
-	}
-
-	// Under storm collapse we should never have more than a handful of
-	// notifications out of 1000 events. The exact count depends on
-	// StormThreshold, but it must be << n.
-	if rec.Len() > 50 {
-		t.Fatalf("storm collapse expected <= 50 notifications from %d events, got %d (lastAction=%s)",
-			n, rec.Len(), lastAction)
-	}
-}
-
 // TestBoundedStateUnderLoad verifies that the engine's internal state map
 // grows only with distinct (ns,owner,reason) keys, not with each event.
 func TestBoundedStateUnderLoad(t *testing.T) {
 	rec := &recordingAlertManager{}
-	eng := correlation.NewEngine(defaultStormConfig(rec))
+	eng := correlation.NewEngine(defaultConfig(rec))
 
 	// 10 distinct owners × 100 events each = 1000 total events
 	distinctOwners := 10
@@ -400,11 +360,11 @@ func TestBoundedStateUnderLoad(t *testing.T) {
 	}
 }
 
-// BenchmarkProcessStorm measures allocation and throughput of engine.Process
-// under a bulk-load scenario simulating storm collapse.
-func BenchmarkProcessStorm(b *testing.B) {
+// BenchmarkProcess measures allocation and throughput of engine.Process
+// under bulk-load conditions.
+func BenchmarkProcess(b *testing.B) {
 	rec := &recordingAlertManager{}
-	eng := correlation.NewEngine(defaultStormConfig(rec))
+	eng := correlation.NewEngine(defaultConfig(rec))
 
 	owner := "dep-bench"
 	cs := makeContainerState(1, "CrashLoopBackOff", 137)

@@ -5,15 +5,17 @@ import (
 	"fmt"
 	"net/http"
 	"os"
+	"strings"
 	"time"
+
+	"github.com/google/go-github/v41/github"
+	"k8s.io/klog/v2"
 
 	"github.com/abahmed/kwatch/internal/alert"
 	"github.com/abahmed/kwatch/internal/config"
 	"github.com/abahmed/kwatch/internal/constant"
 	"github.com/abahmed/kwatch/internal/state"
 	"github.com/abahmed/kwatch/internal/version"
-	"github.com/google/go-github/v41/github"
-	"k8s.io/klog/v2"
 )
 
 type GitHubReleaseChecker interface {
@@ -63,24 +65,17 @@ func NewUpgrader(
 	}
 }
 
-func (u *Upgrader) SetGitHubClient(client GitHubReleaseChecker) {
-	u.githubClient = client
-}
-
-func (u *Upgrader) SetAlertManager(alertMgr Notifier) {
-	u.alertManager = alertMgr
-}
-
-func (u *Upgrader) SetStateManager(stateMgr VersionTracker) {
-	u.stateManager = stateMgr
-}
-
 func (u *Upgrader) CheckUpdates(ctx context.Context) {
 	if u.config.DisableUpdateCheck ||
 		version.Short() == "dev" {
 		if u.config.DisableUpdateCheck {
 			klog.Infof("update check disabled")
 		}
+		return
+	}
+
+	if u.isPrerelease(version.Short()) {
+		klog.Infof("prerelease build (%s), skipping update check", version.Short())
 		return
 	}
 
@@ -98,6 +93,13 @@ func (u *Upgrader) CheckUpdates(ctx context.Context) {
 			u.checkRelease(ctx)
 		}
 	}
+}
+
+// isPrerelease reports whether the baked version string denotes a prerelease
+// (e.g. v0.11.0-rc.1). RC builds opt into the dev channel, so their users are
+// never nagged with notices for the latest stable release.
+func (u *Upgrader) isPrerelease(version string) bool {
+	return strings.Contains(version, "-rc")
 }
 
 func (u *Upgrader) checkRelease(ctx context.Context) {

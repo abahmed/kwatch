@@ -13,8 +13,9 @@ type Signal struct {
 	Message        string
 	NodeName       string
 	Container      string
+	Image          string
 	RestartCount   int32
-	Severity       string
+	Severity       model.Severity
 	Logs           string
 	Events         string
 	PodName        string // specific pod (empty for owner-level signals)
