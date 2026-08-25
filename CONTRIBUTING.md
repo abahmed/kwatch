@@ -56,6 +56,15 @@ the README but never carry version pins.
   README instead. If a pinned snippet looks stale, bump it in a PR, but do not pre-stamp the
   next version (e.g. `v0.11.0`) before it ships.
 
+- **`deploy/deploy.yaml` says different things on `main` and at an RC tag — on purpose.** On
+  `main` it pins the latest **stable** image, so copying the manifest out of the repo browser
+  can never install a preview build. At a **release-candidate tag** it pins the RC image, so
+  `kubectl apply` against that tag installs the candidate. The release workflow achieves this
+  by adding a second commit that is tagged but **never pushed to `main`**, which is also why
+  an RC tag sits one commit ahead of `main`. Do not "fix" either side: re-pointing `main`
+  ships previews to anyone who copies the manifest, and dropping the tag-only commit silently
+  gives RC testers the stable build. See `RELEASES.md`.
+
 - **Never delete the install markers in `README.md`.** Version pins live between HTML
   comments — `<!-- stable-install:start -->` … `:end` and `<!-- rc-install:start -->` …
   `:end` — and the release workflow only rewrites what is inside them. A pin moved outside a
