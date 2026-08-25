@@ -329,7 +329,7 @@ Want to add your company? [Open an issue!](https://github.com/abahmed/kwatch/iss
 
 ## ⭐️ Stargazers
 
-<img src="https://api.star-history.com/svg?repos=abahmed/kwatch&type=Date" alt="Stargazers over time" style="max-width: 100%">
+<img src="https://star-history.dera.page/svg?repos=abahmed/kwatch&type=Date" alt="Stargazers over time" style="max-width: 100%">
 
 ---
 
