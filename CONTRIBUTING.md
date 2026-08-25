@@ -47,17 +47,27 @@ the README but never carry version pins.
   version-free about the stable — a patch release during the window would otherwise make it
   stale. It uses the same `🚧 Unreleased` marker and is stripped the same way.
 
-- **Never touch pinned version references in a feature/bug PR.** `README.md` install
-  snippets, the `deploy.yaml` image tag, `deploy/chart/Chart.yaml`, and
-  `deploy/chart/README.md` always point at the **latest released version** (e.g. `v0.10.5`);
-  the `stable` workflow bumps them at release time. Keep `docs/` pages **free of version
-  pins** — if a reference page needs an install command, link to the README instead. If a
-  pinned snippet looks stale, bump it in a PR, but do not pre-stamp the next version
-  (e.g. `v0.11.0`) before it ships.
+- **Never touch pinned version references in a feature/bug PR.** The stable `README.md`
+  install snippets, the `deploy.yaml` image tag, `deploy/chart/Chart.yaml`, and
+  `deploy/chart/README.md` always point at the **latest stable release** (e.g. `v0.10.5`).
+  The preview block in `README.md` points at the **newest open release candidate**, or says
+  there isn't one. The release workflow bumps all of them at release time. Keep `docs/`
+  pages **free of version pins** — if a reference page needs an install command, link to the
+  README instead. If a pinned snippet looks stale, bump it in a PR, but do not pre-stamp the
+  next version (e.g. `v0.11.0`) before it ships.
 
-- The `stable` and `patch` release commands push the version-bump commit to protected
-  `main`, so they need the `RELEASE_TOKEN` secret (see `RELEASES.md`). Without it the
-  workflow fails before tagging — add the secret before first use.
+- **Never delete the install markers in `README.md`.** Version pins live between HTML
+  comments — `<!-- stable-install:start -->` … `:end` and `<!-- rc-install:start -->` …
+  `:end` — and the release workflow only rewrites what is inside them. A pin moved outside a
+  block silently stops being maintained: nothing fails, the snippet just goes stale and
+  starts telling users to install a version that isn't current. If you add a version pin,
+  put it inside the block for its channel. A marker name may repeat — `stable-install` wraps
+  both the install section and the clean-up section, and both are rewritten together.
+
+- All three release commands (`rc`, `stable`, `patch`) push a version-bump commit to
+  protected `main`, so they need the `RELEASE_TOKEN` secret (see `RELEASES.md`). `rc` needs
+  it too, because it maintains the preview block. Without the secret the workflow fails
+  before tagging — add it before first use.
 
 ### Code of Conduct
 We expect everyone to follow the [Code Of Conduct](./CODE_OF_CONDUCT.md)
