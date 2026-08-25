@@ -38,17 +38,14 @@ jobs:
           - language: go
             build-mode: autobuild
 
+    # Do NOT add actions/setup-go here. The CodeQL Go extractor is built with
+    # go1.26.5 and cannot type-check this module (go.mod says go 1.27.0).
+    # Putting Go 1.27 on PATH as a real GOROOT turns those extractor failures
+    # into ~100 red error annotations without fixing anything. Letting Go
+    # auto-download the toolchain into the module cache keeps them quiet.
     steps:
     - name: Checkout repository
       uses: actions/checkout@v7
-
-    # autobuild otherwise uses whatever Go the runner ships, which will fail
-    # once that is older than the version go.mod asks for.
-    - name: Install Go
-      if: matrix.language == 'go'
-      uses: actions/setup-go@v6
-      with:
-        go-version-file: go.mod
 
     - name: Initialize CodeQL
       uses: github/codeql-action/init@v4
