@@ -18,6 +18,9 @@
   <a href="https://github.com/abahmed/kwatch/releases/latest">
     <img src="https://img.shields.io/github/v/release/abahmed/kwatch?label=kwatch" />
   </a>
+  <a href="https://github.com/abahmed/kwatch/releases">
+    <img src="https://img.shields.io/github/v/release/abahmed/kwatch?include_prereleases&label=pre-release&color=orange" />
+  </a>
   <a href="https://github.com/abahmed/kwatch/blob/main/LICENSE">
     <img src="https://img.shields.io/github/license/abahmed/kwatch" />
   </a>
@@ -32,7 +35,7 @@
   </a>
 </p>
 
-> **🚧 Unreleased** — documents the **v0.11.0-rc** dev build. Install snippets below stay pinned to the latest stable. Removed automatically at release.
+> **🚧 Unreleased** — documents the **v0.11.0-rc** dev build. The install snippets below stay pinned to the latest stable; the preview build has its own section. Removed automatically at release.
 
 > **👋 New to Kubernetes? No problem.**  
 > kwatch delivers **alerts that explain themselves** — what broke, *why*, the logs and events — straight to your team chat, 24/7.  
@@ -98,6 +101,8 @@ digging. ✨
 
 ## ⚡️ 60-second install
 
+<!-- stable-install:start -->
+
 ### 📦 Helm (easiest 🏆)
 
 ```shell
@@ -118,6 +123,8 @@ curl -L https://raw.githubusercontent.com/abahmed/kwatch/v0.10.5/deploy/config.y
 kubectl apply -f config.yaml
 kubectl apply -f https://raw.githubusercontent.com/abahmed/kwatch/v0.10.5/deploy/deploy.yaml
 ```
+
+<!-- stable-install:end -->
 
 `config.yaml` is the only file you edit. One small block per place you want alerts:
 
@@ -144,12 +151,45 @@ All 56 providers, with every parameter and example, are in
 - Crash a test pod, the classic proof:
   `kubectl run boom --image=busybox:1.36 --restart=Always -- sh -c "sleep 5 && exit 1"`
 
-### 🧪 Beta (`v0.11.0-rc`) — coming soon
+### 🧪 Release candidate
 
-The banner at the top means this README already tracks the **`v0.11.0-rc`** dev build — newer
-than the stable release. The first pre-release isn't cut yet: when a **`v0.11.0-rc.N`**
-build appears on the [releases page](https://github.com/abahmed/kwatch/releases), grab it —
-kubectl install commands will land right here (no Helm for the beta).
+<details>
+<summary>Want the preview build?</summary>
+
+<!-- rc-install:start -->
+
+Current preview: **v0.11.0-rc.4** — not for production.
+
+No Helm chart is published for release candidates, so install from the manifests at the RC
+tag. They already pin the preview image, so this is all you need:
+
+```shell
+curl -L https://raw.githubusercontent.com/abahmed/kwatch/v0.11.0-rc.4/deploy/config.yaml -o config.yaml
+# ✏️ Edit config.yaml with your team-chat webhook
+kubectl apply -f config.yaml
+kubectl apply -f https://raw.githubusercontent.com/abahmed/kwatch/v0.11.0-rc.4/deploy/deploy.yaml
+```
+
+Already running kwatch? Switch an existing install straight to the preview:
+
+```shell
+kubectl -n kwatch set image deployment/kwatch kwatch=ghcr.io/abahmed/kwatch:v0.11.0-rc.4
+```
+
+Check what you actually got:
+
+```shell
+kubectl -n kwatch get deployment kwatch -o jsonpath='{.spec.template.spec.containers[0].image}'
+```
+
+To go back to stable, re-run the install commands at the top of this page.
+
+RC builds never get the `latest` tag, and the in-app upgrader stays quiet on them — you
+opted into the dev channel, so kwatch won't nag you back toward stable.
+
+<!-- rc-install:end -->
+
+</details>
 
 ---
 
@@ -272,10 +312,16 @@ Under the hood it's all explained in [how kwatch thinks](./docs/architecture.md)
 
 ## 🧹 Clean up
 
+<!-- stable-install:start -->
+
 ```shell
 kubectl delete -f https://raw.githubusercontent.com/abahmed/kwatch/v0.10.5/deploy/config.yaml
 kubectl delete -f https://raw.githubusercontent.com/abahmed/kwatch/v0.10.5/deploy/deploy.yaml
 ```
+
+<!-- stable-install:end -->
+
+Installed with Helm instead? `helm uninstall [RELEASE_NAME] --namespace kwatch`
 
 ---
 
@@ -304,6 +350,7 @@ logs; those tell you what happened, kwatch is the one that wakes you up. ⏰
 - [📣 Alert providers](./docs/providers.md)
 - [🧠 How kwatch thinks](./docs/architecture.md)
 - [📦 Helm chart](./deploy/chart/README.md)
+- [🔖 Versioning & releases](./RELEASES.md)
 
 ---
 

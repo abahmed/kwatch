@@ -21,6 +21,9 @@ jobs:
     permissions:
       packages: write
       contents: read
+    outputs:
+      tag: ${{ steps.rel.outputs.tag }}
+      digest: ${{ steps.build.outputs.digest }}
     steps:
       # Values come in through env, never inlined into the script, so a tag
       # name can't be used to inject shell.
@@ -94,6 +97,7 @@ jobs:
             type=raw,value=latest,enable=${{ steps.rel.outputs.prerelease != 'true' }}
 
       - name: Build and push Docker image
+        id: build
         uses: docker/build-push-action@v7
         with:
           platforms: linux/amd64,linux/arm64,linux/arm/v7,linux/arm/v6
@@ -107,3 +111,51 @@ jobs:
             RELEASE_VERSION=${{ steps.rel.outputs.tag }}
             GIT_COMMIT=${{ steps.sha.outputs.sha }}
             BUILD_DATE=${{ steps.rel.outputs.build_date }}
+
+      - name: Summary
+        if: ${{ always() && steps.rel.outputs.tag != '' }}
+        env:
+          TAG: ${{ steps.rel.outputs.tag }}
+          PRERELEASE: ${{ steps.rel.outputs.prerelease }}
+          SHA: ${{ steps.sha.outputs.sha }}
+          DIGEST: ${{ steps.build.outputs.digest }}
+          TAGS: ${{ steps.meta.outputs.tags }}
+          OUTCOME: ${{ steps.build.outcome }}
+        run: |
+          set -euo pipefail
+          {
+            if [ "$OUTCOME" != "success" ]; then
+              echo "## Build failed for $TAG"
+              echo
+              echo "Nothing was pushed."
+            else
+              echo "## $TAG"
+              echo
+              echo "| | |"
+              echo "|---|---|"
+              echo "| pre-release | $PRERELEASE |"
+              echo "| commit | \`$SHA\` |"
+              echo "| digest | \`$DIGEST\` |"
+              echo "| platforms | linux/amd64, linux/arm64, linux/arm/v7, linux/arm/v6 |"
+              echo
+              echo "### Tags pushed"
+              echo
+              echo '```'
+              echo "$TAGS"
+              echo '```'
+              echo
+              echo "### Pull"
+              echo
+              echo "By tag, which can move:"
+              echo
+              echo '```sh'
+              echo "docker pull ghcr.io/abahmed/kwatch:$TAG"
+              echo '```'
+              echo
+              echo "By digest, which cannot. Use this to pin a deployment:"
+              echo
+              echo '```sh'
+              echo "docker pull ghcr.io/abahmed/kwatch@$DIGEST"
+              echo '```'
+            fi
+          } >> "$GITHUB_STEP_SUMMARY"
