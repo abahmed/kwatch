@@ -69,3 +69,69 @@ jobs:
     - name: Template tests
       if: steps.changes.outputs.chart == 'true'
       run: ./deploy/chart/test_helm.sh
+
+  # publish.yml is the only other place a container image gets built, and it
+  # runs on a release — after the tag exists. Without this job a broken
+  # Dockerfile is only discovered once it is already shipping.
+  image:
+    name: Image
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    permissions:
+      contents: read
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v7
+    - name: Detect image changes
+      id: changes
+      uses: dorny/paths-filter@v3
+      with:
+        filters: |
+          image:
+            - 'Dockerfile'
+            - '.dockerignore'
+            - 'go.mod'
+            - 'go.sum'
+    - name: Set up QEMU
+      if: steps.changes.outputs.image == 'true'
+      uses: docker/setup-qemu-action@v4
+    - name: Set up Docker Buildx
+      if: steps.changes.outputs.image == 'true'
+      uses: docker/setup-buildx-action@v4
+    # Same platform list as the release build. Nothing is pushed, and the
+    # cache is read-only so pull requests never add to the repo cache quota.
+    - name: Build every release platform
+      if: steps.changes.outputs.image == 'true'
+      uses: docker/build-push-action@v7
+      with:
+        platforms: linux/amd64,linux/arm64,linux/arm/v7,linux/arm/v6
+        context: .
+        push: false
+        cache-from: type=gha
+        build-args: |
+          RELEASE_VERSION=ci
+          GIT_COMMIT=${{ github.sha }}
+          BUILD_DATE=ci
+    # A cross-compile that silently falls back to the host would still build
+    # and still push, producing amd64 binaries inside arm manifests. Only
+    # inspecting the binary catches that.
+    - name: Verify each binary is built for its own architecture
+      if: steps.changes.outputs.image == 'true'
+      run: |
+        set -euo pipefail
+        check() {
+          docker buildx build --platform "$1" --output "type=local,dest=/tmp/$2" .
+          got=$(file -b "/tmp/$2/bin/kwatch")
+          echo "$1 -> $got"
+          echo "$got" | grep -q "$3" || { echo "::error::$1 produced the wrong architecture"; exit 1; }
+        }
+        check linux/amd64  amd64 "x86-64"
+        check linux/arm64  arm64 "ARM aarch64"
+        check linux/arm/v7 armv7 "ARM, EABI5"
+    - name: Smoke-test the image
+      if: steps.changes.outputs.image == 'true'
+      run: |
+        set -euo pipefail
+        docker buildx build --platform linux/amd64 --load -t kwatch:ci \
+          --build-arg RELEASE_VERSION=ci .
+        docker run --rm kwatch:ci --version
