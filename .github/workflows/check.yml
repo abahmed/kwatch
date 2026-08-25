@@ -5,25 +5,32 @@ on:
   pull_request:
     branches: [ main ]
 
+# A new push to a PR cancels the run still going for the old commit.
+concurrency:
+  group: check-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   check:
     name: Check
     runs-on: ubuntu-latest
+    timeout-minutes: 20
     permissions:
       contents: read
     steps:
     - name: Checkout code
       uses: actions/checkout@v7
-      with:
-          ref: ${{ github.ref }}
     - name: Install Go
       uses: actions/setup-go@v6
       with:
-        go-version: '1.27'
+        # Read from go.mod so the CI Go version can never drift from the repo.
+        go-version-file: go.mod
     - name: Lint
       uses: golangci/golangci-lint-action@v9
       with:
-        version: latest
+        # Pinned. "latest" means an upstream release can break CI with no
+        # change on our side.
+        version: v2.13.1
     - name: Build
       run: go build -o kwatch ./cmd/kwatch
     - name: Test
@@ -40,6 +47,7 @@ jobs:
   chart:
     name: Chart
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     permissions:
       contents: read
     steps:
