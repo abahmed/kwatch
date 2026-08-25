@@ -32,6 +32,11 @@ jobs:
           fetch-depth: 0
           token: ${{ secrets.RELEASE_TOKEN || secrets.GITHUB_TOKEN }}
 
+      - name: Configure git user
+        run: |
+          git config --global user.name "github-actions[bot]"
+          git config --global user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
       - name: Compute version
         id: meta
         env:
@@ -165,8 +170,6 @@ jobs:
             perl -ni -e 'print unless /^>\s*\*\*[^*]*Unreleased\*\*/' README.md docs/*.md
           fi
 
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add deploy/chart/Chart.yaml deploy/chart/README.md deploy/deploy.yaml README.md docs/
           if git diff --cached --quiet; then
             echo "no version changes to commit; the tag will point at main HEAD"
