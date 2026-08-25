@@ -261,6 +261,31 @@ func (in *SilenceRule) DeepCopyInto(out *SilenceRule) {
 		*out = make([]string, len(*in))
 		copy(*out, *in)
 	}
+	if in.ContainerNames != nil {
+		in, out := &in.ContainerNames, &out.ContainerNames
+		*out = make([]string, len(*in))
+		copy(*out, *in)
+	}
+	if in.LogPatterns != nil {
+		in, out := &in.LogPatterns, &out.LogPatterns
+		*out = make([]string, len(*in))
+		copy(*out, *in)
+	}
+	if in.ContainerMessages != nil {
+		in, out := &in.ContainerMessages, &out.ContainerMessages
+		*out = make([]string, len(*in))
+		copy(*out, *in)
+	}
+	if in.NodeReasons != nil {
+		in, out := &in.NodeReasons, &out.NodeReasons
+		*out = make([]string, len(*in))
+		copy(*out, *in)
+	}
+	if in.NodeMessages != nil {
+		in, out := &in.NodeMessages, &out.NodeMessages
+		*out = make([]string, len(*in))
+		copy(*out, *in)
+	}
 }
 
 func (in *SilenceRule) DeepCopy() *SilenceRule {

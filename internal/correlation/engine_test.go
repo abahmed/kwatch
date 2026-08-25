@@ -2,14 +2,10 @@ package correlation
 
 import (
 	"fmt"
-	"strings"
 	"sync"
 	"testing"
 	"time"
 
-	"github.com/abahmed/kwatch/internal/enricher"
-	"github.com/abahmed/kwatch/internal/event"
-	"github.com/abahmed/kwatch/internal/model"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	appsv1 "k8s.io/api/apps/v1"
@@ -18,6 +14,10 @@ import (
 	"k8s.io/apimachinery/pkg/labels"
 	appsv1lister "k8s.io/client-go/listers/apps/v1"
 	corev1lister "k8s.io/client-go/listers/core/v1"
+
+	"github.com/abahmed/kwatch/internal/enricher"
+	"github.com/abahmed/kwatch/internal/event"
+	"github.com/abahmed/kwatch/internal/model"
 )
 
 func mockClock(t time.Time) func() time.Time {
@@ -50,7 +50,7 @@ func TestProcessCreateNew(t *testing.T) {
 
 	assert.Equal(t, model.ActionCreate, action)
 	assert.NotNil(t, inc)
-	assert.Equal(t, "default:deploy-1:CrashLoopBackOff:", inc.Key)
+	assert.Equal(t, "default:deploy-1:CrashLoopBackOff:", string(inc.Key))
 	assert.Equal(t, "deploy-1", inc.Name)
 	assert.Equal(t, "default", inc.Namespace)
 	assert.Equal(t, "CrashLoopBackOff", inc.Reason)
@@ -165,7 +165,7 @@ func TestProcessEmptyOwner(t *testing.T) {
 
 	inc, action := e.Process(ev, "", nil)
 	assert.Equal(t, model.ActionCreate, action)
-	assert.Equal(t, "default::OOMKilled:", inc.Key)
+	assert.Equal(t, "default::OOMKilled:", string(inc.Key))
 }
 
 func TestCleanup(t *testing.T) {
@@ -203,7 +203,7 @@ func TestCleanupKeepsRecent(t *testing.T) {
 	assert.Equal(t, 1, len(e.state))
 }
 
-func TestRemovePodMultiIncidentResolve(t *testing.T) {
+func TestRemovePodNoResolve(t *testing.T) {
 	e := newTestEngine()
 
 	ev1 := event.Event{
@@ -222,16 +222,13 @@ func TestRemovePodMultiIncidentResolve(t *testing.T) {
 
 	assert.Equal(t, 2, len(e.state))
 
-	var resolvedKeys []string
-	e.config.LifecycleHook = func(inc *model.Incident, action model.IncidentAction) {
-		if action == model.ActionResolved {
-			resolvedKeys = append(resolvedKeys, inc.Key)
-		}
-	}
-
+	// RemovePod must NOT resolve incidents — just remove the pod from resources
 	e.RemovePod("default", "pod-1")
 
-	assert.Equal(t, 2, len(resolvedKeys), "both incidents should resolve")
+	assert.Equal(t, model.StateActive, e.state["default:deploy-1:CrashLoopBackOff:"].State,
+		"incident must stay active after RemovePod")
+	assert.Equal(t, model.StateActive, e.state["default:deploy-1:OOMKilled:"].State,
+		"incident must stay active after RemovePod")
 	assert.Equal(t, 0, len(e.state["default:deploy-1:CrashLoopBackOff:"].Resources))
 	assert.Equal(t, 0, len(e.state["default:deploy-1:OOMKilled:"].Resources))
 }
@@ -267,7 +264,7 @@ func TestBaselineSuppression(t *testing.T) {
 
 	incidentKey := BuildKey("default", "deploy-1", "CrashLoopBackOff", "")
 
-	e.SetSeen(map[string]map[string]int64{incidentKey: {"pod-1": fakeNow.Unix()}})
+	e.SetBaseline(map[string]map[string]int64{string(incidentKey): {"pod-1": fakeNow.Unix()}})
 
 	ev := event.Event{
 		PodName:   "pod-1",
@@ -279,7 +276,7 @@ func TestBaselineSuppression(t *testing.T) {
 	assert.Equal(t, model.ActionSkip, action)
 }
 
-func TestSetSeenMergesNotReplaces(t *testing.T) {
+func TestSetBaselineMergesNotReplaces(t *testing.T) {
 	fakeNow := time.Date(2025, 1, 1, 0, 0, 0, 0, time.UTC)
 	e := newTestEngine()
 	e.now = mockClock(fakeNow)
@@ -289,16 +286,16 @@ func TestSetSeenMergesNotReplaces(t *testing.T) {
 	key3 := BuildKey("default", "dep-2", "CrashLoopBackOff", "")
 
 	// First call: seed key1 and key2
-	e.SetSeen(map[string]map[string]int64{
-		key1: {"pod-a": fakeNow.Unix()},
-		key2: {"pod-b": fakeNow.Unix()},
+	e.SetBaseline(map[string]map[string]int64{
+		string(key1): {"pod-a": fakeNow.Unix()},
+		string(key2): {"pod-b": fakeNow.Unix()},
 	})
 
 	// Second call: same key1 with fresher timestamp, plus new key3
 	later := fakeNow.Add(1 * time.Hour)
-	e.SetSeen(map[string]map[string]int64{
-		key1: {"pod-a": later.Unix()},
-		key3: {"pod-c": later.Unix()},
+	e.SetBaseline(map[string]map[string]int64{
+		string(key1): {"pod-a": later.Unix()},
+		string(key3): {"pod-c": later.Unix()},
 	})
 
 	// All keys should be present (key1 and key2 preserved from first call,
@@ -306,18 +303,18 @@ func TestSetSeenMergesNotReplaces(t *testing.T) {
 	e.mu.Lock()
 	defer e.mu.Unlock()
 
-	_, ok1 := e.seen[key1]["pod-a"]
-	assert.True(t, ok1, "key1 from first SetSeen must survive after second SetSeen")
+	_, ok1 := e.baseline[string(key1)]["pod-a"]
+	assert.True(t, ok1, "key1 from first SetBaseline must survive after second SetBaseline")
 
-	_, ok2 := e.seen[key2]["pod-b"]
-	assert.True(t, ok2, "key2 from first SetSeen must survive after second SetSeen (merge)")
+	_, ok2 := e.baseline[string(key2)]["pod-b"]
+	assert.True(t, ok2, "key2 from first SetBaseline must survive after second SetBaseline (merge)")
 
-	_, ok3 := e.seen[key3]["pod-c"]
-	assert.True(t, ok3, "key3 from second SetSeen must be present")
+	_, ok3 := e.baseline[string(key3)]["pod-c"]
+	assert.True(t, ok3, "key3 from second SetBaseline must be present")
 
 	// Timestamp for key1/pod-a must reflect the later value (was updated, not stuck)
-	assert.Equal(t, later.Unix(), e.seen[key1]["pod-a"],
-		"SetSeen must update timestamp for existing entry")
+	assert.Equal(t, later.Unix(), e.baseline[string(key1)]["pod-a"],
+		"SetBaseline must update timestamp for existing entry")
 }
 
 func TestClearSeenUnsuppresses(t *testing.T) {
@@ -325,8 +322,8 @@ func TestClearSeenUnsuppresses(t *testing.T) {
 
 	incidentKey := BuildKey("default", "deploy-1", "CrashLoopBackOff", "")
 
-	e.SetSeen(map[string]map[string]int64{incidentKey: {"pod-1": time.Now().Unix()}})
-	e.ClearSeenForPod("default", "pod-1")
+	e.SetBaseline(map[string]map[string]int64{string(incidentKey): {"pod-1": time.Now().Unix()}})
+	e.ClearBaselineForPod("default", "pod-1")
 
 	ev := event.Event{
 		PodName:   "pod-1",
@@ -346,7 +343,7 @@ func TestBaselineSuppressesForFullTTL(t *testing.T) {
 
 	incidentKey := BuildKey("default", "deploy-1", "CrashLoopBackOff", "")
 	// entry created 1 hour ago — well within the 24h TTL
-	e.SetSeen(map[string]map[string]int64{incidentKey: {"pod-1": fakeNow.Add(-1 * time.Hour).Unix()}})
+	e.SetBaseline(map[string]map[string]int64{string(incidentKey): {"pod-1": fakeNow.Add(-1 * time.Hour).Unix()}})
 
 	ev := event.Event{
 		PodName: "pod-1", Namespace: "default", Reason: "CrashLoopBackOff",
@@ -363,7 +360,7 @@ func TestBaselineExpiredPrunes(t *testing.T) {
 
 	incidentKey := BuildKey("default", "deploy-1", "CrashLoopBackOff", "")
 	// entry created 25 hours ago — past the 24h TTL
-	e.SetSeen(map[string]map[string]int64{incidentKey: {"pod-1": fakeNow.Add(-25 * time.Hour).Unix()}})
+	e.SetBaseline(map[string]map[string]int64{string(incidentKey): {"pod-1": fakeNow.Add(-25 * time.Hour).Unix()}})
 
 	ev := event.Event{
 		PodName: "pod-1", Namespace: "default", Reason: "CrashLoopBackOff",
@@ -371,9 +368,9 @@ func TestBaselineExpiredPrunes(t *testing.T) {
 	_, action := e.Process(ev, "deploy-1", nil)
 	assert.Equal(t, model.ActionCreate, action)
 
-	// entry should be pruned from seen
+	// entry should be pruned from baseline
 	e.mu.Lock()
-	_, stillSeen := e.seen[incidentKey]
+	_, stillSeen := e.baseline[string(incidentKey)]
 	e.mu.Unlock()
 	assert.False(t, stillSeen, "expired baseline entry should be pruned")
 }
@@ -396,13 +393,13 @@ func TestRemovePodClearsSeen(t *testing.T) {
 	incidentKey := inc.Key
 
 	// Now baseline the incident key
-	e.SetSeen(map[string]map[string]int64{incidentKey: {"pod-1": time.Now().Unix()}})
+	e.SetBaseline(map[string]map[string]int64{string(incidentKey): {"pod-1": time.Now().Unix()}})
 
-	// RemovePod should clear the baseline when the incident empties
+	// RemovePod clears the baseline for the removed pod
 	e.RemovePod("default", "pod-1")
 
-	// A new event for the same key should now fire (update, since the resolved
-	// incident is still in state and gets reactivated)
+	// A new event for a different pod with the same key — incident is still
+	// active (RemovePod does NOT resolve), so the update is silent
 	ev2 := event.Event{
 		PodName:   "pod-2",
 		Namespace: "default",
@@ -410,7 +407,43 @@ func TestRemovePodClearsSeen(t *testing.T) {
 	}
 
 	_, action = e.Process(ev2, "deploy-1", nil)
-	assert.Equal(t, model.ActionCreate, action)
+	assert.Equal(t, model.ActionSkip, action)
+}
+
+func TestOwnerLevelBaselineFallsBackToEmptyPod(t *testing.T) {
+	e := NewEngine(Config{
+		Window:   10 * time.Minute,
+		Baseline: map[string]map[string]int64{"ns:ns/web:ServiceNoEndpoints:": {"": time.Now().Unix()}},
+	})
+	// Live owner-level signal carries PodName (service name) — must still be
+	// recognized as baselined even though the seed used the empty pod key.
+	ev := event.Event{
+		Resource:  "service",
+		PodName:   "web",
+		Namespace: "ns",
+		Reason:    "ServiceNoEndpoints",
+	}
+	inc, action := e.Process(ev, "ns/web", nil)
+	assert.Nil(t, inc)
+	assert.Equal(t, model.ActionSkip, action)
+}
+
+func TestOwnerLevelBaselineNoEmptyPod(t *testing.T) {
+	e := NewEngine(Config{
+		Window: 10 * time.Minute,
+		Baseline: map[string]map[string]int64{
+			"ns:ns/web:ServiceNoEndpoints:": {"web": time.Now().Unix()},
+		},
+	})
+	ev := event.Event{
+		Resource:  "service",
+		PodName:   "web",
+		Namespace: "ns",
+		Reason:    "ServiceNoEndpoints",
+	}
+	inc, action := e.Process(ev, "ns/web", nil)
+	assert.Nil(t, inc)
+	assert.Equal(t, model.ActionSkip, action)
 }
 
 func TestStsOwnedPodsGroupByStsName(t *testing.T) {
@@ -439,7 +472,7 @@ func TestStsOwnedPodsGroupByStsName(t *testing.T) {
 	assert.Equal(t, model.ActionSkip, action2)
 	assert.Equal(t, inc1.Key, inc2.Key)
 	assert.Equal(t, "my-sts", inc1.Name)
-	assert.Equal(t, "high", inc1.Severity)
+	assert.Equal(t, model.SeverityHigh, inc1.Severity)
 	// After the second call, the live incident has both pods. Use inc2 (clone of the second call).
 	assert.True(t, inc2.Resources["db-0"])
 	assert.True(t, inc2.Resources["db-1"])
@@ -500,6 +533,61 @@ func TestRenotifyConfig(t *testing.T) {
 	}
 }
 
+func TestRevivedIncidentResetsRenotifyBudget(t *testing.T) {
+	fakeNow := time.Date(2025, 1, 1, 0, 0, 0, 0, time.UTC)
+	e := NewEngine(Config{
+		Window:                     10 * time.Minute,
+		RenotifyIntervalBySeverity: map[string]time.Duration{"default": 1 * time.Minute},
+		RenotifyMaxPerIncident:     3,
+	})
+	e.now = mockClock(fakeNow)
+
+	var updates int
+	e.config.LifecycleHook = func(inc *model.Incident, action model.IncidentAction) {
+		if action == model.ActionUpdate {
+			updates++
+		}
+	}
+
+	ev := event.Event{Namespace: "default", PodName: "pod-1", Reason: "CrashLoopBackOff"}
+	inc, action := e.Process(ev, "deploy-1", nil)
+	assert.Equal(t, model.ActionCreate, action)
+	require.Zero(t, inc.RenotifyCount)
+
+	// Exhaust the renotify budget: 3 renotifies at 61s intervals.
+	for i := 0; i < 3; i++ {
+		fakeNow = fakeNow.Add(61 * time.Second)
+		e.now = mockClock(fakeNow)
+		e.checkLifecycle()
+		require.Equal(t, i+1, e.state[inc.Key].RenotifyCount, "renotify %d must fire", i+1)
+	}
+	require.Equal(t, 3, updates)
+
+	// A 4th cycle past the interval is capped: no more renotifies.
+	fakeNow = fakeNow.Add(61 * time.Second)
+	e.now = mockClock(fakeNow)
+	e.checkLifecycle()
+	require.Equal(t, 3, e.state[inc.Key].RenotifyCount, "renotify budget must cap at maxPer")
+	require.Equal(t, 3, updates, "renotify must not exceed maxPer")
+
+	// Resolve, wait out the cooldown, then revive.
+	e.MarkResolved(inc.Key)
+	require.Equal(t, model.StateResolved, e.state[inc.Key].State)
+
+	fakeNow = fakeNow.Add(11 * time.Minute)
+	e.now = mockClock(fakeNow)
+	revived, action := e.Process(ev, "deploy-1", nil)
+	require.Equal(t, model.ActionUpdate, action, "revival must be a silent update, not a create")
+	require.Equal(t, model.StateActive, revived.State)
+	assert.Zero(t, revived.RenotifyCount, "revival must reset the renotify budget")
+
+	// The revived incident gets a fresh renotify budget.
+	e.now = mockClock(fakeNow.Add(61 * time.Second))
+	e.checkLifecycle()
+	require.Equal(t, 1, e.state[inc.Key].RenotifyCount, "revived incident must renotify again")
+	require.Equal(t, 4, updates)
+}
+
 // ── BUG-1: escalation ──────────────────────────────────────────────
 
 func escTestEngine() *Engine {
@@ -510,6 +598,21 @@ func escTestEngine() *Engine {
 	})
 }
 
+func TestBarePodIncidentUsesPodName(t *testing.T) {
+	e := newTestEngine()
+
+	ev := event.Event{PodName: "bare-pod-1", Namespace: "default", Reason: "CrashLoopBackOff"}
+	inc, action := e.Process(ev, "", nil)
+	assert.Equal(t, model.ActionCreate, action)
+	assert.Equal(t, "bare-pod-1", inc.Name, "bare pod incident must use the pod name")
+	assert.Equal(t, "pod", inc.Resource)
+
+	// Owner-level incidents keep the owner name
+	ev2 := event.Event{PodName: "rs-pod-1", Namespace: "default", Reason: "CrashLoopBackOff"}
+	inc2, _ := e.Process(ev2, "deploy-1", nil)
+	assert.Equal(t, "deploy-1", inc2.Name)
+}
+
 func TestEscalationFirstCrossingIsHigh(t *testing.T) {
 	e := escTestEngine()
 	// Use OOMKilled to avoid CrashLoopHighFrequency rename when RestartCount > 5
@@ -518,7 +621,7 @@ func TestEscalationFirstCrossingIsHigh(t *testing.T) {
 	// within cooldown, cross tier 3:
 	inc2, action := e.Process(ev, "dep", &model.ContainerState{RestartCount: 4})
 	assert.Equal(t, model.ActionUpdate, action)
-	assert.Equal(t, "high", inc2.Severity)
+	assert.Equal(t, model.SeverityHigh, inc2.Severity)
 	assert.Contains(t, inc2.Hint, "crossed 3")
 	assert.Equal(t, inc.Key, inc2.Key)
 }
@@ -534,7 +637,7 @@ func TestEscalationSecondCrossingIsCritical(t *testing.T) {
 	e.Process(ev, "dep", &model.ContainerState{RestartCount: 2})                // crosses tier 1 → high
 	inc, action := e.Process(ev, "dep", &model.ContainerState{RestartCount: 4}) // crosses tier 3 → critical
 	assert.Equal(t, model.ActionUpdate, action)
-	assert.Equal(t, "critical", inc.Severity)
+	assert.Equal(t, model.SeverityCritical, inc.Severity)
 }
 
 func TestEscalationSameTierSkips(t *testing.T) {
@@ -601,6 +704,41 @@ func TestInhibitionLiftsOnNodeResolve(t *testing.T) {
 	assert.Equal(t, model.ActionCreate, action)
 }
 
+func TestInhibitionLiftsOnNodeResolveDuringHoldDown(t *testing.T) {
+	e := NewEngine(Config{
+		Window:                    10 * time.Minute,
+		ResolveHoldDown:           5 * time.Minute,
+		InhibitNodeSuppressesPods: true,
+	})
+	e.Process(event.Event{Resource: "node", PodName: "node-1", NodeName: "node-1", Reason: "NodeNotReady"}, "node-1", nil)
+	assert.True(t, e.activeNodeIncidents["node-1"])
+
+	// Node recovers: the incident enters PendingResolve (hold-down), but the
+	// recovered node must stop suppressing pods immediately, not after the
+	// hold-down finalizes.
+	e.ResolveByResource("node", "node-1")
+	assert.False(t, e.activeNodeIncidents["node-1"], "recovered node must stop suppressing pods during hold-down")
+
+	podEv := event.Event{PodName: "p", Namespace: "ns", NodeName: "node-1", Reason: "CrashLoopBackOff"}
+	_, action := e.Process(podEv, "dep", nil)
+	assert.Equal(t, model.ActionCreate, action)
+}
+
+func TestInhibitionMarkResolvedHoldDownClearsFlag(t *testing.T) {
+	e := NewEngine(Config{
+		Window:                    10 * time.Minute,
+		ResolveHoldDown:           5 * time.Minute,
+		InhibitNodeSuppressesPods: true,
+	})
+	e.Process(event.Event{Resource: "node", PodName: "node-1", NodeName: "node-1", Reason: "NodeNotReady"}, "node-1", nil)
+	assert.True(t, e.activeNodeIncidents["node-1"])
+
+	// MarkResolved with hold-down enabled must clear the flag the same way
+	// the immediate-resolve branch does.
+	e.MarkResolved(BuildKey("", "node-1", "NodeNotReady", ""))
+	assert.False(t, e.activeNodeIncidents["node-1"], "recovered node must stop suppressing pods during hold-down")
+}
+
 func TestInhibitionSuppressedCounter(t *testing.T) {
 	e := NewEngine(Config{
 		Window:                    10 * time.Minute,
@@ -615,6 +753,70 @@ func TestInhibitionSuppressedCounter(t *testing.T) {
 			assert.Equal(t, 1, nodeInc.SuppressedOwners["dep"])
 		}
 	}
+}
+
+func TestInhibitionOvercommitDoesNotSuppressPods(t *testing.T) {
+	e := NewEngine(Config{
+		Window:                    10 * time.Minute,
+		InhibitNodeSuppressesPods: true,
+	})
+	// Synthetic capacity incident — not a real node outage.
+	e.Process(event.Event{Resource: "node", PodName: "node-1", NodeName: "node-1", Reason: "NodeResourceCritical"}, "node-1", nil)
+	assert.False(t, e.activeNodeIncidents["node-1"], "overcommit must not populate inhibition map")
+
+	podEv := event.Event{PodName: "p", Namespace: "ns", NodeName: "node-1", Reason: "CrashLoopBackOff"}
+	_, action := e.Process(podEv, "dep", nil)
+	assert.Equal(t, model.ActionCreate, action, "pod on over-committed node must not be suppressed")
+}
+
+func TestInhibitionOvercommitDoesNotSuppressUnschedulable(t *testing.T) {
+	e := NewEngine(Config{
+		Window:                    10 * time.Minute,
+		InhibitNodeSuppressesPods: true,
+	})
+	e.Process(event.Event{Resource: "node", PodName: "node-1", NodeName: "node-1", Reason: "NodeResourceCritical"}, "node-1", nil)
+
+	ev := event.Event{PodName: "p1", Namespace: "ns", NodeName: "", Reason: "Unschedulable"}
+	_, action := e.Process(ev, "deploy-1", nil)
+	assert.Equal(t, model.ActionCreate, action, "overcommit on one node must not suppress cluster-wide unschedulable pods")
+}
+
+func TestInhibitionRecoveredBaselineNodeClearsFlag(t *testing.T) {
+	e := NewEngine(Config{
+		Window:                    10 * time.Minute,
+		InhibitNodeSuppressesPods: true,
+	})
+	// Simulate a pre-existing NodeNotReady at startup (baselined, no incident).
+	e.SetActiveNodeIncidents([]string{"node-1"})
+	assert.True(t, e.activeNodeIncidents["node-1"])
+
+	// Node recovers — no incident exists to resolve, but the flag must clear.
+	e.RefreshNodeInhibition("node-1")
+	assert.False(t, e.activeNodeIncidents["node-1"], "recovered node must stop suppressing pods")
+
+	podEv := event.Event{PodName: "p", Namespace: "ns", NodeName: "node-1", Reason: "CrashLoopBackOff"}
+	_, action := e.Process(podEv, "dep", nil)
+	assert.Equal(t, model.ActionCreate, action)
+}
+
+func TestInhibitionRefreshKeepsFlagWithOtherIncidents(t *testing.T) {
+	e := NewEngine(Config{
+		Window:                    10 * time.Minute,
+		InhibitNodeSuppressesPods: true,
+	})
+	// Two disruptive conditions on the same node.
+	e.Process(event.Event{Resource: "node", PodName: "node-1", NodeName: "node-1", Reason: "NodeNotReady"}, "node-1", nil)
+	e.Process(event.Event{Resource: "node", PodName: "node-1", NodeName: "node-1", Reason: "NodeMemoryPressure"}, "node-1", nil)
+
+	// One condition resolves — the other still active must keep the flag.
+	e.MarkResolved(BuildKey("", "node-1", "NodeNotReady", ""))
+	e.RefreshNodeInhibition("node-1")
+	assert.True(t, e.activeNodeIncidents["node-1"], "remaining active node incident must keep suppression")
+
+	// Once the last active node incident resolves, the flag clears.
+	e.MarkResolved(BuildKey("", "node-1", "NodeMemoryPressure", ""))
+	e.RefreshNodeInhibition("node-1")
+	assert.False(t, e.activeNodeIncidents["node-1"])
 }
 
 func TestMarkResolvedIdempotent(t *testing.T) {
@@ -684,6 +886,42 @@ func TestResolveHoldDownDelaysResolve(t *testing.T) {
 	}
 }
 
+func TestCleanupFinalizesPendingResolveWithNotification(t *testing.T) {
+	fakeNow := time.Date(2025, 1, 1, 0, 0, 0, 0, time.UTC)
+	var resolves int
+	e := NewEngine(Config{
+		Window:          10 * time.Minute,
+		ResolveHoldDown: 20 * time.Minute,
+		LifecycleHook: func(inc *model.Incident, action model.IncidentAction) {
+			if action == model.ActionResolved {
+				resolves++
+			}
+		},
+	})
+	e.now = mockClock(fakeNow)
+
+	ev := event.Event{Namespace: "default", PodName: "pod-1", Reason: "CrashLoopBackOff"}
+	inc, action := e.Process(ev, "deploy-1", nil)
+	assert.Equal(t, model.ActionCreate, action)
+
+	// MarkResolved schedules the resolve (ResolveAt = +20m); no notify yet.
+	e.MarkResolved(inc.Key)
+	assert.Equal(t, 0, resolves)
+	if live := e.state[inc.Key]; live != nil {
+		assert.Equal(t, model.StatePendingResolve, live.State)
+	}
+
+	// Advance past the cleanup window (+10m) but before ResolveAt (+20m):
+	// cleanup reaps the incident first and must emit a resolved
+	// notification instead of silently dropping it.
+	fakeNow = fakeNow.Add(11 * time.Minute)
+	e.now = mockClock(fakeNow)
+	e.cleanup()
+
+	assert.Equal(t, 1, resolves, "cleanup must notify a resolved transition for pending-resolve incidents")
+	assert.Empty(t, e.state, "cleanup must remove the finalized incident")
+}
+
 func TestResolveHoldDownRevivesOnRecurrence(t *testing.T) {
 	fakeNow := time.Date(2025, 1, 1, 0, 0, 0, 0, time.UTC)
 	var resolves int
@@ -721,25 +959,38 @@ func TestResolveHoldDownRevivesOnRecurrence(t *testing.T) {
 	assert.Equal(t, 0, resolves, "hook must not fire")
 }
 
-func TestProcessResolvedIncidentCreatesFresh(t *testing.T) {
-	e := newTestEngine()
+func TestProcessResolvedIncidentSilentlyRevives(t *testing.T) {
+	fakeNow := time.Date(2025, 1, 1, 0, 0, 0, 0, time.UTC)
+	e := NewEngine(Config{
+		Window: 10 * time.Minute,
+	})
+	e.now = mockClock(fakeNow)
 
 	ev := event.Event{Namespace: "default", PodName: "pod-1", Reason: "CrashLoopBackOff"}
 	inc, action := e.Process(ev, "deploy-1", nil)
 	assert.Equal(t, model.ActionCreate, action)
 	key := inc.Key
 
-	// Immediately resolve
+	// Immediately resolve — MarkResolved also arms the cooldown.
 	e.MarkResolved(key)
 	live := e.state[key]
 	if live != nil {
 		assert.Equal(t, model.StateResolved, live.State)
 	}
 
-	// Process again — should create fresh (not update)
+	// Recurrence within cooldown — suppressed, no notification at all.
+	_, action = e.Process(ev, "deploy-1", nil)
+	assert.Equal(t, model.ActionSkip, action, "recurrence within cooldown must skip")
+
+	// Advance past the cooldown window, then recur again — the resolved
+	// incident must silently revive (ActionUpdate, not ActionCreate) to
+	// avoid a resolved→CREATE→resolved flip-flop.
+	fakeNow = fakeNow.Add(11 * time.Minute)
+	e.now = mockClock(fakeNow)
 	inc2, action := e.Process(ev, "deploy-1", nil)
-	assert.Equal(t, model.ActionCreate, action)
+	assert.Equal(t, model.ActionUpdate, action)
 	assert.Equal(t, key, inc2.Key)
+	assert.Equal(t, model.StateActive, inc2.State)
 }
 
 func TestIncidentKeyMatchesProcess(t *testing.T) {
@@ -827,7 +1078,7 @@ func TestPerPodBaselineNewPodAlerts(t *testing.T) {
 	e := newTestEngine()
 
 	key := BuildKey("default", "deploy-1", "CrashLoopBackOff", "")
-	e.SetSeen(map[string]map[string]int64{key: {"pod-1": time.Now().Unix()}})
+	e.SetBaseline(map[string]map[string]int64{string(key): {"pod-1": time.Now().Unix()}})
 
 	// pod-1 is baselined — should skip
 	ev1 := event.Event{Namespace: "default", PodName: "pod-1", Reason: "CrashLoopBackOff"}
@@ -840,13 +1091,13 @@ func TestPerPodBaselineNewPodAlerts(t *testing.T) {
 	assert.Equal(t, model.ActionCreate, action)
 }
 
-func TestClearSeenForPodIsPerPod(t *testing.T) {
+func TestClearBaselineForPodIsPerPod(t *testing.T) {
 	e := newTestEngine()
 
 	key := BuildKey("default", "deploy-1", "CrashLoopBackOff", "")
-	e.SetSeen(map[string]map[string]int64{key: {"pod-1": time.Now().Unix(), "pod-2": time.Now().Unix()}})
+	e.SetBaseline(map[string]map[string]int64{string(key): {"pod-1": time.Now().Unix(), "pod-2": time.Now().Unix()}})
 
-	e.ClearSeenForPod("default", "pod-1")
+	e.ClearBaselineForPod("default", "pod-1")
 
 	// pod-1 un-baselined → create
 	ev1 := event.Event{Namespace: "default", PodName: "pod-1", Reason: "CrashLoopBackOff"}
@@ -863,7 +1114,7 @@ func TestRemovePodReleasesBaseline(t *testing.T) {
 	e := newTestEngine()
 
 	key := BuildKey("default", "deploy-1", "CrashLoopBackOff", "")
-	e.SetSeen(map[string]map[string]int64{key: {"pod-1": time.Now().Unix()}})
+	e.SetBaseline(map[string]map[string]int64{string(key): {"pod-1": time.Now().Unix()}})
 
 	// RemovePod should release the baseline slot for pod-1
 	e.RemovePod("default", "pod-1")
@@ -873,29 +1124,69 @@ func TestRemovePodReleasesBaseline(t *testing.T) {
 	assert.Equal(t, model.ActionCreate, action)
 }
 
-func TestResolvedIncidentRecreatesOnce(t *testing.T) {
+func TestRemovePodReleasesBaselineScopedToNamespace(t *testing.T) {
 	e := newTestEngine()
+
+	keyA := BuildKey("ns-a", "dep-a", "CrashLoopBackOff", "")
+	keyB := BuildKey("ns-b", "dep-b", "CrashLoopBackOff", "")
+	e.SetBaseline(map[string]map[string]int64{
+		string(keyA): {"web": time.Now().Unix()},
+		string(keyB): {"web": time.Now().Unix()},
+	})
+
+	// Removing pod "web" from ns-a must not release the baseline slot for
+	// the identically-named pod in ns-b.
+	e.RemovePod("ns-a", "web")
+
+	assert.NotContains(t, e.baseline[string(keyA)], "web", "baseline for ns-a must be released")
+	if pods, ok := e.baseline[string(keyB)]; ok {
+		assert.Contains(t, pods, "web", "baseline for ns-b must survive")
+	} else {
+		t.Fatal("ns-b baseline key missing")
+	}
+
+	// ns-b pod still baselined → skip
+	ev := event.Event{Namespace: "ns-b", PodName: "web", Reason: "CrashLoopBackOff"}
+	_, action := e.Process(ev, "dep-b", nil)
+	assert.Equal(t, model.ActionSkip, action)
+
+	// ns-a pod un-baselined → create
+	ev2 := event.Event{Namespace: "ns-a", PodName: "web", Reason: "CrashLoopBackOff"}
+	_, action = e.Process(ev2, "dep-a", nil)
+	assert.Equal(t, model.ActionCreate, action)
+}
+
+func TestResolvedIncidentSilentlyRevives(t *testing.T) {
+	fakeNow := time.Date(2025, 1, 1, 0, 0, 0, 0, time.UTC)
+	e := NewEngine(Config{
+		Window: 10 * time.Minute,
+	})
+	e.now = mockClock(fakeNow)
 
 	ev := event.Event{Namespace: "default", PodName: "pod-1", Reason: "CrashLoopBackOff"}
 	inc, action := e.Process(ev, "deploy-1", nil)
 	assert.Equal(t, model.ActionCreate, action)
 	key := inc.Key
 
-	// Resolve
+	// Resolve (arms cooldown)
 	e.MarkResolved(key)
 	live := e.state[key]
 	if live != nil {
 		assert.Equal(t, model.StateResolved, live.State)
 	}
 
-	// First recurrence → ActionCreate and stored
+	// Advance past the cooldown window so the revival path is exercised.
+	fakeNow = fakeNow.Add(11 * time.Minute)
+	e.now = mockClock(fakeNow)
+
+	// First recurrence → ActionUpdate (silent revival, not re-create)
 	ev2 := event.Event{Namespace: "default", PodName: "pod-2", Reason: "CrashLoopBackOff"}
 	_, action = e.Process(ev2, "deploy-1", nil)
-	assert.Equal(t, model.ActionCreate, action)
+	assert.Equal(t, model.ActionUpdate, action)
 
-	// Second recurrence within cooldown → ActionSkip (cooldown on the new incident)
+	// Second recurrence → ActionSkip (same sig, no change)
 	_, action = e.Process(ev2, "deploy-1", nil)
-	assert.Equal(t, model.ActionSkip, action, "must respect cooldown on the re-created incident, NOT re-create again")
+	assert.Equal(t, model.ActionSkip, action)
 }
 
 func TestPendingReviveSkips(t *testing.T) {
@@ -944,7 +1235,7 @@ func TestRemovePodEvictsLastContainerIndex(t *testing.T) {
 	}
 	e.Process(ev, "deploy-1", cs)
 
-	key := "default/pod-1"
+	key := "default/pod-1/."
 	assert.Contains(t, e.lastContainerIndex, key)
 	assert.NotNil(t, e.lastContainerIndex[key])
 	assert.Equal(t, int32(3), e.lastContainerIndex[key].RestartCount)
@@ -955,6 +1246,36 @@ func TestRemovePodEvictsLastContainerIndex(t *testing.T) {
 	assert.NotContains(t, e.lastContainerIndex, key)
 	assert.Equal(t, before-1, len(e.lastContainerIndex))
 	assert.Nil(t, e.GetLastContainerState("default", "pod-1", "."))
+}
+
+func TestLastContainerStateKeyedByContainer(t *testing.T) {
+	e := newTestEngine()
+
+	// Two containers in the same pod with different restart counts must
+	// not clobber each other's tracked state.
+	evApp := event.Event{
+		PodName:       "pod-1",
+		Namespace:     "default",
+		ContainerName: "app",
+		Reason:        "CrashLoopBackOff",
+	}
+	evSidecar := event.Event{
+		PodName:       "pod-1",
+		Namespace:     "default",
+		ContainerName: "sidecar",
+		Reason:        "CrashLoopBackOff",
+	}
+	e.Process(evApp, "deploy-1", &model.ContainerState{RestartCount: 9, Reason: "Error", Status: "terminated"})
+	e.Process(evSidecar, "deploy-1", &model.ContainerState{RestartCount: 1, Reason: "Error", Status: "terminated"})
+
+	app := e.GetLastContainerState("default", "pod-1", "app")
+	if assert.NotNil(t, app) {
+		assert.Equal(t, int32(9), app.RestartCount, "app container state must not be overwritten by sidecar")
+	}
+	sidecar := e.GetLastContainerState("default", "pod-1", "sidecar")
+	if assert.NotNil(t, sidecar) {
+		assert.Equal(t, int32(1), sidecar.RestartCount)
+	}
 }
 
 // ── Node baseline / cooldown / suppression tests ──────────────────
@@ -969,7 +1290,7 @@ func TestNodeEventSkipsBaseline(t *testing.T) {
 
 	// Seed a baseline entry for the node condition (simulating buildSeenSet)
 	incidentKey := BuildKey("", "node-1", "NodeNotReady", "")
-	e.SetSeen(map[string]map[string]int64{incidentKey: {"node-1": fakeNow.Unix()}})
+	e.SetBaseline(map[string]map[string]int64{string(incidentKey): {"node-1": fakeNow.Unix()}})
 
 	// Node event with same key — should NOT be baselined
 	ev := event.Event{Resource: "node", PodName: "node-1", NodeName: "node-1", Reason: "NodeNotReady"}
@@ -1030,6 +1351,33 @@ func TestCleanupCooldownSuppressesRecreate(t *testing.T) {
 	assert.True(t, expiry.After(fakeNow))
 
 	// Same event re-arrives — should be suppressed by cooldown
+	_, action = e.Process(ev, "dep", nil)
+	assert.Equal(t, model.ActionSkip, action)
+}
+
+func TestMarkResolvedSetsCooldown(t *testing.T) {
+	fakeNow := time.Date(2025, 1, 1, 0, 0, 0, 0, time.UTC)
+	e := NewEngine(Config{
+		Window: 10 * time.Minute,
+	})
+	e.now = mockClock(fakeNow)
+
+	// Create incident
+	ev := event.Event{PodName: "pod-1", Namespace: "ns", Reason: "CrashLoopBackOff"}
+	inc, action := e.Process(ev, "dep", nil)
+	assert.Equal(t, model.ActionCreate, action)
+
+	// MarkResolved (no hold-down) must add a cooldown, same as
+	// cleanup()/checkLifecycle/ResolveByResource do.
+	e.MarkResolved(inc.Key)
+
+	e.mu.Lock()
+	expiry, hasCooldown := e.cleanupCooldown[inc.Key]
+	e.mu.Unlock()
+	assert.True(t, hasCooldown, "MarkResolved must set cleanupCooldown")
+	assert.True(t, expiry.After(fakeNow))
+
+	// Same event re-arrives — suppressed by the cooldown, no flip-flop update.
 	_, action = e.Process(ev, "dep", nil)
 	assert.Equal(t, model.ActionSkip, action)
 }
@@ -1201,7 +1549,7 @@ func TestSnapshotAllRestoreIncidentsRoundTrip(t *testing.T) {
 	// Restore into a fresh engine with matching baseline
 	e2 := NewEngine(Config{
 		Window:   10 * time.Minute,
-		Baseline: map[string]map[string]int64{inc.Key: {"pod-1": time.Now().Unix()}},
+		Baseline: map[string]map[string]int64{string(inc.Key): {"pod-1": time.Now().Unix()}},
 	})
 	e2.RestoreIncidents(snap)
 	assert.Equal(t, 1, e2.ActiveCount())
@@ -1216,6 +1564,101 @@ func TestSnapshotAllRestoreIncidentsRoundTrip(t *testing.T) {
 	assert.False(t, restored.LastSeen.IsZero())
 }
 
+func TestSnapshotPersistedRoundTrip(t *testing.T) {
+	e := NewEngine(Config{
+		Window: 10 * time.Minute,
+	})
+	ev := event.Event{PodName: "pod-1", Namespace: "ns", Reason: "CrashLoopBackOff"}
+	inc, _ := e.Process(ev, "dep", &model.ContainerState{RestartCount: 2})
+	require.NotNil(t, inc)
+
+	snap := e.SnapshotPersisted()
+	require.NotNil(t, snap)
+	require.Len(t, snap, 1)
+	assert.Equal(t, inc.Key, snap[0].Key)
+	assert.Equal(t, inc.Reason, snap[0].Reason)
+	assert.Equal(t, inc.State, snap[0].State)
+
+	e2 := NewEngine(Config{
+		Window:   10 * time.Minute,
+		Baseline: map[string]map[string]int64{string(inc.Key): {"pod-1": time.Now().Unix()}},
+	})
+	restored := make(map[model.IncidentKey]*model.Incident, len(snap))
+	for i := range snap {
+		restored[snap[i].Key] = snap[i].ToIncident()
+	}
+	e2.RestoreIncidents(restored)
+	assert.Equal(t, 1, e2.ActiveCount())
+}
+
+func TestMassFailurePersistenceRoundTrip(t *testing.T) {
+	e := NewEngine(Config{
+		Window: 10 * time.Minute,
+	})
+	mfKey := MassFailureKey("configmap/ns/app-cfg")
+	created := e.AddMassFailure(&model.Incident{
+		Key:       mfKey,
+		Reason:    "CrashLoopBackOff",
+		Namespace: "ns",
+		Resource:  "pod",
+		Name:      "configmap/ns/app-cfg",
+		State:     model.StateActive,
+	})
+	assert.True(t, created)
+	assert.True(t, e.HasMassFailure(mfKey))
+	// Duplicate add is a no-op.
+	assert.False(t, e.AddMassFailure(&model.Incident{Key: mfKey}))
+
+	snap := e.SnapshotPersisted()
+	require.NotNil(t, snap)
+	keys := make([]model.IncidentKey, 0, len(snap))
+	for i := range snap {
+		keys = append(keys, snap[i].Key)
+	}
+	assert.Contains(t, keys, mfKey)
+
+	// Restore into a fresh engine WITHOUT any baseline: mass failures bypass
+	// the baseline gate, so they survive restarts.
+	e2 := NewEngine(Config{Window: 10 * time.Minute})
+	restored := make(map[model.IncidentKey]*model.Incident, len(snap))
+	for i := range snap {
+		restored[snap[i].Key] = snap[i].ToIncident()
+	}
+	e2.RestoreIncidents(restored)
+	assert.True(t, e2.HasMassFailure(mfKey))
+
+	// Removing it clears the store.
+	assert.True(t, e2.RemoveMassFailure(mfKey))
+	assert.False(t, e2.HasMassFailure(mfKey))
+	assert.False(t, e2.RemoveMassFailure(mfKey))
+}
+
+func TestMassFailureKeyHelpers(t *testing.T) {
+	assert.True(t, IsMassFailureKey(MassFailureKey("node//n1")))
+	assert.False(t, IsMassFailureKey("ns:dep:CrashLoopBackOff:"))
+
+	parts := ParseKey(MassFailureKey("configmap/ns/app-cfg"))
+	assert.True(t, parts.IsMassFailure)
+	assert.Equal(t, "configmap/ns/app-cfg", parts.MassDependencyKey)
+
+	// Non mass-failure keys parse as before.
+	normal := ParseKey("ns:dep:CrashLoopBackOff:")
+	assert.False(t, normal.IsMassFailure)
+}
+
+func TestMassFailureSetClone(t *testing.T) {
+	e := NewEngine(Config{Window: 10 * time.Minute})
+	e.AddMassFailure(&model.Incident{Key: MassFailureKey("node//n1"), Reason: "NotReady", Resource: "node", State: model.StateActive})
+
+	snap := e.MassFailureSet()
+	require.Len(t, snap, 1)
+	// Mutating the snapshot must not corrupt the store.
+	for _, inc := range snap {
+		inc.State = model.StateResolved
+	}
+	assert.True(t, e.HasMassFailure(MassFailureKey("node//n1")))
+}
+
 func TestSnapshotAllEmpty(t *testing.T) {
 	e := NewEngine(Config{
 		Window: 10 * time.Minute,
@@ -1223,6 +1666,25 @@ func TestSnapshotAllEmpty(t *testing.T) {
 	snap := e.SnapshotAll()
 	// No incidents processed so dirty=false and SnapshotAll returns nil
 	assert.Nil(t, snap)
+}
+
+func TestActiveIncidentsDoesNotClearDirty(t *testing.T) {
+	e := NewEngine(Config{
+		Window: 10 * time.Minute,
+	})
+	ev := event.Event{PodName: "pod-1", Namespace: "ns", Reason: "CrashLoopBackOff"}
+	_, _ = e.Process(ev, "dep", &model.ContainerState{RestartCount: 1})
+
+	// Multiple consumers within a tick: ActiveIncidents must behave the same
+	// for every call AND leave SnapshotAll able to report the incident.
+	first := e.ActiveIncidents()
+	require.Len(t, first, 1)
+	second := e.ActiveIncidents()
+	require.Len(t, second, 1)
+	assert.Equal(t, first, second)
+
+	snap := e.SnapshotAll()
+	require.Len(t, snap, 1)
 }
 
 func TestRestoreIncidentsBumpsLastSeen(t *testing.T) {
@@ -1239,7 +1701,7 @@ func TestRestoreIncidentsBumpsLastSeen(t *testing.T) {
 	snap := e.SnapshotAll()
 	e2 := NewEngine(Config{
 		Window:   10 * time.Minute,
-		Baseline: map[string]map[string]int64{inc.Key: {"pod-1": time.Now().Unix()}},
+		Baseline: map[string]map[string]int64{string(inc.Key): {"pod-1": time.Now().Unix()}},
 	})
 	e2.RestoreIncidents(snap)
 
@@ -1422,7 +1884,7 @@ func TestIsOwnerHealthyDaemonSetUnhealthy(t *testing.T) {
 	assert.False(t, e.isOwnerHealthy(inc))
 }
 
-func TestClearSeenForPodClearsCooldown(t *testing.T) {
+func TestClearBaselineForPodClearsCooldown(t *testing.T) {
 	fakeNow := time.Date(2025, 1, 1, 0, 0, 0, 0, time.UTC)
 	e := NewEngine(Config{
 		Window: 10 * time.Minute,
@@ -1436,14 +1898,14 @@ func TestClearSeenForPodClearsCooldown(t *testing.T) {
 	e.cleanupCooldown[key] = fakeNow.Add(10 * time.Minute)
 	e.mu.Unlock()
 
-	// ClearSeenForPod for the pod's namespace
-	e.ClearSeenForPod("ns", "pod-1")
+	// ClearBaselineForPod for the pod's namespace
+	e.ClearBaselineForPod("ns", "pod-1")
 
 	// Cooldown should be cleared
 	e.mu.Lock()
 	_, exists := e.cleanupCooldown[key]
 	e.mu.Unlock()
-	assert.False(t, exists, "cooldown should be cleared by ClearSeenForPod")
+	assert.False(t, exists, "cooldown should be cleared by ClearBaselineForPod")
 }
 
 // ── Smart grouping (reason-adaptive) tests ─────────────────────────
@@ -1483,7 +1945,7 @@ func TestSmartGroupingFlushAfterWindow(t *testing.T) {
 
 	var groupInc *model.Incident
 	e.config.LifecycleHook = func(inc *model.Incident, action model.IncidentAction) {
-		if strings.HasPrefix(inc.Key, "__group__") {
+		if IsGroupKey(inc.Key) {
 			groupInc = inc
 		}
 	}
@@ -1505,7 +1967,7 @@ func TestSmartGroupingDifferentReasonsSeparate(t *testing.T) {
 
 	var groups int
 	e.config.LifecycleHook = func(inc *model.Incident, action model.IncidentAction) {
-		if strings.HasPrefix(inc.Key, "__group__") {
+		if IsGroupKey(inc.Key) {
 			groups++
 		}
 	}
@@ -1525,7 +1987,7 @@ func TestSmartGroupingResolvedNotIncluded(t *testing.T) {
 
 	var groupCount int
 	e.config.LifecycleHook = func(inc *model.Incident, action model.IncidentAction) {
-		if strings.HasPrefix(inc.Key, "__group__") {
+		if IsGroupKey(inc.Key) {
 			groupCount++
 		}
 	}
@@ -1578,7 +2040,7 @@ func TestSmartGroupingPendingGroupCleanedAfterFlush(t *testing.T) {
 	e.checkLifecycle()
 
 	e.mu.Lock()
-	pg, exists := e.pendingGroups["CrashLoopBackOff|ns|dep1"]
+	pg, exists := e.groupBuffers["CrashLoopBackOff|ns|dep1"]
 	e.mu.Unlock()
 	assert.False(t, exists, "pending group must be deleted after flush")
 	require.Nil(t, pg)
@@ -1593,6 +2055,241 @@ func TestSmartGroupingIncidentHasNotifiedSig(t *testing.T) {
 	assert.NotZero(t, inc.LastNotifiedAt, "LastNotifiedAt must be set")
 }
 
+func TestSmartGroupingReFlushUpdateNotCreate(t *testing.T) {
+	now := time.Date(2025, 1, 1, 0, 0, 0, 0, time.UTC)
+	e := newSmartGroupingEngine()
+	e.now = mockClock(now)
+
+	e.Process(event.Event{PodName: "p1", Namespace: "ns", Reason: "CrashLoopBackOff"}, "dep1", nil)
+
+	var groupInc *model.Incident
+	var groupAction model.IncidentAction
+	var groupActions int
+	e.config.LifecycleHook = func(inc *model.Incident, action model.IncidentAction) {
+		if IsGroupKey(inc.Key) {
+			groupInc = inc
+			groupAction = action
+			groupActions++
+		}
+	}
+
+	e.now = mockClock(now.Add(61 * time.Second))
+	e.checkLifecycle()
+	require.Equal(t, 1, groupActions)
+	require.Equal(t, model.ActionCreate, groupAction)
+	key := groupInc.Key
+
+	// Re-arm the buffer with more events on the same group.
+	e.Process(event.Event{PodName: "p2", Namespace: "ns", Reason: "CrashLoopBackOff"}, "dep1", nil)
+
+	// Flush again past the renotify cooldown: same key, UPDATE not CREATE.
+	e.now = mockClock(now.Add(7 * time.Minute))
+	e.checkLifecycle()
+
+	require.Equal(t, 2, groupActions)
+	assert.Equal(t, key, groupInc.Key, "re-flush must keep the stable group key")
+	assert.Equal(t, model.ActionUpdate, groupAction, "re-flush must emit an update, not a create")
+}
+
+func TestSmartGroupingReFlushCooldownSuppresses(t *testing.T) {
+	now := time.Date(2025, 1, 1, 0, 0, 0, 0, time.UTC)
+	e := newSmartGroupingEngine()
+	e.now = mockClock(now)
+
+	e.Process(event.Event{PodName: "p1", Namespace: "ns", Reason: "CrashLoopBackOff"}, "dep1", nil)
+
+	var groupCalls int
+	e.config.LifecycleHook = func(inc *model.Incident, action model.IncidentAction) {
+		if IsGroupKey(inc.Key) {
+			groupCalls++
+		}
+	}
+
+	e.now = mockClock(now.Add(61 * time.Second))
+	e.checkLifecycle()
+	assert.Equal(t, 1, groupCalls)
+
+	// Re-arm the buffer and flush within the cooldown: no re-notification.
+	e.Process(event.Event{PodName: "p2", Namespace: "ns", Reason: "CrashLoopBackOff"}, "dep1", nil)
+	e.now = mockClock(now.Add(122 * time.Second))
+	e.checkLifecycle()
+	assert.Equal(t, 1, groupCalls, "re-flush within the cooldown must not re-notify")
+}
+
+func TestSmartGroupingReGroupAfterCooldownSkip(t *testing.T) {
+	now := time.Date(2025, 1, 1, 0, 0, 0, 0, time.UTC)
+	e := newSmartGroupingEngine()
+	e.now = mockClock(now)
+
+	e.Process(event.Event{PodName: "p1", Namespace: "ns", Reason: "CrashLoopBackOff"}, "dep1", nil)
+
+	var groupCalls int
+	e.config.LifecycleHook = func(inc *model.Incident, action model.IncidentAction) {
+		if IsGroupKey(inc.Key) {
+			groupCalls++
+		}
+	}
+
+	// First flush emits CREATE and resets the member's NotifiedSig.
+	e.now = mockClock(now.Add(61 * time.Second))
+	e.checkLifecycle()
+	require.Equal(t, 1, groupCalls)
+
+	// Re-arm with the same member and flush within the renotify cooldown:
+	// suppressed, but the member must remain re-groupable afterward.
+	e.Process(event.Event{PodName: "p1", Namespace: "ns", Reason: "CrashLoopBackOff"}, "dep1", nil)
+	e.now = mockClock(now.Add(122 * time.Second))
+	e.checkLifecycle()
+	require.Equal(t, 1, groupCalls, "re-flush within the cooldown must not re-notify")
+
+	// The suppressed flush must reset NotifiedSig so the member can re-enter
+	// the buffer; once the cooldown lapses the recurring flush must emit an
+	// UPDATE rather than staying silent forever.
+	e.Process(event.Event{PodName: "p1", Namespace: "ns", Reason: "CrashLoopBackOff"}, "dep1", nil)
+	e.now = mockClock(now.Add(400 * time.Second))
+	e.checkLifecycle()
+	assert.Equal(t, 2, groupCalls, "group must resume UPDATE notifications after the cooldown lapses")
+}
+
+func TestSmartGroupingFoldRekeysMember(t *testing.T) {
+	now := time.Date(2025, 1, 1, 0, 0, 0, 0, time.UTC)
+	e := newSmartGroupingEngine()
+	e.now = mockClock(now)
+
+	sigLog := "connection refused:5432"
+	e.Process(event.Event{PodName: "p1", Namespace: "ns", Reason: "CrashLoopBackOff", Logs: sigLog}, "dep1", nil)
+	e.Process(event.Event{PodName: "p2", Namespace: "ns", Reason: "CrashLoopBackOff", Logs: sigLog}, "dep2", nil)
+
+	var actions []model.IncidentAction
+	e.config.LifecycleHook = func(inc *model.Incident, action model.IncidentAction) {
+		if IsGroupKey(inc.Key) {
+			actions = append(actions, action)
+		}
+	}
+
+	e.now = mockClock(now.Add(61 * time.Second))
+	e.checkLifecycle()
+	require.Equal(t, []model.IncidentAction{model.ActionCreate}, actions)
+
+	// Member dep1 crosses the high-frequency threshold → folded. The incident
+	// is migrated to the folded key (not dropped), so the group keeps tracking
+	// it under the new key instead of being released early.
+	cs := &model.ContainerState{RestartCount: 6}
+	e.Process(event.Event{PodName: "p1", Namespace: "ns", Reason: "CrashLoopBackOff", Logs: sigLog}, "dep1", cs)
+
+	_, ok := e.state["ns:dep1:CrashLoopHighFrequency:"]
+	require.True(t, ok, "folded incident must migrate to the folded key")
+	_, ok = e.state["ns:dep1:CrashLoopBackOff:"]
+	require.False(t, ok, "old key must be gone")
+	require.Equal(t, []model.IncidentAction{model.ActionCreate}, actions,
+		"fold must not resolve or re-notify the group")
+
+	// Resolving only dep2 must not resolve the group — dep1 is still crashing
+	// under its folded key.
+	e.MarkResolved("ns:dep2:CrashLoopBackOff:")
+	require.Equal(t, []model.IncidentAction{model.ActionCreate}, actions)
+
+	// Resolving dep1 (folded key) resolves the whole group.
+	e.MarkResolved("ns:dep1:CrashLoopHighFrequency:")
+	require.Equal(t, []model.IncidentAction{model.ActionCreate, model.ActionResolved}, actions)
+}
+
+func TestSmartGroupingFoldRekeysAllMembers(t *testing.T) {
+	now := time.Date(2025, 1, 1, 0, 0, 0, 0, time.UTC)
+	e := newSmartGroupingEngine()
+	e.now = mockClock(now)
+
+	sigLog := "connection refused:5432"
+	e.Process(event.Event{PodName: "p1", Namespace: "ns", Reason: "CrashLoopBackOff", Logs: sigLog}, "dep1", nil)
+	e.Process(event.Event{PodName: "p2", Namespace: "ns", Reason: "CrashLoopBackOff", Logs: sigLog}, "dep2", nil)
+
+	var actions []model.IncidentAction
+	e.config.LifecycleHook = func(inc *model.Incident, action model.IncidentAction) {
+		if IsGroupKey(inc.Key) {
+			actions = append(actions, action)
+		}
+	}
+
+	e.now = mockClock(now.Add(61 * time.Second))
+	e.checkLifecycle()
+	require.Equal(t, []model.IncidentAction{model.ActionCreate}, actions)
+
+	// Both members fold → both migrate to folded keys. The group still tracks
+	// them (the loops are ongoing), so it must NOT resolve.
+	cs := &model.ContainerState{RestartCount: 6}
+	e.Process(event.Event{PodName: "p1", Namespace: "ns", Reason: "CrashLoopBackOff", Logs: sigLog}, "dep1", cs)
+	e.Process(event.Event{PodName: "p2", Namespace: "ns", Reason: "CrashLoopBackOff", Logs: sigLog}, "dep2", cs)
+	require.Equal(t, []model.IncidentAction{model.ActionCreate}, actions,
+		"folding must not resolve the group synchronously")
+
+	e.now = mockClock(now.Add(90 * time.Second))
+	e.checkLifecycle()
+	require.Equal(t, []model.IncidentAction{model.ActionCreate}, actions,
+		"folding must not resolve the group on the next tick either")
+}
+
+func TestResolveByResourceReleasesGroupMember(t *testing.T) {
+	now := time.Date(2025, 1, 1, 0, 0, 0, 0, time.UTC)
+	e := newSmartGroupingEngine()
+	e.now = mockClock(now)
+
+	sigLog := "connection refused:5432"
+	e.Process(event.Event{PodName: "p1", Namespace: "ns", Reason: "CrashLoopBackOff", Logs: sigLog}, "dep1", nil)
+	e.Process(event.Event{PodName: "p2", Namespace: "ns", Reason: "CrashLoopBackOff", Logs: sigLog}, "dep2", nil)
+
+	var actions []model.IncidentAction
+	e.config.LifecycleHook = func(inc *model.Incident, action model.IncidentAction) {
+		if IsGroupKey(inc.Key) {
+			actions = append(actions, action)
+		}
+	}
+
+	e.now = mockClock(now.Add(61 * time.Second))
+	e.checkLifecycle()
+	require.Equal(t, []model.IncidentAction{model.ActionCreate}, actions)
+
+	// Resolving one member via ResolveByResource must not emit a group
+	// resolve until every member has resolved.
+	e.ResolveByResource("pod", "dep2")
+	require.Equal(t, []model.IncidentAction{model.ActionCreate}, actions, "group not fully resolved yet")
+
+	e.ResolveByResource("pod", "dep1")
+	require.Equal(t, []model.IncidentAction{model.ActionCreate, model.ActionResolved}, actions)
+}
+
+func TestSmartGroupingNewOccurrenceCreatesAgain(t *testing.T) {
+	now := time.Date(2025, 1, 1, 0, 0, 0, 0, time.UTC)
+	e := newSmartGroupingEngine()
+	e.now = mockClock(now)
+
+	e.Process(event.Event{PodName: "p1", Namespace: "ns", Reason: "CrashLoopBackOff"}, "dep1", nil)
+
+	var actions []model.IncidentAction
+	e.config.LifecycleHook = func(inc *model.Incident, action model.IncidentAction) {
+		if IsGroupKey(inc.Key) {
+			actions = append(actions, action)
+		}
+	}
+
+	e.now = mockClock(now.Add(61 * time.Second))
+	e.checkLifecycle()
+	require.Equal(t, []model.IncidentAction{model.ActionCreate}, actions)
+
+	// All members resolve → batch group resolve resets the flush state.
+	e.MarkResolved("ns:dep1:CrashLoopBackOff:")
+	require.Equal(t, []model.IncidentAction{model.ActionCreate, model.ActionResolved}, actions)
+
+	// A new occurrence of the same group (after the member cooldown) must
+	// CREATE again rather than updating the previously-resolved key.
+	e.now = mockClock(now.Add(11*time.Minute + 2*time.Second))
+	e.Process(event.Event{PodName: "p2", Namespace: "ns", Reason: "CrashLoopBackOff"}, "dep1", nil)
+	e.now = mockClock(now.Add(12*time.Minute + 5*time.Second))
+	e.checkLifecycle()
+
+	require.Len(t, actions, 3)
+	assert.Equal(t, model.ActionCreate, actions[2])
+}
+
 // ── Reason-adaptive scope tests ────────────────────────────────────
 
 func TestSmartGroupingOwnerScope(t *testing.T) {
@@ -1601,8 +2298,8 @@ func TestSmartGroupingOwnerScope(t *testing.T) {
 	e.Process(event.Event{PodName: "p2", Namespace: "ns", Reason: "OOMKilled"}, "dep2", nil)
 
 	e.mu.Lock()
-	_, has1 := e.pendingGroups["OOMKilled|ns|dep1"]
-	_, has2 := e.pendingGroups["OOMKilled|ns|dep2"]
+	_, has1 := e.groupBuffers["OOMKilled|ns|dep1"]
+	_, has2 := e.groupBuffers["OOMKilled|ns|dep2"]
 	e.mu.Unlock()
 	assert.True(t, has1, "dep1 owner-scoped group must exist")
 	assert.True(t, has2, "dep2 owner-scoped group must exist")
@@ -1614,8 +2311,8 @@ func TestSmartGroupingNodeScope(t *testing.T) {
 	e.Process(event.Event{PodName: "node-2", Resource: "node", NodeName: "node-2", Reason: "DiskPressure"}, "node-2", nil)
 
 	e.mu.Lock()
-	_, has1 := e.pendingGroups["DiskPressure|node|node-1"]
-	_, has2 := e.pendingGroups["DiskPressure|node|node-2"]
+	_, has1 := e.groupBuffers["DiskPressure|node|node-1"]
+	_, has2 := e.groupBuffers["DiskPressure|node|node-2"]
 	e.mu.Unlock()
 	assert.True(t, has1, "node-1 group must exist")
 	assert.True(t, has2, "node-2 group must exist")
@@ -1629,7 +2326,7 @@ func TestSmartGroupingSignatureScope(t *testing.T) {
 
 	gk := "CrashLoopBackOff|sig|Postgres unreachable — check the DB Service/endpoints + connection string."
 	e.mu.Lock()
-	pg, ok := e.pendingGroups[gk]
+	pg, ok := e.groupBuffers[gk]
 	e.mu.Unlock()
 	require.True(t, ok, "signature-scoped group must exist")
 	assert.Equal(t, 2, len(pg.entries), "both owners in same signature group")
@@ -1642,9 +2339,9 @@ func TestSmartGroupingSignatureFallback(t *testing.T) {
 	e.Process(event.Event{PodName: "p2", Namespace: "ns", Reason: "CrashLoopBackOff"}, "dep2", nil)
 
 	e.mu.Lock()
-	_, has1 := e.pendingGroups["CrashLoopBackOff|ns|dep1"]
-	_, has2 := e.pendingGroups["CrashLoopBackOff|ns|dep2"]
-	_, hasSig := e.pendingGroups["CrashLoopBackOff|sig|"]
+	_, has1 := e.groupBuffers["CrashLoopBackOff|ns|dep1"]
+	_, has2 := e.groupBuffers["CrashLoopBackOff|ns|dep2"]
+	_, hasSig := e.groupBuffers["CrashLoopBackOff|sig|"]
 	e.mu.Unlock()
 	assert.True(t, has1, "dep1 owner-scoped fallback must exist")
 	assert.True(t, has2, "dep2 owner-scoped fallback must exist")
@@ -1667,7 +2364,7 @@ func TestSmartGroupingImagePerImage(t *testing.T) {
 
 	e.mu.Lock()
 	gk := "ImagePullBackOff|img|nginx:latest|ns|ns"
-	pg, ok := e.pendingGroups[gk]
+	pg, ok := e.groupBuffers[gk]
 	e.mu.Unlock()
 	require.True(t, ok, "image-scoped group must exist")
 	assert.Equal(t, 2, len(pg.entries))
@@ -1689,7 +2386,7 @@ func TestSmartGroupingImageGlobal(t *testing.T) {
 
 	e.mu.Lock()
 	gk := "ImagePullBackOff|global|rate_limit"
-	pg, ok := e.pendingGroups[gk]
+	pg, ok := e.groupBuffers[gk]
 	e.mu.Unlock()
 	require.True(t, ok, "global rate_limit group must exist")
 	// Both pods map to the same global key => single entry
@@ -1712,7 +2409,7 @@ func TestSmartGroupingImageAuth(t *testing.T) {
 
 	e.mu.Lock()
 	gk := "ImagePullBackOff|ns|ns"
-	pg, ok := e.pendingGroups[gk]
+	pg, ok := e.groupBuffers[gk]
 	e.mu.Unlock()
 	require.True(t, ok, "auth ns-scoped group must exist")
 	assert.Equal(t, 2, len(pg.entries))
@@ -1724,8 +2421,8 @@ func TestSmartGroupingNamespaceScope(t *testing.T) {
 	e.Process(event.Event{PodName: "p2", Namespace: "ns2", Reason: "CreateContainerConfigError"}, "dep2", nil)
 
 	e.mu.Lock()
-	_, has1 := e.pendingGroups["CreateContainerConfigError|ns|ns"]
-	_, has2 := e.pendingGroups["CreateContainerConfigError|ns|ns2"]
+	_, has1 := e.groupBuffers["CreateContainerConfigError|ns|ns"]
+	_, has2 := e.groupBuffers["CreateContainerConfigError|ns|ns2"]
 	e.mu.Unlock()
 	assert.True(t, has1, "ns group must exist")
 	assert.True(t, has2, "ns2 group must exist")
@@ -1737,8 +2434,8 @@ func TestSmartGroupingCrossNamespace(t *testing.T) {
 	e.Process(event.Event{PodName: "p2", Namespace: "ns2", Reason: "OOMKilled"}, "dep1", nil)
 
 	e.mu.Lock()
-	_, has1 := e.pendingGroups["OOMKilled|ns1|dep1"]
-	_, has2 := e.pendingGroups["OOMKilled|ns2|dep1"]
+	_, has1 := e.groupBuffers["OOMKilled|ns1|dep1"]
+	_, has2 := e.groupBuffers["OOMKilled|ns2|dep1"]
 	e.mu.Unlock()
 	assert.True(t, has1, "ns1 group must exist")
 	assert.True(t, has2, "ns2 group must exist")
@@ -1760,7 +2457,7 @@ func TestSmartGroupingEntryLimit(t *testing.T) {
 	}
 
 	e.mu.Lock()
-	pg, ok := e.pendingGroups[gk]
+	pg, ok := e.groupBuffers[gk]
 	e.mu.Unlock()
 	require.True(t, ok, "pending group must exist")
 	assert.Equal(t, maxGroupEntries, len(pg.entries), "entries must be capped")
@@ -1784,7 +2481,7 @@ func TestSmartGroupingSeverityInheritance(t *testing.T) {
 
 	var groupInc *model.Incident
 	e.config.LifecycleHook = func(inc *model.Incident, action model.IncidentAction) {
-		if strings.HasPrefix(inc.Key, "__group__") {
+		if IsGroupKey(inc.Key) {
 			groupInc = inc
 		}
 	}
@@ -1793,7 +2490,7 @@ func TestSmartGroupingSeverityInheritance(t *testing.T) {
 	e.checkLifecycle()
 
 	require.NotNil(t, groupInc, "group summary must be emitted")
-	assert.Equal(t, "critical", groupInc.Severity, "group must inherit highest severity")
+	assert.Equal(t, model.SeverityCritical, groupInc.Severity, "group must inherit highest severity")
 }
 
 // --- mock service lister ---
@@ -2145,33 +2842,13 @@ func TestClassifyImagePullScope(t *testing.T) {
 }
 
 func TestSeverityRank(t *testing.T) {
-	assert.Equal(t, 3, severityRank("critical"))
-	assert.Equal(t, 2, severityRank("high"))
-	assert.Equal(t, 1, severityRank("medium"))
-	assert.Equal(t, 0, severityRank("normal"))
-	assert.Equal(t, 0, severityRank(""))
-	assert.Equal(t, 0, severityRank("unknown"))
-}
-
-func TestBaselineSnapshot(t *testing.T) {
-	e := NewEngine(Config{
-		Window:      10 * time.Minute,
-		BaselineTTL: 10 * time.Minute,
-	})
-	snap := e.BaselineSnapshot()
-	assert.NotNil(t, snap)
-
-	ts := time.Now().Unix()
-	e.SetSeen(map[string]map[string]int64{
-		"ns:dep:Err:": {"sig-1": ts},
-	})
-	snap = e.BaselineSnapshot()
-	assert.Equal(t, ts, snap["ns:dep:Err:"]["sig-1"])
-
-	// Verify isolation: mutate returned map's inner entry
-	snap["ns:dep:Err:"]["sig-1"] = 999
-	snap2 := e.BaselineSnapshot()
-	assert.Equal(t, ts, snap2["ns:dep:Err:"]["sig-1"])
+	assert.Equal(t, 3, model.SeverityCritical.Rank())
+	assert.Equal(t, 2, model.SeverityHigh.Rank())
+	assert.Equal(t, 1, model.SeverityMedium.Rank())
+	assert.Equal(t, 1, model.SeverityWarning.Rank(), "warning must rank above normal for sticky escalation")
+	assert.Equal(t, 0, model.SeverityNormal.Rank())
+	assert.Equal(t, 0, model.Severity("").Rank())
+	assert.Equal(t, 0, model.Severity("unknown").Rank())
 }
 
 func TestCountActiveNodeIncidents(t *testing.T) {
@@ -2183,37 +2860,6 @@ func TestCountActiveNodeIncidents(t *testing.T) {
 
 	e2 := newTestEngine()
 	assert.Equal(t, 0, e2.CountActiveNodeIncidents())
-}
-
-func TestSetAnalysis(t *testing.T) {
-	e := newTestEngine()
-	ev := event.Event{PodName: "p1", Namespace: "ns", Reason: "CrashLoopBackOff"}
-	inc, _ := e.Process(ev, "dep1", nil)
-
-	e.SetAnalysis(inc.Key, "root cause found")
-	e.mu.Lock()
-	assert.Equal(t, "root cause found", e.state[inc.Key].Analysis)
-	e.mu.Unlock()
-
-	// No-op for non-existent key
-	e.SetAnalysis("nonexistent", "should not panic")
-}
-
-func TestGetIncidentsByNamespace(t *testing.T) {
-	e := newTestEngine()
-	e.Process(event.Event{PodName: "p1", Namespace: "ns-a", Reason: "Err1"}, "dep1", nil)
-	e.Process(event.Event{PodName: "p2", Namespace: "ns-b", Reason: "Err2"}, "dep2", nil)
-
-	nsA := e.GetIncidentsByNamespace("ns-a")
-	assert.Len(t, nsA, 1)
-	assert.Equal(t, "Err1", nsA[0].Reason)
-
-	nsB := e.GetIncidentsByNamespace("ns-b")
-	assert.Len(t, nsB, 1)
-	assert.Equal(t, "Err2", nsB[0].Reason)
-
-	nsC := e.GetIncidentsByNamespace("ns-c")
-	assert.Len(t, nsC, 0)
 }
 
 func TestBuildNodeSummary(t *testing.T) {

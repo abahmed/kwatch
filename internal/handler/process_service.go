@@ -4,13 +4,16 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/abahmed/kwatch/internal/correlation"
-	"github.com/abahmed/kwatch/internal/event"
+	"github.com/abahmed/kwatch/internal/constant"
+
 	corev1 "k8s.io/api/core/v1"
 	discoveryv1 "k8s.io/api/discovery/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/client-go/tools/cache"
+
+	"github.com/abahmed/kwatch/internal/correlation"
+	"github.com/abahmed/kwatch/internal/event"
 )
 
 var defaultServiceSustainedSeconds float64 = 60
@@ -44,7 +47,7 @@ func DetectServiceEndpointIssue(svc *corev1.Service, epSlices []*discoveryv1.End
 		return &event.Signal{
 			Resource:  "service",
 			Namespace: svc.Namespace,
-			Reason:    "ServiceNoEndpoints",
+			Reason:    constant.ReasonServiceNoEndpoints,
 			Owner:     key,
 			PodName:   svc.Name,
 			Labels:    svc.Labels,
@@ -63,7 +66,7 @@ func (h *handler) ProcessService(key string, deleted bool) error {
 		h.correlator.ResolveByResource("service", namespace+"/"+name)
 		return nil
 	}
-	svc, err := h.serviceLister.Services(namespace).Get(name)
+	svc, err := h.listers.service.Services(namespace).Get(name)
 	if err != nil {
 		if errors.IsNotFound(err) {
 			h.correlator.ResolveByResource("service", namespace+"/"+name)
@@ -86,7 +89,7 @@ func (h *handler) ProcessServiceObject(svc *corev1.Service, deleted bool) error 
 	}
 
 	sel := labels.Set{"kubernetes.io/service-name": svc.Name}.AsSelector()
-	epSlices, err := h.endpointSliceLister.EndpointSlices(svc.Namespace).List(sel)
+	epSlices, err := h.listers.endpointSlice.EndpointSlices(svc.Namespace).List(sel)
 	if err != nil {
 		return fmt.Errorf("failed to list endpoint slices for %s/%s: %w", svc.Namespace, svc.Name, err)
 	}
@@ -103,24 +106,16 @@ func (h *handler) ProcessServiceObject(svc *corev1.Service, deleted bool) error 
 	} else {
 		h.clearServiceNoEndpoints(svc.Namespace, svc.Name)
 		h.correlator.MarkResolved(
-			correlation.BuildKey(svc.Namespace, svc.Namespace+"/"+svc.Name, "ServiceNoEndpoints", ""),
+			correlation.BuildKey(svc.Namespace, svc.Namespace+"/"+svc.Name, constant.ReasonServiceNoEndpoints, ""),
 		)
 	}
 	return nil
 }
 
 func (h *handler) markServiceNoEndpoints(key string) time.Time {
-	h.serviceMu.Lock()
-	defer h.serviceMu.Unlock()
-	if t, ok := h.serviceNoEndpointSince[key]; ok {
-		return t
-	}
-	h.serviceNoEndpointSince[key] = h.now()
-	return h.serviceNoEndpointSince[key]
+	return h.fs.serviceNoEndpoint.mark(key, h.now())
 }
 
 func (h *handler) clearServiceNoEndpoints(namespace, name string) {
-	h.serviceMu.Lock()
-	defer h.serviceMu.Unlock()
-	delete(h.serviceNoEndpointSince, namespace+"/"+name)
+	h.fs.serviceNoEndpoint.clear(correlation.OwnerPath(namespace, name))
 }

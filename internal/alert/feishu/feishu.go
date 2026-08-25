@@ -7,11 +7,15 @@ import (
 	"io"
 	"net/http"
 
+	"k8s.io/klog/v2"
+
+	"github.com/abahmed/kwatch/internal/alert/util"
 	"github.com/abahmed/kwatch/internal/config"
 	"github.com/abahmed/kwatch/internal/event"
 	"github.com/abahmed/kwatch/internal/k8s"
+	"github.com/abahmed/kwatch/internal/message"
+	"github.com/abahmed/kwatch/internal/model"
 	"github.com/abahmed/kwatch/internal/ratelimit"
-	"k8s.io/klog/v2"
 )
 
 type FeiShu struct {
@@ -73,23 +77,23 @@ func NewFeiShu(config map[string]interface{}, appCfg *config.App) *FeiShu {
 }
 
 // Name returns name of the provider
-func (r *FeiShu) Name() string {
+func (f *FeiShu) Name() string {
 	return "Fei Shu"
 }
 
 // SendEvent sends event to the provider
-func (r *FeiShu) SendEvent(e *event.Event) error {
-	body, err := r.buildRequestBodyFeiShu(e.FormatMarkdown(r.appCfg.ClusterName, "", ""))
+func (f *FeiShu) SendEvent(e *event.Event) error {
+	body, err := f.buildRequestBodyFeiShu(e.FormatMarkdown(f.appCfg.ClusterName, "", ""))
 	if err != nil {
 		return err
 	}
-	return r.sendByFeiShuApi(body)
+	return f.sendByFeiShuApi(body)
 }
 
-func (r *FeiShu) sendByFeiShuApi(reqBody string) error {
+func (f *FeiShu) sendByFeiShuApi(reqBody string) error {
 	client := k8s.GetDefaultClient()
 	buffer := bytes.NewBuffer([]byte(reqBody))
-	request, err := http.NewRequest(http.MethodPost, r.webhook, buffer)
+	request, err := http.NewRequest(http.MethodPost, f.webhook, buffer)
 	if err != nil {
 		return err
 	}
@@ -121,15 +125,26 @@ func (r *FeiShu) sendByFeiShuApi(reqBody string) error {
 }
 
 // SendMessage sends text message to the provider
-func (r *FeiShu) SendMessage(msg string) error {
-	body, err := r.buildRequestBodyFeiShu(msg)
+func (f *FeiShu) SendMessage(msg string) error {
+	body, err := f.buildRequestBodyFeiShu(msg)
 	if err != nil {
 		return err
 	}
-	return r.sendByFeiShuApi(body)
+	return f.sendByFeiShuApi(body)
 }
 
-func (r *FeiShu) buildRequestBodyFeiShu(
+// SendIncident implements alert.ThreadProvider.
+// It renders the incident using the Report model and PlaintextRenderer,
+// producing a context-adaptive text message.
+func (f *FeiShu) SendIncident(inc *model.Incident, action model.IncidentAction) error {
+	text := util.RenderIncident(inc, action, message.NewPlainTextRenderer(), f.appCfg.ClusterName)
+	if text == "" {
+		return nil
+	}
+	return f.SendMessage(text)
+}
+
+func (f *FeiShu) buildRequestBodyFeiShu(
 	text string) (string, error) {
 	body := feiShuRequestBody{
 		MsgType: "interactive",
@@ -140,7 +155,7 @@ func (r *FeiShu) buildRequestBodyFeiShu(
 			Header: feiShuHeader{
 				Title: feiShuHeaderTitle{
 					Tag:     "plain_text",
-					Content: r.title,
+					Content: f.title,
 				},
 				Template: "blue",
 			},

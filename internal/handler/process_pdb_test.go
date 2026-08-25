@@ -4,12 +4,14 @@ import (
 	"testing"
 	"time"
 
-	"github.com/abahmed/kwatch/internal/config"
-	"github.com/abahmed/kwatch/internal/correlation"
 	"github.com/stretchr/testify/assert"
 	policyv1 "k8s.io/api/policy/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/client-go/informers"
 	"k8s.io/client-go/kubernetes/fake"
+
+	"github.com/abahmed/kwatch/internal/config"
+	"github.com/abahmed/kwatch/internal/correlation"
 )
 
 func TestIsPdbBlockingTrue(t *testing.T) {
@@ -149,10 +151,10 @@ func TestProcessPdbObjectSustained(t *testing.T) {
 func TestProcessPdbObjectExistingEntry(t *testing.T) {
 	e := testCorrelator()
 	h := NewHandler(fake.NewSimpleClientset(), &config.Config{}, e, testAlertMgr)
-	hh := h.(*handler)
+	hh := h
 
 	// Seed an existing entry so markFirstPdbViolation returns the stored time
-	hh.firstPdbViolation["ns1/pdb1"] = time.Now().Add(-1 * time.Hour)
+	hh.fs.pdbViolation.seed("ns1/pdb1", time.Now().Add(-1*time.Hour))
 
 	pdb := &policyv1.PodDisruptionBudget{
 		ObjectMeta: metav1.ObjectMeta{Name: "pdb1", Namespace: "ns1"},
@@ -180,5 +182,20 @@ func TestProcessPdbDeleted(t *testing.T) {
 
 func TestProcessPdbNoop(t *testing.T) {
 	h := NewHandler(fake.NewSimpleClientset(), &config.Config{}, testCorrelator(), testAlertMgr)
+
+	pdb := &policyv1.PodDisruptionBudget{
+		ObjectMeta: metav1.ObjectMeta{Name: "pdb1", Namespace: "ns1"},
+		Status: policyv1.PodDisruptionBudgetStatus{
+			ObservedGeneration: 1,
+			DesiredHealthy:     2,
+			DisruptionsAllowed: 1,
+			CurrentHealthy:     2,
+		},
+	}
+	pdb.Generation = 1
+
+	f := informers.NewSharedInformerFactory(fake.NewSimpleClientset(pdb), 0)
+	h.SetPdbLister(f.Policy().V1().PodDisruptionBudgets().Lister())
+
 	assert.NoError(t, h.ProcessPdb("ns1/pdb1", false))
 }

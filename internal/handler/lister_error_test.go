@@ -4,10 +4,11 @@ import (
 	"context"
 	"testing"
 
-	"github.com/abahmed/kwatch/internal/config"
 	"github.com/stretchr/testify/assert"
 	"k8s.io/client-go/informers"
 	"k8s.io/client-go/kubernetes/fake"
+
+	"github.com/abahmed/kwatch/internal/config"
 )
 
 func TestProcessPodListerError(t *testing.T) {
@@ -43,6 +44,13 @@ func TestProcessStatefulSetListerError(t *testing.T) {
 	f := informers.NewSharedInformerFactory(fake.NewSimpleClientset(), 0)
 	h.SetStatefulSetLister(&errorSSLister{f.Apps().V1().StatefulSets().Lister()})
 	assert.Error(t, h.ProcessStatefulSet("ns/my-ss", false))
+}
+
+func TestProcessPdbListerError(t *testing.T) {
+	h := NewHandler(fake.NewSimpleClientset(), &config.Config{}, testCorrelator(), testAlertMgr)
+	f := informers.NewSharedInformerFactory(fake.NewSimpleClientset(), 0)
+	h.SetPdbLister(&errorPdbLister{f.Policy().V1().PodDisruptionBudgets().Lister()})
+	assert.Error(t, h.ProcessPdb("ns/my-pdb", false))
 }
 
 func TestProcessJobListerError(t *testing.T) {

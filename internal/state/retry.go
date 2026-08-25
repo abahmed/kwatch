@@ -2,7 +2,6 @@ package state
 
 import (
 	"context"
-	"strings"
 	"time"
 
 	corev1 "k8s.io/api/core/v1"
@@ -102,8 +101,9 @@ func isConflictError(err error) bool {
 	if err == nil {
 		return false
 	}
-	msg := err.Error()
-	return strings.Contains(msg, "conflict") ||
-		strings.Contains(msg, "Conflict") ||
-		strings.Contains(msg, "was changed")
+	// k8s conflict errors carry StatusReasonConflict; the human-readable
+	// message ("the object has been modified; please apply your changes…")
+	// does not contain the word "conflict", so string matching missed them
+	// and the retry loop never ran.
+	return apierrors.IsConflict(err)
 }

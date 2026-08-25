@@ -5,16 +5,17 @@ import (
 	"errors"
 	"testing"
 
-	"github.com/abahmed/kwatch/internal/alert"
-	"github.com/abahmed/kwatch/internal/config"
-	"github.com/abahmed/kwatch/internal/state"
-	"github.com/abahmed/kwatch/internal/version"
 	"github.com/google/go-github/v41/github"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes/fake"
+
+	"github.com/abahmed/kwatch/internal/alert"
+	"github.com/abahmed/kwatch/internal/config"
+	"github.com/abahmed/kwatch/internal/state"
+	"github.com/abahmed/kwatch/internal/version"
 )
 
 type MockGitHubClient struct {
@@ -106,6 +107,17 @@ func TestVersionComparison(t *testing.T) {
 
 	currentVersion := version.Short()
 	assert.NotEmpty(currentVersion)
+}
+
+func TestIsPrerelease(t *testing.T) {
+	assert := assert.New(t)
+
+	u := &Upgrader{}
+	assert.True(u.isPrerelease("v0.11.0-rc.1"))
+	assert.True(u.isPrerelease("v0.11.0-rc.17"))
+	assert.False(u.isPrerelease("v0.10.5"))
+	assert.False(u.isPrerelease("v0.11.0"))
+	assert.False(u.isPrerelease("dev"))
 }
 
 func TestUpgraderWithDisabledConfig(t *testing.T) {
@@ -221,7 +233,7 @@ func TestCheckReleaseGitHubError(t *testing.T) {
 		Return(nil, nil, errors.New("rate limit exceeded"))
 
 	u := NewUpgrader(&config.Upgrader{}, &alert.AlertManager{}, nil)
-	u.SetGitHubClient(mockGithub)
+	u.githubClient = mockGithub
 
 	u.checkRelease(context.Background())
 
@@ -234,7 +246,7 @@ func TestCheckReleaseNilTagName(t *testing.T) {
 		Return(&github.RepositoryRelease{}, nil, nil)
 
 	u := NewUpgrader(&config.Upgrader{}, &alert.AlertManager{}, nil)
-	u.SetGitHubClient(mockGithub)
+	u.githubClient = mockGithub
 
 	u.checkRelease(context.Background())
 
@@ -248,7 +260,7 @@ func TestCheckReleaseSameVersion(t *testing.T) {
 		Return(&github.RepositoryRelease{TagName: &currentVersion}, nil, nil)
 
 	u := NewUpgrader(&config.Upgrader{}, &alert.AlertManager{}, nil)
-	u.SetGitHubClient(mockGithub)
+	u.githubClient = mockGithub
 
 	u.checkRelease(context.Background())
 
@@ -277,7 +289,7 @@ func TestCheckReleaseAlreadyNotified(t *testing.T) {
 	stateMgr := state.NewStateManager(client, "kwatch")
 
 	u := NewUpgrader(&config.Upgrader{}, &alert.AlertManager{}, stateMgr)
-	u.SetGitHubClient(mockGithub)
+	u.githubClient = mockGithub
 
 	u.checkRelease(context.Background())
 
@@ -296,8 +308,8 @@ func TestCheckReleaseNewVersionNotifies(t *testing.T) {
 	stateMgr := state.NewStateManager(fake.NewSimpleClientset(), "kwatch")
 
 	u := NewUpgrader(&config.Upgrader{}, &alert.AlertManager{}, stateMgr)
-	u.SetGitHubClient(mockGithub)
-	u.SetAlertManager(mockAlert)
+	u.githubClient = mockGithub
+	u.alertManager = mockAlert
 
 	u.checkRelease(context.Background())
 
@@ -329,8 +341,8 @@ func TestCheckReleaseNewVersionSetsState(t *testing.T) {
 	stateMgr := state.NewStateManager(client, "kwatch")
 
 	u := NewUpgrader(&config.Upgrader{}, &alert.AlertManager{}, stateMgr)
-	u.SetGitHubClient(mockGithub)
-	u.SetAlertManager(mockAlert)
+	u.githubClient = mockGithub
+	u.alertManager = mockAlert
 
 	u.checkRelease(context.Background())
 

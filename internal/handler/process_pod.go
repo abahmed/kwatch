@@ -4,20 +4,12 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/abahmed/kwatch/internal/filter"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/client-go/tools/cache"
-)
 
-func podMountsPVC(pod *corev1.Pod) bool {
-	for _, v := range pod.Spec.Volumes {
-		if v.PersistentVolumeClaim != nil {
-			return true
-		}
-	}
-	return false
-}
+	"github.com/abahmed/kwatch/internal/filter"
+)
 
 func isPodHealthy(pod *corev1.Pod) bool {
 	if pod.Status.Phase == corev1.PodRunning || pod.Status.Phase == corev1.PodSucceeded {
@@ -45,7 +37,7 @@ func (h *handler) ProcessPod(ctx context.Context, key string, deleted bool) erro
 		return nil
 	}
 
-	pod, err := h.podLister.Pods(namespace).Get(name)
+	pod, err := h.listers.pod.Pods(namespace).Get(name)
 	if err != nil {
 		if errors.IsNotFound(err) {
 			h.correlator.RemovePod(namespace, name)
@@ -73,17 +65,17 @@ func (h *handler) ProcessPodObject(parent context.Context, pod *corev1.Pod, dele
 		Config:      h.config,
 		Pod:         pod,
 		EvType:      "ADDED",
-		RSLister:    h.rsLister,
-		DSLister:    h.dsLister,
-		SSLister:    h.ssLister,
-		EventLister: h.eventLister,
+		RSLister:    h.listers.rs,
+		DSLister:    h.listers.ds,
+		SSLister:    h.listers.ss,
+		EventLister: h.listers.event,
 	}
 
 	h.executePodFilters(&ctxF)
 	h.executeContainersFilters(&ctxF)
 
 	if isPodHealthy(pod) {
-		h.ClearSeenForPod(pod.Namespace, pod.Name)
+		h.ClearBaselineForPod(pod.Namespace, pod.Name)
 	}
 	return nil
 }

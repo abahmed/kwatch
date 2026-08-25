@@ -3,10 +3,11 @@ package email
 import (
 	"testing"
 
-	"github.com/abahmed/kwatch/internal/config"
-	"github.com/abahmed/kwatch/internal/event"
 	"github.com/stretchr/testify/assert"
 	gomail "gopkg.in/mail.v2"
+
+	"github.com/abahmed/kwatch/internal/config"
+	"github.com/abahmed/kwatch/internal/event"
 )
 
 func mockedSend(m ...*gomail.Message) error {

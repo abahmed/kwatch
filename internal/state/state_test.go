@@ -7,13 +7,16 @@ import (
 	"testing"
 	"time"
 
+	"github.com/stretchr/testify/assert"
+	corev1 "k8s.io/api/core/v1"
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/runtime/schema"
+	"k8s.io/client-go/kubernetes/fake"
+
 	"github.com/abahmed/kwatch/internal/correlation"
 	"github.com/abahmed/kwatch/internal/event"
 	"github.com/abahmed/kwatch/internal/model"
-	"github.com/stretchr/testify/assert"
-	corev1 "k8s.io/api/core/v1"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/client-go/kubernetes/fake"
 )
 
 func TestNewStateManager(t *testing.T) {
@@ -404,22 +407,24 @@ func TestUpdateWithRetryUpdaterError(t *testing.T) {
 func TestIsConflictError(t *testing.T) {
 	assert := assert.New(t)
 
-	conflictErr1 := errors.New("conflict in configmap")
-	assert.True(isConflictError(conflictErr1))
+	// A real k8s conflict: the human-readable message has no "conflict" word.
+	conflictErr := apierrors.NewConflict(
+		schema.GroupResource{Resource: "configmaps"}, "kwatch",
+		errors.New("Operation cannot be fulfilled on configmaps \"kwatch\": the object has been modified; please apply your changes to the latest version and try again"),
+	)
+	assert.True(apierrors.IsConflict(conflictErr))
+	assert.True(isConflictError(conflictErr), "real k8s conflict must be detected so retries fire")
 
-	conflictErr2 := errors.New("Conflict detected")
-	assert.True(isConflictError(conflictErr2))
+	// A StatusError with a different reason is not a conflict.
+	notFound := apierrors.NewNotFound(schema.GroupResource{Resource: "configmaps"}, "kwatch")
+	assert.False(isConflictError(notFound))
 
-	conflictErr3 := errors.New("resource was changed")
-	assert.True(isConflictError(conflictErr3))
-
-	normalErr := errors.New("not found")
-	assert.False(isConflictError(normalErr))
+	// Plain error messages containing the word "conflict" are NOT conflicts.
+	assert.False(isConflictError(errors.New("conflict in configmap")))
+	assert.False(isConflictError(errors.New("Conflict detected")))
+	assert.False(isConflictError(errors.New("resource was changed")))
 
 	assert.False(isConflictError(nil))
-
-	conflictErr := &ConflictError{Message: "conflict detected"}
-	assert.True(isConflictError(conflictErr))
 }
 
 func TestConflictError(t *testing.T) {
@@ -664,19 +669,55 @@ func TestSaveIncidentsOverwrites(t *testing.T) {
 	assert.Equal("ns:dep-2:OOMKilled:", loaded[0]["key"])
 }
 
+func TestSaveAndGetPersistedIncidentsRoundTrip(t *testing.T) {
+	assert := assert.New(t)
+	ctx := context.Background()
+	client := fake.NewSimpleClientset()
+	sm := NewStateManager(client, "kwatch")
+
+	now := time.Now().Truncate(time.Second)
+	incidents := []model.PersistedIncident{
+		{
+			Key:            "pod/ns/dep-1",
+			Reason:         "OOMKilled",
+			Namespace:      "ns",
+			Name:           "dep-1",
+			Resource:       "pod",
+			Count:          3,
+			FirstSeen:      now.Add(-time.Hour),
+			LastSeen:       now,
+			OwnerKind:      "Deployment",
+			Severity:       model.SeverityHigh,
+			State:          model.StatePendingResolve,
+			ResolveAt:      now.Add(2 * time.Minute),
+			NotifiedSig:    "firing|high",
+			LastNotifiedAt: now,
+			RenotifyCount:  1,
+		},
+	}
+	err := sm.SaveIncidents(ctx, incidents)
+	assert.Nil(err)
+
+	var loaded []model.PersistedIncident
+	err = sm.GetIncidents(ctx, &loaded)
+	assert.Nil(err)
+	assert.Equal(1, len(loaded))
+	assert.Equal("pod/ns/dep-1", string(loaded[0].Key))
+	assert.Equal("OOMKilled", loaded[0].Reason)
+	assert.Equal(float64(3), float64(loaded[0].Count))
+	assert.Equal(model.SeverityHigh, loaded[0].Severity)
+	assert.Equal(model.StatePendingResolve, loaded[0].State)
+	assert.True(loaded[0].ResolveAt.Equal(now.Add(2*time.Minute)), "ResolveAt must survive ConfigMap round trip")
+}
+
 func TestSaveBaselineTooLarge(t *testing.T) {
 	assert := assert.New(t)
 	client := fake.NewSimpleClientset()
 	sm := NewStateManager(client, "kwatch")
-
 	// Build a baseline large enough that even gzipped it exceeds
 	// baselineMaxBytes (~1,032,192). Use many entries with unique keys
 	// to minimise gzip leverage.
 	large := make(map[string]map[string]int64)
-	// Each entry: "k-<N>": {"p-<N>": <ts>} ≈ 35 uncompressed bytes.
-	// 100,000 entries ~ 3.5 MB uncompressed; gzip of low-entropy data
-	// still compresses ~5× → ~700 KB (may or may not exceed 1 MB).
-	// Use 200,000 entries with varying key content to reduce compressibility.
 	for i := 0; i < 200000; i++ {
 		key := fmt.Sprintf("k-%08d", i)
 		large[key] = map[string]int64{fmt.Sprintf("p-%08d", i): int64(1718064000 + i)}

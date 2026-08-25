@@ -3,8 +3,6 @@ package handler
 import (
 	"testing"
 
-	"github.com/abahmed/kwatch/internal/config"
-	"github.com/abahmed/kwatch/internal/model"
 	"github.com/stretchr/testify/assert"
 	corev1 "k8s.io/api/core/v1"
 	discoveryv1 "k8s.io/api/discovery/v1"
@@ -12,6 +10,9 @@ import (
 	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/client-go/informers"
 	"k8s.io/client-go/kubernetes/fake"
+
+	"github.com/abahmed/kwatch/internal/config"
+	"github.com/abahmed/kwatch/internal/model"
 )
 
 func epSliceForSvc(name, ns string, ready bool) *discoveryv1.EndpointSlice {
@@ -287,7 +288,7 @@ func TestProcessServiceObjectSliceNotFound(t *testing.T) {
 
 	svc := &corev1.Service{
 		ObjectMeta: metav1.ObjectMeta{Name: "test-svc", Namespace: "default"},
-		Spec: corev1.ServiceSpec{ClusterIP: "10.0.0.1"},
+		Spec:       corev1.ServiceSpec{ClusterIP: "10.0.0.1"},
 	}
 
 	assert.NoError(t, h.ProcessServiceObject(svc, false))

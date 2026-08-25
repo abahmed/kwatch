@@ -4,13 +4,16 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/abahmed/kwatch/internal/event"
+	"github.com/abahmed/kwatch/internal/constant"
+
 	"github.com/robfig/cron/v3"
 	batchv1 "k8s.io/api/batch/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/tools/cache"
 	"k8s.io/klog/v2"
+
+	"github.com/abahmed/kwatch/internal/event"
 )
 
 // DefaultCronNotScheduledGrace is the grace period added after the expected
@@ -29,7 +32,7 @@ func (h *handler) ProcessCronJob(key string, deleted bool) error {
 		return nil
 	}
 
-	cj, err := h.cronJobLister.CronJobs(namespace).Get(name)
+	cj, err := h.listers.cronJob.CronJobs(namespace).Get(name)
 	if err != nil {
 		if errors.IsNotFound(err) {
 			h.clearFirstSuspendedCJ(namespace + "/" + name)
@@ -48,7 +51,7 @@ func DetectCronJobIssue(cj *batchv1.CronJob) *event.Signal {
 	if cj.Spec.Suspend != nil && *cj.Spec.Suspend {
 		return &event.Signal{
 			Resource:  "cronjob",
-			Reason:    "CronJobSuspended",
+			Reason:    constant.ReasonCronJobSuspended,
 			Namespace: cj.Namespace,
 			Owner:     cj.Namespace + "/" + cj.Name,
 			Labels:    cj.Labels,
@@ -65,7 +68,7 @@ func DetectCronJobIssue(cj *batchv1.CronJob) *event.Signal {
 	if time.Now().After(threshold) {
 		return &event.Signal{
 			Resource:  "cronjob",
-			Reason:    "CronJobNotScheduled",
+			Reason:    constant.ReasonCronJobNotScheduled,
 			Namespace: cj.Namespace,
 			Owner:     cj.Namespace + "/" + cj.Name,
 			Labels:    cj.Labels,
@@ -89,7 +92,7 @@ func (h *handler) ProcessCronJobObject(cj *batchv1.CronJob, deleted bool) error 
 	key := cj.Namespace + "/" + cj.Name
 	sig := DetectCronJobIssue(cj)
 
-	if sig != nil && sig.Reason == "CronJobSuspended" {
+	if sig != nil && sig.Reason == constant.ReasonCronJobSuspended {
 		// Sustained check: avoid noise from intentional suspension during
 		// incident response or maintenance windows.
 		first := h.markFirstSuspendedCJ(key)
@@ -113,19 +116,11 @@ func (h *handler) ProcessCronJobObject(cj *batchv1.CronJob, deleted bool) error 
 }
 
 func (h *handler) markFirstSuspendedCJ(key string) time.Time {
-	h.cjMu.Lock()
-	defer h.cjMu.Unlock()
-	if t, ok := h.firstSuspendedCJs[key]; ok {
-		return t
-	}
-	h.firstSuspendedCJs[key] = h.now()
-	return h.firstSuspendedCJs[key]
+	return h.fs.suspendedCJs.mark(key, h.now())
 }
 
 func (h *handler) clearFirstSuspendedCJ(key string) {
-	h.cjMu.Lock()
-	defer h.cjMu.Unlock()
-	delete(h.firstSuspendedCJs, key)
+	h.fs.suspendedCJs.clear(key)
 }
 
 // NextFireAfter returns the time the CronJob should have next fired, based on

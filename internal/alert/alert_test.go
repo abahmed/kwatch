@@ -3,18 +3,40 @@ package alert
 import (
 	"context"
 	"errors"
-	"net/http"
-	"net/http/httptest"
+	"fmt"
 	"strings"
 	"testing"
+	"text/template"
 	"time"
+
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 
 	"github.com/abahmed/kwatch/internal/config"
 	"github.com/abahmed/kwatch/internal/event"
-	"github.com/abahmed/kwatch/internal/llm"
 	"github.com/abahmed/kwatch/internal/model"
-	"github.com/stretchr/testify/assert"
 )
+
+// testBuildMessage is a helper for tests that creates a minimal AlertManager
+// and calls buildMessage with no insight, 100 max lines, and no templates.
+func testBuildMessage(inc *model.Incident, action model.IncidentAction, clusterName string) string {
+	am := AlertManager{clusterName: clusterName}
+	return am.buildMessage(inc, action, nil, nil)
+}
+
+// testBuildMessageWithTemplate is a helper for tests that builds a message
+// with the given parsed templates.
+func testBuildMessageWithTemplate(inc *model.Incident, action model.IncidentAction, clusterName string, rawTpls map[string]string) string {
+	am := AlertManager{clusterName: clusterName}
+	parsed := map[string]*template.Template{}
+	for k, v := range rawTpls {
+		t, err := template.New(k).Parse(v)
+		if err == nil {
+			parsed[k] = t
+		}
+	}
+	return am.buildMessage(inc, action, nil, parsed)
+}
 
 type fakeProvider struct{}
 
@@ -242,6 +264,47 @@ func TestNotifyIncidentThreadProviderWithSkip(t *testing.T) {
 	assert.Nil(t, tp.lastInc)
 }
 
+func TestNotifyIncidentThreadProviderClamped(t *testing.T) {
+	tp := &fakeThreadProvider{}
+	am := AlertManager{}
+	am.entries = append(am.entries, providerEntry{
+		provider: tp,
+		retry:    retryConfig{maxAttempts: 1, delay: time.Second, maxBackoff: defaultMaxBackoff},
+		maxBytes: 2000,
+	})
+
+	bigLog := strings.Repeat("error: something failed\n", 300)
+	inc := &model.Incident{
+		Key:         "default:deploy:CrashLoopBackOff",
+		Name:        "deploy",
+		Namespace:   "default",
+		Reason:      "CrashLoopBackOff",
+		Resource:    "pod",
+		Count:       2,
+		Logs:        bigLog,
+		IncludeLogs: true,
+		FirstSeen:   time.Now().Add(-5 * time.Minute),
+		LastSeen:    time.Now(),
+		Resources:   map[string]bool{"pod-1": true},
+	}
+	am.NotifyIncident(inc, model.ActionCreate, nil)
+
+	assert.NotNil(t, tp.lastInc)
+	assert.Less(t, len(tp.lastInc.Logs), len(bigLog))
+	assert.Contains(t, tp.lastInc.Logs, "truncated")
+
+	rendered := testBuildMessage(tp.lastInc, model.ActionCreate, "")
+	assert.LessOrEqual(t, len(rendered), 2000)
+}
+
+func TestDefaultMaxBytes(t *testing.T) {
+	assert.Equal(t, 2000, defaultMaxBytes("discord"))
+	assert.Equal(t, 4096, defaultMaxBytes("telegram"))
+	assert.Equal(t, 28000, defaultMaxBytes("teams"))
+	assert.Equal(t, 40000, defaultMaxBytes("slack"))
+	assert.Equal(t, 0, defaultMaxBytes("webhook"))
+}
+
 func TestFormatIncidentMessage(t *testing.T) {
 	now := time.Now()
 	inc := &model.Incident{
@@ -257,15 +320,14 @@ func TestFormatIncidentMessage(t *testing.T) {
 		PeakResources: 2,
 	}
 
-	msg := formatIncidentMessage(inc, model.ActionCreate, 100, nil)
+	msg := testBuildMessage(inc, model.ActionCreate, "test-cluster")
 	assert.Contains(t, msg, "CrashLoopBackOff")
 	assert.Contains(t, msg, "deploy")
-	assert.Contains(t, msg, "pod")
-	assert.Contains(t, msg, "Peak: 2 pods")
+	assert.Contains(t, msg, "2")
 
-	msgUpdate := formatIncidentMessage(inc, model.ActionUpdate, 100, nil)
+	msgUpdate := testBuildMessage(inc, model.ActionUpdate, "test-cluster")
 	assert.Contains(t, msgUpdate, "CrashLoopBackOff")
-	assert.Contains(t, msgUpdate, "Count: 2")
+	assert.Contains(t, msgUpdate, "2")
 }
 
 func TestFormatIncidentMessageWithLogsEvents(t *testing.T) {
@@ -286,11 +348,11 @@ func TestFormatIncidentMessageWithLogsEvents(t *testing.T) {
 		IncludeLogs:   true,
 	}
 
-	msg := formatIncidentMessage(inc, model.ActionCreate, 100, nil)
-	assert.Contains(t, msg, "Logs:")
+	msg := testBuildMessage(inc, model.ActionCreate, "test-cluster")
+	assert.Contains(t, msg, "Logs")
 	assert.Contains(t, msg, "line1")
 	assert.Contains(t, msg, "line2")
-	assert.Contains(t, msg, "Events:")
+	assert.Contains(t, msg, "Events")
 	assert.Contains(t, msg, "Pulling image")
 	assert.Contains(t, msg, "BackOff restart")
 }
@@ -309,11 +371,10 @@ func TestFormatResolvedMessageGolden(t *testing.T) {
 		Resources: map[string]bool{"pod-1": true},
 	}
 
-	msg := formatIncidentMessage(inc, model.ActionResolved, 100, nil)
+	msg := testBuildMessage(inc, model.ActionResolved, "test-cluster")
 	assert.Contains(t, msg, "Resolved")
 	assert.Contains(t, msg, "deploy")
 	assert.Contains(t, msg, "OOMKilled")
-	assert.Contains(t, msg, "Total events: 3")
 }
 
 func TestSilenceByNamespace(t *testing.T) {
@@ -440,12 +501,9 @@ func TestFormatIncidentMessageWithTemplate(t *testing.T) {
 		Resources: map[string]bool{"pod-1": true},
 	}
 
-	am := AlertManager{}
-	am.SetTemplates(map[string]string{
+	msg := testBuildMessageWithTemplate(inc, model.ActionCreate, "test-cluster", map[string]string{
 		"crashloopbackoff": "{{.Incident.Name}} {{.Action}}",
 	})
-
-	msg := formatIncidentMessage(inc, model.ActionCreate, 100, am.templates)
 	want := "deploy create"
 	if msg != want {
 		t.Errorf("got %q, want %q", msg, want)
@@ -466,13 +524,10 @@ func TestFormatIncidentMessageWithTemplateRenderError(t *testing.T) {
 		Resources: map[string]bool{"pod-1": true},
 	}
 
-	am := AlertManager{}
 	// bad template syntax — Parse will reject it, so it won't be stored
-	am.SetTemplates(map[string]string{
+	msg := testBuildMessageWithTemplate(inc, model.ActionCreate, "test-cluster", map[string]string{
 		"oomkilled": "{{.Incident.Name {{.Action}}",
 	})
-	// no template stored -> falls back to default
-	msg := formatIncidentMessage(inc, model.ActionCreate, 100, am.templates)
 	if msg == "" {
 		t.Fatal("expected fallback message, got empty")
 	}
@@ -495,12 +550,9 @@ func TestFormatIncidentMessageUnregisteredReason(t *testing.T) {
 		Resources: map[string]bool{"pod-1": true},
 	}
 
-	am := AlertManager{}
-	am.SetTemplates(map[string]string{
+	msg := testBuildMessageWithTemplate(inc, model.ActionCreate, "test-cluster", map[string]string{
 		"crashloopbackoff": "OVERRIDE",
 	})
-
-	msg := formatIncidentMessage(inc, model.ActionCreate, 100, am.templates)
 	if !strings.Contains(msg, "NodeNotReady") {
 		t.Errorf("expected default message to contain reason, got %q", msg)
 	}
@@ -602,6 +654,28 @@ func TestFallbackUsedOnExhaustion(t *testing.T) {
 	}
 }
 
+// The fallback message must respect the fallback provider's own maxBytes
+// limit, not just the primary's.
+func TestFallbackMessageTruncatedToFallbackMaxBytes(t *testing.T) {
+	primary := &errorRecorderProvider{name: "Primary", err: nil}
+	fb := &errorRecorderProvider{name: "Fallback", err: nil}
+
+	am := AlertManager{}
+	am.entries = append(am.entries, providerEntry{
+		provider: primary,
+		retry:    retryConfig{maxAttempts: 1, delay: time.Millisecond},
+		fallback: &providerEntry{provider: fb, maxBytes: 64},
+	})
+
+	primary.err = errors.New("fail")
+	am.Notify(strings.Repeat("x", 500))
+
+	require.Equal(t, 1, fb.callCount)
+	assert.LessOrEqual(t, len(fb.msg), 64, "fallback message must respect the fallback provider's maxBytes")
+	assert.Contains(t, fb.msg, "(truncated)")
+	assert.Contains(t, fb.msg, "fallback")
+}
+
 func TestExtractRetryYAMLInt(t *testing.T) {
 	// YAML v3 unmarshals integers as int, not float64.
 	cfg := map[string]interface{}{
@@ -648,7 +722,7 @@ func TestExtractRetryClamps(t *testing.T) {
 
 func TestExtractRetryDefaults(t *testing.T) {
 	rc := extractRetry(map[string]interface{}{})
-	assert.Equal(t, 1, rc.maxAttempts)
+	assert.Equal(t, 3, rc.maxAttempts)
 	assert.Equal(t, time.Second, rc.delay)
 	assert.Equal(t, defaultMaxBackoff, rc.maxBackoff)
 	assert.False(t, rc.jitterEnabled)
@@ -712,51 +786,9 @@ func (p *fakeRecordingEventProvider) SendEvent(evt *event.Event) error {
 func (p *fakeRecordingEventProvider) Name() string       { return "Recording" }
 func (p *fakeRecordingEventProvider) UsesEventDelivery() {}
 
-// countingProvider signals each delivery so tests can synchronize without
-// poking shutdown internals.
-type countingProvider struct{ delivered chan struct{} }
-
-func (p *countingProvider) Name() string                 { return "Slack" }
-func (p *countingProvider) SendMessage(string) error     { p.delivered <- struct{}{}; return nil }
-func (p *countingProvider) SendEvent(*event.Event) error { return nil }
-
-// P2: in-flight enrichment must finish its fanOut on OPEN provider channels
-// during shutdown — no send-on-closed panic, and the alert is still delivered.
-func TestShutdownNoPanicWithInflightEnrichment(t *testing.T) {
-	// Stub LLM sidecar: the handler blocks long enough for shutdown to start
-	// closing channels, then returns (causing a JSON decode failure in
-	// Analyze — the enrichment completes with error and fans out).
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		time.Sleep(300 * time.Millisecond)
-	}))
-	defer srv.Close()
-
-	delivered := make(chan struct{}, 8)
-	am := &AlertManager{}
-	am.entries = []providerEntry{{
-		provider: &countingProvider{delivered: delivered},
-		retry:    retryConfig{maxAttempts: 1},
-		ch:       make(chan deliverJob, channelCap),
-	}}
-	am.llm = llm.New(srv.URL)
-	am.enrichCh = make(chan deliverJob, 1)
-
-	ctx, cancel := context.WithCancel(context.Background())
-	am.Start(ctx)
-
-	am.NotifyIncident(&model.Incident{Key: "k", Name: "n", Reason: "OOMKilled"}, model.ActionCreate, nil)
-	time.Sleep(50 * time.Millisecond) // let the enrich worker enter Analyze
-	cancel()                          // triggers shutdown (enrichCh closed)
-
-	select {
-	case <-delivered: // alert delivered even though enrichment was cut short
-	case <-time.After(2 * time.Second):
-		t.Fatal("incident was not delivered after shutdown")
-	}
-}
-
-// P2 (second case): a late NotifyIncident after shutdown closed enrichCh must
-// be a no-op, not a send-on-closed panic (Fix 2e).
+// A late NotifyIncident after shutdown must be a no-op, not a send-on-closed
+// panic: shutdown closes the provider channels and fanOut must never send on
+// a closed channel (Fix 2e).
 func TestNotifyIncidentAfterShutdownIsNoop(t *testing.T) {
 	am := &AlertManager{}
 	am.entries = []providerEntry{{
@@ -764,40 +796,41 @@ func TestNotifyIncidentAfterShutdownIsNoop(t *testing.T) {
 		retry:    retryConfig{maxAttempts: 1},
 		ch:       make(chan deliverJob, channelCap),
 	}}
-	am.llm = llm.New("http://127.0.0.1:0")
-	am.enrichCh = make(chan deliverJob, 1)
 
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 	am.Start(ctx)
-	am.shutdown() // deterministic: closes enrichCh + provider channels, waits
+	am.shutdown() // deterministic: closes provider channels, waits
 
-	// enrichCh is now closed; without Fix 2e this would panic.
 	am.NotifyIncident(&model.Incident{Key: "k", Name: "n", Reason: "OOMKilled"}, model.ActionCreate, nil)
 }
 
-// P3: the breaker is a true single-probe half-open (Fix 3). Tested directly —
-// record/allow take an explicit `now`; enrichOne's time.Now() is not injectable.
-func TestBreakerSingleProbe(t *testing.T) {
-	var b breaker
-	t0 := time.Now()
+// Saturation: when a provider channel is full, fanOut drops the oldest queued
+// job to make room and records it in the dead-letter queue instead of silently
+// losing it.
+func TestFanOutSaturatedQueueRecordsDeadLetter(t *testing.T) {
+	am := &AlertManager{}
+	ch := make(chan deliverJob, channelCap)
+	inc := &model.Incident{Key: "old-job", Name: "n1", Reason: "Error"}
+	for i := 0; i < channelCap; i++ {
+		ch <- deliverJob{inc: &model.Incident{Key: model.IncidentKey(fmt.Sprintf("stale-%d", i))}}
+	}
+	am.entries = []providerEntry{{
+		provider: &fakeProvider{},
+		ch:       ch,
+	}}
 
-	b.record(t0, false)
-	b.record(t0, false)
-	b.record(t0, false) // threshold reached → open
-	assert.False(t, b.allow(t0))
-	assert.False(t, b.allow(t0.Add(breakerCooldown-time.Second)))
+	am.mu.Lock()
+	am.fanOut(deliverJob{inc: inc, action: model.ActionCreate})
+	am.mu.Unlock()
 
-	probeAt := t0.Add(breakerCooldown + time.Second)
-	assert.True(t, b.allow(probeAt)) // exactly one probe after cooldown
-
-	b.record(probeAt, false) // failed probe re-opens for a full cooldown
-	assert.False(t, b.allow(probeAt.Add(time.Second)))
-	assert.False(t, b.allow(probeAt.Add(breakerCooldown-time.Second)))
-
-	closeAt := probeAt.Add(breakerCooldown + time.Second)
-	assert.True(t, b.allow(closeAt))
-	b.record(closeAt, true) // successful probe closes
-	assert.True(t, b.allow(closeAt))
-	assert.Equal(t, 0, b.fails)
+	// The new job must be queued (oldest drained out) and the drained job
+	// recorded as a dead letter.
+	assert.Len(t, ch, channelCap)
+	dl := am.DeadLetters()
+	dlList, ok := dl.([]DeadLetterEntry)
+	require.True(t, ok)
+	assert.Len(t, dlList, 1)
+	assert.Equal(t, "stale-0", dlList[0].Key)
+	assert.Contains(t, dlList[0].Error, "queue saturated")
 }

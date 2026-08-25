@@ -29,6 +29,7 @@ func newOomTracker(threshold int, window time.Duration) *oomTracker {
 }
 
 const maxOomEntries = 100
+const maxOomKeys = 500
 
 // record adds a timestamp for the given key and returns the count of
 // events within the sliding window, and whether the threshold is met.
@@ -50,8 +51,22 @@ func (t *oomTracker) record(key string) (count int, isRepeating bool) {
 	}
 	t.records[key] = entries
 
+	if len(t.records) > maxOomKeys {
+		t.pruneStaleLocked(cutoff)
+	}
+
 	count = len(entries)
 	return count, count >= t.threshold
+}
+
+// pruneStaleLocked removes tracker keys whose newest event predates cutoff,
+// preventing unbounded growth from short-lived pods. Caller holds t.mu.
+func (t *oomTracker) pruneStaleLocked(cutoff time.Time) {
+	for key, entries := range t.records {
+		if len(entries) == 0 || entries[len(entries)-1].Time.Before(cutoff) {
+			delete(t.records, key)
+		}
+	}
 }
 
 // History returns a formatted timeline of OOM events for the given key.

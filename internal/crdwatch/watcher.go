@@ -6,9 +6,6 @@ import (
 	"sync"
 	"time"
 
-	"github.com/abahmed/kwatch/api/v1alpha1"
-	"github.com/abahmed/kwatch/internal/alert"
-	"github.com/abahmed/kwatch/internal/config"
 	"k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
@@ -19,6 +16,10 @@ import (
 	"k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/cache"
 	"k8s.io/klog/v2"
+
+	"github.com/abahmed/kwatch/api/v1alpha1"
+	"github.com/abahmed/kwatch/internal/alert"
+	"github.com/abahmed/kwatch/internal/config"
 )
 
 var gvr = schema.GroupVersionResource{
@@ -78,11 +79,13 @@ func (w *Watcher) Start(ctx context.Context) error {
 	factory := dynamicinformer.NewFilteredDynamicSharedInformerFactory(dc, w.resync, w.namespace, nil)
 	inf := factory.ForResource(gvr).Informer()
 
-	inf.AddEventHandler(cache.ResourceEventHandlerFuncs{
+	if _, err := inf.AddEventHandler(cache.ResourceEventHandlerFuncs{
 		AddFunc:    func(obj interface{}) { w.reload(obj) },
 		UpdateFunc: func(_, newObj interface{}) { w.reload(newObj) },
 		DeleteFunc: func(_ interface{}) { w.restore() },
-	})
+	}); err != nil {
+		return fmt.Errorf("crdwatch: failed to register event handler: %w", err)
+	}
 
 	factory.Start(ctx.Done())
 	if !cache.WaitForCacheSync(ctx.Done(), inf.HasSynced) {
@@ -142,7 +145,12 @@ func (w *Watcher) reload(obj interface{}) {
 	}
 
 	if spec.SeverityByOwnerKind != nil {
-		w.engine.SetSeverityMap(spec.SeverityByOwnerKind)
+		if bad := config.InvalidSeverityKeys(spec.SeverityByOwnerKind); len(bad) > 0 {
+			klog.ErrorS(nil, "crdwatch: severityByOwnerKind has invalid severity values, ignoring map",
+				"keys", bad, "crd", cr.Name)
+		} else {
+			w.engine.SetSeverityMap(spec.SeverityByOwnerKind)
+		}
 	}
 
 	// Log restart-only fields that can't be hot-applied

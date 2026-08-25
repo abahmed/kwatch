@@ -1,0 +1,183 @@
+package controller
+
+import (
+	"strings"
+
+	corev1 "k8s.io/api/core/v1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/labels"
+	"k8s.io/klog/v2"
+)
+
+func (c *Controller) addPodToGraph(pod *corev1.Pod) {
+	if c.graph == nil {
+		return
+	}
+	ns := pod.Namespace
+	name := pod.Name
+
+	if pod.Spec.NodeName != "" {
+		c.graph.AddEdge("pod", ns, name, "node", "", pod.Spec.NodeName, "scheduled_on")
+	}
+	if pod.Spec.ServiceAccountName != "" {
+		c.graph.AddEdge("pod", ns, name, "serviceaccount", ns, pod.Spec.ServiceAccountName, "uses_sa")
+	}
+	for _, ref := range pod.OwnerReferences {
+		ownerKind := strings.ToLower(ref.Kind)
+		c.graph.AddEdge("pod", ns, name, ownerKind, ns, ref.Name, "owned_by")
+	}
+	for _, vol := range pod.Spec.Volumes {
+		if cm := vol.ConfigMap; cm != nil {
+			c.graph.AddEdge("pod", ns, name, "configmap", ns, cm.Name, "mounts")
+		}
+		if s := vol.Secret; s != nil {
+			c.graph.AddEdge("pod", ns, name, "secret", ns, s.SecretName, "mounts")
+		}
+		if pvc := vol.PersistentVolumeClaim; pvc != nil {
+			c.graph.AddEdge("pod", ns, name, "pvc", ns, pvc.ClaimName, "mounts")
+		}
+	}
+	for _, ctr := range pod.Spec.Containers {
+		c.addContainerEnvToGraph(ns, name, ctr)
+	}
+	for _, ctr := range pod.Spec.InitContainers {
+		c.addContainerEnvToGraph(ns, name, ctr)
+	}
+
+	if c.serviceLister == nil {
+		return
+	}
+	svcs, err := c.serviceLister.Services(ns).List(labels.Everything())
+	if err != nil {
+		klog.ErrorS(err, "failed to list services for graph edge", "namespace", ns)
+		return
+	}
+	for _, svc := range svcs {
+		if svc.Spec.Selector == nil {
+			continue
+		}
+		if labels.SelectorFromSet(svc.Spec.Selector).Matches(labels.Set(pod.Labels)) {
+			c.graph.AddEdge("service", ns, svc.Name, "pod", ns, name, "selects")
+		}
+	}
+}
+
+func (c *Controller) removePodFromGraph(pod *corev1.Pod) {
+	if c.graph == nil {
+		return
+	}
+	c.graph.RemoveNode("pod", pod.Namespace, pod.Name)
+}
+
+func (c *Controller) addContainerEnvToGraph(ns, podName string, ctr corev1.Container) {
+	for _, envFrom := range ctr.EnvFrom {
+		if cm := envFrom.ConfigMapRef; cm != nil {
+			c.graph.AddEdge("pod", ns, podName, "configmap", ns, cm.Name, "env_from")
+		}
+		if s := envFrom.SecretRef; s != nil {
+			c.graph.AddEdge("pod", ns, podName, "secret", ns, s.Name, "env_from")
+		}
+	}
+	for _, env := range ctr.Env {
+		if env.ValueFrom != nil {
+			if cm := env.ValueFrom.ConfigMapKeyRef; cm != nil {
+				c.graph.AddEdge("pod", ns, podName, "configmap", ns, cm.Name, "env_ref")
+			}
+			if s := env.ValueFrom.SecretKeyRef; s != nil {
+				c.graph.AddEdge("pod", ns, podName, "secret", ns, s.Name, "env_ref")
+			}
+		}
+	}
+}
+
+func (c *Controller) buildGraph() {
+	if c.graph == nil {
+		return
+	}
+	c.graph.Clear()
+
+	pods, err := c.podLister.List(labels.Everything())
+	if err != nil {
+		klog.ErrorS(err, "failed to list pods for graph build")
+		return
+	}
+	for _, pod := range pods {
+		c.addPodToGraph(pod)
+	}
+
+	c.buildResourceGraph()
+
+	klog.V(4).InfoS("dependency graph built from informer cache", "edges", len(c.graph.Edges()))
+}
+
+// pruneGraph performs mark-and-sweep on the resource graph: removes
+// ConfigMap, Secret, and Service nodes that no longer exist in the
+// informer cache. This prevents stale entries from accumulating
+// between full rebuilds.
+// markActiveKeys records the graph node keys of a listed resource kind so
+// dependent edges can be pruned against them.
+func markActiveKeys[T metav1.Object](active map[string]bool, kind string, items []T, err error, logMsg string) {
+	if err != nil {
+		klog.ErrorS(err, logMsg)
+		return
+	}
+	for _, obj := range items {
+		active[kind+"/"+obj.GetNamespace()+"/"+obj.GetName()] = true
+	}
+}
+
+func (c *Controller) pruneGraph() {
+	if c.graph == nil {
+		return
+	}
+
+	active := make(map[string]bool)
+
+	if cmLister := c.configMapLister; cmLister != nil {
+		cms, err := cmLister.List(labels.Everything())
+		markActiveKeys(active, "configmap", cms, err, "failed to list configmaps for graph pruning")
+	}
+
+	if secretLister := c.secretLister; secretLister != nil {
+		secrets, err := secretLister.List(labels.Everything())
+		markActiveKeys(active, "secret", secrets, err, "failed to list secrets for graph pruning")
+	}
+
+	if svcLister := c.serviceLister; svcLister != nil {
+		svcs, err := svcLister.List(labels.Everything())
+		markActiveKeys(active, "service", svcs, err, "failed to list services for graph pruning")
+	}
+
+	if saLister := c.serviceAccountLister; saLister != nil {
+		sas, err := saLister.List(labels.Everything())
+		markActiveKeys(active, "serviceaccount", sas, err, "failed to list serviceaccounts for graph pruning")
+	}
+
+	if scLister := c.storageClassLister; scLister != nil {
+		scs, err := scLister.List(labels.Everything())
+		markActiveKeys(active, "storageclass", scs, err, "failed to list storageclasses for graph pruning")
+	}
+
+	if pvLister := c.pvLister; pvLister != nil {
+		pvs, err := pvLister.List(labels.Everything())
+		markActiveKeys(active, "persistentvolume", pvs, err, "failed to list persistentvolumes for graph pruning")
+	}
+
+	if pvcLister := c.pvcLister; pvcLister != nil {
+		pvcs, err := pvcLister.List(labels.Everything())
+		markActiveKeys(active, "pvc", pvcs, err, "failed to list pvcs for graph pruning")
+	}
+
+	pre := len(c.graph.Edges())
+	c.graph.Prune("configmap", active)
+	c.graph.Prune("secret", active)
+	c.graph.Prune("service", active)
+	c.graph.Prune("serviceaccount", active)
+	c.graph.Prune("storageclass", active)
+	c.graph.Prune("persistentvolume", active)
+	c.graph.Prune("pvc", active)
+	post := len(c.graph.Edges())
+	if pruned := pre - post; pruned > 0 {
+		klog.V(4).InfoS("graph pruned", "removed", pruned, "remaining", post)
+	}
+}

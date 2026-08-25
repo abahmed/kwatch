@@ -110,14 +110,13 @@ func (s *StateManager) EnsureClusterID(ctx context.Context) (string, error) {
 }
 
 func (s *StateManager) MarkAsInitialized(ctx context.Context, clusterID, version string) error {
-	cm, err := s.client.CoreV1().ConfigMaps(s.namespace).Get(ctx, stateConfigMapName, metav1.GetOptions{})
+	_, err := s.client.CoreV1().ConfigMaps(s.namespace).Get(ctx, stateConfigMapName, metav1.GetOptions{})
 	if err != nil {
 		if !apierrors.IsNotFound(err) {
 			return err
 		}
-		cm = s.createConfigMap(clusterID, version)
-		_, err = s.client.CoreV1().ConfigMaps(s.namespace).Create(ctx, cm, metav1.CreateOptions{})
-		if err != nil {
+		cm := s.createConfigMap(clusterID, version)
+		if _, err := s.client.CoreV1().ConfigMaps(s.namespace).Create(ctx, cm, metav1.CreateOptions{}); err != nil {
 			return err
 		}
 		klog.InfoS("created state configmap with cluster ID", "clusterID", clusterID)

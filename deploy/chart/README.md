@@ -13,7 +13,7 @@ helm repo update
 ## Install Chart
 
 ```console
-helm install [RELEASE_NAME] kwatch/kwatch --version 0.11.0
+helm install [RELEASE_NAME] kwatch/kwatch --version 0.10.5
 ```
 
 ## Uninstall Chart
@@ -34,9 +34,8 @@ helm delete --purge [RELEASE_NAME]
 | `securityContext.readOnlyRootFilesystem` | Container's root filesystem is read-only | true |
 | `service.port` | Health check port | 8060 |
 | `resources` | CPU/Memory resource requests/limits | {limits: memory: 256Mi cpu: 100m} |
-| `config.llm.enabled` | Enable AI enrichment via kwatch-llm sidecar | false |
 | `nodeSelector` | Node labels for pod assignment | {} |
 | `tolerations` | Tolerations for pod assignment | [] |
 | `affinity` | affinity for pod | {} |
-| `config` | [kwatch configuration](https://github.com/abahmed/kwatch#configuration) | {} |
+| `config` | [kwatch configuration](../../docs/configuration.md) | {} |
 | `upgrader.disableUpdateCheck` | Disable startup update check | `false` |

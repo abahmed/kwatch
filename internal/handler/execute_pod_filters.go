@@ -2,17 +2,16 @@ package handler
 
 import (
 	"fmt"
-	"sort"
 	"time"
+
+	corev1 "k8s.io/api/core/v1"
+	"k8s.io/klog/v2"
 
 	"github.com/abahmed/kwatch/internal/enricher"
 	"github.com/abahmed/kwatch/internal/event"
 	"github.com/abahmed/kwatch/internal/filter"
 	"github.com/abahmed/kwatch/internal/k8s"
 	"github.com/abahmed/kwatch/internal/model"
-	corev1 "k8s.io/api/core/v1"
-	"k8s.io/apimachinery/pkg/labels"
-	"k8s.io/klog/v2"
 )
 
 func (h *handler) executePodFilters(ctx *filter.Context) {
@@ -34,33 +33,7 @@ func (h *handler) executePodFilters(ctx *filter.Context) {
 	}
 
 	// Phase 2: Enrich (I/O: events, owner)
-	if ctx.Events == nil {
-		if ctx.EventLister != nil {
-			all, err := ctx.EventLister.Events(ctx.Pod.Namespace).List(labels.Everything())
-			if err != nil {
-				klog.ErrorS(err, "event lister failed", "pod", ctx.Pod.Name)
-			} else {
-				items := make([]corev1.Event, 0, len(all))
-				for _, e := range all {
-					if e.InvolvedObject.Kind == "Pod" && e.InvolvedObject.Name == ctx.Pod.Name {
-						items = append(items, *e)
-					}
-				}
-				sort.Slice(items, func(i, j int) bool {
-					return items[i].LastTimestamp.Before(&items[j].LastTimestamp)
-				})
-				ctx.Events = &items
-			}
-		} else {
-			podEvents, err := k8s.GetPodEvents(ctx.Ctx, ctx.Client, ctx.Pod.Name, ctx.Pod.Namespace)
-			if err != nil {
-				klog.ErrorS(err, "failed to fetch pod events", "pod", ctx.Pod.Name)
-			}
-			if podEvents != nil {
-				ctx.Events = &podEvents.Items
-			}
-		}
-	}
+	h.loadPodEvents(ctx)
 
 	for i := range h.podEnrichers {
 		if h.podEnrichers[i].Enrich(ctx) {
@@ -84,44 +57,6 @@ func (h *handler) executePodFilters(ctx *filter.Context) {
 		ownerKind = ctx.Owner.Kind
 	}
 
-	hint := enricher.HintForReason(ctx.PodReason)
-	if ctx.PodMsg != "" {
-		hint = ctx.PodMsg + " — " + hint
-	}
-	if ctx.PodReason == "Unschedulable" && ctx.Pod != nil {
-		if h.config.ScheduleMonitor.Enabled {
-			var delay time.Duration
-			for _, c := range ctx.Pod.Status.Conditions {
-				if c.Type == corev1.PodScheduled && c.Status == corev1.ConditionFalse {
-					delay = h.now().Sub(c.LastTransitionTime.Time)
-					break
-				}
-			}
-			if delay <= 0 {
-				delay = h.now().Sub(ctx.Pod.CreationTimestamp.Time)
-			}
-			if delay > 30*time.Second {
-				hint = fmt.Sprintf("unschedulable for %s — ", roundDuration(delay)) + hint
-			}
-		}
-		// Add pod resource requests so the user can compare against node capacity
-		for _, c := range ctx.Pod.Spec.Containers {
-			req := c.Resources.Requests
-			if req != nil {
-				cpu, mem := req.Cpu(), req.Memory()
-				if cpu != nil || mem != nil {
-					r := c.Name + " requests:"
-					if cpu != nil && !cpu.IsZero() {
-						r += " cpu=" + cpu.String()
-					}
-					if mem != nil && !mem.IsZero() {
-						r += " mem=" + mem.String()
-					}
-					hint = hint + "; " + r
-				}
-			}
-		}
-	}
 	h.signalEvent(&event.Signal{
 		Resource:  "pod",
 		PodName:   ctx.Pod.Name,
@@ -132,7 +67,7 @@ func (h *handler) executePodFilters(ctx *filter.Context) {
 		Events:    k8s.GetPodEventsStr(ctx.Events),
 		Labels:    ctx.Pod.Labels,
 		OwnerKind: ownerKind,
-		Hint:      hint,
+		Hint:      h.podIssueHint(ctx),
 		Owner:     ownerName,
 		ContainerState: &model.ContainerState{
 			Reason: ctx.PodReason,
@@ -140,6 +75,63 @@ func (h *handler) executePodFilters(ctx *filter.Context) {
 			Status: "",
 		},
 	})
+}
+
+// podIssueHint builds the hint for pod-level (non-container) issues, adding
+// scheduling delay and resource requests for unschedulable pods.
+func (h *handler) podIssueHint(ctx *filter.Context) string {
+	hint := enricher.HintForReason(ctx.PodReason)
+	if ctx.PodMsg != "" {
+		hint = ctx.PodMsg + " — " + hint
+	}
+	if ctx.PodReason != "Unschedulable" || ctx.Pod == nil {
+		return hint
+	}
+
+	if h.config.ScheduleMonitor.Enabled {
+		if delay := h.unschedulableDelay(ctx); delay > 30*time.Second {
+			hint = fmt.Sprintf("unschedulable for %s — ", roundDuration(delay)) + hint
+		}
+	}
+
+	// Add pod resource requests so the user can compare against node capacity
+	for _, c := range ctx.Pod.Spec.Containers {
+		if r := containerRequestSummary(c); r != "" {
+			hint = hint + "; " + r
+		}
+	}
+	return hint
+}
+
+func (h *handler) unschedulableDelay(ctx *filter.Context) time.Duration {
+	for _, c := range ctx.Pod.Status.Conditions {
+		if c.Type == corev1.PodScheduled && c.Status == corev1.ConditionFalse {
+			if delay := h.now().Sub(c.LastTransitionTime.Time); delay > 0 {
+				return delay
+			}
+			break
+		}
+	}
+	return h.now().Sub(ctx.Pod.CreationTimestamp.Time)
+}
+
+func containerRequestSummary(c corev1.Container) string {
+	req := c.Resources.Requests
+	if req == nil {
+		return ""
+	}
+	cpu, mem := req.Cpu(), req.Memory()
+	if cpu == nil && mem == nil {
+		return ""
+	}
+	r := c.Name + " requests:"
+	if cpu != nil && !cpu.IsZero() {
+		r += " cpu=" + cpu.String()
+	}
+	if mem != nil && !mem.IsZero() {
+		r += " mem=" + mem.String()
+	}
+	return r
 }
 
 // roundDuration formats a duration for human display: "5m30s", "2h15m", etc.

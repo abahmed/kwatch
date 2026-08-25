@@ -4,10 +4,13 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/abahmed/kwatch/internal/event"
+	"github.com/abahmed/kwatch/internal/constant"
+
 	appsv1 "k8s.io/api/apps/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/client-go/tools/cache"
+
+	"github.com/abahmed/kwatch/internal/event"
 )
 
 // DetectStatefulSetIssue returns a Signal if the StatefulSet has unavailable
@@ -16,7 +19,7 @@ func DetectStatefulSetIssue(ss *appsv1.StatefulSet) *event.Signal {
 	if ss.Status.Replicas > 0 && ss.Status.ReadyReplicas < ss.Status.Replicas {
 		return &event.Signal{
 			Resource:  "statefulset",
-			Reason:    "StsUnavailable",
+			Reason:    constant.ReasonStsUnavailable,
 			Namespace: ss.Namespace,
 			Owner:     ss.Namespace + "/" + ss.Name,
 			Labels:    ss.Labels,
@@ -44,7 +47,7 @@ func (h *handler) ProcessStatefulSet(key string, deleted bool) error {
 		return nil
 	}
 
-	ss, err := h.ssLister.StatefulSets(namespace).Get(name)
+	ss, err := h.listers.ss.StatefulSets(namespace).Get(name)
 	if err != nil {
 		if errors.IsNotFound(err) {
 			h.correlator.ResolveByResource("statefulset", namespace+"/"+name)
@@ -89,7 +92,7 @@ func (h *handler) ProcessStatefulSetObject(ss *appsv1.StatefulSet, deleted bool)
 		h.signalEvent(&event.Signal{
 			Resource:  "statefulset",
 			Namespace: ss.Namespace,
-			Reason:    "StsUnavailable",
+			Reason:    constant.ReasonStsUnavailable,
 			Owner:     key,
 			Labels:    ss.Labels,
 			Hint:      stsAvailabilityHint(ss),
@@ -103,17 +106,9 @@ func (h *handler) ProcessStatefulSetObject(ss *appsv1.StatefulSet, deleted bool)
 }
 
 func (h *handler) markFirstUnavailableSts(key string) time.Time {
-	h.stsMu.Lock()
-	defer h.stsMu.Unlock()
-	if t, ok := h.firstUnavailableSts[key]; ok {
-		return t
-	}
-	h.firstUnavailableSts[key] = h.now()
-	return h.firstUnavailableSts[key]
+	return h.fs.unavailableSts.mark(key, h.now())
 }
 
 func (h *handler) clearFirstUnavailableSts(key string) {
-	h.stsMu.Lock()
-	defer h.stsMu.Unlock()
-	delete(h.firstUnavailableSts, key)
+	h.fs.unavailableSts.clear(key)
 }

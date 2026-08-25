@@ -3,11 +3,14 @@ package handler
 import (
 	"fmt"
 
-	"github.com/abahmed/kwatch/internal/correlation"
-	"github.com/abahmed/kwatch/internal/event"
+	"github.com/abahmed/kwatch/internal/constant"
+
 	networkingv1 "k8s.io/api/networking/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/client-go/tools/cache"
+
+	"github.com/abahmed/kwatch/internal/correlation"
+	"github.com/abahmed/kwatch/internal/event"
 )
 
 // DetectNetworkPolicyIssue checks for potentially problematic NetworkPolicies.
@@ -25,7 +28,7 @@ func DetectNetworkPolicyIssue(policy *networkingv1.NetworkPolicy) *event.Signal 
 		return &event.Signal{
 			Resource:  "networkpolicy",
 			Namespace: policy.Namespace,
-			Reason:    "RestrictiveNetworkPolicy",
+			Reason:    constant.ReasonRestrictiveNetworkPolicy,
 			Owner:     policy.Namespace + "/" + policy.Name,
 			PodName:   policy.Name,
 			Labels:    policy.Labels,
@@ -53,7 +56,7 @@ func (h *handler) ProcessNetworkPolicy(key string, deleted bool) error {
 		h.correlator.ResolveByResource("networkpolicy", namespace+"/"+name)
 		return nil
 	}
-	policy, err := h.netpolLister.NetworkPolicies(namespace).Get(name)
+	policy, err := h.listers.netpol.NetworkPolicies(namespace).Get(name)
 	if err != nil {
 		if errors.IsNotFound(err) {
 			h.correlator.ResolveByResource("networkpolicy", namespace+"/"+name)
@@ -77,7 +80,7 @@ func (h *handler) ProcessNetworkPolicyObject(policy *networkingv1.NetworkPolicy,
 	if sig != nil {
 		h.signalEvent(sig)
 	} else {
-		h.correlator.MarkResolved(correlation.BuildKey(policy.Namespace, policy.Namespace+"/"+policy.Name, "RestrictiveNetworkPolicy", ""))
+		h.correlator.MarkResolved(correlation.BuildKey(policy.Namespace, policy.Namespace+"/"+policy.Name, constant.ReasonRestrictiveNetworkPolicy, ""))
 	}
 	return nil
 }

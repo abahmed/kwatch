@@ -6,13 +6,14 @@ import (
 	"testing"
 	"time"
 
-	"github.com/abahmed/kwatch/internal/config"
-	"github.com/abahmed/kwatch/internal/model"
 	"github.com/stretchr/testify/assert"
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes/fake"
+
+	"github.com/abahmed/kwatch/internal/config"
+	"github.com/abahmed/kwatch/internal/model"
 )
 
 func TestNamespaceFilterAllowed(t *testing.T) {
@@ -438,6 +439,98 @@ func TestContainerStateFilterTerminatedExitCode0(t *testing.T) {
 	filter := ContainerStateFilter{}
 	result := filter.Execute(ctx)
 	assert.True(result)
+}
+
+func TestContainerStateFilterTerminatedCompletedWithRestarts(t *testing.T) {
+	assert := assert.New(t)
+
+	ctx := &Context{
+		Container: &ContainerContext{
+			HasRestarts: true,
+			Container: &corev1.ContainerStatus{
+				State: corev1.ContainerState{
+					Terminated: &corev1.ContainerStateTerminated{
+						Reason:   "Completed",
+						ExitCode: 0,
+					},
+				},
+			},
+		},
+
+		Pod: &corev1.Pod{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      "test-pod",
+				Namespace: "default",
+			},
+		},
+	}
+
+	// A cleanly-terminated container is not a failure even when the
+	// restart count is non-zero (e.g. init container that failed once
+	// then succeeded). It must be skipped, not alerted.
+	filter := ContainerStateFilter{}
+	result := filter.Execute(ctx)
+	assert.True(result)
+}
+
+func TestContainerStateFilterTerminatedGracefulWithRestarts(t *testing.T) {
+	assert := assert.New(t)
+
+	ctx := &Context{
+		Container: &ContainerContext{
+			HasRestarts: true,
+			Container: &corev1.ContainerStatus{
+				State: corev1.ContainerState{
+					Terminated: &corev1.ContainerStateTerminated{
+						Reason:   "Error",
+						ExitCode: 143,
+					},
+				},
+			},
+		},
+
+		Pod: &corev1.Pod{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      "test-pod",
+				Namespace: "default",
+			},
+		},
+	}
+
+	// Graceful SIGTERM shutdown must still be skipped with restarts,
+	// while a genuine crash (non-zero, non-143 exit) still alerts.
+	filter := ContainerStateFilter{}
+	result := filter.Execute(ctx)
+	assert.True(result)
+}
+
+func TestContainerStateFilterTerminatedCrashWithRestarts(t *testing.T) {
+	assert := assert.New(t)
+
+	ctx := &Context{
+		Container: &ContainerContext{
+			HasRestarts: true,
+			Container: &corev1.ContainerStatus{
+				State: corev1.ContainerState{
+					Terminated: &corev1.ContainerStateTerminated{
+						Reason:   "Error",
+						ExitCode: 137,
+					},
+				},
+			},
+		},
+
+		Pod: &corev1.Pod{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      "test-pod",
+				Namespace: "default",
+			},
+		},
+	}
+
+	filter := ContainerStateFilter{}
+	result := filter.Execute(ctx)
+	assert.False(result)
 }
 
 func TestContainerRestartsFilterNoState(t *testing.T) {

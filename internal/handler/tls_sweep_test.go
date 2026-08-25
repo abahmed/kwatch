@@ -10,13 +10,14 @@ import (
 	"testing"
 	"time"
 
-	"github.com/abahmed/kwatch/internal/config"
-	"github.com/abahmed/kwatch/internal/correlation"
 	"github.com/stretchr/testify/assert"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/informers"
 	"k8s.io/client-go/kubernetes/fake"
+
+	"github.com/abahmed/kwatch/internal/config"
+	"github.com/abahmed/kwatch/internal/correlation"
 )
 
 func generateTestCert(t *testing.T, commonName string, notAfter time.Time) []byte {
@@ -35,7 +36,7 @@ func generateTestCert(t *testing.T, commonName string, notAfter time.Time) []byt
 }
 
 func newHandlerForTest() *handler {
-	return NewHandler(fake.NewSimpleClientset(), &config.Config{}, correlation.NewEngine(correlation.Config{}), testAlertMgr).(*handler)
+	return NewHandler(fake.NewSimpleClientset(), &config.Config{}, correlation.NewEngine(correlation.Config{}), testAlertMgr)
 }
 
 func TestSweepTLSSecretsNilLister(t *testing.T) {
@@ -51,7 +52,7 @@ func TestCheckTLSSecretNoCertData(t *testing.T) {
 
 func TestCheckTLSSecretExpired(t *testing.T) {
 	e := correlation.NewEngine(correlation.Config{Window: 10 * time.Minute})
-	h := NewHandler(fake.NewSimpleClientset(), &config.Config{}, e, testAlertMgr).(*handler)
+	h := NewHandler(fake.NewSimpleClientset(), &config.Config{}, e, testAlertMgr)
 	certData := generateTestCert(t, "test.example.com", time.Now().Add(-24*time.Hour))
 	secret := &corev1.Secret{
 		ObjectMeta: metav1.ObjectMeta{Name: "tls1", Namespace: "ns1"},
@@ -63,7 +64,7 @@ func TestCheckTLSSecretExpired(t *testing.T) {
 
 func TestCheckTLSSecretExpiringSoon(t *testing.T) {
 	e := correlation.NewEngine(correlation.Config{Window: 10 * time.Minute})
-	h := NewHandler(fake.NewSimpleClientset(), &config.Config{}, e, testAlertMgr).(*handler)
+	h := NewHandler(fake.NewSimpleClientset(), &config.Config{}, e, testAlertMgr)
 	certData := generateTestCert(t, "test.example.com", time.Now().Add(10*24*time.Hour))
 	secret := &corev1.Secret{
 		ObjectMeta: metav1.ObjectMeta{Name: "tls1", Namespace: "ns1"},
@@ -75,7 +76,7 @@ func TestCheckTLSSecretExpiringSoon(t *testing.T) {
 
 func TestCheckTLSSecretExpiringSoonCritical(t *testing.T) {
 	e := correlation.NewEngine(correlation.Config{Window: 10 * time.Minute})
-	h := NewHandler(fake.NewSimpleClientset(), &config.Config{}, e, testAlertMgr).(*handler)
+	h := NewHandler(fake.NewSimpleClientset(), &config.Config{}, e, testAlertMgr)
 	certData := generateTestCert(t, "test.example.com", time.Now().Add(2*24*time.Hour))
 	secret := &corev1.Secret{
 		ObjectMeta: metav1.ObjectMeta{Name: "tls1", Namespace: "ns1"},
@@ -87,7 +88,7 @@ func TestCheckTLSSecretExpiringSoonCritical(t *testing.T) {
 
 func TestCheckTLSSecretHealthy(t *testing.T) {
 	e := correlation.NewEngine(correlation.Config{Window: 10 * time.Minute})
-	h := NewHandler(fake.NewSimpleClientset(), &config.Config{}, e, testAlertMgr).(*handler)
+	h := NewHandler(fake.NewSimpleClientset(), &config.Config{}, e, testAlertMgr)
 	certData := generateTestCert(t, "test.example.com", time.Now().Add(365*24*time.Hour))
 	secret := &corev1.Secret{
 		ObjectMeta: metav1.ObjectMeta{Name: "tls1", Namespace: "ns1"},

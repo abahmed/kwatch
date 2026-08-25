@@ -3,11 +3,14 @@ package handler
 import (
 	"fmt"
 
-	"github.com/abahmed/kwatch/internal/correlation"
-	"github.com/abahmed/kwatch/internal/event"
+	"github.com/abahmed/kwatch/internal/constant"
+
 	networkingv1 "k8s.io/api/networking/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/client-go/tools/cache"
+
+	"github.com/abahmed/kwatch/internal/correlation"
+	"github.com/abahmed/kwatch/internal/event"
 )
 
 // DetectIngressIssue checks an Ingress for backends referencing non-existent services.
@@ -28,7 +31,7 @@ func DetectIngressIssue(ing *networkingv1.Ingress, hasService func(ns, name stri
 				sigs = append(sigs, &event.Signal{
 					Resource:  "ingress",
 					Namespace: ing.Namespace,
-					Reason:    "IngressBackendNotFound",
+					Reason:    constant.ReasonIngressBackendNotFound,
 					Owner:     ing.Namespace + "/" + ing.Name,
 					PodName:   ing.Name,
 					Labels:    ing.Labels,
@@ -45,7 +48,7 @@ func DetectIngressIssue(ing *networkingv1.Ingress, hasService func(ns, name stri
 			sigs = append(sigs, &event.Signal{
 				Resource:  "ingress",
 				Namespace: ing.Namespace,
-				Reason:    "IngressBackendNotFound",
+				Reason:    constant.ReasonIngressBackendNotFound,
 				Owner:     ing.Namespace + "/" + ing.Name,
 				PodName:   ing.Name,
 				Labels:    ing.Labels,
@@ -66,7 +69,7 @@ func (h *handler) ProcessIngress(key string, deleted bool) error {
 		h.correlator.ResolveByResource("ingress", namespace+"/"+name)
 		return nil
 	}
-	ing, err := h.ingressLister.Ingresses(namespace).Get(name)
+	ing, err := h.listers.ingress.Ingresses(namespace).Get(name)
 	if err != nil {
 		if errors.IsNotFound(err) {
 			h.correlator.ResolveByResource("ingress", namespace+"/"+name)
@@ -87,10 +90,10 @@ func (h *handler) ProcessIngressObject(ing *networkingv1.Ingress, deleted bool) 
 	}
 
 	hasService := func(ns, name string) bool {
-		if h.serviceLister == nil {
+		if h.listers.service == nil {
 			return true
 		}
-		_, err := h.serviceLister.Services(ns).Get(name)
+		_, err := h.listers.service.Services(ns).Get(name)
 		return err == nil
 	}
 
@@ -99,7 +102,7 @@ func (h *handler) ProcessIngressObject(ing *networkingv1.Ingress, deleted bool) 
 		h.signalEvent(sig)
 	}
 	if len(sigs) == 0 {
-		h.correlator.MarkResolved(correlation.BuildKey(ing.Namespace, ing.Namespace+"/"+ing.Name, "IngressBackendNotFound", ""))
+		h.correlator.MarkResolved(correlation.BuildKey(ing.Namespace, ing.Namespace+"/"+ing.Name, constant.ReasonIngressBackendNotFound, ""))
 	}
 	return nil
 }

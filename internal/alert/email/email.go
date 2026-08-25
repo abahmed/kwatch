@@ -6,10 +6,12 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/abahmed/kwatch/internal/config"
-	"github.com/abahmed/kwatch/internal/event"
 	gomail "gopkg.in/mail.v2"
 	"k8s.io/klog/v2"
+
+	"github.com/abahmed/kwatch/internal/alert/util"
+	"github.com/abahmed/kwatch/internal/config"
+	"github.com/abahmed/kwatch/internal/event"
 )
 
 type Email struct {
@@ -79,13 +81,6 @@ func (e *Email) Name() string {
 	return "Email"
 }
 
-func orDefault(s, def string) string {
-	if s == "" {
-		return def
-	}
-	return s
-}
-
 func (e *Email) UsesEventDelivery() {}
 
 // SendEvent sends event to the provider
@@ -116,7 +111,7 @@ func (e *Email) buildMessageSubjectAndBody(
 	}
 
 	var parts []string
-	parts = append(parts, fmt.Sprintf("Reason: %s", orDefault(ev.Reason, "unknown")))
+	parts = append(parts, fmt.Sprintf("Reason: %s", util.OrDefault(ev.Reason, "unknown")))
 
 	if ev.PodName != "" {
 		parts = append(parts, fmt.Sprintf("Pod: %s", ev.PodName))

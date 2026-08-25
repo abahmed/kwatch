@@ -10,11 +10,14 @@ import (
 	"sync/atomic"
 	"time"
 
+	"github.com/abahmed/kwatch/internal/constant"
+
+	"k8s.io/klog/v2"
+
 	"github.com/abahmed/kwatch/internal/config"
 	"github.com/abahmed/kwatch/internal/event"
 	"github.com/abahmed/kwatch/internal/metrics"
 	"github.com/abahmed/kwatch/internal/model"
-	"k8s.io/klog/v2"
 )
 
 type IncidentLister interface {
@@ -163,7 +166,9 @@ func (h *HealthServer) healthzHandler(w http.ResponseWriter, r *http.Request) {
 func (h *HealthServer) healthHandler(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusOK)
-	json.NewEncoder(w).Encode(HealthResponse{Status: "ok"})
+	if err := json.NewEncoder(w).Encode(HealthResponse{Status: "ok"}); err != nil {
+		klog.ErrorS(err, "health: encode health response")
+	}
 }
 
 func (h *HealthServer) SetReady(v bool) {
@@ -200,7 +205,9 @@ func (h *HealthServer) incidentsHandler(w http.ResponseWriter, r *http.Request) 
 	snap := h.incidentAPI.Snapshot()
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusOK)
-	json.NewEncoder(w).Encode(snap)
+	if err := json.NewEncoder(w).Encode(snap); err != nil {
+		klog.ErrorS(err, "health: encode incidents snapshot")
+	}
 }
 
 func (h *HealthServer) testAlertHandler(w http.ResponseWriter, r *http.Request) {
@@ -226,13 +233,12 @@ func (h *HealthServer) testAlertHandler(w http.ResponseWriter, r *http.Request) 
 	ev := event.Event{
 		PodName:       "test-pod",
 		Namespace:     "default",
-		Reason:        "TestAlert",
+		Reason:        constant.ReasonTestAlert,
 		Events:        "this is a test alert from kwatch",
 		IncludeEvents: true,
 		IncludeLogs:   true,
 	}
 	h.alertManager.NotifyEvent(ev)
-	h.alertManager.Notify("[test-alert] kwatch test alert sent")
 	w.Header().Set("Content-Type", "text/plain")
 	w.WriteHeader(http.StatusOK)
 	if _, err := w.Write([]byte("test alert sent")); err != nil {
@@ -254,5 +260,7 @@ func (h *HealthServer) deadLettersHandler(w http.ResponseWriter, r *http.Request
 	}
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusOK)
-	json.NewEncoder(w).Encode(h.deadLetterLister.DeadLetters())
+	if err := json.NewEncoder(w).Encode(h.deadLetterLister.DeadLetters()); err != nil {
+		klog.ErrorS(err, "health: encode dead letters")
+	}
 }

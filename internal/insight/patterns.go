@@ -3,6 +3,7 @@ package insight
 import (
 	"fmt"
 	"strings"
+	"time"
 
 	"github.com/abahmed/kwatch/internal/context"
 	"github.com/abahmed/kwatch/internal/model"
@@ -15,6 +16,8 @@ type MassFailure struct {
 	Reason           string
 	Namespace        string
 	ResourceKind     string
+	RootCause        string
+	RecentChanges    []context.Change
 }
 
 const (
@@ -75,7 +78,7 @@ func ScanMassFailures(incidents []*model.Incident, graph *context.ResourceGraph)
 		if inc.State != model.StateActive {
 			continue
 		}
-		deps := graph.DependenciesOf(inc.Resource, inc.Namespace, inc.Name)
+		deps := dependenciesFor(graph, inc)
 		seen := make(map[string]bool)
 		for _, d := range deps {
 			if seen[d] {
@@ -115,6 +118,22 @@ func (mf MassFailure) Describe() string {
 	if idx := strings.Index(short, "/"); idx >= 0 {
 		short = short[idx+1:]
 	}
-	return fmt.Sprintf("%d %s incidents share dependency %s (threshold: %d, affected: %d)",
+	base := fmt.Sprintf("%d %s incidents share dependency %s (threshold: %d, affected: %d)",
 		mf.AffectedCount, mf.ResourceKind, short, mf.Threshold, mf.AffectedCount)
+	if mf.RootCause != "" {
+		base += "; root cause: " + mf.RootCause
+	}
+	if len(mf.RecentChanges) > 0 {
+		parts := make([]string, 0, len(mf.RecentChanges))
+		for _, c := range mf.RecentChanges {
+			delta := time.Since(c.Timestamp).Round(time.Second)
+			if delta < 0 {
+				delta = 0
+			}
+			parts = append(parts, fmt.Sprintf("%s/%s updated %s ago",
+				c.Namespace, c.Name, delta))
+		}
+		base += "; recent changes: " + strings.Join(parts, ", ")
+	}
+	return base
 }

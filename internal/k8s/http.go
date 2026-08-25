@@ -9,8 +9,9 @@ import (
 	"os"
 	"time"
 
-	"github.com/abahmed/kwatch/internal/config"
 	"k8s.io/klog/v2"
+
+	"github.com/abahmed/kwatch/internal/config"
 )
 
 const (
@@ -66,14 +67,6 @@ func InitHTTPClient(cfg *config.App) {
 
 	transport.TLSClientConfig = tlsCfg
 	defaultClient.Transport = transport
-}
-
-// NewHTTPClient returns an *http.Client using the shared transport.
-func NewHTTPClient() *http.Client {
-	return &http.Client{
-		Timeout:   DefaultHTTPTimeout,
-		Transport: defaultClient.Transport,
-	}
 }
 
 // GetDefaultClient returns the shared default HTTP client.

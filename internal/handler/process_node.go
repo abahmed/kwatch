@@ -5,11 +5,14 @@ import (
 	"strings"
 	"time"
 
-	"github.com/abahmed/kwatch/internal/correlation"
-	"github.com/abahmed/kwatch/internal/event"
+	"github.com/abahmed/kwatch/internal/constant"
+
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/klog/v2"
+
+	"github.com/abahmed/kwatch/internal/correlation"
+	"github.com/abahmed/kwatch/internal/event"
 )
 
 // newNodeGracePeriod is how long a newly-created node is allowed to stay
@@ -33,7 +36,7 @@ func (h *handler) ProcessNode(key string, deleted bool) error {
 		return nil
 	}
 
-	node, err := h.nodeLister.Get(name)
+	node, err := h.listers.node.Get(name)
 	if err != nil {
 		if errors.IsNotFound(err) {
 			h.clearAllNodePressure(name)
@@ -52,7 +55,7 @@ func NodeConditionReason(c corev1.NodeCondition) string {
 	switch c.Type {
 	case corev1.NodeReady:
 		if c.Status != corev1.ConditionTrue {
-			return "NodeNotReady"
+			return constant.ReasonNodeNotReady
 		}
 	case corev1.NodeMemoryPressure, corev1.NodeDiskPressure,
 		corev1.NodePIDPressure, corev1.NodeNetworkUnavailable:
@@ -65,6 +68,9 @@ func NodeConditionReason(c corev1.NodeCondition) string {
 
 func (h *handler) resolveNodeCondition(nodeName, stableReason string) {
 	h.correlator.MarkResolved(correlation.BuildKey("", nodeName, stableReason, ""))
+	// Refresh the inhibition flag even when no incident existed to resolve
+	// (e.g. a baselined NodeNotReady recovered) so pods stop being suppressed.
+	h.correlator.RefreshNodeInhibition(nodeName)
 }
 
 func (h *handler) emitNodeAlert(node *corev1.Node, c corev1.NodeCondition, stableReason string) {
@@ -111,14 +117,15 @@ func (h *handler) ProcessNodeObject(node *corev1.Node, deleted bool) error {
 	for _, c := range node.Status.Conditions {
 		switch c.Type {
 		case corev1.NodeReady:
-			if c.Status == corev1.ConditionTrue {
-				h.resolveNodeCondition(node.Name, "NodeNotReady")
-			} else if node.DeletionTimestamp != nil || node.Spec.Unschedulable {
-				h.resolveNodeCondition(node.Name, "NodeNotReady")
-			} else if isNewNode(node) {
-				h.resolveNodeCondition(node.Name, "NodeNotReady")
-			} else {
-				h.emitNodeAlert(node, c, "NodeNotReady")
+			switch {
+			case c.Status == corev1.ConditionTrue:
+				h.resolveNodeCondition(node.Name, constant.ReasonNodeNotReady)
+			case node.DeletionTimestamp != nil || node.Spec.Unschedulable:
+				h.resolveNodeCondition(node.Name, constant.ReasonNodeNotReady)
+			case isNewNode(node):
+				h.resolveNodeCondition(node.Name, constant.ReasonNodeNotReady)
+			default:
+				h.emitNodeAlert(node, c, constant.ReasonNodeNotReady)
 			}
 		case corev1.NodeMemoryPressure, corev1.NodeDiskPressure,
 			corev1.NodePIDPressure, corev1.NodeNetworkUnavailable:
@@ -141,28 +148,13 @@ func (h *handler) ProcessNodeObject(node *corev1.Node, deleted bool) error {
 }
 
 func (h *handler) markFirstNodePressure(key string) time.Time {
-	h.npMu.Lock()
-	defer h.npMu.Unlock()
-	if t, ok := h.firstNodePressure[key]; ok {
-		return t
-	}
-	h.firstNodePressure[key] = h.now()
-	return h.firstNodePressure[key]
+	return h.fs.nodePressure.mark(key, h.now())
 }
 
 func (h *handler) clearFirstNodePressure(key string) {
-	h.npMu.Lock()
-	defer h.npMu.Unlock()
-	delete(h.firstNodePressure, key)
+	h.fs.nodePressure.clear(key)
 }
 
 func (h *handler) clearAllNodePressure(nodeName string) {
-	h.npMu.Lock()
-	defer h.npMu.Unlock()
-	prefix := nodeName + "/"
-	for k := range h.firstNodePressure {
-		if strings.HasPrefix(k, prefix) {
-			delete(h.firstNodePressure, k)
-		}
-	}
+	h.fs.nodePressure.clearPrefix(nodeName + "/")
 }

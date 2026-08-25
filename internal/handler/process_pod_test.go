@@ -4,28 +4,15 @@ import (
 	"context"
 	"testing"
 
-	"github.com/abahmed/kwatch/internal/config"
-	"github.com/abahmed/kwatch/internal/correlation"
 	"github.com/stretchr/testify/assert"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/informers"
 	"k8s.io/client-go/kubernetes/fake"
+
+	"github.com/abahmed/kwatch/internal/config"
+	"github.com/abahmed/kwatch/internal/correlation"
 )
-
-func TestPodMountsPVCFalse(t *testing.T) {
-	pod := &corev1.Pod{Spec: corev1.PodSpec{Volumes: []corev1.Volume{
-		{Name: "v1", VolumeSource: corev1.VolumeSource{EmptyDir: &corev1.EmptyDirVolumeSource{}}},
-	}}}
-	assert.False(t, podMountsPVC(pod))
-}
-
-func TestPodMountsPVCTrue(t *testing.T) {
-	pod := &corev1.Pod{Spec: corev1.PodSpec{Volumes: []corev1.Volume{
-		{Name: "v1", VolumeSource: corev1.VolumeSource{PersistentVolumeClaim: &corev1.PersistentVolumeClaimVolumeSource{ClaimName: "pvc1"}}},
-	}}}
-	assert.True(t, podMountsPVC(pod))
-}
 
 func TestIsPodHealthyRunningNoIssues(t *testing.T) {
 	pod := &corev1.Pod{

@@ -9,10 +9,12 @@ import (
 	"slices"
 	"strings"
 
+	"k8s.io/klog/v2"
+
+	"github.com/abahmed/kwatch/internal/alert/util"
 	"github.com/abahmed/kwatch/internal/config"
 	"github.com/abahmed/kwatch/internal/event"
 	"github.com/abahmed/kwatch/internal/k8s"
-	"k8s.io/klog/v2"
 )
 
 const (
@@ -20,13 +22,6 @@ const (
 	defaultZendutyText  = "There is an issue with container (%s) in pod (%s)"
 	zendutyAPIURL       = "https://www.zenduty.com/api/events"
 )
-
-func orDefault(s, def string) string {
-	if s == "" {
-		return def
-	}
-	return s
-}
 
 var AlertTypes = []string{
 	"critical",
@@ -79,30 +74,30 @@ func NewZenduty(config map[string]interface{}, appCfg *config.App) *Zenduty {
 }
 
 // Name returns name of the provider
-func (m *Zenduty) Name() string {
+func (z *Zenduty) Name() string {
 	return "Zenduty"
 }
 
-func (m *Zenduty) UsesEventDelivery() {}
+func (z *Zenduty) UsesEventDelivery() {}
 
 // SendMessage sends text message to the provider
-func (m *Zenduty) SendMessage(msg string) error {
+func (z *Zenduty) SendMessage(msg string) error {
 	return nil
 }
 
 // SendEvent sends event to the provider
-func (m *Zenduty) SendEvent(e *event.Event) error {
+func (z *Zenduty) SendEvent(e *event.Event) error {
 	if e.Action == "resolved" {
-		return m.resolveAlert(e.DedupKey)
+		return z.resolveAlert(e.DedupKey)
 	}
-	b, err := m.buildMessage(e)
+	b, err := z.buildMessage(e)
 	if err != nil {
 		return err
 	}
-	return m.sendAPI(b)
+	return z.sendAPI(b)
 }
 
-func (m *Zenduty) resolveAlert(entityID string) error {
+func (z *Zenduty) resolveAlert(entityID string) error {
 	payload := zendutyPayload{
 		AlertType: "resolved",
 		EntityID:  entityID,
@@ -112,14 +107,14 @@ func (m *Zenduty) resolveAlert(entityID string) error {
 	if err != nil {
 		return fmt.Errorf("failed to marshal zenduty resolve payload: %w", err)
 	}
-	return m.sendAPI(body)
+	return z.sendAPI(body)
 }
 
 // sendAPI sends http request to Zenduty API
-func (m *Zenduty) sendAPI(content []byte) error {
+func (z *Zenduty) sendAPI(content []byte) error {
 	client := k8s.GetDefaultClient()
 	buffer := bytes.NewBuffer(content)
-	url := m.url + "/" + m.integrationkey + "/"
+	url := z.url + "/" + z.integrationkey + "/"
 	request, err := http.NewRequest(http.MethodPost, url, buffer)
 	if err != nil {
 		return err
@@ -147,9 +142,9 @@ func (m *Zenduty) sendAPI(content []byte) error {
 	return nil
 }
 
-func (m *Zenduty) buildMessage(e *event.Event) ([]byte, error) {
+func (z *Zenduty) buildMessage(e *event.Event) ([]byte, error) {
 	payload := zendutyPayload{
-		AlertType: m.alertType,
+		AlertType: z.alertType,
 		EntityID:  e.DedupKey,
 	}
 
@@ -160,7 +155,7 @@ func (m *Zenduty) buildMessage(e *event.Event) ([]byte, error) {
 	payload.Message = msg
 
 	var summaryParts []string
-	summaryParts = append(summaryParts, fmt.Sprintf("Reason: %s", orDefault(e.Reason, "unknown")))
+	summaryParts = append(summaryParts, fmt.Sprintf("Reason: %s", util.OrDefault(e.Reason, "unknown")))
 	if e.PodName != "" {
 		summaryParts = append(summaryParts, fmt.Sprintf("Pod: %s", e.PodName))
 	}
@@ -173,8 +168,8 @@ func (m *Zenduty) buildMessage(e *event.Event) ([]byte, error) {
 	if e.NodeName != "" {
 		summaryParts = append(summaryParts, fmt.Sprintf("Node: %s", e.NodeName))
 	}
-	if m.appCfg.ClusterName != "" {
-		summaryParts = append(summaryParts, fmt.Sprintf("Cluster: %s", m.appCfg.ClusterName))
+	if z.appCfg.ClusterName != "" {
+		summaryParts = append(summaryParts, fmt.Sprintf("Cluster: %s", z.appCfg.ClusterName))
 	}
 
 	summary := strings.Join(summaryParts, " · ")

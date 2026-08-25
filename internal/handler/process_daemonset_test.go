@@ -4,13 +4,15 @@ import (
 	"testing"
 	"time"
 
-	"github.com/abahmed/kwatch/internal/config"
-	"github.com/abahmed/kwatch/internal/correlation"
 	"github.com/stretchr/testify/assert"
 	appsv1 "k8s.io/api/apps/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/informers"
 	"k8s.io/client-go/kubernetes/fake"
+
+	"github.com/abahmed/kwatch/internal/config"
+	"github.com/abahmed/kwatch/internal/correlation"
+	"github.com/abahmed/kwatch/internal/event"
 )
 
 func TestDetectDaemonSetIssueUnavailable(t *testing.T) {
@@ -133,11 +135,39 @@ func TestProcessDaemonSetObjectNodeInhibition(t *testing.T) {
 	assert.Equal(t, 0, e.ActiveCount(), "should be suppressed by node inhibition")
 }
 
+func TestProcessDaemonSetObjectOvercommitDoesNotInhibit(t *testing.T) {
+	e := testCorrelator()
+	e.Process(event.Event{Resource: "node", PodName: "node1", NodeName: "node1", Reason: "NodeResourceCritical"}, "node1", nil)
+	assert.Equal(t, 0, e.CountActiveNodeIncidents(), "overcommit must not count toward node inhibition")
+	h := NewHandler(fake.NewSimpleClientset(), &config.Config{}, e, testAlertMgr)
+
+	ds := &appsv1.DaemonSet{
+		ObjectMeta: metav1.ObjectMeta{Name: "ds1", Namespace: "ns1"},
+		Status: appsv1.DaemonSetStatus{
+			DesiredNumberScheduled: 3,
+			NumberUnavailable:      1,
+			UpdatedNumberScheduled: 3,
+			ObservedGeneration:     1,
+		},
+	}
+	ds.Generation = 1
+	assert.NoError(t, h.ProcessDaemonSetObject(ds, false))
+
+	// The DaemonSetUnavailable incident must be created (not inhibited).
+	found := false
+	for _, inc := range e.SnapshotAll() {
+		if inc.Resource == "daemonset" && inc.Reason == "DaemonSetUnavailable" {
+			found = true
+		}
+	}
+	assert.True(t, found, "over-committed node must not suppress the DaemonSetUnavailable alert")
+}
+
 func TestProcessDaemonSetObjectRolloutGrace(t *testing.T) {
 	e := testCorrelator()
 	now := time.Now()
 	h := NewHandler(fake.NewSimpleClientset(), &config.Config{}, e, testAlertMgr)
-	h.(*handler).now = func() time.Time { return now }
+	h.now = func() time.Time { return now }
 
 	ds := &appsv1.DaemonSet{
 		ObjectMeta: metav1.ObjectMeta{Name: "ds1", Namespace: "ns1"},
@@ -175,7 +205,7 @@ func TestProcessDaemonSetObjectSustained(t *testing.T) {
 
 func TestMarkFirstUnavailableDSHit(t *testing.T) {
 	e := testCorrelator()
-	h := NewHandler(fake.NewSimpleClientset(), &config.Config{}, e, testAlertMgr).(*handler)
+	h := NewHandler(fake.NewSimpleClientset(), &config.Config{}, e, testAlertMgr)
 	t1 := h.markFirstUnavailableDS("ns1/ds1")
 	t2 := h.markFirstUnavailableDS("ns1/ds1")
 	assert.Equal(t, t1, t2, "second call should return existing entry")

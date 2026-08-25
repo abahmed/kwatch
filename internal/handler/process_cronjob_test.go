@@ -4,13 +4,14 @@ import (
 	"testing"
 	"time"
 
-	"github.com/abahmed/kwatch/internal/config"
-	"github.com/abahmed/kwatch/internal/correlation"
 	"github.com/stretchr/testify/assert"
 	batchv1 "k8s.io/api/batch/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/informers"
 	"k8s.io/client-go/kubernetes/fake"
+
+	"github.com/abahmed/kwatch/internal/config"
+	"github.com/abahmed/kwatch/internal/correlation"
 )
 
 func TestDetectCronJobIssueSuspended(t *testing.T) {
@@ -176,7 +177,7 @@ func TestProcessCronJobSuspended(t *testing.T) {
 
 func TestMarkFirstSuspendedCJHit(t *testing.T) {
 	e := testCorrelator()
-	h := NewHandler(fake.NewSimpleClientset(), &config.Config{}, e, testAlertMgr).(*handler)
+	h := NewHandler(fake.NewSimpleClientset(), &config.Config{}, e, testAlertMgr)
 	t1 := h.markFirstSuspendedCJ("ns1/cj1")
 	t2 := h.markFirstSuspendedCJ("ns1/cj1")
 	assert.Equal(t, t1, t2, "second call should return existing entry")

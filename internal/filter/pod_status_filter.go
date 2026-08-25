@@ -10,30 +10,27 @@ import (
 
 type PodStatusFilter struct{}
 
-func (f PodStatusFilter) Detect(ctx *Context) Status {
-	if ctx.Pod == nil {
-		return StatusAlert
-	}
-	if ctx.Pod.Status.Phase == corev1.PodSucceeded {
+// skipNonIssuePod reports pods that can never have issues: succeeded jobs and
+// bare Added events without conditions.
+func skipNonIssuePod(ctx *Context) (Status, bool) {
+	if ctx.Pod.Status.Phase == corev1.PodSucceeded ||
+		(strings.EqualFold(ctx.EvType, "Added") && len(ctx.Pod.Status.Conditions) == 0) {
 		ctx.PodHasIssues = false
 		ctx.ContainersHasIssues = false
-		return StatusSkip
+		return StatusSkip, true
 	}
+	return StatusAlert, false
+}
 
-	if strings.EqualFold(ctx.EvType, "Added") && len(ctx.Pod.Status.Conditions) == 0 {
-		ctx.PodHasIssues = false
-		ctx.ContainersHasIssues = false
-		return StatusSkip
-	}
-
-	issueInContainers := true
-	issueInPod := true
+// collectPodIssues derives issue flags from pod conditions. completed marks a
+// terminated pod (Ready=False/PodCompleted) that must be skipped outright.
+func collectPodIssues(ctx *Context) (issueInPod, issueInContainers, completed bool) {
+	issueInPod, issueInContainers = true, true
 	for _, c := range ctx.Pod.Status.Conditions {
-		if c.Type == corev1.PodReady {
+		switch c.Type {
+		case corev1.PodReady:
 			if c.Status == corev1.ConditionFalse && c.Reason == "PodCompleted" {
-				ctx.PodHasIssues = false
-				ctx.ContainersHasIssues = false
-				return StatusSkip
+				return false, false, true
 			}
 
 			issueInPod = false
@@ -41,42 +38,72 @@ func (f PodStatusFilter) Detect(ctx *Context) Status {
 			if c.Status != corev1.ConditionTrue {
 				issueInContainers = true
 			}
-		} else if c.Type == corev1.PodScheduled && c.Status == corev1.ConditionFalse {
-			issueInPod = true
-			issueInContainers = false
-			ctx.PodReason = c.Reason
-			ctx.PodMsg = c.Message
-		} else if c.Type == corev1.ContainersReady && c.Status == corev1.ConditionFalse {
-			issueInContainers = true
-			issueInPod = false
-		} else if c.Type == corev1.PodReadyToStartContainers && c.Status == corev1.ConditionFalse {
-			issueInPod = true
-			issueInContainers = false
-			ctx.PodReason = c.Reason
-			ctx.PodMsg = c.Message
+		case corev1.PodScheduled:
+			if c.Status == corev1.ConditionFalse {
+				issueInPod = true
+				issueInContainers = false
+				ctx.PodReason = c.Reason
+				ctx.PodMsg = c.Message
+			}
+		case corev1.ContainersReady:
+			if c.Status == corev1.ConditionFalse {
+				issueInContainers = true
+				issueInPod = false
+			}
+		case corev1.PodReadyToStartContainers:
+			if c.Status == corev1.ConditionFalse {
+				issueInPod = true
+				issueInContainers = false
+				ctx.PodReason = c.Reason
+				ctx.PodMsg = c.Message
+			}
 		}
 	}
+	return issueInPod, issueInContainers, false
+}
 
-	ctx.PodHasIssues = issueInPod
-	ctx.ContainersHasIssues = issueInContainers
-
-	if len(ctx.PodReason) > 0 &&
-		len(ctx.Config.AllowedReasons) > 0 &&
+// skipByReasonConfig applies the reason allow/forbid lists.
+func skipByReasonConfig(ctx *Context) bool {
+	if len(ctx.PodReason) == 0 {
+		return false
+	}
+	if len(ctx.Config.AllowedReasons) > 0 &&
 		!slices.Contains(ctx.Config.AllowedReasons, ctx.PodReason) {
 		klog.InfoS(
 			"skipping reason for pod as it is not in the reason allow list",
 			"reason", ctx.PodReason,
 			"pod", ctx.Pod.Name)
-		return StatusSkip
+		return true
 	}
-
-	if len(ctx.PodReason) > 0 &&
-		len(ctx.Config.ForbiddenReasons) > 0 &&
+	if len(ctx.Config.ForbiddenReasons) > 0 &&
 		slices.Contains(ctx.Config.ForbiddenReasons, ctx.PodReason) {
 		klog.InfoS(
 			"skipping reason for pod as it is in the reason forbid list",
 			"reason", ctx.PodReason,
 			"pod", ctx.Pod.Name)
+		return true
+	}
+	return false
+}
+
+func (f PodStatusFilter) Detect(ctx *Context) Status {
+	if ctx.Pod == nil {
+		return StatusAlert
+	}
+	if status, skip := skipNonIssuePod(ctx); skip {
+		return status
+	}
+
+	issueInPod, issueInContainers, completed := collectPodIssues(ctx)
+	if completed {
+		ctx.PodHasIssues = false
+		ctx.ContainersHasIssues = false
+		return StatusSkip
+	}
+	ctx.PodHasIssues = issueInPod
+	ctx.ContainersHasIssues = issueInContainers
+
+	if skipByReasonConfig(ctx) {
 		return StatusSkip
 	}
 

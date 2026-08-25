@@ -8,12 +8,16 @@ import (
 	"net/http"
 	"strings"
 
+	"k8s.io/klog/v2"
+
+	"github.com/abahmed/kwatch/internal/alert/util"
 	"github.com/abahmed/kwatch/internal/config"
 	"github.com/abahmed/kwatch/internal/constant"
 	"github.com/abahmed/kwatch/internal/event"
 	"github.com/abahmed/kwatch/internal/k8s"
+	"github.com/abahmed/kwatch/internal/message"
+	"github.com/abahmed/kwatch/internal/model"
 	"github.com/abahmed/kwatch/internal/ratelimit"
-	"k8s.io/klog/v2"
 )
 
 type Mattermost struct {
@@ -88,6 +92,17 @@ func (m *Mattermost) SendEvent(e *event.Event) error {
 		return err
 	}
 	return m.sendAPI(b)
+}
+
+// SendIncident implements alert.ThreadProvider.
+// It renders the incident using the Report model and PlaintextRenderer,
+// producing a context-adaptive text message.
+func (m *Mattermost) SendIncident(inc *model.Incident, action model.IncidentAction) error {
+	text := util.RenderIncident(inc, action, message.NewPlainTextRenderer(), m.appCfg.ClusterName)
+	if text == "" {
+		return nil
+	}
+	return m.SendMessage(text)
 }
 
 func (m *Mattermost) sendAPI(content []byte) error {

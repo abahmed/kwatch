@@ -15,7 +15,13 @@ rules:
   resources: ["namespaces"]
   verbs: ["get", "list", "watch"]
 - apiGroups: [""]
-  resources: ["services", "endpoints"]
+  resources: ["services"]
+  verbs: ["get", "watch", "list"]
+- apiGroups: [""]
+  resources: ["persistentvolumes", "serviceaccounts"]
+  verbs: ["get", "watch", "list"]
+- apiGroups: ["storage.k8s.io"]
+  resources: ["storageclasses"]
   verbs: ["get", "watch", "list"]
 - apiGroups: ["apps"]
   resources: ["daemonsets", "statefulsets", "deployments", "replicasets"]
@@ -25,6 +31,9 @@ rules:
   verbs: ["get", "watch", "list"]
 - apiGroups: ["networking.k8s.io"]
   resources: ["ingresses", "networkpolicies"]
+  verbs: ["get", "watch", "list"]
+- apiGroups: ["discovery.k8s.io"]
+  resources: ["endpointslices"]
   verbs: ["get", "watch", "list"]
 # - apiGroups: ["kwatch.abahmed.dev"]
 #   resources: ["kwatchconfigs"]
@@ -109,7 +118,7 @@ spec:
       serviceAccountName: kwatch
       containers:
       - name: kwatch
-        image: ghcr.io/abahmed/kwatch:v0.11.0
+        image: ghcr.io/abahmed/kwatch:v0.10.5
         imagePullPolicy: IfNotPresent
         securityContext:
           runAsNonRoot: true
@@ -153,25 +162,6 @@ spec:
           requests:
             memory: "128Mi"
             cpu: "100m"
-      # - name: llm
-      #   image: ghcr.io/abahmed/kwatch-llm:latest
-      #   imagePullPolicy: IfNotPresent
-      #   readinessProbe:
-      #     httpGet:
-      #       path: /health
-      #       port: 8080
-      #     initialDelaySeconds: 5
-      #     periodSeconds: 10
-      #   resources:
-      #     requests: { cpu: "1000m", memory: "1Gi" }
-      #     limits: { cpu: "1000m", memory: "1Gi" }
-      #   securityContext:
-      #     allowPrivilegeEscalation: false
-      #     runAsNonRoot: true
-      #     runAsUser: 1000
-      #     runAsGroup: 1000
-      #     capabilities: { drop: ["ALL"] }
-      #     seccompProfile: { type: RuntimeDefault }
       volumes:
       - name: config-volume
         configMap:
