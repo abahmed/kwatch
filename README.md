@@ -161,18 +161,16 @@ All 56 providers, with every parameter and example, are in
 Current preview: **v0.11.0-rc.4** — not for production.
 
 No Helm chart is published for release candidates, so install from the manifests at the RC
-tag. The manifests deliberately stay pinned to the latest **stable** image, so set the
-preview image explicitly — without the second command you would be running stable:
+tag. They already pin the preview image, so this is all you need:
 
 ```shell
 curl -L https://raw.githubusercontent.com/abahmed/kwatch/v0.11.0-rc.4/deploy/config.yaml -o config.yaml
 # ✏️ Edit config.yaml with your team-chat webhook
 kubectl apply -f config.yaml
 kubectl apply -f https://raw.githubusercontent.com/abahmed/kwatch/v0.11.0-rc.4/deploy/deploy.yaml
-kubectl -n kwatch set image deployment/kwatch kwatch=ghcr.io/abahmed/kwatch:v0.11.0-rc.4
 ```
 
-Already running kwatch? The last command on its own switches you to the preview:
+Already running kwatch? Switch an existing install straight to the preview:
 
 ```shell
 kubectl -n kwatch set image deployment/kwatch kwatch=ghcr.io/abahmed/kwatch:v0.11.0-rc.4
