@@ -23,7 +23,7 @@ jobs:
     - name: Lint
       uses: golangci/golangci-lint-action@v9
       with:
-        version: v2
+        version: latest
     - name: Build
       run: go build -o kwatch ./cmd/kwatch
     - name: Test
