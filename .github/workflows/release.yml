@@ -217,6 +217,7 @@ jobs:
           VERSION: ${{ steps.meta.outputs.version }}
           PRERELEASE: ${{ steps.meta.outputs.prerelease }}
           SHA: ${{ steps.target.outputs.sha }}
+          GH_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
           PRERELEASE_ARGS=""
