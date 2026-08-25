@@ -79,6 +79,22 @@ You never need to read the logs to find out what was cut.
 
 Run `rc` as often as needed until the candidate stabilizes.
 
+> **Why installing an RC takes one extra command.** `deploy/deploy.yaml` stays pinned to the
+> latest **stable** image everywhere — on `main` and at every tag, RC tags included. The bump
+> commit is also the commit that gets tagged, so a single commit cannot carry a stable image
+> for `main` and an RC image for the tag. Breaking the pin would mean anyone copying
+> `deploy/deploy.yaml` out of the repo browser silently installs a preview build, so the
+> README's preview block instead tells users to apply the manifest and then
+> `kubectl -n kwatch set image deployment/kwatch kwatch=ghcr.io/abahmed/kwatch:<rc tag>`.
+>
+> `stable` and `patch` need no such step: their bump commit **is** the tagged commit, so
+> `deploy.yaml` at the tag already carries the released image and a plain `kubectl apply`
+> is correct.
+>
+> If you ever change `rc` to bump `deploy/deploy.yaml`, drop the `set image` line from the
+> README preview block in the same PR — and be clear that you are trading it for a `main`
+> that ships preview builds to anyone who copies the manifest.
+
 ### `stable` — promote the latest RC
 
 1. Verifies the newest RC points at the current `main` tip; otherwise it fails and you must
