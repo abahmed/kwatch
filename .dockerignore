@@ -1,0 +1,21 @@
+# Keep the build context to what `go build ./cmd/kwatch` actually needs.
+# Without this, .git alone is 5.1 MB of a 7.8 MB repo, and every commit
+# changes it — which invalidates the COPY layer on every single build.
+
+.git
+.gitignore
+.github
+
+# Docs and assets are never compiled in.
+*.md
+docs/
+assets/
+
+# Deployment manifests and the chart ship from the repo, not the image.
+deploy/
+
+# Tooling config.
+.golangci.yml
+.dockerignore
+Dockerfile
+LICENSE
