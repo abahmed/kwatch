@@ -270,9 +270,10 @@ jobs:
 
       - name: Bump chart and README versions
         id: bump
-        if: ${{ !inputs.dry_run && (inputs.command == 'stable' || inputs.command == 'patch') }}
+        if: ${{ !inputs.dry_run }}
         env:
           VERSION: ${{ steps.meta.outputs.version }}
+          COMMAND: ${{ inputs.command }}
           TARGET: ${{ inputs.target }}
           SHA: ${{ steps.target.outputs.sha }}
         run: |
@@ -283,23 +284,51 @@ jobs:
 
           CHART_VER=$(echo "$VERSION" | sed -E 's/^v//')
           export VERSION CHART_VER
-          perl -pi -e 's/^version: .*/version: "$ENV{CHART_VER}"/' deploy/chart/Chart.yaml
-          perl -pi -e 's/^appVersion: .*/appVersion: "$ENV{VERSION}"/' deploy/chart/Chart.yaml
-          perl -pi -e 's/--version [0-9]+\.[0-9]+\.[0-9]+/--version $ENV{CHART_VER}/' README.md deploy/chart/README.md
-          perl -pi -e 's#kwatch/v[0-9]+\.[0-9]+\.[0-9]+/#kwatch/$ENV{VERSION}/#g' README.md
-          perl -pi -e 's#image: ghcr\.io/abahmed/kwatch:[^\n]*#image: ghcr.io/abahmed/kwatch:$ENV{VERSION}#' deploy/deploy.yaml
-          if [ "${{ inputs.command }}" = "stable" ]; then
+
+          # Rewrite version pins inside one marked block only, so an rc never
+          # touches the stable install snippets and a stable never touches the
+          # preview ones. Repeated start/end pairs of the same name are fine,
+          # which is what lets the clean-up section share the stable marker.
+          bump_block() {
+            BLOCK="$1" perl -i -pe '
+              $in = 1 if /<!--\s*\Q$ENV{BLOCK}\E:start\s*-->/;
+              $in = 0 if /<!--\s*\Q$ENV{BLOCK}\E:end\s*-->/;
+              if ($in) {
+                s/--version \d+\.\d+\.\d+(?:-rc\.\d+)?/--version $ENV{CHART_VER}/g;
+                s{kwatch/v\d+\.\d+\.\d+(?:-rc\.\d+)?/}{kwatch/$ENV{VERSION}/}g;
+                s{ghcr\.io/abahmed/kwatch:v\d+\.\d+\.\d+(?:-rc\.\d+)?}{ghcr.io/abahmed/kwatch:$ENV{VERSION}}g;
+                s/\*\*v\d+\.\d+\.\d+(?:-rc\.\d+)?\*\*/**$ENV{VERSION}**/g;
+              }
+            ' README.md
+          }
+
+          if [ "$COMMAND" = "rc" ]; then
+            # Preview snippets only. The chart and deploy manifests stay on the
+            # last stable, so a plain kubectl apply from main never ships an rc.
+            bump_block rc-install
+          else
+            bump_block stable-install
+            perl -pi -e 's/^version: .*/version: "$ENV{CHART_VER}"/' deploy/chart/Chart.yaml
+            perl -pi -e 's/^appVersion: .*/appVersion: "$ENV{VERSION}"/' deploy/chart/Chart.yaml
+            perl -pi -e 's/--version [0-9]+\.[0-9]+\.[0-9]+/--version $ENV{CHART_VER}/' deploy/chart/README.md
+            perl -pi -e 's#image: ghcr\.io/abahmed/kwatch:[^\n]*#image: ghcr.io/abahmed/kwatch:$ENV{VERSION}#' deploy/deploy.yaml
+          fi
+
+          if [ "$COMMAND" = "stable" ]; then
+            # The rc this promotes has just shipped, so the preview block has
+            # nothing to point at until the next rc opens a series.
+            perl -0777 -i -pe 's{(<!-- rc-install:start -->).*?(<!-- rc-install:end -->)}{$1\n\n_No release candidate right now._\n\n$2}s' README.md
             perl -ni -e 'print unless /^>\s*\*\*[^*]*Unreleased\*\*/' README.md docs/*.md
           fi
 
-          git add deploy/chart/Chart.yaml deploy/chart/README.md deploy/deploy.yaml README.md docs/
+          git add README.md deploy/chart/Chart.yaml deploy/chart/README.md deploy/deploy.yaml docs/
           if git diff --cached --quiet; then
             echo "no version changes to commit; the tag will point at $SHA"
             echo "bumped=false" >> "$GITHUB_OUTPUT"
             exit 0
           fi
 
-          git commit -m "chore: release $VERSION - bump chart and README versions"
+          git commit -m "chore: release $VERSION - bump pinned versions"
           BUMP_SHA=$(git rev-parse HEAD)
 
           if [ -n "$TARGET" ]; then
