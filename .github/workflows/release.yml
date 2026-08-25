@@ -150,10 +150,12 @@ jobs:
                 echo "::error::$VERSION already exists"
                 exit 1
               fi
-              RC_COMMIT=$(git rev-list -n 1 "$LATEST_RC")
-              MAIN_COMMIT=$(git rev-parse origin/main)
-              if [ "$RC_COMMIT" != "$MAIN_COMMIT" ]; then
-                COUNT=$(git rev-list --count "$LATEST_RC..origin/main")
+              # main must carry nothing the RC does not already have. An RC tag
+              # sits one commit ahead of main on purpose (that commit pins the
+              # manifest to the preview image and is never pushed), so compare
+              # by reachability rather than by sha equality.
+              COUNT=$(git rev-list --count "$LATEST_RC..origin/main")
+              if [ "$COUNT" != "0" ]; then
                 echo "::error::main has $COUNT commit(s) beyond $LATEST_RC. Cut a fresh RC first."
                 exit 1
               fi
@@ -321,30 +323,45 @@ jobs:
             perl -ni -e 'print unless /^>\s*\*\*[^*]*Unreleased\*\*/' README.md docs/*.md
           fi
 
+          # ---- commit 1: what main carries ----
           git add README.md deploy/chart/Chart.yaml deploy/chart/README.md deploy/deploy.yaml docs/
           if git diff --cached --quiet; then
-            echo "no version changes to commit; the tag will point at $SHA"
+            echo "nothing to bump for main"
             echo "bumped=false" >> "$GITHUB_OUTPUT"
-            exit 0
+          else
+            git commit -m "chore: release $VERSION - bump pinned versions"
+            if [ -n "$TARGET" ]; then
+              # Released off an older commit. The bump belongs to the tag only,
+              # since pushing it to main would rewrite main's version backwards.
+              echo "::warning::target was set, so the version bump is on the tag only. Update main by hand if it should carry $VERSION."
+            else
+              if ! git push origin "HEAD:refs/heads/main"; then
+                echo "::error::could not push the version bump to main. RELEASE_TOKEN must be a classic PAT with repo scope, allowed to bypass branch protection. Push it manually and re-run:"
+                echo "::error::  git push origin $(git rev-parse HEAD):main"
+                exit 1
+              fi
+            fi
+            echo "bumped=true" >> "$GITHUB_OUTPUT"
           fi
 
-          git commit -m "chore: release $VERSION - bump pinned versions"
-          BUMP_SHA=$(git rev-parse HEAD)
-
-          if [ -n "$TARGET" ]; then
-            # Hotfix off an older commit. The bump belongs to the tag only,
-            # since pushing it to main would rewrite main's version backwards.
-            echo "::warning::target was set, so the version bump is on the tag only. Update main by hand if it should carry $VERSION."
-          else
-            if ! git push origin "$BUMP_SHA:refs/heads/main"; then
-              echo "::error::could not push the version bump to main. RELEASE_TOKEN must be a classic PAT with repo scope, allowed to bypass branch protection. Push it manually and re-run:"
-              echo "::error::  git push origin $BUMP_SHA:main"
-              exit 1
+          # ---- commit 2, rc only: what the tag carries ----
+          # The tag must ship a manifest that installs the preview image, so a
+          # plain `kubectl apply` at the RC tag just works. This commit is
+          # deliberately NOT pushed: main's deploy.yaml keeps pointing at the
+          # latest stable, so copying it out of the repo browser can never
+          # install a preview build. The tag therefore sits one commit ahead of
+          # main, which is why the stable guard compares by reachability.
+          if [ "$COMMAND" = "rc" ]; then
+            perl -pi -e 's#image: ghcr\.io/abahmed/kwatch:[^\n]*#image: ghcr.io/abahmed/kwatch:$ENV{VERSION}#' deploy/deploy.yaml
+            git add deploy/deploy.yaml
+            if git diff --cached --quiet; then
+              echo "::warning::deploy/deploy.yaml already pins $VERSION; nothing to add to the tag"
+            else
+              git commit -m "chore: $VERSION - pin manifest to the preview image (tag only)"
             fi
           fi
 
-          echo "sha=$BUMP_SHA" >> "$GITHUB_OUTPUT"
-          echo "bumped=true" >> "$GITHUB_OUTPUT"
+          echo "sha=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
 
       - name: Create tag
         if: ${{ !inputs.dry_run }}
