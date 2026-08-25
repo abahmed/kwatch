@@ -32,7 +32,7 @@ jobs:
           flavor: |
             latest=false
           tags: |
-            type=semver,pattern={{raw}}
+            type=semver,pattern={{raw}},value=${{ github.event.release.tag_name }}
             type=raw,value=latest,enable=${{ github.event.release.prerelease != true }}
       - name: Build and push Docker image
         uses: docker/build-push-action@v7
