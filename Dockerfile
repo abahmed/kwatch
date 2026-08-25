@@ -16,10 +16,10 @@ ARG TARGETVARIANT
 WORKDIR /build
 
 # Dependencies change far less often than source, so keep them in their own
-# layer. The cache mount also survives within a build, so the four platforms
-# share one module download instead of doing it four times.
+# layer. This RUN references no TARGET* args, so BuildKit runs it once and
+# shares the result across all four platforms.
 COPY go.mod go.sum /build/
-RUN --mount=type=cache,target=/go/pkg/mod,sharing=locked \
+RUN --mount=type=cache,target=/go/pkg/mod \
     go mod download
 
 COPY . /build/
@@ -28,8 +28,13 @@ COPY . /build/
 # on every run, which makes Go's build cache useless. -installsuffix has done
 # nothing since Go 1.10. -buildvcs=false keeps Go from needing git in the
 # image; the version values come from ldflags anyway.
-RUN --mount=type=cache,target=/go/pkg/mod,sharing=locked \
-    --mount=type=cache,target=/root/.cache/go-build,sharing=locked \
+#
+# This RUN does reference TARGET* args, so BuildKit runs it once per platform.
+# The mounts are left at the default sharing=shared so those four runs happen
+# concurrently; sharing=locked would serialize them. GOCACHE and GOMODCACHE
+# are both safe for concurrent use by multiple processes.
+RUN --mount=type=cache,target=/go/pkg/mod \
+    --mount=type=cache,target=/root/.cache/go-build \
     set -eu; \
     export CGO_ENABLED=0 GOOS="${TARGETOS}" GOARCH="${TARGETARCH}"; \
     if [ "${TARGETARCH}" = "arm" ]; then export GOARM="${TARGETVARIANT#v}"; fi; \
