@@ -72,8 +72,10 @@ You never need to read the logs to find out what was cut.
    newest stable.
 5. `publish.yml` pushes `ghcr.io/abahmed/kwatch:v<X>.<Y>.<Z>-rc.<N>` only — **no `latest`**,
    and the in-app upgrader does not nag RC users.
-6. Chart and README versions are untouched (they stay pinned to the latest released version,
-   e.g. `v0.10.5`).
+6. Updates the **preview install block** in `README.md` (between the `rc-install` markers) to
+   the new RC and pushes that commit to `main`. The chart, `deploy/deploy.yaml`, the chart
+   README, and the **stable** install snippets are left alone — they stay on the latest
+   stable, so a plain `kubectl apply` straight from `main` never ships a preview build.
 
 Run `rc` as often as needed until the candidate stabilizes.
 
@@ -81,21 +83,24 @@ Run `rc` as often as needed until the candidate stabilizes.
 
 1. Verifies the newest RC points at the current `main` tip; otherwise it fails and you must
    cut a fresh RC first.
-2. Bumps every pinned version reference to the new version, strips `🚧 Unreleased` banners
-   from `README.md` and every `docs/*.md`, commits them to `main`, and pushes
-   (`RELEASE_TOKEN` required; see below):
+2. Bumps every stable pin to the new version, resets the **preview** block to
+   *"No release candidate right now."* (the RC it promotes has just shipped), strips
+   `🚧 Unreleased` banners from `README.md` and every `docs/*.md`, commits them to `main`,
+   and pushes (`RELEASE_TOKEN` required; see below):
    `deploy/chart/Chart.yaml` (`version`, `appVersion`), `deploy/chart/README.md`,
-   `deploy/deploy.yaml` (image tag), and the `README.md` install snippets
+   `deploy/deploy.yaml` (image tag), and the `README.md` stable install snippets
    (`helm install --version`, `/kwatch/vX.Y.Z/deploy/...`).
 3. Creates the `v<X>.<Y>.<Z>` tag **on that bump commit** and opens a normal GitHub Release
    (gets `latest`). Because the tag commit carries the bumped files, the raw
    `/kwatch/vX.Y.Z/deploy/...` refs and the chart at the tag match the released version.
 
 > **Pinned-version invariant:** on `main`, the chart version, `deploy.yaml` image tag, chart
-> README, and README install snippets always point at the **latest released version** — what
-> a visitor reads is what they can actually install. They are bumped by the `stable` and
-> `patch` commands and never by feature PRs. The `docs/` reference pages carry **no version
-> pins**; a reference page that needs an install command links to the README instead.
+> README, and the **stable** README install snippets always point at the latest **stable**
+> release. The **preview** README block always points at the newest open RC, or says there
+> isn't one. What a visitor reads is what they can actually install, on either channel.
+> Every pin is bumped by the release workflow and never by feature PRs. The `docs/`
+> reference pages carry **no version pins**; a reference page that needs an install command
+> links to the README instead.
 
 ### `patch` — hotfix tagged on `main`
 
@@ -119,10 +124,11 @@ Run `rc` as often as needed until the candidate stabilizes.
 > would rewrite `main`'s pinned versions backwards. Update `main` by hand if it should
 > carry the new version.
 
-> The version-bump commit is pushed to the protected `main` branch, so `stable` and `patch`
+> The version-bump commit is pushed to the protected `main` branch, so **all three commands**
 > require a **`RELEASE_TOKEN`** secret (a maintainer classic PAT with `repo` scope, allowed
-> to bypass branch protection). If the secret is missing or the push fails, the workflow
-> stops **before** tagging and prints the manual `git push` command to run.
+> to bypass branch protection). `rc` needs it too, since it now maintains the preview block.
+> If the secret is missing or the push fails, the workflow stops **before** tagging and
+> prints the manual `git push` command to run.
 >
 > `RELEASE_TOKEN` is also what makes the image get built. A GitHub Release created with the
 > default `GITHUB_TOKEN` does **not** trigger other workflows, so `publish.yml` would never
@@ -166,6 +172,25 @@ immediately, but under a banner while unreleased:
   `deploy.yaml` image, chart files) in the same commit.
 - Maintainers never touch version numbers by hand; the pinned-version invariant and the
   banner convention are enforced by `CONTRIBUTING.md` and the gate checklist above.
+
+### Install blocks in `README.md`
+
+Version pins live inside HTML comment markers, and the workflow only rewrites what is
+between them:
+
+| Marker | Holds | Bumped by |
+|---|---|---|
+| `<!-- stable-install:start -->` … `:end` | Helm + kubectl install snippets, and the clean-up commands | `stable`, `patch` |
+| `<!-- rc-install:start -->` … `:end` | The collapsed preview section | `rc`; reset to a placeholder by `stable` |
+
+Three rules follow from this:
+
+- **Do not delete the markers.** They are how the workflow finds what to rewrite. A pin
+  outside them silently stops being maintained — nothing fails, it just goes stale.
+- **A marker name may repeat.** `stable-install` wraps two regions (install and clean-up)
+  and both are rewritten in one pass.
+- **New version pin? Put it inside a block.** If it belongs to the stable channel it goes in
+  a `stable-install` region; if it documents the preview it goes in the `rc-install` one.
 
 ## Releasing the Helm chart (manual)
 
