@@ -36,6 +36,8 @@ COPY . /build/
 RUN --mount=type=cache,target=/go/pkg/mod \
     --mount=type=cache,target=/root/.cache/go-build \
     set -eu; \
+    : "${TARGETOS:?empty - buildx did not supply TARGETOS}"; \
+    : "${TARGETARCH:?empty - buildx did not supply TARGETARCH}"; \
     export CGO_ENABLED=0 GOOS="${TARGETOS}" GOARCH="${TARGETARCH}"; \
     if [ "${TARGETARCH}" = "arm" ]; then export GOARM="${TARGETVARIANT#v}"; fi; \
     go build -trimpath -buildvcs=false \
