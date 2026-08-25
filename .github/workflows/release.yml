@@ -143,7 +143,7 @@ jobs:
           if [ -z "$LOG" ]; then
             LOG="* No changes since $PREV."
           fi
-          BODY="## kwatch $VERSION
+          BODY="## $VERSION
 
           $LOG
 
@@ -209,7 +209,7 @@ jobs:
           SHA: ${{ steps.target.outputs.sha }}
         run: |
           set -euo pipefail
-          git tag -a "$VERSION" -m "kwatch $VERSION" "$SHA"
+          git tag -a "$VERSION" -m "$VERSION" "$SHA"
           git push origin "$VERSION"
 
       - name: Create GitHub release
@@ -224,7 +224,7 @@ jobs:
           [ "$PRERELEASE" = "true" ] && PRERELEASE_ARGS="--prerelease"
           gh release create "$VERSION" \
             --repo "$GITHUB_REPOSITORY" \
-            --title "kwatch $VERSION" \
+            --title "$VERSION" \
             --notes-file /tmp/release-notes.md \
             $PRERELEASE_ARGS \
             --target "$SHA"
