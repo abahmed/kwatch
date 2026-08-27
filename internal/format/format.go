@@ -7,21 +7,24 @@ import (
 	"time"
 )
 
-// ShortImage drops the registry from an image reference. A reader wants to
-// know which image and which tag, not which registry it came from:
+// ShortImage reduces an image reference to what a reader needs: the image
+// name with its tag or digest. The registry host and the repository path
+// say where it came from, not what it is, and they triple the line length:
+//
+//	registry.example.com/team/api:1.2.0        → api:1.2.0
+//	ghcr.io/org/tool@sha256:abcdef0123456789…  → tool@abcdef012345
+//	nginx:1.25                                 → nginx:1.25
+//
 // A digest is cut to its first 12 characters, the way container tools show it.
 func ShortImage(image string) string {
 	image = strings.TrimSpace(image)
 	if image == "" {
 		return ""
 	}
-	// The first path segment is a registry host when it contains a dot or a
-	// port, or is "localhost". Docker Hub images have no such segment.
-	if i := strings.Index(image, "/"); i > 0 {
-		host := image[:i]
-		if strings.ContainsAny(host, ".:") || host == "localhost" {
-			image = image[i+1:]
-		}
+	// Keep only the last path segment: everything before it is registry
+	// host and repository path.
+	if i := strings.LastIndex(image, "/"); i >= 0 {
+		image = image[i+1:]
 	}
 	if i := strings.Index(image, "@sha256:"); i > 0 {
 		digest := image[i+len("@sha256:"):]

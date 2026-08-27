@@ -31,8 +31,10 @@ func TestSignAWSV4Deterministic(t *testing.T) {
 	h2, err := SignAWSV4("k", "s", "us-east-1", "sns", "POST",
 		"https://sns.us-east-1.amazonaws.com/", []byte("a=1"))
 	assert.Nil(err)
-	h3, err := SignAWSV4("k", "s", "us-east-1", "sns", "POST",
-		"https://sns.us-east-1.amazonaws.com/", []byte("a=1"))
+	// A different region must sign differently: the region is part of the
+	// credential scope.
+	h3, err := SignAWSV4("k", "s", "us-west-2", "sns", "POST",
+		"https://sns.us-west-2.amazonaws.com/", []byte("a=1"))
 	assert.Nil(err)
 	h4, err := SignAWSV4("k", "other", "us-east-1", "sns", "POST",
 		"https://sns.us-east-1.amazonaws.com/", []byte("a=1"))
