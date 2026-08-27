@@ -20,11 +20,31 @@ func TestResolveSeverityExactMatch(t *testing.T) {
 			"Evicted":          "warning",
 		},
 	}
-	assert.Equal(t, model.SeverityHigh, e.resolveSeverity("StatefulSet", "Error"))
-	assert.Equal(t, model.SeverityCritical, e.resolveSeverity("DaemonSet", "Error"))
-	assert.Equal(t, model.SeverityMedium, e.resolveSeverity("Deployment", "ImagePullBackOff"))
-	assert.Equal(t, model.SeverityWarning, e.resolveSeverity("Deployment", "Evicted"))
-	assert.Equal(t, model.SeverityNormal, e.resolveSeverity("Deployment", "CrashLoopBackOff"))
+	assert.Equal(
+		t,
+		model.SeverityHigh,
+		e.resolveSeverity("StatefulSet", "Error"),
+	)
+	assert.Equal(
+		t,
+		model.SeverityCritical,
+		e.resolveSeverity("DaemonSet", "Error"),
+	)
+	assert.Equal(
+		t,
+		model.SeverityMedium,
+		e.resolveSeverity("Deployment", "ImagePullBackOff"),
+	)
+	assert.Equal(
+		t,
+		model.SeverityWarning,
+		e.resolveSeverity("Deployment", "Evicted"),
+	)
+	assert.Equal(
+		t,
+		model.SeverityNormal,
+		e.resolveSeverity("Deployment", "CrashLoopBackOff"),
+	)
 }
 
 func TestResolveSeverityCaseInsensitive(t *testing.T) {
@@ -39,9 +59,21 @@ func TestResolveSeverityCaseInsensitive(t *testing.T) {
 	}
 	// K8s kinds/reasons arrive with canonical capitalization; config keys
 	// must still resolve regardless of case.
-	assert.Equal(t, model.SeverityHigh, e.resolveSeverity("StatefulSet", "Error"))
-	assert.Equal(t, model.SeverityCritical, e.resolveSeverity("DaemonSet", "Error"))
-	assert.Equal(t, model.SeverityMedium, e.resolveSeverity("Deployment", "ImagePullBackOff"))
+	assert.Equal(
+		t,
+		model.SeverityHigh,
+		e.resolveSeverity("StatefulSet", "Error"),
+	)
+	assert.Equal(
+		t,
+		model.SeverityCritical,
+		e.resolveSeverity("DaemonSet", "Error"),
+	)
+	assert.Equal(
+		t,
+		model.SeverityMedium,
+		e.resolveSeverity("Deployment", "ImagePullBackOff"),
+	)
 }
 
 func TestResolveSeverityValueCaseInsensitive(t *testing.T) {
@@ -55,9 +87,21 @@ func TestResolveSeverityValueCaseInsensitive(t *testing.T) {
 			"Evicted":          "warning",
 		},
 	}
-	assert.Equal(t, model.SeverityHigh, e.resolveSeverity("StatefulSet", "Error"))
-	assert.Equal(t, model.SeverityCritical, e.resolveSeverity("Deployment", "ImagePullBackOff"))
-	assert.Equal(t, model.SeverityWarning, e.resolveSeverity("Deployment", "Evicted"))
+	assert.Equal(
+		t,
+		model.SeverityHigh,
+		e.resolveSeverity("StatefulSet", "Error"),
+	)
+	assert.Equal(
+		t,
+		model.SeverityCritical,
+		e.resolveSeverity("Deployment", "ImagePullBackOff"),
+	)
+	assert.Equal(
+		t,
+		model.SeverityWarning,
+		e.resolveSeverity("Deployment", "Evicted"),
+	)
 }
 
 func TestEnrichSeverityNotCorruptedByConfig(t *testing.T) {
@@ -66,17 +110,31 @@ func TestEnrichSeverityNotCorruptedByConfig(t *testing.T) {
 	}
 	inc := &model.Incident{}
 	e.Enrich(&event.Event{OwnerKind: "StatefulSet"}, inc)
-	assert.Equal(t, model.SeverityHigh, inc.Severity, "StatefulSet severity must come from user config")
+	assert.Equal(
+		t,
+		model.SeverityHigh,
+		inc.Severity,
+		"StatefulSet severity must come from user config",
+	)
 }
 
 func TestEnrichSeverityWarningSticky(t *testing.T) {
 	e := &DefaultEnricher{
 		SeverityByReason: map[string]string{"ImagePullBackOff": "normal"},
 	}
-	inc := &model.Incident{Severity: model.SeverityWarning}
+	inc := &model.Incident{
+		Status: model.Status{
+			Severity: model.SeverityWarning,
+		},
+	}
 	// A "normal" event must NOT downgrade an open "warning" incident.
 	e.Enrich(&event.Event{Reason: "ImagePullBackOff"}, inc)
-	assert.Equal(t, model.SeverityWarning, inc.Severity, "warning must be sticky against normal events")
+	assert.Equal(
+		t,
+		model.SeverityWarning,
+		inc.Severity,
+		"warning must be sticky against normal events",
+	)
 
 	// But an explicit "high" event still escalates.
 	e.Enrich(&event.Event{Severity: model.SeverityHigh}, inc)

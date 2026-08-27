@@ -33,14 +33,20 @@ type alertEntry struct {
 }
 
 // recordingAlertManager captures (incident, action) pairs for assertion in
-// integration tests. It stands in for the real alert.AlertManager when
-// wired through the correlation engine's LifecycleHook.
+// integration tests. It stands in for the real alert.AlertManager, wired
+// through the correlation engine's LifecycleHook — the engine announces every
+// decision itself, including the ones Process returns, so tests must not
+// record the return value a second time.
 type recordingAlertManager struct {
 	mu       sync.Mutex
 	notified []alertEntry
 }
 
-func (r *recordingAlertManager) NotifyIncident(inc *model.Incident, action model.IncidentAction, _ ...interface{}) {
+func (r *recordingAlertManager) NotifyIncident(
+	inc *model.Incident,
+	action model.IncidentAction,
+	_ ...interface{},
+) {
 	r.mu.Lock()
 	r.notified = append(r.notified, alertEntry{inc: inc, action: action})
 	r.mu.Unlock()
@@ -52,7 +58,9 @@ func (r *recordingAlertManager) Len() int {
 	return len(r.notified)
 }
 
-func (r *recordingAlertManager) Get(i int) (*model.Incident, model.IncidentAction) {
+func (r *recordingAlertManager) Get(
+	i int,
+) (*model.Incident, model.IncidentAction) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	if i < 0 || i >= len(r.notified) {
@@ -78,7 +86,9 @@ func newTestEngine(rec *recordingAlertManager) *correlation.Engine {
 
 // makeEvent is a shorthand for building an event.Event with commonly-used
 // fields set.
-func makeEvent(resource, podName, namespace, reason, containerName, nodeName string) event.Event {
+func makeEvent(
+	resource, podName, namespace, reason, containerName, nodeName string,
+) event.Event {
 	return event.Event{
 		Resource:      resource,
 		PodName:       podName,
@@ -91,8 +101,13 @@ func makeEvent(resource, podName, namespace, reason, containerName, nodeName str
 	}
 }
 
-// makeContainerState builds a model.ContainerState for use in engine Process calls.
-func makeContainerState(restartCount int32, reason string, exitCode int32) *model.ContainerState {
+// makeContainerState builds a model.ContainerState for use in engine Process
+// calls.
+func makeContainerState(
+	restartCount int32,
+	reason string,
+	exitCode int32,
+) *model.ContainerState {
 	return &model.ContainerState{
 		RestartCount: restartCount,
 		Reason:       reason,
@@ -112,7 +127,14 @@ func TestCrashLoopPodCreatesAndResolves(t *testing.T) {
 	rec := &recordingAlertManager{}
 	eng := newTestEngine(rec)
 
-	ev := makeEvent("pod", "my-pod", "default", "CrashLoopBackOff", "main", "node-1")
+	ev := makeEvent(
+		"pod",
+		"my-pod",
+		"default",
+		"CrashLoopBackOff",
+		"main",
+		"node-1",
+	)
 	owner := "my-deployment"
 	cs := makeContainerState(3, "CrashLoopBackOff", 137)
 
@@ -124,13 +146,21 @@ func TestCrashLoopPodCreatesAndResolves(t *testing.T) {
 	if inc == nil {
 		t.Fatal("expected non-nil incident")
 	}
-	if inc.Key != correlation.BuildKey(ev.Namespace, owner, "CrashLoopBackOff", "") {
+	if inc.Key != correlation.BuildKey(
+		ev.Namespace,
+		owner,
+		"CrashLoopBackOff",
+		"",
+	) {
 		t.Fatalf("unexpected incident key: %s", inc.Key)
 	}
-	rec.NotifyIncident(inc, action)
 
 	// Second occurrence: edge-triggered → skip (same NotifiedSig)
-	inc2, action2 := eng.Process(ev, owner, makeContainerState(4, "CrashLoopBackOff", 137))
+	inc2, action2 := eng.Process(
+		ev,
+		owner,
+		makeContainerState(4, "CrashLoopBackOff", 137),
+	)
 	if action2 != model.ActionSkip {
 		t.Fatalf("expected ActionSkip (edge-triggered), got %s", action2)
 	}
@@ -141,20 +171,31 @@ func TestCrashLoopPodCreatesAndResolves(t *testing.T) {
 	// Resolve
 	eng.MarkResolved(inc.Key)
 
-	// Two notifications: the create we recorded, and the resolved from LifecycleHook
+	// Two notifications: the create we recorded, and the resolved from
+	// LifecycleHook
 	if rec.Len() != 2 {
 		_, a0 := rec.Get(0)
 		_, a1 := rec.Get(1)
-		t.Fatalf("expected 2 notifications (create + resolved), got %d: [%s, %s]",
-			rec.Len(), a0, a1)
+		t.Fatalf(
+			"expected 2 notifications (create + resolved), got %d: [%s, %s]",
+			rec.Len(),
+			a0,
+			a1,
+		)
 	}
 	_, createAction := rec.Get(0)
 	_, resolveAction := rec.Get(1)
 	if createAction != model.ActionCreate {
-		t.Fatalf("first notification should be ActionCreate, got %s", createAction)
+		t.Fatalf(
+			"first notification should be ActionCreate, got %s",
+			createAction,
+		)
 	}
 	if resolveAction != model.ActionResolved {
-		t.Fatalf("second notification should be ActionResolved, got %s", resolveAction)
+		t.Fatalf(
+			"second notification should be ActionResolved, got %s",
+			resolveAction,
+		)
 	}
 }
 
@@ -170,18 +211,23 @@ func TestNodeConditionCreateAndResolve(t *testing.T) {
 
 	inc, action := eng.Process(ev, owner, nil)
 	if action != model.ActionCreate {
-		t.Fatalf("expected ActionCreate for node MemoryPressure, got %s", action)
+		t.Fatalf(
+			"expected ActionCreate for node MemoryPressure, got %s",
+			action,
+		)
 	}
 	if inc == nil {
 		t.Fatal("expected non-nil node incident")
 	}
-	rec.NotifyIncident(inc, action)
 
 	// Resolve
 	eng.MarkResolved(inc.Key)
 
 	if rec.Len() != 2 {
-		t.Fatalf("expected 2 notifications (create + resolved), got %d", rec.Len())
+		t.Fatalf(
+			"expected 2 notifications (create + resolved), got %d",
+			rec.Len(),
+		)
 	}
 
 	_, a0 := rec.Get(0)
@@ -216,24 +262,40 @@ func TestInhibitionSuppressesPodsDuringNodeFailure(t *testing.T) {
 	if nodeAction != model.ActionCreate {
 		t.Fatalf("expected ActionCreate for node incident, got %s", nodeAction)
 	}
-	rec.NotifyIncident(nodeInc, nodeAction)
 
 	// Pod incident on the same node should be suppressed
-	podEv := makeEvent("pod", "crashing-pod", "default", "CrashLoopBackOff", "app", "worker-1")
-	_, podAction := eng.Process(podEv, "my-deployment", makeContainerState(1, "CrashLoopBackOff", 1))
+	podEv := makeEvent(
+		"pod",
+		"crashing-pod",
+		"default",
+		"CrashLoopBackOff",
+		"app",
+		"worker-1",
+	)
+	_, podAction := eng.Process(
+		podEv,
+		"my-deployment",
+		makeContainerState(1, "CrashLoopBackOff", 1),
+	)
 	if podAction != model.ActionSkip {
 		t.Fatalf("expected ActionSkip (node-inhibited), got %s", podAction)
 	}
 
 	// Pod incident should NOT appear in notifications
 	if rec.Len() != 1 {
-		t.Fatalf("expected 1 notification (node create only), got %d", rec.Len())
+		t.Fatalf(
+			"expected 1 notification (node create only), got %d",
+			rec.Len(),
+		)
 	}
 
 	// After node resolves, pod should be allowed
 	eng.MarkResolved(nodeInc.Key)
 	if rec.Len() != 2 {
-		t.Fatalf("expected 2 notifications after node resolve, got %d", rec.Len())
+		t.Fatalf(
+			"expected 2 notifications after node resolve, got %d",
+			rec.Len(),
+		)
 	}
 }
 
@@ -244,7 +306,12 @@ func TestBaselineSuppressesRestartRepage(t *testing.T) {
 	rec := &recordingAlertManager{}
 	eng := newTestEngine(rec)
 
-	key := correlation.BuildKey("default", "my-deployment", "CrashLoopBackOff", "")
+	key := correlation.BuildKey(
+		"default",
+		"my-deployment",
+		"CrashLoopBackOff",
+		"",
+	)
 
 	// Seed a baseline entry so the engine treats the pod as previously seen
 	eng.SetBaseline(map[string]map[string]int64{
@@ -252,7 +319,11 @@ func TestBaselineSuppressesRestartRepage(t *testing.T) {
 	})
 
 	ev := makeEvent("pod", "my-pod", "default", "CrashLoopBackOff", "main", "")
-	inc, action := eng.Process(ev, "my-deployment", makeContainerState(3, "CrashLoopBackOff", 137))
+	inc, action := eng.Process(
+		ev,
+		"my-deployment",
+		makeContainerState(3, "CrashLoopBackOff", 137),
+	)
 	if action != model.ActionSkip {
 		t.Fatalf("expected ActionSkip for baselined pod, got %s", action)
 	}
@@ -288,11 +359,15 @@ func TestOwnerGroupingSameReason(t *testing.T) {
 	if !inc1.Resources["pod-a"] {
 		t.Fatal("first pod should be in Resources")
 	}
-	rec.NotifyIncident(inc1, action1)
 
-	// Second pod with same owner+reason → same incident key, edge-triggered skip
+	// Second pod with same owner+reason → same incident key, edge-triggered
+	// skip
 	ev2 := makeEvent("pod", "pod-b", "default", "CrashLoopBackOff", "main", "")
-	inc2, action2 := eng.Process(ev2, owner, makeContainerState(1, "CrashLoopBackOff", 137))
+	inc2, action2 := eng.Process(
+		ev2,
+		owner,
+		makeContainerState(1, "CrashLoopBackOff", 137),
+	)
 	if action2 != model.ActionSkip {
 		t.Fatalf("expected ActionSkip for grouped second pod, got %s", action2)
 	}
@@ -308,7 +383,10 @@ func TestOwnerGroupingSameReason(t *testing.T) {
 		t.Fatal("pod-b missing from Resources")
 	}
 	if inc2.PeakResources < 2 {
-		t.Fatalf("PeakResources should be at least 2, got %d", inc2.PeakResources)
+		t.Fatalf(
+			"PeakResources should be at least 2, got %d",
+			inc2.PeakResources,
+		)
 	}
 
 	// Resolve
@@ -349,7 +427,12 @@ func TestBoundedStateUnderLoad(t *testing.T) {
 	// in its active state. We can't access state directly, but we can verify
 	// indirectly: resolving each triggers a single notification.
 	for o := 0; o < distinctOwners; o++ {
-		key := correlation.BuildKey("load-ns", fmt.Sprintf("dep-%d", o), "OOMKill", "")
+		key := correlation.BuildKey(
+			"load-ns",
+			fmt.Sprintf("dep-%d", o),
+			"OOMKill",
+			"",
+		)
 		eng.MarkResolved(key)
 	}
 

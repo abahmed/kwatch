@@ -53,6 +53,7 @@ podLabels: {}
 #
 # smartGrouping:
 #   windowSeconds: 60
+#   namespaceFanOutThreshold: 3   # owners failing the same way in one namespace → one alert
 config: {}
 
 # -- Configure the upgrader/update checker (nested under config in the ConfigMap)

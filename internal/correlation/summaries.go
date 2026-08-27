@@ -3,73 +3,74 @@ package correlation
 import (
 	"fmt"
 	"sort"
-	"strings"
-	"time"
+
+	"github.com/abahmed/kwatch/internal/format"
 
 	"github.com/abahmed/kwatch/internal/model"
 )
 
 // flush using scope-adapted format.
-func (e *Engine) buildGroupSummary(entries []groupEntry, firstSeen time.Time) string {
+// buildGroupSummary names a group the way a person would describe it to a
+// colleague. The reason, the count and the age are rendered as their own
+// fields by every provider, so the summary must not repeat them — it used to
+// read "ContainersNotReady — 1 pod in dev/api (total 1) — 1m",
+// which said the reason twice and the size three times.
+func (e *Engine) buildGroupSummary(entries []groupEntry) string {
 	if len(entries) == 0 {
 		return ""
 	}
-	scope := detectGroupScope(entries)
-	r := entries[0].reason
-	timeAgo := ""
-	if d := e.now().Sub(firstSeen).Round(time.Second); d > 0 {
-		timeAgo = fmt.Sprintf(" — %s", timeAgoStr(d))
-	}
-	switch scope {
+	switch detectGroupScope(entries) {
 	case "node":
-		return e.buildNodeSummary(r, entries, timeAgo)
+		return e.buildNodeSummary(entries)
 	case "signature":
-		return e.buildSignatureSummary(r, entries, timeAgo)
+		return e.buildSignatureSummary(entries)
 	case "image":
-		return e.buildImageSummary(r, entries, timeAgo)
+		return e.buildImageSummary(entries)
 	case "owner":
-		return e.buildOwnerSummary(r, entries, timeAgo)
+		return e.buildOwnerSummary(entries)
 	case "namespace":
-		return e.buildNamespaceSummary(r, entries, timeAgo)
+		return e.buildNamespaceSummary(entries)
 	default:
-		return e.buildGenericSummary(r, entries, timeAgo)
+		return e.buildGenericSummary(entries)
 	}
-}
-
-func timeAgoStr(d time.Duration) string {
-	if d < time.Minute {
-		return fmt.Sprintf("%ds", int(d.Seconds()))
-	}
-	if d < time.Hour {
-		return fmt.Sprintf("%dm", int(d.Minutes()))
-	}
-	return fmt.Sprintf("%dh", int(d.Hours()))
-}
-
-func pluralize(s string, n int) string {
-	if n == 1 {
-		return s
-	}
-	return s + "s"
 }
 
 func detectGroupScope(entries []groupEntry) string {
 	r := entries[0].reason
-	nodes := uniqueNonEmptyStr(entries, func(e groupEntry) string { return e.nodeName })
+	nodes := uniqueNonEmptyStr(
+		entries,
+		func(e groupEntry) string { return e.nodeName },
+	)
 	if len(nodes) == 1 && isNodeLevelReason(r) {
 		return "node"
 	}
-	sigs := uniqueNonEmptyStr(entries, func(e groupEntry) string { return e.logSignature })
+	sigs := uniqueNonEmptyStr(
+		entries,
+		func(e groupEntry) string { return e.logSignature },
+	)
 	if len(sigs) == 1 {
 		return "signature"
 	}
-	imgs := uniqueNonEmptyStr(entries, func(e groupEntry) string { return e.image })
+	imgs := uniqueNonEmptyStr(
+		entries,
+		func(e groupEntry) string { return e.image },
+	)
 	if len(imgs) == 1 {
 		return "image"
 	}
-	owners := uniqueNonEmptyStr(entries, func(e groupEntry) string { return e.owner })
+	owners := uniqueNonEmptyStr(
+		entries,
+		func(e groupEntry) string { return e.owner },
+	)
 	if len(owners) == 1 {
 		return "owner"
+	}
+	namespaces := uniqueNonEmptyStr(
+		entries,
+		func(e groupEntry) string { return e.namespace },
+	)
+	if len(namespaces) == 1 {
+		return "namespace"
 	}
 	return "generic"
 }
@@ -85,135 +86,140 @@ func uniqueNonEmptyStr[T any](entries []T, fn func(T) string) []string {
 	for v := range m {
 		out = append(out, v)
 	}
+	sort.Strings(out)
 	return out
 }
 
-func (e *Engine) buildOwnerSummary(r string, entries []groupEntry, timeAgo string) string {
-	byPod := make(map[string]int)
+// ownerRefs lists the distinct owners, as "name" within one namespace or
+// "ns/name" across several, with a multiplier when one owner has several
+// failing pods.
+func ownerRefs(entries []groupEntry, withNamespace bool) []string {
+	counts := make(map[string]int)
 	for _, ge := range entries {
-		byPod[ge.podName]++
+		ref := ge.owner
+		if withNamespace && ge.namespace != "" {
+			ref = ge.namespace + "/" + ge.owner
+		}
+		if ref == "" {
+			continue
+		}
+		counts[ref]++
 	}
-	podList := make([]string, 0, len(byPod))
-	for p := range byPod {
-		podList = append(podList, p)
-	}
-	sort.Strings(podList)
-	owner := entries[0].namespace + "/" + entries[0].owner
-	total := len(entries)
-	return fmt.Sprintf("%s — %d %s in %s (total %d)%s",
-		r, len(byPod), pluralize("pod", len(byPod)), owner, total, timeAgo)
-}
-
-func (e *Engine) buildNodeSummary(r string, entries []groupEntry, timeAgo string) string {
-	node := entries[0].nodeName
-	byPod := make(map[string]int)
-	for _, ge := range entries {
-		byPod[ge.podName]++
-	}
-	podCount := len(byPod)
-	total := len(entries)
-	return fmt.Sprintf("%s — node: %s, %d %s affected (total %d)%s",
-		r, node, podCount, pluralize("pod", podCount), total, timeAgo)
-}
-
-func (e *Engine) buildSignatureSummary(r string, entries []groupEntry, timeAgo string) string {
-	sig := entries[0].logSignature
-	byOwner := make(map[string]int)
-	for _, ge := range entries {
-		o := ge.namespace + "/" + ge.owner
-		byOwner[o]++
-	}
-	owners := make([]string, 0, len(byOwner))
-	for o, c := range byOwner {
-		if c > 1 {
-			owners = append(owners, fmt.Sprintf("%s (%d)", o, c))
+	out := make([]string, 0, len(counts))
+	for ref, n := range counts {
+		if n > 1 {
+			out = append(out, fmt.Sprintf("%s ×%d", ref, n))
 		} else {
-			owners = append(owners, o)
+			out = append(out, ref)
 		}
 	}
-	sort.Strings(owners)
-	total := len(entries)
-	return fmt.Sprintf("%s — %s, %s: %s (total %d)%s",
-		r, sig, pluralize("deployment", len(byOwner)), strings.Join(owners, ", "), total, timeAgo)
+	sort.Strings(out)
+	return out
 }
 
-func (e *Engine) buildImageSummary(r string, entries []groupEntry, timeAgo string) string {
-	img := entries[0].image
-	isGlobal := IsGlobalKey(entries[0].key)
+func podCount(entries []groupEntry) int {
+	return len(
+		uniqueNonEmptyStr(
+			entries,
+			func(e groupEntry) string { return e.podName },
+		),
+	)
+}
+
+// "3 pods of Deployment dev/api"
+func (e *Engine) buildOwnerSummary(entries []groupEntry) string {
+	first := entries[0]
+	owner := first.owner
+	if first.namespace != "" {
+		owner = first.namespace + "/" + owner
+	}
+	kind := ""
+	if inc, ok := e.state[first.key]; ok && inc.OwnerKind != "" {
+		kind = inc.OwnerKind + " "
+	}
+	return fmt.Sprintf(
+		"%s of %s%s",
+		format.Plural(podCount(entries), "pod"),
+		kind,
+		owner,
+	)
+}
+
+// "12 pods on node ip-10-0-81-7 across 6 workloads"
+func (e *Engine) buildNodeSummary(entries []groupEntry) string {
+	owners := uniqueNonEmptyStr(
+		entries,
+		func(e groupEntry) string { return e.namespace + "/" + e.owner },
+	)
+	s := fmt.Sprintf(
+		"%s on node %s",
+		format.Plural(podCount(entries), "pod"),
+		format.ShortNode(entries[0].nodeName),
+	)
+	if len(owners) > 1 {
+		s += fmt.Sprintf(" across %s", format.Plural(len(owners), "workload"))
+	}
+	return s
+}
+
+// "api, readify, tracking — same error: connection refused:5432"
+func (e *Engine) buildSignatureSummary(entries []groupEntry) string {
+	return fmt.Sprintf("%s — same error: %s",
+		format.JoinNames(ownerRefs(entries, true), 5), entries[0].logSignature)
+}
+
+// "image api:1.2.0 — api, api-worker"  or, for a
+// registry-wide failure, "4 workloads across 3 namespaces"
+func (e *Engine) buildImageSummary(entries []groupEntry) string {
+	if IsGlobalKey(entries[0].key) {
+		owners := uniqueNonEmptyStr(
+			entries,
+			func(e groupEntry) string { return e.namespace + "/" + e.owner },
+		)
+		namespaces := uniqueNonEmptyStr(
+			entries,
+			func(e groupEntry) string { return e.namespace },
+		)
+		s := format.Plural(len(owners), "workload")
+		if len(namespaces) > 1 {
+			s += fmt.Sprintf(
+				" across %s",
+				format.Plural(len(namespaces), "namespace"),
+			)
+		}
+		return s
+	}
+	img := format.ShortImage(entries[0].image)
 	if img == "" {
-		img = "unknown"
+		img = "unknown image"
+	} else {
+		img = "image " + img
 	}
-	if isGlobal {
-		byOwner := make(map[string]int)
-		for _, ge := range entries {
-			o := ge.namespace + "/" + ge.owner
-			byOwner[o]++
-		}
-		ownerCount := len(byOwner)
-		total := len(entries)
-		return fmt.Sprintf("%s — %d %s affected (total %d)%s",
-			r, ownerCount, pluralize("deployment", ownerCount), total, timeAgo)
-	}
-	byOwner := make(map[string]int)
-	for _, ge := range entries {
-		byOwner[ge.owner]++
-	}
-	owners := make([]string, 0, len(byOwner))
-	for o, c := range byOwner {
-		if c > 1 {
-			owners = append(owners, fmt.Sprintf("%s (%d)", o, c))
-		} else {
-			owners = append(owners, o)
-		}
-	}
-	sort.Strings(owners)
-	total := len(entries)
-	ns := entries[0].namespace
-	if ns != "" {
-		ns = " (" + ns + ")"
-	}
-	return fmt.Sprintf("%s — image %q%s, %s: %s (total %d)%s",
-		r, img, ns, pluralize("deployment", len(byOwner)), strings.Join(owners, ", "), total, timeAgo)
+	return fmt.Sprintf(
+		"%s — %s",
+		img,
+		format.JoinNames(ownerRefs(entries, false), 5),
+	)
 }
 
-func (e *Engine) buildNamespaceSummary(r string, entries []groupEntry, timeAgo string) string {
-	ns := entries[0].namespace
-	byOwner := make(map[string]int)
-	for _, ge := range entries {
-		byOwner[ge.owner]++
-	}
-	owners := make([]string, 0, len(byOwner))
-	for o, c := range byOwner {
-		if c > 1 {
-			owners = append(owners, fmt.Sprintf("%s (%d)", o, c))
-		} else {
-			owners = append(owners, o)
-		}
-	}
-	sort.Strings(owners)
-	total := len(entries)
-	return fmt.Sprintf("%s — namespace: %s, %s: %s (total %d)%s",
-		r, ns, pluralize("deployment", len(byOwner)), strings.Join(owners, ", "), total, timeAgo)
+// "6 workloads in dev: accounts, api, fleet, readify, tdesk,
+// tracking"
+func (e *Engine) buildNamespaceSummary(entries []groupEntry) string {
+	owners := ownerRefs(entries, false)
+	return fmt.Sprintf(
+		"%s in %s: %s",
+		format.Plural(
+			len(owners),
+			"workload",
+		),
+		entries[0].namespace,
+		format.JoinNames(owners, 8),
+	)
 }
 
-func (e *Engine) buildGenericSummary(r string, entries []groupEntry, timeAgo string) string {
-	byOwner := make(map[string]int)
-	for _, ge := range entries {
-		o := ge.namespace + "/" + ge.owner
-		byOwner[o]++
-	}
-	owners := make([]string, 0, len(byOwner))
-	for o, c := range byOwner {
-		if c > 1 {
-			owners = append(owners, fmt.Sprintf("%s (%d)", o, c))
-		} else {
-			owners = append(owners, o)
-		}
-	}
-	sort.Strings(owners)
-	total := len(entries)
-	return fmt.Sprintf("%s — affected: %s (total %d)%s",
-		r, strings.Join(owners, ", "), total, timeAgo)
+// "ns-a/api, ns-b/worker"
+func (e *Engine) buildGenericSummary(entries []groupEntry) string {
+	return format.JoinNames(ownerRefs(entries, true), 8)
 }
 
 func (e *Engine) groupSeverity(entries []groupEntry) model.Severity {

@@ -49,7 +49,12 @@ func TestProcessServiceCreatesIncident(t *testing.T) {
 	defer func() { defaultServiceSustainedSeconds = 60 }()
 
 	e := testCorrelator()
-	h := NewHandler(fake.NewSimpleClientset(), &config.Config{}, e, testAlertMgr)
+	h := NewHandler(
+		fake.NewSimpleClientset(),
+		&config.Config{},
+		e,
+		testAlertMgr,
+	)
 
 	svc := &corev1.Service{
 		ObjectMeta: metav1.ObjectMeta{Name: "test-svc", Namespace: "default"},
@@ -61,9 +66,11 @@ func TestProcessServiceCreatesIncident(t *testing.T) {
 
 	f := informers.NewSharedInformerFactory(fake.NewSimpleClientset(), 0)
 	f.Core().V1().Services().Informer().GetIndexer().Add(svc)
-	f.Discovery().V1().EndpointSlices().Informer().GetIndexer().Add(emptyEpSlice("test-svc", "default"))
-	h.SetServiceLister(f.Core().V1().Services().Lister())
-	h.SetEndpointSliceLister(f.Discovery().V1().EndpointSlices().Lister())
+	f.Discovery().V1().EndpointSlices().Informer().GetIndexer().Add(
+		emptyEpSlice("test-svc", "default"),
+	)
+	h.listers.Service = f.Core().V1().Services().Lister()
+	h.listers.EndpointSlice = f.Discovery().V1().EndpointSlices().Lister()
 
 	assert.NoError(t, h.ProcessService("default/test-svc", false))
 
@@ -78,16 +85,26 @@ func TestProcessServiceCreatesIncident(t *testing.T) {
 }
 
 func TestProcessServiceKeyDeleted(t *testing.T) {
-	h := NewHandler(fake.NewSimpleClientset(), &config.Config{}, testCorrelator(), testAlertMgr)
+	h := NewHandler(
+		fake.NewSimpleClientset(),
+		&config.Config{},
+		testCorrelator(),
+		testAlertMgr,
+	)
 	assert.NoError(t, h.ProcessService("default/test-svc", true))
 }
 
 func TestProcessServiceKeyNotFound(t *testing.T) {
 	e := testCorrelator()
-	h := NewHandler(fake.NewSimpleClientset(), &config.Config{}, e, testAlertMgr)
+	h := NewHandler(
+		fake.NewSimpleClientset(),
+		&config.Config{},
+		e,
+		testAlertMgr,
+	)
 
 	f := informers.NewSharedInformerFactory(fake.NewSimpleClientset(), 0)
-	h.SetServiceLister(f.Core().V1().Services().Lister())
+	h.listers.Service = f.Core().V1().Services().Lister()
 
 	assert.NoError(t, h.ProcessService("default/missing", false))
 	assert.Equal(t, 0, e.ActiveCount())
@@ -134,9 +151,15 @@ func TestDetectServiceEndpointIssueReady(t *testing.T) {
 			ClusterIP: "10.0.0.1",
 		},
 	}
-	epSlices := []*discoveryv1.EndpointSlice{epSliceForSvc("test-svc", "default", true)}
+	epSlices := []*discoveryv1.EndpointSlice{
+		epSliceForSvc("test-svc", "default", true),
+	}
 	sig := DetectServiceEndpointIssue(svc, epSlices)
-	assert.Nil(t, sig, "service with ready endpoints should not produce a signal")
+	assert.Nil(
+		t,
+		sig,
+		"service with ready endpoints should not produce a signal",
+	)
 }
 
 func TestDetectServiceEndpointIssueNoReadyEndpoints(t *testing.T) {
@@ -147,7 +170,9 @@ func TestDetectServiceEndpointIssueNoReadyEndpoints(t *testing.T) {
 			ClusterIP: "10.0.0.1",
 		},
 	}
-	epSlices := []*discoveryv1.EndpointSlice{emptyEpSlice("test-svc", "default")}
+	epSlices := []*discoveryv1.EndpointSlice{
+		emptyEpSlice("test-svc", "default"),
+	}
 	sig := DetectServiceEndpointIssue(svc, epSlices)
 	assert.NotNil(t, sig)
 	assert.Equal(t, "ServiceNoEndpoints", sig.Reason)
@@ -163,9 +188,15 @@ func TestDetectServiceEndpointIssueOnlyNotReady(t *testing.T) {
 			ClusterIP: "10.0.0.1",
 		},
 	}
-	epSlices := []*discoveryv1.EndpointSlice{epSliceForSvc("test-svc", "default", false)}
+	epSlices := []*discoveryv1.EndpointSlice{
+		epSliceForSvc("test-svc", "default", false),
+	}
 	sig := DetectServiceEndpointIssue(svc, epSlices)
-	assert.NotNil(t, sig, "service with only not-ready addresses should produce a signal")
+	assert.NotNil(
+		t,
+		sig,
+		"service with only not-ready addresses should produce a signal",
+	)
 }
 
 func TestDetectServiceEndpointIssueMultipleNotReady(t *testing.T) {
@@ -181,14 +212,24 @@ func TestDetectServiceEndpointIssueMultipleNotReady(t *testing.T) {
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      "ep",
 			Namespace: "default",
-			Labels:    map[string]string{"kubernetes.io/service-name": "test-svc"},
+			Labels: map[string]string{
+				"kubernetes.io/service-name": "test-svc",
+			},
 		},
 		Endpoints: []discoveryv1.Endpoint{
-			{Addresses: []string{"10.0.0.2"}, Conditions: discoveryv1.EndpointConditions{Ready: &notReady}},
+			{
+				Addresses:  []string{"10.0.0.2"},
+				Conditions: discoveryv1.EndpointConditions{Ready: &notReady},
+			},
 		},
 	}}
 	sig := DetectServiceEndpointIssue(svc, epSlices)
-	assert.NotNil(t, sig, "service with only not-ready endpoint conditions should produce a signal")
+	assert.NotNil(
+		t,
+		sig,
+		"service with only not-ready endpoint conditions should produce a "+
+			"signal",
+	)
 }
 
 func TestProcessServiceObjectNoEndpointsIncident(t *testing.T) {
@@ -196,7 +237,12 @@ func TestProcessServiceObjectNoEndpointsIncident(t *testing.T) {
 	defer func() { defaultServiceSustainedSeconds = 60 }()
 
 	e := testCorrelator()
-	h := NewHandler(fake.NewSimpleClientset(), &config.Config{}, e, testAlertMgr)
+	h := NewHandler(
+		fake.NewSimpleClientset(),
+		&config.Config{},
+		e,
+		testAlertMgr,
+	)
 
 	svc := &corev1.Service{
 		ObjectMeta: metav1.ObjectMeta{Name: "test-svc", Namespace: "default"},
@@ -207,10 +253,14 @@ func TestProcessServiceObjectNoEndpointsIncident(t *testing.T) {
 	}
 
 	f := informers.NewSharedInformerFactory(fake.NewSimpleClientset(), 0)
-	sel := labels.SelectorFromSet(map[string]string{"kubernetes.io/service-name": "test-svc"})
+	sel := labels.SelectorFromSet(
+		map[string]string{"kubernetes.io/service-name": "test-svc"},
+	)
 	_ = sel
-	f.Discovery().V1().EndpointSlices().Informer().GetIndexer().Add(emptyEpSlice("test-svc", "default"))
-	h.SetEndpointSliceLister(f.Discovery().V1().EndpointSlices().Lister())
+	f.Discovery().V1().EndpointSlices().Informer().GetIndexer().Add(
+		emptyEpSlice("test-svc", "default"),
+	)
+	h.listers.EndpointSlice = f.Discovery().V1().EndpointSlices().Lister()
 
 	assert.NoError(t, h.ProcessServiceObject(svc, false))
 
@@ -230,7 +280,12 @@ func TestProcessServiceObjectResolve(t *testing.T) {
 	defer func() { defaultServiceSustainedSeconds = 60 }()
 
 	e := testCorrelator()
-	h := NewHandler(fake.NewSimpleClientset(), &config.Config{}, e, testAlertMgr)
+	h := NewHandler(
+		fake.NewSimpleClientset(),
+		&config.Config{},
+		e,
+		testAlertMgr,
+	)
 
 	svc := &corev1.Service{
 		ObjectMeta: metav1.ObjectMeta{Name: "test-svc", Namespace: "default"},
@@ -245,22 +300,37 @@ func TestProcessServiceObjectResolve(t *testing.T) {
 
 	epNoReady := emptyEpSlice("test-svc", "default")
 	indexer.Add(epNoReady)
-	h.SetEndpointSliceLister(f.Discovery().V1().EndpointSlices().Lister())
+	h.listers.EndpointSlice = f.Discovery().V1().EndpointSlices().Lister()
 
 	assert.NoError(t, h.ProcessServiceObject(svc, false))
-	assert.Equal(t, 1, e.ActiveCount(), "incident should be created for no endpoints")
+	assert.Equal(
+		t,
+		1,
+		e.ActiveCount(),
+		"incident should be created for no endpoints",
+	)
 
 	indexer.Delete(epNoReady)
 	epReady := epSliceForSvc("test-svc", "default", true)
 	indexer.Add(epReady)
 
 	assert.NoError(t, h.ProcessServiceObject(svc, false))
-	assert.Equal(t, 0, e.ActiveCount(), "incident should be resolved when endpoints are ready")
+	assert.Equal(
+		t,
+		0,
+		e.ActiveCount(),
+		"incident should be resolved when endpoints are ready",
+	)
 }
 
 func TestProcessServiceObjectDeleted(t *testing.T) {
 	e := testCorrelator()
-	h := NewHandler(fake.NewSimpleClientset(), &config.Config{}, e, testAlertMgr)
+	h := NewHandler(
+		fake.NewSimpleClientset(),
+		&config.Config{},
+		e,
+		testAlertMgr,
+	)
 
 	svc := &corev1.Service{
 		ObjectMeta: metav1.ObjectMeta{Name: "test-svc", Namespace: "default"},
@@ -270,21 +340,36 @@ func TestProcessServiceObjectDeleted(t *testing.T) {
 }
 
 func TestProcessServiceObjectNil(t *testing.T) {
-	h := NewHandler(fake.NewSimpleClientset(), &config.Config{}, testCorrelator(), testAlertMgr)
+	h := NewHandler(
+		fake.NewSimpleClientset(),
+		&config.Config{},
+		testCorrelator(),
+		testAlertMgr,
+	)
 	assert.NoError(t, h.ProcessServiceObject(nil, false))
 }
 
 func TestProcessServiceInvalidKey(t *testing.T) {
-	h := NewHandler(fake.NewSimpleClientset(), &config.Config{}, testCorrelator(), testAlertMgr)
+	h := NewHandler(
+		fake.NewSimpleClientset(),
+		&config.Config{},
+		testCorrelator(),
+		testAlertMgr,
+	)
 	assert.Error(t, h.ProcessService("a/b/c", false))
 }
 
 func TestProcessServiceObjectSliceNotFound(t *testing.T) {
 	e := testCorrelator()
-	h := NewHandler(fake.NewSimpleClientset(), &config.Config{}, e, testAlertMgr)
+	h := NewHandler(
+		fake.NewSimpleClientset(),
+		&config.Config{},
+		e,
+		testAlertMgr,
+	)
 
 	f := informers.NewSharedInformerFactory(fake.NewSimpleClientset(), 0)
-	h.SetEndpointSliceLister(f.Discovery().V1().EndpointSlices().Lister())
+	h.listers.EndpointSlice = f.Discovery().V1().EndpointSlices().Lister()
 
 	svc := &corev1.Service{
 		ObjectMeta: metav1.ObjectMeta{Name: "test-svc", Namespace: "default"},
@@ -292,12 +377,22 @@ func TestProcessServiceObjectSliceNotFound(t *testing.T) {
 	}
 
 	assert.NoError(t, h.ProcessServiceObject(svc, false))
-	assert.Equal(t, 0, e.ActiveCount(), "endpoints not found should not create incident")
+	assert.Equal(
+		t,
+		0,
+		e.ActiveCount(),
+		"endpoints not found should not create incident",
+	)
 }
 
 func TestProcessServiceObjectClusterIPEmpty(t *testing.T) {
 	e := testCorrelator()
-	h := NewHandler(fake.NewSimpleClientset(), &config.Config{}, e, testAlertMgr)
+	h := NewHandler(
+		fake.NewSimpleClientset(),
+		&config.Config{},
+		e,
+		testAlertMgr,
+	)
 
 	svc := &corev1.Service{
 		ObjectMeta: metav1.ObjectMeta{Name: "test-svc", Namespace: "default"},
@@ -308,16 +403,28 @@ func TestProcessServiceObjectClusterIPEmpty(t *testing.T) {
 	}
 
 	f := informers.NewSharedInformerFactory(fake.NewSimpleClientset(), 0)
-	f.Discovery().V1().EndpointSlices().Informer().GetIndexer().Add(emptyEpSlice("test-svc", "default"))
-	h.SetEndpointSliceLister(f.Discovery().V1().EndpointSlices().Lister())
+	f.Discovery().V1().EndpointSlices().Informer().GetIndexer().Add(
+		emptyEpSlice("test-svc", "default"),
+	)
+	h.listers.EndpointSlice = f.Discovery().V1().EndpointSlices().Lister()
 
 	assert.NoError(t, h.ProcessServiceObject(svc, false))
-	assert.Equal(t, 0, e.ActiveCount(), "service with empty ClusterIP should not create incident")
+	assert.Equal(
+		t,
+		0,
+		e.ActiveCount(),
+		"service with empty ClusterIP should not create incident",
+	)
 }
 
 func TestProcessServiceObjectNoSelectorNoIncident(t *testing.T) {
 	e := testCorrelator()
-	h := NewHandler(fake.NewSimpleClientset(), &config.Config{}, e, testAlertMgr)
+	h := NewHandler(
+		fake.NewSimpleClientset(),
+		&config.Config{},
+		e,
+		testAlertMgr,
+	)
 
 	svc := &corev1.Service{
 		ObjectMeta: metav1.ObjectMeta{Name: "test-svc", Namespace: "default"},
@@ -327,11 +434,18 @@ func TestProcessServiceObjectNoSelectorNoIncident(t *testing.T) {
 	}
 
 	f := informers.NewSharedInformerFactory(fake.NewSimpleClientset(), 0)
-	f.Discovery().V1().EndpointSlices().Informer().GetIndexer().Add(emptyEpSlice("test-svc", "default"))
-	h.SetEndpointSliceLister(f.Discovery().V1().EndpointSlices().Lister())
+	f.Discovery().V1().EndpointSlices().Informer().GetIndexer().Add(
+		emptyEpSlice("test-svc", "default"),
+	)
+	h.listers.EndpointSlice = f.Discovery().V1().EndpointSlices().Lister()
 
 	assert.NoError(t, h.ProcessServiceObject(svc, false))
-	assert.Equal(t, 0, e.ActiveCount(), "service without selectors should not create incident")
+	assert.Equal(
+		t,
+		0,
+		e.ActiveCount(),
+		"service without selectors should not create incident",
+	)
 }
 
 func TestDetectServiceEndpointIssueEmptySlice(t *testing.T) {
@@ -373,23 +487,39 @@ func TestDetectServiceEndpointIssueReadyInSecondSlice(t *testing.T) {
 			ObjectMeta: metav1.ObjectMeta{
 				Name:      "a",
 				Namespace: "default",
-				Labels:    map[string]string{"kubernetes.io/service-name": "test-svc"},
+				Labels: map[string]string{
+					"kubernetes.io/service-name": "test-svc",
+				},
 			},
 			Endpoints: []discoveryv1.Endpoint{
-				{Addresses: []string{"10.0.0.2"}, Conditions: discoveryv1.EndpointConditions{Ready: &notReady}},
+				{
+					Addresses: []string{"10.0.0.2"},
+					Conditions: discoveryv1.EndpointConditions{
+						Ready: &notReady,
+					},
+				},
 			},
 		},
 		{
 			ObjectMeta: metav1.ObjectMeta{
 				Name:      "b",
 				Namespace: "default",
-				Labels:    map[string]string{"kubernetes.io/service-name": "test-svc"},
+				Labels: map[string]string{
+					"kubernetes.io/service-name": "test-svc",
+				},
 			},
 			Endpoints: []discoveryv1.Endpoint{
-				{Addresses: []string{"10.0.0.3"}, Conditions: discoveryv1.EndpointConditions{Ready: &ready}},
+				{
+					Addresses:  []string{"10.0.0.3"},
+					Conditions: discoveryv1.EndpointConditions{Ready: &ready},
+				},
 			},
 		},
 	}
 	sig := DetectServiceEndpointIssue(svc, epSlices)
-	assert.Nil(t, sig, "ready endpoint in second slice should not produce a signal")
+	assert.Nil(
+		t,
+		sig,
+		"ready endpoint in second slice should not produce a signal",
+	)
 }

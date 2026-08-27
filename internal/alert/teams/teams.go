@@ -1,11 +1,8 @@
 package teams
 
 import (
-	"bytes"
 	"encoding/json"
 	"fmt"
-	"io"
-	"net/http"
 	"strings"
 	"time"
 
@@ -14,15 +11,13 @@ import (
 	"github.com/abahmed/kwatch/internal/alert/util"
 	"github.com/abahmed/kwatch/internal/config"
 	"github.com/abahmed/kwatch/internal/event"
-	"github.com/abahmed/kwatch/internal/k8s"
+	"github.com/abahmed/kwatch/internal/insight"
 	"github.com/abahmed/kwatch/internal/message"
 	"github.com/abahmed/kwatch/internal/model"
-	"github.com/abahmed/kwatch/internal/ratelimit"
 )
 
 const (
 	defaultTeamsTitle = "&#9937; Kwatch detected a crash in pod"
-	defaultMaxRetries = 3
 	defaultRetryDelay = 5
 )
 
@@ -31,7 +26,6 @@ type Teams struct {
 	webhook    string
 	title      string
 	text       string
-	maxRetries int
 	retryDelay int
 
 	// reference for general app configuration
@@ -57,11 +51,6 @@ func NewTeams(config map[string]interface{}, appCfg *config.App) *Teams {
 	title, _ := config["title"].(string)
 	text, _ := config["text"].(string)
 
-	maxRetries, mxOk := config["maxRetries"].(int)
-	if !mxOk || maxRetries == 0 {
-		maxRetries = defaultMaxRetries
-	}
-
 	retryDelay, dlOk := config["retryDelay"].(int)
 	if !dlOk || retryDelay == 0 {
 		retryDelay = defaultRetryDelay
@@ -71,7 +60,6 @@ func NewTeams(config map[string]interface{}, appCfg *config.App) *Teams {
 		webhook:    webhook,
 		title:      title,
 		text:       text,
-		maxRetries: maxRetries,
 		retryDelay: retryDelay,
 		appCfg:     appCfg,
 	}
@@ -103,8 +91,28 @@ func (t *Teams) SendMessage(msg string) error {
 // SendIncident implements alert.ThreadProvider.
 // It renders the incident using the Report model and PlaintextRenderer,
 // producing a context-adaptive text message.
-func (t *Teams) SendIncident(inc *model.Incident, action model.IncidentAction) error {
-	text := util.RenderIncident(inc, action, message.NewPlainTextRenderer(), t.appCfg.ClusterName)
+func (t *Teams) SendIncident(
+	inc *model.Incident,
+	action model.IncidentAction,
+) error {
+	return t.SendIncidentWithInsight(inc, action, nil)
+}
+
+// SendIncidentWithInsight implements alert.InsightThreadProvider, so the
+// diagnosis — likely cause, impact, recent changes — is rendered rather than
+// dropped on the way to this provider.
+func (t *Teams) SendIncidentWithInsight(
+	inc *model.Incident,
+	action model.IncidentAction,
+	ins *insight.Insight,
+) error {
+	text := util.RenderIncidentWithInsight(
+		inc,
+		action,
+		ins,
+		message.NewPlainTextRenderer(),
+		t.appCfg.ClusterName,
+	)
 	if text == "" {
 		return nil
 	}
@@ -113,55 +121,21 @@ func (t *Teams) SendIncident(inc *model.Incident, action model.IncidentAction) e
 
 // SendApi send the given payload to the Power Automate flow with retry logic
 func (t *Teams) sendAPI(payload []byte) error {
-	// try to send the message up to "maxRetries" times
-	for attempts := 0; attempts < t.maxRetries; attempts++ {
-		request, err :=
-			http.NewRequest(
-				http.MethodPost,
-				t.webhook,
-				bytes.NewBuffer(payload))
-		if err != nil {
-			return fmt.Errorf("error creating HTTP request: %w", err)
-		}
-
-		request.Header.Set("Content-Type", "application/json")
-
-		client := k8s.GetDefaultClient()
-		resp, err := client.Do(request)
-		if err != nil {
-			return fmt.Errorf("failed to create HTTP response: %w", err)
-		}
-		if resp.StatusCode == http.StatusTooManyRequests {
-			d := ratelimit.ParseRetryAfter(resp)
-			resp.Body.Close()
-			if d > 0 {
-				time.Sleep(d)
-				continue
-			}
-			return &ratelimit.Error{
-				Provider:   "Teams",
-				StatusCode: http.StatusTooManyRequests,
-				RetryAfter: d,
-			}
-		}
-		if resp.StatusCode >= http.StatusOK && resp.StatusCode < http.StatusMultipleChoices {
-			resp.Body.Close()
-			return nil
-		}
-
-		body, readErr := io.ReadAll(resp.Body)
-		resp.Body.Close()
-		if readErr != nil {
-			return fmt.Errorf("call to power automate flow returned status %d", resp.StatusCode)
-		}
-		if resp.StatusCode == http.StatusBadRequest && strings.Contains(string(body), "TriggerInputSchemaMismatch") {
-			return fmt.Errorf("failed to send message due to schema mismatch: %s", string(body))
-		}
-		return fmt.Errorf("call to power automate flow returned status %d: %s", resp.StatusCode, string(body))
+	body, err := util.Send(
+		util.Request{Provider: "Teams", URL: t.webhook, Body: payload},
+	)
+	if err != nil &&
+		strings.Contains(string(body), "TriggerInputSchemaMismatch") {
+		// The flow's trigger schema does not accept our payload; no retry
+		// will change that.
+		return event.Permanent(
+			fmt.Errorf(
+				"failed to send message due to schema mismatch: %s",
+				string(body),
+			),
+		)
 	}
-
-	// After all retries, return an error
-	return fmt.Errorf("failed to send message after %d attempts", t.maxRetries)
+	return err
 }
 
 // buildRequestBodyTeams builds the request body for the Power Automate flow
@@ -216,13 +190,19 @@ func (t *Teams) buildRequestBodyTeams(e *event.Event) ([]byte, error) {
 					if e.IncludeLogs && strings.TrimSpace(e.Logs) != "" {
 						body = append(body, map[string]interface{}{
 							"type": "TextBlock",
-							"text": fmt.Sprintf("Logs: %s", strings.TrimSpace(e.Logs)),
+							"text": fmt.Sprintf(
+								"Logs: %s",
+								strings.TrimSpace(e.Logs),
+							),
 						})
 					}
 					if e.IncludeEvents && strings.TrimSpace(e.Events) != "" {
 						body = append(body, map[string]interface{}{
 							"type": "TextBlock",
-							"text": fmt.Sprintf("Events: \n%s", strings.TrimSpace(e.Events)),
+							"text": fmt.Sprintf(
+								"Events: \n%s",
+								strings.TrimSpace(e.Events),
+							),
 						})
 					}
 					body = append(body, map[string]interface{}{
@@ -264,7 +244,10 @@ func (t *Teams) buildRequestBodyMessage(msg string) ([]byte, error) {
 
 	jsonBytes, err := json.Marshal(payload)
 	if err != nil {
-		return nil, fmt.Errorf("failed to marshal teams message payload: %w", err)
+		return nil, fmt.Errorf(
+			"failed to marshal teams message payload: %w",
+			err,
+		)
 	}
 
 	return jsonBytes, nil

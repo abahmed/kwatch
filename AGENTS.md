@@ -32,7 +32,7 @@ Dependency direction flows downward; never import upward.
 | `internal/handler` | Turns raw Kubernetes objects into candidate incidents (filters + hints) |
 | `internal/filter` | Detect-time suppression filters (pod status, owners, reasons) |
 | `internal/config` | Config loading/validation, suppression index builder |
-| `internal/correlation` | Incident lifecycle (create/update/resolve/skip), grouping, cooldowns |
+| `internal/correlation` | Incident lifecycle (create/update/resolve/skip), attribution, grouping, cooldowns. The **only** emitter of notifications (`emit.go`) |
 | `internal/insight` | Cause/impact/recent-change analysis over the dependency graph |
 | `internal/event`, `internal/context`, `internal/model` | Shared types |
 | `internal/alert/*` | One subpackage per provider + routing/retry/ratelimit plumbing |
@@ -42,8 +42,29 @@ Dependency direction flows downward; never import upward.
 
 Rules of thumb:
 
-- `model` / `event` / `context` / `constant` must stay leaf packages.
+- `model` / `event` / `context` / `constant` / `format` must stay leaf packages.
 - Provider packages under `alert/` only depend on `model`, `message`, `config`, and `alert/util`.
+- Providers that talk HTTP call `alert/util.Send`; never `net/http` directly (the linter
+  enforces this). Send is where a status code becomes success, rate-limited, permanent or
+  retryable — a provider must not have its own opinion.
+- Nothing outside `correlation` calls `AlertManager.NotifyIncident` for incidents. The
+  handler feeds `Engine.Process` and stops; the engine announces every decision — live
+  events, resolves, group flushes, renotify, mass failures — through `LifecycleHook`, so
+  audit, diagnosis and delivery cannot diverge between paths.
+- When a hint carries a fact a renderer needs (a memory limit, a probe endpoint, a delay),
+  put it in `model.Facts` next to the hint. Renderers read facts; they never parse the hint.
+- `model.Incident` is five embedded parts — `Subject`, `Status`, `Evidence`, `Attribution`,
+  `Delivery` — each with one writer (see the type comment). Reads are promoted
+  (`inc.Reason`, `inc.Count`); composite literals name the part. `PersistedIncident` stays
+  flat: it is the on-disk format and must not change shape.
+- `filter.Context` is `Sources` (read-only lookups the handler sets once) + the object under
+  evaluation + `Findings` (what detectors concluded). A filter never writes `Sources`.
+- The handler gets its informer-backed lookups in one `handler.Listers` value via
+  `SetListers`, after all informers are wired. Do not add per-lister setters back to the
+  `Handler` interface; a nil lister means "that monitor is off".
+- Time-based decisions read an injected clock (`filter.Sources.Now`, `handler.now`,
+  `Engine.now`, `insight.Engine.now`, `ReportBuilder.now`), not `time.Now()` directly, so
+  "unready for 5 minutes" is testable without waiting 5 minutes.
 - Keep files focused; ~400 lines is the soft ceiling — split by responsibility within the
   same package rather than growing a god file.
 
@@ -69,8 +90,11 @@ The controller watches many resource kinds through one abstraction:
 1. Add a pipeline field to `Controller` and construct it in `New()` with a name matching
    the ChangeTracker label (set `track` explicitly if the label differs from the name).
 2. Write a `wire*` function in `wiring.go` using `watch()` (or `listen()`), returning any
-   factories the shutdown path needs.
-3. Call it from `New()`, wire its `syncFn`, add it to `allPipelines()`.
+   factories the shutdown path needs. It stores the lister on the `Controller`; it does not
+   talk to the handler.
+3. Call it from `New()`, wire its `syncFn`, add it to `allPipelines()`, and add the lister to
+   the single `handler.Listers{...}` value `New()` hands to `SetListers` (plus a field on
+   `handler.Listers` itself).
 4. If it needs periodic sweeps (like control-plane pods), check `startWorkers` in `Run()`.
 5. Add its graph edges in `graph_resources.go` if insight analysis should see it.
 
@@ -96,3 +120,10 @@ Some quirks are load-bearing. Preserve them unless a change explicitly says othe
 - Exit code 137 with a reason other than `OOMKilled` is a plain SIGKILL, not an OOM.
 - Suppression consolidation: deprecated `ignore*` fields become synthetic `SilenceRule`s in
   `appendIgnoreFieldSilences`; keep both paths reading the unified index.
+- `Engine.processLocked` runs five stages in a fixed order — baseline, attribution (node →
+  shared dependency → owning workload), cooldown, identity, announcement. Attribution comes
+  *before* cooldown on purpose: a pod whose key is cooling down is still its owner's symptom
+  and must keep being counted against it. Add a new kind of cause to `attribution.go`, not
+  as a new check in `processLocked`.
+- The audit skip reasons `baseline`, `node_inhibition`, `mass_failure`,
+  `cascading_suppression`, `cooldown` are stable strings people grep for.

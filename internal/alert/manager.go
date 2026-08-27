@@ -104,7 +104,12 @@ func (a *AlertManager) Init(
 		pvdr := newProvider(lowerCaseKey, v, appCfg)
 		if pvdr == nil {
 			if config.KnownProviders[lowerCaseKey] {
-				klog.InfoS("alert provider has missing or invalid credentials, skipping", "name", k)
+				klog.InfoS(
+					"alert provider has missing or invalid credentials, "+
+						"skipping",
+					"name",
+					k,
+				)
 			} else {
 				klog.InfoS("unknown alert provider, skipping", "name", k)
 			}
@@ -132,13 +137,22 @@ func (a *AlertManager) Init(
 	for i := range entries {
 		if entries[i].fallbackNamed != "" {
 			for j := range entries {
-				if strings.EqualFold(entries[j].provider.Name(), entries[i].fallbackNamed) {
+				if strings.EqualFold(
+					entries[j].provider.Name(),
+					entries[i].fallbackNamed,
+				) {
 					entries[i].fallback = &entries[j]
 					break
 				}
 			}
 			if entries[i].fallback == nil {
-				klog.InfoS("fallback provider not found, skipping", "provider", entries[i].provider.Name(), "fallback", entries[i].fallbackNamed)
+				klog.InfoS(
+					"fallback provider not found, skipping",
+					"provider",
+					entries[i].provider.Name(),
+					"fallback",
+					entries[i].fallbackNamed,
+				)
 			}
 			entries[i].fallbackNamed = ""
 		}
@@ -185,8 +199,15 @@ func (a *AlertManager) Notify(msg string) {
 			if err := sendWithRetry(ctx, func() error {
 				return p.SendEvent(ev)
 			}, entry.retry, p.Name()); err != nil && entry.fallback != nil {
-				if fbErr := entry.fallback.provider.SendMessage("[fallback — primary " + p.Name() + " failed] " + msg); fbErr != nil {
-					klog.ErrorS(fbErr, "fallback provider failed", "provider", entry.fallback.provider.Name())
+				if fbErr := entry.fallback.provider.SendMessage(
+					"[fallback — primary " + p.Name() + " failed] " + msg,
+				); fbErr != nil {
+					klog.ErrorS(
+						fbErr,
+						"fallback provider failed",
+						"provider",
+						entry.fallback.provider.Name(),
+					)
 				}
 			}
 			continue
@@ -195,9 +216,19 @@ func (a *AlertManager) Notify(msg string) {
 		if err := sendWithRetry(ctx, func() error {
 			return p.SendMessage(truncMsg)
 		}, entry.retry, p.Name()); err != nil && entry.fallback != nil {
-			fbMsg := truncateMsg("[fallback — primary "+p.Name()+" failed] "+truncMsg, entry.fallback.maxBytes)
-			if fbErr := entry.fallback.provider.SendMessage(fbMsg); fbErr != nil {
-				klog.ErrorS(fbErr, "fallback provider failed", "provider", entry.fallback.provider.Name())
+			fbMsg := truncateMsg(
+				"[fallback — primary "+p.Name()+" failed] "+truncMsg,
+				entry.fallback.maxBytes,
+			)
+			if fbErr := entry.fallback.provider.SendMessage(
+				fbMsg,
+			); fbErr != nil {
+				klog.ErrorS(
+					fbErr,
+					"fallback provider failed",
+					"provider",
+					entry.fallback.provider.Name(),
+				)
 			}
 		}
 	}
@@ -222,8 +253,18 @@ func (a *AlertManager) NotifyEvent(event event.Event) {
 		if err := sendWithRetry(ctx, func() error {
 			return p.SendEvent(&event)
 		}, entry.retry, p.Name()); err != nil && entry.fallback != nil {
-			if ferr := entry.fallback.provider.SendMessage("[fallback — primary " + p.Name() + " failed] " + event.Reason + " in " + event.Namespace + "/" + event.PodName); ferr != nil {
-				klog.ErrorS(ferr, "fallback provider send failed", "primary", p.Name(), "fallback", entry.fallback.provider.Name())
+			if ferr := entry.fallback.provider.SendMessage(
+				"[fallback — primary " + p.Name() + " failed] " + event.Reason +
+					" in " + event.Namespace + "/" + event.PodName,
+			); ferr != nil {
+				klog.ErrorS(
+					ferr,
+					"fallback provider send failed",
+					"primary",
+					p.Name(),
+					"fallback",
+					entry.fallback.provider.Name(),
+				)
 			}
 		}
 	}
@@ -234,6 +275,19 @@ func (a *AlertManager) NotifyEvent(event event.Event) {
 
 type ThreadProvider interface {
 	SendIncident(inc *model.Incident, action model.IncidentAction) error
+}
+
+// InsightThreadProvider is a ThreadProvider that can also show the insight
+// engine's diagnosis — likely cause, impact, recent changes — in its own
+// format. Without it a rich provider builds its message from the incident
+// alone and the diagnosis is silently dropped.
+type InsightThreadProvider interface {
+	ThreadProvider
+	SendIncidentWithInsight(
+		inc *model.Incident,
+		action model.IncidentAction,
+		ins *insight.Insight,
+	) error
 }
 
 // EventDeliveryProvider is a marker interface for providers whose real
@@ -249,18 +303,33 @@ type EventDeliveryProvider interface {
 // incidentToEvent maps a delivered incident to the legacy event.Event shape
 // these EventDeliveryProvider providers' SendEvent expects.
 
-func (a *AlertManager) NotifyIncident(inc *model.Incident, action model.IncidentAction, insight *insight.Insight) {
+func (a *AlertManager) NotifyIncident(
+	inc *model.Incident,
+	action model.IncidentAction,
+	insight *insight.Insight,
+) {
 	if action == model.ActionSkip {
 		return
 	}
 
 	if a.isSilenced(inc) {
 		klog.V(4).InfoS("incident suppressed by silence rule",
-			"key", inc.Key, "id", inc.ID, "reason", inc.Reason, "namespace", inc.Namespace)
+			"key", inc.Key, "id", inc.ID, "reason", inc.Reason,
+			"namespace", inc.Namespace)
 		return
 	}
 
-	klog.InfoS("sending incident", "action", action, "key", inc.Key, "id", inc.ID, "count", inc.Count)
+	klog.InfoS(
+		"sending incident",
+		"action",
+		action,
+		"key",
+		inc.Key,
+		"id",
+		inc.ID,
+		"count",
+		inc.Count,
+	)
 
 	if !a.started {
 		a.deliverAllSync(inc, action, insight)
@@ -290,8 +359,12 @@ func (a *AlertManager) AddProvider(p Provider) {
 	defer a.mu.Unlock()
 	entry := providerEntry{
 		provider: p,
-		retry:    retryConfig{maxAttempts: 1, delay: time.Second, maxBackoff: defaultMaxBackoff},
-		ch:       make(chan deliverJob, channelCap),
+		retry: retryConfig{
+			maxAttempts: 1,
+			delay:       time.Second,
+			maxBackoff:  defaultMaxBackoff,
+		},
+		ch: make(chan deliverJob, channelCap),
 	}
 	a.entries = append(a.entries, entry)
 	if a.started {

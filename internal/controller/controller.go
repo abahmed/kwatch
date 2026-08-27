@@ -4,12 +4,14 @@ import (
 	"context"
 	"fmt"
 	"os"
+	"sort"
+	"strings"
 	"time"
 
 	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
 	"k8s.io/apimachinery/pkg/util/wait"
 	"k8s.io/client-go/kubernetes"
-	admissionregistrationv1lister "k8s.io/client-go/listers/admissionregistration/v1"
+	admregv1lister "k8s.io/client-go/listers/admissionregistration/v1"
 	appsv1lister "k8s.io/client-go/listers/apps/v1"
 	autoscalingv2lister "k8s.io/client-go/listers/autoscaling/v2"
 	batchv1lister "k8s.io/client-go/listers/batch/v1"
@@ -26,6 +28,7 @@ import (
 	"github.com/abahmed/kwatch/internal/correlation"
 	"github.com/abahmed/kwatch/internal/event"
 	"github.com/abahmed/kwatch/internal/handler"
+	"github.com/abahmed/kwatch/internal/metrics"
 	"github.com/abahmed/kwatch/internal/resource"
 )
 
@@ -60,6 +63,8 @@ type Controller struct {
 	ssLister      appsv1lister.StatefulSetLister
 	pdbLister     policyv1lister.PodDisruptionBudgetLister
 	eventLister   corev1lister.EventLister
+	// one per event informer, all indexed by "byPod"
+	eventIndexers []cache.Indexer
 	hpaLister     autoscalingv2lister.HorizontalPodAutoscalerLister
 	secretLister  corev1lister.SecretLister
 	maxBaseline   int
@@ -81,8 +86,8 @@ type Controller struct {
 
 	serviceLister       corev1lister.ServiceLister
 	endpointSliceLister discoveryv1lister.EndpointSliceLister
-	mwcLister           admissionregistrationv1lister.MutatingWebhookConfigurationLister
-	vwcLister           admissionregistrationv1lister.ValidatingWebhookConfigurationLister
+	mwcLister           admregv1lister.MutatingWebhookConfigurationLister
+	vwcLister           admregv1lister.ValidatingWebhookConfigurationLister
 	ingressLister       networkingv1lister.IngressLister
 	netpolLister        networkingv1lister.NetworkPolicyLister
 	cpPodLister         corev1lister.PodLister
@@ -153,13 +158,22 @@ func New(
 		hpa:           newResourcePipeline("hpa", "horizontalpodautoscalers"),
 		service:       newResourcePipeline("service", "services"),
 		endpointSlice: newResourcePipeline("endpointslice", "endpointslices"),
-		mwc:           newResourcePipeline("mutatingwebhookconfiguration", "mutatingwebhookconfigurations"),
-		vwc:           newResourcePipeline("validatingwebhookconfiguration", "validatingwebhookconfigurations"),
-		ingress:       newResourcePipeline("ingress", "ingresses"),
-		netpol:        newResourcePipeline("networkpolicy", "networkpolicies"),
-		cpPod:         newResourcePipeline("controlplane pod", "controlplanepods"),
-		podLister:     podLister,
-		maxBaseline:   maxBaseline,
+		mwc: newResourcePipeline(
+			"mutatingwebhookconfiguration",
+			"mutatingwebhookconfigurations",
+		),
+		vwc: newResourcePipeline(
+			"validatingwebhookconfiguration",
+			"validatingwebhookconfigurations",
+		),
+		ingress: newResourcePipeline("ingress", "ingresses"),
+		netpol:  newResourcePipeline("networkpolicy", "networkpolicies"),
+		cpPod: newResourcePipeline(
+			"controlplane pod",
+			"controlplanepods",
+		),
+		podLister:   podLister,
+		maxBaseline: maxBaseline,
 	}
 
 	c.pod.startWorkers = true
@@ -183,31 +197,29 @@ func New(
 	c.netpol.syncFn = c.syncNetpol
 	c.cpPod.syncFn = c.syncCpPod
 
-	h.SetPodLister(podLister)
-
 	for _, inf := range podInformers {
 		c.pod.synced = append(c.pod.synced, inf.HasSynced)
 		inf.AddEventHandler(c.podEventHandler())
 	}
 
-	c.wireNode(h, cfg, fs)
-	c.wireRollout(h, cfg, fs)
-	c.wireJobs(h, cfg, fs)
-	c.wireDaemonSetMonitor(h, cfg, fs)
-	c.wireCronJobs(h, cfg, fs)
-	c.wireHPA(h, cfg, fs)
-	c.wireService(h, cfg, fs)
-	c.wireAdmissionWebhooks(h, cfg, fs)
-	c.wireIngress(h, cfg, fs)
-	c.wireNetpol(h, cfg, fs)
+	c.wireNode(cfg, fs)
+	c.wireRollout(cfg, fs)
+	c.wireJobs(cfg, fs)
+	c.wireDaemonSetMonitor(cfg, fs)
+	c.wireCronJobs(cfg, fs)
+	c.wireHPA(cfg, fs)
+	c.wireService(cfg, fs)
+	c.wireAdmissionWebhooks(cfg, fs)
+	c.wireIngress(cfg, fs)
+	c.wireNetpol(cfg, fs)
 	if cfg.ControlPlaneMonitor.Enabled {
-		factories = append(factories, c.wireControlPlane(h, client, resync))
+		factories = append(factories, c.wireControlPlane(client, resync))
 	}
-	c.wireReplicaSet(h, fs)
-	c.wireDaemonSetLister(h, fs)
-	c.wireStatefulSet(h, cfg, fs)
-	c.wirePDB(h, cfg, fs)
-	factories = append(factories, c.wireEvents(h, client, resync, namespaces)...)
+	c.wireReplicaSet(fs)
+	c.wireDaemonSetLister(fs)
+	c.wireStatefulSet(cfg, fs)
+	c.wirePDB(cfg, fs)
+	factories = append(factories, c.wireEvents(client, resync, namespaces)...)
 	if cfg.ClusterAutoscalerMonitor.Enabled {
 		factories = append(factories, wireClusterAutoscaler(h, client, resync))
 	}
@@ -215,8 +227,35 @@ func New(
 	c.wireGraphSupport(fs)
 	c.wireGraphHandlers(fs, cfg)
 	if cfg.TlsMonitor.Enabled {
-		factories = append(factories, c.wireTLS(h, client, resync, namespaces)...)
+		factories = append(factories, c.wireTLS(client, resync, namespaces)...)
 	}
+
+	// Every informer is wired; hand the handler its lookups in one go. A
+	// lister for a disabled monitor is nil, which the handler treats as
+	// "not available" the same way the old per-lister setters did by never
+	// being called.
+	h.SetListers(handler.Listers{
+		Pod:           c.podLister,
+		Node:          c.nodeLister,
+		Deploy:        c.deployLister,
+		Job:           c.jobLister,
+		CronJob:       c.cronJobLister,
+		RS:            c.rsLister,
+		DS:            c.dsLister,
+		SS:            c.ssLister,
+		PDB:           c.pdbLister,
+		Event:         c.eventLister,
+		EventsByPod:   c.eventsByPod,
+		HPA:           c.hpaLister,
+		MWC:           c.mwcLister,
+		VWC:           c.vwcLister,
+		Service:       c.serviceLister,
+		EndpointSlice: c.endpointSliceLister,
+		Secret:        c.secretLister,
+		Netpol:        c.netpolLister,
+		Ingress:       c.ingressLister,
+		CPPod:         c.cpPodLister,
+	})
 
 	stopCh := make(chan struct{})
 	for _, f := range factories {
@@ -241,7 +280,61 @@ func New(
 func (c *Controller) SetReadyFunc(fn func()) { c.readyFn = fn }
 
 func (c *Controller) SetTracker(t *kwcontext.ChangeTracker) { c.tracker = t }
-func (c *Controller) SetGraph(g *kwcontext.ResourceGraph)   { c.graph = g }
+
+// recordGraphSize publishes the graph's size so an empty graph — and therefore
+// empty diagnoses — is visible on /metrics instead of only in the alerts that
+// arrive without a cause.
+func (c *Controller) recordGraphSize() {
+	if c.graph == nil {
+		return
+	}
+	nodes, edges := c.graph.Size()
+	metrics.Default.GraphNodes.Store(int64(nodes))
+	metrics.Default.GraphEdges.Store(int64(edges))
+}
+func (c *Controller) SetGraph(g *kwcontext.ResourceGraph) { c.graph = g }
+
+// cacheSyncTimeout bounds the initial informer sync. Without a bound, one
+// resource the ServiceAccount cannot list — a missing RBAC rule, an API group
+// the cluster does not serve — parks kwatch forever: never ready, never
+// alerting, with only reflector errors in the log to explain why.
+var cacheSyncTimeout = 5 * time.Minute // a var so tests can shorten it
+
+// waitForCaches waits for every informer to sync and, on timeout, names the
+// pipelines that never did so the failure points at the missing permission.
+func (c *Controller) waitForCaches(
+	ctx context.Context,
+	syncFns []cache.InformerSynced,
+) error {
+	waitCtx, cancel := context.WithTimeout(ctx, cacheSyncTimeout)
+	defer cancel()
+	if cache.WaitForCacheSync(waitCtx.Done(), syncFns...) {
+		return nil
+	}
+	if ctx.Err() != nil {
+		return fmt.Errorf("failed to wait for caches to sync: %w", ctx.Err())
+	}
+	var unsynced []string
+	for _, p := range c.allPipelines() {
+		if p == nil {
+			continue
+		}
+		for _, synced := range p.synced {
+			if !synced() {
+				unsynced = append(unsynced, p.name)
+				break
+			}
+		}
+	}
+	sort.Strings(unsynced)
+	return fmt.Errorf(
+		"informer caches did not sync within %s (unsynced: %s) — check that "+
+			"kwatch's ClusterRole grants list/watch on these resources and "+
+			"that the API groups exist on this cluster",
+		cacheSyncTimeout,
+		strings.Join(unsynced, ", "),
+	)
+}
 
 func (c *Controller) Run(ctx context.Context, workers int) error {
 	defer utilruntime.HandleCrash()
@@ -262,14 +355,15 @@ func (c *Controller) Run(ctx context.Context, workers int) error {
 	syncFns = append(syncFns, c.eventsSynced...)
 	syncFns = append(syncFns, c.configMapSynced...)
 	syncFns = append(syncFns, c.secretsSynced...)
-	if !cache.WaitForCacheSync(ctx.Done(), syncFns...) {
-		return fmt.Errorf("failed to wait for caches to sync")
+	if err := c.waitForCaches(ctx, syncFns); err != nil {
+		return err
 	}
 	if c.readyFn != nil {
 		c.readyFn()
 	}
 
 	c.buildGraph()
+	c.recordGraphSize()
 	go func() {
 		rebuildTicker := time.NewTicker(60 * time.Minute)
 		defer rebuildTicker.Stop()
@@ -281,8 +375,10 @@ func (c *Controller) Run(ctx context.Context, workers int) error {
 				return
 			case <-rebuildTicker.C:
 				c.buildGraph()
+				c.recordGraphSize()
 			case <-pruneTicker.C:
 				c.pruneGraph()
+				c.recordGraphSize()
 			}
 		}
 	}()
@@ -303,7 +399,12 @@ func (c *Controller) Run(ctx context.Context, workers int) error {
 				MemWarning: cfg.MemWarning, MemCritical: cfg.MemCritical,
 			}, c.nodeLister, c.podLister)
 			mon.Run(ctx, func(sig *event.Signal) {
-				c.handler.ProcessNodeResourceOvercommit(sig.Reason, sig.NodeName, sig.Hint, sig.Severity)
+				c.handler.ProcessNodeResourceOvercommit(
+					sig.Reason,
+					sig.NodeName,
+					sig.Hint,
+					sig.Severity,
+				)
 			})
 		}(c.nodeResourceCfg)
 	}

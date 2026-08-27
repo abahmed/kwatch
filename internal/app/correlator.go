@@ -2,6 +2,8 @@ package app
 
 import (
 	"context"
+	"fmt"
+	"hash/crc32"
 	"strings"
 	"time"
 
@@ -20,7 +22,11 @@ import (
 )
 
 // configureAlertManager applies silences, templates, and starts delivery.
-func configureAlertManager(ctx context.Context, cfg *config.Config, am *alert.AlertManager) {
+func configureAlertManager(
+	ctx context.Context,
+	cfg *config.Config,
+	am *alert.AlertManager,
+) {
 	am.SetSilences(cfg.Silences)
 	am.SetTemplates(cfg.Templates)
 	if cfg.MaxRecentLogLines > 0 {
@@ -38,37 +44,60 @@ type engineHolder struct {
 // newCorrelator builds the correlation engine with its incident lifecycle,
 // mass-failure, and baseline hooks wired to the alerting stack.
 func newCorrelator(
-	cfg *config.Config, baseline map[string]map[string]int64,
-	am *alert.AlertManager, auditLogger *audit.AuditLogger,
-	graph *kwcontext.ResourceGraph, baselineCh chan<- map[string]map[string]int64,
+	cfg *config.Config,
+	baseline map[string]map[string]int64,
+	am *alert.AlertManager,
+	auditLogger *audit.AuditLogger,
+	graph *kwcontext.ResourceGraph,
+	baselineCh chan<- map[string]map[string]int64,
+	insightEngine *insight.Engine,
 ) *correlation.Engine {
 	holder := &engineHolder{}
 	opts := &engineOptions{
-		cfg:          cfg,
-		baseline:     baseline,
-		alertManager: am,
-		auditLogger:  auditLogger,
-		graph:        graph,
-		baselineCh:   baselineCh,
+		cfg:           cfg,
+		baseline:      baseline,
+		alertManager:  am,
+		auditLogger:   auditLogger,
+		graph:         graph,
+		baselineCh:    baselineCh,
+		insightEngine: insightEngine,
+		notify:        am.NotifyIncident,
 	}
 
 	holder.engine = correlation.NewEngine(correlation.Config{
-		Window:                     time.Duration(cfg.Correlation.Window) * time.Minute,
-		LifecycleInterval:          time.Duration(cfg.Correlation.LifecycleInterval) * time.Minute,
-		Baseline:                   baseline,
-		Enricher:                   &enricher.DefaultEnricher{SeverityByOwnerKind: cfg.SeverityByOwnerKind, SeverityByReason: cfg.SeverityByReason},
-		EscalationEnabled:          cfg.Correlation.Escalation.Enabled,
-		EscalationTiers:            cfg.Correlation.Escalation.Tiers,
-		InhibitNodeSuppressesPods:  cfg.Inhibition.NodeSuppressesPods,
-		RenotifyIntervalBySeverity: renotifyIntervalBySeverity(cfg.Correlation.Renotify.IntervalBySeverity),
-		RenotifyMaxPerIncident:     cfg.Correlation.Renotify.MaxPerIncident,
-		Runbooks:                   cfg.Runbooks,
-		ResolveHoldDown:            time.Duration(cfg.Correlation.ResolveHoldDown) * time.Second,
-		MaxBaseline:                cfg.Correlation.MaxBaseline,
-		SmartGroupingWindow:        time.Duration(cfg.SmartGrouping.WindowSeconds) * time.Second,
-		LifecycleHook:              lifecycleHook(opts, holder),
-		MassFailureHook:            massFailureHook(opts, holder),
-		OnBaselineChange:           onBaselineChange(baselineCh),
+		Window: time.Duration(
+			cfg.Correlation.Window,
+		) * time.Minute,
+		LifecycleInterval: time.Duration(
+			cfg.Correlation.LifecycleInterval,
+		) * time.Minute,
+		Baseline: baseline,
+		Enricher: &enricher.DefaultEnricher{
+			SeverityByOwnerKind: cfg.SeverityByOwnerKind,
+			SeverityByReason:    cfg.SeverityByReason,
+		},
+		EscalationEnabled:         cfg.Correlation.Escalation.Enabled,
+		EscalationTiers:           cfg.Correlation.Escalation.Tiers,
+		InhibitNodeSuppressesPods: cfg.Inhibition.NodeSuppressesPods,
+		RenotifyIntervalBySeverity: renotifyIntervalBySeverity(
+			cfg.Correlation.Renotify.IntervalBySeverity,
+		),
+		RenotifyMaxPerIncident: cfg.Correlation.Renotify.MaxPerIncident,
+		Runbooks:               cfg.Runbooks,
+		ResolveHoldDown: time.Duration(
+			cfg.Correlation.ResolveHoldDown,
+		) * time.Second,
+		MaxBaseline: cfg.Correlation.MaxBaseline,
+		SmartGroupingWindow: time.Duration(
+			cfg.SmartGrouping.WindowSeconds,
+		) * time.Second,
+		NamespaceFanOutThreshold: cfg.SmartGrouping.NamespaceFanOutThreshold,
+		DependenciesOf: func(inc *model.Incident) []string {
+			return insight.DependenciesFor(opts.graph, inc)
+		},
+		LifecycleHook:    lifecycleHook(opts, holder),
+		MassFailureHook:  massFailureHook(opts, holder),
+		OnBaselineChange: onBaselineChange(baselineCh),
 	})
 	return holder.engine
 }
@@ -81,16 +110,44 @@ type engineOptions struct {
 	auditLogger  *audit.AuditLogger
 	graph        *kwcontext.ResourceGraph
 	baselineCh   chan<- map[string]map[string]int64
+	// insightEngine turns an incident plus the resource graph into a
+	// diagnosis: likely cause, impact, what changed recently.
+	insightEngine *insight.Engine
+	// notify is the delivery sink, injectable so the hook can be tested.
+	notify func(*model.Incident, model.IncidentAction, *insight.Insight)
+}
+
+// diagnose runs the insight engine for the actions where a diagnosis helps.
+// A resolve carries none: there is nothing left to explain. A mass failure is
+// the diagnosis — its hint already names the shared dependency — so running
+// the graph over it again would only add noise.
+func (o *engineOptions) diagnose(
+	inc *model.Incident,
+	action model.IncidentAction,
+) *insight.Insight {
+	if o.insightEngine == nil || action == model.ActionResolved ||
+		correlation.IsMassFailureKey(inc.Key) {
+		return nil
+	}
+	return o.insightEngine.Analyze(inc)
 }
 
 // lifecycleHook audits and notifies each incident edge unless it was skipped.
-func lifecycleHook(opts *engineOptions, holder *engineHolder) func(*model.Incident, model.IncidentAction) {
+// It is the only place a notification is sent from: the engine routes every
+// decision — live events, resolves, group flushes, renotify, mass failures —
+// through here, so audit, diagnosis and delivery cannot diverge between paths.
+func lifecycleHook(
+	opts *engineOptions,
+	holder *engineHolder,
+) func(*model.Incident, model.IncidentAction) {
 	return func(inc *model.Incident, action model.IncidentAction) {
 		if action != model.ActionSkip {
 			opts.auditLogger.LogIncident(inc, action)
-			opts.alertManager.NotifyIncident(inc, action, nil)
+			opts.notify(inc, action, opts.diagnose(inc, action))
 		}
-		metrics.Default.ActiveIncidents.Store(int64(holder.engine.ActiveCount()))
+		metrics.Default.ActiveIncidents.Store(
+			int64(holder.engine.ActiveCount()),
+		)
 	}
 }
 
@@ -108,52 +165,94 @@ func massFailureHook(opts *engineOptions, holder *engineHolder) func() {
 		for _, mf := range mfs {
 			current[mf.SharedDependency] = mf
 		}
-		notifyNewMassFailures(opts, holder, current)
-		resolveClearedMassFailures(opts, holder, current)
+		notifyNewMassFailures(holder, current)
+		resolveClearedMassFailures(holder, current)
 	}
 }
 
 // notifyNewMassFailures fires active incidents for mass failures the engine is
 // not yet tracking.
-func notifyNewMassFailures(opts *engineOptions, holder *engineHolder, current map[string]insight.MassFailure) {
+func notifyNewMassFailures(
+	holder *engineHolder,
+	current map[string]insight.MassFailure,
+) {
 	for key, mf := range current {
 		incKey := correlation.MassFailureKey(key)
 		if holder.engine.HasMassFailure(incKey) {
 			continue
 		}
 		klog.V(2).InfoS("mass failure detected", "message", mf.Describe())
+		now := time.Now()
 		inc := &model.Incident{
-			Key:       incKey,
-			Reason:    mf.Reason,
-			Namespace: mf.Namespace,
-			Resource:  mf.ResourceKind,
-			Name:      key,
-			State:     model.StateActive,
+			Subject: model.Subject{
+				ID:        massFailureID(incKey),
+				Key:       incKey,
+				Reason:    mf.Reason,
+				Namespace: mf.Namespace,
+				Resource:  mf.ResourceKind,
+				Name:      describeDependency(key),
+			},
+			Status: model.Status{
+				Count:         mf.AffectedCount,
+				PeakResources: mf.AffectedCount,
+				FirstSeen:     now,
+				LastSeen:      now,
+				State:         model.StateActive,
+			},
+			Evidence: model.Evidence{
+				Hint: mf.Describe(),
+			},
 		}
+
 		holder.engine.AddMassFailure(inc)
-		opts.alertManager.NotifyIncident(inc, model.ActionCreate, nil)
 	}
+}
+
+// massFailureID derives the stable short id every provider displays. Group
+// incidents use the same crc32-of-key scheme, so the two look consistent.
+func massFailureID(key model.IncidentKey) string {
+	return fmt.Sprintf("%08x", crc32.ChecksumIEEE([]byte(key)))
+}
+
+// describeDependency turns the internal "kind/namespace/name" dependency key
+// into something readable. Cluster-scoped resources carry an empty namespace,
+// which rendered as "node//ip-10-0-0-1" before.
+func describeDependency(depKey string) string {
+	parts := strings.SplitN(depKey, "/", 3)
+	if len(parts) != 3 {
+		return depKey
+	}
+	kind, ns, name := parts[0], parts[1], parts[2]
+	if ns == "" {
+		return kind + " " + name
+	}
+	return kind + " " + ns + "/" + name
 }
 
 // resolveClearedMassFailures resolves tracked mass failures whose shared
 // dependency no longer appears in the failure set.
-func resolveClearedMassFailures(opts *engineOptions, holder *engineHolder, current map[string]insight.MassFailure) {
+func resolveClearedMassFailures(
+	holder *engineHolder,
+	current map[string]insight.MassFailure,
+) {
 	tracked := holder.engine.MassFailureSet()
-	for incKey, inc := range tracked {
+	for incKey := range tracked {
 		dep := strings.TrimPrefix(string(incKey), "mass-failure/")
 		if _, exists := current[dep]; exists {
 			continue
 		}
 		klog.V(2).InfoS("mass failure resolved", "dependency", dep)
-		resolved := inc.Clone()
-		resolved.State = model.StateResolved
+		// The engine announces the resolve and then releases whatever the
+		// mass failure was speaking for that is still broken, so a symptom
+		// that outlives its cause is announced instead of lost.
 		holder.engine.RemoveMassFailure(incKey)
-		opts.alertManager.NotifyIncident(resolved, model.ActionResolved, nil)
 	}
 }
 
 // onBaselineChange forwards baseline snapshots to the persistent saver.
-func onBaselineChange(baselineCh chan<- map[string]map[string]int64) func(map[string]map[string]int64) {
+func onBaselineChange(
+	baselineCh chan<- map[string]map[string]int64,
+) func(map[string]map[string]int64) {
 	return func(b map[string]map[string]int64) {
 		total := 0
 		for _, pods := range b {
@@ -169,9 +268,16 @@ func onBaselineChange(baselineCh chan<- map[string]map[string]int64) func(map[st
 }
 
 // restoreIncidents loads previously persisted incidents back into memory.
-func restoreIncidents(ctx context.Context, stateMgr *state.StateManager, correlator *correlation.Engine) {
-	var persisted []model.PersistedIncident
-	if err := stateMgr.GetIncidents(ctx, &persisted); err != nil {
+func restoreIncidents(
+	ctx context.Context,
+	stateMgr *state.StateManager,
+	correlator *correlation.Engine,
+) {
+	persisted, err := stateMgr.LoadPersistedIncidents(ctx)
+	if err != nil {
+		// Not fatal: kwatch starts with no correlation memory, which means
+		// anything already broken is announced again as new. Worth a log, not
+		// worth refusing to start.
 		klog.ErrorS(err, "failed to restore incidents from configmap")
 		return
 	}

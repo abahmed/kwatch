@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	discoveryv1 "k8s.io/api/discovery/v1"
@@ -18,21 +19,14 @@ import (
 	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/client-go/informers"
 	"k8s.io/client-go/kubernetes/fake"
-	admissionregistrationv1lister "k8s.io/client-go/listers/admissionregistration/v1"
 	appsv1lister "k8s.io/client-go/listers/apps/v1"
-	autoscalingv2lister "k8s.io/client-go/listers/autoscaling/v2"
-	batchv1lister "k8s.io/client-go/listers/batch/v1"
-	corev1lister "k8s.io/client-go/listers/core/v1"
-	discoveryv1lister "k8s.io/client-go/listers/discovery/v1"
-	networkingv1lister "k8s.io/client-go/listers/networking/v1"
-	policyv1lister "k8s.io/client-go/listers/policy/v1"
 	"k8s.io/client-go/tools/cache"
 	"k8s.io/client-go/util/workqueue"
 	"k8s.io/klog/v2"
 
 	"github.com/abahmed/kwatch/internal/config"
 	"github.com/abahmed/kwatch/internal/correlation"
-	"github.com/abahmed/kwatch/internal/insight"
+	"github.com/abahmed/kwatch/internal/handler"
 	"github.com/abahmed/kwatch/internal/model"
 )
 
@@ -47,7 +41,11 @@ type mockHandler struct {
 	startupSummary map[string]int
 }
 
-func (m *mockHandler) ProcessPod(_ context.Context, key string, deleted bool) error {
+func (m *mockHandler) ProcessPod(
+	_ context.Context,
+	key string,
+	deleted bool,
+) error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	m.podKeys = append(m.podKeys, key)
@@ -81,25 +79,43 @@ func (m *mockHandler) nodeEntry(i int) (string, bool) {
 	defer m.mu.Unlock()
 	return m.nodeKeys[i], m.nodeDel[i]
 }
-func (m *mockHandler) ProcessDeployment(string, bool) error                  { return m.err }
-func (m *mockHandler) ProcessJob(string, bool) error                         { return m.err }
-func (m *mockHandler) SetPodLister(corev1lister.PodLister)                   {}
-func (m *mockHandler) SetNodeLister(corev1lister.NodeLister)                 {}
-func (m *mockHandler) SetDeploymentLister(appsv1lister.DeploymentLister)     {}
-func (m *mockHandler) SetJobLister(batchv1lister.JobLister)                  {}
-func (m *mockHandler) SetReplicaLister(appsv1lister.ReplicaSetLister)        {}
-func (m *mockHandler) SetDaemonSetLister(appsv1lister.DaemonSetLister)       {}
-func (m *mockHandler) SetStatefulSetLister(appsv1lister.StatefulSetLister)   {}
-func (m *mockHandler) SetPdbLister(policyv1lister.PodDisruptionBudgetLister) {}
-func (m *mockHandler) SetEventLister(corev1lister.EventLister)               {}
-func (m *mockHandler) ProcessDaemonSet(string, bool) error                   { return m.err }
-func (m *mockHandler) ProcessCronJob(string, bool) error                     { return m.err }
-func (m *mockHandler) SetCronJobLister(batchv1lister.CronJobLister)          {}
-func (m *mockHandler) SetHorizontalPodAutoscalerLister(autoscalingv2lister.HorizontalPodAutoscalerLister) {
+
+func (m *mockHandler) ProcessDeployment(
+	string,
+	bool,
+) error {
+	return m.err
 }
-func (m *mockHandler) ProcessHorizontalPodAutoscaler(string, bool) error { return m.err }
-func (m *mockHandler) SetSecretLister(corev1lister.SecretLister)         {}
-func (m *mockHandler) SweepTLSSecrets()                                  {}
+
+func (m *mockHandler) ProcessJob(
+	string,
+	bool,
+) error {
+	return m.err
+}
+
+func (m *mockHandler) ProcessDaemonSet(
+	string,
+	bool,
+) error {
+	return m.err
+}
+
+func (m *mockHandler) ProcessCronJob(
+	string,
+	bool,
+) error {
+	return m.err
+}
+
+func (m *mockHandler) ProcessHorizontalPodAutoscaler(
+	string,
+	bool,
+) error {
+	return m.err
+}
+func (m *mockHandler) SetListers(handler.Listers) {}
+func (m *mockHandler) SweepTLSSecrets()           {}
 func (m *mockHandler) SetBaseline(baseline map[string]map[string]int64) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
@@ -112,28 +128,76 @@ func (m *mockHandler) ReportStartupSummary(suppressed map[string]int) {
 	defer m.mu.Unlock()
 	m.startupSummary = suppressed
 }
-func (m *mockHandler) ProcessMutatingWebhookConfiguration(string, bool) error   { return m.err }
-func (m *mockHandler) ProcessValidatingWebhookConfiguration(string, bool) error { return m.err }
-func (m *mockHandler) ProcessService(string, bool) error                        { return m.err }
-func (m *mockHandler) ProcessNetworkPolicy(string, bool) error                  { return m.err }
-func (m *mockHandler) ProcessIngress(string, bool) error                        { return m.err }
-func (m *mockHandler) ProcessControlPlanePod(*corev1.Pod) error                 { return m.err }
-func (m *mockHandler) SweepControlPlane()                                       {}
-func (m *mockHandler) SetServiceLister(corev1lister.ServiceLister)              {}
-func (m *mockHandler) SetEndpointSliceLister(discoveryv1lister.EndpointSliceLister) {
+
+func (m *mockHandler) ProcessMutatingWebhookConfiguration(
+	string,
+	bool,
+) error {
+	return m.err
 }
-func (m *mockHandler) SetMwCLister(admissionregistrationv1lister.MutatingWebhookConfigurationLister) {
+
+func (m *mockHandler) ProcessValidatingWebhookConfiguration(
+	string,
+	bool,
+) error {
+	return m.err
 }
-func (m *mockHandler) SetVwCLister(admissionregistrationv1lister.ValidatingWebhookConfigurationLister) {
+
+func (m *mockHandler) ProcessService(
+	string,
+	bool,
+) error {
+	return m.err
 }
-func (m *mockHandler) SetIngressLister(networkingv1lister.IngressLister)                    {}
-func (m *mockHandler) SetNetpolLister(networkingv1lister.NetworkPolicyLister)               {}
-func (m *mockHandler) SetCpPodLister(corev1lister.PodLister)                                {}
-func (m *mockHandler) ProcessStatefulSet(string, bool) error                                { return m.err }
-func (m *mockHandler) ProcessPdb(string, bool) error                                        { return m.err }
-func (m *mockHandler) SetInsightEngine(_ *insight.Engine)                                   {}
-func (m *mockHandler) ProcessNodeResourceOvercommit(string, string, string, model.Severity) {}
-func (m *mockHandler) ProcessClusterAutoscalerEvent(*corev1.Event)                          {}
+
+func (m *mockHandler) ProcessNetworkPolicy(
+	string,
+	bool,
+) error {
+	return m.err
+}
+
+func (m *mockHandler) ProcessIngress(
+	string,
+	bool,
+) error {
+	return m.err
+}
+
+func (m *mockHandler) ProcessControlPlanePod(
+	*corev1.Pod,
+) error {
+	return m.err
+}
+
+func (m *mockHandler) SweepControlPlane() {}
+
+func (m *mockHandler) ProcessStatefulSet(
+	string,
+	bool,
+) error {
+	return m.err
+}
+
+func (m *mockHandler) ProcessPdb(
+	string,
+	bool,
+) error {
+	return m.err
+}
+
+func (m *mockHandler) ProcessNodeResourceOvercommit(
+	string,
+	string,
+	string,
+	model.Severity,
+) {
+}
+
+func (m *mockHandler) ProcessClusterAutoscalerEvent(
+	*corev1.Event,
+) {
+}
 
 func TestNewCreatesController(t *testing.T) {
 	assert := assert.New(t)
@@ -214,7 +278,10 @@ func TestSyncEndpointSliceResolvesServiceByLabel(t *testing.T) {
 
 	svc := &corev1.Service{
 		ObjectMeta: metav1.ObjectMeta{Name: "web", Namespace: "ns"},
-		Spec:       corev1.ServiceSpec{ClusterIP: "10.0.0.1", Selector: map[string]string{"app": "web"}},
+		Spec: corev1.ServiceSpec{
+			ClusterIP: "10.0.0.1",
+			Selector:  map[string]string{"app": "web"},
+		},
 	}
 	epSlice := &discoveryv1.EndpointSlice{
 		ObjectMeta: metav1.ObjectMeta{
@@ -456,9 +523,15 @@ func TestSyncPodInvalidKey(t *testing.T) {
 
 	// The key is forwarded to the handler, which is responsible for parsing
 	// and validating it; the controller is a thin dispatch layer.
-	err := ctrl.syncPod(context.Background(), "invalid-key-without-namespace/extra/segments")
+	err := ctrl.syncPod(
+		context.Background(),
+		"invalid-key-without-namespace/extra/segments",
+	)
 	assert.NoError(err)
-	assert.Equal([]string{"invalid-key-without-namespace/extra/segments"}, h.podKeys)
+	assert.Equal(
+		[]string{"invalid-key-without-namespace/extra/segments"},
+		h.podKeys,
+	)
 	assert.Equal([]bool{false}, h.podDel)
 }
 
@@ -622,7 +695,13 @@ func TestRunEndToEndPodDelete(t *testing.T) {
 			Namespace: "default",
 		},
 	}
-	_, err := client.CoreV1().Pods("default").Create(ctx, pod, metav1.CreateOptions{})
+	_, err := client.CoreV1().Pods(
+		"default",
+	).Create(
+		ctx,
+		pod,
+		metav1.CreateOptions{},
+	)
 	assert.NoError(err)
 
 	assert.Eventually(func() bool {
@@ -635,7 +714,13 @@ func TestRunEndToEndPodDelete(t *testing.T) {
 	h.podDel = nil
 	h.mu.Unlock()
 
-	err = client.CoreV1().Pods("default").Delete(ctx, "ephemeral", metav1.DeleteOptions{})
+	err = client.CoreV1().Pods(
+		"default",
+	).Delete(
+		ctx,
+		"ephemeral",
+		metav1.DeleteOptions{},
+	)
 	assert.NoError(err)
 
 	assert.Eventually(func() bool {
@@ -810,7 +895,10 @@ func TestEnqueuePodDeletedFinalStateUnknown(t *testing.T) {
 			Namespace: "default",
 		},
 	}
-	tombstone := cache.DeletedFinalStateUnknown{Key: "default/lost-pod", Obj: pod}
+	tombstone := cache.DeletedFinalStateUnknown{
+		Key: "default/lost-pod",
+		Obj: pod,
+	}
 	ctrl.pod.enqueue(tombstone)
 	assert.Equal(1, ctrl.pod.queue.Len())
 
@@ -877,7 +965,8 @@ func TestRunMultipleWorkers(t *testing.T) {
 
 	assert.Eventually(func() bool {
 		return h.podCount() >= 20
-	}, 10*time.Second, 100*time.Millisecond, "all 20 pods should be processed with 4 workers")
+	}, 10*time.Second, 100*time.Millisecond, "all 20 pods should be processed "+
+		"with 4 workers")
 
 	cancel()
 }
@@ -940,7 +1029,11 @@ func TestBuildSeenSetSeedsNodeConditions(t *testing.T) {
 	h.mu.Unlock()
 
 	expectedKey := correlation.BuildKey("", "worker-1", "MemoryPressure", "")
-	assert.Contains(baseline, string(expectedKey), "buildSeenSet must seed node conditions")
+	assert.Contains(
+		baseline,
+		string(expectedKey),
+		"buildSeenSet must seed node conditions",
+	)
 }
 
 // errDaemonSetLister is a DaemonSetLister whose List always fails,
@@ -949,7 +1042,9 @@ type errDaemonSetLister struct {
 	appsv1lister.DaemonSetLister
 }
 
-func (e *errDaemonSetLister) List(selector labels.Selector) ([]*appsv1.DaemonSet, error) {
+func (e *errDaemonSetLister) List(
+	selector labels.Selector,
+) ([]*appsv1.DaemonSet, error) {
 	return nil, errors.New("cache not synced")
 }
 
@@ -1021,28 +1116,52 @@ func TestBuildSeenSetSurfacesListerErrors(t *testing.T) {
 	baseline := h.seenBaseline
 	h.mu.Unlock()
 	expectedKey := correlation.BuildKey("", "worker-1", "MemoryPressure", "")
-	assert.Contains(t, baseline, string(expectedKey), "other baseline categories must still be seeded")
+	assert.Contains(
+		t,
+		baseline,
+		string(expectedKey),
+		"other baseline categories must still be seeded",
+	)
 }
 
 func TestBuildSeenPerPodAndHealthySiblingKeepsBaseline(t *testing.T) {
 	client := fake.NewSimpleClientset(
 		&corev1.Pod{
-			ObjectMeta: metav1.ObjectMeta{Name: "healthy-pod", Namespace: "default",
-				OwnerReferences: []metav1.OwnerReference{{Kind: "Deployment", Name: "dep", APIVersion: "apps/v1"}}},
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      "healthy-pod",
+				Namespace: "default",
+				OwnerReferences: []metav1.OwnerReference{
+					{Kind: "Deployment", Name: "dep", APIVersion: "apps/v1"},
+				},
+			},
 			Status: corev1.PodStatus{
 				Phase: corev1.PodRunning,
-				ContainerStatuses: []corev1.ContainerStatus{{
-					Name: "c", State: corev1.ContainerState{Running: &corev1.ContainerStateRunning{}}}},
+				ContainerStatuses: []corev1.ContainerStatus{
+					{
+						Name: "c",
+						State: corev1.ContainerState{
+							Running: &corev1.ContainerStateRunning{},
+						},
+					},
+				},
 			},
 		},
 		&corev1.Pod{
-			ObjectMeta: metav1.ObjectMeta{Name: "failed-pod", Namespace: "default",
-				OwnerReferences: []metav1.OwnerReference{{Kind: "Deployment", Name: "dep", APIVersion: "apps/v1"}}},
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      "failed-pod",
+				Namespace: "default",
+				OwnerReferences: []metav1.OwnerReference{
+					{Kind: "Deployment", Name: "dep", APIVersion: "apps/v1"},
+				},
+			},
 			Status: corev1.PodStatus{
 				Phase: corev1.PodFailed,
 				ContainerStatuses: []corev1.ContainerStatus{{
 					Name: "c", State: corev1.ContainerState{
-						Waiting: &corev1.ContainerStateWaiting{Reason: "Error"}}}},
+						Waiting: &corev1.ContainerStateWaiting{
+							Reason: "Error",
+						},
+					}}},
 			},
 		},
 	)
@@ -1069,25 +1188,44 @@ func TestBuildSeenPerPodAndHealthySiblingKeepsBaseline(t *testing.T) {
 	assert.True(t, ok, "failed pod must be baselined")
 
 	// The healthy pod should NOT be in the baseline
-	assert.NotContains(t, baseline[string(key)], "healthy-pod", "healthy pod must NOT be baselined")
+	assert.NotContains(
+		t,
+		baseline[string(key)],
+		"healthy-pod",
+		"healthy pod must NOT be baselined",
+	)
 
-	// Simulate ClearBaselineForPod for the healthy pod — should NOT affect the failed pod's entry
+	// Simulate ClearBaselineForPod for the healthy pod — should NOT affect
+	// the failed pod's entry
 	h.ClearBaselineForPod("default", "healthy-pod")
 
 	_, ok = baseline[string(key)]["failed-pod"]
-	assert.True(t, ok, "ClearBaselineForPod for healthy sibling must not clear failed pod's baseline")
+	assert.True(
+		t,
+		ok,
+		"ClearBaselineForPod for healthy sibling must not clear failed pod's "+
+			"baseline",
+	)
 }
 
 func TestBuildSeenCrashLoopHighFreq(t *testing.T) {
 	client := fake.NewSimpleClientset(
 		&corev1.Pod{
-			ObjectMeta: metav1.ObjectMeta{Name: "cl-pod", Namespace: "default",
-				OwnerReferences: []metav1.OwnerReference{{Kind: "Deployment", Name: "dep", APIVersion: "apps/v1"}}},
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      "cl-pod",
+				Namespace: "default",
+				OwnerReferences: []metav1.OwnerReference{
+					{Kind: "Deployment", Name: "dep", APIVersion: "apps/v1"},
+				},
+			},
 			Status: corev1.PodStatus{
 				ContainerStatuses: []corev1.ContainerStatus{{
 					Name: "app", RestartCount: 7,
 					State: corev1.ContainerState{
-						Waiting: &corev1.ContainerStateWaiting{Reason: "CrashLoopBackOff"}}}},
+						Waiting: &corev1.ContainerStateWaiting{
+							Reason: "CrashLoopBackOff",
+						},
+					}}},
 			},
 		},
 	)
@@ -1108,27 +1246,43 @@ func TestBuildSeenCrashLoopHighFreq(t *testing.T) {
 	baseline := h.seenBaseline
 	h.mu.Unlock()
 
-	// Key should be CrashLoopHighFrequency (not CrashLoopBackOff) because restarts > 5
+	// Key should be CrashLoopHighFrequency (not CrashLoopBackOff) because
+	// restarts > 5
 	key := correlation.BuildKey("default", "dep", "CrashLoopHighFrequency", "")
 	_, ok := baseline[string(key)]["cl-pod"]
-	assert.True(t, ok, "buildSeenSet must use CrashLoopHighFrequency for restarts > 5")
+	assert.True(
+		t,
+		ok,
+		"buildSeenSet must use CrashLoopHighFrequency for restarts > 5",
+	)
 }
 
 func TestBuildSeenRunningWithRestarts(t *testing.T) {
 	client := fake.NewSimpleClientset(
 		&corev1.Pod{
-			ObjectMeta: metav1.ObjectMeta{Name: "restarted-pod", Namespace: "default",
-				OwnerReferences: []metav1.OwnerReference{{Kind: "Deployment", Name: "dep", APIVersion: "apps/v1"}}},
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      "restarted-pod",
+				Namespace: "default",
+				OwnerReferences: []metav1.OwnerReference{
+					{Kind: "Deployment", Name: "dep", APIVersion: "apps/v1"},
+				},
+			},
 			Status: corev1.PodStatus{
 				Phase: corev1.PodRunning,
-				ContainerStatuses: []corev1.ContainerStatus{{
-					Name:         "app",
-					RestartCount: 3,
-					State:        corev1.ContainerState{Running: &corev1.ContainerStateRunning{}},
-					LastTerminationState: corev1.ContainerState{
-						Terminated: &corev1.ContainerStateTerminated{Reason: "Error"},
+				ContainerStatuses: []corev1.ContainerStatus{
+					{
+						Name:         "app",
+						RestartCount: 3,
+						State: corev1.ContainerState{
+							Running: &corev1.ContainerStateRunning{},
+						},
+						LastTerminationState: corev1.ContainerState{
+							Terminated: &corev1.ContainerStateTerminated{
+								Reason: "Error",
+							},
+						},
 					},
-				}},
+				},
 			},
 		},
 	)
@@ -1149,10 +1303,16 @@ func TestBuildSeenRunningWithRestarts(t *testing.T) {
 	baseline := h.seenBaseline
 	h.mu.Unlock()
 
-	// Must use LastTerminationState.Terminated.Reason ("Error"), not skip the pod
+	// Must use LastTerminationState.Terminated.Reason ("Error"), not skip the
+	// pod
 	key := correlation.BuildKey("default", "dep", "Error", "")
 	_, ok := baseline[string(key)]["restarted-pod"]
-	assert.True(t, ok, "Running container with restarts must be baselined using LastTerminationState.Reason")
+	assert.True(
+		t,
+		ok,
+		"Running container with restarts must be baselined using "+
+			"LastTerminationState.Reason",
+	)
 }
 
 func TestBuildSeenSetReportsStartupSummary(t *testing.T) {
@@ -1218,14 +1378,22 @@ func TestBuildSeenSetReportsStartupSummary(t *testing.T) {
 	h.mu.Unlock()
 
 	a.NotNil(summary, "ReportStartupSummary should have been called")
-	a.Greater(len(summary), 0, "suppressed map should have entries for broken pods")
+	a.Greater(
+		len(summary),
+		0,
+		"suppressed map should have entries for broken pods",
+	)
 
 	// Verify the suppressed key format: owner/reason
 	found := false
 	for key, count := range summary {
 		if count > 0 {
 			found = true
-			a.Contains(key, "/", "suppressed key should use owner/reason format")
+			a.Contains(
+				key,
+				"/",
+				"suppressed key should use owner/reason format",
+			)
 		}
 	}
 	a.True(found, "at least one suppressed entry should exist")
@@ -1241,8 +1409,12 @@ func TestBuildSeenSeedsDaemonSetBaselineWithEmptyKey(t *testing.T) {
 		},
 		Spec: appsv1.DaemonSetSpec{
 			Template: corev1.PodTemplateSpec{
-				ObjectMeta: metav1.ObjectMeta{Labels: map[string]string{"app": "test"}},
-				Spec:       corev1.PodSpec{Containers: []corev1.Container{{Name: "app"}}},
+				ObjectMeta: metav1.ObjectMeta{
+					Labels: map[string]string{"app": "test"},
+				},
+				Spec: corev1.PodSpec{
+					Containers: []corev1.Container{{Name: "app"}},
+				},
 			},
 		},
 		Status: appsv1.DaemonSetStatus{
@@ -1271,11 +1443,23 @@ func TestBuildSeenSeedsDaemonSetBaselineWithEmptyKey(t *testing.T) {
 	baseline := h.seenBaseline
 	h.mu.Unlock()
 
-	key := correlation.BuildKey("default", "default/test-ds", "DaemonSetUnavailable", "")
-	a.Contains(baseline, string(key), "buildSeenSet must seed DaemonSet issues into baseline")
+	key := correlation.BuildKey(
+		"default",
+		"default/test-ds",
+		"DaemonSetUnavailable",
+		"",
+	)
+	a.Contains(
+		baseline,
+		string(key),
+		"buildSeenSet must seed DaemonSet issues into baseline",
+	)
 
 	_, hasEmpty := baseline[string(key)][""]
-	a.True(hasEmpty, "controller resource baseline must map under empty pod key")
+	a.True(
+		hasEmpty,
+		"controller resource baseline must map under empty pod key",
+	)
 }
 
 func TestBuildSeenSeedsDeploymentUnavailableBaseline(t *testing.T) {
@@ -1289,8 +1473,12 @@ func TestBuildSeenSeedsDeploymentUnavailableBaseline(t *testing.T) {
 		},
 		Spec: appsv1.DeploymentSpec{
 			Template: corev1.PodTemplateSpec{
-				ObjectMeta: metav1.ObjectMeta{Labels: map[string]string{"app": "test"}},
-				Spec:       corev1.PodSpec{Containers: []corev1.Container{{Name: "app"}}},
+				ObjectMeta: metav1.ObjectMeta{
+					Labels: map[string]string{"app": "test"},
+				},
+				Spec: corev1.PodSpec{
+					Containers: []corev1.Container{{Name: "app"}},
+				},
 			},
 		},
 		Status: appsv1.DeploymentStatus{
@@ -1319,11 +1507,23 @@ func TestBuildSeenSeedsDeploymentUnavailableBaseline(t *testing.T) {
 	baseline := h.seenBaseline
 	h.mu.Unlock()
 
-	key := correlation.BuildKey("default", "default/test-dep", "DeploymentUnavailable", "")
-	a.Contains(baseline, string(key), "buildSeenSet must seed DeploymentUnavailable issues into baseline")
+	key := correlation.BuildKey(
+		"default",
+		"default/test-dep",
+		"DeploymentUnavailable",
+		"",
+	)
+	a.Contains(
+		baseline,
+		string(key),
+		"buildSeenSet must seed DeploymentUnavailable issues into baseline",
+	)
 
 	_, hasEmpty := baseline[string(key)][""]
-	a.True(hasEmpty, "deployment resource baseline must map under empty pod key")
+	a.True(
+		hasEmpty,
+		"deployment resource baseline must map under empty pod key",
+	)
 }
 
 func TestBuildSeenSetReportsEmptySummaryOnNoBrokenPods(t *testing.T) {
@@ -1367,4 +1567,85 @@ func TestBuildSeenSetReportsEmptySummaryOnNoBrokenPods(t *testing.T) {
 
 	// Must be empty or nil (no broken pods to suppress)
 	a.Empty(summary, "no broken pods means empty startup summary")
+}
+
+// A key whose sync fails every time must eventually be dropped. Before the cap
+// it circulated with backoff for the life of the process.
+func TestProcessNextItemGivesUpAfterMaxRetries(t *testing.T) {
+	p := newResourcePipeline("pod", "pods")
+	// The production limiter backs off exponentially into the minutes; the
+	// test only cares about the count, so requeue with no delay.
+	p.queue = workqueue.NewTypedRateLimitingQueueWithConfig(
+		workqueue.NewTypedItemExponentialFailureRateLimiter[string](0, 0),
+		workqueue.TypedRateLimitingQueueConfig[string]{Name: "test"},
+	)
+	calls := 0
+	p.syncFn = func(context.Context, string) error {
+		calls++
+		return errors.New("always fails")
+	}
+	p.queue.Add("default/doomed")
+
+	// Drive the queue until the key is no longer requeued. Rate-limited
+	// re-adds land after a delay, so poll with a bound rather than spin.
+	deadline := time.Now().Add(20 * time.Second)
+	for time.Now().Before(deadline) {
+		if p.queue.Len() == 0 && p.queue.NumRequeues("default/doomed") == 0 {
+			break
+		}
+		if p.queue.Len() > 0 {
+			require.True(t, p.processNextItem(context.Background()))
+			continue
+		}
+		time.Sleep(5 * time.Millisecond)
+	}
+
+	assert.Equal(
+		t,
+		maxSyncRetries+1,
+		calls,
+		"one initial attempt plus maxSyncRetries requeues",
+	)
+	assert.Equal(
+		t,
+		0,
+		p.queue.NumRequeues("default/doomed"),
+		"the key must be forgotten",
+	)
+	assert.Equal(t, 0, p.queue.Len(), "nothing left in the queue")
+}
+
+// One informer that can never sync — a missing RBAC rule, an absent API group
+// — must not park kwatch forever. The error has to name the resource.
+func TestWaitForCachesNamesTheInformerThatNeverSynced(t *testing.T) {
+	c := &Controller{
+		pod:  newResourcePipeline("pod", "pods"),
+		node: newResourcePipeline("node", "nodes"),
+	}
+	c.pod.synced = []cache.InformerSynced{func() bool { return true }}
+	c.node.synced = []cache.InformerSynced{func() bool { return false }}
+
+	// Shorten the sync budget itself; a parent deadline would be reported as
+	// a shutdown, not as an informer that never synced.
+	prev := cacheSyncTimeout
+	cacheSyncTimeout = 50 * time.Millisecond
+	defer func() { cacheSyncTimeout = prev }()
+
+	err := c.waitForCaches(
+		context.Background(),
+		append(c.pod.synced, c.node.synced...),
+	)
+	require.Error(t, err)
+	assert.Contains(
+		t,
+		err.Error(),
+		"node",
+		"the unsynced pipeline must be named",
+	)
+	assert.NotContains(
+		t,
+		err.Error(),
+		"unsynced: pod",
+		"a synced pipeline must not be blamed",
+	)
 }

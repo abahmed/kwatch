@@ -1,10 +1,8 @@
 package telegram
 
 import (
-	"bytes"
 	"encoding/json"
 	"fmt"
-	"io"
 	"net/http"
 	"strings"
 	"time"
@@ -14,10 +12,10 @@ import (
 	"github.com/abahmed/kwatch/internal/alert/util"
 	"github.com/abahmed/kwatch/internal/config"
 	"github.com/abahmed/kwatch/internal/event"
+	"github.com/abahmed/kwatch/internal/insight"
 	"github.com/abahmed/kwatch/internal/k8s"
 	"github.com/abahmed/kwatch/internal/message"
 	"github.com/abahmed/kwatch/internal/model"
-	"github.com/abahmed/kwatch/internal/ratelimit"
 )
 
 const (
@@ -90,7 +88,10 @@ func (t *Telegram) Verify() error {
 	}
 	defer resp.Body.Close()
 	if resp.StatusCode != http.StatusOK {
-		return fmt.Errorf("telegram getMe returned status %d", resp.StatusCode)
+		return event.ClassifyHTTP(
+			resp.StatusCode,
+			fmt.Errorf("telegram getMe returned status %d", resp.StatusCode),
+		)
 	}
 	return nil
 }
@@ -114,8 +115,28 @@ func (t *Telegram) SendMessage(msg string) error {
 // SendIncident implements alert.ThreadProvider.
 // It renders the incident using the Report model and PlaintextRenderer,
 // producing a context-adaptive text message.
-func (t *Telegram) SendIncident(inc *model.Incident, action model.IncidentAction) error {
-	text := util.RenderIncident(inc, action, message.NewPlainTextRenderer(), t.appCfg.ClusterName)
+func (t *Telegram) SendIncident(
+	inc *model.Incident,
+	action model.IncidentAction,
+) error {
+	return t.SendIncidentWithInsight(inc, action, nil)
+}
+
+// SendIncidentWithInsight implements alert.InsightThreadProvider, so the
+// diagnosis — likely cause, impact, recent changes — is rendered rather than
+// dropped on the way to this provider.
+func (t *Telegram) SendIncidentWithInsight(
+	inc *model.Incident,
+	action model.IncidentAction,
+	ins *insight.Insight,
+) error {
+	text := util.RenderIncidentWithInsight(
+		inc,
+		action,
+		ins,
+		message.NewPlainTextRenderer(),
+		t.appCfg.ClusterName,
+	)
 	if text == "" {
 		return nil
 	}
@@ -130,13 +151,19 @@ func (t *Telegram) buildRequestBodyTelegram(
 	txt := ""
 	if len(customMsg) == 0 {
 		var parts []string
-		parts = append(parts, fmt.Sprintf("*Reason:* %s", util.OrDefault(e.Reason, "unknown")))
+		parts = append(
+			parts,
+			fmt.Sprintf("*Reason:* %s", util.OrDefault(e.Reason, "unknown")),
+		)
 
 		if e.PodName != "" {
 			parts = append(parts, fmt.Sprintf("*Pod:* %s", e.PodName))
 		}
 		if e.ContainerName != "" {
-			parts = append(parts, fmt.Sprintf("*Container:* %s", e.ContainerName))
+			parts = append(
+				parts,
+				fmt.Sprintf("*Container:* %s", e.ContainerName),
+			)
 		}
 		if e.Namespace != "" {
 			parts = append(parts, fmt.Sprintf("*Namespace:* %s", e.Namespace))
@@ -145,7 +172,10 @@ func (t *Telegram) buildRequestBodyTelegram(
 			parts = append(parts, fmt.Sprintf("*Node:* %s", e.NodeName))
 		}
 		if t.appCfg.ClusterName != "" {
-			parts = append(parts, fmt.Sprintf("*Cluster:* %s", t.appCfg.ClusterName))
+			parts = append(
+				parts,
+				fmt.Sprintf("*Cluster:* %s", t.appCfg.ClusterName),
+			)
 		}
 
 		txt = "⛑ Kwatch alert\n" + strings.Join(parts, "\n")
@@ -181,47 +211,23 @@ func (t *Telegram) buildRequestBodyTelegram(
 }
 
 func (t *Telegram) sendByTelegramApi(reqBody string) error {
-	client := k8s.GetDefaultClient()
-	buffer := bytes.NewBuffer([]byte(reqBody))
-	url := fmt.Sprintf(t.url, t.token)
-
-	request, err := http.NewRequest(http.MethodPost, url, buffer)
-	if err != nil {
-		return err
-	}
-
-	request.Header.Set("Content-Type", "application/json")
-
-	response, err := client.Do(request)
-	if err != nil {
-		return err
-	}
-	defer response.Body.Close()
-
-	if response.StatusCode == http.StatusTooManyRequests {
-		d := ratelimit.ParseRetryAfter(response)
-		if d == 0 {
-			body, _ := io.ReadAll(response.Body)
+	_, err := util.Send(util.Request{
+		Provider: "Telegram",
+		URL:      fmt.Sprintf(t.url, t.token),
+		Body:     []byte(reqBody),
+		// Telegram reports the back-off in the JSON body, not the header.
+		RetryAfterFromBody: func(body []byte) time.Duration {
 			var p struct {
 				Parameters *struct {
 					RetryAfter int `json:"retry_after"`
 				} `json:"parameters"`
 			}
-			if json.Unmarshal(body, &p) == nil && p.Parameters != nil && p.Parameters.RetryAfter > 0 {
-				d = time.Duration(p.Parameters.RetryAfter) * time.Second
+			if json.Unmarshal(body, &p) == nil && p.Parameters != nil &&
+				p.Parameters.RetryAfter > 0 {
+				return time.Duration(p.Parameters.RetryAfter) * time.Second
 			}
-		}
-		return &ratelimit.Error{
-			Provider:   "Telegram",
-			StatusCode: http.StatusTooManyRequests,
-			RetryAfter: d,
-		}
-	}
-	if response.StatusCode > 299 {
-		return fmt.Errorf(
-			"call to telegram alert returned status code %d",
-			response.StatusCode)
-	}
-
-	return nil
+			return 0
+		},
+	})
+	return err
 }

@@ -19,10 +19,11 @@ func (f PendingPodFilter) Detect(ctx *Context) Status {
 	}
 
 	refTime := ctx.Pod.CreationTimestamp.Time
-	if !ctx.Config.WatchStartTime.IsZero() && ctx.Config.WatchStartTime.After(refTime) {
+	if !ctx.Config.WatchStartTime.IsZero() &&
+		ctx.Config.WatchStartTime.After(refTime) {
 		refTime = ctx.Config.WatchStartTime
 	}
-	if time.Since(refTime) < f.Threshold {
+	if ctx.now().Sub(refTime) < f.Threshold {
 		return StatusContinue
 	}
 
@@ -43,7 +44,9 @@ func (f PendingPodFilter) Detect(ctx *Context) Status {
 
 	if ctx.PodReason == "" {
 		ctx.PodReason = "PodPending"
-		ctx.PodMsg = "pod has been in Pending phase for " + f.Threshold.Round(time.Second).String()
+		ctx.PodMsg = "pod has been in Pending phase for " + f.Threshold.Round(
+			time.Second,
+		).String()
 	}
 
 	return StatusAlert

@@ -1,6 +1,8 @@
 package controller
 
 import (
+	"time"
+
 	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/klog/v2"
 
@@ -52,7 +54,10 @@ func (c *Controller) seedPdbs(rec *baselineRecorder) {
 	if c.pdbLister != nil {
 		pdbs, err := c.pdbLister.List(labels.Everything())
 		if err != nil {
-			klog.ErrorS(err, "failed to list pod disruption budgets for baseline seeding")
+			klog.ErrorS(
+				err,
+				"failed to list pod disruption budgets for baseline seeding",
+			)
 		} else {
 			for _, pdb := range pdbs {
 				if sig := handler.DetectPdbIssue(pdb); sig != nil {
@@ -70,9 +75,11 @@ func (c *Controller) seedDeployments(rec *baselineRecorder) {
 			klog.ErrorS(err, "failed to list deployments for baseline seeding")
 		} else {
 			for _, deploy := range deploys {
-				if sig := handler.DetectDeploymentIssue(deploy); sig != nil {
-					rec.seed(sig)
-				} else if sig := handler.DetectDeploymentUnavailable(deploy); sig != nil {
+				sig := handler.DetectDeploymentIssue(deploy)
+				if sig == nil {
+					sig = handler.DetectDeploymentUnavailable(deploy)
+				}
+				if sig != nil {
 					rec.seed(sig)
 				}
 			}
@@ -102,7 +109,10 @@ func (c *Controller) seedCronJobs(rec *baselineRecorder) {
 			klog.ErrorS(err, "failed to list cronjobs for baseline seeding")
 		} else {
 			for _, cj := range cjs {
-				if sig := handler.DetectCronJobIssue(cj); sig != nil {
+				if sig := handler.DetectCronJobIssue(
+					cj,
+					time.Now(),
+				); sig != nil {
 					rec.seed(sig)
 				}
 			}
@@ -115,7 +125,11 @@ func (c *Controller) seedHPAs(rec *baselineRecorder) {
 	if c.hpaLister != nil {
 		hpas, err := c.hpaLister.List(labels.Everything())
 		if err != nil {
-			klog.ErrorS(err, "failed to list horizontal pod autoscalers for baseline seeding")
+			klog.ErrorS(
+				err,
+				"failed to list horizontal pod autoscalers for baseline "+
+					"seeding",
+			)
 		} else {
 			for _, hpa := range hpas {
 				for _, sig := range handler.DetectHPAIssues(hpa) {
@@ -134,13 +148,29 @@ func (c *Controller) seedServices(rec *baselineRecorder) {
 			klog.ErrorS(err, "failed to list services for baseline seeding")
 		} else {
 			for _, svc := range svcs {
-				sel := labels.Set{"kubernetes.io/service-name": svc.Name}.AsSelector()
-				epSlices, err := c.endpointSliceLister.EndpointSlices(svc.Namespace).List(sel)
+				sel := labels.Set{
+					"kubernetes.io/service-name": svc.Name,
+				}.AsSelector()
+				epSlices, err := c.endpointSliceLister.EndpointSlices(
+					svc.Namespace,
+				).List(
+					sel,
+				)
 				if err != nil {
-					klog.ErrorS(err, "failed to list endpoint slices for baseline seeding", "service", svc.Name, "namespace", svc.Namespace)
+					klog.ErrorS(
+						err,
+						"failed to list endpoint slices for baseline seeding",
+						"service",
+						svc.Name,
+						"namespace",
+						svc.Namespace,
+					)
 					continue
 				}
-				if sig := handler.DetectServiceEndpointIssue(svc, epSlices); sig != nil {
+				if sig := handler.DetectServiceEndpointIssue(
+					svc,
+					epSlices,
+				); sig != nil {
 					rec.seed(sig)
 				}
 			}
@@ -167,15 +197,23 @@ func (c *Controller) seedControllersWithSvc(rec *baselineRecorder) {
 	c.seedIngresses(rec, hasSvc)
 }
 
-func (c *Controller) seedMwcs(rec *baselineRecorder, hasSvc func(ns, name string) bool) {
+func (c *Controller) seedMwcs(
+	rec *baselineRecorder,
+	hasSvc func(ns, name string) bool,
+) {
 	// Admission webhooks — seed webhook-backend issues
 	if c.mwcLister != nil {
 		mwcs, err := c.mwcLister.List(labels.Everything())
 		if err != nil {
-			klog.ErrorS(err, "failed to list mutating webhook configurations for baseline seeding")
+			klog.ErrorS(
+				err,
+				"failed to list mutating webhook configurations for baseline "+
+					"seeding",
+			)
 		} else {
 			for _, mwc := range mwcs {
-				for _, sig := range handler.DetectMutatingWebhookIssue(mwc, hasSvc) {
+				sigs := handler.DetectMutatingWebhookIssue(mwc, hasSvc)
+				for _, sig := range sigs {
 					rec.seed(sig)
 				}
 			}
@@ -183,14 +221,22 @@ func (c *Controller) seedMwcs(rec *baselineRecorder, hasSvc func(ns, name string
 	}
 }
 
-func (c *Controller) seedVwcs(rec *baselineRecorder, hasSvc func(ns, name string) bool) {
+func (c *Controller) seedVwcs(
+	rec *baselineRecorder,
+	hasSvc func(ns, name string) bool,
+) {
 	if c.vwcLister != nil {
 		vwcs, err := c.vwcLister.List(labels.Everything())
 		if err != nil {
-			klog.ErrorS(err, "failed to list validating webhook configurations for baseline seeding")
+			klog.ErrorS(
+				err,
+				"failed to list validating webhook configurations for "+
+					"baseline seeding",
+			)
 		} else {
 			for _, vwc := range vwcs {
-				for _, sig := range handler.DetectValidatingWebhookIssue(vwc, hasSvc) {
+				sigs := handler.DetectValidatingWebhookIssue(vwc, hasSvc)
+				for _, sig := range sigs {
 					rec.seed(sig)
 				}
 			}
@@ -198,7 +244,10 @@ func (c *Controller) seedVwcs(rec *baselineRecorder, hasSvc func(ns, name string
 	}
 }
 
-func (c *Controller) seedIngresses(rec *baselineRecorder, hasSvc func(ns, name string) bool) {
+func (c *Controller) seedIngresses(
+	rec *baselineRecorder,
+	hasSvc func(ns, name string) bool,
+) {
 	// Ingresses — seed ingress-backend issues
 	if c.ingressLister != nil {
 		ings, err := c.ingressLister.List(labels.Everything())
@@ -219,7 +268,10 @@ func (c *Controller) seedNetworkPolicies(rec *baselineRecorder) {
 	if c.netpolLister != nil {
 		policies, err := c.netpolLister.List(labels.Everything())
 		if err != nil {
-			klog.ErrorS(err, "failed to list network policies for baseline seeding")
+			klog.ErrorS(
+				err,
+				"failed to list network policies for baseline seeding",
+			)
 		} else {
 			for _, policy := range policies {
 				if sig := handler.DetectNetworkPolicyIssue(policy); sig != nil {
@@ -236,7 +288,10 @@ func (c *Controller) seedControlPlaneBaseline(rec *baselineRecorder) {
 	if c.cpPod.startWorkers && c.cpPodLister != nil {
 		pods, err := c.cpPodLister.List(labels.Everything())
 		if err != nil {
-			klog.ErrorS(err, "failed to list control-plane pods for baseline seeding")
+			klog.ErrorS(
+				err,
+				"failed to list control-plane pods for baseline seeding",
+			)
 		} else {
 			for _, pod := range pods {
 				if sig := handler.DetectControlPlanePodIssue(pod); sig != nil {

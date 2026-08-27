@@ -1,19 +1,16 @@
 package webhook
 
 import (
-	"bytes"
 	"encoding/json"
 	"fmt"
-	"net/http"
 	"strings"
 
 	"github.com/abahmed/kwatch/internal/alert/util"
 	"github.com/abahmed/kwatch/internal/config"
 	"github.com/abahmed/kwatch/internal/event"
-	"github.com/abahmed/kwatch/internal/k8s"
+	"github.com/abahmed/kwatch/internal/insight"
 	"github.com/abahmed/kwatch/internal/message"
 	"github.com/abahmed/kwatch/internal/model"
-	"github.com/abahmed/kwatch/internal/ratelimit"
 
 	"k8s.io/klog/v2"
 )
@@ -102,58 +99,63 @@ func (w *Webhook) Name() string {
 
 // SendEvent sends event to the provider
 func (w *Webhook) SendEvent(ev *event.Event) error {
-	client := k8s.GetDefaultClient()
-
 	reqBody, err := w.buildRequestBody(ev)
 	if err != nil {
 		return err
 	}
-	buffer := bytes.NewBuffer(reqBody)
+	_, err = util.Send(w.request(reqBody))
+	return err
+}
 
-	request, err := http.NewRequest(http.MethodPost, w.webhook, buffer)
-	if err != nil {
-		return err
+// request builds the call every webhook delivery makes: the user's headers
+// and optional basic auth on top of a JSON POST.
+func (w *Webhook) request(body []byte) util.Request {
+	r := util.Request{
+		Provider: "Webhook",
+		URL:      w.webhook,
+		Body:     body,
+		Headers:  make(map[string]string, len(w.headers)),
 	}
-
 	for _, header := range w.headers {
-		request.Header.Set(header.Name, header.Value)
+		r.Headers[header.Name] = header.Value
 	}
 	if len(w.username) > 0 && len(w.password) > 0 {
-		request.SetBasicAuth(w.username, w.password)
-	}
-
-	response, err := client.Do(request)
-	if err != nil {
-		return err
-	}
-	defer response.Body.Close()
-
-	if response.StatusCode == http.StatusTooManyRequests {
-		return &ratelimit.Error{
-			Provider:   "Webhook",
-			StatusCode: http.StatusTooManyRequests,
-			RetryAfter: ratelimit.ParseRetryAfter(response),
+		r.BasicAuth = &util.BasicAuth{
+			Username: w.username,
+			Password: w.password,
 		}
 	}
-	if response.StatusCode > 299 {
-		return fmt.Errorf(
-			"call to webhook returned status code %d",
-			response.StatusCode)
-	}
-
-	return nil
+	return r
 }
 
 // SendIncident implements alert.ThreadProvider.
 // It renders the incident using the Report model and PlaintextRenderer,
 // producing a context-adaptive text message, then POSTs it as JSON.
-func (w *Webhook) SendIncident(inc *model.Incident, action model.IncidentAction) error {
-	text := util.RenderIncident(inc, action, message.NewPlainTextRenderer(), w.appCfg.ClusterName)
+func (w *Webhook) SendIncident(
+	inc *model.Incident,
+	action model.IncidentAction,
+) error {
+	return w.SendIncidentWithInsight(inc, action, nil)
+}
+
+// SendIncidentWithInsight implements alert.InsightThreadProvider, so the
+// diagnosis — likely cause, impact, recent changes — is rendered rather than
+// dropped on the way to this provider.
+func (w *Webhook) SendIncidentWithInsight(
+	inc *model.Incident,
+	action model.IncidentAction,
+	ins *insight.Insight,
+) error {
+	text := util.RenderIncidentWithInsight(
+		inc,
+		action,
+		ins,
+		message.NewPlainTextRenderer(),
+		w.appCfg.ClusterName,
+	)
 	if text == "" {
 		return nil
 	}
-
-	client := k8s.GetDefaultClient()
 
 	payload, err := json.Marshal(map[string]interface{}{
 		"Cluster": w.appCfg.ClusterName,
@@ -164,39 +166,8 @@ func (w *Webhook) SendIncident(inc *model.Incident, action model.IncidentAction)
 	if err != nil {
 		return fmt.Errorf("failed to marshal webhook incident payload: %w", err)
 	}
-
-	request, err := http.NewRequest(http.MethodPost, w.webhook, bytes.NewBuffer(payload))
-	if err != nil {
-		return err
-	}
-
-	for _, header := range w.headers {
-		request.Header.Set(header.Name, header.Value)
-	}
-	if len(w.username) > 0 && len(w.password) > 0 {
-		request.SetBasicAuth(w.username, w.password)
-	}
-
-	response, err := client.Do(request)
-	if err != nil {
-		return err
-	}
-	defer response.Body.Close()
-
-	if response.StatusCode == http.StatusTooManyRequests {
-		return &ratelimit.Error{
-			Provider:   "Webhook",
-			StatusCode: http.StatusTooManyRequests,
-			RetryAfter: ratelimit.ParseRetryAfter(response),
-		}
-	}
-	if response.StatusCode > 299 {
-		return fmt.Errorf(
-			"call to webhook returned status code %d",
-			response.StatusCode)
-	}
-
-	return nil
+	_, err = util.Send(w.request(payload))
+	return err
 }
 
 func (w *Webhook) buildRequestBody(

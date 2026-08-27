@@ -17,7 +17,11 @@ func (e *Engine) trackNodeIncident(res, nodeName, reason string) {
 }
 
 // recordSuppressedPod bumps the suppression counters on a node incident.
-func recordSuppressedPod(nodeInc *model.Incident, ev event.Event, owner string) {
+func recordSuppressedPod(
+	nodeInc *model.Incident,
+	ev event.Event,
+	owner string,
+) {
 	nodeInc.SuppressedPods++
 	if owner != "" {
 		if nodeInc.SuppressedOwners == nil {
@@ -26,45 +30,16 @@ func recordSuppressedPod(nodeInc *model.Incident, ev event.Event, owner string) 
 		nodeInc.SuppressedOwners[owner]++
 	}
 	if len(nodeInc.SuppressedPodSummaries) < 20 {
-		nodeInc.SuppressedPodSummaries = append(nodeInc.SuppressedPodSummaries, model.PodSummary{
-			Namespace:    ev.Namespace,
-			PodName:      ev.PodName,
-			Reason:       ev.Reason,
-			RestartCount: ev.RestartCount,
-		})
+		nodeInc.SuppressedPodSummaries = append(
+			nodeInc.SuppressedPodSummaries,
+			model.PodSummary{
+				Namespace:    ev.Namespace,
+				PodName:      ev.PodName,
+				Reason:       ev.Reason,
+				RestartCount: ev.RestartCount,
+			},
+		)
 	}
-}
-
-// logNodeInhibitionSkip records an audit skip for a pod suppressed by an
-// active node incident. nodeName is set only when the pod was bound to a node.
-func (e *Engine) logNodeInhibitionSkip(ev event.Event, key model.IncidentKey, nodeName string) {
-	if e.auditLogger == nil {
-		return
-	}
-	e.auditLogger.LogSkip(&model.Incident{Key: key, Namespace: ev.Namespace, Reason: ev.Reason, ID: string(key), NodeName: nodeName}, "node_inhibition")
-}
-
-// suppressedByNodeIncident reports whether the pod event should be suppressed
-// because its node has an active incident, or (for unschedulable pods with no
-// node) because any node incident is active. Records suppression stats on the
-// owning node incident. Caller must hold e.mu.
-func (e *Engine) suppressedByNodeIncident(ev event.Event, owner string, key model.IncidentKey) bool {
-	if ev.NodeName != "" && e.activeNodeIncidents[ev.NodeName] {
-		if nodeInc := e.findNodeIncident(ev.NodeName); nodeInc != nil {
-			recordSuppressedPod(nodeInc, ev, owner)
-		}
-		e.logNodeInhibitionSkip(ev, key, ev.NodeName)
-		return true
-	}
-	// Unschedulable pods (empty NodeName) — suppress when any node incident is active.
-	if ev.NodeName == "" && len(e.activeNodeIncidents) > 0 {
-		if nodeInc := e.findMostConstrainedNodeIncident(); nodeInc != nil {
-			recordSuppressedPod(nodeInc, ev, owner)
-		}
-		e.logNodeInhibitionSkip(ev, key, "")
-		return true
-	}
-	return false
 }
 
 // Caller must hold e.mu.
@@ -84,7 +59,8 @@ func (e *Engine) findNodeIncident(nodeName string) *model.Incident {
 func (e *Engine) findMostConstrainedNodeIncident() *model.Incident {
 	var best *model.Incident
 	for _, inc := range e.state {
-		if inc.Resource == "node" && inc.State != model.StateResolved && inc.State != model.StatePendingResolve {
+		if inc.Resource == "node" && inc.State != model.StateResolved &&
+			inc.State != model.StatePendingResolve {
 			if best == nil || inc.SuppressedPods > best.SuppressedPods {
 				best = inc
 			}
@@ -117,7 +93,9 @@ func (e *Engine) SetActiveNodeIncidents(nodeNames []string) {
 // delays the "resolved" notification. Caller must hold e.mu.
 func (e *Engine) refreshNodeInhibition(nodeName string) {
 	for _, inc := range e.state {
-		if inc.Resource == "node" && inc.Name == nodeName && inc.State != model.StateResolved && inc.State != model.StatePendingResolve {
+		if inc.Resource == "node" && inc.Name == nodeName &&
+			inc.State != model.StateResolved &&
+			inc.State != model.StatePendingResolve {
 			return
 		}
 	}

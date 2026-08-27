@@ -15,7 +15,10 @@ import (
 	"github.com/abahmed/kwatch/internal/event"
 )
 
-func (h *handler) ProcessHorizontalPodAutoscaler(key string, deleted bool) error {
+func (h *handler) ProcessHorizontalPodAutoscaler(
+	key string,
+	deleted bool,
+) error {
 	namespace, name, err := cache.SplitMetaNamespaceKey(key)
 	if err != nil {
 		return fmt.Errorf("invalid hpa key %q: %w", key, err)
@@ -23,18 +26,29 @@ func (h *handler) ProcessHorizontalPodAutoscaler(key string, deleted bool) error
 	if deleted {
 		h.clearFirstMaxed(namespace + "/" + name)
 		h.clearFirstScalingError(namespace + "/" + name)
-		h.correlator.ResolveByResource("horizontalpodautoscaler", namespace+"/"+name)
+		h.correlator.ResolveByResource(
+			"horizontalpodautoscaler",
+			namespace+"/"+name,
+		)
 		return nil
 	}
-	hpa, err := h.listers.hpa.HorizontalPodAutoscalers(namespace).Get(name)
+	hpa, err := h.listers.HPA.HorizontalPodAutoscalers(namespace).Get(name)
 	if err != nil {
 		if errors.IsNotFound(err) {
 			h.clearFirstMaxed(namespace + "/" + name)
 			h.clearFirstScalingError(namespace + "/" + name)
-			h.correlator.ResolveByResource("horizontalpodautoscaler", namespace+"/"+name)
+			h.correlator.ResolveByResource(
+				"horizontalpodautoscaler",
+				namespace+"/"+name,
+			)
 			return nil
 		}
-		return fmt.Errorf("failed to get hpa %s/%s from cache: %w", namespace, name, err)
+		return fmt.Errorf(
+			"failed to get hpa %s/%s from cache: %w",
+			namespace,
+			name,
+			err,
+		)
 	}
 	return h.ProcessHorizontalPodAutoscalerObject(hpa, false)
 }
@@ -50,7 +64,8 @@ func hpaAtMax(hpa *autoscalingv2.HorizontalPodAutoscaler) bool {
 	hasScalingLimited := false
 	for i := range hpa.Status.Conditions {
 		c := &hpa.Status.Conditions[i]
-		if c.Type == autoscalingv2.ScalingLimited && c.Status == corev1.ConditionTrue {
+		if c.Type == autoscalingv2.ScalingLimited &&
+			c.Status == corev1.ConditionTrue {
 			hasScalingLimited = true
 			if c.Reason == constant.ReasonTooManyReplicas {
 				return true
@@ -70,13 +85,16 @@ func hpaAtMax(hpa *autoscalingv2.HorizontalPodAutoscaler) bool {
 // DetectHPAIssues returns signals for both scaling errors and maxed-out
 // conditions. Used for baseline seeding at startup. Returns multiple signals
 // so that both conditions are seeded independently.
-func DetectHPAIssues(hpa *autoscalingv2.HorizontalPodAutoscaler) []*event.Signal {
+func DetectHPAIssues(
+	hpa *autoscalingv2.HorizontalPodAutoscaler,
+) []*event.Signal {
 	key := hpa.Namespace + "/" + hpa.Name
 	var out []*event.Signal
 
 	for i := range hpa.Status.Conditions {
 		c := &hpa.Status.Conditions[i]
-		if (c.Type == autoscalingv2.AbleToScale || c.Type == autoscalingv2.ScalingActive) &&
+		if (c.Type == autoscalingv2.AbleToScale ||
+			c.Type == autoscalingv2.ScalingActive) &&
 			c.Status == corev1.ConditionFalse {
 			if c.Reason == constant.ReasonScalingDisabled {
 				continue // target intentionally at 0 replicas — not an error
@@ -87,7 +105,12 @@ func DetectHPAIssues(hpa *autoscalingv2.HorizontalPodAutoscaler) []*event.Signal
 				Namespace: hpa.Namespace,
 				Owner:     key,
 				Labels:    hpa.Labels,
-				Hint:      fmt.Sprintf("%s: %s — %s", c.Type, c.Reason, c.Message),
+				Hint: fmt.Sprintf(
+					"%s: %s — %s",
+					c.Type,
+					c.Reason,
+					c.Message,
+				),
 			})
 			break
 		}
@@ -100,21 +123,31 @@ func DetectHPAIssues(hpa *autoscalingv2.HorizontalPodAutoscaler) []*event.Signal
 			Namespace: hpa.Namespace,
 			Owner:     key,
 			Labels:    hpa.Labels,
-			Hint:      fmt.Sprintf("pinned at max=%d (current=%d)", hpa.Spec.MaxReplicas, hpa.Status.CurrentReplicas),
+			Hint: fmt.Sprintf(
+				"pinned at max=%d (current=%d)",
+				hpa.Spec.MaxReplicas,
+				hpa.Status.CurrentReplicas,
+			),
 		})
 	}
 
 	return out
 }
 
-func (h *handler) ProcessHorizontalPodAutoscalerObject(hpa *autoscalingv2.HorizontalPodAutoscaler, deleted bool) error {
+func (h *handler) ProcessHorizontalPodAutoscalerObject(
+	hpa *autoscalingv2.HorizontalPodAutoscaler,
+	deleted bool,
+) error {
 	if hpa == nil {
 		return nil
 	}
 	if deleted {
 		h.clearFirstMaxed(hpa.Namespace + "/" + hpa.Name)
 		h.clearFirstScalingError(hpa.Namespace + "/" + hpa.Name)
-		h.correlator.ResolveByResource("horizontalpodautoscaler", hpa.Namespace+"/"+hpa.Name)
+		h.correlator.ResolveByResource(
+			"horizontalpodautoscaler",
+			hpa.Namespace+"/"+hpa.Name,
+		)
 		return nil
 	}
 
@@ -126,7 +159,9 @@ func (h *handler) ProcessHorizontalPodAutoscalerObject(hpa *autoscalingv2.Horizo
 	for _, sig := range sigs {
 		if sig.Reason == constant.ReasonHPAScalingError {
 			first := h.markFirstScalingError(key)
-			sustained := time.Duration(h.config.HpaMonitor.SustainedMinutes) * time.Minute
+			sustained := time.Duration(
+				h.config.HpaMonitor.SustainedMinutes,
+			) * time.Minute
 			if sustained <= 0 || h.now().Sub(first) >= sustained {
 				h.signalEvent(sig)
 			}
@@ -135,18 +170,34 @@ func (h *handler) ProcessHorizontalPodAutoscalerObject(hpa *autoscalingv2.Horizo
 	}
 	if !hadError {
 		h.clearFirstScalingError(key)
-		h.correlator.MarkResolved(correlation.BuildKey(hpa.Namespace, key, constant.ReasonHPAScalingError, ""))
+		h.correlator.MarkResolved(
+			correlation.BuildKey(
+				hpa.Namespace,
+				key,
+				constant.ReasonHPAScalingError,
+				"",
+			),
+		)
 	}
 
 	// (2) maxed detection
 	if !hpaAtMax(hpa) {
 		h.clearFirstMaxed(key)
-		h.correlator.MarkResolved(correlation.BuildKey(hpa.Namespace, key, constant.ReasonHPAMaxedOut, ""))
+		h.correlator.MarkResolved(
+			correlation.BuildKey(
+				hpa.Namespace,
+				key,
+				constant.ReasonHPAMaxedOut,
+				"",
+			),
+		)
 		return nil
 	}
 
 	first := h.markFirstMaxed(key)
-	sustained := time.Duration(h.config.HpaMonitor.SustainedMinutes) * time.Minute
+	sustained := time.Duration(
+		h.config.HpaMonitor.SustainedMinutes,
+	) * time.Minute
 	if sustained > 0 && h.now().Sub(first) < sustained {
 		return nil
 	}
@@ -157,9 +208,14 @@ func (h *handler) ProcessHorizontalPodAutoscalerObject(hpa *autoscalingv2.Horizo
 		Reason:    constant.ReasonHPAMaxedOut,
 		Owner:     key,
 		Labels:    hpa.Labels,
-		Hint: fmt.Sprintf("pinned at max=%d (desired=%d current=%d) for %s — raise maxReplicas or investigate load",
-			hpa.Spec.MaxReplicas, hpa.Status.DesiredReplicas,
-			hpa.Status.CurrentReplicas, h.now().Sub(first).Round(time.Minute)),
+		Hint: fmt.Sprintf(
+			"pinned at max=%d (desired=%d current=%d) for %s — raise "+
+				"maxReplicas or investigate load",
+			hpa.Spec.MaxReplicas,
+			hpa.Status.DesiredReplicas,
+			hpa.Status.CurrentReplicas,
+			h.now().Sub(first).Round(time.Minute),
+		),
 	})
 	return nil
 }

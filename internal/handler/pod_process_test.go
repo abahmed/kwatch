@@ -18,13 +18,17 @@ import (
 	"github.com/abahmed/kwatch/internal/config"
 	"github.com/abahmed/kwatch/internal/event"
 	"github.com/abahmed/kwatch/internal/filter"
-	"github.com/abahmed/kwatch/internal/insight"
 	"github.com/abahmed/kwatch/internal/model"
 )
 
 func TestSignalEventWithRestartCountOnly(t *testing.T) {
 	e := testCorrelator()
-	h := NewHandler(fake.NewSimpleClientset(), &config.Config{}, e, testAlertMgr)
+	h := NewHandler(
+		fake.NewSimpleClientset(),
+		&config.Config{},
+		e,
+		testAlertMgr,
+	)
 	h.signalEvent(&event.Signal{
 		Resource:     "pod",
 		Reason:       "CrashLoopBackOff",
@@ -126,7 +130,7 @@ func TestEmitHighRestartAlertWithOwner(t *testing.T) {
 	}
 	f := informers.NewSharedInformerFactory(fake.NewSimpleClientset(), 0)
 	f.Apps().V1().ReplicaSets().Informer().GetIndexer().Add(rs)
-	hh.SetReplicaLister(f.Apps().V1().ReplicaSets().Lister())
+	hh.listers.RS = f.Apps().V1().ReplicaSets().Lister()
 
 	pod := &corev1.Pod{
 		ObjectMeta: metav1.ObjectMeta{
@@ -200,7 +204,11 @@ func TestProcessPodUnschedulableWithDelayAndResources(t *testing.T) {
 	err := h.ProcessPodObject(context.Background(), pod, false)
 	assert.NoError(t, err)
 	snap := e.Snapshot()
-	assert.NotEmpty(t, snap, "Unschedulable pod with delay and resources should create incident")
+	assert.NotEmpty(
+		t,
+		snap,
+		"Unschedulable pod with delay and resources should create incident",
+	)
 }
 
 func TestProcessPodWithEventLister(t *testing.T) {
@@ -211,7 +219,7 @@ func TestProcessPodWithEventLister(t *testing.T) {
 
 	// Set event lister
 	f := informers.NewSharedInformerFactory(client, 0)
-	h.SetEventLister(f.Core().V1().Events().Lister())
+	h.listers.Event = f.Core().V1().Events().Lister()
 
 	pod := &corev1.Pod{
 		ObjectMeta: metav1.ObjectMeta{Name: "broken", Namespace: "default"},
@@ -289,7 +297,10 @@ func TestProcessPodImagePullBackOffWithSecrets(t *testing.T) {
 	h := NewHandler(client, cfg, e, testAlertMgr)
 
 	pod := &corev1.Pod{
-		ObjectMeta: metav1.ObjectMeta{Name: "pull-pod-secrets", Namespace: "default"},
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "pull-pod-secrets",
+			Namespace: "default",
+		},
 		Spec: corev1.PodSpec{
 			NodeName: "node1",
 			ImagePullSecrets: []corev1.LocalObjectReference{
@@ -337,7 +348,10 @@ func TestProcessPodWithOomRepeating(t *testing.T) {
 	h := NewHandler(client, cfg, e, testAlertMgr)
 
 	pod := &corev1.Pod{
-		ObjectMeta: metav1.ObjectMeta{Name: "oom-repeat-pod", Namespace: "default"},
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "oom-repeat-pod",
+			Namespace: "default",
+		},
 		Spec: corev1.PodSpec{
 			NodeName: "node1",
 			Containers: []corev1.Container{
@@ -382,7 +396,12 @@ func TestProcessPodWithOomRepeating(t *testing.T) {
 	// Second call: should detect OOM repeating
 	err = h.ProcessPodObject(context.Background(), pod, false)
 	assert.NoError(t, err)
-	assert.Equal(t, 1, e.ActiveCount(), "second OOM should update existing incident")
+	assert.Equal(
+		t,
+		1,
+		e.ActiveCount(),
+		"second OOM should update existing incident",
+	)
 }
 
 func TestProcessPodWithCrashLoopBackOffLivenessProbe(t *testing.T) {
@@ -392,7 +411,10 @@ func TestProcessPodWithCrashLoopBackOffLivenessProbe(t *testing.T) {
 	h := NewHandler(client, cfg, e, testAlertMgr)
 
 	pod := &corev1.Pod{
-		ObjectMeta: metav1.ObjectMeta{Name: "liveness-pod", Namespace: "default"},
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "liveness-pod",
+			Namespace: "default",
+		},
 		Spec: corev1.PodSpec{
 			NodeName: "node1",
 			Containers: []corev1.Container{
@@ -449,7 +471,7 @@ func TestProcessPodUnschedulableWithEventLister(t *testing.T) {
 
 	// Set event lister to exercise that branch in executePodFilters
 	f := informers.NewSharedInformerFactory(client, 0)
-	h.SetEventLister(f.Core().V1().Events().Lister())
+	h.listers.Event = f.Core().V1().Events().Lister()
 
 	pod := &corev1.Pod{
 		ObjectMeta: metav1.ObjectMeta{
@@ -729,7 +751,12 @@ func TestProcessPodCompletedStatus(t *testing.T) {
 }
 
 func TestEmitHighRestartAlertNoOwner(t *testing.T) {
-	h := NewHandler(fake.NewSimpleClientset(), &config.Config{}, testCorrelator(), testAlertMgr)
+	h := NewHandler(
+		fake.NewSimpleClientset(),
+		&config.Config{},
+		testCorrelator(),
+		testAlertMgr,
+	)
 
 	ctx := &filter.Context{
 		Pod: &corev1.Pod{
@@ -815,23 +842,14 @@ func TestProcessPodUnschedulableWithResourceRequests(t *testing.T) {
 	assert.NotEmpty(t, snap, "Unschedulable pod should create incident")
 }
 
-func TestSignalEventWithInsightEngine(t *testing.T) {
-	e := testCorrelator()
-	ie := insight.Engine{}
-	h := NewHandler(fake.NewSimpleClientset(), &config.Config{}, e, testAlertMgr)
-	h.SetInsightEngine(&ie)
-	h.signalEvent(&event.Signal{
-		Resource:  "pod",
-		Reason:    "TestReason",
-		PodName:   "p1",
-		Namespace: "ns1",
-	})
-	assert.Equal(t, 1, e.ActiveCount())
-}
-
 func TestSignalEventWithMessageHintFallback(t *testing.T) {
 	e := testCorrelator()
-	h := NewHandler(fake.NewSimpleClientset(), &config.Config{}, e, testAlertMgr)
+	h := NewHandler(
+		fake.NewSimpleClientset(),
+		&config.Config{},
+		e,
+		testAlertMgr,
+	)
 	h.signalEvent(&event.Signal{
 		Resource:  "pod",
 		Reason:    "TestReason",
@@ -844,7 +862,12 @@ func TestSignalEventWithMessageHintFallback(t *testing.T) {
 
 func TestSignalEventWithContainerState(t *testing.T) {
 	e := testCorrelator()
-	h := NewHandler(fake.NewSimpleClientset(), &config.Config{}, e, testAlertMgr)
+	h := NewHandler(
+		fake.NewSimpleClientset(),
+		&config.Config{},
+		e,
+		testAlertMgr,
+	)
 
 	h.signalEvent(&event.Signal{
 		Resource:     "pod",

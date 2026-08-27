@@ -34,11 +34,14 @@ func TestProcessPodEventListerWithEvents(t *testing.T) {
 		Reason: "FailedScheduling",
 	}
 	f.Core().V1().Events().Informer().GetIndexer().Add(ev)
-	h.SetEventLister(f.Core().V1().Events().Lister())
+	h.listers.Event = f.Core().V1().Events().Lister()
 
 	pod := &corev1.Pod{
-		ObjectMeta: metav1.ObjectMeta{Name: "unschedulable-pod", Namespace: "default"},
-		Spec:       corev1.PodSpec{NodeName: "node1"},
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "unschedulable-pod",
+			Namespace: "default",
+		},
+		Spec: corev1.PodSpec{NodeName: "node1"},
 		Status: corev1.PodStatus{
 			Phase: corev1.PodPending,
 			Conditions: []corev1.PodCondition{
@@ -63,10 +66,13 @@ func TestProcessPodEventListerError(t *testing.T) {
 	h := NewHandler(client, &config.Config{}, e, testAlertMgr)
 
 	f := informers.NewSharedInformerFactory(client, 0)
-	h.SetEventLister(&errorEventLister{f.Core().V1().Events().Lister()})
+	h.listers.Event = &errorEventLister{f.Core().V1().Events().Lister()}
 
 	pod := &corev1.Pod{
-		ObjectMeta: metav1.ObjectMeta{Name: "unschedulable-pod", Namespace: "default"},
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "unschedulable-pod",
+			Namespace: "default",
+		},
 		Status: corev1.PodStatus{
 			Phase: corev1.PodPending,
 			Conditions: []corev1.PodCondition{
@@ -88,13 +94,20 @@ func TestProcessPodEventListerError(t *testing.T) {
 func TestProcessPodGetEventsError(t *testing.T) {
 	e := testCorrelator()
 	client := fake.NewSimpleClientset()
-	client.PrependReactor("list", "events", func(action clienttesting.Action) (bool, runtime.Object, error) {
-		return true, nil, assert.AnError
-	})
+	client.PrependReactor(
+		"list",
+		"events",
+		func(action clienttesting.Action) (bool, runtime.Object, error) {
+			return true, nil, assert.AnError
+		},
+	)
 	h := NewHandler(client, &config.Config{}, e, testAlertMgr)
 
 	pod := &corev1.Pod{
-		ObjectMeta: metav1.ObjectMeta{Name: "unschedulable-pod", Namespace: "default"},
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "unschedulable-pod",
+			Namespace: "default",
+		},
 		Status: corev1.PodStatus{
 			Phase: corev1.PodPending,
 			Conditions: []corev1.PodCondition{
@@ -131,10 +144,13 @@ func TestProcessPodEventsDeletingPod(t *testing.T) {
 		Message: "deleting pod for some reason",
 	}
 	f.Core().V1().Events().Informer().GetIndexer().Add(ev)
-	h.SetEventLister(f.Core().V1().Events().Lister())
+	h.listers.Event = f.Core().V1().Events().Lister()
 
 	pod := &corev1.Pod{
-		ObjectMeta: metav1.ObjectMeta{Name: "deleting-pod", Namespace: "default"},
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "deleting-pod",
+			Namespace: "default",
+		},
 		Status: corev1.PodStatus{
 			Phase: corev1.PodPending,
 			Conditions: []corev1.PodCondition{
@@ -161,10 +177,14 @@ func TestProcessPodOwnerResolved(t *testing.T) {
 
 	f := informers.NewSharedInformerFactory(client, 0)
 	rs := &appsv1.ReplicaSet{
-		ObjectMeta: metav1.ObjectMeta{Name: "my-rs", Namespace: "default", UID: "rs-uid"},
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "my-rs",
+			Namespace: "default",
+			UID:       "rs-uid",
+		},
 	}
 	f.Apps().V1().ReplicaSets().Informer().GetIndexer().Add(rs)
-	h.SetReplicaLister(f.Apps().V1().ReplicaSets().Lister())
+	h.listers.RS = f.Apps().V1().ReplicaSets().Lister()
 
 	pod := &corev1.Pod{
 		ObjectMeta: metav1.ObjectMeta{
@@ -224,10 +244,13 @@ func TestProcessPodEventListerMultiEvents(t *testing.T) {
 	}
 	f.Core().V1().Events().Informer().GetIndexer().Add(ev1)
 	f.Core().V1().Events().Informer().GetIndexer().Add(ev2)
-	h.SetEventLister(f.Core().V1().Events().Lister())
+	h.listers.Event = f.Core().V1().Events().Lister()
 
 	pod := &corev1.Pod{
-		ObjectMeta: metav1.ObjectMeta{Name: "unschedulable-pod", Namespace: "default"},
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "unschedulable-pod",
+			Namespace: "default",
+		},
 		Status: corev1.PodStatus{
 			Phase: corev1.PodPending,
 			Conditions: []corev1.PodCondition{
@@ -244,4 +267,5 @@ func TestProcessPodEventListerMultiEvents(t *testing.T) {
 	assert.Equal(t, 1, e.ActiveCount())
 }
 
-// --- executeContainersFilters: sort.Slice in event lister path with 2 events ---
+// --- executeContainersFilters: sort.Slice in event lister path with 2 events
+// ---

@@ -22,7 +22,13 @@ func TestOrDefault(t *testing.T) {
 	for _, tt := range tests {
 		got := OrDefault(tt.s, tt.def)
 		if got != tt.want {
-			t.Errorf("OrDefault(%q, %q) = %q, want %q", tt.s, tt.def, got, tt.want)
+			t.Errorf(
+				"OrDefault(%q, %q) = %q, want %q",
+				tt.s,
+				tt.def,
+				got,
+				tt.want,
+			)
 		}
 	}
 }
@@ -42,11 +48,23 @@ func TestChunks(t *testing.T) {
 	for _, tt := range tests {
 		result := Chunks(tt.s, tt.chunkSize)
 		if len(result) != tt.wantCount {
-			t.Errorf("Chunks(%q, %d): got %d chunks, want %d", tt.s, tt.chunkSize, len(result), tt.wantCount)
+			t.Errorf(
+				"Chunks(%q, %d): got %d chunks, want %d",
+				tt.s,
+				tt.chunkSize,
+				len(result),
+				tt.wantCount,
+			)
 			continue
 		}
 		if result[0] != tt.wantFirst {
-			t.Errorf("Chunks(%q, %d): first chunk = %q, want %q", tt.s, tt.chunkSize, result[0], tt.wantFirst)
+			t.Errorf(
+				"Chunks(%q, %d): first chunk = %q, want %q",
+				tt.s,
+				tt.chunkSize,
+				result[0],
+				tt.wantFirst,
+			)
 		}
 	}
 }
@@ -59,8 +77,18 @@ func TestChunksEmpty(t *testing.T) {
 }
 
 func TestRenderIncidentSkip(t *testing.T) {
-	inc := &model.Incident{Key: "a:b:c", Name: "test"}
-	got := RenderIncident(inc, model.ActionSkip, message.NewPlainTextRenderer(), "cluster")
+	inc := &model.Incident{
+		Subject: model.Subject{
+			Key:  "a:b:c",
+			Name: "test",
+		},
+	}
+	got := RenderIncident(
+		inc,
+		model.ActionSkip,
+		message.NewPlainTextRenderer(),
+		"cluster",
+	)
 	if got != "" {
 		t.Errorf("RenderIncident with ActionSkip = %q, want empty", got)
 	}
@@ -68,13 +96,21 @@ func TestRenderIncidentSkip(t *testing.T) {
 
 func TestRenderIncidentCreate(t *testing.T) {
 	inc := &model.Incident{
-		Key:       "default:deploy:OOMKilled",
-		Name:      "deploy",
-		Namespace: "default",
-		Reason:    "OOMKilled",
-		Resource:  "pod",
+		Subject: model.Subject{
+			Key:       "default:deploy:OOMKilled",
+			Name:      "deploy",
+			Namespace: "default",
+			Reason:    "OOMKilled",
+			Resource:  "pod",
+		},
 	}
-	got := RenderIncident(inc, model.ActionCreate, message.NewPlainTextRenderer(), "cluster")
+
+	got := RenderIncident(
+		inc,
+		model.ActionCreate,
+		message.NewPlainTextRenderer(),
+		"cluster",
+	)
 	if got == "" {
 		t.Fatal("RenderIncident with ActionCreate returned empty")
 	}
@@ -84,10 +120,13 @@ func TestRenderIncidentCreate(t *testing.T) {
 }
 
 func TestPostAcceptsAny2xx(t *testing.T) {
-	for _, code := range []int{http.StatusOK, http.StatusAccepted, http.StatusNoContent} {
-		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			w.WriteHeader(code)
-		}))
+	codes := []int{http.StatusOK, http.StatusAccepted, http.StatusNoContent}
+	for _, code := range codes {
+		srv := httptest.NewServer(
+			http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				w.WriteHeader(code)
+			}),
+		)
 		_, err := Post("test", srv.URL, []byte(`{}`), "application/json", nil)
 		srv.Close()
 		if err != nil {
@@ -97,10 +136,13 @@ func TestPostAcceptsAny2xx(t *testing.T) {
 }
 
 func TestPostRejectsNon2xx(t *testing.T) {
-	for _, code := range []int{http.StatusBadRequest, http.StatusInternalServerError} {
-		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			w.WriteHeader(code)
-		}))
+	codes := []int{http.StatusBadRequest, http.StatusInternalServerError}
+	for _, code := range codes {
+		srv := httptest.NewServer(
+			http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				w.WriteHeader(code)
+			}),
+		)
 		_, err := Post("test", srv.URL, []byte(`{}`), "application/json", nil)
 		srv.Close()
 		if err == nil {
@@ -110,16 +152,21 @@ func TestPostRejectsNon2xx(t *testing.T) {
 }
 
 func TestPostRateLimit(t *testing.T) {
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.Header().Set("Retry-After", "10")
-		w.WriteHeader(http.StatusTooManyRequests)
-	}))
+	srv := httptest.NewServer(
+		http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			w.Header().Set("Retry-After", "10")
+			w.WriteHeader(http.StatusTooManyRequests)
+		}),
+	)
 	defer srv.Close()
 	_, err := Post("test", srv.URL, []byte(`{}`), "application/json", nil)
 	if err == nil {
 		t.Fatal("Post with 429 expected error")
 	}
 	if !strings.Contains(err.Error(), "retry after") {
-		t.Errorf("expected rate limit error to mention retry after, got %v", err)
+		t.Errorf(
+			"expected rate limit error to mention retry after, got %v",
+			err,
+		)
 	}
 }

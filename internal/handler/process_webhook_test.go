@@ -10,6 +10,7 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/informers"
+	admissionv1informers "k8s.io/client-go/informers/admissionregistration/v1"
 	"k8s.io/client-go/kubernetes/fake"
 
 	"github.com/abahmed/kwatch/internal/config"
@@ -31,7 +32,11 @@ func TestDetectMutatingWebhookNoServiceRef(t *testing.T) {
 	}
 	hasService := func(ns, name string) bool { return false }
 	sigs := DetectMutatingWebhookIssue(mwc, hasService)
-	assert.Empty(t, sigs, "webhook without service ref should not produce a signal")
+	assert.Empty(
+		t,
+		sigs,
+		"webhook without service ref should not produce a signal",
+	)
 }
 
 func TestDetectMutatingWebhookServiceExists(t *testing.T) {
@@ -53,7 +58,11 @@ func TestDetectMutatingWebhookServiceExists(t *testing.T) {
 		return ns == "default" && name == "my-webhook-svc"
 	}
 	sigs := DetectMutatingWebhookIssue(mwc, hasService)
-	assert.Empty(t, sigs, "webhook with existing service should not produce a signal")
+	assert.Empty(
+		t,
+		sigs,
+		"webhook with existing service should not produce a signal",
+	)
 }
 
 func TestDetectMutatingWebhookServiceMissing(t *testing.T) {
@@ -191,11 +200,16 @@ func TestProcessMutatingWebhookObjectCreatesAndResolves(t *testing.T) {
 		},
 	})
 
-	h := NewHandler(fake.NewSimpleClientset(), &config.Config{}, e, testAlertMgr)
+	h := NewHandler(
+		fake.NewSimpleClientset(),
+		&config.Config{},
+		e,
+		testAlertMgr,
+	)
 
 	// Set up service lister with NO services so lookups fail
 	f := informers.NewSharedInformerFactory(fake.NewSimpleClientset(), 0)
-	h.SetServiceLister(f.Core().V1().Services().Lister())
+	h.listers.Service = f.Core().V1().Services().Lister()
 
 	mwc := &admissionregistrationv1.MutatingWebhookConfiguration{
 		ObjectMeta: metav1.ObjectMeta{Name: "test-mwc"},
@@ -227,7 +241,10 @@ func TestProcessMutatingWebhookObjectCreatesAndResolves(t *testing.T) {
 
 	// Add the missing service to the lister and re-process — should resolve
 	svc := &corev1.Service{
-		ObjectMeta: metav1.ObjectMeta{Name: "missing-svc", Namespace: "default"},
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "missing-svc",
+			Namespace: "default",
+		},
 	}
 	f.Core().V1().Services().Informer().GetIndexer().Add(svc)
 
@@ -236,7 +253,12 @@ func TestProcessMutatingWebhookObjectCreatesAndResolves(t *testing.T) {
 	mu.Lock()
 	r := resolves
 	mu.Unlock()
-	assert.Equal(t, 1, r, "WebhookBackendNotFound should resolve when service exists")
+	assert.Equal(
+		t,
+		1,
+		r,
+		"WebhookBackendNotFound should resolve when service exists",
+	)
 	assert.Equal(t, 0, e.ActiveCount())
 }
 
@@ -255,11 +277,16 @@ func TestProcessValidatingWebhookObjectCreatesAndResolves(t *testing.T) {
 		},
 	})
 
-	h := NewHandler(fake.NewSimpleClientset(), &config.Config{}, e, testAlertMgr)
+	h := NewHandler(
+		fake.NewSimpleClientset(),
+		&config.Config{},
+		e,
+		testAlertMgr,
+	)
 
 	// Set up service lister with NO services so lookups fail
 	f := informers.NewSharedInformerFactory(fake.NewSimpleClientset(), 0)
-	h.SetServiceLister(f.Core().V1().Services().Lister())
+	h.listers.Service = f.Core().V1().Services().Lister()
 
 	vwc := &admissionregistrationv1.ValidatingWebhookConfiguration{
 		ObjectMeta: metav1.ObjectMeta{Name: "test-vwc"},
@@ -290,7 +317,10 @@ func TestProcessValidatingWebhookObjectCreatesAndResolves(t *testing.T) {
 
 	// Add the missing service to the lister and re-process — should resolve
 	svc := &corev1.Service{
-		ObjectMeta: metav1.ObjectMeta{Name: "missing-svc", Namespace: "default"},
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "missing-svc",
+			Namespace: "default",
+		},
 	}
 	f.Core().V1().Services().Informer().GetIndexer().Add(svc)
 
@@ -299,33 +329,63 @@ func TestProcessValidatingWebhookObjectCreatesAndResolves(t *testing.T) {
 	mu.Lock()
 	r := resolves
 	mu.Unlock()
-	assert.Equal(t, 1, r, "WebhookBackendNotFound should resolve when service exists")
+	assert.Equal(
+		t,
+		1,
+		r,
+		"WebhookBackendNotFound should resolve when service exists",
+	)
 	assert.Equal(t, 0, e.ActiveCount())
 }
 
 func TestProcessMutatingWebhookObjectDeleted(t *testing.T) {
-	h := NewHandler(fake.NewSimpleClientset(), &config.Config{}, testCorrelator(), testAlertMgr)
+	h := NewHandler(
+		fake.NewSimpleClientset(),
+		&config.Config{},
+		testCorrelator(),
+		testAlertMgr,
+	)
 	assert.NoError(t, h.ProcessMutatingWebhookConfiguration("test-mwc", true))
 }
 
 func TestProcessValidatingWebhookObjectDeleted(t *testing.T) {
-	h := NewHandler(fake.NewSimpleClientset(), &config.Config{}, testCorrelator(), testAlertMgr)
+	h := NewHandler(
+		fake.NewSimpleClientset(),
+		&config.Config{},
+		testCorrelator(),
+		testAlertMgr,
+	)
 	assert.NoError(t, h.ProcessValidatingWebhookConfiguration("test-vwc", true))
 }
 
 func TestProcessMutatingWebhookObjectNil(t *testing.T) {
-	h := NewHandler(fake.NewSimpleClientset(), &config.Config{}, testCorrelator(), testAlertMgr)
+	h := NewHandler(
+		fake.NewSimpleClientset(),
+		&config.Config{},
+		testCorrelator(),
+		testAlertMgr,
+	)
 	assert.NoError(t, h.ProcessMutatingWebhookConfigurationObject(nil, false))
 }
 
 func TestProcessValidatingWebhookObjectNil(t *testing.T) {
-	h := NewHandler(fake.NewSimpleClientset(), &config.Config{}, testCorrelator(), testAlertMgr)
+	h := NewHandler(
+		fake.NewSimpleClientset(),
+		&config.Config{},
+		testCorrelator(),
+		testAlertMgr,
+	)
 	assert.NoError(t, h.ProcessValidatingWebhookConfigurationObject(nil, false))
 }
 
 func TestProcessMutatingWebhookObjectNoServiceRefNoIncident(t *testing.T) {
 	e := testCorrelator()
-	h := NewHandler(fake.NewSimpleClientset(), &config.Config{}, e, testAlertMgr)
+	h := NewHandler(
+		fake.NewSimpleClientset(),
+		&config.Config{},
+		e,
+		testAlertMgr,
+	)
 
 	mwc := &admissionregistrationv1.MutatingWebhookConfiguration{
 		ObjectMeta: metav1.ObjectMeta{Name: "test-mwc"},
@@ -344,22 +404,35 @@ func TestProcessMutatingWebhookObjectNoServiceRefNoIncident(t *testing.T) {
 
 func TestProcessMutatingWebhookConfigurationKeyNotFound(t *testing.T) {
 	e := testCorrelator()
-	h := NewHandler(fake.NewSimpleClientset(), &config.Config{}, e, testAlertMgr)
+	h := NewHandler(
+		fake.NewSimpleClientset(),
+		&config.Config{},
+		e,
+		testAlertMgr,
+	)
 
 	f := informers.NewSharedInformerFactory(fake.NewSimpleClientset(), 0)
-	h.SetMwCLister(f.Admissionregistration().V1().MutatingWebhookConfigurations().Lister())
+	h.listers.MWC = admv1(f).MutatingWebhookConfigurations().Lister()
 
-	assert.NoError(t, h.ProcessMutatingWebhookConfiguration("missing-mwc", false))
+	assert.NoError(
+		t,
+		h.ProcessMutatingWebhookConfiguration("missing-mwc", false),
+	)
 	assert.Equal(t, 0, e.ActiveCount())
 }
 
 func TestProcessMutatingWebhookConfigurationKeyValid(t *testing.T) {
 	e := correlation.NewEngine(correlation.Config{Window: 10 * time.Minute})
-	h := NewHandler(fake.NewSimpleClientset(), &config.Config{}, e, testAlertMgr)
+	h := NewHandler(
+		fake.NewSimpleClientset(),
+		&config.Config{},
+		e,
+		testAlertMgr,
+	)
 
 	f := informers.NewSharedInformerFactory(fake.NewSimpleClientset(), 0)
-	h.SetMwCLister(f.Admissionregistration().V1().MutatingWebhookConfigurations().Lister())
-	h.SetServiceLister(f.Core().V1().Services().Lister())
+	h.listers.MWC = admv1(f).MutatingWebhookConfigurations().Lister()
+	h.listers.Service = f.Core().V1().Services().Lister()
 
 	mwc := &admissionregistrationv1.MutatingWebhookConfiguration{
 		ObjectMeta: metav1.ObjectMeta{Name: "test-mwc"},
@@ -375,7 +448,9 @@ func TestProcessMutatingWebhookConfigurationKeyValid(t *testing.T) {
 			},
 		},
 	}
-	f.Admissionregistration().V1().MutatingWebhookConfigurations().Informer().GetIndexer().Add(mwc)
+	admv1(f).MutatingWebhookConfigurations().Informer().GetIndexer().Add(
+		mwc,
+	)
 
 	assert.NoError(t, h.ProcessMutatingWebhookConfiguration("test-mwc", false))
 
@@ -386,27 +461,44 @@ func TestProcessMutatingWebhookConfigurationKeyValid(t *testing.T) {
 			found = true
 		}
 	}
-	assert.True(t, found, "key-based ProcessMutatingWebhookConfiguration should create incident")
+	assert.True(
+		t,
+		found,
+		"key-based ProcessMutatingWebhookConfiguration should create incident",
+	)
 }
 
 func TestProcessValidatingWebhookConfigurationKeyNotFound(t *testing.T) {
 	e := testCorrelator()
-	h := NewHandler(fake.NewSimpleClientset(), &config.Config{}, e, testAlertMgr)
+	h := NewHandler(
+		fake.NewSimpleClientset(),
+		&config.Config{},
+		e,
+		testAlertMgr,
+	)
 
 	f := informers.NewSharedInformerFactory(fake.NewSimpleClientset(), 0)
-	h.SetVwCLister(f.Admissionregistration().V1().ValidatingWebhookConfigurations().Lister())
+	h.listers.VWC = admv1(f).ValidatingWebhookConfigurations().Lister()
 
-	assert.NoError(t, h.ProcessValidatingWebhookConfiguration("missing-vwc", false))
+	assert.NoError(
+		t,
+		h.ProcessValidatingWebhookConfiguration("missing-vwc", false),
+	)
 	assert.Equal(t, 0, e.ActiveCount())
 }
 
 func TestProcessValidatingWebhookConfigurationKeyValid(t *testing.T) {
 	e := correlation.NewEngine(correlation.Config{Window: 10 * time.Minute})
-	h := NewHandler(fake.NewSimpleClientset(), &config.Config{}, e, testAlertMgr)
+	h := NewHandler(
+		fake.NewSimpleClientset(),
+		&config.Config{},
+		e,
+		testAlertMgr,
+	)
 
 	f := informers.NewSharedInformerFactory(fake.NewSimpleClientset(), 0)
-	h.SetVwCLister(f.Admissionregistration().V1().ValidatingWebhookConfigurations().Lister())
-	h.SetServiceLister(f.Core().V1().Services().Lister())
+	h.listers.VWC = admv1(f).ValidatingWebhookConfigurations().Lister()
+	h.listers.Service = f.Core().V1().Services().Lister()
 
 	vwc := &admissionregistrationv1.ValidatingWebhookConfiguration{
 		ObjectMeta: metav1.ObjectMeta{Name: "test-vwc"},
@@ -422,9 +514,14 @@ func TestProcessValidatingWebhookConfigurationKeyValid(t *testing.T) {
 			},
 		},
 	}
-	f.Admissionregistration().V1().ValidatingWebhookConfigurations().Informer().GetIndexer().Add(vwc)
+	admv1(f).ValidatingWebhookConfigurations().Informer().GetIndexer().Add(
+		vwc,
+	)
 
-	assert.NoError(t, h.ProcessValidatingWebhookConfiguration("test-vwc", false))
+	assert.NoError(
+		t,
+		h.ProcessValidatingWebhookConfiguration("test-vwc", false),
+	)
 
 	snap := e.Snapshot()
 	var found bool
@@ -433,12 +530,22 @@ func TestProcessValidatingWebhookConfigurationKeyValid(t *testing.T) {
 			found = true
 		}
 	}
-	assert.True(t, found, "key-based ProcessValidatingWebhookConfiguration should create incident")
+	assert.True(
+		t,
+		found,
+		"key-based ProcessValidatingWebhookConfiguration should create "+
+			"incident",
+	)
 }
 
 func TestProcessMutatingWebhookConfigurationObjectDeleted(t *testing.T) {
 	e := testCorrelator()
-	h := NewHandler(fake.NewSimpleClientset(), &config.Config{}, e, testAlertMgr)
+	h := NewHandler(
+		fake.NewSimpleClientset(),
+		&config.Config{},
+		e,
+		testAlertMgr,
+	)
 
 	mwc := &admissionregistrationv1.MutatingWebhookConfiguration{
 		ObjectMeta: metav1.ObjectMeta{Name: "test-mwc"},
@@ -449,7 +556,12 @@ func TestProcessMutatingWebhookConfigurationObjectDeleted(t *testing.T) {
 
 func TestProcessValidatingWebhookConfigurationObjectDeleted(t *testing.T) {
 	e := testCorrelator()
-	h := NewHandler(fake.NewSimpleClientset(), &config.Config{}, e, testAlertMgr)
+	h := NewHandler(
+		fake.NewSimpleClientset(),
+		&config.Config{},
+		e,
+		testAlertMgr,
+	)
 
 	vwc := &admissionregistrationv1.ValidatingWebhookConfiguration{
 		ObjectMeta: metav1.ObjectMeta{Name: "test-vwc"},
@@ -458,9 +570,16 @@ func TestProcessValidatingWebhookConfigurationObjectDeleted(t *testing.T) {
 	assert.Equal(t, 0, e.ActiveCount())
 }
 
-func TestProcessMutatingWebhookConfigurationObjectNoServiceLister(t *testing.T) {
+func TestProcessMutatingWebhookConfigurationObjectNoServiceLister(
+	t *testing.T,
+) {
 	e := testCorrelator()
-	h := NewHandler(fake.NewSimpleClientset(), &config.Config{}, e, testAlertMgr)
+	h := NewHandler(
+		fake.NewSimpleClientset(),
+		&config.Config{},
+		e,
+		testAlertMgr,
+	)
 
 	mwc := &admissionregistrationv1.MutatingWebhookConfiguration{
 		ObjectMeta: metav1.ObjectMeta{Name: "test-mwc"},
@@ -477,12 +596,24 @@ func TestProcessMutatingWebhookConfigurationObjectNoServiceLister(t *testing.T) 
 		},
 	}
 	assert.NoError(t, h.ProcessMutatingWebhookConfigurationObject(mwc, false))
-	assert.Equal(t, 0, e.ActiveCount(), "no service lister assumes ok, no incident")
+	assert.Equal(
+		t,
+		0,
+		e.ActiveCount(),
+		"no service lister assumes ok, no incident",
+	)
 }
 
-func TestProcessValidatingWebhookConfigurationObjectNoServiceLister(t *testing.T) {
+func TestProcessValidatingWebhookConfigurationObjectNoServiceLister(
+	t *testing.T,
+) {
 	e := testCorrelator()
-	h := NewHandler(fake.NewSimpleClientset(), &config.Config{}, e, testAlertMgr)
+	h := NewHandler(
+		fake.NewSimpleClientset(),
+		&config.Config{},
+		e,
+		testAlertMgr,
+	)
 
 	vwc := &admissionregistrationv1.ValidatingWebhookConfiguration{
 		ObjectMeta: metav1.ObjectMeta{Name: "test-vwc"},
@@ -499,5 +630,15 @@ func TestProcessValidatingWebhookConfigurationObjectNoServiceLister(t *testing.T
 		},
 	}
 	assert.NoError(t, h.ProcessValidatingWebhookConfigurationObject(vwc, false))
-	assert.Equal(t, 0, e.ActiveCount(), "no service lister assumes ok, no incident")
+	assert.Equal(
+		t,
+		0,
+		e.ActiveCount(),
+		"no service lister assumes ok, no incident",
+	)
+}
+
+// admv1 shortens the admissionregistration/v1 informer group in tests.
+func admv1(f informers.SharedInformerFactory) admissionv1informers.Interface {
+	return f.Admissionregistration().V1()
 }

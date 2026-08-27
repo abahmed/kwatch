@@ -32,7 +32,12 @@ func TestHpaScalingErrorCreateAndResolve(t *testing.T) {
 		},
 	})
 
-	h := NewHandler(fake.NewSimpleClientset(), &config.Config{}, e, testAlertMgr)
+	h := NewHandler(
+		fake.NewSimpleClientset(),
+		&config.Config{},
+		e,
+		testAlertMgr,
+	)
 
 	hpa := &autoscalingv2.HorizontalPodAutoscaler{
 		ObjectMeta: metav1.ObjectMeta{
@@ -76,7 +81,12 @@ func TestHpaScalingErrorCreateAndResolve(t *testing.T) {
 	mu.Lock()
 	r := resolves
 	mu.Unlock()
-	assert.Equal(t, 1, r, "HPAScalingError should resolve when condition clears")
+	assert.Equal(
+		t,
+		1,
+		r,
+		"HPAScalingError should resolve when condition clears",
+	)
 }
 
 func TestHpaMaxedOutStillWorksIndependently(t *testing.T) {
@@ -232,18 +242,33 @@ func TestHpaScalingErrorOnlyResolvedWhenConditionClears(t *testing.T) {
 	mu.Lock()
 	r := resolves
 	mu.Unlock()
-	assert.Equal(t, 1, r, "exactly one resolve (HPAScalingError), not the maxed incident")
+	assert.Equal(
+		t,
+		1,
+		r,
+		"exactly one resolve (HPAScalingError), not the maxed incident",
+	)
 
 	snap := e.Snapshot()
 	for _, v := range snap {
 		if v.Reason == "HPAScalingError" {
-			assert.Equal(t, model.StateResolved, v.State, "HPAScalingError should be resolved")
+			assert.Equal(
+				t,
+				model.StateResolved,
+				v.State,
+				"HPAScalingError should be resolved",
+			)
 		}
 	}
 }
 
 func TestHpaNilAndDeleted(t *testing.T) {
-	h := NewHandler(fake.NewSimpleClientset(), &config.Config{}, testCorrelator(), testAlertMgr)
+	h := NewHandler(
+		fake.NewSimpleClientset(),
+		&config.Config{},
+		testCorrelator(),
+		testAlertMgr,
+	)
 
 	assert.NoError(t, h.ProcessHorizontalPodAutoscalerObject(nil, false))
 
@@ -257,32 +282,58 @@ func TestHpaNilAndDeleted(t *testing.T) {
 }
 
 func TestProcessHorizontalPodAutoscalerInvalidKey(t *testing.T) {
-	h := NewHandler(fake.NewSimpleClientset(), &config.Config{}, testCorrelator(), testAlertMgr)
+	h := NewHandler(
+		fake.NewSimpleClientset(),
+		&config.Config{},
+		testCorrelator(),
+		testAlertMgr,
+	)
 	assert.Error(t, h.ProcessHorizontalPodAutoscaler("a/b/c", false))
 }
 
 func TestProcessHorizontalPodAutoscalerDeleted(t *testing.T) {
-	h := NewHandler(fake.NewSimpleClientset(), &config.Config{}, testCorrelator(), testAlertMgr)
-	assert.NoError(t, h.ProcessHorizontalPodAutoscaler("default/test-hpa", true))
+	h := NewHandler(
+		fake.NewSimpleClientset(),
+		&config.Config{},
+		testCorrelator(),
+		testAlertMgr,
+	)
+	assert.NoError(
+		t,
+		h.ProcessHorizontalPodAutoscaler("default/test-hpa", true),
+	)
 }
 
 func TestProcessHorizontalPodAutoscalerNotFound(t *testing.T) {
 	e := testCorrelator()
-	h := NewHandler(fake.NewSimpleClientset(), &config.Config{}, e, testAlertMgr)
+	h := NewHandler(
+		fake.NewSimpleClientset(),
+		&config.Config{},
+		e,
+		testAlertMgr,
+	)
 
 	f := informers.NewSharedInformerFactory(fake.NewSimpleClientset(), 0)
-	h.SetHorizontalPodAutoscalerLister(f.Autoscaling().V2().HorizontalPodAutoscalers().Lister())
+	h.listers.HPA = f.Autoscaling().V2().HorizontalPodAutoscalers().Lister()
 
-	assert.NoError(t, h.ProcessHorizontalPodAutoscaler("default/missing", false))
+	assert.NoError(
+		t,
+		h.ProcessHorizontalPodAutoscaler("default/missing", false),
+	)
 	assert.Equal(t, 0, e.ActiveCount())
 }
 
 func TestProcessHorizontalPodAutoscalerKeyValid(t *testing.T) {
 	e := correlation.NewEngine(correlation.Config{Window: 10 * time.Minute})
-	h := NewHandler(fake.NewSimpleClientset(), &config.Config{}, e, testAlertMgr)
+	h := NewHandler(
+		fake.NewSimpleClientset(),
+		&config.Config{},
+		e,
+		testAlertMgr,
+	)
 
 	f := informers.NewSharedInformerFactory(fake.NewSimpleClientset(), 0)
-	h.SetHorizontalPodAutoscalerLister(f.Autoscaling().V2().HorizontalPodAutoscalers().Lister())
+	h.listers.HPA = f.Autoscaling().V2().HorizontalPodAutoscalers().Lister()
 
 	hpa := &autoscalingv2.HorizontalPodAutoscaler{
 		ObjectMeta: metav1.ObjectMeta{
@@ -303,9 +354,14 @@ func TestProcessHorizontalPodAutoscalerKeyValid(t *testing.T) {
 			},
 		},
 	}
-	f.Autoscaling().V2().HorizontalPodAutoscalers().Informer().GetIndexer().Add(hpa)
+	f.Autoscaling().V2().HorizontalPodAutoscalers().Informer().GetIndexer().Add(
+		hpa,
+	)
 
-	assert.NoError(t, h.ProcessHorizontalPodAutoscaler("default/test-hpa", false))
+	assert.NoError(
+		t,
+		h.ProcessHorizontalPodAutoscaler("default/test-hpa", false),
+	)
 
 	snap := e.Snapshot()
 	var found bool
@@ -314,7 +370,11 @@ func TestProcessHorizontalPodAutoscalerKeyValid(t *testing.T) {
 			found = true
 		}
 	}
-	assert.True(t, found, "key-based ProcessHorizontalPodAutoscaler should create incident")
+	assert.True(
+		t,
+		found,
+		"key-based ProcessHorizontalPodAutoscaler should create incident",
+	)
 }
 
 func TestHpaAtMaxMaxReplicasOne(t *testing.T) {

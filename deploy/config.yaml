@@ -14,7 +14,8 @@ data:
     maxRecentLogLines: <number>    # also caps logs/events in alert message blocks (default 50)
     ignoreFailedGracefulShutdown: <boolean>
     ignoreDisruptionTerminations: <boolean>    # skip pods evicted during node drains (default true)
-    reportStartupBaseline: <boolean>           # send one startup summary of pre-existing issues (default true)
+    reportStartupBaseline: <boolean>           # send one startup summary of pre-existing issues (default true).
+                                               # Issues already present at startup are otherwise quiet for 24h, so keep this on.
     containerRestartThreshold: <number>        # alert if a container restarts this many times (0 = off, default 0)
     workers: <number>                          # parallel reconcile workers (default 1)
 
@@ -73,7 +74,7 @@ data:
       maxBaseline: 5000                # max baseline entries (default 5000)
       escalation:
         enabled: <boolean>             # auto-escalate severity by restart count (default true)
-        tiers: [3, 10, 50]             # restart thresholds: 3→"high", 10→"critical"
+        tiers: [3, 10]                 # restart thresholds: 3→"high", 10→"critical" (nothing above critical)
       # renotify:
       #   intervalBySeverity:
       #     default: <minutes>         # renotify interval per severity (0 = off)
@@ -90,7 +91,7 @@ data:
 
     rolloutMonitor:
       enabled: <boolean>
-      # sustainedMinutes: <minutes>    # Debounce before alerting (default 2)
+      # sustainedMinutes: <minutes>    # Debounce before alerting (default 5; Kubernetes' own progressDeadlineSeconds is 600)
 
     daemonSetMonitor:
       enabled: <boolean>
@@ -181,7 +182,8 @@ data:
     # different workload owners within a time window into a single notification.
     # Enabled by default; disable by setting windowSeconds to 0.
     smartGrouping:
-      windowSeconds: <int>   # grouping window in seconds (default 60)
+      windowSeconds: <int>              # grouping window in seconds (default 60, 0 = off)
+      namespaceFanOutThreshold: <int>   # owners failing the same way in one namespace before they collapse into one alert (default 3, 0 = off)
 
     # ── Templates / Runbooks ──────────────────────────────
     # templates:

@@ -1,11 +1,8 @@
 package zenduty
 
 import (
-	"bytes"
 	"encoding/json"
 	"fmt"
-	"io"
-	"net/http"
 	"slices"
 	"strings"
 
@@ -14,7 +11,6 @@ import (
 	"github.com/abahmed/kwatch/internal/alert/util"
 	"github.com/abahmed/kwatch/internal/config"
 	"github.com/abahmed/kwatch/internal/event"
-	"github.com/abahmed/kwatch/internal/k8s"
 )
 
 const (
@@ -112,34 +108,14 @@ func (z *Zenduty) resolveAlert(entityID string) error {
 
 // sendAPI sends http request to Zenduty API
 func (z *Zenduty) sendAPI(content []byte) error {
-	client := k8s.GetDefaultClient()
-	buffer := bytes.NewBuffer(content)
-	url := z.url + "/" + z.integrationkey + "/"
-	request, err := http.NewRequest(http.MethodPost, url, buffer)
-	if err != nil {
-		return err
-	}
-
-	request.Header.Set("Content-Type", "application/json")
-
-	response, err := client.Do(request)
-	if err != nil {
-		return err
-	}
-	defer response.Body.Close()
-
-	if response.StatusCode != 201 {
-		if response.StatusCode == http.StatusTooManyRequests {
-			return event.CheckHTTPResponse(response, "zenduty")
-		}
-		body, _ := io.ReadAll(response.Body)
-		return fmt.Errorf(
-			"call to zenduty alert returned status code %d: %s",
-			response.StatusCode,
-			string(body))
-	}
-
-	return nil
+	_, err := util.Send(
+		util.Request{
+			Provider: "Zenduty",
+			URL:      z.url + "/" + z.integrationkey + "/",
+			Body:     content,
+		},
+	)
+	return err
 }
 
 func (z *Zenduty) buildMessage(e *event.Event) ([]byte, error) {
@@ -155,21 +131,33 @@ func (z *Zenduty) buildMessage(e *event.Event) ([]byte, error) {
 	payload.Message = msg
 
 	var summaryParts []string
-	summaryParts = append(summaryParts, fmt.Sprintf("Reason: %s", util.OrDefault(e.Reason, "unknown")))
+	summaryParts = append(
+		summaryParts,
+		fmt.Sprintf("Reason: %s", util.OrDefault(e.Reason, "unknown")),
+	)
 	if e.PodName != "" {
 		summaryParts = append(summaryParts, fmt.Sprintf("Pod: %s", e.PodName))
 	}
 	if e.ContainerName != "" {
-		summaryParts = append(summaryParts, fmt.Sprintf("Container: %s", e.ContainerName))
+		summaryParts = append(
+			summaryParts,
+			fmt.Sprintf("Container: %s", e.ContainerName),
+		)
 	}
 	if e.Namespace != "" {
-		summaryParts = append(summaryParts, fmt.Sprintf("Namespace: %s", e.Namespace))
+		summaryParts = append(
+			summaryParts,
+			fmt.Sprintf("Namespace: %s", e.Namespace),
+		)
 	}
 	if e.NodeName != "" {
 		summaryParts = append(summaryParts, fmt.Sprintf("Node: %s", e.NodeName))
 	}
 	if z.appCfg.ClusterName != "" {
-		summaryParts = append(summaryParts, fmt.Sprintf("Cluster: %s", z.appCfg.ClusterName))
+		summaryParts = append(
+			summaryParts,
+			fmt.Sprintf("Cluster: %s", z.appCfg.ClusterName),
+		)
 	}
 
 	summary := strings.Join(summaryParts, " · ")

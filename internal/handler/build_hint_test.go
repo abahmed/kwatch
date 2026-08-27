@@ -15,7 +15,12 @@ import (
 )
 
 func TestBuildHintOOMKilledNoMemLimit(t *testing.T) {
-	h := NewHandler(fake.NewSimpleClientset(), &config.Config{}, testCorrelator(), testAlertMgr)
+	h := NewHandler(
+		fake.NewSimpleClientset(),
+		&config.Config{},
+		testCorrelator(),
+		testAlertMgr,
+	)
 
 	ctx := &filter.Context{
 		Pod: &corev1.Pod{
@@ -39,7 +44,7 @@ func TestBuildHintOOMKilledNoMemLimit(t *testing.T) {
 			ExitCode: 137,
 		},
 	}
-	hint := h.buildContainerHint(ctx)
+	hint, _ := h.buildContainerHint(ctx)
 	assert.Contains(t, hint, "OOMKilled with no memory limit set")
 }
 
@@ -47,7 +52,12 @@ func TestBuildHintOOMKilledNoMemLimit(t *testing.T) {
 // kill — the hint must not claim memory pressure.
 
 func TestBuildHintExit137NonOOMKilled(t *testing.T) {
-	h := NewHandler(fake.NewSimpleClientset(), &config.Config{}, testCorrelator(), testAlertMgr)
+	h := NewHandler(
+		fake.NewSimpleClientset(),
+		&config.Config{},
+		testCorrelator(),
+		testAlertMgr,
+	)
 
 	ctx := &filter.Context{
 		Pod: &corev1.Pod{
@@ -66,7 +76,7 @@ func TestBuildHintExit137NonOOMKilled(t *testing.T) {
 			ExitCode: 137,
 		},
 	}
-	hint := h.buildContainerHint(ctx)
+	hint, _ := h.buildContainerHint(ctx)
 	assert.Contains(t, hint, "Killed (SIGKILL")
 	assert.NotContains(t, hint, "OOMKilled")
 	assert.NotContains(t, hint, "memory")
@@ -77,9 +87,18 @@ func TestBuildHintExit137NonOOMKilled(t *testing.T) {
 
 func TestBuildHintExit137NonOOMNotTrackedAsOOM(t *testing.T) {
 	cfg := &config.Config{
-		OomMonitor: config.OomMonitor{Enabled: true, Threshold: 3, WindowMinutes: 10},
+		OomMonitor: config.OomMonitor{
+			Enabled:       true,
+			Threshold:     3,
+			WindowMinutes: 10,
+		},
 	}
-	h := NewHandler(fake.NewSimpleClientset(), cfg, testCorrelator(), testAlertMgr)
+	h := NewHandler(
+		fake.NewSimpleClientset(),
+		cfg,
+		testCorrelator(),
+		testAlertMgr,
+	)
 
 	ctx := &filter.Context{
 		Pod: &corev1.Pod{
@@ -103,8 +122,13 @@ func TestBuildHintExit137NonOOMNotTrackedAsOOM(t *testing.T) {
 	for i := 0; i < 5; i++ {
 		ctx.Container.Reason = "Error"
 		ctx.Container.ExitCode = 137
-		hint := h.buildContainerHint(ctx)
-		assert.Equal(t, "Error", ctx.Container.Reason, "non-OOM 137 exit must not flip reason to OOMRepeating")
+		hint, _ := h.buildContainerHint(ctx)
+		assert.Equal(
+			t,
+			"Error",
+			ctx.Container.Reason,
+			"non-OOM 137 exit must not flip reason to OOMRepeating",
+		)
 		assert.Contains(t, hint, "Killed (SIGKILL")
 	}
 }
@@ -112,7 +136,12 @@ func TestBuildHintExit137NonOOMNotTrackedAsOOM(t *testing.T) {
 // --- buildContainerHint: CrashLoopBackOff with LivenessProbe ---
 
 func TestBuildHintCrashLoopBackOffLiveness(t *testing.T) {
-	h := NewHandler(fake.NewSimpleClientset(), &config.Config{}, testCorrelator(), testAlertMgr)
+	h := NewHandler(
+		fake.NewSimpleClientset(),
+		&config.Config{},
+		testCorrelator(),
+		testAlertMgr,
+	)
 
 	ctx := &filter.Context{
 		Pod: &corev1.Pod{
@@ -141,14 +170,19 @@ func TestBuildHintCrashLoopBackOffLiveness(t *testing.T) {
 			ExitCode: 1,
 		},
 	}
-	hint := h.buildContainerHint(ctx)
+	hint, _ := h.buildContainerHint(ctx)
 	assert.Contains(t, hint, "liveness probe")
 }
 
 // --- buildContainerHint: ImagePullBackOff with imagePullSecrets ---
 
 func TestBuildHintImagePullBackOffWithSecrets(t *testing.T) {
-	h := NewHandler(fake.NewSimpleClientset(), &config.Config{}, testCorrelator(), testAlertMgr)
+	h := NewHandler(
+		fake.NewSimpleClientset(),
+		&config.Config{},
+		testCorrelator(),
+		testAlertMgr,
+	)
 
 	ctx := &filter.Context{
 		Pod: &corev1.Pod{
@@ -173,14 +207,24 @@ func TestBuildHintImagePullBackOffWithSecrets(t *testing.T) {
 			ExitCode: 0,
 		},
 	}
-	hint := h.buildContainerHint(ctx)
+	hint, facts := h.buildContainerHint(ctx)
 	assert.Contains(t, hint, "imagePullSecrets")
+	assert.True(
+		t,
+		facts.PullSecretsSet,
+		"the renderer learns about the secrets from the facts, not the prose",
+	)
 }
 
 // --- buildContainerHint: ImagePullBackOff with well-known error message ---
 
 func TestBuildHintImagePullBackOffRateLimit(t *testing.T) {
-	h := NewHandler(fake.NewSimpleClientset(), &config.Config{}, testCorrelator(), testAlertMgr)
+	h := NewHandler(
+		fake.NewSimpleClientset(),
+		&config.Config{},
+		testCorrelator(),
+		testAlertMgr,
+	)
 
 	ctx := &filter.Context{
 		Pod: &corev1.Pod{
@@ -199,14 +243,19 @@ func TestBuildHintImagePullBackOffRateLimit(t *testing.T) {
 			Msg:    "toomanyrequests: rate limit exceeded",
 		},
 	}
-	hint := h.buildContainerHint(ctx)
+	hint, _ := h.buildContainerHint(ctx)
 	assert.Contains(t, hint, "rate limit")
 }
 
 // --- executeContainersFilters: container with Msg set for buildHint ---
 
 func TestBuildHintOOMKilledWithLimit(t *testing.T) {
-	h := NewHandler(fake.NewSimpleClientset(), &config.Config{}, testCorrelator(), testAlertMgr)
+	h := NewHandler(
+		fake.NewSimpleClientset(),
+		&config.Config{},
+		testCorrelator(),
+		testAlertMgr,
+	)
 
 	ctx := &filter.Context{
 		Pod: &corev1.Pod{
@@ -217,7 +266,9 @@ func TestBuildHintOOMKilledWithLimit(t *testing.T) {
 						Name: "app",
 						Resources: corev1.ResourceRequirements{
 							Limits: corev1.ResourceList{
-								corev1.ResourceMemory: resource.MustParse("256Mi"),
+								corev1.ResourceMemory: resource.MustParse(
+									"256Mi",
+								),
 							},
 						},
 					},
@@ -232,14 +283,20 @@ func TestBuildHintOOMKilledWithLimit(t *testing.T) {
 			ExitCode: 137,
 		},
 	}
-	hint := h.buildContainerHint(ctx)
+	hint, facts := h.buildContainerHint(ctx)
 	assert.Contains(t, hint, "memory limit")
+	assert.Equal(t, "256Mi", facts.MemoryLimit)
 }
 
 // --- buildContainerHint: CrashLoopBackOff without LivenessProbe ---
 
 func TestBuildHintCrashLoopBackOffNoLiveness(t *testing.T) {
-	h := NewHandler(fake.NewSimpleClientset(), &config.Config{}, testCorrelator(), testAlertMgr)
+	h := NewHandler(
+		fake.NewSimpleClientset(),
+		&config.Config{},
+		testCorrelator(),
+		testAlertMgr,
+	)
 
 	ctx := &filter.Context{
 		Pod: &corev1.Pod{
@@ -258,14 +315,19 @@ func TestBuildHintCrashLoopBackOffNoLiveness(t *testing.T) {
 			ExitCode: 1,
 		},
 	}
-	hint := h.buildContainerHint(ctx)
+	hint, _ := h.buildContainerHint(ctx)
 	assert.NotEmpty(t, hint)
 }
 
 // --- pod issue with signalEvent ---
 
 func TestBuildHintNoSpecFound(t *testing.T) {
-	h := NewHandler(fake.NewSimpleClientset(), &config.Config{}, testCorrelator(), testAlertMgr)
+	h := NewHandler(
+		fake.NewSimpleClientset(),
+		&config.Config{},
+		testCorrelator(),
+		testAlertMgr,
+	)
 
 	ctx := &filter.Context{
 		Pod: &corev1.Pod{
@@ -280,14 +342,19 @@ func TestBuildHintNoSpecFound(t *testing.T) {
 			ExitCode: 1,
 		},
 	}
-	hint := h.buildContainerHint(ctx)
+	hint, _ := h.buildContainerHint(ctx)
 	assert.NotEmpty(t, hint)
 }
 
 // --- Init container error ---
 
 func TestBuildHintInitContainerError(t *testing.T) {
-	h := NewHandler(fake.NewSimpleClientset(), &config.Config{}, testCorrelator(), testAlertMgr)
+	h := NewHandler(
+		fake.NewSimpleClientset(),
+		&config.Config{},
+		testCorrelator(),
+		testAlertMgr,
+	)
 
 	ctx := &filter.Context{
 		Pod: &corev1.Pod{
@@ -307,14 +374,19 @@ func TestBuildHintInitContainerError(t *testing.T) {
 			IsInit:   true,
 		},
 	}
-	hint := h.buildContainerHint(ctx)
+	hint, _ := h.buildContainerHint(ctx)
 	assert.Contains(t, hint, "init container")
 }
 
 // --- Unschedulable with creation delay (no condition transition) ---
 
 func TestBuildHintLivenessProbeFailed(t *testing.T) {
-	h := NewHandler(fake.NewSimpleClientset(), &config.Config{}, testCorrelator(), testAlertMgr)
+	h := NewHandler(
+		fake.NewSimpleClientset(),
+		&config.Config{},
+		testCorrelator(),
+		testAlertMgr,
+	)
 
 	ctx := &filter.Context{
 		Pod: &corev1.Pod{
@@ -343,8 +415,9 @@ func TestBuildHintLivenessProbeFailed(t *testing.T) {
 			ExitCode: 0,
 		},
 	}
-	hint := h.buildContainerHint(ctx)
+	hint, facts := h.buildContainerHint(ctx)
 	assert.Contains(t, hint, "liveness")
+	assert.Equal(t, "HTTP GET http://app:8080/healthz", facts.ProbeEndpoint)
 }
 
 // --- buildContainerHint: OOMRepeating with primed oomTracker ---
@@ -370,7 +443,9 @@ func TestBuildHintOOMRepeating(t *testing.T) {
 						Name: "app",
 						Resources: corev1.ResourceRequirements{
 							Limits: corev1.ResourceList{
-								corev1.ResourceMemory: resource.MustParse("256Mi"),
+								corev1.ResourceMemory: resource.MustParse(
+									"256Mi",
+								),
 							},
 						},
 					},
@@ -385,9 +460,13 @@ func TestBuildHintOOMRepeating(t *testing.T) {
 			ExitCode: 137,
 		},
 	}
-	hint := h.buildContainerHint(ctx)
+	hint, facts := h.buildContainerHint(ctx)
 	assert.Contains(t, hint, "OOMKilled")
 	assert.Contains(t, hint, "potential memory leak")
+	assert.True(t, facts.MemoryLeak)
+	assert.Equal(t, 2, facts.OOMCount)
+	assert.Equal(t, 10, facts.OOMWindowMin)
+	assert.NotEmpty(t, facts.OOMTimeline)
 }
 
 // --- Unschedulable delay fallback (delay <= 0) ---

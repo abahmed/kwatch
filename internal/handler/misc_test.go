@@ -38,7 +38,9 @@ func TestHealthyPodZeroAPICalls(t *testing.T) {
 				{
 					Name: "app",
 					State: corev1.ContainerState{
-						Running: &corev1.ContainerStateRunning{StartedAt: metav1.Now()},
+						Running: &corev1.ContainerStateRunning{
+							StartedAt: metav1.Now(),
+						},
 					},
 				},
 			},
@@ -50,7 +52,12 @@ func TestHealthyPodZeroAPICalls(t *testing.T) {
 	assert.NoError(t, err)
 	endCount := len(client.Fake.Actions())
 
-	assert.Equal(t, startCount, endCount, "healthy pod should not trigger any API calls")
+	assert.Equal(
+		t,
+		startCount,
+		endCount,
+		"healthy pod should not trigger any API calls",
+	)
 }
 
 func TestBrokenPodMakesAPICalls(t *testing.T) {
@@ -99,7 +106,13 @@ func TestBrokenPodMakesAPICalls(t *testing.T) {
 	endCount := len(client.Fake.Actions())
 
 	// Without event lister: 1 event LIST + 1 log GET = 2 API calls
-	assert.Equal(t, 2, endCount-startCount, "broken pod should trigger exactly 2 API calls (1 event LIST + 1 log GET)")
+	assert.Equal(
+		t,
+		2,
+		endCount-startCount,
+		"broken pod should trigger exactly 2 API calls (1 event LIST + 1 log "+
+			"GET)",
+	)
 }
 
 func TestBrokenPodEventsFromCache(t *testing.T) {
@@ -114,7 +127,7 @@ func TestBrokenPodEventsFromCache(t *testing.T) {
 
 	// Seed event lister with an event for this pod
 	f := informers.NewSharedInformerFactory(client, 0)
-	h.SetEventLister(f.Core().V1().Events().Lister())
+	h.listers.Event = f.Core().V1().Events().Lister()
 
 	pod := &corev1.Pod{
 		ObjectMeta: metav1.ObjectMeta{
@@ -154,7 +167,13 @@ func TestBrokenPodEventsFromCache(t *testing.T) {
 	endCount := len(client.Fake.Actions())
 
 	// With event lister: 0 event LISTs + 1 log GET = 1 API call
-	assert.Equal(t, 1, endCount-startCount, "broken pod with event lister should trigger exactly 1 API call (log GET only)")
+	assert.Equal(
+		t,
+		1,
+		endCount-startCount,
+		"broken pod with event lister should trigger exactly 1 API call (log "+
+			"GET only)",
+	)
 }
 
 func TestIsPodTerminatingOrDisrupted(t *testing.T) {
@@ -209,7 +228,12 @@ func TestLastTermInfo(t *testing.T) {
 }
 
 func TestReportStartupSummaryNoSuppressed(t *testing.T) {
-	h := NewHandler(fake.NewSimpleClientset(), &config.Config{}, testCorrelator(), testAlertMgr)
+	h := NewHandler(
+		fake.NewSimpleClientset(),
+		&config.Config{},
+		testCorrelator(),
+		testAlertMgr,
+	)
 	h.ReportStartupSummary(nil)
 }
 
@@ -217,7 +241,9 @@ func TestReportStartupSummaryWithData(t *testing.T) {
 	h := NewHandler(fake.NewSimpleClientset(), &config.Config{
 		ReportStartupBaseline: true,
 	}, testCorrelator(), testAlertMgr)
-	h.ReportStartupSummary(map[string]int{"CrashLoopBackOff": 3, "ImagePullBackOff": 2})
+	h.ReportStartupSummary(
+		map[string]int{"CrashLoopBackOff": 3, "ImagePullBackOff": 2},
+	)
 }
 
 func TestFindContainerSpec(t *testing.T) {

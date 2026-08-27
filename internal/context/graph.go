@@ -27,6 +27,22 @@ func NewResourceGraph() *ResourceGraph {
 	}
 }
 
+// Size reports how many resources and relationships the graph currently
+// holds. An empty or shrinking graph means diagnoses will be empty too, and
+// nothing else makes that visible.
+func (g *ResourceGraph) Size() (nodes, edges int) {
+	g.mu.RLock()
+	defer g.mu.RUnlock()
+	seen := make(map[string]struct{}, len(g.dependents)+len(g.dependencies))
+	for k := range g.dependents {
+		seen[k] = struct{}{}
+	}
+	for k := range g.dependencies {
+		seen[k] = struct{}{}
+	}
+	return len(seen), len(g.edges)
+}
+
 func resourceKey(kind, namespace, name string) string {
 	return kind + "/" + namespace + "/" + name
 }
@@ -35,7 +51,9 @@ func edgeKey(from, to string) string {
 	return from + "\x00" + to
 }
 
-func (g *ResourceGraph) AddEdge(fromKind, fromNS, fromName, toKind, toNS, toName, edgeType string) {
+func (g *ResourceGraph) AddEdge(
+	fromKind, fromNS, fromName, toKind, toNS, toName, edgeType string,
+) {
 	g.mu.Lock()
 	defer g.mu.Unlock()
 	from := resourceKey(fromKind, fromNS, fromName)
@@ -75,7 +93,9 @@ func (g *ResourceGraph) RemoveNode(kind, namespace, name string) {
 // outgoing edges on update; without this, replaced dependencies would leave
 // stale edges behind once RemoveNode is too destructive (it would also drop
 // edges contributed by other nodes).
-func (g *ResourceGraph) RemoveEdgesFrom(kind, namespace, name, edgeType string) {
+func (g *ResourceGraph) RemoveEdgesFrom(
+	kind, namespace, name, edgeType string,
+) {
 	g.mu.Lock()
 	defer g.mu.Unlock()
 	from := resourceKey(kind, namespace, name)
@@ -108,7 +128,9 @@ func (g *ResourceGraph) DependenciesOf(kind, namespace, name string) []string {
 // TraverseDependents returns every node reachable from the given node by
 // following dependents edges (BFS), including indirect ("transitive")
 // dependents. The starting node itself is never included.
-func (g *ResourceGraph) TraverseDependents(kind, namespace, name string) []string {
+func (g *ResourceGraph) TraverseDependents(
+	kind, namespace, name string,
+) []string {
 	g.mu.RLock()
 	defer g.mu.RUnlock()
 	root := resourceKey(kind, namespace, name)
@@ -134,7 +156,9 @@ func (g *ResourceGraph) TraverseDependents(kind, namespace, name string) []strin
 // TraverseDependencies returns every node reachable from the given node by
 // following dependency edges (BFS), including indirect ("transitive")
 // dependencies. This walks backwards from an incident toward its root causes.
-func (g *ResourceGraph) TraverseDependencies(kind, namespace, name string) []string {
+func (g *ResourceGraph) TraverseDependencies(
+	kind, namespace, name string,
+) []string {
 	g.mu.RLock()
 	defer g.mu.RUnlock()
 	root := resourceKey(kind, namespace, name)
@@ -170,7 +194,9 @@ func (g *ResourceGraph) DependentsOf(kind, namespace, name string) []string {
 	return out
 }
 
-func (g *ResourceGraph) DependentsByType(kind, namespace, name, depKind string) []string {
+func (g *ResourceGraph) DependentsByType(
+	kind, namespace, name, depKind string,
+) []string {
 	g.mu.RLock()
 	defer g.mu.RUnlock()
 	key := resourceKey(kind, namespace, name)

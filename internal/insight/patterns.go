@@ -42,7 +42,9 @@ func dynamicThreshold(depKey string, graph *context.ResourceGraph) int {
 		return minMassFailThreshold
 	}
 
-	if strings.HasPrefix(depKey, "configmap/") || strings.HasPrefix(depKey, "secret/") || strings.HasPrefix(depKey, "pvc/") {
+	if strings.HasPrefix(depKey, "configmap/") ||
+		strings.HasPrefix(depKey, "secret/") ||
+		strings.HasPrefix(depKey, "pvc/") {
 		parts := strings.SplitN(depKey, "/", 3)
 		if len(parts) == 3 {
 			kind := parts[0]
@@ -63,7 +65,10 @@ func dynamicThreshold(depKey string, graph *context.ResourceGraph) int {
 	return minMassFailThreshold
 }
 
-func ScanMassFailures(incidents []*model.Incident, graph *context.ResourceGraph) []MassFailure {
+func ScanMassFailures(
+	incidents []*model.Incident,
+	graph *context.ResourceGraph,
+) []MassFailure {
 	if graph == nil {
 		return nil
 	}
@@ -113,20 +118,33 @@ func ScanMassFailures(incidents []*model.Incident, graph *context.ResourceGraph)
 	return results
 }
 
+// Describe renders the mass failure for humans, with change ages measured
+// against the wall clock.
 func (mf MassFailure) Describe() string {
+	return mf.describeAt(time.Now())
+}
+
+// describeAt is Describe with an explicit clock, for deterministic tests.
+func (mf MassFailure) describeAt(now time.Time) string {
 	short := mf.SharedDependency
 	if idx := strings.Index(short, "/"); idx >= 0 {
 		short = short[idx+1:]
 	}
-	base := fmt.Sprintf("%d %s incidents share dependency %s (threshold: %d, affected: %d)",
-		mf.AffectedCount, mf.ResourceKind, short, mf.Threshold, mf.AffectedCount)
+	base := fmt.Sprintf(
+		"%d %s incidents share dependency %s (threshold: %d, affected: %d)",
+		mf.AffectedCount,
+		mf.ResourceKind,
+		short,
+		mf.Threshold,
+		mf.AffectedCount,
+	)
 	if mf.RootCause != "" {
 		base += "; root cause: " + mf.RootCause
 	}
 	if len(mf.RecentChanges) > 0 {
 		parts := make([]string, 0, len(mf.RecentChanges))
 		for _, c := range mf.RecentChanges {
-			delta := time.Since(c.Timestamp).Round(time.Second)
+			delta := now.Sub(c.Timestamp).Round(time.Second)
 			if delta < 0 {
 				delta = 0
 			}

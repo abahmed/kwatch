@@ -12,12 +12,17 @@ import (
 )
 
 func isPodHealthy(pod *corev1.Pod) bool {
-	if pod.Status.Phase == corev1.PodRunning || pod.Status.Phase == corev1.PodSucceeded {
+	if pod.Status.Phase == corev1.PodRunning ||
+		pod.Status.Phase == corev1.PodSucceeded {
 		for _, cs := range pod.Status.ContainerStatuses {
-			if cs.State.Waiting != nil && cs.State.Waiting.Reason != "ContainerCreating" && cs.State.Waiting.Reason != "PodInitializing" {
+			if cs.State.Waiting != nil &&
+				cs.State.Waiting.Reason != "ContainerCreating" &&
+				cs.State.Waiting.Reason != "PodInitializing" {
 				return false
 			}
-			if cs.State.Terminated != nil && cs.State.Terminated.ExitCode != 0 && cs.State.Terminated.Reason != "Completed" {
+			if cs.State.Terminated != nil &&
+				cs.State.Terminated.ExitCode != 0 &&
+				cs.State.Terminated.Reason != "Completed" {
 				return false
 			}
 		}
@@ -26,7 +31,11 @@ func isPodHealthy(pod *corev1.Pod) bool {
 	return false
 }
 
-func (h *handler) ProcessPod(ctx context.Context, key string, deleted bool) error {
+func (h *handler) ProcessPod(
+	ctx context.Context,
+	key string,
+	deleted bool,
+) error {
 	namespace, name, err := cache.SplitMetaNamespaceKey(key)
 	if err != nil {
 		return fmt.Errorf("invalid pod key %q: %w", key, err)
@@ -37,19 +46,28 @@ func (h *handler) ProcessPod(ctx context.Context, key string, deleted bool) erro
 		return nil
 	}
 
-	pod, err := h.listers.pod.Pods(namespace).Get(name)
+	pod, err := h.listers.Pod.Pods(namespace).Get(name)
 	if err != nil {
 		if errors.IsNotFound(err) {
 			h.correlator.RemovePod(namespace, name)
 			return nil
 		}
-		return fmt.Errorf("failed to get pod %s/%s from cache: %w", namespace, name, err)
+		return fmt.Errorf(
+			"failed to get pod %s/%s from cache: %w",
+			namespace,
+			name,
+			err,
+		)
 	}
 
 	return h.ProcessPodObject(ctx, pod, false)
 }
 
-func (h *handler) ProcessPodObject(parent context.Context, pod *corev1.Pod, deleted bool) error {
+func (h *handler) ProcessPodObject(
+	parent context.Context,
+	pod *corev1.Pod,
+	deleted bool,
+) error {
 	if pod == nil {
 		return nil
 	}
@@ -60,15 +78,19 @@ func (h *handler) ProcessPodObject(parent context.Context, pod *corev1.Pod, dele
 	}
 
 	ctxF := filter.Context{
-		Ctx:         parent,
-		Client:      h.kclient,
-		Config:      h.config,
-		Pod:         pod,
-		EvType:      "ADDED",
-		RSLister:    h.listers.rs,
-		DSLister:    h.listers.ds,
-		SSLister:    h.listers.ss,
-		EventLister: h.listers.event,
+		Sources: filter.Sources{
+			Ctx:         parent,
+			Client:      h.kclient,
+			Config:      h.config,
+			RSLister:    h.listers.RS,
+			DSLister:    h.listers.DS,
+			SSLister:    h.listers.SS,
+			EventLister: h.listers.Event,
+			EventsByPod: h.listers.EventsByPod,
+			Now:         h.now,
+		},
+		Pod:    pod,
+		EvType: "ADDED",
 	}
 
 	h.executePodFilters(&ctxF)

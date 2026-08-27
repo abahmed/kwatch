@@ -13,8 +13,12 @@ import (
 	"github.com/abahmed/kwatch/internal/event"
 )
 
-// DetectIngressIssue checks an Ingress for backends referencing non-existent services.
-func DetectIngressIssue(ing *networkingv1.Ingress, hasService func(ns, name string) bool) []*event.Signal {
+// DetectIngressIssue checks an Ingress for backends referencing non-existent
+// services.
+func DetectIngressIssue(
+	ing *networkingv1.Ingress,
+	hasService func(ns, name string) bool,
+) []*event.Signal {
 	var sigs []*event.Signal
 	ns := ing.Namespace
 
@@ -35,14 +39,20 @@ func DetectIngressIssue(ing *networkingv1.Ingress, hasService func(ns, name stri
 					Owner:     ing.Namespace + "/" + ing.Name,
 					PodName:   ing.Name,
 					Labels:    ing.Labels,
-					Hint:      fmt.Sprintf("ingress %s/%s: backend service %q not found", ing.Namespace, ing.Name, svcName),
+					Hint: fmt.Sprintf(
+						"ingress %s/%s: backend service %q not found",
+						ing.Namespace,
+						ing.Name,
+						svcName,
+					),
 				})
 			}
 		}
 	}
 
 	// Also check default backend
-	if ing.Spec.DefaultBackend != nil && ing.Spec.DefaultBackend.Service != nil {
+	if ing.Spec.DefaultBackend != nil &&
+		ing.Spec.DefaultBackend.Service != nil {
 		svcName := ing.Spec.DefaultBackend.Service.Name
 		if !hasService(ns, svcName) {
 			sigs = append(sigs, &event.Signal{
@@ -52,7 +62,12 @@ func DetectIngressIssue(ing *networkingv1.Ingress, hasService func(ns, name stri
 				Owner:     ing.Namespace + "/" + ing.Name,
 				PodName:   ing.Name,
 				Labels:    ing.Labels,
-				Hint:      fmt.Sprintf("ingress %s/%s: default backend service %q not found", ing.Namespace, ing.Name, svcName),
+				Hint: fmt.Sprintf(
+					"ingress %s/%s: default backend service %q not found",
+					ing.Namespace,
+					ing.Name,
+					svcName,
+				),
 			})
 		}
 	}
@@ -69,18 +84,26 @@ func (h *handler) ProcessIngress(key string, deleted bool) error {
 		h.correlator.ResolveByResource("ingress", namespace+"/"+name)
 		return nil
 	}
-	ing, err := h.listers.ingress.Ingresses(namespace).Get(name)
+	ing, err := h.listers.Ingress.Ingresses(namespace).Get(name)
 	if err != nil {
 		if errors.IsNotFound(err) {
 			h.correlator.ResolveByResource("ingress", namespace+"/"+name)
 			return nil
 		}
-		return fmt.Errorf("failed to get ingress %s/%s from cache: %w", namespace, name, err)
+		return fmt.Errorf(
+			"failed to get ingress %s/%s from cache: %w",
+			namespace,
+			name,
+			err,
+		)
 	}
 	return h.ProcessIngressObject(ing, false)
 }
 
-func (h *handler) ProcessIngressObject(ing *networkingv1.Ingress, deleted bool) error {
+func (h *handler) ProcessIngressObject(
+	ing *networkingv1.Ingress,
+	deleted bool,
+) error {
 	if ing == nil {
 		return nil
 	}
@@ -90,10 +113,10 @@ func (h *handler) ProcessIngressObject(ing *networkingv1.Ingress, deleted bool) 
 	}
 
 	hasService := func(ns, name string) bool {
-		if h.listers.service == nil {
+		if h.listers.Service == nil {
 			return true
 		}
-		_, err := h.listers.service.Services(ns).Get(name)
+		_, err := h.listers.Service.Services(ns).Get(name)
 		return err == nil
 	}
 
@@ -102,7 +125,14 @@ func (h *handler) ProcessIngressObject(ing *networkingv1.Ingress, deleted bool) 
 		h.signalEvent(sig)
 	}
 	if len(sigs) == 0 {
-		h.correlator.MarkResolved(correlation.BuildKey(ing.Namespace, ing.Namespace+"/"+ing.Name, constant.ReasonIngressBackendNotFound, ""))
+		h.correlator.MarkResolved(
+			correlation.BuildKey(
+				ing.Namespace,
+				ing.Namespace+"/"+ing.Name,
+				constant.ReasonIngressBackendNotFound,
+				"",
+			),
+		)
 	}
 	return nil
 }

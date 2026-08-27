@@ -36,7 +36,15 @@ func TestDynamicThresholdNodeSmall(t *testing.T) {
 func TestDynamicThresholdConfigMap(t *testing.T) {
 	graph := context.NewResourceGraph()
 	for i := 0; i < 20; i++ {
-		graph.AddEdge("pod", "ns", fmt.Sprintf("p%d", i), "configmap", "ns", "cm1", "mounts")
+		graph.AddEdge(
+			"pod",
+			"ns",
+			fmt.Sprintf("p%d", i),
+			"configmap",
+			"ns",
+			"cm1",
+			"mounts",
+		)
 	}
 
 	th := dynamicThreshold("configmap/ns/cm1", graph)
@@ -46,7 +54,15 @@ func TestDynamicThresholdConfigMap(t *testing.T) {
 func TestDynamicThresholdPVC(t *testing.T) {
 	graph := context.NewResourceGraph()
 	for i := 0; i < 10; i++ {
-		graph.AddEdge("pod", "ns", fmt.Sprintf("p%d", i), "pvc", "ns", "pv1", "mounts")
+		graph.AddEdge(
+			"pod",
+			"ns",
+			fmt.Sprintf("p%d", i),
+			"pvc",
+			"ns",
+			"pv1",
+			"mounts",
+		)
 	}
 
 	th := dynamicThreshold("pvc/ns/pv1", graph)
@@ -56,7 +72,15 @@ func TestDynamicThresholdPVC(t *testing.T) {
 func TestDynamicThresholdSecret(t *testing.T) {
 	graph := context.NewResourceGraph()
 	for i := 0; i < 20; i++ {
-		graph.AddEdge("pod", "ns", fmt.Sprintf("p%d", i), "secret", "ns", "s1", "mounts")
+		graph.AddEdge(
+			"pod",
+			"ns",
+			fmt.Sprintf("p%d", i),
+			"secret",
+			"ns",
+			"s1",
+			"mounts",
+		)
 	}
 
 	th := dynamicThreshold("secret/ns/s1", graph)
@@ -71,17 +95,30 @@ func TestScanMassFailuresNilGraph(t *testing.T) {
 func TestScanMassFailuresBelowThreshold(t *testing.T) {
 	graph := context.NewResourceGraph()
 	for i := 0; i < 14; i++ {
-		graph.AddEdge("pod", "ns", fmt.Sprintf("p%d", i), "configmap", "ns", "cm1", "mounts")
+		graph.AddEdge(
+			"pod",
+			"ns",
+			fmt.Sprintf("p%d", i),
+			"configmap",
+			"ns",
+			"cm1",
+			"mounts",
+		)
 	}
 
 	incidents := make([]*model.Incident, 0)
 	for i := 0; i < 3; i++ {
 		incidents = append(incidents, &model.Incident{
-			Resource:  "pod",
-			Namespace: "ns",
-			Name:      fmt.Sprintf("p%d", i),
-			State:     model.StateActive,
-		})
+			Subject: model.Subject{
+				Resource:  "pod",
+				Namespace: "ns",
+				Name:      fmt.Sprintf("p%d", i),
+			},
+			Status: model.Status{
+				State: model.StateActive,
+			},
+		},
+		)
 	}
 
 	mfs := ScanMassFailures(incidents, graph)
@@ -104,11 +141,15 @@ func TestScanMassFailures(t *testing.T) {
 	}
 
 	incidents := []*model.Incident{
-		{Resource: "pod", Namespace: "ns", Name: "p", State: model.StateActive},
+		{
+			Subject: model.Subject{Resource: "pod", Namespace: "ns", Name: "p"},
+			Status:  model.Status{State: model.StateActive},
+		},
 	}
 
 	mfs := ScanMassFailures(incidents, graph)
-	// Only 1 incident, threshold for 5 dependents is 3 (5*30%=1, but floor is 3)
+	// Only 1 incident, threshold for 5 dependents is 3 (5*30%=1, but floor is
+	// 3)
 	assert.Empty(t, mfs)
 }
 
@@ -122,18 +163,28 @@ func TestScanMassFailuresDetectsSharedDependency(t *testing.T) {
 	incidents := make([]*model.Incident, 0)
 	for i := 0; i < 5; i++ {
 		incidents = append(incidents, &model.Incident{
-			Resource:  "pod",
-			Namespace: "ns",
-			Name:      "p",
-			Reason:    "CrashLoopBackOff",
-			State:     model.StateActive,
-		})
+			Subject: model.Subject{
+				Resource:  "pod",
+				Namespace: "ns",
+				Name:      "p",
+				Reason:    "CrashLoopBackOff",
+			},
+			Status: model.Status{
+				State: model.StateActive,
+			},
+		},
+		)
 	}
 
 	mfs := ScanMassFailures(incidents, graph)
 
-	if len(mfs) > 0 {
+	// Five incidents on one node whose threshold is 3 (5 × 30% rounds below
+	// the floor): exactly one mass failure, on that node.
+	if assert.Len(t, mfs, 1) {
 		assert.Equal(t, "node//n1", mfs[0].SharedDependency)
+		assert.Equal(t, 5, mfs[0].AffectedCount)
+		assert.Equal(t, 3, mfs[0].Threshold)
+		assert.Equal(t, "CrashLoopBackOff", mfs[0].Reason)
 	}
 }
 
@@ -142,7 +193,14 @@ func TestScanMassFailuresSkipsResolved(t *testing.T) {
 	graph.AddEdge("pod", "ns", "p1", "node", "", "n1", "scheduled_on")
 
 	incidents := []*model.Incident{
-		{Resource: "pod", Namespace: "ns", Name: "p1", State: model.StateResolved},
+		{
+			Subject: model.Subject{
+				Resource:  "pod",
+				Namespace: "ns",
+				Name:      "p1",
+			},
+			Status: model.Status{State: model.StateResolved},
+		},
 	}
 
 	mfs := ScanMassFailures(incidents, graph)
@@ -160,15 +218,27 @@ func TestScanMassFailuresMultipleSharedDeps(t *testing.T) {
 	incidents := make([]*model.Incident, 0)
 	for i := 0; i < 5; i++ {
 		incidents = append(incidents, &model.Incident{
-			Resource:  "pod",
-			Namespace: "ns",
-			Name:      "p",
-			State:     model.StateActive,
-		})
+			Subject: model.Subject{
+				Resource:  "pod",
+				Namespace: "ns",
+				Name:      "p",
+			},
+			Status: model.Status{
+				State: model.StateActive,
+			},
+		},
+		)
 	}
 
 	mfs := ScanMassFailures(incidents, graph)
-	assert.GreaterOrEqual(t, len(mfs), 1) // at least one shared dep found
+
+	// Both shared dependencies cross their thresholds, so both are reported.
+	// Results come from a map, so compare as a set.
+	deps := make(map[string]int, len(mfs))
+	for _, mf := range mfs {
+		deps[mf.SharedDependency] = mf.AffectedCount
+	}
+	assert.Equal(t, map[string]int{"node//n1": 5, "configmap/ns/cm1": 5}, deps)
 }
 
 func TestDynamicThresholdNodeInnerIf(t *testing.T) {
@@ -213,21 +283,34 @@ func TestScanMassFailuresPodIncidentUsesResources(t *testing.T) {
 	for i := 0; i < 4; i++ {
 		podName := fmt.Sprintf("dep1-7d8d7-%d", i)
 		graph.AddEdge("pod", "ns", podName, "node", "", "n1", "scheduled_on")
-		graph.AddEdge("pod", "ns", podName, "deployment", "ns", "dep1", "owned_by")
+		graph.AddEdge(
+			"pod",
+			"ns",
+			podName,
+			"deployment",
+			"ns",
+			"dep1",
+			"owned_by",
+		)
 	}
 
 	incidents := make([]*model.Incident, 0)
 	for i := 0; i < 4; i++ {
 		incidents = append(incidents, &model.Incident{
-			Resource:  "pod",
-			Namespace: "ns",
-			Name:      "dep1", // owner name, not the pod name
-			Reason:    "CrashLoopBackOff",
-			State:     model.StateActive,
-			Resources: map[string]bool{
-				fmt.Sprintf("dep1-7d8d7-%d", i): true,
+			Subject: model.Subject{
+				Resource:  "pod",
+				Namespace: "ns",
+				Name:      "dep1",
+				Reason:    "CrashLoopBackOff",
 			},
-		})
+			Status: model.Status{
+				State: model.StateActive,
+				Resources: map[string]bool{
+					fmt.Sprintf("dep1-7d8d7-%d", i): true,
+				},
+			},
+		},
+		)
 	}
 
 	mfs := ScanMassFailures(incidents, graph)
@@ -247,7 +330,15 @@ func TestScanMassFailuresWorkloadIncidentNamespaceName(t *testing.T) {
 	for i := 0; i < 5; i++ {
 		depName := fmt.Sprintf("dep%d", i)
 		podName := fmt.Sprintf("dep%d-pod", i)
-		graph.AddEdge("pod", "ns", podName, "deployment", "ns", depName, "owned_by")
+		graph.AddEdge(
+			"pod",
+			"ns",
+			podName,
+			"deployment",
+			"ns",
+			depName,
+			"owned_by",
+		)
 		graph.AddEdge("service", "ns", "svc1", "pod", "ns", podName, "selects")
 	}
 
@@ -255,16 +346,24 @@ func TestScanMassFailuresWorkloadIncidentNamespaceName(t *testing.T) {
 	for i := 0; i < 5; i++ {
 		depName := fmt.Sprintf("dep%d", i)
 		incidents = append(incidents, &model.Incident{
-			Resource:  "deployment",
-			Namespace: "ns",
-			Name:      "ns/" + depName, // stored as namespace/name
-			State:     model.StateActive,
-		})
+			Subject: model.Subject{
+				Resource:  "deployment",
+				Namespace: "ns",
+				Name:      "ns/" + depName,
+			},
+			Status: model.Status{
+				State: model.StateActive,
+			},
+		},
+		)
 	}
 
 	mfs := ScanMassFailures(incidents, graph)
-	// Without the fix this produced deployment/ns/ns/depN keys and found nothing.
-	assert.Empty(t, mfs) // deployments have no shared *dependency*; the service selects pods, not deployments
+	// Without the fix this produced deployment/ns/ns/depN keys and found
+	// nothing.
+	// Deployments have no shared *dependency*: the service selects pods, not
+	// deployments.
+	assert.Empty(t, mfs)
 }
 
 func TestMassFailureDescribe(t *testing.T) {
@@ -290,9 +389,16 @@ func TestMassFailureDescribeEnriched(t *testing.T) {
 		Reason:           "CrashLoopBackOff",
 		Namespace:        "ns",
 		ResourceKind:     "pod",
-		RootCause:        "underlying node n1 may be unhealthy (pattern: node_failure)",
+		RootCause: "underlying node n1 may be unhealthy (pattern: " +
+			"node_failure)",
 		RecentChanges: []context.Change{
-			{Resource: "configmap", Namespace: "ns", Name: "cm1", Type: context.ChangeUpdate, Timestamp: time.Now().Add(-2 * time.Minute)},
+			{
+				Resource:  "configmap",
+				Namespace: "ns",
+				Name:      "cm1",
+				Type:      context.ChangeUpdate,
+				Timestamp: time.Now().Add(-2 * time.Minute),
+			},
 		},
 	}
 	desc := mf.Describe()
@@ -311,7 +417,13 @@ func TestMassFailureDescribeClampsFutureTimestamps(t *testing.T) {
 		ResourceKind:     "pod",
 		RecentChanges: []context.Change{
 			// Future timestamp (clock skew): must render as 0s, never "-Xs".
-			{Resource: "configmap", Namespace: "ns", Name: "cm1", Type: context.ChangeUpdate, Timestamp: time.Now().Add(5 * time.Minute)},
+			{
+				Resource:  "configmap",
+				Namespace: "ns",
+				Name:      "cm1",
+				Type:      context.ChangeUpdate,
+				Timestamp: time.Now().Add(5 * time.Minute),
+			},
 		},
 	}
 	desc := mf.Describe()
@@ -340,7 +452,11 @@ func TestEnrichMassFailureRootCause(t *testing.T) {
 		AffectedCount:    4,
 		Threshold:        3,
 	})
-	assert.Contains(t, mf.RootCause, "underlying configmap cm1 may be changed or misconfigured")
+	assert.Contains(
+		t,
+		mf.RootCause,
+		"underlying configmap cm1 may be changed or misconfigured",
+	)
 	assert.Contains(t, mf.RootCause, "config_error")
 	assert.Len(t, mf.RecentChanges, 1)
 	assert.Equal(t, "cm1", mf.RecentChanges[0].Name)
@@ -348,7 +464,8 @@ func TestEnrichMassFailureRootCause(t *testing.T) {
 
 func TestEnrichMassFailureDeepRoot(t *testing.T) {
 	graph := context.NewResourceGraph()
-	// pv-1 <- node n1 and pv-1 <- pod p1; the shared dep is pv-1, whose upstream
+	// pv-1 <- node n1 and pv-1 <- pod p1; the shared dep is pv-1, whose
+	// upstream
 	// is the node — the walker should surface n1 as the root cause.
 	graph.AddEdge("persistentvolume", "", "pv-1", "node", "", "n1", "local_at")
 	graph.AddEdge("pod", "ns", "p1", "persistentvolume", "", "pv-1", "binds")

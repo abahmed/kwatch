@@ -79,7 +79,7 @@ jobs:
           esac
 
           # Match the exact SemVer shapes. A loose "does not contain -rc"
-          # filter would treat v1.0.0-beta.1 as a stable tag, and every version
+          # filter would treat v1.0.0 as a stable tag, and every version
           # computed from it would then be wrong.
           STABLE_TAGS=$(git tag -l 'v[0-9]*' | grep -E '^v[0-9]+\.[0-9]+\.[0-9]+$' | sort -V || true)
           LATEST_STABLE=$(echo "$STABLE_TAGS" | tail -1)

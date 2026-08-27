@@ -43,6 +43,12 @@ func serve(ctx context.Context, deps *serverDeps) int {
 		interval := 60 * time.Second
 		ticker := time.NewTicker(interval)
 		defer ticker.Stop()
+		// Share the incident-snapshot tick rather than adding another timer:
+		// one ConfigMap write a minute is already the cadence here, and it
+		// bounds the reported gap to a minute of resolution.
+		if deps.recordAlive != nil {
+			deps.recordAlive(ctx)
+		}
 		for {
 			select {
 			case <-ctx.Done():
@@ -53,6 +59,9 @@ func serve(ctx context.Context, deps *serverDeps) int {
 			case <-ticker.C:
 				if snap := deps.correlator.SnapshotPersisted(); len(snap) > 0 {
 					trySendIncidentSnapshot(deps.incidentCh, snap)
+				}
+				if deps.recordAlive != nil {
+					deps.recordAlive(ctx)
 				}
 			}
 		}
@@ -102,14 +111,25 @@ func startCRDWatcher(ctx context.Context, deps *serverDeps) {
 		return
 	}
 	resync := time.Duration(deps.cfg.ResyncSeconds) * time.Second
-	w := crdwatch.New(deps.cfg, deps.alertManager, deps.correlator, restCfg, k8s.GetNamespace(), resync)
+	w := crdwatch.New(
+		deps.cfg,
+		deps.alertManager,
+		deps.correlator,
+		restCfg,
+		k8s.GetNamespace(),
+		resync,
+	)
 	if err := w.Start(ctx); err != nil {
 		klog.ErrorS(err, "CRD watcher error")
 	}
 }
 
 // waitShutdown blocks until a signal or controller failure, then drains.
-func waitShutdown(deps *serverDeps, wg *sync.WaitGroup, errCh <-chan error) int {
+func waitShutdown(
+	deps *serverDeps,
+	wg *sync.WaitGroup,
+	errCh <-chan error,
+) int {
 	sigCh := make(chan os.Signal, 1)
 	signal.Notify(sigCh, os.Interrupt, syscall.SIGTERM)
 	defer signal.Stop(sigCh)

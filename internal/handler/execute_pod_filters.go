@@ -10,6 +10,7 @@ import (
 	"github.com/abahmed/kwatch/internal/enricher"
 	"github.com/abahmed/kwatch/internal/event"
 	"github.com/abahmed/kwatch/internal/filter"
+	"github.com/abahmed/kwatch/internal/format"
 	"github.com/abahmed/kwatch/internal/k8s"
 	"github.com/abahmed/kwatch/internal/model"
 )
@@ -50,13 +51,26 @@ func (h *handler) executePodFilters(ctx *filter.Context) {
 		ownerName = ctx.Owner.Name
 	}
 
-	klog.V(2).InfoS("pod only issue", "pod", ctx.Pod.Name, "owner", ownerName, "reason", ctx.PodReason, "message", ctx.PodMsg)
+	klog.V(
+		2,
+	).InfoS(
+		"pod only issue",
+		"pod",
+		ctx.Pod.Name,
+		"owner",
+		ownerName,
+		"reason",
+		ctx.PodReason,
+		"message",
+		ctx.PodMsg,
+	)
 
 	ownerKind := ""
 	if ctx.Owner != nil {
 		ownerKind = ctx.Owner.Kind
 	}
 
+	hint, facts := h.podIssueHint(ctx)
 	h.signalEvent(&event.Signal{
 		Resource:  "pod",
 		PodName:   ctx.Pod.Name,
@@ -67,7 +81,8 @@ func (h *handler) executePodFilters(ctx *filter.Context) {
 		Events:    k8s.GetPodEventsStr(ctx.Events),
 		Labels:    ctx.Pod.Labels,
 		OwnerKind: ownerKind,
-		Hint:      h.podIssueHint(ctx),
+		Hint:      hint,
+		Facts:     facts,
 		Owner:     ownerName,
 		ContainerState: &model.ContainerState{
 			Reason: ctx.PodReason,
@@ -78,29 +93,36 @@ func (h *handler) executePodFilters(ctx *filter.Context) {
 }
 
 // podIssueHint builds the hint for pod-level (non-container) issues, adding
-// scheduling delay and resource requests for unschedulable pods.
-func (h *handler) podIssueHint(ctx *filter.Context) string {
+// scheduling delay and resource requests for unschedulable pods. The same
+// details come back as structured facts for the renderer.
+func (h *handler) podIssueHint(ctx *filter.Context) (string, model.Facts) {
+	var facts model.Facts
 	hint := enricher.HintForReason(ctx.PodReason)
 	if ctx.PodMsg != "" {
 		hint = ctx.PodMsg + " — " + hint
 	}
 	if ctx.PodReason != "Unschedulable" || ctx.Pod == nil {
-		return hint
+		return hint, facts
 	}
 
 	if h.config.ScheduleMonitor.Enabled {
 		if delay := h.unschedulableDelay(ctx); delay > 30*time.Second {
-			hint = fmt.Sprintf("unschedulable for %s — ", roundDuration(delay)) + hint
+			facts.SchedulingDelay = delay
+			hint = fmt.Sprintf(
+				"unschedulable for %s — ",
+				roundDuration(delay),
+			) + hint
 		}
 	}
 
 	// Add pod resource requests so the user can compare against node capacity
 	for _, c := range ctx.Pod.Spec.Containers {
 		if r := containerRequestSummary(c); r != "" {
+			facts.ResourceRequests = append(facts.ResourceRequests, r)
 			hint = hint + "; " + r
 		}
 	}
-	return hint
+	return hint, facts
 }
 
 func (h *handler) unschedulableDelay(ctx *filter.Context) time.Duration {
@@ -136,12 +158,5 @@ func containerRequestSummary(c corev1.Container) string {
 
 // roundDuration formats a duration for human display: "5m30s", "2h15m", etc.
 func roundDuration(d time.Duration) string {
-	d = d.Round(time.Second)
-	if d < time.Minute {
-		return fmt.Sprintf("%ds", int(d.Seconds()))
-	}
-	if d < time.Hour {
-		return fmt.Sprintf("%dm%ds", int(d.Minutes()), int(d.Seconds())%60)
-	}
-	return fmt.Sprintf("%dh%dm", int(d.Hours()), int(d.Minutes())%60)
+	return format.Duration(d)
 }

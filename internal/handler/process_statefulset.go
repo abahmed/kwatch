@@ -31,8 +31,13 @@ func DetectStatefulSetIssue(ss *appsv1.StatefulSet) *event.Signal {
 
 func stsAvailabilityHint(ss *appsv1.StatefulSet) string {
 	notReady := ss.Status.Replicas - ss.Status.ReadyReplicas
-	return fmt.Sprintf("%d/%d pods not ready (ready: %d) — check PVC, pod status, or rollout progress",
-		notReady, ss.Status.Replicas, ss.Status.ReadyReplicas)
+	return fmt.Sprintf(
+		"%d/%d pods not ready (ready: %d) — check PVC, pod status, or rollout "+
+			"progress",
+		notReady,
+		ss.Status.Replicas,
+		ss.Status.ReadyReplicas,
+	)
 }
 
 func (h *handler) ProcessStatefulSet(key string, deleted bool) error {
@@ -47,19 +52,27 @@ func (h *handler) ProcessStatefulSet(key string, deleted bool) error {
 		return nil
 	}
 
-	ss, err := h.listers.ss.StatefulSets(namespace).Get(name)
+	ss, err := h.listers.SS.StatefulSets(namespace).Get(name)
 	if err != nil {
 		if errors.IsNotFound(err) {
 			h.correlator.ResolveByResource("statefulset", namespace+"/"+name)
 			return nil
 		}
-		return fmt.Errorf("failed to get statefulset %s/%s from cache: %w", namespace, name, err)
+		return fmt.Errorf(
+			"failed to get statefulset %s/%s from cache: %w",
+			namespace,
+			name,
+			err,
+		)
 	}
 
 	return h.ProcessStatefulSetObject(ss, false)
 }
 
-func (h *handler) ProcessStatefulSetObject(ss *appsv1.StatefulSet, deleted bool) error {
+func (h *handler) ProcessStatefulSetObject(
+	ss *appsv1.StatefulSet,
+	deleted bool,
+) error {
 	if ss == nil {
 		return nil
 	}
@@ -84,7 +97,9 @@ func (h *handler) ProcessStatefulSetObject(ss *appsv1.StatefulSet, deleted bool)
 			}
 		}
 
-		sustained := time.Duration(h.config.StatefulSetMonitor.SustainedMinutes) * time.Minute
+		sustained := time.Duration(
+			h.config.StatefulSetMonitor.SustainedMinutes,
+		) * time.Minute
 		if sustained > 0 && h.now().Sub(first) < sustained {
 			return nil
 		}

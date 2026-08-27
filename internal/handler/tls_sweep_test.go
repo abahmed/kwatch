@@ -20,7 +20,11 @@ import (
 	"github.com/abahmed/kwatch/internal/correlation"
 )
 
-func generateTestCert(t *testing.T, commonName string, notAfter time.Time) []byte {
+func generateTestCert(
+	t *testing.T,
+	commonName string,
+	notAfter time.Time,
+) []byte {
 	key, err := rsa.GenerateKey(rand.Reader, 2048)
 	assert.NoError(t, err)
 
@@ -29,18 +33,34 @@ func generateTestCert(t *testing.T, commonName string, notAfter time.Time) []byt
 		Subject:      pkix.Name{CommonName: commonName},
 		NotAfter:     notAfter,
 	}
-	certDER, err := x509.CreateCertificate(rand.Reader, template, template, &key.PublicKey, key)
+	certDER, err := x509.CreateCertificate(
+		rand.Reader,
+		template,
+		template,
+		&key.PublicKey,
+		key,
+	)
 	assert.NoError(t, err)
 
 	return pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: certDER})
 }
 
 func newHandlerForTest() *handler {
-	return NewHandler(fake.NewSimpleClientset(), &config.Config{}, correlation.NewEngine(correlation.Config{}), testAlertMgr)
+	return NewHandler(
+		fake.NewSimpleClientset(),
+		&config.Config{},
+		correlation.NewEngine(correlation.Config{}),
+		testAlertMgr,
+	)
 }
 
 func TestSweepTLSSecretsNilLister(t *testing.T) {
-	h := NewHandler(fake.NewSimpleClientset(), &config.Config{}, correlation.NewEngine(correlation.Config{}), testAlertMgr)
+	h := NewHandler(
+		fake.NewSimpleClientset(),
+		&config.Config{},
+		correlation.NewEngine(correlation.Config{}),
+		testAlertMgr,
+	)
 	h.SweepTLSSecrets()
 }
 
@@ -52,8 +72,17 @@ func TestCheckTLSSecretNoCertData(t *testing.T) {
 
 func TestCheckTLSSecretExpired(t *testing.T) {
 	e := correlation.NewEngine(correlation.Config{Window: 10 * time.Minute})
-	h := NewHandler(fake.NewSimpleClientset(), &config.Config{}, e, testAlertMgr)
-	certData := generateTestCert(t, "test.example.com", time.Now().Add(-24*time.Hour))
+	h := NewHandler(
+		fake.NewSimpleClientset(),
+		&config.Config{},
+		e,
+		testAlertMgr,
+	)
+	certData := generateTestCert(
+		t,
+		"test.example.com",
+		time.Now().Add(-24*time.Hour),
+	)
 	secret := &corev1.Secret{
 		ObjectMeta: metav1.ObjectMeta{Name: "tls1", Namespace: "ns1"},
 		Data:       map[string][]byte{"tls.crt": certData},
@@ -64,8 +93,17 @@ func TestCheckTLSSecretExpired(t *testing.T) {
 
 func TestCheckTLSSecretExpiringSoon(t *testing.T) {
 	e := correlation.NewEngine(correlation.Config{Window: 10 * time.Minute})
-	h := NewHandler(fake.NewSimpleClientset(), &config.Config{}, e, testAlertMgr)
-	certData := generateTestCert(t, "test.example.com", time.Now().Add(10*24*time.Hour))
+	h := NewHandler(
+		fake.NewSimpleClientset(),
+		&config.Config{},
+		e,
+		testAlertMgr,
+	)
+	certData := generateTestCert(
+		t,
+		"test.example.com",
+		time.Now().Add(10*24*time.Hour),
+	)
 	secret := &corev1.Secret{
 		ObjectMeta: metav1.ObjectMeta{Name: "tls1", Namespace: "ns1"},
 		Data:       map[string][]byte{"tls.crt": certData},
@@ -76,8 +114,17 @@ func TestCheckTLSSecretExpiringSoon(t *testing.T) {
 
 func TestCheckTLSSecretExpiringSoonCritical(t *testing.T) {
 	e := correlation.NewEngine(correlation.Config{Window: 10 * time.Minute})
-	h := NewHandler(fake.NewSimpleClientset(), &config.Config{}, e, testAlertMgr)
-	certData := generateTestCert(t, "test.example.com", time.Now().Add(2*24*time.Hour))
+	h := NewHandler(
+		fake.NewSimpleClientset(),
+		&config.Config{},
+		e,
+		testAlertMgr,
+	)
+	certData := generateTestCert(
+		t,
+		"test.example.com",
+		time.Now().Add(2*24*time.Hour),
+	)
 	secret := &corev1.Secret{
 		ObjectMeta: metav1.ObjectMeta{Name: "tls1", Namespace: "ns1"},
 		Data:       map[string][]byte{"tls.crt": certData},
@@ -88,8 +135,17 @@ func TestCheckTLSSecretExpiringSoonCritical(t *testing.T) {
 
 func TestCheckTLSSecretHealthy(t *testing.T) {
 	e := correlation.NewEngine(correlation.Config{Window: 10 * time.Minute})
-	h := NewHandler(fake.NewSimpleClientset(), &config.Config{}, e, testAlertMgr)
-	certData := generateTestCert(t, "test.example.com", time.Now().Add(365*24*time.Hour))
+	h := NewHandler(
+		fake.NewSimpleClientset(),
+		&config.Config{},
+		e,
+		testAlertMgr,
+	)
+	certData := generateTestCert(
+		t,
+		"test.example.com",
+		time.Now().Add(365*24*time.Hour),
+	)
 	secret := &corev1.Secret{
 		ObjectMeta: metav1.ObjectMeta{Name: "tls1", Namespace: "ns1"},
 		Data:       map[string][]byte{"tls.crt": certData},
@@ -109,24 +165,42 @@ func TestCheckTLSSecretPEMDecodeFail(t *testing.T) {
 func TestCheckTLSSecretCertParseFail(t *testing.T) {
 	h := newHandlerForTest()
 	secret := &corev1.Secret{
-		Data: map[string][]byte{"tls.crt": pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: []byte("invalid-der")})},
+		Data: map[string][]byte{
+			"tls.crt": pem.EncodeToMemory(
+				&pem.Block{Type: "CERTIFICATE", Bytes: []byte("invalid-der")},
+			),
+		},
 	}
 	h.checkTLSSecret(secret, time.Now(), 30*24*time.Hour)
 }
 
 func TestSweepTLSSecretsWithLister(t *testing.T) {
 	e := correlation.NewEngine(correlation.Config{Window: 10 * time.Minute})
-	h := NewHandler(fake.NewSimpleClientset(), &config.Config{}, e, testAlertMgr)
-	certData := generateTestCert(t, "test.example.com", time.Now().Add(10*24*time.Hour))
+	h := NewHandler(
+		fake.NewSimpleClientset(),
+		&config.Config{},
+		e,
+		testAlertMgr,
+	)
+	certData := generateTestCert(
+		t,
+		"test.example.com",
+		time.Now().Add(10*24*time.Hour),
+	)
 	secret := &corev1.Secret{
 		ObjectMeta: metav1.ObjectMeta{Name: "tls1", Namespace: "ns1"},
 		Data:       map[string][]byte{"tls.crt": certData},
 	}
 	f := informers.NewSharedInformerFactory(fake.NewSimpleClientset(), 0)
 	f.Core().V1().Secrets().Informer().GetIndexer().Add(secret)
-	h.SetSecretLister(f.Core().V1().Secrets().Lister())
+	h.listers.Secret = f.Core().V1().Secrets().Lister()
 	h.SweepTLSSecrets()
-	assert.Equal(t, 1, e.ActiveCount(), "expiring secret should create incident via sweep")
+	assert.Equal(
+		t,
+		1,
+		e.ActiveCount(),
+		"expiring secret should create incident via sweep",
+	)
 }
 
 func TestSweepTLSSecretsWithThresholdDefault(t *testing.T) {
@@ -134,44 +208,66 @@ func TestSweepTLSSecretsWithThresholdDefault(t *testing.T) {
 	h := NewHandler(fake.NewSimpleClientset(), &config.Config{
 		TlsMonitor: config.TlsMonitor{Threshold: 0},
 	}, e, testAlertMgr)
-	certData := generateTestCert(t, "test.example.com", time.Now().Add(10*24*time.Hour))
+	certData := generateTestCert(
+		t,
+		"test.example.com",
+		time.Now().Add(10*24*time.Hour),
+	)
 	secret := &corev1.Secret{
 		ObjectMeta: metav1.ObjectMeta{Name: "tls1", Namespace: "ns1"},
 		Data:       map[string][]byte{"tls.crt": certData},
 	}
 	f := informers.NewSharedInformerFactory(fake.NewSimpleClientset(), 0)
 	f.Core().V1().Secrets().Informer().GetIndexer().Add(secret)
-	h.SetSecretLister(f.Core().V1().Secrets().Lister())
+	h.listers.Secret = f.Core().V1().Secrets().Lister()
 	h.SweepTLSSecrets()
 	assert.Equal(t, 1, e.ActiveCount())
 }
 
 func TestSweepTLSSecretsExpired(t *testing.T) {
 	e := correlation.NewEngine(correlation.Config{Window: 10 * time.Minute})
-	h := NewHandler(fake.NewSimpleClientset(), &config.Config{}, e, testAlertMgr)
-	certData := generateTestCert(t, "test.example.com", time.Now().Add(-24*time.Hour))
+	h := NewHandler(
+		fake.NewSimpleClientset(),
+		&config.Config{},
+		e,
+		testAlertMgr,
+	)
+	certData := generateTestCert(
+		t,
+		"test.example.com",
+		time.Now().Add(-24*time.Hour),
+	)
 	secret := &corev1.Secret{
 		ObjectMeta: metav1.ObjectMeta{Name: "tls1", Namespace: "ns1"},
 		Data:       map[string][]byte{"tls.crt": certData},
 	}
 	f := informers.NewSharedInformerFactory(fake.NewSimpleClientset(), 0)
 	f.Core().V1().Secrets().Informer().GetIndexer().Add(secret)
-	h.SetSecretLister(f.Core().V1().Secrets().Lister())
+	h.listers.Secret = f.Core().V1().Secrets().Lister()
 	h.SweepTLSSecrets()
 	assert.Equal(t, 1, e.ActiveCount())
 }
 
 func TestSweepTLSSecretsHealthy(t *testing.T) {
 	e := correlation.NewEngine(correlation.Config{Window: 10 * time.Minute})
-	h := NewHandler(fake.NewSimpleClientset(), &config.Config{}, e, testAlertMgr)
-	certData := generateTestCert(t, "test.example.com", time.Now().Add(365*24*time.Hour))
+	h := NewHandler(
+		fake.NewSimpleClientset(),
+		&config.Config{},
+		e,
+		testAlertMgr,
+	)
+	certData := generateTestCert(
+		t,
+		"test.example.com",
+		time.Now().Add(365*24*time.Hour),
+	)
 	secret := &corev1.Secret{
 		ObjectMeta: metav1.ObjectMeta{Name: "tls1", Namespace: "ns1"},
 		Data:       map[string][]byte{"tls.crt": certData},
 	}
 	f := informers.NewSharedInformerFactory(fake.NewSimpleClientset(), 0)
 	f.Core().V1().Secrets().Informer().GetIndexer().Add(secret)
-	h.SetSecretLister(f.Core().V1().Secrets().Lister())
+	h.listers.Secret = f.Core().V1().Secrets().Lister()
 	h.SweepTLSSecrets()
 	assert.Equal(t, 0, e.ActiveCount())
 }

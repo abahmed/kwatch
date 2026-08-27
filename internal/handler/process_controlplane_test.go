@@ -15,7 +15,12 @@ import (
 
 func TestSweepControlPlaneWithLister(t *testing.T) {
 	e := testCorrelator()
-	h := NewHandler(fake.NewSimpleClientset(), &config.Config{}, e, testAlertMgr)
+	h := NewHandler(
+		fake.NewSimpleClientset(),
+		&config.Config{},
+		e,
+		testAlertMgr,
+	)
 
 	healthy := &corev1.Pod{
 		ObjectMeta: metav1.ObjectMeta{
@@ -29,7 +34,12 @@ func TestSweepControlPlaneWithLister(t *testing.T) {
 				{Type: corev1.PodReady, Status: corev1.ConditionTrue},
 			},
 			ContainerStatuses: []corev1.ContainerStatus{
-				{Name: "apiserver", State: corev1.ContainerState{Running: &corev1.ContainerStateRunning{}}},
+				{
+					Name: "apiserver",
+					State: corev1.ContainerState{
+						Running: &corev1.ContainerStateRunning{},
+					},
+				},
 			},
 		},
 	}
@@ -76,7 +86,12 @@ func TestSweepControlPlaneWithLister(t *testing.T) {
 				{Type: corev1.PodReady, Status: corev1.ConditionTrue},
 			},
 			ContainerStatuses: []corev1.ContainerStatus{
-				{Name: "app", State: corev1.ContainerState{Running: &corev1.ContainerStateRunning{}}},
+				{
+					Name: "app",
+					State: corev1.ContainerState{
+						Running: &corev1.ContainerStateRunning{},
+					},
+				},
 			},
 		},
 	}
@@ -85,11 +100,16 @@ func TestSweepControlPlaneWithLister(t *testing.T) {
 	f.Core().V1().Pods().Informer().GetIndexer().Add(healthy)
 	f.Core().V1().Pods().Informer().GetIndexer().Add(broken)
 	f.Core().V1().Pods().Informer().GetIndexer().Add(nonCP)
-	h.SetCpPodLister(f.Core().V1().Pods().Lister())
+	h.listers.CPPod = f.Core().V1().Pods().Lister()
 
 	h.SweepControlPlane()
 
-	assert.Equal(t, 1, e.ActiveCount(), "only the broken control-plane pod should create an incident")
+	assert.Equal(
+		t,
+		1,
+		e.ActiveCount(),
+		"only the broken control-plane pod should create an incident",
+	)
 
 	snap := e.Snapshot()
 	var found bool
@@ -99,16 +119,27 @@ func TestSweepControlPlaneWithLister(t *testing.T) {
 			assert.Contains(t, v.Name, "kube-scheduler-broken")
 		}
 	}
-	assert.True(t, found, "ControlPlaneComponentFailure incident should exist for broken pod")
+	assert.True(
+		t,
+		found,
+		"ControlPlaneComponentFailure incident should exist for broken pod",
+	)
 }
 
 func TestDetectControlPlanePodPodCompletedReason(t *testing.T) {
 	pod := &corev1.Pod{
-		ObjectMeta: metav1.ObjectMeta{Name: "kube-apiserver", Namespace: "kube-system"},
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "kube-apiserver",
+			Namespace: "kube-system",
+		},
 		Status: corev1.PodStatus{
 			Phase: corev1.PodRunning,
 			Conditions: []corev1.PodCondition{
-				{Type: corev1.PodReady, Status: corev1.ConditionFalse, Reason: "PodCompleted"},
+				{
+					Type:   corev1.PodReady,
+					Status: corev1.ConditionFalse,
+					Reason: "PodCompleted",
+				},
 			},
 			ContainerStatuses: []corev1.ContainerStatus{
 				{
@@ -126,7 +157,10 @@ func TestDetectControlPlanePodPodCompletedReason(t *testing.T) {
 
 func TestDetectControlPlanePodSucceeded(t *testing.T) {
 	pod := &corev1.Pod{
-		ObjectMeta: metav1.ObjectMeta{Name: "kube-apiserver", Namespace: "kube-system"},
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "kube-apiserver",
+			Namespace: "kube-system",
+		},
 		Status: corev1.PodStatus{
 			Phase: corev1.PodSucceeded,
 		},
@@ -137,7 +171,10 @@ func TestDetectControlPlanePodSucceeded(t *testing.T) {
 
 func TestDetectControlPlanePodRunningAndReady(t *testing.T) {
 	pod := &corev1.Pod{
-		ObjectMeta: metav1.ObjectMeta{Name: "kube-apiserver", Namespace: "kube-system"},
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "kube-apiserver",
+			Namespace: "kube-system",
+		},
 		Status: corev1.PodStatus{
 			Phase: corev1.PodRunning,
 			Conditions: []corev1.PodCondition{
@@ -159,11 +196,18 @@ func TestDetectControlPlanePodRunningAndReady(t *testing.T) {
 
 func TestDetectControlPlanePodNotReadyNoContainerIssue(t *testing.T) {
 	pod := &corev1.Pod{
-		ObjectMeta: metav1.ObjectMeta{Name: "kube-apiserver", Namespace: "kube-system"},
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "kube-apiserver",
+			Namespace: "kube-system",
+		},
 		Status: corev1.PodStatus{
 			Phase: corev1.PodPending,
 			Conditions: []corev1.PodCondition{
-				{Type: corev1.PodReady, Status: corev1.ConditionFalse, Reason: "ContainersNotReady"},
+				{
+					Type:   corev1.PodReady,
+					Status: corev1.ConditionFalse,
+					Reason: "ContainersNotReady",
+				},
 			},
 			ContainerStatuses: []corev1.ContainerStatus{
 				{
@@ -176,12 +220,19 @@ func TestDetectControlPlanePodNotReadyNoContainerIssue(t *testing.T) {
 		},
 	}
 	sig := DetectControlPlanePodIssue(pod)
-	assert.Nil(t, sig, "not ready with all containers running should not produce a signal")
+	assert.Nil(
+		t,
+		sig,
+		"not ready with all containers running should not produce a signal",
+	)
 }
 
 func TestDetectControlPlanePodCrashLoopBackOff(t *testing.T) {
 	pod := &corev1.Pod{
-		ObjectMeta: metav1.ObjectMeta{Name: "kube-apiserver", Namespace: "kube-system"},
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "kube-apiserver",
+			Namespace: "kube-system",
+		},
 		Status: corev1.PodStatus{
 			Phase: corev1.PodRunning,
 			Conditions: []corev1.PodCondition{
@@ -262,12 +313,19 @@ func TestDetectControlPlanePodTerminatedZeroExit(t *testing.T) {
 		},
 	}
 	sig := DetectControlPlanePodIssue(pod)
-	assert.Nil(t, sig, "container terminated with exit code 0 should not produce a signal")
+	assert.Nil(
+		t,
+		sig,
+		"container terminated with exit code 0 should not produce a signal",
+	)
 }
 
 func TestDetectControlPlanePodContainerCreating(t *testing.T) {
 	pod := &corev1.Pod{
-		ObjectMeta: metav1.ObjectMeta{Name: "kube-scheduler", Namespace: "kube-system"},
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "kube-scheduler",
+			Namespace: "kube-system",
+		},
 		Status: corev1.PodStatus{
 			Phase: corev1.PodPending,
 			Conditions: []corev1.PodCondition{
@@ -286,12 +344,19 @@ func TestDetectControlPlanePodContainerCreating(t *testing.T) {
 		},
 	}
 	sig := DetectControlPlanePodIssue(pod)
-	assert.Nil(t, sig, "container with ContainerCreating should not produce a signal")
+	assert.Nil(
+		t,
+		sig,
+		"container with ContainerCreating should not produce a signal",
+	)
 }
 
 func TestDetectControlPlanePodPodInitializing(t *testing.T) {
 	pod := &corev1.Pod{
-		ObjectMeta: metav1.ObjectMeta{Name: "kube-scheduler", Namespace: "kube-system"},
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "kube-scheduler",
+			Namespace: "kube-system",
+		},
 		Status: corev1.PodStatus{
 			Phase: corev1.PodPending,
 			Conditions: []corev1.PodCondition{
@@ -310,12 +375,19 @@ func TestDetectControlPlanePodPodInitializing(t *testing.T) {
 		},
 	}
 	sig := DetectControlPlanePodIssue(pod)
-	assert.Nil(t, sig, "container with PodInitializing should not produce a signal")
+	assert.Nil(
+		t,
+		sig,
+		"container with PodInitializing should not produce a signal",
+	)
 }
 
 func TestDetectControlPlanePodUnschedulable(t *testing.T) {
 	pod := &corev1.Pod{
-		ObjectMeta: metav1.ObjectMeta{Name: "kube-controller-manager", Namespace: "kube-system"},
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "kube-controller-manager",
+			Namespace: "kube-system",
+		},
 		Status: corev1.PodStatus{
 			Phase: corev1.PodPending,
 			Conditions: []corev1.PodCondition{
@@ -337,7 +409,10 @@ func TestDetectControlPlanePodUnschedulable(t *testing.T) {
 
 func TestDetectControlPlanePodInitContainerError(t *testing.T) {
 	pod := &corev1.Pod{
-		ObjectMeta: metav1.ObjectMeta{Name: "coredns", Namespace: "kube-system"},
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "coredns",
+			Namespace: "kube-system",
+		},
 		Status: corev1.PodStatus{
 			Phase: corev1.PodPending,
 			Conditions: []corev1.PodCondition{
@@ -363,7 +438,12 @@ func TestDetectControlPlanePodInitContainerError(t *testing.T) {
 
 func TestProcessControlPlanePodHealthy(t *testing.T) {
 	e := testCorrelator()
-	h := NewHandler(fake.NewSimpleClientset(), &config.Config{}, e, testAlertMgr)
+	h := NewHandler(
+		fake.NewSimpleClientset(),
+		&config.Config{},
+		e,
+		testAlertMgr,
+	)
 
 	pod := &corev1.Pod{
 		ObjectMeta: metav1.ObjectMeta{
@@ -388,12 +468,22 @@ func TestProcessControlPlanePodHealthy(t *testing.T) {
 	}
 
 	assert.NoError(t, h.ProcessControlPlanePod(pod))
-	assert.Equal(t, 0, e.ActiveCount(), "healthy control-plane pod should not create incident")
+	assert.Equal(
+		t,
+		0,
+		e.ActiveCount(),
+		"healthy control-plane pod should not create incident",
+	)
 }
 
 func TestProcessControlPlanePodBrokenCreatesIncident(t *testing.T) {
 	e := testCorrelator()
-	h := NewHandler(fake.NewSimpleClientset(), &config.Config{}, e, testAlertMgr)
+	h := NewHandler(
+		fake.NewSimpleClientset(),
+		&config.Config{},
+		e,
+		testAlertMgr,
+	)
 
 	pod := &corev1.Pod{
 		ObjectMeta: metav1.ObjectMeta{
@@ -441,7 +531,12 @@ func TestProcessControlPlanePodBrokenCreatesIncident(t *testing.T) {
 
 func TestProcessControlPlanePodNonControlPlane(t *testing.T) {
 	e := testCorrelator()
-	h := NewHandler(fake.NewSimpleClientset(), &config.Config{}, e, testAlertMgr)
+	h := NewHandler(
+		fake.NewSimpleClientset(),
+		&config.Config{},
+		e,
+		testAlertMgr,
+	)
 
 	pod := &corev1.Pod{
 		ObjectMeta: metav1.ObjectMeta{
@@ -466,7 +561,12 @@ func TestProcessControlPlanePodNonControlPlane(t *testing.T) {
 	}
 
 	assert.NoError(t, h.ProcessControlPlanePod(pod))
-	assert.Equal(t, 0, e.ActiveCount(), "non-control-plane pod should not be processed")
+	assert.Equal(
+		t,
+		0,
+		e.ActiveCount(),
+		"non-control-plane pod should not be processed",
+	)
 }
 
 func TestComponentNameFromLabels(t *testing.T) {
@@ -477,13 +577,33 @@ func TestComponentNameFromLabels(t *testing.T) {
 	}{
 		{"nil labels", nil, ""},
 		{"empty labels", map[string]string{}, ""},
-		{"kube-apiserver", map[string]string{"component": "kube-apiserver"}, "kube-apiserver"},
-		{"kube-scheduler", map[string]string{"component": "kube-scheduler"}, "kube-scheduler"},
-		{"kube-controller-manager", map[string]string{"component": "kube-controller-manager"}, "kube-controller-manager"},
+		{
+			"kube-apiserver",
+			map[string]string{"component": "kube-apiserver"},
+			"kube-apiserver",
+		},
+		{
+			"kube-scheduler",
+			map[string]string{"component": "kube-scheduler"},
+			"kube-scheduler",
+		},
+		{
+			"kube-controller-manager",
+			map[string]string{"component": "kube-controller-manager"},
+			"kube-controller-manager",
+		},
 		{"etcd", map[string]string{"component": "etcd"}, "etcd"},
-		{"kube-proxy", map[string]string{"k8s-app": "kube-proxy"}, "kube-proxy"},
+		{
+			"kube-proxy",
+			map[string]string{"k8s-app": "kube-proxy"},
+			"kube-proxy",
+		},
 		{"coredns", map[string]string{"k8s-app": "kube-dns"}, "coredns"},
-		{"metrics-server", map[string]string{"k8s-app": "metrics-server"}, "metrics-server"},
+		{
+			"metrics-server",
+			map[string]string{"k8s-app": "metrics-server"},
+			"metrics-server",
+		},
 		{"unknown", map[string]string{"component": "unknown"}, ""},
 		{"wrong label key", map[string]string{"app": "kube-apiserver"}, ""},
 	}
@@ -497,6 +617,11 @@ func TestComponentNameFromLabels(t *testing.T) {
 }
 
 func TestSweepControlPlaneNoLister(t *testing.T) {
-	h := NewHandler(fake.NewSimpleClientset(), &config.Config{}, testCorrelator(), testAlertMgr)
+	h := NewHandler(
+		fake.NewSimpleClientset(),
+		&config.Config{},
+		testCorrelator(),
+		testAlertMgr,
+	)
 	h.SweepControlPlane() // should not panic
 }

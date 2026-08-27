@@ -24,13 +24,18 @@ func (h *handler) ProcessJob(key string, deleted bool) error {
 		return nil
 	}
 
-	job, err := h.listers.job.Jobs(namespace).Get(name)
+	job, err := h.listers.Job.Jobs(namespace).Get(name)
 	if err != nil {
 		if errors.IsNotFound(err) {
 			h.correlator.ResolveByResource("job", namespace+"/"+name)
 			return nil
 		}
-		return fmt.Errorf("failed to get job %s/%s from cache: %w", namespace, name, err)
+		return fmt.Errorf(
+			"failed to get job %s/%s from cache: %w",
+			namespace,
+			name,
+			err,
+		)
 	}
 
 	return h.ProcessJobObject(job, false)

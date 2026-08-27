@@ -41,8 +41,11 @@ type serverDeps struct {
 	ctl           *controller.Controller
 	incidentCh    chan []model.PersistedIncident
 	notifyStartup func()
-	cleanup       func()
-	tlsSweep      func()
+	// recordAlive stamps the liveness marker that lets the next start report
+	// how long monitoring was down.
+	recordAlive func(context.Context)
+	cleanup     func()
+	tlsSweep    func()
 }
 
 // Run loads config and wires all monitors, then runs until shutdown.
@@ -99,7 +102,16 @@ func Run() int {
 		Output:  cfg.AuditLog.Output,
 	})
 
-	correlator := newCorrelator(cfg, baseline, am, auditLogger, graph, baselineCh)
+	insightEngine := insight.NewEngine(graph, tracker)
+	correlator := newCorrelator(
+		cfg,
+		baseline,
+		am,
+		auditLogger,
+		graph,
+		baselineCh,
+		insightEngine,
+	)
 	restoreIncidents(ctx, stateMgr, correlator)
 
 	correlator.SetAuditLogger(auditLogger)
@@ -112,12 +124,16 @@ func Run() int {
 		return 1
 	}
 
-	pvcMonitor := pvc.NewPvcMonitor(k8sClient, &cfg.PvcMonitor, am, correlator, stateMgr)
+	pvcMonitor := pvc.NewPvcMonitor(
+		k8sClient,
+		&cfg.PvcMonitor,
+		am,
+		correlator,
+		stateMgr,
+	)
 	hbMonitor := heartbeat.NewHeartbeatMonitor(&cfg.HeartbeatMonitor)
 
 	h := handler.NewHandler(k8sClient, cfg, correlator, am)
-	insightEngine := insight.NewEngine(graph, tracker)
-	h.SetInsightEngine(insightEngine)
 
 	ctl, cleanup := controller.New(k8sClient, cfg, h)
 	ctl.SetTracker(tracker)
@@ -141,6 +157,7 @@ func Run() int {
 		ctl:           ctl,
 		incidentCh:    incidentCh,
 		notifyStartup: sm.NotifyStartup,
+		recordAlive:   sm.RecordAlive,
 		cleanup:       cleanup,
 		tlsSweep:      tlsSweep,
 	}

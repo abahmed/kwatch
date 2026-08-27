@@ -1,10 +1,8 @@
 package matrix
 
 import (
-	"bytes"
 	"encoding/json"
 	"fmt"
-	"io"
 	"net/http"
 	"net/url"
 	"regexp"
@@ -14,10 +12,10 @@ import (
 	"github.com/abahmed/kwatch/internal/alert/util"
 	"github.com/abahmed/kwatch/internal/config"
 	"github.com/abahmed/kwatch/internal/event"
+	"github.com/abahmed/kwatch/internal/insight"
 	"github.com/abahmed/kwatch/internal/k8s"
 	"github.com/abahmed/kwatch/internal/message"
 	"github.com/abahmed/kwatch/internal/model"
-	"github.com/abahmed/kwatch/internal/ratelimit"
 )
 
 var htmlTagRegex = regexp.MustCompile(`<.*?>`)
@@ -77,8 +75,28 @@ func (m *Matrix) SendMessage(msg string) error {
 // SendIncident implements alert.ThreadProvider.
 // It renders the incident using the Report model and PlaintextRenderer,
 // producing a context-adaptive text message.
-func (m *Matrix) SendIncident(inc *model.Incident, action model.IncidentAction) error {
-	text := util.RenderIncident(inc, action, message.NewPlainTextRenderer(), m.appCfg.ClusterName)
+func (m *Matrix) SendIncident(
+	inc *model.Incident,
+	action model.IncidentAction,
+) error {
+	return m.SendIncidentWithInsight(inc, action, nil)
+}
+
+// SendIncidentWithInsight implements alert.InsightThreadProvider, so the
+// diagnosis — likely cause, impact, recent changes — is rendered rather than
+// dropped on the way to this provider.
+func (m *Matrix) SendIncidentWithInsight(
+	inc *model.Incident,
+	action model.IncidentAction,
+	ins *insight.Insight,
+) error {
+	text := util.RenderIncidentWithInsight(
+		inc,
+		action,
+		ins,
+		message.NewPlainTextRenderer(),
+		m.appCfg.ClusterName,
+	)
 	if text == "" {
 		return nil
 	}
@@ -109,46 +127,19 @@ func (m *Matrix) sendAPI(formattedMsg string) error {
 		return err
 	}
 
-	request, err := http.NewRequest(
-		http.MethodPut,
-		fmt.Sprintf(
+	_, err = util.Send(util.Request{
+		Provider: "Matrix",
+		Method:   http.MethodPut,
+		URL: fmt.Sprintf(
 			"%s/_matrix/client/v3/rooms/%s/send/m.room.message/%s",
 			m.homeServer,
 			url.PathEscape(m.internalRoomID),
 			k8s.RandomString(24),
 		),
-		bytes.NewBuffer(msgBytes),
-	)
-	if err != nil {
-		return err
-	}
-
-	request.Header.Set("Content-Type", "application/json")
-	request.Header.Set("Authorization", "Bearer "+m.accessToken)
-	client := k8s.GetDefaultClient()
-	response, err := client.Do(request)
-	if err != nil {
-		return err
-	}
-	defer response.Body.Close()
-
-	if response.StatusCode == http.StatusTooManyRequests {
-		return &ratelimit.Error{
-			Provider:   "Matrix",
-			StatusCode: http.StatusTooManyRequests,
-			RetryAfter: ratelimit.ParseRetryAfter(response),
-		}
-	}
-	if response.StatusCode > 399 {
-		body, _ := io.ReadAll(response.Body)
-		return fmt.Errorf(
-			"call to matrix alert returned status code %d: %s",
-			response.StatusCode,
-			string(body))
-
-	}
-
-	return nil
+		Body:    msgBytes,
+		Headers: map[string]string{"Authorization": "Bearer " + m.accessToken},
+	})
+	return err
 }
 
 // This method uses a regular expression to remove HTML tags.

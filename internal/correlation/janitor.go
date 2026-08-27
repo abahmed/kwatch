@@ -9,12 +9,6 @@ import (
 	"github.com/abahmed/kwatch/internal/model"
 )
 
-// transition is a deferred notification for a lifecycle change.
-type transition struct {
-	inc    *model.Incident
-	action model.IncidentAction
-}
-
 func (e *Engine) StartCleanup(ctx context.Context) {
 	cleanupInterval := e.config.Window / 2
 	if cleanupInterval < 30*time.Second {
@@ -48,41 +42,33 @@ func (e *Engine) cleanup() {
 		if !now.After(inc.LastSeen.Add(e.config.Window)) {
 			continue
 		}
-		// Do not clean up pod incidents whose owning workload is still unhealthy.
+		// Do not clean up pod incidents whose owning workload is still
+		// unhealthy.
 		if !e.isOwnerHealthy(inc) {
 			continue
 		}
-		// Finalize active/digested/pending-resolve incidents with a resolve
-		// so the LifecycleHook emits a resolved notification and Slack's
-		// threadMap is pruned. StatePendingResolve that outlives the stale
-		// window is finalized here too — otherwise the incident would be
-		// silently dropped without a resolved notification.
+		// Finalize active/pending-resolve incidents with a resolve so the
+		// LifecycleHook emits a resolved notification and Slack's threadMap
+		// is pruned. StatePendingResolve that outlives the stale window is
+		// finalized here too — otherwise the incident would be silently
+		// dropped without a resolved notification.
 		if inc.State != model.StateResolved {
-			inc.State = model.StateResolved
-			// Smart group batch resolve
-			if groupInc, groupAction, tracked := e.tryConsumeGroupResolve(key); tracked {
-				if groupAction != model.ActionSkip {
-					pending = append(pending, transition{groupInc, groupAction})
-				}
-			} else if a := e.edgeAction(inc); a != model.ActionSkip {
-				pending = append(pending, transition{inc.Clone(), a})
+			pending = append(pending, e.resolveLocked(key, inc, now))
+		} else {
+			// Already resolved: still arm the cooldown so a recurrence of a
+			// still-broken resource revives silently.
+			e.cleanupCooldown[key] = now.Add(e.config.Window)
+			e.removeBaselineForIncident(key, inc)
+			if inc.Resource == "node" {
+				e.refreshNodeInhibition(inc.Name)
 			}
 		}
-		// Add cooldown to prevent resolve→recreate cycle for still-broken resources
-		e.cleanupCooldown[key] = now.Add(e.config.Window)
-		e.removeBaselineForIncident(key, inc)
 		e.removeIncidentFromNamespaceIndex(inc)
 		delete(e.state, key)
-		if inc.Resource == "node" {
-			e.refreshNodeInhibition(inc.Name)
-		}
+		e.clearSkipAudit(key)
 	}
 	e.mu.Unlock()
-	for _, t := range pending {
-		if h := e.config.LifecycleHook; h != nil {
-			h(t.inc, t.action)
-		}
-	}
+	e.emit(pending...)
 }
 
 func (e *Engine) checkLifecycle() {
@@ -109,21 +95,12 @@ func (e *Engine) checkLifecycle() {
 
 	e.mu.Unlock()
 
-	for _, t := range pending {
-		if hook := e.config.LifecycleHook; hook != nil {
-			hook(t.inc, t.action)
-		}
-	}
+	e.emit(pending...)
 	if hook := e.config.MassFailureHook; hook != nil {
 		hook()
 	}
 	if baselineChanged {
-		if hook := e.config.OnBaselineChange; hook != nil {
-			e.mu.Lock()
-			snapshot := cloneBaseline(e.baseline)
-			e.mu.Unlock()
-			hook(snapshot)
-		}
+		e.publishBaseline()
 	}
 }
 
@@ -133,7 +110,8 @@ func (e *Engine) finalizePendingResolves(now time.Time) ([]transition, bool) {
 	var pending []transition
 	var baselineChanged bool
 	for key, inc := range e.state {
-		if inc.State != model.StatePendingResolve || inc.ResolveAt.IsZero() || !now.After(inc.ResolveAt) {
+		if inc.State != model.StatePendingResolve || inc.ResolveAt.IsZero() ||
+			!now.After(inc.ResolveAt) {
 			continue
 		}
 		// Do not finalize if the owning workload is still unhealthy.
@@ -142,23 +120,8 @@ func (e *Engine) finalizePendingResolves(now time.Time) ([]transition, bool) {
 			inc.ResolveAt = time.Time{}
 			continue
 		}
-		inc.State = model.StateResolved
-		if inc.Resource == "node" {
-			e.refreshNodeInhibition(inc.Name)
-		}
-		e.removeBaselineForIncident(key, inc)
-		e.cleanupCooldown[key] = now.Add(e.config.Window)
-		// Smart group batch resolve
-		if groupInc, groupAction, tracked := e.tryConsumeGroupResolve(key); tracked {
-			baselineChanged = true
-			if groupAction != model.ActionSkip {
-				pending = append(pending, transition{groupInc, groupAction})
-			}
-		} else {
-			action := e.edgeAction(inc)
-			baselineChanged = true
-			pending = append(pending, transition{inc.Clone(), action})
-		}
+		baselineChanged = true
+		pending = append(pending, e.resolveLocked(key, inc, now))
 	}
 	return pending, baselineChanged
 }
@@ -177,10 +140,11 @@ func (e *Engine) renotifyDue(now time.Time) []transition {
 		maxPer = 3
 	}
 	for _, inc := range e.state {
-		if inc.State == model.StateResolved || inc.State == model.StatePendingResolve {
+		if inc.State == model.StateResolved ||
+			inc.State == model.StatePendingResolve {
 			continue
 		}
-		if grouped[inc.Key] {
+		if grouped[inc.Key] || inc.SuppressedBy != "" {
 			continue
 		}
 		if inc.RenotifyCount >= maxPer {
@@ -197,7 +161,10 @@ func (e *Engine) renotifyDue(now time.Time) []transition {
 			inc.RenotifyCount++
 			inc.LastNotifiedAt = now
 			// For renotify we emit update
-			pending = append(pending, transition{inc.Clone(), model.ActionUpdate})
+			pending = append(
+				pending,
+				transition{inc.Clone(), model.ActionUpdate},
+			)
 		}
 	}
 	return pending

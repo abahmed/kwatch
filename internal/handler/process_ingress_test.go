@@ -19,11 +19,16 @@ import (
 
 func TestProcessIngressCreatesIncident(t *testing.T) {
 	e := testCorrelator()
-	h := NewHandler(fake.NewSimpleClientset(), &config.Config{}, e, testAlertMgr)
+	h := NewHandler(
+		fake.NewSimpleClientset(),
+		&config.Config{},
+		e,
+		testAlertMgr,
+	)
 
 	f := informers.NewSharedInformerFactory(fake.NewSimpleClientset(), 0)
-	h.SetServiceLister(f.Core().V1().Services().Lister())
-	h.SetIngressLister(f.Networking().V1().Ingresses().Lister())
+	h.listers.Service = f.Core().V1().Services().Lister()
+	h.listers.Ingress = f.Networking().V1().Ingresses().Lister()
 
 	ing := &networkingv1.Ingress{
 		ObjectMeta: metav1.ObjectMeta{Name: "test-ing", Namespace: "default"},
@@ -39,7 +44,9 @@ func TestProcessIngressCreatesIncident(t *testing.T) {
 									Backend: networkingv1.IngressBackend{
 										Service: &networkingv1.IngressServiceBackend{
 											Name: "missing-svc",
-											Port: networkingv1.ServiceBackendPort{Number: 80},
+											Port: networkingv1.ServiceBackendPort{
+												Number: 80,
+											},
 										},
 									},
 								},
@@ -57,7 +64,8 @@ func TestProcessIngressCreatesIncident(t *testing.T) {
 	snap := e.Snapshot()
 	var found bool
 	for _, v := range snap {
-		if v.Reason == "IngressBackendNotFound" && v.State == model.StateActive {
+		if v.Reason == "IngressBackendNotFound" &&
+			v.State == model.StateActive {
 			found = true
 		}
 	}
@@ -65,16 +73,26 @@ func TestProcessIngressCreatesIncident(t *testing.T) {
 }
 
 func TestProcessIngressKeyDeleted(t *testing.T) {
-	h := NewHandler(fake.NewSimpleClientset(), &config.Config{}, testCorrelator(), testAlertMgr)
+	h := NewHandler(
+		fake.NewSimpleClientset(),
+		&config.Config{},
+		testCorrelator(),
+		testAlertMgr,
+	)
 	assert.NoError(t, h.ProcessIngress("default/test-ing", true))
 }
 
 func TestProcessIngressKeyNotFound(t *testing.T) {
 	e := testCorrelator()
-	h := NewHandler(fake.NewSimpleClientset(), &config.Config{}, e, testAlertMgr)
+	h := NewHandler(
+		fake.NewSimpleClientset(),
+		&config.Config{},
+		e,
+		testAlertMgr,
+	)
 
 	f := informers.NewSharedInformerFactory(fake.NewSimpleClientset(), 0)
-	h.SetIngressLister(f.Networking().V1().Ingresses().Lister())
+	h.listers.Ingress = f.Networking().V1().Ingresses().Lister()
 
 	assert.NoError(t, h.ProcessIngress("default/missing", false))
 	assert.Equal(t, 0, e.ActiveCount())
@@ -134,7 +152,11 @@ func TestDetectIngressIssueNoServiceBackend(t *testing.T) {
 	}
 	hasService := func(ns, name string) bool { return false }
 	sigs := DetectIngressIssue(ing, hasService)
-	assert.Empty(t, sigs, "paths without service backend should not produce a signal")
+	assert.Empty(
+		t,
+		sigs,
+		"paths without service backend should not produce a signal",
+	)
 }
 
 func TestDetectIngressIssueServiceExists(t *testing.T) {
@@ -152,7 +174,9 @@ func TestDetectIngressIssueServiceExists(t *testing.T) {
 									Backend: networkingv1.IngressBackend{
 										Service: &networkingv1.IngressServiceBackend{
 											Name: "my-svc",
-											Port: networkingv1.ServiceBackendPort{Number: 80},
+											Port: networkingv1.ServiceBackendPort{
+												Number: 80,
+											},
 										},
 									},
 								},
@@ -185,7 +209,9 @@ func TestDetectIngressIssueServiceMissing(t *testing.T) {
 									Backend: networkingv1.IngressBackend{
 										Service: &networkingv1.IngressServiceBackend{
 											Name: "missing-svc",
-											Port: networkingv1.ServiceBackendPort{Number: 80},
+											Port: networkingv1.ServiceBackendPort{
+												Number: 80,
+											},
 										},
 									},
 								},
@@ -285,11 +311,16 @@ func TestProcessIngressObjectCreatesAndResolves(t *testing.T) {
 		},
 	})
 
-	h := NewHandler(fake.NewSimpleClientset(), &config.Config{}, e, testAlertMgr)
+	h := NewHandler(
+		fake.NewSimpleClientset(),
+		&config.Config{},
+		e,
+		testAlertMgr,
+	)
 
 	// Set up service lister with NO services so lookups fail
 	f := informers.NewSharedInformerFactory(fake.NewSimpleClientset(), 0)
-	h.SetServiceLister(f.Core().V1().Services().Lister())
+	h.listers.Service = f.Core().V1().Services().Lister()
 
 	ing := &networkingv1.Ingress{
 		ObjectMeta: metav1.ObjectMeta{Name: "test-ing", Namespace: "default"},
@@ -305,7 +336,9 @@ func TestProcessIngressObjectCreatesAndResolves(t *testing.T) {
 									Backend: networkingv1.IngressBackend{
 										Service: &networkingv1.IngressServiceBackend{
 											Name: "missing-svc",
-											Port: networkingv1.ServiceBackendPort{Number: 80},
+											Port: networkingv1.ServiceBackendPort{
+												Number: 80,
+											},
 										},
 									},
 								},
@@ -332,7 +365,10 @@ func TestProcessIngressObjectCreatesAndResolves(t *testing.T) {
 
 	// Add the missing service and re-process — should resolve
 	svc := &corev1.Service{
-		ObjectMeta: metav1.ObjectMeta{Name: "missing-svc", Namespace: "default"},
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "missing-svc",
+			Namespace: "default",
+		},
 	}
 	f.Core().V1().Services().Informer().GetIndexer().Add(svc)
 
@@ -341,20 +377,30 @@ func TestProcessIngressObjectCreatesAndResolves(t *testing.T) {
 	mu.Lock()
 	r := resolves
 	mu.Unlock()
-	assert.Equal(t, 1, r, "IngressBackendNotFound should resolve when service exists")
+	assert.Equal(
+		t,
+		1,
+		r,
+		"IngressBackendNotFound should resolve when service exists",
+	)
 	assert.Equal(t, 0, e.ActiveCount())
 }
 
 func TestProcessIngressObjectAlreadyResolved(t *testing.T) {
 	e := testCorrelator()
-	h := NewHandler(fake.NewSimpleClientset(), &config.Config{}, e, testAlertMgr)
+	h := NewHandler(
+		fake.NewSimpleClientset(),
+		&config.Config{},
+		e,
+		testAlertMgr,
+	)
 
 	f := informers.NewSharedInformerFactory(fake.NewSimpleClientset(), 0)
 	svc := &corev1.Service{
 		ObjectMeta: metav1.ObjectMeta{Name: "my-svc", Namespace: "default"},
 	}
 	f.Core().V1().Services().Informer().GetIndexer().Add(svc)
-	h.SetServiceLister(f.Core().V1().Services().Lister())
+	h.listers.Service = f.Core().V1().Services().Lister()
 
 	ing := &networkingv1.Ingress{
 		ObjectMeta: metav1.ObjectMeta{Name: "test-ing", Namespace: "default"},
@@ -370,7 +416,9 @@ func TestProcessIngressObjectAlreadyResolved(t *testing.T) {
 									Backend: networkingv1.IngressBackend{
 										Service: &networkingv1.IngressServiceBackend{
 											Name: "my-svc",
-											Port: networkingv1.ServiceBackendPort{Number: 80},
+											Port: networkingv1.ServiceBackendPort{
+												Number: 80,
+											},
 										},
 									},
 								},
@@ -383,27 +431,52 @@ func TestProcessIngressObjectAlreadyResolved(t *testing.T) {
 	}
 
 	assert.NoError(t, h.ProcessIngressObject(ing, false))
-	assert.Equal(t, 0, e.ActiveCount(), "ingress with valid backend should not create incident")
+	assert.Equal(
+		t,
+		0,
+		e.ActiveCount(),
+		"ingress with valid backend should not create incident",
+	)
 }
 
 func TestProcessIngressObjectDeleted(t *testing.T) {
-	h := NewHandler(fake.NewSimpleClientset(), &config.Config{}, testCorrelator(), testAlertMgr)
+	h := NewHandler(
+		fake.NewSimpleClientset(),
+		&config.Config{},
+		testCorrelator(),
+		testAlertMgr,
+	)
 	assert.NoError(t, h.ProcessIngress("default/test-ing", true))
 }
 
 func TestProcessIngressObjectNil(t *testing.T) {
-	h := NewHandler(fake.NewSimpleClientset(), &config.Config{}, testCorrelator(), testAlertMgr)
+	h := NewHandler(
+		fake.NewSimpleClientset(),
+		&config.Config{},
+		testCorrelator(),
+		testAlertMgr,
+	)
 	assert.NoError(t, h.ProcessIngressObject(nil, false))
 }
 
 func TestProcessIngressInvalidKey(t *testing.T) {
-	h := NewHandler(fake.NewSimpleClientset(), &config.Config{}, testCorrelator(), testAlertMgr)
+	h := NewHandler(
+		fake.NewSimpleClientset(),
+		&config.Config{},
+		testCorrelator(),
+		testAlertMgr,
+	)
 	assert.Error(t, h.ProcessIngress("a/b/c", false))
 }
 
 func TestProcessIngressObjectDeletedPath(t *testing.T) {
 	e := testCorrelator()
-	h := NewHandler(fake.NewSimpleClientset(), &config.Config{}, e, testAlertMgr)
+	h := NewHandler(
+		fake.NewSimpleClientset(),
+		&config.Config{},
+		e,
+		testAlertMgr,
+	)
 
 	ing := &networkingv1.Ingress{
 		ObjectMeta: metav1.ObjectMeta{Name: "test-ing", Namespace: "default"},

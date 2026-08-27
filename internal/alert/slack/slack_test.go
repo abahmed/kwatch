@@ -1,6 +1,8 @@
 package slack
 
 import (
+	"errors"
+	"strings"
 	"testing"
 	"time"
 
@@ -9,7 +11,9 @@ import (
 
 	"github.com/abahmed/kwatch/internal/alert/util"
 	"github.com/abahmed/kwatch/internal/config"
+	kwcontext "github.com/abahmed/kwatch/internal/context"
 	"github.com/abahmed/kwatch/internal/event"
+	"github.com/abahmed/kwatch/internal/insight"
 	"github.com/abahmed/kwatch/internal/model"
 )
 
@@ -79,7 +83,8 @@ func TestSendEventWebhook(t *testing.T) {
 		Namespace:     "default",
 		Reason:        "OOMKILLED",
 		Logs:          "some log line 1\nsome log line 2\nsome log line 3",
-		Events:        "BackOff Back-off restarting failed container\nevent3\nevent5",
+		Events: "BackOff Back-off restarting failed " +
+			"container\nevent3\nevent5",
 	}
 	assert.Nil(s.SendEvent(ev))
 }
@@ -134,7 +139,8 @@ func TestSendEventWebhookWithLargeLogs(t *testing.T) {
 	// generate logs larger than chunkSize (2000)
 	longLog := ""
 	for i := 0; i < 500; i++ {
-		longLog += "Nam quis nulla. Integer malesuada. In in enim a arcu imperdiet.\n"
+		longLog += "Nam quis nulla. Integer malesuada. In in enim a arcu " +
+			"imperdiet.\n"
 	}
 
 	ev := &event.Event{
@@ -260,16 +266,21 @@ func TestMarkdownF(t *testing.T) {
 
 func testIncident() *model.Incident {
 	return &model.Incident{
-		Key:       "default:deploy-1:CrashLoopBackOff",
-		Name:      "deploy-1",
-		Namespace: "default",
-		Reason:    "CrashLoopBackOff",
-		Resource:  "pod",
-		Count:     1,
-		FirstSeen: time.Now().Add(-5 * time.Minute),
-		LastSeen:  time.Now(),
-		Resources: map[string]bool{"pod-1": true, "pod-2": true},
+		Subject: model.Subject{
+			Key:       "default:deploy-1:CrashLoopBackOff",
+			Name:      "deploy-1",
+			Namespace: "default",
+			Reason:    "CrashLoopBackOff",
+			Resource:  "pod",
+		},
+		Status: model.Status{
+			Count:     1,
+			FirstSeen: time.Now().Add(-5 * time.Minute),
+			LastSeen:  time.Now(),
+			Resources: map[string]bool{"pod-1": true, "pod-2": true},
+		},
 	}
+
 }
 
 // --- SendIncident: webhook fallback ---
@@ -366,7 +377,9 @@ func TestSendIncidentTokenCreate(t *testing.T) {
 
 	var capturedBlocks *slackClient.Blocks
 	var capturedThreadTS string
-	s.postBlocksFn = func(blocks *slackClient.Blocks, threadTS string) (string, error) {
+	s.postBlocksFn = func(
+		blocks *slackClient.Blocks, threadTS string,
+	) (string, error) {
 		capturedBlocks = blocks
 		capturedThreadTS = threadTS
 		return "12345.67890", nil
@@ -389,14 +402,18 @@ func TestSendIncidentTokenUpdate(t *testing.T) {
 	assert := assert.New(t)
 
 	s := &Slack{
-		channel:   "#alerts",
-		appCfg:    &config.App{ClusterName: "dev"},
-		threadMap: map[string]string{"default:deploy-1:CrashLoopBackOff": "12345.67890"},
+		channel: "#alerts",
+		appCfg:  &config.App{ClusterName: "dev"},
+		threadMap: map[string]string{
+			"default:deploy-1:CrashLoopBackOff": "12345.67890",
+		},
 	}
 
 	var capturedBlocks *slackClient.Blocks
 	var capturedThreadTS string
-	s.postBlocksFn = func(blocks *slackClient.Blocks, threadTS string) (string, error) {
+	s.postBlocksFn = func(
+		blocks *slackClient.Blocks, threadTS string,
+	) (string, error) {
 		capturedBlocks = blocks
 		capturedThreadTS = threadTS
 		return "12345.67891", nil
@@ -418,7 +435,9 @@ func TestSendIncidentTokenUpdateNoThread(t *testing.T) {
 	}
 
 	var capturedThreadTS string
-	s.postBlocksFn = func(_ *slackClient.Blocks, threadTS string) (string, error) {
+	s.postBlocksFn = func(
+		_ *slackClient.Blocks, threadTS string,
+	) (string, error) {
 		capturedThreadTS = threadTS
 		return "12345.67890", nil
 	}
@@ -522,7 +541,11 @@ func TestBuildIncidentUpdateBlocksWithLogsEvents(t *testing.T) {
 	blocks := buildIncidentUpdateBlocks(inc)
 
 	assert.NotNil(blocks)
-	assert.Greater(len(blocks.BlockSet), 1, "update blocks should include Logs/Events sections")
+	assert.Greater(
+		len(blocks.BlockSet),
+		1,
+		"update blocks should include Logs/Events sections",
+	)
 }
 
 func TestFormatIncidentTextWithLogsEvents(t *testing.T) {
@@ -555,4 +578,137 @@ func TestFormatIncidentTextUpdateWithLogsEvents(t *testing.T) {
 	assert.Contains(text, "Warning BackOff")
 	assert.Contains(text, "Logs:")
 	assert.Contains(text, "Error: crash")
+}
+
+// Incidents are keyed by owner, so one incident can name several replicas
+// under Resources while the attached evidence came from exactly one of them.
+// dev showed "api-...-gjwjp" under Resources and events describing
+// "api-...-96p24"; the alert must say which pod it is showing.
+func TestEvidenceIsAttributedToItsPod(t *testing.T) {
+	base := func() *model.Incident {
+		return &model.Incident{
+			Subject: model.Subject{
+				Name:      "api",
+				Reason:    "ContainersNotReady",
+				Namespace: "dev",
+			},
+			Evidence: model.Evidence{
+				Events:        "[..] FailedScheduling no nodes available",
+				IncludeEvents: true,
+				EvidencePod:   "api-584ddc9849-96p24",
+			},
+		}
+
+	}
+
+	// Several replicas covered: the evidence pod must be named.
+	multi := base()
+	multi.Resources = map[string]bool{
+		"api-584ddc9849-gjwjp": true,
+		"api-584ddc9849-96p24": true,
+	}
+	title := evidenceTitle(":mag: *Events*", multi)
+	if !strings.Contains(title, "api-584ddc9849-96p24") {
+		t.Errorf(
+			"multi-pod incident must attribute its evidence, got %q",
+			title,
+		)
+	}
+
+	// A single pod that is the incident itself needs no redundant label.
+	single := base()
+	single.Name = "api-584ddc9849-96p24"
+	single.Resources = map[string]bool{"api-584ddc9849-96p24": true}
+	if got := evidenceTitle(":mag: *Events*", single); got != ":mag: *Events*" {
+		t.Errorf(
+			"single-pod incident should not repeat the pod name, got %q",
+			got,
+		)
+	}
+
+	// No recorded source: unchanged.
+	none := base()
+	none.EvidencePod = ""
+	if got := evidenceTitle(":mag: *Events*", none); got != ":mag: *Events*" {
+		t.Errorf("unattributed evidence must render unchanged, got %q", got)
+	}
+}
+
+// Slack reports request and credential problems as bare error codes. Those
+// cannot succeed on retry and must be marked permanent; rate limits keep
+// their Retry-After; anything else stays transient.
+func TestSlackErrorClassification(t *testing.T) {
+	codes := []string{
+		"invalid_blocks", "channel_not_found", "invalid_auth", "not_in_channel",
+	}
+	for _, code := range codes {
+		err := wrapSlackRateLimit(errors.New(code))
+		assert.True(t, event.IsPermanent(err), "%s must be permanent", code)
+	}
+	transient := wrapSlackRateLimit(errors.New("connection reset by peer"))
+	assert.False(
+		t,
+		event.IsPermanent(transient),
+		"network errors stay retryable",
+	)
+	assert.Nil(t, wrapSlackRateLimit(nil))
+}
+
+// The rich (token) Slack path builds its blocks from the incident alone and
+// used to drop the diagnosis entirely. It must now render cause, impact and
+// recent changes, and stay unchanged when there is no diagnosis.
+func TestIncidentBlocksRenderDiagnosis(t *testing.T) {
+	app := &config.App{ClusterName: "dev"}
+	inc := &model.Incident{
+		Subject: model.Subject{
+			Reason:    "ContainersNotReady",
+			Name:      "api",
+			Namespace: "dev",
+		},
+		Status: model.Status{
+			Count: 1,
+		},
+	}
+
+	flatten := func(b *slackClient.Blocks) string {
+		var sb strings.Builder
+		for _, blk := range b.BlockSet {
+			if sec, ok := blk.(slackClient.SectionBlock); ok &&
+				sec.Text != nil {
+				sb.WriteString(sec.Text.Text)
+				sb.WriteString("\n")
+			}
+		}
+		return sb.String()
+	}
+
+	ins := &insight.Insight{
+		Cause:   "node ip-10-0-81-7 may be unhealthy",
+		Pattern: "node_failure",
+		Impact:  "12 pods on this node, affecting 3 services",
+		RecentChanges: []kwcontext.Change{
+			{
+				Resource:  "configmap",
+				Namespace: "dev",
+				Name:      "api-config",
+				Type:      kwcontext.ChangeUpdate,
+				Timestamp: time.Now().Add(-3 * time.Minute),
+			},
+		},
+	}
+	text := flatten(buildIncidentBlocksWithInsight(inc, app, ins))
+	assert.Contains(t, text, "Diagnosis")
+	assert.Contains(t, text, "node ip-10-0-81-7 may be unhealthy")
+	assert.Contains(t, text, "node_failure")
+	assert.Contains(t, text, "12 pods on this node")
+	assert.Contains(t, text, "configmap dev/api-config update")
+
+	plain := flatten(buildIncidentBlocksWithInsight(inc, app, nil))
+	assert.NotContains(t, plain, "Diagnosis", "no diagnosis, no section")
+	assert.Equal(
+		t,
+		plain,
+		flatten(buildIncidentBlocks(inc, app)),
+		"the old entry point is unchanged",
+	)
 }

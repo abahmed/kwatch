@@ -27,7 +27,7 @@ Versions are always computed from existing tags — maintainers never type a ver
 only choose which part moves.
 
 > **Tag hygiene:** only `-rc.<N>` pre-releases are recognised. The workflow matches
-> `vX.Y.Z` for stable tags and `vX.Y.Z-rc.<N>` for RCs, exactly. A tag like `v1.0.0-beta.1`
+> `vX.Y.Z` for stable tags and `vX.Y.Z-rc.<N>` for RCs, exactly. A tag like `v1.0.0-rc.1`
 > is ignored by both, so do not create other pre-release forms — the version computation
 > will behave as if it does not exist.
 

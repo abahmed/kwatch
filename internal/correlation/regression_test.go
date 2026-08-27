@@ -17,23 +17,48 @@ import (
 // duplicate CREATE for the same ongoing loop.
 func TestFoldMigratesIncidentNotRecreates(t *testing.T) {
 	e := newTestEngine()
-	_, action := e.Process(event.Event{PodName: "p1", Namespace: "ns", Reason: "Error"},
-		"dep", &model.ContainerState{RestartCount: 3})
+	_, action := e.Process(
+		event.Event{PodName: "p1", Namespace: "ns", Reason: "Error"},
+		"dep",
+		&model.ContainerState{RestartCount: 3},
+	)
 	require.Equal(t, model.ActionCreate, action)
 	oldID := e.state["ns:dep:Error:"].ID
 	oldFirstSeen := e.state["ns:dep:Error:"].FirstSeen
 
-	_, action = e.Process(event.Event{PodName: "p1", Namespace: "ns", Reason: "Error"},
-		"dep", &model.ContainerState{RestartCount: 6})
-	assert.Equal(t, model.ActionSkip, action, "fold must not fire a duplicate CREATE")
+	_, action = e.Process(
+		event.Event{PodName: "p1", Namespace: "ns", Reason: "Error"},
+		"dep",
+		&model.ContainerState{RestartCount: 6},
+	)
+	assert.Equal(
+		t,
+		model.ActionSkip,
+		action,
+		"fold must not fire a duplicate CREATE",
+	)
 
 	_, ok := e.state["ns:dep:Error:"]
 	assert.False(t, ok, "pre-fold key must be gone")
 	mig, ok := e.state["ns:dep:CrashLoopHighFrequency:"]
 	require.True(t, ok, "folded key must hold the migrated incident")
-	assert.Equal(t, oldID, mig.ID, "ID must survive the fold (alert thread continuity)")
-	assert.True(t, mig.FirstSeen.Equal(oldFirstSeen), "FirstSeen must survive the fold")
-	assert.Equal(t, 2, mig.Count, "the crossing event must count on the same incident")
+	assert.Equal(
+		t,
+		oldID,
+		mig.ID,
+		"ID must survive the fold (alert thread continuity)",
+	)
+	assert.True(
+		t,
+		mig.FirstSeen.Equal(oldFirstSeen),
+		"FirstSeen must survive the fold",
+	)
+	assert.Equal(
+		t,
+		2,
+		mig.Count,
+		"the crossing event must count on the same incident",
+	)
 }
 
 // B3: renotify must skip incidents absorbed into a smart group — the group
@@ -41,10 +66,12 @@ func TestFoldMigratesIncidentNotRecreates(t *testing.T) {
 func TestRenotifySkipsGroupedIncidents(t *testing.T) {
 	now := time.Date(2025, 1, 1, 0, 0, 0, 0, time.UTC)
 	e := NewEngine(Config{
-		Window:                     10 * time.Minute,
-		SmartGroupingWindow:        60 * time.Second,
-		RenotifyIntervalBySeverity: map[string]time.Duration{"default": 30 * time.Second},
-		RenotifyMaxPerIncident:     3,
+		Window:              10 * time.Minute,
+		SmartGroupingWindow: 60 * time.Second,
+		RenotifyIntervalBySeverity: map[string]time.Duration{
+			"default": 30 * time.Second,
+		},
+		RenotifyMaxPerIncident: 3,
 	})
 	e.now = mockClock(now)
 
@@ -55,8 +82,31 @@ func TestRenotifySkipsGroupedIncidents(t *testing.T) {
 		}
 	}
 
-	_, action := e.Process(event.Event{PodName: "p1", Namespace: "ns", Reason: "CrashLoopBackOff"}, "dep1", nil)
+	// Two owners sharing a log signature form one real group. A buffer with a
+	// single member is emitted as that member, so a lone incident would not
+	// exercise the grouped-member path at all.
+	sigLog := "connection refused:5432"
+	_, action := e.Process(
+		event.Event{
+			PodName:   "p1",
+			Namespace: "ns",
+			Reason:    "CrashLoopBackOff",
+			Logs:      sigLog,
+		},
+		"dep1",
+		nil,
+	)
 	assert.Equal(t, model.ActionSkip, action)
+	e.Process(
+		event.Event{
+			PodName:   "p2",
+			Namespace: "ns",
+			Reason:    "CrashLoopBackOff",
+			Logs:      sigLog,
+		},
+		"dep2",
+		nil,
+	)
 
 	// Flush the group, then hit a renotify tick well past the interval.
 	e.now = mockClock(now.Add(61 * time.Second))
@@ -65,37 +115,83 @@ func TestRenotifySkipsGroupedIncidents(t *testing.T) {
 	e.checkLifecycle()
 	e.checkLifecycle()
 
-	assert.Equal(t, 0, memberUpdates, "grouped member must never be individually renotified")
+	assert.Equal(
+		t,
+		0,
+		memberUpdates,
+		"grouped member must never be individually renotified",
+	)
 }
 
 // B3 control: a non-grouped incident still renotifies normally.
+// hasGroupIncident reports whether any synthetic smart-group incident exists.
+func (e *Engine) hasGroupIncident() bool {
+	e.mu.Lock()
+	defer e.mu.Unlock()
+	for k := range e.state {
+		if IsGroupKey(k) {
+			return true
+		}
+	}
+	return len(e.groupResolveTrackers) > 0
+}
+
 func TestRenotifyStillFiresForNonGrouped(t *testing.T) {
 	now := time.Date(2025, 1, 1, 0, 0, 0, 0, time.UTC)
 	e := NewEngine(Config{
-		Window:                     10 * time.Minute,
-		SmartGroupingWindow:        60 * time.Second,
-		RenotifyIntervalBySeverity: map[string]time.Duration{"default": 30 * time.Second},
-		RenotifyMaxPerIncident:     3,
+		Window:              10 * time.Minute,
+		SmartGroupingWindow: 60 * time.Second,
+		RenotifyIntervalBySeverity: map[string]time.Duration{
+			"default": 30 * time.Second,
+		},
+		RenotifyMaxPerIncident: 3,
 	})
 	e.now = mockClock(now)
 
-	// Different reasons → different groups; this one stays alone but grouped.
+	// A buffer that never collects a second member is emitted as the incident
+	// itself rather than as a group of one. It is therefore an ordinary
+	// incident from that point on, and renotify applies to it normally —
+	// which is what this test's name has always claimed.
 	var updates int
 	e.config.LifecycleHook = func(inc *model.Incident, a model.IncidentAction) {
-		if strings.HasPrefix(string(inc.Key), "ns:dep1:") && a == model.ActionUpdate {
+		if strings.HasPrefix(string(inc.Key), "ns:dep1:") &&
+			a == model.ActionUpdate {
 			updates++
 		}
 	}
-	e.Process(event.Event{PodName: "p1", Namespace: "ns", Reason: "Error"}, "dep1", nil)
+	e.Process(
+		event.Event{PodName: "p1", Namespace: "ns", Reason: "Error"},
+		"dep1",
+		nil,
+	)
 
+	// Still inside the grouping window: nothing has been emitted yet.
+	e.now = mockClock(now.Add(30 * time.Second))
+	e.checkLifecycle()
+	assert.Equal(
+		t,
+		0,
+		updates,
+		"nothing emitted before the grouping window closes",
+	)
+
+	// Window closes: emitted as a plain incident, not a group of one.
 	e.now = mockClock(now.Add(91 * time.Second))
 	e.checkLifecycle()
-	assert.Equal(t, 0, updates, "still grouped within window → no individual renotify")
+	require.False(
+		t,
+		e.hasGroupIncident(),
+		"a lone member must not produce a group incident",
+	)
 
-	// After the group flushes it is tracked as a member → still skipped.
+	// Well past the renotify interval, an ungrouped incident renotifies.
 	e.now = mockClock(now.Add(2 * time.Hour))
 	e.checkLifecycle()
-	assert.Equal(t, 0, updates)
+	assert.Positive(
+		t,
+		updates,
+		"an ungrouped incident must still be renotified",
+	)
 }
 
 // B4: a workload incident stored with the "ns/name" owner encoding must
@@ -103,51 +199,132 @@ func TestRenotifyStillFiresForNonGrouped(t *testing.T) {
 func TestCascadingSuppressionAcrossOwnerEncodings(t *testing.T) {
 	e := newTestEngine()
 	// Workload detector path: Owner = "ns/dep".
-	_, action := e.Process(event.Event{Resource: "deployment", Namespace: "ns", Reason: "ProgressDeadlineExceeded"}, "ns/dep", nil)
+	_, action := e.Process(
+		event.Event{
+			Resource:  "deployment",
+			Namespace: "ns",
+			Reason:    "ProgressDeadlineExceeded",
+		},
+		"ns/dep",
+		nil,
+	)
 	require.Equal(t, model.ActionCreate, action)
 
 	// Pod path: owner resolved to the bare deployment name.
-	_, action = e.Process(event.Event{Resource: "pod", PodName: "p1", Namespace: "ns", Reason: "CrashLoopBackOff"}, "dep", nil)
-	assert.Equal(t, model.ActionSkip, action, "bare-owner pod symptom must be suppressed")
+	_, action = e.Process(
+		event.Event{
+			Resource:  "pod",
+			PodName:   "p1",
+			Namespace: "ns",
+			Reason:    "CrashLoopBackOff",
+		},
+		"dep",
+		nil,
+	)
+	assert.Equal(
+		t,
+		model.ActionSkip,
+		action,
+		"bare-owner pod symptom must be suppressed",
+	)
 }
 
 // B6: resolving one pod's incident must not un-baseline sibling pods sharing
 // the same owner+reason key.
 func TestBaselineSiblingsPreservedOnResolve(t *testing.T) {
 	now := time.Now().Unix()
-	e := NewEngine(Config{Window: 10 * time.Minute, BaselineTTL: 24 * time.Hour,
-		Baseline: map[string]map[string]int64{"ns:dep:CrashLoopBackOff:": {"p1": now, "p2": now}}})
+	e := NewEngine(Config{
+		Window:      10 * time.Minute,
+		BaselineTTL: 24 * time.Hour,
+		Baseline: map[string]map[string]int64{
+			"ns:dep:CrashLoopBackOff:": {"p1": now, "p2": now},
+		},
+	})
 
 	// p3 is new → incident fires under the shared key.
-	_, action := e.Process(event.Event{PodName: "p3", Namespace: "ns", Reason: "CrashLoopBackOff"}, "dep", nil)
+	_, action := e.Process(
+		event.Event{PodName: "p3", Namespace: "ns", Reason: "CrashLoopBackOff"},
+		"dep",
+		nil,
+	)
 	require.Equal(t, model.ActionCreate, action)
 
 	e.MarkResolved("ns:dep:CrashLoopBackOff:")
 
 	// p1/p2 keep their startup baseline; p3's (non-existent) entry stays gone.
 	pods, ok := e.baseline["ns:dep:CrashLoopBackOff:"]
-	require.True(t, ok, "key must survive resolution while siblings remain baselined")
-	assert.True(t, pods["p1"] > 0 && pods["p2"] > 0, "siblings must stay baselined")
+	require.True(
+		t,
+		ok,
+		"key must survive resolution while siblings remain baselined",
+	)
+	assert.True(
+		t,
+		pods["p1"] > 0 && pods["p2"] > 0,
+		"siblings must stay baselined",
+	)
 	assert.Zero(t, pods["p3"])
 
-	_, action = e.Process(event.Event{PodName: "p1", Namespace: "ns", Reason: "CrashLoopBackOff"}, "dep", nil)
-	assert.Equal(t, model.ActionSkip, action, "sibling p1 must remain suppressed")
+	_, action = e.Process(
+		event.Event{PodName: "p1", Namespace: "ns", Reason: "CrashLoopBackOff"},
+		"dep",
+		nil,
+	)
+	assert.Equal(
+		t,
+		model.ActionSkip,
+		action,
+		"sibling p1 must remain suppressed",
+	)
 }
 
 // B6 global-scope variant: resolving one global image-pull incident must not
 // un-baseline the other affected pods cluster-wide.
 func TestBaselineGlobalScopePreservedOnResolve(t *testing.T) {
 	now := time.Now().Unix()
-	e := NewEngine(Config{Window: 10 * time.Minute, BaselineTTL: 24 * time.Hour,
-		Baseline: map[string]map[string]int64{"ImagePullBackOff|global|rate_limit": {"p1": now, "p2": now, "p3": now}}})
+	e := NewEngine(Config{
+		Window:      10 * time.Minute,
+		BaselineTTL: 24 * time.Hour,
+		Baseline: map[string]map[string]int64{
+			"ImagePullBackOff|global|rate_limit": {
+				"p1": now,
+				"p2": now,
+				"p3": now,
+			},
+		},
+	})
 
-	_, action := e.Process(event.Event{PodName: "p9", Namespace: "ns1", Reason: "ImagePullBackOff", Message: "toomanyrequests"}, "dep1", nil)
+	_, action := e.Process(
+		event.Event{
+			PodName:   "p9",
+			Namespace: "ns1",
+			Reason:    "ImagePullBackOff",
+			Message:   "toomanyrequests",
+		},
+		"dep1",
+		nil,
+	)
 	require.Equal(t, model.ActionCreate, action)
 
 	e.MarkResolved("ImagePullBackOff|global|rate_limit")
 
 	for _, p := range []string{"p1", "p2", "p3"} {
-		_, action = e.Process(event.Event{PodName: p, Namespace: "other-ns", Reason: "ImagePullBackOff", Message: "toomanyrequests"}, "other-owner", nil)
-		assert.Equal(t, model.ActionSkip, action, "globally baselined pod %s must stay suppressed", p)
+		_, action = e.Process(
+			event.Event{
+				PodName:   p,
+				Namespace: "other-ns",
+				Reason:    "ImagePullBackOff",
+				Message:   "toomanyrequests",
+			},
+			"other-owner",
+			nil,
+		)
+		assert.Equal(
+			t,
+			model.ActionSkip,
+			action,
+			"globally baselined pod %s must stay suppressed",
+			p,
+		)
 	}
 }

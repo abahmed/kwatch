@@ -35,8 +35,14 @@ func isPdbBlocking(pdb *policyv1.PodDisruptionBudget) bool {
 }
 
 func pdbHint(pdb *policyv1.PodDisruptionBudget) string {
-	return fmt.Sprintf("PDB %s/%s blocking: currentHealthy=%d, desiredHealthy=%d — pod disruptions not allowed; check pod health or reduce replica count",
-		pdb.Namespace, pdb.Name, pdb.Status.CurrentHealthy, pdb.Status.DesiredHealthy)
+	return fmt.Sprintf(
+		"PDB %s/%s blocking: currentHealthy=%d, desiredHealthy=%d — pod "+
+			"disruptions not allowed; check pod health or reduce replica count",
+		pdb.Namespace,
+		pdb.Name,
+		pdb.Status.CurrentHealthy,
+		pdb.Status.DesiredHealthy,
+	)
 }
 
 func (h *handler) ProcessPdb(key string, deleted bool) error {
@@ -47,31 +53,48 @@ func (h *handler) ProcessPdb(key string, deleted bool) error {
 
 	if deleted {
 		h.clearFirstPdbViolation(namespace + "/" + name)
-		h.correlator.ResolveByResource("poddisruptionbudget", namespace+"/"+name)
+		h.correlator.ResolveByResource(
+			"poddisruptionbudget",
+			namespace+"/"+name,
+		)
 		return nil
 	}
 
-	pdb, err := h.listers.pdb.PodDisruptionBudgets(namespace).Get(name)
+	pdb, err := h.listers.PDB.PodDisruptionBudgets(namespace).Get(name)
 	if err != nil {
 		if errors.IsNotFound(err) {
 			h.clearFirstPdbViolation(namespace + "/" + name)
-			h.correlator.ResolveByResource("poddisruptionbudget", namespace+"/"+name)
+			h.correlator.ResolveByResource(
+				"poddisruptionbudget",
+				namespace+"/"+name,
+			)
 			return nil
 		}
-		return fmt.Errorf("failed to get pdb %s/%s from cache: %w", namespace, name, err)
+		return fmt.Errorf(
+			"failed to get pdb %s/%s from cache: %w",
+			namespace,
+			name,
+			err,
+		)
 	}
 
 	return h.ProcessPdbObject(pdb, false)
 }
 
-func (h *handler) ProcessPdbObject(pdb *policyv1.PodDisruptionBudget, deleted bool) error {
+func (h *handler) ProcessPdbObject(
+	pdb *policyv1.PodDisruptionBudget,
+	deleted bool,
+) error {
 	if pdb == nil {
 		return nil
 	}
 
 	if deleted {
 		h.clearFirstPdbViolation(pdb.Namespace + "/" + pdb.Name)
-		h.correlator.ResolveByResource("poddisruptionbudget", pdb.Namespace+"/"+pdb.Name)
+		h.correlator.ResolveByResource(
+			"poddisruptionbudget",
+			pdb.Namespace+"/"+pdb.Name,
+		)
 		return nil
 	}
 
@@ -80,7 +103,9 @@ func (h *handler) ProcessPdbObject(pdb *policyv1.PodDisruptionBudget, deleted bo
 	if isPdbBlocking(pdb) {
 		first := h.markFirstPdbViolation(key)
 
-		sustained := time.Duration(h.config.PdbMonitor.SustainedMinutes) * time.Minute
+		sustained := time.Duration(
+			h.config.PdbMonitor.SustainedMinutes,
+		) * time.Minute
 		if sustained > 0 && h.now().Sub(first) < sustained {
 			return nil
 		}

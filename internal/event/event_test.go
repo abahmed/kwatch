@@ -1,6 +1,7 @@
 package event
 
 import (
+	"net/http"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -251,4 +252,25 @@ func TestFormatTextOnlyWhitespaceEventsLogs(t *testing.T) {
 
 	result := e.FormatText("test-cluster", "")
 	assert.Contains(result, "test-cluster")
+}
+
+func TestIsPermanentHTTPStatus(t *testing.T) {
+	cases := map[int]bool{
+		http.StatusOK:              false,
+		http.StatusBadRequest:      true, // the payload is wrong
+		http.StatusUnauthorized:    true, // the token is wrong
+		http.StatusForbidden:       true,
+		http.StatusNotFound:        true,  // the channel/webhook is wrong
+		http.StatusRequestTimeout:  false, // explicitly asks to try again
+		http.StatusTooManyRequests: false, // rate limited, has Retry-After
+		// the server is having a bad time
+		http.StatusInternalServerError: false,
+		http.StatusBadGateway:          false,
+		http.StatusServiceUnavailable:  false,
+	}
+	for code, want := range cases {
+		if got := IsPermanentHTTPStatus(code); got != want {
+			t.Errorf("status %d: permanent=%v, want %v", code, got, want)
+		}
+	}
 }

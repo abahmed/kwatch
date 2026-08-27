@@ -22,7 +22,8 @@ func (f ContainerReasonsFilter) Detect(ctx *Context) Status {
 		ctx.Container.Reason = container.State.Terminated.Reason
 		ctx.Container.Msg = container.State.Terminated.Message
 		ctx.Container.ExitCode = container.State.Terminated.ExitCode
-		ctx.Container.LastTerminatedOn = container.State.Terminated.StartedAt.Time
+		ctx.Container.LastTerminatedOn =
+			container.State.Terminated.StartedAt.Time
 	}
 
 	if (ctx.Container.Reason == "CrashLoopBackOff" ||
@@ -65,12 +66,14 @@ func (f ContainerReasonsFilter) Detect(ctx *Context) Status {
 			lastState.Msg == ctx.Container.Msg &&
 			lastState.ExitCode == ctx.Container.ExitCode {
 
-			cooldown := time.Duration(ctx.Config.Correlation.CooldownMinutes) * time.Minute
+			cooldown := time.Duration(
+				ctx.Config.Correlation.CooldownMinutes,
+			) * time.Minute
 			if cooldown <= 0 {
 				// cooldownMinutes=0 means disable cooldown — always re-alert
 				return StatusAlert
 			}
-			if time.Since(lastState.LastTerminatedOn) < cooldown {
+			if ctx.now().Sub(lastState.LastTerminatedOn) < cooldown {
 				return StatusSkip
 			}
 		}

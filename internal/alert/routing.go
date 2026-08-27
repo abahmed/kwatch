@@ -27,25 +27,35 @@ func extractRoutes(cfg map[string]interface{}) []config.AlertRoute {
 					if ns, ok := rm["namespaces"]; ok {
 						if arr, ok := ns.([]interface{}); ok {
 							for _, n := range arr {
-								route.Namespaces = append(route.Namespaces, fmt.Sprint(n))
+								route.Namespaces = append(
+									route.Namespaces,
+									fmt.Sprint(n),
+								)
 							}
 						}
 					}
 					if sev, ok := rm["severities"]; ok {
 						if arr, ok := sev.([]interface{}); ok {
 							for _, s := range arr {
-								route.Severities = append(route.Severities, fmt.Sprint(s))
+								route.Severities = append(
+									route.Severities,
+									fmt.Sprint(s),
+								)
 							}
 						}
 					}
 					if rea, ok := rm["reasons"]; ok {
 						if arr, ok := rea.([]interface{}); ok {
 							for _, r := range arr {
-								route.Reasons = append(route.Reasons, fmt.Sprint(r))
+								route.Reasons = append(
+									route.Reasons,
+									fmt.Sprint(r),
+								)
 							}
 						}
 					}
-					if len(route.Namespaces) > 0 || len(route.Severities) > 0 || len(route.Reasons) > 0 {
+					if len(route.Namespaces) > 0 || len(route.Severities) > 0 ||
+						len(route.Reasons) > 0 {
 						out = append(out, route)
 					}
 				}
@@ -56,15 +66,28 @@ func extractRoutes(cfg map[string]interface{}) []config.AlertRoute {
 	return nil
 }
 
-func extractTemplates(cfg map[string]interface{}) map[string]*template.Template {
+func extractTemplates(
+	cfg map[string]interface{},
+) map[string]*template.Template {
 	if raw, ok := cfg["templates"]; ok {
 		if tpl, ok := raw.(map[string]interface{}); ok {
 			out := make(map[string]*template.Template, len(tpl))
 			for reason, rawBody := range tpl {
 				if body, ok := rawBody.(string); ok {
-					t, err := template.New(reason).Option("missingkey=zero").Parse(body)
+					t, err := template.New(
+						reason,
+					).Option(
+						"missingkey=zero",
+					).Parse(
+						body,
+					)
 					if err != nil {
-						klog.ErrorS(err, "invalid provider template, skipping", "reason", reason)
+						klog.ErrorS(
+							err,
+							"invalid provider template, skipping",
+							"reason",
+							reason,
+						)
 						continue
 					}
 					out[strings.ToLower(reason)] = t
@@ -114,7 +137,11 @@ func applyRetryMaxAttempts(rm map[string]interface{}, rc *retryConfig) {
 }
 
 // applyRetryDuration parses a duration-string retry option into dst when valid.
-func applyRetryDuration(rm map[string]interface{}, key string, dst *time.Duration) {
+func applyRetryDuration(
+	rm map[string]interface{},
+	key string,
+	dst *time.Duration,
+) {
 	s, ok := rm[key].(string)
 	if !ok {
 		return
@@ -221,7 +248,10 @@ func shouldDeliver(routes []config.AlertRoute, inc *model.Incident) bool {
 	return false
 }
 
-func backoffFor(attempt int, baseDelay, maxBackoff time.Duration) time.Duration {
+func backoffFor(
+	attempt int,
+	baseDelay, maxBackoff time.Duration,
+) time.Duration {
 	shift := attempt - 1
 	if shift > 30 {
 		return maxBackoff
@@ -244,11 +274,27 @@ func applyJitter(d time.Duration, factor float64) time.Duration {
 	return d + jitter
 }
 
-func sendWithRetry(ctx context.Context, sendFn func() error, rc retryConfig, providerName string) error {
+func sendWithRetry(
+	ctx context.Context,
+	sendFn func() error,
+	rc retryConfig,
+	providerName string,
+) error {
 	var lastErr error
 	for attempt := 1; attempt <= rc.maxAttempts; attempt++ {
 		if err := sendFn(); err != nil {
 			lastErr = err
+			// A permanent failure will fail identically on every attempt, and
+			// each retry holds up everything queued behind it on this provider.
+			if event.IsPermanent(err) {
+				klog.ErrorS(
+					err,
+					"provider rejected the notification; not retrying",
+					"provider",
+					providerName,
+				)
+				return err
+			}
 			if attempt < rc.maxAttempts {
 				sleepDur := rc.delay
 				if rc.maxBackoff > 0 {

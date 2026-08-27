@@ -224,11 +224,15 @@ overcommit, repeating OOMs and more — lives in the [configuration reference](.
   after a hold-down and revives silently past a cooldown
 - 🔇 **Smart grouping** — related failures coalesce into one notification, re-notified on a
   gentle cooldown, batch-resolved together
-- 📊 **Mass-failure detection** — 30% of a shared dependency down → one blast-radius alert,
-  auto-resolved when it recovers
+- 📊 **Mass-failure detection** — 30% of a shared dependency down → one blast-radius alert
+  that *replaces* the per-workload alerts rather than arriving alongside them, auto-resolved
+  when it recovers
 - 🚨 **Escalation & re-notify** — repeated crashes climb severity, and long-lived incidents
   nudge you again so nothing is forgotten
-- 📜 **Audit log** — every decision (create / update / resolve / skip) as structured JSON
+- 📜 **Audit log** — every decision (create / update / resolve / skip) as structured JSON,
+  with suppressions recorded on change rather than on every poll
+- 🕳️ **Knows when it was blind** — kwatch stamps its own liveness, so if it was down while your
+  cluster wasn't, the next startup message says how long nobody was watching
 - ♻️ **Live config** — change severity via `KwatchConfig` CRDs without restarting
 - 🔁 **Delivery resilience** — per-provider routes, retries, and fallback, with a dead-letter
   view for the rare message that can't be sent

@@ -17,10 +17,17 @@ import (
 )
 
 func TestProcessServiceObjectEndpointSliceListerError(t *testing.T) {
-	h := NewHandler(fake.NewSimpleClientset(), &config.Config{}, testCorrelator(), testAlertMgr)
+	h := NewHandler(
+		fake.NewSimpleClientset(),
+		&config.Config{},
+		testCorrelator(),
+		testAlertMgr,
+	)
 	f := informers.NewSharedInformerFactory(fake.NewSimpleClientset(), 0)
-	h.SetEndpointSliceLister(&errorEndpointSliceLister{f.Discovery().V1().EndpointSlices().Lister()})
-	h.SetServiceLister(f.Core().V1().Services().Lister())
+	h.listers.EndpointSlice = &errorEndpointSliceLister{
+		f.Discovery().V1().EndpointSlices().Lister(),
+	}
+	h.listers.Service = f.Core().V1().Services().Lister()
 
 	svc := &corev1.Service{
 		ObjectMeta: metav1.ObjectMeta{Name: "svc1", Namespace: "ns1"},
@@ -31,7 +38,12 @@ func TestProcessServiceObjectEndpointSliceListerError(t *testing.T) {
 // --- ProcessIngressObject nil serviceLister ---
 
 func TestProcessIngressObjectNilServiceLister(t *testing.T) {
-	h := NewHandler(fake.NewSimpleClientset(), &config.Config{}, testCorrelator(), testAlertMgr)
+	h := NewHandler(
+		fake.NewSimpleClientset(),
+		&config.Config{},
+		testCorrelator(),
+		testAlertMgr,
+	)
 
 	ing := &networkingv1.Ingress{
 		ObjectMeta: metav1.ObjectMeta{Name: "ing1", Namespace: "ns1"},
@@ -45,7 +57,9 @@ func TestProcessIngressObjectNilServiceLister(t *testing.T) {
 							Backend: networkingv1.IngressBackend{
 								Service: &networkingv1.IngressServiceBackend{
 									Name: "nonexistent-svc",
-									Port: networkingv1.ServiceBackendPort{Number: 80},
+									Port: networkingv1.ServiceBackendPort{
+										Number: 80,
+									},
 								},
 							},
 						}},
@@ -61,7 +75,11 @@ func TestProcessIngressObjectNilServiceLister(t *testing.T) {
 
 func TestDetectControlPlanePodIssueCrashLoopBackOffLastTerm(t *testing.T) {
 	pod := &corev1.Pod{
-		ObjectMeta: metav1.ObjectMeta{Name: "cp-pod", Namespace: "kube-system", Labels: map[string]string{"component": "kube-apiserver"}},
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "cp-pod",
+			Namespace: "kube-system",
+			Labels:    map[string]string{"component": "kube-apiserver"},
+		},
 		Status: corev1.PodStatus{
 			Phase: corev1.PodRunning,
 			ContainerStatuses: []corev1.ContainerStatus{
@@ -92,10 +110,14 @@ func TestDetectControlPlanePodIssueCrashLoopBackOffLastTerm(t *testing.T) {
 
 func TestDetectCronJobIssueInvalidSchedule(t *testing.T) {
 	cj := &batchv1.CronJob{
-		ObjectMeta: metav1.ObjectMeta{Name: "cj1", Namespace: "ns1", CreationTimestamp: metav1.NewTime(time.Now().Add(-48 * time.Hour))},
-		Spec:       batchv1.CronJobSpec{Schedule: "invalid"},
+		ObjectMeta: metav1.ObjectMeta{
+			Name:              "cj1",
+			Namespace:         "ns1",
+			CreationTimestamp: metav1.NewTime(time.Now().Add(-48 * time.Hour)),
+		},
+		Spec: batchv1.CronJobSpec{Schedule: "invalid"},
 	}
-	sig := DetectCronJobIssue(cj)
+	sig := DetectCronJobIssue(cj, time.Now())
 	assert.NotNil(t, sig)
 	assert.Equal(t, "CronJobNotScheduled", sig.Reason)
 }
@@ -113,7 +135,12 @@ func TestProcessCronJobObjectSustainedSuspension(t *testing.T) {
 		Spec:       batchv1.CronJobSpec{Suspend: &suspend},
 	}
 	assert.NoError(t, h.ProcessCronJobObject(cj, false))
-	assert.Equal(t, 0, e.ActiveCount(), "sustained window should suppress alert")
+	assert.Equal(
+		t,
+		0,
+		e.ActiveCount(),
+		"sustained window should suppress alert",
+	)
 }
 
 // --- executePodFilters: event lister with events ---
@@ -123,12 +150,16 @@ func TestProcessCronJobInvalidSchedule(t *testing.T) {
 	client := fake.NewSimpleClientset()
 	f := informers.NewSharedInformerFactory(client, 0)
 	cj := &batchv1.CronJob{
-		ObjectMeta: metav1.ObjectMeta{Name: "cj1", Namespace: "ns1", CreationTimestamp: metav1.NewTime(time.Now().Add(-48 * time.Hour))},
-		Spec:       batchv1.CronJobSpec{Schedule: "invalid"},
+		ObjectMeta: metav1.ObjectMeta{
+			Name:              "cj1",
+			Namespace:         "ns1",
+			CreationTimestamp: metav1.NewTime(time.Now().Add(-48 * time.Hour)),
+		},
+		Spec: batchv1.CronJobSpec{Schedule: "invalid"},
 	}
 	f.Batch().V1().CronJobs().Informer().GetIndexer().Add(cj)
 	h := NewHandler(client, &config.Config{}, e, testAlertMgr)
-	h.SetCronJobLister(f.Batch().V1().CronJobs().Lister())
+	h.listers.CronJob = f.Batch().V1().CronJobs().Lister()
 	assert.NoError(t, h.ProcessCronJob("ns1/cj1", false))
 	assert.Equal(t, 1, e.ActiveCount())
 }
@@ -137,7 +168,11 @@ func TestProcessCronJobInvalidSchedule(t *testing.T) {
 
 func TestDetectControlPlanePodRunningContinue(t *testing.T) {
 	pod := &corev1.Pod{
-		ObjectMeta: metav1.ObjectMeta{Name: "cp-pod", Namespace: "kube-system", Labels: map[string]string{"component": "kube-apiserver"}},
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "cp-pod",
+			Namespace: "kube-system",
+			Labels:    map[string]string{"component": "kube-apiserver"},
+		},
 		Status: corev1.PodStatus{
 			Phase: corev1.PodRunning,
 			ContainerStatuses: []corev1.ContainerStatus{
@@ -157,9 +192,14 @@ func TestDetectControlPlanePodRunningContinue(t *testing.T) {
 // --- Unschedulable with resource requests ---
 
 func TestProcessIngressObjectWithServiceLister(t *testing.T) {
-	h := NewHandler(fake.NewSimpleClientset(), &config.Config{}, testCorrelator(), testAlertMgr)
+	h := NewHandler(
+		fake.NewSimpleClientset(),
+		&config.Config{},
+		testCorrelator(),
+		testAlertMgr,
+	)
 	f := informers.NewSharedInformerFactory(fake.NewSimpleClientset(), 0)
-	h.SetServiceLister(f.Core().V1().Services().Lister())
+	h.listers.Service = f.Core().V1().Services().Lister()
 
 	ing := &networkingv1.Ingress{
 		ObjectMeta: metav1.ObjectMeta{Name: "ing1", Namespace: "ns1"},
@@ -173,7 +213,9 @@ func TestProcessIngressObjectWithServiceLister(t *testing.T) {
 							Backend: networkingv1.IngressBackend{
 								Service: &networkingv1.IngressServiceBackend{
 									Name: "nonexistent-svc",
-									Port: networkingv1.ServiceBackendPort{Number: 80},
+									Port: networkingv1.ServiceBackendPort{
+										Number: 80,
+									},
 								},
 							},
 						}},
@@ -192,21 +234,30 @@ func TestProcessCronJobNotScheduledPath(t *testing.T) {
 	client := fake.NewSimpleClientset()
 	f := informers.NewSharedInformerFactory(client, 0)
 	cj := &batchv1.CronJob{
-		ObjectMeta: metav1.ObjectMeta{Name: "cj1", Namespace: "ns1", CreationTimestamp: metav1.NewTime(time.Now().Add(-48 * time.Hour))},
-		Spec:       batchv1.CronJobSpec{Schedule: "*/5 * * * *"},
+		ObjectMeta: metav1.ObjectMeta{
+			Name:              "cj1",
+			Namespace:         "ns1",
+			CreationTimestamp: metav1.NewTime(time.Now().Add(-48 * time.Hour)),
+		},
+		Spec: batchv1.CronJobSpec{Schedule: "*/5 * * * *"},
 	}
 	f.Batch().V1().CronJobs().Informer().GetIndexer().Add(cj)
 	h := NewHandler(client, &config.Config{}, e, testAlertMgr)
-	h.SetCronJobLister(f.Batch().V1().CronJobs().Lister())
+	h.listers.CronJob = f.Batch().V1().CronJobs().Lister()
 	assert.NoError(t, h.ProcessCronJob("ns1/cj1", false))
 	assert.Equal(t, 1, e.ActiveCount())
 }
 
-// --- Container no spec found for buildContainerHint (spec != nil false in probe section) ---
+// --- Container no spec found for buildContainerHint (spec != nil false in
+// probe section) ---
 
 func TestDetectControlPlanePodIssueCrashLoopBackOffWithLastTerm(t *testing.T) {
 	pod := &corev1.Pod{
-		ObjectMeta: metav1.ObjectMeta{Name: "cp-pod", Namespace: "kube-system", Labels: map[string]string{"component": "kube-apiserver"}},
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "cp-pod",
+			Namespace: "kube-system",
+			Labels:    map[string]string{"component": "kube-apiserver"},
+		},
 		Status: corev1.PodStatus{
 			Phase: corev1.PodRunning,
 			ContainerStatuses: []corev1.ContainerStatus{
@@ -234,11 +285,16 @@ func TestDetectControlPlanePodIssueCrashLoopBackOffWithLastTerm(t *testing.T) {
 	assert.Equal(t, "ControlPlaneComponentFailure", sig.Reason)
 }
 
-// --- DetectControlPlanePodIssue: Waiting reason fallback (ImagePullBackOff) ---
+// --- DetectControlPlanePodIssue: Waiting reason fallback (ImagePullBackOff)
+// ---
 
 func TestDetectControlPlanePodIssueWaitingFallback(t *testing.T) {
 	pod := &corev1.Pod{
-		ObjectMeta: metav1.ObjectMeta{Name: "cp-pod", Namespace: "kube-system", Labels: map[string]string{"component": "kube-scheduler"}},
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "cp-pod",
+			Namespace: "kube-system",
+			Labels:    map[string]string{"component": "kube-scheduler"},
+		},
 		Status: corev1.PodStatus{
 			Phase: corev1.PodRunning,
 			ContainerStatuses: []corev1.ContainerStatus{
