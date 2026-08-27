@@ -76,10 +76,20 @@ func TestProcessContainerIgnoreLogPatternSuppresses(t *testing.T) {
 	}
 
 	assert.NoError(t, h1.ProcessPodObject(context.Background(), pod, false))
-	assert.Equal(t, 1, e1.ActiveCount(), "control case should produce an incident")
+	assert.Equal(
+		t,
+		1,
+		e1.ActiveCount(),
+		"control case should produce an incident",
+	)
 
 	assert.NoError(t, h2.ProcessPodObject(context.Background(), pod, false))
-	assert.Equal(t, 0, e2.ActiveCount(), "log pattern suppression must skip the container")
+	assert.Equal(
+		t,
+		0,
+		e2.ActiveCount(),
+		"log pattern suppression must skip the container",
+	)
 }
 
 func TestHighRestartCountIncident(t *testing.T) {
@@ -117,10 +127,12 @@ func TestHighRestartCountIncident(t *testing.T) {
 	}
 
 	ctx := &filter.Context{
-		Ctx:    context.Background(),
-		Client: fake.NewSimpleClientset(),
-		Config: cfg,
-		Pod:    pod,
+		Sources: filter.Sources{
+			Ctx:    context.Background(),
+			Client: fake.NewSimpleClientset(),
+			Config: cfg,
+		},
+		Pod: pod,
 	}
 
 	h.executeContainersFilters(ctx)
@@ -134,7 +146,11 @@ func TestHighRestartCountIncident(t *testing.T) {
 			assert.Equal(t, "test-pod", v.Name)
 		}
 	}
-	assert.True(t, foundHighRestart, "HighRestartCount incident should be created")
+	assert.True(
+		t,
+		foundHighRestart,
+		"HighRestartCount incident should be created",
+	)
 }
 
 // highRestartRunningPod builds a currently-Running pod whose container has
@@ -179,10 +195,12 @@ func runHighRestart(t *testing.T, cfg *config.Config) *correlation.Engine {
 	})
 	h := NewHandler(fake.NewSimpleClientset(), cfg, e, testAlertMgr)
 	ctx := &filter.Context{
-		Ctx:    context.Background(),
-		Client: fake.NewSimpleClientset(),
-		Config: cfg,
-		Pod:    highRestartRunningPod("Error"),
+		Sources: filter.Sources{
+			Ctx:    context.Background(),
+			Client: fake.NewSimpleClientset(),
+			Config: cfg,
+		},
+		Pod: highRestartRunningPod("Error"),
 	}
 	h.executeContainersFilters(ctx)
 	return e
@@ -202,8 +220,13 @@ func TestHighRestartCountNotInAllowedReasonsSuppressed(t *testing.T) {
 		ContainerRestartThreshold: 3,
 		AllowedReasons:            []string{"OOMKilled"},
 	})
-	assert.Equal(t, 0, e.ActiveCount(),
-		"a last-exit reason outside the allow list must suppress the HighRestartCount alert")
+	assert.Equal(
+		t,
+		0,
+		e.ActiveCount(),
+		"a last-exit reason outside the allow list must suppress the "+
+			"HighRestartCount alert",
+	)
 }
 
 func TestHighRestartCountInAllowedReasonsFires(t *testing.T) {
@@ -211,8 +234,13 @@ func TestHighRestartCountInAllowedReasonsFires(t *testing.T) {
 		ContainerRestartThreshold: 3,
 		AllowedReasons:            []string{"Error"},
 	})
-	assert.Equal(t, 1, e.ActiveCount(),
-		"a last-exit reason in the allow list must still produce the HighRestartCount alert")
+	assert.Equal(
+		t,
+		1,
+		e.ActiveCount(),
+		"a last-exit reason in the allow list must still produce the "+
+			"HighRestartCount alert",
+	)
 }
 
 func TestHighRestartCountLogPatternSuppressed(t *testing.T) {

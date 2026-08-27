@@ -1,21 +1,17 @@
 package feishu
 
 import (
-	"bytes"
 	"encoding/json"
 	"fmt"
-	"io"
-	"net/http"
 
 	"k8s.io/klog/v2"
 
 	"github.com/abahmed/kwatch/internal/alert/util"
 	"github.com/abahmed/kwatch/internal/config"
 	"github.com/abahmed/kwatch/internal/event"
-	"github.com/abahmed/kwatch/internal/k8s"
+	"github.com/abahmed/kwatch/internal/insight"
 	"github.com/abahmed/kwatch/internal/message"
 	"github.com/abahmed/kwatch/internal/model"
-	"github.com/abahmed/kwatch/internal/ratelimit"
 )
 
 type FeiShu struct {
@@ -83,7 +79,9 @@ func (f *FeiShu) Name() string {
 
 // SendEvent sends event to the provider
 func (f *FeiShu) SendEvent(e *event.Event) error {
-	body, err := f.buildRequestBodyFeiShu(e.FormatMarkdown(f.appCfg.ClusterName, "", ""))
+	body, err := f.buildRequestBodyFeiShu(
+		e.FormatMarkdown(f.appCfg.ClusterName, "", ""),
+	)
 	if err != nil {
 		return err
 	}
@@ -91,37 +89,10 @@ func (f *FeiShu) SendEvent(e *event.Event) error {
 }
 
 func (f *FeiShu) sendByFeiShuApi(reqBody string) error {
-	client := k8s.GetDefaultClient()
-	buffer := bytes.NewBuffer([]byte(reqBody))
-	request, err := http.NewRequest(http.MethodPost, f.webhook, buffer)
-	if err != nil {
-		return err
-	}
-
-	request.Header.Set("Content-Type", "application/json")
-
-	response, err := client.Do(request)
-	if err != nil {
-		return err
-	}
-	defer response.Body.Close()
-
-	if response.StatusCode == http.StatusTooManyRequests {
-		return &ratelimit.Error{
-			Provider:   "Feishu",
-			StatusCode: http.StatusTooManyRequests,
-			RetryAfter: ratelimit.ParseRetryAfter(response),
-		}
-	}
-	if response.StatusCode != 200 {
-		body, _ := io.ReadAll(response.Body)
-		return fmt.Errorf(
-			"call to feishu alert returned status code %d: %s",
-			response.StatusCode,
-			string(body))
-	}
-
-	return nil
+	_, err := util.Send(
+		util.Request{Provider: "Feishu", URL: f.webhook, Body: []byte(reqBody)},
+	)
+	return err
 }
 
 // SendMessage sends text message to the provider
@@ -136,8 +107,28 @@ func (f *FeiShu) SendMessage(msg string) error {
 // SendIncident implements alert.ThreadProvider.
 // It renders the incident using the Report model and PlaintextRenderer,
 // producing a context-adaptive text message.
-func (f *FeiShu) SendIncident(inc *model.Incident, action model.IncidentAction) error {
-	text := util.RenderIncident(inc, action, message.NewPlainTextRenderer(), f.appCfg.ClusterName)
+func (f *FeiShu) SendIncident(
+	inc *model.Incident,
+	action model.IncidentAction,
+) error {
+	return f.SendIncidentWithInsight(inc, action, nil)
+}
+
+// SendIncidentWithInsight implements alert.InsightThreadProvider, so the
+// diagnosis — likely cause, impact, recent changes — is rendered rather than
+// dropped on the way to this provider.
+func (f *FeiShu) SendIncidentWithInsight(
+	inc *model.Incident,
+	action model.IncidentAction,
+	ins *insight.Insight,
+) error {
+	text := util.RenderIncidentWithInsight(
+		inc,
+		action,
+		ins,
+		message.NewPlainTextRenderer(),
+		f.appCfg.ClusterName,
+	)
 	if text == "" {
 		return nil
 	}

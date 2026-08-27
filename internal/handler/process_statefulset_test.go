@@ -42,13 +42,23 @@ func TestStsAvailabilityHint(t *testing.T) {
 
 func TestProcessStatefulSetObjectNil(t *testing.T) {
 	e := correlation.NewEngine(correlation.Config{Window: 10 * time.Minute})
-	h := NewHandler(fake.NewSimpleClientset(), &config.Config{}, e, testAlertMgr)
+	h := NewHandler(
+		fake.NewSimpleClientset(),
+		&config.Config{},
+		e,
+		testAlertMgr,
+	)
 	assert.NoError(t, h.ProcessStatefulSetObject(nil, false))
 }
 
 func TestProcessStatefulSetObjectDeleted(t *testing.T) {
 	e := correlation.NewEngine(correlation.Config{Window: 10 * time.Minute})
-	h := NewHandler(fake.NewSimpleClientset(), &config.Config{}, e, testAlertMgr)
+	h := NewHandler(
+		fake.NewSimpleClientset(),
+		&config.Config{},
+		e,
+		testAlertMgr,
+	)
 	ss := &appsv1.StatefulSet{
 		ObjectMeta: metav1.ObjectMeta{Name: "ss1", Namespace: "ns1"},
 	}
@@ -57,7 +67,12 @@ func TestProcessStatefulSetObjectDeleted(t *testing.T) {
 
 func TestProcessStatefulSetObjectHealthy(t *testing.T) {
 	e := correlation.NewEngine(correlation.Config{Window: 10 * time.Minute})
-	h := NewHandler(fake.NewSimpleClientset(), &config.Config{}, e, testAlertMgr)
+	h := NewHandler(
+		fake.NewSimpleClientset(),
+		&config.Config{},
+		e,
+		testAlertMgr,
+	)
 	ss := &appsv1.StatefulSet{
 		ObjectMeta: metav1.ObjectMeta{Name: "ss1", Namespace: "ns1"},
 		Status:     appsv1.StatefulSetStatus{Replicas: 3, ReadyReplicas: 3},
@@ -68,7 +83,12 @@ func TestProcessStatefulSetObjectHealthy(t *testing.T) {
 
 func TestProcessStatefulSetObjectUnavailable(t *testing.T) {
 	e := correlation.NewEngine(correlation.Config{Window: 10 * time.Minute})
-	h := NewHandler(fake.NewSimpleClientset(), &config.Config{}, e, testAlertMgr)
+	h := NewHandler(
+		fake.NewSimpleClientset(),
+		&config.Config{},
+		e,
+		testAlertMgr,
+	)
 	ss := &appsv1.StatefulSet{
 		ObjectMeta: metav1.ObjectMeta{Name: "ss1", Namespace: "ns1"},
 		Status: appsv1.StatefulSetStatus{
@@ -86,7 +106,12 @@ func TestProcessStatefulSetObjectUnavailable(t *testing.T) {
 func TestProcessStatefulSetObjectRolloutGrace(t *testing.T) {
 	e := testCorrelator()
 	now := time.Now()
-	h := NewHandler(fake.NewSimpleClientset(), &config.Config{}, e, testAlertMgr)
+	h := NewHandler(
+		fake.NewSimpleClientset(),
+		&config.Config{},
+		e,
+		testAlertMgr,
+	)
 	h.now = func() time.Time { return now }
 
 	ss := &appsv1.StatefulSet{
@@ -100,7 +125,12 @@ func TestProcessStatefulSetObjectRolloutGrace(t *testing.T) {
 	}
 	ss.Generation = 1
 	assert.NoError(t, h.ProcessStatefulSetObject(ss, false))
-	assert.Equal(t, 0, e.ActiveCount(), "should be suppressed during rollout grace")
+	assert.Equal(
+		t,
+		0,
+		e.ActiveCount(),
+		"should be suppressed during rollout grace",
+	)
 }
 
 func TestProcessStatefulSetObjectSustained(t *testing.T) {
@@ -120,39 +150,69 @@ func TestProcessStatefulSetObjectSustained(t *testing.T) {
 	}
 	ss.Generation = 1
 	assert.NoError(t, h.ProcessStatefulSetObject(ss, false))
-	assert.Equal(t, 0, e.ActiveCount(), "should be suppressed during sustained window")
+	assert.Equal(
+		t,
+		0,
+		e.ActiveCount(),
+		"should be suppressed during sustained window",
+	)
 }
 
 func TestMarkFirstUnavailableStsHit(t *testing.T) {
 	e := testCorrelator()
-	h := NewHandler(fake.NewSimpleClientset(), &config.Config{}, e, testAlertMgr)
+	h := NewHandler(
+		fake.NewSimpleClientset(),
+		&config.Config{},
+		e,
+		testAlertMgr,
+	)
 	t1 := h.markFirstUnavailableSts("ns1/ss1")
 	t2 := h.markFirstUnavailableSts("ns1/ss1")
 	assert.Equal(t, t1, t2, "second call should return existing entry")
 }
 
 func TestProcessStatefulSetInvalidKey(t *testing.T) {
-	h := NewHandler(fake.NewSimpleClientset(), &config.Config{}, testCorrelator(), testAlertMgr)
+	h := NewHandler(
+		fake.NewSimpleClientset(),
+		&config.Config{},
+		testCorrelator(),
+		testAlertMgr,
+	)
 	assert.Error(t, h.ProcessStatefulSet("a/b/c", false))
 }
 
 func TestProcessStatefulSetDeleted(t *testing.T) {
-	h := NewHandler(fake.NewSimpleClientset(), &config.Config{}, testCorrelator(), testAlertMgr)
+	h := NewHandler(
+		fake.NewSimpleClientset(),
+		&config.Config{},
+		testCorrelator(),
+		testAlertMgr,
+	)
 	assert.NoError(t, h.ProcessStatefulSet("ns1/ss1", true))
 }
 
 func TestProcessStatefulSetNotFound(t *testing.T) {
 	e := correlation.NewEngine(correlation.Config{Window: 10 * time.Minute})
-	h := NewHandler(fake.NewSimpleClientset(), &config.Config{}, e, testAlertMgr)
+	h := NewHandler(
+		fake.NewSimpleClientset(),
+		&config.Config{},
+		e,
+		testAlertMgr,
+	)
 	client := fake.NewSimpleClientset()
 	f := informers.NewSharedInformerFactory(client, 0)
-	h.SetStatefulSetLister(f.Apps().V1().StatefulSets().Lister())
+	h.listers.SS = f.Apps().V1().StatefulSets().Lister()
 	assert.NoError(t, h.ProcessStatefulSet("ns1/missing", false))
 }
 
 func TestProcessStatefulSetUnavailable(t *testing.T) {
 	e := correlation.NewEngine(correlation.Config{Window: 10 * time.Minute})
-	h := NewHandler(fake.NewSimpleClientset(), &config.Config{}, e, testAlertMgr)
+	h := NewHandler(
+		fake.NewSimpleClientset(),
+		&config.Config{},
+		e,
+		testAlertMgr,
+	)
 	ss := &appsv1.StatefulSet{
 		ObjectMeta: metav1.ObjectMeta{Name: "ss1", Namespace: "ns1"},
 		Status: appsv1.StatefulSetStatus{
@@ -166,7 +226,7 @@ func TestProcessStatefulSetUnavailable(t *testing.T) {
 	client := fake.NewSimpleClientset()
 	f := informers.NewSharedInformerFactory(client, 0)
 	f.Apps().V1().StatefulSets().Informer().GetIndexer().Add(ss)
-	h.SetStatefulSetLister(f.Apps().V1().StatefulSets().Lister())
+	h.listers.SS = f.Apps().V1().StatefulSets().Lister()
 	assert.NoError(t, h.ProcessStatefulSet("ns1/ss1", false))
 	assert.Equal(t, 1, e.ActiveCount())
 }

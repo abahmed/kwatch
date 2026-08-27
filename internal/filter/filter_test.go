@@ -25,9 +25,10 @@ func TestNamespaceFilterAllowed(t *testing.T) {
 	}
 
 	ctx := &Context{
-		Client: client,
-		Config: cfg,
-
+		Sources: Sources{
+			Client: client,
+			Config: cfg,
+		},
 		Pod: &corev1.Pod{
 			ObjectMeta: metav1.ObjectMeta{
 				Name:      "test-pod",
@@ -50,9 +51,10 @@ func TestNamespaceFilterForbidden(t *testing.T) {
 	}
 
 	ctx := &Context{
-		Client: client,
-		Config: cfg,
-
+		Sources: Sources{
+			Client: client,
+			Config: cfg,
+		},
 		Pod: &corev1.Pod{
 			ObjectMeta: metav1.ObjectMeta{
 				Name:      "test-pod",
@@ -75,9 +77,10 @@ func TestNamespaceFilterNotInAllowedList(t *testing.T) {
 	}
 
 	ctx := &Context{
-		Client: client,
-		Config: cfg,
-
+		Sources: Sources{
+			Client: client,
+			Config: cfg,
+		},
 		Pod: &corev1.Pod{
 			ObjectMeta: metav1.ObjectMeta{
 				Name:      "test-pod",
@@ -98,9 +101,10 @@ func TestNamespaceFilterNoConfig(t *testing.T) {
 	cfg := &config.Config{}
 
 	ctx := &Context{
-		Client: client,
-		Config: cfg,
-
+		Sources: Sources{
+			Client: client,
+			Config: cfg,
+		},
 		Pod: &corev1.Pod{
 			ObjectMeta: metav1.ObjectMeta{
 				Name:      "test-pod",
@@ -126,9 +130,10 @@ func TestPodNameFilter(t *testing.T) {
 	}
 
 	ctx := &Context{
-		Client: client,
-		Config: cfg,
-
+		Sources: Sources{
+			Client: client,
+			Config: cfg,
+		},
 		Pod: &corev1.Pod{
 			ObjectMeta: metav1.ObjectMeta{
 				Name:      "test-pod",
@@ -154,9 +159,10 @@ func TestPodNameFilterNoMatch(t *testing.T) {
 	}
 
 	ctx := &Context{
-		Client: client,
-		Config: cfg,
-
+		Sources: Sources{
+			Client: client,
+			Config: cfg,
+		},
 		Pod: &corev1.Pod{
 			ObjectMeta: metav1.ObjectMeta{
 				Name:      "test-pod",
@@ -177,9 +183,10 @@ func TestPodNameFilterEmptyConfig(t *testing.T) {
 	cfg := &config.Config{}
 
 	ctx := &Context{
-		Client: client,
-		Config: cfg,
-
+		Sources: Sources{
+			Client: client,
+			Config: cfg,
+		},
 		Pod: &corev1.Pod{
 			ObjectMeta: metav1.ObjectMeta{
 				Name:      "test-pod",
@@ -616,15 +623,16 @@ func TestContainerKillingFilterDisabled(t *testing.T) {
 	assert := assert.New(t)
 
 	ctx := &Context{
-		Config: &config.Config{
-			IgnoreFailedGracefulShutdown: false,
+		Sources: Sources{
+			Config: &config.Config{
+				IgnoreFailedGracefulShutdown: false,
+			},
 		},
 		Container: &ContainerContext{
 			Container: &corev1.ContainerStatus{
 				Name: "test-container",
 			},
 		},
-
 		Pod: &corev1.Pod{
 			ObjectMeta: metav1.ObjectMeta{
 				Name:      "test-pod",
@@ -642,8 +650,10 @@ func TestContainerKillingFilterNilEvents(t *testing.T) {
 	assert := assert.New(t)
 
 	ctx := &Context{
-		Config: &config.Config{
-			IgnoreFailedGracefulShutdown: true,
+		Sources: Sources{
+			Config: &config.Config{
+				IgnoreFailedGracefulShutdown: true,
+			},
 		},
 		Container: &ContainerContext{
 			Container: &corev1.ContainerStatus{
@@ -651,7 +661,6 @@ func TestContainerKillingFilterNilEvents(t *testing.T) {
 			},
 		},
 		Events: nil,
-
 		Pod: &corev1.Pod{
 			ObjectMeta: metav1.ObjectMeta{
 				Name:      "test-pod",
@@ -669,8 +678,10 @@ func TestContainerKillingFilterWaitingState(t *testing.T) {
 	assert := assert.New(t)
 
 	ctx := &Context{
-		Config: &config.Config{
-			IgnoreFailedGracefulShutdown: true,
+		Sources: Sources{
+			Config: &config.Config{
+				IgnoreFailedGracefulShutdown: true,
+			},
 		},
 		Container: &ContainerContext{
 			Container: &corev1.ContainerStatus{
@@ -683,7 +694,6 @@ func TestContainerKillingFilterWaitingState(t *testing.T) {
 			},
 		},
 		Events: &[]corev1.Event{},
-
 		Pod: &corev1.Pod{
 			ObjectMeta: metav1.ObjectMeta{
 				Name:      "test-pod",
@@ -701,8 +711,10 @@ func TestContainerKillingFilterWithKillingEvent(t *testing.T) {
 	assert := assert.New(t)
 
 	ctx := &Context{
-		Config: &config.Config{
-			IgnoreFailedGracefulShutdown: true,
+		Sources: Sources{
+			Config: &config.Config{
+				IgnoreFailedGracefulShutdown: true,
+			},
 		},
 		Container: &ContainerContext{
 			Container: &corev1.ContainerStatus{
@@ -715,7 +727,6 @@ func TestContainerKillingFilterWithKillingEvent(t *testing.T) {
 				Message: "Stopping container test-container",
 			},
 		},
-
 		Pod: &corev1.Pod{
 			ObjectMeta: metav1.ObjectMeta{
 				Name:      "test-pod",
@@ -733,8 +744,10 @@ func TestContainerKillingFilterWithOtherEvent(t *testing.T) {
 	assert := assert.New(t)
 
 	ctx := &Context{
-		Config: &config.Config{
-			IgnoreFailedGracefulShutdown: true,
+		Sources: Sources{
+			Config: &config.Config{
+				IgnoreFailedGracefulShutdown: true,
+			},
 		},
 		Container: &ContainerContext{
 			Container: &corev1.ContainerStatus{
@@ -747,7 +760,6 @@ func TestContainerKillingFilterWithOtherEvent(t *testing.T) {
 				Message: "Started container test-container",
 			},
 		},
-
 		Pod: &corev1.Pod{
 			ObjectMeta: metav1.ObjectMeta{
 				Name:      "test-pod",
@@ -765,15 +777,18 @@ func TestPodEventsFilterNotPodHasIssues(t *testing.T) {
 	assert := assert.New(t)
 
 	ctx := &Context{
-		Config: &config.Config{},
+		Sources: Sources{
+			Config: &config.Config{},
+		},
+		Findings: Findings{
+			PodHasIssues: false,
+		},
 		Events: &[]corev1.Event{
 			{
 				Type:    corev1.EventTypeWarning,
 				Message: "deleting pod",
 			},
 		},
-		PodHasIssues: false,
-
 		Pod: &corev1.Pod{
 			ObjectMeta: metav1.ObjectMeta{
 				Name:      "test-pod",
@@ -791,10 +806,13 @@ func TestPodEventsFilterNilEvents(t *testing.T) {
 	assert := assert.New(t)
 
 	ctx := &Context{
-		Config:       &config.Config{},
-		Events:       nil,
-		PodHasIssues: true,
-
+		Sources: Sources{
+			Config: &config.Config{},
+		},
+		Findings: Findings{
+			PodHasIssues: true,
+		},
+		Events: nil,
 		Pod: &corev1.Pod{
 			ObjectMeta: metav1.ObjectMeta{
 				Name:      "test-pod",
@@ -812,15 +830,18 @@ func TestPodEventsFilterWarningDeletingPod(t *testing.T) {
 	assert := assert.New(t)
 
 	ctx := &Context{
-		Config:       &config.Config{},
-		PodHasIssues: true,
+		Sources: Sources{
+			Config: &config.Config{},
+		},
+		Findings: Findings{
+			PodHasIssues: true,
+		},
 		Events: &[]corev1.Event{
 			{
 				Type:    corev1.EventTypeWarning,
 				Message: "deleting pod",
 			},
 		},
-
 		Pod: &corev1.Pod{
 			ObjectMeta: metav1.ObjectMeta{
 				Name:      "test-pod",
@@ -840,13 +861,14 @@ func TestContainerNameFilterIgnored(t *testing.T) {
 	assert := assert.New(t)
 
 	ctx := &Context{
-		Config: &config.Config{},
+		Sources: Sources{
+			Config: &config.Config{},
+		},
 		Container: &ContainerContext{
 			Container: &corev1.ContainerStatus{
 				Name: "test-container",
 			},
 		},
-
 		Pod: &corev1.Pod{
 			ObjectMeta: metav1.ObjectMeta{
 				Name:      "test-pod",
@@ -867,13 +889,14 @@ func TestContainerNameFilterNoMatch(t *testing.T) {
 	assert := assert.New(t)
 
 	ctx := &Context{
-		Config: &config.Config{},
+		Sources: Sources{
+			Config: &config.Config{},
+		},
 		Container: &ContainerContext{
 			Container: &corev1.ContainerStatus{
 				Name: "test-container",
 			},
 		},
-
 		Pod: &corev1.Pod{
 			ObjectMeta: metav1.ObjectMeta{
 				Name:      "test-pod",
@@ -894,13 +917,14 @@ func TestContainerNameFilterEmptyConfig(t *testing.T) {
 	assert := assert.New(t)
 
 	ctx := &Context{
-		Config: &config.Config{},
+		Sources: Sources{
+			Config: &config.Config{},
+		},
 		Container: &ContainerContext{
 			Container: &corev1.ContainerStatus{
 				Name: "test-container",
 			},
 		},
-
 		Pod: &corev1.Pod{
 			ObjectMeta: metav1.ObjectMeta{
 				Name:      "test-pod",
@@ -987,7 +1011,9 @@ func TestContainerReasonsFilterWaiting(t *testing.T) {
 	assert := assert.New(t)
 
 	ctx := &Context{
-		Config: &config.Config{},
+		Sources: Sources{
+			Config: &config.Config{},
+		},
 		Container: &ContainerContext{
 			Container: &corev1.ContainerStatus{
 				Name: "test-container",
@@ -999,7 +1025,6 @@ func TestContainerReasonsFilterWaiting(t *testing.T) {
 				},
 			},
 		},
-
 		Pod: &corev1.Pod{
 			ObjectMeta: metav1.ObjectMeta{
 				Name:      "test-pod",
@@ -1019,7 +1044,9 @@ func TestContainerReasonsFilterTerminated(t *testing.T) {
 	assert := assert.New(t)
 
 	ctx := &Context{
-		Config: &config.Config{},
+		Sources: Sources{
+			Config: &config.Config{},
+		},
 		Container: &ContainerContext{
 			Container: &corev1.ContainerStatus{
 				Name: "test-container",
@@ -1033,7 +1060,6 @@ func TestContainerReasonsFilterTerminated(t *testing.T) {
 				},
 			},
 		},
-
 		Pod: &corev1.Pod{
 			ObjectMeta: metav1.ObjectMeta{
 				Name:      "test-pod",
@@ -1054,7 +1080,9 @@ func TestContainerReasonsFilterCrashLoopBackOff(t *testing.T) {
 	assert := assert.New(t)
 
 	ctx := &Context{
-		Config: &config.Config{},
+		Sources: Sources{
+			Config: &config.Config{},
+		},
 		Container: &ContainerContext{
 			HasRestarts: true,
 			Container: &corev1.ContainerStatus{
@@ -1093,8 +1121,10 @@ func TestContainerReasonsFilterAllowedReason(t *testing.T) {
 	assert := assert.New(t)
 
 	ctx := &Context{
-		Config: &config.Config{
-			AllowedReasons: []string{"OOMKilled"},
+		Sources: Sources{
+			Config: &config.Config{
+				AllowedReasons: []string{"OOMKilled"},
+			},
 		},
 		Container: &ContainerContext{
 			Container: &corev1.ContainerStatus{
@@ -1106,7 +1136,6 @@ func TestContainerReasonsFilterAllowedReason(t *testing.T) {
 				},
 			},
 		},
-
 		Pod: &corev1.Pod{
 			ObjectMeta: metav1.ObjectMeta{
 				Name:      "test-pod",
@@ -1124,8 +1153,10 @@ func TestContainerReasonsFilterForbiddenReason(t *testing.T) {
 	assert := assert.New(t)
 
 	ctx := &Context{
-		Config: &config.Config{
-			ForbiddenReasons: []string{"ImagePullBackOff"},
+		Sources: Sources{
+			Config: &config.Config{
+				ForbiddenReasons: []string{"ImagePullBackOff"},
+			},
 		},
 		Container: &ContainerContext{
 			Container: &corev1.ContainerStatus{
@@ -1137,7 +1168,6 @@ func TestContainerReasonsFilterForbiddenReason(t *testing.T) {
 				},
 			},
 		},
-
 		Pod: &corev1.Pod{
 			ObjectMeta: metav1.ObjectMeta{
 				Name:      "test-pod",
@@ -1157,7 +1187,9 @@ func TestContainerReasonsFilterSameTerminatedTime(t *testing.T) {
 	now := metav1.Now()
 
 	ctx := &Context{
-		Config: &config.Config{},
+		Sources: Sources{
+			Config: &config.Config{},
+		},
 		Container: &ContainerContext{
 			LastTerminatedOn: now.Time,
 			Container: &corev1.ContainerStatus{
@@ -1193,7 +1225,9 @@ func TestContainerReasonsFilterSameReason(t *testing.T) {
 	assert := assert.New(t)
 
 	ctx := &Context{
-		Config: &config.Config{},
+		Sources: Sources{
+			Config: &config.Config{},
+		},
 		Container: &ContainerContext{
 			Reason:   "OOMKilled",
 			Msg:      "killed",
@@ -1229,9 +1263,11 @@ func TestContainerLogsFilterNoRestarts(t *testing.T) {
 	assert := assert.New(t)
 
 	ctx := &Context{
-		Client: fake.NewSimpleClientset(),
-		Config: &config.Config{
-			MaxRecentLogLines: 10,
+		Sources: Sources{
+			Client: fake.NewSimpleClientset(),
+			Config: &config.Config{
+				MaxRecentLogLines: 10,
+			},
 		},
 		Container: &ContainerContext{
 			Container: &corev1.ContainerStatus{
@@ -1244,7 +1280,6 @@ func TestContainerLogsFilterNoRestarts(t *testing.T) {
 				},
 			},
 		},
-
 		Pod: &corev1.Pod{
 			ObjectMeta: metav1.ObjectMeta{
 				Name:      "test-pod",
@@ -1262,10 +1297,12 @@ func TestContainerLogsFilterCrashLoopBackOff(t *testing.T) {
 	assert := assert.New(t)
 
 	ctx := &Context{
-		Ctx:    context.Background(),
-		Client: fake.NewSimpleClientset(),
-		Config: &config.Config{
-			MaxRecentLogLines: 10,
+		Sources: Sources{
+			Ctx:    context.Background(),
+			Client: fake.NewSimpleClientset(),
+			Config: &config.Config{
+				MaxRecentLogLines: 10,
+			},
 		},
 		Container: &ContainerContext{
 			HasRestarts: true,
@@ -1279,7 +1316,6 @@ func TestContainerLogsFilterCrashLoopBackOff(t *testing.T) {
 				},
 			},
 		},
-
 		Pod: &corev1.Pod{
 			ObjectMeta: metav1.ObjectMeta{
 				Name:      "test-pod",
@@ -1291,7 +1327,8 @@ func TestContainerLogsFilterCrashLoopBackOff(t *testing.T) {
 	filter := ContainerLogsFilter{}
 	result := filter.Execute(ctx)
 	// Should not short-circuit (return false means "don't stop processing"):
-	// with RestartCount>0 and Waiting, previousLogs=true and it attempts log fetch
+	// with RestartCount>0 and Waiting, previousLogs=true and it attempts log
+	// fetch
 	assert.False(result)
 }
 
@@ -1299,10 +1336,12 @@ func TestContainerLogsFilterWithRestarts(t *testing.T) {
 	assert := assert.New(t)
 
 	ctx := &Context{
-		Ctx:    context.Background(),
-		Client: fake.NewSimpleClientset(),
-		Config: &config.Config{
-			MaxRecentLogLines: 10,
+		Sources: Sources{
+			Ctx:    context.Background(),
+			Client: fake.NewSimpleClientset(),
+			Config: &config.Config{
+				MaxRecentLogLines: 10,
+			},
 		},
 		Container: &ContainerContext{
 			HasRestarts: true,
@@ -1314,7 +1353,6 @@ func TestContainerLogsFilterWithRestarts(t *testing.T) {
 				},
 			},
 		},
-
 		Pod: &corev1.Pod{
 			ObjectMeta: metav1.ObjectMeta{
 				Name:      "test-pod",
@@ -1336,9 +1374,11 @@ func TestContainerLogsFilterIgnoredPattern(t *testing.T) {
 		LogPatterns: []*regexp.Regexp{regexp.MustCompile("fake logs")},
 	}
 	ctx := &Context{
-		Ctx:    context.Background(),
-		Client: fake.NewSimpleClientset(),
-		Config: cfg,
+		Sources: Sources{
+			Ctx:    context.Background(),
+			Client: fake.NewSimpleClientset(),
+			Config: cfg,
+		},
 		Container: &ContainerContext{
 			Container: &corev1.ContainerStatus{
 				Name:         "test-container",
@@ -1348,7 +1388,6 @@ func TestContainerLogsFilterIgnoredPattern(t *testing.T) {
 				},
 			},
 		},
-
 		Pod: &corev1.Pod{
 			ObjectMeta: metav1.ObjectMeta{
 				Name:      "test-pod",
@@ -1371,9 +1410,11 @@ func TestPodOwnersFilterAlreadySet(t *testing.T) {
 	}
 
 	ctx := &Context{
-		Client: fake.NewSimpleClientset(),
-		Config: &config.Config{},
-		Owner:  &owner,
+		Sources: Sources{
+			Client: fake.NewSimpleClientset(),
+			Config: &config.Config{},
+		},
+		Owner: &owner,
 		Pod: &corev1.Pod{
 			ObjectMeta: metav1.ObjectMeta{
 				Name:      "test-pod",
@@ -1392,9 +1433,11 @@ func TestPodOwnersFilterNoOwnerReferences(t *testing.T) {
 	assert := assert.New(t)
 
 	ctx := &Context{
-		Client: fake.NewSimpleClientset(),
-		Config: &config.Config{},
-		Owner:  nil,
+		Sources: Sources{
+			Client: fake.NewSimpleClientset(),
+			Config: &config.Config{},
+		},
+		Owner: nil,
 		Pod: &corev1.Pod{
 			ObjectMeta: metav1.ObjectMeta{
 				Name:            "test-pod",
@@ -1414,9 +1457,11 @@ func TestPodOwnersFilterDirectOwner(t *testing.T) {
 	assert := assert.New(t)
 
 	ctx := &Context{
-		Client: fake.NewSimpleClientset(),
-		Config: &config.Config{},
-		Owner:  nil,
+		Sources: Sources{
+			Client: fake.NewSimpleClientset(),
+			Config: &config.Config{},
+		},
+		Owner: nil,
 		Pod: &corev1.Pod{
 			ObjectMeta: metav1.ObjectMeta{
 				Name:      "test-pod",
@@ -1442,9 +1487,11 @@ func TestPodOwnersFilterReplicaSet(t *testing.T) {
 	assert := assert.New(t)
 
 	ctx := &Context{
-		Client: fake.NewSimpleClientset(),
-		Config: &config.Config{},
-		Owner:  nil,
+		Sources: Sources{
+			Client: fake.NewSimpleClientset(),
+			Config: &config.Config{},
+		},
+		Owner: nil,
 		Pod: &corev1.Pod{
 			ObjectMeta: metav1.ObjectMeta{
 				Name:      "test-pod",
@@ -1462,16 +1509,20 @@ func TestPodOwnersFilterReplicaSet(t *testing.T) {
 	filter := PodOwnersFilter{}
 	result := filter.Execute(ctx)
 	assert.False(result)
-	assert.Nil(ctx.Owner, "owner should remain nil when ReplicaSet API lookup fails")
+	assert.Nil(
+		ctx.Owner,
+		"owner should remain nil when ReplicaSet API lookup fails",
+	)
 }
 
 func TestPodStatusFilterSucceeded(t *testing.T) {
 	assert := assert.New(t)
 
 	ctx := &Context{
-		Client: fake.NewSimpleClientset(),
-		Config: &config.Config{},
-
+		Sources: Sources{
+			Client: fake.NewSimpleClientset(),
+			Config: &config.Config{},
+		},
 		Pod: &corev1.Pod{
 			ObjectMeta: metav1.ObjectMeta{
 				Name:      "test-pod",
@@ -1494,10 +1545,11 @@ func TestPodStatusFilterAddedWithNoConditions(t *testing.T) {
 	assert := assert.New(t)
 
 	ctx := &Context{
-		Client: fake.NewSimpleClientset(),
-		Config: &config.Config{},
+		Sources: Sources{
+			Client: fake.NewSimpleClientset(),
+			Config: &config.Config{},
+		},
 		EvType: "Added",
-
 		Pod: &corev1.Pod{
 			ObjectMeta: metav1.ObjectMeta{
 				Name:      "test-pod",
@@ -1520,9 +1572,10 @@ func TestPodStatusFilterPodCompleted(t *testing.T) {
 	assert := assert.New(t)
 
 	ctx := &Context{
-		Client: fake.NewSimpleClientset(),
-		Config: &config.Config{},
-
+		Sources: Sources{
+			Client: fake.NewSimpleClientset(),
+			Config: &config.Config{},
+		},
 		Pod: &corev1.Pod{
 			ObjectMeta: metav1.ObjectMeta{
 				Name:      "test-pod",
@@ -1551,9 +1604,10 @@ func TestPodStatusFilterPodReady(t *testing.T) {
 	assert := assert.New(t)
 
 	ctx := &Context{
-		Client: fake.NewSimpleClientset(),
-		Config: &config.Config{},
-
+		Sources: Sources{
+			Client: fake.NewSimpleClientset(),
+			Config: &config.Config{},
+		},
 		Pod: &corev1.Pod{
 			ObjectMeta: metav1.ObjectMeta{
 				Name:      "test-pod",
@@ -1582,9 +1636,10 @@ func TestPodStatusFilterContainersNotReady(t *testing.T) {
 	assert := assert.New(t)
 
 	ctx := &Context{
-		Client: fake.NewSimpleClientset(),
-		Config: &config.Config{},
-
+		Sources: Sources{
+			Client: fake.NewSimpleClientset(),
+			Config: &config.Config{},
+		},
 		Pod: &corev1.Pod{
 			ObjectMeta: metav1.ObjectMeta{
 				Name:      "test-pod",
@@ -1612,9 +1667,10 @@ func TestPodStatusFilterPodNotScheduled(t *testing.T) {
 	assert := assert.New(t)
 
 	ctx := &Context{
-		Client: fake.NewSimpleClientset(),
-		Config: &config.Config{},
-
+		Sources: Sources{
+			Client: fake.NewSimpleClientset(),
+			Config: &config.Config{},
+		},
 		Pod: &corev1.Pod{
 			ObjectMeta: metav1.ObjectMeta{
 				Name:      "test-pod",
@@ -1645,9 +1701,10 @@ func TestPodStatusFilterContainersReadyFalse(t *testing.T) {
 	assert := assert.New(t)
 
 	ctx := &Context{
-		Client: fake.NewSimpleClientset(),
-		Config: &config.Config{},
-
+		Sources: Sources{
+			Client: fake.NewSimpleClientset(),
+			Config: &config.Config{},
+		},
 		Pod: &corev1.Pod{
 			ObjectMeta: metav1.ObjectMeta{
 				Name:      "test-pod",
@@ -1679,11 +1736,12 @@ func TestPodStatusFilterAllowedReason(t *testing.T) {
 	assert := assert.New(t)
 
 	ctx := &Context{
-		Client: fake.NewSimpleClientset(),
-		Config: &config.Config{
-			AllowedReasons: []string{"OOMKilled"},
+		Sources: Sources{
+			Client: fake.NewSimpleClientset(),
+			Config: &config.Config{
+				AllowedReasons: []string{"OOMKilled"},
+			},
 		},
-
 		Pod: &corev1.Pod{
 			ObjectMeta: metav1.ObjectMeta{
 				Name:      "test-pod",
@@ -1712,11 +1770,12 @@ func TestPodStatusFilterForbiddenReason(t *testing.T) {
 	assert := assert.New(t)
 
 	ctx := &Context{
-		Client: fake.NewSimpleClientset(),
-		Config: &config.Config{
-			ForbiddenReasons: []string{"Unschedulable"},
+		Sources: Sources{
+			Client: fake.NewSimpleClientset(),
+			Config: &config.Config{
+				ForbiddenReasons: []string{"Unschedulable"},
+			},
 		},
-
 		Pod: &corev1.Pod{
 			ObjectMeta: metav1.ObjectMeta{
 				Name:      "test-pod",
@@ -1745,12 +1804,16 @@ func TestPendingPodFilterNewPod(t *testing.T) {
 	assert := assert.New(t)
 
 	ctx := &Context{
-		Config: &config.Config{},
+		Sources: Sources{
+			Config: &config.Config{},
+		},
 		Pod: &corev1.Pod{
 			ObjectMeta: metav1.ObjectMeta{
-				Name:              "test-pod",
-				Namespace:         "default",
-				CreationTimestamp: metav1.NewTime(time.Now().Add(-1 * time.Minute)),
+				Name:      "test-pod",
+				Namespace: "default",
+				CreationTimestamp: metav1.NewTime(
+					time.Now().Add(-1 * time.Minute),
+				),
 			},
 			Status: corev1.PodStatus{
 				Phase: corev1.PodPending,
@@ -1768,12 +1831,16 @@ func TestPendingPodFilterOldPodNoWatchStart(t *testing.T) {
 	assert := assert.New(t)
 
 	ctx := &Context{
-		Config: &config.Config{},
+		Sources: Sources{
+			Config: &config.Config{},
+		},
 		Pod: &corev1.Pod{
 			ObjectMeta: metav1.ObjectMeta{
-				Name:              "test-pod",
-				Namespace:         "default",
-				CreationTimestamp: metav1.NewTime(time.Now().Add(-1 * time.Hour)),
+				Name:      "test-pod",
+				Namespace: "default",
+				CreationTimestamp: metav1.NewTime(
+					time.Now().Add(-1 * time.Hour),
+				),
 			},
 			Status: corev1.PodStatus{
 				Phase: corev1.PodPending,
@@ -1800,14 +1867,18 @@ func TestPendingPodFilterRestartGracePeriod(t *testing.T) {
 
 	watchStart := time.Now().Add(-1 * time.Minute)
 	ctx := &Context{
-		Config: &config.Config{
-			WatchStartTime: watchStart,
+		Sources: Sources{
+			Config: &config.Config{
+				WatchStartTime: watchStart,
+			},
 		},
 		Pod: &corev1.Pod{
 			ObjectMeta: metav1.ObjectMeta{
-				Name:              "test-pod",
-				Namespace:         "default",
-				CreationTimestamp: metav1.NewTime(time.Now().Add(-24 * time.Hour)),
+				Name:      "test-pod",
+				Namespace: "default",
+				CreationTimestamp: metav1.NewTime(
+					time.Now().Add(-24 * time.Hour),
+				),
 			},
 			Status: corev1.PodStatus{
 				Phase: corev1.PodPending,
@@ -1815,7 +1886,8 @@ func TestPendingPodFilterRestartGracePeriod(t *testing.T) {
 		},
 	}
 
-	// With 5min threshold and only 1min since watch start, the filter should skip
+	// With 5min threshold and only 1min since watch start, the filter should
+	// skip
 	filter := PendingPodFilter{Threshold: 5 * time.Minute}
 	result := filter.Execute(ctx)
 	assert.False(result)
@@ -1827,14 +1899,18 @@ func TestPendingPodFilterRestartAfterGracePeriod(t *testing.T) {
 
 	watchStart := time.Now().Add(-10 * time.Minute)
 	ctx := &Context{
-		Config: &config.Config{
-			WatchStartTime: watchStart,
+		Sources: Sources{
+			Config: &config.Config{
+				WatchStartTime: watchStart,
+			},
 		},
 		Pod: &corev1.Pod{
 			ObjectMeta: metav1.ObjectMeta{
-				Name:              "test-pod",
-				Namespace:         "default",
-				CreationTimestamp: metav1.NewTime(time.Now().Add(-24 * time.Hour)),
+				Name:      "test-pod",
+				Namespace: "default",
+				CreationTimestamp: metav1.NewTime(
+					time.Now().Add(-24 * time.Hour),
+				),
 			},
 			Status: corev1.PodStatus{
 				Phase: corev1.PodPending,
@@ -1861,10 +1937,14 @@ func TestPodStatusFilterAlreadyKnown(t *testing.T) {
 	assert := assert.New(t)
 
 	ctx := &Context{
-		Client:       fake.NewSimpleClientset(),
-		Config:       &config.Config{},
-		PodHasIssues: true,
-		PodLastState: &model.ContainerState{},
+		Sources: Sources{
+			Client: fake.NewSimpleClientset(),
+			Config: &config.Config{},
+		},
+		Findings: Findings{
+			PodHasIssues: true,
+			PodLastState: &model.ContainerState{},
+		},
 		Pod: &corev1.Pod{
 			ObjectMeta: metav1.ObjectMeta{
 				Name:      "test-pod",
@@ -1893,9 +1973,10 @@ func TestPodStatusFilterPodReadyToStartContainersFalse(t *testing.T) {
 	assert := assert.New(t)
 
 	ctx := &Context{
-		Client: fake.NewSimpleClientset(),
-		Config: &config.Config{},
-
+		Sources: Sources{
+			Client: fake.NewSimpleClientset(),
+			Config: &config.Config{},
+		},
 		Pod: &corev1.Pod{
 			ObjectMeta: metav1.ObjectMeta{
 				Name:      "test-pod",
@@ -1927,8 +2008,10 @@ func TestContainerLogsFilterContainerStatusUnknown(t *testing.T) {
 	assert := assert.New(t)
 
 	ctx := &Context{
-		Client: fake.NewSimpleClientset(),
-		Config: &config.Config{},
+		Sources: Sources{
+			Client: fake.NewSimpleClientset(),
+			Config: &config.Config{},
+		},
 		Container: &ContainerContext{
 			Container: &corev1.ContainerStatus{
 				Name:         "test-container",
@@ -1967,9 +2050,11 @@ func TestPodOwnersFilterStatefulSet(t *testing.T) {
 	client := fake.NewSimpleClientset(sts)
 
 	ctx := &Context{
-		Client: client,
-		Config: &config.Config{},
-		Owner:  nil,
+		Sources: Sources{
+			Client: client,
+			Config: &config.Config{},
+		},
+		Owner: nil,
 		Pod: &corev1.Pod{
 			ObjectMeta: metav1.ObjectMeta{
 				Name:      "my-sts-0",

@@ -46,12 +46,18 @@ func (e *DefaultEnricher) Enrich(ev *event.Event, inc *model.Incident) {
 	} else {
 		inc.Hint = hintForReason(ev.Reason)
 	}
+	if !ev.Facts.IsZero() {
+		inc.Facts = ev.Facts
+	}
 	// CD-3: signature-based hints for common patterns
 	if sh := SignatureHint(ev.Logs); sh != "" {
 		inc.Hint = combineHints(inc.Hint, sh)
 	}
 	inc.Logs = ev.Logs
 	inc.Events = ev.Events
+	// Remember which replica this evidence came from; the incident is keyed by
+	// owner and will outlive it.
+	inc.EvidencePod = ev.PodName
 	inc.IncludeEvents = ev.IncludeEvents
 	inc.IncludeLogs = ev.IncludeLogs
 	newSev := ev.Severity
@@ -67,7 +73,9 @@ func (e *DefaultEnricher) Enrich(ev *event.Event, inc *model.Incident) {
 	}
 }
 
-func (e *DefaultEnricher) resolveSeverity(ownerKind, reason string) model.Severity {
+func (e *DefaultEnricher) resolveSeverity(
+	ownerKind, reason string,
+) model.Severity {
 	if e.SeverityByReason != nil {
 		if s, ok := lookupCaseInsensitive(e.SeverityByReason, reason); ok {
 			return model.NormalizeSeverity(s)
@@ -77,7 +85,10 @@ func (e *DefaultEnricher) resolveSeverity(ownerKind, reason string) model.Severi
 		return model.NormalizeSeverity(s)
 	}
 	if e.SeverityByOwnerKind != nil {
-		if s, ok := lookupCaseInsensitive(e.SeverityByOwnerKind, ownerKind); ok {
+		if s, ok := lookupCaseInsensitive(
+			e.SeverityByOwnerKind,
+			ownerKind,
+		); ok {
 			return model.NormalizeSeverity(s)
 		}
 		if s, ok := e.SeverityByOwnerKind["default"]; ok {

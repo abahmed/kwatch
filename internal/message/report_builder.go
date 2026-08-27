@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/abahmed/kwatch/internal/constant"
+	"github.com/abahmed/kwatch/internal/format"
 	"github.com/abahmed/kwatch/internal/insight"
 	"github.com/abahmed/kwatch/internal/model"
 )
@@ -15,17 +16,26 @@ import (
 // to the incident's reason are populated.
 type ReportBuilder struct {
 	cluster string
+	// now is the clock change ages are measured against; injectable for
+	// deterministic tests.
+	now func() time.Time
 }
 
 // NewReportBuilder returns a ReportBuilder with the given cluster name.
 func NewReportBuilder(cluster string) *ReportBuilder {
 	return &ReportBuilder{
 		cluster: cluster,
+		now:     time.Now,
 	}
 }
 
-// Build produces a Report from the given incident, action, and optional insight.
-func (rb *ReportBuilder) Build(inc *model.Incident, action model.IncidentAction, ins *insight.Insight) *Report {
+// Build produces a Report from the given incident, action, and optional
+// insight.
+func (rb *ReportBuilder) Build(
+	inc *model.Incident,
+	action model.IncidentAction,
+	ins *insight.Insight,
+) *Report {
 	r := &Report{
 		Action:    actionString(action),
 		Reason:    inc.Reason,
@@ -49,7 +59,10 @@ func (rb *ReportBuilder) Build(inc *model.Incident, action model.IncidentAction,
 	return r
 }
 
-func (rb *ReportBuilder) buildSummary(inc *model.Incident, action model.IncidentAction) SummarySection {
+func (rb *ReportBuilder) buildSummary(
+	inc *model.Incident,
+	action model.IncidentAction,
+) SummarySection {
 	return SummarySection{
 		Emoji:    actionEmoji(action, inc.Severity),
 		Duration: durationStr(inc.FirstSeen, inc.LastSeen),
@@ -67,16 +80,17 @@ func (rb *ReportBuilder) populateIdentity(r *Report, inc *model.Incident) {
 
 	// Node issues: only node identity
 	if inc.Resource == "node" {
-		r.Identity = &IdentitySection{Node: inc.Name}
+		r.Identity = &IdentitySection{Node: format.ShortNode(inc.Name)}
 		return
 	}
 
 	// Pod/container issues
-	if inc.Resource == "pod" && inc.ContainerName != "" && inc.ContainerName != "." {
+	if inc.Resource == "pod" && inc.ContainerName != "" &&
+		inc.ContainerName != "." {
 		r.Identity = &IdentitySection{
 			Container: inc.ContainerName,
-			Image:     inc.Image,
-			Node:      inc.NodeName,
+			Image:     format.ShortImage(inc.Image),
+			Node:      format.ShortNode(inc.NodeName),
 			OwnerKind: inc.OwnerKind,
 		}
 		return
@@ -84,7 +98,7 @@ func (rb *ReportBuilder) populateIdentity(r *Report, inc *model.Incident) {
 
 	// Workload issues (deployment, statefulset, etc.)
 	r.Identity = &IdentitySection{
-		Node:      inc.NodeName,
+		Node:      format.ShortNode(inc.NodeName),
 		OwnerKind: inc.OwnerKind,
 	}
 }
@@ -108,16 +122,84 @@ func (rb *ReportBuilder) populateState(r *Report, inc *model.Incident) {
 	}
 }
 
-func (rb *ReportBuilder) populateDiagnosis(r *Report, inc *model.Incident, ins *insight.Insight) {
+func (rb *ReportBuilder) populateDiagnosis(
+	r *Report,
+	inc *model.Incident,
+	ins *insight.Insight,
+) {
 	d := &DiagnosisSection{
-		Hint: inc.Hint,
+		Hint: dedupeHint(inc.Hint, r.Name, r.Summary.Label, stateMessage(inc)),
 	}
 	if ins != nil {
 		d.Cause = ins.Cause
 		d.Impact = ins.Impact
 		d.Pattern = ins.Pattern
 	}
+	// Topology the correlation engine resolved from live Service selectors.
+	// It is impact, and belongs with the rest of the impact.
+	if d.Impact == "" && len(inc.AffectedServices) > 0 {
+		label := "service"
+		if len(inc.AffectedServices) > 1 {
+			label = "services"
+		}
+		d.Impact = "affects " + label + " " + format.JoinNames(
+			inc.AffectedServices,
+			4,
+		)
+	}
+	if inc.OwnerUnhealthy && inc.OwnerKind != "" && d.Cause == "" {
+		d.Cause = fmt.Sprintf(
+			"owning %s is unhealthy — this looks like a rollout, not an "+
+				"isolated crash",
+			inc.OwnerKind,
+		)
+		d.Pattern = "rollout_failure"
+	}
 	r.Diagnosis = d
+}
+
+func stateMessage(inc *model.Incident) string {
+	if inc.LastContainerState == nil {
+		return ""
+	}
+	return inc.LastContainerState.Msg
+}
+
+// dedupeHint removes hint fragments that merely repeat text shown elsewhere
+// in the message: the incident's own name, its human label, or the state
+// message. The hint is for what is *not* already on screen.
+func dedupeHint(hint string, shown ...string) string {
+	if strings.TrimSpace(hint) == "" {
+		return ""
+	}
+	var keep []string
+	seen := make(map[string]bool)
+	for _, frag := range strings.Split(hint, "; ") {
+		frag = strings.TrimSpace(
+			strings.TrimRight(strings.TrimSpace(frag), "—-;: "),
+		)
+		if frag == "" || seen[frag] {
+			continue
+		}
+		redundant := false
+		for _, sh := range shown {
+			sh = strings.TrimSpace(sh)
+			if sh == "" {
+				continue
+			}
+			if frag == sh || strings.Contains(sh, frag) ||
+				strings.HasPrefix(frag, sh) {
+				redundant = true
+				break
+			}
+		}
+		if redundant {
+			continue
+		}
+		seen[frag] = true
+		keep = append(keep, frag)
+	}
+	return strings.Join(keep, "; ")
 }
 
 func (rb *ReportBuilder) populateEvidence(r *Report, inc *model.Incident) {
@@ -158,6 +240,7 @@ func (rb *ReportBuilder) populateChanges(r *Report, ins *insight.Insight) {
 			Resource:  c.Resource,
 			Reference: ref,
 			Type:      fmt.Sprintf("%v", c.Type),
+			Age:       ageOf(c.Timestamp, rb.now()),
 		})
 	}
 
@@ -175,27 +258,31 @@ func (rb *ReportBuilder) populateSuppressed(r *Report, inc *model.Incident) {
 	}
 	r.SuppressedPods = inc.SuppressedPods
 	for _, ps := range inc.SuppressedPodSummaries {
-		r.SuppressedPodSummaries = append(r.SuppressedPodSummaries, PodSummaryEntry{
-			Namespace:    ps.Namespace,
-			PodName:      ps.PodName,
-			Reason:       ps.Reason,
-			RestartCount: ps.RestartCount,
-		})
+		r.SuppressedPodSummaries = append(
+			r.SuppressedPodSummaries,
+			PodSummaryEntry{
+				Namespace:    ps.Namespace,
+				PodName:      ps.PodName,
+				Reason:       ps.Reason,
+				RestartCount: ps.RestartCount,
+			},
+		)
 	}
 }
 
 func (rb *ReportBuilder) populateTypeSpecific(r *Report, inc *model.Incident) {
 	reason := inc.Reason
 
+	facts := inc.Facts
 	switch {
-	case reason == constant.ReasonOOMKilled || reason == constant.ReasonOOMRepeating:
-		leakCount, windowMin := extractOOMLeakStats(inc.Hint)
+	case reason == constant.ReasonOOMKilled ||
+		reason == constant.ReasonOOMRepeating:
 		r.OOM = &OOMSection{
-			MemoryLimit: extractMemoryLimit(inc),
-			Timeline:    extractOOMTimeline(inc),
-			IsLeak:      strings.Contains(inc.Hint, "memory leak"),
-			LeakCount:   leakCount,
-			WindowMin:   windowMin,
+			MemoryLimit: facts.MemoryLimit,
+			Timeline:    facts.OOMTimeline,
+			IsLeak:      facts.MemoryLeak,
+			LeakCount:   facts.OOMCount,
+			WindowMin:   facts.OOMWindowMin,
 		}
 		// Hide exit code (always 137) and image (irrelevant for OOM)
 		if r.State != nil {
@@ -205,10 +292,11 @@ func (rb *ReportBuilder) populateTypeSpecific(r *Report, inc *model.Incident) {
 			r.Identity.Image = ""
 		}
 
-	case reason == constant.ReasonImagePullBackOff || reason == constant.ReasonErrImagePull:
+	case reason == constant.ReasonImagePullBackOff ||
+		reason == constant.ReasonErrImagePull:
 		r.Image = &ImageSection{
-			RegistryHint: extractRegistryHint(inc),
-			PullSecrets:  extractPullSecrets(inc),
+			RegistryHint: registryHint(inc),
+			PullSecrets:  facts.PullSecretsSet,
 		}
 		// Clear logs (container never started), keep events
 		if r.Evidence != nil {
@@ -218,16 +306,20 @@ func (rb *ReportBuilder) populateTypeSpecific(r *Report, inc *model.Incident) {
 			r.State.ExitCode = 0
 		}
 
-	case reason == constant.ReasonLivenessProbeFailed || reason == constant.ReasonReadinessProbeFailed || reason == constant.ReasonStartupProbeFailed:
+	case reason == constant.ReasonLivenessProbeFailed ||
+		reason == constant.ReasonReadinessProbeFailed ||
+		reason == constant.ReasonStartupProbeFailed:
 		r.Probe = &ProbeSection{
 			ProbeType: probeTypeFromReason(reason),
-			Endpoint:  extractProbeEndpoint(inc),
+			Endpoint:  facts.ProbeEndpoint,
 		}
 
 	case reason == constant.ReasonUnschedulable || reason == "Pending":
 		r.Pending = &PendingSection{
-			Delay:            extractSchedulingDelay(inc),
-			ResourceRequests: extractResourceRequestStrings(inc),
+			ResourceRequests: facts.ResourceRequests,
+		}
+		if facts.SchedulingDelay > 0 {
+			r.Pending.Delay = format.Duration(facts.SchedulingDelay)
 		}
 		// No container identity or evidence for pending pods
 		r.Identity = nil
@@ -236,6 +328,15 @@ func (rb *ReportBuilder) populateTypeSpecific(r *Report, inc *model.Incident) {
 }
 
 // --- Helpers ---
+
+// registryHint is the kubelet's own message for an image-pull failure, e.g.
+// `Back-off pulling image "ghcr.io/x/y:v2"` — the most specific thing we know.
+func registryHint(inc *model.Incident) string {
+	if inc.LastContainerState == nil {
+		return ""
+	}
+	return inc.LastContainerState.Msg
+}
 
 func durationStr(first, last time.Time) string {
 	d := last.Sub(first).Round(time.Minute)
@@ -268,6 +369,8 @@ func actionEmoji(action model.IncidentAction, severity model.Severity) string {
 	case model.ActionUpdate:
 		return "🔄"
 	default:
+		// Red is reserved for critical. A normal alert that shows the same
+		// colour as a critical one teaches readers to ignore the colour.
 		switch severity {
 		case model.SeverityCritical:
 			return "🔴"
@@ -276,7 +379,7 @@ func actionEmoji(action model.IncidentAction, severity model.Severity) string {
 		case model.SeverityWarning, model.SeverityMedium:
 			return "🟡"
 		default:
-			return "🔴"
+			return "🔵"
 		}
 	}
 }
@@ -293,38 +396,101 @@ func probeTypeFromReason(reason string) string {
 	return "probe"
 }
 
+// reasonLabels maps a Kubernetes reason code to the phrase a person would use
+// for it. The code stays visible on the headline for searching; this is what
+// the reader parses first.
+var reasonLabels = map[string]string{
+	constant.ReasonOOMKilled:            "Out of memory",
+	constant.ReasonCrashLoopBackOff:     "Container keeps crashing",
+	constant.ReasonImagePullBackOff:     "Failed to download image",
+	constant.ReasonErrImagePull:         "Failed to download image",
+	constant.ReasonLivenessProbeFailed:  "Health check failed",
+	constant.ReasonReadinessProbeFailed: "Not ready for traffic",
+	constant.ReasonStartupProbeFailed:   "Startup check failed",
+	constant.ReasonUnschedulable:        "No capacity available",
+	"Pending":                           "Waiting for resources",
+	constant.ReasonNodeNotReady:         "Node is not ready",
+	constant.ReasonBackOff:              "Backing off after crash",
+	constant.ReasonError:                "Container error",
+	constant.ReasonHighRestartCount:     "Frequent restarts",
+	constant.ReasonInitContainerError:   "Init container failed",
+	constant.ReasonOOMRepeating:         "Repeated out of memory",
+	constant.ReasonEvicted:              "Pod was evicted",
+	constant.ReasonContainersNotReady:   "Pod not ready",
+
+	// workloads
+	constant.ReasonDeploymentUnavailable: "Deployment below desired replicas",
+
+	constant.ReasonDaemonSetUnavailable: "DaemonSet below desired replicas",
+
+	constant.ReasonStsUnavailable: "StatefulSet below desired replicas",
+
+	constant.ReasonProgressDeadlineExceeded: "Rollout stuck",
+
+	constant.ReasonHPAMaxedOut: "Autoscaler pinned at max replicas",
+
+	constant.ReasonHPAScalingError:     "Autoscaler cannot scale",
+	constant.ReasonJobFailed:           "Job failed",
+	constant.ReasonJobSuspended:        "Job suspended",
+	constant.ReasonCronJobSuspended:    "CronJob suspended",
+	constant.ReasonCronJobNotScheduled: "CronJob missed its schedule",
+	constant.ReasonPdbViolation:        "Disruption budget violated",
+
+	// networking
+	constant.ReasonServiceNoEndpoints:     "Service has no healthy backends",
+	constant.ReasonIngressBackendNotFound: "Ingress points at missing service",
+	constant.ReasonWebhookBackendNotFound: "Admission webhook has no backend",
+	constant.ReasonTLSCertExpired:         "TLS certificate expired",
+	constant.ReasonTLSCertExpiringSoon:    "TLS certificate expiring soon",
+
+	// cluster
+	constant.ReasonControlPlaneComponentFailure: "Control-plane component failing",
+
+	constant.ReasonVolumeUsageHigh:      "Volume running out of space",
+	constant.ReasonNodeResourceHigh:     "Node overcommitted",
+	constant.ReasonNodeResourceCritical: "Node overcommitted",
+	constant.ReasonMemoryPressure:       "Node under memory pressure",
+	constant.ReasonNodeMemoryPressure:   "Node under memory pressure",
+	constant.ReasonDiskPressure:         "Node under disk pressure",
+	constant.ReasonPIDPressure:          "Node out of process IDs",
+	constant.ReasonNetworkUnavailable:   "Node network unavailable",
+	constant.ReasonContainerCannotRun:   "Container cannot start",
+	constant.ReasonCreateContainerError: "Container cannot start",
+	constant.ReasonCreateConfigError:    "Missing ConfigMap or Secret",
+	constant.ReasonDeadlineExceeded:     "Ran past its deadline",
+	constant.ReasonImageInspectError:    "Invalid image reference",
+	constant.ReasonInvalidImageName:     "Invalid image reference",
+	constant.ReasonSandboxError:         "Pod sandbox failed",
+	constant.ReasonPreempting:           "Pod preempted",
+
+	constant.ReasonPreExistingAtStartup: "Already broken when kwatch started",
+}
+
+// reasonLabel returns the human phrase for a reason, or the reason itself
+// when there is none.
 func reasonLabel(reason string) string {
-	switch reason {
-	case constant.ReasonOOMKilled:
-		return "Out of memory"
-	case constant.ReasonCrashLoopBackOff:
-		return "Container keeps crashing"
-	case constant.ReasonImagePullBackOff, constant.ReasonErrImagePull:
-		return "Failed to download image"
-	case constant.ReasonLivenessProbeFailed:
-		return "Health check failed"
-	case constant.ReasonReadinessProbeFailed:
-		return "Not ready for traffic"
-	case constant.ReasonStartupProbeFailed:
-		return "Startup check failed"
-	case constant.ReasonUnschedulable:
-		return "No capacity available"
-	case "Pending":
-		return "Waiting for resources"
-	case constant.ReasonNodeNotReady:
-		return "Node is not ready"
-	case constant.ReasonBackOff:
-		return "Backing off after crash"
-	case constant.ReasonError:
-		return "Container error"
-	case constant.ReasonHighRestartCount:
-		return "Frequent restarts"
-	case constant.ReasonInitContainerError:
-		return "Init container failed"
-	case constant.ReasonOOMRepeating:
-		return "Repeated out of memory"
-	case constant.ReasonEvicted:
-		return "Pod was evicted"
+	if label, ok := reasonLabels[reason]; ok {
+		return label
 	}
 	return reason
+}
+
+// ageOf renders how long ago t was, coarsely — "40s", "3m", "2h". Empty for
+// the zero time.
+func ageOf(t, now time.Time) string {
+	if t.IsZero() {
+		return ""
+	}
+	d := now.Sub(t)
+	if d < 0 {
+		d = 0
+	}
+	switch {
+	case d < time.Minute:
+		return fmt.Sprintf("%ds", int(d.Seconds()))
+	case d < time.Hour:
+		return fmt.Sprintf("%dm", int(d.Minutes()))
+	default:
+		return fmt.Sprintf("%dh", int(d.Hours()))
+	}
 }

@@ -32,14 +32,19 @@ func (h *handler) ProcessCronJob(key string, deleted bool) error {
 		return nil
 	}
 
-	cj, err := h.listers.cronJob.CronJobs(namespace).Get(name)
+	cj, err := h.listers.CronJob.CronJobs(namespace).Get(name)
 	if err != nil {
 		if errors.IsNotFound(err) {
 			h.clearFirstSuspendedCJ(namespace + "/" + name)
 			h.correlator.ResolveByResource("cronjob", namespace+"/"+name)
 			return nil
 		}
-		return fmt.Errorf("failed to get cronjob %s/%s from cache: %w", namespace, name, err)
+		return fmt.Errorf(
+			"failed to get cronjob %s/%s from cache: %w",
+			namespace,
+			name,
+			err,
+		)
 	}
 
 	return h.ProcessCronJobObject(cj, false)
@@ -47,7 +52,7 @@ func (h *handler) ProcessCronJob(key string, deleted bool) error {
 
 // DetectCronJobIssue returns a Signal if the CronJob has a problem
 // (suspended or not scheduled). Used for baseline seeding at startup.
-func DetectCronJobIssue(cj *batchv1.CronJob) *event.Signal {
+func DetectCronJobIssue(cj *batchv1.CronJob, now time.Time) *event.Signal {
 	if cj.Spec.Suspend != nil && *cj.Spec.Suspend {
 		return &event.Signal{
 			Resource:  "cronjob",
@@ -58,14 +63,22 @@ func DetectCronJobIssue(cj *batchv1.CronJob) *event.Signal {
 		}
 	}
 
-	nextExpected := NextFireAfter(cj.Spec.Schedule, cj.Status.LastScheduleTime, cj.CreationTimestamp.Time, cj.Spec.TimeZone)
+	nextExpected := NextFireAfter(
+		cj.Spec.Schedule,
+		cj.Status.LastScheduleTime,
+		cj.CreationTimestamp.Time,
+		cj.Spec.TimeZone,
+	)
 	if nextExpected.IsZero() {
-		nextExpected = DefaultNextFire(cj.Status.LastScheduleTime, cj.CreationTimestamp.Time)
+		nextExpected = DefaultNextFire(
+			cj.Status.LastScheduleTime,
+			cj.CreationTimestamp.Time,
+		)
 	}
 
 	threshold := nextExpected.Add(DefaultCronNotScheduledGrace)
 
-	if time.Now().After(threshold) {
+	if now.After(threshold) {
 		return &event.Signal{
 			Resource:  "cronjob",
 			Reason:    constant.ReasonCronJobNotScheduled,
@@ -78,7 +91,10 @@ func DetectCronJobIssue(cj *batchv1.CronJob) *event.Signal {
 	return nil
 }
 
-func (h *handler) ProcessCronJobObject(cj *batchv1.CronJob, deleted bool) error {
+func (h *handler) ProcessCronJobObject(
+	cj *batchv1.CronJob,
+	deleted bool,
+) error {
 	if cj == nil {
 		return nil
 	}
@@ -90,13 +106,15 @@ func (h *handler) ProcessCronJobObject(cj *batchv1.CronJob, deleted bool) error 
 	}
 
 	key := cj.Namespace + "/" + cj.Name
-	sig := DetectCronJobIssue(cj)
+	sig := DetectCronJobIssue(cj, h.now())
 
 	if sig != nil && sig.Reason == constant.ReasonCronJobSuspended {
 		// Sustained check: avoid noise from intentional suspension during
 		// incident response or maintenance windows.
 		first := h.markFirstSuspendedCJ(key)
-		sustained := time.Duration(h.config.CronJobMonitor.SustainedMinutes) * time.Minute
+		sustained := time.Duration(
+			h.config.CronJobMonitor.SustainedMinutes,
+		) * time.Minute
 		if sustained > 0 && h.now().Sub(first) < sustained {
 			return nil
 		}
@@ -127,7 +145,12 @@ func (h *handler) clearFirstSuspendedCJ(key string) {
 // its schedule. If LastScheduleTime is nil, it uses CreationTimestamp as the
 // reference point. Returns zero time if the schedule cannot be parsed.
 // timeZone is the optional IANA timezone from cj.Spec.TimeZone (k8s >=1.27).
-func NextFireAfter(schedule string, lastSchedule *metav1.Time, creation time.Time, timeZone *string) time.Time {
+func NextFireAfter(
+	schedule string,
+	lastSchedule *metav1.Time,
+	creation time.Time,
+	timeZone *string,
+) time.Time {
 	sched, err := cron.ParseStandard(schedule)
 	if err != nil {
 		return time.Time{}
@@ -141,7 +164,12 @@ func NextFireAfter(schedule string, lastSchedule *metav1.Time, creation time.Tim
 		if err == nil {
 			ref = ref.In(loc)
 		} else {
-			klog.ErrorS(err, "cronjob has invalid timezone, using UTC", "timeZone", *timeZone)
+			klog.ErrorS(
+				err,
+				"cronjob has invalid timezone, using UTC",
+				"timeZone",
+				*timeZone,
+			)
 		}
 	}
 	return sched.Next(ref)

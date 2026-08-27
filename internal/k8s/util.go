@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"math/rand"
 	"os"
+	"sort"
 	"strings"
 	"time"
 
@@ -15,39 +16,70 @@ import (
 )
 
 // GetPodEventsStr returns formatted events as a string for specified pod
+// MaxEventsInMessage bounds how many events are rendered into an alert. A
+// pod that churns can accumulate hundreds, and an unbounded list pushes the
+// message past the provider's block/length limits, which loses the whole
+// alert rather than just the surplus events.
+const MaxEventsInMessage = 40
+
+// eventTime resolves the most meaningful timestamp an event carries.
+func eventTime(ev v1.Event) time.Time {
+	for _, ts := range []time.Time{
+		ev.LastTimestamp.Time,
+		ev.EventTime.Time,
+		ev.FirstTimestamp.Time,
+		ev.CreationTimestamp.Time,
+	} {
+		if !ts.IsZero() {
+			return ts
+		}
+	}
+	return time.Time{}
+}
+
 func GetPodEventsStr(events *[]v1.Event) string {
 	if events == nil {
 		return ""
 	}
 
-	eventsString := ""
+	// Oldest first, so trimming keeps the most recent events — the ones that
+	// explain the current state.
+	sorted := make([]v1.Event, len(*events))
+	copy(sorted, *events)
+	sort.SliceStable(sorted, func(i, j int) bool {
+		return eventTime(sorted[i]).Before(eventTime(sorted[j]))
+	})
 
-	for _, ev := range *events {
-		ts := ev.LastTimestamp.Time
-		if ts.IsZero() {
-			ts = ev.EventTime.Time
-		}
-		if ts.IsZero() {
-			ts = ev.FirstTimestamp.Time
-		}
-		if ts.IsZero() {
-			ts = ev.CreationTimestamp.Time
-		}
-
-		if ts.IsZero() {
-			eventsString += fmt.Sprintf("%s %s\n", ev.Reason, ev.Message)
-			continue
-		}
-
-		eventsString +=
-			fmt.Sprintf(
-				"[%s] %s %s\n",
-				ts.String(),
-				ev.Reason,
-				ev.Message)
+	omitted := 0
+	if len(sorted) > MaxEventsInMessage {
+		omitted = len(sorted) - MaxEventsInMessage
+		sorted = sorted[len(sorted)-MaxEventsInMessage:]
 	}
 
-	return strings.TrimSpace(eventsString)
+	var b strings.Builder
+	if omitted > 0 {
+		fmt.Fprintf(&b, "... %d earlier event(s) omitted\n", omitted)
+	}
+
+	for _, ev := range sorted {
+		ts := eventTime(ev)
+		if ts.IsZero() {
+			fmt.Fprintf(&b, "%s %s\n", ev.Reason, ev.Message)
+			continue
+		}
+		// "Aug 25 23:52:21" rather than "2026-08-25 23:52:21.123 +0000 UTC":
+		// the year and sub-second precision cost 20 characters per line and
+		// tell the reader nothing they need to act.
+		fmt.Fprintf(
+			&b,
+			"%s  %s  %s\n",
+			ts.UTC().Format("Jan 02 15:04:05"),
+			ev.Reason,
+			ev.Message,
+		)
+	}
+
+	return strings.TrimSpace(b.String())
 }
 
 // GetPodContainerLogs returns logs for specified container in pod
@@ -95,10 +127,14 @@ func getContainerLogs(
 	// Attempt with 15s timeout; retry once on timeout if context allows.
 	for attempt := 0; attempt < 2; attempt++ {
 		cctx, cancel := context.WithTimeout(ctx, 15*time.Second)
-		logs, err := c.CoreV1().
-			Pods(namespace).
-			GetLogs(name, options).
-			DoRaw(cctx)
+		logs, err := c.CoreV1().Pods(
+			namespace,
+		).GetLogs(
+			name,
+			options,
+		).DoRaw(
+			cctx,
+		)
 		cancel()
 
 		if err == nil {
@@ -111,7 +147,10 @@ func getContainerLogs(
 		}
 		return nil, err
 	}
-	return nil, fmt.Errorf("log fetch failed after retries for container %s", name)
+	return nil, fmt.Errorf(
+		"log fetch failed after retries for container %s",
+		name,
+	)
 }
 
 func isTimeoutError(err error) bool {
@@ -131,11 +170,9 @@ func GetPodEvents(
 	namespace string) (*v1.EventList, error) {
 	cctx, cancel := context.WithTimeout(ctx, 10*time.Second)
 	defer cancel()
-	return c.CoreV1().
-		Events(namespace).
-		List(cctx, metav1.ListOptions{
-			FieldSelector: "involvedObject.name=" + name,
-		})
+	return c.CoreV1().Events(namespace).List(cctx, metav1.ListOptions{
+		FieldSelector: "involvedObject.name=" + name,
+	})
 }
 
 // IsNodeReady returns true if the node's Ready condition is True.
@@ -149,26 +186,34 @@ func IsNodeReady(n *v1.Node) bool {
 }
 
 // GetNodes gets a list of nodes
-func GetNodes(ctx context.Context, c kubernetes.Interface) (*v1.NodeList, error) {
+func GetNodes(
+	ctx context.Context,
+	c kubernetes.Interface,
+) (*v1.NodeList, error) {
 	cctx, cancel := context.WithTimeout(ctx, 10*time.Second)
 	defer cancel()
-	return c.CoreV1().
-		Nodes().
-		List(cctx, metav1.ListOptions{})
+	return c.CoreV1().Nodes().List(cctx, metav1.ListOptions{})
 }
 
 // GetNodeSummary gets a list of nodes
-func GetNodeSummary(ctx context.Context, c kubernetes.Interface, name string) ([]byte, error) {
+func GetNodeSummary(
+	ctx context.Context,
+	c kubernetes.Interface,
+	name string,
+) ([]byte, error) {
 	cctx, cancel := context.WithTimeout(ctx, 10*time.Second)
 	defer cancel()
-	return c.CoreV1().
-		RESTClient().
-		Get().
-		Resource("nodes").
-		Name(name).
-		SubResource("proxy").
-		Suffix("stats/summary").
-		DoRaw(cctx)
+	return c.CoreV1().RESTClient().Get().Resource(
+		"nodes",
+	).Name(
+		name,
+	).SubResource(
+		"proxy",
+	).Suffix(
+		"stats/summary",
+	).DoRaw(
+		cctx,
+	)
 }
 
 // RandomString generates random string with provided n size

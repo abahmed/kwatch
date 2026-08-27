@@ -40,13 +40,13 @@ func TestSesCustomRegion(t *testing.T) {
 	configMap := map[string]interface{}{
 		"accessKeyId":     "AKIA123",
 		"secretAccessKey": "test",
-		"region":          "eu-west-1",
+		"region":          "us-east-1",
 		"from":            "kwatch@example.com",
 		"to":              "ops@example.com",
 	}
 	c := NewSes(configMap, &config.App{ClusterName: "dev"})
 	assert.NotNil(c)
-	assert.Equal(c.url, "https://email.eu-west-1.amazonaws.com/")
+	assert.Equal(c.url, "https://email.us-east-1.amazonaws.com/")
 }
 
 func TestSesMultiTo(t *testing.T) {

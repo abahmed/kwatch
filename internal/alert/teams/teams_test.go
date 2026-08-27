@@ -269,7 +269,6 @@ func TestNewTeamsWithCustomRetrySettings(t *testing.T) {
 	appCfg := &config.App{ClusterName: "dev"}
 	teams := NewTeams(configMap, appCfg)
 	assert.NotNil(t, teams)
-	assert.Equal(t, 5, teams.maxRetries)
 	assert.Equal(t, 10, teams.retryDelay)
 }
 

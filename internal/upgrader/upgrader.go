@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"net/http"
 	"os"
+	"strconv"
 	"strings"
 	"time"
 
@@ -19,12 +20,18 @@ import (
 )
 
 type GitHubReleaseChecker interface {
-	GetLatestRelease(ctx context.Context, owner, repo string) (*github.RepositoryRelease, *github.Response, error)
+	GetLatestRelease(
+		ctx context.Context,
+		owner, repo string,
+	) (*github.RepositoryRelease, *github.Response, error)
 }
 
 type GitHubClient struct{}
 
-func (c *GitHubClient) GetLatestRelease(ctx context.Context, owner, repo string) (*github.RepositoryRelease, *github.Response, error) {
+func (c *GitHubClient) GetLatestRelease(
+	ctx context.Context,
+	owner, repo string,
+) (*github.RepositoryRelease, *github.Response, error) {
 	httpClient := &http.Client{Timeout: 30 * time.Second}
 	client := github.NewClient(httpClient)
 	return client.Repositories.GetLatestRelease(ctx, owner, repo)
@@ -54,7 +61,8 @@ func NewUpgrader(
 	if upCfg == nil {
 		upCfg = &config.Upgrader{}
 	}
-	if os.Getenv("SKIP_UPGRADE_CHECK") == "1" || os.Getenv("SKIP_UPGRADE_CHECK") == "true" {
+	if os.Getenv("SKIP_UPGRADE_CHECK") == "1" ||
+		os.Getenv("SKIP_UPGRADE_CHECK") == "true" {
 		upCfg.DisableUpdateCheck = true
 	}
 	return &Upgrader{
@@ -75,7 +83,10 @@ func (u *Upgrader) CheckUpdates(ctx context.Context) {
 	}
 
 	if u.isPrerelease(version.Short()) {
-		klog.Infof("prerelease build (%s), skipping update check", version.Short())
+		klog.Infof(
+			"prerelease build (%s), skipping update check",
+			version.Short(),
+		)
 		return
 	}
 
@@ -117,7 +128,7 @@ func (u *Upgrader) checkRelease(ctx context.Context) {
 		return
 	}
 
-	if version.Short() == *r.TagName {
+	if !isNewer(*r.TagName, version.Short()) {
 		return
 	}
 
@@ -134,8 +145,51 @@ func (u *Upgrader) checkRelease(ctx context.Context) {
 	u.alertManager.Notify(fmt.Sprintf(constant.KwatchUpdateMsg, *r.TagName))
 
 	if u.stateManager != nil {
-		if err := u.stateManager.SetNotifiedVersion(ctx, *r.TagName); err != nil {
+		if err := u.stateManager.SetNotifiedVersion(
+			ctx,
+			*r.TagName,
+		); err != nil {
 			klog.InfoS("failed to set notified version", "error", err)
 		}
 	}
+}
+
+// parseSemver reads "v1.2.3" or "1.2.3" (an optional "-pre" suffix is
+// tolerated and ignored). ok is false for anything else.
+func parseSemver(v string) (parts [3]int, ok bool) {
+	v = strings.TrimPrefix(strings.TrimSpace(v), "v")
+	if i := strings.IndexAny(v, "-+"); i >= 0 {
+		v = v[:i]
+	}
+	fields := strings.Split(v, ".")
+	if len(fields) != 3 {
+		return parts, false
+	}
+	for i, f := range fields {
+		n, err := strconv.Atoi(f)
+		if err != nil || n < 0 {
+			return parts, false
+		}
+		parts[i] = n
+	}
+	return parts, true
+}
+
+// isNewer reports whether latest is a strictly newer release than current.
+// A plain string comparison would nag a v0.12.0 install about v0.9.5, and a
+// build running ahead of the latest published release about that release.
+// When either side is not a version at all, fall back to "different means
+// newer" so an unusual tag still gets reported.
+func isNewer(latest, current string) bool {
+	l, lok := parseSemver(latest)
+	c, cok := parseSemver(current)
+	if !lok || !cok {
+		return latest != current
+	}
+	for i := 0; i < 3; i++ {
+		if l[i] != c[i] {
+			return l[i] > c[i]
+		}
+	}
+	return false
 }

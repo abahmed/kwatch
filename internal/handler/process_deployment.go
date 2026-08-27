@@ -26,14 +26,19 @@ func (h *handler) ProcessDeployment(key string, deleted bool) error {
 		return nil
 	}
 
-	deploy, err := h.listers.deploy.Deployments(namespace).Get(name)
+	deploy, err := h.listers.Deploy.Deployments(namespace).Get(name)
 	if err != nil {
 		if errors.IsNotFound(err) {
 			h.clearFirstUnavailableDeploy(namespace + "/" + name)
 			h.correlator.ResolveByResource("deployment", namespace+"/"+name)
 			return nil
 		}
-		return fmt.Errorf("failed to get deployment %s/%s from cache: %w", namespace, name, err)
+		return fmt.Errorf(
+			"failed to get deployment %s/%s from cache: %w",
+			namespace,
+			name,
+			err,
+		)
 	}
 
 	return h.ProcessDeploymentObject(deploy, false)
@@ -58,14 +63,21 @@ func DetectDeploymentIssue(deploy *appsv1.Deployment) *event.Signal {
 	return nil
 }
 
-// availabilityHintDeploy builds a human-readable summary of deployment availability.
+// availabilityHintDeploy builds a human-readable summary of deployment
+// availability.
 func availabilityHintDeploy(deploy *appsv1.Deployment) string {
 	unavailable := deploy.Status.UnavailableReplicas
 	desired := deploy.Status.Replicas
 	ready := deploy.Status.ReadyReplicas
 	updated := deploy.Status.UpdatedReplicas
-	return fmt.Sprintf("%d/%d replicas unavailable (ready: %d, updated: %d) — check rollout status and pod events",
-		unavailable, desired, ready, updated)
+	return fmt.Sprintf(
+		"%d/%d replicas unavailable (ready: %d, updated: %d) — check rollout "+
+			"status and pod events",
+		unavailable,
+		desired,
+		ready,
+		updated,
+	)
 }
 
 // DetectDeploymentUnavailable returns a Signal when a Deployment has replicas
@@ -85,7 +97,10 @@ func DetectDeploymentUnavailable(deploy *appsv1.Deployment) *event.Signal {
 	return nil
 }
 
-func (h *handler) ProcessDeploymentObject(deploy *appsv1.Deployment, deleted bool) error {
+func (h *handler) ProcessDeploymentObject(
+	deploy *appsv1.Deployment,
+	deleted bool,
+) error {
 	if deploy == nil {
 		return nil
 	}
@@ -106,11 +121,14 @@ func (h *handler) ProcessDeploymentObject(deploy *appsv1.Deployment, deleted boo
 	}
 
 	// New: DeploymentUnavailable — replicas exist but are not ready/available.
-	// Only alert when the observed generation matches (not mid-rollout metadata sync).
+	// Only alert when the observed generation matches (not mid-rollout metadata
+	// sync).
 	if sig := DetectDeploymentUnavailable(deploy); sig != nil {
 		first := h.markFirstUnavailableDeploy(key)
 
-		sustained := time.Duration(h.config.RolloutMonitor.SustainedMinutes) * time.Minute
+		sustained := time.Duration(
+			h.config.RolloutMonitor.SustainedMinutes,
+		) * time.Minute
 		if sustained > 0 && h.now().Sub(first) < sustained {
 			return nil
 		}

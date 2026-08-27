@@ -17,7 +17,7 @@ import (
 )
 
 func (h *handler) SweepTLSSecrets() {
-	if h.listers.secret == nil {
+	if h.listers.Secret == nil {
 		return
 	}
 	threshold := h.config.TlsMonitor.Threshold
@@ -26,7 +26,7 @@ func (h *handler) SweepTLSSecrets() {
 	}
 	warnWindow := time.Duration(threshold) * 24 * time.Hour
 
-	secrets, err := h.listers.secret.List(labels.Everything())
+	secrets, err := h.listers.Secret.List(labels.Everything())
 	if err != nil {
 		klog.ErrorS(err, "tls sweep: failed to list secrets from cache")
 		return
@@ -37,7 +37,11 @@ func (h *handler) SweepTLSSecrets() {
 	}
 }
 
-func (h *handler) checkTLSSecret(secret *corev1.Secret, now time.Time, warnWindow time.Duration) {
+func (h *handler) checkTLSSecret(
+	secret *corev1.Secret,
+	now time.Time,
+	warnWindow time.Duration,
+) {
 	certData, ok := secret.Data["tls.crt"]
 	if !ok || len(certData) == 0 {
 		return
@@ -50,7 +54,14 @@ func (h *handler) checkTLSSecret(secret *corev1.Secret, now time.Time, warnWindo
 
 	cert, err := x509.ParseCertificate(block.Bytes)
 	if err != nil {
-		klog.ErrorS(err, "tls sweep: parse certificate", "secret", secret.Name, "namespace", secret.Namespace)
+		klog.ErrorS(
+			err,
+			"tls sweep: parse certificate",
+			"secret",
+			secret.Name,
+			"namespace",
+			secret.Namespace,
+		)
 		return
 	}
 
@@ -69,7 +80,11 @@ func (h *handler) checkTLSSecret(secret *corev1.Secret, now time.Time, warnWindo
 			Owner:     key,
 			Labels:    secret.Labels,
 			Severity:  "high",
-			Hint:      fmt.Sprintf("expired %v ago; CN=%s", (-remaining).Round(time.Hour), cn),
+			Hint: fmt.Sprintf(
+				"expired %v ago; CN=%s",
+				(-remaining).Round(time.Hour),
+				cn,
+			),
 		})
 	case remaining < warnWindow:
 		daysLeft := int(remaining.Hours() / 24)
@@ -89,7 +104,12 @@ func (h *handler) checkTLSSecret(secret *corev1.Secret, now time.Time, warnWindo
 			Owner:     key,
 			Labels:    secret.Labels,
 			Severity:  severity,
-			Hint:      fmt.Sprintf("expires in %dd (%s); CN=%s", daysLeft, expiry.Format("2006-01-02"), cn),
+			Hint: fmt.Sprintf(
+				"expires in %dd (%s); CN=%s",
+				daysLeft,
+				expiry.Format("2006-01-02"),
+				cn,
+			),
 		})
 	default:
 		h.correlator.ResolveByResource("secret", key)

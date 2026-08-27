@@ -87,19 +87,24 @@ func TestControllerPodEvent(t *testing.T) {
 
 	client := fake.NewSimpleClientset(pod)
 
-	correlator := correlation.NewEngine(correlation.Config{
-		Window:            10 * time.Minute,
-		LifecycleInterval: 1 * time.Minute,
-		Enricher:          &enricher.DefaultEnricher{},
-		BaselineTTL:       1 * time.Nanosecond,
-	})
-
 	rec := &recordingProvider{}
 	alertMgr := &alert.AlertManager{}
 	alertMgr.Init(map[string]map[string]interface{}{}, &config.App{
 		DisableStartupMessage: true,
 	})
 	alertMgr.AddProvider(rec)
+
+	// The engine is the only thing that notifies; the handler just feeds it.
+	// This mirrors app.newCorrelator's wiring.
+	correlator := correlation.NewEngine(correlation.Config{
+		Window:            10 * time.Minute,
+		LifecycleInterval: 1 * time.Minute,
+		Enricher:          &enricher.DefaultEnricher{},
+		BaselineTTL:       1 * time.Nanosecond,
+		LifecycleHook: func(inc *model.Incident, action model.IncidentAction) {
+			alertMgr.NotifyIncident(inc, action, nil)
+		},
+	})
 
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
@@ -141,7 +146,12 @@ func TestControllerPodEvent(t *testing.T) {
 	if lastEv == nil {
 		t.Fatal("expected incident to be delivered to recording provider")
 	}
-	assert.Equal(t, "create", lastEv.Action, "first incident should be create action")
+	assert.Equal(
+		t,
+		"create",
+		lastEv.Action,
+		"first incident should be create action",
+	)
 	assert.NotEmpty(t, lastEv.DedupKey, "incident must have dedup key")
 	assert.Equal(t, "OOMKilled", lastEv.Reason)
 }

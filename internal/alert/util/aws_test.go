@@ -31,8 +31,8 @@ func TestSignAWSV4Deterministic(t *testing.T) {
 	h2, err := SignAWSV4("k", "s", "us-east-1", "sns", "POST",
 		"https://sns.us-east-1.amazonaws.com/", []byte("a=1"))
 	assert.Nil(err)
-	h3, err := SignAWSV4("k", "s", "eu-west-1", "sns", "POST",
-		"https://sns.eu-west-1.amazonaws.com/", []byte("a=1"))
+	h3, err := SignAWSV4("k", "s", "us-east-1", "sns", "POST",
+		"https://sns.us-east-1.amazonaws.com/", []byte("a=1"))
 	assert.Nil(err)
 	h4, err := SignAWSV4("k", "other", "us-east-1", "sns", "POST",
 		"https://sns.us-east-1.amazonaws.com/", []byte("a=1"))

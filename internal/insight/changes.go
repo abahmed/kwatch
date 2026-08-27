@@ -11,7 +11,10 @@ import (
 
 // directResourceChanges returns recent tracker entries matching the incident's
 // own resource identity.
-func directResourceChanges(recent []context.Change, inc *model.Incident) []context.Change {
+func directResourceChanges(
+	recent []context.Change,
+	inc *model.Incident,
+) []context.Change {
 	matchingNames := make(map[string]bool)
 	for _, k := range graphKeysForIncident(inc) {
 		parts := strings.SplitN(k, "/", 3)
@@ -22,7 +25,8 @@ func directResourceChanges(recent []context.Change, inc *model.Incident) []conte
 	}
 	filtered := make([]context.Change, 0, len(recent))
 	for _, c := range recent {
-		if c.Resource == inc.Resource && c.Namespace == inc.Namespace && matchingNames[c.Name] {
+		if c.Resource == inc.Resource && c.Namespace == inc.Namespace &&
+			matchingNames[c.Name] {
 			filtered = append(filtered, c)
 		}
 	}
@@ -32,7 +36,11 @@ func directResourceChanges(recent []context.Change, inc *model.Incident) []conte
 // appendDependencyChanges records updates to the incident's dependencies and,
 // absent a more specific diagnosis, attributes the cause to the newest change.
 // Reports whether any dependency changes were found.
-func (e *Engine) appendDependencyChanges(recent []context.Change, inc *model.Incident, ins *Insight) bool {
+func (e *Engine) appendDependencyChanges(
+	recent []context.Change,
+	inc *model.Incident,
+	ins *Insight,
+) bool {
 	deps := dependenciesFor(e.graph, inc)
 	if len(deps) == 0 {
 		return false
@@ -60,15 +68,44 @@ func (e *Engine) appendDependencyChanges(recent []context.Change, inc *model.Inc
 	// hide the actual root cause.
 	if ins.Cause == "" && ins.Pattern == "" {
 		c := depChanges[0]
-		delta := time.Since(c.Timestamp).Round(time.Second)
-		if delta < 0 {
-			delta = 0
-		}
 		ins.Cause = fmt.Sprintf("%s %s/%s was updated %s before this incident",
-			c.Resource, c.Namespace, c.Name, delta)
+			c.Resource, c.Namespace, c.Name, ageOf(c.Timestamp, e.now()))
 		ins.Pattern = "dependency_change"
 	}
 	return true
+}
+
+// workloadKinds are the owners whose spec change is a rollout.
+var workloadKinds = map[string]bool{
+	"deployment":  true,
+	"statefulset": true,
+	"daemonset":   true,
+}
+
+// ownerRolloutChanges finds recent updates to the workload that owns the
+// failing pods. A Deployment updated two minutes before its pods stopped
+// being ready is the single most useful thing an alert can say.
+func ownerRolloutChanges(
+	recent []context.Change,
+	inc *model.Incident,
+) []context.Change {
+	if inc.Resource != "pod" || inc.OwnerKind == "" {
+		return nil
+	}
+	kind := strings.ToLower(inc.OwnerKind)
+	if !workloadKinds[kind] {
+		return nil
+	}
+	owner := strings.TrimPrefix(inc.Name, inc.Namespace+"/")
+	var out []context.Change
+	for _, c := range recent {
+		if c.Resource == kind && c.Namespace == inc.Namespace &&
+			c.Name == owner &&
+			c.Type == context.ChangeUpdate {
+			out = append(out, c)
+		}
+	}
+	return out
 }
 
 func (e *Engine) checkRecentChanges(inc *model.Incident, ins *Insight) {
@@ -77,27 +114,57 @@ func (e *Engine) checkRecentChanges(inc *model.Incident, ins *Insight) {
 	}
 	recent := e.tracker.RecentChangesBefore(5 * time.Minute)
 
-	if filtered := directResourceChanges(recent, inc); len(filtered) > 0 {
-		ins.RecentChanges = filtered
-		return
+	// A pod's own create/update/delete is the incident, not its cause;
+	// listing it as "what changed" says nothing. Look at what the pods
+	// depend on instead: their owner's rollout, then their config.
+	if inc.Resource == "pod" {
+		if rollout := ownerRolloutChanges(recent, inc); len(rollout) > 0 {
+			ins.RecentChanges = rollout[:min(len(rollout), 3)]
+			if ins.Cause == "" {
+				c := rollout[0]
+				ins.Cause = fmt.Sprintf(
+					"%s %s/%s was updated %s before this incident — likely a "+
+						"rollout",
+					inc.OwnerKind,
+					c.Namespace,
+					c.Name,
+					ageOf(c.Timestamp, e.now()),
+				)
+				ins.Pattern = "rollout"
+			}
+			return
+		}
+	} else {
+		filtered := directResourceChanges(recent, inc)
+		if len(filtered) > 0 {
+			ins.RecentChanges = filtered[:min(len(filtered), 3)]
+			return
+		}
 	}
 
-	// Dependency-filtered pass: check if any dependency of this resource changed
+	// Dependency-filtered pass: check if any dependency of this resource
+	// changed
 	if e.graph != nil && e.appendDependencyChanges(recent, inc, ins) {
 		return
 	}
 
 	// Namespace-wide fallback, capped at three entries.
-	filtered := make([]context.Change, 0, len(recent))
-	for _, c := range recent {
-		if c.Namespace == inc.Namespace {
-			filtered = append(filtered, c)
-		}
+	// No namespace-wide fallback: unrelated churn in the same namespace is
+	// noise, and noise here undermines the cases where the change is real.
+}
+
+// ageOf renders how long before now t was, coarsely — "2m", "40s", "3h".
+func ageOf(t, now time.Time) string {
+	d := now.Sub(t)
+	if d < 0 {
+		d = 0
 	}
-	if len(filtered) > 3 {
-		filtered = filtered[:3]
-	}
-	if len(filtered) > 0 {
-		ins.RecentChanges = filtered
+	switch {
+	case d < time.Minute:
+		return fmt.Sprintf("%ds", int(d.Seconds()))
+	case d < time.Hour:
+		return fmt.Sprintf("%dm", int(d.Minutes()))
+	default:
+		return fmt.Sprintf("%dh", int(d.Hours()))
 	}
 }

@@ -29,12 +29,15 @@ message in your chat:
    [Context-aware intelligence](#context-aware-intelligence).)
 5. **kwatch looks at what changed.** If the thing that broke was just updated (a ConfigMap
    edited minutes ago), kwatch says so — that's your smoking gun.
-6. **kwatch decides how to say it.** Related incidents may be **grouped** into one
-   notification, and duplicates are **suppressed** so you're not paged for the same crash
-   five times. (Details in [Smart grouping](#smart-grouping).)
+6. **kwatch decides whether to say it.** Before anything is sent, every event walks the
+   same five checks in the same order — is it pre-existing, is it a *symptom* of something
+   already known, is it cooling down, which incident is it, and should it speak now or wait
+   for its group. (Details in [How kwatch decides whether to speak](#how-kwatch-decides-whether-to-speak).)
 7. **It lands in your chat.** The message — logs, events, a runbook link if you set one —
    is delivered to your configured providers. If one provider fails, kwatch tries the next
-   (routing, retries, and fallback are configurable).
+   (routing, retries, and fallback are configurable). Every notification, whatever triggered
+   it, leaves through one door: it is audited, diagnosed and delivered the same way whether
+   it came from a live event, a timer, a group flush or a mass failure clearing.
 
 Think of kwatch as a detective: it doesn't just shout "it broke!" — it investigates, names
 the suspect, and tells you who else might be hurt.
@@ -63,7 +66,11 @@ config needed.
 
 ### What the insight engine tells you
 
-When an incident fires, the engine walks the graph and answers three questions:
+When an incident fires, the engine walks the graph and answers three questions. The answers
+travel with **every** notification — a fresh incident, a grouped one, a re-notification, an
+escalation — and Slack renders them as a **🧠 Diagnosis** block under the alert's fields. If
+you are on a large cluster and diagnoses come back empty, check `kwatch_graph_nodes` and
+`kwatch_graph_edges` on `/metrics`: an empty graph explains nothing.
 
 1. **What likely caused this?** It checks the incident's own tree first:
    - the **node** is in its dependencies → *"node worker-2 may be unhealthy"* — the 
@@ -85,6 +92,55 @@ When an incident fires, the engine walks the graph and answers three questions:
 3. **What changed recently?** It checks its change tracker for updates to the same resource
    in the last few minutes. A Secret that changed 3 minutes before every pod started
    CrashLooping is almost certainly the culprit.
+
+### 📨 What an alert looks like
+
+Every notification is built from one **report** — the same structure whatever the provider —
+and rendered top-down in the order a person reads:
+
+```
+🟠 Pod not ready — dev/api · Deployment · ContainersNotReady · high
+pod stopped being ready 2m ago
+
+🧠 Diagnosis
+• Why: node ip-10-0-81-7 may be unhealthy (node_failure)
+• Impact: affects service api
+• Changed recently: deployment dev/api updated 3m ago
+
+💡 check readiness probe and recent logs
+  pod api-584ddc9849-gjwjp · image api:1.2.0 · node ip-10-0-81-7 · 2m · dev
+
+🔍 Events — from api-584ddc9849-gjwjp
+  Aug 25 23:52:21  FailedScheduling  0/5 nodes are available …
+```
+
+1. **Headline** — a plain-English label for the reason (*Pod not ready*, *Container keeps
+   crashing*, *Rollout stuck*), then what it happened to. The raw reason code stays on the line
+   for searching.
+2. **What** — one sentence of current state.
+3. **Diagnosis** — why, what else it touches, and what changed just before. Only when the graph
+   has something to say; a quiet alert stays quiet.
+4. **Hint** — anything actionable not already shown above. Fragments that repeat the headline
+   or the state are dropped.
+5. **Meta** — pod, image, node, restarts, count, age, cluster — one grey line. Image
+   references lose their registry and node names their domain; both tripled the line length and
+   said nothing a reader needed.
+6. **Evidence** — events and logs, timestamped `Aug 25 23:52:21`, labelled with the pod they
+   came from when the incident covers more than one.
+
+**Groups are named the way you'd say them.** *"3 pods of Deployment dev/api"*,
+*"12 pods on node ip-10-0-81-7 across 6 workloads"*, *"6 workloads in dev: accounts,
+api, fleet …"*, *"api, readify — same error: connection refused:5432"*. The
+reason, the count and the age have their own places in the message, so the name never repeats
+them.
+
+**Impact names things.** *"affects service api"*, not *"affects 1 service(s)"*. Services
+and ingresses are listed by name (up to four, then *"+N more"*); everything else is counted.
+
+**"What changed" is only what could be a cause.** For a failing pod that means its owner's
+rollout (*"Deployment dev/api was updated 2m before this incident — likely a rollout"*) or an
+edit to a ConfigMap or Secret it mounts. The pod's own creation is not listed — that *is* the
+incident — and unrelated churn elsewhere in the namespace is ignored.
 
 > **Example — the ConfigMap that started it all.** Three pods in `my-app` all start
 > CrashLooping at once. Without context, that's three unrelated alerts. kwatch sees all
@@ -137,9 +193,9 @@ Two behaviors keep this honest:
   default 10 minutes). If the identical problem reappears inside that window, it's revived
   **silently** — no "resolved → crash → resolved → crash" ping-pong in your chat.
 - **Escalation.** When a crash keeps repeating, kwatch raises its hand. With escalation on
-  (default), repeated restarts climb tiers (defaults `[3, 10, 50]` restarts) and later tiers
-  are *notified again* with a higher severity — the first crash is a papercut, the 50th is a
-  page.
+  (default), repeated restarts climb tiers (defaults `[3, 10]` restarts) and each crossing is
+  *notified again* with a higher severity — the first crash is a papercut, the third is
+  high, the tenth is a page.
 - **Re-notify.** For long-lived incidents that stay broken for hours, kwatch can nudge you
   again on a timer (`correlation.renotify.intervalBySeverity`, e.g. every 60 minutes for
   `high`), up to `maxPerIncident` times (default 3) — so a quiet incident can't be forgotten,
@@ -147,6 +203,38 @@ Two behaviors keep this honest:
 - **Node suppression.** If the problem is a *node* condition, alerts for pods on that node
   are suppressed while the node is actually down. The moment it recovers, suppression lifts
   **immediately** — it doesn't wait for the resolve hold-down to finish.
+
+### How kwatch decides whether to speak
+
+Every event — a crashing container, a node condition, a stuck rollout — goes through the
+same five stages, in this order. Each stage can end the story.
+
+| # | Stage | Question | If yes |
+|:--|:--|:--|:--|
+| 1 | **Baseline** | Was this already broken when kwatch started? | Stay quiet; it is not news. |
+| 2 | **Attribution** | Is this a *symptom* of something kwatch already knows about? | Record it against the cause — count it, list it — and let the cause's alert speak for it. |
+| 3 | **Cooldown** | Did this exact problem resolve a few minutes ago? | Revive silently; no "resolved → crash → resolved" ping-pong. |
+| 4 | **Identity** | Which incident is this? | Update the existing one (or fold a crash loop into its canonical key) instead of opening a new one. |
+| 5 | **Announcement** | Should it speak now? | Buffer it for its group, or send on the edge — only when something observable changed. |
+
+Attribution recognises three kinds of cause, checked from broadest to narrowest:
+
+1. **A node condition.** The pod's node is NotReady or under pressure — the pod is the
+   node's symptom. (A pod with no node yet, when any node is down, is attributed to the most
+   constrained one: it probably cannot schedule because of it.)
+2. **A shared dependency.** A [mass failure](#mass-failure-detection) already covers the
+   ConfigMap, Secret or node this resource depends on. The symptom is kept — it counts
+   toward the blast radius, and if it is still broken when the mass failure clears it is
+   announced then — but stays silent while the bigger alert is open.
+3. **The owning workload.** The pod's own Deployment or Job already has an incident (a
+   stuck rollout, a failed job). The pod is folded into it.
+
+Attribution runs *before* the cooldown check on purpose: a pod whose incident is cooling
+down is still its owner's symptom and keeps being counted against it, instead of vanishing
+into "cooldown".
+
+Every one of these decisions is written to the [audit log](configuration.md#audit-log) —
+once per incident, not once per poll — so "why didn't kwatch tell me?" always has an answer.
 
 ---
 
@@ -195,16 +283,42 @@ no volume, no backend to run. It writes the things it can't afford to forget:
 
 | ConfigMap | What it holds |
 |:--|:--|
-| `kwatch-state` | Cluster identity + upgrade bookkeeping |
-| `kwatch-incidents` | Every active incident (so a restart doesn't forget what's broken) |
+| `kwatch-state` | Cluster identity, upgrade bookkeeping, and a `last-seen` liveness stamp |
+| `kwatch-incidents` | Every active incident (so a restart doesn't forget what's broken), trimmed to the freshest that fit if the cluster is large enough to exceed a ConfigMap |
 | `kwatch-baseline` | The pre-existing problems seen at startup |
 | `kwatch-pvc` | Last-known disk usage for PVC monitoring |
+
+State written by kwatch 0.10.x used a different layout; it is read and migrated on the first
+start of a newer version, so an upgrade keeps its incident memory instead of re-announcing
+everything already broken.
 
 The point: if kwatch restarts, is rescheduled, or its pod is recreated, it **resumes exactly
 where it left off** — active incidents stay active, and it doesn't re-report everything as
 brand new. That also enables the startup *baseline* check: kwatch snapshots the problems that
 already existed when it boots, and `reportStartupBaseline` tells you about them once (so you
 know what your cluster already looks like), without treating them as fresh crashes.
+
+### 🕳️ Knowing when nobody was watching
+
+kwatch runs as a single replica, so it shares fate with the cluster it reports on: when nodes
+go away, kwatch goes away too — precisely when the gap matters most. Silence is ambiguous, and
+"nothing was wrong" and "nothing was looking" should not look the same in your chat channel.
+
+So kwatch stamps a `last-seen` timestamp into `kwatch-state` once a minute, riding the same
+tick that snapshots incidents rather than adding another write. On the next start it compares
+that stamp with the current time. A gap longer than **5 minutes** is reported alongside the
+startup message:
+
+```
+🎉 kwatch@v0.11.0 just started!
+⚠️ No monitoring for 52m before this start — anything that broke in that window went unreported.
+```
+
+Ordinary restarts, rollouts and pod moves take less than that and stay quiet. A first-ever run
+has no stamp to compare against and says nothing.
+
+Gap detection tells you the window existed; it cannot tell you what happened inside it. Treat
+it as a prompt to look, not a report.
 
 ---
 

@@ -38,7 +38,10 @@ func startBaselineSaver(ctx context.Context, stateMgr interface {
 			}
 			timerC = timer.C
 		case <-timerC:
-			if err := stateMgr.SaveBaseline(context.Background(), pending); err != nil {
+			if err := stateMgr.SaveBaseline(
+				context.Background(),
+				pending,
+			); err != nil {
 				klog.ErrorS(err, "failed to save baseline")
 			}
 			timerC = nil
@@ -47,7 +50,10 @@ func startBaselineSaver(ctx context.Context, stateMgr interface {
 				timer.Stop()
 			}
 			if pending != nil {
-				fctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+				fctx, cancel := context.WithTimeout(
+					context.Background(),
+					5*time.Second,
+				)
 				_ = stateMgr.SaveBaseline(fctx, pending)
 				cancel()
 			}
@@ -59,7 +65,10 @@ func startBaselineSaver(ctx context.Context, stateMgr interface {
 // startIncidentSaver saves incident snapshots to the ConfigMap whenever a
 // snapshot arrives on the channel. On ctx cancellation it saves the final
 // snapshot before returning.
-func trySendIncidentSnapshot(ch chan<- []model.PersistedIncident, snap []model.PersistedIncident) {
+func trySendIncidentSnapshot(
+	ch chan<- []model.PersistedIncident,
+	snap []model.PersistedIncident,
+) {
 	select {
 	case ch <- snap:
 	default:
@@ -67,23 +76,41 @@ func trySendIncidentSnapshot(ch chan<- []model.PersistedIncident, snap []model.P
 	}
 }
 
-func startIncidentSaver(ctx context.Context, stateMgr interface {
-	SaveIncidents(context.Context, any) error
-}, ch <-chan []model.PersistedIncident) {
+// incidentSaver is the narrow contract the saver needs. It is typed on
+// purpose: an `any` here is what previously let the saved shape and the
+// restored shape drift apart unnoticed.
+type incidentSaver interface {
+	SavePersistedIncidents(context.Context, []model.PersistedIncident) error
+}
+
+func startIncidentSaver(
+	ctx context.Context,
+	stateMgr incidentSaver,
+	ch <-chan []model.PersistedIncident,
+) {
 	var pending []model.PersistedIncident
 	for {
 		select {
 		case snap := <-ch:
 			pending = snap
-			fctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-			if err := stateMgr.SaveIncidents(fctx, pending); err != nil {
+			fctx, cancel := context.WithTimeout(
+				context.Background(),
+				10*time.Second,
+			)
+			if err := stateMgr.SavePersistedIncidents(
+				fctx,
+				pending,
+			); err != nil {
 				klog.ErrorS(err, "failed to save incidents")
 			}
 			cancel()
 		case <-ctx.Done():
 			if len(pending) > 0 {
-				fctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-				_ = stateMgr.SaveIncidents(fctx, pending)
+				fctx, cancel := context.WithTimeout(
+					context.Background(),
+					5*time.Second,
+				)
+				_ = stateMgr.SavePersistedIncidents(fctx, pending)
 				cancel()
 			}
 			return

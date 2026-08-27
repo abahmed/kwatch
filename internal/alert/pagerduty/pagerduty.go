@@ -1,17 +1,14 @@
 package pagerduty
 
 import (
-	"bytes"
 	"encoding/json"
 	"fmt"
-	"net/http"
 
 	"k8s.io/klog/v2"
 
 	"github.com/abahmed/kwatch/internal/alert/util"
 	"github.com/abahmed/kwatch/internal/config"
 	"github.com/abahmed/kwatch/internal/event"
-	"github.com/abahmed/kwatch/internal/k8s"
 )
 
 const (
@@ -53,7 +50,10 @@ type Pagerduty struct {
 }
 
 // NewPagerDuty returns new PagerDuty instance
-func NewPagerDuty(config map[string]interface{}, appCfg *config.App) *Pagerduty {
+func NewPagerDuty(
+	config map[string]interface{},
+	appCfg *config.App,
+) *Pagerduty {
 	integrationKey, ok := config["integrationKey"].(string)
 	if !ok || len(integrationKey) == 0 {
 		klog.InfoS("initializing pagerduty with an empty integration key")
@@ -78,28 +78,14 @@ func (p *Pagerduty) UsesEventDelivery() {}
 
 // SendEvent sends event to the provider
 func (p *Pagerduty) SendEvent(ev *event.Event) error {
-	client := k8s.GetDefaultClient()
-
 	reqBody, err := p.buildRequestBodyPagerDuty(ev, p.integrationKey)
 	if err != nil {
 		return err
 	}
-	buffer := bytes.NewBuffer([]byte(reqBody))
-
-	request, err := http.NewRequest(http.MethodPost, p.url, buffer)
-	if err != nil {
-		return err
-	}
-
-	request.Header.Set("Content-Type", "application/json")
-
-	response, err := client.Do(request)
-	if err != nil {
-		return err
-	}
-	defer response.Body.Close()
-
-	return event.CheckHTTPResponse(response, "pagerduty")
+	_, err = util.Send(
+		util.Request{Provider: "PagerDuty", URL: p.url, Body: []byte(reqBody)},
+	)
+	return err
 }
 
 // SendMessage sends text message to the provider
@@ -120,7 +106,10 @@ func (p *Pagerduty) buildRequestBodyPagerDuty(
 		summary = fmt.Sprintf(defaultEventTitle, ev.ContainerName)
 	}
 
-	source := util.OrDefault(ev.ContainerName, util.OrDefault(ev.PodName, "unknown"))
+	source := util.OrDefault(
+		ev.ContainerName,
+		util.OrDefault(ev.PodName, "unknown"),
+	)
 
 	payload := pagerdutyPayload{
 		RoutingKey:  key,

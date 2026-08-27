@@ -23,8 +23,8 @@ const newNodeGracePeriod = 5 * time.Minute
 
 // isNewNode returns true when the Node resource was created recently enough
 // that NotReady is likely transient (autoscaler bootstrap).
-func isNewNode(node *corev1.Node) bool {
-	return time.Since(node.CreationTimestamp.Time) < newNodeGracePeriod
+func isNewNode(node *corev1.Node, now time.Time) bool {
+	return now.Sub(node.CreationTimestamp.Time) < newNodeGracePeriod
 }
 
 func (h *handler) ProcessNode(key string, deleted bool) error {
@@ -36,7 +36,7 @@ func (h *handler) ProcessNode(key string, deleted bool) error {
 		return nil
 	}
 
-	node, err := h.listers.node.Get(name)
+	node, err := h.listers.Node.Get(name)
 	if err != nil {
 		if errors.IsNotFound(err) {
 			h.clearAllNodePressure(name)
@@ -67,22 +67,44 @@ func NodeConditionReason(c corev1.NodeCondition) string {
 }
 
 func (h *handler) resolveNodeCondition(nodeName, stableReason string) {
-	h.correlator.MarkResolved(correlation.BuildKey("", nodeName, stableReason, ""))
+	h.correlator.MarkResolved(
+		correlation.BuildKey("", nodeName, stableReason, ""),
+	)
 	// Refresh the inhibition flag even when no incident existed to resolve
 	// (e.g. a baselined NodeNotReady recovered) so pods stop being suppressed.
 	h.correlator.RefreshNodeInhibition(nodeName)
 }
 
-func (h *handler) emitNodeAlert(node *corev1.Node, c corev1.NodeCondition, stableReason string) {
+func (h *handler) emitNodeAlert(
+	node *corev1.Node,
+	c corev1.NodeCondition,
+	stableReason string,
+) {
 	for _, ignoreReason := range h.config.Suppression.NodeReasons {
 		if c.Reason == ignoreReason {
-			klog.V(4).InfoS("Skipping Notify for node due to ignored reason", "node", node.Name, "reason", c.Reason)
+			klog.V(
+				4,
+			).InfoS(
+				"Skipping Notify for node due to ignored reason",
+				"node",
+				node.Name,
+				"reason",
+				c.Reason,
+			)
 			return
 		}
 	}
 	for _, ignoreMessage := range h.config.Suppression.NodeMessages {
 		if strings.Contains(c.Message, ignoreMessage) {
-			klog.V(4).InfoS("Skipping Notify for node due to ignored message", "node", node.Name, "message", c.Message)
+			klog.V(
+				4,
+			).InfoS(
+				"Skipping Notify for node due to ignored message",
+				"node",
+				node.Name,
+				"message",
+				c.Message,
+			)
 			return
 		}
 	}
@@ -122,7 +144,7 @@ func (h *handler) ProcessNodeObject(node *corev1.Node, deleted bool) error {
 				h.resolveNodeCondition(node.Name, constant.ReasonNodeNotReady)
 			case node.DeletionTimestamp != nil || node.Spec.Unschedulable:
 				h.resolveNodeCondition(node.Name, constant.ReasonNodeNotReady)
-			case isNewNode(node):
+			case isNewNode(node, h.now()):
 				h.resolveNodeCondition(node.Name, constant.ReasonNodeNotReady)
 			default:
 				h.emitNodeAlert(node, c, constant.ReasonNodeNotReady)
@@ -133,7 +155,9 @@ func (h *handler) ProcessNodeObject(node *corev1.Node, deleted bool) error {
 				// Sustained check: brief metric spikes should not page.
 				key := node.Name + "/" + string(c.Type)
 				first := h.markFirstNodePressure(key)
-				sustained := time.Duration(h.config.NodeMonitor.SustainedMinutes) * time.Minute
+				sustained := time.Duration(
+					h.config.NodeMonitor.SustainedMinutes,
+				) * time.Minute
 				if sustained > 0 && h.now().Sub(first) < sustained {
 					break
 				}

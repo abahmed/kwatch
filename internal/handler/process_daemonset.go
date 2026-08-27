@@ -33,8 +33,13 @@ func availabilityHint(ds *appsv1.DaemonSet) string {
 	unavailable := ds.Status.NumberUnavailable
 	desired := ds.Status.DesiredNumberScheduled
 	available := ds.Status.NumberAvailable
-	return fmt.Sprintf("%d/%d pods unavailable (available: %d) — check node capacity, taints, or image",
-		unavailable, desired, available)
+	return fmt.Sprintf(
+		"%d/%d pods unavailable (available: %d) — check node capacity, "+
+			"taints, or image",
+		unavailable,
+		desired,
+		available,
+	)
 }
 
 func (h *handler) ProcessDaemonSet(key string, deleted bool) error {
@@ -48,19 +53,27 @@ func (h *handler) ProcessDaemonSet(key string, deleted bool) error {
 		return nil
 	}
 
-	ds, err := h.listers.ds.DaemonSets(namespace).Get(name)
+	ds, err := h.listers.DS.DaemonSets(namespace).Get(name)
 	if err != nil {
 		if errors.IsNotFound(err) {
 			h.correlator.ResolveByResource("daemonset", namespace+"/"+name)
 			return nil
 		}
-		return fmt.Errorf("failed to get daemonset %s/%s from cache: %w", namespace, name, err)
+		return fmt.Errorf(
+			"failed to get daemonset %s/%s from cache: %w",
+			namespace,
+			name,
+			err,
+		)
 	}
 
 	return h.ProcessDaemonSetObject(ds, false)
 }
 
-func (h *handler) ProcessDaemonSetObject(ds *appsv1.DaemonSet, deleted bool) error {
+func (h *handler) ProcessDaemonSetObject(
+	ds *appsv1.DaemonSet,
+	deleted bool,
+) error {
 	if ds == nil {
 		return nil
 	}
@@ -77,7 +90,9 @@ func (h *handler) ProcessDaemonSetObject(ds *appsv1.DaemonSet, deleted bool) err
 		// Node-driven inhibition: if there are at least as many active node
 		// incidents as unavailable DS pods, the root cause is the node, not
 		// the DaemonSet — suppress to avoid duplicative alerts.
-		if h.correlator.CountActiveNodeIncidents() >= int(ds.Status.NumberUnavailable) {
+		if h.correlator.CountActiveNodeIncidents() >= int(
+			ds.Status.NumberUnavailable,
+		) {
 			h.clearFirstUnavailableDS(key)
 			h.correlator.ResolveByResource("daemonset", key)
 			return nil
@@ -99,7 +114,9 @@ func (h *handler) ProcessDaemonSetObject(ds *appsv1.DaemonSet, deleted bool) err
 			// still unsettled past the grace → stuck rollout; fall through
 		}
 
-		sustained := time.Duration(h.config.DaemonSetMonitor.SustainedMinutes) * time.Minute
+		sustained := time.Duration(
+			h.config.DaemonSetMonitor.SustainedMinutes,
+		) * time.Minute
 		if sustained > 0 && h.now().Sub(first) < sustained {
 			return nil
 		}

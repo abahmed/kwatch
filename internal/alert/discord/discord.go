@@ -10,6 +10,7 @@ import (
 	"github.com/abahmed/kwatch/internal/config"
 	"github.com/abahmed/kwatch/internal/constant"
 	"github.com/abahmed/kwatch/internal/event"
+	"github.com/abahmed/kwatch/internal/insight"
 	"github.com/abahmed/kwatch/internal/k8s"
 	"github.com/abahmed/kwatch/internal/message"
 	"github.com/abahmed/kwatch/internal/model"
@@ -86,7 +87,10 @@ func (d *Discord) Verify() error {
 	}
 	defer resp.Body.Close()
 	if resp.StatusCode != http.StatusOK {
-		return fmt.Errorf("discord webhook GET returned status %d", resp.StatusCode)
+		return fmt.Errorf(
+			"discord webhook GET returned status %d",
+			resp.StatusCode,
+		)
 	}
 	return nil
 }
@@ -154,13 +158,20 @@ func (d *Discord) SendEvent(ev *event.Event) error {
 				name := ":memo: Logs"
 				totalFields++
 				if len(parts) > 1 {
-					name = fmt.Sprintf(":memo: Logs (%d/%d)", totalFields, len(parts))
+					name = fmt.Sprintf(
+						":memo: Logs (%d/%d)",
+						totalFields,
+						len(parts),
+					)
 				}
 				if totalFields > maxFields {
 					remaining := len(parts) - (totalFields - 1)
 					fields = append(fields, &discordgo.MessageEmbedField{
-						Name:  ":memo: Logs",
-						Value: fmt.Sprintf("… (truncated, %d more chunk(s))", remaining),
+						Name: ":memo: Logs",
+						Value: fmt.Sprintf(
+							"… (truncated, %d more chunk(s))",
+							remaining,
+						),
 					})
 					break
 				}
@@ -221,8 +232,28 @@ func (d *Discord) SendMessage(msg string) error {
 // SendIncident implements alert.ThreadProvider.
 // It renders the incident using the Report model and DiscordRenderer,
 // producing a rich embed with context-adaptive fields.
-func (d *Discord) SendIncident(inc *model.Incident, action model.IncidentAction) error {
-	text := util.RenderIncident(inc, action, message.NewDiscordRenderer(), d.appCfg.ClusterName)
+func (d *Discord) SendIncident(
+	inc *model.Incident,
+	action model.IncidentAction,
+) error {
+	return d.SendIncidentWithInsight(inc, action, nil)
+}
+
+// SendIncidentWithInsight implements alert.InsightThreadProvider, so the
+// diagnosis — likely cause, impact, recent changes — is rendered rather than
+// dropped on the way to this provider.
+func (d *Discord) SendIncidentWithInsight(
+	inc *model.Incident,
+	action model.IncidentAction,
+	ins *insight.Insight,
+) error {
+	text := util.RenderIncidentWithInsight(
+		inc,
+		action,
+		ins,
+		message.NewDiscordRenderer(),
+		d.appCfg.ClusterName,
+	)
 	if text == "" {
 		return nil
 	}

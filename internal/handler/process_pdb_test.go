@@ -82,13 +82,23 @@ func TestPdbHint(t *testing.T) {
 
 func TestProcessPdbObjectNil(t *testing.T) {
 	e := correlation.NewEngine(correlation.Config{Window: 10 * time.Minute})
-	h := NewHandler(fake.NewSimpleClientset(), &config.Config{}, e, testAlertMgr)
+	h := NewHandler(
+		fake.NewSimpleClientset(),
+		&config.Config{},
+		e,
+		testAlertMgr,
+	)
 	assert.NoError(t, h.ProcessPdbObject(nil, false))
 }
 
 func TestProcessPdbObjectDeleted(t *testing.T) {
 	e := correlation.NewEngine(correlation.Config{Window: 10 * time.Minute})
-	h := NewHandler(fake.NewSimpleClientset(), &config.Config{}, e, testAlertMgr)
+	h := NewHandler(
+		fake.NewSimpleClientset(),
+		&config.Config{},
+		e,
+		testAlertMgr,
+	)
 	pdb := &policyv1.PodDisruptionBudget{
 		ObjectMeta: metav1.ObjectMeta{Name: "pdb1", Namespace: "ns1"},
 	}
@@ -97,7 +107,12 @@ func TestProcessPdbObjectDeleted(t *testing.T) {
 
 func TestProcessPdbObjectBlocking(t *testing.T) {
 	e := correlation.NewEngine(correlation.Config{Window: 10 * time.Minute})
-	h := NewHandler(fake.NewSimpleClientset(), &config.Config{}, e, testAlertMgr)
+	h := NewHandler(
+		fake.NewSimpleClientset(),
+		&config.Config{},
+		e,
+		testAlertMgr,
+	)
 	pdb := &policyv1.PodDisruptionBudget{
 		ObjectMeta: metav1.ObjectMeta{Name: "pdb1", Namespace: "ns1"},
 		Status: policyv1.PodDisruptionBudgetStatus{
@@ -114,7 +129,12 @@ func TestProcessPdbObjectBlocking(t *testing.T) {
 
 func TestProcessPdbObjectHealthy(t *testing.T) {
 	e := correlation.NewEngine(correlation.Config{Window: 10 * time.Minute})
-	h := NewHandler(fake.NewSimpleClientset(), &config.Config{}, e, testAlertMgr)
+	h := NewHandler(
+		fake.NewSimpleClientset(),
+		&config.Config{},
+		e,
+		testAlertMgr,
+	)
 	pdb := &policyv1.PodDisruptionBudget{
 		ObjectMeta: metav1.ObjectMeta{Name: "pdb1", Namespace: "ns1"},
 		Status: policyv1.PodDisruptionBudgetStatus{
@@ -145,12 +165,22 @@ func TestProcessPdbObjectSustained(t *testing.T) {
 	}
 	pdb.Generation = 1
 	assert.NoError(t, h.ProcessPdbObject(pdb, false))
-	assert.Equal(t, 0, e.ActiveCount(), "should be suppressed during sustained window")
+	assert.Equal(
+		t,
+		0,
+		e.ActiveCount(),
+		"should be suppressed during sustained window",
+	)
 }
 
 func TestProcessPdbObjectExistingEntry(t *testing.T) {
 	e := testCorrelator()
-	h := NewHandler(fake.NewSimpleClientset(), &config.Config{}, e, testAlertMgr)
+	h := NewHandler(
+		fake.NewSimpleClientset(),
+		&config.Config{},
+		e,
+		testAlertMgr,
+	)
 	hh := h
 
 	// Seed an existing entry so markFirstPdbViolation returns the stored time
@@ -167,21 +197,41 @@ func TestProcessPdbObjectExistingEntry(t *testing.T) {
 	}
 	pdb.Generation = 1
 	assert.NoError(t, h.ProcessPdbObject(pdb, false))
-	assert.Equal(t, 1, e.ActiveCount(), "existing entry with old timestamp should fire")
+	assert.Equal(
+		t,
+		1,
+		e.ActiveCount(),
+		"existing entry with old timestamp should fire",
+	)
 }
 
 func TestProcessPdbInvalidKey(t *testing.T) {
-	h := NewHandler(fake.NewSimpleClientset(), &config.Config{}, testCorrelator(), testAlertMgr)
+	h := NewHandler(
+		fake.NewSimpleClientset(),
+		&config.Config{},
+		testCorrelator(),
+		testAlertMgr,
+	)
 	assert.Error(t, h.ProcessPdb("a/b/c", false))
 }
 
 func TestProcessPdbDeleted(t *testing.T) {
-	h := NewHandler(fake.NewSimpleClientset(), &config.Config{}, testCorrelator(), testAlertMgr)
+	h := NewHandler(
+		fake.NewSimpleClientset(),
+		&config.Config{},
+		testCorrelator(),
+		testAlertMgr,
+	)
 	assert.NoError(t, h.ProcessPdb("ns1/pdb1", true))
 }
 
 func TestProcessPdbNoop(t *testing.T) {
-	h := NewHandler(fake.NewSimpleClientset(), &config.Config{}, testCorrelator(), testAlertMgr)
+	h := NewHandler(
+		fake.NewSimpleClientset(),
+		&config.Config{},
+		testCorrelator(),
+		testAlertMgr,
+	)
 
 	pdb := &policyv1.PodDisruptionBudget{
 		ObjectMeta: metav1.ObjectMeta{Name: "pdb1", Namespace: "ns1"},
@@ -195,7 +245,7 @@ func TestProcessPdbNoop(t *testing.T) {
 	pdb.Generation = 1
 
 	f := informers.NewSharedInformerFactory(fake.NewSimpleClientset(pdb), 0)
-	h.SetPdbLister(f.Policy().V1().PodDisruptionBudgets().Lister())
+	h.listers.PDB = f.Policy().V1().PodDisruptionBudgets().Lister()
 
 	assert.NoError(t, h.ProcessPdb("ns1/pdb1", false))
 }

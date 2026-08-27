@@ -17,6 +17,7 @@ narrowing the watch list and turning off the noisy reasons.
 | Parameter | What it does |
 |:---|---|
 | `maxRecentLogLines` | How many recent log lines to include in each alert (default: 50) |
+| `smartGrouping.namespaceFanOutThreshold` | How many owners failing the same way in one namespace collapse into a single alert (default: 3, `0` disables) |
 | `resyncSeconds` | How often to re-scan everything for problems. `0` = only react to live events (recommended). |
 | `workers` | How many checks to run in parallel (default: 1, raise for big clusters) |
 | `namespaces` | 🔽 Watch only these namespaces — or use `!kube-system` to watch *everything except* it |
@@ -26,7 +27,7 @@ narrowing the watch list and turning off the noisy reasons.
 | `ignoreDisruptionTerminations` | ✅ Skip pods evicted during node drains (default: true — keep it) |
 | `runbooks` | 📚 Add a link to your runbook for each error reason, so every alert comes with help attached |
 | `containerRestartThreshold` | Alert if a container restarts this many times (default: 0, off) |
-| `reportStartupBaseline` | 📋 Send one startup summary of pre-existing issues (default: true) |
+| `reportStartupBaseline` | 📋 Send one startup summary of pre-existing issues (default: true). Anything already broken when kwatch starts is otherwise quiet for **24 hours** and re-captured on every restart, so this summary is the only way you hear about it — keep it on |
 | `ignore*` fields | 🔕 Deprecated filters (`ignoreContainerNames`, `ignorePodNames`, `ignoreLogPatterns`, `ignoreContainerMessages`, `ignoreNodeReasons`, `ignoreNodeMessages`) — use the more flexible `silences` below |
 
 #### 🔽 Filter by namespace
@@ -70,7 +71,7 @@ talks to the outside world.
 | `app.logFormatter` | Log format: `text` (default) or `json` |
 | `app.insecureSkipTLSVerify` | 🔓 Skip TLS verification on outbound HTTP (default: false) |
 | `app.caBundlePath` | 📜 Path to a PEM CA bundle for outbound HTTP |
-| `includeEvents` | 📋 Include K8s events in alerts (default: true) |
+| `includeEvents` | 📋 Include K8s events in alerts (default: true). At most the 40 most recent are attached; older ones are summarised as `... N earlier event(s) omitted`. A churning pod can accumulate hundreds, and an unbounded list pushes the message past the chat provider's size limits, which loses the whole alert rather than just the surplus |
 | `includeLogs` | 📋 Include container logs in alerts (default: true) |
 
 ## 💓 Health checks
@@ -88,12 +89,21 @@ tests.
 
 **Endpoints:**
 - `GET /healthz` — ✅ Liveness
-- `GET /readyz` — ✅ Readiness
+- `GET /readyz` — ✅ Readiness. Ready once every informer cache has synced. If one never does —
+  a missing RBAC rule, an API group the cluster does not serve — kwatch exits after **5 minutes**
+  with an error naming the unsynced resource, rather than sitting not-ready forever with only
+  reflector errors in the log to explain why.
 - `GET /health` — `{"status": "ok"}`
-- `GET /metrics` — 📊 Prometheus metrics (incidents, notifications, baseline)
+- `GET /metrics` — 📊 Prometheus metrics (incidents, notifications, baseline, dependency-graph size)
 - `GET /incidents` — 📋 All active incidents (requires `diagnostics: true`)
 - `POST /test-alert` — 📤 Send a test alert (requires `diagnostics: true`)
 - `GET /deadletters` — 💀 Recent delivery failures (requires `diagnostics: true`)
+
+> **Know when alerts are being lost.** A notification a provider rejects is dead-lettered,
+> counted in `kwatch_notifications_dropped_total`, and — with `diagnostics: true` — listed
+> at `/deadletters`. Diagnostics are off by default because `/test-alert` accepts
+> unauthenticated POSTs; if you turn them on, set `diagnosticsToken`. Either way, alert on
+> the counter: it is the difference between "no incidents" and "no deliveries".
 
 ## 🔄 Upgrader
 
@@ -146,7 +156,7 @@ your whole Deployment down.
 | Parameter | What it does |
 |:---|---|
 | `rolloutMonitor.enabled` | ✅ Watch for stuck deployments (default: true) |
-| `rolloutMonitor.sustainedMinutes` | ⏱️ Minutes of unavailability before alerting (default: 2) |
+| `rolloutMonitor.sustainedMinutes` | ⏱️ Minutes of unavailability before alerting (default: 5). Kubernetes' own `progressDeadlineSeconds` is 600; anything much shorter flags normal rollouts of slow-booting services |
 
 ### 📡 DaemonSet Monitor
 
@@ -324,19 +334,38 @@ When a pod is stuck Unschedulable, computes `now - PodScheduled.LastTransitionTi
 |:---|---|
 | `notReadyMonitor.enabled` | ✅ Watch Running pods stuck NotReady (default: true) |
 
-Alerts with `ContainersNotReady` when a Running pod's Ready condition stays false for 60 seconds. Container-level failures (crashes, waits, non-zero terminations) are handled by the container pipeline, so this fires for otherwise-healthy containers whose pod never becomes ready.
+Alerts with `ContainersNotReady` when a Running pod's Ready condition stays false for longer than the pod is allowed. Container-level failures (crashes, waits, non-zero terminations) are handled by the container pipeline, so this fires for otherwise-healthy containers whose pod never becomes ready.
+
+**How long is "too long" is derived from the pod, not from a fixed number.** There is nothing to configure:
+
+- A pod that **has never been ready** is still starting up, so it gets whatever budget its own probes declare — `initialDelaySeconds + failureThreshold × periodSeconds`, taken from `startupProbe` (falling back to `readinessProbe`), across init and app containers. A service that legitimately takes 90 seconds to boot no longer alerts on every rollout, and one with no probes keeps the 60 second floor. The budget is capped at 15 minutes so a generous probe cannot defer an alert indefinitely.
+- A pod that **was ready and stopped being ready** gets the plain 60 second floor. That is a regression rather than a slow start, and it should not wait.
+
+The alert states the real elapsed time (`pod stopped being ready 3h12m ago`), never the threshold.
+
+Restarting kwatch does not reset that clock. There is a short grace period after startup during which pre-existing conditions are not alerted, but the duration you are shown is always how long the pod has actually been unready.
 
 ### 🎯 Severity
 
-Every alert carries a color — **normal** or **high** — and you control the coloring. It
-drives urgent channels, escalation, and re-notification.
+Every alert carries a severity, shown as the colour of its headline, and you control it.
+Severity drives urgent channels, escalation, and re-notification.
+
+| Severity | Headline | Meaning |
+|:--|:--|:--|
+| `critical` | 🔴 | Something users feel right now |
+| `high` | 🟠 | Needs a person soon |
+| `warning` / `medium` | 🟡 | Worth a look |
+| `normal` | 🔵 | Informational |
+
+The scale is monotonic on purpose: red is reserved for critical, so a red headline always
+means the worst case and a blue one never competes with it.
 
 | Parameter | What it does |
 |:---|---|
 | `severityByOwnerKind` | Set severity per resource type, e.g. `StatefulSet: "high"` |
 | `severityByReason` | Set severity per event reason, checked before owner kind, e.g. `OOMKilled: "high"` |
 
-Defaults: `StatefulSet` → 🔴 high, everything else → 🟡 normal
+Defaults: `StatefulSet` → 🟠 high, everything else → 🔵 normal
 
 ### 🔇 Silences — stop the noise
 
@@ -388,7 +417,7 @@ should escalate a recurring crash to you.
 | `correlation.cooldownMinutes` | ⏱️ Min time between identical crash re-alerts (default: 10; 0 = off) |
 | `correlation.maxBaseline` | 📈 Max baseline entries kept for startup comparison (default: 5000) |
 | `correlation.escalation.enabled` | ✅ Escalate severity on repeated crashes (default: true) |
-| `correlation.escalation.tiers` | 📊 Restart thresholds: `[3, 10, 50]` |
+| `correlation.escalation.tiers` | 📊 Restart thresholds (default: `[3, 10]`): crossing the first → `high`, the second → `critical`. There is nothing above critical, so a third tier does nothing |
 | `correlation.renotify.intervalBySeverity` | 🔔 Re-alert interval per severity (e.g. `high: 60`), `default` key as fallback; unset = off |
 | `correlation.renotify.maxPerIncident` | 🔔 Max re-alerts per incident (default: 3) |
 
@@ -401,8 +430,68 @@ notification, then re-notified on a gentle cooldown instead of on every event.
 | Parameter | What it does |
 |:---|---|
 | `smartGrouping.windowSeconds` | ⏱ Grouping window in seconds (default: 60). Set to 0 to disable. |
+| `smartGrouping.namespaceFanOutThreshold` | 🧺 Owners failing the same way in one namespace, within one window, before their groups collapse into a single alert (default: 3; `0` disables) |
+
+**The first failure alerts immediately.** Grouping only holds an incident back once a *second*
+owner in the same namespace fails the same way inside the window — the earliest moment a
+namespace-wide problem can be told apart from an isolated one. An isolated failure therefore
+costs no grouping latency at all. If the fan-out threshold is then reached, the namespace-wide
+alert counts that first owner in its total, and the first owner's own thread gets a short note
+pointing at the wider alert. That thread stays open and resolves when the pod actually recovers
+— it is never marked resolved just because a bigger alert took over. A buffer that ends the
+window with a single member is sent as that incident, under its own name — never announced as
+a "group" of one.
 
 kwatch groups related incidents by the dimension that best captures each failure type's root cause. For example, OOMKilled and probe failures group by owner+namespace, node conditions group by node (not pod errors on the same node), image pull errors group by image (or globally for rate limits), and CrashLoopBackOff with a matching log signature bridges across owners. Each group notification shows affected pods, owners, nodes, or images depending on scope, with overflow counting above 1,000 entries. After a group notification is sent, the same condition is not silently repeated on every event: re-notifications are throttled by a cooldown (4× the grouping window, clamped between 5 and 30 minutes). While the underlying members keep failing, the group resumes with a periodic UPDATE after the cooldown lapses; it resolves (and stops notifying) once the members clear. This prevents per-event flooding while still surfacing ongoing incidents.
+
+**Namespace fan-out collapses into one alert.** Most reasons group by reason + namespace + owner, which is right when one workload is unhealthy and wrong when the whole namespace is — a node going away can make a dozen deployments unready at once and produce a dozen alerts for one event. When `smartGrouping.namespaceFanOutThreshold` distinct owners (default **3**, `0` disables) fail the same way in one namespace inside one grouping window, their separate groups collapse into a single notification listing every affected owner. Groups already scoped to a shared cause — a node, an image, a log signature — are never merged this way, because they already describe the cause. This is the backstop for when the resource graph does not link the failures; when it does, mass-failure detection catches them first.
+
+The order these decisions are made in — baseline, then attribution to a node / shared dependency / owning workload, then cooldown — is described in [How kwatch decides whether to speak](architecture.md#how-kwatch-decides-whether-to-speak).
+
+**Mass failures suppress their own members.** When many workloads fail for one shared reason — a node going away, a ConfigMap breaking — kwatch raises a single blast-radius alert. Incidents whose dependency is already the subject of that alert are suppressed rather than sent alongside it, and recorded in the audit log with `skipReason: mass_failure`. Suppressed incidents are still tracked: they count toward the mass failure, resolve silently if they recover, and any that are **still broken when the mass failure clears are announced at that point** — a symptom that outlives its cause is not lost. The node's own incident is never suppressed: it is the root cause, not a symptom of itself.
+
+**Evidence names the pod it came from.** An incident is keyed by owner rather than by pod, so it survives replicas being replaced and can list several pods under `Resources`. The logs and events attached to it come from exactly one of those pods, and the alert says which (`Events — from pod-abc123`) whenever the incident covers more than that pod.
+
+### 🔐 Keeping credentials out of the ConfigMap
+
+kwatch's config is a ConfigMap. ConfigMaps are readable by anyone with `get` access to the
+namespace and are not encrypted at rest by default, so a provider token written there is a
+token anyone in the namespace can take.
+
+kwatch expands `${VAR}` in its config, so keep the secret in a Secret and reference it:
+
+```yaml
+# Secret
+apiVersion: v1
+kind: Secret
+metadata:
+  name: kwatch-credentials
+stringData:
+  SLACK_TOKEN: xoxb-...
+```
+
+```yaml
+# kwatch container in the Deployment
+env:
+  - name: SLACK_TOKEN
+    valueFrom:
+      secretKeyRef:
+        name: kwatch-credentials
+        key: SLACK_TOKEN
+```
+
+```yaml
+# config.yaml
+alert:
+  slack:
+    token: "${SLACK_TOKEN}"
+```
+
+Only `${VAR}` (braced) is expanded, and only where the value is a string. The Helm chart does
+not expose an `env` override yet; patch the rendered Deployment or use a values overlay.
+
+If a token has ever been committed to a ConfigMap, rotate it — it should be treated as
+disclosed, not merely moved.
 
 ### 📝 Audit log
 
@@ -416,6 +505,8 @@ searchable history of everything it decided.
 | `auditLog.output` | Destination: `stdout` (default) or a file path |
 
 Emits `create`/`update`/`resolved`/`skip` entries (with `incidentKey`, `namespace`, `reason`, `severity`, `count`, `duration`, `skipReason`) to stdout or a file for feeding into your log pipeline.
+
+**`skip` entries record state changes, not every evaluation.** Suppression is a standing condition: a baselined incident is re-evaluated on every poll, and writing a line each time buries everything else — a single baselined HPA can emit thousands of identical entries a day. A skip is therefore recorded the first time it applies to an incident key, and again only if the reason changes (say `baseline` → `cooldown`) or if the incident starts alerting and is later suppressed again. If you are counting suppression *events*, count polls elsewhere; this log answers "what did kwatch decide", not "how often did it re-decide the same thing".
 
 ### 📋 CRD — live config changes
 

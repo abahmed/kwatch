@@ -1,11 +1,8 @@
 package mattermost
 
 import (
-	"bytes"
 	"encoding/json"
 	"fmt"
-	"io"
-	"net/http"
 	"strings"
 
 	"k8s.io/klog/v2"
@@ -14,10 +11,9 @@ import (
 	"github.com/abahmed/kwatch/internal/config"
 	"github.com/abahmed/kwatch/internal/constant"
 	"github.com/abahmed/kwatch/internal/event"
-	"github.com/abahmed/kwatch/internal/k8s"
+	"github.com/abahmed/kwatch/internal/insight"
 	"github.com/abahmed/kwatch/internal/message"
 	"github.com/abahmed/kwatch/internal/model"
-	"github.com/abahmed/kwatch/internal/ratelimit"
 )
 
 type Mattermost struct {
@@ -47,7 +43,10 @@ type mmPayload struct {
 }
 
 // NewMattermost returns new mattermost instance
-func NewMattermost(config map[string]interface{}, appCfg *config.App) *Mattermost {
+func NewMattermost(
+	config map[string]interface{},
+	appCfg *config.App,
+) *Mattermost {
 	webhook, ok := config["webhook"].(string)
 	if !ok || len(webhook) == 0 {
 		klog.InfoS("initializing mattermost with empty webhook url")
@@ -97,8 +96,28 @@ func (m *Mattermost) SendEvent(e *event.Event) error {
 // SendIncident implements alert.ThreadProvider.
 // It renders the incident using the Report model and PlaintextRenderer,
 // producing a context-adaptive text message.
-func (m *Mattermost) SendIncident(inc *model.Incident, action model.IncidentAction) error {
-	text := util.RenderIncident(inc, action, message.NewPlainTextRenderer(), m.appCfg.ClusterName)
+func (m *Mattermost) SendIncident(
+	inc *model.Incident,
+	action model.IncidentAction,
+) error {
+	return m.SendIncidentWithInsight(inc, action, nil)
+}
+
+// SendIncidentWithInsight implements alert.InsightThreadProvider, so the
+// diagnosis — likely cause, impact, recent changes — is rendered rather than
+// dropped on the way to this provider.
+func (m *Mattermost) SendIncidentWithInsight(
+	inc *model.Incident,
+	action model.IncidentAction,
+	ins *insight.Insight,
+) error {
+	text := util.RenderIncidentWithInsight(
+		inc,
+		action,
+		ins,
+		message.NewPlainTextRenderer(),
+		m.appCfg.ClusterName,
+	)
 	if text == "" {
 		return nil
 	}
@@ -106,37 +125,10 @@ func (m *Mattermost) SendIncident(inc *model.Incident, action model.IncidentActi
 }
 
 func (m *Mattermost) sendAPI(content []byte) error {
-	client := k8s.GetDefaultClient()
-	buffer := bytes.NewBuffer(content)
-	request, err := http.NewRequest(http.MethodPost, m.webhook, buffer)
-	if err != nil {
-		return err
-	}
-
-	request.Header.Set("Content-Type", "application/json")
-
-	response, err := client.Do(request)
-	if err != nil {
-		return err
-	}
-	defer response.Body.Close()
-
-	if response.StatusCode == http.StatusTooManyRequests {
-		return &ratelimit.Error{
-			Provider:   "Mattermost",
-			StatusCode: http.StatusTooManyRequests,
-			RetryAfter: ratelimit.ParseRetryAfter(response),
-		}
-	}
-	if response.StatusCode != 200 {
-		body, _ := io.ReadAll(response.Body)
-		return fmt.Errorf(
-			"call to mattermost alert returned status code %d: %s",
-			response.StatusCode,
-			string(body))
-	}
-
-	return nil
+	_, err := util.Send(
+		util.Request{Provider: "Mattermost", URL: m.webhook, Body: content},
+	)
+	return err
 }
 
 func (m *Mattermost) buildMessage(e *event.Event, msg *string) ([]byte, error) {
@@ -164,28 +156,68 @@ func (m *Mattermost) buildMessage(e *event.Event, msg *string) ([]byte, error) {
 
 		mmFields := []mmField{}
 		if m.appCfg.ClusterName != "" {
-			mmFields = append(mmFields, mmField{Title: "Cluster", Value: m.appCfg.ClusterName, Short: true})
+			mmFields = append(
+				mmFields,
+				mmField{
+					Title: "Cluster",
+					Value: m.appCfg.ClusterName,
+					Short: true,
+				},
+			)
 		}
 		if e.PodName != "" {
-			mmFields = append(mmFields, mmField{Title: "Name", Value: e.PodName, Short: true})
+			mmFields = append(
+				mmFields,
+				mmField{Title: "Name", Value: e.PodName, Short: true},
+			)
 		}
 		if e.ContainerName != "" {
-			mmFields = append(mmFields, mmField{Title: "Container", Value: e.ContainerName, Short: true})
+			mmFields = append(
+				mmFields,
+				mmField{
+					Title: "Container",
+					Value: e.ContainerName,
+					Short: true,
+				},
+			)
 		}
 		if e.Namespace != "" {
-			mmFields = append(mmFields, mmField{Title: "Namespace", Value: e.Namespace, Short: true})
+			mmFields = append(
+				mmFields,
+				mmField{Title: "Namespace", Value: e.Namespace, Short: true},
+			)
 		}
 		if e.NodeName != "" {
-			mmFields = append(mmFields, mmField{Title: "Node", Value: e.NodeName, Short: true})
+			mmFields = append(
+				mmFields,
+				mmField{Title: "Node", Value: e.NodeName, Short: true},
+			)
 		}
 		if e.Reason != "" {
-			mmFields = append(mmFields, mmField{Title: "Reason", Value: e.Reason, Short: true})
+			mmFields = append(
+				mmFields,
+				mmField{Title: "Reason", Value: e.Reason, Short: true},
+			)
 		}
 		if logs != "" {
-			mmFields = append(mmFields, mmField{Title: ":memo: Logs", Value: "```\n" + logs + "\n```", Short: false})
+			mmFields = append(
+				mmFields,
+				mmField{
+					Title: ":memo: Logs",
+					Value: "```\n" + logs + "\n```",
+					Short: false,
+				},
+			)
 		}
 		if events != "" {
-			mmFields = append(mmFields, mmField{Title: ":mag: Events", Value: "```\n" + events + " \n```", Short: false})
+			mmFields = append(
+				mmFields,
+				mmField{
+					Title: ":mag: Events",
+					Value: "```\n" + events + " \n```",
+					Short: false,
+				},
+			)
 		}
 
 		payload.Attachments = []mmAttachment{

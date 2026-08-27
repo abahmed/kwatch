@@ -4,6 +4,7 @@ linters:
   default: none
   enable:
     - errcheck
+    - forbidigo
     - gocritic
     - gocyclo
     - govet
@@ -11,6 +12,13 @@ linters:
     - unparam
     - unused
   settings:
+    forbidigo:
+      forbid:
+        # Providers must call util.Send: it is the one place that turns HTTP
+        # statuses into success / rate-limited / permanent / retryable. A
+        # provider with its own http.NewRequest gets its own status bugs.
+        - pattern: '^http\.(NewRequest|NewRequestWithContext|Post|Get|Head|PostForm)$'
+          msg: "alert providers must send through util.Send, not raw net/http"
     govet:
       disable:
         - inline
@@ -34,6 +42,12 @@ linters:
       # Informer wiring is declarative; ignoring AddEventHandler is noise.
       - path: "internal/controller"
         linters: [errcheck]
+      # The raw-HTTP rule is only about alert providers; util.Send is where the
+      # one allowed http.NewRequest lives.
+      - linters: [forbidigo]
+        path-except: "^internal/alert/"
+      - linters: [forbidigo]
+        path: "^internal/alert/util/"
 
 formatters:
   enable:

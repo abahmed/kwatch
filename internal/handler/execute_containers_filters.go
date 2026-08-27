@@ -101,7 +101,7 @@ func (h *handler) executeContainersFilters(ctx *filter.Context) {
 			ownerKind = ctx.Owner.Kind
 		}
 
-		hint := h.buildContainerHint(ctx)
+		hint, facts := h.buildContainerHint(ctx)
 		h.signalEvent(&event.Signal{
 			Resource:     "pod",
 			PodName:      ctx.Pod.Name,
@@ -117,6 +117,7 @@ func (h *handler) executeContainersFilters(ctx *filter.Context) {
 			OwnerKind:    ownerKind,
 			RestartCount: ctx.Container.Container.RestartCount,
 			Hint:         hint,
+			Facts:        facts,
 			Owner:        ownerName,
 			ContainerState: &model.ContainerState{
 				RestartCount:     ctx.Container.Container.RestartCount,
@@ -137,15 +138,46 @@ func (h *handler) loadPodEvents(ctx *filter.Context) {
 	if ctx.Events != nil || ctx.Pod == nil {
 		return
 	}
+	// Indexed lookup first: O(events for this pod) instead of O(events in the
+	// namespace). The informer already maintains this index; until now nothing
+	// read it.
+	if ctx.EventsByPod != nil {
+		evs, err := ctx.EventsByPod(ctx.Pod.Namespace, ctx.Pod.Name)
+		if err == nil {
+			items := make([]corev1.Event, 0, len(evs))
+			for _, e := range evs {
+				items = append(items, *e)
+			}
+			sort.Slice(items, func(i, j int) bool {
+				return items[i].LastTimestamp.Before(&items[j].LastTimestamp)
+			})
+			ctx.Events = &items
+			return
+		}
+		klog.V(
+			2,
+		).InfoS(
+			"event index lookup failed, falling back to lister",
+			"pod",
+			ctx.Pod.Name,
+			"error",
+			err,
+		)
+	}
 	if ctx.EventLister != nil {
-		all, err := ctx.EventLister.Events(ctx.Pod.Namespace).List(labels.Everything())
+		all, err := ctx.EventLister.Events(
+			ctx.Pod.Namespace,
+		).List(
+			labels.Everything(),
+		)
 		if err != nil {
 			klog.ErrorS(err, "event lister failed", "pod", ctx.Pod.Name)
 			return
 		}
 		items := make([]corev1.Event, 0, len(all))
 		for _, e := range all {
-			if e.InvolvedObject.Kind == "Pod" && e.InvolvedObject.Name == ctx.Pod.Name {
+			if e.InvolvedObject.Kind == "Pod" &&
+				e.InvolvedObject.Name == ctx.Pod.Name {
 				items = append(items, *e)
 			}
 		}
@@ -155,7 +187,12 @@ func (h *handler) loadPodEvents(ctx *filter.Context) {
 		ctx.Events = &items
 		return
 	}
-	podEvents, err := k8s.GetPodEvents(ctx.Ctx, ctx.Client, ctx.Pod.Name, ctx.Pod.Namespace)
+	podEvents, err := k8s.GetPodEvents(
+		ctx.Ctx,
+		ctx.Client,
+		ctx.Pod.Name,
+		ctx.Pod.Namespace,
+	)
 	if err != nil {
 		klog.ErrorS(err, "failed to fetch pod events", "pod", ctx.Pod.Name)
 		return
@@ -181,7 +218,8 @@ func (h *handler) highRestartSuppressed(ctx *filter.Context) bool {
 	// detectors leave it empty for a currently-Running container.
 	reason := ctx.Container.Reason
 	if reason == "" {
-		if last := ctx.Container.Container.LastTerminationState.Terminated; last != nil {
+		term := ctx.Container.Container.LastTerminationState
+		if last := term.Terminated; last != nil {
 			reason = last.Reason
 		}
 	}
@@ -189,15 +227,21 @@ func (h *handler) highRestartSuppressed(ctx *filter.Context) bool {
 	if len(h.config.AllowedReasons) > 0 &&
 		!slices.Contains(h.config.AllowedReasons, reason) {
 		klog.InfoS(
-			"skipping high-restart-count alert as reason is not in the reason allow list",
-			"reason", reason)
+			"skipping high-restart-count alert as reason is not in the reason "+
+				"allow list",
+			"reason",
+			reason,
+		)
 		return true
 	}
 	if len(h.config.ForbiddenReasons) > 0 &&
 		slices.Contains(h.config.ForbiddenReasons, reason) {
 		klog.InfoS(
-			"skipping high-restart-count alert as reason is in the reason forbid list",
-			"reason", reason)
+			"skipping high-restart-count alert as reason is in the reason "+
+				"forbid list",
+			"reason",
+			reason,
+		)
 		return true
 	}
 
@@ -210,7 +254,8 @@ func (h *handler) highRestartSuppressed(ctx *filter.Context) bool {
 	return false
 }
 
-// findContainerSpec returns the matching container spec (including init containers) by name.
+// findContainerSpec returns the matching container spec (including init
+// containers) by name.
 func findContainerSpec(pod *corev1.Pod, name string) *corev1.Container {
 	for i := range pod.Spec.Containers {
 		if pod.Spec.Containers[i].Name == name {
@@ -231,9 +276,11 @@ func findContainerSpec(pod *corev1.Pod, name string) *corev1.Container {
 // crash-looping workloads. Falls back to the pod name for bare pods.
 func (h *handler) oomKey(ctx *filter.Context) string {
 	if ctx.Owner != nil && ctx.Owner.Name != "" {
-		return ctx.Pod.Namespace + "/" + ctx.Owner.Name + "/" + ctx.Container.Container.Name
+		return ctx.Pod.Namespace + "/" + ctx.Owner.Name + "/" +
+			ctx.Container.Container.Name
 	}
-	return ctx.Pod.Namespace + "/" + ctx.Pod.Name + "/" + ctx.Container.Container.Name
+	return ctx.Pod.Namespace + "/" + ctx.Pod.Name + "/" +
+		ctx.Container.Container.Name
 }
 
 // isPodTerminatingOrDisrupted returns true when the pod is in a terminal or
@@ -248,7 +295,8 @@ func isPodTerminatingOrDisrupted(pod *corev1.Pod) bool {
 	if pod.DeletionTimestamp != nil {
 		return true
 	}
-	if pod.Status.Phase == corev1.PodFailed && pod.Status.Reason == constant.ReasonEvicted {
+	if pod.Status.Phase == corev1.PodFailed &&
+		pod.Status.Reason == constant.ReasonEvicted {
 		return true
 	}
 	for _, c := range pod.Status.Conditions {
@@ -259,8 +307,16 @@ func isPodTerminatingOrDisrupted(pod *corev1.Pod) bool {
 	return false
 }
 
-func (h *handler) emitHighRestartAlert(ctx *filter.Context, container *corev1.ContainerStatus) {
-	owner := correlation.ResolveOwnerName(ctx.Pod, h.listers.rs, h.listers.ds, h.listers.ss)
+func (h *handler) emitHighRestartAlert(
+	ctx *filter.Context,
+	container *corev1.ContainerStatus,
+) {
+	owner := correlation.ResolveOwnerName(
+		ctx.Pod,
+		h.listers.RS,
+		h.listers.DS,
+		h.listers.SS,
+	)
 	if owner == "" {
 		return
 	}
@@ -277,8 +333,12 @@ func (h *handler) emitHighRestartAlert(ctx *filter.Context, container *corev1.Co
 		Reason:       constant.ReasonHighRestartCount,
 		Labels:       ctx.Pod.Labels,
 		RestartCount: container.RestartCount,
-		Hint: fmt.Sprintf("container restarted %d times (last exit: %s, code %d)",
-			container.RestartCount, lastReason, lastEC),
+		Hint: fmt.Sprintf(
+			"container restarted %d times (last exit: %s, code %d)",
+			container.RestartCount,
+			lastReason,
+			lastEC,
+		),
 		Owner: owner,
 		ContainerState: &model.ContainerState{
 			RestartCount: container.RestartCount,

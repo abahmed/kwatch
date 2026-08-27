@@ -3,9 +3,12 @@ package k8s
 import (
 	"context"
 	"errors"
+	"fmt"
 	"math/rand"
 	"os"
+	"strings"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
 	v1 "k8s.io/api/core/v1"
@@ -37,12 +40,16 @@ func TestGetPodContainerLogsError(t *testing.T) {
 	assert := assert.New(t)
 
 	client := fake.NewSimpleClientset()
-	client.PrependReactor("get", "pods", func(action k8stesting.Action) (bool, runtime.Object, error) {
-		if action.GetSubresource() == "log" {
-			return true, nil, errors.New("log fetch error")
-		}
-		return false, nil, nil
-	})
+	client.PrependReactor(
+		"get",
+		"pods",
+		func(action k8stesting.Action) (bool, runtime.Object, error) {
+			if action.GetSubresource() == "log" {
+				return true, nil, errors.New("log fetch error")
+			}
+			return false, nil, nil
+		},
+	)
 
 	logs := GetPodContainerLogs(
 		context.Background(),
@@ -53,7 +60,11 @@ func TestGetPodContainerLogsError(t *testing.T) {
 		false,
 		20)
 
-	assert.Equal("", logs, "GetPodContainerLogs should return empty string on error")
+	assert.Equal(
+		"",
+		logs,
+		"GetPodContainerLogs should return empty string on error",
+	)
 }
 
 func TestGetPodEventsStr(t *testing.T) {
@@ -67,7 +78,8 @@ func TestGetPodEventsStr(t *testing.T) {
 
 	result := GetPodEventsStr(&[]v1.Event{event})
 	expectedOutput :=
-		"[" + event.LastTimestamp.String() + "] " + event.Reason + " " +
+		event.LastTimestamp.UTC().Format("Jan 02 15:04:05") +
+			"  " + event.Reason + "  " +
 			event.Message
 	assert.Equal(result, expectedOutput)
 }
@@ -84,7 +96,7 @@ func TestGetPodEventsStrFallsBackToFirstTimestamp(t *testing.T) {
 
 	result := GetPodEventsStr(&[]v1.Event{event})
 	expectedOutput :=
-		"[" + ts.Time.String() + "] Started Container started"
+		ts.Time.UTC().Format("Jan 02 15:04:05") + "  Started  Container started"
 	assert.Equal(expectedOutput, result)
 }
 
@@ -100,7 +112,7 @@ func TestGetPodEventsStrFallsBackToCreationTimestamp(t *testing.T) {
 
 	result := GetPodEventsStr(&[]v1.Event{event})
 	expectedOutput :=
-		"[" + ts.Time.String() + "] Pulled Pulled image"
+		ts.Time.UTC().Format("Jan 02 15:04:05") + "  Pulled  Pulled image"
 	assert.Equal(expectedOutput, result)
 }
 
@@ -240,7 +252,12 @@ func TestGetPodEventsWithFieldSelector(t *testing.T) {
 			}, nil
 		})
 
-	result, err := GetPodEvents(context.Background(), cli, "my-pod", "test-namespace")
+	result, err := GetPodEvents(
+		context.Background(),
+		cli,
+		"my-pod",
+		"test-namespace",
+	)
 	assert.NoError(err)
 	assert.NotNil(result)
 	assert.Equal(0, len(result.Items))
@@ -283,7 +300,12 @@ func TestGetPodEventsSuccess(t *testing.T) {
 			}, nil
 		})
 
-	result, err := GetPodEvents(context.Background(), cli, "test-pod", "default")
+	result, err := GetPodEvents(
+		context.Background(),
+		cli,
+		"test-pod",
+		"default",
+	)
 	assert.NoError(err)
 	assert.NotNil(result)
 	assert.Equal(1, len(result.Items))
@@ -295,4 +317,29 @@ func TestGetDefaultClient(t *testing.T) {
 	client := GetDefaultClient()
 	assert.NotNil(client)
 	assert.Equal(DefaultHTTPTimeout, client.Timeout)
+}
+
+// Events are unbounded in Kubernetes; a churning pod accumulates hundreds. An
+// unbounded list pushed alerts past the provider's limits and lost the whole
+// alert. The cap keeps the newest, which describe the current state.
+func TestGetPodEventsStrKeepsNewestUpToCap(t *testing.T) {
+	events := make([]v1.Event, 0, 300)
+	for i := 299; i >= 0; i-- { // deliberately newest-first input
+		events = append(events, v1.Event{
+			Reason:        fmt.Sprintf("Event%03d", i),
+			Message:       "m",
+			LastTimestamp: metav1.NewTime(time.Unix(int64(1700000000+i*60), 0)),
+		})
+	}
+	out := GetPodEventsStr(&events)
+	lines := strings.Split(out, "\n")
+	assert.Len(t, lines, MaxEventsInMessage+1, "cap plus the omission note")
+	assert.Contains(t, lines[0], "260 earlier event(s) omitted")
+	assert.Contains(t, out, "Event299", "the newest event survives")
+	assert.NotContains(t, out, "Event000", "the oldest is shed first")
+	assert.True(
+		t,
+		strings.Index(out, "Event260") < strings.Index(out, "Event299"),
+		"oldest kept comes first",
+	)
 }

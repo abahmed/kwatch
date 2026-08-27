@@ -1,14 +1,11 @@
 package dingtalk
 
 import (
-	"bytes"
 	"crypto/hmac"
 	"crypto/sha256"
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
-	"io"
-	"net/http"
 	"net/url"
 	"time"
 
@@ -18,10 +15,9 @@ import (
 	"github.com/abahmed/kwatch/internal/config"
 	"github.com/abahmed/kwatch/internal/constant"
 	"github.com/abahmed/kwatch/internal/event"
-	"github.com/abahmed/kwatch/internal/k8s"
+	"github.com/abahmed/kwatch/internal/insight"
 	"github.com/abahmed/kwatch/internal/message"
 	"github.com/abahmed/kwatch/internal/model"
-	"github.com/abahmed/kwatch/internal/ratelimit"
 )
 
 const (
@@ -122,8 +118,28 @@ func (d *DingTalk) SendMessage(msg string) error {
 // SendIncident implements alert.ThreadProvider.
 // It renders the incident using the Report model and PlaintextRenderer,
 // producing a context-adaptive text message.
-func (d *DingTalk) SendIncident(inc *model.Incident, action model.IncidentAction) error {
-	text := util.RenderIncident(inc, action, message.NewPlainTextRenderer(), d.appCfg.ClusterName)
+func (d *DingTalk) SendIncident(
+	inc *model.Incident,
+	action model.IncidentAction,
+) error {
+	return d.SendIncidentWithInsight(inc, action, nil)
+}
+
+// SendIncidentWithInsight implements alert.InsightThreadProvider, so the
+// diagnosis — likely cause, impact, recent changes — is rendered rather than
+// dropped on the way to this provider.
+func (d *DingTalk) SendIncidentWithInsight(
+	inc *model.Incident,
+	action model.IncidentAction,
+	ins *insight.Insight,
+) error {
+	text := util.RenderIncidentWithInsight(
+		inc,
+		action,
+		ins,
+		message.NewPlainTextRenderer(),
+		d.appCfg.ClusterName,
+	)
 	if text == "" {
 		return nil
 	}
@@ -131,56 +147,31 @@ func (d *DingTalk) SendIncident(inc *model.Incident, action model.IncidentAction
 }
 
 func (d *DingTalk) sendAPI(msg string) error {
-	buffer := bytes.NewBuffer([]byte(msg))
-
 	url := fmt.Sprintf(d.url, d.accessToken)
 	if len(d.secret) != 0 {
 		url += getSignature(d.secret)
 	}
-
-	request, err := http.NewRequest(
-		http.MethodPost,
-		url,
-		buffer,
+	data, err := util.Send(
+		util.Request{Provider: "DingTalk", URL: url, Body: []byte(msg)},
 	)
 	if err != nil {
 		return err
 	}
 
-	request.Header.Set("Content-Type", "application/json")
-
-	client := k8s.GetDefaultClient()
-	response, err := client.Do(request)
-	if err != nil {
-		return err
-	}
-	defer response.Body.Close()
-
-	if response.StatusCode == http.StatusTooManyRequests {
-		return &ratelimit.Error{
-			Provider:   "DingTalk",
-			StatusCode: http.StatusTooManyRequests,
-			RetryAfter: ratelimit.ParseRetryAfter(response),
-		}
-	}
-
-	data, err := io.ReadAll(response.Body)
-	if err != nil {
-		return err
-	}
-
+	// DingTalk answers 200 to a rejected message and reports the failure in
+	// the body instead. Some of those codes are transient (130101 is its
+	// frequency limit), so the error stays retryable.
 	var dr dingResponse
-	err = json.Unmarshal(data, &dr)
-	if err != nil {
+	if err := json.Unmarshal(data, &dr); err != nil {
 		return err
 	}
 	if dr.Errcode != 0 {
 		return fmt.Errorf(
-			"call to ding talk alert returned status code %d: %s",
-			response.StatusCode,
-			string(data))
+			"call to ding talk alert rejected (errcode %d): %s",
+			dr.Errcode,
+			string(data),
+		)
 	}
-
 	return nil
 }
 

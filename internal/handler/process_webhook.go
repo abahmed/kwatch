@@ -22,14 +22,18 @@ func serviceRef(svc *admissionregistrationv1.ServiceReference) string {
 
 // DetectMutatingWebhookIssue checks a MutatingWebhookConfiguration for webhooks
 // whose service backend doesn't exist.
-func DetectMutatingWebhookIssue(mwc *admissionregistrationv1.MutatingWebhookConfiguration, hasService func(ns, name string) bool) []*event.Signal {
+func DetectMutatingWebhookIssue(
+	mwc *admissionregistrationv1.MutatingWebhookConfiguration,
+	hasService func(ns, name string) bool,
+) []*event.Signal {
 	var sigs []*event.Signal
 	for _, w := range mwc.Webhooks {
 		ref := serviceRef(w.ClientConfig.Service)
 		if ref == "" {
 			continue
 		}
-		ns, name := w.ClientConfig.Service.Namespace, w.ClientConfig.Service.Name
+		svc := w.ClientConfig.Service
+		ns, name := svc.Namespace, svc.Name
 		if !hasService(ns, name) {
 			sigs = append(sigs, &event.Signal{
 				Resource:  "mutatingwebhookconfiguration",
@@ -38,23 +42,33 @@ func DetectMutatingWebhookIssue(mwc *admissionregistrationv1.MutatingWebhookConf
 				Owner:     mwc.Name,
 				PodName:   mwc.Name,
 				Labels:    mwc.Labels,
-				Hint:      fmt.Sprintf("mutating webhook %q: service %s/%s does not exist", mwc.Name, ns, name),
+				Hint: fmt.Sprintf(
+					"mutating webhook %q: service %s/%s does not exist",
+					mwc.Name,
+					ns,
+					name,
+				),
 			})
 		}
 	}
 	return sigs
 }
 
-// DetectValidatingWebhookIssue checks a ValidatingWebhookConfiguration for webhooks
+// DetectValidatingWebhookIssue checks a ValidatingWebhookConfiguration for
+// webhooks
 // whose service backend doesn't exist.
-func DetectValidatingWebhookIssue(vwc *admissionregistrationv1.ValidatingWebhookConfiguration, hasService func(ns, name string) bool) []*event.Signal {
+func DetectValidatingWebhookIssue(
+	vwc *admissionregistrationv1.ValidatingWebhookConfiguration,
+	hasService func(ns, name string) bool,
+) []*event.Signal {
 	var sigs []*event.Signal
 	for _, w := range vwc.Webhooks {
 		ref := serviceRef(w.ClientConfig.Service)
 		if ref == "" {
 			continue
 		}
-		ns, name := w.ClientConfig.Service.Namespace, w.ClientConfig.Service.Name
+		svc := w.ClientConfig.Service
+		ns, name := svc.Namespace, svc.Name
 		if !hasService(ns, name) {
 			sigs = append(sigs, &event.Signal{
 				Resource:  "validatingwebhookconfiguration",
@@ -63,30 +77,45 @@ func DetectValidatingWebhookIssue(vwc *admissionregistrationv1.ValidatingWebhook
 				Owner:     vwc.Name,
 				PodName:   vwc.Name,
 				Labels:    vwc.Labels,
-				Hint:      fmt.Sprintf("validating webhook %q: service %s/%s does not exist", vwc.Name, ns, name),
+				Hint: fmt.Sprintf(
+					"validating webhook %q: service %s/%s does not exist",
+					vwc.Name,
+					ns,
+					name,
+				),
 			})
 		}
 	}
 	return sigs
 }
 
-func (h *handler) ProcessMutatingWebhookConfiguration(key string, deleted bool) error {
+func (h *handler) ProcessMutatingWebhookConfiguration(
+	key string,
+	deleted bool,
+) error {
 	if deleted {
 		h.correlator.ResolveByResource("mutatingwebhookconfiguration", key)
 		return nil
 	}
-	mwc, err := h.listers.mwc.Get(key)
+	mwc, err := h.listers.MWC.Get(key)
 	if err != nil {
 		if errors.IsNotFound(err) {
 			h.correlator.ResolveByResource("mutatingwebhookconfiguration", key)
 			return nil
 		}
-		return fmt.Errorf("failed to get mutatingwebhookconfiguration %s from cache: %w", key, err)
+		return fmt.Errorf(
+			"failed to get mutatingwebhookconfiguration %s from cache: %w",
+			key,
+			err,
+		)
 	}
 	return h.ProcessMutatingWebhookConfigurationObject(mwc, false)
 }
 
-func (h *handler) ProcessMutatingWebhookConfigurationObject(mwc *admissionregistrationv1.MutatingWebhookConfiguration, deleted bool) error {
+func (h *handler) ProcessMutatingWebhookConfigurationObject(
+	mwc *admissionregistrationv1.MutatingWebhookConfiguration,
+	deleted bool,
+) error {
 	if mwc == nil {
 		return nil
 	}
@@ -96,10 +125,10 @@ func (h *handler) ProcessMutatingWebhookConfigurationObject(mwc *admissionregist
 	}
 
 	hasService := func(ns, name string) bool {
-		if h.listers.service == nil {
+		if h.listers.Service == nil {
 			return true // can't check, assume ok
 		}
-		_, err := h.listers.service.Services(ns).Get(name)
+		_, err := h.listers.Service.Services(ns).Get(name)
 		return err == nil
 	}
 
@@ -108,41 +137,64 @@ func (h *handler) ProcessMutatingWebhookConfigurationObject(mwc *admissionregist
 		h.signalEvent(sig)
 	}
 	if len(sigs) == 0 {
-		h.correlator.MarkResolved(correlation.BuildKey("", mwc.Name, constant.ReasonWebhookBackendNotFound, ""))
+		h.correlator.MarkResolved(
+			correlation.BuildKey(
+				"",
+				mwc.Name,
+				constant.ReasonWebhookBackendNotFound,
+				"",
+			),
+		)
 	}
 	return nil
 }
 
-func (h *handler) ProcessValidatingWebhookConfiguration(key string, deleted bool) error {
+func (h *handler) ProcessValidatingWebhookConfiguration(
+	key string,
+	deleted bool,
+) error {
 	if deleted {
 		h.correlator.ResolveByResource("validatingwebhookconfiguration", key)
 		return nil
 	}
-	vwc, err := h.listers.vwc.Get(key)
+	vwc, err := h.listers.VWC.Get(key)
 	if err != nil {
 		if errors.IsNotFound(err) {
-			h.correlator.ResolveByResource("validatingwebhookconfiguration", key)
+			h.correlator.ResolveByResource(
+				"validatingwebhookconfiguration",
+				key,
+			)
 			return nil
 		}
-		return fmt.Errorf("failed to get validatingwebhookconfiguration %s from cache: %w", key, err)
+		return fmt.Errorf(
+			"failed to get validatingwebhookconfiguration %s from cache: %w",
+			key,
+			err,
+		)
 	}
 	return h.ProcessValidatingWebhookConfigurationObject(vwc, false)
 }
 
-func (h *handler) ProcessValidatingWebhookConfigurationObject(vwc *admissionregistrationv1.ValidatingWebhookConfiguration, deleted bool) error {
+func (h *handler) ProcessValidatingWebhookConfigurationObject(
+	vwc *admissionregistrationv1.ValidatingWebhookConfiguration,
+	deleted bool,
+) error {
 	if vwc == nil {
 		return nil
 	}
 	if deleted {
-		h.correlator.ResolveByResource("validatingwebhookconfiguration", vwc.Name)
+		h.correlator.ResolveByResource(
+			"validatingwebhookconfiguration",
+			vwc.Name,
+		)
 		return nil
 	}
 
 	hasService := func(ns, name string) bool {
-		if h.listers.service == nil {
+		if h.listers.Service == nil {
 			return true
 		}
-		_, err := h.listers.service.Services(ns).Get(name)
+		_, err := h.listers.Service.Services(ns).Get(name)
 		return err == nil
 	}
 
@@ -151,7 +203,14 @@ func (h *handler) ProcessValidatingWebhookConfigurationObject(vwc *admissionregi
 		h.signalEvent(sig)
 	}
 	if len(sigs) == 0 {
-		h.correlator.MarkResolved(correlation.BuildKey("", vwc.Name, constant.ReasonWebhookBackendNotFound, ""))
+		h.correlator.MarkResolved(
+			correlation.BuildKey(
+				"",
+				vwc.Name,
+				constant.ReasonWebhookBackendNotFound,
+				"",
+			),
+		)
 	}
 	return nil
 }

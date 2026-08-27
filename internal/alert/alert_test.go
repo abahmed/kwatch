@@ -14,19 +14,29 @@ import (
 
 	"github.com/abahmed/kwatch/internal/config"
 	"github.com/abahmed/kwatch/internal/event"
+	"github.com/abahmed/kwatch/internal/insight"
 	"github.com/abahmed/kwatch/internal/model"
 )
 
 // testBuildMessage is a helper for tests that creates a minimal AlertManager
 // and calls buildMessage with no insight, 100 max lines, and no templates.
-func testBuildMessage(inc *model.Incident, action model.IncidentAction, clusterName string) string {
+func testBuildMessage(
+	inc *model.Incident,
+	action model.IncidentAction,
+	clusterName string,
+) string {
 	am := AlertManager{clusterName: clusterName}
 	return am.buildMessage(inc, action, nil, nil)
 }
 
 // testBuildMessageWithTemplate is a helper for tests that builds a message
 // with the given parsed templates.
-func testBuildMessageWithTemplate(inc *model.Incident, action model.IncidentAction, clusterName string, rawTpls map[string]string) string {
+func testBuildMessageWithTemplate(
+	inc *model.Incident,
+	action model.IncidentAction,
+	clusterName string,
+	rawTpls map[string]string,
+) string {
 	am := AlertManager{clusterName: clusterName}
 	parsed := map[string]*template.Template{}
 	for k, v := range rawTpls {
@@ -154,8 +164,14 @@ func TestSendProvidersEvent(t *testing.T) {
 	am := AlertManager{}
 	am.entries = append(
 		am.entries,
-		providerEntry{provider: &fakeProvider{}, retry: retryConfig{maxAttempts: 1}},
-		providerEntry{provider: &fakeProviderWithError{}, retry: retryConfig{maxAttempts: 1}},
+		providerEntry{
+			provider: &fakeProvider{},
+			retry:    retryConfig{maxAttempts: 1},
+		},
+		providerEntry{
+			provider: &fakeProviderWithError{},
+			retry:    retryConfig{maxAttempts: 1},
+		},
 	)
 	am.NotifyEvent(event.Event{})
 }
@@ -164,26 +180,42 @@ func TestSendProvidersMsg(t *testing.T) {
 	am := AlertManager{}
 	am.entries = append(
 		am.entries,
-		providerEntry{provider: &fakeProvider{}, retry: retryConfig{maxAttempts: 1}},
-		providerEntry{provider: &fakeProviderWithError{}, retry: retryConfig{maxAttempts: 1}},
+		providerEntry{
+			provider: &fakeProvider{},
+			retry:    retryConfig{maxAttempts: 1},
+		},
+		providerEntry{
+			provider: &fakeProviderWithError{},
+			retry:    retryConfig{maxAttempts: 1},
+		},
 	)
 	am.Notify("hello world!")
 }
 
 func TestNotifyIncidentCreate(t *testing.T) {
 	am := AlertManager{}
-	am.entries = append(am.entries, providerEntry{provider: &fakeProvider{}, retry: retryConfig{maxAttempts: 1}})
+	am.entries = append(
+		am.entries,
+		providerEntry{
+			provider: &fakeProvider{},
+			retry:    retryConfig{maxAttempts: 1},
+		},
+	)
 
 	inc := &model.Incident{
-		Key:       "default:deploy:CrashLoopBackOff",
-		Name:      "deploy",
-		Namespace: "default",
-		Reason:    "CrashLoopBackOff",
-		Resource:  "pod",
-		Count:     1,
-		FirstSeen: time.Now().Add(-5 * time.Minute),
-		LastSeen:  time.Now(),
-		Resources: map[string]bool{"pod-1": true},
+		Subject: model.Subject{
+			Key:       "default:deploy:CrashLoopBackOff",
+			Name:      "deploy",
+			Namespace: "default",
+			Reason:    "CrashLoopBackOff",
+			Resource:  "pod",
+		},
+		Status: model.Status{
+			Count:     1,
+			FirstSeen: time.Now().Add(-5 * time.Minute),
+			LastSeen:  time.Now(),
+			Resources: map[string]bool{"pod-1": true},
+		},
 	}
 
 	am.NotifyIncident(inc, model.ActionCreate, nil)
@@ -191,18 +223,32 @@ func TestNotifyIncidentCreate(t *testing.T) {
 
 func TestNotifyIncidentUpdate(t *testing.T) {
 	am := AlertManager{}
-	am.entries = append(am.entries, providerEntry{provider: &fakeProvider{}, retry: retryConfig{maxAttempts: 1}}, providerEntry{provider: &fakeProviderWithError{}, retry: retryConfig{maxAttempts: 1}})
+	am.entries = append(
+		am.entries,
+		providerEntry{
+			provider: &fakeProvider{},
+			retry:    retryConfig{maxAttempts: 1},
+		},
+		providerEntry{
+			provider: &fakeProviderWithError{},
+			retry:    retryConfig{maxAttempts: 1},
+		},
+	)
 
 	inc := &model.Incident{
-		Key:       "default:deploy:OOMKilled",
-		Name:      "deploy",
-		Namespace: "default",
-		Reason:    "OOMKilled",
-		Resource:  "pod",
-		Count:     3,
-		FirstSeen: time.Now().Add(-10 * time.Minute),
-		LastSeen:  time.Now(),
-		Resources: map[string]bool{"pod-1": true, "pod-2": true},
+		Subject: model.Subject{
+			Key:       "default:deploy:OOMKilled",
+			Name:      "deploy",
+			Namespace: "default",
+			Reason:    "OOMKilled",
+			Resource:  "pod",
+		},
+		Status: model.Status{
+			Count:     3,
+			FirstSeen: time.Now().Add(-10 * time.Minute),
+			LastSeen:  time.Now(),
+			Resources: map[string]bool{"pod-1": true, "pod-2": true},
+		},
 	}
 
 	am.NotifyIncident(inc, model.ActionUpdate, nil)
@@ -210,11 +256,19 @@ func TestNotifyIncidentUpdate(t *testing.T) {
 
 func TestNotifyIncidentSkip(t *testing.T) {
 	am := AlertManager{}
-	am.entries = append(am.entries, providerEntry{provider: &fakeProvider{}, retry: retryConfig{maxAttempts: 1}})
+	am.entries = append(
+		am.entries,
+		providerEntry{
+			provider: &fakeProvider{},
+			retry:    retryConfig{maxAttempts: 1},
+		},
+	)
 
 	inc := &model.Incident{
-		Key:  "default:deploy:OOMKilled",
-		Name: "deploy",
+		Subject: model.Subject{
+			Key:  "default:deploy:OOMKilled",
+			Name: "deploy",
+		},
 	}
 
 	am.NotifyIncident(inc, model.ActionSkip, nil)
@@ -228,8 +282,13 @@ type fakeThreadProvider struct {
 
 func (p *fakeThreadProvider) SendMessage(msg string) error     { return nil }
 func (p *fakeThreadProvider) SendEvent(evt *event.Event) error { return nil }
-func (p *fakeThreadProvider) Name() string                     { return "ThreadSlack" }
-func (p *fakeThreadProvider) SendIncident(inc *model.Incident, action model.IncidentAction) error {
+
+func (p *fakeThreadProvider) Name() string { return "ThreadSlack" }
+
+func (p *fakeThreadProvider) SendIncident(
+	inc *model.Incident,
+	action model.IncidentAction,
+) error {
 	p.lastInc = inc
 	p.lastAct = action
 	return nil
@@ -238,12 +297,18 @@ func (p *fakeThreadProvider) SendIncident(inc *model.Incident, action model.Inci
 func TestNotifyIncidentCallsThreadProvider(t *testing.T) {
 	tp := &fakeThreadProvider{}
 	am := AlertManager{}
-	am.entries = append(am.entries, providerEntry{provider: tp, retry: retryConfig{maxAttempts: 1}})
+	am.entries = append(
+		am.entries,
+		providerEntry{provider: tp, retry: retryConfig{maxAttempts: 1}},
+	)
 
 	inc := &model.Incident{
-		Key:  "default:deploy:OOMKilled",
-		Name: "deploy",
+		Subject: model.Subject{
+			Key:  "default:deploy:OOMKilled",
+			Name: "deploy",
+		},
 	}
+
 	am.NotifyIncident(inc, model.ActionCreate, nil)
 
 	assert.Equal(t, inc, tp.lastInc)
@@ -253,12 +318,18 @@ func TestNotifyIncidentCallsThreadProvider(t *testing.T) {
 func TestNotifyIncidentThreadProviderWithSkip(t *testing.T) {
 	tp := &fakeThreadProvider{}
 	am := AlertManager{}
-	am.entries = append(am.entries, providerEntry{provider: tp, retry: retryConfig{maxAttempts: 1}})
+	am.entries = append(
+		am.entries,
+		providerEntry{provider: tp, retry: retryConfig{maxAttempts: 1}},
+	)
 
 	inc := &model.Incident{
-		Key:  "default:deploy:OOMKilled",
-		Name: "deploy",
+		Subject: model.Subject{
+			Key:  "default:deploy:OOMKilled",
+			Name: "deploy",
+		},
 	}
+
 	am.NotifyIncident(inc, model.ActionSkip, nil)
 
 	assert.Nil(t, tp.lastInc)
@@ -269,24 +340,35 @@ func TestNotifyIncidentThreadProviderClamped(t *testing.T) {
 	am := AlertManager{}
 	am.entries = append(am.entries, providerEntry{
 		provider: tp,
-		retry:    retryConfig{maxAttempts: 1, delay: time.Second, maxBackoff: defaultMaxBackoff},
+		retry: retryConfig{
+			maxAttempts: 1,
+			delay:       time.Second,
+			maxBackoff:  defaultMaxBackoff,
+		},
 		maxBytes: 2000,
 	})
 
 	bigLog := strings.Repeat("error: something failed\n", 300)
 	inc := &model.Incident{
-		Key:         "default:deploy:CrashLoopBackOff",
-		Name:        "deploy",
-		Namespace:   "default",
-		Reason:      "CrashLoopBackOff",
-		Resource:    "pod",
-		Count:       2,
-		Logs:        bigLog,
-		IncludeLogs: true,
-		FirstSeen:   time.Now().Add(-5 * time.Minute),
-		LastSeen:    time.Now(),
-		Resources:   map[string]bool{"pod-1": true},
+		Subject: model.Subject{
+			Key:       "default:deploy:CrashLoopBackOff",
+			Name:      "deploy",
+			Namespace: "default",
+			Reason:    "CrashLoopBackOff",
+			Resource:  "pod",
+		},
+		Status: model.Status{
+			Count:     2,
+			FirstSeen: time.Now().Add(-5 * time.Minute),
+			LastSeen:  time.Now(),
+			Resources: map[string]bool{"pod-1": true},
+		},
+		Evidence: model.Evidence{
+			Logs:        bigLog,
+			IncludeLogs: true,
+		},
 	}
+
 	am.NotifyIncident(inc, model.ActionCreate, nil)
 
 	assert.NotNil(t, tp.lastInc)
@@ -308,16 +390,20 @@ func TestDefaultMaxBytes(t *testing.T) {
 func TestFormatIncidentMessage(t *testing.T) {
 	now := time.Now()
 	inc := &model.Incident{
-		Key:           "default:deploy:CrashLoopBackOff",
-		Name:          "deploy",
-		Namespace:     "default",
-		Reason:        "CrashLoopBackOff",
-		Resource:      "pod",
-		Count:         2,
-		FirstSeen:     now.Add(-10 * time.Minute),
-		LastSeen:      now,
-		Resources:     map[string]bool{"pod-1": true, "pod-2": true},
-		PeakResources: 2,
+		Subject: model.Subject{
+			Key:       "default:deploy:CrashLoopBackOff",
+			Name:      "deploy",
+			Namespace: "default",
+			Reason:    "CrashLoopBackOff",
+			Resource:  "pod",
+		},
+		Status: model.Status{
+			Count:         2,
+			FirstSeen:     now.Add(-10 * time.Minute),
+			LastSeen:      now,
+			Resources:     map[string]bool{"pod-1": true, "pod-2": true},
+			PeakResources: 2,
+		},
 	}
 
 	msg := testBuildMessage(inc, model.ActionCreate, "test-cluster")
@@ -333,19 +419,26 @@ func TestFormatIncidentMessage(t *testing.T) {
 func TestFormatIncidentMessageWithLogsEvents(t *testing.T) {
 	now := time.Now()
 	inc := &model.Incident{
-		Key:           "default:deploy:CrashLoopBackOff",
-		Name:          "deploy",
-		Namespace:     "default",
-		Reason:        "CrashLoopBackOff",
-		Resource:      "pod",
-		Count:         2,
-		FirstSeen:     now.Add(-10 * time.Minute),
-		LastSeen:      now,
-		Resources:     map[string]bool{"pod-1": true, "pod-2": true},
-		Logs:          "line1\nline2\nline3",
-		Events:        "[2024-01-01] Pulling image\n[2024-01-01] BackOff restart",
-		IncludeEvents: true,
-		IncludeLogs:   true,
+		Subject: model.Subject{
+			Key:       "default:deploy:CrashLoopBackOff",
+			Name:      "deploy",
+			Namespace: "default",
+			Reason:    "CrashLoopBackOff",
+			Resource:  "pod",
+		},
+		Status: model.Status{
+			Count:     2,
+			FirstSeen: now.Add(-10 * time.Minute),
+			LastSeen:  now,
+			Resources: map[string]bool{"pod-1": true, "pod-2": true},
+		},
+		Evidence: model.Evidence{
+			Logs: "line1\nline2\nline3",
+			Events: "[2024-01-01] Pulling image\n[2024-01-01] BackOff " +
+				"restart",
+			IncludeEvents: true,
+			IncludeLogs:   true,
+		},
 	}
 
 	msg := testBuildMessage(inc, model.ActionCreate, "test-cluster")
@@ -360,15 +453,19 @@ func TestFormatIncidentMessageWithLogsEvents(t *testing.T) {
 func TestFormatResolvedMessageGolden(t *testing.T) {
 	now := time.Now()
 	inc := &model.Incident{
-		Key:       "default:deploy:OOMKilled",
-		Name:      "deploy",
-		Namespace: "default",
-		Reason:    "OOMKilled",
-		Resource:  "pod",
-		Count:     3,
-		FirstSeen: now.Add(-20 * time.Minute),
-		LastSeen:  now,
-		Resources: map[string]bool{"pod-1": true},
+		Subject: model.Subject{
+			Key:       "default:deploy:OOMKilled",
+			Name:      "deploy",
+			Namespace: "default",
+			Reason:    "OOMKilled",
+			Resource:  "pod",
+		},
+		Status: model.Status{
+			Count:     3,
+			FirstSeen: now.Add(-20 * time.Minute),
+			LastSeen:  now,
+			Resources: map[string]bool{"pod-1": true},
+		},
 	}
 
 	msg := testBuildMessage(inc, model.ActionResolved, "test-cluster")
@@ -384,19 +481,25 @@ func TestSilenceByNamespace(t *testing.T) {
 	})
 
 	inc := &model.Incident{
-		Key:       "kube-system:pod:ImagePullBackOff",
-		Name:      "pod",
-		Namespace: "kube-system",
-		Reason:    "ImagePullBackOff",
+		Subject: model.Subject{
+			Key:       "kube-system:pod:ImagePullBackOff",
+			Name:      "pod",
+			Namespace: "kube-system",
+			Reason:    "ImagePullBackOff",
+		},
 	}
+
 	assert.True(t, am.isSilenced(inc))
 
 	inc2 := &model.Incident{
-		Key:       "default:pod:ImagePullBackOff",
-		Name:      "pod",
-		Namespace: "default",
-		Reason:    "ImagePullBackOff",
+		Subject: model.Subject{
+			Key:       "default:pod:ImagePullBackOff",
+			Name:      "pod",
+			Namespace: "default",
+			Reason:    "ImagePullBackOff",
+		},
 	}
+
 	assert.False(t, am.isSilenced(inc2))
 }
 
@@ -407,19 +510,25 @@ func TestSilenceByReason(t *testing.T) {
 	})
 
 	inc := &model.Incident{
-		Key:       "default:pod:BackOff",
-		Name:      "pod",
-		Namespace: "default",
-		Reason:    "BackOff",
+		Subject: model.Subject{
+			Key:       "default:pod:BackOff",
+			Name:      "pod",
+			Namespace: "default",
+			Reason:    "BackOff",
+		},
 	}
+
 	assert.True(t, am.isSilenced(inc))
 
 	inc2 := &model.Incident{
-		Key:       "default:pod:OOMKilled",
-		Name:      "pod",
-		Namespace: "default",
-		Reason:    "OOMKilled",
+		Subject: model.Subject{
+			Key:       "default:pod:OOMKilled",
+			Name:      "pod",
+			Namespace: "default",
+			Reason:    "OOMKilled",
+		},
 	}
+
 	assert.False(t, am.isSilenced(inc2))
 }
 
@@ -429,35 +538,54 @@ func TestRouteFilter(t *testing.T) {
 	}
 
 	inc := &model.Incident{
-		Key:       "production:pod:OOMKilled",
-		Name:      "pod",
-		Namespace: "production",
-		Reason:    "OOMKilled",
-		Severity:  "high",
+		Subject: model.Subject{
+			Key:       "production:pod:OOMKilled",
+			Name:      "pod",
+			Namespace: "production",
+			Reason:    "OOMKilled",
+		},
+		Status: model.Status{
+			Severity: "high",
+		},
 	}
+
 	assert.True(t, matchesRoute(routes[0], inc))
 
 	inc2 := &model.Incident{
-		Key:       "staging:pod:OOMKilled",
-		Name:      "pod",
-		Namespace: "staging",
-		Reason:    "OOMKilled",
-		Severity:  "high",
+		Subject: model.Subject{
+			Key:       "dev:pod:OOMKilled",
+			Name:      "pod",
+			Namespace: "dev",
+			Reason:    "OOMKilled",
+		},
+		Status: model.Status{
+			Severity: "high",
+		},
 	}
+
 	assert.False(t, matchesRoute(routes[0], inc2))
 
 	inc3 := &model.Incident{
-		Key:       "production:pod:BackOff",
-		Name:      "pod",
-		Namespace: "production",
-		Reason:    "BackOff",
-		Severity:  "normal",
+		Subject: model.Subject{
+			Key:       "production:pod:BackOff",
+			Name:      "pod",
+			Namespace: "production",
+			Reason:    "BackOff",
+		},
+		Status: model.Status{
+			Severity: "normal",
+		},
 	}
+
 	assert.False(t, matchesRoute(routes[0], inc3))
 }
 
 func TestShouldDeliverNoRoutes(t *testing.T) {
-	inc := &model.Incident{Key: "default:pod:Error"}
+	inc := &model.Incident{
+		Subject: model.Subject{
+			Key: "default:pod:Error",
+		},
+	}
 	assert.True(t, shouldDeliver(nil, inc))
 	assert.True(t, shouldDeliver([]config.AlertRoute{}, inc))
 }
@@ -490,20 +618,29 @@ func TestSetTemplatesNil(t *testing.T) {
 func TestFormatIncidentMessageWithTemplate(t *testing.T) {
 	now := time.Now()
 	inc := &model.Incident{
-		Key:       "default:deploy:CrashLoopBackOff",
-		Name:      "deploy",
-		Namespace: "default",
-		Reason:    "CrashLoopBackOff",
-		Resource:  "pod",
-		Count:     2,
-		FirstSeen: now.Add(-10 * time.Minute),
-		LastSeen:  now,
-		Resources: map[string]bool{"pod-1": true},
+		Subject: model.Subject{
+			Key:       "default:deploy:CrashLoopBackOff",
+			Name:      "deploy",
+			Namespace: "default",
+			Reason:    "CrashLoopBackOff",
+			Resource:  "pod",
+		},
+		Status: model.Status{
+			Count:     2,
+			FirstSeen: now.Add(-10 * time.Minute),
+			LastSeen:  now,
+			Resources: map[string]bool{"pod-1": true},
+		},
 	}
 
-	msg := testBuildMessageWithTemplate(inc, model.ActionCreate, "test-cluster", map[string]string{
-		"crashloopbackoff": "{{.Incident.Name}} {{.Action}}",
-	})
+	msg := testBuildMessageWithTemplate(
+		inc,
+		model.ActionCreate,
+		"test-cluster",
+		map[string]string{
+			"crashloopbackoff": "{{.Incident.Name}} {{.Action}}",
+		},
+	)
 	want := "deploy create"
 	if msg != want {
 		t.Errorf("got %q, want %q", msg, want)
@@ -513,21 +650,30 @@ func TestFormatIncidentMessageWithTemplate(t *testing.T) {
 func TestFormatIncidentMessageWithTemplateRenderError(t *testing.T) {
 	now := time.Now()
 	inc := &model.Incident{
-		Key:       "default:deploy:OOMKilled",
-		Name:      "deploy",
-		Namespace: "default",
-		Reason:    "OOMKilled",
-		Resource:  "pod",
-		Count:     2,
-		FirstSeen: now.Add(-10 * time.Minute),
-		LastSeen:  now,
-		Resources: map[string]bool{"pod-1": true},
+		Subject: model.Subject{
+			Key:       "default:deploy:OOMKilled",
+			Name:      "deploy",
+			Namespace: "default",
+			Reason:    "OOMKilled",
+			Resource:  "pod",
+		},
+		Status: model.Status{
+			Count:     2,
+			FirstSeen: now.Add(-10 * time.Minute),
+			LastSeen:  now,
+			Resources: map[string]bool{"pod-1": true},
+		},
 	}
 
 	// bad template syntax — Parse will reject it, so it won't be stored
-	msg := testBuildMessageWithTemplate(inc, model.ActionCreate, "test-cluster", map[string]string{
-		"oomkilled": "{{.Incident.Name {{.Action}}",
-	})
+	msg := testBuildMessageWithTemplate(
+		inc,
+		model.ActionCreate,
+		"test-cluster",
+		map[string]string{
+			"oomkilled": "{{.Incident.Name {{.Action}}",
+		},
+	)
 	if msg == "" {
 		t.Fatal("expected fallback message, got empty")
 	}
@@ -539,20 +685,29 @@ func TestFormatIncidentMessageWithTemplateRenderError(t *testing.T) {
 func TestFormatIncidentMessageUnregisteredReason(t *testing.T) {
 	now := time.Now()
 	inc := &model.Incident{
-		Key:       "default:deploy:NodeNotReady",
-		Name:      "deploy",
-		Namespace: "default",
-		Reason:    "NodeNotReady",
-		Resource:  "pod",
-		Count:     1,
-		FirstSeen: now.Add(-10 * time.Minute),
-		LastSeen:  now,
-		Resources: map[string]bool{"pod-1": true},
+		Subject: model.Subject{
+			Key:       "default:deploy:NodeNotReady",
+			Name:      "deploy",
+			Namespace: "default",
+			Reason:    "NodeNotReady",
+			Resource:  "pod",
+		},
+		Status: model.Status{
+			Count:     1,
+			FirstSeen: now.Add(-10 * time.Minute),
+			LastSeen:  now,
+			Resources: map[string]bool{"pod-1": true},
+		},
 	}
 
-	msg := testBuildMessageWithTemplate(inc, model.ActionCreate, "test-cluster", map[string]string{
-		"crashloopbackoff": "OVERRIDE",
-	})
+	msg := testBuildMessageWithTemplate(
+		inc,
+		model.ActionCreate,
+		"test-cluster",
+		map[string]string{
+			"crashloopbackoff": "OVERRIDE",
+		},
+	)
 	if !strings.Contains(msg, "NodeNotReady") {
 		t.Errorf("expected default message to contain reason, got %q", msg)
 	}
@@ -589,7 +744,10 @@ func TestFallbackResolve(t *testing.T) {
 		t.Errorf("expected slack fallback to point to pagerduty entry")
 	}
 	if pagerEntry.fallback != nil {
-		t.Errorf("expected pagerduty to have no fallback, got %v", pagerEntry.fallback)
+		t.Errorf(
+			"expected pagerduty to have no fallback, got %v",
+			pagerEntry.fallback,
+		)
 	}
 }
 
@@ -623,8 +781,14 @@ func (p *errorRecorderProvider) SendMessage(msg string) error {
 	p.callCount++
 	return p.err
 }
-func (p *errorRecorderProvider) SendEvent(evt *event.Event) error { return p.err }
-func (p *errorRecorderProvider) Name() string                     { return p.name }
+
+func (p *errorRecorderProvider) SendEvent(
+	evt *event.Event,
+) error {
+	return p.err
+}
+
+func (p *errorRecorderProvider) Name() string { return p.name }
 
 func TestFallbackUsedOnExhaustion(t *testing.T) {
 	primary := &errorRecorderProvider{name: "Primary", err: nil}
@@ -647,7 +811,10 @@ func TestFallbackUsedOnExhaustion(t *testing.T) {
 	primary.callCount = 0
 	am.Notify("test message 2")
 	if primary.callCount != 1 {
-		t.Errorf("expected 1 primary call on failure, got %d", primary.callCount)
+		t.Errorf(
+			"expected 1 primary call on failure, got %d",
+			primary.callCount,
+		)
 	}
 	if fb.callCount != 1 {
 		t.Errorf("expected 1 fallback call, got %d", fb.callCount)
@@ -671,7 +838,12 @@ func TestFallbackMessageTruncatedToFallbackMaxBytes(t *testing.T) {
 	am.Notify(strings.Repeat("x", 500))
 
 	require.Equal(t, 1, fb.callCount)
-	assert.LessOrEqual(t, len(fb.msg), 64, "fallback message must respect the fallback provider's maxBytes")
+	assert.LessOrEqual(
+		t,
+		len(fb.msg),
+		64,
+		"fallback message must respect the fallback provider's maxBytes",
+	)
 	assert.Contains(t, fb.msg, "(truncated)")
 	assert.Contains(t, fb.msg, "fallback")
 }
@@ -747,22 +919,31 @@ func TestSendWithRetrySuccess(t *testing.T) {
 	}
 }
 
-func TestNotifyIncidentEventDeliveryProviderPropagatesActionAndDedup(t *testing.T) {
+func TestNotifyIncidentEventDeliveryProviderPropagatesActionAndDedup(
+	t *testing.T,
+) {
 	fp := &fakeRecordingEventProvider{}
 	am := AlertManager{}
-	am.entries = append(am.entries, providerEntry{provider: fp, retry: retryConfig{maxAttempts: 1}})
+	am.entries = append(
+		am.entries,
+		providerEntry{provider: fp, retry: retryConfig{maxAttempts: 1}},
+	)
 
 	inc := &model.Incident{
-		Key:       "default:deploy:CrashLoopBackOff",
-		Name:      "deploy",
-		Namespace: "default",
-		Reason:    "CrashLoopBackOff",
-		Resource:  "pod",
-		ID:        "abc123",
-		Count:     1,
-		FirstSeen: time.Now().Add(-5 * time.Minute),
-		LastSeen:  time.Now(),
-		Resources: map[string]bool{"pod-1": true},
+		Subject: model.Subject{
+			Key:       "default:deploy:CrashLoopBackOff",
+			Name:      "deploy",
+			Namespace: "default",
+			Reason:    "CrashLoopBackOff",
+			Resource:  "pod",
+			ID:        "abc123",
+		},
+		Status: model.Status{
+			Count:     1,
+			FirstSeen: time.Now().Add(-5 * time.Minute),
+			LastSeen:  time.Now(),
+			Resources: map[string]bool{"pod-1": true},
+		},
 	}
 
 	am.NotifyIncident(inc, model.ActionResolved, nil)
@@ -778,7 +959,11 @@ type fakeRecordingEventProvider struct {
 	lastEvent *event.Event
 }
 
-func (p *fakeRecordingEventProvider) SendMessage(msg string) error { return nil }
+func (p *fakeRecordingEventProvider) SendMessage(
+	msg string,
+) error {
+	return nil
+}
 func (p *fakeRecordingEventProvider) SendEvent(evt *event.Event) error {
 	p.lastEvent = evt
 	return nil
@@ -802,7 +987,13 @@ func TestNotifyIncidentAfterShutdownIsNoop(t *testing.T) {
 	am.Start(ctx)
 	am.shutdown() // deterministic: closes provider channels, waits
 
-	am.NotifyIncident(&model.Incident{Key: "k", Name: "n", Reason: "OOMKilled"}, model.ActionCreate, nil)
+	am.NotifyIncident(&model.Incident{
+		Subject: model.Subject{
+			Key:    "k",
+			Name:   "n",
+			Reason: "OOMKilled",
+		},
+	}, model.ActionCreate, nil)
 }
 
 // Saturation: when a provider channel is full, fanOut drops the oldest queued
@@ -811,9 +1002,19 @@ func TestNotifyIncidentAfterShutdownIsNoop(t *testing.T) {
 func TestFanOutSaturatedQueueRecordsDeadLetter(t *testing.T) {
 	am := &AlertManager{}
 	ch := make(chan deliverJob, channelCap)
-	inc := &model.Incident{Key: "old-job", Name: "n1", Reason: "Error"}
+	inc := &model.Incident{
+		Subject: model.Subject{
+			Key:    "arriving-job",
+			Name:   "n1",
+			Reason: "Error",
+		},
+	}
 	for i := 0; i < channelCap; i++ {
-		ch <- deliverJob{inc: &model.Incident{Key: model.IncidentKey(fmt.Sprintf("stale-%d", i))}}
+		ch <- deliverJob{inc: &model.Incident{
+			Subject: model.Subject{
+				Key: model.IncidentKey(fmt.Sprintf("queued-%d", i)),
+			},
+		}}
 	}
 	am.entries = []providerEntry{{
 		provider: &fakeProvider{},
@@ -824,13 +1025,102 @@ func TestFanOutSaturatedQueueRecordsDeadLetter(t *testing.T) {
 	am.fanOut(deliverJob{inc: inc, action: model.ActionCreate})
 	am.mu.Unlock()
 
-	// The new job must be queued (oldest drained out) and the drained job
-	// recorded as a dead letter.
-	assert.Len(t, ch, channelCap)
+	// Under saturation the already-queued notifications are kept — they are
+	// the earlier, more diagnostic ones — and the arriving job is dead-
+	// lettered instead. Evicting the oldest could discard an incident's
+	// CREATE while keeping a later UPDATE for the same incident.
+	assert.Len(t, ch, channelCap, "queue stays full; nothing was evicted")
+
+	first := <-ch
+	assert.Equal(t, model.IncidentKey("queued-0"), first.inc.Key,
+		"the earliest queued notification must survive")
+
 	dl := am.DeadLetters()
 	dlList, ok := dl.([]DeadLetterEntry)
 	require.True(t, ok)
 	assert.Len(t, dlList, 1)
-	assert.Equal(t, "stale-0", dlList[0].Key)
+	assert.Equal(t, "arriving-job", dlList[0].Key,
+		"the job that could not be queued is the one recorded")
 	assert.Contains(t, dlList[0].Error, "queue saturated")
+}
+
+// A permanent failure — a malformed payload, a revoked token — fails the same
+// way on every attempt, and each retry holds up every alert queued behind it
+// on that provider. It must be given up on immediately.
+func TestSendWithRetryStopsOnPermanentError(t *testing.T) {
+	attempts := 0
+	err := sendWithRetry(context.Background(), func() error {
+		attempts++
+		return event.Permanent(errors.New("invalid_blocks"))
+	}, retryConfig{maxAttempts: 5, delay: time.Millisecond}, "test")
+	require.Error(t, err)
+	assert.Equal(t, 1, attempts, "a permanent error must not be retried")
+	assert.True(
+		t,
+		event.IsPermanent(err),
+		"the permanent marker must survive to the caller",
+	)
+
+	// A transient error still gets every attempt.
+	attempts = 0
+	_ = sendWithRetry(context.Background(), func() error {
+		attempts++
+		return errors.New("connection reset")
+	}, retryConfig{maxAttempts: 3, delay: time.Millisecond}, "test")
+	assert.Equal(t, 3, attempts, "a transient error is retried to maxAttempts")
+}
+
+type fakeInsightProvider struct {
+	fakeProvider
+	gotInsight   *insight.Insight
+	plainCalled  bool
+	insightCalls int
+}
+
+func (p *fakeInsightProvider) SendIncident(
+	*model.Incident,
+	model.IncidentAction,
+) error {
+	p.plainCalled = true
+	return nil
+}
+
+func (p *fakeInsightProvider) SendIncidentWithInsight(
+	_ *model.Incident,
+	_ model.IncidentAction,
+	ins *insight.Insight,
+) error {
+	p.insightCalls++
+	p.gotInsight = ins
+	return nil
+}
+
+// A provider that can render a diagnosis must be handed one. Falling back to
+// the plain SendIncident would silently drop the cause, impact and changes.
+func TestDeliverOnePrefersInsightCapableProvider(t *testing.T) {
+	fp := &fakeInsightProvider{}
+	am := &AlertManager{}
+	entry := providerEntry{provider: fp, retry: retryConfig{maxAttempts: 1}}
+	inc := &model.Incident{
+		Subject: model.Subject{
+			Key:    "ns:dep:Error:",
+			Reason: "Error",
+			Name:   "dep",
+		},
+	}
+	ins := &insight.Insight{
+		Cause:   "node worker-2 may be unhealthy",
+		Pattern: "node_failure",
+	}
+
+	am.deliverOne(context.Background(), &entry, inc, model.ActionCreate, ins)
+
+	assert.Equal(t, 1, fp.insightCalls)
+	assert.False(
+		t,
+		fp.plainCalled,
+		"the insight-aware path must be used, not the plain one",
+	)
+	require.NotNil(t, fp.gotInsight)
+	assert.Equal(t, "node worker-2 may be unhealthy", fp.gotInsight.Cause)
 }

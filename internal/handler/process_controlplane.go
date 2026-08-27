@@ -12,7 +12,8 @@ import (
 	"github.com/abahmed/kwatch/internal/event"
 )
 
-// controlPlaneSelectors maps component names to their well-known label selectors.
+// controlPlaneSelectors maps component names to their well-known label
+// selectors.
 var controlPlaneSelectors = map[string]string{
 	"kube-apiserver":          "component=kube-apiserver",
 	"kube-scheduler":          "component=kube-scheduler",
@@ -50,10 +51,12 @@ func DetectControlPlanePodIssue(pod *corev1.Pod) *event.Signal {
 	for _, cs := range allStatuses {
 		var reason string
 		if w := cs.State.Waiting; w != nil {
-			if w.Reason == constant.ReasonContainerCreating || w.Reason == constant.ReasonPodInitializing {
+			if w.Reason == constant.ReasonContainerCreating ||
+				w.Reason == constant.ReasonPodInitializing {
 				continue
 			}
-			if w.Reason == constant.ReasonCrashLoopBackOff && cs.LastTerminationState.Terminated != nil {
+			if w.Reason == constant.ReasonCrashLoopBackOff &&
+				cs.LastTerminationState.Terminated != nil {
 				reason = cs.LastTerminationState.Terminated.Reason
 			} else {
 				reason = w.Reason
@@ -80,7 +83,13 @@ func DetectControlPlanePodIssue(pod *corev1.Pod) *event.Signal {
 				Owner:        key,
 				Labels:       pod.Labels,
 				Severity:     "high",
-				Hint:         fmt.Sprintf("control-plane component %s/%s: container %s has issue: %s", pod.Namespace, pod.Name, cs.Name, reason),
+				Hint: fmt.Sprintf(
+					"control-plane component %s/%s: container %s has issue: %s",
+					pod.Namespace,
+					pod.Name,
+					cs.Name,
+					reason,
+				),
 			}
 		}
 	}
@@ -97,7 +106,13 @@ func DetectControlPlanePodIssue(pod *corev1.Pod) *event.Signal {
 				Owner:     key,
 				Labels:    pod.Labels,
 				Severity:  "high",
-				Hint:      fmt.Sprintf("control-plane component %s/%s: %s: %s", pod.Namespace, pod.Name, c.Reason, c.Message),
+				Hint: fmt.Sprintf(
+					"control-plane component %s/%s: %s: %s",
+					pod.Namespace,
+					pod.Name,
+					c.Reason,
+					c.Message,
+				),
 			}
 		}
 	}
@@ -105,7 +120,8 @@ func DetectControlPlanePodIssue(pod *corev1.Pod) *event.Signal {
 	return nil
 }
 
-// ComponentNameFromLabels tries to identify which control-plane component a pod belongs to.
+// ComponentNameFromLabels tries to identify which control-plane component a pod
+// belongs to.
 func ComponentNameFromLabels(labels map[string]string) string {
 	if labels == nil {
 		return ""
@@ -133,17 +149,22 @@ func (h *handler) ProcessControlPlanePod(pod *corev1.Pod) error {
 
 // SweepControlPlane lists all pods in the cpPodLister cache and checks them.
 func (h *handler) SweepControlPlane() {
-	if h.listers.cpPod == nil {
+	if h.listers.CPPod == nil {
 		return
 	}
-	pods, err := h.listers.cpPod.List(labels.Everything())
+	pods, err := h.listers.CPPod.List(labels.Everything())
 	if err != nil {
 		klog.ErrorS(err, "controlplane sweep: failed to list pods from cache")
 		return
 	}
 	for _, pod := range pods {
 		if err := h.ProcessControlPlanePod(pod); err != nil {
-			klog.ErrorS(err, "controlplane sweep: failed to process pod", "pod", klog.KObj(pod))
+			klog.ErrorS(
+				err,
+				"controlplane sweep: failed to process pod",
+				"pod",
+				klog.KObj(pod),
+			)
 		}
 	}
 }

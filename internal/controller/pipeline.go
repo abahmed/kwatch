@@ -9,6 +9,11 @@ import (
 	"k8s.io/client-go/util/workqueue"
 )
 
+// maxSyncRetries bounds how many times a failing key is requeued. With the
+// default exponential rate limiter the retries span a few minutes in total,
+// which outlasts any transient apiserver hiccup.
+const maxSyncRetries = 15
+
 // resourcePipeline bundles the plumbing every watched kind shares: a workqueue
 // fed by informer event handlers, the informer HasSynced funcs Run must wait
 // for, and the handler method each dequeued key is dispatched to.
@@ -57,8 +62,26 @@ func (p *resourcePipeline) processNextItem(ctx context.Context) bool {
 	defer p.queue.Done(key)
 
 	if err := p.syncFn(ctx, key); err != nil {
-		p.queue.AddRateLimited(key)
-		utilruntime.HandleError(fmt.Errorf("error syncing %s %q: %s, requeuing", p.name, key, err.Error()))
+		// Requeue with backoff, but not forever: a key that fails every time
+		// (a malformed key, an object the lister can never return) would
+		// otherwise circulate for the life of the process.
+		if p.queue.NumRequeues(key) < maxSyncRetries {
+			p.queue.AddRateLimited(key)
+			utilruntime.HandleError(
+				fmt.Errorf(
+					"error syncing %s %q: %s, requeuing",
+					p.name,
+					key,
+					err.Error(),
+				),
+			)
+			return true
+		}
+		p.queue.Forget(key)
+		utilruntime.HandleError(
+			fmt.Errorf("error syncing %s %q: %s, giving up after %d attempts",
+				p.name, key, err.Error(), maxSyncRetries),
+		)
 		return true
 	}
 

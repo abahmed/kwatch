@@ -14,16 +14,22 @@ import (
 func TestReportBuilderCreate(t *testing.T) {
 	rb := NewReportBuilder("test-cluster")
 	inc := &model.Incident{
-		Name:      "p1",
-		Namespace: "ns1",
-		Resource:  "pod",
-		Reason:    "CrashLoopBackOff",
-		Severity:  "critical",
-		Count:     3,
-		FirstSeen: time.Now().Add(-10 * time.Minute),
-		LastSeen:  time.Now(),
-		Hint:      "OOMKill",
-		Resources: map[string]bool{"p1": true},
+		Subject: model.Subject{
+			Name:      "p1",
+			Namespace: "ns1",
+			Resource:  "pod",
+			Reason:    "CrashLoopBackOff",
+		},
+		Status: model.Status{
+			Severity:  "critical",
+			Count:     3,
+			FirstSeen: time.Now().Add(-10 * time.Minute),
+			LastSeen:  time.Now(),
+			Resources: map[string]bool{"p1": true},
+		},
+		Evidence: model.Evidence{
+			Hint: "OOMKill",
+		},
 	}
 
 	report := rb.Build(inc, model.ActionCreate, nil)
@@ -41,13 +47,18 @@ func TestReportBuilderCreate(t *testing.T) {
 func TestReportBuilderCreateWithInsight(t *testing.T) {
 	rb := NewReportBuilder("test-cluster")
 	inc := &model.Incident{
-		Name:      "p1",
-		Namespace: "ns1",
-		Resource:  "pod",
-		Reason:    "ImagePullBackOff",
-		Severity:  "warning",
-		Resources: map[string]bool{"p1": true},
+		Subject: model.Subject{
+			Name:      "p1",
+			Namespace: "ns1",
+			Resource:  "pod",
+			Reason:    "ImagePullBackOff",
+		},
+		Status: model.Status{
+			Severity:  "warning",
+			Resources: map[string]bool{"p1": true},
+		},
 	}
+
 	ins := &insight.Insight{
 		Cause:   "node n1 may be unhealthy",
 		Impact:  "3 pods on this node",
@@ -64,14 +75,22 @@ func TestReportBuilderCreateWithInsight(t *testing.T) {
 func TestReportBuilderCreateWithChanges(t *testing.T) {
 	rb := NewReportBuilder("test-cluster")
 	inc := &model.Incident{
-		Name:      "p1",
-		Namespace: "ns1",
-		Resource:  "pod",
-		Reason:    "Error",
+		Subject: model.Subject{
+			Name:      "p1",
+			Namespace: "ns1",
+			Resource:  "pod",
+			Reason:    "Error",
+		},
 	}
+
 	ins := &insight.Insight{
 		RecentChanges: []context.Change{
-			{Resource: "configmap", Namespace: "ns1", Name: "cm1", Type: context.ChangeUpdate},
+			{
+				Resource:  "configmap",
+				Namespace: "ns1",
+				Name:      "cm1",
+				Type:      context.ChangeUpdate,
+			},
 		},
 	}
 
@@ -84,14 +103,18 @@ func TestReportBuilderCreateWithChanges(t *testing.T) {
 func TestReportBuilderUpdate(t *testing.T) {
 	rb := NewReportBuilder("test-cluster")
 	inc := &model.Incident{
-		Name:      "p1",
-		Namespace: "ns1",
-		Resource:  "pod",
-		Reason:    "CrashLoopBackOff",
-		Severity:  "critical",
-		Count:     5,
-		FirstSeen: time.Now().Add(-30 * time.Minute),
-		LastSeen:  time.Now(),
+		Subject: model.Subject{
+			Name:      "p1",
+			Namespace: "ns1",
+			Resource:  "pod",
+			Reason:    "CrashLoopBackOff",
+		},
+		Status: model.Status{
+			Severity:  "critical",
+			Count:     5,
+			FirstSeen: time.Now().Add(-30 * time.Minute),
+			LastSeen:  time.Now(),
+		},
 	}
 
 	report := rb.Build(inc, model.ActionUpdate, nil)
@@ -102,13 +125,17 @@ func TestReportBuilderUpdate(t *testing.T) {
 func TestReportBuilderResolved(t *testing.T) {
 	rb := NewReportBuilder("test-cluster")
 	inc := &model.Incident{
-		Name:      "p1",
-		Namespace: "ns1",
-		Resource:  "pod",
-		Reason:    "CrashLoopBackOff",
-		Count:     3,
-		FirstSeen: time.Now().Add(-5 * time.Minute),
-		LastSeen:  time.Now(),
+		Subject: model.Subject{
+			Name:      "p1",
+			Namespace: "ns1",
+			Resource:  "pod",
+			Reason:    "CrashLoopBackOff",
+		},
+		Status: model.Status{
+			Count:     3,
+			FirstSeen: time.Now().Add(-5 * time.Minute),
+			LastSeen:  time.Now(),
+		},
 	}
 
 	report := rb.Build(inc, model.ActionResolved, nil)
@@ -119,15 +146,24 @@ func TestReportBuilderResolved(t *testing.T) {
 func TestReportBuilderOOMTypeSpecific(t *testing.T) {
 	rb := NewReportBuilder("test-cluster")
 	inc := &model.Incident{
-		Name:               "p1",
-		Namespace:          "ns1",
-		Resource:           "pod",
-		Reason:             "OOMKilled",
-		ContainerName:      "c1",
-		LastContainerState: &model.ContainerState{ExitCode: 137},
-		Hint:               "OOMKilled (memory limit: 256Mi) — consider increasing memory limits",
-		FirstSeen:          time.Now().Add(-5 * time.Minute),
-		LastSeen:           time.Now(),
+		Subject: model.Subject{
+			Name:          "p1",
+			Namespace:     "ns1",
+			Resource:      "pod",
+			Reason:        "OOMKilled",
+			ContainerName: "c1",
+		},
+		Status: model.Status{
+			LastContainerState: &model.ContainerState{ExitCode: 137},
+			FirstSeen:          time.Now().Add(-5 * time.Minute),
+			LastSeen:           time.Now(),
+		},
+		Evidence: model.Evidence{
+			// The wording of the hint is irrelevant: the section is built from
+			// the facts, not parsed out of the prose.
+			Hint:  "the container ran out of memory",
+			Facts: model.Facts{MemoryLimit: "256Mi"},
+		},
 	}
 
 	report := rb.Build(inc, model.ActionCreate, nil)
@@ -143,43 +179,66 @@ func TestReportBuilderOOMTypeSpecific(t *testing.T) {
 func TestReportBuilderOOMLeak(t *testing.T) {
 	rb := NewReportBuilder("test-cluster")
 	inc := &model.Incident{
-		Name:               "p1",
-		Namespace:          "ns1",
-		Resource:           "pod",
-		Reason:             "OOMRepeating",
-		LastContainerState: &model.ContainerState{ExitCode: 137},
-		Hint:               "OOMKilled 5 times in 60m — potential memory leak [1,2,3,4,5]",
-		FirstSeen:          time.Now().Add(-5 * time.Minute),
-		LastSeen:           time.Now(),
+		Subject: model.Subject{
+			Name:      "p1",
+			Namespace: "ns1",
+			Resource:  "pod",
+			Reason:    "OOMRepeating",
+		},
+		Status: model.Status{
+			LastContainerState: &model.ContainerState{ExitCode: 137},
+			FirstSeen:          time.Now().Add(-5 * time.Minute),
+			LastSeen:           time.Now(),
+		},
+		Evidence: model.Evidence{
+			Hint: "OOMKilled 5 times in 60m — potential memory leak " +
+				"[1,2,3,4,5]",
+			Facts: model.Facts{
+				OOMCount:     5,
+				OOMWindowMin: 60,
+				MemoryLeak:   true,
+				OOMTimeline:  "[1,2,3,4,5]",
+			},
+		},
 	}
 
 	report := rb.Build(inc, model.ActionCreate, nil)
 	assert.NotNil(t, report.OOM)
 	assert.True(t, report.OOM.IsLeak)
 	assert.Equal(t, "[1,2,3,4,5]", report.OOM.Timeline)
-	assert.Equal(t, 5, report.OOM.LeakCount, "leak count must be parsed from the hint")
-	assert.Equal(t, 60, report.OOM.WindowMin, "leak window must be parsed from the hint")
+	assert.Equal(t, 5, report.OOM.LeakCount)
+	assert.Equal(t, 60, report.OOM.WindowMin)
 }
 
 func TestReportBuilderImageTypeSpecific(t *testing.T) {
 	rb := NewReportBuilder("test-cluster")
 	inc := &model.Incident{
-		Name:      "p1",
-		Namespace: "ns1",
-		Resource:  "pod",
-		Reason:    "ImagePullBackOff",
-		LastContainerState: &model.ContainerState{
-			Msg: "Back-off pulling image \"myimage:latest\"",
+		Subject: model.Subject{
+			Name:      "p1",
+			Namespace: "ns1",
+			Resource:  "pod",
+			Reason:    "ImagePullBackOff",
 		},
-		IncludeLogs: true,
-		Logs:        "some logs",
-		FirstSeen:   time.Now().Add(-5 * time.Minute),
-		LastSeen:    time.Now(),
+		Status: model.Status{
+			LastContainerState: &model.ContainerState{
+				Msg: "Back-off pulling image \"myimage:latest\"",
+			},
+			FirstSeen: time.Now().Add(-5 * time.Minute),
+			LastSeen:  time.Now(),
+		},
+		Evidence: model.Evidence{
+			IncludeLogs: true,
+			Logs:        "some logs",
+		},
 	}
 
 	report := rb.Build(inc, model.ActionCreate, nil)
 	assert.NotNil(t, report.Image)
-	assert.Equal(t, "Back-off pulling image \"myimage:latest\"", report.Image.RegistryHint)
+	assert.Equal(
+		t,
+		"Back-off pulling image \"myimage:latest\"",
+		report.Image.RegistryHint,
+	)
 	// Evidence logs cleared for ImagePullBackOff, events preserved
 	assert.NotNil(t, report.Evidence)
 	assert.Empty(t, report.Evidence.Logs)
@@ -188,18 +247,33 @@ func TestReportBuilderImageTypeSpecific(t *testing.T) {
 func TestReportBuilderPendingTypeSpecific(t *testing.T) {
 	rb := NewReportBuilder("test-cluster")
 	inc := &model.Incident{
-		Name:      "p1",
-		Namespace: "ns1",
-		Resource:  "pod",
-		Reason:    "Unschedulable",
-		Hint:      "unschedulable for 5m30s — no nodes match",
-		FirstSeen: time.Now().Add(-5 * time.Minute),
-		LastSeen:  time.Now(),
+		Subject: model.Subject{
+			Name:      "p1",
+			Namespace: "ns1",
+			Resource:  "pod",
+			Reason:    "Unschedulable",
+		},
+		Status: model.Status{
+			FirstSeen: time.Now().Add(-5 * time.Minute),
+			LastSeen:  time.Now(),
+		},
+		Evidence: model.Evidence{
+			Hint: "unschedulable for 5m30s — no nodes match",
+			Facts: model.Facts{
+				SchedulingDelay:  5*time.Minute + 30*time.Second,
+				ResourceRequests: []string{"app requests: cpu=500m mem=1Gi"},
+			},
+		},
 	}
 
 	report := rb.Build(inc, model.ActionCreate, nil)
 	assert.NotNil(t, report.Pending)
 	assert.Equal(t, "5m30s", report.Pending.Delay)
+	assert.Equal(
+		t,
+		[]string{"app requests: cpu=500m mem=1Gi"},
+		report.Pending.ResourceRequests,
+	)
 	// Identity and evidence should be hidden for pending
 	assert.Nil(t, report.Identity)
 	assert.Nil(t, report.Evidence)
@@ -208,17 +282,23 @@ func TestReportBuilderPendingTypeSpecific(t *testing.T) {
 func TestReportBuilderSuppressedPods(t *testing.T) {
 	rb := NewReportBuilder("test-cluster")
 	inc := &model.Incident{
-		Name:           "node1",
-		Namespace:      "",
-		Resource:       "node",
-		Reason:         "NotReady",
-		SuppressedPods: 3,
-		SuppressedPodSummaries: []model.PodSummary{
-			{Namespace: "ns1", PodName: "p1", Reason: "CrashLoopBackOff"},
-			{Namespace: "ns2", PodName: "p2", Reason: "OOMKilled"},
+		Subject: model.Subject{
+			Name:      "node1",
+			Namespace: "",
+			Resource:  "node",
+			Reason:    "NotReady",
 		},
-		FirstSeen: time.Now().Add(-5 * time.Minute),
-		LastSeen:  time.Now(),
+		Status: model.Status{
+			FirstSeen: time.Now().Add(-5 * time.Minute),
+			LastSeen:  time.Now(),
+		},
+		Attribution: model.Attribution{
+			SuppressedPods: 3,
+			SuppressedPodSummaries: []model.PodSummary{
+				{Namespace: "ns1", PodName: "p1", Reason: "CrashLoopBackOff"},
+				{Namespace: "ns2", PodName: "p2", Reason: "OOMKilled"},
+			},
+		},
 	}
 
 	report := rb.Build(inc, model.ActionCreate, nil)
@@ -236,7 +316,11 @@ func TestDurationStr(t *testing.T) {
 	now := time.Now()
 	assert.Equal(t, "1m", durationStr(now, now.Add(30*time.Second)))
 	assert.Equal(t, "5m", durationStr(now, now.Add(5*time.Minute)))
-	assert.Equal(t, "2h3m", durationStr(now, now.Add(2*time.Hour+3*time.Minute)))
+	assert.Equal(
+		t,
+		"2h3m",
+		durationStr(now, now.Add(2*time.Hour+3*time.Minute)),
+	)
 }
 
 func TestRenderAction(t *testing.T) {
@@ -314,13 +398,25 @@ func TestPlainTextRendererCreate(t *testing.T) {
 
 func TestFormatChanges(t *testing.T) {
 	renderer := NewPlainTextRenderer()
-	changes := &ChangesSection{
-		Items: []ChangeItem{
-			{Resource: "configmap", Reference: "ns1/cm1", Type: "updated"},
-		},
+	report := &Report{
+		Action:    "create",
+		Reason:    "CrashLoopBackOff",
+		Name:      "p1",
+		Namespace: "ns1",
+		Summary:   SummarySection{Emoji: "🔴"},
+		Changes: &ChangesSection{Items: []ChangeItem{
+			{
+				Resource:  "configmap",
+				Reference: "ns1/cm1",
+				Type:      "updated",
+				Age:       "3m",
+			},
+		}},
 	}
-	msg := renderer.renderChanges(changes)
-	assert.Contains(t, msg, "configmap")
-	assert.Contains(t, msg, "ns1/cm1")
-	assert.Contains(t, msg, "updated")
+	msg := renderer.RenderCreate(report)
+	assert.Contains(
+		t,
+		msg,
+		"Changed recently: configmap ns1/cm1 updated 3m ago",
+	)
 }

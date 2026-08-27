@@ -18,7 +18,10 @@ import (
 
 var defaultServiceSustainedSeconds float64 = 60
 
-func DetectServiceEndpointIssue(svc *corev1.Service, epSlices []*discoveryv1.EndpointSlice) *event.Signal {
+func DetectServiceEndpointIssue(
+	svc *corev1.Service,
+	epSlices []*discoveryv1.EndpointSlice,
+) *event.Signal {
 	if svc.Spec.Selector == nil || len(svc.Spec.Selector) == 0 {
 		return nil
 	}
@@ -51,7 +54,10 @@ func DetectServiceEndpointIssue(svc *corev1.Service, epSlices []*discoveryv1.End
 			Owner:     key,
 			PodName:   svc.Name,
 			Labels:    svc.Labels,
-			Hint:      fmt.Sprintf("service %s has selectors but no ready endpoints", key),
+			Hint: fmt.Sprintf(
+				"service %s has selectors but no ready endpoints",
+				key,
+			),
 		}
 	}
 	return nil
@@ -66,18 +72,26 @@ func (h *handler) ProcessService(key string, deleted bool) error {
 		h.correlator.ResolveByResource("service", namespace+"/"+name)
 		return nil
 	}
-	svc, err := h.listers.service.Services(namespace).Get(name)
+	svc, err := h.listers.Service.Services(namespace).Get(name)
 	if err != nil {
 		if errors.IsNotFound(err) {
 			h.correlator.ResolveByResource("service", namespace+"/"+name)
 			return nil
 		}
-		return fmt.Errorf("failed to get service %s/%s from cache: %w", namespace, name, err)
+		return fmt.Errorf(
+			"failed to get service %s/%s from cache: %w",
+			namespace,
+			name,
+			err,
+		)
 	}
 	return h.ProcessServiceObject(svc, false)
 }
 
-func (h *handler) ProcessServiceObject(svc *corev1.Service, deleted bool) error {
+func (h *handler) ProcessServiceObject(
+	svc *corev1.Service,
+	deleted bool,
+) error {
 	if svc == nil {
 		return nil
 	}
@@ -89,9 +103,18 @@ func (h *handler) ProcessServiceObject(svc *corev1.Service, deleted bool) error 
 	}
 
 	sel := labels.Set{"kubernetes.io/service-name": svc.Name}.AsSelector()
-	epSlices, err := h.listers.endpointSlice.EndpointSlices(svc.Namespace).List(sel)
+	epSlices, err := h.listers.EndpointSlice.EndpointSlices(
+		svc.Namespace,
+	).List(
+		sel,
+	)
 	if err != nil {
-		return fmt.Errorf("failed to list endpoint slices for %s/%s: %w", svc.Namespace, svc.Name, err)
+		return fmt.Errorf(
+			"failed to list endpoint slices for %s/%s: %w",
+			svc.Namespace,
+			svc.Name,
+			err,
+		)
 	}
 
 	sig := DetectServiceEndpointIssue(svc, epSlices)
@@ -106,7 +129,12 @@ func (h *handler) ProcessServiceObject(svc *corev1.Service, deleted bool) error 
 	} else {
 		h.clearServiceNoEndpoints(svc.Namespace, svc.Name)
 		h.correlator.MarkResolved(
-			correlation.BuildKey(svc.Namespace, svc.Namespace+"/"+svc.Name, constant.ReasonServiceNoEndpoints, ""),
+			correlation.BuildKey(
+				svc.Namespace,
+				svc.Namespace+"/"+svc.Name,
+				constant.ReasonServiceNoEndpoints,
+				"",
+			),
 		)
 	}
 	return nil

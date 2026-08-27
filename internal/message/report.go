@@ -85,6 +85,7 @@ type ChangeItem struct {
 	Resource  string
 	Reference string
 	Type      string
+	Age       string // how long before now, e.g. "3m"; empty when unknown
 }
 
 // OOMSection holds OOM-specific diagnostics.

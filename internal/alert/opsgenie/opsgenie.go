@@ -1,25 +1,23 @@
 package opsgenie
 
 import (
-	"bytes"
 	"encoding/json"
 	"fmt"
-	"io"
-	"net/http"
 	"strings"
 
 	"k8s.io/klog/v2"
 
+	"github.com/abahmed/kwatch/internal/alert/util"
 	"github.com/abahmed/kwatch/internal/config"
 	"github.com/abahmed/kwatch/internal/event"
-	"github.com/abahmed/kwatch/internal/k8s"
 )
 
 const (
 	defaultOpsgenieTitle = "kwatch detected a crash in pod: %s"
 	defaultOpsgenieText  = "There is an issue with container (%s) in pod (%s)"
 	opsgenieAPIURL       = "https://api.opsgenie.com/v2/alerts"
-	opsgenieCloseURL     = "https://api.opsgenie.com/v2/alerts/%s/close?identifierType=alias"
+	opsgenieCloseURL     = "https://api.opsgenie.com/v2/alerts/%s/close" +
+		"?identifierType=alias"
 )
 
 type Opsgenie struct {
@@ -89,67 +87,24 @@ func (o *Opsgenie) SendEvent(e *event.Event) error {
 }
 
 func (o *Opsgenie) closeAlert(alias string) error {
-	client := k8s.GetDefaultClient()
-	url := fmt.Sprintf(o.closeURL, alias)
-	body := []byte(`{}`)
-	buffer := bytes.NewBuffer(body)
-	request, err := http.NewRequest(http.MethodPost, url, buffer)
-	if err != nil {
-		return err
-	}
-	request.Header.Set("Content-Type", "application/json")
-	request.Header.Set("Authorization", "GenieKey "+o.apikey)
-
-	response, err := client.Do(request)
-	if err != nil {
-		return err
-	}
-	defer response.Body.Close()
-
-	if response.StatusCode != 202 {
-		if response.StatusCode == http.StatusTooManyRequests {
-			return event.CheckHTTPResponse(response, "opsgenie")
-		}
-		body, _ := io.ReadAll(response.Body)
-		return fmt.Errorf(
-			"call to opsgenie close alert returned status code %d: %s",
-			response.StatusCode,
-			string(body))
-	}
-	return nil
+	_, err := util.Send(util.Request{
+		Provider: "Opsgenie",
+		URL:      fmt.Sprintf(o.closeURL, alias),
+		Body:     []byte(`{}`),
+		Headers:  map[string]string{"Authorization": "GenieKey " + o.apikey},
+	})
+	return err
 }
 
 // sendAPI sends http request to Opsgenie API
 func (o *Opsgenie) sendAPI(content []byte) error {
-	client := k8s.GetDefaultClient()
-	buffer := bytes.NewBuffer(content)
-	request, err := http.NewRequest(http.MethodPost, o.url, buffer)
-	if err != nil {
-		return err
-	}
-
-	// set request headers
-	request.Header.Set("Content-Type", "application/json")
-	request.Header.Set("Authorization", "GenieKey "+o.apikey)
-
-	response, err := client.Do(request)
-	if err != nil {
-		return err
-	}
-	defer response.Body.Close()
-
-	if response.StatusCode != 202 {
-		if response.StatusCode == http.StatusTooManyRequests {
-			return event.CheckHTTPResponse(response, "opsgenie")
-		}
-		body, _ := io.ReadAll(response.Body)
-		return fmt.Errorf(
-			"call to opsgenie alert returned status code %d: %s",
-			response.StatusCode,
-			string(body))
-	}
-
-	return nil
+	_, err := util.Send(util.Request{
+		Provider: "Opsgenie",
+		URL:      o.url,
+		Body:     content,
+		Headers:  map[string]string{"Authorization": "GenieKey " + o.apikey},
+	})
+	return err
 }
 
 func (o *Opsgenie) buildMessage(e *event.Event) ([]byte, error) {

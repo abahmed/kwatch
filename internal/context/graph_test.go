@@ -137,7 +137,11 @@ func TestRemoveEdgesFrom(t *testing.T) {
 	assert.Empty(t, g.DependentsOf("service", "ns1", "svc1"))
 	assert.Empty(t, g.DependentsOf("service", "ns1", "svc2"))
 	// Node itself and other node's edge remain.
-	assert.Contains(t, g.DependentsOf("ingress", "ns1", "ing1"), "deployment/ns1/dep1")
+	assert.Contains(
+		t,
+		g.DependentsOf("ingress", "ns1", "ing1"),
+		"deployment/ns1/dep1",
+	)
 }
 
 func TestTraverseDependentsTransitive(t *testing.T) {
@@ -204,4 +208,21 @@ func TestTraverseDependenciesTransitive(t *testing.T) {
 
 	// From service, nothing upstream.
 	assert.Empty(t, g.TraverseDependencies("service", "ns", "svc"))
+}
+
+func TestGraphSize(t *testing.T) {
+	g := NewResourceGraph()
+	if n, e := g.Size(); n != 0 || e != 0 {
+		t.Fatalf("empty graph reported %d nodes, %d edges", n, e)
+	}
+	g.AddEdge("pod", "ns", "a", "node", "", "n1", "scheduled_on")
+	g.AddEdge("pod", "ns", "b", "node", "", "n1", "scheduled_on")
+	g.AddEdge("pod", "ns", "a", "configmap", "ns", "cfg", "mounts")
+	n, e := g.Size()
+	if e != 3 {
+		t.Errorf("edges = %d, want 3", e)
+	}
+	if n != 4 { // a, b, n1, cfg
+		t.Errorf("nodes = %d, want 4", n)
+	}
 }

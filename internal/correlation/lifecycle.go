@@ -14,23 +14,25 @@ import (
 // resolved→CREATE→resolved flip-flop that re-creating would cause), revoking
 // a pending resolve, and a routine update to an already-active incident.
 // Caller must hold e.mu.
-func (e *Engine) refreshIncident(inc *model.Incident, ev event.Event, cs *model.ContainerState, owner string, now time.Time) (*model.Incident, model.IncidentAction) {
+func (e *Engine) refreshIncident(
+	inc *model.Incident,
+	ev event.Event,
+	cs *model.ContainerState,
+	owner string,
+	now time.Time,
+) (*model.Incident, model.IncidentAction) {
 	// A revival starts a fresh renotify budget. Otherwise an incident that
 	// resolved after maxing out renotify would never be re-notified again
 	// when the same problem recurs.
-	revived := inc.State == model.StateResolved || inc.State == model.StatePendingResolve
+	revived := inc.State == model.StateResolved ||
+		inc.State == model.StatePendingResolve
 	inc.State = model.StateActive
 	inc.ResolveAt = time.Time{}
 	if revived {
 		inc.RenotifyCount = 0
 		inc.LastNotifiedAt = time.Time{}
 	}
-	if ev.PodName != "" {
-		inc.Resources[ev.PodName] = true
-		if len(inc.Resources) > inc.PeakResources {
-			inc.PeakResources = len(inc.Resources)
-		}
-	}
+	addResource(inc, ev.PodName)
 	if ev.ContainerName != "" && ev.ContainerName != "." {
 		inc.Containers[ev.ContainerName] = true
 	}
@@ -49,11 +51,57 @@ func (e *Engine) refreshIncident(inc *model.Incident, ev event.Event, cs *model.
 	return inc, e.edgeAction(inc)
 }
 
+// resolveLocked finalises an incident as resolved and returns what to
+// announce: the group's resolve once every member is done, the incident's own
+// resolve on the edge, or a skip.
+//
+// Every path that ends an incident — MarkResolved, ResolveByResource, the
+// stale-incident cleanup, the hold-down finaliser — goes through here. Each
+// used to carry its own copy of this bookkeeping, and they had drifted: one
+// armed the cooldown during hold-down (so a recurrence inside the hold-down
+// was swallowed and the incident resolved anyway), the others did not. One
+// function means one behaviour. Caller must hold e.mu.
+func (e *Engine) resolveLocked(
+	key model.IncidentKey,
+	inc *model.Incident,
+	now time.Time,
+) transition {
+	inc.State = model.StateResolved
+	if inc.Resource == "node" {
+		e.refreshNodeInhibition(inc.Name)
+	}
+	e.removeBaselineForIncident(key, inc)
+	// Arm the cooldown so a recurrence within the window revives silently
+	// instead of producing a resolved→CREATE→resolved flip-flop.
+	e.cleanupCooldown[key] = now.Add(e.config.Window)
+	// A group member's resolve is folded into the group's: one "all
+	// recovered" message replaces N individual ones.
+	if groupInc, groupAction, tracked := e.groupMemberResolved(key); tracked {
+		return transition{groupInc, groupAction}
+	}
+	return transition{inc.Clone(), e.edgeAction(inc)}
+}
+
+// holdDownLocked parks a recovered incident until ResolveHoldDown elapses, so
+// a blip that comes straight back never shows a fake "resolved". Node
+// inhibition is lifted immediately: the condition has already recovered and
+// only the announcement is delayed. The cooldown is NOT armed here — a
+// recurrence during the hold-down must revive the incident, not be swallowed.
+// Caller must hold e.mu.
+func (e *Engine) holdDownLocked(inc *model.Incident, now time.Time) {
+	inc.State = model.StatePendingResolve
+	inc.ResolveAt = now.Add(e.config.ResolveHoldDown)
+	if inc.Resource == "node" {
+		e.refreshNodeInhibition(inc.Name)
+	}
+}
+
 func (e *Engine) MarkResolved(key model.IncidentKey) {
 	e.mu.Lock()
 	e.dirty = true
 	inc, ok := e.state[key]
-	if !ok || inc.State == model.StateResolved || inc.State == model.StatePendingResolve {
+	if !ok || inc.State == model.StateResolved ||
+		inc.State == model.StatePendingResolve {
 		e.mu.Unlock()
 		return
 	}
@@ -62,65 +110,17 @@ func (e *Engine) MarkResolved(key model.IncidentKey) {
 		e.mu.Unlock()
 		return
 	}
+	now := e.now()
 	if e.config.ResolveHoldDown > 0 {
-		inc.State = model.StatePendingResolve
-		inc.ResolveAt = e.now().Add(e.config.ResolveHoldDown)
-		// The node condition has already recovered; un-suppress pods now
-		// instead of waiting for the hold-down to finalize.
-		if inc.Resource == "node" {
-			e.refreshNodeInhibition(inc.Name)
-		}
+		e.holdDownLocked(inc, now)
 		e.mu.Unlock()
 		return
 	}
-	// Smart group batch resolve: check if this incident is a member of a
-	// tracked smart group. If so, buffer the resolve and only emit one
-	// notification when all members have resolved.
-	if groupInc, groupAction, tracked := e.tryConsumeGroupResolve(key); tracked {
-		inc.State = model.StateResolved
-		if inc.Resource == "node" {
-			e.refreshNodeInhibition(inc.Name)
-		}
-		e.removeBaselineForIncident(key, inc)
-		e.cleanupCooldown[key] = e.now().Add(e.config.Window)
-		e.mu.Unlock()
-		if groupAction != model.ActionSkip {
-			if hook := e.config.LifecycleHook; hook != nil {
-				hook(groupInc.Clone(), groupAction)
-			}
-		}
-		if hook := e.config.OnBaselineChange; hook != nil {
-			e.mu.Lock()
-			snapshot := cloneBaseline(e.baseline)
-			e.mu.Unlock()
-			hook(snapshot)
-		}
-		return
-	}
-	inc.State = model.StateResolved
-	if inc.Resource == "node" {
-		e.refreshNodeInhibition(inc.Name)
-	}
-	e.removeBaselineForIncident(key, inc)
-	// Arm the cooldown so a recurrence within the window is suppressed
-	// (preventing a resolved→CREATE→resolved flip-flop), then revives
-	// silently once the cooldown expires.
-	e.cleanupCooldown[key] = e.now().Add(e.config.Window)
-	action := e.edgeAction(inc)
-	snap := inc.Clone()
+	t := e.resolveLocked(key, inc, now)
 	e.mu.Unlock()
 
-	if action != model.ActionSkip {
-		if hook := e.config.LifecycleHook; hook != nil {
-			hook(snap, action)
-		}
-	}
-	if hook := e.config.OnBaselineChange; hook != nil {
-		e.mu.Lock()
-		snapshot := cloneBaseline(e.baseline)
-		e.mu.Unlock()
-		hook(snapshot)
-	}
+	e.emit(t)
+	e.publishBaseline()
 }
 
 func (e *Engine) RemovePod(namespace, podName string) {
@@ -167,77 +167,40 @@ func (e *Engine) RemovePod(namespace, podName string) {
 	e.mu.Unlock()
 
 	if baselineChanged {
-		if hook := e.config.OnBaselineChange; hook != nil {
-			e.mu.Lock()
-			snapshot := cloneBaseline(e.baseline)
-			e.mu.Unlock()
-			hook(snapshot)
-		}
+		e.publishBaseline()
 	}
 }
 
 func (e *Engine) ResolveByResource(resource, name string) {
-	type transition struct {
-		inc    *model.Incident
-		action model.IncidentAction
-	}
 	var pending []transition
-	var baselineChanged bool
+	resolved := false
 
 	e.mu.Lock()
 	e.dirty = true
 	now := e.now()
 	for key, inc := range e.state {
-		if inc.Resource == resource && inc.Name == name && inc.State != model.StateResolved {
-			if inc.State == model.StatePendingResolve {
-				continue
-			}
-			// For pod incidents owned by a workload, gate on workload health.
-			if !e.isOwnerHealthy(inc) {
-				continue
-			}
-			if e.config.ResolveHoldDown > 0 {
-				inc.State = model.StatePendingResolve
-				inc.ResolveAt = now.Add(e.config.ResolveHoldDown)
-				e.cleanupCooldown[key] = now.Add(e.config.Window)
-				// The node condition has already recovered; un-suppress pods
-				// now instead of waiting for the hold-down to finalize.
-				if inc.Resource == "node" {
-					e.refreshNodeInhibition(inc.Name)
-				}
-				continue
-			}
-			inc.State = model.StateResolved
-			if inc.Resource == "node" {
-				e.refreshNodeInhibition(inc.Name)
-			}
-			e.removeBaselineForIncident(key, inc)
-			e.cleanupCooldown[key] = now.Add(e.config.Window)
-			// Smart group batch resolve: when the incident is a group member,
-			// the group RESOLVED replaces the individual notification.
-			if groupInc, groupAction, tracked := e.groupMemberResolved(key); tracked {
-				if groupAction != model.ActionSkip {
-					pending = append(pending, transition{groupInc, groupAction})
-				}
-			} else if action := e.edgeAction(inc); action != model.ActionSkip {
-				baselineChanged = true
-				pending = append(pending, transition{inc.Clone(), action})
-			}
+		if inc.Resource != resource || inc.Name != name {
+			continue
 		}
+		if inc.State == model.StateResolved ||
+			inc.State == model.StatePendingResolve {
+			continue
+		}
+		// For pod incidents owned by a workload, gate on workload health.
+		if !e.isOwnerHealthy(inc) {
+			continue
+		}
+		if e.config.ResolveHoldDown > 0 {
+			e.holdDownLocked(inc, now)
+			continue
+		}
+		resolved = true
+		pending = append(pending, e.resolveLocked(key, inc, now))
 	}
 	e.mu.Unlock()
 
-	for _, t := range pending {
-		if hook := e.config.LifecycleHook; hook != nil {
-			hook(t.inc, t.action)
-		}
-	}
-	if baselineChanged {
-		if hook := e.config.OnBaselineChange; hook != nil {
-			e.mu.Lock()
-			snapshot := cloneBaseline(e.baseline)
-			e.mu.Unlock()
-			hook(snapshot)
-		}
+	e.emit(pending...)
+	if resolved {
+		e.publishBaseline()
 	}
 }

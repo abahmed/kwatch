@@ -12,6 +12,7 @@ import (
 	"github.com/abahmed/kwatch/internal/config"
 	"github.com/abahmed/kwatch/internal/constant"
 	"github.com/abahmed/kwatch/internal/event"
+	"github.com/abahmed/kwatch/internal/insight"
 	"github.com/abahmed/kwatch/internal/model"
 	"github.com/abahmed/kwatch/internal/ratelimit"
 
@@ -50,7 +51,9 @@ type Slack struct {
 	compact bool
 
 	// overridable in tests
-	postBlocksFn func(blocks *slackClient.Blocks, threadTS string) (string, error)
+	postBlocksFn func(
+		blocks *slackClient.Blocks, threadTS string,
+	) (string, error)
 }
 
 // NewSlack returns new Slack instance
@@ -67,7 +70,11 @@ func NewSlack(config map[string]interface{}, appCfg *config.App) *Slack {
 			klog.InfoS("initializing slack with token but missing channel")
 			return nil
 		}
-		klog.InfoS("initializing slack with token and channel", "channel", channel)
+		klog.InfoS(
+			"initializing slack with token and channel",
+			"channel",
+			channel,
+		)
 		return &Slack{
 			token:            token,
 			channel:          channel,
@@ -230,6 +237,29 @@ func (s *Slack) sendAPIWithToken(msg *slackClient.WebhookMessage) error {
 	return wrapSlackRateLimit(err)
 }
 
+// permanentSlackErrors are Slack API error codes that describe the request or
+// the credentials, not the service. Retrying them cannot succeed. The
+// slack-go client surfaces these as errors whose text is the bare code.
+var permanentSlackErrors = map[string]bool{
+	"invalid_blocks":        true,
+	"invalid_blocks_format": true,
+	"invalid_arguments":     true,
+	"invalid_auth":          true,
+	"not_authed":            true,
+	"token_revoked":         true,
+	"token_expired":         true,
+	"account_inactive":      true,
+	"channel_not_found":     true,
+	"not_in_channel":        true,
+	"is_archived":           true,
+	"msg_too_long":          true,
+	"no_text":               true,
+	"missing_scope":         true,
+}
+
+// wrapSlackRateLimit classifies a Slack API error so retry logic can act on
+// it: rate limits carry their Retry-After, permanent rejections are marked so
+// they are not retried, everything else is left as a transient failure.
 func wrapSlackRateLimit(err error) error {
 	if err == nil {
 		return nil
@@ -242,13 +272,19 @@ func wrapSlackRateLimit(err error) error {
 			RetryAfter: rle.RetryAfter,
 		}
 	}
+	if permanentSlackErrors[strings.TrimSpace(err.Error())] {
+		return event.Permanent(err)
+	}
 	return err
 }
 
 // SendIncident implements alert.ThreadProvider.
 // In token mode it posts rich blocks and threads updates.
 // In webhook mode it falls back to SendMessage.
-func (s *Slack) SendIncident(inc *model.Incident, action model.IncidentAction) error {
+func (s *Slack) SendIncident(
+	inc *model.Incident,
+	action model.IncidentAction,
+) error {
 	if action == model.ActionSkip {
 		return nil
 	}
@@ -256,12 +292,35 @@ func (s *Slack) SendIncident(inc *model.Incident, action model.IncidentAction) e
 		return s.SendMessage(formatIncidentText(inc, action))
 	}
 	if s.postBlocksFn != nil || s.apiClient != nil {
-		return s.sendIncidentWithToken(inc, action)
+		return s.sendIncidentWithToken(inc, action, nil)
 	}
 	return s.SendMessage(formatIncidentText(inc, action))
 }
 
-func (s *Slack) sendIncidentWithToken(inc *model.Incident, action model.IncidentAction) error {
+// SendIncidentWithInsight implements alert.InsightThreadProvider: the same as
+// SendIncident, with the diagnosis rendered as its own block.
+func (s *Slack) SendIncidentWithInsight(
+	inc *model.Incident,
+	action model.IncidentAction,
+	ins *insight.Insight,
+) error {
+	if action == model.ActionSkip {
+		return nil
+	}
+	if s.compact {
+		return s.SendMessage(formatIncidentText(inc, action))
+	}
+	if s.postBlocksFn != nil || s.apiClient != nil {
+		return s.sendIncidentWithToken(inc, action, ins)
+	}
+	return s.SendMessage(formatIncidentText(inc, action))
+}
+
+func (s *Slack) sendIncidentWithToken(
+	inc *model.Incident,
+	action model.IncidentAction,
+	ins *insight.Insight,
+) error {
 	key := string(inc.Key)
 
 	post := s.postBlocks
@@ -271,7 +330,7 @@ func (s *Slack) sendIncidentWithToken(inc *model.Incident, action model.Incident
 
 	switch action {
 	case model.ActionCreate:
-		blocks := buildIncidentBlocks(inc, s.appCfg)
+		blocks := buildIncidentBlocksWithInsight(inc, s.appCfg, ins)
 		ts, err := post(blocks, "")
 		if err != nil {
 			return err
@@ -281,7 +340,7 @@ func (s *Slack) sendIncidentWithToken(inc *model.Incident, action model.Incident
 
 	case model.ActionUpdate:
 		threadTS := s.loadThread(key)
-		blocks := buildIncidentUpdateBlocks(inc)
+		blocks := buildIncidentUpdateBlocksWithInsight(inc, ins)
 		_, err := post(blocks, threadTS)
 		return err
 
@@ -324,7 +383,10 @@ func (s *Slack) popThread(key string) string {
 	return ts
 }
 
-func (s *Slack) postBlocks(blocks *slackClient.Blocks, threadTS string) (string, error) {
+func (s *Slack) postBlocks(
+	blocks *slackClient.Blocks,
+	threadTS string,
+) (string, error) {
 	opts := []slackClient.MsgOption{
 		slackClient.MsgOptionBlocks(blocks.BlockSet...),
 		slackClient.MsgOptionAsUser(true),

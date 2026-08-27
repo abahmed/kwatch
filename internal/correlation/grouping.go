@@ -25,6 +25,28 @@ type groupEntry struct {
 	image         string
 	nodeName      string
 	logSignature  string
+
+	// prevNotifiedSig is the member's notification signature from before
+	// buffering overwrote it. A group of one is emitted as the member itself,
+	// which needs the real value to tell a first alert from an update.
+	prevNotifiedSig string
+}
+
+// ownerWindow records which owners have failed the same way in one namespace
+// during the current grouping window, and which of them were announced
+// immediately rather than buffered.
+//
+// An owner-scoped group ("reason|namespace|owner") can only ever hold one
+// incident, because the incident key is owner-scoped too — so buffering the
+// first owner never groups anything; it only delays the most common alert by a
+// whole window. The first owner is therefore announced at once. Buffering
+// starts with the second owner, which is the earliest moment a namespace-wide
+// fan-out can be told apart from an isolated failure.
+type ownerWindow struct {
+	firstSeen time.Time
+	owners    map[string]bool
+	// owner → incident key announced immediately
+	announced map[string]model.IncidentKey
 }
 
 type pendingGroup struct {
@@ -39,6 +61,9 @@ type pendingGroup struct {
 type groupFlushState struct {
 	notified       bool
 	lastNotifiedAt time.Time
+	// firstSeen is when the group first became active, carried across
+	// re-flushes so reported durations reflect the real age of the problem.
+	firstSeen time.Time
 }
 
 type groupResolveTracker struct {
@@ -55,11 +80,12 @@ type groupResolveTracker struct {
 const maxGroupEntries = 1000
 
 type Config struct {
-	Window                     time.Duration
-	LifecycleInterval          time.Duration
-	Enricher                   enricher.Enricher
-	LifecycleHook              func(inc *model.Incident, action model.IncidentAction)
-	MassFailureHook            func() // called during lifecycle tick; reports mass failures
+	Window            time.Duration
+	LifecycleInterval time.Duration
+	Enricher          enricher.Enricher
+	LifecycleHook     func(inc *model.Incident, action model.IncidentAction)
+	// called during lifecycle tick; reports mass failures
+	MassFailureHook            func()
 	BaselineTTL                time.Duration
 	Baseline                   map[string]map[string]int64
 	OnBaselineChange           func(baseline map[string]map[string]int64)
@@ -72,6 +98,16 @@ type Config struct {
 	ResolveHoldDown            time.Duration
 	Runbooks                   map[string]string
 	SmartGroupingWindow        time.Duration
+	// DependenciesOf resolves the shared dependencies an incident touches, so
+	// the engine can suppress symptoms already covered by a mass-failure
+	// alert. Supplied by the app, which owns the resource graph. Nil disables
+	// mass-failure suppression.
+	DependenciesOf func(*model.Incident) []string
+	// NamespaceFanOutThreshold is how many distinct owners must fail the same
+	// way, in one namespace, inside one grouping window before their per-owner
+	// groups are collapsed into a single namespace-level notification. Zero
+	// disables the collapse.
+	NamespaceFanOutThreshold int
 }
 
 func containsAny(s string, substrs ...string) bool {
@@ -112,26 +148,39 @@ func classifyImagePullScope(msg string) string {
 
 func computeGroupKey(r string, ev event.Event, owner string) string {
 	switch r {
-	case constant.ReasonOOMKilled, constant.ReasonOOMRepeating, constant.ReasonCrashLoopHighFreq, constant.ReasonHighRestartCount,
+	case constant.ReasonOOMKilled,
+		constant.ReasonOOMRepeating,
+		constant.ReasonCrashLoopHighFreq,
+		constant.ReasonHighRestartCount,
 		constant.ReasonInitContainerError,
-		constant.ReasonContainerCannotRun, constant.ReasonCreateContainerError,
+		constant.ReasonContainerCannotRun,
+		constant.ReasonCreateContainerError,
 		constant.ReasonDeadlineExceeded,
-		constant.ReasonStartupProbeFailed, constant.ReasonLivenessProbeFailed,
-		constant.ReasonReadinessProbeFailed, constant.ReasonProbeError,
-		constant.ReasonPostStartHookError, constant.ReasonPreStopHookError,
+		constant.ReasonStartupProbeFailed,
+		constant.ReasonLivenessProbeFailed,
+		constant.ReasonReadinessProbeFailed,
+		constant.ReasonProbeError,
+		constant.ReasonPostStartHookError,
+		constant.ReasonPreStopHookError,
 		constant.ReasonNodeAffinity,
-		constant.ReasonProgressDeadlineExceeded, constant.ReasonDeploymentUnavailable,
+		constant.ReasonProgressDeadlineExceeded,
+		constant.ReasonDeploymentUnavailable,
 		constant.ReasonDaemonSetUnavailable,
 		constant.ReasonStsUnavailable,
 		constant.ReasonPdbViolation,
-		constant.ReasonHPAMaxedOut, constant.ReasonHPAScalingError,
-		constant.ReasonJobFailed, constant.ReasonJobSuspended,
-		constant.ReasonCronJobSuspended, constant.ReasonCronJobNotScheduled,
+		constant.ReasonHPAMaxedOut,
+		constant.ReasonHPAScalingError,
+		constant.ReasonJobFailed,
+		constant.ReasonJobSuspended,
+		constant.ReasonCronJobSuspended,
+		constant.ReasonCronJobNotScheduled,
 		constant.ReasonVolumeUsageHigh,
 		constant.ReasonPreExistingAtStartup:
 		return r + "|" + ev.Namespace + "|" + owner
 
-	case constant.ReasonCrashLoopBackOff, constant.ReasonBackOff, constant.ReasonError:
+	case constant.ReasonCrashLoopBackOff,
+		constant.ReasonBackOff,
+		constant.ReasonError:
 		if sig := enricher.SignatureHint(ev.Logs); sig != "" {
 			return r + "|sig|" + sig
 		}
@@ -154,10 +203,16 @@ func computeGroupKey(r string, ev event.Event, owner string) string {
 	case constant.ReasonImageInspectError, constant.ReasonInvalidImageName:
 		return r + "|img|" + ev.Image + "|ns|" + ev.Namespace
 
-	case constant.ReasonNodeNotReady, constant.ReasonMemoryPressure, constant.ReasonDiskPressure,
-		constant.ReasonPIDPressure, constant.ReasonNetworkUnavailable,
-		constant.ReasonContainerStatusKnown, constant.ReasonEvicted, constant.ReasonPreempting,
-		constant.ReasonNodeResourceHigh, constant.ReasonNodeResourceCritical:
+	case constant.ReasonNodeNotReady,
+		constant.ReasonMemoryPressure,
+		constant.ReasonDiskPressure,
+		constant.ReasonPIDPressure,
+		constant.ReasonNetworkUnavailable,
+		constant.ReasonContainerStatusKnown,
+		constant.ReasonEvicted,
+		constant.ReasonPreempting,
+		constant.ReasonNodeResourceHigh,
+		constant.ReasonNodeResourceCritical:
 		return r + "|node|" + ev.NodeName
 
 	case constant.ReasonServiceNoEndpoints:
@@ -166,10 +221,13 @@ func computeGroupKey(r string, ev event.Event, owner string) string {
 	case constant.ReasonControlPlaneComponentFailure:
 		return r + "|cp|" + ev.Namespace
 
-	case constant.ReasonCreateConfigError, constant.ReasonUnschedulable, constant.ReasonPodPending,
+	case constant.ReasonCreateConfigError,
+		constant.ReasonUnschedulable,
+		constant.ReasonPodPending,
 		constant.ReasonSchedulingGated,
 		constant.ReasonRegistryUnavailable,
-		constant.ReasonTLSCertExpired, constant.ReasonTLSCertExpiringSoon:
+		constant.ReasonTLSCertExpired,
+		constant.ReasonTLSCertExpiringSoon:
 		return r + "|ns|" + ev.Namespace
 
 	default:
@@ -236,32 +294,42 @@ func (e *Engine) rekeyGroupReferences(oldKey, newKey model.IncidentKey) {
 // Caller must hold e.mu.
 // tryGroupIncident attempts to add an event to the smart grouping buffer.
 // Returns true if the incident was grouped (caller should return ActionSkip).
-func (e *Engine) tryGroupIncident(inc *model.Incident, ev event.Event, owner string, now time.Time) bool {
+func (e *Engine) tryGroupIncident(
+	inc *model.Incident,
+	ev event.Event,
+	owner string,
+	now time.Time,
+) bool {
 	if e.config.SmartGroupingWindow <= 0 || inc.NotifiedSig != "" {
 		return false
 	}
 	r := normalizeReason(ev.Reason)
 	gk := computeGroupKey(r, ev, owner)
+	if e.firstOwnerInWindow(gk, r, ev.Namespace, owner, inc.Key, now) {
+		return false // announce now; nothing to group yet
+	}
 	pg, ok := e.groupBuffers[gk]
 	if !ok {
 		pg = &pendingGroup{firstSeen: now}
 		e.groupBuffers[gk] = pg
 	}
 	sig := ""
-	if r == constant.ReasonCrashLoopBackOff || r == constant.ReasonBackOff || r == constant.ReasonError {
+	if r == constant.ReasonCrashLoopBackOff || r == constant.ReasonBackOff ||
+		r == constant.ReasonError {
 		sig = enricher.SignatureHint(ev.Logs)
 	}
 	entry := groupEntry{
-		key:           inc.Key,
-		namespace:     ev.Namespace,
-		owner:         owner,
-		reason:        r,
-		kind:          ev.Resource,
-		podName:       ev.PodName,
-		containerName: ev.ContainerName,
-		image:         ev.Image,
-		nodeName:      ev.NodeName,
-		logSignature:  sig,
+		key:             inc.Key,
+		prevNotifiedSig: inc.NotifiedSig,
+		namespace:       ev.Namespace,
+		owner:           owner,
+		reason:          r,
+		kind:            ev.Resource,
+		podName:         ev.PodName,
+		containerName:   ev.ContainerName,
+		image:           ev.Image,
+		nodeName:        ev.NodeName,
+		logSignature:    sig,
 	}
 	pg.entries = append(pg.entries, entry)
 	if len(pg.entries) > maxGroupEntries {
@@ -274,6 +342,56 @@ func (e *Engine) tryGroupIncident(inc *model.Incident, ev event.Event, owner str
 	return true
 }
 
+// ownerScopeOf reports the reason|namespace scope when gk is an owner-scoped
+// group key for this event, and "" otherwise. Node, image and signature keys
+// are three-part too, so the shape is checked against the event, not counted.
+func ownerScopeOf(gk, r, namespace, owner string) string {
+	if namespace == "" || owner == "" || gk != r+"|"+namespace+"|"+owner {
+		return ""
+	}
+	return r + "|" + namespace
+}
+
+// firstOwnerInWindow records the owner in its reason|namespace window and
+// reports whether it is the first one there — in which case the caller
+// announces the incident immediately instead of buffering it. Caller must hold
+// e.mu.
+func (e *Engine) firstOwnerInWindow(
+	gk, r, namespace, owner string,
+	key model.IncidentKey,
+	now time.Time,
+) bool {
+	scope := ownerScopeOf(gk, r, namespace, owner)
+	if scope == "" {
+		return false
+	}
+	w := e.fanOutWindows[scope]
+	if w == nil || now.Sub(w.firstSeen) > e.config.SmartGroupingWindow {
+		w = &ownerWindow{
+			firstSeen: now,
+			owners:    map[string]bool{},
+			announced: map[string]model.IncidentKey{},
+		}
+		e.fanOutWindows[scope] = w
+	}
+	w.owners[owner] = true
+	if len(w.owners) == 1 {
+		w.announced[owner] = key
+		return true
+	}
+	return false
+}
+
+// pruneFanOutWindows drops owner windows that have closed. Caller must hold
+// e.mu.
+func (e *Engine) pruneFanOutWindows(now time.Time) {
+	for scope, w := range e.fanOutWindows {
+		if now.Sub(w.firstSeen) > e.config.SmartGroupingWindow {
+			delete(e.fanOutWindows, scope)
+		}
+	}
+}
+
 // Caller must hold e.mu.
 // buildGroupSummary produces a human-readable summary for a smart grouping
 
@@ -283,7 +401,9 @@ func (e *Engine) tryGroupIncident(inc *model.Incident, ev event.Event, owner str
 // Members removed from state outside MarkResolved (orphan folding, resource
 // resolution) must go through here so the group isn't left waiting forever
 // on a member that no longer exists.
-func (e *Engine) groupMemberResolved(key model.IncidentKey) (groupInc *model.Incident, action model.IncidentAction, tracked bool) {
+func (e *Engine) groupMemberResolved(
+	key model.IncidentKey,
+) (groupInc *model.Incident, action model.IncidentAction, tracked bool) {
 	for gk, tracker := range e.groupResolveTrackers {
 		if _, ok := tracker.members[key]; ok {
 			tracker.members[key] = true
@@ -303,24 +423,29 @@ func (e *Engine) groupMemberResolved(key model.IncidentKey) (groupInc *model.Inc
 			// after RESOLVED would otherwise re-open a closed incident).
 			delete(e.groupFlushStates, gk)
 			groupInc := &model.Incident{
-				ID:        fmt.Sprintf("%08x", crc32.ChecksumIEEE([]byte(tracker.groupIncKey))),
-				Key:       tracker.groupIncKey,
-				Reason:    tracker.reason,
-				Name:      tracker.summary,
-				Count:     tracker.totalCount,
-				FirstSeen: tracker.firstSeen,
-				LastSeen:  tracker.lastSeen,
-				State:     model.StateResolved,
-				Severity:  tracker.severity,
-				Hint:      tracker.summary,
+				Subject: model.Subject{
+					ID: fmt.Sprintf(
+						"%08x",
+						crc32.ChecksumIEEE([]byte(tracker.groupIncKey)),
+					),
+					Key:    tracker.groupIncKey,
+					Reason: tracker.reason,
+					Name:   tracker.summary,
+				},
+				Status: model.Status{
+					Count:     tracker.totalCount,
+					FirstSeen: tracker.firstSeen,
+					LastSeen:  tracker.lastSeen,
+					State:     model.StateResolved,
+					Severity:  tracker.severity,
+				},
+				Evidence: model.Evidence{
+					Hint: tracker.summary,
+				},
 			}
+
 			return groupInc, model.ActionResolved, true
 		}
 	}
 	return nil, model.ActionSkip, false
-}
-
-// Caller must hold e.mu.
-func (e *Engine) tryConsumeGroupResolve(key model.IncidentKey) (groupInc *model.Incident, action model.IncidentAction, tracked bool) {
-	return e.groupMemberResolved(key)
 }

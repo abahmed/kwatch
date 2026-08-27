@@ -23,13 +23,17 @@ func TestProcessPodListerSuccess(t *testing.T) {
 		Status: corev1.PodStatus{
 			Phase: corev1.PodRunning,
 			ContainerStatuses: []corev1.ContainerStatus{
-				{State: corev1.ContainerState{Running: &corev1.ContainerStateRunning{}}},
+				{
+					State: corev1.ContainerState{
+						Running: &corev1.ContainerStateRunning{},
+					},
+				},
 			},
 		},
 	}
 	f.Core().V1().Pods().Informer().GetIndexer().Add(pod)
 	h := NewHandler(client, &config.Config{}, e, testAlertMgr)
-	h.SetPodLister(f.Core().V1().Pods().Lister())
+	h.listers.Pod = f.Core().V1().Pods().Lister()
 	assert.NoError(t, h.ProcessPod(context.Background(), "ns1/p1", false))
 }
 
@@ -41,7 +45,10 @@ func TestProcessPodSignalEvent(t *testing.T) {
 	h := NewHandler(client, &config.Config{}, e, testAlertMgr)
 
 	pod := &corev1.Pod{
-		ObjectMeta: metav1.ObjectMeta{Name: "unschedulable-pod", Namespace: "default"},
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "unschedulable-pod",
+			Namespace: "default",
+		},
 		Status: corev1.PodStatus{
 			Phase: corev1.PodPending,
 			Conditions: []corev1.PodCondition{
@@ -58,7 +65,8 @@ func TestProcessPodSignalEvent(t *testing.T) {
 	assert.Equal(t, 1, e.ActiveCount())
 }
 
-// --- ProcessIngressObject with serviceLister set (no service found safe path) ---
+// --- ProcessIngressObject with serviceLister set (no service found safe path)
+// ---
 
 func TestEmitHighRestartAlertOwnerEmpty(t *testing.T) {
 	e := testCorrelator()
@@ -98,7 +106,12 @@ func TestEmitHighRestartAlertOwnerEmpty(t *testing.T) {
 		},
 	}
 	assert.NoError(t, h.ProcessPodObject(context.Background(), pod, false))
-	assert.Equal(t, 0, e.ActiveCount(), "empty owner should suppress high restart alert")
+	assert.Equal(
+		t,
+		0,
+		e.ActiveCount(),
+		"empty owner should suppress high restart alert",
+	)
 }
 
 // --- executePodFilters: StatusContinue from PendingPodFilter ---
@@ -107,13 +120,19 @@ func TestProcessPodStatusContinue(t *testing.T) {
 	e := testCorrelator()
 	client := fake.NewSimpleClientset()
 	cfg := &config.Config{
-		PendingPodMonitor: config.PendingPodMonitor{Enabled: true, Threshold: 60},
+		PendingPodMonitor: config.PendingPodMonitor{
+			Enabled:   true,
+			Threshold: 60,
+		},
 	}
 	h := NewHandler(client, cfg, e, testAlertMgr)
 
 	pod := &corev1.Pod{
-		ObjectMeta: metav1.ObjectMeta{Name: "unschedulable-pod", Namespace: "default"},
-		Spec:       corev1.PodSpec{NodeName: "node1"},
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "unschedulable-pod",
+			Namespace: "default",
+		},
+		Spec: corev1.PodSpec{NodeName: "node1"},
 		Status: corev1.PodStatus{
 			Phase: corev1.PodRunning,
 			Conditions: []corev1.PodCondition{
@@ -149,10 +168,13 @@ func TestProcessPodNoIssuesAfterEnrich(t *testing.T) {
 		Message: "deleting pod for maintenance",
 	}
 	f.Core().V1().Events().Informer().GetIndexer().Add(ev)
-	h.SetEventLister(f.Core().V1().Events().Lister())
+	h.listers.Event = f.Core().V1().Events().Lister()
 
 	pod := &corev1.Pod{
-		ObjectMeta: metav1.ObjectMeta{Name: "unschedulable-pod", Namespace: "default"},
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "unschedulable-pod",
+			Namespace: "default",
+		},
 		Status: corev1.PodStatus{
 			Phase: corev1.PodPending,
 			Conditions: []corev1.PodCondition{
@@ -166,7 +188,12 @@ func TestProcessPodNoIssuesAfterEnrich(t *testing.T) {
 		},
 	}
 	assert.NoError(t, h.ProcessPodObject(context.Background(), pod, false))
-	assert.Equal(t, 0, e.ActiveCount(), "deleting event should clear PodHasIssues")
+	assert.Equal(
+		t,
+		0,
+		e.ActiveCount(),
+		"deleting event should clear PodHasIssues",
+	)
 }
 
 // --- executePodFilters: sort.Slice in event lister path with 2 events ---
@@ -175,15 +202,21 @@ func TestProcessPodNoIssuesAfterPodEnricher(t *testing.T) {
 	e := testCorrelator()
 	client := fake.NewSimpleClientset()
 	cfg := &config.Config{
-		PendingPodMonitor: config.PendingPodMonitor{Enabled: true, Threshold: 600},
+		PendingPodMonitor: config.PendingPodMonitor{
+			Enabled:   true,
+			Threshold: 600,
+		},
 	}
 	h := NewHandler(client, cfg, e, testAlertMgr)
 	hh := h
 	hh.podEnrichers = []filter.Enricher{clearPodIssuesEnricher{}}
 
 	pod := &corev1.Pod{
-		ObjectMeta: metav1.ObjectMeta{Name: "pending-pod", Namespace: "default"},
-		Spec:       corev1.PodSpec{NodeName: ""},
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "pending-pod",
+			Namespace: "default",
+		},
+		Spec: corev1.PodSpec{NodeName: ""},
 		Status: corev1.PodStatus{
 			Phase: corev1.PodPending,
 			Conditions: []corev1.PodCondition{

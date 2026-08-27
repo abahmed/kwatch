@@ -16,9 +16,15 @@ import (
 // DetectNetworkPolicyIssue checks for potentially problematic NetworkPolicies.
 // Currently detects deny-all egress policies that could silently break
 // outbound connectivity.
-func DetectNetworkPolicyIssue(policy *networkingv1.NetworkPolicy) *event.Signal {
+func DetectNetworkPolicyIssue(
+	policy *networkingv1.NetworkPolicy,
+) *event.Signal {
 	// Check for overly restrictive default-deny policies
-	isDenyAllEgress := len(policy.Spec.PolicyTypes) == 0 || containsPolicyType(policy.Spec.PolicyTypes, networkingv1.PolicyTypeEgress)
+	isDenyAllEgress := len(policy.Spec.PolicyTypes) == 0 ||
+		containsPolicyType(
+			policy.Spec.PolicyTypes,
+			networkingv1.PolicyTypeEgress,
+		)
 	if !isDenyAllEgress {
 		return nil
 	}
@@ -32,13 +38,21 @@ func DetectNetworkPolicyIssue(policy *networkingv1.NetworkPolicy) *event.Signal 
 			Owner:     policy.Namespace + "/" + policy.Name,
 			PodName:   policy.Name,
 			Labels:    policy.Labels,
-			Hint:      fmt.Sprintf("networkpolicy %s/%s has deny-all egress — may block outbound connectivity", policy.Namespace, policy.Name),
+			Hint: fmt.Sprintf(
+				"networkpolicy %s/%s has deny-all egress — may block outbound "+
+					"connectivity",
+				policy.Namespace,
+				policy.Name,
+			),
 		}
 	}
 	return nil
 }
 
-func containsPolicyType(types []networkingv1.PolicyType, t networkingv1.PolicyType) bool {
+func containsPolicyType(
+	types []networkingv1.PolicyType,
+	t networkingv1.PolicyType,
+) bool {
 	for _, pt := range types {
 		if pt == t {
 			return true
@@ -56,23 +70,34 @@ func (h *handler) ProcessNetworkPolicy(key string, deleted bool) error {
 		h.correlator.ResolveByResource("networkpolicy", namespace+"/"+name)
 		return nil
 	}
-	policy, err := h.listers.netpol.NetworkPolicies(namespace).Get(name)
+	policy, err := h.listers.Netpol.NetworkPolicies(namespace).Get(name)
 	if err != nil {
 		if errors.IsNotFound(err) {
 			h.correlator.ResolveByResource("networkpolicy", namespace+"/"+name)
 			return nil
 		}
-		return fmt.Errorf("failed to get networkpolicy %s/%s from cache: %w", namespace, name, err)
+		return fmt.Errorf(
+			"failed to get networkpolicy %s/%s from cache: %w",
+			namespace,
+			name,
+			err,
+		)
 	}
 	return h.ProcessNetworkPolicyObject(policy, false)
 }
 
-func (h *handler) ProcessNetworkPolicyObject(policy *networkingv1.NetworkPolicy, deleted bool) error {
+func (h *handler) ProcessNetworkPolicyObject(
+	policy *networkingv1.NetworkPolicy,
+	deleted bool,
+) error {
 	if policy == nil {
 		return nil
 	}
 	if deleted {
-		h.correlator.ResolveByResource("networkpolicy", policy.Namespace+"/"+policy.Name)
+		h.correlator.ResolveByResource(
+			"networkpolicy",
+			policy.Namespace+"/"+policy.Name,
+		)
 		return nil
 	}
 
@@ -80,7 +105,14 @@ func (h *handler) ProcessNetworkPolicyObject(policy *networkingv1.NetworkPolicy,
 	if sig != nil {
 		h.signalEvent(sig)
 	} else {
-		h.correlator.MarkResolved(correlation.BuildKey(policy.Namespace, policy.Namespace+"/"+policy.Name, constant.ReasonRestrictiveNetworkPolicy, ""))
+		h.correlator.MarkResolved(
+			correlation.BuildKey(
+				policy.Namespace,
+				policy.Namespace+"/"+policy.Name,
+				constant.ReasonRestrictiveNetworkPolicy,
+				"",
+			),
+		)
 	}
 	return nil
 }

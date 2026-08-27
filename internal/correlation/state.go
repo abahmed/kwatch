@@ -43,10 +43,13 @@ func (e *Engine) Snapshot() []model.IncidentView {
 	return out
 }
 
-func (e *Engine) GetLastContainerState(namespace, podName, container string) *model.ContainerState {
+func (e *Engine) GetLastContainerState(
+	namespace, podName, container string,
+) *model.ContainerState {
 	e.mu.Lock()
 	defer e.mu.Unlock()
-	cs, ok := e.lastContainerIndex[lastContainerKey(namespace, podName, container)]
+	key := lastContainerKey(namespace, podName, container)
+	cs, ok := e.lastContainerIndex[key]
 	if !ok || cs == nil {
 		return nil
 	}
@@ -62,7 +65,10 @@ func lastContainerKey(namespace, podName, container string) string {
 }
 
 // Caller must hold e.mu.
-func (e *Engine) indexLastContainerState(namespace, podName, container string, cs *model.ContainerState) {
+func (e *Engine) indexLastContainerState(
+	namespace, podName, container string,
+	cs *model.ContainerState,
+) {
 	if podName == "" || cs == nil {
 		return
 	}
@@ -189,7 +195,9 @@ func (e *Engine) SnapshotPersisted() []model.PersistedIncident {
 // Mass-failure incidents (mass-failure/<dependency> keys) are restored into
 // the dedicated massFailures store regardless of the baseline so an ongoing
 // mass failure is not re-alerted after a restart.
-func (e *Engine) RestoreIncidents(incidents map[model.IncidentKey]*model.Incident) {
+func (e *Engine) RestoreIncidents(
+	incidents map[model.IncidentKey]*model.Incident,
+) {
 	e.mu.Lock()
 	defer e.mu.Unlock()
 	e.dirty = true
@@ -210,7 +218,8 @@ func (e *Engine) RestoreIncidents(incidents map[model.IncidentKey]*model.Inciden
 			restored++
 			continue
 		}
-		if _, ok := e.baseline[string(key)]; !ok || len(e.baseline[string(key)]) == 0 {
+		if _, ok := e.baseline[string(key)]; !ok ||
+			len(e.baseline[string(key)]) == 0 {
 			continue
 		}
 		if _, exists := e.state[key]; exists {
@@ -245,35 +254,62 @@ func (e *Engine) MassFailureSet() map[model.IncidentKey]*model.Incident {
 func (e *Engine) HasMassFailure(key model.IncidentKey) bool {
 	e.mu.Lock()
 	defer e.mu.Unlock()
+	return e.hasMassFailureLocked(key)
+}
+
+// hasMassFailureLocked is the lock-free form for callers already inside the
+// engine mutex. Process holds it for its whole body, and sync.Mutex is not
+// reentrant.
+func (e *Engine) hasMassFailureLocked(key model.IncidentKey) bool {
 	_, ok := e.massFailures[key]
 	return ok
 }
 
-// AddMassFailure registers a synthetic mass-failure incident so it survives
-// restarts without re-alerting. Returns true if it was newly tracked.
+// AddMassFailure registers a synthetic mass-failure incident and announces it.
+// It is persisted so a restart does not re-alert. Returns true if it was newly
+// tracked; a duplicate is neither stored nor announced. Callers must not hold
+// e.mu.
 func (e *Engine) AddMassFailure(inc *model.Incident) bool {
 	e.mu.Lock()
-	defer e.mu.Unlock()
 	if _, exists := e.massFailures[inc.Key]; exists {
+		e.mu.Unlock()
 		return false
 	}
 	inc.FirstSeen = e.now()
 	inc.LastSeen = inc.FirstSeen
+	if inc.State != model.StateResolved {
+		inc.State = model.StateActive
+	}
+	inc.NotifiedSig = notifSig(inc)
 	e.massFailures[inc.Key] = inc
 	e.dirty = true
+	snap := inc.Clone()
+	e.mu.Unlock()
+
+	e.emit(transition{snap, model.ActionCreate})
 	return true
 }
 
-// RemoveMassFailure drops a previously tracked mass-failure incident. Returns
-// true if it was tracked at all.
+// RemoveMassFailure resolves a tracked mass failure: it announces the resolve
+// and then releases every incident the mass failure was speaking for, so a
+// symptom that outlived its cause is announced instead of lost. Returns true
+// if the mass failure was tracked at all. Callers must not hold e.mu.
 func (e *Engine) RemoveMassFailure(key model.IncidentKey) bool {
 	e.mu.Lock()
-	defer e.mu.Unlock()
-	if _, exists := e.massFailures[key]; !exists {
+	inc, exists := e.massFailures[key]
+	if !exists {
+		e.mu.Unlock()
 		return false
 	}
 	delete(e.massFailures, key)
-	e.dirty = true
+	resolved := inc.Clone()
+	resolved.State = model.StateResolved
+	resolved.NotifiedSig = notifSig(resolved)
+	released := e.releaseSuppressedLocked(key)
+	e.mu.Unlock()
+
+	e.emit(
+		append([]transition{{resolved, model.ActionResolved}}, released...)...)
 	return true
 }
 

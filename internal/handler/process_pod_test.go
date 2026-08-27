@@ -19,7 +19,11 @@ func TestIsPodHealthyRunningNoIssues(t *testing.T) {
 		Status: corev1.PodStatus{
 			Phase: corev1.PodRunning,
 			ContainerStatuses: []corev1.ContainerStatus{
-				{State: corev1.ContainerState{Running: &corev1.ContainerStateRunning{}}},
+				{
+					State: corev1.ContainerState{
+						Running: &corev1.ContainerStateRunning{},
+					},
+				},
 			},
 		},
 	}
@@ -31,7 +35,13 @@ func TestIsPodHealthyWaitingIssue(t *testing.T) {
 		Status: corev1.PodStatus{
 			Phase: corev1.PodRunning,
 			ContainerStatuses: []corev1.ContainerStatus{
-				{State: corev1.ContainerState{Waiting: &corev1.ContainerStateWaiting{Reason: "CrashLoopBackOff"}}},
+				{
+					State: corev1.ContainerState{
+						Waiting: &corev1.ContainerStateWaiting{
+							Reason: "CrashLoopBackOff",
+						},
+					},
+				},
 			},
 		},
 	}
@@ -43,7 +53,13 @@ func TestIsPodHealthyContainerCreating(t *testing.T) {
 		Status: corev1.PodStatus{
 			Phase: corev1.PodRunning,
 			ContainerStatuses: []corev1.ContainerStatus{
-				{State: corev1.ContainerState{Waiting: &corev1.ContainerStateWaiting{Reason: "ContainerCreating"}}},
+				{
+					State: corev1.ContainerState{
+						Waiting: &corev1.ContainerStateWaiting{
+							Reason: "ContainerCreating",
+						},
+					},
+				},
 			},
 		},
 	}
@@ -55,7 +71,14 @@ func TestIsPodHealthyTerminatedNonZero(t *testing.T) {
 		Status: corev1.PodStatus{
 			Phase: corev1.PodRunning,
 			ContainerStatuses: []corev1.ContainerStatus{
-				{State: corev1.ContainerState{Terminated: &corev1.ContainerStateTerminated{ExitCode: 1, Reason: "Error"}}},
+				{
+					State: corev1.ContainerState{
+						Terminated: &corev1.ContainerStateTerminated{
+							ExitCode: 1,
+							Reason:   "Error",
+						},
+					},
+				},
 			},
 		},
 	}
@@ -67,7 +90,14 @@ func TestIsPodHealthyTerminatedCompleted(t *testing.T) {
 		Status: corev1.PodStatus{
 			Phase: corev1.PodSucceeded,
 			ContainerStatuses: []corev1.ContainerStatus{
-				{State: corev1.ContainerState{Terminated: &corev1.ContainerStateTerminated{ExitCode: 0, Reason: "Completed"}}},
+				{
+					State: corev1.ContainerState{
+						Terminated: &corev1.ContainerStateTerminated{
+							ExitCode: 0,
+							Reason:   "Completed",
+						},
+					},
+				},
 			},
 		},
 	}
@@ -83,13 +113,23 @@ func TestIsPodHealthyNotRunning(t *testing.T) {
 
 func TestProcessPodObjectNil(t *testing.T) {
 	e := correlation.NewEngine(correlation.Config{})
-	h := NewHandler(fake.NewSimpleClientset(), &config.Config{}, e, testAlertMgr)
+	h := NewHandler(
+		fake.NewSimpleClientset(),
+		&config.Config{},
+		e,
+		testAlertMgr,
+	)
 	assert.NoError(t, h.ProcessPodObject(context.Background(), nil, false))
 }
 
 func TestProcessPodObjectDeleted(t *testing.T) {
 	e := correlation.NewEngine(correlation.Config{})
-	h := NewHandler(fake.NewSimpleClientset(), &config.Config{}, e, testAlertMgr)
+	h := NewHandler(
+		fake.NewSimpleClientset(),
+		&config.Config{},
+		e,
+		testAlertMgr,
+	)
 	pod := &corev1.Pod{
 		ObjectMeta: metav1.ObjectMeta{Name: "p1", Namespace: "ns1"},
 	}
@@ -98,13 +138,22 @@ func TestProcessPodObjectDeleted(t *testing.T) {
 
 func TestProcessPodObjectHealthy(t *testing.T) {
 	e := correlation.NewEngine(correlation.Config{})
-	h := NewHandler(fake.NewSimpleClientset(), &config.Config{}, e, testAlertMgr)
+	h := NewHandler(
+		fake.NewSimpleClientset(),
+		&config.Config{},
+		e,
+		testAlertMgr,
+	)
 	pod := &corev1.Pod{
 		ObjectMeta: metav1.ObjectMeta{Name: "p1", Namespace: "ns1"},
 		Status: corev1.PodStatus{
 			Phase: corev1.PodRunning,
 			ContainerStatuses: []corev1.ContainerStatus{
-				{State: corev1.ContainerState{Running: &corev1.ContainerStateRunning{}}},
+				{
+					State: corev1.ContainerState{
+						Running: &corev1.ContainerStateRunning{},
+					},
+				},
 			},
 		},
 	}
@@ -112,20 +161,35 @@ func TestProcessPodObjectHealthy(t *testing.T) {
 }
 
 func TestProcessPodInvalidKey(t *testing.T) {
-	h := NewHandler(fake.NewSimpleClientset(), &config.Config{}, testCorrelator(), testAlertMgr)
+	h := NewHandler(
+		fake.NewSimpleClientset(),
+		&config.Config{},
+		testCorrelator(),
+		testAlertMgr,
+	)
 	assert.Error(t, h.ProcessPod(context.Background(), "a/b/c", false))
 }
 
 func TestProcessPodTopLevelDeleted(t *testing.T) {
-	h := NewHandler(fake.NewSimpleClientset(), &config.Config{}, testCorrelator(), testAlertMgr)
+	h := NewHandler(
+		fake.NewSimpleClientset(),
+		&config.Config{},
+		testCorrelator(),
+		testAlertMgr,
+	)
 	assert.NoError(t, h.ProcessPod(context.Background(), "ns1/p1", true))
 }
 
 func TestProcessPodNotFound(t *testing.T) {
 	e := correlation.NewEngine(correlation.Config{})
-	h := NewHandler(fake.NewSimpleClientset(), &config.Config{}, e, testAlertMgr)
+	h := NewHandler(
+		fake.NewSimpleClientset(),
+		&config.Config{},
+		e,
+		testAlertMgr,
+	)
 	client := fake.NewSimpleClientset()
 	f := informers.NewSharedInformerFactory(client, 0)
-	h.SetPodLister(f.Core().V1().Pods().Lister())
+	h.listers.Pod = f.Core().V1().Pods().Lister()
 	assert.NoError(t, h.ProcessPod(context.Background(), "ns1/missing", false))
 }

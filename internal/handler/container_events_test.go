@@ -2,6 +2,7 @@ package handler
 
 import (
 	"context"
+	"strings"
 	"testing"
 	"time"
 
@@ -20,10 +21,15 @@ import (
 func TestProcessContainerEventListerError(t *testing.T) {
 	e := testCorrelator()
 	client := fake.NewSimpleClientset()
-	h := NewHandler(client, &config.Config{MaxRecentLogLines: 10}, e, testAlertMgr)
+	h := NewHandler(
+		client,
+		&config.Config{MaxRecentLogLines: 10},
+		e,
+		testAlertMgr,
+	)
 
 	f := informers.NewSharedInformerFactory(client, 0)
-	h.SetEventLister(&errorEventLister{f.Core().V1().Events().Lister()})
+	h.listers.Event = &errorEventLister{f.Core().V1().Events().Lister()}
 
 	pod := &corev1.Pod{
 		ObjectMeta: metav1.ObjectMeta{Name: "broken-pod", Namespace: "default"},
@@ -53,7 +59,12 @@ func TestProcessContainerEventListerError(t *testing.T) {
 func TestProcessContainerEventListerWithEvents(t *testing.T) {
 	e := testCorrelator()
 	client := fake.NewSimpleClientset()
-	h := NewHandler(client, &config.Config{MaxRecentLogLines: 10}, e, testAlertMgr)
+	h := NewHandler(
+		client,
+		&config.Config{MaxRecentLogLines: 10},
+		e,
+		testAlertMgr,
+	)
 
 	f := informers.NewSharedInformerFactory(client, 0)
 	ev := &corev1.Event{
@@ -66,7 +77,7 @@ func TestProcessContainerEventListerWithEvents(t *testing.T) {
 		Reason: "BackOff",
 	}
 	f.Core().V1().Events().Informer().GetIndexer().Add(ev)
-	h.SetEventLister(f.Core().V1().Events().Lister())
+	h.listers.Event = f.Core().V1().Events().Lister()
 
 	pod := &corev1.Pod{
 		ObjectMeta: metav1.ObjectMeta{Name: "broken-pod", Namespace: "default"},
@@ -96,10 +107,19 @@ func TestProcessContainerEventListerWithEvents(t *testing.T) {
 func TestProcessContainerGetEventsError(t *testing.T) {
 	e := testCorrelator()
 	client := fake.NewSimpleClientset()
-	client.PrependReactor("list", "events", func(action clienttesting.Action) (bool, runtime.Object, error) {
-		return true, nil, assert.AnError
-	})
-	h := NewHandler(client, &config.Config{MaxRecentLogLines: 10}, e, testAlertMgr)
+	client.PrependReactor(
+		"list",
+		"events",
+		func(action clienttesting.Action) (bool, runtime.Object, error) {
+			return true, nil, assert.AnError
+		},
+	)
+	h := NewHandler(
+		client,
+		&config.Config{MaxRecentLogLines: 10},
+		e,
+		testAlertMgr,
+	)
 
 	pod := &corev1.Pod{
 		ObjectMeta: metav1.ObjectMeta{Name: "broken-pod", Namespace: "default"},
@@ -147,7 +167,7 @@ func TestProcessContainerKillingFilterSkip(t *testing.T) {
 		Message: "Stopping container app",
 	}
 	f.Core().V1().Events().Informer().GetIndexer().Add(ev)
-	h.SetEventLister(f.Core().V1().Events().Lister())
+	h.listers.Event = f.Core().V1().Events().Lister()
 
 	pod := &corev1.Pod{
 		ObjectMeta: metav1.ObjectMeta{Name: "killed-pod", Namespace: "default"},
@@ -182,10 +202,14 @@ func TestProcessContainerOwnerResolved(t *testing.T) {
 
 	f := informers.NewSharedInformerFactory(client, 0)
 	rs := &appsv1.ReplicaSet{
-		ObjectMeta: metav1.ObjectMeta{Name: "my-rs", Namespace: "default", UID: "rs-uid"},
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "my-rs",
+			Namespace: "default",
+			UID:       "rs-uid",
+		},
 	}
 	f.Apps().V1().ReplicaSets().Informer().GetIndexer().Add(rs)
-	h.SetReplicaLister(f.Apps().V1().ReplicaSets().Lister())
+	h.listers.RS = f.Apps().V1().ReplicaSets().Lister()
 
 	pod := &corev1.Pod{
 		ObjectMeta: metav1.ObjectMeta{
@@ -221,7 +245,12 @@ func TestProcessContainerOwnerResolved(t *testing.T) {
 func TestProcessContainerWithMsg(t *testing.T) {
 	e := testCorrelator()
 	client := fake.NewSimpleClientset()
-	h := NewHandler(client, &config.Config{MaxRecentLogLines: 10}, e, testAlertMgr)
+	h := NewHandler(
+		client,
+		&config.Config{MaxRecentLogLines: 10},
+		e,
+		testAlertMgr,
+	)
 
 	pod := &corev1.Pod{
 		ObjectMeta: metav1.ObjectMeta{Name: "broken-pod", Namespace: "default"},
@@ -246,7 +275,8 @@ func TestProcessContainerWithMsg(t *testing.T) {
 	assert.Equal(t, 1, e.ActiveCount())
 }
 
-// --- container issue with container message populated (Msg path in buildsignalEvent) ---
+// --- container issue with container message populated (Msg path in
+// buildsignalEvent) ---
 
 func TestProcessContainerSignalEvent(t *testing.T) {
 	e := testCorrelator()
@@ -313,7 +343,7 @@ func TestProcessContainerEventListerMultiEvents(t *testing.T) {
 	}
 	f.Core().V1().Events().Informer().GetIndexer().Add(ev1)
 	f.Core().V1().Events().Informer().GetIndexer().Add(ev2)
-	h.SetEventLister(f.Core().V1().Events().Lister())
+	h.listers.Event = f.Core().V1().Events().Lister()
 
 	pod := &corev1.Pod{
 		ObjectMeta: metav1.ObjectMeta{Name: "broken-pod", Namespace: "default"},
@@ -339,3 +369,73 @@ func TestProcessContainerEventListerMultiEvents(t *testing.T) {
 }
 
 // --- buildContainerHint: LivenessProbeFailed with spec ---
+
+// The informer keeps a by-pod index of events. When it is available it must be
+// used instead of listing the whole namespace and filtering on every alert.
+func TestPodEventsComeFromIndexWhenAvailable(t *testing.T) {
+	e := testCorrelator()
+	client := fake.NewSimpleClientset()
+	h := NewHandler(
+		client,
+		&config.Config{MaxRecentLogLines: 10},
+		e,
+		testAlertMgr,
+	)
+	f := informers.NewSharedInformerFactory(client, 0)
+
+	// The lister errors, so any events that show up came from the index.
+	h.listers.Event = &errorEventLister{f.Core().V1().Events().Lister()}
+	indexHits := 0
+	h.listers.EventsByPod = func(ns, pod string) ([]*corev1.Event, error) {
+		indexHits++
+		assert.Equal(t, "default", ns)
+		assert.Equal(t, "broken-pod", pod)
+		return []*corev1.Event{
+			{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "ev-from-index",
+					Namespace: ns,
+				},
+				InvolvedObject: corev1.ObjectReference{Kind: "Pod", Name: pod},
+				Type:           "Warning",
+				Reason:         "IndexedReason",
+				Message:        "served from the informer index",
+			},
+		}, nil
+	}
+
+	pod := &corev1.Pod{
+		ObjectMeta: metav1.ObjectMeta{Name: "broken-pod", Namespace: "default"},
+		Spec:       corev1.PodSpec{NodeName: "node1"},
+		Status: corev1.PodStatus{
+			Phase: corev1.PodRunning,
+			ContainerStatuses: []corev1.ContainerStatus{
+				{
+					Name:         "app",
+					RestartCount: 5,
+					State: corev1.ContainerState{
+						Waiting: &corev1.ContainerStateWaiting{
+							Reason:  "CrashLoopBackOff",
+							Message: "backoff restart",
+						},
+					},
+				},
+			},
+		},
+	}
+	assert.NoError(t, h.ProcessPodObject(context.Background(), pod, false))
+	assert.Equal(t, 1, indexHits, "the index must be consulted exactly once")
+
+	var found bool
+	for _, inc := range e.SnapshotAll() {
+		if strings.Contains(inc.Events, "IndexedReason") {
+			found = true
+		}
+	}
+	assert.True(
+		t,
+		found,
+		"the incident's events must come from the index, not the (failing) "+
+			"lister",
+	)
+}

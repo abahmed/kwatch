@@ -1,21 +1,17 @@
 package rocketchat
 
 import (
-	"bytes"
 	"encoding/json"
 	"fmt"
-	"io"
-	"net/http"
 
 	"k8s.io/klog/v2"
 
 	"github.com/abahmed/kwatch/internal/alert/util"
 	"github.com/abahmed/kwatch/internal/config"
 	"github.com/abahmed/kwatch/internal/event"
-	"github.com/abahmed/kwatch/internal/k8s"
+	"github.com/abahmed/kwatch/internal/insight"
 	"github.com/abahmed/kwatch/internal/message"
 	"github.com/abahmed/kwatch/internal/model"
-	"github.com/abahmed/kwatch/internal/ratelimit"
 )
 
 type RocketChat struct {
@@ -31,7 +27,10 @@ type rocketChatWebhookPayload struct {
 }
 
 // NewRocketChat returns new rocket chat instance
-func NewRocketChat(config map[string]interface{}, appCfg *config.App) *RocketChat {
+func NewRocketChat(
+	config map[string]interface{},
+	appCfg *config.App,
+) *RocketChat {
 	webhook, ok := config["webhook"].(string)
 	if !ok || len(webhook) == 0 {
 		klog.InfoS("initializing Rocket Chat with empty webhook url")
@@ -65,37 +64,10 @@ func (r *RocketChat) SendEvent(e *event.Event) error {
 }
 
 func (r *RocketChat) sendByRocketChatApi(reqBody []byte) error {
-	client := k8s.GetDefaultClient()
-	buffer := bytes.NewBuffer(reqBody)
-	request, err := http.NewRequest(http.MethodPost, r.webhook, buffer)
-	if err != nil {
-		return err
-	}
-
-	request.Header.Set("Content-Type", "application/json")
-
-	response, err := client.Do(request)
-	if err != nil {
-		return err
-	}
-	defer response.Body.Close()
-
-	if response.StatusCode == http.StatusTooManyRequests {
-		return &ratelimit.Error{
-			Provider:   "RocketChat",
-			StatusCode: http.StatusTooManyRequests,
-			RetryAfter: ratelimit.ParseRetryAfter(response),
-		}
-	}
-	if response.StatusCode != 200 {
-		body, _ := io.ReadAll(response.Body)
-		return fmt.Errorf(
-			"call to rocket chat alert returned status code %d: %s",
-			response.StatusCode,
-			string(body))
-	}
-
-	return nil
+	_, err := util.Send(
+		util.Request{Provider: "RocketChat", URL: r.webhook, Body: reqBody},
+	)
+	return err
 }
 
 // SendMessage sends text message to the provider
@@ -110,8 +82,28 @@ func (r *RocketChat) SendMessage(msg string) error {
 // SendIncident implements alert.ThreadProvider.
 // It renders the incident using the Report model and PlaintextRenderer,
 // producing a context-adaptive text message.
-func (r *RocketChat) SendIncident(inc *model.Incident, action model.IncidentAction) error {
-	text := util.RenderIncident(inc, action, message.NewPlainTextRenderer(), r.appCfg.ClusterName)
+func (r *RocketChat) SendIncident(
+	inc *model.Incident,
+	action model.IncidentAction,
+) error {
+	return r.SendIncidentWithInsight(inc, action, nil)
+}
+
+// SendIncidentWithInsight implements alert.InsightThreadProvider, so the
+// diagnosis — likely cause, impact, recent changes — is rendered rather than
+// dropped on the way to this provider.
+func (r *RocketChat) SendIncidentWithInsight(
+	inc *model.Incident,
+	action model.IncidentAction,
+	ins *insight.Insight,
+) error {
+	text := util.RenderIncidentWithInsight(
+		inc,
+		action,
+		ins,
+		message.NewPlainTextRenderer(),
+		r.appCfg.ClusterName,
+	)
 	if text == "" {
 		return nil
 	}

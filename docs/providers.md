@@ -15,8 +15,17 @@ Every alert provider kwatch can deliver to. For install and quick-start, see the
   Discord, Teams), paging for serious stuff (PagerDuty, Opsgenie, SIGNL4, Squadcast), email
   or SMS if you want a paper trail, and the **Custom Webhook** if you have anything else in
   mind.
+- **Every provider says the same thing.** All 56 providers render from one report — the
+  plain-English headline, the diagnosis (why, impact, what changed), the deduplicated hint,
+  the short image and node names, the evidence. Slack in token mode lays it out as blocks;
+  everyone else gets the same content as text. No provider is a second-class citizen.
 - **Reliability is built in.** Every provider shares the same routing, retry, and fallback
   controls (shown at the top under Slack — they apply to all providers).
+- **One HTTP path.** Every provider that talks HTTP sends through the same helper
+  (`alert/util.Send`), so a `429` is always honoured with its `Retry-After`, a `4xx` is never
+  retried (the payload will not get better), and a `5xx` or network error always is. A
+  provider cannot have its own idea of what a status code means — the linter rejects raw
+  `net/http` calls under `internal/alert/`.
 
 ## How to pick
 
@@ -69,7 +78,11 @@ In plain words: the same options work for all providers, not just Slack.
 - **`routes`** — if you have several *channels* for one provider, send only some alerts to
   each (filtered by namespace or severity).
 - **`retry`** — how hard kwatch tries before giving up: `maxAttempts` times, waiting `delay`
-  between tries.
+  between tries. Only failures that *can* succeed on a retry are retried — a timeout, a 5xx,
+  a rate limit (which waits exactly as long as the provider's `Retry-After` asks). A failure
+  that says the request itself is wrong — a 4xx, a rejected payload, an unknown channel, a
+  revoked token — is given up on immediately and goes straight to the dead-letter queue, so
+  it cannot hold up the alerts queued behind it.
 - **`fallback`** — if this provider fails for good, hand the alert to another provider
   (e.g. Slack → PagerDuty when Slack is down).
 
@@ -157,6 +170,10 @@ Father to get a `token` and a `chatId`.
 | `alert.teams.webhook` | 🔗 Webhook URL |
 | `alert.teams.title` | ✏️ Custom title |
 | `alert.teams.text` | ✏️ Custom text |
+
+> `alert.teams.maxRetries` is ignored: Teams used to retry inside the provider on top of the
+> shared delivery retry, so a rate-limited flow was hammered twice. Retries are now governed
+> only by the shared retry settings above, like every other provider.
 
 ### 🚀 Rocket Chat
 
@@ -718,4 +735,7 @@ dedicated page for — an IRC bot, a home-grown dashboard, a Zapier-style glue j
 | `alert.webhook.url` | 🔗 Webhook URL |
 | `alert.webhook.headers` | 📋 Custom headers |
 | `alert.webhook.basicAuth` | 🔐 Username + password |
+
+> Requests are sent as `POST` with `Content-Type: application/json` unless one of your
+> `headers` sets `Content-Type` itself.
 

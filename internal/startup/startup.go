@@ -3,6 +3,7 @@ package startup
 import (
 	"context"
 	"fmt"
+	"time"
 
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/klog/v2"
@@ -15,11 +16,15 @@ import (
 )
 
 type StartupManager struct {
-	stateManager   *state.StateManager
-	alertManager   *alert.AlertManager
-	config         *config.Config
-	shouldNotify   bool
+	stateManager *state.StateManager
+	alertManager *alert.AlertManager
+	config       *config.Config
+	shouldNotify bool
+	// downtime is how long monitoring was unavailable before this start,
+	// zero when there is no previous record or the gap was insignificant.
+	downtime       time.Duration
 	currentVersion string
+	now            func() time.Time
 }
 
 func NewStartupManager(
@@ -31,6 +36,7 @@ func NewStartupManager(
 	sm := &StartupManager{
 		stateManager: state.NewStateManager(client, namespace),
 		config:       &config.Config{App: *appCfg},
+		now:          time.Now,
 	}
 
 	sm.alertManager = &alert.AlertManager{}
@@ -52,21 +58,68 @@ func (s *StartupManager) HandleStartup(ctx context.Context) error {
 	storedVersion := s.stateManager.GetStoredVersion(ctx)
 	isUpgrade := storedVersion != "" && storedVersion != s.currentVersion
 
-	s.shouldNotify = (isFirstRun || isUpgrade) && !s.config.App.DisableStartupMessage
+	// How long was nobody watching? kwatch runs as a single replica, so it
+	// goes down with the cluster it is meant to report on — exactly when the
+	// gap matters most. Saying so is the difference between "no alerts" and
+	// "no alerts because nothing was looking".
+	s.downtime = s.measureDowntime(ctx)
 
-	if err := s.stateManager.MarkAsInitialized(ctx, clusterID, s.currentVersion); err != nil {
+	s.shouldNotify = (isFirstRun || isUpgrade || s.downtime > 0) &&
+		!s.config.App.DisableStartupMessage
+
+	if err := s.stateManager.MarkAsInitialized(
+		ctx,
+		clusterID,
+		s.currentVersion,
+	); err != nil {
 		klog.InfoS("failed to mark as initialized", "error", err)
 	}
 
 	return nil
 }
 
+// minReportableDowntime keeps ordinary restarts quiet. Rollouts and pod moves
+// take a few minutes; only a gap longer than this says anything useful.
+const minReportableDowntime = 5 * time.Minute
+
+// measureDowntime compares the last recorded liveness stamp with now.
+func (s *StartupManager) measureDowntime(ctx context.Context) time.Duration {
+	last := s.stateManager.GetLastSeen(ctx)
+	if last.IsZero() {
+		return 0
+	}
+	gap := s.now().Sub(last)
+	if gap < minReportableDowntime {
+		return 0
+	}
+	return gap
+}
+
+// RecordAlive stamps the liveness marker used to measure the next gap.
+func (s *StartupManager) RecordAlive(ctx context.Context) {
+	if err := s.stateManager.SetLastSeen(ctx, s.now()); err != nil {
+		klog.V(2).InfoS("failed to record liveness stamp", "error", err)
+	}
+}
+
 func (s *StartupManager) NotifyStartup() {
-	if s.shouldNotify {
-		s.alertManager.Notify(
-			fmt.Sprintf(constant.WelcomeMsg, s.currentVersion),
+	if !s.shouldNotify {
+		return
+	}
+	msg := fmt.Sprintf(constant.WelcomeMsg, s.currentVersion)
+	if s.downtime > 0 {
+		msg += fmt.Sprintf(
+			"\n:warning: No monitoring for %s before this start — anything "+
+				"that broke in that window went unreported.",
+			s.downtime.Round(time.Minute),
+		)
+		klog.InfoS(
+			"monitoring gap detected",
+			"downtime",
+			s.downtime.Round(time.Minute),
 		)
 	}
+	s.alertManager.Notify(msg)
 }
 
 func (s *StartupManager) GetAlertManager() *alert.AlertManager {

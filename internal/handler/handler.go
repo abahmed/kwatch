@@ -9,14 +9,6 @@ import (
 
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/client-go/kubernetes"
-	admissionregistrationv1lister "k8s.io/client-go/listers/admissionregistration/v1"
-	appsv1lister "k8s.io/client-go/listers/apps/v1"
-	autoscalingv2lister "k8s.io/client-go/listers/autoscaling/v2"
-	batchv1lister "k8s.io/client-go/listers/batch/v1"
-	corev1lister "k8s.io/client-go/listers/core/v1"
-	discoveryv1lister "k8s.io/client-go/listers/discovery/v1"
-	networkingv1lister "k8s.io/client-go/listers/networking/v1"
-	policyv1lister "k8s.io/client-go/listers/policy/v1"
 
 	"github.com/abahmed/kwatch/internal/alert"
 	"github.com/abahmed/kwatch/internal/config"
@@ -24,7 +16,6 @@ import (
 	"github.com/abahmed/kwatch/internal/correlation"
 	"github.com/abahmed/kwatch/internal/event"
 	"github.com/abahmed/kwatch/internal/filter"
-	"github.com/abahmed/kwatch/internal/insight"
 	"github.com/abahmed/kwatch/internal/model"
 )
 
@@ -45,32 +36,18 @@ type Handler interface {
 	ProcessIngress(key string, deleted bool) error
 	ProcessControlPlanePod(pod *corev1.Pod) error
 	SweepControlPlane()
-	SetIngressLister(lister networkingv1lister.IngressLister)
-	SetCpPodLister(lister corev1lister.PodLister)
-	SetNetpolLister(lister networkingv1lister.NetworkPolicyLister)
-	SetServiceLister(lister corev1lister.ServiceLister)
-	SetEndpointSliceLister(lister discoveryv1lister.EndpointSliceLister)
-	SetMwCLister(lister admissionregistrationv1lister.MutatingWebhookConfigurationLister)
-	SetVwCLister(lister admissionregistrationv1lister.ValidatingWebhookConfigurationLister)
-	SetPodLister(lister corev1lister.PodLister)
-	SetNodeLister(lister corev1lister.NodeLister)
-	SetDeploymentLister(lister appsv1lister.DeploymentLister)
-	SetJobLister(lister batchv1lister.JobLister)
-	SetReplicaLister(lister appsv1lister.ReplicaSetLister)
-	SetDaemonSetLister(lister appsv1lister.DaemonSetLister)
-	SetStatefulSetLister(lister appsv1lister.StatefulSetLister)
-	SetPdbLister(lister policyv1lister.PodDisruptionBudgetLister)
-	SetEventLister(lister corev1lister.EventLister)
-	SetCronJobLister(lister batchv1lister.CronJobLister)
-	SetHorizontalPodAutoscalerLister(lister autoscalingv2lister.HorizontalPodAutoscalerLister)
-	SetSecretLister(lister corev1lister.SecretLister)
-	SetInsightEngine(engine *insight.Engine)
 	SweepTLSSecrets()
+	// SetListers installs every informer-backed lookup in one call, once the
+	// controller has wired its informers.
+	SetListers(Listers)
 	SetBaseline(baseline map[string]map[string]int64)
 	SetActiveNodeIncidents(nodeNames []string)
 	ClearBaselineForPod(namespace, podName string)
 	ReportStartupSummary(suppressed map[string]int)
-	ProcessNodeResourceOvercommit(reason, nodeName, hint string, severity model.Severity)
+	ProcessNodeResourceOvercommit(
+		reason, nodeName, hint string,
+		severity model.Severity,
+	)
 	ProcessClusterAutoscalerEvent(ev *corev1.Event)
 }
 
@@ -79,13 +56,12 @@ type Handler interface {
 // objects and forward resulting signals through the correlation engine to
 // the alert manager.
 type handler struct {
-	kclient       kubernetes.Interface
-	config        *config.Config
-	correlator    *correlation.Engine
-	alertManager  *alert.AlertManager
-	insightEngine *insight.Engine
-	oomTracker    *oomTracker
-	now           func() time.Time
+	kclient      kubernetes.Interface
+	config       *config.Config
+	correlator   *correlation.Engine
+	alertManager *alert.AlertManager
+	oomTracker   *oomTracker
+	now          func() time.Time
 
 	podDetectors                  []filter.Detector
 	podEnrichers                  []filter.Enricher
@@ -93,7 +69,7 @@ type handler struct {
 	containerSuppressionEnrichers []filter.Enricher
 	containerDataEnrichers        []filter.Enricher
 
-	listers listerSet
+	listers Listers
 
 	fs firstSeenSet
 }
@@ -128,7 +104,10 @@ func NewHandler(
 	}
 }
 
-func (h *handler) ProcessNodeResourceOvercommit(reason, nodeName, hint string, severity model.Severity) {
+func (h *handler) ProcessNodeResourceOvercommit(
+	reason, nodeName, hint string,
+	severity model.Severity,
+) {
 	if severity == "" {
 		severity = model.SeverityWarning
 	}
@@ -154,23 +133,41 @@ func (h *handler) ReportStartupSummary(suppressed map[string]int) {
 	}
 	sort.Strings(parts)
 	inc := &model.Incident{
-		ID: "startup-baseline", Key: "startup:baseline", Reason: constant.ReasonPreExistingAtStartup,
-		Severity: model.SeverityNormal, Count: total,
-		Hint: fmt.Sprintf("kwatch started with %d pre-existing issue(s), suppressed from per-incident alerts: %s",
-			total, strings.Join(parts, ", ")),
+		Subject: model.Subject{
+			ID:     "startup-baseline",
+			Key:    "startup:baseline",
+			Reason: constant.ReasonPreExistingAtStartup,
+		},
+		Status: model.Status{
+			Severity: model.SeverityNormal,
+			Count:    total,
+		},
+		Evidence: model.Evidence{
+			Hint: fmt.Sprintf(
+				"kwatch started with %d pre-existing issue(s), suppressed "+
+					"from per-incident alerts: %s",
+				total,
+				strings.Join(parts, ", "),
+			),
+		},
 	}
+
+	// This is the one direct send outside the correlation engine, and it is
+	// deliberate: the startup summary is a one-off report, not an incident
+	// with a lifecycle — nothing will update or resolve it, so there is no
+	// state for the engine to own.
 	h.alertManager.NotifyIncident(inc, model.ActionCreate, nil)
 }
 
-func (h *handler) report(ev event.Event, owner string, cs *model.ContainerState) {
-	inc, action := h.correlator.Process(ev, owner, cs)
-	if action != model.ActionSkip {
-		var ins *insight.Insight
-		if h.insightEngine != nil {
-			ins = h.insightEngine.Analyze(inc)
-		}
-		h.alertManager.NotifyIncident(inc, action, ins)
-	}
+// report feeds one event to the correlation engine. The engine decides and
+// announces on its own; notifying here as well is how the live path once
+// diverged from every timer-driven path (no audit, no diagnosis).
+func (h *handler) report(
+	ev event.Event,
+	owner string,
+	cs *model.ContainerState,
+) {
+	h.correlator.Process(ev, owner, cs)
 }
 
 // signalEvent converts a Signal to an Event and sends it through the
@@ -192,6 +189,7 @@ func (h *handler) signalEvent(s *event.Signal) {
 		OwnerKind:     s.OwnerKind,
 		RestartCount:  int(s.RestartCount),
 		Hint:          s.Hint,
+		Facts:         s.Facts,
 		Severity:      s.Severity,
 	}
 

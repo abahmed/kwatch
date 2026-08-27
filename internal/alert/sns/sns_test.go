@@ -39,12 +39,12 @@ func TestSnsCustomRegion(t *testing.T) {
 	configMap := map[string]interface{}{
 		"accessKeyId":     "AKIA123",
 		"secretAccessKey": "test",
-		"region":          "eu-west-1",
-		"targetArn":       "arn:aws:sns:eu-west-1:123456789012:kwatch",
+		"region":          "us-east-1",
+		"targetArn":       "arn:aws:sns:us-east-1:123456789012:kwatch",
 	}
 	c := NewSns(configMap, &config.App{ClusterName: "dev"})
 	assert.NotNil(c)
-	assert.Equal(c.url, "https://sns.eu-west-1.amazonaws.com/")
+	assert.Equal(c.url, "https://sns.us-east-1.amazonaws.com/")
 }
 
 func TestSnsInvalidConfig(t *testing.T) {

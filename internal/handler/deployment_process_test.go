@@ -16,7 +16,9 @@ import (
 func TestProcessDeploymentObjectUnavailable(t *testing.T) {
 	client := fake.NewSimpleClientset()
 	cfg := &config.Config{
-		RolloutMonitor: config.RolloutMonitor{SustainedMinutes: 0}, // fire immediately
+		RolloutMonitor: config.RolloutMonitor{
+			SustainedMinutes: 0,
+		}, // fire immediately
 	}
 	e := testCorrelator()
 	h := NewHandler(client, cfg, e, testAlertMgr)
@@ -45,7 +47,7 @@ func TestProcessDeploymentObjectUnavailable(t *testing.T) {
 	}
 	f := informers.NewSharedInformerFactory(client, 0)
 	f.Apps().V1().Deployments().Informer().GetIndexer().Add(deploy)
-	h.SetDeploymentLister(f.Apps().V1().Deployments().Lister())
+	h.listers.Deploy = f.Apps().V1().Deployments().Lister()
 
 	// Process via string key (like the controller does)
 	err := h.ProcessDeployment("default/my-deploy", false)
@@ -58,7 +60,9 @@ func TestProcessDeploymentObjectUnavailable(t *testing.T) {
 func TestProcessDeploymentObjectUnavailableSustained(t *testing.T) {
 	client := fake.NewSimpleClientset()
 	cfg := &config.Config{
-		RolloutMonitor: config.RolloutMonitor{SustainedMinutes: 10}, // requires 10 min sustained
+		RolloutMonitor: config.RolloutMonitor{
+			SustainedMinutes: 10,
+		}, // requires 10 min sustained
 	}
 	e := testCorrelator()
 	h := NewHandler(client, cfg, e, testAlertMgr)
@@ -79,12 +83,17 @@ func TestProcessDeploymentObjectUnavailableSustained(t *testing.T) {
 	}
 	f := informers.NewSharedInformerFactory(client, 0)
 	f.Apps().V1().Deployments().Informer().GetIndexer().Add(deploy)
-	h.SetDeploymentLister(f.Apps().V1().Deployments().Lister())
+	h.listers.Deploy = f.Apps().V1().Deployments().Lister()
 
 	// First call: should NOT fire (not yet sustained)
 	err := h.ProcessDeployment("default/my-deploy", false)
 	assert.NoError(t, err)
-	assert.Equal(t, 0, e.ActiveCount(), "should not fire before sustained window")
+	assert.Equal(
+		t,
+		0,
+		e.ActiveCount(),
+		"should not fire before sustained window",
+	)
 
 	// Second call with same deployment: still not sustained without time travel
 	err = h.ProcessDeployment("default/my-deploy", false)
@@ -118,11 +127,16 @@ func TestProcessDeploymentObjectHealthy(t *testing.T) {
 	}
 	f := informers.NewSharedInformerFactory(client, 0)
 	f.Apps().V1().Deployments().Informer().GetIndexer().Add(deploy)
-	h.SetDeploymentLister(f.Apps().V1().Deployments().Lister())
+	h.listers.Deploy = f.Apps().V1().Deployments().Lister()
 
 	err := h.ProcessDeployment("default/healthy-deploy", false)
 	assert.NoError(t, err)
-	assert.Equal(t, 0, e.ActiveCount(), "healthy deployment should not create incidents")
+	assert.Equal(
+		t,
+		0,
+		e.ActiveCount(),
+		"healthy deployment should not create incidents",
+	)
 }
 
 func TestProcessDeploymentObjectProgressDeadlineExceeded(t *testing.T) {
@@ -148,11 +162,16 @@ func TestProcessDeploymentObjectProgressDeadlineExceeded(t *testing.T) {
 	}
 	f := informers.NewSharedInformerFactory(client, 0)
 	f.Apps().V1().Deployments().Informer().GetIndexer().Add(deploy)
-	h.SetDeploymentLister(f.Apps().V1().Deployments().Lister())
+	h.listers.Deploy = f.Apps().V1().Deployments().Lister()
 
 	err := h.ProcessDeployment("default/stuck-deploy", false)
 	assert.NoError(t, err)
-	assert.Equal(t, 1, e.ActiveCount(), "ProgressDeadlineExceeded should create an incident")
+	assert.Equal(
+		t,
+		1,
+		e.ActiveCount(),
+		"ProgressDeadlineExceeded should create an incident",
+	)
 }
 
 func TestProcessDeploymentObjectDeleted(t *testing.T) {
@@ -203,24 +222,39 @@ func TestProcessDeploymentObjectNotYetObserved(t *testing.T) {
 	}
 	f := informers.NewSharedInformerFactory(client, 0)
 	f.Apps().V1().Deployments().Informer().GetIndexer().Add(deploy)
-	h.SetDeploymentLister(f.Apps().V1().Deployments().Lister())
+	h.listers.Deploy = f.Apps().V1().Deployments().Lister()
 
 	err := h.ProcessDeployment("default/new-deploy", false)
 	assert.NoError(t, err)
-	assert.Equal(t, 0, e.ActiveCount(), "not yet observed deployment should not fire")
+	assert.Equal(
+		t,
+		0,
+		e.ActiveCount(),
+		"not yet observed deployment should not fire",
+	)
 }
 
 func TestProcessDeploymentInvalidKey(t *testing.T) {
-	h := NewHandler(fake.NewSimpleClientset(), &config.Config{}, testCorrelator(), testAlertMgr)
+	h := NewHandler(
+		fake.NewSimpleClientset(),
+		&config.Config{},
+		testCorrelator(),
+		testAlertMgr,
+	)
 	assert.Error(t, h.ProcessDeployment("a/b/c", false))
 }
 
 func TestProcessDeploymentNotFound(t *testing.T) {
 	e := testCorrelator()
-	h := NewHandler(fake.NewSimpleClientset(), &config.Config{}, e, testAlertMgr)
+	h := NewHandler(
+		fake.NewSimpleClientset(),
+		&config.Config{},
+		e,
+		testAlertMgr,
+	)
 
 	f := informers.NewSharedInformerFactory(fake.NewSimpleClientset(), 0)
-	h.SetDeploymentLister(f.Apps().V1().Deployments().Lister())
+	h.listers.Deploy = f.Apps().V1().Deployments().Lister()
 
 	assert.NoError(t, h.ProcessDeployment("default/missing", false))
 	assert.Equal(t, 0, e.ActiveCount())

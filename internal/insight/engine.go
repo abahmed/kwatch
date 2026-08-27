@@ -21,10 +21,16 @@ type Insight struct {
 type Engine struct {
 	graph   *context.ResourceGraph
 	tracker *context.ChangeTracker
+	// now is the clock "updated 3m ago" is measured against; injectable so
+	// tests do not depend on the wall clock.
+	now func() time.Time
 }
 
-func NewEngine(graph *context.ResourceGraph, tracker *context.ChangeTracker) *Engine {
-	return &Engine{graph: graph, tracker: tracker}
+func NewEngine(
+	graph *context.ResourceGraph,
+	tracker *context.ChangeTracker,
+) *Engine {
+	return &Engine{graph: graph, tracker: tracker, now: time.Now}
 }
 
 func (e *Engine) Analyze(inc *model.Incident) *Insight {
@@ -48,7 +54,11 @@ func (e *Engine) EnrichMassFailure(mf MassFailure) MassFailure {
 	}
 
 	if e.graph != nil {
-		if cause, pattern := e.rootCauseOfRef(parts[0], parts[1], parts[2]); cause != "" {
+		if cause, pattern := e.rootCauseOfRef(
+			parts[0],
+			parts[1],
+			parts[2],
+		); cause != "" {
 			mf.RootCause = cause + fmt.Sprintf(" (pattern: %s)", pattern)
 		}
 	}
@@ -58,7 +68,8 @@ func (e *Engine) EnrichMassFailure(mf MassFailure) MassFailure {
 		depKey := parts[0] + "/" + parts[1] + "/" + parts[2]
 		var changes []context.Change
 		for _, c := range recent {
-			if c.Resource+"/"+c.Namespace+"/"+c.Name == depKey && c.Type == context.ChangeUpdate {
+			if c.Resource+"/"+c.Namespace+"/"+c.Name == depKey &&
+				c.Type == context.ChangeUpdate {
 				changes = append(changes, c)
 				if len(changes) >= 3 {
 					break
@@ -113,7 +124,20 @@ func graphKeysForIncident(inc *model.Incident) []string {
 
 // dependenciesFor unions the dependencies of all graph nodes belonging to the
 // incident, deduplicating results.
-func dependenciesFor(graph *context.ResourceGraph, inc *model.Incident) []string {
+// DependenciesFor returns the shared-dependency keys an incident touches in
+// the resource graph. Exported so the correlation engine can ask "is this
+// failure already covered by a mass-failure alert?" without owning a graph.
+func DependenciesFor(
+	graph *context.ResourceGraph,
+	inc *model.Incident,
+) []string {
+	return dependenciesFor(graph, inc)
+}
+
+func dependenciesFor(
+	graph *context.ResourceGraph,
+	inc *model.Incident,
+) []string {
 	seen := make(map[string]bool)
 	var deps []string
 	for _, k := range graphKeysForIncident(inc) {

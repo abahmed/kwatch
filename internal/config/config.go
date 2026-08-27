@@ -109,9 +109,11 @@ type Config struct {
 	// IgnoreLogPatterns configuration
 	IgnoreLogPatternsCompiled []*regexp.Regexp
 
-	// IgnoreNodeReasons is an optional list of node reasons for which alerting should be skipped
+	// IgnoreNodeReasons is an optional list of node reasons for which alerting
+	// should be skipped
 	IgnoreNodeReasons []string `yaml:"ignoreNodeReasons"`
-	// IgnoreNodeMessages is an optional list of node messages for which alerting should be skipped
+	// IgnoreNodeMessages is an optional list of node messages for which
+	// alerting should be skipped
 	IgnoreNodeMessages []string `yaml:"ignoreNodeMessages"`
 
 	// ResyncSeconds is the interval (in seconds) for periodic informer resyncs.
@@ -185,7 +187,8 @@ type Config struct {
 	// NetworkPolicyMonitor configures network policy issue monitoring.
 	NetworkPolicyMonitor NetworkPolicyMonitor `yaml:"networkPolicyMonitor"`
 
-	// Silences is an optional list of silence rules that suppress matching incidents.
+	// Silences is an optional list of silence rules that suppress matching
+	// incidents.
 	Silences []SilenceRule `yaml:"silences"`
 
 	// SuppressionIndex is compiled from both Silences and deprecated ignore*
@@ -304,6 +307,12 @@ type SmartGrouping struct {
 	// WindowSeconds is the time window in seconds for grouping same-reason
 	// incidents together. Default 60. Set to 0 to disable grouping.
 	WindowSeconds int `yaml:"windowSeconds"`
+
+	// NamespaceFanOutThreshold is how many distinct owners must fail the same
+	// way, in one namespace, inside one window before their separate groups
+	// collapse into one namespace-level notification. Default 3. Set to 0 to
+	// keep one notification per owner.
+	NamespaceFanOutThreshold int `yaml:"namespaceFanOutThreshold"`
 }
 
 // ScheduleMonitor configures scheduling delay diagnostics.
@@ -348,6 +357,7 @@ type AlertRoute struct {
 type AuditLogConfig struct {
 	// Enabled toggles audit logging. Default false.
 	Enabled bool `yaml:"enabled"`
-	// Output is the destination for audit log entries: "stdout" (default) or a file path.
+	// Output is the destination for audit log entries: "stdout" (default) or a
+	// file path.
 	Output string `yaml:"output"`
 }

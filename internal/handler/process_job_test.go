@@ -20,7 +20,11 @@ func TestDetectJobIssueFailed(t *testing.T) {
 		ObjectMeta: metav1.ObjectMeta{Name: "job1", Namespace: "ns1"},
 		Status: batchv1.JobStatus{
 			Conditions: []batchv1.JobCondition{
-				{Type: batchv1.JobFailed, Status: corev1.ConditionTrue, Reason: "BackoffLimitExceeded"},
+				{
+					Type:   batchv1.JobFailed,
+					Status: corev1.ConditionTrue,
+					Reason: "BackoffLimitExceeded",
+				},
 			},
 		},
 	}
@@ -34,7 +38,11 @@ func TestDetectJobIssueFailedEmptyReason(t *testing.T) {
 		ObjectMeta: metav1.ObjectMeta{Name: "job1", Namespace: "ns1"},
 		Status: batchv1.JobStatus{
 			Conditions: []batchv1.JobCondition{
-				{Type: batchv1.JobFailed, Status: corev1.ConditionTrue, Reason: ""},
+				{
+					Type:   batchv1.JobFailed,
+					Status: corev1.ConditionTrue,
+					Reason: "",
+				},
 			},
 		},
 	}
@@ -66,13 +74,23 @@ func TestDetectJobIssueNoIssue(t *testing.T) {
 
 func TestProcessJobObjectNil(t *testing.T) {
 	e := correlation.NewEngine(correlation.Config{Window: 10 * time.Minute})
-	h := NewHandler(fake.NewSimpleClientset(), &config.Config{}, e, testAlertMgr)
+	h := NewHandler(
+		fake.NewSimpleClientset(),
+		&config.Config{},
+		e,
+		testAlertMgr,
+	)
 	assert.NoError(t, h.ProcessJobObject(nil, false))
 }
 
 func TestProcessJobObjectDeleted(t *testing.T) {
 	e := correlation.NewEngine(correlation.Config{Window: 10 * time.Minute})
-	h := NewHandler(fake.NewSimpleClientset(), &config.Config{}, e, testAlertMgr)
+	h := NewHandler(
+		fake.NewSimpleClientset(),
+		&config.Config{},
+		e,
+		testAlertMgr,
+	)
 	job := &batchv1.Job{
 		ObjectMeta: metav1.ObjectMeta{Name: "job1", Namespace: "ns1"},
 	}
@@ -81,7 +99,12 @@ func TestProcessJobObjectDeleted(t *testing.T) {
 
 func TestProcessJobObjectComplete(t *testing.T) {
 	e := correlation.NewEngine(correlation.Config{Window: 10 * time.Minute})
-	h := NewHandler(fake.NewSimpleClientset(), &config.Config{}, e, testAlertMgr)
+	h := NewHandler(
+		fake.NewSimpleClientset(),
+		&config.Config{},
+		e,
+		testAlertMgr,
+	)
 	job := &batchv1.Job{
 		ObjectMeta: metav1.ObjectMeta{Name: "job1", Namespace: "ns1"},
 		Status: batchv1.JobStatus{
@@ -96,12 +119,21 @@ func TestProcessJobObjectComplete(t *testing.T) {
 
 func TestProcessJobObjectFailed(t *testing.T) {
 	e := correlation.NewEngine(correlation.Config{Window: 10 * time.Minute})
-	h := NewHandler(fake.NewSimpleClientset(), &config.Config{}, e, testAlertMgr)
+	h := NewHandler(
+		fake.NewSimpleClientset(),
+		&config.Config{},
+		e,
+		testAlertMgr,
+	)
 	job := &batchv1.Job{
 		ObjectMeta: metav1.ObjectMeta{Name: "job1", Namespace: "ns1"},
 		Status: batchv1.JobStatus{
 			Conditions: []batchv1.JobCondition{
-				{Type: batchv1.JobFailed, Status: corev1.ConditionTrue, Reason: "BackoffLimitExceeded"},
+				{
+					Type:   batchv1.JobFailed,
+					Status: corev1.ConditionTrue,
+					Reason: "BackoffLimitExceeded",
+				},
 			},
 		},
 	}
@@ -111,7 +143,12 @@ func TestProcessJobObjectFailed(t *testing.T) {
 
 func TestProcessJobObjectHealthy(t *testing.T) {
 	e := correlation.NewEngine(correlation.Config{Window: 10 * time.Minute})
-	h := NewHandler(fake.NewSimpleClientset(), &config.Config{}, e, testAlertMgr)
+	h := NewHandler(
+		fake.NewSimpleClientset(),
+		&config.Config{},
+		e,
+		testAlertMgr,
+	)
 	job := &batchv1.Job{
 		ObjectMeta: metav1.ObjectMeta{Name: "job1", Namespace: "ns1"},
 	}
@@ -120,39 +157,63 @@ func TestProcessJobObjectHealthy(t *testing.T) {
 }
 
 func TestProcessJobInvalidKey(t *testing.T) {
-	h := NewHandler(fake.NewSimpleClientset(), &config.Config{}, testCorrelator(), testAlertMgr)
+	h := NewHandler(
+		fake.NewSimpleClientset(),
+		&config.Config{},
+		testCorrelator(),
+		testAlertMgr,
+	)
 	assert.Error(t, h.ProcessJob("a/b/c", false))
 }
 
 func TestProcessJobDeleted(t *testing.T) {
-	h := NewHandler(fake.NewSimpleClientset(), &config.Config{}, testCorrelator(), testAlertMgr)
+	h := NewHandler(
+		fake.NewSimpleClientset(),
+		&config.Config{},
+		testCorrelator(),
+		testAlertMgr,
+	)
 	assert.NoError(t, h.ProcessJob("ns1/job1", true))
 }
 
 func TestProcessJobNotFound(t *testing.T) {
 	e := correlation.NewEngine(correlation.Config{Window: 10 * time.Minute})
-	h := NewHandler(fake.NewSimpleClientset(), &config.Config{}, e, testAlertMgr)
+	h := NewHandler(
+		fake.NewSimpleClientset(),
+		&config.Config{},
+		e,
+		testAlertMgr,
+	)
 	client := fake.NewSimpleClientset()
 	f := informers.NewSharedInformerFactory(client, 0)
-	h.SetJobLister(f.Batch().V1().Jobs().Lister())
+	h.listers.Job = f.Batch().V1().Jobs().Lister()
 	assert.NoError(t, h.ProcessJob("ns1/missing", false))
 }
 
 func TestProcessJobFailed(t *testing.T) {
 	e := correlation.NewEngine(correlation.Config{Window: 10 * time.Minute})
-	h := NewHandler(fake.NewSimpleClientset(), &config.Config{}, e, testAlertMgr)
+	h := NewHandler(
+		fake.NewSimpleClientset(),
+		&config.Config{},
+		e,
+		testAlertMgr,
+	)
 	job := &batchv1.Job{
 		ObjectMeta: metav1.ObjectMeta{Name: "job1", Namespace: "ns1"},
 		Status: batchv1.JobStatus{
 			Conditions: []batchv1.JobCondition{
-				{Type: batchv1.JobFailed, Status: corev1.ConditionTrue, Reason: "BackoffLimitExceeded"},
+				{
+					Type:   batchv1.JobFailed,
+					Status: corev1.ConditionTrue,
+					Reason: "BackoffLimitExceeded",
+				},
 			},
 		},
 	}
 	client := fake.NewSimpleClientset()
 	f := informers.NewSharedInformerFactory(client, 0)
 	f.Batch().V1().Jobs().Informer().GetIndexer().Add(job)
-	h.SetJobLister(f.Batch().V1().Jobs().Lister())
+	h.listers.Job = f.Batch().V1().Jobs().Lister()
 	assert.NoError(t, h.ProcessJob("ns1/job1", false))
 	assert.Equal(t, 1, e.ActiveCount())
 }

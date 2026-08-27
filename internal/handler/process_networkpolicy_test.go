@@ -19,15 +19,25 @@ import (
 
 func TestProcessNetworkPolicyCreatesIncident(t *testing.T) {
 	e := testCorrelator()
-	h := NewHandler(fake.NewSimpleClientset(), &config.Config{}, e, testAlertMgr)
+	h := NewHandler(
+		fake.NewSimpleClientset(),
+		&config.Config{},
+		e,
+		testAlertMgr,
+	)
 
 	f := informers.NewSharedInformerFactory(fake.NewSimpleClientset(), 0)
-	h.SetNetpolLister(f.Networking().V1().NetworkPolicies().Lister())
+	h.listers.Netpol = f.Networking().V1().NetworkPolicies().Lister()
 
 	policy := &networkingv1.NetworkPolicy{
-		ObjectMeta: metav1.ObjectMeta{Name: "test-netpol", Namespace: "default"},
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "test-netpol",
+			Namespace: "default",
+		},
 		Spec: networkingv1.NetworkPolicySpec{
-			PolicyTypes: []networkingv1.PolicyType{networkingv1.PolicyTypeEgress},
+			PolicyTypes: []networkingv1.PolicyType{
+				networkingv1.PolicyTypeEgress,
+			},
 		},
 	}
 	f.Networking().V1().NetworkPolicies().Informer().GetIndexer().Add(policy)
@@ -37,24 +47,39 @@ func TestProcessNetworkPolicyCreatesIncident(t *testing.T) {
 	snap := e.Snapshot()
 	var found bool
 	for _, v := range snap {
-		if v.Reason == "RestrictiveNetworkPolicy" && v.State == model.StateActive {
+		if v.Reason == "RestrictiveNetworkPolicy" &&
+			v.State == model.StateActive {
 			found = true
 		}
 	}
-	assert.True(t, found, "key-based ProcessNetworkPolicy should create incident")
+	assert.True(
+		t,
+		found,
+		"key-based ProcessNetworkPolicy should create incident",
+	)
 }
 
 func TestProcessNetworkPolicyKeyDeleted(t *testing.T) {
-	h := NewHandler(fake.NewSimpleClientset(), &config.Config{}, testCorrelator(), testAlertMgr)
+	h := NewHandler(
+		fake.NewSimpleClientset(),
+		&config.Config{},
+		testCorrelator(),
+		testAlertMgr,
+	)
 	assert.NoError(t, h.ProcessNetworkPolicy("default/test-netpol", true))
 }
 
 func TestProcessNetworkPolicyKeyNotFound(t *testing.T) {
 	e := testCorrelator()
-	h := NewHandler(fake.NewSimpleClientset(), &config.Config{}, e, testAlertMgr)
+	h := NewHandler(
+		fake.NewSimpleClientset(),
+		&config.Config{},
+		e,
+		testAlertMgr,
+	)
 
 	f := informers.NewSharedInformerFactory(fake.NewSimpleClientset(), 0)
-	h.SetNetpolLister(f.Networking().V1().NetworkPolicies().Lister())
+	h.listers.Netpol = f.Networking().V1().NetworkPolicies().Lister()
 
 	assert.NoError(t, h.ProcessNetworkPolicy("default/missing", false))
 	assert.Equal(t, 0, e.ActiveCount())
@@ -62,9 +87,14 @@ func TestProcessNetworkPolicyKeyNotFound(t *testing.T) {
 
 func TestDetectNetworkPolicyNoEgressPolicyType(t *testing.T) {
 	policy := &networkingv1.NetworkPolicy{
-		ObjectMeta: metav1.ObjectMeta{Name: "test-netpol", Namespace: "default"},
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "test-netpol",
+			Namespace: "default",
+		},
 		Spec: networkingv1.NetworkPolicySpec{
-			PolicyTypes: []networkingv1.PolicyType{networkingv1.PolicyTypeIngress},
+			PolicyTypes: []networkingv1.PolicyType{
+				networkingv1.PolicyTypeIngress,
+			},
 		},
 	}
 	sig := DetectNetworkPolicyIssue(policy)
@@ -73,9 +103,14 @@ func TestDetectNetworkPolicyNoEgressPolicyType(t *testing.T) {
 
 func TestDetectNetworkPolicyDenyAllEgress(t *testing.T) {
 	policy := &networkingv1.NetworkPolicy{
-		ObjectMeta: metav1.ObjectMeta{Name: "test-netpol", Namespace: "default"},
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "test-netpol",
+			Namespace: "default",
+		},
 		Spec: networkingv1.NetworkPolicySpec{
-			PolicyTypes: []networkingv1.PolicyType{networkingv1.PolicyTypeEgress},
+			PolicyTypes: []networkingv1.PolicyType{
+				networkingv1.PolicyTypeEgress,
+			},
 		},
 	}
 	sig := DetectNetworkPolicyIssue(policy)
@@ -87,24 +122,41 @@ func TestDetectNetworkPolicyDenyAllEgress(t *testing.T) {
 
 func TestDetectNetworkPolicyDenyAllEgressEmptyPolicyTypes(t *testing.T) {
 	policy := &networkingv1.NetworkPolicy{
-		ObjectMeta: metav1.ObjectMeta{Name: "test-netpol", Namespace: "default"},
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "test-netpol",
+			Namespace: "default",
+		},
 		Spec: networkingv1.NetworkPolicySpec{
 			PolicyTypes: []networkingv1.PolicyType{},
 		},
 	}
 	sig := DetectNetworkPolicyIssue(policy)
-	assert.NotNil(t, sig, "empty policy types with no egress rules should be flagged")
+	assert.NotNil(
+		t,
+		sig,
+		"empty policy types with no egress rules should be flagged",
+	)
 }
 
 func TestDetectNetworkPolicyHasEgressRules(t *testing.T) {
 	policy := &networkingv1.NetworkPolicy{
-		ObjectMeta: metav1.ObjectMeta{Name: "test-netpol", Namespace: "default"},
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "test-netpol",
+			Namespace: "default",
+		},
 		Spec: networkingv1.NetworkPolicySpec{
-			PolicyTypes: []networkingv1.PolicyType{networkingv1.PolicyTypeEgress},
+			PolicyTypes: []networkingv1.PolicyType{
+				networkingv1.PolicyTypeEgress,
+			},
 			Egress: []networkingv1.NetworkPolicyEgressRule{
 				{
 					Ports: []networkingv1.NetworkPolicyPort{
-						{Port: &intstr.IntOrString{Type: intstr.Int, IntVal: 443}},
+						{
+							Port: &intstr.IntOrString{
+								Type:   intstr.Int,
+								IntVal: 443,
+							},
+						},
 					},
 				},
 			},
@@ -116,25 +168,40 @@ func TestDetectNetworkPolicyHasEgressRules(t *testing.T) {
 
 func TestDetectNetworkPolicyEmptyPolicyTypesWithEgressRules(t *testing.T) {
 	policy := &networkingv1.NetworkPolicy{
-		ObjectMeta: metav1.ObjectMeta{Name: "test-netpol", Namespace: "default"},
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "test-netpol",
+			Namespace: "default",
+		},
 		Spec: networkingv1.NetworkPolicySpec{
 			PolicyTypes: []networkingv1.PolicyType{},
 			Egress: []networkingv1.NetworkPolicyEgressRule{
 				{
 					Ports: []networkingv1.NetworkPolicyPort{
-						{Port: &intstr.IntOrString{Type: intstr.Int, IntVal: 443}},
+						{
+							Port: &intstr.IntOrString{
+								Type:   intstr.Int,
+								IntVal: 443,
+							},
+						},
 					},
 				},
 			},
 		},
 	}
 	sig := DetectNetworkPolicyIssue(policy)
-	assert.Nil(t, sig, "empty policy types with egress rules should not produce a signal")
+	assert.Nil(
+		t,
+		sig,
+		"empty policy types with egress rules should not produce a signal",
+	)
 }
 
 func TestDetectNetworkPolicyEgressAndIngressWithNoEgressRules(t *testing.T) {
 	policy := &networkingv1.NetworkPolicy{
-		ObjectMeta: metav1.ObjectMeta{Name: "test-netpol", Namespace: "default"},
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "test-netpol",
+			Namespace: "default",
+		},
 		Spec: networkingv1.NetworkPolicySpec{
 			PolicyTypes: []networkingv1.PolicyType{
 				networkingv1.PolicyTypeIngress,
@@ -143,7 +210,11 @@ func TestDetectNetworkPolicyEgressAndIngressWithNoEgressRules(t *testing.T) {
 		},
 	}
 	sig := DetectNetworkPolicyIssue(policy)
-	assert.NotNil(t, sig, "policy with egress type but no egress rules should be flagged")
+	assert.NotNil(
+		t,
+		sig,
+		"policy with egress type but no egress rules should be flagged",
+	)
 }
 
 func TestProcessNetworkPolicyObjectCreatesAndResolves(t *testing.T) {
@@ -161,12 +232,22 @@ func TestProcessNetworkPolicyObjectCreatesAndResolves(t *testing.T) {
 		},
 	})
 
-	h := NewHandler(fake.NewSimpleClientset(), &config.Config{}, e, testAlertMgr)
+	h := NewHandler(
+		fake.NewSimpleClientset(),
+		&config.Config{},
+		e,
+		testAlertMgr,
+	)
 
 	policy := &networkingv1.NetworkPolicy{
-		ObjectMeta: metav1.ObjectMeta{Name: "test-netpol", Namespace: "default"},
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "test-netpol",
+			Namespace: "default",
+		},
 		Spec: networkingv1.NetworkPolicySpec{
-			PolicyTypes: []networkingv1.PolicyType{networkingv1.PolicyTypeEgress},
+			PolicyTypes: []networkingv1.PolicyType{
+				networkingv1.PolicyTypeEgress,
+			},
 		},
 	}
 
@@ -197,46 +278,89 @@ func TestProcessNetworkPolicyObjectCreatesAndResolves(t *testing.T) {
 	mu.Lock()
 	r := resolves
 	mu.Unlock()
-	assert.Equal(t, 1, r, "RestrictiveNetworkPolicy should resolve when egress rules are added")
+	assert.Equal(
+		t,
+		1,
+		r,
+		"RestrictiveNetworkPolicy should resolve when egress rules are added",
+	)
 	assert.Equal(t, 0, e.ActiveCount())
 }
 
 func TestProcessNetworkPolicyObjectNoIssue(t *testing.T) {
 	e := testCorrelator()
-	h := NewHandler(fake.NewSimpleClientset(), &config.Config{}, e, testAlertMgr)
+	h := NewHandler(
+		fake.NewSimpleClientset(),
+		&config.Config{},
+		e,
+		testAlertMgr,
+	)
 
 	policy := &networkingv1.NetworkPolicy{
-		ObjectMeta: metav1.ObjectMeta{Name: "test-netpol", Namespace: "default"},
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "test-netpol",
+			Namespace: "default",
+		},
 		Spec: networkingv1.NetworkPolicySpec{
-			PolicyTypes: []networkingv1.PolicyType{networkingv1.PolicyTypeIngress},
+			PolicyTypes: []networkingv1.PolicyType{
+				networkingv1.PolicyTypeIngress,
+			},
 		},
 	}
 
 	assert.NoError(t, h.ProcessNetworkPolicyObject(policy, false))
-	assert.Equal(t, 0, e.ActiveCount(), "ingress-only policy should not create incident")
+	assert.Equal(
+		t,
+		0,
+		e.ActiveCount(),
+		"ingress-only policy should not create incident",
+	)
 }
 
 func TestProcessNetworkPolicyObjectDeleted(t *testing.T) {
-	h := NewHandler(fake.NewSimpleClientset(), &config.Config{}, testCorrelator(), testAlertMgr)
+	h := NewHandler(
+		fake.NewSimpleClientset(),
+		&config.Config{},
+		testCorrelator(),
+		testAlertMgr,
+	)
 	assert.NoError(t, h.ProcessNetworkPolicy("default/test-netpol", true))
 }
 
 func TestProcessNetworkPolicyObjectNil(t *testing.T) {
-	h := NewHandler(fake.NewSimpleClientset(), &config.Config{}, testCorrelator(), testAlertMgr)
+	h := NewHandler(
+		fake.NewSimpleClientset(),
+		&config.Config{},
+		testCorrelator(),
+		testAlertMgr,
+	)
 	assert.NoError(t, h.ProcessNetworkPolicyObject(nil, false))
 }
 
 func TestProcessNetworkPolicyInvalidKey(t *testing.T) {
-	h := NewHandler(fake.NewSimpleClientset(), &config.Config{}, testCorrelator(), testAlertMgr)
+	h := NewHandler(
+		fake.NewSimpleClientset(),
+		&config.Config{},
+		testCorrelator(),
+		testAlertMgr,
+	)
 	assert.Error(t, h.ProcessNetworkPolicy("a/b/c", false))
 }
 
 func TestProcessNetworkPolicyObjectDeletedPath(t *testing.T) {
 	e := testCorrelator()
-	h := NewHandler(fake.NewSimpleClientset(), &config.Config{}, e, testAlertMgr)
+	h := NewHandler(
+		fake.NewSimpleClientset(),
+		&config.Config{},
+		e,
+		testAlertMgr,
+	)
 
 	policy := &networkingv1.NetworkPolicy{
-		ObjectMeta: metav1.ObjectMeta{Name: "test-netpol", Namespace: "default"},
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "test-netpol",
+			Namespace: "default",
+		},
 	}
 	assert.NoError(t, h.ProcessNetworkPolicyObject(policy, true))
 	assert.Equal(t, 0, e.ActiveCount())

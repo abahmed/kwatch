@@ -53,13 +53,23 @@ func TestAvailabilityHint(t *testing.T) {
 
 func TestProcessDaemonSetObjectNil(t *testing.T) {
 	e := correlation.NewEngine(correlation.Config{Window: 10 * time.Minute})
-	h := NewHandler(fake.NewSimpleClientset(), &config.Config{}, e, testAlertMgr)
+	h := NewHandler(
+		fake.NewSimpleClientset(),
+		&config.Config{},
+		e,
+		testAlertMgr,
+	)
 	assert.NoError(t, h.ProcessDaemonSetObject(nil, false))
 }
 
 func TestProcessDaemonSetObjectDeleted(t *testing.T) {
 	e := correlation.NewEngine(correlation.Config{Window: 10 * time.Minute})
-	h := NewHandler(fake.NewSimpleClientset(), &config.Config{}, e, testAlertMgr)
+	h := NewHandler(
+		fake.NewSimpleClientset(),
+		&config.Config{},
+		e,
+		testAlertMgr,
+	)
 	ds := &appsv1.DaemonSet{
 		ObjectMeta: metav1.ObjectMeta{Name: "ds1", Namespace: "ns1"},
 	}
@@ -68,7 +78,12 @@ func TestProcessDaemonSetObjectDeleted(t *testing.T) {
 
 func TestProcessDaemonSetObjectHealthy(t *testing.T) {
 	e := correlation.NewEngine(correlation.Config{Window: 10 * time.Minute})
-	h := NewHandler(fake.NewSimpleClientset(), &config.Config{}, e, testAlertMgr)
+	h := NewHandler(
+		fake.NewSimpleClientset(),
+		&config.Config{},
+		e,
+		testAlertMgr,
+	)
 	ds := &appsv1.DaemonSet{
 		ObjectMeta: metav1.ObjectMeta{Name: "ds1", Namespace: "ns1"},
 		Status: appsv1.DaemonSetStatus{
@@ -82,7 +97,12 @@ func TestProcessDaemonSetObjectHealthy(t *testing.T) {
 
 func TestProcessDaemonSetObjectUnavailable(t *testing.T) {
 	e := correlation.NewEngine(correlation.Config{Window: 10 * time.Minute})
-	h := NewHandler(fake.NewSimpleClientset(), &config.Config{}, e, testAlertMgr)
+	h := NewHandler(
+		fake.NewSimpleClientset(),
+		&config.Config{},
+		e,
+		testAlertMgr,
+	)
 	ds := &appsv1.DaemonSet{
 		ObjectMeta: metav1.ObjectMeta{Name: "ds1", Namespace: "ns1"},
 		Status: appsv1.DaemonSetStatus{
@@ -98,28 +118,48 @@ func TestProcessDaemonSetObjectUnavailable(t *testing.T) {
 }
 
 func TestProcessDaemonSetInvalidKey(t *testing.T) {
-	h := NewHandler(fake.NewSimpleClientset(), &config.Config{}, testCorrelator(), testAlertMgr)
+	h := NewHandler(
+		fake.NewSimpleClientset(),
+		&config.Config{},
+		testCorrelator(),
+		testAlertMgr,
+	)
 	assert.Error(t, h.ProcessDaemonSet("a/b/c", false))
 }
 
 func TestProcessDaemonSetDeleted(t *testing.T) {
-	h := NewHandler(fake.NewSimpleClientset(), &config.Config{}, testCorrelator(), testAlertMgr)
+	h := NewHandler(
+		fake.NewSimpleClientset(),
+		&config.Config{},
+		testCorrelator(),
+		testAlertMgr,
+	)
 	assert.NoError(t, h.ProcessDaemonSet("ns1/ds1", true))
 }
 
 func TestProcessDaemonSetNotFound(t *testing.T) {
 	e := correlation.NewEngine(correlation.Config{Window: 10 * time.Minute})
-	h := NewHandler(fake.NewSimpleClientset(), &config.Config{}, e, testAlertMgr)
+	h := NewHandler(
+		fake.NewSimpleClientset(),
+		&config.Config{},
+		e,
+		testAlertMgr,
+	)
 	client := fake.NewSimpleClientset()
 	f := informers.NewSharedInformerFactory(client, 0)
-	h.SetDaemonSetLister(f.Apps().V1().DaemonSets().Lister())
+	h.listers.DS = f.Apps().V1().DaemonSets().Lister()
 	assert.NoError(t, h.ProcessDaemonSet("ns1/missing", false))
 }
 
 func TestProcessDaemonSetObjectNodeInhibition(t *testing.T) {
 	e := testCorrelator()
 	e.SetActiveNodeIncidents([]string{"node1"})
-	h := NewHandler(fake.NewSimpleClientset(), &config.Config{}, e, testAlertMgr)
+	h := NewHandler(
+		fake.NewSimpleClientset(),
+		&config.Config{},
+		e,
+		testAlertMgr,
+	)
 
 	ds := &appsv1.DaemonSet{
 		ObjectMeta: metav1.ObjectMeta{Name: "ds1", Namespace: "ns1"},
@@ -132,14 +172,38 @@ func TestProcessDaemonSetObjectNodeInhibition(t *testing.T) {
 	}
 	ds.Generation = 1
 	assert.NoError(t, h.ProcessDaemonSetObject(ds, false))
-	assert.Equal(t, 0, e.ActiveCount(), "should be suppressed by node inhibition")
+	assert.Equal(
+		t,
+		0,
+		e.ActiveCount(),
+		"should be suppressed by node inhibition",
+	)
 }
 
 func TestProcessDaemonSetObjectOvercommitDoesNotInhibit(t *testing.T) {
 	e := testCorrelator()
-	e.Process(event.Event{Resource: "node", PodName: "node1", NodeName: "node1", Reason: "NodeResourceCritical"}, "node1", nil)
-	assert.Equal(t, 0, e.CountActiveNodeIncidents(), "overcommit must not count toward node inhibition")
-	h := NewHandler(fake.NewSimpleClientset(), &config.Config{}, e, testAlertMgr)
+	e.Process(
+		event.Event{
+			Resource: "node",
+			PodName:  "node1",
+			NodeName: "node1",
+			Reason:   "NodeResourceCritical",
+		},
+		"node1",
+		nil,
+	)
+	assert.Equal(
+		t,
+		0,
+		e.CountActiveNodeIncidents(),
+		"overcommit must not count toward node inhibition",
+	)
+	h := NewHandler(
+		fake.NewSimpleClientset(),
+		&config.Config{},
+		e,
+		testAlertMgr,
+	)
 
 	ds := &appsv1.DaemonSet{
 		ObjectMeta: metav1.ObjectMeta{Name: "ds1", Namespace: "ns1"},
@@ -160,13 +224,22 @@ func TestProcessDaemonSetObjectOvercommitDoesNotInhibit(t *testing.T) {
 			found = true
 		}
 	}
-	assert.True(t, found, "over-committed node must not suppress the DaemonSetUnavailable alert")
+	assert.True(
+		t,
+		found,
+		"over-committed node must not suppress the DaemonSetUnavailable alert",
+	)
 }
 
 func TestProcessDaemonSetObjectRolloutGrace(t *testing.T) {
 	e := testCorrelator()
 	now := time.Now()
-	h := NewHandler(fake.NewSimpleClientset(), &config.Config{}, e, testAlertMgr)
+	h := NewHandler(
+		fake.NewSimpleClientset(),
+		&config.Config{},
+		e,
+		testAlertMgr,
+	)
 	h.now = func() time.Time { return now }
 
 	ds := &appsv1.DaemonSet{
@@ -180,7 +253,12 @@ func TestProcessDaemonSetObjectRolloutGrace(t *testing.T) {
 	}
 	ds.Generation = 1
 	assert.NoError(t, h.ProcessDaemonSetObject(ds, false))
-	assert.Equal(t, 0, e.ActiveCount(), "should be suppressed during rollout grace")
+	assert.Equal(
+		t,
+		0,
+		e.ActiveCount(),
+		"should be suppressed during rollout grace",
+	)
 }
 
 func TestProcessDaemonSetObjectSustained(t *testing.T) {
@@ -200,12 +278,22 @@ func TestProcessDaemonSetObjectSustained(t *testing.T) {
 	}
 	ds.Generation = 1
 	assert.NoError(t, h.ProcessDaemonSetObject(ds, false))
-	assert.Equal(t, 0, e.ActiveCount(), "should be suppressed during sustained window")
+	assert.Equal(
+		t,
+		0,
+		e.ActiveCount(),
+		"should be suppressed during sustained window",
+	)
 }
 
 func TestMarkFirstUnavailableDSHit(t *testing.T) {
 	e := testCorrelator()
-	h := NewHandler(fake.NewSimpleClientset(), &config.Config{}, e, testAlertMgr)
+	h := NewHandler(
+		fake.NewSimpleClientset(),
+		&config.Config{},
+		e,
+		testAlertMgr,
+	)
 	t1 := h.markFirstUnavailableDS("ns1/ds1")
 	t2 := h.markFirstUnavailableDS("ns1/ds1")
 	assert.Equal(t, t1, t2, "second call should return existing entry")
@@ -213,7 +301,12 @@ func TestMarkFirstUnavailableDSHit(t *testing.T) {
 
 func TestProcessDaemonSetUnavailable(t *testing.T) {
 	e := correlation.NewEngine(correlation.Config{Window: 10 * time.Minute})
-	h := NewHandler(fake.NewSimpleClientset(), &config.Config{}, e, testAlertMgr)
+	h := NewHandler(
+		fake.NewSimpleClientset(),
+		&config.Config{},
+		e,
+		testAlertMgr,
+	)
 	ds := &appsv1.DaemonSet{
 		ObjectMeta: metav1.ObjectMeta{Name: "ds1", Namespace: "ns1"},
 		Status: appsv1.DaemonSetStatus{
@@ -227,7 +320,7 @@ func TestProcessDaemonSetUnavailable(t *testing.T) {
 	client := fake.NewSimpleClientset()
 	f := informers.NewSharedInformerFactory(client, 0)
 	f.Apps().V1().DaemonSets().Informer().GetIndexer().Add(ds)
-	h.SetDaemonSetLister(f.Apps().V1().DaemonSets().Lister())
+	h.listers.DS = f.Apps().V1().DaemonSets().Lister()
 	assert.NoError(t, h.ProcessDaemonSet("ns1/ds1", false))
 	assert.Equal(t, 1, e.ActiveCount())
 }
