@@ -113,10 +113,14 @@ func (rb *ReportBuilder) populateState(r *Report, inc *model.Incident) {
 		return
 	}
 
+	restarts := inc.RestartCount
+	if restarts > int(^uint32(0)>>1) {
+		restarts = int(^uint32(0) >> 1)
+	}
 	r.State = &StateSection{
 		Message:     inc.LastContainerState.Msg,
 		ExitCode:    inc.LastContainerState.ExitCode,
-		Restarts:    int32(inc.RestartCount),
+		Restarts:    int32(restarts),
 		Duration:    durationStr(inc.FirstSeen, inc.LastSeen),
 		TotalEvents: inc.Count,
 	}

@@ -22,6 +22,9 @@
   policy, while remaining findings require a separate security-hardening batch.
 - `govulncheck ./...`: reports `GO-2026-5932` in `golang.org/x/crypto/openpgp`, which is
   unmaintained and has no published fixed version.
+- Additional security hardening: audit-log creation is restricted to owner-only (`0600`),
+  heartbeat response-body close errors are surfaced, and restart-count rendering clamps
+  values before narrowing to `int32`.
 
 ## Infrastructure-dependent checks not executed
 
