@@ -65,3 +65,16 @@ available.
 No tag, image push, chart publication, GitHub release, or external-cluster mutation was
 performed. Release actions remain pending explicit maintainer authorization and completion
 of the blocked evidence items above.
+
+## Remaining-work checklist
+
+- [ ] Install or provision a supported Kubernetes test matrix (`kubectl` plus `kind` or an
+  equivalent cluster runtime).
+- [ ] Run install, upgrade, rollback, uninstall, CRD, RBAC, restart, API-outage, informer
+  reconnect, and notification failure-injection scenarios.
+- [ ] Run 1K/5K/10K+ resource performance and bounded soak measurements; record raw results.
+- [ ] Build and inspect release containers; produce SBOM, provenance, signatures, and digest
+  verification.
+- [ ] Obtain an independent final review and resolve or explicitly accept any new findings.
+- [ ] Obtain maintainer authorization before creating tags, publishing artifacts, or mutating
+  an external cluster.
