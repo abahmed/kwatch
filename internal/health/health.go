@@ -194,6 +194,10 @@ func (h *HealthServer) incidentsHandler(w http.ResponseWriter, r *http.Request) 
 	if !h.requireDiagnosticsAuth(w, r) {
 		return
 	}
+	if r.Method != http.MethodGet {
+		w.WriteHeader(http.StatusMethodNotAllowed)
+		return
+	}
 	if h.incidentAPI == nil {
 		w.Header().Set("Content-Type", "text/plain")
 		w.WriteHeader(http.StatusServiceUnavailable)
@@ -248,6 +252,10 @@ func (h *HealthServer) testAlertHandler(w http.ResponseWriter, r *http.Request) 
 
 func (h *HealthServer) deadLettersHandler(w http.ResponseWriter, r *http.Request) {
 	if !h.requireDiagnosticsAuth(w, r) {
+		return
+	}
+	if r.Method != http.MethodGet {
+		w.WriteHeader(http.StatusMethodNotAllowed)
 		return
 	}
 	if h.deadLetterLister == nil {
