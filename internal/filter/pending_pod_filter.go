@@ -19,6 +19,9 @@ func (f PendingPodFilter) Detect(ctx *Context) Status {
 	}
 
 	refTime := ctx.Pod.CreationTimestamp.Time
+	if refTime.IsZero() {
+		refTime = ctx.now()
+	}
 	if !ctx.Config.WatchStartTime.IsZero() &&
 		ctx.Config.WatchStartTime.After(refTime) {
 		refTime = ctx.Config.WatchStartTime

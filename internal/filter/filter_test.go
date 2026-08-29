@@ -226,6 +226,11 @@ func TestContainerStateFilterRunning(t *testing.T) {
 	assert.Equal("running", ctx.Container.Status)
 }
 
+func TestContainerStateFilterNilStatusIsSafe(t *testing.T) {
+	ctx := &Context{Container: &ContainerContext{}}
+	assert.Equal(t, StatusAlert, (ContainerStateFilter{}).Detect(ctx))
+}
+
 func TestContainerStateFilterRunningWithRestarts(t *testing.T) {
 	assert := assert.New(t)
 
@@ -1825,6 +1830,18 @@ func TestPendingPodFilterNewPod(t *testing.T) {
 	result := filter.Execute(ctx)
 	assert.False(result)
 	assert.False(ctx.PodHasIssues)
+}
+
+func TestPendingPodFilterZeroCreationTimestampUsesNow(t *testing.T) {
+	now := time.Date(2025, 1, 1, 0, 0, 0, 0, time.UTC)
+	ctx := &Context{
+		Sources: Sources{
+			Config: &config.Config{},
+			Now:    func() time.Time { return now },
+		},
+		Pod: &corev1.Pod{Status: corev1.PodStatus{Phase: corev1.PodPending}},
+	}
+	assert.False(t, (PendingPodFilter{Threshold: 5 * time.Minute}).Execute(ctx))
 }
 
 func TestPendingPodFilterOldPodNoWatchStart(t *testing.T) {
