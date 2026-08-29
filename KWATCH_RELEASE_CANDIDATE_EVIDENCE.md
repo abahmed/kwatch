@@ -3,7 +3,7 @@
 ## Source
 
 - Branch: `kwatch-hardening`
-- Source SHA: `1aaa0c796c124c964de4a0e3a7ea4fd6569ca074`
+- Source SHA: `0d0457842628e9d3ba7db3cd97f394860ed6006a`
 - Working tree: clean
 - Build-time binary version defaults to `dev`; release workflows inject the version.
 
@@ -18,13 +18,14 @@
 - `helm template kwatch deploy/chart`: passed
 - `bash deploy/chart/test_helm.sh`: passed
 - `staticcheck ./...`: passed
-- `gosec ./...`: reports 24 findings; informer `G104` cases are intentional per repository
-  policy, while remaining findings require a separate security-hardening batch.
-- `govulncheck ./...`: reports `GO-2026-5932` in `golang.org/x/crypto/openpgp`, which is
-  unmaintained and has no published fixed version.
+- `gosec ./...`: remaining findings are the intentional informer `G104` cases and the
+  configuration-controlled file paths in `internal/config/load_config.go` (`G304`/`G703`).
+- `govulncheck ./...`: no vulnerabilities reachable from imported packages. One vulnerability
+  remains in a required-but-unreachable module dependency; it is not called by Kwatch.
 - Additional security hardening: audit-log creation is restricted to owner-only (`0600`),
-  heartbeat response-body close errors are surfaced, and restart-count rendering clamps
-  values before narrowing to `int32`.
+  heartbeat response-body close errors are surfaced, restart-count rendering clamps values
+  before narrowing to `int32`, operational randomness uses `crypto/rand`, and the GitHub
+  client no longer pulls the deprecated `x/crypto/openpgp` implementation.
 
 ## Infrastructure-dependent checks not executed
 
