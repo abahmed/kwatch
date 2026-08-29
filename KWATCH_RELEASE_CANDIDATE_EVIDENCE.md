@@ -18,6 +18,8 @@
 - `go test -race -tags=integration ./internal/integration/...`: passed.
 - Local `BenchmarkProcess` baseline (Apple M4 virtual, 2s): 1,164 ns/op, 1,912 B/op,
   11 allocs/op. This is an engine microbenchmark, not a cluster-scale capacity claim.
+- LLM-removal search: no implementation, dependency, configuration, or deployment references
+  were found; matches are limited to audit-plan wording and unrelated `image pull` test names.
 - `golangci-lint run`: passed
 - `helm lint deploy/chart`: passed
 - `helm template kwatch deploy/chart`: passed
