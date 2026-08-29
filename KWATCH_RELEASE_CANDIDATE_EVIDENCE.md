@@ -15,6 +15,7 @@
 - `go test -race ./...`: passed on the current source
 - `go test -tags=integration ./internal/integration`: passed using the repository's fake-client
   integration harness (cluster-backed scenarios remain unverified).
+- `go test -race -tags=integration ./internal/integration/...`: passed.
 - `golangci-lint run`: passed
 - `helm lint deploy/chart`: passed
 - `helm template kwatch deploy/chart`: passed
