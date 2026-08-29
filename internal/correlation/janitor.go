@@ -39,7 +39,7 @@ func (e *Engine) cleanup() {
 	now := e.now()
 	var pending []transition
 	for key, inc := range e.state {
-		if !now.After(inc.LastSeen.Add(e.config.Window)) {
+		if now.Before(inc.LastSeen.Add(e.config.Window)) {
 			continue
 		}
 		// Do not clean up pod incidents whose owning workload is still
@@ -111,7 +111,7 @@ func (e *Engine) finalizePendingResolves(now time.Time) ([]transition, bool) {
 	var baselineChanged bool
 	for key, inc := range e.state {
 		if inc.State != model.StatePendingResolve || inc.ResolveAt.IsZero() ||
-			!now.After(inc.ResolveAt) {
+			now.Before(inc.ResolveAt) {
 			continue
 		}
 		// Do not finalize if the owning workload is still unhealthy.
