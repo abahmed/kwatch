@@ -3,6 +3,7 @@ package controller
 import (
 	"context"
 	"fmt"
+	"math"
 	"sort"
 	"strings"
 	"time"
@@ -86,7 +87,11 @@ func newFactories(
 }
 
 func informerExcludedNamespaces(forbidden []string) string {
-	seen := make(map[string]struct{}, len(forbidden)+1)
+	seenCap := 1
+	if len(forbidden) < math.MaxInt {
+		seenCap = len(forbidden) + 1
+	}
+	seen := make(map[string]struct{}, seenCap)
 	seen["kube-system"] = struct{}{}
 	for _, namespace := range forbidden {
 		if namespace != "" {
