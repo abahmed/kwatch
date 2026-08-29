@@ -112,7 +112,10 @@ func TestControllerPodEvent(t *testing.T) {
 	alertMgr.Start(ctx)
 
 	h := handler.NewHandler(client, cfg, correlator, alertMgr)
-	ctrl, cleanup := controller.New(client, cfg, h)
+	ctrl, cleanup, err := controller.New(client, cfg, h)
+	if err != nil {
+		t.Fatalf("controller.New failed: %v", err)
+	}
 	defer cleanup()
 
 	ctrlCtx, ctrlCancel := context.WithCancel(context.Background())
@@ -128,7 +131,7 @@ func TestControllerPodEvent(t *testing.T) {
 
 	time.Sleep(500 * time.Millisecond)
 
-	err := h.ProcessPodObject(ctrlCtx, pod, false)
+	err = h.ProcessPodObject(ctrlCtx, pod, false)
 	if err != nil {
 		t.Fatalf("ProcessPodObject failed: %v", err)
 	}
