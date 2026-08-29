@@ -55,7 +55,7 @@ jobs:
       uses: actions/checkout@v7
     - name: Detect chart changes
       id: changes
-      uses: dorny/paths-filter@v3
+      uses: dorny/paths-filter@v4
       with:
         filters: |
           chart:
@@ -84,7 +84,7 @@ jobs:
       uses: actions/checkout@v7
     - name: Detect image changes
       id: changes
-      uses: dorny/paths-filter@v3
+      uses: dorny/paths-filter@v4
       with:
         filters: |
           image:
