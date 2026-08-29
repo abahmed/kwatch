@@ -137,6 +137,25 @@ func TestAttributionPrecedence(t *testing.T) {
 	e.mu.Unlock()
 }
 
+func TestAttributionTieBreakersAreDeterministic(t *testing.T) {
+	e := newTestEngine()
+	e.mu.Lock()
+	e.state[model.IncidentKey("node::A:")] = &model.Incident{
+		Subject:     model.Subject{Key: "node::A:", Resource: "node", Name: "n1"},
+		Status:      model.Status{State: model.StateActive},
+		Attribution: model.Attribution{SuppressedPods: 2},
+	}
+	e.state[model.IncidentKey("node::B:")] = &model.Incident{
+		Subject:     model.Subject{Key: "node::B:", Resource: "node", Name: "n2"},
+		Status:      model.Status{State: model.StateActive},
+		Attribution: model.Attribution{SuppressedPods: 2},
+	}
+	chosen := e.findMostConstrainedNodeIncident()
+	e.mu.Unlock()
+	require.NotNil(t, chosen)
+	assert.Equal(t, model.IncidentKey("node::A:"), chosen.Key)
+}
+
 // recordSymptom credits the cause and never announces the symptom.
 func TestAttributionRecordsAgainstTheCause(t *testing.T) {
 	e := attributionEngine(t)

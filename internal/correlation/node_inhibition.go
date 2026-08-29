@@ -1,6 +1,8 @@
 package correlation
 
 import (
+	"sort"
+
 	"github.com/abahmed/kwatch/internal/constant"
 	"github.com/abahmed/kwatch/internal/event"
 	"github.com/abahmed/kwatch/internal/model"
@@ -44,7 +46,13 @@ func recordSuppressedPod(
 
 // Caller must hold e.mu.
 func (e *Engine) findNodeIncident(nodeName string) *model.Incident {
-	for _, inc := range e.state {
+	keys := make([]string, 0, len(e.state))
+	for key := range e.state {
+		keys = append(keys, string(key))
+	}
+	sort.Strings(keys)
+	for _, rawKey := range keys {
+		inc := e.state[model.IncidentKey(rawKey)]
 		if inc.Resource == "node" && inc.Name == nodeName {
 			return inc
 		}
@@ -58,10 +66,18 @@ func (e *Engine) findNodeIncident(nodeName string) *model.Incident {
 // Caller must hold e.mu.
 func (e *Engine) findMostConstrainedNodeIncident() *model.Incident {
 	var best *model.Incident
-	for _, inc := range e.state {
+	keys := make([]string, 0, len(e.state))
+	for key := range e.state {
+		keys = append(keys, string(key))
+	}
+	sort.Strings(keys)
+	for _, rawKey := range keys {
+		inc := e.state[model.IncidentKey(rawKey)]
 		if inc.Resource == "node" && inc.State != model.StateResolved &&
 			inc.State != model.StatePendingResolve {
-			if best == nil || inc.SuppressedPods > best.SuppressedPods {
+			if best == nil || inc.SuppressedPods > best.SuppressedPods ||
+				(inc.SuppressedPods == best.SuppressedPods &&
+					string(inc.Key) < string(best.Key)) {
 				best = inc
 			}
 		}
