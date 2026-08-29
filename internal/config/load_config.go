@@ -20,7 +20,8 @@ func LintStrict() error {
 	if configFile == "" {
 		return nil
 	}
-	raw, err := os.ReadFile(configFile)
+	// CONFIG_FILE is an explicit operator-selected path, not user-controlled input.
+	raw, err := os.ReadFile(configFile) // #nosec G304,G703 -- intentional operator path
 	if err != nil {
 		return err
 	}
@@ -82,7 +83,8 @@ func parseConfigFile() (*Config, error) {
 		return config, nil
 	}
 
-	yamlFile, err := os.ReadFile(configFile)
+	// CONFIG_FILE is an explicit operator-selected path, not user-controlled input.
+	yamlFile, err := os.ReadFile(configFile) // #nosec G304,G703 -- intentional operator path
 	if err != nil {
 		if os.IsNotExist(err) {
 			klog.InfoS("config file not found; using default (no alert providers)", "path", configFile)
