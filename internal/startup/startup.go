@@ -52,7 +52,14 @@ func (s *StartupManager) HandleStartup(ctx context.Context) error {
 		clusterID = ""
 	}
 
-	isFirstRun, _ := s.stateManager.IsFirstRun(ctx)
+	isFirstRun, err := s.stateManager.IsFirstRun(ctx)
+	if err != nil {
+		// Unknown state is not a first install. Avoid sending a misleading
+		// welcome message when the API is temporarily unavailable or RBAC is
+		// incomplete; initialization below will log its own failure as well.
+		klog.InfoS("failed to determine whether this is the first run", "error", err)
+		isFirstRun = false
+	}
 
 	s.currentVersion = version.Short()
 	storedVersion := s.stateManager.GetStoredVersion(ctx)

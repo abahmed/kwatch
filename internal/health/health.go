@@ -4,6 +4,7 @@ import (
 	"context"
 	"crypto/subtle"
 	"encoding/json"
+	"net"
 	"net/http"
 	"net/http/pprof"
 	"strconv"
@@ -138,9 +139,14 @@ func (h *HealthServer) Start(ctx context.Context) error {
 		IdleTimeout:       60 * time.Second,
 	}
 
+	ln, err := net.Listen("tcp", h.server.Addr)
+	if err != nil {
+		return err
+	}
+
 	go func() {
 		klog.InfoS("starting health check server", "port", h.port)
-		if err := h.server.ListenAndServe(); err != nil && err != http.ErrServerClosed {
+		if err := h.server.Serve(ln); err != nil && err != http.ErrServerClosed {
 			klog.ErrorS(err, "health check server error")
 		}
 	}()

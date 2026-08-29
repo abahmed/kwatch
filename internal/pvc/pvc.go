@@ -12,7 +12,6 @@ import (
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/klog/v2"
 
-	"github.com/abahmed/kwatch/internal/alert"
 	"github.com/abahmed/kwatch/internal/config"
 	"github.com/abahmed/kwatch/internal/correlation"
 	"github.com/abahmed/kwatch/internal/event"
@@ -28,13 +27,13 @@ const (
 type PvcMonitor struct {
 	client         kubernetes.Interface
 	config         *config.PvcMonitor
-	alertManager   *alert.AlertManager
 	correlator     *correlation.Engine
 	state          *state.StateManager // persistence; nil only in unit tests
 	notifiedPvc    map[string]bool
 	lastUsage      map[string]state.PvcSample // last observed sample per PV name (survives unmount)
 	pvByPVC        map[string]string          // cached PVC→PV map (shared by sweep + per-node sample)
 	pvByPVCAt      time.Time                  // when pvByPVC was last refreshed
+	now            func() time.Time
 	mu             sync.RWMutex
 	firstScan      bool
 	sem            chan struct{}                                                                              // bounds concurrent getNodeUsage calls
@@ -47,7 +46,7 @@ const pvByPVCTTL = 60 * time.Second
 // once per pvByPVCTTL. Shared by checkUsage (sweep) and per-node sample (event-driven).
 func (p *PvcMonitor) pvcMap(ctx context.Context) map[string]string {
 	p.mu.RLock()
-	if p.pvByPVC != nil && time.Since(p.pvByPVCAt) < pvByPVCTTL {
+	if p.pvByPVC != nil && p.now().Sub(p.pvByPVCAt) < pvByPVCTTL {
 		m := p.pvByPVC
 		p.mu.RUnlock()
 		return m
@@ -64,7 +63,7 @@ func (p *PvcMonitor) pvcMap(ctx context.Context) map[string]string {
 			m[c.Namespace+"/"+c.Name] = c.Spec.VolumeName
 		}
 		p.mu.Lock()
-		p.pvByPVC, p.pvByPVCAt = m, time.Now()
+		p.pvByPVC, p.pvByPVCAt = m, p.now()
 		p.mu.Unlock()
 	} else {
 		klog.ErrorS(err, "pvc monitor: list PVCs")
@@ -78,25 +77,24 @@ func (p *PvcMonitor) pvcMap(ctx context.Context) map[string]string {
 func NewPvcMonitor(
 	client kubernetes.Interface,
 	config *config.PvcMonitor,
-	alertManager *alert.AlertManager,
 	correlator *correlation.Engine,
 	stateMgr *state.StateManager,
 ) *PvcMonitor {
 	return &PvcMonitor{
-		client:       client,
-		config:       config,
-		alertManager: alertManager,
-		correlator:   correlator,
-		state:        stateMgr,
-		notifiedPvc:  make(map[string]bool),
-		lastUsage:    make(map[string]state.PvcSample),
-		firstScan:    true,
-		sem:          make(chan struct{}, maxConcurrentSamples),
+		client:      client,
+		config:      config,
+		correlator:  correlator,
+		state:       stateMgr,
+		notifiedPvc: make(map[string]bool),
+		lastUsage:   make(map[string]state.PvcSample),
+		now:         time.Now,
+		firstScan:   true,
+		sem:         make(chan struct{}, maxConcurrentSamples),
 	}
 }
 
 func (p *PvcMonitor) Start(ctx context.Context) {
-	if !p.config.Enabled {
+	if p.config == nil || !p.config.Enabled {
 		return
 	}
 
@@ -166,10 +164,7 @@ func (p *PvcMonitor) reportSignal(s *event.Signal) {
 		Hint:      s.Hint,
 		Severity:  s.Severity,
 	}
-	inc, action := p.correlator.Process(ev, s.Owner, nil)
-	if action != model.ActionSkip {
-		p.alertManager.NotifyIncident(inc, action, nil)
-	}
+	p.correlator.Process(ev, s.Owner, nil)
 }
 
 // persist snapshots lastUsage to the kwatch-pvc ConfigMap. Called ONLY from the

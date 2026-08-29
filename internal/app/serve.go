@@ -52,14 +52,12 @@ func serve(ctx context.Context, deps *serverDeps) int {
 		for {
 			select {
 			case <-ctx.Done():
-				if snap := deps.correlator.SnapshotPersisted(); len(snap) > 0 {
-					trySendIncidentSnapshot(deps.incidentCh, snap)
-				}
 				return
 			case <-ticker.C:
-				if snap := deps.correlator.SnapshotPersisted(); len(snap) > 0 {
-					trySendIncidentSnapshot(deps.incidentCh, snap)
-				}
+				trySendIncidentSnapshot(
+					deps.incidentCh,
+					deps.correlator.SnapshotPersisted(),
+				)
 				if deps.recordAlive != nil {
 					deps.recordAlive(ctx)
 				}
@@ -111,14 +109,7 @@ func startCRDWatcher(ctx context.Context, deps *serverDeps) {
 		return
 	}
 	resync := time.Duration(deps.cfg.ResyncSeconds) * time.Second
-	w := crdwatch.New(
-		deps.cfg,
-		deps.alertManager,
-		deps.correlator,
-		restCfg,
-		k8s.GetNamespace(),
-		resync,
-	)
+	w := crdwatch.New(deps.cfg, restCfg, k8s.GetNamespace(), resync, deps.cancel)
 	if err := w.Start(ctx); err != nil {
 		klog.ErrorS(err, "CRD watcher error")
 	}
@@ -154,6 +145,8 @@ func waitShutdown(
 	case <-time.After(10 * time.Second):
 		klog.InfoS("timed out waiting for background tasks")
 	}
+	waitIncidentSaver(deps)
+	saveFinalIncidentSnapshot(deps)
 
 	select {
 	case <-deps.alertManager.Done():
@@ -166,6 +159,11 @@ func waitShutdown(
 		klog.ErrorS(err, "failed to stop health check server")
 	}
 	sc()
+	if deps.closeAudit != nil {
+		if err := deps.closeAudit(); err != nil {
+			klog.ErrorS(err, "failed to close audit logger")
+		}
+	}
 	deps.cleanup()
 	return 0
 }

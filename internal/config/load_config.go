@@ -161,10 +161,19 @@ func prepareConfig(config *Config) []error {
 		errs = append(errs, fmt.Errorf("failed to compile log pattern: %w", err))
 	}
 
+	// Remove synthetic rules from any earlier preparation pass before building
+	// them again. Startup CRD overlays may request a second pass.
+	if n := config.syntheticSilences; n > 0 && len(config.Silences) >= n {
+		config.Silences = config.Silences[:len(config.Silences)-n]
+	}
+	config.syntheticSilences = 0
+
 	// Consolidation: convert deprecated ignore* fields into synthetic
 	// SilenceRules so detect-time and post-detect filters both read from
 	// the unified Silences / SuppressionIndex.
+	baseLen := len(config.Silences)
 	config.Silences = appendIgnoreFieldSilences(config)
+	config.syntheticSilences = len(config.Silences) - baseLen
 
 	// Build suppression index for detect-time filters
 	config.Suppression = config.BuildSuppressionIndex()
@@ -214,6 +223,24 @@ func LoadConfig() (*Config, error) {
 	config.SeverityByReason = cloneMap(config.SeverityByReason)
 
 	return config, nil
+}
+
+// RebuildAfterOverlay refreshes validation and derived indexes after a
+// startup-only configuration source has overlaid the base file.
+func RebuildAfterOverlay(c *Config) error {
+	if errs := prepareConfig(c); len(errs) > 0 {
+		return errors.Join(errs...)
+	}
+	return nil
+}
+
+// ResetDerivedSilences removes generated ignore* rules before an external
+// overlay mutates the serialized Silences field.
+func ResetDerivedSilences(c *Config) {
+	if n := c.syntheticSilences; n > 0 && len(c.Silences) >= n {
+		c.Silences = c.Silences[:len(c.Silences)-n]
+	}
+	c.syntheticSilences = 0
 }
 
 func cloneMap(m map[string]string) map[string]string {

@@ -125,7 +125,8 @@ func (r *Registry) Handler() http.Handler {
 			lines,
 			fmt.Sprintf("kwatch_graph_edges %d", r.GraphEdges.Load()),
 		)
-		_, err := fmt.Fprint(w, strings.Join(lines, "\n")+"\n")
-		klog.ErrorS(err, "metrics: write prometheus output")
+		if _, err := fmt.Fprint(w, strings.Join(lines, "\n")+"\n"); err != nil {
+			klog.ErrorS(err, "metrics: write prometheus output")
+		}
 	})
 }

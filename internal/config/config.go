@@ -37,8 +37,8 @@ type Config struct {
 	// suppressed from per-incident alerts by the baseline.
 	ReportStartupBaseline bool `yaml:"reportStartupBaseline"`
 
-	// MaxRecentLogLines optional max tail log lines in messages,
-	// if it's not provided it will get all log lines
+	// MaxRecentLogLines limits the tail log lines fetched from Kubernetes.
+	// If it is not provided, the built-in default is used.
 	MaxRecentLogLines int64 `yaml:"maxRecentLogLines"`
 
 	// IgnoreFailedGracefulShutdown if set to true, containers which are
@@ -194,6 +194,9 @@ type Config struct {
 	// SuppressionIndex is compiled from both Silences and deprecated ignore*
 	// fields for efficient detect-time lookup. Populated by LoadConfig.
 	Suppression SuppressionIndex
+	// syntheticSilences counts trailing rules generated from legacy ignore*
+	// fields. It is derived state and is never serialized.
+	syntheticSilences int
 
 	// WatchStartTime is set once at startup and used by filters to measure
 	// resource age relative to when kwatch began watching (not pod birth).

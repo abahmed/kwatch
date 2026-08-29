@@ -8,6 +8,7 @@ import (
 	"k8s.io/klog/v2"
 
 	"github.com/abahmed/kwatch/internal/config"
+	"github.com/abahmed/kwatch/internal/k8s"
 )
 
 type HeartbeatMonitor struct {
@@ -18,12 +19,12 @@ type HeartbeatMonitor struct {
 func NewHeartbeatMonitor(cfg *config.HeartbeatMonitor) *HeartbeatMonitor {
 	return &HeartbeatMonitor{
 		config: cfg,
-		client: &http.Client{Timeout: 10 * time.Second},
+		client: k8s.GetDefaultClient(),
 	}
 }
 
 func (m *HeartbeatMonitor) Start(ctx context.Context) {
-	if !m.config.Enabled {
+	if m.config == nil || !m.config.Enabled {
 		return
 	}
 	if m.config.URL == "" {
@@ -65,7 +66,13 @@ func (m *HeartbeatMonitor) ping(ctx context.Context) {
 	if err := resp.Body.Close(); err != nil {
 		klog.ErrorS(err, "heartbeat ping: failed to close response body")
 	}
-	if resp.StatusCode >= 400 {
-		klog.InfoS("heartbeat ping returned non-2xx", "status", resp.StatusCode, "url", m.config.URL)
+	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+		klog.InfoS(
+			"heartbeat ping returned non-2xx",
+			"status",
+			resp.StatusCode,
+			"url",
+			m.config.URL,
+		)
 	}
 }

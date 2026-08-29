@@ -29,9 +29,6 @@ func configureAlertManager(
 ) {
 	am.SetSilences(cfg.Silences)
 	am.SetTemplates(cfg.Templates)
-	if cfg.MaxRecentLogLines > 0 {
-		am.SetMaxLogLines(int(cfg.MaxRecentLogLines))
-	}
 	am.Start(ctx)
 }
 

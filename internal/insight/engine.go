@@ -64,7 +64,7 @@ func (e *Engine) EnrichMassFailure(mf MassFailure) MassFailure {
 	}
 
 	if e.tracker != nil {
-		recent := e.tracker.RecentChangesBefore(15 * time.Minute)
+		recent := e.tracker.RecentChangesBeforeAt(15*time.Minute, e.now())
 		depKey := parts[0] + "/" + parts[1] + "/" + parts[2]
 		var changes []context.Change
 		for _, c := range recent {

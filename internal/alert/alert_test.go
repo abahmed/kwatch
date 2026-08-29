@@ -848,6 +848,45 @@ func TestFallbackMessageTruncatedToFallbackMaxBytes(t *testing.T) {
 	assert.Contains(t, fb.msg, "fallback")
 }
 
+type eventFallbackProvider struct {
+	eventCalls   int
+	messageCalls int
+}
+
+func (p *eventFallbackProvider) Name() string { return "Event Fallback" }
+
+func (p *eventFallbackProvider) SendEvent(*event.Event) error {
+	p.eventCalls++
+	return nil
+}
+
+func (p *eventFallbackProvider) SendMessage(string) error {
+	p.messageCalls++
+	return nil
+}
+
+func (p *eventFallbackProvider) UsesEventDelivery() {}
+
+func TestIncidentFallbackUsesEventDeliveryInterface(t *testing.T) {
+	primary := &errorRecorderProvider{name: "Primary", err: errors.New("fail")}
+	fallback := &eventFallbackProvider{}
+	am := AlertManager{entries: []providerEntry{{
+		provider: primary,
+		retry:    retryConfig{maxAttempts: 1, delay: time.Millisecond},
+		fallback: &providerEntry{
+			provider: fallback,
+			retry:    retryConfig{maxAttempts: 1, delay: time.Millisecond},
+		},
+	}}}
+
+	am.NotifyIncident(&model.Incident{
+		Subject: model.Subject{Key: "ns:pod:Error", Reason: "Error"},
+	}, model.ActionCreate, nil)
+
+	assert.Equal(t, 1, fallback.eventCalls)
+	assert.Zero(t, fallback.messageCalls)
+}
+
 func TestExtractRetryYAMLInt(t *testing.T) {
 	// YAML v3 unmarshals integers as int, not float64.
 	cfg := map[string]interface{}{

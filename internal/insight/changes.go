@@ -112,7 +112,7 @@ func (e *Engine) checkRecentChanges(inc *model.Incident, ins *Insight) {
 	if e.tracker == nil {
 		return
 	}
-	recent := e.tracker.RecentChangesBefore(5 * time.Minute)
+	recent := e.tracker.RecentChangesBeforeAt(5*time.Minute, e.now())
 
 	// A pod's own create/update/delete is the incident, not its cause;
 	// listing it as "what changed" says nothing. Look at what the pods
