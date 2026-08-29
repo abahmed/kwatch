@@ -18,8 +18,9 @@
 - `helm template kwatch deploy/chart`: passed
 - `bash deploy/chart/test_helm.sh`: passed
 - `staticcheck ./...`: passed
-- `gosec ./...`: remaining findings are the intentional informer `G104` cases and the
-  configuration-controlled file paths in `internal/config/load_config.go` (`G304`/`G703`).
+- `gosec ./...`: remaining findings are the intentional informer `G104` cases; the
+  configuration-controlled paths in `internal/config/load_config.go` are explicitly
+  documented with scoped `nosec` annotations.
 - `govulncheck ./...`: no vulnerabilities reachable from imported packages. One vulnerability
   remains in a required-but-unreachable module dependency; it is not called by Kwatch.
 - Additional security hardening: audit-log creation is restricted to owner-only (`0600`),
