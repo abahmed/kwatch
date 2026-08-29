@@ -20,6 +20,9 @@
   11 allocs/op. This is an engine microbenchmark, not a cluster-scale capacity claim.
 - LLM-removal search: no implementation, dependency, configuration, or deployment references
   were found; matches are limited to audit-plan wording and unrelated `image pull` test names.
+- Local release metadata: chart `version: 0.10.5`, chart `appVersion: v0.10.5`, and raw
+  manifest image `ghcr.io/abahmed/kwatch:v0.10.5`; the binary defaults to `dev` unless release
+  ldflags are supplied.
 - `golangci-lint run`: passed
 - `helm lint deploy/chart`: passed
 - `helm template kwatch deploy/chart`: passed
