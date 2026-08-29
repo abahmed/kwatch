@@ -101,6 +101,23 @@ func TestMultipleEdges(t *testing.T) {
 	assert.Contains(t, deps, "deployment/ns1/dep1")
 }
 
+func TestMultipleEdgeTypesForSameResourcePair(t *testing.T) {
+	g := NewResourceGraph()
+	g.AddEdge("pod", "ns1", "p1", "configmap", "ns1", "cfg", "mounts")
+	g.AddEdge("pod", "ns1", "p1", "configmap", "ns1", "cfg", "env_ref")
+
+	assert.Len(t, g.Edges(), 2)
+	assert.Equal(t, []string{"configmap/ns1/cfg"}, g.DependenciesOf("pod", "ns1", "p1"))
+
+	g.RemoveEdgesFrom("pod", "ns1", "p1", "mounts")
+	assert.Len(t, g.Edges(), 1)
+	assert.Equal(t, []string{"configmap/ns1/cfg"}, g.DependenciesOf("pod", "ns1", "p1"))
+
+	g.RemoveEdgesFrom("pod", "ns1", "p1", "env_ref")
+	assert.Empty(t, g.Edges())
+	assert.Empty(t, g.DependenciesOf("pod", "ns1", "p1"))
+}
+
 func TestEdgesDoNotGrowOnRepeatedAdd(t *testing.T) {
 	g := NewResourceGraph()
 	for i := 0; i < 1000; i++ {

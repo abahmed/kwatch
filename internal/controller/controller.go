@@ -83,6 +83,7 @@ type Controller struct {
 	ssSynced      []cache.InformerSynced
 	eventsSynced  []cache.InformerSynced
 	secretsSynced []cache.InformerSynced
+	graphSynced   []cache.InformerSynced
 
 	serviceLister       corev1lister.ServiceLister
 	endpointSliceLister discoveryv1lister.EndpointSliceLister
@@ -94,7 +95,9 @@ type Controller struct {
 
 	nodeResourceCfg *config.NodeResourceMonitor
 
-	readyFn func()
+	readyFn           func()
+	watchAll          bool
+	allowedNamespaces map[string]struct{}
 }
 
 // allPipelines returns every pipeline in a fixed order for iteration over
@@ -129,13 +132,13 @@ func New(
 ) (*Controller, func()) {
 	resync := time.Duration(cfg.ResyncSeconds) * time.Second
 
-	namespaces, err := resolveNamespaces(cfg, client)
+	scope, err := resolveNamespaces(cfg, client)
 	if err != nil {
 		klog.ErrorS(err, "failed to resolve namespaces")
 		os.Exit(1)
 	}
 
-	fs, factories := newFactories(client, namespaces, resync)
+	fs, factories := newFactories(client, scope, cfg.ForbiddenNamespaces, resync)
 
 	podLister := fs.podLister()
 	podInformers := fs.podInformers()
@@ -174,6 +177,13 @@ func New(
 		),
 		podLister:   podLister,
 		maxBaseline: maxBaseline,
+		watchAll:    scope.all,
+	}
+	if !scope.all {
+		c.allowedNamespaces = make(map[string]struct{}, len(scope.namespaces))
+		for _, namespace := range scope.namespaces {
+			c.allowedNamespaces[namespace] = struct{}{}
+		}
 	}
 
 	c.pod.startWorkers = true
@@ -219,7 +229,7 @@ func New(
 	c.wireDaemonSetLister(fs)
 	c.wireStatefulSet(cfg, fs)
 	c.wirePDB(cfg, fs)
-	factories = append(factories, c.wireEvents(client, resync, namespaces)...)
+	factories = append(factories, c.wireEvents(client, resync, scope)...)
 	if cfg.ClusterAutoscalerMonitor.Enabled {
 		factories = append(factories, wireClusterAutoscaler(h, client, resync))
 	}
@@ -227,7 +237,7 @@ func New(
 	c.wireGraphSupport(fs)
 	c.wireGraphHandlers(fs, cfg)
 	if cfg.TlsMonitor.Enabled {
-		factories = append(factories, c.wireTLS(client, resync, namespaces)...)
+		factories = append(factories, c.wireTLS(client, resync, scope)...)
 	}
 
 	// Every informer is wired; hand the handler its lookups in one go. A
@@ -279,6 +289,14 @@ func New(
 
 func (c *Controller) SetReadyFunc(fn func()) { c.readyFn = fn }
 
+func (c *Controller) NamespaceAllowed(namespace string) bool {
+	if c.watchAll || namespace == "" {
+		return true
+	}
+	_, ok := c.allowedNamespaces[namespace]
+	return ok
+}
+
 func (c *Controller) SetTracker(t *kwcontext.ChangeTracker) { c.tracker = t }
 
 // recordGraphSize publishes the graph's size so an empty graph — and therefore
@@ -319,13 +337,15 @@ func (c *Controller) waitForCaches(
 		if p == nil {
 			continue
 		}
-		for _, synced := range p.synced {
-			if !synced() {
-				unsynced = append(unsynced, p.name)
-				break
-			}
-		}
+		unsynced = appendUnsynced(unsynced, p.name, p.synced)
 	}
+	unsynced = appendUnsynced(unsynced, "replicaset graph support", c.rsSynced)
+	unsynced = appendUnsynced(unsynced, "daemonset graph support", c.dsSynced)
+	unsynced = appendUnsynced(unsynced, "statefulset graph support", c.ssSynced)
+	unsynced = appendUnsynced(unsynced, "pod events", c.eventsSynced)
+	unsynced = appendUnsynced(unsynced, "configmaps", c.configMapSynced)
+	unsynced = appendUnsynced(unsynced, "TLS secrets", c.secretsSynced)
+	unsynced = appendUnsynced(unsynced, "graph support", c.graphSynced)
 	sort.Strings(unsynced)
 	return fmt.Errorf(
 		"informer caches did not sync within %s (unsynced: %s) — check that "+
@@ -334,6 +354,19 @@ func (c *Controller) waitForCaches(
 		cacheSyncTimeout,
 		strings.Join(unsynced, ", "),
 	)
+}
+
+func appendUnsynced(
+	unsynced []string,
+	name string,
+	syncFns []cache.InformerSynced,
+) []string {
+	for _, synced := range syncFns {
+		if !synced() {
+			return append(unsynced, name)
+		}
+	}
+	return unsynced
 }
 
 func (c *Controller) Run(ctx context.Context, workers int) error {
@@ -355,6 +388,7 @@ func (c *Controller) Run(ctx context.Context, workers int) error {
 	syncFns = append(syncFns, c.eventsSynced...)
 	syncFns = append(syncFns, c.configMapSynced...)
 	syncFns = append(syncFns, c.secretsSynced...)
+	syncFns = append(syncFns, c.graphSynced...)
 	if err := c.waitForCaches(ctx, syncFns); err != nil {
 		return err
 	}

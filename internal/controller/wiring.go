@@ -152,6 +152,9 @@ func (c *Controller) wirePDB(cfg *config.Config, fs factorySet) {
 		return
 	}
 	pdbInformers := fs.pdbInformers()
+	if len(pdbInformers) == 0 {
+		return
+	}
 
 	c.pdbLister = fs.pdbLister()
 	c.pdb.synced = []cache.InformerSynced{pdbInformers[0].HasSynced}
@@ -189,17 +192,23 @@ func (c *Controller) wireDaemonSetLister(fs factorySet) {
 func (c *Controller) wireEvents(
 	client kubernetes.Interface,
 	resync time.Duration,
-	namespaces []string,
+	scope namespaceScope,
 ) []informers.SharedInformerFactory {
 	var eventFactories []informers.SharedInformerFactory
-	if len(namespaces) <= 1 {
+	if !scope.all && len(scope.namespaces) == 0 {
+		return eventFactories
+	}
+	if scope.all || len(scope.namespaces) == 1 {
 		opts := []informers.SharedInformerOption{
 			informers.WithTweakListOptions(func(o *metav1.ListOptions) {
 				o.FieldSelector = "involvedObject.kind=Pod"
+				if scope.all {
+					o.FieldSelector += "," + informerExcludedNamespaces(scope.forbidden)
+				}
 			}),
 		}
-		if len(namespaces) == 1 {
-			opts = append(opts, informers.WithNamespace(namespaces[0]))
+		if len(scope.namespaces) == 1 {
+			opts = append(opts, informers.WithNamespace(scope.namespaces[0]))
 		}
 		ef := informers.NewSharedInformerFactoryWithOptions(
 			client,
@@ -224,8 +233,8 @@ func (c *Controller) wireEvents(
 		c.eventIndexers = append(c.eventIndexers, eventInformer.GetIndexer())
 		c.eventsSynced = append(c.eventsSynced, eventInformer.HasSynced)
 	} else {
-		listers := make([]corev1lister.EventLister, 0, len(namespaces))
-		for _, ns := range namespaces {
+		listers := make([]corev1lister.EventLister, 0, len(scope.namespaces))
+		for _, ns := range scope.namespaces {
 			ns := ns
 			opts := []informers.SharedInformerOption{
 				informers.WithTweakListOptions(func(o *metav1.ListOptions) {
@@ -371,6 +380,18 @@ func (c *Controller) wireGraphSupport(fs factorySet) {
 	c.pvLister = fs.persistentVolumeLister()
 	c.serviceAccountLister = fs.serviceAccountLister()
 	c.storageClassLister = fs.storageClassLister()
+	for _, inf := range fs.pvcInformers() {
+		c.graphSynced = append(c.graphSynced, inf.HasSynced)
+	}
+	for _, inf := range fs.serviceAccountInformers() {
+		c.graphSynced = append(c.graphSynced, inf.HasSynced)
+	}
+	for _, inf := range fs.persistentVolumeInformers() {
+		c.graphSynced = append(c.graphSynced, inf.HasSynced)
+	}
+	for _, inf := range fs.storageClassInformers() {
+		c.graphSynced = append(c.graphSynced, inf.HasSynced)
+	}
 	// Cluster-scoped listers only exist when a global/cluster factory was
 	// created; watching multiple namespaces skips PV and storage class edges.
 	if c.pvLister == nil || c.storageClassLister == nil {
@@ -385,17 +406,23 @@ func (c *Controller) wireGraphSupport(fs factorySet) {
 func (c *Controller) wireTLS(
 	client kubernetes.Interface,
 	resync time.Duration,
-	namespaces []string,
+	scope namespaceScope,
 ) []informers.SharedInformerFactory {
 	var tlsFactories []informers.SharedInformerFactory
-	if len(namespaces) <= 1 {
+	if !scope.all && len(scope.namespaces) == 0 {
+		return tlsFactories
+	}
+	if scope.all || len(scope.namespaces) == 1 {
 		opts := []informers.SharedInformerOption{
 			informers.WithTweakListOptions(func(o *metav1.ListOptions) {
 				o.FieldSelector = "type=kubernetes.io/tls"
+				if scope.all {
+					o.FieldSelector += "," + informerExcludedNamespaces(scope.forbidden)
+				}
 			}),
 		}
-		if len(namespaces) == 1 {
-			opts = append(opts, informers.WithNamespace(namespaces[0]))
+		if len(scope.namespaces) == 1 {
+			opts = append(opts, informers.WithNamespace(scope.namespaces[0]))
 		}
 		tf := informers.NewSharedInformerFactoryWithOptions(
 			client,
@@ -408,8 +435,8 @@ func (c *Controller) wireTLS(
 			tf.Core().V1().Secrets().Informer().HasSynced,
 		)
 	} else {
-		listers := make([]corev1lister.SecretLister, 0, len(namespaces))
-		for _, ns := range namespaces {
+		listers := make([]corev1lister.SecretLister, 0, len(scope.namespaces))
+		for _, ns := range scope.namespaces {
 			ns := ns
 			opts := []informers.SharedInformerOption{
 				informers.WithTweakListOptions(func(o *metav1.ListOptions) {

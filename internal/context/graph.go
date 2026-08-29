@@ -12,11 +12,21 @@ type Edge struct {
 	Type string
 }
 
+// EdgeTarget describes one outgoing relationship when a resource replaces its
+// graph contribution as an atomic snapshot.
+type EdgeTarget struct {
+	Kind      string
+	Namespace string
+	Name      string
+	Type      string
+}
+
 type ResourceGraph struct {
 	mu           sync.RWMutex
 	dependents   map[string]map[string]bool
 	dependencies map[string]map[string]bool
 	edges        map[string]Edge
+	edgeCounts   map[string]int
 }
 
 func NewResourceGraph() *ResourceGraph {
@@ -24,6 +34,7 @@ func NewResourceGraph() *ResourceGraph {
 		dependents:   make(map[string]map[string]bool),
 		dependencies: make(map[string]map[string]bool),
 		edges:        make(map[string]Edge),
+		edgeCounts:   make(map[string]int),
 	}
 }
 
@@ -47,7 +58,11 @@ func resourceKey(kind, namespace, name string) string {
 	return kind + "/" + namespace + "/" + name
 }
 
-func edgeKey(from, to string) string {
+func edgeKey(from, to, edgeType string) string {
+	return relationshipKey(from, to) + "\x00" + edgeType
+}
+
+func relationshipKey(from, to string) string {
 	return from + "\x00" + to
 }
 
@@ -56,36 +71,85 @@ func (g *ResourceGraph) AddEdge(
 ) {
 	g.mu.Lock()
 	defer g.mu.Unlock()
-	from := resourceKey(fromKind, fromNS, fromName)
-	to := resourceKey(toKind, toNS, toName)
-	if from == to {
+	g.addEdgeLocked(Edge{
+		From: resourceKey(fromKind, fromNS, fromName),
+		To:   resourceKey(toKind, toNS, toName),
+		Type: edgeType,
+	})
+}
+
+// ReplaceMatchingEdges atomically removes edges selected by match and adds the
+// supplied replacements. It lets an informer stage a resource's replacement
+// relationships before changing the live graph, without deleting edges that
+// are owned by other resource builders.
+func (g *ResourceGraph) ReplaceMatchingEdges(match func(Edge) bool, additions []Edge) {
+	g.mu.Lock()
+	defer g.mu.Unlock()
+
+	for _, edge := range g.edges {
+		if match(edge) {
+			g.removeEdgeLocked(edge)
+		}
+	}
+	for _, edge := range additions {
+		g.addEdgeLocked(edge)
+	}
+}
+
+// ReplaceOutgoingEdges atomically replaces every relationship contributed by
+// a resource. Informer updates use this after their new relationships have
+// been staged so graph readers never see a partially rebuilt resource.
+func (g *ResourceGraph) ReplaceOutgoingEdges(
+	kind, namespace, name string, targets []EdgeTarget,
+) {
+	from := resourceKey(kind, namespace, name)
+	g.mu.Lock()
+	defer g.mu.Unlock()
+
+	for _, edge := range g.edges {
+		if edge.From == from {
+			g.removeEdgeLocked(edge)
+		}
+	}
+	for _, target := range targets {
+		g.addEdgeLocked(Edge{
+			From: from,
+			To:   resourceKey(target.Kind, target.Namespace, target.Name),
+			Type: target.Type,
+		})
+	}
+}
+
+func (g *ResourceGraph) addEdgeLocked(edge Edge) {
+	if edge.From == edge.To {
 		return
 	}
-	if g.dependencies[from] == nil {
-		g.dependencies[from] = make(map[string]bool)
+	from, to := edge.From, edge.To
+	edgeType := edge.Type
+	key := edgeKey(from, to, edgeType)
+	if _, exists := g.edges[key]; exists {
+		return
 	}
-	g.dependencies[from][to] = true
-	if g.dependents[to] == nil {
-		g.dependents[to] = make(map[string]bool)
+	pair := relationshipKey(from, to)
+	if g.edgeCounts[pair] == 0 {
+		if g.dependencies[from] == nil {
+			g.dependencies[from] = make(map[string]bool)
+		}
+		g.dependencies[from][to] = true
+		if g.dependents[to] == nil {
+			g.dependents[to] = make(map[string]bool)
+		}
+		g.dependents[to][from] = true
 	}
-	g.dependents[to][from] = true
-	g.edges[edgeKey(from, to)] = Edge{From: from, To: to, Type: edgeType}
+	g.edgeCounts[pair]++
+	g.edges[key] = edge
 }
 
 func (g *ResourceGraph) RemoveNode(kind, namespace, name string) {
 	g.mu.Lock()
 	defer g.mu.Unlock()
 	key := resourceKey(kind, namespace, name)
-	for dep := range g.dependents[key] {
-		delete(g.dependencies[dep], key)
-		delete(g.edges, edgeKey(dep, key))
-	}
-	for dep := range g.dependencies[key] {
-		delete(g.dependents[dep], key)
-		delete(g.edges, edgeKey(key, dep))
-	}
-	delete(g.dependencies, key)
-	delete(g.dependents, key)
+	g.removeNodeLocked(key)
 }
 
 // RemoveEdgesFrom removes every outgoing edge of the given type from the node,
@@ -99,15 +163,9 @@ func (g *ResourceGraph) RemoveEdgesFrom(
 	g.mu.Lock()
 	defer g.mu.Unlock()
 	from := resourceKey(kind, namespace, name)
-	if froms, ok := g.dependencies[from]; ok {
-		for to := range froms {
-			if e, ok := g.edges[edgeKey(from, to)]; ok && e.Type == edgeType {
-				delete(g.edges, edgeKey(from, to))
-				delete(froms, to)
-				if toDeps, ok := g.dependents[to]; ok {
-					delete(toDeps, from)
-				}
-			}
+	for _, edge := range g.edges {
+		if edge.From == from && edge.Type == edgeType {
+			g.removeEdgeLocked(edge)
 		}
 	}
 }
@@ -223,9 +281,36 @@ func (g *ResourceGraph) Edges() []Edge {
 		if out[i].From != out[j].From {
 			return out[i].From < out[j].From
 		}
-		return out[i].To < out[j].To
+		if out[i].To != out[j].To {
+			return out[i].To < out[j].To
+		}
+		return out[i].Type < out[j].Type
 	})
 	return out
+}
+
+// ReplaceWith atomically replaces this graph's contents with a consistent
+// snapshot of next. Callers build next off to the side and only publish it
+// after every required cache lookup succeeds, so a failed rebuild never
+// empties the live graph.
+func (g *ResourceGraph) ReplaceWith(next *ResourceGraph) {
+	if next == nil || g == next {
+		return
+	}
+
+	next.mu.RLock()
+	dependencies := cloneAdjacency(next.dependencies)
+	dependents := cloneAdjacency(next.dependents)
+	edges := cloneEdges(next.edges)
+	edgeCounts := cloneEdgeCounts(next.edgeCounts)
+	next.mu.RUnlock()
+
+	g.mu.Lock()
+	defer g.mu.Unlock()
+	g.dependencies = dependencies
+	g.dependents = dependents
+	g.edges = edges
+	g.edgeCounts = edgeCounts
 }
 
 func (g *ResourceGraph) Clear() {
@@ -234,6 +319,7 @@ func (g *ResourceGraph) Clear() {
 	g.dependencies = make(map[string]map[string]bool)
 	g.dependents = make(map[string]map[string]bool)
 	g.edges = make(map[string]Edge)
+	g.edgeCounts = make(map[string]int)
 }
 
 // Prune removes all nodes of the given kind whose key is not present in the
@@ -243,22 +329,77 @@ func (g *ResourceGraph) Prune(kind string, active map[string]bool) {
 	g.mu.Lock()
 	defer g.mu.Unlock()
 	prefix := kind + "/"
+	stale := make(map[string]bool)
 	for key := range g.dependencies {
 		if strings.HasPrefix(key, prefix) && !active[key] {
-			for dep := range g.dependencies[key] {
-				delete(g.dependents[dep], key)
-				delete(g.edges, edgeKey(key, dep))
-			}
-			delete(g.dependencies, key)
+			stale[key] = true
 		}
 	}
 	for key := range g.dependents {
 		if strings.HasPrefix(key, prefix) && !active[key] {
-			for dep := range g.dependents[key] {
-				delete(g.dependencies[dep], key)
-				delete(g.edges, edgeKey(dep, key))
-			}
-			delete(g.dependents, key)
+			stale[key] = true
 		}
 	}
+	for key := range stale {
+		g.removeNodeLocked(key)
+	}
+}
+
+func (g *ResourceGraph) removeNodeLocked(node string) {
+	for _, edge := range g.edges {
+		if edge.From == node || edge.To == node {
+			g.removeEdgeLocked(edge)
+		}
+	}
+	delete(g.dependencies, node)
+	delete(g.dependents, node)
+}
+
+func (g *ResourceGraph) removeEdgeLocked(edge Edge) {
+	delete(g.edges, edgeKey(edge.From, edge.To, edge.Type))
+	pair := relationshipKey(edge.From, edge.To)
+	g.edgeCounts[pair]--
+	if g.edgeCounts[pair] > 0 {
+		return
+	}
+	delete(g.edgeCounts, pair)
+	if dependencies := g.dependencies[edge.From]; dependencies != nil {
+		delete(dependencies, edge.To)
+		if len(dependencies) == 0 {
+			delete(g.dependencies, edge.From)
+		}
+	}
+	if dependents := g.dependents[edge.To]; dependents != nil {
+		delete(dependents, edge.From)
+		if len(dependents) == 0 {
+			delete(g.dependents, edge.To)
+		}
+	}
+}
+
+func cloneAdjacency(in map[string]map[string]bool) map[string]map[string]bool {
+	out := make(map[string]map[string]bool, len(in))
+	for node, links := range in {
+		out[node] = make(map[string]bool, len(links))
+		for link, present := range links {
+			out[node][link] = present
+		}
+	}
+	return out
+}
+
+func cloneEdges(in map[string]Edge) map[string]Edge {
+	out := make(map[string]Edge, len(in))
+	for key, edge := range in {
+		out[key] = edge
+	}
+	return out
+}
+
+func cloneEdgeCounts(in map[string]int) map[string]int {
+	out := make(map[string]int, len(in))
+	for key, count := range in {
+		out[key] = count
+	}
+	return out
 }

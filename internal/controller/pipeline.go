@@ -2,8 +2,11 @@ package controller
 
 import (
 	"context"
+	"errors"
 	"fmt"
+	"time"
 
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
 	"k8s.io/client-go/tools/cache"
 	"k8s.io/client-go/util/workqueue"
@@ -12,7 +15,10 @@ import (
 // maxSyncRetries bounds how many times a failing key is requeued. With the
 // default exponential rate limiter the retries span a few minutes in total,
 // which outlasts any transient apiserver hiccup.
-const maxSyncRetries = 15
+const (
+	maxSyncRetries    = 15
+	syncRecoveryDelay = 5 * time.Minute
+)
 
 // resourcePipeline bundles the plumbing every watched kind shares: a workqueue
 // fed by informer event handlers, the informer HasSynced funcs Run must wait
@@ -60,12 +66,11 @@ func (p *resourcePipeline) processNextItem(ctx context.Context) bool {
 		return false
 	}
 	defer p.queue.Done(key)
-
 	if err := p.syncFn(ctx, key); err != nil {
-		// Requeue with backoff, but not forever: a key that fails every time
-		// (a malformed key, an object the lister can never return) would
-		// otherwise circulate for the life of the process.
-		if p.queue.NumRequeues(key) < maxSyncRetries {
+		// Retry transient errors with backoff first. A still-failing resource
+		// then moves to a slow recovery cadence, while permanent errors are
+		// forgotten immediately.
+		if shouldRetrySyncError(ctx, err) && p.queue.NumRequeues(key) < maxSyncRetries {
 			p.queue.AddRateLimited(key)
 			utilruntime.HandleError(
 				fmt.Errorf(
@@ -77,16 +82,36 @@ func (p *resourcePipeline) processNextItem(ctx context.Context) bool {
 			)
 			return true
 		}
+		retryable := shouldRetrySyncError(ctx, err)
 		p.queue.Forget(key)
+		reason := "dropping non-retryable error"
+		if retryable {
+			p.queue.AddAfter(key, syncRecoveryDelay)
+			reason = fmt.Sprintf("scheduling recovery retry in %s after %d attempts", syncRecoveryDelay, maxSyncRetries)
+		}
 		utilruntime.HandleError(
-			fmt.Errorf("error syncing %s %q: %s, giving up after %d attempts",
-				p.name, key, err.Error(), maxSyncRetries),
+			fmt.Errorf("error syncing %s %q: %s, %s", p.name, key, err.Error(), reason),
 		)
 		return true
 	}
 
 	p.queue.Forget(key)
 	return true
+}
+
+func shouldRetrySyncError(ctx context.Context, err error) bool {
+	if ctx.Err() != nil || errors.Is(err, context.Canceled) {
+		return false
+	}
+	return !apierrors.IsNotFound(err) &&
+		!apierrors.IsAlreadyExists(err) &&
+		!apierrors.IsBadRequest(err) &&
+		!apierrors.IsForbidden(err) &&
+		!apierrors.IsInvalid(err) &&
+		!apierrors.IsMethodNotSupported(err) &&
+		!apierrors.IsNotAcceptable(err) &&
+		!apierrors.IsRequestEntityTooLargeError(err) &&
+		!apierrors.IsUnauthorized(err)
 }
 
 func (p *resourcePipeline) worker(ctx context.Context) {

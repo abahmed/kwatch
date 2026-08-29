@@ -107,6 +107,17 @@ func (fs factorySet) serviceAccountLister() corev1lister.ServiceAccountLister {
 	return &multiServiceAccountLister{listers: listers}
 }
 
+func (fs factorySet) serviceAccountInformers() []cache.SharedIndexInformer {
+	if fs.global != nil {
+		return []cache.SharedIndexInformer{fs.global.Core().V1().ServiceAccounts().Informer()}
+	}
+	out := make([]cache.SharedIndexInformer, 0, len(fs.perNamespace))
+	for _, f := range fs.perNamespace {
+		out = append(out, f.Core().V1().ServiceAccounts().Informer())
+	}
+	return out
+}
+
 func (fs factorySet) persistentVolumeLister() corev1lister.PersistentVolumeLister {
 	if fs.clusterScoped != nil {
 		return fs.clusterScoped.Core().V1().PersistentVolumes().Lister()

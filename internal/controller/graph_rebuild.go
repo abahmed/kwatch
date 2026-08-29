@@ -20,6 +20,8 @@ import (
 	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/apimachinery/pkg/selection"
 	"k8s.io/klog/v2"
+
+	kwcontext "github.com/abahmed/kwatch/internal/context"
 )
 
 func (c *Controller) rebuildReplicaSet(obj interface{}) {
@@ -30,8 +32,7 @@ func (c *Controller) rebuildReplicaSet(obj interface{}) {
 	if !ok {
 		return
 	}
-	c.graph.RemoveEdgesFrom("replicaset", rs.Namespace, rs.Name, "owned_by")
-	c.addOwnedByEdges("replicaset", rs.Namespace, rs.Name, rs.OwnerReferences)
+	c.graph.ReplaceOutgoingEdges("replicaset", rs.Namespace, rs.Name, ownedByTargets(rs.Namespace, rs.OwnerReferences))
 }
 
 func (c *Controller) rebuildJob(obj interface{}) {
@@ -42,8 +43,7 @@ func (c *Controller) rebuildJob(obj interface{}) {
 	if !ok {
 		return
 	}
-	c.graph.RemoveEdgesFrom("job", job.Namespace, job.Name, "owned_by")
-	c.addOwnedByEdges("job", job.Namespace, job.Name, job.OwnerReferences)
+	c.graph.ReplaceOutgoingEdges("job", job.Namespace, job.Name, ownedByTargets(job.Namespace, job.OwnerReferences))
 }
 
 func (c *Controller) rebuildIngress(obj interface{}) {
@@ -54,11 +54,15 @@ func (c *Controller) rebuildIngress(obj interface{}) {
 	if !ok {
 		return
 	}
-	g := c.graph
-	g.RemoveEdgesFrom("ingress", ing.Namespace, ing.Name, graphEdgeRoutesTo)
+	targets := make([]kwcontext.EdgeTarget, 0)
 	add := func(svc *networkingv1.IngressServiceBackend) {
 		if svc != nil && svc.Name != "" {
-			g.AddEdge("ingress", ing.Namespace, ing.Name, "service", ing.Namespace, svc.Name, graphEdgeRoutesTo)
+			targets = append(targets, kwcontext.EdgeTarget{
+				Kind:      "service",
+				Namespace: ing.Namespace,
+				Name:      svc.Name,
+				Type:      graphEdgeRoutesTo,
+			})
 		}
 	}
 	if ing.Spec.DefaultBackend != nil {
@@ -72,6 +76,7 @@ func (c *Controller) rebuildIngress(obj interface{}) {
 			add(path.Backend.Service)
 		}
 	}
+	c.graph.ReplaceOutgoingEdges("ingress", ing.Namespace, ing.Name, targets)
 }
 
 func (c *Controller) rebuildHorizontalPodAutoscaler(obj interface{}) {
@@ -82,13 +87,17 @@ func (c *Controller) rebuildHorizontalPodAutoscaler(obj interface{}) {
 	if !ok {
 		return
 	}
-	g := c.graph
-	g.RemoveEdgesFrom("horizontalpodautoscaler", hpa.Namespace, hpa.Name, graphEdgeScales)
+	var targets []kwcontext.EdgeTarget
 	ref := hpa.Spec.ScaleTargetRef
 	if ref.Name != "" && ref.Kind != "" {
-		g.AddEdge("horizontalpodautoscaler", hpa.Namespace, hpa.Name,
-			strings.ToLower(ref.Kind), hpa.Namespace, ref.Name, graphEdgeScales)
+		targets = append(targets, kwcontext.EdgeTarget{
+			Kind:      strings.ToLower(ref.Kind),
+			Namespace: hpa.Namespace,
+			Name:      ref.Name,
+			Type:      graphEdgeScales,
+		})
 	}
+	c.graph.ReplaceOutgoingEdges("horizontalpodautoscaler", hpa.Namespace, hpa.Name, targets)
 }
 
 func (c *Controller) rebuildNetworkPolicy(obj interface{}) {
@@ -99,9 +108,13 @@ func (c *Controller) rebuildNetworkPolicy(obj interface{}) {
 	if !ok {
 		return
 	}
-	g := c.graph
-	g.RemoveEdgesFrom("networkpolicy", np.Namespace, np.Name, graphEdgeAppliesTo)
-	c.addSelectorEdges("networkpolicy", np.Namespace, np.Name, &np.Spec.PodSelector, graphEdgeAppliesTo)
+	if err := c.rebuildNetworkPolicyChecked(np); err != nil {
+		klog.ErrorS(err, "failed to rebuild networkpolicy graph edges; keeping previous edges", "namespace", np.Namespace, "name", np.Name)
+	}
+}
+
+func (c *Controller) rebuildNetworkPolicyChecked(np *networkingv1.NetworkPolicy) error {
+	return c.replaceSelectorEdges("networkpolicy", np.Namespace, np.Name, &np.Spec.PodSelector, graphEdgeAppliesTo)
 }
 
 func (c *Controller) rebuildPodDisruptionBudget(obj interface{}) {
@@ -112,33 +125,54 @@ func (c *Controller) rebuildPodDisruptionBudget(obj interface{}) {
 	if !ok {
 		return
 	}
-	g := c.graph
-	g.RemoveEdgesFrom("poddisruptionbudget", pdb.Namespace, pdb.Name, graphEdgeProtects)
-	if pdb.Spec.Selector == nil {
-		return
+	if err := c.rebuildPodDisruptionBudgetChecked(pdb); err != nil {
+		klog.ErrorS(err, "failed to rebuild poddisruptionbudget graph edges; keeping previous edges", "namespace", pdb.Namespace, "name", pdb.Name)
 	}
-	c.addSelectorEdges("poddisruptionbudget", pdb.Namespace, pdb.Name, pdb.Spec.Selector, graphEdgeProtects)
 }
 
-// addSelectorEdges links the given resource node to every pod in its namespace
-// matched by the label selector, encoding "resource protects/applies to pod".
-func (c *Controller) addSelectorEdges(kind, ns, name string, sel *metav1.LabelSelector, edgeType string) {
+func (c *Controller) rebuildPodDisruptionBudgetChecked(pdb *policyv1.PodDisruptionBudget) error {
+	if pdb.Spec.Selector == nil {
+		c.graph.ReplaceOutgoingEdges("poddisruptionbudget", pdb.Namespace, pdb.Name, nil)
+		return nil
+	}
+	return c.replaceSelectorEdges("poddisruptionbudget", pdb.Namespace, pdb.Name, pdb.Spec.Selector, graphEdgeProtects)
+}
+
+func (c *Controller) replaceSelectorEdges(kind, ns, name string, sel *metav1.LabelSelector, edgeType string) error {
+	podNames, err := c.selectedPodNames(ns, sel)
+	if err != nil {
+		return err
+	}
+	targets := make([]kwcontext.EdgeTarget, 0, len(podNames))
+	for _, podName := range podNames {
+		targets = append(targets, kwcontext.EdgeTarget{
+			Kind:      "pod",
+			Namespace: ns,
+			Name:      podName,
+			Type:      edgeType,
+		})
+	}
+	c.graph.ReplaceOutgoingEdges(kind, ns, name, targets)
+	return nil
+}
+
+func (c *Controller) selectedPodNames(ns string, sel *metav1.LabelSelector) ([]string, error) {
 	if c.podLister == nil {
-		return
+		return nil, nil
 	}
 	selector, err := metav1.LabelSelectorAsSelector(sel)
 	if err != nil {
-		klog.ErrorS(err, "failed to build selector for graph edge", "resource", kind, "namespace", ns, "name", name)
-		return
+		return nil, fmt.Errorf("build pod selector: %w", err)
 	}
 	pods, err := c.podLister.Pods(ns).List(selector)
 	if err != nil {
-		klog.ErrorS(err, "failed to list pods for graph edge", "resource", kind, "namespace", ns, "name", name)
-		return
+		return nil, fmt.Errorf("list selected pods: %w", err)
 	}
+	names := make([]string, 0, len(pods))
 	for _, p := range pods {
-		c.graph.AddEdge(kind, ns, name, "pod", ns, p.Name, edgeType)
+		names = append(names, p.Name)
 	}
+	return names, nil
 }
 
 func (c *Controller) rebuildEndpointSlice(obj interface{}) {
@@ -149,17 +183,26 @@ func (c *Controller) rebuildEndpointSlice(obj interface{}) {
 	if !ok {
 		return
 	}
-	g := c.graph
-	g.RemoveEdgesFrom("endpointslice", eps.Namespace, eps.Name, graphEdgeBacks)
-	g.RemoveEdgesFrom("endpointslice", eps.Namespace, eps.Name, graphEdgeTargets)
+	targets := make([]kwcontext.EdgeTarget, 0, len(eps.Endpoints)+1)
 	if svc := eps.Labels["kubernetes.io/service-name"]; svc != "" {
-		g.AddEdge("endpointslice", eps.Namespace, eps.Name, "service", eps.Namespace, svc, graphEdgeBacks)
+		targets = append(targets, kwcontext.EdgeTarget{
+			Kind:      "service",
+			Namespace: eps.Namespace,
+			Name:      svc,
+			Type:      graphEdgeBacks,
+		})
 	}
 	for _, ep := range eps.Endpoints {
 		if ref := ep.TargetRef; ref != nil && ref.Kind == "Pod" && ref.Name != "" {
-			g.AddEdge("endpointslice", eps.Namespace, eps.Name, "pod", eps.Namespace, ref.Name, graphEdgeTargets)
+			targets = append(targets, kwcontext.EdgeTarget{
+				Kind:      "pod",
+				Namespace: eps.Namespace,
+				Name:      ref.Name,
+				Type:      graphEdgeTargets,
+			})
 		}
 	}
+	c.graph.ReplaceOutgoingEdges("endpointslice", eps.Namespace, eps.Name, targets)
 }
 
 func (c *Controller) rebuildPersistentVolumeClaim(obj interface{}) {
@@ -170,15 +213,18 @@ func (c *Controller) rebuildPersistentVolumeClaim(obj interface{}) {
 	if !ok {
 		return
 	}
-	g := c.graph
-	g.RemoveEdgesFrom("pvc", pvc.Namespace, pvc.Name, graphEdgeBinds)
-	g.RemoveEdgesFrom("pvc", pvc.Namespace, pvc.Name, graphEdgeUsesSC)
+	var targets []kwcontext.EdgeTarget
 	if pvc.Spec.VolumeName != "" {
-		g.AddEdge("pvc", pvc.Namespace, pvc.Name, "persistentvolume", "", pvc.Spec.VolumeName, graphEdgeBinds)
+		targets = append(targets, kwcontext.EdgeTarget{
+			Kind: "persistentvolume", Name: pvc.Spec.VolumeName, Type: graphEdgeBinds,
+		})
 	}
 	if sc := pvc.Spec.StorageClassName; sc != nil && *sc != "" {
-		g.AddEdge("pvc", pvc.Namespace, pvc.Name, "storageclass", "", *sc, graphEdgeUsesSC)
+		targets = append(targets, kwcontext.EdgeTarget{
+			Kind: "storageclass", Name: *sc, Type: graphEdgeUsesSC,
+		})
 	}
+	c.graph.ReplaceOutgoingEdges("pvc", pvc.Namespace, pvc.Name, targets)
 }
 
 // rebuildPersistentVolume links a PV to the node(s) it can be scheduled on via
@@ -192,28 +238,45 @@ func (c *Controller) rebuildPersistentVolume(obj interface{}) {
 	if !ok {
 		return
 	}
-	g := c.graph
-	g.RemoveEdgesFrom("persistentvolume", "", pv.Name, graphEdgeLocalAt)
-	if pv.Spec.NodeAffinity == nil || pv.Spec.NodeAffinity.Required == nil {
-		return
+	if err := c.rebuildPersistentVolumeChecked(pv); err != nil {
+		klog.ErrorS(err, "failed to rebuild persistentvolume graph edges; keeping previous edges", "pv", pv.Name)
 	}
-	if c.nodeLister == nil {
-		return
+}
+
+func (c *Controller) rebuildPersistentVolumeChecked(pv *corev1.PersistentVolume) error {
+	nodeNames, err := c.persistentVolumeNodeNames(pv)
+	if err != nil {
+		return err
 	}
+	targets := make([]kwcontext.EdgeTarget, 0, len(nodeNames))
+	for _, nodeName := range nodeNames {
+		targets = append(targets, kwcontext.EdgeTarget{
+			Kind: "node", Name: nodeName, Type: graphEdgeLocalAt,
+		})
+	}
+	c.graph.ReplaceOutgoingEdges("persistentvolume", "", pv.Name, targets)
+	return nil
+}
+
+func (c *Controller) persistentVolumeNodeNames(pv *corev1.PersistentVolume) ([]string, error) {
+	if pv.Spec.NodeAffinity == nil || pv.Spec.NodeAffinity.Required == nil || c.nodeLister == nil {
+		return nil, nil
+	}
+	var names []string
 	for _, term := range pv.Spec.NodeAffinity.Required.NodeSelectorTerms {
 		selector, err := selectorFromNodeSelectorTerm(term)
 		if err != nil {
-			continue
+			return nil, fmt.Errorf("build node selector: %w", err)
 		}
 		nodes, err := c.nodeLister.List(selector)
 		if err != nil {
-			klog.ErrorS(err, "failed to list nodes for PV graph edge", "pv", pv.Name)
-			return
+			return nil, fmt.Errorf("list matching nodes: %w", err)
 		}
 		for _, n := range nodes {
-			g.AddEdge("persistentvolume", "", pv.Name, "node", "", n.Name, graphEdgeLocalAt)
+			names = append(names, n.Name)
 		}
 	}
+	return names, nil
 }
 
 func selectorFromNodeSelectorTerm(term corev1.NodeSelectorTerm) (labels.Selector, error) {

@@ -1,14 +1,15 @@
 package controller
 
 import (
+	"fmt"
 	"strings"
 
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/client-go/tools/cache"
-	"k8s.io/klog/v2"
 
 	"github.com/abahmed/kwatch/internal/config"
+	kwcontext "github.com/abahmed/kwatch/internal/context"
 )
 
 // Edge types added by the per-resource graph builders. Keep them in sync with
@@ -48,20 +49,24 @@ func (c *Controller) graphHandler(kind string, rebuild func(interface{})) cache.
 	}
 }
 
-// addOwnedByEdges records an owned_by edge from a resource to each of its
-// workload owners, completing the owner chains the pod informer cannot see
-// directly (ReplicaSet→Deployment, Job→CronJob, ...).
-func (c *Controller) addOwnedByEdges(kind, ns, name string, ownerRefs []metav1.OwnerReference) {
-	if c.graph == nil {
-		return
-	}
+// ownedByTargets describes edges from a resource to its workload owners,
+// completing owner chains the pod informer cannot see directly
+// (ReplicaSet→Deployment, Job→CronJob, ...).
+func ownedByTargets(namespace string, ownerRefs []metav1.OwnerReference) []kwcontext.EdgeTarget {
+	targets := make([]kwcontext.EdgeTarget, 0, len(ownerRefs))
 	for _, ref := range ownerRefs {
 		okind := strings.ToLower(ref.Kind)
 		if !isTrackedWorkload(okind) {
 			continue
 		}
-		c.graph.AddEdge(kind, ns, name, okind, ns, ref.Name, "owned_by")
+		targets = append(targets, kwcontext.EdgeTarget{
+			Kind:      okind,
+			Namespace: namespace,
+			Name:      ref.Name,
+			Type:      "owned_by",
+		})
 	}
+	return targets
 }
 
 func isTrackedWorkload(k string) bool {
@@ -72,60 +77,93 @@ func isTrackedWorkload(k string) bool {
 	return false
 }
 
-// rebuildFrom feeds listed objects into a per-object graph rebuild, logging
-// list failures instead of aborting the remaining resource types.
-func rebuildFrom[T any](items []T, err error, logMsg string, rebuild func(interface{})) {
+// rebuildFrom feeds a complete lister result into a per-object graph rebuild.
+// A rebuild publishes its graph only after every required lister succeeds, so
+// a cache failure must abort rather than replacing valid state with a partial
+// graph.
+func rebuildFrom[T any](items []T, err error, logMsg string, rebuild func(interface{})) error {
 	if err != nil {
-		klog.ErrorS(err, logMsg)
-		return
+		return fmt.Errorf("%s: %w", logMsg, err)
 	}
 	for i := range items {
 		rebuild(items[i])
 	}
+	return nil
+}
+
+func rebuildCheckedFrom[T any](items []T, err error, logMsg string, rebuild func(T) error) error {
+	if err != nil {
+		return fmt.Errorf("%s: %w", logMsg, err)
+	}
+	for _, item := range items {
+		if err := rebuild(item); err != nil {
+			return fmt.Errorf("%s: %w", logMsg, err)
+		}
+	}
+	return nil
 }
 
 // buildResourceGraph rebuilds graph nodes for every non-pod resource type from
 // the informer caches. Pod edges are rebuilt by buildGraph before this runs.
-func (c *Controller) buildResourceGraph() {
+func (c *Controller) buildResourceGraph() error {
 	if c.graph == nil {
-		return
+		return nil
 	}
 	if c.pvcLister != nil {
 		items, err := c.pvcLister.PersistentVolumeClaims(metav1.NamespaceAll).List(labels.Everything())
-		rebuildFrom(items, err, "failed to list pvcs for graph build", c.rebuildPersistentVolumeClaim)
+		if err := rebuildFrom(items, err, "list pvcs for graph build", c.rebuildPersistentVolumeClaim); err != nil {
+			return err
+		}
 	}
 	if c.rsLister != nil {
 		items, err := c.rsLister.ReplicaSets(metav1.NamespaceAll).List(labels.Everything())
-		rebuildFrom(items, err, "failed to list replicasets for graph build", c.rebuildReplicaSet)
+		if err := rebuildFrom(items, err, "list replicasets for graph build", c.rebuildReplicaSet); err != nil {
+			return err
+		}
 	}
 	if c.jobLister != nil {
 		items, err := c.jobLister.Jobs(metav1.NamespaceAll).List(labels.Everything())
-		rebuildFrom(items, err, "failed to list jobs for graph build", c.rebuildJob)
+		if err := rebuildFrom(items, err, "list jobs for graph build", c.rebuildJob); err != nil {
+			return err
+		}
 	}
 	if c.ingressLister != nil {
 		items, err := c.ingressLister.Ingresses(metav1.NamespaceAll).List(labels.Everything())
-		rebuildFrom(items, err, "failed to list ingresses for graph build", c.rebuildIngress)
+		if err := rebuildFrom(items, err, "list ingresses for graph build", c.rebuildIngress); err != nil {
+			return err
+		}
 	}
 	if c.hpaLister != nil {
 		items, err := c.hpaLister.HorizontalPodAutoscalers(metav1.NamespaceAll).List(labels.Everything())
-		rebuildFrom(items, err, "failed to list hpas for graph build", c.rebuildHorizontalPodAutoscaler)
+		if err := rebuildFrom(items, err, "list hpas for graph build", c.rebuildHorizontalPodAutoscaler); err != nil {
+			return err
+		}
 	}
 	if c.netpolLister != nil {
 		items, err := c.netpolLister.NetworkPolicies(metav1.NamespaceAll).List(labels.Everything())
-		rebuildFrom(items, err, "failed to list networkpolicies for graph build", c.rebuildNetworkPolicy)
+		if err := rebuildCheckedFrom(items, err, "build networkpolicy graph edges", c.rebuildNetworkPolicyChecked); err != nil {
+			return err
+		}
 	}
 	if c.pdbLister != nil {
 		items, err := c.pdbLister.PodDisruptionBudgets(metav1.NamespaceAll).List(labels.Everything())
-		rebuildFrom(items, err, "failed to list pdbs for graph build", c.rebuildPodDisruptionBudget)
+		if err := rebuildCheckedFrom(items, err, "build poddisruptionbudget graph edges", c.rebuildPodDisruptionBudgetChecked); err != nil {
+			return err
+		}
 	}
 	if c.endpointSliceLister != nil {
 		items, err := c.endpointSliceLister.EndpointSlices(metav1.NamespaceAll).List(labels.Everything())
-		rebuildFrom(items, err, "failed to list endpoint slices for graph build", c.rebuildEndpointSlice)
+		if err := rebuildFrom(items, err, "list endpoint slices for graph build", c.rebuildEndpointSlice); err != nil {
+			return err
+		}
 	}
 	if c.pvLister != nil {
 		items, err := c.pvLister.List(labels.Everything())
-		rebuildFrom(items, err, "failed to list persistentvolumes for graph build", c.rebuildPersistentVolume)
+		if err := rebuildCheckedFrom(items, err, "build persistentvolume graph edges", c.rebuildPersistentVolumeChecked); err != nil {
+			return err
+		}
 	}
+	return nil
 }
 
 // wireGraphHandlers attaches per-resource graph maintenance handlers to the

@@ -112,7 +112,6 @@ func Run() int {
 		baselineCh,
 		insightEngine,
 	)
-	restoreIncidents(ctx, stateMgr, correlator)
 
 	correlator.SetAuditLogger(auditLogger)
 
@@ -136,6 +135,7 @@ func Run() int {
 	h := handler.NewHandler(k8sClient, cfg, correlator, am)
 
 	ctl, cleanup := controller.New(k8sClient, cfg, h)
+	restoreIncidents(ctx, stateMgr, correlator, ctl.NamespaceAllowed)
 	ctl.SetTracker(tracker)
 	ctl.SetGraph(graph)
 	ctl.SetReadyFunc(func() { healthServer.SetReady(true) })
