@@ -26,6 +26,10 @@ var Default = &Registry{}
 
 func (r *Registry) Handler() http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
+		if req.Method != http.MethodGet {
+			w.WriteHeader(http.StatusMethodNotAllowed)
+			return
+		}
 		w.Header().Set("Content-Type", "text/plain; version=0.0.4")
 		var lines []string
 		lines = append(
@@ -33,18 +37,21 @@ func (r *Registry) Handler() http.Handler {
 			"# HELP kwatch_incidents_total Total incidents by action",
 		)
 		lines = append(lines, "# TYPE kwatch_incidents_total counter")
-		for action, count := range map[string]int64{
-			"create":   r.IncidentsCreate.Load(),
-			"update":   r.IncidentsUpdate.Load(),
-			"resolved": r.IncidentsResolved.Load(),
-			"grouped":  r.IncidentsGrouped.Load(),
+		for _, sample := range []struct {
+			action string
+			count  int64
+		}{
+			{action: "create", count: r.IncidentsCreate.Load()},
+			{action: "update", count: r.IncidentsUpdate.Load()},
+			{action: "resolved", count: r.IncidentsResolved.Load()},
+			{action: "grouped", count: r.IncidentsGrouped.Load()},
 		} {
 			lines = append(
 				lines,
 				fmt.Sprintf(
 					`kwatch_incidents_total{action="%s"} %d`,
-					action,
-					count,
+					sample.action,
+					sample.count,
 				),
 			)
 		}
