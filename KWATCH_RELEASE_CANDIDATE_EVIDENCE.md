@@ -16,6 +16,8 @@
 - `go test -tags=integration ./internal/integration`: passed using the repository's fake-client
   integration harness (cluster-backed scenarios remain unverified).
 - `go test -race -tags=integration ./internal/integration/...`: passed.
+- Local `BenchmarkProcess` baseline (Apple M4 virtual, 2s): 1,164 ns/op, 1,912 B/op,
+  11 allocs/op. This is an engine microbenchmark, not a cluster-scale capacity claim.
 - `golangci-lint run`: passed
 - `helm lint deploy/chart`: passed
 - `helm template kwatch deploy/chart`: passed
