@@ -19,6 +19,9 @@ func DetectIngressIssue(
 	ing *networkingv1.Ingress,
 	hasService func(ns, name string) bool,
 ) []*event.Signal {
+	if ing == nil || hasService == nil {
+		return nil
+	}
 	var sigs []*event.Signal
 	ns := ing.Namespace
 

@@ -60,6 +60,10 @@ func TestNextFireAfter(t *testing.T) {
 	assert.True(t, fire.After(now))
 }
 
+func TestDetectCronJobIssueNilIsSafe(t *testing.T) {
+	assert.Nil(t, DetectCronJobIssue(nil, time.Now()))
+}
+
 func TestNextFireAfterInvalidSchedule(t *testing.T) {
 	assert.True(t, NextFireAfter("invalid", nil, time.Now(), nil).IsZero())
 }

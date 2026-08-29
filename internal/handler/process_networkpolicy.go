@@ -19,6 +19,9 @@ import (
 func DetectNetworkPolicyIssue(
 	policy *networkingv1.NetworkPolicy,
 ) *event.Signal {
+	if policy == nil {
+		return nil
+	}
 	// Check for overly restrictive default-deny policies
 	isDenyAllEgress := len(policy.Spec.PolicyTypes) == 0 ||
 		containsPolicyType(

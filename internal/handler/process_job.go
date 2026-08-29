@@ -44,6 +44,9 @@ func (h *handler) ProcessJob(key string, deleted bool) error {
 // DetectJobIssue returns a Signal if the Job has a failed or suspended
 // condition. Used for baseline seeding at startup.
 func DetectJobIssue(job *batchv1.Job) *event.Signal {
+	if job == nil {
+		return nil
+	}
 	for _, c := range job.Status.Conditions {
 		switch c.Type {
 		case batchv1.JobFailed:

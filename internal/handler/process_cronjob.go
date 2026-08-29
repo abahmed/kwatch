@@ -53,6 +53,9 @@ func (h *handler) ProcessCronJob(key string, deleted bool) error {
 // DetectCronJobIssue returns a Signal if the CronJob has a problem
 // (suspended or not scheduled). Used for baseline seeding at startup.
 func DetectCronJobIssue(cj *batchv1.CronJob, now time.Time) *event.Signal {
+	if cj == nil {
+		return nil
+	}
 	if cj.Spec.Suspend != nil && *cj.Spec.Suspend {
 		return &event.Signal{
 			Resource:  "cronjob",
@@ -78,7 +81,7 @@ func DetectCronJobIssue(cj *batchv1.CronJob, now time.Time) *event.Signal {
 
 	threshold := nextExpected.Add(DefaultCronNotScheduledGrace)
 
-	if now.After(threshold) {
+	if !now.Before(threshold) {
 		return &event.Signal{
 			Resource:  "cronjob",
 			Reason:    constant.ReasonCronJobNotScheduled,

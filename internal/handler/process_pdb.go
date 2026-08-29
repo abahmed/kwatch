@@ -14,6 +14,9 @@ import (
 
 // DetectPdbIssue returns a Signal if the PDB is blocking disruptions.
 func DetectPdbIssue(pdb *policyv1.PodDisruptionBudget) *event.Signal {
+	if pdb == nil {
+		return nil
+	}
 	if isPdbBlocking(pdb) {
 		return &event.Signal{
 			Resource:  "poddisruptionbudget",

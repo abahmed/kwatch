@@ -22,6 +22,9 @@ func DetectServiceEndpointIssue(
 	svc *corev1.Service,
 	epSlices []*discoveryv1.EndpointSlice,
 ) *event.Signal {
+	if svc == nil {
+		return nil
+	}
 	if svc.Spec.Selector == nil || len(svc.Spec.Selector) == 0 {
 		return nil
 	}

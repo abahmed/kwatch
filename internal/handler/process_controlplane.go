@@ -26,6 +26,9 @@ var controlPlaneSelectors = map[string]string{
 
 // DetectControlPlanePodIssue checks a pod for control-plane failure conditions.
 func DetectControlPlanePodIssue(pod *corev1.Pod) *event.Signal {
+	if pod == nil {
+		return nil
+	}
 	if pod.Status.Phase == corev1.PodSucceeded {
 		return nil
 	}
@@ -49,48 +52,8 @@ func DetectControlPlanePodIssue(pod *corev1.Pod) *event.Signal {
 	allStatuses = append(allStatuses, pod.Status.InitContainerStatuses...)
 
 	for _, cs := range allStatuses {
-		var reason string
-		if w := cs.State.Waiting; w != nil {
-			if w.Reason == constant.ReasonContainerCreating ||
-				w.Reason == constant.ReasonPodInitializing {
-				continue
-			}
-			if w.Reason == constant.ReasonCrashLoopBackOff &&
-				cs.LastTerminationState.Terminated != nil {
-				reason = cs.LastTerminationState.Terminated.Reason
-			} else {
-				reason = w.Reason
-			}
-		} else if t := cs.State.Terminated; t != nil {
-			if t.ExitCode == 0 || t.Reason == constant.ReasonCompleted {
-				continue
-			}
-			reason = t.Reason
-		} else if cs.State.Running != nil {
-			continue
-		}
-
-		if reason != "" {
-			key := pod.Namespace + "/" + pod.Name
-			return &event.Signal{
-				Resource:     "controlplane",
-				Namespace:    pod.Namespace,
-				PodName:      pod.Name,
-				Container:    cs.Name,
-				Image:        cs.Image,
-				RestartCount: cs.RestartCount,
-				Reason:       constant.ReasonControlPlaneComponentFailure,
-				Owner:        key,
-				Labels:       pod.Labels,
-				Severity:     "high",
-				Hint: fmt.Sprintf(
-					"control-plane component %s/%s: container %s has issue: %s",
-					pod.Namespace,
-					pod.Name,
-					cs.Name,
-					reason,
-				),
-			}
+		if sig := controlPlaneContainerIssue(pod, cs); sig != nil {
+			return sig
 		}
 	}
 
@@ -118,6 +81,40 @@ func DetectControlPlanePodIssue(pod *corev1.Pod) *event.Signal {
 	}
 
 	return nil
+}
+
+func controlPlaneContainerIssue(pod *corev1.Pod, cs corev1.ContainerStatus) *event.Signal {
+	reason := controlPlaneContainerReason(cs)
+	if reason == "" {
+		return nil
+	}
+	key := pod.Namespace + "/" + pod.Name
+	return &event.Signal{
+		Resource: "controlplane", Namespace: pod.Namespace, PodName: pod.Name,
+		Container: cs.Name, Image: cs.Image, RestartCount: cs.RestartCount,
+		Reason: constant.ReasonControlPlaneComponentFailure, Owner: key,
+		Labels: pod.Labels, Severity: "high",
+		Hint: fmt.Sprintf("control-plane component %s/%s: container %s has issue: %s", pod.Namespace, pod.Name, cs.Name, reason),
+	}
+}
+
+func controlPlaneContainerReason(cs corev1.ContainerStatus) string {
+	if w := cs.State.Waiting; w != nil {
+		if w.Reason == constant.ReasonContainerCreating || w.Reason == constant.ReasonPodInitializing {
+			return ""
+		}
+		if w.Reason == constant.ReasonCrashLoopBackOff && cs.LastTerminationState.Terminated != nil {
+			return cs.LastTerminationState.Terminated.Reason
+		}
+		return w.Reason
+	}
+	if t := cs.State.Terminated; t != nil {
+		if t.ExitCode == 0 || t.Reason == constant.ReasonCompleted {
+			return ""
+		}
+		return t.Reason
+	}
+	return ""
 }
 
 // ComponentNameFromLabels tries to identify which control-plane component a pod
