@@ -62,7 +62,9 @@ func (m *HeartbeatMonitor) ping(ctx context.Context) {
 		klog.ErrorS(err, "heartbeat ping failed", "url", m.config.URL)
 		return
 	}
-	resp.Body.Close()
+	if err := resp.Body.Close(); err != nil {
+		klog.ErrorS(err, "heartbeat ping: failed to close response body")
+	}
 	if resp.StatusCode >= 400 {
 		klog.InfoS("heartbeat ping returned non-2xx", "status", resp.StatusCode, "url", m.config.URL)
 	}

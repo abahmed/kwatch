@@ -38,7 +38,7 @@ func (l failingServiceLister) List(labels.Selector) ([]*corev1.Service, error) {
 }
 
 func (l failingServiceLister) Services(string) corev1lister.ServiceNamespaceLister {
-	return failingServiceNamespaceLister{err: l.err}
+	return failingServiceNamespaceLister(l)
 }
 
 type failingServiceNamespaceLister struct {

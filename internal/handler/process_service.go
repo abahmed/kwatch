@@ -25,7 +25,7 @@ func DetectServiceEndpointIssue(
 	if svc == nil {
 		return nil
 	}
-	if svc.Spec.Selector == nil || len(svc.Spec.Selector) == 0 {
+	if len(svc.Spec.Selector) == 0 {
 		return nil
 	}
 	if svc.Spec.ClusterIP == "None" || svc.Spec.ClusterIP == "" {

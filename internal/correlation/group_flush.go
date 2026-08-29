@@ -31,9 +31,7 @@ func (e *Engine) flushGroupBuffers(now time.Time) []transition {
 	sort.Strings(ready)
 
 	merged := e.mergeNamespaceFanOut(ready, now)
-	for _, t := range merged.transitions {
-		pending = append(pending, t)
-	}
+	pending = append(pending, merged.transitions...)
 	e.pruneFanOutWindows(now)
 
 	for _, gk := range ready {
