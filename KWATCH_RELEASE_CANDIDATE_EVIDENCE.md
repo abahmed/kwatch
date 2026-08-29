@@ -12,7 +12,7 @@
 - `go build ./...`: passed
 - `go vet ./...`: passed
 - `go test ./...`: passed
-- `go test -race ./...`: passed in the Phase 5 verification run
+- `go test -race ./...`: passed on the current source
 - `golangci-lint run`: passed
 - `helm lint deploy/chart`: passed
 - `helm template kwatch deploy/chart`: passed
