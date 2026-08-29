@@ -62,7 +62,7 @@ jobs:
             - 'deploy/chart/**'
     - name: Install Helm
       if: steps.changes.outputs.chart == 'true'
-      uses: azure/setup-helm@v4
+      uses: azure/setup-helm@v5
     - name: Lint chart
       if: steps.changes.outputs.chart == 'true'
       run: helm lint deploy/chart
