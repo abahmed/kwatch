@@ -110,7 +110,9 @@ func startIncidentSaver(
 				case snap := <-ch:
 					pending = snap
 				default:
-					saveIncidentSnapshot(stateMgr, pending, 5*time.Second)
+					if pending != nil {
+						saveIncidentSnapshot(stateMgr, pending, 5*time.Second)
+					}
 					return
 				}
 			}

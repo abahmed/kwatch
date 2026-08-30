@@ -14,23 +14,21 @@ func OrDefault(s, def string) string {
 	return s
 }
 
-// Chunks splits s into slices of at most chunkSize characters.
+// Chunks splits s into UTF-8-safe slices whose byte length is at most
+// chunkSize where possible. Provider limits are byte limits, not rune limits.
 func Chunks(s string, chunkSize int) []string {
-	if chunkSize >= len(s) {
+	if chunkSize <= 0 || chunkSize >= len(s) {
 		return []string{s}
 	}
 
 	chunks := make([]string, 0, (len(s)-1)/chunkSize+1)
-	currentLen := 0
 	currentStart := 0
 
 	for i := range s {
-		if currentLen == chunkSize {
+		if i > currentStart && i-currentStart >= chunkSize {
 			chunks = append(chunks, s[currentStart:i])
-			currentLen = 0
 			currentStart = i
 		}
-		currentLen++
 	}
 
 	chunks = append(chunks, s[currentStart:])

@@ -78,10 +78,7 @@ func NewWebhook(config map[string]interface{}, appCfg *config.App) *Webhook {
 		a = Authentication{}
 	}
 
-	klog.InfoS("initializing webhook",
-		"url", url,
-		"headers", headers,
-		"username", a.UserName)
+	klog.InfoS("initializing webhook with configured authentication")
 
 	return &Webhook{
 		webhook:  url,

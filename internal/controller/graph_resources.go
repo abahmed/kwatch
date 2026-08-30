@@ -127,6 +127,9 @@ func (c *Controller) buildResourceGraph() error {
 			return err
 		}
 	}
+	if err := c.buildServiceGraph(); err != nil {
+		return err
+	}
 	if c.ingressLister != nil {
 		items, err := c.ingressLister.Ingresses(metav1.NamespaceAll).List(labels.Everything())
 		if err := rebuildFrom(items, err, "list ingresses for graph build", c.rebuildIngress); err != nil {
@@ -157,13 +160,26 @@ func (c *Controller) buildResourceGraph() error {
 			return err
 		}
 	}
-	if c.pvLister != nil {
-		items, err := c.pvLister.List(labels.Everything())
-		if err := rebuildCheckedFrom(items, err, "build persistentvolume graph edges", c.rebuildPersistentVolumeChecked); err != nil {
-			return err
-		}
+	if err := c.buildPersistentVolumeGraph(); err != nil {
+		return err
 	}
 	return nil
+}
+
+func (c *Controller) buildServiceGraph() error {
+	if c.serviceLister == nil {
+		return nil
+	}
+	items, err := c.serviceLister.Services(metav1.NamespaceAll).List(labels.Everything())
+	return rebuildCheckedFrom(items, err, "build service graph edges", c.rebuildServiceChecked)
+}
+
+func (c *Controller) buildPersistentVolumeGraph() error {
+	if c.pvLister == nil {
+		return nil
+	}
+	items, err := c.pvLister.List(labels.Everything())
+	return rebuildCheckedFrom(items, err, "build persistentvolume graph edges", c.rebuildPersistentVolumeChecked)
 }
 
 // wireGraphHandlers attaches per-resource graph maintenance handlers to the
@@ -173,6 +189,11 @@ func (c *Controller) buildResourceGraph() error {
 // monitor contribute edges only while that monitor is on; pod, configmap and
 // the newly introduced PVC informer are always wired.
 func (c *Controller) wireGraphHandlers(fs factorySet, cfg *config.Config) {
+	if c.serviceLister != nil {
+		for _, inf := range fs.serviceInformers() {
+			inf.AddEventHandler(c.graphHandler("service", c.rebuildService))
+		}
+	}
 	for _, inf := range fs.rsInformers() {
 		inf.AddEventHandler(c.graphHandler("replicaset", func(obj interface{}) { c.rebuildReplicaSet(obj) }))
 	}

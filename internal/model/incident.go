@@ -266,6 +266,10 @@ type PersistedIncident struct {
 
 // ToPersisted converts an Incident into its serializable subset.
 func (inc *Incident) ToPersisted() PersistedIncident {
+	resources := make(map[string]bool, len(inc.Resources))
+	for k, v := range inc.Resources {
+		resources[k] = v
+	}
 	return PersistedIncident{
 		Key:            inc.Key,
 		Reason:         inc.Reason,
@@ -275,7 +279,7 @@ func (inc *Incident) ToPersisted() PersistedIncident {
 		Count:          inc.Count,
 		FirstSeen:      inc.FirstSeen,
 		LastSeen:       inc.LastSeen,
-		Resources:      inc.Resources,
+		Resources:      resources,
 		PeakResources:  inc.PeakResources,
 		OwnerKind:      inc.OwnerKind,
 		RestartCount:   inc.RestartCount,

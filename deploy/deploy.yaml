@@ -35,17 +35,16 @@ rules:
 - apiGroups: ["discovery.k8s.io"]
   resources: ["endpointslices"]
   verbs: ["get", "watch", "list"]
-# - apiGroups: ["kwatch.abahmed.dev"]
-#   resources: ["kwatchconfigs"]
-#   verbs: ["get", "watch", "list"]
-#   # uncomment if you enable crd
+- apiGroups: ["kwatch.abahmed.dev"]
+  resources: ["kwatchconfigs"]
+  verbs: ["get", "watch", "list"]
 - apiGroups: ["autoscaling"]
   resources: ["horizontalpodautoscalers"]
   verbs: ["get", "watch", "list"]
+# TLS monitor is off by default. Add this rule when enabling tlsMonitor:
 # - apiGroups: [""]
 #   resources: ["secrets"]
 #   verbs: ["get", "list", "watch"]
-#   # uncomment if you enable tlsMonitor
 - apiGroups: ["batch"]
   resources: ["jobs", "cronjobs"]
   verbs: ["get", "watch", "list"]

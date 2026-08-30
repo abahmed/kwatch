@@ -39,6 +39,7 @@ type Entry struct {
 type Config struct {
 	Enabled bool
 	Output  string // "stdout" or file path
+	Now     func() time.Time
 }
 
 type AuditLogger struct {
@@ -46,10 +47,15 @@ type AuditLogger struct {
 	writer io.Writer
 	enc    *json.Encoder
 	cfg    Config
+	now    func() time.Time
 }
 
 func NewLogger(cfg Config) *AuditLogger {
-	l := &AuditLogger{cfg: cfg}
+	now := cfg.Now
+	if now == nil {
+		now = time.Now
+	}
+	l := &AuditLogger{cfg: cfg, now: now}
 	if !cfg.Enabled {
 		return l
 	}
@@ -101,7 +107,7 @@ func (l *AuditLogger) LogIncident(inc *model.Incident, action model.IncidentActi
 		duration = inc.LastSeen.Sub(inc.FirstSeen).Round(time.Second).String()
 	}
 	l.log(Entry{
-		Timestamp:   time.Now(),
+		Timestamp:   l.now(),
 		Action:      l.actionFromIncidentAction(action),
 		IncidentKey: string(inc.Key),
 		IncidentID:  inc.ID,
@@ -119,7 +125,7 @@ func (l *AuditLogger) LogSkip(inc *model.Incident, skipReason string) {
 		return
 	}
 	l.log(Entry{
-		Timestamp:   time.Now(),
+		Timestamp:   l.now(),
 		Action:      ActionSkip,
 		IncidentKey: string(inc.Key),
 		IncidentID:  inc.ID,

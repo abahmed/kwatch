@@ -48,7 +48,13 @@ func runWithFlags() int {
 			runLint(strict, check)
 			return 0
 		case "replay":
-			runReplay()
+			dryRun := false
+			for _, a := range args[1:] {
+				if a == "--dry-run" || a == "dry-run" {
+					dryRun = true
+				}
+			}
+			runReplay(dryRun)
 			return 0
 		}
 	}

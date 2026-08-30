@@ -60,7 +60,7 @@ func NewFeiShu(config map[string]interface{}, appCfg *config.App) *FeiShu {
 		return nil
 	}
 
-	klog.InfoS("initializing Fei Shu with webhook url", "webhook", webhook)
+	klog.InfoS("initializing Fei Shu with webhook configured")
 
 	title, _ := config["title"].(string)
 

@@ -95,10 +95,9 @@ func (m *Monitor) checkNode(node *corev1.Node, pods []*corev1.Pod) *event.Signal
 
 	var cpuReq, memReq int64
 	for _, pod := range pods {
-		for _, c := range pod.Spec.Containers {
-			cpuReq += c.Resources.Requests.Cpu().MilliValue()
-			memReq += c.Resources.Requests.Memory().Value()
-		}
+		podCPU, podMemory := podRequests(pod)
+		cpuReq += podCPU
+		memReq += podMemory
 	}
 
 	cpuRatio := float64(cpuReq) / float64(cpuAlloc)
@@ -145,6 +144,29 @@ func (m *Monitor) checkNode(node *corev1.Node, pods []*corev1.Pod) *event.Signal
 		Labels:   node.Labels,
 		Severity: severity,
 	}
+}
+
+// podRequests returns the scheduler-equivalent CPU and memory requests for a
+// pod. Regular containers are summed, while init-container requests are the
+// per-resource maximum. Pod overhead is charged on top of that effective
+// request. Ignoring either part understates node overcommitment.
+func podRequests(pod *corev1.Pod) (cpuMilli, memoryBytes int64) {
+	for _, c := range pod.Spec.Containers {
+		cpuMilli += c.Resources.Requests.Cpu().MilliValue()
+		memoryBytes += c.Resources.Requests.Memory().Value()
+	}
+	var initCPU, initMemory int64
+	for _, c := range pod.Spec.InitContainers {
+		initCPU = max(initCPU, c.Resources.Requests.Cpu().MilliValue())
+		initMemory = max(initMemory, c.Resources.Requests.Memory().Value())
+	}
+	cpuMilli = max(cpuMilli, initCPU)
+	memoryBytes = max(memoryBytes, initMemory)
+	if pod.Spec.Overhead != nil {
+		cpuMilli += pod.Spec.Overhead.Cpu().MilliValue()
+		memoryBytes += pod.Spec.Overhead.Memory().Value()
+	}
+	return cpuMilli, memoryBytes
 }
 
 func overcommitHint(nodeName string, cpuRatio, memRatio float64, level string) string {

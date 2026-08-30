@@ -37,7 +37,7 @@ func NewRocketChat(
 		return nil
 	}
 
-	klog.InfoS("initializing Rocket Chat with webhook url", "webhook", webhook)
+	klog.InfoS("initializing Rocket Chat with webhook configured")
 
 	text, _ := config["text"].(string)
 

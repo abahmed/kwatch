@@ -3,11 +3,14 @@ package controller
 import (
 	"time"
 
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/client-go/informers"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/tools/cache"
 
 	"github.com/abahmed/kwatch/internal/config"
+	kwcontext "github.com/abahmed/kwatch/internal/context"
 )
 
 // wireNode sets up the node informer when either monitor is enabled.
@@ -72,18 +75,64 @@ func (c *Controller) wireService(cfg *config.Config, fs factorySet) {
 		c.service.synced = append(c.service.synced, inf.HasSynced)
 	}
 
+	for _, inf := range serviceInformers {
+		inf.AddEventHandler(cache.ResourceEventHandlerFuncs{
+			AddFunc: func(obj interface{}) {
+				c.recordChange(kwcontext.ChangeCreate, "service", obj)
+				if cfg.ServiceMonitor.Enabled {
+					c.service.enqueue(obj)
+				}
+				c.enqueueServiceDependents()
+			},
+			UpdateFunc: func(_, obj interface{}) {
+				c.recordChange(kwcontext.ChangeUpdate, "service", obj)
+				if cfg.ServiceMonitor.Enabled {
+					c.service.enqueue(obj)
+				}
+				c.enqueueServiceDependents()
+			},
+			DeleteFunc: func(obj interface{}) {
+				c.recordChange(kwcontext.ChangeDelete, "service", obj)
+				if cfg.ServiceMonitor.Enabled {
+					c.service.enqueue(obj)
+				}
+				c.enqueueServiceDependents()
+			},
+		})
+	}
 	if !cfg.ServiceMonitor.Enabled {
 		return
 	}
 	c.endpointSliceLister = fs.endpointSliceLister()
-
-	for _, inf := range serviceInformers {
-		inf.AddEventHandler(
-			c.changeRecordingHandler(c.service.trackResource(), c.service.enqueue),
-		)
-	}
 	c.service.startWorkers = true
 	c.watch(c.endpointSlice, fs.endpointSliceInformers()...)
+}
+
+// enqueueServiceDependents rechecks objects whose detector reads the Service
+// lister. A Service change can resolve an Ingress or admission-webhook issue
+// without changing the referencing object itself.
+func (c *Controller) enqueueServiceDependents() {
+	if c.ingress.startWorkers && c.ingressLister != nil {
+		if items, err := c.ingressLister.Ingresses(metav1.NamespaceAll).List(labels.Everything()); err == nil {
+			for _, item := range items {
+				c.ingress.enqueue(item)
+			}
+		}
+	}
+	if c.mwc.startWorkers && c.mwcLister != nil {
+		if items, err := c.mwcLister.List(labels.Everything()); err == nil {
+			for _, item := range items {
+				c.mwc.enqueue(item)
+			}
+		}
+	}
+	if c.vwc.startWorkers && c.vwcLister != nil {
+		if items, err := c.vwcLister.List(labels.Everything()); err == nil {
+			for _, item := range items {
+				c.vwc.enqueue(item)
+			}
+		}
+	}
 }
 
 func (c *Controller) wireAdmissionWebhooks(cfg *config.Config, fs factorySet) {

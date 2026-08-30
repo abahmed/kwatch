@@ -32,13 +32,12 @@ func (a *AlertManager) AddProvider(p Provider) {
 	}
 	a.entries = append(a.entries, entry)
 	if a.started {
+		ctx := a.ctx
+		if ctx == nil {
+			ctx = context.Background()
+		}
 		a.providerWg.Add(1)
-		go func() {
-			defer a.providerWg.Done()
-			for job := range entry.ch {
-				a.deliverOne(a.ctx, &entry, job.inc, job.action, job.insight)
-			}
-		}()
+		go a.runProvider(&entry, ctx)
 	}
 }
 
@@ -54,28 +53,33 @@ func (a *AlertManager) Start(ctx context.Context) {
 		a.mu.Unlock()
 		return
 	}
+	if a.stopped {
+		for i := range a.entries {
+			a.entries[i].ch = make(chan deliverJob, channelCap)
+		}
+	}
 	a.started = true
 	a.stopped = false
 	a.ctx = ctx
 	a.done = make(chan struct{})
-	entries := make([]providerEntry, len(a.entries))
-	copy(entries, a.entries)
-	a.mu.Unlock()
-
-	for i := range entries {
-		entry := &entries[i]
+	entries := make([]*providerEntry, len(a.entries))
+	for i := range a.entries {
+		entries[i] = &a.entries[i]
 		a.providerWg.Add(1)
-		go func() {
-			defer a.providerWg.Done()
-			for job := range entry.ch {
-				a.deliverOne(a.ctx, entry, job.inc, job.action, job.insight)
-			}
-		}()
+		go a.runProvider(entries[i], ctx)
 	}
+	a.mu.Unlock()
 	go func() {
 		<-ctx.Done()
 		a.shutdown()
 	}()
+}
+
+func (a *AlertManager) runProvider(entry *providerEntry, ctx context.Context) {
+	defer a.providerWg.Done()
+	for job := range entry.ch {
+		a.deliverOne(ctx, entry, job.inc, job.action, job.insight)
+	}
 }
 
 // shutdown waits for all delivery workers to finish (used in tests).

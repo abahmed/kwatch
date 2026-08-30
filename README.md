@@ -310,7 +310,7 @@ Under the hood it's all explained in [how kwatch thinks](./docs/architecture.md)
 | `kwatch lint` | ✅ Validate your config |
 | `kwatch lint --strict` | ✅✅ Strict check (catches typos!) |
 | `kwatch lint --check` | ✅✅✅ Validate + test provider credentials |
-| `kwatch replay < events.jsonl` | 🎬 Replay a saved event stream to test your setup |
+| `kwatch replay [--dry-run] < events.jsonl` | 🎬 Replay a saved event stream to test your setup; dry-run only prints what would be sent |
 
 ---
 

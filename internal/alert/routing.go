@@ -210,7 +210,7 @@ func matchesRoute(route config.AlertRoute, inc *model.Incident) bool {
 	if len(route.Severities) > 0 {
 		found := false
 		for _, s := range route.Severities {
-			if model.SeverityFromString(s) == inc.Severity {
+			if model.NormalizeSeverity(s) == inc.Severity {
 				found = true
 				break
 			}

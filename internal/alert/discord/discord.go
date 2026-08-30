@@ -52,7 +52,7 @@ func NewDiscord(config map[string]interface{}, appCfg *config.App) *Discord {
 		klog.InfoS("initializing discord with missing id or token")
 		return nil
 	}
-	klog.InfoS("initializing discord with webhook url", "webhook", webhook)
+	klog.InfoS("initializing discord with webhook configured")
 
 	webhookToken := webhookList[len(webhookList)-1]
 	webhookID := webhookList[len(webhookList)-2]

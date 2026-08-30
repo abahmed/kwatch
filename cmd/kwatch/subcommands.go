@@ -51,7 +51,7 @@ func runLint(strict, check bool) {
 	fmt.Println("config OK")
 }
 
-func runReplay() {
+func runReplay(dryRun bool) {
 	cfg, err := config.LoadConfig()
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "ERROR: %v\n", err)
@@ -62,6 +62,10 @@ func runReplay() {
 	for k := range cfg.Alert {
 		providers = append(providers, k)
 	}
+	am := &alert.AlertManager{}
+	am.Init(cfg.Alert, &cfg.App)
+	am.SetSilences(cfg.Silences)
+	am.SetTemplates(cfg.Templates)
 
 	scanner := bufio.NewScanner(os.Stdin)
 	for scanner.Scan() {
@@ -75,7 +79,12 @@ func runReplay() {
 			continue
 		}
 		msg := fmt.Sprintf("[replay] %s/%s %s: %s", ev.Namespace, ev.PodName, ev.Reason, ev.Events)
-		fmt.Printf("would notify %v: %s\n", providers, msg)
+		if dryRun {
+			fmt.Printf("would replay to %v: %s\n", providers, msg)
+			continue
+		}
+		am.NotifyEvent(ev)
+		fmt.Printf("replayed to %v: %s\n", providers, msg)
 	}
 	if err := scanner.Err(); err != nil {
 		fmt.Fprintf(os.Stderr, "ERROR: reading stdin: %v\n", err)

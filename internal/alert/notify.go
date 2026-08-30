@@ -19,14 +19,18 @@ func (a *AlertManager) Notify(msg string) {
 	a.mu.Lock()
 	entries := make([]providerEntry, len(a.entries))
 	copy(entries, a.entries)
+	ctx := a.ctx
+	stopped := a.stopped
 	a.mu.Unlock()
+	if stopped {
+		return
+	}
+	if ctx == nil {
+		ctx = context.Background()
+	}
 
 	for _, entry := range entries {
 		p := entry.provider
-		ctx := a.ctx
-		if ctx == nil {
-			ctx = context.Background()
-		}
 		if _, ok := p.(EventDeliveryProvider); ok {
 			ev := &event.Event{
 				PodName: msg,
@@ -70,9 +74,13 @@ func (a *AlertManager) NotifyEvent(event event.Event) {
 	a.mu.Lock()
 	entries := make([]providerEntry, len(a.entries))
 	copy(entries, a.entries)
-	a.mu.Unlock()
-
 	ctx := a.ctx
+	stopped := a.stopped
+	a.mu.Unlock()
+	if stopped {
+		return
+	}
+
 	if ctx == nil {
 		ctx = context.Background()
 	}
@@ -156,7 +164,14 @@ func (a *AlertManager) NotifyIncident(
 		inc.Count,
 	)
 
-	if !a.started {
+	a.mu.Lock()
+	started := a.started
+	stopped := a.stopped
+	a.mu.Unlock()
+	if stopped {
+		return
+	}
+	if !started {
 		a.deliverAllSync(inc, action, insight)
 		return
 	}
@@ -170,7 +185,7 @@ func (a *AlertManager) NotifyIncident(
 	job := deliverJob{inc: snap, action: action, insight: ins}
 
 	a.mu.Lock()
-	stopped := a.stopped
+	stopped = a.stopped
 	if !stopped {
 		a.fanOut(job)
 	}

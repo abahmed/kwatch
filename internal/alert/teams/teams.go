@@ -46,7 +46,7 @@ func NewTeams(config map[string]interface{}, appCfg *config.App) *Teams {
 		return nil
 	}
 
-	klog.InfoS("initializing Teams with flow url", "webhook", webhook)
+	klog.InfoS("initializing Teams with flow url configured")
 
 	title, _ := config["title"].(string)
 	text, _ := config["text"].(string)

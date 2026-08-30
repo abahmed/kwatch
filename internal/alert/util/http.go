@@ -7,12 +7,57 @@ import (
 	"io"
 	"net/http"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/abahmed/kwatch/internal/event"
 	"github.com/abahmed/kwatch/internal/k8s"
 	"github.com/abahmed/kwatch/internal/ratelimit"
 )
+
+var providerContexts = struct {
+	sync.RWMutex
+	values map[string]context.Context
+}{values: make(map[string]context.Context)}
+
+var providerContextLocks sync.Map
+
+// WithProviderContext scopes a provider context to one delivery operation.
+// The per-provider lock prevents two independent managers using the same
+// provider name from borrowing one another's context.
+func WithProviderContext(provider string, ctx context.Context, fn func()) {
+	value, _ := providerContextLocks.LoadOrStore(provider, &sync.Mutex{})
+	mu := value.(*sync.Mutex)
+	mu.Lock()
+	providerContexts.Lock()
+	previous, hadPrevious := providerContexts.values[provider]
+	if ctx == nil {
+		ctx = context.Background()
+	}
+	providerContexts.values[provider] = ctx
+	providerContexts.Unlock()
+	defer func() {
+		providerContexts.Lock()
+		if hadPrevious {
+			providerContexts.values[provider] = previous
+		} else {
+			delete(providerContexts.values, provider)
+		}
+		providerContexts.Unlock()
+		mu.Unlock()
+	}()
+	fn()
+}
+
+func providerContext(provider string) context.Context {
+	providerContexts.RLock()
+	ctx := providerContexts.values[provider]
+	providerContexts.RUnlock()
+	if ctx == nil {
+		return context.Background()
+	}
+	return ctx
+}
 
 // Request is one call to a provider's HTTP API.
 //
@@ -55,7 +100,7 @@ func Send(r Request) ([]byte, error) {
 	}
 	ctx := r.Context
 	if ctx == nil {
-		ctx = context.Background()
+		ctx = providerContext(r.Provider)
 	}
 	req, err := http.NewRequestWithContext(ctx, method, r.URL, bytes.NewReader(r.Body))
 	if err != nil {
@@ -117,9 +162,23 @@ func Post(
 	contentType string,
 	headers map[string]string,
 ) ([]byte, error) {
+	return PostContext(context.Background(), provider, url, body, contentType, headers)
+}
+
+// PostContext is the context-aware form of Post. Providers that can receive
+// the delivery context should use this form so shutdown cancels an in-flight
+// request instead of waiting for the transport timeout.
+func PostContext(
+	ctx context.Context,
+	provider, url string,
+	body []byte,
+	contentType string,
+	headers map[string]string,
+) ([]byte, error) {
 	return Send(
 		Request{
 			Provider:    provider,
+			Context:     ctx,
 			URL:         url,
 			Body:        body,
 			ContentType: contentType,

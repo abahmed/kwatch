@@ -46,7 +46,7 @@ func newCorrelator(
 	am *alert.AlertManager,
 	auditLogger *audit.AuditLogger,
 	graph *kwcontext.ResourceGraph,
-	baselineCh chan<- map[string]map[string]int64,
+	baselineCh chan map[string]map[string]int64,
 	insightEngine *insight.Engine,
 ) *correlation.Engine {
 	holder := &engineHolder{}
@@ -151,7 +151,7 @@ func lifecycleHook(
 // massFailureHook reports new mass failures and resolves ones that cleared.
 func massFailureHook(opts *engineOptions, holder *engineHolder) func() {
 	return func() {
-		allIncidents := holder.engine.SnapshotAll()
+		allIncidents := holder.engine.ActiveIncidents()
 		incList := make([]*model.Incident, 0, len(allIncidents))
 		for _, inc := range allIncidents {
 			incList = append(incList, inc)
@@ -248,7 +248,7 @@ func resolveClearedMassFailures(
 
 // onBaselineChange forwards baseline snapshots to the persistent saver.
 func onBaselineChange(
-	baselineCh chan<- map[string]map[string]int64,
+	baselineCh chan map[string]map[string]int64,
 ) func(map[string]map[string]int64) {
 	return func(b map[string]map[string]int64) {
 		total := 0
@@ -259,7 +259,15 @@ func onBaselineChange(
 		select {
 		case baselineCh <- b:
 		default:
-			// Channel full: drop oldest, keep newest
+			// Channel full: drop oldest, keep newest.
+			select {
+			case <-baselineCh:
+			default:
+			}
+			select {
+			case baselineCh <- b:
+			default:
+			}
 		}
 	}
 }

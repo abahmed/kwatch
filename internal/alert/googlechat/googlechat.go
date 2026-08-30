@@ -37,7 +37,7 @@ func NewGoogleChat(
 		return nil
 	}
 
-	klog.InfoS("initializing Google Chat with webhook url", "webhook", webhook)
+	klog.InfoS("initializing Google Chat with webhook configured")
 
 	text, _ := config["text"].(string)
 

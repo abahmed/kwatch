@@ -29,7 +29,7 @@ func NewWecom(config map[string]interface{}, appCfg *config.App) *Wecom {
 		return nil
 	}
 
-	klog.InfoS("initializing wecom", "webhook", webhook)
+	klog.InfoS("initializing wecom with webhook configured")
 
 	return &Wecom{
 		webhook: webhook,

@@ -76,6 +76,24 @@ func TestChunksEmpty(t *testing.T) {
 	}
 }
 
+func TestChunksUsesUTF8SafeByteBoundaries(t *testing.T) {
+	chunks := Chunks("aé日b", 3)
+	if len(chunks) != 3 || chunks[0] != "aé" || chunks[1] != "日" || chunks[2] != "b" {
+		t.Fatalf("unexpected UTF-8 chunks: %#v", chunks)
+	}
+	for _, chunk := range chunks {
+		if len(chunk) > 3 {
+			t.Fatalf("chunk %q exceeds byte limit", chunk)
+		}
+	}
+}
+
+func TestChunksNonPositiveSizeDoesNotPanic(t *testing.T) {
+	if got := Chunks("hello", 0); len(got) != 1 || got[0] != "hello" {
+		t.Fatalf("unexpected zero-size chunks: %#v", got)
+	}
+}
+
 func TestRenderIncidentSkip(t *testing.T) {
 	inc := &model.Incident{
 		Subject: model.Subject{

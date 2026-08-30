@@ -88,7 +88,7 @@ func NewSlack(config map[string]interface{}, appCfg *config.App) *Slack {
 		return nil
 	}
 
-	klog.InfoS("initializing slack with webhook url", "webhook", webhook)
+	klog.InfoS("initializing slack with webhook configured")
 
 	return &Slack{
 		webhook:          webhook,

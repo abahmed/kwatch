@@ -17,6 +17,12 @@ func (in *AppConfig) DeepCopy() *AppConfig {
 
 func (in *CorrelationConfig) DeepCopyInto(out *CorrelationConfig) {
 	*out = *in
+	if in.Escalation != nil {
+		out.Escalation = runtime.DeepCopyJSONValue(map[string]interface{}(in.Escalation)).(map[string]interface{})
+	}
+	if in.Renotify != nil {
+		out.Renotify = runtime.DeepCopyJSONValue(map[string]interface{}(in.Renotify)).(map[string]interface{})
+	}
 }
 
 func (in *CorrelationConfig) DeepCopy() *CorrelationConfig {
@@ -170,6 +176,26 @@ func (in *KwatchConfigSpec) DeepCopyInto(out *KwatchConfigSpec) {
 		*out = make([]string, len(*in))
 		copy(*out, *in)
 	}
+	if in.IgnoreContainerMessages != nil {
+		in, out := &in.IgnoreContainerMessages, &out.IgnoreContainerMessages
+		*out = make([]string, len(*in))
+		copy(*out, *in)
+	}
+	if in.IgnoreNodeReasons != nil {
+		in, out := &in.IgnoreNodeReasons, &out.IgnoreNodeReasons
+		*out = make([]string, len(*in))
+		copy(*out, *in)
+	}
+	if in.IgnoreNodeMessages != nil {
+		in, out := &in.IgnoreNodeMessages, &out.IgnoreNodeMessages
+		*out = make([]string, len(*in))
+		copy(*out, *in)
+	}
+	if in.IgnoreDisruptionTerminations != nil {
+		in, out := &in.IgnoreDisruptionTerminations, &out.IgnoreDisruptionTerminations
+		*out = new(bool)
+		**out = **in
+	}
 	if in.SeverityByOwnerKind != nil {
 		in, out := &in.SeverityByOwnerKind, &out.SeverityByOwnerKind
 		*out = make(map[string]string, len(*in))
@@ -184,6 +210,14 @@ func (in *KwatchConfigSpec) DeepCopyInto(out *KwatchConfigSpec) {
 			(*in)[i].DeepCopyInto(&(*out)[i])
 		}
 	}
+	if in.SeverityByReason != nil {
+		in, out := &in.SeverityByReason, &out.SeverityByReason
+		*out = make(map[string]string, len(*in))
+		for key, val := range *in {
+			(*out)[key] = val
+		}
+	}
+	deepCopySpecMaps(in, out)
 	out.Correlation = in.Correlation
 	out.PvcMonitor = in.PvcMonitor
 	out.NodeMonitor = in.NodeMonitor
@@ -194,6 +228,50 @@ func (in *KwatchConfigSpec) DeepCopyInto(out *KwatchConfigSpec) {
 	out.HeartbeatMonitor = in.HeartbeatMonitor
 	out.HealthCheck = in.HealthCheck
 	out.App = in.App
+}
+
+func deepCopySpecMaps(in, out *KwatchConfigSpec) {
+	if in.Upgrader != nil {
+		out.Upgrader = runtime.DeepCopyJSONValue(in.Upgrader).(map[string]interface{})
+	}
+	if in.Alert != nil {
+		out.Alert = runtime.DeepCopyJSONValue(in.Alert).(map[string]interface{})
+	}
+	copyMonitor := func(v MonitorConfig) MonitorConfig {
+		if v == nil {
+			return nil
+		}
+		return runtime.DeepCopyJSONValue(map[string]interface{}(v)).(map[string]interface{})
+	}
+	out.ScheduleMonitor = copyMonitor(in.ScheduleMonitor)
+	out.OomMonitor = copyMonitor(in.OomMonitor)
+	out.PendingPodMonitor = copyMonitor(in.PendingPodMonitor)
+	out.NotReadyMonitor = copyMonitor(in.NotReadyMonitor)
+	out.StatefulSetMonitor = copyMonitor(in.StatefulSetMonitor)
+	out.PdbMonitor = copyMonitor(in.PdbMonitor)
+	out.NodeResourceMonitor = copyMonitor(in.NodeResourceMonitor)
+	out.ClusterAutoscalerMonitor = copyMonitor(in.ClusterAutoscalerMonitor)
+	out.HpaMonitor = copyMonitor(in.HpaMonitor)
+	out.TlsMonitor = copyMonitor(in.TlsMonitor)
+	out.ServiceMonitor = copyMonitor(in.ServiceMonitor)
+	out.AdmissionWebhookMonitor = copyMonitor(in.AdmissionWebhookMonitor)
+	out.ControlPlaneMonitor = copyMonitor(in.ControlPlaneMonitor)
+	out.IngressMonitor = copyMonitor(in.IngressMonitor)
+	out.NetworkPolicyMonitor = copyMonitor(in.NetworkPolicyMonitor)
+	out.SmartGrouping = copyMonitor(in.SmartGrouping)
+	out.Inhibition = copyMonitor(in.Inhibition)
+	if in.Templates != nil {
+		out.Templates = make(map[string]string, len(in.Templates))
+		for k, v := range in.Templates {
+			out.Templates[k] = v
+		}
+	}
+	if in.Runbooks != nil {
+		out.Runbooks = make(map[string]string, len(in.Runbooks))
+		for k, v := range in.Runbooks {
+			out.Runbooks[k] = v
+		}
+	}
 }
 
 func (in *KwatchConfigSpec) DeepCopy() *KwatchConfigSpec {

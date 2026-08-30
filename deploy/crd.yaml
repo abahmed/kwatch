@@ -57,6 +57,30 @@ spec:
                   type: integer
                 resyncSeconds:
                   type: integer
+                namespaceSelector:
+                  type: string
+                ignoreContainerMessages:
+                  type: array
+                  items:
+                    type: string
+                ignoreNodeReasons:
+                  type: array
+                  items:
+                    type: string
+                ignoreNodeMessages:
+                  type: array
+                  items:
+                    type: string
+                ignoreDisruptionTerminations:
+                  type: boolean
+                containerRestartThreshold:
+                  type: integer
+                reportStartupBaseline:
+                  type: boolean
+                severityByReason:
+                  type: object
+                  additionalProperties:
+                    type: string
                 silences:
                   type: array
                   items:
@@ -99,12 +123,32 @@ spec:
                   properties:
                     window:
                       type: integer
-                    cooldown:
-                      type: integer
-                    staleThreshold:
-                      type: integer
                     lifecycleInterval:
                       type: integer
+                    resolveHoldDown:
+                      type: integer
+                    cooldownMinutes:
+                      type: integer
+                    maxBaseline:
+                      type: integer
+                    escalation:
+                      type: object
+                      properties:
+                        enabled:
+                          type: boolean
+                        tiers:
+                          type: array
+                          items:
+                            type: integer
+                    renotify:
+                      type: object
+                      properties:
+                        intervalBySeverity:
+                          type: object
+                          additionalProperties:
+                            type: integer
+                        maxPerIncident:
+                          type: integer
                 pvcMonitor:
                   type: object
                   properties:
@@ -118,29 +162,61 @@ spec:
                       type: number
                 nodeMonitor:
                   type: object
-                  properties:
-                    enabled:
-                      type: boolean
+                  x-kubernetes-preserve-unknown-fields: true
+                nodeResourceMonitor:
+                  type: object
+                  x-kubernetes-preserve-unknown-fields: true
+                pendingPodMonitor:
+                  type: object
+                  x-kubernetes-preserve-unknown-fields: true
+                notReadyMonitor:
+                  type: object
+                  x-kubernetes-preserve-unknown-fields: true
+                scheduleMonitor:
+                  type: object
+                  x-kubernetes-preserve-unknown-fields: true
+                oomMonitor:
+                  type: object
+                  x-kubernetes-preserve-unknown-fields: true
                 rolloutMonitor:
                   type: object
-                  properties:
-                    enabled:
-                      type: boolean
+                  x-kubernetes-preserve-unknown-fields: true
                 daemonSetMonitor:
                   type: object
-                  properties:
-                    enabled:
-                      type: boolean
+                  x-kubernetes-preserve-unknown-fields: true
                 jobMonitor:
                   type: object
-                  properties:
-                    enabled:
-                      type: boolean
+                  x-kubernetes-preserve-unknown-fields: true
                 cronJobMonitor:
                   type: object
-                  properties:
-                    enabled:
-                      type: boolean
+                  x-kubernetes-preserve-unknown-fields: true
+                statefulSetMonitor:
+                  type: object
+                  x-kubernetes-preserve-unknown-fields: true
+                pdbMonitor:
+                  type: object
+                  x-kubernetes-preserve-unknown-fields: true
+                hpaMonitor:
+                  type: object
+                  x-kubernetes-preserve-unknown-fields: true
+                serviceMonitor:
+                  type: object
+                  x-kubernetes-preserve-unknown-fields: true
+                admissionWebhookMonitor:
+                  type: object
+                  x-kubernetes-preserve-unknown-fields: true
+                ingressMonitor:
+                  type: object
+                  x-kubernetes-preserve-unknown-fields: true
+                networkPolicyMonitor:
+                  type: object
+                  x-kubernetes-preserve-unknown-fields: true
+                controlPlaneMonitor:
+                  type: object
+                  x-kubernetes-preserve-unknown-fields: true
+                clusterAutoscalerMonitor:
+                  type: object
+                  x-kubernetes-preserve-unknown-fields: true
                 heartbeatMonitor:
                   type: object
                   properties:
@@ -168,3 +244,34 @@ spec:
                       type: boolean
                     logFormatter:
                       type: string
+                    insecureSkipTLSVerify:
+                      type: boolean
+                    caBundlePath:
+                      type: string
+                smartGrouping:
+                  type: object
+                  x-kubernetes-preserve-unknown-fields: true
+                inhibition:
+                  type: object
+                  x-kubernetes-preserve-unknown-fields: true
+                templates:
+                  type: object
+                  additionalProperties:
+                    type: string
+                runbooks:
+                  type: object
+                  additionalProperties:
+                    type: string
+                auditLog:
+                  type: object
+                  properties:
+                    enabled:
+                      type: boolean
+                    output:
+                      type: string
+                upgrader:
+                  type: object
+                  x-kubernetes-preserve-unknown-fields: true
+                alert:
+                  type: object
+                  x-kubernetes-preserve-unknown-fields: true

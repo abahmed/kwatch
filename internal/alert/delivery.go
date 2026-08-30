@@ -7,6 +7,7 @@ import (
 
 	"k8s.io/klog/v2"
 
+	"github.com/abahmed/kwatch/internal/alert/util"
 	"github.com/abahmed/kwatch/internal/constant"
 	"github.com/abahmed/kwatch/internal/event"
 	"github.com/abahmed/kwatch/internal/insight"
@@ -32,6 +33,24 @@ type DeadLetterEntry struct {
 // delivery interface. Event-based providers deliberately implement
 // SendMessage as a no-op, so a fallback must not always use that method.
 func (a *AlertManager) deliverFallbackIncident(
+	ctx context.Context,
+	entry *providerEntry,
+	primary string,
+	inc *model.Incident,
+	action model.IncidentAction,
+	ins *insight.Insight,
+) error {
+	if primary == entry.provider.Name() {
+		return a.deliverFallbackIncidentWithContext(ctx, entry, primary, inc, action, ins)
+	}
+	var err error
+	util.WithProviderContext(entry.provider.Name(), ctx, func() {
+		err = a.deliverFallbackIncidentWithContext(ctx, entry, primary, inc, action, ins)
+	})
+	return err
+}
+
+func (a *AlertManager) deliverFallbackIncidentWithContext(
 	ctx context.Context,
 	entry *providerEntry,
 	primary string,
@@ -71,6 +90,18 @@ func deliverFallbackMessage(
 	entry *providerEntry,
 	primary, msg string,
 ) error {
+	var err error
+	util.WithProviderContext(entry.provider.Name(), ctx, func() {
+		err = deliverFallbackMessageWithContext(ctx, entry, primary, msg)
+	})
+	return err
+}
+
+func deliverFallbackMessageWithContext(
+	ctx context.Context,
+	entry *providerEntry,
+	primary, msg string,
+) error {
 	p := entry.provider
 	retry := fallbackRetryConfig(entry.retry)
 	if _, ok := p.(EventDeliveryProvider); ok {
@@ -85,6 +116,18 @@ func deliverFallbackMessage(
 }
 
 func deliverFallbackEvent(
+	ctx context.Context,
+	entry *providerEntry,
+	ev *event.Event,
+) error {
+	var err error
+	util.WithProviderContext(entry.provider.Name(), ctx, func() {
+		err = deliverFallbackEventWithContext(ctx, entry, ev)
+	})
+	return err
+}
+
+func deliverFallbackEventWithContext(
 	ctx context.Context,
 	entry *providerEntry,
 	ev *event.Event,
@@ -127,6 +170,18 @@ func (a *AlertManager) recordDeadLetter(
 // deliverOne handles the full send+retry for a single (entry, incident) pair.
 
 func (a *AlertManager) deliverOne(
+	ctx context.Context,
+	entry *providerEntry,
+	inc *model.Incident,
+	action model.IncidentAction,
+	ins *insight.Insight,
+) {
+	util.WithProviderContext(entry.provider.Name(), ctx, func() {
+		a.deliverOneWithContext(ctx, entry, inc, action, ins)
+	})
+}
+
+func (a *AlertManager) deliverOneWithContext(
 	ctx context.Context,
 	entry *providerEntry,
 	inc *model.Incident,

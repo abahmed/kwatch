@@ -580,6 +580,12 @@ func TestRouteFilter(t *testing.T) {
 	assert.False(t, matchesRoute(routes[0], inc3))
 }
 
+func TestRouteFilterNormalizesSeverity(t *testing.T) {
+	route := config.AlertRoute{Severities: []string{"HIGH"}}
+	inc := &model.Incident{Status: model.Status{Severity: model.SeverityHigh}}
+	assert.True(t, matchesRoute(route, inc))
+}
+
 func TestShouldDeliverNoRoutes(t *testing.T) {
 	inc := &model.Incident{
 		Subject: model.Subject{
@@ -1033,6 +1039,28 @@ func TestNotifyIncidentAfterShutdownIsNoop(t *testing.T) {
 			Reason: "OOMKilled",
 		},
 	}, model.ActionCreate, nil)
+}
+
+func TestAlertManagerCanRestartAfterShutdown(t *testing.T) {
+	am := &AlertManager{}
+	am.entries = []providerEntry{{
+		provider: &fakeProvider{},
+		retry:    retryConfig{maxAttempts: 1},
+		ch:       make(chan deliverJob, channelCap),
+	}}
+
+	ctx1, cancel1 := context.WithCancel(context.Background())
+	am.Start(ctx1)
+	am.shutdown()
+	cancel1()
+
+	ctx2, cancel2 := context.WithCancel(context.Background())
+	defer cancel2()
+	am.Start(ctx2)
+	am.NotifyIncident(&model.Incident{
+		Subject: model.Subject{Key: "restart", Name: "n", Reason: "Error"},
+	}, model.ActionCreate, nil)
+	am.shutdown()
 }
 
 // Saturation: when a provider channel is full, fanOut drops the oldest queued

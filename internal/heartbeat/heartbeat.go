@@ -40,7 +40,7 @@ func (m *HeartbeatMonitor) Start(ctx context.Context) {
 	ticker := time.NewTicker(interval)
 	defer ticker.Stop()
 
-	klog.InfoS("heartbeat monitor started", "interval", interval, "url", m.config.URL)
+	klog.InfoS("heartbeat monitor started", "interval", interval)
 	for {
 		select {
 		case <-ctx.Done():
@@ -55,12 +55,12 @@ func (m *HeartbeatMonitor) Start(ctx context.Context) {
 func (m *HeartbeatMonitor) ping(ctx context.Context) {
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, m.config.URL, nil)
 	if err != nil {
-		klog.ErrorS(err, "heartbeat ping: failed to create request", "url", m.config.URL)
+		klog.ErrorS(err, "heartbeat ping: failed to create request")
 		return
 	}
 	resp, err := m.client.Do(req)
 	if err != nil {
-		klog.ErrorS(err, "heartbeat ping failed", "url", m.config.URL)
+		klog.ErrorS(err, "heartbeat ping failed")
 		return
 	}
 	if err := resp.Body.Close(); err != nil {
@@ -71,8 +71,6 @@ func (m *HeartbeatMonitor) ping(ctx context.Context) {
 			"heartbeat ping returned non-2xx",
 			"status",
 			resp.StatusCode,
-			"url",
-			m.config.URL,
 		)
 	}
 }

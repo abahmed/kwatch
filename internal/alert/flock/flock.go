@@ -28,7 +28,7 @@ func NewFlock(config map[string]interface{}, appCfg *config.App) *Flock {
 		return nil
 	}
 
-	klog.InfoS("initializing flock", "webhook", webhook)
+	klog.InfoS("initializing flock with webhook configured")
 
 	return &Flock{
 		webhook: webhook,

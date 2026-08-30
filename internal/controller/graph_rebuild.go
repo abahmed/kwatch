@@ -24,6 +24,41 @@ import (
 	kwcontext "github.com/abahmed/kwatch/internal/context"
 )
 
+func (c *Controller) rebuildService(obj interface{}) {
+	if c.graph == nil {
+		return
+	}
+	svc, ok := obj.(*corev1.Service)
+	if !ok {
+		return
+	}
+	if err := c.rebuildServiceChecked(svc); err != nil {
+		klog.ErrorS(err, "failed to rebuild service graph edges; keeping previous edges", "namespace", svc.Namespace, "name", svc.Name)
+	}
+}
+
+func (c *Controller) rebuildServiceChecked(svc *corev1.Service) error {
+	if c.podLister == nil {
+		return nil
+	}
+	if len(svc.Spec.Selector) == 0 {
+		c.graph.ReplaceOutgoingEdges("service", svc.Namespace, svc.Name, nil)
+		return nil
+	}
+	pods, err := c.podLister.Pods(svc.Namespace).List(labels.SelectorFromSet(svc.Spec.Selector))
+	if err != nil {
+		return fmt.Errorf("list pods selected by service: %w", err)
+	}
+	targets := make([]kwcontext.EdgeTarget, 0, len(pods))
+	for _, pod := range pods {
+		targets = append(targets, kwcontext.EdgeTarget{
+			Kind: "pod", Namespace: svc.Namespace, Name: pod.Name, Type: "selects",
+		})
+	}
+	c.graph.ReplaceOutgoingEdges("service", svc.Namespace, svc.Name, targets)
+	return nil
+}
+
 func (c *Controller) rebuildReplicaSet(obj interface{}) {
 	if c.graph == nil {
 		return

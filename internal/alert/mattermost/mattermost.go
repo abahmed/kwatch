@@ -53,7 +53,7 @@ func NewMattermost(
 		return nil
 	}
 
-	klog.InfoS("initializing mattermost with webhook url", "webhook", webhook)
+	klog.InfoS("initializing mattermost with webhook configured")
 
 	title, _ := config["title"].(string)
 	text, _ := config["text"].(string)
