@@ -42,3 +42,23 @@ func TestRebuildGraphTracksCustomResourceOwner(t *testing.T) {
 		t.Fatalf("unexpected custom resource dependencies: %v", got)
 	}
 }
+
+func TestGraphReferenceRulesTraverseArrays(t *testing.T) {
+	graph := kwcontext.NewResourceGraph()
+	monitor := &Monitor{graph: graph}
+	monitor.SetGraphReferenceRules([]string{"spec.backendRefs.name=service"})
+	obj := &unstructured.Unstructured{Object: map[string]interface{}{
+		"metadata": map[string]interface{}{"name": "route", "namespace": "apps"},
+		"spec": map[string]interface{}{"backendRefs": []interface{}{
+			map[string]interface{}{"name": "api"},
+			map[string]interface{}{"name": "web"},
+		}},
+	}}
+
+	monitor.rebuildGraph(obj)
+
+	deps := graph.DependenciesOf("customresource", "apps", "route")
+	if len(deps) != 2 || deps[0] != "service/apps/api" || deps[1] != "service/apps/web" {
+		t.Fatalf("unexpected reference dependencies: %v", deps)
+	}
+}

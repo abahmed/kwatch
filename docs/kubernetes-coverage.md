@@ -70,7 +70,9 @@ VolumeSnapshots, VolumeSnapshotContents, VolumeSnapshotClasses, and local PV
 node affinity. Gateway API routes are linked to Gateway/GatewayClass, backend
 Services, and listener TLS Secrets; Ingress is linked to IngressClass. Explicit
 HTTP/TCP/DNS probes are also linked to matching Kubernetes Service DNS names or
-kept as external network targets.
+kept as external network targets. Generic CRD references can be configured as
+`crd.graphReferences` paths such as `spec.backendRefs.name=service`; arrays are
+traversed automatically.
 
 ## Noise and recovery controls
 

@@ -319,6 +319,10 @@ type CrdConfig struct {
 	// FailureConditions overrides the default condition rules using entries such
 	// as "Ready=False" or "Degraded=True" for dynamically watched CRDs.
 	FailureConditions []string `yaml:"failureConditions"`
+	// GraphReferences maps dot-separated CR spec paths to Kubernetes kinds,
+	// for example "spec.serviceName=service" or
+	// "spec.backendRefs.name=service". Arrays are traversed automatically.
+	GraphReferences []string `yaml:"graphReferences"`
 }
 
 // SmartGrouping configures coalescing same-reason incidents across

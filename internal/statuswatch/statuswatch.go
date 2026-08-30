@@ -39,6 +39,12 @@ type Monitor struct {
 	factories        map[string]dynamicinformer.DynamicSharedInformerFactory
 	conditionRules   map[string]map[string]bool
 	graph            *kwcontext.ResourceGraph
+	graphReferences  []graphReferenceRule
+}
+
+type graphReferenceRule struct {
+	path []string
+	kind string
 }
 
 // SetGraph connects generic CRD status monitoring to the shared dependency
@@ -79,6 +85,27 @@ func (m *Monitor) SetConditionRules(entries []string) {
 		return
 	}
 	m.conditionRules = rules
+}
+
+func (m *Monitor) SetGraphReferenceRules(entries []string) {
+	rules := make([]graphReferenceRule, 0, len(entries))
+	for _, entry := range entries {
+		parts := strings.SplitN(entry, "=", 2)
+		if len(parts) != 2 {
+			continue
+		}
+		path := make([]string, 0)
+		for _, part := range strings.Split(strings.TrimSpace(parts[0]), ".") {
+			if part != "" {
+				path = append(path, part)
+			}
+		}
+		kind := strings.ToLower(strings.TrimSpace(parts[1]))
+		if len(path) > 0 && kind != "" {
+			rules = append(rules, graphReferenceRule{path: path, kind: kind})
+		}
+	}
+	m.graphReferences = rules
 }
 
 func defaultConditionRules() map[string]map[string]bool {
@@ -220,7 +247,35 @@ func (m *Monitor) rebuildGraph(u *unstructured.Unstructured) {
 			Kind: strings.ToLower(ref.Kind), Namespace: u.GetNamespace(), Name: ref.Name, Type: "owned_by",
 		})
 	}
+	for _, rule := range m.graphReferences {
+		for _, name := range nestedStringValues(u.Object, rule.path) {
+			targets = append(targets, kwcontext.EdgeTarget{
+				Kind: rule.kind, Namespace: u.GetNamespace(), Name: name, Type: "references",
+			})
+		}
+	}
 	m.graph.ReplaceOutgoingEdges("customresource", u.GetNamespace(), u.GetName(), targets)
+}
+
+func nestedStringValues(value interface{}, path []string) []string {
+	if len(path) == 0 {
+		if name, ok := value.(string); ok && name != "" {
+			return []string{name}
+		}
+		return nil
+	}
+	if items, ok := value.([]interface{}); ok {
+		var values []string
+		for _, item := range items {
+			values = append(values, nestedStringValues(item, path)...)
+		}
+		return values
+	}
+	object, ok := value.(map[string]interface{})
+	if !ok {
+		return nil
+	}
+	return nestedStringValues(object[path[0]], path[1:])
 }
 
 func (m *Monitor) resolve(namespace, owner, reason string) {

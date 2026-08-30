@@ -64,6 +64,10 @@ spec:
                       type: array
                       items:
                         type: string
+                    graphReferences:
+                      type: array
+                      items:
+                        type: string
                 namespaceSelector:
                   type: string
                 ignoreContainerMessages:

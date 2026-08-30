@@ -194,6 +194,7 @@ func Run() int {
 		} else {
 			monitor.SetNamespaceFilter(ctl.NamespaceAllowed)
 			monitor.SetConditionRules(cfg.CrdConfig.FailureConditions)
+			monitor.SetGraphReferenceRules(cfg.CrdConfig.GraphReferences)
 			monitor.SetGraph(graph)
 			statusRun = func(runCtx context.Context) {
 				if err := monitor.Start(runCtx); err != nil {

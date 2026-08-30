@@ -213,6 +213,12 @@ func validateMonitors(cfg *Config) []error {
 			errs = append(errs, errors.New("crd.failureConditions entries must use ConditionType=Status"))
 		}
 	}
+	for _, rule := range cfg.CrdConfig.GraphReferences {
+		parts := strings.SplitN(rule, "=", 2)
+		if len(parts) != 2 || strings.TrimSpace(parts[0]) == "" || strings.TrimSpace(parts[1]) == "" {
+			errs = append(errs, errors.New("crd.graphReferences entries must use path=kind"))
+		}
+	}
 	errs = append(errs, validateHeartbeatMonitor(cfg)...)
 	if cfg.SmartGrouping.NamespaceFanOutThreshold < 0 {
 		errs = append(
