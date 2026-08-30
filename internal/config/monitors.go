@@ -175,6 +175,13 @@ type NodeResourceMonitor struct {
 
 	// MemCritical is the memory overcommit ratio for critical.
 	MemCritical float64 `yaml:"memCritical"`
+
+	// Filesystem and inode percentages use kubelet summary data. Zero disables
+	// the corresponding signal.
+	FilesystemWarningPercent  float64 `yaml:"filesystemWarningPercent"`
+	FilesystemCriticalPercent float64 `yaml:"filesystemCriticalPercent"`
+	InodeWarningPercent       float64 `yaml:"inodeWarningPercent"`
+	InodeCriticalPercent      float64 `yaml:"inodeCriticalPercent"`
 }
 
 // RuntimeMetricsMonitor reads metrics.k8s.io when a Metrics Server is
@@ -186,6 +193,36 @@ type RuntimeMetricsMonitor struct {
 	MemoryCriticalPercent int  `yaml:"memoryCriticalPercent"`
 	CPUWarningPercent     int  `yaml:"cpuWarningPercent"`
 	CPUCriticalPercent    int  `yaml:"cpuCriticalPercent"`
+}
+
+// ActiveProbeMonitor performs opt-in checks against explicitly configured
+// endpoints. It never guesses application endpoints from Services, which
+// would probe too much and create false incidents.
+type ActiveProbeMonitor struct {
+	Enabled           bool              `yaml:"enabled"`
+	IntervalSeconds   int               `yaml:"intervalSeconds"`
+	TimeoutSeconds    int               `yaml:"timeoutSeconds"`
+	FailureThreshold  int               `yaml:"failureThreshold"`
+	RecoveryThreshold int               `yaml:"recoveryThreshold"`
+	HTTP              []HTTPProbeTarget `yaml:"http"`
+	TCP               []TCPProbeTarget  `yaml:"tcp"`
+	DNS               []DNSProbeTarget  `yaml:"dns"`
+}
+
+type HTTPProbeTarget struct {
+	Name           string `yaml:"name"`
+	URL            string `yaml:"url"`
+	ExpectedStatus int    `yaml:"expectedStatus"`
+}
+
+type TCPProbeTarget struct {
+	Name    string `yaml:"name"`
+	Address string `yaml:"address"`
+}
+
+type DNSProbeTarget struct {
+	Name string `yaml:"name"`
+	Host string `yaml:"host"`
 }
 
 // DaemonSetMonitor configures rollout-stuck detection for DaemonSets.

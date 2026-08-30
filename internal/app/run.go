@@ -23,6 +23,7 @@ import (
 	"github.com/abahmed/kwatch/internal/k8s"
 	"github.com/abahmed/kwatch/internal/metricsapi"
 	"github.com/abahmed/kwatch/internal/model"
+	"github.com/abahmed/kwatch/internal/probe"
 	"github.com/abahmed/kwatch/internal/pvc"
 	"github.com/abahmed/kwatch/internal/startup"
 	"github.com/abahmed/kwatch/internal/statuswatch"
@@ -54,6 +55,7 @@ type serverDeps struct {
 	tlsSweep    func()
 	statusRun   func(context.Context)
 	metricsRun  func(context.Context)
+	probeRun    func(context.Context)
 }
 
 // Run loads config and wires all monitors, then runs until shutdown.
@@ -212,6 +214,11 @@ func Run() int {
 		tlsSweep = h.SweepTLSSecrets
 	}
 
+	var probeRun func(context.Context)
+	if cfg.ActiveProbeMonitor.Enabled {
+		probeRun = probe.New(cfg.ActiveProbeMonitor, correlator).Start
+	}
+
 	deps := &serverDeps{
 		ctx:           ctx,
 		cancel:        cancel,
@@ -232,6 +239,7 @@ func Run() int {
 		tlsSweep:      tlsSweep,
 		statusRun:     statusRun,
 		metricsRun:    metricsRun,
+		probeRun:      probeRun,
 	}
 	return serve(ctx, deps)
 }

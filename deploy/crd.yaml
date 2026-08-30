@@ -217,6 +217,9 @@ spec:
                 runtimeMetricsMonitor:
                   type: object
                   x-kubernetes-preserve-unknown-fields: true
+                activeProbeMonitor:
+                  type: object
+                  x-kubernetes-preserve-unknown-fields: true
                 controlPlaneMonitor:
                   type: object
                   x-kubernetes-preserve-unknown-fields: true

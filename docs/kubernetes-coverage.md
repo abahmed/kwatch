@@ -19,8 +19,9 @@ the categories below intentionally use different signal sources.
   evidence, plus CronJob suspension, missed schedule, concurrency and starting
   deadline handling.
 - Nodes: Ready, memory/disk/PID/network pressure, sustained pressure, lease
-  heartbeat staleness, node deletion finalizers, bootstrap grace periods and
-  request/allocatable overcommit.
+  heartbeat staleness, node deletion finalizers, bootstrap grace periods,
+  request/allocatable overcommit, and optional kubelet-summary filesystem and
+  inode usage thresholds.
 - Storage: mounted volume usage, PVC Pending/Lost, filesystem-resize and
   controller/node resize failures, modify-volume failures, PV
   Released/Failed (including status reason/message), and stuck PVC/PV
@@ -31,10 +32,17 @@ the categories below intentionally use different signal sources.
   with no usable endpoints.
 - Cluster resources: exhausted ResourceQuota, stuck Namespace termination, and
   ReplicaSet status failures.
+- Resource-level Events: recent failure-shaped Warning Events for scheduling,
+  storage attach/provision/mount, autoscaling, admission, discovery, and node
+  health are correlated to their involved object. Pod and Cluster Autoscaler
+  Events continue through their specialized context-rich detectors.
 - Runtime metrics: optional Metrics API collection of actual per-container CPU
   and memory usage against declared limits. Configure it through
   `runtimeMetricsMonitor`; if Metrics Server is unavailable, the monitor stays
   quiet and does not resolve existing incidents.
+- Active probes: opt-in HTTP, TCP, and DNS checks for explicitly configured
+  targets through `activeProbeMonitor`, with consecutive-failure and recovery
+  thresholds. Targets are never inferred automatically from Services.
 
 ## Dynamic status
 

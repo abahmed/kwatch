@@ -302,8 +302,38 @@ eventually pays the price.
 | `nodeResourceMonitor.cpuCritical` | 🚨 CPU overcommit ratio for critical (default: 4.0) |
 | `nodeResourceMonitor.memWarning` | ⚠️ Memory overcommit ratio for warning (default: 2.0) |
 | `nodeResourceMonitor.memCritical` | 🚨 Memory overcommit ratio for critical (default: 4.0) |
+| `nodeResourceMonitor.filesystemWarningPercent` | ⚠️ Node filesystem usage warning threshold (default: 90; 0 disables) |
+| `nodeResourceMonitor.filesystemCriticalPercent` | 🚨 Node filesystem usage critical threshold (default: 95; 0 disables) |
+| `nodeResourceMonitor.inodeWarningPercent` | ⚠️ Node inode usage warning threshold (default: 90; 0 disables) |
+| `nodeResourceMonitor.inodeCriticalPercent` | 🚨 Node inode usage critical threshold (default: 95; 0 disables) |
 
 Periodically computes the ratio of pod resource requests vs node allocatable for CPU and memory. Data is purely in-memory — no TSDB or persistent storage needed.
+
+### 🌐 Active Probes
+
+Active probes are opt-in and target only endpoints explicitly listed by the
+operator; kwatch never probes every Service automatically. A target must fail
+`failureThreshold` consecutive checks before alerting and pass
+`recoveryThreshold` consecutive checks before resolving.
+
+```yaml
+activeProbeMonitor:
+  enabled: true
+  intervalSeconds: 30
+  timeoutSeconds: 5
+  failureThreshold: 3
+  recoveryThreshold: 2
+  http:
+    - name: public-api
+      url: https://api.example.com/ready
+      expectedStatus: 200
+  tcp:
+    - name: postgres
+      address: postgres.database.svc:5432
+  dns:
+    - name: cluster-dns
+      host: kubernetes.default.svc
+```
 
 ### 💥 OOM Pattern Monitor
 
@@ -529,4 +559,3 @@ spec:
   silences:
     - namespaces: ["kube-system"]
 ```
-

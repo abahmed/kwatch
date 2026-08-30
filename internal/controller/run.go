@@ -76,6 +76,11 @@ func (c *Controller) Run(ctx context.Context, workers int) error {
 				Interval:   interval,
 				CpuWarning: cfg.CpuWarning, CpuCritical: cfg.CpuCritical,
 				MemWarning: cfg.MemWarning, MemCritical: cfg.MemCritical,
+				FilesystemWarningPercent:  cfg.FilesystemWarningPercent,
+				FilesystemCriticalPercent: cfg.FilesystemCriticalPercent,
+				InodeWarningPercent:       cfg.InodeWarningPercent,
+				InodeCriticalPercent:      cfg.InodeCriticalPercent,
+				Client:                    c.client,
 			}, c.nodeLister, c.podLister)
 			mon.Run(ctx, func(sig *event.Signal) {
 				c.handler.ProcessNodeResourceOvercommit(

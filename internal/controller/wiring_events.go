@@ -25,6 +25,11 @@ func (c *Controller) wireEvents(
 	if !scope.all && len(scope.namespaces) == 0 {
 		return eventFactories
 	}
+	warningFactories := wireWarningEvents(c.handler, client, resync, scope)
+	eventFactories = append(eventFactories, warningFactories...)
+	for _, factory := range warningFactories {
+		c.eventsSynced = append(c.eventsSynced, factory.Core().V1().Events().Informer().HasSynced)
+	}
 	if scope.all || len(scope.namespaces) == 1 {
 		opts := []informers.SharedInformerOption{
 			informers.WithTweakListOptions(func(o *metav1.ListOptions) {
@@ -98,6 +103,60 @@ func (c *Controller) wireEvents(
 		c.eventLister = &multiEventLister{listers: listers}
 	}
 	return eventFactories
+}
+
+// wireWarningEvents adds a second, deliberately narrow event stream for
+// resource-level failures. Pod Events remain on the indexed informer above so
+// their richer log/container context is preserved.
+func wireWarningEvents(
+	h handler.Handler,
+	client kubernetes.Interface,
+	resync time.Duration,
+	scope namespaceScope,
+) []informers.SharedInformerFactory {
+	var factories []informers.SharedInformerFactory
+	add := func(opts ...informers.SharedInformerOption) {
+		factory := informers.NewSharedInformerFactoryWithOptions(client, resync, opts...)
+		informer := factory.Core().V1().Events().Informer()
+		informer.AddEventHandler(cache.ResourceEventHandlerFuncs{
+			AddFunc: func(obj interface{}) {
+				if ev, ok := obj.(*corev1.Event); ok {
+					h.ProcessWarningEvent(ev)
+				}
+			},
+			UpdateFunc: func(_, obj interface{}) {
+				if ev, ok := obj.(*corev1.Event); ok {
+					h.ProcessWarningEvent(ev)
+				}
+			},
+		})
+		factories = append(factories, factory)
+	}
+	if scope.all || len(scope.namespaces) == 1 {
+		opts := []informers.SharedInformerOption{
+			informers.WithTweakListOptions(func(o *metav1.ListOptions) {
+				o.FieldSelector = "type=Warning"
+				if scope.all {
+					o.FieldSelector += "," + informerExcludedNamespaces(scope.forbidden)
+				}
+			}),
+		}
+		if len(scope.namespaces) == 1 {
+			opts = append(opts, informers.WithNamespace(scope.namespaces[0]))
+		}
+		add(opts...)
+		return factories
+	}
+	for _, namespace := range scope.namespaces {
+		namespace := namespace
+		add(
+			informers.WithNamespace(namespace),
+			informers.WithTweakListOptions(func(o *metav1.ListOptions) {
+				o.FieldSelector = "type=Warning"
+			}),
+		)
+	}
+	return factories
 }
 
 // eventsByPodIndex is the informer index that maps "namespace/pod" to the

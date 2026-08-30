@@ -2,6 +2,7 @@ package resource
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"time"
 
@@ -9,29 +10,37 @@ import (
 
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/labels"
+	"k8s.io/client-go/kubernetes"
 	corev1lister "k8s.io/client-go/listers/core/v1"
 
 	"github.com/abahmed/kwatch/internal/event"
+	"github.com/abahmed/kwatch/internal/k8s"
 	"github.com/abahmed/kwatch/internal/model"
 )
 
 type Config struct {
-	CpuWarning  float64
-	CpuCritical float64
-	MemWarning  float64
-	MemCritical float64
-	Interval    time.Duration
+	CpuWarning                float64
+	CpuCritical               float64
+	MemWarning                float64
+	MemCritical               float64
+	FilesystemWarningPercent  float64
+	FilesystemCriticalPercent float64
+	InodeWarningPercent       float64
+	InodeCriticalPercent      float64
+	Interval                  time.Duration
+	Client                    kubernetes.Interface
 }
 
 type Monitor struct {
 	cfg        Config
 	nodeLister corev1lister.NodeLister
 	podLister  corev1lister.PodLister
+	client     kubernetes.Interface
 	interval   time.Duration
 }
 
 func NewMonitor(cfg Config, nodeLister corev1lister.NodeLister, podLister corev1lister.PodLister) *Monitor {
-	return &Monitor{cfg: cfg, nodeLister: nodeLister, podLister: podLister, interval: cfg.Interval}
+	return &Monitor{cfg: cfg, nodeLister: nodeLister, podLister: podLister, client: cfg.Client, interval: cfg.Interval}
 }
 
 // Run starts the periodic check loop. The callback is called for each
@@ -47,11 +56,77 @@ func (m *Monitor) Run(ctx context.Context, callback func(sig *event.Signal)) {
 			return
 		case <-time.After(m.interval):
 			signals := m.Check()
+			signals = append(signals, m.checkFilesystem(ctx)...)
 			for _, sig := range signals {
 				callback(sig)
 			}
 		}
 	}
+}
+
+type filesystemSummary struct {
+	Node struct {
+		FS *filesystemStats `json:"fs"`
+	} `json:"node"`
+}
+
+type filesystemStats struct {
+	CapacityBytes *uint64 `json:"capacityBytes"`
+	UsedBytes     *uint64 `json:"usedBytes"`
+	Inodes        *uint64 `json:"inodes"`
+	InodesFree    *uint64 `json:"inodesFree"`
+}
+
+func (m *Monitor) checkFilesystem(ctx context.Context) []*event.Signal {
+	if m.client == nil || (m.cfg.FilesystemWarningPercent <= 0 && m.cfg.InodeWarningPercent <= 0) {
+		return nil
+	}
+	nodes, err := m.nodeLister.List(labels.Everything())
+	if err != nil {
+		return nil
+	}
+	var signals []*event.Signal
+	for _, node := range nodes {
+		body, err := k8s.GetNodeSummary(ctx, m.client, node.Name)
+		if err != nil {
+			continue
+		}
+		var summary filesystemSummary
+		if json.Unmarshal(body, &summary) != nil || summary.Node.FS == nil {
+			continue
+		}
+		signals = append(signals, filesystemSignals(node, summary.Node.FS, m.cfg)...)
+	}
+	return signals
+}
+
+func filesystemSignals(node *corev1.Node, fs *filesystemStats, cfg Config) []*event.Signal {
+	var out []*event.Signal
+	if fs.CapacityBytes != nil && fs.UsedBytes != nil && *fs.CapacityBytes > 0 {
+		pct := float64(*fs.UsedBytes) / float64(*fs.CapacityBytes) * 100
+		if sig := thresholdSignal(node, pct, cfg.FilesystemWarningPercent, cfg.FilesystemCriticalPercent, constant.ReasonNodeFilesystemHigh, constant.ReasonNodeFilesystemCritical, "filesystem"); sig != nil {
+			out = append(out, sig)
+		}
+	}
+	if fs.Inodes != nil && fs.InodesFree != nil && *fs.Inodes > 0 && *fs.InodesFree <= *fs.Inodes {
+		pct := float64(*fs.Inodes-*fs.InodesFree) / float64(*fs.Inodes) * 100
+		if sig := thresholdSignal(node, pct, cfg.InodeWarningPercent, cfg.InodeCriticalPercent, constant.ReasonNodeInodesHigh, constant.ReasonNodeInodesCritical, "inodes"); sig != nil {
+			out = append(out, sig)
+		}
+	}
+	return out
+}
+
+func thresholdSignal(node *corev1.Node, pct, warning, critical float64, warnReason, criticalReason, resourceName string) *event.Signal {
+	if warning <= 0 || pct < warning {
+		return nil
+	}
+	reason, severity := warnReason, model.SeverityWarning
+	if critical > 0 && pct >= critical {
+		reason, severity = criticalReason, model.SeverityCritical
+	}
+	return &event.Signal{Resource: "node", NodeName: node.Name, PodName: node.Name, Owner: node.Name, Reason: reason, Severity: severity,
+		Labels: node.Labels, Hint: fmt.Sprintf("Node %s %s usage is %.1f%%", node.Name, resourceName, pct)}
 }
 
 // Check computes overcommit ratios for all nodes and returns signals.

@@ -229,6 +229,8 @@ func (m *mockHandler) ProcessClusterAutoscalerEvent(
 ) {
 }
 
+func (m *mockHandler) ProcessWarningEvent(*corev1.Event) {}
+
 func TestNewCreatesController(t *testing.T) {
 	assert := assert.New(t)
 

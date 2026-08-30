@@ -66,6 +66,18 @@ func validateNodeResourceMonitor(cfg *Config) []error {
 			errors.New("nodeResourceMonitor.memCritical must be >= memWarning"),
 		)
 	}
+	for name, values := range map[string][2]float64{
+		"filesystem": {cfg.NodeResourceMonitor.FilesystemWarningPercent, cfg.NodeResourceMonitor.FilesystemCriticalPercent},
+		"inode":      {cfg.NodeResourceMonitor.InodeWarningPercent, cfg.NodeResourceMonitor.InodeCriticalPercent},
+	} {
+		warning, critical := values[0], values[1]
+		if warning == 0 && critical == 0 {
+			continue
+		}
+		if warning <= 0 || warning > 100 || critical < warning || critical > 100 {
+			errs = append(errs, errors.New("nodeResourceMonitor."+name+" thresholds must be 0/disabled or warning <= critical <= 100"))
+		}
+	}
 	return errs
 }
 
@@ -89,6 +101,39 @@ func validateRuntimeMetricsMonitor(cfg *Config) []error {
 	}
 	if m.CPUCriticalPercent < m.CPUWarningPercent || m.CPUCriticalPercent > 100 {
 		errs = append(errs, errors.New("runtimeMetricsMonitor.cpuCriticalPercent must be >= warning and <= 100"))
+	}
+	return errs
+}
+
+func validateActiveProbeMonitor(cfg *Config) []error {
+	if !cfg.ActiveProbeMonitor.Enabled {
+		return nil
+	}
+	m := cfg.ActiveProbeMonitor
+	var errs []error
+	if m.IntervalSeconds <= 0 {
+		errs = append(errs, errors.New("activeProbeMonitor.intervalSeconds must be > 0"))
+	}
+	if m.TimeoutSeconds <= 0 {
+		errs = append(errs, errors.New("activeProbeMonitor.timeoutSeconds must be > 0"))
+	}
+	if m.FailureThreshold <= 0 || m.RecoveryThreshold <= 0 {
+		errs = append(errs, errors.New("activeProbeMonitor thresholds must be > 0"))
+	}
+	for _, target := range m.HTTP {
+		if target.Name == "" || target.URL == "" {
+			errs = append(errs, errors.New("activeProbeMonitor.http targets require name and url"))
+		}
+	}
+	for _, target := range m.TCP {
+		if target.Name == "" || target.Address == "" {
+			errs = append(errs, errors.New("activeProbeMonitor.tcp targets require name and address"))
+		}
+	}
+	for _, target := range m.DNS {
+		if target.Name == "" || target.Host == "" {
+			errs = append(errs, errors.New("activeProbeMonitor.dns targets require name and host"))
+		}
 	}
 	return errs
 }
@@ -148,6 +193,7 @@ func validateMonitors(cfg *Config) []error {
 	}
 	errs = append(errs, validateNodeResourceMonitor(cfg)...)
 	errs = append(errs, validateRuntimeMetricsMonitor(cfg)...)
+	errs = append(errs, validateActiveProbeMonitor(cfg)...)
 	errs = append(errs, validateOomMonitor(cfg)...)
 	errs = append(errs, validateTlsMonitor(cfg)...)
 	errs = append(

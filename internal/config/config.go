@@ -161,6 +161,10 @@ type Config struct {
 	// the metrics.k8s.io API is available.
 	RuntimeMetricsMonitor RuntimeMetricsMonitor `yaml:"runtimeMetricsMonitor"`
 
+	// ActiveProbeMonitor performs explicitly configured HTTP, TCP, and DNS
+	// checks. It is opt-in because Kubernetes cannot infer safe probe targets.
+	ActiveProbeMonitor ActiveProbeMonitor `yaml:"activeProbeMonitor"`
+
 	// DaemonSetMonitor configures rollout-stuck detection for DaemonSets.
 	DaemonSetMonitor DaemonSetMonitor `yaml:"daemonSetMonitor"`
 

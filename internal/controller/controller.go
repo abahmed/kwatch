@@ -25,6 +25,7 @@ import (
 
 type Controller struct {
 	handler handler.Handler
+	client  kubernetes.Interface
 
 	// One pipeline per watched kind with its own queue and workers.
 	pod           *resourcePipeline
@@ -147,6 +148,7 @@ func New(
 
 	c := &Controller{
 		handler:       h,
+		client:        client,
 		pod:           newResourcePipeline("pod", "pods"),
 		node:          newResourcePipeline("node", "nodes"),
 		deployment:    newResourcePipeline("deployment", "deployments"),

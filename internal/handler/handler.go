@@ -54,6 +54,7 @@ type Handler interface {
 		severity model.Severity,
 	)
 	ProcessClusterAutoscalerEvent(ev *corev1.Event)
+	ProcessWarningEvent(ev *corev1.Event)
 }
 
 // handler is the central event processor: informers call its Process*
