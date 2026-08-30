@@ -23,6 +23,8 @@ type ResourceGraph struct {
 	dependencies map[string]map[string]bool
 	edges        map[string]Edge
 	edgeCounts   map[string]int
+	outgoing     map[string]map[string]bool
+	incoming     map[string]map[string]bool
 }
 
 func NewResourceGraph() *ResourceGraph {
@@ -31,6 +33,8 @@ func NewResourceGraph() *ResourceGraph {
 		dependencies: make(map[string]map[string]bool),
 		edges:        make(map[string]Edge),
 		edgeCounts:   make(map[string]int),
+		outgoing:     make(map[string]map[string]bool),
+		incoming:     make(map[string]map[string]bool),
 	}
 }
 
@@ -102,8 +106,8 @@ func (g *ResourceGraph) ReplaceOutgoingEdges(
 	g.mu.Lock()
 	defer g.mu.Unlock()
 
-	for _, edge := range g.edges {
-		if edge.From == from {
+	for key := range g.outgoing[from] {
+		if edge, ok := g.edges[key]; ok {
 			g.removeEdgeLocked(edge)
 		}
 	}
@@ -139,6 +143,14 @@ func (g *ResourceGraph) addEdgeLocked(edge Edge) {
 	}
 	g.edgeCounts[pair]++
 	g.edges[key] = edge
+	if g.outgoing[from] == nil {
+		g.outgoing[from] = make(map[string]bool)
+	}
+	g.outgoing[from][key] = true
+	if g.incoming[to] == nil {
+		g.incoming[to] = make(map[string]bool)
+	}
+	g.incoming[to][key] = true
 }
 
 func (g *ResourceGraph) RemoveNode(kind, namespace, name string) {
@@ -159,8 +171,8 @@ func (g *ResourceGraph) RemoveEdgesFrom(
 	g.mu.Lock()
 	defer g.mu.Unlock()
 	from := resourceKey(kind, namespace, name)
-	for _, edge := range g.edges {
-		if edge.From == from && edge.Type == edgeType {
+	for key := range g.outgoing[from] {
+		if edge, ok := g.edges[key]; ok && edge.Type == edgeType {
 			g.removeEdgeLocked(edge)
 		}
 	}

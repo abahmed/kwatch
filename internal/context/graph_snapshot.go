@@ -16,6 +16,8 @@ func (g *ResourceGraph) ReplaceWith(next *ResourceGraph) {
 	dependents := cloneAdjacency(next.dependents)
 	edges := cloneEdges(next.edges)
 	edgeCounts := cloneEdgeCounts(next.edgeCounts)
+	outgoing := cloneAdjacency(next.outgoing)
+	incoming := cloneAdjacency(next.incoming)
 	next.mu.RUnlock()
 
 	g.mu.Lock()
@@ -24,6 +26,8 @@ func (g *ResourceGraph) ReplaceWith(next *ResourceGraph) {
 	g.dependents = dependents
 	g.edges = edges
 	g.edgeCounts = edgeCounts
+	g.outgoing = outgoing
+	g.incoming = incoming
 }
 
 func (g *ResourceGraph) Clear() {
@@ -33,6 +37,8 @@ func (g *ResourceGraph) Clear() {
 	g.dependents = make(map[string]map[string]bool)
 	g.edges = make(map[string]Edge)
 	g.edgeCounts = make(map[string]int)
+	g.outgoing = make(map[string]map[string]bool)
+	g.incoming = make(map[string]map[string]bool)
 }
 
 // Prune removes all nodes of the given kind whose key is not present in the
@@ -59,17 +65,37 @@ func (g *ResourceGraph) Prune(kind string, active map[string]bool) {
 }
 
 func (g *ResourceGraph) removeNodeLocked(node string) {
-	for _, edge := range g.edges {
-		if edge.From == node || edge.To == node {
+	for key := range g.outgoing[node] {
+		if edge, ok := g.edges[key]; ok {
+			g.removeEdgeLocked(edge)
+		}
+	}
+	for key := range g.incoming[node] {
+		if edge, ok := g.edges[key]; ok {
 			g.removeEdgeLocked(edge)
 		}
 	}
 	delete(g.dependencies, node)
 	delete(g.dependents, node)
+	delete(g.outgoing, node)
+	delete(g.incoming, node)
 }
 
 func (g *ResourceGraph) removeEdgeLocked(edge Edge) {
-	delete(g.edges, edgeKey(edge.From, edge.To, edge.Type))
+	key := edgeKey(edge.From, edge.To, edge.Type)
+	delete(g.edges, key)
+	if edges := g.outgoing[edge.From]; edges != nil {
+		delete(edges, key)
+		if len(edges) == 0 {
+			delete(g.outgoing, edge.From)
+		}
+	}
+	if edges := g.incoming[edge.To]; edges != nil {
+		delete(edges, key)
+		if len(edges) == 0 {
+			delete(g.incoming, edge.To)
+		}
+	}
 	pair := relationshipKey(edge.From, edge.To)
 	g.edgeCounts[pair]--
 	if g.edgeCounts[pair] > 0 {
