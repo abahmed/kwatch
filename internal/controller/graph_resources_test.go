@@ -7,6 +7,7 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	corev1 "k8s.io/api/core/v1"
+	discoveryv1 "k8s.io/api/discovery/v1"
 	networkingv1 "k8s.io/api/networking/v1"
 	policyv1 "k8s.io/api/policy/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -69,6 +70,7 @@ func newGraphTestGraph(objects ...runtime.Object) (*Controller, context.CancelFu
 	c.pvcLister = factory.Core().V1().PersistentVolumeClaims().Lister()
 	c.netpolLister = factory.Networking().V1().NetworkPolicies().Lister()
 	c.pdbLister = factory.Policy().V1().PodDisruptionBudgets().Lister()
+	c.endpointSliceLister = factory.Discovery().V1().EndpointSlices().Lister()
 	factory.Start(ctx.Done())
 	factory.WaitForCacheSync(ctx.Done())
 	return c, cancel
@@ -183,6 +185,26 @@ func TestRebuildIngressTLSSecret(t *testing.T) {
 	defer cancel()
 	c.rebuildIngress(ing)
 	assert.Contains(t, c.graph.DependenciesOf("ingress", "ns", "ing"), "secret/ns/tls-cert")
+}
+
+func TestRebuildEndpointSliceTracksUnreadyEndpoint(t *testing.T) {
+	ready := false
+	svc := &corev1.Service{
+		ObjectMeta: metav1.ObjectMeta{Name: "api", Namespace: "ns1"},
+		Spec:       corev1.ServiceSpec{Selector: map[string]string{"app": "api"}},
+	}
+	eps := &discoveryv1.EndpointSlice{
+		ObjectMeta: metav1.ObjectMeta{Name: "api-1", Namespace: "ns1", Labels: map[string]string{"kubernetes.io/service-name": "api"}},
+		Endpoints:  []discoveryv1.Endpoint{{Addresses: []string{"10.0.0.2"}, Conditions: discoveryv1.EndpointConditions{Ready: &ready}}},
+	}
+	c, cancel := newGraphTestGraph(svc, eps)
+	defer cancel()
+
+	c.rebuildEndpointSlice(eps)
+	c.rebuildServiceChecked(svc)
+
+	assert.Contains(t, c.graph.DependenciesOf("service", "ns1", "api"), "endpointslice/ns1/api-1")
+	assert.Contains(t, c.graph.DependenciesOf("endpointslice", "ns1", "api-1"), "endpoint/ns1/api-1#10.0.0.2")
 }
 
 func TestAddPodToGraphServiceAccountEdge(t *testing.T) {

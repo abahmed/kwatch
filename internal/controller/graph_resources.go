@@ -23,6 +23,8 @@ const (
 	graphEdgeBinds     = "binds"      // pvc → persistentvolume
 	graphEdgeBacks     = "backs"      // endpointslice → service
 	graphEdgeTargets   = "targets"    // endpointslice → pod
+	graphEdgeProvides  = "provides"   // service → endpointslice
+	graphEdgeUnready   = "unready"    // endpointslice → unhealthy endpoint
 	graphEdgeUsesSA    = "uses_sa"    // pod → serviceaccount
 	graphEdgeUsesPull  = "uses_pull_secret"
 	graphEdgeProjects  = "projects"   // pod → projected config/secret

@@ -64,7 +64,8 @@ with different condition semantics.
 
 Root-cause analysis also follows projected ConfigMaps/Secrets, image pull
 Secrets, CSI drivers, Ingress TLS Secrets, PV StorageClasses, owner chains,
-Service selectors, EndpointSlices, and local PV node affinity.
+Service selectors, EndpointSlices (including unready/terminating endpoints),
+node Leases, generic Custom Resource owners, and local PV node affinity.
 
 ## Noise and recovery controls
 

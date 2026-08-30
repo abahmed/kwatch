@@ -55,6 +55,19 @@ func (c *Controller) rebuildServiceChecked(svc *corev1.Service) error {
 			Kind: "pod", Namespace: svc.Namespace, Name: pod.Name, Type: "selects",
 		})
 	}
+	if c.endpointSliceLister != nil {
+		slices, err := c.endpointSliceLister.EndpointSlices(svc.Namespace).List(labels.Everything())
+		if err != nil {
+			return fmt.Errorf("list endpoint slices for service graph: %w", err)
+		}
+		for _, eps := range slices {
+			if eps.Labels["kubernetes.io/service-name"] == svc.Name {
+				targets = append(targets, kwcontext.EdgeTarget{
+					Kind: "endpointslice", Namespace: svc.Namespace, Name: eps.Name, Type: graphEdgeProvides,
+				})
+			}
+		}
+	}
 	c.graph.ReplaceOutgoingEdges("service", svc.Namespace, svc.Name, targets)
 	return nil
 }
@@ -235,6 +248,12 @@ func (c *Controller) rebuildEndpointSlice(obj interface{}) {
 		})
 	}
 	for _, ep := range eps.Endpoints {
+		if !endpointCanReceiveTraffic(ep) {
+			targets = append(targets, kwcontext.EdgeTarget{
+				Kind: "endpoint", Namespace: eps.Namespace,
+				Name: eps.Name + "#" + endpointAddress(ep), Type: graphEdgeUnready,
+			})
+		}
 		if ref := ep.TargetRef; ref != nil && ref.Kind == "Pod" && ref.Name != "" {
 			targets = append(targets, kwcontext.EdgeTarget{
 				Kind:      "pod",
@@ -245,6 +264,30 @@ func (c *Controller) rebuildEndpointSlice(obj interface{}) {
 		}
 	}
 	c.graph.ReplaceOutgoingEdges("endpointslice", eps.Namespace, eps.Name, targets)
+	if svc := eps.Labels["kubernetes.io/service-name"]; svc != "" && c.serviceLister != nil {
+		if obj, err := c.serviceLister.Services(eps.Namespace).Get(svc); err == nil {
+			if err := c.rebuildServiceChecked(obj); err != nil {
+				klog.ErrorS(err, "failed to refresh service graph edges after endpointslice change", "namespace", eps.Namespace, "service", svc)
+			}
+		}
+	}
+}
+
+func endpointCanReceiveTraffic(ep discoveryv1.Endpoint) bool {
+	if ep.Conditions.Terminating != nil && *ep.Conditions.Terminating {
+		return false
+	}
+	if ep.Conditions.Ready != nil {
+		return *ep.Conditions.Ready
+	}
+	return ep.Conditions.Serving == nil || *ep.Conditions.Serving
+}
+
+func endpointAddress(ep discoveryv1.Endpoint) string {
+	if len(ep.Addresses) > 0 && ep.Addresses[0] != "" {
+		return ep.Addresses[0]
+	}
+	return "unknown"
 }
 
 func (c *Controller) rebuildPersistentVolumeClaim(obj interface{}) {
