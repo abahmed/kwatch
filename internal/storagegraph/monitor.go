@@ -19,6 +19,9 @@ import (
 var (
 	volumeAttachmentGVR = schema.GroupVersionResource{Group: "storage.k8s.io", Version: "v1", Resource: "volumeattachments"}
 	csiDriverGVR        = schema.GroupVersionResource{Group: "storage.k8s.io", Version: "v1", Resource: "csidrivers"}
+	volumeSnapshotGVR   = schema.GroupVersionResource{Group: "snapshot.storage.k8s.io", Version: "v1", Resource: "volumesnapshots"}
+	snapshotContentGVR  = schema.GroupVersionResource{Group: "snapshot.storage.k8s.io", Version: "v1", Resource: "volumesnapshotcontents"}
+	snapshotClassGVR    = schema.GroupVersionResource{Group: "snapshot.storage.k8s.io", Version: "v1", Resource: "volumesnapshotclasses"}
 )
 
 type Monitor struct {
@@ -43,6 +46,9 @@ func (m *Monitor) Start(ctx context.Context) error {
 	}{
 		{volumeAttachmentGVR, m.processVolumeAttachment},
 		{csiDriverGVR, m.processCSIDriver},
+		{volumeSnapshotGVR, m.processVolumeSnapshot},
+		{snapshotContentGVR, m.processSnapshotContent},
+		{snapshotClassGVR, m.processSnapshotClass},
 	} {
 		informer := factory.ForResource(watched.gvr).Informer()
 		if _, err := informer.AddEventHandler(cache.ResourceEventHandlerFuncs{
@@ -107,14 +113,72 @@ func (m *Monitor) processCSIDriver(obj interface{}) {
 	_ = u.GetName()
 }
 
+func (m *Monitor) processVolumeSnapshot(obj interface{}) {
+	u, ok := obj.(*unstructured.Unstructured)
+	if !ok || m.graph == nil {
+		return
+	}
+	targets := make([]kwcontext.EdgeTarget, 0, 2)
+	claim, _, _ := unstructured.NestedString(u.Object, "spec", "source", "persistentVolumeClaimName")
+	if claim != "" {
+		targets = append(targets, kwcontext.EdgeTarget{Kind: "pvc", Namespace: u.GetNamespace(), Name: claim, Type: "snapshots"})
+	}
+	if snapshotError(u) {
+		targets = append(targets, kwcontext.EdgeTarget{Kind: "volumesnapshot_failure", Namespace: u.GetNamespace(), Name: u.GetName(), Type: "failure"})
+	}
+	m.graph.ReplaceOutgoingEdges("volumesnapshot", u.GetNamespace(), u.GetName(), targets)
+}
+
+func (m *Monitor) processSnapshotContent(obj interface{}) {
+	u, ok := obj.(*unstructured.Unstructured)
+	if !ok || m.graph == nil {
+		return
+	}
+	targets := make([]kwcontext.EdgeTarget, 0, 3)
+	ref, _, _ := unstructured.NestedString(u.Object, "spec", "volumeSnapshotRef", "name")
+	refNamespace, _, _ := unstructured.NestedString(u.Object, "spec", "volumeSnapshotRef", "namespace")
+	if refNamespace == "" {
+		refNamespace = u.GetNamespace()
+	}
+	if ref != "" {
+		targets = append(targets, kwcontext.EdgeTarget{Kind: "volumesnapshot", Namespace: refNamespace, Name: ref, Type: "contains"})
+	}
+	if pv, _, _ := unstructured.NestedString(u.Object, "spec", "source", "volumeHandle"); pv != "" {
+		targets = append(targets, kwcontext.EdgeTarget{Kind: "volumehandle", Name: pv, Type: "backs"})
+	}
+	if snapshotError(u) {
+		targets = append(targets, kwcontext.EdgeTarget{Kind: "volumesnapshot_failure", Name: u.GetName(), Type: "failure"})
+	}
+	m.graph.ReplaceOutgoingEdges("volumesnapshotcontent", "", u.GetName(), targets)
+}
+
+func (m *Monitor) processSnapshotClass(obj interface{}) {
+	u, ok := obj.(*unstructured.Unstructured)
+	if !ok || m.graph == nil {
+		return
+	}
+	driver, _, _ := unstructured.NestedString(u.Object, "driver")
+	if driver == "" {
+		return
+	}
+	m.graph.ReplaceOutgoingEdges("volumesnapshotclass", "", u.GetName(), []kwcontext.EdgeTarget{{Kind: "csidriver", Name: driver, Type: "uses_csi"}})
+}
+
 func (m *Monitor) removeNode(gvr schema.GroupVersionResource, obj interface{}) {
 	u, ok := obj.(*unstructured.Unstructured)
 	if !ok || m.graph == nil {
 		return
 	}
 	kind := "csidriver"
-	if gvr == volumeAttachmentGVR {
+	switch gvr {
+	case volumeAttachmentGVR:
 		kind = "volumeattachment"
+	case volumeSnapshotGVR:
+		kind = "volumesnapshot"
+	case snapshotContentGVR:
+		kind = "volumesnapshotcontent"
+	case snapshotClassGVR:
+		kind = "volumesnapshotclass"
 	}
 	m.graph.RemoveNode(kind, u.GetNamespace(), u.GetName())
 }
@@ -131,4 +195,9 @@ func attachError(u *unstructured.Unstructured) bool {
 		return true
 	}
 	return false
+}
+
+func snapshotError(u *unstructured.Unstructured) bool {
+	message, found, _ := unstructured.NestedString(u.Object, "status", "error", "message")
+	return found && strings.TrimSpace(message) != ""
 }

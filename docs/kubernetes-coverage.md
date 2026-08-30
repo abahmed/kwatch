@@ -66,7 +66,8 @@ Root-cause analysis also follows projected ConfigMaps/Secrets, image pull
 Secrets, CSI drivers, Ingress TLS Secrets, PV StorageClasses, owner chains,
 Service selectors, EndpointSlices (including unready/terminating endpoints),
 node Leases, generic Custom Resource owners, VolumeAttachments, CSI drivers,
-and local PV node affinity.
+VolumeSnapshots, VolumeSnapshotContents, VolumeSnapshotClasses, and local PV
+node affinity.
 
 ## Noise and recovery controls
 

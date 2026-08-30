@@ -32,6 +32,25 @@ func TestProcessVolumeAttachmentBuildsFailureDependencies(t *testing.T) {
 	assertContains(t, graph.DependenciesOf("persistentvolume", "", "pv-1"), "volumeattachment//va-1")
 }
 
+func TestProcessVolumeSnapshotBuildsPVCAndFailureDependencies(t *testing.T) {
+	graph := kwcontext.NewResourceGraph()
+	monitor := &Monitor{graph: graph}
+	obj := &unstructured.Unstructured{Object: map[string]interface{}{
+		"metadata": map[string]interface{}{"name": "snap-1", "namespace": "apps"},
+		"spec": map[string]interface{}{
+			"source": map[string]interface{}{"persistentVolumeClaimName": "data"},
+		},
+		"status": map[string]interface{}{
+			"error": map[string]interface{}{"message": "backend rejected request"},
+		},
+	}}
+
+	monitor.processVolumeSnapshot(obj)
+
+	assertContains(t, graph.DependenciesOf("volumesnapshot", "apps", "snap-1"), "pvc/apps/data")
+	assertContains(t, graph.DependenciesOf("volumesnapshot", "apps", "snap-1"), "volumesnapshot_failure/apps/snap-1")
+}
+
 func assertContains(t *testing.T, values []string, want string) {
 	t.Helper()
 	for _, value := range values {

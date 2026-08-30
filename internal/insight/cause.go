@@ -246,6 +246,8 @@ func describeRootCauses(roots []modelCauseRef) (string, string) {
 			return fmt.Sprintf("endpoint %s is not ready to receive traffic", r.Name), "endpoint_failure"
 		case "volumeattachment_failure":
 			return fmt.Sprintf("volume attachment %s reported an attach failure", r.Name), "storage_attachment_failure"
+		case "volumesnapshot_failure":
+			return fmt.Sprintf("volume snapshot %s reported an error", r.Name), "storage_snapshot_failure"
 		}
 	}
 	// fallback: name the deepest overall resource
