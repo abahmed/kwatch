@@ -68,7 +68,9 @@ Service selectors, EndpointSlices (including unready/terminating endpoints),
 node Leases, generic Custom Resource owners, VolumeAttachments, CSI drivers,
 VolumeSnapshots, VolumeSnapshotContents, VolumeSnapshotClasses, and local PV
 node affinity. Gateway API routes are linked to Gateway/GatewayClass, backend
-Services, and listener TLS Secrets; Ingress is linked to IngressClass.
+Services, and listener TLS Secrets; Ingress is linked to IngressClass. Explicit
+HTTP/TCP/DNS probes are also linked to matching Kubernetes Service DNS names or
+kept as external network targets.
 
 ## Noise and recovery controls
 

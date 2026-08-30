@@ -224,7 +224,9 @@ func Run() int {
 
 	var probeRun func(context.Context)
 	if cfg.ActiveProbeMonitor.Enabled {
-		probeRun = probe.New(cfg.ActiveProbeMonitor, correlator).Start
+		probeMonitor := probe.New(cfg.ActiveProbeMonitor, correlator)
+		probeMonitor.SetGraph(graph)
+		probeRun = probeMonitor.Start
 	}
 
 	var kubeletRun func(context.Context)

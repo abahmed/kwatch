@@ -5,11 +5,14 @@ import (
 	"fmt"
 	"net"
 	"net/http"
+	"net/url"
+	"strings"
 	"sync"
 	"time"
 
 	"github.com/abahmed/kwatch/internal/config"
 	"github.com/abahmed/kwatch/internal/constant"
+	kwcontext "github.com/abahmed/kwatch/internal/context"
 	"github.com/abahmed/kwatch/internal/correlation"
 	"github.com/abahmed/kwatch/internal/event"
 	"github.com/abahmed/kwatch/internal/model"
@@ -23,6 +26,11 @@ type Monitor struct {
 	mu         sync.Mutex
 	failures   map[string]int
 	successes  map[string]int
+	graph      *kwcontext.ResourceGraph
+}
+
+func (m *Monitor) SetGraph(graph *kwcontext.ResourceGraph) {
+	m.graph = graph
 }
 
 func New(cfg config.ActiveProbeMonitor, correlator *correlation.Engine) *Monitor {
@@ -61,17 +69,45 @@ func (m *Monitor) Start(ctx context.Context) {
 
 func (m *Monitor) check(ctx context.Context) {
 	for _, target := range m.cfg.HTTP {
+		m.linkTarget("http/"+target.Name, target.URL)
 		ok, detail := m.http(ctx, target)
 		m.record("http/"+target.Name, "http/"+target.Name, ok, detail)
 	}
 	for _, target := range m.cfg.TCP {
+		m.linkTarget("tcp/"+target.Name, target.Address)
 		ok, detail := m.tcp(ctx, target)
 		m.record("tcp/"+target.Name, "tcp/"+target.Name, ok, detail)
 	}
 	for _, target := range m.cfg.DNS {
+		m.linkTarget("dns/"+target.Name, target.Host)
 		ok, detail := m.dns(ctx, target)
 		m.record("dns/"+target.Name, "dns/"+target.Name, ok, detail)
 	}
+}
+
+func (m *Monitor) linkTarget(owner, raw string) {
+	if m.graph == nil {
+		return
+	}
+	host := raw
+	if parsed, err := url.Parse(raw); err == nil && parsed.Hostname() != "" {
+		host = parsed.Hostname()
+	} else if parsedHost, _, err := net.SplitHostPort(raw); err == nil {
+		host = parsedHost
+	}
+	if svc, namespace, ok := serviceDNS(host); ok {
+		m.graph.ReplaceOutgoingEdges("activeprobe", "", owner, []kwcontext.EdgeTarget{{Kind: "service", Namespace: namespace, Name: svc, Type: "probes"}})
+		return
+	}
+	m.graph.ReplaceOutgoingEdges("activeprobe", "", owner, []kwcontext.EdgeTarget{{Kind: "networktarget", Name: owner, Type: "probes"}})
+}
+
+func serviceDNS(host string) (string, string, bool) {
+	parts := strings.Split(strings.TrimSuffix(host, "."), ".")
+	if len(parts) < 3 || parts[2] != "svc" || parts[0] == "" || parts[1] == "" {
+		return "", "", false
+	}
+	return parts[0], parts[1], true
 }
 
 func (m *Monitor) http(ctx context.Context, target config.HTTPProbeTarget) (bool, string) {
