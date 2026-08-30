@@ -195,7 +195,7 @@ func (c *Controller) buildPersistentVolumeGraph() error {
 func (c *Controller) wireGraphHandlers(fs factorySet, cfg *config.Config) {
 	if c.nodeLister != nil {
 		inf := fs.nodeInformer()
-		inf.AddEventHandler(c.graphHandler("node", func(interface{}) {}))
+		inf.AddEventHandler(c.graphHandler("node", c.rebuildNodeGraph))
 	}
 	if c.serviceLister != nil {
 		for _, inf := range fs.serviceInformers() {

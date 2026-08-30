@@ -93,6 +93,23 @@ func (c *Controller) addPodVolumeToGraph(ns, podName string, vol corev1.Volume) 
 	}
 }
 
+func (c *Controller) rebuildNodeGraph(obj interface{}) {
+	node, ok := obj.(*corev1.Node)
+	if !ok || c.graph == nil || c.pvLister == nil {
+		return
+	}
+	pvs, err := c.pvLister.List(labels.Everything())
+	if err != nil {
+		klog.ErrorS(err, "failed to refresh persistentvolume graph edges after node change", "node", node.Name)
+		return
+	}
+	for _, pv := range pvs {
+		if err := c.rebuildPersistentVolumeChecked(pv); err != nil {
+			klog.ErrorS(err, "failed to refresh persistentvolume graph edges after node change", "node", node.Name, "pv", pv.Name)
+		}
+	}
+}
+
 func (c *Controller) removePodFromGraph(pod *corev1.Pod) {
 	if c.graph == nil {
 		return
