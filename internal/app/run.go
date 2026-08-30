@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"time"
 
+	"k8s.io/client-go/kubernetes"
 	"k8s.io/klog/v2"
 
 	"github.com/abahmed/kwatch/internal/alert"
@@ -110,12 +111,7 @@ func Run() int {
 	}
 
 	healthServer := health.NewHealthServer(cfg.HealthCheck)
-	securityMonitor := security.New(k8sClient)
-	securityNamespaces := cfg.AllowedNamespaces
-	if len(securityNamespaces) == 0 {
-		securityNamespaces = []string{k8s.GetNamespace()}
-	}
-	securityMonitor.SetNamespaces(securityNamespaces)
+	securityMonitor := configureSecurityMonitor(cfg, k8sClient)
 	healthServer.SetSecurityLister(securityMonitor)
 
 	am := sm.GetAlertManager()
@@ -280,6 +276,16 @@ func Run() int {
 		securityRun:   securityRun,
 	}
 	return serve(ctx, deps)
+}
+
+func configureSecurityMonitor(cfg *config.Config, client kubernetes.Interface) *security.Monitor {
+	monitor := security.New(client)
+	namespaces := cfg.AllowedNamespaces
+	if len(namespaces) == 0 {
+		namespaces = []string{k8s.GetNamespace()}
+	}
+	monitor.SetNamespaces(namespaces)
+	return monitor
 }
 
 func newNetworkGraphRun(cfg *config.Config, graph *kwcontext.ResourceGraph) func(context.Context) {
