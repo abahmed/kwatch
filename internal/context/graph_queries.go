@@ -2,6 +2,11 @@ package context
 
 import "sort"
 
+// A malformed or unexpectedly broad topology must not turn one diagnosis into
+// an unbounded memory/CPU operation. The limit is deliberately high enough for
+// ordinary clusters while keeping worst-case traversal bounded.
+const maxGraphTraversalNodes = 10000
+
 func (g *ResourceGraph) DependenciesOf(kind, namespace, name string) []string {
 	g.mu.RLock()
 	defer g.mu.RUnlock()
@@ -28,6 +33,9 @@ func (g *ResourceGraph) TraverseDependents(
 	queue := []string{root}
 	var out []string
 	for len(queue) > 0 {
+		if len(visited) >= maxGraphTraversalNodes {
+			break
+		}
 		cur := queue[0]
 		queue = queue[1:]
 		for dep := range g.dependents[cur] {
@@ -56,6 +64,9 @@ func (g *ResourceGraph) TraverseDependencies(
 	queue := []string{root}
 	var out []string
 	for len(queue) > 0 {
+		if len(visited) >= maxGraphTraversalNodes {
+			break
+		}
 		cur := queue[0]
 		queue = queue[1:]
 		for dep := range g.dependencies[cur] {
