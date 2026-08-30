@@ -21,8 +21,10 @@ the categories below intentionally use different signal sources.
 - Nodes: Ready, memory/disk/PID/network pressure, sustained pressure, lease
   heartbeat staleness, node deletion finalizers, bootstrap grace periods and
   request/allocatable overcommit.
-- Storage: mounted volume usage, PVC Pending/Lost and resize/modify errors, PV
-  Released/Failed, and stuck PVC/PV finalizers.
+- Storage: mounted volume usage, PVC Pending/Lost, filesystem-resize and
+  controller/node resize failures, modify-volume failures, PV
+  Released/Failed (including status reason/message), and stuck PVC/PV
+  finalizers.
 - Services and admission backends: EndpointSlice readiness/serving/terminating
   semantics, missing endpoints, named/numeric port publication mismatches,
   LoadBalancer provisioning and Service failure conditions, and webhook services
@@ -37,8 +39,8 @@ the categories below intentionally use different signal sources.
 ## Dynamic status
 
 When enabled through the cluster-resource monitor, kwatch watches APIService
-objects and discovers CRDs dynamically. CRD versions with a status subresource
-are watched for failure-shaped `Ready=False`, `Available=False`,
+objects and discovers CRDs dynamically. Every served CRD version with a status
+subresource is watched for failure-shaped `Ready=False`, `Available=False`,
 `Degraded=True`, and `Progressing=False` conditions. Informational conditions
 are ignored, and messages/reasons are preserved as alert evidence.
 

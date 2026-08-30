@@ -98,7 +98,7 @@ func DetectHPAIssues(
 		c := &hpa.Status.Conditions[i]
 		if (c.Type == autoscalingv2.AbleToScale ||
 			c.Type == autoscalingv2.ScalingActive) &&
-			c.Status == corev1.ConditionFalse {
+			(c.Status == corev1.ConditionFalse || c.Status == corev1.ConditionUnknown) {
 			if c.Reason == constant.ReasonScalingDisabled {
 				continue // target intentionally at 0 replicas — not an error
 			}

@@ -11,6 +11,7 @@ import (
 	"k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/client-go/tools/cache"
 
+	"github.com/abahmed/kwatch/internal/correlation"
 	"github.com/abahmed/kwatch/internal/event"
 )
 
@@ -114,6 +115,11 @@ func (h *handler) ProcessStatefulSetObject(
 	for _, sig := range conditionSignals {
 		h.signalEvent(sig)
 	}
+	if len(conditionSignals) == 0 {
+		h.correlator.MarkResolved(correlation.BuildKey(
+			ss.Namespace, key, constant.ReasonStatefulSetCondition, "",
+		))
+	}
 
 	if statefulSetUnavailable(ss) {
 		first := h.markFirstUnavailableSts(key)
@@ -145,7 +151,9 @@ func (h *handler) ProcessStatefulSetObject(
 		return nil
 	}
 	h.clearFirstUnavailableSts(key)
-	h.correlator.ResolveByResource("statefulset", key)
+	if len(conditionSignals) == 0 {
+		h.correlator.ResolveByResource("statefulset", key)
+	}
 	return nil
 }
 

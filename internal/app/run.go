@@ -184,6 +184,7 @@ func Run() int {
 		); monitorErr != nil {
 			klog.ErrorS(monitorErr, "failed to initialize generic status monitor")
 		} else {
+			monitor.SetNamespaceFilter(ctl.NamespaceAllowed)
 			statusRun = func(runCtx context.Context) {
 				if err := monitor.Start(runCtx); err != nil {
 					klog.ErrorS(err, "generic status monitor stopped")

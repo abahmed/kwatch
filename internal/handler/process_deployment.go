@@ -11,6 +11,7 @@ import (
 	"k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/client-go/tools/cache"
 
+	"github.com/abahmed/kwatch/internal/correlation"
 	"github.com/abahmed/kwatch/internal/event"
 )
 
@@ -77,6 +78,7 @@ func DetectDeploymentConditions(deploy *appsv1.Deployment) []*event.Signal {
 	var out []*event.Signal
 	for _, condition := range deploy.Status.Conditions {
 		if condition.Status != corev1.ConditionFalse &&
+			condition.Status != corev1.ConditionUnknown &&
 			!(condition.Type == appsv1.DeploymentReplicaFailure && condition.Status == corev1.ConditionTrue) {
 			continue
 		}
@@ -193,6 +195,17 @@ func (h *handler) ProcessDeploymentObject(
 	for _, sig := range conditionSignals {
 		h.signalEvent(sig)
 	}
+	if len(conditionSignals) == 0 {
+		for _, reason := range []string{
+			constant.ReasonDeploymentProgressing,
+			constant.ReasonDeploymentAvailable,
+			constant.ReasonDeploymentReplicaFailure,
+		} {
+			h.correlator.MarkResolved(correlation.BuildKey(
+				deploy.Namespace, key, reason, "",
+			))
+		}
+	}
 
 	// New: DeploymentUnavailable — replicas exist but are not ready/available.
 	// Only alert when the observed generation matches (not mid-rollout metadata
@@ -213,7 +226,9 @@ func (h *handler) ProcessDeploymentObject(
 	}
 
 	h.clearFirstUnavailableDeploy(key)
-	h.correlator.ResolveByResource("deployment", key)
+	if len(conditionSignals) == 0 {
+		h.correlator.ResolveByResource("deployment", key)
+	}
 	return nil
 }
 

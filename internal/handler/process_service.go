@@ -95,7 +95,7 @@ func DetectServiceStatusIssue(svc *corev1.Service, now time.Time) *event.Signal 
 	}
 	key := svc.Namespace + "/" + svc.Name
 	for _, condition := range svc.Status.Conditions {
-		if condition.Status != metav1.ConditionFalse {
+		if condition.Status != metav1.ConditionFalse && condition.Status != metav1.ConditionUnknown {
 			continue
 		}
 		hint := string(condition.Type) + ": " + condition.Reason

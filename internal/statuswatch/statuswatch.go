@@ -28,12 +28,20 @@ var (
 // well-known failure-shaped conditions as incidents; arbitrary informational
 // status fields are deliberately ignored to prevent operator noise.
 type Monitor struct {
-	client     dynamic.Interface
-	correlator *correlation.Engine
-	resync     time.Duration
-	ctx        context.Context
-	mu         sync.Mutex
-	factories  map[string]dynamicinformer.DynamicSharedInformerFactory
+	client           dynamic.Interface
+	correlator       *correlation.Engine
+	resync           time.Duration
+	ctx              context.Context
+	namespaceAllowed func(string) bool
+	mu               sync.Mutex
+	factories        map[string]dynamicinformer.DynamicSharedInformerFactory
+}
+
+// SetNamespaceFilter keeps dynamically discovered namespaced resources aligned
+// with the controller's resolved namespace scope. Cluster-scoped resources
+// pass an empty namespace and are always allowed.
+func (m *Monitor) SetNamespaceFilter(filter func(string) bool) {
+	m.namespaceAllowed = filter
 }
 
 func New(restConfig *rest.Config, correlator *correlation.Engine, resync time.Duration) (*Monitor, error) {
@@ -97,15 +105,24 @@ func (m *Monitor) watchCRD(obj interface{}) {
 	if group == "" || plural == "" || len(versions) == 0 {
 		return
 	}
-	version, _ := versions[0].(map[string]interface{})["name"].(string)
-	if version == "" {
-		return
+	for _, rawVersion := range versions {
+		versionSpec, ok := rawVersion.(map[string]interface{})
+		if !ok {
+			continue
+		}
+		version, _ := versionSpec["name"].(string)
+		served, _ := versionSpec["served"].(bool)
+		if version == "" || !served {
+			continue
+		}
+		if _, enabled, _ := unstructured.NestedFieldNoCopy(versionSpec, "subresources", "status"); !enabled {
+			continue
+		}
+		m.watchVersion(schema.GroupVersionResource{Group: group, Version: version, Resource: plural})
 	}
-	versionSpec, _ := versions[0].(map[string]interface{})
-	if _, enabled, _ := unstructured.NestedFieldNoCopy(versionSpec, "subresources", "status"); !enabled {
-		return
-	}
-	gvr := schema.GroupVersionResource{Group: group, Version: version, Resource: plural}
+}
+
+func (m *Monitor) watchVersion(gvr schema.GroupVersionResource) {
 	key := gvr.String()
 	m.mu.Lock()
 	if _, exists := m.factories[key]; exists {
@@ -133,6 +150,9 @@ func (m *Monitor) processCR(obj interface{}) {
 	if !ok {
 		return
 	}
+	if m.namespaceAllowed != nil && !m.namespaceAllowed(u.GetNamespace()) {
+		return
+	}
 	if sig := failureSignal(u, "customresource", resourceOwner(u)); sig != nil {
 		m.correlator.Process(event.Event{Resource: sig.Resource, Namespace: sig.Namespace, PodName: sig.PodName, Reason: sig.Reason, Hint: sig.Hint, Labels: sig.Labels}, sig.Owner, nil)
 	} else {
@@ -142,7 +162,7 @@ func (m *Monitor) processCR(obj interface{}) {
 
 func (m *Monitor) resolveCR(obj interface{}) {
 	u, ok := obj.(*unstructured.Unstructured)
-	if ok {
+	if ok && (m.namespaceAllowed == nil || m.namespaceAllowed(u.GetNamespace())) {
 		m.resolve(u.GetNamespace(), resourceOwner(u), constant.ReasonCustomResourceFailure)
 	}
 }
@@ -172,11 +192,15 @@ func failureSignal(u *unstructured.Unstructured, resource, owner string) *event.
 		status, _ := condition["status"].(string)
 		reason, _ := condition["reason"].(string)
 		message, _ := condition["message"].(string)
-		failed := (typ == "Ready" || typ == "Available") && status == "False"
+		failed := (typ == "Ready" || typ == "Available") &&
+			(status == "False" || status == "Unknown")
 		failed = failed || typ == "Degraded" && status == "True"
 		failed = failed || typ == "Progressing" && status == "False"
 		if !failed {
 			continue
+		}
+		if reason == "" {
+			reason = "condition reported " + status
 		}
 		hint := typ + "=" + status + ": " + reason
 		if message != "" {

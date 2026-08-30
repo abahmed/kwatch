@@ -11,6 +11,7 @@ import (
 	"k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/client-go/tools/cache"
 
+	"github.com/abahmed/kwatch/internal/correlation"
 	"github.com/abahmed/kwatch/internal/event"
 )
 
@@ -114,6 +115,11 @@ func (h *handler) ProcessDaemonSetObject(
 	for _, sig := range conditionSignals {
 		h.signalEvent(sig)
 	}
+	if len(conditionSignals) == 0 {
+		h.correlator.MarkResolved(correlation.BuildKey(
+			ds.Namespace, key, constant.ReasonDaemonSetCondition, "",
+		))
+	}
 
 	if ds.Status.DesiredNumberScheduled > 0 && ds.Status.NumberUnavailable > 0 {
 		// Node-driven inhibition: if there are at least as many active node
@@ -163,7 +169,9 @@ func (h *handler) ProcessDaemonSetObject(
 		return nil
 	}
 	h.clearFirstUnavailableDS(key)
-	h.correlator.ResolveByResource("daemonset", key)
+	if len(conditionSignals) == 0 {
+		h.correlator.ResolveByResource("daemonset", key)
+	}
 	return nil
 }
 
