@@ -346,6 +346,7 @@ no Agent or Prometheus installation is required.
 | `kubeletTelemetryMonitor.intervalSeconds` | ⏱️ Collection interval (default: 60) |
 | `kubeletTelemetryMonitor.failureThreshold` | 🔁 Consecutive failing samples before alerting (default: 2) |
 | `kubeletTelemetryMonitor.recoveryThreshold` | ✅ Consecutive healthy samples before resolving (default: 2) |
+| `kubeletTelemetryMonitor.persistState` | 💾 Persist counters and confirmation state across restarts (default: true) |
 | `kubeletTelemetryMonitor.memoryWarningPercent` | ⚠️ Container memory usage warning (default: 90) |
 | `kubeletTelemetryMonitor.memoryCriticalPercent` | 🚨 Container memory usage critical (default: 100) |
 | `kubeletTelemetryMonitor.ephemeralStorageWarningPercent` | ⚠️ Container ephemeral-storage warning (default: 90) |

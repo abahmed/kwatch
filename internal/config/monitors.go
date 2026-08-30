@@ -202,6 +202,7 @@ type KubeletTelemetryMonitor struct {
 	IntervalSeconds                 int     `yaml:"intervalSeconds"`
 	FailureThreshold                int     `yaml:"failureThreshold"`
 	RecoveryThreshold               int     `yaml:"recoveryThreshold"`
+	PersistState                    bool    `yaml:"persistState"`
 	MemoryWarningPercent            float64 `yaml:"memoryWarningPercent"`
 	MemoryCriticalPercent           float64 `yaml:"memoryCriticalPercent"`
 	EphemeralStorageWarningPercent  float64 `yaml:"ephemeralStorageWarningPercent"`

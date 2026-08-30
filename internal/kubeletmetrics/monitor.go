@@ -36,6 +36,18 @@ type Monitor struct {
 	podCache   map[string]*corev1.Pod
 	podCacheAt time.Time
 	lastSweep  time.Time
+	store      StateStore
+}
+
+type StateStore interface {
+	LoadTelemetryState(context.Context) ([]byte, error)
+	SaveTelemetryState(context.Context, []byte) error
+}
+
+type persistedState struct {
+	Previous  map[string]metricSnapshot `json:"previous"`
+	Failures  map[string]int            `json:"failures"`
+	Successes map[string]int            `json:"successes"`
 }
 
 type endpointStatus struct {
@@ -129,6 +141,7 @@ func (m *Monitor) Start(ctx context.Context) {
 	if !m.cfg.Enabled || m.client == nil {
 		return
 	}
+	m.loadState(ctx)
 	interval := time.Duration(m.cfg.IntervalSeconds) * time.Second
 	if interval <= 0 {
 		interval = time.Minute
@@ -175,6 +188,7 @@ func (m *Monitor) sweep(ctx context.Context) {
 	m.mu.Lock()
 	m.lastSweep = m.now()
 	m.mu.Unlock()
+	m.saveState(ctx)
 }
 
 func (m *Monitor) Snapshot() Status {
@@ -200,6 +214,46 @@ func (m *Monitor) Snapshot() Status {
 
 func (m *Monitor) TelemetryStatus() interface{} {
 	return m.Snapshot()
+}
+
+func (m *Monitor) SetStateStore(store StateStore) { m.store = store }
+
+func (m *Monitor) loadState(ctx context.Context) {
+	if !m.cfg.PersistState || m.store == nil {
+		return
+	}
+	data, err := m.store.LoadTelemetryState(ctx)
+	if err != nil || len(data) == 0 {
+		return
+	}
+	var state persistedState
+	if json.Unmarshal(data, &state) != nil {
+		return
+	}
+	m.mu.Lock()
+	if state.Previous != nil {
+		m.previous = state.Previous
+	}
+	if state.Failures != nil {
+		m.failures = state.Failures
+	}
+	if state.Successes != nil {
+		m.successes = state.Successes
+	}
+	m.mu.Unlock()
+}
+
+func (m *Monitor) saveState(ctx context.Context) {
+	if !m.cfg.PersistState || m.store == nil {
+		return
+	}
+	m.mu.Lock()
+	state := persistedState{Previous: m.previous, Failures: m.failures, Successes: m.successes}
+	m.mu.Unlock()
+	data, err := json.Marshal(state)
+	if err == nil {
+		_ = m.store.SaveTelemetryState(ctx, data)
+	}
 }
 
 func (m *Monitor) recordEndpoint(node, endpoint string, err error) {

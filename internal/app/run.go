@@ -225,6 +225,9 @@ func Run() int {
 	var kubeletRun func(context.Context)
 	if cfg.KubeletTelemetryMonitor.Enabled {
 		kubeletMonitor := kubeletmetrics.New(k8sClient, cfg.KubeletTelemetryMonitor, correlator)
+		if cfg.KubeletTelemetryMonitor.PersistState {
+			kubeletMonitor.SetStateStore(stateMgr)
+		}
 		healthServer.SetTelemetryLister(kubeletMonitor)
 		kubeletRun = kubeletMonitor.Start
 	}
