@@ -8,6 +8,7 @@ import (
 
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime/schema"
+	"k8s.io/client-go/discovery"
 	"k8s.io/client-go/dynamic"
 	"k8s.io/client-go/dynamic/dynamicinformer"
 	"k8s.io/client-go/rest"
@@ -25,9 +26,10 @@ var (
 )
 
 type Monitor struct {
-	client dynamic.Interface
-	graph  *kwcontext.ResourceGraph
-	resync time.Duration
+	client          dynamic.Interface
+	discoveryClient discovery.DiscoveryInterface
+	graph           *kwcontext.ResourceGraph
+	resync          time.Duration
 }
 
 func New(restConfig *rest.Config, graph *kwcontext.ResourceGraph, resync time.Duration) (*Monitor, error) {
@@ -35,7 +37,11 @@ func New(restConfig *rest.Config, graph *kwcontext.ResourceGraph, resync time.Du
 	if err != nil {
 		return nil, fmt.Errorf("storagegraph: create dynamic client: %w", err)
 	}
-	return &Monitor{client: client, graph: graph, resync: resync}, nil
+	discoveryClient, err := discovery.NewDiscoveryClientForConfig(restConfig)
+	if err != nil {
+		return nil, fmt.Errorf("storagegraph: create discovery client: %w", err)
+	}
+	return &Monitor{client: client, discoveryClient: discoveryClient, graph: graph, resync: resync}, nil
 }
 
 func (m *Monitor) Start(ctx context.Context) error {
@@ -50,6 +56,9 @@ func (m *Monitor) Start(ctx context.Context) error {
 		{snapshotContentGVR, m.processSnapshotContent},
 		{snapshotClassGVR, m.processSnapshotClass},
 	} {
+		if !m.resourceAvailable(watched.gvr) {
+			continue
+		}
 		informer := factory.ForResource(watched.gvr).Informer()
 		if _, err := informer.AddEventHandler(cache.ResourceEventHandlerFuncs{
 			AddFunc: watched.fn,
@@ -65,6 +74,14 @@ func (m *Monitor) Start(ctx context.Context) error {
 	}
 	factory.Start(ctx.Done())
 	return nil
+}
+
+func (m *Monitor) resourceAvailable(gvr schema.GroupVersionResource) bool {
+	if m.discoveryClient == nil {
+		return true
+	}
+	_, err := m.discoveryClient.ServerResourcesForGroupVersion(gvr.GroupVersion().String())
+	return err == nil
 }
 
 func (m *Monitor) processVolumeAttachment(obj interface{}) {
