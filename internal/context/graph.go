@@ -96,6 +96,35 @@ func (g *ResourceGraph) ReplaceMatchingEdges(match func(Edge) bool, additions []
 	}
 }
 
+// ReplaceMatchingEdgesAround limits a relationship replacement to edges that
+// enter or leave node. It is useful for resources such as attachments that
+// maintain one outgoing edge and one reverse bookkeeping edge; unlike the
+// generic method it does not scan unrelated graph edges.
+func (g *ResourceGraph) ReplaceMatchingEdgesAround(
+	node string,
+	match func(Edge) bool,
+	additions []Edge,
+) {
+	g.mu.Lock()
+	defer g.mu.Unlock()
+
+	keys := make(map[string]bool, len(g.outgoing[node])+len(g.incoming[node]))
+	for key := range g.outgoing[node] {
+		keys[key] = true
+	}
+	for key := range g.incoming[node] {
+		keys[key] = true
+	}
+	for key := range keys {
+		if edge, ok := g.edges[key]; ok && match(edge) {
+			g.removeEdgeLocked(edge)
+		}
+	}
+	for _, edge := range additions {
+		g.addEdgeLocked(edge)
+	}
+}
+
 // ReplaceOutgoingEdges atomically replaces every relationship contributed by
 // a resource. Informer updates use this after their new relationships have
 // been staged so graph readers never see a partially rebuilt resource.

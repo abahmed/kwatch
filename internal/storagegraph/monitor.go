@@ -97,7 +97,7 @@ func (m *Monitor) processVolumeAttachment(obj interface{}) {
 	if pv != "" {
 		additions = append(additions, kwcontext.Edge{From: "persistentvolume//" + pv, To: vaKey, Type: "has_attachment"})
 	}
-	m.graph.ReplaceMatchingEdges(func(edge kwcontext.Edge) bool {
+	m.graph.ReplaceMatchingEdgesAround(vaKey, func(edge kwcontext.Edge) bool {
 		return edge.From == vaKey || (edge.Type == "has_attachment" && edge.To == vaKey)
 	}, additions)
 }

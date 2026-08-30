@@ -31,6 +31,21 @@ func TestAddSelfEdgeIgnored(t *testing.T) {
 	assert.Empty(t, g.Edges())
 }
 
+func TestReplaceMatchingEdgesAroundOnlyTouchesAdjacentEdges(t *testing.T) {
+	g := NewResourceGraph()
+	g.AddEdge("volumeattachment", "", "va", "persistentvolume", "", "pv-old", "attaches")
+	g.AddEdge("persistentvolume", "", "pv-old", "volumeattachment", "", "va", "has_attachment")
+	g.AddEdge("pod", "ns", "p", "node", "", "n", "scheduled_on")
+
+	g.ReplaceMatchingEdgesAround("volumeattachment//va", func(edge Edge) bool {
+		return edge.Type == "attaches" || edge.Type == "has_attachment"
+	}, []Edge{{From: "volumeattachment//va", To: "persistentvolume//pv-new", Type: "attaches"}})
+
+	assert.Equal(t, []string{"persistentvolume//pv-new"}, g.DependenciesOf("volumeattachment", "", "va"))
+	assert.Equal(t, []string{"node//n"}, g.DependenciesOf("pod", "ns", "p"))
+	assert.Empty(t, g.DependentsOf("volumeattachment", "", "va"))
+}
+
 func TestDependentsByType(t *testing.T) {
 	g := NewResourceGraph()
 	g.AddEdge("pod", "ns1", "p1", "node", "", "n1", "scheduled_on")
