@@ -193,10 +193,7 @@ func (c *Controller) buildPersistentVolumeGraph() error {
 // monitor contribute edges only while that monitor is on; pod, configmap and
 // the newly introduced PVC informer are always wired.
 func (c *Controller) wireGraphHandlers(fs factorySet, cfg *config.Config) {
-	if c.nodeLister != nil {
-		inf := fs.nodeInformer()
-		inf.AddEventHandler(c.graphHandler("node", c.rebuildNodeGraph))
-	}
+	c.wireNodeAndLeaseGraphHandlers(fs)
 	if c.serviceLister != nil {
 		for _, inf := range fs.serviceInformers() {
 			inf.AddEventHandler(c.graphHandler("service", c.rebuildService))
@@ -243,6 +240,18 @@ func (c *Controller) wireGraphHandlers(fs factorySet, cfg *config.Config) {
 	if cfg.ServiceMonitor.Enabled {
 		for _, inf := range fs.endpointSliceInformers() {
 			inf.AddEventHandler(c.graphHandler("endpointslice", c.rebuildEndpointSlice))
+		}
+	}
+}
+
+func (c *Controller) wireNodeAndLeaseGraphHandlers(fs factorySet) {
+	if c.nodeLister != nil {
+		inf := fs.nodeInformer()
+		inf.AddEventHandler(c.graphHandler("node", c.rebuildNodeGraph))
+	}
+	if c.leaseLister != nil {
+		for _, inf := range fs.leaseInformers() {
+			inf.AddEventHandler(c.graphHandler("lease", c.rebuildLeaseGraph))
 		}
 	}
 }
