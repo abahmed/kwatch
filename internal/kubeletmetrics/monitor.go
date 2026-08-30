@@ -254,12 +254,41 @@ func (m *Monitor) saveState(ctx context.Context) {
 		return
 	}
 	m.mu.Lock()
-	state := persistedState{Previous: m.previous, Failures: m.failures, Successes: m.successes, StateSeen: m.stateSeen}
+	state := persistedState{
+		Previous:  cloneMetricSnapshots(m.previous),
+		Failures:  cloneIntMap(m.failures),
+		Successes: cloneIntMap(m.successes),
+		StateSeen: cloneTimes(m.stateSeen),
+	}
 	m.mu.Unlock()
 	data, err := json.Marshal(state)
 	if err == nil {
 		_ = m.store.SaveTelemetryState(ctx, data)
 	}
+}
+
+func cloneMetricSnapshots(source map[string]metricSnapshot) map[string]metricSnapshot {
+	clone := make(map[string]metricSnapshot, len(source))
+	for key, value := range source {
+		clone[key] = value
+	}
+	return clone
+}
+
+func cloneIntMap(source map[string]int) map[string]int {
+	clone := make(map[string]int, len(source))
+	for key, value := range source {
+		clone[key] = value
+	}
+	return clone
+}
+
+func cloneTimes(source map[string]time.Time) map[string]time.Time {
+	clone := make(map[string]time.Time, len(source))
+	for key, value := range source {
+		clone[key] = value
+	}
+	return clone
 }
 
 func (m *Monitor) recordEndpoint(node, endpoint string, err error) {

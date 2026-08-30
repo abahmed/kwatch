@@ -6,6 +6,7 @@ import (
 	"strings"
 	"time"
 
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/client-go/discovery"
@@ -74,7 +75,12 @@ func (m *Monitor) resourceAvailable(gvr schema.GroupVersionResource) bool {
 		return true
 	}
 	_, err := m.discoveryClient.ServerResourcesForGroupVersion(gvr.GroupVersion().String())
-	return err == nil
+	if err == nil {
+		return true
+	}
+	// Skip APIs that are genuinely absent or forbidden. For transient
+	// discovery failures, still create the informer so client-go can retry.
+	return !apierrors.IsNotFound(err) && !apierrors.IsForbidden(err)
 }
 
 func (m *Monitor) rebuild(kind string, obj interface{}) {
