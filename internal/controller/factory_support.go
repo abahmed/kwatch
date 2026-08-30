@@ -185,6 +185,28 @@ func (fs factorySet) resourceQuotaInformers() []cache.SharedIndexInformer {
 	return out
 }
 
+func (fs factorySet) limitRangeLister() corev1lister.LimitRangeLister {
+	if fs.global != nil {
+		return fs.global.Core().V1().LimitRanges().Lister()
+	}
+	listers := make([]corev1lister.LimitRangeLister, 0, len(fs.perNamespace))
+	for _, f := range fs.perNamespace {
+		listers = append(listers, f.Core().V1().LimitRanges().Lister())
+	}
+	return &multiLimitRangeLister{listers: listers}
+}
+
+func (fs factorySet) limitRangeInformers() []cache.SharedIndexInformer {
+	if fs.global != nil {
+		return []cache.SharedIndexInformer{fs.global.Core().V1().LimitRanges().Informer()}
+	}
+	out := make([]cache.SharedIndexInformer, 0, len(fs.perNamespace))
+	for _, f := range fs.perNamespace {
+		out = append(out, f.Core().V1().LimitRanges().Informer())
+	}
+	return out
+}
+
 func (fs factorySet) namespaceLister() corev1lister.NamespaceLister {
 	if fs.clusterScoped != nil {
 		return fs.clusterScoped.Core().V1().Namespaces().Lister()

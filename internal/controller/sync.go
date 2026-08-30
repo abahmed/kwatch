@@ -109,6 +109,10 @@ func (c *Controller) syncResourceQuota(_ context.Context, key string) error {
 	return c.handler.ProcessResourceQuota(key, false)
 }
 
+func (c *Controller) syncLimitRange(_ context.Context, key string) error {
+	return c.handler.ProcessLimitRange(key, false)
+}
+
 func (c *Controller) syncNamespace(_ context.Context, key string) error {
 	return c.handler.ProcessNamespace(key, false)
 }

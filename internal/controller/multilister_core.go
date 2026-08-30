@@ -96,6 +96,24 @@ type multiResourceQuotaLister struct {
 	listers []corev1lister.ResourceQuotaLister
 }
 
+// LimitRange
+// ---------------------------------------------------------------------------
+
+type multiLimitRangeLister struct {
+	listers []corev1lister.LimitRangeLister
+}
+
+func (m *multiLimitRangeLister) List(selector labels.Selector) ([]*corev1.LimitRange, error) {
+	return listAll(selector, m.listers)
+}
+
+func (m *multiLimitRangeLister) LimitRanges(namespace string) corev1lister.LimitRangeNamespaceLister {
+	return &multiNamespace[*corev1.LimitRange, corev1lister.LimitRangeNamespaceLister]{
+		listers: nsAll(m.listers, namespace, corev1lister.LimitRangeLister.LimitRanges),
+		gr:      schema.GroupResource{Group: "", Resource: "limitranges"},
+	}
+}
+
 func (m *multiResourceQuotaLister) List(selector labels.Selector) ([]*corev1.ResourceQuota, error) {
 	return listAll(selector, m.listers)
 }

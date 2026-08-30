@@ -36,6 +36,7 @@ type Handler interface {
 	ProcessNetworkPolicy(key string, deleted bool) error
 	ProcessIngress(key string, deleted bool) error
 	ProcessResourceQuota(key string, deleted bool) error
+	ProcessLimitRange(key string, deleted bool) error
 	ProcessNamespace(key string, deleted bool) error
 	ProcessLease(key string, deleted bool) error
 	ProcessControlPlanePod(pod *corev1.Pod) error

@@ -31,8 +31,8 @@ the categories below intentionally use different signal sources.
   semantics, missing endpoints, named/numeric port publication mismatches,
   LoadBalancer provisioning and Service failure conditions, and webhook services
   with no usable endpoints.
-- Cluster resources: exhausted ResourceQuota, stuck Namespace termination, and
-  ReplicaSet status failures.
+- Cluster resources: exhausted ResourceQuota, contradictory LimitRange
+  constraints, stuck Namespace termination, and ReplicaSet status failures.
 - Resource-level Events: recent failure-shaped Warning Events for scheduling,
   storage attach/provision/mount, autoscaling, admission, discovery, and node
   health are correlated to their involved object. Pod and Cluster Autoscaler

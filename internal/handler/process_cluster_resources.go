@@ -40,6 +40,72 @@ func (h *handler) ProcessResourceQuota(key string, deleted bool) error {
 	return nil
 }
 
+func (h *handler) ProcessLimitRange(key string, deleted bool) error {
+	namespace, name, err := cache.SplitMetaNamespaceKey(key)
+	if err != nil {
+		return fmt.Errorf("invalid limitrange key %q: %w", key, err)
+	}
+	owner := namespace + "/" + name
+	if deleted {
+		h.correlator.ResolveByResource("limitrange", owner)
+		return nil
+	}
+	limitRange, err := h.listers.LimitRange.LimitRanges(namespace).Get(name)
+	if err != nil {
+		if errors.IsNotFound(err) {
+			h.correlator.ResolveByResource("limitrange", owner)
+			return nil
+		}
+		return fmt.Errorf("failed to get limitrange %s from cache: %w", owner, err)
+	}
+	if sig := DetectLimitRangeIssue(limitRange); sig != nil {
+		h.signalEvent(sig)
+	} else {
+		h.correlator.ResolveByResource("limitrange", owner)
+	}
+	return nil
+}
+
+// DetectLimitRangeIssue catches contradictory resource constraints that can
+// make admissions fail or produce unusable defaults. Kubernetes normally
+// rejects these at creation time, but older objects and upgraded clusters can
+// still expose them through the informer cache.
+func DetectLimitRangeIssue(limitRange *corev1.LimitRange) *event.Signal {
+	if limitRange == nil {
+		return nil
+	}
+	for _, item := range limitRange.Spec.Limits {
+		for resource, minimum := range item.Min {
+			if maximum, ok := item.Max[resource]; ok && minimum.Cmp(maximum) > 0 {
+				return limitRangeSignal(limitRange, resource, fmt.Sprintf("min %s exceeds max %s", minimum.String(), maximum.String()))
+			}
+		}
+		for resource, defaultValue := range item.Default {
+			if minimum, ok := item.Min[resource]; ok && defaultValue.Cmp(minimum) < 0 {
+				return limitRangeSignal(limitRange, resource, fmt.Sprintf("default %s is below min %s", defaultValue.String(), minimum.String()))
+			}
+			if maximum, ok := item.Max[resource]; ok && defaultValue.Cmp(maximum) > 0 {
+				return limitRangeSignal(limitRange, resource, fmt.Sprintf("default %s exceeds max %s", defaultValue.String(), maximum.String()))
+			}
+		}
+		for resource, request := range item.DefaultRequest {
+			if defaultValue, ok := item.Default[resource]; ok && request.Cmp(defaultValue) > 0 {
+				return limitRangeSignal(limitRange, resource, fmt.Sprintf("defaultRequest %s exceeds default %s", request.String(), defaultValue.String()))
+			}
+		}
+	}
+	return nil
+}
+
+func limitRangeSignal(limitRange *corev1.LimitRange, resource, detail string) *event.Signal {
+	owner := limitRange.Namespace + "/" + limitRange.Name
+	return &event.Signal{
+		Resource: "limitrange", Namespace: limitRange.Namespace, PodName: limitRange.Name,
+		Owner: owner, Reason: constant.ReasonLimitRangeInvalid, Labels: limitRange.Labels,
+		Hint: fmt.Sprintf("LimitRange %s has invalid %s constraint: %s", owner, resource, detail),
+	}
+}
+
 // DetectResourceQuotaIssue reports only exhausted hard limits. Usage close to
 // a limit is not a failure and is intentionally left to metrics/prediction
 // monitors, which prevents quota alerts from becoming noisy.

@@ -60,7 +60,7 @@ type NetworkPolicyMonitor struct {
 // ClusterResourceMonitor configures status checks for cluster-level resource
 // exhaustion and lifecycle failures that are not represented by Pod events.
 type ClusterResourceMonitor struct {
-	// Enabled enables ResourceQuota and stuck Namespace detection.
+	// Enabled enables ResourceQuota, LimitRange, and stuck Namespace detection.
 	Enabled bool `yaml:"enabled"`
 	// SustainedMinutes is the minimum age of a terminating Namespace before it
 	// is reported as stuck. Zero uses the built-in default.

@@ -45,6 +45,7 @@ type Controller struct {
 	netpol        *resourcePipeline
 	cpPod         *resourcePipeline
 	resourceQuota *resourcePipeline
+	limitRange    *resourcePipeline
 	namespace     *resourcePipeline
 	lease         *resourcePipeline
 	replicaSet    *resourcePipeline
@@ -89,6 +90,7 @@ type Controller struct {
 	netpolLister        networkingv1lister.NetworkPolicyLister
 	cpPodLister         corev1lister.PodLister
 	resourceQuotaLister corev1lister.ResourceQuotaLister
+	limitRangeLister    corev1lister.LimitRangeLister
 	namespaceLister     corev1lister.NamespaceLister
 	leaseLister         coordinationv1lister.LeaseLister
 
@@ -105,7 +107,7 @@ func (c *Controller) allPipelines() []*resourcePipeline {
 	return []*resourcePipeline{
 		c.pod, c.node, c.deployment, c.job, c.daemonSet, c.statefulSet,
 		c.pdb, c.cronJob, c.hpa, c.service, c.endpointSlice, c.mwc,
-		c.vwc, c.ingress, c.netpol, c.cpPod, c.resourceQuota, c.namespace, c.lease, c.replicaSet,
+		c.vwc, c.ingress, c.netpol, c.cpPod, c.resourceQuota, c.limitRange, c.namespace, c.lease, c.replicaSet,
 	}
 }
 
@@ -175,6 +177,7 @@ func New(
 			"controlplanepods",
 		),
 		resourceQuota: newResourcePipeline("resourcequota", "resourcequotas"),
+		limitRange:    newResourcePipeline("limitrange", "limitranges"),
 		namespace:     newResourcePipeline("namespace", "namespaces"),
 		lease:         newResourcePipeline("lease", "leases"),
 		replicaSet:    newResourcePipeline("replicaset", "replicasets-status"),
@@ -210,6 +213,7 @@ func New(
 	c.netpol.syncFn = c.syncNetpol
 	c.cpPod.syncFn = c.syncCpPod
 	c.resourceQuota.syncFn = c.syncResourceQuota
+	c.limitRange.syncFn = c.syncLimitRange
 	c.namespace.syncFn = c.syncNamespace
 	c.lease.syncFn = c.syncLease
 	c.replicaSet.syncFn = c.syncReplicaSet
@@ -273,6 +277,7 @@ func New(
 		Netpol:        c.netpolLister,
 		Ingress:       c.ingressLister,
 		ResourceQuota: c.resourceQuotaLister,
+		LimitRange:    c.limitRangeLister,
 		Namespace:     c.namespaceLister,
 		Lease:         c.leaseLister,
 		CPPod:         c.cpPodLister,

@@ -40,6 +40,7 @@ type Listers struct {
 	Ingress       networkingv1lister.IngressLister
 	CPPod         corev1lister.PodLister
 	ResourceQuota corev1lister.ResourceQuotaLister
+	LimitRange    corev1lister.LimitRangeLister
 	Namespace     corev1lister.NamespaceLister
 	Lease         coordinationv1lister.LeaseLister
 }

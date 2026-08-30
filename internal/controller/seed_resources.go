@@ -51,6 +51,18 @@ func (c *Controller) seedClusterResources(rec *baselineRecorder) {
 			}
 		}
 	}
+	if c.limitRangeLister != nil {
+		limitRanges, err := c.limitRangeLister.List(labels.Everything())
+		if err != nil {
+			klog.ErrorS(err, "failed to list limit ranges for baseline seeding")
+		} else {
+			for _, limitRange := range limitRanges {
+				if sig := handler.DetectLimitRangeIssue(limitRange); sig != nil {
+					rec.seed(sig)
+				}
+			}
+		}
+	}
 	if c.namespaceLister != nil {
 		namespaces, err := c.namespaceLister.List(labels.Everything())
 		if err != nil {

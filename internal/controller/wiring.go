@@ -171,6 +171,8 @@ func (c *Controller) wireClusterResources(cfg *config.Config, fs factorySet) {
 	}
 	c.resourceQuotaLister = fs.resourceQuotaLister()
 	c.watch(c.resourceQuota, fs.resourceQuotaInformers()...)
+	c.limitRangeLister = fs.limitRangeLister()
+	c.watch(c.limitRange, fs.limitRangeInformers()...)
 
 	c.namespaceLister = fs.namespaceLister()
 	if inf := fs.namespaceInformer(); inf != nil {
