@@ -176,13 +176,19 @@ func routeBackends(u *unstructured.Unstructured) []kwcontext.EdgeTarget {
 }
 
 func (m *Monitor) remove(kind string, obj interface{}) {
-	u, ok := obj.(*unstructured.Unstructured)
-	if !ok || m.graph == nil {
+	if m.graph == nil {
 		return
 	}
-	ns := u.GetNamespace()
+	key, err := cache.DeletionHandlingMetaNamespaceKeyFunc(obj)
+	if err != nil {
+		return
+	}
+	ns, name, err := cache.SplitMetaNamespaceKey(key)
+	if err != nil {
+		return
+	}
 	if kind == "gatewayclass" || kind == "referencegrant" {
 		ns = ""
 	}
-	m.graph.RemoveNode(kind, ns, u.GetName())
+	m.graph.RemoveNode(kind, ns, name)
 }

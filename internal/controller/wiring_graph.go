@@ -1,7 +1,6 @@
 package controller
 
 import (
-	corev1 "k8s.io/api/core/v1"
 	"k8s.io/client-go/tools/cache"
 	"k8s.io/klog/v2"
 
@@ -27,8 +26,10 @@ func (c *Controller) wireConfigMap(fs factorySet) {
 			DeleteFunc: func(obj interface{}) {
 				c.recordChange(kwcontext.ChangeDelete, "configmap", obj)
 				if c.graph != nil {
-					if cm, ok := obj.(*corev1.ConfigMap); ok {
-						c.graph.RemoveNode("configmap", cm.Namespace, cm.Name)
+					if key, err := cache.DeletionHandlingMetaNamespaceKeyFunc(obj); err == nil {
+						if ns, name, splitErr := cache.SplitMetaNamespaceKey(key); splitErr == nil {
+							c.graph.RemoveNode("configmap", ns, name)
+						}
 					}
 				}
 			},
@@ -66,8 +67,12 @@ func (c *Controller) wireGraphSupport(fs factorySet) {
 			},
 			DeleteFunc: func(obj interface{}) {
 				c.recordChange(kwcontext.ChangeDelete, "secret", obj)
-				if secret, ok := obj.(*corev1.Secret); ok && c.graph != nil {
-					c.graph.RemoveNode("secret", secret.Namespace, secret.Name)
+				if c.graph != nil {
+					if key, err := cache.DeletionHandlingMetaNamespaceKeyFunc(obj); err == nil {
+						if ns, name, splitErr := cache.SplitMetaNamespaceKey(key); splitErr == nil {
+							c.graph.RemoveNode("secret", ns, name)
+						}
+					}
 				}
 			},
 		})

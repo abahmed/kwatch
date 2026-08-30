@@ -151,9 +151,13 @@ func (m *Monitor) processAPIService(obj interface{}) {
 }
 
 func (m *Monitor) resolveAPIService(obj interface{}) {
-	u, ok := obj.(*unstructured.Unstructured)
-	if ok {
-		m.resolve("", u.GetName(), constant.ReasonAPIServiceFailure)
+	key, err := cache.DeletionHandlingMetaNamespaceKeyFunc(obj)
+	if err != nil {
+		return
+	}
+	_, name, err := cache.SplitMetaNamespaceKey(key)
+	if err == nil && name != "" {
+		m.resolve("", name, constant.ReasonAPIServiceFailure)
 	}
 }
 
@@ -225,13 +229,25 @@ func (m *Monitor) processCR(obj interface{}) {
 }
 
 func (m *Monitor) resolveCR(obj interface{}) {
-	u, ok := obj.(*unstructured.Unstructured)
-	if ok && (m.namespaceAllowed == nil || m.namespaceAllowed(u.GetNamespace())) {
-		if m.graph != nil {
-			m.graph.RemoveNode("customresource", u.GetNamespace(), u.GetName())
-		}
-		m.resolve(u.GetNamespace(), resourceOwner(u), constant.ReasonCustomResourceFailure)
+	key, err := cache.DeletionHandlingMetaNamespaceKeyFunc(obj)
+	if err != nil {
+		return
 	}
+	namespace, name, err := cache.SplitMetaNamespaceKey(key)
+	if err != nil || (m.namespaceAllowed != nil && !m.namespaceAllowed(namespace)) {
+		return
+	}
+	if m.graph != nil {
+		m.graph.RemoveNode("customresource", namespace, name)
+	}
+	m.resolve(namespace, resourceOwnerParts(namespace, name), constant.ReasonCustomResourceFailure)
+}
+
+func resourceOwnerParts(namespace, name string) string {
+	if namespace == "" {
+		return name
+	}
+	return namespace + "/" + name
 }
 
 func (m *Monitor) rebuildGraph(u *unstructured.Unstructured) {

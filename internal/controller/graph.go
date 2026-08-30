@@ -134,11 +134,11 @@ func (c *Controller) rebuildLeaseGraph(obj interface{}) {
 	c.addNodeLeaseEdge(lease.Name)
 }
 
-func (c *Controller) removePodFromGraph(pod *corev1.Pod) {
+func (c *Controller) removePodFromGraph(namespace, name string) {
 	if c.graph == nil {
 		return
 	}
-	c.graph.RemoveNode("pod", pod.Namespace, pod.Name)
+	c.graph.RemoveNode("pod", namespace, name)
 }
 
 func (c *Controller) rebuildPodGraph(pod *corev1.Pod) {

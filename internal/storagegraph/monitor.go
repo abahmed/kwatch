@@ -188,8 +188,15 @@ func (m *Monitor) processSnapshotClass(obj interface{}) {
 }
 
 func (m *Monitor) removeNode(gvr schema.GroupVersionResource, obj interface{}) {
-	u, ok := obj.(*unstructured.Unstructured)
-	if !ok || m.graph == nil {
+	if m.graph == nil {
+		return
+	}
+	key, err := cache.DeletionHandlingMetaNamespaceKeyFunc(obj)
+	if err != nil {
+		return
+	}
+	ns, name, err := cache.SplitMetaNamespaceKey(key)
+	if err != nil {
 		return
 	}
 	kind := "csidriver"
@@ -203,7 +210,10 @@ func (m *Monitor) removeNode(gvr schema.GroupVersionResource, obj interface{}) {
 	case snapshotClassGVR:
 		kind = "volumesnapshotclass"
 	}
-	m.graph.RemoveNode(kind, u.GetNamespace(), u.GetName())
+	if kind == "csidriver" || kind == "volumesnapshotclass" || kind == "volumesnapshotcontent" {
+		ns = ""
+	}
+	m.graph.RemoveNode(kind, ns, name)
 }
 
 func targetKey(target kwcontext.EdgeTarget) string {

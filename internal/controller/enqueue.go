@@ -84,8 +84,10 @@ func (c *Controller) podEventHandler() cache.ResourceEventHandlerFuncs {
 		},
 		DeleteFunc: func(obj interface{}) {
 			c.recordChange(kwcontext.ChangeDelete, "pod", obj)
-			if pod, ok := obj.(*corev1.Pod); ok {
-				c.removePodFromGraph(pod)
+			if key, err := cache.DeletionHandlingMetaNamespaceKeyFunc(obj); err == nil {
+				if namespace, name, splitErr := cache.SplitMetaNamespaceKey(key); splitErr == nil {
+					c.removePodFromGraph(namespace, name)
+				}
 			}
 			c.pod.enqueue(obj)
 		},

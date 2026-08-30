@@ -4,6 +4,7 @@ import (
 	"testing"
 
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
+	"k8s.io/client-go/tools/cache"
 
 	kwcontext "github.com/abahmed/kwatch/internal/context"
 )
@@ -30,6 +31,21 @@ func TestProcessVolumeAttachmentBuildsFailureDependencies(t *testing.T) {
 	assertContains(t, graph.DependenciesOf("volumeattachment", "", "va-1"), "csidriver//example.csi")
 	assertContains(t, graph.DependenciesOf("volumeattachment", "", "va-1"), "volumeattachment_failure//va-1")
 	assertContains(t, graph.DependenciesOf("persistentvolume", "", "pv-1"), "volumeattachment//va-1")
+}
+
+func TestRemoveNodeHandlesDeletionTombstone(t *testing.T) {
+	graph := kwcontext.NewResourceGraph()
+	monitor := &Monitor{graph: graph}
+	graph.AddEdge("csidriver", "", "example.csi", "node", "", "node-1", "supports")
+	obj := &unstructured.Unstructured{Object: map[string]interface{}{
+		"metadata": map[string]interface{}{"name": "example.csi"},
+	}}
+
+	monitor.removeNode(csiDriverGVR, cache.DeletedFinalStateUnknown{Key: "example.csi", Obj: obj})
+
+	if got := graph.DependenciesOf("csidriver", "", "example.csi"); len(got) != 0 {
+		t.Fatalf("tombstone delete left graph dependencies: %v", got)
+	}
 }
 
 func TestProcessVolumeSnapshotBuildsPVCAndFailureDependencies(t *testing.T) {
