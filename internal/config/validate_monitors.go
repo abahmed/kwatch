@@ -147,8 +147,12 @@ func validateKubeletTelemetryMonitor(cfg *Config) []error {
 	if m.IntervalSeconds <= 0 {
 		errs = append(errs, errors.New("kubeletTelemetryMonitor.intervalSeconds must be > 0"))
 	}
+	if m.FailureThreshold <= 0 || m.RecoveryThreshold <= 0 {
+		errs = append(errs, errors.New("kubeletTelemetryMonitor failure and recovery thresholds must be > 0"))
+	}
 	for name, values := range map[string][2]float64{
 		"memory":           {m.MemoryWarningPercent, m.MemoryCriticalPercent},
+		"ephemeralStorage": {m.EphemeralStorageWarningPercent, m.EphemeralStorageCriticalPercent},
 		"cpu":              {m.CPUWarningPercent, m.CPUCriticalPercent},
 		"cpuThrottling":    {m.CPUThrottlingWarningPercent, m.CPUThrottlingCriticalPercent},
 		"psi":              {m.PSIWarningPercent, m.PSICriticalPercent},

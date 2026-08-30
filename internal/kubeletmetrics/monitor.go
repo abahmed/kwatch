@@ -13,6 +13,7 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes"
+	"k8s.io/klog/v2"
 
 	"github.com/abahmed/kwatch/internal/config"
 	"github.com/abahmed/kwatch/internal/constant"
@@ -26,6 +27,8 @@ type Monitor struct {
 	correlator *correlation.Engine
 	cfg        config.KubeletTelemetryMonitor
 	previous   map[string]metricSnapshot
+	failures   map[string]int
+	successes  map[string]int
 	now        func() time.Time
 	mu         sync.Mutex
 }
@@ -54,9 +57,10 @@ type podReference struct {
 }
 
 type containerSummary struct {
-	Name   string       `json:"name"`
-	CPU    *cpuStats    `json:"cpu"`
-	Memory *memoryStats `json:"memory"`
+	Name   string           `json:"name"`
+	CPU    *cpuStats        `json:"cpu"`
+	Memory *memoryStats     `json:"memory"`
+	RootFS *filesystemStats `json:"rootfs"`
 }
 
 type cpuStats struct {
@@ -65,6 +69,10 @@ type cpuStats struct {
 
 type memoryStats struct {
 	WorkingSetBytes uint64 `json:"workingSetBytes"`
+}
+
+type filesystemStats struct {
+	UsedBytes uint64 `json:"usedBytes"`
 }
 
 type nodeSummary struct {
@@ -94,7 +102,8 @@ type networkStats struct {
 }
 
 func New(client kubernetes.Interface, cfg config.KubeletTelemetryMonitor, correlator *correlation.Engine) *Monitor {
-	return &Monitor{client: client, cfg: cfg, correlator: correlator, previous: make(map[string]metricSnapshot), now: time.Now}
+	return &Monitor{client: client, cfg: cfg, correlator: correlator, previous: make(map[string]metricSnapshot),
+		failures: make(map[string]int), successes: make(map[string]int), now: time.Now}
 }
 
 func (m *Monitor) Start(ctx context.Context) {
@@ -124,12 +133,25 @@ func (m *Monitor) sweep(ctx context.Context) {
 		return
 	}
 	pods := m.pods(ctx)
+	sem := make(chan struct{}, 8)
+	var wg sync.WaitGroup
 	for i := range nodes.Items {
 		node := &nodes.Items[i]
-		m.checkSummary(ctx, node, pods)
-		m.checkCadvisor(ctx, node)
-		m.checkRuntimeMetrics(ctx, node)
+		wg.Add(1)
+		go func(node *corev1.Node) {
+			defer wg.Done()
+			select {
+			case sem <- struct{}{}:
+			case <-ctx.Done():
+				return
+			}
+			defer func() { <-sem }()
+			m.checkSummary(ctx, node, pods)
+			m.checkCadvisor(ctx, node)
+			m.checkRuntimeMetrics(ctx, node)
+		}(node)
 	}
+	wg.Wait()
 }
 
 func (m *Monitor) pods(ctx context.Context) map[string]*corev1.Pod {
@@ -151,10 +173,12 @@ func (m *Monitor) checkSummary(ctx context.Context, node *corev1.Node, pods map[
 	body, err := m.client.CoreV1().RESTClient().Get().Resource("nodes").Name(node.Name).
 		SubResource("proxy").Suffix("stats/summary").DoRaw(requestCtx)
 	if err != nil {
+		klog.V(2).InfoS("kubelet summary unavailable", "node", node.Name, "error", err)
 		return
 	}
 	var data summary
 	if json.Unmarshal(body, &data) != nil {
+		klog.V(2).InfoS("kubelet summary invalid", "node", node.Name)
 		return
 	}
 	if data.Node.CPU.PSI != nil || data.Node.Memory.PSI != nil {
@@ -164,9 +188,13 @@ func (m *Monitor) checkSummary(ctx context.Context, node *corev1.Node, pods map[
 			if psi >= m.cfg.PSICriticalPercent {
 				severity = model.SeverityCritical
 			}
-			m.report(node.Name, reason, severity, fmt.Sprintf("Node %s pressure stall is %.1f%% over the last 10s", node.Name, psi))
+			m.observe(node.Name+"/"+reason, true,
+				func() {
+					m.report(node.Name, reason, severity, fmt.Sprintf("Node %s pressure stall is %.1f%% over the last 10s", node.Name, psi))
+				},
+				func() {})
 		} else {
-			m.resolve(node.Name, constant.ReasonNodePSIHigh)
+			m.observe(node.Name+"/"+constant.ReasonNodePSIHigh, false, func() {}, func() { m.resolve(node.Name, constant.ReasonNodePSIHigh) })
 		}
 	}
 	if data.Node.Network != nil {
@@ -214,22 +242,32 @@ func (m *Monitor) checkContainerUsage(pod *corev1.Pod, container containerSummar
 				constant.ReasonContainerCPUHigh, fmt.Sprintf("%d nanocores", container.CPU.UsageNanoCores), cpuLimit.String(), "cpu")
 		}
 	}
+	if container.RootFS != nil {
+		if storageLimit := limit.StorageEphemeral(); storageLimit != nil && !storageLimit.IsZero() {
+			percent := float64(container.RootFS.UsedBytes) / storageLimit.AsApproximateFloat64() * 100
+			m.reportUsage(pod, container.Name, percent, m.cfg.EphemeralStorageWarningPercent, m.cfg.EphemeralStorageCriticalPercent,
+				constant.ReasonContainerEphemeralStorageHigh, fmt.Sprintf("%d bytes", container.RootFS.UsedBytes), storageLimit.String(), "ephemeral-storage")
+		}
+	}
 }
 
 func (m *Monitor) reportUsage(pod *corev1.Pod, container string, percent, warning, critical float64, reason, usage, limit, unit string) {
 	key := correlation.BuildKey(pod.Namespace, pod.Namespace+"/"+pod.Name, reason, container)
 	if percent < warning {
-		m.correlator.MarkResolved(key)
+		m.observe(string(key), false, func() {}, func() { m.correlator.MarkResolved(key) })
 		return
 	}
 	severity := model.SeverityWarning
 	if percent >= critical {
 		severity = model.SeverityCritical
 	}
-	m.correlator.Process(event.Event{Resource: "pod", Namespace: pod.Namespace, PodName: pod.Name, ContainerName: container,
-		Reason: reason, OwnerKind: "Pod", Severity: severity,
-		Hint: fmt.Sprintf("container %s %s usage is %.0f%% of its limit (%s/%s)", container, unit, percent, usage, limit)},
-		pod.Namespace+"/"+pod.Name, nil)
+	m.observe(string(key), true,
+		func() {
+			m.correlator.Process(event.Event{Resource: "pod", Namespace: pod.Namespace, PodName: pod.Name, ContainerName: container,
+				Reason: reason, OwnerKind: "Pod", Severity: severity,
+				Hint: fmt.Sprintf("container %s %s usage is %.0f%% of its limit (%s/%s)", container, unit, percent, usage, limit)},
+				pod.Namespace+"/"+pod.Name, nil)
+		}, func() {})
 }
 
 func maxPSI(stats ...*psiStats) float64 {
@@ -267,9 +305,13 @@ func (m *Monitor) checkNetwork(node string, current networkStats) {
 		if rate >= m.cfg.NetworkErrorRateCritical {
 			severity = model.SeverityCritical
 		}
-		m.report(node, reason, severity, fmt.Sprintf("Node %s network errors increased at %.2f errors/sec", node, rate))
+		m.observe(key, true,
+			func() {
+				m.report(node, reason, severity, fmt.Sprintf("Node %s network errors increased at %.2f errors/sec", node, rate))
+			},
+			func() {})
 	} else {
-		m.resolve(node, constant.ReasonNodeNetworkErrors)
+		m.observe(key, false, func() {}, func() { m.resolve(node, constant.ReasonNodeNetworkErrors) })
 	}
 }
 
@@ -279,6 +321,7 @@ func (m *Monitor) checkCadvisor(ctx context.Context, node *corev1.Node) {
 	body, err := m.client.CoreV1().RESTClient().Get().Resource("nodes").Name(node.Name).
 		SubResource("proxy").Suffix("metrics/cadvisor").DoRaw(requestCtx)
 	if err != nil {
+		klog.V(2).InfoS("kubelet cAdvisor metrics unavailable", "node", node.Name, "error", err)
 		return
 	}
 	metrics := parseCounters(body)
@@ -305,9 +348,13 @@ func (m *Monitor) checkCadvisor(ctx context.Context, node *corev1.Node) {
 			if percent >= m.cfg.CPUThrottlingCriticalPercent {
 				severity = model.SeverityCritical
 			}
-			m.reportContainer(namespace, pod, container, owner, severity, percent)
+			incidentKey := "cpu/" + node.Name + "/" + key
+			m.observe(incidentKey, true,
+				func() { m.reportContainer(namespace, pod, container, owner, severity, percent) },
+				func() {})
 		} else if namespace != "" && pod != "" {
-			m.resolveContainer(namespace, pod, container)
+			incidentKey := "cpu/" + node.Name + "/" + key
+			m.observe(incidentKey, false, func() {}, func() { m.resolveContainer(namespace, pod, container) })
 		}
 	}
 }
@@ -318,6 +365,7 @@ func (m *Monitor) checkRuntimeMetrics(ctx context.Context, node *corev1.Node) {
 	body, err := m.client.CoreV1().RESTClient().Get().Resource("nodes").Name(node.Name).
 		SubResource("proxy").Suffix("metrics").DoRaw(requestCtx)
 	if err != nil {
+		klog.V(2).InfoS("kubelet metrics unavailable", "node", node.Name, "error", err)
 		return
 	}
 	current := sumCounters(parseNamedCounters(body, "kubelet_runtime_operations_errors_total"))
@@ -340,9 +388,13 @@ func (m *Monitor) checkRuntimeMetrics(ctx context.Context, node *corev1.Node) {
 		if rate >= m.cfg.RuntimeErrorRateCritical {
 			severity = model.SeverityCritical
 		}
-		m.report(node.Name, reason, severity, fmt.Sprintf("Node %s kubelet runtime errors increased at %.2f errors/sec", node.Name, rate))
+		m.observe(key, true,
+			func() {
+				m.report(node.Name, reason, severity, fmt.Sprintf("Node %s kubelet runtime errors increased at %.2f errors/sec", node.Name, rate))
+			},
+			func() {})
 	} else {
-		m.resolve(node.Name, constant.ReasonNodeRuntimeErrors)
+		m.observe(key, false, func() {}, func() { m.resolve(node.Name, constant.ReasonNodeRuntimeErrors) })
 	}
 }
 
@@ -397,7 +449,7 @@ func metricLine(line string) (string, map[string]string, float64, bool) {
 	if len(parts) < 2 {
 		return "", nil, 0, false
 	}
-	value, err := strconv.ParseFloat(parts[len(parts)-1], 64)
+	value, err := strconv.ParseFloat(parts[1], 64)
 	if err != nil {
 		return "", nil, 0, false
 	}
@@ -447,4 +499,36 @@ func (m *Monitor) resolve(node, reason string) {
 
 func (m *Monitor) resolveContainer(namespace, pod, container string) {
 	m.correlator.MarkResolved(correlation.BuildKey(namespace, namespace+"/"+pod, constant.ReasonContainerCPUThrottled, container))
+}
+
+func (m *Monitor) observe(key string, failing bool, report, resolve func()) {
+	failureThreshold := m.cfg.FailureThreshold
+	if failureThreshold <= 0 {
+		failureThreshold = 1
+	}
+	recoveryThreshold := m.cfg.RecoveryThreshold
+	if recoveryThreshold <= 0 {
+		recoveryThreshold = 1
+	}
+	m.mu.Lock()
+	if failing {
+		m.failures[key]++
+		m.successes[key] = 0
+		reportNow := m.failures[key] >= failureThreshold
+		m.mu.Unlock()
+		if reportNow {
+			report()
+		}
+		return
+	}
+	m.successes[key]++
+	m.failures[key] = 0
+	resolveNow := m.successes[key] >= recoveryThreshold
+	if resolveNow {
+		delete(m.successes, key)
+	}
+	m.mu.Unlock()
+	if resolveNow {
+		resolve()
+	}
 }

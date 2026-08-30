@@ -73,8 +73,9 @@ func DefaultConfig() *Config {
 			FailureThreshold: 3, RecoveryThreshold: 2,
 		},
 		KubeletTelemetryMonitor: KubeletTelemetryMonitor{
-			Enabled: true, IntervalSeconds: 60,
+			Enabled: true, IntervalSeconds: 60, FailureThreshold: 2, RecoveryThreshold: 2,
 			MemoryWarningPercent: 90, MemoryCriticalPercent: 100,
+			EphemeralStorageWarningPercent: 90, EphemeralStorageCriticalPercent: 95,
 			CPUWarningPercent: 90, CPUCriticalPercent: 100,
 			CPUThrottlingWarningPercent: 25, CPUThrottlingCriticalPercent: 50,
 			PSIWarningPercent: 20, PSICriticalPercent: 50,

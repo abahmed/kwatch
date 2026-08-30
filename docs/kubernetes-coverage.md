@@ -46,9 +46,11 @@ the categories below intentionally use different signal sources.
   thresholds. Targets are never inferred automatically from Services.
 - Kubelet telemetry: built-in kubelet `stats/summary` and
   `metrics/cadvisor` are queried directly through the API server proxy for PSI,
-  node network/runtime error rates, per-container CPU/memory usage, and CPU
-  throttling. Missing or unauthorized endpoints disable only the affected
-  detector.
+  node network/runtime error rates, per-container CPU/memory/ephemeral-storage
+  usage, and CPU throttling. Missing or unauthorized endpoints disable only the affected
+  detector and are logged at diagnostic verbosity; they do not create false
+  incidents. New telemetry signals require consecutive samples before firing
+  and recovery samples before resolving.
 
 ## Dynamic status
 

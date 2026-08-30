@@ -198,20 +198,24 @@ type RuntimeMetricsMonitor struct {
 // KubeletTelemetryMonitor reads built-in kubelet telemetry through the API
 // server proxy without requiring an agent or external monitoring product.
 type KubeletTelemetryMonitor struct {
-	Enabled                      bool    `yaml:"enabled"`
-	IntervalSeconds              int     `yaml:"intervalSeconds"`
-	MemoryWarningPercent         float64 `yaml:"memoryWarningPercent"`
-	MemoryCriticalPercent        float64 `yaml:"memoryCriticalPercent"`
-	CPUWarningPercent            float64 `yaml:"cpuWarningPercent"`
-	CPUCriticalPercent           float64 `yaml:"cpuCriticalPercent"`
-	CPUThrottlingWarningPercent  float64 `yaml:"cpuThrottlingWarningPercent"`
-	CPUThrottlingCriticalPercent float64 `yaml:"cpuThrottlingCriticalPercent"`
-	PSIWarningPercent            float64 `yaml:"psiWarningPercent"`
-	PSICriticalPercent           float64 `yaml:"psiCriticalPercent"`
-	NetworkErrorRateWarning      float64 `yaml:"networkErrorRateWarning"`
-	NetworkErrorRateCritical     float64 `yaml:"networkErrorRateCritical"`
-	RuntimeErrorRateWarning      float64 `yaml:"runtimeErrorRateWarning"`
-	RuntimeErrorRateCritical     float64 `yaml:"runtimeErrorRateCritical"`
+	Enabled                         bool    `yaml:"enabled"`
+	IntervalSeconds                 int     `yaml:"intervalSeconds"`
+	FailureThreshold                int     `yaml:"failureThreshold"`
+	RecoveryThreshold               int     `yaml:"recoveryThreshold"`
+	MemoryWarningPercent            float64 `yaml:"memoryWarningPercent"`
+	MemoryCriticalPercent           float64 `yaml:"memoryCriticalPercent"`
+	EphemeralStorageWarningPercent  float64 `yaml:"ephemeralStorageWarningPercent"`
+	EphemeralStorageCriticalPercent float64 `yaml:"ephemeralStorageCriticalPercent"`
+	CPUWarningPercent               float64 `yaml:"cpuWarningPercent"`
+	CPUCriticalPercent              float64 `yaml:"cpuCriticalPercent"`
+	CPUThrottlingWarningPercent     float64 `yaml:"cpuThrottlingWarningPercent"`
+	CPUThrottlingCriticalPercent    float64 `yaml:"cpuThrottlingCriticalPercent"`
+	PSIWarningPercent               float64 `yaml:"psiWarningPercent"`
+	PSICriticalPercent              float64 `yaml:"psiCriticalPercent"`
+	NetworkErrorRateWarning         float64 `yaml:"networkErrorRateWarning"`
+	NetworkErrorRateCritical        float64 `yaml:"networkErrorRateCritical"`
+	RuntimeErrorRateWarning         float64 `yaml:"runtimeErrorRateWarning"`
+	RuntimeErrorRateCritical        float64 `yaml:"runtimeErrorRateCritical"`
 }
 
 // ActiveProbeMonitor performs opt-in checks against explicitly configured
