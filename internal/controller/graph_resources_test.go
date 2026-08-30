@@ -7,6 +7,8 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	corev1 "k8s.io/api/core/v1"
+	networkingv1 "k8s.io/api/networking/v1"
+	policyv1 "k8s.io/api/policy/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/labels"
 	runtime "k8s.io/apimachinery/pkg/runtime"
@@ -65,9 +67,36 @@ func newGraphTestGraph(objects ...runtime.Object) (*Controller, context.CancelFu
 	c.serviceLister = factory.Core().V1().Services().Lister()
 	c.pvLister = factory.Core().V1().PersistentVolumes().Lister()
 	c.pvcLister = factory.Core().V1().PersistentVolumeClaims().Lister()
+	c.netpolLister = factory.Networking().V1().NetworkPolicies().Lister()
+	c.pdbLister = factory.Policy().V1().PodDisruptionBudgets().Lister()
 	factory.Start(ctx.Done())
 	factory.WaitForCacheSync(ctx.Done())
 	return c, cancel
+}
+
+func TestRebuildPodGraphRefreshesSelectorEdges(t *testing.T) {
+	policy := &networkingv1.NetworkPolicy{
+		ObjectMeta: metav1.ObjectMeta{Name: "deny", Namespace: "ns1"},
+		Spec: networkingv1.NetworkPolicySpec{PodSelector: metav1.LabelSelector{
+			MatchLabels: map[string]string{"app": "web"},
+		}},
+	}
+	budget := &policyv1.PodDisruptionBudget{
+		ObjectMeta: metav1.ObjectMeta{Name: "pdb", Namespace: "ns1"},
+		Spec: policyv1.PodDisruptionBudgetSpec{Selector: &metav1.LabelSelector{
+			MatchLabels: map[string]string{"app": "web"},
+		}},
+	}
+	pod := &corev1.Pod{
+		ObjectMeta: metav1.ObjectMeta{Name: "p1", Namespace: "ns1", Labels: map[string]string{"app": "web"}},
+	}
+	c, cancel := newGraphTestGraph(policy, budget, pod)
+	defer cancel()
+
+	c.rebuildPodGraph(pod)
+
+	assert.Equal(t, []string{"pod/ns1/p1"}, c.graph.DependenciesOf("networkpolicy", "ns1", "deny"))
+	assert.Equal(t, []string{"pod/ns1/p1"}, c.graph.DependenciesOf("poddisruptionbudget", "ns1", "pdb"))
 }
 
 func TestAddPodToGraphExtraKinds(t *testing.T) {
@@ -76,6 +105,13 @@ func TestAddPodToGraphExtraKinds(t *testing.T) {
 		Spec: corev1.PodSpec{
 			NodeName:           "n1",
 			ServiceAccountName: "sa1",
+			ImagePullSecrets:   []corev1.LocalObjectReference{{Name: "pull-secret"}},
+			Volumes: []corev1.Volume{{Name: "projected", VolumeSource: corev1.VolumeSource{
+				Projected: &corev1.ProjectedVolumeSource{Sources: []corev1.VolumeProjection{
+					{ConfigMap: &corev1.ConfigMapProjection{LocalObjectReference: corev1.LocalObjectReference{Name: "projected-config"}}},
+					{Secret: &corev1.SecretProjection{LocalObjectReference: corev1.LocalObjectReference{Name: "projected-secret"}}},
+				}},
+			}}, {Name: "csi", VolumeSource: corev1.VolumeSource{CSI: &corev1.CSIVolumeSource{Driver: "example.csi"}}}},
 		},
 	}
 	c, cancel := newGraphTestGraph(pod)
@@ -86,6 +122,10 @@ func TestAddPodToGraphExtraKinds(t *testing.T) {
 	assert.ElementsMatch(t, c.graph.DependenciesOf("pod", "ns1", "p1"), []string{
 		"node//n1",
 		"serviceaccount/ns1/sa1",
+		"secret/ns1/pull-secret",
+		"configmap/ns1/projected-config",
+		"secret/ns1/projected-secret",
+		"csidriver//example.csi",
 	})
 }
 
@@ -135,6 +175,14 @@ func TestRebuildPersistentVolumeNodeAffinity(t *testing.T) {
 
 	assert.Equal(t, []string{"node//n1"}, c.graph.DependenciesOf("persistentvolume", "", "pv1"))
 	assert.Equal(t, []string{"persistentvolume//pv1"}, c.graph.DependentsOf("node", "", "n1"))
+}
+
+func TestRebuildIngressTLSSecret(t *testing.T) {
+	ing := &networkingv1.Ingress{ObjectMeta: metav1.ObjectMeta{Name: "ing", Namespace: "ns"}, Spec: networkingv1.IngressSpec{TLS: []networkingv1.IngressTLS{{SecretName: "tls-cert"}}}}
+	c, cancel := newGraphTestGraph()
+	defer cancel()
+	c.rebuildIngress(ing)
+	assert.Contains(t, c.graph.DependenciesOf("ingress", "ns", "ing"), "secret/ns/tls-cert")
 }
 
 func TestAddPodToGraphServiceAccountEdge(t *testing.T) {

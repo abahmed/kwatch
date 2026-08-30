@@ -24,8 +24,12 @@ const (
 	graphEdgeBacks     = "backs"      // endpointslice → service
 	graphEdgeTargets   = "targets"    // endpointslice → pod
 	graphEdgeUsesSA    = "uses_sa"    // pod → serviceaccount
-	graphEdgeUsesSC    = "uses_sc"    // pvc → storageclass
+	graphEdgeUsesPull  = "uses_pull_secret"
+	graphEdgeProjects  = "projects"   // pod → projected config/secret
+	graphEdgeUsesCSI   = "uses_csi"   // pod → CSIDriver
+	graphEdgeUsesSC    = "uses_sc"    // pvc/persistentvolume → storageclass
 	graphEdgeLocalAt   = "local_at"   // persistentvolume → node (affinity)
+	graphEdgeTLS       = "tls_secret" // ingress → TLS secret
 )
 
 // graphHandler returns an event handler that maintains a resource's node in
@@ -189,6 +193,10 @@ func (c *Controller) buildPersistentVolumeGraph() error {
 // monitor contribute edges only while that monitor is on; pod, configmap and
 // the newly introduced PVC informer are always wired.
 func (c *Controller) wireGraphHandlers(fs factorySet, cfg *config.Config) {
+	if c.nodeLister != nil {
+		inf := fs.nodeInformer()
+		inf.AddEventHandler(c.graphHandler("node", func(interface{}) {}))
+	}
 	if c.serviceLister != nil {
 		for _, inf := range fs.serviceInformers() {
 			inf.AddEventHandler(c.graphHandler("service", c.rebuildService))

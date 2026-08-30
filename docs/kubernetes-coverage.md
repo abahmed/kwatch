@@ -62,6 +62,10 @@ are ignored, and messages/reasons are preserved as alert evidence.
 These rules can be customized through `crd.failureConditions` for operators
 with different condition semantics.
 
+Root-cause analysis also follows projected ConfigMaps/Secrets, image pull
+Secrets, CSI drivers, Ingress TLS Secrets, PV StorageClasses, owner chains,
+Service selectors, EndpointSlices, and local PV node affinity.
+
 ## Noise and recovery controls
 
 The detection path supports startup baselines, persisted incidents, stable

@@ -111,6 +111,13 @@ func (c *Controller) rebuildIngress(obj interface{}) {
 			add(path.Backend.Service)
 		}
 	}
+	for _, tls := range ing.Spec.TLS {
+		if tls.SecretName != "" {
+			targets = append(targets, kwcontext.EdgeTarget{
+				Kind: "secret", Namespace: ing.Namespace, Name: tls.SecretName, Type: graphEdgeTLS,
+			})
+		}
+	}
 	c.graph.ReplaceOutgoingEdges("ingress", ing.Namespace, ing.Name, targets)
 }
 
@@ -287,6 +294,11 @@ func (c *Controller) rebuildPersistentVolumeChecked(pv *corev1.PersistentVolume)
 	for _, nodeName := range nodeNames {
 		targets = append(targets, kwcontext.EdgeTarget{
 			Kind: "node", Name: nodeName, Type: graphEdgeLocalAt,
+		})
+	}
+	if pv.Spec.StorageClassName != "" {
+		targets = append(targets, kwcontext.EdgeTarget{
+			Kind: "storageclass", Name: pv.Spec.StorageClassName, Type: graphEdgeUsesSC,
 		})
 	}
 	c.graph.ReplaceOutgoingEdges("persistentvolume", "", pv.Name, targets)
