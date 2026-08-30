@@ -39,7 +39,32 @@ type metricSnapshot struct {
 }
 
 type summary struct {
-	Node nodeSummary `json:"node"`
+	Node nodeSummary  `json:"node"`
+	Pods []podSummary `json:"pods"`
+}
+
+type podSummary struct {
+	PodRef     podReference       `json:"podRef"`
+	Containers []containerSummary `json:"containers"`
+}
+
+type podReference struct {
+	Name      string `json:"name"`
+	Namespace string `json:"namespace"`
+}
+
+type containerSummary struct {
+	Name   string       `json:"name"`
+	CPU    *cpuStats    `json:"cpu"`
+	Memory *memoryStats `json:"memory"`
+}
+
+type cpuStats struct {
+	UsageNanoCores uint64 `json:"usageNanoCores"`
+}
+
+type memoryStats struct {
+	WorkingSetBytes uint64 `json:"workingSetBytes"`
 }
 
 type nodeSummary struct {
@@ -98,15 +123,29 @@ func (m *Monitor) sweep(ctx context.Context) {
 	if err != nil {
 		return
 	}
+	pods := m.pods(ctx)
 	for i := range nodes.Items {
 		node := &nodes.Items[i]
-		m.checkSummary(ctx, node)
+		m.checkSummary(ctx, node, pods)
 		m.checkCadvisor(ctx, node)
 		m.checkRuntimeMetrics(ctx, node)
 	}
 }
 
-func (m *Monitor) checkSummary(ctx context.Context, node *corev1.Node) {
+func (m *Monitor) pods(ctx context.Context) map[string]*corev1.Pod {
+	pods, err := m.client.CoreV1().Pods("").List(ctx, metav1.ListOptions{})
+	if err != nil {
+		return nil
+	}
+	result := make(map[string]*corev1.Pod, len(pods.Items))
+	for i := range pods.Items {
+		pod := &pods.Items[i]
+		result[pod.Namespace+"/"+pod.Name] = pod
+	}
+	return result
+}
+
+func (m *Monitor) checkSummary(ctx context.Context, node *corev1.Node, pods map[string]*corev1.Pod) {
 	requestCtx, cancel := context.WithTimeout(ctx, 10*time.Second)
 	defer cancel()
 	body, err := m.client.CoreV1().RESTClient().Get().Resource("nodes").Name(node.Name).
@@ -133,6 +172,64 @@ func (m *Monitor) checkSummary(ctx context.Context, node *corev1.Node) {
 	if data.Node.Network != nil {
 		m.checkNetwork(node.Name, *data.Node.Network)
 	}
+	m.checkPodUsage(data.Pods, pods)
+}
+
+func (m *Monitor) checkPodUsage(summaries []podSummary, pods map[string]*corev1.Pod) {
+	for _, podSummary := range summaries {
+		pod := pods[podSummary.PodRef.Namespace+"/"+podSummary.PodRef.Name]
+		if pod == nil {
+			continue
+		}
+		limits := containerLimits(pod)
+		for _, container := range podSummary.Containers {
+			limit, ok := limits[container.Name]
+			if ok {
+				m.checkContainerUsage(pod, container, limit)
+			}
+		}
+	}
+}
+
+func containerLimits(pod *corev1.Pod) map[string]corev1.ResourceList {
+	limits := make(map[string]corev1.ResourceList)
+	for _, container := range append(append([]corev1.Container{}, pod.Spec.InitContainers...), pod.Spec.Containers...) {
+		limits[container.Name] = container.Resources.Limits
+	}
+	return limits
+}
+
+func (m *Monitor) checkContainerUsage(pod *corev1.Pod, container containerSummary, limit corev1.ResourceList) {
+	if container.Memory != nil {
+		if memoryLimit := limit.Memory(); memoryLimit != nil && !memoryLimit.IsZero() {
+			percent := float64(container.Memory.WorkingSetBytes) / memoryLimit.AsApproximateFloat64() * 100
+			m.reportUsage(pod, container.Name, percent, m.cfg.MemoryWarningPercent, m.cfg.MemoryCriticalPercent,
+				constant.ReasonContainerMemoryHigh, fmt.Sprintf("%d bytes", container.Memory.WorkingSetBytes), memoryLimit.String(), "memory")
+		}
+	}
+	if container.CPU != nil {
+		if cpuLimit := limit.Cpu(); cpuLimit != nil && !cpuLimit.IsZero() {
+			percent := float64(container.CPU.UsageNanoCores) / (cpuLimit.AsApproximateFloat64() * 1e9) * 100
+			m.reportUsage(pod, container.Name, percent, m.cfg.CPUWarningPercent, m.cfg.CPUCriticalPercent,
+				constant.ReasonContainerCPUHigh, fmt.Sprintf("%d nanocores", container.CPU.UsageNanoCores), cpuLimit.String(), "cpu")
+		}
+	}
+}
+
+func (m *Monitor) reportUsage(pod *corev1.Pod, container string, percent, warning, critical float64, reason, usage, limit, unit string) {
+	key := correlation.BuildKey(pod.Namespace, pod.Namespace+"/"+pod.Name, reason, container)
+	if percent < warning {
+		m.correlator.MarkResolved(key)
+		return
+	}
+	severity := model.SeverityWarning
+	if percent >= critical {
+		severity = model.SeverityCritical
+	}
+	m.correlator.Process(event.Event{Resource: "pod", Namespace: pod.Namespace, PodName: pod.Name, ContainerName: container,
+		Reason: reason, OwnerKind: "Pod", Severity: severity,
+		Hint: fmt.Sprintf("container %s %s usage is %.0f%% of its limit (%s/%s)", container, unit, percent, usage, limit)},
+		pod.Namespace+"/"+pod.Name, nil)
 }
 
 func maxPSI(stats ...*psiStats) float64 {

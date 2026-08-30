@@ -184,8 +184,8 @@ type NodeResourceMonitor struct {
 	InodeCriticalPercent      float64 `yaml:"inodeCriticalPercent"`
 }
 
-// RuntimeMetricsMonitor reads metrics.k8s.io when a Metrics Server is
-// available and compares actual container usage with declared limits.
+// RuntimeMetricsMonitor optionally reads metrics.k8s.io when a Metrics Server
+// is available. Built-in kubelet telemetry is the standalone default.
 type RuntimeMetricsMonitor struct {
 	Enabled               bool `yaml:"enabled"`
 	IntervalSeconds       int  `yaml:"intervalSeconds"`
@@ -200,6 +200,10 @@ type RuntimeMetricsMonitor struct {
 type KubeletTelemetryMonitor struct {
 	Enabled                      bool    `yaml:"enabled"`
 	IntervalSeconds              int     `yaml:"intervalSeconds"`
+	MemoryWarningPercent         float64 `yaml:"memoryWarningPercent"`
+	MemoryCriticalPercent        float64 `yaml:"memoryCriticalPercent"`
+	CPUWarningPercent            float64 `yaml:"cpuWarningPercent"`
+	CPUCriticalPercent           float64 `yaml:"cpuCriticalPercent"`
 	CPUThrottlingWarningPercent  float64 `yaml:"cpuThrottlingWarningPercent"`
 	CPUThrottlingCriticalPercent float64 `yaml:"cpuThrottlingCriticalPercent"`
 	PSIWarningPercent            float64 `yaml:"psiWarningPercent"`

@@ -37,17 +37,18 @@ the categories below intentionally use different signal sources.
   storage attach/provision/mount, autoscaling, admission, discovery, and node
   health are correlated to their involved object. Pod and Cluster Autoscaler
   Events continue through their specialized context-rich detectors.
-- Runtime metrics: optional Metrics API collection of actual per-container CPU
-  and memory usage against declared limits. Configure it through
-  `runtimeMetricsMonitor`; if Metrics Server is unavailable, the monitor stays
-  quiet and does not resolve existing incidents.
+- Runtime metrics: built-in kubelet Summary API collection of actual
+  per-container CPU and memory usage against declared limits. The optional
+  Metrics API integration is retained for users who already run Metrics Server,
+  but is disabled by default and is not required.
 - Active probes: opt-in HTTP, TCP, and DNS checks for explicitly configured
   targets through `activeProbeMonitor`, with consecutive-failure and recovery
   thresholds. Targets are never inferred automatically from Services.
 - Kubelet telemetry: built-in kubelet `stats/summary` and
   `metrics/cadvisor` are queried directly through the API server proxy for PSI,
-  node network/runtime error rates, and per-container CPU throttling. Missing or
-  unauthorized endpoints disable only the affected detector.
+  node network/runtime error rates, per-container CPU/memory usage, and CPU
+  throttling. Missing or unauthorized endpoints disable only the affected
+  detector.
 
 ## Dynamic status
 

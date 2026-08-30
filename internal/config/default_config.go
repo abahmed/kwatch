@@ -64,7 +64,7 @@ func DefaultConfig() *Config {
 			InodeCriticalPercent:      95,
 		},
 		RuntimeMetricsMonitor: RuntimeMetricsMonitor{
-			Enabled: true, IntervalSeconds: 60,
+			Enabled: false, IntervalSeconds: 60,
 			MemoryWarningPercent: 90, MemoryCriticalPercent: 100,
 			CPUWarningPercent: 90, CPUCriticalPercent: 100,
 		},
@@ -74,6 +74,8 @@ func DefaultConfig() *Config {
 		},
 		KubeletTelemetryMonitor: KubeletTelemetryMonitor{
 			Enabled: true, IntervalSeconds: 60,
+			MemoryWarningPercent: 90, MemoryCriticalPercent: 100,
+			CPUWarningPercent: 90, CPUCriticalPercent: 100,
 			CPUThrottlingWarningPercent: 25, CPUThrottlingCriticalPercent: 50,
 			PSIWarningPercent: 20, PSICriticalPercent: 50,
 			NetworkErrorRateWarning: 1, NetworkErrorRateCritical: 10,

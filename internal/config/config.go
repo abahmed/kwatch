@@ -157,8 +157,8 @@ type Config struct {
 	// NodeResourceMonitor configures node resource overcommit prediction.
 	NodeResourceMonitor NodeResourceMonitor `yaml:"nodeResourceMonitor"`
 
-	// RuntimeMetricsMonitor compares actual container usage with limits when
-	// the metrics.k8s.io API is available.
+	// RuntimeMetricsMonitor optionally compares usage through metrics.k8s.io.
+	// Standalone usage monitoring is provided by KubeletTelemetryMonitor.
 	RuntimeMetricsMonitor RuntimeMetricsMonitor `yaml:"runtimeMetricsMonitor"`
 
 	// ActiveProbeMonitor performs explicitly configured HTTP, TCP, and DNS
