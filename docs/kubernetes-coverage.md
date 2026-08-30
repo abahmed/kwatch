@@ -83,10 +83,12 @@ the correlation engine so live, periodic, startup, and recovery decisions share
 the same lifecycle and deduplication rules.
 
 Security diagnostics include a periodic RBAC self-check for the cluster-scoped
-permissions needed by the enabled monitors. Results are available from the
-diagnostics-protected `/security` health endpoint; missing permissions are
-reported as capability gaps, not incidents, so intentionally restricted
-deployments do not create alert noise.
+and selected namespace-scoped permissions needed by the enabled monitors.
+Explicitly allowed namespaces are checked; with cluster-wide scope, the kwatch
+namespace is checked to keep the operation bounded on large clusters. Results
+are available from the diagnostics-protected `/security` health endpoint;
+missing permissions are reported as capability gaps, not incidents, so
+intentionally restricted deployments do not create alert noise.
 
 ## Important boundary
 

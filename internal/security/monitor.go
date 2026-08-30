@@ -12,9 +12,10 @@ import (
 )
 
 type Permission struct {
-	Group    string `json:"group"`
-	Resource string `json:"resource"`
-	Verb     string `json:"verb"`
+	Namespace string `json:"namespace,omitempty"`
+	Group     string `json:"group"`
+	Resource  string `json:"resource"`
+	Verb      string `json:"verb"`
 }
 
 type Status struct {
@@ -23,15 +24,40 @@ type Status struct {
 	RBACDenied bool         `json:"rbacDenied"`
 	Missing    []Permission `json:"missing,omitempty"`
 	Checks     int          `json:"checks"`
+	Scope      string       `json:"scope"`
 }
 
 type Monitor struct {
-	client kubernetes.Interface
-	mu     sync.RWMutex
-	status Status
+	client     kubernetes.Interface
+	mu         sync.RWMutex
+	status     Status
+	namespaces []string
 }
 
 var requiredClusterPermissions = clusterPermissions()
+var requiredNamespacedPermissions = namespacedPermissions()
+
+func namespacedPermissions() []Permission {
+	resources := []Permission{
+		{Resource: "pods"}, {Resource: "events"}, {Resource: "services"},
+		{Resource: "endpointslices", Group: "discovery.k8s.io"},
+		{Resource: "deployments", Group: "apps"}, {Resource: "replicasets", Group: "apps"},
+		{Resource: "statefulsets", Group: "apps"}, {Resource: "daemonsets", Group: "apps"},
+		{Resource: "jobs", Group: "batch"}, {Resource: "cronjobs", Group: "batch"},
+		{Resource: "horizontalpodautoscalers", Group: "autoscaling"},
+		{Resource: "poddisruptionbudgets", Group: "policy"},
+		{Resource: "networkpolicies", Group: "networking.k8s.io"},
+		{Resource: "resourcequotas"}, {Resource: "limitranges"},
+	}
+	permissions := make([]Permission, 0, len(resources)*3)
+	for _, resource := range resources {
+		for _, verb := range []string{"get", "list", "watch"} {
+			resource.Verb = verb
+			permissions = append(permissions, resource)
+		}
+	}
+	return permissions
+}
 
 func clusterPermissions() []Permission {
 	resources := []Permission{
@@ -55,6 +81,15 @@ func clusterPermissions() []Permission {
 
 func New(client kubernetes.Interface) *Monitor {
 	return &Monitor{client: client}
+}
+
+func (m *Monitor) SetNamespaces(namespaces []string) {
+	if len(namespaces) == 0 {
+		return
+	}
+	m.mu.Lock()
+	m.namespaces = append([]string(nil), namespaces...)
+	m.mu.Unlock()
 }
 
 func (m *Monitor) Start(ctx context.Context) {
@@ -90,7 +125,10 @@ func (m *Monitor) SecurityStatus() interface{} {
 func (m *Monitor) check(ctx context.Context) {
 	requestCtx, cancel := context.WithTimeout(ctx, 15*time.Second)
 	defer cancel()
-	status := Status{Available: true, Checks: len(requiredClusterPermissions), LastCheck: time.Now()}
+	m.mu.RLock()
+	namespaces := append([]string(nil), m.namespaces...)
+	m.mu.RUnlock()
+	status := Status{Available: true, Checks: len(requiredClusterPermissions), LastCheck: time.Now(), Scope: "cluster"}
 	for _, permission := range requiredClusterPermissions {
 		allowed, err := m.allowed(requestCtx, permission)
 		if err != nil {
@@ -106,6 +144,25 @@ func (m *Monitor) check(ctx context.Context) {
 			status.Missing = append(status.Missing, permission)
 		}
 	}
+	for _, namespace := range namespaces {
+		if namespace == "" {
+			continue
+		}
+		status.Scope = "cluster+namespace"
+		for _, permission := range requiredNamespacedPermissions {
+			permission.Namespace = namespace
+			allowed, err := m.allowed(requestCtx, permission)
+			status.Checks++
+			if err != nil {
+				status.Available = false
+				continue
+			}
+			if !allowed {
+				status.RBACDenied = true
+				status.Missing = append(status.Missing, permission)
+			}
+		}
+	}
 	m.mu.Lock()
 	m.status = status
 	m.mu.Unlock()
@@ -115,7 +172,7 @@ func (m *Monitor) allowed(ctx context.Context, permission Permission) (bool, err
 	group := permission.Group
 	request := &authorizationv1.SelfSubjectAccessReview{
 		Spec: authorizationv1.SelfSubjectAccessReviewSpec{ResourceAttributes: &authorizationv1.ResourceAttributes{
-			Group: group, Resource: permission.Resource, Verb: permission.Verb,
+			Namespace: permission.Namespace, Group: group, Resource: permission.Resource, Verb: permission.Verb,
 		}},
 	}
 	result, err := m.client.AuthorizationV1().SelfSubjectAccessReviews().Create(ctx, request, metav1.CreateOptions{})

@@ -111,6 +111,11 @@ func Run() int {
 
 	healthServer := health.NewHealthServer(cfg.HealthCheck)
 	securityMonitor := security.New(k8sClient)
+	securityNamespaces := cfg.AllowedNamespaces
+	if len(securityNamespaces) == 0 {
+		securityNamespaces = []string{k8s.GetNamespace()}
+	}
+	securityMonitor.SetNamespaces(securityNamespaces)
 	healthServer.SetSecurityLister(securityMonitor)
 
 	am := sm.GetAlertManager()
