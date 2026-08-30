@@ -82,6 +82,12 @@ inhibition, resolution, and scope-aware storage checks. Signals are sent through
 the correlation engine so live, periodic, startup, and recovery decisions share
 the same lifecycle and deduplication rules.
 
+Security diagnostics include a periodic RBAC self-check for the cluster-scoped
+permissions needed by the enabled monitors. Results are available from the
+diagnostics-protected `/security` health endpoint; missing permissions are
+reported as capability gaps, not incidents, so intentionally restricted
+deployments do not create alert noise.
+
 ## Important boundary
 
 Kubernetes API objects cannot expose every runtime failure. CPU throttling,

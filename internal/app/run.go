@@ -27,6 +27,7 @@ import (
 	"github.com/abahmed/kwatch/internal/networkgraph"
 	"github.com/abahmed/kwatch/internal/probe"
 	"github.com/abahmed/kwatch/internal/pvc"
+	"github.com/abahmed/kwatch/internal/security"
 	"github.com/abahmed/kwatch/internal/startup"
 	"github.com/abahmed/kwatch/internal/statuswatch"
 	"github.com/abahmed/kwatch/internal/storagegraph"
@@ -62,6 +63,7 @@ type serverDeps struct {
 	kubeletRun  func(context.Context)
 	storageRun  func(context.Context)
 	networkRun  func(context.Context)
+	securityRun func(context.Context)
 }
 
 // Run loads config and wires all monitors, then runs until shutdown.
@@ -108,6 +110,8 @@ func Run() int {
 	}
 
 	healthServer := health.NewHealthServer(cfg.HealthCheck)
+	securityMonitor := security.New(k8sClient)
+	healthServer.SetSecurityLister(securityMonitor)
 
 	am := sm.GetAlertManager()
 	configureAlertManager(ctx, cfg, am)
@@ -239,6 +243,7 @@ func Run() int {
 		healthServer.SetTelemetryLister(kubeletMonitor)
 		kubeletRun = kubeletMonitor.Start
 	}
+	securityRun := securityMonitor.Start
 
 	storageRun := newStorageGraphRun(cfg, graph)
 	networkRun := newNetworkGraphRun(cfg, graph)
@@ -267,6 +272,7 @@ func Run() int {
 		kubeletRun:    kubeletRun,
 		storageRun:    storageRun,
 		networkRun:    networkRun,
+		securityRun:   securityRun,
 	}
 	return serve(ctx, deps)
 }
