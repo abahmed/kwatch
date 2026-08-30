@@ -30,6 +30,7 @@ type Monitor struct {
 	previous   map[string]metricSnapshot
 	failures   map[string]int
 	successes  map[string]int
+	stateSeen  map[string]time.Time
 	now        func() time.Time
 	mu         sync.Mutex
 	endpoint   map[string]endpointStatus
@@ -48,6 +49,7 @@ type persistedState struct {
 	Previous  map[string]metricSnapshot `json:"previous"`
 	Failures  map[string]int            `json:"failures"`
 	Successes map[string]int            `json:"successes"`
+	StateSeen map[string]time.Time      `json:"stateSeen"`
 }
 
 type endpointStatus struct {
@@ -134,7 +136,7 @@ type networkStats struct {
 
 func New(client kubernetes.Interface, cfg config.KubeletTelemetryMonitor, correlator *correlation.Engine) *Monitor {
 	return &Monitor{client: client, cfg: cfg, correlator: correlator, previous: make(map[string]metricSnapshot),
-		failures: make(map[string]int), successes: make(map[string]int), endpoint: make(map[string]endpointStatus), podCache: make(map[string]*corev1.Pod), now: time.Now}
+		failures: make(map[string]int), successes: make(map[string]int), stateSeen: make(map[string]time.Time), endpoint: make(map[string]endpointStatus), podCache: make(map[string]*corev1.Pod), now: time.Now}
 }
 
 func (m *Monitor) Start(ctx context.Context) {
@@ -185,6 +187,7 @@ func (m *Monitor) sweep(ctx context.Context) {
 	}
 	wg.Wait()
 	m.pruneSnapshots(nodes)
+	m.pruneSignalState()
 	m.mu.Lock()
 	m.lastSweep = m.now()
 	m.mu.Unlock()
@@ -240,6 +243,9 @@ func (m *Monitor) loadState(ctx context.Context) {
 	if state.Successes != nil {
 		m.successes = state.Successes
 	}
+	if state.StateSeen != nil {
+		m.stateSeen = state.StateSeen
+	}
 	m.mu.Unlock()
 }
 
@@ -248,7 +254,7 @@ func (m *Monitor) saveState(ctx context.Context) {
 		return
 	}
 	m.mu.Lock()
-	state := persistedState{Previous: m.previous, Failures: m.failures, Successes: m.successes}
+	state := persistedState{Previous: m.previous, Failures: m.failures, Successes: m.successes, StateSeen: m.stateSeen}
 	m.mu.Unlock()
 	data, err := json.Marshal(state)
 	if err == nil {
@@ -727,6 +733,7 @@ func (m *Monitor) observe(key string, failing bool, report, resolve func()) {
 		recoveryThreshold = 1
 	}
 	m.mu.Lock()
+	m.stateSeen[key] = m.now()
 	if failing {
 		m.failures[key]++
 		m.successes[key] = 0
@@ -746,5 +753,22 @@ func (m *Monitor) observe(key string, failing bool, report, resolve func()) {
 	m.mu.Unlock()
 	if resolveNow {
 		resolve()
+	}
+}
+
+func (m *Monitor) pruneSignalState() {
+	interval := time.Duration(m.cfg.IntervalSeconds) * time.Second
+	if interval <= 0 {
+		interval = time.Minute
+	}
+	cutoff := m.now().Add(-10 * interval)
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	for key, seen := range m.stateSeen {
+		if seen.Before(cutoff) {
+			delete(m.stateSeen, key)
+			delete(m.failures, key)
+			delete(m.successes, key)
+		}
 	}
 }
