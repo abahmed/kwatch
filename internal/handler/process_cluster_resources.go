@@ -97,7 +97,7 @@ func DetectLimitRangeIssue(limitRange *corev1.LimitRange) *event.Signal {
 	return nil
 }
 
-func limitRangeSignal(limitRange *corev1.LimitRange, resource, detail string) *event.Signal {
+func limitRangeSignal(limitRange *corev1.LimitRange, resource corev1.ResourceName, detail string) *event.Signal {
 	owner := limitRange.Namespace + "/" + limitRange.Name
 	return &event.Signal{
 		Resource: "limitrange", Namespace: limitRange.Namespace, PodName: limitRange.Name,
