@@ -46,3 +46,22 @@ func TestMaxPSIHandlesMissingResources(t *testing.T) {
 		t.Fatalf("maxPSI = %v, want 12.5", got)
 	}
 }
+
+func TestSnapshotNode(t *testing.T) {
+	tests := []struct {
+		key  string
+		want string
+		ok   bool
+	}{
+		{key: "network/node-a", want: "node-a", ok: true},
+		{key: "runtime/node-b", want: "node-b", ok: true},
+		{key: "cpu/node-c/app/web/api", want: "node-c", ok: true},
+		{key: "unknown/node-d", ok: false},
+	}
+	for _, test := range tests {
+		got, ok := snapshotNode(test.key)
+		if got != test.want || ok != test.ok {
+			t.Errorf("snapshotNode(%q) = %q, %v; want %q, %v", test.key, got, ok, test.want, test.ok)
+		}
+	}
+}

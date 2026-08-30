@@ -152,6 +152,38 @@ func (m *Monitor) sweep(ctx context.Context) {
 		}(node)
 	}
 	wg.Wait()
+	m.pruneSnapshots(nodes.Items)
+}
+
+func (m *Monitor) pruneSnapshots(nodes []corev1.Node) {
+	active := make(map[string]struct{}, len(nodes))
+	for _, node := range nodes {
+		active[node.Name] = struct{}{}
+	}
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	for key := range m.previous {
+		node, ok := snapshotNode(key)
+		if ok {
+			if _, exists := active[node]; !exists {
+				delete(m.previous, key)
+			}
+		}
+	}
+}
+
+func snapshotNode(key string) (string, bool) {
+	parts := strings.SplitN(key, "/", 3)
+	if len(parts) < 2 {
+		return "", false
+	}
+	if parts[0] == "network" || parts[0] == "runtime" {
+		return parts[1], true
+	}
+	if parts[0] == "cpu" && len(parts) == 3 {
+		return parts[1], true
+	}
+	return "", false
 }
 
 func (m *Monitor) pods(ctx context.Context) map[string]*corev1.Pod {
