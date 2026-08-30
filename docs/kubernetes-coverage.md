@@ -29,6 +29,10 @@ the categories below intentionally use different signal sources.
   with no usable endpoints.
 - Cluster resources: exhausted ResourceQuota, stuck Namespace termination, and
   ReplicaSet status failures.
+- Runtime metrics: optional Metrics API collection of actual per-container CPU
+  and memory usage against declared limits. Configure it through
+  `runtimeMetricsMonitor`; if Metrics Server is unavailable, the monitor stays
+  quiet and does not resolve existing incidents.
 
 ## Dynamic status
 
@@ -48,9 +52,9 @@ the same lifecycle and deduplication rules.
 
 ## Important boundary
 
-Kubernetes API objects cannot expose every runtime failure. Actual CPU/memory
-usage, throttling, cAdvisor/kubelet health, API latency, DNS resolution, packet
-loss, HTTP/TCP reachability, service-mesh health, cloud-provider volume state,
+Kubernetes API objects cannot expose every runtime failure. CPU throttling,
+cAdvisor/kubelet health, API latency, DNS resolution, packet loss,
+HTTP/TCP reachability, service-mesh health, cloud-provider volume state,
 VPA/KEDA/Cluster Autoscaler internals, and application SLOs require metrics,
 logs, traces, or active probes. kwatch consumes the runtime evidence available
 through pod/node summaries and events; it does not claim that informer status

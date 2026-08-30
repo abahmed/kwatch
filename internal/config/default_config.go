@@ -59,6 +59,11 @@ func DefaultConfig() *Config {
 			MemWarning:      2.0,
 			MemCritical:     4.0,
 		},
+		RuntimeMetricsMonitor: RuntimeMetricsMonitor{
+			Enabled: true, IntervalSeconds: 60,
+			MemoryWarningPercent: 90, MemoryCriticalPercent: 100,
+			CPUWarningPercent: 90, CPUCriticalPercent: 100,
+		},
 		DaemonSetMonitor: DaemonSetMonitor{
 			Enabled:          true,
 			SustainedMinutes: 5,

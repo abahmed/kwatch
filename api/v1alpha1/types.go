@@ -63,6 +63,7 @@ type KwatchConfigSpec struct {
 	IngressMonitor               MonitorConfig          `json:"ingressMonitor,omitempty"`
 	NetworkPolicyMonitor         MonitorConfig          `json:"networkPolicyMonitor,omitempty"`
 	ClusterResourceMonitor       MonitorConfig          `json:"clusterResourceMonitor,omitempty"`
+	RuntimeMetricsMonitor        MonitorConfig          `json:"runtimeMetricsMonitor,omitempty"`
 	SmartGrouping                MonitorConfig          `json:"smartGrouping,omitempty"`
 	Inhibition                   MonitorConfig          `json:"inhibition,omitempty"`
 	Templates                    map[string]string      `json:"templates,omitempty"`

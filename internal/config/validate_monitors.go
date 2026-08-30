@@ -69,6 +69,30 @@ func validateNodeResourceMonitor(cfg *Config) []error {
 	return errs
 }
 
+func validateRuntimeMetricsMonitor(cfg *Config) []error {
+	if !cfg.RuntimeMetricsMonitor.Enabled {
+		return nil
+	}
+	m := cfg.RuntimeMetricsMonitor
+	var errs []error
+	if m.IntervalSeconds <= 0 {
+		errs = append(errs, errors.New("runtimeMetricsMonitor.intervalSeconds must be > 0"))
+	}
+	if m.MemoryWarningPercent <= 0 || m.MemoryWarningPercent > 100 {
+		errs = append(errs, errors.New("runtimeMetricsMonitor.memoryWarningPercent must be in 1..100"))
+	}
+	if m.MemoryCriticalPercent < m.MemoryWarningPercent || m.MemoryCriticalPercent > 100 {
+		errs = append(errs, errors.New("runtimeMetricsMonitor.memoryCriticalPercent must be >= warning and <= 100"))
+	}
+	if m.CPUWarningPercent <= 0 || m.CPUWarningPercent > 100 {
+		errs = append(errs, errors.New("runtimeMetricsMonitor.cpuWarningPercent must be in 1..100"))
+	}
+	if m.CPUCriticalPercent < m.CPUWarningPercent || m.CPUCriticalPercent > 100 {
+		errs = append(errs, errors.New("runtimeMetricsMonitor.cpuCriticalPercent must be >= warning and <= 100"))
+	}
+	return errs
+}
+
 func validateOomMonitor(cfg *Config) []error {
 	var errs []error
 	if !cfg.OomMonitor.Enabled {
@@ -123,6 +147,7 @@ func validateMonitors(cfg *Config) []error {
 		)
 	}
 	errs = append(errs, validateNodeResourceMonitor(cfg)...)
+	errs = append(errs, validateRuntimeMetricsMonitor(cfg)...)
 	errs = append(errs, validateOomMonitor(cfg)...)
 	errs = append(errs, validateTlsMonitor(cfg)...)
 	errs = append(

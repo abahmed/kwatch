@@ -28,6 +28,9 @@ func serve(ctx context.Context, deps *serverDeps) int {
 	if deps.statusRun != nil {
 		wg.Add(1)
 	}
+	if deps.metricsRun != nil {
+		wg.Add(1)
+	}
 
 	go func() {
 		defer wg.Done()
@@ -87,6 +90,12 @@ func serve(ctx context.Context, deps *serverDeps) int {
 		go func() {
 			defer wg.Done()
 			deps.statusRun(ctx)
+		}()
+	}
+	if deps.metricsRun != nil {
+		go func() {
+			defer wg.Done()
+			deps.metricsRun(ctx)
 		}()
 	}
 	if deps.cfg.CrdConfig.Enabled {

@@ -21,6 +21,7 @@ import (
 	"github.com/abahmed/kwatch/internal/heartbeat"
 	"github.com/abahmed/kwatch/internal/insight"
 	"github.com/abahmed/kwatch/internal/k8s"
+	"github.com/abahmed/kwatch/internal/metricsapi"
 	"github.com/abahmed/kwatch/internal/model"
 	"github.com/abahmed/kwatch/internal/pvc"
 	"github.com/abahmed/kwatch/internal/startup"
@@ -52,6 +53,7 @@ type serverDeps struct {
 	cleanup     func()
 	tlsSweep    func()
 	statusRun   func(context.Context)
+	metricsRun  func(context.Context)
 }
 
 // Run loads config and wires all monitors, then runs until shutdown.
@@ -190,6 +192,20 @@ func Run() int {
 		}
 	}
 
+	var metricsRun func(context.Context)
+	if cfg.RuntimeMetricsMonitor.Enabled {
+		if restCfg, restErr := client.GetRestConfig(&cfg.App); restErr != nil {
+			klog.ErrorS(restErr, "failed to create runtime metrics monitor")
+		} else if monitor, monitorErr := metricsapi.New(
+			restCfg, k8sClient, cfg.RuntimeMetricsMonitor, correlator,
+		); monitorErr != nil {
+			klog.ErrorS(monitorErr, "failed to initialize runtime metrics monitor")
+		} else {
+			monitor.SetNamespaceFilter(ctl.NamespaceAllowed)
+			metricsRun = monitor.Start
+		}
+	}
+
 	var tlsSweep func()
 	if cfg.TlsMonitor.Enabled {
 		tlsSweep = h.SweepTLSSecrets
@@ -214,6 +230,7 @@ func Run() int {
 		cleanup:       cleanup,
 		tlsSweep:      tlsSweep,
 		statusRun:     statusRun,
+		metricsRun:    metricsRun,
 	}
 	return serve(ctx, deps)
 }

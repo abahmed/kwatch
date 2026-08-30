@@ -177,6 +177,17 @@ type NodeResourceMonitor struct {
 	MemCritical float64 `yaml:"memCritical"`
 }
 
+// RuntimeMetricsMonitor reads metrics.k8s.io when a Metrics Server is
+// available and compares actual container usage with declared limits.
+type RuntimeMetricsMonitor struct {
+	Enabled               bool `yaml:"enabled"`
+	IntervalSeconds       int  `yaml:"intervalSeconds"`
+	MemoryWarningPercent  int  `yaml:"memoryWarningPercent"`
+	MemoryCriticalPercent int  `yaml:"memoryCriticalPercent"`
+	CPUWarningPercent     int  `yaml:"cpuWarningPercent"`
+	CPUCriticalPercent    int  `yaml:"cpuCriticalPercent"`
+}
+
 // DaemonSetMonitor configures rollout-stuck detection for DaemonSets.
 type DaemonSetMonitor struct {
 	// Enabled if set to true, it will watch DaemonSets for stuck rollouts.

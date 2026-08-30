@@ -69,6 +69,8 @@ const (
 	ReasonNetworkUnavailable   = "NetworkUnavailable"
 	ReasonNodeResourceHigh     = "NodeResourceHigh"
 	ReasonNodeResourceCritical = "NodeResourceCritical"
+	ReasonContainerMemoryHigh  = "ContainerMemoryUsageHigh"
+	ReasonContainerCPUHigh     = "ContainerCPUUsageHigh"
 
 	// Workload rollout reasons.
 	ReasonProgressDeadlineExceeded = "ProgressDeadlineExceeded"

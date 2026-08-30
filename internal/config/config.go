@@ -157,6 +157,10 @@ type Config struct {
 	// NodeResourceMonitor configures node resource overcommit prediction.
 	NodeResourceMonitor NodeResourceMonitor `yaml:"nodeResourceMonitor"`
 
+	// RuntimeMetricsMonitor compares actual container usage with limits when
+	// the metrics.k8s.io API is available.
+	RuntimeMetricsMonitor RuntimeMetricsMonitor `yaml:"runtimeMetricsMonitor"`
+
 	// DaemonSetMonitor configures rollout-stuck detection for DaemonSets.
 	DaemonSetMonitor DaemonSetMonitor `yaml:"daemonSetMonitor"`
 

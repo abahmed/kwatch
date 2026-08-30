@@ -259,6 +259,7 @@ func deepCopySpecMaps(in, out *KwatchConfigSpec) {
 	out.IngressMonitor = copyMonitor(in.IngressMonitor)
 	out.NetworkPolicyMonitor = copyMonitor(in.NetworkPolicyMonitor)
 	out.ClusterResourceMonitor = copyMonitor(in.ClusterResourceMonitor)
+	out.RuntimeMetricsMonitor = copyMonitor(in.RuntimeMetricsMonitor)
 	out.SmartGrouping = copyMonitor(in.SmartGrouping)
 	out.Inhibition = copyMonitor(in.Inhibition)
 	if in.Templates != nil {

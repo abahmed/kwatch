@@ -214,6 +214,9 @@ spec:
                 clusterResourceMonitor:
                   type: object
                   x-kubernetes-preserve-unknown-fields: true
+                runtimeMetricsMonitor:
+                  type: object
+                  x-kubernetes-preserve-unknown-fields: true
                 controlPlaneMonitor:
                   type: object
                   x-kubernetes-preserve-unknown-fields: true
