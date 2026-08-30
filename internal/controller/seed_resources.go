@@ -217,6 +217,9 @@ func (c *Controller) seedServices(rec *baselineRecorder) {
 			klog.ErrorS(err, "failed to list services for baseline seeding")
 		} else {
 			for _, svc := range svcs {
+				if sig := handler.DetectServiceStatusIssue(svc, time.Now()); sig != nil {
+					rec.seed(sig)
+				}
 				sel := labels.Set{
 					"kubernetes.io/service-name": svc.Name,
 				}.AsSelector()

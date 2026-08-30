@@ -24,8 +24,9 @@ the categories below intentionally use different signal sources.
 - Storage: mounted volume usage, PVC Pending/Lost and resize/modify errors, PV
   Released/Failed, and stuck PVC/PV finalizers.
 - Services and admission backends: EndpointSlice readiness/serving/terminating
-  semantics, missing endpoints, named/numeric port publication mismatches, and
-  webhook services with no usable endpoints.
+  semantics, missing endpoints, named/numeric port publication mismatches,
+  LoadBalancer provisioning and Service failure conditions, and webhook services
+  with no usable endpoints.
 - Cluster resources: exhausted ResourceQuota, stuck Namespace termination, and
   ReplicaSet status failures.
 

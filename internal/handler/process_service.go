@@ -9,6 +9,7 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	discoveryv1 "k8s.io/api/discovery/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/client-go/tools/cache"
 
@@ -86,6 +87,33 @@ func DetectServicePortIssue(
 		}
 	}
 	return nil
+}
+
+func DetectServiceStatusIssue(svc *corev1.Service, now time.Time) *event.Signal {
+	if svc == nil {
+		return nil
+	}
+	key := svc.Namespace + "/" + svc.Name
+	for _, condition := range svc.Status.Conditions {
+		if condition.Status != metav1.ConditionFalse {
+			continue
+		}
+		hint := string(condition.Type) + ": " + condition.Reason
+		if condition.Message != "" {
+			hint += " — " + condition.Message
+		}
+		return &event.Signal{Resource: "service", Namespace: svc.Namespace, PodName: svc.Name,
+			Owner: key, Reason: constant.ReasonLoadBalancerPending, Labels: svc.Labels, Hint: hint}
+	}
+	if svc.Spec.Type != corev1.ServiceTypeLoadBalancer || len(svc.Status.LoadBalancer.Ingress) > 0 {
+		return nil
+	}
+	if now.Sub(svc.CreationTimestamp.Time) < time.Duration(defaultServiceSustainedSeconds)*time.Second {
+		return nil
+	}
+	return &event.Signal{Resource: "service", Namespace: svc.Namespace, PodName: svc.Name,
+		Owner: key, Reason: constant.ReasonLoadBalancerPending, Labels: svc.Labels,
+		Hint: fmt.Sprintf("LoadBalancer service %s has no provisioned ingress address", key)}
 }
 
 func servicePortExpectations(svc *corev1.Service) (map[string]bool, map[string]bool) {
@@ -210,14 +238,14 @@ func (h *handler) ProcessServiceObject(
 
 	sig := DetectServiceEndpointIssue(svc, epSlices)
 	portSig := DetectServicePortIssue(svc, epSlices)
+	statusSig := DetectServiceStatusIssue(svc, h.now())
 	key := svc.Namespace + "/" + svc.Name
 	if sig != nil {
 		first := h.markServiceNoEndpoints(key)
 		sustained := time.Duration(defaultServiceSustainedSeconds) * time.Second
-		if h.now().Sub(first) < sustained {
-			return nil
+		if h.now().Sub(first) >= sustained {
+			h.signalEvent(sig)
 		}
-		h.signalEvent(sig)
 	} else {
 		h.clearServiceNoEndpoints(svc.Namespace, svc.Name)
 		h.correlator.MarkResolved(
@@ -234,6 +262,13 @@ func (h *handler) ProcessServiceObject(
 	} else {
 		h.correlator.MarkResolved(correlation.BuildKey(
 			svc.Namespace, key, constant.ReasonServicePortMismatch, "",
+		))
+	}
+	if statusSig != nil {
+		h.signalEvent(statusSig)
+	} else {
+		h.correlator.MarkResolved(correlation.BuildKey(
+			svc.Namespace, key, constant.ReasonLoadBalancerPending, "",
 		))
 	}
 	return nil

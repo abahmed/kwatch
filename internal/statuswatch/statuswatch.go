@@ -3,7 +3,6 @@ package statuswatch
 import (
 	"context"
 	"fmt"
-	"strings"
 	"sync"
 	"time"
 
@@ -176,7 +175,7 @@ func failureSignal(u *unstructured.Unstructured, resource, owner string) *event.
 		failed := (typ == "Ready" || typ == "Available") && status == "False"
 		failed = failed || typ == "Degraded" && status == "True"
 		failed = failed || typ == "Progressing" && status == "False"
-		if !failed || !meaningfulReason(reason, message) {
+		if !failed {
 			continue
 		}
 		hint := typ + "=" + status + ": " + reason
@@ -186,16 +185,6 @@ func failureSignal(u *unstructured.Unstructured, resource, owner string) *event.
 		return &event.Signal{Resource: resource, Namespace: u.GetNamespace(), PodName: u.GetName(), Owner: owner, Reason: reasonFor(resource), Labels: u.GetLabels(), Hint: hint}
 	}
 	return nil
-}
-
-func meaningfulReason(reason, message string) bool {
-	text := strings.ToLower(reason + " " + message)
-	for _, token := range []string{"fail", "error", "reject", "unavail", "timeout", "degrad", "stuck", "invalid", "missing", "notfound", "endpoint"} {
-		if strings.Contains(text, token) {
-			return true
-		}
-	}
-	return false
 }
 
 func reasonFor(resource string) string {

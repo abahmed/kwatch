@@ -100,6 +100,7 @@ const (
 	// Service and routing reasons.
 	ReasonServiceNoEndpoints       = "ServiceNoEndpoints"
 	ReasonServicePortMismatch      = "ServicePortMismatch"
+	ReasonLoadBalancerPending      = "LoadBalancerProvisioning"
 	ReasonIngressBackendNotFound   = "IngressBackendNotFound"
 	ReasonWebhookBackendNotFound   = "WebhookBackendNotFound"
 	ReasonWebhookNoEndpoints       = "WebhookNoEndpoints"
