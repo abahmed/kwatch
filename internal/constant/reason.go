@@ -130,6 +130,7 @@ const (
 	ReasonPersistentVolumeClaim  = "PersistentVolumeClaimFailure"
 	ReasonPersistentVolume       = "PersistentVolumeFailure"
 	ReasonResourceQuotaExhausted = "ResourceQuotaExhausted"
+	ReasonLimitRangeInvalid      = "LimitRangeInvalid"
 	ReasonNamespaceStuck         = "NamespaceStuckTerminating"
 	ReasonNodeLeaseStale         = "NodeLeaseStale"
 	ReasonNodeStuckTerminating   = "NodeStuckTerminating"
