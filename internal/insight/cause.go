@@ -244,6 +244,8 @@ func describeRootCauses(roots []modelCauseRef) (string, string) {
 			return fmt.Sprintf("node heartbeat lease %s may be stale or unavailable", r.Name), "node_heartbeat"
 		case "endpoint":
 			return fmt.Sprintf("endpoint %s is not ready to receive traffic", r.Name), "endpoint_failure"
+		case "volumeattachment_failure":
+			return fmt.Sprintf("volume attachment %s reported an attach failure", r.Name), "storage_attachment_failure"
 		}
 	}
 	// fallback: name the deepest overall resource

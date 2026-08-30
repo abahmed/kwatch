@@ -25,7 +25,7 @@ func serve(ctx context.Context, deps *serverDeps) int {
 	if deps.tlsSweep != nil {
 		wg.Add(1)
 	}
-	optionalMonitors := []func(context.Context){deps.statusRun, deps.metricsRun, deps.probeRun, deps.kubeletRun}
+	optionalMonitors := []func(context.Context){deps.statusRun, deps.metricsRun, deps.probeRun, deps.kubeletRun, deps.storageRun}
 	for _, monitor := range optionalMonitors {
 		startOptionalMonitor(ctx, &wg, monitor)
 	}
