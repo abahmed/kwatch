@@ -190,6 +190,7 @@ func Run() int {
 		} else {
 			monitor.SetNamespaceFilter(ctl.NamespaceAllowed)
 			monitor.SetConditionRules(cfg.CrdConfig.FailureConditions)
+			monitor.SetGraph(graph)
 			statusRun = func(runCtx context.Context) {
 				if err := monitor.Start(runCtx); err != nil {
 					klog.ErrorS(err, "generic status monitor stopped")

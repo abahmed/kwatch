@@ -16,6 +16,7 @@ import (
 	"k8s.io/klog/v2"
 
 	"github.com/abahmed/kwatch/internal/constant"
+	kwcontext "github.com/abahmed/kwatch/internal/context"
 	"github.com/abahmed/kwatch/internal/correlation"
 	"github.com/abahmed/kwatch/internal/event"
 )
@@ -37,6 +38,14 @@ type Monitor struct {
 	mu               sync.Mutex
 	factories        map[string]dynamicinformer.DynamicSharedInformerFactory
 	conditionRules   map[string]map[string]bool
+	graph            *kwcontext.ResourceGraph
+}
+
+// SetGraph connects generic CRD status monitoring to the shared dependency
+// graph. The monitor remains useful without it, which keeps graph support
+// optional for callers and for clusters where CRD access is restricted.
+func (m *Monitor) SetGraph(graph *kwcontext.ResourceGraph) {
+	m.graph = graph
 }
 
 // SetNamespaceFilter keeps dynamically discovered namespaced resources aligned
@@ -180,6 +189,7 @@ func (m *Monitor) processCR(obj interface{}) {
 	if m.namespaceAllowed != nil && !m.namespaceAllowed(u.GetNamespace()) {
 		return
 	}
+	m.rebuildGraph(u)
 	if sig := failureSignal(u, "customresource", resourceOwner(u), m.conditionRules); sig != nil {
 		m.correlator.Process(event.Event{Resource: sig.Resource, Namespace: sig.Namespace, PodName: sig.PodName, Reason: sig.Reason, Hint: sig.Hint, Labels: sig.Labels}, sig.Owner, nil)
 	} else {
@@ -190,8 +200,27 @@ func (m *Monitor) processCR(obj interface{}) {
 func (m *Monitor) resolveCR(obj interface{}) {
 	u, ok := obj.(*unstructured.Unstructured)
 	if ok && (m.namespaceAllowed == nil || m.namespaceAllowed(u.GetNamespace())) {
+		if m.graph != nil {
+			m.graph.RemoveNode("customresource", u.GetNamespace(), u.GetName())
+		}
 		m.resolve(u.GetNamespace(), resourceOwner(u), constant.ReasonCustomResourceFailure)
 	}
+}
+
+func (m *Monitor) rebuildGraph(u *unstructured.Unstructured) {
+	if m.graph == nil {
+		return
+	}
+	targets := make([]kwcontext.EdgeTarget, 0, len(u.GetOwnerReferences()))
+	for _, ref := range u.GetOwnerReferences() {
+		if ref.Name == "" || ref.Kind == "" {
+			continue
+		}
+		targets = append(targets, kwcontext.EdgeTarget{
+			Kind: strings.ToLower(ref.Kind), Namespace: u.GetNamespace(), Name: ref.Name, Type: "owned_by",
+		})
+	}
+	m.graph.ReplaceOutgoingEdges("customresource", u.GetNamespace(), u.GetName(), targets)
 }
 
 func (m *Monitor) resolve(namespace, owner, reason string) {
