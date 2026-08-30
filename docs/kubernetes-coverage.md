@@ -1,7 +1,8 @@
 # Kubernetes failure coverage
 
 kwatch combines informer state, status conditions, Kubernetes Events, logs,
-node summary data, and persisted incident state. No single Kubernetes object
+node summary data, active probes, and persisted incident state. It does not
+require Prometheus, Grafana, or another external monitoring product. No single Kubernetes object
 status proves that application traffic, DNS, or runtime health is working, so
 the categories below intentionally use different signal sources.
 
@@ -63,11 +64,11 @@ the same lifecycle and deduplication rules.
 ## Important boundary
 
 Kubernetes API objects cannot expose every runtime failure. CPU throttling,
-cAdvisor/kubelet health, API latency, DNS resolution, packet loss,
-HTTP/TCP reachability, service-mesh health, cloud-provider volume state,
+cAdvisor/kubelet health beyond the summary API, API latency, packet loss,
+service-mesh health, cloud-provider volume state,
 VPA/KEDA/Cluster Autoscaler internals, and application SLOs require metrics,
 logs, traces, or active probes. kwatch consumes the runtime evidence available
-through pod/node summaries and events; it does not claim that informer status
+through pod/node summaries, active probes, and events; it does not claim that informer status
 alone covers these signals.
 
 See the Kubernetes documentation for [Pod lifecycle](https://kubernetes.io/docs/concepts/workloads/pods/pod-lifecycle/),

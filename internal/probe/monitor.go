@@ -86,7 +86,10 @@ func (m *Monitor) http(ctx context.Context, target config.HTTPProbeTarget) (bool
 	_ = resp.Body.Close()
 	expected := target.ExpectedStatus
 	if expected == 0 {
-		expected = http.StatusOK
+		if resp.StatusCode >= http.StatusOK && resp.StatusCode < http.StatusBadRequest {
+			return true, fmt.Sprintf("HTTP status %d", resp.StatusCode)
+		}
+		return false, fmt.Sprintf("HTTP status %d (expected 2xx or 3xx)", resp.StatusCode)
 	}
 	if resp.StatusCode != expected {
 		return false, fmt.Sprintf("HTTP status %d (expected %d)", resp.StatusCode, expected)
