@@ -18,13 +18,8 @@ import (
 
 // Create returns kubernetes client after initializing it with in-cluster, or
 // out of cluster config
-func Create(appConfig *config.App) kubernetes.Interface {
-	client, err := CreateClient(appConfig)
-	if err != nil {
-		klog.ErrorS(err, "failed to create kubernetes client")
-		os.Exit(1)
-	}
-	return client
+func Create(appConfig *config.App) (kubernetes.Interface, error) {
+	return CreateClient(appConfig)
 }
 
 // CreateClient returns kubernetes client or an error

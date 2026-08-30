@@ -384,6 +384,10 @@ func TestHpaAtMaxMaxReplicasOne(t *testing.T) {
 	assert.False(t, hpaAtMax(hpa))
 }
 
+func TestDetectHPAIssuesNilIsSafe(t *testing.T) {
+	assert.Empty(t, DetectHPAIssues(nil))
+}
+
 func TestHpaAtMaxScalingLimitedOtherReason(t *testing.T) {
 	hpa := &autoscalingv2.HorizontalPodAutoscaler{
 		Spec: autoscalingv2.HorizontalPodAutoscalerSpec{MaxReplicas: 10},

@@ -26,6 +26,9 @@ func DetectMutatingWebhookIssue(
 	mwc *admissionregistrationv1.MutatingWebhookConfiguration,
 	hasService func(ns, name string) bool,
 ) []*event.Signal {
+	if mwc == nil || hasService == nil {
+		return nil
+	}
 	var sigs []*event.Signal
 	for _, w := range mwc.Webhooks {
 		ref := serviceRef(w.ClientConfig.Service)
@@ -61,6 +64,9 @@ func DetectValidatingWebhookIssue(
 	vwc *admissionregistrationv1.ValidatingWebhookConfiguration,
 	hasService func(ns, name string) bool,
 ) []*event.Signal {
+	if vwc == nil || hasService == nil {
+		return nil
+	}
 	var sigs []*event.Signal
 	for _, w := range vwc.Webhooks {
 		ref := serviceRef(w.ClientConfig.Service)

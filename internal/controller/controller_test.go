@@ -18,6 +18,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/client-go/informers"
+	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/kubernetes/fake"
 	appsv1lister "k8s.io/client-go/listers/apps/v1"
 	"k8s.io/client-go/tools/cache"
@@ -29,6 +30,18 @@ import (
 	"github.com/abahmed/kwatch/internal/handler"
 	"github.com/abahmed/kwatch/internal/model"
 )
+
+func newTestController(
+	t testing.TB,
+	client kubernetes.Interface,
+	cfg *config.Config,
+	h handler.Handler,
+) (*Controller, func()) {
+	t.Helper()
+	ctrl, cleanup, err := New(client, cfg, h)
+	require.NoError(t, err)
+	return ctrl, cleanup
+}
 
 type mockHandler struct {
 	mu             sync.Mutex
@@ -206,7 +219,7 @@ func TestNewCreatesController(t *testing.T) {
 	cfg := &config.Config{}
 	h := &mockHandler{}
 
-	ctrl, cleanup := New(client, cfg, h)
+	ctrl, cleanup := newTestController(t, client, cfg, h)
 	defer cleanup()
 
 	assert.NotNil(ctrl)
@@ -228,7 +241,7 @@ func TestNewWithNodeMonitor(t *testing.T) {
 	}
 	h := &mockHandler{}
 
-	ctrl, cleanup := New(client, cfg, h)
+	ctrl, cleanup := newTestController(t, client, cfg, h)
 	defer cleanup()
 
 	assert.NotEmpty(ctrl.node.synced)
@@ -247,7 +260,7 @@ func TestNewWithNodeResourceMonitorOnly(t *testing.T) {
 	}
 	h := &mockHandler{}
 
-	ctrl, cleanup := New(client, cfg, h)
+	ctrl, cleanup := newTestController(t, client, cfg, h)
 	defer cleanup()
 
 	// Node resource monitoring needs the node lister even when the node
@@ -266,7 +279,7 @@ func TestNewWithSingleNamespace(t *testing.T) {
 	}
 	h := &mockHandler{}
 
-	ctrl, cleanup := New(client, cfg, h)
+	ctrl, cleanup := newTestController(t, client, cfg, h)
 	defer cleanup()
 
 	assert.NotNil(ctrl)
@@ -295,7 +308,7 @@ func TestSyncEndpointSliceResolvesServiceByLabel(t *testing.T) {
 		ServiceMonitor: config.ServiceMonitor{Enabled: true},
 	}
 	h := &mockHandler{}
-	ctrl, cleanup := New(client, cfg, h)
+	ctrl, cleanup := newTestController(t, client, cfg, h)
 	defer cleanup()
 
 	// The slice name ("web-hash") must NOT be looked up as the service name.
@@ -314,7 +327,7 @@ func TestSyncEndpointSliceIgnoresUnlabeled(t *testing.T) {
 		ServiceMonitor: config.ServiceMonitor{Enabled: true},
 	}
 	h := &mockHandler{}
-	ctrl, cleanup := New(client, cfg, h)
+	ctrl, cleanup := newTestController(t, client, cfg, h)
 	defer cleanup()
 
 	err := ctrl.syncEndpointSlice(context.Background(), "ns/web-hash")
@@ -330,7 +343,7 @@ func TestNewWithResync(t *testing.T) {
 	}
 	h := &mockHandler{}
 
-	ctrl, cleanup := New(client, cfg, h)
+	ctrl, cleanup := newTestController(t, client, cfg, h)
 	defer cleanup()
 
 	assert.NotNil(ctrl)
@@ -440,7 +453,7 @@ func TestProcessNextPodItemProcessesKey(t *testing.T) {
 
 	client := fake.NewSimpleClientset()
 	h := &mockHandler{}
-	ctrl, cleanup := New(client, &config.Config{}, h)
+	ctrl, cleanup := newTestController(t, client, &config.Config{}, h)
 	defer cleanup()
 
 	ctrl.pod.queue.Add("default/test-pod")
@@ -458,7 +471,7 @@ func TestProcessNextNodeItemProcessesKey(t *testing.T) {
 	cfg := &config.Config{
 		NodeMonitor: config.NodeMonitor{Enabled: true},
 	}
-	ctrl, cleanup := New(client, cfg, h)
+	ctrl, cleanup := newTestController(t, client, cfg, h)
 	defer cleanup()
 
 	ctrl.node.queue.Add("worker-1")
@@ -481,7 +494,7 @@ func TestSyncPodExistingPod(t *testing.T) {
 	cfg := &config.Config{}
 	h := &mockHandler{}
 
-	ctrl, cleanup := New(client, cfg, h)
+	ctrl, cleanup := newTestController(t, client, cfg, h)
 	defer cleanup()
 
 	assert.Eventually(func() bool {
@@ -502,7 +515,7 @@ func TestSyncPodDeletedPod(t *testing.T) {
 	cfg := &config.Config{}
 	h := &mockHandler{}
 
-	ctrl, cleanup := New(client, cfg, h)
+	ctrl, cleanup := newTestController(t, client, cfg, h)
 	defer cleanup()
 
 	err := ctrl.syncPod(context.Background(), "default/nonexistent")
@@ -518,7 +531,7 @@ func TestSyncPodInvalidKey(t *testing.T) {
 	cfg := &config.Config{}
 	h := &mockHandler{}
 
-	ctrl, cleanup := New(client, cfg, h)
+	ctrl, cleanup := newTestController(t, client, cfg, h)
 	defer cleanup()
 
 	// The key is forwarded to the handler, which is responsible for parsing
@@ -542,7 +555,7 @@ func TestSyncPodHandlerError(t *testing.T) {
 	cfg := &config.Config{}
 	h := &mockHandler{err: errors.New("handler failed")}
 
-	ctrl, cleanup := New(client, cfg, h)
+	ctrl, cleanup := newTestController(t, client, cfg, h)
 	defer cleanup()
 
 	err := ctrl.syncPod(context.Background(), "default/nonexistent")
@@ -564,7 +577,7 @@ func TestSyncNodeExistingNode(t *testing.T) {
 	}
 	h := &mockHandler{}
 
-	ctrl, cleanup := New(client, cfg, h)
+	ctrl, cleanup := newTestController(t, client, cfg, h)
 	defer cleanup()
 
 	assert.Eventually(func() bool {
@@ -587,7 +600,7 @@ func TestSyncNodeDeletedNode(t *testing.T) {
 	}
 	h := &mockHandler{}
 
-	ctrl, cleanup := New(client, cfg, h)
+	ctrl, cleanup := newTestController(t, client, cfg, h)
 	defer cleanup()
 
 	err := ctrl.syncNode(context.Background(), "nonexistent-node")
@@ -605,7 +618,7 @@ func TestSyncNodeHandlerError(t *testing.T) {
 	}
 	h := &mockHandler{err: errors.New("node handler failed")}
 
-	ctrl, cleanup := New(client, cfg, h)
+	ctrl, cleanup := newTestController(t, client, cfg, h)
 	defer cleanup()
 
 	err := ctrl.syncNode(context.Background(), "nonexistent-node")
@@ -620,7 +633,7 @@ func TestRunShutsDownOnContextCancel(t *testing.T) {
 	cfg := &config.Config{}
 	h := &mockHandler{}
 
-	ctrl, cleanup := New(client, cfg, h)
+	ctrl, cleanup := newTestController(t, client, cfg, h)
 	defer cleanup()
 
 	ctx, cancel := context.WithCancel(context.Background())
@@ -657,7 +670,7 @@ func TestRunEndToEndPodAdd(t *testing.T) {
 	cfg := &config.Config{}
 	h := &mockHandler{}
 
-	ctrl, cleanup := New(client, cfg, h)
+	ctrl, cleanup := newTestController(t, client, cfg, h)
 	defer cleanup()
 
 	ctx, cancel := context.WithCancel(context.Background())
@@ -681,7 +694,7 @@ func TestRunEndToEndPodDelete(t *testing.T) {
 	cfg := &config.Config{}
 	h := &mockHandler{}
 
-	ctrl, cleanup := New(client, cfg, h)
+	ctrl, cleanup := newTestController(t, client, cfg, h)
 	defer cleanup()
 
 	ctx, cancel := context.WithCancel(context.Background())
@@ -746,7 +759,7 @@ func TestRunEndToEndNodeAdd(t *testing.T) {
 	}
 	h := &mockHandler{}
 
-	ctrl, cleanup := New(client, cfg, h)
+	ctrl, cleanup := newTestController(t, client, cfg, h)
 	defer cleanup()
 
 	ctx, cancel := context.WithCancel(context.Background())
@@ -779,7 +792,7 @@ func TestRunEndToEndRequeueOnError(t *testing.T) {
 	cfg := &config.Config{}
 	h := &mockHandler{err: errors.New("transient error")}
 
-	ctrl, cleanup := New(client, cfg, h)
+	ctrl, cleanup := newTestController(t, client, cfg, h)
 	defer cleanup()
 
 	ctx, cancel := context.WithCancel(context.Background())
@@ -912,7 +925,7 @@ func TestProcessNextPodItemForgetsOnSuccess(t *testing.T) {
 
 	client := fake.NewSimpleClientset()
 	h := &mockHandler{}
-	ctrl, cleanup := New(client, &config.Config{}, h)
+	ctrl, cleanup := newTestController(t, client, &config.Config{}, h)
 	defer cleanup()
 
 	ctrl.pod.queue.Add("default/forgotten")
@@ -937,7 +950,7 @@ func TestNewMultiNamespaceHasMultipleSynced(t *testing.T) {
 	}
 	h := &mockHandler{}
 
-	ctrl, cleanup := New(client, cfg, h)
+	ctrl, cleanup := newTestController(t, client, cfg, h)
 	defer cleanup()
 
 	assert.Len(ctrl.pod.synced, 2, "should have one synced fn per namespace")
@@ -950,7 +963,7 @@ func TestRunMultipleWorkers(t *testing.T) {
 	cfg := &config.Config{}
 	h := &mockHandler{}
 
-	ctrl, cleanup := New(client, cfg, h)
+	ctrl, cleanup := newTestController(t, client, cfg, h)
 	defer cleanup()
 
 	ctx, cancel := context.WithCancel(context.Background())
@@ -986,7 +999,7 @@ func TestMultiNamespaceListerSeesBothNamespaces(t *testing.T) {
 	}
 	h := &mockHandler{}
 
-	ctrl, cleanup := New(client, cfg, h)
+	ctrl, cleanup := newTestController(t, client, cfg, h)
 	defer cleanup()
 
 	assert.Eventually(func() bool {
@@ -1013,7 +1026,7 @@ func TestBuildSeenSetSeedsNodeConditions(t *testing.T) {
 	}
 	h := &mockHandler{}
 
-	ctrl, cleanup := New(client, cfg, h)
+	ctrl, cleanup := newTestController(t, client, cfg, h)
 	defer cleanup()
 
 	assert.Eventually(func() bool {
@@ -1081,7 +1094,7 @@ func TestBuildSeenSetSurfacesListerErrors(t *testing.T) {
 	}
 	h := &mockHandler{}
 
-	ctrl, cleanup := New(client, cfg, h)
+	ctrl, cleanup := newTestController(t, client, cfg, h)
 	defer cleanup()
 
 	assert.Eventually(t, func() bool {
@@ -1168,7 +1181,7 @@ func TestBuildSeenPerPodAndHealthySiblingKeepsBaseline(t *testing.T) {
 	cfg := &config.Config{}
 	h := &mockHandler{}
 
-	ctrl, cleanup := New(client, cfg, h)
+	ctrl, cleanup := newTestController(t, client, cfg, h)
 	defer cleanup()
 
 	assert.Eventually(t, func() bool {
@@ -1232,7 +1245,7 @@ func TestBuildSeenCrashLoopHighFreq(t *testing.T) {
 	cfg := &config.Config{}
 	h := &mockHandler{}
 
-	ctrl, cleanup := New(client, cfg, h)
+	ctrl, cleanup := newTestController(t, client, cfg, h)
 	defer cleanup()
 
 	assert.Eventually(t, func() bool {
@@ -1289,7 +1302,7 @@ func TestBuildSeenRunningWithRestarts(t *testing.T) {
 	cfg := &config.Config{}
 	h := &mockHandler{}
 
-	ctrl, cleanup := New(client, cfg, h)
+	ctrl, cleanup := newTestController(t, client, cfg, h)
 	defer cleanup()
 
 	assert.Eventually(t, func() bool {
@@ -1357,7 +1370,7 @@ func TestBuildSeenSetReportsStartupSummary(t *testing.T) {
 	cfg := &config.Config{}
 	h := &mockHandler{}
 
-	ctrl, cleanup := New(client, cfg, h)
+	ctrl, cleanup := newTestController(t, client, cfg, h)
 	defer cleanup()
 
 	a.Eventually(func() bool {
@@ -1429,7 +1442,7 @@ func TestBuildSeenSeedsDaemonSetBaselineWithEmptyKey(t *testing.T) {
 	}
 	h := &mockHandler{}
 
-	ctrl, cleanup := New(client, cfg, h)
+	ctrl, cleanup := newTestController(t, client, cfg, h)
 	defer cleanup()
 
 	a.Eventually(func() bool {
@@ -1493,7 +1506,7 @@ func TestBuildSeenSeedsDeploymentUnavailableBaseline(t *testing.T) {
 	}
 	h := &mockHandler{}
 
-	ctrl, cleanup := New(client, cfg, h)
+	ctrl, cleanup := newTestController(t, client, cfg, h)
 	defer cleanup()
 
 	a.Eventually(func() bool {
@@ -1551,7 +1564,7 @@ func TestBuildSeenSetReportsEmptySummaryOnNoBrokenPods(t *testing.T) {
 	cfg := &config.Config{}
 	h := &mockHandler{}
 
-	ctrl, cleanup := New(client, cfg, h)
+	ctrl, cleanup := newTestController(t, client, cfg, h)
 	defer cleanup()
 
 	a.Eventually(func() bool {

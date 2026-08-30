@@ -163,7 +163,7 @@ func (p *PvcMonitor) apply(pvcUsages []*PvcUsage, pvByPVC map[string]string, inc
 	p.mu.Lock()
 	defer p.mu.Unlock()
 
-	now := time.Now()
+	now := p.now()
 	clear := p.effectiveClear()
 
 	currentNotified := make(map[string]bool, len(pvcUsages))

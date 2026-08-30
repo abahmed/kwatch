@@ -71,15 +71,14 @@ func (c *Controller) podEventHandler() cache.ResourceEventHandlerFuncs {
 		AddFunc: func(obj interface{}) {
 			c.recordChange(kwcontext.ChangeCreate, "pod", obj)
 			if pod, ok := obj.(*corev1.Pod); ok {
-				c.addPodToGraph(pod)
+				c.rebuildPodGraph(pod)
 			}
 			c.pod.enqueue(obj)
 		},
 		UpdateFunc: func(old, new interface{}) {
 			c.recordChange(kwcontext.ChangeUpdate, "pod", new)
 			if pod, ok := new.(*corev1.Pod); ok {
-				c.removePodFromGraph(pod)
-				c.addPodToGraph(pod)
+				c.rebuildPodGraph(pod)
 			}
 			c.pod.enqueue(new)
 		},

@@ -2,6 +2,7 @@ package util
 
 import (
 	"bytes"
+	"context"
 	"fmt"
 	"io"
 	"net/http"
@@ -23,6 +24,7 @@ import (
 type Request struct {
 	// Provider names the integration in errors and rate-limit reports.
 	Provider string
+	Context  context.Context
 	// Method defaults to POST.
 	Method string
 	URL    string
@@ -51,7 +53,11 @@ func Send(r Request) ([]byte, error) {
 	if method == "" {
 		method = http.MethodPost
 	}
-	req, err := http.NewRequest(method, r.URL, bytes.NewReader(r.Body))
+	ctx := r.Context
+	if ctx == nil {
+		ctx = context.Background()
+	}
+	req, err := http.NewRequestWithContext(ctx, method, r.URL, bytes.NewReader(r.Body))
 	if err != nil {
 		return nil, err
 	}
@@ -73,7 +79,8 @@ func Send(r Request) ([]byte, error) {
 	}
 	defer resp.Body.Close()
 
-	respBody, _ := io.ReadAll(resp.Body)
+	const maxResponseBytes = 1 << 20
+	respBody, _ := io.ReadAll(io.LimitReader(resp.Body, maxResponseBytes))
 
 	if resp.StatusCode == http.StatusTooManyRequests {
 		retryAfter := ratelimit.ParseRetryAfter(resp)

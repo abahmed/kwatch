@@ -47,6 +47,9 @@ func (h *handler) ProcessDeployment(key string, deleted bool) error {
 // DetectDeploymentIssue returns a Signal if the Deployment has a stuck
 // rollout or unavailable replicas. Used for baseline seeding at startup.
 func DetectDeploymentIssue(deploy *appsv1.Deployment) *event.Signal {
+	if deploy == nil {
+		return nil
+	}
 	for _, c := range deploy.Status.Conditions {
 		if c.Type == appsv1.DeploymentProgressing &&
 			c.Status == corev1.ConditionFalse &&
@@ -84,6 +87,9 @@ func availabilityHintDeploy(deploy *appsv1.Deployment) string {
 // that are not available, ignoring mid-rollout metadata sync (stale observed
 // generation). Used for baseline seeding at startup.
 func DetectDeploymentUnavailable(deploy *appsv1.Deployment) *event.Signal {
+	if deploy == nil {
+		return nil
+	}
 	if deploy.Status.Replicas > 0 && deploy.Status.UnavailableReplicas > 0 &&
 		deploy.Status.ObservedGeneration >= deploy.Generation {
 		return &event.Signal{

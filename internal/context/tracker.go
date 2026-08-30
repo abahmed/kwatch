@@ -64,9 +64,13 @@ func (t *ChangeTracker) Record(c Change) {
 }
 
 func (t *ChangeTracker) RecentChangesBefore(age time.Duration) []Change {
+	return t.RecentChangesBeforeAt(age, time.Now())
+}
+
+func (t *ChangeTracker) RecentChangesBeforeAt(age time.Duration, now time.Time) []Change {
 	t.mu.RLock()
 	defer t.mu.RUnlock()
-	cutoff := time.Now().Add(-age)
+	cutoff := now.Add(-age)
 	var out []Change
 	for i := 0; i < t.count; i++ {
 		idx := (t.head - 1 - i + len(t.buffer)) % len(t.buffer)

@@ -83,7 +83,13 @@ func (r *RetryConfigMapManager) UpdateWithRetry(
 		}
 
 		klog.V(4).InfoS("configmap conflict, retrying", "attempt", i+1, "maxRetries", maxRetries)
-		time.Sleep(retryDelay)
+		timer := time.NewTimer(retryDelay)
+		select {
+		case <-ctx.Done():
+			timer.Stop()
+			return ctx.Err()
+		case <-timer.C:
+		}
 	}
 
 	return &ConflictError{Message: "failed after max retries"}

@@ -16,6 +16,9 @@ import (
 // DetectStatefulSetIssue returns a Signal if the StatefulSet has unavailable
 // pods that would trigger an alert. Used for baseline seeding at startup.
 func DetectStatefulSetIssue(ss *appsv1.StatefulSet) *event.Signal {
+	if ss == nil {
+		return nil
+	}
 	if ss.Status.Replicas > 0 && ss.Status.ReadyReplicas < ss.Status.Replicas {
 		return &event.Signal{
 			Resource:  "statefulset",

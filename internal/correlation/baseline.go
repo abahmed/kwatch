@@ -133,6 +133,26 @@ func (e *Engine) ClearBaselineForPod(namespace, podName string) {
 	}
 }
 
+// FilterBaseline removes entries outside the currently monitored namespace
+// scope during startup restoration.
+func (e *Engine) FilterBaseline(allowed func(string) bool) {
+	if allowed == nil {
+		return
+	}
+	e.mu.Lock()
+	defer e.mu.Unlock()
+	for key := range e.baseline {
+		ns := key
+		if i := strings.IndexByte(ns, ':'); i >= 0 {
+			ns = ns[:i]
+		}
+		if ns != "" && !allowed(ns) {
+			delete(e.baseline, key)
+			e.dirty = true
+		}
+	}
+}
+
 // removeBaselineForIncident drops the resolved incident's coverage from the
 // baseline while preserving sibling entries. Deleting the whole key (as before)
 // un-baselined sibling pods that share the same owner+reason key, so their

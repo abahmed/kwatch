@@ -3,18 +3,18 @@ package upgrader
 import (
 	"context"
 	"fmt"
-	"net/http"
 	"os"
 	"strconv"
 	"strings"
 	"time"
 
-	"github.com/google/go-github/v41/github"
+	"github.com/google/go-github/v55/github"
 	"k8s.io/klog/v2"
 
 	"github.com/abahmed/kwatch/internal/alert"
 	"github.com/abahmed/kwatch/internal/config"
 	"github.com/abahmed/kwatch/internal/constant"
+	"github.com/abahmed/kwatch/internal/k8s"
 	"github.com/abahmed/kwatch/internal/state"
 	"github.com/abahmed/kwatch/internal/version"
 )
@@ -32,8 +32,7 @@ func (c *GitHubClient) GetLatestRelease(
 	ctx context.Context,
 	owner, repo string,
 ) (*github.RepositoryRelease, *github.Response, error) {
-	httpClient := &http.Client{Timeout: 30 * time.Second}
-	client := github.NewClient(httpClient)
+	client := github.NewClient(k8s.GetDefaultClient())
 	return client.Repositories.GetLatestRelease(ctx, owner, repo)
 }
 

@@ -1,15 +1,9 @@
 package controller
 
 import (
-	"context"
 	"fmt"
-	"os"
-	"sort"
-	"strings"
 	"time"
 
-	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
-	"k8s.io/apimachinery/pkg/util/wait"
 	"k8s.io/client-go/kubernetes"
 	admregv1lister "k8s.io/client-go/listers/admissionregistration/v1"
 	appsv1lister "k8s.io/client-go/listers/apps/v1"
@@ -21,15 +15,11 @@ import (
 	policyv1lister "k8s.io/client-go/listers/policy/v1"
 	storagev1lister "k8s.io/client-go/listers/storage/v1"
 	"k8s.io/client-go/tools/cache"
-	"k8s.io/klog/v2"
 
 	"github.com/abahmed/kwatch/internal/config"
 	kwcontext "github.com/abahmed/kwatch/internal/context"
 	"github.com/abahmed/kwatch/internal/correlation"
-	"github.com/abahmed/kwatch/internal/event"
 	"github.com/abahmed/kwatch/internal/handler"
-	"github.com/abahmed/kwatch/internal/metrics"
-	"github.com/abahmed/kwatch/internal/resource"
 )
 
 type Controller struct {
@@ -83,6 +73,7 @@ type Controller struct {
 	ssSynced      []cache.InformerSynced
 	eventsSynced  []cache.InformerSynced
 	secretsSynced []cache.InformerSynced
+	graphSynced   []cache.InformerSynced
 
 	serviceLister       corev1lister.ServiceLister
 	endpointSliceLister discoveryv1lister.EndpointSliceLister
@@ -94,7 +85,9 @@ type Controller struct {
 
 	nodeResourceCfg *config.NodeResourceMonitor
 
-	readyFn func()
+	readyFn           func()
+	watchAll          bool
+	allowedNamespaces map[string]struct{}
 }
 
 // allPipelines returns every pipeline in a fixed order for iteration over
@@ -126,16 +119,15 @@ func New(
 	client kubernetes.Interface,
 	cfg *config.Config,
 	h handler.Handler,
-) (*Controller, func()) {
+) (*Controller, func(), error) {
 	resync := time.Duration(cfg.ResyncSeconds) * time.Second
 
-	namespaces, err := resolveNamespaces(cfg, client)
+	scope, err := resolveNamespaces(cfg, client)
 	if err != nil {
-		klog.ErrorS(err, "failed to resolve namespaces")
-		os.Exit(1)
+		return nil, nil, fmt.Errorf("resolve namespaces: %w", err)
 	}
 
-	fs, factories := newFactories(client, namespaces, resync)
+	fs, factories := newFactories(client, scope, cfg.ForbiddenNamespaces, resync)
 
 	podLister := fs.podLister()
 	podInformers := fs.podInformers()
@@ -174,6 +166,13 @@ func New(
 		),
 		podLister:   podLister,
 		maxBaseline: maxBaseline,
+		watchAll:    scope.all,
+	}
+	if !scope.all {
+		c.allowedNamespaces = make(map[string]struct{}, len(scope.namespaces))
+		for _, namespace := range scope.namespaces {
+			c.allowedNamespaces[namespace] = struct{}{}
+		}
 	}
 
 	c.pod.startWorkers = true
@@ -219,7 +218,7 @@ func New(
 	c.wireDaemonSetLister(fs)
 	c.wireStatefulSet(cfg, fs)
 	c.wirePDB(cfg, fs)
-	factories = append(factories, c.wireEvents(client, resync, namespaces)...)
+	factories = append(factories, c.wireEvents(client, resync, scope)...)
 	if cfg.ClusterAutoscalerMonitor.Enabled {
 		factories = append(factories, wireClusterAutoscaler(h, client, resync))
 	}
@@ -227,7 +226,7 @@ func New(
 	c.wireGraphSupport(fs)
 	c.wireGraphHandlers(fs, cfg)
 	if cfg.TlsMonitor.Enabled {
-		factories = append(factories, c.wireTLS(client, resync, namespaces)...)
+		factories = append(factories, c.wireTLS(client, resync, scope)...)
 	}
 
 	// Every informer is wired; hand the handler its lookups in one go. A
@@ -274,149 +273,5 @@ func New(
 		}
 	}
 
-	return c, cleanup
-}
-
-func (c *Controller) SetReadyFunc(fn func()) { c.readyFn = fn }
-
-func (c *Controller) SetTracker(t *kwcontext.ChangeTracker) { c.tracker = t }
-
-// recordGraphSize publishes the graph's size so an empty graph — and therefore
-// empty diagnoses — is visible on /metrics instead of only in the alerts that
-// arrive without a cause.
-func (c *Controller) recordGraphSize() {
-	if c.graph == nil {
-		return
-	}
-	nodes, edges := c.graph.Size()
-	metrics.Default.GraphNodes.Store(int64(nodes))
-	metrics.Default.GraphEdges.Store(int64(edges))
-}
-func (c *Controller) SetGraph(g *kwcontext.ResourceGraph) { c.graph = g }
-
-// cacheSyncTimeout bounds the initial informer sync. Without a bound, one
-// resource the ServiceAccount cannot list — a missing RBAC rule, an API group
-// the cluster does not serve — parks kwatch forever: never ready, never
-// alerting, with only reflector errors in the log to explain why.
-var cacheSyncTimeout = 5 * time.Minute // a var so tests can shorten it
-
-// waitForCaches waits for every informer to sync and, on timeout, names the
-// pipelines that never did so the failure points at the missing permission.
-func (c *Controller) waitForCaches(
-	ctx context.Context,
-	syncFns []cache.InformerSynced,
-) error {
-	waitCtx, cancel := context.WithTimeout(ctx, cacheSyncTimeout)
-	defer cancel()
-	if cache.WaitForCacheSync(waitCtx.Done(), syncFns...) {
-		return nil
-	}
-	if ctx.Err() != nil {
-		return fmt.Errorf("failed to wait for caches to sync: %w", ctx.Err())
-	}
-	var unsynced []string
-	for _, p := range c.allPipelines() {
-		if p == nil {
-			continue
-		}
-		for _, synced := range p.synced {
-			if !synced() {
-				unsynced = append(unsynced, p.name)
-				break
-			}
-		}
-	}
-	sort.Strings(unsynced)
-	return fmt.Errorf(
-		"informer caches did not sync within %s (unsynced: %s) — check that "+
-			"kwatch's ClusterRole grants list/watch on these resources and "+
-			"that the API groups exist on this cluster",
-		cacheSyncTimeout,
-		strings.Join(unsynced, ", "),
-	)
-}
-
-func (c *Controller) Run(ctx context.Context, workers int) error {
-	defer utilruntime.HandleCrash()
-	for _, p := range c.allPipelines() {
-		defer p.shutdown()
-	}
-
-	klog.InfoS("starting controller")
-
-	klog.InfoS("waiting for informer caches to sync")
-	var syncFns []cache.InformerSynced
-	for _, p := range c.allPipelines() {
-		syncFns = append(syncFns, p.synced...)
-	}
-	syncFns = append(syncFns, c.rsSynced...)
-	syncFns = append(syncFns, c.dsSynced...)
-	syncFns = append(syncFns, c.ssSynced...)
-	syncFns = append(syncFns, c.eventsSynced...)
-	syncFns = append(syncFns, c.configMapSynced...)
-	syncFns = append(syncFns, c.secretsSynced...)
-	if err := c.waitForCaches(ctx, syncFns); err != nil {
-		return err
-	}
-	if c.readyFn != nil {
-		c.readyFn()
-	}
-
-	c.buildGraph()
-	c.recordGraphSize()
-	go func() {
-		rebuildTicker := time.NewTicker(60 * time.Minute)
-		defer rebuildTicker.Stop()
-		pruneTicker := time.NewTicker(5 * time.Minute)
-		defer pruneTicker.Stop()
-		for {
-			select {
-			case <-ctx.Done():
-				return
-			case <-rebuildTicker.C:
-				c.buildGraph()
-				c.recordGraphSize()
-			case <-pruneTicker.C:
-				c.pruneGraph()
-				c.recordGraphSize()
-			}
-		}
-	}()
-	c.buildSeenSet()
-	if c.cpPod.startWorkers {
-		c.handler.SweepControlPlane()
-	}
-
-	if c.nodeResourceCfg != nil {
-		go func(cfg *config.NodeResourceMonitor) {
-			interval := time.Duration(cfg.IntervalSeconds) * time.Second
-			if interval <= 0 {
-				interval = 300 * time.Second
-			}
-			mon := resource.NewMonitor(resource.Config{
-				Interval:   interval,
-				CpuWarning: cfg.CpuWarning, CpuCritical: cfg.CpuCritical,
-				MemWarning: cfg.MemWarning, MemCritical: cfg.MemCritical,
-			}, c.nodeLister, c.podLister)
-			mon.Run(ctx, func(sig *event.Signal) {
-				c.handler.ProcessNodeResourceOvercommit(
-					sig.Reason,
-					sig.NodeName,
-					sig.Hint,
-					sig.Severity,
-				)
-			})
-		}(c.nodeResourceCfg)
-	}
-
-	klog.InfoS("starting workers")
-	for i := 0; i < workers; i++ {
-		for _, p := range c.activePipelines() {
-			go wait.UntilWithContext(ctx, p.worker, time.Second)
-		}
-	}
-
-	<-ctx.Done()
-	klog.InfoS("shutting down workers")
-	return nil
+	return c, cleanup, nil
 }

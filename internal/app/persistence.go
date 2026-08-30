@@ -54,7 +54,9 @@ func startBaselineSaver(ctx context.Context, stateMgr interface {
 					context.Background(),
 					5*time.Second,
 				)
-				_ = stateMgr.SaveBaseline(fctx, pending)
+				if err := stateMgr.SaveBaseline(fctx, pending); err != nil {
+					klog.ErrorS(err, "failed to save final baseline")
+				}
 				cancel()
 			}
 			return
@@ -66,13 +68,21 @@ func startBaselineSaver(ctx context.Context, stateMgr interface {
 // snapshot arrives on the channel. On ctx cancellation it saves the final
 // snapshot before returning.
 func trySendIncidentSnapshot(
-	ch chan<- []model.PersistedIncident,
+	ch chan []model.PersistedIncident,
 	snap []model.PersistedIncident,
 ) {
 	select {
 	case ch <- snap:
 	default:
-		klog.V(4).InfoS("incident snapshot channel full, dropping")
+		select {
+		case <-ch:
+		default:
+		}
+		select {
+		case ch <- snap:
+		default:
+			klog.V(4).InfoS("incident snapshot channel full, dropping")
+		}
 	}
 }
 
@@ -93,28 +103,52 @@ func startIncidentSaver(
 		select {
 		case snap := <-ch:
 			pending = snap
-			fctx, cancel := context.WithTimeout(
-				context.Background(),
-				10*time.Second,
-			)
-			if err := stateMgr.SavePersistedIncidents(
-				fctx,
-				pending,
-			); err != nil {
-				klog.ErrorS(err, "failed to save incidents")
-			}
-			cancel()
+			saveIncidentSnapshot(stateMgr, pending, 10*time.Second)
 		case <-ctx.Done():
-			if len(pending) > 0 {
-				fctx, cancel := context.WithTimeout(
-					context.Background(),
-					5*time.Second,
-				)
-				_ = stateMgr.SavePersistedIncidents(fctx, pending)
-				cancel()
+			for {
+				select {
+				case snap := <-ch:
+					pending = snap
+				default:
+					saveIncidentSnapshot(stateMgr, pending, 5*time.Second)
+					return
+				}
 			}
-			return
 		}
+	}
+}
+
+func waitIncidentSaver(deps *serverDeps) {
+	if deps.incidentDone == nil {
+		return
+	}
+	select {
+	case <-deps.incidentDone:
+	case <-time.After(10 * time.Second):
+		klog.InfoS("timed out waiting for incident saver")
+	}
+}
+
+func saveFinalIncidentSnapshot(deps *serverDeps) {
+	if deps.incidentSaver == nil || deps.correlator == nil {
+		return
+	}
+	saveIncidentSnapshot(
+		deps.incidentSaver,
+		deps.correlator.SnapshotPersisted(),
+		5*time.Second,
+	)
+}
+
+func saveIncidentSnapshot(
+	stateMgr incidentSaver,
+	snap []model.PersistedIncident,
+	timeout time.Duration,
+) {
+	fctx, cancel := context.WithTimeout(context.Background(), timeout)
+	defer cancel()
+	if err := stateMgr.SavePersistedIncidents(fctx, snap); err != nil {
+		klog.ErrorS(err, "failed to save incidents")
 	}
 }
 

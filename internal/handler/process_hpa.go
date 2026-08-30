@@ -88,6 +88,9 @@ func hpaAtMax(hpa *autoscalingv2.HorizontalPodAutoscaler) bool {
 func DetectHPAIssues(
 	hpa *autoscalingv2.HorizontalPodAutoscaler,
 ) []*event.Signal {
+	if hpa == nil {
+		return nil
+	}
 	key := hpa.Namespace + "/" + hpa.Name
 	var out []*event.Signal
 

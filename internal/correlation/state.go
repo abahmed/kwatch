@@ -1,6 +1,8 @@
 package correlation
 
 import (
+	"sort"
+
 	appsv1lister "k8s.io/client-go/listers/apps/v1"
 	corev1lister "k8s.io/client-go/listers/core/v1"
 	"k8s.io/klog/v2"
@@ -172,15 +174,22 @@ func (e *Engine) ActiveIncidents() map[model.IncidentKey]*model.Incident {
 func (e *Engine) SnapshotPersisted() []model.PersistedIncident {
 	e.mu.Lock()
 	defer e.mu.Unlock()
-	out := make([]model.PersistedIncident, 0, len(e.state)+len(e.massFailures))
-	for _, inc := range e.state {
-		if inc.State == model.StateResolved {
-			continue
-		}
-		out = append(out, inc.ToPersisted())
+	keys := make([]string, 0, len(e.state)+len(e.massFailures))
+	for key := range e.state {
+		keys = append(keys, string(key))
 	}
-	for _, inc := range e.massFailures {
-		if inc.State == model.StateResolved {
+	for key := range e.massFailures {
+		keys = append(keys, string(key))
+	}
+	sort.Strings(keys)
+	out := make([]model.PersistedIncident, 0, len(keys))
+	for _, rawKey := range keys {
+		key := model.IncidentKey(rawKey)
+		inc := e.state[key]
+		if inc == nil {
+			inc = e.massFailures[key]
+		}
+		if inc == nil || inc.State == model.StateResolved {
 			continue
 		}
 		out = append(out, inc.ToPersisted())
@@ -207,14 +216,18 @@ func (e *Engine) RestoreIncidents(
 	now := e.now()
 	restored := 0
 	for key, inc := range incidents {
+		if inc == nil {
+			continue
+		}
 		if IsMassFailureKey(key) {
 			if _, exists := e.massFailures[key]; exists {
 				continue
 			}
-			inc.LastSeen = now
-			inc.LastUpdate = now
-			inc.NotifiedSig = notifSig(inc)
-			e.massFailures[key] = inc
+			clone := inc.Clone()
+			clone.LastSeen = now
+			clone.LastUpdate = now
+			clone.NotifiedSig = notifSig(clone)
+			e.massFailures[key] = clone
 			restored++
 			continue
 		}
@@ -225,11 +238,12 @@ func (e *Engine) RestoreIncidents(
 		if _, exists := e.state[key]; exists {
 			continue
 		}
-		inc.LastSeen = now
-		inc.LastUpdate = now
-		inc.NotifiedSig = notifSig(inc)
-		e.state[key] = inc
-		e.indexIncidentByNamespace(inc)
+		clone := inc.Clone()
+		clone.LastSeen = now
+		clone.LastUpdate = now
+		clone.NotifiedSig = notifSig(clone)
+		e.state[key] = clone
+		e.indexIncidentByNamespace(clone)
 		restored++
 	}
 	if restored > 0 {
@@ -271,19 +285,25 @@ func (e *Engine) hasMassFailureLocked(key model.IncidentKey) bool {
 // e.mu.
 func (e *Engine) AddMassFailure(inc *model.Incident) bool {
 	e.mu.Lock()
-	if _, exists := e.massFailures[inc.Key]; exists {
+	if inc == nil {
 		e.mu.Unlock()
 		return false
 	}
-	inc.FirstSeen = e.now()
-	inc.LastSeen = inc.FirstSeen
-	if inc.State != model.StateResolved {
-		inc.State = model.StateActive
+	key := inc.Key
+	if _, exists := e.massFailures[key]; exists {
+		e.mu.Unlock()
+		return false
 	}
-	inc.NotifiedSig = notifSig(inc)
-	e.massFailures[inc.Key] = inc
+	stored := inc.Clone()
+	stored.FirstSeen = e.now()
+	stored.LastSeen = stored.FirstSeen
+	if stored.State != model.StateResolved {
+		stored.State = model.StateActive
+	}
+	stored.NotifiedSig = notifSig(stored)
+	e.massFailures[key] = stored
 	e.dirty = true
-	snap := inc.Clone()
+	snap := stored.Clone()
 	e.mu.Unlock()
 
 	e.emit(transition{snap, model.ActionCreate})

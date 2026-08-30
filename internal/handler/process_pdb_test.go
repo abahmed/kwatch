@@ -56,6 +56,10 @@ func TestDetectPdbIssue(t *testing.T) {
 	assert.Equal(t, "PdbViolation", sig.Reason)
 }
 
+func TestDetectPdbIssueNilIsSafe(t *testing.T) {
+	assert.Nil(t, DetectPdbIssue(nil))
+}
+
 func TestDetectPdbIssueNoIssue(t *testing.T) {
 	pdb := &policyv1.PodDisruptionBudget{
 		ObjectMeta: metav1.ObjectMeta{Name: "pdb1", Namespace: "ns1"},

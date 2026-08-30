@@ -56,7 +56,7 @@ func NewLogger(cfg Config) *AuditLogger {
 	if cfg.Output == "" || cfg.Output == "stdout" {
 		l.writer = os.Stdout
 	} else {
-		f, err := os.OpenFile(cfg.Output, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
+		f, err := os.OpenFile(cfg.Output, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0600)
 		if err != nil {
 			klog.ErrorS(err, "failed to open audit log file, falling back to stdout", "path", cfg.Output)
 			l.writer = os.Stdout

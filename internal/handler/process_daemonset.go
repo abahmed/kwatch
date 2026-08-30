@@ -16,6 +16,9 @@ import (
 // DetectDaemonSetIssue returns a Signal if the DaemonSet has unavailable
 // pods that would trigger an alert. Used for baseline seeding at startup.
 func DetectDaemonSetIssue(ds *appsv1.DaemonSet) *event.Signal {
+	if ds == nil {
+		return nil
+	}
 	if ds.Status.DesiredNumberScheduled > 0 && ds.Status.NumberUnavailable > 0 {
 		return &event.Signal{
 			Resource:  "daemonset",

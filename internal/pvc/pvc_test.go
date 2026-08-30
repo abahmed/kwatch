@@ -13,7 +13,6 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes/fake"
 
-	"github.com/abahmed/kwatch/internal/alert"
 	"github.com/abahmed/kwatch/internal/config"
 	"github.com/abahmed/kwatch/internal/correlation"
 	"github.com/abahmed/kwatch/internal/enricher"
@@ -31,13 +30,10 @@ func TestNewPvcMonitor(t *testing.T) {
 		Threshold: 80,
 		Interval:  5,
 	}
-	alertMgr := &alert.AlertManager{}
-
-	pvc := NewPvcMonitor(client, cfg, alertMgr, nil, nil)
+	pvc := NewPvcMonitor(client, cfg, nil, nil)
 	assert.NotNil(pvc)
 	assert.Equal(client, pvc.client)
 	assert.Equal(cfg, pvc.config)
-	assert.Equal(alertMgr, pvc.alertManager)
 	assert.NotNil(pvc.notifiedPvc)
 }
 
@@ -45,22 +41,10 @@ func TestNewPvcMonitorNilConfig(t *testing.T) {
 	assert := assert.New(t)
 
 	client := fake.NewSimpleClientset()
-	alertMgr := &alert.AlertManager{}
 
-	pvc := NewPvcMonitor(client, nil, alertMgr, nil, nil)
+	pvc := NewPvcMonitor(client, nil, nil, nil)
 	assert.NotNil(pvc)
 	assert.Nil(pvc.config)
-}
-
-func TestNewPvcMonitorNilAlertManager(t *testing.T) {
-	assert := assert.New(t)
-
-	client := fake.NewSimpleClientset()
-	cfg := &config.PvcMonitor{}
-
-	pvc := NewPvcMonitor(client, cfg, nil, nil, nil)
-	assert.NotNil(pvc)
-	assert.Nil(pvc.alertManager)
 }
 
 func TestStartDisabled(t *testing.T) {
@@ -68,9 +52,8 @@ func TestStartDisabled(t *testing.T) {
 	cfg := &config.PvcMonitor{
 		Enabled: false,
 	}
-	alertMgr := &alert.AlertManager{}
 
-	pvc := NewPvcMonitor(client, cfg, alertMgr, nil, nil)
+	pvc := NewPvcMonitor(client, cfg, nil, nil)
 	pvc.Start(context.Background())
 }
 
@@ -79,9 +62,8 @@ func TestCleanupUnderThreshold(t *testing.T) {
 
 	client := fake.NewSimpleClientset()
 	cfg := &config.PvcMonitor{}
-	alertMgr := &alert.AlertManager{}
 
-	pvc := NewPvcMonitor(client, cfg, alertMgr, nil, nil)
+	pvc := NewPvcMonitor(client, cfg, nil, nil)
 
 	for i := 0; i < 100; i++ {
 		pvc.notifiedPvc[string(rune(i))] = true
@@ -97,9 +79,8 @@ func TestCleanupOverThreshold(t *testing.T) {
 
 	client := fake.NewSimpleClientset()
 	cfg := &config.PvcMonitor{}
-	alertMgr := &alert.AlertManager{}
 
-	pvc := NewPvcMonitor(client, cfg, alertMgr, nil, nil)
+	pvc := NewPvcMonitor(client, cfg, nil, nil)
 
 	for i := 0; i < 1001; i++ {
 		pvc.notifiedPvc[string(rune(i))] = true
@@ -114,9 +95,8 @@ func TestCleanupExactlyThreshold(t *testing.T) {
 
 	client := fake.NewSimpleClientset()
 	cfg := &config.PvcMonitor{}
-	alertMgr := &alert.AlertManager{}
 
-	pvc := NewPvcMonitor(client, cfg, alertMgr, nil, nil)
+	pvc := NewPvcMonitor(client, cfg, nil, nil)
 
 	for i := 0; i < 1000; i++ {
 		pvc.notifiedPvc[string(rune(i))] = true
@@ -129,9 +109,8 @@ func TestCleanupExactlyThreshold(t *testing.T) {
 func TestPvcMonitorConcurrency(t *testing.T) {
 	client := fake.NewSimpleClientset()
 	cfg := &config.PvcMonitor{}
-	alertMgr := &alert.AlertManager{}
 
-	pvc := NewPvcMonitor(client, cfg, alertMgr, nil, nil)
+	pvc := NewPvcMonitor(client, cfg, nil, nil)
 
 	var wg sync.WaitGroup
 	for i := 0; i < 100; i++ {
@@ -268,9 +247,8 @@ func TestCheckUsageNoNodes(t *testing.T) {
 		Enabled:   true,
 		Threshold: 80,
 	}
-	alertMgr := &alert.AlertManager{}
 
-	pvc := NewPvcMonitor(client, cfg, alertMgr, nil, nil)
+	pvc := NewPvcMonitor(client, cfg, nil, nil)
 	pvc.checkUsage(context.Background())
 
 	assert.Equal(0, len(pvc.notifiedPvc))
@@ -284,9 +262,8 @@ func TestCheckUsageAlreadyNotified(t *testing.T) {
 		Enabled:   true,
 		Threshold: 80,
 	}
-	alertMgr := &alert.AlertManager{}
 
-	pvc := NewPvcMonitor(client, cfg, alertMgr, nil, nil)
+	pvc := NewPvcMonitor(client, cfg, nil, nil)
 	pvc.notifiedPvc["existing-pv"] = true
 
 	assert.True(pvc.notifiedPvc["existing-pv"])
@@ -300,9 +277,8 @@ func TestCheckUsageUnderThreshold(t *testing.T) {
 		Enabled:   true,
 		Threshold: 90,
 	}
-	alertMgr := &alert.AlertManager{}
 
-	pvc := NewPvcMonitor(client, cfg, alertMgr, nil, nil)
+	pvc := NewPvcMonitor(client, cfg, nil, nil)
 
 	usage := &PvcUsage{
 		Name:            "test-pvc",
@@ -327,9 +303,8 @@ func TestCheckUsageOverThreshold(t *testing.T) {
 		Enabled:   true,
 		Threshold: 80,
 	}
-	alertMgr := &alert.AlertManager{}
 
-	pvc := NewPvcMonitor(client, cfg, alertMgr, nil, nil)
+	pvc := NewPvcMonitor(client, cfg, nil, nil)
 
 	usage := &PvcUsage{
 		Name:            "test-pvc",
@@ -528,9 +503,8 @@ func TestPvcFirstScanInitializedTrue(t *testing.T) {
 
 	client := fake.NewSimpleClientset()
 	cfg := &config.PvcMonitor{Enabled: true, Threshold: 80}
-	alertMgr := &alert.AlertManager{}
 
-	pvc := NewPvcMonitor(client, cfg, alertMgr, nil, nil)
+	pvc := NewPvcMonitor(client, cfg, nil, nil)
 	assert.True(pvc.firstScan, "firstScan should initialize to true")
 }
 
@@ -539,9 +513,8 @@ func TestPvcFirstScanSetToFalseAfterCheckUsage(t *testing.T) {
 
 	client := fake.NewSimpleClientset()
 	cfg := &config.PvcMonitor{Enabled: true, Threshold: 80}
-	alertMgr := &alert.AlertManager{}
 
-	pvc := NewPvcMonitor(client, cfg, alertMgr, nil, nil)
+	pvc := NewPvcMonitor(client, cfg, nil, nil)
 	assert.True(pvc.firstScan)
 
 	pvc.checkUsage(context.Background())
@@ -554,9 +527,8 @@ func TestPvcFirstScanSeedsNotifiedOnOverThreshold(t *testing.T) {
 
 	client := fake.NewSimpleClientset()
 	cfg := &config.PvcMonitor{Enabled: true, Threshold: 80}
-	alertMgr := &alert.AlertManager{}
 
-	pvc := NewPvcMonitor(client, cfg, alertMgr, nil, nil)
+	pvc := NewPvcMonitor(client, cfg, nil, nil)
 	assert.True(pvc.firstScan)
 
 	// Simulate what checkUsage does: over-threshold PVCs during firstScan
@@ -575,7 +547,7 @@ func TestPvcFirstScanSeedsNotifiedOnOverThreshold(t *testing.T) {
 // ── apply() unit tests ────────────────────────────────────────
 
 func newTestPvcMonitor(cfg *config.PvcMonitor, correlator *correlation.Engine) *PvcMonitor {
-	m := NewPvcMonitor(fake.NewSimpleClientset(), cfg, &alert.AlertManager{}, correlator, nil)
+	m := NewPvcMonitor(fake.NewSimpleClientset(), cfg, correlator, nil)
 	m.firstScan = false // tests that check signal behavior need firstScan=false
 	return m
 }
@@ -736,7 +708,7 @@ func TestPersistWritesToConfigMap(t *testing.T) {
 
 	cfg := &config.PvcMonitor{Enabled: true, Threshold: 80}
 	corr := newTestCorrelator()
-	m := NewPvcMonitor(client, cfg, &alert.AlertManager{}, corr, sm)
+	m := NewPvcMonitor(client, cfg, corr, sm)
 
 	// Populate lastUsage via apply
 	m.apply([]*PvcUsage{
@@ -790,7 +762,7 @@ func TestPersistenceRoundTripRestoresIncidents(t *testing.T) {
 	// Create a PvcMonitor with the SAME state manager (simulates restart)
 	cfg := &config.PvcMonitor{Enabled: true, Threshold: 80, CriticalThreshold: 90}
 	corr := newTestCorrelator()
-	m := NewPvcMonitor(client, cfg, &alert.AlertManager{}, corr, sm)
+	m := NewPvcMonitor(client, cfg, corr, sm)
 
 	// Simulate Start's seed block (which runs before first checkUsage)
 	if seed := sm.GetPvcUsage(context.Background()); seed != nil {
@@ -828,7 +800,7 @@ func TestPersistenceRoundTripKeepFiringWithoutRemount(t *testing.T) {
 
 	cfg := &config.PvcMonitor{Enabled: true, Threshold: 80, ClearThreshold: 75}
 	corr := newTestCorrelator()
-	m := NewPvcMonitor(client, cfg, &alert.AlertManager{}, corr, sm)
+	m := NewPvcMonitor(client, cfg, corr, sm)
 
 	// Seed from configmap (same as Start)
 	if seed := sm.GetPvcUsage(context.Background()); seed != nil {
@@ -861,7 +833,7 @@ func TestPersistenceRoundTripNoPreviousState(t *testing.T) {
 	// No pre-existing ConfigMap
 	cfg := &config.PvcMonitor{Enabled: true, Threshold: 80}
 	corr := newTestCorrelator()
-	m := NewPvcMonitor(client, cfg, &alert.AlertManager{}, corr, sm)
+	m := NewPvcMonitor(client, cfg, corr, sm)
 
 	// Seed from ConfigMap (should return nil since there's no data)
 	assert.Nil(t, sm.GetPvcUsage(context.Background()))
@@ -979,7 +951,7 @@ func TestPvcMapCachesAndReturnsWithinTTL(t *testing.T) {
 	ctx := context.Background()
 	client := fake.NewSimpleClientset()
 	cfg := &config.PvcMonitor{Enabled: true, Threshold: 80}
-	m := NewPvcMonitor(client, cfg, &alert.AlertManager{}, nil, nil)
+	m := NewPvcMonitor(client, cfg, nil, nil)
 
 	// Create a PVC in the fake cluster
 	pvc := &v1.PersistentVolumeClaim{
@@ -1007,7 +979,7 @@ func TestPvcMapRefreshesAfterTTL(t *testing.T) {
 	ctx := context.Background()
 	client := fake.NewSimpleClientset()
 	cfg := &config.PvcMonitor{Enabled: true, Threshold: 80}
-	m := NewPvcMonitor(client, cfg, &alert.AlertManager{}, nil, nil)
+	m := NewPvcMonitor(client, cfg, nil, nil)
 
 	// Create a PVC
 	pvc := &v1.PersistentVolumeClaim{
@@ -1039,7 +1011,7 @@ func TestPvcMapEmptyWithNoPVCs(t *testing.T) {
 	ctx := context.Background()
 	client := fake.NewSimpleClientset()
 	cfg := &config.PvcMonitor{Enabled: true, Threshold: 80}
-	m := NewPvcMonitor(client, cfg, &alert.AlertManager{}, nil, nil)
+	m := NewPvcMonitor(client, cfg, nil, nil)
 
 	result := m.pvcMap(ctx)
 	assert.NotNil(t, result)
@@ -1050,7 +1022,7 @@ func TestPvcMapReturnsMapNotNilOnAPIFailure(t *testing.T) {
 	// With a nil client, the API call will fail; pvcMap should fall back to
 	// the last good map (nil initially, so returns nil).
 	cfg := &config.PvcMonitor{Enabled: true, Threshold: 80}
-	m := NewPvcMonitor(nil, cfg, &alert.AlertManager{}, nil, nil)
+	m := NewPvcMonitor(nil, cfg, nil, nil)
 
 	result := m.pvcMap(context.Background())
 	assert.NotNil(t, result, "no client → empty map, not nil")

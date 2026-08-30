@@ -15,6 +15,7 @@ import (
 	kwcontext "github.com/abahmed/kwatch/internal/context"
 	"github.com/abahmed/kwatch/internal/controller"
 	"github.com/abahmed/kwatch/internal/correlation"
+	"github.com/abahmed/kwatch/internal/crdwatch"
 	"github.com/abahmed/kwatch/internal/handler"
 	"github.com/abahmed/kwatch/internal/health"
 	"github.com/abahmed/kwatch/internal/heartbeat"
@@ -40,10 +41,13 @@ type serverDeps struct {
 	hbMonitor     *heartbeat.HeartbeatMonitor
 	ctl           *controller.Controller
 	incidentCh    chan []model.PersistedIncident
+	incidentSaver incidentSaver
+	incidentDone  <-chan struct{}
 	notifyStartup func()
 	// recordAlive stamps the liveness marker that lets the next start report
 	// how long monitoring was down.
 	recordAlive func(context.Context)
+	closeAudit  func() error
 	cleanup     func()
 	tlsSweep    func()
 }
@@ -62,8 +66,23 @@ func Run() int {
 
 	klog.InfoS(fmt.Sprintf(constant.WelcomeMsg, version.Short()))
 
+	if cfg.CrdConfig.Enabled {
+		restCfg, err := client.GetRestConfig(&cfg.App)
+		if err != nil {
+			klog.ErrorS(err, "failed to get rest config for startup CRD")
+			return 1
+		}
+		if err := crdwatch.ApplyStartupConfig(ctx, cfg, restCfg, k8s.GetNamespace()); err != nil {
+			klog.ErrorS(err, "failed to apply startup CRD configuration")
+			return 1
+		}
+	}
 	k8s.InitHTTPClient(&cfg.App)
-	k8sClient := client.Create(&cfg.App)
+	k8sClient, err := client.Create(&cfg.App)
+	if err != nil {
+		klog.ErrorS(err, "failed to create kubernetes client")
+		return 1
+	}
 
 	sm := startup.NewStartupManager(
 		k8sClient,
@@ -85,14 +104,22 @@ func Run() int {
 	go up.CheckUpdates(ctx)
 
 	stateMgr := sm.GetStateManager()
-	baseline := stateMgr.GetBaseline(ctx)
 	stateMgr.MigrateLegacyBaseline(ctx)
+	// Migrate before loading: on the first release that uses the dedicated
+	// ConfigMap, the only baseline may still be in kwatch-state. Loading first
+	// would construct the engine with an empty baseline and re-alert every
+	// pre-existing incident during this process lifetime.
+	baseline := stateMgr.GetBaseline(ctx)
 
 	baselineCh := make(chan map[string]map[string]int64, 64)
 	go startBaselineSaver(ctx, stateMgr, baselineCh, 0)
 
 	incidentCh := make(chan []model.PersistedIncident, 1)
-	go startIncidentSaver(ctx, stateMgr, incidentCh)
+	incidentDone := make(chan struct{})
+	go func() {
+		defer close(incidentDone)
+		startIncidentSaver(ctx, stateMgr, incidentCh)
+	}()
 
 	tracker := kwcontext.NewChangeTracker(0)
 	graph := kwcontext.NewResourceGraph()
@@ -112,7 +139,6 @@ func Run() int {
 		baselineCh,
 		insightEngine,
 	)
-	restoreIncidents(ctx, stateMgr, correlator)
 
 	correlator.SetAuditLogger(auditLogger)
 
@@ -127,7 +153,6 @@ func Run() int {
 	pvcMonitor := pvc.NewPvcMonitor(
 		k8sClient,
 		&cfg.PvcMonitor,
-		am,
 		correlator,
 		stateMgr,
 	)
@@ -135,7 +160,12 @@ func Run() int {
 
 	h := handler.NewHandler(k8sClient, cfg, correlator, am)
 
-	ctl, cleanup := controller.New(k8sClient, cfg, h)
+	ctl, cleanup, err := controller.New(k8sClient, cfg, h)
+	if err != nil {
+		klog.ErrorS(err, "failed to create controller")
+		return 1
+	}
+	restoreIncidents(ctx, stateMgr, correlator, ctl.NamespaceAllowed)
 	ctl.SetTracker(tracker)
 	ctl.SetGraph(graph)
 	ctl.SetReadyFunc(func() { healthServer.SetReady(true) })
@@ -156,8 +186,11 @@ func Run() int {
 		hbMonitor:     hbMonitor,
 		ctl:           ctl,
 		incidentCh:    incidentCh,
+		incidentSaver: stateMgr,
+		incidentDone:  incidentDone,
 		notifyStartup: sm.NotifyStartup,
 		recordAlive:   sm.RecordAlive,
+		closeAudit:    auditLogger.Close,
 		cleanup:       cleanup,
 		tlsSweep:      tlsSweep,
 	}

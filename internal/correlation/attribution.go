@@ -1,6 +1,7 @@
 package correlation
 
 import (
+	"sort"
 	"time"
 
 	"github.com/abahmed/kwatch/internal/event"
@@ -161,7 +162,13 @@ func (e *Engine) ownerIncidentFor(
 	// Only incidents in the event's own namespace can claim it, so walk the
 	// namespace index rather than every incident in the cluster: this runs on
 	// every event.
-	for _, existing := range e.namespaceIndex[ev.Namespace] {
+	keys := make([]string, 0, len(e.namespaceIndex[ev.Namespace]))
+	for key := range e.namespaceIndex[ev.Namespace] {
+		keys = append(keys, string(key))
+	}
+	sort.Strings(keys)
+	for _, rawKey := range keys {
+		existing := e.namespaceIndex[ev.Namespace][model.IncidentKey(rawKey)]
 		if existing.State == model.StateResolved ||
 			existing.State == model.StatePendingResolve {
 			continue
@@ -267,7 +274,13 @@ func (e *Engine) releaseSuppressedLocked(
 	massKey model.IncidentKey,
 ) []transition {
 	var released []transition
-	for _, inc := range e.state {
+	keys := make([]string, 0, len(e.state))
+	for key := range e.state {
+		keys = append(keys, string(key))
+	}
+	sort.Strings(keys)
+	for _, rawKey := range keys {
+		inc := e.state[model.IncidentKey(rawKey)]
 		if inc.SuppressedBy != massKey {
 			continue
 		}

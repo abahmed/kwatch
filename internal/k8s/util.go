@@ -2,8 +2,9 @@ package k8s
 
 import (
 	"context"
+	"crypto/rand"
 	"fmt"
-	"math/rand"
+	"math/big"
 	"os"
 	"sort"
 	"strings"
@@ -222,9 +223,13 @@ func RandomString(n int) string {
 		"NOPQRSTUVWXYZ0123456789"
 
 	b := make([]byte, n)
-	r := rand.New(rand.NewSource(time.Now().UnixNano()))
+	limit := big.NewInt(int64(len(availableCharacterBytes)))
 	for i := range b {
-		b[i] = availableCharacterBytes[r.Intn(len(availableCharacterBytes))]
+		n, err := rand.Int(rand.Reader, limit)
+		if err != nil {
+			return ""
+		}
+		b[i] = availableCharacterBytes[n.Int64()]
 	}
 
 	return string(b)

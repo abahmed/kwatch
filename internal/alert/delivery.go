@@ -7,6 +7,8 @@ import (
 
 	"k8s.io/klog/v2"
 
+	"github.com/abahmed/kwatch/internal/constant"
+	"github.com/abahmed/kwatch/internal/event"
 	"github.com/abahmed/kwatch/internal/insight"
 	"github.com/abahmed/kwatch/internal/metrics"
 	"github.com/abahmed/kwatch/internal/model"
@@ -26,10 +28,83 @@ type DeadLetterEntry struct {
 	Timestamp time.Time            `json:"timestamp"`
 }
 
+// deliverFallbackIncident sends an incident through the fallback's native
+// delivery interface. Event-based providers deliberately implement
+// SendMessage as a no-op, so a fallback must not always use that method.
+func (a *AlertManager) deliverFallbackIncident(
+	ctx context.Context,
+	entry *providerEntry,
+	primary string,
+	inc *model.Incident,
+	action model.IncidentAction,
+	ins *insight.Insight,
+) error {
+	p := entry.provider
+	retry := fallbackRetryConfig(entry.retry)
+	if ip, ok := p.(InsightThreadProvider); ok {
+		return sendWithRetry(ctx, func() error {
+			return ip.SendIncidentWithInsight(inc, action, ins)
+		}, retry, p.Name())
+	}
+	if tp, ok := p.(ThreadProvider); ok {
+		return sendWithRetry(ctx, func() error {
+			return tp.SendIncident(inc, action)
+		}, retry, p.Name())
+	}
+	if _, ok := p.(EventDeliveryProvider); ok {
+		ev := incidentToEvent(inc, action)
+		return sendWithRetry(ctx, func() error {
+			return p.SendEvent(ev)
+		}, retry, p.Name())
+	}
+	msg := truncateMsg(
+		"[fallback — primary "+primary+" failed] "+a.buildMessage(inc, action, ins, nil),
+		entry.maxBytes,
+	)
+	return sendWithRetry(ctx, func() error {
+		return p.SendMessage(msg)
+	}, retry, p.Name())
+}
+
+func deliverFallbackMessage(
+	ctx context.Context,
+	entry *providerEntry,
+	primary, msg string,
+) error {
+	p := entry.provider
+	retry := fallbackRetryConfig(entry.retry)
+	if _, ok := p.(EventDeliveryProvider); ok {
+		ev := &event.Event{PodName: msg, Reason: constant.ReasonNotify}
+		return sendWithRetry(ctx, func() error { return p.SendEvent(ev) }, retry, p.Name())
+	}
+	fallback := truncateMsg(
+		"[fallback — primary "+primary+" failed] "+msg,
+		entry.maxBytes,
+	)
+	return sendWithRetry(ctx, func() error { return p.SendMessage(fallback) }, retry, p.Name())
+}
+
+func deliverFallbackEvent(
+	ctx context.Context,
+	entry *providerEntry,
+	ev *event.Event,
+) error {
+	p := entry.provider
+	retry := fallbackRetryConfig(entry.retry)
+	return sendWithRetry(ctx, func() error { return p.SendEvent(ev) }, retry, p.Name())
+}
+
 const channelCap = 256
 const dlqCap = 100
 
 const defaultMaxBackoff = 30 * time.Second
+
+func fallbackRetryConfig(rc retryConfig) retryConfig {
+	if rc.maxAttempts < 1 {
+		rc.maxAttempts = 1
+	}
+	return rc
+}
 
 func (a *AlertManager) recordDeadLetter(
 	entry *providerEntry,
@@ -63,7 +138,7 @@ func (a *AlertManager) deliverOne(
 
 	tpl := entry.templates
 	if len(tpl) == 0 {
-		tpl = a.templates
+		tpl = a.globalTemplates()
 	}
 
 	// Evaluate routes before rendering so route-filtered incidents don't pay
@@ -134,11 +209,9 @@ func (a *AlertManager) deliverOne(
 		)
 		a.recordDeadLetter(entry, inc, action, err)
 		if entry.fallback != nil {
-			fbMsg := truncateMsg(
-				"[fallback — primary "+p.Name()+" failed] "+msg,
-				entry.fallback.maxBytes,
+			fbErr := a.deliverFallbackIncident(
+				ctx, entry.fallback, p.Name(), inc, action, ins,
 			)
-			fbErr := entry.fallback.provider.SendMessage(fbMsg)
 			if fbErr != nil {
 				klog.ErrorS(
 					fbErr,
@@ -194,7 +267,7 @@ func (a *AlertManager) deliverAllSync(
 		p := entry.provider
 		tpl := entry.templates
 		if len(tpl) == 0 {
-			tpl = a.templates
+			tpl = a.globalTemplates()
 		}
 		if !shouldDeliver(entry.routes, inc) {
 			continue
@@ -202,7 +275,22 @@ func (a *AlertManager) deliverAllSync(
 		raw := a.buildMessage(inc, action, ins, tpl)
 		msg := truncateMsg(raw, entry.maxBytes)
 		var err error
-		if tp, ok := p.(ThreadProvider); ok {
+		if ip, ok := p.(InsightThreadProvider); ok {
+			sendInc := inc
+			if entry.maxBytes > 0 {
+				sendInc = a.clampIncidentForProvider(
+					inc,
+					action,
+					ins,
+					entry.maxBytes,
+					tpl,
+					len(raw),
+				)
+			}
+			err = sendWithRetry(context.Background(), func() error {
+				return ip.SendIncidentWithInsight(sendInc, action, ins)
+			}, entry.retry, p.Name())
+		} else if tp, ok := p.(ThreadProvider); ok {
 			sendInc := inc
 			if entry.maxBytes > 0 {
 				sendInc = a.clampIncidentForProvider(
@@ -239,6 +327,14 @@ func (a *AlertManager) deliverAllSync(
 				"id",
 				inc.ID,
 			)
+			if entry.fallback != nil {
+				if fbErr := a.deliverFallbackIncident(
+					context.Background(), entry.fallback, p.Name(), inc, action, ins,
+				); fbErr != nil {
+					klog.ErrorS(fbErr, "sync fallback delivery failed",
+						"provider", entry.fallback.provider.Name())
+				}
+			}
 		}
 	}
 }

@@ -7,9 +7,8 @@ import (
 	"time"
 
 	"k8s.io/apimachinery/pkg/api/errors"
+	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
-	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/client-go/dynamic"
 	"k8s.io/client-go/dynamic/dynamicinformer"
@@ -17,8 +16,6 @@ import (
 	"k8s.io/client-go/tools/cache"
 	"k8s.io/klog/v2"
 
-	"github.com/abahmed/kwatch/api/v1alpha1"
-	"github.com/abahmed/kwatch/internal/alert"
 	"github.com/abahmed/kwatch/internal/config"
 )
 
@@ -28,31 +25,26 @@ var gvr = schema.GroupVersionResource{
 	Resource: "kwatchconfigs",
 }
 
-// Watcher monitors KwatchConfig CRs and applies safe config changes live.
-type SeveritySetter interface {
-	SetSeverityMap(map[string]string)
-}
+// Watcher monitors KwatchConfig CRs. Config changes are deliberately not
+// applied live: a partially reconfigured controller is harder to reason about
+// than a brief, explicit restart.
 
 type Watcher struct {
-	cfg          *config.Config
-	alertManager *alert.AlertManager
-	engine       SeveritySetter
-	restConfig   *rest.Config
-	namespace    string
-	resync       time.Duration
-	mu           sync.Mutex
-	fallbackCfg  *config.Config // boot-time values restored on CR delete
+	cfg         *config.Config
+	restConfig  *rest.Config
+	namespace   string
+	resync      time.Duration
+	mu          sync.Mutex
+	seen        map[string]string
+	ready       bool
+	restart     func()
+	restartOnce sync.Once
 }
 
-func New(cfg *config.Config, alertManager *alert.AlertManager, engine SeveritySetter, restConfig *rest.Config, namespace string, resync time.Duration) *Watcher {
+func New(cfg *config.Config, restConfig *rest.Config, namespace string, resync time.Duration, restart func()) *Watcher {
 	return &Watcher{
-		cfg:          cfg,
-		alertManager: alertManager,
-		engine:       engine,
-		restConfig:   restConfig,
-		namespace:    namespace,
-		resync:       resync,
-		fallbackCfg:  cfg,
+		cfg: cfg, restConfig: restConfig, namespace: namespace,
+		resync: resync, seen: make(map[string]string), restart: restart,
 	}
 }
 
@@ -80,9 +72,9 @@ func (w *Watcher) Start(ctx context.Context) error {
 	inf := factory.ForResource(gvr).Informer()
 
 	if _, err := inf.AddEventHandler(cache.ResourceEventHandlerFuncs{
-		AddFunc:    func(obj interface{}) { w.reload(obj) },
-		UpdateFunc: func(_, newObj interface{}) { w.reload(newObj) },
-		DeleteFunc: func(_ interface{}) { w.restore() },
+		AddFunc:    w.changed,
+		UpdateFunc: func(_, obj interface{}) { w.changed(obj) },
+		DeleteFunc: w.deleted,
 	}); err != nil {
 		return fmt.Errorf("crdwatch: failed to register event handler: %w", err)
 	}
@@ -92,86 +84,62 @@ func (w *Watcher) Start(ctx context.Context) error {
 		return fmt.Errorf("crdwatch: failed to sync informer cache")
 	}
 
-	// Process existing CRs
-	items, err := dc.Resource(gvr).Namespace(w.namespace).List(ctx, metav1.ListOptions{})
-	if err == nil {
-		for i := range items.Items {
-			w.reload(&items.Items[i])
-		}
-	}
+	w.seedKnown(inf.GetStore().List())
 
 	klog.InfoS("CRD watcher started", "namespace", w.namespace)
 	return nil
 }
 
-// reload converts an unstructured KwatchConfig CR into typed config and
-// hot-applies safe fields. Restart-only fields are logged and skipped.
-func (w *Watcher) reload(obj interface{}) {
-	unstr, ok := obj.(*unstructured.Unstructured)
-	if !ok {
-		return
-	}
-
-	var cr v1alpha1.KwatchConfig
-	if err := runtime.DefaultUnstructuredConverter.FromUnstructured(unstr.UnstructuredContent(), &cr); err != nil {
-		klog.ErrorS(err, "crdwatch: failed to convert unstructured to KwatchConfig", "name", unstr.GetName())
-		return
-	}
-
+func (w *Watcher) seedKnown(objects []interface{}) {
 	w.mu.Lock()
 	defer w.mu.Unlock()
-
-	spec := cr.Spec
-
-	if spec.MaxRecentLogLines > 0 {
-		w.alertManager.SetMaxLogLines(int(spec.MaxRecentLogLines))
-	}
-
-	{
-		silences := make([]config.SilenceRule, 0, len(spec.Silences))
-		for _, s := range spec.Silences {
-			silences = append(silences, config.SilenceRule{
-				Namespaces:        s.Namespaces,
-				Reasons:           s.Reasons,
-				PodNamePatterns:   s.PodNamePatterns,
-				ContainerNames:    s.ContainerNames,
-				LogPatterns:       s.LogPatterns,
-				ContainerMessages: s.ContainerMessages,
-				NodeReasons:       s.NodeReasons,
-				NodeMessages:      s.NodeMessages,
-			})
-		}
-		w.alertManager.SetSilences(silences)
-	}
-
-	if spec.SeverityByOwnerKind != nil {
-		if bad := config.InvalidSeverityKeys(spec.SeverityByOwnerKind); len(bad) > 0 {
-			klog.ErrorS(nil, "crdwatch: severityByOwnerKind has invalid severity values, ignoring map",
-				"keys", bad, "crd", cr.Name)
-		} else {
-			w.engine.SetSeverityMap(spec.SeverityByOwnerKind)
+	for _, obj := range objects {
+		if accessor, err := meta.Accessor(obj); err == nil {
+			w.seen[accessor.GetNamespace()+"/"+accessor.GetName()] = accessor.GetResourceVersion()
 		}
 	}
-
-	// Log restart-only fields that can't be hot-applied
-	if spec.Workers > 0 || spec.PvcMonitor.Enabled || spec.NodeMonitor.Enabled || spec.RolloutMonitor.Enabled || spec.DaemonSetMonitor.Enabled || spec.JobMonitor.Enabled || spec.CronJobMonitor.Enabled {
-		klog.InfoS("crdwatch: some config changes require a restart to take effect",
-			"crd", cr.Name)
-	}
-
-	klog.V(4).InfoS("crdwatch: applied config from CR", "name", cr.Name)
+	w.ready = true
 }
 
-// restore re-applies the boot-time ConfigMap-derived config on CR deletion.
-func (w *Watcher) restore() {
-	w.mu.Lock()
-	defer w.mu.Unlock()
-
-	w.alertManager.SetSilences(w.fallbackCfg.Silences)
-	if w.fallbackCfg.MaxRecentLogLines > 0 {
-		w.alertManager.SetMaxLogLines(int(w.fallbackCfg.MaxRecentLogLines))
+func (w *Watcher) changed(obj interface{}) {
+	accessor, err := meta.Accessor(obj)
+	if err != nil {
+		return
 	}
-	w.engine.SetSeverityMap(w.fallbackCfg.SeverityByOwnerKind)
+	key := accessor.GetNamespace() + "/" + accessor.GetName()
+	version := accessor.GetResourceVersion()
+	w.mu.Lock()
+	previous, known := w.seen[key]
+	if !known {
+		w.seen[key] = version
+	}
+	ready := w.ready
+	w.mu.Unlock()
+	if !ready || previous == version || w.restart == nil {
+		return
+	}
+	w.restartOnce.Do(func() {
+		klog.InfoS("KwatchConfig changed; restarting to apply configuration")
+		w.restart()
+	})
+}
 
-	klog.InfoS("crdwatch: restored config from boot-time snapshot")
+func (w *Watcher) deleted(obj interface{}) {
+	accessor, err := meta.Accessor(obj)
+	if err != nil || w.restart == nil {
+		return
+	}
+	key := accessor.GetNamespace() + "/" + accessor.GetName()
+	w.mu.Lock()
+	_, known := w.seen[key]
+	delete(w.seen, key)
+	ready := w.ready
+	w.mu.Unlock()
+	if !ready || !known {
+		return
+	}
+	w.restartOnce.Do(func() {
+		klog.InfoS("KwatchConfig changed; restarting to apply configuration")
+		w.restart()
+	})
 }

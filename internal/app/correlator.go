@@ -29,9 +29,6 @@ func configureAlertManager(
 ) {
 	am.SetSilences(cfg.Silences)
 	am.SetTemplates(cfg.Templates)
-	if cfg.MaxRecentLogLines > 0 {
-		am.SetMaxLogLines(int(cfg.MaxRecentLogLines))
-	}
 	am.Start(ctx)
 }
 
@@ -272,6 +269,7 @@ func restoreIncidents(
 	ctx context.Context,
 	stateMgr *state.StateManager,
 	correlator *correlation.Engine,
+	allowed func(string) bool,
 ) {
 	persisted, err := stateMgr.LoadPersistedIncidents(ctx)
 	if err != nil {
@@ -281,12 +279,16 @@ func restoreIncidents(
 		klog.ErrorS(err, "failed to restore incidents from configmap")
 		return
 	}
+	correlator.FilterBaseline(allowed)
 	if len(persisted) == 0 {
 		return
 	}
 	restored := make(map[model.IncidentKey]*model.Incident, len(persisted))
 	for i := range persisted {
 		inc := persisted[i].ToIncident()
+		if inc.Namespace != "" && allowed != nil && !allowed(inc.Namespace) {
+			continue
+		}
 		restored[inc.Key] = inc
 	}
 	correlator.RestoreIncidents(restored)

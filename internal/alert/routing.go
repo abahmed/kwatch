@@ -2,9 +2,10 @@ package alert
 
 import (
 	"context"
+	cryptorand "crypto/rand"
+	"encoding/binary"
 	"errors"
 	"fmt"
-	"math/rand/v2"
 	"strings"
 	"text/template"
 	"time"
@@ -270,7 +271,12 @@ func applyJitter(d time.Duration, factor float64) time.Duration {
 	if factor <= 0 {
 		return d
 	}
-	jitter := time.Duration(float64(d) * factor * (rand.Float64()*2 - 1))
+	var seed [8]byte
+	if _, err := cryptorand.Read(seed[:]); err != nil {
+		return d
+	}
+	ratio := float64(binary.LittleEndian.Uint64(seed[:])) / float64(^uint64(0))
+	jitter := time.Duration(float64(d) * factor * (ratio*2 - 1))
 	return d + jitter
 }
 
