@@ -1,9 +1,11 @@
 package statuswatch
 
 import (
+	"context"
 	"testing"
 
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
+	"k8s.io/client-go/dynamic/dynamicinformer"
 
 	kwcontext "github.com/abahmed/kwatch/internal/context"
 )
@@ -21,6 +23,24 @@ func TestFailureSignalUsesConfiguredConditionRules(t *testing.T) {
 	}
 	if signal := failureSignal(obj, "customresource", "db", defaultConditionRules()); signal != nil {
 		t.Fatalf("default rules should ignore custom Healthy condition: %+v", signal)
+	}
+}
+
+func TestReconcileCRDVersionsStopsUnservedVersion(t *testing.T) {
+	stopped := false
+	monitor := &Monitor{
+		factories:   map[string]dynamicinformer.DynamicSharedInformerFactory{"old": nil},
+		stops:       map[string]context.CancelFunc{"old": func() { stopped = true }},
+		crdVersions: map[string]map[string]struct{}{"dbs.example.io": {"old": {}}},
+	}
+
+	monitor.reconcileCRDVersions("dbs.example.io", map[string]struct{}{"new": {}})
+
+	if !stopped {
+		t.Fatal("expected unserved CRD version to be stopped")
+	}
+	if _, exists := monitor.factories["old"]; exists {
+		t.Fatal("stale CRD informer was not removed")
 	}
 }
 

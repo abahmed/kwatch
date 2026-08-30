@@ -37,6 +37,8 @@ type Monitor struct {
 	namespaceAllowed func(string) bool
 	mu               sync.Mutex
 	factories        map[string]dynamicinformer.DynamicSharedInformerFactory
+	stops            map[string]context.CancelFunc
+	crdVersions      map[string]map[string]struct{}
 	conditionRules   map[string]map[string]bool
 	graph            *kwcontext.ResourceGraph
 	graphReferences  []graphReferenceRule
@@ -66,7 +68,12 @@ func New(restConfig *rest.Config, correlator *correlation.Engine, resync time.Du
 	if err != nil {
 		return nil, fmt.Errorf("statuswatch: create dynamic client: %w", err)
 	}
-	return &Monitor{client: client, correlator: correlator, resync: resync, factories: make(map[string]dynamicinformer.DynamicSharedInformerFactory), conditionRules: defaultConditionRules()}, nil
+	return &Monitor{
+		client: client, correlator: correlator, resync: resync,
+		factories: make(map[string]dynamicinformer.DynamicSharedInformerFactory),
+		stops:     make(map[string]context.CancelFunc), crdVersions: make(map[string]map[string]struct{}),
+		conditionRules: defaultConditionRules(),
+	}, nil
 }
 
 func (m *Monitor) SetConditionRules(entries []string) {
@@ -128,6 +135,7 @@ func (m *Monitor) Start(ctx context.Context) error {
 	crdInformer := factory.ForResource(crdGVR).Informer()
 	if _, err := crdInformer.AddEventHandler(cache.ResourceEventHandlerFuncs{
 		AddFunc: m.watchCRD, UpdateFunc: func(_, obj interface{}) { m.watchCRD(obj) },
+		DeleteFunc: m.deleteCRD,
 	}); err != nil {
 		return err
 	}
@@ -136,6 +144,24 @@ func (m *Monitor) Start(ctx context.Context) error {
 		return fmt.Errorf("statuswatch: informer sync failed")
 	}
 	return nil
+}
+
+func (m *Monitor) deleteCRD(obj interface{}) {
+	key, err := cache.DeletionHandlingMetaNamespaceKeyFunc(obj)
+	if err != nil {
+		return
+	}
+	_, name, err := cache.SplitMetaNamespaceKey(key)
+	if err != nil {
+		name = key
+	}
+	m.mu.Lock()
+	versions := m.crdVersions[name]
+	delete(m.crdVersions, name)
+	m.mu.Unlock()
+	for version := range versions {
+		m.stopVersion(version)
+	}
 }
 
 func (m *Monitor) processAPIService(obj interface{}) {
@@ -170,8 +196,10 @@ func (m *Monitor) watchCRD(obj interface{}) {
 	versions, _, _ := unstructured.NestedSlice(crd.Object, "spec", "versions")
 	plural, _, _ := unstructured.NestedString(crd.Object, "spec", "names", "plural")
 	if group == "" || plural == "" || len(versions) == 0 {
+		m.reconcileCRDVersions(crd.GetName(), nil)
 		return
 	}
+	desired := make(map[string]struct{})
 	for _, rawVersion := range versions {
 		versionSpec, ok := rawVersion.(map[string]interface{})
 		if !ok {
@@ -185,7 +213,23 @@ func (m *Monitor) watchCRD(obj interface{}) {
 		if _, enabled, _ := unstructured.NestedFieldNoCopy(versionSpec, "subresources", "status"); !enabled {
 			continue
 		}
-		m.watchVersion(schema.GroupVersionResource{Group: group, Version: version, Resource: plural})
+		gvr := schema.GroupVersionResource{Group: group, Version: version, Resource: plural}
+		desired[gvr.String()] = struct{}{}
+		m.watchVersion(gvr)
+	}
+	m.reconcileCRDVersions(crd.GetName(), desired)
+}
+
+func (m *Monitor) reconcileCRDVersions(crdName string, desired map[string]struct{}) {
+	m.mu.Lock()
+	previous := m.crdVersions[crdName]
+	m.crdVersions[crdName] = desired
+	m.mu.Unlock()
+	for key := range previous {
+		if _, keep := desired[key]; keep {
+			continue
+		}
+		m.stopVersion(key)
 	}
 }
 
@@ -197,7 +241,6 @@ func (m *Monitor) watchVersion(gvr schema.GroupVersionResource) {
 		return
 	}
 	factory := dynamicinformer.NewDynamicSharedInformerFactory(m.client, m.resync)
-	m.factories[key] = factory
 	m.mu.Unlock()
 	informer := factory.ForResource(gvr).Informer()
 	_, err := informer.AddEventHandler(cache.ResourceEventHandlerFuncs{
@@ -209,7 +252,28 @@ func (m *Monitor) watchVersion(gvr schema.GroupVersionResource) {
 		klog.ErrorS(err, "statuswatch: register CRD informer", "resource", key)
 		return
 	}
-	factory.Start(m.ctx.Done())
+	versionCtx, stop := context.WithCancel(m.ctx)
+	m.mu.Lock()
+	if _, exists := m.factories[key]; exists {
+		m.mu.Unlock()
+		stop()
+		return
+	}
+	m.factories[key] = factory
+	m.stops[key] = stop
+	m.mu.Unlock()
+	factory.Start(versionCtx.Done())
+}
+
+func (m *Monitor) stopVersion(key string) {
+	m.mu.Lock()
+	stop := m.stops[key]
+	delete(m.stops, key)
+	delete(m.factories, key)
+	m.mu.Unlock()
+	if stop != nil {
+		stop()
+	}
 }
 
 func (m *Monitor) processCR(obj interface{}) {
