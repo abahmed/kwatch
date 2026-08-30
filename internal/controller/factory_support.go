@@ -97,6 +97,28 @@ func (fs factorySet) configMapInformers() []cache.SharedIndexInformer {
 	return out
 }
 
+func (fs factorySet) secretLister() corev1lister.SecretLister {
+	if fs.global != nil {
+		return fs.global.Core().V1().Secrets().Lister()
+	}
+	listers := make([]corev1lister.SecretLister, 0, len(fs.perNamespace))
+	for _, f := range fs.perNamespace {
+		listers = append(listers, f.Core().V1().Secrets().Lister())
+	}
+	return &multiSecretLister{listers: listers}
+}
+
+func (fs factorySet) secretInformers() []cache.SharedIndexInformer {
+	if fs.global != nil {
+		return []cache.SharedIndexInformer{fs.global.Core().V1().Secrets().Informer()}
+	}
+	out := make([]cache.SharedIndexInformer, 0, len(fs.perNamespace))
+	for _, f := range fs.perNamespace {
+		out = append(out, f.Core().V1().Secrets().Informer())
+	}
+	return out
+}
+
 func (fs factorySet) pvcInformers() []cache.SharedIndexInformer {
 	if fs.global != nil {
 		return []cache.SharedIndexInformer{fs.global.Core().V1().PersistentVolumeClaims().Informer()}

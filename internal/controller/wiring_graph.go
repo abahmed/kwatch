@@ -38,6 +38,7 @@ func (c *Controller) wireConfigMap(fs factorySet) {
 
 // wireGraphSupport assigns the lister extras used by the resource graph.
 func (c *Controller) wireGraphSupport(fs factorySet) {
+	c.secretLister = fs.secretLister()
 	c.pvcLister = fs.pvcLister()
 	c.pvLister = fs.persistentVolumeLister()
 	c.serviceAccountLister = fs.serviceAccountLister()
@@ -53,6 +54,23 @@ func (c *Controller) wireGraphSupport(fs factorySet) {
 	}
 	for _, inf := range fs.storageClassInformers() {
 		c.graphSynced = append(c.graphSynced, inf.HasSynced)
+	}
+	for _, inf := range fs.secretInformers() {
+		c.graphSynced = append(c.graphSynced, inf.HasSynced)
+		inf.AddEventHandler(cache.ResourceEventHandlerFuncs{
+			AddFunc: func(obj interface{}) {
+				c.recordChange(kwcontext.ChangeCreate, "secret", obj)
+			},
+			UpdateFunc: func(_, obj interface{}) {
+				c.recordChange(kwcontext.ChangeUpdate, "secret", obj)
+			},
+			DeleteFunc: func(obj interface{}) {
+				c.recordChange(kwcontext.ChangeDelete, "secret", obj)
+				if secret, ok := obj.(*corev1.Secret); ok && c.graph != nil {
+					c.graph.RemoveNode("secret", secret.Namespace, secret.Name)
+				}
+			},
+		})
 	}
 	// Cluster-scoped listers only exist when a global/cluster factory was
 	// created; watching multiple namespaces skips PV and storage class edges.
