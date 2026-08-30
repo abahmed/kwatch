@@ -103,6 +103,11 @@ func (c *Controller) rebuildIngress(obj interface{}) {
 		return
 	}
 	targets := make([]kwcontext.EdgeTarget, 0)
+	if ing.Spec.IngressClassName != nil && *ing.Spec.IngressClassName != "" {
+		targets = append(targets, kwcontext.EdgeTarget{
+			Kind: "ingressclass", Name: *ing.Spec.IngressClassName, Type: "uses_class",
+		})
+	}
 	add := func(svc *networkingv1.IngressServiceBackend) {
 		if svc != nil && svc.Name != "" {
 			targets = append(targets, kwcontext.EdgeTarget{

@@ -24,6 +24,7 @@ import (
 	"github.com/abahmed/kwatch/internal/kubeletmetrics"
 	"github.com/abahmed/kwatch/internal/metricsapi"
 	"github.com/abahmed/kwatch/internal/model"
+	"github.com/abahmed/kwatch/internal/networkgraph"
 	"github.com/abahmed/kwatch/internal/probe"
 	"github.com/abahmed/kwatch/internal/pvc"
 	"github.com/abahmed/kwatch/internal/startup"
@@ -60,6 +61,7 @@ type serverDeps struct {
 	probeRun    func(context.Context)
 	kubeletRun  func(context.Context)
 	storageRun  func(context.Context)
+	networkRun  func(context.Context)
 }
 
 // Run loads config and wires all monitors, then runs until shutdown.
@@ -236,6 +238,7 @@ func Run() int {
 	}
 
 	storageRun := newStorageGraphRun(cfg, graph)
+	networkRun := newNetworkGraphRun(cfg, graph)
 
 	deps := &serverDeps{
 		ctx:           ctx,
@@ -260,8 +263,30 @@ func Run() int {
 		probeRun:      probeRun,
 		kubeletRun:    kubeletRun,
 		storageRun:    storageRun,
+		networkRun:    networkRun,
 	}
 	return serve(ctx, deps)
+}
+
+func newNetworkGraphRun(cfg *config.Config, graph *kwcontext.ResourceGraph) func(context.Context) {
+	if !cfg.ClusterResourceMonitor.Enabled {
+		return nil
+	}
+	restCfg, err := client.GetRestConfig(&cfg.App)
+	if err != nil {
+		klog.ErrorS(err, "failed to create rest config for network graph monitor")
+		return nil
+	}
+	monitor, err := networkgraph.New(restCfg, graph, time.Duration(cfg.ResyncSeconds)*time.Second)
+	if err != nil {
+		klog.ErrorS(err, "failed to initialize network graph monitor")
+		return nil
+	}
+	return func(ctx context.Context) {
+		if err := monitor.Start(ctx); err != nil {
+			klog.ErrorS(err, "network graph monitor stopped")
+		}
+	}
 }
 
 func newStorageGraphRun(cfg *config.Config, graph *kwcontext.ResourceGraph) func(context.Context) {

@@ -67,7 +67,8 @@ Secrets, CSI drivers, Ingress TLS Secrets, PV StorageClasses, owner chains,
 Service selectors, EndpointSlices (including unready/terminating endpoints),
 node Leases, generic Custom Resource owners, VolumeAttachments, CSI drivers,
 VolumeSnapshots, VolumeSnapshotContents, VolumeSnapshotClasses, and local PV
-node affinity.
+node affinity. Gateway API routes are linked to Gateway/GatewayClass, backend
+Services, and listener TLS Secrets; Ingress is linked to IngressClass.
 
 ## Noise and recovery controls
 

@@ -1,0 +1,165 @@
+package networkgraph
+
+import (
+	"context"
+	"fmt"
+	"strings"
+	"time"
+
+	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
+	"k8s.io/apimachinery/pkg/runtime/schema"
+	"k8s.io/client-go/dynamic"
+	"k8s.io/client-go/dynamic/dynamicinformer"
+	"k8s.io/client-go/rest"
+	"k8s.io/client-go/tools/cache"
+
+	kwcontext "github.com/abahmed/kwatch/internal/context"
+)
+
+var watchedResources = []struct {
+	gvr  schema.GroupVersionResource
+	kind string
+}{
+	{schema.GroupVersionResource{Group: "gateway.networking.k8s.io", Version: "v1", Resource: "gatewayclasses"}, "gatewayclass"},
+	{schema.GroupVersionResource{Group: "gateway.networking.k8s.io", Version: "v1", Resource: "gateways"}, "gateway"},
+	{schema.GroupVersionResource{Group: "gateway.networking.k8s.io", Version: "v1", Resource: "httproutes"}, "httproute"},
+	{schema.GroupVersionResource{Group: "gateway.networking.k8s.io", Version: "v1", Resource: "grpcroutes"}, "grpcroute"},
+	{schema.GroupVersionResource{Group: "gateway.networking.k8s.io", Version: "v1alpha2", Resource: "tcproutes"}, "tcproute"},
+	{schema.GroupVersionResource{Group: "gateway.networking.k8s.io", Version: "v1alpha2", Resource: "tlsroutes"}, "tlsroute"},
+	{schema.GroupVersionResource{Group: "gateway.networking.k8s.io", Version: "v1", Resource: "referencegrants"}, "referencegrant"},
+}
+
+type Monitor struct {
+	client dynamic.Interface
+	graph  *kwcontext.ResourceGraph
+	resync time.Duration
+}
+
+func New(restConfig *rest.Config, graph *kwcontext.ResourceGraph, resync time.Duration) (*Monitor, error) {
+	client, err := dynamic.NewForConfig(restConfig)
+	if err != nil {
+		return nil, fmt.Errorf("networkgraph: create dynamic client: %w", err)
+	}
+	return &Monitor{client: client, graph: graph, resync: resync}, nil
+}
+
+func (m *Monitor) Start(ctx context.Context) error {
+	factory := dynamicinformer.NewDynamicSharedInformerFactory(m.client, m.resync)
+	for _, watched := range watchedResources {
+		informer := factory.ForResource(watched.gvr).Informer()
+		kind := watched.kind
+		if _, err := informer.AddEventHandler(cache.ResourceEventHandlerFuncs{
+			AddFunc:    func(obj interface{}) { m.rebuild(kind, obj) },
+			UpdateFunc: func(_, obj interface{}) { m.rebuild(kind, obj) },
+			DeleteFunc: func(obj interface{}) { m.remove(kind, obj) },
+		}); err != nil {
+			return fmt.Errorf("networkgraph: register %s informer: %w", watched.gvr, err)
+		}
+	}
+	factory.Start(ctx.Done())
+	return nil
+}
+
+func (m *Monitor) rebuild(kind string, obj interface{}) {
+	u, ok := obj.(*unstructured.Unstructured)
+	if !ok || m.graph == nil {
+		return
+	}
+	targets := make([]kwcontext.EdgeTarget, 0, 8)
+	if kind == "gateway" {
+		if class, _, _ := unstructured.NestedString(u.Object, "spec", "gatewayClassName"); class != "" {
+			targets = append(targets, kwcontext.EdgeTarget{Kind: "gatewayclass", Name: class, Type: "uses_class"})
+		}
+		targets = append(targets, secretReferences(u)...)
+	} else if strings.HasSuffix(kind, "route") {
+		targets = append(targets, routeParents(u)...)
+		targets = append(targets, routeBackends(u)...)
+	}
+	ns := u.GetNamespace()
+	if kind == "gatewayclass" || kind == "referencegrant" {
+		ns = ""
+	}
+	m.graph.ReplaceOutgoingEdges(kind, ns, u.GetName(), targets)
+}
+
+func secretReferences(u *unstructured.Unstructured) []kwcontext.EdgeTarget {
+	listeners, _, _ := unstructured.NestedSlice(u.Object, "spec", "listeners")
+	targets := make([]kwcontext.EdgeTarget, 0)
+	for _, raw := range listeners {
+		listener, ok := raw.(map[string]interface{})
+		if !ok {
+			continue
+		}
+		refs, _, _ := unstructured.NestedSlice(listener, "tls", "certificateRefs")
+		for _, rawRef := range refs {
+			ref, ok := rawRef.(map[string]interface{})
+			if !ok {
+				continue
+			}
+			name, _ := ref["name"].(string)
+			kind, _ := ref["kind"].(string)
+			if name != "" && (kind == "" || strings.EqualFold(kind, "Secret")) {
+				targets = append(targets, kwcontext.EdgeTarget{Kind: "secret", Namespace: u.GetNamespace(), Name: name, Type: "tls_secret"})
+			}
+		}
+	}
+	return targets
+}
+
+func routeParents(u *unstructured.Unstructured) []kwcontext.EdgeTarget {
+	parents, _, _ := unstructured.NestedSlice(u.Object, "spec", "parentRefs")
+	targets := make([]kwcontext.EdgeTarget, 0, len(parents))
+	for _, raw := range parents {
+		ref, ok := raw.(map[string]interface{})
+		if !ok {
+			continue
+		}
+		name, _ := ref["name"].(string)
+		kind, _ := ref["kind"].(string)
+		ns, _ := ref["namespace"].(string)
+		if ns == "" {
+			ns = u.GetNamespace()
+		}
+		if name != "" && (kind == "" || strings.EqualFold(kind, "Gateway")) {
+			targets = append(targets, kwcontext.EdgeTarget{Kind: "gateway", Namespace: ns, Name: name, Type: "routes_to"})
+		}
+	}
+	return targets
+}
+
+func routeBackends(u *unstructured.Unstructured) []kwcontext.EdgeTarget {
+	rules, _, _ := unstructured.NestedSlice(u.Object, "spec", "rules")
+	targets := make([]kwcontext.EdgeTarget, 0)
+	for _, rawRule := range rules {
+		rule, ok := rawRule.(map[string]interface{})
+		if !ok {
+			continue
+		}
+		refs, _, _ := unstructured.NestedSlice(rule, "backendRefs")
+		for _, rawRef := range refs {
+			ref, ok := rawRef.(map[string]interface{})
+			if !ok {
+				continue
+			}
+			name, _ := ref["name"].(string)
+			kind, _ := ref["kind"].(string)
+			group, _ := ref["group"].(string)
+			if name != "" && (kind == "" || strings.EqualFold(kind, "Service")) && (group == "" || group == "core") {
+				targets = append(targets, kwcontext.EdgeTarget{Kind: "service", Namespace: u.GetNamespace(), Name: name, Type: "routes_to"})
+			}
+		}
+	}
+	return targets
+}
+
+func (m *Monitor) remove(kind string, obj interface{}) {
+	u, ok := obj.(*unstructured.Unstructured)
+	if !ok || m.graph == nil {
+		return
+	}
+	ns := u.GetNamespace()
+	if kind == "gatewayclass" || kind == "referencegrant" {
+		ns = ""
+	}
+	m.graph.RemoveNode(kind, ns, u.GetName())
+}
