@@ -72,6 +72,13 @@ func DefaultConfig() *Config {
 			IntervalSeconds: 30, TimeoutSeconds: 5,
 			FailureThreshold: 3, RecoveryThreshold: 2,
 		},
+		KubeletTelemetryMonitor: KubeletTelemetryMonitor{
+			Enabled: true, IntervalSeconds: 60,
+			CPUThrottlingWarningPercent: 25, CPUThrottlingCriticalPercent: 50,
+			PSIWarningPercent: 20, PSICriticalPercent: 50,
+			NetworkErrorRateWarning: 1, NetworkErrorRateCritical: 10,
+			RuntimeErrorRateWarning: 1, RuntimeErrorRateCritical: 10,
+		},
 		DaemonSetMonitor: DaemonSetMonitor{
 			Enabled:          true,
 			SustainedMinutes: 5,

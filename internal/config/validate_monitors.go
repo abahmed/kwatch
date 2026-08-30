@@ -138,6 +138,28 @@ func validateActiveProbeMonitor(cfg *Config) []error {
 	return errs
 }
 
+func validateKubeletTelemetryMonitor(cfg *Config) []error {
+	if !cfg.KubeletTelemetryMonitor.Enabled {
+		return nil
+	}
+	m := cfg.KubeletTelemetryMonitor
+	var errs []error
+	if m.IntervalSeconds <= 0 {
+		errs = append(errs, errors.New("kubeletTelemetryMonitor.intervalSeconds must be > 0"))
+	}
+	for name, values := range map[string][2]float64{
+		"cpuThrottling":    {m.CPUThrottlingWarningPercent, m.CPUThrottlingCriticalPercent},
+		"psi":              {m.PSIWarningPercent, m.PSICriticalPercent},
+		"networkErrorRate": {m.NetworkErrorRateWarning, m.NetworkErrorRateCritical},
+		"runtimeErrorRate": {m.RuntimeErrorRateWarning, m.RuntimeErrorRateCritical},
+	} {
+		if values[0] <= 0 || values[1] < values[0] {
+			errs = append(errs, errors.New("kubeletTelemetryMonitor."+name+" thresholds must be positive and warning <= critical"))
+		}
+	}
+	return errs
+}
+
 func validateOomMonitor(cfg *Config) []error {
 	var errs []error
 	if !cfg.OomMonitor.Enabled {
@@ -194,6 +216,7 @@ func validateMonitors(cfg *Config) []error {
 	errs = append(errs, validateNodeResourceMonitor(cfg)...)
 	errs = append(errs, validateRuntimeMetricsMonitor(cfg)...)
 	errs = append(errs, validateActiveProbeMonitor(cfg)...)
+	errs = append(errs, validateKubeletTelemetryMonitor(cfg)...)
 	errs = append(errs, validateOomMonitor(cfg)...)
 	errs = append(errs, validateTlsMonitor(cfg)...)
 	errs = append(

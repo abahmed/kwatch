@@ -25,14 +25,9 @@ func serve(ctx context.Context, deps *serverDeps) int {
 	if deps.tlsSweep != nil {
 		wg.Add(1)
 	}
-	if deps.statusRun != nil {
-		wg.Add(1)
-	}
-	if deps.metricsRun != nil {
-		wg.Add(1)
-	}
-	if deps.probeRun != nil {
-		wg.Add(1)
+	optionalMonitors := []func(context.Context){deps.statusRun, deps.metricsRun, deps.probeRun, deps.kubeletRun}
+	for _, monitor := range optionalMonitors {
+		startOptionalMonitor(ctx, &wg, monitor)
 	}
 
 	go func() {
@@ -89,24 +84,6 @@ func serve(ctx context.Context, deps *serverDeps) int {
 			}
 		}()
 	}
-	if deps.statusRun != nil {
-		go func() {
-			defer wg.Done()
-			deps.statusRun(ctx)
-		}()
-	}
-	if deps.metricsRun != nil {
-		go func() {
-			defer wg.Done()
-			deps.metricsRun(ctx)
-		}()
-	}
-	if deps.probeRun != nil {
-		go func() {
-			defer wg.Done()
-			deps.probeRun(ctx)
-		}()
-	}
 	if deps.cfg.CrdConfig.Enabled {
 		startCRDWatcher(ctx, deps)
 	}
@@ -126,6 +103,17 @@ func serve(ctx context.Context, deps *serverDeps) int {
 	}()
 
 	return waitShutdown(deps, &wg, errCh)
+}
+
+func startOptionalMonitor(ctx context.Context, wg *sync.WaitGroup, monitor func(context.Context)) {
+	if monitor == nil {
+		return
+	}
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		monitor(ctx)
+	}()
 }
 
 // startCRDWatcher launches the CRD watcher against the cluster rest config.

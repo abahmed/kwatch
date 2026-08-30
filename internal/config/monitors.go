@@ -195,6 +195,21 @@ type RuntimeMetricsMonitor struct {
 	CPUCriticalPercent    int  `yaml:"cpuCriticalPercent"`
 }
 
+// KubeletTelemetryMonitor reads built-in kubelet telemetry through the API
+// server proxy without requiring an agent or external monitoring product.
+type KubeletTelemetryMonitor struct {
+	Enabled                      bool    `yaml:"enabled"`
+	IntervalSeconds              int     `yaml:"intervalSeconds"`
+	CPUThrottlingWarningPercent  float64 `yaml:"cpuThrottlingWarningPercent"`
+	CPUThrottlingCriticalPercent float64 `yaml:"cpuThrottlingCriticalPercent"`
+	PSIWarningPercent            float64 `yaml:"psiWarningPercent"`
+	PSICriticalPercent           float64 `yaml:"psiCriticalPercent"`
+	NetworkErrorRateWarning      float64 `yaml:"networkErrorRateWarning"`
+	NetworkErrorRateCritical     float64 `yaml:"networkErrorRateCritical"`
+	RuntimeErrorRateWarning      float64 `yaml:"runtimeErrorRateWarning"`
+	RuntimeErrorRateCritical     float64 `yaml:"runtimeErrorRateCritical"`
+}
+
 // ActiveProbeMonitor performs opt-in checks against explicitly configured
 // endpoints. It never guesses application endpoints from Services, which
 // would probe too much and create false incidents.

@@ -21,6 +21,7 @@ import (
 	"github.com/abahmed/kwatch/internal/heartbeat"
 	"github.com/abahmed/kwatch/internal/insight"
 	"github.com/abahmed/kwatch/internal/k8s"
+	"github.com/abahmed/kwatch/internal/kubeletmetrics"
 	"github.com/abahmed/kwatch/internal/metricsapi"
 	"github.com/abahmed/kwatch/internal/model"
 	"github.com/abahmed/kwatch/internal/probe"
@@ -56,6 +57,7 @@ type serverDeps struct {
 	statusRun   func(context.Context)
 	metricsRun  func(context.Context)
 	probeRun    func(context.Context)
+	kubeletRun  func(context.Context)
 }
 
 // Run loads config and wires all monitors, then runs until shutdown.
@@ -219,6 +221,11 @@ func Run() int {
 		probeRun = probe.New(cfg.ActiveProbeMonitor, correlator).Start
 	}
 
+	var kubeletRun func(context.Context)
+	if cfg.KubeletTelemetryMonitor.Enabled {
+		kubeletRun = kubeletmetrics.New(k8sClient, cfg.KubeletTelemetryMonitor, correlator).Start
+	}
+
 	deps := &serverDeps{
 		ctx:           ctx,
 		cancel:        cancel,
@@ -240,6 +247,7 @@ func Run() int {
 		statusRun:     statusRun,
 		metricsRun:    metricsRun,
 		probeRun:      probeRun,
+		kubeletRun:    kubeletRun,
 	}
 	return serve(ctx, deps)
 }

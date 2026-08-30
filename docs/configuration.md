@@ -335,6 +335,24 @@ activeProbeMonitor:
       host: kubernetes.default.svc
 ```
 
+### 🧠 Kubelet Telemetry
+
+`kubeletTelemetryMonitor` uses Kubernetes' built-in kubelet endpoints directly;
+no Agent or Prometheus installation is required.
+
+| Parameter | What it does |
+|:---|:---|
+| `kubeletTelemetryMonitor.enabled` | ✅ Enable built-in kubelet telemetry (default: true) |
+| `kubeletTelemetryMonitor.intervalSeconds` | ⏱️ Collection interval (default: 60) |
+| `kubeletTelemetryMonitor.cpuThrottlingWarningPercent` | ⚠️ Container throttling warning (default: 25) |
+| `kubeletTelemetryMonitor.cpuThrottlingCriticalPercent` | 🚨 Container throttling critical (default: 50) |
+| `kubeletTelemetryMonitor.psiWarningPercent` | ⚠️ PSI warning threshold (default: 20) |
+| `kubeletTelemetryMonitor.psiCriticalPercent` | 🚨 PSI critical threshold (default: 50) |
+| `kubeletTelemetryMonitor.networkErrorRateWarning` | ⚠️ Node network errors/sec warning (default: 1) |
+| `kubeletTelemetryMonitor.networkErrorRateCritical` | 🚨 Node network errors/sec critical (default: 10) |
+| `kubeletTelemetryMonitor.runtimeErrorRateWarning` | ⚠️ Kubelet runtime errors/sec warning (default: 1) |
+| `kubeletTelemetryMonitor.runtimeErrorRateCritical` | 🚨 Kubelet runtime errors/sec critical (default: 10) |
+
 ### 💥 OOM Pattern Monitor
 
 | Parameter | What it does |

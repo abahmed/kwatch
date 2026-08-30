@@ -76,6 +76,10 @@ const (
 	ReasonContainerMemoryHigh    = "ContainerMemoryUsageHigh"
 	ReasonContainerCPUHigh       = "ContainerCPUUsageHigh"
 	ReasonActiveProbeFailure     = "ActiveProbeFailure"
+	ReasonContainerCPUThrottled  = "ContainerCPUThrottled"
+	ReasonNodePSIHigh            = "NodePressureStall"
+	ReasonNodeNetworkErrors      = "NodeNetworkErrors"
+	ReasonNodeRuntimeErrors      = "NodeRuntimeErrors"
 
 	// Workload rollout reasons.
 	ReasonProgressDeadlineExceeded = "ProgressDeadlineExceeded"

@@ -44,6 +44,10 @@ the categories below intentionally use different signal sources.
 - Active probes: opt-in HTTP, TCP, and DNS checks for explicitly configured
   targets through `activeProbeMonitor`, with consecutive-failure and recovery
   thresholds. Targets are never inferred automatically from Services.
+- Kubelet telemetry: built-in kubelet `stats/summary` and
+  `metrics/cadvisor` are queried directly through the API server proxy for PSI,
+  node network/runtime error rates, and per-container CPU throttling. Missing or
+  unauthorized endpoints disable only the affected detector.
 
 ## Dynamic status
 

@@ -165,6 +165,9 @@ type Config struct {
 	// checks. It is opt-in because Kubernetes cannot infer safe probe targets.
 	ActiveProbeMonitor ActiveProbeMonitor `yaml:"activeProbeMonitor"`
 
+	// KubeletTelemetryMonitor reads built-in kubelet telemetry without an agent.
+	KubeletTelemetryMonitor KubeletTelemetryMonitor `yaml:"kubeletTelemetryMonitor"`
+
 	// DaemonSetMonitor configures rollout-stuck detection for DaemonSets.
 	DaemonSetMonitor DaemonSetMonitor `yaml:"daemonSetMonitor"`
 
