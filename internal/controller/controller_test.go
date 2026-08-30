@@ -186,6 +186,10 @@ func (m *mockHandler) ProcessResourceQuota(string, bool) error {
 	return m.err
 }
 
+func (m *mockHandler) ProcessLimitRange(string, bool) error {
+	return m.err
+}
+
 func (m *mockHandler) ProcessNamespace(string, bool) error {
 	return m.err
 }
