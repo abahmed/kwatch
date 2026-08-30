@@ -364,6 +364,18 @@ no Agent or Prometheus installation is required.
 `runtimeMetricsMonitor` is an optional legacy Metrics Server integration and is
 disabled by default. It is not required for standalone CPU/memory monitoring.
 
+For dynamically watched CRDs, `crd.failureConditions` can override the default
+failure rules. Use entries such as `Ready=False`, `Available=Unknown`,
+`Degraded=True`, or `Progressing=False`.
+
+When health checks are enabled, `/kubelet` exposes the latest per-node
+availability counts for Summary, cAdvisor, and runtime endpoints, including
+RBAC-denied nodes.
+
+The optional `runtimeMetricsMonitor` requires an additional `metrics.k8s.io`
+read permission and a Metrics Server; the shipped RBAC deliberately does not
+grant that unused permission by default.
+
 ### 💥 OOM Pattern Monitor
 
 | Parameter | What it does |

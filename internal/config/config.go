@@ -316,6 +316,9 @@ type Upgrader struct {
 type CrdConfig struct {
 	// Enabled if set to true, watches KwatchConfig CRs for live config changes.
 	Enabled bool `yaml:"enabled"`
+	// FailureConditions overrides the default condition rules using entries such
+	// as "Ready=False" or "Degraded=True" for dynamically watched CRDs.
+	FailureConditions []string `yaml:"failureConditions"`
 }
 
 // SmartGrouping configures coalescing same-reason incidents across

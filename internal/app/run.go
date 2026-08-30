@@ -189,6 +189,7 @@ func Run() int {
 			klog.ErrorS(monitorErr, "failed to initialize generic status monitor")
 		} else {
 			monitor.SetNamespaceFilter(ctl.NamespaceAllowed)
+			monitor.SetConditionRules(cfg.CrdConfig.FailureConditions)
 			statusRun = func(runCtx context.Context) {
 				if err := monitor.Start(runCtx); err != nil {
 					klog.ErrorS(err, "generic status monitor stopped")
@@ -223,7 +224,9 @@ func Run() int {
 
 	var kubeletRun func(context.Context)
 	if cfg.KubeletTelemetryMonitor.Enabled {
-		kubeletRun = kubeletmetrics.New(k8sClient, cfg.KubeletTelemetryMonitor, correlator).Start
+		kubeletMonitor := kubeletmetrics.New(k8sClient, cfg.KubeletTelemetryMonitor, correlator)
+		healthServer.SetTelemetryLister(kubeletMonitor)
+		kubeletRun = kubeletMonitor.Start
 	}
 
 	deps := &serverDeps{

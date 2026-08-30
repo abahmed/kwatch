@@ -11,6 +11,7 @@ import (
 	"time"
 
 	corev1 "k8s.io/api/core/v1"
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/klog/v2"
@@ -31,6 +32,24 @@ type Monitor struct {
 	successes  map[string]int
 	now        func() time.Time
 	mu         sync.Mutex
+	endpoint   map[string]endpointStatus
+	podCache   map[string]*corev1.Pod
+	podCacheAt time.Time
+	lastSweep  time.Time
+}
+
+type endpointStatus struct {
+	Summary, CAdvisor, Runtime bool
+	RBACDenied                 bool
+}
+
+type Status struct {
+	LastSweep         time.Time `json:"lastSweep"`
+	Nodes             int       `json:"nodes"`
+	SummaryAvailable  int       `json:"summaryAvailable"`
+	CAdvisorAvailable int       `json:"cadvisorAvailable"`
+	RuntimeAvailable  int       `json:"runtimeAvailable"`
+	RBACDenied        int       `json:"rbacDenied"`
 }
 
 type metricSnapshot struct {
@@ -103,7 +122,7 @@ type networkStats struct {
 
 func New(client kubernetes.Interface, cfg config.KubeletTelemetryMonitor, correlator *correlation.Engine) *Monitor {
 	return &Monitor{client: client, cfg: cfg, correlator: correlator, previous: make(map[string]metricSnapshot),
-		failures: make(map[string]int), successes: make(map[string]int), now: time.Now}
+		failures: make(map[string]int), successes: make(map[string]int), endpoint: make(map[string]endpointStatus), podCache: make(map[string]*corev1.Pod), now: time.Now}
 }
 
 func (m *Monitor) Start(ctx context.Context) {
@@ -128,15 +147,15 @@ func (m *Monitor) Start(ctx context.Context) {
 }
 
 func (m *Monitor) sweep(ctx context.Context) {
-	nodes, err := m.client.CoreV1().Nodes().List(ctx, metav1.ListOptions{})
+	nodes, err := m.nodes(ctx)
 	if err != nil {
 		return
 	}
 	pods := m.pods(ctx)
 	sem := make(chan struct{}, 8)
 	var wg sync.WaitGroup
-	for i := range nodes.Items {
-		node := &nodes.Items[i]
+	for i := range nodes {
+		node := &nodes[i]
 		wg.Add(1)
 		go func(node *corev1.Node) {
 			defer wg.Done()
@@ -152,7 +171,53 @@ func (m *Monitor) sweep(ctx context.Context) {
 		}(node)
 	}
 	wg.Wait()
-	m.pruneSnapshots(nodes.Items)
+	m.pruneSnapshots(nodes)
+	m.mu.Lock()
+	m.lastSweep = m.now()
+	m.mu.Unlock()
+}
+
+func (m *Monitor) Snapshot() Status {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	status := Status{LastSweep: m.lastSweep, Nodes: len(m.endpoint)}
+	for _, endpoint := range m.endpoint {
+		if endpoint.Summary {
+			status.SummaryAvailable++
+		}
+		if endpoint.CAdvisor {
+			status.CAdvisorAvailable++
+		}
+		if endpoint.Runtime {
+			status.RuntimeAvailable++
+		}
+		if endpoint.RBACDenied {
+			status.RBACDenied++
+		}
+	}
+	return status
+}
+
+func (m *Monitor) TelemetryStatus() interface{} {
+	return m.Snapshot()
+}
+
+func (m *Monitor) recordEndpoint(node, endpoint string, err error) {
+	m.mu.Lock()
+	status := m.endpoint[node]
+	available := err == nil
+	denied := err != nil && apierrors.IsForbidden(err)
+	switch endpoint {
+	case "summary":
+		status.Summary = available
+	case "cadvisor":
+		status.CAdvisor = available
+	case "runtime":
+		status.Runtime = available
+	}
+	status.RBACDenied = status.RBACDenied || denied
+	m.endpoint[node] = status
+	m.mu.Unlock()
 }
 
 func (m *Monitor) pruneSnapshots(nodes []corev1.Node) {
@@ -168,6 +233,11 @@ func (m *Monitor) pruneSnapshots(nodes []corev1.Node) {
 			if _, exists := active[node]; !exists {
 				delete(m.previous, key)
 			}
+		}
+	}
+	for node := range m.endpoint {
+		if _, exists := active[node]; !exists {
+			delete(m.endpoint, node)
 		}
 	}
 }
@@ -187,23 +257,57 @@ func snapshotNode(key string) (string, bool) {
 }
 
 func (m *Monitor) pods(ctx context.Context) map[string]*corev1.Pod {
-	pods, err := m.client.CoreV1().Pods("").List(ctx, metav1.ListOptions{})
-	if err != nil {
-		return nil
+	now := m.now()
+	m.mu.Lock()
+	if now.Sub(m.podCacheAt) < 15*time.Second && len(m.podCache) > 0 {
+		cached := m.podCache
+		m.mu.Unlock()
+		return cached
 	}
-	result := make(map[string]*corev1.Pod, len(pods.Items))
-	for i := range pods.Items {
-		pod := &pods.Items[i]
-		result[pod.Namespace+"/"+pod.Name] = pod
+	m.mu.Unlock()
+	result := make(map[string]*corev1.Pod)
+	continueToken := ""
+	for {
+		pods, err := m.client.CoreV1().Pods("").List(ctx, metav1.ListOptions{Limit: 500, Continue: continueToken})
+		if err != nil {
+			return nil
+		}
+		for i := range pods.Items {
+			pod := &pods.Items[i]
+			result[pod.Namespace+"/"+pod.Name] = pod
+		}
+		continueToken = pods.Continue
+		if continueToken == "" {
+			break
+		}
 	}
+	m.mu.Lock()
+	m.podCache, m.podCacheAt = result, now
+	m.mu.Unlock()
 	return result
+}
+
+func (m *Monitor) nodes(ctx context.Context) ([]corev1.Node, error) {
+	var result []corev1.Node
+	continueToken := ""
+	for {
+		nodes, err := m.client.CoreV1().Nodes().List(ctx, metav1.ListOptions{Limit: 500, Continue: continueToken})
+		if err != nil {
+			return nil, err
+		}
+		result = append(result, nodes.Items...)
+		continueToken = nodes.Continue
+		if continueToken == "" {
+			return result, nil
+		}
+	}
 }
 
 func (m *Monitor) checkSummary(ctx context.Context, node *corev1.Node, pods map[string]*corev1.Pod) {
 	requestCtx, cancel := context.WithTimeout(ctx, 10*time.Second)
 	defer cancel()
-	body, err := m.client.CoreV1().RESTClient().Get().Resource("nodes").Name(node.Name).
-		SubResource("proxy").Suffix("stats/summary").DoRaw(requestCtx)
+	body, err := m.proxyRaw(requestCtx, node.Name, "stats/summary")
+	m.recordEndpoint(node.Name, "summary", err)
 	if err != nil {
 		klog.V(2).InfoS("kubelet summary unavailable", "node", node.Name, "error", err)
 		return
@@ -350,8 +454,8 @@ func (m *Monitor) checkNetwork(node string, current networkStats) {
 func (m *Monitor) checkCadvisor(ctx context.Context, node *corev1.Node) {
 	requestCtx, cancel := context.WithTimeout(ctx, 10*time.Second)
 	defer cancel()
-	body, err := m.client.CoreV1().RESTClient().Get().Resource("nodes").Name(node.Name).
-		SubResource("proxy").Suffix("metrics/cadvisor").DoRaw(requestCtx)
+	body, err := m.proxyRaw(requestCtx, node.Name, "metrics/cadvisor")
+	m.recordEndpoint(node.Name, "cadvisor", err)
 	if err != nil {
 		klog.V(2).InfoS("kubelet cAdvisor metrics unavailable", "node", node.Name, "error", err)
 		return
@@ -394,8 +498,8 @@ func (m *Monitor) checkCadvisor(ctx context.Context, node *corev1.Node) {
 func (m *Monitor) checkRuntimeMetrics(ctx context.Context, node *corev1.Node) {
 	requestCtx, cancel := context.WithTimeout(ctx, 10*time.Second)
 	defer cancel()
-	body, err := m.client.CoreV1().RESTClient().Get().Resource("nodes").Name(node.Name).
-		SubResource("proxy").Suffix("metrics").DoRaw(requestCtx)
+	body, err := m.proxyRaw(requestCtx, node.Name, "metrics")
+	m.recordEndpoint(node.Name, "runtime", err)
 	if err != nil {
 		klog.V(2).InfoS("kubelet metrics unavailable", "node", node.Name, "error", err)
 		return
@@ -428,6 +532,32 @@ func (m *Monitor) checkRuntimeMetrics(ctx context.Context, node *corev1.Node) {
 	} else {
 		m.observe(key, false, func() {}, func() { m.resolve(node.Name, constant.ReasonNodeRuntimeErrors) })
 	}
+}
+
+func (m *Monitor) proxyRaw(ctx context.Context, node, suffix string) ([]byte, error) {
+	delays := []time.Duration{0, 100 * time.Millisecond, 250 * time.Millisecond}
+	var lastErr error
+	for attempt, delay := range delays {
+		if delay > 0 {
+			timer := time.NewTimer(delay)
+			select {
+			case <-ctx.Done():
+				timer.Stop()
+				return nil, ctx.Err()
+			case <-timer.C:
+			}
+		}
+		body, err := m.client.CoreV1().RESTClient().Get().Resource("nodes").Name(node).
+			SubResource("proxy").Suffix(suffix).DoRaw(ctx)
+		if err == nil {
+			return body, nil
+		}
+		lastErr = err
+		if ctx.Err() != nil || attempt == len(delays)-1 {
+			break
+		}
+	}
+	return nil, lastErr
 }
 
 type counterPair struct{ Throttled, Periods float64 }

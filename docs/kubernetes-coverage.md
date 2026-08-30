@@ -59,6 +59,8 @@ objects and discovers CRDs dynamically. Every served CRD version with a status
 subresource is watched for failure-shaped `Ready=False`, `Available=False`,
 `Degraded=True`, and `Progressing=False` conditions. Informational conditions
 are ignored, and messages/reasons are preserved as alert evidence.
+These rules can be customized through `crd.failureConditions` for operators
+with different condition semantics.
 
 ## Noise and recovery controls
 

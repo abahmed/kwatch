@@ -3,6 +3,7 @@ package statuswatch
 import (
 	"context"
 	"fmt"
+	"strings"
 	"sync"
 	"time"
 
@@ -35,6 +36,7 @@ type Monitor struct {
 	namespaceAllowed func(string) bool
 	mu               sync.Mutex
 	factories        map[string]dynamicinformer.DynamicSharedInformerFactory
+	conditionRules   map[string]map[string]bool
 }
 
 // SetNamespaceFilter keeps dynamically discovered namespaced resources aligned
@@ -49,7 +51,32 @@ func New(restConfig *rest.Config, correlator *correlation.Engine, resync time.Du
 	if err != nil {
 		return nil, fmt.Errorf("statuswatch: create dynamic client: %w", err)
 	}
-	return &Monitor{client: client, correlator: correlator, resync: resync, factories: make(map[string]dynamicinformer.DynamicSharedInformerFactory)}, nil
+	return &Monitor{client: client, correlator: correlator, resync: resync, factories: make(map[string]dynamicinformer.DynamicSharedInformerFactory), conditionRules: defaultConditionRules()}, nil
+}
+
+func (m *Monitor) SetConditionRules(entries []string) {
+	rules := make(map[string]map[string]bool)
+	for _, entry := range entries {
+		parts := strings.SplitN(entry, "=", 2)
+		if len(parts) != 2 || parts[0] == "" || parts[1] == "" {
+			continue
+		}
+		if rules[parts[0]] == nil {
+			rules[parts[0]] = make(map[string]bool)
+		}
+		rules[parts[0]][parts[1]] = true
+	}
+	if len(rules) == 0 {
+		return
+	}
+	m.conditionRules = rules
+}
+
+func defaultConditionRules() map[string]map[string]bool {
+	return map[string]map[string]bool{
+		"Ready": {"False": true, "Unknown": true}, "Available": {"False": true, "Unknown": true},
+		"Degraded": {"True": true}, "Progressing": {"False": true},
+	}
 }
 
 func (m *Monitor) Start(ctx context.Context) error {
@@ -80,7 +107,7 @@ func (m *Monitor) processAPIService(obj interface{}) {
 	if !ok {
 		return
 	}
-	if sig := failureSignal(u, "apiservice", u.GetName()); sig != nil {
+	if sig := failureSignal(u, "apiservice", u.GetName(), m.conditionRules); sig != nil {
 		m.correlator.Process(event.Event{Resource: sig.Resource, Namespace: sig.Namespace, PodName: sig.PodName, Reason: sig.Reason, Hint: sig.Hint, Labels: sig.Labels}, sig.Owner, nil)
 	} else {
 		m.resolve("", u.GetName(), constant.ReasonAPIServiceFailure)
@@ -153,7 +180,7 @@ func (m *Monitor) processCR(obj interface{}) {
 	if m.namespaceAllowed != nil && !m.namespaceAllowed(u.GetNamespace()) {
 		return
 	}
-	if sig := failureSignal(u, "customresource", resourceOwner(u)); sig != nil {
+	if sig := failureSignal(u, "customresource", resourceOwner(u), m.conditionRules); sig != nil {
 		m.correlator.Process(event.Event{Resource: sig.Resource, Namespace: sig.Namespace, PodName: sig.PodName, Reason: sig.Reason, Hint: sig.Hint, Labels: sig.Labels}, sig.Owner, nil)
 	} else {
 		m.resolve(u.GetNamespace(), resourceOwner(u), constant.ReasonCustomResourceFailure)
@@ -178,7 +205,7 @@ func resourceOwner(u *unstructured.Unstructured) string {
 	return u.GetNamespace() + "/" + u.GetName()
 }
 
-func failureSignal(u *unstructured.Unstructured, resource, owner string) *event.Signal {
+func failureSignal(u *unstructured.Unstructured, resource, owner string, rules map[string]map[string]bool) *event.Signal {
 	conditions, found, _ := unstructured.NestedSlice(u.Object, "status", "conditions")
 	if !found {
 		return nil
@@ -192,10 +219,10 @@ func failureSignal(u *unstructured.Unstructured, resource, owner string) *event.
 		status, _ := condition["status"].(string)
 		reason, _ := condition["reason"].(string)
 		message, _ := condition["message"].(string)
-		failed := (typ == "Ready" || typ == "Available") &&
-			(status == "False" || status == "Unknown")
-		failed = failed || typ == "Degraded" && status == "True"
-		failed = failed || typ == "Progressing" && status == "False"
+		failed := false
+		if statuses := rules[typ]; statuses != nil {
+			failed = statuses[status]
+		}
 		if !failed {
 			continue
 		}

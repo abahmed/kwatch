@@ -3,6 +3,7 @@ package config
 import (
 	"errors"
 	"fmt"
+	"strings"
 )
 
 // validateMonitors checks the per-monitor sustain/interval defaults.
@@ -206,6 +207,12 @@ func validateTlsMonitor(cfg *Config) []error {
 
 func validateMonitors(cfg *Config) []error {
 	var errs []error
+	for _, rule := range cfg.CrdConfig.FailureConditions {
+		parts := strings.Split(rule, "=")
+		if len(parts) != 2 || strings.TrimSpace(parts[0]) == "" || strings.TrimSpace(parts[1]) == "" {
+			errs = append(errs, errors.New("crd.failureConditions entries must use ConditionType=Status"))
+		}
+	}
 	errs = append(errs, validateHeartbeatMonitor(cfg)...)
 	if cfg.SmartGrouping.NamespaceFanOutThreshold < 0 {
 		errs = append(

@@ -34,6 +34,10 @@ type DeadLetterLister interface {
 	DeadLetters() interface{}
 }
 
+type TelemetryLister interface {
+	TelemetryStatus() interface{}
+}
+
 type HealthServer struct {
 	server           *http.Server
 	port             int
@@ -44,6 +48,7 @@ type HealthServer struct {
 	incidentAPI      IncidentLister
 	alertManager     TestAlertSender
 	deadLetterLister DeadLetterLister
+	telemetryLister  TelemetryLister
 	ready            atomic.Bool
 }
 
@@ -99,6 +104,10 @@ func (h *HealthServer) SetDeadLetterLister(l DeadLetterLister) {
 	h.deadLetterLister = l
 }
 
+func (h *HealthServer) SetTelemetryLister(l TelemetryLister) {
+	h.telemetryLister = l
+}
+
 func (h *HealthServer) Start(ctx context.Context) error {
 	if !h.enabled {
 		klog.V(4).InfoS("health check is disabled")
@@ -114,6 +123,7 @@ func (h *HealthServer) Start(ctx context.Context) error {
 		mux.HandleFunc("/test-alert", h.testAlertHandler)
 		mux.HandleFunc("/deadletters", h.deadLettersHandler)
 	}
+	mux.HandleFunc("/kubelet", h.kubeletHandler)
 
 	mux.Handle("/metrics", metrics.Default.Handler())
 
@@ -152,6 +162,20 @@ func (h *HealthServer) Start(ctx context.Context) error {
 	}()
 
 	return nil
+}
+
+func (h *HealthServer) kubeletHandler(w http.ResponseWriter, r *http.Request) {
+	if !h.requireDiagnosticsAuth(w, r) {
+		return
+	}
+	if h.telemetryLister == nil {
+		w.WriteHeader(http.StatusServiceUnavailable)
+		return
+	}
+	w.Header().Set("Content-Type", "application/json")
+	if err := json.NewEncoder(w).Encode(h.telemetryLister.TelemetryStatus()); err != nil {
+		klog.ErrorS(err, "health: encode kubelet telemetry status")
+	}
 }
 
 func (h *HealthServer) Stop(ctx context.Context) error {

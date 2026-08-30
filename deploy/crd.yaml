@@ -57,6 +57,13 @@ spec:
                   type: integer
                 resyncSeconds:
                   type: integer
+                crd:
+                  type: object
+                  properties:
+                    failureConditions:
+                      type: array
+                      items:
+                        type: string
                 namespaceSelector:
                   type: string
                 ignoreContainerMessages:
