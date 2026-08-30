@@ -187,6 +187,9 @@ type Config struct {
 	// NetworkPolicyMonitor configures network policy issue monitoring.
 	NetworkPolicyMonitor NetworkPolicyMonitor `yaml:"networkPolicyMonitor"`
 
+	// ClusterResourceMonitor configures quota and namespace lifecycle checks.
+	ClusterResourceMonitor ClusterResourceMonitor `yaml:"clusterResourceMonitor"`
+
 	// Silences is an optional list of silence rules that suppress matching
 	// incidents.
 	Silences []SilenceRule `yaml:"silences"`

@@ -23,6 +23,7 @@ type Handler interface {
 	ProcessPod(ctx context.Context, key string, deleted bool) error
 	ProcessNode(key string, deleted bool) error
 	ProcessDeployment(key string, deleted bool) error
+	ProcessReplicaSet(key string, deleted bool) error
 	ProcessJob(key string, deleted bool) error
 	ProcessDaemonSet(key string, deleted bool) error
 	ProcessCronJob(key string, deleted bool) error
@@ -34,12 +35,16 @@ type Handler interface {
 	ProcessService(key string, deleted bool) error
 	ProcessNetworkPolicy(key string, deleted bool) error
 	ProcessIngress(key string, deleted bool) error
+	ProcessResourceQuota(key string, deleted bool) error
+	ProcessNamespace(key string, deleted bool) error
+	ProcessLease(key string, deleted bool) error
 	ProcessControlPlanePod(pod *corev1.Pod) error
 	SweepControlPlane()
 	SweepTLSSecrets()
 	// SetListers installs every informer-backed lookup in one call, once the
 	// controller has wired its informers.
 	SetListers(Listers)
+	SetNamespaceScope(namespaces []string, all bool)
 	SetBaseline(baseline map[string]map[string]int64)
 	SetActiveNodeIncidents(nodeNames []string)
 	ClearBaselineForPod(namespace, podName string)
@@ -69,7 +74,9 @@ type handler struct {
 	containerSuppressionEnrichers []filter.Enricher
 	containerDataEnrichers        []filter.Enricher
 
-	listers Listers
+	listers           Listers
+	namespaceScope    map[string]struct{}
+	namespaceScopeAll bool
 
 	fs firstSeenSet
 }

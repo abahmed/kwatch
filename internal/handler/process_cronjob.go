@@ -79,7 +79,11 @@ func DetectCronJobIssue(cj *batchv1.CronJob, now time.Time) *event.Signal {
 		)
 	}
 
-	threshold := nextExpected.Add(DefaultCronNotScheduledGrace)
+	grace := DefaultCronNotScheduledGrace
+	if cj.Spec.StartingDeadlineSeconds != nil && *cj.Spec.StartingDeadlineSeconds > 0 {
+		grace = time.Duration(*cj.Spec.StartingDeadlineSeconds) * time.Second
+	}
+	threshold := nextExpected.Add(grace)
 
 	if !now.Before(threshold) {
 		return &event.Signal{

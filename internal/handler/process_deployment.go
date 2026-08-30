@@ -66,11 +66,52 @@ func DetectDeploymentIssue(deploy *appsv1.Deployment) *event.Signal {
 	return nil
 }
 
+// DetectDeploymentConditions preserves the condition type as a stable signal
+// instead of reducing every unhealthy Deployment to replica availability.
+// ProgressDeadlineExceeded keeps its historical reason for compatibility.
+func DetectDeploymentConditions(deploy *appsv1.Deployment) []*event.Signal {
+	if deploy == nil {
+		return nil
+	}
+	owner := deploy.Namespace + "/" + deploy.Name
+	var out []*event.Signal
+	for _, condition := range deploy.Status.Conditions {
+		if condition.Status != corev1.ConditionFalse &&
+			!(condition.Type == appsv1.DeploymentReplicaFailure && condition.Status == corev1.ConditionTrue) {
+			continue
+		}
+		reason := ""
+		switch condition.Type {
+		case appsv1.DeploymentProgressing:
+			reason = constant.ReasonDeploymentProgressing
+		case appsv1.DeploymentAvailable:
+			reason = constant.ReasonDeploymentAvailable
+		case appsv1.DeploymentReplicaFailure:
+			reason = constant.ReasonDeploymentReplicaFailure
+		}
+		if reason == "" || (condition.Type == appsv1.DeploymentProgressing && condition.Reason == constant.ReasonProgressDeadlineExceeded) {
+			continue
+		}
+		hint := condition.Reason
+		if condition.Message != "" {
+			hint = condition.Reason + ": " + condition.Message
+		}
+		out = append(out, &event.Signal{
+			Resource: "deployment", Namespace: deploy.Namespace, PodName: deploy.Name,
+			Owner: owner, Reason: reason, Labels: deploy.Labels, Hint: hint,
+		})
+	}
+	return out
+}
+
 // availabilityHintDeploy builds a human-readable summary of deployment
 // availability.
 func availabilityHintDeploy(deploy *appsv1.Deployment) string {
 	unavailable := deploy.Status.UnavailableReplicas
-	desired := deploy.Status.Replicas
+	desired := deploymentDesiredReplicas(deploy)
+	if unavailable == 0 && desired > deploy.Status.ReadyReplicas {
+		unavailable = desired - deploy.Status.ReadyReplicas
+	}
 	ready := deploy.Status.ReadyReplicas
 	updated := deploy.Status.UpdatedReplicas
 	return fmt.Sprintf(
@@ -90,7 +131,7 @@ func DetectDeploymentUnavailable(deploy *appsv1.Deployment) *event.Signal {
 	if deploy == nil {
 		return nil
 	}
-	if deploy.Status.Replicas > 0 && deploy.Status.UnavailableReplicas > 0 &&
+	if deploymentUnavailable(deploy) &&
 		deploy.Status.ObservedGeneration >= deploy.Generation {
 		return &event.Signal{
 			Resource:  "deployment",
@@ -101,6 +142,28 @@ func DetectDeploymentUnavailable(deploy *appsv1.Deployment) *event.Signal {
 		}
 	}
 	return nil
+}
+
+func deploymentDesiredReplicas(deploy *appsv1.Deployment) int32 {
+	if deploy == nil {
+		return 0
+	}
+	if deploy.Spec.Replicas != nil {
+		return *deploy.Spec.Replicas
+	}
+	// Status.Replicas is the best available observation for objects produced
+	// by older clients/tests that omitted the optional spec default.
+	return deploy.Status.Replicas
+}
+
+func deploymentUnavailable(deploy *appsv1.Deployment) bool {
+	if deploy == nil {
+		return false
+	}
+	if deploy.Spec.Replicas == nil {
+		return deploy.Status.Replicas > 0 && deploy.Status.UnavailableReplicas > 0
+	}
+	return *deploy.Spec.Replicas > 0 && deploy.Status.ReadyReplicas < *deploy.Spec.Replicas
 }
 
 func (h *handler) ProcessDeploymentObject(
@@ -124,6 +187,11 @@ func (h *handler) ProcessDeploymentObject(
 		h.clearFirstUnavailableDeploy(key)
 		h.signalEvent(sig)
 		return nil
+	}
+
+	conditionSignals := DetectDeploymentConditions(deploy)
+	for _, sig := range conditionSignals {
+		h.signalEvent(sig)
 	}
 
 	// New: DeploymentUnavailable — replicas exist but are not ready/available.

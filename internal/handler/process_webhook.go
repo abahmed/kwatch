@@ -142,6 +142,10 @@ func (h *handler) ProcessMutatingWebhookConfigurationObject(
 	for _, sig := range sigs {
 		h.signalEvent(sig)
 	}
+	endpointSigs := h.detectWebhookEndpointIssues(mwc.Name, mwc.Namespace, mwc.Labels, mutatingWebhookServices(mwc))
+	for _, sig := range endpointSigs {
+		h.signalEvent(sig)
+	}
 	if len(sigs) == 0 {
 		h.correlator.MarkResolved(
 			correlation.BuildKey(
@@ -151,6 +155,9 @@ func (h *handler) ProcessMutatingWebhookConfigurationObject(
 				"",
 			),
 		)
+	}
+	if len(endpointSigs) == 0 {
+		h.correlator.MarkResolved(correlation.BuildKey("", mwc.Name, constant.ReasonWebhookNoEndpoints, ""))
 	}
 	return nil
 }
@@ -208,6 +215,10 @@ func (h *handler) ProcessValidatingWebhookConfigurationObject(
 	for _, sig := range sigs {
 		h.signalEvent(sig)
 	}
+	endpointSigs := h.detectWebhookEndpointIssues(vwc.Name, vwc.Namespace, vwc.Labels, validatingWebhookServices(vwc))
+	for _, sig := range endpointSigs {
+		h.signalEvent(sig)
+	}
 	if len(sigs) == 0 {
 		h.correlator.MarkResolved(
 			correlation.BuildKey(
@@ -217,6 +228,9 @@ func (h *handler) ProcessValidatingWebhookConfigurationObject(
 				"",
 			),
 		)
+	}
+	if len(endpointSigs) == 0 {
+		h.correlator.MarkResolved(correlation.BuildKey("", vwc.Name, constant.ReasonWebhookNoEndpoints, ""))
 	}
 	return nil
 }

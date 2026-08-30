@@ -104,3 +104,19 @@ func (c *Controller) syncCpPod(_ context.Context, key string) error {
 
 	return c.handler.ProcessControlPlanePod(pod)
 }
+
+func (c *Controller) syncResourceQuota(_ context.Context, key string) error {
+	return c.handler.ProcessResourceQuota(key, false)
+}
+
+func (c *Controller) syncNamespace(_ context.Context, key string) error {
+	return c.handler.ProcessNamespace(key, false)
+}
+
+func (c *Controller) syncLease(_ context.Context, key string) error {
+	return c.handler.ProcessLease(key, false)
+}
+
+func (c *Controller) syncReplicaSet(_ context.Context, key string) error {
+	return c.handler.ProcessReplicaSet(key, false)
+}

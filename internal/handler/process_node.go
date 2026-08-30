@@ -21,6 +21,8 @@ import (
 // alerting during that window is noise.
 const newNodeGracePeriod = 5 * time.Minute
 
+const stuckNodeDeletionGrace = 10 * time.Minute
+
 // isNewNode returns true when the Node resource was created recently enough
 // that NotReady is likely transient (autoscaler bootstrap).
 func isNewNode(node *corev1.Node, now time.Time) bool {
@@ -168,7 +170,31 @@ func (h *handler) ProcessNodeObject(node *corev1.Node, deleted bool) error {
 			}
 		}
 	}
+
+	if sig := DetectNodeDeletionIssue(node, h.now()); sig != nil {
+		h.signalEvent(sig)
+	} else {
+		h.correlator.MarkResolved(correlation.BuildKey(
+			"", node.Name, constant.ReasonNodeStuckTerminating, "",
+		))
+	}
 	return nil
+}
+
+func DetectNodeDeletionIssue(node *corev1.Node, now time.Time) *event.Signal {
+	if node == nil || node.DeletionTimestamp == nil || len(node.Finalizers) == 0 {
+		return nil
+	}
+	age := now.Sub(node.DeletionTimestamp.Time)
+	if age < stuckNodeDeletionGrace {
+		return nil
+	}
+	return &event.Signal{
+		Resource: "node", NodeName: node.Name, PodName: node.Name,
+		Owner: node.Name, Reason: constant.ReasonNodeStuckTerminating,
+		Labels: node.Labels,
+		Hint:   fmt.Sprintf("node %s has been terminating for %s with finalizers: %s", node.Name, age.Round(time.Minute), strings.Join(node.Finalizers, ", ")),
+	}
 }
 
 func (h *handler) markFirstNodePressure(key string) time.Time {

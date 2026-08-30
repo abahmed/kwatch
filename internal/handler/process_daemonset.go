@@ -7,6 +7,7 @@ import (
 	"github.com/abahmed/kwatch/internal/constant"
 
 	appsv1 "k8s.io/api/apps/v1"
+	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/client-go/tools/cache"
 
@@ -30,6 +31,27 @@ func DetectDaemonSetIssue(ds *appsv1.DaemonSet) *event.Signal {
 		}
 	}
 	return nil
+}
+
+func DetectDaemonSetConditions(ds *appsv1.DaemonSet) []*event.Signal {
+	if ds == nil {
+		return nil
+	}
+	owner := ds.Namespace + "/" + ds.Name
+	var out []*event.Signal
+	for _, condition := range ds.Status.Conditions {
+		if condition.Status == corev1.ConditionTrue {
+			continue
+		}
+		hint := string(condition.Type) + ": " + condition.Reason
+		if condition.Message != "" {
+			hint += " — " + condition.Message
+		}
+		out = append(out, &event.Signal{Resource: "daemonset", Namespace: ds.Namespace,
+			PodName: ds.Name, Owner: owner, Reason: constant.ReasonDaemonSetCondition,
+			Labels: ds.Labels, Hint: hint})
+	}
+	return out
 }
 
 func availabilityHint(ds *appsv1.DaemonSet) string {
@@ -88,6 +110,10 @@ func (h *handler) ProcessDaemonSetObject(
 	}
 
 	key := ds.Namespace + "/" + ds.Name
+	conditionSignals := DetectDaemonSetConditions(ds)
+	for _, sig := range conditionSignals {
+		h.signalEvent(sig)
+	}
 
 	if ds.Status.DesiredNumberScheduled > 0 && ds.Status.NumberUnavailable > 0 {
 		// Node-driven inhibition: if there are at least as many active node
@@ -97,7 +123,9 @@ func (h *handler) ProcessDaemonSetObject(
 			ds.Status.NumberUnavailable,
 		) {
 			h.clearFirstUnavailableDS(key)
-			h.correlator.ResolveByResource("daemonset", key)
+			if len(conditionSignals) == 0 {
+				h.correlator.ResolveByResource("daemonset", key)
+			}
 			return nil
 		}
 
@@ -134,7 +162,6 @@ func (h *handler) ProcessDaemonSetObject(
 		})
 		return nil
 	}
-
 	h.clearFirstUnavailableDS(key)
 	h.correlator.ResolveByResource("daemonset", key)
 	return nil

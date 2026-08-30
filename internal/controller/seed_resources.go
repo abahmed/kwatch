@@ -18,6 +18,63 @@ func (c *Controller) seedControllers(rec *baselineRecorder) {
 	c.seedCronJobs(rec)
 	c.seedHPAs(rec)
 	c.seedNetworkPolicies(rec)
+	c.seedClusterResources(rec)
+	c.seedReplicaSets(rec)
+}
+
+func (c *Controller) seedReplicaSets(rec *baselineRecorder) {
+	if c.rsLister == nil {
+		return
+	}
+	sets, err := c.rsLister.List(labels.Everything())
+	if err != nil {
+		klog.ErrorS(err, "failed to list replicasets for baseline seeding")
+		return
+	}
+	for _, rs := range sets {
+		if sig := handler.DetectReplicaSetIssue(rs); sig != nil {
+			rec.seed(sig)
+		}
+	}
+}
+
+func (c *Controller) seedClusterResources(rec *baselineRecorder) {
+	if c.resourceQuotaLister != nil {
+		quotas, err := c.resourceQuotaLister.List(labels.Everything())
+		if err != nil {
+			klog.ErrorS(err, "failed to list resource quotas for baseline seeding")
+		} else {
+			for _, quota := range quotas {
+				if sig := handler.DetectResourceQuotaIssue(quota); sig != nil {
+					rec.seed(sig)
+				}
+			}
+		}
+	}
+	if c.namespaceLister != nil {
+		namespaces, err := c.namespaceLister.List(labels.Everything())
+		if err != nil {
+			klog.ErrorS(err, "failed to list namespaces for baseline seeding")
+		} else {
+			for _, namespace := range namespaces {
+				if sig := handler.DetectNamespaceIssue(namespace, time.Now(), 0); sig != nil {
+					rec.seed(sig)
+				}
+			}
+		}
+	}
+	if c.leaseLister != nil {
+		leases, err := c.leaseLister.List(labels.Everything())
+		if err != nil {
+			klog.ErrorS(err, "failed to list node leases for baseline seeding")
+		} else {
+			for _, lease := range leases {
+				if sig := handler.DetectNodeLeaseIssue(lease, time.Now(), 0); sig != nil {
+					rec.seed(sig)
+				}
+			}
+		}
+	}
 }
 
 func (c *Controller) seedDaemonSets(rec *baselineRecorder) {
@@ -28,6 +85,9 @@ func (c *Controller) seedDaemonSets(rec *baselineRecorder) {
 		} else {
 			for _, ds := range dss {
 				if sig := handler.DetectDaemonSetIssue(ds); sig != nil {
+					rec.seed(sig)
+				}
+				for _, sig := range handler.DetectDaemonSetConditions(ds) {
 					rec.seed(sig)
 				}
 			}
@@ -43,6 +103,9 @@ func (c *Controller) seedStatefulSets(rec *baselineRecorder) {
 		} else {
 			for _, ss := range sss {
 				if sig := handler.DetectStatefulSetIssue(ss); sig != nil {
+					rec.seed(sig)
+				}
+				for _, sig := range handler.DetectStatefulSetConditions(ss) {
 					rec.seed(sig)
 				}
 			}
@@ -82,6 +145,9 @@ func (c *Controller) seedDeployments(rec *baselineRecorder) {
 				if sig != nil {
 					rec.seed(sig)
 				}
+				for _, conditionSig := range handler.DetectDeploymentConditions(deploy) {
+					rec.seed(conditionSig)
+				}
 			}
 		}
 	}
@@ -95,6 +161,9 @@ func (c *Controller) seedJobs(rec *baselineRecorder) {
 		} else {
 			for _, job := range jobs {
 				if sig := handler.DetectJobIssue(job); sig != nil {
+					rec.seed(sig)
+				}
+				if sig := handler.DetectJobExecutionIssue(job, time.Now()); sig != nil {
 					rec.seed(sig)
 				}
 			}
@@ -171,6 +240,9 @@ func (c *Controller) seedServices(rec *baselineRecorder) {
 					svc,
 					epSlices,
 				); sig != nil {
+					rec.seed(sig)
+				}
+				if sig := handler.DetectServicePortIssue(svc, epSlices); sig != nil {
 					rec.seed(sig)
 				}
 			}

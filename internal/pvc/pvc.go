@@ -25,19 +25,65 @@ const (
 )
 
 type PvcMonitor struct {
-	client         kubernetes.Interface
-	config         *config.PvcMonitor
-	correlator     *correlation.Engine
-	state          *state.StateManager // persistence; nil only in unit tests
-	notifiedPvc    map[string]bool
-	lastUsage      map[string]state.PvcSample // last observed sample per PV name (survives unmount)
-	pvByPVC        map[string]string          // cached PVC→PV map (shared by sweep + per-node sample)
-	pvByPVCAt      time.Time                  // when pvByPVC was last refreshed
-	now            func() time.Time
-	mu             sync.RWMutex
-	firstScan      bool
-	sem            chan struct{}                                                                              // bounds concurrent getNodeUsage calls
-	getNodeUsageFn func(ctx context.Context, nodeName string, pvByPVC map[string]string) ([]*PvcUsage, error) // test override
+	client              kubernetes.Interface
+	config              *config.PvcMonitor
+	correlator          *correlation.Engine
+	state               *state.StateManager // persistence; nil only in unit tests
+	notifiedPvc         map[string]bool
+	lastUsage           map[string]state.PvcSample // last observed sample per PV name (survives unmount)
+	pvByPVC             map[string]string          // cached PVC→PV map (shared by sweep + per-node sample)
+	pvByPVCAt           time.Time                  // when pvByPVC was last refreshed
+	now                 func() time.Time
+	mu                  sync.RWMutex
+	firstScan           bool
+	sem                 chan struct{}                                                                              // bounds concurrent getNodeUsage calls
+	getNodeUsageFn      func(ctx context.Context, nodeName string, pvByPVC map[string]string) ([]*PvcUsage, error) // test override
+	allowedNamespaces   map[string]struct{}
+	forbiddenNamespaces map[string]struct{}
+	namespaceFilter     func(string) bool
+}
+
+// SetNamespaceScope keeps the periodic API-based storage checks aligned with
+// the informer scope used by the controller. Empty scope means all namespaces.
+func (p *PvcMonitor) SetNamespaceScope(allowed, forbidden []string) {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	p.allowedNamespaces = make(map[string]struct{}, len(allowed))
+	for _, namespace := range allowed {
+		p.allowedNamespaces[namespace] = struct{}{}
+	}
+	p.forbiddenNamespaces = make(map[string]struct{}, len(forbidden))
+	for _, namespace := range forbidden {
+		p.forbiddenNamespaces[namespace] = struct{}{}
+	}
+	p.pvByPVC = nil
+	p.pvByPVCAt = time.Time{}
+}
+
+// SetNamespaceFilter lets the controller provide its resolved namespace
+// selector, including dynamic NamespaceSelector configuration.
+func (p *PvcMonitor) SetNamespaceFilter(filter func(string) bool) {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	p.namespaceFilter = filter
+	p.pvByPVC = nil
+	p.pvByPVCAt = time.Time{}
+}
+
+func (p *PvcMonitor) namespaceAllowed(namespace string) bool {
+	p.mu.RLock()
+	defer p.mu.RUnlock()
+	if p.namespaceFilter != nil {
+		return p.namespaceFilter(namespace)
+	}
+	if _, forbidden := p.forbiddenNamespaces[namespace]; forbidden {
+		return false
+	}
+	if len(p.allowedNamespaces) > 0 {
+		_, allowed := p.allowedNamespaces[namespace]
+		return allowed
+	}
+	return true
 }
 
 const pvByPVCTTL = 60 * time.Second
@@ -60,6 +106,9 @@ func (p *PvcMonitor) pvcMap(ctx context.Context) map[string]string {
 	if pvcs, err := p.client.CoreV1().PersistentVolumeClaims("").List(ctx, metav1.ListOptions{}); err == nil {
 		for i := range pvcs.Items {
 			c := &pvcs.Items[i]
+			if !p.namespaceAllowed(c.Namespace) {
+				continue
+			}
 			m[c.Namespace+"/"+c.Name] = c.Spec.VolumeName
 		}
 		p.mu.Lock()

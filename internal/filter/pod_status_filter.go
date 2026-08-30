@@ -6,6 +6,8 @@ import (
 	"golang.org/x/exp/slices"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/klog/v2"
+
+	"github.com/abahmed/kwatch/internal/constant"
 )
 
 type PodStatusFilter struct{}
@@ -26,6 +28,19 @@ func skipNonIssuePod(ctx *Context) (Status, bool) {
 // terminated pod (Ready=False/PodCompleted) that must be skipped outright.
 func collectPodIssues(ctx *Context) (issueInPod, issueInContainers, completed bool) {
 	issueInPod, issueInContainers = true, true
+	switch ctx.Pod.Status.Phase {
+	case corev1.PodFailed:
+		issueInContainers = false
+		ctx.PodReason = ctx.Pod.Status.Reason
+		if ctx.PodReason == "" {
+			ctx.PodReason = constant.ReasonPodFailed
+		}
+		ctx.PodMsg = ctx.Pod.Status.Message
+	case corev1.PodUnknown:
+		issueInContainers = false
+		ctx.PodReason = constant.ReasonPodStatusUnknown
+		ctx.PodMsg = ctx.Pod.Status.Message
+	}
 	for _, c := range ctx.Pod.Status.Conditions {
 		switch c.Type {
 		case corev1.PodReady:

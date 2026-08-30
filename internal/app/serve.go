@@ -25,6 +25,9 @@ func serve(ctx context.Context, deps *serverDeps) int {
 	if deps.tlsSweep != nil {
 		wg.Add(1)
 	}
+	if deps.statusRun != nil {
+		wg.Add(1)
+	}
 
 	go func() {
 		defer wg.Done()
@@ -78,6 +81,12 @@ func serve(ctx context.Context, deps *serverDeps) int {
 					deps.tlsSweep()
 				}
 			}
+		}()
+	}
+	if deps.statusRun != nil {
+		go func() {
+			defer wg.Done()
+			deps.statusRun(ctx)
 		}()
 	}
 	if deps.cfg.CrdConfig.Enabled {

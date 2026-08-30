@@ -9,6 +9,7 @@ import (
 	appsv1lister "k8s.io/client-go/listers/apps/v1"
 	autoscalingv2lister "k8s.io/client-go/listers/autoscaling/v2"
 	batchv1lister "k8s.io/client-go/listers/batch/v1"
+	coordinationv1lister "k8s.io/client-go/listers/coordination/v1"
 	corev1lister "k8s.io/client-go/listers/core/v1"
 	discoveryv1lister "k8s.io/client-go/listers/discovery/v1"
 	networkingv1lister "k8s.io/client-go/listers/networking/v1"
@@ -42,6 +43,10 @@ type Controller struct {
 	ingress       *resourcePipeline
 	netpol        *resourcePipeline
 	cpPod         *resourcePipeline
+	resourceQuota *resourcePipeline
+	namespace     *resourcePipeline
+	lease         *resourcePipeline
+	replicaSet    *resourcePipeline
 
 	podLister     corev1lister.PodLister
 	nodeLister    corev1lister.NodeLister
@@ -82,6 +87,9 @@ type Controller struct {
 	ingressLister       networkingv1lister.IngressLister
 	netpolLister        networkingv1lister.NetworkPolicyLister
 	cpPodLister         corev1lister.PodLister
+	resourceQuotaLister corev1lister.ResourceQuotaLister
+	namespaceLister     corev1lister.NamespaceLister
+	leaseLister         coordinationv1lister.LeaseLister
 
 	nodeResourceCfg *config.NodeResourceMonitor
 
@@ -96,7 +104,7 @@ func (c *Controller) allPipelines() []*resourcePipeline {
 	return []*resourcePipeline{
 		c.pod, c.node, c.deployment, c.job, c.daemonSet, c.statefulSet,
 		c.pdb, c.cronJob, c.hpa, c.service, c.endpointSlice, c.mwc,
-		c.vwc, c.ingress, c.netpol, c.cpPod,
+		c.vwc, c.ingress, c.netpol, c.cpPod, c.resourceQuota, c.namespace, c.lease, c.replicaSet,
 	}
 }
 
@@ -164,9 +172,13 @@ func New(
 			"controlplane pod",
 			"controlplanepods",
 		),
-		podLister:   podLister,
-		maxBaseline: maxBaseline,
-		watchAll:    scope.all,
+		resourceQuota: newResourcePipeline("resourcequota", "resourcequotas"),
+		namespace:     newResourcePipeline("namespace", "namespaces"),
+		lease:         newResourcePipeline("lease", "leases"),
+		replicaSet:    newResourcePipeline("replicaset", "replicasets-status"),
+		podLister:     podLister,
+		maxBaseline:   maxBaseline,
+		watchAll:      scope.all,
 	}
 	if !scope.all {
 		c.allowedNamespaces = make(map[string]struct{}, len(scope.namespaces))
@@ -195,6 +207,10 @@ func New(
 	c.ingress.syncFn = c.syncIngress
 	c.netpol.syncFn = c.syncNetpol
 	c.cpPod.syncFn = c.syncCpPod
+	c.resourceQuota.syncFn = c.syncResourceQuota
+	c.namespace.syncFn = c.syncNamespace
+	c.lease.syncFn = c.syncLease
+	c.replicaSet.syncFn = c.syncReplicaSet
 
 	for _, inf := range podInformers {
 		c.pod.synced = append(c.pod.synced, inf.HasSynced)
@@ -211,10 +227,11 @@ func New(
 	c.wireAdmissionWebhooks(cfg, fs)
 	c.wireIngress(cfg, fs)
 	c.wireNetpol(cfg, fs)
+	c.wireClusterResources(cfg, fs)
 	if cfg.ControlPlaneMonitor.Enabled {
 		factories = append(factories, c.wireControlPlane(client, resync))
 	}
-	c.wireReplicaSet(fs)
+	c.wireReplicaSet(cfg, fs)
 	c.wireDaemonSetLister(fs)
 	c.wireStatefulSet(cfg, fs)
 	c.wirePDB(cfg, fs)
@@ -253,8 +270,12 @@ func New(
 		Secret:        c.secretLister,
 		Netpol:        c.netpolLister,
 		Ingress:       c.ingressLister,
+		ResourceQuota: c.resourceQuotaLister,
+		Namespace:     c.namespaceLister,
+		Lease:         c.leaseLister,
 		CPPod:         c.cpPodLister,
 	})
+	h.SetNamespaceScope(scope.namespaces, scope.all)
 
 	stopCh := make(chan struct{})
 	for _, f := range factories {

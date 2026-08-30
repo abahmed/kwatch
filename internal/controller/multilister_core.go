@@ -4,9 +4,26 @@ import (
 	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 
+	coordinationv1 "k8s.io/api/coordination/v1"
 	corev1 "k8s.io/api/core/v1"
+	coordinationv1lister "k8s.io/client-go/listers/coordination/v1"
 	corev1lister "k8s.io/client-go/listers/core/v1"
 )
+
+type multiLeaseLister struct {
+	listers []coordinationv1lister.LeaseLister
+}
+
+func (m *multiLeaseLister) List(selector labels.Selector) ([]*coordinationv1.Lease, error) {
+	return listAll(selector, m.listers)
+}
+
+func (m *multiLeaseLister) Leases(namespace string) coordinationv1lister.LeaseNamespaceLister {
+	return &multiNamespace[*coordinationv1.Lease, coordinationv1lister.LeaseNamespaceLister]{
+		listers: nsAll(m.listers, namespace, coordinationv1lister.LeaseLister.Leases),
+		gr:      schema.GroupResource{Group: "coordination.k8s.io", Resource: "leases"},
+	}
+}
 
 // ConfigMap
 // ---------------------------------------------------------------------------
@@ -70,6 +87,24 @@ func (m *multiPodLister) Pods(namespace string) corev1lister.PodNamespaceLister 
 
 type multiPVCListLister struct {
 	listers []corev1lister.PersistentVolumeClaimLister
+}
+
+// ResourceQuota
+// ---------------------------------------------------------------------------
+
+type multiResourceQuotaLister struct {
+	listers []corev1lister.ResourceQuotaLister
+}
+
+func (m *multiResourceQuotaLister) List(selector labels.Selector) ([]*corev1.ResourceQuota, error) {
+	return listAll(selector, m.listers)
+}
+
+func (m *multiResourceQuotaLister) ResourceQuotas(namespace string) corev1lister.ResourceQuotaNamespaceLister {
+	return &multiNamespace[*corev1.ResourceQuota, corev1lister.ResourceQuotaNamespaceLister]{
+		listers: nsAll(m.listers, namespace, corev1lister.ResourceQuotaLister.ResourceQuotas),
+		gr:      schema.GroupResource{Group: "", Resource: "resourcequotas"},
+	}
 }
 
 func (m *multiPVCListLister) List(selector labels.Selector) ([]*corev1.PersistentVolumeClaim, error) {

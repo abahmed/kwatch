@@ -48,6 +48,9 @@ const (
 	ReasonNodeAffinity        = "NodeAffinity"
 	ReasonUnschedulable       = "Unschedulable"
 	ReasonPodPending          = "PodPending"
+	ReasonPodFailed           = "PodFailed"
+	ReasonPodStatusUnknown    = "PodStatusUnknown"
+	ReasonPodStuckTerminating = "PodStuckTerminating"
 	ReasonSchedulingGated     = "SchedulingGated"
 	ReasonFailedScheduling    = "FailedScheduling"
 	ReasonEvicted             = "Evicted"
@@ -70,6 +73,12 @@ const (
 	// Workload rollout reasons.
 	ReasonProgressDeadlineExceeded = "ProgressDeadlineExceeded"
 	ReasonDeploymentUnavailable    = "DeploymentUnavailable"
+	ReasonDeploymentProgressing    = "DeploymentProgressingFalse"
+	ReasonDeploymentAvailable      = "DeploymentAvailableFalse"
+	ReasonDeploymentReplicaFailure = "DeploymentReplicaFailure"
+	ReasonReplicaSetFailure        = "ReplicaSetFailure"
+	ReasonStatefulSetCondition     = "StatefulSetConditionFailure"
+	ReasonDaemonSetCondition       = "DaemonSetConditionFailure"
 	ReasonDaemonSetUnavailable     = "DaemonSetUnavailable"
 	ReasonStsUnavailable           = "StsUnavailable"
 	ReasonReplicaSetUpdated        = "ReplicaSetUpdated"
@@ -79,7 +88,10 @@ const (
 	ReasonFailedGetScale           = "FailedGetScale"
 	ReasonHPAMaxedOut              = "HPAMaxedOut"
 	ReasonHPAScalingError          = "HPAScalingError"
+	ReasonHPAScalingLimited        = "HPAScalingLimited"
 	ReasonJobFailed                = "JobFailed"
+	ReasonJobDeadlineExceeded      = "JobDeadlineExceeded"
+	ReasonJobBackoffLimitExceeded  = "JobBackoffLimitExceeded"
 	ReasonJobSuspended             = "JobSuspended"
 	ReasonCronJobSuspended         = "CronJobSuspended"
 	ReasonCronJobNotScheduled      = "CronJobNotScheduled"
@@ -87,8 +99,12 @@ const (
 
 	// Service and routing reasons.
 	ReasonServiceNoEndpoints       = "ServiceNoEndpoints"
+	ReasonServicePortMismatch      = "ServicePortMismatch"
 	ReasonIngressBackendNotFound   = "IngressBackendNotFound"
 	ReasonWebhookBackendNotFound   = "WebhookBackendNotFound"
+	ReasonWebhookNoEndpoints       = "WebhookNoEndpoints"
+	ReasonAPIServiceFailure        = "APIServiceFailure"
+	ReasonCustomResourceFailure    = "CustomResourceFailure"
 	ReasonRestrictiveNetworkPolicy = "RestrictiveNetworkPolicy"
 
 	// Certificates and control plane reasons.
@@ -97,7 +113,13 @@ const (
 	ReasonControlPlaneComponentFailure = "ControlPlaneComponentFailure"
 
 	// Storage reasons.
-	ReasonVolumeUsageHigh = "VolumeUsageHigh"
+	ReasonVolumeUsageHigh        = "VolumeUsageHigh"
+	ReasonPersistentVolumeClaim  = "PersistentVolumeClaimFailure"
+	ReasonPersistentVolume       = "PersistentVolumeFailure"
+	ReasonResourceQuotaExhausted = "ResourceQuotaExhausted"
+	ReasonNamespaceStuck         = "NamespaceStuckTerminating"
+	ReasonNodeLeaseStale         = "NodeLeaseStale"
+	ReasonNodeStuckTerminating   = "NodeStuckTerminating"
 
 	// Synthetic and startup reasons.
 	ReasonPreExistingAtStartup = "PreExistingAtStartup"

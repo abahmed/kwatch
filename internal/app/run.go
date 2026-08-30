@@ -24,6 +24,7 @@ import (
 	"github.com/abahmed/kwatch/internal/model"
 	"github.com/abahmed/kwatch/internal/pvc"
 	"github.com/abahmed/kwatch/internal/startup"
+	"github.com/abahmed/kwatch/internal/statuswatch"
 	"github.com/abahmed/kwatch/internal/upgrader"
 	"github.com/abahmed/kwatch/internal/version"
 )
@@ -50,6 +51,7 @@ type serverDeps struct {
 	closeAudit  func() error
 	cleanup     func()
 	tlsSweep    func()
+	statusRun   func(context.Context)
 }
 
 // Run loads config and wires all monitors, then runs until shutdown.
@@ -165,10 +167,28 @@ func Run() int {
 		klog.ErrorS(err, "failed to create controller")
 		return 1
 	}
+	pvcMonitor.SetNamespaceFilter(ctl.NamespaceAllowed)
 	restoreIncidents(ctx, stateMgr, correlator, ctl.NamespaceAllowed)
 	ctl.SetTracker(tracker)
 	ctl.SetGraph(graph)
 	ctl.SetReadyFunc(func() { healthServer.SetReady(true) })
+
+	var statusRun func(context.Context)
+	if cfg.ClusterResourceMonitor.Enabled {
+		if restCfg, restErr := client.GetRestConfig(&cfg.App); restErr != nil {
+			klog.ErrorS(restErr, "failed to create generic status monitor")
+		} else if monitor, monitorErr := statuswatch.New(
+			restCfg, correlator, time.Duration(cfg.ResyncSeconds)*time.Second,
+		); monitorErr != nil {
+			klog.ErrorS(monitorErr, "failed to initialize generic status monitor")
+		} else {
+			statusRun = func(runCtx context.Context) {
+				if err := monitor.Start(runCtx); err != nil {
+					klog.ErrorS(err, "generic status monitor stopped")
+				}
+			}
+		}
+	}
 
 	var tlsSweep func()
 	if cfg.TlsMonitor.Enabled {
@@ -193,6 +213,7 @@ func Run() int {
 		closeAudit:    auditLogger.Close,
 		cleanup:       cleanup,
 		tlsSweep:      tlsSweep,
+		statusRun:     statusRun,
 	}
 	return serve(ctx, deps)
 }

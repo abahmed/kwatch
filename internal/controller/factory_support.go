@@ -2,11 +2,34 @@ package controller
 
 import (
 	admissionregistrationv1lister "k8s.io/client-go/listers/admissionregistration/v1"
+	coordinationv1lister "k8s.io/client-go/listers/coordination/v1"
 	corev1lister "k8s.io/client-go/listers/core/v1"
 	networkingv1lister "k8s.io/client-go/listers/networking/v1"
 	storagev1lister "k8s.io/client-go/listers/storage/v1"
 	"k8s.io/client-go/tools/cache"
 )
+
+func (fs factorySet) leaseLister() coordinationv1lister.LeaseLister {
+	if fs.global != nil {
+		return fs.global.Coordination().V1().Leases().Lister()
+	}
+	listers := make([]coordinationv1lister.LeaseLister, 0, len(fs.perNamespace))
+	for _, f := range fs.perNamespace {
+		listers = append(listers, f.Coordination().V1().Leases().Lister())
+	}
+	return &multiLeaseLister{listers: listers}
+}
+
+func (fs factorySet) leaseInformers() []cache.SharedIndexInformer {
+	if fs.global != nil {
+		return []cache.SharedIndexInformer{fs.global.Coordination().V1().Leases().Informer()}
+	}
+	out := make([]cache.SharedIndexInformer, 0, len(fs.perNamespace))
+	for _, f := range fs.perNamespace {
+		out = append(out, f.Coordination().V1().Leases().Informer())
+	}
+	return out
+}
 
 func (fs factorySet) ingressLister() networkingv1lister.IngressLister {
 	if fs.global != nil {
@@ -116,6 +139,48 @@ func (fs factorySet) serviceAccountInformers() []cache.SharedIndexInformer {
 		out = append(out, f.Core().V1().ServiceAccounts().Informer())
 	}
 	return out
+}
+
+func (fs factorySet) resourceQuotaLister() corev1lister.ResourceQuotaLister {
+	if fs.global != nil {
+		return fs.global.Core().V1().ResourceQuotas().Lister()
+	}
+	listers := make([]corev1lister.ResourceQuotaLister, 0, len(fs.perNamespace))
+	for _, f := range fs.perNamespace {
+		listers = append(listers, f.Core().V1().ResourceQuotas().Lister())
+	}
+	return &multiResourceQuotaLister{listers: listers}
+}
+
+func (fs factorySet) resourceQuotaInformers() []cache.SharedIndexInformer {
+	if fs.global != nil {
+		return []cache.SharedIndexInformer{fs.global.Core().V1().ResourceQuotas().Informer()}
+	}
+	out := make([]cache.SharedIndexInformer, 0, len(fs.perNamespace))
+	for _, f := range fs.perNamespace {
+		out = append(out, f.Core().V1().ResourceQuotas().Informer())
+	}
+	return out
+}
+
+func (fs factorySet) namespaceLister() corev1lister.NamespaceLister {
+	if fs.clusterScoped != nil {
+		return fs.clusterScoped.Core().V1().Namespaces().Lister()
+	}
+	if fs.global != nil {
+		return fs.global.Core().V1().Namespaces().Lister()
+	}
+	return nil
+}
+
+func (fs factorySet) namespaceInformer() cache.SharedIndexInformer {
+	if fs.clusterScoped != nil {
+		return fs.clusterScoped.Core().V1().Namespaces().Informer()
+	}
+	if fs.global != nil {
+		return fs.global.Core().V1().Namespaces().Informer()
+	}
+	return nil
 }
 
 func (fs factorySet) persistentVolumeLister() corev1lister.PersistentVolumeLister {

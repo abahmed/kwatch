@@ -1,0 +1,206 @@
+package statuswatch
+
+import (
+	"context"
+	"fmt"
+	"strings"
+	"sync"
+	"time"
+
+	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
+	"k8s.io/apimachinery/pkg/runtime/schema"
+	"k8s.io/client-go/dynamic"
+	"k8s.io/client-go/dynamic/dynamicinformer"
+	"k8s.io/client-go/rest"
+	"k8s.io/client-go/tools/cache"
+	"k8s.io/klog/v2"
+
+	"github.com/abahmed/kwatch/internal/constant"
+	"github.com/abahmed/kwatch/internal/correlation"
+	"github.com/abahmed/kwatch/internal/event"
+)
+
+var (
+	apiServiceGVR = schema.GroupVersionResource{Group: "apiregistration.k8s.io", Version: "v1", Resource: "apiservices"}
+	crdGVR        = schema.GroupVersionResource{Group: "apiextensions.k8s.io", Version: "v1", Resource: "customresourcedefinitions"}
+)
+
+// Monitor watches APIService and discovered CRD instances. It only treats
+// well-known failure-shaped conditions as incidents; arbitrary informational
+// status fields are deliberately ignored to prevent operator noise.
+type Monitor struct {
+	client     dynamic.Interface
+	correlator *correlation.Engine
+	resync     time.Duration
+	ctx        context.Context
+	mu         sync.Mutex
+	factories  map[string]dynamicinformer.DynamicSharedInformerFactory
+}
+
+func New(restConfig *rest.Config, correlator *correlation.Engine, resync time.Duration) (*Monitor, error) {
+	client, err := dynamic.NewForConfig(restConfig)
+	if err != nil {
+		return nil, fmt.Errorf("statuswatch: create dynamic client: %w", err)
+	}
+	return &Monitor{client: client, correlator: correlator, resync: resync, factories: make(map[string]dynamicinformer.DynamicSharedInformerFactory)}, nil
+}
+
+func (m *Monitor) Start(ctx context.Context) error {
+	m.ctx = ctx
+	factory := dynamicinformer.NewDynamicSharedInformerFactory(m.client, m.resync)
+	apiInformer := factory.ForResource(apiServiceGVR).Informer()
+	if _, err := apiInformer.AddEventHandler(cache.ResourceEventHandlerFuncs{
+		AddFunc: m.processAPIService, UpdateFunc: func(_, obj interface{}) { m.processAPIService(obj) },
+		DeleteFunc: m.resolveAPIService,
+	}); err != nil {
+		return err
+	}
+	crdInformer := factory.ForResource(crdGVR).Informer()
+	if _, err := crdInformer.AddEventHandler(cache.ResourceEventHandlerFuncs{
+		AddFunc: m.watchCRD, UpdateFunc: func(_, obj interface{}) { m.watchCRD(obj) },
+	}); err != nil {
+		return err
+	}
+	factory.Start(ctx.Done())
+	if !cache.WaitForCacheSync(ctx.Done(), apiInformer.HasSynced, crdInformer.HasSynced) {
+		return fmt.Errorf("statuswatch: informer sync failed")
+	}
+	return nil
+}
+
+func (m *Monitor) processAPIService(obj interface{}) {
+	u, ok := obj.(*unstructured.Unstructured)
+	if !ok {
+		return
+	}
+	if sig := failureSignal(u, "apiservice", u.GetName()); sig != nil {
+		m.correlator.Process(event.Event{Resource: sig.Resource, Namespace: sig.Namespace, PodName: sig.PodName, Reason: sig.Reason, Hint: sig.Hint, Labels: sig.Labels}, sig.Owner, nil)
+	} else {
+		m.resolve("", u.GetName(), constant.ReasonAPIServiceFailure)
+	}
+}
+
+func (m *Monitor) resolveAPIService(obj interface{}) {
+	u, ok := obj.(*unstructured.Unstructured)
+	if ok {
+		m.resolve("", u.GetName(), constant.ReasonAPIServiceFailure)
+	}
+}
+
+func (m *Monitor) watchCRD(obj interface{}) {
+	crd, ok := obj.(*unstructured.Unstructured)
+	if !ok {
+		return
+	}
+	group, _, _ := unstructured.NestedString(crd.Object, "spec", "group")
+	versions, _, _ := unstructured.NestedSlice(crd.Object, "spec", "versions")
+	plural, _, _ := unstructured.NestedString(crd.Object, "spec", "names", "plural")
+	if group == "" || plural == "" || len(versions) == 0 {
+		return
+	}
+	version, _ := versions[0].(map[string]interface{})["name"].(string)
+	if version == "" {
+		return
+	}
+	versionSpec, _ := versions[0].(map[string]interface{})
+	if _, enabled, _ := unstructured.NestedFieldNoCopy(versionSpec, "subresources", "status"); !enabled {
+		return
+	}
+	gvr := schema.GroupVersionResource{Group: group, Version: version, Resource: plural}
+	key := gvr.String()
+	m.mu.Lock()
+	if _, exists := m.factories[key]; exists {
+		m.mu.Unlock()
+		return
+	}
+	factory := dynamicinformer.NewDynamicSharedInformerFactory(m.client, m.resync)
+	m.factories[key] = factory
+	m.mu.Unlock()
+	informer := factory.ForResource(gvr).Informer()
+	_, err := informer.AddEventHandler(cache.ResourceEventHandlerFuncs{
+		AddFunc:    m.processCR,
+		UpdateFunc: func(_, obj interface{}) { m.processCR(obj) },
+		DeleteFunc: m.resolveCR,
+	})
+	if err != nil {
+		klog.ErrorS(err, "statuswatch: register CRD informer", "resource", key)
+		return
+	}
+	factory.Start(m.ctx.Done())
+}
+
+func (m *Monitor) processCR(obj interface{}) {
+	u, ok := obj.(*unstructured.Unstructured)
+	if !ok {
+		return
+	}
+	if sig := failureSignal(u, "customresource", resourceOwner(u)); sig != nil {
+		m.correlator.Process(event.Event{Resource: sig.Resource, Namespace: sig.Namespace, PodName: sig.PodName, Reason: sig.Reason, Hint: sig.Hint, Labels: sig.Labels}, sig.Owner, nil)
+	} else {
+		m.resolve(u.GetNamespace(), resourceOwner(u), constant.ReasonCustomResourceFailure)
+	}
+}
+
+func (m *Monitor) resolveCR(obj interface{}) {
+	u, ok := obj.(*unstructured.Unstructured)
+	if ok {
+		m.resolve(u.GetNamespace(), resourceOwner(u), constant.ReasonCustomResourceFailure)
+	}
+}
+
+func (m *Monitor) resolve(namespace, owner, reason string) {
+	m.correlator.MarkResolved(correlation.BuildKey(namespace, owner, reason, ""))
+}
+
+func resourceOwner(u *unstructured.Unstructured) string {
+	if u.GetNamespace() == "" {
+		return u.GetName()
+	}
+	return u.GetNamespace() + "/" + u.GetName()
+}
+
+func failureSignal(u *unstructured.Unstructured, resource, owner string) *event.Signal {
+	conditions, found, _ := unstructured.NestedSlice(u.Object, "status", "conditions")
+	if !found {
+		return nil
+	}
+	for _, raw := range conditions {
+		condition, ok := raw.(map[string]interface{})
+		if !ok {
+			continue
+		}
+		typ, _ := condition["type"].(string)
+		status, _ := condition["status"].(string)
+		reason, _ := condition["reason"].(string)
+		message, _ := condition["message"].(string)
+		failed := (typ == "Ready" || typ == "Available") && status == "False"
+		failed = failed || typ == "Degraded" && status == "True"
+		failed = failed || typ == "Progressing" && status == "False"
+		if !failed || !meaningfulReason(reason, message) {
+			continue
+		}
+		hint := typ + "=" + status + ": " + reason
+		if message != "" {
+			hint += " — " + message
+		}
+		return &event.Signal{Resource: resource, Namespace: u.GetNamespace(), PodName: u.GetName(), Owner: owner, Reason: reasonFor(resource), Labels: u.GetLabels(), Hint: hint}
+	}
+	return nil
+}
+
+func meaningfulReason(reason, message string) bool {
+	text := strings.ToLower(reason + " " + message)
+	for _, token := range []string{"fail", "error", "reject", "unavail", "timeout", "degrad", "stuck", "invalid", "missing", "notfound", "endpoint"} {
+		if strings.Contains(text, token) {
+			return true
+		}
+	}
+	return false
+}
+
+func reasonFor(resource string) string {
+	if resource == "apiservice" {
+		return constant.ReasonAPIServiceFailure
+	}
+	return constant.ReasonCustomResourceFailure
+}

@@ -117,6 +117,15 @@ func DetectHPAIssues(
 			})
 			break
 		}
+		if c.Type == autoscalingv2.ScalingLimited &&
+			c.Status == corev1.ConditionTrue &&
+			c.Reason != constant.ReasonTooManyReplicas && c.Reason != "TooFewReplicas" {
+			out = append(out, &event.Signal{
+				Resource: "horizontalpodautoscaler", Reason: constant.ReasonHPAScalingLimited,
+				Namespace: hpa.Namespace, Owner: key, Labels: hpa.Labels,
+				Hint: fmt.Sprintf("ScalingLimited: %s — %s", c.Reason, c.Message),
+			})
+		}
 	}
 
 	if hpaAtMax(hpa) {
@@ -159,6 +168,7 @@ func (h *handler) ProcessHorizontalPodAutoscalerObject(
 	// (1) scaling-error detection — sustained check to avoid transient noise
 	sigs := DetectHPAIssues(hpa)
 	hadError := false
+	hadLimited := false
 	for _, sig := range sigs {
 		if sig.Reason == constant.ReasonHPAScalingError {
 			first := h.markFirstScalingError(key)
@@ -169,6 +179,9 @@ func (h *handler) ProcessHorizontalPodAutoscalerObject(
 				h.signalEvent(sig)
 			}
 			hadError = true
+		} else if sig.Reason == constant.ReasonHPAScalingLimited {
+			h.signalEvent(sig)
+			hadLimited = true
 		}
 	}
 	if !hadError {
@@ -181,6 +194,11 @@ func (h *handler) ProcessHorizontalPodAutoscalerObject(
 				"",
 			),
 		)
+	}
+	if !hadLimited {
+		h.correlator.MarkResolved(correlation.BuildKey(
+			hpa.Namespace, key, constant.ReasonHPAScalingLimited, "",
+		))
 	}
 
 	// (2) maxed detection

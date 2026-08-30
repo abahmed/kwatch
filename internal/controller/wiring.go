@@ -165,6 +165,21 @@ func (c *Controller) wireNetpol(cfg *config.Config, fs factorySet) {
 	c.watch(c.netpol, fs.netpolInformers()...)
 }
 
+func (c *Controller) wireClusterResources(cfg *config.Config, fs factorySet) {
+	if !cfg.ClusterResourceMonitor.Enabled {
+		return
+	}
+	c.resourceQuotaLister = fs.resourceQuotaLister()
+	c.watch(c.resourceQuota, fs.resourceQuotaInformers()...)
+
+	c.namespaceLister = fs.namespaceLister()
+	if inf := fs.namespaceInformer(); inf != nil {
+		c.watch(c.namespace, inf)
+	}
+	c.leaseLister = fs.leaseLister()
+	c.watch(c.lease, fs.leaseInformers()...)
+}
+
 // wireControlPlane wires the kube-system pod informer and returns the dedicated
 // factory it owns.
 func (c *Controller) wireControlPlane(
@@ -220,14 +235,18 @@ func (c *Controller) wirePDB(cfg *config.Config, fs factorySet) {
 }
 
 // wireReplicaSet wires the replicaset lister used by owner resolution.
-func (c *Controller) wireReplicaSet(fs factorySet) {
+func (c *Controller) wireReplicaSet(cfg *config.Config, fs factorySet) {
 	c.rsLister = fs.rsLister()
 
+	rsInformers := fs.rsInformers()
 	var rsSynced []cache.InformerSynced
-	for _, inf := range fs.rsInformers() {
+	for _, inf := range rsInformers {
 		rsSynced = append(rsSynced, inf.HasSynced)
 	}
 	c.rsSynced = rsSynced
+	if cfg.ClusterResourceMonitor.Enabled {
+		c.watch(c.replicaSet, rsInformers...)
+	}
 
 }
 

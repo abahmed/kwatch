@@ -81,6 +81,9 @@ func (c *Controller) buildSeenSet() {
 
 	for _, pod := range pods {
 		c.emitBaseline(rec, pod)
+		if sig := handler.DetectPodDeletionIssue(pod, time.Now()); sig != nil {
+			rec.seed(sig)
+		}
 	}
 
 	c.seedNodeBaseline(rec)
@@ -180,6 +183,9 @@ func (c *Controller) seedNodeBaseline(rec *baselineRecorder) {
 						rec.add(key, n.Name)
 						hasIssue = true
 					}
+				}
+				if sig := handler.DetectNodeDeletionIssue(n, time.Now()); sig != nil {
+					rec.seed(sig)
 				}
 				if hasIssue {
 					activeNodeIncidents = append(activeNodeIncidents, n.Name)

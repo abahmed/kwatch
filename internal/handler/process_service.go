@@ -38,7 +38,7 @@ func DetectServiceEndpointIssue(
 	hasReady := false
 	for _, slice := range epSlices {
 		for _, ep := range slice.Endpoints {
-			if ep.Conditions.Ready != nil && *ep.Conditions.Ready {
+			if endpointCanReceiveTraffic(ep) {
 				hasReady = true
 				break
 			}
@@ -64,6 +64,94 @@ func DetectServiceEndpointIssue(
 		}
 	}
 	return nil
+}
+
+func DetectServicePortIssue(
+	svc *corev1.Service,
+	epSlices []*discoveryv1.EndpointSlice,
+) *event.Signal {
+	if svc == nil || len(svc.Spec.Ports) == 0 || len(epSlices) == 0 {
+		return nil
+	}
+	names, numbers := servicePortExpectations(svc)
+	observedNames, observedNumbers := endpointPortObservations(epSlices)
+	for name := range names {
+		if !observedNames[name] {
+			return servicePortMismatch(svc, fmt.Sprintf("named port %q is not published by its EndpointSlices", name))
+		}
+	}
+	for key := range numbers {
+		if !observedNumbers[key] {
+			return servicePortMismatch(svc, fmt.Sprintf("target port %s is not published by its EndpointSlices", key))
+		}
+	}
+	return nil
+}
+
+func servicePortExpectations(svc *corev1.Service) (map[string]bool, map[string]bool) {
+	names := make(map[string]bool)
+	numbers := make(map[string]bool)
+	for _, port := range svc.Spec.Ports {
+		if port.Name != "" {
+			names[port.Name] = true
+		}
+		if port.TargetPort.StrVal == "" {
+			target := port.TargetPort.IntVal
+			if target == 0 {
+				target = port.Port
+			}
+			numbers[servicePortKey(port.Protocol, target)] = true
+		}
+	}
+	return names, numbers
+}
+
+func endpointPortObservations(epSlices []*discoveryv1.EndpointSlice) (map[string]bool, map[string]bool) {
+	names := make(map[string]bool)
+	numbers := make(map[string]bool)
+	for _, slice := range epSlices {
+		for _, port := range slice.Ports {
+			if port.Name != nil {
+				names[*port.Name] = true
+			}
+			if port.Port == nil {
+				continue
+			}
+			protocol := corev1.ProtocolTCP
+			if port.Protocol != nil {
+				protocol = *port.Protocol
+			}
+			numbers[servicePortKey(protocol, *port.Port)] = true
+		}
+	}
+	return names, numbers
+}
+
+func servicePortMismatch(svc *corev1.Service, detail string) *event.Signal {
+	key := svc.Namespace + "/" + svc.Name
+	return &event.Signal{Resource: "service", Namespace: svc.Namespace, PodName: svc.Name,
+		Owner: key, Reason: constant.ReasonServicePortMismatch, Labels: svc.Labels,
+		Hint: fmt.Sprintf("service %s %s", key, detail)}
+}
+
+func servicePortKey(protocol corev1.Protocol, port int32) string {
+	if protocol == "" {
+		protocol = corev1.ProtocolTCP
+	}
+	return fmt.Sprintf("%s/%d", protocol, port)
+}
+
+// endpointCanReceiveTraffic follows EndpointSlice conditions. A terminating
+// endpoint is not a healthy destination for new Service traffic, while a
+// missing Ready condition is usable unless Serving explicitly says false.
+func endpointCanReceiveTraffic(ep discoveryv1.Endpoint) bool {
+	if ep.Conditions.Terminating != nil && *ep.Conditions.Terminating {
+		return false
+	}
+	if ep.Conditions.Ready != nil {
+		return *ep.Conditions.Ready
+	}
+	return ep.Conditions.Serving == nil || *ep.Conditions.Serving
 }
 
 func (h *handler) ProcessService(key string, deleted bool) error {
@@ -121,6 +209,7 @@ func (h *handler) ProcessServiceObject(
 	}
 
 	sig := DetectServiceEndpointIssue(svc, epSlices)
+	portSig := DetectServicePortIssue(svc, epSlices)
 	key := svc.Namespace + "/" + svc.Name
 	if sig != nil {
 		first := h.markServiceNoEndpoints(key)
@@ -139,6 +228,13 @@ func (h *handler) ProcessServiceObject(
 				"",
 			),
 		)
+	}
+	if portSig != nil {
+		h.signalEvent(portSig)
+	} else {
+		h.correlator.MarkResolved(correlation.BuildKey(
+			svc.Namespace, key, constant.ReasonServicePortMismatch, "",
+		))
 	}
 	return nil
 }

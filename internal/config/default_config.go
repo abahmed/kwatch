@@ -81,6 +81,7 @@ func DefaultConfig() *Config {
 		ControlPlaneMonitor:     ControlPlaneMonitor{Enabled: true},
 		IngressMonitor:          IngressMonitor{Enabled: true},
 		NetworkPolicyMonitor:    NetworkPolicyMonitor{Enabled: true},
+		ClusterResourceMonitor:  ClusterResourceMonitor{Enabled: true, SustainedMinutes: 10},
 		SmartGrouping: SmartGrouping{
 			WindowSeconds:            60,
 			NamespaceFanOutThreshold: 3,

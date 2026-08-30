@@ -8,6 +8,8 @@ import (
 
 	"github.com/abahmed/kwatch/internal/constant"
 
+	corev1 "k8s.io/api/core/v1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/klog/v2"
 
 	"github.com/abahmed/kwatch/internal/event"
@@ -24,12 +26,20 @@ type PvcUsage struct {
 	UsagePercentage float64
 }
 
+const stuckVolumeDeletionGrace = 10 * time.Minute
+
 // checkUsage iterates all nodes and queries the kubelet summary API for
 // volume usage. Only PVCs that are actively mounted by a pod on the node
 // appear in the summary. PVCs that are Bound but not yet mounted (e.g. a
 // newly created PVC whose consumer pod hasn't scheduled) are invisible to
 // this check and will not trigger alerts until a pod mounts them.
 func (p *PvcMonitor) checkUsage(ctx context.Context) {
+	// Mounted-volume usage is only one storage signal. The API status is the
+	// authoritative signal for Pending/Lost PVCs and Released/Failed PVs, so
+	// inspect it before querying kubelet summaries. This also works on clusters
+	// with no ready nodes.
+	p.checkVolumeStatus(ctx)
+
 	nodes, err := k8s.GetNodes(ctx, p.client)
 	if err != nil {
 		klog.ErrorS(err, "pvc monitor: failed to get nodes")
@@ -78,6 +88,100 @@ func (p *PvcMonitor) checkUsage(ctx context.Context) {
 	}
 
 	p.apply(pvcUsages, pvByPVC, incomplete, true /*isSweep*/)
+}
+
+func (p *PvcMonitor) checkVolumeStatus(ctx context.Context) {
+	if p.client == nil {
+		return
+	}
+	pvcs, err := p.client.CoreV1().PersistentVolumeClaims("").List(
+		ctx, metav1.ListOptions{},
+	)
+	if err != nil {
+		klog.ErrorS(err, "pvc monitor: failed to list pvc status")
+		return
+	}
+	for i := range pvcs.Items {
+		pvc := &pvcs.Items[i]
+		if !p.namespaceAllowed(pvc.Namespace) {
+			continue
+		}
+		key := pvc.Namespace + "/" + pvc.Name
+		condition := pvcFailureCondition(pvc.Status.Conditions)
+		stuck := volumeStuckTerminating(pvc.DeletionTimestamp, pvc.Finalizers, p.now())
+		if pvcStatusFailure(pvc.Status.Phase) || condition != "" || stuck {
+			hint := fmt.Sprintf("PVC %s is %s", key, pvc.Status.Phase)
+			if condition != "" {
+				hint = fmt.Sprintf("PVC %s has condition %s", key, condition)
+			}
+			if stuck {
+				hint = fmt.Sprintf("PVC %s has been terminating for %s with finalizers: %v",
+					key, p.now().Sub(pvc.DeletionTimestamp.Time).Round(time.Minute), pvc.Finalizers)
+			}
+			p.reportSignal(&event.Signal{
+				Resource: "pvc", Namespace: pvc.Namespace, PodName: pvc.Name,
+				Owner: key, Reason: constant.ReasonPersistentVolumeClaim,
+				Labels: pvc.Labels,
+				Hint:   hint,
+			})
+		} else {
+			p.correlator.ResolveByResource("pvc", key)
+		}
+	}
+
+	pvs, err := p.client.CoreV1().PersistentVolumes().List(
+		ctx, metav1.ListOptions{},
+	)
+	if err != nil {
+		klog.ErrorS(err, "pvc monitor: failed to list pv status")
+		return
+	}
+	for i := range pvs.Items {
+		pv := &pvs.Items[i]
+		stuck := volumeStuckTerminating(pv.DeletionTimestamp, pv.Finalizers, p.now())
+		if pvStatusFailure(pv.Status.Phase) || stuck {
+			hint := fmt.Sprintf("PV %s is %s", pv.Name, pv.Status.Phase)
+			if stuck {
+				hint = fmt.Sprintf("PV %s has been terminating for %s with finalizers: %v",
+					pv.Name, p.now().Sub(pv.DeletionTimestamp.Time).Round(time.Minute), pv.Finalizers)
+			}
+			p.reportSignal(&event.Signal{
+				Resource: "pv", PodName: pv.Name, Owner: pv.Name,
+				Reason: constant.ReasonPersistentVolume, Labels: pv.Labels,
+				Hint: hint,
+			})
+		} else {
+			p.correlator.ResolveByResource("pv", pv.Name)
+		}
+	}
+}
+
+func volumeStuckTerminating(deletion *metav1.Time, finalizers []string, now time.Time) bool {
+	return deletion != nil && len(finalizers) > 0 &&
+		now.Sub(deletion.Time) >= stuckVolumeDeletionGrace
+}
+
+func pvcStatusFailure(phase corev1.PersistentVolumeClaimPhase) bool {
+	return phase == corev1.ClaimPending || phase == corev1.ClaimLost
+}
+
+func pvcFailureCondition(conditions []corev1.PersistentVolumeClaimCondition) string {
+	for _, condition := range conditions {
+		if condition.Status != corev1.ConditionTrue {
+			continue
+		}
+		switch condition.Type {
+		case corev1.PersistentVolumeClaimControllerResizeError,
+			corev1.PersistentVolumeClaimNodeResizeError,
+			corev1.PersistentVolumeClaimVolumeModifyVolumeError:
+			return string(condition.Type)
+		}
+	}
+	return ""
+}
+
+func pvStatusFailure(phase corev1.PersistentVolumePhase) bool {
+	return phase == corev1.VolumeReleased || phase == corev1.VolumeFailed
 }
 
 // apply folds one batch of observations into the cache + correlator under p.mu.

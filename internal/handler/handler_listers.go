@@ -6,6 +6,7 @@ import (
 	appsv1lister "k8s.io/client-go/listers/apps/v1"
 	autoscalingv2lister "k8s.io/client-go/listers/autoscaling/v2"
 	batchv1lister "k8s.io/client-go/listers/batch/v1"
+	coordinationv1lister "k8s.io/client-go/listers/coordination/v1"
 	corev1lister "k8s.io/client-go/listers/core/v1"
 	discoveryv1lister "k8s.io/client-go/listers/discovery/v1"
 	networkingv1lister "k8s.io/client-go/listers/networking/v1"
@@ -38,6 +39,9 @@ type Listers struct {
 	Netpol        networkingv1lister.NetworkPolicyLister
 	Ingress       networkingv1lister.IngressLister
 	CPPod         corev1lister.PodLister
+	ResourceQuota corev1lister.ResourceQuotaLister
+	Namespace     corev1lister.NamespaceLister
+	Lease         coordinationv1lister.LeaseLister
 }
 
 // SetListers installs the informer-backed lookups. The correlation engine gets
@@ -56,6 +60,14 @@ func (h *handler) SetListers(l Listers) {
 	}
 	if l.Service != nil {
 		h.correlator.SetServiceLister(l.Service)
+	}
+}
+
+func (h *handler) SetNamespaceScope(namespaces []string, all bool) {
+	h.namespaceScopeAll = all
+	h.namespaceScope = make(map[string]struct{}, len(namespaces))
+	for _, namespace := range namespaces {
+		h.namespaceScope[namespace] = struct{}{}
 	}
 }
 

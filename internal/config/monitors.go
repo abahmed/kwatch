@@ -57,6 +57,19 @@ type NetworkPolicyMonitor struct {
 	Enabled bool `yaml:"enabled"`
 }
 
+// ClusterResourceMonitor configures status checks for cluster-level resource
+// exhaustion and lifecycle failures that are not represented by Pod events.
+type ClusterResourceMonitor struct {
+	// Enabled enables ResourceQuota and stuck Namespace detection.
+	Enabled bool `yaml:"enabled"`
+	// SustainedMinutes is the minimum age of a terminating Namespace before it
+	// is reported as stuck. Zero uses the built-in default.
+	SustainedMinutes int `yaml:"sustainedMinutes"`
+	// NodeLeaseStaleSeconds is how long a node lease may go without a renew
+	// time before it is reported. Zero uses 90 seconds.
+	NodeLeaseStaleSeconds int `yaml:"nodeLeaseStaleSeconds"`
+}
+
 type PvcMonitor struct {
 	// Enabled if set to true, it will check pvc usage periodically
 	// By default, this value is true

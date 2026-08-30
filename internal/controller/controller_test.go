@@ -100,6 +100,10 @@ func (m *mockHandler) ProcessDeployment(
 	return m.err
 }
 
+func (m *mockHandler) ProcessReplicaSet(string, bool) error {
+	return m.err
+}
+
 func (m *mockHandler) ProcessJob(
 	string,
 	bool,
@@ -127,8 +131,9 @@ func (m *mockHandler) ProcessHorizontalPodAutoscaler(
 ) error {
 	return m.err
 }
-func (m *mockHandler) SetListers(handler.Listers) {}
-func (m *mockHandler) SweepTLSSecrets()           {}
+func (m *mockHandler) SetListers(handler.Listers)       {}
+func (m *mockHandler) SetNamespaceScope([]string, bool) {}
+func (m *mockHandler) SweepTLSSecrets()                 {}
 func (m *mockHandler) SetBaseline(baseline map[string]map[string]int64) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
@@ -174,6 +179,18 @@ func (m *mockHandler) ProcessIngress(
 	string,
 	bool,
 ) error {
+	return m.err
+}
+
+func (m *mockHandler) ProcessResourceQuota(string, bool) error {
+	return m.err
+}
+
+func (m *mockHandler) ProcessNamespace(string, bool) error {
+	return m.err
+}
+
+func (m *mockHandler) ProcessLease(string, bool) error {
 	return m.err
 }
 
