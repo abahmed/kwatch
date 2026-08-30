@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"sort"
 	"strings"
+	"time"
 
 	"github.com/abahmed/kwatch/internal/context"
 	"github.com/abahmed/kwatch/internal/model"
@@ -14,6 +15,7 @@ type modelCauseRef struct {
 	Namespace string
 	Name      string
 	depth     int
+	score     int
 }
 
 func (e *Engine) determineCause(inc *model.Incident, ins *Insight) {
@@ -70,7 +72,56 @@ func (e *Engine) determineCause(inc *model.Incident, ins *Insight) {
 	// None of the direct dependencies match a known root cause category, so
 	// walk the full transitive chain backward and blame its deepest resource.
 	if roots := e.rootCauses(inc); len(roots) > 0 {
+		e.rankRootsByEvidence(roots)
 		ins.Cause, ins.Pattern = describeRootCauses(roots)
+	}
+}
+
+// rankRootsByEvidence makes the graph traversal time-aware. A deep dependency
+// is useful, but a resource that changed immediately before the incident is a
+// much stronger suspect than an unchanged leaf. This keeps topology as the
+// fallback while letting recent informer changes break ties intelligently.
+func (e *Engine) rankRootsByEvidence(roots []modelCauseRef) {
+	for i := range roots {
+		roots[i].score = roots[i].depth * 10
+		if e.tracker == nil {
+			continue
+		}
+		for _, change := range e.tracker.RecentChangesBeforeAt(10*time.Minute, e.now()) {
+			if change.Resource != roots[i].Kind || change.Namespace != roots[i].Namespace ||
+				change.Name != roots[i].Name {
+				continue
+			}
+			switch change.Type {
+			case context.ChangeUpdate:
+				roots[i].score += recencyScore(change.Timestamp, e.now())
+			case context.ChangeCreate, context.ChangeDelete:
+				roots[i].score += recencyScore(change.Timestamp, e.now()) / 2
+			}
+		}
+	}
+	sort.SliceStable(roots, func(i, j int) bool {
+		if roots[i].score != roots[j].score {
+			return roots[i].score > roots[j].score
+		}
+		return roots[i].depth > roots[j].depth
+	})
+}
+
+func recencyScore(timestamp, now time.Time) int {
+	age := now.Sub(timestamp)
+	if age < 0 {
+		age = 0
+	}
+	switch {
+	case age <= time.Minute:
+		return 50
+	case age <= 3*time.Minute:
+		return 35
+	case age <= 7*time.Minute:
+		return 20
+	default:
+		return 10
 	}
 }
 

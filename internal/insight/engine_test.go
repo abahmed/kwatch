@@ -43,6 +43,25 @@ func TestAnalyzeNodeFailure(t *testing.T) {
 	assert.Equal(t, "node_failure", ins.Pattern)
 }
 
+func TestAnalyzeRootCausePrefersRecentDependencyChange(t *testing.T) {
+	graph := context.NewResourceGraph()
+	graph.AddEdge("pod", "ns1", "p1", "service", "ns1", "api", "routes_to")
+	graph.AddEdge("service", "ns1", "api", "configmap", "ns1", "old", "backed_by")
+	graph.AddEdge("service", "ns1", "api", "secret", "ns1", "new", "backed_by")
+	now := time.Date(2026, 8, 30, 12, 0, 0, 0, time.UTC)
+	tracker := context.NewChangeTracker(10)
+	tracker.Record(context.Change{Resource: "configmap", Namespace: "ns1", Name: "old", Type: context.ChangeUpdate, Timestamp: now.Add(-9 * time.Minute)})
+	tracker.Record(context.Change{Resource: "secret", Namespace: "ns1", Name: "new", Type: context.ChangeUpdate, Timestamp: now.Add(-30 * time.Second)})
+
+	e := NewEngine(graph, tracker)
+	e.now = func() time.Time { return now }
+	ins := e.Analyze(&model.Incident{Subject: model.Subject{
+		Resource: "pod", Namespace: "ns1", Name: "p1",
+	}})
+
+	assert.Contains(t, ins.Cause, "secret new")
+}
+
 func TestAnalyzeRolloutFailure(t *testing.T) {
 	graph := context.NewResourceGraph()
 	graph.AddEdge("pod", "ns1", "p1", "deployment", "ns1", "dep1", "owned_by")
