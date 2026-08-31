@@ -58,6 +58,7 @@ type endpointStatus struct {
 }
 
 type Status struct {
+	State             string    `json:"state"`
 	LastSweep         time.Time `json:"lastSweep"`
 	Nodes             int       `json:"nodes"`
 	SummaryAvailable  int       `json:"summaryAvailable"`
@@ -197,7 +198,7 @@ func (m *Monitor) sweep(ctx context.Context) {
 func (m *Monitor) Snapshot() Status {
 	m.mu.Lock()
 	defer m.mu.Unlock()
-	status := Status{LastSweep: m.lastSweep, Nodes: len(m.endpoint)}
+	status := Status{State: "unavailable", LastSweep: m.lastSweep, Nodes: len(m.endpoint)}
 	for _, endpoint := range m.endpoint {
 		if endpoint.Summary {
 			status.SummaryAvailable++
@@ -210,6 +211,14 @@ func (m *Monitor) Snapshot() Status {
 		}
 		if endpoint.RBACDenied {
 			status.RBACDenied++
+		}
+	}
+	if status.RBACDenied > 0 && status.SummaryAvailable == 0 {
+		status.State = "rbacDenied"
+	} else if status.SummaryAvailable > 0 {
+		status.State = "healthy"
+		if status.SummaryAvailable < status.Nodes || status.CAdvisorAvailable < status.Nodes {
+			status.State = "partial"
 		}
 	}
 	return status

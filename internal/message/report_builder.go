@@ -138,6 +138,9 @@ func (rb *ReportBuilder) populateDiagnosis(
 		d.Cause = ins.Cause
 		d.Impact = ins.Impact
 		d.Pattern = ins.Pattern
+		d.Confidence = ins.Confidence
+		d.Evidence = append([]string(nil), ins.Evidence...)
+		d.NextSteps = append([]string(nil), ins.NextSteps...)
 	}
 	// Topology the correlation engine resolved from live Service selectors.
 	// It is impact, and belongs with the rest of the impact.

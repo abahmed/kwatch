@@ -1,5 +1,13 @@
 package config
 
+// MaintenanceConfig describes annotations used to silence deliberate pod
+// maintenance without disabling monitoring for the rest of the cluster.
+type MaintenanceConfig struct {
+	Enabled         bool   `yaml:"enabled"`
+	Annotation      string `yaml:"annotation"`
+	UntilAnnotation string `yaml:"untilAnnotation"`
+}
+
 type ClusterAutoscalerMonitor struct {
 	// Enabled toggles cluster-autoscaler event monitoring.
 	Enabled bool `yaml:"enabled"`

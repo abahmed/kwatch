@@ -111,6 +111,11 @@ func (h *handler) ProcessCronJobObject(
 		h.correlator.ResolveByResource("cronjob", cj.Namespace+"/"+cj.Name)
 		return nil
 	}
+	if h.inMaintenance(cj.Annotations) {
+		h.clearFirstSuspendedCJ(cj.Namespace + "/" + cj.Name)
+		h.correlator.ResolveByResource("cronjob", cj.Namespace+"/"+cj.Name)
+		return nil
+	}
 
 	key := cj.Namespace + "/" + cj.Name
 	sig := DetectCronJobIssue(cj, h.now())

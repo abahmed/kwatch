@@ -20,6 +20,8 @@ const (
 	initKey                = "kwatch-init"
 	clusterIDKey           = "cluster-id"
 	versionKey             = "version"
+	stateSchemaVersionKey  = "state-schema-version"
+	currentStateSchema     = "2"
 	firstRunKey            = "first-run"
 	notifiedVersionKey     = "notified-version"
 	lastSeenKey            = "last-seen"
@@ -237,6 +239,7 @@ func (s *StateManager) MarkAsInitialized(
 			c.Data[firstRunKey] = time.Now().UTC().Format(time.RFC3339)
 		}
 		c.Data[versionKey] = version
+		c.Data[stateSchemaVersionKey] = currentStateSchema
 		return nil
 	})
 }
@@ -256,10 +259,11 @@ func (s *StateManager) createConfigMap(
 			Namespace: s.namespace,
 		},
 		Data: map[string]string{
-			initKey:      "true",
-			clusterIDKey: clusterID,
-			versionKey:   version,
-			firstRunKey:  time.Now().UTC().Format(time.RFC3339),
+			initKey:               "true",
+			clusterIDKey:          clusterID,
+			versionKey:            version,
+			stateSchemaVersionKey: currentStateSchema,
+			firstRunKey:           time.Now().UTC().Format(time.RFC3339),
 		},
 	}
 }

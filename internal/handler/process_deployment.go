@@ -183,6 +183,11 @@ func (h *handler) ProcessDeploymentObject(
 		h.correlator.ResolveByResource("deployment", key)
 		return nil
 	}
+	if h.inMaintenance(deploy.Annotations) {
+		h.clearFirstUnavailableDeploy(key)
+		h.correlator.ResolveByResource("deployment", key)
+		return nil
+	}
 
 	// Existing: ProgressDeadlineExceeded
 	if sig := DetectDeploymentIssue(deploy); sig != nil {
@@ -213,9 +218,12 @@ func (h *handler) ProcessDeploymentObject(
 	if sig := DetectDeploymentUnavailable(deploy); sig != nil {
 		first := h.markFirstUnavailableDeploy(key)
 
-		sustained := time.Duration(
+		sustained := adaptiveSustained(
 			h.config.RolloutMonitor.SustainedMinutes,
-		) * time.Minute
+			h.config.AdaptiveThresholds,
+			deploymentDesiredReplicas(deploy),
+			deploy.Status.UnavailableReplicas,
+		)
 		if sustained > 0 && h.now().Sub(first) < sustained {
 			return nil
 		}

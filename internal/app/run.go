@@ -3,6 +3,7 @@ package app
 import (
 	"context"
 	"fmt"
+	"strings"
 	"time"
 
 	"k8s.io/client-go/kubernetes"
@@ -31,6 +32,7 @@ import (
 	"github.com/abahmed/kwatch/internal/pvc"
 	"github.com/abahmed/kwatch/internal/security"
 	"github.com/abahmed/kwatch/internal/startup"
+	"github.com/abahmed/kwatch/internal/state"
 	"github.com/abahmed/kwatch/internal/statuswatch"
 	"github.com/abahmed/kwatch/internal/storagegraph"
 	"github.com/abahmed/kwatch/internal/upgrader"
@@ -123,6 +125,9 @@ func Run() int {
 	go up.CheckUpdates(ctx)
 
 	stateMgr := sm.GetStateManager()
+
+	tracker := loadChangeTracker(ctx, stateMgr)
+	go startChangeHistorySaver(ctx, stateMgr, tracker)
 	stateMgr.MigrateLegacyBaseline(ctx)
 	// Migrate before loading: on the first release that uses the dedicated
 	// ConfigMap, the only baseline may still be in kwatch-state. Loading first
@@ -140,7 +145,6 @@ func Run() int {
 		startIncidentSaver(ctx, stateMgr, incidentCh)
 	}()
 
-	tracker := kwcontext.NewChangeTracker(0)
 	graph := kwcontext.NewResourceGraph()
 
 	auditLogger := audit.NewLogger(audit.Config{
@@ -158,6 +162,17 @@ func Run() int {
 		baselineCh,
 		insightEngine,
 	)
+	insightEngine.SetActiveChecker(func(kind, namespace, name string) bool {
+		for _, inc := range correlator.ActiveIncidents() {
+			for _, key := range insight.IncidentGraphKeys(inc) {
+				parts := strings.SplitN(key, "/", 3)
+				if len(parts) == 3 && parts[0] == kind && parts[1] == namespace && parts[2] == name {
+					return true
+				}
+			}
+		}
+		return false
+	})
 
 	correlator.SetAuditLogger(auditLogger)
 
@@ -191,40 +206,9 @@ func Run() int {
 	ctl.SetGraph(graph)
 	ctl.SetReadyFunc(func() { healthServer.SetReady(true) })
 
-	var statusRun func(context.Context)
-	if cfg.ClusterResourceMonitor.Enabled {
-		if restCfg, restErr := client.GetRestConfig(&cfg.App); restErr != nil {
-			klog.ErrorS(restErr, "failed to create generic status monitor")
-		} else if monitor, monitorErr := statuswatch.New(
-			restCfg, correlator, time.Duration(cfg.ResyncSeconds)*time.Second,
-		); monitorErr != nil {
-			klog.ErrorS(monitorErr, "failed to initialize generic status monitor")
-		} else {
-			monitor.SetNamespaceFilter(ctl.NamespaceAllowed)
-			monitor.SetConditionRules(cfg.CrdConfig.FailureConditions)
-			monitor.SetGraphReferenceRules(cfg.CrdConfig.GraphReferences)
-			monitor.SetGraph(graph)
-			statusRun = func(runCtx context.Context) {
-				if err := monitor.Start(runCtx); err != nil {
-					klog.ErrorS(err, "generic status monitor stopped")
-				}
-			}
-		}
-	}
+	statusRun := configureStatusMonitor(cfg, ctl, graph, correlator)
 
-	var metricsRun func(context.Context)
-	if cfg.RuntimeMetricsMonitor.Enabled {
-		if restCfg, restErr := client.GetRestConfig(&cfg.App); restErr != nil {
-			klog.ErrorS(restErr, "failed to create runtime metrics monitor")
-		} else if monitor, monitorErr := metricsapi.New(
-			restCfg, k8sClient, cfg.RuntimeMetricsMonitor, correlator,
-		); monitorErr != nil {
-			klog.ErrorS(monitorErr, "failed to initialize runtime metrics monitor")
-		} else {
-			monitor.SetNamespaceFilter(ctl.NamespaceAllowed)
-			metricsRun = monitor.Start
-		}
-	}
+	metricsRun := configureMetricsMonitor(cfg, ctl, k8sClient, correlator)
 
 	var tlsSweep func()
 	if cfg.TlsMonitor.Enabled {
@@ -284,6 +268,29 @@ func Run() int {
 	return serve(ctx, deps)
 }
 
+func loadChangeTracker(ctx context.Context, stateMgr *state.StateManager) *kwcontext.ChangeTracker {
+	tracker := kwcontext.NewChangeTracker(0)
+	if changes, err := stateMgr.LoadChangeHistory(ctx); err == nil {
+		tracker.Restore(changes)
+	}
+	return tracker
+}
+
+func startChangeHistorySaver(ctx context.Context, stateMgr *state.StateManager, tracker *kwcontext.ChangeTracker) {
+	ticker := time.NewTicker(time.Minute)
+	defer ticker.Stop()
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case <-ticker.C:
+			if err := stateMgr.SaveChangeHistory(ctx, tracker.Snapshot()); err != nil {
+				klog.ErrorS(err, "failed to persist recent change history")
+			}
+		}
+	}
+}
+
 func configureSecurityMonitor(cfg *config.Config, client kubernetes.Interface) *security.Monitor {
 	monitor := security.New(client)
 	namespaces := cfg.AllowedNamespaces
@@ -309,6 +316,49 @@ func configureControlPlaneMonitor(cfg *config.Config, clientset kubernetes.Inter
 		return nil
 	}
 	healthServer.SetControlPlaneLister(monitor)
+	return monitor.Start
+}
+
+func configureStatusMonitor(cfg *config.Config, ctl *controller.Controller, graph *kwcontext.ResourceGraph, correlator *correlation.Engine) func(context.Context) {
+	if !cfg.ClusterResourceMonitor.Enabled {
+		return nil
+	}
+	restCfg, err := client.GetRestConfig(&cfg.App)
+	if err != nil {
+		klog.ErrorS(err, "failed to create generic status monitor")
+		return nil
+	}
+	monitor, err := statuswatch.New(restCfg, correlator, time.Duration(cfg.ResyncSeconds)*time.Second)
+	if err != nil {
+		klog.ErrorS(err, "failed to initialize generic status monitor")
+		return nil
+	}
+	monitor.SetNamespaceFilter(ctl.NamespaceAllowed)
+	monitor.SetConditionRules(cfg.CrdConfig.FailureConditions)
+	monitor.SetGraphReferenceRules(cfg.CrdConfig.GraphReferences)
+	monitor.SetGraph(graph)
+	return func(ctx context.Context) {
+		if err := monitor.Start(ctx); err != nil {
+			klog.ErrorS(err, "generic status monitor stopped")
+		}
+	}
+}
+
+func configureMetricsMonitor(cfg *config.Config, ctl *controller.Controller, clientset kubernetes.Interface, correlator *correlation.Engine) func(context.Context) {
+	if !cfg.RuntimeMetricsMonitor.Enabled {
+		return nil
+	}
+	restCfg, err := client.GetRestConfig(&cfg.App)
+	if err != nil {
+		klog.ErrorS(err, "failed to create runtime metrics monitor")
+		return nil
+	}
+	monitor, err := metricsapi.New(restCfg, clientset, cfg.RuntimeMetricsMonitor, correlator)
+	if err != nil {
+		klog.ErrorS(err, "failed to initialize runtime metrics monitor")
+		return nil
+	}
+	monitor.SetNamespaceFilter(ctl.NamespaceAllowed)
 	return monitor.Start
 }
 

@@ -32,6 +32,11 @@ type Config struct {
 	// Correlation configuration for incident dedup/grouping
 	Correlation Correlation `yaml:"correlation"`
 
+	// AdaptiveThresholds adds bounded grace for large workloads during partial
+	// rollouts, reducing alerts caused by normal rollout jitter.
+	AdaptiveThresholds bool              `yaml:"adaptiveThresholds"`
+	Maintenance        MaintenanceConfig `yaml:"maintenance"`
+
 	// ReportStartupBaseline if true (default), emits a single informational
 	// notification at startup summarizing pre-existing issues that are
 	// suppressed from per-incident alerts by the baseline.

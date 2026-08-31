@@ -165,13 +165,22 @@ func (t textRenderer) diagnosis(r *Report, full bool) []string {
 		if r.Diagnosis.Pattern != "" {
 			line += " (" + r.Diagnosis.Pattern + ")"
 		}
+		if r.Diagnosis.Confidence > 0 {
+			line += fmt.Sprintf(" · confidence %.0f%%", r.Diagnosis.Confidence*100)
+		}
 		out = append(out, line)
 	}
 	if !full {
 		return out
 	}
+	if len(r.Diagnosis.Evidence) > 0 {
+		out = append(out, t.m.bold("Evidence:")+" "+strings.Join(r.Diagnosis.Evidence, "; "))
+	}
 	if r.Diagnosis.Impact != "" {
 		out = append(out, t.m.bold("Impact:")+" "+r.Diagnosis.Impact)
+	}
+	if len(r.Diagnosis.NextSteps) > 0 {
+		out = append(out, t.m.bold("Next:")+" "+strings.Join(r.Diagnosis.NextSteps, "; "))
 	}
 	return out
 }

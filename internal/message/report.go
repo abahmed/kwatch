@@ -62,10 +62,13 @@ type StateSection struct {
 
 // DiagnosisSection holds diagnostic context.
 type DiagnosisSection struct {
-	Hint    string
-	Cause   string
-	Impact  string
-	Pattern string
+	Hint       string
+	Cause      string
+	Impact     string
+	Pattern    string
+	Confidence float64
+	Evidence   []string
+	NextSteps  []string
 }
 
 // EvidenceSection holds logs and events.

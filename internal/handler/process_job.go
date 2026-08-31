@@ -107,6 +107,10 @@ func (h *handler) ProcessJobObject(job *batchv1.Job, deleted bool) error {
 		h.correlator.ResolveByResource("job", job.Namespace+"/"+job.Name)
 		return nil
 	}
+	if h.inMaintenance(job.Annotations) {
+		h.correlator.ResolveByResource("job", job.Namespace+"/"+job.Name)
+		return nil
+	}
 
 	for _, c := range job.Status.Conditions {
 		if c.Type == batchv1.JobComplete && c.Status == corev1.ConditionTrue {

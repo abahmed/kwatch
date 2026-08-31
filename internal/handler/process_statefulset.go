@@ -109,6 +109,11 @@ func (h *handler) ProcessStatefulSetObject(
 		h.correlator.ResolveByResource("statefulset", ss.Namespace+"/"+ss.Name)
 		return nil
 	}
+	if h.inMaintenance(ss.Annotations) {
+		h.clearFirstUnavailableSts(ss.Namespace + "/" + ss.Name)
+		h.correlator.ResolveByResource("statefulset", ss.Namespace+"/"+ss.Name)
+		return nil
+	}
 
 	key := ss.Namespace + "/" + ss.Name
 	conditionSignals := DetectStatefulSetConditions(ss)
@@ -133,9 +138,12 @@ func (h *handler) ProcessStatefulSetObject(
 			}
 		}
 
-		sustained := time.Duration(
+		sustained := adaptiveSustained(
 			h.config.StatefulSetMonitor.SustainedMinutes,
-		) * time.Minute
+			h.config.AdaptiveThresholds,
+			statefulSetReplicas(ss),
+			statefulSetReplicas(ss)-ss.Status.ReadyReplicas,
+		)
 		if sustained > 0 && h.now().Sub(first) < sustained {
 			return nil
 		}

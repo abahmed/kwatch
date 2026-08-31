@@ -27,6 +27,8 @@ narrowing the watch list and turning off the noisy reasons.
 | `ignoreDisruptionTerminations` | ✅ Skip pods evicted during node drains (default: true — keep it) |
 | `runbooks` | 📚 Add a link to your runbook for each error reason, so every alert comes with help attached |
 | `containerRestartThreshold` | Alert if a container restarts this many times (default: 0, off) |
+| `adaptiveThresholds` | Add bounded workload-aware grace during small partial rollouts (default: true) |
+| `maintenance` | Suppress explicitly marked pod/container maintenance without disabling cluster monitoring |
 | `reportStartupBaseline` | 📋 Send one startup summary of pre-existing issues (default: true). Anything already broken when kwatch starts is otherwise quiet for **24 hours** and re-captured on every restart, so this summary is the only way you hear about it — keep it on |
 | `ignore*` fields | 🔕 Deprecated filters (`ignoreContainerNames`, `ignorePodNames`, `ignoreLogPatterns`, `ignoreContainerMessages`, `ignoreNodeReasons`, `ignoreNodeMessages`) — use the more flexible `silences` below |
 
@@ -57,6 +59,28 @@ reasons:
   - !Started
   - !Killing
 ```
+
+#### 🔧 Maintenance mode
+
+Mark a workload's pod template (or an individual Pod) when a deliberate change
+should not page for its pod/container symptoms:
+
+```yaml
+maintenance:
+  enabled: true
+  annotation: kwatch.io/maintenance
+  untilAnnotation: kwatch.io/maintenance-until
+```
+
+Use `kwatch.io/maintenance: "true"`, or set the until annotation to an RFC3339
+time such as `2026-08-31T23:00:00Z`. This suppresses pod/container symptoms only;
+kwatch continues monitoring nodes, control plane, storage, and workload-level
+conditions. Invalid expiry values are ignored rather than suppressing alerts.
+
+The same annotations may be placed on Deployment, StatefulSet, DaemonSet, Job,
+CronJob, HPA, or PDB objects to suppress their own workload-level alerts during
+an intentional maintenance operation. Node and control-plane alerts are never
+suppressed by this setting.
 
 ## 📱 App settings
 
@@ -104,6 +128,40 @@ tests.
 > at `/deadletters`. Diagnostics are off by default because `/test-alert` accepts
 > unauthenticated POSTs; if you turn them on, set `diagnosticsToken`. Either way, alert on
 > the counter: it is the difference between "no incidents" and "no deliveries".
+
+## 🔐 Kubernetes permissions and graceful degradation
+
+The bundled manifests contain a read-only ClusterRole and a namespace Role for
+kwatch state ConfigMaps. kwatch never needs write access to monitored
+workloads. The ClusterRole covers:
+
+| API group | Resources used |
+|:---|:---|
+| core | Pods, pod logs, Events, Nodes, Nodes proxy, Services, Endpoints, PVCs, ConfigMaps, Secrets, ResourceQuotas, LimitRanges, Namespaces, Leases, ServiceAccounts |
+| apps | Deployments, ReplicaSets, StatefulSets, DaemonSets |
+| batch | Jobs, CronJobs |
+| autoscaling | HorizontalPodAutoscalers |
+| policy | PodDisruptionBudgets |
+| networking.k8s.io | NetworkPolicies, Ingresses |
+| storage.k8s.io | StorageClasses, VolumeAttachments, CSIDrivers, VolumeSnapshots and related resources |
+| admissionregistration.k8s.io | Mutating/Validating webhook configurations and admission policies |
+| certificates.k8s.io | CertificateSigningRequests and PodCertificateRequests |
+| flowcontrol.apiserver.k8s.io | FlowSchemas and PriorityLevelConfigurations |
+| apiregistration.k8s.io | APIServices |
+| apiextensions.k8s.io | CustomResourceDefinitions |
+| gateway.networking.k8s.io | GatewayClasses, Gateways, HTTP/TCP/TLS/gRPCRoutes, ReferenceGrants |
+| authorization.k8s.io | SelfSubjectAccessReviews |
+
+Watched resources need only `get`, `list`, and `watch`. Optional monitors expose
+`unavailable` or `rbacDenied` when an API is not served or a permission is
+missing; the controller continues with the remaining monitors. Metrics Server,
+Prometheus, a service mesh, and a cloud-provider API are not required for core
+Kubernetes object monitoring.
+
+The `/kubelet` health status also reports `state` as `healthy`, `partial`,
+`unavailable`, or `rbacDenied`, alongside Summary, cAdvisor, runtime, and node
+counts. Missing optional kubelet endpoints are visible without becoming
+fabricated incidents.
 
 ## 🔄 Upgrader
 
@@ -503,6 +561,12 @@ should escalate a recurring crash to you.
 | `correlation.escalation.tiers` | 📊 Restart thresholds (default: `[3, 10]`): crossing the first → `high`, the second → `critical`. There is nothing above critical, so a third tier does nothing |
 | `correlation.renotify.intervalBySeverity` | 🔔 Re-alert interval per severity (e.g. `high: 60`), `default` key as fallback; unset = off |
 | `correlation.renotify.maxPerIncident` | 🔔 Max re-alerts per incident (default: 3) |
+
+Incident state, baseline, telemetry state, and recent change history are stored
+in Kubernetes ConfigMaps with retry-on-conflict updates. Older incident layouts
+are migrated on load, and oversized history is truncated to the newest entries
+so persistence cannot block the main monitoring loop. A persistence failure is
+logged and monitoring continues; it does not fabricate a new incident.
 
 ### 🧹 Smart Grouping — coalesce duplicate notifications
 

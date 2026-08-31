@@ -8,6 +8,12 @@ func DefaultConfig() *Config {
 		MaxRecentLogLines:            50,
 		ResyncSeconds:                0,
 		Workers:                      1,
+		AdaptiveThresholds:           true,
+		Maintenance: MaintenanceConfig{
+			Enabled:         true,
+			Annotation:      "kwatch.io/maintenance",
+			UntilAnnotation: "kwatch.io/maintenance-until",
+		},
 		PvcMonitor: PvcMonitor{
 			Enabled:           true,
 			Interval:          5,

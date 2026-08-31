@@ -52,6 +52,7 @@ func ValidateConfig(cfg *Config) []string {
 	if cfg.MaxRecentLogLines < 0 {
 		errs = append(errs, "maxRecentLogLines must be >= 0")
 	}
+	errs = append(errs, validateMaintenance(cfg)...)
 
 	errs = append(errs, validatePvcWatch(cfg)...)
 
@@ -119,6 +120,13 @@ func ValidateConfig(cfg *Config) []string {
 	}
 
 	return errs
+}
+
+func validateMaintenance(cfg *Config) []string {
+	if cfg.Maintenance.Enabled && strings.TrimSpace(cfg.Maintenance.Annotation) == "" {
+		return []string{"maintenance.annotation must not be empty when maintenance is enabled"}
+	}
+	return nil
 }
 
 // validateRetryJitter checks that every configured retry.jitterFactor is in

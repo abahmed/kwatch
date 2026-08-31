@@ -109,6 +109,11 @@ func (h *handler) ProcessDaemonSetObject(
 		h.correlator.ResolveByResource("daemonset", ds.Namespace+"/"+ds.Name)
 		return nil
 	}
+	if h.inMaintenance(ds.Annotations) {
+		h.clearFirstUnavailableDS(ds.Namespace + "/" + ds.Name)
+		h.correlator.ResolveByResource("daemonset", ds.Namespace+"/"+ds.Name)
+		return nil
+	}
 
 	key := ds.Namespace + "/" + ds.Name
 	conditionSignals := DetectDaemonSetConditions(ds)
@@ -151,9 +156,13 @@ func (h *handler) ProcessDaemonSetObject(
 			// still unsettled past the grace → stuck rollout; fall through
 		}
 
-		sustained := time.Duration(
+		unavailable := ds.Status.DesiredNumberScheduled - ds.Status.NumberReady
+		sustained := adaptiveSustained(
 			h.config.DaemonSetMonitor.SustainedMinutes,
-		) * time.Minute
+			h.config.AdaptiveThresholds,
+			ds.Status.DesiredNumberScheduled,
+			unavailable,
+		)
 		if sustained > 0 && h.now().Sub(first) < sustained {
 			return nil
 		}

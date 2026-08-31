@@ -72,6 +72,10 @@ func (e *Engine) impactReach(
 			}
 			seen[d] = true
 			dp := strings.SplitN(d, "/", 3)
+			if e.activeChecker != nil && len(dp) == 3 &&
+				!e.activeChecker(dp[0], dp[1], dp[2]) {
+				continue
+			}
 			kind := dp[0]
 			counts[kind]++
 			if len(dp) == 3 {

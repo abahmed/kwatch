@@ -162,6 +162,12 @@ func (h *handler) ProcessHorizontalPodAutoscalerObject(
 		)
 		return nil
 	}
+	if h.inMaintenance(hpa.Annotations) {
+		h.clearFirstMaxed(hpa.Namespace + "/" + hpa.Name)
+		h.clearFirstScalingError(hpa.Namespace + "/" + hpa.Name)
+		h.correlator.ResolveByResource("horizontalpodautoscaler", hpa.Namespace+"/"+hpa.Name)
+		return nil
+	}
 
 	key := hpa.Namespace + "/" + hpa.Name
 
@@ -216,9 +222,12 @@ func (h *handler) ProcessHorizontalPodAutoscalerObject(
 	}
 
 	first := h.markFirstMaxed(key)
-	sustained := time.Duration(
+	sustained := adaptiveSustained(
 		h.config.HpaMonitor.SustainedMinutes,
-	) * time.Minute
+		h.config.AdaptiveThresholds,
+		hpa.Spec.MaxReplicas,
+		hpa.Spec.MaxReplicas-hpa.Status.CurrentReplicas,
+	)
 	if sustained > 0 && h.now().Sub(first) < sustained {
 		return nil
 	}

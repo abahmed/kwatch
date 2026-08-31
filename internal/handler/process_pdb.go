@@ -62,7 +62,6 @@ func (h *handler) ProcessPdb(key string, deleted bool) error {
 		)
 		return nil
 	}
-
 	pdb, err := h.listers.PDB.PodDisruptionBudgets(namespace).Get(name)
 	if err != nil {
 		if errors.IsNotFound(err) {
@@ -100,15 +99,23 @@ func (h *handler) ProcessPdbObject(
 		)
 		return nil
 	}
+	if h.inMaintenance(pdb.Annotations) {
+		h.clearFirstPdbViolation(pdb.Namespace + "/" + pdb.Name)
+		h.correlator.ResolveByResource("poddisruptionbudget", pdb.Namespace+"/"+pdb.Name)
+		return nil
+	}
 
 	key := pdb.Namespace + "/" + pdb.Name
 
 	if isPdbBlocking(pdb) {
 		first := h.markFirstPdbViolation(key)
 
-		sustained := time.Duration(
+		sustained := adaptiveSustained(
 			h.config.PdbMonitor.SustainedMinutes,
-		) * time.Minute
+			h.config.AdaptiveThresholds,
+			pdb.Status.DesiredHealthy,
+			pdb.Status.DesiredHealthy-pdb.Status.CurrentHealthy,
+		)
 		if sustained > 0 && h.now().Sub(first) < sustained {
 			return nil
 		}

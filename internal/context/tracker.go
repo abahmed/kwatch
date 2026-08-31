@@ -42,6 +42,31 @@ type ChangeTracker struct {
 	count  int
 }
 
+// Snapshot returns changes from oldest to newest so the history can be safely
+// persisted and restored without exposing the ring-buffer internals.
+func (t *ChangeTracker) Snapshot() []Change {
+	t.mu.RLock()
+	defer t.mu.RUnlock()
+	out := make([]Change, 0, t.count)
+	start := (t.head - t.count + len(t.buffer)) % len(t.buffer)
+	for i := 0; i < t.count; i++ {
+		out = append(out, t.buffer[(start+i)%len(t.buffer)])
+	}
+	return out
+}
+
+// Restore replaces the in-memory history with a previously persisted window.
+// Invalid/old entries are harmless; the ring retains only its configured size.
+func (t *ChangeTracker) Restore(changes []Change) {
+	t.mu.Lock()
+	t.buffer = make([]Change, len(t.buffer))
+	t.head, t.count = 0, 0
+	t.mu.Unlock()
+	for _, change := range changes {
+		t.Record(change)
+	}
+}
+
 const defaultTrackedChanges = 1000
 
 func NewChangeTracker(capacity int) *ChangeTracker {

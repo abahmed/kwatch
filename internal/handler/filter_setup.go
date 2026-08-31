@@ -15,6 +15,9 @@ func buildPodDetectors(cfg *config.Config) []filter.Detector {
 		filter.PodNameFilter{},
 		filter.PodStatusFilter{},
 	}
+	if cfg.Maintenance.Enabled {
+		podDetectors = append(podDetectors, filter.MaintenanceFilter{})
+	}
 
 	if cfg.PendingPodMonitor.Enabled {
 		pendingThreshold := time.Duration(cfg.PendingPodMonitor.Threshold) * time.Second
@@ -52,6 +55,9 @@ func buildContainerDetectors(cfg *config.Config) []filter.Detector {
 		filter.ContainerReasonsFilter{},
 		filter.NoiseFilter{},
 		filter.ContainerMessageFilter{},
+	}
+	if cfg.Maintenance.Enabled {
+		containerDetectors = append(containerDetectors, filter.MaintenanceFilter{})
 	}
 
 	if cfg.IgnoreDisruptionTerminations == nil || *cfg.IgnoreDisruptionTerminations {
