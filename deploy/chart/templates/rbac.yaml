@@ -4,7 +4,7 @@ metadata:
   name: {{ .Release.Name }}
 rules:
 - apiGroups: [""]
-  resources: ["events", "nodes", "nodes/proxy", "pods", "pods/log", "persistentvolumeclaims", "configmaps", "resourcequotas"]
+  resources: ["events", "nodes", "nodes/proxy", "pods", "pods/log", "persistentvolumeclaims", "configmaps", "secrets", "resourcequotas", "limitranges"]
   verbs: ["get", "watch", "list"]
 - apiGroups: [""]
   resources: ["namespaces"]
@@ -30,8 +30,8 @@ rules:
 - apiGroups: ["storage.k8s.io"]
   resources: ["storageclasses"]
   verbs: ["get", "watch", "list"]
-- apiGroups: ["admissionregistration.k8s.io"]
-  resources: ["mutatingwebhookconfigurations", "validatingwebhookconfigurations"]
+	- apiGroups: ["admissionregistration.k8s.io"]
+	  resources: ["mutatingwebhookconfigurations", "validatingwebhookconfigurations", "validatingadmissionpolicies", "validatingadmissionpolicybindings"]
   verbs: ["get", "watch", "list"]
 - apiGroups: ["networking.k8s.io"]
   resources: ["ingresses", "networkpolicies"]
@@ -39,11 +39,6 @@ rules:
 - apiGroups: ["discovery.k8s.io"]
   resources: ["endpointslices"]
   verbs: ["get", "watch", "list"]
-{{- if and .Values.config.tlsMonitor .Values.config.tlsMonitor.enabled }}
-- apiGroups: [""]
-  resources: ["secrets"]
-  verbs: ["get", "list", "watch"]
-{{- end }}
 {{- if and .Values.config.crd .Values.config.crd.enabled }}
 - apiGroups: ["kwatch.abahmed.dev"]
   resources: ["kwatchconfigs"]
@@ -57,6 +52,18 @@ rules:
   verbs: ["get", "watch", "list"]
 - apiGroups: ["policy"]
   resources: ["poddisruptionbudgets"]
+  verbs: ["get", "watch", "list"]
+- apiGroups: ["authorization.k8s.io"]
+  resources: ["selfsubjectaccessreviews"]
+  verbs: ["create"]
+- apiGroups: ["storage.k8s.io"]
+  resources: ["volumeattachments", "csidrivers"]
+  verbs: ["get", "watch", "list"]
+- apiGroups: ["snapshot.storage.k8s.io"]
+  resources: ["volumesnapshots", "volumesnapshotcontents", "volumesnapshotclasses"]
+  verbs: ["get", "watch", "list"]
+- apiGroups: ["gateway.networking.k8s.io"]
+  resources: ["gatewayclasses", "gateways", "httproutes", "grpcroutes", "tcproutes", "tlsroutes", "referencegrants"]
   verbs: ["get", "watch", "list"]
 ---
 apiVersion: rbac.authorization.k8s.io/v1

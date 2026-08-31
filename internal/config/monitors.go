@@ -43,6 +43,16 @@ type AdmissionWebhookMonitor struct {
 type ControlPlaneMonitor struct {
 	// Enabled if set to true, it will monitor control-plane health.
 	Enabled bool `yaml:"enabled"`
+	// IntervalSeconds controls active API-server and component health probes.
+	// Zero uses 30 seconds.
+	IntervalSeconds int `yaml:"intervalSeconds"`
+	// APIServerLatencyWarningMs is the sustained latency threshold for /readyz.
+	// Zero uses 1000ms.
+	APIServerLatencyWarningMs int `yaml:"apiServerLatencyWarningMs"`
+	// FailureThreshold is the number of consecutive failures before alerting.
+	FailureThreshold int `yaml:"failureThreshold"`
+	// RecoveryThreshold is the number of consecutive successes before resolving.
+	RecoveryThreshold int `yaml:"recoveryThreshold"`
 }
 
 // IngressMonitor configures ingress backend health monitoring.
@@ -219,9 +229,8 @@ type KubeletTelemetryMonitor struct {
 	RuntimeErrorRateCritical        float64 `yaml:"runtimeErrorRateCritical"`
 }
 
-// ActiveProbeMonitor performs opt-in checks against explicitly configured
-// endpoints. It never guesses application endpoints from Services, which
-// would probe too much and create false incidents.
+// ActiveProbeMonitor performs checks against configured endpoints and, when
+// AutoServices is enabled, advertised Service ports from inside kwatch.
 type ActiveProbeMonitor struct {
 	Enabled           bool              `yaml:"enabled"`
 	IntervalSeconds   int               `yaml:"intervalSeconds"`
@@ -231,12 +240,15 @@ type ActiveProbeMonitor struct {
 	HTTP              []HTTPProbeTarget `yaml:"http"`
 	TCP               []TCPProbeTarget  `yaml:"tcp"`
 	DNS               []DNSProbeTarget  `yaml:"dns"`
+	AutoServices      bool              `yaml:"autoServices"`
 }
 
 type HTTPProbeTarget struct {
-	Name           string `yaml:"name"`
-	URL            string `yaml:"url"`
-	ExpectedStatus int    `yaml:"expectedStatus"`
+	Name              string `yaml:"name"`
+	URL               string `yaml:"url"`
+	ExpectedStatus    int    `yaml:"expectedStatus"`
+	LatencyWarningMs  int    `yaml:"latencyWarningMs"`
+	LatencyCriticalMs int    `yaml:"latencyCriticalMs"`
 }
 
 type TCPProbeTarget struct {

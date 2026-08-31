@@ -42,19 +42,29 @@ type SecurityLister interface {
 	SecurityStatus() interface{}
 }
 
+type ControlPlaneLister interface {
+	ControlPlaneStatus() interface{}
+}
+
+type InformerLister interface {
+	InformerStatus() interface{}
+}
+
 type HealthServer struct {
-	server           *http.Server
-	port             int
-	enabled          bool
-	pprof            bool
-	diagnostics      bool
-	diagnosticsToken string
-	incidentAPI      IncidentLister
-	alertManager     TestAlertSender
-	deadLetterLister DeadLetterLister
-	telemetryLister  TelemetryLister
-	securityLister   SecurityLister
-	ready            atomic.Bool
+	server             *http.Server
+	port               int
+	enabled            bool
+	pprof              bool
+	diagnostics        bool
+	diagnosticsToken   string
+	incidentAPI        IncidentLister
+	alertManager       TestAlertSender
+	deadLetterLister   DeadLetterLister
+	telemetryLister    TelemetryLister
+	securityLister     SecurityLister
+	controlPlaneLister ControlPlaneLister
+	informerLister     InformerLister
+	ready              atomic.Bool
 }
 
 type HealthResponse struct {
@@ -117,6 +127,14 @@ func (h *HealthServer) SetSecurityLister(l SecurityLister) {
 	h.securityLister = l
 }
 
+func (h *HealthServer) SetControlPlaneLister(l ControlPlaneLister) {
+	h.controlPlaneLister = l
+}
+
+func (h *HealthServer) SetInformerLister(l InformerLister) {
+	h.informerLister = l
+}
+
 func (h *HealthServer) Start(ctx context.Context) error {
 	if !h.enabled {
 		klog.V(4).InfoS("health check is disabled")
@@ -134,6 +152,8 @@ func (h *HealthServer) Start(ctx context.Context) error {
 	}
 	mux.HandleFunc("/kubelet", h.kubeletHandler)
 	mux.HandleFunc("/security", h.securityHandler)
+	mux.HandleFunc("/controlplane", h.controlPlaneHandler)
+	mux.HandleFunc("/informer", h.informerHandler)
 
 	mux.Handle("/metrics", metrics.Default.Handler())
 
@@ -199,6 +219,34 @@ func (h *HealthServer) securityHandler(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 	if err := json.NewEncoder(w).Encode(h.securityLister.SecurityStatus()); err != nil {
 		klog.ErrorS(err, "health: encode security status")
+	}
+}
+
+func (h *HealthServer) controlPlaneHandler(w http.ResponseWriter, r *http.Request) {
+	if !h.requireDiagnosticsAuth(w, r) {
+		return
+	}
+	if h.controlPlaneLister == nil {
+		w.WriteHeader(http.StatusServiceUnavailable)
+		return
+	}
+	w.Header().Set("Content-Type", "application/json")
+	if err := json.NewEncoder(w).Encode(h.controlPlaneLister.ControlPlaneStatus()); err != nil {
+		klog.ErrorS(err, "health: encode control-plane status")
+	}
+}
+
+func (h *HealthServer) informerHandler(w http.ResponseWriter, r *http.Request) {
+	if !h.requireDiagnosticsAuth(w, r) {
+		return
+	}
+	if h.informerLister == nil {
+		w.WriteHeader(http.StatusServiceUnavailable)
+		return
+	}
+	w.Header().Set("Content-Type", "application/json")
+	if err := json.NewEncoder(w).Encode(h.informerLister.InformerStatus()); err != nil {
+		klog.ErrorS(err, "health: encode informer status")
 	}
 }
 

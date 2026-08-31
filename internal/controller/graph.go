@@ -146,8 +146,7 @@ func (c *Controller) rebuildPodGraph(pod *corev1.Pod) {
 		return
 	}
 
-	next := *c
-	next.graph = kwcontext.NewResourceGraph()
+	next := c.graphBuilder(kwcontext.NewResourceGraph())
 	if err := next.addPodToGraphChecked(pod); err != nil {
 		klog.ErrorS(err, "failed to rebuild pod graph edges; keeping previous edges", "namespace", pod.Namespace, "pod", pod.Name)
 		return
@@ -216,14 +215,27 @@ func (c *Controller) buildGraph() {
 		return
 	}
 
-	next := *c
-	next.graph = kwcontext.NewResourceGraph()
+	next := c.graphBuilder(kwcontext.NewResourceGraph())
 	if err := next.buildGraphContents(); err != nil {
 		klog.ErrorS(err, "failed to rebuild dependency graph; keeping previous graph")
 		return
 	}
 	c.graph.ReplaceWith(next.graph)
 	klog.V(4).InfoS("dependency graph built from informer cache", "edges", len(c.graph.Edges()))
+}
+
+// graphBuilder returns a lock-free controller view containing only the
+// listers required by graph construction. Copying Controller itself is unsafe
+// now that it owns synchronization state for informer diagnostics.
+func (c *Controller) graphBuilder(graph *kwcontext.ResourceGraph) *Controller {
+	return &Controller{
+		graph: graph, podLister: c.podLister, nodeLister: c.nodeLister,
+		pvcLister: c.pvcLister, pvLister: c.pvLister, rsLister: c.rsLister,
+		jobLister: c.jobLister, serviceLister: c.serviceLister,
+		ingressLister: c.ingressLister, hpaLister: c.hpaLister,
+		netpolLister: c.netpolLister, pdbLister: c.pdbLister,
+		endpointSliceLister: c.endpointSliceLister,
+	}
 }
 
 func (c *Controller) buildGraphContents() error {

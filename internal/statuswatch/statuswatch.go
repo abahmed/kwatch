@@ -22,26 +22,30 @@ import (
 )
 
 var (
-	apiServiceGVR = schema.GroupVersionResource{Group: "apiregistration.k8s.io", Version: "v1", Resource: "apiservices"}
-	crdGVR        = schema.GroupVersionResource{Group: "apiextensions.k8s.io", Version: "v1", Resource: "customresourcedefinitions"}
+	apiServiceGVR                 = schema.GroupVersionResource{Group: "apiregistration.k8s.io", Version: "v1", Resource: "apiservices"}
+	crdGVR                        = schema.GroupVersionResource{Group: "apiextensions.k8s.io", Version: "v1", Resource: "customresourcedefinitions"}
+	validatingAdmissionPolicyGVR  = schema.GroupVersionResource{Group: "admissionregistration.k8s.io", Version: "v1", Resource: "validatingadmissionpolicies"}
+	validatingAdmissionBindingGVR = schema.GroupVersionResource{Group: "admissionregistration.k8s.io", Version: "v1", Resource: "validatingadmissionpolicybindings"}
 )
 
 // Monitor watches APIService and discovered CRD instances. It only treats
 // well-known failure-shaped conditions as incidents; arbitrary informational
 // status fields are deliberately ignored to prevent operator noise.
 type Monitor struct {
-	client           dynamic.Interface
-	correlator       *correlation.Engine
-	resync           time.Duration
-	ctx              context.Context
-	namespaceAllowed func(string) bool
-	mu               sync.Mutex
-	factories        map[string]dynamicinformer.DynamicSharedInformerFactory
-	stops            map[string]context.CancelFunc
-	crdVersions      map[string]map[string]struct{}
-	conditionRules   map[string]map[string]bool
-	graph            *kwcontext.ResourceGraph
-	graphReferences  []graphReferenceRule
+	client            dynamic.Interface
+	correlator        *correlation.Engine
+	resync            time.Duration
+	ctx               context.Context
+	namespaceAllowed  func(string) bool
+	mu                sync.Mutex
+	factories         map[string]dynamicinformer.DynamicSharedInformerFactory
+	stops             map[string]context.CancelFunc
+	crdVersions       map[string]map[string]struct{}
+	conditionRules    map[string]map[string]bool
+	graph             *kwcontext.ResourceGraph
+	graphReferences   []graphReferenceRule
+	admissionPolicies map[string]struct{}
+	admissionBindings map[string]*unstructured.Unstructured
 }
 
 type graphReferenceRule struct {
@@ -72,7 +76,8 @@ func New(restConfig *rest.Config, correlator *correlation.Engine, resync time.Du
 		client: client, correlator: correlator, resync: resync,
 		factories: make(map[string]dynamicinformer.DynamicSharedInformerFactory),
 		stops:     make(map[string]context.CancelFunc), crdVersions: make(map[string]map[string]struct{}),
-		conditionRules: defaultConditionRules(),
+		conditionRules:    defaultConditionRules(),
+		admissionPolicies: make(map[string]struct{}), admissionBindings: make(map[string]*unstructured.Unstructured),
 	}, nil
 }
 
@@ -139,11 +144,133 @@ func (m *Monitor) Start(ctx context.Context) error {
 	}); err != nil {
 		return err
 	}
+	m.startAdmissionInformers(factory)
 	factory.Start(ctx.Done())
 	if !cache.WaitForCacheSync(ctx.Done(), apiInformer.HasSynced, crdInformer.HasSynced) {
 		return fmt.Errorf("statuswatch: informer sync failed")
 	}
 	return nil
+}
+
+func (m *Monitor) startAdmissionInformers(factory dynamicinformer.DynamicSharedInformerFactory) {
+	policyInformer := factory.ForResource(validatingAdmissionPolicyGVR).Informer()
+	if _, err := policyInformer.AddEventHandler(cache.ResourceEventHandlerFuncs{
+		AddFunc: m.processAdmissionPolicy, UpdateFunc: func(_, obj interface{}) { m.processAdmissionPolicy(obj) }, DeleteFunc: m.deleteAdmissionPolicy,
+	}); err != nil {
+		klog.ErrorS(err, "statuswatch: register admission policy informer")
+	}
+	bindingInformer := factory.ForResource(validatingAdmissionBindingGVR).Informer()
+	if _, err := bindingInformer.AddEventHandler(cache.ResourceEventHandlerFuncs{
+		AddFunc: m.processAdmissionBinding, UpdateFunc: func(_, obj interface{}) { m.processAdmissionBinding(obj) }, DeleteFunc: m.deleteAdmissionBinding,
+	}); err != nil {
+		klog.ErrorS(err, "statuswatch: register admission policy binding informer")
+	}
+}
+
+func (m *Monitor) processAdmissionPolicy(obj interface{}) {
+	u, ok := obj.(*unstructured.Unstructured)
+	if !ok {
+		return
+	}
+	m.mu.Lock()
+	m.admissionPolicies[u.GetName()] = struct{}{}
+	m.mu.Unlock()
+	if sig := admissionPolicySignal(u); sig != nil {
+		m.correlator.Process(event.Event{Resource: sig.Resource, PodName: sig.PodName, Reason: sig.Reason, Hint: sig.Hint, Labels: sig.Labels}, sig.Owner, nil)
+	} else {
+		m.resolve("", u.GetName(), constant.ReasonAdmissionPolicyInvalid)
+	}
+	m.recheckAdmissionBindings()
+}
+
+func (m *Monitor) processAdmissionBinding(obj interface{}) {
+	u, ok := obj.(*unstructured.Unstructured)
+	if !ok {
+		return
+	}
+	m.mu.Lock()
+	m.admissionBindings[u.GetName()] = u.DeepCopy()
+	m.mu.Unlock()
+	m.processAdmissionBindingObject(u)
+}
+
+func (m *Monitor) processAdmissionBindingObject(u *unstructured.Unstructured) {
+	policy, _, _ := unstructured.NestedString(u.Object, "spec", "policyName")
+	m.mu.Lock()
+	_, exists := m.admissionPolicies[policy]
+	m.mu.Unlock()
+	if policy != "" && !exists {
+		sig := &event.Signal{Resource: "validatingadmissionpolicybinding", PodName: u.GetName(), Owner: u.GetName(), Reason: constant.ReasonAdmissionBindingInvalid, Labels: u.GetLabels(), Hint: fmt.Sprintf("binding references missing ValidatingAdmissionPolicy %q", policy)}
+		m.correlator.Process(event.Event{Resource: sig.Resource, Reason: sig.Reason, Hint: sig.Hint, Labels: sig.Labels}, sig.Owner, nil)
+		return
+	}
+	m.resolve("", u.GetName(), constant.ReasonAdmissionBindingInvalid)
+}
+
+func (m *Monitor) recheckAdmissionBindings() {
+	m.mu.Lock()
+	bindings := make([]*unstructured.Unstructured, 0, len(m.admissionBindings))
+	for _, binding := range m.admissionBindings {
+		bindings = append(bindings, binding.DeepCopy())
+	}
+	m.mu.Unlock()
+	for _, binding := range bindings {
+		m.processAdmissionBindingObject(binding)
+	}
+}
+
+func (m *Monitor) deleteAdmissionPolicy(obj interface{}) {
+	u, ok := obj.(*unstructured.Unstructured)
+	if !ok {
+		return
+	}
+	m.mu.Lock()
+	delete(m.admissionPolicies, u.GetName())
+	m.mu.Unlock()
+	m.resolve("", u.GetName(), constant.ReasonAdmissionPolicyInvalid)
+	m.recheckAdmissionBindings()
+}
+
+func (m *Monitor) deleteAdmissionBinding(obj interface{}) {
+	u, ok := obj.(*unstructured.Unstructured)
+	if !ok {
+		return
+	}
+	m.mu.Lock()
+	delete(m.admissionBindings, u.GetName())
+	m.mu.Unlock()
+	m.resolve("", u.GetName(), constant.ReasonAdmissionBindingInvalid)
+}
+
+func admissionPolicySignal(u *unstructured.Unstructured) *event.Signal {
+	if warnings, found, _ := unstructured.NestedSlice(u.Object, "status", "typeChecking", "expressionWarnings"); found && len(warnings) > 0 {
+		return &event.Signal{Resource: "validatingadmissionpolicy", PodName: u.GetName(), Owner: u.GetName(), Reason: constant.ReasonAdmissionPolicyInvalid, Labels: u.GetLabels(), Hint: fmt.Sprintf("type checking reported %d expression warning(s): %s", len(warnings), admissionWarningText(warnings))}
+	}
+	sig := failureSignal(u, "validatingadmissionpolicy", u.GetName(), defaultConditionRulesWithAdmission())
+	if sig != nil {
+		sig.Reason = constant.ReasonAdmissionPolicyInvalid
+	}
+	return sig
+}
+
+func defaultConditionRulesWithAdmission() map[string]map[string]bool {
+	rules := defaultConditionRules()
+	rules["Valid"] = map[string]bool{"False": true, "Unknown": true}
+	return rules
+}
+
+func admissionWarningText(warnings []interface{}) string {
+	for _, raw := range warnings {
+		item, ok := raw.(map[string]interface{})
+		if !ok {
+			continue
+		}
+		warning, ok := item["warning"].(string)
+		if ok && warning != "" {
+			return warning
+		}
+	}
+	return "invalid CEL expression"
 }
 
 func (m *Monitor) deleteCRD(obj interface{}) {

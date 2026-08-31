@@ -102,6 +102,9 @@ func (h *handler) ProcessPodObject(
 
 	h.executePodFilters(&ctxF)
 	h.executeContainersFilters(&ctxF)
+	for _, sig := range DetectPodReferenceIssues(pod, h.listers) {
+		h.signalEvent(sig)
+	}
 
 	if sig := DetectPodDeletionIssue(pod, h.now()); sig != nil {
 		h.signalEvent(sig)

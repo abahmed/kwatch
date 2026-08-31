@@ -2,6 +2,7 @@ package controller
 
 import (
 	"fmt"
+	"sync"
 	"time"
 
 	"k8s.io/client-go/kubernetes"
@@ -21,6 +22,7 @@ import (
 	kwcontext "github.com/abahmed/kwatch/internal/context"
 	"github.com/abahmed/kwatch/internal/correlation"
 	"github.com/abahmed/kwatch/internal/handler"
+	"github.com/abahmed/kwatch/internal/metrics"
 )
 
 type Controller struct {
@@ -96,9 +98,64 @@ type Controller struct {
 
 	nodeResourceCfg *config.NodeResourceMonitor
 
-	readyFn           func()
-	watchAll          bool
-	allowedNamespaces map[string]struct{}
+	readyFn                  func()
+	watchAll                 bool
+	allowedNamespaces        map[string]struct{}
+	informerMu               sync.RWMutex
+	informerEvents           int64
+	informerWatchErrors      int64
+	informerLastEvent        time.Time
+	informerLastWatchError   time.Time
+	informerLastWatchMessage string
+	informers                []cache.SharedIndexInformer
+}
+
+type InformerStatus struct {
+	LastEvent              time.Time     `json:"lastEvent"`
+	LastWatchError         time.Time     `json:"lastWatchError"`
+	WatchErrors            int64         `json:"watchErrors"`
+	Events                 int64         `json:"events"`
+	EventAge               time.Duration `json:"eventAge"`
+	WatchHealthy           bool          `json:"watchHealthy"`
+	LastError              string        `json:"lastError,omitempty"`
+	InformerCount          int           `json:"informerCount"`
+	Unsynced               int           `json:"unsynced"`
+	WithoutResourceVersion int           `json:"withoutResourceVersion"`
+}
+
+func (c *Controller) InformerStatus() interface{} {
+	c.informerMu.RLock()
+	defer c.informerMu.RUnlock()
+	status := InformerStatus{LastEvent: c.informerLastEvent, LastWatchError: c.informerLastWatchError, WatchErrors: c.informerWatchErrors, Events: c.informerEvents, LastError: c.informerLastWatchMessage, WatchHealthy: c.informerWatchErrors == 0 || time.Since(c.informerLastWatchError) > 5*time.Minute, InformerCount: len(c.informers)}
+	for _, informer := range c.informers {
+		if !informer.HasSynced() {
+			status.Unsynced++
+		}
+		if informer.LastSyncResourceVersion() == "" {
+			status.WithoutResourceVersion++
+		}
+	}
+	if !status.LastEvent.IsZero() {
+		status.EventAge = time.Since(status.LastEvent)
+	}
+	return status
+}
+
+func (c *Controller) recordInformerEvent() {
+	c.informerMu.Lock()
+	c.informerEvents++
+	metrics.Default.InformerEvents.Add(1)
+	c.informerLastEvent = time.Now()
+	c.informerMu.Unlock()
+}
+
+func (c *Controller) recordInformerWatchError(err error) {
+	c.informerMu.Lock()
+	c.informerWatchErrors++
+	metrics.Default.InformerWatchErrors.Add(1)
+	c.informerLastWatchError = time.Now()
+	c.informerLastWatchMessage = err.Error()
+	c.informerMu.Unlock()
 }
 
 // allPipelines returns every pipeline in a fixed order for iteration over
@@ -257,30 +314,32 @@ func New(
 	// "not available" the same way the old per-lister setters did by never
 	// being called.
 	h.SetListers(handler.Listers{
-		Pod:           c.podLister,
-		Node:          c.nodeLister,
-		Deploy:        c.deployLister,
-		Job:           c.jobLister,
-		CronJob:       c.cronJobLister,
-		RS:            c.rsLister,
-		DS:            c.dsLister,
-		SS:            c.ssLister,
-		PDB:           c.pdbLister,
-		Event:         c.eventLister,
-		EventsByPod:   c.eventsByPod,
-		HPA:           c.hpaLister,
-		MWC:           c.mwcLister,
-		VWC:           c.vwcLister,
-		Service:       c.serviceLister,
-		EndpointSlice: c.endpointSliceLister,
-		Secret:        c.secretLister,
-		Netpol:        c.netpolLister,
-		Ingress:       c.ingressLister,
-		ResourceQuota: c.resourceQuotaLister,
-		LimitRange:    c.limitRangeLister,
-		Namespace:     c.namespaceLister,
-		Lease:         c.leaseLister,
-		CPPod:         c.cpPodLister,
+		Pod:            c.podLister,
+		Node:           c.nodeLister,
+		Deploy:         c.deployLister,
+		Job:            c.jobLister,
+		CronJob:        c.cronJobLister,
+		RS:             c.rsLister,
+		DS:             c.dsLister,
+		SS:             c.ssLister,
+		PDB:            c.pdbLister,
+		Event:          c.eventLister,
+		EventsByPod:    c.eventsByPod,
+		HPA:            c.hpaLister,
+		MWC:            c.mwcLister,
+		VWC:            c.vwcLister,
+		Service:        c.serviceLister,
+		EndpointSlice:  c.endpointSliceLister,
+		ConfigMap:      c.configMapLister,
+		Secret:         c.secretLister,
+		ServiceAccount: c.serviceAccountLister,
+		Netpol:         c.netpolLister,
+		Ingress:        c.ingressLister,
+		ResourceQuota:  c.resourceQuotaLister,
+		LimitRange:     c.limitRangeLister,
+		Namespace:      c.namespaceLister,
+		Lease:          c.leaseLister,
+		CPPod:          c.cpPodLister,
 	})
 	h.SetNamespaceScope(scope.namespaces, scope.all)
 

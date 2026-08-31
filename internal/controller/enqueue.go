@@ -33,14 +33,17 @@ func (c *Controller) recordChange(typ kwcontext.ChangeType, resource string, obj
 func (c *Controller) changeRecordingHandler(resource string, enqueue func(interface{})) cache.ResourceEventHandlerFuncs {
 	return cache.ResourceEventHandlerFuncs{
 		AddFunc: func(obj interface{}) {
+			c.recordInformerEvent()
 			c.recordChange(kwcontext.ChangeCreate, resource, obj)
 			enqueue(obj)
 		},
 		UpdateFunc: func(old, new interface{}) {
+			c.recordInformerEvent()
 			c.recordChange(kwcontext.ChangeUpdate, resource, new)
 			enqueue(new)
 		},
 		DeleteFunc: func(obj interface{}) {
+			c.recordInformerEvent()
 			c.recordChange(kwcontext.ChangeDelete, resource, obj)
 			enqueue(obj)
 		},
@@ -51,6 +54,8 @@ func (c *Controller) changeRecordingHandler(resource string, enqueue func(interf
 // informer feeding the pipeline, and marks its workers to start.
 func (c *Controller) watch(p *resourcePipeline, informers ...cache.SharedIndexInformer) {
 	for _, inf := range informers {
+		c.informers = append(c.informers, inf)
+		_ = inf.SetWatchErrorHandler(func(_ *cache.Reflector, err error) { c.recordInformerWatchError(err) })
 		p.synced = append(p.synced, inf.HasSynced)
 		inf.AddEventHandler(c.changeRecordingHandler(p.trackResource(), p.enqueue))
 	}
@@ -61,6 +66,8 @@ func (c *Controller) watch(p *resourcePipeline, informers ...cache.SharedIndexIn
 // informers' caches are already awaited via lister-support sync tracking.
 func (c *Controller) listen(p *resourcePipeline, informers ...cache.SharedIndexInformer) {
 	for _, inf := range informers {
+		c.informers = append(c.informers, inf)
+		_ = inf.SetWatchErrorHandler(func(_ *cache.Reflector, err error) { c.recordInformerWatchError(err) })
 		inf.AddEventHandler(c.changeRecordingHandler(p.trackResource(), p.enqueue))
 	}
 	p.startWorkers = true
@@ -69,6 +76,7 @@ func (c *Controller) listen(p *resourcePipeline, informers ...cache.SharedIndexI
 func (c *Controller) podEventHandler() cache.ResourceEventHandlerFuncs {
 	return cache.ResourceEventHandlerFuncs{
 		AddFunc: func(obj interface{}) {
+			c.recordInformerEvent()
 			c.recordChange(kwcontext.ChangeCreate, "pod", obj)
 			if pod, ok := obj.(*corev1.Pod); ok {
 				c.rebuildPodGraph(pod)
@@ -76,6 +84,7 @@ func (c *Controller) podEventHandler() cache.ResourceEventHandlerFuncs {
 			c.pod.enqueue(obj)
 		},
 		UpdateFunc: func(old, new interface{}) {
+			c.recordInformerEvent()
 			c.recordChange(kwcontext.ChangeUpdate, "pod", new)
 			if pod, ok := new.(*corev1.Pod); ok {
 				c.rebuildPodGraph(pod)
@@ -83,6 +92,7 @@ func (c *Controller) podEventHandler() cache.ResourceEventHandlerFuncs {
 			c.pod.enqueue(new)
 		},
 		DeleteFunc: func(obj interface{}) {
+			c.recordInformerEvent()
 			c.recordChange(kwcontext.ChangeDelete, "pod", obj)
 			if key, err := cache.DeletionHandlingMetaNamespaceKeyFunc(obj); err == nil {
 				if namespace, name, splitErr := cache.SplitMetaNamespaceKey(key); splitErr == nil {

@@ -15,6 +15,7 @@ import (
 	"github.com/abahmed/kwatch/internal/constant"
 	kwcontext "github.com/abahmed/kwatch/internal/context"
 	"github.com/abahmed/kwatch/internal/controller"
+	"github.com/abahmed/kwatch/internal/controlplane"
 	"github.com/abahmed/kwatch/internal/correlation"
 	"github.com/abahmed/kwatch/internal/crdwatch"
 	"github.com/abahmed/kwatch/internal/handler"
@@ -54,17 +55,18 @@ type serverDeps struct {
 	notifyStartup func()
 	// recordAlive stamps the liveness marker that lets the next start report
 	// how long monitoring was down.
-	recordAlive func(context.Context)
-	closeAudit  func() error
-	cleanup     func()
-	tlsSweep    func()
-	statusRun   func(context.Context)
-	metricsRun  func(context.Context)
-	probeRun    func(context.Context)
-	kubeletRun  func(context.Context)
-	storageRun  func(context.Context)
-	networkRun  func(context.Context)
-	securityRun func(context.Context)
+	recordAlive     func(context.Context)
+	closeAudit      func() error
+	cleanup         func()
+	tlsSweep        func()
+	statusRun       func(context.Context)
+	metricsRun      func(context.Context)
+	probeRun        func(context.Context)
+	kubeletRun      func(context.Context)
+	storageRun      func(context.Context)
+	networkRun      func(context.Context)
+	securityRun     func(context.Context)
+	controlPlaneRun func(context.Context)
 }
 
 // Run loads config and wires all monitors, then runs until shutdown.
@@ -182,6 +184,7 @@ func Run() int {
 		klog.ErrorS(err, "failed to create controller")
 		return 1
 	}
+	healthServer.SetInformerLister(ctl)
 	pvcMonitor.SetNamespaceFilter(ctl.NamespaceAllowed)
 	restoreIncidents(ctx, stateMgr, correlator, ctl.NamespaceAllowed)
 	ctl.SetTracker(tracker)
@@ -231,6 +234,7 @@ func Run() int {
 	var probeRun func(context.Context)
 	if cfg.ActiveProbeMonitor.Enabled {
 		probeMonitor := probe.New(cfg.ActiveProbeMonitor, correlator)
+		probeMonitor.SetKubernetesClient(k8sClient)
 		probeMonitor.SetGraph(graph)
 		probeRun = probeMonitor.Start
 	}
@@ -245,35 +249,37 @@ func Run() int {
 		kubeletRun = kubeletMonitor.Start
 	}
 	securityRun := securityMonitor.Start
+	controlPlaneRun := configureControlPlaneMonitor(cfg, k8sClient, healthServer, correlator)
 
-	storageRun := newStorageGraphRun(cfg, graph)
+	storageRun := newStorageGraphRun(cfg, graph, correlator)
 	networkRun := newNetworkGraphRun(cfg, graph)
 
 	deps := &serverDeps{
-		ctx:           ctx,
-		cancel:        cancel,
-		cfg:           cfg,
-		healthServer:  healthServer,
-		alertManager:  am,
-		correlator:    correlator,
-		pvcMonitor:    pvcMonitor,
-		hbMonitor:     hbMonitor,
-		ctl:           ctl,
-		incidentCh:    incidentCh,
-		incidentSaver: stateMgr,
-		incidentDone:  incidentDone,
-		notifyStartup: sm.NotifyStartup,
-		recordAlive:   sm.RecordAlive,
-		closeAudit:    auditLogger.Close,
-		cleanup:       cleanup,
-		tlsSweep:      tlsSweep,
-		statusRun:     statusRun,
-		metricsRun:    metricsRun,
-		probeRun:      probeRun,
-		kubeletRun:    kubeletRun,
-		storageRun:    storageRun,
-		networkRun:    networkRun,
-		securityRun:   securityRun,
+		ctx:             ctx,
+		cancel:          cancel,
+		cfg:             cfg,
+		healthServer:    healthServer,
+		alertManager:    am,
+		correlator:      correlator,
+		pvcMonitor:      pvcMonitor,
+		hbMonitor:       hbMonitor,
+		ctl:             ctl,
+		incidentCh:      incidentCh,
+		incidentSaver:   stateMgr,
+		incidentDone:    incidentDone,
+		notifyStartup:   sm.NotifyStartup,
+		recordAlive:     sm.RecordAlive,
+		closeAudit:      auditLogger.Close,
+		cleanup:         cleanup,
+		tlsSweep:        tlsSweep,
+		statusRun:       statusRun,
+		metricsRun:      metricsRun,
+		probeRun:        probeRun,
+		kubeletRun:      kubeletRun,
+		storageRun:      storageRun,
+		networkRun:      networkRun,
+		securityRun:     securityRun,
+		controlPlaneRun: controlPlaneRun,
 	}
 	return serve(ctx, deps)
 }
@@ -286,6 +292,24 @@ func configureSecurityMonitor(cfg *config.Config, client kubernetes.Interface) *
 	}
 	monitor.SetNamespaces(namespaces)
 	return monitor
+}
+
+func configureControlPlaneMonitor(cfg *config.Config, clientset kubernetes.Interface, healthServer *health.HealthServer, correlator *correlation.Engine) func(context.Context) {
+	if !cfg.ControlPlaneMonitor.Enabled {
+		return nil
+	}
+	restCfg, err := client.GetRestConfig(&cfg.App)
+	if err != nil {
+		klog.ErrorS(err, "failed to create control-plane monitor")
+		return nil
+	}
+	monitor, err := controlplane.New(restCfg, clientset, cfg.ControlPlaneMonitor, correlator)
+	if err != nil {
+		klog.ErrorS(err, "failed to initialize control-plane monitor")
+		return nil
+	}
+	healthServer.SetControlPlaneLister(monitor)
+	return monitor.Start
 }
 
 func newNetworkGraphRun(cfg *config.Config, graph *kwcontext.ResourceGraph) func(context.Context) {
@@ -309,7 +333,7 @@ func newNetworkGraphRun(cfg *config.Config, graph *kwcontext.ResourceGraph) func
 	}
 }
 
-func newStorageGraphRun(cfg *config.Config, graph *kwcontext.ResourceGraph) func(context.Context) {
+func newStorageGraphRun(cfg *config.Config, graph *kwcontext.ResourceGraph, correlator *correlation.Engine) func(context.Context) {
 	if !cfg.ClusterResourceMonitor.Enabled {
 		return nil
 	}
@@ -323,6 +347,7 @@ func newStorageGraphRun(cfg *config.Config, graph *kwcontext.ResourceGraph) func
 		klog.ErrorS(err, "failed to initialize storage graph monitor")
 		return nil
 	}
+	monitor.SetCorrelator(correlator)
 	return func(ctx context.Context) {
 		if err := monitor.Start(ctx); err != nil {
 			klog.ErrorS(err, "storage graph monitor stopped")

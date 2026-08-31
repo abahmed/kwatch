@@ -247,9 +247,15 @@ Monitors `MutatingWebhookConfiguration` and `ValidatingWebhookConfiguration` res
 
 | Parameter | What it does |
 |:---|---|
-| `controlPlaneMonitor.enabled` | 🏛️ Watch for broken control-plane components (default: true) |
+| `controlPlaneMonitor.enabled` | 🏛️ Watch for broken control-plane components and API health (default: true) |
+| `controlPlaneMonitor.intervalSeconds` | Active API/component probe interval (default: 30) |
+| `controlPlaneMonitor.apiServerLatencyWarningMs` | Sustained `/readyz` latency warning threshold (default: 1000) |
+| `controlPlaneMonitor.failureThreshold` / `recoveryThreshold` | Consecutive samples to alert / resolve (defaults: 2 / 2) |
 
-Detects container issues (CrashLoopBackOff, Error, OOMKilled, etc.) in control-plane pods (kube-apiserver, kube-scheduler, kube-controller-manager, etcd, kube-proxy, coredns). Runs a dedicated sweep at startup to catch pre-existing failures.
+Detects container issues (CrashLoopBackOff, Error, OOMKilled, etc.) in control-plane pods (kube-apiserver, kube-scheduler, kube-controller-manager, etcd, kube-proxy, coredns), actively probes API server `/readyz`, and probes scheduler/controller-manager/etcd health endpoints through the Kubernetes API. It also exposes probe state at `/controlplane`; informer watch interruptions and event freshness are available at `/informer`. Runs a dedicated sweep at startup to catch pre-existing failures.
+
+The same monitor performs an in-cluster DNS lookup of `kubernetes.default.svc`,
+so CoreDNS failures are detected even when CoreDNS Pods still appear Running.
 
 ### 🌐 Ingress Backend Monitor
 
@@ -312,7 +318,9 @@ Periodically computes the ratio of pod resource requests vs node allocatable for
 ### 🌐 Active Probes
 
 Active probes are opt-in and target only endpoints explicitly listed by the
-operator; kwatch never probes every Service automatically. A target must fail
+operator by default. Set `autoServices: true` to probe every advertised
+Service port from inside the kwatch Pod (TCP for all ports, plus HTTP for
+ports whose name starts with `http`). A target must fail
 `failureThreshold` consecutive checks before alerting and pass
 `recoveryThreshold` consecutive checks before resolving.
 
@@ -323,10 +331,13 @@ activeProbeMonitor:
   timeoutSeconds: 5
   failureThreshold: 3
   recoveryThreshold: 2
+  autoServices: false
   http:
     - name: public-api
       url: https://api.example.com/ready
       expectedStatus: 200
+      latencyWarningMs: 500
+      latencyCriticalMs: 2000
   tcp:
     - name: postgres
       address: postgres.database.svc:5432

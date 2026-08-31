@@ -126,6 +126,15 @@ var reasonLabels = map[string]string{
 
 	// cluster
 	constant.ReasonControlPlaneComponentFailure: "Control-plane component failing",
+	constant.ReasonAPIServerUnavailable:         "Kubernetes API server unavailable",
+	constant.ReasonAPIServerLatency:             "Kubernetes API server is slow",
+	constant.ReasonSchedulerUnavailable:         "Kubernetes scheduler health check failed",
+	constant.ReasonControllerManagerUnavailable: "Kubernetes controller-manager health check failed",
+	constant.ReasonEtcdUnavailable:              "etcd health check failed",
+	constant.ReasonCoreDNSUnavailable:           "CoreDNS DNS resolution failed",
+	constant.ReasonActiveProbeLatency:           "Application probe latency is high",
+	constant.ReasonVolumeAttachmentFailure:      "Volume attachment failed",
+	constant.ReasonVolumeSnapshotFailure:        "Volume snapshot failed",
 
 	constant.ReasonVolumeUsageHigh:      "Volume running out of space",
 	constant.ReasonNodeResourceHigh:     "Node overcommitted",

@@ -15,7 +15,10 @@ import (
 	"k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/cache"
 
+	"github.com/abahmed/kwatch/internal/constant"
 	kwcontext "github.com/abahmed/kwatch/internal/context"
+	"github.com/abahmed/kwatch/internal/correlation"
+	"github.com/abahmed/kwatch/internal/event"
 )
 
 var (
@@ -31,7 +34,10 @@ type Monitor struct {
 	discoveryClient discovery.DiscoveryInterface
 	graph           *kwcontext.ResourceGraph
 	resync          time.Duration
+	correlator      *correlation.Engine
 }
+
+func (m *Monitor) SetCorrelator(correlator *correlation.Engine) { m.correlator = correlator }
 
 func New(restConfig *rest.Config, graph *kwcontext.ResourceGraph, resync time.Duration) (*Monitor, error) {
 	client, err := dynamic.NewForConfig(restConfig)
@@ -92,7 +98,7 @@ func (m *Monitor) resourceAvailable(gvr schema.GroupVersionResource) bool {
 
 func (m *Monitor) processVolumeAttachment(obj interface{}) {
 	u, ok := obj.(*unstructured.Unstructured)
-	if !ok || m.graph == nil {
+	if !ok {
 		return
 	}
 	name := u.GetName()
@@ -111,6 +117,12 @@ func (m *Monitor) processVolumeAttachment(obj interface{}) {
 	}
 	if attachError(u) {
 		targets = append(targets, kwcontext.EdgeTarget{Kind: "volumeattachment_failure", Name: name, Type: "failure"})
+		m.reportFailure(u, constant.ReasonVolumeAttachmentFailure, attachmentErrorHint(u))
+	} else {
+		m.resolveFailure(u, constant.ReasonVolumeAttachmentFailure)
+	}
+	if m.graph == nil {
+		return
 	}
 	vaKey := "volumeattachment//" + name
 	additions := make([]kwcontext.Edge, 0, len(targets)+1)
@@ -127,7 +139,15 @@ func (m *Monitor) processVolumeAttachment(obj interface{}) {
 
 func (m *Monitor) processCSIDriver(obj interface{}) {
 	u, ok := obj.(*unstructured.Unstructured)
-	if !ok || m.graph == nil {
+	if !ok {
+		return
+	}
+	if snapshotError(u) {
+		m.reportFailure(u, constant.ReasonVolumeSnapshotFailure, snapshotErrorHint(u))
+	} else {
+		m.resolveFailure(u, constant.ReasonVolumeSnapshotFailure)
+	}
+	if m.graph == nil {
 		return
 	}
 	// The node is intentionally created by pod CSI edges. This handler removes
@@ -138,7 +158,15 @@ func (m *Monitor) processCSIDriver(obj interface{}) {
 
 func (m *Monitor) processVolumeSnapshot(obj interface{}) {
 	u, ok := obj.(*unstructured.Unstructured)
-	if !ok || m.graph == nil {
+	if !ok {
+		return
+	}
+	if snapshotError(u) {
+		m.reportFailure(u, constant.ReasonVolumeSnapshotFailure, snapshotErrorHint(u))
+	} else {
+		m.resolveFailure(u, constant.ReasonVolumeSnapshotFailure)
+	}
+	if m.graph == nil {
 		return
 	}
 	targets := make([]kwcontext.EdgeTarget, 0, 2)
@@ -233,4 +261,37 @@ func attachError(u *unstructured.Unstructured) bool {
 func snapshotError(u *unstructured.Unstructured) bool {
 	message, found, _ := unstructured.NestedString(u.Object, "status", "error", "message")
 	return found && strings.TrimSpace(message) != ""
+}
+
+func attachmentErrorHint(u *unstructured.Unstructured) string {
+	reason, _, _ := unstructured.NestedString(u.Object, "status", "attachError", "reason")
+	message, _, _ := unstructured.NestedString(u.Object, "status", "attachError", "message")
+	return strings.TrimSpace(reason + ": " + message)
+}
+
+func snapshotErrorHint(u *unstructured.Unstructured) string {
+	message, _, _ := unstructured.NestedString(u.Object, "status", "error", "message")
+	return strings.TrimSpace(message)
+}
+
+func (m *Monitor) reportFailure(u *unstructured.Unstructured, reason, hint string) {
+	if m.correlator == nil {
+		return
+	}
+	owner := u.GetName()
+	if u.GetNamespace() != "" {
+		owner = u.GetNamespace() + "/" + owner
+	}
+	m.correlator.Process(event.Event{Resource: strings.ToLower(u.GetKind()), Namespace: u.GetNamespace(), PodName: u.GetName(), Reason: reason, Hint: hint, Labels: u.GetLabels(), Severity: "high"}, owner, nil)
+}
+
+func (m *Monitor) resolveFailure(u *unstructured.Unstructured, reason string) {
+	if m.correlator == nil {
+		return
+	}
+	owner := u.GetName()
+	if u.GetNamespace() != "" {
+		owner = u.GetNamespace() + "/" + owner
+	}
+	m.correlator.MarkResolved(correlation.BuildKey(u.GetNamespace(), owner, reason, ""))
 }

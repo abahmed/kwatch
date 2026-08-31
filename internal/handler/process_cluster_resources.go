@@ -2,6 +2,7 @@ package handler
 
 import (
 	"fmt"
+	"strings"
 	"time"
 
 	corev1 "k8s.io/api/core/v1"
@@ -9,6 +10,7 @@ import (
 	"k8s.io/client-go/tools/cache"
 
 	"github.com/abahmed/kwatch/internal/constant"
+	"github.com/abahmed/kwatch/internal/correlation"
 	"github.com/abahmed/kwatch/internal/event"
 )
 
@@ -152,6 +154,11 @@ func (h *handler) ProcessNamespace(key string, deleted bool) error {
 	} else {
 		h.correlator.ResolveByResource("namespace", key)
 	}
+	if sig := DetectPodSecurityLabelIssue(ns); sig != nil {
+		h.signalEvent(sig)
+	} else {
+		h.correlator.MarkResolved(correlation.BuildKey("", ns.Name, constant.ReasonPodSecurityPolicyInvalid, ""))
+	}
 	return nil
 }
 
@@ -195,4 +202,25 @@ func DetectNamespaceIssue(ns *corev1.Namespace, now time.Time, sustainedMinutes 
 		Owner: ns.Name, Reason: constant.ReasonNamespaceStuck, Labels: ns.Labels,
 		Hint: fmt.Sprintf("namespace %s has been terminating for %s; inspect finalizers", ns.Name, age.Round(time.Minute)),
 	}
+}
+
+// DetectPodSecurityLabelIssue catches malformed Pod Security Admission labels.
+// Actual admission denials are returned synchronously by the API server and
+// are not retained as Namespace status, so the monitor reports only durable,
+// objectively invalid policy configuration here.
+func DetectPodSecurityLabelIssue(ns *corev1.Namespace) *event.Signal {
+	if ns == nil {
+		return nil
+	}
+	for _, mode := range []string{"enforce", "warn", "audit"} {
+		level := ns.Labels["pod-security.kubernetes.io/"+mode]
+		if level != "" && level != "privileged" && level != "baseline" && level != "restricted" {
+			return &event.Signal{Resource: "namespace", Namespace: ns.Name, PodName: ns.Name, Owner: ns.Name, Reason: constant.ReasonPodSecurityPolicyInvalid, Labels: ns.Labels, Hint: fmt.Sprintf("Pod Security Admission %s policy has invalid level %q; expected privileged, baseline, or restricted", mode, level)}
+		}
+		version := ns.Labels["pod-security.kubernetes.io/"+mode+"-version"]
+		if version != "" && version != "latest" && !strings.HasPrefix(version, "v1.") {
+			return &event.Signal{Resource: "namespace", Namespace: ns.Name, PodName: ns.Name, Owner: ns.Name, Reason: constant.ReasonPodSecurityPolicyInvalid, Labels: ns.Labels, Hint: fmt.Sprintf("Pod Security Admission %s policy has invalid version %q; expected latest or v1.<minor>", mode, version)}
+		}
+	}
+	return nil
 }

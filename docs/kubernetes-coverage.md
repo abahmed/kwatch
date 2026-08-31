@@ -37,6 +37,37 @@ the categories below intentionally use different signal sources.
   storage attach/provision/mount, autoscaling, admission, discovery, and node
   health are correlated to their involved object. Pod and Cluster Autoscaler
   Events continue through their specialized context-rich detectors.
+- Security and admission: RBAC capability self-checks, missing ServiceAccounts,
+  required Secret/ConfigMap references in volumes and environment injection,
+  unreachable mutating/validating webhook backends, malformed Pod Security
+  Admission namespace labels, and ValidatingAdmissionPolicy type-checking
+  warnings or bindings that reference a missing policy. These signals preserve
+  the exact object and reference name so the alert points to the correction.
+- Control plane: active `/readyz` availability and latency checks for the API
+  server, health endpoint checks for scheduler/controller-manager/etcd when
+  their Pods are visible, and a diagnostic informer status with received-event
+  freshness plus watch-interruption counters. Component absence is reported as
+  unsupported rather than failure because managed control planes are commonly
+  hidden from tenant RBAC.
+- DNS: an in-cluster lookup of `kubernetes.default.svc` validates the complete
+  CoreDNS/service-discovery path from the kwatch Pod, not merely the CoreDNS
+  Pod phase.
+- Services: optional `activeProbeMonitor.autoServices` performs in-cluster TCP
+  checks for advertised Service ports and HTTP checks for ports named `http*`,
+  connecting the result back to the Service in the dependency graph. It is
+  opt-in because a declared port is not proof that an application listener is
+  intended.
+- Application probes can enforce per-target HTTP latency warning/critical
+  thresholds in addition to status-code checks, giving kwatch a lightweight
+  SLO signal without a metrics server.
+- Autoscaling: HPA condition details remain informer-native, while VPA/KEDA
+  objects are covered by the dynamic CRD status watcher whenever their CRDs
+  expose failure-shaped conditions. Missing metrics APIs are treated as an
+  unavailable optional capability, not as an application incident.
+- Storage lifecycle: CSI VolumeAttachment attach errors and CSI snapshot
+  errors now produce incidents with their controller-provided reason/message;
+  mount/unmount and provisioning failures continue to come from Kubernetes
+  Warning Events and PVC/PV status.
 - Runtime metrics: built-in kubelet Summary API collection of actual
   per-container CPU and memory usage against declared limits. The optional
   Metrics API integration is retained for users who already run Metrics Server,
@@ -99,6 +130,12 @@ VPA/KEDA/Cluster Autoscaler internals, and application SLOs require metrics,
 logs, traces, or active probes. kwatch consumes the runtime evidence available
 through pod/node summaries, active probes, and events; it does not claim that informer status
 alone covers these signals.
+
+Individual Pod Security or ValidatingAdmissionPolicy denials are returned in
+the API response (and may be present in audit logs), but Kubernetes does not
+retain a watchable object for every denied request. kwatch therefore detects
+durable policy misconfiguration and resulting object/event symptoms; request-
+level denial analytics require an audit-log sink, which is not required.
 
 See the Kubernetes documentation for [Pod lifecycle](https://kubernetes.io/docs/concepts/workloads/pods/pod-lifecycle/),
 [Node status](https://kubernetes.io/docs/reference/node/node-status/),

@@ -71,6 +71,7 @@ func DefaultConfig() *Config {
 		ActiveProbeMonitor: ActiveProbeMonitor{
 			IntervalSeconds: 30, TimeoutSeconds: 5,
 			FailureThreshold: 3, RecoveryThreshold: 2,
+			AutoServices: false,
 		},
 		KubeletTelemetryMonitor: KubeletTelemetryMonitor{
 			Enabled: true, IntervalSeconds: 60, FailureThreshold: 2, RecoveryThreshold: 2, PersistState: true,
@@ -101,7 +102,7 @@ func DefaultConfig() *Config {
 		Inhibition:              Inhibition{NodeSuppressesPods: true},
 		ServiceMonitor:          ServiceMonitor{Enabled: true},
 		AdmissionWebhookMonitor: AdmissionWebhookMonitor{Enabled: true},
-		ControlPlaneMonitor:     ControlPlaneMonitor{Enabled: true},
+		ControlPlaneMonitor:     ControlPlaneMonitor{Enabled: true, IntervalSeconds: 30, APIServerLatencyWarningMs: 1000, FailureThreshold: 2, RecoveryThreshold: 2},
 		IngressMonitor:          IngressMonitor{Enabled: true},
 		NetworkPolicyMonitor:    NetworkPolicyMonitor{Enabled: true},
 		ClusterResourceMonitor:  ClusterResourceMonitor{Enabled: true, SustainedMinutes: 10},

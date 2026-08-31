@@ -229,7 +229,11 @@
           "controlPlaneMonitor": {
             "type": "object",
             "properties": {
-              "enabled": { "type": "boolean" }
+              "enabled": { "type": "boolean" },
+              "intervalSeconds": { "type": "integer", "minimum": 1 },
+              "apiServerLatencyWarningMs": { "type": "integer", "minimum": 1 },
+              "failureThreshold": { "type": "integer", "minimum": 1 },
+              "recoveryThreshold": { "type": "integer", "minimum": 1 }
             }
           },
           "ingressMonitor": {
