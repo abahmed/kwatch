@@ -86,8 +86,8 @@ func (c *Controller) wireService(cfg *config.Config, fs factorySet) {
 				}
 				c.enqueueServiceDependents(obj)
 			},
-			UpdateFunc: func(_, obj interface{}) {
-				c.recordChange(kwcontext.ChangeUpdate, "service", obj)
+			UpdateFunc: func(old, obj interface{}) {
+				c.recordChangeUpdate("service", old, obj)
 				if cfg.ServiceMonitor.Enabled {
 					c.service.enqueue(obj)
 				}
@@ -120,12 +120,11 @@ func (c *Controller) enqueueServiceDependents(obj interface{}) {
 			for _, key := range keys {
 				c.ingress.enqueue(strings.TrimPrefix(key, "ingress/"))
 			}
-			if len(keys) == 0 {
-				// A Service event can race the graph update for a newly created or
-				// changed Ingress. Prefer an occasional broad recheck to silently
-				// missing a resolution during that short inconsistency window.
-				c.enqueueAllIngresses()
-			}
+			// The graph is an optimization, not the source of truth. It can be
+			// briefly stale while an Ingress and Service are updated together;
+			// always recheck the lister-backed Ingress set so a real dependency
+			// cannot be missed.
+			c.enqueueAllIngresses()
 		} else {
 			c.enqueueAllIngresses()
 		}

@@ -107,19 +107,21 @@ func CheckHTTPResponse(resp *http.Response, provider string) error {
 
 // Event used to represent info needed by providers to send messages
 type Event struct {
-	Resource      string // "pod", "node", "pvc"
-	PodName       string
-	ContainerName string
-	Image         string
-	Message       string
-	Namespace     string
-	NodeName      string
-	Reason        string
-	Events        string
-	Logs          string
-	Labels        map[string]string
-	OwnerKind     string
-	RestartCount  int
+	Resource string // "pod", "node", "pvc"
+	PodName  string
+	// PodGenerateName is the stable name prefix for generated Pod replacements.
+	PodGenerateName string
+	ContainerName   string
+	Image           string
+	Message         string
+	Namespace       string
+	NodeName        string
+	Reason          string
+	Events          string
+	Logs            string
+	Labels          map[string]string
+	OwnerKind       string
+	RestartCount    int
 	// Pre-computed diagnostic hint; empty = auto-generate from Reason
 	Hint string
 	// Structured details behind Hint; renderers read these, not the prose

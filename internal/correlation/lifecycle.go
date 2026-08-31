@@ -67,6 +67,11 @@ func (e *Engine) resolveLocked(
 	now time.Time,
 ) transition {
 	inc.State = model.StateResolved
+	// LastSeen is the end of the incident timeline. A resolve can be caused by
+	// a clean status observation or by a stale/hold-down sweep, so retaining the
+	// last failure timestamp makes the rendered resolution point misleading.
+	inc.LastSeen = now
+	inc.LastUpdate = now
 	if inc.Resource == "node" {
 		e.refreshNodeInhibition(inc.Name)
 	}

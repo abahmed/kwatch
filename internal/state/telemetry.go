@@ -24,7 +24,7 @@ const maxRCAFeedbackBytes = 64 * 1024
 const rcaFeedbackKey = "records"
 
 func (s *StateManager) LoadRCAFeedback(ctx context.Context) ([]insight.RCARecord, error) {
-	cm, err := s.client.CoreV1().ConfigMaps(s.namespace).Get(ctx, "kwatch-rca", metav1.GetOptions{})
+	cm, err := s.client.CoreV1().ConfigMaps(s.namespace).Get(ctx, rcaConfigMapName, metav1.GetOptions{})
 	if err != nil {
 		if !apierrors.IsNotFound(err) {
 			return nil, err
@@ -66,7 +66,7 @@ func (s *StateManager) SaveRCAFeedback(ctx context.Context, records []insight.RC
 }
 
 func (s *StateManager) LoadChangeHistory(ctx context.Context) ([]kwcontext.Change, error) {
-	cm, err := s.client.CoreV1().ConfigMaps(s.namespace).Get(ctx, "kwatch-changes", metav1.GetOptions{})
+	cm, err := s.client.CoreV1().ConfigMaps(s.namespace).Get(ctx, changesConfigMapName, metav1.GetOptions{})
 	if err != nil {
 		if !apierrors.IsNotFound(err) {
 			return nil, err

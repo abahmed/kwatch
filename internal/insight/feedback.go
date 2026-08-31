@@ -25,11 +25,20 @@ type RCARecord struct {
 type FeedbackStore struct {
 	mu      sync.RWMutex
 	records map[string]RCARecord
+	// active remembers the diagnosis attached to a live incident. Resolve
+	// notifications do not carry the original Insight, so using only the
+	// reason would incorrectly update every learned pattern for that reason.
+	active map[string]string
 }
 
 const maxFeedbackRecords = 500
 
-func NewFeedbackStore() *FeedbackStore { return &FeedbackStore{records: make(map[string]RCARecord)} }
+func NewFeedbackStore() *FeedbackStore {
+	return &FeedbackStore{
+		records: make(map[string]RCARecord),
+		active:  make(map[string]string),
+	}
+}
 
 func (s *FeedbackStore) Observe(inc *model.Incident, action model.IncidentAction, pattern string) {
 	if s == nil || inc == nil || pattern == "" {
@@ -37,24 +46,18 @@ func (s *FeedbackStore) Observe(inc *model.Incident, action model.IncidentAction
 	}
 	key := feedbackKey(inc, pattern)
 	s.mu.Lock()
+	incidentKey := ""
+	if inc != nil {
+		incidentKey = string(inc.Key)
+	}
 	if action == model.ActionResolved {
-		// Resolution notifications do not always carry the diagnosis that was
-		// available at creation time. Apply the outcome to every learned
-		// pattern for this reason so a restart/resolve cycle still closes the
-		// correct feedback record.
-		matched := false
-		prefix := feedbackKey(inc, "")
-		for candidate := range s.records {
-			if strings.HasPrefix(candidate, prefix) {
-				s.recordOutcome(candidate, model.ActionResolved)
-				matched = true
-			}
+		if learned := s.active[incidentKey]; learned != "" {
+			key = feedbackKey(inc, learned)
+			pattern = learned
 		}
-		if matched {
-			s.prune()
-			s.mu.Unlock()
-			return
-		}
+		delete(s.active, incidentKey)
+	} else if incidentKey != "" && pattern != "" {
+		s.active[incidentKey] = pattern
 	}
 	record := s.records[key]
 	record.Fingerprint, record.CauseClass = key, pattern
@@ -82,25 +85,6 @@ func (s *FeedbackStore) Observe(inc *model.Incident, action model.IncidentAction
 	s.records[key] = record
 	s.prune()
 	s.mu.Unlock()
-}
-
-func (s *FeedbackStore) recordOutcome(key string, action model.IncidentAction) {
-	record := s.records[key]
-	record.LastSeen = clock.Now()
-	if action == model.ActionResolved {
-		record.Resolved++
-		record.LastOutcome = "resolved"
-		if record.Observations >= 3 {
-			record.ConfidenceBias += 0.01
-		}
-	}
-	if record.ConfidenceBias > 0.15 {
-		record.ConfidenceBias = 0.15
-	}
-	if record.ConfidenceBias < -0.15 {
-		record.ConfidenceBias = -0.15
-	}
-	s.records[key] = record
 }
 
 func (s *FeedbackStore) prune() {
@@ -148,6 +132,7 @@ func (s *FeedbackStore) Restore(records []RCARecord) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	s.records = make(map[string]RCARecord, len(records))
+	s.active = make(map[string]string)
 	for _, record := range records {
 		if record.Fingerprint != "" {
 			s.records[record.Fingerprint] = record

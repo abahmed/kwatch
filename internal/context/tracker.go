@@ -118,7 +118,8 @@ func (t *ChangeTracker) RecentChangesBeforeAt(age time.Duration, now time.Time) 
 	var out []Change
 	for i := 0; i < t.count; i++ {
 		idx := (t.head - 1 - i + len(t.buffer)) % len(t.buffer)
-		if t.buffer[idx].Timestamp.After(cutoff) {
+		if t.buffer[idx].Timestamp.After(cutoff) &&
+			!t.buffer[idx].Timestamp.After(now) {
 			out = append(out, t.buffer[idx])
 		}
 	}

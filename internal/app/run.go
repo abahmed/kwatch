@@ -55,6 +55,7 @@ type serverDeps struct {
 	incidentCh    chan []model.PersistedIncident
 	incidentSaver incidentSaver
 	incidentDone  <-chan struct{}
+	feedbackDone  <-chan struct{}
 	notifyStartup func()
 	// recordAlive stamps the liveness marker that lets the next start report
 	// how long monitoring was down.
@@ -167,6 +168,9 @@ func RunWithClock(now func() time.Time) int {
 	feedbackStore := loadFeedbackStore(ctx, stateMgr)
 	insightEngine.SetFeedbackStore(feedbackStore)
 	insightEngine.SetClock(now)
+	feedbackCh := make(chan []insight.RCARecord, 1)
+	feedbackDone := make(chan struct{})
+	go startFeedbackSaver(ctx, stateMgr, feedbackCh, feedbackDone)
 	correlator := newCorrelator(
 		cfg,
 		baseline,
@@ -176,11 +180,7 @@ func RunWithClock(now func() time.Time) int {
 		baselineCh,
 		insightEngine,
 		feedbackStore,
-		func() {
-			if err := stateMgr.SaveRCAFeedback(ctx, feedbackStore.Snapshot()); err != nil {
-				klog.ErrorS(err, "failed to persist RCA feedback")
-			}
-		},
+		func() { trySendFeedbackSnapshot(feedbackCh, feedbackStore.Snapshot()) },
 	)
 	correlator.SetClock(now)
 	insightEngine.SetActiveChecker(func(kind, namespace, name string) bool {
@@ -222,6 +222,7 @@ func RunWithClock(now func() time.Time) int {
 	}
 	healthServer.SetInformerLister(ctl)
 	pvcMonitor.SetNamespaceFilter(ctl.NamespaceAllowed)
+	pvcMonitor.SetClock(now)
 	restoreIncidents(ctx, stateMgr, correlator, ctl.NamespaceAllowed)
 	ctl.SetTracker(tracker)
 	ctl.SetGraph(graph)
@@ -257,8 +258,8 @@ func RunWithClock(now func() time.Time) int {
 	securityRun := securityMonitor.Start
 	controlPlaneRun := configureControlPlaneMonitor(cfg, k8sClient, healthServer, correlator, now)
 
-	storageRun := newStorageGraphRun(cfg, graph, correlator)
-	networkRun := newNetworkGraphRun(cfg, graph)
+	storageRun := newStorageGraphRun(cfg, graph, correlator, ctl.NamespaceAllowed)
+	networkRun := newNetworkGraphRun(cfg, graph, ctl.NamespaceAllowed)
 
 	deps := &serverDeps{
 		ctx:             ctx,
@@ -273,6 +274,7 @@ func RunWithClock(now func() time.Time) int {
 		incidentCh:      incidentCh,
 		incidentSaver:   stateMgr,
 		incidentDone:    incidentDone,
+		feedbackDone:    feedbackDone,
 		notifyStartup:   sm.NotifyStartup,
 		recordAlive:     sm.RecordAlive,
 		closeAudit:      auditLogger.Close,
@@ -395,7 +397,7 @@ func configureMetricsMonitor(cfg *config.Config, ctl *controller.Controller, cli
 	return monitor.Start
 }
 
-func newNetworkGraphRun(cfg *config.Config, graph *kwcontext.ResourceGraph) func(context.Context) {
+func newNetworkGraphRun(cfg *config.Config, graph *kwcontext.ResourceGraph, namespaceAllowed func(string) bool) func(context.Context) {
 	if !cfg.ClusterResourceMonitor.Enabled {
 		return nil
 	}
@@ -409,6 +411,7 @@ func newNetworkGraphRun(cfg *config.Config, graph *kwcontext.ResourceGraph) func
 		klog.ErrorS(err, "failed to initialize network graph monitor")
 		return nil
 	}
+	monitor.SetNamespaceFilter(namespaceAllowed)
 	return func(ctx context.Context) {
 		if err := monitor.Start(ctx); err != nil {
 			klog.ErrorS(err, "network graph monitor stopped")
@@ -416,7 +419,7 @@ func newNetworkGraphRun(cfg *config.Config, graph *kwcontext.ResourceGraph) func
 	}
 }
 
-func newStorageGraphRun(cfg *config.Config, graph *kwcontext.ResourceGraph, correlator *correlation.Engine) func(context.Context) {
+func newStorageGraphRun(cfg *config.Config, graph *kwcontext.ResourceGraph, correlator *correlation.Engine, namespaceAllowed func(string) bool) func(context.Context) {
 	if !cfg.ClusterResourceMonitor.Enabled {
 		return nil
 	}
@@ -431,6 +434,7 @@ func newStorageGraphRun(cfg *config.Config, graph *kwcontext.ResourceGraph, corr
 		return nil
 	}
 	monitor.SetCorrelator(correlator)
+	monitor.SetNamespaceFilter(namespaceAllowed)
 	return func(ctx context.Context) {
 		if err := monitor.Start(ctx); err != nil {
 			klog.ErrorS(err, "storage graph monitor stopped")

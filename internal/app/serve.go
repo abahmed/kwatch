@@ -161,6 +161,7 @@ func waitShutdown(
 		klog.InfoS("timed out waiting for background tasks")
 	}
 	waitIncidentSaver(deps)
+	waitFeedbackSaver(deps)
 	saveFinalIncidentSnapshot(deps)
 
 	select {

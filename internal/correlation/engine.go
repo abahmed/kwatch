@@ -57,7 +57,7 @@ func IncidentKey(
 			return GlobalKey(r, scope)
 		}
 	}
-	return BuildKey(ev.Namespace, owner, r, "")
+	return BuildKey(ev.Namespace, incidentOwner(ev, owner), r, "")
 }
 
 func notifSig(inc *model.Incident) string {

@@ -154,7 +154,7 @@ func lifecycleHook(
 				}
 			}
 			opts.insightEngine.ObserveOutcome(inc, action, pattern)
-			if opts.saveFeedback != nil {
+			if opts.saveFeedback != nil && (action == model.ActionCreate || action == model.ActionResolved) {
 				opts.saveFeedback()
 			}
 		}

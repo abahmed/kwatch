@@ -335,7 +335,7 @@ func certificateSignal(u *unstructured.Unstructured, resource, owner string, now
 		return nil
 	}
 	cert, err := x509.ParseCertificate(block.Bytes)
-	if err != nil || time.Until(cert.NotAfter) > 7*24*time.Hour {
+	if err != nil || cert.NotAfter.Sub(now) > 7*24*time.Hour {
 		return nil
 	}
 	return &event.Signal{Resource: resource, Namespace: u.GetNamespace(), PodName: u.GetName(), Owner: owner, Reason: reasonFor(resource), Labels: u.GetLabels(), Hint: fmt.Sprintf("issued certificate expires at %s", cert.NotAfter.UTC().Format(time.RFC3339))}

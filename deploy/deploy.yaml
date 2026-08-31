@@ -36,7 +36,7 @@ rules:
   resources: ["daemonsets", "statefulsets", "deployments", "replicasets"]
   verbs: ["get", "watch", "list"]
 - apiGroups: ["admissionregistration.k8s.io"]
-	  resources: ["mutatingwebhookconfigurations", "validatingwebhookconfigurations", "validatingadmissionpolicies", "validatingadmissionpolicybindings"]
+  resources: ["mutatingwebhookconfigurations", "validatingwebhookconfigurations", "validatingadmissionpolicies", "validatingadmissionpolicybindings"]
   verbs: ["get", "watch", "list"]
 - apiGroups: ["admissionregistration.k8s.io"]
   resources: ["mutatingadmissionpolicies", "mutatingadmissionpolicybindings"]

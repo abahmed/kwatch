@@ -9,12 +9,23 @@ func permissionsForConfig(cfg *config.Config) ([]Permission, []Permission) {
 	if cfg == nil {
 		return clusterPermissions(), namespacedPermissions()
 	}
+	// These resources are part of the controller's baseline graph and owner
+	// resolution wiring, even when their dedicated detector is disabled.
 	cluster := permissionResources(
 		Permission{Resource: "leases", Group: "coordination.k8s.io"},
+		Permission{Resource: "persistentvolumes"},
+		Permission{Resource: "serviceaccounts"},
+		Permission{Resource: "storageclasses", Group: "storage.k8s.io"},
 	)
 	namespaced := permissionResources(
 		Permission{Resource: "pods"},
 		Permission{Resource: "events"},
+		Permission{Resource: "configmaps"},
+		Permission{Resource: "secrets"},
+		Permission{Resource: "persistentvolumeclaims"},
+		Permission{Resource: "replicasets", Group: "apps"},
+		Permission{Resource: "statefulsets", Group: "apps"},
+		Permission{Resource: "daemonsets", Group: "apps"},
 	)
 	addNamespaced := func(enabled bool, resources ...Permission) {
 		if enabled {
@@ -36,13 +47,16 @@ func permissionsForConfig(cfg *config.Config) ([]Permission, []Permission) {
 	addNamespaced(cfg.HpaMonitor.Enabled, autoscaling("horizontalpodautoscalers")...)
 	addNamespaced(cfg.PdbMonitor.Enabled, policy("poddisruptionbudgets")...)
 	addNamespaced(cfg.ServiceMonitor.Enabled, Permission{Resource: "services"}, Permission{Resource: "endpointslices", Group: "discovery.k8s.io"})
+	addNamespaced(cfg.IngressMonitor.Enabled || cfg.AdmissionWebhookMonitor.Enabled, Permission{Resource: "services"})
+	addNamespaced(cfg.ServiceMonitor.Enabled || cfg.IngressMonitor.Enabled || cfg.AdmissionWebhookMonitor.Enabled,
+		Permission{Resource: "endpointslices", Group: "discovery.k8s.io"})
 	addNamespaced(cfg.IngressMonitor.Enabled, networking("ingresses")...)
 	addNamespaced(cfg.NetworkPolicyMonitor.Enabled, networking("networkpolicies")...)
 	addNamespaced(cfg.ClusterResourceMonitor.Enabled, Permission{Resource: "resourcequotas"}, Permission{Resource: "limitranges"})
 	addNamespaced(cfg.TlsMonitor.Enabled, Permission{Resource: "secrets"})
 
 	nodesNeeded := cfg.NodeMonitor.Enabled || cfg.NodeResourceMonitor.Enabled || cfg.KubeletTelemetryMonitor.Enabled || cfg.ControlPlaneMonitor.Enabled
-	addCluster(nodesNeeded, Permission{Resource: "nodes"})
+	addCluster(nodesNeeded, Permission{Resource: "nodes"}, Permission{Resource: "nodes/proxy"})
 	addCluster(cfg.ClusterResourceMonitor.Enabled, Permission{Resource: "namespaces"})
 	addCluster(cfg.PvcMonitor.Enabled,
 		Permission{Resource: "persistentvolumes"},
@@ -54,6 +68,20 @@ func permissionsForConfig(cfg *config.Config) ([]Permission, []Permission) {
 		Permission{Resource: "mutatingwebhookconfigurations", Group: "admissionregistration.k8s.io"},
 		Permission{Resource: "validatingwebhookconfigurations", Group: "admissionregistration.k8s.io"},
 	)
+	if cfg.ClusterResourceMonitor.Enabled {
+		addCluster(true,
+			Permission{Resource: "apiservices", Group: "apiregistration.k8s.io"},
+			Permission{Resource: "validatingadmissionpolicies", Group: "admissionregistration.k8s.io"},
+			Permission{Resource: "validatingadmissionpolicybindings", Group: "admissionregistration.k8s.io"},
+			Permission{Resource: "mutatingadmissionpolicies", Group: "admissionregistration.k8s.io"},
+			Permission{Resource: "mutatingadmissionpolicybindings", Group: "admissionregistration.k8s.io"},
+			Permission{Resource: "certificatesigningrequests", Group: "certificates.k8s.io"},
+			Permission{Resource: "podcertificaterequests", Group: "certificates.k8s.io"},
+			Permission{Resource: "flowschemas", Group: "flowcontrol.apiserver.k8s.io"},
+			Permission{Resource: "prioritylevelconfigurations", Group: "flowcontrol.apiserver.k8s.io"},
+			Permission{Resource: "endpoints"},
+		)
+	}
 	// The CRD watcher is startup/live infrastructure and is independent of
 	// workload monitors; it must retain access when the installed CRD exists.
 	addCluster(true, Permission{Resource: "customresourcedefinitions", Group: "apiextensions.k8s.io"})

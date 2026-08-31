@@ -142,6 +142,15 @@ func NewPvcMonitor(
 	}
 }
 
+// SetClock injects the clock used for PVC cache TTLs and lifecycle decisions.
+func (p *PvcMonitor) SetClock(now func() time.Time) {
+	if now != nil {
+		p.mu.Lock()
+		p.now = now
+		p.mu.Unlock()
+	}
+}
+
 func (p *PvcMonitor) Start(ctx context.Context) {
 	if p.config == nil || !p.config.Enabled {
 		return

@@ -21,7 +21,7 @@ func (c *Controller) wireConfigMap(fs factorySet) {
 				c.recordChange(kwcontext.ChangeCreate, "configmap", obj)
 			},
 			UpdateFunc: func(old, new interface{}) {
-				c.recordChange(kwcontext.ChangeUpdate, "configmap", new)
+				c.recordChangeUpdate("configmap", old, new)
 			},
 			DeleteFunc: func(obj interface{}) {
 				c.recordChange(kwcontext.ChangeDelete, "configmap", obj)
@@ -62,8 +62,8 @@ func (c *Controller) wireGraphSupport(fs factorySet) {
 			AddFunc: func(obj interface{}) {
 				c.recordChange(kwcontext.ChangeCreate, "secret", obj)
 			},
-			UpdateFunc: func(_, obj interface{}) {
-				c.recordChange(kwcontext.ChangeUpdate, "secret", obj)
+			UpdateFunc: func(old, obj interface{}) {
+				c.recordChangeUpdate("secret", old, obj)
 			},
 			DeleteFunc: func(obj interface{}) {
 				c.recordChange(kwcontext.ChangeDelete, "secret", obj)

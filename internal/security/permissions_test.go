@@ -16,11 +16,11 @@ func TestPermissionsFollowEnabledMonitors(t *testing.T) {
 	if hasPermission(namespaced, "deployments", "apps") {
 		t.Fatal("disabled rollout monitor should not require deployments")
 	}
-	if hasPermission(namespaced, "secrets", "") {
-		t.Fatal("disabled TLS monitor should not require secrets")
+	if !hasPermission(namespaced, "secrets", "") {
+		t.Fatal("graph wiring requires secrets even when TLS monitor is disabled")
 	}
-	if hasPermission(cluster, "persistentvolumes", "") {
-		t.Fatal("disabled PVC monitor should not require persistent volumes")
+	if !hasPermission(cluster, "persistentvolumes", "") {
+		t.Fatal("graph wiring requires persistent volumes even when PVC monitor is disabled")
 	}
 
 	cfg.RolloutMonitor.Enabled = true

@@ -362,7 +362,7 @@ func TestAnalyzeRecentChangesCap(t *testing.T) {
 			Namespace: "ns1",
 			Name:      "dep1",
 			Type:      context.ChangeUpdate,
-			Timestamp: now.Add(time.Duration(i) * time.Second),
+			Timestamp: now.Add(-time.Duration(5-i) * time.Second),
 		})
 	}
 

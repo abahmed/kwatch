@@ -36,9 +36,14 @@ type Monitor struct {
 	graph           *kwcontext.ResourceGraph
 	resync          time.Duration
 	correlator      *correlation.Engine
+	allowed         func(string) bool
 }
 
 func (m *Monitor) SetCorrelator(correlator *correlation.Engine) { m.correlator = correlator }
+
+// SetNamespaceFilter keeps namespaced snapshot failures and graph edges
+// aligned with the controller's configured namespace scope.
+func (m *Monitor) SetNamespaceFilter(filter func(string) bool) { m.allowed = filter }
 
 func New(restConfig *rest.Config, graph *kwcontext.ResourceGraph, resync time.Duration) (*Monitor, error) {
 	client, err := dynamic.NewForConfig(restConfig)
@@ -95,9 +100,12 @@ func (m *Monitor) resourceAvailable(gvr schema.GroupVersionResource) bool {
 	if err == nil {
 		return true
 	}
-	// Skip APIs that are genuinely absent or forbidden. For transient
-	// discovery failures, still create the informer so client-go can retry.
-	return !apierrors.IsNotFound(err) && !apierrors.IsForbidden(err)
+	// Keep an informer for an API that is currently absent. The reflector will
+	// retry ListAndWatch with backoff and will begin receiving objects if the
+	// optional API is installed later in this process lifetime. Forbidden is
+	// different: retrying it forever only creates noise and cannot discover
+	// anything without an RBAC change.
+	return !apierrors.IsForbidden(err)
 }
 
 func (m *Monitor) processVolumeAttachment(obj interface{}) {
@@ -163,6 +171,9 @@ func (m *Monitor) processCSIDriver(obj interface{}) {
 func (m *Monitor) processVolumeSnapshot(obj interface{}) {
 	u, ok := obj.(*unstructured.Unstructured)
 	if !ok {
+		return
+	}
+	if m.allowed != nil && u.GetNamespace() != "" && !m.allowed(u.GetNamespace()) {
 		return
 	}
 	if snapshotError(u) {
@@ -280,6 +291,9 @@ func snapshotErrorHint(u *unstructured.Unstructured) string {
 
 func (m *Monitor) reportFailure(u *unstructured.Unstructured, reason, hint string) {
 	if m.correlator == nil {
+		return
+	}
+	if m.allowed != nil && u.GetNamespace() != "" && !m.allowed(u.GetNamespace()) {
 		return
 	}
 	owner := u.GetName()

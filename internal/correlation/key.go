@@ -3,6 +3,7 @@ package correlation
 import (
 	"strings"
 
+	"github.com/abahmed/kwatch/internal/event"
 	"github.com/abahmed/kwatch/internal/model"
 )
 
@@ -13,6 +14,18 @@ import (
 // BuildKey constructs the incident key used for dedup, grouping, and baseline.
 func BuildKey(namespace, owner, reason, container string) model.IncidentKey {
 	return model.IncidentKey(namespace + ":" + owner + ":" + reason + ":" + container)
+}
+
+// incidentOwner returns a stable logical owner only for generated Pods that
+// have no Kubernetes owner reference. A plain ownerless Pod remains keyed by
+// its actual name because Kubernetes provides no evidence that another Pod is
+// its replacement.
+func incidentOwner(ev event.Event, owner string) string {
+	if ev.Resource == "pod" && ev.OwnerKind == "" &&
+		ev.PodGenerateName != "" && owner == ev.PodName {
+		return "generated/" + ev.PodGenerateName
+	}
+	return owner
 }
 
 // GlobalKey builds the cluster-scoped key form "<reason>|global|<scope>" used

@@ -64,7 +64,7 @@ func (h *handler) ProcessWarningEvent(ev *corev1.Event) {
 
 func recentEvent(ev *corev1.Event, now time.Time) bool {
 	t := eventTime(ev)
-	return !t.IsZero() && now.Sub(t) <= genericEventMaxAge
+	return !t.IsZero() && !t.After(now) && now.Sub(t) <= genericEventMaxAge
 }
 
 func eventTime(ev *corev1.Event) time.Time {
