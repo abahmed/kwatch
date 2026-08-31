@@ -2,6 +2,7 @@ package state
 
 import (
 	"context"
+	"strconv"
 	"time"
 
 	"github.com/google/uuid"
@@ -126,6 +127,16 @@ func (s *StateManager) GetStoredVersion(ctx context.Context) string {
 	return cm.Data[versionKey]
 }
 
+// GetStateSchemaVersion reports the persisted state format. An empty value is
+// a legacy installation that predates explicit schema tracking.
+func (s *StateManager) GetStateSchemaVersion(ctx context.Context) string {
+	cm, err := s.client.CoreV1().ConfigMaps(s.namespace).Get(ctx, stateConfigMapName, metav1.GetOptions{})
+	if err != nil {
+		return ""
+	}
+	return cm.Data[stateSchemaVersionKey]
+}
+
 func (s *StateManager) GetNotifiedVersion(ctx context.Context) string {
 	cm, err := s.client.CoreV1().ConfigMaps(
 		s.namespace,
@@ -228,6 +239,7 @@ func (s *StateManager) MarkAsInitialized(
 	}
 
 	return s.stateMgr.UpdateWithRetry(ctx, func(c *corev1.ConfigMap) error {
+		migrateStateData(c.Data)
 		if _, exists := c.Data[initKey]; !exists {
 			c.Data[initKey] = "true"
 		}
@@ -239,9 +251,30 @@ func (s *StateManager) MarkAsInitialized(
 			c.Data[firstRunKey] = time.Now().UTC().Format(time.RFC3339)
 		}
 		c.Data[versionKey] = version
-		c.Data[stateSchemaVersionKey] = currentStateSchema
 		return nil
 	})
+}
+
+// migrateStateData is deliberately conservative: state keys are additive and
+// older installations can be upgraded by recording the current schema. A
+// future schema is preserved so an older binary never silently downgrades it.
+// Payload-specific migrations remain in their loaders (for example, the
+// incident loader handles the legacy map format).
+func migrateStateData(data map[string]string) {
+	if data == nil {
+		return
+	}
+	stored, err := strconv.Atoi(data[stateSchemaVersionKey])
+	if err != nil {
+		if data[stateSchemaVersionKey] == "" || stored < 1 {
+			data[stateSchemaVersionKey] = currentStateSchema
+		}
+		return
+	}
+	current, _ := strconv.Atoi(currentStateSchema)
+	if stored < current {
+		data[stateSchemaVersionKey] = currentStateSchema
+	}
 }
 
 // ── helpers ───────────────────────────────────────────────────

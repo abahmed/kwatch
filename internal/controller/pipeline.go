@@ -10,6 +10,8 @@ import (
 	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
 	"k8s.io/client-go/tools/cache"
 	"k8s.io/client-go/util/workqueue"
+
+	"github.com/abahmed/kwatch/internal/metrics"
 )
 
 // maxSyncRetries bounds how many times a failing key is requeued. With the
@@ -66,6 +68,12 @@ func (p *resourcePipeline) processNextItem(ctx context.Context) bool {
 		return false
 	}
 	defer p.queue.Done(key)
+	started := time.Now()
+	defer func() {
+		metrics.Default.ProcessingLatencyMs.Store(time.Since(started).Milliseconds())
+		metrics.Default.QueueDepth.Store(int64(p.queue.Len()))
+	}()
+	metrics.Default.QueueDepth.Store(int64(p.queue.Len()))
 	if err := p.syncFn(ctx, key); err != nil {
 		// Retry transient errors with backoff first. A still-failing resource
 		// then moves to a slow recovery cadence, while permanent errors are

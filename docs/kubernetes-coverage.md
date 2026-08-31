@@ -64,7 +64,7 @@ the categories below intentionally use different signal sources.
 - Application probes can enforce per-target HTTP latency warning/critical
   thresholds in addition to status-code checks, giving kwatch a lightweight
   SLO signal without a metrics server.
-- Autoscaling: HPA condition details remain informer-native, while VPA/KEDA
+- Autoscaling: HPA condition details remain informer-native, while
   objects are covered by the dynamic CRD status watcher whenever their CRDs
   expose failure-shaped conditions. Missing metrics APIs are treated as an
   unavailable optional capability, not as an application incident.

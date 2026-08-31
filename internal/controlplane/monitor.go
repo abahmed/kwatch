@@ -37,6 +37,7 @@ type EndpointStatus struct {
 }
 
 type Status struct {
+	State       string                    `json:"state"`
 	LastCheck   time.Time                 `json:"lastCheck"`
 	APIServer   EndpointStatus            `json:"apiServer"`
 	CoreDNS     EndpointStatus            `json:"coreDNS"`
@@ -90,7 +91,26 @@ func (m *Monitor) ControlPlaneStatus() interface{} {
 	for name, status := range m.status.Components {
 		copyStatus.Components[name] = status
 	}
+	copyStatus.State = controlPlaneState(copyStatus)
 	return copyStatus
+}
+
+func controlPlaneState(status Status) string {
+	if !status.APIServer.Supported && status.CoreDNS.Supported == false {
+		return "unavailable"
+	}
+	if !status.APIServer.Available || (status.CoreDNS.Supported && !status.CoreDNS.Available) {
+		return "partial"
+	}
+	for _, component := range status.Components {
+		if component.Supported && !component.Available {
+			return "partial"
+		}
+	}
+	if status.LastCheck.IsZero() {
+		return "unavailable"
+	}
+	return "healthy"
 }
 
 func (m *Monitor) check(ctx context.Context) {

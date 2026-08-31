@@ -105,7 +105,7 @@ func DetectServiceStatusIssue(svc *corev1.Service, now time.Time) *event.Signal 
 		return &event.Signal{Resource: "service", Namespace: svc.Namespace, PodName: svc.Name,
 			Owner: key, Reason: constant.ReasonLoadBalancerPending, Labels: svc.Labels, Hint: hint}
 	}
-	if svc.Spec.Type != corev1.ServiceTypeLoadBalancer || len(svc.Status.LoadBalancer.Ingress) > 0 {
+	if svc.Spec.Type != corev1.ServiceTypeLoadBalancer || serviceHasLoadBalancerAddress(svc) {
 		return nil
 	}
 	if now.Sub(svc.CreationTimestamp.Time) < time.Duration(defaultServiceSustainedSeconds)*time.Second {
@@ -114,6 +114,15 @@ func DetectServiceStatusIssue(svc *corev1.Service, now time.Time) *event.Signal 
 	return &event.Signal{Resource: "service", Namespace: svc.Namespace, PodName: svc.Name,
 		Owner: key, Reason: constant.ReasonLoadBalancerPending, Labels: svc.Labels,
 		Hint: fmt.Sprintf("LoadBalancer service %s has no provisioned ingress address", key)}
+}
+
+func serviceHasLoadBalancerAddress(svc *corev1.Service) bool {
+	for _, ingress := range svc.Status.LoadBalancer.Ingress {
+		if ingress.IP != "" || ingress.Hostname != "" {
+			return true
+		}
+	}
+	return false
 }
 
 func servicePortExpectations(svc *corev1.Service) (map[string]bool, map[string]bool) {

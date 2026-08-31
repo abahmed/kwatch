@@ -19,6 +19,7 @@ type Permission struct {
 }
 
 type Status struct {
+	State      string       `json:"state"`
 	LastCheck  time.Time    `json:"lastCheck"`
 	Available  bool         `json:"available"`
 	RBACDenied bool         `json:"rbacDenied"`
@@ -115,6 +116,7 @@ func (m *Monitor) Snapshot() Status {
 	defer m.mu.RUnlock()
 	status := m.status
 	status.Missing = append([]Permission(nil), m.status.Missing...)
+	status.State = securityState(status)
 	return status
 }
 
@@ -166,6 +168,19 @@ func (m *Monitor) check(ctx context.Context) {
 	m.mu.Lock()
 	m.status = status
 	m.mu.Unlock()
+}
+
+func securityState(status Status) string {
+	if status.RBACDenied {
+		return "rbacDenied"
+	}
+	if !status.Available {
+		return "unavailable"
+	}
+	if status.LastCheck.IsZero() {
+		return "unavailable"
+	}
+	return "healthy"
 }
 
 func (m *Monitor) allowed(ctx context.Context, permission Permission) (bool, error) {

@@ -111,6 +111,7 @@ type Controller struct {
 }
 
 type InformerStatus struct {
+	State                  string        `json:"state"`
 	LastEvent              time.Time     `json:"lastEvent"`
 	LastWatchError         time.Time     `json:"lastWatchError"`
 	WatchErrors            int64         `json:"watchErrors"`
@@ -126,7 +127,7 @@ type InformerStatus struct {
 func (c *Controller) InformerStatus() interface{} {
 	c.informerMu.RLock()
 	defer c.informerMu.RUnlock()
-	status := InformerStatus{LastEvent: c.informerLastEvent, LastWatchError: c.informerLastWatchError, WatchErrors: c.informerWatchErrors, Events: c.informerEvents, LastError: c.informerLastWatchMessage, WatchHealthy: c.informerWatchErrors == 0 || time.Since(c.informerLastWatchError) > 5*time.Minute, InformerCount: len(c.informers)}
+	status := InformerStatus{State: "unavailable", LastEvent: c.informerLastEvent, LastWatchError: c.informerLastWatchError, WatchErrors: c.informerWatchErrors, Events: c.informerEvents, LastError: c.informerLastWatchMessage, WatchHealthy: c.informerWatchErrors == 0 || time.Since(c.informerLastWatchError) > 5*time.Minute, InformerCount: len(c.informers)}
 	for _, informer := range c.informers {
 		if !informer.HasSynced() {
 			status.Unsynced++
@@ -137,6 +138,14 @@ func (c *Controller) InformerStatus() interface{} {
 	}
 	if !status.LastEvent.IsZero() {
 		status.EventAge = time.Since(status.LastEvent)
+	}
+	switch {
+	case status.Unsynced > 0:
+		status.State = "partial"
+	case status.InformerCount > 0 && !status.WatchHealthy:
+		status.State = "unavailable"
+	case status.InformerCount > 0:
+		status.State = "healthy"
 	}
 	return status
 }

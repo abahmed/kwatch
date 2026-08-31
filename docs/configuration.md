@@ -118,7 +118,7 @@ tests.
   with an error naming the unsynced resource, rather than sitting not-ready forever with only
   reflector errors in the log to explain why.
 - `GET /health` — `{"status": "ok"}`
-- `GET /metrics` — 📊 Prometheus metrics (incidents, notifications, baseline, dependency-graph size)
+- `GET /metrics` — 📊 Prometheus-format metrics (incidents, notifications, baseline, dependency-graph size/rebuild latency, queues, and informer activity). It does not require Prometheus to be installed.
 - `GET /incidents` — 📋 All active incidents (requires `diagnostics: true`)
 - `POST /test-alert` — 📤 Send a test alert (requires `diagnostics: true`)
 - `GET /deadletters` — 💀 Recent delivery failures (requires `diagnostics: true`)
@@ -158,10 +158,13 @@ missing; the controller continues with the remaining monitors. Metrics Server,
 Prometheus, a service mesh, and a cloud-provider API are not required for core
 Kubernetes object monitoring.
 
-The `/kubelet` health status also reports `state` as `healthy`, `partial`,
-`unavailable`, or `rbacDenied`, alongside Summary, cAdvisor, runtime, and node
-counts. Missing optional kubelet endpoints are visible without becoming
-fabricated incidents.
+The `/kubelet` health status reports `healthy`, `partial`, `unavailable`, or
+`rbacDenied`, alongside Summary, cAdvisor, runtime, and node counts. The
+`/controlplane`, `/security`, and `/informer` endpoints expose the same state
+vocabulary and detailed last-error fields. `partial` means some built-in
+capabilities are working; `rbacDenied` identifies an authorization gap rather
+than a Kubernetes failure. Missing optional endpoints are visible without
+becoming fabricated incidents.
 
 ## 🔄 Upgrader
 

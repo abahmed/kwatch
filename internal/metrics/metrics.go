@@ -25,6 +25,10 @@ type Registry struct {
 	ControlPlaneProbeErrors atomic.Int64
 	InformerWatchErrors     atomic.Int64
 	InformerEvents          atomic.Int64
+	QueueDepth              atomic.Int64
+	ProcessingLatencyMs     atomic.Int64
+	GraphRebuilds           atomic.Int64
+	GraphRebuildLatencyMs   atomic.Int64
 }
 
 var Default = &Registry{}
@@ -76,6 +80,18 @@ func (r *Registry) Handler() http.Handler {
 		lines = append(lines, "# HELP kwatch_informer_events_total Informer events received by kwatch")
 		lines = append(lines, "# TYPE kwatch_informer_events_total counter")
 		lines = append(lines, fmt.Sprintf("kwatch_informer_events_total %d", r.InformerEvents.Load()))
+		lines = append(lines, "# HELP kwatch_queue_depth Current aggregate workqueue depth")
+		lines = append(lines, "# TYPE kwatch_queue_depth gauge")
+		lines = append(lines, fmt.Sprintf("kwatch_queue_depth %d", r.QueueDepth.Load()))
+		lines = append(lines, "# HELP kwatch_processing_latency_milliseconds Latest work item processing latency")
+		lines = append(lines, "# TYPE kwatch_processing_latency_milliseconds gauge")
+		lines = append(lines, fmt.Sprintf("kwatch_processing_latency_milliseconds %d", r.ProcessingLatencyMs.Load()))
+		lines = append(lines, "# HELP kwatch_graph_rebuilds_total Dependency graph rebuild attempts")
+		lines = append(lines, "# TYPE kwatch_graph_rebuilds_total counter")
+		lines = append(lines, fmt.Sprintf("kwatch_graph_rebuilds_total %d", r.GraphRebuilds.Load()))
+		lines = append(lines, "# HELP kwatch_graph_rebuild_latency_milliseconds Latest dependency graph rebuild latency")
+		lines = append(lines, "# TYPE kwatch_graph_rebuild_latency_milliseconds gauge")
+		lines = append(lines, fmt.Sprintf("kwatch_graph_rebuild_latency_milliseconds %d", r.GraphRebuildLatencyMs.Load()))
 		lines = append(
 			lines,
 			"# HELP kwatch_notifications_total Total notification attempts",

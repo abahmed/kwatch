@@ -3,6 +3,7 @@ package controller
 import (
 	"fmt"
 	"strings"
+	"time"
 
 	coordinationv1 "k8s.io/api/coordination/v1"
 	corev1 "k8s.io/api/core/v1"
@@ -11,6 +12,7 @@ import (
 	"k8s.io/klog/v2"
 
 	kwcontext "github.com/abahmed/kwatch/internal/context"
+	"github.com/abahmed/kwatch/internal/metrics"
 )
 
 func (c *Controller) addPodToGraph(pod *corev1.Pod) {
@@ -214,6 +216,11 @@ func (c *Controller) buildGraph() {
 	if c.graph == nil {
 		return
 	}
+	started := time.Now()
+	metrics.Default.GraphRebuilds.Add(1)
+	defer func() {
+		metrics.Default.GraphRebuildLatencyMs.Store(time.Since(started).Milliseconds())
+	}()
 
 	next := c.graphBuilder(kwcontext.NewResourceGraph())
 	if err := next.buildGraphContents(); err != nil {
