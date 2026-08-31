@@ -16,6 +16,7 @@ import (
 	"k8s.io/client-go/tools/cache"
 
 	kwcontext "github.com/abahmed/kwatch/internal/context"
+	"github.com/abahmed/kwatch/internal/k8s"
 )
 
 var watchedResources = []struct {
@@ -57,6 +58,9 @@ func (m *Monitor) Start(ctx context.Context) error {
 			continue
 		}
 		informer := factory.ForResource(watched.gvr).Informer()
+		if err := informer.SetTransform(k8s.TrimManagedFields); err != nil {
+			return fmt.Errorf("networkgraph: set %s cache transform: %w", watched.gvr, err)
+		}
 		kind := watched.kind
 		if _, err := informer.AddEventHandler(cache.ResourceEventHandlerFuncs{
 			AddFunc:    func(obj interface{}) { m.rebuild(kind, obj) },

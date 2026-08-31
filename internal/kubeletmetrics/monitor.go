@@ -31,6 +31,7 @@ type Monitor struct {
 	failures   map[string]int
 	successes  map[string]int
 	stateSeen  map[string]time.Time
+	baselines  map[string]usageBaseline
 	now        func() time.Time
 	mu         sync.Mutex
 	endpoint   map[string]endpointStatus
@@ -50,6 +51,7 @@ type persistedState struct {
 	Failures  map[string]int            `json:"failures"`
 	Successes map[string]int            `json:"successes"`
 	StateSeen map[string]time.Time      `json:"stateSeen"`
+	Baselines map[string]usageBaseline  `json:"baselines,omitempty"`
 }
 
 type endpointStatus struct {
@@ -73,6 +75,12 @@ type metricSnapshot struct {
 	Periods   float64
 	RxErrors  uint64
 	TxErrors  uint64
+}
+
+type usageBaseline struct {
+	Percent float64   `json:"percent"`
+	Samples int       `json:"samples"`
+	Updated time.Time `json:"updated"`
 }
 
 type summary struct {
@@ -137,7 +145,7 @@ type networkStats struct {
 
 func New(client kubernetes.Interface, cfg config.KubeletTelemetryMonitor, correlator *correlation.Engine) *Monitor {
 	return &Monitor{client: client, cfg: cfg, correlator: correlator, previous: make(map[string]metricSnapshot),
-		failures: make(map[string]int), successes: make(map[string]int), stateSeen: make(map[string]time.Time), endpoint: make(map[string]endpointStatus), podCache: make(map[string]*corev1.Pod), now: time.Now}
+		failures: make(map[string]int), successes: make(map[string]int), stateSeen: make(map[string]time.Time), baselines: make(map[string]usageBaseline), endpoint: make(map[string]endpointStatus), podCache: make(map[string]*corev1.Pod), now: time.Now}
 }
 
 func (m *Monitor) Start(ctx context.Context) {
@@ -255,6 +263,9 @@ func (m *Monitor) loadState(ctx context.Context) {
 	if state.StateSeen != nil {
 		m.stateSeen = state.StateSeen
 	}
+	if state.Baselines != nil {
+		m.baselines = state.Baselines
+	}
 	m.mu.Unlock()
 }
 
@@ -268,6 +279,7 @@ func (m *Monitor) saveState(ctx context.Context) {
 		Failures:  cloneIntMap(m.failures),
 		Successes: cloneIntMap(m.successes),
 		StateSeen: cloneTimes(m.stateSeen),
+		Baselines: cloneUsageBaselines(m.baselines),
 	}
 	m.mu.Unlock()
 	data, err := json.Marshal(state)
@@ -278,6 +290,14 @@ func (m *Monitor) saveState(ctx context.Context) {
 
 func cloneMetricSnapshots(source map[string]metricSnapshot) map[string]metricSnapshot {
 	clone := make(map[string]metricSnapshot, len(source))
+	for key, value := range source {
+		clone[key] = value
+	}
+	return clone
+}
+
+func cloneUsageBaselines(source map[string]usageBaseline) map[string]usageBaseline {
+	clone := make(map[string]usageBaseline, len(source))
 	for key, value := range source {
 		clone[key] = value
 	}
@@ -487,6 +507,7 @@ func (m *Monitor) checkContainerUsage(pod *corev1.Pod, container containerSummar
 
 func (m *Monitor) reportUsage(pod *corev1.Pod, container string, percent, warning, critical float64, reason, usage, limit, unit string) {
 	key := correlation.BuildKey(pod.Namespace, pod.Namespace+"/"+pod.Name, reason, container)
+	warning, critical = m.adaptiveUsageThreshold(string(key), percent, warning, critical)
 	if percent < warning {
 		m.observe(string(key), false, func() {}, func() { m.correlator.MarkResolved(key) })
 		return
@@ -502,6 +523,43 @@ func (m *Monitor) reportUsage(pod *corev1.Pod, container string, percent, warnin
 				Hint: fmt.Sprintf("container %s %s usage is %.0f%% of its limit (%s/%s)", container, unit, percent, usage, limit)},
 				pod.Namespace+"/"+pod.Name, nil)
 		}, func() {})
+}
+
+// adaptiveUsageThreshold learns a workload's normal usage from kubelet
+// Summary samples. It only raises the warning threshold, requires several
+// samples, and never moves it into the critical boundary. Critical usage
+// remains governed by configuration, so a busy workload cannot hide an
+// imminent limit breach.
+func (m *Monitor) adaptiveUsageThreshold(key string, percent, warning, critical float64) (float64, float64) {
+	if warning <= 0 || critical <= warning || percent >= critical {
+		return warning, critical
+	}
+	now := m.now()
+	m.mu.Lock()
+	baseline := m.baselines[key]
+	if baseline.Samples == 0 {
+		baseline.Percent = percent
+	} else {
+		baseline.Percent = baseline.Percent*0.8 + percent*0.2
+	}
+	if baseline.Samples < 1000000 {
+		baseline.Samples++
+	}
+	baseline.Updated = now
+	m.baselines[key] = baseline
+	m.mu.Unlock()
+	if baseline.Samples < 5 || baseline.Percent <= warning {
+		return warning, critical
+	}
+	learned := baseline.Percent * 1.25
+	maxWarning := critical - 1
+	if learned > maxWarning {
+		learned = maxWarning
+	}
+	if learned > warning {
+		warning = learned
+	}
+	return warning, critical
 }
 
 func maxPSI(stats ...*psiStats) float64 {
@@ -807,6 +865,11 @@ func (m *Monitor) pruneSignalState() {
 			delete(m.stateSeen, key)
 			delete(m.failures, key)
 			delete(m.successes, key)
+		}
+	}
+	for key, baseline := range m.baselines {
+		if baseline.Updated.Before(cutoff) {
+			delete(m.baselines, key)
 		}
 	}
 }

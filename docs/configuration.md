@@ -119,6 +119,11 @@ tests.
   reflector errors in the log to explain why.
 - `GET /health` — `{"status": "ok"}`
 - `GET /metrics` — 📊 Prometheus-format metrics (incidents, notifications, baseline, dependency-graph size/rebuild latency, queues, and informer activity). It does not require Prometheus to be installed.
+
+Informer caches discard Kubernetes `managedFields` metadata at ingestion time
+to reduce memory on apply-heavy clusters. Labels, annotations, spec, status,
+resource versions, and deletion metadata remain intact for detection and graph
+analysis.
 - `GET /incidents` — 📋 All active incidents (requires `diagnostics: true`)
 - `POST /test-alert` — 📤 Send a test alert (requires `diagnostics: true`)
 - `GET /deadletters` — 💀 Recent delivery failures (requires `diagnostics: true`)
@@ -385,6 +390,11 @@ ports whose name starts with `http`). A target must fail
 `failureThreshold` consecutive checks before alerting and pass
 `recoveryThreshold` consecutive checks before resolving.
 
+Explicit `http`, `tcp`, and `dns` targets are the recommended low-noise mode.
+`autoServices` is opt-in and probes every advertised Service port; it uses
+paginated Kubernetes API lists so large clusters are not fetched as one large
+response.
+
 ```yaml
 activeProbeMonitor:
   enabled: true
@@ -444,6 +454,12 @@ failure rules. Use entries such as `Ready=False`, `Available=Unknown`,
 When health checks are enabled, `/kubelet` exposes the latest per-node
 availability counts for Summary, cAdvisor, and runtime endpoints, including
 RBAC-denied nodes.
+
+Kubelet usage thresholds learn a bounded per-container baseline after five
+healthy samples. The learned warning threshold can rise up to one percentage
+point below the configured critical threshold; the critical threshold itself
+never changes. Baselines are persisted when telemetry persistence is enabled
+and are discarded after the normal stale-state window.
 
 The optional `runtimeMetricsMonitor` requires an additional `metrics.k8s.io`
 read permission and a Metrics Server; the shipped RBAC deliberately does not

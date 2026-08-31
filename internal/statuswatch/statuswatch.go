@@ -23,6 +23,7 @@ import (
 	kwcontext "github.com/abahmed/kwatch/internal/context"
 	"github.com/abahmed/kwatch/internal/correlation"
 	"github.com/abahmed/kwatch/internal/event"
+	"github.com/abahmed/kwatch/internal/k8s"
 )
 
 var (
@@ -171,6 +172,9 @@ func (m *Monitor) Start(ctx context.Context) error {
 	m.ctx = ctx
 	factory := dynamicinformer.NewDynamicSharedInformerFactory(m.client, m.resync)
 	apiInformer := factory.ForResource(apiServiceGVR).Informer()
+	if err := apiInformer.SetTransform(k8s.TrimManagedFields); err != nil {
+		return fmt.Errorf("statuswatch: set api service cache transform: %w", err)
+	}
 	if _, err := apiInformer.AddEventHandler(cache.ResourceEventHandlerFuncs{
 		AddFunc: m.processAPIService, UpdateFunc: func(_, obj interface{}) { m.processAPIService(obj) },
 		DeleteFunc: m.resolveAPIService,
@@ -178,6 +182,9 @@ func (m *Monitor) Start(ctx context.Context) error {
 		return err
 	}
 	crdInformer := factory.ForResource(crdGVR).Informer()
+	if err := crdInformer.SetTransform(k8s.TrimManagedFields); err != nil {
+		return fmt.Errorf("statuswatch: set crd cache transform: %w", err)
+	}
 	if _, err := crdInformer.AddEventHandler(cache.ResourceEventHandlerFuncs{
 		AddFunc: m.watchCRD, UpdateFunc: func(_, obj interface{}) { m.watchCRD(obj) },
 		DeleteFunc: m.deleteCRD,
@@ -203,6 +210,10 @@ func (m *Monitor) startStaticStatusInformers(factory dynamicinformer.DynamicShar
 			continue
 		}
 		informer := factory.ForResource(watched.gvr).Informer()
+		if err := informer.SetTransform(k8s.TrimManagedFields); err != nil {
+			klog.ErrorS(err, "statuswatch: set status cache transform", "resource", watched.gvr)
+			continue
+		}
 		if _, err := informer.AddEventHandler(cache.ResourceEventHandlerFuncs{
 			AddFunc:    func(obj interface{}) { m.processStatic(obj, watched) },
 			UpdateFunc: func(_, obj interface{}) { m.processStatic(obj, watched) },
@@ -331,12 +342,20 @@ func (m *Monitor) resolveStatic(obj interface{}, watched staticWatch) {
 
 func (m *Monitor) startAdmissionInformers(factory dynamicinformer.DynamicSharedInformerFactory) {
 	policyInformer := factory.ForResource(validatingAdmissionPolicyGVR).Informer()
+	if err := policyInformer.SetTransform(k8s.TrimManagedFields); err != nil {
+		klog.ErrorS(err, "statuswatch: set policy cache transform")
+		return
+	}
 	if _, err := policyInformer.AddEventHandler(cache.ResourceEventHandlerFuncs{
 		AddFunc: m.processAdmissionPolicy, UpdateFunc: func(_, obj interface{}) { m.processAdmissionPolicy(obj) }, DeleteFunc: m.deleteAdmissionPolicy,
 	}); err != nil {
 		klog.ErrorS(err, "statuswatch: register admission policy informer")
 	}
 	bindingInformer := factory.ForResource(validatingAdmissionBindingGVR).Informer()
+	if err := bindingInformer.SetTransform(k8s.TrimManagedFields); err != nil {
+		klog.ErrorS(err, "statuswatch: set binding cache transform")
+		return
+	}
 	if _, err := bindingInformer.AddEventHandler(cache.ResourceEventHandlerFuncs{
 		AddFunc: m.processAdmissionBinding, UpdateFunc: func(_, obj interface{}) { m.processAdmissionBinding(obj) }, DeleteFunc: m.deleteAdmissionBinding,
 	}); err != nil {
@@ -547,6 +566,10 @@ func (m *Monitor) watchVersion(gvr schema.GroupVersionResource) {
 	factory := dynamicinformer.NewDynamicSharedInformerFactory(m.client, m.resync)
 	m.mu.Unlock()
 	informer := factory.ForResource(gvr).Informer()
+	if err := informer.SetTransform(k8s.TrimManagedFields); err != nil {
+		klog.ErrorS(err, "statuswatch: set CRD cache transform", "resource", gvr)
+		return
+	}
 	_, err := informer.AddEventHandler(cache.ResourceEventHandlerFuncs{
 		AddFunc:    m.processCR,
 		UpdateFunc: func(_, obj interface{}) { m.processCR(obj) },

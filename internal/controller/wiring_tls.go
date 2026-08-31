@@ -31,6 +31,7 @@ func (c *Controller) wireTLS(
 		if len(scope.namespaces) == 1 {
 			opts = append(opts, informers.WithNamespace(scope.namespaces[0]))
 		}
+		opts = append(opts, informerMemoryOptions()...)
 		tf := informers.NewSharedInformerFactoryWithOptions(
 			client,
 			resync,
@@ -51,6 +52,7 @@ func (c *Controller) wireTLS(
 				}),
 				informers.WithNamespace(ns),
 			}
+			opts = append(opts, informerMemoryOptions()...)
 			tf := informers.NewSharedInformerFactoryWithOptions(
 				client,
 				resync,

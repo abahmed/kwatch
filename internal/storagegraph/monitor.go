@@ -19,6 +19,7 @@ import (
 	kwcontext "github.com/abahmed/kwatch/internal/context"
 	"github.com/abahmed/kwatch/internal/correlation"
 	"github.com/abahmed/kwatch/internal/event"
+	"github.com/abahmed/kwatch/internal/k8s"
 )
 
 var (
@@ -67,6 +68,9 @@ func (m *Monitor) Start(ctx context.Context) error {
 			continue
 		}
 		informer := factory.ForResource(watched.gvr).Informer()
+		if err := informer.SetTransform(k8s.TrimManagedFields); err != nil {
+			return fmt.Errorf("storagegraph: set %s cache transform: %w", watched.gvr, err)
+		}
 		if _, err := informer.AddEventHandler(cache.ResourceEventHandlerFuncs{
 			AddFunc: watched.fn,
 			UpdateFunc: func(_, obj interface{}) {

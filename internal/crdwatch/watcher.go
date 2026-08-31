@@ -17,6 +17,7 @@ import (
 	"k8s.io/klog/v2"
 
 	"github.com/abahmed/kwatch/internal/config"
+	"github.com/abahmed/kwatch/internal/k8s"
 )
 
 var gvr = schema.GroupVersionResource{
@@ -70,6 +71,9 @@ func (w *Watcher) Start(ctx context.Context) error {
 
 	factory := dynamicinformer.NewFilteredDynamicSharedInformerFactory(dc, w.resync, w.namespace, nil)
 	inf := factory.ForResource(gvr).Informer()
+	if err := inf.SetTransform(k8s.TrimManagedFields); err != nil {
+		return fmt.Errorf("crdwatch: set cache transform: %w", err)
+	}
 
 	if _, err := inf.AddEventHandler(cache.ResourceEventHandlerFuncs{
 		AddFunc:    w.changed,

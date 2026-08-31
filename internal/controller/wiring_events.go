@@ -42,6 +42,7 @@ func (c *Controller) wireEvents(
 		if len(scope.namespaces) == 1 {
 			opts = append(opts, informers.WithNamespace(scope.namespaces[0]))
 		}
+		opts = append(opts, informerMemoryOptions()...)
 		ef := informers.NewSharedInformerFactoryWithOptions(
 			client,
 			resync,
@@ -74,6 +75,7 @@ func (c *Controller) wireEvents(
 				}),
 				informers.WithNamespace(ns),
 			}
+			opts = append(opts, informerMemoryOptions()...)
 			ef := informers.NewSharedInformerFactoryWithOptions(
 				client,
 				resync,

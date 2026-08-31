@@ -1,8 +1,10 @@
 package controller
 
 import (
+	"strings"
 	"time"
 
+	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/client-go/informers"
@@ -82,21 +84,21 @@ func (c *Controller) wireService(cfg *config.Config, fs factorySet) {
 				if cfg.ServiceMonitor.Enabled {
 					c.service.enqueue(obj)
 				}
-				c.enqueueServiceDependents()
+				c.enqueueServiceDependents(obj)
 			},
 			UpdateFunc: func(_, obj interface{}) {
 				c.recordChange(kwcontext.ChangeUpdate, "service", obj)
 				if cfg.ServiceMonitor.Enabled {
 					c.service.enqueue(obj)
 				}
-				c.enqueueServiceDependents()
+				c.enqueueServiceDependents(obj)
 			},
 			DeleteFunc: func(obj interface{}) {
 				c.recordChange(kwcontext.ChangeDelete, "service", obj)
 				if cfg.ServiceMonitor.Enabled {
 					c.service.enqueue(obj)
 				}
-				c.enqueueServiceDependents()
+				c.enqueueServiceDependents(obj)
 			},
 		})
 	}
@@ -111,13 +113,17 @@ func (c *Controller) wireService(cfg *config.Config, fs factorySet) {
 // enqueueServiceDependents rechecks objects whose detector reads the Service
 // lister. A Service change can resolve an Ingress or admission-webhook issue
 // without changing the referencing object itself.
-func (c *Controller) enqueueServiceDependents() {
-	if c.ingress.startWorkers && c.ingressLister != nil {
-		if items, err := c.ingressLister.Ingresses(metav1.NamespaceAll).List(labels.Everything()); err == nil {
-			for _, item := range items {
-				c.ingress.enqueue(item)
+func (c *Controller) enqueueServiceDependents(obj interface{}) {
+	if c.ingress.startWorkers && c.graph != nil {
+		if service, ok := obj.(*corev1.Service); ok {
+			for _, key := range c.graph.DependentsByType("service", service.Namespace, service.Name, "ingress") {
+				c.ingress.enqueue(strings.TrimPrefix(key, "ingress/"))
 			}
+		} else {
+			c.enqueueAllIngresses()
 		}
+	} else if c.ingress.startWorkers && c.ingressLister != nil {
+		c.enqueueAllIngresses()
 	}
 	if c.mwc.startWorkers && c.mwcLister != nil {
 		if items, err := c.mwcLister.List(labels.Everything()); err == nil {
@@ -131,6 +137,17 @@ func (c *Controller) enqueueServiceDependents() {
 			for _, item := range items {
 				c.vwc.enqueue(item)
 			}
+		}
+	}
+}
+
+func (c *Controller) enqueueAllIngresses() {
+	if c.ingressLister == nil {
+		return
+	}
+	if items, err := c.ingressLister.Ingresses(metav1.NamespaceAll).List(labels.Everything()); err == nil {
+		for _, item := range items {
+			c.ingress.enqueue(item)
 		}
 	}
 }
@@ -188,10 +205,14 @@ func (c *Controller) wireControlPlane(
 	client kubernetes.Interface,
 	resync time.Duration,
 ) informers.SharedInformerFactory {
+	opts := append(
+		[]informers.SharedInformerOption{informers.WithNamespace("kube-system")},
+		informerMemoryOptions()...,
+	)
 	cpFactory := informers.NewSharedInformerFactoryWithOptions(
 		client,
 		resync,
-		informers.WithNamespace("kube-system"),
+		opts...,
 	)
 	cpPodInformer := cpFactory.Core().V1().Pods().Informer()
 

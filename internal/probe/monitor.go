@@ -96,12 +96,23 @@ func (m *Monitor) check(ctx context.Context) {
 }
 
 func (m *Monitor) checkServices(ctx context.Context) {
-	services, err := m.kclient.CoreV1().Services("").List(ctx, metav1.ListOptions{})
-	if err != nil {
-		return
-	}
-	for i := range services.Items {
-		m.checkService(ctx, &services.Items[i])
+	const pageSize int64 = 500
+	continueToken := ""
+	for {
+		services, err := m.kclient.CoreV1().Services("").List(ctx, metav1.ListOptions{
+			Limit:    pageSize,
+			Continue: continueToken,
+		})
+		if err != nil {
+			return
+		}
+		for i := range services.Items {
+			m.checkService(ctx, &services.Items[i])
+		}
+		if services.Continue == "" || ctx.Err() != nil {
+			return
+		}
+		continueToken = services.Continue
 	}
 }
 
