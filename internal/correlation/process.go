@@ -137,13 +137,14 @@ func (e *Engine) newIncident(
 ) *model.Incident {
 	inc := &model.Incident{
 		Subject: model.Subject{
-			ID:        fmt.Sprintf("%08x", crc32.ChecksumIEEE([]byte(key))),
-			Key:       key,
-			Reason:    ev.Reason,
-			Namespace: ev.Namespace,
-			Resource:  res,
-			Name:      owner,
-			NodeName:  ev.NodeName,
+			ID:          fmt.Sprintf("%08x", crc32.ChecksumIEEE([]byte(key))),
+			Fingerprint: StableFingerprint(ev, owner, cs),
+			Key:         key,
+			Reason:      ev.Reason,
+			Namespace:   ev.Namespace,
+			Resource:    res,
+			Name:        owner,
+			NodeName:    ev.NodeName,
 		},
 		Status: model.Status{
 			Count:      1,

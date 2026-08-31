@@ -37,14 +37,15 @@ func (rb *ReportBuilder) Build(
 	ins *insight.Insight,
 ) *Report {
 	r := &Report{
-		Action:    actionString(action),
-		Reason:    inc.Reason,
-		Severity:  string(inc.Severity),
-		Resource:  inc.Resource,
-		Name:      inc.Name,
-		Namespace: inc.Namespace,
-		Cluster:   rb.cluster,
-		Runbook:   inc.Runbook,
+		Action:      actionString(action),
+		Reason:      inc.Reason,
+		Severity:    string(inc.Severity),
+		Resource:    inc.Resource,
+		Name:        inc.Name,
+		Namespace:   inc.Namespace,
+		Cluster:     rb.cluster,
+		Runbook:     inc.Runbook,
+		Fingerprint: inc.Fingerprint,
 	}
 
 	r.Summary = rb.buildSummary(inc, action)
@@ -53,6 +54,7 @@ func (rb *ReportBuilder) Build(
 	rb.populateDiagnosis(r, inc, ins)
 	rb.populateEvidence(r, inc)
 	rb.populateChanges(r, ins)
+	r.Timeline = rb.buildTimeline(inc, ins, action)
 	rb.populateSuppressed(r, inc)
 	rb.populateTypeSpecific(r, inc)
 

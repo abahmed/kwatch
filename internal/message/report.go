@@ -16,12 +16,14 @@ type Report struct {
 	Summary SummarySection
 
 	// Conditionally populated
-	Identity  *IdentitySection
-	State     *StateSection
-	Diagnosis *DiagnosisSection
-	Evidence  *EvidenceSection
-	Changes   *ChangesSection
-	Runbook   string
+	Identity    *IdentitySection
+	State       *StateSection
+	Diagnosis   *DiagnosisSection
+	Evidence    *EvidenceSection
+	Changes     *ChangesSection
+	Runbook     string
+	Fingerprint string
+	Timeline    string
 
 	// Type-specific sections (populated only for relevant reasons)
 	OOM     *OOMSection

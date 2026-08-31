@@ -80,6 +80,7 @@ func TestTextRendererReadsTopDown(t *testing.T) {
 	// The state message leads the natural-language explanation and is not
 	// repeated in the hint.
 	assert.True(t, strings.HasPrefix(lines[1], "pod stopped being ready 2m ago"))
+	assert.Contains(t, out, "Timeline:")
 	assert.Equal(t, 1, strings.Count(out, "pod stopped being ready"))
 	// Diagnosis comes before the hint and the details without exposing a form.
 	cause, hint, meta := strings.Index(

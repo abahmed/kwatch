@@ -79,33 +79,6 @@ func chunkedSections(title, text string) []slackClient.Block {
 	return blocks
 }
 
-func diagnosisFromParts(
-	cause, pattern, impact string,
-	changes []string,
-) (slackClient.Block, bool) {
-	var lines []string
-	if cause != "" {
-		line := "• *Why:* " + cause
-		if pattern != "" {
-			line += fmt.Sprintf(" _(%s)_", pattern)
-		}
-		lines = append(lines, line)
-	}
-	if impact != "" {
-		lines = append(lines, "• *Impact:* "+impact)
-	}
-	if len(changes) > 0 {
-		lines = append(
-			lines,
-			"• *A recent change may be related:* "+strings.Join(changes, "; "),
-		)
-	}
-	if len(lines) == 0 {
-		return nil, false
-	}
-	return markdownSection("🧠 *Diagnosis*\n" + strings.Join(lines, "\n")), true
-}
-
 // contextLine renders a compact "meta" strip: small grey text under the
 // message, where Slack puts things that support the alert without competing
 // with it.

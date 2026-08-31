@@ -224,6 +224,9 @@ func (e *Engine) RestoreIncidents(
 				continue
 			}
 			clone := inc.Clone()
+			if clone.Fingerprint == "" {
+				clone.Fingerprint = legacyFingerprint(clone.Key)
+			}
 			clone.LastSeen = now
 			clone.LastUpdate = now
 			clone.NotifiedSig = notifSig(clone)
@@ -239,6 +242,9 @@ func (e *Engine) RestoreIncidents(
 			continue
 		}
 		clone := inc.Clone()
+		if clone.Fingerprint == "" {
+			clone.Fingerprint = legacyFingerprint(clone.Key)
+		}
 		clone.LastSeen = now
 		clone.LastUpdate = now
 		clone.NotifiedSig = notifSig(clone)

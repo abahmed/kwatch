@@ -14,6 +14,7 @@ import (
 	kwcontext "github.com/abahmed/kwatch/internal/context"
 	"github.com/abahmed/kwatch/internal/event"
 	"github.com/abahmed/kwatch/internal/insight"
+	"github.com/abahmed/kwatch/internal/message"
 	"github.com/abahmed/kwatch/internal/model"
 )
 
@@ -697,9 +698,9 @@ func TestIncidentBlocksRenderDiagnosis(t *testing.T) {
 		},
 	}
 	text := flatten(buildIncidentBlocksWithInsight(inc, app, ins))
-	assert.Contains(t, text, "Diagnosis")
+	assert.NotContains(t, text, "Why:")
 	assert.Contains(t, text, "node ip-10-0-81-7 may be unhealthy")
-	assert.Contains(t, text, "node_failure")
+	assert.Contains(t, text, message.Narrative(reportFor(inc, model.ActionCreate, ins, app)))
 	assert.Contains(t, text, "12 pods on this node")
 	assert.Contains(t, text, "configmap dev/api-config update")
 
