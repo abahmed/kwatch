@@ -43,6 +43,10 @@ the categories below intentionally use different signal sources.
   Admission namespace labels, and ValidatingAdmissionPolicy type-checking
   warnings or bindings that reference a missing policy. These signals preserve
   the exact object and reference name so the alert points to the correction.
+- Built-in platform APIs outside the main workload pipelines: MutatingAdmissionPolicy,
+  CertificateSigningRequest/PodCertificateRequest, legacy Endpoints, and API Priority and Fairness
+  (FlowSchema/PriorityLevelConfiguration) failure conditions are watched when
+  their API and feature gate are present.
 - Control plane: active `/readyz` availability and latency checks for the API
   server, health endpoint checks for scheduler/controller-manager/etcd when
   their Pods are visible, and a diagnostic informer status with received-event
@@ -92,6 +96,18 @@ subresource is watched for failure-shaped `Ready=False`, `Available=False`,
 are ignored, and messages/reasons are preserved as alert evidence.
 These rules can be customized through `crd.failureConditions` for operators
 with different condition semantics.
+
+Built-in APIs introduced in newer Kubernetes versions or protected by feature
+gates are capability-aware: if the API is not served, its watcher remains
+inactive without creating a false incident.
+
+Some built-in APIs intentionally remain event/relationship based rather than
+being treated as condition resources: DRA `ResourceClaim`/`ResourceSlice`,
+`CSINode`, `VolumeAttributesClass`, and legacy `ReplicationController` do not
+provide a stable, universal failure condition that can be alerted on safely.
+Their scheduling, driver, and lifecycle failures are still covered when they
+surface through Pod/Node status or Kubernetes Warning Events. Legacy `Endpoints`
+is deprecated and EndpointSlice remains the authoritative service signal.
 
 Root-cause analysis also follows projected ConfigMaps/Secrets, image pull
 Secrets, CSI drivers, Ingress TLS Secrets, PV StorageClasses, owner chains,

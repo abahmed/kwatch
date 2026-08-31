@@ -2,13 +2,17 @@ package statuswatch
 
 import (
 	"context"
+	"crypto/x509"
+	"encoding/pem"
 	"fmt"
 	"strings"
 	"sync"
 	"time"
 
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime/schema"
+	"k8s.io/client-go/discovery"
 	"k8s.io/client-go/dynamic"
 	"k8s.io/client-go/dynamic/dynamicinformer"
 	"k8s.io/client-go/rest"
@@ -26,13 +30,45 @@ var (
 	crdGVR                        = schema.GroupVersionResource{Group: "apiextensions.k8s.io", Version: "v1", Resource: "customresourcedefinitions"}
 	validatingAdmissionPolicyGVR  = schema.GroupVersionResource{Group: "admissionregistration.k8s.io", Version: "v1", Resource: "validatingadmissionpolicies"}
 	validatingAdmissionBindingGVR = schema.GroupVersionResource{Group: "admissionregistration.k8s.io", Version: "v1", Resource: "validatingadmissionpolicybindings"}
+	mutatingAdmissionPolicyGVR    = schema.GroupVersionResource{Group: "admissionregistration.k8s.io", Version: "v1", Resource: "mutatingadmissionpolicies"}
+	mutatingAdmissionBindingGVR   = schema.GroupVersionResource{Group: "admissionregistration.k8s.io", Version: "v1", Resource: "mutatingadmissionpolicybindings"}
+	certificateRequestGVR         = schema.GroupVersionResource{Group: "certificates.k8s.io", Version: "v1", Resource: "certificatesigningrequests"}
+	podCertificateRequestGVR      = schema.GroupVersionResource{Group: "certificates.k8s.io", Version: "v1", Resource: "podcertificaterequests"}
+	flowSchemaGVR                 = schema.GroupVersionResource{Group: "flowcontrol.apiserver.k8s.io", Version: "v1", Resource: "flowschemas"}
+	priorityLevelGVR              = schema.GroupVersionResource{Group: "flowcontrol.apiserver.k8s.io", Version: "v1", Resource: "prioritylevelconfigurations"}
+	legacyEndpointsGVR            = schema.GroupVersionResource{Group: "", Version: "v1", Resource: "endpoints"}
 )
+
+type staticWatch struct {
+	gvr      schema.GroupVersionResource
+	resource string
+	rules    map[string]map[string]bool
+}
+
+var staticStatusWatches = []staticWatch{
+	{gvr: mutatingAdmissionPolicyGVR, resource: "mutatingadmissionpolicy", rules: defaultConditionRulesWithAdmission()},
+	{gvr: mutatingAdmissionBindingGVR, resource: "mutatingadmissionpolicybinding", rules: defaultConditionRulesWithAdmission()},
+	{gvr: certificateRequestGVR, resource: "certificatesigningrequest", rules: map[string]map[string]bool{
+		"Denied": {"True": true}, "Failed": {"True": true},
+	}},
+	{gvr: podCertificateRequestGVR, resource: "podcertificaterequest", rules: map[string]map[string]bool{
+		"Denied": {"True": true}, "Failed": {"True": true},
+	}},
+	{gvr: flowSchemaGVR, resource: "flowschema", rules: map[string]map[string]bool{
+		"Dangling": {"True": true}, "Invalid": {"True": true},
+	}},
+	{gvr: priorityLevelGVR, resource: "prioritylevelconfiguration", rules: map[string]map[string]bool{
+		"Dangling": {"True": true}, "Invalid": {"True": true},
+	}},
+	{gvr: legacyEndpointsGVR, resource: "endpoints"},
+}
 
 // Monitor watches APIService and discovered CRD instances. It only treats
 // well-known failure-shaped conditions as incidents; arbitrary informational
 // status fields are deliberately ignored to prevent operator noise.
 type Monitor struct {
 	client            dynamic.Interface
+	discoveryClient   discovery.DiscoveryInterface
 	correlator        *correlation.Engine
 	resync            time.Duration
 	ctx               context.Context
@@ -72,8 +108,12 @@ func New(restConfig *rest.Config, correlator *correlation.Engine, resync time.Du
 	if err != nil {
 		return nil, fmt.Errorf("statuswatch: create dynamic client: %w", err)
 	}
+	discoveryClient, err := discovery.NewDiscoveryClientForConfig(restConfig)
+	if err != nil {
+		return nil, fmt.Errorf("statuswatch: create discovery client: %w", err)
+	}
 	return &Monitor{
-		client: client, correlator: correlator, resync: resync,
+		client: client, discoveryClient: discoveryClient, correlator: correlator, resync: resync,
 		factories: make(map[string]dynamicinformer.DynamicSharedInformerFactory),
 		stops:     make(map[string]context.CancelFunc), crdVersions: make(map[string]map[string]struct{}),
 		conditionRules:    defaultConditionRules(),
@@ -145,11 +185,148 @@ func (m *Monitor) Start(ctx context.Context) error {
 		return err
 	}
 	m.startAdmissionInformers(factory)
+	m.startStaticStatusInformers(factory)
 	factory.Start(ctx.Done())
 	if !cache.WaitForCacheSync(ctx.Done(), apiInformer.HasSynced, crdInformer.HasSynced) {
 		return fmt.Errorf("statuswatch: informer sync failed")
 	}
 	return nil
+}
+
+// startStaticStatusInformers covers built-in APIs that are not represented by
+// the typed controller pipelines but expose durable status conditions. Missing
+// APIs (older clusters or disabled feature gates) simply produce no objects.
+func (m *Monitor) startStaticStatusInformers(factory dynamicinformer.DynamicSharedInformerFactory) {
+	for _, watched := range staticStatusWatches {
+		watched := watched
+		if watched.resource == "endpoints" && m.endpointSlicesAvailable() {
+			continue
+		}
+		informer := factory.ForResource(watched.gvr).Informer()
+		if _, err := informer.AddEventHandler(cache.ResourceEventHandlerFuncs{
+			AddFunc:    func(obj interface{}) { m.processStatic(obj, watched) },
+			UpdateFunc: func(_, obj interface{}) { m.processStatic(obj, watched) },
+			DeleteFunc: func(obj interface{}) { m.resolveStatic(obj, watched) },
+		}); err != nil {
+			klog.ErrorS(err, "statuswatch: register built-in status informer", "resource", watched.gvr)
+		}
+	}
+}
+
+func (m *Monitor) endpointSlicesAvailable() bool {
+	_, err := m.discoveryClient.ServerResourcesForGroupVersion("discovery.k8s.io/v1")
+	return err == nil
+}
+
+func (m *Monitor) processStatic(obj interface{}, watched staticWatch) {
+	u, ok := obj.(*unstructured.Unstructured)
+	if !ok || (m.namespaceAllowed != nil && !m.namespaceAllowed(u.GetNamespace())) {
+		return
+	}
+	owner := resourceOwner(u)
+	var sig *event.Signal
+	evaluated := true
+	switch watched.resource {
+	case "endpoints":
+		sig, evaluated = m.legacyEndpointSignal(u)
+	case "certificatesigningrequest", "podcertificaterequest":
+		sig = certificateSignal(u, watched.resource, owner)
+	default:
+		sig = failureSignal(u, watched.resource, owner, watched.rules)
+	}
+	if !evaluated {
+		return
+	}
+	if sig != nil {
+		m.correlator.Process(event.Event{Resource: sig.Resource, Namespace: sig.Namespace, PodName: sig.PodName, Reason: sig.Reason, Hint: sig.Hint, Labels: sig.Labels}, sig.Owner, nil)
+	} else {
+		m.correlator.MarkResolved(correlation.BuildKey(u.GetNamespace(), owner, reasonFor(watched.resource), ""))
+	}
+}
+
+func (m *Monitor) legacyEndpointSignal(u *unstructured.Unstructured) (*event.Signal, bool) {
+	if u.GetNamespace() == "" {
+		return nil, true
+	}
+	service, err := m.client.Resource(schema.GroupVersionResource{Group: "", Version: "v1", Resource: "services"}).Namespace(u.GetNamespace()).Get(m.ctx, u.GetName(), metav1.GetOptions{})
+	if err != nil {
+		return nil, false
+	}
+	selector, _, _ := unstructured.NestedStringMap(service.Object, "spec", "selector")
+	clusterIP, _, _ := unstructured.NestedString(service.Object, "spec", "clusterIP")
+	typeName, _, _ := unstructured.NestedString(service.Object, "spec", "type")
+	if len(selector) == 0 || clusterIP == "" || clusterIP == "None" || typeName == "ExternalName" {
+		return nil, true
+	}
+	subsets, _, _ := unstructured.NestedSlice(u.Object, "subsets")
+	for _, raw := range subsets {
+		subset, ok := raw.(map[string]interface{})
+		if !ok {
+			continue
+		}
+		addresses, _, _ := unstructured.NestedSlice(subset, "addresses")
+		if len(addresses) > 0 {
+			return nil, true
+		}
+	}
+	key := u.GetNamespace() + "/" + u.GetName()
+	return &event.Signal{Resource: "service", Namespace: u.GetNamespace(), PodName: u.GetName(), Owner: key, Reason: constant.ReasonServiceNoEndpoints, Labels: u.GetLabels(), Hint: fmt.Sprintf("legacy Endpoints object %s has no ready addresses", key)}, true
+}
+
+func certificateSignal(u *unstructured.Unstructured, resource, owner string) *event.Signal {
+	rules := map[string]map[string]bool{"Denied": {"True": true}, "Failed": {"True": true}}
+	if sig := failureSignal(u, resource, owner, rules); sig != nil {
+		return sig
+	}
+	conditions, _, _ := unstructured.NestedSlice(u.Object, "status", "conditions")
+	approved := false
+	for _, raw := range conditions {
+		condition, ok := raw.(map[string]interface{})
+		if !ok {
+			continue
+		}
+		typ, _ := condition["type"].(string)
+		status, _ := condition["status"].(string)
+		if typ == "Approved" && status == "True" {
+			approved = true
+		}
+	}
+	creation := u.GetCreationTimestamp()
+	if !approved || creation.IsZero() || time.Since(creation.Time) < 10*time.Minute {
+		return nil
+	}
+	certificateField := "certificate"
+	if resource == "podcertificaterequest" {
+		certificateField = "certificateChain"
+	}
+	certificate, _, _ := unstructured.NestedString(u.Object, "status", certificateField)
+	if certificate == "" {
+		return &event.Signal{Resource: resource, Namespace: u.GetNamespace(), PodName: u.GetName(), Owner: owner, Reason: reasonFor(resource), Labels: u.GetLabels(), Hint: "certificate request was approved but the signer has not issued a certificate after 10 minutes"}
+	}
+	block, _ := pem.Decode([]byte(certificate))
+	if block == nil {
+		return nil
+	}
+	cert, err := x509.ParseCertificate(block.Bytes)
+	if err != nil || time.Until(cert.NotAfter) > 7*24*time.Hour {
+		return nil
+	}
+	return &event.Signal{Resource: resource, Namespace: u.GetNamespace(), PodName: u.GetName(), Owner: owner, Reason: reasonFor(resource), Labels: u.GetLabels(), Hint: fmt.Sprintf("issued certificate expires at %s", cert.NotAfter.UTC().Format(time.RFC3339))}
+}
+
+func (m *Monitor) resolveStatic(obj interface{}, watched staticWatch) {
+	key, err := cache.DeletionHandlingMetaNamespaceKeyFunc(obj)
+	if err != nil {
+		return
+	}
+	namespace, name, err := cache.SplitMetaNamespaceKey(key)
+	if err != nil {
+		namespace, name = "", key
+	}
+	if m.namespaceAllowed != nil && !m.namespaceAllowed(namespace) {
+		return
+	}
+	m.correlator.MarkResolved(correlation.BuildKey(namespace, resourceOwnerParts(namespace, name), reasonFor(watched.resource), ""))
 }
 
 func (m *Monitor) startAdmissionInformers(factory dynamicinformer.DynamicSharedInformerFactory) {
@@ -532,6 +709,18 @@ func failureSignal(u *unstructured.Unstructured, resource, owner string, rules m
 func reasonFor(resource string) string {
 	if resource == "apiservice" {
 		return constant.ReasonAPIServiceFailure
+	}
+	switch resource {
+	case "mutatingadmissionpolicy", "mutatingadmissionpolicybinding":
+		return constant.ReasonMutatingAdmissionPolicyInvalid
+	case "certificatesigningrequest":
+		return constant.ReasonCertificateSigningRequestFailure
+	case "flowschema", "prioritylevelconfiguration":
+		return constant.ReasonAPIPriorityAndFairnessFailure
+	case "endpoints":
+		return constant.ReasonServiceNoEndpoints
+	case "resourceclaim":
+		return constant.ReasonResourceClaimFailure
 	}
 	return constant.ReasonCustomResourceFailure
 }
