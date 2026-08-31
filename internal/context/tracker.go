@@ -4,6 +4,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/abahmed/kwatch/internal/change"
 	"github.com/abahmed/kwatch/internal/clock"
 )
 
@@ -29,12 +30,16 @@ func (t ChangeType) String() string {
 }
 
 type Change struct {
-	Resource  string
-	Namespace string
-	Name      string
-	Type      ChangeType
-	Timestamp time.Time
-	Detail    string
+	Resource   string
+	Namespace  string
+	Name       string
+	Type       ChangeType
+	Timestamp  time.Time
+	Detail     string
+	Fields     []change.FieldChange
+	BeforeHash string
+	AfterHash  string
+	Additional int
 }
 
 type ChangeTracker struct {

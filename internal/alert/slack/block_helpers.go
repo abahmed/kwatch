@@ -97,7 +97,7 @@ func diagnosisFromParts(
 	if len(changes) > 0 {
 		lines = append(
 			lines,
-			"• *Changed recently:* "+strings.Join(changes, "; "),
+			"• *A recent change may be related:* "+strings.Join(changes, "; "),
 		)
 	}
 	if len(lines) == 0 {

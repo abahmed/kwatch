@@ -244,11 +244,15 @@ func (rb *ReportBuilder) populateChanges(r *Report, ins *insight.Insight) {
 			ref = c.Namespace + "/" + c.Name
 		}
 		items = append(items, ChangeItem{
-			Resource:  c.Resource,
-			Reference: ref,
-			Type:      fmt.Sprintf("%v", c.Type),
-			Age:       ageOf(c.Timestamp, rb.now()),
+			Resource:   c.Resource,
+			Reference:  ref,
+			Type:       fmt.Sprintf("%v", c.Type),
+			Age:        ageOf(c.Timestamp, rb.now()),
+			Additional: c.Additional,
 		})
+		for _, field := range c.Fields {
+			items[len(items)-1].Fields = append(items[len(items)-1].Fields, FieldChange{Path: field.Path, Before: field.Before, After: field.After, Action: field.Action})
+		}
 	}
 
 	if len(items) > 0 {

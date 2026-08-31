@@ -417,6 +417,6 @@ func TestFormatChanges(t *testing.T) {
 	assert.Contains(
 		t,
 		msg,
-		"Changed recently: configmap ns1/cm1 updated 3m ago",
+		"A recent change may be related: configmap ns1/cm1 updated 3m ago",
 	)
 }

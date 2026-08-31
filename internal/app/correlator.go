@@ -48,6 +48,8 @@ func newCorrelator(
 	graph *kwcontext.ResourceGraph,
 	baselineCh chan map[string]map[string]int64,
 	insightEngine *insight.Engine,
+	feedbackStore *insight.FeedbackStore,
+	saveFeedback func(),
 ) *correlation.Engine {
 	holder := &engineHolder{}
 	opts := &engineOptions{
@@ -58,6 +60,8 @@ func newCorrelator(
 		graph:         graph,
 		baselineCh:    baselineCh,
 		insightEngine: insightEngine,
+		feedbackStore: feedbackStore,
+		saveFeedback:  saveFeedback,
 		notify:        am.NotifyIncident,
 	}
 
@@ -110,6 +114,8 @@ type engineOptions struct {
 	// insightEngine turns an incident plus the resource graph into a
 	// diagnosis: likely cause, impact, what changed recently.
 	insightEngine *insight.Engine
+	feedbackStore *insight.FeedbackStore
+	saveFeedback  func()
 	// notify is the delivery sink, injectable so the hook can be tested.
 	notify func(*model.Incident, model.IncidentAction, *insight.Insight)
 }
@@ -138,9 +144,26 @@ func lifecycleHook(
 	holder *engineHolder,
 ) func(*model.Incident, model.IncidentAction) {
 	return func(inc *model.Incident, action model.IncidentAction) {
+		var diagnosis *insight.Insight
+		if opts.insightEngine != nil {
+			pattern := inc.Reason
+			if action != model.ActionResolved {
+				diagnosis = opts.diagnose(inc, action)
+				if diagnosis != nil && diagnosis.Pattern != "" {
+					pattern = diagnosis.Pattern
+				}
+			}
+			opts.insightEngine.ObserveOutcome(inc, action, pattern)
+			if opts.saveFeedback != nil {
+				opts.saveFeedback()
+			}
+		}
 		if action != model.ActionSkip {
 			opts.auditLogger.LogIncident(inc, action)
-			opts.notify(inc, action, opts.diagnose(inc, action))
+			if diagnosis == nil && action != model.ActionResolved {
+				diagnosis = opts.diagnose(inc, action)
+			}
+			opts.notify(inc, action, diagnosis)
 		}
 		metrics.Default.ActiveIncidents.Store(
 			int64(holder.engine.ActiveCount()),

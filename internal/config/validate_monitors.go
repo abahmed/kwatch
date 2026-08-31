@@ -122,9 +122,7 @@ func validateActiveProbeMonitor(cfg *Config) []error {
 		errs = append(errs, errors.New("activeProbeMonitor thresholds must be > 0"))
 	}
 	for _, target := range m.HTTP {
-		if target.Name == "" || target.URL == "" {
-			errs = append(errs, errors.New("activeProbeMonitor.http targets require name and url"))
-		}
+		errs = append(errs, validateHTTPProbeTarget(target)...)
 	}
 	for _, target := range m.TCP {
 		if target.Name == "" || target.Address == "" {
@@ -135,6 +133,20 @@ func validateActiveProbeMonitor(cfg *Config) []error {
 		if target.Name == "" || target.Host == "" {
 			errs = append(errs, errors.New("activeProbeMonitor.dns targets require name and host"))
 		}
+	}
+	return errs
+}
+
+func validateHTTPProbeTarget(target HTTPProbeTarget) []error {
+	var errs []error
+	if target.Name == "" || target.URL == "" {
+		errs = append(errs, errors.New("activeProbeMonitor.http targets require name and url"))
+	}
+	if target.ExpectedStatus > 0 && (target.ExpectedStatus < 100 || target.ExpectedStatus > 599) {
+		errs = append(errs, errors.New("activeProbeMonitor.http expectedStatus must be between 100 and 599"))
+	}
+	if target.LatencyWarningMs > 0 && target.LatencyCriticalMs > 0 && target.LatencyCriticalMs < target.LatencyWarningMs {
+		errs = append(errs, errors.New("activeProbeMonitor.http latencyCriticalMs must be >= latencyWarningMs"))
 	}
 	return errs
 }

@@ -6,9 +6,11 @@ import (
 	"fmt"
 
 	corev1 "k8s.io/api/core/v1"
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
 	kwcontext "github.com/abahmed/kwatch/internal/context"
+	"github.com/abahmed/kwatch/internal/insight"
 )
 
 const telemetryStateKey = "kubelet-telemetry"
@@ -17,10 +19,62 @@ const changeHistoryStateKey = "change-history"
 
 const maxChangeHistoryBytes = 64 * 1024
 
-func (s *StateManager) LoadChangeHistory(ctx context.Context) ([]kwcontext.Change, error) {
-	cm, err := s.client.CoreV1().ConfigMaps(s.namespace).Get(ctx, stateConfigMapName, metav1.GetOptions{})
+const maxRCAFeedbackBytes = 64 * 1024
+
+const rcaFeedbackKey = "records"
+
+func (s *StateManager) LoadRCAFeedback(ctx context.Context) ([]insight.RCARecord, error) {
+	cm, err := s.client.CoreV1().ConfigMaps(s.namespace).Get(ctx, "kwatch-rca", metav1.GetOptions{})
 	if err != nil {
-		return nil, err
+		if !apierrors.IsNotFound(err) {
+			return nil, err
+		}
+		cm, err = s.client.CoreV1().ConfigMaps(s.namespace).Get(ctx, stateConfigMapName, metav1.GetOptions{})
+		if err != nil {
+			return nil, err
+		}
+	}
+	var records []insight.RCARecord
+	if raw := cm.Data[rcaFeedbackKey]; raw != "" {
+		err = json.Unmarshal([]byte(raw), &records)
+	}
+	return records, err
+}
+
+func (s *StateManager) SaveRCAFeedback(ctx context.Context, records []insight.RCARecord) error {
+	data, err := json.Marshal(records)
+	if err != nil {
+		return err
+	}
+	for len(records) > 1 && len(data) > maxRCAFeedbackBytes {
+		records = records[len(records)/2:]
+		data, err = json.Marshal(records)
+		if err != nil {
+			return err
+		}
+	}
+	if len(data) > maxRCAFeedbackBytes {
+		return fmt.Errorf("rca feedback exceeds %d bytes", maxRCAFeedbackBytes)
+	}
+	return s.rcaMgr.UpdateWithRetry(ctx, func(cm *corev1.ConfigMap) error {
+		if cm.Data == nil {
+			cm.Data = make(map[string]string)
+		}
+		cm.Data[rcaFeedbackKey] = string(data)
+		return nil
+	})
+}
+
+func (s *StateManager) LoadChangeHistory(ctx context.Context) ([]kwcontext.Change, error) {
+	cm, err := s.client.CoreV1().ConfigMaps(s.namespace).Get(ctx, "kwatch-changes", metav1.GetOptions{})
+	if err != nil {
+		if !apierrors.IsNotFound(err) {
+			return nil, err
+		}
+		cm, err = s.client.CoreV1().ConfigMaps(s.namespace).Get(ctx, stateConfigMapName, metav1.GetOptions{})
+		if err != nil {
+			return nil, err
+		}
 	}
 	var changes []kwcontext.Change
 	if err := json.Unmarshal([]byte(cm.Data[changeHistoryStateKey]), &changes); err != nil {
@@ -36,7 +90,7 @@ func (s *StateManager) SaveChangeHistory(ctx context.Context, changes []kwcontex
 			return err
 		}
 		if len(data) <= maxChangeHistoryBytes {
-			return s.stateMgr.UpdateWithRetry(ctx, func(cm *corev1.ConfigMap) error {
+			return s.changesMgr.UpdateWithRetry(ctx, func(cm *corev1.ConfigMap) error {
 				if cm.Data == nil {
 					cm.Data = make(map[string]string)
 				}

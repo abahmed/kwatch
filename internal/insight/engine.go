@@ -29,7 +29,8 @@ type Engine struct {
 	activeChecker func(kind, namespace, name string) bool
 	// now is the clock "updated 3m ago" is measured against; injectable so
 	// tests do not depend on the wall clock.
-	now func() time.Time
+	now      func() time.Time
+	feedback *FeedbackStore
 }
 
 // SetActiveChecker supplies the correlation engine's live incident view. The
@@ -42,6 +43,14 @@ func (e *Engine) SetActiveChecker(checker func(kind, namespace, name string) boo
 func (e *Engine) SetClock(now func() time.Time) {
 	if now != nil {
 		e.now = now
+	}
+}
+
+func (e *Engine) SetFeedbackStore(store *FeedbackStore) { e.feedback = store }
+
+func (e *Engine) ObserveOutcome(inc *model.Incident, action model.IncidentAction, pattern string) {
+	if e.feedback != nil {
+		e.feedback.Observe(inc, action, pattern)
 	}
 }
 
@@ -112,6 +121,7 @@ func (e *Engine) scoreInsight(inc *model.Incident, ins *Insight) {
 	case "root_cause":
 		ins.Confidence = 0.40
 	}
+	e.applyFeedbackBias(inc, ins)
 	if ins.Confidence > 0 && len(ins.Evidence) == 0 {
 		ins.Confidence *= 0.65
 	}
@@ -147,6 +157,16 @@ func minFloat(a, b float64) float64 {
 		return a
 	}
 	return b
+}
+
+func (e *Engine) applyFeedbackBias(inc *model.Incident, ins *Insight) {
+	if e.feedback == nil || ins.Pattern == "" {
+		return
+	}
+	ins.Confidence = minFloat(ins.Confidence+e.feedback.Bias(feedbackKey(inc, ins.Pattern)), 1)
+	if ins.Confidence < 0 {
+		ins.Confidence = 0
+	}
 }
 
 func nextSteps(inc *model.Incident) []string {

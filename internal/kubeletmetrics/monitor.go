@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"math"
 	"strconv"
 	"strings"
 	"sync"
@@ -80,6 +81,7 @@ type metricSnapshot struct {
 type usageBaseline struct {
 	Percent float64   `json:"percent"`
 	Samples int       `json:"samples"`
+	M2      float64   `json:"m2,omitempty"`
 	Updated time.Time `json:"updated"`
 }
 
@@ -548,7 +550,13 @@ func (m *Monitor) adaptiveUsageThreshold(key string, percent, warning, critical 
 	if baseline.Samples == 0 {
 		baseline.Percent = percent
 	} else {
-		baseline.Percent = baseline.Percent*0.8 + percent*0.2
+		// Welford's online update keeps the observed spread without retaining
+		// every sample. This makes the learned threshold follow real workload
+		// variability while remaining bounded and ConfigMap-friendly.
+		count := float64(baseline.Samples + 1)
+		delta := percent - baseline.Percent
+		baseline.Percent += delta / count
+		baseline.M2 += delta * (percent - baseline.Percent)
 	}
 	if baseline.Samples < 1000000 {
 		baseline.Samples++
@@ -560,6 +568,10 @@ func (m *Monitor) adaptiveUsageThreshold(key string, percent, warning, critical 
 		return warning, critical
 	}
 	learned := baseline.Percent * 1.25
+	if baseline.Samples > 1 && baseline.M2 > 0 {
+		deviation := math.Sqrt(baseline.M2 / float64(baseline.Samples-1))
+		learned = math.Max(learned, baseline.Percent+2*deviation)
+	}
 	maxWarning := critical - 1
 	if learned > maxWarning {
 		learned = maxWarning

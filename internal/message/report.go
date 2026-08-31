@@ -85,10 +85,19 @@ type ChangesSection struct {
 
 // ChangeItem is a single recent change entry.
 type ChangeItem struct {
-	Resource  string
-	Reference string
-	Type      string
-	Age       string // how long before now, e.g. "3m"; empty when unknown
+	Resource   string
+	Reference  string
+	Type       string
+	Age        string // how long before now, e.g. "3m"; empty when unknown
+	Fields     []FieldChange
+	Additional int
+}
+
+type FieldChange struct {
+	Path   string
+	Before string
+	After  string
+	Action string
 }
 
 // OOMSection holds OOM-specific diagnostics.

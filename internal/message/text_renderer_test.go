@@ -77,13 +77,14 @@ func TestTextRendererReadsTopDown(t *testing.T) {
 	)
 	// The reason appears exactly once, not four times.
 	assert.Equal(t, 1, strings.Count(out, "ContainersNotReady"))
-	// The state message is its own line and not repeated in the hint.
-	assert.Equal(t, "pod stopped being ready 2m ago", lines[1])
+	// The state message leads the natural-language explanation and is not
+	// repeated in the hint.
+	assert.True(t, strings.HasPrefix(lines[1], "pod stopped being ready 2m ago"))
 	assert.Equal(t, 1, strings.Count(out, "pod stopped being ready"))
-	// Diagnosis comes before the hint and the details.
-	why, hint, meta := strings.Index(
+	// Diagnosis comes before the hint and the details without exposing a form.
+	cause, hint, meta := strings.Index(
 		out,
-		"Why:",
+		"The strongest signal points to",
 	), strings.Index(
 		out,
 		"Hint:",
@@ -93,14 +94,14 @@ func TestTextRendererReadsTopDown(t *testing.T) {
 	)
 	assert.True(
 		t,
-		why < hint && hint < meta,
-		"order must be why → hint → details",
+		cause < hint && hint < meta,
+		"order must be cause → hint → details",
 	)
 	// A change carries its age.
 	assert.Regexp(
 		t,
 		regexp.MustCompile(
-			`Changed recently: deployment dev/api updated \d+[smh] ago`,
+			`A recent change may be related: deployment dev/api updated \d+[smh] ago`,
 		),
 		out,
 	)

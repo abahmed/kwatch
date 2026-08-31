@@ -20,6 +20,8 @@ const (
 	baselineConfigMapName  = "kwatch-baseline"
 	incidentsConfigMapName = "kwatch-incidents"
 	pvcConfigMapName       = "kwatch-pvc"
+	changesConfigMapName   = "kwatch-changes"
+	rcaConfigMapName       = "kwatch-rca"
 	initKey                = "kwatch-init"
 	clusterIDKey           = "cluster-id"
 	versionKey             = "version"
@@ -51,6 +53,8 @@ type StateManager struct {
 	baselineMgr  *RetryConfigMapManager // kwatch-baseline
 	incidentsMgr *RetryConfigMapManager // kwatch-incidents
 	pvcMgr       *RetryConfigMapManager // kwatch-pvc
+	changesMgr   *RetryConfigMapManager // kwatch-changes
+	rcaMgr       *RetryConfigMapManager // kwatch-rca
 	now          func() time.Time
 }
 
@@ -80,6 +84,16 @@ func NewStateManager(
 			client,
 			namespace,
 			pvcConfigMapName,
+		),
+		changesMgr: NewRetryConfigMapManager(
+			client,
+			namespace,
+			changesConfigMapName,
+		),
+		rcaMgr: NewRetryConfigMapManager(
+			client,
+			namespace,
+			rcaConfigMapName,
 		),
 		now: clock.Now,
 	}

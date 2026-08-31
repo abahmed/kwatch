@@ -74,10 +74,12 @@ type serverDeps struct {
 
 // Run loads config and wires all monitors, then runs until shutdown.
 func Run() int {
-	return run(time.Now)
+	return RunWithClock(time.Now)
 }
 
-func run(now func() time.Time) int {
+// RunWithClock runs kwatch with an injected clock, primarily for deterministic
+// integration tests and embedded callers.
+func RunWithClock(now func() time.Time) int {
 	clock.Set(now)
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
@@ -162,6 +164,8 @@ func run(now func() time.Time) int {
 	})
 
 	insightEngine := insight.NewEngine(graph, tracker)
+	feedbackStore := loadFeedbackStore(ctx, stateMgr)
+	insightEngine.SetFeedbackStore(feedbackStore)
 	insightEngine.SetClock(now)
 	correlator := newCorrelator(
 		cfg,
@@ -171,6 +175,12 @@ func run(now func() time.Time) int {
 		graph,
 		baselineCh,
 		insightEngine,
+		feedbackStore,
+		func() {
+			if err := stateMgr.SaveRCAFeedback(ctx, feedbackStore.Snapshot()); err != nil {
+				klog.ErrorS(err, "failed to persist RCA feedback")
+			}
+		},
 	)
 	correlator.SetClock(now)
 	insightEngine.SetActiveChecker(func(kind, namespace, name string) bool {
@@ -286,6 +296,14 @@ func loadChangeTracker(ctx context.Context, stateMgr *state.StateManager) *kwcon
 		tracker.Restore(changes)
 	}
 	return tracker
+}
+
+func loadFeedbackStore(ctx context.Context, stateMgr *state.StateManager) *insight.FeedbackStore {
+	store := insight.NewFeedbackStore()
+	if records, err := stateMgr.LoadRCAFeedback(ctx); err == nil {
+		store.Restore(records)
+	}
+	return store
 }
 
 func startChangeHistorySaver(ctx context.Context, stateMgr *state.StateManager, tracker *kwcontext.ChangeTracker) {

@@ -6,6 +6,7 @@ import (
 	"time"
 
 	authorizationv1 "k8s.io/api/authorization/v1"
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/klog/v2"
@@ -152,6 +153,9 @@ func (m *Monitor) check(ctx context.Context) {
 		allowed, err := m.allowed(requestCtx, permission)
 		if err != nil {
 			status.Available = false
+			if apierrors.IsForbidden(err) {
+				status.RBACDenied = true
+			}
 			if requestCtx.Err() != nil {
 				break
 			}
@@ -174,6 +178,9 @@ func (m *Monitor) check(ctx context.Context) {
 			status.Checks++
 			if err != nil {
 				status.Available = false
+				if apierrors.IsForbidden(err) {
+					status.RBACDenied = true
+				}
 				continue
 			}
 			if !allowed {

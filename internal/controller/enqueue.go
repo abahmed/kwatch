@@ -4,12 +4,25 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/client-go/tools/cache"
 
+	"github.com/abahmed/kwatch/internal/change"
 	kwcontext "github.com/abahmed/kwatch/internal/context"
 )
 
 func (c *Controller) recordChange(typ kwcontext.ChangeType, resource string, obj interface{}) {
+	c.recordChangeUpdate(resource, nil, obj, typ)
+}
+
+func (c *Controller) recordChangeUpdate(resource string, oldObj, newObj interface{}, typ ...kwcontext.ChangeType) {
 	if c.tracker == nil {
 		return
+	}
+	changeType := kwcontext.ChangeUpdate
+	if len(typ) > 0 {
+		changeType = typ[0]
+	}
+	obj := newObj
+	if obj == nil {
+		obj = oldObj
 	}
 	key, err := cache.DeletionHandlingMetaNamespaceKeyFunc(obj)
 	if err != nil {
@@ -19,13 +32,18 @@ func (c *Controller) recordChange(typ kwcontext.ChangeType, resource string, obj
 	if name == "" {
 		name = key
 	}
-	c.tracker.Record(kwcontext.Change{
+	record := kwcontext.Change{
 		Resource:  resource,
 		Namespace: ns,
 		Name:      name,
-		Type:      typ,
+		Type:      changeType,
 		Timestamp: c.nowTime(),
-	})
+	}
+	if changeType == kwcontext.ChangeUpdate && oldObj != nil && newObj != nil {
+		diff := change.Diff(oldObj, newObj)
+		record.Fields, record.BeforeHash, record.AfterHash, record.Additional = diff.Fields, diff.BeforeHash, diff.AfterHash, diff.Additional
+	}
+	c.tracker.Record(record)
 }
 
 func (c *Controller) changeRecordingHandler(resource string, enqueue func(interface{})) cache.ResourceEventHandlerFuncs {
@@ -37,7 +55,7 @@ func (c *Controller) changeRecordingHandler(resource string, enqueue func(interf
 		},
 		UpdateFunc: func(old, new interface{}) {
 			c.recordInformerEvent()
-			c.recordChange(kwcontext.ChangeUpdate, resource, new)
+			c.recordChangeUpdate(resource, old, new)
 			enqueue(new)
 		},
 		DeleteFunc: func(obj interface{}) {
@@ -83,7 +101,7 @@ func (c *Controller) podEventHandler() cache.ResourceEventHandlerFuncs {
 		},
 		UpdateFunc: func(old, new interface{}) {
 			c.recordInformerEvent()
-			c.recordChange(kwcontext.ChangeUpdate, "pod", new)
+			c.recordChangeUpdate("pod", old, new)
 			if pod, ok := new.(*corev1.Pod); ok {
 				c.rebuildPodGraph(pod)
 			}

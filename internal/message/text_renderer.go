@@ -47,8 +47,7 @@ type textRenderer struct{ m markup }
 
 func (t textRenderer) RenderCreate(r *Report) string {
 	lines := []string{t.headline(r)}
-	lines = append(lines, t.state(r))
-	lines = append(lines, t.diagnosis(r, true)...)
+	lines = append(lines, t.story(r))
 	lines = append(lines, t.changes(r))
 	lines = append(lines, t.hint(r))
 	lines = append(lines, t.meta(r))
@@ -65,12 +64,50 @@ func (t textRenderer) RenderCreate(r *Report) string {
 // have moved — state, cause, identity, fresh evidence.
 func (t textRenderer) RenderUpdate(r *Report) string {
 	lines := []string{t.headline(r)}
-	lines = append(lines, t.state(r))
-	lines = append(lines, t.diagnosis(r, false)...)
+	lines = append(lines, t.story(r))
 	lines = append(lines, t.meta(r))
 	lines = append(lines, t.typeSpecific(r)...)
 	lines = append(lines, t.evidence(r)...)
 	return joinNonEmpty(lines)
+}
+
+// story turns the structured diagnosis into a short, natural explanation.
+// It deliberately avoids exposing the internal field layout as a form.
+func (t textRenderer) story(r *Report) string {
+	if r == nil {
+		return ""
+	}
+	var sentences []string
+	if r.State != nil && r.State.Message != "" {
+		sentences = append(sentences, r.State.Message)
+	}
+	if r.Diagnosis != nil {
+		if r.Diagnosis.Cause != "" {
+			cause := "The strongest signal points to " + strings.TrimSuffix(r.Diagnosis.Cause, ".")
+			if r.Diagnosis.Confidence > 0 {
+				cause += fmt.Sprintf(" (%.0f%% confidence)", r.Diagnosis.Confidence*100)
+			}
+			sentences = append(sentences, cause+".")
+		}
+		if r.Diagnosis.Impact != "" {
+			sentences = append(sentences, capitalizeSentence(r.Diagnosis.Impact)+".")
+		}
+		if len(r.Diagnosis.Evidence) > 0 {
+			sentences = append(sentences, "This is supported by "+strings.Join(r.Diagnosis.Evidence, "; ")+".")
+		}
+		if len(r.Diagnosis.NextSteps) > 0 {
+			sentences = append(sentences, "Start by "+strings.ToLower(strings.TrimSuffix(r.Diagnosis.NextSteps[0], "."))+".")
+		}
+	}
+	return strings.Join(sentences, " ")
+}
+
+func capitalizeSentence(value string) string {
+	value = strings.TrimSpace(value)
+	if value == "" {
+		return ""
+	}
+	return strings.ToUpper(value[:1]) + value[1:]
 }
 
 func (t textRenderer) RenderResolved(r *Report) string {
@@ -147,44 +184,6 @@ func (t textRenderer) headline(r *Report) string {
 	return h
 }
 
-func (t textRenderer) state(r *Report) string {
-	if r.State == nil {
-		return ""
-	}
-	return r.State.Message
-}
-
-// diagnosis: why, impact, what changed — only the lines that have content.
-func (t textRenderer) diagnosis(r *Report, full bool) []string {
-	if r.Diagnosis == nil {
-		return nil
-	}
-	var out []string
-	if r.Diagnosis.Cause != "" {
-		line := t.m.bold("Why:") + " " + r.Diagnosis.Cause
-		if r.Diagnosis.Pattern != "" {
-			line += " (" + r.Diagnosis.Pattern + ")"
-		}
-		if r.Diagnosis.Confidence > 0 {
-			line += fmt.Sprintf(" · confidence %.0f%%", r.Diagnosis.Confidence*100)
-		}
-		out = append(out, line)
-	}
-	if !full {
-		return out
-	}
-	if len(r.Diagnosis.Evidence) > 0 {
-		out = append(out, t.m.bold("Evidence:")+" "+strings.Join(r.Diagnosis.Evidence, "; "))
-	}
-	if r.Diagnosis.Impact != "" {
-		out = append(out, t.m.bold("Impact:")+" "+r.Diagnosis.Impact)
-	}
-	if len(r.Diagnosis.NextSteps) > 0 {
-		out = append(out, t.m.bold("Next:")+" "+strings.Join(r.Diagnosis.NextSteps, "; "))
-	}
-	return out
-}
-
 // changes: what moved just before the incident, with how long before.
 func (t textRenderer) changes(r *Report) string {
 	if r.Changes == nil || len(r.Changes.Items) == 0 {
@@ -200,13 +199,23 @@ func (t textRenderer) changes(r *Report) string {
 			)
 			break
 		}
-		p := fmt.Sprintf("%s %s %s", c.Resource, c.Reference, c.Type)
+		p := fmt.Sprintf("%s %s %s", c.Resource, c.Reference, strings.ToLower(c.Type))
 		if c.Age != "" {
 			p += " " + c.Age + " ago"
 		}
+		if len(c.Fields) > 0 {
+			field := c.Fields[0]
+			p += ": " + field.Path
+			if field.Before != "" && field.After != "" {
+				p += " changed from " + field.Before + " to " + field.After
+			}
+			if c.Additional > 0 {
+				p += fmt.Sprintf(" (+%d more fields)", c.Additional)
+			}
+		}
 		parts = append(parts, p)
 	}
-	return t.m.bold("Changed recently:") + " " + strings.Join(parts, "; ")
+	return "A recent change may be related: " + strings.Join(parts, "; ")
 }
 
 func (t textRenderer) hint(r *Report) string {
