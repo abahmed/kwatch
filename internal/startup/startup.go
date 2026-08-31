@@ -24,6 +24,7 @@ type StartupManager struct {
 	// zero when there is no previous record or the gap was insignificant.
 	downtime       time.Duration
 	currentVersion string
+	clusterID      string
 	now            func() time.Time
 }
 
@@ -80,9 +81,17 @@ func (s *StartupManager) HandleStartup(ctx context.Context) error {
 		s.currentVersion,
 	); err != nil {
 		klog.InfoS("failed to mark as initialized", "error", err)
+		return nil
 	}
+	s.clusterID = clusterID
 
 	return nil
+}
+
+// TelemetryIdentity returns the stable cluster identity and current version
+// after startup state has been persisted successfully.
+func (s *StartupManager) TelemetryIdentity() (string, string) {
+	return s.clusterID, s.currentVersion
 }
 
 // minReportableDowntime keeps ordinary restarts quiet. Rollouts and pod moves

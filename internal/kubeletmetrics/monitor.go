@@ -177,6 +177,7 @@ func (m *Monitor) sweep(ctx context.Context) {
 	if err != nil {
 		return
 	}
+	m.resetEndpointStatus(nodes)
 	pods := m.pods(ctx)
 	sem := make(chan struct{}, 8)
 	var wg sync.WaitGroup
@@ -203,6 +204,17 @@ func (m *Monitor) sweep(ctx context.Context) {
 	m.lastSweep = m.now()
 	m.mu.Unlock()
 	m.saveState(ctx)
+}
+
+// resetEndpointStatus starts a fresh health snapshot for the current node
+// set. In particular, RBACDenied must not remain latched after access is
+// restored; recordEndpoint rebuilds it from the results of this sweep.
+func (m *Monitor) resetEndpointStatus(nodes []corev1.Node) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	for _, node := range nodes {
+		m.endpoint[node.Name] = endpointStatus{}
+	}
 }
 
 func (m *Monitor) Snapshot() Status {
@@ -508,7 +520,12 @@ func (m *Monitor) checkContainerUsage(pod *corev1.Pod, container containerSummar
 }
 
 func (m *Monitor) reportUsage(pod *corev1.Pod, container string, percent, warning, critical float64, reason, usage, limit, unit string) {
-	key := correlation.BuildKey(pod.Namespace, pod.Namespace+"/"+pod.Name, reason, container)
+	owner := pod.Namespace + "/" + pod.Name
+	if len(pod.OwnerReferences) == 0 {
+		owner = pod.Name
+	}
+	ev := event.Event{Resource: "pod", Namespace: pod.Namespace, PodName: pod.Name, PodUID: string(pod.UID), PodLineageID: pod.Annotations[event.PodLineageAnnotation], ContainerName: container, Reason: reason}
+	key := correlation.IncidentKey(ev, owner, nil)
 	warning, critical = m.adaptiveUsageThreshold(usageBaselineKey(pod, container, reason), percent, warning, critical)
 	if percent < warning {
 		m.observe(string(key), false, func() {}, func() { m.correlator.MarkResolved(key) })
@@ -520,10 +537,10 @@ func (m *Monitor) reportUsage(pod *corev1.Pod, container string, percent, warnin
 	}
 	m.observe(string(key), true,
 		func() {
-			m.correlator.Process(event.Event{Resource: "pod", Namespace: pod.Namespace, PodName: pod.Name, ContainerName: container,
-				Reason: reason, OwnerKind: "Pod", Severity: severity,
+			m.correlator.Process(event.Event{Resource: "pod", Namespace: pod.Namespace, PodName: pod.Name, PodUID: string(pod.UID), PodLineageID: pod.Annotations[event.PodLineageAnnotation], ContainerName: container,
+				Reason: reason, Severity: severity,
 				Hint: fmt.Sprintf("container %s %s usage is %.0f%% of its limit (%s/%s)", container, unit, percent, usage, limit)},
-				pod.Namespace+"/"+pod.Name, nil)
+				owner, nil)
 		}, func() {})
 }
 
@@ -662,7 +679,7 @@ func (m *Monitor) checkCadvisor(ctx context.Context, node *corev1.Node) {
 			}
 			incidentKey := "cpu/" + node.Name + "/" + key
 			m.observe(incidentKey, true,
-				func() { m.reportContainer(namespace, pod, container, owner, severity, percent) },
+				func() { m.reportContainer(m.cachedPod(namespace, pod), container, owner, severity, percent) },
 				func() {})
 		} else if namespace != "" && pod != "" {
 			incidentKey := "cpu/" + node.Name + "/" + key
@@ -826,9 +843,18 @@ func (m *Monitor) report(node, reason string, severity model.Severity, hint stri
 	m.correlator.Process(event.Event{Resource: "node", NodeName: node, PodName: node, Reason: reason, Hint: hint, Severity: severity}, node, nil)
 }
 
-func (m *Monitor) reportContainer(namespace, pod, container, owner string, severity model.Severity, percent float64) {
-	m.correlator.Process(event.Event{Resource: "pod", Namespace: namespace, PodName: pod, ContainerName: container, Reason: constant.ReasonContainerCPUThrottled, Severity: severity,
-		Hint: fmt.Sprintf("container %s CPU throttling is %.1f%% of scheduling periods", container, percent)}, owner, nil)
+func (m *Monitor) reportContainer(pod *corev1.Pod, container, owner string, severity model.Severity, percent float64) {
+	ev := event.Event{Resource: "pod", ContainerName: container, Reason: constant.ReasonContainerCPUThrottled, Severity: severity,
+		Hint: fmt.Sprintf("container %s CPU throttling is %.1f%% of scheduling periods", container, percent)}
+	if pod != nil {
+		ev.Namespace, ev.PodName = pod.Namespace, pod.Name
+		ev.PodUID = string(pod.UID)
+		ev.PodLineageID = pod.Annotations[event.PodLineageAnnotation]
+		if len(pod.OwnerReferences) == 0 {
+			owner = pod.Name
+		}
+	}
+	m.correlator.Process(ev, owner, nil)
 }
 
 func (m *Monitor) resolve(node, reason string) {
@@ -836,7 +862,27 @@ func (m *Monitor) resolve(node, reason string) {
 }
 
 func (m *Monitor) resolveContainer(namespace, pod, container string) {
-	m.correlator.MarkResolved(correlation.BuildKey(namespace, namespace+"/"+pod, constant.ReasonContainerCPUThrottled, container))
+	obj := m.cachedPod(namespace, pod)
+	owner := namespace + "/" + pod
+	if obj != nil && len(obj.OwnerReferences) == 0 {
+		owner = pod
+	}
+	ev := event.Event{Resource: "pod", Namespace: namespace, PodName: pod, ContainerName: container, Reason: constant.ReasonContainerCPUThrottled}
+	if obj != nil {
+		ev.PodUID = string(obj.UID)
+		ev.PodLineageID = obj.Annotations[event.PodLineageAnnotation]
+	}
+	m.correlator.MarkResolved(correlation.IncidentKey(ev, owner, nil))
+}
+
+func (m *Monitor) cachedPod(namespace, name string) *corev1.Pod {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	pod := m.podCache[namespace+"/"+name]
+	if pod == nil {
+		return nil
+	}
+	return pod.DeepCopy()
 }
 
 func (m *Monitor) observe(key string, failing bool, report, resolve func()) {

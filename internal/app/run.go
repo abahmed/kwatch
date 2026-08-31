@@ -71,6 +71,7 @@ type serverDeps struct {
 	networkRun      func(context.Context)
 	securityRun     func(context.Context)
 	controlPlaneRun func(context.Context)
+	telemetryRun    func(context.Context)
 }
 
 // Run loads config and wires all monitors, then runs until shutdown.
@@ -122,6 +123,7 @@ func RunWithClock(now func() time.Time) int {
 		klog.ErrorS(err, "failed to run startup")
 		return 1
 	}
+	clusterID, telemetryVersion := sm.TelemetryIdentity()
 
 	healthServer := health.NewHealthServer(cfg.HealthCheck)
 	securityMonitor := configureSecurityMonitor(cfg, k8sClient, now)
@@ -136,6 +138,13 @@ func RunWithClock(now func() time.Time) int {
 
 	stateMgr := sm.GetStateManager()
 	stateMgr.SetClock(now)
+	telemetryRun := configureTelemetryRunner(
+		cfg,
+		stateMgr,
+		clusterID,
+		telemetryVersion,
+		now,
+	)
 
 	tracker := loadChangeTracker(ctx, stateMgr)
 	tracker.SetClock(now)
@@ -288,6 +297,7 @@ func RunWithClock(now func() time.Time) int {
 		networkRun:      networkRun,
 		securityRun:     securityRun,
 		controlPlaneRun: controlPlaneRun,
+		telemetryRun:    telemetryRun,
 	}
 	return serve(ctx, deps)
 }

@@ -43,20 +43,33 @@ func (h *handler) ProcessPod(
 	key string,
 	deleted bool,
 ) error {
+	podUID := podUIDFromQueueKey(key)
+	if i := strings.LastIndex(key, "#"); i >= 0 {
+		key = key[:i]
+	}
 	namespace, name, err := cache.SplitMetaNamespaceKey(key)
 	if err != nil {
 		return fmt.Errorf("invalid pod key %q: %w", key, err)
 	}
 
 	if deleted {
-		h.correlator.RemovePod(namespace, name)
+		// A delete for an old Pod can arrive after Kubernetes has already
+		// created its replacement with the same name. Do not let that stale
+		// tombstone clear the replacement's incidents or startup baseline.
+		if podUID != "" {
+			current, lookupErr := h.listers.Pod.Pods(namespace).Get(name)
+			if lookupErr == nil && string(current.UID) != podUID {
+				return nil
+			}
+		}
+		h.correlator.RemovePodWithUID(namespace, name, podUID)
 		return nil
 	}
 
 	pod, err := h.listers.Pod.Pods(namespace).Get(name)
 	if err != nil {
 		if errors.IsNotFound(err) {
-			h.correlator.RemovePod(namespace, name)
+			h.correlator.RemovePodWithUID(namespace, name, podUID)
 			return nil
 		}
 		return fmt.Errorf(
@@ -70,6 +83,15 @@ func (h *handler) ProcessPod(
 	return h.ProcessPodObject(ctx, pod, false)
 }
 
+func podUIDFromQueueKey(key string) string {
+	for i := len(key) - 1; i >= 0; i-- {
+		if key[i] == '#' {
+			return key[i+1:]
+		}
+	}
+	return ""
+}
+
 func (h *handler) ProcessPodObject(
 	parent context.Context,
 	pod *corev1.Pod,
@@ -80,7 +102,7 @@ func (h *handler) ProcessPodObject(
 	}
 
 	if deleted {
-		h.correlator.RemovePod(pod.Namespace, pod.Name)
+		h.correlator.RemovePodWithUID(pod.Namespace, pod.Name, string(pod.UID))
 		return nil
 	}
 
@@ -110,7 +132,7 @@ func (h *handler) ProcessPodObject(
 		h.signalEvent(sig)
 	} else {
 		h.correlator.MarkResolved(correlation.BuildKey(
-			pod.Namespace, pod.Namespace+"/"+pod.Name,
+			pod.Namespace, podIncidentOwner(pod),
 			constant.ReasonPodStuckTerminating, "",
 		))
 	}
@@ -119,6 +141,13 @@ func (h *handler) ProcessPodObject(
 		h.ClearBaselineForPod(pod.Namespace, pod.Name)
 	}
 	return nil
+}
+
+func podIncidentOwner(pod *corev1.Pod) string {
+	if len(pod.OwnerReferences) == 0 {
+		return pod.Name
+	}
+	return pod.Namespace + "/" + pod.Name
 }
 
 // DetectPodDeletionIssue catches pods that remain terminating because a
@@ -134,7 +163,9 @@ func DetectPodDeletionIssue(pod *corev1.Pod, now time.Time) *event.Signal {
 	}
 	return &event.Signal{
 		Resource: "pod", Namespace: pod.Namespace, PodName: pod.Name,
-		NodeName: pod.Spec.NodeName, Owner: pod.Namespace + "/" + pod.Name,
+		PodUID: string(pod.UID), PodLineageID: podLineageID(pod),
+		PodGenerateName: pod.GenerateName, NodeName: pod.Spec.NodeName,
+		Owner:  podIncidentOwner(pod),
 		Reason: constant.ReasonPodStuckTerminating, Labels: pod.Labels,
 		Hint: fmt.Sprintf("pod has been terminating for %s with finalizers: %s",
 			now.Sub(pod.DeletionTimestamp.Time).Round(time.Minute),

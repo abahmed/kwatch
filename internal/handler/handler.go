@@ -186,6 +186,8 @@ func (h *handler) signalEvent(s *event.Signal) {
 	ev := event.Event{
 		Resource:        s.Resource,
 		PodName:         s.PodName,
+		PodUID:          s.PodUID,
+		PodLineageID:    s.PodLineageID,
 		PodGenerateName: s.PodGenerateName,
 		Namespace:       s.Namespace,
 		NodeName:        s.NodeName,

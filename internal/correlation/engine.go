@@ -116,7 +116,10 @@ type Engine struct {
 	activeNodeIncidents map[string]bool
 	// key: namespace/podName
 	lastContainerIndex map[string]*model.ContainerState
-	serviceLister      corev1lister.ServiceLister
+	// Incident key → concrete Pod name → UID. This protects cleanup when a
+	// replacement reuses a name before an old delete tombstone is processed.
+	podResourceUIDs map[model.IncidentKey]map[string]string
+	serviceLister   corev1lister.ServiceLister
 	// key → cooldown expiry; prevents resolve→recreate cycle
 	cleanupCooldown map[model.IncidentKey]time.Time
 	// computeGroupKey output → group buffer
@@ -161,6 +164,7 @@ func NewEngine(cfg Config) *Engine {
 		config:               cfg,
 		activeNodeIncidents:  make(map[string]bool),
 		lastContainerIndex:   make(map[string]*model.ContainerState),
+		podResourceUIDs:      make(map[model.IncidentKey]map[string]string),
 		cleanupCooldown:      make(map[model.IncidentKey]time.Time),
 		groupBuffers:         make(map[string]*pendingGroup),
 		groupResolveTrackers: make(map[string]*groupResolveTracker),

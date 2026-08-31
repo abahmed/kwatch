@@ -132,10 +132,17 @@ func controlPlaneState(status Status) string {
 func (m *Monitor) check(ctx context.Context) {
 	probeCtx, cancel := context.WithTimeout(ctx, defaultProbeTimeout)
 	defer cancel()
+	// Record the attempt before any individual probe can fail. Otherwise a
+	// failed pod discovery leaves LastCheck and component statuses from an
+	// older successful sweep, which can make the health endpoint look healthy.
+	m.mu.Lock()
+	m.status.LastCheck = m.nowTime()
+	m.mu.Unlock()
 	m.checkAPIServer(probeCtx)
 	m.checkCoreDNS(probeCtx)
 	pods, err := m.client.CoreV1().Pods("").List(probeCtx, metav1.ListOptions{})
 	if err != nil {
+		m.markComponentsUnavailable(err)
 		m.recordProbeError("control-plane pod discovery", err)
 		return
 	}
@@ -145,6 +152,24 @@ func (m *Monitor) check(ctx context.Context) {
 	m.mu.Lock()
 	m.status.LastCheck = m.nowTime()
 	m.mu.Unlock()
+}
+
+func (m *Monitor) markComponentsUnavailable(err error) {
+	checked := m.nowTime()
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	if m.status.Components == nil {
+		m.status.Components = make(map[string]EndpointStatus)
+	}
+	for _, component := range []string{"kube-scheduler", "kube-controller-manager", "etcd"} {
+		m.status.Components[component] = EndpointStatus{
+			Name:        component,
+			Available:   false,
+			LastError:   err.Error(),
+			LastChecked: checked,
+			Supported:   true,
+		}
+	}
 }
 
 func (m *Monitor) checkCoreDNS(ctx context.Context) {

@@ -159,3 +159,192 @@ jobs:
               echo '```'
             fi
           } >> "$GITHUB_STEP_SUMMARY"
+
+  publish_helm_chart:
+    name: Publish Helm chart to kwatch.dev
+    # Release candidates intentionally do not enter the public Helm repo;
+    # stable releases are published automatically after the GitHub Release is
+    # created. This keeps the chart repository aligned with the stable install
+    # instructions while still allowing RC manifests to be tested from git.
+    if: ${{ (github.event_name == 'release' && github.event.release.prerelease == false) || (github.event_name == 'workflow_dispatch' && !contains(inputs.tag, '-rc')) }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    concurrency:
+      group: helm-chart-publish
+      cancel-in-progress: false
+    permissions:
+      contents: read
+    steps:
+      - name: Resolve release info
+        id: rel
+        env:
+          TAG: ${{ inputs.tag || github.event.release.tag_name }}
+        run: |
+          set -euo pipefail
+          if ! echo "$TAG" | grep -Eq '^v[0-9]+\.[0-9]+\.[0-9]+$'; then
+            echo "::error::stable Helm publishing requires a stable semver tag, got $TAG"
+            exit 1
+          fi
+          echo "tag=$TAG" >> "$GITHUB_OUTPUT"
+          echo "version=${TAG#v}" >> "$GITHUB_OUTPUT"
+
+      - name: Check out kwatch at the release tag
+        uses: actions/checkout@v7
+        with:
+          ref: ${{ steps.rel.outputs.tag }}
+
+      - name: Install Helm
+        uses: azure/setup-helm@v5
+
+      - name: Validate and package chart
+        env:
+          VERSION: ${{ steps.rel.outputs.version }}
+        run: |
+          set -euo pipefail
+          chart_version=$(awk '$1 == "version:" {gsub(/["'"'"']/, "", $2); print $2; exit}' deploy/chart/Chart.yaml)
+          if [ "$chart_version" != "$VERSION" ]; then
+            echo "::error::Chart.yaml version $chart_version does not match release $VERSION"
+            exit 1
+          fi
+          helm lint deploy/chart
+          ./deploy/chart/test_helm.sh
+          mkdir -p /tmp/kwatch-chart
+          helm package deploy/chart --destination /tmp/kwatch-chart
+
+      - name: Require release token
+        env:
+          RELEASE_TOKEN: ${{ secrets.RELEASE_TOKEN }}
+        run: |
+          set -euo pipefail
+          if [ -z "$RELEASE_TOKEN" ]; then
+            echo "::error::RELEASE_TOKEN is required to publish the chart to abahmed/kwatch.dev"
+            exit 1
+          fi
+
+      - name: Require Render deploy hook
+        env:
+          RENDER_DEPLOY_HOOK_URL: ${{ secrets.RENDER_DEPLOY_HOOK_URL }}
+        run: |
+          set -euo pipefail
+          if [ -z "$RENDER_DEPLOY_HOOK_URL" ]; then
+            echo "::error::RENDER_DEPLOY_HOOK_URL is required to trigger the kwatch.dev Render deploy"
+            exit 1
+          fi
+
+      - name: Check out kwatch.dev
+        uses: actions/checkout@v7
+        with:
+          repository: abahmed/kwatch.dev
+          path: kwatch.dev
+          ref: main
+          fetch-depth: 0
+          token: ${{ secrets.RELEASE_TOKEN }}
+
+      - name: Update static Helm repository
+        env:
+          VERSION: ${{ steps.rel.outputs.version }}
+        run: |
+          set -euo pipefail
+          chart_dir="kwatch.dev/static/charts"
+          mkdir -p "$chart_dir"
+          cp "/tmp/kwatch-chart/kwatch-$VERSION.tgz" "$chart_dir/"
+
+          old_index="$chart_dir/index.yaml"
+          if [ -f "$old_index" ]; then
+            merge_index=$(mktemp)
+            cp "$old_index" "$merge_index"
+            helm repo index "$chart_dir" \
+              --url https://kwatch.dev/charts \
+              --merge "$merge_index"
+          else
+            helm repo index "$chart_dir" \
+              --url https://kwatch.dev/charts
+          fi
+
+          grep -q "version: $VERSION" "$old_index"
+          grep -q "kwatch-$VERSION.tgz" "$old_index"
+
+      - name: Commit and push chart repository
+        env:
+          VERSION: ${{ steps.rel.outputs.version }}
+        working-directory: kwatch.dev
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add "static/charts/kwatch-$VERSION.tgz" static/charts/index.yaml
+          if git diff --cached --quiet; then
+            echo "chart $VERSION is already published"
+            exit 0
+          fi
+          git commit -m "chore: publish kwatch Helm chart $VERSION"
+          git push origin HEAD:main
+
+      - name: Trigger Render deploy
+        env:
+          RENDER_DEPLOY_HOOK_URL: ${{ secrets.RENDER_DEPLOY_HOOK_URL }}
+        run: |
+          set -euo pipefail
+          curl --fail --silent --show-error --request POST "$RENDER_DEPLOY_HOOK_URL" >/tmp/render-deploy-response.json
+          echo "Render deploy was triggered"
+
+      - name: Summary
+        env:
+          VERSION: ${{ steps.rel.outputs.version }}
+        run: |
+          {
+            echo "## Helm chart $VERSION published"
+            echo
+            echo "- Repository: https://kwatch.dev/charts"
+            echo "- Package: https://kwatch.dev/charts/kwatch-$VERSION.tgz"
+            echo "- Render deploy: triggered by the kwatch.dev main push"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+  verify_published_artifacts:
+    name: Verify stable release artifacts
+    if: ${{ always() && github.event_name == 'release' && github.event.release.prerelease == false }}
+    needs: [push_to_registry, publish_helm_chart]
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: read
+      packages: read
+    steps:
+      - name: Require publishing jobs to succeed
+        env:
+          IMAGE_JOB: ${{ needs.push_to_registry.result }}
+          CHART_JOB: ${{ needs.publish_helm_chart.result }}
+        run: |
+          set -euo pipefail
+          if [ "$IMAGE_JOB" != "success" ] || [ "$CHART_JOB" != "success" ]; then
+            echo "::error::release artifacts were not published (image=$IMAGE_JOB, chart=$CHART_JOB)"
+            exit 1
+          fi
+
+      - name: Verify container image
+        env:
+          TAG: ${{ github.event.release.tag_name }}
+        run: |
+          set -euo pipefail
+          docker buildx imagetools inspect "ghcr.io/abahmed/kwatch:$TAG" >/dev/null
+
+      - name: Verify public Helm repository
+        env:
+          VERSION: ${{ github.event.release.tag_name }}
+        run: |
+          set -euo pipefail
+          VERSION="${VERSION#v}"
+          index_url="https://kwatch.dev/charts/index.yaml"
+          package_url="https://kwatch.dev/charts/kwatch-$VERSION.tgz"
+          for attempt in $(seq 1 30); do
+            if curl --fail --silent --show-error --location "$index_url" -o /tmp/index.yaml \
+              && grep -q "version: $VERSION" /tmp/index.yaml \
+              && curl --fail --silent --show-error --location "$package_url" -o /dev/null; then
+              echo "verified chart $VERSION at $index_url"
+              exit 0
+            fi
+            echo "waiting for Render to publish chart $VERSION (attempt $attempt/30)"
+            sleep 20
+          done
+          echo "::error::chart $VERSION was not reachable from kwatch.dev after Render deployment wait"
+          exit 1

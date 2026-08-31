@@ -23,10 +23,12 @@ func StableFingerprint(ev event.Event, owner string, cs *model.ContainerState) s
 		container = ""
 	}
 	identity := owner
-	if ev.Resource == "pod" && ev.OwnerKind == "" && owner == ev.PodName {
-		// The prefix survives object replacement while the concrete generated
-		// Pod name does not.
-		identity = "generated/" + strings.TrimSpace(ev.PodGenerateName)
+	if ev.Resource == "pod" && ev.OwnerKind == "" && (owner == "" || owner == ev.PodName) {
+		if lineage := strings.TrimSpace(ev.PodLineageID); lineage != "" {
+			identity = "lineage/" + stableIdentityHash(ev.Namespace+":"+lineage)
+		} else if uid := strings.TrimSpace(ev.PodUID); uid != "" {
+			identity = "uid/" + uid
+		}
 	}
 	canonical := strings.Join([]string{
 		strings.ToLower(strings.TrimSpace(ev.Namespace)),

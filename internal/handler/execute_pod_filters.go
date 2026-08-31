@@ -49,6 +49,12 @@ func (h *handler) executePodFilters(ctx *filter.Context) {
 	ownerName := ""
 	if ctx.Owner != nil {
 		ownerName = ctx.Owner.Name
+	} else if len(ctx.Pod.OwnerReferences) == 0 {
+		// An ownerless Pod is its own logical owner. This keeps independent
+		// ownerless Pods separate while allowing generated replacements to be
+		// folded by correlation only when the Pod has authoritative identity
+		// metadata (UID or explicit lineage).
+		ownerName = ctx.Pod.Name
 	}
 
 	klog.V(
@@ -74,6 +80,8 @@ func (h *handler) executePodFilters(ctx *filter.Context) {
 	h.signalEvent(&event.Signal{
 		Resource:        "pod",
 		PodName:         ctx.Pod.Name,
+		PodUID:          string(ctx.Pod.UID),
+		PodLineageID:    podLineageID(ctx.Pod),
 		PodGenerateName: ctx.Pod.GenerateName,
 		Container:       ".",
 		Namespace:       ctx.Pod.Namespace,

@@ -9,6 +9,9 @@ type Config struct {
 	// App general configuration
 	App App `yaml:"app"`
 
+	// Telemetry configures the anonymous installation heartbeat.
+	Telemetry Telemetry `yaml:"telemetry"`
+
 	// Upgrader configuration
 	Upgrader Upgrader `yaml:"upgrader"`
 
@@ -247,6 +250,12 @@ type Config struct {
 
 	// AuditLog configures structured JSON audit logging for all incidents.
 	AuditLog AuditLogConfig `yaml:"auditLog"`
+}
+
+// Telemetry configures the anonymous installation heartbeat. It is enabled
+// for official builds by default and can be disabled by the operator.
+type Telemetry struct {
+	Enabled bool `yaml:"enabled"`
 }
 
 // KnownProviders is the canonical set of known alert provider names.

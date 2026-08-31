@@ -17,6 +17,9 @@ func permissionsForConfig(cfg *config.Config) ([]Permission, []Permission) {
 		Permission{Resource: "serviceaccounts"},
 		Permission{Resource: "storageclasses", Group: "storage.k8s.io"},
 	)
+	cluster = append(cluster, Permission{
+		Resource: "selfsubjectaccessreviews", Group: "authorization.k8s.io", Verb: "create",
+	})
 	namespaced := permissionResources(
 		Permission{Resource: "pods"},
 		Permission{Resource: "events"},
@@ -80,6 +83,18 @@ func permissionsForConfig(cfg *config.Config) ([]Permission, []Permission) {
 			Permission{Resource: "flowschemas", Group: "flowcontrol.apiserver.k8s.io"},
 			Permission{Resource: "prioritylevelconfigurations", Group: "flowcontrol.apiserver.k8s.io"},
 			Permission{Resource: "endpoints"},
+			Permission{Resource: "volumeattachments", Group: "storage.k8s.io"},
+			Permission{Resource: "csidrivers", Group: "storage.k8s.io"},
+			Permission{Resource: "volumesnapshots", Group: "snapshot.storage.k8s.io"},
+			Permission{Resource: "volumesnapshotcontents", Group: "snapshot.storage.k8s.io"},
+			Permission{Resource: "volumesnapshotclasses", Group: "snapshot.storage.k8s.io"},
+			Permission{Resource: "gatewayclasses", Group: "gateway.networking.k8s.io"},
+			Permission{Resource: "gateways", Group: "gateway.networking.k8s.io"},
+			Permission{Resource: "httproutes", Group: "gateway.networking.k8s.io"},
+			Permission{Resource: "grpcroutes", Group: "gateway.networking.k8s.io"},
+			Permission{Resource: "tcproutes", Group: "gateway.networking.k8s.io"},
+			Permission{Resource: "tlsroutes", Group: "gateway.networking.k8s.io"},
+			Permission{Resource: "referencegrants", Group: "gateway.networking.k8s.io"},
 		)
 	}
 	// The CRD watcher is startup/live infrastructure and is independent of

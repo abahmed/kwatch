@@ -1,6 +1,8 @@
 package correlation
 
 import (
+	"crypto/sha256"
+	"encoding/hex"
 	"strings"
 
 	"github.com/abahmed/kwatch/internal/event"
@@ -21,11 +23,20 @@ func BuildKey(namespace, owner, reason, container string) model.IncidentKey {
 // its actual name because Kubernetes provides no evidence that another Pod is
 // its replacement.
 func incidentOwner(ev event.Event, owner string) string {
-	if ev.Resource == "pod" && ev.OwnerKind == "" &&
-		ev.PodGenerateName != "" && owner == ev.PodName {
-		return "generated/" + ev.PodGenerateName
+	if ev.Resource == "pod" && ev.OwnerKind == "" && (owner == "" || owner == ev.PodName) {
+		if lineage := strings.TrimSpace(ev.PodLineageID); lineage != "" {
+			return "lineage/" + stableIdentityHash(ev.Namespace+":"+lineage)
+		}
+		if uid := strings.TrimSpace(ev.PodUID); uid != "" {
+			return "uid/" + uid
+		}
 	}
 	return owner
+}
+
+func stableIdentityHash(value string) string {
+	sum := sha256.Sum256([]byte(value))
+	return hex.EncodeToString(sum[:8])
 }
 
 // GlobalKey builds the cluster-scoped key form "<reason>|global|<scope>" used

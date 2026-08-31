@@ -107,9 +107,11 @@ func CheckHTTPResponse(resp *http.Response, provider string) error {
 
 // Event used to represent info needed by providers to send messages
 type Event struct {
-	Resource string // "pod", "node", "pvc"
-	PodName  string
-	// PodGenerateName is the stable name prefix for generated Pod replacements.
+	Resource     string // "pod", "node", "pvc"
+	PodName      string
+	PodUID       string // UID of the concrete Pod instance
+	PodLineageID string // explicit stable lineage for ownerless Pods
+	// PodGenerateName is evidence only; it is never an authoritative identity.
 	PodGenerateName string
 	ContainerName   string
 	Image           string

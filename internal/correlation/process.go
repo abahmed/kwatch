@@ -74,6 +74,7 @@ func (e *Engine) processLocked(
 	if c := e.attribute(ev, owner, key, res); c.kind != causeNone {
 		return e.recordSymptom(c, ev, owner, cs, key, res, now)
 	}
+	e.rememberPodResource(key, ev)
 
 	// 3. cooldown
 	if e.skipByCooldown(key, ev) {
@@ -164,8 +165,9 @@ func (e *Engine) newIncident(
 	if ev.ContainerName != "" && ev.ContainerName != "." {
 		inc.Containers[ev.ContainerName] = true
 	}
-	// Bare pods (no owner) are identified by their own name.
-	if owner == "" {
+	// Keep the human-facing incident name as the concrete Pod name even when
+	// correlation uses a UID or explicit lineage internally.
+	if owner == "" || (ev.Resource == "pod" && ev.OwnerKind == "" && owner == ev.PodName) {
 		inc.Name = ev.PodName
 	}
 	inc.LastContainerState = cs

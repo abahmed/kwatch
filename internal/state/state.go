@@ -30,6 +30,7 @@ const (
 	firstRunKey            = "first-run"
 	notifiedVersionKey     = "notified-version"
 	lastSeenKey            = "last-seen"
+	telemetryLastSentKey   = "telemetry-last-sent"
 	baselineKey            = "baseline"
 	incidentsKey           = "incidents"
 	pvcUsageKey            = "pvc-usage"
@@ -227,6 +228,38 @@ func (s *StateManager) GetLastSeen(ctx context.Context) time.Time {
 		return time.Time{}
 	}
 	return t
+}
+
+// GetTelemetryLastSent returns the last time the anonymous heartbeat was
+// successfully sent. The zero time means no heartbeat has been sent yet.
+func (s *StateManager) GetTelemetryLastSent(ctx context.Context) time.Time {
+	cm, err := s.client.CoreV1().ConfigMaps(
+		s.namespace,
+	).Get(ctx, stateConfigMapName, metav1.GetOptions{})
+	if err != nil {
+		return time.Time{}
+	}
+	raw := cm.Data[telemetryLastSentKey]
+	if raw == "" {
+		return time.Time{}
+	}
+	t, err := time.Parse(time.RFC3339, raw)
+	if err != nil {
+		klog.V(2).InfoS("ignoring unparsable telemetry last-sent value", "value", raw)
+		return time.Time{}
+	}
+	return t
+}
+
+// SetTelemetryLastSent records the last successful anonymous heartbeat.
+func (s *StateManager) SetTelemetryLastSent(ctx context.Context, t time.Time) error {
+	return s.stateMgr.UpdateWithRetry(ctx, func(cm *corev1.ConfigMap) error {
+		if cm.Data == nil {
+			cm.Data = make(map[string]string)
+		}
+		cm.Data[telemetryLastSentKey] = t.UTC().Format(time.RFC3339)
+		return nil
+	})
 }
 
 func (s *StateManager) EnsureClusterID(ctx context.Context) (string, error) {

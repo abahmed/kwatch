@@ -187,6 +187,21 @@ you manage updates yourself (e.g. you pin images).
 |:---|---|
 | `upgrader.disableUpdateCheck` | 🔕 Don't check for new kwatch versions |
 
+## 📡 Anonymous telemetry
+
+Official builds send a small anonymous heartbeat so the project can estimate
+adoption. The payload contains only the cluster UUID already stored in
+`kwatch-state` and the kwatch version. It is sent after startup and at most
+once per week to `https://api.kwatch.dev/v1/telemetry/heartbeat`.
+
+| Parameter | What it does |
+|:---|:---|
+| `telemetry.enabled` | ✅ Send anonymous adoption heartbeats (default: `true`) |
+
+Disable it with `telemetry.enabled: false`. Development builds and recognized CI
+environments do not send telemetry. Telemetry failures never affect monitoring
+startup or runtime.
+
 ---
 
 ## 📊 Monitors

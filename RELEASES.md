@@ -3,7 +3,8 @@
 This document describes how kwatch is branched and released. Releases are cut with the
 `.github/workflows/release.yml` workflow using `workflow_dispatch`. It creates the version
 tag and a GitHub Release; `.github/workflows/publish.yml` then builds and pushes the
-multi-arch container image to `ghcr.io/abahmed/kwatch`.
+multi-arch container image to `ghcr.io/abahmed/kwatch` and publishes the stable Helm
+chart to `https://kwatch.dev/charts`.
 
 ## Branch model
 
@@ -214,22 +215,34 @@ Three rules follow from this:
 - **New version pin? Put it inside a block.** If it belongs to the stable channel it goes in
   a `stable-install` region; if it documents the preview it goes in the `rc-install` one.
 
-## Releasing the Helm chart (manual)
+## Releasing the Helm chart
 
-The chart (`deploy/chart`) is published to the ArtifactHub **kwatch** repository. After a
-stable release, package and upload it manually — always from `main` HEAD **after** the
-`stable` workflow's version-bump commit, so `Chart.yaml` carries the released version:
+Stable chart publishing is automatic. The `publish_helm_chart` job in
+`.github/workflows/publish.yml` runs from the stable GitHub Release tag, verifies that
+`deploy/chart/Chart.yaml` has the same version, runs `helm lint`, packages the chart, and
+updates `static/charts/index.yaml` in the `abahmed/kwatch.dev` repository.
 
-```sh
-# Update the artifacthub.io/changes annotation in Chart.yaml to describe this release first
-helm lint deploy/chart
-helm package deploy/chart   # uses Chart.yaml version, e.g. kwatch-0.11.0.tgz
-# upload the resulting .tgz to the ArtifactHub kwatch repository
-```
+The push to `kwatch.dev`'s `main` branch triggers its Render deployment. Docusaurus serves
+the generated files under `static/charts` at `https://kwatch.dev/charts`, so users receive
+the new chart without a manual upload. RC releases are intentionally excluded; they remain
+available through the versioned manifests and container images only.
 
-Nothing in this repository publishes the chart. `Chart.yaml` is the source of truth for the
-version; the copy users install comes from ArtifactHub and only updates when someone runs
-the steps above.
+One repository secret is required in `abahmed/kwatch`:
+
+- `RELEASE_TOKEN`: a token with permission to push the protected `main` branch, create
+  tags/releases, trigger `publish.yml`, and **Contents: Read and write** access to
+  `abahmed/kwatch.dev`. It must not be replaced by the default `GITHUB_TOKEN`.
+- `RENDER_DEPLOY_HOOK_URL`: the secret Deploy Hook URL copied from the `kwatch.dev` Render
+  service settings. The workflow sends a `POST` after pushing the chart repository.
+
+Disable Render's normal **Auto-Deploy** for the `kwatch.dev` service when using this hook;
+otherwise the same `kwatch.dev` push can start two deploys.
+
+If the token is missing or cannot push to `kwatch.dev`, the chart job fails without changing
+the website repository. The container image job and GitHub Release are separate jobs, so the
+release remains inspectable and the publish workflow can be safely re-run after fixing the
+token. The final verification job fails the stable release workflow if either the image or
+the public chart is not reachable.
 
 ## Upgrader notes
 

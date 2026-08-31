@@ -81,6 +81,9 @@ func clusterPermissions() []Permission {
 			permissions = append(permissions, resource)
 		}
 	}
+	permissions = append(permissions, Permission{
+		Resource: "selfsubjectaccessreviews", Group: "authorization.k8s.io", Verb: "create",
+	})
 	return permissions
 }
 

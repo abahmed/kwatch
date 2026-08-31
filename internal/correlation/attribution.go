@@ -233,12 +233,14 @@ func (e *Engine) recordSymptom(
 			inc.LastSeen = now
 			inc.LastUpdate = now
 		}
+		e.rememberPodResource(key, ev)
 		inc.SuppressedBy = c.mass
 		return inc, model.ActionSkip
 
 	case causeOwnerWorkload:
 		c.owner.Count++
 		addResource(c.owner, ev.PodName)
+		e.rememberPodResource(c.owner.Key, ev)
 		c.owner.LastSeen = now
 		return nil, model.ActionSkip
 	}

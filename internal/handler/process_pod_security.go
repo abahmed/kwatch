@@ -149,5 +149,5 @@ func uniqueNames(names []string) []string {
 }
 
 func podReferenceSignal(pod *corev1.Pod, reason, kind, name string) *event.Signal {
-	return &event.Signal{Resource: "pod", Namespace: pod.Namespace, PodName: pod.Name, NodeName: pod.Spec.NodeName, Owner: pod.Namespace + "/" + pod.Name, Reason: reason, Labels: pod.Labels, Hint: fmt.Sprintf("pod references required %s %q, but it is not present in the namespace", kind, name)}
+	return &event.Signal{Resource: "pod", Namespace: pod.Namespace, PodName: pod.Name, PodUID: string(pod.UID), PodLineageID: podLineageID(pod), PodGenerateName: pod.GenerateName, NodeName: pod.Spec.NodeName, Owner: podIncidentOwner(pod), Reason: reason, Labels: pod.Labels, Hint: fmt.Sprintf("pod references required %s %q, but it is not present in the namespace", kind, name)}
 }

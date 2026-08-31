@@ -30,8 +30,9 @@ rules:
 - apiGroups: ["storage.k8s.io"]
   resources: ["storageclasses"]
   verbs: ["get", "watch", "list"]
-	- apiGroups: ["admissionregistration.k8s.io"]
-	  resources: ["mutatingwebhookconfigurations", "validatingwebhookconfigurations", "validatingadmissionpolicies", "validatingadmissionpolicybindings"]
+
+- apiGroups: ["admissionregistration.k8s.io"]
+  resources: ["mutatingwebhookconfigurations", "validatingwebhookconfigurations", "validatingadmissionpolicies", "validatingadmissionpolicybindings"]
   verbs: ["get", "watch", "list"]
 - apiGroups: ["admissionregistration.k8s.io"]
   resources: ["mutatingadmissionpolicies", "mutatingadmissionpolicybindings"]

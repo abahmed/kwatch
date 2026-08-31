@@ -85,6 +85,8 @@ func (h *handler) executeContainersFilters(ctx *filter.Context) {
 		ownerName := ""
 		if ctx.Owner != nil {
 			ownerName = ctx.Owner.Name
+		} else if len(ctx.Pod.OwnerReferences) == 0 {
+			ownerName = ctx.Pod.Name
 		}
 
 		klog.V(2).InfoS(
@@ -105,6 +107,8 @@ func (h *handler) executeContainersFilters(ctx *filter.Context) {
 		h.signalEvent(&event.Signal{
 			Resource:        "pod",
 			PodName:         ctx.Pod.Name,
+			PodUID:          string(ctx.Pod.UID),
+			PodLineageID:    podLineageID(ctx.Pod),
 			PodGenerateName: ctx.Pod.GenerateName,
 			Container:       ctx.Container.Container.Name,
 			Image:           ctx.Container.Container.Image,
@@ -325,15 +329,18 @@ func (h *handler) emitHighRestartAlert(
 	lastReason, lastEC := lastTermInfo(container)
 
 	h.signalEvent(&event.Signal{
-		Resource:     "pod",
-		PodName:      ctx.Pod.Name,
-		Container:    container.Name,
-		Image:        container.Image,
-		Namespace:    ctx.Pod.Namespace,
-		NodeName:     ctx.Pod.Spec.NodeName,
-		Reason:       constant.ReasonHighRestartCount,
-		Labels:       ctx.Pod.Labels,
-		RestartCount: container.RestartCount,
+		Resource:        "pod",
+		PodName:         ctx.Pod.Name,
+		PodUID:          string(ctx.Pod.UID),
+		PodLineageID:    podLineageID(ctx.Pod),
+		PodGenerateName: ctx.Pod.GenerateName,
+		Container:       container.Name,
+		Image:           container.Image,
+		Namespace:       ctx.Pod.Namespace,
+		NodeName:        ctx.Pod.Spec.NodeName,
+		Reason:          constant.ReasonHighRestartCount,
+		Labels:          ctx.Pod.Labels,
+		RestartCount:    container.RestartCount,
 		Hint: fmt.Sprintf(
 			"container restarted %d times (last exit: %s, code %d)",
 			container.RestartCount,

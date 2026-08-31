@@ -60,14 +60,42 @@ func (w *Watcher) Start(ctx context.Context) error {
 		return fmt.Errorf("crdwatch: failed to create dynamic client: %w", err)
 	}
 
-	// Pre-flight: check if the CRD is installed
+	// Pre-flight: check if the CRD is installed. If it is installed later,
+	// keep watching for it instead of requiring a process restart.
 	if _, err := dc.Resource(gvr).Namespace(w.namespace).List(ctx, metav1.ListOptions{Limit: 1}); err != nil {
 		if errors.IsNotFound(err) {
-			klog.InfoS("CRD kwatchconfigs.kwatch.abahmed.dev not found — CRD watcher skipped")
+			klog.InfoS("CRD kwatchconfigs.kwatch.abahmed.dev not found; waiting for installation")
+			go w.waitForCRD(ctx, dc)
 			return nil
 		}
 		return fmt.Errorf("crdwatch: preflight check failed: %w", err)
 	}
+	return w.startInformer(ctx, dc)
+}
+
+func (w *Watcher) waitForCRD(ctx context.Context, dc dynamic.Interface) {
+	ticker := time.NewTicker(time.Minute)
+	defer ticker.Stop()
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case <-ticker.C:
+			if _, err := dc.Resource(gvr).Namespace(w.namespace).List(ctx, metav1.ListOptions{Limit: 1}); err != nil {
+				if !errors.IsNotFound(err) {
+					klog.V(2).InfoS("CRD watcher discovery unavailable", "error", err)
+				}
+				continue
+			}
+			if err := w.startInformer(ctx, dc); err != nil {
+				klog.ErrorS(err, "CRD watcher failed to start after installation")
+			}
+			return
+		}
+	}
+}
+
+func (w *Watcher) startInformer(ctx context.Context, dc dynamic.Interface) error {
 
 	factory := dynamicinformer.NewFilteredDynamicSharedInformerFactory(dc, w.resync, w.namespace, nil)
 	inf := factory.ForResource(gvr).Informer()

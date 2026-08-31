@@ -2,6 +2,7 @@ package controller
 
 import (
 	corev1 "k8s.io/api/core/v1"
+	"k8s.io/apimachinery/pkg/api/meta"
 	"k8s.io/client-go/tools/cache"
 
 	"github.com/abahmed/kwatch/internal/change"
@@ -115,7 +116,23 @@ func (c *Controller) podEventHandler() cache.ResourceEventHandlerFuncs {
 					c.removePodFromGraph(namespace, name)
 				}
 			}
-			c.pod.enqueue(obj)
+			c.pod.queue.Add(podDeleteQueueKey(obj))
 		},
 	}
+}
+
+func podDeleteQueueKey(obj interface{}) string {
+	key, err := cache.DeletionHandlingMetaNamespaceKeyFunc(obj)
+	if err != nil {
+		return ""
+	}
+	if tombstone, ok := obj.(cache.DeletedFinalStateUnknown); ok {
+		obj = tombstone.Obj
+	} else if tombstone, ok := obj.(*cache.DeletedFinalStateUnknown); ok && tombstone != nil {
+		obj = tombstone.Obj
+	}
+	if accessor, err := meta.Accessor(obj); err == nil && accessor.GetUID() != "" {
+		return key + "#" + string(accessor.GetUID())
+	}
+	return key
 }

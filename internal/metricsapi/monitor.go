@@ -102,35 +102,35 @@ func (m *Monitor) processPod(ctx context.Context, metrics *unstructured.Unstruct
 			continue
 		}
 		usage, _, _ := unstructured.NestedStringMap(container, "usage")
-		m.processMetric(namespace, metrics.GetName(), name, usage, limit, seen, pod.Labels)
+		m.processMetric(pod, name, usage, limit, seen)
 	}
 	for name := range limits {
 		if !seen[name] {
-			m.resolveContainer(namespace, metrics.GetName(), name, constant.ReasonContainerMemoryHigh)
-			m.resolveContainer(namespace, metrics.GetName(), name, constant.ReasonContainerCPUHigh)
+			m.resolveContainer(pod, name, constant.ReasonContainerMemoryHigh)
+			m.resolveContainer(pod, name, constant.ReasonContainerCPUHigh)
 		}
 	}
 }
 
-func (m *Monitor) processMetric(namespace, podName, containerName string, usage map[string]string, limit corev1.ResourceList, seen map[string]bool, labels map[string]string) {
+func (m *Monitor) processMetric(pod *corev1.Pod, containerName string, usage map[string]string, limit corev1.ResourceList, seen map[string]bool) {
 	seen[containerName] = true
 	if usageMemory, ok := parseQuantity(usage[string(corev1.ResourceMemory)]); ok {
-		if sig := usageSignal(namespace, podName, containerName, usageMemory, limit.Memory(), m.cfg.MemoryWarningPercent, m.cfg.MemoryCriticalPercent, constant.ReasonContainerMemoryHigh, labels, "memory"); sig != nil {
+		if sig := usageSignal(pod, containerName, usageMemory, limit.Memory(), m.cfg.MemoryWarningPercent, m.cfg.MemoryCriticalPercent, constant.ReasonContainerMemoryHigh, "memory"); sig != nil {
 			m.report(sig)
 		} else {
-			m.resolveContainer(namespace, podName, containerName, constant.ReasonContainerMemoryHigh)
+			m.resolveContainer(pod, containerName, constant.ReasonContainerMemoryHigh)
 		}
 	}
 	if usageCPU, ok := parseQuantity(usage[string(corev1.ResourceCPU)]); ok {
-		if sig := usageSignal(namespace, podName, containerName, usageCPU, limit.Cpu(), m.cfg.CPUWarningPercent, m.cfg.CPUCriticalPercent, constant.ReasonContainerCPUHigh, labels, "cpu"); sig != nil {
+		if sig := usageSignal(pod, containerName, usageCPU, limit.Cpu(), m.cfg.CPUWarningPercent, m.cfg.CPUCriticalPercent, constant.ReasonContainerCPUHigh, "cpu"); sig != nil {
 			m.report(sig)
 		} else {
-			m.resolveContainer(namespace, podName, containerName, constant.ReasonContainerCPUHigh)
+			m.resolveContainer(pod, containerName, constant.ReasonContainerCPUHigh)
 		}
 	}
 }
 
-func usageSignal(namespace, pod, container string, usage, limit *resource.Quantity, warning, critical int, reason string, labels map[string]string, unit string) *event.Signal {
+func usageSignal(pod *corev1.Pod, container string, usage, limit *resource.Quantity, warning, critical int, reason, unit string) *event.Signal {
 	if limit == nil || limit.IsZero() || usage == nil {
 		return nil
 	}
@@ -142,8 +142,12 @@ func usageSignal(namespace, pod, container string, usage, limit *resource.Quanti
 	if percent >= float64(critical) {
 		severity = model.SeverityCritical
 	}
-	return &event.Signal{Resource: "pod", Namespace: namespace, PodName: pod, Container: container,
-		Owner: namespace + "/" + pod, Reason: reason, Labels: labels, Severity: severity,
+	owner := pod.Namespace + "/" + pod.Name
+	if len(pod.OwnerReferences) == 0 {
+		owner = pod.Name
+	}
+	return &event.Signal{Resource: "pod", Namespace: pod.Namespace, PodName: pod.Name, PodUID: string(pod.UID), PodLineageID: pod.Annotations[event.PodLineageAnnotation], Container: container,
+		Owner: owner, Reason: reason, Labels: pod.Labels, Severity: severity,
 		Hint: fmt.Sprintf("container %s %s usage is %.0f%% of its limit (%s/%s)", container, unit, percent, usage.String(), limit.String())}
 }
 
@@ -164,9 +168,13 @@ func parseQuantity(value string) (*resource.Quantity, bool) {
 }
 
 func (m *Monitor) report(sig *event.Signal) {
-	m.correlator.Process(event.Event{Resource: sig.Resource, Namespace: sig.Namespace, PodName: sig.PodName, ContainerName: sig.Container, Reason: sig.Reason, Hint: sig.Hint, Labels: sig.Labels, Severity: sig.Severity}, sig.Owner, nil)
+	m.correlator.Process(event.Event{Resource: sig.Resource, Namespace: sig.Namespace, PodName: sig.PodName, PodUID: sig.PodUID, PodLineageID: sig.PodLineageID, ContainerName: sig.Container, Reason: sig.Reason, Hint: sig.Hint, Labels: sig.Labels, Severity: sig.Severity}, sig.Owner, nil)
 }
 
-func (m *Monitor) resolveContainer(namespace, pod, container, reason string) {
-	m.correlator.MarkResolved(correlation.BuildKey(namespace, namespace+"/"+pod, reason, container))
+func (m *Monitor) resolveContainer(pod *corev1.Pod, container, reason string) {
+	owner := pod.Namespace + "/" + pod.Name
+	if len(pod.OwnerReferences) == 0 {
+		owner = pod.Name
+	}
+	m.correlator.MarkResolved(correlation.IncidentKey(event.Event{Resource: "pod", Namespace: pod.Namespace, PodName: pod.Name, PodUID: string(pod.UID), PodLineageID: pod.Annotations[event.PodLineageAnnotation], ContainerName: container, Reason: reason}, owner, nil))
 }

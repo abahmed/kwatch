@@ -50,6 +50,17 @@ jobs:
           echo "::error::release must be dispatched from main, got ${{ github.ref }}"
           exit 1
 
+      - name: Require release token
+        if: ${{ !inputs.dry_run }}
+        env:
+          RELEASE_TOKEN: ${{ secrets.RELEASE_TOKEN }}
+        run: |
+          set -euo pipefail
+          if [ -z "$RELEASE_TOKEN" ]; then
+            echo "::error::RELEASE_TOKEN is required for a real release. A GITHUB_TOKEN-created release will not trigger Publish."
+            exit 1
+          fi
+
       - name: Check out the repo
         uses: actions/checkout@v7
         with:
@@ -381,7 +392,7 @@ jobs:
           SHA: ${{ steps.bump.outputs.sha || steps.target.outputs.sha }}
           # Must NOT be the default GITHUB_TOKEN: releases it creates do not
           # trigger the Publish workflow, so no Docker image gets built.
-          GH_TOKEN: ${{ secrets.RELEASE_TOKEN || github.token }}
+          GH_TOKEN: ${{ secrets.RELEASE_TOKEN }}
         run: |
           set -euo pipefail
           PRERELEASE_ARGS=""

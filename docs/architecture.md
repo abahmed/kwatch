@@ -4,6 +4,20 @@ kwatch is not one of those tools that just forwards every Kubernetes event to yo
 Events happen constantly in a cluster — most of them are harmless. kwatch connects the dots,
 cuts the noise, and explains what broke and **why** in one plain message.
 
+### Pod identity and replacements
+
+Correlation uses a Kubernetes controller's owner UID when a Pod has an
+`OwnerReference`. For an ownerless Pod, kwatch uses the Pod UID, so a new Pod
+cannot inherit an unrelated incident. If an ownerless Pod is intentionally
+recreated as the same logical unit, put this annotation on the Pod template:
+
+```yaml
+kwatch.abahmed.dev/lineage-id: payments-worker
+```
+
+`generateName`, labels, and matching specs are evidence shown in diagnosis,
+not proof of replacement and never cause deduplication by themselves.
+
 This page explains the ideas behind those alerts in simple English. For setup and every
 option, see the [README](../README.md) and the [configuration reference](./configuration.md).
 

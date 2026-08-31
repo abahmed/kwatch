@@ -3,6 +3,7 @@ package config
 func DefaultConfig() *Config {
 	return &Config{
 		App:                          App{LogFormatter: "text"},
+		Telemetry:                    Telemetry{Enabled: true},
 		IgnoreFailedGracefulShutdown: true,
 		ReportStartupBaseline:        true,
 		MaxRecentLogLines:            50,
