@@ -12,6 +12,7 @@ import (
 	"k8s.io/klog/v2"
 
 	"github.com/abahmed/kwatch/internal/clock"
+	"github.com/abahmed/kwatch/internal/config"
 )
 
 type Permission struct {
@@ -32,15 +33,14 @@ type Status struct {
 }
 
 type Monitor struct {
-	client     kubernetes.Interface
-	mu         sync.RWMutex
-	status     Status
-	namespaces []string
-	now        func() time.Time
+	client                kubernetes.Interface
+	mu                    sync.RWMutex
+	status                Status
+	namespaces            []string
+	clusterPermissions    []Permission
+	namespacedPermissions []Permission
+	now                   func() time.Time
 }
-
-var requiredClusterPermissions = clusterPermissions()
-var requiredNamespacedPermissions = namespacedPermissions()
 
 func namespacedPermissions() []Permission {
 	resources := []Permission{
@@ -85,7 +85,24 @@ func clusterPermissions() []Permission {
 }
 
 func New(client kubernetes.Interface) *Monitor {
-	return &Monitor{client: client, now: time.Now}
+	return &Monitor{
+		client:                client,
+		clusterPermissions:    clusterPermissions(),
+		namespacedPermissions: namespacedPermissions(),
+		now:                   time.Now,
+	}
+}
+
+// NewWithConfig checks only permissions needed by enabled monitors. New is
+// retained for callers that want the complete capability audit.
+func NewWithConfig(client kubernetes.Interface, cfg *config.Config) *Monitor {
+	cluster, namespaced := permissionsForConfig(cfg)
+	return &Monitor{
+		client:                client,
+		clusterPermissions:    cluster,
+		namespacedPermissions: namespaced,
+		now:                   time.Now,
+	}
 }
 
 // SetClock injects the clock used for security health timestamps.
@@ -148,8 +165,8 @@ func (m *Monitor) check(ctx context.Context) {
 	m.mu.RLock()
 	namespaces := append([]string(nil), m.namespaces...)
 	m.mu.RUnlock()
-	status := Status{Available: true, Checks: len(requiredClusterPermissions), LastCheck: m.nowTime(), Scope: "cluster"}
-	for _, permission := range requiredClusterPermissions {
+	status := Status{Available: true, Checks: len(m.clusterPermissions), LastCheck: m.nowTime(), Scope: "cluster"}
+	for _, permission := range m.clusterPermissions {
 		allowed, err := m.allowed(requestCtx, permission)
 		if err != nil {
 			status.Available = false
@@ -172,7 +189,7 @@ func (m *Monitor) check(ctx context.Context) {
 			continue
 		}
 		status.Scope = "cluster+namespace"
-		for _, permission := range requiredNamespacedPermissions {
+		for _, permission := range m.namespacedPermissions {
 			permission.Namespace = namespace
 			allowed, err := m.allowed(requestCtx, permission)
 			status.Checks++

@@ -322,7 +322,7 @@ func startChangeHistorySaver(ctx context.Context, stateMgr *state.StateManager, 
 }
 
 func configureSecurityMonitor(cfg *config.Config, client kubernetes.Interface, now func() time.Time) *security.Monitor {
-	monitor := security.New(client)
+	monitor := security.NewWithConfig(client, cfg)
 	monitor.SetClock(now)
 	namespaces := cfg.AllowedNamespaces
 	if len(namespaces) == 0 {

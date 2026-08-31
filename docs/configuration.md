@@ -163,6 +163,13 @@ missing; the controller continues with the remaining monitors. Metrics Server,
 Prometheus, a service mesh, and a cloud-provider API are not required for core
 Kubernetes object monitoring.
 
+The `/security` capability audit is scoped to the monitors enabled in the
+loaded configuration: disabled rollout, TLS, storage, networking, admission,
+and other optional monitors are not reported as missing capabilities. The
+bundled ClusterRole remains a static superset so one manifest can support any
+configuration; installations requiring least privilege can remove rules for
+disabled monitors from their copied manifest without changing kwatch.
+
 The `/kubelet` health status reports `healthy`, `partial`, `unavailable`, or
 `rbacDenied`, alongside Summary, cAdvisor, runtime, and node counts. The
 `/controlplane`, `/security`, and `/informer` endpoints expose the same state
