@@ -3,7 +3,6 @@ package controller
 import (
 	"fmt"
 	"strings"
-	"time"
 
 	coordinationv1 "k8s.io/api/coordination/v1"
 	corev1 "k8s.io/api/core/v1"
@@ -216,10 +215,10 @@ func (c *Controller) buildGraph() {
 	if c.graph == nil {
 		return
 	}
-	started := time.Now()
+	started := c.nowTime()
 	metrics.Default.GraphRebuilds.Add(1)
 	defer func() {
-		metrics.Default.GraphRebuildLatencyMs.Store(time.Since(started).Milliseconds())
+		metrics.Default.GraphRebuildLatencyMs.Store(c.nowTime().Sub(started).Milliseconds())
 	}()
 
 	next := c.graphBuilder(kwcontext.NewResourceGraph())

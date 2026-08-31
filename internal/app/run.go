@@ -12,6 +12,7 @@ import (
 	"github.com/abahmed/kwatch/internal/alert"
 	"github.com/abahmed/kwatch/internal/audit"
 	"github.com/abahmed/kwatch/internal/client"
+	"github.com/abahmed/kwatch/internal/clock"
 	"github.com/abahmed/kwatch/internal/config"
 	"github.com/abahmed/kwatch/internal/constant"
 	kwcontext "github.com/abahmed/kwatch/internal/context"
@@ -73,6 +74,11 @@ type serverDeps struct {
 
 // Run loads config and wires all monitors, then runs until shutdown.
 func Run() int {
+	return run(time.Now)
+}
+
+func run(now func() time.Time) int {
+	clock.Set(now)
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
@@ -81,7 +87,7 @@ func Run() int {
 		klog.ErrorS(err, "failed to load config")
 		return 1
 	}
-	cfg.WatchStartTime = time.Now()
+	cfg.WatchStartTime = now()
 
 	klog.InfoS(fmt.Sprintf(constant.WelcomeMsg, version.Short()))
 
@@ -115,18 +121,21 @@ func Run() int {
 	}
 
 	healthServer := health.NewHealthServer(cfg.HealthCheck)
-	securityMonitor := configureSecurityMonitor(cfg, k8sClient)
+	securityMonitor := configureSecurityMonitor(cfg, k8sClient, now)
 	healthServer.SetSecurityLister(securityMonitor)
 
 	am := sm.GetAlertManager()
+	am.SetClock(now)
 	configureAlertManager(ctx, cfg, am)
 
 	up := upgrader.NewUpgrader(&cfg.Upgrader, am, sm.GetStateManager())
 	go up.CheckUpdates(ctx)
 
 	stateMgr := sm.GetStateManager()
+	stateMgr.SetClock(now)
 
 	tracker := loadChangeTracker(ctx, stateMgr)
+	tracker.SetClock(now)
 	go startChangeHistorySaver(ctx, stateMgr, tracker)
 	stateMgr.MigrateLegacyBaseline(ctx)
 	// Migrate before loading: on the first release that uses the dedicated
@@ -153,6 +162,7 @@ func Run() int {
 	})
 
 	insightEngine := insight.NewEngine(graph, tracker)
+	insightEngine.SetClock(now)
 	correlator := newCorrelator(
 		cfg,
 		baseline,
@@ -162,6 +172,7 @@ func Run() int {
 		baselineCh,
 		insightEngine,
 	)
+	correlator.SetClock(now)
 	insightEngine.SetActiveChecker(func(kind, namespace, name string) bool {
 		for _, inc := range correlator.ActiveIncidents() {
 			for _, key := range insight.IncidentGraphKeys(inc) {
@@ -206,7 +217,7 @@ func Run() int {
 	ctl.SetGraph(graph)
 	ctl.SetReadyFunc(func() { healthServer.SetReady(true) })
 
-	statusRun := configureStatusMonitor(cfg, ctl, graph, correlator)
+	statusRun := configureStatusMonitor(cfg, ctl, graph, correlator, now)
 
 	metricsRun := configureMetricsMonitor(cfg, ctl, k8sClient, correlator)
 
@@ -218,6 +229,7 @@ func Run() int {
 	var probeRun func(context.Context)
 	if cfg.ActiveProbeMonitor.Enabled {
 		probeMonitor := probe.New(cfg.ActiveProbeMonitor, correlator)
+		probeMonitor.SetClock(now)
 		probeMonitor.SetKubernetesClient(k8sClient)
 		probeMonitor.SetGraph(graph)
 		probeRun = probeMonitor.Start
@@ -233,7 +245,7 @@ func Run() int {
 		kubeletRun = kubeletMonitor.Start
 	}
 	securityRun := securityMonitor.Start
-	controlPlaneRun := configureControlPlaneMonitor(cfg, k8sClient, healthServer, correlator)
+	controlPlaneRun := configureControlPlaneMonitor(cfg, k8sClient, healthServer, correlator, now)
 
 	storageRun := newStorageGraphRun(cfg, graph, correlator)
 	networkRun := newNetworkGraphRun(cfg, graph)
@@ -291,8 +303,9 @@ func startChangeHistorySaver(ctx context.Context, stateMgr *state.StateManager, 
 	}
 }
 
-func configureSecurityMonitor(cfg *config.Config, client kubernetes.Interface) *security.Monitor {
+func configureSecurityMonitor(cfg *config.Config, client kubernetes.Interface, now func() time.Time) *security.Monitor {
 	monitor := security.New(client)
+	monitor.SetClock(now)
 	namespaces := cfg.AllowedNamespaces
 	if len(namespaces) == 0 {
 		namespaces = []string{k8s.GetNamespace()}
@@ -301,7 +314,7 @@ func configureSecurityMonitor(cfg *config.Config, client kubernetes.Interface) *
 	return monitor
 }
 
-func configureControlPlaneMonitor(cfg *config.Config, clientset kubernetes.Interface, healthServer *health.HealthServer, correlator *correlation.Engine) func(context.Context) {
+func configureControlPlaneMonitor(cfg *config.Config, clientset kubernetes.Interface, healthServer *health.HealthServer, correlator *correlation.Engine, now func() time.Time) func(context.Context) {
 	if !cfg.ControlPlaneMonitor.Enabled {
 		return nil
 	}
@@ -315,11 +328,12 @@ func configureControlPlaneMonitor(cfg *config.Config, clientset kubernetes.Inter
 		klog.ErrorS(err, "failed to initialize control-plane monitor")
 		return nil
 	}
+	monitor.SetClock(now)
 	healthServer.SetControlPlaneLister(monitor)
 	return monitor.Start
 }
 
-func configureStatusMonitor(cfg *config.Config, ctl *controller.Controller, graph *kwcontext.ResourceGraph, correlator *correlation.Engine) func(context.Context) {
+func configureStatusMonitor(cfg *config.Config, ctl *controller.Controller, graph *kwcontext.ResourceGraph, correlator *correlation.Engine, now func() time.Time) func(context.Context) {
 	if !cfg.ClusterResourceMonitor.Enabled {
 		return nil
 	}
@@ -333,6 +347,7 @@ func configureStatusMonitor(cfg *config.Config, ctl *controller.Controller, grap
 		klog.ErrorS(err, "failed to initialize generic status monitor")
 		return nil
 	}
+	monitor.SetClock(now)
 	monitor.SetNamespaceFilter(ctl.NamespaceAllowed)
 	monitor.SetConditionRules(cfg.CrdConfig.FailureConditions)
 	monitor.SetGraphReferenceRules(cfg.CrdConfig.GraphReferences)

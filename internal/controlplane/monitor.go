@@ -13,6 +13,7 @@ import (
 	"k8s.io/client-go/rest"
 	"k8s.io/klog/v2"
 
+	"github.com/abahmed/kwatch/internal/clock"
 	"github.com/abahmed/kwatch/internal/config"
 	"github.com/abahmed/kwatch/internal/constant"
 	"github.com/abahmed/kwatch/internal/correlation"
@@ -54,6 +55,7 @@ type Monitor struct {
 	status     Status
 	failures   map[string]int
 	recoveries map[string]int
+	now        func() time.Time
 }
 
 func New(restConfig *rest.Config, client kubernetes.Interface, cfg config.ControlPlaneMonitor, correlator *correlation.Engine) (*Monitor, error) {
@@ -62,7 +64,21 @@ func New(restConfig *rest.Config, client kubernetes.Interface, cfg config.Contro
 		return nil, fmt.Errorf("controlplane: create REST client: %w", err)
 	}
 	return &Monitor{client: client, restClient: restClient, cfg: cfg, correlator: correlator,
-		status: Status{Components: make(map[string]EndpointStatus)}, failures: make(map[string]int), recoveries: make(map[string]int)}, nil
+		status: Status{Components: make(map[string]EndpointStatus)}, failures: make(map[string]int), recoveries: make(map[string]int), now: time.Now}, nil
+}
+
+// SetClock injects the wall clock used for status timestamps and probe latency.
+func (m *Monitor) SetClock(now func() time.Time) {
+	if now != nil {
+		m.now = now
+	}
+}
+
+func (m *Monitor) nowTime() time.Time {
+	if m.now != nil {
+		return m.now()
+	}
+	return clock.Now()
 }
 
 func (m *Monitor) Start(ctx context.Context) {
@@ -127,14 +143,15 @@ func (m *Monitor) check(ctx context.Context) {
 		m.checkComponent(probeCtx, component, pods.Items)
 	}
 	m.mu.Lock()
-	m.status.LastCheck = time.Now()
+	m.status.LastCheck = m.nowTime()
 	m.mu.Unlock()
 }
 
 func (m *Monitor) checkCoreDNS(ctx context.Context) {
-	started := time.Now()
+	started := m.nowTime()
 	_, err := net.DefaultResolver.LookupHost(ctx, "kubernetes.default.svc")
-	status := EndpointStatus{Name: "coredns/kubernetes.default.svc", Latency: time.Since(started), LastChecked: time.Now(), Supported: true, Available: err == nil}
+	checked := m.nowTime()
+	status := EndpointStatus{Name: "coredns/kubernetes.default.svc", Latency: checked.Sub(started), LastChecked: checked, Supported: true, Available: err == nil}
 	if err != nil {
 		status.LastError = err.Error()
 	}
@@ -149,9 +166,10 @@ func (m *Monitor) checkCoreDNS(ctx context.Context) {
 }
 
 func (m *Monitor) checkAPIServer(ctx context.Context) {
-	started := time.Now()
+	started := m.nowTime()
 	_, err := m.restClient.Get().AbsPath("/readyz").Param("verbose", "true").Do(ctx).Raw()
-	status := EndpointStatus{Name: "kube-apiserver/readyz", Latency: time.Since(started), LastChecked: time.Now(), Supported: true, Available: err == nil}
+	checked := m.nowTime()
+	status := EndpointStatus{Name: "kube-apiserver/readyz", Latency: checked.Sub(started), LastChecked: checked, Supported: true, Available: err == nil}
 	if err != nil {
 		status.LastError = err.Error()
 	}
@@ -184,27 +202,28 @@ func (m *Monitor) checkComponent(ctx context.Context, component string, pods []c
 		}
 	}
 	if len(candidates) == 0 {
-		m.setComponent(component, EndpointStatus{Name: component, Supported: false, LastChecked: time.Now()})
+		m.setComponent(component, EndpointStatus{Name: component, Supported: false, LastChecked: m.nowTime()})
 		return
 	}
 	var lastErr error
 	var latency time.Duration
 	for _, pod := range candidates {
-		started := time.Now()
+		started := m.nowTime()
 		path := "healthz"
 		if component == "etcd" {
 			path = "health"
 		}
 		_, err := m.client.CoreV1().RESTClient().Get().Namespace(pod.Namespace).Resource("pods").Name(pod.Name).SubResource("proxy").Suffix(path).Do(ctx).Raw()
-		latency = time.Since(started)
+		checked := m.nowTime()
+		latency = checked.Sub(started)
 		if err == nil {
-			m.setComponent(component, EndpointStatus{Name: component, Supported: true, Available: true, Latency: latency, LastChecked: time.Now()})
+			m.setComponent(component, EndpointStatus{Name: component, Supported: true, Available: true, Latency: latency, LastChecked: checked})
 			m.observe(component, true, componentReason(component), component+" health endpoint recovered")
 			return
 		}
 		lastErr = err
 	}
-	status := EndpointStatus{Name: component, Supported: true, Available: false, Latency: latency, LastChecked: time.Now()}
+	status := EndpointStatus{Name: component, Supported: true, Available: false, Latency: latency, LastChecked: m.nowTime()}
 	if lastErr != nil {
 		status.LastError = lastErr.Error()
 		metrics.Default.ControlPlaneProbeErrors.Add(1)

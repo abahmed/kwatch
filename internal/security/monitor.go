@@ -9,6 +9,8 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/klog/v2"
+
+	"github.com/abahmed/kwatch/internal/clock"
 )
 
 type Permission struct {
@@ -33,6 +35,7 @@ type Monitor struct {
 	mu         sync.RWMutex
 	status     Status
 	namespaces []string
+	now        func() time.Time
 }
 
 var requiredClusterPermissions = clusterPermissions()
@@ -81,7 +84,21 @@ func clusterPermissions() []Permission {
 }
 
 func New(client kubernetes.Interface) *Monitor {
-	return &Monitor{client: client}
+	return &Monitor{client: client, now: time.Now}
+}
+
+// SetClock injects the clock used for security health timestamps.
+func (m *Monitor) SetClock(now func() time.Time) {
+	if now != nil {
+		m.now = now
+	}
+}
+
+func (m *Monitor) nowTime() time.Time {
+	if m.now != nil {
+		return m.now()
+	}
+	return clock.Now()
 }
 
 func (m *Monitor) SetNamespaces(namespaces []string) {
@@ -130,7 +147,7 @@ func (m *Monitor) check(ctx context.Context) {
 	m.mu.RLock()
 	namespaces := append([]string(nil), m.namespaces...)
 	m.mu.RUnlock()
-	status := Status{Available: true, Checks: len(requiredClusterPermissions), LastCheck: time.Now(), Scope: "cluster"}
+	status := Status{Available: true, Checks: len(requiredClusterPermissions), LastCheck: m.nowTime(), Scope: "cluster"}
 	for _, permission := range requiredClusterPermissions {
 		allowed, err := m.allowed(requestCtx, permission)
 		if err != nil {

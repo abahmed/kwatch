@@ -14,6 +14,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes"
 
+	"github.com/abahmed/kwatch/internal/clock"
 	"github.com/abahmed/kwatch/internal/config"
 	"github.com/abahmed/kwatch/internal/constant"
 	kwcontext "github.com/abahmed/kwatch/internal/context"
@@ -32,6 +33,7 @@ type Monitor struct {
 	failures   map[string]int
 	successes  map[string]int
 	graph      *kwcontext.ResourceGraph
+	now        func() time.Time
 }
 
 func (m *Monitor) SetKubernetesClient(client kubernetes.Interface) { m.kclient = client }
@@ -50,7 +52,22 @@ func New(cfg config.ActiveProbeMonitor, correlator *correlation.Engine) *Monitor
 		client:   &http.Client{Timeout: timeout},
 		timeout:  timeout,
 		failures: make(map[string]int), successes: make(map[string]int),
+		now: time.Now,
 	}
+}
+
+// SetClock injects the clock used for active-probe latency measurements.
+func (m *Monitor) SetClock(now func() time.Time) {
+	if now != nil {
+		m.now = now
+	}
+}
+
+func (m *Monitor) nowTime() time.Time {
+	if m.now != nil {
+		return m.now()
+	}
+	return clock.Now()
 }
 
 func (m *Monitor) Start(ctx context.Context) {
@@ -164,7 +181,7 @@ func serviceDNS(host string) (string, string, bool) {
 }
 
 func (m *Monitor) http(ctx context.Context, target config.HTTPProbeTarget) (bool, string, string) {
-	started := time.Now()
+	started := m.nowTime()
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, target.URL, nil)
 	if err != nil {
 		return false, err.Error(), constant.ReasonActiveProbeFailure
@@ -174,7 +191,7 @@ func (m *Monitor) http(ctx context.Context, target config.HTTPProbeTarget) (bool
 		return false, err.Error(), constant.ReasonActiveProbeFailure
 	}
 	_ = resp.Body.Close()
-	latency := time.Since(started)
+	latency := m.nowTime().Sub(started)
 	expected := target.ExpectedStatus
 	if expected == 0 {
 		if resp.StatusCode >= http.StatusOK && resp.StatusCode < http.StatusBadRequest {

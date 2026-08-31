@@ -18,6 +18,7 @@ import (
 	storagev1lister "k8s.io/client-go/listers/storage/v1"
 	"k8s.io/client-go/tools/cache"
 
+	"github.com/abahmed/kwatch/internal/clock"
 	"github.com/abahmed/kwatch/internal/config"
 	kwcontext "github.com/abahmed/kwatch/internal/context"
 	"github.com/abahmed/kwatch/internal/correlation"
@@ -108,6 +109,7 @@ type Controller struct {
 	informerLastWatchError   time.Time
 	informerLastWatchMessage string
 	informers                []cache.SharedIndexInformer
+	now                      func() time.Time
 }
 
 type InformerStatus struct {
@@ -124,10 +126,18 @@ type InformerStatus struct {
 	WithoutResourceVersion int           `json:"withoutResourceVersion"`
 }
 
+func (c *Controller) nowTime() time.Time {
+	if c.now != nil {
+		return c.now()
+	}
+	return clock.Now()
+}
+
 func (c *Controller) InformerStatus() interface{} {
 	c.informerMu.RLock()
 	defer c.informerMu.RUnlock()
-	status := InformerStatus{State: "unavailable", LastEvent: c.informerLastEvent, LastWatchError: c.informerLastWatchError, WatchErrors: c.informerWatchErrors, Events: c.informerEvents, LastError: c.informerLastWatchMessage, WatchHealthy: c.informerWatchErrors == 0 || time.Since(c.informerLastWatchError) > 5*time.Minute, InformerCount: len(c.informers)}
+	now := c.nowTime()
+	status := InformerStatus{State: "unavailable", LastEvent: c.informerLastEvent, LastWatchError: c.informerLastWatchError, WatchErrors: c.informerWatchErrors, Events: c.informerEvents, LastError: c.informerLastWatchMessage, WatchHealthy: c.informerWatchErrors == 0 || now.Sub(c.informerLastWatchError) > 5*time.Minute, InformerCount: len(c.informers)}
 	for _, informer := range c.informers {
 		if !informer.HasSynced() {
 			status.Unsynced++
@@ -137,7 +147,7 @@ func (c *Controller) InformerStatus() interface{} {
 		}
 	}
 	if !status.LastEvent.IsZero() {
-		status.EventAge = time.Since(status.LastEvent)
+		status.EventAge = now.Sub(status.LastEvent)
 	}
 	switch {
 	case status.Unsynced > 0:
@@ -154,7 +164,7 @@ func (c *Controller) recordInformerEvent() {
 	c.informerMu.Lock()
 	c.informerEvents++
 	metrics.Default.InformerEvents.Add(1)
-	c.informerLastEvent = time.Now()
+	c.informerLastEvent = c.nowTime()
 	c.informerMu.Unlock()
 }
 
@@ -162,7 +172,7 @@ func (c *Controller) recordInformerWatchError(err error) {
 	c.informerMu.Lock()
 	c.informerWatchErrors++
 	metrics.Default.InformerWatchErrors.Add(1)
-	c.informerLastWatchError = time.Now()
+	c.informerLastWatchError = c.nowTime()
 	c.informerLastWatchMessage = err.Error()
 	c.informerMu.Unlock()
 }
@@ -250,12 +260,16 @@ func New(
 		podLister:     podLister,
 		maxBaseline:   maxBaseline,
 		watchAll:      scope.all,
+		now:           clock.Now,
 	}
 	if !scope.all {
 		c.allowedNamespaces = make(map[string]struct{}, len(scope.namespaces))
 		for _, namespace := range scope.namespaces {
 			c.allowedNamespaces[namespace] = struct{}{}
 		}
+	}
+	for _, pipeline := range c.allPipelines() {
+		pipeline.now = c.nowTime
 	}
 
 	c.pod.startWorkers = true

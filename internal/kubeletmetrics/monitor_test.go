@@ -1,6 +1,22 @@
 package kubeletmetrics
 
-import "testing"
+import (
+	"testing"
+
+	corev1 "k8s.io/api/core/v1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+)
+
+func TestUsageBaselineKeyUsesPodUID(t *testing.T) {
+	first := &corev1.Pod{ObjectMeta: metav1.ObjectMeta{Namespace: "prod", Name: "api", UID: "uid-1"}}
+	second := &corev1.Pod{ObjectMeta: metav1.ObjectMeta{Namespace: "prod", Name: "api", UID: "uid-2"}}
+
+	key1 := usageBaselineKey(first, "app", "CPUHigh")
+	key2 := usageBaselineKey(second, "app", "CPUHigh")
+	if key1 == key2 {
+		t.Fatalf("replacement Pods shared baseline key %q", key1)
+	}
+}
 
 func TestMetricLineParsesLabelsAndTimestamp(t *testing.T) {
 	name, labels, value, ok := metricLine(`container_cpu_cfs_periods_total{pod_namespace="app",pod_name="web",container_name="api"} 42 1700000000`)

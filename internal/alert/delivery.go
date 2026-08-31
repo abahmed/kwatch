@@ -162,7 +162,7 @@ func (a *AlertManager) recordDeadLetter(
 		Key:       string(inc.Key),
 		Action:    action,
 		Error:     err.Error(),
-		Timestamp: time.Now(),
+		Timestamp: a.nowTime(),
 	}
 	a.dlqHead = (a.dlqHead + 1) % dlqCap
 }

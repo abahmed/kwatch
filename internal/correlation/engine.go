@@ -10,6 +10,7 @@ import (
 	corev1lister "k8s.io/client-go/listers/core/v1"
 
 	"github.com/abahmed/kwatch/internal/audit"
+	"github.com/abahmed/kwatch/internal/clock"
 	"github.com/abahmed/kwatch/internal/constant"
 	"github.com/abahmed/kwatch/internal/enricher"
 	"github.com/abahmed/kwatch/internal/event"
@@ -169,12 +170,28 @@ func NewEngine(cfg Config) *Engine {
 		massFailures:         make(map[model.IncidentKey]*model.Incident),
 	}
 	if e.now == nil {
-		e.now = time.Now
+		e.now = clock.Now
 	}
 	if cfg.Baseline != nil {
 		e.SetBaseline(cfg.Baseline)
 	}
 	return e
+}
+
+// SetClock injects the clock used for incident lifecycle timestamps.
+func (e *Engine) SetClock(now func() time.Time) {
+	if now != nil {
+		e.now = now
+	}
+}
+
+// Now returns the engine clock for integrations that create incidents on its
+// behalf, keeping their timestamps consistent with the lifecycle engine.
+func (e *Engine) Now() time.Time {
+	if e.now != nil {
+		return e.now()
+	}
+	return clock.Now()
 }
 
 var knownRetryReasons = map[string]bool{

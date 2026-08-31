@@ -1,8 +1,6 @@
 package controller
 
 import (
-	"time"
-
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/client-go/tools/cache"
 
@@ -26,7 +24,7 @@ func (c *Controller) recordChange(typ kwcontext.ChangeType, resource string, obj
 		Namespace: ns,
 		Name:      name,
 		Type:      typ,
-		Timestamp: time.Now(),
+		Timestamp: c.nowTime(),
 	})
 }
 

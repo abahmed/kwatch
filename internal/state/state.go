@@ -11,6 +11,8 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/klog/v2"
+
+	"github.com/abahmed/kwatch/internal/clock"
 )
 
 const (
@@ -49,6 +51,7 @@ type StateManager struct {
 	baselineMgr  *RetryConfigMapManager // kwatch-baseline
 	incidentsMgr *RetryConfigMapManager // kwatch-incidents
 	pvcMgr       *RetryConfigMapManager // kwatch-pvc
+	now          func() time.Time
 }
 
 func NewStateManager(
@@ -78,7 +81,22 @@ func NewStateManager(
 			namespace,
 			pvcConfigMapName,
 		),
+		now: clock.Now,
 	}
+}
+
+// SetClock injects the clock used for persisted lifecycle metadata.
+func (s *StateManager) SetClock(now func() time.Time) {
+	if now != nil {
+		s.now = now
+	}
+}
+
+func (s *StateManager) nowTime() time.Time {
+	if s.now != nil {
+		return s.now()
+	}
+	return clock.Now()
 }
 
 func (s *StateManager) IsFirstRun(ctx context.Context) (bool, error) {
@@ -248,7 +266,7 @@ func (s *StateManager) MarkAsInitialized(
 			c.Data[clusterIDKey] = clusterID
 		}
 		if _, exists := c.Data[firstRunKey]; !exists {
-			c.Data[firstRunKey] = time.Now().UTC().Format(time.RFC3339)
+			c.Data[firstRunKey] = s.nowTime().UTC().Format(time.RFC3339)
 		}
 		c.Data[versionKey] = version
 		return nil
@@ -296,7 +314,7 @@ func (s *StateManager) createConfigMap(
 			clusterIDKey:          clusterID,
 			versionKey:            version,
 			stateSchemaVersionKey: currentStateSchema,
-			firstRunKey:           time.Now().UTC().Format(time.RFC3339),
+			firstRunKey:           s.nowTime().UTC().Format(time.RFC3339),
 		},
 	}
 }

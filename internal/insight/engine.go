@@ -38,6 +38,13 @@ func (e *Engine) SetActiveChecker(checker func(kind, namespace, name string) boo
 	e.activeChecker = checker
 }
 
+// SetClock injects the clock used for recent-change analysis.
+func (e *Engine) SetClock(now func() time.Time) {
+	if now != nil {
+		e.now = now
+	}
+}
+
 func NewEngine(
 	graph *context.ResourceGraph,
 	tracker *context.ChangeTracker,

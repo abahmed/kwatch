@@ -10,6 +10,7 @@ import (
 	appsv1lister "k8s.io/client-go/listers/apps/v1"
 	corev1lister "k8s.io/client-go/listers/core/v1"
 
+	"github.com/abahmed/kwatch/internal/clock"
 	"github.com/abahmed/kwatch/internal/config"
 	"github.com/abahmed/kwatch/internal/model"
 )
@@ -104,5 +105,5 @@ func (c *Context) now() time.Time {
 	if c.Now != nil {
 		return c.Now()
 	}
-	return time.Now()
+	return clock.Now()
 }

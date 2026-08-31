@@ -179,7 +179,7 @@ func notifyNewMassFailures(
 			continue
 		}
 		klog.V(2).InfoS("mass failure detected", "message", mf.Describe())
-		now := time.Now()
+		now := holder.engine.Now()
 		inc := &model.Incident{
 			Subject: model.Subject{
 				ID:        massFailureID(incKey),

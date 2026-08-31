@@ -19,6 +19,7 @@ import (
 	"k8s.io/client-go/tools/cache"
 	"k8s.io/klog/v2"
 
+	"github.com/abahmed/kwatch/internal/clock"
 	"github.com/abahmed/kwatch/internal/constant"
 	kwcontext "github.com/abahmed/kwatch/internal/context"
 	"github.com/abahmed/kwatch/internal/correlation"
@@ -83,6 +84,7 @@ type Monitor struct {
 	graphReferences   []graphReferenceRule
 	admissionPolicies map[string]struct{}
 	admissionBindings map[string]*unstructured.Unstructured
+	now               func() time.Time
 }
 
 type graphReferenceRule struct {
@@ -117,9 +119,23 @@ func New(restConfig *rest.Config, correlator *correlation.Engine, resync time.Du
 		client: client, discoveryClient: discoveryClient, correlator: correlator, resync: resync,
 		factories: make(map[string]dynamicinformer.DynamicSharedInformerFactory),
 		stops:     make(map[string]context.CancelFunc), crdVersions: make(map[string]map[string]struct{}),
-		conditionRules:    defaultConditionRules(),
+		conditionRules: defaultConditionRules(), now: time.Now,
 		admissionPolicies: make(map[string]struct{}), admissionBindings: make(map[string]*unstructured.Unstructured),
 	}, nil
+}
+
+// SetClock injects the clock used by time-sensitive status decisions.
+func (m *Monitor) SetClock(now func() time.Time) {
+	if now != nil {
+		m.now = now
+	}
+}
+
+func (m *Monitor) nowTime() time.Time {
+	if m.now != nil {
+		return m.now()
+	}
+	return clock.Now()
 }
 
 func (m *Monitor) SetConditionRules(entries []string) {
@@ -241,7 +257,7 @@ func (m *Monitor) processStatic(obj interface{}, watched staticWatch) {
 	case "endpoints":
 		sig, evaluated = m.legacyEndpointSignal(u)
 	case "certificatesigningrequest", "podcertificaterequest":
-		sig = certificateSignal(u, watched.resource, owner)
+		sig = certificateSignal(u, watched.resource, owner, m.nowTime())
 	default:
 		sig = failureSignal(u, watched.resource, owner, watched.rules)
 	}
@@ -284,7 +300,7 @@ func (m *Monitor) legacyEndpointSignal(u *unstructured.Unstructured) (*event.Sig
 	return &event.Signal{Resource: "service", Namespace: u.GetNamespace(), PodName: u.GetName(), Owner: key, Reason: constant.ReasonServiceNoEndpoints, Labels: u.GetLabels(), Hint: fmt.Sprintf("legacy Endpoints object %s has no ready addresses", key)}, true
 }
 
-func certificateSignal(u *unstructured.Unstructured, resource, owner string) *event.Signal {
+func certificateSignal(u *unstructured.Unstructured, resource, owner string, now time.Time) *event.Signal {
 	rules := map[string]map[string]bool{"Denied": {"True": true}, "Failed": {"True": true}}
 	if sig := failureSignal(u, resource, owner, rules); sig != nil {
 		return sig
@@ -303,7 +319,7 @@ func certificateSignal(u *unstructured.Unstructured, resource, owner string) *ev
 		}
 	}
 	creation := u.GetCreationTimestamp()
-	if !approved || creation.IsZero() || time.Since(creation.Time) < 10*time.Minute {
+	if !approved || creation.IsZero() || now.Sub(creation.Time) < 10*time.Minute {
 		return nil
 	}
 	certificateField := "certificate"

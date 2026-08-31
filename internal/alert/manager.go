@@ -6,9 +6,11 @@ import (
 	"strings"
 	"sync"
 	"text/template"
+	"time"
 
 	"k8s.io/klog/v2"
 
+	"github.com/abahmed/kwatch/internal/clock"
 	"github.com/abahmed/kwatch/internal/config"
 	"github.com/abahmed/kwatch/internal/event"
 )
@@ -41,6 +43,21 @@ type AlertManager struct {
 	done chan struct{}
 
 	ctx context.Context
+	now func() time.Time
+}
+
+// SetClock injects the clock used for delivery bookkeeping timestamps.
+func (a *AlertManager) SetClock(now func() time.Time) {
+	if now != nil {
+		a.now = now
+	}
+}
+
+func (a *AlertManager) nowTime() time.Time {
+	if a.now != nil {
+		return a.now()
+	}
+	return clock.Now()
 }
 
 func (a *AlertManager) SetTemplates(tpl map[string]string) {

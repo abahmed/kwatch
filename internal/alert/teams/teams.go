@@ -9,6 +9,7 @@ import (
 	"k8s.io/klog/v2"
 
 	"github.com/abahmed/kwatch/internal/alert/util"
+	"github.com/abahmed/kwatch/internal/clock"
 	"github.com/abahmed/kwatch/internal/config"
 	"github.com/abahmed/kwatch/internal/event"
 	"github.com/abahmed/kwatch/internal/insight"
@@ -209,7 +210,7 @@ func (t *Teams) buildRequestBodyTeams(e *event.Event) ([]byte, error) {
 						"type": "TextBlock",
 						"text": fmt.Sprintf(
 							"Time: %s",
-							time.Now().Format(time.RFC1123)),
+							clock.Now().Format(time.RFC1123)),
 					})
 					return body
 				}(),

@@ -7,11 +7,11 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/url"
-	"time"
 
 	"k8s.io/klog/v2"
 
 	"github.com/abahmed/kwatch/internal/alert/util"
+	"github.com/abahmed/kwatch/internal/clock"
 	"github.com/abahmed/kwatch/internal/config"
 	"github.com/abahmed/kwatch/internal/constant"
 	"github.com/abahmed/kwatch/internal/event"
@@ -176,7 +176,7 @@ func (d *DingTalk) sendAPI(msg string) error {
 }
 
 func getSignature(secret string) string {
-	timeStr := fmt.Sprintf("%d", time.Now().UnixNano()/1e6)
+	timeStr := fmt.Sprintf("%d", clock.Now().UnixNano()/1e6)
 
 	sign := fmt.Sprintf("%s\n%s", timeStr, secret)
 	signData := computeHmacSha256(sign, secret)

@@ -6,7 +6,8 @@ import (
 	"encoding/hex"
 	"net/url"
 	"strings"
-	"time"
+
+	"github.com/abahmed/kwatch/internal/clock"
 )
 
 const (
@@ -30,7 +31,7 @@ func SignAWSV4(accessKey, secretKey, region, service, method, rawURL string, bod
 		path = "/"
 	}
 
-	now := time.Now().UTC()
+	now := clock.Now().UTC()
 	amzDate := now.Format("20060102T150405Z")
 	dateStamp := now.Format("20060102")
 

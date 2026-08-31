@@ -68,7 +68,7 @@ func (e *Engine) appendDependencyChanges(
 	// hide the actual root cause.
 	if ins.Cause == "" && ins.Pattern == "" {
 		c := depChanges[0]
-		ins.Cause = fmt.Sprintf("%s %s/%s was updated %s before this incident",
+		ins.Cause = fmt.Sprintf("%s %s/%s was updated %s before this incident — likely related",
 			c.Resource, c.Namespace, c.Name, ageOf(c.Timestamp, e.now()))
 		ins.Pattern = "dependency_change"
 	}

@@ -3,6 +3,8 @@ package context
 import (
 	"sync"
 	"time"
+
+	"github.com/abahmed/kwatch/internal/clock"
 )
 
 type ChangeType int
@@ -40,6 +42,7 @@ type ChangeTracker struct {
 	buffer []Change
 	head   int
 	count  int
+	now    func() time.Time
 }
 
 // Snapshot returns changes from oldest to newest so the history can be safely
@@ -75,6 +78,14 @@ func NewChangeTracker(capacity int) *ChangeTracker {
 	}
 	return &ChangeTracker{
 		buffer: make([]Change, capacity),
+		now:    clock.Now,
+	}
+}
+
+// SetClock injects the clock used by the convenience history query.
+func (t *ChangeTracker) SetClock(now func() time.Time) {
+	if now != nil {
+		t.now = now
 	}
 }
 
@@ -89,7 +100,10 @@ func (t *ChangeTracker) Record(c Change) {
 }
 
 func (t *ChangeTracker) RecentChangesBefore(age time.Duration) []Change {
-	return t.RecentChangesBeforeAt(age, time.Now())
+	if t.now != nil {
+		return t.RecentChangesBeforeAt(age, t.now())
+	}
+	return t.RecentChangesBeforeAt(age, clock.Now())
 }
 
 func (t *ChangeTracker) RecentChangesBeforeAt(age time.Duration, now time.Time) []Change {

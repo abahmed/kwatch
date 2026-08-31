@@ -507,7 +507,7 @@ func (m *Monitor) checkContainerUsage(pod *corev1.Pod, container containerSummar
 
 func (m *Monitor) reportUsage(pod *corev1.Pod, container string, percent, warning, critical float64, reason, usage, limit, unit string) {
 	key := correlation.BuildKey(pod.Namespace, pod.Namespace+"/"+pod.Name, reason, container)
-	warning, critical = m.adaptiveUsageThreshold(string(key), percent, warning, critical)
+	warning, critical = m.adaptiveUsageThreshold(usageBaselineKey(pod, container, reason), percent, warning, critical)
 	if percent < warning {
 		m.observe(string(key), false, func() {}, func() { m.correlator.MarkResolved(key) })
 		return
@@ -523,6 +523,14 @@ func (m *Monitor) reportUsage(pod *corev1.Pod, container string, percent, warnin
 				Hint: fmt.Sprintf("container %s %s usage is %.0f%% of its limit (%s/%s)", container, unit, percent, usage, limit)},
 				pod.Namespace+"/"+pod.Name, nil)
 		}, func() {})
+}
+
+func usageBaselineKey(pod *corev1.Pod, container, reason string) string {
+	identity := string(pod.UID)
+	if identity == "" {
+		identity = pod.Namespace + "/" + pod.Name
+	}
+	return identity + "/" + container + "/" + reason
 }
 
 // adaptiveUsageThreshold learns a workload's normal usage from kubelet

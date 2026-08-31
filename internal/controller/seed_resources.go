@@ -1,8 +1,6 @@
 package controller
 
 import (
-	"time"
-
 	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/klog/v2"
 
@@ -69,7 +67,7 @@ func (c *Controller) seedClusterResources(rec *baselineRecorder) {
 			klog.ErrorS(err, "failed to list namespaces for baseline seeding")
 		} else {
 			for _, namespace := range namespaces {
-				if sig := handler.DetectNamespaceIssue(namespace, time.Now(), 0); sig != nil {
+				if sig := handler.DetectNamespaceIssue(namespace, c.nowTime(), 0); sig != nil {
 					rec.seed(sig)
 				}
 			}
@@ -81,7 +79,7 @@ func (c *Controller) seedClusterResources(rec *baselineRecorder) {
 			klog.ErrorS(err, "failed to list node leases for baseline seeding")
 		} else {
 			for _, lease := range leases {
-				if sig := handler.DetectNodeLeaseIssue(lease, time.Now(), 0); sig != nil {
+				if sig := handler.DetectNodeLeaseIssue(lease, c.nowTime(), 0); sig != nil {
 					rec.seed(sig)
 				}
 			}
@@ -175,7 +173,7 @@ func (c *Controller) seedJobs(rec *baselineRecorder) {
 				if sig := handler.DetectJobIssue(job); sig != nil {
 					rec.seed(sig)
 				}
-				if sig := handler.DetectJobExecutionIssue(job, time.Now()); sig != nil {
+				if sig := handler.DetectJobExecutionIssue(job, c.nowTime()); sig != nil {
 					rec.seed(sig)
 				}
 			}
@@ -192,7 +190,7 @@ func (c *Controller) seedCronJobs(rec *baselineRecorder) {
 			for _, cj := range cjs {
 				if sig := handler.DetectCronJobIssue(
 					cj,
-					time.Now(),
+					c.nowTime(),
 				); sig != nil {
 					rec.seed(sig)
 				}
@@ -229,7 +227,7 @@ func (c *Controller) seedServices(rec *baselineRecorder) {
 			klog.ErrorS(err, "failed to list services for baseline seeding")
 		} else {
 			for _, svc := range svcs {
-				if sig := handler.DetectServiceStatusIssue(svc, time.Now()); sig != nil {
+				if sig := handler.DetectServiceStatusIssue(svc, c.nowTime()); sig != nil {
 					rec.seed(sig)
 				}
 				sel := labels.Set{

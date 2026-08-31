@@ -77,11 +77,11 @@ func (c *Controller) buildSeenSet() {
 		return
 	}
 
-	rec := newBaselineRecorder(time.Now(), c.maxBaseline)
+	rec := newBaselineRecorder(c.nowTime(), c.maxBaseline)
 
 	for _, pod := range pods {
 		c.emitBaseline(rec, pod)
-		if sig := handler.DetectPodDeletionIssue(pod, time.Now()); sig != nil {
+		if sig := handler.DetectPodDeletionIssue(pod, c.nowTime()); sig != nil {
 			rec.seed(sig)
 		}
 	}
@@ -184,7 +184,7 @@ func (c *Controller) seedNodeBaseline(rec *baselineRecorder) {
 						hasIssue = true
 					}
 				}
-				if sig := handler.DetectNodeDeletionIssue(n, time.Now()); sig != nil {
+				if sig := handler.DetectNodeDeletionIssue(n, c.nowTime()); sig != nil {
 					rec.seed(sig)
 				}
 				if hasIssue {

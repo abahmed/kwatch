@@ -3,11 +3,11 @@ package sensugo
 import (
 	"encoding/json"
 	"strings"
-	"time"
 
 	"k8s.io/klog/v2"
 
 	"github.com/abahmed/kwatch/internal/alert/util"
+	"github.com/abahmed/kwatch/internal/clock"
 	"github.com/abahmed/kwatch/internal/config"
 	"github.com/abahmed/kwatch/internal/event"
 )
@@ -99,7 +99,7 @@ func (s *Sensugo) SendMessage(msg string) error {
 			Metadata: sensuMetadata{Name: "kwatch"},
 			Status:   1,
 			Output:   msg,
-			Issued:   time.Now().Unix(),
+			Issued:   clock.Now().Unix(),
 		},
 	}
 

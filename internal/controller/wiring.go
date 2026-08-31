@@ -116,8 +116,15 @@ func (c *Controller) wireService(cfg *config.Config, fs factorySet) {
 func (c *Controller) enqueueServiceDependents(obj interface{}) {
 	if c.ingress.startWorkers && c.graph != nil {
 		if service, ok := obj.(*corev1.Service); ok {
-			for _, key := range c.graph.DependentsByType("service", service.Namespace, service.Name, "ingress") {
+			keys := c.graph.DependentsByType("service", service.Namespace, service.Name, "ingress")
+			for _, key := range keys {
 				c.ingress.enqueue(strings.TrimPrefix(key, "ingress/"))
+			}
+			if len(keys) == 0 {
+				// A Service event can race the graph update for a newly created or
+				// changed Ingress. Prefer an occasional broad recheck to silently
+				// missing a resolution during that short inconsistency window.
+				c.enqueueAllIngresses()
 			}
 		} else {
 			c.enqueueAllIngresses()
