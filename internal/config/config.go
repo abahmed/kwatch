@@ -12,6 +12,10 @@ type Config struct {
 	// Telemetry configures the anonymous installation heartbeat.
 	Telemetry Telemetry `yaml:"telemetry"`
 
+	// Features contains optional fine-grained operator disables. Product-tier
+	// entitlement is resolved internally and cannot be granted from this file.
+	Features FeatureOverrides `yaml:"features"`
+
 	// Upgrader configuration
 	Upgrader Upgrader `yaml:"upgrader"`
 
@@ -258,6 +262,14 @@ type Telemetry struct {
 	Enabled bool `yaml:"enabled"`
 }
 
+// FeatureOverrides lets an operator turn off individual capabilities without
+// disabling their entire monitor module. IDs are validated against kwatch's
+// built-in feature catalog during startup. There is intentionally no
+// user-configurable "tier" or "license" field here.
+type FeatureOverrides struct {
+	Disabled []string `yaml:"disabled"`
+}
+
 // KnownProviders is the canonical set of known alert provider names.
 // Both alert.Init and config validation reference this to prevent drift.
 var KnownProviders = map[string]bool{
@@ -393,7 +405,8 @@ type AlertRoute struct {
 
 // AuditLogConfig configures structured audit logging for all incidents.
 type AuditLogConfig struct {
-	// Enabled toggles audit logging. Default false.
+	// Enabled toggles audit logging. Default true; entries go to stdout unless
+	// an output file is configured.
 	Enabled bool `yaml:"enabled"`
 	// Output is the destination for audit log entries: "stdout" (default) or a
 	// file path.

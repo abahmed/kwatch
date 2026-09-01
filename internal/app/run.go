@@ -20,12 +20,14 @@ import (
 	"github.com/abahmed/kwatch/internal/controlplane"
 	"github.com/abahmed/kwatch/internal/correlation"
 	"github.com/abahmed/kwatch/internal/crdwatch"
+	"github.com/abahmed/kwatch/internal/feature"
 	"github.com/abahmed/kwatch/internal/handler"
 	"github.com/abahmed/kwatch/internal/health"
 	"github.com/abahmed/kwatch/internal/heartbeat"
 	"github.com/abahmed/kwatch/internal/insight"
 	"github.com/abahmed/kwatch/internal/k8s"
 	"github.com/abahmed/kwatch/internal/kubeletmetrics"
+	"github.com/abahmed/kwatch/internal/message"
 	"github.com/abahmed/kwatch/internal/metricsapi"
 	"github.com/abahmed/kwatch/internal/model"
 	"github.com/abahmed/kwatch/internal/networkgraph"
@@ -86,25 +88,21 @@ func RunWithClock(now func() time.Time) int {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
-	cfg, err := config.LoadConfig()
+	cfg, featurePlan, err := loadConfigAndFeaturePlan(now())
 	if err != nil {
-		klog.ErrorS(err, "failed to load config")
+		klog.ErrorS(err, "failed to load config and build feature plan")
 		return 1
 	}
 	cfg.WatchStartTime = now()
+	// Install the plan before startup handling because startup failures may
+	// already produce a notification through the alert manager.
+	message.SetFeaturePlan(featurePlan)
 
 	klog.InfoS(fmt.Sprintf(constant.WelcomeMsg, version.Short()))
 
-	if cfg.CrdConfig.Enabled {
-		restCfg, err := client.GetRestConfig(&cfg.App)
-		if err != nil {
-			klog.ErrorS(err, "failed to get rest config for startup CRD")
-			return 1
-		}
-		if err := crdwatch.ApplyStartupConfig(ctx, cfg, restCfg, k8s.GetNamespace()); err != nil {
-			klog.ErrorS(err, "failed to apply startup CRD configuration")
-			return 1
-		}
+	if err := applyStartupCRD(ctx, cfg); err != nil {
+		klog.ErrorS(err, "failed to apply startup CRD configuration")
+		return 1
 	}
 	k8s.InitHTTPClient(&cfg.App)
 	k8sClient, err := client.Create(&cfg.App)
@@ -126,7 +124,8 @@ func RunWithClock(now func() time.Time) int {
 	clusterID, telemetryVersion := sm.TelemetryIdentity()
 
 	healthServer := health.NewHealthServer(cfg.HealthCheck)
-	securityMonitor := configureSecurityMonitor(cfg, k8sClient, now)
+	healthServer.SetFeaturePlan(featurePlan)
+	securityMonitor := configureSecurityMonitor(cfg, k8sClient, now, featurePlan)
 	healthServer.SetSecurityLister(securityMonitor)
 
 	am := sm.GetAlertManager()
@@ -146,25 +145,9 @@ func RunWithClock(now func() time.Time) int {
 		now,
 	)
 
-	tracker := loadChangeTracker(ctx, stateMgr)
+	persist := configurePersistence(ctx, stateMgr, featurePlan)
+	tracker := persist.tracker
 	tracker.SetClock(now)
-	go startChangeHistorySaver(ctx, stateMgr, tracker)
-	stateMgr.MigrateLegacyBaseline(ctx)
-	// Migrate before loading: on the first release that uses the dedicated
-	// ConfigMap, the only baseline may still be in kwatch-state. Loading first
-	// would construct the engine with an empty baseline and re-alert every
-	// pre-existing incident during this process lifetime.
-	baseline := stateMgr.GetBaseline(ctx)
-
-	baselineCh := make(chan map[string]map[string]int64, 64)
-	go startBaselineSaver(ctx, stateMgr, baselineCh, 0)
-
-	incidentCh := make(chan []model.PersistedIncident, 1)
-	incidentDone := make(chan struct{})
-	go func() {
-		defer close(incidentDone)
-		startIncidentSaver(ctx, stateMgr, incidentCh)
-	}()
 
 	graph := kwcontext.NewResourceGraph()
 
@@ -174,24 +157,24 @@ func RunWithClock(now func() time.Time) int {
 	})
 
 	insightEngine := insight.NewEngine(graph, tracker)
-	feedbackStore := loadFeedbackStore(ctx, stateMgr)
+	insightEngine.SetFeaturePlan(featurePlan)
+	feedbackStore := persist.feedbackStore
 	insightEngine.SetFeedbackStore(feedbackStore)
 	insightEngine.SetClock(now)
-	feedbackCh := make(chan []insight.RCARecord, 1)
-	feedbackDone := make(chan struct{})
-	go startFeedbackSaver(ctx, stateMgr, feedbackCh, feedbackDone)
 	correlator := newCorrelator(
 		cfg,
-		baseline,
+		persist.baseline,
 		am,
 		auditLogger,
 		graph,
-		baselineCh,
+		persist.baselineCh,
 		insightEngine,
 		feedbackStore,
-		func() { trySendFeedbackSnapshot(feedbackCh, feedbackStore.Snapshot()) },
+		persist.saveFeedback,
+		featurePlan,
 	)
 	correlator.SetClock(now)
+	correlator.SetFeaturePlan(featurePlan)
 	insightEngine.SetActiveChecker(func(kind, namespace, name string) bool {
 		for _, inc := range correlator.ActiveIncidents() {
 			for _, key := range insight.IncidentGraphKeys(inc) {
@@ -232,43 +215,42 @@ func RunWithClock(now func() time.Time) int {
 	healthServer.SetInformerLister(ctl)
 	pvcMonitor.SetNamespaceFilter(ctl.NamespaceAllowed)
 	pvcMonitor.SetClock(now)
-	restoreIncidents(ctx, stateMgr, correlator, ctl.NamespaceAllowed)
+	if persist.incidentSaver != nil {
+		restoreIncidents(ctx, stateMgr, correlator, ctl.NamespaceAllowed)
+	}
 	ctl.SetTracker(tracker)
 	ctl.SetGraph(graph)
 	ctl.SetReadyFunc(func() { healthServer.SetReady(true) })
 
-	statusRun := configureStatusMonitor(cfg, ctl, graph, correlator, now)
+	statusRun := configureStatusMonitor(cfg, ctl, graph, correlator, now, featurePlan)
 
-	metricsRun := configureMetricsMonitor(cfg, ctl, k8sClient, correlator)
+	metricsRun := configureMetricsMonitor(cfg, ctl, k8sClient, correlator, featurePlan)
 
 	var tlsSweep func()
-	if cfg.TlsMonitor.Enabled {
+	if cfg.TlsMonitor.Enabled && featurePlan.Enabled(feature.TLSMonitoring) {
 		tlsSweep = h.SweepTLSSecrets
 	}
 
-	var probeRun func(context.Context)
-	if cfg.ActiveProbeMonitor.Enabled {
-		probeMonitor := probe.New(cfg.ActiveProbeMonitor, correlator)
-		probeMonitor.SetClock(now)
-		probeMonitor.SetKubernetesClient(k8sClient)
-		probeMonitor.SetGraph(graph)
-		probeRun = probeMonitor.Start
-	}
+	probeRun := configureProbeRunner(cfg, correlator, k8sClient, graph, featurePlan, now)
 
 	var kubeletRun func(context.Context)
-	if cfg.KubeletTelemetryMonitor.Enabled {
+	if cfg.KubeletTelemetryMonitor.Enabled && featurePlan.Enabled(feature.KubeletTelemetry) {
 		kubeletMonitor := kubeletmetrics.New(k8sClient, cfg.KubeletTelemetryMonitor, correlator)
+		kubeletMonitor.SetFeaturePlan(featurePlan)
 		if cfg.KubeletTelemetryMonitor.PersistState {
 			kubeletMonitor.SetStateStore(stateMgr)
 		}
 		healthServer.SetTelemetryLister(kubeletMonitor)
 		kubeletRun = kubeletMonitor.Start
 	}
-	securityRun := securityMonitor.Start
-	controlPlaneRun := configureControlPlaneMonitor(cfg, k8sClient, healthServer, correlator, now)
+	var securityRun func(context.Context)
+	if featurePlan.Enabled(feature.RBACAudit) {
+		securityRun = securityMonitor.Start
+	}
+	controlPlaneRun := configureControlPlaneMonitor(cfg, k8sClient, healthServer, correlator, now, featurePlan)
 
-	storageRun := newStorageGraphRun(cfg, graph, correlator, ctl.NamespaceAllowed)
-	networkRun := newNetworkGraphRun(cfg, graph, ctl.NamespaceAllowed)
+	storageRun := newStorageGraphRun(cfg, graph, correlator, ctl.NamespaceAllowed, featurePlan)
+	networkRun := newNetworkGraphRun(cfg, graph, ctl.NamespaceAllowed, featurePlan)
 
 	deps := &serverDeps{
 		ctx:             ctx,
@@ -280,10 +262,10 @@ func RunWithClock(now func() time.Time) int {
 		pvcMonitor:      pvcMonitor,
 		hbMonitor:       hbMonitor,
 		ctl:             ctl,
-		incidentCh:      incidentCh,
-		incidentSaver:   stateMgr,
-		incidentDone:    incidentDone,
-		feedbackDone:    feedbackDone,
+		incidentCh:      persist.incidentCh,
+		incidentSaver:   persist.incidentSaver,
+		incidentDone:    persist.incidentDone,
+		feedbackDone:    persist.feedbackDone,
 		notifyStartup:   sm.NotifyStartup,
 		recordAlive:     sm.RecordAlive,
 		closeAudit:      auditLogger.Close,
@@ -302,20 +284,135 @@ func RunWithClock(now func() time.Time) int {
 	return serve(ctx, deps)
 }
 
-func loadChangeTracker(ctx context.Context, stateMgr *state.StateManager) *kwcontext.ChangeTracker {
+func loadConfigAndFeaturePlan(now time.Time) (*config.Config, feature.Plan, error) {
+	cfg, err := config.LoadConfig()
+	if err != nil {
+		return nil, feature.Plan{}, err
+	}
+	plan, err := buildFeaturePlan(cfg, now)
+	if err != nil {
+		return nil, feature.Plan{}, err
+	}
+	applyFeaturePlan(cfg, plan)
+	return cfg, plan, nil
+}
+
+func applyStartupCRD(ctx context.Context, cfg *config.Config) error {
+	if !cfg.CrdConfig.Enabled {
+		return nil
+	}
+	restCfg, err := client.GetRestConfig(&cfg.App)
+	if err != nil {
+		return fmt.Errorf("get rest config for startup CRD: %w", err)
+	}
+	return crdwatch.ApplyStartupConfig(ctx, cfg, restCfg, k8s.GetNamespace())
+}
+
+func configureProbeRunner(cfg *config.Config, correlator *correlation.Engine, clientset kubernetes.Interface, graph *kwcontext.ResourceGraph, plan feature.Plan, now func() time.Time) func(context.Context) {
+	if !cfg.ActiveProbeMonitor.Enabled || !activeProbesEnabled(plan) {
+		return nil
+	}
+	monitor := probe.New(cfg.ActiveProbeMonitor, correlator)
+	monitor.SetClock(now)
+	monitor.SetKubernetesClient(clientset)
+	monitor.SetGraph(graph)
+	monitor.SetFeaturePlan(plan)
+	return monitor.Start
+}
+
+type persistenceSetup struct {
+	tracker       *kwcontext.ChangeTracker
+	baseline      map[string]map[string]int64
+	baselineCh    chan map[string]map[string]int64
+	incidentCh    chan []model.PersistedIncident
+	incidentDone  chan struct{}
+	incidentSaver incidentSaver
+	feedbackStore *insight.FeedbackStore
+	feedbackDone  chan struct{}
+	saveFeedback  func()
+}
+
+func configurePersistence(
+	ctx context.Context,
+	stateMgr *state.StateManager,
+	plan feature.Plan,
+) persistenceSetup {
+	tracker := loadChangeTracker(ctx, stateMgr, plan)
+	if planAllows(plan, feature.ChangePersistence) {
+		go startChangeHistorySaver(ctx, stateMgr, tracker)
+	}
+
+	baseline := map[string]map[string]int64{}
+	baselineCh := make(chan map[string]map[string]int64, 64)
+	if planAllows(plan, feature.BaselinePersistence) {
+		// Migrate before loading: the first release using the dedicated
+		// ConfigMap may still have its baseline in the legacy state object.
+		stateMgr.MigrateLegacyBaseline(ctx)
+		baseline = stateMgr.GetBaseline(ctx)
+		go startBaselineSaver(ctx, stateMgr, baselineCh, 0)
+	}
+
+	incidentDone := make(chan struct{})
+	var incidentCh chan []model.PersistedIncident
+	var incidentSaverForRun incidentSaver
+	if planAllows(plan, feature.IncidentPersistence) {
+		incidentCh = make(chan []model.PersistedIncident, 1)
+		incidentSaverForRun = stateMgr
+		go func() {
+			defer close(incidentDone)
+			startIncidentSaver(ctx, stateMgr, incidentCh)
+		}()
+	} else {
+		close(incidentDone)
+	}
+
+	feedbackStore := loadFeedbackStore(ctx, stateMgr, plan)
+	feedbackDone := make(chan struct{})
+	feedbackCh := make(chan []insight.RCARecord, 1)
+	if planAllows(plan, feature.RCAFeedback) {
+		go startFeedbackSaver(ctx, stateMgr, feedbackCh, feedbackDone)
+	} else {
+		close(feedbackDone)
+	}
+
+	return persistenceSetup{
+		tracker: tracker, baseline: baseline, baselineCh: baselineCh,
+		incidentCh: incidentCh, incidentDone: incidentDone,
+		incidentSaver: incidentSaverForRun, feedbackStore: feedbackStore,
+		feedbackDone: feedbackDone,
+		saveFeedback: feedbackSnapshotSaver(plan, feedbackCh, feedbackStore),
+	}
+}
+
+func loadChangeTracker(ctx context.Context, stateMgr *state.StateManager, plan feature.Plan) *kwcontext.ChangeTracker {
 	tracker := kwcontext.NewChangeTracker(0)
-	if changes, err := stateMgr.LoadChangeHistory(ctx); err == nil {
-		tracker.Restore(changes)
+	if planAllows(plan, feature.ChangePersistence) {
+		if changes, err := stateMgr.LoadChangeHistory(ctx); err == nil {
+			tracker.Restore(changes)
+		}
 	}
 	return tracker
 }
 
-func loadFeedbackStore(ctx context.Context, stateMgr *state.StateManager) *insight.FeedbackStore {
+func loadFeedbackStore(ctx context.Context, stateMgr *state.StateManager, plan feature.Plan) *insight.FeedbackStore {
 	store := insight.NewFeedbackStore()
-	if records, err := stateMgr.LoadRCAFeedback(ctx); err == nil {
-		store.Restore(records)
+	if planAllows(plan, feature.RCAFeedback) {
+		if records, err := stateMgr.LoadRCAFeedback(ctx); err == nil {
+			store.Restore(records)
+		}
 	}
 	return store
+}
+
+func feedbackSnapshotSaver(
+	plan feature.Plan,
+	ch chan []insight.RCARecord,
+	store *insight.FeedbackStore,
+) func() {
+	if !planAllows(plan, feature.RCAFeedback) {
+		return nil
+	}
+	return func() { trySendFeedbackSnapshot(ch, store.Snapshot()) }
 }
 
 func startChangeHistorySaver(ctx context.Context, stateMgr *state.StateManager, tracker *kwcontext.ChangeTracker) {
@@ -333,8 +430,8 @@ func startChangeHistorySaver(ctx context.Context, stateMgr *state.StateManager, 
 	}
 }
 
-func configureSecurityMonitor(cfg *config.Config, client kubernetes.Interface, now func() time.Time) *security.Monitor {
-	monitor := security.NewWithConfig(client, cfg)
+func configureSecurityMonitor(cfg *config.Config, client kubernetes.Interface, now func() time.Time, plan feature.Plan) *security.Monitor {
+	monitor := security.NewWithConfigAndPlan(client, cfg, plan)
 	monitor.SetClock(now)
 	namespaces := cfg.AllowedNamespaces
 	if len(namespaces) == 0 {
@@ -344,8 +441,8 @@ func configureSecurityMonitor(cfg *config.Config, client kubernetes.Interface, n
 	return monitor
 }
 
-func configureControlPlaneMonitor(cfg *config.Config, clientset kubernetes.Interface, healthServer *health.HealthServer, correlator *correlation.Engine, now func() time.Time) func(context.Context) {
-	if !cfg.ControlPlaneMonitor.Enabled {
+func configureControlPlaneMonitor(cfg *config.Config, clientset kubernetes.Interface, healthServer *health.HealthServer, correlator *correlation.Engine, now func() time.Time, plan feature.Plan) func(context.Context) {
+	if !cfg.ControlPlaneMonitor.Enabled || !controlPlaneFeaturesEnabled(plan) {
 		return nil
 	}
 	restCfg, err := client.GetRestConfig(&cfg.App)
@@ -359,12 +456,13 @@ func configureControlPlaneMonitor(cfg *config.Config, clientset kubernetes.Inter
 		return nil
 	}
 	monitor.SetClock(now)
+	monitor.SetFeaturePlan(plan)
 	healthServer.SetControlPlaneLister(monitor)
 	return monitor.Start
 }
 
-func configureStatusMonitor(cfg *config.Config, ctl *controller.Controller, graph *kwcontext.ResourceGraph, correlator *correlation.Engine, now func() time.Time) func(context.Context) {
-	if !cfg.ClusterResourceMonitor.Enabled {
+func configureStatusMonitor(cfg *config.Config, ctl *controller.Controller, graph *kwcontext.ResourceGraph, correlator *correlation.Engine, now func() time.Time, plan feature.Plan) func(context.Context) {
+	if !cfg.ClusterResourceMonitor.Enabled || !plan.Enabled(feature.GenericStatus) {
 		return nil
 	}
 	restCfg, err := client.GetRestConfig(&cfg.App)
@@ -389,8 +487,8 @@ func configureStatusMonitor(cfg *config.Config, ctl *controller.Controller, grap
 	}
 }
 
-func configureMetricsMonitor(cfg *config.Config, ctl *controller.Controller, clientset kubernetes.Interface, correlator *correlation.Engine) func(context.Context) {
-	if !cfg.RuntimeMetricsMonitor.Enabled {
+func configureMetricsMonitor(cfg *config.Config, ctl *controller.Controller, clientset kubernetes.Interface, correlator *correlation.Engine, plan feature.Plan) func(context.Context) {
+	if !cfg.RuntimeMetricsMonitor.Enabled || !plan.Enabled(feature.MetricsAPI) {
 		return nil
 	}
 	restCfg, err := client.GetRestConfig(&cfg.App)
@@ -407,8 +505,8 @@ func configureMetricsMonitor(cfg *config.Config, ctl *controller.Controller, cli
 	return monitor.Start
 }
 
-func newNetworkGraphRun(cfg *config.Config, graph *kwcontext.ResourceGraph, namespaceAllowed func(string) bool) func(context.Context) {
-	if !cfg.ClusterResourceMonitor.Enabled {
+func newNetworkGraphRun(cfg *config.Config, graph *kwcontext.ResourceGraph, namespaceAllowed func(string) bool, plan feature.Plan) func(context.Context) {
+	if !cfg.ClusterResourceMonitor.Enabled || !plan.Enabled(feature.NetworkDetection) {
 		return nil
 	}
 	restCfg, err := client.GetRestConfig(&cfg.App)
@@ -429,8 +527,8 @@ func newNetworkGraphRun(cfg *config.Config, graph *kwcontext.ResourceGraph, name
 	}
 }
 
-func newStorageGraphRun(cfg *config.Config, graph *kwcontext.ResourceGraph, correlator *correlation.Engine, namespaceAllowed func(string) bool) func(context.Context) {
-	if !cfg.ClusterResourceMonitor.Enabled {
+func newStorageGraphRun(cfg *config.Config, graph *kwcontext.ResourceGraph, correlator *correlation.Engine, namespaceAllowed func(string) bool, plan feature.Plan) func(context.Context) {
+	if !cfg.ClusterResourceMonitor.Enabled || !plan.Enabled(feature.StorageDetection) {
 		return nil
 	}
 	restCfg, err := client.GetRestConfig(&cfg.App)

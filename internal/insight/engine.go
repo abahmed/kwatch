@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/abahmed/kwatch/internal/context"
+	"github.com/abahmed/kwatch/internal/feature"
 	"github.com/abahmed/kwatch/internal/model"
 )
 
@@ -31,6 +32,7 @@ type Engine struct {
 	// tests do not depend on the wall clock.
 	now      func() time.Time
 	feedback *FeedbackStore
+	plan     feature.Plan
 }
 
 // SetActiveChecker supplies the correlation engine's live incident view. The
@@ -48,6 +50,18 @@ func (e *Engine) SetClock(now func() time.Time) {
 
 func (e *Engine) SetFeedbackStore(store *FeedbackStore) { e.feedback = store }
 
+// SetFeaturePlan supplies the immutable capability plan built by the
+// composition root. A zero plan is kept backward compatible for package
+// users that construct an insight engine directly.
+func (e *Engine) SetFeaturePlan(plan feature.Plan) { e.plan = plan }
+
+func (e *Engine) featureEnabled(id feature.ID) bool {
+	if len(e.plan.Decisions) == 0 {
+		return true
+	}
+	return e.plan.Enabled(id)
+}
+
 func (e *Engine) ObserveOutcome(inc *model.Incident, action model.IncidentAction, pattern string) {
 	if e.feedback != nil {
 		e.feedback.Observe(inc, action, pattern)
@@ -64,9 +78,15 @@ func NewEngine(
 func (e *Engine) Analyze(inc *model.Incident) *Insight {
 	ins := &Insight{}
 
-	e.determineCause(inc, ins)
-	e.describeImpact(inc, ins)
-	e.checkRecentChanges(inc, ins)
+	if e.featureEnabled(feature.DirectDiagnosis) {
+		e.determineCause(inc, ins)
+	}
+	if e.featureEnabled(feature.ImpactAnalysis) {
+		e.describeImpact(inc, ins)
+	}
+	if e.featureEnabled(feature.ChangeDiff) {
+		e.checkRecentChanges(inc, ins)
+	}
 	e.scoreInsight(inc, ins)
 
 	return ins
@@ -79,6 +99,15 @@ func (e *Engine) scoreInsight(inc *model.Incident, ins *Insight) {
 	if inc == nil {
 		return
 	}
+	evidenceBefore := e.appendObservedEvidence(inc, ins)
+	e.setPatternConfidence(ins)
+	e.applyInsightAdjustments(inc, ins, evidenceBefore)
+	if e.featureEnabled(feature.DirectDiagnosis) {
+		ins.NextSteps = nextSteps(inc)
+	}
+}
+
+func (e *Engine) appendObservedEvidence(inc *model.Incident, ins *Insight) int {
 	if inc.Events != "" {
 		ins.Evidence = append(ins.Evidence, "Kubernetes warning events were observed")
 	}
@@ -110,7 +139,13 @@ func (e *Engine) scoreInsight(inc *model.Incident, ins *Insight) {
 		ins.Evidence = append(ins.Evidence, "a related resource changed shortly before the incident")
 	}
 	evidenceBefore := len(ins.Evidence)
-	e.appendActiveDependencyEvidence(inc, ins)
+	if e.featureEnabled(feature.DependencyGraph) {
+		e.appendActiveDependencyEvidence(inc, ins)
+	}
+	return evidenceBefore
+}
+
+func (e *Engine) setPatternConfidence(ins *Insight) {
 	switch ins.Pattern {
 	case "node_failure":
 		ins.Confidence = 0.90
@@ -121,14 +156,18 @@ func (e *Engine) scoreInsight(inc *model.Incident, ins *Insight) {
 	case "root_cause":
 		ins.Confidence = 0.40
 	}
-	e.applyFeedbackBias(inc, ins)
+}
+
+func (e *Engine) applyInsightAdjustments(inc *model.Incident, ins *Insight, evidenceBefore int) {
+	if e.featureEnabled(feature.RCAFeedback) {
+		e.applyFeedbackBias(inc, ins)
+	}
 	if ins.Confidence > 0 && len(ins.Evidence) == 0 {
 		ins.Confidence *= 0.65
 	}
 	if ins.Confidence > 0 && evidenceBefore == 0 && len(ins.Evidence) > 0 {
 		ins.Confidence = minFloat(ins.Confidence+0.10, 1)
 	}
-	ins.NextSteps = nextSteps(inc)
 }
 
 func (e *Engine) appendActiveDependencyEvidence(
@@ -213,7 +252,7 @@ func (e *Engine) EnrichMassFailure(mf MassFailure) MassFailure {
 		return mf
 	}
 
-	if e.graph != nil {
+	if e.featureEnabled(feature.DependencyGraph) && e.graph != nil {
 		if cause, pattern := e.rootCauseOfRef(
 			parts[0],
 			parts[1],
@@ -223,7 +262,7 @@ func (e *Engine) EnrichMassFailure(mf MassFailure) MassFailure {
 		}
 	}
 
-	if e.tracker != nil {
+	if e.featureEnabled(feature.ChangeDiff) && e.tracker != nil {
 		recent := e.tracker.RecentChangesBeforeAt(15*time.Minute, e.now())
 		depKey := parts[0] + "/" + parts[1] + "/" + parts[2]
 		var changes []context.Change

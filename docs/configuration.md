@@ -3,6 +3,11 @@
 Every kwatch configuration option, monitor, and endpoint in one place. For the 60-second
 install and a quick overview, see the [README](../README.md).
 
+String values may reference a mounted file with the exact form `${file:/path}`. This is
+useful for notification credentials: kwatch reads the file at startup without placing the
+credential in a ConfigMap or command line. The interactive installer uses this form and
+stores the referenced files in a Kubernetes Secret.
+
 > **The good news: you probably don't need this page.** Every option below has a safe
 > default and works out of the box. Use this reference when you want to *change* something —
 > fewer alerts, a different channel, a custom message — or when a term in an alert confuses
@@ -169,6 +174,29 @@ and other optional monitors are not reported as missing capabilities. The
 bundled ClusterRole remains a static superset so one manifest can support any
 configuration; installations requiring least privilege can remove rules for
 disabled monitors from their copied manifest without changing kwatch.
+
+### Fine-grained feature controls
+
+Monitor settings decide what kwatch requests. The optional `features.disabled` list can
+turn off individual capabilities inside a monitor without disabling the whole module:
+
+```yaml
+features:
+  disabled:
+    - telemetry.cpu.throttling
+    - intelligence.diagnosis.change-diff
+```
+
+Feature IDs are stable and validated at startup; an unknown ID fails fast with a clear
+error. This is an operator switch only: it cannot grant a paid capability or change the
+active product tier. The diagnostics endpoint `/features` shows policy, requested, allowed,
+enabled, and dependency state for every catalog entry.
+
+The interactive `kwatch.sh` manager downloads the matching
+`deploy/feature-catalog.tsv` from the installed release and caches it in a
+separate ConfigMap. Run `kwatch.sh features` (or choose **Show capabilities**)
+to see the available IDs, tiers, dependencies, and plain-language descriptions;
+the script does not need to be replaced when a release adds a capability.
 
 The `/kubelet` health status reports `healthy`, `partial`, `unavailable`, or
 `rbacDenied`, alongside Summary, cAdvisor, runtime, and node counts. The
@@ -699,12 +727,13 @@ Emits `create`/`update`/`resolved`/`skip` entries (with `incidentKey`, `namespac
 ### 📋 CRD — live config changes
 
 In plain words: instead of editing the ConfigMap and restarting, you can push config changes
-live with a small custom resource. Off by default — turn it on only if you manage kwatch via
-kubectl and want hot reloads.
+live with a small custom resource. It is off in the generic binary defaults when no CRD is
+installed. The Helm chart installs the CRD and enables it by default; the interactive installer
+does the same. Manual deployments must install the CRD before enabling it.
 
 | Parameter | What it does |
 |:---|---|
-| `crd.enabled` | Watch `KwatchConfig` CRs for live config updates (default: false) |
+| `crd.enabled` | Watch `KwatchConfig` CRs for live config updates (default: false for the binary; true in Helm and the interactive installer) |
 
 ```yaml
 apiVersion: kwatch.abahmed.dev/v1alpha1

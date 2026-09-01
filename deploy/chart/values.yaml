@@ -46,7 +46,9 @@ podLabels: {}
 # All detection monitors are ON by default; see docs.
 # resyncSeconds defaults to 0 (event-driven). workers defaults to 1 — raise on large
 # clusters (≈1 per few-thousand pods); each worker fans out to ≤7 goroutines.
-# To enable TLS monitoring (reads Secrets):
+# TLS monitoring is opt-in in the interactive installer (it reads TLS Secrets).
+# The chart's read-only Secret permission is retained because the dependency
+# graph also uses Secret references.
 # tlsMonitor:
 #   enabled: true
 #   threshold: 30
@@ -54,12 +56,16 @@ podLabels: {}
 # smartGrouping:
 #   windowSeconds: 60
 #   namespaceFanOutThreshold: 3   # owners failing the same way in one namespace → one alert
-config: {}
+# The chart installs the KwatchConfig CRD and enables live configuration
+# overlay by default. Other monitors keep their application defaults.
+config:
+  crd:
+    enabled: true
+
+# -- Use an existing Secret containing config.yaml instead of rendering config in a ConfigMap
+configSecretName: ""
 
 # -- Configure the upgrader/update checker (nested under config in the ConfigMap)
 # config:
 #   upgrader:
 #     disableUpdateCheck: false
-
-
-

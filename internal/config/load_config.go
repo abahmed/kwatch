@@ -29,6 +29,10 @@ func LintStrict() error {
 	if err != nil {
 		return err
 	}
+	expanded, err = expandFileRefs(expanded)
+	if err != nil {
+		return err
+	}
 	if strings.TrimSpace(expanded) == "" {
 		return nil
 	}
@@ -43,6 +47,7 @@ func LintStrict() error {
 // not set in the environment is reported as an error rather than silently
 // expanding to an empty string, which would corrupt the configuration.
 var envVarRe = regexp.MustCompile(`\$\{(\w+)\}`)
+var fileRefRe = regexp.MustCompile(`^\$\{file:(.+)\}$`)
 
 func expandEnv(s string) (string, error) {
 	unset := map[string]bool{}
@@ -67,6 +72,45 @@ func expandEnv(s string) (string, error) {
 		return "", fmt.Errorf("environment variable(s) referenced in config are not set: %s", strings.Join(names, ", "))
 	}
 	return out, nil
+}
+
+// expandFileRefs resolves exact ${file:/path} scalar references after YAML
+// parsing so secret values remain correctly escaped when YAML is re-encoded.
+func expandFileRefs(s string) (string, error) {
+	if strings.TrimSpace(s) == "" {
+		return s, nil
+	}
+	var document yaml.Node
+	if err := yaml.Unmarshal([]byte(s), &document); err != nil {
+		return "", err
+	}
+	if err := resolveFileRefNodes(&document); err != nil {
+		return "", err
+	}
+	resolved, err := yaml.Marshal(&document)
+	if err != nil {
+		return "", err
+	}
+	return string(resolved), nil
+}
+
+func resolveFileRefNodes(node *yaml.Node) error {
+	if node.Kind == yaml.ScalarNode && node.Tag == "!!str" {
+		match := fileRefRe.FindStringSubmatch(node.Value)
+		if match != nil {
+			value, err := os.ReadFile(match[1]) // #nosec G304 -- operator-selected config reference
+			if err != nil {
+				return fmt.Errorf("config file reference %q could not be read: %w", match[1], err)
+			}
+			node.Value = strings.TrimRight(string(value), "\r\n")
+		}
+	}
+	for _, child := range node.Content {
+		if err := resolveFileRefNodes(child); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 // LoadConfig loads yaml configuration from file if provided, otherwise
@@ -97,6 +141,11 @@ func parseConfigFile() (*Config, error) {
 	expanded, err := expandEnv(string(yamlFile))
 	if err != nil {
 		klog.ErrorS(err, "failed to expand environment variables in config", "file", configFile)
+		return nil, err
+	}
+	expanded, err = expandFileRefs(expanded)
+	if err != nil {
+		klog.ErrorS(err, "failed to resolve file references in config", "file", configFile)
 		return nil, err
 	}
 

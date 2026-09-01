@@ -1,0 +1,148 @@
+# kwatch config metadata v1
+features.disabled|Product control|Stable feature IDs to disable individually without disabling the owning monitor.|active|
+workers|Performance|Number of Kubernetes work queues processed in parallel.|active|
+resyncSeconds|Performance|Periodic safety resync interval in seconds; zero keeps event-driven mode.|active|
+maxRecentLogLines|Alerts|Maximum recent log lines attached to an incident.|active|
+containerRestartThreshold|Alerts|Alert when a container reaches this cumulative restart count; zero disables it.|active|
+includeEvents|Alerts|Include recent Kubernetes events in incident messages.|active|
+includeLogs|Alerts|Include recent container logs in incident messages.|active|
+alert|Alerts|Notification provider configuration stored in the Kubernetes Secret.|active|
+namespaces|Scope|Comma-separated namespaces to watch; leave empty to watch every namespace.|active|
+namespaceSelector|Scope|Kubernetes label selector used to choose namespaces.|active|
+reasons|Scope|Comma-separated event reasons to allow or exclude with a leading !.|active|
+ignoreFailedGracefulShutdown|Noise reduction|Ignore forceful container termination during an intentional shutdown.|active|
+ignoreDisruptionTerminations|Noise reduction|Ignore pods being deliberately evicted, preempted, or disrupted.|active|
+adaptiveThresholds|Noise reduction|Add bounded grace during normal partial rollouts.|active|
+reportStartupBaseline|Noise reduction|Summarize issues that already existed when kwatch started.|active|
+correlation.window|Incident memory|Minutes in which related signals are correlated.|active|
+correlation.lifecycleInterval|Incident memory|Minutes between lifecycle and resolution sweeps.|active|
+correlation.resolveHoldDown|Incident memory|Seconds a signal must stay healthy before resolving.|active|
+correlation.cooldownMinutes|Incident memory|Minimum minutes before the same incident can notify again.|active|
+correlation.maxBaseline|Incident memory|Maximum persisted baseline entries.|active|
+correlation.escalation|Incident memory|JSON object controlling restart-count severity escalation.|active|
+correlation.renotify|Incident memory|JSON object controlling periodic re-notification.|active|
+severityByOwnerKind|Alerts|JSON map overriding severity by workload owner kind.|active|
+severityByReason|Alerts|JSON map overriding severity by detected reason.|active|
+smartGrouping.windowSeconds|Noise reduction|Seconds for grouping related failures into one notification.|active|
+smartGrouping.namespaceFanOutThreshold|Noise reduction|Owners failing alike before a namespace fan-out incident is created.|active|
+inhibition.nodeSuppressesPods|Noise reduction|Suppress pod symptoms while their node has an active incident.|active|
+nodeMonitor.enabled|Monitors|Watch node readiness and pressure conditions.|active|
+nodeMonitor.sustainedMinutes|Monitors|Minutes a node condition must persist before alerting.|active|
+pvcMonitor.enabled|Monitors|Watch mounted PVC usage and storage pressure.|active|
+pvcMonitor.interval|Monitors|Minutes between PVC usage checks.|active|
+pvcMonitor.threshold|Monitors|PVC usage percentage that creates a warning.|active|
+pvcMonitor.criticalThreshold|Monitors|PVC usage percentage that creates a critical alert.|active|
+pvcMonitor.clearThreshold|Monitors|PVC usage percentage below which an alert resolves.|active|
+rolloutMonitor.enabled|Monitors|Watch Deployments for stuck rollouts.|active|
+rolloutMonitor.sustainedMinutes|Monitors|Minutes a Deployment may remain unavailable before alerting.|active|
+statefulSetMonitor.enabled|Monitors|Watch StatefulSets for stuck updates.|active|
+statefulSetMonitor.sustainedMinutes|Monitors|Minutes a StatefulSet may remain unavailable before alerting.|active|
+daemonSetMonitor.enabled|Monitors|Watch DaemonSets for unavailable pods and scheduling failures.|active|
+daemonSetMonitor.sustainedMinutes|Monitors|Minutes a DaemonSet may remain unavailable before alerting.|active|
+jobMonitor.enabled|Monitors|Watch Jobs for failures and deadline problems.|active|
+cronJobMonitor.enabled|Monitors|Watch CronJobs for missed or suspended work.|active|
+cronJobMonitor.sustainedMinutes|Monitors|Minutes a CronJob condition must persist before alerting.|active|
+hpaMonitor.enabled|Monitors|Watch HPAs that remain constrained or maxed out.|active|
+hpaMonitor.sustainedMinutes|Monitors|Minutes an HPA must remain constrained before alerting.|active|
+serviceMonitor.enabled|Monitors|Watch Services with no ready backends.|active|
+ingressMonitor.enabled|Monitors|Watch Ingress backend availability.|active|
+networkPolicyMonitor.enabled|Monitors|Detect evidence of restrictive NetworkPolicies.|active|
+admissionWebhookMonitor.enabled|Monitors|Watch admission webhook availability and failures.|active|
+controlPlaneMonitor.enabled|Monitors|Watch API server and control-plane health signals.|active|
+clusterResourceMonitor.enabled|Monitors|Watch quota, namespace, and lease lifecycle failures.|active|
+clusterResourceMonitor.sustainedMinutes|Monitors|Minutes a terminating namespace or quota condition must persist before alerting.|active|
+clusterResourceMonitor.nodeLeaseStaleSeconds|Monitors|Seconds without a node lease renewal before reporting a stale heartbeat.|active|
+heartbeatMonitor.enabled|Monitors|Send a periodic external dead-man heartbeat.|active|
+heartbeatMonitor.interval|Monitors|Seconds between heartbeat notifications.|active|
+heartbeatMonitor.url|Monitors|Optional heartbeat endpoint URL.|active|
+scheduleMonitor.enabled|Monitors|Include scheduling delay and unschedulable diagnostics.|active|
+oomMonitor.enabled|Monitors|Track repeating OOM kills independently from current pod state.|active|
+oomMonitor.threshold|Monitors|OOM kills within the window before raising a repeating-OOM incident.|active|
+oomMonitor.windowMinutes|Monitors|Sliding window used for repeating OOM detection.|active|
+pendingPodMonitor.enabled|Monitors|Watch pods that remain Pending.|active|
+pendingPodMonitor.threshold|Monitors|Seconds a pod may remain Pending before alerting.|active|
+notReadyMonitor.enabled|Monitors|Watch running pods that remain not ready.|active|
+pdbMonitor.enabled|Monitors|Watch PodDisruptionBudgets that block voluntary disruption.|active|
+pdbMonitor.sustainedMinutes|Monitors|Minutes a PDB violation must persist before alerting.|active|
+nodeResourceMonitor.enabled|Monitors|Watch node overcommit and filesystem/inode pressure.|active|
+nodeResourceMonitor.intervalSeconds|Monitors|Seconds between node resource checks.|active|
+nodeResourceMonitor.cpuWarning|Monitors|CPU requested-to-capacity ratio that raises a warning.|active|
+nodeResourceMonitor.cpuCritical|Monitors|CPU requested-to-capacity ratio that raises a critical alert.|active|
+nodeResourceMonitor.memWarning|Monitors|Memory requested-to-capacity ratio that raises a warning.|active|
+nodeResourceMonitor.memCritical|Monitors|Memory requested-to-capacity ratio that raises a critical alert.|active|
+nodeResourceMonitor.filesystemWarningPercent|Monitors|Node filesystem usage warning threshold.|active|
+nodeResourceMonitor.filesystemCriticalPercent|Monitors|Node filesystem usage critical threshold.|active|
+nodeResourceMonitor.inodeWarningPercent|Monitors|Node inode usage warning threshold.|active|
+nodeResourceMonitor.inodeCriticalPercent|Monitors|Node inode usage critical threshold.|active|
+runtimeMetricsMonitor.enabled|Monitors|Use metrics.k8s.io when available for workload usage diagnostics.|active|
+runtimeMetricsMonitor.intervalSeconds|Monitors|Seconds between runtime metrics checks.|active|
+runtimeMetricsMonitor.memoryWarningPercent|Monitors|Memory usage warning percentage when metrics.k8s.io is available.|active|
+runtimeMetricsMonitor.memoryCriticalPercent|Monitors|Memory usage critical percentage when metrics.k8s.io is available.|active|
+runtimeMetricsMonitor.cpuWarningPercent|Monitors|CPU usage warning percentage when metrics.k8s.io is available.|active|
+runtimeMetricsMonitor.cpuCriticalPercent|Monitors|CPU usage critical percentage when metrics.k8s.io is available.|active|
+clusterAutoscalerMonitor.enabled|Monitors|Watch built-in cluster-autoscaler evidence from Kubernetes resources and events.|active|
+tlsMonitor.threshold|Monitors|Days before certificate expiry to warn.|active|
+tlsMonitor.criticalThreshold|Monitors|Days before certificate expiry for a critical alert.|active|
+controlPlaneMonitor.intervalSeconds|Monitors|Seconds between API and control-plane health checks.|active|
+controlPlaneMonitor.apiServerLatencyWarningMs|Monitors|API readyz latency warning threshold in milliseconds.|active|
+controlPlaneMonitor.failureThreshold|Monitors|Consecutive control-plane failures before alerting.|active|
+controlPlaneMonitor.recoveryThreshold|Monitors|Consecutive successful checks before resolving.|active|
+kubeletTelemetryMonitor.enabled|Monitors|Read built-in kubelet telemetry without an agent.|active|
+kubeletTelemetryMonitor.intervalSeconds|Monitors|Seconds between built-in kubelet telemetry sweeps.|active|
+kubeletTelemetryMonitor.persistState|Monitors|Persist telemetry counters across restarts.|active|
+kubeletTelemetryMonitor.failureThreshold|Monitors|Consecutive kubelet telemetry failures before alerting.|active|
+kubeletTelemetryMonitor.recoveryThreshold|Monitors|Consecutive successful telemetry checks before resolving.|active|
+kubeletTelemetryMonitor.memoryWarningPercent|Monitors|Kubelet memory usage warning threshold.|active|
+kubeletTelemetryMonitor.memoryCriticalPercent|Monitors|Kubelet memory usage critical threshold.|active|
+kubeletTelemetryMonitor.ephemeralStorageWarningPercent|Monitors|Ephemeral-storage usage warning threshold.|active|
+kubeletTelemetryMonitor.ephemeralStorageCriticalPercent|Monitors|Ephemeral-storage usage critical threshold.|active|
+kubeletTelemetryMonitor.cpuWarningPercent|Monitors|CPU usage warning threshold from kubelet telemetry.|active|
+kubeletTelemetryMonitor.cpuCriticalPercent|Monitors|CPU usage critical threshold from kubelet telemetry.|active|
+kubeletTelemetryMonitor.cpuThrottlingWarningPercent|Monitors|CPU throttling warning threshold.|active|
+kubeletTelemetryMonitor.cpuThrottlingCriticalPercent|Monitors|CPU throttling critical threshold.|active|
+kubeletTelemetryMonitor.psiWarningPercent|Monitors|Pressure stall warning threshold.|active|
+kubeletTelemetryMonitor.psiCriticalPercent|Monitors|Pressure stall critical threshold.|active|
+kubeletTelemetryMonitor.networkErrorRateWarning|Monitors|Network error rate warning threshold.|active|
+kubeletTelemetryMonitor.networkErrorRateCritical|Monitors|Network error rate critical threshold.|active|
+kubeletTelemetryMonitor.runtimeErrorRateWarning|Monitors|Container runtime error rate warning threshold.|active|
+kubeletTelemetryMonitor.runtimeErrorRateCritical|Monitors|Container runtime error rate critical threshold.|active|
+tlsMonitor.enabled|Monitors|Watch TLS certificates before expiry; reads certificate Secrets.|active|
+activeProbeMonitor.enabled|Monitors|Run explicitly configured application probes.|active|
+activeProbeMonitor.intervalSeconds|Monitors|Seconds between active probe rounds.|active|
+activeProbeMonitor.timeoutSeconds|Monitors|Timeout for each active probe.|active|
+activeProbeMonitor.failureThreshold|Monitors|Consecutive probe failures before alerting.|active|
+activeProbeMonitor.recoveryThreshold|Monitors|Consecutive successes before resolving a probe incident.|active|
+activeProbeMonitor.autoServices|Monitors|Probe discoverable Service ports automatically; opt in to avoid unexpected traffic.|active|
+activeProbeMonitor.http|Monitors|JSON array of HTTP probe targets with optional paths, headers, and latency limits.|active|
+activeProbeMonitor.tcp|Monitors|JSON array of TCP probe targets.|active|
+activeProbeMonitor.dns|Monitors|JSON array of DNS probe targets.|active|
+upgrader.disableUpdateCheck|Operations|Disable the update notification.|active|
+telemetry.enabled|Operations|Send the anonymous adoption heartbeat.|active|
+maintenance.enabled|Operations|Honor maintenance annotations while preserving cluster-level alerts.|active|
+maintenance.annotation|Operations|Annotation that marks deliberate maintenance on a resource.|active|
+maintenance.untilAnnotation|Operations|Optional annotation containing the maintenance expiry timestamp.|active|
+healthCheck.diagnostics|Operations|Expose diagnostic endpoints such as incidents and test-alert.|active|
+healthCheck.pprof|Operations|Expose Go profiling endpoints; keep disabled in production.|active|
+app.clusterName|Operations|Cluster name shown in notifications.|active|
+app.proxyURL|Operations|Optional proxy for outbound provider requests.|active|
+app.disableStartupMessage|Operations|Disable the startup notification.|active|
+app.logFormatter|Operations|Log output format: text or json.|active|
+app.insecureSkipTLSVerify|Security|Skip TLS verification for outbound providers; strongly discouraged.|active|
+app.caBundlePath|Security|Path to a mounted PEM bundle for outbound provider TLS.|active|
+healthCheck.enabled|Operations|Expose the built-in health endpoint.|active|
+healthCheck.port|Operations|Port for health and optional diagnostic endpoints.|active|
+healthCheck.diagnosticsToken|Security|Optional Bearer token required for diagnostic endpoints.|active|
+crd.enabled|Operations|Watch KwatchConfig and supported CRD status conditions for live changes; enabled by the interactive installer after installing the CRD.|active|
+crd.failureConditions|Operations|Additional CRD condition rules such as Ready=False or Degraded=True.|active|
+crd.graphReferences|Operations|Optional CRD references used by dependency and impact analysis.|active|
+auditLog.enabled|Operations|Write structured incident lifecycle records to the configured audit sink.|active|
+auditLog.output|Operations|Audit output: stdout or a supported output sink.|active|
+templates|Operations|JSON map of optional reason-specific message templates.|active|
+runbooks|Operations|JSON map of reason-to-runbook URLs.|active|
+silences|Noise reduction|JSON array of scoped silence rules.|active|
+ignoreContainerNames|Compatibility|Legacy container suppression field.|deprecated|silences
+ignorePodNames|Compatibility|Legacy pod-name suppression field.|deprecated|silences
+ignoreLogPatterns|Compatibility|Legacy log suppression field.|deprecated|silences
+ignoreContainerMessages|Compatibility|Legacy container-message suppression field.|deprecated|silences
+ignoreNodeReasons|Compatibility|Legacy node-reason suppression field.|deprecated|silences
+ignoreNodeMessages|Compatibility|Legacy node-message suppression field.|deprecated|silences

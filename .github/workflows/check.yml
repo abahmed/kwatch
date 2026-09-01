@@ -19,27 +19,35 @@ jobs:
       contents: read
     steps:
     - name: Checkout code
-      uses: actions/checkout@v7
+      uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
     - name: Install Go
-      uses: actions/setup-go@v6
+      uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16 # v6
       with:
         # Read from go.mod so the CI Go version can never drift from the repo.
         go-version-file: go.mod
+    - name: Install actionlint
+      run: go install github.com/rhysd/actionlint/cmd/actionlint@v1.7.7
+    - name: Lint GitHub Actions
+      run: "$(go env GOPATH)/bin/actionlint"
     - name: Lint
-      uses: golangci/golangci-lint-action@v9
+      uses: golangci/golangci-lint-action@ba0d7d2ec06a0ea1cb5fa41b2e4a3ab91d21278a # v9
       with:
         # Pinned. "latest" means an upstream release can break CI with no
         # change on our side.
         version: v2.13.1
     - name: Build
       run: go build -o kwatch ./cmd/kwatch
+    - name: Verify configuration catalog
+      run: |
+        go run ./cmd/configcatalog -output /tmp/kwatch-config-catalog.tsv
+        cmp -s deploy/config-catalog.tsv /tmp/kwatch-config-catalog.tsv
     - name: Test
       run: go test -race --coverprofile=coverage.txt --covermode=atomic ./...
     - name: Integration tests
       run: go test -race -tags integration ./internal/integration/...
     - name: Upload coverage to Codecov
       if: success() && github.ref == 'refs/heads/main'
-      uses: codecov/codecov-action@v7
+      uses: codecov/codecov-action@fb8b3582c8e4def4969c97caa2f19720cb33a72f # v7
       with:
         token: ${{ secrets.CODECOV_TOKEN }}
         fail_ci_if_error: false
@@ -52,23 +60,29 @@ jobs:
       contents: read
     steps:
     - name: Checkout code
-      uses: actions/checkout@v7
+      uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
     - name: Detect chart changes
       id: changes
-      uses: dorny/paths-filter@v4
+      uses: dorny/paths-filter@ceb8a2b8f2d89434be7ff52d3de7ec3738c5cc9d # v4
       with:
         filters: |
           chart:
             - 'deploy/chart/**'
     - name: Install Helm
       if: steps.changes.outputs.chart == 'true'
-      uses: azure/setup-helm@v5
+      uses: azure/setup-helm@9bc31f4ebc9c6b171d7bfbaa5d006ae7abdb4310 # v5
     - name: Lint chart
       if: steps.changes.outputs.chart == 'true'
       run: helm lint deploy/chart
     - name: Template tests
       if: steps.changes.outputs.chart == 'true'
       run: ./deploy/chart/test_helm.sh
+    - name: Create disposable Kubernetes cluster
+      if: steps.changes.outputs.chart == 'true'
+      uses: helm/kind-action@a1b0e391336a6ee6713a0583f8c6240d70863de3 # v1.12.0
+    - name: CRD lifecycle integration test
+      if: steps.changes.outputs.chart == 'true'
+      run: ./deploy/chart/test_helm_lifecycle.sh
 
   # publish.yml is the only other place a container image gets built, and it
   # runs on a release — after the tag exists. Without this job a broken
@@ -81,28 +95,29 @@ jobs:
       contents: read
     steps:
     - name: Checkout code
-      uses: actions/checkout@v7
+      uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
     - name: Detect image changes
       id: changes
-      uses: dorny/paths-filter@v4
+      uses: dorny/paths-filter@ceb8a2b8f2d89434be7ff52d3de7ec3738c5cc9d # v4
       with:
         filters: |
           image:
             - 'Dockerfile'
             - '.dockerignore'
+            - '**/*.go'
             - 'go.mod'
             - 'go.sum'
     - name: Set up QEMU
       if: steps.changes.outputs.image == 'true'
-      uses: docker/setup-qemu-action@v4
+      uses: docker/setup-qemu-action@96fe6ef7f33517b61c61be40b68a1882f3264fb8 # v4
     - name: Set up Docker Buildx
       if: steps.changes.outputs.image == 'true'
-      uses: docker/setup-buildx-action@v4
+      uses: docker/setup-buildx-action@37fe631027851001ddb9b187196cc803df7f5f0e # v4
     # Same platform list as the release build. Nothing is pushed, and the
     # cache is read-only so pull requests never add to the repo cache quota.
     - name: Build every release platform
       if: steps.changes.outputs.image == 'true'
-      uses: docker/build-push-action@v7
+      uses: docker/build-push-action@53b7df96c91f9c12dcc8a07bcb9ccacbed38856a # v7
       with:
         platforms: linux/amd64,linux/arm64,linux/arm/v7,linux/arm/v6
         context: .
@@ -128,6 +143,7 @@ jobs:
         check linux/amd64  amd64 "x86-64"
         check linux/arm64  arm64 "ARM aarch64"
         check linux/arm/v7 armv7 "ARM, EABI5"
+        check linux/arm/v6 armv6 "ARM"
     - name: Smoke-test the image
       if: steps.changes.outputs.image == 'true'
       run: |

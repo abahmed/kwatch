@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/abahmed/kwatch/internal/event"
+	"github.com/abahmed/kwatch/internal/feature"
 	"github.com/abahmed/kwatch/internal/model"
 )
 
@@ -92,7 +93,7 @@ func (e *Engine) processLocked(
 			return e.refreshIncident(inc, ev, cs, owner, now)
 		}
 
-		if e.config.EscalationEnabled && cs != nil &&
+		if e.featureEnabled(feature.Escalation) && e.config.EscalationEnabled && cs != nil &&
 			e.escalateRestartCount(inc, ev, cs, now) {
 			return inc, e.edgeAction(inc)
 		}
@@ -175,30 +176,52 @@ func (e *Engine) newIncident(
 	if cs != nil {
 		inc.RestartCount = int(cs.RestartCount)
 	}
-	if url, ok := e.config.Runbooks[ev.Reason]; ok {
-		inc.Runbook = url
-	}
-	if e.config.EscalationEnabled && cs != nil {
-		cur := int(cs.RestartCount)
-		if t := crossedTier(-1, cur, e.config.EscalationTiers); t >= 0 {
-			ev.Severity = severityForTier(t, inc.Severity)
-		} else if ev.Severity == "" {
-			// seed from the absolute threshold when no tier is crossed at
-			// startup
-			for i := len(e.config.EscalationTiers) - 1; i >= 0; i-- {
-				if cur >= e.config.EscalationTiers[i] {
-					ev.Severity = severityForTier(i, inc.Severity)
-					break
-				}
-			}
+	if e.featureEnabled(feature.Runbooks) {
+		if url, ok := e.config.Runbooks[ev.Reason]; ok {
+			inc.Runbook = url
 		}
 	}
+	e.applyIncidentEscalation(&ev, inc, cs)
 	e.config.Enricher.Enrich(&ev, inc)
 
 	// Topology is impact, not explanation. It used to be appended to the
 	// hint as prose, where it repeated what the diagnosis block already says
 	// and made the hint unreadable. Keep it structured; renderers decide how
 	// to show it.
+	e.attachIncidentRelations(inc, ev, owner, res)
+
+	return inc
+}
+
+func (e *Engine) applyIncidentEscalation(
+	ev *event.Event,
+	inc *model.Incident,
+	cs *model.ContainerState,
+) {
+	if !e.featureEnabled(feature.Escalation) || !e.config.EscalationEnabled || cs == nil {
+		return
+	}
+	cur := int(cs.RestartCount)
+	if tier := crossedTier(-1, cur, e.config.EscalationTiers); tier >= 0 {
+		ev.Severity = severityForTier(tier, inc.Severity)
+		return
+	}
+	if ev.Severity != "" {
+		return
+	}
+	for i := len(e.config.EscalationTiers) - 1; i >= 0; i-- {
+		if cur >= e.config.EscalationTiers[i] {
+			ev.Severity = severityForTier(i, inc.Severity)
+			break
+		}
+	}
+}
+
+func (e *Engine) attachIncidentRelations(
+	inc *model.Incident,
+	ev event.Event,
+	owner, res string,
+) {
 	if deps := e.findDependentServices(ev.Namespace, ev.Labels); len(deps) > 0 {
 		sort.Strings(deps)
 		inc.AffectedServices = deps
@@ -206,6 +229,4 @@ func (e *Engine) newIncident(
 	if res == "pod" && owner != "" && !e.isOwnerHealthy(inc) {
 		inc.OwnerUnhealthy = true
 	}
-
-	return inc
 }

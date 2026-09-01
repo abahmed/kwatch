@@ -19,8 +19,13 @@ helm install [RELEASE_NAME] kwatch/kwatch --version 0.10.5
 ## Uninstall Chart
 
 ```console
-helm delete --purge [RELEASE_NAME]
+helm uninstall [RELEASE_NAME] --namespace kwatch
 ```
+
+The chart owns and upgrades the `KwatchConfig` CRD automatically on install and upgrade.
+The CRD is intentionally kept when the release is uninstalled so live configuration is not
+removed accidentally. Delete it manually only when you are sure no KwatchConfig resources
+are needed.
 
 ## Configuration
 
@@ -37,5 +42,6 @@ helm delete --purge [RELEASE_NAME]
 | `nodeSelector` | Node labels for pod assignment | {} |
 | `tolerations` | Tolerations for pod assignment | [] |
 | `affinity` | affinity for pod | {} |
-| `config` | [kwatch configuration](../../docs/configuration.md) | {} |
+| `config` | [kwatch configuration](../../docs/configuration.md); `crd.enabled` defaults to `true` because the chart installs the KwatchConfig CRD | `{crd: {enabled: true}}` |
+| `configSecretName` | Existing Secret containing `config.yaml`; keeps notification credentials out of the ConfigMap | `""` |
 | `upgrader.disableUpdateCheck` | Disable startup update check | `false` |

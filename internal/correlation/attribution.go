@@ -5,6 +5,7 @@ import (
 	"time"
 
 	"github.com/abahmed/kwatch/internal/event"
+	"github.com/abahmed/kwatch/internal/feature"
 	"github.com/abahmed/kwatch/internal/model"
 )
 
@@ -82,8 +83,10 @@ func (e *Engine) attribute(
 	if massKey, ok := e.coveringMassFailure(ev, key, res); ok {
 		return cause{kind: causeSharedDependency, mass: massKey}
 	}
-	if inc, ok := e.ownerIncidentFor(ev, owner, res); ok {
-		return cause{kind: causeOwnerWorkload, owner: inc}
+	if e.featureEnabled(feature.CascadeSuppression) {
+		if inc, ok := e.ownerIncidentFor(ev, owner, res); ok {
+			return cause{kind: causeOwnerWorkload, owner: inc}
+		}
 	}
 	return cause{}
 }
@@ -96,7 +99,8 @@ func (e *Engine) nodeCauseFor(
 	ev event.Event,
 	res string,
 ) (*model.Incident, bool) {
-	if !e.config.InhibitNodeSuppressesPods || res != "pod" {
+	if !e.featureEnabled(feature.CascadeSuppression) ||
+		!e.config.InhibitNodeSuppressesPods || res != "pod" {
 		return nil, false
 	}
 	if ev.NodeName != "" {
@@ -122,7 +126,8 @@ func (e *Engine) coveringMassFailure(
 	key model.IncidentKey,
 	res string,
 ) (model.IncidentKey, bool) {
-	if res == "node" || len(e.massFailures) == 0 ||
+	if !e.featureEnabled(feature.MassFailureSuppression) ||
+		!e.featureEnabled(feature.DependencyGraph) || res == "node" || len(e.massFailures) == 0 ||
 		e.config.DependenciesOf == nil {
 		return "", false
 	}

@@ -13,6 +13,7 @@ import (
 
 	"github.com/abahmed/kwatch/internal/clock"
 	"github.com/abahmed/kwatch/internal/config"
+	"github.com/abahmed/kwatch/internal/feature"
 )
 
 type Permission struct {
@@ -99,7 +100,15 @@ func New(client kubernetes.Interface) *Monitor {
 // NewWithConfig checks only permissions needed by enabled monitors. New is
 // retained for callers that want the complete capability audit.
 func NewWithConfig(client kubernetes.Interface, cfg *config.Config) *Monitor {
-	cluster, namespaced := permissionsForConfig(cfg)
+	return NewWithConfigAndPlan(client, cfg, feature.Plan{})
+}
+
+// NewWithConfigAndPlan makes the RBAC audit reflect both monitor configuration
+// and the effective product capability plan. This keeps a disabled capability
+// from requesting permissions even when an old config still contains its
+// monitor settings.
+func NewWithConfigAndPlan(client kubernetes.Interface, cfg *config.Config, plan feature.Plan) *Monitor {
+	cluster, namespaced := permissionsForConfigAndPlan(cfg, plan)
 	return &Monitor{
 		client:                client,
 		clusterPermissions:    cluster,

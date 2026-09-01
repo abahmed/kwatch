@@ -6,6 +6,7 @@ import (
 
 	"k8s.io/klog/v2"
 
+	"github.com/abahmed/kwatch/internal/feature"
 	"github.com/abahmed/kwatch/internal/model"
 )
 
@@ -89,7 +90,7 @@ func (e *Engine) checkLifecycle() {
 	pending = append(pending, e.renotifyDue(now)...)
 
 	// smart grouping flush
-	if e.config.SmartGroupingWindow > 0 {
+	if e.featureEnabled(feature.SmartGrouping) && e.config.SmartGroupingWindow > 0 {
 		pending = append(pending, e.flushGroupBuffers(now)...)
 	}
 

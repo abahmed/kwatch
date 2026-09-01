@@ -62,7 +62,7 @@ jobs:
           fi
 
       - name: Check out the repo
-        uses: actions/checkout@v7
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
           fetch-depth: 0
           token: ${{ secrets.RELEASE_TOKEN || secrets.GITHUB_TOKEN }}
@@ -72,11 +72,18 @@ jobs:
           git config --global user.name "github-actions[bot]"
           git config --global user.email "41898282+github-actions[bot]@users.noreply.github.com"
 
+      - name: Install Go
+        uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16 # v6
+        with:
+          go-version-file: go.mod
+
       - name: Compute version
         id: meta
         env:
           COMMAND: ${{ inputs.command }}
           BUMP: ${{ inputs.bump }}
+          DRY_RUN: ${{ inputs.dry_run }}
+          GH_TOKEN: ${{ secrets.RELEASE_TOKEN }}
         run: |
           set -euo pipefail
 
@@ -99,6 +106,9 @@ jobs:
 
           strip_rc() { echo "$1" | sed -E 's/-rc\.[0-9]+$//'; }
           rc_num()   { echo "$1" | sed -E 's/.*-rc\.([0-9]+)$/\1/'; }
+          release_exists() {
+            [ "$DRY_RUN" = true ] || gh release view "$1" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1
+          }
 
           # BUMP applied to the last stable. Only rc uses this, and only when
           # it opens a new series.
@@ -157,10 +167,6 @@ jobs:
               VERSION=$(strip_rc "$LATEST_RC")
               PREV="$LATEST_STABLE"
               PRERELEASE=false
-              if git rev-parse -q --verify "refs/tags/$VERSION" >/dev/null; then
-                echo "::error::$VERSION already exists"
-                exit 1
-              fi
               # main must carry nothing the RC does not already have. An RC tag
               # sits one commit ahead of main on purpose (that commit pins the
               # manifest to the preview image and is never pushed), so compare
@@ -196,9 +202,28 @@ jobs:
               ;;
           esac
 
+          # A tag can be pushed successfully while creating the GitHub Release
+          # fails (for example, a transient API error). On a retry, resume that
+          # exact unfinished release instead of calculating the next version.
+          RESUME=false
+          if [ "$DRY_RUN" != true ]; then
+            if [ "$COMMAND" = rc ] && [ -n "$LATEST_RC" ] && ! release_exists "$LATEST_RC"; then
+              VERSION="$LATEST_RC"
+              PRERELEASE=true
+              RESUME=true
+              echo "::notice::resuming unfinished release $VERSION"
+            elif [ "$COMMAND" != rc ] && git rev-parse -q --verify "refs/tags/$VERSION" >/dev/null \
+              && ! release_exists "$VERSION"; then
+              RESUME=true
+              echo "::notice::resuming unfinished release $VERSION"
+            fi
+          fi
+
           if git rev-parse -q --verify "refs/tags/$VERSION" >/dev/null; then
-            echo "::error::tag $VERSION already exists"
-            exit 1
+            if [ "$RESUME" != true ]; then
+              echo "::error::tag $VERSION already exists and is not an unfinished release"
+              exit 1
+            fi
           fi
 
           if ! echo "$VERSION" | grep -Eq '^v[0-9]+\.[0-9]+\.[0-9]+(-rc\.[0-9]+)?$'; then
@@ -216,6 +241,7 @@ jobs:
           echo "version=$VERSION" >> "$GITHUB_OUTPUT"
           echo "prev=$PREV" >> "$GITHUB_OUTPUT"
           echo "prerelease=$PRERELEASE" >> "$GITHUB_OUTPUT"
+          echo "resume=$RESUME" >> "$GITHUB_OUTPUT"
           echo "$COMMAND -> $VERSION (notes compare against ${PREV:-nothing})"
 
       # Must run before the changelog and the bump, so both work on the
@@ -224,9 +250,25 @@ jobs:
         id: target
         env:
           TARGET: ${{ inputs.target }}
+          RESUME: ${{ steps.meta.outputs.resume }}
         run: |
           set -euo pipefail
+          if [ "$RESUME" = true ]; then
+            if [ -n "$TARGET" ]; then
+              echo "::error::target cannot be used while resuming an existing release"
+              exit 1
+            fi
+            RESOLVED=$(git rev-list -n 1 "refs/tags/${{ steps.meta.outputs.version }}")
+            echo "sha=$RESOLVED" >> "$GITHUB_OUTPUT"
+            echo "existing_tag=true" >> "$GITHUB_OUTPUT"
+            echo "resuming tag at $RESOLVED"
+            exit 0
+          fi
           if [ -n "$TARGET" ]; then
+            if [ "$COMMAND" != "patch" ]; then
+              echo "::error::target is supported only for patch releases; RC and stable must use the workflow's computed release commit"
+              exit 1
+            fi
             if ! git rev-parse -q --verify "$TARGET^{commit}" >/dev/null; then
               echo "::error::target '$TARGET' is not a valid commit, tag, or ref"
               exit 1
@@ -234,6 +276,10 @@ jobs:
             RESOLVED=$(git rev-parse "$TARGET^{commit}")
           else
             RESOLVED=$(git rev-parse HEAD)
+          fi
+          if ! git merge-base --is-ancestor "$RESOLVED" origin/main; then
+            echo "::error::target $RESOLVED is not an ancestor of origin/main"
+            exit 1
           fi
           echo "sha=$RESOLVED" >> "$GITHUB_OUTPUT"
           echo "tagging at $RESOLVED"
@@ -281,9 +327,18 @@ jobs:
 
           cat /tmp/release-notes.md
 
+      - name: Validate installer configuration catalog
+        run: |
+          set -euo pipefail
+          test -s deploy/config-catalog.tsv
+          grep -Eq '^# kwatch config catalog v[0-9]+$' deploy/config-catalog.tsv
+          test -s deploy/feature-catalog.tsv
+          grep -Eq '^# kwatch feature catalog v[0-9]+$' deploy/feature-catalog.tsv
+          echo "configuration and feature catalogs are present in the release tag"
+
       - name: Bump chart and README versions
         id: bump
-        if: ${{ !inputs.dry_run }}
+        if: ${{ !inputs.dry_run && steps.meta.outputs.resume != 'true' }}
         env:
           VERSION: ${{ steps.meta.outputs.version }}
           COMMAND: ${{ inputs.command }}
@@ -297,6 +352,12 @@ jobs:
 
           CHART_VER=$(echo "$VERSION" | sed -E 's/^v//')
           export VERSION CHART_VER
+
+          # Generate the manager catalog from the config structs before the
+          # release tag is created. Existing descriptions and deprecations are
+          # preserved; newly added fields are discovered automatically.
+          go run ./cmd/configcatalog -output deploy/config-catalog.tsv
+          go run ./cmd/featurecatalog -output deploy/feature-catalog.tsv
 
           # Rewrite version pins inside one marked block only, so an rc never
           # touches the stable install snippets and a stable never touches the
@@ -335,7 +396,7 @@ jobs:
           fi
 
           # ---- commit 1: what main carries ----
-          git add README.md deploy/chart/Chart.yaml deploy/chart/README.md deploy/deploy.yaml docs/
+          git add README.md deploy/chart/Chart.yaml deploy/chart/README.md deploy/deploy.yaml deploy/config-catalog.tsv deploy/feature-catalog.tsv docs/
           if git diff --cached --quiet; then
             echo "nothing to bump for main"
             echo "bumped=false" >> "$GITHUB_OUTPUT"
@@ -374,8 +435,38 @@ jobs:
 
           echo "sha=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
 
-      - name: Create tag
+      - name: Verify release contents before tagging
         if: ${{ !inputs.dry_run }}
+        env:
+          VERSION: ${{ steps.meta.outputs.version }}
+          COMMAND: ${{ inputs.command }}
+          SHA: ${{ steps.bump.outputs.sha || steps.target.outputs.sha }}
+        run: |
+          set -euo pipefail
+          chart_version=$(git show "$SHA:deploy/chart/Chart.yaml" | awk '$1 == "version:" {gsub(/["'"'"']/, "", $2); print $2; exit}')
+          catalog_header=$(git show "$SHA:deploy/config-catalog.tsv" | head -1)
+          feature_catalog_header=$(git show "$SHA:deploy/feature-catalog.tsv" | head -1)
+          manifest_image=$(git show "$SHA:deploy/deploy.yaml" | grep -m1 'ghcr.io/abahmed/kwatch:' || true)
+
+          test -n "$chart_version" || { echo "::error::release tag has no chart version"; exit 1; }
+          test "$catalog_header" = "# kwatch config catalog v1" || {
+            echo "::error::release tag has an invalid configuration catalog"; exit 1;
+          }
+          test "$feature_catalog_header" = "# kwatch feature catalog v1" || {
+            echo "::error::release tag has an invalid feature catalog"; exit 1;
+          }
+          echo "$manifest_image" | grep -Fq "ghcr.io/abahmed/kwatch:$VERSION" || {
+            echo "::error::deploy manifest does not pin image $VERSION"; exit 1;
+          }
+          if [ "$COMMAND" != "rc" ]; then
+            test "$chart_version" = "${VERSION#v}" || {
+              echo "::error::chart version $chart_version does not match $VERSION"; exit 1;
+            }
+          fi
+          echo "release contents verified at $SHA"
+
+      - name: Create tag
+        if: ${{ !inputs.dry_run && steps.meta.outputs.resume != 'true' }}
         env:
           VERSION: ${{ steps.meta.outputs.version }}
           SHA: ${{ steps.bump.outputs.sha || steps.target.outputs.sha }}
@@ -395,6 +486,10 @@ jobs:
           GH_TOKEN: ${{ secrets.RELEASE_TOKEN }}
         run: |
           set -euo pipefail
+          if gh release view "$VERSION" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            echo "GitHub Release $VERSION already exists; continuing with artifact publishing."
+            exit 0
+          fi
           PRERELEASE_ARGS=""
           if [ "$PRERELEASE" = "true" ]; then
             PRERELEASE_ARGS="--prerelease"

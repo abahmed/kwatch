@@ -15,6 +15,7 @@ import (
 	kwcontext "github.com/abahmed/kwatch/internal/context"
 	"github.com/abahmed/kwatch/internal/correlation"
 	"github.com/abahmed/kwatch/internal/enricher"
+	"github.com/abahmed/kwatch/internal/feature"
 	"github.com/abahmed/kwatch/internal/insight"
 	"github.com/abahmed/kwatch/internal/metrics"
 	"github.com/abahmed/kwatch/internal/model"
@@ -50,6 +51,7 @@ func newCorrelator(
 	insightEngine *insight.Engine,
 	feedbackStore *insight.FeedbackStore,
 	saveFeedback func(),
+	plan feature.Plan,
 ) *correlation.Engine {
 	holder := &engineHolder{}
 	opts := &engineOptions{
@@ -93,14 +95,37 @@ func newCorrelator(
 			cfg.SmartGrouping.WindowSeconds,
 		) * time.Second,
 		NamespaceFanOutThreshold: cfg.SmartGrouping.NamespaceFanOutThreshold,
-		DependenciesOf: func(inc *model.Incident) []string {
-			return insight.DependenciesFor(opts.graph, inc)
-		},
-		LifecycleHook:    lifecycleHook(opts, holder),
-		MassFailureHook:  massFailureHook(opts, holder),
-		OnBaselineChange: onBaselineChange(baselineCh),
+		DependenciesOf:           dependencyResolver(opts.graph, plan),
+		LifecycleHook:            lifecycleHook(opts, holder),
+		MassFailureHook:          massFailureHookForPlan(opts, holder, plan),
+		OnBaselineChange:         onBaselineChange(baselineCh),
 	})
 	return holder.engine
+}
+
+func dependencyResolver(graph *kwcontext.ResourceGraph, plan feature.Plan) func(*model.Incident) []string {
+	if !planAllows(plan, feature.DependencyGraph) ||
+		!planAllows(plan, feature.MassFailureSuppression) {
+		return nil
+	}
+	return func(inc *model.Incident) []string {
+		return insight.DependenciesFor(graph, inc)
+	}
+}
+
+func planAllows(plan feature.Plan, id feature.ID) bool {
+	return len(plan.Decisions) == 0 || plan.Enabled(id)
+}
+
+func massFailureHookForPlan(
+	opts *engineOptions,
+	holder *engineHolder,
+	plan feature.Plan,
+) func() {
+	if !planAllows(plan, feature.MassFailureSuppression) {
+		return nil
+	}
+	return massFailureHook(opts, holder)
 }
 
 // engineOptions groups the inputs shared by the correlator hooks.

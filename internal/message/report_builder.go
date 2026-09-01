@@ -3,9 +3,11 @@ package message
 import (
 	"fmt"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/abahmed/kwatch/internal/constant"
+	"github.com/abahmed/kwatch/internal/feature"
 	"github.com/abahmed/kwatch/internal/format"
 	"github.com/abahmed/kwatch/internal/insight"
 	"github.com/abahmed/kwatch/internal/model"
@@ -18,7 +20,32 @@ type ReportBuilder struct {
 	cluster string
 	// now is the clock change ages are measured against; injectable for
 	// deterministic tests.
-	now func() time.Time
+	now  func() time.Time
+	plan feature.Plan
+}
+
+var reportPlan struct {
+	sync.RWMutex
+	plan feature.Plan
+}
+
+// SetFeaturePlan installs the process-wide immutable plan used by all
+// provider renderers. Rendering is intentionally centralized here because
+// providers build reports through different paths.
+func SetFeaturePlan(plan feature.Plan) {
+	reportPlan.Lock()
+	reportPlan.plan = plan
+	reportPlan.Unlock()
+}
+
+func currentFeaturePlan() feature.Plan {
+	reportPlan.RLock()
+	defer reportPlan.RUnlock()
+	return reportPlan.plan
+}
+
+func reportFeatureEnabled(plan feature.Plan, id feature.ID) bool {
+	return len(plan.Decisions) == 0 || plan.Enabled(id)
 }
 
 // NewReportBuilder returns a ReportBuilder with the given cluster name.
@@ -26,6 +53,7 @@ func NewReportBuilder(cluster string) *ReportBuilder {
 	return &ReportBuilder{
 		cluster: cluster,
 		now:     time.Now,
+		plan:    currentFeaturePlan(),
 	}
 }
 
@@ -53,8 +81,12 @@ func (rb *ReportBuilder) Build(
 	rb.populateState(r, inc)
 	rb.populateDiagnosis(r, inc, ins)
 	rb.populateEvidence(r, inc)
-	rb.populateChanges(r, ins)
-	r.Timeline = rb.buildTimeline(inc, ins, action)
+	if reportFeatureEnabled(rb.plan, feature.ChangeDiff) {
+		rb.populateChanges(r, ins)
+	}
+	if reportFeatureEnabled(rb.plan, feature.IncidentTimeline) {
+		r.Timeline = rb.buildTimeline(inc, ins, action)
+	}
 	rb.populateSuppressed(r, inc)
 	rb.populateTypeSpecific(r, inc)
 
@@ -137,16 +169,22 @@ func (rb *ReportBuilder) populateDiagnosis(
 		Hint: dedupeHint(inc.Hint, r.Name, r.Summary.Label, stateMessage(inc)),
 	}
 	if ins != nil {
-		d.Cause = ins.Cause
-		d.Impact = ins.Impact
-		d.Pattern = ins.Pattern
-		d.Confidence = ins.Confidence
-		d.Evidence = append([]string(nil), ins.Evidence...)
-		d.NextSteps = append([]string(nil), ins.NextSteps...)
+		if reportFeatureEnabled(rb.plan, feature.DirectDiagnosis) {
+			d.Cause = ins.Cause
+			d.Pattern = ins.Pattern
+			d.NextSteps = append([]string(nil), ins.NextSteps...)
+		}
+		if reportFeatureEnabled(rb.plan, feature.ImpactAnalysis) {
+			d.Impact = ins.Impact
+		}
+		if reportFeatureEnabled(rb.plan, feature.RCAConfidence) {
+			d.Confidence = ins.Confidence
+			d.Evidence = append([]string(nil), ins.Evidence...)
+		}
 	}
 	// Topology the correlation engine resolved from live Service selectors.
 	// It is impact, and belongs with the rest of the impact.
-	if d.Impact == "" && len(inc.AffectedServices) > 0 {
+	if reportFeatureEnabled(rb.plan, feature.ImpactAnalysis) && d.Impact == "" && len(inc.AffectedServices) > 0 {
 		label := "service"
 		if len(inc.AffectedServices) > 1 {
 			label = "services"
@@ -156,7 +194,7 @@ func (rb *ReportBuilder) populateDiagnosis(
 			4,
 		)
 	}
-	if inc.OwnerUnhealthy && inc.OwnerKind != "" && d.Cause == "" {
+	if reportFeatureEnabled(rb.plan, feature.DirectDiagnosis) && inc.OwnerUnhealthy && inc.OwnerKind != "" && d.Cause == "" {
 		d.Cause = fmt.Sprintf(
 			"owning %s is unhealthy — this looks like a rollout, not an "+
 				"isolated crash",

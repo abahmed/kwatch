@@ -1,3 +1,4 @@
+{{- if not .Values.configSecretName }}
 apiVersion: v1
 kind: ConfigMap
 metadata:
@@ -6,3 +7,4 @@ metadata:
 data:
   config.yaml: |
     {{- toYaml .Values.config | nindent 4 }}
+{{- end }}

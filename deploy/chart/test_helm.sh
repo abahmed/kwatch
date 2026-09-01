@@ -22,4 +22,16 @@ echo "=== security context ==="
 echo "$OUT1" | grep -q "runAsNonRoot" || { echo "FAIL: securityContext missing"; exit 1; }
 echo "PASS: security context"
 
+cmp -s ../crd.yaml templates/kwatchconfig-crd.yaml || {
+  echo "FAIL: chart CRD is out of sync with deploy/crd.yaml"
+  exit 1
+}
+echo "PASS: CRD is in sync"
+
+echo "$OUT1" | grep -q "kind: CustomResourceDefinition" || {
+  echo "FAIL: CRD is not rendered by the chart"
+  exit 1
+}
+echo "PASS: CRD is rendered"
+
 echo "All helm template tests passed."

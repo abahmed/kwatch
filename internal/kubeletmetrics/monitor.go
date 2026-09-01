@@ -21,6 +21,7 @@ import (
 	"github.com/abahmed/kwatch/internal/constant"
 	"github.com/abahmed/kwatch/internal/correlation"
 	"github.com/abahmed/kwatch/internal/event"
+	"github.com/abahmed/kwatch/internal/feature"
 	"github.com/abahmed/kwatch/internal/model"
 )
 
@@ -40,6 +41,7 @@ type Monitor struct {
 	podCacheAt time.Time
 	lastSweep  time.Time
 	store      StateStore
+	plan       feature.Plan
 }
 
 type StateStore interface {
@@ -192,9 +194,15 @@ func (m *Monitor) sweep(ctx context.Context) {
 				return
 			}
 			defer func() { <-sem }()
-			m.checkSummary(ctx, node, pods)
-			m.checkCadvisor(ctx, node)
-			m.checkRuntimeMetrics(ctx, node)
+			if m.summaryFeaturesEnabled() {
+				m.checkSummary(ctx, node, pods)
+			}
+			if m.featureEnabled(feature.CPUThrottling) {
+				m.checkCadvisor(ctx, node)
+			}
+			if m.featureEnabled(feature.RuntimeErrors) {
+				m.checkRuntimeMetrics(ctx, node)
+			}
 		}(node)
 	}
 	wg.Wait()
@@ -251,6 +259,11 @@ func (m *Monitor) TelemetryStatus() interface{} {
 }
 
 func (m *Monitor) SetStateStore(store StateStore) { m.store = store }
+
+// SetFeaturePlan applies signal-level capability decisions. Summary, cAdvisor,
+// and runtime endpoints remain separate so disabling one signal does not
+// silently disable unrelated telemetry from the same kubelet.
+func (m *Monitor) SetFeaturePlan(plan feature.Plan) { m.plan = plan }
 
 func (m *Monitor) loadState(ctx context.Context) {
 	if !m.cfg.PersistState || m.store == nil {
@@ -449,7 +462,7 @@ func (m *Monitor) checkSummary(ctx context.Context, node *corev1.Node, pods map[
 		klog.V(2).InfoS("kubelet summary invalid", "node", node.Name)
 		return
 	}
-	if data.Node.CPU.PSI != nil || data.Node.Memory.PSI != nil {
+	if m.featureEnabled(feature.PressureSignals) && (data.Node.CPU.PSI != nil || data.Node.Memory.PSI != nil) {
 		psi := maxPSI(data.Node.CPU.PSI, data.Node.Memory.PSI)
 		if psi >= m.cfg.PSIWarningPercent {
 			reason, severity := constant.ReasonNodePSIHigh, model.SeverityWarning
@@ -465,10 +478,12 @@ func (m *Monitor) checkSummary(ctx context.Context, node *corev1.Node, pods map[
 			m.observe(node.Name+"/"+constant.ReasonNodePSIHigh, false, func() {}, func() { m.resolve(node.Name, constant.ReasonNodePSIHigh) })
 		}
 	}
-	if data.Node.Network != nil {
+	if m.featureEnabled(feature.NetworkErrors) && data.Node.Network != nil {
 		m.checkNetwork(node.Name, *data.Node.Network)
 	}
-	m.checkPodUsage(data.Pods, pods)
+	if m.featureEnabled(feature.CPUUsage) || m.featureEnabled(feature.MemoryUsage) || m.featureEnabled(feature.StorageUsage) {
+		m.checkPodUsage(data.Pods, pods)
+	}
 }
 
 func (m *Monitor) checkPodUsage(summaries []podSummary, pods map[string]*corev1.Pod) {
@@ -496,21 +511,21 @@ func containerLimits(pod *corev1.Pod) map[string]corev1.ResourceList {
 }
 
 func (m *Monitor) checkContainerUsage(pod *corev1.Pod, container containerSummary, limit corev1.ResourceList) {
-	if container.Memory != nil {
+	if m.featureEnabled(feature.MemoryUsage) && container.Memory != nil {
 		if memoryLimit := limit.Memory(); memoryLimit != nil && !memoryLimit.IsZero() {
 			percent := float64(container.Memory.WorkingSetBytes) / memoryLimit.AsApproximateFloat64() * 100
 			m.reportUsage(pod, container.Name, percent, m.cfg.MemoryWarningPercent, m.cfg.MemoryCriticalPercent,
 				constant.ReasonContainerMemoryHigh, fmt.Sprintf("%d bytes", container.Memory.WorkingSetBytes), memoryLimit.String(), "memory")
 		}
 	}
-	if container.CPU != nil {
+	if m.featureEnabled(feature.CPUUsage) && container.CPU != nil {
 		if cpuLimit := limit.Cpu(); cpuLimit != nil && !cpuLimit.IsZero() {
 			percent := float64(container.CPU.UsageNanoCores) / (cpuLimit.AsApproximateFloat64() * 1e9) * 100
 			m.reportUsage(pod, container.Name, percent, m.cfg.CPUWarningPercent, m.cfg.CPUCriticalPercent,
 				constant.ReasonContainerCPUHigh, fmt.Sprintf("%d nanocores", container.CPU.UsageNanoCores), cpuLimit.String(), "cpu")
 		}
 	}
-	if container.RootFS != nil {
+	if m.featureEnabled(feature.StorageUsage) && container.RootFS != nil {
 		if storageLimit := limit.StorageEphemeral(); storageLimit != nil && !storageLimit.IsZero() {
 			percent := float64(container.RootFS.UsedBytes) / storageLimit.AsApproximateFloat64() * 100
 			m.reportUsage(pod, container.Name, percent, m.cfg.EphemeralStorageWarningPercent, m.cfg.EphemeralStorageCriticalPercent,
@@ -615,6 +630,9 @@ func maxPSI(stats ...*psiStats) float64 {
 }
 
 func (m *Monitor) checkNetwork(node string, current networkStats) {
+	if !m.featureEnabled(feature.NetworkErrors) {
+		return
+	}
 	now := m.now()
 	key := "network/" + node
 	m.mu.Lock()
@@ -645,6 +663,9 @@ func (m *Monitor) checkNetwork(node string, current networkStats) {
 }
 
 func (m *Monitor) checkCadvisor(ctx context.Context, node *corev1.Node) {
+	if !m.featureEnabled(feature.CPUThrottling) {
+		return
+	}
 	requestCtx, cancel := context.WithTimeout(ctx, 10*time.Second)
 	defer cancel()
 	body, err := m.proxyRaw(requestCtx, node.Name, "metrics/cadvisor")
@@ -689,6 +710,9 @@ func (m *Monitor) checkCadvisor(ctx context.Context, node *corev1.Node) {
 }
 
 func (m *Monitor) checkRuntimeMetrics(ctx context.Context, node *corev1.Node) {
+	if !m.featureEnabled(feature.RuntimeErrors) {
+		return
+	}
 	requestCtx, cancel := context.WithTimeout(ctx, 10*time.Second)
 	defer cancel()
 	body, err := m.proxyRaw(requestCtx, node.Name, "metrics")
@@ -938,4 +962,21 @@ func (m *Monitor) pruneSignalState() {
 			delete(m.baselines, key)
 		}
 	}
+}
+
+func (m *Monitor) summaryFeaturesEnabled() bool {
+	return m.featureEnabled(feature.PressureSignals) ||
+		m.featureEnabled(feature.NetworkErrors) ||
+		m.featureEnabled(feature.CPUUsage) ||
+		m.featureEnabled(feature.MemoryUsage) ||
+		m.featureEnabled(feature.StorageUsage)
+}
+
+func (m *Monitor) featureEnabled(id feature.ID) bool {
+	// A zero plan is retained as compatibility mode for callers that construct
+	// a Monitor directly. The application always supplies a complete plan.
+	if len(m.plan.Decisions) == 0 {
+		return true
+	}
+	return m.plan.Enabled(id)
 }

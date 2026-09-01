@@ -15,7 +15,11 @@ spec:
   template:
     metadata:
       annotations:
+        {{- if .Values.configSecretName }}
+        checksum/config-secret: {{ .Values.configSecretName | sha256sum }}
+        {{- else }}
         checksum/config: {{ include (print $.Template.BasePath "/configmap.yaml") . | sha256sum }}
+        {{- end }}
         {{- with .Values.podAnnotations }}
           {{- toYaml . | nindent 8 }}
         {{- end }}
@@ -81,5 +85,10 @@ spec:
       {{- end }}
       volumes:
         - name: config-volume
+          {{- if .Values.configSecretName }}
+          secret:
+            secretName: {{ .Values.configSecretName }}
+          {{- else }}
           configMap:
             name: {{ .Release.Name }}
+          {{- end }}

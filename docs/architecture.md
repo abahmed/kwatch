@@ -21,6 +21,20 @@ not proof of replacement and never cause deduplication by themselves.
 This page explains the ideas behind those alerts in simple English. For setup and every
 option, see the [README](../README.md) and the [configuration reference](./configuration.md).
 
+## 🧩 Capability policy
+
+kwatch keeps product capabilities in one versioned catalog instead of scattering Community /
+Pro checks through monitors. Each capability has a stable ID, explicit dependencies, a
+lifecycle, and a minimum tier. At startup the composition root combines monitor
+configuration with the active policy and produces one immutable effective plan. Monitors
+receive that plan and can gate their own signal, protocol, or endpoint without knowing about
+licenses.
+
+This gives the future license resolver one integration point: it will provide a validated
+policy with an expiry, while configuration can only disable capabilities. A restart is
+required after policy/configuration changes; a running monitor never changes entitlement
+mid-sweep. `/features` is read-only and exists to make the effective result supportable.
+
 ---
 
 ## 🗺️ The journey of an alert
