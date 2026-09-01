@@ -34,6 +34,19 @@ func runWithFlags() int {
 	args := flag.Args()
 	if len(args) > 0 {
 		switch args[0] {
+		case "version":
+			if len(args) > 1 && args[1] == "--json" {
+				data, err := version.JSON()
+				if err != nil {
+					fmt.Fprintf(os.Stderr, "could not encode version: %v\n", err)
+					return 1
+				}
+				fmt.Println(string(data))
+			} else {
+				info := version.Current()
+				fmt.Printf("version %s (commit %s, built %s)\n", info.Version, info.Commit, info.BuildDate)
+			}
+			return 0
 		case "lint":
 			strict := false
 			check := false

@@ -21,6 +21,8 @@ jobs:
     permissions:
       packages: write
       contents: read
+      id-token: write
+      attestations: write
     outputs:
       tag: ${{ steps.rel.outputs.tag }}
       digest: ${{ steps.build.outputs.digest }}
@@ -33,7 +35,7 @@ jobs:
           EVENT: ${{ github.event_name }}
           TAG: ${{ inputs.tag || github.event.release.tag_name }}
           REL_PRERELEASE: ${{ github.event.release.prerelease }}
-          REL_PUBLISHED: ${{ github.event.release.published_at }}
+          GH_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
 
@@ -41,24 +43,34 @@ jobs:
             echo "::error::no tag to build"
             exit 1
           fi
+          if ! echo "$TAG" | grep -Eq '^v[0-9]+\.[0-9]+\.[0-9]+(-rc\.[0-9]+)?$'; then
+            echo "::error::tag must be vX.Y.Z or vX.Y.Z-rc.N, got $TAG"
+            exit 1
+          fi
+
+          expected_prerelease=false
+          if echo "$TAG" | grep -q -- '-rc\.'; then
+            expected_prerelease=true
+          fi
 
           if [ "$EVENT" = "release" ]; then
             PRERELEASE="$REL_PRERELEASE"
-            BUILD_DATE="$REL_PUBLISHED"
+            if [ "$PRERELEASE" != "$expected_prerelease" ]; then
+              echo "::error::release prerelease flag does not match tag $TAG"
+              exit 1
+            fi
           else
             # Manual re-run: infer from the tag name, since there is no
             # release payload to read.
-            if echo "$TAG" | grep -q -- '-rc'; then
-              PRERELEASE=true
-            else
-              PRERELEASE=false
+            PRERELEASE="$expected_prerelease"
+            if ! gh release view "$TAG" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+              echo "::error::workflow_dispatch requires an existing GitHub Release for $TAG"
+              exit 1
             fi
-            BUILD_DATE=$(date -u +%Y-%m-%dT%H:%M:%SZ)
           fi
 
           echo "tag=$TAG" >> "$GITHUB_OUTPUT"
           echo "prerelease=$PRERELEASE" >> "$GITHUB_OUTPUT"
-          echo "build_date=$BUILD_DATE" >> "$GITHUB_OUTPUT"
           echo "building $TAG (prerelease=$PRERELEASE)"
 
       - name: Check out the repo
@@ -71,6 +83,13 @@ jobs:
       - name: Resolve commit
         id: sha
         run: echo "sha=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
+
+      - name: Resolve deterministic build metadata
+        id: buildmeta
+        run: |
+          set -euo pipefail
+          echo "build_date=$(git show -s --format=%cI HEAD)" >> "$GITHUB_OUTPUT"
+          echo "source_date_epoch=$(git show -s --format=%ct HEAD)" >> "$GITHUB_OUTPUT"
 
       - name: Set up QEMU
         uses: docker/setup-qemu-action@96fe6ef7f33517b61c61be40b68a1882f3264fb8 # v4
@@ -104,13 +123,63 @@ jobs:
           context: .
           push: true
           tags: ${{ steps.meta.outputs.tags }}
-          labels: ${{ steps.meta.outputs.labels }}
+          labels: |
+            ${{ steps.meta.outputs.labels }}
+            org.opencontainers.image.source=https://github.com/abahmed/kwatch
+            org.opencontainers.image.version=${{ steps.rel.outputs.tag }}
+            org.opencontainers.image.revision=${{ steps.sha.outputs.sha }}
+            org.opencontainers.image.created=${{ steps.buildmeta.outputs.build_date }}
+            org.opencontainers.image.licenses=Elastic-2.0
           cache-from: type=gha
           cache-to: type=gha,mode=max
           build-args: |
             RELEASE_VERSION=${{ steps.rel.outputs.tag }}
             GIT_COMMIT=${{ steps.sha.outputs.sha }}
-            BUILD_DATE=${{ steps.rel.outputs.build_date }}
+            BUILD_DATE=${{ steps.buildmeta.outputs.build_date }}
+            SOURCE_DATE_EPOCH=${{ steps.buildmeta.outputs.source_date_epoch }}
+
+      - name: Install Cosign
+        uses: sigstore/cosign-installer@6f9f17788090df1f26f669e9d70d6ae9567deba6 # v4.1.2
+
+      - name: Sign image digest
+        env:
+          IMAGE: ghcr.io/abahmed/kwatch
+          DIGEST: ${{ steps.build.outputs.digest }}
+        run: |
+          set -euo pipefail
+          test -n "$DIGEST"
+          cosign sign --yes "${IMAGE}@${DIGEST}"
+
+      - name: Attest image build provenance
+        uses: actions/attest@1e69f48acb82d1966a394da916b4c1698aa569d6 # v4
+        with:
+          subject-name: ghcr.io/abahmed/kwatch
+          subject-digest: ${{ steps.build.outputs.digest }}
+          push-to-registry: true
+
+      - name: Write image release evidence
+        env:
+          TAG: ${{ steps.rel.outputs.tag }}
+          SHA: ${{ steps.sha.outputs.sha }}
+          DIGEST: ${{ steps.build.outputs.digest }}
+          BUILD_DATE: ${{ steps.buildmeta.outputs.build_date }}
+        run: |
+          set -euo pipefail
+          mkdir -p /tmp/kwatch-image-evidence
+          jq -n \
+            --arg tag "$TAG" \
+            --arg commit "$SHA" \
+            --arg digest "$DIGEST" \
+            --arg build_date "$BUILD_DATE" \
+            '{tag:$tag, commit:$commit, image:"ghcr.io/abahmed/kwatch", digest:$digest, buildDate:$build_date}' \
+            > /tmp/kwatch-image-evidence/image.json
+
+      - name: Upload image release evidence
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: kwatch-image-evidence-${{ steps.rel.outputs.tag }}
+          path: /tmp/kwatch-image-evidence/image.json
+          if-no-files-found: error
 
       - name: Summary
         if: ${{ always() && steps.rel.outputs.tag != '' }}
@@ -210,6 +279,13 @@ jobs:
           ./deploy/chart/test_helm.sh
           mkdir -p /tmp/kwatch-chart
           helm package deploy/chart --destination /tmp/kwatch-chart
+
+      - name: Upload Helm release evidence
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: kwatch-helm-evidence-${{ steps.rel.outputs.tag }}
+          path: /tmp/kwatch-chart/kwatch-${{ steps.rel.outputs.version }}.tgz
+          if-no-files-found: error
 
       - name: Require release token
         env:
@@ -314,10 +390,161 @@ jobs:
             echo "- Render deploy: triggered once through RENDER_DEPLOY_HOOK_URL"
           } >> "$GITHUB_STEP_SUMMARY"
 
-  verify_published_artifacts:
-    name: Verify stable release artifacts
-    if: ${{ always() && ((github.event_name == 'release' && github.event.release.prerelease == false) || (github.event_name == 'workflow_dispatch' && !contains(inputs.tag, '-rc'))) }}
+  publish_release_evidence:
+    name: Publish release evidence
+    if: ${{ always() && needs.push_to_registry.result == 'success' && (needs.publish_helm_chart.result == 'success' || contains(needs.push_to_registry.outputs.tag, '-rc.')) }}
     needs: [push_to_registry, publish_helm_chart]
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: write
+      packages: read
+    steps:
+      - name: Check out the release tag
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          ref: ${{ needs.push_to_registry.outputs.tag }}
+          fetch-depth: 0
+
+      - name: Download image evidence
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        with:
+          name: kwatch-image-evidence-${{ needs.push_to_registry.outputs.tag }}
+          path: /tmp/kwatch-evidence/image
+
+      - name: Download Helm evidence
+        if: ${{ needs.publish_helm_chart.result == 'success' }}
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        with:
+          name: kwatch-helm-evidence-${{ needs.push_to_registry.outputs.tag }}
+          path: /tmp/kwatch-evidence/helm
+
+      - name: Create checksums and release manifest
+        env:
+          TAG: ${{ needs.push_to_registry.outputs.tag }}
+          IMAGE: ghcr.io/abahmed/kwatch
+          IMAGE_DIGEST: ${{ needs.push_to_registry.outputs.digest }}
+        run: |
+          set -euo pipefail
+          output=/tmp/kwatch-evidence/final
+          mkdir -p "$output"
+
+          image_json=/tmp/kwatch-evidence/image/image.json
+          test -s "$image_json"
+          source_commit=$(git rev-list -n 1 "$TAG")
+          recorded_commit=$(jq -r '.commit' "$image_json")
+          test "$source_commit" = "$recorded_commit"
+          recorded_digest=$(jq -r '.digest' "$image_json")
+          test "$IMAGE_DIGEST" = "$recorded_digest"
+
+          source_archive="$output/kwatch-${TAG}-source.tar.gz"
+          git archive --format=tar --prefix="kwatch-${TAG}/" "$TAG" | gzip -n > "$source_archive"
+
+          printf '%s\n' \
+            "image=$IMAGE" \
+            "tag=$TAG" \
+            "digest=$IMAGE_DIGEST" \
+            "sourceCommit=$source_commit" \
+            > "$output/kwatch-${TAG}-image-digests.txt"
+
+          chart_file=''
+          chart_sha=''
+          if [ -d /tmp/kwatch-evidence/helm ]; then
+            chart_file=$(find /tmp/kwatch-evidence/helm -maxdepth 1 -type f -name '*.tgz' -print -quit)
+            if [ -n "$chart_file" ]; then
+              cp "$chart_file" "$output/$(basename "$chart_file")"
+              chart_file="$output/$(basename "$chart_file")"
+              chart_sha=$(sha256sum "$chart_file" | awk '{print $1}')
+            fi
+          fi
+
+          jq -n \
+            --arg tag "$TAG" \
+            --arg commit "$source_commit" \
+            --arg image "$IMAGE" \
+            --arg digest "$IMAGE_DIGEST" \
+            --arg workflow "$GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID" \
+            --arg chart "${chart_file:+$(basename "$chart_file")}" \
+            --arg chart_sha "$chart_sha" \
+            '{schemaVersion:1, version:$tag,
+              source:{repository:"https://github.com/abahmed/kwatch", tag:$tag, commit:$commit},
+              image:{reference:$image, tag:$tag, digest:$digest, cosignSigned:true},
+              build:{workflow:$workflow}}
+              + (if $chart == "" then {} else {helm:{artifact:$chart, sha256:$chart_sha}} end)' \
+            > "$output/kwatch-${TAG}-release.json"
+
+          (cd "$output" && sha256sum kwatch-* > "kwatch-${TAG}-SHA256SUMS")
+
+      - name: Upload evidence to GitHub Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ needs.push_to_registry.outputs.tag }}
+        run: |
+          set -euo pipefail
+          existing=$(gh release view "$TAG" --repo "$GITHUB_REPOSITORY" --json assets --jq '.assets[].name' || true)
+          verify_dir=$(mktemp -d)
+          for asset in /tmp/kwatch-evidence/final/*; do
+            name=$(basename "$asset")
+            if printf '%s\n' "$existing" | grep -Fqx "$name"; then
+              gh release download "$TAG" --repo "$GITHUB_REPOSITORY" \
+                --pattern "$name" --dir "$verify_dir"
+              if ! cmp -s "$asset" "$verify_dir/$name"; then
+                echo "::error::release asset $name already exists with different content"
+                exit 1
+              fi
+              echo "release asset $name already matches; keeping it immutable"
+            else
+              gh release upload "$TAG" "$asset" --repo "$GITHUB_REPOSITORY"
+            fi
+          done
+
+      - name: Add integrity details to release notes
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ needs.push_to_registry.outputs.tag }}
+          IMAGE: ghcr.io/abahmed/kwatch
+          IMAGE_DIGEST: ${{ needs.push_to_registry.outputs.digest }}
+        run: |
+          set -euo pipefail
+          gh release view "$TAG" --repo "$GITHUB_REPOSITORY" --json body --jq .body > /tmp/release-body.md
+          cat > /tmp/release-integrity.md <<EOF
+          <!-- release-integrity:start -->
+          ## Release integrity
+
+          - Source tag: [\`$TAG\`](https://github.com/$GITHUB_REPOSITORY/tree/$TAG)
+          - Source commit: \`$(git rev-list -n 1 "$TAG")\`
+          - Image: \`$IMAGE@$IMAGE_DIGEST\`
+          - Verification files: [checksums](https://github.com/$GITHUB_REPOSITORY/releases/download/$TAG/kwatch-${TAG}-SHA256SUMS), [manifest](https://github.com/$GITHUB_REPOSITORY/releases/download/$TAG/kwatch-${TAG}-release.json)
+
+          Verify the image with:
+
+          \`\`\`sh
+          cosign verify \\
+            --certificate-oidc-issuer=https://token.actions.githubusercontent.com \\
+            --certificate-identity-regexp='^https://github.com/abahmed/kwatch/.github/workflows/publish.yml@' \\
+            $IMAGE@$IMAGE_DIGEST
+          \`\`\`
+          <!-- release-integrity:end -->
+          EOF
+
+          if grep -q '<!-- release-integrity:start -->' /tmp/release-body.md; then
+            awk -v block=/tmp/release-integrity.md '
+              BEGIN { while ((getline line < block) > 0) replacement = replacement line ORS }
+              /<!-- release-integrity:start -->/ { printf "%s", replacement; inside=1; next }
+              /<!-- release-integrity:end -->/ { inside=0; next }
+              !inside { print }
+            ' /tmp/release-body.md > /tmp/release-body-updated.md
+          else
+            cat /tmp/release-body.md /tmp/release-integrity.md > /tmp/release-body-updated.md
+          fi
+
+          jq -Rs '{body: .}' /tmp/release-body-updated.md |
+            gh api --method PATCH "repos/$GITHUB_REPOSITORY/releases/tags/$TAG" --input - >/dev/null
+
+  verify_published_artifacts:
+    name: Verify published artifacts
+    if: ${{ always() && needs.push_to_registry.result == 'success' && needs.publish_release_evidence.result == 'success' }}
+    needs: [push_to_registry, publish_helm_chart, publish_release_evidence]
     runs-on: ubuntu-latest
     timeout-minutes: 15
     permissions:
@@ -328,23 +555,80 @@ jobs:
         env:
           IMAGE_JOB: ${{ needs.push_to_registry.result }}
           CHART_JOB: ${{ needs.publish_helm_chart.result }}
+          EVIDENCE_JOB: ${{ needs.publish_release_evidence.result }}
+          TAG: ${{ needs.push_to_registry.outputs.tag }}
         run: |
           set -euo pipefail
-          if [ "$IMAGE_JOB" != "success" ] || [ "$CHART_JOB" != "success" ]; then
-            echo "::error::release artifacts were not published (image=$IMAGE_JOB, chart=$CHART_JOB)"
+          if [ "$IMAGE_JOB" != "success" ] || [ "$EVIDENCE_JOB" != "success" ]; then
+            echo "::error::release artifacts were not published (image=$IMAGE_JOB, chart=$CHART_JOB, evidence=$EVIDENCE_JOB)"
             exit 1
           fi
+          if echo "$TAG" | grep -q -- '-rc\.'; then
+            test "$CHART_JOB" = "skipped"
+          else
+            test "$CHART_JOB" = "success"
+          fi
+
+      - name: Check out the published tag
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          ref: ${{ needs.push_to_registry.outputs.tag }}
+          fetch-depth: 0
+
+      - name: Install Cosign
+        uses: sigstore/cosign-installer@6f9f17788090df1f26f669e9d70d6ae9567deba6 # v4.1.2
+
+      - name: Verify image signature and identity
+        env:
+          IMAGE: ghcr.io/abahmed/kwatch
+          DIGEST: ${{ needs.push_to_registry.outputs.digest }}
+        run: |
+          set -euo pipefail
+          cosign verify \
+            --certificate-oidc-issuer=https://token.actions.githubusercontent.com \
+            --certificate-identity-regexp='^https://github.com/abahmed/kwatch/.github/workflows/publish.yml@' \
+            "${IMAGE}@${DIGEST}" >/tmp/cosign-verify.json
+          test -s /tmp/cosign-verify.json
 
       - name: Verify container image
         env:
-          TAG: ${{ github.event.release.tag_name }}
+          IMAGE: ghcr.io/abahmed/kwatch
+          DIGEST: ${{ needs.push_to_registry.outputs.digest }}
         run: |
           set -euo pipefail
-          docker buildx imagetools inspect "ghcr.io/abahmed/kwatch:$TAG" >/dev/null
+          docker pull "${IMAGE}@${DIGEST}"
+          docker buildx imagetools inspect "${IMAGE}@${DIGEST}" >/dev/null
+          labels=$(docker inspect "${IMAGE}@${DIGEST}" --format '{{json .Config.Labels}}')
+          revision=$(echo "$labels" | jq -r '."org.opencontainers.image.revision"')
+          version=$(echo "$labels" | jq -r '."org.opencontainers.image.version"')
+          test "$revision" = "$(git rev-list -n 1 "${{ needs.push_to_registry.outputs.tag }}")"
+          test "$version" = "${{ needs.push_to_registry.outputs.tag }}"
+          docker run --rm "${IMAGE}@${DIGEST}" version --json > /tmp/version.json
+          test "$(jq -r .version /tmp/version.json)" = "${{ needs.push_to_registry.outputs.tag }}"
+          test "$(jq -r .commit /tmp/version.json)" = "$revision"
+
+      - name: Verify release checksums and source mapping
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ needs.push_to_registry.outputs.tag }}
+          EXPECTED_DIGEST: ${{ needs.push_to_registry.outputs.digest }}
+        run: |
+          set -euo pipefail
+          mkdir -p /tmp/release-assets
+          gh release download "$TAG" --repo "$GITHUB_REPOSITORY" \
+            --pattern 'kwatch-*' --dir /tmp/release-assets --clobber
+          cd /tmp/release-assets
+          sha256sum -c "kwatch-${TAG}-SHA256SUMS"
+          manifest="kwatch-${TAG}-release.json"
+          test "$(jq -r .version "$manifest")" = "$TAG"
+          test "$(jq -r .source.tag "$manifest")" = "$TAG"
+          test "$(jq -r .source.commit "$manifest")" = "$(git -C "$GITHUB_WORKSPACE" rev-list -n 1 "$TAG")"
+          test "$(jq -r .image.digest "$manifest")" = "$EXPECTED_DIGEST"
 
       - name: Verify public Helm repository
+        if: ${{ !contains(needs.push_to_registry.outputs.tag, '-rc.') }}
         env:
-          VERSION: ${{ github.event.release.tag_name }}
+          VERSION: ${{ needs.push_to_registry.outputs.tag }}
         run: |
           set -euo pipefail
           VERSION="${VERSION#v}"

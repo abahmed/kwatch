@@ -29,8 +29,7 @@ annotations:
       url: https://kwatch.dev
     - name: Source
       url: https://github.com/abahmed/kwatch
-  artifacthub.io/license: MIT
+  artifacthub.io/license: Elastic-2.0
   artifacthub.io/changes: |
     - kind: fixed
       description: "Bug fixes and stability improvements — see the GitHub release notes."
-
