@@ -7,7 +7,7 @@ import (
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/client-go/dynamic/dynamicinformer"
 
-	kwcontext "github.com/abahmed/kwatch/internal/context"
+	kwcontext "github.com/abahmed/kwatch/internal/graphcontext"
 )
 
 func TestFailureSignalUsesConfiguredConditionRules(t *testing.T) {

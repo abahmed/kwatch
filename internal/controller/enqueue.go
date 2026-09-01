@@ -6,7 +6,7 @@ import (
 	"k8s.io/client-go/tools/cache"
 
 	"github.com/abahmed/kwatch/internal/change"
-	kwcontext "github.com/abahmed/kwatch/internal/context"
+	kwcontext "github.com/abahmed/kwatch/internal/graphcontext"
 )
 
 func (c *Controller) recordChange(typ kwcontext.ChangeType, resource string, obj interface{}) {

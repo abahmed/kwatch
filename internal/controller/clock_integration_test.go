@@ -12,7 +12,7 @@ import (
 	"k8s.io/client-go/informers"
 	"k8s.io/client-go/kubernetes/fake"
 
-	kwcontext "github.com/abahmed/kwatch/internal/context"
+	kwcontext "github.com/abahmed/kwatch/internal/graphcontext"
 )
 
 func TestRecordChangeUsesInjectedClock(t *testing.T) {

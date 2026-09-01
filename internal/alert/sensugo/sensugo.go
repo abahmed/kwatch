@@ -3,11 +3,11 @@ package sensugo
 import (
 	"encoding/json"
 	"strings"
+	"time"
 
 	"k8s.io/klog/v2"
 
 	"github.com/abahmed/kwatch/internal/alert/util"
-	"github.com/abahmed/kwatch/internal/clock"
 	"github.com/abahmed/kwatch/internal/config"
 	"github.com/abahmed/kwatch/internal/event"
 )
@@ -41,6 +41,7 @@ type Sensugo struct {
 	entity    string
 
 	appCfg *config.App
+	now    func() time.Time
 }
 
 // NewSensugo returns a new Sensugo object
@@ -75,6 +76,14 @@ func NewSensugo(config map[string]interface{}, appCfg *config.App) *Sensugo {
 		namespace: namespace,
 		entity:    entity,
 		appCfg:    appCfg,
+		now:       time.Now,
+	}
+}
+
+// SetClock injects the timestamp source used in Sensu events.
+func (s *Sensugo) SetClock(now func() time.Time) {
+	if now != nil {
+		s.now = now
 	}
 }
 
@@ -99,7 +108,7 @@ func (s *Sensugo) SendMessage(msg string) error {
 			Metadata: sensuMetadata{Name: "kwatch"},
 			Status:   1,
 			Output:   msg,
-			Issued:   clock.Now().Unix(),
+			Issued:   s.now().Unix(),
 		},
 	}
 

@@ -4,7 +4,7 @@ import (
 	"k8s.io/client-go/tools/cache"
 	"k8s.io/klog/v2"
 
-	kwcontext "github.com/abahmed/kwatch/internal/context"
+	kwcontext "github.com/abahmed/kwatch/internal/graphcontext"
 )
 
 // wireConfigMap wires the shared configmap informer used for dependency

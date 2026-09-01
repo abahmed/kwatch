@@ -11,7 +11,6 @@ import (
 	"github.com/abahmed/kwatch/internal/constant"
 	"github.com/abahmed/kwatch/internal/event"
 	"github.com/abahmed/kwatch/internal/insight"
-	"github.com/abahmed/kwatch/internal/k8s"
 	"github.com/abahmed/kwatch/internal/message"
 	"github.com/abahmed/kwatch/internal/model"
 	"github.com/abahmed/kwatch/internal/ratelimit"
@@ -79,20 +78,13 @@ func (d *Discord) Name() string {
 
 // Verify checks webhook credentials by issuing a GET to the webhook URL.
 func (d *Discord) Verify() error {
-	client := k8s.GetDefaultClient()
 	url := fmt.Sprintf("https://discord.com/api/webhooks/%s/%s", d.id, d.token)
-	resp, err := client.Get(url)
-	if err != nil {
-		return err
-	}
-	defer resp.Body.Close()
-	if resp.StatusCode != http.StatusOK {
-		return fmt.Errorf(
-			"discord webhook GET returned status %d",
-			resp.StatusCode,
-		)
-	}
-	return nil
+	_, err := util.Send(util.Request{
+		Provider: "Discord",
+		Method:   http.MethodGet,
+		URL:      url,
+	})
+	return err
 }
 
 // SendEvent sends event to the provider

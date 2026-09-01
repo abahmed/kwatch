@@ -1,4 +1,4 @@
-package context
+package graphcontext
 
 import "sync"
 
@@ -82,7 +82,10 @@ func (g *ResourceGraph) AddEdge(
 // supplied replacements. It lets an informer stage a resource's replacement
 // relationships before changing the live graph, without deleting edges that
 // are owned by other resource builders.
-func (g *ResourceGraph) ReplaceMatchingEdges(match func(Edge) bool, additions []Edge) {
+func (g *ResourceGraph) ReplaceMatchingEdges(
+	match func(Edge) bool,
+	additions []Edge,
+) {
 	g.mu.Lock()
 	defer g.mu.Unlock()
 

@@ -9,7 +9,7 @@ import (
 	"k8s.io/client-go/tools/cache"
 
 	"github.com/abahmed/kwatch/internal/config"
-	kwcontext "github.com/abahmed/kwatch/internal/context"
+	kwcontext "github.com/abahmed/kwatch/internal/graphcontext"
 )
 
 // Edge types added by the per-resource graph builders. Keep them in sync with

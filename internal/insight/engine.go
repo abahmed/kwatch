@@ -6,8 +6,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/abahmed/kwatch/internal/context"
 	"github.com/abahmed/kwatch/internal/feature"
+	context "github.com/abahmed/kwatch/internal/graphcontext"
 	"github.com/abahmed/kwatch/internal/model"
 )
 

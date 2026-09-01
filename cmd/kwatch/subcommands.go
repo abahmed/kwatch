@@ -4,7 +4,8 @@ import (
 	"bufio"
 	"encoding/json"
 	"fmt"
-	"os"
+	"io"
+	"sort"
 	"strings"
 
 	"github.com/abahmed/kwatch/internal/alert"
@@ -12,23 +13,31 @@ import (
 	"github.com/abahmed/kwatch/internal/event"
 )
 
-func runLint(strict, check bool) {
+func runLint(strict, check bool, out, errOut io.Writer) int {
 	cfg, err := config.LoadConfig()
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "ERROR: %v\n", err)
-		os.Exit(1)
+		if _, writeErr := fmt.Fprintf(errOut, "ERROR: %v\n", err); writeErr != nil {
+			return 1
+		}
+		return 1
 	}
 	errs := config.ValidateConfig(cfg)
 	if len(errs) > 0 {
 		for _, e := range errs {
-			fmt.Fprintf(os.Stderr, "  %s\n", e)
+			if _, writeErr := fmt.Fprintf(errOut, "  %s\n", e); writeErr != nil {
+				return 1
+			}
 		}
-		os.Exit(1)
+		return 1
 	}
 	if strict {
 		if err := config.LintStrict(); err != nil {
-			fmt.Fprintf(os.Stderr, "STRICT ERROR: %v\n", err)
-			os.Exit(1)
+			if _, writeErr := fmt.Fprintf(
+				errOut, "STRICT ERROR: %v\n", err,
+			); writeErr != nil {
+				return 1
+			}
+			return 1
 		}
 	}
 	if check {
@@ -36,38 +45,56 @@ func runLint(strict, check bool) {
 		am.Init(cfg.Alert, &cfg.App)
 		results := am.VerifyAll()
 		hasErr := false
-		for name, err := range results {
+		names := make([]string, 0, len(results))
+		for name := range results {
+			names = append(names, name)
+		}
+		sort.Strings(names)
+		for _, name := range names {
+			err := results[name]
 			if err != nil {
-				fmt.Fprintf(os.Stderr, "  %s: FAIL — %v\n", name, err)
+				if _, writeErr := fmt.Fprintf(
+					errOut, "  %s: FAIL — %v\n", name, err,
+				); writeErr != nil {
+					return 1
+				}
 				hasErr = true
 			} else {
-				fmt.Printf("  %s: OK\n", name)
+				if _, writeErr := fmt.Fprintf(out, "  %s: OK\n", name); writeErr != nil {
+					return 1
+				}
 			}
 		}
 		if hasErr {
-			os.Exit(1)
+			return 1
 		}
 	}
-	fmt.Println("config OK")
+	if _, err := fmt.Fprintln(out, "config OK"); err != nil {
+		return 1
+	}
+	return 0
 }
 
-func runReplay(dryRun bool) {
+func runReplay(dryRun bool, in io.Reader, out, errOut io.Writer) int {
 	cfg, err := config.LoadConfig()
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "ERROR: %v\n", err)
-		os.Exit(1)
+		if _, writeErr := fmt.Fprintf(errOut, "ERROR: %v\n", err); writeErr != nil {
+			return 1
+		}
+		return 1
 	}
 
 	providers := make([]string, 0, len(cfg.Alert))
 	for k := range cfg.Alert {
 		providers = append(providers, k)
 	}
+	sort.Strings(providers)
 	am := &alert.AlertManager{}
 	am.Init(cfg.Alert, &cfg.App)
 	am.SetSilences(cfg.Silences)
 	am.SetTemplates(cfg.Templates)
 
-	scanner := bufio.NewScanner(os.Stdin)
+	scanner := bufio.NewScanner(in)
 	for scanner.Scan() {
 		line := strings.TrimSpace(scanner.Text())
 		if line == "" || strings.HasPrefix(line, "#") {
@@ -75,19 +102,39 @@ func runReplay(dryRun bool) {
 		}
 		var ev event.Event
 		if err := json.Unmarshal([]byte(line), &ev); err != nil {
-			fmt.Fprintf(os.Stderr, "ERROR: invalid event line: %v\n  %s\n", err, line)
+			if _, writeErr := fmt.Fprintf(
+				errOut, "ERROR: invalid event line: %v\n  %s\n", err, line,
+			); writeErr != nil {
+				return 1
+			}
 			continue
 		}
-		msg := fmt.Sprintf("[replay] %s/%s %s: %s", ev.Namespace, ev.PodName, ev.Reason, ev.Events)
+		msg := fmt.Sprintf(
+			"[replay] %s/%s %s: %s",
+			ev.Namespace, ev.PodName, ev.Reason, ev.Events,
+		)
 		if dryRun {
-			fmt.Printf("would replay to %v: %s\n", providers, msg)
+			if _, writeErr := fmt.Fprintf(
+				out, "would replay to %v: %s\n", providers, msg,
+			); writeErr != nil {
+				return 1
+			}
 			continue
 		}
 		am.NotifyEvent(ev)
-		fmt.Printf("replayed to %v: %s\n", providers, msg)
+		if _, writeErr := fmt.Fprintf(
+			out, "replayed to %v: %s\n", providers, msg,
+		); writeErr != nil {
+			return 1
+		}
 	}
 	if err := scanner.Err(); err != nil {
-		fmt.Fprintf(os.Stderr, "ERROR: reading stdin: %v\n", err)
-		os.Exit(1)
+		if _, writeErr := fmt.Fprintf(
+			errOut, "ERROR: reading stdin: %v\n", err,
+		); writeErr != nil {
+			return 1
+		}
+		return 1
 	}
+	return 0
 }

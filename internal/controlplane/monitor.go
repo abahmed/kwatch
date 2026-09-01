@@ -234,9 +234,11 @@ func (m *Monitor) checkAPIServer(ctx context.Context) {
 	m.mu.Lock()
 	m.status.APIServer = status
 	m.mu.Unlock()
-	metrics.Default.APIServerLatencyMs.Store(status.Latency.Milliseconds())
+	metrics.DefaultRegistry().APIServerLatencyMs.Store(
+		status.Latency.Milliseconds(),
+	)
 	if err != nil {
-		metrics.Default.APIServerProbeErrors.Add(1)
+		metrics.DefaultRegistry().APIServerProbeErrors.Add(1)
 		m.observe("api-server", false, constant.ReasonAPIServerUnavailable, fmt.Sprintf("kube-apiserver /readyz failed: %v", err))
 		return
 	}
@@ -284,7 +286,7 @@ func (m *Monitor) checkComponent(ctx context.Context, component string, pods []c
 	status := EndpointStatus{Name: component, Supported: true, Available: false, Latency: latency, LastChecked: m.nowTime()}
 	if lastErr != nil {
 		status.LastError = lastErr.Error()
-		metrics.Default.ControlPlaneProbeErrors.Add(1)
+		metrics.DefaultRegistry().ControlPlaneProbeErrors.Add(1)
 	}
 	m.setComponent(component, status)
 	m.observe(component, false, componentReason(component), fmt.Sprintf("%s health endpoint failed: %v", component, lastErr))
@@ -319,7 +321,7 @@ func (m *Monitor) recordProbeError(name string, err error) {
 	m.mu.Lock()
 	m.status.ProbeErrors++
 	m.mu.Unlock()
-	metrics.Default.ControlPlaneProbeErrors.Add(1)
+	metrics.DefaultRegistry().ControlPlaneProbeErrors.Add(1)
 	klog.ErrorS(err, "controlplane probe failed", "probe", name)
 }
 

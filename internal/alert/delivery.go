@@ -189,7 +189,7 @@ func (a *AlertManager) deliverOneWithContext(
 	ins *insight.Insight,
 ) {
 	p := entry.provider
-	metrics.Default.NotificationsTotal.Add(1)
+	metrics.DefaultRegistry().NotificationsTotal.Add(1)
 
 	tpl := entry.templates
 	if len(tpl) == 0 {
@@ -251,7 +251,7 @@ func (a *AlertManager) deliverOneWithContext(
 		}, entry.retry, p.Name())
 	}
 	if err != nil {
-		metrics.Default.NotificationsDropped.Add(1)
+		metrics.DefaultRegistry().NotificationsDropped.Add(1)
 		klog.ErrorS(
 			err,
 			"failed to send",
@@ -299,7 +299,7 @@ func (a *AlertManager) fanOut(job deliverJob) {
 			//
 			// Nothing is lost silently — the dropped job goes to the
 			// dead-letter queue, which is readable over the health endpoint.
-			metrics.Default.NotificationsDropped.Add(1)
+			metrics.DefaultRegistry().NotificationsDropped.Add(1)
 			a.recordDeadLetter(
 				&entry,
 				job.inc,
@@ -371,7 +371,7 @@ func (a *AlertManager) deliverAllSync(
 			}, entry.retry, p.Name())
 		}
 		if err != nil {
-			metrics.Default.NotificationsDropped.Add(1)
+			metrics.DefaultRegistry().NotificationsDropped.Add(1)
 			klog.ErrorS(
 				err,
 				"sync delivery failed",

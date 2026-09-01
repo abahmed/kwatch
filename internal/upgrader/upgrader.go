@@ -3,6 +3,7 @@ package upgrader
 import (
 	"context"
 	"fmt"
+	"net/http"
 	"os"
 	"strconv"
 	"strings"
@@ -14,7 +15,6 @@ import (
 	"github.com/abahmed/kwatch/internal/alert"
 	"github.com/abahmed/kwatch/internal/config"
 	"github.com/abahmed/kwatch/internal/constant"
-	"github.com/abahmed/kwatch/internal/k8s"
 	"github.com/abahmed/kwatch/internal/state"
 	"github.com/abahmed/kwatch/internal/version"
 )
@@ -26,13 +26,15 @@ type GitHubReleaseChecker interface {
 	) (*github.RepositoryRelease, *github.Response, error)
 }
 
-type GitHubClient struct{}
+type GitHubClient struct {
+	client *http.Client
+}
 
 func (c *GitHubClient) GetLatestRelease(
 	ctx context.Context,
 	owner, repo string,
 ) (*github.RepositoryRelease, *github.Response, error) {
-	client := github.NewClient(k8s.GetDefaultClient())
+	client := github.NewClient(c.client)
 	return client.Repositories.GetLatestRelease(ctx, owner, repo)
 }
 
@@ -56,6 +58,7 @@ func NewUpgrader(
 	upCfg *config.Upgrader,
 	alertManager *alert.AlertManager,
 	stateManager *state.StateManager,
+	clients ...*http.Client,
 ) *Upgrader {
 	if upCfg == nil {
 		upCfg = &config.Upgrader{}
@@ -64,11 +67,15 @@ func NewUpgrader(
 		os.Getenv("SKIP_UPGRADE_CHECK") == "true" {
 		upCfg.DisableUpdateCheck = true
 	}
+	client := http.DefaultClient
+	if len(clients) > 0 && clients[0] != nil {
+		client = clients[0]
+	}
 	return &Upgrader{
 		config:       upCfg,
 		alertManager: alertManager,
 		stateManager: stateManager,
-		githubClient: &GitHubClient{},
+		githubClient: &GitHubClient{client: client},
 	}
 }
 

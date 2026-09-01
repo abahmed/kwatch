@@ -3,7 +3,7 @@ package probe
 import (
 	"testing"
 
-	kwcontext "github.com/abahmed/kwatch/internal/context"
+	kwcontext "github.com/abahmed/kwatch/internal/graphcontext"
 )
 
 func TestServiceDNS(t *testing.T) {

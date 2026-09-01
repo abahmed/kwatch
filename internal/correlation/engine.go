@@ -84,14 +84,14 @@ func (e *Engine) edgeAction(inc *model.Incident) model.IncidentAction {
 	inc.NotifiedSig = sig
 	inc.LastNotifiedAt = e.now()
 	if inc.State == model.StateResolved {
-		metrics.Default.IncidentsResolved.Add(1)
+		metrics.DefaultRegistry().IncidentsResolved.Add(1)
 		return model.ActionResolved
 	}
 	if prev == "" {
-		metrics.Default.IncidentsCreate.Add(1)
+		metrics.DefaultRegistry().IncidentsCreate.Add(1)
 		return model.ActionCreate
 	}
-	metrics.Default.IncidentsUpdate.Add(1)
+	metrics.DefaultRegistry().IncidentsUpdate.Add(1)
 	return model.ActionUpdate
 }
 

@@ -115,7 +115,7 @@ func (e *Engine) tryGroupIncident(
 	}
 	inc.NotifiedSig = notifSig(inc)
 	inc.LastNotifiedAt = now
-	metrics.Default.IncidentsGrouped.Add(1)
+	metrics.DefaultRegistry().IncidentsGrouped.Add(1)
 	return true
 }
 

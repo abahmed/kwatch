@@ -50,6 +50,13 @@ type AlertManager struct {
 func (a *AlertManager) SetClock(now func() time.Time) {
 	if now != nil {
 		a.now = now
+		for i := range a.entries {
+			if clocked, ok := a.entries[i].provider.(interface {
+				SetClock(func() time.Time)
+			}); ok {
+				clocked.SetClock(now)
+			}
+		}
 	}
 }
 

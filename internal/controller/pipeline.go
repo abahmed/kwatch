@@ -73,10 +73,12 @@ func (p *resourcePipeline) processNextItem(ctx context.Context) bool {
 	defer p.queue.Done(key)
 	started := p.nowTime()
 	defer func() {
-		metrics.Default.ProcessingLatencyMs.Store(p.nowTime().Sub(started).Milliseconds())
-		metrics.Default.QueueDepth.Store(int64(p.queue.Len()))
+		metrics.DefaultRegistry().ProcessingLatencyMs.Store(
+			p.nowTime().Sub(started).Milliseconds(),
+		)
+		metrics.DefaultRegistry().QueueDepth.Store(int64(p.queue.Len()))
 	}()
-	metrics.Default.QueueDepth.Store(int64(p.queue.Len()))
+	metrics.DefaultRegistry().QueueDepth.Store(int64(p.queue.Len()))
 	if err := p.syncFn(ctx, key); err != nil {
 		// Retry transient errors with backoff first. A still-failing resource
 		// then moves to a slow recovery cadence, while permanent errors are

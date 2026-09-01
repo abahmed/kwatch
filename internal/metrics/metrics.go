@@ -31,7 +31,14 @@ type Registry struct {
 	GraphRebuildLatencyMs   atomic.Int64
 }
 
+// Default is retained for compatibility with external integrations.
 var Default = &Registry{}
+
+// DefaultRegistry returns the process-wide metrics registry through the
+// package boundary used by internal components.
+func DefaultRegistry() *Registry {
+	return Default
+}
 
 func (r *Registry) Handler() http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {

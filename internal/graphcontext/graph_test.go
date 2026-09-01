@@ -1,4 +1,4 @@
-package context
+package graphcontext
 
 import (
 	"testing"
@@ -33,15 +33,28 @@ func TestAddSelfEdgeIgnored(t *testing.T) {
 
 func TestReplaceMatchingEdgesAroundOnlyTouchesAdjacentEdges(t *testing.T) {
 	g := NewResourceGraph()
-	g.AddEdge("volumeattachment", "", "va", "persistentvolume", "", "pv-old", "attaches")
-	g.AddEdge("persistentvolume", "", "pv-old", "volumeattachment", "", "va", "has_attachment")
+	g.AddEdge(
+		"volumeattachment", "", "va", "persistentvolume", "", "pv-old",
+		"attaches",
+	)
+	g.AddEdge(
+		"persistentvolume", "", "pv-old", "volumeattachment", "", "va",
+		"has_attachment",
+	)
 	g.AddEdge("pod", "ns", "p", "node", "", "n", "scheduled_on")
 
 	g.ReplaceMatchingEdgesAround("volumeattachment//va", func(edge Edge) bool {
 		return edge.Type == "attaches" || edge.Type == "has_attachment"
-	}, []Edge{{From: "volumeattachment//va", To: "persistentvolume//pv-new", Type: "attaches"}})
+	}, []Edge{{
+		From: "volumeattachment//va", To: "persistentvolume//pv-new",
+		Type: "attaches",
+	}})
 
-	assert.Equal(t, []string{"persistentvolume//pv-new"}, g.DependenciesOf("volumeattachment", "", "va"))
+	assert.Equal(
+		t,
+		[]string{"persistentvolume//pv-new"},
+		g.DependenciesOf("volumeattachment", "", "va"),
+	)
 	assert.Equal(t, []string{"node//n"}, g.DependenciesOf("pod", "ns", "p"))
 	assert.Empty(t, g.DependentsOf("volumeattachment", "", "va"))
 }
@@ -122,11 +135,19 @@ func TestMultipleEdgeTypesForSameResourcePair(t *testing.T) {
 	g.AddEdge("pod", "ns1", "p1", "configmap", "ns1", "cfg", "env_ref")
 
 	assert.Len(t, g.Edges(), 2)
-	assert.Equal(t, []string{"configmap/ns1/cfg"}, g.DependenciesOf("pod", "ns1", "p1"))
+	assert.Equal(
+		t,
+		[]string{"configmap/ns1/cfg"},
+		g.DependenciesOf("pod", "ns1", "p1"),
+	)
 
 	g.RemoveEdgesFrom("pod", "ns1", "p1", "mounts")
 	assert.Len(t, g.Edges(), 1)
-	assert.Equal(t, []string{"configmap/ns1/cfg"}, g.DependenciesOf("pod", "ns1", "p1"))
+	assert.Equal(
+		t,
+		[]string{"configmap/ns1/cfg"},
+		g.DependenciesOf("pod", "ns1", "p1"),
+	)
 
 	g.RemoveEdgesFrom("pod", "ns1", "p1", "env_ref")
 	assert.Empty(t, g.Edges())

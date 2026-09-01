@@ -20,8 +20,8 @@ import (
 
 	"github.com/abahmed/kwatch/internal/clock"
 	"github.com/abahmed/kwatch/internal/config"
-	kwcontext "github.com/abahmed/kwatch/internal/context"
 	"github.com/abahmed/kwatch/internal/correlation"
+	kwcontext "github.com/abahmed/kwatch/internal/graphcontext"
 	"github.com/abahmed/kwatch/internal/handler"
 	"github.com/abahmed/kwatch/internal/metrics"
 )
@@ -163,7 +163,7 @@ func (c *Controller) InformerStatus() interface{} {
 func (c *Controller) recordInformerEvent() {
 	c.informerMu.Lock()
 	c.informerEvents++
-	metrics.Default.InformerEvents.Add(1)
+	metrics.DefaultRegistry().InformerEvents.Add(1)
 	c.informerLastEvent = c.nowTime()
 	c.informerMu.Unlock()
 }
@@ -171,7 +171,7 @@ func (c *Controller) recordInformerEvent() {
 func (c *Controller) recordInformerWatchError(err error) {
 	c.informerMu.Lock()
 	c.informerWatchErrors++
-	metrics.Default.InformerWatchErrors.Add(1)
+	metrics.DefaultRegistry().InformerWatchErrors.Add(1)
 	c.informerLastWatchError = c.nowTime()
 	c.informerLastWatchMessage = err.Error()
 	c.informerMu.Unlock()

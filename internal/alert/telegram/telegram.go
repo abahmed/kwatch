@@ -3,7 +3,6 @@ package telegram
 import (
 	"encoding/json"
 	"fmt"
-	"net/http"
 	"strings"
 	"time"
 
@@ -13,7 +12,6 @@ import (
 	"github.com/abahmed/kwatch/internal/config"
 	"github.com/abahmed/kwatch/internal/event"
 	"github.com/abahmed/kwatch/internal/insight"
-	"github.com/abahmed/kwatch/internal/k8s"
 	"github.com/abahmed/kwatch/internal/message"
 	"github.com/abahmed/kwatch/internal/model"
 )
@@ -80,20 +78,13 @@ func (t *Telegram) Name() string {
 
 // Verify checks credentials via Telegram getMe API.
 func (t *Telegram) Verify() error {
-	client := k8s.GetDefaultClient()
 	url := fmt.Sprintf(telegramGetMeURL, t.token)
-	resp, err := client.Get(url)
-	if err != nil {
-		return err
-	}
-	defer resp.Body.Close()
-	if resp.StatusCode != http.StatusOK {
-		return event.ClassifyHTTP(
-			resp.StatusCode,
-			fmt.Errorf("telegram getMe returned status %d", resp.StatusCode),
-		)
-	}
-	return nil
+	_, err := util.Send(util.Request{
+		Provider: "Telegram",
+		Method:   "GET",
+		URL:      url,
+	})
+	return err
 }
 
 // SendEvent sends event to the provider

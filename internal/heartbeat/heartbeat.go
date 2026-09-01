@@ -8,7 +8,6 @@ import (
 	"k8s.io/klog/v2"
 
 	"github.com/abahmed/kwatch/internal/config"
-	"github.com/abahmed/kwatch/internal/k8s"
 )
 
 type HeartbeatMonitor struct {
@@ -16,10 +15,19 @@ type HeartbeatMonitor struct {
 	client *http.Client
 }
 
-func NewHeartbeatMonitor(cfg *config.HeartbeatMonitor) *HeartbeatMonitor {
+// NewHeartbeatMonitor builds a monitor with an optional shared HTTP client.
+// The default keeps the constructor backward compatible for callers outside
+// the application composition root.
+func NewHeartbeatMonitor(
+	cfg *config.HeartbeatMonitor, clients ...*http.Client,
+) *HeartbeatMonitor {
+	client := http.DefaultClient
+	if len(clients) > 0 && clients[0] != nil {
+		client = clients[0]
+	}
 	return &HeartbeatMonitor{
 		config: cfg,
-		client: k8s.GetDefaultClient(),
+		client: client,
 	}
 }
 

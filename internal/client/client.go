@@ -16,14 +16,24 @@ import (
 	"github.com/abahmed/kwatch/internal/config"
 )
 
-// Create returns kubernetes client after initializing it with in-cluster, or
-// out of cluster config
-func Create(appConfig *config.App) (kubernetes.Interface, error) {
-	return CreateClient(appConfig)
+// NewKubernetesClient creates a Kubernetes client from cluster or local config.
+func NewKubernetesClient(appConfig *config.App) (kubernetes.Interface, error) {
+	return newKubernetesClient(appConfig)
 }
 
-// CreateClient returns kubernetes client or an error
+// Create is retained for compatibility. New code should use
+// NewKubernetesClient.
+func Create(appConfig *config.App) (kubernetes.Interface, error) {
+	return NewKubernetesClient(appConfig)
+}
+
+// CreateClient is retained for compatibility. New code should use
+// NewKubernetesClient.
 func CreateClient(appConfig *config.App) (kubernetes.Interface, error) {
+	return NewKubernetesClient(appConfig)
+}
+
+func newKubernetesClient(appConfig *config.App) (kubernetes.Interface, error) {
 	// try to use in cluster config
 	clientConfig, err := rest.InClusterConfig()
 	if err != nil {

@@ -1,7 +1,7 @@
 package controller
 
 import (
-	kwcontext "github.com/abahmed/kwatch/internal/context"
+	kwcontext "github.com/abahmed/kwatch/internal/graphcontext"
 	"github.com/abahmed/kwatch/internal/metrics"
 )
 
@@ -25,7 +25,7 @@ func (c *Controller) recordGraphSize() {
 		return
 	}
 	nodes, edges := c.graph.Size()
-	metrics.Default.GraphNodes.Store(int64(nodes))
-	metrics.Default.GraphEdges.Store(int64(edges))
+	metrics.DefaultRegistry().GraphNodes.Store(int64(nodes))
+	metrics.DefaultRegistry().GraphEdges.Store(int64(edges))
 }
 func (c *Controller) SetGraph(g *kwcontext.ResourceGraph) { c.graph = g }

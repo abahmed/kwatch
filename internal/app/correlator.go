@@ -12,10 +12,10 @@ import (
 	"github.com/abahmed/kwatch/internal/alert"
 	"github.com/abahmed/kwatch/internal/audit"
 	"github.com/abahmed/kwatch/internal/config"
-	kwcontext "github.com/abahmed/kwatch/internal/context"
 	"github.com/abahmed/kwatch/internal/correlation"
 	"github.com/abahmed/kwatch/internal/enricher"
 	"github.com/abahmed/kwatch/internal/feature"
+	kwcontext "github.com/abahmed/kwatch/internal/graphcontext"
 	"github.com/abahmed/kwatch/internal/insight"
 	"github.com/abahmed/kwatch/internal/metrics"
 	"github.com/abahmed/kwatch/internal/model"
@@ -190,7 +190,7 @@ func lifecycleHook(
 			}
 			opts.notify(inc, action, diagnosis)
 		}
-		metrics.Default.ActiveIncidents.Store(
+		metrics.DefaultRegistry().ActiveIncidents.Store(
 			int64(holder.engine.ActiveCount()),
 		)
 	}
@@ -303,7 +303,7 @@ func onBaselineChange(
 		for _, pods := range b {
 			total += len(pods)
 		}
-		metrics.Default.BaselineSize.Store(int64(total))
+		metrics.DefaultRegistry().BaselineSize.Store(int64(total))
 		select {
 		case baselineCh <- b:
 		default:

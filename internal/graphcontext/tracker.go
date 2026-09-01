@@ -1,4 +1,4 @@
-package context
+package graphcontext
 
 import (
 	"sync"
@@ -111,7 +111,10 @@ func (t *ChangeTracker) RecentChangesBefore(age time.Duration) []Change {
 	return t.RecentChangesBeforeAt(age, clock.Now())
 }
 
-func (t *ChangeTracker) RecentChangesBeforeAt(age time.Duration, now time.Time) []Change {
+func (t *ChangeTracker) RecentChangesBeforeAt(
+	age time.Duration,
+	now time.Time,
+) []Change {
 	t.mu.RLock()
 	defer t.mu.RUnlock()
 	cutoff := now.Add(-age)

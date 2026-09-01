@@ -25,6 +25,7 @@ type RCARecord struct {
 type FeedbackStore struct {
 	mu      sync.RWMutex
 	records map[string]RCARecord
+	now     func() time.Time
 	// active remembers the diagnosis attached to a live incident. Resolve
 	// notifications do not carry the original Insight, so using only the
 	// reason would incorrectly update every learned pattern for that reason.
@@ -37,6 +38,14 @@ func NewFeedbackStore() *FeedbackStore {
 	return &FeedbackStore{
 		records: make(map[string]RCARecord),
 		active:  make(map[string]string),
+		now:     clock.Now,
+	}
+}
+
+// SetClock injects the clock used for feedback timestamps.
+func (s *FeedbackStore) SetClock(now func() time.Time) {
+	if now != nil {
+		s.now = now
 	}
 }
 
@@ -61,7 +70,7 @@ func (s *FeedbackStore) Observe(inc *model.Incident, action model.IncidentAction
 	}
 	record := s.records[key]
 	record.Fingerprint, record.CauseClass = key, pattern
-	record.LastSeen = clock.Now()
+	record.LastSeen = s.now()
 	if action == model.ActionResolved {
 		record.Resolved++
 		record.LastOutcome = "resolved"

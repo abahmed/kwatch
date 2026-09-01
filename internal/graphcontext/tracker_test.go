@@ -1,4 +1,4 @@
-package context
+package graphcontext
 
 import (
 	"testing"
@@ -20,8 +20,12 @@ func TestRecentChangesBefore(t *testing.T) {
 	tr := NewChangeTracker(100)
 	now := time.Now()
 	tr.Record(Change{Resource: "pod", Name: "p1", Timestamp: now})
-	tr.Record(Change{Resource: "pod", Name: "p2", Timestamp: now.Add(-10 * time.Minute)})
-	tr.Record(Change{Resource: "pod", Name: "p3", Timestamp: now.Add(-20 * time.Minute)})
+	tr.Record(Change{
+		Resource: "pod", Name: "p2", Timestamp: now.Add(-10 * time.Minute),
+	})
+	tr.Record(Change{
+		Resource: "pod", Name: "p3", Timestamp: now.Add(-20 * time.Minute),
+	})
 
 	recent := tr.RecentChangesBefore(15 * time.Minute)
 	assert.Len(t, recent, 2)

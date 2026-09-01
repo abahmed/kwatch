@@ -13,7 +13,6 @@ import (
 	"github.com/abahmed/kwatch/internal/config"
 	"github.com/abahmed/kwatch/internal/event"
 	"github.com/abahmed/kwatch/internal/insight"
-	"github.com/abahmed/kwatch/internal/k8s"
 	"github.com/abahmed/kwatch/internal/message"
 	"github.com/abahmed/kwatch/internal/model"
 )
@@ -134,7 +133,7 @@ func (m *Matrix) sendAPI(formattedMsg string) error {
 			"%s/_matrix/client/v3/rooms/%s/send/m.room.message/%s",
 			m.homeServer,
 			url.PathEscape(m.internalRoomID),
-			k8s.RandomString(24),
+			util.RandomString(24),
 		),
 		Body:    msgBytes,
 		Headers: map[string]string{"Authorization": "Bearer " + m.accessToken},

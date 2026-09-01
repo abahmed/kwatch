@@ -10,7 +10,7 @@ import (
 	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/klog/v2"
 
-	kwcontext "github.com/abahmed/kwatch/internal/context"
+	kwcontext "github.com/abahmed/kwatch/internal/graphcontext"
 	"github.com/abahmed/kwatch/internal/metrics"
 )
 
@@ -216,9 +216,11 @@ func (c *Controller) buildGraph() {
 		return
 	}
 	started := c.nowTime()
-	metrics.Default.GraphRebuilds.Add(1)
+	metrics.DefaultRegistry().GraphRebuilds.Add(1)
 	defer func() {
-		metrics.Default.GraphRebuildLatencyMs.Store(c.nowTime().Sub(started).Milliseconds())
+		metrics.DefaultRegistry().GraphRebuildLatencyMs.Store(
+			c.nowTime().Sub(started).Milliseconds(),
+		)
 	}()
 
 	next := c.graphBuilder(kwcontext.NewResourceGraph())

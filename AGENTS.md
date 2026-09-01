@@ -12,6 +12,10 @@ Every change must pass before you are done:
 go build ./... && go vet ./... && go test ./... && golangci-lint run
 ```
 
+The repository also enforces formatting and line length. Run the complete gate
+with `make verify`; it includes `line-check` and `git diff --check` should be
+clean before handoff.
+
 - Linters: errcheck, gocritic, gocyclo, govet, ineffassign, unparam, unused (`.golangci.yml`).
 - **Cyclomatic complexity limit is 20** (`gocyclo min-complexity: 20`), tests included. When a
   function exceeds it, extract helpers or table data instead of raising the threshold.
@@ -19,6 +23,79 @@ go build ./... && go vet ./... && go test ./... && golangci-lint run
   third-party second, kwatch last).
 - Test files are exempt from errcheck/unparam/gocritic/gocyclo; `internal/controller` is
   exempt from errcheck (informer wiring intentionally ignores AddEventHandler returns).
+
+## Coding style directives
+
+These directives apply to humans and coding agents. Preserve the existing
+architecture unless a change explicitly expands its scope.
+
+- Use `goimports`, not only `gofmt`, with the repository local prefix. Keep
+  imports grouped as standard library, third-party dependencies, then kwatch.
+- Keep every touched or newly created line at 80 columns or fewer. Wrap calls,
+  signatures, composite literals, and comments; do not hide violations by
+  disabling the line checker.
+- Keep every Go file below 400 lines. When a file grows, split it by
+  responsibility and use semantic names such as `conditions.go` or
+  `payload_limits_test.go`, not anonymous numeric fragments.
+- Match the package name to the final directory component. For example,
+  `internal/graphcontext` must declare `package graphcontext`.
+- Add short comments only where they explain an invariant, compatibility rule,
+  or non-obvious decision. Avoid decorative separator comments and restating
+  the code.
+- Prefer small functions with one responsibility. Extract `build*`, `parse*`,
+  `apply*`, and `validate*` helpers before complexity or readability suffers.
+- Return errors to callers. `os.Exit` belongs only in the top-level command
+  entrypoint; libraries and subcommands must remain testable.
+- Inject clocks, HTTP clients, listers, and other time- or I/O-dependent
+  collaborators through constructors or setters. Production code must not
+  call `time.Now()` directly when a decision can be tested with a fake clock.
+- Keep package globals immutable or narrowly scoped. Use an explicit registry
+  or dependency seam for mutable process state; retain compatibility aliases
+  only when removing them would break external users.
+- Use `metrics.DefaultRegistry()` at internal call sites. Do not introduce new
+  direct uses of `metrics.Default` or hidden singleton clients.
+- Construct shared Kubernetes or HTTP clients in `internal/app` and pass them
+  into monitors, providers, and integrations that need them.
+- Import `internal/graphcontext` with an explicit alias when the standard
+  library `context` is also in scope; never disguise a package-name mismatch.
+- Do not duplicate provider transport or retry logic. Providers build payloads
+  and call `alert/util.Send`; shared utilities decide status classification,
+  timeout, retry, and rate-limit behavior.
+- Preserve persistence formats and public constructor compatibility where
+  possible. Prefer optional dependencies or adapters over breaking call sites.
+
+### Naming standard
+
+- Use `New<Type>` for constructors and `Set<Type>` for optional wiring. Keep
+  constructor arguments ordered as configuration, required dependencies, then
+  optional dependencies.
+- Name methods after the domain action: `Process`, `Resolve`, `Snapshot`, and
+  `Validate`. Avoid vague verbs such as `Do`, `HandleIt`, or `Create` when the
+  resource type is known.
+- Use singular package names and lower-case file names. Group files by one
+  responsibility: `graph_resources.go`, `group_flush.go`, and
+  `payload_limits_test.go` are preferred examples.
+- Follow Go initialisms consistently: `ID`, `UID`, `URL`, `HTTP`, `API`, `PVC`,
+  and `JSON`. Do not introduce a new spelling variant for an existing public
+  identifier; add a compatibility wrapper when a rename is unavoidable.
+- Use `camelCase` for local names, `PascalCase` for exported names, and avoid
+  redundant package prefixes such as `config.ConfigManager`.
+- Use `Test<Type><Behavior>` for tests. Name table cases by behavior, not by
+  implementation order or issue number.
+
+### Test and refactor directives
+
+- Before splitting a test file, identify package-level fixtures, helper types,
+  and imports. Copy required declarations into the correct focused file and
+  run that package's tests immediately after the split.
+- Keep tests deterministic: use injected clocks and fake clients rather than
+  sleeps, wall-clock assertions, or live network calls.
+- Add or update focused tests for every behavior change, especially lifecycle
+  transitions, suppression decisions, retries, persistence, and compatibility.
+- Do not mechanically rewrite unrelated files. Review `git diff` after each
+  refactor and preserve user changes already present in the worktree.
+- Do not remove a legacy package or alias until `rg` confirms there are no
+  remaining imports and the full repository gate passes.
 
 ## Package map
 
@@ -34,7 +111,7 @@ Dependency direction flows downward; never import upward.
 | `internal/config` | Config loading/validation, suppression index builder |
 | `internal/correlation` | Incident lifecycle (create/update/resolve/skip), attribution, grouping, cooldowns. The **only** emitter of notifications (`emit.go`) |
 | `internal/insight` | Cause/impact/recent-change analysis over the dependency graph |
-| `internal/event`, `internal/context`, `internal/model` | Shared types |
+| `internal/event`, `internal/graphcontext`, `internal/model` | Shared types |
 | `internal/alert/*` | One subpackage per provider + routing/retry/ratelimit plumbing |
 | `internal/state`, `internal/startup`, `internal/upgrader` | Crash-safe persistence in ConfigMaps, baseline, upgrades |
 | `internal/{pvc,heartbeat,health,audit,crdwatch,integration}` | Periodic watchdogs and integrations |
@@ -42,8 +119,11 @@ Dependency direction flows downward; never import upward.
 
 Rules of thumb:
 
-- `model` / `event` / `context` / `constant` / `format` must stay leaf packages.
-- Provider packages under `alert/` only depend on `model`, `message`, `config`, and `alert/util`.
+- `model` / `event` / `graphcontext` / `constant` / `format` must stay leaf
+  packages.
+- Provider packages under `alert/` depend on `event`, `model`, `config`, and
+  `alert/util`; rich renderers may also use `message` and `insight`. Providers
+  must not import `controller`, `handler`, `correlation`, or `k8s` clients.
 - Providers that talk HTTP call `alert/util.Send`; never `net/http` directly (the linter
   enforces this). Send is where a status code becomes success, rate-limited, permanent or
   retryable — a provider must not have its own opinion.
