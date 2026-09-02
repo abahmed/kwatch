@@ -175,28 +175,12 @@ bundled ClusterRole remains a static superset so one manifest can support any
 configuration; installations requiring least privilege can remove rules for
 disabled monitors from their copied manifest without changing kwatch.
 
-### Fine-grained feature controls
-
-Monitor settings decide what kwatch requests. The optional `features.disabled` list can
-turn off individual capabilities inside a monitor without disabling the whole module:
-
-```yaml
-features:
-  disabled:
-    - telemetry.cpu.throttling
-    - intelligence.diagnosis.change-diff
-```
-
-Feature IDs are stable and validated at startup; an unknown ID fails fast with a clear
-error. This is an operator switch only: it cannot grant a paid capability or change the
-active product tier. The diagnostics endpoint `/features` shows policy, requested, allowed,
-enabled, and dependency state for every catalog entry.
-
 The interactive `kwatch.sh` manager downloads the matching
 `deploy/feature-catalog.tsv` from the installed release and caches it in a
 separate ConfigMap. Run `kwatch.sh features` (or choose **Show capabilities**)
-to see the available IDs, tiers, dependencies, and plain-language descriptions;
-the script does not need to be replaced when a release adds a capability.
+to see the available IDs, dependencies, and plain-language descriptions;
+the catalog is informational and does not change runtime behavior. To disable
+monitoring, use the monitor's normal `enabled` or threshold settings.
 
 The `/kubelet` health status reports `healthy`, `partial`, `unavailable`, or
 `rbacDenied`, alongside Summary, cAdvisor, runtime, and node counts. The
@@ -215,20 +199,24 @@ you manage updates yourself (e.g. you pin images).
 |:---|---|
 | `upgrader.disableUpdateCheck` | 🔕 Don't check for new kwatch versions |
 
-## 📡 Anonymous telemetry
+## 📡 Minimal adoption telemetry
 
-Official builds send a small anonymous heartbeat so the project can estimate
-adoption. The payload contains only the cluster UUID already stored in
-`kwatch-state` and the kwatch version. It is sent after startup and at most
-once per week to `https://api.kwatch.dev/v1/telemetry/heartbeat`.
+Official builds send a small pseudonymous heartbeat so the project can estimate
+adoption. The payload contains only a stable, randomly generated installation
+ID (kept in `kwatch-state`) and the kwatch version. The API field is named
+`cluster_uuid` for wire compatibility; it is not the Kubernetes cluster UID.
+It is sent after startup and at most once per week to
+`https://api.kwatch.dev/v1/telemetry/heartbeat`.
 
 | Parameter | What it does |
 |:---|:---|
-| `telemetry.enabled` | ✅ Send anonymous adoption heartbeats (default: `true`) |
+| `telemetry.enabled` | ✅ Send adoption heartbeats (default: `true`) |
 
 Disable it with `telemetry.enabled: false`. Development builds and recognized CI
-environments do not send telemetry. Telemetry failures never affect monitoring
-startup or runtime.
+environments do not send telemetry. The service should use this data only for
+aggregate adoption counts and version planning; no feature-usage or cluster
+inventory is collected. Telemetry failures never affect monitoring startup or
+runtime.
 
 ---
 

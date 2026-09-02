@@ -13,7 +13,6 @@ import (
 
 	"github.com/abahmed/kwatch/internal/config"
 	"github.com/abahmed/kwatch/internal/correlation"
-	"github.com/abahmed/kwatch/internal/feature"
 )
 
 type Monitor struct {
@@ -32,7 +31,6 @@ type Monitor struct {
 	podCacheAt time.Time
 	lastSweep  time.Time
 	store      StateStore
-	plan       feature.Plan
 }
 
 type StateStore interface {
@@ -87,15 +85,9 @@ func (m *Monitor) sweep(ctx context.Context) {
 				return
 			}
 			defer func() { <-sem }()
-			if m.summaryFeaturesEnabled() {
-				m.checkSummary(ctx, node, pods)
-			}
-			if m.featureEnabled(feature.CPUThrottling) {
-				m.checkCadvisor(ctx, node)
-			}
-			if m.featureEnabled(feature.RuntimeErrors) {
-				m.checkRuntimeMetrics(ctx, node)
-			}
+			m.checkSummary(ctx, node, pods)
+			m.checkCadvisor(ctx, node)
+			m.checkRuntimeMetrics(ctx, node)
 		}(node)
 	}
 	wg.Wait()
@@ -152,11 +144,6 @@ func (m *Monitor) TelemetryStatus() interface{} {
 }
 
 func (m *Monitor) SetStateStore(store StateStore) { m.store = store }
-
-// SetFeaturePlan applies signal-level capability decisions. Summary, cAdvisor,
-// and runtime endpoints remain separate so disabling one signal does not
-// silently disable unrelated telemetry from the same kubelet.
-func (m *Monitor) SetFeaturePlan(plan feature.Plan) { m.plan = plan }
 
 func (m *Monitor) recordEndpoint(node, endpoint string, err error) {
 	m.mu.Lock()

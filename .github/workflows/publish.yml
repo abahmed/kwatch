@@ -129,7 +129,7 @@ jobs:
             org.opencontainers.image.version=${{ steps.rel.outputs.tag }}
             org.opencontainers.image.revision=${{ steps.sha.outputs.sha }}
             org.opencontainers.image.created=${{ steps.buildmeta.outputs.build_date }}
-            org.opencontainers.image.licenses=Elastic-2.0
+            org.opencontainers.image.licenses=MIT
           cache-from: type=gha
           cache-to: type=gha,mode=max
           build-args: |

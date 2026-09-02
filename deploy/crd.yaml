@@ -279,13 +279,6 @@ spec:
                   properties:
                     enabled:
                       type: boolean
-                features:
-                  type: object
-                  properties:
-                    disabled:
-                      type: array
-                      items:
-                        type: string
                 maintenance:
                   type: object
                   properties:

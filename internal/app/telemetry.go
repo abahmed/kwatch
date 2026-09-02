@@ -48,7 +48,7 @@ func configureTelemetryRunner(
 			)
 			cancel()
 			if err != nil {
-				klog.V(3).InfoS("anonymous telemetry heartbeat failed", "error", err)
+				klog.V(3).InfoS("adoption telemetry heartbeat failed", "error", err)
 				return
 			}
 			if err := stateMgr.SetTelemetryLastSent(ctx, sentAt); err != nil {

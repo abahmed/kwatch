@@ -19,7 +19,6 @@ import (
 	"github.com/abahmed/kwatch/internal/constant"
 	"github.com/abahmed/kwatch/internal/correlation"
 	"github.com/abahmed/kwatch/internal/event"
-	"github.com/abahmed/kwatch/internal/feature"
 	kwcontext "github.com/abahmed/kwatch/internal/graphcontext"
 	"github.com/abahmed/kwatch/internal/model"
 )
@@ -35,7 +34,6 @@ type Monitor struct {
 	successes  map[string]int
 	graph      *kwcontext.ResourceGraph
 	now        func() time.Time
-	plan       feature.Plan
 }
 
 func (m *Monitor) SetKubernetesClient(client kubernetes.Interface) { m.kclient = client }
@@ -43,11 +41,6 @@ func (m *Monitor) SetKubernetesClient(client kubernetes.Interface) { m.kclient =
 func (m *Monitor) SetGraph(graph *kwcontext.ResourceGraph) {
 	m.graph = graph
 }
-
-// SetFeaturePlan applies fine-grained entitlement and operator overrides to
-// probe protocols without making the probe package aware of configuration
-// files or product licensing.
-func (m *Monitor) SetFeaturePlan(plan feature.Plan) { m.plan = plan }
 
 func New(cfg config.ActiveProbeMonitor, correlator *correlation.Engine) *Monitor {
 	timeout := time.Duration(cfg.TimeoutSeconds) * time.Second
@@ -99,28 +92,28 @@ func (m *Monitor) Start(ctx context.Context) {
 }
 
 func (m *Monitor) check(ctx context.Context) {
-	if m.featureEnabled(feature.HTTPProbes) {
-		for _, target := range m.cfg.HTTP {
-			m.linkTarget("http/"+target.Name, target.URL)
-			ok, detail, reason := m.http(ctx, target)
-			m.record("http/"+target.Name, "http/"+target.Name, reason, ok, detail)
-		}
+	for _, target := range m.cfg.HTTP {
+		m.linkTarget("http/"+target.Name, target.URL)
+		ok, detail, reason := m.http(ctx, target)
+		m.record("http/"+target.Name, "http/"+target.Name, reason, ok, detail)
 	}
-	if m.featureEnabled(feature.TCPProbes) {
-		for _, target := range m.cfg.TCP {
-			m.linkTarget("tcp/"+target.Name, target.Address)
-			ok, detail := m.tcp(ctx, target)
-			m.record("tcp/"+target.Name, "tcp/"+target.Name, constant.ReasonActiveProbeFailure, ok, detail)
-		}
+	for _, target := range m.cfg.TCP {
+		m.linkTarget("tcp/"+target.Name, target.Address)
+		ok, detail := m.tcp(ctx, target)
+		m.record(
+			"tcp/"+target.Name, "tcp/"+target.Name,
+			constant.ReasonActiveProbeFailure, ok, detail,
+		)
 	}
-	if m.featureEnabled(feature.DNSProbes) {
-		for _, target := range m.cfg.DNS {
-			m.linkTarget("dns/"+target.Name, target.Host)
-			ok, detail := m.dns(ctx, target)
-			m.record("dns/"+target.Name, "dns/"+target.Name, constant.ReasonActiveProbeFailure, ok, detail)
-		}
+	for _, target := range m.cfg.DNS {
+		m.linkTarget("dns/"+target.Name, target.Host)
+		ok, detail := m.dns(ctx, target)
+		m.record(
+			"dns/"+target.Name, "dns/"+target.Name,
+			constant.ReasonActiveProbeFailure, ok, detail,
+		)
 	}
-	if m.cfg.AutoServices && m.kclient != nil && m.featureEnabled(feature.AutomaticProbes) {
+	if m.cfg.AutoServices && m.kclient != nil {
 		m.checkServices(ctx)
 	}
 }
@@ -154,12 +147,10 @@ func (m *Monitor) checkService(ctx context.Context, service *corev1.Service) {
 		}
 		owner := "service/" + service.Namespace + "/" + service.Name + "/" + fmt.Sprint(port.Port)
 		address := fmt.Sprintf("%s:%d", host, port.Port)
-		if m.featureEnabled(feature.TCPProbes) {
-			m.linkTarget(owner, host)
-			ok, detail := m.tcp(ctx, config.TCPProbeTarget{Name: owner, Address: address})
-			m.record("auto-"+owner, owner, constant.ReasonActiveProbeFailure, ok, detail)
-		}
-		if strings.HasPrefix(strings.ToLower(port.Name), "http") && m.featureEnabled(feature.HTTPProbes) {
+		m.linkTarget(owner, host)
+		ok, detail := m.tcp(ctx, config.TCPProbeTarget{Name: owner, Address: address})
+		m.record("auto-"+owner, owner, constant.ReasonActiveProbeFailure, ok, detail)
+		if strings.HasPrefix(strings.ToLower(port.Name), "http") {
 			scheme := "http"
 			if strings.HasPrefix(strings.ToLower(port.Name), "https") {
 				scheme = "https"
@@ -221,9 +212,6 @@ func (m *Monitor) http(ctx context.Context, target config.HTTPProbeTarget) (bool
 }
 
 func (m *Monitor) probeLatencyResult(status int, latency time.Duration, target config.HTTPProbeTarget) (bool, string, string) {
-	if !m.featureEnabled(feature.ProbeLatency) {
-		return true, fmt.Sprintf("HTTP status %d in %s", status, latency.Round(time.Millisecond)), constant.ReasonActiveProbeFailure
-	}
 	return probeLatencyResult(status, latency, target)
 }
 
@@ -302,14 +290,4 @@ func threshold(value, fallback int) int {
 		return fallback
 	}
 	return value
-}
-
-func (m *Monitor) featureEnabled(id feature.ID) bool {
-	// A zero plan is retained as an opt-in compatibility mode for package
-	// callers and focused tests that construct a Monitor directly. The app
-	// always supplies a complete plan before starting it.
-	if len(m.plan.Decisions) == 0 {
-		return true
-	}
-	return m.plan.Enabled(id)
 }

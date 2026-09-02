@@ -299,11 +299,11 @@ live-config CRDs — is in the [configuration reference](./docs/configuration.md
 
 Under the hood it's all explained in [how kwatch thinks](./docs/architecture.md).
 
-Release images are signed and published with a source commit, immutable digest, and
-checksums. See [release integrity](./docs/release-integrity.md) if your organization
-requires artifact verification. See [licensing](./docs/licensing.md) for the current
-Elastic License 2.0 terms, the historical MIT release terms, and
-[third-party notices](./docs/third-party-notices.md).
+Release images are signed and published with a source commit, immutable digest,
+and checksums. See [release integrity](./docs/release-integrity.md) if your
+organization requires artifact verification. See
+[licensing](./docs/licensing.md) for the MIT terms and
+[third-party notices](./docs/third-party-notices.md) for dependency licenses.
 
 ---
 
@@ -398,5 +398,4 @@ Questions? Suggestions? [Chat with us on Discord](https://discord.gg/kzJszdKmJ7)
 
 ## ⚠️ License
 
-kwatch is distributed under the [Elastic License 2.0](LICENSE). Historical
-releases remain available under [MIT](LICENSE-MIT).
+kwatch is free and open source under the [MIT License](LICENSE).

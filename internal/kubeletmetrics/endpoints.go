@@ -9,14 +9,10 @@ import (
 	"k8s.io/klog/v2"
 
 	"github.com/abahmed/kwatch/internal/constant"
-	"github.com/abahmed/kwatch/internal/feature"
 	"github.com/abahmed/kwatch/internal/model"
 )
 
 func (m *Monitor) checkNetwork(node string, current networkStats) {
-	if !m.featureEnabled(feature.NetworkErrors) {
-		return
-	}
 	now := m.now()
 	key := "network/" + node
 	m.mu.Lock()
@@ -62,9 +58,6 @@ func (m *Monitor) checkNetwork(node string, current networkStats) {
 }
 
 func (m *Monitor) checkCadvisor(ctx context.Context, node *corev1.Node) {
-	if !m.featureEnabled(feature.CPUThrottling) {
-		return
-	}
 	requestCtx, cancel := context.WithTimeout(ctx, 10*time.Second)
 	defer cancel()
 	body, err := m.proxyRaw(requestCtx, node.Name, "metrics/cadvisor")
@@ -125,9 +118,6 @@ func (m *Monitor) checkCadvisor(ctx context.Context, node *corev1.Node) {
 }
 
 func (m *Monitor) checkRuntimeMetrics(ctx context.Context, node *corev1.Node) {
-	if !m.featureEnabled(feature.RuntimeErrors) {
-		return
-	}
 	requestCtx, cancel := context.WithTimeout(ctx, 10*time.Second)
 	defer cancel()
 	body, err := m.proxyRaw(requestCtx, node.Name, "metrics")

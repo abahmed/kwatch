@@ -3,13 +3,11 @@ package health
 import (
 	"encoding/json"
 	"net/http"
-	"time"
 
 	"k8s.io/klog/v2"
 
 	"github.com/abahmed/kwatch/internal/constant"
 	"github.com/abahmed/kwatch/internal/event"
-	"github.com/abahmed/kwatch/internal/feature"
 )
 
 func (h *HealthServer) kubeletHandler(w http.ResponseWriter, r *http.Request) {
@@ -75,32 +73,6 @@ func (h *HealthServer) informerHandler(w http.ResponseWriter, r *http.Request) {
 		h.informerLister.InformerStatus(),
 	); err != nil {
 		klog.ErrorS(err, "health: encode informer status")
-	}
-}
-
-func (h *HealthServer) featuresHandler(w http.ResponseWriter, r *http.Request) {
-	if !h.requireDiagnosticsAuth(w, r) {
-		return
-	}
-	if r.Method != http.MethodGet {
-		w.WriteHeader(http.StatusMethodNotAllowed)
-		return
-	}
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(http.StatusOK)
-	response := struct {
-		PolicySource string             `json:"policySource"`
-		Tier         string             `json:"tier"`
-		ExpiresAt    time.Time          `json:"expiresAt,omitempty"`
-		Features     []feature.Decision `json:"features"`
-	}{
-		PolicySource: h.featurePlan.PolicySource,
-		Tier:         h.featurePlan.Tier,
-		ExpiresAt:    h.featurePlan.ExpiresAt,
-		Features:     h.featurePlan.DecisionsList(),
-	}
-	if err := json.NewEncoder(w).Encode(response); err != nil {
-		klog.ErrorS(err, "health: encode feature plan")
 	}
 }
 

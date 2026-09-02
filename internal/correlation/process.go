@@ -7,7 +7,6 @@ import (
 	"time"
 
 	"github.com/abahmed/kwatch/internal/event"
-	"github.com/abahmed/kwatch/internal/feature"
 	"github.com/abahmed/kwatch/internal/model"
 )
 
@@ -93,7 +92,7 @@ func (e *Engine) processLocked(
 			return e.refreshIncident(inc, ev, cs, owner, now)
 		}
 
-		if e.featureEnabled(feature.Escalation) && e.config.EscalationEnabled && cs != nil &&
+		if e.config.EscalationEnabled && cs != nil &&
 			e.escalateRestartCount(inc, ev, cs, now) {
 			return inc, e.edgeAction(inc)
 		}
@@ -176,10 +175,8 @@ func (e *Engine) newIncident(
 	if cs != nil {
 		inc.RestartCount = int(cs.RestartCount)
 	}
-	if e.featureEnabled(feature.Runbooks) {
-		if url, ok := e.config.Runbooks[ev.Reason]; ok {
-			inc.Runbook = url
-		}
+	if url, ok := e.config.Runbooks[ev.Reason]; ok {
+		inc.Runbook = url
 	}
 	e.applyIncidentEscalation(&ev, inc, cs)
 	e.config.Enricher.Enrich(&ev, inc)
@@ -198,7 +195,7 @@ func (e *Engine) applyIncidentEscalation(
 	inc *model.Incident,
 	cs *model.ContainerState,
 ) {
-	if !e.featureEnabled(feature.Escalation) || !e.config.EscalationEnabled || cs == nil {
+	if !e.config.EscalationEnabled || cs == nil {
 		return
 	}
 	cur := int(cs.RestartCount)

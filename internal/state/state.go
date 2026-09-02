@@ -230,7 +230,7 @@ func (s *StateManager) GetLastSeen(ctx context.Context) time.Time {
 	return t
 }
 
-// GetTelemetryLastSent returns the last time the anonymous heartbeat was
+// GetTelemetryLastSent returns the last time the adoption heartbeat was
 // successfully sent. The zero time means no heartbeat has been sent yet.
 func (s *StateManager) GetTelemetryLastSent(ctx context.Context) time.Time {
 	cm, err := s.client.CoreV1().ConfigMaps(
@@ -251,7 +251,7 @@ func (s *StateManager) GetTelemetryLastSent(ctx context.Context) time.Time {
 	return t
 }
 
-// SetTelemetryLastSent records the last successful anonymous heartbeat.
+// SetTelemetryLastSent records the last successful adoption heartbeat.
 func (s *StateManager) SetTelemetryLastSent(ctx context.Context, t time.Time) error {
 	return s.stateMgr.UpdateWithRetry(ctx, func(cm *corev1.ConfigMap) error {
 		if cm.Data == nil {

@@ -9,12 +9,8 @@ type Config struct {
 	// App general configuration
 	App App `yaml:"app"`
 
-	// Telemetry configures the anonymous installation heartbeat.
+	// Telemetry configures the minimal adoption heartbeat.
 	Telemetry Telemetry `yaml:"telemetry"`
-
-	// Features contains optional fine-grained operator disables. Product-tier
-	// entitlement is resolved internally and cannot be granted from this file.
-	Features FeatureOverrides `yaml:"features"`
 
 	// Upgrader configuration
 	Upgrader Upgrader `yaml:"upgrader"`
@@ -256,18 +252,10 @@ type Config struct {
 	AuditLog AuditLogConfig `yaml:"auditLog"`
 }
 
-// Telemetry configures the anonymous installation heartbeat. It is enabled
+// Telemetry configures the minimal adoption heartbeat. It is enabled
 // for official builds by default and can be disabled by the operator.
 type Telemetry struct {
 	Enabled bool `yaml:"enabled"`
-}
-
-// FeatureOverrides lets an operator turn off individual capabilities without
-// disabling their entire monitor module. IDs are validated against kwatch's
-// built-in feature catalog during startup. There is intentionally no
-// user-configurable "tier" or "license" field here.
-type FeatureOverrides struct {
-	Disabled []string `yaml:"disabled"`
 }
 
 // Inhibition configures cross-monitor suppression rules.

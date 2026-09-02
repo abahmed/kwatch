@@ -1,5 +1,4 @@
 # kwatch config metadata v1
-features.disabled|Product control|Stable feature IDs to disable individually without disabling the owning monitor.|active|
 workers|Performance|Number of Kubernetes work queues processed in parallel.|active|
 resyncSeconds|Performance|Periodic safety resync interval in seconds; zero keeps event-driven mode.|active|
 maxRecentLogLines|Alerts|Maximum recent log lines attached to an incident.|active|
@@ -117,7 +116,7 @@ activeProbeMonitor.http|Monitors|JSON array of HTTP probe targets with optional 
 activeProbeMonitor.tcp|Monitors|JSON array of TCP probe targets.|active|
 activeProbeMonitor.dns|Monitors|JSON array of DNS probe targets.|active|
 upgrader.disableUpdateCheck|Operations|Disable the update notification.|active|
-telemetry.enabled|Operations|Send the anonymous adoption heartbeat.|active|
+telemetry.enabled|Operations|Send the adoption heartbeat.|active|
 maintenance.enabled|Operations|Honor maintenance annotations while preserving cluster-level alerts.|active|
 maintenance.annotation|Operations|Annotation that marks deliberate maintenance on a resource.|active|
 maintenance.untilAnnotation|Operations|Optional annotation containing the maintenance expiry timestamp.|active|

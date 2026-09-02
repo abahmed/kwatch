@@ -211,7 +211,7 @@ func TestNamespaceFanOutCollapsesIntoOneAlert(t *testing.T) {
 	n3, _ := groupCreates(collect(e3))
 	assert.Equal(t, 2, n3, "one collapsed alert per namespace")
 
-	// The feature can be turned off: one notification per owner, none grouped.
+	// Without a grouping window, each owner is notified independently.
 	e4 := newEngine(0)
 	direct4 := fail(
 		e4,

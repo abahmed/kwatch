@@ -15,7 +15,6 @@ import (
 
 	"github.com/abahmed/kwatch/internal/config"
 	"github.com/abahmed/kwatch/internal/event"
-	"github.com/abahmed/kwatch/internal/feature"
 	"github.com/abahmed/kwatch/internal/metrics"
 	"github.com/abahmed/kwatch/internal/model"
 )
@@ -63,7 +62,6 @@ type HealthServer struct {
 	securityLister     SecurityLister
 	controlPlaneLister ControlPlaneLister
 	informerLister     InformerLister
-	featurePlan        feature.Plan
 	ready              atomic.Bool
 }
 
@@ -135,13 +133,6 @@ func (h *HealthServer) SetInformerLister(l InformerLister) {
 	h.informerLister = l
 }
 
-// SetFeaturePlan publishes the immutable startup entitlement/activation
-// snapshot. It is intentionally status-only; health endpoints cannot change
-// feature policy or grant Pro capabilities.
-func (h *HealthServer) SetFeaturePlan(plan feature.Plan) {
-	h.featurePlan = plan
-}
-
 func (h *HealthServer) Start(ctx context.Context) error {
 	if !h.enabled {
 		klog.V(4).InfoS("health check is disabled")
@@ -161,7 +152,6 @@ func (h *HealthServer) Start(ctx context.Context) error {
 	mux.HandleFunc("/security", h.securityHandler)
 	mux.HandleFunc("/controlplane", h.controlPlaneHandler)
 	mux.HandleFunc("/informer", h.informerHandler)
-	mux.HandleFunc("/features", h.featuresHandler)
 
 	mux.Handle("/metrics", metrics.DefaultRegistry().Handler())
 

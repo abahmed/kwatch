@@ -13,7 +13,7 @@ import (
 // Endpoint is the first-party adoption telemetry endpoint.
 const Endpoint = "https://api.kwatch.dev/v1/telemetry/heartbeat"
 
-// WeeklyInterval is the minimum interval between anonymous heartbeats.
+// WeeklyInterval is the minimum interval between adoption heartbeats.
 const WeeklyInterval = 7 * 24 * time.Hour
 
 var uuidPattern = regexp.MustCompile(`^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-4[0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}$`)
@@ -29,7 +29,7 @@ func ShouldSend(lastSent, now time.Time) bool {
 	return lastSent.IsZero() || now.Sub(lastSent) >= WeeklyInterval
 }
 
-// Report sends one anonymous heartbeat. It returns nil only after receiving a
+// Report sends one adoption heartbeat. It returns nil only after receiving a
 // successful 2xx response; callers should persist the send time only then.
 func Report(ctx context.Context, client *http.Client, endpoint, clusterID, version string) error {
 	if client == nil {

@@ -1,8 +1,8 @@
 # Release integrity
 
 Every published container release includes a source commit, image digest, checksums,
-and a release manifest. The image is signed with Cosign using GitHub Actions OIDC;
-there is no runtime connection from kwatch to Sigstore or to a license server.
+and a release manifest. The image is signed with Cosign using GitHub Actions
+OIDC; kwatch does not connect to Sigstore at runtime.
 
 ## Pin the image
 
@@ -48,4 +48,3 @@ docker run --rm ghcr.io/abahmed/kwatch@sha256:<digest> version --json
 ```
 
 The returned `version` and `commit` should match the release tag and manifest.
-

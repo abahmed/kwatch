@@ -116,7 +116,7 @@ activeProbeMonitor.http|json|[]|Monitors|JSON array of HTTP probe targets with o
 activeProbeMonitor.tcp|json|[]|Monitors|JSON array of TCP probe targets.|active|
 activeProbeMonitor.dns|json|[]|Monitors|JSON array of DNS probe targets.|active|
 upgrader.disableUpdateCheck|boolean|false|Operations|Disable the update notification.|active|
-telemetry.enabled|boolean|true|Operations|Send the anonymous adoption heartbeat.|active|
+telemetry.enabled|boolean|true|Operations|Send the adoption heartbeat.|active|
 maintenance.enabled|boolean|true|Operations|Honor maintenance annotations while preserving cluster-level alerts.|active|
 maintenance.annotation|string|kwatch.io/maintenance|Operations|Annotation that marks deliberate maintenance on a resource.|active|
 maintenance.untilAnnotation|string|kwatch.io/maintenance-until|Operations|Optional annotation containing the maintenance expiry timestamp.|active|
@@ -145,4 +145,3 @@ ignoreLogPatterns|list|legacy|Compatibility|Legacy log suppression field.|deprec
 ignoreContainerMessages|list|legacy|Compatibility|Legacy container-message suppression field.|deprecated|silences
 ignoreNodeReasons|list|legacy|Compatibility|Legacy node-reason suppression field.|deprecated|silences
 ignoreNodeMessages|list|legacy|Compatibility|Legacy node-message suppression field.|deprecated|silences
-features.disabled|list|null|Product control|Stable feature IDs to disable individually without disabling the owning monitor.|active|

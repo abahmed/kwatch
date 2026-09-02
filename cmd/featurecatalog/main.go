@@ -31,7 +31,6 @@ func main() {
 		}
 		lines = append(lines, strings.Join([]string{
 			string(definition.ID),
-			tierName(definition.Tier),
 			string(definition.Lifecycle),
 			definition.Description,
 			strings.Join(dependencies, ","),
@@ -41,11 +40,4 @@ func main() {
 		fmt.Fprintln(os.Stderr, err)
 		os.Exit(1)
 	}
-}
-
-func tierName(tier feature.Tier) string {
-	if tier == feature.Pro {
-		return "pro"
-	}
-	return "community"
 }

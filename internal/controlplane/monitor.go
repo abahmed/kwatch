@@ -18,7 +18,6 @@ import (
 	"github.com/abahmed/kwatch/internal/constant"
 	"github.com/abahmed/kwatch/internal/correlation"
 	"github.com/abahmed/kwatch/internal/event"
-	"github.com/abahmed/kwatch/internal/feature"
 	"github.com/abahmed/kwatch/internal/metrics"
 )
 
@@ -57,7 +56,6 @@ type Monitor struct {
 	failures   map[string]int
 	recoveries map[string]int
 	now        func() time.Time
-	plan       feature.Plan
 }
 
 func New(restConfig *rest.Config, client kubernetes.Interface, cfg config.ControlPlaneMonitor, correlator *correlation.Engine) (*Monitor, error) {
@@ -82,10 +80,6 @@ func (m *Monitor) nowTime() time.Time {
 	}
 	return clock.Now()
 }
-
-// SetFeaturePlan applies signal-level decisions while keeping the monitor
-// independent from licensing and configuration parsing.
-func (m *Monitor) SetFeaturePlan(plan feature.Plan) { m.plan = plan }
 
 func (m *Monitor) Start(ctx context.Context) {
 	interval := time.Duration(m.cfg.IntervalSeconds) * time.Second
@@ -144,22 +138,12 @@ func (m *Monitor) check(ctx context.Context) {
 	m.mu.Lock()
 	m.status.LastCheck = m.nowTime()
 	m.mu.Unlock()
-	if m.featureEnabled(feature.APIServerHealth) {
-		m.checkAPIServer(probeCtx)
-	}
-	if m.featureEnabled(feature.NetworkDetection) {
-		m.checkCoreDNS(probeCtx)
-	}
+	m.checkAPIServer(probeCtx)
+	m.checkCoreDNS(probeCtx)
 	components := []string{}
-	if m.featureEnabled(feature.SchedulerHealth) {
-		components = append(components, "kube-scheduler")
-	}
-	if m.featureEnabled(feature.ControllerManagerHealth) {
-		components = append(components, "kube-controller-manager")
-	}
-	if m.featureEnabled(feature.EtcdHealth) {
-		components = append(components, "etcd")
-	}
+	components = append(components, "kube-scheduler")
+	components = append(components, "kube-controller-manager")
+	components = append(components, "etcd")
 	if len(components) == 0 {
 		return
 	}
@@ -184,15 +168,10 @@ func (m *Monitor) markComponentsUnavailable(err error) {
 	if m.status.Components == nil {
 		m.status.Components = make(map[string]EndpointStatus)
 	}
-	components := []string{}
-	if m.featureEnabled(feature.SchedulerHealth) {
-		components = append(components, "kube-scheduler")
-	}
-	if m.featureEnabled(feature.ControllerManagerHealth) {
-		components = append(components, "kube-controller-manager")
-	}
-	if m.featureEnabled(feature.EtcdHealth) {
-		components = append(components, "etcd")
+	components := []string{
+		"kube-scheduler",
+		"kube-controller-manager",
+		"etcd",
 	}
 	for _, component := range components {
 		m.status.Components[component] = EndpointStatus{
@@ -246,7 +225,7 @@ func (m *Monitor) checkAPIServer(ctx context.Context) {
 	if threshold <= 0 {
 		threshold = time.Second
 	}
-	if m.featureEnabled(feature.APIServerLatency) && status.Latency >= threshold {
+	if status.Latency >= threshold {
 		m.observe("api-server-latency", false, constant.ReasonAPIServerLatency, fmt.Sprintf("kube-apiserver /readyz took %s (threshold %s)", status.Latency.Round(time.Millisecond), threshold))
 		return
 	}
@@ -351,11 +330,4 @@ func (m *Monitor) observe(key string, healthy bool, reason, hint string) {
 	if resolved {
 		m.correlator.MarkResolved(correlation.BuildKey("", key, reason, ""))
 	}
-}
-
-func (m *Monitor) featureEnabled(id feature.ID) bool {
-	if len(m.plan.Decisions) == 0 {
-		return true
-	}
-	return m.plan.Enabled(id)
 }

@@ -163,13 +163,6 @@
           "reasons": { "type": "array", "items": { "type": "string" } },
           "ignorePodNames": { "type": "array", "items": { "type": "string" } },
           "severityByOwnerKind": { "type": "object", "additionalProperties": { "type": "string" } },
-          "features": {
-            "type": "object",
-            "description": "Optional fine-grained capability disables; product tier cannot be granted here.",
-            "properties": {
-              "disabled": { "type": "array", "items": { "type": "string" } }
-            }
-          },
           "nodeMonitor": {
             "type": "object",
             "properties": {

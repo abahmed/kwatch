@@ -16,7 +16,6 @@ import (
 	"github.com/abahmed/kwatch/internal/constant"
 	"github.com/abahmed/kwatch/internal/controller"
 	"github.com/abahmed/kwatch/internal/correlation"
-	"github.com/abahmed/kwatch/internal/feature"
 	kwcontext "github.com/abahmed/kwatch/internal/graphcontext"
 	"github.com/abahmed/kwatch/internal/handler"
 	"github.com/abahmed/kwatch/internal/health"
@@ -24,7 +23,6 @@ import (
 	"github.com/abahmed/kwatch/internal/insight"
 	"github.com/abahmed/kwatch/internal/k8s"
 	"github.com/abahmed/kwatch/internal/kubeletmetrics"
-	"github.com/abahmed/kwatch/internal/message"
 	"github.com/abahmed/kwatch/internal/model"
 	"github.com/abahmed/kwatch/internal/pvc"
 	"github.com/abahmed/kwatch/internal/startup"
@@ -78,23 +76,20 @@ func RunWithClock(now func() time.Time) int {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
-	cfg, featurePlan, err := loadConfigAndFeaturePlan(now())
+	cfg, err := loadConfig()
 	if err != nil {
-		klog.ErrorS(err, "failed to load config and build feature plan")
+		klog.ErrorS(err, "failed to load config")
 		return 1
 	}
 	cfg.WatchStartTime = now()
-	// Install the plan before startup handling because startup failures may
-	// already produce a notification through the alert manager.
-	message.SetFeaturePlan(featurePlan)
 
 	klog.InfoS(fmt.Sprintf(constant.WelcomeMsg, version.Short()))
 
+	k8s.InitHTTPClient(&cfg.App)
 	if err := applyStartupCRD(ctx, cfg); err != nil {
 		klog.ErrorS(err, "failed to apply startup CRD configuration")
 		return 1
 	}
-	k8s.InitHTTPClient(&cfg.App)
 	k8sClient, err := client.NewKubernetesClient(&cfg.App)
 	if err != nil {
 		klog.ErrorS(err, "failed to create kubernetes client")
@@ -114,8 +109,7 @@ func RunWithClock(now func() time.Time) int {
 	clusterID, telemetryVersion := sm.TelemetryIdentity()
 
 	healthServer := health.NewHealthServer(cfg.HealthCheck)
-	healthServer.SetFeaturePlan(featurePlan)
-	securityMonitor := configureSecurityMonitor(cfg, k8sClient, now, featurePlan)
+	securityMonitor := configureSecurityMonitor(cfg, k8sClient, now)
 	healthServer.SetSecurityLister(securityMonitor)
 
 	am := sm.GetAlertManager()
@@ -140,7 +134,7 @@ func RunWithClock(now func() time.Time) int {
 		now,
 	)
 
-	persist := configurePersistence(ctx, stateMgr, featurePlan, now)
+	persist := configurePersistence(ctx, stateMgr, now)
 	tracker := persist.tracker
 	tracker.SetClock(now)
 
@@ -152,7 +146,6 @@ func RunWithClock(now func() time.Time) int {
 	})
 
 	insightEngine := insight.NewEngine(graph, tracker)
-	insightEngine.SetFeaturePlan(featurePlan)
 	feedbackStore := persist.feedbackStore
 	insightEngine.SetFeedbackStore(feedbackStore)
 	insightEngine.SetClock(now)
@@ -166,10 +159,8 @@ func RunWithClock(now func() time.Time) int {
 		insightEngine,
 		feedbackStore,
 		persist.saveFeedback,
-		featurePlan,
 	)
 	correlator.SetClock(now)
-	correlator.SetFeaturePlan(featurePlan)
 	insightEngine.SetActiveChecker(func(kind, namespace, name string) bool {
 		for _, inc := range correlator.ActiveIncidents() {
 			for _, key := range insight.IncidentGraphKeys(inc) {
@@ -220,21 +211,20 @@ func RunWithClock(now func() time.Time) int {
 	ctl.SetGraph(graph)
 	ctl.SetReadyFunc(func() { healthServer.SetReady(true) })
 
-	statusRun := configureStatusMonitor(cfg, ctl, graph, correlator, now, featurePlan)
+	statusRun := configureStatusMonitor(cfg, ctl, graph, correlator, now)
 
-	metricsRun := configureMetricsMonitor(cfg, ctl, k8sClient, correlator, featurePlan)
+	metricsRun := configureMetricsMonitor(cfg, ctl, k8sClient, correlator)
 
 	var tlsSweep func()
-	if cfg.TlsMonitor.Enabled && featurePlan.Enabled(feature.TLSMonitoring) {
+	if cfg.TlsMonitor.Enabled {
 		tlsSweep = h.SweepTLSSecrets
 	}
 
-	probeRun := configureProbeRunner(cfg, correlator, k8sClient, graph, featurePlan, now)
+	probeRun := configureProbeRunner(cfg, correlator, k8sClient, graph, now)
 
 	var kubeletRun func(context.Context)
-	if cfg.KubeletTelemetryMonitor.Enabled && featurePlan.Enabled(feature.KubeletTelemetry) {
+	if cfg.KubeletTelemetryMonitor.Enabled {
 		kubeletMonitor := kubeletmetrics.New(k8sClient, cfg.KubeletTelemetryMonitor, correlator)
-		kubeletMonitor.SetFeaturePlan(featurePlan)
 		if cfg.KubeletTelemetryMonitor.PersistState {
 			kubeletMonitor.SetStateStore(stateMgr)
 		}
@@ -242,13 +232,13 @@ func RunWithClock(now func() time.Time) int {
 		kubeletRun = kubeletMonitor.Start
 	}
 	var securityRun func(context.Context)
-	if featurePlan.Enabled(feature.RBACAudit) {
-		securityRun = securityMonitor.Start
-	}
-	controlPlaneRun := configureControlPlaneMonitor(cfg, k8sClient, healthServer, correlator, now, featurePlan)
+	securityRun = securityMonitor.Start
+	controlPlaneRun := configureControlPlaneMonitor(
+		cfg, k8sClient, healthServer, correlator, now,
+	)
 
-	storageRun := newStorageGraphRun(cfg, graph, correlator, ctl.NamespaceAllowed, featurePlan)
-	networkRun := newNetworkGraphRun(cfg, graph, ctl.NamespaceAllowed, featurePlan)
+	storageRun := newStorageGraphRun(cfg, graph, correlator, ctl.NamespaceAllowed)
+	networkRun := newNetworkGraphRun(cfg, graph, ctl.NamespaceAllowed)
 
 	deps := &serverDeps{
 		ctx:             ctx,

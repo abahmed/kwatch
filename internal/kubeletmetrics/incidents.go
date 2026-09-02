@@ -9,7 +9,6 @@ import (
 	"github.com/abahmed/kwatch/internal/constant"
 	"github.com/abahmed/kwatch/internal/correlation"
 	"github.com/abahmed/kwatch/internal/event"
-	"github.com/abahmed/kwatch/internal/feature"
 	"github.com/abahmed/kwatch/internal/model"
 )
 
@@ -133,21 +132,4 @@ func (m *Monitor) pruneSignalState() {
 			delete(m.baselines, key)
 		}
 	}
-}
-
-func (m *Monitor) summaryFeaturesEnabled() bool {
-	return m.featureEnabled(feature.PressureSignals) ||
-		m.featureEnabled(feature.NetworkErrors) ||
-		m.featureEnabled(feature.CPUUsage) ||
-		m.featureEnabled(feature.MemoryUsage) ||
-		m.featureEnabled(feature.StorageUsage)
-}
-
-func (m *Monitor) featureEnabled(id feature.ID) bool {
-	// A zero plan is retained as compatibility mode for callers that construct
-	// a Monitor directly. The application always supplies a complete plan.
-	if len(m.plan.Decisions) == 0 {
-		return true
-	}
-	return m.plan.Enabled(id)
 }

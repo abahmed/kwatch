@@ -13,7 +13,6 @@ import (
 	"github.com/abahmed/kwatch/internal/constant"
 	"github.com/abahmed/kwatch/internal/correlation"
 	"github.com/abahmed/kwatch/internal/event"
-	"github.com/abahmed/kwatch/internal/feature"
 	"github.com/abahmed/kwatch/internal/model"
 )
 
@@ -35,8 +34,7 @@ func (m *Monitor) checkSummary(
 		klog.V(2).InfoS("kubelet summary invalid", "node", node.Name)
 		return
 	}
-	if m.featureEnabled(feature.PressureSignals) &&
-		(data.Node.CPU.PSI != nil || data.Node.Memory.PSI != nil) {
+	if data.Node.CPU.PSI != nil || data.Node.Memory.PSI != nil {
 		psi := maxPSI(data.Node.CPU.PSI, data.Node.Memory.PSI)
 		if psi >= m.cfg.PSIWarningPercent {
 			reason, severity := constant.ReasonNodePSIHigh, model.SeverityWarning
@@ -65,14 +63,10 @@ func (m *Monitor) checkSummary(
 			)
 		}
 	}
-	if m.featureEnabled(feature.NetworkErrors) && data.Node.Network != nil {
+	if data.Node.Network != nil {
 		m.checkNetwork(node.Name, *data.Node.Network)
 	}
-	if m.featureEnabled(feature.CPUUsage) ||
-		m.featureEnabled(feature.MemoryUsage) ||
-		m.featureEnabled(feature.StorageUsage) {
-		m.checkPodUsage(data.Pods, pods)
-	}
+	m.checkPodUsage(data.Pods, pods)
 }
 
 func (m *Monitor) checkPodUsage(
@@ -108,7 +102,7 @@ func containerLimits(pod *corev1.Pod) map[string]corev1.ResourceList {
 func (m *Monitor) checkContainerUsage(
 	pod *corev1.Pod, container containerSummary, limit corev1.ResourceList,
 ) {
-	if m.featureEnabled(feature.MemoryUsage) && container.Memory != nil {
+	if container.Memory != nil {
 		memoryLimit := limit.Memory()
 		if memoryLimit != nil && !memoryLimit.IsZero() {
 			percent := float64(container.Memory.WorkingSetBytes) /
@@ -122,7 +116,7 @@ func (m *Monitor) checkContainerUsage(
 			)
 		}
 	}
-	if m.featureEnabled(feature.CPUUsage) && container.CPU != nil {
+	if container.CPU != nil {
 		if cpuLimit := limit.Cpu(); cpuLimit != nil && !cpuLimit.IsZero() {
 			percent := float64(container.CPU.UsageNanoCores) /
 				(cpuLimit.AsApproximateFloat64() * 1e9) * 100
@@ -135,7 +129,7 @@ func (m *Monitor) checkContainerUsage(
 			)
 		}
 	}
-	if m.featureEnabled(feature.StorageUsage) && container.RootFS != nil {
+	if container.RootFS != nil {
 		storageLimit := limit.StorageEphemeral()
 		if storageLimit != nil && !storageLimit.IsZero() {
 			percent := float64(container.RootFS.UsedBytes) /

@@ -1,6 +1,4 @@
-// Package feature contains the product capability catalog and entitlement
-// planner. It deliberately has no dependency on configuration or Kubernetes;
-// the composition root translates runtime configuration into a plan.
+// Package feature contains the product capability catalog used by kwatch.sh.
 package feature
 
 // ID is a stable capability identifier. IDs are API, persistence, and support
@@ -15,7 +13,6 @@ const (
 	PodOOM             ID = "core.pods.oom"
 	PodReadiness       ID = "core.pods.readiness"
 	PodRestarts        ID = "core.pods.restarts"
-	PodLifecycle       ID = "core.pods.lifecycle"
 	WorkloadDetection  ID = "core.detection.workloads"
 	DeploymentRollout  ID = "core.workloads.deployment-rollout"
 	StatefulSetRollout ID = "core.workloads.statefulset-rollout"
@@ -47,13 +44,10 @@ const (
 	RCAConfidence    ID = "intelligence.diagnosis.confidence"
 	RCAFeedback      ID = "intelligence.diagnosis.feedback"
 
-	Fingerprinting         ID = "incidents.identity.fingerprint"
-	ConfirmationWindow     ID = "incidents.lifecycle.confirmation"
 	Cooldown               ID = "incidents.lifecycle.cooldown"
 	SmartGrouping          ID = "incidents.lifecycle.grouping"
 	MassFailureSuppression ID = "incidents.lifecycle.mass-failure"
 	CascadeSuppression     ID = "incidents.lifecycle.cascade-suppression"
-	SeverityByBlastRadius  ID = "incidents.lifecycle.blast-radius-severity"
 	IncidentPersistence    ID = "incidents.persistence.active"
 	BaselinePersistence    ID = "incidents.persistence.baseline"
 	ChangePersistence      ID = "incidents.persistence.change-history"
@@ -77,7 +71,6 @@ const (
 	DNSProbes       ID = "probes.dns"
 	AutomaticProbes ID = "probes.services.automatic"
 	ProbeLatency    ID = "probes.latency"
-	ProbeHeaders    ID = "probes.http.custom-headers"
 
 	// Control plane and cluster resource signals.
 	ControlPlanePods        ID = "control-plane.pods"
@@ -86,29 +79,16 @@ const (
 	SchedulerHealth         ID = "control-plane.scheduler"
 	ControllerManagerHealth ID = "control-plane.controller-manager"
 	EtcdHealth              ID = "control-plane.etcd"
-	InformerHealth          ID = "control-plane.informer"
 	GenericStatus           ID = "cluster-resources.status"
 	CRDDiscovery            ID = "cluster-resources.crd-discovery"
 
 	// Security and admission.
-	EventFailureSecurity ID = "security.events.failures"
-	RBACAudit            ID = "security.rbac.audit"
-	AdmissionFailures    ID = "security.admission.failures"
-	TLSMonitoring        ID = "security.tls"
-	AuditLog             ID = "security.audit-log"
+	RBACAudit     ID = "security.rbac.audit"
+	TLSMonitoring ID = "security.tls"
+	AuditLog      ID = "security.audit-log"
 
 	// Delivery.
-	SingleDestination ID = "delivery.single-destination"
-	MultiDestination  ID = "delivery.multi-destination"
-	AdvancedRouting   ID = "delivery.routing.advanced"
-	Escalation        ID = "delivery.escalation"
-	CustomTemplates   ID = "delivery.templates"
-	Runbooks          ID = "delivery.runbooks"
-
-	// Reserved premium capabilities. Keeping these IDs in the same catalog
-	// makes the binary ready for a future license resolver without scattering
-	// product checks throughout monitors.
-	PremiumActiveProbes ID = "pro.active-probes"
-	PremiumRCAFeedback  ID = "pro.rca-feedback"
-	PremiumExports      ID = "pro.incident-export"
+	Escalation      ID = "delivery.escalation"
+	CustomTemplates ID = "delivery.templates"
+	Runbooks        ID = "delivery.runbooks"
 )

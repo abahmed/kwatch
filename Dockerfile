@@ -58,7 +58,7 @@ LABEL org.opencontainers.image.source="https://github.com/abahmed/kwatch" \
       org.opencontainers.image.version="${RELEASE_VERSION}" \
       org.opencontainers.image.revision="${GIT_COMMIT}" \
       org.opencontainers.image.created="${BUILD_DATE}" \
-      org.opencontainers.image.licenses="Elastic-2.0"
+      org.opencontainers.image.licenses="MIT"
 
 RUN apk add --no-cache ca-certificates && \
     adduser -D -u 1000 kwatch

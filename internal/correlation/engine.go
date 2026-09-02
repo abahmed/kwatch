@@ -14,7 +14,6 @@ import (
 	"github.com/abahmed/kwatch/internal/constant"
 	"github.com/abahmed/kwatch/internal/enricher"
 	"github.com/abahmed/kwatch/internal/event"
-	"github.com/abahmed/kwatch/internal/feature"
 	"github.com/abahmed/kwatch/internal/metrics"
 	"github.com/abahmed/kwatch/internal/model"
 )
@@ -142,7 +141,6 @@ type Engine struct {
 	// baselined HPA alone produced ~11k identical lines a day, drowning the
 	// signal in the log.
 	loggedSkips map[model.IncidentKey]string
-	plan        feature.Plan
 }
 
 func NewEngine(cfg Config) *Engine {
@@ -189,17 +187,6 @@ func (e *Engine) SetClock(now func() time.Time) {
 	if now != nil {
 		e.now = now
 	}
-}
-
-// SetFeaturePlan supplies the effective capability plan. A zero plan keeps
-// the correlation package usable by embedders and older callers.
-func (e *Engine) SetFeaturePlan(plan feature.Plan) { e.plan = plan }
-
-func (e *Engine) featureEnabled(id feature.ID) bool {
-	if len(e.plan.Decisions) == 0 {
-		return true
-	}
-	return e.plan.Enabled(id)
 }
 
 // Now returns the engine clock for integrations that create incidents on its

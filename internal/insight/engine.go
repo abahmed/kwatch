@@ -6,7 +6,6 @@ import (
 	"strings"
 	"time"
 
-	"github.com/abahmed/kwatch/internal/feature"
 	context "github.com/abahmed/kwatch/internal/graphcontext"
 	"github.com/abahmed/kwatch/internal/model"
 )
@@ -32,7 +31,6 @@ type Engine struct {
 	// tests do not depend on the wall clock.
 	now      func() time.Time
 	feedback *FeedbackStore
-	plan     feature.Plan
 }
 
 // SetActiveChecker supplies the correlation engine's live incident view. The
@@ -50,18 +48,6 @@ func (e *Engine) SetClock(now func() time.Time) {
 
 func (e *Engine) SetFeedbackStore(store *FeedbackStore) { e.feedback = store }
 
-// SetFeaturePlan supplies the immutable capability plan built by the
-// composition root. A zero plan is kept backward compatible for package
-// users that construct an insight engine directly.
-func (e *Engine) SetFeaturePlan(plan feature.Plan) { e.plan = plan }
-
-func (e *Engine) featureEnabled(id feature.ID) bool {
-	if len(e.plan.Decisions) == 0 {
-		return true
-	}
-	return e.plan.Enabled(id)
-}
-
 func (e *Engine) ObserveOutcome(inc *model.Incident, action model.IncidentAction, pattern string) {
 	if e.feedback != nil {
 		e.feedback.Observe(inc, action, pattern)
@@ -78,15 +64,9 @@ func NewEngine(
 func (e *Engine) Analyze(inc *model.Incident) *Insight {
 	ins := &Insight{}
 
-	if e.featureEnabled(feature.DirectDiagnosis) {
-		e.determineCause(inc, ins)
-	}
-	if e.featureEnabled(feature.ImpactAnalysis) {
-		e.describeImpact(inc, ins)
-	}
-	if e.featureEnabled(feature.ChangeDiff) {
-		e.checkRecentChanges(inc, ins)
-	}
+	e.determineCause(inc, ins)
+	e.describeImpact(inc, ins)
+	e.checkRecentChanges(inc, ins)
 	e.scoreInsight(inc, ins)
 
 	return ins
@@ -102,9 +82,7 @@ func (e *Engine) scoreInsight(inc *model.Incident, ins *Insight) {
 	evidenceBefore := e.appendObservedEvidence(inc, ins)
 	e.setPatternConfidence(ins)
 	e.applyInsightAdjustments(inc, ins, evidenceBefore)
-	if e.featureEnabled(feature.DirectDiagnosis) {
-		ins.NextSteps = nextSteps(inc)
-	}
+	ins.NextSteps = nextSteps(inc)
 }
 
 func (e *Engine) appendObservedEvidence(inc *model.Incident, ins *Insight) int {
@@ -139,9 +117,7 @@ func (e *Engine) appendObservedEvidence(inc *model.Incident, ins *Insight) int {
 		ins.Evidence = append(ins.Evidence, "a related resource changed shortly before the incident")
 	}
 	evidenceBefore := len(ins.Evidence)
-	if e.featureEnabled(feature.DependencyGraph) {
-		e.appendActiveDependencyEvidence(inc, ins)
-	}
+	e.appendActiveDependencyEvidence(inc, ins)
 	return evidenceBefore
 }
 
@@ -159,9 +135,7 @@ func (e *Engine) setPatternConfidence(ins *Insight) {
 }
 
 func (e *Engine) applyInsightAdjustments(inc *model.Incident, ins *Insight, evidenceBefore int) {
-	if e.featureEnabled(feature.RCAFeedback) {
-		e.applyFeedbackBias(inc, ins)
-	}
+	e.applyFeedbackBias(inc, ins)
 	if ins.Confidence > 0 && len(ins.Evidence) == 0 {
 		ins.Confidence *= 0.65
 	}
@@ -252,7 +226,7 @@ func (e *Engine) EnrichMassFailure(mf MassFailure) MassFailure {
 		return mf
 	}
 
-	if e.featureEnabled(feature.DependencyGraph) && e.graph != nil {
+	if e.graph != nil {
 		if cause, pattern := e.rootCauseOfRef(
 			parts[0],
 			parts[1],
@@ -262,7 +236,7 @@ func (e *Engine) EnrichMassFailure(mf MassFailure) MassFailure {
 		}
 	}
 
-	if e.featureEnabled(feature.ChangeDiff) && e.tracker != nil {
+	if e.tracker != nil {
 		recent := e.tracker.RecentChangesBeforeAt(15*time.Minute, e.now())
 		depKey := parts[0] + "/" + parts[1] + "/" + parts[2]
 		var changes []context.Change
