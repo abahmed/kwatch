@@ -71,12 +71,27 @@ type KwatchConfigSpec struct {
 	Runbooks                     map[string]string      `json:"runbooks,omitempty"`
 	AuditLog                     AuditLogConfig         `json:"auditLog,omitempty"`
 	Workers                      int                    `json:"workers,omitempty"`
+
+	AdaptiveThresholds bool              `json:"adaptiveThresholds,omitempty"`
+	Maintenance        MaintenanceConfig `json:"maintenance,omitempty"`
+	Telemetry          TelemetryConfig   `json:"telemetry,omitempty"`
+	ActiveProbeMonitor MonitorConfig     `json:"activeProbeMonitor,omitempty"`
 }
 
 // MonitorConfig is intentionally open-ended because monitor options evolve
 // independently from the CRD version. The CRD remains the source of truth for
 // validation while typed clients can round-trip newly added options safely.
 type MonitorConfig map[string]interface{}
+
+type MaintenanceConfig struct {
+	Enabled         bool   `json:"enabled,omitempty"`
+	Annotation      string `json:"annotation,omitempty"`
+	UntilAnnotation string `json:"untilAnnotation,omitempty"`
+}
+
+type TelemetryConfig struct {
+	Enabled bool `json:"enabled,omitempty"`
+}
 
 type AuditLogConfig struct {
 	Enabled bool   `json:"enabled,omitempty"`

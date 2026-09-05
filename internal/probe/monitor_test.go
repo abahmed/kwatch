@@ -1,13 +1,34 @@
 package probe
 
 import (
+	"net/http"
 	"testing"
+	"time"
 
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
+	"github.com/abahmed/kwatch/internal/config"
 	kwcontext "github.com/abahmed/kwatch/internal/graphcontext"
 )
+
+func TestNewWithClientUsesInjectedHTTPClient(t *testing.T) {
+	client := &http.Client{}
+	monitor := NewWithClient(
+		config.ActiveProbeMonitor{TimeoutSeconds: 7},
+		nil,
+		client,
+	)
+	if monitor.client == client {
+		t.Fatal("active probe monitor should not mutate the injected client")
+	}
+	if monitor.client.Timeout != 7*time.Second {
+		t.Fatalf("expected fallback timeout, got %s", monitor.client.Timeout)
+	}
+	if monitor.client.Transport != client.Transport {
+		t.Fatal("active probe monitor did not retain the shared transport")
+	}
+}
 
 func TestServiceDNS(t *testing.T) {
 	service, namespace, ok := serviceDNS("api.apps.svc.cluster.local.")

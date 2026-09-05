@@ -58,14 +58,30 @@ func (m *Monitor) SetNamespaceFilter(allowed func(string) bool) {
 }
 
 func New(cfg config.ActiveProbeMonitor, correlator *correlation.Engine) *Monitor {
+	return NewWithClient(cfg, correlator)
+}
+
+// NewWithClient builds a monitor with the application's shared HTTP client.
+// This keeps active probes aligned with proxy and TLS settings.
+func NewWithClient(
+	cfg config.ActiveProbeMonitor,
+	correlator *correlation.Engine,
+	clients ...*http.Client,
+) *Monitor {
 	timeout := time.Duration(cfg.TimeoutSeconds) * time.Second
 	if timeout <= 0 {
 		timeout = 5 * time.Second
 	}
+	client := &http.Client{Timeout: timeout}
+	if len(clients) > 0 && clients[0] != nil {
+		shared := *clients[0]
+		shared.Timeout = timeout
+		client = &shared
+	}
 	return &Monitor{
 		cfg: cfg, correlator: correlator,
 		watchAll: true,
-		client:   &http.Client{Timeout: timeout},
+		client:   client,
 		timeout:  timeout,
 		failures: make(map[string]int), successes: make(map[string]int),
 		autoTargets: make(map[string]autoProbeTarget),

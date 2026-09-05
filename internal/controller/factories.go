@@ -86,7 +86,20 @@ func newFactories(
 		opts = append(opts, informerMemoryOptions()...)
 		factories = append(factories, informers.NewSharedInformerFactoryWithOptions(client, resync, opts...))
 	}
-	return factorySet{perNamespace: factories}, factories
+	// Cluster-scoped resources must have their own factory. A namespaced
+	// factory is sufficient for cluster-scoped REST endpoints in some client-go
+	// versions, but relying on that makes multi-namespace scope silently lose
+	// namespace, PV, and storage-class watches.
+	clusterFactory := informers.NewSharedInformerFactoryWithOptions(
+		client,
+		resync,
+		informerMemoryOptions()...,
+	)
+	factories = append(factories, clusterFactory)
+	return factorySet{
+		perNamespace:  factories[:len(factories)-1],
+		clusterScoped: clusterFactory,
+	}, factories
 }
 
 // informerMemoryOptions removes server-managed field ownership metadata from

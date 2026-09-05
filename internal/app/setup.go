@@ -59,7 +59,11 @@ func configureProbeRunner(
 		!activeProbesEnabled(cfg.ActiveProbeMonitor) {
 		return nil
 	}
-	monitor := probe.New(cfg.ActiveProbeMonitor, correlator)
+	monitor := probe.NewWithClient(
+		cfg.ActiveProbeMonitor,
+		correlator,
+		k8s.GetDefaultClient(),
+	)
 	monitor.SetClock(now)
 	monitor.SetKubernetesClient(clientset)
 	monitor.SetGraph(graph)

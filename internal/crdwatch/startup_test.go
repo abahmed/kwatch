@@ -41,3 +41,33 @@ func TestRejectSecretConfigRejectsGlobalSecretFields(t *testing.T) {
 		assert.Error(t, rejectSecretConfig(spec))
 	}
 }
+
+func TestNormalizeLegacySpecUsesNestedThreshold(t *testing.T) {
+	spec := map[string]interface{}{
+		"pendingPodThreshold": float64(120),
+	}
+	normalizeLegacySpec(spec)
+
+	assert.NotContains(t, spec, "pendingPodThreshold")
+	assert.Equal(
+		t,
+		float64(120),
+		spec["pendingPodMonitor"].(map[string]interface{})["threshold"],
+	)
+}
+
+func TestNormalizeLegacySpecDoesNotOverrideNestedThreshold(t *testing.T) {
+	spec := map[string]interface{}{
+		"pendingPodThreshold": float64(120),
+		"pendingPodMonitor": map[string]interface{}{
+			"threshold": float64(30),
+		},
+	}
+	normalizeLegacySpec(spec)
+
+	assert.Equal(
+		t,
+		float64(30),
+		spec["pendingPodMonitor"].(map[string]interface{})["threshold"],
+	)
+}

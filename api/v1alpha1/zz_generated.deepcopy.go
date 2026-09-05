@@ -73,6 +73,19 @@ func (in *HealthCheckConfig) DeepCopy() *HealthCheckConfig {
 	return out
 }
 
+func (in *MaintenanceConfig) DeepCopyInto(out *MaintenanceConfig) {
+	*out = *in
+}
+
+func (in *MaintenanceConfig) DeepCopy() *MaintenanceConfig {
+	if in == nil {
+		return nil
+	}
+	out := new(MaintenanceConfig)
+	in.DeepCopyInto(out)
+	return out
+}
+
 func (in *HeartbeatMonitorConfig) DeepCopyInto(out *HeartbeatMonitorConfig) {
 	*out = *in
 }
@@ -220,6 +233,8 @@ func (in *KwatchConfigSpec) DeepCopyInto(out *KwatchConfigSpec) {
 	deepCopySpecMaps(in, out)
 	out.Correlation = in.Correlation
 	out.PvcMonitor = in.PvcMonitor
+	out.Maintenance = in.Maintenance
+	out.Telemetry = in.Telemetry
 	out.NodeMonitor = in.NodeMonitor
 	out.RolloutMonitor = in.RolloutMonitor
 	out.DaemonSetMonitor = in.DaemonSetMonitor
@@ -257,6 +272,7 @@ func deepCopySpecMaps(in, out *KwatchConfigSpec) {
 	out.NetworkPolicyMonitor = copyMonitor(in.NetworkPolicyMonitor)
 	out.ClusterResourceMonitor = copyMonitor(in.ClusterResourceMonitor)
 	out.RuntimeMetricsMonitor = copyMonitor(in.RuntimeMetricsMonitor)
+	out.ActiveProbeMonitor = copyMonitor(in.ActiveProbeMonitor)
 	out.KubeletTelemetryMonitor = copyMonitor(in.KubeletTelemetryMonitor)
 	out.Crd = copyMonitor(in.Crd)
 	out.SmartGrouping = copyMonitor(in.SmartGrouping)
@@ -306,6 +322,19 @@ func (in *PvcMonitorConfig) DeepCopy() *PvcMonitorConfig {
 		return nil
 	}
 	out := new(PvcMonitorConfig)
+	in.DeepCopyInto(out)
+	return out
+}
+
+func (in *TelemetryConfig) DeepCopyInto(out *TelemetryConfig) {
+	*out = *in
+}
+
+func (in *TelemetryConfig) DeepCopy() *TelemetryConfig {
+	if in == nil {
+		return nil
+	}
+	out := new(TelemetryConfig)
 	in.DeepCopyInto(out)
 	return out
 }

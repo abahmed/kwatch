@@ -39,3 +39,29 @@ func TestSilenceRuleDeepCopyIsNotAliased(t *testing.T) {
 	assert.Equal(t, []string{"KubeletNotReady"}, in.NodeReasons)
 	assert.Equal(t, []string{"draining"}, in.NodeMessages)
 }
+
+func TestKwatchConfigSpecDeepCopyCopiesMonitorFields(t *testing.T) {
+	in := &KwatchConfigSpec{
+		AdaptiveThresholds: true,
+		Maintenance: MaintenanceConfig{
+			Enabled:         true,
+			Annotation:      "kwatch.io/maintenance",
+			UntilAnnotation: "kwatch.io/maintenance-until",
+		},
+		Telemetry: TelemetryConfig{Enabled: true},
+		ActiveProbeMonitor: MonitorConfig{
+			"http": []interface{}{"https://example.test"},
+		},
+	}
+	out := in.DeepCopy()
+	out.ActiveProbeMonitor["http"].([]interface{})[0] = "changed"
+
+	assert.True(t, out.AdaptiveThresholds)
+	assert.Equal(t, in.Maintenance, out.Maintenance)
+	assert.Equal(t, in.Telemetry, out.Telemetry)
+	assert.Equal(
+		t,
+		"https://example.test",
+		in.ActiveProbeMonitor["http"].([]interface{})[0],
+	)
+}
