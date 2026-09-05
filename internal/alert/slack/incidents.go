@@ -1,8 +1,7 @@
 package slack
 
 import (
-	"context"
-
+	"github.com/abahmed/kwatch/internal/alert/util"
 	"github.com/abahmed/kwatch/internal/insight"
 	"github.com/abahmed/kwatch/internal/model"
 
@@ -126,7 +125,7 @@ func (s *Slack) postBlocks(
 		opts = append(opts, slackClient.MsgOptionTS(threadTS))
 	}
 	_, ts, err := s.apiClient.PostMessageContext(
-		context.Background(),
+		util.ProviderContext(s.Name()),
 		s.channel,
 		opts...,
 	)

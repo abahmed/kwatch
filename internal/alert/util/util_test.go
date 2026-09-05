@@ -1,10 +1,12 @@
 package util
 
 import (
+	"context"
 	"net/http"
 	"net/http/httptest"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/abahmed/kwatch/internal/message"
 	"github.com/abahmed/kwatch/internal/model"
@@ -186,5 +188,49 @@ func TestPostRateLimit(t *testing.T) {
 			"expected rate limit error to mention retry after, got %v",
 			err,
 		)
+	}
+}
+
+func TestPostUsesScopedProviderContext(t *testing.T) {
+	started := make(chan struct{})
+	finished := make(chan struct{})
+	srv := httptest.NewServer(
+		http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			close(started)
+			<-r.Context().Done()
+			close(finished)
+		}),
+	)
+	defer srv.Close()
+
+	ctx, cancel := context.WithCancel(context.Background())
+	done := make(chan error, 1)
+	go func() {
+		var err error
+		WithProviderContext("test", ctx, func() {
+			_, err = Post("test", srv.URL, nil, "", nil)
+		})
+		done <- err
+	}()
+
+	select {
+	case <-started:
+	case <-time.After(time.Second):
+		t.Fatal("request did not start")
+	}
+	cancel()
+
+	select {
+	case <-finished:
+	case <-time.After(time.Second):
+		t.Fatal("request context was not cancelled")
+	}
+	select {
+	case err := <-done:
+		if err == nil {
+			t.Fatal("Post returned nil after context cancellation")
+		}
+	case <-time.After(time.Second):
+		t.Fatal("Post did not return after context cancellation")
 	}
 }

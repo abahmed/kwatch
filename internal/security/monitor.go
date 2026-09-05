@@ -16,10 +16,11 @@ import (
 )
 
 type Permission struct {
-	Namespace string `json:"namespace,omitempty"`
-	Group     string `json:"group"`
-	Resource  string `json:"resource"`
-	Verb      string `json:"verb"`
+	Namespace      string `json:"namespace,omitempty"`
+	Group          string `json:"group"`
+	Resource       string `json:"resource"`
+	Verb           string `json:"verb"`
+	NonResourceURL string `json:"nonResourceURL,omitempty"`
 }
 
 type Status struct {
@@ -265,11 +266,21 @@ func securityState(status Status) string {
 }
 
 func (m *Monitor) allowed(ctx context.Context, permission Permission) (bool, error) {
-	group := permission.Group
 	request := &authorizationv1.SelfSubjectAccessReview{
-		Spec: authorizationv1.SelfSubjectAccessReviewSpec{ResourceAttributes: &authorizationv1.ResourceAttributes{
-			Namespace: permission.Namespace, Group: group, Resource: permission.Resource, Verb: permission.Verb,
-		}},
+		Spec: authorizationv1.SelfSubjectAccessReviewSpec{},
+	}
+	if permission.NonResourceURL != "" {
+		request.Spec.NonResourceAttributes = &authorizationv1.NonResourceAttributes{
+			Path: permission.NonResourceURL,
+			Verb: permission.Verb,
+		}
+	} else {
+		request.Spec.ResourceAttributes = &authorizationv1.ResourceAttributes{
+			Namespace: permission.Namespace,
+			Group:     permission.Group,
+			Resource:  permission.Resource,
+			Verb:      permission.Verb,
+		}
 	}
 	result, err := m.client.AuthorizationV1().SelfSubjectAccessReviews().Create(ctx, request, metav1.CreateOptions{})
 	if err != nil {

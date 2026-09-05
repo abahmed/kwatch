@@ -2,13 +2,13 @@ package app
 
 import (
 	"context"
-	"net/http"
 	"os"
 	"time"
 
 	"k8s.io/klog/v2"
 
 	"github.com/abahmed/kwatch/internal/config"
+	"github.com/abahmed/kwatch/internal/k8s"
 	"github.com/abahmed/kwatch/internal/state"
 	"github.com/abahmed/kwatch/internal/telemetry"
 )
@@ -30,7 +30,7 @@ func configureTelemetryRunner(
 		return nil
 	}
 	return func(ctx context.Context) {
-		client := &http.Client{Timeout: 2 * time.Second}
+		client := k8s.GetDefaultClient()
 		ticker := time.NewTicker(telemetry.WeeklyInterval)
 		defer ticker.Stop()
 		send := func() {

@@ -9,6 +9,7 @@ import (
 // of errors suitable for use in LoadConfig.
 func Validate(cfg *Config) []error {
 	var errs []error
+	errs = append(errs, validateApp(cfg.App)...)
 	errs = append(errs, validateCorrelation(cfg)...)
 	errs = append(errs, validateMonitors(cfg)...)
 	errs = append(errs, validatePvc(cfg)...)

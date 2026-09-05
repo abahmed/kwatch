@@ -16,8 +16,13 @@ metadata:
     app.kubernetes.io/managed-by: kwatch.sh
 rules:
 - apiGroups: [""]
-  resources: ["events", "nodes", "nodes/proxy", "pods", "pods/log", "persistentvolumeclaims", "configmaps", "secrets", "resourcequotas", "limitranges", "endpoints"]
+  resources: ["events", "nodes", "nodes/proxy", "pods", "pods/log", "pods/proxy", "persistentvolumeclaims", "configmaps", "secrets", "resourcequotas", "limitranges", "endpoints"]
   verbs: ["get", "watch", "list"]
+- apiGroups: ["metrics.k8s.io"]
+  resources: ["pods"]
+  verbs: ["get", "watch", "list"]
+- nonResourceURLs: ["/readyz", "/readyz/*"]
+  verbs: ["get"]
 - apiGroups: [""]
   resources: ["namespaces"]
   verbs: ["get", "list", "watch"]

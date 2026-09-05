@@ -176,12 +176,14 @@ func waitShutdown(
 	signal.Notify(sigCh, os.Interrupt, syscall.SIGTERM)
 	defer signal.Stop(sigCh)
 
+	exitCode := 0
 	select {
 	case <-sigCh:
 		klog.InfoS("shutting down gracefully...")
 	case err := <-errCh:
 		if err != nil {
 			klog.ErrorS(err, "controller startup failed, shutting down")
+			exitCode = 1
 		}
 	}
 	deps.cancel()
@@ -234,7 +236,7 @@ func waitShutdown(
 		}
 	}
 	deps.cleanup()
-	return 0
+	return exitCode
 }
 
 func waitController(deps *serverDeps) bool {

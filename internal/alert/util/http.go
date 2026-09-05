@@ -59,6 +59,13 @@ func providerContext(provider string) context.Context {
 	return ctx
 }
 
+// ProviderContext returns the delivery context currently associated with a
+// provider. SDK-backed providers use it when their client exposes a context
+// aware request method but does not accept our Request type.
+func ProviderContext(provider string) context.Context {
+	return providerContext(provider)
+}
+
 // Request is one call to a provider's HTTP API.
 //
 // Every provider that talks HTTP goes through Send. That is what makes status
@@ -141,7 +148,7 @@ func Send(r Request) ([]byte, error) {
 	if resp.StatusCode < 200 || resp.StatusCode > 299 {
 		err := fmt.Errorf(
 			"call to %s returned status code %d: %s",
-			r.Provider, resp.StatusCode, strings.TrimSpace(string(respBody)))
+			r.Provider, resp.StatusCode, responseSummary(respBody))
 		// A 4xx means the request is wrong, not that the server is busy.
 		// Retrying a bad payload three times just delays the alerts behind it.
 		if event.IsPermanentHTTPStatus(resp.StatusCode) {
@@ -153,6 +160,23 @@ func Send(r Request) ([]byte, error) {
 	return respBody, nil
 }
 
+func responseSummary(body []byte) string {
+	const maxSummaryBytes = 512
+	text := strings.TrimSpace(string(body))
+	lower := strings.ToLower(text)
+	for _, marker := range []string{
+		"token", "secret", "password", "api_key", "apikey", "access_token",
+	} {
+		if strings.Contains(lower, marker) {
+			return "[response body omitted because it may contain credentials]"
+		}
+	}
+	if len(text) > maxSummaryBytes {
+		return text[:maxSummaryBytes] + "…"
+	}
+	return text
+}
+
 // Post sends an HTTP POST to url with the given body, content type and extra
 // headers, returning the response body on success. It is Send for the common
 // case; see Request for the status handling.
@@ -162,7 +186,15 @@ func Post(
 	contentType string,
 	headers map[string]string,
 ) ([]byte, error) {
-	return PostContext(context.Background(), provider, url, body, contentType, headers)
+	return Send(
+		Request{
+			Provider:    provider,
+			URL:         url,
+			Body:        body,
+			ContentType: contentType,
+			Headers:     headers,
+		},
+	)
 }
 
 // PostContext is the context-aware form of Post. Providers that can receive

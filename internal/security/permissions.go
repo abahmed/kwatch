@@ -154,7 +154,14 @@ func addControlPlaneSecurityPermissions(
 	b.addCluster(
 		cfg.ControlPlaneMonitor.Enabled,
 		Permission{Resource: "pods"},
+		Permission{Resource: "pods/proxy"},
 	)
+	if cfg.ControlPlaneMonitor.Enabled {
+		b.cluster = append(b.cluster, Permission{
+			NonResourceURL: "/readyz",
+			Verb:           "get",
+		})
+	}
 	b.addCluster(
 		cfg.ControlPlaneMonitor.Enabled,
 		Permission{Resource: "apiservices", Group: "apiregistration.k8s.io"},

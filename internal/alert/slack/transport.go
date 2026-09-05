@@ -1,11 +1,11 @@
 package slack
 
 import (
-	"context"
 	"errors"
 	"net/http"
 	"strings"
 
+	"github.com/abahmed/kwatch/internal/alert/util"
 	"github.com/abahmed/kwatch/internal/event"
 	"github.com/abahmed/kwatch/internal/ratelimit"
 
@@ -31,7 +31,7 @@ func (s *Slack) sendAPIWithToken(msg *slackClient.WebhookMessage) error {
 		opts = append(opts, slackClient.MsgOptionBlocks(msg.Blocks.BlockSet...))
 	}
 	_, _, err := s.apiClient.PostMessageContext(
-		context.Background(),
+		util.ProviderContext(s.Name()),
 		s.channel,
 		opts...,
 	)

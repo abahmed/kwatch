@@ -241,10 +241,14 @@ func (m *Monitor) resourceAvailable(gvr schema.GroupVersionResource) bool {
 		gvr.GroupVersion().String(),
 	)
 	if err != nil {
-		// Keep absent optional APIs retryable so an API installed later is
-		// discovered without restarting kwatch. Forbidden APIs are skipped
-		// because retries cannot succeed without an RBAC change.
-		return !apierrors.IsForbidden(err)
+		// A missing or forbidden API must not create a reflector that will
+		// retry forever. Transient discovery failures should start the
+		// informer so its normal backoff can recover without a restart.
+		if apierrors.IsNotFound(err) || apierrors.IsForbidden(err) ||
+			apierrors.IsUnauthorized(err) || apierrors.IsMethodNotSupported(err) {
+			return false
+		}
+		return true
 	}
 	for _, resource := range resources.APIResources {
 		if resource.Name == gvr.Resource {

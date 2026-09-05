@@ -37,6 +37,9 @@ func severityValueError(mapName, key, value string) string {
 // returns a list of human-readable problems.
 func ValidateConfig(cfg *Config) []string {
 	var errs []string
+	for _, err := range validateApp(cfg.App) {
+		errs = append(errs, err.Error())
+	}
 
 	if len(cfg.Alert) == 0 {
 		errs = append(errs, "no alert providers configured")

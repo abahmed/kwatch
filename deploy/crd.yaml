@@ -240,6 +240,15 @@ spec:
                 runtimeMetricsMonitor:
                   type: object
                   x-kubernetes-preserve-unknown-fields: true
+                tlsMonitor:
+                  type: object
+                  properties:
+                    enabled:
+                      type: boolean
+                    threshold:
+                      type: integer
+                    criticalThreshold:
+                      type: integer
                 kubeletTelemetryMonitor:
                   type: object
                   x-kubernetes-preserve-unknown-fields: true

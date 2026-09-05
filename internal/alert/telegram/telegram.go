@@ -89,7 +89,13 @@ func (t *Telegram) Verify() error {
 
 // SendEvent sends event to the provider
 func (t *Telegram) SendEvent(e *event.Event) error {
-	klog.V(4).InfoS("sending to telegram event", "event", e)
+	klog.V(4).InfoS(
+		"sending to telegram event",
+		"namespace", e.Namespace,
+		"name", e.PodName,
+		"reason", e.Reason,
+		"action", e.Action,
+	)
 
 	reqBody := t.buildRequestBodyTelegram(e, t.chatId, "")
 	return t.sendByTelegramApi(reqBody)

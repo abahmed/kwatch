@@ -45,7 +45,10 @@ func InitHTTPClient(cfg *config.App) {
 	transport := defaultTransport()
 
 	if cfg.ProxyURL != "" {
-		if p, err := url.Parse(cfg.ProxyURL); err == nil {
+		p, err := url.Parse(cfg.ProxyURL)
+		if err != nil || p.Scheme == "" || p.Host == "" {
+			klog.ErrorS(err, "invalid outbound proxy URL")
+		} else {
 			transport.Proxy = http.ProxyURL(p)
 		}
 	}
@@ -58,10 +61,21 @@ func InitHTTPClient(cfg *config.App) {
 	}
 
 	if cfg.CABundlePath != "" {
-		if caCert, err := os.ReadFile(cfg.CABundlePath); err == nil {
+		caCert, err := os.ReadFile(cfg.CABundlePath)
+		if err != nil {
+			klog.ErrorS(
+				err, "could not read outbound CA bundle", "path", cfg.CABundlePath,
+			)
+		} else {
 			caCertPool := x509.NewCertPool()
-			caCertPool.AppendCertsFromPEM(caCert)
-			tlsCfg.RootCAs = caCertPool
+			if caCertPool.AppendCertsFromPEM(caCert) {
+				tlsCfg.RootCAs = caCertPool
+			} else {
+				klog.Warning(
+					"outbound CA bundle contains no valid certificates: ",
+					cfg.CABundlePath,
+				)
+			}
 		}
 	}
 

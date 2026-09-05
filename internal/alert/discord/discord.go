@@ -11,6 +11,7 @@ import (
 	"github.com/abahmed/kwatch/internal/constant"
 	"github.com/abahmed/kwatch/internal/event"
 	"github.com/abahmed/kwatch/internal/insight"
+	"github.com/abahmed/kwatch/internal/k8s"
 	"github.com/abahmed/kwatch/internal/message"
 	"github.com/abahmed/kwatch/internal/model"
 	"github.com/abahmed/kwatch/internal/ratelimit"
@@ -56,7 +57,12 @@ func NewDiscord(config map[string]interface{}, appCfg *config.App) *Discord {
 	webhookToken := webhookList[len(webhookList)-1]
 	webhookID := webhookList[len(webhookList)-2]
 
-	discordClient, _ := discordgo.New("")
+	discordClient, err := discordgo.New("")
+	if err != nil {
+		klog.ErrorS(err, "initializing discord client")
+		return nil
+	}
+	discordClient.Client = k8s.GetDefaultClient()
 
 	title, _ := config["title"].(string)
 	text, _ := config["text"].(string)
@@ -89,7 +95,13 @@ func (d *Discord) Verify() error {
 
 // SendEvent sends event to the provider
 func (d *Discord) SendEvent(ev *event.Event) error {
-	klog.V(4).InfoS("sending to discord event", "event", ev)
+	klog.V(4).InfoS(
+		"sending to discord event",
+		"namespace", ev.Namespace,
+		"name", ev.PodName,
+		"reason", ev.Reason,
+		"action", ev.Action,
+	)
 
 	// initialize fields with basic info
 	fields := []*discordgo.MessageEmbedField{}
@@ -204,7 +216,9 @@ func (d *Discord) SendEvent(ev *event.Event) error {
 					},
 				},
 			},
-		})
+		},
+		discordgo.WithContext(util.ProviderContext(d.Name())),
+	)
 	return wrapDiscordRateLimit(err)
 }
 
@@ -217,7 +231,9 @@ func (d *Discord) SendMessage(msg string) error {
 		false,
 		&discordgo.WebhookParams{
 			Content: msg,
-		})
+		},
+		discordgo.WithContext(util.ProviderContext(d.Name())),
+	)
 	return wrapDiscordRateLimit(err)
 }
 

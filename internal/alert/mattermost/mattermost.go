@@ -84,7 +84,13 @@ func (m *Mattermost) SendMessage(msg string) error {
 
 // SendEvent sends event to the provider
 func (m *Mattermost) SendEvent(e *event.Event) error {
-	klog.V(4).InfoS("sending to mattermost event", "event", e)
+	klog.V(4).InfoS(
+		"sending to mattermost event",
+		"namespace", e.Namespace,
+		"name", e.PodName,
+		"reason", e.Reason,
+		"action", e.Action,
+	)
 
 	b, err := m.buildMessage(e, nil)
 	if err != nil {

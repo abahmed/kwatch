@@ -174,7 +174,13 @@ func (w *Watcher) changed(obj interface{}) {
 	}
 	ready := w.ready
 	w.mu.Unlock()
-	if !ready || previous == version || w.restart == nil {
+	if !ready || w.restart == nil {
+		return
+	}
+	// An Add event after the initial cache seed is a configuration that was
+	// not present when startup configuration was applied. Treat it like an
+	// update so the process reloads the new object immediately.
+	if known && previous == version {
 		return
 	}
 	w.restartOnce.Do(func() {

@@ -1,12 +1,41 @@
 package config
 
 import (
+	"os"
 	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
+
+func TestValidateAppTransportSettings(t *testing.T) {
+	cfg := DefaultConfig()
+	cfg.App.ProxyURL = "not a URL"
+	errs := Validate(cfg)
+	assertErrorContains(t, errs, "app.proxyURL must be a valid URL")
+
+	path := t.TempDir() + "/ca.pem"
+	require.NoError(t, os.WriteFile(path, []byte("not PEM"), 0600))
+	cfg.App.ProxyURL = "http://proxy.example.test:8080"
+	cfg.App.CABundlePath = path
+	errs = Validate(cfg)
+	assertErrorContains(
+		t,
+		errs,
+		"app.caBundlePath does not contain a valid PEM certificate",
+	)
+}
+
+func assertErrorContains(t *testing.T, errs []error, want string) {
+	t.Helper()
+	for _, err := range errs {
+		if strings.Contains(err.Error(), want) {
+			return
+		}
+	}
+	t.Fatalf("expected validation error containing %q, got %v", want, errs)
+}
 
 func TestInvalidSeverityKeys(t *testing.T) {
 	m := map[string]string{

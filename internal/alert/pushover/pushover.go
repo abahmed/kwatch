@@ -49,7 +49,7 @@ func NewPushover(config map[string]interface{}, appCfg *config.App) *Pushover {
 		priority = int(v)
 	}
 
-	klog.InfoS("initializing pushover", "user", user, "title", title)
+	klog.InfoS("initializing pushover", "title", title)
 
 	return &Pushover{
 		url:      pushoverAPIURL,

@@ -152,10 +152,10 @@ func (h *HealthServer) Start(ctx context.Context) error {
 		mux.HandleFunc("/test-alert", h.testAlertHandler)
 		mux.HandleFunc("/deadletters", h.deadLettersHandler)
 	}
-	mux.HandleFunc("/kubelet", h.kubeletHandler)
-	mux.HandleFunc("/security", h.securityHandler)
-	mux.HandleFunc("/controlplane", h.controlPlaneHandler)
-	mux.HandleFunc("/informer", h.informerHandler)
+	mux.HandleFunc("/kubelet", h.guard(h.kubeletHandler))
+	mux.HandleFunc("/security", h.guard(h.securityHandler))
+	mux.HandleFunc("/controlplane", h.guard(h.controlPlaneHandler))
+	mux.HandleFunc("/informer", h.guard(h.informerHandler))
 
 	mux.Handle("/metrics", metrics.DefaultRegistry().Handler())
 

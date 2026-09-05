@@ -56,7 +56,7 @@ func NewNtfy(config map[string]interface{}, appCfg *config.App) *Ntfy {
 		priority = int(v)
 	}
 
-	klog.InfoS("initializing ntfy", "url", server, "topic", topic, "title", title)
+	klog.InfoS("initializing ntfy", "url", server, "title", title)
 
 	return &Ntfy{
 		url:      strings.TrimRight(server, "/") + "/" + strings.TrimLeft(topic, "/"),

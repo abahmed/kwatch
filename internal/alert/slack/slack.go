@@ -9,6 +9,7 @@ import (
 	"github.com/abahmed/kwatch/internal/config"
 	"github.com/abahmed/kwatch/internal/constant"
 	"github.com/abahmed/kwatch/internal/event"
+	"github.com/abahmed/kwatch/internal/k8s"
 
 	slackClient "github.com/slack-go/slack"
 	"k8s.io/klog/v2"
@@ -70,13 +71,16 @@ func NewSlack(config map[string]interface{}, appCfg *config.App) *Slack {
 			channel,
 		)
 		return &Slack{
-			token:            token,
-			channel:          channel,
-			title:            title,
-			text:             text,
-			compact:          compact,
-			appCfg:           appCfg,
-			apiClient:        slackClient.New(token),
+			token:   token,
+			channel: channel,
+			title:   title,
+			text:    text,
+			compact: compact,
+			appCfg:  appCfg,
+			apiClient: slackClient.New(
+				token,
+				slackClient.OptionHTTPClient(k8s.GetDefaultClient()),
+			),
 			maxThreadMapSize: 1000,
 		}
 	}
@@ -98,7 +102,11 @@ func NewSlack(config map[string]interface{}, appCfg *config.App) *Slack {
 		compact:          compact,
 		maxThreadMapSize: 1000,
 		appCfg:           appCfg,
-		send:             slackClient.PostWebhook,
+		send: func(url string, msg *slackClient.WebhookMessage) error {
+			return slackClient.PostWebhookCustomHTTPContext(
+				util.ProviderContext("Slack"), url, k8s.GetDefaultClient(), msg,
+			)
+		},
 	}
 }
 
@@ -121,7 +129,13 @@ func (s *Slack) Verify() error {
 
 // SendEvent sends event to the provider
 func (s *Slack) SendEvent(ev *event.Event) error {
-	klog.InfoS("sending to slack event", "event", ev)
+	klog.InfoS(
+		"sending to slack event",
+		"namespace", ev.Namespace,
+		"name", ev.PodName,
+		"reason", ev.Reason,
+		"action", ev.Action,
+	)
 
 	// compact mode: single-line text message
 	if s.compact {

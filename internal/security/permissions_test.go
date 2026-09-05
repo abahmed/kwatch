@@ -25,6 +25,9 @@ func TestPermissionsFollowEnabledMonitors(t *testing.T) {
 	if !hasPermission(namespaced, "pods/log", "") {
 		t.Fatal("enabled log enrichment requires pods/log get access")
 	}
+	if !hasNonResourcePermission(cluster, "/readyz", "get") {
+		t.Fatal("control-plane monitoring requires /readyz access")
+	}
 
 	cfg.RolloutMonitor.Enabled = true
 	cfg.TlsMonitor.Enabled = true
@@ -96,6 +99,17 @@ func resourceGroup(resource string) string {
 func hasPermission(permissions []Permission, resource, group string) bool {
 	for _, permission := range permissions {
 		if permission.Resource == resource && permission.Group == group {
+			return true
+		}
+	}
+	return false
+}
+
+func hasNonResourcePermission(
+	permissions []Permission, path, verb string,
+) bool {
+	for _, permission := range permissions {
+		if permission.NonResourceURL == path && permission.Verb == verb {
 			return true
 		}
 	}

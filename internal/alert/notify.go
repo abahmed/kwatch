@@ -69,7 +69,14 @@ func (a *AlertManager) Notify(msg string) {
 // NotifyEvent sends event to all providers
 
 func (a *AlertManager) NotifyEvent(event event.Event) {
-	klog.InfoS("sending event", "event", event)
+	klog.InfoS(
+		"sending event",
+		"resource", event.Resource,
+		"namespace", event.Namespace,
+		"name", event.PodName,
+		"reason", event.Reason,
+		"action", event.Action,
+	)
 
 	a.mu.Lock()
 	entries := make([]providerEntry, len(a.entries))

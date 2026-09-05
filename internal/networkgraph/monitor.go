@@ -165,11 +165,14 @@ func (m *Monitor) resourceAvailable(gvr schema.GroupVersionResource) bool {
 		gvr.GroupVersion().String(),
 	)
 	if err != nil {
-		// Keep an informer for an API that is currently absent. The
-		// reflector will retry and pick it up if the optional API is
-		// installed later in this process lifetime. Forbidden is different:
-		// retrying it forever only creates noise without an RBAC change.
-		return !apierrors.IsForbidden(err)
+		// A missing or forbidden API must not create a reflector that will
+		// retry forever. Transient discovery failures should start the
+		// informer so its normal backoff can recover without a restart.
+		if apierrors.IsNotFound(err) || apierrors.IsForbidden(err) ||
+			apierrors.IsUnauthorized(err) || apierrors.IsMethodNotSupported(err) {
+			return false
+		}
+		return true
 	}
 	for _, resource := range resources.APIResources {
 		if resource.Name == gvr.Resource {
