@@ -9,6 +9,7 @@ import (
 	"sync"
 	"time"
 
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime/schema"
@@ -240,7 +241,10 @@ func (m *Monitor) resourceAvailable(gvr schema.GroupVersionResource) bool {
 		gvr.GroupVersion().String(),
 	)
 	if err != nil {
-		return false
+		// Keep absent optional APIs retryable so an API installed later is
+		// discovered without restarting kwatch. Forbidden APIs are skipped
+		// because retries cannot succeed without an RBAC change.
+		return !apierrors.IsForbidden(err)
 	}
 	for _, resource := range resources.APIResources {
 		if resource.Name == gvr.Resource {

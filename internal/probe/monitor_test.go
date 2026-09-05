@@ -62,6 +62,21 @@ func TestServiceProbesBuildStableTarget(t *testing.T) {
 	}
 }
 
+func TestServiceProbesSkipNonTCPPorts(t *testing.T) {
+	service := &corev1.Service{
+		ObjectMeta: metav1.ObjectMeta{Name: "dns", Namespace: "apps"},
+		Spec: corev1.ServiceSpec{Ports: []corev1.ServicePort{
+			{Name: "dns", Port: 53, Protocol: corev1.ProtocolUDP},
+			{Name: "http", Port: 8080, Protocol: corev1.ProtocolTCP},
+		}},
+	}
+
+	probes := serviceProbes(service)
+	if len(probes) != 1 || probes[0].port.Port != 8080 {
+		t.Fatalf("unexpected probes: %+v", probes)
+	}
+}
+
 func TestGraphNodeStillUsedBySiblingProbe(t *testing.T) {
 	current := map[string]autoProbeTarget{
 		"auto-service/apps/api/80": {

@@ -186,14 +186,16 @@ func startIncidentSaver(
 	}
 }
 
-func waitIncidentSaver(deps *serverDeps) {
+func waitIncidentSaver(deps *serverDeps) bool {
 	if deps.incidentDone == nil {
-		return
+		return true
 	}
 	select {
 	case <-deps.incidentDone:
+		return true
 	case <-time.After(10 * time.Second):
 		klog.InfoS("timed out waiting for incident saver")
+		return false
 	}
 }
 
@@ -208,14 +210,16 @@ func saveFinalIncidentSnapshot(deps *serverDeps) {
 	)
 }
 
-func waitFeedbackSaver(deps *serverDeps) {
+func waitFeedbackSaver(deps *serverDeps) bool {
 	if deps.feedbackDone == nil {
-		return
+		return true
 	}
 	select {
 	case <-deps.feedbackDone:
+		return true
 	case <-time.After(10 * time.Second):
 		klog.InfoS("timed out waiting for RCA feedback saver")
+		return false
 	}
 }
 

@@ -185,14 +185,37 @@ func waitShutdown(
 		}
 	}
 	deps.cancel()
-	waitController(deps)
+	controllerStopped := waitController(deps)
 
-	// Every producer must stop before the final snapshot. A timeout here lets
-	// a slow monitor mutate correlation state after it has been persisted.
-	wg.Wait()
-	waitIncidentSaver(deps)
-	waitFeedbackSaver(deps)
-	saveFinalIncidentSnapshot(deps)
+	// Every producer should stop before the final snapshot. Keep a hard bound
+	// so a misbehaving dependency cannot prevent the process from terminating.
+	backgroundDone := make(chan struct{})
+	go func() {
+		wg.Wait()
+		close(backgroundDone)
+	}()
+	backgroundStopped := false
+	select {
+	case <-backgroundDone:
+		backgroundStopped = true
+	case <-time.After(10 * time.Second):
+		klog.InfoS("timed out waiting for background tasks")
+	}
+	if controllerStopped && backgroundStopped {
+		incidentStopped := waitIncidentSaver(deps)
+		feedbackStopped := waitFeedbackSaver(deps)
+		if incidentStopped && feedbackStopped {
+			saveFinalIncidentSnapshot(deps)
+		} else {
+			klog.InfoS(
+				"skipping final incident snapshot while savers are still running",
+			)
+		}
+	} else {
+		klog.InfoS(
+			"skipping final incident snapshot while workers are still running",
+		)
+	}
 
 	select {
 	case <-deps.alertManager.Done():
@@ -214,12 +237,18 @@ func waitShutdown(
 	return 0
 }
 
-func waitController(deps *serverDeps) {
+func waitController(deps *serverDeps) bool {
 	if deps.controllerDone == nil {
-		return
+		return true
 	}
 	// The controller owns the event workers that can still mutate the
 	// correlator. Its Run method observes the canceled context, so waiting here
 	// is required before taking the final snapshot.
-	<-deps.controllerDone
+	select {
+	case <-deps.controllerDone:
+		return true
+	case <-time.After(10 * time.Second):
+		klog.InfoS("timed out waiting for controller")
+		return false
+	}
 }

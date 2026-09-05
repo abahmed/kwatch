@@ -19,15 +19,13 @@ import (
 
 const (
 	defaultTeamsTitle = "&#9937; Kwatch detected a crash in pod"
-	defaultRetryDelay = 5
 )
 
 type Teams struct {
 	// The HTTP trigger URL for the Power Automate flow
-	webhook    string
-	title      string
-	text       string
-	retryDelay int
+	webhook string
+	title   string
+	text    string
 
 	// reference for general app configuration
 	appCfg *config.App
@@ -52,17 +50,11 @@ func NewTeams(config map[string]interface{}, appCfg *config.App) *Teams {
 	title, _ := config["title"].(string)
 	text, _ := config["text"].(string)
 
-	retryDelay, dlOk := config["retryDelay"].(int)
-	if !dlOk || retryDelay == 0 {
-		retryDelay = defaultRetryDelay
-	}
-
 	return &Teams{
-		webhook:    webhook,
-		title:      title,
-		text:       text,
-		retryDelay: retryDelay,
-		appCfg:     appCfg,
+		webhook: webhook,
+		title:   title,
+		text:    text,
+		appCfg:  appCfg,
 	}
 }
 

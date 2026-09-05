@@ -11,6 +11,9 @@ kind: ClusterRole
 apiVersion: rbac.authorization.k8s.io/v1
 metadata:
   name: kwatch
+  labels:
+    app.kubernetes.io/instance: kwatch
+    app.kubernetes.io/managed-by: kwatch.sh
 rules:
 - apiGroups: [""]
   resources: ["events", "nodes", "nodes/proxy", "pods", "pods/log", "persistentvolumeclaims", "configmaps", "secrets", "resourcequotas", "limitranges", "endpoints"]
@@ -87,12 +90,18 @@ kind: ServiceAccount
 metadata:
   name: kwatch
   namespace: kwatch
+  labels:
+    app.kubernetes.io/instance: kwatch
+    app.kubernetes.io/managed-by: kwatch.sh
 automountServiceAccountToken: true
 ---
 apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRoleBinding
 metadata:
   name: kwatch
+  labels:
+    app.kubernetes.io/instance: kwatch
+    app.kubernetes.io/managed-by: kwatch.sh
 roleRef:
   apiGroup: rbac.authorization.k8s.io
   kind: ClusterRole
@@ -107,6 +116,9 @@ apiVersion: rbac.authorization.k8s.io/v1
 metadata:
   name: kwatch-configmap-manager
   namespace: kwatch
+  labels:
+    app.kubernetes.io/instance: kwatch
+    app.kubernetes.io/managed-by: kwatch.sh
 rules:
 - apiGroups: [""]
   resources: ["configmaps"]
@@ -122,6 +134,9 @@ kind: RoleBinding
 metadata:
   name: kwatch-configmap-manager
   namespace: kwatch
+  labels:
+    app.kubernetes.io/instance: kwatch
+    app.kubernetes.io/managed-by: kwatch.sh
 roleRef:
   apiGroup: rbac.authorization.k8s.io
   kind: Role
@@ -136,6 +151,9 @@ kind: Deployment
 metadata:
   name: kwatch
   namespace: kwatch
+  labels:
+    app.kubernetes.io/instance: kwatch
+    app.kubernetes.io/managed-by: kwatch.sh
 spec:
   replicas: 1
   strategy:
@@ -143,10 +161,12 @@ spec:
   selector:
     matchLabels:
       app: kwatch
+      app.kubernetes.io/instance: kwatch
   template:
     metadata:
       labels:
         app: kwatch
+        app.kubernetes.io/instance: kwatch
     spec:
       restartPolicy: Always
       serviceAccountName: kwatch

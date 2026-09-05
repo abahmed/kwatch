@@ -52,6 +52,7 @@ clusterResourceMonitor.sustainedMinutes|Monitors|Minutes a terminating namespace
 clusterResourceMonitor.nodeLeaseStaleSeconds|Monitors|Seconds without a node lease renewal before reporting a stale heartbeat.|active|
 heartbeatMonitor.enabled|Monitors|Send a periodic external dead-man heartbeat.|active|
 heartbeatMonitor.interval|Monitors|Seconds between heartbeat notifications.|active|
+heartbeatMonitor.url|Security|External dead-man heartbeat URL; stored only through a mounted Secret.|secret|
 scheduleMonitor.enabled|Monitors|Include scheduling delay and unschedulable diagnostics.|active|
 oomMonitor.enabled|Monitors|Track repeating OOM kills independently from current pod state.|active|
 oomMonitor.threshold|Monitors|OOM kills within the window before raising a repeating-OOM incident.|active|
@@ -119,6 +120,7 @@ maintenance.enabled|Operations|Honor maintenance annotations while preserving cl
 maintenance.annotation|Operations|Annotation that marks deliberate maintenance on a resource.|active|
 maintenance.untilAnnotation|Operations|Optional annotation containing the maintenance expiry timestamp.|active|
 healthCheck.diagnostics|Operations|Expose diagnostic endpoints such as incidents and test-alert.|active|
+healthCheck.diagnosticsToken|Security|Bearer token for diagnostic endpoints; stored only through a mounted Secret.|secret|
 healthCheck.pprof|Operations|Expose Go profiling endpoints; keep disabled in production.|active|
 app.clusterName|Operations|Cluster name shown in notifications.|active|
 app.proxyURL|Operations|Optional proxy for outbound provider requests.|active|

@@ -14,9 +14,7 @@ import (
 const catalogHeader = "# kwatch config catalog v1"
 
 var managerHiddenPaths = map[string]bool{
-	"alert":                        true,
-	"healthCheck.diagnosticsToken": true,
-	"heartbeatMonitor.url":         true,
+	"alert": true,
 }
 
 type metadata struct {

@@ -76,6 +76,7 @@ const providerCatalogData = "" +
 	"ntfy|ntfy|url|string|false|false|url|https://ntfy.sh|Server URL (def" +
 	"ault: https://ntfy.sh)\n" +
 	"ntfy|ntfy|token|string|false|true|||Optional auth token\n" +
+	"ntfy|ntfy|title|string|false|false|||Custom title\n" +
 	"ntfy|ntfy|priority|integer|false|false|integer|4|Priority 1-5 (defau" +
 	"lt: 4)\n" +
 	"pushover|Pushover|token|string|true|true|||Application token\n" +
@@ -103,8 +104,10 @@ const providerCatalogData = "" +
 	"e.g. self-hosted Gitea)\n" +
 	"zapier|Zapier|url|string|true|true|url||Zap webhook URL\n" +
 	"zapier|Zapier|token|string|false|true|||Optional token\n" +
+	"zapier|Zapier|title|string|false|false|||Custom title\n" +
 	"n8n|n8n|url|string|true|true|url||Workflow webhook URL\n" +
 	"n8n|n8n|token|string|false|true|||Optional auth header value\n" +
+	"n8n|n8n|title|string|false|false|||Custom title\n" +
 	"ifttt|IFTTT|key|string|true|true|||Webhooks key\n" +
 	"ifttt|IFTTT|event|string|false|false||kwatch|Event name (default: kw" +
 	"atch)\n" +
@@ -116,6 +119,7 @@ const providerCatalogData = "" +
 	"zulip|Zulip|url|string|false|false|url|https://zulip.example.com/api" +
 	"/v1/messages|Server URL (default: https://zulip.example.com/api/v1/m" +
 	"essages)\n" +
+	"zulip|Zulip|title|string|false|false|||Custom title\n" +
 	"homeassistant|Home Assistant|token|string|true|true|||Long-lived acc" +
 	"ess token\n" +
 	"homeassistant|Home Assistant|url|string|false|false|url|http://local" +
@@ -133,6 +137,7 @@ const providerCatalogData = "" +
 	"(default: datadoghq.com)\n" +
 	"datadog|Datadog|applicationKey|string|false|true|||Optional applicat" +
 	"ion key\n" +
+	"datadog|Datadog|title|string|false|false|||Custom title\n" +
 	"datadog|Datadog|alertType|string|false|false||error|Alert type (defa" +
 	"ult: error)\n" +
 	"datadog|Datadog|tags|list|false|false|list||Comma-separated tags\n" +

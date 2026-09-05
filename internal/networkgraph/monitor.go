@@ -6,6 +6,7 @@ import (
 	"strings"
 	"time"
 
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/client-go/discovery"
@@ -164,7 +165,11 @@ func (m *Monitor) resourceAvailable(gvr schema.GroupVersionResource) bool {
 		gvr.GroupVersion().String(),
 	)
 	if err != nil {
-		return false
+		// Keep an informer for an API that is currently absent. The
+		// reflector will retry and pick it up if the optional API is
+		// installed later in this process lifetime. Forbidden is different:
+		// retrying it forever only creates noise without an RBAC change.
+		return !apierrors.IsForbidden(err)
 	}
 	for _, resource := range resources.APIResources {
 		if resource.Name == gvr.Resource {

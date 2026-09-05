@@ -88,8 +88,8 @@ Run the manager again after installation to configure alerts, change settings,
 upgrade, check status, or uninstall kwatch.
 
 > 🧭 **Recommended:** use `kwatch.sh` for the normal installation. This README
-> intentionally does not include Helm or `kubectl apply` commands. If you need
-> manual, Helm, or GitOps steps, see the [installation guide](https://kwatch.dev/docs/installation).
+> intentionally does not include Helm or `kubectl apply` commands. Manual,
+> Helm, and direct manifest lifecycles are not supported; use the manager.
 
 ## 🔔 What an alert looks like
 

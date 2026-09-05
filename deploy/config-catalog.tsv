@@ -142,3 +142,5 @@ ignoreLogPatterns|list|legacy|Compatibility|Legacy log suppression field.|deprec
 ignoreContainerMessages|list|legacy|Compatibility|Legacy container-message suppression field.|deprecated|silences
 ignoreNodeReasons|list|legacy|Compatibility|Legacy node-reason suppression field.|deprecated|silences
 ignoreNodeMessages|list|legacy|Compatibility|Legacy node-message suppression field.|deprecated|silences
+heartbeatMonitor.url|string|empty|Security|External dead-man heartbeat URL; stored only through a mounted Secret.|secret|
+healthCheck.diagnosticsToken|string|empty|Security|Bearer token for diagnostic endpoints; stored only through a mounted Secret.|secret|

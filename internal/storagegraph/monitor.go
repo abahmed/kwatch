@@ -6,6 +6,7 @@ import (
 	"strings"
 	"time"
 
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/client-go/discovery"
@@ -133,7 +134,10 @@ func (m *Monitor) resourceAvailable(gvr schema.GroupVersionResource) bool {
 		gvr.GroupVersion().String(),
 	)
 	if err != nil {
-		return false
+		// Optional APIs may be installed after kwatch starts. Let the
+		// informer retry absent APIs, but avoid endless retries for RBAC
+		// denials that cannot change without an operator action.
+		return !apierrors.IsForbidden(err)
 	}
 	for _, resource := range resources.APIResources {
 		if resource.Name == gvr.Resource {

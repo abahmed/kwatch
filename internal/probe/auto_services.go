@@ -137,7 +137,8 @@ func serviceProbes(service *corev1.Service) []serviceProbe {
 	host := service.Name + "." + service.Namespace + ".svc"
 	probes := make([]serviceProbe, 0, len(service.Spec.Ports))
 	for _, port := range service.Spec.Ports {
-		if port.Port <= 0 {
+		if port.Port <= 0 ||
+			(port.Protocol != "" && port.Protocol != corev1.ProtocolTCP) {
 			continue
 		}
 		owner := fmt.Sprintf(

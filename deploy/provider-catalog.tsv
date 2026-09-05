@@ -49,6 +49,7 @@ gotify|Gotify|title|string|false|false|||Custom title
 ntfy|ntfy|topic|string|true|true|||Topic to publish to
 ntfy|ntfy|url|string|false|false|url|https://ntfy.sh|Server URL (default: https://ntfy.sh)
 ntfy|ntfy|token|string|false|true|||Optional auth token
+ntfy|ntfy|title|string|false|false|||Custom title
 ntfy|ntfy|priority|integer|false|false|integer|4|Priority 1-5 (default: 4)
 pushover|Pushover|token|string|true|true|||Application token
 pushover|Pushover|user|string|true|true|||User or group key
@@ -70,8 +71,10 @@ gitea|Gitea|repo|string|true|false|||Repository name
 gitea|Gitea|url|string|false|false|url||Optional endpoint override (e.g. self-hosted Gitea)
 zapier|Zapier|url|string|true|true|url||Zap webhook URL
 zapier|Zapier|token|string|false|true|||Optional token
+zapier|Zapier|title|string|false|false|||Custom title
 n8n|n8n|url|string|true|true|url||Workflow webhook URL
 n8n|n8n|token|string|false|true|||Optional auth header value
+n8n|n8n|title|string|false|false|||Custom title
 ifttt|IFTTT|key|string|true|true|||Webhooks key
 ifttt|IFTTT|event|string|false|false||kwatch|Event name (default: kwatch)
 teamsworkflow|Teams Workflow|webhook|string|true|true|url||Power Automate / Teams Workflow URL
@@ -79,6 +82,7 @@ zulip|Zulip|email|string|true|false|||Bot email
 zulip|Zulip|token|string|true|true|||Bot API key
 zulip|Zulip|channel|string|true|false|||Channel/stream to post to
 zulip|Zulip|url|string|false|false|url|https://zulip.example.com/api/v1/messages|Server URL (default: https://zulip.example.com/api/v1/messages)
+zulip|Zulip|title|string|false|false|||Custom title
 homeassistant|Home Assistant|token|string|true|true|||Long-lived access token
 homeassistant|Home Assistant|url|string|false|false|url|http://localhost:8123|Server URL (default: http://localhost:8123)
 homeassistant|Home Assistant|service|string|false|false||notify|Notification service (default: notify)
@@ -91,6 +95,7 @@ splunk|Splunk|host|string|false|false|||Host name (optional)
 datadog|Datadog|apiKey|string|true|true|||API key
 datadog|Datadog|site|string|false|false||datadoghq.com|Datadog site (default: datadoghq.com)
 datadog|Datadog|applicationKey|string|false|true|||Optional application key
+datadog|Datadog|title|string|false|false|||Custom title
 datadog|Datadog|alertType|string|false|false||error|Alert type (default: error)
 datadog|Datadog|tags|list|false|false|list||Comma-separated tags
 newrelic|New Relic|apiKey|string|true|true|||User API key

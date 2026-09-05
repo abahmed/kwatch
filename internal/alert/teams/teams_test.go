@@ -260,7 +260,7 @@ func TestBuildRequestBodyMessage(t *testing.T) {
 	assert.Empty(t, result.Attachment)
 }
 
-func TestNewTeamsWithCustomRetrySettings(t *testing.T) {
+func TestNewTeamsIgnoresLegacyRetrySettings(t *testing.T) {
 	configMap := map[string]interface{}{
 		"webhook":    "http://example.com",
 		"maxRetries": 5,
@@ -269,7 +269,6 @@ func TestNewTeamsWithCustomRetrySettings(t *testing.T) {
 	appCfg := &config.App{ClusterName: "dev"}
 	teams := NewTeams(configMap, appCfg)
 	assert.NotNil(t, teams)
-	assert.Equal(t, 10, teams.retryDelay)
 }
 
 func TestBuildRequestBodyTeamsGolden(t *testing.T) {
