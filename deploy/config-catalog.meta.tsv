@@ -5,7 +5,6 @@ maxRecentLogLines|Alerts|Maximum recent log lines attached to an incident.|activ
 containerRestartThreshold|Alerts|Alert when a container reaches this cumulative restart count; zero disables it.|active|
 includeEvents|Alerts|Include recent Kubernetes events in incident messages.|active|
 includeLogs|Alerts|Include recent container logs in incident messages.|active|
-alert|Alerts|Notification provider configuration stored in the Kubernetes Secret.|active|
 namespaces|Scope|Comma-separated namespaces to watch; leave empty to watch every namespace.|active|
 namespaceSelector|Scope|Kubernetes label selector used to choose namespaces.|active|
 reasons|Scope|Comma-separated event reasons to allow or exclude with a leading !.|active|
@@ -30,7 +29,7 @@ nodeMonitor.sustainedMinutes|Monitors|Minutes a node condition must persist befo
 pvcMonitor.enabled|Monitors|Watch mounted PVC usage and storage pressure.|active|
 pvcMonitor.interval|Monitors|Minutes between PVC usage checks.|active|
 pvcMonitor.threshold|Monitors|PVC usage percentage that creates a warning.|active|
-pvcMonitor.criticalThreshold|Monitors|PVC usage percentage that creates a critical alert.|active|
+pvcMonitor.criticalThreshold|Monitors|PVC usage percentage that creates a high-severity alert.|active|
 pvcMonitor.clearThreshold|Monitors|PVC usage percentage below which an alert resolves.|active|
 rolloutMonitor.enabled|Monitors|Watch Deployments for stuck rollouts.|active|
 rolloutMonitor.sustainedMinutes|Monitors|Minutes a Deployment may remain unavailable before alerting.|active|
@@ -53,7 +52,6 @@ clusterResourceMonitor.sustainedMinutes|Monitors|Minutes a terminating namespace
 clusterResourceMonitor.nodeLeaseStaleSeconds|Monitors|Seconds without a node lease renewal before reporting a stale heartbeat.|active|
 heartbeatMonitor.enabled|Monitors|Send a periodic external dead-man heartbeat.|active|
 heartbeatMonitor.interval|Monitors|Seconds between heartbeat notifications.|active|
-heartbeatMonitor.url|Monitors|Optional heartbeat endpoint URL.|active|
 scheduleMonitor.enabled|Monitors|Include scheduling delay and unschedulable diagnostics.|active|
 oomMonitor.enabled|Monitors|Track repeating OOM kills independently from current pod state.|active|
 oomMonitor.threshold|Monitors|OOM kills within the window before raising a repeating-OOM incident.|active|
@@ -81,7 +79,7 @@ runtimeMetricsMonitor.cpuWarningPercent|Monitors|CPU usage warning percentage wh
 runtimeMetricsMonitor.cpuCriticalPercent|Monitors|CPU usage critical percentage when metrics.k8s.io is available.|active|
 clusterAutoscalerMonitor.enabled|Monitors|Watch built-in cluster-autoscaler evidence from Kubernetes resources and events.|active|
 tlsMonitor.threshold|Monitors|Days before certificate expiry to warn.|active|
-tlsMonitor.criticalThreshold|Monitors|Days before certificate expiry for a critical alert.|active|
+tlsMonitor.criticalThreshold|Monitors|Days before certificate expiry for a high-severity alert.|active|
 controlPlaneMonitor.intervalSeconds|Monitors|Seconds between API and control-plane health checks.|active|
 controlPlaneMonitor.apiServerLatencyWarningMs|Monitors|API readyz latency warning threshold in milliseconds.|active|
 controlPlaneMonitor.failureThreshold|Monitors|Consecutive control-plane failures before alerting.|active|
@@ -130,8 +128,7 @@ app.insecureSkipTLSVerify|Security|Skip TLS verification for outbound providers;
 app.caBundlePath|Security|Path to a mounted PEM bundle for outbound provider TLS.|active|
 healthCheck.enabled|Operations|Expose the built-in health endpoint.|active|
 healthCheck.port|Operations|Port for health and optional diagnostic endpoints.|active|
-healthCheck.diagnosticsToken|Security|Optional Bearer token required for diagnostic endpoints.|active|
-crd.enabled|Operations|Watch KwatchConfig and supported CRD status conditions for live changes; enabled by the interactive installer after installing the CRD.|active|
+crd.enabled|Operations|Watch KwatchConfig and supported CRD status conditions; restart kwatch when configuration changes; enabled by the interactive installer after installing the CRD.|active|
 crd.failureConditions|Operations|Additional CRD condition rules such as Ready=False or Degraded=True.|active|
 crd.graphReferences|Operations|Optional CRD references used by dependency and impact analysis.|active|
 auditLog.enabled|Operations|Write structured incident lifecycle records to the configured audit sink.|active|

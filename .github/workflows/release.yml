@@ -334,7 +334,9 @@ jobs:
           grep -Eq '^# kwatch config catalog v[0-9]+$' deploy/config-catalog.tsv
           test -s deploy/feature-catalog.tsv
           grep -Eq '^# kwatch feature catalog v[0-9]+$' deploy/feature-catalog.tsv
-          echo "configuration and feature catalogs are present in the release tag"
+          test -s deploy/provider-catalog.tsv
+          grep -Eq '^# kwatch provider catalog v[0-9]+$' deploy/provider-catalog.tsv
+          echo "configuration, feature, and provider catalogs are present"
 
       - name: Bump chart and README versions
         id: bump
@@ -358,6 +360,7 @@ jobs:
           # preserved; newly added fields are discovered automatically.
           go run ./cmd/configcatalog -output deploy/config-catalog.tsv
           go run ./cmd/featurecatalog -output deploy/feature-catalog.tsv
+          go run ./cmd/providercatalog -output deploy/provider-catalog.tsv
 
           # Rewrite version pins inside one marked block only, so an rc never
           # touches the stable install snippets and a stable never touches the
@@ -396,7 +399,9 @@ jobs:
           fi
 
           # ---- commit 1: what main carries ----
-          git add README.md deploy/chart/Chart.yaml deploy/chart/README.md deploy/deploy.yaml deploy/config-catalog.tsv deploy/feature-catalog.tsv docs/
+          git add README.md deploy/chart/Chart.yaml deploy/chart/README.md \
+            deploy/deploy.yaml deploy/config-catalog.tsv \
+            deploy/feature-catalog.tsv deploy/provider-catalog.tsv docs/
           if git diff --cached --quiet; then
             echo "nothing to bump for main"
             echo "bumped=false" >> "$GITHUB_OUTPUT"
@@ -446,6 +451,7 @@ jobs:
           chart_version=$(git show "$SHA:deploy/chart/Chart.yaml" | awk '$1 == "version:" {gsub(/["'"'"']/, "", $2); print $2; exit}')
           catalog_header=$(git show "$SHA:deploy/config-catalog.tsv" | head -1)
           feature_catalog_header=$(git show "$SHA:deploy/feature-catalog.tsv" | head -1)
+          provider_catalog_header=$(git show "$SHA:deploy/provider-catalog.tsv" | head -1)
           manifest_image=$(git show "$SHA:deploy/deploy.yaml" | grep -m1 'ghcr.io/abahmed/kwatch:' || true)
 
           test -n "$chart_version" || { echo "::error::release tag has no chart version"; exit 1; }
@@ -454,6 +460,9 @@ jobs:
           }
           test "$feature_catalog_header" = "# kwatch feature catalog v1" || {
             echo "::error::release tag has an invalid feature catalog"; exit 1;
+          }
+          test "$provider_catalog_header" = "# kwatch provider catalog v1" || {
+            echo "::error::release tag has an invalid provider catalog"; exit 1;
           }
           echo "$manifest_image" | grep -Fq "ghcr.io/abahmed/kwatch:$VERSION" || {
             echo "::error::deploy manifest does not pin image $VERSION"; exit 1;

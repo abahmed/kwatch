@@ -6,7 +6,6 @@ import (
 	"strings"
 	"time"
 
-	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/client-go/discovery"
@@ -20,16 +19,59 @@ import (
 )
 
 var watchedResources = []struct {
-	gvr  schema.GroupVersionResource
-	kind string
+	gvr        schema.GroupVersionResource
+	kind       string
+	namespaced bool
 }{
-	{schema.GroupVersionResource{Group: "gateway.networking.k8s.io", Version: "v1", Resource: "gatewayclasses"}, "gatewayclass"},
-	{schema.GroupVersionResource{Group: "gateway.networking.k8s.io", Version: "v1", Resource: "gateways"}, "gateway"},
-	{schema.GroupVersionResource{Group: "gateway.networking.k8s.io", Version: "v1", Resource: "httproutes"}, "httproute"},
-	{schema.GroupVersionResource{Group: "gateway.networking.k8s.io", Version: "v1", Resource: "grpcroutes"}, "grpcroute"},
-	{schema.GroupVersionResource{Group: "gateway.networking.k8s.io", Version: "v1alpha2", Resource: "tcproutes"}, "tcproute"},
-	{schema.GroupVersionResource{Group: "gateway.networking.k8s.io", Version: "v1alpha2", Resource: "tlsroutes"}, "tlsroute"},
-	{schema.GroupVersionResource{Group: "gateway.networking.k8s.io", Version: "v1", Resource: "referencegrants"}, "referencegrant"},
+	{
+		schema.GroupVersionResource{
+			Group: "gateway.networking.k8s.io", Version: "v1",
+			Resource: "gatewayclasses",
+		},
+		"gatewayclass", false,
+	},
+	{
+		schema.GroupVersionResource{
+			Group: "gateway.networking.k8s.io", Version: "v1",
+			Resource: "gateways",
+		},
+		"gateway", true,
+	},
+	{
+		schema.GroupVersionResource{
+			Group: "gateway.networking.k8s.io", Version: "v1",
+			Resource: "httproutes",
+		},
+		"httproute", true,
+	},
+	{
+		schema.GroupVersionResource{
+			Group: "gateway.networking.k8s.io", Version: "v1",
+			Resource: "grpcroutes",
+		},
+		"grpcroute", true,
+	},
+	{
+		schema.GroupVersionResource{
+			Group: "gateway.networking.k8s.io", Version: "v1alpha2",
+			Resource: "tcproutes",
+		},
+		"tcproute", true,
+	},
+	{
+		schema.GroupVersionResource{
+			Group: "gateway.networking.k8s.io", Version: "v1alpha2",
+			Resource: "tlsroutes",
+		},
+		"tlsroute", true,
+	},
+	{
+		schema.GroupVersionResource{
+			Group: "gateway.networking.k8s.io", Version: "v1",
+			Resource: "referencegrants",
+		},
+		"referencegrant", true,
+	},
 }
 
 type Monitor struct {
@@ -38,6 +80,8 @@ type Monitor struct {
 	graph           *kwcontext.ResourceGraph
 	resync          time.Duration
 	allowed         func(string) bool
+	namespaces      []string
+	watchAll        bool
 }
 
 func New(restConfig *rest.Config, graph *kwcontext.ResourceGraph, resync time.Duration) (*Monitor, error) {
@@ -49,50 +93,85 @@ func New(restConfig *rest.Config, graph *kwcontext.ResourceGraph, resync time.Du
 	if err != nil {
 		return nil, fmt.Errorf("networkgraph: create discovery client: %w", err)
 	}
-	return &Monitor{client: client, discoveryClient: discoveryClient, graph: graph, resync: resync}, nil
+	return &Monitor{
+		client: client, discoveryClient: discoveryClient, graph: graph,
+		resync: resync, watchAll: true,
+	}, nil
 }
 
 // SetNamespaceFilter keeps graph edges from namespaced Gateway API objects
 // within the same scope as the controller's typed informers.
 func (m *Monitor) SetNamespaceFilter(filter func(string) bool) { m.allowed = filter }
 
+func (m *Monitor) SetNamespaceScope(namespaces []string, watchAll bool) {
+	m.namespaces = append([]string(nil), namespaces...)
+	m.watchAll = watchAll
+}
+
 func (m *Monitor) Start(ctx context.Context) error {
-	factory := dynamicinformer.NewDynamicSharedInformerFactory(m.client, m.resync)
+	factories := make([]dynamicinformer.DynamicSharedInformerFactory, 0)
 	for _, watched := range watchedResources {
 		if !m.resourceAvailable(watched.gvr) {
 			continue
 		}
-		informer := factory.ForResource(watched.gvr).Informer()
-		if err := informer.SetTransform(k8s.TrimManagedFields); err != nil {
-			return fmt.Errorf("networkgraph: set %s cache transform: %w", watched.gvr, err)
-		}
-		kind := watched.kind
-		if _, err := informer.AddEventHandler(cache.ResourceEventHandlerFuncs{
-			AddFunc:    func(obj interface{}) { m.rebuild(kind, obj) },
-			UpdateFunc: func(_, obj interface{}) { m.rebuild(kind, obj) },
-			DeleteFunc: func(obj interface{}) { m.remove(kind, obj) },
-		}); err != nil {
-			return fmt.Errorf("networkgraph: register %s informer: %w", watched.gvr, err)
+		for _, namespace := range m.watchNamespaces(watched.namespaced) {
+			factory := dynamicinformer.NewFilteredDynamicSharedInformerFactory(
+				m.client, m.resync, namespace, nil,
+			)
+			informer := factory.ForResource(watched.gvr).Informer()
+			if err := informer.SetTransform(k8s.TrimManagedFields); err != nil {
+				return fmt.Errorf(
+					"networkgraph: set %s cache transform: %w",
+					watched.gvr, err,
+				)
+			}
+			kind := watched.kind
+			if _, err := informer.AddEventHandler(
+				cache.ResourceEventHandlerFuncs{
+					AddFunc: func(obj interface{}) { m.rebuild(kind, obj) },
+					UpdateFunc: func(_, obj interface{}) {
+						m.rebuild(kind, obj)
+					},
+					DeleteFunc: func(obj interface{}) { m.remove(kind, obj) },
+				},
+			); err != nil {
+				return fmt.Errorf(
+					"networkgraph: register %s informer: %w",
+					watched.gvr, err,
+				)
+			}
+			factories = append(factories, factory)
 		}
 	}
-	factory.Start(ctx.Done())
+	for _, factory := range factories {
+		factory.Start(ctx.Done())
+	}
 	return nil
+}
+
+func (m *Monitor) watchNamespaces(namespaced bool) []string {
+	if !namespaced || m.watchAll {
+		return []string{""}
+	}
+	return append([]string(nil), m.namespaces...)
 }
 
 func (m *Monitor) resourceAvailable(gvr schema.GroupVersionResource) bool {
 	if m.discoveryClient == nil {
 		return true
 	}
-	_, err := m.discoveryClient.ServerResourcesForGroupVersion(gvr.GroupVersion().String())
-	if err == nil {
-		return true
+	resources, err := m.discoveryClient.ServerResourcesForGroupVersion(
+		gvr.GroupVersion().String(),
+	)
+	if err != nil {
+		return false
 	}
-	// Keep an informer for an API that is currently absent. The reflector will
-	// retry ListAndWatch with backoff and will begin receiving objects if the
-	// optional API is installed later in this process lifetime. Forbidden is
-	// different: retrying it forever only creates noise and cannot discover
-	// anything without an RBAC change.
-	return !apierrors.IsForbidden(err)
+	for _, resource := range resources.APIResources {
+		if resource.Name == gvr.Resource {
+			return true
+		}
+	}
+	return false
 }
 
 func (m *Monitor) rebuild(kind string, obj interface{}) {
@@ -114,7 +193,7 @@ func (m *Monitor) rebuild(kind string, obj interface{}) {
 		targets = append(targets, routeBackends(u)...)
 	}
 	ns := u.GetNamespace()
-	if kind == "gatewayclass" || kind == "referencegrant" {
+	if kind == "gatewayclass" {
 		ns = ""
 	}
 	m.graph.ReplaceOutgoingEdges(kind, ns, u.GetName(), targets)
@@ -136,8 +215,18 @@ func secretReferences(u *unstructured.Unstructured) []kwcontext.EdgeTarget {
 			}
 			name, _ := ref["name"].(string)
 			kind, _ := ref["kind"].(string)
-			if name != "" && (kind == "" || strings.EqualFold(kind, "Secret")) {
-				targets = append(targets, kwcontext.EdgeTarget{Kind: "secret", Namespace: u.GetNamespace(), Name: name, Type: "tls_secret"})
+			group, _ := ref["group"].(string)
+			namespace, _ := ref["namespace"].(string)
+			if namespace == "" {
+				namespace = u.GetNamespace()
+			}
+			if name != "" &&
+				(kind == "" || strings.EqualFold(kind, "Secret")) &&
+				(group == "" || group == "core") {
+				targets = append(targets, kwcontext.EdgeTarget{
+					Kind: "secret", Namespace: namespace, Name: name,
+					Type: "tls_secret",
+				})
 			}
 		}
 	}
@@ -182,8 +271,15 @@ func routeBackends(u *unstructured.Unstructured) []kwcontext.EdgeTarget {
 			name, _ := ref["name"].(string)
 			kind, _ := ref["kind"].(string)
 			group, _ := ref["group"].(string)
+			namespace, _ := ref["namespace"].(string)
+			if namespace == "" {
+				namespace = u.GetNamespace()
+			}
 			if name != "" && (kind == "" || strings.EqualFold(kind, "Service")) && (group == "" || group == "core") {
-				targets = append(targets, kwcontext.EdgeTarget{Kind: "service", Namespace: u.GetNamespace(), Name: name, Type: "routes_to"})
+				targets = append(targets, kwcontext.EdgeTarget{
+					Kind: "service", Namespace: namespace, Name: name,
+					Type: "routes_to",
+				})
 			}
 		}
 	}
@@ -202,7 +298,7 @@ func (m *Monitor) remove(kind string, obj interface{}) {
 	if err != nil {
 		return
 	}
-	if kind == "gatewayclass" || kind == "referencegrant" {
+	if kind == "gatewayclass" {
 		ns = ""
 	}
 	m.graph.RemoveNode(kind, ns, name)

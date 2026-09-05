@@ -3,9 +3,10 @@ package crdwatch
 import (
 	"context"
 	"encoding/json"
+	stderrors "errors"
 	"fmt"
 
-	"k8s.io/apimachinery/pkg/api/errors"
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/dynamic"
 	"k8s.io/client-go/rest"
@@ -28,7 +29,7 @@ func ApplyStartupConfig(ctx context.Context, cfg *config.Config, restCfg *rest.C
 	}
 	list, err := dc.Resource(gvr).Namespace(namespace).List(ctx, metav1.ListOptions{})
 	if err != nil {
-		if errors.IsNotFound(err) {
+		if apierrors.IsNotFound(err) {
 			return nil
 		}
 		return err
@@ -43,6 +44,9 @@ func ApplyStartupConfig(ctx context.Context, cfg *config.Config, restCfg *rest.C
 	if !ok {
 		return nil
 	}
+	if err := rejectSecretConfig(spec); err != nil {
+		return err
+	}
 	raw, err := json.Marshal(spec)
 	if err != nil {
 		return err
@@ -52,4 +56,35 @@ func ApplyStartupConfig(ctx context.Context, cfg *config.Config, restCfg *rest.C
 		return err
 	}
 	return config.RebuildAfterOverlay(cfg)
+}
+
+func rejectSecretConfig(spec interface{}) error {
+	root, ok := spec.(map[string]interface{})
+	if !ok {
+		return nil
+	}
+	if _, exists := root["alert"]; exists {
+		return stderrors.New(
+			"KwatchConfig.spec.alert is forbidden; mount provider " +
+				"credentials through config.yaml file references",
+		)
+	}
+	for _, path := range [][]string{
+		{"healthCheck", "diagnosticsToken"},
+		{"heartbeatMonitor", "url"},
+	} {
+		section, ok := root[path[0]].(map[string]interface{})
+		if !ok {
+			continue
+		}
+		if _, exists := section[path[1]]; exists {
+			return fmt.Errorf(
+				"KwatchConfig.spec.%s.%s is forbidden; configure it "+
+					"through a mounted Secret",
+				path[0],
+				path[1],
+			)
+		}
+	}
+	return nil
 }

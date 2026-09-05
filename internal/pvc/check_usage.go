@@ -94,15 +94,13 @@ func (p *PvcMonitor) checkVolumeStatus(ctx context.Context) {
 	if p.client == nil {
 		return
 	}
-	pvcs, err := p.client.CoreV1().PersistentVolumeClaims("").List(
-		ctx, metav1.ListOptions{},
-	)
+	pvcs, err := p.listPVCs(ctx)
 	if err != nil {
 		klog.ErrorS(err, "pvc monitor: failed to list pvc status")
 		return
 	}
-	for i := range pvcs.Items {
-		pvc := &pvcs.Items[i]
+	for i := range pvcs {
+		pvc := &pvcs[i]
 		if !p.namespaceAllowed(pvc.Namespace) {
 			continue
 		}

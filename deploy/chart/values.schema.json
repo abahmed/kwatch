@@ -89,6 +89,36 @@
               "array"
             ],
             "default": "true"
+          },
+          "allowPrivilegeEscalation": {
+            "type": [
+              "string",
+              "boolean",
+              "number",
+              "object",
+              "array"
+            ],
+            "default": "false"
+          },
+          "capabilities": {
+            "type": "object",
+            "properties": {
+              "drop": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "seccompProfile": {
+            "type": "object",
+            "properties": {
+              "type": {
+                "type": "string",
+                "default": "RuntimeDefault"
+              }
+            }
           }
         }
       },

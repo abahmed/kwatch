@@ -3,7 +3,9 @@ package statuswatch
 import (
 	"context"
 	"strings"
+	"time"
 
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/client-go/dynamic/dynamicinformer"
@@ -75,6 +77,7 @@ func (m *Monitor) watchCRD(obj interface{}) {
 	plural, _, _ := unstructured.NestedString(
 		crd.Object, "spec", "names", "plural",
 	)
+	scope, _, _ := unstructured.NestedString(crd.Object, "spec", "scope")
 	if group == "" || plural == "" || len(versions) == 0 {
 		m.reconcileCRDVersions(crd.GetName(), nil)
 		return
@@ -98,8 +101,11 @@ func (m *Monitor) watchCRD(obj interface{}) {
 		gvr := schema.GroupVersionResource{
 			Group: group, Version: version, Resource: plural,
 		}
-		desired[gvr.String()] = struct{}{}
-		m.watchVersion(gvr)
+		for _, namespace := range m.watchNamespaces(scope == "Namespaced") {
+			key := versionKey(gvr, namespace)
+			desired[key] = struct{}{}
+			m.watchVersion(gvr, namespace)
+		}
 	}
 	m.reconcileCRDVersions(crd.GetName(), desired)
 }
@@ -119,15 +125,34 @@ func (m *Monitor) reconcileCRDVersions(
 	}
 }
 
-func (m *Monitor) watchVersion(gvr schema.GroupVersionResource) {
-	key := gvr.String()
+func (m *Monitor) watchNamespaces(namespaced bool) []string {
+	if !namespaced || m.watchAll {
+		return []string{""}
+	}
+	return append([]string(nil), m.namespaces...)
+}
+
+func versionKey(gvr schema.GroupVersionResource, namespace string) string {
+	return gvr.String() + "|" + namespace
+}
+
+func (m *Monitor) watchVersion(
+	gvr schema.GroupVersionResource,
+	namespace string,
+) {
+	key := versionKey(gvr, namespace)
 	m.mu.Lock()
 	if _, exists := m.factories[key]; exists {
 		m.mu.Unlock()
 		return
 	}
-	factory := dynamicinformer.NewDynamicSharedInformerFactory(m.client, m.resync)
 	m.mu.Unlock()
+	if !m.canWatchVersion(gvr, namespace) {
+		return
+	}
+	factory := dynamicinformer.NewFilteredDynamicSharedInformerFactory(
+		m.client, m.resync, namespace, nil,
+	)
 	informer := factory.ForResource(gvr).Informer()
 	if err := informer.SetTransform(k8s.TrimManagedFields); err != nil {
 		klog.ErrorS(
@@ -157,6 +182,28 @@ func (m *Monitor) watchVersion(gvr schema.GroupVersionResource) {
 	m.stops[key] = stop
 	m.mu.Unlock()
 	factory.Start(versionCtx.Done())
+}
+
+func (m *Monitor) canWatchVersion(
+	gvr schema.GroupVersionResource,
+	namespace string,
+) bool {
+	if m.ctx == nil {
+		return false
+	}
+	listCtx, cancel := context.WithTimeout(m.ctx, 10*time.Second)
+	defer cancel()
+	_, err := m.client.Resource(gvr).Namespace(namespace).List(
+		listCtx, metav1.ListOptions{Limit: 1},
+	)
+	if err != nil {
+		klog.V(2).InfoS(
+			"statuswatch: custom resource is not listable; skipping",
+			"resource", gvr, "namespace", namespace, "error", err,
+		)
+		return false
+	}
+	return true
 }
 
 func (m *Monitor) stopVersion(key string) {

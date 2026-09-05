@@ -2,6 +2,10 @@ apiVersion: v1
 kind: Namespace
 metadata:
   name: kwatch
+  labels:
+    pod-security.kubernetes.io/enforce: restricted
+    pod-security.kubernetes.io/audit: restricted
+    pod-security.kubernetes.io/warn: restricted
 ---
 kind: ClusterRole
 apiVersion: rbac.authorization.k8s.io/v1
@@ -83,6 +87,7 @@ kind: ServiceAccount
 metadata:
   name: kwatch
   namespace: kwatch
+automountServiceAccountToken: true
 ---
 apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRoleBinding
@@ -105,7 +110,11 @@ metadata:
 rules:
 - apiGroups: [""]
   resources: ["configmaps"]
-  verbs: ["get", "create", "update", "patch"]
+  verbs: ["create"]
+- apiGroups: [""]
+  resources: ["configmaps"]
+  resourceNames: ["kwatch-state", "kwatch-baseline", "kwatch-incidents", "kwatch-pvc", "kwatch-changes", "kwatch-rca"]
+  verbs: ["get", "update", "patch"]
 
 ---
 apiVersion: rbac.authorization.k8s.io/v1
@@ -141,6 +150,7 @@ spec:
     spec:
       restartPolicy: Always
       serviceAccountName: kwatch
+      automountServiceAccountToken: true
       containers:
       - name: kwatch
         image: ghcr.io/abahmed/kwatch:v0.10.5
@@ -150,6 +160,11 @@ spec:
           runAsUser: 1000
           runAsGroup: 1000
           readOnlyRootFilesystem: true
+          allowPrivilegeEscalation: false
+          capabilities:
+            drop: ["ALL"]
+          seccompProfile:
+            type: RuntimeDefault
         ports:
           - name: health
             containerPort: 8060
@@ -189,5 +204,6 @@ spec:
             cpu: "100m"
       volumes:
       - name: config-volume
-        configMap:
-          name: kwatch
+        secret:
+          secretName: kwatch
+          defaultMode: 0400

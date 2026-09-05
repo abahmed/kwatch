@@ -37,8 +37,10 @@ type Monitor struct {
 	mu                    sync.RWMutex
 	status                Status
 	namespaces            []string
+	allNamespaces         bool
 	clusterPermissions    []Permission
 	namespacedPermissions []Permission
+	infrastructure        []Permission
 	now                   func() time.Time
 }
 
@@ -104,6 +106,7 @@ func NewWithConfig(client kubernetes.Interface, cfg *config.Config) *Monitor {
 		client:                client,
 		clusterPermissions:    cluster,
 		namespacedPermissions: namespaced,
+		infrastructure:        infrastructurePermissions(cfg),
 		now:                   time.Now,
 	}
 }
@@ -123,11 +126,26 @@ func (m *Monitor) nowTime() time.Time {
 }
 
 func (m *Monitor) SetNamespaces(namespaces []string) {
-	if len(namespaces) == 0 {
-		return
-	}
 	m.mu.Lock()
 	m.namespaces = append([]string(nil), namespaces...)
+	m.mu.Unlock()
+}
+
+// SetAllNamespaces selects cluster-wide authorization checks for namespaced
+// resources without requiring an additional namespace list permission.
+func (m *Monitor) SetAllNamespaces(all bool) {
+	m.mu.Lock()
+	m.allNamespaces = all
+	m.mu.Unlock()
+}
+
+// SetInfrastructureNamespace scopes persistence and KwatchConfig checks to
+// the namespace where kwatch itself stores and reads those objects.
+func (m *Monitor) SetInfrastructureNamespace(namespace string) {
+	m.mu.Lock()
+	for i := range m.infrastructure {
+		m.infrastructure[i].Namespace = namespace
+	}
 	m.mu.Unlock()
 }
 
@@ -167,7 +185,12 @@ func (m *Monitor) check(ctx context.Context) {
 	defer cancel()
 	m.mu.RLock()
 	namespaces := append([]string(nil), m.namespaces...)
+	allNamespaces := m.allNamespaces
+	infrastructure := append([]Permission(nil), m.infrastructure...)
 	m.mu.RUnlock()
+	if allNamespaces {
+		namespaces = []string{""}
+	}
 	status := Status{Available: true, Checks: len(m.clusterPermissions), LastCheck: m.nowTime(), Scope: "cluster"}
 	for _, permission := range m.clusterPermissions {
 		allowed, err := m.allowed(requestCtx, permission)
@@ -187,11 +210,25 @@ func (m *Monitor) check(ctx context.Context) {
 			status.Missing = append(status.Missing, permission)
 		}
 	}
-	for _, namespace := range namespaces {
-		if namespace == "" {
+	for _, permission := range infrastructure {
+		allowed, err := m.allowed(requestCtx, permission)
+		status.Checks++
+		if err != nil {
+			status.Available = false
+			if apierrors.IsForbidden(err) {
+				status.RBACDenied = true
+			}
 			continue
 		}
-		status.Scope = "cluster+namespace"
+		if !allowed {
+			status.RBACDenied = true
+			status.Missing = append(status.Missing, permission)
+		}
+	}
+	for _, namespace := range namespaces {
+		if namespace != "" {
+			status.Scope = "cluster+namespace"
+		}
 		for _, permission := range m.namespacedPermissions {
 			permission.Namespace = namespace
 			allowed, err := m.allowed(requestCtx, permission)

@@ -1,82 +1,103 @@
-## Contributing to kwatch
+# 🤝 Contributing to kwatch
 
-:tada: Anyone can contribute to kwatch. Newcomers are always welcome to contribute to kwatch, and we are happy to offer help to newcomers.
-Before making changes, please first discuss the change you want to make through [Discord](https://discord.gg/kzJszdKmJ7)
+Thank you for helping make Kubernetes easier to operate. Code, tests,
+documentation, bug reports, and ideas are all welcome.
 
+## 🌱 Choose a way to help
 
-### There are many ways to contribute:
+- 🐛 [Report a bug](https://github.com/abahmed/kwatch/issues)
+- 💡 [Suggest an improvement](https://github.com/abahmed/kwatch/issues)
+- 📚 Improve a guide or example
+- 🧪 Add or improve tests
+- 💻 Fix an issue or build a feature
+- 💬 Ask in [Discord](https://discord.gg/kzJszdKmJ7)
 
-+ [Suggest new features to be implemented](https://github.com/abahmed/kwatch/issues)
-+ [Report issues](https://github.com/abahmed/kwatch/issues)
-+ [Improve Documentation](https://github.com/abahmed/kwatch)
-+ [Fix issues](https://github.com/abahmed/kwatch/issues)
+For a large change, open an issue or discuss it in Discord before coding. This
+helps us agree on the approach and avoids duplicated work.
 
+## 🛠️ Local development
 
-### Code Contribution
+1. Fork and clone the repository.
+2. Create a short-lived branch from `main`.
+3. Read [AGENTS.md](./AGENTS.md) before changing Go code.
+4. Make a focused change with tests and documentation.
+5. Run the full verification gate:
 
-If you wish to work on an issue, please comment on the issue that you want to work on it. This is to prevent duplicated efforts on the same issue.
+```bash
+make verify
+```
 
-Before you start coding, read [AGENTS.md](./AGENTS.md) — it documents the build/test gate,
-package layout, naming conventions, and the checklist for adding a new monitored resource.
+The gate builds the binary, runs `go vet`, runs the tests, checks formatting and
+line length, and runs `golangci-lint`.
 
+## 📐 Code and documentation rules
 
-Contributions to kwatch should be made in the form of pull requests to the **main** branch. Each pull request will be reviewed by someone with permission to land patches. After reviewing the patch, it could be landed in the main branch or given feedback for changes.
+- Keep package dependencies moving downward; follow the package map in
+  [AGENTS.md](./AGENTS.md).
+- Inject clocks and I/O collaborators when behavior depends on time or a
+  network/API call.
+- Add focused tests for behavior changes.
+- Keep docs task-focused: explain the goal, show a complete command, and use
+  fake credentials.
+- Explain Kubernetes terms the first time you use them.
+- Use emojis when they help readers scan a page, not as decoration on every
+  line.
 
-### Documenting features
+## 📚 Where documentation belongs
 
-Feature documentation lives in the right place: the landing-page **README** gets a short
-section and a link; the detail goes into a page under `docs/`
-([configuration](./docs/configuration.md), [providers](./docs/providers.md),
-[architecture](./docs/architecture.md)). Docs pages keep the **same banner convention** as
-the README but never carry version pins.
+- [README](./README.md): short product explanation and quick install.
+- [`docs/configuration.md`](./docs/configuration.md): every setting and monitor.
+- [`docs/providers.md`](./docs/providers.md): every alert provider.
+- [`docs/architecture.md`](./docs/architecture.md): design and runtime behavior.
+- [`docs/kwatch-sh.md`](./docs/kwatch-sh.md): interactive manager behavior.
+- [kwatch.dev](https://kwatch.dev): beginner guides and the public docs site.
 
-- **Released features:** document them normally, no marker.
-- **Unreleased features:** merge the code and the doc section, but mark the section with the
-  official banner:
+When adding a feature, update the short README section and the detailed
+reference. Keep the two repositories consistent.
 
-  ```
-  > **🚧 Unreleased** — ships in `v0.12.0`. Not available in stable installs yet.
-  ```
+## 🚧 Unreleased features
 
-  The banner is stripped automatically when a stable release is cut (see `RELEASES.md` —
-  from `README.md` and every `docs/*.md`), so the docs on `main` always tell users exactly
-  what has shipped versus what is pending.
+If a feature is merged before its release, mark the relevant documentation:
 
-  When a whole milestone rewrite is still unreleased, a single top-of-file banner instead
-  marks the entire README as documenting the dev build (e.g. `v0.11.0-rc`). Keep it
-  version-free about the stable — a patch release during the window would otherwise make it
-  stale. It uses the same `🚧 Unreleased` marker and is stripped the same way.
+```markdown
+> **🚧 Unreleased** — ships in `vX.Y.Z`. Not available in stable installs yet.
+```
 
-- **Never touch pinned version references in a feature/bug PR.** The stable `README.md`
-  install snippets, the `deploy.yaml` image tag, `deploy/chart/Chart.yaml`, and
-  `deploy/chart/README.md` always point at the **latest stable release** (e.g. `v0.10.5`).
-  The preview block in `README.md` points at the **newest open release candidate**, or says
-  there isn't one. The release workflow bumps all of them at release time. Keep `docs/`
-  pages **free of version pins** — if a reference page needs an install command, link to the
-  README instead. If a pinned snippet looks stale, bump it in a PR, but do not pre-stamp the
-  next version (e.g. `v0.11.0`) before it ships.
+The release workflow removes these banners when the stable release ships.
 
-- **`deploy/deploy.yaml` says different things on `main` and at an RC tag — on purpose.** On
-  `main` it pins the latest **stable** image, so copying the manifest out of the repo browser
-  can never install a preview build. At a **release-candidate tag** it pins the RC image, so
-  `kubectl apply` against that tag installs the candidate. The release workflow achieves this
-  by adding a second commit that is tagged but **never pushed to `main`**, which is also why
-  an RC tag sits one commit ahead of `main`. Do not "fix" either side: re-pointing `main`
-  ships previews to anyone who copies the manifest, and dropping the tag-only commit silently
-  gives RC testers the stable build. See `RELEASES.md`.
+## 📌 Version pins and releases
 
-- **Never delete the install markers in `README.md`.** Version pins live between HTML
-  comments — `<!-- stable-install:start -->` … `:end` and `<!-- rc-install:start -->` …
-  `:end` — and the release workflow only rewrites what is inside them. A pin moved outside a
-  block silently stops being maintained: nothing fails, the snippet just goes stale and
-  starts telling users to install a version that isn't current. If you add a version pin,
-  put it inside the block for its channel. A marker name may repeat — `stable-install` wraps
-  both the install section and the clean-up section, and both are rewritten together.
+Do not update version numbers in normal feature pull requests. The release
+workflow owns these locations:
 
-- All three release commands (`rc`, `stable`, `patch`) push a version-bump commit to
-  protected `main`, so they need the `RELEASE_TOKEN` secret (see `RELEASES.md`). `rc` needs
-  it too, because it maintains the preview block. Without the secret the workflow fails
-  before tagging — add it before first use.
+- `README.md` blocks between `stable-install` markers;
+- the preview block between `rc-install` markers;
+- `deploy/deploy.yaml`;
+- `deploy/chart/Chart.yaml`; and
+- `deploy/chart/README.md`.
 
-### Code of Conduct
-We expect everyone to follow the [Code Of Conduct](./CODE_OF_CONDUCT.md)
+Keep install docs version-free when possible. Never delete the README markers;
+the workflow uses them to update stable and preview commands automatically.
+Read [RELEASES.md](./RELEASES.md) before cutting a release.
+
+The release workflow also publishes the configuration and feature catalogs used
+by [`kwatch.sh`](https://kwatch.dev/kwatch.sh). Add new settings to the Go
+configuration source and let the catalog command generate the installer data.
+
+## 📤 Pull requests
+
+Open pull requests against `main` and include:
+
+- what changed;
+- why it changed;
+- tests or checks you ran; and
+- any documentation or migration notes users need.
+
+Keep commits and pull requests focused. Reviewers may ask for changes before
+merging.
+
+## 📜 Community and security
+
+Follow the [Code of Conduct](./CODE_OF_CONDUCT.md). Report security problems
+privately using [SECURITY.md](./SECURITY.md); do not publish credentials or
+unpatched exploit details in a public issue.

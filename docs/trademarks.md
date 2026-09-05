@@ -1,4 +1,4 @@
-# Trademarks
+# ™️ Trademarks
 
 Kwatch and the Kwatch logo are trademarks of the Kwatch project owner. The source
 license does not grant permission to use those marks in a way that suggests an

@@ -6,7 +6,6 @@ import (
 	"strings"
 	"time"
 
-	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/client-go/discovery"
@@ -37,6 +36,8 @@ type Monitor struct {
 	resync          time.Duration
 	correlator      *correlation.Engine
 	allowed         func(string) bool
+	namespaces      []string
+	watchAll        bool
 }
 
 func (m *Monitor) SetCorrelator(correlator *correlation.Engine) { m.correlator = correlator }
@@ -44,6 +45,11 @@ func (m *Monitor) SetCorrelator(correlator *correlation.Engine) { m.correlator =
 // SetNamespaceFilter keeps namespaced snapshot failures and graph edges
 // aligned with the controller's configured namespace scope.
 func (m *Monitor) SetNamespaceFilter(filter func(string) bool) { m.allowed = filter }
+
+func (m *Monitor) SetNamespaceScope(namespaces []string, watchAll bool) {
+	m.namespaces = append([]string(nil), namespaces...)
+	m.watchAll = watchAll
+}
 
 func New(restConfig *rest.Config, graph *kwcontext.ResourceGraph, resync time.Duration) (*Monitor, error) {
 	client, err := dynamic.NewForConfig(restConfig)
@@ -54,58 +60,87 @@ func New(restConfig *rest.Config, graph *kwcontext.ResourceGraph, resync time.Du
 	if err != nil {
 		return nil, fmt.Errorf("storagegraph: create discovery client: %w", err)
 	}
-	return &Monitor{client: client, discoveryClient: discoveryClient, graph: graph, resync: resync}, nil
+	return &Monitor{
+		client: client, discoveryClient: discoveryClient, graph: graph,
+		resync: resync, watchAll: true,
+	}, nil
 }
 
 func (m *Monitor) Start(ctx context.Context) error {
-	factory := dynamicinformer.NewDynamicSharedInformerFactory(m.client, m.resync)
+	factories := make([]dynamicinformer.DynamicSharedInformerFactory, 0)
 	for _, watched := range []struct {
-		gvr schema.GroupVersionResource
-		fn  func(interface{})
+		gvr        schema.GroupVersionResource
+		fn         func(interface{})
+		namespaced bool
 	}{
-		{volumeAttachmentGVR, m.processVolumeAttachment},
-		{csiDriverGVR, m.processCSIDriver},
-		{volumeSnapshotGVR, m.processVolumeSnapshot},
-		{snapshotContentGVR, m.processSnapshotContent},
-		{snapshotClassGVR, m.processSnapshotClass},
+		{volumeAttachmentGVR, m.processVolumeAttachment, false},
+		{csiDriverGVR, m.processCSIDriver, false},
+		{volumeSnapshotGVR, m.processVolumeSnapshot, true},
+		{snapshotContentGVR, m.processSnapshotContent, false},
+		{snapshotClassGVR, m.processSnapshotClass, false},
 	} {
 		if !m.resourceAvailable(watched.gvr) {
 			continue
 		}
-		informer := factory.ForResource(watched.gvr).Informer()
-		if err := informer.SetTransform(k8s.TrimManagedFields); err != nil {
-			return fmt.Errorf("storagegraph: set %s cache transform: %w", watched.gvr, err)
-		}
-		if _, err := informer.AddEventHandler(cache.ResourceEventHandlerFuncs{
-			AddFunc: watched.fn,
-			UpdateFunc: func(_, obj interface{}) {
-				watched.fn(obj)
-			},
-			DeleteFunc: func(obj interface{}) {
-				m.removeNode(watched.gvr, obj)
-			},
-		}); err != nil {
-			return fmt.Errorf("storagegraph: register %s informer: %w", watched.gvr, err)
+		for _, namespace := range m.watchNamespaces(watched.namespaced) {
+			factory := dynamicinformer.NewFilteredDynamicSharedInformerFactory(
+				m.client, m.resync, namespace, nil,
+			)
+			informer := factory.ForResource(watched.gvr).Informer()
+			if err := informer.SetTransform(k8s.TrimManagedFields); err != nil {
+				return fmt.Errorf(
+					"storagegraph: set %s cache transform: %w",
+					watched.gvr, err,
+				)
+			}
+			if _, err := informer.AddEventHandler(
+				cache.ResourceEventHandlerFuncs{
+					AddFunc: watched.fn,
+					UpdateFunc: func(_, obj interface{}) {
+						watched.fn(obj)
+					},
+					DeleteFunc: func(obj interface{}) {
+						m.removeNode(watched.gvr, obj)
+					},
+				},
+			); err != nil {
+				return fmt.Errorf(
+					"storagegraph: register %s informer: %w",
+					watched.gvr, err,
+				)
+			}
+			factories = append(factories, factory)
 		}
 	}
-	factory.Start(ctx.Done())
+	for _, factory := range factories {
+		factory.Start(ctx.Done())
+	}
 	return nil
+}
+
+func (m *Monitor) watchNamespaces(namespaced bool) []string {
+	if !namespaced || m.watchAll {
+		return []string{""}
+	}
+	return append([]string(nil), m.namespaces...)
 }
 
 func (m *Monitor) resourceAvailable(gvr schema.GroupVersionResource) bool {
 	if m.discoveryClient == nil {
 		return true
 	}
-	_, err := m.discoveryClient.ServerResourcesForGroupVersion(gvr.GroupVersion().String())
-	if err == nil {
-		return true
+	resources, err := m.discoveryClient.ServerResourcesForGroupVersion(
+		gvr.GroupVersion().String(),
+	)
+	if err != nil {
+		return false
 	}
-	// Keep an informer for an API that is currently absent. The reflector will
-	// retry ListAndWatch with backoff and will begin receiving objects if the
-	// optional API is installed later in this process lifetime. Forbidden is
-	// different: retrying it forever only creates noise and cannot discover
-	// anything without an RBAC change.
-	return !apierrors.IsForbidden(err)
+	for _, resource := range resources.APIResources {
+		if resource.Name == gvr.Resource {
+			return true
+		}
+	}
+	return false
 }
 
 func (m *Monitor) processVolumeAttachment(obj interface{}) {

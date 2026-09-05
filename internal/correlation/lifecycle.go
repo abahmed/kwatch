@@ -110,6 +110,10 @@ func (e *Engine) holdDownLocked(inc *model.Incident, now time.Time) {
 
 func (e *Engine) MarkResolved(key model.IncidentKey) {
 	e.mu.Lock()
+	if e.frozen {
+		e.mu.Unlock()
+		return
+	}
 	e.dirty = true
 	inc, ok := e.state[key]
 	if !ok || inc.State == model.StateResolved ||
@@ -143,6 +147,10 @@ func (e *Engine) RemovePodWithUID(namespace, podName, podUID string) {
 	var baselineChanged bool
 
 	e.mu.Lock()
+	if e.frozen {
+		e.mu.Unlock()
+		return
+	}
 	e.dirty = true
 	for key, inc := range e.state {
 		if inc.Namespace != namespace {
@@ -207,6 +215,10 @@ func (e *Engine) ResolveByResource(resource, name string) {
 	resolved := false
 
 	e.mu.Lock()
+	if e.frozen {
+		e.mu.Unlock()
+		return
+	}
 	e.dirty = true
 	now := e.now()
 	for key, inc := range e.state {

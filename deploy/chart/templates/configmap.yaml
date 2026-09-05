@@ -1,3 +1,15 @@
+{{- $config := default dict .Values.config }}
+{{- $health := default dict (index $config "healthCheck") }}
+{{- $heartbeat := default dict (index $config "heartbeatMonitor") }}
+{{- if and (not .Values.configSecretName) (hasKey $config "alert") }}
+{{- fail "config.alert requires configSecretName; credentials cannot be stored in a ConfigMap" }}
+{{- end }}
+{{- if and (not .Values.configSecretName) (hasKey $health "diagnosticsToken") }}
+{{- fail "healthCheck.diagnosticsToken requires configSecretName" }}
+{{- end }}
+{{- if and (not .Values.configSecretName) (hasKey $heartbeat "url") }}
+{{- fail "heartbeatMonitor.url requires configSecretName" }}
+{{- end }}
 {{- if not .Values.configSecretName }}
 apiVersion: v1
 kind: ConfigMap
@@ -6,5 +18,5 @@ metadata:
   namespace: {{ .Release.Namespace }}
 data:
   config.yaml: |
-    {{- toYaml .Values.config | nindent 4 }}
+    {{- toYaml $config | nindent 4 }}
 {{- end }}

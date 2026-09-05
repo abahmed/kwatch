@@ -1,4 +1,9 @@
-# How kwatch thinks
+# 🧠 How kwatch thinks
+
+This page is for contributors and curious operators who want to understand what
+happens after Kubernetes reports a problem. For installation, start with the
+[interactive manager](./kwatch-sh.md); for settings, use the
+[configuration reference](./configuration.md).
 
 kwatch is not one of those tools that just forwards every Kubernetes event to your chat.
 Events happen constantly in a cluster — most of them are harmless. kwatch connects the dots,

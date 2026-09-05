@@ -234,9 +234,6 @@ func deepCopySpecMaps(in, out *KwatchConfigSpec) {
 	if in.Upgrader != nil {
 		out.Upgrader = runtime.DeepCopyJSONValue(in.Upgrader).(map[string]interface{})
 	}
-	if in.Alert != nil {
-		out.Alert = runtime.DeepCopyJSONValue(in.Alert).(map[string]interface{})
-	}
 	copyMonitor := func(v MonitorConfig) MonitorConfig {
 		if v == nil {
 			return nil

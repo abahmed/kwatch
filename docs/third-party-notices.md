@@ -1,4 +1,4 @@
-# Third-party notices
+# 📚 Third-party notices
 
 Kwatch includes code from the third-party packages below. Kwatch does not
 relicense these packages; each package keeps the license shown in the table.

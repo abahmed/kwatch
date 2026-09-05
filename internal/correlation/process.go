@@ -21,6 +21,10 @@ func (e *Engine) Process(
 	cs *model.ContainerState,
 ) (*model.Incident, model.IncidentAction) {
 	e.mu.Lock()
+	if e.frozen {
+		e.mu.Unlock()
+		return nil, model.ActionSkip
+	}
 	inc, action := e.processLocked(ev, owner, cs)
 	if inc != nil {
 		inc = inc.Clone()

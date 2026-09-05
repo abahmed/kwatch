@@ -16,19 +16,27 @@ import (
 func (m *Monitor) startAdmissionInformers(
 	factory dynamicinformer.DynamicSharedInformerFactory,
 ) {
-	policyInformer := factory.ForResource(validatingAdmissionPolicyGVR).Informer()
-	if err := policyInformer.SetTransform(k8s.TrimManagedFields); err != nil {
-		klog.ErrorS(err, "statuswatch: set policy cache transform")
-		return
+	if m.resourceAvailable(validatingAdmissionPolicyGVR) {
+		policyInformer := factory.
+			ForResource(validatingAdmissionPolicyGVR).Informer()
+		if err := policyInformer.SetTransform(k8s.TrimManagedFields); err != nil {
+			klog.ErrorS(err, "statuswatch: set policy cache transform")
+			return
+		}
+		if _, err := policyInformer.AddEventHandler(
+			cache.ResourceEventHandlerFuncs{
+				AddFunc: m.processAdmissionPolicy,
+				UpdateFunc: func(_, obj interface{}) {
+					m.processAdmissionPolicy(obj)
+				},
+				DeleteFunc: m.deleteAdmissionPolicy,
+			},
+		); err != nil {
+			klog.ErrorS(err, "statuswatch: register admission policy informer")
+		}
 	}
-	if _, err := policyInformer.AddEventHandler(cache.ResourceEventHandlerFuncs{
-		AddFunc: m.processAdmissionPolicy,
-		UpdateFunc: func(_, obj interface{}) {
-			m.processAdmissionPolicy(obj)
-		},
-		DeleteFunc: m.deleteAdmissionPolicy,
-	}); err != nil {
-		klog.ErrorS(err, "statuswatch: register admission policy informer")
+	if !m.resourceAvailable(validatingAdmissionBindingGVR) {
+		return
 	}
 	bindingInformer := factory.
 		ForResource(validatingAdmissionBindingGVR).Informer()

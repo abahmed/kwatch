@@ -31,6 +31,9 @@ type Monitor struct {
 	podCacheAt time.Time
 	lastSweep  time.Time
 	store      StateStore
+	namespaces []string
+	watchAll   bool
+	allowed    func(string) bool
 }
 
 type StateStore interface {
@@ -38,9 +41,20 @@ type StateStore interface {
 	SaveTelemetryState(context.Context, []byte) error
 }
 
-func New(client kubernetes.Interface, cfg config.KubeletTelemetryMonitor, correlator *correlation.Engine) *Monitor {
-	return &Monitor{client: client, cfg: cfg, correlator: correlator, previous: make(map[string]metricSnapshot),
-		failures: make(map[string]int), successes: make(map[string]int), stateSeen: make(map[string]time.Time), baselines: make(map[string]usageBaseline), endpoint: make(map[string]endpointStatus), podCache: make(map[string]*corev1.Pod), now: time.Now}
+func New(
+	client kubernetes.Interface,
+	cfg config.KubeletTelemetryMonitor,
+	correlator *correlation.Engine,
+) *Monitor {
+	return &Monitor{
+		client: client, cfg: cfg, correlator: correlator, watchAll: true,
+		previous: make(map[string]metricSnapshot),
+		failures: make(map[string]int), successes: make(map[string]int),
+		stateSeen: make(map[string]time.Time),
+		baselines: make(map[string]usageBaseline),
+		endpoint:  make(map[string]endpointStatus),
+		podCache:  make(map[string]*corev1.Pod), now: time.Now,
+	}
 }
 
 func (m *Monitor) Start(ctx context.Context) {
@@ -145,6 +159,25 @@ func (m *Monitor) TelemetryStatus() interface{} {
 
 func (m *Monitor) SetStateStore(store StateStore) { m.store = store }
 
+func (m *Monitor) SetClock(now func() time.Time) {
+	if now != nil {
+		m.now = now
+	}
+}
+
+func (m *Monitor) SetNamespaceScope(namespaces []string, watchAll bool) {
+	m.mu.Lock()
+	m.namespaces = append([]string(nil), namespaces...)
+	m.watchAll = watchAll
+	m.mu.Unlock()
+}
+
+func (m *Monitor) SetNamespaceFilter(allowed func(string) bool) {
+	m.mu.Lock()
+	m.allowed = allowed
+	m.mu.Unlock()
+}
+
 func (m *Monitor) recordEndpoint(node, endpoint string, err error) {
 	m.mu.Lock()
 	status := m.endpoint[node]
@@ -208,20 +241,38 @@ func (m *Monitor) pods(ctx context.Context) map[string]*corev1.Pod {
 		return cached
 	}
 	m.mu.Unlock()
+	m.mu.Lock()
+	namespaces := append([]string(nil), m.namespaces...)
+	watchAll := m.watchAll
+	allowed := m.allowed
+	m.mu.Unlock()
+	if !watchAll && len(namespaces) == 0 {
+		return map[string]*corev1.Pod{}
+	}
 	result := make(map[string]*corev1.Pod)
-	continueToken := ""
-	for {
-		pods, err := m.client.CoreV1().Pods("").List(ctx, metav1.ListOptions{Limit: 500, Continue: continueToken})
-		if err != nil {
-			return nil
-		}
-		for i := range pods.Items {
-			pod := &pods.Items[i]
-			result[pod.Namespace+"/"+pod.Name] = pod
-		}
-		continueToken = pods.Continue
-		if continueToken == "" {
-			break
+	if watchAll {
+		namespaces = []string{""}
+	}
+	for _, namespace := range namespaces {
+		continueToken := ""
+		for {
+			pods, err := m.client.CoreV1().Pods(namespace).List(
+				ctx, metav1.ListOptions{Limit: 500, Continue: continueToken},
+			)
+			if err != nil {
+				return nil
+			}
+			for i := range pods.Items {
+				pod := &pods.Items[i]
+				if allowed != nil && !allowed(pod.Namespace) {
+					continue
+				}
+				result[pod.Namespace+"/"+pod.Name] = pod
+			}
+			continueToken = pods.Continue
+			if continueToken == "" {
+				break
+			}
 		}
 	}
 	m.mu.Lock()

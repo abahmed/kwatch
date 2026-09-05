@@ -49,6 +49,7 @@ func applyStartupCRD(ctx context.Context, cfg *config.Config) error {
 
 func configureProbeRunner(
 	cfg *config.Config,
+	ctl *controller.Controller,
 	correlator *correlation.Engine,
 	clientset kubernetes.Interface,
 	graph *kwcontext.ResourceGraph,
@@ -62,6 +63,9 @@ func configureProbeRunner(
 	monitor.SetClock(now)
 	monitor.SetKubernetesClient(clientset)
 	monitor.SetGraph(graph)
+	namespaces, watchAll := ctl.NamespaceScope()
+	monitor.SetNamespaceScope(namespaces, watchAll)
+	monitor.SetNamespaceFilter(ctl.NamespaceAllowed)
 	return monitor.Start
 }
 
@@ -176,11 +180,8 @@ func configureSecurityMonitor(
 ) *security.Monitor {
 	monitor := security.NewWithConfig(client, cfg)
 	monitor.SetClock(now)
-	namespaces := cfg.AllowedNamespaces
-	if len(namespaces) == 0 {
-		namespaces = []string{k8s.GetNamespace()}
-	}
-	monitor.SetNamespaces(namespaces)
+	monitor.SetNamespaces(cfg.AllowedNamespaces)
+	monitor.SetInfrastructureNamespace(k8s.GetNamespace())
 	return monitor
 }
 
@@ -196,6 +197,7 @@ func configureControlPlaneMonitor(
 	}
 	restCfg, err := client.GetRestConfig(&cfg.App)
 	if err != nil {
+		healthServer.SetComponentError("control-plane", err)
 		klog.ErrorS(err, "failed to create control-plane monitor")
 		return nil
 	}
@@ -203,6 +205,7 @@ func configureControlPlaneMonitor(
 		restCfg, clientset, cfg.ControlPlaneMonitor, correlator,
 	)
 	if err != nil {
+		healthServer.SetComponentError("control-plane", err)
 		klog.ErrorS(err, "failed to initialize control-plane monitor")
 		return nil
 	}
@@ -216,6 +219,7 @@ func configureStatusMonitor(
 	ctl *controller.Controller,
 	graph *kwcontext.ResourceGraph,
 	correlator *correlation.Engine,
+	healthServer *health.HealthServer,
 	now func() time.Time,
 ) func(context.Context) {
 	if !cfg.ClusterResourceMonitor.Enabled {
@@ -223,6 +227,7 @@ func configureStatusMonitor(
 	}
 	restCfg, err := client.GetRestConfig(&cfg.App)
 	if err != nil {
+		healthServer.SetComponentError("status", err)
 		klog.ErrorS(err, "failed to create generic status monitor")
 		return nil
 	}
@@ -231,16 +236,20 @@ func configureStatusMonitor(
 		time.Duration(cfg.ResyncSeconds)*time.Second,
 	)
 	if err != nil {
+		healthServer.SetComponentError("status", err)
 		klog.ErrorS(err, "failed to initialize generic status monitor")
 		return nil
 	}
 	monitor.SetClock(now)
 	monitor.SetNamespaceFilter(ctl.NamespaceAllowed)
+	namespaces, watchAll := ctl.NamespaceScope()
+	monitor.SetNamespaceScope(namespaces, watchAll)
 	monitor.SetConditionRules(cfg.CrdConfig.FailureConditions)
 	monitor.SetGraphReferenceRules(cfg.CrdConfig.GraphReferences)
 	monitor.SetGraph(graph)
 	return func(ctx context.Context) {
 		if err := monitor.Start(ctx); err != nil {
+			healthServer.SetComponentError("status", err)
 			klog.ErrorS(err, "generic status monitor stopped")
 		}
 	}
@@ -251,12 +260,14 @@ func configureMetricsMonitor(
 	ctl *controller.Controller,
 	clientset kubernetes.Interface,
 	correlator *correlation.Engine,
+	healthServer *health.HealthServer,
 ) func(context.Context) {
 	if !cfg.RuntimeMetricsMonitor.Enabled {
 		return nil
 	}
 	restCfg, err := client.GetRestConfig(&cfg.App)
 	if err != nil {
+		healthServer.SetComponentError("runtime-metrics", err)
 		klog.ErrorS(err, "failed to create runtime metrics monitor")
 		return nil
 	}
@@ -264,23 +275,31 @@ func configureMetricsMonitor(
 		restCfg, clientset, cfg.RuntimeMetricsMonitor, correlator,
 	)
 	if err != nil {
+		healthServer.SetComponentError("runtime-metrics", err)
 		klog.ErrorS(err, "failed to initialize runtime metrics monitor")
 		return nil
 	}
 	monitor.SetNamespaceFilter(ctl.NamespaceAllowed)
+	namespaces, watchAll := ctl.NamespaceScope()
+	monitor.SetNamespaceScope(namespaces, watchAll)
 	return monitor.Start
 }
 
 func newNetworkGraphRun(
 	cfg *config.Config,
 	graph *kwcontext.ResourceGraph,
-	namespaceAllowed func(string) bool,
+	ctl *controller.Controller,
+	healthServer *health.HealthServer,
 ) func(context.Context) {
-	if !cfg.ClusterResourceMonitor.Enabled {
+	if !cfg.ClusterResourceMonitor.Enabled ||
+		(!cfg.ServiceMonitor.Enabled &&
+			!cfg.IngressMonitor.Enabled &&
+			!cfg.NetworkPolicyMonitor.Enabled) {
 		return nil
 	}
 	restCfg, err := client.GetRestConfig(&cfg.App)
 	if err != nil {
+		healthServer.SetComponentError("network-graph", err)
 		klog.ErrorS(err, "failed to create rest config for network graph monitor")
 		return nil
 	}
@@ -288,12 +307,16 @@ func newNetworkGraphRun(
 		restCfg, graph, time.Duration(cfg.ResyncSeconds)*time.Second,
 	)
 	if err != nil {
+		healthServer.SetComponentError("network-graph", err)
 		klog.ErrorS(err, "failed to initialize network graph monitor")
 		return nil
 	}
-	monitor.SetNamespaceFilter(namespaceAllowed)
+	monitor.SetNamespaceFilter(ctl.NamespaceAllowed)
+	namespaces, watchAll := ctl.NamespaceScope()
+	monitor.SetNamespaceScope(namespaces, watchAll)
 	return func(ctx context.Context) {
 		if err := monitor.Start(ctx); err != nil {
+			healthServer.SetComponentError("network-graph", err)
 			klog.ErrorS(err, "network graph monitor stopped")
 		}
 	}
@@ -303,13 +326,15 @@ func newStorageGraphRun(
 	cfg *config.Config,
 	graph *kwcontext.ResourceGraph,
 	correlator *correlation.Engine,
-	namespaceAllowed func(string) bool,
+	ctl *controller.Controller,
+	healthServer *health.HealthServer,
 ) func(context.Context) {
 	if !cfg.ClusterResourceMonitor.Enabled {
 		return nil
 	}
 	restCfg, err := client.GetRestConfig(&cfg.App)
 	if err != nil {
+		healthServer.SetComponentError("storage-graph", err)
 		klog.ErrorS(err, "failed to create rest config for storage graph monitor")
 		return nil
 	}
@@ -317,13 +342,17 @@ func newStorageGraphRun(
 		restCfg, graph, time.Duration(cfg.ResyncSeconds)*time.Second,
 	)
 	if err != nil {
+		healthServer.SetComponentError("storage-graph", err)
 		klog.ErrorS(err, "failed to initialize storage graph monitor")
 		return nil
 	}
 	monitor.SetCorrelator(correlator)
-	monitor.SetNamespaceFilter(namespaceAllowed)
+	monitor.SetNamespaceFilter(ctl.NamespaceAllowed)
+	namespaces, watchAll := ctl.NamespaceScope()
+	monitor.SetNamespaceScope(namespaces, watchAll)
 	return func(ctx context.Context) {
 		if err := monitor.Start(ctx); err != nil {
+			healthServer.SetComponentError("storage-graph", err)
 			klog.ErrorS(err, "storage graph monitor stopped")
 		}
 	}

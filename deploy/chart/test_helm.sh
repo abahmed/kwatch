@@ -20,6 +20,15 @@ echo "PASS: memory limit"
 
 echo "=== security context ==="
 echo "$OUT1" | grep -q "runAsNonRoot" || { echo "FAIL: securityContext missing"; exit 1; }
+echo "$OUT1" | grep -q "allowPrivilegeEscalation: false" || {
+  echo "FAIL: privilege escalation is not disabled"; exit 1;
+}
+echo "$OUT1" | grep -q "type: RuntimeDefault" || {
+  echo "FAIL: seccomp profile missing"; exit 1;
+}
+echo "$OUT1" | grep -q 'resourceNames: \["kwatch-state"' || {
+  echo "FAIL: state ConfigMap RBAC is not restricted"; exit 1;
+}
 echo "PASS: security context"
 
 cmp -s ../crd.yaml templates/kwatchconfig-crd.yaml || {

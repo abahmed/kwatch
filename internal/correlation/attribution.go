@@ -264,6 +264,10 @@ func addResource(inc *model.Incident, podName string) {
 // announced. Callers must not hold e.mu.
 func (e *Engine) ReleaseSuppressed(massKey model.IncidentKey) int {
 	e.mu.Lock()
+	if e.frozen {
+		e.mu.Unlock()
+		return 0
+	}
 	released := e.releaseSuppressedLocked(massKey)
 	e.mu.Unlock()
 	e.emit(released...)

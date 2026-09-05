@@ -5,7 +5,6 @@ maxRecentLogLines|integer|50|Alerts|Maximum recent log lines attached to an inci
 containerRestartThreshold|integer|0|Alerts|Alert when a container reaches this cumulative restart count; zero disables it.|active|
 includeEvents|boolean|true|Alerts|Include recent Kubernetes events in incident messages.|active|
 includeLogs|boolean|true|Alerts|Include recent container logs in incident messages.|active|
-alert|json|{}|Alerts|Notification provider configuration stored in the Kubernetes Secret.|active|
 namespaces|list|all|Scope|Comma-separated namespaces to watch; leave empty to watch every namespace.|active|
 namespaceSelector|string|empty|Scope|Kubernetes label selector used to choose namespaces.|active|
 reasons|list|all|Scope|Comma-separated event reasons to allow or exclude with a leading !.|active|
@@ -30,7 +29,7 @@ nodeMonitor.sustainedMinutes|integer|3|Monitors|Minutes a node condition must pe
 pvcMonitor.enabled|boolean|true|Monitors|Watch mounted PVC usage and storage pressure.|active|
 pvcMonitor.interval|integer|5|Monitors|Minutes between PVC usage checks.|active|
 pvcMonitor.threshold|float|80|Monitors|PVC usage percentage that creates a warning.|active|
-pvcMonitor.criticalThreshold|float|90|Monitors|PVC usage percentage that creates a critical alert.|active|
+pvcMonitor.criticalThreshold|float|90|Monitors|PVC usage percentage that creates a high-severity alert.|active|
 pvcMonitor.clearThreshold|float|75|Monitors|PVC usage percentage below which an alert resolves.|active|
 rolloutMonitor.enabled|boolean|true|Monitors|Watch Deployments for stuck rollouts.|active|
 rolloutMonitor.sustainedMinutes|integer|5|Monitors|Minutes a Deployment may remain unavailable before alerting.|active|
@@ -53,7 +52,6 @@ clusterResourceMonitor.sustainedMinutes|integer|10|Monitors|Minutes a terminatin
 clusterResourceMonitor.nodeLeaseStaleSeconds|integer|90|Monitors|Seconds without a node lease renewal before reporting a stale heartbeat.|active|
 heartbeatMonitor.enabled|boolean|false|Monitors|Send a periodic external dead-man heartbeat.|active|
 heartbeatMonitor.interval|integer|300|Monitors|Seconds between heartbeat notifications.|active|
-heartbeatMonitor.url|string|empty|Monitors|Optional heartbeat endpoint URL.|active|
 scheduleMonitor.enabled|boolean|true|Monitors|Include scheduling delay and unschedulable diagnostics.|active|
 oomMonitor.enabled|boolean|true|Monitors|Track repeating OOM kills independently from current pod state.|active|
 oomMonitor.threshold|integer|3|Monitors|OOM kills within the window before raising a repeating-OOM incident.|active|
@@ -81,7 +79,7 @@ runtimeMetricsMonitor.cpuWarningPercent|integer|90|Monitors|CPU usage warning pe
 runtimeMetricsMonitor.cpuCriticalPercent|integer|100|Monitors|CPU usage critical percentage when metrics.k8s.io is available.|active|
 clusterAutoscalerMonitor.enabled|boolean|true|Monitors|Watch built-in cluster-autoscaler evidence from Kubernetes resources and events.|active|
 tlsMonitor.threshold|integer|30|Monitors|Days before certificate expiry to warn.|active|
-tlsMonitor.criticalThreshold|integer|3|Monitors|Days before certificate expiry for a critical alert.|active|
+tlsMonitor.criticalThreshold|integer|3|Monitors|Days before certificate expiry for a high-severity alert.|active|
 controlPlaneMonitor.intervalSeconds|integer|30|Monitors|Seconds between API and control-plane health checks.|active|
 controlPlaneMonitor.apiServerLatencyWarningMs|integer|1000|Monitors|API readyz latency warning threshold in milliseconds.|active|
 controlPlaneMonitor.failureThreshold|integer|2|Monitors|Consecutive control-plane failures before alerting.|active|
@@ -130,8 +128,7 @@ app.insecureSkipTLSVerify|boolean|false|Security|Skip TLS verification for outbo
 app.caBundlePath|string|empty|Security|Path to a mounted PEM bundle for outbound provider TLS.|active|
 healthCheck.enabled|boolean|true|Operations|Expose the built-in health endpoint.|active|
 healthCheck.port|integer|8060|Operations|Port for health and optional diagnostic endpoints.|active|
-healthCheck.diagnosticsToken|string|empty|Security|Optional Bearer token required for diagnostic endpoints.|active|
-crd.enabled|boolean|true|Operations|Watch KwatchConfig and supported CRD status conditions for live changes; enabled by the interactive installer after installing the CRD.|active|
+crd.enabled|boolean|true|Operations|Watch KwatchConfig and supported CRD status conditions; restart kwatch when configuration changes; enabled by the interactive installer after installing the CRD.|active|
 crd.failureConditions|list|empty|Operations|Additional CRD condition rules such as Ready=False or Degraded=True.|active|
 crd.graphReferences|list|empty|Operations|Optional CRD references used by dependency and impact analysis.|active|
 auditLog.enabled|boolean|true|Operations|Write structured incident lifecycle records to the configured audit sink.|active|

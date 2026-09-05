@@ -40,6 +40,24 @@ func TestGetAllowForbidSlices(t *testing.T) {
 	}
 }
 
+func TestValidateNamespaceEntries(t *testing.T) {
+	for _, entries := range [][]string{{""}, {"!"}, {"UPPER"}, {"has space"}} {
+		if errs := validateNamespaceEntries(entries); len(errs) == 0 {
+			t.Fatalf("expected invalid namespace error for %q", entries)
+		}
+	}
+	if errs := validateNamespaceEntries(
+		[]string{"default", "!kube-system"},
+	); len(errs) != 0 {
+		t.Fatalf("valid namespaces rejected: %v", errs)
+	}
+}
+
+func TestValidateReasonEntriesRejectsWhitespace(t *testing.T) {
+	errs := validateReasonEntries([]string{" ", "! ", "CrashLoopBackOff"})
+	assert.Len(t, errs, 2)
+}
+
 func TestEmptyConfig(t *testing.T) {
 	assert := assert.New(t)
 
@@ -168,22 +186,8 @@ reasons:
 	os.WriteFile(configPath, content, 0644)
 
 	cfg, err := LoadConfig()
-	assert.Nil(err)
-	assert.NotNil(cfg)
-
-	// ${TEST_WEBHOOK} → expanded
-	assert.Equal("https://hooks.example.com/x", cfg.App.ClusterName)
-
-	// bare $HOME → NOT expanded (left as literal)
-	assert.Equal("$HOME", cfg.App.ProxyURL)
-
-	// ${TEST_MISSING} (set to empty) → empty string
-	assert.Len(cfg.AllowedNamespaces, 1)
-	assert.Equal("", cfg.AllowedNamespaces[0])
-
-	// literal $ in bcrypt-like value → unchanged
-	assert.Len(cfg.AllowedReasons, 1)
-	assert.Equal("pass$2a$10$xyz", cfg.AllowedReasons[0])
+	assert.ErrorContains(err, "namespaces entries must not be empty")
+	assert.Nil(cfg)
 
 	// verify mixed {A}-$B case
 	os.WriteFile(configPath, []byte(`app:

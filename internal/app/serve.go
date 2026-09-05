@@ -20,6 +20,14 @@ import (
 func serve(ctx context.Context, deps *serverDeps) int {
 	var wg sync.WaitGroup
 	errCh := make(chan error, 1)
+	if deps.initialized == nil {
+		ready := make(chan struct{})
+		close(ready)
+		deps.initialized = ready
+	}
+	if deps.controllerDone == nil {
+		deps.controllerDone = make(chan struct{})
+	}
 
 	wg.Add(4)
 	if deps.tlsSweep != nil {
@@ -27,7 +35,7 @@ func serve(ctx context.Context, deps *serverDeps) int {
 	}
 	optionalMonitors := []func(context.Context){deps.statusRun, deps.metricsRun, deps.probeRun, deps.kubeletRun, deps.storageRun, deps.networkRun, deps.securityRun, deps.controlPlaneRun, deps.telemetryRun}
 	for _, monitor := range optionalMonitors {
-		startOptionalMonitor(ctx, &wg, monitor)
+		startOptionalMonitor(ctx, &wg, deps.initialized, monitor)
 	}
 
 	go func() {
@@ -36,6 +44,9 @@ func serve(ctx context.Context, deps *serverDeps) int {
 	}()
 	go func() {
 		defer wg.Done()
+		if !waitForInitialization(ctx, deps.initialized) {
+			return
+		}
 		deps.pvcMonitor.Start(ctx)
 	}()
 	go func() {
@@ -85,10 +96,15 @@ func serve(ctx context.Context, deps *serverDeps) int {
 		}()
 	}
 	if deps.cfg.CrdConfig.Enabled {
-		startCRDWatcher(ctx, deps)
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			startCRDWatcher(ctx, deps)
+		}()
 	}
 
 	go func() {
+		defer close(deps.controllerDone)
 		deps.notifyStartup()
 
 		workers := deps.cfg.Workers
@@ -105,15 +121,35 @@ func serve(ctx context.Context, deps *serverDeps) int {
 	return waitShutdown(deps, &wg, errCh)
 }
 
-func startOptionalMonitor(ctx context.Context, wg *sync.WaitGroup, monitor func(context.Context)) {
+func startOptionalMonitor(
+	ctx context.Context,
+	wg *sync.WaitGroup,
+	initialized <-chan struct{},
+	monitor func(context.Context),
+) {
 	if monitor == nil {
 		return
 	}
 	wg.Add(1)
 	go func() {
 		defer wg.Done()
+		if !waitForInitialization(ctx, initialized) {
+			return
+		}
 		monitor(ctx)
 	}()
+}
+
+func waitForInitialization(
+	ctx context.Context,
+	initialized <-chan struct{},
+) bool {
+	select {
+	case <-initialized:
+		return true
+	case <-ctx.Done():
+		return false
+	}
 }
 
 // startCRDWatcher launches the CRD watcher against the cluster rest config.
@@ -149,17 +185,11 @@ func waitShutdown(
 		}
 	}
 	deps.cancel()
+	waitController(deps)
 
-	doneCh := make(chan struct{})
-	go func() {
-		wg.Wait()
-		close(doneCh)
-	}()
-	select {
-	case <-doneCh:
-	case <-time.After(10 * time.Second):
-		klog.InfoS("timed out waiting for background tasks")
-	}
+	// Every producer must stop before the final snapshot. A timeout here lets
+	// a slow monitor mutate correlation state after it has been persisted.
+	wg.Wait()
 	waitIncidentSaver(deps)
 	waitFeedbackSaver(deps)
 	saveFinalIncidentSnapshot(deps)
@@ -182,4 +212,14 @@ func waitShutdown(
 	}
 	deps.cleanup()
 	return 0
+}
+
+func waitController(deps *serverDeps) {
+	if deps.controllerDone == nil {
+		return
+	}
+	// The controller owns the event workers that can still mutate the
+	// correlator. Its Run method observes the canceled context, so waiting here
+	// is required before taking the final snapshot.
+	<-deps.controllerDone
 }

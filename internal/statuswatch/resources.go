@@ -48,9 +48,10 @@ var (
 )
 
 type staticWatch struct {
-	gvr      schema.GroupVersionResource
-	resource string
-	rules    map[string]map[string]bool
+	gvr        schema.GroupVersionResource
+	resource   string
+	rules      map[string]map[string]bool
+	namespaced bool
 }
 
 var staticStatusWatches = []staticWatch{
@@ -73,8 +74,9 @@ var staticStatusWatches = []staticWatch{
 		},
 	},
 	{
-		gvr:      podCertificateRequestGVR,
-		resource: "podcertificaterequest",
+		gvr:        podCertificateRequestGVR,
+		resource:   "podcertificaterequest",
+		namespaced: true,
 		rules: map[string]map[string]bool{
 			"Denied": {"True": true},
 			"Failed": {"True": true},
@@ -96,5 +98,5 @@ var staticStatusWatches = []staticWatch{
 			"Invalid":  {"True": true},
 		},
 	},
-	{gvr: legacyEndpointsGVR, resource: "endpoints"},
+	{gvr: legacyEndpointsGVR, resource: "endpoints", namespaced: true},
 }

@@ -37,10 +37,6 @@ func (c *Controller) Run(ctx context.Context, workers int) error {
 	if err := c.waitForCaches(ctx, syncFns); err != nil {
 		return err
 	}
-	if c.readyFn != nil {
-		c.readyFn()
-	}
-
 	c.buildGraph()
 	c.recordGraphSize()
 	go func() {
@@ -64,6 +60,9 @@ func (c *Controller) Run(ctx context.Context, workers int) error {
 	c.buildSeenSet()
 	if c.cpPod.startWorkers {
 		c.handler.SweepControlPlane()
+	}
+	if c.readyFn != nil {
+		c.readyFn()
 	}
 
 	if c.nodeResourceCfg != nil {

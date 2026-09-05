@@ -2,13 +2,17 @@ apiVersion: v1
 kind: Namespace
 metadata:
   name: kwatch
+  labels:
+    pod-security.kubernetes.io/enforce: restricted
+    pod-security.kubernetes.io/audit: restricted
+    pod-security.kubernetes.io/warn: restricted
 ---
 apiVersion: v1
-kind: ConfigMap
+kind: Secret
 metadata:
   name: kwatch
   namespace: kwatch
-data:
+stringData:
   config.yaml: |
     # ── General ──────────────────────────────────────────────
     maxRecentLogLines: <number>    # also caps logs/events in alert message blocks (default 50)
@@ -158,7 +162,7 @@ data:
     heartbeatMonitor:
       enabled: <boolean>
       # interval: <seconds>            # ping interval (default 300)
-      # url: "<url>"                   # external endpoint to ping
+      # url must come from a Secret-backed ${file:/absolute/path} reference.
 
     pvcMonitor:
       # NOTE: usage is read from each node's kubelet stats/summary, which only reports
@@ -169,7 +173,7 @@ data:
       enabled: <boolean>           # default true
       interval: 5                  # check interval (minutes, default 5)
       threshold: 80                # warn at this % (default 80)
-      criticalThreshold: 90        # critical at this % (default 90)
+      criticalThreshold: 90        # high severity at this % (default 90)
       clearThreshold: 75           # resolve below this % (default 75)
 
     # ── Audit log (JSON incident stream) ─────────────────
@@ -197,7 +201,7 @@ data:
       port: 8060                   # listen port (default 8060)
       # pprof: <boolean>           # set true to enable /debug/pprof/* profiling endpoints
       # diagnostics: <boolean>     # set true to enable /incidents, /test-alert endpoints
-      # diagnosticsToken: "<token>" # optional Bearer token for diagnostic endpoints
+      # diagnosticsToken must use a Secret-backed ${file:/absolute/path} reference.
 
     # ── App ───────────────────────────────────────────────
     app:
@@ -218,186 +222,9 @@ data:
 
     # ── CRD watcher ───────────────────────────────────────
     # crd:
-    #   enabled: <boolean>   # watch KwatchConfig CRs for live config changes
+    #   enabled: <boolean>   # restart kwatch when KwatchConfig changes
 
-    # ── Alert providers ───────────────────────────────────
-    alert:
-      slack:
-        webhook: <webhook_url>
-        # Optional routing + retry:
-        # routes:
-        #   - namespaces: ["production"]
-        #     severities: ["high"]
-        # retry:
-        #   maxAttempts: 3
-        #   delay: 5s
-
-      pagerduty:
-        integrationKey: <integration_key>
-
-      discord:
-        webhook: <webhook_url>
-
-      telegram:
-        token: <token_key>
-        chatId: <chat_id>
-
-      email:
-        from: <from_mail>
-        to: <to_mail>
-        password: <password>
-        host: <host>
-        port: <port_number>
-
-      teams:
-        webhook: <webhook_url>
-
-      rocketchat:
-        webhook: <webhook_url>
-
-      mattermost:
-        webhook: <webhook_url>
-
-      opsgenie:
-        apiKey: <api_key>
-
-      # matrix:
-      #   homeServer: "<url>"
-      #   accessToken: "<token>"
-      #   internalRoomId: "<room_id>"
-
-      # dingtalk:
-      #   accessToken: <access_token>
-      #   # secret: <signing_secret>
-
-      # feishu:
-      #   webhook: <webhook_url>
-
-      # webhook:
-      #   url: "<url>"
-      #   headers:
-      #     Authorization: "<token>"
-
-      # zenduty:
-      #   integrationKey: <integration_key>
-
-      # googlechat:
-      #   webhook: <webhook_url>
-
-      # gotify:
-      #   url: <url>
-      #   token: <token>
-
-      # ntfy:
-      #   topic: <topic>
-      #   url: "https://ntfy.sh"
-      #   token: <token>
-      #   priority: 4
-
-      # pushover:
-      #   token: <app_token>
-      #   user: <user_key>
-
-      # webex:
-      #   accessToken: <token>
-      #   roomId: <room_id>
-
-      # github:
-      #   token: <token>
-      #   owner: <owner>
-      #   repo: <repo>
-
-      # gitlab:
-      #   token: <token>
-      #   projectId: <project_id>
-
-      # teamsworkflow:
-      #   webhook: <workflow_url>
-
-      # zulip:
-      #   email: <bot_email>
-      #   token: <api_key>
-      #   channel: <stream>
-
-      # splunk:
-      #   url: <hec_url>
-      #   token: <hec_token>
-
-      # datadog:
-      #   apiKey: <api_key>
-
-      # newrelic:
-      #   apiKey: <user_api_key>
-      #   accountId: <account_id>
-
-      # ilert:
-      #   integrationKey: <integration_key>
-
-      # squadcast:
-      #   serviceKey: <service_key>
-
-      # signl4:
-      #   teamSecret: <team_secret>
-
-      # twilio:
-      #   accountSid: <account_sid>
-      #   authToken: <auth_token>
-      #   from: <sender_number>
-      #   to: <recipient_number>
-
-      # ses:
-      #   accessKeyId: <access_key_id>
-      #   secretAccessKey: <secret_access_key>
-      #   region: "us-east-1"
-      #   from: <sender>
-      #   to: <recipient>
-
-      # sns:
-      #   accessKeyId: <access_key_id>
-      #   secretAccessKey: <secret_access_key>
-      #   region: "us-east-1"
-      #   topicArn: <topic_arn>
-
-      # jira:
-      #   url: <jira_url>
-      #   user: <user>
-      #   apiToken: <api_token>
-      #   projectKey: <project_key>
-
-      # wecom:
-      #   webhook: <group_robot_webhook_url>
-
-      # mailgun:
-      #   apiKey: <api_key>
-      #   domain: <domain>
-      #   from: <sender>
-      #   to: <recipient>
-
-      # resend:
-      #   apiKey: <api_key>
-      #   from: <sender>
-      #   to: <recipient>
-
-      # goalert:
-      #   token: <api_token>
-      #   serviceId: <service_id>
-
-      # alerta:
-      #   url: <alerta_url>
-      #   apiKey: <api_key>
-
-      # threema:
-      #   gatewayId: <gateway_id>
-      #   secret: <gateway_secret>
-      #   to: <threema_id>
-
-      # flock:
-      #   webhook: <webhook_url>
-
-      # pushbullet:
-      #   accessToken: <access_token>
-
-      # sensugo:
-      #   url: <sensu_url>
-      #   apiKey: <api_key>
-
+    # Provider credentials are never valid as plain config values. Use
+    # kwatch.sh, or mount a Secret and reference each credential with
+    # ${file:/absolute/path}. See docs/providers.md.
+    alert: {}

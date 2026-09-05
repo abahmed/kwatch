@@ -31,6 +31,7 @@ spec:
     spec:
       restartPolicy: Always
       serviceAccountName:  {{ .Release.Name }}
+      automountServiceAccountToken: true
       containers:
         - name: {{ .Chart.Name }}
           securityContext:
@@ -88,7 +89,9 @@ spec:
           {{- if .Values.configSecretName }}
           secret:
             secretName: {{ .Values.configSecretName }}
+            defaultMode: 0400
           {{- else }}
           configMap:
             name: {{ .Release.Name }}
+            defaultMode: 0444
           {{- end }}

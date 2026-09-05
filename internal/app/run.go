@@ -33,20 +33,22 @@ import (
 // serverDeps bundles the wired components so the background loop and the
 // shutdown sequence can live in their own functions.
 type serverDeps struct {
-	ctx           context.Context
-	cancel        context.CancelFunc
-	cfg           *config.Config
-	healthServer  *health.HealthServer
-	alertManager  *alert.AlertManager
-	correlator    *correlation.Engine
-	pvcMonitor    *pvc.PvcMonitor
-	hbMonitor     *heartbeat.HeartbeatMonitor
-	ctl           *controller.Controller
-	incidentCh    chan []model.PersistedIncident
-	incidentSaver incidentSaver
-	incidentDone  <-chan struct{}
-	feedbackDone  <-chan struct{}
-	notifyStartup func()
+	ctx            context.Context
+	cancel         context.CancelFunc
+	cfg            *config.Config
+	healthServer   *health.HealthServer
+	alertManager   *alert.AlertManager
+	correlator     *correlation.Engine
+	pvcMonitor     *pvc.PvcMonitor
+	hbMonitor      *heartbeat.HeartbeatMonitor
+	ctl            *controller.Controller
+	incidentCh     chan []model.PersistedIncident
+	incidentSaver  incidentSaver
+	incidentDone   <-chan struct{}
+	feedbackDone   <-chan struct{}
+	initialized    <-chan struct{}
+	controllerDone chan struct{}
+	notifyStartup  func()
 	// recordAlive stamps the liveness marker that lets the next start report
 	// how long monitoring was down.
 	recordAlive     func(context.Context)
@@ -178,10 +180,6 @@ func RunWithClock(now func() time.Time) int {
 	healthServer.SetIncidentAPI(correlator)
 	healthServer.SetAlertManager(am)
 	healthServer.SetDeadLetterLister(am)
-	if err := healthServer.Start(ctx); err != nil {
-		klog.ErrorS(err, "failed to start health check server")
-		return 1
-	}
 
 	pvcMonitor := pvc.NewPvcMonitor(
 		k8sClient,
@@ -198,10 +196,17 @@ func RunWithClock(now func() time.Time) int {
 
 	ctl, cleanup, err := controller.New(k8sClient, cfg, h)
 	if err != nil {
+		if closeErr := auditLogger.Close(); closeErr != nil {
+			klog.ErrorS(closeErr, "failed to close audit logger")
+		}
 		klog.ErrorS(err, "failed to create controller")
 		return 1
 	}
 	healthServer.SetInformerLister(ctl)
+	namespaces, watchAll := ctl.NamespaceScope()
+	securityMonitor.SetNamespaces(namespaces)
+	securityMonitor.SetAllNamespaces(watchAll)
+	pvcMonitor.SetNamespaceScope(namespaces, cfg.ForbiddenNamespaces, watchAll)
 	pvcMonitor.SetNamespaceFilter(ctl.NamespaceAllowed)
 	pvcMonitor.SetClock(now)
 	if persist.incidentSaver != nil {
@@ -209,22 +214,43 @@ func RunWithClock(now func() time.Time) int {
 	}
 	ctl.SetTracker(tracker)
 	ctl.SetGraph(graph)
-	ctl.SetReadyFunc(func() { healthServer.SetReady(true) })
+	initialized := make(chan struct{})
+	ctl.SetReadyFunc(func() {
+		healthServer.SetReady(true)
+		close(initialized)
+	})
+	if err := healthServer.Start(ctx); err != nil {
+		cleanup()
+		if err := auditLogger.Close(); err != nil {
+			klog.ErrorS(err, "failed to close audit logger")
+		}
+		klog.ErrorS(err, "failed to start health check server")
+		return 1
+	}
 
-	statusRun := configureStatusMonitor(cfg, ctl, graph, correlator, now)
+	statusRun := configureStatusMonitor(
+		cfg, ctl, graph, correlator, healthServer, now,
+	)
 
-	metricsRun := configureMetricsMonitor(cfg, ctl, k8sClient, correlator)
+	metricsRun := configureMetricsMonitor(
+		cfg, ctl, k8sClient, correlator, healthServer,
+	)
 
 	var tlsSweep func()
 	if cfg.TlsMonitor.Enabled {
 		tlsSweep = h.SweepTLSSecrets
 	}
 
-	probeRun := configureProbeRunner(cfg, correlator, k8sClient, graph, now)
+	probeRun := configureProbeRunner(
+		cfg, ctl, correlator, k8sClient, graph, now,
+	)
 
 	var kubeletRun func(context.Context)
 	if cfg.KubeletTelemetryMonitor.Enabled {
 		kubeletMonitor := kubeletmetrics.New(k8sClient, cfg.KubeletTelemetryMonitor, correlator)
+		kubeletMonitor.SetNamespaceScope(namespaces, watchAll)
+		kubeletMonitor.SetNamespaceFilter(ctl.NamespaceAllowed)
+		kubeletMonitor.SetClock(now)
 		if cfg.KubeletTelemetryMonitor.PersistState {
 			kubeletMonitor.SetStateStore(stateMgr)
 		}
@@ -237,8 +263,10 @@ func RunWithClock(now func() time.Time) int {
 		cfg, k8sClient, healthServer, correlator, now,
 	)
 
-	storageRun := newStorageGraphRun(cfg, graph, correlator, ctl.NamespaceAllowed)
-	networkRun := newNetworkGraphRun(cfg, graph, ctl.NamespaceAllowed)
+	storageRun := newStorageGraphRun(
+		cfg, graph, correlator, ctl, healthServer,
+	)
+	networkRun := newNetworkGraphRun(cfg, graph, ctl, healthServer)
 
 	deps := &serverDeps{
 		ctx:             ctx,
@@ -254,6 +282,8 @@ func RunWithClock(now func() time.Time) int {
 		incidentSaver:   persist.incidentSaver,
 		incidentDone:    persist.incidentDone,
 		feedbackDone:    persist.feedbackDone,
+		initialized:     initialized,
+		controllerDone:  make(chan struct{}),
 		notifyStartup:   sm.NotifyStartup,
 		recordAlive:     sm.RecordAlive,
 		closeAudit:      auditLogger.Close,

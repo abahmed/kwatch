@@ -203,7 +203,7 @@ func saveFinalIncidentSnapshot(deps *serverDeps) {
 	}
 	saveIncidentSnapshot(
 		deps.incidentSaver,
-		deps.correlator.SnapshotPersisted(),
+		deps.correlator.FreezeAndSnapshotPersisted(),
 		5*time.Second,
 	)
 }

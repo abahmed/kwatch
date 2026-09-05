@@ -46,7 +46,6 @@ type KwatchConfigSpec struct {
 	HealthCheck                  HealthCheckConfig      `json:"healthCheck,omitempty"`
 	App                          AppConfig              `json:"app,omitempty"`
 	Upgrader                     map[string]interface{} `json:"upgrader,omitempty"`
-	Alert                        map[string]interface{} `json:"alert,omitempty"`
 	ScheduleMonitor              MonitorConfig          `json:"scheduleMonitor,omitempty"`
 	OomMonitor                   MonitorConfig          `json:"oomMonitor,omitempty"`
 	PendingPodMonitor            MonitorConfig          `json:"pendingPodMonitor,omitempty"`
@@ -129,17 +128,15 @@ type CronJobMonitorConfig struct {
 }
 
 type HeartbeatMonitorConfig struct {
-	Enabled  bool   `json:"enabled,omitempty"`
-	Interval int    `json:"interval,omitempty"`
-	URL      string `json:"url,omitempty"`
+	Enabled  bool `json:"enabled,omitempty"`
+	Interval int  `json:"interval,omitempty"`
 }
 
 type HealthCheckConfig struct {
-	Enabled          bool   `json:"enabled,omitempty"`
-	Port             int    `json:"port,omitempty"`
-	Pprof            bool   `json:"pprof,omitempty"`
-	Diagnostics      bool   `json:"diagnostics,omitempty"`
-	DiagnosticsToken string `json:"diagnosticsToken,omitempty"`
+	Enabled     bool `json:"enabled,omitempty"`
+	Port        int  `json:"port,omitempty"`
+	Pprof       bool `json:"pprof,omitempty"`
+	Diagnostics bool `json:"diagnostics,omitempty"`
 }
 
 type AppConfig struct {

@@ -70,7 +70,7 @@ func (w *Watcher) Start(ctx context.Context) error {
 		}
 		return fmt.Errorf("crdwatch: preflight check failed: %w", err)
 	}
-	return w.startInformer(ctx, dc)
+	return w.startInformer(ctx, dc, false)
 }
 
 func (w *Watcher) waitForCRD(ctx context.Context, dc dynamic.Interface) {
@@ -81,13 +81,19 @@ func (w *Watcher) waitForCRD(ctx context.Context, dc dynamic.Interface) {
 		case <-ctx.Done():
 			return
 		case <-ticker.C:
-			if _, err := dc.Resource(gvr).Namespace(w.namespace).List(ctx, metav1.ListOptions{Limit: 1}); err != nil {
+			list, err := dc.Resource(gvr).Namespace(w.namespace).List(
+				ctx, metav1.ListOptions{Limit: 1},
+			)
+			if err != nil {
 				if !errors.IsNotFound(err) {
 					klog.V(2).InfoS("CRD watcher discovery unavailable", "error", err)
 				}
 				continue
 			}
-			if err := w.startInformer(ctx, dc); err != nil {
+			if w.restartForLateConfig(len(list.Items)) {
+				return
+			}
+			if err := w.startInformer(ctx, dc, true); err != nil {
 				klog.ErrorS(err, "CRD watcher failed to start after installation")
 			}
 			return
@@ -95,7 +101,11 @@ func (w *Watcher) waitForCRD(ctx context.Context, dc dynamic.Interface) {
 	}
 }
 
-func (w *Watcher) startInformer(ctx context.Context, dc dynamic.Interface) error {
+func (w *Watcher) startInformer(
+	ctx context.Context,
+	dc dynamic.Interface,
+	restartOnInitial bool,
+) error {
 
 	factory := dynamicinformer.NewFilteredDynamicSharedInformerFactory(dc, w.resync, w.namespace, nil)
 	inf := factory.ForResource(gvr).Informer()
@@ -116,10 +126,27 @@ func (w *Watcher) startInformer(ctx context.Context, dc dynamic.Interface) error
 		return fmt.Errorf("crdwatch: failed to sync informer cache")
 	}
 
-	w.seedKnown(inf.GetStore().List())
+	initial := inf.GetStore().List()
+	w.seedKnown(initial)
+	if restartOnInitial {
+		w.restartForLateConfig(len(initial))
+	}
 
 	klog.InfoS("CRD watcher started", "namespace", w.namespace)
 	return nil
+}
+
+func (w *Watcher) restartForLateConfig(count int) bool {
+	if count == 0 || w.restart == nil {
+		return false
+	}
+	w.restartOnce.Do(func() {
+		klog.InfoS(
+			"KwatchConfig appeared after startup; restarting to apply configuration",
+		)
+		w.restart()
+	})
+	return true
 }
 
 func (w *Watcher) seedKnown(objects []interface{}) {

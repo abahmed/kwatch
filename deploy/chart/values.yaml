@@ -18,6 +18,12 @@ securityContext:
   runAsGroup: 1000
   runAsNonRoot: true
   readOnlyRootFilesystem: true
+  allowPrivilegeEscalation: false
+  capabilities:
+    drop:
+      - ALL
+  seccompProfile:
+    type: RuntimeDefault
 
 service:
   port: 8060
@@ -62,10 +68,11 @@ config:
   crd:
     enabled: true
 
-# -- Use an existing Secret containing config.yaml instead of rendering config in a ConfigMap
+# -- Use an existing Secret containing config.yaml and credential files.
+# Required for alert providers, heartbeatMonitor.url, and diagnosticsToken.
 configSecretName: ""
 
-# -- Configure the upgrader/update checker (nested under config in the ConfigMap)
+# -- Configure the upgrader/update checker (nested under config)
 # config:
 #   upgrader:
 #     disableUpdateCheck: false

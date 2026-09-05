@@ -37,6 +37,7 @@ func (e *Engine) cleanup() {
 	e.mu.Lock()
 	e.dirty = true
 	now := e.now()
+	e.removeExpiredCooldowns(now)
 	var pending []transition
 	for key, inc := range e.state {
 		if now.Before(inc.LastSeen.Add(e.config.Window)) {
@@ -69,6 +70,17 @@ func (e *Engine) cleanup() {
 	}
 	e.mu.Unlock()
 	e.emit(pending...)
+}
+
+// removeExpiredCooldowns bounds the per-incident cooldown index even when a
+// historical key never appears again. Caller must hold e.mu.
+func (e *Engine) removeExpiredCooldowns(now time.Time) {
+	for key, expiry := range e.cleanupCooldown {
+		if !now.Before(expiry) {
+			delete(e.cleanupCooldown, key)
+			e.clearSkipAudit(key)
+		}
+	}
 }
 
 func (e *Engine) checkLifecycle() {

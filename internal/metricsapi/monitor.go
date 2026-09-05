@@ -25,11 +25,13 @@ import (
 var podMetricsGVR = schema.GroupVersionResource{Group: "metrics.k8s.io", Version: "v1beta1", Resource: "pods"}
 
 type Monitor struct {
-	metrics    dynamic.ResourceInterface
+	metrics    dynamic.NamespaceableResourceInterface
 	client     kubernetes.Interface
 	correlator *correlation.Engine
 	cfg        config.RuntimeMetricsMonitor
 	allowed    func(string) bool
+	namespaces []string
+	watchAll   bool
 }
 
 func New(restConfig *rest.Config, client kubernetes.Interface, cfg config.RuntimeMetricsMonitor, correlator *correlation.Engine) (*Monitor, error) {
@@ -37,10 +39,18 @@ func New(restConfig *rest.Config, client kubernetes.Interface, cfg config.Runtim
 	if err != nil {
 		return nil, fmt.Errorf("metricsapi: create dynamic client: %w", err)
 	}
-	return &Monitor{metrics: dynamicClient.Resource(podMetricsGVR), client: client, correlator: correlator, cfg: cfg}, nil
+	return &Monitor{
+		metrics: dynamicClient.Resource(podMetricsGVR), client: client,
+		correlator: correlator, cfg: cfg, watchAll: true,
+	}, nil
 }
 
 func (m *Monitor) SetNamespaceFilter(filter func(string) bool) { m.allowed = filter }
+
+func (m *Monitor) SetNamespaceScope(namespaces []string, watchAll bool) {
+	m.namespaces = append([]string(nil), namespaces...)
+	m.watchAll = watchAll
+}
 
 func (m *Monitor) Start(ctx context.Context) {
 	interval := time.Duration(m.cfg.IntervalSeconds) * time.Second
@@ -64,25 +74,72 @@ func (m *Monitor) sweep(ctx context.Context) {
 	if m.metrics == nil || m.client == nil {
 		return
 	}
-	metricsList, err := m.metrics.List(ctx, metav1.ListOptions{})
-	if err != nil {
-		// Metrics Server is optional. A missing/forbidden metrics API must not
-		// resolve existing incidents or create a synthetic outage incident.
-		klog.V(2).InfoS("metricsapi unavailable", "error", err)
-		return
+	namespaces := m.namespaces
+	if m.watchAll {
+		namespaces = []string{""}
 	}
-	for i := range metricsList.Items {
-		m.processPod(ctx, &metricsList.Items[i])
+	for _, namespace := range namespaces {
+		metricsList, err := m.metrics.Namespace(namespace).List(
+			ctx, metav1.ListOptions{},
+		)
+		if err != nil {
+			// Metrics Server is optional. A missing/forbidden metrics API must not
+			// resolve existing incidents or create a synthetic outage incident.
+			klog.V(2).InfoS("metricsapi unavailable", "error", err)
+			continue
+		}
+		pods, err := m.listPods(ctx, namespace)
+		if err != nil {
+			klog.V(2).InfoS("metricsapi pod list unavailable", "error", err)
+			continue
+		}
+		for i := range metricsList.Items {
+			metrics := &metricsList.Items[i]
+			pod := pods[metrics.GetNamespace()+"/"+metrics.GetName()]
+			if pod != nil {
+				m.processPod(pod, metrics)
+			}
+		}
 	}
 }
 
-func (m *Monitor) processPod(ctx context.Context, metrics *unstructured.Unstructured) {
+func (m *Monitor) listPods(
+	ctx context.Context,
+	namespace string,
+) (map[string]*corev1.Pod, error) {
+	const pageSize int64 = 500
+	result := make(map[string]*corev1.Pod)
+	continueToken := ""
+	for {
+		list, err := m.client.CoreV1().Pods(namespace).List(
+			ctx,
+			metav1.ListOptions{Limit: pageSize, Continue: continueToken},
+		)
+		if err != nil {
+			return nil, err
+		}
+		for i := range list.Items {
+			pod := &list.Items[i]
+			if m.allowed == nil || m.allowed(pod.Namespace) {
+				result[pod.Namespace+"/"+pod.Name] = pod
+			}
+		}
+		if list.Continue == "" {
+			return result, nil
+		}
+		continueToken = list.Continue
+	}
+}
+
+func (m *Monitor) processPod(
+	pod *corev1.Pod,
+	metrics *unstructured.Unstructured,
+) {
 	namespace, name := metrics.GetNamespace(), metrics.GetName()
 	if m.allowed != nil && !m.allowed(namespace) {
 		return
 	}
-	pod, err := m.client.CoreV1().Pods(namespace).Get(ctx, name, metav1.GetOptions{})
-	if err != nil {
+	if pod.Namespace != namespace || pod.Name != name {
 		return
 	}
 	limits := containerLimits(pod)

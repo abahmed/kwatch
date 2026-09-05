@@ -1,4 +1,7 @@
-# Release integrity
+# 🔐 Release integrity
+
+Use this guide when you need to verify that an image or binary came from the
+published kwatch release and was not changed on the way to your cluster.
 
 Every published container release includes a source commit, image digest, checksums,
 and a release manifest. The image is signed with Cosign using GitHub Actions

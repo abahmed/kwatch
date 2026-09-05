@@ -174,6 +174,20 @@ func (e *Engine) ActiveIncidents() map[model.IncidentKey]*model.Incident {
 func (e *Engine) SnapshotPersisted() []model.PersistedIncident {
 	e.mu.Lock()
 	defer e.mu.Unlock()
+	return e.snapshotPersistedLocked()
+}
+
+// FreezeAndSnapshotPersisted stops runtime incident changes and returns the
+// final serializable state. It is only for shutdown: freezing is permanent.
+func (e *Engine) FreezeAndSnapshotPersisted() []model.PersistedIncident {
+	e.mu.Lock()
+	defer e.mu.Unlock()
+	e.frozen = true
+	return e.snapshotPersistedLocked()
+}
+
+// Caller must hold e.mu.
+func (e *Engine) snapshotPersistedLocked() []model.PersistedIncident {
 	keys := make([]string, 0, len(e.state)+len(e.massFailures))
 	for key := range e.state {
 		keys = append(keys, string(key))
@@ -298,7 +312,7 @@ func (e *Engine) hasMassFailureLocked(key model.IncidentKey) bool {
 // e.mu.
 func (e *Engine) AddMassFailure(inc *model.Incident) bool {
 	e.mu.Lock()
-	if inc == nil {
+	if e.frozen || inc == nil {
 		e.mu.Unlock()
 		return false
 	}
@@ -329,6 +343,10 @@ func (e *Engine) AddMassFailure(inc *model.Incident) bool {
 // if the mass failure was tracked at all. Callers must not hold e.mu.
 func (e *Engine) RemoveMassFailure(key model.IncidentKey) bool {
 	e.mu.Lock()
+	if e.frozen {
+		e.mu.Unlock()
+		return false
+	}
 	inc, exists := e.massFailures[key]
 	if !exists {
 		e.mu.Unlock()

@@ -101,6 +101,10 @@ const DefaultMaxBaseline = 2000
 type Engine struct {
 	mu    sync.Mutex
 	state map[model.IncidentKey]*model.Incident
+	// frozen is set immediately before the final shutdown snapshot. Dynamic
+	// informer callbacks may still be unwinding after their stop channel
+	// closes, so runtime incident mutations must become no-ops at that point.
+	frozen bool
 	// ns → key → inc
 	namespaceIndex map[string]map[model.IncidentKey]*model.Incident
 	config         Config

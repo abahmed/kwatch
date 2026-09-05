@@ -2,10 +2,16 @@ package statuswatch
 
 import (
 	"context"
+	"errors"
 	"testing"
 
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
+	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/client-go/dynamic/dynamicinformer"
+	dynamicfake "k8s.io/client-go/dynamic/fake"
+	k8stesting "k8s.io/client-go/testing"
 
 	kwcontext "github.com/abahmed/kwatch/internal/graphcontext"
 )
@@ -80,5 +86,40 @@ func TestGraphReferenceRulesTraverseArrays(t *testing.T) {
 	deps := graph.DependenciesOf("customresource", "apps", "route")
 	if len(deps) != 2 || deps[0] != "service/apps/api" || deps[1] != "service/apps/web" {
 		t.Fatalf("unexpected reference dependencies: %v", deps)
+	}
+}
+
+func TestWatchNamespacesUsesExplicitScope(t *testing.T) {
+	monitor := &Monitor{namespaces: []string{"apps"}}
+	if got := monitor.watchNamespaces(false); len(got) != 1 || got[0] != "" {
+		t.Fatalf("cluster resource scope changed: %v", got)
+	}
+	got := monitor.watchNamespaces(true)
+	if len(got) != 1 || got[0] != "apps" {
+		t.Fatalf("namespaced resource scope changed: %v", got)
+	}
+}
+
+func TestCanWatchVersionSkipsForbiddenResource(t *testing.T) {
+	gvr := schema.GroupVersionResource{
+		Group: "example.io", Version: "v1", Resource: "widgets",
+	}
+	client := dynamicfake.NewSimpleDynamicClientWithCustomListKinds(
+		runtime.NewScheme(), map[schema.GroupVersionResource]string{
+			gvr: "WidgetList",
+		},
+	)
+	client.PrependReactor(
+		"list", "widgets",
+		func(k8stesting.Action) (bool, runtime.Object, error) {
+			return true, nil, apierrors.NewForbidden(
+				gvr.GroupResource(), "", errors.New("denied"),
+			)
+		},
+	)
+	monitor := &Monitor{client: client, ctx: context.Background()}
+
+	if monitor.canWatchVersion(gvr, "apps") {
+		t.Fatal("forbidden custom resource should not start an informer")
 	}
 }

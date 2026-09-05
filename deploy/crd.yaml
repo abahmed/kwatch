@@ -259,8 +259,6 @@ spec:
                       type: boolean
                     interval:
                       type: integer
-                    url:
-                      type: string
                 healthCheck:
                   type: object
                   properties:
@@ -272,8 +270,6 @@ spec:
                       type: boolean
                     diagnostics:
                       type: boolean
-                    diagnosticsToken:
-                      type: string
                 telemetry:
                   type: object
                   properties:
@@ -325,8 +321,5 @@ spec:
                     output:
                       type: string
                 upgrader:
-                  type: object
-                  x-kubernetes-preserve-unknown-fields: true
-                alert:
                   type: object
                   x-kubernetes-preserve-unknown-fields: true

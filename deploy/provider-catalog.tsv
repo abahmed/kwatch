@@ -1,0 +1,406 @@
+# kwatch provider catalog v1
+slack|Slack|webhook|string|false|true|url||Slack webhook URL
+slack|Slack|channel|string|false|false|||Override channel
+slack|Slack|title|string|false|false|||Custom title
+slack|Slack|text|string|false|false|||Custom text
+slack|Slack|compact|boolean|false|false|boolean|false|Single-line mode
+slack|Slack|token|string|false|true|||Bot token (xoxb-...)
+discord|Discord|webhook|string|true|true|url||Discord webhook URL
+discord|Discord|title|string|false|false|||Custom title
+discord|Discord|text|string|false|false|||Custom text
+email|Email|from|string|true|false|||From address
+email|Email|password|string|true|true|||From password
+email|Email|host|string|true|false|||SMTP host
+email|Email|port|string|true|false|port||SMTP port
+email|Email|to|string|true|false|||Receiver email
+line|LINE|token|string|true|true|||LINE Notify access token
+pagerduty|PagerDuty|integrationKey|string|true|true|||PagerDuty integration key
+telegram|Telegram|token|string|true|true|||Bot token
+telegram|Telegram|chatId|string|true|false|telegram-chat-id||Chat ID
+teams|Teams|webhook|string|true|true|url||Webhook URL
+teams|Teams|title|string|false|false|||Custom title
+teams|Teams|text|string|false|false|||Custom text
+rocketchat|Rocket.Chat|webhook|string|true|true|url||Webhook URL
+rocketchat|Rocket.Chat|text|string|false|false|||Custom text
+mattermost|Mattermost|webhook|string|true|true|url||Webhook URL
+mattermost|Mattermost|title|string|false|false|||Custom title
+mattermost|Mattermost|text|string|false|false|||Custom text
+opsgenie|Opsgenie|apiKey|string|true|true|||API Key
+opsgenie|Opsgenie|title|string|false|false|||Custom title
+opsgenie|Opsgenie|text|string|false|false|||Custom text
+matrix|Matrix|homeServer|string|true|false|url||HomeServer URL
+matrix|Matrix|accessToken|string|true|true|||Access token
+matrix|Matrix|internalRoomId|string|true|false|||Room ID
+matrix|Matrix|title|string|false|false|||Custom title
+matrix|Matrix|text|string|false|false|||Custom text
+dingtalk|Dingtalk|accessToken|string|true|true|||Access token
+dingtalk|Dingtalk|secret|string|false|true|||Signing secret
+dingtalk|Dingtalk|title|string|false|false|||Custom title
+feishu|Feishu|webhook|string|true|true|url||Webhook URL
+feishu|Feishu|title|string|false|false|||Custom title
+zenduty|Zenduty|integrationKey|string|true|true|||Integration Key
+zenduty|Zenduty|alertType|string|false|false||critical|Alert type (default: critical)
+googlechat|Google Chat|webhook|string|true|true|url||Webhook URL
+googlechat|Google Chat|text|string|false|false|||Custom text
+gotify|Gotify|url|string|true|false|url||Gotify server URL
+gotify|Gotify|token|string|true|true|||App token
+gotify|Gotify|priority|integer|false|false|integer||Priority (optional)
+gotify|Gotify|title|string|false|false|||Custom title
+ntfy|ntfy|topic|string|true|true|||Topic to publish to
+ntfy|ntfy|url|string|false|false|url|https://ntfy.sh|Server URL (default: https://ntfy.sh)
+ntfy|ntfy|token|string|false|true|||Optional auth token
+ntfy|ntfy|priority|integer|false|false|integer|4|Priority 1-5 (default: 4)
+pushover|Pushover|token|string|true|true|||Application token
+pushover|Pushover|user|string|true|true|||User or group key
+pushover|Pushover|priority|integer|false|false|integer||Priority (optional)
+pushover|Pushover|title|string|false|false|||Custom title
+webex|Webex|accessToken|string|true|true|||Bot access token
+webex|Webex|roomId|string|false|false|||Room ID (optional)
+webex|Webex|toPersonEmail|string|false|false|||Person email (optional)
+github|GitHub|token|string|true|true|||Personal access token
+github|GitHub|owner|string|true|false|||Repository owner
+github|GitHub|repo|string|true|false|||Repository name
+github|GitHub|url|string|false|false|url||Optional endpoint override (e.g. GitHub Enterprise)
+gitlab|GitLab|token|string|true|true|||Personal access token
+gitlab|GitLab|projectId|string|true|false|||Project ID
+gitlab|GitLab|url|string|false|false|url||Optional endpoint override (e.g. self-hosted GitLab)
+gitea|Gitea|token|string|true|true|||Access token
+gitea|Gitea|owner|string|true|false|||Repository owner
+gitea|Gitea|repo|string|true|false|||Repository name
+gitea|Gitea|url|string|false|false|url||Optional endpoint override (e.g. self-hosted Gitea)
+zapier|Zapier|url|string|true|true|url||Zap webhook URL
+zapier|Zapier|token|string|false|true|||Optional token
+n8n|n8n|url|string|true|true|url||Workflow webhook URL
+n8n|n8n|token|string|false|true|||Optional auth header value
+ifttt|IFTTT|key|string|true|true|||Webhooks key
+ifttt|IFTTT|event|string|false|false||kwatch|Event name (default: kwatch)
+teamsworkflow|Teams Workflow|webhook|string|true|true|url||Power Automate / Teams Workflow URL
+zulip|Zulip|email|string|true|false|||Bot email
+zulip|Zulip|token|string|true|true|||Bot API key
+zulip|Zulip|channel|string|true|false|||Channel/stream to post to
+zulip|Zulip|url|string|false|false|url|https://zulip.example.com/api/v1/messages|Server URL (default: https://zulip.example.com/api/v1/messages)
+homeassistant|Home Assistant|token|string|true|true|||Long-lived access token
+homeassistant|Home Assistant|url|string|false|false|url|http://localhost:8123|Server URL (default: http://localhost:8123)
+homeassistant|Home Assistant|service|string|false|false||notify|Notification service (default: notify)
+splunk|Splunk|url|string|true|false|url||HEC endpoint URL
+splunk|Splunk|token|string|true|true|||HEC token
+splunk|Splunk|source|string|false|false|||Source name (optional)
+splunk|Splunk|sourcetype|string|false|false|||Source type (optional)
+splunk|Splunk|index|string|false|false|||Index name (optional)
+splunk|Splunk|host|string|false|false|||Host name (optional)
+datadog|Datadog|apiKey|string|true|true|||API key
+datadog|Datadog|site|string|false|false||datadoghq.com|Datadog site (default: datadoghq.com)
+datadog|Datadog|applicationKey|string|false|true|||Optional application key
+datadog|Datadog|alertType|string|false|false||error|Alert type (default: error)
+datadog|Datadog|tags|list|false|false|list||Comma-separated tags
+newrelic|New Relic|apiKey|string|true|true|||User API key
+newrelic|New Relic|accountId|string|true|false|||Account ID
+clickup|ClickUp|token|string|true|true|||Personal API token
+clickup|ClickUp|listId|string|true|false|||List ID to create tasks in
+clickup|ClickUp|priority|integer|false|false|integer||Optional task priority (1-4)
+ilert|iLert|integrationKey|string|true|true|||Integration key
+ilert|iLert|priority|integer|false|false|integer||Priority (LOW/HIGH/CRITICAL, default: HIGH)
+incidentio|Incident.io|url|string|true|true|url||Incident.io URL
+incidentio|Incident.io|apiKey|string|false|true|||Optional API key
+squadcast|Squadcast|serviceKey|string|true|true|||Service key
+signl4|SIGNL4|teamSecret|string|true|true|||Team secret
+signl4|SIGNL4|title|string|false|false|||Custom title
+signl4|SIGNL4|user|string|false|false|||Optional alerting user
+signl4|SIGNL4|url|string|false|false|url||Optional endpoint override
+twilio|Twilio|accountSid|string|true|true|||Account SID
+twilio|Twilio|authToken|string|true|true|||Auth token
+twilio|Twilio|from|string|true|false|||Sender phone number
+twilio|Twilio|to|string|true|false|||Recipient phone number
+vonage|Vonage|apiKey|string|true|true|||API key
+vonage|Vonage|apiSecret|string|true|true|||API secret
+vonage|Vonage|from|string|true|false|||Sender name/number
+vonage|Vonage|to|string|true|false|||Recipient phone number
+plivo|Plivo|authId|string|true|true|||Auth ID
+plivo|Plivo|authToken|string|true|true|||Auth token
+plivo|Plivo|from|string|true|false|||Sender number
+plivo|Plivo|to|string|true|false|||Recipient phone number
+messagebird|MessageBird|accessKey|string|true|true|||Access key
+messagebird|MessageBird|from|string|true|false|||Sender number
+messagebird|MessageBird|to|string|true|false|||Recipient phone number
+signal|Signal|number|string|true|false|||Sender phone number
+signal|Signal|to|string|true|false|||Recipient phone number
+signal|Signal|url|string|false|false|url|http://localhost:8080|REST API URL (default: http://localhost:8080)
+sendgrid|SendGrid|apiKey|string|true|true|||API key
+sendgrid|SendGrid|from|string|true|false|||From address
+sendgrid|SendGrid|to|list|true|false|list||Recipients (list of addresses)
+sendgrid|SendGrid|subject|string|false|false|||Email subject
+ses|SES|accessKeyId|string|true|true|||AWS access key ID
+ses|SES|secretAccessKey|string|true|true|||AWS secret access key
+ses|SES|region|string|false|false||us-east-1|AWS region (default: us-east-1)
+ses|SES|from|string|true|false|||Verified sender address
+ses|SES|to|string|true|false|||Recipients (comma-separated)
+ses|SES|subject|string|false|false|||Email subject
+sns|SNS|accessKeyId|string|true|true|||AWS access key ID
+sns|SNS|secretAccessKey|string|true|true|||AWS secret access key
+sns|SNS|region|string|false|false||us-east-1|AWS region (default: us-east-1)
+sns|SNS|topicArn|string|false|false|||SNS topic ARN (or targetArn)
+sns|SNS|targetArn|string|false|false|||SNS target ARN (alternative to topicArn).
+sns|SNS|subject|string|false|false|||Optional subject (email subscriptions)
+jira|Jira|url|string|true|false|url||Jira base URL
+jira|Jira|user|string|true|false|||Email or username
+jira|Jira|apiToken|string|true|true|||API token
+jira|Jira|projectKey|string|true|false|||Project key
+jira|Jira|issueType|string|false|false||Task|Issue type (default: Task)
+wecom|WeCom|webhook|string|true|true|url||Group robot webhook URL
+splunkoncall|Splunk On-Call|apiKey|string|true|true|||API key
+splunkoncall|Splunk On-Call|routingKey|string|true|true|||Routing key
+splunkoncall|Splunk On-Call|url|string|false|false|url||Optional endpoint override
+mailgun|Mailgun|apiKey|string|true|true|||API key
+mailgun|Mailgun|domain|string|true|false|||Sending domain
+mailgun|Mailgun|from|string|true|false|||From address
+mailgun|Mailgun|to|string|true|false|||Recipients (comma-separated)
+mailgun|Mailgun|subject|string|false|false|||Email subject
+mailgun|Mailgun|url|string|false|false|url||Optional endpoint override (e.g. EU region)
+resend|Resend|apiKey|string|true|true|||API key
+resend|Resend|from|string|true|false|||From address
+resend|Resend|to|string|true|false|||Recipients (comma-separated)
+resend|Resend|subject|string|false|false|||Email subject
+goalert|GoAlert|url|string|false|false|url|https://goalert.example.com|GoAlert URL (default: https://goalert.example.com)
+goalert|GoAlert|token|string|true|true|||API token
+goalert|GoAlert|serviceId|string|true|false|||Service ID
+alerta|Alerta|url|string|true|false|url||Alerta server URL
+alerta|Alerta|apiKey|string|true|true|||API key
+alerta|Alerta|environment|string|false|false||Production|Environment (default: Production)
+alerta|Alerta|service|string|false|false||kwatch|Service name (default: kwatch)
+threema|Threema|gatewayId|string|true|true|||Threema Gateway ID
+threema|Threema|secret|string|true|true|||Gateway secret
+threema|Threema|to|string|true|false|||Recipient Threema ID
+flock|Flock|webhook|string|true|true|url||Incoming webhook URL
+pushbullet|Pushbullet|accessToken|string|true|true|||Access token
+sensugo|SensiGo|url|string|true|false|url||Sensu Go API URL
+sensugo|SensiGo|apiKey|string|true|true|||API key
+sensugo|SensiGo|namespace|string|false|false||default|Namespace (default: default)
+sensugo|SensiGo|entity|string|false|false||kwatch|Entity name (default: kwatch)
+webhook|Generic Webhook|url|string|true|true|url||Webhook URL
+webhook|Generic Webhook|headers|headers|false|false|||Custom headers
+webhook|Generic Webhook|basicAuth.username|string|false|false|||Basic-auth username.
+webhook|Generic Webhook|basicAuth.password|string|false|true|||Basic-auth password.
+slack|Slack|routes|json|false|false|json||Optional JSON route filters.
+slack|Slack|retry.maxAttempts|integer|false|false|integer||Optional maximum retry attempts.
+slack|Slack|retry.delay|string|false|false|||Optional retry delay, for example 5s.
+slack|Slack|fallback|string|false|false|||Optional fallback provider name.
+discord|Discord|routes|json|false|false|json||Optional JSON route filters.
+discord|Discord|retry.maxAttempts|integer|false|false|integer||Optional maximum retry attempts.
+discord|Discord|retry.delay|string|false|false|||Optional retry delay, for example 5s.
+discord|Discord|fallback|string|false|false|||Optional fallback provider name.
+email|Email|routes|json|false|false|json||Optional JSON route filters.
+email|Email|retry.maxAttempts|integer|false|false|integer||Optional maximum retry attempts.
+email|Email|retry.delay|string|false|false|||Optional retry delay, for example 5s.
+email|Email|fallback|string|false|false|||Optional fallback provider name.
+line|LINE|routes|json|false|false|json||Optional JSON route filters.
+line|LINE|retry.maxAttempts|integer|false|false|integer||Optional maximum retry attempts.
+line|LINE|retry.delay|string|false|false|||Optional retry delay, for example 5s.
+line|LINE|fallback|string|false|false|||Optional fallback provider name.
+pagerduty|PagerDuty|routes|json|false|false|json||Optional JSON route filters.
+pagerduty|PagerDuty|retry.maxAttempts|integer|false|false|integer||Optional maximum retry attempts.
+pagerduty|PagerDuty|retry.delay|string|false|false|||Optional retry delay, for example 5s.
+pagerduty|PagerDuty|fallback|string|false|false|||Optional fallback provider name.
+telegram|Telegram|routes|json|false|false|json||Optional JSON route filters.
+telegram|Telegram|retry.maxAttempts|integer|false|false|integer||Optional maximum retry attempts.
+telegram|Telegram|retry.delay|string|false|false|||Optional retry delay, for example 5s.
+telegram|Telegram|fallback|string|false|false|||Optional fallback provider name.
+teams|Teams|routes|json|false|false|json||Optional JSON route filters.
+teams|Teams|retry.maxAttempts|integer|false|false|integer||Optional maximum retry attempts.
+teams|Teams|retry.delay|string|false|false|||Optional retry delay, for example 5s.
+teams|Teams|fallback|string|false|false|||Optional fallback provider name.
+rocketchat|Rocket.Chat|routes|json|false|false|json||Optional JSON route filters.
+rocketchat|Rocket.Chat|retry.maxAttempts|integer|false|false|integer||Optional maximum retry attempts.
+rocketchat|Rocket.Chat|retry.delay|string|false|false|||Optional retry delay, for example 5s.
+rocketchat|Rocket.Chat|fallback|string|false|false|||Optional fallback provider name.
+mattermost|Mattermost|routes|json|false|false|json||Optional JSON route filters.
+mattermost|Mattermost|retry.maxAttempts|integer|false|false|integer||Optional maximum retry attempts.
+mattermost|Mattermost|retry.delay|string|false|false|||Optional retry delay, for example 5s.
+mattermost|Mattermost|fallback|string|false|false|||Optional fallback provider name.
+opsgenie|Opsgenie|routes|json|false|false|json||Optional JSON route filters.
+opsgenie|Opsgenie|retry.maxAttempts|integer|false|false|integer||Optional maximum retry attempts.
+opsgenie|Opsgenie|retry.delay|string|false|false|||Optional retry delay, for example 5s.
+opsgenie|Opsgenie|fallback|string|false|false|||Optional fallback provider name.
+matrix|Matrix|routes|json|false|false|json||Optional JSON route filters.
+matrix|Matrix|retry.maxAttempts|integer|false|false|integer||Optional maximum retry attempts.
+matrix|Matrix|retry.delay|string|false|false|||Optional retry delay, for example 5s.
+matrix|Matrix|fallback|string|false|false|||Optional fallback provider name.
+dingtalk|Dingtalk|routes|json|false|false|json||Optional JSON route filters.
+dingtalk|Dingtalk|retry.maxAttempts|integer|false|false|integer||Optional maximum retry attempts.
+dingtalk|Dingtalk|retry.delay|string|false|false|||Optional retry delay, for example 5s.
+dingtalk|Dingtalk|fallback|string|false|false|||Optional fallback provider name.
+feishu|Feishu|routes|json|false|false|json||Optional JSON route filters.
+feishu|Feishu|retry.maxAttempts|integer|false|false|integer||Optional maximum retry attempts.
+feishu|Feishu|retry.delay|string|false|false|||Optional retry delay, for example 5s.
+feishu|Feishu|fallback|string|false|false|||Optional fallback provider name.
+zenduty|Zenduty|routes|json|false|false|json||Optional JSON route filters.
+zenduty|Zenduty|retry.maxAttempts|integer|false|false|integer||Optional maximum retry attempts.
+zenduty|Zenduty|retry.delay|string|false|false|||Optional retry delay, for example 5s.
+zenduty|Zenduty|fallback|string|false|false|||Optional fallback provider name.
+googlechat|Google Chat|routes|json|false|false|json||Optional JSON route filters.
+googlechat|Google Chat|retry.maxAttempts|integer|false|false|integer||Optional maximum retry attempts.
+googlechat|Google Chat|retry.delay|string|false|false|||Optional retry delay, for example 5s.
+googlechat|Google Chat|fallback|string|false|false|||Optional fallback provider name.
+gotify|Gotify|routes|json|false|false|json||Optional JSON route filters.
+gotify|Gotify|retry.maxAttempts|integer|false|false|integer||Optional maximum retry attempts.
+gotify|Gotify|retry.delay|string|false|false|||Optional retry delay, for example 5s.
+gotify|Gotify|fallback|string|false|false|||Optional fallback provider name.
+ntfy|ntfy|routes|json|false|false|json||Optional JSON route filters.
+ntfy|ntfy|retry.maxAttempts|integer|false|false|integer||Optional maximum retry attempts.
+ntfy|ntfy|retry.delay|string|false|false|||Optional retry delay, for example 5s.
+ntfy|ntfy|fallback|string|false|false|||Optional fallback provider name.
+pushover|Pushover|routes|json|false|false|json||Optional JSON route filters.
+pushover|Pushover|retry.maxAttempts|integer|false|false|integer||Optional maximum retry attempts.
+pushover|Pushover|retry.delay|string|false|false|||Optional retry delay, for example 5s.
+pushover|Pushover|fallback|string|false|false|||Optional fallback provider name.
+webex|Webex|routes|json|false|false|json||Optional JSON route filters.
+webex|Webex|retry.maxAttempts|integer|false|false|integer||Optional maximum retry attempts.
+webex|Webex|retry.delay|string|false|false|||Optional retry delay, for example 5s.
+webex|Webex|fallback|string|false|false|||Optional fallback provider name.
+github|GitHub|routes|json|false|false|json||Optional JSON route filters.
+github|GitHub|retry.maxAttempts|integer|false|false|integer||Optional maximum retry attempts.
+github|GitHub|retry.delay|string|false|false|||Optional retry delay, for example 5s.
+github|GitHub|fallback|string|false|false|||Optional fallback provider name.
+gitlab|GitLab|routes|json|false|false|json||Optional JSON route filters.
+gitlab|GitLab|retry.maxAttempts|integer|false|false|integer||Optional maximum retry attempts.
+gitlab|GitLab|retry.delay|string|false|false|||Optional retry delay, for example 5s.
+gitlab|GitLab|fallback|string|false|false|||Optional fallback provider name.
+gitea|Gitea|routes|json|false|false|json||Optional JSON route filters.
+gitea|Gitea|retry.maxAttempts|integer|false|false|integer||Optional maximum retry attempts.
+gitea|Gitea|retry.delay|string|false|false|||Optional retry delay, for example 5s.
+gitea|Gitea|fallback|string|false|false|||Optional fallback provider name.
+zapier|Zapier|routes|json|false|false|json||Optional JSON route filters.
+zapier|Zapier|retry.maxAttempts|integer|false|false|integer||Optional maximum retry attempts.
+zapier|Zapier|retry.delay|string|false|false|||Optional retry delay, for example 5s.
+zapier|Zapier|fallback|string|false|false|||Optional fallback provider name.
+n8n|n8n|routes|json|false|false|json||Optional JSON route filters.
+n8n|n8n|retry.maxAttempts|integer|false|false|integer||Optional maximum retry attempts.
+n8n|n8n|retry.delay|string|false|false|||Optional retry delay, for example 5s.
+n8n|n8n|fallback|string|false|false|||Optional fallback provider name.
+ifttt|IFTTT|routes|json|false|false|json||Optional JSON route filters.
+ifttt|IFTTT|retry.maxAttempts|integer|false|false|integer||Optional maximum retry attempts.
+ifttt|IFTTT|retry.delay|string|false|false|||Optional retry delay, for example 5s.
+ifttt|IFTTT|fallback|string|false|false|||Optional fallback provider name.
+teamsworkflow|Teams Workflow|routes|json|false|false|json||Optional JSON route filters.
+teamsworkflow|Teams Workflow|retry.maxAttempts|integer|false|false|integer||Optional maximum retry attempts.
+teamsworkflow|Teams Workflow|retry.delay|string|false|false|||Optional retry delay, for example 5s.
+teamsworkflow|Teams Workflow|fallback|string|false|false|||Optional fallback provider name.
+zulip|Zulip|routes|json|false|false|json||Optional JSON route filters.
+zulip|Zulip|retry.maxAttempts|integer|false|false|integer||Optional maximum retry attempts.
+zulip|Zulip|retry.delay|string|false|false|||Optional retry delay, for example 5s.
+zulip|Zulip|fallback|string|false|false|||Optional fallback provider name.
+homeassistant|Home Assistant|routes|json|false|false|json||Optional JSON route filters.
+homeassistant|Home Assistant|retry.maxAttempts|integer|false|false|integer||Optional maximum retry attempts.
+homeassistant|Home Assistant|retry.delay|string|false|false|||Optional retry delay, for example 5s.
+homeassistant|Home Assistant|fallback|string|false|false|||Optional fallback provider name.
+splunk|Splunk|routes|json|false|false|json||Optional JSON route filters.
+splunk|Splunk|retry.maxAttempts|integer|false|false|integer||Optional maximum retry attempts.
+splunk|Splunk|retry.delay|string|false|false|||Optional retry delay, for example 5s.
+splunk|Splunk|fallback|string|false|false|||Optional fallback provider name.
+datadog|Datadog|routes|json|false|false|json||Optional JSON route filters.
+datadog|Datadog|retry.maxAttempts|integer|false|false|integer||Optional maximum retry attempts.
+datadog|Datadog|retry.delay|string|false|false|||Optional retry delay, for example 5s.
+datadog|Datadog|fallback|string|false|false|||Optional fallback provider name.
+newrelic|New Relic|routes|json|false|false|json||Optional JSON route filters.
+newrelic|New Relic|retry.maxAttempts|integer|false|false|integer||Optional maximum retry attempts.
+newrelic|New Relic|retry.delay|string|false|false|||Optional retry delay, for example 5s.
+newrelic|New Relic|fallback|string|false|false|||Optional fallback provider name.
+clickup|ClickUp|routes|json|false|false|json||Optional JSON route filters.
+clickup|ClickUp|retry.maxAttempts|integer|false|false|integer||Optional maximum retry attempts.
+clickup|ClickUp|retry.delay|string|false|false|||Optional retry delay, for example 5s.
+clickup|ClickUp|fallback|string|false|false|||Optional fallback provider name.
+ilert|iLert|routes|json|false|false|json||Optional JSON route filters.
+ilert|iLert|retry.maxAttempts|integer|false|false|integer||Optional maximum retry attempts.
+ilert|iLert|retry.delay|string|false|false|||Optional retry delay, for example 5s.
+ilert|iLert|fallback|string|false|false|||Optional fallback provider name.
+incidentio|Incident.io|routes|json|false|false|json||Optional JSON route filters.
+incidentio|Incident.io|retry.maxAttempts|integer|false|false|integer||Optional maximum retry attempts.
+incidentio|Incident.io|retry.delay|string|false|false|||Optional retry delay, for example 5s.
+incidentio|Incident.io|fallback|string|false|false|||Optional fallback provider name.
+squadcast|Squadcast|routes|json|false|false|json||Optional JSON route filters.
+squadcast|Squadcast|retry.maxAttempts|integer|false|false|integer||Optional maximum retry attempts.
+squadcast|Squadcast|retry.delay|string|false|false|||Optional retry delay, for example 5s.
+squadcast|Squadcast|fallback|string|false|false|||Optional fallback provider name.
+signl4|SIGNL4|routes|json|false|false|json||Optional JSON route filters.
+signl4|SIGNL4|retry.maxAttempts|integer|false|false|integer||Optional maximum retry attempts.
+signl4|SIGNL4|retry.delay|string|false|false|||Optional retry delay, for example 5s.
+signl4|SIGNL4|fallback|string|false|false|||Optional fallback provider name.
+twilio|Twilio|routes|json|false|false|json||Optional JSON route filters.
+twilio|Twilio|retry.maxAttempts|integer|false|false|integer||Optional maximum retry attempts.
+twilio|Twilio|retry.delay|string|false|false|||Optional retry delay, for example 5s.
+twilio|Twilio|fallback|string|false|false|||Optional fallback provider name.
+vonage|Vonage|routes|json|false|false|json||Optional JSON route filters.
+vonage|Vonage|retry.maxAttempts|integer|false|false|integer||Optional maximum retry attempts.
+vonage|Vonage|retry.delay|string|false|false|||Optional retry delay, for example 5s.
+vonage|Vonage|fallback|string|false|false|||Optional fallback provider name.
+plivo|Plivo|routes|json|false|false|json||Optional JSON route filters.
+plivo|Plivo|retry.maxAttempts|integer|false|false|integer||Optional maximum retry attempts.
+plivo|Plivo|retry.delay|string|false|false|||Optional retry delay, for example 5s.
+plivo|Plivo|fallback|string|false|false|||Optional fallback provider name.
+messagebird|MessageBird|routes|json|false|false|json||Optional JSON route filters.
+messagebird|MessageBird|retry.maxAttempts|integer|false|false|integer||Optional maximum retry attempts.
+messagebird|MessageBird|retry.delay|string|false|false|||Optional retry delay, for example 5s.
+messagebird|MessageBird|fallback|string|false|false|||Optional fallback provider name.
+signal|Signal|routes|json|false|false|json||Optional JSON route filters.
+signal|Signal|retry.maxAttempts|integer|false|false|integer||Optional maximum retry attempts.
+signal|Signal|retry.delay|string|false|false|||Optional retry delay, for example 5s.
+signal|Signal|fallback|string|false|false|||Optional fallback provider name.
+sendgrid|SendGrid|routes|json|false|false|json||Optional JSON route filters.
+sendgrid|SendGrid|retry.maxAttempts|integer|false|false|integer||Optional maximum retry attempts.
+sendgrid|SendGrid|retry.delay|string|false|false|||Optional retry delay, for example 5s.
+sendgrid|SendGrid|fallback|string|false|false|||Optional fallback provider name.
+ses|SES|routes|json|false|false|json||Optional JSON route filters.
+ses|SES|retry.maxAttempts|integer|false|false|integer||Optional maximum retry attempts.
+ses|SES|retry.delay|string|false|false|||Optional retry delay, for example 5s.
+ses|SES|fallback|string|false|false|||Optional fallback provider name.
+sns|SNS|routes|json|false|false|json||Optional JSON route filters.
+sns|SNS|retry.maxAttempts|integer|false|false|integer||Optional maximum retry attempts.
+sns|SNS|retry.delay|string|false|false|||Optional retry delay, for example 5s.
+sns|SNS|fallback|string|false|false|||Optional fallback provider name.
+jira|Jira|routes|json|false|false|json||Optional JSON route filters.
+jira|Jira|retry.maxAttempts|integer|false|false|integer||Optional maximum retry attempts.
+jira|Jira|retry.delay|string|false|false|||Optional retry delay, for example 5s.
+jira|Jira|fallback|string|false|false|||Optional fallback provider name.
+wecom|WeCom|routes|json|false|false|json||Optional JSON route filters.
+wecom|WeCom|retry.maxAttempts|integer|false|false|integer||Optional maximum retry attempts.
+wecom|WeCom|retry.delay|string|false|false|||Optional retry delay, for example 5s.
+wecom|WeCom|fallback|string|false|false|||Optional fallback provider name.
+splunkoncall|Splunk On-Call|routes|json|false|false|json||Optional JSON route filters.
+splunkoncall|Splunk On-Call|retry.maxAttempts|integer|false|false|integer||Optional maximum retry attempts.
+splunkoncall|Splunk On-Call|retry.delay|string|false|false|||Optional retry delay, for example 5s.
+splunkoncall|Splunk On-Call|fallback|string|false|false|||Optional fallback provider name.
+mailgun|Mailgun|routes|json|false|false|json||Optional JSON route filters.
+mailgun|Mailgun|retry.maxAttempts|integer|false|false|integer||Optional maximum retry attempts.
+mailgun|Mailgun|retry.delay|string|false|false|||Optional retry delay, for example 5s.
+mailgun|Mailgun|fallback|string|false|false|||Optional fallback provider name.
+resend|Resend|routes|json|false|false|json||Optional JSON route filters.
+resend|Resend|retry.maxAttempts|integer|false|false|integer||Optional maximum retry attempts.
+resend|Resend|retry.delay|string|false|false|||Optional retry delay, for example 5s.
+resend|Resend|fallback|string|false|false|||Optional fallback provider name.
+goalert|GoAlert|routes|json|false|false|json||Optional JSON route filters.
+goalert|GoAlert|retry.maxAttempts|integer|false|false|integer||Optional maximum retry attempts.
+goalert|GoAlert|retry.delay|string|false|false|||Optional retry delay, for example 5s.
+goalert|GoAlert|fallback|string|false|false|||Optional fallback provider name.
+alerta|Alerta|routes|json|false|false|json||Optional JSON route filters.
+alerta|Alerta|retry.maxAttempts|integer|false|false|integer||Optional maximum retry attempts.
+alerta|Alerta|retry.delay|string|false|false|||Optional retry delay, for example 5s.
+alerta|Alerta|fallback|string|false|false|||Optional fallback provider name.
+threema|Threema|routes|json|false|false|json||Optional JSON route filters.
+threema|Threema|retry.maxAttempts|integer|false|false|integer||Optional maximum retry attempts.
+threema|Threema|retry.delay|string|false|false|||Optional retry delay, for example 5s.
+threema|Threema|fallback|string|false|false|||Optional fallback provider name.
+flock|Flock|routes|json|false|false|json||Optional JSON route filters.
+flock|Flock|retry.maxAttempts|integer|false|false|integer||Optional maximum retry attempts.
+flock|Flock|retry.delay|string|false|false|||Optional retry delay, for example 5s.
+flock|Flock|fallback|string|false|false|||Optional fallback provider name.
+pushbullet|Pushbullet|routes|json|false|false|json||Optional JSON route filters.
+pushbullet|Pushbullet|retry.maxAttempts|integer|false|false|integer||Optional maximum retry attempts.
+pushbullet|Pushbullet|retry.delay|string|false|false|||Optional retry delay, for example 5s.
+pushbullet|Pushbullet|fallback|string|false|false|||Optional fallback provider name.
+sensugo|SensiGo|routes|json|false|false|json||Optional JSON route filters.
+sensugo|SensiGo|retry.maxAttempts|integer|false|false|integer||Optional maximum retry attempts.
+sensugo|SensiGo|retry.delay|string|false|false|||Optional retry delay, for example 5s.
+sensugo|SensiGo|fallback|string|false|false|||Optional fallback provider name.
+webhook|Generic Webhook|routes|json|false|false|json||Optional JSON route filters.
+webhook|Generic Webhook|retry.maxAttempts|integer|false|false|integer||Optional maximum retry attempts.
+webhook|Generic Webhook|retry.delay|string|false|false|||Optional retry delay, for example 5s.
+webhook|Generic Webhook|fallback|string|false|false|||Optional fallback provider name.

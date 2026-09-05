@@ -37,6 +37,8 @@ type Monitor struct {
 	resync            time.Duration
 	ctx               context.Context
 	namespaceAllowed  func(string) bool
+	namespaces        []string
+	watchAll          bool
 	mu                sync.Mutex
 	factories         map[string]dynamicinformer.DynamicSharedInformerFactory
 	stops             map[string]context.CancelFunc
@@ -83,7 +85,13 @@ func New(restConfig *rest.Config, correlator *correlation.Engine, resync time.Du
 		stops:     make(map[string]context.CancelFunc), crdVersions: make(map[string]map[string]struct{}),
 		conditionRules: defaultConditionRules(), now: time.Now,
 		admissionPolicies: make(map[string]struct{}), admissionBindings: make(map[string]*unstructured.Unstructured),
+		watchAll: true,
 	}, nil
+}
+
+func (m *Monitor) SetNamespaceScope(namespaces []string, watchAll bool) {
+	m.namespaces = append([]string(nil), namespaces...)
+	m.watchAll = watchAll
 }
 
 // SetClock injects the clock used by time-sensitive status decisions.
@@ -163,8 +171,21 @@ func (m *Monitor) Start(ctx context.Context) error {
 		return err
 	}
 	m.startAdmissionInformers(factory)
-	m.startStaticStatusInformers(factory)
+	m.startStaticStatusInformers(factory, false)
+	if m.watchAll {
+		m.startStaticStatusInformers(factory, true)
+	}
 	factory.Start(ctx.Done())
+	if !m.watchAll {
+		for _, namespace := range m.namespaces {
+			namespacedFactory :=
+				dynamicinformer.NewFilteredDynamicSharedInformerFactory(
+					m.client, m.resync, namespace, nil,
+				)
+			m.startStaticStatusInformers(namespacedFactory, true)
+			namespacedFactory.Start(ctx.Done())
+		}
+	}
 	if !cache.WaitForCacheSync(ctx.Done(), apiInformer.HasSynced, crdInformer.HasSynced) {
 		return fmt.Errorf("statuswatch: informer sync failed")
 	}
@@ -174,9 +195,18 @@ func (m *Monitor) Start(ctx context.Context) error {
 // startStaticStatusInformers covers built-in APIs that are not represented by
 // the typed controller pipelines but expose durable status conditions. Missing
 // APIs (older clusters or disabled feature gates) simply produce no objects.
-func (m *Monitor) startStaticStatusInformers(factory dynamicinformer.DynamicSharedInformerFactory) {
+func (m *Monitor) startStaticStatusInformers(
+	factory dynamicinformer.DynamicSharedInformerFactory,
+	namespaced bool,
+) {
 	for _, watched := range staticStatusWatches {
 		watched := watched
+		if watched.namespaced != namespaced {
+			continue
+		}
+		if !m.resourceAvailable(watched.gvr) {
+			continue
+		}
 		if watched.resource == "endpoints" && m.endpointSlicesAvailable() {
 			continue
 		}
@@ -196,8 +226,28 @@ func (m *Monitor) startStaticStatusInformers(factory dynamicinformer.DynamicShar
 }
 
 func (m *Monitor) endpointSlicesAvailable() bool {
-	_, err := m.discoveryClient.ServerResourcesForGroupVersion("discovery.k8s.io/v1")
-	return err == nil
+	return m.resourceAvailable(schema.GroupVersionResource{
+		Group: "discovery.k8s.io", Version: "v1",
+		Resource: "endpointslices",
+	})
+}
+
+func (m *Monitor) resourceAvailable(gvr schema.GroupVersionResource) bool {
+	if m.discoveryClient == nil {
+		return true
+	}
+	resources, err := m.discoveryClient.ServerResourcesForGroupVersion(
+		gvr.GroupVersion().String(),
+	)
+	if err != nil {
+		return false
+	}
+	for _, resource := range resources.APIResources {
+		if resource.Name == gvr.Resource {
+			return true
+		}
+	}
+	return false
 }
 
 func (m *Monitor) processStatic(obj interface{}, watched staticWatch) {

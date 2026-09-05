@@ -2,7 +2,7 @@
 # Following Kubernetes community conventions
 
 .PHONY: build test test-short lint vet clean verify verify-fmt verify-unit \
-	verify-all line-check docker-build docker-build-latest help
+	verify-all verify-catalogs line-check docker-build docker-build-latest help
 
 # Binary names
 BINARY_NAME := kwatch
@@ -38,6 +38,7 @@ help:
 	@echo "  make vet           Run go vet"
 	@echo "  make lint          Run linting (requires golangci-lint)"
 	@echo "  make verify        Run the complete required validation gate"
+	@echo "  make verify-catalogs Verify checked-in generated catalogs"
 	@echo "  make line-check    Check new Go lines for an 80-column maximum"
 	@echo "  make verify-fmt    Verify code formatting"
 	@echo "  make verify-unit   Run unit tests"
@@ -93,7 +94,16 @@ verify-unit:
 
 # Run the repository's required validation gate. Keep this in the same order
 # as AGENTS.md so local verification and CI verification cannot drift.
-verify: build vet test lint line-check
+verify: build vet test lint line-check verify-catalogs
+
+verify-catalogs:
+	@tmp=$$(mktemp -d); trap 'rm -rf "$$tmp"' EXIT; \
+	$(GOCMD) run ./cmd/configcatalog -output "$$tmp/config.tsv"; \
+	cmp deploy/config-catalog.tsv "$$tmp/config.tsv"; \
+	$(GOCMD) run ./cmd/featurecatalog -output "$$tmp/feature.tsv"; \
+	cmp deploy/feature-catalog.tsv "$$tmp/feature.tsv"; \
+	$(GOCMD) run ./cmd/providercatalog -output "$$tmp/provider.tsv"; \
+	cmp deploy/provider-catalog.tsv "$$tmp/provider.tsv"
 
 # Backward-compatible alias retained for contributors using the old target.
 verify-all: verify

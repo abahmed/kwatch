@@ -9,6 +9,7 @@ import (
 	"strings"
 
 	"gopkg.in/yaml.v3"
+	utilvalidation "k8s.io/apimachinery/pkg/util/validation"
 	"k8s.io/klog/v2"
 )
 
@@ -23,6 +24,9 @@ func LintStrict() error {
 	// CONFIG_FILE is an explicit operator-selected path, not user-controlled input.
 	raw, err := os.ReadFile(configFile) // #nosec G304,G703 -- intentional operator path
 	if err != nil {
+		return err
+	}
+	if err := validateSecretReferences(string(raw)); err != nil {
 		return err
 	}
 	expanded, err := expandEnv(string(raw))
@@ -47,7 +51,7 @@ func LintStrict() error {
 // not set in the environment is reported as an error rather than silently
 // expanding to an empty string, which would corrupt the configuration.
 var envVarRe = regexp.MustCompile(`\$\{(\w+)\}`)
-var fileRefRe = regexp.MustCompile(`^\$\{file:(.+)\}$`)
+var fileRefRe = regexp.MustCompile(`^\$\{file:(/[^}]*)\}$`)
 
 func expandEnv(s string) (string, error) {
 	unset := map[string]bool{}
@@ -137,6 +141,10 @@ func parseConfigFile() (*Config, error) {
 		klog.InfoS("unable to load config file", "error", err.Error())
 		return nil, err
 	}
+	if err := validateSecretReferences(string(yamlFile)); err != nil {
+		klog.ErrorS(err, "unsafe credential in config", "file", configFile)
+		return nil, err
+	}
 
 	expanded, err := expandEnv(string(yamlFile))
 	if err != nil {
@@ -162,6 +170,8 @@ func parseConfigFile() (*Config, error) {
 // prepareAllowForbidLists splits namespace and reason lists and validates that
 // allow and forbid sides are mutually exclusive.
 func prepareAllowForbidLists(config *Config, errs []error) []error {
+	errs = append(errs, validateNamespaceEntries(config.Namespaces)...)
+	errs = append(errs, validateReasonEntries(config.Reasons)...)
 	// Parse namespace allow/forbid lists
 	config.AllowedNamespaces, config.ForbiddenNamespaces =
 		getAllowForbidSlices(config.Namespaces)
@@ -184,6 +194,35 @@ func prepareAllowForbidLists(config *Config, errs []error) []error {
 			errors.New("either allowed or forbidden reasons must be set, can't set both"))
 	}
 
+	return errs
+}
+
+func validateNamespaceEntries(items []string) []error {
+	var errs []error
+	for _, item := range items {
+		name := strings.TrimPrefix(item, "!")
+		if name == "" {
+			errs = append(errs, errors.New("namespaces entries must not be empty"))
+			continue
+		}
+		if problems := utilvalidation.IsDNS1123Label(name); len(problems) > 0 {
+			errs = append(errs, fmt.Errorf(
+				"invalid namespace %q: %s",
+				name,
+				strings.Join(problems, ", "),
+			))
+		}
+	}
+	return errs
+}
+
+func validateReasonEntries(items []string) []error {
+	var errs []error
+	for _, item := range items {
+		if strings.TrimSpace(strings.TrimPrefix(item, "!")) == "" {
+			errs = append(errs, errors.New("reasons entries must not be empty"))
+		}
+	}
 	return errs
 }
 

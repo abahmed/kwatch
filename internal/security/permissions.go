@@ -41,6 +41,16 @@ func permissionsForConfig(cfg *config.Config) ([]Permission, []Permission) {
 	addNodeStoragePermissions(&builder, cfg)
 	addControlPlaneSecurityPermissions(&builder, cfg)
 	addClusterResourcePermissions(&builder, cfg)
+	builder.addNamespaced(
+		cfg.RuntimeMetricsMonitor.Enabled,
+		Permission{Resource: "pods", Group: "metrics.k8s.io"},
+	)
+	if cfg.IncludeLogs == nil || *cfg.IncludeLogs {
+		builder.namespaced = append(builder.namespaced, Permission{
+			Resource: "pods/log",
+			Verb:     "get",
+		})
+	}
 	// The CRD watcher is startup/live infrastructure and is independent of
 	// workload monitors; it must retain access when the installed CRD exists.
 	builder.addCluster(
@@ -51,6 +61,22 @@ func permissionsForConfig(cfg *config.Config) ([]Permission, []Permission) {
 		},
 	)
 	return deduplicate(builder.cluster), deduplicate(builder.namespaced)
+}
+
+func infrastructurePermissions(cfg *config.Config) []Permission {
+	permissions := []Permission{
+		{Resource: "configmaps", Verb: "get"},
+		{Resource: "configmaps", Verb: "create"},
+		{Resource: "configmaps", Verb: "update"},
+		{Resource: "configmaps", Verb: "patch"},
+	}
+	if cfg != nil && cfg.CrdConfig.Enabled {
+		permissions = append(permissions, permissionResources(Permission{
+			Resource: "kwatchconfigs",
+			Group:    "kwatch.abahmed.dev",
+		})...)
+	}
+	return permissions
 }
 
 type permissionBuilder struct {
@@ -86,7 +112,8 @@ func addWorkloadPermissions(b *permissionBuilder, cfg *config.Config) {
 }
 
 func addNetworkPermissions(b *permissionBuilder, cfg *config.Config) {
-	service := cfg.ServiceMonitor.Enabled
+	service := cfg.ServiceMonitor.Enabled ||
+		(cfg.ActiveProbeMonitor.Enabled && cfg.ActiveProbeMonitor.AutoServices)
 	ingress := cfg.IngressMonitor.Enabled
 	b.addNamespaced(
 		service,
@@ -126,6 +153,10 @@ func addControlPlaneSecurityPermissions(
 ) {
 	b.addCluster(
 		cfg.ControlPlaneMonitor.Enabled,
+		Permission{Resource: "pods"},
+	)
+	b.addCluster(
+		cfg.ControlPlaneMonitor.Enabled,
 		Permission{Resource: "apiservices", Group: "apiregistration.k8s.io"},
 	)
 	b.addCluster(cfg.AdmissionWebhookMonitor.Enabled,
@@ -144,18 +175,97 @@ func addClusterResourcePermissions(b *permissionBuilder, cfg *config.Config) {
 	if !cfg.ClusterResourceMonitor.Enabled {
 		return
 	}
-	b.addNamespaced(true, Permission{Resource: "resourcequotas"}, Permission{Resource: "limitranges"})
-	b.addCluster(true, Permission{Resource: "namespaces"}, Permission{Resource: "apiservices", Group: "apiregistration.k8s.io"},
-		Permission{Resource: "validatingadmissionpolicies", Group: "admissionregistration.k8s.io"},
-		Permission{Resource: "validatingadmissionpolicybindings", Group: "admissionregistration.k8s.io"},
-		Permission{Resource: "mutatingadmissionpolicies", Group: "admissionregistration.k8s.io"},
-		Permission{Resource: "mutatingadmissionpolicybindings", Group: "admissionregistration.k8s.io"},
-		Permission{Resource: "certificatesigningrequests", Group: "certificates.k8s.io"}, Permission{Resource: "podcertificaterequests", Group: "certificates.k8s.io"},
-		Permission{Resource: "flowschemas", Group: "flowcontrol.apiserver.k8s.io"}, Permission{Resource: "prioritylevelconfigurations", Group: "flowcontrol.apiserver.k8s.io"},
-		Permission{Resource: "endpoints"}, Permission{Resource: "volumeattachments", Group: "storage.k8s.io"}, Permission{Resource: "csidrivers", Group: "storage.k8s.io"},
-		Permission{Resource: "volumesnapshots", Group: "snapshot.storage.k8s.io"}, Permission{Resource: "volumesnapshotcontents", Group: "snapshot.storage.k8s.io"}, Permission{Resource: "volumesnapshotclasses", Group: "snapshot.storage.k8s.io"},
-		Permission{Resource: "gatewayclasses", Group: "gateway.networking.k8s.io"}, Permission{Resource: "gateways", Group: "gateway.networking.k8s.io"}, Permission{Resource: "httproutes", Group: "gateway.networking.k8s.io"},
-		Permission{Resource: "grpcroutes", Group: "gateway.networking.k8s.io"}, Permission{Resource: "tcproutes", Group: "gateway.networking.k8s.io"}, Permission{Resource: "tlsroutes", Group: "gateway.networking.k8s.io"}, Permission{Resource: "referencegrants", Group: "gateway.networking.k8s.io"})
+	b.addNamespaced(
+		true,
+		Permission{Resource: "resourcequotas"},
+		Permission{Resource: "limitranges"},
+		Permission{Resource: "endpoints"},
+		Permission{
+			Resource: "podcertificaterequests",
+			Group:    "certificates.k8s.io",
+		},
+		Permission{
+			Resource: "volumesnapshots",
+			Group:    "snapshot.storage.k8s.io",
+		},
+		Permission{
+			Resource: "gateways",
+			Group:    "gateway.networking.k8s.io",
+		},
+		Permission{
+			Resource: "httproutes",
+			Group:    "gateway.networking.k8s.io",
+		},
+		Permission{
+			Resource: "grpcroutes",
+			Group:    "gateway.networking.k8s.io",
+		},
+		Permission{
+			Resource: "tcproutes",
+			Group:    "gateway.networking.k8s.io",
+		},
+		Permission{
+			Resource: "tlsroutes",
+			Group:    "gateway.networking.k8s.io",
+		},
+		Permission{
+			Resource: "referencegrants",
+			Group:    "gateway.networking.k8s.io",
+		},
+	)
+	b.addCluster(
+		true,
+		Permission{Resource: "namespaces"},
+		Permission{
+			Resource: "apiservices",
+			Group:    "apiregistration.k8s.io",
+		},
+		Permission{
+			Resource: "validatingadmissionpolicies",
+			Group:    "admissionregistration.k8s.io",
+		},
+		Permission{
+			Resource: "validatingadmissionpolicybindings",
+			Group:    "admissionregistration.k8s.io",
+		},
+		Permission{
+			Resource: "mutatingadmissionpolicies",
+			Group:    "admissionregistration.k8s.io",
+		},
+		Permission{
+			Resource: "mutatingadmissionpolicybindings",
+			Group:    "admissionregistration.k8s.io",
+		},
+		Permission{
+			Resource: "certificatesigningrequests",
+			Group:    "certificates.k8s.io",
+		},
+		Permission{
+			Resource: "flowschemas",
+			Group:    "flowcontrol.apiserver.k8s.io",
+		},
+		Permission{
+			Resource: "prioritylevelconfigurations",
+			Group:    "flowcontrol.apiserver.k8s.io",
+		},
+		Permission{
+			Resource: "volumeattachments",
+			Group:    "storage.k8s.io",
+		},
+		Permission{Resource: "csidrivers", Group: "storage.k8s.io"},
+		Permission{
+			Resource: "volumesnapshotcontents",
+			Group:    "snapshot.storage.k8s.io",
+		},
+		Permission{
+			Resource: "volumesnapshotclasses",
+			Group:    "snapshot.storage.k8s.io",
+		},
+		Permission{
+			Resource: "gatewayclasses",
+			Group:    "gateway.networking.k8s.io",
+		},
+	)
 }
 
 func permissionResources(resources ...Permission) []Permission {

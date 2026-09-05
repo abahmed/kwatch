@@ -6,13 +6,13 @@ import (
 	"sync"
 	"time"
 
-	"github.com/abahmed/kwatch/internal/constant"
-
+	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/klog/v2"
 
 	"github.com/abahmed/kwatch/internal/config"
+	"github.com/abahmed/kwatch/internal/constant"
 	"github.com/abahmed/kwatch/internal/correlation"
 	"github.com/abahmed/kwatch/internal/event"
 	"github.com/abahmed/kwatch/internal/model"
@@ -41,11 +41,15 @@ type PvcMonitor struct {
 	allowedNamespaces   map[string]struct{}
 	forbiddenNamespaces map[string]struct{}
 	namespaceFilter     func(string) bool
+	watchAll            bool
 }
 
 // SetNamespaceScope keeps the periodic API-based storage checks aligned with
 // the informer scope used by the controller. Empty scope means all namespaces.
-func (p *PvcMonitor) SetNamespaceScope(allowed, forbidden []string) {
+func (p *PvcMonitor) SetNamespaceScope(
+	allowed, forbidden []string,
+	all ...bool,
+) {
 	p.mu.Lock()
 	defer p.mu.Unlock()
 	p.allowedNamespaces = make(map[string]struct{}, len(allowed))
@@ -56,8 +60,45 @@ func (p *PvcMonitor) SetNamespaceScope(allowed, forbidden []string) {
 	for _, namespace := range forbidden {
 		p.forbiddenNamespaces[namespace] = struct{}{}
 	}
+	p.watchAll = len(allowed) == 0
+	if len(all) > 0 {
+		p.watchAll = all[0]
+	}
 	p.pvByPVC = nil
 	p.pvByPVCAt = time.Time{}
+}
+
+func (p *PvcMonitor) listPVCs(
+	ctx context.Context,
+) ([]corev1.PersistentVolumeClaim, error) {
+	p.mu.RLock()
+	namespaces := make([]string, 0, len(p.allowedNamespaces))
+	for namespace := range p.allowedNamespaces {
+		namespaces = append(namespaces, namespace)
+	}
+	watchAll := p.watchAll
+	p.mu.RUnlock()
+	if watchAll {
+		namespaces = []string{""}
+	}
+	var result []corev1.PersistentVolumeClaim
+	for _, namespace := range namespaces {
+		continueToken := ""
+		for {
+			list, err := p.client.CoreV1().PersistentVolumeClaims(namespace).List(
+				ctx, metav1.ListOptions{Limit: 500, Continue: continueToken},
+			)
+			if err != nil {
+				return nil, err
+			}
+			result = append(result, list.Items...)
+			continueToken = list.Continue
+			if continueToken == "" {
+				break
+			}
+		}
+	}
+	return result, nil
 }
 
 // SetNamespaceFilter lets the controller provide its resolved namespace
@@ -73,6 +114,10 @@ func (p *PvcMonitor) SetNamespaceFilter(filter func(string) bool) {
 func (p *PvcMonitor) namespaceAllowed(namespace string) bool {
 	p.mu.RLock()
 	defer p.mu.RUnlock()
+	return p.namespaceAllowedLocked(namespace)
+}
+
+func (p *PvcMonitor) namespaceAllowedLocked(namespace string) bool {
 	if p.namespaceFilter != nil {
 		return p.namespaceFilter(namespace)
 	}
@@ -103,9 +148,9 @@ func (p *PvcMonitor) pvcMap(ctx context.Context) map[string]string {
 	if p.client == nil {
 		return m
 	}
-	if pvcs, err := p.client.CoreV1().PersistentVolumeClaims("").List(ctx, metav1.ListOptions{}); err == nil {
-		for i := range pvcs.Items {
-			c := &pvcs.Items[i]
+	if pvcs, err := p.listPVCs(ctx); err == nil {
+		for i := range pvcs {
+			c := &pvcs[i]
 			if !p.namespaceAllowed(c.Namespace) {
 				continue
 			}
@@ -138,6 +183,7 @@ func NewPvcMonitor(
 		lastUsage:   make(map[string]state.PvcSample),
 		now:         time.Now,
 		firstScan:   true,
+		watchAll:    true,
 		sem:         make(chan struct{}, maxConcurrentSamples),
 	}
 }
@@ -168,6 +214,11 @@ func (p *PvcMonitor) Start(ctx context.Context) {
 		}
 		var restore []*event.Signal
 		for pv, s := range p.lastUsage {
+			if !p.namespaceAllowedLocked(s.Namespace) {
+				delete(p.lastUsage, pv)
+				delete(p.notifiedPvc, pv)
+				continue
+			}
 			if s.Pct >= p.config.Threshold {
 				p.notifiedPvc[pv] = true
 				sev := model.SeverityNormal

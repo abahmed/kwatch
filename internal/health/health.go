@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"net/http/pprof"
 	"strconv"
+	"sync"
 	"sync/atomic"
 	"time"
 
@@ -63,6 +64,8 @@ type HealthServer struct {
 	controlPlaneLister ControlPlaneLister
 	informerLister     InformerLister
 	ready              atomic.Bool
+	componentMu        sync.RWMutex
+	componentErrors    map[string]string
 }
 
 type HealthResponse struct {
@@ -76,6 +79,7 @@ func NewHealthServer(cfg config.HealthCheck) *HealthServer {
 		pprof:            cfg.Pprof,
 		diagnostics:      cfg.Diagnostics,
 		diagnosticsToken: cfg.DiagnosticsToken,
+		componentErrors:  make(map[string]string),
 	}
 	return h
 }
@@ -188,6 +192,18 @@ func (h *HealthServer) Start(ctx context.Context) error {
 			klog.ErrorS(err, "health check server error")
 		}
 	}()
+	if ctx != nil {
+		go func() {
+			<-ctx.Done()
+			shutdownCtx, cancel := context.WithTimeout(
+				context.Background(), 10*time.Second,
+			)
+			defer cancel()
+			if err := h.Stop(shutdownCtx); err != nil {
+				klog.ErrorS(err, "health check context shutdown failed")
+			}
+		}()
+	}
 
 	return nil
 }
@@ -219,9 +235,28 @@ func (h *HealthServer) SetReady(v bool) {
 	h.ready.Store(v)
 }
 
+func (h *HealthServer) SetComponentError(name string, err error) {
+	h.componentMu.Lock()
+	defer h.componentMu.Unlock()
+	if h.componentErrors == nil {
+		h.componentErrors = make(map[string]string)
+	}
+	if err == nil {
+		delete(h.componentErrors, name)
+		return
+	}
+	h.componentErrors[name] = err.Error()
+}
+
+func (h *HealthServer) componentsHealthy() bool {
+	h.componentMu.RLock()
+	defer h.componentMu.RUnlock()
+	return len(h.componentErrors) == 0
+}
+
 func (h *HealthServer) readyzHandler(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "text/plain")
-	if !h.ready.Load() {
+	if !h.ready.Load() || !h.componentsHealthy() {
 		w.WriteHeader(http.StatusServiceUnavailable)
 		if _, err := w.Write([]byte("not ready")); err != nil {
 			klog.ErrorS(err, "health: write not-ready response")

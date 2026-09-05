@@ -48,6 +48,17 @@ func TestRemoveNodeHandlesDeletionTombstone(t *testing.T) {
 	}
 }
 
+func TestWatchNamespacesUsesExplicitScope(t *testing.T) {
+	monitor := &Monitor{namespaces: []string{"apps"}}
+	if got := monitor.watchNamespaces(false); len(got) != 1 || got[0] != "" {
+		t.Fatalf("cluster resource scope changed: %v", got)
+	}
+	got := monitor.watchNamespaces(true)
+	if len(got) != 1 || got[0] != "apps" {
+		t.Fatalf("namespaced resource scope changed: %v", got)
+	}
+}
+
 func TestProcessVolumeSnapshotBuildsPVCAndFailureDependencies(t *testing.T) {
 	graph := kwcontext.NewResourceGraph()
 	monitor := &Monitor{graph: graph}

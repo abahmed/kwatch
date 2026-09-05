@@ -13,6 +13,12 @@ import (
 
 const catalogHeader = "# kwatch config catalog v1"
 
+var managerHiddenPaths = map[string]bool{
+	"alert":                        true,
+	"healthCheck.diagnosticsToken": true,
+	"heartbeatMonitor.url":         true,
+}
+
 type metadata struct {
 	category    string
 	description string
@@ -115,6 +121,9 @@ func walk(t reflect.Type, value reflect.Value, prefix string, old map[string]str
 		path := name
 		if prefix != "" {
 			path = prefix + "." + name
+		}
+		if managerHiddenPaths[path] {
+			continue
 		}
 		*seen = addExisting(path, old, *seen)
 		fieldValue := value.Field(i)

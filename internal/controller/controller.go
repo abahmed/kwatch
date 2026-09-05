@@ -102,6 +102,7 @@ type Controller struct {
 	readyFn                  func()
 	watchAll                 bool
 	allowedNamespaces        map[string]struct{}
+	forbiddenNamespaces      map[string]struct{}
 	informerMu               sync.RWMutex
 	informerEvents           int64
 	informerWatchErrors      int64
@@ -252,15 +253,16 @@ func New(
 			"controlplane pod",
 			"controlplanepods",
 		),
-		resourceQuota: newResourcePipeline("resourcequota", "resourcequotas"),
-		limitRange:    newResourcePipeline("limitrange", "limitranges"),
-		namespace:     newResourcePipeline("namespace", "namespaces"),
-		lease:         newResourcePipeline("lease", "leases"),
-		replicaSet:    newResourcePipeline("replicaset", "replicasets-status"),
-		podLister:     podLister,
-		maxBaseline:   maxBaseline,
-		watchAll:      scope.all,
-		now:           clock.Now,
+		resourceQuota:       newResourcePipeline("resourcequota", "resourcequotas"),
+		limitRange:          newResourcePipeline("limitrange", "limitranges"),
+		namespace:           newResourcePipeline("namespace", "namespaces"),
+		lease:               newResourcePipeline("lease", "leases"),
+		replicaSet:          newResourcePipeline("replicaset", "replicasets-status"),
+		podLister:           podLister,
+		maxBaseline:         maxBaseline,
+		watchAll:            scope.all,
+		forbiddenNamespaces: makeNamespaceSet(cfg.ForbiddenNamespaces),
+		now:                 clock.Now,
 	}
 	if !scope.all {
 		c.allowedNamespaces = make(map[string]struct{}, len(scope.namespaces))

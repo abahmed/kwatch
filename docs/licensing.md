@@ -1,4 +1,4 @@
-# Licensing
+# 📄 Licensing
 
 Kwatch is free and open source under the
 [MIT License](../LICENSE). The license permits personal and commercial use,

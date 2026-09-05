@@ -85,7 +85,13 @@ func TestControllerPodEvent(t *testing.T) {
 		},
 	}
 
-	client := fake.NewSimpleClientset(pod)
+	serviceAccount := &corev1.ServiceAccount{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "default",
+			Namespace: "default",
+		},
+	}
+	client := fake.NewSimpleClientset(pod, serviceAccount)
 
 	rec := &recordingProvider{}
 	alertMgr := &alert.AlertManager{}

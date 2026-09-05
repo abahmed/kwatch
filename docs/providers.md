@@ -1,6 +1,16 @@
-# Alert providers
+# 📣 Alert providers
 
-Every alert provider kwatch can deliver to. For install and quick-start, see the [README](../README.md).
+This is the complete provider reference for kwatch. If you are choosing a
+channel for the first time, start with the [quick-start guide](../README.md)
+or the [channel picker on kwatch.dev](https://kwatch.dev/docs/channels).
+
+In simple terms: configure a provider under `alert:`, give kwatch its webhook
+or credential, and it will send incidents to that destination.
+
+Provider credentials must never appear directly in `config.yaml`. Put every
+webhook, token, key, password, and other credential in a mounted Kubernetes
+Secret, then use an exact `${file:/absolute/path}` reference. kwatch rejects
+plain credentials and `${ENV_VAR}` substitutions for sensitive fields.
 
 ## How providers work
 
@@ -65,7 +75,7 @@ Everything below is a reference — one section per provider, with the parameter
 ```yaml
 alert:
   slack:
-    webhook: "https://hooks.slack.com/..."
+    webhook: "${file:/config/slack-webhook}"
     compact: true
 ```
 
@@ -89,7 +99,7 @@ In plain words: the same options work for all providers, not just Slack.
 ```yaml
 alert:
   slack:
-    webhook: "<url>"
+    webhook: "${file:/config/slack-webhook}"
     routes:
       - namespaces: ["production"]
         severities: ["high", "critical"]
@@ -102,7 +112,7 @@ Need a backup? Set a fallback:
 ```yaml
 alert:
   slack:
-    webhook: "<url>"
+    webhook: "${file:/config/slack-webhook}"
     fallback: "pagerduty"    # 🆘 tries PagerDuty if Slack fails
     retry:
       maxAttempts: 3
@@ -141,7 +151,7 @@ search.
 ```yaml
 alert:
   line:
-    token: "YOUR_LINE_NOTIFY_TOKEN"
+    token: "${file:/config/line-token}"
 ```
 
 ### 🚨 PagerDuty
@@ -250,7 +260,7 @@ Father to get a `token` and a `chatId`.
 alert:
   gotify:
     url: "https://gotify.example.com"
-    token: "SOMETOKEN"
+    token: "${file:/config/gotify-token}"
 ```
 
 ### 🔔 Ntfy
@@ -265,7 +275,7 @@ alert:
 ```yaml
 alert:
   ntfy:
-    topic: "kwatch-alerts"
+    topic: "${file:/config/ntfy-topic}"
 ```
 
 ### 📲 Pushover
@@ -297,7 +307,7 @@ alert:
 ```yaml
 alert:
   github:
-    token: "ghp_..."
+    token: "${file:/config/github-token}"
     owner: "acme"
     repo: "infra"
 ```
@@ -313,7 +323,7 @@ alert:
 ```yaml
 alert:
   gitlab:
-    token: "glpat-..."
+    token: "${file:/config/gitlab-token}"
     projectId: "12345"
 ```
 
@@ -391,7 +401,7 @@ alert:
 alert:
   splunk:
     url: "https://splunk.example.com:8088/services/collector/event"
-    token: "Splunk-..."
+    token: "${file:/config/splunk-token}"
 ```
 
 ### 🐕 Datadog
@@ -414,7 +424,7 @@ alert:
 ```yaml
 alert:
   newrelic:
-    apiKey: "NRAK-..."
+    apiKey: "${file:/config/newrelic-api-key}"
     accountId: "1234567"
 ```
 
@@ -429,7 +439,7 @@ alert:
 ```yaml
 alert:
   clickup:
-    token: "pk_..."
+    token: "${file:/config/clickup-token}"
     listId: "901234567"
 ```
 
@@ -476,8 +486,8 @@ alert:
 ```yaml
 alert:
   twilio:
-    accountSid: "AC..."
-    authToken: "..."
+    accountSid: "${file:/config/twilio-account-sid}"
+    authToken: "${file:/config/twilio-auth-token}"
     from: "+12025550100"
     to: "+12025550101"
 ```
@@ -528,7 +538,7 @@ alert:
 ```yaml
 alert:
   sendgrid:
-    apiKey: "SG..."
+    apiKey: "${file:/config/sendgrid-api-key}"
     from: "kwatch@example.com"
     to:
       - "ops@example.com"
@@ -549,8 +559,8 @@ alert:
 ```yaml
 alert:
   ses:
-    accessKeyId: "AKIA..."
-    secretAccessKey: "..."
+    accessKeyId: "${file:/config/ses-access-key-id}"
+    secretAccessKey: "${file:/config/ses-secret-access-key}"
     region: "us-east-1"
     from: "kwatch@example.com"
     to: "ops@example.com, oncall@example.com"
@@ -563,14 +573,15 @@ alert:
 | `alert.sns.accessKeyId` | 🔑 AWS access key ID |
 | `alert.sns.secretAccessKey` | 🔑 AWS secret access key |
 | `alert.sns.region` | 🌍 AWS region (default: `us-east-1`) |
-| `alert.sns.topicArn` | 📢 SNS topic ARN (or `targetArn`) |
+| `alert.sns.topicArn` | 📢 SNS topic ARN (optional when using `targetArn`) |
+| `alert.sns.targetArn` | 📢 SNS endpoint or target ARN (alternative to `topicArn`) |
 | `alert.sns.subject` | ✏️ Optional subject (email subscriptions) |
 
 ```yaml
 alert:
   sns:
-    accessKeyId: "AKIA..."
-    secretAccessKey: "..."
+    accessKeyId: "${file:/config/sns-access-key-id}"
+    secretAccessKey: "${file:/config/sns-secret-access-key}"
     region: "us-east-1"
     topicArn: "arn:aws:sns:us-east-1:123456789012:kwatch"
 ```
@@ -590,7 +601,7 @@ alert:
   jira:
     url: "https://kwatch.atlassian.net"
     user: "ops@example.com"
-    apiToken: "ATATT..."
+    apiToken: "${file:/config/jira-api-token}"
     projectKey: "OPS"
 ```
 
@@ -603,7 +614,7 @@ alert:
 ```yaml
 alert:
   wecom:
-    webhook: "https://qyapi.weixin.qq.com/cgi-bin/webhook/send?key=..."
+    webhook: "${file:/config/wecom-webhook}"
 ```
 
 ### 🆘 Splunk OnCall (VictorOps)
@@ -617,8 +628,8 @@ alert:
 ```yaml
 alert:
   splunkoncall:
-    apiKey: "..."
-    routingKey: "everyone"
+    apiKey: "${file:/config/splunk-oncall-api-key}"
+    routingKey: "${file:/config/splunk-oncall-routing-key}"
 ```
 
 ### ✉️ Mailgun
@@ -635,7 +646,7 @@ alert:
 ```yaml
 alert:
   mailgun:
-    apiKey: "key-..."
+    apiKey: "${file:/config/mailgun-api-key}"
     domain: "mg.example.com"
     from: "kwatch@mg.example.com"
     to: "ops@example.com"
@@ -653,7 +664,7 @@ alert:
 ```yaml
 alert:
   resend:
-    apiKey: "re_..."
+    apiKey: "${file:/config/resend-api-key}"
     from: "kwatch@example.com"
     to: "ops@example.com, oncall@example.com"
 ```
@@ -669,7 +680,7 @@ alert:
 ```yaml
 alert:
   goalert:
-    token: "..."
+    token: "${file:/config/goalert-token}"
     serviceId: "SVC123"
 ```
 
@@ -686,7 +697,7 @@ alert:
 alert:
   alerta:
     url: "https://alerta.example.com"
-    apiKey: "..."
+    apiKey: "${file:/config/alerta-api-key}"
 ```
 
 ### 🟩 Threema Gateway
@@ -722,7 +733,7 @@ alert:
 alert:
   sensugo:
     url: "http://sensu.example.com:8080"
-    apiKey: "..."
+    apiKey: "${file:/config/sensugo-api-key}"
 ```
 
 ### 🔗 Custom Webhook
@@ -738,4 +749,3 @@ dedicated page for — an IRC bot, a home-grown dashboard, a Zapier-style glue j
 
 > Requests are sent as `POST` with `Content-Type: application/json` unless one of your
 > `headers` sets `Content-Type` itself.
-

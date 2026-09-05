@@ -45,6 +45,10 @@ jobs:
       run: |
         go run ./cmd/featurecatalog -output /tmp/kwatch-feature-catalog.tsv
         cmp -s deploy/feature-catalog.tsv /tmp/kwatch-feature-catalog.tsv
+    - name: Verify provider catalog
+      run: |
+        go run ./cmd/providercatalog -output /tmp/kwatch-provider-catalog.tsv
+        cmp -s deploy/provider-catalog.tsv /tmp/kwatch-provider-catalog.tsv
     - name: Test
       run: go test -race --coverprofile=coverage.txt --covermode=atomic ./...
     - name: Integration tests

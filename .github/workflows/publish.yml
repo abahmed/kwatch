@@ -297,16 +297,6 @@ jobs:
             exit 1
           fi
 
-      - name: Require Render deploy hook
-        env:
-          RENDER_DEPLOY_HOOK_URL: ${{ secrets.RENDER_DEPLOY_HOOK_URL }}
-        run: |
-          set -euo pipefail
-          if [ -z "$RENDER_DEPLOY_HOOK_URL" ]; then
-            echo "::error::RENDER_DEPLOY_HOOK_URL is required to trigger the kwatch.dev Render deploy"
-            exit 1
-          fi
-
       - name: Check out kwatch.dev
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
@@ -346,9 +336,7 @@ jobs:
         working-directory: kwatch.dev
         run: |
           set -euo pipefail
-          # Render deploy hooks are used as the single deployment trigger;
-          # disable Render's automatic deploy-on-push setting for this repo to
-          # avoid deploying twice for the same chart commit.
+          # Bring the latest website commit in before adding the chart files.
           git pull --rebase --autostash origin main
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
@@ -370,14 +358,6 @@ jobs:
             git pull --rebase --autostash origin main
           done
 
-      - name: Trigger Render deploy
-        env:
-          RENDER_DEPLOY_HOOK_URL: ${{ secrets.RENDER_DEPLOY_HOOK_URL }}
-        run: |
-          set -euo pipefail
-          curl --fail --silent --show-error --request POST "$RENDER_DEPLOY_HOOK_URL" >/tmp/render-deploy-response.json
-          echo "Render deploy was triggered"
-
       - name: Summary
         env:
           VERSION: ${{ steps.rel.outputs.version }}
@@ -387,7 +367,115 @@ jobs:
             echo
             echo "- Repository: https://kwatch.dev/charts"
             echo "- Package: https://kwatch.dev/charts/kwatch-$VERSION.tgz"
-            echo "- Render deploy: triggered once through RENDER_DEPLOY_HOOK_URL"
+            echo "- Website deploy: handled by the release sync job"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+  update_website:
+    name: Update kwatch.dev release metadata
+    if: ${{ always() && needs.push_to_registry.result == 'success' && (needs.publish_helm_chart.result == 'success' || needs.publish_helm_chart.result == 'skipped') }}
+    needs: [push_to_registry, publish_helm_chart]
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: read
+    steps:
+      - name: Require release credentials
+        env:
+          RELEASE_TOKEN: ${{ secrets.RELEASE_TOKEN }}
+          RENDER_DEPLOY_HOOK_URL: ${{ secrets.RENDER_DEPLOY_HOOK_URL }}
+        run: |
+          set -euo pipefail
+          test -n "$RELEASE_TOKEN" || {
+            echo "::error::RELEASE_TOKEN is required to update kwatch.dev"
+            exit 1
+          }
+          test -n "$RENDER_DEPLOY_HOOK_URL" || {
+            echo "::error::RENDER_DEPLOY_HOOK_URL is required to deploy kwatch.dev"
+            exit 1
+          }
+
+      - name: Check out kwatch.dev
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          repository: abahmed/kwatch.dev
+          path: kwatch.dev
+          ref: main
+          fetch-depth: 0
+          token: ${{ secrets.RELEASE_TOKEN }}
+
+      - name: Update release metadata
+        env:
+          TAG: ${{ needs.push_to_registry.outputs.tag }}
+        working-directory: kwatch.dev
+        run: |
+          set -euo pipefail
+          metadata="src/data/releases.json"
+          test -f "$metadata"
+          tmp=$(mktemp)
+          if echo "$TAG" | grep -q -- '-rc\.'; then
+            jq --arg tag "$TAG" \
+              '.preview = {version: ($tag | sub("^v"; "")), tag: $tag}' \
+              "$metadata" > "$tmp"
+          else
+            jq --arg tag "$TAG" \
+              '.stable = {version: ($tag | sub("^v"; "")), tag: $tag}
+               | .preview = null' "$metadata" > "$tmp"
+          fi
+          mv "$tmp" "$metadata"
+          jq empty "$metadata"
+          git diff --check
+
+      - name: Build website
+        working-directory: kwatch.dev
+        run: |
+          set -euo pipefail
+          yarn install --frozen-lockfile
+          yarn typecheck
+          yarn build
+
+      - name: Commit and push website update
+        env:
+          TAG: ${{ needs.push_to_registry.outputs.tag }}
+        working-directory: kwatch.dev
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add src/data/releases.json
+          if git diff --cached --quiet; then
+            echo "website metadata already points at $TAG"
+            exit 0
+          fi
+          git commit -m "chore: publish kwatch $TAG metadata"
+          for attempt in 1 2 3; do
+            if git push origin HEAD:main; then
+              exit 0
+            fi
+            if [ "$attempt" -eq 3 ]; then
+              echo "::error::could not push the website update after $attempt attempts"
+              exit 1
+            fi
+            git pull --rebase --autostash origin main
+          done
+
+      - name: Trigger Render deploy
+        env:
+          RENDER_DEPLOY_HOOK_URL: ${{ secrets.RENDER_DEPLOY_HOOK_URL }}
+        run: |
+          set -euo pipefail
+          curl --fail --silent --show-error --request POST \
+            "$RENDER_DEPLOY_HOOK_URL" >/tmp/render-deploy-response.json
+          echo "Render deploy was triggered"
+
+      - name: Summary
+        env:
+          TAG: ${{ needs.push_to_registry.outputs.tag }}
+        run: |
+          {
+            echo "## kwatch.dev updated for $TAG"
+            echo
+            echo "- Release metadata committed to abahmed/kwatch.dev"
+            echo "- Render deploy triggered once"
           } >> "$GITHUB_STEP_SUMMARY"
 
   publish_release_evidence:
@@ -544,7 +632,7 @@ jobs:
   verify_published_artifacts:
     name: Verify published artifacts
     if: ${{ always() && needs.push_to_registry.result == 'success' && needs.publish_release_evidence.result == 'success' }}
-    needs: [push_to_registry, publish_helm_chart, publish_release_evidence]
+    needs: [push_to_registry, publish_helm_chart, update_website, publish_release_evidence]
     runs-on: ubuntu-latest
     timeout-minutes: 15
     permissions:
@@ -555,12 +643,13 @@ jobs:
         env:
           IMAGE_JOB: ${{ needs.push_to_registry.result }}
           CHART_JOB: ${{ needs.publish_helm_chart.result }}
+          WEBSITE_JOB: ${{ needs.update_website.result }}
           EVIDENCE_JOB: ${{ needs.publish_release_evidence.result }}
           TAG: ${{ needs.push_to_registry.outputs.tag }}
         run: |
           set -euo pipefail
-          if [ "$IMAGE_JOB" != "success" ] || [ "$EVIDENCE_JOB" != "success" ]; then
-            echo "::error::release artifacts were not published (image=$IMAGE_JOB, chart=$CHART_JOB, evidence=$EVIDENCE_JOB)"
+          if [ "$IMAGE_JOB" != "success" ] || [ "$WEBSITE_JOB" != "success" ] || [ "$EVIDENCE_JOB" != "success" ]; then
+            echo "::error::release artifacts were not published (image=$IMAGE_JOB, chart=$CHART_JOB, website=$WEBSITE_JOB, evidence=$EVIDENCE_JOB)"
             exit 1
           fi
           if echo "$TAG" | grep -q -- '-rc\.'; then

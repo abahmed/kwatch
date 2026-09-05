@@ -1,47 +1,122 @@
-# kwatch Helm Chart
+# 📦 kwatch Helm chart
 
-monitor all changes in your Kubernetes(K8s) cluster, detects crashes in your running apps in realtime, and publishes notifications to your channels (Slack,
-Discord, etc.) instantly
+The Helm chart installs kwatch and its Kubernetes resources in one release.
+Use it when you manage cluster configuration with Helm or GitOps.
 
-## Add Repository
+If you want the fewest decisions, use the [interactive manager](https://kwatch.dev/docs/kwatch-manager).
 
-```console
+## ✅ Requirements
+
+- Helm 3 or newer
+- A supported Kubernetes cluster
+- Permission to create resources in the target namespace
+
+## 🚀 Install
+
+Add the kwatch chart repository:
+
+```bash
 helm repo add kwatch https://kwatch.dev/charts
 helm repo update
 ```
 
-## Install Chart
+Create a local `config.yaml`. Credentials must be file references:
 
-```console
-helm install [RELEASE_NAME] kwatch/kwatch --version 0.10.5
+```yaml
+crd:
+  enabled: true
+alert:
+  slack:
+    webhook: "${file:/config/slack-webhook}"
+app:
+  clusterName: "production"
 ```
 
-## Uninstall Chart
+Create an existing Secret from that file and a local credential file:
 
-```console
-helm uninstall [RELEASE_NAME] --namespace kwatch
+```bash
+kubectl create namespace kwatch --dry-run=client -o yaml | kubectl apply -f -
+kubectl label namespace kwatch \
+  pod-security.kubernetes.io/enforce=restricted \
+  pod-security.kubernetes.io/audit=restricted \
+  pod-security.kubernetes.io/warn=restricted --overwrite
+kubectl -n kwatch create secret generic kwatch-config \
+  --from-file=config.yaml \
+  --from-file=slack-webhook
 ```
 
-The chart owns and upgrades the `KwatchConfig` CRD automatically on install and upgrade.
-The CRD is intentionally kept when the release is uninstalled so live configuration is not
-removed accidentally. Delete it manually only when you are sure no KwatchConfig resources
-are needed.
+Then set the Secret name in `values.yaml`:
 
-## Configuration
+```yaml
+configSecretName: kwatch-config
+```
 
-| Parameter | Description | Default |
-|-----------|-------------|---------|
-| `podAnnotations` | Pod annotations | {} |
-| `podLabels` | Pod labels | {} |
-| `securityContext.runAsNonRoot` | Container runs as a non-root user | true |
-| `securityContext.runAsUser` | Container processes' UID to run the entrypoint | 1000 |
-| `securityContext.runAsGroup` | Container processes' GID to run the entrypoint | 1000 |
-| `securityContext.readOnlyRootFilesystem` | Container's root filesystem is read-only | true |
-| `service.port` | Health check port | 8060 |
-| `resources` | CPU/Memory resource requests/limits | {limits: memory: 256Mi cpu: 100m} |
-| `nodeSelector` | Node labels for pod assignment | {} |
-| `tolerations` | Tolerations for pod assignment | [] |
-| `affinity` | affinity for pod | {} |
-| `config` | [kwatch configuration](../../docs/configuration.md); `crd.enabled` defaults to `true` because the chart installs the KwatchConfig CRD | `{crd: {enabled: true}}` |
-| `configSecretName` | Existing Secret containing `config.yaml`; keeps notification credentials out of the ConfigMap | `""` |
-| `upgrader.disableUpdateCheck` | Disable startup update check | `false` |
+When `configSecretName` is set, the Secret's `config.yaml` is the complete base
+configuration; `.Values.config` is not merged into it.
+
+Install it:
+
+```bash
+helm install kwatch kwatch/kwatch \
+  --namespace kwatch \
+  --values values.yaml
+```
+
+The public chart repository contains stable releases. To test a release
+candidate, use its tagged Kubernetes manifests instead.
+
+## 🔎 Verify the install
+
+```bash
+kubectl get pods -n kwatch
+kubectl logs -n kwatch deployment/kwatch
+```
+
+The pod should show `READY 1/1` and `STATUS Running`.
+
+## ⬆️ Upgrade
+
+```bash
+helm repo update
+helm upgrade kwatch kwatch/kwatch \
+  --namespace kwatch \
+  --values values.yaml
+```
+
+Helm upgrades the `KwatchConfig` CRD automatically. The chart keeps the CRD
+when the release is removed so configuration resources are not deleted by
+surprise.
+
+## 🧹 Uninstall
+
+```bash
+helm uninstall kwatch --namespace kwatch
+```
+
+Delete the namespace only if it contains no other resources you want to keep:
+
+```bash
+kubectl delete namespace kwatch
+```
+
+## ⚙️ Values
+
+| Value | Purpose | Default |
+| --- | --- | --- |
+| `config` | Non-sensitive kwatch configuration | `{crd: {enabled: true}}` |
+| `configSecretName` | Existing Secret containing `config.yaml` | `""` |
+| `service.port` | Health-check port | `8060` |
+| `resources` | CPU and memory requests/limits | `100m` CPU, `256Mi` memory |
+| `securityContext.runAsNonRoot` | Run without root privileges | `true` |
+| `securityContext.readOnlyRootFilesystem` | Use a read-only root filesystem | `true` |
+| `securityContext.allowPrivilegeEscalation` | Prevent privilege escalation | `false` |
+| `securityContext.capabilities.drop` | Linux capabilities removed from the container | `[ALL]` |
+| `securityContext.seccompProfile.type` | Seccomp profile | `RuntimeDefault` |
+| `podAnnotations` | Additional Pod annotations | `{}` |
+| `podLabels` | Additional Pod labels | `{}` |
+| `nodeSelector` | Choose nodes by label | `{}` |
+| `tolerations` | Allow configured taints | `[]` |
+| `affinity` | Control Pod placement | `{}` |
+| `upgrader.disableUpdateCheck` | Disable the startup update check | `false` |
+
+The full configuration reference is in [`docs/configuration.md`](../../docs/configuration.md).

@@ -10,8 +10,6 @@ import (
 	"sync"
 	"time"
 
-	corev1 "k8s.io/api/core/v1"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes"
 
 	"github.com/abahmed/kwatch/internal/clock"
@@ -24,22 +22,39 @@ import (
 )
 
 type Monitor struct {
-	cfg        config.ActiveProbeMonitor
-	correlator *correlation.Engine
-	client     *http.Client
-	timeout    time.Duration
-	kclient    kubernetes.Interface
-	mu         sync.Mutex
-	failures   map[string]int
-	successes  map[string]int
-	graph      *kwcontext.ResourceGraph
-	now        func() time.Time
+	cfg         config.ActiveProbeMonitor
+	correlator  *correlation.Engine
+	client      *http.Client
+	timeout     time.Duration
+	kclient     kubernetes.Interface
+	mu          sync.Mutex
+	failures    map[string]int
+	successes   map[string]int
+	graph       *kwcontext.ResourceGraph
+	now         func() time.Time
+	namespaces  []string
+	watchAll    bool
+	allowed     func(string) bool
+	autoTargets map[string]autoProbeTarget
 }
 
 func (m *Monitor) SetKubernetesClient(client kubernetes.Interface) { m.kclient = client }
 
 func (m *Monitor) SetGraph(graph *kwcontext.ResourceGraph) {
 	m.graph = graph
+}
+
+func (m *Monitor) SetNamespaceScope(namespaces []string, watchAll bool) {
+	m.mu.Lock()
+	m.namespaces = append([]string(nil), namespaces...)
+	m.watchAll = watchAll
+	m.mu.Unlock()
+}
+
+func (m *Monitor) SetNamespaceFilter(allowed func(string) bool) {
+	m.mu.Lock()
+	m.allowed = allowed
+	m.mu.Unlock()
 }
 
 func New(cfg config.ActiveProbeMonitor, correlator *correlation.Engine) *Monitor {
@@ -49,10 +64,12 @@ func New(cfg config.ActiveProbeMonitor, correlator *correlation.Engine) *Monitor
 	}
 	return &Monitor{
 		cfg: cfg, correlator: correlator,
+		watchAll: true,
 		client:   &http.Client{Timeout: timeout},
 		timeout:  timeout,
 		failures: make(map[string]int), successes: make(map[string]int),
-		now: time.Now,
+		autoTargets: make(map[string]autoProbeTarget),
+		now:         time.Now,
 	}
 }
 
@@ -115,49 +132,6 @@ func (m *Monitor) check(ctx context.Context) {
 	}
 	if m.cfg.AutoServices && m.kclient != nil {
 		m.checkServices(ctx)
-	}
-}
-
-func (m *Monitor) checkServices(ctx context.Context) {
-	const pageSize int64 = 500
-	continueToken := ""
-	for {
-		services, err := m.kclient.CoreV1().Services("").List(ctx, metav1.ListOptions{
-			Limit:    pageSize,
-			Continue: continueToken,
-		})
-		if err != nil {
-			return
-		}
-		for i := range services.Items {
-			m.checkService(ctx, &services.Items[i])
-		}
-		if services.Continue == "" || ctx.Err() != nil {
-			return
-		}
-		continueToken = services.Continue
-	}
-}
-
-func (m *Monitor) checkService(ctx context.Context, service *corev1.Service) {
-	host := service.Name + "." + service.Namespace + ".svc"
-	for _, port := range service.Spec.Ports {
-		if port.Port <= 0 {
-			continue
-		}
-		owner := "service/" + service.Namespace + "/" + service.Name + "/" + fmt.Sprint(port.Port)
-		address := fmt.Sprintf("%s:%d", host, port.Port)
-		m.linkTarget(owner, host)
-		ok, detail := m.tcp(ctx, config.TCPProbeTarget{Name: owner, Address: address})
-		m.record("auto-"+owner, owner, constant.ReasonActiveProbeFailure, ok, detail)
-		if strings.HasPrefix(strings.ToLower(port.Name), "http") {
-			scheme := "http"
-			if strings.HasPrefix(strings.ToLower(port.Name), "https") {
-				scheme = "https"
-			}
-			httpOK, httpDetail, httpReason := m.http(ctx, config.HTTPProbeTarget{Name: owner, URL: scheme + "://" + address})
-			m.record("auto-http-"+owner, owner+"/http", httpReason, httpOK, httpDetail)
-		}
 	}
 }
 

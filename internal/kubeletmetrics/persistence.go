@@ -4,6 +4,8 @@ import (
 	"context"
 	"encoding/json"
 	"time"
+
+	"k8s.io/klog/v2"
 )
 
 func (m *Monitor) loadState(ctx context.Context) {
@@ -11,11 +13,16 @@ func (m *Monitor) loadState(ctx context.Context) {
 		return
 	}
 	data, err := m.store.LoadTelemetryState(ctx)
-	if err != nil || len(data) == 0 {
+	if err != nil {
+		klog.ErrorS(err, "failed to load kubelet telemetry state")
+		return
+	}
+	if len(data) == 0 {
 		return
 	}
 	var state persistedState
-	if json.Unmarshal(data, &state) != nil {
+	if err := json.Unmarshal(data, &state); err != nil {
+		klog.ErrorS(err, "failed to decode kubelet telemetry state")
 		return
 	}
 	m.mu.Lock()
@@ -51,8 +58,12 @@ func (m *Monitor) saveState(ctx context.Context) {
 	}
 	m.mu.Unlock()
 	data, err := json.Marshal(state)
-	if err == nil {
-		_ = m.store.SaveTelemetryState(ctx, data)
+	if err != nil {
+		klog.ErrorS(err, "failed to encode kubelet telemetry state")
+		return
+	}
+	if err := m.store.SaveTelemetryState(ctx, data); err != nil {
+		klog.ErrorS(err, "failed to persist kubelet telemetry state")
 	}
 }
 

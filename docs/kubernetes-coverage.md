@@ -1,4 +1,8 @@
-# Kubernetes failure coverage
+# 🎯 Kubernetes failure coverage
+
+This page answers one question: **what can kwatch notice?** It is a technical
+reference for operators who want to understand the signals behind an alert.
+For a quick overview, see the [README](../README.md).
 
 kwatch combines informer state, status conditions, Kubernetes Events, logs,
 node summary data, active probes, and persisted incident state. It does not
