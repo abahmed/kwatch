@@ -59,8 +59,27 @@ You need Bash, `curl`, `kubectl`, and permission to install the required
 namespace-scoped and cluster-scoped resources.
 
 The manager selects the latest stable release by default. During installation
-and upgrade it lets you choose the newest published release candidate
-interactively when one is available; no version parameter is required.
+and upgrade it offers the newest release candidate interactively when one is
+available.
+
+<!-- stable-install:start -->
+
+✅ **Stable:** **v0.10.5**
+
+Stable is the recommended channel for normal use. Credentials are stored in a
+Kubernetes Secret and the manager waits for kwatch to become ready.
+
+<!-- stable-install:end -->
+
+### 🧪 Preview builds
+
+<!-- rc-install:start -->
+
+The current preview is **v0.11.0-rc.7**. Select it interactively when you want
+to test preview changes. Preview builds are for testing; read the
+[release notes](https://github.com/abahmed/kwatch/releases) first.
+
+<!-- rc-install:end -->
 
 Use the manager again after installation to configure alerts, change settings,
 upgrade, check status, or uninstall kwatch. Do not apply `deploy.yaml` or
@@ -90,26 +109,22 @@ KWATCH_RELEASE=kwatch-prod \
 
 ## 🔎 What kwatch monitors
 
-Core monitors are enabled by default; optional integrations are opt-in:
+Most monitors are enabled by default:
 
 | Area | Examples |
 | --- | --- |
 | Pods and containers | Crashes, OOM kills, restarts, and readiness |
 | Scheduling | Pending Pods, unschedulable workloads, and delay |
-| Workloads | Deployments, StatefulSets, DaemonSets, Jobs, CronJobs, and PDBs |
+| Workloads | Deployments, StatefulSets, DaemonSets, Jobs, and CronJobs |
 | Infrastructure | Nodes, resource pressure, disk, and inode usage |
 | Storage | PVC usage and persistent-volume failures |
-| Networking | Services, Ingress, webhooks, and NetworkPolicies |
+| Traffic | Services, Ingress, webhooks, and NetworkPolicies |
 | Scaling | HPA and cluster-autoscaler signals |
 | Platform health | Control plane, kubelet telemetry, and cluster resources |
-| Security and policy | TLS expiry, RBAC, admission, and Pod Security findings |
+| Security | TLS expiry, PDB issues, RBAC, and Pod Security findings |
 
-Heartbeat notifications, Metrics Server usage, TLS certificate monitoring, and
-active probes are opt-in. Generic custom-resource status checks use
-`clusterResourceMonitor` (enabled by default) and run only for resources the
-ServiceAccount can list and watch. The `KwatchConfig` overlay is enabled by
-Helm and the interactive installer, while the standalone binary defaults
-`crd.enabled` to false. See the
+Heartbeat notifications, Metrics Server usage, TLS monitoring, active probes,
+and custom-resource watching are opt-in. See the
 [configuration reference](https://kwatch.dev/docs/general-configuration) for
 defaults, permissions, and thresholds.
 
@@ -153,8 +168,8 @@ configuration.
 | `correlation` | Track, resolve, cool down, and re-notify incidents |
 | `app.clusterName` | Identify the cluster in every alert |
 
-Run `kwatch lint` before restarting with an edited configuration. Add `--check`
-to verify credentials for providers that support checks.
+Run `kwatch lint` before applying a configuration. Add `--check` to verify
+credentials for providers that support checks.
 
 ## 🛠️ Manage the installation
 
@@ -166,7 +181,7 @@ configure-alert  Change the notification destination
 configure        Change monitors, thresholds, and silences
 upgrade          Upgrade to stable or choose an available RC
 status           Show deployment and manager state
-features         Show the capabilities of the installed release
+features         Show the installed feature catalog
 uninstall        Remove the workload and notification Secret
 ```
 
