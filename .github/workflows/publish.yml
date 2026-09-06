@@ -626,8 +626,9 @@ jobs:
             cat /tmp/release-body.md /tmp/release-integrity.md > /tmp/release-body-updated.md
           fi
 
+          release_id=$(gh api "repos/$GITHUB_REPOSITORY/releases/tags/$TAG" --jq .id)
           jq -Rs '{body: .}' /tmp/release-body-updated.md |
-            gh api --method PATCH "repos/$GITHUB_REPOSITORY/releases/tags/$TAG" --input - >/dev/null
+            gh api --method PATCH "repos/$GITHUB_REPOSITORY/releases/$release_id" --input - >/dev/null
 
   verify_published_artifacts:
     name: Verify published artifacts
