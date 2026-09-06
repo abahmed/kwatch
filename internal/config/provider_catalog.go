@@ -155,7 +155,8 @@ const providerCatalogData = "" +
 	"clickup|ClickUp|priority|integer|false|false|integer||Optional task " +
 	"priority (1-4)\n" +
 	"ilert|iLert|integrationKey|string|true|true|||Integration key\n" +
-	"ilert|iLert|priority|integer|false|false|integer||Priority (LOW/HIGH" +
+	"ilert|iLert|priority|string|false|false|one-of:LOW,HIGH,CRITICAL|HIGH|" +
+	"Priority (LOW/HIGH" +
 	"/CRITICAL, default: HIGH)\n" +
 	"incidentio|Incident.io|url|string|true|true|url||Incident.io URL\n" +
 	"incidentio|Incident.io|apiKey|string|false|true|||Optional API key\n" +
