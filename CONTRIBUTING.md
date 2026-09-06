@@ -70,14 +70,12 @@ The release workflow removes these banners when the stable release ships.
 Do not update version numbers in normal feature pull requests. The release
 workflow owns these locations:
 
-- `README.md` blocks between `stable-install` markers;
-- the preview block between `rc-install` markers;
 - `deploy/deploy.yaml`;
 - `deploy/chart/Chart.yaml`; and
 - `deploy/chart/README.md`.
 
-Keep install docs version-free when possible. Never delete the README markers;
-the workflow uses them to update stable and preview commands automatically.
+Keep install docs version-free. The repository README delegates stable and RC
+selection to the interactive `kwatch.sh` manager; do not add release pins there.
 Read [RELEASES.md](./RELEASES.md) before cutting a release.
 
 The release workflow also publishes the configuration and feature catalogs used

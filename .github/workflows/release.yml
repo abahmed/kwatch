@@ -357,7 +357,7 @@ jobs:
           grep -Eq '^# kwatch provider catalog v[0-9]+$' deploy/provider-catalog.tsv
           echo "configuration, feature, and provider catalogs are present"
 
-      - name: Bump chart and README versions
+      - name: Bump manifests and release catalogs
         id: bump
         if: ${{ !inputs.dry_run && steps.meta.outputs.resume != 'true' }}
         env:
@@ -381,29 +381,10 @@ jobs:
           go run ./cmd/featurecatalog -output deploy/feature-catalog.tsv
           go run ./cmd/providercatalog -output deploy/provider-catalog.tsv
 
-          # Rewrite version pins inside one marked block only, so an rc never
-          # touches the stable install snippets and a stable never touches the
-          # preview ones. Repeated start/end pairs of the same name are fine,
-          # which is what lets the clean-up section share the stable marker.
-          bump_block() {
-            BLOCK="$1" perl -i -pe '
-              $in = 1 if /<!--\s*\Q$ENV{BLOCK}\E:start\s*-->/;
-              $in = 0 if /<!--\s*\Q$ENV{BLOCK}\E:end\s*-->/;
-              if ($in) {
-                s/--version \d+\.\d+\.\d+(?:-rc\.\d+)?/--version $ENV{CHART_VER}/g;
-                s{kwatch/v\d+\.\d+\.\d+(?:-rc\.\d+)?/}{kwatch/$ENV{VERSION}/}g;
-                s{ghcr\.io/abahmed/kwatch:v\d+\.\d+\.\d+(?:-rc\.\d+)?}{ghcr.io/abahmed/kwatch:$ENV{VERSION}}g;
-                s/\*\*v\d+\.\d+\.\d+(?:-rc\.\d+)?\*\*/**$ENV{VERSION}**/g;
-              }
-            ' README.md
-          }
-
-          if [ "$COMMAND" = "rc" ]; then
-            # Preview snippets only. The chart and deploy manifests stay on the
-            # last stable, so a plain kubectl apply from main never ships an rc.
-            bump_block rc-install
-          else
-            bump_block stable-install
+          # For an RC, the chart and main deploy manifest stay on the last
+          # stable, so a plain kubectl apply from main never ships an RC. The
+          # version-free README is not changed by release automation.
+          if [ "$COMMAND" != "rc" ]; then
             perl -pi -e 's/^version: .*/version: "$ENV{CHART_VER}"/' deploy/chart/Chart.yaml
             perl -pi -e 's/^appVersion: .*/appVersion: "$ENV{VERSION}"/' deploy/chart/Chart.yaml
             perl -pi -e 's/--version [0-9]+\.[0-9]+\.[0-9]+/--version $ENV{CHART_VER}/' deploy/chart/README.md
@@ -411,9 +392,6 @@ jobs:
           fi
 
           if [ "$COMMAND" = "stable" ]; then
-            # The rc this promotes has just shipped, so the preview block has
-            # nothing to point at until the next rc opens a series.
-            perl -0777 -i -pe 's{(<!-- rc-install:start -->).*?(<!-- rc-install:end -->)}{$1\n\n_No release candidate right now._\n\n$2}s' README.md
             perl -ni -e 'print unless /^>\s*\*\*[^*]*Unreleased\*\*/' README.md docs/*.md
           fi
 
@@ -425,7 +403,7 @@ jobs:
             echo "nothing to bump for main"
             echo "bumped=false" >> "$GITHUB_OUTPUT"
           else
-            git commit -m "chore: release $VERSION - bump pinned versions"
+            git commit -m "chore: release $VERSION - update manifests and catalogs"
             if [ -n "$TARGET" ]; then
               # Released off an older commit. The bump belongs to the tag only,
               # since pushing it to main would rewrite main's version backwards.

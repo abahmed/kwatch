@@ -40,6 +40,11 @@ This is the supported installation path. It downloads and applies the matching
 release resources itself; do not apply `deploy.yaml` or `config.yaml` manually,
 because that bypasses the guided Secret handling and security verification.
 
+Official release images send a small pseudonymous adoption heartbeat once a
+week by default. It contains an installation ID and kwatch version only; no
+feature usage or cluster inventory is collected. Disable it later from the
+manager's **Configure settings** menu with `telemetry.enabled: false`.
+
 ## 🎯 Choose a cluster safely
 
 If your kubeconfig has more than one context, the manager shows the contexts

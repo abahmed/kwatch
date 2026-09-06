@@ -59,32 +59,14 @@ You need Bash, `curl`, `kubectl`, and permission to install the required
 namespace-scoped and cluster-scoped resources.
 
 The manager selects the latest stable release by default. During installation
-and upgrade it offers the newest release candidate interactively when one is
-available.
+and upgrade it lets you choose the newest published release candidate
+interactively when one is available; no version parameter is required.
 
-Official builds send a small pseudonymous adoption heartbeat once a week by
-default. It contains an installation ID and kwatch version only; no feature
-usage or cluster inventory is collected. Disable it with
-`telemetry.enabled: false` when you do not want these heartbeats.
-
-<!-- stable-install:start -->
-
-✅ **Stable:** **v0.10.5**
-
-Stable is the recommended channel for normal use. Credentials are stored in a
-Kubernetes Secret and the manager waits for kwatch to become ready.
-
-<!-- stable-install:end -->
-
-### 🧪 Preview builds
-
-<!-- rc-install:start -->
-
-The current preview is **v0.11.0-rc.7**. Select it interactively when you want
-to test preview changes. Preview builds are for testing; read the
-[release notes](https://github.com/abahmed/kwatch/releases) first.
-
-<!-- rc-install:end -->
+Official release images send a small pseudonymous adoption heartbeat once a
+week by default. It contains an installation ID and kwatch version only; no
+feature usage or cluster inventory is collected. Disable it with
+`telemetry.enabled: false` from the manager's **Configure settings** menu if
+you do not want these heartbeats.
 
 Use the manager again after installation to configure alerts, change settings,
 upgrade, check status, or uninstall kwatch. Do not apply `deploy.yaml` or

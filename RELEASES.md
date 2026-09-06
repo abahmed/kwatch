@@ -79,10 +79,10 @@ the older series is intentionally no longer the release target.
    newest stable.
 5. `publish.yml` pushes `ghcr.io/abahmed/kwatch:v<X>.<Y>.<Z>-rc.<N>` only — **no `latest`**,
    and the in-app upgrader does not nag RC users.
-6. Updates the **preview install block** in `README.md` (between the `rc-install` markers) to
-   the new RC and pushes that commit to `main`. The chart, the chart README, and the
-   **stable** install snippets are left alone. After publishing, `publish.yml` updates
-   the preview version shown on `kwatch.dev` and deploys the site automatically.
+6. Regenerates the configuration, feature, and provider catalogs and pushes any
+   resulting release metadata commit to `main`. The README install instructions
+   are version-free. After publishing, `publish.yml` updates the preview version
+   shown on `kwatch.dev` and deploys the site automatically.
 7. Adds a second commit — **not pushed to `main`** — that pins `deploy/deploy.yaml` to the RC
    image, and puts the tag on it. So `kubectl apply` against the RC tag installs the
    candidate, while `deploy/deploy.yaml` on `main` still points at the latest stable. See the
@@ -98,7 +98,7 @@ Run `rc` as often as needed until the candidate stabilizes.
 >
 > | Commit | Contains | Pushed to `main` | Tagged |
 > |---|---|---|---|
-> | 1 | `README.md` preview block → the new RC | ✅ | — |
+> | 1 | Release catalogs and metadata, when changed | ✅ | — |
 > | 2 | `deploy/deploy.yaml` image → the new RC | ❌ never | ✅ |
 >
 > The second commit exists only on the tag. That is why an RC tag sits exactly one commit
@@ -113,26 +113,23 @@ Run `rc` as often as needed until the candidate stabilizes.
    (`git rev-list --count <rc>..origin/main` must be 0); otherwise it fails and you must cut
    a fresh RC first. This is a reachability check, not sha equality — an RC tag is one commit
    ahead of `main` on purpose (see the note under `rc`), so comparing shas would always fail.
-2. Bumps every stable pin to the new version, resets the **preview** block to
-   *"No release candidate right now."* (the RC it promotes has just shipped), strips
-   `🚧 Unreleased` banners from `README.md` and every `docs/*.md`, commits them to `main`,
-   and pushes (`RELEASE_TOKEN` required; see below):
+2. Bumps the stable manifest and chart versions, strips `🚧 Unreleased` banners
+   from `README.md` and every `docs/*.md`, commits them to `main`, and pushes
+   (`RELEASE_TOKEN` required; see below):
    `deploy/chart/Chart.yaml` (`version`, `appVersion`), `deploy/chart/README.md`,
-   `deploy/deploy.yaml` (image tag), and the `README.md` stable install snippets
-   (`helm install --version`, `/kwatch/vX.Y.Z/deploy/...`).
+   and `deploy/deploy.yaml` (image tag).
 3. Creates the `v<X>.<Y>.<Z>` tag **on that bump commit** and opens a normal GitHub Release
    (gets `latest`). Because the tag commit carries the bumped files, the raw
    `/kwatch/vX.Y.Z/deploy/...` refs and the chart at the tag match the released version.
 4. `publish.yml` updates the stable version shown on `kwatch.dev`, clears the preview
    version, builds the site, and triggers one Render deployment.
 
-> **Pinned-version invariant:** on `main`, the chart version, `deploy.yaml` image tag, chart
-> README, and the **stable** README install snippets always point at the latest **stable**
-> release. The **preview** README block always points at the newest open RC, or says there
-> isn't one. What a visitor reads is what they can actually install, on either channel.
-> Every pin is bumped by the release workflow and never by feature PRs. The `docs/`
-> reference pages carry **no version pins**; a reference page that needs an install command
-> links to the README instead.
+> **Pinned-version invariant:** on `main`, the chart version, `deploy.yaml` image tag,
+> and chart README always point at the latest stable release. The README install
+> command deliberately resolves the current stable release through `kwatch.sh`, while
+> the interactive manager offers a published RC. Every manifest pin is bumped by the
+> release workflow and never by feature PRs. The `docs/` reference pages carry no
+> version pins; a reference page that needs an install command links to the manager.
 
 ### `patch` — hotfix tagged on `main`
 
@@ -158,7 +155,7 @@ Run `rc` as often as needed until the candidate stabilizes.
 
 > The version-bump commit is pushed to the protected `main` branch, so **all three commands**
 > require a **`RELEASE_TOKEN`** secret (a maintainer classic PAT with `repo` scope, allowed
-> to bypass branch protection). `rc` needs it too, since it now maintains the preview block.
+> to bypass branch protection). `rc` needs it too, since it may push regenerated catalogs.
 > If the secret is missing or the push fails, the workflow stops **before** tagging and
 > prints the manual `git push` command to run.
 >
@@ -200,29 +197,16 @@ immediately, but under a banner while unreleased:
   top-of-file banner marks the entire README as documenting the dev build. Same `🚧 Unreleased`
   marker, stripped the same way.
 - The `stable` command strips every banner line from `README.md` and `docs/*.md` and bumps
-  the pinned version references (`helm install --version`, `/kwatch/vX.Y.Z/deploy/...`,
-  `deploy.yaml` image, chart files) in the same commit.
+  the pinned manifest and chart references in the same commit.
 - Maintainers never touch version numbers by hand; the pinned-version invariant and the
   banner convention are enforced by `CONTRIBUTING.md` and the gate checklist above.
 
-### Install blocks in `README.md`
+### Version-free install instructions
 
-Version pins live inside HTML comment markers, and the workflow only rewrites what is
-between them:
-
-| Marker | Holds | Bumped by |
-|---|---|---|
-| `<!-- stable-install:start -->` … `:end` | Helm + kubectl install snippets, and the clean-up commands | `stable`, `patch` |
-| `<!-- rc-install:start -->` … `:end` | The collapsed preview section | `rc`; reset to a placeholder by `stable` |
-
-Three rules follow from this:
-
-- **Do not delete the markers.** They are how the workflow finds what to rewrite. A pin
-  outside them silently stops being maintained — nothing fails, it just goes stale.
-- **A marker name may repeat.** `stable-install` wraps two regions (install and clean-up)
-  and both are rewritten in one pass.
-- **New version pin? Put it inside a block.** If it belongs to the stable channel it goes in
-  a `stable-install` region; if it documents the preview it goes in the `rc-install` one.
+The repository README intentionally does not pin a stable or preview version. The
+interactive `kwatch.sh` manager resolves the latest stable release by default and
+offers a published RC during installation or upgrade. Release-specific image and
+chart pins remain in the manifests and chart metadata maintained by the workflow.
 
 ## Releasing the Helm chart
 
