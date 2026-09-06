@@ -253,10 +253,12 @@ jobs:
             echo "::warning::go.mod has no /v$NEW_MAJOR suffix on the module path. Go needs it for major >= 2, so 'go install ...@$VERSION' will fail until go.mod and every internal import are updated."
           fi
 
-          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
-          echo "prev=$PREV" >> "$GITHUB_OUTPUT"
-          echo "prerelease=$PRERELEASE" >> "$GITHUB_OUTPUT"
-          echo "resume=$RESUME" >> "$GITHUB_OUTPUT"
+          {
+            echo "version=$VERSION"
+            echo "prev=$PREV"
+            echo "prerelease=$PRERELEASE"
+            echo "resume=$RESUME"
+          } >> "$GITHUB_OUTPUT"
           echo "$COMMAND -> $VERSION (notes compare against ${PREV:-nothing})"
 
       # Must run before the changelog and the bump, so both work on the
@@ -274,8 +276,10 @@ jobs:
               exit 1
             fi
             RESOLVED=$(git rev-list -n 1 "refs/tags/${{ steps.meta.outputs.version }}")
-            echo "sha=$RESOLVED" >> "$GITHUB_OUTPUT"
-            echo "existing_tag=true" >> "$GITHUB_OUTPUT"
+            {
+              echo "sha=$RESOLVED"
+              echo "existing_tag=true"
+            } >> "$GITHUB_OUTPUT"
             echo "resuming tag at $RESOLVED"
             exit 0
           fi

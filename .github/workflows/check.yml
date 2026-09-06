@@ -28,7 +28,9 @@ jobs:
     - name: Install actionlint
       run: go install github.com/rhysd/actionlint/cmd/actionlint@v1.7.7
     - name: Lint GitHub Actions
-      run: "$(go env GOPATH)/bin/actionlint"
+      run: |
+        actionlint_bin="$(go env GOPATH)/bin/actionlint"
+        "$actionlint_bin"
     - name: Lint
       uses: golangci/golangci-lint-action@ba0d7d2ec06a0ea1cb5fa41b2e4a3ab91d21278a # v9
       with:
