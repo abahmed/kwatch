@@ -17,6 +17,7 @@ type silenceMatcher struct {
 	containerNames []string
 	logPatterns    []*regexp.Regexp
 	containerMsgs  []string
+	eventMessages  []string
 	nodeReasons    []string
 	nodeMessages   []string
 }
@@ -31,6 +32,7 @@ func (a *AlertManager) SetSilences(rules []config.SilenceRule) {
 			reasons:        sr.Reasons,
 			containerNames: sr.ContainerNames,
 			containerMsgs:  sr.ContainerMessages,
+			eventMessages:  sr.EventMessages,
 			nodeReasons:    sr.NodeReasons,
 			nodeMessages:   sr.NodeMessages,
 		}
@@ -86,6 +88,10 @@ func matchesSilence(sm silenceMatcher, inc *model.Incident) bool {
 		if inc.LastContainerState == nil || !anyContains(sm.containerMsgs, inc.LastContainerState.Msg) {
 			return false
 		}
+	}
+	if len(sm.eventMessages) > 0 &&
+		!anyContains(sm.eventMessages, inc.Events) {
+		return false
 	}
 	if len(sm.nodeReasons) > 0 && !anyEq(sm.nodeReasons, inc.Reason) {
 		return false

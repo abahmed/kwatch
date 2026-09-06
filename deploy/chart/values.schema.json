@@ -373,6 +373,7 @@
                 "containerNames": { "type": "array", "items": { "type": "string" } },
                 "logPatterns": { "type": "array", "items": { "type": "string" } },
                 "containerMessages": { "type": "array", "items": { "type": "string" } },
+                "eventMessages": { "type": "array", "items": { "type": "string" } },
                 "nodeReasons": { "type": "array", "items": { "type": "string" } },
                 "nodeMessages": { "type": "array", "items": { "type": "string" } }
               }

@@ -40,6 +40,7 @@ func buildPodDetectors(cfg *config.Config) []filter.Detector {
 func buildPodEnrichers() []filter.Enricher {
 	return []filter.Enricher{
 		filter.PodEventsFilter{},
+		filter.EventMessageFilter{},
 		filter.PodOwnersFilter{},
 	}
 }
@@ -69,6 +70,7 @@ func buildContainerDetectors(cfg *config.Config) []filter.Detector {
 func buildContainerSuppressionEnrichers() []filter.Enricher {
 	return []filter.Enricher{
 		filter.ContainerKillingFilter{},
+		filter.EventMessageFilter{},
 		filter.ContainerLogsFilter{},
 	}
 }

@@ -22,6 +22,10 @@ type SilenceRule struct {
 	// ContainerMessages is an optional list of substrings; if a container
 	// status message contains any entry, the incident is suppressed.
 	ContainerMessages []string `yaml:"containerMessages"`
+	// EventMessages is an optional list of substrings; if an Event message
+	// attached to the affected Pod contains any entry, the incident is
+	// suppressed.
+	EventMessages []string `yaml:"eventMessages"`
 	// NodeReasons is an optional list of node reasons to silence.
 	NodeReasons []string `yaml:"nodeReasons"`
 	// NodeMessages is an optional list of substrings; if a node condition
@@ -37,6 +41,7 @@ type SuppressionIndex struct {
 	PodNamePatterns   []*regexp.Regexp
 	LogPatterns       []*regexp.Regexp
 	ContainerMessages []string
+	EventMessages     []string
 	NodeReasons       []string
 	NodeMessages      []string
 }
@@ -44,23 +49,25 @@ type SuppressionIndex struct {
 // suppressionBuilder accumulates deduplicated suppression entries from both
 // SilenceRules and the deprecated ignore* config fields.
 type suppressionBuilder struct {
-	idx          SuppressionIndex
-	containers   map[string]bool
-	podPatterns  map[string]bool
-	logPatterns  map[string]bool
-	messages     map[string]bool
-	nodeReasons  map[string]bool
-	nodeMessages map[string]bool
+	idx           SuppressionIndex
+	containers    map[string]bool
+	podPatterns   map[string]bool
+	logPatterns   map[string]bool
+	messages      map[string]bool
+	eventMessages map[string]bool
+	nodeReasons   map[string]bool
+	nodeMessages  map[string]bool
 }
 
 func newSuppressionBuilder() *suppressionBuilder {
 	return &suppressionBuilder{
-		containers:   map[string]bool{},
-		podPatterns:  map[string]bool{},
-		logPatterns:  map[string]bool{},
-		messages:     map[string]bool{},
-		nodeReasons:  map[string]bool{},
-		nodeMessages: map[string]bool{},
+		containers:    map[string]bool{},
+		podPatterns:   map[string]bool{},
+		logPatterns:   map[string]bool{},
+		messages:      map[string]bool{},
+		eventMessages: map[string]bool{},
+		nodeReasons:   map[string]bool{},
+		nodeMessages:  map[string]bool{},
 	}
 }
 
@@ -112,6 +119,15 @@ func (b *suppressionBuilder) addMessages(items []string) {
 	}
 }
 
+func (b *suppressionBuilder) addEventMessages(items []string) {
+	for _, message := range items {
+		if !b.eventMessages[message] {
+			b.idx.EventMessages = append(b.idx.EventMessages, message)
+			b.eventMessages[message] = true
+		}
+	}
+}
+
 func (b *suppressionBuilder) addNodeReasons(items []string) {
 	for _, r := range items {
 		if !b.nodeReasons[r] {
@@ -135,6 +151,7 @@ func (b *suppressionBuilder) addRule(sr SilenceRule) {
 	b.addPodPatterns(sr.PodNamePatterns, "invalid suppression pod name pattern")
 	b.addLogPatterns(sr.LogPatterns, "invalid suppression log pattern")
 	b.addMessages(sr.ContainerMessages)
+	b.addEventMessages(sr.EventMessages)
 	b.addNodeReasons(sr.NodeReasons)
 	b.addNodeMessages(sr.NodeMessages)
 }

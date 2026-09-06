@@ -170,6 +170,7 @@ type SilenceRule struct {
 	ContainerNames    []string `json:"containerNames,omitempty"`
 	LogPatterns       []string `json:"logPatterns,omitempty"`
 	ContainerMessages []string `json:"containerMessages,omitempty"`
+	EventMessages     []string `json:"eventMessages,omitempty"`
 	NodeReasons       []string `json:"nodeReasons,omitempty"`
 	NodeMessages      []string `json:"nodeMessages,omitempty"`
 }

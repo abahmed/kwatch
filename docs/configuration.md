@@ -636,7 +636,26 @@ silences:
   - podNamePatterns: ["my-fancy-pod-.*"]
 ```
 
-Each rule can also filter by `containerNames`, `logPatterns`, `containerMessages`, `nodeReasons`, and `nodeMessages` (message substrings). An incident matching any rule is suppressed entirely. The deprecated top-level `ignore*` fields map onto these rules.
+Each rule can also filter by `containerNames`, `logPatterns`, `containerMessages`,
+`eventMessages`, `nodeReasons`, and `nodeMessages` (message substrings). An
+incident matching any rule is suppressed entirely. `eventMessages` checks the
+Kubernetes Events attached to the affected Pod, so it can suppress a container
+incident whose status reason is generic but whose Event explains that the
+condition was transient. The deprecated top-level `ignore*` fields map onto
+these rules.
+
+For example, suppress a noisy transient cache-sync error while keeping other
+`CreateContainerConfigError` incidents visible:
+
+```yaml
+silences:
+  - eventMessages:
+      - "failed to sync configmap cache"
+```
+
+The match is a case-sensitive substring of an attached Event message. It
+suppresses the whole incident; `includeEvents` only controls whether matching
+or non-matching Events are rendered in the notification.
 
 ### 🚫 Inhibition — no double alerts
 

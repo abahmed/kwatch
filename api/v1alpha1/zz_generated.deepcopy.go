@@ -384,6 +384,11 @@ func (in *SilenceRule) DeepCopyInto(out *SilenceRule) {
 		*out = make([]string, len(*in))
 		copy(*out, *in)
 	}
+	if in.EventMessages != nil {
+		in, out := &in.EventMessages, &out.EventMessages
+		*out = make([]string, len(*in))
+		copy(*out, *in)
+	}
 	if in.NodeReasons != nil {
 		in, out := &in.NodeReasons, &out.NodeReasons
 		*out = make([]string, len(*in))

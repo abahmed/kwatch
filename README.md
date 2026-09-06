@@ -162,7 +162,7 @@ configuration.
 | --- | --- |
 | `namespaces` | Watch only selected namespaces |
 | `reasons` | Include or exclude alert reasons |
-| `silences` | Suppress known, intentional failures |
+| `silences` | Suppress known, intentional failures, including matching Event messages |
 | `includeLogs` / `includeEvents` | Add Kubernetes context to alerts |
 | `smartGrouping` | Combine related symptoms |
 | `correlation` | Track, resolve, cool down, and re-notify incidents |

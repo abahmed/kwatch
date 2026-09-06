@@ -14,6 +14,7 @@ func TestSilenceRuleDeepCopyIsNotAliased(t *testing.T) {
 		ContainerNames:    []string{"sidecar"},
 		LogPatterns:       []string{"fatal"},
 		ContainerMessages: []string{"denied"},
+		EventMessages:     []string{"cache timed out"},
 		NodeReasons:       []string{"KubeletNotReady"},
 		NodeMessages:      []string{"draining"},
 	}
@@ -27,6 +28,7 @@ func TestSilenceRuleDeepCopyIsNotAliased(t *testing.T) {
 	out.ContainerNames[0] = "mutated"
 	out.LogPatterns[0] = "mutated"
 	out.ContainerMessages[0] = "mutated"
+	out.EventMessages[0] = "mutated"
 	out.NodeReasons[0] = "mutated"
 	out.NodeMessages[0] = "mutated"
 
@@ -36,6 +38,7 @@ func TestSilenceRuleDeepCopyIsNotAliased(t *testing.T) {
 	assert.Equal(t, []string{"sidecar"}, in.ContainerNames)
 	assert.Equal(t, []string{"fatal"}, in.LogPatterns)
 	assert.Equal(t, []string{"denied"}, in.ContainerMessages)
+	assert.Equal(t, []string{"cache timed out"}, in.EventMessages)
 	assert.Equal(t, []string{"KubeletNotReady"}, in.NodeReasons)
 	assert.Equal(t, []string{"draining"}, in.NodeMessages)
 }

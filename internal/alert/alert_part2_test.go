@@ -164,6 +164,40 @@ func TestSilenceByReason(t *testing.T) {
 	assert.False(t, am.isSilenced(inc2))
 }
 
+func TestSilenceByEventMessage(t *testing.T) {
+	am := AlertManager{}
+	am.SetSilences([]config.SilenceRule{
+		{EventMessages: []string{"failed to sync configmap cache"}},
+	})
+
+	inc := &model.Incident{
+		Subject: model.Subject{
+			Key:       "default:pod:CreateContainerConfigError",
+			Name:      "pod",
+			Namespace: "default",
+			Reason:    "CreateContainerConfigError",
+		},
+		Evidence: model.Evidence{
+			Events: "Warning CreateContainerConfigError: failed to sync " +
+				"configmap cache: timed out",
+		},
+	}
+
+	assert.True(t, am.isSilenced(inc))
+
+	inc2 := &model.Incident{
+		Subject: model.Subject{
+			Key:       "default:pod:CreateContainerConfigError",
+			Name:      "pod",
+			Namespace: "default",
+			Reason:    "CreateContainerConfigError",
+		},
+		Evidence: model.Evidence{Events: "Warning BackOff: restarting container"},
+	}
+
+	assert.False(t, am.isSilenced(inc2))
+}
+
 func TestRouteFilter(t *testing.T) {
 	routes := []config.AlertRoute{
 		{Namespaces: []string{"production"}, Severities: []string{"high"}},

@@ -137,7 +137,7 @@ auditLog.enabled|Operations|Write structured incident lifecycle records to the c
 auditLog.output|Operations|Audit output: stdout or a supported output sink.|active|
 templates|Operations|JSON map of optional reason-specific message templates.|active|
 runbooks|Operations|JSON map of reason-to-runbook URLs.|active|
-silences|Noise reduction|JSON array of scoped silence rules.|active|
+silences|Noise reduction|JSON array of scoped silence rules, including eventMessages substring matches for attached Kubernetes Events.|active|
 ignoreContainerNames|Compatibility|Legacy container suppression field.|deprecated|silences
 ignorePodNames|Compatibility|Legacy pod-name suppression field.|deprecated|silences
 ignoreLogPatterns|Compatibility|Legacy log suppression field.|deprecated|silences

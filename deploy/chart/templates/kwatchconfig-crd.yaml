@@ -131,6 +131,10 @@ spec:
                         type: array
                         items:
                           type: string
+                      eventMessages:
+                        type: array
+                        items:
+                          type: string
                       nodeReasons:
                         type: array
                         items:

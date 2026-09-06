@@ -68,6 +68,7 @@ stringData:
       # - containerNames: ["<container>"]
       # - logPatterns: ["<regex>"]
       # - containerMessages: ["<substring>"]
+      # - eventMessages: ["<substring in a Kubernetes Event message>"]
 
     # ── Correlation (incident dedup & lifecycle) ──────────
     correlation:
