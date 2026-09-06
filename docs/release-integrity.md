@@ -7,20 +7,21 @@ Every published container release includes a source commit, image digest, checks
 and a release manifest. The image is signed with Cosign using GitHub Actions
 OIDC; kwatch does not connect to Sigstore at runtime.
 
-## Pin the image
+## Use the release image
 
-Use the immutable digest from the GitHub Release instead of a mutable tag:
+Use the published version tag for installation and normal operation:
 
 ```shell
-docker pull ghcr.io/abahmed/kwatch@sha256:<digest>
+docker pull ghcr.io/abahmed/kwatch:vX.Y.Z
 ```
 
 The release manifest records the relationship between the version tag, source commit,
-image digest, and (for stable releases) Helm package checksum.
+image digest, and (for stable releases) Helm package checksum. The digest is release
+evidence for verification, not a separate operational image tag.
 
 ## Verify an image
 
-Install Cosign, then verify the digest from the release:
+Install Cosign, then verify the digest recorded in the release evidence:
 
 ```shell
 cosign verify \
@@ -29,7 +30,8 @@ cosign verify \
   ghcr.io/abahmed/kwatch@sha256:<digest>
 ```
 
-The command should be run against the exact digest, not `latest` or another mutable tag.
+The command verifies the image behind the version tag; do not use the `sha256-...`
+provenance tag as an operational image.
 
 ## Verify checksums
 
@@ -47,7 +49,7 @@ and its `image.digest` must match the digest used for the Cosign verification.
 The image embeds its version and source commit:
 
 ```shell
-docker run --rm ghcr.io/abahmed/kwatch@sha256:<digest> version --json
+docker run --rm ghcr.io/abahmed/kwatch:vX.Y.Z version --json
 ```
 
 The returned `version` and `commit` should match the release tag and manifest.

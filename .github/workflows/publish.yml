@@ -221,11 +221,9 @@ jobs:
               echo "docker pull ghcr.io/abahmed/kwatch:$TAG"
               echo '```'
               echo
-              echo "By digest, which cannot. Use this to pin a deployment:"
+              echo "The release digest is recorded in the release evidence for verification:"
               echo
-              echo '```sh'
-              echo "docker pull ghcr.io/abahmed/kwatch@$DIGEST"
-              echo '```'
+              echo "  $DIGEST"
             fi
           } >> "$GITHUB_STEP_SUMMARY"
 
