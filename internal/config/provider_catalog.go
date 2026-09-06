@@ -18,16 +18,21 @@ type ProviderField struct {
 	Validation  string
 	Default     string
 	Description string
+	Group       string
+	Condition   string
 }
 
 const providerCatalogData = "" +
-	"slack|Slack|webhook|string|false|true|url||Slack webhook URL\n" +
-	"slack|Slack|channel|string|false|false|||Override channel\n" +
+	"slack|Slack|webhook|string|false|true|url||Slack webhook URL|" +
+	"authentication|choice:webhook\n" +
+	"slack|Slack|channel|string|false|false|||Override channel||" +
+	"required-if:authentication=token\n" +
 	"slack|Slack|title|string|false|false|||Custom title\n" +
 	"slack|Slack|text|string|false|false|||Custom text\n" +
 	"slack|Slack|compact|boolean|false|false|boolean|false|Single-line mo" +
 	"de\n" +
-	"slack|Slack|token|string|false|true|||Bot token (xoxb-...)\n" +
+	"slack|Slack|token|string|false|true|||Bot token (xoxb-...)|" +
+	"authentication|choice:token\n" +
 	"discord|Discord|webhook|string|true|true|url||Discord webhook URL\n" +
 	"discord|Discord|title|string|false|false|||Custom title\n" +
 	"discord|Discord|text|string|false|false|||Custom text\n" +
@@ -194,9 +199,10 @@ const providerCatalogData = "" +
 	"sns|SNS|secretAccessKey|string|true|true|||AWS secret access key\n" +
 	"sns|SNS|region|string|false|false||us-east-1|AWS region (default: us" +
 	"-east-1)\n" +
-	"sns|SNS|topicArn|string|false|false|||SNS topic ARN (or targetArn)\n" +
-	"sns|SNS|targetArn|string|false|false|||SNS target ARN (alternative t" +
-	"o topicArn).\n" +
+	"sns|SNS|topicArn|string|false|false|||SNS topic ARN (or targetArn)|" +
+	"destination|choice:topic\n" +
+	"sns|SNS|targetArn|string|false|false|||SNS target ARN (alternative to " +
+	"topicArn)|destination|choice:target\n" +
 	"sns|SNS|subject|string|false|false|||Optional subject (email subscri" +
 	"ptions)\n" +
 	"jira|Jira|url|string|true|false|url||Jira base URL\n" +
@@ -700,8 +706,8 @@ func parseProviderCatalog(raw string) []ProviderField {
 		if line == "" || strings.HasPrefix(line, "#") {
 			continue
 		}
-		parts := strings.SplitN(line, "|", 9)
-		if len(parts) != 9 {
+		parts := strings.SplitN(line, "|", 11)
+		if len(parts) != 9 && len(parts) != 11 {
 			panic(fmt.Sprintf("invalid provider catalog row: %q", line))
 		}
 		required, err := strconv.ParseBool(parts[4])
@@ -712,13 +718,41 @@ func parseProviderCatalog(raw string) []ProviderField {
 		if err != nil {
 			panic(fmt.Sprintf("invalid provider catalog secret flag: %q", line))
 		}
+		group, condition := "", ""
+		if len(parts) == 11 {
+			group, condition = parts[9], parts[10]
+		}
+		if err := validateProviderCondition(group, condition); err != nil {
+			panic(fmt.Sprintf("invalid provider catalog condition: %q: %v", line, err))
+		}
 		fields = append(fields, ProviderField{
 			Provider: parts[0], DisplayName: parts[1], Field: parts[2],
 			Type: parts[3], Required: required, Secret: secret,
 			Validation: parts[6], Default: parts[7], Description: parts[8],
+			Group: group, Condition: condition,
 		})
 	}
 	return fields
+}
+
+func validateProviderCondition(group, condition string) error {
+	if condition == "" {
+		return nil
+	}
+	if strings.HasPrefix(condition, "choice:") {
+		if group == "" || strings.TrimPrefix(condition, "choice:") == "" {
+			return fmt.Errorf("choice conditions need a group and value")
+		}
+		return nil
+	}
+	if strings.HasPrefix(condition, "required-if:") {
+		expression := strings.TrimPrefix(condition, "required-if:")
+		if !strings.Contains(expression, "=") {
+			return fmt.Errorf("required-if conditions need group=value")
+		}
+		return nil
+	}
+	return fmt.Errorf("unsupported condition %q", condition)
 }
 
 // ProviderCatalog returns a copy of the complete guided installer schema.

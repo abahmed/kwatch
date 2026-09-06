@@ -1,10 +1,10 @@
 # kwatch provider catalog v1
-slack|Slack|webhook|string|false|true|url||Slack webhook URL
-slack|Slack|channel|string|false|false|||Override channel
+slack|Slack|webhook|string|false|true|url||Slack webhook URL|authentication|choice:webhook
+slack|Slack|channel|string|false|false|||Override channel||required-if:authentication=token
 slack|Slack|title|string|false|false|||Custom title
 slack|Slack|text|string|false|false|||Custom text
 slack|Slack|compact|boolean|false|false|boolean|false|Single-line mode
-slack|Slack|token|string|false|true|||Bot token (xoxb-...)
+slack|Slack|token|string|false|true|||Bot token (xoxb-...)|authentication|choice:token
 discord|Discord|webhook|string|true|true|url||Discord webhook URL
 discord|Discord|title|string|false|false|||Custom title
 discord|Discord|text|string|false|false|||Custom text
@@ -143,8 +143,8 @@ ses|SES|subject|string|false|false|||Email subject
 sns|SNS|accessKeyId|string|true|true|||AWS access key ID
 sns|SNS|secretAccessKey|string|true|true|||AWS secret access key
 sns|SNS|region|string|false|false||us-east-1|AWS region (default: us-east-1)
-sns|SNS|topicArn|string|false|false|||SNS topic ARN (or targetArn)
-sns|SNS|targetArn|string|false|false|||SNS target ARN (alternative to topicArn).
+sns|SNS|topicArn|string|false|false|||SNS topic ARN (or targetArn)|destination|choice:topic
+sns|SNS|targetArn|string|false|false|||SNS target ARN (alternative to topicArn)|destination|choice:target
 sns|SNS|subject|string|false|false|||Optional subject (email subscriptions)
 jira|Jira|url|string|true|false|url||Jira base URL
 jira|Jira|user|string|true|false|||Email or username

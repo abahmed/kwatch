@@ -207,8 +207,11 @@ monitoring, use the monitor's normal `enabled` or threshold settings.
 
 Guided notification setup uses `deploy/provider-catalog.tsv`. It covers every
 supported provider and documented provider field, and marks every credential
-field as Secret-backed. Provider credentials never appear in the general
-configuration catalog.
+field as Secret-backed. It can also describe provider-specific choice groups
+and conditional fields (for example, one authentication method requiring a
+channel). The installer interprets those relationships generically, so adding
+a new provider does not require provider-specific shell logic. Provider
+credentials never appear in the general configuration catalog.
 
 The `/kubelet` health status reports `healthy`, `partial`, `unavailable`, or
 `rbacDenied`, alongside Summary, cAdvisor, runtime, and node counts. The

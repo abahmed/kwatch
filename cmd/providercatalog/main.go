@@ -67,7 +67,7 @@ func validProviderFieldType(fieldType string) bool {
 }
 
 func providerLine(field config.ProviderField) string {
-	return strings.Join([]string{
+	parts := []string{
 		field.Provider,
 		field.DisplayName,
 		field.Field,
@@ -77,5 +77,9 @@ func providerLine(field config.ProviderField) string {
 		field.Validation,
 		field.Default,
 		field.Description,
-	}, "|")
+	}
+	if field.Group != "" || field.Condition != "" {
+		parts = append(parts, field.Group, field.Condition)
+	}
+	return strings.Join(parts, "|")
 }
