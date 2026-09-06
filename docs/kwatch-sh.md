@@ -68,10 +68,10 @@ bash -c "$(curl -fsSL https://kwatch.dev/kwatch.sh)" -- --help
 
 | Command | What it does |
 | --- | --- |
-| `install` | Install the latest stable release |
+| `install` | Install the latest stable release, or choose an available RC |
 | `configure-alert` | Change the alert provider and credential |
 | `configure` | Change settings from the generated catalog |
-| `upgrade` | Upgrade to the latest stable release |
+| `upgrade` | Upgrade to the latest stable release, or choose an available RC |
 | `status` | Show the workload and manager state |
 | `features` | Show the capabilities of the installed release |
 | `uninstall` | Remove the workload and notification Secret |

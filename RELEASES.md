@@ -45,6 +45,7 @@ Run the **Release** workflow (Actions → Release → Run workflow) and set:
 |---|---|---|
 | `command` | yes | `rc`, `stable`, or `patch` |
 | `bump` | no | `minor` (default), `major`, or `patch`. Only used by `rc` when it opens a new series |
+| `new_series` | no | For `rc` only. Abandon an open RC series and start a new one from the latest stable |
 | `target` | no | A commit sha/ref to tag. Defaults to `main` HEAD |
 | `dry_run` | no | Compute the version and notes, then stop. Nothing is tagged or built |
 
@@ -66,6 +67,11 @@ You never need to read the logs to find out what was cut.
    | `minor` (default) | `v0.12.0-rc.1` | new features |
    | `patch` | `v0.11.1-rc.1` | a fix you want to soak before shipping |
    | `major` | `v1.0.0-rc.1` | breaking changes |
+
+If an old RC series should be abandoned before promotion, set `new_series: true`.
+Then choose the desired `bump`; `bump: major` starts `v1.0.0-rc.1` from the latest
+stable even when an older `v0.11.0-rc.*` series is still open. Use this only when
+the older series is intentionally no longer the release target.
 
 3. Creates the tag and opens a GitHub Release marked **pre-release**.
 4. Release notes compare against the **previous RC** while a series is open, so each RC

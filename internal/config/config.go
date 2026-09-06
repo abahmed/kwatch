@@ -337,7 +337,7 @@ type SmartGrouping struct {
 // HealthCheck config struct
 type HealthCheck struct {
 	// Enabled if set to true, it will enable health check endpoint
-	// By default, this value is false
+	// By default, this value is true.
 	Enabled bool `yaml:"enabled"`
 
 	// Port is the port to listen on for health check requests

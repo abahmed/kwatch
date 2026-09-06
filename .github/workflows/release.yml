@@ -20,6 +20,11 @@ on:
           - major
           - patch
         default: minor
+      new_series:
+        description: 'For rc only: abandon the open RC series and start a new one from the latest stable. Use with bump=major for v1.0.0-rc.1.'
+        required: false
+        type: boolean
+        default: false
       target:
         description: 'Optional commit sha/ref to tag (defaults to main HEAD). Mainly useful for patch to isolate a hotfix.'
         required: false
@@ -82,6 +87,7 @@ jobs:
         env:
           COMMAND: ${{ inputs.command }}
           BUMP: ${{ inputs.bump }}
+          NEW_SERIES: ${{ inputs.new_series }}
           DRY_RUN: ${{ inputs.dry_run }}
           GH_TOKEN: ${{ secrets.RELEASE_TOKEN }}
         run: |
@@ -95,6 +101,10 @@ jobs:
               exit 1
               ;;
           esac
+          if [ "$NEW_SERIES" = true ] && [ "$COMMAND" != rc ]; then
+            echo "::error::new_series is supported only for rc releases"
+            exit 1
+          fi
 
           # Match the exact SemVer shapes. A loose "does not contain -rc"
           # filter would treat v1.0.0 as a stable tag, and every version
@@ -141,7 +151,12 @@ jobs:
                   RC_CONSUMED=true
                 fi
               fi
-              if [ -n "$LATEST_RC" ] && [ "$RC_CONSUMED" = false ]; then
+              if [ "$NEW_SERIES" = true ]; then
+                BASE=$(bumped)
+                LAST_N=0
+                PREV="$LATEST_STABLE"
+                echo "::notice::starting a new $BASE series; the previous RC series is being abandoned"
+              elif [ -n "$LATEST_RC" ] && [ "$RC_CONSUMED" = false ]; then
                 # Series already open, so just take the next number. Comparing
                 # against the previous RC keeps the notes to what actually
                 # changed, instead of repeating the whole series every time.

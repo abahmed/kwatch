@@ -5,7 +5,7 @@
 </p>
 
 <p align="center">
-  <strong>When Kubernetes breaks, know why. 👀🧠📣</strong>
+  <strong>See what broke. Understand why. Know what to do next. 👀🧠⚡</strong>
 </p>
 
 <p align="center">
@@ -15,62 +15,59 @@
   <a href="https://github.com/abahmed/kwatch/issues">Issues</a>
 </p>
 
-> **🚧 Unreleased** — this branch documents the next development build.
-> `kwatch.sh` is the supported install path. Stable and preview status are
-> shown below.
-
 # kwatch
 
-kwatch is an open-source Kubernetes monitor that turns cluster problems into
-clear, actionable alerts.
+kwatch is an open-source Kubernetes incident monitor. It turns failures into
+clear alerts that explain **what broke, why it happened, and what to check
+next**.
 
-It watches your cluster, connects symptoms to likely causes, and sends the
-right context to the channel your team already uses. No hosted account is
-required: kwatch runs in your own cluster.
+It runs inside your own cluster. There is no hosted account, agent platform,
+or required observability stack.
 
-## ✨ Why kwatch?
+## Why teams use kwatch
 
-Kubernetes can tell you that a Pod is failing. kwatch helps explain what to do
-next.
+Kubernetes can tell you that a Pod is failing. kwatch adds the context needed
+to act:
 
-| Kubernetes says... | kwatch adds... |
+| Kubernetes signal | What kwatch adds |
 | --- | --- |
-| `CrashLoopBackOff` | The reason, recent logs, events, and useful context |
-| `Pending` | Scheduling clues and the resources that may be blocking it |
-| A node is unhealthy | The affected workloads and the wider impact |
-| Many Pods fail together | One grouped incident instead of alert noise |
+| `CrashLoopBackOff` | Reason, logs, events, owner, and next step |
+| `Pending` | Scheduling clues and unschedulable duration |
+| Unhealthy node | Affected workloads and dependency impact |
+| Many related failures | One grouped incident instead of alert noise |
 
-The goal is simple: answer **what broke, why it happened, and what to check
-next**. 🧭
+Alerts can include the workload, owner, namespace, Pod, container, node,
+recent logs, Kubernetes events, related dependencies, and a suggested action.
 
-## 🚀 Install in one command
+## 🚀 Install interactively
 
-The interactive `kwatch.sh` manager is the recommended way to start. It asks
-where to send alerts, creates the Kubernetes resources, checks the rollout,
-and can manage the installation later.
+The supported path is the interactive `kwatch.sh` manager. It:
+
+1. Lets you choose the kubeconfig context without changing your current one.
+2. Asks where to send alerts.
+3. Stores credentials in a Kubernetes Secret.
+4. Installs the CRD and hardened kwatch workload.
+5. Waits for the deployment to become ready and checks its security posture.
+
+Run it with no version parameters:
 
 ```bash
 /bin/bash -c "$(curl -fsSL https://kwatch.dev/kwatch.sh)"
 ```
 
-You need Bash, `curl`, `kubectl`, and access to a supported Kubernetes cluster.
-The manager lets you choose a kubeconfig context without changing your current
-context.
+You need Bash, `curl`, `kubectl`, and permission to install the required
+namespace-scoped and cluster-scoped resources.
 
-For a different namespace or release name:
-
-```bash
-KWATCH_NAMESPACE=platform-monitoring \
-KWATCH_RELEASE=kwatch \
-  /bin/bash -c "$(curl -fsSL https://kwatch.dev/kwatch.sh)"
-```
+The manager selects the latest stable release by default. During installation
+and upgrade it offers the newest release candidate interactively when one is
+available.
 
 <!-- stable-install:start -->
 
 ✅ **Stable:** **v0.10.5**
 
-`kwatch.sh` always installs the latest stable release. It stores notification
-credentials in a Kubernetes Secret and waits for kwatch to become ready.
+Stable is the recommended channel for normal use. Credentials are stored in a
+Kubernetes Secret and the manager waits for kwatch to become ready.
 
 <!-- stable-install:end -->
 
@@ -78,18 +75,24 @@ credentials in a Kubernetes Secret and waits for kwatch to become ready.
 
 <!-- rc-install:start -->
 
-The manager installs stable releases only. The current preview is
-**v0.11.0-rc.7**. Preview builds are for testing; see the
-[release notes](https://github.com/abahmed/kwatch/releases) before using one.
+The current preview is **v0.11.0-rc.7**. Select it interactively when you want
+to test preview changes. Preview builds are for testing; read the
+[release notes](https://github.com/abahmed/kwatch/releases) first.
 
 <!-- rc-install:end -->
 
-Run the manager again after installation to configure alerts, change settings,
-upgrade, check status, or uninstall kwatch.
+Use the manager again after installation to configure alerts, change settings,
+upgrade, check status, or uninstall kwatch. Do not apply `deploy.yaml` or
+`config.yaml` manually; that bypasses guided Secret handling and verification.
 
-> 🧭 **Recommended:** use `kwatch.sh` for the normal installation. This README
-> intentionally does not include Helm or `kubectl apply` commands. Manual,
-> Helm, and direct manifest lifecycles are not supported; use the manager.
+For a different namespace or release name, set environment variables before
+starting the manager:
+
+```bash
+KWATCH_NAMESPACE=platform-monitoring \
+KWATCH_RELEASE=kwatch-prod \
+  /bin/bash -c "$(curl -fsSL https://kwatch.dev/kwatch.sh)"
+```
 
 ## 🔔 What an alert looks like
 
@@ -104,46 +107,41 @@ upgrade, check status, or uninstall kwatch.
 📄 Recent logs and Kubernetes events are included.
 ```
 
-Alerts can include the affected workload, owner, namespace, Pod, container,
-node, recent logs, Kubernetes events, related dependencies, and a suggested
-next step when the signal provides enough information.
-
-## 🔎 What does kwatch monitor?
+## 🔎 What kwatch monitors
 
 Most monitors are enabled by default:
 
-- 💥 Pods and containers: crashes, OOM kills, restart patterns, and probes
-- ⏳ Scheduling: Pending Pods, unschedulable workloads, and scheduling delay
-- 🧱 Workloads: Deployments, StatefulSets, DaemonSets, Jobs, and CronJobs
-- 🖥️ Infrastructure: Nodes, resource pressure, disk, and inode usage
-- 💾 Storage: PVC usage and persistent-volume related failures
-- 🌐 Traffic: Services, Ingress, admission webhooks, and NetworkPolicies
-- 📈 Scaling: HPA and cluster-autoscaler signals
-- 🧭 Platform health: control plane, kubelet telemetry, and cluster resources
-- 🔐 Security: TLS expiry, PDB issues, RBAC findings, and Pod Security labels
-- 🧩 Optional extensions: active probes and custom-resource status conditions
+| Area | Examples |
+| --- | --- |
+| Pods and containers | Crashes, OOM kills, restarts, and readiness |
+| Scheduling | Pending Pods, unschedulable workloads, and delay |
+| Workloads | Deployments, StatefulSets, DaemonSets, Jobs, and CronJobs |
+| Infrastructure | Nodes, resource pressure, disk, and inode usage |
+| Storage | PVC usage and persistent-volume failures |
+| Traffic | Services, Ingress, webhooks, and NetworkPolicies |
+| Scaling | HPA and cluster-autoscaler signals |
+| Platform health | Control plane, kubelet telemetry, and cluster resources |
+| Security | TLS expiry, PDB issues, RBAC, and Pod Security findings |
 
-Heartbeat notifications, runtime Metrics Server usage, TLS monitoring, active
-probes, and custom-resource watching are opt-in. See the
+Heartbeat notifications, Metrics Server usage, TLS monitoring, active probes,
+and custom-resource watching are opt-in. See the
 [configuration reference](https://kwatch.dev/docs/general-configuration) for
 defaults, permissions, and thresholds.
 
 ## 📣 Send alerts where your team works
 
-kwatch supports **56 notification integrations**:
+kwatch supports **56 notification integrations**, including Slack, Discord,
+Microsoft Teams, Google Chat, Telegram, email, PagerDuty, Opsgenie,
+Mattermost, Rocket.Chat, Matrix, webhooks, Jira, and Datadog.
 
-Slack · Discord · Microsoft Teams · Google Chat · Telegram · email · PagerDuty
-· Opsgenie · Mattermost · Rocket.Chat · Matrix · webhooks · Jira · Datadog ·
-and many more.
+Configure one or more channels under `alert:`. The
+[alert channel guide](https://kwatch.dev/docs/channels) has setup examples,
+routing, retries, fallbacks, and the complete provider list.
 
-Configure one or more channels under `alert:`. For examples, routing, retries,
-fallbacks, and the complete provider list, see the
-[alert channel guide](https://kwatch.dev/docs/channels).
+## 🔐 Credentials stay in Secrets
 
-## ⚙️ Start with a small config
-
-The manager creates the Secret for you. A simple Slack configuration looks like
-this:
+Provider credentials, diagnostic tokens, and heartbeat URLs must be mounted
+from a Kubernetes Secret. Use an exact file reference in `config.yaml`:
 
 ```yaml
 app:
@@ -154,55 +152,53 @@ alert:
     webhook: "${file:/config/slack-webhook}"
 ```
 
-`/config/slack-webhook` must be a file mounted from a Kubernetes Secret.
-Plain credentials and environment substitutions are rejected at startup.
+Plain credentials and `${ENV_VAR}` substitutions are rejected for sensitive
+fields. The manager creates the Secret and writes only file references to the
+configuration.
 
-Common settings:
+## ⚙️ Useful configuration
 
-| Setting | Purpose |
+| Setting | Use it to... |
 | --- | --- |
-| `namespaces` | Monitor only selected namespaces |
+| `namespaces` | Watch only selected namespaces |
 | `reasons` | Include or exclude alert reasons |
 | `silences` | Suppress known, intentional failures |
-| `includeLogs` / `includeEvents` | Add useful Kubernetes context |
+| `includeLogs` / `includeEvents` | Add Kubernetes context to alerts |
 | `smartGrouping` | Combine related symptoms |
 | `correlation` | Track, resolve, cool down, and re-notify incidents |
 | `app.clusterName` | Identify the cluster in every alert |
 
-Use `kwatch lint` before applying a config. Add `--check` to verify credentials
-for providers that support checks. Read the full
-[configuration reference](https://kwatch.dev/docs/general-configuration) for
-all settings and safe credential storage.
+Run `kwatch lint` before applying a configuration. Add `--check` to verify
+credentials for providers that support checks.
 
 ## 🛠️ Manage the installation
 
-`kwatch.sh` is also the day-to-day manager:
+Run the same manager command again after installation:
 
 ```text
 install          Install kwatch
 configure-alert  Change the notification destination
 configure        Change monitors, thresholds, and silences
-upgrade          Upgrade to the latest stable release
+upgrade          Upgrade to stable or choose an available RC
 status           Show deployment and manager state
 features         Show the installed feature catalog
 uninstall        Remove the workload and notification Secret
 ```
 
-It keeps the `KwatchConfig`, backups, namespace, and CRD during uninstall so a
-future reinstall can keep the existing configuration. Run `kwatch.sh --help`
-for the command list.
+The manager backs up configuration before upgrades and keeps the `KwatchConfig`,
+backups, namespace, and CRD during uninstall so a future reinstall can recover
+the existing setup.
 
 ## 💻 CLI tools
 
-The container includes a small CLI for operators and automation:
+The container also includes a small CLI for operators and automation:
 
 | Command | Purpose |
 | --- | --- |
-| `kwatch` | Run the monitor |
 | `kwatch --version` | Print the short version |
 | `kwatch version --json` | Print build information as JSON |
-| `kwatch lint --strict` | Validate config and catch unknown fields |
-| `kwatch lint --check` | Validate config and supported provider checks |
+| `kwatch lint --strict` | Validate config and reject unknown fields |
+| `kwatch lint --check` | Validate config and provider checks |
 | `kwatch replay --dry-run < events.jsonl` | Preview replay without sending |
 
 `kwatch replay` sends real notifications by default. Use `--dry-run` when you
@@ -211,13 +207,13 @@ only want to preview the result.
 ## 🧭 Focused, not a full observability stack
 
 kwatch is an alerting and diagnosis layer. It is not a metrics database, log
-store, dashboard, or query language.
-
-Use Prometheus/Grafana for long-term metrics and Loki for log search. Use kwatch
-when something changes and you need a useful explanation quickly.
+store, dashboard, or query language. Use Prometheus/Grafana for long-term
+metrics and Loki for log search; use kwatch when something changes and you
+need a useful explanation quickly.
 
 ## 📚 Documentation
 
+- [Repository documentation index](./docs/README.md)
 - [Getting started](https://kwatch.dev/docs/getting-started)
 - [`kwatch.sh` manager](https://kwatch.dev/docs/kwatch-manager)
 - [Configuration](https://kwatch.dev/docs/general-configuration)
@@ -229,7 +225,7 @@ when something changes and you need a useful explanation quickly.
 
 ## 🤝 Contribute
 
-Bug report? New idea? Documentation improvement? Please open an issue or pull
+Bug report, new idea, or documentation improvement? Open an issue or pull
 request.
 
 - [Open an issue](https://github.com/abahmed/kwatch/issues)
