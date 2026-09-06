@@ -62,12 +62,6 @@ The manager selects the latest stable release by default. During installation
 and upgrade it lets you choose the newest published release candidate
 interactively when one is available; no version parameter is required.
 
-Official release images send a small pseudonymous adoption heartbeat once a
-week by default. It contains an installation ID and kwatch version only; no
-feature usage or cluster inventory is collected. Disable it with
-`telemetry.enabled: false` from the manager's **Configure settings** menu if
-you do not want these heartbeats.
-
 Use the manager again after installation to configure alerts, change settings,
 upgrade, check status, or uninstall kwatch. Do not apply `deploy.yaml` or
 `config.yaml` manually; that bypasses guided Secret handling and verification.
