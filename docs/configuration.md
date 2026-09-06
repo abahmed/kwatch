@@ -627,7 +627,7 @@ Defaults: `StatefulSet` → 🟠 high, everything else → 🔵 normal
 
 In plain words: if a rule matches an incident, that incident is **completely ignored** — no
 alert, no group, nothing. Build rules from anything on the incident: namespace, reason, pod
-name pattern, container name, log text, or node.
+name pattern, container name, log text, Event message, or node.
 
 ```yaml
 silences:
