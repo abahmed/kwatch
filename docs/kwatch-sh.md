@@ -83,8 +83,10 @@ bash -c "$(curl -fsSL https://kwatch.dev/kwatch.sh)" -- --help
 ## 🧪 Version-aware settings
 
 The manager loads the configuration, feature, and guided-provider catalogs for
-the installed release. It caches them in the cluster and falls back to its
-embedded catalogs when GitHub is not reachable. The provider catalog covers
+the installed release. It caches each catalog in the cluster and only reuses a
+cache entry when it is tagged for that exact release. There are no embedded
+catalog fallbacks in `kwatch.sh`; if the matching artifact and cache are both
+unavailable, catalog-dependent actions stop with an explicit error. The provider catalog covers
 every supported notification provider, defines each documented prompt, and
 marks whether its value must be stored as a Secret file. It also carries
 generic choice-group, conditional-field, and at-least-one destination
