@@ -45,7 +45,7 @@ const providerCatalogData = "" +
 	"pagerduty|PagerDuty|integrationKey|string|true|true|||PagerDuty inte" +
 	"gration key\n" +
 	"telegram|Telegram|token|string|true|true|||Bot token\n" +
-	"telegram|Telegram|chatId|string|true|false|telegram-chat-id||Chat ID\n" +
+	"telegram|Telegram|chatId|string|true|false|signed-integer||Chat ID\n" +
 	"teams|Teams|webhook|string|true|true|url||Webhook URL\n" +
 	"teams|Teams|title|string|false|false|||Custom title\n" +
 	"teams|Teams|text|string|false|false|||Custom text\n" +

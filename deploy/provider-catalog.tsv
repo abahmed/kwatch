@@ -16,7 +16,7 @@ email|Email|to|string|true|false|||Receiver email
 line|LINE|token|string|true|true|||LINE Notify access token
 pagerduty|PagerDuty|integrationKey|string|true|true|||PagerDuty integration key
 telegram|Telegram|token|string|true|true|||Bot token
-telegram|Telegram|chatId|string|true|false|telegram-chat-id||Chat ID
+telegram|Telegram|chatId|string|true|false|signed-integer||Chat ID
 teams|Teams|webhook|string|true|true|url||Webhook URL
 teams|Teams|title|string|false|false|||Custom title
 teams|Teams|text|string|false|false|||Custom text
