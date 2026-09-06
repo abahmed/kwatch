@@ -104,7 +104,7 @@ clickup|ClickUp|token|string|true|true|||Personal API token
 clickup|ClickUp|listId|string|true|false|||List ID to create tasks in
 clickup|ClickUp|priority|integer|false|false|integer||Optional task priority (1-4)
 ilert|iLert|integrationKey|string|true|true|||Integration key
-ilert|iLert|priority|integer|false|false|integer||Priority (LOW/HIGH/CRITICAL, default: HIGH)
+ilert|iLert|priority|string|false|false|one-of:LOW,HIGH,CRITICAL|HIGH|Priority (LOW/HIGH/CRITICAL, default: HIGH)
 incidentio|Incident.io|url|string|true|true|url||Incident.io URL
 incidentio|Incident.io|apiKey|string|false|true|||Optional API key
 squadcast|Squadcast|serviceKey|string|true|true|||Service key
