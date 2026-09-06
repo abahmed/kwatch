@@ -134,7 +134,8 @@ func TestProviderCatalogCoversKnownProviders(t *testing.T) {
 func TestProviderCatalogDescribesConditionalCredentials(t *testing.T) {
 	fields := make(map[string]ProviderField)
 	for _, field := range ProviderCatalog() {
-		if field.Provider == "slack" || field.Provider == "sns" {
+		if field.Provider == "slack" || field.Provider == "sns" ||
+			field.Provider == "webex" {
 			fields[field.Provider+"."+field.Field] = field
 		}
 	}
@@ -148,6 +149,9 @@ func TestProviderCatalogDescribesConditionalCredentials(t *testing.T) {
 	)
 	assert.Equal(t, "destination", fields["sns.topicArn"].Group)
 	assert.Equal(t, "choice:target", fields["sns.targetArn"].Condition)
+	assert.Equal(t, "destination", fields["webex.roomId"].Group)
+	assert.Equal(t, "at-least-one", fields["webex.roomId"].Condition)
+	assert.Equal(t, "at-least-one", fields["webex.toPersonEmail"].Condition)
 }
 
 func providerCatalogTestConfig(field ProviderField, value string) string {

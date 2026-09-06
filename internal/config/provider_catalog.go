@@ -90,9 +90,10 @@ const providerCatalogData = "" +
 	"tional)\n" +
 	"pushover|Pushover|title|string|false|false|||Custom title\n" +
 	"webex|Webex|accessToken|string|true|true|||Bot access token\n" +
-	"webex|Webex|roomId|string|false|false|||Room ID (optional)\n" +
-	"webex|Webex|toPersonEmail|string|false|false|||Person email (optiona" +
-	"l)\n" +
+	"webex|Webex|roomId|string|false|false|||Room ID (at least one " +
+	"destination required)|destination|at-least-one\n" +
+	"webex|Webex|toPersonEmail|string|false|false|||Person email (at " +
+	"least one destination required)|destination|at-least-one\n" +
 	"github|GitHub|token|string|true|true|||Personal access token\n" +
 	"github|GitHub|owner|string|true|false|||Repository owner\n" +
 	"github|GitHub|repo|string|true|false|||Repository name\n" +
@@ -742,6 +743,12 @@ func validateProviderCondition(group, condition string) error {
 	if strings.HasPrefix(condition, "choice:") {
 		if group == "" || strings.TrimPrefix(condition, "choice:") == "" {
 			return fmt.Errorf("choice conditions need a group and value")
+		}
+		return nil
+	}
+	if condition == "at-least-one" {
+		if group == "" {
+			return fmt.Errorf("at-least-one conditions need a group")
 		}
 		return nil
 	}

@@ -56,8 +56,8 @@ pushover|Pushover|user|string|true|true|||User or group key
 pushover|Pushover|priority|integer|false|false|integer||Priority (optional)
 pushover|Pushover|title|string|false|false|||Custom title
 webex|Webex|accessToken|string|true|true|||Bot access token
-webex|Webex|roomId|string|false|false|||Room ID (optional)
-webex|Webex|toPersonEmail|string|false|false|||Person email (optional)
+webex|Webex|roomId|string|false|false|||Room ID (at least one destination required)|destination|at-least-one
+webex|Webex|toPersonEmail|string|false|false|||Person email (at least one destination required)|destination|at-least-one
 github|GitHub|token|string|true|true|||Personal access token
 github|GitHub|owner|string|true|false|||Repository owner
 github|GitHub|repo|string|true|false|||Repository name

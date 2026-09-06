@@ -292,8 +292,8 @@ alert:
 | Parameter | What it does |
 |:---|---|
 | `alert.webex.accessToken` | 🔑 Bot access token |
-| `alert.webex.roomId` | 🚪 Room ID (optional) |
-| `alert.webex.toPersonEmail` | ✉️ Person email (optional) |
+| `alert.webex.roomId` | 🚪 Room ID (provide this or `toPersonEmail`) |
+| `alert.webex.toPersonEmail` | ✉️ Person email (provide this or `roomId`) |
 
 ### 🐙 GitHub
 

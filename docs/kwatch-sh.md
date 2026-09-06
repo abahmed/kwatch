@@ -87,9 +87,9 @@ the installed release. It caches them in the cluster and falls back to its
 embedded catalogs when GitHub is not reachable. The provider catalog covers
 every supported notification provider, defines each documented prompt, and
 marks whether its value must be stored as a Secret file. It also carries
-generic choice-group and conditional-field metadata, so alternative provider
-credentials are handled from catalog data rather than provider-specific
-installer code.
+generic choice-group, conditional-field, and at-least-one destination
+metadata, so alternative provider credentials are handled from catalog data
+rather than provider-specific installer code.
 
 The release workflow generates these catalogs from Go definitions. When a new
 setting or guided provider is added, update its source definition and regenerate
