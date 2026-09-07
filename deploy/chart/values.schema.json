@@ -122,6 +122,22 @@
           }
         }
       },
+      "podSecurityContext": {
+        "type": "object",
+        "required": [],
+        "properties": {
+          "fsGroup": {
+            "type": [
+              "string",
+              "boolean",
+              "number",
+              "object",
+              "array"
+            ],
+            "default": "1000"
+          }
+        }
+      },
       "resources": {
         "type": "object",
         "required": [],
