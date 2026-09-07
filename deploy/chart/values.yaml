@@ -24,6 +24,8 @@ securityContext:
       - ALL
   seccompProfile:
     type: RuntimeDefault
+  podSecurityContext:
+    fsGroup: 1000
 
 service:
   port: 8060
