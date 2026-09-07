@@ -32,6 +32,10 @@ spec:
       restartPolicy: Always
       serviceAccountName:  {{ .Release.Name }}
       automountServiceAccountToken: true
+      {{- with .Values.podSecurityContext }}
+      securityContext:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
       containers:
         - name: {{ .Chart.Name }}
           securityContext:
