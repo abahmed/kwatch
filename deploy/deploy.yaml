@@ -130,6 +130,9 @@ rules:
   verbs: ["create"]
 - apiGroups: [""]
   resources: ["configmaps"]
+  verbs: ["get", "update", "patch"]
+- apiGroups: [""]
+  resources: ["configmaps"]
   resourceNames: ["kwatch-state", "kwatch-baseline", "kwatch-incidents", "kwatch-pvc", "kwatch-changes", "kwatch-rca"]
   verbs: ["get", "update", "patch"]
 
@@ -176,6 +179,8 @@ spec:
       restartPolicy: Always
       serviceAccountName: kwatch
       automountServiceAccountToken: true
+      securityContext:
+        fsGroup: 1000
       containers:
       - name: kwatch
         image: ghcr.io/abahmed/kwatch:v0.10.5
