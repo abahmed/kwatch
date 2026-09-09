@@ -9,6 +9,7 @@ import (
 	"github.com/abahmed/kwatch/internal/alert/util"
 	"github.com/abahmed/kwatch/internal/config"
 	"github.com/abahmed/kwatch/internal/event"
+	"github.com/abahmed/kwatch/internal/model"
 )
 
 const (
@@ -93,6 +94,27 @@ func (p *Pagerduty) SendMessage(msg string) error {
 	return nil
 }
 
+// pagerdutySeverity maps kwatch's severity onto the four PagerDuty accepts.
+//
+// Every alert used to be sent as "critical", which is what escalation
+// policies page on: a warning about CPU throttling woke somebody at 3am with
+// the same urgency as a cluster-wide outage, and teams responded by muting
+// the integration. An unknown or unset severity is "error", not "critical" --
+// the safe default is the one that files rather than pages.
+func pagerdutySeverity(sev model.Severity) string {
+	switch sev {
+	case model.SeverityCritical:
+		return "critical"
+	case model.SeverityHigh:
+		return "error"
+	case model.SeverityMedium, model.SeverityWarning:
+		return "warning"
+	case model.SeverityNormal:
+		return "info"
+	}
+	return "error"
+}
+
 func (p *Pagerduty) buildRequestBodyPagerDuty(
 	ev *event.Event,
 	key string) (string, error) {
@@ -118,7 +140,7 @@ func (p *Pagerduty) buildRequestBodyPagerDuty(
 		Payload: pagerdutyPayloadDetails{
 			Summary:  summary,
 			Source:   source,
-			Severity: "critical",
+			Severity: pagerdutySeverity(ev.Severity),
 			CustomDetail: pagerdutyCustomDetails{
 				Cluster:   p.appCfg.ClusterName,
 				Name:      ev.PodName,

@@ -2,7 +2,6 @@ package state
 
 import (
 	"context"
-	"fmt"
 	"sort"
 
 	corev1 "k8s.io/api/core/v1"
@@ -16,32 +15,37 @@ import (
 // ── Incident persistence ─────────────────────────────────────
 
 func (s *StateManager) SaveIncidents(ctx context.Context, incidents any) error {
+	return s.incidentsMgr.UpdateWithRetry(ctx, applyIncidents(incidents))
+}
+
+// SaveIncidentState writes the whole correlation snapshot in one update.
+//
+// The four parts live in one ConfigMap but used to be written one at a time:
+// four reads, four updates and four chances to conflict, every time anything
+// changed. Worse, a failure partway through left the parts describing
+// different moments -- group state naming incidents that were never written.
+// One update is atomic and costs a quarter as much.
+func (s *StateManager) SaveIncidentState(
+	ctx context.Context,
+	incidents []model.PersistedIncident,
+	groups []model.PersistedGroup,
+	threads map[string]map[string]string,
+	engine model.PersistedEngineState,
+) error {
+	writers := []func(*corev1.ConfigMap) error{
+		applyIncidents(trimIncidentsToBudget(incidents)),
+		applyGroups(groups),
+		applyThreads(threads),
+		applyEngineState(engine),
+	}
 	return s.incidentsMgr.UpdateWithRetry(
 		ctx,
 		func(cm *corev1.ConfigMap) error {
-			data, err := gzJSON(incidents)
-			if err != nil {
-				return err
+			for _, write := range writers {
+				if err := write(cm); err != nil {
+					return err
+				}
 			}
-			if len(data) > baselineMaxBytes {
-				klog.ErrorS(
-					nil,
-					"incidents too large for ConfigMap, skipping save",
-					"size",
-					len(data),
-					"max",
-					baselineMaxBytes,
-				)
-				return fmt.Errorf(
-					"incidents %d bytes exceeds ConfigMap budget %d",
-					len(data),
-					baselineMaxBytes,
-				)
-			}
-			if cm.BinaryData == nil {
-				cm.BinaryData = map[string][]byte{}
-			}
-			cm.BinaryData[incidentsKey] = data
 			return nil
 		},
 	)
@@ -177,4 +181,111 @@ func (s *StateManager) LoadPersistedIncidents(
 	klog.InfoS("migrated incident state from the legacy object layout",
 		"count", len(migrated))
 	return migrated, nil
+}
+
+// SavePersistedGroups stores smart-group state next to the incidents, under
+// its own ConfigMap entry.
+func (s *StateManager) SavePersistedGroups(
+	ctx context.Context,
+	groups []model.PersistedGroup,
+) error {
+	return s.incidentsMgr.UpdateWithRetry(ctx, applyGroups(groups))
+}
+
+// LoadPersistedGroups reads smart-group state. A missing entry is not an
+// error: it is what an older release, or a first run, leaves behind.
+func (s *StateManager) LoadPersistedGroups(
+	ctx context.Context,
+) ([]model.PersistedGroup, error) {
+	cm, err := s.client.CoreV1().ConfigMaps(s.namespace).Get(
+		ctx, incidentsConfigMapName, metav1.GetOptions{},
+	)
+	if err != nil {
+		if apierrors.IsNotFound(err) {
+			return nil, nil
+		}
+		return nil, err
+	}
+	gz, ok := cm.BinaryData[groupsKey]
+	if !ok || len(gz) == 0 {
+		return nil, nil
+	}
+	var groups []model.PersistedGroup
+	if err := gunzipJSON(gz, &groups); err != nil {
+		return nil, err
+	}
+	return groups, nil
+}
+
+// SaveProviderThreads stores per-provider conversation ids (provider name →
+// incident key → thread id) beside the incidents they belong to.
+func (s *StateManager) SaveProviderThreads(
+	ctx context.Context,
+	threads map[string]map[string]string,
+) error {
+	return s.incidentsMgr.UpdateWithRetry(ctx, applyThreads(threads))
+}
+
+// LoadProviderThreads reads saved conversation ids. A missing entry is what a
+// first run, or a release without thread persistence, leaves behind.
+func (s *StateManager) LoadProviderThreads(
+	ctx context.Context,
+) (map[string]map[string]string, error) {
+	cm, err := s.client.CoreV1().ConfigMaps(s.namespace).Get(
+		ctx, incidentsConfigMapName, metav1.GetOptions{},
+	)
+	if err != nil {
+		if apierrors.IsNotFound(err) {
+			return nil, nil
+		}
+		return nil, err
+	}
+	gz, ok := cm.BinaryData[threadsKey]
+	if !ok || len(gz) == 0 {
+		return nil, nil
+	}
+	var threads map[string]map[string]string
+	if err := gunzipJSON(gz, &threads); err != nil {
+		return nil, err
+	}
+	return threads, nil
+}
+
+// SaveEngineState stores the correlation engine's remaining working memory
+// beside the incidents it belongs to.
+func (s *StateManager) SaveEngineState(
+	ctx context.Context,
+	engine model.PersistedEngineState,
+) error {
+	return s.incidentsMgr.UpdateWithRetry(ctx, applyEngineState(engine))
+}
+
+func isEmptyEngineState(engine model.PersistedEngineState) bool {
+	return len(engine.Cooldowns) == 0 && len(engine.PodUIDs) == 0 &&
+		len(engine.Containers) == 0 && len(engine.FanOut) == 0
+}
+
+// LoadEngineState reads the engine bookkeeping back. A missing entry is what
+// a first run, or a release without it, leaves behind.
+func (s *StateManager) LoadEngineState(
+	ctx context.Context,
+) (model.PersistedEngineState, error) {
+	var engine model.PersistedEngineState
+	cm, err := s.client.CoreV1().ConfigMaps(s.namespace).Get(
+		ctx, incidentsConfigMapName, metav1.GetOptions{},
+	)
+	if err != nil {
+		if apierrors.IsNotFound(err) {
+			return engine, nil
+		}
+		return engine, err
+	}
+	gz, ok := cm.BinaryData[engineKey]
+	if !ok || len(gz) == 0 {
+		return engine, nil
+	}
+	if err := gunzipJSON(gz, &engine); err != nil {
+		return engine, err
+	}
+	return engine, nil
 }

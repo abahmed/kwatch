@@ -10,16 +10,21 @@ import (
 
 // refreshIncident applies the latest event to an existing incident, keeping
 // it active and returning the notification action. It covers three cases with
-// identical bookkeeping: silently reviving a resolved incident (avoids the
+// identical bookkeeping: reviving a resolved incident (avoids the
 // resolved→CREATE→resolved flip-flop that re-creating would cause), revoking
 // a pending resolve, and a routine update to an already-active incident.
-// Caller must hold e.mu.
+//
+// silent asks for the bookkeeping without the announcement, which is what a
+// revival inside the cleanup cooldown wants: the incident carries on and
+// keeps counting, and the next real change — an escalation, or its eventual
+// resolve — is what speaks. Caller must hold e.mu.
 func (e *Engine) refreshIncident(
 	inc *model.Incident,
 	ev event.Event,
 	cs *model.ContainerState,
 	owner string,
 	now time.Time,
+	silent bool,
 ) (*model.Incident, model.IncidentAction) {
 	// A revival starts a fresh renotify budget. Otherwise an incident that
 	// resolved after maxing out renotify would never be re-notified again
@@ -51,6 +56,17 @@ func (e *Engine) refreshIncident(
 	inc.LastSeen = now
 	inc.LastUpdate = now
 	e.config.Enricher.Enrich(&ev, inc)
+	if silent {
+		// Pre-recording the signature is what makes the announcement a
+		// no-op. Grouping is skipped for the same reason: buffering into a
+		// group would announce on the group's flush, which is exactly the
+		// message the cooldown is suppressing. The renotify clock restarts
+		// from here, so a problem that is still unfixed one interval later
+		// does say so.
+		inc.NotifiedSig = notifSig(inc)
+		inc.LastNotifiedAt = now
+		return inc, model.ActionSkip
+	}
 	if e.tryGroupIncident(inc, ev, owner, now) {
 		return inc, model.ActionSkip
 	}
@@ -61,7 +77,7 @@ func (e *Engine) refreshIncident(
 // announce: the group's resolve once every member is done, the incident's own
 // resolve on the edge, or a skip.
 //
-// Every path that ends an incident — MarkResolved, ResolveByResource, the
+// Every path that ends an incident — markResolved, Resolve, the
 // stale-incident cleanup, the hold-down finaliser — goes through here. Each
 // used to carry its own copy of this bookkeeping, and they had drifted: one
 // armed the cooldown during hold-down (so a recurrence inside the hold-down
@@ -79,7 +95,7 @@ func (e *Engine) resolveLocked(
 	inc.LastSeen = now
 	inc.LastUpdate = now
 	if inc.Resource == "node" {
-		e.refreshNodeInhibition(inc.Name)
+		e.refreshNodeInhibition(inc.Ref().Name)
 	}
 	e.removeBaselineForIncident(key, inc)
 	delete(e.podResourceUIDs, key)
@@ -104,11 +120,15 @@ func (e *Engine) holdDownLocked(inc *model.Incident, now time.Time) {
 	inc.State = model.StatePendingResolve
 	inc.ResolveAt = now.Add(e.config.ResolveHoldDown)
 	if inc.Resource == "node" {
-		e.refreshNodeInhibition(inc.Name)
+		e.refreshNodeInhibition(inc.Ref().Name)
 	}
 }
 
-func (e *Engine) MarkResolved(key model.IncidentKey) {
+// markResolved closes one incident by its exact key. It is the engine's
+// internal primitive: callers outside this package say which subject
+// recovered (Resolve) or hand back the observation (ResolveObserved), and
+// never spell a key.
+func (e *Engine) markResolved(key model.IncidentKey) {
 	e.mu.Lock()
 	if e.frozen {
 		e.mu.Unlock()
@@ -118,7 +138,13 @@ func (e *Engine) MarkResolved(key model.IncidentKey) {
 	inc, ok := e.state[key]
 	if !ok || inc.State == model.StateResolved ||
 		inc.State == model.StatePendingResolve {
+		// No incident to resolve, but the observation of recovery still
+		// retires any owner-level baseline entry that was suppressing one.
+		cleared := e.clearBaselineEntryForKey(key)
 		e.mu.Unlock()
+		if cleared {
+			e.publishBaseline()
+		}
 		return
 	}
 	// Do not resolve if the owning workload is still unhealthy.
@@ -179,7 +205,7 @@ func (e *Engine) RemovePodWithUID(namespace, podName, podUID string) {
 		// ReplicaSet replaces pods continuously and each deletion would
 		// resolve the incident, then the new pod would re-create it, causing
 		// a flip-flop cycle. Resolution is handled solely by cleanup(),
-		// checkLifecycle(), and MarkResolved().
+		// checkLifecycle(), and markResolved().
 	}
 	// Release per-pod baseline slots for this pod, scoped to the namespace
 	// so an identically-named pod in another namespace keeps its baseline.
@@ -206,44 +232,6 @@ func (e *Engine) RemovePodWithUID(namespace, podName, podUID string) {
 	e.mu.Unlock()
 
 	if baselineChanged {
-		e.publishBaseline()
-	}
-}
-
-func (e *Engine) ResolveByResource(resource, name string) {
-	var pending []transition
-	resolved := false
-
-	e.mu.Lock()
-	if e.frozen {
-		e.mu.Unlock()
-		return
-	}
-	e.dirty = true
-	now := e.now()
-	for key, inc := range e.state {
-		if inc.Resource != resource || inc.Name != name {
-			continue
-		}
-		if inc.State == model.StateResolved ||
-			inc.State == model.StatePendingResolve {
-			continue
-		}
-		// For pod incidents owned by a workload, gate on workload health.
-		if !e.isOwnerHealthy(inc) {
-			continue
-		}
-		if e.config.ResolveHoldDown > 0 {
-			e.holdDownLocked(inc, now)
-			continue
-		}
-		resolved = true
-		pending = append(pending, e.resolveLocked(key, inc, now))
-	}
-	e.mu.Unlock()
-
-	e.emit(pending...)
-	if resolved {
 		e.publishBaseline()
 	}
 }

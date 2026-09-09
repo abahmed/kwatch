@@ -11,35 +11,29 @@ import (
 	"k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/client-go/tools/cache"
 
-	"github.com/abahmed/kwatch/internal/correlation"
-	"github.com/abahmed/kwatch/internal/event"
+	"github.com/abahmed/kwatch/internal/model"
+	"github.com/abahmed/kwatch/internal/observe"
 )
 
 // DetectDaemonSetIssue returns a Signal if the DaemonSet has unavailable
 // pods that would trigger an alert. Used for baseline seeding at startup.
-func DetectDaemonSetIssue(ds *appsv1.DaemonSet) *event.Signal {
+func DetectDaemonSetIssue(ds *appsv1.DaemonSet) *model.Observation {
 	if ds == nil {
 		return nil
 	}
 	if ds.Status.DesiredNumberScheduled > 0 && ds.Status.NumberUnavailable > 0 {
-		return &event.Signal{
-			Resource:  "daemonset",
-			Reason:    constant.ReasonDaemonSetUnavailable,
-			Namespace: ds.Namespace,
-			Owner:     ds.Namespace + "/" + ds.Name,
-			Labels:    ds.Labels,
-			Hint:      availabilityHint(ds),
-		}
+		return observe.Object(
+			"daemonset", ds, constant.ReasonDaemonSetUnavailable,
+		).WithHint(availabilityHint(ds))
 	}
 	return nil
 }
 
-func DetectDaemonSetConditions(ds *appsv1.DaemonSet) []*event.Signal {
+func DetectDaemonSetConditions(ds *appsv1.DaemonSet) []*model.Observation {
 	if ds == nil {
 		return nil
 	}
-	owner := ds.Namespace + "/" + ds.Name
-	var out []*event.Signal
+	var out []*model.Observation
 	for _, condition := range ds.Status.Conditions {
 		if condition.Status == corev1.ConditionTrue {
 			continue
@@ -48,9 +42,9 @@ func DetectDaemonSetConditions(ds *appsv1.DaemonSet) []*event.Signal {
 		if condition.Message != "" {
 			hint += " — " + condition.Message
 		}
-		out = append(out, &event.Signal{Resource: "daemonset", Namespace: ds.Namespace,
-			PodName: ds.Name, Owner: owner, Reason: constant.ReasonDaemonSetCondition,
-			Labels: ds.Labels, Hint: hint})
+		out = append(out, observe.Object(
+			"daemonset", ds, constant.ReasonDaemonSetCondition,
+		).WithHint(hint))
 	}
 	return out
 }
@@ -75,14 +69,14 @@ func (h *handler) ProcessDaemonSet(key string, deleted bool) error {
 	}
 
 	if deleted {
-		h.correlator.ResolveByResource("daemonset", namespace+"/"+name)
+		h.reconcileGone(model.NewObjectRef("daemonset", namespace, name))
 		return nil
 	}
 
 	ds, err := h.listers.DS.DaemonSets(namespace).Get(name)
 	if err != nil {
 		if errors.IsNotFound(err) {
-			h.correlator.ResolveByResource("daemonset", namespace+"/"+name)
+			h.reconcileGone(model.NewObjectRef("daemonset", namespace, name))
 			return nil
 		}
 		return fmt.Errorf(
@@ -104,27 +98,15 @@ func (h *handler) ProcessDaemonSetObject(
 		return nil
 	}
 
-	if deleted {
-		h.clearFirstUnavailableDS(ds.Namespace + "/" + ds.Name)
-		h.correlator.ResolveByResource("daemonset", ds.Namespace+"/"+ds.Name)
-		return nil
-	}
-	if h.inMaintenance(ds.Annotations) {
-		h.clearFirstUnavailableDS(ds.Namespace + "/" + ds.Name)
-		h.correlator.ResolveByResource("daemonset", ds.Namespace+"/"+ds.Name)
+	subject := model.NewObjectRef("daemonset", ds.Namespace, ds.Name)
+	key := ds.Namespace + "/" + ds.Name
+	if deleted || h.inMaintenance(ds.Annotations) {
+		h.clearFirstUnavailableDS(key)
+		h.reconcileGone(subject)
 		return nil
 	}
 
-	key := ds.Namespace + "/" + ds.Name
-	conditionSignals := DetectDaemonSetConditions(ds)
-	for _, sig := range conditionSignals {
-		h.signalEvent(sig)
-	}
-	if len(conditionSignals) == 0 {
-		h.correlator.MarkResolved(correlation.BuildKey(
-			ds.Namespace, key, constant.ReasonDaemonSetCondition, "",
-		))
-	}
+	current := DetectDaemonSetConditions(ds)
 
 	if ds.Status.DesiredNumberScheduled > 0 && ds.Status.NumberUnavailable > 0 {
 		// Node-driven inhibition: if there are at least as many active node
@@ -134,54 +116,54 @@ func (h *handler) ProcessDaemonSetObject(
 			ds.Status.NumberUnavailable,
 		) {
 			h.clearFirstUnavailableDS(key)
-			if len(conditionSignals) == 0 {
-				h.correlator.ResolveByResource("daemonset", key)
-			}
+			h.reconcile(subject, current)
 			return nil
 		}
 
 		first := h.markFirstUnavailableDS(key)
-
-		// Only alert on sustained unavailability — rolling updates and brief
-		// node blips have transient unavailability that should not page.
-		// A DaemonSet stuck mid-rollout (unsettled) is given a grace window
-		// before alerting; after the grace expires we assume it's stuck.
-		settled := ds.Status.ObservedGeneration >= ds.Generation &&
-			ds.Status.UpdatedNumberScheduled == ds.Status.DesiredNumberScheduled
-		if !settled {
-			rolloutGrace := 15 * time.Minute
-			if h.now().Sub(first) < rolloutGrace {
-				return nil // genuinely mid-rollout — give it time
+		if h.dsUnavailableSustained(ds, first) {
+			current = append(current, observe.Object(
+				"daemonset", ds, constant.ReasonDaemonSetUnavailable,
+			).WithHint(availabilityHint(ds)))
+		} else {
+			// Mid-rollout or still inside the sustain window: report the
+			// conditions that stand, and leave everything else as it is.
+			for _, obs := range current {
+				h.observe(obs)
 			}
-			// still unsettled past the grace → stuck rollout; fall through
-		}
-
-		unavailable := ds.Status.DesiredNumberScheduled - ds.Status.NumberReady
-		sustained := adaptiveSustained(
-			h.config.DaemonSetMonitor.SustainedMinutes,
-			h.config.AdaptiveThresholds,
-			ds.Status.DesiredNumberScheduled,
-			unavailable,
-		)
-		if sustained > 0 && h.now().Sub(first) < sustained {
 			return nil
 		}
+	} else {
+		h.clearFirstUnavailableDS(key)
+	}
 
-		h.signalEvent(&event.Signal{
-			Resource:  "daemonset",
-			Namespace: ds.Namespace,
-			Reason:    constant.ReasonDaemonSetUnavailable,
-			Owner:     key,
-			Labels:    ds.Labels,
-			Hint:      availabilityHint(ds),
-		})
-		return nil
-	}
-	h.clearFirstUnavailableDS(key)
-	if len(conditionSignals) == 0 {
-		h.correlator.ResolveByResource("daemonset", key)
-	}
+	h.reconcile(subject, current)
 	return nil
+}
+
+// dsUnavailableSustained reports whether an unavailable DaemonSet has been
+// unavailable long enough to alert on. Rolling updates and brief node blips
+// are transient and must not page: a DaemonSet still mid-rollout gets a grace
+// window, and after it expires the rollout is treated as stuck.
+func (h *handler) dsUnavailableSustained(
+	ds *appsv1.DaemonSet, first time.Time,
+) bool {
+	settled := ds.Status.ObservedGeneration >= ds.Generation &&
+		ds.Status.UpdatedNumberScheduled == ds.Status.DesiredNumberScheduled
+	if !settled {
+		const rolloutGrace = 15 * time.Minute
+		if h.now().Sub(first) < rolloutGrace {
+			return false
+		}
+	}
+	unavailable := ds.Status.DesiredNumberScheduled - ds.Status.NumberReady
+	sustained := adaptiveSustained(
+		h.config.DaemonSetMonitor.SustainedMinutes,
+		h.config.AdaptiveThresholds,
+		ds.Status.DesiredNumberScheduled,
+		unavailable,
+	)
+	return sustained <= 0 || h.now().Sub(first) >= sustained
 }
 
 func (h *handler) markFirstUnavailableDS(key string) time.Time {

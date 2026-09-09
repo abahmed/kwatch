@@ -14,8 +14,8 @@ import (
 	"github.com/abahmed/kwatch/internal/config"
 	"github.com/abahmed/kwatch/internal/constant"
 	"github.com/abahmed/kwatch/internal/correlation"
-	"github.com/abahmed/kwatch/internal/event"
 	"github.com/abahmed/kwatch/internal/model"
+	"github.com/abahmed/kwatch/internal/observe"
 	"github.com/abahmed/kwatch/internal/state"
 )
 
@@ -212,36 +212,40 @@ func (p *PvcMonitor) Start(ctx context.Context) {
 		if seed != nil {
 			p.lastUsage = seed
 		}
-		var restore []*event.Signal
-		for pv, s := range p.lastUsage {
+		// Samples used to be keyed by PV name; re-key from the sample's own
+		// claim identity so a restart across that change neither loses the
+		// held state nor resurrects an entry the live path can never clear.
+		p.lastUsage = rekeyByClaim(p.lastUsage)
+		var restore []*model.Observation
+		for key, s := range p.lastUsage {
 			if !p.namespaceAllowedLocked(s.Namespace) {
-				delete(p.lastUsage, pv)
-				delete(p.notifiedPvc, pv)
+				delete(p.lastUsage, key)
+				delete(p.notifiedPvc, key)
 				continue
 			}
 			if s.Pct >= p.config.Threshold {
-				p.notifiedPvc[pv] = true
+				p.notifiedPvc[key] = true
 				sev := model.SeverityNormal
 				if s.Pct >= p.config.CriticalThreshold {
 					sev = model.SeverityHigh
 				}
-				restore = append(restore, &event.Signal{
-					Resource: "pvc", PodName: s.PodName, Namespace: s.Namespace,
-					Reason: constant.ReasonVolumeUsageHigh, Hint: fmt.Sprintf("VolumeUsage(%.0f%%)", s.Pct),
-					Severity: sev, Owner: pv,
-				})
+				restore = append(restore, observe.VolumeUsage(
+					s.Namespace, s.Name, s.PodName,
+					constant.ReasonVolumeUsageHigh,
+				).WithSeverity(sev).WithFacts(volumeFacts(s.PVName)).
+					WithHint(fmt.Sprintf("VolumeUsage(%.0f%%)", s.Pct)))
 			}
 		}
 		p.mu.Unlock()
-		for _, sig := range restore {
-			p.reportSignal(sig)
+		for _, obs := range restore {
+			p.report(obs)
 		}
 	}
 
 	p.checkUsage(ctx)
 	p.persist(ctx) // B3: persist the initial sweep too (previously only the ticker loop persisted)
 
-	interval := time.Duration(p.config.Interval) * time.Minute
+	interval := p.config.Interval.Duration()
 	if interval <= 0 {
 		interval = 5 * time.Minute
 	}
@@ -264,16 +268,42 @@ func (p *PvcMonitor) Start(ctx context.Context) {
 	}
 }
 
-func (p *PvcMonitor) reportSignal(s *event.Signal) {
-	ev := event.Event{
-		Resource:  s.Resource,
-		PodName:   s.PodName,
-		Namespace: s.Namespace,
-		Reason:    s.Reason,
-		Hint:      s.Hint,
-		Severity:  s.Severity,
+// rekeyByClaim rebuilds a usage map under "namespace/claim" keys, taking the
+// identity from each sample rather than from its existing key. Samples with no
+// recorded claim are dropped: they cannot be matched to a live claim, so
+// keeping them would hold an incident that nothing can ever resolve.
+func rekeyByClaim(
+	usage map[string]state.PvcSample,
+) map[string]state.PvcSample {
+	result := make(map[string]state.PvcSample, len(usage))
+	for _, sample := range usage {
+		if sample.Namespace == "" || sample.Name == "" {
+			continue
+		}
+		key := sample.Namespace + "/" + sample.Name
+		if existing, ok := result[key]; ok && existing.Seen.After(sample.Seen) {
+			continue
+		}
+		result[key] = sample
 	}
-	p.correlator.Process(ev, s.Owner, nil)
+	return result
+}
+
+// volumeFacts records the bound PersistentVolume as evidence on a claim-keyed
+// incident, so the PV name stays visible in the notification without being
+// part of the incident's identity.
+func volumeFacts(pvName string) model.Facts {
+	return model.Facts{Volume: pvName}
+}
+
+// report forwards a storage observation to the engine.
+//
+// This used to be its own hand-written conversion into the pipeline's event,
+// and it dropped labels and pod identity: every silence rule matching on
+// labels or pod-name patterns was silently inert for storage incidents, and
+// the engine could not tell a replacement Pod from the original.
+func (p *PvcMonitor) report(obs *model.Observation) {
+	p.correlator.Process(obs)
 }
 
 // persist snapshots lastUsage to the kwatch-pvc ConfigMap. Called ONLY from the

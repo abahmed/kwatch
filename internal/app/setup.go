@@ -19,8 +19,8 @@ import (
 	"github.com/abahmed/kwatch/internal/insight"
 	"github.com/abahmed/kwatch/internal/k8s"
 	"github.com/abahmed/kwatch/internal/metricsapi"
-	"github.com/abahmed/kwatch/internal/model"
 	"github.com/abahmed/kwatch/internal/networkgraph"
+	"github.com/abahmed/kwatch/internal/observe"
 	"github.com/abahmed/kwatch/internal/probe"
 	"github.com/abahmed/kwatch/internal/security"
 	"github.com/abahmed/kwatch/internal/state"
@@ -32,6 +32,11 @@ func loadConfig() (*config.Config, error) {
 	cfg, err := config.LoadConfig()
 	if err != nil {
 		return nil, err
+	}
+	// Legal but self-defeating combinations: loud once at startup beats
+	// notifications that are quietly wrong for the life of the process.
+	for _, warning := range config.Warnings(cfg) {
+		klog.InfoS("configuration warning", "detail", warning)
 	}
 	return cfg, nil
 }
@@ -70,6 +75,7 @@ func configureProbeRunner(
 	namespaces, watchAll := ctl.NamespaceScope()
 	monitor.SetNamespaceScope(namespaces, watchAll)
 	monitor.SetNamespaceFilter(ctl.NamespaceAllowed)
+	monitor.SetServiceLister(ctl.ServiceLister())
 	return monitor.Start
 }
 
@@ -82,7 +88,7 @@ type persistenceSetup struct {
 	tracker       *kwcontext.ChangeTracker
 	baseline      map[string]map[string]int64
 	baselineCh    chan map[string]map[string]int64
-	incidentCh    chan []model.PersistedIncident
+	incidentCh    chan stateSnapshot
 	incidentDone  chan struct{}
 	incidentSaver incidentSaver
 	feedbackStore *insight.FeedbackStore
@@ -106,7 +112,7 @@ func configurePersistence(
 	go startBaselineSaver(ctx, stateMgr, baselineCh, 0)
 
 	incidentDone := make(chan struct{})
-	incidentCh := make(chan []model.PersistedIncident, 1)
+	incidentCh := make(chan stateSnapshot, 1)
 	var incidentSaverForRun incidentSaver = stateMgr
 	go func() {
 		defer close(incidentDone)
@@ -251,6 +257,7 @@ func configureStatusMonitor(
 	monitor.SetConditionRules(cfg.CrdConfig.FailureConditions)
 	monitor.SetGraphReferenceRules(cfg.CrdConfig.GraphReferences)
 	monitor.SetGraph(graph)
+	monitor.SetServiceLister(ctl.ServiceLister())
 	return func(ctx context.Context) {
 		if err := monitor.Start(ctx); err != nil {
 			healthServer.SetComponentError("status", err)
@@ -265,6 +272,7 @@ func configureMetricsMonitor(
 	clientset kubernetes.Interface,
 	correlator *correlation.Engine,
 	healthServer *health.HealthServer,
+	owners observe.OwnerResolver,
 ) func(context.Context) {
 	if !cfg.RuntimeMetricsMonitor.Enabled {
 		return nil
@@ -286,6 +294,8 @@ func configureMetricsMonitor(
 	monitor.SetNamespaceFilter(ctl.NamespaceAllowed)
 	namespaces, watchAll := ctl.NamespaceScope()
 	monitor.SetNamespaceScope(namespaces, watchAll)
+	monitor.SetPodLister(ctl.PodLister())
+	monitor.SetOwnerResolver(owners)
 	return monitor.Start
 }
 

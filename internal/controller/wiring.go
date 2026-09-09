@@ -1,12 +1,8 @@
 package controller
 
 import (
-	"strings"
 	"time"
 
-	corev1 "k8s.io/api/core/v1"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/client-go/informers"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/tools/cache"
@@ -110,54 +106,6 @@ func (c *Controller) wireService(cfg *config.Config, fs factorySet) {
 	c.watch(c.endpointSlice, fs.endpointSliceInformers()...)
 }
 
-// enqueueServiceDependents rechecks objects whose detector reads the Service
-// lister. A Service change can resolve an Ingress or admission-webhook issue
-// without changing the referencing object itself.
-func (c *Controller) enqueueServiceDependents(obj interface{}) {
-	if c.ingress.startWorkers && c.graph != nil {
-		if service, ok := obj.(*corev1.Service); ok {
-			keys := c.graph.DependentsByType("service", service.Namespace, service.Name, "ingress")
-			for _, key := range keys {
-				c.ingress.enqueue(strings.TrimPrefix(key, "ingress/"))
-			}
-			// The graph is an optimization, not the source of truth. It can be
-			// briefly stale while an Ingress and Service are updated together;
-			// always recheck the lister-backed Ingress set so a real dependency
-			// cannot be missed.
-			c.enqueueAllIngresses()
-		} else {
-			c.enqueueAllIngresses()
-		}
-	} else if c.ingress.startWorkers && c.ingressLister != nil {
-		c.enqueueAllIngresses()
-	}
-	if c.mwc.startWorkers && c.mwcLister != nil {
-		if items, err := c.mwcLister.List(labels.Everything()); err == nil {
-			for _, item := range items {
-				c.mwc.enqueue(item)
-			}
-		}
-	}
-	if c.vwc.startWorkers && c.vwcLister != nil {
-		if items, err := c.vwcLister.List(labels.Everything()); err == nil {
-			for _, item := range items {
-				c.vwc.enqueue(item)
-			}
-		}
-	}
-}
-
-func (c *Controller) enqueueAllIngresses() {
-	if c.ingressLister == nil {
-		return
-	}
-	if items, err := c.ingressLister.Ingresses(metav1.NamespaceAll).List(labels.Everything()); err == nil {
-		for _, item := range items {
-			c.ingress.enqueue(item)
-		}
-	}
-}
-
 func (c *Controller) wireAdmissionWebhooks(cfg *config.Config, fs factorySet) {
 	if !cfg.AdmissionWebhookMonitor.Enabled {
 		return
@@ -246,8 +194,12 @@ func (c *Controller) wireStatefulSet(cfg *config.Config, fs factorySet) {
 	}
 }
 
-// wirePDB wires the pdb monitor. Only the first informer's HasSynced is
-// awaited, matching the historical single-sync behavior.
+// wirePDB wires the pdb monitor.
+//
+// Every informer is awaited, not just the first. With one factory per watched
+// namespace, awaiting only the first meant baseline seeding ran against a
+// partially populated cache, so PDBs in the other namespaces were not seeded
+// and were re-announced as new after every restart.
 func (c *Controller) wirePDB(cfg *config.Config, fs factorySet) {
 	if !cfg.PdbMonitor.Enabled {
 		return
@@ -258,7 +210,9 @@ func (c *Controller) wirePDB(cfg *config.Config, fs factorySet) {
 	}
 
 	c.pdbLister = fs.pdbLister()
-	c.pdb.synced = []cache.InformerSynced{pdbInformers[0].HasSynced}
+	for _, inf := range pdbInformers {
+		c.pdb.synced = append(c.pdb.synced, inf.HasSynced)
+	}
 
 	c.listen(c.pdb, pdbInformers...)
 }

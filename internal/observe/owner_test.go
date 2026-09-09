@@ -1,30 +1,25 @@
-package correlation
+package observe
 
 import (
-	"context"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/client-go/kubernetes/fake"
 	appsv1lister "k8s.io/client-go/listers/apps/v1"
 	"k8s.io/client-go/tools/cache"
 )
 
-var ctx = context.Background()
-
-func TestResolveOwnerNameNoOwner(t *testing.T) {
+func TestPodOwnerOfNoOwner(t *testing.T) {
 	pod := &corev1.Pod{
 		ObjectMeta: metav1.ObjectMeta{Name: "p1", Namespace: "ns1"},
 	}
-	name := ResolveOwnerName(pod, nil, nil, nil)
+	name := PodOwners{}.OwnerOf(pod).Name
 	assert.Equal(t, "p1", name)
 }
 
-func TestResolveOwnerNameReplicaSet(t *testing.T) {
-	client := fake.NewSimpleClientset()
+func TestPodOwnerOfReplicaSet(t *testing.T) {
 	rs := &appsv1.ReplicaSet{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      "rs1",
@@ -34,11 +29,8 @@ func TestResolveOwnerNameReplicaSet(t *testing.T) {
 			},
 		},
 	}
-	_, err := client.AppsV1().ReplicaSets("ns1").Create(ctx, rs, metav1.CreateOptions{})
-	assert.NoError(t, err)
-
 	indexer := cache.NewIndexer(cache.MetaNamespaceKeyFunc, cache.Indexers{})
-	err = indexer.Add(rs)
+	err := indexer.Add(rs)
 	assert.NoError(t, err)
 	rsLister := appsv1lister.NewReplicaSetLister(indexer)
 
@@ -51,11 +43,11 @@ func TestResolveOwnerNameReplicaSet(t *testing.T) {
 			},
 		},
 	}
-	name := ResolveOwnerName(pod, rsLister, nil, nil)
+	name := PodOwners{RS: rsLister}.OwnerOf(pod).Name
 	assert.Equal(t, "dep1", name)
 }
 
-func TestResolveOwnerNameReplicaSetNoGrandparent(t *testing.T) {
+func TestPodOwnerOfReplicaSetNoGrandparent(t *testing.T) {
 	indexer := cache.NewIndexer(cache.MetaNamespaceKeyFunc, cache.Indexers{})
 	rs := &appsv1.ReplicaSet{
 		ObjectMeta: metav1.ObjectMeta{Name: "rs1", Namespace: "ns1"},
@@ -73,11 +65,11 @@ func TestResolveOwnerNameReplicaSetNoGrandparent(t *testing.T) {
 			},
 		},
 	}
-	name := ResolveOwnerName(pod, rsLister, nil, nil)
+	name := PodOwners{RS: rsLister}.OwnerOf(pod).Name
 	assert.Equal(t, "rs1", name)
 }
 
-func TestResolveOwnerNameReplicaSetNilLister(t *testing.T) {
+func TestPodOwnerOfReplicaSetNilLister(t *testing.T) {
 	pod := &corev1.Pod{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      "p1",
@@ -87,11 +79,11 @@ func TestResolveOwnerNameReplicaSetNilLister(t *testing.T) {
 			},
 		},
 	}
-	name := ResolveOwnerName(pod, nil, nil, nil)
+	name := PodOwners{}.OwnerOf(pod).Name
 	assert.Empty(t, name)
 }
 
-func TestResolveOwnerNameDaemonSet(t *testing.T) {
+func TestPodOwnerOfDaemonSet(t *testing.T) {
 	indexer := cache.NewIndexer(cache.MetaNamespaceKeyFunc, cache.Indexers{})
 	ds := &appsv1.DaemonSet{
 		ObjectMeta: metav1.ObjectMeta{Name: "ds1", Namespace: "ns1"},
@@ -109,11 +101,11 @@ func TestResolveOwnerNameDaemonSet(t *testing.T) {
 			},
 		},
 	}
-	name := ResolveOwnerName(pod, nil, dsLister, nil)
+	name := PodOwners{DS: dsLister}.OwnerOf(pod).Name
 	assert.Equal(t, "ds1", name)
 }
 
-func TestResolveOwnerNameDaemonSetNilLister(t *testing.T) {
+func TestPodOwnerOfDaemonSetNilLister(t *testing.T) {
 	pod := &corev1.Pod{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      "p1",
@@ -123,11 +115,11 @@ func TestResolveOwnerNameDaemonSetNilLister(t *testing.T) {
 			},
 		},
 	}
-	name := ResolveOwnerName(pod, nil, nil, nil)
+	name := PodOwners{}.OwnerOf(pod).Name
 	assert.Empty(t, name)
 }
 
-func TestResolveOwnerNameStatefulSet(t *testing.T) {
+func TestPodOwnerOfStatefulSet(t *testing.T) {
 	indexer := cache.NewIndexer(cache.MetaNamespaceKeyFunc, cache.Indexers{})
 	ss := &appsv1.StatefulSet{
 		ObjectMeta: metav1.ObjectMeta{Name: "ss1", Namespace: "ns1"},
@@ -145,11 +137,11 @@ func TestResolveOwnerNameStatefulSet(t *testing.T) {
 			},
 		},
 	}
-	name := ResolveOwnerName(pod, nil, nil, ssLister)
+	name := PodOwners{SS: ssLister}.OwnerOf(pod).Name
 	assert.Equal(t, "ss1", name)
 }
 
-func TestResolveOwnerNameStatefulSetNilLister(t *testing.T) {
+func TestPodOwnerOfStatefulSetNilLister(t *testing.T) {
 	pod := &corev1.Pod{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      "p1",
@@ -159,11 +151,11 @@ func TestResolveOwnerNameStatefulSetNilLister(t *testing.T) {
 			},
 		},
 	}
-	name := ResolveOwnerName(pod, nil, nil, nil)
+	name := PodOwners{}.OwnerOf(pod).Name
 	assert.Empty(t, name)
 }
 
-func TestResolveOwnerNameUnknownKind(t *testing.T) {
+func TestPodOwnerOfUnknownKind(t *testing.T) {
 	pod := &corev1.Pod{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      "p1",
@@ -173,6 +165,6 @@ func TestResolveOwnerNameUnknownKind(t *testing.T) {
 			},
 		},
 	}
-	name := ResolveOwnerName(pod, nil, nil, nil)
+	name := PodOwners{}.OwnerOf(pod).Name
 	assert.Equal(t, "custom1", name)
 }

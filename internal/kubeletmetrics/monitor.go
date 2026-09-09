@@ -9,10 +9,13 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/client-go/kubernetes"
+	corev1lister "k8s.io/client-go/listers/core/v1"
 
 	"github.com/abahmed/kwatch/internal/config"
 	"github.com/abahmed/kwatch/internal/correlation"
+	"github.com/abahmed/kwatch/internal/observe"
 )
 
 type Monitor struct {
@@ -22,6 +25,9 @@ type Monitor struct {
 	previous   map[string]metricSnapshot
 	failures   map[string]int
 	successes  map[string]int
+	// failing marks the signals that have actually crossed the failure
+	// threshold, so a signal that has always been healthy never resolves.
+	failing    map[string]bool
 	stateSeen  map[string]time.Time
 	baselines  map[string]usageBaseline
 	now        func() time.Time
@@ -34,6 +40,35 @@ type Monitor struct {
 	namespaces []string
 	watchAll   bool
 	allowed    func(string) bool
+	// owners resolves a pod to the workload its incidents are keyed by; nil
+	// falls back to keying by pod.
+	owners observe.OwnerResolver
+	// nodeLister reads the controller's node informer cache.
+	nodeLister corev1lister.NodeLister
+	// podLister reads the controller's pod informer cache.
+	//
+	// This monitor used to LIST every pod from the API server on every sweep
+	// -- once a minute, paged at 500 -- while the controller already held a
+	// synced pod informer for the same objects. One cluster-wide LIST per
+	// minute per monitor is load the API server does not need to carry, and
+	// two views of the same pods can disagree.
+	podLister corev1lister.PodLister
+}
+
+// SetNodeLister wires the controller's node cache. When set, the sweep reads
+// it instead of paging every node from the API server on each interval.
+func (m *Monitor) SetNodeLister(lister corev1lister.NodeLister) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	m.nodeLister = lister
+}
+
+// SetPodLister wires the controller's pod cache. When set, sweeps read it
+// instead of listing from the API server.
+func (m *Monitor) SetPodLister(lister corev1lister.PodLister) {
+	m.mu.Lock()
+	m.podLister = lister
+	m.mu.Unlock()
 }
 
 type StateStore interface {
@@ -50,6 +85,7 @@ func New(
 		client: client, cfg: cfg, correlator: correlator, watchAll: true,
 		previous: make(map[string]metricSnapshot),
 		failures: make(map[string]int), successes: make(map[string]int),
+		failing:   make(map[string]bool),
 		stateSeen: make(map[string]time.Time),
 		baselines: make(map[string]usageBaseline),
 		endpoint:  make(map[string]endpointStatus),
@@ -172,6 +208,15 @@ func (m *Monitor) SetNamespaceScope(namespaces []string, watchAll bool) {
 	m.mu.Unlock()
 }
 
+// SetOwnerResolver wires the lister-backed owner lookup the pod pipeline uses,
+// so kubelet-derived incidents land on the same workload key as everything
+// else. An unresolved answer falls back to the pod.
+func (m *Monitor) SetOwnerResolver(owners observe.OwnerResolver) {
+	m.mu.Lock()
+	m.owners = owners
+	m.mu.Unlock()
+}
+
 func (m *Monitor) SetNamespaceFilter(allowed func(string) bool) {
 	m.mu.Lock()
 	m.allowed = allowed
@@ -240,7 +285,16 @@ func (m *Monitor) pods(ctx context.Context) map[string]*corev1.Pod {
 		m.mu.Unlock()
 		return cached
 	}
+	lister := m.podLister
 	m.mu.Unlock()
+	if lister != nil {
+		if result, ok := m.podsFromCache(lister); ok {
+			m.mu.Lock()
+			m.podCache, m.podCacheAt = result, now
+			m.mu.Unlock()
+			return result
+		}
+	}
 	m.mu.Lock()
 	namespaces := append([]string(nil), m.namespaces...)
 	watchAll := m.watchAll
@@ -282,6 +336,19 @@ func (m *Monitor) pods(ctx context.Context) map[string]*corev1.Pod {
 }
 
 func (m *Monitor) nodes(ctx context.Context) ([]corev1.Node, error) {
+	m.mu.Lock()
+	lister := m.nodeLister
+	m.mu.Unlock()
+	if lister != nil {
+		nodes, err := lister.List(labels.Everything())
+		if err == nil {
+			result := make([]corev1.Node, 0, len(nodes))
+			for _, node := range nodes {
+				result = append(result, *node)
+			}
+			return result, nil
+		}
+	}
 	var result []corev1.Node
 	continueToken := ""
 	for {
@@ -295,4 +362,45 @@ func (m *Monitor) nodes(ctx context.Context) ([]corev1.Node, error) {
 			return result, nil
 		}
 	}
+}
+
+// podsFromCache reads the pod informer cache, honouring the configured
+// namespace scope. ok is false when the cache cannot answer, so the caller
+// falls back to the API server rather than acting on an empty view.
+func (m *Monitor) podsFromCache(
+	lister corev1lister.PodLister,
+) (map[string]*corev1.Pod, bool) {
+	m.mu.Lock()
+	namespaces := append([]string(nil), m.namespaces...)
+	watchAll := m.watchAll
+	allowed := m.allowed
+	m.mu.Unlock()
+	if !watchAll && len(namespaces) == 0 {
+		return map[string]*corev1.Pod{}, true
+	}
+	if watchAll {
+		namespaces = []string{""}
+	}
+	result := make(map[string]*corev1.Pod)
+	for _, namespace := range namespaces {
+		var (
+			pods []*corev1.Pod
+			err  error
+		)
+		if namespace == "" {
+			pods, err = lister.List(labels.Everything())
+		} else {
+			pods, err = lister.Pods(namespace).List(labels.Everything())
+		}
+		if err != nil {
+			return nil, false
+		}
+		for _, pod := range pods {
+			if allowed != nil && !allowed(pod.Namespace) {
+				continue
+			}
+			result[pod.Namespace+"/"+pod.Name] = pod
+		}
+	}
+	return result, true
 }

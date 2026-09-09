@@ -8,8 +8,16 @@ import (
 
 type counterPair struct{ Throttled, Periods float64 }
 
+// parseCounters pairs CFS throttled and total period counters per container.
+//
+// cAdvisor keys its series by cgroup id, and a container that just restarted
+// briefly exports two: the old cgroup, still present, and the new one. Keyed
+// only by container, the last line read won for each metric independently, so
+// throttled periods from one cgroup were divided by total periods from the
+// other -- which is how a ratio came out at 600%. Series are therefore kept
+// per id and one consistent pair chosen per container.
 func parseCounters(body []byte) map[string]counterPair {
-	out := make(map[string]counterPair)
+	byID := make(map[string]map[string]counterPair)
 	scanner := bufio.NewScanner(strings.NewReader(string(body)))
 	for scanner.Scan() {
 		line := scanner.Text()
@@ -22,16 +30,39 @@ func parseCounters(body []byte) map[string]counterPair {
 				name != "container_cpu_cfs_periods_total") {
 			continue
 		}
-		key := labels["namespace"] + "/" + labels["pod"] + "/" + labels["container"]
-		pair := out[key]
+		key := labels["namespace"] + "/" + labels["pod"] + "/" +
+			labels["container"]
+		pairs := byID[key]
+		if pairs == nil {
+			pairs = make(map[string]counterPair)
+			byID[key] = pairs
+		}
+		pair := pairs[labels["id"]]
 		if name == "container_cpu_cfs_throttled_periods_total" {
 			pair.Throttled = value
 		} else {
 			pair.Periods = value
 		}
-		out[key] = pair
+		pairs[labels["id"]] = pair
+	}
+	out := make(map[string]counterPair, len(byID))
+	for key, pairs := range byID {
+		out[key] = liveCounterPair(pairs)
 	}
 	return out
+}
+
+// liveCounterPair picks, among the cgroups reporting for one container, the
+// one that has accumulated the most scheduling periods -- the one that has
+// actually been running. Both counters come from that same series.
+func liveCounterPair(pairs map[string]counterPair) counterPair {
+	var best counterPair
+	for _, pair := range pairs {
+		if pair.Periods > best.Periods {
+			best = pair
+		}
+	}
+	return best
 }
 
 func parseNamedCounters(body []byte, wanted string) map[string]float64 {

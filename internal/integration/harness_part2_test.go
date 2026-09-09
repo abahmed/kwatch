@@ -5,6 +5,7 @@ import (
 	"testing"
 
 	"github.com/abahmed/kwatch/internal/correlation"
+	"github.com/abahmed/kwatch/internal/model"
 )
 
 func TestBoundedStateUnderLoad(t *testing.T) {
@@ -22,7 +23,7 @@ func TestBoundedStateUnderLoad(t *testing.T) {
 		for i := 0; i < eventsPerOwner; i++ {
 			podName := fmt.Sprintf("pod-%d", i)
 			ev := makeEvent("pod", podName, "load-ns", "OOMKill", "main", "")
-			eng.Process(ev, owner, cs)
+			eng.Process(ownedBy(ev, owner, cs))
 		}
 	}
 
@@ -30,13 +31,11 @@ func TestBoundedStateUnderLoad(t *testing.T) {
 	// in its active state. We can't access state directly, but we can verify
 	// indirectly: resolving each triggers a single notification.
 	for o := 0; o < distinctOwners; o++ {
-		key := correlation.BuildKey(
-			"load-ns",
-			fmt.Sprintf("dep-%d", o),
-			"OOMKill",
-			"",
-		)
-		eng.MarkResolved(key)
+		eng.Resolve(model.ObjectRef{
+			Kind:      "pod",
+			Namespace: "load-ns",
+			Name:      fmt.Sprintf("dep-%d", o),
+		}, "OOMKill")
 	}
 
 	// DistinctOwners creates + distinctOwners resolves = 2*distinctOwners in
@@ -61,6 +60,6 @@ func BenchmarkProcess(b *testing.B) {
 	b.ReportAllocs()
 
 	for i := 0; i < b.N; i++ {
-		eng.Process(ev, owner, cs)
+		eng.Process(ownedBy(ev, owner, cs))
 	}
 }

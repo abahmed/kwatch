@@ -28,6 +28,8 @@ func TestRecordChangeUsesInjectedClock(t *testing.T) {
 	require.Equal(t, now, changes[0].Timestamp)
 }
 
+// A Service change must reach the Ingresses that name it even when the graph
+// holds no edge for the pair yet -- the Ingress spec is the authority.
 func TestServiceDependentsFallbackWhenGraphHasNoEdge(t *testing.T) {
 	client := fake.NewSimpleClientset()
 	factory := informers.NewSharedInformerFactory(client, 0)
@@ -53,4 +55,9 @@ func TestServiceDependentsFallbackWhenGraphHasNoEdge(t *testing.T) {
 
 var networkingIngress = networkingv1.Ingress{
 	ObjectMeta: metav1.ObjectMeta{Name: "api-ingress", Namespace: "prod"},
+	Spec: networkingv1.IngressSpec{
+		DefaultBackend: &networkingv1.IngressBackend{
+			Service: &networkingv1.IngressServiceBackend{Name: "api"},
+		},
+	},
 }

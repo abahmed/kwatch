@@ -9,8 +9,8 @@ import (
 	"k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/client-go/tools/cache"
 
-	"github.com/abahmed/kwatch/internal/correlation"
-	"github.com/abahmed/kwatch/internal/event"
+	"github.com/abahmed/kwatch/internal/model"
+	"github.com/abahmed/kwatch/internal/observe"
 )
 
 // DetectIngressIssue checks an Ingress for backends referencing non-existent
@@ -18,11 +18,11 @@ import (
 func DetectIngressIssue(
 	ing *networkingv1.Ingress,
 	hasService func(ns, name string) bool,
-) []*event.Signal {
+) []*model.Observation {
 	if ing == nil || hasService == nil {
 		return nil
 	}
-	var sigs []*event.Signal
+	var sigs []*model.Observation
 	ns := ing.Namespace
 
 	for _, rule := range ing.Spec.Rules {
@@ -35,20 +35,14 @@ func DetectIngressIssue(
 			}
 			svcName := path.Backend.Service.Name
 			if !hasService(ns, svcName) {
-				sigs = append(sigs, &event.Signal{
-					Resource:  "ingress",
-					Namespace: ing.Namespace,
-					Reason:    constant.ReasonIngressBackendNotFound,
-					Owner:     ing.Namespace + "/" + ing.Name,
-					PodName:   ing.Name,
-					Labels:    ing.Labels,
-					Hint: fmt.Sprintf(
-						"ingress %s/%s: backend service %q not found",
-						ing.Namespace,
-						ing.Name,
-						svcName,
-					),
-				})
+				sigs = append(sigs, observe.Object(
+					"ingress", ing, constant.ReasonIngressBackendNotFound,
+				).WithHint(fmt.Sprintf(
+					"ingress %s/%s: backend service %q not found",
+					ing.Namespace,
+					ing.Name,
+					svcName,
+				)))
 			}
 		}
 	}
@@ -58,20 +52,14 @@ func DetectIngressIssue(
 		ing.Spec.DefaultBackend.Service != nil {
 		svcName := ing.Spec.DefaultBackend.Service.Name
 		if !hasService(ns, svcName) {
-			sigs = append(sigs, &event.Signal{
-				Resource:  "ingress",
-				Namespace: ing.Namespace,
-				Reason:    constant.ReasonIngressBackendNotFound,
-				Owner:     ing.Namespace + "/" + ing.Name,
-				PodName:   ing.Name,
-				Labels:    ing.Labels,
-				Hint: fmt.Sprintf(
-					"ingress %s/%s: default backend service %q not found",
-					ing.Namespace,
-					ing.Name,
-					svcName,
-				),
-			})
+			sigs = append(sigs, observe.Object(
+				"ingress", ing, constant.ReasonIngressBackendNotFound,
+			).WithHint(fmt.Sprintf(
+				"ingress %s/%s: default backend service %q not found",
+				ing.Namespace,
+				ing.Name,
+				svcName,
+			)))
 		}
 	}
 
@@ -84,13 +72,13 @@ func (h *handler) ProcessIngress(key string, deleted bool) error {
 		return fmt.Errorf("invalid ingress key %q: %w", key, err)
 	}
 	if deleted {
-		h.correlator.ResolveByResource("ingress", namespace+"/"+name)
+		h.reconcileGone(model.NewObjectRef("ingress", namespace, name))
 		return nil
 	}
 	ing, err := h.listers.Ingress.Ingresses(namespace).Get(name)
 	if err != nil {
 		if errors.IsNotFound(err) {
-			h.correlator.ResolveByResource("ingress", namespace+"/"+name)
+			h.reconcileGone(model.NewObjectRef("ingress", namespace, name))
 			return nil
 		}
 		return fmt.Errorf(
@@ -110,8 +98,9 @@ func (h *handler) ProcessIngressObject(
 	if ing == nil {
 		return nil
 	}
+	subject := model.NewObjectRef("ingress", ing.Namespace, ing.Name)
 	if deleted {
-		h.correlator.ResolveByResource("ingress", ing.Namespace+"/"+ing.Name)
+		h.reconcileGone(subject)
 		return nil
 	}
 
@@ -123,19 +112,6 @@ func (h *handler) ProcessIngressObject(
 		return err == nil
 	}
 
-	sigs := DetectIngressIssue(ing, hasService)
-	for _, sig := range sigs {
-		h.signalEvent(sig)
-	}
-	if len(sigs) == 0 {
-		h.correlator.MarkResolved(
-			correlation.BuildKey(
-				ing.Namespace,
-				ing.Namespace+"/"+ing.Name,
-				constant.ReasonIngressBackendNotFound,
-				"",
-			),
-		)
-	}
+	h.reconcile(subject, DetectIngressIssue(ing, hasService))
 	return nil
 }

@@ -8,6 +8,7 @@ import (
 	corev1 "k8s.io/api/core/v1"
 
 	"github.com/abahmed/kwatch/internal/constant"
+	"github.com/abahmed/kwatch/internal/format"
 )
 
 // DefaultNotReadyThreshold is the floor a pod must stay not ready before an
@@ -103,6 +104,37 @@ func hasEverBeenReady(
 	return notReadySince.Sub(created) > startupBudget
 }
 
+// firstStartUnreadyFor is how long a pod that has never been ready has kept
+// its application waiting. PodReady=False is stamped when the pod is
+// scheduled, but the application cannot begin until its init containers have
+// run and its image has been pulled -- a minute or more on a freshly scaled
+// node -- so the clock starts when the application container actually did,
+// or every cold-node rollout alerts at 1m0s for a process seconds old.
+func firstStartUnreadyFor(
+	pod *corev1.Pod,
+	lastTransition, now time.Time,
+) time.Duration {
+	if started := latestContainerStart(pod); started.After(lastTransition) {
+		return now.Sub(started)
+	}
+	return now.Sub(lastTransition)
+}
+
+// latestContainerStart returns the most recent time any application
+// container entered Running, or zero when none has.
+func latestContainerStart(pod *corev1.Pod) time.Time {
+	var latest time.Time
+	for _, cs := range pod.Status.ContainerStatuses {
+		if cs.State.Running == nil {
+			continue
+		}
+		if at := cs.State.Running.StartedAt.Time; at.After(latest) {
+			latest = at
+		}
+	}
+	return latest
+}
+
 // NotReadyFilter alerts when a pod has been not ready (PodReady=False) for
 // longer than Threshold even though all its containers are running and have
 // not crashed. The container detectors intentionally skip running containers
@@ -167,6 +199,7 @@ func (f NotReadyFilter) Detect(ctx *Context) Status {
 	threshold := f.Threshold
 	if !everReady {
 		threshold = budget
+		notReadyFor = firstStartUnreadyFor(ctx.Pod, lastTransition, ctx.now())
 	}
 
 	// Separately, do not alert within one threshold of kwatch starting up:
@@ -185,12 +218,13 @@ func (f NotReadyFilter) Detect(ctx *Context) Status {
 	ctx.PodReason = constant.ReasonContainersNotReady
 	if everReady {
 		ctx.PodMsg = fmt.Sprintf("pod stopped being ready %s ago",
-			notReadyFor.Round(time.Second))
+			format.Duration(notReadyFor))
 	} else {
 		ctx.PodMsg = fmt.Sprintf(
-			"pod has never become ready — %s since start (allowed %s)",
-			notReadyFor.Round(time.Second),
-			threshold.Round(time.Second),
+			"pod has never become ready — %s since its container started "+
+				"(allowed %s)",
+			format.Duration(notReadyFor),
+			format.Duration(threshold),
 		)
 	}
 

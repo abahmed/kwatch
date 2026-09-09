@@ -1,6 +1,8 @@
 package controller
 
 import (
+	"maps"
+
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/meta"
 	"k8s.io/client-go/tools/cache"
@@ -20,6 +22,13 @@ func (c *Controller) recordChangeUpdate(resource string, oldObj, newObj interfac
 	changeType := kwcontext.ChangeUpdate
 	if len(typ) > 0 {
 		changeType = typ[0]
+	}
+	// A node lease is renewed every ten seconds; that is a heartbeat, not a
+	// change. Recorded, it named the lease as "a related resource that
+	// changed shortly before" every node incident, and in a bounded history
+	// it crowds out the changes that actually explain something.
+	if resource == "lease" && changeType == kwcontext.ChangeUpdate {
+		return
 	}
 	obj := newObj
 	if obj == nil {
@@ -42,6 +51,15 @@ func (c *Controller) recordChangeUpdate(resource string, oldObj, newObj interfac
 	}
 	if changeType == kwcontext.ChangeUpdate && oldObj != nil && newObj != nil {
 		diff := change.Diff(oldObj, newObj)
+		// Diff already discards status and controller-managed metadata. An
+		// update that leaves nothing behind is a controller writing status --
+		// an HPA re-evaluating, a Deployment counting replicas -- not a change
+		// anyone made. Recorded, it announced itself as "a related resource
+		// changed 0s ago" on the very incident it described.
+		if len(diff.Fields) == 0 && diff.BeforeHash != "" &&
+			diff.BeforeHash == diff.AfterHash {
+			return
+		}
 		record.Fields, record.BeforeHash, record.AfterHash, record.Additional = diff.Fields, diff.BeforeHash, diff.AfterHash, diff.Additional
 	}
 	c.tracker.Record(record)
@@ -96,7 +114,7 @@ func (c *Controller) podEventHandler() cache.ResourceEventHandlerFuncs {
 			c.recordInformerEvent()
 			c.recordChange(kwcontext.ChangeCreate, "pod", obj)
 			if pod, ok := obj.(*corev1.Pod); ok {
-				c.rebuildPodGraph(pod)
+				c.rebuildPodGraph(pod, true)
 			}
 			c.pod.enqueue(obj)
 		},
@@ -104,7 +122,13 @@ func (c *Controller) podEventHandler() cache.ResourceEventHandlerFuncs {
 			c.recordInformerEvent()
 			c.recordChangeUpdate("pod", old, new)
 			if pod, ok := new.(*corev1.Pod); ok {
-				c.rebuildPodGraph(pod)
+				oldPod, _ := old.(*corev1.Pod)
+				if podGraphInputsChanged(oldPod, pod) {
+					c.rebuildPodGraph(
+						pod, oldPod == nil ||
+							!maps.Equal(oldPod.Labels, pod.Labels),
+					)
+				}
 			}
 			c.pod.enqueue(new)
 		},

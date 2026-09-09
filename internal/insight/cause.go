@@ -6,9 +6,55 @@ import (
 	"strings"
 	"time"
 
+	"github.com/abahmed/kwatch/internal/constant"
 	context "github.com/abahmed/kwatch/internal/graphcontext"
 	"github.com/abahmed/kwatch/internal/model"
 )
+
+// dependencyChangeWindow is how far back a ConfigMap or Secret update still
+// counts as a plausible cause for a workload that depends on it.
+const dependencyChangeWindow = 15 * time.Minute
+
+// reasonCauses are diagnoses that follow from the reason alone. A container
+// throttled at its CPU limit is not a config error and an HPA that cannot read
+// metrics is not an unhealthy Deployment; consulting the dependency graph for
+// these only produced confident-sounding wrong answers.
+var reasonCauses = map[string]struct{ cause, pattern string }{
+	constant.ReasonContainerCPUThrottled: {
+		"the container is being throttled at its CPU limit; raise the " +
+			"limit or lower the request/limit gap",
+		"resource_limit",
+	},
+	constant.ReasonContainerMemoryHigh: {
+		"the container is close to its memory limit and will be OOM-killed " +
+			"if usage keeps growing",
+		"resource_limit",
+	},
+	constant.ReasonContainerCPUHigh: {
+		"the container is using nearly all of its CPU limit",
+		"resource_limit",
+	},
+	constant.ReasonNodePSIHigh: {
+		"the node is stalling on CPU, memory or I/O pressure; every pod on " +
+			"it is slowed",
+		"node_pressure",
+	},
+	constant.ReasonFailedGetResourceMetric: {
+		"the metrics API returned no data for the scale target; " +
+			"metrics-server may be unavailable or the pods too new to report",
+		"metrics_unavailable",
+	},
+	constant.ReasonFailedComputeMetricsReplicas: {
+		"the metrics API returned no data for the scale target; " +
+			"metrics-server may be unavailable or the pods too new to report",
+		"metrics_unavailable",
+	},
+	constant.ReasonFailedGetMetrics: {
+		"the metrics API returned no data for the scale target; " +
+			"metrics-server may be unavailable or the pods too new to report",
+		"metrics_unavailable",
+	},
+}
 
 type modelCauseRef struct {
 	Kind      string
@@ -19,6 +65,10 @@ type modelCauseRef struct {
 }
 
 func (e *Engine) determineCause(inc *model.Incident, ins *Insight) {
+	if rc, ok := reasonCauses[inc.Reason]; ok {
+		ins.Cause, ins.Pattern = rc.cause, rc.pattern
+		return
+	}
 	if e.graph == nil {
 		return
 	}
@@ -52,14 +102,25 @@ func (e *Engine) determineCause(inc *model.Incident, ins *Insight) {
 		}
 	}
 
+	// A referenced ConfigMap or Secret is only a suspect when it actually
+	// changed recently. Every pod references some, so blaming one merely
+	// for being referenced attributed nearly every incident to configuration.
 	for _, d := range deps {
 		switch {
 		case strings.HasPrefix(d, "configmap/"):
-			ins.Cause = "referenced ConfigMap may have changed or is misconfigured"
+			if !e.changedRecently(d) {
+				continue
+			}
+			ins.Cause = "referenced ConfigMap " + shortName(d) +
+				" changed shortly before this incident"
 			ins.Pattern = "config_error"
 			return
 		case strings.HasPrefix(d, "secret/"):
-			ins.Cause = "referenced Secret may have changed or is misconfigured"
+			if !e.changedRecently(d) {
+				continue
+			}
+			ins.Cause = "referenced Secret " + shortName(d) +
+				" changed shortly before this incident"
 			ins.Pattern = "config_error"
 			return
 		case strings.HasPrefix(d, "pvc/"):
@@ -73,8 +134,62 @@ func (e *Engine) determineCause(inc *model.Incident, ins *Insight) {
 	// walk the full transitive chain backward and blame its deepest resource.
 	if roots := e.rootCauses(inc); len(roots) > 0 {
 		e.rankRootsByEvidence(roots)
-		ins.Cause, ins.Pattern = describeRootCauses(roots)
+		roots = e.dropUnchangedConfigRoots(roots)
+		if len(roots) > 0 {
+			ins.Cause, ins.Pattern = describeRootCauses(roots)
+		}
 	}
+}
+
+// dropUnchangedConfigRoots removes ConfigMap and Secret roots that have not
+// changed recently. Being the deepest dependency is topology, not evidence:
+// nearly every pod bottoms out in some ConfigMap, and blaming it for being
+// there gave the same false attribution the direct check above used to.
+func (e *Engine) dropUnchangedConfigRoots(
+	roots []modelCauseRef,
+) []modelCauseRef {
+	out := make([]modelCauseRef, 0, len(roots))
+	for _, r := range roots {
+		if r.Kind == "configmap" || r.Kind == "secret" {
+			if !e.changedRecently(
+				model.ObjectKey(r.Kind, r.Namespace, r.Name),
+			) {
+				continue
+			}
+		}
+		out = append(out, r)
+	}
+	return out
+}
+
+// changedRecently reports whether the tracker saw an update to the resource
+// behind a "kind/namespace/name" graph key within dependencyChangeWindow.
+func (e *Engine) changedRecently(depKey string) bool {
+	if e.tracker == nil {
+		return false
+	}
+	recent := e.tracker.RecentChangesBeforeAt(dependencyChangeWindow, e.now())
+	for _, c := range recent {
+		if c.Type != context.ChangeUpdate {
+			continue
+		}
+		if c.Resource+"/"+c.Namespace+"/"+c.Name == depKey {
+			return true
+		}
+	}
+	return false
+}
+
+// shortName renders a "kind/namespace/name" key as "namespace/name".
+func shortName(depKey string) string {
+	parts := strings.SplitN(depKey, "/", 3)
+	if len(parts) != 3 {
+		return depKey
+	}
+	if parts[1] == "" {
+		return parts[2]
+	}
+	return parts[1] + "/" + parts[2]
 }
 
 // rankRootsByEvidence makes the graph traversal time-aware. A deep dependency
@@ -184,6 +299,12 @@ func walkBackToRoots(g *context.ResourceGraph, startKey string) []modelCauseRef 
 	out := make([]modelCauseRef, 0, len(best))
 	for k, depth := range best {
 		parts := strings.SplitN(k, "/", 3)
+		// A node's heartbeat lease reflects the node; it never causes
+		// anything. Left in, it was the deepest "dependency" of every node
+		// incident and was blamed as stale while renewing every ten seconds.
+		if parts[0] == "lease" {
+			continue
+		}
 		out = append(out, modelCauseRef{Kind: parts[0], Namespace: parts[1], Name: parts[2], depth: depth})
 	}
 	return out
@@ -195,7 +316,7 @@ func appendRoots(dst, src []modelCauseRef) []modelCauseRef {
 		seen[r.Kind+"/"+r.Namespace+"/"+r.Name] = true
 	}
 	for _, r := range src {
-		k := r.Kind + "/" + r.Namespace + "/" + r.Name
+		k := model.ObjectKey(r.Kind, r.Namespace, r.Name)
 		if seen[k] {
 			// keep the deepest depth if it was already recorded shallower
 			for i := range dst {
@@ -240,8 +361,6 @@ func describeRootCauses(roots []modelCauseRef) (string, string) {
 			return fmt.Sprintf("underlying secret %s may be changed or misconfigured", r.Name), "config_error"
 		case "serviceaccount":
 			return fmt.Sprintf("underlying serviceaccount %s may be misconfigured", r.Name), "config_error"
-		case "lease":
-			return fmt.Sprintf("node heartbeat lease %s may be stale or unavailable", r.Name), "node_heartbeat"
 		case "endpoint":
 			return fmt.Sprintf("endpoint %s is not ready to receive traffic", r.Name), "endpoint_failure"
 		case "volumeattachment_failure":

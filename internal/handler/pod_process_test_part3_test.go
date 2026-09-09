@@ -12,8 +12,8 @@ import (
 	"k8s.io/client-go/kubernetes/fake"
 
 	"github.com/abahmed/kwatch/internal/config"
-	"github.com/abahmed/kwatch/internal/event"
 	"github.com/abahmed/kwatch/internal/model"
+	"github.com/abahmed/kwatch/internal/observe"
 )
 
 func TestProcessPodUnschedulableWithScheduleMonitor(t *testing.T) {
@@ -97,13 +97,12 @@ func TestSignalEventWithMessageHintFallback(t *testing.T) {
 		e,
 		testAlertMgr,
 	)
-	h.signalEvent(&event.Signal{
-		Resource:  "pod",
-		Reason:    "TestReason",
-		PodName:   "p1",
-		Namespace: "ns1",
-		Message:   "fallback message",
-	})
+	h.observe(observe.PodOwnedBy(
+		&corev1.Pod{ObjectMeta: metav1.ObjectMeta{
+			Name: "p1", Namespace: "ns1",
+		}},
+		"", "TestReason", model.ObjectRef{},
+	).WithMessage("fallback message"))
 	assert.Equal(t, 1, e.ActiveCount())
 }
 
@@ -116,17 +115,18 @@ func TestSignalEventWithContainerState(t *testing.T) {
 		testAlertMgr,
 	)
 
-	h.signalEvent(&event.Signal{
-		Resource:     "pod",
-		Reason:       "TestReason",
-		PodName:      "p1",
-		Namespace:    "ns1",
+	obs := observe.PodOwnedBy(
+		&corev1.Pod{ObjectMeta: metav1.ObjectMeta{
+			Name: "p1", Namespace: "ns1",
+		}},
+		"", "TestReason", model.ObjectRef{},
+	)
+	obs.RestartCount = 3
+	obs.ContainerState = &model.ContainerState{
 		RestartCount: 3,
-		ContainerState: &model.ContainerState{
-			RestartCount: 3,
-			Reason:       "OOMKilled",
-			ExitCode:     137,
-		},
-	})
+		Reason:       "OOMKilled",
+		ExitCode:     137,
+	}
+	h.observe(obs)
 	assert.Equal(t, 1, e.ActiveCount())
 }

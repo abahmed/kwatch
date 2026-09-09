@@ -88,11 +88,16 @@ func (m *Monitor) checkCadvisor(ctx context.Context, node *corev1.Node) {
 		}
 		percent := (current.Throttled - previous.Throttled) /
 			(current.Periods - previous.Periods) * 100
+		// A period is either throttled or not, so the ratio cannot exceed
+		// one; anything above it is a counter artifact, not a measurement.
+		if percent > 100 {
+			percent = 100
+		}
 		namespace, pod, container := metricIdentity(key)
 		if namespace == "" || pod == "" || container == "" {
 			continue
 		}
-		owner := namespace + "/" + pod
+		owner := m.podOwner(m.cachedPod(namespace, pod), namespace, pod)
 		if percent >= m.cfg.CPUThrottlingWarningPercent {
 			severity := model.SeverityWarning
 			if percent >= m.cfg.CPUThrottlingCriticalPercent {

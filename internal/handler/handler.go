@@ -14,9 +14,9 @@ import (
 	"github.com/abahmed/kwatch/internal/config"
 	"github.com/abahmed/kwatch/internal/constant"
 	"github.com/abahmed/kwatch/internal/correlation"
-	"github.com/abahmed/kwatch/internal/event"
 	"github.com/abahmed/kwatch/internal/filter"
 	"github.com/abahmed/kwatch/internal/model"
+	"github.com/abahmed/kwatch/internal/observe"
 )
 
 type Handler interface {
@@ -45,10 +45,15 @@ type Handler interface {
 	// SetListers installs every informer-backed lookup in one call, once the
 	// controller has wired its informers.
 	SetListers(Listers)
+	// Owners is the pod-ownership resolver this pipeline keys incidents by,
+	// for monitors outside this package that emit pod incidents. Sharing it
+	// is what keeps a kubelet-derived incident and a status-derived one about
+	// the same Deployment from arriving as two alerts.
+	Owners() observe.OwnerResolver
 	SetNamespaceScope(namespaces []string, all bool)
 	SetBaseline(baseline map[string]map[string]int64)
 	SetActiveNodeIncidents(nodeNames []string)
-	ClearBaselineForPod(namespace, podName string)
+	ClearBaselineForPod(namespace, podName string, owner model.ObjectRef)
 	ReportStartupSummary(suppressed map[string]int)
 	ProcessNodeResourceOvercommit(
 		reason, nodeName, hint string,
@@ -80,6 +85,14 @@ type handler struct {
 	namespaceScope    map[string]struct{}
 	namespaceScopeAll bool
 
+	// reconciler derives recovery from what each object was last found to be
+	// wrong with. See reconcile.go.
+	reconciler *reconciler
+
+	// logCache keeps a container's log tail across the passes that re-report
+	// the same crash loop.
+	logCache *filter.LogCache
+
 	fs firstSeenSet
 }
 
@@ -96,7 +109,7 @@ func NewHandler(
 		)
 	}
 
-	return &handler{
+	h := &handler{
 		kclient:      cli,
 		config:       cfg,
 		correlator:   correlator,
@@ -105,12 +118,17 @@ func NewHandler(
 		oomTracker:   oomTr,
 		now:          time.Now,
 
+		reconciler:                    newReconciler(),
 		podDetectors:                  buildPodDetectors(cfg),
 		podEnrichers:                  buildPodEnrichers(),
 		containerDetectors:            buildContainerDetectors(cfg),
 		containerSuppressionEnrichers: buildContainerSuppressionEnrichers(),
 		containerDataEnrichers:        buildContainerDataEnrichers(),
 	}
+	// The cache reads the handler's clock rather than the wall clock, so a
+	// test that moves time forward expires cached log tails with it.
+	h.logCache = filter.NewLogCache(func() time.Time { return h.now() })
+	return h
 }
 
 func (h *handler) ProcessNodeResourceOvercommit(
@@ -120,27 +138,17 @@ func (h *handler) ProcessNodeResourceOvercommit(
 	if severity == "" {
 		severity = model.SeverityWarning
 	}
-	h.signalEvent(&event.Signal{
-		Resource: "node",
-		Reason:   reason,
-		Hint:     hint,
-		NodeName: nodeName,
-		Owner:    nodeName,
-		Severity: severity,
-	})
+	h.observe(
+		observe.NodeNamed(nodeName, reason).
+			WithSeverity(severity).WithHint(hint),
+	)
 }
 
 func (h *handler) ReportStartupSummary(suppressed map[string]int) {
 	if !h.config.ReportStartupBaseline || len(suppressed) == 0 {
 		return
 	}
-	parts := make([]string, 0, len(suppressed))
-	total := 0
-	for k, n := range suppressed {
-		parts = append(parts, fmt.Sprintf("%s ×%d", k, n))
-		total += n
-	}
-	sort.Strings(parts)
+	hint, total := startupSummaryHint(suppressed)
 	inc := &model.Incident{
 		Subject: model.Subject{
 			ID:     "startup-baseline",
@@ -151,14 +159,7 @@ func (h *handler) ReportStartupSummary(suppressed map[string]int) {
 			Severity: model.SeverityNormal,
 			Count:    total,
 		},
-		Evidence: model.Evidence{
-			Hint: fmt.Sprintf(
-				"kwatch started with %d pre-existing issue(s), suppressed "+
-					"from per-incident alerts: %s",
-				total,
-				strings.Join(parts, ", "),
-			),
-		},
+		Evidence: model.Evidence{Hint: hint},
 	}
 
 	// This is the one direct send outside the correlation engine, and it is
@@ -168,63 +169,80 @@ func (h *handler) ReportStartupSummary(suppressed map[string]int) {
 	h.alertManager.NotifyIncident(inc, model.ActionCreate, nil)
 }
 
-// report feeds one event to the correlation engine. The engine decides and
-// announces on its own; notifying here as well is how the live path once
-// diverged from every timer-driven path (no audit, no diagnosis).
-func (h *handler) report(
-	ev event.Event,
-	owner string,
-	cs *model.ContainerState,
-) {
-	h.correlator.Process(ev, owner, cs)
-}
+// maxStartupReasons bounds the reasons named in the startup summary.
+const maxStartupReasons = 8
 
-// signalEvent converts a Signal to an Event and sends it through the
-// correlation engine. It applies eventWithConfig and builds a
-// ContainerState from the signal fields or uses the pre-built one.
-func (h *handler) signalEvent(s *event.Signal) {
-	ev := event.Event{
-		Resource:        s.Resource,
-		PodName:         s.PodName,
-		PodUID:          s.PodUID,
-		PodLineageID:    s.PodLineageID,
-		PodGenerateName: s.PodGenerateName,
-		Namespace:       s.Namespace,
-		NodeName:        s.NodeName,
-		ContainerName:   s.Container,
-		Image:           s.Image,
-		Message:         s.Message,
-		Reason:          s.Reason,
-		Events:          s.Events,
-		Logs:            s.Logs,
-		Labels:          s.Labels,
-		OwnerKind:       s.OwnerKind,
-		RestartCount:    int(s.RestartCount),
-		Hint:            s.Hint,
-		Facts:           s.Facts,
-		Severity:        s.Severity,
-	}
-
-	if s.Message != "" && ev.Hint == "" {
-		ev.Hint = s.Message
-	}
-
-	ev = h.eventWithConfig(ev)
-
-	var cs *model.ContainerState
-	if s.ContainerState != nil {
-		cs = s.ContainerState
-	} else if s.RestartCount > 0 {
-		cs = &model.ContainerState{
-			RestartCount: s.RestartCount,
+// startupSummaryHint condenses the suppressed baseline into what a reader can
+// take in: how many issues, of which kinds, across how many workloads. Keys
+// are "<owner path>/<reason>". Listing every one -- three hundred lines cut
+// off mid-word by the chat provider -- said "a lot" and nothing else.
+func startupSummaryHint(suppressed map[string]int) (string, int) {
+	byReason := make(map[string]int)
+	owners := make(map[string]bool)
+	total := 0
+	for key, n := range suppressed {
+		total += n
+		reason := key
+		owner := ""
+		if i := strings.LastIndex(key, "/"); i >= 0 {
+			reason, owner = key[i+1:], key[:i]
+		}
+		byReason[reason] += n
+		if owner != "" {
+			owners[owner] = true
 		}
 	}
-
-	h.report(ev, s.Owner, cs)
+	reasons := make([]string, 0, len(byReason))
+	for reason := range byReason {
+		reasons = append(reasons, reason)
+	}
+	sort.Slice(reasons, func(i, j int) bool {
+		if byReason[reasons[i]] != byReason[reasons[j]] {
+			return byReason[reasons[i]] > byReason[reasons[j]]
+		}
+		return reasons[i] < reasons[j]
+	})
+	parts := make([]string, 0, maxStartupReasons+1)
+	for i, reason := range reasons {
+		if i == maxStartupReasons {
+			parts = append(parts,
+				fmt.Sprintf("+%d other kinds", len(reasons)-i))
+			break
+		}
+		parts = append(parts, fmt.Sprintf("%s ×%d", reason, byReason[reason]))
+	}
+	hint := fmt.Sprintf(
+		"kwatch started with %d pre-existing issue(s), not re-alerted",
+		total,
+	)
+	if len(owners) > 0 {
+		hint += fmt.Sprintf(" across %d workloads", len(owners))
+	}
+	return hint + ": " + strings.Join(parts, ", "), total
 }
 
-func (h *handler) eventWithConfig(ev event.Event) event.Event {
-	ev.IncludeEvents = h.config.IncludeEvents == nil || *h.config.IncludeEvents
-	ev.IncludeLogs = h.config.IncludeLogs == nil || *h.config.IncludeLogs
-	return ev
+// observe feeds one observation to the correlation engine. The engine decides
+// and announces on its own; notifying here as well is how the live path once
+// diverged from every timer-driven path (no audit, no diagnosis).
+//
+// The only thing added here is the evidence policy, which is the one part of
+// an alert only this package knows: whether this deployment was configured to
+// collect logs and events at all.
+func (h *handler) observe(obs *model.Observation) {
+	if obs == nil {
+		return
+	}
+	obs.IncludeEvents =
+		h.config.IncludeEvents == nil || *h.config.IncludeEvents
+	obs.IncludeLogs = h.config.IncludeLogs == nil || *h.config.IncludeLogs
+	h.correlator.Process(obs)
+}
+
+// Owners implements Handler.
+func (h *handler) Owners() observe.OwnerResolver {
+	return observe.PodOwners{
+		RS: h.listers.RS,
+		DS: h.listers.DS,
+		SS: h.listers.SS,
+	}
 }

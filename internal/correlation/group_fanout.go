@@ -76,11 +76,16 @@ func (e *Engine) mergeNamespaceFanOut(
 
 		// A per-owner group announced in an earlier window now folds into the
 		// namespace-wide one. Close its thread, or it stays open with no
-		// resolve ever arriving.
+		// resolve ever arriving, and keep the members it was waiting on.
+		carry := map[model.IncidentKey]bool{}
 		for _, ge := range entries {
-			gk := ge.reason + "|" + ge.namespace + "|" + ge.owner
-			if t, ok := e.foldAnnouncedGroup(gk, ge.reason, now); ok {
+			gk := ownerGroupKey(ge.reason, ge.namespace, ge.owner)
+			t, members, ok := e.foldAnnouncedGroup(gk, ge.reason, now)
+			if ok {
 				out.transitions = append(out.transitions, t)
+			}
+			for key, resolved := range members {
+				carry[key] = resolved
 			}
 		}
 
@@ -96,9 +101,11 @@ func (e *Engine) mergeNamespaceFanOut(
 		// it actually recovers — not be swallowed into the group's batch
 		// resolve — so it is not tracked as a group member.
 		if tracker := e.groupResolveTrackers[fanKey]; tracker != nil {
+			e.carryGroupMembers(tracker, carry)
 			for _, ge := range announced {
 				delete(tracker.members, ge.key)
 			}
+			tracker.totalCount = len(tracker.members)
 		}
 		for _, gk := range keys {
 			out.consumed[gk] = true
@@ -208,19 +215,53 @@ func (e *Engine) noteWiderBlastRadius(
 	return transition{note, model.ActionUpdate}
 }
 
+// carryGroupMembers moves the unresolved members of folded per-owner groups
+// onto the group that absorbed them.
+//
+// Without this the fan-out tracker knew only the members of the wave that
+// triggered it. Everything an earlier window had already grouped was
+// forgotten, so each of those incidents resolved on its own -- the pile of
+// individual green ticks that grouping exists to prevent, arriving right
+// after a single namespace-wide alert had promised to speak for all of them.
+// Caller must hold e.mu.
+func (e *Engine) carryGroupMembers(
+	tracker *groupResolveTracker,
+	carry map[model.IncidentKey]bool,
+) {
+	for key, resolved := range carry {
+		if resolved {
+			continue
+		}
+		if _, already := tracker.members[key]; already {
+			continue
+		}
+		if inc, live := e.state[key]; !live ||
+			inc.State == model.StateResolved {
+			continue
+		}
+		tracker.members[key] = false
+	}
+}
+
 // foldAnnouncedGroup resolves a per-owner group that was announced before a
 // namespace fan-out absorbed it, and forgets its flush and resolve state so
-// the fan-out key owns those members from now on. Reports whether a resolve
-// transition was produced. Caller must hold e.mu.
+// the fan-out key owns those members from now on. It returns the members the
+// folded group was still waiting on, for the caller to hand to the group that
+// took its place, and whether a resolve transition was produced. Caller must
+// hold e.mu.
 func (e *Engine) foldAnnouncedGroup(
 	gk, reason string,
 	now time.Time,
-) (transition, bool) {
+) (transition, map[model.IncidentKey]bool, bool) {
 	fs, ok := e.groupFlushStates[gk]
+	var members map[model.IncidentKey]bool
+	if tracker := e.groupResolveTrackers[gk]; tracker != nil {
+		members = tracker.members
+	}
 	delete(e.groupFlushStates, gk)
 	delete(e.groupResolveTrackers, gk)
 	if !ok || !fs.notified {
-		return transition{}, false
+		return transition{}, members, false
 	}
 	key := model.IncidentKey(groupKeyPrefix + gk)
 	parts := strings.Split(gk, "|")
@@ -251,7 +292,7 @@ func (e *Engine) foldAnnouncedGroup(
 		},
 	},
 
-		model.ActionResolved}, true
+		model.ActionResolved}, members, true
 }
 
 // activeEntriesAcross gathers the still-active members of several buffers and

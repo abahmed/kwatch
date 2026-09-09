@@ -204,9 +204,9 @@ func TestIsPodTerminatingOrDisrupted(t *testing.T) {
 func TestRoundDuration(t *testing.T) {
 	assert.Equal(t, "5s", roundDuration(5*time.Second))
 	assert.Equal(t, "0s", roundDuration(0))
-	assert.Equal(t, "1m0s", roundDuration(time.Minute))
+	assert.Equal(t, "1m", roundDuration(time.Minute))
 	assert.Equal(t, "2m30s", roundDuration(150*time.Second))
-	assert.Equal(t, "1h0m", roundDuration(time.Hour))
+	assert.Equal(t, "1h", roundDuration(time.Hour))
 	assert.Equal(t, "2h15m", roundDuration(2*time.Hour+15*time.Minute))
 }
 

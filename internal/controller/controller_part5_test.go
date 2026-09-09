@@ -166,7 +166,14 @@ func TestBuildSeenSetReportsEmptySummaryOnNoBrokenPods(t *testing.T) {
 		},
 	}
 
-	client := fake.NewSimpleClientset(pod)
+	// Every real namespace has a default ServiceAccount; without it the
+	// pod-reference detector correctly reports one missing, which is not what
+	// this test is about.
+	defaultSA := &corev1.ServiceAccount{
+		ObjectMeta: metav1.ObjectMeta{Name: "default", Namespace: "default"},
+	}
+
+	client := fake.NewSimpleClientset(pod, defaultSA)
 	cfg := &config.Config{}
 	h := &mockHandler{}
 

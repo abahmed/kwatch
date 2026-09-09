@@ -7,10 +7,12 @@ import (
 	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/klog/v2"
 
+	"github.com/abahmed/kwatch/internal/constant"
 	"github.com/abahmed/kwatch/internal/correlation"
-	"github.com/abahmed/kwatch/internal/event"
+	"github.com/abahmed/kwatch/internal/filter"
 	"github.com/abahmed/kwatch/internal/handler"
 	"github.com/abahmed/kwatch/internal/model"
+	"github.com/abahmed/kwatch/internal/observe"
 )
 
 // baselineRecorder accumulates the startup Seen set. add converts from the
@@ -51,33 +53,45 @@ func (r *baselineRecorder) add(key model.IncidentKey, pod string) {
 	}
 }
 
-func (r *baselineRecorder) seed(sig *event.Signal) {
-	ev := event.Event{
-		Resource:        sig.Resource,
-		Namespace:       sig.Namespace,
-		Reason:          sig.Reason,
-		PodName:         sig.PodName,
-		PodUID:          sig.PodUID,
-		PodLineageID:    sig.PodLineageID,
-		PodGenerateName: sig.PodGenerateName,
-		OwnerKind:       sig.OwnerKind,
+// seed records a detector's signal in the baseline under the key the live
+// path will produce for it.
+//
+// Both of these used to hand-copy a subset of the signal into an event, and
+// what they left out changed the key: no Message (which decides whether an
+// image-pull failure is keyed globally) and no container state (which decides
+// whether a repeatedly-restarting container folds to one crash-loop key). A
+// key that differs from the live one is a baseline entry that suppresses
+// nothing. The signal's own conversion is used instead.
+func (r *baselineRecorder) seed(obs *model.Observation) {
+	// Only a pod subject gets a pod-level entry. A Deployment, an Ingress or
+	// a Node is seeded at owner level -- the empty pod key -- which covers
+	// every pod of that owner and expires on the short owner TTL instead of
+	// the full baseline TTL. Detectors used to disagree about this purely by
+	// whether they happened to fill in a name.
+	pod := ""
+	if obs.Subject.Kind == "pod" {
+		pod = obs.Subject.Name
 	}
-	key := correlation.IncidentKey(ev, sig.Owner, nil)
-	r.add(key, sig.PodName)
+	r.add(correlation.ObservationKey(obs), pod)
 }
 
 // seedControlPlane records CP signals under the actual pod name.
-func (r *baselineRecorder) seedControlPlane(pod *corev1.Pod, sig *event.Signal) {
-	ev := event.Event{
-		Resource:  sig.Resource,
-		Namespace: sig.Namespace,
-		Reason:    sig.Reason,
-		OwnerKind: sig.OwnerKind,
-	}
-	key := correlation.IncidentKey(ev, sig.Owner, nil)
-	r.add(key, pod.Name)
+func (r *baselineRecorder) seedControlPlane(
+	pod *corev1.Pod, obs *model.Observation,
+) {
+	r.add(correlation.ObservationKey(obs), pod.Name)
 }
 
+// buildSeenSet records what was already broken when kwatch started, so those
+// problems are reported once as a summary instead of as a burst of new
+// incidents.
+//
+// A seed means "this was failing at startup", which is not the same as "this
+// would alert": the detectors run here without the sustain gating the live
+// path applies, so something failing for one minute of a five-minute sustain
+// window is seeded even though no incident would have opened. Owner-level
+// entries therefore expire on the engine's short OwnerBaselineTTL rather than
+// the full baseline TTL, and any observed recovery retires them.
 func (c *Controller) buildSeenSet() {
 	pods, err := c.podLister.List(labels.Everything())
 	if err != nil {
@@ -87,14 +101,22 @@ func (c *Controller) buildSeenSet() {
 
 	rec := newBaselineRecorder(c.nowTime(), c.maxBaseline)
 
+	podListers := handler.Listers{
+		Secret:         c.secretLister,
+		ConfigMap:      c.configMapLister,
+		ServiceAccount: c.serviceAccountLister,
+	}
 	for _, pod := range pods {
 		c.emitBaseline(rec, pod)
 		if sig := handler.DetectPodDeletionIssue(pod, c.nowTime()); sig != nil {
 			rec.seed(sig)
 		}
+		for _, sig := range handler.DetectPodReferenceIssues(pod, podListers) {
+			rec.seed(sig)
+		}
 	}
 
-	c.seedNodeBaseline(rec)
+	c.seedNodeBaseline()
 	c.seedControllers(rec)
 	c.seedServices(rec)
 	c.seedControllersWithSvc(rec)
@@ -112,8 +134,10 @@ func (c *Controller) emitBaseline(rec *baselineRecorder, pod *corev1.Pod) {
 	if pod.Status.Phase == corev1.PodSucceeded {
 		return
 	}
-	owner := correlation.ResolveOwnerName(pod, c.rsLister, c.dsLister, c.ssLister)
-	if owner == "" {
+	owner := observe.PodOwners{
+		RS: c.rsLister, DS: c.dsLister, SS: c.ssLister,
+	}.OwnerOf(pod)
+	if owner.Name == "" {
 		return
 	}
 
@@ -128,80 +152,101 @@ func (c *Controller) emitBaseline(rec *baselineRecorder, pod *corev1.Pod) {
 		if reason == "" {
 			continue
 		}
-		ev := event.Event{Namespace: pod.Namespace, PodName: pod.Name, PodUID: string(pod.UID), PodLineageID: pod.Annotations[event.PodLineageAnnotation], PodGenerateName: pod.GenerateName, Reason: reason, ContainerName: cs.Name}
-		key := correlation.IncidentKey(ev, owner, &model.ContainerState{RestartCount: cs.RestartCount})
-		rec.add(key, pod.Name)
+		obs := observe.PodOwnedBy(pod, cs.Name, reason, owner)
+		obs.Message = filter.ContainerIssueMessage(&cs)
+		obs.RestartCount = cs.RestartCount
+		rec.add(correlation.ObservationKey(obs), pod.Name)
 		hadContainerIssue = true
 	}
 
-	if !hadContainerIssue {
-		for _, cond := range pod.Status.Conditions {
-			if cond.Type == corev1.PodScheduled && cond.Status == corev1.ConditionFalse {
-				ev := event.Event{Namespace: pod.Namespace, PodName: pod.Name, PodUID: string(pod.UID), PodLineageID: pod.Annotations[event.PodLineageAnnotation], PodGenerateName: pod.GenerateName, Reason: cond.Reason, ContainerName: "."}
-				key := correlation.IncidentKey(ev, owner, nil)
-				rec.add(key, pod.Name)
-				break
-			}
-		}
+	if hadContainerIssue {
+		return
+	}
+	if reason := c.podLevelSeedReason(pod); reason != "" {
+		obs := observe.PodOwnedBy(pod, ".", reason, owner)
+		rec.add(correlation.ObservationKey(obs), pod.Name)
 	}
 }
 
-// containerIssueReason normalizes a container status into a signal reason,
-// skipping transient and benign states.
-func containerIssueReason(cs *corev1.ContainerStatus) string {
-	if w := cs.State.Waiting; w != nil {
-		if w.Reason == "ContainerCreating" || w.Reason == "PodInitializing" {
+// podLevelSeedReason is the pod-level reason the live pipeline would report
+// for this pod right now, or "" when it would report none.
+//
+// Only the scheduling condition used to be seeded. A pod that had been
+// unready for three hours, or Pending with no condition explaining why, was
+// not in the baseline at all: the live detectors suppress themselves for one
+// threshold after startup, and then announced a problem that predated the
+// restart as brand new, with a duration measured from the restart.
+func (c *Controller) podLevelSeedReason(pod *corev1.Pod) string {
+	for _, cond := range pod.Status.Conditions {
+		if cond.Type == corev1.PodScheduled &&
+			cond.Status == corev1.ConditionFalse {
+			return cond.Reason
+		}
+	}
+	now := c.nowTime()
+	th := c.seedThresholds
+	if pod.Status.Phase == corev1.PodPending && th.pendingPodEnabled {
+		ref := pod.CreationTimestamp.Time
+		if !ref.IsZero() && now.Sub(ref) >= th.pendingPod {
+			return constant.ReasonPodPending
+		}
+		return ""
+	}
+	if pod.Status.Phase != corev1.PodRunning || !th.notReadyEnabled {
+		return ""
+	}
+	for _, cond := range pod.Status.Conditions {
+		if cond.Type != corev1.PodReady {
+			continue
+		}
+		if cond.Status == corev1.ConditionTrue ||
+			cond.LastTransitionTime.IsZero() {
 			return ""
 		}
-		// Match ContainerReasonsFilter: normalize CrashLoopBackOff to
-		// LastTerminationState reason so the baseline key matches the live
-		// signal key.
-		if w.Reason == "CrashLoopBackOff" && cs.LastTerminationState.Terminated != nil {
-			return cs.LastTerminationState.Terminated.Reason
+		if now.Sub(cond.LastTransitionTime.Time) >= th.notReady {
+			return constant.ReasonContainersNotReady
 		}
-		return w.Reason
-	}
-	if t := cs.State.Terminated; t != nil {
-		if t.ExitCode == 0 || t.Reason == "Completed" {
-			return ""
-		}
-		return t.Reason
-	}
-	if cs.State.Running != nil && cs.RestartCount > 0 && cs.LastTerminationState.Terminated != nil {
-		return cs.LastTerminationState.Terminated.Reason
+		return ""
 	}
 	return ""
 }
 
-// seedNodeBaseline seeds alerting node conditions and pre-populates active node
-// incidents so pod suppression is active before any worker starts.
-func (c *Controller) seedNodeBaseline(rec *baselineRecorder) {
+// containerIssueReason is the shared rule the live container detector uses,
+// so a seeded baseline key matches the key the live signal will produce.
+func containerIssueReason(cs *corev1.ContainerStatus) string {
+	return filter.ContainerIssueReason(cs)
+}
+
+// seedNodeBaseline pre-populates the active node incidents so pod suppression
+// is in force before any worker starts.
+//
+// Nothing is written to the baseline here, and that is deliberate. The engine
+// exempts node events from the baseline check outright -- a node that was
+// already down at startup must still be announced, because every pod on it
+// depends on that alert existing -- so a node entry suppressed nothing. What
+// it did do was consume one of the bounded baseline slots that a real
+// suppression needed, and count itself into the startup summary, which then
+// told the operator kwatch had quietly absorbed problems it went on to alert
+// about anyway.
+func (c *Controller) seedNodeBaseline() {
+	if len(c.node.synced) == 0 || c.nodeLister == nil {
+		return
+	}
+	nodes, err := c.nodeLister.List(labels.Everything())
+	if err != nil {
+		klog.ErrorS(err, "failed to list nodes for baseline seeding")
+		return
+	}
 	var activeNodeIncidents []string
-	if len(c.node.synced) > 0 && c.nodeLister != nil {
-		nodes, err := c.nodeLister.List(labels.Everything())
-		if err != nil {
-			klog.ErrorS(err, "failed to list nodes for baseline seeding")
-		} else {
-			for _, n := range nodes {
-				hasIssue := false
-				for _, cond := range n.Status.Conditions {
-					if reason := handler.NodeConditionReason(cond); reason != "" {
-						ev := event.Event{Reason: reason}
-						key := correlation.IncidentKey(ev, n.Name, nil)
-						rec.add(key, n.Name)
-						hasIssue = true
-					}
-				}
-				if sig := handler.DetectNodeDeletionIssue(n, c.nowTime()); sig != nil {
-					rec.seed(sig)
-				}
-				if hasIssue {
-					activeNodeIncidents = append(activeNodeIncidents, n.Name)
-				}
+	for _, n := range nodes {
+		for _, cond := range n.Status.Conditions {
+			if handler.NodeConditionReason(cond) == "" {
+				continue
 			}
+			activeNodeIncidents = append(activeNodeIncidents, n.Name)
+			break
 		}
 	}
-
 	if len(activeNodeIncidents) > 0 {
 		c.handler.SetActiveNodeIncidents(activeNodeIncidents)
 	}

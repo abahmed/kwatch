@@ -85,7 +85,14 @@ func TestAnalyzeConfigError(t *testing.T) {
 	graph := context.NewResourceGraph()
 	graph.AddEdge("pod", "ns1", "p1", "configmap", "ns1", "cm1", "mounts")
 
-	e := NewEngine(graph, context.NewChangeTracker(10))
+	now := time.Date(2025, 1, 1, 12, 0, 0, 0, time.UTC)
+	tracker := context.NewChangeTracker(10)
+	tracker.Record(context.Change{
+		Resource: "configmap", Namespace: "ns1", Name: "cm1",
+		Type: context.ChangeUpdate, Timestamp: now.Add(-time.Minute),
+	})
+	e := NewEngine(graph, tracker)
+	e.SetClock(func() time.Time { return now })
 	inc := &model.Incident{
 		Subject: model.Subject{
 			Resource:  "pod",
@@ -103,7 +110,14 @@ func TestAnalyzeSecretError(t *testing.T) {
 	graph := context.NewResourceGraph()
 	graph.AddEdge("pod", "ns1", "p1", "secret", "ns1", "s1", "env_from")
 
-	e := NewEngine(graph, context.NewChangeTracker(10))
+	now := time.Date(2025, 1, 1, 12, 0, 0, 0, time.UTC)
+	tracker := context.NewChangeTracker(10)
+	tracker.Record(context.Change{
+		Resource: "secret", Namespace: "ns1", Name: "s1",
+		Type: context.ChangeUpdate, Timestamp: now.Add(-time.Minute),
+	})
+	e := NewEngine(graph, tracker)
+	e.SetClock(func() time.Time { return now })
 	inc := &model.Incident{
 		Subject: model.Subject{
 			Resource:  "pod",

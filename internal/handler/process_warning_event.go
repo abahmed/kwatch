@@ -6,8 +6,8 @@ import (
 
 	corev1 "k8s.io/api/core/v1"
 
-	"github.com/abahmed/kwatch/internal/event"
 	"github.com/abahmed/kwatch/internal/model"
+	"github.com/abahmed/kwatch/internal/observe"
 )
 
 const genericEventMaxAge = 15 * time.Minute
@@ -40,10 +40,6 @@ func (h *handler) ProcessWarningEvent(ev *corev1.Event) {
 	if _, ok := warningEventReasons[ev.Reason]; !ok || !recentEvent(ev, h.now()) {
 		return
 	}
-	owner := ev.InvolvedObject.Namespace + "/" + ev.InvolvedObject.Name
-	if ev.InvolvedObject.Namespace == "" {
-		owner = ev.InvolvedObject.Name
-	}
 	hint := ev.Reason
 	if ev.Message != "" {
 		hint += ": " + ev.Message
@@ -51,15 +47,14 @@ func (h *handler) ProcessWarningEvent(ev *corev1.Event) {
 	if ev.Source.Component != "" {
 		hint += " (source: " + ev.Source.Component + ")"
 	}
-	h.signalEvent(&event.Signal{
-		Resource:  strings.ToLower(ev.InvolvedObject.Kind),
-		Namespace: ev.InvolvedObject.Namespace,
-		PodName:   ev.InvolvedObject.Name,
-		Owner:     owner,
-		Reason:    ev.Reason,
-		Hint:      hint,
-		Severity:  model.SeverityWarning,
-	})
+	obs := observe.ObjectNamed(
+		strings.ToLower(ev.InvolvedObject.Kind),
+		ev.InvolvedObject.Namespace,
+		ev.InvolvedObject.Name,
+		ev.Reason,
+	).WithSeverity(model.SeverityWarning).WithHint(hint)
+	obs.Transient = true
+	h.observe(obs)
 }
 
 func recentEvent(ev *corev1.Event, now time.Time) bool {

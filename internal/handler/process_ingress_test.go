@@ -226,8 +226,8 @@ func TestDetectIngressIssueServiceMissing(t *testing.T) {
 	sigs := DetectIngressIssue(ing, hasService)
 	assert.Len(t, sigs, 1)
 	assert.Equal(t, "IngressBackendNotFound", sigs[0].Reason)
-	assert.Equal(t, "ingress", sigs[0].Resource)
-	assert.Equal(t, "default/test-ing", sigs[0].Owner)
+	assert.Equal(t, "ingress", sigs[0].Subject.Kind)
+	assert.Equal(t, "default/test-ing", sigs[0].OwnerPath())
 }
 
 func TestDetectIngressIssueDefaultBackendMissing(t *testing.T) {

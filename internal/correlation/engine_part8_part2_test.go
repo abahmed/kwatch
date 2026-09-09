@@ -54,7 +54,7 @@ func TestMassFailureSuppressionReleasesSurvivorsWhenItClears(t *testing.T) {
 		}
 	}
 	for _, dep := range []string{"dep1", "dep2", "dep3"} {
-		inc, action := e.Process(ev(dep), dep, nil)
+		inc, action := e.processEvent(ev(dep), dep, nil)
 		assert.Equal(t, model.ActionSkip, action)
 		require.NotNil(t, inc, "a suppressed incident is still recorded")
 		assert.Equal(t, deadNode, inc.SuppressedBy)
@@ -73,7 +73,7 @@ func TestMassFailureSuppressionReleasesSurvivorsWhenItClears(t *testing.T) {
 
 	// One member recovers while suppressed: no notification for something never
 	// announced.
-	e.MarkResolved(BuildKey("ns", "dep1", "ContainersNotReady", ""))
+	e.markResolved(BuildKey("ns", "dep1", "ContainersNotReady", ""))
 	assert.Empty(t, announced, "a suppressed incident resolves silently")
 
 	// The mass failure clears; the two survivors are released and announced
@@ -92,7 +92,7 @@ func TestMassFailureSuppressionReleasesSurvivorsWhenItClears(t *testing.T) {
 	}
 	// From here on they behave like any other incident: they were announced
 	// on release, so their recovery is announced too.
-	e.MarkResolved(BuildKey("ns", "dep2", "ContainersNotReady", ""))
+	e.markResolved(BuildKey("ns", "dep2", "ContainersNotReady", ""))
 	assert.Equal(
 		t,
 		seen{"dep2", model.ActionResolved},

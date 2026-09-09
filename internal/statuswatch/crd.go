@@ -13,7 +13,6 @@ import (
 	"k8s.io/klog/v2"
 
 	"github.com/abahmed/kwatch/internal/constant"
-	"github.com/abahmed/kwatch/internal/event"
 	kwcontext "github.com/abahmed/kwatch/internal/graphcontext"
 	"github.com/abahmed/kwatch/internal/k8s"
 )
@@ -42,17 +41,13 @@ func (m *Monitor) processAPIService(obj interface{}) {
 		return
 	}
 	if sig := failureSignal(
-		u, "apiservice", u.GetName(), m.conditionRules,
+		u, "apiservice", m.conditionRules,
 	); sig != nil {
-		m.correlator.Process(
-			event.Event{
-				Resource: sig.Resource, Namespace: sig.Namespace,
-				PodName: sig.PodName, Reason: sig.Reason,
-				Hint: sig.Hint, Labels: sig.Labels,
-			}, sig.Owner, nil,
-		)
+		m.correlator.Process(sig)
 	} else {
-		m.resolve("", u.GetName(), constant.ReasonAPIServiceFailure)
+		m.resolve(
+			"apiservice", "", u.GetName(), constant.ReasonAPIServiceFailure,
+		)
 	}
 }
 
@@ -63,7 +58,9 @@ func (m *Monitor) resolveAPIService(obj interface{}) {
 	}
 	_, name, err := cache.SplitMetaNamespaceKey(key)
 	if err == nil && name != "" {
-		m.resolve("", name, constant.ReasonAPIServiceFailure)
+		m.resolve(
+			"apiservice", "", name, constant.ReasonAPIServiceFailure,
+		)
 	}
 }
 
@@ -227,18 +224,12 @@ func (m *Monitor) processCR(obj interface{}) {
 	}
 	m.rebuildGraph(u)
 	if sig := failureSignal(
-		u, "customresource", resourceOwner(u), m.conditionRules,
+		u, "customresource", m.conditionRules,
 	); sig != nil {
-		m.correlator.Process(
-			event.Event{
-				Resource: sig.Resource, Namespace: sig.Namespace,
-				PodName: sig.PodName, Reason: sig.Reason,
-				Hint: sig.Hint, Labels: sig.Labels,
-			}, sig.Owner, nil,
-		)
+		m.correlator.Process(sig)
 	} else {
 		m.resolve(
-			u.GetNamespace(), resourceOwner(u),
+			"customresource", u.GetNamespace(), u.GetName(),
 			constant.ReasonCustomResourceFailure,
 		)
 	}
@@ -258,7 +249,7 @@ func (m *Monitor) resolveCR(obj interface{}) {
 		m.graph.RemoveNode("customresource", namespace, name)
 	}
 	m.resolve(
-		namespace, resourceOwnerParts(namespace, name),
+		"customresource", namespace, name,
 		constant.ReasonCustomResourceFailure,
 	)
 }

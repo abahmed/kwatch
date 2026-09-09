@@ -15,7 +15,7 @@ import (
 func incidentToEvent(inc *model.Incident, action model.IncidentAction) *event.Event {
 	return &event.Event{
 		Resource:      inc.Resource,
-		PodName:       inc.Name,
+		PodName:       eventPodName(inc),
 		ContainerName: inc.ContainerName,
 		Namespace:     inc.Namespace,
 		NodeName:      inc.NodeName,
@@ -33,6 +33,19 @@ func incidentToEvent(inc *model.Incident, action model.IncidentAction) *event.Ev
 	}
 }
 
+// eventPodName is the pod a provider should name.
+//
+// A pod incident is keyed by its owning workload, so Incident.Name holds a
+// Deployment or StatefulSet name. Passing that as PodName made every provider
+// that titles its alert with the pod name announce a pod that does not exist.
+// EvidencePod is the replica the logs and events were actually read from.
+func eventPodName(inc *model.Incident) string {
+	if inc.Resource == "pod" && inc.EvidencePod != "" {
+		return inc.EvidencePod
+	}
+	return inc.Name
+}
+
 // NotifyIncident enqueues an incident for delivery to all providers.
 // When Start has been called, delivery is asynchronous via per-provider
 // buffered channels (non-blocking; drops oldest on full).
@@ -40,7 +53,7 @@ func incidentToEvent(inc *model.Incident, action model.IncidentAction) *event.Ev
 // insight is optional; nil means no structured analysis available.
 
 func (a *AlertManager) buildMessage(inc *model.Incident, action model.IncidentAction, ins *insight.Insight, templates map[string]*template.Template) string {
-	rb := message.NewReportBuilder(a.clusterName)
+	rb := message.NewReportBuilder(a.clusterName).SetClock(a.nowTime)
 	report := rb.Build(inc, action, ins)
 	renderer := message.NewPlainTextRenderer()
 	msg := message.RenderAction(renderer, report)

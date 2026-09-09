@@ -8,8 +8,8 @@ import (
 	admissionregistrationv1 "k8s.io/api/admissionregistration/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
 
-	"github.com/abahmed/kwatch/internal/correlation"
-	"github.com/abahmed/kwatch/internal/event"
+	"github.com/abahmed/kwatch/internal/model"
+	"github.com/abahmed/kwatch/internal/observe"
 )
 
 // serviceRef returns "namespace/name" for a webhook's ServiceReference, or "".
@@ -25,11 +25,11 @@ func serviceRef(svc *admissionregistrationv1.ServiceReference) string {
 func DetectMutatingWebhookIssue(
 	mwc *admissionregistrationv1.MutatingWebhookConfiguration,
 	hasService func(ns, name string) bool,
-) []*event.Signal {
+) []*model.Observation {
 	if mwc == nil || hasService == nil {
 		return nil
 	}
-	var sigs []*event.Signal
+	var sigs []*model.Observation
 	for _, w := range mwc.Webhooks {
 		ref := serviceRef(w.ClientConfig.Service)
 		if ref == "" {
@@ -38,20 +38,15 @@ func DetectMutatingWebhookIssue(
 		svc := w.ClientConfig.Service
 		ns, name := svc.Namespace, svc.Name
 		if !hasService(ns, name) {
-			sigs = append(sigs, &event.Signal{
-				Resource:  "mutatingwebhookconfiguration",
-				Namespace: mwc.Namespace,
-				Reason:    constant.ReasonWebhookBackendNotFound,
-				Owner:     mwc.Name,
-				PodName:   mwc.Name,
-				Labels:    mwc.Labels,
-				Hint: fmt.Sprintf(
-					"mutating webhook %q: service %s/%s does not exist",
-					mwc.Name,
-					ns,
-					name,
-				),
-			})
+			sigs = append(sigs, observe.Object(
+				"mutatingwebhookconfiguration", mwc,
+				constant.ReasonWebhookBackendNotFound,
+			).WithHint(fmt.Sprintf(
+				"mutating webhook %q: service %s/%s does not exist",
+				mwc.Name,
+				ns,
+				name,
+			)))
 		}
 	}
 	return sigs
@@ -63,11 +58,11 @@ func DetectMutatingWebhookIssue(
 func DetectValidatingWebhookIssue(
 	vwc *admissionregistrationv1.ValidatingWebhookConfiguration,
 	hasService func(ns, name string) bool,
-) []*event.Signal {
+) []*model.Observation {
 	if vwc == nil || hasService == nil {
 		return nil
 	}
-	var sigs []*event.Signal
+	var sigs []*model.Observation
 	for _, w := range vwc.Webhooks {
 		ref := serviceRef(w.ClientConfig.Service)
 		if ref == "" {
@@ -76,20 +71,15 @@ func DetectValidatingWebhookIssue(
 		svc := w.ClientConfig.Service
 		ns, name := svc.Namespace, svc.Name
 		if !hasService(ns, name) {
-			sigs = append(sigs, &event.Signal{
-				Resource:  "validatingwebhookconfiguration",
-				Namespace: vwc.Namespace,
-				Reason:    constant.ReasonWebhookBackendNotFound,
-				Owner:     vwc.Name,
-				PodName:   vwc.Name,
-				Labels:    vwc.Labels,
-				Hint: fmt.Sprintf(
-					"validating webhook %q: service %s/%s does not exist",
-					vwc.Name,
-					ns,
-					name,
-				),
-			})
+			sigs = append(sigs, observe.Object(
+				"validatingwebhookconfiguration", vwc,
+				constant.ReasonWebhookBackendNotFound,
+			).WithHint(fmt.Sprintf(
+				"validating webhook %q: service %s/%s does not exist",
+				vwc.Name,
+				ns,
+				name,
+			)))
 		}
 	}
 	return sigs
@@ -100,13 +90,13 @@ func (h *handler) ProcessMutatingWebhookConfiguration(
 	deleted bool,
 ) error {
 	if deleted {
-		h.correlator.ResolveByResource("mutatingwebhookconfiguration", key)
+		h.forgetWebhook("mutatingwebhookconfiguration", key)
 		return nil
 	}
 	mwc, err := h.listers.MWC.Get(key)
 	if err != nil {
 		if errors.IsNotFound(err) {
-			h.correlator.ResolveByResource("mutatingwebhookconfiguration", key)
+			h.forgetWebhook("mutatingwebhookconfiguration", key)
 			return nil
 		}
 		return fmt.Errorf(
@@ -126,7 +116,7 @@ func (h *handler) ProcessMutatingWebhookConfigurationObject(
 		return nil
 	}
 	if deleted {
-		h.correlator.ResolveByResource("mutatingwebhookconfiguration", mwc.Name)
+		h.forgetWebhook("mutatingwebhookconfiguration", mwc.Name)
 		return nil
 	}
 
@@ -138,27 +128,20 @@ func (h *handler) ProcessMutatingWebhookConfigurationObject(
 		return err == nil
 	}
 
-	sigs := DetectMutatingWebhookIssue(mwc, hasService)
-	for _, sig := range sigs {
-		h.signalEvent(sig)
-	}
-	endpointSigs := h.detectWebhookEndpointIssues(mwc.Name, mwc.Namespace, mwc.Labels, mutatingWebhookServices(mwc))
-	for _, sig := range endpointSigs {
-		h.signalEvent(sig)
-	}
-	if len(sigs) == 0 {
-		h.correlator.MarkResolved(
-			correlation.BuildKey(
-				"",
-				mwc.Name,
-				constant.ReasonWebhookBackendNotFound,
-				"",
-			),
-		)
-	}
-	if len(endpointSigs) == 0 {
-		h.correlator.MarkResolved(correlation.BuildKey("", mwc.Name, constant.ReasonWebhookNoEndpoints, ""))
-	}
+	h.reconcile(
+		model.NewObjectRef("mutatingwebhookconfiguration", "", mwc.Name),
+		DetectMutatingWebhookIssue(mwc, hasService),
+	)
+	// The endpoint findings are about the webhook's backing Service, which is
+	// a subject of its own -- resolving the configuration would not answer
+	// for them.
+	h.reconcile(
+		model.NewObjectRef("webhook", mwc.Namespace, mwc.Name),
+		h.detectWebhookEndpointIssues(
+			mwc.Name, mwc.Namespace, mwc.Labels,
+			MutatingWebhookServices(mwc),
+		),
+	)
 	return nil
 }
 
@@ -167,16 +150,13 @@ func (h *handler) ProcessValidatingWebhookConfiguration(
 	deleted bool,
 ) error {
 	if deleted {
-		h.correlator.ResolveByResource("validatingwebhookconfiguration", key)
+		h.forgetWebhook("validatingwebhookconfiguration", key)
 		return nil
 	}
 	vwc, err := h.listers.VWC.Get(key)
 	if err != nil {
 		if errors.IsNotFound(err) {
-			h.correlator.ResolveByResource(
-				"validatingwebhookconfiguration",
-				key,
-			)
+			h.forgetWebhook("validatingwebhookconfiguration", key)
 			return nil
 		}
 		return fmt.Errorf(
@@ -196,10 +176,7 @@ func (h *handler) ProcessValidatingWebhookConfigurationObject(
 		return nil
 	}
 	if deleted {
-		h.correlator.ResolveByResource(
-			"validatingwebhookconfiguration",
-			vwc.Name,
-		)
+		h.forgetWebhook("validatingwebhookconfiguration", vwc.Name)
 		return nil
 	}
 
@@ -211,26 +188,24 @@ func (h *handler) ProcessValidatingWebhookConfigurationObject(
 		return err == nil
 	}
 
-	sigs := DetectValidatingWebhookIssue(vwc, hasService)
-	for _, sig := range sigs {
-		h.signalEvent(sig)
-	}
-	endpointSigs := h.detectWebhookEndpointIssues(vwc.Name, vwc.Namespace, vwc.Labels, validatingWebhookServices(vwc))
-	for _, sig := range endpointSigs {
-		h.signalEvent(sig)
-	}
-	if len(sigs) == 0 {
-		h.correlator.MarkResolved(
-			correlation.BuildKey(
-				"",
-				vwc.Name,
-				constant.ReasonWebhookBackendNotFound,
-				"",
-			),
-		)
-	}
-	if len(endpointSigs) == 0 {
-		h.correlator.MarkResolved(correlation.BuildKey("", vwc.Name, constant.ReasonWebhookNoEndpoints, ""))
-	}
+	h.reconcile(
+		model.NewObjectRef("validatingwebhookconfiguration", "", vwc.Name),
+		DetectValidatingWebhookIssue(vwc, hasService),
+	)
+	h.reconcile(
+		model.NewObjectRef("webhook", vwc.Namespace, vwc.Name),
+		h.detectWebhookEndpointIssues(
+			vwc.Name, vwc.Namespace, vwc.Labels,
+			ValidatingWebhookServices(vwc),
+		),
+	)
 	return nil
+}
+
+// forgetWebhook retires both subjects a webhook configuration reports under:
+// the configuration itself, and the backing Service its endpoint findings are
+// about.
+func (h *handler) forgetWebhook(kind, name string) {
+	h.reconcileGone(model.NewObjectRef(kind, "", name))
+	h.reconcileGone(model.NewObjectRef("webhook", "", name))
 }

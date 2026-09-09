@@ -29,7 +29,7 @@ func TestBaselineSuppressesForFullTTL(t *testing.T) {
 	ev := event.Event{
 		PodName: "pod-1", Namespace: "default", Reason: "CrashLoopBackOff",
 	}
-	_, action := e.Process(ev, "deploy-1", nil)
+	_, action := e.processEvent(ev, "deploy-1", nil)
 	assert.Equal(t, model.ActionSkip, action)
 }
 
@@ -50,7 +50,7 @@ func TestBaselineExpiredPrunes(t *testing.T) {
 	ev := event.Event{
 		PodName: "pod-1", Namespace: "default", Reason: "CrashLoopBackOff",
 	}
-	_, action := e.Process(ev, "deploy-1", nil)
+	_, action := e.processEvent(ev, "deploy-1", nil)
 	assert.Equal(t, model.ActionCreate, action)
 
 	// entry should be pruned from baseline
@@ -72,7 +72,7 @@ func TestRemovePodClearsSeen(t *testing.T) {
 		Reason:    "CrashLoopBackOff",
 	}
 
-	inc, action := e.Process(ev, "deploy-1", nil)
+	inc, action := e.processEvent(ev, "deploy-1", nil)
 	assert.Equal(t, model.ActionCreate, action)
 	assert.NotNil(t, inc)
 	incidentKey := inc.Key
@@ -95,7 +95,7 @@ func TestRemovePodClearsSeen(t *testing.T) {
 		Reason:    "CrashLoopBackOff",
 	}
 
-	_, action = e.Process(ev2, "deploy-1", nil)
+	_, action = e.processEvent(ev2, "deploy-1", nil)
 	assert.Equal(t, model.ActionSkip, action)
 }
 
@@ -114,7 +114,7 @@ func TestOwnerLevelBaselineFallsBackToEmptyPod(t *testing.T) {
 		Namespace: "ns",
 		Reason:    "ServiceNoEndpoints",
 	}
-	inc, action := e.Process(ev, "ns/web", nil)
+	inc, action := e.processEvent(ev, "ns/web", nil)
 	assert.Nil(t, inc)
 	assert.Equal(t, model.ActionSkip, action)
 }
@@ -132,7 +132,7 @@ func TestOwnerLevelBaselineNoEmptyPod(t *testing.T) {
 		Namespace: "ns",
 		Reason:    "ServiceNoEndpoints",
 	}
-	inc, action := e.Process(ev, "ns/web", nil)
+	inc, action := e.processEvent(ev, "ns/web", nil)
 	assert.Nil(t, inc)
 	assert.Equal(t, model.ActionSkip, action)
 }
@@ -158,8 +158,8 @@ func TestStsOwnedPodsGroupByStsName(t *testing.T) {
 		OwnerKind: "StatefulSet",
 	}
 
-	inc1, action1 := e.Process(ev1, "my-sts", nil)
-	inc2, action2 := e.Process(ev2, "my-sts", nil)
+	inc1, action1 := e.processEvent(ev1, "my-sts", nil)
+	inc2, action2 := e.processEvent(ev2, "my-sts", nil)
 
 	assert.Equal(t, model.ActionCreate, action1)
 	assert.Equal(t, model.ActionSkip, action2)
@@ -181,7 +181,7 @@ func TestSnapshot(t *testing.T) {
 		Namespace: "default",
 		Reason:    "CrashLoopBackOff",
 	}
-	e.Process(ev, "deploy-1", nil)
+	e.processEvent(ev, "deploy-1", nil)
 
 	snap := e.Snapshot()
 	if len(snap) != 1 {
@@ -254,7 +254,7 @@ func TestRevivedIncidentResetsRenotifyBudget(t *testing.T) {
 		PodName:   "pod-1",
 		Reason:    "CrashLoopBackOff",
 	}
-	inc, action := e.Process(ev, "deploy-1", nil)
+	inc, action := e.processEvent(ev, "deploy-1", nil)
 	assert.Equal(t, model.ActionCreate, action)
 	require.Zero(t, inc.RenotifyCount)
 
@@ -286,12 +286,12 @@ func TestRevivedIncidentResetsRenotifyBudget(t *testing.T) {
 	require.Equal(t, 3, updates, "renotify must not exceed maxPer")
 
 	// Resolve, wait out the cooldown, then revive.
-	e.MarkResolved(inc.Key)
+	e.markResolved(inc.Key)
 	require.Equal(t, model.StateResolved, e.state[inc.Key].State)
 
 	fakeNow = fakeNow.Add(11 * time.Minute)
 	e.now = mockClock(fakeNow)
-	revived, action := e.Process(ev, "deploy-1", nil)
+	revived, action := e.processEvent(ev, "deploy-1", nil)
 	require.Equal(
 		t,
 		model.ActionUpdate,
@@ -337,7 +337,7 @@ func TestBarePodIncidentUsesPodName(t *testing.T) {
 		Namespace: "default",
 		Reason:    "CrashLoopBackOff",
 	}
-	inc, action := e.Process(ev, "", nil)
+	inc, action := e.processEvent(ev, "", nil)
 	assert.Equal(t, model.ActionCreate, action)
 	assert.Equal(
 		t,
@@ -353,7 +353,7 @@ func TestBarePodIncidentUsesPodName(t *testing.T) {
 		Namespace: "default",
 		Reason:    "CrashLoopBackOff",
 	}
-	inc2, _ := e.Process(ev2, "deploy-1", nil)
+	inc2, _ := e.processEvent(ev2, "deploy-1", nil)
 	assert.Equal(t, "deploy-1", inc2.Name)
 }
 
@@ -362,9 +362,11 @@ func TestEscalationFirstCrossingIsHigh(t *testing.T) {
 	// Use OOMKilled to avoid CrashLoopHighFrequency rename when RestartCount >
 	// 5
 	ev := event.Event{PodName: "p", Namespace: "ns", Reason: "OOMKilled"}
-	inc, _ := e.Process(ev, "dep", &model.ContainerState{RestartCount: 2})
+	inc, _ := e.processEvent(ev, "dep", &model.ContainerState{RestartCount: 2})
 	// within cooldown, cross tier 3:
-	inc2, action := e.Process(ev, "dep", &model.ContainerState{RestartCount: 4})
+	inc2, action := e.processEvent(
+		ev, "dep", &model.ContainerState{RestartCount: 4},
+	)
 	assert.Equal(t, model.ActionUpdate, action)
 	assert.Equal(t, model.SeverityHigh, inc2.Severity)
 	assert.Contains(t, inc2.Hint, "crossed 3")

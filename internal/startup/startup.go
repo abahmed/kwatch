@@ -11,6 +11,7 @@ import (
 	"github.com/abahmed/kwatch/internal/alert"
 	"github.com/abahmed/kwatch/internal/config"
 	"github.com/abahmed/kwatch/internal/constant"
+	"github.com/abahmed/kwatch/internal/format"
 	"github.com/abahmed/kwatch/internal/state"
 	"github.com/abahmed/kwatch/internal/version"
 )
@@ -124,10 +125,14 @@ func (s *StartupManager) NotifyStartup() {
 	}
 	msg := fmt.Sprintf(constant.WelcomeMsg, s.currentVersion)
 	if s.downtime > 0 {
+		gapEnd := s.now()
+		gapStart := gapEnd.Add(-s.downtime)
 		msg += fmt.Sprintf(
-			"\n:warning: No monitoring for %s before this start — anything "+
+			"\n:warning: No monitoring between %s and %s UTC (%s) — anything "+
 				"that broke in that window went unreported.",
-			s.downtime.Round(time.Minute),
+			gapStart.UTC().Format("15:04"),
+			gapEnd.UTC().Format("15:04"),
+			format.Duration(s.downtime.Round(time.Minute)),
 		)
 		klog.InfoS(
 			"monitoring gap detected",

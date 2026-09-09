@@ -10,7 +10,7 @@ import (
 	"k8s.io/klog/v2"
 
 	"github.com/abahmed/kwatch/internal/config"
-	"github.com/abahmed/kwatch/internal/event"
+	"github.com/abahmed/kwatch/internal/model"
 	"github.com/abahmed/kwatch/internal/resource"
 )
 
@@ -81,12 +81,12 @@ func (c *Controller) Run(ctx context.Context, workers int) error {
 				InodeCriticalPercent:      cfg.InodeCriticalPercent,
 				Client:                    c.client,
 			}, c.nodeLister, c.podLister)
-			mon.Run(ctx, func(sig *event.Signal) {
+			mon.Run(ctx, func(obs *model.Observation) {
 				c.handler.ProcessNodeResourceOvercommit(
-					sig.Reason,
-					sig.NodeName,
-					sig.Hint,
-					sig.Severity,
+					obs.Reason,
+					obs.NodeName,
+					obs.Hint,
+					obs.Severity,
 				)
 			})
 		}(c.nodeResourceCfg)

@@ -9,17 +9,19 @@ import (
 	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
+	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/client-go/dynamic"
 	"k8s.io/client-go/kubernetes"
+	corev1lister "k8s.io/client-go/listers/core/v1"
 	"k8s.io/client-go/rest"
 	"k8s.io/klog/v2"
 
 	"github.com/abahmed/kwatch/internal/config"
 	"github.com/abahmed/kwatch/internal/constant"
 	"github.com/abahmed/kwatch/internal/correlation"
-	"github.com/abahmed/kwatch/internal/event"
 	"github.com/abahmed/kwatch/internal/model"
+	"github.com/abahmed/kwatch/internal/observe"
 )
 
 var podMetricsGVR = schema.GroupVersionResource{Group: "metrics.k8s.io", Version: "v1beta1", Resource: "pods"}
@@ -32,6 +34,43 @@ type Monitor struct {
 	allowed    func(string) bool
 	namespaces []string
 	watchAll   bool
+	// owners resolves a pod to the workload its incidents are keyed by.
+	//
+	// Without it this monitor keyed usage incidents by "namespace/pod" while
+	// kubeletmetrics keyed the same container's usage by its owning workload,
+	// so one container over its memory limit opened two incidents and sent two
+	// alerts. Nil falls back to the pod, as before.
+	owners observe.OwnerResolver
+	// podLister reads the controller's pod informer cache instead of listing
+	// every pod from the API server on each sweep.
+	podLister corev1lister.PodLister
+}
+
+// SetPodLister wires the controller's pod cache.
+func (m *Monitor) SetPodLister(lister corev1lister.PodLister) {
+	m.podLister = lister
+}
+
+// SetOwnerResolver wires the lister-backed owner lookup the pod pipeline uses.
+func (m *Monitor) SetOwnerResolver(owners observe.OwnerResolver) {
+	m.owners = owners
+}
+
+// podOwner is the incident owner for a pod, resolved the way every other
+// producer resolves it.
+func (m *Monitor) podOwner(pod *corev1.Pod) model.ObjectRef {
+	if m.owners != nil {
+		if owner := m.owners.OwnerOf(pod); owner.Name != "" {
+			return owner
+		}
+	}
+	if len(pod.OwnerReferences) == 0 {
+		return observe.SelfOwner("Pod", pod.Namespace, pod.Name)
+	}
+	// Unresolved: keep the key this monitor has always used here. No Kind,
+	// because the pod does have owner references -- kwatch just could not
+	// follow them, and "Pod" would state the opposite.
+	return model.ObjectRef{Name: pod.Namespace + "/" + pod.Name}
 }
 
 func New(restConfig *rest.Config, client kubernetes.Interface, cfg config.RuntimeMetricsMonitor, correlator *correlation.Engine) (*Monitor, error) {
@@ -107,6 +146,11 @@ func (m *Monitor) listPods(
 	ctx context.Context,
 	namespace string,
 ) (map[string]*corev1.Pod, error) {
+	if m.podLister != nil {
+		if result, err := m.podsFromCache(namespace); err == nil {
+			return result, nil
+		}
+	}
 	const pageSize int64 = 500
 	result := make(map[string]*corev1.Pod)
 	continueToken := ""
@@ -171,23 +215,45 @@ func (m *Monitor) processPod(
 
 func (m *Monitor) processMetric(pod *corev1.Pod, containerName string, usage map[string]string, limit corev1.ResourceList, seen map[string]bool) {
 	seen[containerName] = true
+	owner := m.podOwner(pod)
 	if usageMemory, ok := parseQuantity(usage[string(corev1.ResourceMemory)]); ok {
-		if sig := usageSignal(pod, containerName, usageMemory, limit.Memory(), m.cfg.MemoryWarningPercent, m.cfg.MemoryCriticalPercent, constant.ReasonContainerMemoryHigh, "memory"); sig != nil {
+		sig := usageSignal(
+			pod, containerName, usageMemory, limit.Memory(),
+			m.cfg.MemoryWarningPercent, m.cfg.MemoryCriticalPercent,
+			constant.ReasonContainerMemoryHigh, "memory", owner,
+		)
+		if sig != nil {
 			m.report(sig)
 		} else {
-			m.resolveContainer(pod, containerName, constant.ReasonContainerMemoryHigh)
+			m.resolveContainer(
+				pod, containerName, constant.ReasonContainerMemoryHigh,
+			)
 		}
 	}
 	if usageCPU, ok := parseQuantity(usage[string(corev1.ResourceCPU)]); ok {
-		if sig := usageSignal(pod, containerName, usageCPU, limit.Cpu(), m.cfg.CPUWarningPercent, m.cfg.CPUCriticalPercent, constant.ReasonContainerCPUHigh, "cpu"); sig != nil {
+		sig := usageSignal(
+			pod, containerName, usageCPU, limit.Cpu(),
+			m.cfg.CPUWarningPercent, m.cfg.CPUCriticalPercent,
+			constant.ReasonContainerCPUHigh, "cpu", owner,
+		)
+		if sig != nil {
 			m.report(sig)
 		} else {
-			m.resolveContainer(pod, containerName, constant.ReasonContainerCPUHigh)
+			m.resolveContainer(
+				pod, containerName, constant.ReasonContainerCPUHigh,
+			)
 		}
 	}
 }
 
-func usageSignal(pod *corev1.Pod, container string, usage, limit *resource.Quantity, warning, critical int, reason, unit string) *event.Signal {
+func usageSignal(
+	pod *corev1.Pod,
+	container string,
+	usage, limit *resource.Quantity,
+	warning, critical int,
+	reason, unit string,
+	owner model.ObjectRef,
+) *model.Observation {
 	if limit == nil || limit.IsZero() || usage == nil {
 		return nil
 	}
@@ -199,13 +265,12 @@ func usageSignal(pod *corev1.Pod, container string, usage, limit *resource.Quant
 	if percent >= float64(critical) {
 		severity = model.SeverityCritical
 	}
-	owner := pod.Namespace + "/" + pod.Name
-	if len(pod.OwnerReferences) == 0 {
-		owner = pod.Name
-	}
-	return &event.Signal{Resource: "pod", Namespace: pod.Namespace, PodName: pod.Name, PodUID: string(pod.UID), PodLineageID: pod.Annotations[event.PodLineageAnnotation], Container: container,
-		Owner: owner, Reason: reason, Labels: pod.Labels, Severity: severity,
-		Hint: fmt.Sprintf("container %s %s usage is %.0f%% of its limit (%s/%s)", container, unit, percent, usage.String(), limit.String())}
+	return observe.PodOwnedBy(pod, container, reason, owner).
+		WithSeverity(severity).
+		WithHint(fmt.Sprintf(
+			"container %s %s usage is %.0f%% of its limit (%s/%s)",
+			container, unit, percent, usage.String(), limit.String(),
+		))
 }
 
 func containerLimits(pod *corev1.Pod) map[string]corev1.ResourceList {
@@ -224,14 +289,37 @@ func parseQuantity(value string) (*resource.Quantity, bool) {
 	return &quantity, err == nil
 }
 
-func (m *Monitor) report(sig *event.Signal) {
-	m.correlator.Process(event.Event{Resource: sig.Resource, Namespace: sig.Namespace, PodName: sig.PodName, PodUID: sig.PodUID, PodLineageID: sig.PodLineageID, ContainerName: sig.Container, Reason: sig.Reason, Hint: sig.Hint, Labels: sig.Labels, Severity: sig.Severity}, sig.Owner, nil)
+func (m *Monitor) report(obs *model.Observation) {
+	m.correlator.Process(obs)
 }
 
 func (m *Monitor) resolveContainer(pod *corev1.Pod, container, reason string) {
-	owner := pod.Namespace + "/" + pod.Name
-	if len(pod.OwnerReferences) == 0 {
-		owner = pod.Name
+	m.correlator.ResolveObserved(
+		observe.PodOwnedBy(pod, container, reason, m.podOwner(pod)),
+	)
+}
+
+// podsFromCache reads the pod informer cache for one namespace ("" means all).
+func (m *Monitor) podsFromCache(
+	namespace string,
+) (map[string]*corev1.Pod, error) {
+	var (
+		pods []*corev1.Pod
+		err  error
+	)
+	if namespace == "" {
+		pods, err = m.podLister.List(labels.Everything())
+	} else {
+		pods, err = m.podLister.Pods(namespace).List(labels.Everything())
 	}
-	m.correlator.MarkResolved(correlation.IncidentKey(event.Event{Resource: "pod", Namespace: pod.Namespace, PodName: pod.Name, PodUID: string(pod.UID), PodLineageID: pod.Annotations[event.PodLineageAnnotation], ContainerName: container, Reason: reason}, owner, nil))
+	if err != nil {
+		return nil, err
+	}
+	result := make(map[string]*corev1.Pod, len(pods))
+	for _, pod := range pods {
+		if m.allowed == nil || m.allowed(pod.Namespace) {
+			result[pod.Namespace+"/"+pod.Name] = pod
+		}
+	}
+	return result, nil
 }

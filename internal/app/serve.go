@@ -11,6 +11,7 @@ import (
 	"k8s.io/klog/v2"
 
 	"github.com/abahmed/kwatch/internal/client"
+	"github.com/abahmed/kwatch/internal/controller"
 	"github.com/abahmed/kwatch/internal/crdwatch"
 	"github.com/abahmed/kwatch/internal/k8s"
 )
@@ -71,7 +72,12 @@ func serve(ctx context.Context, deps *serverDeps) int {
 			case <-ticker.C:
 				trySendIncidentSnapshot(
 					deps.incidentCh,
-					deps.correlator.SnapshotPersisted(),
+					stateSnapshot{
+						incidents: deps.correlator.SnapshotPersisted(),
+						groups:    deps.correlator.SnapshotGroups(),
+						threads:   deps.alertManager.SnapshotThreads(),
+						engine:    deps.correlator.SnapshotEngineState(),
+					},
 				)
 				if deps.recordAlive != nil {
 					deps.recordAlive(ctx)
@@ -102,10 +108,28 @@ func serve(ctx context.Context, deps *serverDeps) int {
 			startCRDWatcher(ctx, deps)
 		}()
 	}
+	if deps.cfg.NamespaceSelector != "" {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			namespaces, _ := deps.ctl.NamespaceScope()
+			controller.WatchNamespaceScope(
+				ctx,
+				deps.kubeClient,
+				deps.cfg.NamespaceSelector,
+				namespaces,
+				deps.cancel,
+			)
+		}()
+	}
 
 	go func() {
 		defer close(deps.controllerDone)
-		deps.notifyStartup()
+		// The startup message goes out on its own goroutine: Notify delivers
+		// synchronously with per-provider retries, so one unreachable
+		// provider held up informer start and readiness behind three
+		// backoffs.
+		go deps.notifyStartup()
 
 		workers := deps.cfg.Workers
 		if workers < 1 {

@@ -9,23 +9,21 @@ import (
 	"k8s.io/client-go/tools/cache"
 
 	"github.com/abahmed/kwatch/internal/constant"
-	"github.com/abahmed/kwatch/internal/event"
+	"github.com/abahmed/kwatch/internal/model"
+	"github.com/abahmed/kwatch/internal/observe"
 )
 
 // DetectPdbIssue returns a Signal if the PDB is blocking disruptions.
-func DetectPdbIssue(pdb *policyv1.PodDisruptionBudget) *event.Signal {
+func DetectPdbIssue(
+	pdb *policyv1.PodDisruptionBudget,
+) *model.Observation {
 	if pdb == nil {
 		return nil
 	}
 	if isPdbBlocking(pdb) {
-		return &event.Signal{
-			Resource:  "poddisruptionbudget",
-			Reason:    constant.ReasonPdbViolation,
-			Namespace: pdb.Namespace,
-			Owner:     pdb.Namespace + "/" + pdb.Name,
-			Labels:    pdb.Labels,
-			Hint:      pdbHint(pdb),
-		}
+		return observe.Object(
+			"poddisruptionbudget", pdb, constant.ReasonPdbViolation,
+		).WithHint(pdbHint(pdb))
 	}
 	return nil
 }
@@ -54,22 +52,17 @@ func (h *handler) ProcessPdb(key string, deleted bool) error {
 		return fmt.Errorf("invalid pdb key %q: %w", key, err)
 	}
 
+	subject := model.NewObjectRef("poddisruptionbudget", namespace, name)
 	if deleted {
 		h.clearFirstPdbViolation(namespace + "/" + name)
-		h.correlator.ResolveByResource(
-			"poddisruptionbudget",
-			namespace+"/"+name,
-		)
+		h.reconcileGone(subject)
 		return nil
 	}
 	pdb, err := h.listers.PDB.PodDisruptionBudgets(namespace).Get(name)
 	if err != nil {
 		if errors.IsNotFound(err) {
 			h.clearFirstPdbViolation(namespace + "/" + name)
-			h.correlator.ResolveByResource(
-				"poddisruptionbudget",
-				namespace+"/"+name,
-			)
+			h.reconcileGone(subject)
 			return nil
 		}
 		return fmt.Errorf(
@@ -91,48 +84,36 @@ func (h *handler) ProcessPdbObject(
 		return nil
 	}
 
-	if deleted {
-		h.clearFirstPdbViolation(pdb.Namespace + "/" + pdb.Name)
-		h.correlator.ResolveByResource(
-			"poddisruptionbudget",
-			pdb.Namespace+"/"+pdb.Name,
-		)
-		return nil
-	}
-	if h.inMaintenance(pdb.Annotations) {
-		h.clearFirstPdbViolation(pdb.Namespace + "/" + pdb.Name)
-		h.correlator.ResolveByResource("poddisruptionbudget", pdb.Namespace+"/"+pdb.Name)
-		return nil
-	}
-
+	subject := model.NewObjectRef(
+		"poddisruptionbudget", pdb.Namespace, pdb.Name,
+	)
 	key := pdb.Namespace + "/" + pdb.Name
-
-	if isPdbBlocking(pdb) {
-		first := h.markFirstPdbViolation(key)
-
-		sustained := adaptiveSustained(
-			h.config.PdbMonitor.SustainedMinutes,
-			h.config.AdaptiveThresholds,
-			pdb.Status.DesiredHealthy,
-			pdb.Status.DesiredHealthy-pdb.Status.CurrentHealthy,
-		)
-		if sustained > 0 && h.now().Sub(first) < sustained {
-			return nil
-		}
-
-		h.signalEvent(&event.Signal{
-			Resource:  "poddisruptionbudget",
-			Namespace: pdb.Namespace,
-			Reason:    constant.ReasonPdbViolation,
-			Owner:     key,
-			Labels:    pdb.Labels,
-			Hint:      pdbHint(pdb),
-		})
+	if deleted || h.inMaintenance(pdb.Annotations) {
+		h.clearFirstPdbViolation(key)
+		h.reconcileGone(subject)
 		return nil
 	}
 
-	h.clearFirstPdbViolation(key)
-	h.correlator.ResolveByResource("poddisruptionbudget", key)
+	if !isPdbBlocking(pdb) {
+		h.clearFirstPdbViolation(key)
+		h.reconcile(subject, nil)
+		return nil
+	}
+
+	first := h.markFirstPdbViolation(key)
+	sustained := adaptiveSustained(
+		h.config.PdbMonitor.SustainedMinutes,
+		h.config.AdaptiveThresholds,
+		pdb.Status.DesiredHealthy,
+		pdb.Status.DesiredHealthy-pdb.Status.CurrentHealthy,
+	)
+	if sustained > 0 && h.now().Sub(first) < sustained {
+		return nil
+	}
+
+	h.reconcile(subject, findings(observe.Object(
+		"poddisruptionbudget", pdb, constant.ReasonPdbViolation,
+	).WithHint(pdbHint(pdb))))
 	return nil
 }
 

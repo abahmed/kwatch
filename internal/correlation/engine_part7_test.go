@@ -54,7 +54,7 @@ func TestActiveIncidentsDoesNotClearDirty(t *testing.T) {
 		Namespace: "ns",
 		Reason:    "CrashLoopBackOff",
 	}
-	_, _ = e.Process(ev, "dep", &model.ContainerState{RestartCount: 1})
+	_, _ = e.processEvent(ev, "dep", &model.ContainerState{RestartCount: 1})
 
 	// Multiple consumers within a tick: ActiveIncidents must behave the same
 	// for every call AND leave SnapshotAll able to report the incident.
@@ -73,7 +73,7 @@ func TestRestoreIncidentsBumpsLastSeen(t *testing.T) {
 		Window: 10 * time.Minute,
 	})
 	ev := event.Event{PodName: "pod-1", Namespace: "ns", Reason: "OOMKilled"}
-	inc, _ := e.Process(ev, "dep", &model.ContainerState{RestartCount: 1})
+	inc, _ := e.processEvent(ev, "dep", &model.ContainerState{RestartCount: 1})
 	require.NotNil(t, inc)
 	originalLastSeen := inc.LastSeen
 
@@ -355,14 +355,39 @@ func TestClearBaselineForPodClearsCooldown(t *testing.T) {
 	e.cleanupCooldown[key] = fakeNow.Add(10 * time.Minute)
 	e.mu.Unlock()
 
-	// ClearBaselineForPod for the pod's namespace
-	e.ClearBaselineForPod("ns", "pod-1")
+	// A pod of this owner recovering clears its owner's cooldown.
+	e.ClearBaselineForPod(
+		"ns", "pod-1",
+		model.ObjectRef{Kind: "Deployment", Namespace: "ns", Name: "dep"},
+	)
 
-	// Cooldown should be cleared
 	e.mu.Lock()
 	_, exists := e.cleanupCooldown[key]
 	e.mu.Unlock()
 	assert.False(t, exists, "cooldown should be cleared by ClearBaselineForPod")
+}
+
+// A healthy pod must not disarm the cooldowns of unrelated owners in its
+// namespace: that is what let a resolve ping-pong with a re-create.
+func TestClearBaselineForPodLeavesOtherOwnersCooldowns(t *testing.T) {
+	fakeNow := time.Date(2025, 1, 1, 0, 0, 0, 0, time.UTC)
+	e := NewEngine(Config{Window: 10 * time.Minute})
+	e.now = mockClock(fakeNow)
+
+	other := BuildKey("ns", "other-dep", "CrashLoopBackOff", "")
+	e.mu.Lock()
+	e.cleanupCooldown[other] = fakeNow.Add(10 * time.Minute)
+	e.mu.Unlock()
+
+	e.ClearBaselineForPod(
+		"ns", "pod-1",
+		model.ObjectRef{Kind: "Deployment", Namespace: "ns", Name: "dep"},
+	)
+
+	e.mu.Lock()
+	_, exists := e.cleanupCooldown[other]
+	e.mu.Unlock()
+	assert.True(t, exists, "another owner's cooldown must survive")
 }
 
 // Smart grouping (reason-adaptive) tests.

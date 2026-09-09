@@ -137,8 +137,13 @@ func addNetworkPermissions(b *permissionBuilder, cfg *config.Config) {
 }
 
 func addNodeStoragePermissions(b *permissionBuilder, cfg *config.Config) {
+	// The PVC monitor reads volume usage from each kubelet's summary
+	// endpoint, so it needs nodes and nodes/proxy just as the node monitors
+	// do. Leaving it out of this set meant a PVC-only configuration reported
+	// full RBAC while every usage sweep was being denied.
 	nodes := cfg.NodeMonitor.Enabled || cfg.NodeResourceMonitor.Enabled ||
-		cfg.KubeletTelemetryMonitor.Enabled || cfg.ControlPlaneMonitor.Enabled
+		cfg.KubeletTelemetryMonitor.Enabled ||
+		cfg.ControlPlaneMonitor.Enabled || cfg.PvcMonitor.Enabled
 	b.addCluster(
 		nodes, Permission{Resource: "nodes"}, Permission{Resource: "nodes/proxy"},
 	)

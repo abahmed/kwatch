@@ -5,6 +5,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/abahmed/kwatch/internal/clock"
 	"github.com/abahmed/kwatch/internal/constant"
 	"github.com/abahmed/kwatch/internal/format"
 	"github.com/abahmed/kwatch/internal/insight"
@@ -25,8 +26,18 @@ type ReportBuilder struct {
 func NewReportBuilder(cluster string) *ReportBuilder {
 	return &ReportBuilder{
 		cluster: cluster,
-		now:     time.Now,
+		now:     clock.Now,
 	}
+}
+
+// SetClock injects the clock change ages are measured against. It is the last
+// renderer that read the wall clock directly, which made "updated 3m ago"
+// untestable without waiting three minutes.
+func (rb *ReportBuilder) SetClock(now func() time.Time) *ReportBuilder {
+	if now != nil {
+		rb.now = now
+	}
+	return rb
 }
 
 // Build produces a Report from the given incident, action, and optional
@@ -82,7 +93,9 @@ func (rb *ReportBuilder) populateIdentity(r *Report, inc *model.Incident) {
 
 	// Node issues: only node identity
 	if inc.Resource == "node" {
-		r.Identity = &IdentitySection{Node: format.ShortNode(inc.Name)}
+		r.Identity = &IdentitySection{
+			Node: format.ShortNode(inc.Ref().Name),
+		}
 		return
 	}
 
@@ -236,7 +249,8 @@ func (rb *ReportBuilder) populateChanges(r *Report, ins *insight.Insight) {
 	items := make([]ChangeItem, 0, len(ins.RecentChanges))
 	seen := make(map[string]bool)
 	for _, c := range ins.RecentChanges {
-		key := c.Resource + "/" + c.Namespace + "/" + c.Name + c.Type.String()
+		key := model.ObjectKey(c.Resource, c.Namespace, c.Name) +
+			c.Type.String()
 		if seen[key] {
 			continue
 		}

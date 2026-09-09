@@ -35,7 +35,10 @@ type Slack struct {
 
 	// thread support
 	threadMap map[string]string
-	mu        sync.Mutex
+	// threadOrder is insertion order for threadMap, so the map can be bounded
+	// by evicting the oldest thread rather than refusing to record new ones.
+	threadOrder []string
+	mu          sync.Mutex
 
 	// maxThreadMapSize bounds the thread map to prevent unbounded growth.
 	// When exceeded, new threads are not tracked (updates/resolves still work

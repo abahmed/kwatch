@@ -176,10 +176,16 @@ func (e *Engine) ownerIncidentFor(
 		if existing.Resource == "pod" {
 			continue
 		}
-		// The owner must match in the incident's Name field and in the owner
-		// slot of its key — the key check guards against two distinct owners
-		// sharing one namespace prefix.
-		if existing.Name != owner && existing.Name != ownerFull {
+		// The owner must match the incident's subject reference and the
+		// owner slot of its key — the key check guards against two distinct
+		// owners sharing one namespace prefix.
+		//
+		// The reference is what settles the first half. Comparing display
+		// names meant matching a field the pipeline deliberately rewrites:
+		// an incident renamed as its pods were replaced stopped claiming its
+		// own symptoms, and each of them was then announced separately.
+		want := model.NewObjectRef(existing.Resource, ev.Namespace, owner)
+		if existing.Ref() != want {
 			continue
 		}
 		if pk := ParseKey(
@@ -204,6 +210,7 @@ func (e *Engine) recordSymptom(
 	key model.IncidentKey,
 	res string,
 	now time.Time,
+	pre precomputed,
 ) (*model.Incident, model.IncidentAction) {
 	e.auditSkipOnce(key, ev, c.kind.auditReason())
 	switch c.kind {
@@ -221,9 +228,9 @@ func (e *Engine) recordSymptom(
 		// announced then instead of vanishing.
 		inc, exists := e.state[key]
 		if !exists {
-			inc = e.newIncident(ev, owner, cs, key, res, now)
+			inc = e.newIncident(ev, owner, cs, key, res, now, pre)
 			e.state[key] = inc
-			e.indexIncidentByNamespace(inc)
+			e.indexIncident(inc)
 		} else {
 			inc.State = model.StateActive
 			inc.ResolveAt = time.Time{}
@@ -238,9 +245,13 @@ func (e *Engine) recordSymptom(
 		return inc, model.ActionSkip
 
 	case causeOwnerWorkload:
+		// The symptom pods are recorded as suppressed, not as resources.
+		// Resources is the list of objects the incident is about, and its
+		// kind is the incident's kind: putting pods in a Deployment
+		// incident's list made a stuck rollout report "peak 4 deployments"
+		// and made the presence check look up Deployments by pod name.
 		c.owner.Count++
-		addResource(c.owner, ev.PodName)
-		e.rememberPodResource(c.owner.Key, ev)
+		recordSuppressedPod(c.owner, ev, owner)
 		c.owner.LastSeen = now
 		return nil, model.ActionSkip
 	}

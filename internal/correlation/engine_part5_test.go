@@ -26,7 +26,7 @@ func TestRemovePodReleasesBaseline(t *testing.T) {
 		PodName:   "pod-1",
 		Reason:    "CrashLoopBackOff",
 	}
-	_, action := e.Process(ev, "deploy-1", nil)
+	_, action := e.processEvent(ev, "deploy-1", nil)
 	assert.Equal(t, model.ActionCreate, action)
 }
 
@@ -62,7 +62,7 @@ func TestRemovePodReleasesBaselineScopedToNamespace(t *testing.T) {
 		PodName:   "web",
 		Reason:    "CrashLoopBackOff",
 	}
-	_, action := e.Process(ev, "dep-b", nil)
+	_, action := e.processEvent(ev, "dep-b", nil)
 	assert.Equal(t, model.ActionSkip, action)
 
 	// ns-a pod un-baselined → create
@@ -71,7 +71,7 @@ func TestRemovePodReleasesBaselineScopedToNamespace(t *testing.T) {
 		PodName:   "web",
 		Reason:    "CrashLoopBackOff",
 	}
-	_, action = e.Process(ev2, "dep-a", nil)
+	_, action = e.processEvent(ev2, "dep-a", nil)
 	assert.Equal(t, model.ActionCreate, action)
 }
 
@@ -87,12 +87,12 @@ func TestResolvedIncidentSilentlyRevives(t *testing.T) {
 		PodName:   "pod-1",
 		Reason:    "CrashLoopBackOff",
 	}
-	inc, action := e.Process(ev, "deploy-1", nil)
+	inc, action := e.processEvent(ev, "deploy-1", nil)
 	assert.Equal(t, model.ActionCreate, action)
 	key := inc.Key
 
 	// Resolve (arms cooldown)
-	e.MarkResolved(key)
+	e.markResolved(key)
 	live := e.state[key]
 	if live != nil {
 		assert.Equal(t, model.StateResolved, live.State)
@@ -108,11 +108,11 @@ func TestResolvedIncidentSilentlyRevives(t *testing.T) {
 		PodName:   "pod-2",
 		Reason:    "CrashLoopBackOff",
 	}
-	_, action = e.Process(ev2, "deploy-1", nil)
+	_, action = e.processEvent(ev2, "deploy-1", nil)
 	assert.Equal(t, model.ActionUpdate, action)
 
 	// Second recurrence → ActionSkip (same sig, no change)
-	_, action = e.Process(ev2, "deploy-1", nil)
+	_, action = e.processEvent(ev2, "deploy-1", nil)
 	assert.Equal(t, model.ActionSkip, action)
 }
 
@@ -133,11 +133,11 @@ func TestPendingReviveSkips(t *testing.T) {
 		PodName:   "pod-1",
 		Reason:    "CrashLoopBackOff",
 	}
-	inc, action := e.Process(ev, "deploy-1", nil)
+	inc, action := e.processEvent(ev, "deploy-1", nil)
 	assert.Equal(t, model.ActionCreate, action)
 
 	// Mark pending resolve
-	e.MarkResolved(inc.Key)
+	e.markResolved(inc.Key)
 	live := e.state[inc.Key]
 	if live != nil {
 		assert.Equal(t, model.StatePendingResolve, live.State)
@@ -145,7 +145,7 @@ func TestPendingReviveSkips(t *testing.T) {
 	assert.Equal(t, 0, resolved)
 
 	// Revive → skip (edge-triggered, same sig), state back to active
-	_, action = e.Process(ev, "deploy-1", nil)
+	_, action = e.processEvent(ev, "deploy-1", nil)
 	assert.Equal(t, model.ActionSkip, action)
 	live = e.state[inc.Key]
 	if live != nil {
@@ -168,12 +168,16 @@ func TestRemovePodEvictsLastContainerIndex(t *testing.T) {
 		Namespace: "default",
 		Reason:    "CrashLoopBackOff",
 	}
-	e.Process(ev, "deploy-1", cs)
+	e.processEvent(ev, "deploy-1", cs)
 
 	key := "default/pod-1/."
 	assert.Contains(t, e.lastContainerIndex, key)
-	assert.NotNil(t, e.lastContainerIndex[key])
-	assert.Equal(t, int32(3), e.lastContainerIndex[key].RestartCount)
+	assert.NotNil(t, e.lastContainerIndex[key].state)
+	assert.Equal(
+		t,
+		int32(3),
+		e.lastContainerIndex[key].state.RestartCount,
+	)
 
 	before := len(e.lastContainerIndex)
 	e.RemovePod("default", "pod-1")
@@ -200,7 +204,7 @@ func TestLastContainerStateKeyedByContainer(t *testing.T) {
 		ContainerName: "sidecar",
 		Reason:        "CrashLoopBackOff",
 	}
-	e.Process(
+	e.processEvent(
 		evApp,
 		"deploy-1",
 		&model.ContainerState{
@@ -209,7 +213,7 @@ func TestLastContainerStateKeyedByContainer(t *testing.T) {
 			Status:       "terminated",
 		},
 	)
-	e.Process(
+	e.processEvent(
 		evSidecar,
 		"deploy-1",
 		&model.ContainerState{
@@ -259,7 +263,7 @@ func TestNodeEventSkipsBaseline(t *testing.T) {
 		NodeName: "node-1",
 		Reason:   "NodeNotReady",
 	}
-	inc, action := e.Process(ev, "node-1", nil)
+	inc, action := e.processEvent(ev, "node-1", nil)
 	assert.Equal(t, model.ActionCreate, action)
 	assert.NotNil(t, inc)
 	assert.Equal(t, "node", inc.Resource)
@@ -287,7 +291,7 @@ func TestNodeBaselineDoesNotBlockPodSuppression(t *testing.T) {
 		NodeName:  "node-1",
 		Reason:    "CrashLoopBackOff",
 	}
-	_, action := e.Process(podEv, "dep", nil)
+	_, action := e.processEvent(podEv, "dep", nil)
 	assert.Equal(t, model.ActionSkip, action)
 }
 
@@ -304,7 +308,7 @@ func TestCleanupCooldownSuppressesRecreate(t *testing.T) {
 		Namespace: "ns",
 		Reason:    "CrashLoopBackOff",
 	}
-	_, action := e.Process(ev, "dep", nil)
+	_, action := e.processEvent(ev, "dep", nil)
 	assert.Equal(t, model.ActionCreate, action)
 
 	// Advance past Window so cleanup fires
@@ -325,7 +329,7 @@ func TestCleanupCooldownSuppressesRecreate(t *testing.T) {
 	assert.True(t, expiry.After(fakeNow))
 
 	// Same event re-arrives — should be suppressed by cooldown
-	_, action = e.Process(ev, "dep", nil)
+	_, action = e.processEvent(ev, "dep", nil)
 	assert.Equal(t, model.ActionSkip, action)
 }
 
@@ -342,12 +346,12 @@ func TestMarkResolvedSetsCooldown(t *testing.T) {
 		Namespace: "ns",
 		Reason:    "CrashLoopBackOff",
 	}
-	inc, action := e.Process(ev, "dep", nil)
+	inc, action := e.processEvent(ev, "dep", nil)
 	assert.Equal(t, model.ActionCreate, action)
 
 	// MarkResolved (no hold-down) must add a cooldown, same as
-	// cleanup()/checkLifecycle/ResolveByResource do.
-	e.MarkResolved(inc.Key)
+	// cleanup()/checkLifecycle/Resolve do.
+	e.markResolved(inc.Key)
 
 	e.mu.Lock()
 	expiry, hasCooldown := e.cleanupCooldown[inc.Key]
@@ -356,6 +360,6 @@ func TestMarkResolvedSetsCooldown(t *testing.T) {
 	assert.True(t, expiry.After(fakeNow))
 
 	// Same event re-arrives — suppressed by the cooldown, no flip-flop update.
-	_, action = e.Process(ev, "dep", nil)
+	_, action = e.processEvent(ev, "dep", nil)
 	assert.Equal(t, model.ActionSkip, action)
 }

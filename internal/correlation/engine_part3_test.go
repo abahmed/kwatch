@@ -17,13 +17,13 @@ func TestEscalationSecondCrossingIsCritical(t *testing.T) {
 		EscalationTiers:   []int{1, 3, 5},
 	})
 	ev := event.Event{PodName: "p", Namespace: "ns", Reason: "OOMKilled"}
-	e.Process(ev, "dep", &model.ContainerState{RestartCount: 0})
-	e.Process(
+	e.processEvent(ev, "dep", &model.ContainerState{RestartCount: 0})
+	e.processEvent(
 		ev,
 		"dep",
 		&model.ContainerState{RestartCount: 2},
 	) // crosses tier 1 → high
-	inc, action := e.Process(
+	inc, action := e.processEvent(
 		ev,
 		"dep",
 		&model.ContainerState{RestartCount: 4},
@@ -35,8 +35,8 @@ func TestEscalationSecondCrossingIsCritical(t *testing.T) {
 func TestEscalationSameTierSkips(t *testing.T) {
 	e := escTestEngine()
 	ev := event.Event{PodName: "p", Namespace: "ns", Reason: "OOMKilled"}
-	e.Process(ev, "dep", &model.ContainerState{RestartCount: 4})
-	_, action := e.Process(
+	e.processEvent(ev, "dep", &model.ContainerState{RestartCount: 4})
+	_, action := e.processEvent(
 		ev,
 		"dep",
 		&model.ContainerState{RestartCount: 5},
@@ -47,8 +47,8 @@ func TestEscalationSameTierSkips(t *testing.T) {
 func TestEscalationDisabledIsNoop(t *testing.T) {
 	e := newTestEngine() // escalation off
 	ev := event.Event{PodName: "p", Namespace: "ns", Reason: "OOMKilled"}
-	e.Process(ev, "dep", &model.ContainerState{RestartCount: 2})
-	_, action := e.Process(ev, "dep", &model.ContainerState{RestartCount: 4})
+	e.processEvent(ev, "dep", &model.ContainerState{RestartCount: 2})
+	_, action := e.processEvent(ev, "dep", &model.ContainerState{RestartCount: 4})
 	assert.Equal(t, model.ActionSkip, action) // no escalation, same sig
 }
 
@@ -65,14 +65,14 @@ func TestInhibitionSuppressesPodOnBrokenNode(t *testing.T) {
 		NodeName: "node-1",
 		Reason:   "NodeNotReady",
 	}
-	e.Process(nodeEv, "node-1", nil)
+	e.processEvent(nodeEv, "node-1", nil)
 	podEv := event.Event{
 		PodName:   "p",
 		Namespace: "ns",
 		NodeName:  "node-1",
 		Reason:    "CrashLoopBackOff",
 	}
-	inc, action := e.Process(podEv, "dep", nil)
+	inc, action := e.processEvent(podEv, "dep", nil)
 	assert.Nil(t, inc)
 	assert.Equal(t, model.ActionSkip, action)
 }
@@ -82,7 +82,7 @@ func TestInhibitionFlagOffDoesNotSuppress(t *testing.T) {
 		Window:                    10 * time.Minute,
 		InhibitNodeSuppressesPods: false,
 	})
-	e.Process(
+	e.processEvent(
 		event.Event{
 			Resource: "node",
 			PodName:  "node-1",
@@ -92,7 +92,7 @@ func TestInhibitionFlagOffDoesNotSuppress(t *testing.T) {
 		"node-1",
 		nil,
 	)
-	_, action := e.Process(
+	_, action := e.processEvent(
 		event.Event{
 			PodName:   "p",
 			Namespace: "ns",
@@ -110,7 +110,7 @@ func TestInhibitionOtherNodeUnaffected(t *testing.T) {
 		Window:                    10 * time.Minute,
 		InhibitNodeSuppressesPods: true,
 	})
-	e.Process(
+	e.processEvent(
 		event.Event{
 			Resource: "node",
 			PodName:  "node-1",
@@ -126,7 +126,7 @@ func TestInhibitionOtherNodeUnaffected(t *testing.T) {
 		NodeName:  "node-2",
 		Reason:    "CrashLoopBackOff",
 	}
-	_, action := e.Process(podEv, "dep", nil)
+	_, action := e.processEvent(podEv, "dep", nil)
 	assert.Equal(t, model.ActionCreate, action)
 }
 
@@ -135,7 +135,7 @@ func TestInhibitionLiftsOnNodeResolve(t *testing.T) {
 		Window:                    10 * time.Minute,
 		InhibitNodeSuppressesPods: true,
 	})
-	e.Process(
+	e.processEvent(
 		event.Event{
 			Resource: "node",
 			PodName:  "node-1",
@@ -145,14 +145,14 @@ func TestInhibitionLiftsOnNodeResolve(t *testing.T) {
 		"node-1",
 		nil,
 	)
-	e.ResolveByResource("node", "node-1")
+	e.Resolve(model.ObjectRef{Kind: "node", Name: "node-1"}, "")
 	podEv := event.Event{
 		PodName:   "p",
 		Namespace: "ns",
 		NodeName:  "node-1",
 		Reason:    "CrashLoopBackOff",
 	}
-	_, action := e.Process(podEv, "dep", nil)
+	_, action := e.processEvent(podEv, "dep", nil)
 	assert.Equal(t, model.ActionCreate, action)
 }
 
@@ -162,7 +162,7 @@ func TestInhibitionLiftsOnNodeResolveDuringHoldDown(t *testing.T) {
 		ResolveHoldDown:           5 * time.Minute,
 		InhibitNodeSuppressesPods: true,
 	})
-	e.Process(
+	e.processEvent(
 		event.Event{
 			Resource: "node",
 			PodName:  "node-1",
@@ -177,7 +177,7 @@ func TestInhibitionLiftsOnNodeResolveDuringHoldDown(t *testing.T) {
 	// Node recovers: the incident enters PendingResolve (hold-down), but the
 	// recovered node must stop suppressing pods immediately, not after the
 	// hold-down finalizes.
-	e.ResolveByResource("node", "node-1")
+	e.Resolve(model.ObjectRef{Kind: "node", Name: "node-1"}, "")
 	assert.False(
 		t,
 		e.activeNodeIncidents["node-1"],
@@ -190,7 +190,7 @@ func TestInhibitionLiftsOnNodeResolveDuringHoldDown(t *testing.T) {
 		NodeName:  "node-1",
 		Reason:    "CrashLoopBackOff",
 	}
-	_, action := e.Process(podEv, "dep", nil)
+	_, action := e.processEvent(podEv, "dep", nil)
 	assert.Equal(t, model.ActionCreate, action)
 }
 
@@ -200,7 +200,7 @@ func TestInhibitionMarkResolvedHoldDownClearsFlag(t *testing.T) {
 		ResolveHoldDown:           5 * time.Minute,
 		InhibitNodeSuppressesPods: true,
 	})
-	e.Process(
+	e.processEvent(
 		event.Event{
 			Resource: "node",
 			PodName:  "node-1",
@@ -214,7 +214,7 @@ func TestInhibitionMarkResolvedHoldDownClearsFlag(t *testing.T) {
 
 	// MarkResolved with hold-down enabled must clear the flag the same way
 	// the immediate-resolve branch does.
-	e.MarkResolved(BuildKey("", "node-1", "NodeNotReady", ""))
+	e.markResolved(BuildKey("", "node-1", "NodeNotReady", ""))
 	assert.False(
 		t,
 		e.activeNodeIncidents["node-1"],
@@ -227,7 +227,7 @@ func TestInhibitionSuppressedCounter(t *testing.T) {
 		Window:                    10 * time.Minute,
 		InhibitNodeSuppressesPods: true,
 	})
-	e.Process(
+	e.processEvent(
 		event.Event{
 			Resource: "node",
 			PodName:  "node-1",
@@ -237,7 +237,7 @@ func TestInhibitionSuppressedCounter(t *testing.T) {
 		"node-1",
 		nil,
 	)
-	e.Process(
+	e.processEvent(
 		event.Event{
 			PodName:   "p1",
 			Namespace: "ns",
@@ -262,7 +262,7 @@ func TestInhibitionOvercommitDoesNotSuppressPods(t *testing.T) {
 		InhibitNodeSuppressesPods: true,
 	})
 	// Synthetic capacity incident — not a real node outage.
-	e.Process(
+	e.processEvent(
 		event.Event{
 			Resource: "node",
 			PodName:  "node-1",
@@ -284,7 +284,7 @@ func TestInhibitionOvercommitDoesNotSuppressPods(t *testing.T) {
 		NodeName:  "node-1",
 		Reason:    "CrashLoopBackOff",
 	}
-	_, action := e.Process(podEv, "dep", nil)
+	_, action := e.processEvent(podEv, "dep", nil)
 	assert.Equal(
 		t,
 		model.ActionCreate,
@@ -298,7 +298,7 @@ func TestInhibitionOvercommitDoesNotSuppressUnschedulable(t *testing.T) {
 		Window:                    10 * time.Minute,
 		InhibitNodeSuppressesPods: true,
 	})
-	e.Process(
+	e.processEvent(
 		event.Event{
 			Resource: "node",
 			PodName:  "node-1",
@@ -315,7 +315,7 @@ func TestInhibitionOvercommitDoesNotSuppressUnschedulable(t *testing.T) {
 		NodeName:  "",
 		Reason:    "Unschedulable",
 	}
-	_, action := e.Process(ev, "deploy-1", nil)
+	_, action := e.processEvent(ev, "deploy-1", nil)
 	assert.Equal(
 		t,
 		model.ActionCreate,
@@ -348,7 +348,7 @@ func TestInhibitionRecoveredBaselineNodeClearsFlag(t *testing.T) {
 		NodeName:  "node-1",
 		Reason:    "CrashLoopBackOff",
 	}
-	_, action := e.Process(podEv, "dep", nil)
+	_, action := e.processEvent(podEv, "dep", nil)
 	assert.Equal(t, model.ActionCreate, action)
 }
 
@@ -358,7 +358,7 @@ func TestInhibitionRefreshKeepsFlagWithOtherIncidents(t *testing.T) {
 		InhibitNodeSuppressesPods: true,
 	})
 	// Two disruptive conditions on the same node.
-	e.Process(
+	e.processEvent(
 		event.Event{
 			Resource: "node",
 			PodName:  "node-1",
@@ -368,7 +368,7 @@ func TestInhibitionRefreshKeepsFlagWithOtherIncidents(t *testing.T) {
 		"node-1",
 		nil,
 	)
-	e.Process(
+	e.processEvent(
 		event.Event{
 			Resource: "node",
 			PodName:  "node-1",
@@ -380,7 +380,7 @@ func TestInhibitionRefreshKeepsFlagWithOtherIncidents(t *testing.T) {
 	)
 
 	// One condition resolves — the other still active must keep the flag.
-	e.MarkResolved(BuildKey("", "node-1", "NodeNotReady", ""))
+	e.markResolved(BuildKey("", "node-1", "NodeNotReady", ""))
 	e.RefreshNodeInhibition("node-1")
 	assert.True(
 		t,
@@ -389,7 +389,7 @@ func TestInhibitionRefreshKeepsFlagWithOtherIncidents(t *testing.T) {
 	)
 
 	// Once the last active node incident resolves, the flag clears.
-	e.MarkResolved(BuildKey("", "node-1", "NodeMemoryPressure", ""))
+	e.markResolved(BuildKey("", "node-1", "NodeMemoryPressure", ""))
 	e.RefreshNodeInhibition("node-1")
 	assert.False(t, e.activeNodeIncidents["node-1"])
 }

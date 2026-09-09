@@ -17,7 +17,7 @@ import (
 // duplicate CREATE for the same ongoing loop.
 func TestFoldMigratesIncidentNotRecreates(t *testing.T) {
 	e := newTestEngine()
-	_, action := e.Process(
+	_, action := e.processEvent(
 		event.Event{PodName: "p1", Namespace: "ns", Reason: "Error"},
 		"dep",
 		&model.ContainerState{RestartCount: 3},
@@ -26,7 +26,7 @@ func TestFoldMigratesIncidentNotRecreates(t *testing.T) {
 	oldID := e.state["ns:dep:Error:"].ID
 	oldFirstSeen := e.state["ns:dep:Error:"].FirstSeen
 
-	_, action = e.Process(
+	_, action = e.processEvent(
 		event.Event{PodName: "p1", Namespace: "ns", Reason: "Error"},
 		"dep",
 		&model.ContainerState{RestartCount: 6},
@@ -86,7 +86,7 @@ func TestRenotifySkipsGroupedIncidents(t *testing.T) {
 	// single member is emitted as that member, so a lone incident would not
 	// exercise the grouped-member path at all.
 	sigLog := "connection refused:5432"
-	_, action := e.Process(
+	_, action := e.processEvent(
 		event.Event{
 			PodName:   "p1",
 			Namespace: "ns",
@@ -97,7 +97,7 @@ func TestRenotifySkipsGroupedIncidents(t *testing.T) {
 		nil,
 	)
 	assert.Equal(t, model.ActionSkip, action)
-	e.Process(
+	e.processEvent(
 		event.Event{
 			PodName:   "p2",
 			Namespace: "ns",
@@ -159,7 +159,7 @@ func TestRenotifyStillFiresForNonGrouped(t *testing.T) {
 			updates++
 		}
 	}
-	e.Process(
+	e.processEvent(
 		event.Event{PodName: "p1", Namespace: "ns", Reason: "Error"},
 		"dep1",
 		nil,
@@ -199,7 +199,7 @@ func TestRenotifyStillFiresForNonGrouped(t *testing.T) {
 func TestCascadingSuppressionAcrossOwnerEncodings(t *testing.T) {
 	e := newTestEngine()
 	// Workload detector path: Owner = "ns/dep".
-	_, action := e.Process(
+	_, action := e.processEvent(
 		event.Event{
 			Resource:  "deployment",
 			Namespace: "ns",
@@ -211,7 +211,7 @@ func TestCascadingSuppressionAcrossOwnerEncodings(t *testing.T) {
 	require.Equal(t, model.ActionCreate, action)
 
 	// Pod path: owner resolved to the bare deployment name.
-	_, action = e.Process(
+	_, action = e.processEvent(
 		event.Event{
 			Resource:  "pod",
 			PodName:   "p1",
@@ -242,14 +242,14 @@ func TestBaselineSiblingsPreservedOnResolve(t *testing.T) {
 	})
 
 	// p3 is new → incident fires under the shared key.
-	_, action := e.Process(
+	_, action := e.processEvent(
 		event.Event{PodName: "p3", Namespace: "ns", Reason: "CrashLoopBackOff"},
 		"dep",
 		nil,
 	)
 	require.Equal(t, model.ActionCreate, action)
 
-	e.MarkResolved("ns:dep:CrashLoopBackOff:")
+	e.markResolved("ns:dep:CrashLoopBackOff:")
 
 	// p1/p2 keep their startup baseline; p3's (non-existent) entry stays gone.
 	pods, ok := e.baseline["ns:dep:CrashLoopBackOff:"]
@@ -265,7 +265,7 @@ func TestBaselineSiblingsPreservedOnResolve(t *testing.T) {
 	)
 	assert.Zero(t, pods["p3"])
 
-	_, action = e.Process(
+	_, action = e.processEvent(
 		event.Event{PodName: "p1", Namespace: "ns", Reason: "CrashLoopBackOff"},
 		"dep",
 		nil,
@@ -294,7 +294,7 @@ func TestBaselineGlobalScopePreservedOnResolve(t *testing.T) {
 		},
 	})
 
-	_, action := e.Process(
+	_, action := e.processEvent(
 		event.Event{
 			PodName:   "p9",
 			Namespace: "ns1",
@@ -306,10 +306,10 @@ func TestBaselineGlobalScopePreservedOnResolve(t *testing.T) {
 	)
 	require.Equal(t, model.ActionCreate, action)
 
-	e.MarkResolved("ImagePullBackOff|global|rate_limit")
+	e.markResolved("ImagePullBackOff|global|rate_limit")
 
 	for _, p := range []string{"p1", "p2", "p3"} {
-		_, action = e.Process(
+		_, action = e.processEvent(
 			event.Event{
 				PodName:   p,
 				Namespace: "other-ns",

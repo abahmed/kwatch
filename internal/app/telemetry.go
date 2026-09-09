@@ -29,6 +29,17 @@ func configureTelemetryRunner(
 		stateMgr == nil || clusterID == "" || version == "" {
 		return nil
 	}
+	// Telemetry is on by default, so this line is how an operator finds out
+	// it exists. It names what leaves the cluster, where it goes, and the
+	// setting that stops it: a feature that phones home should be legible
+	// from the logs alone, without reading the docs first.
+	klog.InfoS(
+		"adoption telemetry is on: sending a cluster UUID and the kwatch "+
+			"version once a week, and nothing else; "+
+			"set telemetry.enabled=false to stop it",
+		"endpoint", telemetry.Endpoint,
+		"interval", telemetry.WeeklyInterval,
+	)
 	return func(ctx context.Context) {
 		client := k8s.GetDefaultClient()
 		ticker := time.NewTicker(telemetry.WeeklyInterval)

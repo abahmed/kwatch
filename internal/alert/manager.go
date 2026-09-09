@@ -44,6 +44,9 @@ type AlertManager struct {
 
 	ctx context.Context
 	now func() time.Time
+
+	// pacer spreads deliveries per provider and holds the overflow digests.
+	pacer sendPacer
 }
 
 // SetClock injects the clock used for delivery bookkeeping timestamps.

@@ -10,6 +10,7 @@ import (
 	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
 	"k8s.io/client-go/tools/cache"
 	"k8s.io/client-go/util/workqueue"
+	"k8s.io/klog/v2"
 
 	"github.com/abahmed/kwatch/internal/clock"
 	"github.com/abahmed/kwatch/internal/metrics"
@@ -101,6 +102,15 @@ func (p *resourcePipeline) processNextItem(ctx context.Context) bool {
 		if retryable {
 			p.queue.AddAfter(key, syncRecoveryDelay)
 			reason = fmt.Sprintf("scheduling recovery retry in %s after %d attempts", syncRecoveryDelay, maxSyncRetries)
+		} else {
+			// Nothing will look at this object again until it changes or the
+			// informer resyncs, so the gap in coverage is worth an error the
+			// operator can actually find.
+			klog.ErrorS(err,
+				"giving up on resource after repeated sync failures; "+
+					"it is unmonitored until its next change or resync",
+				"kind", p.name, "key", key,
+				"attempts", maxSyncRetries)
 		}
 		utilruntime.HandleError(
 			fmt.Errorf("error syncing %s %q: %s, %s", p.name, key, err.Error(), reason),

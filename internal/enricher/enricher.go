@@ -1,6 +1,7 @@
 package enricher
 
 import (
+	"fmt"
 	"strings"
 
 	"github.com/abahmed/kwatch/internal/constant"
@@ -53,8 +54,8 @@ func (e *DefaultEnricher) Enrich(ev *event.Event, inc *model.Incident) {
 	if sh := SignatureHint(ev.Logs); sh != "" {
 		inc.Hint = combineHints(inc.Hint, sh)
 	}
-	inc.Logs = ev.Logs
-	inc.Events = ev.Events
+	inc.Logs = clampEvidence(ev.Logs, maxIncidentLogs)
+	inc.Events = clampEvidence(ev.Events, maxIncidentEvents)
 	// Remember which replica this evidence came from; the incident is keyed by
 	// owner and will outlive it.
 	inc.EvidencePod = ev.PodName
@@ -115,4 +116,27 @@ func lookupCaseInsensitive(m map[string]string, key string) (string, bool) {
 		}
 	}
 	return "", false
+}
+
+// An incident holds its evidence for as long as it is active, and a busy
+// cluster holds hundreds of incidents at once. Unbounded log tails and event
+// dumps are the largest part of kwatch's own memory, and no reader needs more
+// than the tail of either.
+const (
+	maxIncidentLogs   = 8 * 1024
+	maxIncidentEvents = 4 * 1024
+)
+
+// clampEvidence keeps the end of the text -- the most recent lines -- and says
+// how much was dropped.
+func clampEvidence(text string, limit int) string {
+	if len(text) <= limit {
+		return text
+	}
+	dropped := len(text) - limit
+	tail := text[dropped:]
+	if idx := strings.IndexByte(tail, '\n'); idx >= 0 && idx < len(tail)-1 {
+		tail = tail[idx+1:]
+	}
+	return fmt.Sprintf("[… %d earlier bytes omitted]\n%s", dropped, tail)
 }

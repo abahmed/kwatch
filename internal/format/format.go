@@ -85,8 +85,15 @@ func Duration(d time.Duration) string {
 	if d < time.Minute {
 		return fmt.Sprintf("%ds", int(d.Seconds()))
 	}
+	// A trailing zero unit is noise: "1m0s" is "1m", "2h0m" is "2h".
 	if d < time.Hour {
-		return fmt.Sprintf("%dm%ds", int(d.Minutes()), int(d.Seconds())%60)
+		if s := int(d.Seconds()) % 60; s != 0 {
+			return fmt.Sprintf("%dm%ds", int(d.Minutes()), s)
+		}
+		return fmt.Sprintf("%dm", int(d.Minutes()))
 	}
-	return fmt.Sprintf("%dh%dm", int(d.Hours()), int(d.Minutes())%60)
+	if m := int(d.Minutes()) % 60; m != 0 {
+		return fmt.Sprintf("%dh%dm", int(d.Hours()), m)
+	}
+	return fmt.Sprintf("%dh", int(d.Hours()))
 }

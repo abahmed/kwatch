@@ -63,29 +63,16 @@ func (e *Engine) flushOneGroup(
 	summary := groupInc.Hint
 	groupIncKey := groupInc.Key
 
-	// Update-not-create: once a group has been notified, re-flushes carry the
-	// same stable key and emit an UPDATE, throttled by a cooldown so a busy
-	// group can't spam every flush window.
-	action := model.ActionCreate
-	if fs, ok := e.groupFlushStates[gk]; ok && fs.notified {
-		if now.After(fs.lastNotifiedAt.Add(e.groupRenotifyCooldown())) {
-			fs.lastNotifiedAt = now
-			action = model.ActionUpdate
-		} else {
-			action = model.ActionSkip
-		}
-	} else {
-		e.groupFlushStates[gk] = &groupFlushState{
-			notified:       true,
-			lastNotifiedAt: now,
-			firstSeen:      firstSeen,
-		}
-	}
-	// Replace any stale tracker for the same key, then track group members so
-	// a later flush can still batch resolve. The tracker is maintained on
-	// every flush path — including the cooldown-suppressed skip — so a
-	// sustained group keeps a live batch-resolve handle.
-	delete(e.groupResolveTrackers, gk)
+	action := decideGroupFlush(
+		e.groupFlushStates[gk],
+		now,
+		e.groupRenotifyCooldown(),
+	)
+	e.applyGroupFlush(gk, action, now, firstSeen)
+	// Fold this wave's members into the group's tracker so a later flush can
+	// still batch resolve. The tracker is maintained on every flush path --
+	// including the cooldown-suppressed skip -- so a sustained group keeps a
+	// live batch-resolve handle.
 	e.trackGroupResolve(gk, pg, active, summary, groupIncKey, now)
 
 	// Reset NotifiedSig on active entries so subsequent events can be
@@ -194,6 +181,13 @@ func (e *Engine) carryGroupMemberData(
 
 // trackGroupResolve records the members of a flushed group so a later batch
 // resolve can resolve the whole group at once. Caller must hold e.mu.
+//
+// Members accumulate across flushes. A group that fills over several windows
+// -- forty HPAs failing in the two minutes after a cold start -- flushes in
+// waves, and replacing the tracker each time kept only the last wave: every
+// earlier member then resolved on its own, forty green ticks for one event.
+// Members that have left the engine's state are dropped so the group cannot
+// wait forever on an incident that no longer exists.
 func (e *Engine) trackGroupResolve(
 	gk string,
 	pg *pendingGroup,
@@ -202,19 +196,74 @@ func (e *Engine) trackGroupResolve(
 	groupIncKey model.IncidentKey,
 	now time.Time,
 ) {
-	sev := e.groupSeverity(active)
-	tracker := &groupResolveTracker{
-		groupIncKey: groupIncKey,
-		members:     make(map[model.IncidentKey]bool),
-		totalCount:  len(active),
-		summary:     summary,
-		reason:      active[0].reason,
-		firstSeen:   pg.firstSeen,
-		lastSeen:    now,
-		severity:    sev,
+	tracker := e.groupResolveTrackers[gk]
+	if tracker == nil || tracker.groupIncKey != groupIncKey {
+		tracker = &groupResolveTracker{
+			groupIncKey: groupIncKey,
+			members:     make(map[model.IncidentKey]bool),
+			firstSeen:   pg.firstSeen,
+		}
+		e.groupResolveTrackers[gk] = tracker
+	}
+	for key := range tracker.members {
+		if inc, ok := e.state[key]; !ok ||
+			inc.State == model.StateResolved {
+			delete(tracker.members, key)
+		}
 	}
 	for _, ge := range active {
-		tracker.members[ge.key] = false
+		if _, tracked := tracker.members[ge.key]; !tracked {
+			tracker.members[ge.key] = false
+		}
 	}
-	e.groupResolveTrackers[gk] = tracker
+	tracker.totalCount = len(tracker.members)
+	tracker.summary = summary
+	tracker.reason = active[0].reason
+	tracker.lastSeen = now
+	tracker.severity = e.groupSeverity(active)
+}
+
+// decideGroupFlush is the notification decision for one group flush, as a
+// function of what was already sent.
+//
+// Update-not-create: once a group has been notified, re-flushes carry the
+// same stable key and emit an UPDATE, throttled by a cooldown so a busy group
+// cannot spam every flush window. The rule used to be spelled as writes
+// interleaved with the branches that decided them, which is why it could only
+// be read by tracing the mutations. Pure, so it can be read -- and later
+// tested -- on its own.
+func decideGroupFlush(
+	fs *groupFlushState,
+	now time.Time,
+	cooldown time.Duration,
+) model.IncidentAction {
+	if fs == nil || !fs.notified {
+		return model.ActionCreate
+	}
+	if now.After(fs.lastNotifiedAt.Add(cooldown)) {
+		return model.ActionUpdate
+	}
+	return model.ActionSkip
+}
+
+// applyGroupFlush records the decision decideGroupFlush made. A skip records
+// nothing: the group keeps the timestamp of the notification that is still
+// inside its cooldown. Caller must hold e.mu.
+func (e *Engine) applyGroupFlush(
+	gk string,
+	action model.IncidentAction,
+	now, firstSeen time.Time,
+) {
+	switch action {
+	case model.ActionCreate:
+		e.groupFlushStates[gk] = &groupFlushState{
+			notified:       true,
+			lastNotifiedAt: now,
+			firstSeen:      firstSeen,
+		}
+	case model.ActionUpdate:
+		if fs := e.groupFlushStates[gk]; fs != nil {
+			fs.lastNotifiedAt = now
+		}
+	}
 }

@@ -71,6 +71,11 @@ type Sources struct {
 	// filtering to the caller on every alert.
 	EventsByPod func(namespace, pod string) ([]*corev1.Event, error)
 
+	// LogCache memoises container log tails so a crash loop reported on
+	// every resync does not re-read the same output from the kubelet each
+	// time. nil reads straight through.
+	LogCache *LogCache
+
 	// Now is the clock every time-based decision in the filters reads.
 	// Injected so "has this pod been unready for 5 minutes" can be tested
 	// without waiting 5 minutes; nil means the wall clock.

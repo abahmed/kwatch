@@ -11,7 +11,8 @@ import (
 	"k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/client-go/tools/cache"
 
-	"github.com/abahmed/kwatch/internal/event"
+	"github.com/abahmed/kwatch/internal/model"
+	"github.com/abahmed/kwatch/internal/observe"
 )
 
 func (h *handler) ProcessJob(key string, deleted bool) error {
@@ -21,14 +22,14 @@ func (h *handler) ProcessJob(key string, deleted bool) error {
 	}
 
 	if deleted {
-		h.correlator.ResolveByResource("job", namespace+"/"+name)
+		h.reconcileGone(model.NewObjectRef("job", namespace, name))
 		return nil
 	}
 
 	job, err := h.listers.Job.Jobs(namespace).Get(name)
 	if err != nil {
 		if errors.IsNotFound(err) {
-			h.correlator.ResolveByResource("job", namespace+"/"+name)
+			h.reconcileGone(model.NewObjectRef("job", namespace, name))
 			return nil
 		}
 		return fmt.Errorf(
@@ -44,7 +45,7 @@ func (h *handler) ProcessJob(key string, deleted bool) error {
 
 // DetectJobIssue returns a Signal if the Job has a failed or suspended
 // condition. Used for baseline seeding at startup.
-func DetectJobIssue(job *batchv1.Job) *event.Signal {
+func DetectJobIssue(job *batchv1.Job) *model.Observation {
 	if job == nil {
 		return nil
 	}
@@ -56,44 +57,41 @@ func DetectJobIssue(job *batchv1.Job) *event.Signal {
 				if reason == "" {
 					reason = constant.ReasonJobFailed
 				}
-				return &event.Signal{
-					Resource:  "job",
-					Reason:    reason,
-					Namespace: job.Namespace,
-					Owner:     job.Namespace + "/" + job.Name,
-					Labels:    job.Labels,
-				}
+				return observe.Object("job", job, reason)
 			}
 		case batchv1.JobSuspended:
 			if c.Status == corev1.ConditionTrue {
-				return &event.Signal{
-					Resource:  "job",
-					Reason:    constant.ReasonJobSuspended,
-					Namespace: job.Namespace,
-					Owner:     job.Namespace + "/" + job.Name,
-					Labels:    job.Labels,
-				}
+				return observe.Object(
+					"job", job, constant.ReasonJobSuspended,
+				)
 			}
 		}
 	}
 	return nil
 }
 
-func DetectJobExecutionIssue(job *batchv1.Job, now time.Time) *event.Signal {
+func DetectJobExecutionIssue(
+	job *batchv1.Job, now time.Time,
+) *model.Observation {
 	if job == nil || job.Status.StartTime == nil {
 		return nil
 	}
-	owner := job.Namespace + "/" + job.Name
 	if job.Spec.ActiveDeadlineSeconds != nil && job.Status.Active > 0 &&
 		now.Sub(job.Status.StartTime.Time) >= time.Duration(*job.Spec.ActiveDeadlineSeconds)*time.Second {
-		return &event.Signal{Resource: "job", Namespace: job.Namespace, Owner: owner,
-			Reason: constant.ReasonJobDeadlineExceeded, Labels: job.Labels,
-			Hint: fmt.Sprintf("Job exceeded activeDeadlineSeconds=%d", *job.Spec.ActiveDeadlineSeconds)}
+		return observe.Object(
+			"job", job, constant.ReasonJobDeadlineExceeded,
+		).WithHint(fmt.Sprintf(
+			"Job exceeded activeDeadlineSeconds=%d",
+			*job.Spec.ActiveDeadlineSeconds,
+		))
 	}
 	if job.Spec.BackoffLimit != nil && job.Status.Failed >= *job.Spec.BackoffLimit && job.Status.CompletionTime == nil {
-		return &event.Signal{Resource: "job", Namespace: job.Namespace, Owner: owner,
-			Reason: constant.ReasonJobBackoffLimitExceeded, Labels: job.Labels,
-			Hint: fmt.Sprintf("Job failed %d times; backoffLimit=%d", job.Status.Failed, *job.Spec.BackoffLimit)}
+		return observe.Object(
+			"job", job, constant.ReasonJobBackoffLimitExceeded,
+		).WithHint(fmt.Sprintf(
+			"Job failed %d times; backoffLimit=%d",
+			job.Status.Failed, *job.Spec.BackoffLimit,
+		))
 	}
 	return nil
 }
@@ -103,33 +101,29 @@ func (h *handler) ProcessJobObject(job *batchv1.Job, deleted bool) error {
 		return nil
 	}
 
-	if deleted {
-		h.correlator.ResolveByResource("job", job.Namespace+"/"+job.Name)
-		return nil
-	}
-	if h.inMaintenance(job.Annotations) {
-		h.correlator.ResolveByResource("job", job.Namespace+"/"+job.Name)
+	subject := model.NewObjectRef("job", job.Namespace, job.Name)
+	if deleted || h.inMaintenance(job.Annotations) || jobComplete(job) {
+		h.reconcileGone(subject)
 		return nil
 	}
 
+	// A failing Job speaks for itself: the execution checks below describe
+	// how it is failing, which the condition already says.
+	if obs := DetectJobIssue(job); obs != nil {
+		h.reconcile(subject, findings(obs))
+		return nil
+	}
+	h.reconcile(subject, findings(DetectJobExecutionIssue(job, h.now())))
+	return nil
+}
+
+// jobComplete reports whether the Job finished successfully, which retires
+// every incident about it -- including a JobSuspended one from earlier.
+func jobComplete(job *batchv1.Job) bool {
 	for _, c := range job.Status.Conditions {
 		if c.Type == batchv1.JobComplete && c.Status == corev1.ConditionTrue {
-			h.correlator.ResolveByResource("job", job.Namespace+"/"+job.Name)
-			return nil
+			return true
 		}
 	}
-
-	if sig := DetectJobIssue(job); sig != nil {
-		h.signalEvent(sig)
-		return nil
-	}
-	if sig := DetectJobExecutionIssue(job, h.now()); sig != nil {
-		h.signalEvent(sig)
-		return nil
-	}
-
-	// No active failing or suspended condition → ensure any prior Job
-	// incident (including JobSuspended) resolves.
-	h.correlator.ResolveByResource("job", job.Namespace+"/"+job.Name)
-	return nil
+	return false
 }

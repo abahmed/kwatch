@@ -5,8 +5,8 @@ import (
 
 	corev1 "k8s.io/api/core/v1"
 
-	"github.com/abahmed/kwatch/internal/event"
 	"github.com/abahmed/kwatch/internal/model"
+	"github.com/abahmed/kwatch/internal/observe"
 )
 
 const caSustainedMinutes = 5
@@ -32,14 +32,12 @@ func (h *handler) ProcessClusterAutoscalerEvent(ev *corev1.Event) {
 			hint = "Cluster autoscaler cannot scale: " + ev.Reason
 		}
 
-		h.signalEvent(&event.Signal{
-			Resource: "cluster-autoscaler",
-			Reason:   ev.Reason,
-			Hint:     hint,
-			Owner:    "cluster-autoscaler",
-			Severity: model.SeverityWarning,
-			NodeName: ev.InvolvedObject.Name,
-		})
+		obs := observe.Synthetic(
+			"cluster-autoscaler", "cluster-autoscaler", ev.Reason,
+		).WithSeverity(model.SeverityWarning).WithHint(hint)
+		obs.NodeName = ev.InvolvedObject.Name
+		obs.Transient = true
+		h.observe(obs)
 
 	default:
 		// TriggeredScaleUp, ScaleDown, etc. — informational. Any non-failure
@@ -48,5 +46,14 @@ func (h *handler) ProcessClusterAutoscalerEvent(ev *corev1.Event) {
 		// would alert immediately without a fresh sustain window.
 		h.fs.caBlocked.clear("FailedToScaleUp")
 		h.fs.caBlocked.clear("NotTriggerScaleUp")
+		// The autoscaler working again is an observed recovery, and it was
+		// the only one available: nothing else ever resolved these, so a
+		// scale-up failure stayed open until the stale sweep closed it with
+		// "not observed to recover" -- which was untrue.
+		autoscaler := model.ObjectRef{
+			Kind: "cluster-autoscaler", Name: "cluster-autoscaler",
+		}
+		h.correlator.Resolve(autoscaler, "FailedToScaleUp")
+		h.correlator.Resolve(autoscaler, "NotTriggerScaleUp")
 	}
 }

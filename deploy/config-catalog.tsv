@@ -15,7 +15,7 @@ reportStartupBaseline|boolean|true|Noise reduction|Summarize issues that already
 correlation.window|integer|10|Incident memory|Minutes in which related signals are correlated.|active|
 correlation.lifecycleInterval|integer|1|Incident memory|Minutes between lifecycle and resolution sweeps.|active|
 correlation.resolveHoldDown|integer|300|Incident memory|Seconds a signal must stay healthy before resolving.|active|
-correlation.cooldownMinutes|integer|10|Incident memory|Minimum minutes before the same incident can notify again.|active|
+correlation.cooldownMinutes|integer|10|Incident memory|Accepted and ignored; the post-resolve cooldown is correlation.window.|deprecated|correlation.window
 correlation.maxBaseline|integer|5000|Incident memory|Maximum persisted baseline entries.|active|
 correlation.escalation|json|{"enabled":true,"tiers":[3,10]}|Incident memory|JSON object controlling restart-count severity escalation.|active|
 correlation.renotify|json|{"maxPerIncident":3}|Incident memory|JSON object controlling periodic re-notification.|active|
@@ -74,7 +74,7 @@ nodeResourceMonitor.inodeCriticalPercent|float|95|Monitors|Node inode usage crit
 runtimeMetricsMonitor.enabled|boolean|false|Monitors|Use metrics.k8s.io when available for workload usage diagnostics.|active|
 runtimeMetricsMonitor.intervalSeconds|integer|60|Monitors|Seconds between runtime metrics checks.|active|
 runtimeMetricsMonitor.memoryWarningPercent|integer|90|Monitors|Memory usage warning percentage when metrics.k8s.io is available.|active|
-runtimeMetricsMonitor.memoryCriticalPercent|integer|100|Monitors|Memory usage critical percentage when metrics.k8s.io is available.|active|
+runtimeMetricsMonitor.memoryCriticalPercent|integer|95|Monitors|Memory usage critical percentage when metrics.k8s.io is available.|active|
 runtimeMetricsMonitor.cpuWarningPercent|integer|90|Monitors|CPU usage warning percentage when metrics.k8s.io is available.|active|
 runtimeMetricsMonitor.cpuCriticalPercent|integer|100|Monitors|CPU usage critical percentage when metrics.k8s.io is available.|active|
 clusterAutoscalerMonitor.enabled|boolean|true|Monitors|Watch built-in cluster-autoscaler evidence from Kubernetes resources and events.|active|
@@ -90,13 +90,13 @@ kubeletTelemetryMonitor.persistState|boolean|true|Monitors|Persist telemetry cou
 kubeletTelemetryMonitor.failureThreshold|integer|2|Monitors|Consecutive kubelet telemetry failures before alerting.|active|
 kubeletTelemetryMonitor.recoveryThreshold|integer|2|Monitors|Consecutive successful telemetry checks before resolving.|active|
 kubeletTelemetryMonitor.memoryWarningPercent|float|90|Monitors|Kubelet memory usage warning threshold.|active|
-kubeletTelemetryMonitor.memoryCriticalPercent|float|100|Monitors|Kubelet memory usage critical threshold.|active|
+kubeletTelemetryMonitor.memoryCriticalPercent|float|95|Monitors|Kubelet memory usage critical threshold.|active|
 kubeletTelemetryMonitor.ephemeralStorageWarningPercent|float|90|Monitors|Ephemeral-storage usage warning threshold.|active|
 kubeletTelemetryMonitor.ephemeralStorageCriticalPercent|float|95|Monitors|Ephemeral-storage usage critical threshold.|active|
 kubeletTelemetryMonitor.cpuWarningPercent|float|90|Monitors|CPU usage warning threshold from kubelet telemetry.|active|
 kubeletTelemetryMonitor.cpuCriticalPercent|float|100|Monitors|CPU usage critical threshold from kubelet telemetry.|active|
-kubeletTelemetryMonitor.cpuThrottlingWarningPercent|float|25|Monitors|CPU throttling warning threshold.|active|
-kubeletTelemetryMonitor.cpuThrottlingCriticalPercent|float|50|Monitors|CPU throttling critical threshold.|active|
+kubeletTelemetryMonitor.cpuThrottlingWarningPercent|float|50|Monitors|CPU throttling warning threshold.|active|
+kubeletTelemetryMonitor.cpuThrottlingCriticalPercent|float|75|Monitors|CPU throttling critical threshold.|active|
 kubeletTelemetryMonitor.psiWarningPercent|float|20|Monitors|Pressure stall warning threshold.|active|
 kubeletTelemetryMonitor.psiCriticalPercent|float|50|Monitors|Pressure stall critical threshold.|active|
 kubeletTelemetryMonitor.networkErrorRateWarning|float|1|Monitors|Network error rate warning threshold.|active|
@@ -110,11 +110,12 @@ activeProbeMonitor.timeoutSeconds|integer|5|Monitors|Timeout for each active pro
 activeProbeMonitor.failureThreshold|integer|3|Monitors|Consecutive probe failures before alerting.|active|
 activeProbeMonitor.recoveryThreshold|integer|2|Monitors|Consecutive successes before resolving a probe incident.|active|
 activeProbeMonitor.autoServices|boolean|false|Monitors|Probe discoverable Service ports automatically; opt in to avoid unexpected traffic.|active|
+activeProbeMonitor.excludeNamespaces|list|[]|Monitors|Namespaces automatic Service probing skips, for default-deny ingress that does not admit kwatch.|active|
 activeProbeMonitor.http|json|[]|Monitors|JSON array of HTTP probe targets with optional paths, headers, and latency limits.|active|
 activeProbeMonitor.tcp|json|[]|Monitors|JSON array of TCP probe targets.|active|
 activeProbeMonitor.dns|json|[]|Monitors|JSON array of DNS probe targets.|active|
 upgrader.disableUpdateCheck|boolean|false|Operations|Disable the update notification.|active|
-telemetry.enabled|boolean|true|Operations|Send the adoption heartbeat.|active|
+telemetry.enabled|boolean|true|Operations|Send the weekly adoption heartbeat.|active|
 maintenance.enabled|boolean|true|Operations|Honor maintenance annotations while preserving cluster-level alerts.|active|
 maintenance.annotation|string|kwatch.io/maintenance|Operations|Annotation that marks deliberate maintenance on a resource.|active|
 maintenance.untilAnnotation|string|kwatch.io/maintenance-until|Operations|Optional annotation containing the maintenance expiry timestamp.|active|

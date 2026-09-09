@@ -28,7 +28,7 @@ func TestMassFailureSuppressesItsMembers(t *testing.T) {
 
 	// Without a tracked mass failure, each workload alerts on its own.
 	for _, dep := range []string{"dep1", "dep2", "dep3"} {
-		_, action := e.Process(event.Event{
+		_, action := e.processEvent(event.Event{
 			PodName: dep + "-abc", Namespace: "ns",
 			Reason: "ContainersNotReady", NodeName: "ip-10-0-81-7",
 		}, dep, nil)
@@ -55,7 +55,7 @@ func TestMassFailureSuppressesItsMembers(t *testing.T) {
 
 	// Further workloads on that node are symptoms of an alert already sent.
 	for _, dep := range []string{"dep4", "dep5", "dep6"} {
-		_, action := e.Process(event.Event{
+		_, action := e.processEvent(event.Event{
 			PodName: dep + "-abc", Namespace: "ns",
 			Reason: "ContainersNotReady", NodeName: "ip-10-0-81-7",
 		}, dep, nil)
@@ -69,7 +69,7 @@ func TestMassFailureSuppressesItsMembers(t *testing.T) {
 	}
 
 	// A workload on a healthy node is unrelated and must still alert.
-	_, action := e.Process(event.Event{
+	_, action := e.processEvent(event.Event{
 		PodName: "dep7-abc", Namespace: "ns",
 		Reason: "ContainersNotReady", NodeName: "ip-10-0-99-9",
 	}, "dep7", nil)
@@ -81,7 +81,7 @@ func TestMassFailureSuppressesItsMembers(t *testing.T) {
 	)
 
 	// The node's own incident is the root cause, never a symptom of itself.
-	_, action = e.Process(event.Event{
+	_, action = e.processEvent(event.Event{
 		Resource: "node", PodName: "ip-10-0-81-7", Namespace: "",
 		Reason: "NodeNotReady", NodeName: "ip-10-0-81-7",
 	}, "ip-10-0-81-7", nil)
@@ -100,7 +100,7 @@ func TestSmartGroupingSingleMemberEmitsIncidentNotGroup(t *testing.T) {
 	e := newSmartGroupingEngine()
 	e.now = mockClock(now)
 
-	inc, action := e.Process(
+	inc, action := e.processEvent(
 		event.Event{PodName: "p1", Namespace: "ns", Reason: "CrashLoopBackOff"},
 		"dep1",
 		nil,
@@ -133,7 +133,7 @@ func TestSmartGroupingSingleMemberEmitsIncidentNotGroup(t *testing.T) {
 	sigLog := "connection refused:5432"
 	e2 := newSmartGroupingEngine()
 	e2.now = mockClock(now)
-	e2.Process(
+	e2.processEvent(
 		event.Event{
 			PodName:   "p1",
 			Namespace: "ns",
@@ -143,7 +143,7 @@ func TestSmartGroupingSingleMemberEmitsIncidentNotGroup(t *testing.T) {
 		"dep1",
 		nil,
 	)
-	e2.Process(
+	e2.processEvent(
 		event.Event{
 			PodName:   "p2",
 			Namespace: "ns",
@@ -172,7 +172,7 @@ func TestSmartGroupingFlushAfterWindow(t *testing.T) {
 	e.now = mockClock(now)
 
 	sigLog := "connection refused:5432"
-	e.Process(
+	e.processEvent(
 		event.Event{
 			PodName:   "p1",
 			Namespace: "ns",
@@ -182,7 +182,7 @@ func TestSmartGroupingFlushAfterWindow(t *testing.T) {
 		"dep1",
 		nil,
 	)
-	e.Process(
+	e.processEvent(
 		event.Event{
 			PodName:   "p2",
 			Namespace: "ns",
@@ -214,12 +214,12 @@ func TestSmartGroupingFlushAfterWindow(t *testing.T) {
 
 func TestSmartGroupingDifferentReasonsSeparate(t *testing.T) {
 	e := newSmartGroupingEngine()
-	e.Process(
+	e.processEvent(
 		event.Event{PodName: "p1", Namespace: "ns", Reason: "CrashLoopBackOff"},
 		"dep1",
 		nil,
 	)
-	e.Process(
+	e.processEvent(
 		event.Event{PodName: "p2", Namespace: "ns", Reason: "OOMKilled"},
 		"dep1",
 		nil,
@@ -245,7 +245,7 @@ func TestSmartGroupingResolvedNotIncluded(t *testing.T) {
 	// Three members share a signature, so removing one still leaves a real
 	// group of two rather than a lone incident.
 	sigLog := "connection refused:5432"
-	e.Process(
+	e.processEvent(
 		event.Event{
 			PodName:   "p1",
 			Namespace: "ns",
@@ -255,7 +255,7 @@ func TestSmartGroupingResolvedNotIncluded(t *testing.T) {
 		"dep1",
 		nil,
 	)
-	e.Process(
+	e.processEvent(
 		event.Event{
 			PodName:   "p2",
 			Namespace: "ns",
@@ -265,7 +265,7 @@ func TestSmartGroupingResolvedNotIncluded(t *testing.T) {
 		"dep2",
 		nil,
 	)
-	e.Process(
+	e.processEvent(
 		event.Event{
 			PodName:   "p3",
 			Namespace: "ns",
@@ -276,7 +276,7 @@ func TestSmartGroupingResolvedNotIncluded(t *testing.T) {
 		nil,
 	)
 
-	e.MarkResolved("ns:dep1:CrashLoopBackOff:")
+	e.markResolved("ns:dep1:CrashLoopBackOff:")
 
 	var groupCount int
 	e.config.LifecycleHook = func(
@@ -349,7 +349,7 @@ func TestSmartGroupingWindowConfigZeroDisabled(t *testing.T) {
 		Window:              10 * time.Minute,
 		SmartGroupingWindow: 0,
 	})
-	_, action := e.Process(
+	_, action := e.processEvent(
 		event.Event{PodName: "p1", Namespace: "ns", Reason: "CrashLoopBackOff"},
 		"dep1",
 		nil,

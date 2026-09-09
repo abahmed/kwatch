@@ -46,14 +46,8 @@ func recordSuppressedPod(
 
 // Caller must hold e.mu.
 func (e *Engine) findNodeIncident(nodeName string) *model.Incident {
-	keys := make([]string, 0, len(e.state))
-	for key := range e.state {
-		keys = append(keys, string(key))
-	}
-	sort.Strings(keys)
-	for _, rawKey := range keys {
-		inc := e.state[model.IncidentKey(rawKey)]
-		if inc.Resource == "node" && inc.Name == nodeName {
+	for _, key := range e.nodeIncidentKeys(nodeName) {
+		if inc := e.state[key]; inc != nil {
 			return inc
 		}
 	}
@@ -65,16 +59,19 @@ func (e *Engine) findNodeIncident(nodeName string) *model.Incident {
 // PendingResolve incidents (recovered conditions) are not targets.
 // Caller must hold e.mu.
 func (e *Engine) findMostConstrainedNodeIncident() *model.Incident {
-	var best *model.Incident
-	keys := make([]string, 0, len(e.state))
-	for key := range e.state {
-		keys = append(keys, string(key))
+	nodes := make([]string, 0, len(e.nodeIncidents))
+	for name := range e.nodeIncidents {
+		nodes = append(nodes, name)
 	}
-	sort.Strings(keys)
-	for _, rawKey := range keys {
-		inc := e.state[model.IncidentKey(rawKey)]
-		if inc.Resource == "node" && inc.State != model.StateResolved &&
-			inc.State != model.StatePendingResolve {
+	sort.Strings(nodes)
+	var best *model.Incident
+	for _, name := range nodes {
+		for _, key := range e.nodeIncidentKeys(name) {
+			inc := e.state[key]
+			if inc == nil || inc.State == model.StateResolved ||
+				inc.State == model.StatePendingResolve {
+				continue
+			}
 			if best == nil || inc.SuppressedPods > best.SuppressedPods ||
 				(inc.SuppressedPods == best.SuppressedPods &&
 					string(inc.Key) < string(best.Key)) {
@@ -108,9 +105,9 @@ func (e *Engine) SetActiveNodeIncidents(nodeNames []string) {
 // inhibit pods: its condition has already recovered and the hold-down only
 // delays the "resolved" notification. Caller must hold e.mu.
 func (e *Engine) refreshNodeInhibition(nodeName string) {
-	for _, inc := range e.state {
-		if inc.Resource == "node" && inc.Name == nodeName &&
-			inc.State != model.StateResolved &&
+	for _, key := range e.nodeIncidentKeys(nodeName) {
+		inc := e.state[key]
+		if inc != nil && inc.State != model.StateResolved &&
 			inc.State != model.StatePendingResolve {
 			return
 		}
@@ -119,7 +116,7 @@ func (e *Engine) refreshNodeInhibition(nodeName string) {
 }
 
 // RefreshNodeInhibition recomputes the node suppression flag after a node
-// condition resolves. Unlike MarkResolved it is safe to call for baselined
+// condition resolves. Unlike markResolved it is safe to call for baselined
 // nodes that never had an incident, so stale suppression is cleared as soon
 // as the node recovers.
 func (e *Engine) RefreshNodeInhibition(nodeName string) {

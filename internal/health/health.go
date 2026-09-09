@@ -70,6 +70,9 @@ type HealthServer struct {
 
 type HealthResponse struct {
 	Status string `json:"status"`
+	// Degraded names the optional components that failed to start, with the
+	// reason. Empty when everything kwatch was asked to run is running.
+	Degraded map[string]string `json:"degraded,omitempty"`
 }
 
 func NewHealthServer(cfg config.HealthCheck) *HealthServer {
@@ -226,7 +229,12 @@ func (h *HealthServer) healthzHandler(w http.ResponseWriter, r *http.Request) {
 func (h *HealthServer) healthHandler(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusOK)
-	if err := json.NewEncoder(w).Encode(HealthResponse{Status: "ok"}); err != nil {
+	response := HealthResponse{Status: "ok"}
+	if degraded := h.ComponentErrors(); len(degraded) > 0 {
+		response.Status = "degraded"
+		response.Degraded = degraded
+	}
+	if err := json.NewEncoder(w).Encode(response); err != nil {
 		klog.ErrorS(err, "health: encode health response")
 	}
 }
@@ -248,15 +256,30 @@ func (h *HealthServer) SetComponentError(name string, err error) {
 	h.componentErrors[name] = err.Error()
 }
 
-func (h *HealthServer) componentsHealthy() bool {
+// ComponentErrors reports the components that failed to start or stopped,
+// so an operator can see a degraded optional monitor on /health.
+func (h *HealthServer) ComponentErrors() map[string]string {
 	h.componentMu.RLock()
 	defer h.componentMu.RUnlock()
-	return len(h.componentErrors) == 0
+	out := make(map[string]string, len(h.componentErrors))
+	for name, message := range h.componentErrors {
+		out[name] = message
+	}
+	return out
 }
 
+// readyzHandler reports whether kwatch is watching the cluster.
+//
+// It deliberately does not fail for a component error. Every component that
+// reports one is an optional monitor -- the generic status watcher, the
+// storage and network graph builders, runtime metrics, the control-plane
+// probe -- and any of them can fail simply because the cluster does not serve
+// that API. Gating readiness on them made a cluster missing an optional API
+// permanently NotReady, so Kubernetes restarted a kwatch that was working.
+// Degraded components are reported through /health instead.
 func (h *HealthServer) readyzHandler(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "text/plain")
-	if !h.ready.Load() || !h.componentsHealthy() {
+	if !h.ready.Load() {
 		w.WriteHeader(http.StatusServiceUnavailable)
 		if _, err := w.Write([]byte("not ready")); err != nil {
 			klog.ErrorS(err, "health: write not-ready response")

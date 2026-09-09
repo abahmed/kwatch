@@ -260,7 +260,7 @@ func TestDetectControlPlanePodCrashLoopBackOff(t *testing.T) {
 	sig := DetectControlPlanePodIssue(pod)
 	assert.NotNil(t, sig)
 	assert.Equal(t, "ControlPlaneComponentFailure", sig.Reason)
-	assert.Equal(t, "controlplane", sig.Resource)
+	assert.Equal(t, "controlplane", sig.Subject.Kind)
 	assert.Equal(t, model.SeverityHigh, sig.Severity)
 	assert.Equal(t, "apiserver", sig.Container)
 }

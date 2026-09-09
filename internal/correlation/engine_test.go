@@ -37,7 +37,7 @@ func TestProcessCreateNew(t *testing.T) {
 	}
 	owner := "deploy-1"
 
-	inc, action := e.Process(ev, owner, nil)
+	inc, action := e.processEvent(ev, owner, nil)
 
 	assert.Equal(t, model.ActionCreate, action)
 	assert.NotNil(t, inc)
@@ -60,13 +60,13 @@ func TestProcessRepeatedEventSkipsSameSig(t *testing.T) {
 	}
 
 	// First event creates
-	inc1, action1 := e.Process(ev, "deploy-1", nil)
+	inc1, action1 := e.processEvent(ev, "deploy-1", nil)
 	assert.Equal(t, model.ActionCreate, action1)
 
 	// Second event with identical sig → skip (edge-triggered), but Count
 	// still updates
 	ev.PodName = "pod-2"
-	inc2, action2 := e.Process(ev, "deploy-1", nil)
+	inc2, action2 := e.processEvent(ev, "deploy-1", nil)
 
 	assert.Equal(t, model.ActionSkip, action2)
 	assert.Equal(t, inc1.Key, inc2.Key)
@@ -83,13 +83,13 @@ func TestProcessSkipSameSigSkipsButUpdatesCount(t *testing.T) {
 		Reason:    "CrashLoopBackOff",
 	}
 
-	inc1, action1 := e.Process(ev, "deploy-1", nil)
+	inc1, action1 := e.processEvent(ev, "deploy-1", nil)
 	assert.Equal(t, model.ActionCreate, action1)
 
 	// Second event with same sig → skip (edge-triggered), Count and Resources
 	// still update
 	ev.PodName = "pod-2"
-	inc2, action2 := e.Process(ev, "deploy-1", nil)
+	inc2, action2 := e.processEvent(ev, "deploy-1", nil)
 
 	assert.Equal(t, model.ActionSkip, action2)
 	assert.Equal(t, inc1.Key, inc2.Key)
@@ -106,11 +106,11 @@ func TestProcessDifferentOwnerNewIncident(t *testing.T) {
 		Reason:    "CrashLoopBackOff",
 	}
 
-	_, action1 := e.Process(ev, "deploy-1", nil)
+	_, action1 := e.processEvent(ev, "deploy-1", nil)
 	assert.Equal(t, model.ActionCreate, action1)
 
 	// Same namespace+reason but different owner
-	_, action2 := e.Process(ev, "deploy-2", nil)
+	_, action2 := e.processEvent(ev, "deploy-2", nil)
 	assert.Equal(t, model.ActionCreate, action2)
 }
 
@@ -122,12 +122,12 @@ func TestProcessDifferentReasonNewIncident(t *testing.T) {
 		Reason:    "CrashLoopBackOff",
 	}
 
-	_, action1 := e.Process(ev, "deploy-1", nil)
+	_, action1 := e.processEvent(ev, "deploy-1", nil)
 	assert.Equal(t, model.ActionCreate, action1)
 
 	// Same namespace+owner but different reason
 	ev.Reason = "OOMKilled"
-	_, action2 := e.Process(ev, "deploy-1", nil)
+	_, action2 := e.processEvent(ev, "deploy-1", nil)
 	assert.Equal(t, model.ActionCreate, action2)
 }
 
@@ -139,12 +139,12 @@ func TestProcessDifferentNamespaceNewIncident(t *testing.T) {
 		Reason:    "CrashLoopBackOff",
 	}
 
-	_, action1 := e.Process(ev, "deploy-1", nil)
+	_, action1 := e.processEvent(ev, "deploy-1", nil)
 	assert.Equal(t, model.ActionCreate, action1)
 
 	// Different namespace
 	ev.Namespace = "kube-system"
-	_, action2 := e.Process(ev, "deploy-1", nil)
+	_, action2 := e.processEvent(ev, "deploy-1", nil)
 	assert.Equal(t, model.ActionCreate, action2)
 }
 
@@ -156,7 +156,7 @@ func TestProcessEmptyOwner(t *testing.T) {
 		Reason:    "OOMKilled",
 	}
 
-	inc, action := e.Process(ev, "", nil)
+	inc, action := e.processEvent(ev, "", nil)
 	assert.Equal(t, model.ActionCreate, action)
 	assert.Equal(t, "default::OOMKilled:", string(inc.Key))
 }
@@ -171,7 +171,7 @@ func TestCleanup(t *testing.T) {
 		Reason:    "CrashLoopBackOff",
 	}
 
-	e.Process(ev, "deploy-1", nil)
+	e.processEvent(ev, "deploy-1", nil)
 	assert.Equal(t, 1, len(e.state))
 
 	time.Sleep(2 * time.Millisecond)
@@ -189,7 +189,7 @@ func TestCleanupKeepsRecent(t *testing.T) {
 		Reason:    "CrashLoopBackOff",
 	}
 
-	e.Process(ev, "deploy-1", nil)
+	e.processEvent(ev, "deploy-1", nil)
 	assert.Equal(t, 1, len(e.state))
 
 	e.cleanup()
@@ -210,8 +210,8 @@ func TestRemovePodNoResolve(t *testing.T) {
 		Reason:    "OOMKilled",
 	}
 
-	e.Process(ev1, "deploy-1", nil)
-	e.Process(ev2, "deploy-1", nil)
+	e.processEvent(ev1, "deploy-1", nil)
+	e.processEvent(ev2, "deploy-1", nil)
 
 	assert.Equal(t, 2, len(e.state))
 
@@ -252,7 +252,7 @@ func TestProcessConcurrentSafe(t *testing.T) {
 				Namespace: "default",
 				Reason:    "CrashLoopBackOff",
 			}
-			e.Process(ev, "deploy-1", nil)
+			e.processEvent(ev, "deploy-1", nil)
 		}()
 	}
 	wg.Wait()
@@ -281,7 +281,7 @@ func TestBaselineSuppression(t *testing.T) {
 		Reason:    "CrashLoopBackOff",
 	}
 
-	_, action := e.Process(ev, "deploy-1", nil)
+	_, action := e.processEvent(ev, "deploy-1", nil)
 	assert.Equal(t, model.ActionSkip, action)
 }
 
@@ -346,7 +346,10 @@ func TestClearSeenUnsuppresses(t *testing.T) {
 			string(incidentKey): {"pod-1": time.Now().Unix()},
 		},
 	)
-	e.ClearBaselineForPod("default", "pod-1")
+	e.ClearBaselineForPod(
+		"default", "pod-1",
+		model.ObjectRef{Kind: "Deployment", Namespace: "default", Name: "deploy-1"},
+	)
 
 	ev := event.Event{
 		PodName:   "pod-1",
@@ -354,6 +357,6 @@ func TestClearSeenUnsuppresses(t *testing.T) {
 		Reason:    "CrashLoopBackOff",
 	}
 
-	_, action := e.Process(ev, "deploy-1", nil)
+	_, action := e.processEvent(ev, "deploy-1", nil)
 	assert.Equal(t, model.ActionCreate, action)
 }

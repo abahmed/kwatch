@@ -11,35 +11,31 @@ import (
 	"k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/client-go/tools/cache"
 
-	"github.com/abahmed/kwatch/internal/correlation"
-	"github.com/abahmed/kwatch/internal/event"
+	"github.com/abahmed/kwatch/internal/model"
+	"github.com/abahmed/kwatch/internal/observe"
 )
 
 // DetectStatefulSetIssue returns a Signal if the StatefulSet has unavailable
 // pods that would trigger an alert. Used for baseline seeding at startup.
-func DetectStatefulSetIssue(ss *appsv1.StatefulSet) *event.Signal {
+func DetectStatefulSetIssue(ss *appsv1.StatefulSet) *model.Observation {
 	if ss == nil {
 		return nil
 	}
 	if statefulSetUnavailable(ss) {
-		return &event.Signal{
-			Resource:  "statefulset",
-			Reason:    constant.ReasonStsUnavailable,
-			Namespace: ss.Namespace,
-			Owner:     ss.Namespace + "/" + ss.Name,
-			Labels:    ss.Labels,
-			Hint:      stsAvailabilityHint(ss),
-		}
+		return observe.Object(
+			"statefulset", ss, constant.ReasonStsUnavailable,
+		).WithHint(stsAvailabilityHint(ss))
 	}
 	return nil
 }
 
-func DetectStatefulSetConditions(ss *appsv1.StatefulSet) []*event.Signal {
+func DetectStatefulSetConditions(
+	ss *appsv1.StatefulSet,
+) []*model.Observation {
 	if ss == nil {
 		return nil
 	}
-	owner := ss.Namespace + "/" + ss.Name
-	var out []*event.Signal
+	var out []*model.Observation
 	for _, condition := range ss.Status.Conditions {
 		if condition.Status == corev1.ConditionTrue {
 			continue
@@ -48,9 +44,9 @@ func DetectStatefulSetConditions(ss *appsv1.StatefulSet) []*event.Signal {
 		if condition.Message != "" {
 			hint += " — " + condition.Message
 		}
-		out = append(out, &event.Signal{Resource: "statefulset", Namespace: ss.Namespace,
-			PodName: ss.Name, Owner: owner, Reason: constant.ReasonStatefulSetCondition,
-			Labels: ss.Labels, Hint: hint})
+		out = append(out, observe.Object(
+			"statefulset", ss, constant.ReasonStatefulSetCondition,
+		).WithHint(hint))
 	}
 	return out
 }
@@ -75,14 +71,16 @@ func (h *handler) ProcessStatefulSet(key string, deleted bool) error {
 
 	if deleted {
 		h.clearFirstUnavailableSts(namespace + "/" + name)
-		h.correlator.ResolveByResource("statefulset", namespace+"/"+name)
+		h.reconcileGone(model.NewObjectRef("statefulset", namespace, name))
 		return nil
 	}
 
 	ss, err := h.listers.SS.StatefulSets(namespace).Get(name)
 	if err != nil {
 		if errors.IsNotFound(err) {
-			h.correlator.ResolveByResource("statefulset", namespace+"/"+name)
+			h.reconcileGone(
+				model.NewObjectRef("statefulset", namespace, name),
+			)
 			return nil
 		}
 		return fmt.Errorf(
@@ -104,65 +102,60 @@ func (h *handler) ProcessStatefulSetObject(
 		return nil
 	}
 
-	if deleted {
-		h.clearFirstUnavailableSts(ss.Namespace + "/" + ss.Name)
-		h.correlator.ResolveByResource("statefulset", ss.Namespace+"/"+ss.Name)
-		return nil
-	}
-	if h.inMaintenance(ss.Annotations) {
-		h.clearFirstUnavailableSts(ss.Namespace + "/" + ss.Name)
-		h.correlator.ResolveByResource("statefulset", ss.Namespace+"/"+ss.Name)
+	subject := model.NewObjectRef("statefulset", ss.Namespace, ss.Name)
+	key := ss.Namespace + "/" + ss.Name
+	if deleted || h.inMaintenance(ss.Annotations) {
+		h.clearFirstUnavailableSts(key)
+		h.reconcileGone(subject)
 		return nil
 	}
 
-	key := ss.Namespace + "/" + ss.Name
-	conditionSignals := DetectStatefulSetConditions(ss)
-	for _, sig := range conditionSignals {
-		h.signalEvent(sig)
-	}
-	if len(conditionSignals) == 0 {
-		h.correlator.MarkResolved(correlation.BuildKey(
-			ss.Namespace, key, constant.ReasonStatefulSetCondition, "",
-		))
-	}
+	current := DetectStatefulSetConditions(ss)
 
 	if statefulSetUnavailable(ss) {
 		first := h.markFirstUnavailableSts(key)
-
-		settled := ss.Status.ObservedGeneration >= ss.Generation &&
-			ss.Status.CurrentReplicas == ss.Status.Replicas
-		if !settled {
-			rolloutGrace := 15 * time.Minute
-			if h.now().Sub(first) < rolloutGrace {
-				return nil
+		if h.stsUnavailableSustained(ss, first) {
+			current = append(current, observe.Object(
+				"statefulset", ss, constant.ReasonStsUnavailable,
+			).WithHint(stsAvailabilityHint(ss)))
+		} else {
+			// Still inside the rollout grace or the sustain window: report
+			// nothing, and leave what is already open alone. Reconciling an
+			// empty set here would resolve a condition that has not changed.
+			for _, obs := range current {
+				h.observe(obs)
 			}
-		}
-
-		sustained := adaptiveSustained(
-			h.config.StatefulSetMonitor.SustainedMinutes,
-			h.config.AdaptiveThresholds,
-			statefulSetReplicas(ss),
-			statefulSetReplicas(ss)-ss.Status.ReadyReplicas,
-		)
-		if sustained > 0 && h.now().Sub(first) < sustained {
 			return nil
 		}
+	} else {
+		h.clearFirstUnavailableSts(key)
+	}
 
-		h.signalEvent(&event.Signal{
-			Resource:  "statefulset",
-			Namespace: ss.Namespace,
-			Reason:    constant.ReasonStsUnavailable,
-			Owner:     key,
-			Labels:    ss.Labels,
-			Hint:      stsAvailabilityHint(ss),
-		})
-		return nil
-	}
-	h.clearFirstUnavailableSts(key)
-	if len(conditionSignals) == 0 {
-		h.correlator.ResolveByResource("statefulset", key)
-	}
+	h.reconcile(subject, current)
 	return nil
+}
+
+// stsUnavailableSustained reports whether an unavailable StatefulSet has been
+// unavailable long enough to be worth an alert: past the rollout grace when it
+// is mid-rollout, and past the configured sustain window either way.
+func (h *handler) stsUnavailableSustained(
+	ss *appsv1.StatefulSet, first time.Time,
+) bool {
+	settled := ss.Status.ObservedGeneration >= ss.Generation &&
+		ss.Status.CurrentReplicas == ss.Status.Replicas
+	if !settled {
+		const rolloutGrace = 15 * time.Minute
+		if h.now().Sub(first) < rolloutGrace {
+			return false
+		}
+	}
+	sustained := adaptiveSustained(
+		h.config.StatefulSetMonitor.SustainedMinutes,
+		h.config.AdaptiveThresholds,
+		statefulSetReplicas(ss),
+		statefulSetReplicas(ss)-ss.Status.ReadyReplicas,
+	)
+	return sustained <= 0 || h.now().Sub(first) >= sustained
 }
 
 func statefulSetReplicas(ss *appsv1.StatefulSet) int32 {

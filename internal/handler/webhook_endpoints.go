@@ -5,12 +5,17 @@ import (
 
 	admissionregistrationv1 "k8s.io/api/admissionregistration/v1"
 	"k8s.io/apimachinery/pkg/labels"
+	discoveryv1lister "k8s.io/client-go/listers/discovery/v1"
 
 	"github.com/abahmed/kwatch/internal/constant"
-	"github.com/abahmed/kwatch/internal/event"
+	"github.com/abahmed/kwatch/internal/model"
+	"github.com/abahmed/kwatch/internal/observe"
 )
 
-func mutatingWebhookServices(cfg *admissionregistrationv1.MutatingWebhookConfiguration) []*admissionregistrationv1.ServiceReference {
+// MutatingWebhookServices lists the Service backends a configuration names.
+func MutatingWebhookServices(
+	cfg *admissionregistrationv1.MutatingWebhookConfiguration,
+) []*admissionregistrationv1.ServiceReference {
 	refs := make([]*admissionregistrationv1.ServiceReference, 0, len(cfg.Webhooks))
 	for i := range cfg.Webhooks {
 		refs = append(refs, cfg.Webhooks[i].ClientConfig.Service)
@@ -18,7 +23,10 @@ func mutatingWebhookServices(cfg *admissionregistrationv1.MutatingWebhookConfigu
 	return refs
 }
 
-func validatingWebhookServices(cfg *admissionregistrationv1.ValidatingWebhookConfiguration) []*admissionregistrationv1.ServiceReference {
+// ValidatingWebhookServices lists the Service backends a configuration names.
+func ValidatingWebhookServices(
+	cfg *admissionregistrationv1.ValidatingWebhookConfiguration,
+) []*admissionregistrationv1.ServiceReference {
 	refs := make([]*admissionregistrationv1.ServiceReference, 0, len(cfg.Webhooks))
 	for i := range cfg.Webhooks {
 		refs = append(refs, cfg.Webhooks[i].ClientConfig.Service)
@@ -26,11 +34,32 @@ func validatingWebhookServices(cfg *admissionregistrationv1.ValidatingWebhookCon
 	return refs
 }
 
-func (h *handler) detectWebhookEndpointIssues(name, namespace string, labelsMap map[string]string, refs []*admissionregistrationv1.ServiceReference) []*event.Signal {
-	if h.listers.EndpointSlice == nil {
+func (h *handler) detectWebhookEndpointIssues(
+	name, namespace string,
+	labelsMap map[string]string,
+	refs []*admissionregistrationv1.ServiceReference,
+) []*model.Observation {
+	return DetectWebhookEndpointIssues(
+		h.listers.EndpointSlice, name, namespace, labelsMap, refs,
+	)
+}
+
+// DetectWebhookEndpointIssues reports webhooks whose backend Service has no
+// endpoint able to receive traffic.
+//
+// Exported so the startup baseline can run exactly the detector the live path
+// runs. A detector reachable from only one of the two is a detector whose
+// findings are re-announced as new on every restart.
+func DetectWebhookEndpointIssues(
+	epLister discoveryv1lister.EndpointSliceLister,
+	name, namespace string,
+	labelsMap map[string]string,
+	refs []*admissionregistrationv1.ServiceReference,
+) []*model.Observation {
+	if epLister == nil {
 		return nil
 	}
-	var out []*event.Signal
+	var out []*model.Observation
 	seen := make(map[string]bool)
 	for _, ref := range refs {
 		if ref == nil || ref.Name == "" {
@@ -41,7 +70,7 @@ func (h *handler) detectWebhookEndpointIssues(name, namespace string, labelsMap 
 			continue
 		}
 		seen[key] = true
-		slices, err := h.listers.EndpointSlice.EndpointSlices(ref.Namespace).List(
+		slices, err := epLister.EndpointSlices(ref.Namespace).List(
 			labels.Set{"kubernetes.io/service-name": ref.Name}.AsSelector(),
 		)
 		if err != nil {
@@ -60,12 +89,13 @@ func (h *handler) detectWebhookEndpointIssues(name, namespace string, labelsMap 
 			}
 		}
 		if !ready {
-			out = append(out, &event.Signal{
-				Resource: "webhook", Namespace: namespace, PodName: name,
-				Owner: name, Reason: constant.ReasonWebhookNoEndpoints,
-				Labels: labelsMap,
-				Hint:   fmt.Sprintf("webhook %s backend service %s has no usable endpoints", name, key),
-			})
+			out = append(out, observe.ObjectNamed(
+				"webhook", namespace, name,
+				constant.ReasonWebhookNoEndpoints,
+			).WithLabels(labelsMap).WithHint(fmt.Sprintf(
+				"webhook %s backend service %s has no usable endpoints",
+				name, key,
+			)))
 		}
 	}
 	return out

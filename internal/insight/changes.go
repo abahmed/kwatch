@@ -21,7 +21,7 @@ func directResourceChanges(
 		matchingNames[parts[2]] = true
 	}
 	if len(matchingNames) == 0 {
-		matchingNames[inc.Name] = true
+		matchingNames[inc.Ref().Name] = true
 	}
 	filtered := make([]context.Change, 0, len(recent))
 	for _, c := range recent {
@@ -47,7 +47,7 @@ func (e *Engine) appendDependencyChanges(
 	}
 	depChanges := make([]context.Change, 0, len(recent))
 	for _, c := range recent {
-		depKey := c.Resource + "/" + c.Namespace + "/" + c.Name
+		depKey := model.ObjectKey(c.Resource, c.Namespace, c.Name)
 		for _, d := range deps {
 			if d == depKey && c.Type == context.ChangeUpdate {
 				depChanges = append(depChanges, c)
@@ -96,7 +96,7 @@ func ownerRolloutChanges(
 	if !workloadKinds[kind] {
 		return nil
 	}
-	owner := strings.TrimPrefix(inc.Name, inc.Namespace+"/")
+	owner := inc.Ref().Name
 	var out []context.Change
 	for _, c := range recent {
 		if c.Resource == kind && c.Namespace == inc.Namespace &&

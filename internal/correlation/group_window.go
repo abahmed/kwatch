@@ -5,8 +5,6 @@ import (
 	"hash/crc32"
 	"time"
 
-	"github.com/abahmed/kwatch/internal/constant"
-	"github.com/abahmed/kwatch/internal/enricher"
 	"github.com/abahmed/kwatch/internal/event"
 	"github.com/abahmed/kwatch/internal/metrics"
 	"github.com/abahmed/kwatch/internal/model"
@@ -80,50 +78,46 @@ func (e *Engine) tryGroupIncident(
 	if e.config.SmartGroupingWindow <= 0 || inc.NotifiedSig != "" {
 		return false
 	}
-	r := normalizeReason(ev.Reason)
-	gk := computeGroupKey(r, ev, owner)
-	if e.firstOwnerInWindow(gk, r, ev.Namespace, owner, inc.Key, now) {
+	plan := planGroupEntry(inc, ev, owner)
+	if e.firstOwnerInWindow(
+		plan.key,
+		plan.entry.reason,
+		ev.Namespace,
+		owner,
+		inc.Key,
+		now,
+	) {
 		return false // announce now; nothing to group yet
 	}
-	pg, ok := e.groupBuffers[gk]
-	if !ok {
-		pg = &pendingGroup{firstSeen: now}
-		e.groupBuffers[gk] = pg
-	}
-	sig := ""
-	if r == constant.ReasonCrashLoopBackOff || r == constant.ReasonBackOff ||
-		r == constant.ReasonError {
-		sig = enricher.SignatureHint(ev.Logs)
-	}
-	entry := groupEntry{
-		key:             inc.Key,
-		prevNotifiedSig: inc.NotifiedSig,
-		namespace:       ev.Namespace,
-		owner:           owner,
-		reason:          r,
-		kind:            ev.Resource,
-		podName:         ev.PodName,
-		containerName:   ev.ContainerName,
-		image:           ev.Image,
-		nodeName:        ev.NodeName,
-		logSignature:    sig,
-	}
-	pg.entries = append(pg.entries, entry)
-	if len(pg.entries) > maxGroupEntries {
-		pg.entries = pg.entries[1:]
-		pg.overflowCount++
-	}
+	e.bufferGroupEntry(plan, now)
 	inc.NotifiedSig = notifSig(inc)
 	inc.LastNotifiedAt = now
 	metrics.DefaultRegistry().IncidentsGrouped.Add(1)
 	return true
 }
 
+// bufferGroupEntry is the effect half of grouping: it files the planned entry
+// under its group, holding the buffer to its size bound. Caller must hold
+// e.mu.
+func (e *Engine) bufferGroupEntry(plan groupPlan, now time.Time) {
+	pg, ok := e.groupBuffers[plan.key]
+	if !ok {
+		pg = &pendingGroup{firstSeen: now}
+		e.groupBuffers[plan.key] = pg
+	}
+	pg.entries = append(pg.entries, plan.entry)
+	if len(pg.entries) > maxGroupEntries {
+		pg.entries = pg.entries[1:]
+		pg.overflowCount++
+	}
+}
+
 // ownerScopeOf reports the reason|namespace scope when gk is an owner-scoped
 // group key for this event, and "" otherwise. Node, image and signature keys
 // are three-part too, so the shape is checked against the event, not counted.
 func ownerScopeOf(gk, r, namespace, owner string) string {
-	if namespace == "" || owner == "" || gk != r+"|"+namespace+"|"+owner {
+	if namespace == "" || owner == "" ||
+		gk != ownerGroupKey(r, namespace, owner) {
 		return ""
 	}
 	return r + "|" + namespace
@@ -172,7 +166,7 @@ func (e *Engine) pruneFanOutWindows(now time.Time) {
 // groupMemberResolved marks key as resolved within its group tracker and
 // returns the group's resolved notification once every member has resolved.
 // Caller must hold e.mu. tracked reports whether key belonged to a group.
-// Members removed from state outside MarkResolved (orphan folding, resource
+// Members removed from state outside markResolved (orphan folding, resource
 // resolution) must go through here so the group isn't left waiting forever
 // on a member that no longer exists.
 func (e *Engine) groupMemberResolved(
@@ -191,35 +185,106 @@ func (e *Engine) groupMemberResolved(
 			if !allResolved {
 				return nil, model.ActionSkip, true
 			}
-			delete(e.groupResolveTrackers, gk)
-			// Reset the flush state so a genuinely new occurrence of the
-			// same group creates a fresh incident (a stable-key UPDATE
-			// after RESOLVED would otherwise re-open a closed incident).
-			delete(e.groupFlushStates, gk)
-			groupInc := &model.Incident{
-				Subject: model.Subject{
-					ID: fmt.Sprintf(
-						"%08x",
-						crc32.ChecksumIEEE([]byte(tracker.groupIncKey)),
-					),
-					Key:    tracker.groupIncKey,
-					Reason: tracker.reason,
-					Name:   tracker.summary,
-				},
-				Status: model.Status{
-					Count:     tracker.totalCount,
-					FirstSeen: tracker.firstSeen,
-					LastSeen:  tracker.lastSeen,
-					State:     model.StateResolved,
-					Severity:  tracker.severity,
-				},
-				Evidence: model.Evidence{
-					Hint: tracker.summary,
-				},
-			}
-
-			return groupInc, model.ActionResolved, true
+			e.closeGroupTracker(gk)
+			return tracker.resolvedIncident(), model.ActionResolved, true
 		}
 	}
 	return nil, model.ActionSkip, false
+}
+
+// closeGroupTracker forgets a finished group. The flush state goes with the
+// tracker so a genuinely new occurrence of the same group creates a fresh
+// incident -- a stable-key UPDATE after RESOLVED would otherwise re-open a
+// closed incident. Caller must hold e.mu.
+func (e *Engine) closeGroupTracker(gk string) {
+	delete(e.groupResolveTrackers, gk)
+	delete(e.groupFlushStates, gk)
+}
+
+// resolvedIncident renders the tracker as the group's resolved notification.
+func (t *groupResolveTracker) resolvedIncident() *model.Incident {
+	return &model.Incident{
+		Subject: model.Subject{
+			ID: fmt.Sprintf(
+				"%08x",
+				crc32.ChecksumIEEE([]byte(t.groupIncKey)),
+			),
+			Key:    t.groupIncKey,
+			Reason: t.reason,
+			Name:   t.summary,
+		},
+		Status: model.Status{
+			Count:     t.totalCount,
+			FirstSeen: t.firstSeen,
+			LastSeen:  t.lastSeen,
+			State:     model.StateResolved,
+			Severity:  t.severity,
+		},
+		Evidence: model.Evidence{
+			Hint: t.summary,
+		},
+	}
+}
+
+// pruneGroupState closes groups that can no longer complete on their own.
+//
+// A tracker is only forgotten when every member resolves through
+// groupMemberResolved. Any path that drops a member from state without going
+// through it -- and any member that is simply never heard from again --
+// leaves the tracker waiting forever: the group is never resolved, the
+// channel never sees it close, and the tracker and its flush state stay in
+// memory for the life of the process. The wait ends when no member is left to
+// wait for -- every one is either resolved or gone from state.
+//
+// Age deliberately does not end it. A group is the notification channel for
+// its members, so closing one whose members are still live would hand those
+// members back to individual renotify and undo the grouping. The members
+// themselves are bounded by the stale sweep, which is what bounds the tracker.
+//
+// Groups closed here still emit a resolved notification -- the alternative is
+// deleting the state silently, which is exactly the "problem still open in
+// Slack forever" symptom. Caller must hold e.mu.
+func (e *Engine) pruneGroupState(now time.Time) []transition {
+	var pending []transition
+	grace := e.config.Window * staleGraceWindows
+	for gk, tracker := range e.groupResolveTrackers {
+		if e.groupCanStillComplete(tracker) {
+			continue
+		}
+		e.closeGroupTracker(gk)
+		pending = append(pending, transition{
+			inc:    tracker.resolvedIncident(),
+			action: model.ActionResolved,
+		})
+	}
+	// A flush state with no tracker and no buffer belongs to a group that is
+	// finished; keeping it only risks suppressing a future occurrence.
+	for gk, st := range e.groupFlushStates {
+		if _, tracked := e.groupResolveTrackers[gk]; tracked {
+			continue
+		}
+		if _, buffered := e.groupBuffers[gk]; buffered {
+			continue
+		}
+		if now.Before(st.lastNotifiedAt.Add(grace)) {
+			continue
+		}
+		delete(e.groupFlushStates, gk)
+	}
+	return pending
+}
+
+// groupCanStillComplete reports whether any member is both unresolved and
+// still present in state, i.e. whether the group has anyone left to wait for.
+// Caller must hold e.mu.
+func (e *Engine) groupCanStillComplete(t *groupResolveTracker) bool {
+	for key, resolved := range t.members {
+		if resolved {
+			continue
+		}
+		if _, live := e.state[key]; live {
+			return true
+		}
+	}
+	return false
 }

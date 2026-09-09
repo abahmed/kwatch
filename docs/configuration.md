@@ -44,7 +44,7 @@ narrowing the watch list and turning off the noisy reasons.
 |:---|---|
 | `maxRecentLogLines` | How many recent log lines to include in each alert (default: 50) |
 | `smartGrouping.namespaceFanOutThreshold` | How many owners failing the same way in one namespace collapse into a single alert (default: 3, `0` disables) |
-| `resyncSeconds` | How often to re-scan everything for problems. `0` = only react to live events (recommended). |
+| `resyncSeconds` | How often to re-scan everything for problems (default: 300). This is also what re-confirms a problem that is *still* happening, so keep it well below `correlation.window` (default 10m); `0` reacts only to live events and means an unrecovered incident can be closed for lack of news. |
 | `workers` | How many checks to run in parallel (default: 1, raise for big clusters) |
 | `namespaces` | 🔽 Watch only these namespaces — or use `!kube-system` to watch *everything except* it |
 | `namespaceSelector` | 🏷️ Pick namespaces by K8s label selector (use *instead of* `namespaces`, not with it) |
@@ -244,11 +244,13 @@ It is sent after startup and at most once per week to
 |:---|:---|
 | `telemetry.enabled` | ✅ Send adoption heartbeats (default: `true`) |
 
-Disable it with `telemetry.enabled: false`. Development builds and recognized CI
-environments do not send telemetry. The service should use this data only for
-aggregate adoption counts and version planning; no feature-usage or cluster
-inventory is collected. Telemetry failures never affect monitoring startup or
-runtime.
+kwatch logs one line at startup naming the endpoint, the payload and this
+setting, so the heartbeat is visible from the logs alone rather than only from
+this page. Disable it with `telemetry.enabled: false`. Development builds and
+recognized CI environments do not send telemetry. The service should use this
+data only for aggregate adoption counts and version planning; no feature-usage
+or cluster inventory is collected. Telemetry failures never affect monitoring
+startup or runtime.
 
 ---
 
@@ -482,9 +484,19 @@ response.
 | `activeProbeMonitor.failureThreshold` | 🔁 Consecutive failures before alerting (default: 3) |
 | `activeProbeMonitor.recoveryThreshold` | ✅ Consecutive successes before resolving (default: 2) |
 | `activeProbeMonitor.autoServices` | 🔗 Probe discoverable Service ports automatically (default: false) |
+| `activeProbeMonitor.excludeNamespaces` | 🚫 Namespaces `autoServices` skips entirely |
 | `activeProbeMonitor.http` | 🌐 Explicit HTTP targets with optional status and latency limits |
 | `activeProbeMonitor.tcp` | 🔌 Explicit TCP targets |
 | `activeProbeMonitor.dns` | 🔎 Explicit DNS targets |
+
+> ⚠️ **`autoServices` and NetworkPolicy.** Auto-probing opens a real TCP
+> connection to every Service port in scope, from kwatch's own pod. In a
+> namespace with default-deny ingress that does not admit kwatch, every
+> Service there is reported as `ActiveProbeFailure` while being perfectly
+> healthy. Two escape hatches: list the namespace in
+> `activeProbeMonitor.excludeNamespaces`, or annotate the individual Service
+> with `kwatch.io/skip-probe: "true"`. Explicitly configured `http`, `tcp` and
+> `dns` targets are never filtered by either — you asked for those by name.
 
 ```yaml
 activeProbeMonitor:
@@ -521,13 +533,13 @@ no Agent or Prometheus installation is required.
 | `kubeletTelemetryMonitor.recoveryThreshold` | ✅ Consecutive healthy samples before resolving (default: 2) |
 | `kubeletTelemetryMonitor.persistState` | 💾 Persist counters and confirmation state across restarts (default: true) |
 | `kubeletTelemetryMonitor.memoryWarningPercent` | ⚠️ Container memory usage warning (default: 90) |
-| `kubeletTelemetryMonitor.memoryCriticalPercent` | 🚨 Container memory usage critical (default: 100) |
+| `kubeletTelemetryMonitor.memoryCriticalPercent` | 🚨 Container memory usage critical (default: 95) |
 | `kubeletTelemetryMonitor.ephemeralStorageWarningPercent` | ⚠️ Container ephemeral-storage warning (default: 90) |
 | `kubeletTelemetryMonitor.ephemeralStorageCriticalPercent` | 🚨 Container ephemeral-storage critical (default: 95) |
 | `kubeletTelemetryMonitor.cpuWarningPercent` | ⚠️ Container CPU usage warning (default: 90) |
 | `kubeletTelemetryMonitor.cpuCriticalPercent` | 🚨 Container CPU usage critical (default: 100) |
-| `kubeletTelemetryMonitor.cpuThrottlingWarningPercent` | ⚠️ Container throttling warning (default: 25) |
-| `kubeletTelemetryMonitor.cpuThrottlingCriticalPercent` | 🚨 Container throttling critical (default: 50) |
+| `kubeletTelemetryMonitor.cpuThrottlingWarningPercent` | ⚠️ Container throttling warning (default: 50) |
+| `kubeletTelemetryMonitor.cpuThrottlingCriticalPercent` | 🚨 Container throttling critical (default: 75) |
 | `kubeletTelemetryMonitor.psiWarningPercent` | ⚠️ PSI warning threshold (default: 20) |
 | `kubeletTelemetryMonitor.psiCriticalPercent` | 🚨 PSI critical threshold (default: 50) |
 | `kubeletTelemetryMonitor.networkErrorRateWarning` | ⚠️ Node network errors/sec warning (default: 1) |
@@ -561,7 +573,7 @@ grant that unused permission by default.
 | `runtimeMetricsMonitor.enabled` | 📊 Use Metrics Server data for workload usage diagnostics (default: false) |
 | `runtimeMetricsMonitor.intervalSeconds` | ⏱️ Seconds between Metrics Server checks (default: 60) |
 | `runtimeMetricsMonitor.memoryWarningPercent` | ⚠️ Memory usage warning percentage (default: 90) |
-| `runtimeMetricsMonitor.memoryCriticalPercent` | 🚨 Memory usage critical percentage (default: 100) |
+| `runtimeMetricsMonitor.memoryCriticalPercent` | 🚨 Memory usage critical percentage (default: 95) |
 | `runtimeMetricsMonitor.cpuWarningPercent` | ⚠️ CPU usage warning percentage (default: 90) |
 | `runtimeMetricsMonitor.cpuCriticalPercent` | 🚨 CPU usage critical percentage (default: 100) |
 
@@ -693,11 +705,11 @@ should escalate a recurring crash to you.
 | `correlation.window` | ⏱️ Keep incidents in memory (default: 10 min) |
 | `correlation.resolveHoldDown` | ⏱️ Wait before sending "resolved" (default: 300s) |
 | `correlation.lifecycleInterval` | ⏱️ Lifecycle check frequency (default: 1 min) |
-| `correlation.cooldownMinutes` | ⏱️ Min time between identical crash re-alerts (default: 10; 0 = off) |
+| `correlation.cooldownMinutes` | ⚠️ Deprecated, accepted and ignored. It gated a pre-filter that dropped repeated crashes before the engine saw them, which defeated the engine's own post-resolve cooldown. That cooldown is `correlation.window` |
 | `correlation.maxBaseline` | 📈 Max baseline entries kept for startup comparison (default: 5000) |
 | `correlation.escalation.enabled` | ✅ Escalate severity on repeated crashes (default: true) |
 | `correlation.escalation.tiers` | 📊 Restart thresholds (default: `[3, 10]`): crossing the first → `high`, the second → `critical`. There is nothing above critical, so a third tier does nothing |
-| `correlation.renotify.intervalBySeverity` | 🔔 Re-alert interval per severity (e.g. `high: 60`), `default` key as fallback; unset = off |
+| `correlation.renotify.intervalBySeverity` | 🔔 Re-alert interval in minutes per severity, `default` key as fallback (default: `critical: 10`, `high: 30`, `medium: 60`, `warning: 60`, `default: 60`). Set a severity to `0` to stop re-alerting it; an empty map turns re-alerting off entirely |
 | `correlation.renotify.maxPerIncident` | 🔔 Max re-alerts per incident (default: 3) |
 
 Incident state, baseline, telemetry state, and recent change history are stored

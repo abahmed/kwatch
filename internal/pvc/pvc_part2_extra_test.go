@@ -28,19 +28,19 @@ func TestApplyDeletedPvcResolves(t *testing.T) {
 		"default/pvc-3": "pv-3",
 	}, false, true)
 
-	assert.True(t, m.notifiedPvc["pv-1"])
+	assert.True(t, m.notifiedPvc["default/pvc-1"])
 
 	// PVC deleted — empty pvByPVC
 	m.apply(nil, map[string]string{}, false, true)
 
 	assert.False(
 		t,
-		m.notifiedPvc["pv-1"],
+		m.notifiedPvc["default/pvc-1"],
 		"deleted PVC must resolve",
 	)
 	assert.NotContains(
 		t,
-		m.lastUsage, "pv-1",
+		m.lastUsage, "default/pvc-1",
 		"deleted PVC must be evicted from lastUsage",
 	)
 
@@ -48,7 +48,7 @@ func TestApplyDeletedPvcResolves(t *testing.T) {
 	allResolved := true
 	snap := corr.Snapshot()
 	for _, v := range snap {
-		if v.Name == "pv-1" {
+		if v.Name == "default/pvc-1" {
 			if v.State != model.StateResolved {
 				allResolved = false
 			}
@@ -81,7 +81,7 @@ func TestApplyRemountedBelowClearResolves(t *testing.T) {
 		"default/pvc-3": "pv-3",
 	}, false, true)
 
-	assert.True(t, m.notifiedPvc["pv-1"])
+	assert.True(t, m.notifiedPvc["default/pvc-1"])
 
 	// Re-mounted but below clear threshold (e.g. 50%)
 	m.apply([]*PvcUsage{
@@ -100,12 +100,12 @@ func TestApplyRemountedBelowClearResolves(t *testing.T) {
 
 	assert.False(
 		t,
-		m.notifiedPvc["pv-1"],
+		m.notifiedPvc["default/pvc-1"],
 		"re-mounted below clear must resolve",
 	)
 	assert.NotContains(
 		t,
-		m.lastUsage, "pv-1",
+		m.lastUsage, "default/pvc-1",
 		"lastUsage must be evicted after genuine resolve",
 	)
 }
@@ -130,7 +130,7 @@ func TestApplyIncompleteSkipsClusterResolve(t *testing.T) {
 		"default/pvc-3": "pv-3",
 	}, false, true)
 
-	assert.True(t, m.notifiedPvc["pv-1"])
+	assert.True(t, m.notifiedPvc["default/pvc-1"])
 
 	// Partial cycles skip the cluster-wide resolve pass.
 	m.apply(
@@ -142,7 +142,7 @@ func TestApplyIncompleteSkipsClusterResolve(t *testing.T) {
 
 	assert.True(
 		t,
-		m.notifiedPvc["pv-1"],
+		m.notifiedPvc["default/pvc-1"],
 		"incomplete cycle must not resolve bound PVs",
 	)
 }
@@ -168,7 +168,7 @@ func TestApplyFirstScanSuppressesSignal(t *testing.T) {
 		"default/pvc-3": "pv-3",
 	}, false, true)
 
-	assert.True(t, m.notifiedPvc["pv-1"])
+	assert.True(t, m.notifiedPvc["default/pvc-1"])
 	assert.False(
 		t,
 		m.firstScan,
@@ -178,7 +178,7 @@ func TestApplyFirstScanSuppressesSignal(t *testing.T) {
 	// No incident should exist in the correlator (firstScan suppressed the signal)
 	snap := corr.Snapshot()
 	for _, v := range snap {
-		if v.Name == "pv-1" {
+		if v.Name == "default/pvc-1" {
 			t.Fatal("first scan should not create incidents in the correlator")
 		}
 	}

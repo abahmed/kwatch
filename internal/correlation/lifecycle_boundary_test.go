@@ -23,11 +23,11 @@ func TestLifecycleDeadlinesTriggerAtExactTimestamp(t *testing.T) {
 	e.now = mockClock(now)
 
 	ev := event.Event{Namespace: "default", PodName: "pod-1", Reason: "CrashLoopBackOff"}
-	inc, action := e.Process(ev, "deploy-1", nil)
+	inc, action := e.processEvent(ev, "deploy-1", nil)
 	require.Equal(t, model.ActionCreate, action)
 
 	// Resolve hold-down also finalizes at its exact deadline.
-	e.MarkResolved(inc.Key)
+	e.markResolved(inc.Key)
 	now = now.Add(5 * time.Minute)
 	e.now = mockClock(now)
 	e.checkLifecycle()

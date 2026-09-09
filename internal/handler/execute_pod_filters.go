@@ -8,11 +8,11 @@ import (
 	"k8s.io/klog/v2"
 
 	"github.com/abahmed/kwatch/internal/enricher"
-	"github.com/abahmed/kwatch/internal/event"
 	"github.com/abahmed/kwatch/internal/filter"
 	"github.com/abahmed/kwatch/internal/format"
 	"github.com/abahmed/kwatch/internal/k8s"
 	"github.com/abahmed/kwatch/internal/model"
+	"github.com/abahmed/kwatch/internal/observe"
 )
 
 func (h *handler) executePodFilters(ctx *filter.Context) {
@@ -46,16 +46,7 @@ func (h *handler) executePodFilters(ctx *filter.Context) {
 		return
 	}
 
-	ownerName := ""
-	if ctx.Owner != nil {
-		ownerName = ctx.Owner.Name
-	} else if len(ctx.Pod.OwnerReferences) == 0 {
-		// An ownerless Pod is its own logical owner. This keeps independent
-		// ownerless Pods separate while allowing generated replacements to be
-		// folded by correlation only when the Pod has authoritative identity
-		// metadata (UID or explicit lineage).
-		ownerName = ctx.Pod.Name
-	}
+	owner := contextOwner(ctx)
 
 	klog.V(
 		2,
@@ -64,41 +55,27 @@ func (h *handler) executePodFilters(ctx *filter.Context) {
 		"pod",
 		ctx.Pod.Name,
 		"owner",
-		ownerName,
+		owner.Name,
 		"reason",
 		ctx.PodReason,
 		"message",
 		ctx.PodMsg,
 	)
 
-	ownerKind := ""
-	if ctx.Owner != nil {
-		ownerKind = ctx.Owner.Kind
-	}
-
 	hint, facts := h.podIssueHint(ctx)
-	h.signalEvent(&event.Signal{
-		Resource:        "pod",
-		PodName:         ctx.Pod.Name,
-		PodUID:          string(ctx.Pod.UID),
-		PodLineageID:    podLineageID(ctx.Pod),
-		PodGenerateName: ctx.Pod.GenerateName,
-		Container:       ".",
-		Namespace:       ctx.Pod.Namespace,
-		NodeName:        ctx.Pod.Spec.NodeName,
-		Reason:          ctx.PodReason,
-		Events:          k8s.GetPodEventsStr(ctx.Events),
-		Labels:          ctx.Pod.Labels,
-		OwnerKind:       ownerKind,
-		Hint:            hint,
-		Facts:           facts,
-		Owner:           ownerName,
-		ContainerState: &model.ContainerState{
-			Reason: ctx.PodReason,
-			Msg:    ctx.PodMsg,
-			Status: "",
-		},
-	})
+	obs := observe.PodOwnedBy(ctx.Pod, ".", ctx.PodReason, owner).
+		WithHint(hint).
+		WithFacts(facts).
+		WithEvidence(
+			"",
+			k8s.GetPodEventsStr(ctx.Events),
+			&model.ContainerState{
+				Reason: ctx.PodReason,
+				Msg:    ctx.PodMsg,
+				Status: "",
+			},
+		)
+	h.observe(obs)
 }
 
 // podIssueHint builds the hint for pod-level (non-container) issues, adding

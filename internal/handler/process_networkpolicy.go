@@ -9,8 +9,8 @@ import (
 	"k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/client-go/tools/cache"
 
-	"github.com/abahmed/kwatch/internal/correlation"
-	"github.com/abahmed/kwatch/internal/event"
+	"github.com/abahmed/kwatch/internal/model"
+	"github.com/abahmed/kwatch/internal/observe"
 )
 
 // DetectNetworkPolicyIssue checks for potentially problematic NetworkPolicies.
@@ -18,7 +18,7 @@ import (
 // outbound connectivity.
 func DetectNetworkPolicyIssue(
 	policy *networkingv1.NetworkPolicy,
-) *event.Signal {
+) *model.Observation {
 	if policy == nil {
 		return nil
 	}
@@ -34,20 +34,14 @@ func DetectNetworkPolicyIssue(
 
 	// If no egress rules exist, it's a deny-all egress
 	if len(policy.Spec.Egress) == 0 {
-		return &event.Signal{
-			Resource:  "networkpolicy",
-			Namespace: policy.Namespace,
-			Reason:    constant.ReasonRestrictiveNetworkPolicy,
-			Owner:     policy.Namespace + "/" + policy.Name,
-			PodName:   policy.Name,
-			Labels:    policy.Labels,
-			Hint: fmt.Sprintf(
-				"networkpolicy %s/%s has deny-all egress — may block outbound "+
-					"connectivity",
-				policy.Namespace,
-				policy.Name,
-			),
-		}
+		return observe.Object(
+			"networkpolicy", policy, constant.ReasonRestrictiveNetworkPolicy,
+		).WithHint(fmt.Sprintf(
+			"networkpolicy %s/%s has deny-all egress — may block outbound "+
+				"connectivity",
+			policy.Namespace,
+			policy.Name,
+		))
 	}
 	return nil
 }
@@ -70,13 +64,15 @@ func (h *handler) ProcessNetworkPolicy(key string, deleted bool) error {
 		return fmt.Errorf("invalid networkpolicy key %q: %w", key, err)
 	}
 	if deleted {
-		h.correlator.ResolveByResource("networkpolicy", namespace+"/"+name)
+		h.reconcileGone(model.NewObjectRef("networkpolicy", namespace, name))
 		return nil
 	}
 	policy, err := h.listers.Netpol.NetworkPolicies(namespace).Get(name)
 	if err != nil {
 		if errors.IsNotFound(err) {
-			h.correlator.ResolveByResource("networkpolicy", namespace+"/"+name)
+			h.reconcileGone(
+				model.NewObjectRef("networkpolicy", namespace, name),
+			)
 			return nil
 		}
 		return fmt.Errorf(
@@ -96,26 +92,13 @@ func (h *handler) ProcessNetworkPolicyObject(
 	if policy == nil {
 		return nil
 	}
+	subject := model.NewObjectRef(
+		"networkpolicy", policy.Namespace, policy.Name,
+	)
 	if deleted {
-		h.correlator.ResolveByResource(
-			"networkpolicy",
-			policy.Namespace+"/"+policy.Name,
-		)
+		h.reconcileGone(subject)
 		return nil
 	}
-
-	sig := DetectNetworkPolicyIssue(policy)
-	if sig != nil {
-		h.signalEvent(sig)
-	} else {
-		h.correlator.MarkResolved(
-			correlation.BuildKey(
-				policy.Namespace,
-				policy.Namespace+"/"+policy.Name,
-				constant.ReasonRestrictiveNetworkPolicy,
-				"",
-			),
-		)
-	}
+	h.reconcile(subject, findings(DetectNetworkPolicyIssue(policy)))
 	return nil
 }

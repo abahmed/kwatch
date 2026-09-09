@@ -18,6 +18,7 @@ import (
 
 	"github.com/abahmed/kwatch/internal/config"
 	"github.com/abahmed/kwatch/internal/correlation"
+	"github.com/abahmed/kwatch/internal/model"
 )
 
 func (e *errDaemonSetLister) List(
@@ -89,16 +90,15 @@ func TestBuildSeenSetSurfacesListerErrors(t *testing.T) {
 	assert.Contains(t, out, "failed to list daemonsets for baseline seeding")
 	assert.Contains(t, out, "cache not synced")
 
-	// A failing lister must not prevent other categories from seeding.
+	// A failing lister must not prevent other categories from running.
 	h.mu.Lock()
-	baseline := h.seenBaseline
+	active := h.activeNodes
 	h.mu.Unlock()
-	expectedKey := correlation.BuildKey("", "worker-1", "MemoryPressure", "")
 	assert.Contains(
 		t,
-		baseline,
-		string(expectedKey),
-		"other baseline categories must still be seeded",
+		active,
+		"worker-1",
+		"other seeding categories must still run",
 	)
 }
 
@@ -175,7 +175,12 @@ func TestBuildSeenPerPodAndHealthySiblingKeepsBaseline(t *testing.T) {
 
 	// Simulate ClearBaselineForPod for the healthy pod — should NOT affect
 	// the failed pod's entry
-	h.ClearBaselineForPod("default", "healthy-pod")
+	h.ClearBaselineForPod(
+		"default", "healthy-pod",
+		model.ObjectRef{
+			Kind: "Deployment", Namespace: "default", Name: "deploy-1",
+		},
+	)
 
 	_, ok = baseline[string(key)]["failed-pod"]
 	assert.True(

@@ -10,35 +10,78 @@ import (
 	"sync"
 	"time"
 
+	corev1 "k8s.io/api/core/v1"
+
+	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/client-go/kubernetes"
+	corev1lister "k8s.io/client-go/listers/core/v1"
 
 	"github.com/abahmed/kwatch/internal/clock"
 	"github.com/abahmed/kwatch/internal/config"
 	"github.com/abahmed/kwatch/internal/constant"
 	"github.com/abahmed/kwatch/internal/correlation"
-	"github.com/abahmed/kwatch/internal/event"
 	kwcontext "github.com/abahmed/kwatch/internal/graphcontext"
 	"github.com/abahmed/kwatch/internal/model"
+	"github.com/abahmed/kwatch/internal/observe"
 )
 
 type Monitor struct {
-	cfg         config.ActiveProbeMonitor
-	correlator  *correlation.Engine
-	client      *http.Client
-	timeout     time.Duration
-	kclient     kubernetes.Interface
-	mu          sync.Mutex
-	failures    map[string]int
-	successes   map[string]int
+	cfg        config.ActiveProbeMonitor
+	correlator *correlation.Engine
+	client     *http.Client
+	timeout    time.Duration
+	kclient    kubernetes.Interface
+	mu         sync.Mutex
+	failures   map[string]int
+	successes  map[string]int
+	// failing marks the targets that have actually reported a failure. A
+	// target that has always been healthy has nothing to recover from, so it
+	// must not resolve on every tick.
+	failing     map[string]bool
 	graph       *kwcontext.ResourceGraph
 	now         func() time.Time
 	namespaces  []string
 	watchAll    bool
 	allowed     func(string) bool
 	autoTargets map[string]autoProbeTarget
+	// serviceLister reads the controller's Service informer cache. Auto
+	// service probing used to LIST every Service in scope on every interval
+	// (30s by default) while the controller already watched them.
+	serviceLister corev1lister.ServiceLister
+}
+
+// SetServiceLister wires the controller's Service cache.
+func (m *Monitor) SetServiceLister(lister corev1lister.ServiceLister) {
+	m.mu.Lock()
+	m.serviceLister = lister
+	m.mu.Unlock()
 }
 
 func (m *Monitor) SetKubernetesClient(client kubernetes.Interface) { m.kclient = client }
+
+// servicesFor reads Services from the informer cache, or nil when the cache
+// is unavailable so the caller falls back to the API server.
+func (m *Monitor) servicesFor(namespace string) []*corev1.Service {
+	m.mu.Lock()
+	lister := m.serviceLister
+	m.mu.Unlock()
+	if lister == nil {
+		return nil
+	}
+	var (
+		services []*corev1.Service
+		err      error
+	)
+	if namespace == "" {
+		services, err = lister.List(labels.Everything())
+	} else {
+		services, err = lister.Services(namespace).List(labels.Everything())
+	}
+	if err != nil {
+		return nil
+	}
+	return services
+}
 
 func (m *Monitor) SetGraph(graph *kwcontext.ResourceGraph) {
 	m.graph = graph
@@ -84,6 +127,7 @@ func NewWithClient(
 		client:   client,
 		timeout:  timeout,
 		failures: make(map[string]int), successes: make(map[string]int),
+		failing:     make(map[string]bool),
 		autoTargets: make(map[string]autoProbeTarget),
 		now:         time.Now,
 	}
@@ -244,6 +288,16 @@ func (m *Monitor) dns(ctx context.Context, target config.DNSProbeTarget) (bool, 
 func (m *Monitor) record(key, owner, reason string, ok bool, detail string) {
 	m.mu.Lock()
 	if ok {
+		if !m.failing[key] {
+			// This target was never reported failing, so there is nothing to
+			// recover from. Resolving anyway cost a locked engine scan per
+			// healthy target per tick, on a target that had never had an
+			// incident in the first place.
+			delete(m.failures, key)
+			delete(m.successes, key)
+			m.mu.Unlock()
+			return
+		}
 		m.failures[key] = 0
 		m.successes[key]++
 		if m.successes[key] < threshold(m.cfg.RecoveryThreshold, 1) {
@@ -252,6 +306,7 @@ func (m *Monitor) record(key, owner, reason string, ok bool, detail string) {
 		}
 		delete(m.failures, key)
 		delete(m.successes, key)
+		delete(m.failing, key)
 	} else {
 		m.successes[key] = 0
 		m.failures[key]++
@@ -259,20 +314,30 @@ func (m *Monitor) record(key, owner, reason string, ok bool, detail string) {
 			m.mu.Unlock()
 			return
 		}
+		m.failing[key] = true
 	}
 	m.mu.Unlock()
 
 	if ok {
-		m.correlator.MarkResolved(correlation.BuildKey("", owner, reason, ""))
+		m.correlator.Resolve(probeRef(owner), reason)
 		if reason == constant.ReasonActiveProbeFailure {
-			m.correlator.MarkResolved(correlation.BuildKey("", owner, constant.ReasonActiveProbeLatency, ""))
+			m.correlator.Resolve(
+				probeRef(owner), constant.ReasonActiveProbeLatency,
+			)
 		}
 		return
 	}
-	m.correlator.Process(event.Event{
-		Resource: "activeprobe", PodName: owner, Reason: reason,
-		Hint: fmt.Sprintf("probe %s failed: %s", owner, detail), Severity: model.SeverityWarning,
-	}, owner, nil)
+	m.correlator.Process(
+		observe.Synthetic("activeprobe", owner, reason).
+			WithSeverity(model.SeverityWarning).
+			WithHint(fmt.Sprintf("probe %s failed: %s", owner, detail)),
+	)
+}
+
+// probeRef is the subject an active probe's incidents are about. A probe
+// target is not a Kubernetes object, so its owner name is its whole identity.
+func probeRef(owner string) model.ObjectRef {
+	return model.ObjectRef{Kind: "activeprobe", Name: owner}
 }
 
 func threshold(value, fallback int) int {

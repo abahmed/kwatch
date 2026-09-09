@@ -10,6 +10,7 @@ import (
 	"github.com/abahmed/kwatch/internal/alert/util"
 	"github.com/abahmed/kwatch/internal/config"
 	"github.com/abahmed/kwatch/internal/event"
+	"github.com/abahmed/kwatch/internal/model"
 )
 
 const (
@@ -107,9 +108,28 @@ func (o *Opsgenie) sendAPI(content []byte) error {
 	return err
 }
 
+// opsgeniePriority maps kwatch's severity onto Opsgenie's P1-P5 scale.
+//
+// Every alert used to be filed as P1, the level whose whole purpose is to
+// page immediately. A warning arriving at P1 trains people to ignore P1.
+// An unknown severity is P3, which notifies without paging.
+func opsgeniePriority(sev model.Severity) string {
+	switch sev {
+	case model.SeverityCritical:
+		return "P1"
+	case model.SeverityHigh:
+		return "P2"
+	case model.SeverityMedium, model.SeverityWarning:
+		return "P3"
+	case model.SeverityNormal:
+		return "P4"
+	}
+	return "P3"
+}
+
 func (o *Opsgenie) buildMessage(e *event.Event) ([]byte, error) {
 	payload := ogPayload{
-		Priority: "P1",
+		Priority: opsgeniePriority(e.Severity),
 	}
 
 	logs := strings.TrimSpace(e.Logs)

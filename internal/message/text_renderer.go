@@ -11,28 +11,39 @@ import (
 type markup struct {
 	bold func(string) string
 	code func(string) string
-	link func(label, url string) string
-	hint string // prefix for the hint line
+	// mono is inline code, for a single identifier inside a sentence. code
+	// is a fenced block and cannot be used mid-line.
+	mono func(string) string
+	// italic marks a line as supporting detail rather than the message.
+	italic func(string) string
+	link   func(label, url string) string
+	hint   string // prefix for the hint line
 }
 
 var (
 	plainMarkup = markup{
-		bold: func(s string) string { return s },
-		code: func(s string) string { return s },
-		link: func(label, url string) string { return label + ": " + url },
-		hint: "Hint:",
+		bold:   func(s string) string { return s },
+		code:   func(s string) string { return s },
+		mono:   func(s string) string { return s },
+		italic: func(s string) string { return s },
+		link:   func(label, url string) string { return label + ": " + url },
+		hint:   "Hint:",
 	}
 	slackMarkup = markup{
-		bold: func(s string) string { return "*" + s + "*" },
-		code: func(s string) string { return "```" + s + "```" },
+		bold:   func(s string) string { return "*" + s + "*" },
+		code:   func(s string) string { return "```" + s + "```" },
+		mono:   func(s string) string { return "`" + s + "`" },
+		italic: func(s string) string { return "_" + s + "_" },
 		link: func(label, url string) string {
 			return "<" + url + "|" + label + ">"
 		},
 		hint: "💡",
 	}
 	discordMarkup = markup{
-		bold: func(s string) string { return "**" + s + "**" },
-		code: func(s string) string { return "```\n" + s + "\n```" },
+		bold:   func(s string) string { return "**" + s + "**" },
+		code:   func(s string) string { return "```\n" + s + "\n```" },
+		mono:   func(s string) string { return "`" + s + "`" },
+		italic: func(s string) string { return "*" + s + "*" },
 		link: func(label, url string) string {
 			return "[" + label + "](" + url + ")"
 		},
@@ -103,12 +114,17 @@ func (t textRenderer) RenderResolved(r *Report) string {
 		info = append(info, fmt.Sprintf("%d occurrences", r.Summary.Count))
 	}
 	if r.Summary.Peak > 1 {
-		info = append(info, fmt.Sprintf("peak %d pods", r.Summary.Peak))
+		info = append(info, fmt.Sprintf(
+			"peak %d %s", r.Summary.Peak, resourcePlural(r),
+		))
 	}
 	if r.Identity != nil && r.Identity.Node != "" {
-		info = append(info, "node "+r.Identity.Node)
+		info = append(info, "node "+t.m.mono(r.Identity.Node))
 	}
-	return joinNonEmpty([]string{head, strings.Join(info, " · ")})
+	if len(info) == 0 {
+		return head
+	}
+	return head + "\n" + t.m.italic(strings.Join(info, " · "))
 }
 
 // ── pieces ──────────────────────────────────────────────────────────
@@ -136,6 +152,15 @@ func subjectOf(r *Report) string {
 }
 
 func isGroupSubject(r *Report) bool { return strings.Contains(r.Name, " ") }
+
+// resourcePlural names what a peak count counts. A node incident that said
+// "peak 4 pods" was simply wrong.
+func resourcePlural(r *Report) string {
+	if r.Resource == "" {
+		return "resources"
+	}
+	return r.Resource + "s"
+}
 
 // headline: "🔴 Pod not ready — dev/api · Deployment ·
 // ContainersNotReady · high"
@@ -247,15 +272,26 @@ func (t textRenderer) typeSpecific(r *Report) []string {
 	return out
 }
 
+// suppressedScope says what the suppressed pods have in common. A node
+// incident speaks for the pods on that node; a workload incident speaks for
+// its own pods, and telling the reader they were "on this node" was simply
+// untrue.
+func suppressedScope(r *Report) string {
+	if r.Resource == "node" {
+		return "on this node"
+	}
+	return "of this " + r.Resource
+}
+
 func (t textRenderer) suppressed(r *Report) []string {
 	if r.SuppressedPods == 0 {
 		return nil
 	}
 	out := []string{
 		fmt.Sprintf(
-			"⚠️ %d other pod(s) on this node also crashed (grouped to reduce "+
-				"noise)",
+			"⚠️ %d other pod(s) %s also failed (grouped to reduce noise)",
 			r.SuppressedPods,
+			suppressedScope(r),
 		),
 	}
 	if n := len(r.SuppressedPodSummaries); n > 0 && n <= 5 {

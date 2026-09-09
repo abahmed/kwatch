@@ -27,16 +27,16 @@ func TestMarkResolvedIdempotent(t *testing.T) {
 		Namespace: "ns",
 		Reason:    "CrashLoopBackOff",
 	}
-	inc, action := e.Process(ev, "dep", nil)
+	inc, action := e.processEvent(ev, "dep", nil)
 	assert.Equal(t, model.ActionCreate, action)
 	assert.NotNil(t, inc)
 
 	// First MarkResolved should fire the hook
-	e.MarkResolved(inc.Key)
+	e.markResolved(inc.Key)
 	assert.Equal(t, 1, resolves)
 
 	// Second MarkResolved (same key) must NOT fire again
-	e.MarkResolved(inc.Key)
+	e.markResolved(inc.Key)
 	assert.Equal(
 		t,
 		1,
@@ -55,7 +55,7 @@ func TestMarkResolvedNonexistentKeyNoOp(t *testing.T) {
 			}
 		},
 	})
-	e.MarkResolved("nonexistent")
+	e.markResolved("nonexistent")
 	assert.Equal(t, 0, resolves)
 }
 
@@ -78,11 +78,11 @@ func TestResolveHoldDownDelaysResolve(t *testing.T) {
 		PodName:   "pod-1",
 		Reason:    "CrashLoopBackOff",
 	}
-	inc, action := e.Process(ev, "deploy-1", nil)
+	inc, action := e.processEvent(ev, "deploy-1", nil)
 	assert.Equal(t, model.ActionCreate, action)
 
 	// MarkResolved should NOT fire the hook immediately
-	e.MarkResolved(inc.Key)
+	e.markResolved(inc.Key)
 	assert.Equal(t, 0, resolves)
 	live := e.state[inc.Key]
 	if live != nil {
@@ -110,11 +110,11 @@ func TestCleanupFinalizesPendingResolveWithNotification(t *testing.T) {
 		PodName:   "pod-1",
 		Reason:    "CrashLoopBackOff",
 	}
-	inc, action := e.Process(ev, "deploy-1", nil)
+	inc, action := e.processEvent(ev, "deploy-1", nil)
 	assert.Equal(t, model.ActionCreate, action)
 
 	// MarkResolved schedules the resolve (ResolveAt = +20m); no notify yet.
-	e.MarkResolved(inc.Key)
+	e.markResolved(inc.Key)
 	assert.Equal(t, 0, resolves)
 	if live := e.state[inc.Key]; live != nil {
 		assert.Equal(t, model.StatePendingResolve, live.State)
@@ -156,11 +156,11 @@ func TestResolveHoldDownRevivesOnRecurrence(t *testing.T) {
 		PodName:   "pod-1",
 		Reason:    "CrashLoopBackOff",
 	}
-	inc, action := e.Process(ev, "deploy-1", nil)
+	inc, action := e.processEvent(ev, "deploy-1", nil)
 	assert.Equal(t, model.ActionCreate, action)
 
 	// Pending resolve
-	e.MarkResolved(inc.Key)
+	e.markResolved(inc.Key)
 	assert.Equal(t, 0, resolves)
 	live := e.state[inc.Key]
 	if live != nil {
@@ -169,7 +169,7 @@ func TestResolveHoldDownRevivesOnRecurrence(t *testing.T) {
 
 	// Recurrence within cooldown — should revive (skip) and cancel the
 	// pending resolve
-	_, action = e.Process(ev, "deploy-1", nil)
+	_, action = e.processEvent(ev, "deploy-1", nil)
 	assert.Equal(
 		t,
 		model.ActionSkip,
@@ -201,33 +201,45 @@ func TestProcessResolvedIncidentSilentlyRevives(t *testing.T) {
 		PodName:   "pod-1",
 		Reason:    "CrashLoopBackOff",
 	}
-	inc, action := e.Process(ev, "deploy-1", nil)
+	inc, action := e.processEvent(ev, "deploy-1", nil)
 	assert.Equal(t, model.ActionCreate, action)
 	key := inc.Key
 
 	// Immediately resolve — MarkResolved also arms the cooldown.
-	e.MarkResolved(key)
+	e.markResolved(key)
 	live := e.state[key]
 	if live != nil {
 		assert.Equal(t, model.StateResolved, live.State)
 	}
 
-	// Recurrence within cooldown — suppressed, no notification at all.
-	_, action = e.Process(ev, "deploy-1", nil)
+	// Recurrence within cooldown — revived, but silent. Announcing again
+	// this soon after the resolve is the flip-flop the cooldown exists to
+	// prevent; dropping the recurrence outright, which is what used to
+	// happen, lost the fact that the problem came straight back.
+	_, action = e.processEvent(ev, "deploy-1", nil)
 	assert.Equal(
 		t,
 		model.ActionSkip,
 		action,
-		"recurrence within cooldown must skip",
+		"recurrence within cooldown must not announce",
 	)
+	live = e.state[key]
+	require.NotNil(t, live)
+	assert.Equal(
+		t,
+		model.StateActive,
+		live.State,
+		"recurrence within cooldown must revive the incident",
+	)
+	assert.Equal(t, 2, live.Count, "and must be counted")
 
-	// Advance past the cooldown window, then recur again — the resolved
-	// incident must silently revive (ActionUpdate, not ActionCreate) to
-	// avoid a resolved→CREATE→resolved flip-flop.
+	// Past the cooldown the incident is simply still active, so a further
+	// report says nothing new. Renotify is what tells the operator it is
+	// still broken.
 	fakeNow = fakeNow.Add(11 * time.Minute)
 	e.now = mockClock(fakeNow)
-	inc2, action := e.Process(ev, "deploy-1", nil)
-	assert.Equal(t, model.ActionUpdate, action)
+	inc2, action := e.processEvent(ev, "deploy-1", nil)
+	assert.Equal(t, model.ActionSkip, action)
 	assert.Equal(t, key, inc2.Key)
 	assert.Equal(t, model.StateActive, inc2.State)
 }
@@ -278,7 +290,7 @@ func TestIncidentKeyMatchesProcess(t *testing.T) {
 			key1 := IncidentKey(tt.ev, tt.owner, tt.cs)
 
 			e := newTestEngine()
-			inc, _ := e.Process(tt.ev, tt.owner, tt.cs)
+			inc, _ := e.processEvent(tt.ev, tt.owner, tt.cs)
 			require.NotNil(t, inc, "Process must produce an incident")
 			assert.Equal(t, key1, inc.Key, "IncidentKey must match Process key")
 		})
@@ -306,10 +318,10 @@ func TestCheckLifecycleFinalizesPendingResolve(t *testing.T) {
 		PodName:   "pod-1",
 		Reason:    "CrashLoopBackOff",
 	}
-	inc, action := e.Process(ev, "deploy-1", nil)
+	inc, action := e.processEvent(ev, "deploy-1", nil)
 	assert.Equal(t, model.ActionCreate, action)
 
-	e.MarkResolved(inc.Key)
+	e.markResolved(inc.Key)
 	live := e.state[inc.Key]
 	if live != nil {
 		assert.Equal(t, model.StatePendingResolve, live.State)
@@ -344,7 +356,7 @@ func TestPerPodBaselineNewPodAlerts(t *testing.T) {
 		PodName:   "pod-1",
 		Reason:    "CrashLoopBackOff",
 	}
-	_, action := e.Process(ev1, "deploy-1", nil)
+	_, action := e.processEvent(ev1, "deploy-1", nil)
 	assert.Equal(t, model.ActionSkip, action)
 
 	// pod-2 is new — should alert
@@ -353,7 +365,7 @@ func TestPerPodBaselineNewPodAlerts(t *testing.T) {
 		PodName:   "pod-2",
 		Reason:    "CrashLoopBackOff",
 	}
-	_, action = e.Process(ev2, "deploy-1", nil)
+	_, action = e.processEvent(ev2, "deploy-1", nil)
 	assert.Equal(t, model.ActionCreate, action)
 }
 
@@ -370,7 +382,10 @@ func TestClearBaselineForPodIsPerPod(t *testing.T) {
 		},
 	)
 
-	e.ClearBaselineForPod("default", "pod-1")
+	e.ClearBaselineForPod(
+		"default", "pod-1",
+		model.ObjectRef{Kind: "Deployment", Namespace: "default", Name: "deploy-1"},
+	)
 
 	// pod-1 un-baselined → create
 	ev1 := event.Event{
@@ -378,7 +393,7 @@ func TestClearBaselineForPodIsPerPod(t *testing.T) {
 		PodName:   "pod-1",
 		Reason:    "CrashLoopBackOff",
 	}
-	_, action := e.Process(ev1, "deploy-1", nil)
+	_, action := e.processEvent(ev1, "deploy-1", nil)
 	assert.Equal(t, model.ActionCreate, action)
 
 	// pod-2 still baselined → skip
@@ -387,6 +402,6 @@ func TestClearBaselineForPodIsPerPod(t *testing.T) {
 		PodName:   "pod-2",
 		Reason:    "CrashLoopBackOff",
 	}
-	_, action = e.Process(ev2, "deploy-1", nil)
+	_, action = e.processEvent(ev2, "deploy-1", nil)
 	assert.Equal(t, model.ActionSkip, action)
 }

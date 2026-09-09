@@ -14,7 +14,8 @@ import (
 	"k8s.io/client-go/tools/cache"
 
 	"github.com/abahmed/kwatch/internal/correlation"
-	"github.com/abahmed/kwatch/internal/event"
+	"github.com/abahmed/kwatch/internal/model"
+	"github.com/abahmed/kwatch/internal/observe"
 )
 
 var defaultServiceSustainedSeconds float64 = 60
@@ -22,7 +23,7 @@ var defaultServiceSustainedSeconds float64 = 60
 func DetectServiceEndpointIssue(
 	svc *corev1.Service,
 	epSlices []*discoveryv1.EndpointSlice,
-) *event.Signal {
+) *model.Observation {
 	if svc == nil {
 		return nil
 	}
@@ -51,18 +52,11 @@ func DetectServiceEndpointIssue(
 
 	if !hasReady {
 		key := svc.Namespace + "/" + svc.Name
-		return &event.Signal{
-			Resource:  "service",
-			Namespace: svc.Namespace,
-			Reason:    constant.ReasonServiceNoEndpoints,
-			Owner:     key,
-			PodName:   svc.Name,
-			Labels:    svc.Labels,
-			Hint: fmt.Sprintf(
-				"service %s has selectors but no ready endpoints",
-				key,
-			),
-		}
+		return observe.Object(
+			"service", svc, constant.ReasonServiceNoEndpoints,
+		).WithHint(fmt.Sprintf(
+			"service %s has selectors but no ready endpoints", key,
+		))
 	}
 	return nil
 }
@@ -70,7 +64,7 @@ func DetectServiceEndpointIssue(
 func DetectServicePortIssue(
 	svc *corev1.Service,
 	epSlices []*discoveryv1.EndpointSlice,
-) *event.Signal {
+) *model.Observation {
 	if svc == nil || len(svc.Spec.Ports) == 0 || len(epSlices) == 0 {
 		return nil
 	}
@@ -89,7 +83,9 @@ func DetectServicePortIssue(
 	return nil
 }
 
-func DetectServiceStatusIssue(svc *corev1.Service, now time.Time) *event.Signal {
+func DetectServiceStatusIssue(
+	svc *corev1.Service, now time.Time,
+) *model.Observation {
 	if svc == nil {
 		return nil
 	}
@@ -102,8 +98,9 @@ func DetectServiceStatusIssue(svc *corev1.Service, now time.Time) *event.Signal 
 		if condition.Message != "" {
 			hint += " — " + condition.Message
 		}
-		return &event.Signal{Resource: "service", Namespace: svc.Namespace, PodName: svc.Name,
-			Owner: key, Reason: constant.ReasonLoadBalancerPending, Labels: svc.Labels, Hint: hint}
+		return observe.Object(
+			"service", svc, constant.ReasonLoadBalancerPending,
+		).WithHint(hint)
 	}
 	if svc.Spec.Type != corev1.ServiceTypeLoadBalancer || serviceHasLoadBalancerAddress(svc) {
 		return nil
@@ -111,9 +108,11 @@ func DetectServiceStatusIssue(svc *corev1.Service, now time.Time) *event.Signal 
 	if now.Sub(svc.CreationTimestamp.Time) < time.Duration(defaultServiceSustainedSeconds)*time.Second {
 		return nil
 	}
-	return &event.Signal{Resource: "service", Namespace: svc.Namespace, PodName: svc.Name,
-		Owner: key, Reason: constant.ReasonLoadBalancerPending, Labels: svc.Labels,
-		Hint: fmt.Sprintf("LoadBalancer service %s has no provisioned ingress address", key)}
+	return observe.Object(
+		"service", svc, constant.ReasonLoadBalancerPending,
+	).WithHint(fmt.Sprintf(
+		"LoadBalancer service %s has no provisioned ingress address", key,
+	))
 }
 
 func serviceHasLoadBalancerAddress(svc *corev1.Service) bool {
@@ -164,11 +163,13 @@ func endpointPortObservations(epSlices []*discoveryv1.EndpointSlice) (map[string
 	return names, numbers
 }
 
-func servicePortMismatch(svc *corev1.Service, detail string) *event.Signal {
+func servicePortMismatch(
+	svc *corev1.Service, detail string,
+) *model.Observation {
 	key := svc.Namespace + "/" + svc.Name
-	return &event.Signal{Resource: "service", Namespace: svc.Namespace, PodName: svc.Name,
-		Owner: key, Reason: constant.ReasonServicePortMismatch, Labels: svc.Labels,
-		Hint: fmt.Sprintf("service %s %s", key, detail)}
+	return observe.Object(
+		"service", svc, constant.ReasonServicePortMismatch,
+	).WithHint(fmt.Sprintf("service %s %s", key, detail))
 }
 
 func servicePortKey(protocol corev1.Protocol, port int32) string {
@@ -197,13 +198,13 @@ func (h *handler) ProcessService(key string, deleted bool) error {
 		return fmt.Errorf("invalid service key %q: %w", key, err)
 	}
 	if deleted {
-		h.correlator.ResolveByResource("service", namespace+"/"+name)
+		h.reconcileGone(model.NewObjectRef("service", namespace, name))
 		return nil
 	}
 	svc, err := h.listers.Service.Services(namespace).Get(name)
 	if err != nil {
 		if errors.IsNotFound(err) {
-			h.correlator.ResolveByResource("service", namespace+"/"+name)
+			h.reconcileGone(model.NewObjectRef("service", namespace, name))
 			return nil
 		}
 		return fmt.Errorf(
@@ -224,9 +225,10 @@ func (h *handler) ProcessServiceObject(
 		return nil
 	}
 
+	subject := model.NewObjectRef("service", svc.Namespace, svc.Name)
 	if deleted {
 		h.clearServiceNoEndpoints(svc.Namespace, svc.Name)
-		h.correlator.ResolveByResource("service", svc.Namespace+"/"+svc.Name)
+		h.reconcileGone(subject)
 		return nil
 	}
 
@@ -245,41 +247,29 @@ func (h *handler) ProcessServiceObject(
 		)
 	}
 
-	sig := DetectServiceEndpointIssue(svc, epSlices)
-	portSig := DetectServicePortIssue(svc, epSlices)
-	statusSig := DetectServiceStatusIssue(svc, h.now())
+	// The endpoint finding is held back until it has lasted long enough to be
+	// real; the reconciler is told only about findings that are being
+	// reported, so a still-settling Service resolves nothing and announces
+	// nothing.
+	var endpoints *model.Observation
 	key := svc.Namespace + "/" + svc.Name
-	if sig != nil {
+	if sig := DetectServiceEndpointIssue(svc, epSlices); sig != nil {
 		first := h.markServiceNoEndpoints(key)
-		sustained := time.Duration(defaultServiceSustainedSeconds) * time.Second
+		sustained := time.Duration(
+			defaultServiceSustainedSeconds,
+		) * time.Second
 		if h.now().Sub(first) >= sustained {
-			h.signalEvent(sig)
+			endpoints = sig
 		}
 	} else {
 		h.clearServiceNoEndpoints(svc.Namespace, svc.Name)
-		h.correlator.MarkResolved(
-			correlation.BuildKey(
-				svc.Namespace,
-				svc.Namespace+"/"+svc.Name,
-				constant.ReasonServiceNoEndpoints,
-				"",
-			),
-		)
 	}
-	if portSig != nil {
-		h.signalEvent(portSig)
-	} else {
-		h.correlator.MarkResolved(correlation.BuildKey(
-			svc.Namespace, key, constant.ReasonServicePortMismatch, "",
-		))
-	}
-	if statusSig != nil {
-		h.signalEvent(statusSig)
-	} else {
-		h.correlator.MarkResolved(correlation.BuildKey(
-			svc.Namespace, key, constant.ReasonLoadBalancerPending, "",
-		))
-	}
+
+	h.reconcile(subject, findings(
+		endpoints,
+		DetectServicePortIssue(svc, epSlices),
+		DetectServiceStatusIssue(svc, h.now()),
+	))
 	return nil
 }
 

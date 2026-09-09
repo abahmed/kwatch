@@ -12,8 +12,8 @@ import (
 	"github.com/abahmed/kwatch/internal/config"
 	"github.com/abahmed/kwatch/internal/correlation"
 	"github.com/abahmed/kwatch/internal/enricher"
-	"github.com/abahmed/kwatch/internal/event"
 	"github.com/abahmed/kwatch/internal/model"
+	"github.com/abahmed/kwatch/internal/observe"
 )
 
 func TestPodStruct(t *testing.T) {
@@ -42,20 +42,15 @@ func TestPvcStableReasonDedup(t *testing.T) {
 		Window: 10 * time.Minute,
 	})
 
-	ev := event.Event{
-		Resource:  "pvc",
-		PodName:   "test-pod",
-		Namespace: "default",
-		Reason:    "VolumeUsageHigh",
-		Hint:      "VolumeUsage(95%)",
-	}
-	owner := "test-pv"
+	ev := observe.VolumeUsage(
+		"default", "test-pvc", "test-pod", "VolumeUsageHigh",
+	).WithHint("VolumeUsage(95%)")
 
-	_, action1 := correlator.Process(ev, owner, nil)
+	_, action1 := correlator.Process(ev)
 	assert.Equal(t, model.ActionCreate, action1)
 
 	// second call with same sig → skip (edge-triggered)
-	_, action2 := correlator.Process(ev, owner, nil)
+	_, action2 := correlator.Process(ev)
 	assert.Equal(
 		t,
 		model.ActionSkip, action2,
@@ -68,27 +63,18 @@ func TestPvcStableReasonDifferentPercentages(t *testing.T) {
 		Window: 10 * time.Minute,
 	})
 
-	ev1 := event.Event{
-		Resource:  "pvc",
-		PodName:   "test-pod",
-		Namespace: "default",
-		Reason:    "VolumeUsageHigh",
-		Hint:      fmt.Sprintf("VolumeUsage(%.0f%%)", 95.0),
-	}
-	owner := "test-pv"
+	ev1 := observe.VolumeUsage(
+		"default", "test-pvc", "test-pod", "VolumeUsageHigh",
+	).WithHint(fmt.Sprintf("VolumeUsage(%.0f%%)", 95.0))
 
-	_, action1 := correlator.Process(ev1, owner, nil)
+	_, action1 := correlator.Process(ev1)
 	assert.Equal(t, model.ActionCreate, action1)
 
-	ev2 := event.Event{
-		Resource:  "pvc",
-		PodName:   "test-pod",
-		Namespace: "default",
-		Reason:    "VolumeUsageHigh",
-		Hint:      fmt.Sprintf("VolumeUsage(%.0f%%)", 96.0),
-	}
+	ev2 := observe.VolumeUsage(
+		"default", "test-pvc", "test-pod", "VolumeUsageHigh",
+	).WithHint(fmt.Sprintf("VolumeUsage(%.0f%%)", 96.0))
 
-	_, action2 := correlator.Process(ev2, owner, nil)
+	_, action2 := correlator.Process(ev2)
 	assert.Equal(
 		t,
 		model.ActionSkip, action2,
@@ -102,16 +88,12 @@ func TestPvcSeverityWarnTier(t *testing.T) {
 		Enricher: &enricher.DefaultEnricher{},
 	})
 
-	ev := event.Event{
-		Resource:  "pvc",
-		PodName:   "test-pod",
-		Namespace: "default",
-		Reason:    "VolumeUsageHigh",
-		Hint:      "VolumeUsage(85%)",
-		Severity:  "normal",
-	}
+	ev := observe.VolumeUsage(
+		"default", "test-pvc", "test-pod", "VolumeUsageHigh",
+	).WithHint("VolumeUsage(85%)").
+		WithSeverity("normal")
 
-	inc, action := correlator.Process(ev, "test-pv", nil)
+	inc, action := correlator.Process(ev)
 	assert.Equal(t, model.ActionCreate, action)
 	assert.Equal(t, model.SeverityNormal, inc.Severity)
 }
@@ -122,16 +104,12 @@ func TestPvcSeverityCriticalTier(t *testing.T) {
 		Enricher: &enricher.DefaultEnricher{},
 	})
 
-	ev := event.Event{
-		Resource:  "pvc",
-		PodName:   "test-pod",
-		Namespace: "default",
-		Reason:    "VolumeUsageHigh",
-		Hint:      "VolumeUsage(92%)",
-		Severity:  "high",
-	}
+	ev := observe.VolumeUsage(
+		"default", "test-pvc", "test-pod", "VolumeUsageHigh",
+	).WithHint("VolumeUsage(92%)").
+		WithSeverity("high")
 
-	inc, action := correlator.Process(ev, "test-pv", nil)
+	inc, action := correlator.Process(ev)
 	assert.Equal(t, model.ActionCreate, action)
 	assert.Equal(t, model.SeverityHigh, inc.Severity)
 }
@@ -142,29 +120,21 @@ func TestPvcSeverityUpgradeFromWarnToCritical(t *testing.T) {
 		Enricher: &enricher.DefaultEnricher{},
 	})
 
-	ev1 := event.Event{
-		Resource:  "pvc",
-		PodName:   "test-pod",
-		Namespace: "default",
-		Reason:    "VolumeUsageHigh",
-		Hint:      "VolumeUsage(85%)",
-		Severity:  "normal",
-	}
+	ev1 := observe.VolumeUsage(
+		"default", "test-pvc", "test-pod", "VolumeUsageHigh",
+	).WithHint("VolumeUsage(85%)").
+		WithSeverity("normal")
 
-	inc1, action1 := correlator.Process(ev1, "test-pv", nil)
+	inc1, action1 := correlator.Process(ev1)
 	assert.Equal(t, model.ActionCreate, action1)
 	assert.Equal(t, model.SeverityNormal, inc1.Severity)
 
-	ev2 := event.Event{
-		Resource:  "pvc",
-		PodName:   "test-pod",
-		Namespace: "default",
-		Reason:    "VolumeUsageHigh",
-		Hint:      "VolumeUsage(92%)",
-		Severity:  "high",
-	}
+	ev2 := observe.VolumeUsage(
+		"default", "test-pvc", "test-pod", "VolumeUsageHigh",
+	).WithHint("VolumeUsage(92%)").
+		WithSeverity("high")
 
-	inc2, action2 := correlator.Process(ev2, "test-pv", nil)
+	inc2, action2 := correlator.Process(ev2)
 	assert.Equal(
 		t,
 		model.ActionUpdate, action2,
@@ -263,19 +233,19 @@ func TestApplyMountedHighKeepsNotified(t *testing.T) {
 		"default/pvc-3": "pv-3",
 	}, false, true)
 
-	assert.True(t, m.notifiedPvc["pv-1"])
+	assert.True(t, m.notifiedPvc["default/pvc-1"])
 	assert.Contains(
 		t,
 		m.lastUsage,
-		"pv-1",
+		"default/pvc-1",
 	)
-	assert.Equal(t, 95.0, m.lastUsage["pv-1"].Pct)
+	assert.Equal(t, 95.0, m.lastUsage["default/pvc-1"].Pct)
 
 	// incident should exist in correlator
 	snap := corr.Snapshot()
 	found := false
 	for _, v := range snap {
-		if v.Name == "pv-1" {
+		if v.Name == "default/pvc-1" {
 			found = true
 		}
 	}
@@ -316,19 +286,19 @@ func TestApplyUnmountedBoundKeepsFiring(t *testing.T) {
 
 	assert.True(
 		t,
-		m.notifiedPvc["pv-1"],
+		m.notifiedPvc["default/pvc-1"],
 		"bound-but-unmounted PVC must keep firing",
 	)
 	assert.Contains(
 		t,
-		m.lastUsage, "pv-1",
+		m.lastUsage, "default/pvc-1",
 		"lastUsage must survive unmount",
 	)
 
 	// incident should still be active (not resolved)
 	snap := corr.Snapshot()
 	for _, v := range snap {
-		if v.Name == "pv-1" {
+		if v.Name == "default/pvc-1" {
 			assert.NotEqual(
 				t,
 				model.StateResolved, v.State,

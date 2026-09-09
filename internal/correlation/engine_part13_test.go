@@ -24,7 +24,7 @@ func TestCascadingSuppressionNoSuppressionForDifferentOwner(t *testing.T) {
 		PodName:   "dep-a",
 		Reason:    "DeploymentUnavailable",
 	}
-	e.Process(depEv, "dep-a", nil)
+	e.processEvent(depEv, "dep-a", nil)
 
 	// Pod incident for different owner "dep-b"
 	podEv := event.Event{
@@ -33,7 +33,7 @@ func TestCascadingSuppressionNoSuppressionForDifferentOwner(t *testing.T) {
 		PodName:   "dep-b-xyz",
 		Reason:    "CrashLoopBackOff",
 	}
-	inc, action := e.Process(podEv, "dep-b", nil)
+	inc, action := e.processEvent(podEv, "dep-b", nil)
 	assert.Equal(
 		t,
 		model.ActionCreate,
@@ -53,8 +53,8 @@ func TestCascadingSuppressionNoSuppressionForResolvedParent(t *testing.T) {
 		PodName:   "myapp",
 		Reason:    "DeploymentUnavailable",
 	}
-	depInc, _ := e.Process(depEv, "myapp", nil)
-	e.MarkResolved(depInc.Key)
+	depInc, _ := e.processEvent(depEv, "myapp", nil)
+	e.markResolved(depInc.Key)
 
 	// Pod incident should not be suppressed (parent is resolved)
 	podEv := event.Event{
@@ -63,7 +63,7 @@ func TestCascadingSuppressionNoSuppressionForResolvedParent(t *testing.T) {
 		PodName:   "myapp-abc",
 		Reason:    "CrashLoopBackOff",
 	}
-	inc, action := e.Process(podEv, "myapp", nil)
+	inc, action := e.processEvent(podEv, "myapp", nil)
 	assert.Equal(
 		t,
 		model.ActionCreate,
@@ -101,7 +101,7 @@ func TestNewIncidentAnnotatesDependentServices(t *testing.T) {
 		Labels:    map[string]string{"app": "myapp"},
 		OwnerKind: "Deployment",
 	}
-	inc, action := e.Process(ev, "myapp", nil)
+	inc, action := e.processEvent(ev, "myapp", nil)
 	assert.Equal(t, model.ActionCreate, action)
 	assert.NotNil(t, inc)
 	// Topology is structured impact, not hint prose.
@@ -139,7 +139,7 @@ func TestNewIncidentAnnotatesParentUnhealthy(t *testing.T) {
 		Reason:    "CrashLoopBackOff",
 		OwnerKind: "Deployment",
 	}
-	inc, action := e.Process(ev, "myapp", nil)
+	inc, action := e.processEvent(ev, "myapp", nil)
 	assert.Equal(t, model.ActionCreate, action)
 	assert.NotNil(t, inc)
 	assert.True(
@@ -175,7 +175,7 @@ func TestNewIncidentDoesNotAnnotateParentWhenHealthy(t *testing.T) {
 		Reason:    "CrashLoopBackOff",
 		OwnerKind: "Deployment",
 	}
-	inc, action := e.Process(ev, "myapp", nil)
+	inc, action := e.processEvent(ev, "myapp", nil)
 	assert.Equal(t, model.ActionCreate, action)
 	assert.NotNil(t, inc)
 	assert.NotContains(t, inc.Hint, "owning")

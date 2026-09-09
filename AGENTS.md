@@ -108,6 +108,7 @@ Dependency direction flows downward; never import upward.
 | `internal/controller` | Informer wiring, workqueues/pipelines, cluster graph, baseline seeding |
 | `internal/handler` | Turns raw Kubernetes objects into candidate incidents (filters + hints) |
 | `internal/filter` | Detect-time suppression filters (pod status, owners, reasons) |
+| `internal/observe` | Kubernetes objects → `model.Observation`; the single pod-ownership resolver |
 | `internal/config` | Config loading/validation, suppression index builder |
 | `internal/correlation` | Incident lifecycle (create/update/resolve/skip), attribution, grouping, cooldowns. The **only** emitter of notifications (`emit.go`) |
 | `internal/insight` | Cause/impact/recent-change analysis over the dependency graph |

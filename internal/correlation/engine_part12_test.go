@@ -24,12 +24,12 @@ func TestSmartGroupingImageAuth(t *testing.T) {
 		PodName: "p1", Namespace: "ns", Reason: "ImagePullBackOff",
 		Image: "nginx:latest", Message: msg,
 	}
-	e.Process(ev, "dep1", nil)
+	e.processEvent(ev, "dep1", nil)
 	ev2 := event.Event{
 		PodName: "p2", Namespace: "ns", Reason: "ImagePullBackOff",
 		Image: "alpine:latest", Message: msg,
 	}
-	e.Process(ev2, "dep2", nil)
+	e.processEvent(ev2, "dep2", nil)
 
 	e.mu.Lock()
 	gk := "ImagePullBackOff|ns|ns"
@@ -41,7 +41,7 @@ func TestSmartGroupingImageAuth(t *testing.T) {
 
 func TestSmartGroupingNamespaceScope(t *testing.T) {
 	e := newSmartGroupingEngine()
-	e.Process(
+	e.processEvent(
 		event.Event{
 			PodName:   "p1",
 			Namespace: "ns",
@@ -50,7 +50,7 @@ func TestSmartGroupingNamespaceScope(t *testing.T) {
 		"dep1",
 		nil,
 	)
-	e.Process(
+	e.processEvent(
 		event.Event{
 			PodName:   "p2",
 			Namespace: "ns2",
@@ -72,12 +72,12 @@ func TestSmartGroupingCrossNamespace(t *testing.T) {
 	e := newSmartGroupingEngine()
 	// Each namespace has its own window, so each owner is the first in its
 	// namespace and both alert immediately; nothing is buffered.
-	_, a1 := e.Process(
+	_, a1 := e.processEvent(
 		event.Event{PodName: "p1", Namespace: "ns1", Reason: "OOMKilled"},
 		"dep1",
 		nil,
 	)
-	_, a2 := e.Process(
+	_, a2 := e.processEvent(
 		event.Event{PodName: "p2", Namespace: "ns2", Reason: "OOMKilled"},
 		"dep1",
 		nil,
@@ -103,7 +103,7 @@ func TestSmartGroupingEntryLimit(t *testing.T) {
 			Reason:    "CrashLoopBackOff",
 			Logs:      sigLog,
 		}
-		e.Process(ev, fmt.Sprintf("dep%d", i), nil)
+		e.processEvent(ev, fmt.Sprintf("dep%d", i), nil)
 	}
 
 	e.mu.Lock()
@@ -125,11 +125,11 @@ func TestSmartGroupingSeverityInheritance(t *testing.T) {
 	e.now = mockClock(now)
 
 	sigLog := "connection refused:5432"
-	e.Process(event.Event{
+	e.processEvent(event.Event{
 		PodName: "p1", Namespace: "ns", Reason: "CrashLoopBackOff",
 		Logs: sigLog, Severity: "normal",
 	}, "dep1", nil)
-	e.Process(event.Event{
+	e.processEvent(event.Event{
 		PodName: "p2", Namespace: "ns", Reason: "CrashLoopBackOff",
 		Logs: sigLog, Severity: "critical",
 	}, "dep2", nil)
@@ -186,14 +186,16 @@ func (m *mockSvcNsLister) Get(name string) (*corev1.Service, error) {
 
 func TestFindDependentServicesNoLister(t *testing.T) {
 	e := newTestEngine()
-	got := e.findDependentServices("ns", map[string]string{"app": "myapp"})
+	got := dependentServices(
+		e.serviceLister, "ns", map[string]string{"app": "myapp"},
+	)
 	assert.Nil(t, got)
 }
 
 func TestFindDependentServicesNoLabels(t *testing.T) {
 	e := newTestEngine()
 	e.SetServiceLister(&mockServiceLister{})
-	got := e.findDependentServices("ns", nil)
+	got := dependentServices(e.serviceLister, "ns", nil)
 	assert.Nil(t, got)
 }
 
@@ -214,7 +216,9 @@ func TestFindDependentServicesMatch(t *testing.T) {
 			}, nil
 		},
 	})
-	got := e.findDependentServices("ns", map[string]string{"app": "api"})
+	got := dependentServices(
+		e.serviceLister, "ns", map[string]string{"app": "api"},
+	)
 	assert.Equal(t, []string{"svc-api"}, got)
 }
 
@@ -235,7 +239,9 @@ func TestFindDependentServicesNoMatch(t *testing.T) {
 			}, nil
 		},
 	})
-	got := e.findDependentServices("ns", map[string]string{"app": "web"})
+	got := dependentServices(
+		e.serviceLister, "ns", map[string]string{"app": "web"},
+	)
 	assert.Empty(t, got)
 }
 
@@ -274,7 +280,9 @@ func TestFindDependentServicesMultiple(t *testing.T) {
 			}, nil
 		},
 	})
-	got := e.findDependentServices("ns", map[string]string{"app": "api"})
+	got := dependentServices(
+		e.serviceLister, "ns", map[string]string{"app": "api"},
+	)
 	assert.Len(t, got, 2)
 	assert.Contains(t, got, "svc-api")
 	assert.Contains(t, got, "svc-grpc")
@@ -295,7 +303,9 @@ func TestFindDependentServicesEmptySelector(t *testing.T) {
 			}, nil
 		},
 	})
-	got := e.findDependentServices("ns", map[string]string{"app": "api"})
+	got := dependentServices(
+		e.serviceLister, "ns", map[string]string{"app": "api"},
+	)
 	assert.Empty(t, got)
 }
 
@@ -328,7 +338,7 @@ func TestCascadingSuppressionSuppressesPodWhenDeploymentUnavailable(
 		PodName:   "myapp",
 		Reason:    "DeploymentUnavailable",
 	}
-	depInc, depAction := e.Process(depEv, "myapp", nil)
+	depInc, depAction := e.processEvent(depEv, "myapp", nil)
 	assert.Equal(t, model.ActionCreate, depAction)
 	assert.NotNil(t, depInc)
 
@@ -340,7 +350,7 @@ func TestCascadingSuppressionSuppressesPodWhenDeploymentUnavailable(
 		ContainerName: "app",
 		Reason:        "CrashLoopBackOff",
 	}
-	podInc, podAction := e.Process(
+	podInc, podAction := e.processEvent(
 		podEv,
 		"myapp",
 		&model.ContainerState{RestartCount: 1},
@@ -355,7 +365,8 @@ func TestCascadingSuppressionSuppressesPodWhenDeploymentUnavailable(
 
 	// Verify the deployment incident was attributed
 	assert.Equal(t, 2, e.state[depInc.Key].Count)
-	assert.True(t, e.state[depInc.Key].Resources["myapp-7d8f9-abc"])
+	assert.Equal(t, 1, e.state[depInc.Key].SuppressedPods)
+	assert.False(t, e.state[depInc.Key].Resources["myapp-7d8f9-abc"])
 }
 
 func TestCascadingSuppressionNoSuppressionWhenDeploymentHealthy(t *testing.T) {
@@ -383,7 +394,7 @@ func TestCascadingSuppressionNoSuppressionWhenDeploymentHealthy(t *testing.T) {
 		PodName:   "myapp-7d8f9-abc",
 		Reason:    "CrashLoopBackOff",
 	}
-	inc, action := e.Process(ev, "myapp", nil)
+	inc, action := e.processEvent(ev, "myapp", nil)
 	assert.Equal(t, model.ActionCreate, action)
 	assert.NotNil(t, inc)
 }

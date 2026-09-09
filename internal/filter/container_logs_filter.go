@@ -1,10 +1,21 @@
 package filter
 
 import (
+	"strings"
+
 	"k8s.io/klog/v2"
 
 	"github.com/abahmed/kwatch/internal/k8s"
 )
+
+// unavailableLogsPrefix opens the body the kubelet returns -- with a 200 --
+// when the runtime has already removed the container whose logs were asked
+// for. Posted as-is it read as the application's own last words.
+const unavailableLogsPrefix = "unable to retrieve container logs for"
+
+func logsUnavailable(logs string) bool {
+	return strings.HasPrefix(strings.TrimSpace(logs), unavailableLogsPrefix)
+}
 
 type ContainerLogsFilter struct{}
 
@@ -30,6 +41,27 @@ func (f ContainerLogsFilter) Enrich(ctx *Context) bool {
 		return false
 	}
 
+	logs := ctx.LogCache.Do(
+		LogCacheKey(ctx.Pod, container),
+		func() string { return fetchContainerLogs(ctx) },
+	)
+
+	for _, pattern := range ctx.Config.Suppression.LogPatterns {
+		if pattern.MatchString(logs) {
+			klog.InfoS(
+				"skipping container logs as it matches the ignore log pattern",
+				"container", container.Name)
+			return true
+		}
+	}
+
+	ctx.Container.Logs = logs
+	return false
+}
+
+// fetchContainerLogs reads a container's recent output from the kubelet.
+func fetchContainerLogs(ctx *Context) string {
+	container := ctx.Container.Container
 	// Always fetch previous container logs when restarts exist so that
 	// the crash output (not the current container's possibly-empty startup)
 	// is included in the notification.
@@ -44,21 +76,26 @@ func (f ContainerLogsFilter) Enrich(ctx *Context) bool {
 		previousLogs,
 		ctx.Config.MaxRecentLogLines)
 
+	// After a crash the runtime may already have collected the previous
+	// container; the current one's startup output is still worth having.
+	if logsUnavailable(logs) {
+		logs = k8s.GetPodContainerLogs(
+			ctx.Ctx,
+			ctx.Client,
+			ctx.Pod.Name,
+			container.Name,
+			ctx.Pod.Namespace,
+			!previousLogs,
+			ctx.Config.MaxRecentLogLines)
+	}
+	if logsUnavailable(logs) {
+		logs = ""
+	}
 	if logs == "" {
-		logs = "[logs unavailable — kubelet timeout or container not yet logged]"
+		return "[logs unavailable — kubelet timeout or container not yet " +
+			"logged]"
 	}
-
-	for _, pattern := range ctx.Config.Suppression.LogPatterns {
-		if pattern.MatchString(logs) {
-			klog.InfoS(
-				"skipping container logs as it matches the ignore log pattern",
-				"container", container.Name)
-			return true
-		}
-	}
-
-	ctx.Container.Logs = logs
-	return false
+	return logs
 }
 
 func (f ContainerLogsFilter) Execute(ctx *Context) bool {

@@ -21,7 +21,9 @@ func TestMassFailureDescribe(t *testing.T) {
 	desc := mf.Describe()
 	assert.Contains(t, desc, "5")
 	assert.Contains(t, desc, "pod")
-	assert.Contains(t, desc, "/n1")
+	assert.Contains(t, desc, "node n1")
+	assert.Contains(t, desc, "CrashLoopBackOff")
+	assert.NotContains(t, desc, "threshold")
 }
 
 func TestMassFailureDescribeEnriched(t *testing.T) {

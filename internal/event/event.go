@@ -137,4 +137,7 @@ type Event struct {
 	Action string
 	// Stable per-incident key for trigger↔resolve correlation
 	DedupKey string
+	// Transient marks a finding that came from a point-in-time Kubernetes
+	// Event rather than from observed object state. See model.Observation.
+	Transient bool
 }

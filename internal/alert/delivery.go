@@ -8,17 +8,34 @@ import (
 	"k8s.io/klog/v2"
 
 	"github.com/abahmed/kwatch/internal/alert/util"
-	"github.com/abahmed/kwatch/internal/constant"
 	"github.com/abahmed/kwatch/internal/event"
 	"github.com/abahmed/kwatch/internal/insight"
 	"github.com/abahmed/kwatch/internal/metrics"
 	"github.com/abahmed/kwatch/internal/model"
 )
 
+// deliverJob is one queued delivery. A job is an incident, a plain message,
+// or a legacy event; queueing all three means messages are paced, digested
+// and dead-lettered exactly like incidents instead of being written straight
+// to the provider from whatever goroutine happened to call Notify.
 type deliverJob struct {
+	kind    jobKind
 	inc     *model.Incident
 	action  model.IncidentAction
 	insight *insight.Insight
+	msg     string
+	ev      *event.Event
+}
+
+// key names the job in logs and dead letters.
+func (j deliverJob) key() string {
+	if j.inc != nil {
+		return string(j.inc.Key)
+	}
+	if j.ev != nil {
+		return j.ev.Reason
+	}
+	return "message"
 }
 
 type DeadLetterEntry struct {
@@ -29,112 +46,32 @@ type DeadLetterEntry struct {
 	Timestamp time.Time            `json:"timestamp"`
 }
 
-// deliverFallbackIncident sends an incident through the fallback's native
-// delivery interface. Event-based providers deliberately implement
-// SendMessage as a no-op, so a fallback must not always use that method.
-func (a *AlertManager) deliverFallbackIncident(
+// deliverFallback re-sends a job through a provider's configured fallback.
+//
+// A fallback used to have three entry points -- one per job shape -- each
+// repeating the provider-type switch. It is one call now: the shape lives in
+// the job, and only the retry budget and the "primary failed" prefix differ
+// from a normal delivery.
+func (a *AlertManager) deliverFallback(
 	ctx context.Context,
 	entry *providerEntry,
 	primary string,
-	inc *model.Incident,
-	action model.IncidentAction,
-	ins *insight.Insight,
+	job deliverJob,
 ) error {
-	if primary == entry.provider.Name() {
-		return a.deliverFallbackIncidentWithContext(ctx, entry, primary, inc, action, ins)
+	opts := deliverOpts{retry: fallbackRetryConfig(entry.retry)}
+	if entry.provider.Name() != primary {
+		opts.prefix = "[fallback — primary " + primary + " failed] "
+	}
+	// Already inside this provider's delivery context: re-entering would
+	// borrow a context from itself.
+	if entry.provider.Name() == primary {
+		return a.dispatch(ctx, entry, job, opts)
 	}
 	var err error
 	util.WithProviderContext(entry.provider.Name(), ctx, func() {
-		err = a.deliverFallbackIncidentWithContext(ctx, entry, primary, inc, action, ins)
+		err = a.dispatch(ctx, entry, job, opts)
 	})
 	return err
-}
-
-func (a *AlertManager) deliverFallbackIncidentWithContext(
-	ctx context.Context,
-	entry *providerEntry,
-	primary string,
-	inc *model.Incident,
-	action model.IncidentAction,
-	ins *insight.Insight,
-) error {
-	p := entry.provider
-	retry := fallbackRetryConfig(entry.retry)
-	if ip, ok := p.(InsightThreadProvider); ok {
-		return sendWithRetry(ctx, func() error {
-			return ip.SendIncidentWithInsight(inc, action, ins)
-		}, retry, p.Name())
-	}
-	if tp, ok := p.(ThreadProvider); ok {
-		return sendWithRetry(ctx, func() error {
-			return tp.SendIncident(inc, action)
-		}, retry, p.Name())
-	}
-	if _, ok := p.(EventDeliveryProvider); ok {
-		ev := incidentToEvent(inc, action)
-		return sendWithRetry(ctx, func() error {
-			return p.SendEvent(ev)
-		}, retry, p.Name())
-	}
-	msg := truncateMsg(
-		"[fallback — primary "+primary+" failed] "+a.buildMessage(inc, action, ins, nil),
-		entry.maxBytes,
-	)
-	return sendWithRetry(ctx, func() error {
-		return p.SendMessage(msg)
-	}, retry, p.Name())
-}
-
-func deliverFallbackMessage(
-	ctx context.Context,
-	entry *providerEntry,
-	primary, msg string,
-) error {
-	var err error
-	util.WithProviderContext(entry.provider.Name(), ctx, func() {
-		err = deliverFallbackMessageWithContext(ctx, entry, primary, msg)
-	})
-	return err
-}
-
-func deliverFallbackMessageWithContext(
-	ctx context.Context,
-	entry *providerEntry,
-	primary, msg string,
-) error {
-	p := entry.provider
-	retry := fallbackRetryConfig(entry.retry)
-	if _, ok := p.(EventDeliveryProvider); ok {
-		ev := &event.Event{PodName: msg, Reason: constant.ReasonNotify}
-		return sendWithRetry(ctx, func() error { return p.SendEvent(ev) }, retry, p.Name())
-	}
-	fallback := truncateMsg(
-		"[fallback — primary "+primary+" failed] "+msg,
-		entry.maxBytes,
-	)
-	return sendWithRetry(ctx, func() error { return p.SendMessage(fallback) }, retry, p.Name())
-}
-
-func deliverFallbackEvent(
-	ctx context.Context,
-	entry *providerEntry,
-	ev *event.Event,
-) error {
-	var err error
-	util.WithProviderContext(entry.provider.Name(), ctx, func() {
-		err = deliverFallbackEventWithContext(ctx, entry, ev)
-	})
-	return err
-}
-
-func deliverFallbackEventWithContext(
-	ctx context.Context,
-	entry *providerEntry,
-	ev *event.Event,
-) error {
-	p := entry.provider
-	retry := fallbackRetryConfig(entry.retry)
-	return sendWithRetry(ctx, func() error { return p.SendEvent(ev) }, retry, p.Name())
 }
 
 const channelCap = 256
@@ -151,131 +88,66 @@ func fallbackRetryConfig(rc retryConfig) retryConfig {
 
 func (a *AlertManager) recordDeadLetter(
 	entry *providerEntry,
-	inc *model.Incident,
-	action model.IncidentAction,
+	job deliverJob,
 	err error,
 ) {
 	a.dlqMu.Lock()
 	defer a.dlqMu.Unlock()
 	a.dlqRing[a.dlqHead] = DeadLetterEntry{
 		Provider:  entry.provider.Name(),
-		Key:       string(inc.Key),
-		Action:    action,
+		Key:       job.key(),
+		Action:    job.action,
 		Error:     err.Error(),
 		Timestamp: a.nowTime(),
 	}
 	a.dlqHead = (a.dlqHead + 1) % dlqCap
 }
 
-// deliverOne handles the full send+retry for a single (entry, incident) pair.
-
+// deliverOne handles the full send, retry, dead-letter and fallback for one
+// job on one provider.
 func (a *AlertManager) deliverOne(
 	ctx context.Context,
 	entry *providerEntry,
-	inc *model.Incident,
-	action model.IncidentAction,
-	ins *insight.Insight,
+	job deliverJob,
 ) {
 	util.WithProviderContext(entry.provider.Name(), ctx, func() {
-		a.deliverOneWithContext(ctx, entry, inc, action, ins)
+		a.deliverOneWithContext(ctx, entry, job)
 	})
 }
 
 func (a *AlertManager) deliverOneWithContext(
 	ctx context.Context,
 	entry *providerEntry,
-	inc *model.Incident,
-	action model.IncidentAction,
-	ins *insight.Insight,
+	job deliverJob,
 ) {
 	p := entry.provider
 	metrics.DefaultRegistry().NotificationsTotal.Add(1)
 
-	tpl := entry.templates
-	if len(tpl) == 0 {
-		tpl = a.globalTemplates()
-	}
-
-	// Evaluate routes before rendering so route-filtered incidents don't pay
-	// for message building (routes depend only on the incident, not the
-	// message).
-	if !shouldDeliver(entry.routes, inc) {
+	// Routes are evaluated before rendering: a filtered incident should not
+	// pay for message building, and routes depend only on the incident.
+	if job.kind == jobIncident && !shouldDeliver(entry.routes, job.inc) {
 		klog.V(4).InfoS("incident filtered by route",
 			"provider", p.Name(),
-			"key", inc.Key)
+			"key", job.key())
 		return
 	}
 
-	raw := a.buildMessage(inc, action, ins, tpl)
-	msg := truncateMsg(raw, entry.maxBytes)
-
-	var err error
-	if ip, ok := p.(InsightThreadProvider); ok {
-		sendInc := inc
-		if entry.maxBytes > 0 {
-			sendInc = a.clampIncidentForProvider(
-				inc,
-				action,
-				ins,
-				entry.maxBytes,
-				tpl,
-				len(raw),
-			)
-		}
-		err = sendWithRetry(ctx, func() error {
-			return ip.SendIncidentWithInsight(sendInc, action, ins)
-		}, entry.retry, p.Name())
-	} else if tp, ok := p.(ThreadProvider); ok {
-		sendInc := inc
-		if entry.maxBytes > 0 {
-			sendInc = a.clampIncidentForProvider(
-				inc,
-				action,
-				ins,
-				entry.maxBytes,
-				tpl,
-				len(raw),
-			)
-		}
-		err = sendWithRetry(ctx, func() error {
-			return tp.SendIncident(sendInc, action)
-		}, entry.retry, p.Name())
-	} else if _, ok := p.(EventDeliveryProvider); ok {
-		ev := incidentToEvent(inc, action)
-		err = sendWithRetry(ctx, func() error {
-			return p.SendEvent(ev)
-		}, entry.retry, p.Name())
-	} else {
-		err = sendWithRetry(ctx, func() error {
-			return p.SendMessage(msg)
-		}, entry.retry, p.Name())
+	err := a.dispatch(ctx, entry, job, deliverOpts{retry: entry.retry})
+	if err == nil {
+		return
 	}
-	if err != nil {
-		metrics.DefaultRegistry().NotificationsDropped.Add(1)
-		klog.ErrorS(
-			err,
-			"failed to send",
-			"provider",
-			p.Name(),
-			"key",
-			inc.Key,
-			"id",
-			inc.ID,
-		)
-		a.recordDeadLetter(entry, inc, action, err)
-		if entry.fallback != nil {
-			fbErr := a.deliverFallbackIncident(
-				ctx, entry.fallback, p.Name(), inc, action, ins,
-			)
-			if fbErr != nil {
-				klog.ErrorS(
-					fbErr,
-					"fallback delivery failed",
-					"provider",
-					entry.fallback.provider.Name(),
-				)
-			}
-		}
+	metrics.DefaultRegistry().NotificationsDropped.Add(1)
+	klog.ErrorS(err, "failed to send",
+		"provider", p.Name(), "key", job.key())
+	a.recordDeadLetter(entry, job, err)
+	if entry.fallback == nil {
+		return
+	}
+	if fbErr := a.deliverFallback(
+		ctx, entry.fallback, p.Name(), job,
+	); fbErr != nil {
+		klog.ErrorS(fbErr, "fallback delivery failed",
+			"provider", entry.fallback.provider.Name())
 	}
 }
 
@@ -300,96 +172,49 @@ func (a *AlertManager) fanOut(job deliverJob) {
 			// Nothing is lost silently — the dropped job goes to the
 			// dead-letter queue, which is readable over the health endpoint.
 			metrics.DefaultRegistry().NotificationsDropped.Add(1)
+			a.digestAdd(entry.provider.Name(), job.inc, job.action)
 			a.recordDeadLetter(
 				&entry,
-				job.inc,
-				job.action,
+				job,
 				fmt.Errorf("delivery queue saturated"),
 			)
 		}
 	}
 }
 
-// deliverAllSync sends directly to every provider (synchronous).
-// Used before Start() is called (e.g. kwatch replay).
-
+// deliverAllSync sends directly to every provider, bypassing the queue. It
+// is only for callers that run before Start -- kwatch replay -- where there
+// are no provider workers to pick a job up.
 func (a *AlertManager) deliverAllSync(
 	inc *model.Incident,
 	action model.IncidentAction,
 	ins *insight.Insight,
 ) {
-	for _, entry := range a.entries {
-		p := entry.provider
-		tpl := entry.templates
-		if len(tpl) == 0 {
-			tpl = a.globalTemplates()
-		}
+	job := incidentJob(inc, action, ins)
+	for i := range a.entries {
+		entry := &a.entries[i]
 		if !shouldDeliver(entry.routes, inc) {
 			continue
 		}
-		raw := a.buildMessage(inc, action, ins, tpl)
-		msg := truncateMsg(raw, entry.maxBytes)
-		var err error
-		if ip, ok := p.(InsightThreadProvider); ok {
-			sendInc := inc
-			if entry.maxBytes > 0 {
-				sendInc = a.clampIncidentForProvider(
-					inc,
-					action,
-					ins,
-					entry.maxBytes,
-					tpl,
-					len(raw),
-				)
-			}
-			err = sendWithRetry(context.Background(), func() error {
-				return ip.SendIncidentWithInsight(sendInc, action, ins)
-			}, entry.retry, p.Name())
-		} else if tp, ok := p.(ThreadProvider); ok {
-			sendInc := inc
-			if entry.maxBytes > 0 {
-				sendInc = a.clampIncidentForProvider(
-					inc,
-					action,
-					ins,
-					entry.maxBytes,
-					tpl,
-					len(raw),
-				)
-			}
-			err = sendWithRetry(context.Background(), func() error {
-				return tp.SendIncident(sendInc, action)
-			}, entry.retry, p.Name())
-		} else if _, ok := p.(EventDeliveryProvider); ok {
-			ev := incidentToEvent(inc, action)
-			err = sendWithRetry(context.Background(), func() error {
-				return p.SendEvent(ev)
-			}, entry.retry, p.Name())
-		} else {
-			err = sendWithRetry(context.Background(), func() error {
-				return p.SendMessage(msg)
-			}, entry.retry, p.Name())
+		err := a.dispatch(
+			context.Background(), entry, job,
+			deliverOpts{retry: entry.retry},
+		)
+		if err == nil {
+			continue
 		}
-		if err != nil {
-			metrics.DefaultRegistry().NotificationsDropped.Add(1)
-			klog.ErrorS(
-				err,
-				"sync delivery failed",
-				"provider",
-				p.Name(),
-				"key",
-				inc.Key,
-				"id",
-				inc.ID,
-			)
-			if entry.fallback != nil {
-				if fbErr := a.deliverFallbackIncident(
-					context.Background(), entry.fallback, p.Name(), inc, action, ins,
-				); fbErr != nil {
-					klog.ErrorS(fbErr, "sync fallback delivery failed",
-						"provider", entry.fallback.provider.Name())
-				}
-			}
+		metrics.DefaultRegistry().NotificationsDropped.Add(1)
+		klog.ErrorS(err, "sync delivery failed",
+			"provider", entry.provider.Name(), "key", job.key())
+		if entry.fallback == nil {
+			continue
+		}
+		if fbErr := a.deliverFallback(
+			context.Background(), entry.fallback,
+			entry.provider.Name(), job,
+		); fbErr != nil {
+			klog.ErrorS(fbErr, "sync fallback delivery failed",
+				"provider", entry.fallback.provider.Name())
 		}
 	}
 }

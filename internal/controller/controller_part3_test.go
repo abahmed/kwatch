@@ -369,16 +369,25 @@ func TestBuildSeenSetSeedsNodeConditions(t *testing.T) {
 
 	ctrl.buildSeenSet()
 
-	// Node conditions SHOULD be seeded into baseline (BASE-1b)
+	// A node condition arms pod suppression and nothing else. The engine
+	// exempts node events from the baseline check outright, so a baseline
+	// entry for one suppressed nothing while consuming a bounded slot and
+	// inflating the startup summary.
 	h.mu.Lock()
 	baseline := h.seenBaseline
+	active := h.activeNodes
 	h.mu.Unlock()
 
 	expectedKey := correlation.BuildKey("", "worker-1", "MemoryPressure", "")
-	assert.Contains(
+	assert.NotContains(
 		baseline,
 		string(expectedKey),
-		"buildSeenSet must seed node conditions",
+		"node conditions must not consume baseline slots",
+	)
+	assert.Contains(
+		active,
+		"worker-1",
+		"buildSeenSet must arm suppression for a failing node",
 	)
 }
 

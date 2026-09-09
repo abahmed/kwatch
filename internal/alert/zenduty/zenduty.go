@@ -11,6 +11,7 @@ import (
 	"github.com/abahmed/kwatch/internal/alert/util"
 	"github.com/abahmed/kwatch/internal/config"
 	"github.com/abahmed/kwatch/internal/event"
+	"github.com/abahmed/kwatch/internal/model"
 )
 
 const (
@@ -54,11 +55,13 @@ func NewZenduty(config map[string]interface{}, appCfg *config.App) *Zenduty {
 
 	klog.InfoS("initializing zenduty with secret apikey")
 
-	// If alert type is not provided, or provided with invalid value
-	// it will fallback to critical type
+	// An alertType that is absent or invalid leaves the field empty, and
+	// each alert then carries its own severity. Defaulting everything to
+	// "critical" meant a CPU-throttling warning arrived at the level whose
+	// job is to page, which is how integrations end up muted.
 	alertType, ok := config["alertType"].(string)
 	if !ok || !slices.Contains(AlertTypes, alertType) {
-		alertType = "critical"
+		alertType = ""
 	}
 
 	return &Zenduty{
@@ -118,9 +121,28 @@ func (z *Zenduty) sendAPI(content []byte) error {
 	return err
 }
 
+// alertTypeFor is the operator's configured alert type when they set one,
+// and the incident's own severity otherwise.
+func (z *Zenduty) alertTypeFor(sev model.Severity) string {
+	if z.alertType != "" {
+		return z.alertType
+	}
+	switch sev {
+	case model.SeverityCritical:
+		return "critical"
+	case model.SeverityHigh:
+		return "error"
+	case model.SeverityMedium, model.SeverityWarning:
+		return "warning"
+	case model.SeverityNormal:
+		return "info"
+	}
+	return "error"
+}
+
 func (z *Zenduty) buildMessage(e *event.Event) ([]byte, error) {
 	payload := zendutyPayload{
-		AlertType: z.alertType,
+		AlertType: z.alertTypeFor(e.Severity),
 		EntityID:  e.DedupKey,
 	}
 

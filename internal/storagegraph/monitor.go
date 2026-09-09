@@ -17,9 +17,10 @@ import (
 
 	"github.com/abahmed/kwatch/internal/constant"
 	"github.com/abahmed/kwatch/internal/correlation"
-	"github.com/abahmed/kwatch/internal/event"
 	kwcontext "github.com/abahmed/kwatch/internal/graphcontext"
 	"github.com/abahmed/kwatch/internal/k8s"
+	"github.com/abahmed/kwatch/internal/model"
+	"github.com/abahmed/kwatch/internal/observe"
 )
 
 var (
@@ -303,7 +304,7 @@ func (m *Monitor) removeNode(gvr schema.GroupVersionResource, obj interface{}) {
 }
 
 func targetKey(target kwcontext.EdgeTarget) string {
-	return target.Kind + "/" + target.Namespace + "/" + target.Name
+	return model.ObjectKey(target.Kind, target.Namespace, target.Name)
 }
 
 func attachError(u *unstructured.Unstructured) bool {
@@ -339,20 +340,19 @@ func (m *Monitor) reportFailure(u *unstructured.Unstructured, reason, hint strin
 	if m.allowed != nil && u.GetNamespace() != "" && !m.allowed(u.GetNamespace()) {
 		return
 	}
-	owner := u.GetName()
-	if u.GetNamespace() != "" {
-		owner = u.GetNamespace() + "/" + owner
-	}
-	m.correlator.Process(event.Event{Resource: strings.ToLower(u.GetKind()), Namespace: u.GetNamespace(), PodName: u.GetName(), Reason: reason, Hint: hint, Labels: u.GetLabels(), Severity: "high"}, owner, nil)
+	// The owner encoding is the observation's to derive; the caller only
+	// says which object it is looking at.
+	obs := observe.ObjectNamed(
+		strings.ToLower(u.GetKind()), u.GetNamespace(), u.GetName(), reason,
+	).WithLabels(u.GetLabels()).WithSeverity(model.SeverityHigh).WithHint(hint)
+	m.correlator.Process(obs)
 }
 
 func (m *Monitor) resolveFailure(u *unstructured.Unstructured, reason string) {
 	if m.correlator == nil {
 		return
 	}
-	owner := u.GetName()
-	if u.GetNamespace() != "" {
-		owner = u.GetNamespace() + "/" + owner
-	}
-	m.correlator.MarkResolved(correlation.BuildKey(u.GetNamespace(), owner, reason, ""))
+	m.correlator.Resolve(model.NewObjectRef(
+		strings.ToLower(u.GetKind()), u.GetNamespace(), u.GetName(),
+	), reason)
 }

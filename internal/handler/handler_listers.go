@@ -11,6 +11,8 @@ import (
 	discoveryv1lister "k8s.io/client-go/listers/discovery/v1"
 	networkingv1lister "k8s.io/client-go/listers/networking/v1"
 	policyv1lister "k8s.io/client-go/listers/policy/v1"
+
+	"github.com/abahmed/kwatch/internal/model"
 )
 
 // Listers bundles every informer-backed lister the handler reads from. The
@@ -82,6 +84,8 @@ func (h *handler) SetActiveNodeIncidents(nodeNames []string) {
 	h.correlator.SetActiveNodeIncidents(nodeNames)
 }
 
-func (h *handler) ClearBaselineForPod(namespace, podName string) {
-	h.correlator.ClearBaselineForPod(namespace, podName)
+func (h *handler) ClearBaselineForPod(
+	namespace, podName string, owner model.ObjectRef,
+) {
+	h.correlator.ClearBaselineForPod(namespace, podName, owner)
 }

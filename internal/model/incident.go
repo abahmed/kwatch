@@ -98,6 +98,10 @@ type Facts struct {
 	// ResourceRequests summarises each container's requests for an
 	// unschedulable pod, e.g. "app requests: cpu=500m mem=1Gi".
 	ResourceRequests []string `json:"resourceRequests,omitempty"`
+	// Volume is the PersistentVolume bound to the claim a storage incident
+	// is about. Storage incidents are identified by their claim, so the PV
+	// name lives here as evidence rather than in the incident's identity.
+	Volume string `json:"volume,omitempty"`
 }
 
 // IsZero reports whether no fact is set.
@@ -108,7 +112,8 @@ func (f Facts) IsZero() bool {
 		f.ProbeEndpoint == "" &&
 		!f.PullSecretsSet &&
 		f.SchedulingDelay == 0 &&
-		len(f.ResourceRequests) == 0
+		len(f.ResourceRequests) == 0 &&
+		f.Volume == ""
 }
 
 // clone returns a copy that shares no memory with f.
@@ -154,20 +159,30 @@ type Subject struct {
 	Reason      string
 	Namespace   string
 	Resource    string
-	// Name identifies the subject of the incident; its encoding depends on the
-	// resource kind, so compare via ParseKey/OwnerPath rather than raw
-	// equality:
-	//   - pod incidents: bare owning-workload name, or the pod's own name when
-	//     the pod is ownerless (set in correlation.newIncident).
-	//   - workload-object incidents (deployment, statefulset, job, ingress,
-	//     service, networkpolicy, ...): fully-qualified "namespace/name".
-	//   - node incidents: the node name.
-	//   - smart-group incidents: a human-readable member summary.
-	Name          string
+	// Name is what the alert calls the subject. It is display text, not
+	// identity: its encoding varies by resource kind -- a bare owning
+	// workload name for pods, "namespace/name" for workload objects, a node
+	// name for nodes, and a whole sentence for a smart group -- and the pod
+	// case is rewritten as replicas come and go. Compare Object, never this.
+	Name string
+	// Object is what the incident is about, decided once when the incident is
+	// created and never rewritten. Everything that has to answer "is this the
+	// same thing?" -- resolving by subject, node inhibition, the dependency
+	// graph -- reads this rather than re-deriving it from Name, which is how
+	// a display change used to become an identity change.
+	Object ObjectRef `json:"-"`
+	// Owner is the workload the subject belongs to, for pod incidents. Empty
+	// when the subject owns itself.
+	Owner         ObjectRef `json:"-"`
 	OwnerKind     string
 	ContainerName string
 	Image         string
 	NodeName      string
+	// Transient records that this incident came from a point-in-time
+	// Kubernetes Event, not from object state. The object still existing
+	// says nothing about whether the event will recur, so the stale sweep
+	// gives a transient incident no presence grace.
+	Transient bool `json:"transient,omitempty"`
 }
 
 // Status is the live state of an incident.
@@ -239,111 +254,6 @@ type Delivery struct {
 	NotifiedSig    string
 	LastNotifiedAt time.Time
 	RenotifyCount  int
-}
-
-// PersistedIncident is a lightweight serializable subset of Incident,
-// stored in the kwatch-incidents ConfigMap to survive restarts.
-type PersistedIncident struct {
-	Key            IncidentKey     `json:"key"`
-	Fingerprint    string          `json:"fingerprint,omitempty"`
-	Reason         string          `json:"reason"`
-	Namespace      string          `json:"namespace"`
-	Name           string          `json:"name"`
-	Resource       string          `json:"resource"`
-	Count          int             `json:"count"`
-	FirstSeen      time.Time       `json:"firstSeen"`
-	LastSeen       time.Time       `json:"lastSeen"`
-	Resources      map[string]bool `json:"resources"`
-	PeakResources  int             `json:"peakResources"`
-	OwnerKind      string          `json:"ownerKind"`
-	RestartCount   int             `json:"restartCount"`
-	Hint           string          `json:"hint"`
-	Facts          Facts           `json:"facts,omitempty"`
-	Severity       Severity        `json:"severity"`
-	State          IncidentState   `json:"state"`
-	ResolveAt      time.Time       `json:"resolveAt,omitempty"`
-	NotifiedSig    string          `json:"notifiedSig"`
-	LastNotifiedAt time.Time       `json:"lastNotifiedAt"`
-	RenotifyCount  int             `json:"renotifyCount"`
-	SuppressedBy   IncidentKey     `json:"suppressedBy,omitempty"`
-}
-
-// ToPersisted converts an Incident into its serializable subset.
-func (inc *Incident) ToPersisted() PersistedIncident {
-	resources := make(map[string]bool, len(inc.Resources))
-	for k, v := range inc.Resources {
-		resources[k] = v
-	}
-	return PersistedIncident{
-		Key:            inc.Key,
-		Fingerprint:    inc.Fingerprint,
-		Reason:         inc.Reason,
-		Namespace:      inc.Namespace,
-		Name:           inc.Name,
-		Resource:       inc.Resource,
-		Count:          inc.Count,
-		FirstSeen:      inc.FirstSeen,
-		LastSeen:       inc.LastSeen,
-		Resources:      resources,
-		PeakResources:  inc.PeakResources,
-		OwnerKind:      inc.OwnerKind,
-		RestartCount:   inc.RestartCount,
-		Hint:           inc.Hint,
-		Facts:          inc.Facts.clone(),
-		Severity:       inc.Severity,
-		State:          inc.State,
-		ResolveAt:      inc.ResolveAt,
-		NotifiedSig:    inc.NotifiedSig,
-		LastNotifiedAt: inc.LastNotifiedAt,
-		RenotifyCount:  inc.RenotifyCount,
-		SuppressedBy:   inc.SuppressedBy,
-	}
-}
-
-// ToIncident converts a PersistedIncident back to a full Incident.
-func (pi *PersistedIncident) ToIncident() *Incident {
-	// Every refresh path writes into Resources; a nil map from an older or
-	// hand-edited ConfigMap would panic the engine on the first event.
-	resources := pi.Resources
-	if resources == nil {
-		resources = make(map[string]bool)
-	}
-	return &Incident{
-		Subject: Subject{
-			Key:         pi.Key,
-			Fingerprint: pi.Fingerprint,
-			Reason:      pi.Reason,
-			Namespace:   pi.Namespace,
-			Name:        pi.Name,
-			Resource:    pi.Resource,
-			OwnerKind:   pi.OwnerKind,
-		},
-		Status: Status{
-			Count:         pi.Count,
-			FirstSeen:     pi.FirstSeen,
-			LastSeen:      pi.LastSeen,
-			Resources:     resources,
-			PeakResources: pi.PeakResources,
-			RestartCount:  pi.RestartCount,
-			Severity:      pi.Severity,
-			State:         pi.State,
-			ResolveAt:     pi.ResolveAt,
-			Containers:    make(map[string]bool),
-			LastUpdate:    pi.LastSeen,
-		},
-		Evidence: Evidence{
-			Hint:  pi.Hint,
-			Facts: pi.Facts.clone(),
-		},
-		Attribution: Attribution{
-			SuppressedBy: pi.SuppressedBy,
-		},
-		Delivery: Delivery{
-			NotifiedSig:    pi.NotifiedSig,
-			LastNotifiedAt: pi.LastNotifiedAt,
-			RenotifyCount:  pi.RenotifyCount,
-		},
-	}
 }
 
 // Clone returns a deep copy of the incident, safe for concurrent use.

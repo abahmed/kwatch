@@ -8,6 +8,7 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/klog/v2"
 
 	kwcontext "github.com/abahmed/kwatch/internal/graphcontext"
 	"github.com/abahmed/kwatch/internal/insight"
@@ -105,20 +106,54 @@ func (s *StateManager) SaveChangeHistory(ctx context.Context, changes []kwcontex
 	return fmt.Errorf("change history exceeds %d bytes", maxChangeHistoryBytes)
 }
 
+// maxTelemetryStateBytes bounds the kubelet telemetry snapshot. It is
+// advisory state -- losing it costs one interval of re-learned baselines --
+// so an oversized payload is dropped rather than failing the save.
+const maxTelemetryStateBytes = 512 * 1024
+
+// LoadTelemetryState reads the kubelet telemetry snapshot, falling back to
+// the shared state ConfigMap where earlier releases wrote it.
 func (s *StateManager) LoadTelemetryState(ctx context.Context) ([]byte, error) {
-	cm, err := s.client.CoreV1().ConfigMaps(s.namespace).Get(ctx, stateConfigMapName, metav1.GetOptions{})
-	if err != nil {
+	cm, err := s.client.CoreV1().ConfigMaps(s.namespace).Get(
+		ctx, telemetryConfigMapName, metav1.GetOptions{},
+	)
+	if err == nil {
+		if raw := cm.Data[telemetryStateKey]; raw != "" {
+			return []byte(raw), nil
+		}
+	} else if !apierrors.IsNotFound(err) {
 		return nil, err
 	}
-	return []byte(cm.Data[telemetryStateKey]), nil
+	legacy, err := s.client.CoreV1().ConfigMaps(s.namespace).Get(
+		ctx, stateConfigMapName, metav1.GetOptions{},
+	)
+	if err != nil {
+		if apierrors.IsNotFound(err) {
+			return nil, nil
+		}
+		return nil, err
+	}
+	return []byte(legacy.Data[telemetryStateKey]), nil
 }
 
-func (s *StateManager) SaveTelemetryState(ctx context.Context, data []byte) error {
-	return s.stateMgr.UpdateWithRetry(ctx, func(cm *corev1.ConfigMap) error {
-		if cm.Data == nil {
-			cm.Data = make(map[string]string)
-		}
-		cm.Data[telemetryStateKey] = string(data)
+func (s *StateManager) SaveTelemetryState(
+	ctx context.Context,
+	data []byte,
+) error {
+	if len(data) > maxTelemetryStateBytes {
+		klog.ErrorS(nil,
+			"kubelet telemetry state too large for ConfigMap, skipping",
+			"size", len(data), "max", maxTelemetryStateBytes)
 		return nil
-	})
+	}
+	return s.telemetryMgr.UpdateWithRetry(
+		ctx,
+		func(cm *corev1.ConfigMap) error {
+			if cm.Data == nil {
+				cm.Data = make(map[string]string)
+			}
+			cm.Data[telemetryStateKey] = string(data)
+			return nil
+		},
+	)
 }

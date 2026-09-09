@@ -2,6 +2,8 @@ package app
 
 import (
 	"context"
+	"encoding/json"
+	"hash/fnv"
 	"time"
 
 	"k8s.io/klog/v2"
@@ -133,9 +135,23 @@ func startBaselineSaver(ctx context.Context, stateMgr interface {
 // startIncidentSaver saves incident snapshots to the ConfigMap whenever a
 // snapshot arrives on the channel. On ctx cancellation it saves the final
 // snapshot before returning.
+// stateSnapshot is the pair that must be written together: incidents, and the
+// smart groups that speak for them. Saved a tick apart they can disagree about
+// which incidents a group is waiting on.
+type stateSnapshot struct {
+	incidents []model.PersistedIncident
+	groups    []model.PersistedGroup
+	// threads is provider name → incident key → conversation id, so a resolve
+	// posted after a restart still lands under the alert that opened it.
+	threads map[string]map[string]string
+	// engine is the correlation bookkeeping that is neither an incident nor a
+	// group: cooldowns, pod UIDs, container states, fan-out windows.
+	engine model.PersistedEngineState
+}
+
 func trySendIncidentSnapshot(
-	ch chan []model.PersistedIncident,
-	snap []model.PersistedIncident,
+	ch chan stateSnapshot,
+	snap stateSnapshot,
 ) {
 	select {
 	case ch <- snap:
@@ -156,28 +172,45 @@ func trySendIncidentSnapshot(
 // purpose: an `any` here is what previously let the saved shape and the
 // restored shape drift apart unnoticed.
 type incidentSaver interface {
-	SavePersistedIncidents(context.Context, []model.PersistedIncident) error
+	SaveIncidentState(
+		ctx context.Context,
+		incidents []model.PersistedIncident,
+		groups []model.PersistedGroup,
+		threads map[string]map[string]string,
+		engine model.PersistedEngineState,
+	) error
 }
 
 func startIncidentSaver(
 	ctx context.Context,
 	stateMgr incidentSaver,
-	ch <-chan []model.PersistedIncident,
+	ch <-chan stateSnapshot,
 ) {
-	var pending []model.PersistedIncident
+	var pending stateSnapshot
+	var havePending bool
+	// lastSaved is the fingerprint of what is already in the ConfigMap. A
+	// snapshot identical to it is not written: on a cluster with a few
+	// long-running incidents the engine reports a change every lifecycle
+	// tick whose serialized form is byte-for-byte the same, and each one
+	// used to be a ConfigMap write.
+	var lastSaved uint64
 	for {
 		select {
 		case snap := <-ch:
-			pending = snap
-			saveIncidentSnapshot(stateMgr, pending, 10*time.Second)
+			pending, havePending = snap, true
+			lastSaved = saveIncidentSnapshot(
+				stateMgr, pending, 10*time.Second, lastSaved,
+			)
 		case <-ctx.Done():
 			for {
 				select {
 				case snap := <-ch:
-					pending = snap
+					pending, havePending = snap, true
 				default:
-					if pending != nil {
-						saveIncidentSnapshot(stateMgr, pending, 5*time.Second)
+					if havePending {
+						saveIncidentSnapshot(
+							stateMgr, pending, 5*time.Second, lastSaved,
+						)
 					}
 					return
 				}
@@ -203,10 +236,26 @@ func saveFinalIncidentSnapshot(deps *serverDeps) {
 	if deps.incidentSaver == nil || deps.correlator == nil {
 		return
 	}
+	// Groups first: freezing is permanent, and the group snapshot reads the
+	// same state the incident snapshot is about to freeze.
+	groups := deps.correlator.SnapshotGroups()
+	var threads map[string]map[string]string
+	if deps.alertManager != nil {
+		threads = deps.alertManager.SnapshotThreads()
+	}
+	engineState := deps.correlator.SnapshotEngineState()
 	saveIncidentSnapshot(
 		deps.incidentSaver,
-		deps.correlator.FreezeAndSnapshotPersisted(),
+		stateSnapshot{
+			incidents: deps.correlator.FreezeAndSnapshotPersisted(),
+			groups:    groups,
+			threads:   threads,
+			engine:    engineState,
+		},
 		5*time.Second,
+		// The final write is unconditional: this is the shutdown snapshot and
+		// there is no next chance to correct it.
+		0,
 	)
 }
 
@@ -223,16 +272,51 @@ func waitFeedbackSaver(deps *serverDeps) bool {
 	}
 }
 
+// saveIncidentSnapshot writes the snapshot unless it matches lastSaved, and
+// returns the fingerprint now on record.
+//
+// The four parts go in one update. They share a ConfigMap, and writing them
+// separately meant four reads and four updates per change -- with a window in
+// between where the group state named incidents that had not been written.
 func saveIncidentSnapshot(
 	stateMgr incidentSaver,
-	snap []model.PersistedIncident,
+	snap stateSnapshot,
 	timeout time.Duration,
-) {
+	lastSaved uint64,
+) uint64 {
+	sig, ok := snapshotFingerprint(snap)
+	if ok && sig == lastSaved {
+		return lastSaved
+	}
 	fctx, cancel := context.WithTimeout(context.Background(), timeout)
 	defer cancel()
-	if err := stateMgr.SavePersistedIncidents(fctx, snap); err != nil {
-		klog.ErrorS(err, "failed to save incidents")
+	err := stateMgr.SaveIncidentState(
+		fctx, snap.incidents, snap.groups, snap.threads, snap.engine,
+	)
+	if err != nil {
+		klog.ErrorS(err, "failed to save correlation state")
+		return lastSaved
 	}
+	if !ok {
+		return lastSaved
+	}
+	return sig
+}
+
+// snapshotFingerprint hashes the serialized snapshot. ok is false when it
+// cannot be serialized, in which case the caller writes unconditionally
+// rather than skipping on a fingerprint it does not have.
+func snapshotFingerprint(snap stateSnapshot) (uint64, bool) {
+	h := fnv.New64a()
+	enc := json.NewEncoder(h)
+	for _, part := range []any{
+		snap.incidents, snap.groups, snap.threads, snap.engine,
+	} {
+		if err := enc.Encode(part); err != nil {
+			return 0, false
+		}
+	}
+	return h.Sum64(), true
 }
 
 func renotifyIntervalBySeverity(m map[string]int) map[string]time.Duration {

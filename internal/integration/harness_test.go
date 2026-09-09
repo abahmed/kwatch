@@ -7,8 +7,8 @@ import (
 
 	"github.com/abahmed/kwatch/internal/correlation"
 	"github.com/abahmed/kwatch/internal/enricher"
-	"github.com/abahmed/kwatch/internal/event"
 	"github.com/abahmed/kwatch/internal/model"
+	"github.com/abahmed/kwatch/internal/observe"
 )
 
 // defaultConfig returns a basic Config suitable for integration tests.
@@ -83,21 +83,31 @@ func newTestEngine(rec *recordingAlertManager) *correlation.Engine {
 	})
 }
 
-// makeEvent is a shorthand for building an event.Event with commonly-used
+// makeEvent is a shorthand for building an observation with commonly-used
 // fields set.
 func makeEvent(
 	resource, podName, namespace, reason, containerName, nodeName string,
-) event.Event {
-	return event.Event{
-		Resource:      resource,
-		PodName:       podName,
-		Namespace:     namespace,
-		Reason:        reason,
-		ContainerName: containerName,
-		NodeName:      nodeName,
-		IncludeEvents: true,
-		IncludeLogs:   true,
+) *model.Observation {
+	obs := observe.ObjectNamed(resource, namespace, podName, reason)
+	obs.Container = containerName
+	obs.NodeName = nodeName
+	obs.IncludeEvents = true
+	obs.IncludeLogs = true
+	return obs
+}
+
+// ownedBy attaches the workload an observation's incidents are keyed by, and
+// the container state behind it. The owner carries no kind, which is how a
+// producer says "key it here" without claiming a workload kind for the alert.
+func ownedBy(
+	obs *model.Observation, owner string, cs *model.ContainerState,
+) *model.Observation {
+	copied := *obs
+	copied.Owner = model.ObjectRef{
+		Namespace: obs.Subject.Namespace, Name: owner,
 	}
+	copied.ContainerState = cs
+	return &copied
 }
 
 // makeContainerState builds a model.ContainerState for use in engine Process
@@ -138,7 +148,7 @@ func TestCrashLoopPodCreatesAndResolves(t *testing.T) {
 	cs := makeContainerState(3, "CrashLoopBackOff", 137)
 
 	// First occurrence: incident is created
-	inc, action := eng.Process(ev, owner, cs)
+	inc, action := eng.Process(ownedBy(ev, owner, cs))
 	if action != model.ActionCreate {
 		t.Fatalf("expected ActionCreate, got %s", action)
 	}
@@ -146,7 +156,7 @@ func TestCrashLoopPodCreatesAndResolves(t *testing.T) {
 		t.Fatal("expected non-nil incident")
 	}
 	if inc.Key != correlation.BuildKey(
-		ev.Namespace,
+		ev.Subject.Namespace,
 		owner,
 		"CrashLoopBackOff",
 		"",
@@ -156,9 +166,7 @@ func TestCrashLoopPodCreatesAndResolves(t *testing.T) {
 
 	// Second occurrence: edge-triggered → skip (same NotifiedSig)
 	inc2, action2 := eng.Process(
-		ev,
-		owner,
-		makeContainerState(4, "CrashLoopBackOff", 137),
+		ownedBy(ev, owner, makeContainerState(4, "CrashLoopBackOff", 137)),
 	)
 	if action2 != model.ActionSkip {
 		t.Fatalf("expected ActionSkip (edge-triggered), got %s", action2)
@@ -168,7 +176,7 @@ func TestCrashLoopPodCreatesAndResolves(t *testing.T) {
 	}
 
 	// Resolve
-	eng.MarkResolved(inc.Key)
+	eng.Resolve(inc.Ref(), inc.Reason)
 
 	// Two notifications: the create we recorded, and the resolved from
 	// LifecycleHook
@@ -208,7 +216,7 @@ func TestNodeConditionCreateAndResolve(t *testing.T) {
 	ev := makeEvent("node", "worker-1", "", "MemoryPressure", "", "worker-1")
 	owner := "worker-1"
 
-	inc, action := eng.Process(ev, owner, nil)
+	inc, action := eng.Process(ownedBy(ev, owner, nil))
 	if action != model.ActionCreate {
 		t.Fatalf(
 			"expected ActionCreate for node MemoryPressure, got %s",
@@ -220,7 +228,7 @@ func TestNodeConditionCreateAndResolve(t *testing.T) {
 	}
 
 	// Resolve
-	eng.MarkResolved(inc.Key)
+	eng.Resolve(inc.Ref(), inc.Reason)
 
 	if rec.Len() != 2 {
 		t.Fatalf(
@@ -257,7 +265,7 @@ func TestInhibitionSuppressesPodsDuringNodeFailure(t *testing.T) {
 
 	// Create a node incident on worker-1
 	nodeEv := makeEvent("node", "worker-1", "", "NodeNotReady", "", "worker-1")
-	nodeInc, nodeAction := eng.Process(nodeEv, "worker-1", nil)
+	nodeInc, nodeAction := eng.Process(ownedBy(nodeEv, "worker-1", nil))
 	if nodeAction != model.ActionCreate {
 		t.Fatalf("expected ActionCreate for node incident, got %s", nodeAction)
 	}
@@ -271,11 +279,11 @@ func TestInhibitionSuppressesPodsDuringNodeFailure(t *testing.T) {
 		"app",
 		"worker-1",
 	)
-	_, podAction := eng.Process(
+	_, podAction := eng.Process(ownedBy(
 		podEv,
 		"my-deployment",
 		makeContainerState(1, "CrashLoopBackOff", 1),
-	)
+	))
 	if podAction != model.ActionSkip {
 		t.Fatalf("expected ActionSkip (node-inhibited), got %s", podAction)
 	}
@@ -289,7 +297,7 @@ func TestInhibitionSuppressesPodsDuringNodeFailure(t *testing.T) {
 	}
 
 	// After node resolves, pod should be allowed
-	eng.MarkResolved(nodeInc.Key)
+	eng.Resolve(nodeInc.Ref(), nodeInc.Reason)
 	if rec.Len() != 2 {
 		t.Fatalf(
 			"expected 2 notifications after node resolve, got %d",
@@ -318,11 +326,11 @@ func TestBaselineSuppressesRestartRepage(t *testing.T) {
 	})
 
 	ev := makeEvent("pod", "my-pod", "default", "CrashLoopBackOff", "main", "")
-	inc, action := eng.Process(
+	inc, action := eng.Process(ownedBy(
 		ev,
 		"my-deployment",
 		makeContainerState(3, "CrashLoopBackOff", 137),
-	)
+	))
 	if action != model.ActionSkip {
 		t.Fatalf("expected ActionSkip for baselined pod, got %s", action)
 	}

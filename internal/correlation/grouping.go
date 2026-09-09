@@ -82,8 +82,17 @@ type Config struct {
 	Enricher          enricher.Enricher
 	LifecycleHook     func(inc *model.Incident, action model.IncidentAction)
 	// called during lifecycle tick; reports mass failures
-	MassFailureHook            func()
-	BaselineTTL                time.Duration
+	MassFailureHook func()
+	BaselineTTL     time.Duration
+	// OwnerBaselineTTL bounds owner-level baseline entries, which are seeded
+	// with an empty pod name and cover every Pod of that owner.
+	//
+	// They shared BaselineTTL (24h). Nothing else expires them: only an
+	// incident's resolve clears a baseline entry, and no incident exists
+	// because the entry suppressed it. A Deployment mid-rollout when kwatch
+	// started was therefore silenced for a day -- including when it recovered
+	// and broke again for real. This only has to outlive the startup burst.
+	OwnerBaselineTTL           time.Duration
 	Baseline                   map[string]map[string]int64
 	OnBaselineChange           func(baseline map[string]map[string]int64)
 	EscalationEnabled          bool
@@ -105,6 +114,16 @@ type Config struct {
 	// groups are collapsed into a single namespace-level notification. Zero
 	// disables the collapse.
 	NamespaceFanOutThreshold int
+	// SubjectPresent reports whether the object an incident is about still
+	// exists, and whether the caller can answer for that kind at all.
+	//
+	// Staleness alone is a poor resolve signal. A Deployment wedged on a
+	// failed rollout stops producing events once the last replica gives up,
+	// and the engine then closed the incident as if the rollout had
+	// succeeded. Asking whether the object is still there separates "gone,
+	// so genuinely finished" from "still broken, just quiet". Nil keeps the
+	// old staleness-only behaviour.
+	SubjectPresent func(resource, namespace, name string) (exists, known bool)
 }
 
 func containsAny(s string, substrs ...string) bool {
@@ -143,7 +162,77 @@ func classifyImagePullScope(msg string) string {
 	}
 }
 
-func computeGroupKey(r string, ev event.Event, owner string) string {
+// ownerGroupKey is the owner-scoped grouping key: every incident with the
+// same reason, in the same namespace, under the same workload shares it.
+//
+// It was spelled out by hand in five places -- three arms of computeGroupKey,
+// the fan-out scope check, and the group-folding loop. The same string built
+// five ways is the shape of bug that takes an afternoon to find, because a
+// mismatch does not fail: the lookup simply misses and the group silently
+// does not fold.
+func ownerGroupKey(reason, namespace, owner string) string {
+	return reason + "|" + namespace + "|" + owner
+}
+
+// groupSignature is the log-derived identity used when the same crash message
+// appears across otherwise unrelated workloads. Only the log-bearing reasons
+// have one, and it is computed once per incident: extracting a signature walks
+// the whole log tail, and grouping used to do it twice for every event.
+func groupSignature(r, logs string) string {
+	switch r {
+	case constant.ReasonCrashLoopBackOff,
+		constant.ReasonBackOff,
+		constant.ReasonError:
+		return enricher.SignatureHint(logs)
+	}
+	return ""
+}
+
+// groupPlan is the decision half of smart grouping: which group an incident
+// belongs to, and the member entry that will stand for it.
+//
+// Grouping used to decide and mutate in one pass -- the window index, the
+// buffer, the incident's own notification fields and the metric counter were
+// all written while the key was still being worked out, so there was no point
+// at which the decision could be inspected on its own. Splitting the two
+// leaves a pure function that answers "what group is this?" and a short
+// applier that performs the writes.
+type groupPlan struct {
+	key   string
+	entry groupEntry
+}
+
+// planGroupEntry computes the group an incident belongs to. Pure: it reads
+// only its arguments and writes nothing.
+func planGroupEntry(
+	inc *model.Incident,
+	ev event.Event,
+	owner string,
+) groupPlan {
+	r := normalizeReason(ev.Reason)
+	sig := groupSignature(r, ev.Logs)
+	return groupPlan{
+		key: computeGroupKey(r, ev, owner, sig),
+		entry: groupEntry{
+			key:             inc.Key,
+			prevNotifiedSig: inc.NotifiedSig,
+			namespace:       ev.Namespace,
+			owner:           owner,
+			reason:          r,
+			kind:            ev.Resource,
+			podName:         ev.PodName,
+			containerName:   ev.ContainerName,
+			image:           ev.Image,
+			nodeName:        ev.NodeName,
+			logSignature:    sig,
+		},
+	}
+}
+
+// computeGroupKey maps a reason onto the scope its incidents should share.
+// sig is the precomputed log signature from groupSignature; it is only
+// consulted for the log-bearing reasons.
+func computeGroupKey(r string, ev event.Event, owner, sig string) string {
 	switch r {
 	case constant.ReasonOOMKilled,
 		constant.ReasonOOMRepeating,
@@ -173,15 +262,15 @@ func computeGroupKey(r string, ev event.Event, owner string) string {
 		constant.ReasonCronJobNotScheduled,
 		constant.ReasonVolumeUsageHigh,
 		constant.ReasonPreExistingAtStartup:
-		return r + "|" + ev.Namespace + "|" + owner
+		return ownerGroupKey(r, ev.Namespace, owner)
 
 	case constant.ReasonCrashLoopBackOff,
 		constant.ReasonBackOff,
 		constant.ReasonError:
-		if sig := enricher.SignatureHint(ev.Logs); sig != "" {
+		if sig != "" {
 			return r + "|sig|" + sig
 		}
-		return r + "|" + ev.Namespace + "|" + owner
+		return ownerGroupKey(r, ev.Namespace, owner)
 
 	case constant.ReasonImagePullBackOff, constant.ReasonErrImagePull:
 		scope := classifyImagePullScope(ev.Message)
@@ -228,6 +317,6 @@ func computeGroupKey(r string, ev event.Event, owner string) string {
 		return r + "|ns|" + ev.Namespace
 
 	default:
-		return r + "|" + ev.Namespace + "|" + owner
+		return ownerGroupKey(r, ev.Namespace, owner)
 	}
 }

@@ -116,8 +116,8 @@ func TestDetectNetworkPolicyDenyAllEgress(t *testing.T) {
 	sig := DetectNetworkPolicyIssue(policy)
 	assert.NotNil(t, sig)
 	assert.Equal(t, "RestrictiveNetworkPolicy", sig.Reason)
-	assert.Equal(t, "networkpolicy", sig.Resource)
-	assert.Equal(t, "default/test-netpol", sig.Owner)
+	assert.Equal(t, "networkpolicy", sig.Subject.Kind)
+	assert.Equal(t, "default/test-netpol", sig.OwnerPath())
 }
 
 func TestDetectNetworkPolicyDenyAllEgressEmptyPolicyTypes(t *testing.T) {

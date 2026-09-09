@@ -2,6 +2,7 @@ package handler
 
 import (
 	"fmt"
+	"strconv"
 	"strings"
 
 	"github.com/abahmed/kwatch/internal/constant"
@@ -10,6 +11,7 @@ import (
 	"github.com/abahmed/kwatch/internal/model"
 
 	corev1 "k8s.io/api/core/v1"
+	"k8s.io/apimachinery/pkg/util/intstr"
 )
 
 // buildContainerHint computes a rich diagnostic hint from container state +
@@ -206,6 +208,22 @@ func buildProbeHint(reason string, spec *corev1.Container) string {
 	)
 }
 
+// probePort renders a probe's port. A probe may name a container port
+// instead of numbering it, and the numeric accessor has no answer for that:
+// every named-port probe used to be described as ":0".
+func probePort(port intstr.IntOrString) string {
+	if port.Type == intstr.String {
+		if port.StrVal == "" {
+			return ""
+		}
+		return ":" + port.StrVal
+	}
+	if port.IntValue() == 0 {
+		return ""
+	}
+	return ":" + strconv.Itoa(port.IntValue())
+}
+
 // probeEndpoint describes what the failing probe checks: "HTTP GET
 // http://app:8080/healthz", "TCP check :5432" or "exec /ready.sh". Empty when
 // the container declares no such probe.
@@ -223,15 +241,26 @@ func probeEndpoint(reason string, spec *corev1.Container) string {
 	case probe == nil:
 		return ""
 	case probe.HTTPGet != nil:
+		// Host and the container name are alternatives, not parts of one
+		// string: concatenating them produced "apppostgres:8080/healthz"
+		// whenever a probe set an explicit host.
+		host := probe.HTTPGet.Host
+		if host == "" {
+			host = spec.Name
+		}
+		scheme := "http"
+		if probe.HTTPGet.Scheme == corev1.URISchemeHTTPS {
+			scheme = "https"
+		}
 		return fmt.Sprintf(
-			"HTTP GET http://%s%s:%d%s",
-			spec.Name,
-			probe.HTTPGet.Host,
-			probe.HTTPGet.Port.IntValue(),
+			"HTTP GET %s://%s%s%s",
+			scheme,
+			host,
+			probePort(probe.HTTPGet.Port),
 			probe.HTTPGet.Path,
 		)
 	case probe.TCPSocket != nil:
-		return fmt.Sprintf("TCP check :%d", probe.TCPSocket.Port.IntValue())
+		return "TCP check " + probePort(probe.TCPSocket.Port)
 	case probe.Exec != nil:
 		cmd := ""
 		if len(probe.Exec.Command) > 0 {

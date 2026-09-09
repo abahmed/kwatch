@@ -26,7 +26,7 @@ func TestFanOutSaturatedQueueRecordsDeadLetter(t *testing.T) {
 		},
 	}
 	for i := 0; i < channelCap; i++ {
-		ch <- deliverJob{inc: &model.Incident{
+		ch <- deliverJob{kind: jobIncident, inc: &model.Incident{
 			Subject: model.Subject{
 				Key: model.IncidentKey(fmt.Sprintf("queued-%d", i)),
 			},
@@ -38,7 +38,7 @@ func TestFanOutSaturatedQueueRecordsDeadLetter(t *testing.T) {
 	}}
 
 	am.mu.Lock()
-	am.fanOut(deliverJob{inc: inc, action: model.ActionCreate})
+	am.fanOut(incidentJob(inc, model.ActionCreate, nil))
 	am.mu.Unlock()
 
 	// Under saturation the already-queued notifications are kept — they are
@@ -127,7 +127,11 @@ func TestDeliverOnePrefersInsightCapableProvider(t *testing.T) {
 		Pattern: "node_failure",
 	}
 
-	am.deliverOne(context.Background(), &entry, inc, model.ActionCreate, ins)
+	am.deliverOne(
+		context.Background(),
+		&entry,
+		incidentJob(inc, model.ActionCreate, ins),
+	)
 
 	assert.Equal(t, 1, fp.insightCalls)
 	assert.False(

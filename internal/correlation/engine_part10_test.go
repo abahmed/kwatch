@@ -16,7 +16,7 @@ func TestSmartGroupingPendingGroupCleanedAfterFlush(t *testing.T) {
 	e := newSmartGroupingEngine()
 	e.now = mockClock(now)
 
-	e.Process(
+	e.processEvent(
 		event.Event{PodName: "p1", Namespace: "ns", Reason: "CrashLoopBackOff"},
 		"dep1",
 		nil,
@@ -35,7 +35,7 @@ func TestSmartGroupingPendingGroupCleanedAfterFlush(t *testing.T) {
 func TestSmartGroupingIncidentHasNotifiedSig(t *testing.T) {
 	e := newSmartGroupingEngine()
 	// First owner: announced immediately, so its signature is the real one.
-	inc, action := e.Process(
+	inc, action := e.processEvent(
 		event.Event{PodName: "p1", Namespace: "ns", Reason: "CrashLoopBackOff"},
 		"dep1",
 		nil,
@@ -45,7 +45,7 @@ func TestSmartGroupingIncidentHasNotifiedSig(t *testing.T) {
 	assert.NotZero(t, inc.NotifiedSig, "NotifiedSig must be set")
 	assert.NotZero(t, inc.LastNotifiedAt, "LastNotifiedAt must be set")
 	// Second owner: buffered, and the signature is set to hold it back.
-	inc2, action := e.Process(
+	inc2, action := e.processEvent(
 		event.Event{PodName: "p2", Namespace: "ns", Reason: "CrashLoopBackOff"},
 		"dep2",
 		nil,
@@ -67,7 +67,7 @@ func TestSmartGroupingReFlushUpdateNotCreate(t *testing.T) {
 	// Two owners sharing a log signature form one genuine group. A buffer
 	// holding a single member is emitted as that member, not as a group.
 	sigLog := "connection refused:5432"
-	e.Process(
+	e.processEvent(
 		event.Event{
 			PodName:   "p1",
 			Namespace: "ns",
@@ -77,7 +77,7 @@ func TestSmartGroupingReFlushUpdateNotCreate(t *testing.T) {
 		"dep1",
 		nil,
 	)
-	e.Process(
+	e.processEvent(
 		event.Event{
 			PodName:   "p2",
 			Namespace: "ns",
@@ -108,7 +108,7 @@ func TestSmartGroupingReFlushUpdateNotCreate(t *testing.T) {
 	key := groupInc.Key
 
 	// Re-arm the buffer with more events on the same group.
-	e.Process(
+	e.processEvent(
 		event.Event{
 			PodName:   "p3",
 			Namespace: "ns",
@@ -118,7 +118,7 @@ func TestSmartGroupingReFlushUpdateNotCreate(t *testing.T) {
 		"dep1",
 		nil,
 	)
-	e.Process(
+	e.processEvent(
 		event.Event{
 			PodName:   "p4",
 			Namespace: "ns",
@@ -154,7 +154,7 @@ func TestSmartGroupingReFlushCooldownSuppresses(t *testing.T) {
 	e.now = mockClock(now)
 
 	sigLog := "connection refused:5432"
-	e.Process(
+	e.processEvent(
 		event.Event{
 			PodName:   "p1",
 			Namespace: "ns",
@@ -164,7 +164,7 @@ func TestSmartGroupingReFlushCooldownSuppresses(t *testing.T) {
 		"dep1",
 		nil,
 	)
-	e.Process(
+	e.processEvent(
 		event.Event{
 			PodName:   "p1b",
 			Namespace: "ns",
@@ -189,7 +189,7 @@ func TestSmartGroupingReFlushCooldownSuppresses(t *testing.T) {
 	assert.Equal(t, 1, groupCalls)
 
 	// Re-arm the buffer and flush within the cooldown: no re-notification.
-	e.Process(
+	e.processEvent(
 		event.Event{
 			PodName:   "p2",
 			Namespace: "ns",
@@ -199,7 +199,7 @@ func TestSmartGroupingReFlushCooldownSuppresses(t *testing.T) {
 		"dep1",
 		nil,
 	)
-	e.Process(
+	e.processEvent(
 		event.Event{
 			PodName:   "p2b",
 			Namespace: "ns",
@@ -225,7 +225,7 @@ func TestSmartGroupingReGroupAfterCooldownSkip(t *testing.T) {
 	e.now = mockClock(now)
 
 	sigLog := "connection refused:5432"
-	e.Process(
+	e.processEvent(
 		event.Event{
 			PodName:   "p1",
 			Namespace: "ns",
@@ -235,7 +235,7 @@ func TestSmartGroupingReGroupAfterCooldownSkip(t *testing.T) {
 		"dep1",
 		nil,
 	)
-	e.Process(
+	e.processEvent(
 		event.Event{
 			PodName:   "p1b",
 			Namespace: "ns",
@@ -262,7 +262,7 @@ func TestSmartGroupingReGroupAfterCooldownSkip(t *testing.T) {
 
 	// Re-arm with the same member and flush within the renotify cooldown:
 	// suppressed, but the member must remain re-groupable afterward.
-	e.Process(
+	e.processEvent(
 		event.Event{
 			PodName:   "p1",
 			Namespace: "ns",
@@ -272,7 +272,7 @@ func TestSmartGroupingReGroupAfterCooldownSkip(t *testing.T) {
 		"dep1",
 		nil,
 	)
-	e.Process(
+	e.processEvent(
 		event.Event{
 			PodName:   "p1b",
 			Namespace: "ns",
@@ -294,7 +294,7 @@ func TestSmartGroupingReGroupAfterCooldownSkip(t *testing.T) {
 	// The suppressed flush must reset NotifiedSig so the member can re-enter
 	// the buffer; once the cooldown lapses the recurring flush must emit an
 	// UPDATE rather than staying silent forever.
-	e.Process(
+	e.processEvent(
 		event.Event{
 			PodName:   "p1",
 			Namespace: "ns",
@@ -304,7 +304,7 @@ func TestSmartGroupingReGroupAfterCooldownSkip(t *testing.T) {
 		"dep1",
 		nil,
 	)
-	e.Process(
+	e.processEvent(
 		event.Event{
 			PodName:   "p1b",
 			Namespace: "ns",

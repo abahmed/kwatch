@@ -2,30 +2,27 @@ package statuswatch
 
 import (
 	"context"
-	"crypto/x509"
-	"encoding/pem"
 	"fmt"
 	"strings"
 	"sync"
 	"time"
 
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/client-go/discovery"
 	"k8s.io/client-go/dynamic"
 	"k8s.io/client-go/dynamic/dynamicinformer"
+	corev1lister "k8s.io/client-go/listers/core/v1"
 	"k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/cache"
 	"k8s.io/klog/v2"
 
 	"github.com/abahmed/kwatch/internal/clock"
-	"github.com/abahmed/kwatch/internal/constant"
 	"github.com/abahmed/kwatch/internal/correlation"
-	"github.com/abahmed/kwatch/internal/event"
 	kwcontext "github.com/abahmed/kwatch/internal/graphcontext"
 	"github.com/abahmed/kwatch/internal/k8s"
+	"github.com/abahmed/kwatch/internal/model"
 )
 
 // Monitor watches APIService and discovered CRD instances. It only treats
@@ -49,7 +46,20 @@ type Monitor struct {
 	graphReferences   []graphReferenceRule
 	admissionPolicies map[string]struct{}
 	admissionBindings map[string]*unstructured.Unstructured
-	now               func() time.Time
+	// serviceLister answers the Service lookup a legacy Endpoints object
+	// needs, from the informer cache instead of a live API read.
+	serviceLister corev1lister.ServiceLister
+	now           func() time.Time
+}
+
+// SetServiceLister wires the controller's Service cache. Legacy Endpoints
+// objects can only be judged against the Service they back, and there is one
+// of those per Endpoints object on every resync; reading the cache turns that
+// from an API round trip into a map lookup.
+func (m *Monitor) SetServiceLister(lister corev1lister.ServiceLister) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	m.serviceLister = lister
 }
 
 type graphReferenceRule struct {
@@ -148,6 +158,10 @@ func (m *Monitor) SetGraphReferenceRules(entries []string) {
 	m.graphReferences = rules
 }
 
+// cacheSyncTimeout bounds the initial informer sync, matching the
+// controller's own bound. A var so tests can shorten it.
+var cacheSyncTimeout = 5 * time.Minute
+
 func (m *Monitor) Start(ctx context.Context) error {
 	m.ctx = ctx
 	factory := dynamicinformer.NewDynamicSharedInformerFactory(m.client, m.resync)
@@ -187,7 +201,15 @@ func (m *Monitor) Start(ctx context.Context) error {
 			namespacedFactory.Start(ctx.Done())
 		}
 	}
-	if !cache.WaitForCacheSync(ctx.Done(), apiInformer.HasSynced, crdInformer.HasSynced) {
+	// Bounded, because ctx.Done() alone never fires for a cluster where the
+	// CRD API is slow or unreachable: the monitor then blocked here forever
+	// and its component was reported neither healthy nor failed, just
+	// missing. A timeout turns that into an error the caller records.
+	syncCtx, cancel := context.WithTimeout(ctx, cacheSyncTimeout)
+	defer cancel()
+	if !cache.WaitForCacheSync(
+		syncCtx.Done(), apiInformer.HasSynced, crdInformer.HasSynced,
+	) {
 		return fmt.Errorf("statuswatch: informer sync failed")
 	}
 	return nil
@@ -263,95 +285,24 @@ func (m *Monitor) processStatic(obj interface{}, watched staticWatch) {
 	if !ok || (m.namespaceAllowed != nil && !m.namespaceAllowed(u.GetNamespace())) {
 		return
 	}
-	owner := resourceOwner(u)
-	var sig *event.Signal
+	var sig *model.Observation
 	evaluated := true
 	switch watched.resource {
 	case "endpoints":
 		sig, evaluated = m.legacyEndpointSignal(u)
 	case "certificatesigningrequest", "podcertificaterequest":
-		sig = certificateSignal(u, watched.resource, owner, m.nowTime())
+		sig = certificateSignal(u, watched.resource, m.nowTime())
 	default:
-		sig = failureSignal(u, watched.resource, owner, watched.rules)
+		sig = failureSignal(u, watched.resource, watched.rules)
 	}
 	if !evaluated {
 		return
 	}
 	if sig != nil {
-		m.correlator.Process(event.Event{Resource: sig.Resource, Namespace: sig.Namespace, PodName: sig.PodName, Reason: sig.Reason, Hint: sig.Hint, Labels: sig.Labels}, sig.Owner, nil)
+		m.correlator.Process(sig)
 	} else {
-		m.correlator.MarkResolved(correlation.BuildKey(u.GetNamespace(), owner, reasonFor(watched.resource), ""))
+		m.resolveObject(u, watched.resource)
 	}
-}
-
-func (m *Monitor) legacyEndpointSignal(u *unstructured.Unstructured) (*event.Signal, bool) {
-	if u.GetNamespace() == "" {
-		return nil, true
-	}
-	service, err := m.client.Resource(schema.GroupVersionResource{Group: "", Version: "v1", Resource: "services"}).Namespace(u.GetNamespace()).Get(m.ctx, u.GetName(), metav1.GetOptions{})
-	if err != nil {
-		return nil, false
-	}
-	selector, _, _ := unstructured.NestedStringMap(service.Object, "spec", "selector")
-	clusterIP, _, _ := unstructured.NestedString(service.Object, "spec", "clusterIP")
-	typeName, _, _ := unstructured.NestedString(service.Object, "spec", "type")
-	if len(selector) == 0 || clusterIP == "" || clusterIP == "None" || typeName == "ExternalName" {
-		return nil, true
-	}
-	subsets, _, _ := unstructured.NestedSlice(u.Object, "subsets")
-	for _, raw := range subsets {
-		subset, ok := raw.(map[string]interface{})
-		if !ok {
-			continue
-		}
-		addresses, _, _ := unstructured.NestedSlice(subset, "addresses")
-		if len(addresses) > 0 {
-			return nil, true
-		}
-	}
-	key := u.GetNamespace() + "/" + u.GetName()
-	return &event.Signal{Resource: "service", Namespace: u.GetNamespace(), PodName: u.GetName(), Owner: key, Reason: constant.ReasonServiceNoEndpoints, Labels: u.GetLabels(), Hint: fmt.Sprintf("legacy Endpoints object %s has no ready addresses", key)}, true
-}
-
-func certificateSignal(u *unstructured.Unstructured, resource, owner string, now time.Time) *event.Signal {
-	rules := map[string]map[string]bool{"Denied": {"True": true}, "Failed": {"True": true}}
-	if sig := failureSignal(u, resource, owner, rules); sig != nil {
-		return sig
-	}
-	conditions, _, _ := unstructured.NestedSlice(u.Object, "status", "conditions")
-	approved := false
-	for _, raw := range conditions {
-		condition, ok := raw.(map[string]interface{})
-		if !ok {
-			continue
-		}
-		typ, _ := condition["type"].(string)
-		status, _ := condition["status"].(string)
-		if typ == "Approved" && status == "True" {
-			approved = true
-		}
-	}
-	creation := u.GetCreationTimestamp()
-	if !approved || creation.IsZero() || now.Sub(creation.Time) < 10*time.Minute {
-		return nil
-	}
-	certificateField := "certificate"
-	if resource == "podcertificaterequest" {
-		certificateField = "certificateChain"
-	}
-	certificate, _, _ := unstructured.NestedString(u.Object, "status", certificateField)
-	if certificate == "" {
-		return &event.Signal{Resource: resource, Namespace: u.GetNamespace(), PodName: u.GetName(), Owner: owner, Reason: reasonFor(resource), Labels: u.GetLabels(), Hint: "certificate request was approved but the signer has not issued a certificate after 10 minutes"}
-	}
-	block, _ := pem.Decode([]byte(certificate))
-	if block == nil {
-		return nil
-	}
-	cert, err := x509.ParseCertificate(block.Bytes)
-	if err != nil || cert.NotAfter.Sub(now) > 7*24*time.Hour {
-		return nil
-	}
-	return &event.Signal{Resource: resource, Namespace: u.GetNamespace(), PodName: u.GetName(), Owner: owner, Reason: reasonFor(resource), Labels: u.GetLabels(), Hint: fmt.Sprintf("issued certificate expires at %s", cert.NotAfter.UTC().Format(time.RFC3339))}
 }
 
 func (m *Monitor) resolveStatic(obj interface{}, watched staticWatch) {
@@ -366,9 +317,26 @@ func (m *Monitor) resolveStatic(obj interface{}, watched staticWatch) {
 	if m.namespaceAllowed != nil && !m.namespaceAllowed(namespace) {
 		return
 	}
-	m.correlator.MarkResolved(correlation.BuildKey(namespace, resourceOwnerParts(namespace, name), reasonFor(watched.resource), ""))
+	m.correlator.Resolve(
+		model.NewObjectRef(watched.resource, namespace, name),
+		reasonFor(watched.resource),
+	)
 }
 
-func (m *Monitor) resolve(namespace, owner, reason string) {
-	m.correlator.MarkResolved(correlation.BuildKey(namespace, owner, reason, ""))
+// resolveObject records that a watched object no longer reports a failing
+// condition.
+func (m *Monitor) resolveObject(
+	u *unstructured.Unstructured, resource string,
+) {
+	m.correlator.Resolve(
+		model.NewObjectRef(resource, u.GetNamespace(), u.GetName()),
+		reasonFor(resource),
+	)
+}
+
+// resolve records that one reason no longer holds for a watched object.
+func (m *Monitor) resolve(resource, namespace, name, reason string) {
+	m.correlator.Resolve(
+		model.NewObjectRef(resource, namespace, name), reason,
+	)
 }

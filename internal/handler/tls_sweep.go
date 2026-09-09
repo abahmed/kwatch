@@ -12,8 +12,8 @@ import (
 	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/klog/v2"
 
-	"github.com/abahmed/kwatch/internal/event"
 	"github.com/abahmed/kwatch/internal/model"
+	"github.com/abahmed/kwatch/internal/observe"
 )
 
 func (h *handler) SweepTLSSecrets() {
@@ -65,27 +65,22 @@ func (h *handler) checkTLSSecret(
 		return
 	}
 
-	key := secret.Namespace + "/" + secret.Name
 	expiry := cert.NotAfter
 	remaining := expiry.Sub(now)
 	cn := cert.Subject.CommonName
 
+	// A renewed certificate moves between these branches, so the finding is
+	// reconciled rather than each branch resolving the other's reason.
+	var current *model.Observation
 	switch {
 	case remaining < 0:
-		h.signalEvent(&event.Signal{
-			Resource:  "secret",
-			PodName:   secret.Name,
-			Namespace: secret.Namespace,
-			Reason:    constant.ReasonTLSCertExpired,
-			Owner:     key,
-			Labels:    secret.Labels,
-			Severity:  "high",
-			Hint: fmt.Sprintf(
-				"expired %v ago; CN=%s",
-				(-remaining).Round(time.Hour),
-				cn,
-			),
-		})
+		current = observe.Object(
+			"secret", secret, constant.ReasonTLSCertExpired,
+		).WithSeverity(model.SeverityHigh).WithHint(fmt.Sprintf(
+			"expired %v ago; CN=%s",
+			(-remaining).Round(time.Hour),
+			cn,
+		))
 	case remaining < warnWindow:
 		daysLeft := int(remaining.Hours() / 24)
 		severity := model.SeverityNormal
@@ -96,22 +91,17 @@ func (h *handler) checkTLSSecret(
 		if daysLeft <= critical {
 			severity = model.SeverityHigh
 		}
-		h.signalEvent(&event.Signal{
-			Resource:  "secret",
-			PodName:   secret.Name,
-			Namespace: secret.Namespace,
-			Reason:    constant.ReasonTLSCertExpiringSoon,
-			Owner:     key,
-			Labels:    secret.Labels,
-			Severity:  severity,
-			Hint: fmt.Sprintf(
-				"expires in %dd (%s); CN=%s",
-				daysLeft,
-				expiry.Format("2006-01-02"),
-				cn,
-			),
-		})
-	default:
-		h.correlator.ResolveByResource("secret", key)
+		current = observe.Object(
+			"secret", secret, constant.ReasonTLSCertExpiringSoon,
+		).WithSeverity(severity).WithHint(fmt.Sprintf(
+			"expires in %dd (%s); CN=%s",
+			daysLeft,
+			expiry.Format("2006-01-02"),
+			cn,
+		))
 	}
+	h.reconcile(
+		model.NewObjectRef("secret", secret.Namespace, secret.Name),
+		findings(current),
+	)
 }

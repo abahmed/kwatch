@@ -13,9 +13,9 @@ import (
 	"k8s.io/client-go/kubernetes"
 	corev1lister "k8s.io/client-go/listers/core/v1"
 
-	"github.com/abahmed/kwatch/internal/event"
 	"github.com/abahmed/kwatch/internal/k8s"
 	"github.com/abahmed/kwatch/internal/model"
+	"github.com/abahmed/kwatch/internal/observe"
 )
 
 type Config struct {
@@ -45,7 +45,9 @@ func NewMonitor(cfg Config, nodeLister corev1lister.NodeLister, podLister corev1
 
 // Run starts the periodic check loop. The callback is called for each
 // overcommit signal found.
-func (m *Monitor) Run(ctx context.Context, callback func(sig *event.Signal)) {
+func (m *Monitor) Run(
+	ctx context.Context, callback func(obs *model.Observation),
+) {
 	if m.interval <= 0 {
 		m.interval = 300 * time.Second
 	}
@@ -77,7 +79,9 @@ type filesystemStats struct {
 	InodesFree    *uint64 `json:"inodesFree"`
 }
 
-func (m *Monitor) checkFilesystem(ctx context.Context) []*event.Signal {
+func (m *Monitor) checkFilesystem(
+	ctx context.Context,
+) []*model.Observation {
 	if m.client == nil || (m.cfg.FilesystemWarningPercent <= 0 && m.cfg.InodeWarningPercent <= 0) {
 		return nil
 	}
@@ -85,7 +89,7 @@ func (m *Monitor) checkFilesystem(ctx context.Context) []*event.Signal {
 	if err != nil {
 		return nil
 	}
-	var signals []*event.Signal
+	var signals []*model.Observation
 	for _, node := range nodes {
 		body, err := k8s.GetNodeSummary(ctx, m.client, node.Name)
 		if err != nil {
@@ -100,8 +104,10 @@ func (m *Monitor) checkFilesystem(ctx context.Context) []*event.Signal {
 	return signals
 }
 
-func filesystemSignals(node *corev1.Node, fs *filesystemStats, cfg Config) []*event.Signal {
-	var out []*event.Signal
+func filesystemSignals(
+	node *corev1.Node, fs *filesystemStats, cfg Config,
+) []*model.Observation {
+	var out []*model.Observation
 	if fs.CapacityBytes != nil && fs.UsedBytes != nil && *fs.CapacityBytes > 0 {
 		pct := float64(*fs.UsedBytes) / float64(*fs.CapacityBytes) * 100
 		if sig := thresholdSignal(node, pct, cfg.FilesystemWarningPercent, cfg.FilesystemCriticalPercent, constant.ReasonNodeFilesystemHigh, constant.ReasonNodeFilesystemCritical, "filesystem"); sig != nil {
@@ -117,7 +123,11 @@ func filesystemSignals(node *corev1.Node, fs *filesystemStats, cfg Config) []*ev
 	return out
 }
 
-func thresholdSignal(node *corev1.Node, pct, warning, critical float64, warnReason, criticalReason, resourceName string) *event.Signal {
+func thresholdSignal(
+	node *corev1.Node,
+	pct, warning, critical float64,
+	warnReason, criticalReason, resourceName string,
+) *model.Observation {
 	if warning <= 0 || pct < warning {
 		return nil
 	}
@@ -125,12 +135,14 @@ func thresholdSignal(node *corev1.Node, pct, warning, critical float64, warnReas
 	if critical > 0 && pct >= critical {
 		reason, severity = criticalReason, model.SeverityCritical
 	}
-	return &event.Signal{Resource: "node", NodeName: node.Name, PodName: node.Name, Owner: node.Name, Reason: reason, Severity: severity,
-		Labels: node.Labels, Hint: fmt.Sprintf("Node %s %s usage is %.1f%%", node.Name, resourceName, pct)}
+	return observe.Node(node, reason).WithSeverity(severity).
+		WithHint(fmt.Sprintf(
+			"Node %s %s usage is %.1f%%", node.Name, resourceName, pct,
+		))
 }
 
 // Check computes overcommit ratios for all nodes and returns signals.
-func (m *Monitor) Check() []*event.Signal {
+func (m *Monitor) Check() []*model.Observation {
 	nodes, err := m.nodeLister.List(labels.Everything())
 	if err != nil {
 		return nil
@@ -150,7 +162,7 @@ func (m *Monitor) Check() []*event.Signal {
 		nodePods[pod.Spec.NodeName] = append(nodePods[pod.Spec.NodeName], pod)
 	}
 
-	var signals []*event.Signal
+	var signals []*model.Observation
 	for _, node := range nodes {
 		sig := m.checkNode(node, nodePods[node.Name])
 		if sig != nil {
@@ -160,7 +172,9 @@ func (m *Monitor) Check() []*event.Signal {
 	return signals
 }
 
-func (m *Monitor) checkNode(node *corev1.Node, pods []*corev1.Pod) *event.Signal {
+func (m *Monitor) checkNode(
+	node *corev1.Node, pods []*corev1.Pod,
+) *model.Observation {
 	cpuAlloc := node.Status.Allocatable.Cpu().MilliValue()
 	memAlloc := node.Status.Allocatable.Memory().Value()
 
@@ -210,15 +224,8 @@ func (m *Monitor) checkNode(node *corev1.Node, pods []*corev1.Pod) *event.Signal
 		return nil
 	}
 
-	return &event.Signal{
-		Resource: "node",
-		Reason:   reason,
-		Hint:     hint,
-		NodeName: node.Name,
-		Owner:    node.Name,
-		Labels:   node.Labels,
-		Severity: severity,
-	}
+	return observe.Node(node, reason).
+		WithSeverity(severity).WithHint(hint)
 }
 
 // podRequests returns the scheduler-equivalent CPU and memory requests for a

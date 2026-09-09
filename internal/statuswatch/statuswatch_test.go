@@ -24,11 +24,17 @@ func TestFailureSignalUsesConfiguredConditionRules(t *testing.T) {
 		}},
 	}}
 	rules := map[string]map[string]bool{"Healthy": {"False": true}}
-	if signal := failureSignal(obj, "customresource", "db", rules); signal == nil || signal.Hint != "Healthy=False: ReplicaLag" {
+	signal := failureSignal(obj, "customresource", rules)
+	if signal == nil || signal.Hint != "Healthy=False: ReplicaLag" {
 		t.Fatalf("unexpected signal: %+v", signal)
 	}
-	if signal := failureSignal(obj, "customresource", "db", defaultConditionRules()); signal != nil {
-		t.Fatalf("default rules should ignore custom Healthy condition: %+v", signal)
+	if signal := failureSignal(
+		obj, "customresource", defaultConditionRules(),
+	); signal != nil {
+		t.Fatalf(
+			"default rules should ignore custom Healthy condition: %+v",
+			signal,
+		)
 	}
 }
 

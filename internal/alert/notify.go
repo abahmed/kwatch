@@ -5,106 +5,74 @@ import (
 
 	"k8s.io/klog/v2"
 
-	"github.com/abahmed/kwatch/internal/constant"
 	"github.com/abahmed/kwatch/internal/event"
 	"github.com/abahmed/kwatch/internal/insight"
 	"github.com/abahmed/kwatch/internal/model"
 )
 
-// Notify sends string msg to all providers
-
+// Notify queues a plain message for every provider.
+//
+// It used to send inline, on the caller's goroutine, with per-provider
+// retries and no dead-letter record. The startup banner is sent from the
+// goroutine that then starts the informers, so one unreachable provider held
+// up monitoring behind three backoffs; and a message that failed everywhere
+// vanished without appearing in /deadletters. Queuing puts messages on the
+// same paced, digested, dead-lettered path as incidents.
 func (a *AlertManager) Notify(msg string) {
 	klog.InfoS("sending message", "msg", msg)
-
-	a.mu.Lock()
-	entries := make([]providerEntry, len(a.entries))
-	copy(entries, a.entries)
-	ctx := a.ctx
-	stopped := a.stopped
-	a.mu.Unlock()
-	if stopped {
-		return
-	}
-	if ctx == nil {
-		ctx = context.Background()
-	}
-
-	for _, entry := range entries {
-		p := entry.provider
-		if _, ok := p.(EventDeliveryProvider); ok {
-			ev := &event.Event{
-				PodName: msg,
-				Reason:  constant.ReasonNotify,
-			}
-			if err := sendWithRetry(ctx, func() error {
-				return p.SendEvent(ev)
-			}, entry.retry, p.Name()); err != nil && entry.fallback != nil {
-				if fbErr := deliverFallbackMessage(ctx, entry.fallback, p.Name(), msg); fbErr != nil {
-					klog.ErrorS(
-						fbErr,
-						"fallback provider failed",
-						"provider",
-						entry.fallback.provider.Name(),
-					)
-				}
-			}
-			continue
-		}
-		truncMsg := truncateMsg(msg, entry.maxBytes)
-		if err := sendWithRetry(ctx, func() error {
-			return p.SendMessage(truncMsg)
-		}, entry.retry, p.Name()); err != nil && entry.fallback != nil {
-			if fbErr := deliverFallbackMessage(ctx, entry.fallback, p.Name(), truncMsg); fbErr != nil {
-				klog.ErrorS(
-					fbErr,
-					"fallback provider failed",
-					"provider",
-					entry.fallback.provider.Name(),
-				)
-			}
-		}
-	}
+	a.enqueue(deliverJob{kind: jobMessage, msg: msg})
 }
 
-// NotifyEvent sends event to all providers
-
-func (a *AlertManager) NotifyEvent(event event.Event) {
+// NotifyEvent queues a legacy event for every provider.
+func (a *AlertManager) NotifyEvent(ev event.Event) {
 	klog.InfoS(
 		"sending event",
-		"resource", event.Resource,
-		"namespace", event.Namespace,
-		"name", event.PodName,
-		"reason", event.Reason,
-		"action", event.Action,
+		"resource", ev.Resource,
+		"namespace", ev.Namespace,
+		"name", ev.PodName,
+		"reason", ev.Reason,
+		"action", ev.Action,
 	)
+	a.enqueue(deliverJob{kind: jobEvent, ev: &ev})
+}
 
+// enqueue fans a job out to every provider queue, falling back to synchronous
+// delivery before Start when no worker exists to pick it up.
+func (a *AlertManager) enqueue(job deliverJob) {
 	a.mu.Lock()
-	entries := make([]providerEntry, len(a.entries))
-	copy(entries, a.entries)
-	ctx := a.ctx
-	stopped := a.stopped
-	a.mu.Unlock()
+	started, stopped := a.started, a.stopped
 	if stopped {
+		a.mu.Unlock()
 		return
 	}
-
+	if started {
+		a.fanOut(job)
+		a.mu.Unlock()
+		return
+	}
+	entries := make([]*providerEntry, len(a.entries))
+	for i := range a.entries {
+		entries[i] = &a.entries[i]
+	}
+	ctx := a.ctx
+	a.mu.Unlock()
 	if ctx == nil {
 		ctx = context.Background()
 	}
 	for _, entry := range entries {
-		p := entry.provider
-		if err := sendWithRetry(ctx, func() error {
-			return p.SendEvent(&event)
-		}, entry.retry, p.Name()); err != nil && entry.fallback != nil {
-			if ferr := deliverFallbackEvent(ctx, entry.fallback, &event); ferr != nil {
-				klog.ErrorS(
-					ferr,
-					"fallback provider send failed",
-					"primary",
-					p.Name(),
-					"fallback",
-					entry.fallback.provider.Name(),
-				)
+		if err := a.dispatch(
+			ctx, entry, job, deliverOpts{retry: entry.retry},
+		); err != nil {
+			klog.ErrorS(err, "failed to send",
+				"provider", entry.provider.Name(), "key", job.key())
+			if entry.fallback == nil {
+				continue
+			}
+			if fbErr := a.deliverFallback(
+				ctx, entry.fallback, entry.provider.Name(), job,
+			); fbErr != nil {
+				klog.ErrorS(fbErr, "fallback provider failed",
+					"provider", entry.fallback.provider.Name())
 			}
 		}
 	}
@@ -189,7 +157,7 @@ func (a *AlertManager) NotifyIncident(
 		cp := *ins
 		ins = &cp
 	}
-	job := deliverJob{inc: snap, action: action, insight: ins}
+	job := incidentJob(snap, action, ins)
 
 	a.mu.Lock()
 	stopped = a.stopped

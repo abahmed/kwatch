@@ -145,6 +145,7 @@ func TestObserveUsesFailureAndRecoveryThresholds(t *testing.T) {
 		correlator: engine,
 		failures:   make(map[string]int),
 		recoveries: make(map[string]int),
+		failing:    make(map[string]bool),
 	}
 
 	monitor.observe("api-server", false,

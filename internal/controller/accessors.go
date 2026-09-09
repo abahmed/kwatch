@@ -3,6 +3,8 @@ package controller
 import (
 	"sort"
 
+	corev1lister "k8s.io/client-go/listers/core/v1"
+
 	kwcontext "github.com/abahmed/kwatch/internal/graphcontext"
 	"github.com/abahmed/kwatch/internal/metrics"
 )
@@ -56,3 +58,22 @@ func (c *Controller) recordGraphSize() {
 	metrics.DefaultRegistry().GraphEdges.Store(int64(edges))
 }
 func (c *Controller) SetGraph(g *kwcontext.ResourceGraph) { c.graph = g }
+
+// PodLister, ServiceLister and NodeLister expose the informer caches the
+// controller already keeps synced.
+//
+// The out-of-band monitors -- kubelet telemetry, runtime metrics, active
+// probes -- each listed the same objects from the API server on their own
+// interval. Sharing the cache removes several cluster-wide LISTs a minute and
+// removes the possibility of two components disagreeing about what exists.
+// A nil return means that informer is not wired, and the caller keeps its own
+// fallback.
+func (c *Controller) PodLister() corev1lister.PodLister { return c.podLister }
+
+func (c *Controller) ServiceLister() corev1lister.ServiceLister {
+	return c.serviceLister
+}
+
+func (c *Controller) NodeLister() corev1lister.NodeLister {
+	return c.nodeLister
+}

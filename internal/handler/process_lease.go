@@ -9,8 +9,8 @@ import (
 	"k8s.io/client-go/tools/cache"
 
 	"github.com/abahmed/kwatch/internal/constant"
-	"github.com/abahmed/kwatch/internal/correlation"
-	"github.com/abahmed/kwatch/internal/event"
+	"github.com/abahmed/kwatch/internal/model"
+	"github.com/abahmed/kwatch/internal/observe"
 )
 
 const (
@@ -39,14 +39,16 @@ func (h *handler) ProcessLease(key string, deleted bool) error {
 		return fmt.Errorf("failed to get lease %s from cache: %w", key, err)
 	}
 	if sig := DetectNodeLeaseIssue(lease, h.now(), h.config.ClusterResourceMonitor.NodeLeaseStaleSeconds); sig != nil {
-		h.signalEvent(sig)
+		h.observe(sig)
 	} else {
 		h.resolveNodeLease(name)
 	}
 	return nil
 }
 
-func DetectNodeLeaseIssue(lease *coordinationv1.Lease, now time.Time, staleSeconds int) *event.Signal {
+func DetectNodeLeaseIssue(
+	lease *coordinationv1.Lease, now time.Time, staleSeconds int,
+) *model.Observation {
 	if lease == nil || lease.Namespace != nodeLeaseNamespace {
 		return nil
 	}
@@ -58,16 +60,17 @@ func DetectNodeLeaseIssue(lease *coordinationv1.Lease, now time.Time, staleSecon
 		if lease.Spec.RenewTime != nil {
 			age = now.Sub(lease.Spec.RenewTime.Time).Round(time.Second).String()
 		}
-		return &event.Signal{
-			Resource: "node", NodeName: lease.Name, PodName: lease.Name,
-			Owner: lease.Name, Reason: constant.ReasonNodeLeaseStale,
-			Labels: lease.Labels,
-			Hint:   fmt.Sprintf("node lease %s/%s has not renewed for %s; kubelet may be unavailable", lease.Namespace, lease.Name, age),
-		}
+		return observe.NodeNamed(
+			lease.Name, constant.ReasonNodeLeaseStale,
+		).WithLabels(lease.Labels).WithHint(fmt.Sprintf(
+			"node lease %s/%s has not renewed for %s;"+
+				" kubelet may be unavailable",
+			lease.Namespace, lease.Name, age,
+		))
 	}
 	return nil
 }
 
 func (h *handler) resolveNodeLease(nodeName string) {
-	h.correlator.MarkResolved(correlation.BuildKey("", nodeName, constant.ReasonNodeLeaseStale, ""))
+	h.correlator.Resolve(nodeRef(nodeName), constant.ReasonNodeLeaseStale)
 }

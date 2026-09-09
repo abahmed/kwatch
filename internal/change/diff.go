@@ -63,10 +63,52 @@ func isSecret(obj runtime.Object) bool {
 	return ok
 }
 
+// churnAnnotations are written by controllers and tooling on every
+// reconcile. They are not something a person changed, and their values --
+// kopf's last-handled configuration is the whole object as JSON -- turned a
+// one-line "what changed" into a screen of text.
+var churnAnnotations = map[string]bool{
+	"kubectl.kubernetes.io/last-applied-configuration": true,
+	"kopf.zalando.org/last-handled-configuration":      true,
+	"deployment.kubernetes.io/revision":                true,
+	"deployment.kubernetes.io/desired-replicas":        true,
+	"deployment.kubernetes.io/max-replicas":            true,
+	"control-plane.alpha.kubernetes.io/leader":         true,
+	"endpoints.kubernetes.io/last-change-trigger-time": true,
+	"argocd.argoproj.io/tracking-id":                   true,
+}
+
+// churnAnnotationPrefixes covers families of the same kind.
+var churnAnnotationPrefixes = []string{
+	"autoscaling.alpha.kubernetes.io/",
+}
+
+func isChurnAnnotation(key string) bool {
+	if churnAnnotations[key] {
+		return true
+	}
+	for _, prefix := range churnAnnotationPrefixes {
+		if strings.HasPrefix(key, prefix) {
+			return true
+		}
+	}
+	return false
+}
+
 func strip(value map[string]interface{}, secret bool) {
 	meta, _ := value["metadata"].(map[string]interface{})
 	for _, key := range []string{"managedFields", "resourceVersion", "generation", "creationTimestamp", "uid"} {
 		delete(meta, key)
+	}
+	if annotations, ok := meta["annotations"].(map[string]interface{}); ok {
+		for key := range annotations {
+			if isChurnAnnotation(key) {
+				delete(annotations, key)
+			}
+		}
+		if len(annotations) == 0 {
+			delete(meta, "annotations")
+		}
 	}
 	delete(value, "status")
 	if kind, _ := value["kind"].(string); secret || strings.EqualFold(kind, "Secret") {

@@ -43,6 +43,14 @@ type Monitor struct {
 	namespacedPermissions []Permission
 	infrastructure        []Permission
 	now                   func() time.Time
+	// cycle counts sweeps, for the namespace round-robin.
+	cycle int
+	// fullSweep asks the next sweep to check every namespace. Set on the
+	// first run and after any denial.
+	fullSweep bool
+	// lastMissing remembers each namespace's last result, so a sweep that
+	// samples one namespace still reports the whole picture.
+	lastMissing map[string][]Permission
 }
 
 func namespacedPermissions() []Permission {
@@ -154,7 +162,11 @@ func (m *Monitor) Start(ctx context.Context) {
 	if m.client == nil {
 		return
 	}
-	interval := 5 * time.Minute
+	// Fifteen minutes, not five. Each sweep is roughly forty-five
+	// SelfSubjectAccessReviews per namespace, and RBAC grants change about
+	// never; the round-robin below keeps a single sweep small, and this
+	// keeps them rare.
+	interval := 15 * time.Minute
 	m.check(ctx)
 	ticker := time.NewTicker(interval)
 	defer ticker.Stop()
@@ -184,11 +196,17 @@ func (m *Monitor) SecurityStatus() interface{} {
 func (m *Monitor) check(ctx context.Context) {
 	requestCtx, cancel := context.WithTimeout(ctx, 15*time.Second)
 	defer cancel()
-	m.mu.RLock()
+	m.mu.Lock()
 	namespaces := append([]string(nil), m.namespaces...)
 	allNamespaces := m.allNamespaces
 	infrastructure := append([]Permission(nil), m.infrastructure...)
-	m.mu.RUnlock()
+	full := m.fullSweep || m.lastMissing == nil
+	if m.lastMissing == nil {
+		m.lastMissing = map[string][]Permission{}
+	}
+	m.cycle++
+	cycle := m.cycle
+	m.mu.Unlock()
 	if allNamespaces {
 		namespaces = []string{""}
 	}
@@ -226,13 +244,58 @@ func (m *Monitor) check(ctx context.Context) {
 			status.Missing = append(status.Missing, permission)
 		}
 	}
+	m.checkNamespaces(requestCtx, namespaces, sampled(namespaces, full, cycle),
+		&status)
+
+	m.mu.Lock()
+	m.status = status
+	// A denial anywhere means the next sweep checks everything: the sampled
+	// picture is the one that must not be trusted when something is wrong.
+	m.fullSweep = status.RBACDenied || !status.Available
+	m.mu.Unlock()
+}
+
+// sampled picks the namespaces this sweep actually queries.
+//
+// Checking every namespace meant roughly forty-five SelfSubjectAccessReviews
+// per namespace per sweep, to re-confirm grants that change about never. One
+// namespace per sweep, round-robin, finds a revoked grant within a full
+// rotation; the remembered result stands in for the rest, and a denial
+// promotes the next sweep back to a full one.
+func sampled(namespaces []string, full bool, cycle int) map[string]bool {
+	out := make(map[string]bool, len(namespaces))
+	if full || len(namespaces) <= 1 {
+		for _, ns := range namespaces {
+			out[ns] = true
+		}
+		return out
+	}
+	out[namespaces[cycle%len(namespaces)]] = true
+	return out
+}
+
+// checkNamespaces runs the namespaced permission checks for the sampled
+// namespaces and folds every namespace's latest known result into status.
+func (m *Monitor) checkNamespaces(
+	ctx context.Context,
+	namespaces []string,
+	check map[string]bool,
+	status *Status,
+) {
 	for _, namespace := range namespaces {
 		if namespace != "" {
 			status.Scope = "cluster+namespace"
 		}
+		if !check[namespace] {
+			m.mu.RLock()
+			status.Missing = append(status.Missing, m.lastMissing[namespace]...)
+			m.mu.RUnlock()
+			continue
+		}
+		var missing []Permission
 		for _, permission := range m.namespacedPermissions {
 			permission.Namespace = namespace
-			allowed, err := m.allowed(requestCtx, permission)
+			allowed, err := m.allowed(ctx, permission)
 			status.Checks++
 			if err != nil {
 				status.Available = false
@@ -242,14 +305,17 @@ func (m *Monitor) check(ctx context.Context) {
 				continue
 			}
 			if !allowed {
-				status.RBACDenied = true
-				status.Missing = append(status.Missing, permission)
+				missing = append(missing, permission)
 			}
 		}
+		status.Missing = append(status.Missing, missing...)
+		m.mu.Lock()
+		m.lastMissing[namespace] = missing
+		m.mu.Unlock()
 	}
-	m.mu.Lock()
-	m.status = status
-	m.mu.Unlock()
+	if len(status.Missing) > 0 {
+		status.RBACDenied = true
+	}
 }
 
 func securityState(status Status) string {

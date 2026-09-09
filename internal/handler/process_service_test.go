@@ -176,8 +176,8 @@ func TestDetectServiceEndpointIssueNoReadyEndpoints(t *testing.T) {
 	sig := DetectServiceEndpointIssue(svc, epSlices)
 	assert.NotNil(t, sig)
 	assert.Equal(t, "ServiceNoEndpoints", sig.Reason)
-	assert.Equal(t, "service", sig.Resource)
-	assert.Equal(t, "default/test-svc", sig.Owner)
+	assert.Equal(t, "service", sig.Subject.Kind)
+	assert.Equal(t, "default/test-svc", sig.OwnerPath())
 }
 
 func TestDetectServiceEndpointIssueOnlyNotReady(t *testing.T) {

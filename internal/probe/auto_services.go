@@ -11,8 +11,29 @@ import (
 
 	"github.com/abahmed/kwatch/internal/config"
 	"github.com/abahmed/kwatch/internal/constant"
-	"github.com/abahmed/kwatch/internal/correlation"
 )
+
+// SkipProbeAnnotation opts one Service out of automatic probing.
+//
+// Auto-probing opens a real TCP connection from kwatch's own pod, so a
+// Service behind a NetworkPolicy that does not admit kwatch is reported as
+// failing when it is perfectly healthy. The namespace-wide escape hatch is
+// activeProbeMonitor.excludeNamespaces; this is the per-Service one, for the
+// case where a single Service in an otherwise reachable namespace is closed
+// off.
+const SkipProbeAnnotation = "kwatch.io/skip-probe"
+
+// skipAutoProbe reports whether a Service has opted out.
+func skipAutoProbe(service *corev1.Service) bool {
+	if service == nil {
+		return true
+	}
+	switch strings.ToLower(service.Annotations[SkipProbeAnnotation]) {
+	case "true", "yes", "1":
+		return true
+	}
+	return false
+}
 
 type autoProbeTarget struct {
 	owner     string
@@ -34,6 +55,8 @@ func (m *Monitor) checkServices(ctx context.Context) {
 	}
 	if watchAll {
 		namespaces = []string{""}
+	} else {
+		namespaces = withoutExcluded(namespaces, m.excludedNamespaces())
 	}
 	jobs := make(chan serviceProbe)
 	var wg sync.WaitGroup
@@ -60,6 +83,46 @@ func (m *Monitor) namespaceSnapshot() ([]string, bool, func(string) bool) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	return append([]string(nil), m.namespaces...), m.watchAll, m.allowed
+}
+
+// excludedNamespaces is the configured auto-probe exclusion set.
+func (m *Monitor) excludedNamespaces() map[string]bool {
+	if len(m.cfg.ExcludeNamespaces) == 0 {
+		return nil
+	}
+	out := make(map[string]bool, len(m.cfg.ExcludeNamespaces))
+	for _, ns := range m.cfg.ExcludeNamespaces {
+		out[ns] = true
+	}
+	return out
+}
+
+// withoutExcluded drops the excluded namespaces from an explicit scope list.
+// A cluster-wide scope cannot be filtered here -- it lists with an empty
+// namespace -- so the per-Service check below carries that case.
+func withoutExcluded(namespaces []string, excluded map[string]bool) []string {
+	if len(excluded) == 0 {
+		return namespaces
+	}
+	out := make([]string, 0, len(namespaces))
+	for _, ns := range namespaces {
+		if !excluded[ns] {
+			out = append(out, ns)
+		}
+	}
+	return out
+}
+
+// probeable reports whether a Service should be probed automatically.
+func probeable(
+	service *corev1.Service,
+	allowed func(string) bool,
+	excluded map[string]bool,
+) bool {
+	if excluded[service.Namespace] || skipAutoProbe(service) {
+		return false
+	}
+	return allowed == nil || allowed(service.Namespace)
 }
 
 func (m *Monitor) queueServiceProbes(
@@ -89,6 +152,23 @@ func (m *Monitor) queueNamespaceProbes(
 	jobs chan<- serviceProbe,
 	current map[string]autoProbeTarget,
 ) bool {
+	excluded := m.excludedNamespaces()
+	if cached := m.servicesFor(namespace); cached != nil {
+		for _, service := range cached {
+			if !probeable(service, allowed, excluded) {
+				continue
+			}
+			for _, probe := range serviceProbes(service) {
+				rememberAutoProbe(current, probe)
+				select {
+				case jobs <- probe:
+				case <-ctx.Done():
+					return false
+				}
+			}
+		}
+		return true
+	}
 	continueToken := ""
 	for {
 		services, err := m.kclient.CoreV1().Services(namespace).List(
@@ -100,7 +180,7 @@ func (m *Monitor) queueNamespaceProbes(
 		}
 		for i := range services.Items {
 			service := &services.Items[i]
-			if allowed != nil && !allowed(service.Namespace) {
+			if !probeable(service, allowed, excluded) {
 				continue
 			}
 			for _, probe := range serviceProbes(service) {
@@ -230,8 +310,6 @@ func (m *Monitor) resolveRemovedTarget(target autoProbeTarget) {
 		constant.ReasonActiveProbeFailure,
 		constant.ReasonActiveProbeLatency,
 	} {
-		m.correlator.MarkResolved(correlation.BuildKey(
-			"", target.owner, reason, "",
-		))
+		m.correlator.Resolve(probeRef(target.owner), reason)
 	}
 }

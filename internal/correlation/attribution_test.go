@@ -28,7 +28,7 @@ func attributionEngine(t *testing.T) *Engine {
 		},
 	})
 	e.now = mockClock(time.Date(2025, 1, 1, 0, 0, 0, 0, time.UTC))
-	e.Process(
+	e.processEvent(
 		event.Event{
 			Resource: "node",
 			PodName:  "node-1",
@@ -47,7 +47,7 @@ func attributionEngine(t *testing.T) *Engine {
 			State: model.StateActive,
 		},
 	})
-	_, action := e.Process(
+	_, action := e.processEvent(
 		event.Event{
 			Resource:  "deployment",
 			Namespace: "ns",
@@ -150,6 +150,8 @@ func TestAttributionTieBreakersAreDeterministic(t *testing.T) {
 		Status:      model.Status{State: model.StateActive},
 		Attribution: model.Attribution{SuppressedPods: 2},
 	}
+	e.indexIncident(e.state[model.IncidentKey("node::A:")])
+	e.indexIncident(e.state[model.IncidentKey("node::B:")])
 	chosen := e.findMostConstrainedNodeIncident()
 	e.mu.Unlock()
 	require.NotNil(t, chosen)
@@ -167,7 +169,7 @@ func TestAttributionRecordsAgainstTheCause(t *testing.T) {
 	}
 
 	// Node: counted on the node incident, no incident of its own.
-	inc, action := e.Process(
+	inc, action := e.processEvent(
 		event.Event{
 			PodName:   "api-1",
 			Namespace: "ns",
@@ -186,7 +188,7 @@ func TestAttributionRecordsAgainstTheCause(t *testing.T) {
 	e.mu.Unlock()
 
 	// Shared dependency: tracked, flagged, silent.
-	inc, action = e.Process(
+	inc, action = e.processEvent(
 		event.Event{
 			PodName:   "api-2",
 			Namespace: "ns",
@@ -205,7 +207,7 @@ func TestAttributionRecordsAgainstTheCause(t *testing.T) {
 	assert.Equal(t, MassFailureKey("node//node-2"), inc.SuppressedBy)
 
 	// Owner: the workload incident absorbs the pod.
-	inc, action = e.Process(
+	inc, action = e.processEvent(
 		event.Event{
 			PodName:   "api-3",
 			Namespace: "ns",
@@ -221,7 +223,10 @@ func TestAttributionRecordsAgainstTheCause(t *testing.T) {
 	owner := e.state[BuildKey("ns", OwnerPath("ns", "api"), "RolloutStuck", "")]
 	require.NotNil(t, owner)
 	assert.Equal(t, 2, owner.Count)
-	assert.True(t, owner.Resources["api-3"])
+	// The symptom pod is recorded as suppressed, not as one more of the
+	// workload's own resources.
+	assert.Equal(t, 1, owner.SuppressedPods)
+	assert.False(t, owner.Resources["api-3"])
 	e.mu.Unlock()
 
 	assert.Zero(t, announced, "a symptom never speaks for itself")
@@ -240,16 +245,16 @@ func TestAttributionOutranksCooldown(t *testing.T) {
 	}
 	key := BuildKey("ns", "web", "CrashLoopBackOff", "")
 
-	_, action := e.Process(podEv, "web", nil)
+	_, action := e.processEvent(podEv, "web", nil)
 	require.Equal(t, model.ActionCreate, action)
-	e.MarkResolved(key)
+	e.markResolved(key)
 	e.mu.Lock()
 	_, inCooldown := e.cleanupCooldown[key]
 	e.mu.Unlock()
 	require.True(t, inCooldown)
 
 	// Now the owner gets its own incident and the pod fails again.
-	_, action = e.Process(
+	_, action = e.processEvent(
 		event.Event{
 			Resource:  "deployment",
 			Namespace: "ns",
@@ -259,7 +264,7 @@ func TestAttributionOutranksCooldown(t *testing.T) {
 		nil,
 	)
 	require.Equal(t, model.ActionCreate, action)
-	inc, action := e.Process(podEv, "web", nil)
+	inc, action := e.processEvent(podEv, "web", nil)
 	assert.Equal(t, model.ActionSkip, action)
 	assert.Nil(t, inc)
 	e.mu.Lock()
@@ -274,7 +279,7 @@ func TestAttributionOutranksCooldown(t *testing.T) {
 }
 
 // A recurrence during the resolve hold-down must revive the incident, not be
-// swallowed. ResolveByResource used to arm the cooldown at hold-down time,
+// swallowed. Subject resolve used to arm the cooldown at hold-down time,
 // which made exactly that happen; every resolve path now shares one helper.
 func TestHoldDownDoesNotArmCooldown(t *testing.T) {
 	now := time.Date(2025, 1, 1, 0, 0, 0, 0, time.UTC)
@@ -288,11 +293,11 @@ func TestHoldDownDoesNotArmCooldown(t *testing.T) {
 		NodeName: "node-1",
 		Reason:   "NodeNotReady",
 	}
-	_, action := e.Process(ev, "node-1", nil)
+	_, action := e.processEvent(ev, "node-1", nil)
 	require.Equal(t, model.ActionCreate, action)
 	key := BuildKey("", "node-1", "NodeNotReady", "")
 
-	e.ResolveByResource("node", "node-1")
+	e.Resolve(model.ObjectRef{Kind: "node", Name: "node-1"}, "")
 	e.mu.Lock()
 	assert.Equal(t, model.StatePendingResolve, e.state[key].State)
 	_, armed := e.cleanupCooldown[key]
@@ -300,7 +305,7 @@ func TestHoldDownDoesNotArmCooldown(t *testing.T) {
 	assert.False(t, armed, "hold-down must not arm the cooldown")
 
 	// The condition comes back inside the hold-down: the incident revives.
-	inc, action := e.Process(ev, "node-1", nil)
+	inc, action := e.processEvent(ev, "node-1", nil)
 	assert.Equal(
 		t,
 		model.ActionSkip,

@@ -9,8 +9,9 @@ import (
 	"k8s.io/klog/v2"
 
 	"github.com/abahmed/kwatch/internal/constant"
-	"github.com/abahmed/kwatch/internal/event"
 	"github.com/abahmed/kwatch/internal/k8s"
+	"github.com/abahmed/kwatch/internal/model"
+	"github.com/abahmed/kwatch/internal/observe"
 )
 
 func (m *Monitor) startAdmissionInformers(
@@ -64,14 +65,12 @@ func (m *Monitor) processAdmissionPolicy(obj interface{}) {
 	m.admissionPolicies[u.GetName()] = struct{}{}
 	m.mu.Unlock()
 	if sig := admissionPolicySignal(u); sig != nil {
-		m.correlator.Process(
-			event.Event{
-				Resource: sig.Resource, PodName: sig.PodName,
-				Reason: sig.Reason, Hint: sig.Hint, Labels: sig.Labels,
-			}, sig.Owner, nil,
-		)
+		m.correlator.Process(sig)
 	} else {
-		m.resolve("", u.GetName(), constant.ReasonAdmissionPolicyInvalid)
+		m.resolve(
+			"validatingadmissionpolicy", "", u.GetName(),
+			constant.ReasonAdmissionPolicyInvalid,
+		)
 	}
 	m.recheckAdmissionBindings()
 }
@@ -93,24 +92,23 @@ func (m *Monitor) processAdmissionBindingObject(u *unstructured.Unstructured) {
 	_, exists := m.admissionPolicies[policy]
 	m.mu.Unlock()
 	if policy != "" && !exists {
-		sig := &event.Signal{
-			Resource: "validatingadmissionpolicybinding",
-			PodName:  u.GetName(), Owner: u.GetName(),
-			Reason: constant.ReasonAdmissionBindingInvalid,
-			Labels: u.GetLabels(),
-			Hint: fmt.Sprintf(
-				"binding references missing ValidatingAdmissionPolicy %q", policy,
-			),
-		}
+		// The hand-built event here also dropped the subject's name, so the
+		// incident never said which binding was broken.
 		m.correlator.Process(
-			event.Event{
-				Resource: sig.Resource, Reason: sig.Reason,
-				Hint: sig.Hint, Labels: sig.Labels,
-			}, sig.Owner, nil,
+			observe.ClusterObject(
+				"validatingadmissionpolicybinding", u.GetName(),
+				constant.ReasonAdmissionBindingInvalid,
+			).WithLabels(u.GetLabels()).WithHint(fmt.Sprintf(
+				"binding references missing ValidatingAdmissionPolicy %q",
+				policy,
+			)),
 		)
 		return
 	}
-	m.resolve("", u.GetName(), constant.ReasonAdmissionBindingInvalid)
+	m.resolve(
+		"validatingadmissionpolicybinding", "", u.GetName(),
+		constant.ReasonAdmissionBindingInvalid,
+	)
 }
 
 func (m *Monitor) recheckAdmissionBindings() {
@@ -133,7 +131,10 @@ func (m *Monitor) deleteAdmissionPolicy(obj interface{}) {
 	m.mu.Lock()
 	delete(m.admissionPolicies, u.GetName())
 	m.mu.Unlock()
-	m.resolve("", u.GetName(), constant.ReasonAdmissionPolicyInvalid)
+	m.resolve(
+		"validatingadmissionpolicy", "", u.GetName(),
+		constant.ReasonAdmissionPolicyInvalid,
+	)
 	m.recheckAdmissionBindings()
 }
 
@@ -145,26 +146,28 @@ func (m *Monitor) deleteAdmissionBinding(obj interface{}) {
 	m.mu.Lock()
 	delete(m.admissionBindings, u.GetName())
 	m.mu.Unlock()
-	m.resolve("", u.GetName(), constant.ReasonAdmissionBindingInvalid)
+	m.resolve(
+		"validatingadmissionpolicybinding", "", u.GetName(),
+		constant.ReasonAdmissionBindingInvalid,
+	)
 }
 
-func admissionPolicySignal(u *unstructured.Unstructured) *event.Signal {
+func admissionPolicySignal(
+	u *unstructured.Unstructured,
+) *model.Observation {
 	if warnings, found, _ := unstructured.NestedSlice(
 		u.Object, "status", "typeChecking", "expressionWarnings",
 	); found && len(warnings) > 0 {
-		return &event.Signal{
-			Resource: "validatingadmissionpolicy",
-			PodName:  u.GetName(), Owner: u.GetName(),
-			Reason: constant.ReasonAdmissionPolicyInvalid,
-			Labels: u.GetLabels(),
-			Hint: fmt.Sprintf(
-				"type checking reported %d expression warning(s): %s",
-				len(warnings), admissionWarningText(warnings),
-			),
-		}
+		return observe.ClusterObject(
+			"validatingadmissionpolicy", u.GetName(),
+			constant.ReasonAdmissionPolicyInvalid,
+		).WithLabels(u.GetLabels()).WithHint(fmt.Sprintf(
+			"type checking reported %d expression warning(s): %s",
+			len(warnings), admissionWarningText(warnings),
+		))
 	}
 	sig := failureSignal(
-		u, "validatingadmissionpolicy", u.GetName(),
+		u, "validatingadmissionpolicy",
 		defaultConditionRulesWithAdmission(),
 	)
 	if sig != nil {

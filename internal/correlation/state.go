@@ -51,31 +51,12 @@ func (e *Engine) GetLastContainerState(
 	e.mu.Lock()
 	defer e.mu.Unlock()
 	key := lastContainerKey(namespace, podName, container)
-	cs, ok := e.lastContainerIndex[key]
-	if !ok || cs == nil {
+	entry, ok := e.lastContainerIndex[key]
+	if !ok || entry.state == nil {
 		return nil
 	}
-	cp := *cs
+	cp := *entry.state
 	return &cp
-}
-
-func lastContainerKey(namespace, podName, container string) string {
-	if container == "" || container == "." {
-		container = "."
-	}
-	return namespace + "/" + podName + "/" + container
-}
-
-// Caller must hold e.mu.
-func (e *Engine) indexLastContainerState(
-	namespace, podName, container string,
-	cs *model.ContainerState,
-) {
-	if podName == "" || cs == nil {
-		return
-	}
-	cp := *cs
-	e.lastContainerIndex[lastContainerKey(namespace, podName, container)] = &cp
 }
 
 // Caller must hold e.mu.
@@ -130,6 +111,17 @@ func (e *Engine) SetAuditLogger(l *audit.AuditLogger) {
 	e.mu.Lock()
 	defer e.mu.Unlock()
 	e.auditLogger = l
+}
+
+// SetSubjectPresence installs the existence check the stale sweep consults
+// before closing an incident. It is a setter rather than a Config field
+// because the informer caches that can answer it are built after the engine.
+func (e *Engine) SetSubjectPresence(
+	fn func(resource, namespace, name string) (exists, known bool),
+) {
+	e.mu.Lock()
+	defer e.mu.Unlock()
+	e.config.SubjectPresent = fn
 }
 
 // SnapshotAll returns a deep copy of all non-resolved incidents keyed by
@@ -212,12 +204,24 @@ func (e *Engine) snapshotPersistedLocked() []model.PersistedIncident {
 }
 
 // RestoreIncidents loads previously persisted incidents into the state map.
-// Only incidents whose key still exists in the seen (baseline) set are
-// restored, to avoid re-alerting for issues that were resolved while down.
-// LastSeen is bumped to now to prevent immediate cleanup-loop resolution.
+//
+// Every active incident comes back. It used to be restored only when its key
+// was also present in the startup baseline, which quietly threw away exactly
+// the incidents that matter: seeding runs the detectors with no sustain
+// gating while the live path gates on SustainedMinutes, so a Deployment that
+// had been unavailable for three minutes at restart was not seeded, its
+// persisted incident was dropped, and two minutes later the detector opened a
+// second one -- a duplicate alert on a new thread, with the original left
+// hanging. The baseline's job is to suppress *new* incidents for
+// pre-existing problems, not to decide what survives a restart.
+//
+// LastSeen is bumped to now so the stale sweep does not close a restored
+// incident before anything has had a chance to re-report it, and NotifiedSig
+// is set so a restored incident is not announced again as new. An incident
+// whose object is gone is closed by the normal cleanup sweep.
+//
 // Mass-failure incidents (mass-failure/<dependency> keys) are restored into
-// the dedicated massFailures store regardless of the baseline so an ongoing
-// mass failure is not re-alerted after a restart.
+// the dedicated massFailures store.
 func (e *Engine) RestoreIncidents(
 	incidents map[model.IncidentKey]*model.Incident,
 ) {
@@ -250,13 +254,12 @@ func (e *Engine) RestoreIncidents(
 		}
 		restoreKey := key
 		if _, ok := e.baseline[string(restoreKey)]; !ok {
+			// Best-effort re-key for incidents written before ownerless Pods
+			// gained UID/lineage identities. Ambiguity leaves the key as it
+			// was rather than risking a false merge.
 			if migrated, ok := e.migrateLegacyPodKey(key, inc); ok {
 				restoreKey = migrated
 			}
-		}
-		if _, ok := e.baseline[string(restoreKey)]; !ok ||
-			len(e.baseline[string(restoreKey)]) == 0 {
-			continue
 		}
 		if _, exists := e.state[restoreKey]; exists {
 			continue
@@ -270,7 +273,7 @@ func (e *Engine) RestoreIncidents(
 		clone.LastUpdate = now
 		clone.NotifiedSig = notifSig(clone)
 		e.state[restoreKey] = clone
-		e.indexIncidentByNamespace(clone)
+		e.indexIncident(clone)
 		restored++
 	}
 	if restored > 0 {

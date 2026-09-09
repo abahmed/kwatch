@@ -11,9 +11,9 @@ import (
 	"k8s.io/client-go/tools/cache"
 
 	"github.com/abahmed/kwatch/internal/constant"
-	"github.com/abahmed/kwatch/internal/correlation"
-	"github.com/abahmed/kwatch/internal/event"
 	"github.com/abahmed/kwatch/internal/filter"
+	"github.com/abahmed/kwatch/internal/model"
+	"github.com/abahmed/kwatch/internal/observe"
 )
 
 const stuckPodDeletionGrace = 10 * time.Minute
@@ -116,6 +116,7 @@ func (h *handler) ProcessPodObject(
 			SSLister:    h.listers.SS,
 			EventLister: h.listers.Event,
 			EventsByPod: h.listers.EventsByPod,
+			LogCache:    h.logCache,
 			Now:         h.now,
 		},
 		Pod:    pod,
@@ -124,51 +125,119 @@ func (h *handler) ProcessPodObject(
 
 	h.executePodFilters(&ctxF)
 	h.executeContainersFilters(&ctxF)
-	for _, sig := range DetectPodReferenceIssues(pod, h.listers) {
-		h.signalEvent(sig)
+	owner := h.podOwnerFor(pod)
+	for _, obs := range DetectPodReferenceIssues(pod, h.listers) {
+		obs.Owner = owner
+		h.observe(obs)
 	}
 
-	if sig := DetectPodDeletionIssue(pod, h.now()); sig != nil {
-		h.signalEvent(sig)
+	if obs := DetectPodDeletionIssue(pod, h.now()); obs != nil {
+		obs.Owner = owner
+		h.observe(obs)
 	} else {
-		h.correlator.MarkResolved(correlation.BuildKey(
-			pod.Namespace, podIncidentOwner(pod),
-			constant.ReasonPodStuckTerminating, "",
-		))
+		// A pod incident is keyed by its owning workload, which is what the
+		// reference names -- the kind stays "pod" because that is the
+		// resource the incident is about.
+		h.correlator.Resolve(
+			model.ObjectRef{
+				Kind: "pod", Namespace: pod.Namespace, Name: owner.Name,
+			},
+			constant.ReasonPodStuckTerminating,
+		)
 	}
 
 	if isPodHealthy(pod) {
-		h.ClearBaselineForPod(pod.Namespace, pod.Name)
+		h.ClearBaselineForPod(pod.Namespace, pod.Name, owner)
 	}
+	h.correlator.ResolveHealthyPodContainers(
+		pod.Namespace,
+		pod.Name,
+		recoveredContainers(pod),
+	)
 	return nil
 }
 
-func podIncidentOwner(pod *corev1.Pod) string {
-	if len(pod.OwnerReferences) == 0 {
-		return pod.Name
+// recoveredContainers names the containers that are running and ready, which
+// is the observed recovery for a container-level incident.
+//
+// Readiness is the load-bearing half. A crash-looping container is Running
+// for a few seconds between restarts, so "Running" alone would resolve an
+// incident mid-crash-loop; a container that has passed its readiness probe
+// has actually started. The resolve hold-down is the second guard: a
+// container that crashes again within it cancels the pending resolve.
+func recoveredContainers(pod *corev1.Pod) map[string]bool {
+	if pod == nil || pod.DeletionTimestamp != nil {
+		return nil
 	}
-	return pod.Namespace + "/" + pod.Name
+	if pod.Status.Phase != corev1.PodRunning {
+		return nil
+	}
+	var out map[string]bool
+	ready := 0
+	for _, cs := range pod.Status.ContainerStatuses {
+		if cs.State.Running == nil || !cs.Ready {
+			continue
+		}
+		if out == nil {
+			out = make(map[string]bool, len(pod.Status.ContainerStatuses))
+		}
+		out[cs.Name] = true
+		ready++
+	}
+	// The empty name is the Pod itself, for incidents recorded without a
+	// container. It only counts as recovered when every container is ready:
+	// otherwise a Pod whose sidecar is still crashing would close a
+	// Pod-scoped incident.
+	if ready > 0 && ready == len(pod.Status.ContainerStatuses) {
+		out[""] = true
+	}
+	// An init container that finished successfully is no longer failing, and
+	// its incident is keyed by its own name.
+	for _, cs := range pod.Status.InitContainerStatuses {
+		if cs.State.Terminated == nil ||
+			cs.State.Terminated.ExitCode != 0 {
+			continue
+		}
+		if out == nil {
+			out = make(map[string]bool)
+		}
+		out[cs.Name] = true
+	}
+	return out
+}
+
+// podOwnerFor resolves the owning workload through the listers, falling back
+// to the pod itself when they cannot answer.
+//
+// The fallback used to be "namespace/pod" -- the inverse of every other
+// producer -- so a stuck-terminating or missing-reference incident was filed
+// under a different owner than that pod's crash incidents, and neither
+// cascade suppression nor owner-health gating could connect them.
+func (h *handler) podOwnerFor(pod *corev1.Pod) model.ObjectRef {
+	if owner := h.Owners().OwnerOf(pod); owner.Name != "" {
+		return owner
+	}
+	return observe.SelfOwner("Pod", pod.Namespace, pod.Name)
 }
 
 // DetectPodDeletionIssue catches pods that remain terminating because a
 // finalizer or kubelet/runtime cleanup is stuck. The regular pod disruption
 // filter suppresses planned deletion symptoms, while this independent signal
 // preserves visibility into the stuck lifecycle itself.
-func DetectPodDeletionIssue(pod *corev1.Pod, now time.Time) *event.Signal {
+func DetectPodDeletionIssue(
+	pod *corev1.Pod, now time.Time,
+) *model.Observation {
 	if pod == nil || pod.DeletionTimestamp == nil || len(pod.Finalizers) == 0 {
 		return nil
 	}
 	if now.Sub(pod.DeletionTimestamp.Time) < stuckPodDeletionGrace {
 		return nil
 	}
-	return &event.Signal{
-		Resource: "pod", Namespace: pod.Namespace, PodName: pod.Name,
-		PodUID: string(pod.UID), PodLineageID: podLineageID(pod),
-		PodGenerateName: pod.GenerateName, NodeName: pod.Spec.NodeName,
-		Owner:  podIncidentOwner(pod),
-		Reason: constant.ReasonPodStuckTerminating, Labels: pod.Labels,
-		Hint: fmt.Sprintf("pod has been terminating for %s with finalizers: %s",
-			now.Sub(pod.DeletionTimestamp.Time).Round(time.Minute),
-			strings.Join(pod.Finalizers, ", ")),
-	}
+	return observe.PodOwnedBy(
+		pod, "", constant.ReasonPodStuckTerminating, model.ObjectRef{},
+	).WithHint(fmt.Sprintf(
+		"pod has been terminating for %s with finalizers: %s",
+		now.Sub(pod.DeletionTimestamp.Time).Round(time.Minute),
+		strings.Join(pod.Finalizers, ", "),
+	))
 }

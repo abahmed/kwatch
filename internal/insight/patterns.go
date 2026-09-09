@@ -2,6 +2,7 @@ package insight
 
 import (
 	"fmt"
+	"sort"
 	"strings"
 	"time"
 
@@ -32,7 +33,7 @@ func dynamicThreshold(depKey string, graph *context.ResourceGraph) int {
 
 	if strings.HasPrefix(depKey, "node/") {
 		deps := graph.DependentsByType("node", "", depKey[6:], "pod")
-		n := len(deps)
+		n := distinctOwnerCount(graph, deps)
 		if n >= 3 {
 			t := n * 30 / 100
 			if t < minMassFailThreshold {
@@ -46,12 +47,11 @@ func dynamicThreshold(depKey string, graph *context.ResourceGraph) int {
 	if strings.HasPrefix(depKey, "configmap/") ||
 		strings.HasPrefix(depKey, "secret/") ||
 		strings.HasPrefix(depKey, "pvc/") {
-		parts := strings.SplitN(depKey, "/", 3)
-		if len(parts) == 3 {
-			kind := parts[0]
-			ns := parts[1]
-			refs := graph.DependentsOf(kind, ns, parts[2])
-			n := len(refs)
+		if ref, ok := model.ParseObjectKey(depKey); ok {
+			kind := ref.Kind
+			ns := ref.Namespace
+			refs := graph.DependentsOf(kind, ns, ref.Name)
+			n := distinctOwnerCount(graph, refs)
 			if n >= 3 {
 				t := n * 30 / 100
 				if t < minMassFailThreshold {
@@ -74,16 +74,33 @@ func ScanMassFailures(
 		return nil
 	}
 	type depEntry struct {
-		count int
-		inc   *model.Incident
+		owners map[string]bool
+		inc    *model.Incident
 	}
 
 	shared := make(map[string]*depEntry)
 
-	for _, inc := range incidents {
+	// Walk the incidents in a stable order. The entry kept per dependency is
+	// whichever incident arrived first, and it supplies the reason,
+	// namespace and kind the mass-failure alert prints; taken in map order
+	// those three could change from tick to tick while nothing about the
+	// failure had, so the same outage re-rendered with different wording.
+	ordered := make([]*model.Incident, 0, len(incidents))
+	ordered = append(ordered, incidents...)
+	sort.Slice(ordered, func(a, b int) bool {
+		return ordered[a].Key < ordered[b].Key
+	})
+
+	// Count distinct workloads, not incidents. Three replicas of one
+	// Deployment -- or its CPU, memory and readiness incidents -- all share
+	// that Deployment's ServiceAccount, Secret and ReplicaSet by definition;
+	// that is one workload having a bad day, not a dependency taking several
+	// down.
+	for _, inc := range ordered {
 		if inc.State != model.StateActive {
 			continue
 		}
+		owner := incidentSubjectKey(inc)
 		deps := dependenciesFor(graph, inc)
 		seen := make(map[string]bool)
 		for _, d := range deps {
@@ -92,24 +109,32 @@ func ScanMassFailures(
 			}
 			seen[d] = true
 			if shared[d] == nil {
-				shared[d] = &depEntry{inc: inc}
+				shared[d] = &depEntry{inc: inc, owners: map[string]bool{}}
 			}
-			shared[d].count++
+			shared[d].owners[owner] = true
 		}
 	}
 
+	depKeys := make([]string, 0, len(shared))
+	for depKey := range shared {
+		depKeys = append(depKeys, depKey)
+	}
+	sort.Strings(depKeys)
+
 	var results []MassFailure
-	for depKey, entry := range shared {
-		if entry.count < minMassFailThreshold {
+	for _, depKey := range depKeys {
+		entry := shared[depKey]
+		count := len(entry.owners)
+		if count < minMassFailThreshold {
 			continue
 		}
 		th := dynamicThreshold(depKey, graph)
-		if entry.count < th {
+		if count < th {
 			continue
 		}
 		results = append(results, MassFailure{
 			SharedDependency: depKey,
-			AffectedCount:    entry.count,
+			AffectedCount:    count,
 			Threshold:        th,
 			Reason:           entry.inc.Reason,
 			Namespace:        entry.inc.Namespace,
@@ -117,6 +142,66 @@ func ScanMassFailures(
 		})
 	}
 	return results
+}
+
+// describeDependency renders a graph key for a reader: "node ip-10-0-57-202"
+// or "configmap staging/app-settings". Cutting at the first slash used to
+// leave cluster-scoped keys as "/ip-10-0-57-202", and "threshold: 4,
+// affected: 6" was the detector's arithmetic, not anything to act on.
+func describeDependency(depKey string) string {
+	ref, ok := model.ParseObjectKey(depKey)
+	if !ok {
+		return depKey
+	}
+	return ref.Describe()
+}
+
+// workloadKinds are the owners a pod is counted under when sizing a
+// threshold. Anything else (a bare pod, a node) counts as itself.
+var thresholdWorkloadKinds = map[string]bool{
+	"deployment":  true,
+	"statefulset": true,
+	"daemonset":   true,
+	"replicaset":  true,
+	"job":         true,
+	"cronjob":     true,
+}
+
+// distinctOwnerCount collapses dependent pods onto the workloads that own
+// them, so a threshold is expressed in the same unit as the affected count.
+func distinctOwnerCount(graph *context.ResourceGraph, deps []string) int {
+	owners := make(map[string]bool, len(deps))
+	for _, dep := range deps {
+		ref, ok := model.ParseObjectKey(dep)
+		if !ok || ref.Kind != "pod" {
+			owners[dep] = true
+			continue
+		}
+		owner := ""
+		for _, up := range graph.DependenciesOf(
+			ref.Kind,
+			ref.Namespace,
+			ref.Name,
+		) {
+			upRef, upOK := model.ParseObjectKey(up)
+			if upOK && thresholdWorkloadKinds[upRef.Kind] {
+				owner = up
+				break
+			}
+		}
+		if owner == "" {
+			owner = dep
+		}
+		owners[owner] = true
+	}
+	return len(owners)
+}
+
+// incidentSubjectKey identifies the workload an incident is about, so several
+// incidents on the same subject count once. Pod incidents carry their owning
+// workload in Name; everything else is already "namespace/name" or a node.
+func incidentSubjectKey(inc *model.Incident) string {
+	return inc.Ref().Key()
 }
 
 // Describe renders the mass failure for humans, with change ages measured
@@ -127,18 +212,15 @@ func (mf MassFailure) Describe() string {
 
 // describeAt is Describe with an explicit clock, for deterministic tests.
 func (mf MassFailure) describeAt(now time.Time) string {
-	short := mf.SharedDependency
-	if idx := strings.Index(short, "/"); idx >= 0 {
-		short = short[idx+1:]
-	}
 	base := fmt.Sprintf(
-		"%d %s incidents share dependency %s (threshold: %d, affected: %d)",
+		"%d %s workloads share %s",
 		mf.AffectedCount,
 		mf.ResourceKind,
-		short,
-		mf.Threshold,
-		mf.AffectedCount,
+		describeDependency(mf.SharedDependency),
 	)
+	if mf.Reason != "" {
+		base += " and are all failing with " + mf.Reason
+	}
 	if mf.RootCause != "" {
 		base += "; root cause: " + mf.RootCause
 	}

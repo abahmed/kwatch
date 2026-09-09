@@ -19,6 +19,26 @@ func Validate(cfg *Config) []error {
 			errors.New("pendingPodMonitor.threshold must be > 0"),
 		)
 	}
+	if cfg.MaxRecentLogLines < 0 {
+		errs = append(errs, errors.New("maxRecentLogLines must be >= 0"))
+	}
+	if cfg.Workers < 1 {
+		errs = append(errs, errors.New("workers must be >= 1"))
+	}
+	if cfg.HealthCheck.Enabled && cfg.HealthCheck.Port <= 0 {
+		errs = append(errs, errors.New(
+			"healthCheck.port must be > 0 when healthCheck.enabled is true",
+		))
+	}
+	if cfg.Correlation.MaxBaseline < 0 {
+		errs = append(errs, errors.New("correlation.maxBaseline must be >= 0"))
+	}
+	for _, text := range validateMaintenance(cfg) {
+		errs = append(errs, errors.New(text))
+	}
+	for _, text := range validateRetryJitter(cfg) {
+		errs = append(errs, errors.New(text))
+	}
 	if cfg.AuditLog.Enabled && cfg.AuditLog.Output == "" {
 		errs = append(
 			errs,
@@ -101,7 +121,7 @@ func validateCorrelation(cfg *Config) []error {
 			errors.New("correlation.resolveHoldDown must be >= 0"),
 		)
 	}
-	if cfg.Correlation.ResolveHoldDown > cfg.Correlation.Window*60 {
+	if int(cfg.Correlation.ResolveHoldDown) > int(cfg.Correlation.Window)*60 {
 		errs = append(
 			errs,
 			errors.New(

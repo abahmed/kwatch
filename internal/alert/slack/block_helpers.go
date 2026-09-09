@@ -63,7 +63,7 @@ func evidenceTitle(title string, inc *model.Incident) string {
 	if pod == "" {
 		return title
 	}
-	if len(inc.Resources) <= 1 && inc.Name == pod {
+	if len(inc.Resources) <= 1 && inc.Ref().Name == pod {
 		return title
 	}
 	return fmt.Sprintf("%s — from `%s`", title, pod)
@@ -198,13 +198,6 @@ func formatIncidentText(
 	renderer := message.NewSlackRenderer()
 	report := message.NewReportBuilder("").Build(inc, action, nil)
 	return message.RenderAction(renderer, report)
-}
-
-func resourcePlural(inc *model.Incident) string {
-	if inc.Resource != "" {
-		return inc.Resource + "s"
-	}
-	return "resources"
 }
 
 func plainSection(txt string) slackClient.SectionBlock {

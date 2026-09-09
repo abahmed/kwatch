@@ -4,11 +4,13 @@ import (
 	"context"
 	"fmt"
 	"net"
+	"strings"
 	"sync"
 	"time"
 
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/rest"
 	"k8s.io/klog/v2"
@@ -17,8 +19,9 @@ import (
 	"github.com/abahmed/kwatch/internal/config"
 	"github.com/abahmed/kwatch/internal/constant"
 	"github.com/abahmed/kwatch/internal/correlation"
-	"github.com/abahmed/kwatch/internal/event"
 	"github.com/abahmed/kwatch/internal/metrics"
+	"github.com/abahmed/kwatch/internal/model"
+	"github.com/abahmed/kwatch/internal/observe"
 )
 
 const (
@@ -55,7 +58,10 @@ type Monitor struct {
 	status     Status
 	failures   map[string]int
 	recoveries map[string]int
-	now        func() time.Time
+	// failing marks the endpoints that have actually been reported down. An
+	// endpoint that has always answered has nothing to resolve.
+	failing map[string]bool
+	now     func() time.Time
 }
 
 func New(restConfig *rest.Config, client kubernetes.Interface, cfg config.ControlPlaneMonitor, correlator *correlation.Engine) (*Monitor, error) {
@@ -63,8 +69,17 @@ func New(restConfig *rest.Config, client kubernetes.Interface, cfg config.Contro
 	if err != nil {
 		return nil, fmt.Errorf("controlplane: create REST client: %w", err)
 	}
-	return &Monitor{client: client, restClient: restClient, cfg: cfg, correlator: correlator,
-		status: Status{Components: make(map[string]EndpointStatus)}, failures: make(map[string]int), recoveries: make(map[string]int), now: time.Now}, nil
+	return &Monitor{
+		client:     client,
+		restClient: restClient,
+		cfg:        cfg,
+		correlator: correlator,
+		status:     Status{Components: make(map[string]EndpointStatus)},
+		failures:   make(map[string]int),
+		recoveries: make(map[string]int),
+		failing:    make(map[string]bool),
+		now:        time.Now,
+	}, nil
 }
 
 // SetClock injects the wall clock used for status timestamps and probe latency.
@@ -129,6 +144,43 @@ func controlPlaneState(status Status) string {
 	return "healthy"
 }
 
+// controlPlaneComponents are the static-pod components kwatch probes for
+// health.
+var controlPlaneComponents = []string{
+	"kube-scheduler",
+	"kube-controller-manager",
+	"etcd",
+}
+
+// componentPods finds the control-plane pods by label.
+//
+// The sweep used to LIST every pod in the cluster on every tick and throw all
+// but three of them away. On a cluster of any size that single call was the
+// largest load kwatch put on the API server, repeated every interval whether
+// or not anything had changed. Both label spellings are queried because
+// distributions disagree about which one they set.
+func (m *Monitor) componentPods(ctx context.Context) ([]corev1.Pod, error) {
+	in := " in (" + strings.Join(controlPlaneComponents, ",") + ")"
+	var out []corev1.Pod
+	seen := map[types.UID]bool{}
+	for _, label := range []string{"component", "k8s-app"} {
+		list, err := m.client.CoreV1().Pods("").List(
+			ctx, metav1.ListOptions{LabelSelector: label + in},
+		)
+		if err != nil {
+			return nil, err
+		}
+		for i := range list.Items {
+			if seen[list.Items[i].UID] {
+				continue
+			}
+			seen[list.Items[i].UID] = true
+			out = append(out, list.Items[i])
+		}
+	}
+	return out, nil
+}
+
 func (m *Monitor) check(ctx context.Context) {
 	probeCtx, cancel := context.WithTimeout(ctx, defaultProbeTimeout)
 	defer cancel()
@@ -140,21 +192,14 @@ func (m *Monitor) check(ctx context.Context) {
 	m.mu.Unlock()
 	m.checkAPIServer(probeCtx)
 	m.checkCoreDNS(probeCtx)
-	components := []string{}
-	components = append(components, "kube-scheduler")
-	components = append(components, "kube-controller-manager")
-	components = append(components, "etcd")
-	if len(components) == 0 {
-		return
-	}
-	pods, err := m.client.CoreV1().Pods("").List(probeCtx, metav1.ListOptions{})
+	pods, err := m.componentPods(probeCtx)
 	if err != nil {
 		m.markComponentsUnavailable(err)
 		m.recordProbeError("control-plane pod discovery", err)
 		return
 	}
-	for _, component := range components {
-		m.checkComponent(probeCtx, component, pods.Items)
+	for _, component := range controlPlaneComponents {
+		m.checkComponent(probeCtx, component, pods)
 	}
 	m.mu.Lock()
 	m.status.LastCheck = m.nowTime()
@@ -168,12 +213,7 @@ func (m *Monitor) markComponentsUnavailable(err error) {
 	if m.status.Components == nil {
 		m.status.Components = make(map[string]EndpointStatus)
 	}
-	components := []string{
-		"kube-scheduler",
-		"kube-controller-manager",
-		"etcd",
-	}
-	for _, component := range components {
+	for _, component := range controlPlaneComponents {
 		m.status.Components[component] = EndpointStatus{
 			Name:        component,
 			Available:   false,
@@ -315,6 +355,15 @@ func (m *Monitor) observe(key string, healthy bool, reason, hint string) {
 	}
 	m.mu.Lock()
 	if healthy {
+		if !m.failing[key] {
+			// Never reported down, so there is nothing to resolve. Calling
+			// Resolve anyway ran a locked engine pass for every control-plane
+			// endpoint on every tick of a perfectly healthy cluster.
+			delete(m.recoveries, key)
+			delete(m.failures, key)
+			m.mu.Unlock()
+			return
+		}
 		m.recoveries[key]++
 		m.failures[key] = 0
 	} else {
@@ -323,11 +372,25 @@ func (m *Monitor) observe(key string, healthy bool, reason, hint string) {
 	}
 	failed := m.failures[key] >= threshold
 	resolved := healthy && m.recoveries[key] >= recovery
-	m.mu.Unlock()
 	if !healthy && failed {
-		m.correlator.Process(event.Event{Resource: "controlplane", Reason: reason, Hint: hint, Severity: "high"}, key, nil)
+		m.failing[key] = true
 	}
 	if resolved {
-		m.correlator.MarkResolved(correlation.BuildKey("", key, reason, ""))
+		delete(m.failing, key)
+		delete(m.recoveries, key)
+	}
+	m.mu.Unlock()
+	if !healthy && failed {
+		obs := observe.Synthetic("controlplane", key, reason).
+			WithSeverity(model.SeverityHigh).WithHint(hint)
+		// The subject is the endpoint kwatch probed, which has no object of
+		// its own; only the owner key identifies it.
+		obs.Subject.Name = ""
+		m.correlator.Process(obs)
+	}
+	if resolved {
+		m.correlator.Resolve(
+			model.ObjectRef{Kind: "controlplane", Name: key}, reason,
+		)
 	}
 }

@@ -126,6 +126,14 @@ type Config struct {
 
 	// ResyncSeconds is the interval (in seconds) for periodic informer resyncs.
 	// If 0, no periodic resync occurs (event-driven only).
+	//
+	// It is not only a freshness knob: resyncs re-run every detector, which is
+	// what re-reports a problem that is still happening. The correlation engine
+	// closes an incident nothing has re-reported for a whole
+	// Correlation.Window, so a resync interval at or above that window (or 0)
+	// means incidents get closed while still broken. config.Warnings says so
+	// at startup.
+	//
 	// On large clusters with 200+ pods, raise Workers (below) to match;
 	ResyncSeconds int `yaml:"resyncSeconds"`
 
@@ -254,6 +262,9 @@ type Config struct {
 
 // Telemetry configures the minimal adoption heartbeat. It is enabled
 // for official builds by default and can be disabled by the operator.
+// Telemetry is the weekly adoption heartbeat: a per-cluster UUID and the
+// kwatch version, nothing else. On by default, and announced at startup with
+// the endpoint and the payload so it is never a surprise.
 type Telemetry struct {
 	Enabled bool `yaml:"enabled"`
 }
@@ -323,7 +334,8 @@ type CrdConfig struct {
 type SmartGrouping struct {
 	// WindowSeconds is the time window in seconds for grouping same-reason
 	// incidents together. Default 60. Set to 0 to disable grouping.
-	WindowSeconds int `yaml:"windowSeconds"`
+	// A bare number counts seconds; "60s" is also accepted.
+	WindowSeconds Seconds `yaml:"windowSeconds"`
 
 	// NamespaceFanOutThreshold is how many distinct owners must fail the same
 	// way, in one namespace, inside one window before their separate groups

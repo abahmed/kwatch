@@ -30,6 +30,16 @@ func runLint(strict, check bool, out, errOut io.Writer) int {
 		}
 		return 1
 	}
+	// Warnings describe a configuration that works but will mislead. They are
+	// reported, never fatal: a lint that fails on a suboptimal setting is a
+	// lint people stop running.
+	for _, warning := range config.Warnings(cfg) {
+		if _, writeErr := fmt.Fprintf(
+			out, "  warning: %s\n", warning,
+		); writeErr != nil {
+			return 1
+		}
+	}
 	if strict {
 		if err := config.LintStrict(); err != nil {
 			if _, writeErr := fmt.Fprintf(

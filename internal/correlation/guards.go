@@ -56,9 +56,9 @@ func (e *Engine) skipByBaseline(
 	return true
 }
 
-// skipByCooldown reports whether re-creation is suppressed by the cleanup
-// cooldown, cleaning up expired entries. Caller must hold e.mu.
-func (e *Engine) skipByCooldown(key model.IncidentKey, ev event.Event) bool {
+// inCooldown reports whether the cleanup cooldown for a key is still
+// running, dropping the entry once it has expired. Caller must hold e.mu.
+func (e *Engine) inCooldown(key model.IncidentKey) bool {
 	expiry, ok := e.cleanupCooldown[key]
 	if !ok {
 		return false
@@ -66,6 +66,17 @@ func (e *Engine) skipByCooldown(key model.IncidentKey, ev event.Event) bool {
 	if !e.now().Before(expiry) {
 		delete(e.cleanupCooldown, key)
 		e.clearSkipAudit(key)
+		return false
+	}
+	return true
+}
+
+// skipByCooldown reports whether re-creation is suppressed by the cleanup
+// cooldown, cleaning up expired entries. It applies only where there is no
+// incident left to revive; a key that still has one is refreshed silently
+// instead, so the recurrence is counted. Caller must hold e.mu.
+func (e *Engine) skipByCooldown(key model.IncidentKey, ev event.Event) bool {
+	if !e.inCooldown(key) {
 		return false
 	}
 	e.auditSkipOnce(key, ev, "cooldown")

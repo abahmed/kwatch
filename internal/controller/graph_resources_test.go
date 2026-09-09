@@ -95,7 +95,7 @@ func TestRebuildPodGraphRefreshesSelectorEdges(t *testing.T) {
 	c, cancel := newGraphTestGraph(policy, budget, pod)
 	defer cancel()
 
-	c.rebuildPodGraph(pod)
+	c.rebuildPodGraph(pod, true)
 
 	assert.Equal(t, []string{"pod/ns1/p1"}, c.graph.DependenciesOf("networkpolicy", "ns1", "deny"))
 	assert.Equal(t, []string{"pod/ns1/p1"}, c.graph.DependenciesOf("poddisruptionbudget", "ns1", "pdb"))
@@ -243,7 +243,7 @@ func TestRebuildPodGraphPreservesExistingEdgesWhenServiceListFails(t *testing.T)
 	c.rebuildPodGraph(&corev1.Pod{
 		ObjectMeta: metav1.ObjectMeta{Name: "p1", Namespace: "ns1"},
 		Spec:       corev1.PodSpec{NodeName: "node2"},
-	})
+	}, true)
 
 	assert.Equal(t, []string{"node//node1"}, c.graph.DependenciesOf("pod", "ns1", "p1"))
 	assert.Equal(t, []string{"endpointslice/ns1/slice1"}, c.graph.DependentsOf("pod", "ns1", "p1"))
@@ -257,7 +257,7 @@ func TestRebuildPodGraphReplacesOnlyPodOwnedEdges(t *testing.T) {
 	c.rebuildPodGraph(&corev1.Pod{
 		ObjectMeta: metav1.ObjectMeta{Name: "p1", Namespace: "ns1"},
 		Spec:       corev1.PodSpec{NodeName: "node2"},
-	})
+	}, true)
 
 	assert.Equal(t, []string{"node//node2"}, c.graph.DependenciesOf("pod", "ns1", "p1"))
 	assert.Equal(t, []string{"endpointslice/ns1/slice1"}, c.graph.DependentsOf("pod", "ns1", "p1"))

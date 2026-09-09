@@ -52,9 +52,9 @@ func TestPersistWritesToConfigMap(t *testing.T) {
 	// Verify we can read it back
 	loaded := sm.GetPvcUsage(context.Background())
 	assert.NotNil(t, loaded)
-	assert.Equal(t, 95.0, loaded["pv-1"].Pct)
-	assert.Equal(t, "default", loaded["pv-1"].Namespace)
-	assert.Equal(t, "pvc-1", loaded["pv-1"].Name)
+	assert.Equal(t, 95.0, loaded["default/pvc-1"].Pct)
+	assert.Equal(t, "default", loaded["default/pvc-1"].Namespace)
+	assert.Equal(t, "pvc-1", loaded["default/pvc-1"].Name)
 }
 
 func TestPersistNilStateDoesNothing(t *testing.T) {
@@ -88,11 +88,13 @@ func TestPersistenceRoundTripRestoresIncidents(t *testing.T) {
 
 	// Pre-populate the ConfigMap with a high PVC sample (simulates prior run)
 	preExisting := map[string]state.PvcSample{
-		"pv-unmounted": {
-			Pct: 95, Namespace: "default", Name: "pvc-backup", Seen: time.Now(),
+		"default/pvc-backup": {
+			Pct: 95, Namespace: "default", Name: "pvc-backup",
+			PVName: "pv-unmounted", Seen: time.Now(),
 		},
-		"pv-low": {
-			Pct: 50, Namespace: "default", Name: "pvc-low", Seen: time.Now(),
+		"default/pvc-low": {
+			Pct: 50, Namespace: "default", Name: "pvc-low",
+			PVName: "pv-low", Seen: time.Now(),
 		},
 	}
 	err := sm.SavePvcUsage(context.Background(), preExisting)
@@ -106,40 +108,40 @@ func TestPersistenceRoundTripRestoresIncidents(t *testing.T) {
 	// Simulate Start's seed block (which runs before first checkUsage)
 	if seed := sm.GetPvcUsage(context.Background()); seed != nil {
 		m.mu.Lock()
-		m.lastUsage = seed
-		for pv, s := range seed {
+		m.lastUsage = rekeyByClaim(seed)
+		for key, s := range m.lastUsage {
 			if s.Pct >= cfg.Threshold {
-				m.notifiedPvc[pv] = true
+				m.notifiedPvc[key] = true
 			}
 		}
 		m.mu.Unlock()
 	}
 
-	// pv-unmounted (95%) should be in notifiedPvc; pv-low (50%) should not
+	// The 95% claim should be in notifiedPvc; the 50% one should not
 	assert.True(
 		t,
-		m.notifiedPvc["pv-unmounted"],
+		m.notifiedPvc["default/pvc-backup"],
 		"high PVC must be re-notified after restart",
 	)
 	assert.False(
 		t,
-		m.notifiedPvc["pv-low"],
+		m.notifiedPvc["default/pvc-low"],
 		"low PVC must not be notified",
 	)
 	assert.Contains(
 		t,
 		m.lastUsage,
-		"pv-unmounted",
+		"default/pvc-backup",
 	)
 	assert.Contains(
 		t,
 		m.lastUsage,
-		"pv-low",
+		"default/pvc-low",
 	)
 
 	// Verify lastUsage values are correct
-	assert.Equal(t, 95.0, m.lastUsage["pv-unmounted"].Pct)
-	assert.Equal(t, "pvc-backup", m.lastUsage["pv-unmounted"].Name)
+	assert.Equal(t, 95.0, m.lastUsage["default/pvc-backup"].Pct)
+	assert.Equal(t, "pvc-backup", m.lastUsage["default/pvc-backup"].Name)
 }
 
 func TestPersistenceRoundTripKeepFiringWithoutRemount(t *testing.T) {
@@ -148,8 +150,9 @@ func TestPersistenceRoundTripKeepFiringWithoutRemount(t *testing.T) {
 
 	// Pre-populate ConfigMap with a high PVC sample
 	preExisting := map[string]state.PvcSample{
-		"pv-backup": {
-			Pct: 95, Namespace: "default", Name: "pvc-backup", Seen: time.Now(),
+		"default/pvc-backup": {
+			Pct: 95, Namespace: "default", Name: "pvc-backup",
+			PVName: "pv-backup", Seen: time.Now(),
 		},
 	}
 	err := sm.SavePvcUsage(context.Background(), preExisting)
@@ -162,24 +165,28 @@ func TestPersistenceRoundTripKeepFiringWithoutRemount(t *testing.T) {
 	// Seed from configmap (same as Start)
 	if seed := sm.GetPvcUsage(context.Background()); seed != nil {
 		m.mu.Lock()
-		m.lastUsage = seed
-		for pv, s := range seed {
+		m.lastUsage = rekeyByClaim(seed)
+		for key, s := range m.lastUsage {
 			if s.Pct >= cfg.Threshold {
-				m.notifiedPvc[pv] = true
+				m.notifiedPvc[key] = true
 			}
 		}
 		m.mu.Unlock()
 	}
 
-	assert.True(t, m.notifiedPvc["pv-backup"])
+	assert.True(t, m.notifiedPvc["default/pvc-backup"])
 
-	// Run a full apply cycle where pv-backup is NOT in pvcUsages (it's unmounted)
-	// but still in pvByPVC (bound). It should KEEP firing.
-	m.apply(nil, map[string]string{"default/pvc-backup": "pv-backup"}, false, true)
+	// Run a full apply cycle where the claim is NOT in pvcUsages (it is
+	// unmounted) but still in pvByPVC (bound). It should KEEP firing.
+	m.apply(
+		nil,
+		map[string]string{"default/pvc-backup": "pv-backup"},
+		false, true,
+	)
 
-	assert.True(t, m.notifiedPvc["pv-backup"],
+	assert.True(t, m.notifiedPvc["default/pvc-backup"],
 		"unmounted high PVC from persisted state must keep firing after apply")
-	assert.Contains(t, m.lastUsage, "pv-backup",
+	assert.Contains(t, m.lastUsage, "default/pvc-backup",
 		"lastUsage must survive the apply cycle")
 }
 
@@ -271,9 +278,9 @@ func TestApplyHighDroppingBelowClearWhileMountedEvicts(t *testing.T) {
 	assert.Contains(
 		t,
 		m.lastUsage,
-		"pv-1",
+		"default/pvc-1",
 	)
-	assert.True(t, m.notifiedPvc["pv-1"])
+	assert.True(t, m.notifiedPvc["default/pvc-1"])
 
 	// Second cycle: still mounted but below clear (e.g. 50%)
 	// Must evict from lastUsage and resolve the incident
@@ -293,12 +300,12 @@ func TestApplyHighDroppingBelowClearWhileMountedEvicts(t *testing.T) {
 
 	assert.NotContains(
 		t,
-		m.lastUsage, "pv-1",
+		m.lastUsage, "default/pvc-1",
 		"dropped below clear must evict from lastUsage",
 	)
 	assert.False(
 		t,
-		m.notifiedPvc["pv-1"],
+		m.notifiedPvc["default/pvc-1"],
 		"dropped below clear must resolve",
 	)
 }
@@ -323,11 +330,11 @@ func TestApplyBetweenClearAndThresholdHolds(t *testing.T) {
 		"default/pvc-3": "pv-3",
 	}, false, true)
 
-	assert.True(t, m.notifiedPvc["pv-1"])
+	assert.True(t, m.notifiedPvc["default/pvc-1"])
 	assert.Contains(
 		t,
 		m.lastUsage,
-		"pv-1",
+		"default/pvc-1",
 	)
 
 	// Second cycle: usage in hold band (clear ≤ usage < threshold, e.g. 78)
@@ -348,12 +355,12 @@ func TestApplyBetweenClearAndThresholdHolds(t *testing.T) {
 	// Must still be in lastUsage (≥ clear) and still notified
 	assert.Contains(
 		t,
-		m.lastUsage, "pv-1",
+		m.lastUsage, "default/pvc-1",
 		"hold-band PVC must remain in lastUsage",
 	)
 	assert.True(
 		t,
-		m.notifiedPvc["pv-1"],
+		m.notifiedPvc["default/pvc-1"],
 		"hold-band PVC must remain firing",
 	)
 }

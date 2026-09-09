@@ -86,12 +86,6 @@ func (e *Engine) scoreInsight(inc *model.Incident, ins *Insight) {
 }
 
 func (e *Engine) appendObservedEvidence(inc *model.Incident, ins *Insight) int {
-	if inc.Events != "" {
-		ins.Evidence = append(ins.Evidence, "Kubernetes warning events were observed")
-	}
-	if inc.Logs != "" {
-		ins.Evidence = append(ins.Evidence, "container logs were collected")
-	}
 	if inc.OwnerUnhealthy {
 		ins.Evidence = append(ins.Evidence, "the owning workload is unhealthy")
 	}
@@ -113,6 +107,11 @@ func (e *Engine) appendObservedEvidence(inc *model.Incident, ins *Insight) int {
 	if inc.Facts.PullSecretsSet {
 		ins.Evidence = append(ins.Evidence, "the pod declares image pull secrets")
 	}
+	if inc.Facts.Volume != "" {
+		ins.Evidence = append(
+			ins.Evidence, "bound volume: "+inc.Facts.Volume,
+		)
+	}
 	if len(ins.RecentChanges) > 0 {
 		ins.Evidence = append(ins.Evidence, "a related resource changed shortly before the incident")
 	}
@@ -129,6 +128,13 @@ func (e *Engine) setPatternConfidence(ins *Insight) {
 		ins.Confidence = 0.85
 	case "dependency_change", "config_error":
 		ins.Confidence = 0.60
+	case "resource_limit":
+		// The reported metric is the cause by definition.
+		ins.Confidence = 0.85
+	case "node_pressure":
+		ins.Confidence = 0.80
+	case "metrics_unavailable":
+		ins.Confidence = 0.70
 	case "root_cause":
 		ins.Confidence = 0.40
 	}
@@ -152,14 +158,11 @@ func (e *Engine) appendActiveDependencyEvidence(
 		return
 	}
 	for _, dependency := range dependenciesFor(e.graph, inc) {
-		parts := strings.SplitN(dependency, "/", 3)
-		if len(parts) != 3 || !e.activeChecker(parts[0], parts[1], parts[2]) {
+		ref, ok := model.ParseObjectKey(dependency)
+		if !ok || !e.activeChecker(ref.Kind, ref.Namespace, ref.Name) {
 			continue
 		}
-		label := parts[0] + " " + parts[2]
-		if parts[1] != "" {
-			label = parts[0] + " " + parts[1] + "/" + parts[2]
-		}
+		label := ref.Describe()
 		ins.Evidence = append(ins.Evidence, "an active incident is already reported for "+label)
 		return
 	}
@@ -186,7 +189,7 @@ func nextSteps(inc *model.Incident) []string {
 	if inc == nil {
 		return nil
 	}
-	name := strings.TrimPrefix(inc.Name, inc.Namespace+"/")
+	name := inc.Ref().Name
 	if inc.Resource == "pod" && len(inc.Resources) > 0 {
 		pods := make([]string, 0, len(inc.Resources))
 		for pod := range inc.Resources {
@@ -202,8 +205,14 @@ func nextSteps(inc *model.Incident) []string {
 		return []string{"kubectl describe node " + name, "kubectl get pods -A --field-selector spec.nodeName=" + name}
 	case "deployment":
 		return []string{"kubectl rollout status deployment/" + name + namespaceArg(inc.Namespace), "kubectl rollout history deployment/" + name + namespaceArg(inc.Namespace)}
-	case "persistentvolumeclaim":
-		return []string{"kubectl describe pvc " + name + namespaceArg(inc.Namespace)}
+	case "pvc", "persistentvolumeclaim":
+		// Storage incidents carry the resource kind "pvc", which is the
+		// vocabulary the graph and the PVC monitor use; the longer spelling
+		// never matched an incident, so PVC alerts arrived with no next step.
+		return []string{
+			"kubectl describe pvc " + name + namespaceArg(inc.Namespace),
+			"kubectl get pv" + namespaceArg(inc.Namespace),
+		}
 	default:
 		return nil
 	}
@@ -221,16 +230,16 @@ func namespaceArg(namespace string) string {
 // node so its transitive dependencies and change history explain why so many
 // resources are failing at once.
 func (e *Engine) EnrichMassFailure(mf MassFailure) MassFailure {
-	parts := strings.SplitN(mf.SharedDependency, "/", 3)
-	if len(parts) != 3 {
+	ref, ok := model.ParseObjectKey(mf.SharedDependency)
+	if !ok {
 		return mf
 	}
 
 	if e.graph != nil {
 		if cause, pattern := e.rootCauseOfRef(
-			parts[0],
-			parts[1],
-			parts[2],
+			ref.Kind,
+			ref.Namespace,
+			ref.Name,
 		); cause != "" {
 			mf.RootCause = cause + fmt.Sprintf(" (pattern: %s)", pattern)
 		}
@@ -238,10 +247,10 @@ func (e *Engine) EnrichMassFailure(mf MassFailure) MassFailure {
 
 	if e.tracker != nil {
 		recent := e.tracker.RecentChangesBeforeAt(15*time.Minute, e.now())
-		depKey := parts[0] + "/" + parts[1] + "/" + parts[2]
+		depKey := ref.Key()
 		var changes []context.Change
 		for _, c := range recent {
-			if c.Resource+"/"+c.Namespace+"/"+c.Name == depKey &&
+			if model.ObjectKey(c.Resource, c.Namespace, c.Name) == depKey &&
 				c.Type == context.ChangeUpdate {
 				changes = append(changes, c)
 				if len(changes) >= 3 {
@@ -269,30 +278,17 @@ func (e *Engine) rootCauseOfRef(kind, ns, name string) (string, string) {
 	return describeRootCauses(roots)
 }
 
-// graphKeysForIncident resolves the graph node keys for an incident. Pod
-// incidents are keyed by their owner while the graph stores real pod names,
-// so the affected pod set (inc.Resources) must be used to reach the right
-// nodes. Workload incidents store Name as "namespace/name".
+// graphKeysForIncident resolves the graph node keys for an incident. The
+// mapping from an incident to the concrete objects it is about -- Pod
+// incidents are keyed by their owner while the graph stores real Pod names --
+// belongs to model.ObjectRefs, so this is only the key rendering.
 func graphKeysForIncident(inc *model.Incident) []string {
-	switch inc.Resource {
-	case "pod":
-		if len(inc.Resources) > 0 {
-			keys := make([]string, 0, len(inc.Resources))
-			for podName := range inc.Resources {
-				keys = append(keys, "pod/"+inc.Namespace+"/"+podName)
-			}
-			return keys
-		}
-		if inc.Name != "" {
-			return []string{"pod/" + inc.Namespace + "/" + inc.Name}
-		}
-	case "node":
-		return []string{"node//" + inc.NodeName}
-	default:
-		name := strings.TrimPrefix(inc.Name, inc.Namespace+"/")
-		return []string{inc.Resource + "/" + inc.Namespace + "/" + name}
+	refs := inc.ObjectRefs()
+	keys := make([]string, 0, len(refs))
+	for _, ref := range refs {
+		keys = append(keys, ref.Key())
 	}
-	return nil
+	return keys
 }
 
 // IncidentGraphKeys exposes the normalized graph identities used by insight

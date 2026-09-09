@@ -21,6 +21,19 @@ import (
 // IncidentKey derives a dedup key from an event, mirroring the exact
 // normalisation
 // chain inside Process. It returns the same key that Process would compute.
+// ObservationKey is the incident key an observation will be folded into. It
+// is exported for the startup baseline, which has to record exactly the key
+// the live path will produce, and for monitors that keep their own
+// per-incident hysteresis state.
+func ObservationKey(obs *model.Observation) model.IncidentKey {
+	if obs == nil {
+		return ""
+	}
+	return IncidentKey(
+		event.FromObservation(obs), obs.OwnerPath(), obs.State(),
+	)
+}
+
 func IncidentKey(
 	ev event.Event,
 	owner string,
@@ -95,8 +108,16 @@ func (e *Engine) edgeAction(inc *model.Incident) model.IncidentAction {
 }
 
 const defaultBaselineTTL = 24 * time.Hour
+
+// defaultOwnerBaselineTTL is the longest detector sustain window plus a
+// margin: long enough that a rollout in progress at startup is not
+// announced, short enough that it cannot hide a later real failure.
+const defaultOwnerBaselineTTL = 10 * time.Minute
 const defaultCrashLoopHighFreqThreshold = 5
-const DefaultMaxBaseline = 2000
+
+// DefaultMaxBaseline mirrors config.DefaultConfig().Correlation.MaxBaseline
+// so the fallback and the shipped default are the same number.
+const DefaultMaxBaseline = 5000
 
 type Engine struct {
 	mu    sync.Mutex
@@ -107,7 +128,14 @@ type Engine struct {
 	frozen bool
 	// ns → key → inc
 	namespaceIndex map[string]map[model.IncidentKey]*model.Incident
-	config         Config
+	// subject reference → keys of the incidents about that object. See
+	// index.go for what the indices are for and the invariant they hold.
+	subjectIndex map[model.ObjectRef]map[model.IncidentKey]struct{}
+	// node name → keys of the incidents about that node
+	nodeIncidents map[string]map[model.IncidentKey]struct{}
+	// "namespace:owner:" → the baseline keys under that owner
+	baselineByOwner map[string]map[string]struct{}
+	config          Config
 	// baseline is the startup baseline: incident key (BuildKey string form) →
 	// pod name → first-seen unix ts. The keys intentionally stay raw strings:
 	// this map crosses the ConfigMap persistence layer (controller/state),
@@ -118,8 +146,8 @@ type Engine struct {
 	dsLister     appsv1lister.DaemonSetLister
 	// node name → has active incident
 	activeNodeIncidents map[string]bool
-	// key: namespace/podName
-	lastContainerIndex map[string]*model.ContainerState
+	// key: namespace/podName/container
+	lastContainerIndex map[string]containerStateEntry
 	// Incident key → concrete Pod name → UID. This protects cleanup when a
 	// replacement reuses a name before an old delete tombstone is processed.
 	podResourceUIDs map[model.IncidentKey]map[string]string
@@ -157,6 +185,9 @@ func NewEngine(cfg Config) *Engine {
 	if cfg.BaselineTTL <= 0 {
 		cfg.BaselineTTL = defaultBaselineTTL
 	}
+	if cfg.OwnerBaselineTTL <= 0 {
+		cfg.OwnerBaselineTTL = defaultOwnerBaselineTTL
+	}
 	if cfg.MaxBaseline <= 0 {
 		cfg.MaxBaseline = DefaultMaxBaseline
 	}
@@ -165,9 +196,15 @@ func NewEngine(cfg Config) *Engine {
 		namespaceIndex: make(
 			map[string]map[model.IncidentKey]*model.Incident,
 		),
+		subjectIndex: make(
+			map[model.ObjectRef]map[model.IncidentKey]struct{},
+		),
+		nodeIncidents:        make(map[string]map[model.IncidentKey]struct{}),
+		baseline:             make(map[string]map[string]int64),
+		baselineByOwner:      make(map[string]map[string]struct{}),
 		config:               cfg,
 		activeNodeIncidents:  make(map[string]bool),
-		lastContainerIndex:   make(map[string]*model.ContainerState),
+		lastContainerIndex:   make(map[string]containerStateEntry),
 		podResourceUIDs:      make(map[model.IncidentKey]map[string]string),
 		cleanupCooldown:      make(map[model.IncidentKey]time.Time),
 		groupBuffers:         make(map[string]*pendingGroup),
@@ -212,6 +249,15 @@ var knownRetryReasons = map[string]bool{
 func normalizeReason(reason string) string {
 	if reason == constant.ReasonErrImagePull {
 		return constant.ReasonImagePullBackOff
+	}
+	// The HPA controller emits FailedGetResourceMetric,
+	// FailedComputeMetricsReplicas and FailedGetMetrics for the one condition
+	// of having no metrics. Kept apart they were two or three alerts per HPA
+	// for a single metrics-server outage.
+	switch reason {
+	case constant.ReasonFailedComputeMetricsReplicas,
+		constant.ReasonFailedGetMetrics:
+		return constant.ReasonFailedGetResourceMetric
 	}
 	idx := strings.LastIndex(reason, " ")
 	if idx > 0 {

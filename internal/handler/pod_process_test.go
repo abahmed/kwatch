@@ -14,7 +14,8 @@ import (
 	"k8s.io/client-go/kubernetes/fake"
 
 	"github.com/abahmed/kwatch/internal/config"
-	"github.com/abahmed/kwatch/internal/event"
+	"github.com/abahmed/kwatch/internal/model"
+	"github.com/abahmed/kwatch/internal/observe"
 )
 
 func TestSignalEventWithRestartCountOnly(t *testing.T) {
@@ -25,13 +26,14 @@ func TestSignalEventWithRestartCountOnly(t *testing.T) {
 		e,
 		testAlertMgr,
 	)
-	h.signalEvent(&event.Signal{
-		Resource:     "pod",
-		Reason:       "CrashLoopBackOff",
-		PodName:      "p1",
-		Namespace:    "ns1",
-		RestartCount: 5,
-	})
+	obs := observe.PodOwnedBy(
+		&corev1.Pod{ObjectMeta: metav1.ObjectMeta{
+			Name: "p1", Namespace: "ns1",
+		}},
+		"", "CrashLoopBackOff", model.ObjectRef{},
+	)
+	obs.RestartCount = 5
+	h.observe(obs)
 	assert.Equal(t, 1, e.ActiveCount())
 }
 

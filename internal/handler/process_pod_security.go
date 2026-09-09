@@ -7,18 +7,21 @@ import (
 	"k8s.io/apimachinery/pkg/api/errors"
 
 	"github.com/abahmed/kwatch/internal/constant"
-	"github.com/abahmed/kwatch/internal/event"
+	"github.com/abahmed/kwatch/internal/model"
+	"github.com/abahmed/kwatch/internal/observe"
 )
 
 // DetectPodReferenceIssues turns opaque admission/mount failures into precise
 // signals when the referenced object is provably absent from the informer
 // cache. Optional references and an unavailable lister are intentionally
 // ignored: absence is only actionable when Kubernetes requires the reference.
-func DetectPodReferenceIssues(pod *corev1.Pod, listers Listers) []*event.Signal {
+func DetectPodReferenceIssues(
+	pod *corev1.Pod, listers Listers,
+) []*model.Observation {
 	if pod == nil {
 		return nil
 	}
-	var signals []*event.Signal
+	var signals []*model.Observation
 	if listers.Secret != nil {
 		for _, ref := range requiredSecretReferences(pod) {
 			if _, err := listers.Secret.Secrets(pod.Namespace).Get(ref); errors.IsNotFound(err) {
@@ -148,6 +151,13 @@ func uniqueNames(names []string) []string {
 	return result
 }
 
-func podReferenceSignal(pod *corev1.Pod, reason, kind, name string) *event.Signal {
-	return &event.Signal{Resource: "pod", Namespace: pod.Namespace, PodName: pod.Name, PodUID: string(pod.UID), PodLineageID: podLineageID(pod), PodGenerateName: pod.GenerateName, NodeName: pod.Spec.NodeName, Owner: podIncidentOwner(pod), Reason: reason, Labels: pod.Labels, Hint: fmt.Sprintf("pod references required %s %q, but it is not present in the namespace", kind, name)}
+func podReferenceSignal(
+	pod *corev1.Pod, reason, kind, name string,
+) *model.Observation {
+	return observe.PodOwnedBy(
+		pod, "", reason, model.ObjectRef{},
+	).WithHint(fmt.Sprintf(
+		"pod references required %s %q, but it is not present in the"+
+			" namespace", kind, name,
+	))
 }

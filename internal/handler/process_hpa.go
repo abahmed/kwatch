@@ -11,8 +11,8 @@ import (
 	"k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/client-go/tools/cache"
 
-	"github.com/abahmed/kwatch/internal/correlation"
-	"github.com/abahmed/kwatch/internal/event"
+	"github.com/abahmed/kwatch/internal/model"
+	"github.com/abahmed/kwatch/internal/observe"
 )
 
 func (h *handler) ProcessHorizontalPodAutoscaler(
@@ -23,13 +23,13 @@ func (h *handler) ProcessHorizontalPodAutoscaler(
 	if err != nil {
 		return fmt.Errorf("invalid hpa key %q: %w", key, err)
 	}
+	subject := model.NewObjectRef(
+		"horizontalpodautoscaler", namespace, name,
+	)
 	if deleted {
 		h.clearFirstMaxed(namespace + "/" + name)
 		h.clearFirstScalingError(namespace + "/" + name)
-		h.correlator.ResolveByResource(
-			"horizontalpodautoscaler",
-			namespace+"/"+name,
-		)
+		h.reconcileGone(subject)
 		return nil
 	}
 	hpa, err := h.listers.HPA.HorizontalPodAutoscalers(namespace).Get(name)
@@ -37,10 +37,7 @@ func (h *handler) ProcessHorizontalPodAutoscaler(
 		if errors.IsNotFound(err) {
 			h.clearFirstMaxed(namespace + "/" + name)
 			h.clearFirstScalingError(namespace + "/" + name)
-			h.correlator.ResolveByResource(
-				"horizontalpodautoscaler",
-				namespace+"/"+name,
-			)
+			h.reconcileGone(subject)
 			return nil
 		}
 		return fmt.Errorf(
@@ -87,12 +84,11 @@ func hpaAtMax(hpa *autoscalingv2.HorizontalPodAutoscaler) bool {
 // so that both conditions are seeded independently.
 func DetectHPAIssues(
 	hpa *autoscalingv2.HorizontalPodAutoscaler,
-) []*event.Signal {
+) []*model.Observation {
 	if hpa == nil {
 		return nil
 	}
-	key := hpa.Namespace + "/" + hpa.Name
-	var out []*event.Signal
+	var out []*model.Observation
 
 	for i := range hpa.Status.Conditions {
 		c := &hpa.Status.Conditions[i]
@@ -102,45 +98,37 @@ func DetectHPAIssues(
 			if c.Reason == constant.ReasonScalingDisabled {
 				continue // target intentionally at 0 replicas — not an error
 			}
-			out = append(out, &event.Signal{
-				Resource:  "horizontalpodautoscaler",
-				Reason:    constant.ReasonHPAScalingError,
-				Namespace: hpa.Namespace,
-				Owner:     key,
-				Labels:    hpa.Labels,
-				Hint: fmt.Sprintf(
-					"%s: %s — %s",
-					c.Type,
-					c.Reason,
-					c.Message,
-				),
-			})
+			out = append(out, observe.Object(
+				"horizontalpodautoscaler", hpa,
+				constant.ReasonHPAScalingError,
+			).WithHint(fmt.Sprintf(
+				"%s: %s — %s",
+				c.Type,
+				c.Reason,
+				c.Message,
+			)))
 			break
 		}
 		if c.Type == autoscalingv2.ScalingLimited &&
 			c.Status == corev1.ConditionTrue &&
 			c.Reason != constant.ReasonTooManyReplicas && c.Reason != "TooFewReplicas" {
-			out = append(out, &event.Signal{
-				Resource: "horizontalpodautoscaler", Reason: constant.ReasonHPAScalingLimited,
-				Namespace: hpa.Namespace, Owner: key, Labels: hpa.Labels,
-				Hint: fmt.Sprintf("ScalingLimited: %s — %s", c.Reason, c.Message),
-			})
+			out = append(out, observe.Object(
+				"horizontalpodautoscaler", hpa,
+				constant.ReasonHPAScalingLimited,
+			).WithHint(fmt.Sprintf(
+				"ScalingLimited: %s — %s", c.Reason, c.Message,
+			)))
 		}
 	}
 
 	if hpaAtMax(hpa) {
-		out = append(out, &event.Signal{
-			Resource:  "horizontalpodautoscaler",
-			Reason:    constant.ReasonHPAMaxedOut,
-			Namespace: hpa.Namespace,
-			Owner:     key,
-			Labels:    hpa.Labels,
-			Hint: fmt.Sprintf(
-				"pinned at max=%d (current=%d)",
-				hpa.Spec.MaxReplicas,
-				hpa.Status.CurrentReplicas,
-			),
-		})
+		out = append(out, observe.Object(
+			"horizontalpodautoscaler", hpa, constant.ReasonHPAMaxedOut,
+		).WithHint(fmt.Sprintf(
+			"pinned at max=%d (current=%d)",
+			hpa.Spec.MaxReplicas,
+			hpa.Status.CurrentReplicas,
+		)))
 	}
 
 	return out
@@ -153,71 +141,43 @@ func (h *handler) ProcessHorizontalPodAutoscalerObject(
 	if hpa == nil {
 		return nil
 	}
-	if deleted {
-		h.clearFirstMaxed(hpa.Namespace + "/" + hpa.Name)
-		h.clearFirstScalingError(hpa.Namespace + "/" + hpa.Name)
-		h.correlator.ResolveByResource(
-			"horizontalpodautoscaler",
-			hpa.Namespace+"/"+hpa.Name,
-		)
-		return nil
-	}
-	if h.inMaintenance(hpa.Annotations) {
-		h.clearFirstMaxed(hpa.Namespace + "/" + hpa.Name)
-		h.clearFirstScalingError(hpa.Namespace + "/" + hpa.Name)
-		h.correlator.ResolveByResource("horizontalpodautoscaler", hpa.Namespace+"/"+hpa.Name)
-		return nil
-	}
-
+	subject := model.NewObjectRef(
+		"horizontalpodautoscaler", hpa.Namespace, hpa.Name,
+	)
 	key := hpa.Namespace + "/" + hpa.Name
+	if deleted || h.inMaintenance(hpa.Annotations) {
+		h.clearFirstMaxed(key)
+		h.clearFirstScalingError(key)
+		h.reconcileGone(subject)
+		return nil
+	}
 
-	// (1) scaling-error detection — sustained check to avoid transient noise
-	sigs := DetectHPAIssues(hpa)
+	var current []*model.Observation
 	hadError := false
-	hadLimited := false
-	for _, sig := range sigs {
-		if sig.Reason == constant.ReasonHPAScalingError {
+	for _, obs := range DetectHPAIssues(hpa) {
+		switch obs.Reason {
+		case constant.ReasonHPAScalingError:
+			hadError = true
+			// Sustained check: a scaling error that clears on the next tick
+			// is the autoscaler working, not an incident.
 			first := h.markFirstScalingError(key)
 			sustained := time.Duration(
 				h.config.HpaMonitor.SustainedMinutes,
 			) * time.Minute
 			if sustained <= 0 || h.now().Sub(first) >= sustained {
-				h.signalEvent(sig)
+				current = append(current, obs)
 			}
-			hadError = true
-		} else if sig.Reason == constant.ReasonHPAScalingLimited {
-			h.signalEvent(sig)
-			hadLimited = true
+		case constant.ReasonHPAScalingLimited:
+			current = append(current, obs)
 		}
 	}
 	if !hadError {
 		h.clearFirstScalingError(key)
-		h.correlator.MarkResolved(
-			correlation.BuildKey(
-				hpa.Namespace,
-				key,
-				constant.ReasonHPAScalingError,
-				"",
-			),
-		)
-	}
-	if !hadLimited {
-		h.correlator.MarkResolved(correlation.BuildKey(
-			hpa.Namespace, key, constant.ReasonHPAScalingLimited, "",
-		))
 	}
 
-	// (2) maxed detection
 	if !hpaAtMax(hpa) {
 		h.clearFirstMaxed(key)
-		h.correlator.MarkResolved(
-			correlation.BuildKey(
-				hpa.Namespace,
-				key,
-				constant.ReasonHPAMaxedOut,
-				"",
-			),
-		)
+		h.reconcile(subject, current)
 		return nil
 	}
 
@@ -229,24 +189,23 @@ func (h *handler) ProcessHorizontalPodAutoscalerObject(
 		hpa.Spec.MaxReplicas-hpa.Status.CurrentReplicas,
 	)
 	if sustained > 0 && h.now().Sub(first) < sustained {
+		for _, obs := range current {
+			h.observe(obs)
+		}
 		return nil
 	}
 
-	h.signalEvent(&event.Signal{
-		Resource:  "horizontalpodautoscaler",
-		Namespace: hpa.Namespace,
-		Reason:    constant.ReasonHPAMaxedOut,
-		Owner:     key,
-		Labels:    hpa.Labels,
-		Hint: fmt.Sprintf(
-			"pinned at max=%d (desired=%d current=%d) for %s — raise "+
-				"maxReplicas or investigate load",
-			hpa.Spec.MaxReplicas,
-			hpa.Status.DesiredReplicas,
-			hpa.Status.CurrentReplicas,
-			h.now().Sub(first).Round(time.Minute),
-		),
-	})
+	current = append(current, observe.Object(
+		"horizontalpodautoscaler", hpa, constant.ReasonHPAMaxedOut,
+	).WithHint(fmt.Sprintf(
+		"pinned at max=%d (desired=%d current=%d) for %s — raise "+
+			"maxReplicas or investigate load",
+		hpa.Spec.MaxReplicas,
+		hpa.Status.DesiredReplicas,
+		hpa.Status.CurrentReplicas,
+		h.now().Sub(first).Round(time.Minute),
+	)))
+	h.reconcile(subject, current)
 	return nil
 }
 

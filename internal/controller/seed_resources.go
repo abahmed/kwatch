@@ -1,9 +1,13 @@
 package controller
 
 import (
+	"time"
+
 	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/klog/v2"
 
+	"github.com/abahmed/kwatch/internal/config"
+	"github.com/abahmed/kwatch/internal/filter"
 	"github.com/abahmed/kwatch/internal/handler"
 )
 
@@ -67,7 +71,13 @@ func (c *Controller) seedClusterResources(rec *baselineRecorder) {
 			klog.ErrorS(err, "failed to list namespaces for baseline seeding")
 		} else {
 			for _, namespace := range namespaces {
-				if sig := handler.DetectNamespaceIssue(namespace, c.nowTime(), 0); sig != nil {
+				if sig := handler.DetectNamespaceIssue(
+					namespace, c.nowTime(),
+					c.seedThresholds.namespaceSustainedMinutes,
+				); sig != nil {
+					rec.seed(sig)
+				}
+				if sig := handler.DetectPodSecurityLabelIssue(namespace); sig != nil {
 					rec.seed(sig)
 				}
 			}
@@ -79,13 +89,46 @@ func (c *Controller) seedClusterResources(rec *baselineRecorder) {
 			klog.ErrorS(err, "failed to list node leases for baseline seeding")
 		} else {
 			for _, lease := range leases {
-				if sig := handler.DetectNodeLeaseIssue(lease, c.nowTime(), 0); sig != nil {
+				if sig := handler.DetectNodeLeaseIssue(
+					lease, c.nowTime(),
+					c.seedThresholds.nodeLeaseStaleSeconds,
+				); sig != nil {
 					rec.seed(sig)
 				}
 			}
 		}
 	}
 }
+
+// seedThresholds are the configured sustain windows the seeding pass uses.
+type seedThresholds struct {
+	namespaceSustainedMinutes int
+	nodeLeaseStaleSeconds     int
+	pendingPod                time.Duration
+	notReady                  time.Duration
+	pendingPodEnabled         bool
+	notReadyEnabled           bool
+}
+
+func newSeedThresholds(cfg *config.Config) seedThresholds {
+	pending := time.Duration(cfg.PendingPodMonitor.Threshold) * time.Second
+	if pending <= 0 {
+		pending = defaultPendingPodThreshold
+	}
+	return seedThresholds{
+		namespaceSustainedMinutes: cfg.ClusterResourceMonitor.SustainedMinutes,
+		nodeLeaseStaleSeconds: cfg.ClusterResourceMonitor.
+			NodeLeaseStaleSeconds,
+		pendingPod:        pending,
+		notReady:          filter.DefaultNotReadyThreshold,
+		pendingPodEnabled: cfg.PendingPodMonitor.Enabled,
+		notReadyEnabled:   cfg.NotReadyMonitor.Enabled,
+	}
+}
+
+// defaultPendingPodThreshold mirrors the pod pipeline's fallback, so a seeded
+// key matches the live one when the config leaves the threshold unset.
+const defaultPendingPodThreshold = 300 * time.Second
 
 func (c *Controller) seedDaemonSets(rec *baselineRecorder) {
 	if c.dsLister != nil {
@@ -298,6 +341,10 @@ func (c *Controller) seedMwcs(
 		} else {
 			for _, mwc := range mwcs {
 				sigs := handler.DetectMutatingWebhookIssue(mwc, hasSvc)
+				sigs = append(sigs, handler.DetectWebhookEndpointIssues(
+					c.endpointSliceLister, mwc.Name, mwc.Namespace,
+					mwc.Labels, handler.MutatingWebhookServices(mwc),
+				)...)
 				for _, sig := range sigs {
 					rec.seed(sig)
 				}
@@ -321,6 +368,10 @@ func (c *Controller) seedVwcs(
 		} else {
 			for _, vwc := range vwcs {
 				sigs := handler.DetectValidatingWebhookIssue(vwc, hasSvc)
+				sigs = append(sigs, handler.DetectWebhookEndpointIssues(
+					c.endpointSliceLister, vwc.Name, vwc.Namespace,
+					vwc.Labels, handler.ValidatingWebhookServices(vwc),
+				)...)
 				for _, sig := range sigs {
 					rec.seed(sig)
 				}

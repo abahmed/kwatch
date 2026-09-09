@@ -284,7 +284,7 @@ func TestCheckUsageUnderThreshold(t *testing.T) {
 	}
 
 	if usage.UsagePercentage >= cfg.Threshold {
-		pvc.notifiedPvc[usage.PVName] = true
+		pvc.notifiedPvc[usage.key()] = true
 	}
 
 	assert.Equal(0, len(pvc.notifiedPvc))
@@ -310,11 +310,11 @@ func TestCheckUsageOverThreshold(t *testing.T) {
 	}
 
 	if usage.UsagePercentage >= cfg.Threshold {
-		pvc.notifiedPvc[usage.PVName] = true
+		pvc.notifiedPvc[usage.key()] = true
 	}
 
 	assert.Equal(1, len(pvc.notifiedPvc))
-	assert.True(pvc.notifiedPvc["test-pv"])
+	assert.True(pvc.notifiedPvc["default/test-pvc"])
 }
 
 func TestRefStruct(t *testing.T) {

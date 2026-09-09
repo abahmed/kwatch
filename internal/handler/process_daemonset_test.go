@@ -12,7 +12,7 @@ import (
 
 	"github.com/abahmed/kwatch/internal/config"
 	"github.com/abahmed/kwatch/internal/correlation"
-	"github.com/abahmed/kwatch/internal/event"
+	"github.com/abahmed/kwatch/internal/observe"
 )
 
 func TestDetectDaemonSetIssueUnavailable(t *testing.T) {
@@ -182,16 +182,7 @@ func TestProcessDaemonSetObjectNodeInhibition(t *testing.T) {
 
 func TestProcessDaemonSetObjectOvercommitDoesNotInhibit(t *testing.T) {
 	e := testCorrelator()
-	e.Process(
-		event.Event{
-			Resource: "node",
-			PodName:  "node1",
-			NodeName: "node1",
-			Reason:   "NodeResourceCritical",
-		},
-		"node1",
-		nil,
-	)
+	e.Process(observe.NodeNamed("node1", "NodeResourceCritical"))
 	assert.Equal(
 		t,
 		0,

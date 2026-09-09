@@ -1,6 +1,8 @@
 package slack
 
 import (
+	"sort"
+
 	"github.com/abahmed/kwatch/internal/alert/util"
 	"github.com/abahmed/kwatch/internal/insight"
 	"github.com/abahmed/kwatch/internal/model"
@@ -89,9 +91,31 @@ func (s *Slack) saveThread(key, ts string) {
 	defer s.mu.Unlock()
 	if s.threadMap == nil {
 		s.threadMap = make(map[string]string)
+		s.threadOrder = nil
 	}
-	if s.maxThreadMapSize <= 0 || len(s.threadMap) < s.maxThreadMapSize {
-		s.threadMap[key] = ts
+	if _, exists := s.threadMap[key]; !exists {
+		s.threadOrder = append(s.threadOrder, key)
+	}
+	s.threadMap[key] = ts
+	// Refusing to record new threads at capacity meant the newest incidents --
+	// the ones still being worked -- lost their thread while long-finished
+	// ones kept theirs. Evict oldest-first instead.
+	for s.maxThreadMapSize > 0 && len(s.threadMap) > s.maxThreadMapSize &&
+		len(s.threadOrder) > 0 {
+		oldest := s.threadOrder[0]
+		s.threadOrder = s.threadOrder[1:]
+		delete(s.threadMap, oldest)
+	}
+}
+
+// forgetThread drops a key from both the map and the eviction order.
+func (s *Slack) forgetThread(key string) {
+	delete(s.threadMap, key)
+	for i, k := range s.threadOrder {
+		if k == key {
+			s.threadOrder = append(s.threadOrder[:i], s.threadOrder[i+1:]...)
+			break
+		}
 	}
 }
 
@@ -108,8 +132,8 @@ func (s *Slack) loadThread(key string) string {
 func (s *Slack) popThread(key string) string {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	ts, _ := s.threadMap[key]
-	delete(s.threadMap, key)
+	ts := s.threadMap[key]
+	s.forgetThread(key)
 	return ts
 }
 
@@ -130,4 +154,49 @@ func (s *Slack) postBlocks(
 		opts...,
 	)
 	return ts, wrapSlackRateLimit(err)
+}
+
+// SnapshotThreads implements alert.ThreadStateProvider.
+func (s *Slack) SnapshotThreads() map[string]string {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if len(s.threadMap) == 0 {
+		return nil
+	}
+	out := make(map[string]string, len(s.threadMap))
+	for key, ts := range s.threadMap {
+		out[key] = ts
+	}
+	return out
+}
+
+// RestoreThreads implements alert.ThreadStateProvider. Restored keys are
+// appended to the eviction order in a stable sequence so the bound still
+// applies, and existing live threads always win over saved ones.
+func (s *Slack) RestoreThreads(saved map[string]string) {
+	if len(saved) == 0 {
+		return
+	}
+	keys := make([]string, 0, len(saved))
+	for key := range saved {
+		keys = append(keys, key)
+	}
+	sort.Strings(keys)
+	for _, key := range keys {
+		if ts := saved[key]; ts != "" {
+			s.adoptThread(key, ts)
+		}
+	}
+}
+
+// adoptThread records a saved thread id unless this run already posted one
+// for that incident: a live thread is always the better target.
+func (s *Slack) adoptThread(key, ts string) {
+	s.mu.Lock()
+	_, exists := s.threadMap[key]
+	s.mu.Unlock()
+	if exists {
+		return
+	}
+	s.saveThread(key, ts)
 }

@@ -8,12 +8,13 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes/fake"
 
 	"github.com/abahmed/kwatch/internal/correlation"
-	"github.com/abahmed/kwatch/internal/event"
 	"github.com/abahmed/kwatch/internal/model"
+	"github.com/abahmed/kwatch/internal/observe"
 )
 
 func TestEngineBackedBaselineRoundTrip(t *testing.T) {
@@ -42,19 +43,13 @@ func TestEngineBackedBaselineRoundTrip(t *testing.T) {
 	})
 
 	// Previously seen pod+container should be suppressed
-	ev1 := event.Event{
-		PodName: "pod-1", Namespace: "default",
-		Reason: "CrashLoopBackOff", ContainerName: "app",
-	}
-	_, action := e.Process(ev1, "dep-1", &model.ContainerState{RestartCount: 1})
+	ev1 := baselineObservation("pod-1")
+	_, action := e.Process(ev1)
 	assert.Equal(model.ActionSkip, action, "baselined pod must be suppressed")
 
 	// A new pod for the same owner+reason should create an incident
-	ev2 := event.Event{
-		PodName: "pod-2", Namespace: "default",
-		Reason: "CrashLoopBackOff", ContainerName: "app",
-	}
-	_, action = e.Process(ev2, "dep-1", &model.ContainerState{RestartCount: 1})
+	ev2 := baselineObservation("pod-2")
+	_, action = e.Process(ev2)
 	assert.Equal(model.ActionCreate, action, "unseen pod must create incident")
 }
 
@@ -334,4 +329,20 @@ func TestLegacyIncidentStateIsMigratedOnLoad(t *testing.T) {
 	again, err := sm.LoadPersistedIncidents(ctx)
 	require.NoError(t, err)
 	assert.Equal(t, got, again)
+}
+
+// baselineObservation is one crash-looping container of dep-1, as the pod
+// pipeline would report it.
+func baselineObservation(pod string) *model.Observation {
+	obs := observe.PodOwnedBy(
+		&corev1.Pod{
+			ObjectMeta: metav1.ObjectMeta{
+				Name: pod, Namespace: "default",
+			},
+		},
+		"app", "CrashLoopBackOff",
+		model.ObjectRef{Namespace: "default", Name: "dep-1"},
+	)
+	obs.ContainerState = &model.ContainerState{RestartCount: 1}
+	return obs
 }

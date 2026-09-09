@@ -23,7 +23,7 @@ func newSmartGroupingEngine() *Engine {
 // point a fan-out can be told apart from an isolated failure.
 func TestSmartGroupingBuffersSameReason(t *testing.T) {
 	e := newSmartGroupingEngine()
-	_, action := e.Process(
+	_, action := e.processEvent(
 		event.Event{PodName: "p1", Namespace: "ns", Reason: "CrashLoopBackOff"},
 		"dep1",
 		nil,
@@ -35,7 +35,7 @@ func TestSmartGroupingBuffersSameReason(t *testing.T) {
 		"the first owner alerts immediately",
 	)
 	assert.Equal(t, 1, len(e.state))
-	_, action = e.Process(
+	_, action = e.processEvent(
 		event.Event{PodName: "p2", Namespace: "ns", Reason: "CrashLoopBackOff"},
 		"dep2",
 		nil,
@@ -87,7 +87,7 @@ func TestNamespaceFanOutCollapsesIntoOneAlert(t *testing.T) {
 		e *Engine, ns string, owners ...string,
 	) (direct []model.IncidentAction) {
 		for _, o := range owners {
-			_, a := e.Process(
+			_, a := e.processEvent(
 				event.Event{
 					PodName:   o + "-abc",
 					Namespace: ns,
@@ -181,7 +181,7 @@ func TestNamespaceFanOutCollapsesIntoOneAlert(t *testing.T) {
 	) {
 		got = append(got, emitted{inc, a})
 	}
-	e.MarkResolved("dev:readify:ContainersNotReady:")
+	e.markResolved("dev:readify:ContainersNotReady:")
 	var ownResolve bool
 	for _, g := range got {
 		if g.inc.Key == "dev:readify:ContainersNotReady:" &&
@@ -273,7 +273,7 @@ func TestNamespaceFanOutClosesTheGroupItAbsorbs(t *testing.T) {
 	}
 
 	for _, dep := range []string{"dep1", "dep2", "dep3"} {
-		e.Process(
+		e.processEvent(
 			event.Event{
 				PodName:   dep + "-c",
 				Namespace: "ns",
@@ -318,7 +318,7 @@ func TestNamespaceFanOutDoesNotMergeNodeScopedGroups(t *testing.T) {
 	)
 	e.now = mockClock(now)
 	for _, node := range []string{"node-a", "node-b", "node-c"} {
-		e.Process(
+		e.processEvent(
 			event.Event{
 				Resource: "node",
 				PodName:  node,

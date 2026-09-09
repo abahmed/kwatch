@@ -52,7 +52,7 @@ func TestDetectDeploymentUnavailable(t *testing.T) {
 	sig := DetectDeploymentUnavailable(deploy)
 	assert.NotNil(t, sig)
 	assert.Equal(t, "DeploymentUnavailable", sig.Reason)
-	assert.Equal(t, "ns1/dep1", sig.Owner)
+	assert.Equal(t, "ns1/dep1", sig.OwnerPath())
 }
 
 func TestDetectDeploymentUnavailableMidRollout(t *testing.T) {

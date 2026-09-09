@@ -1,7 +1,6 @@
 package slack
 
 import (
-	"fmt"
 	"strings"
 
 	"github.com/abahmed/kwatch/internal/config"
@@ -120,43 +119,20 @@ func buildIncidentUpdateBlocksWithInsight(
 	return &slackClient.Blocks{BlockSet: capBlocks(blocks)}
 }
 
+// buildIncidentResolvedBlocks wraps the shared resolved rendering in a Block
+// Kit section.
+//
+// It used to build its own headline. That second copy drifted: it dropped the
+// reason when a friendly label existed, hard-coded the ✅ instead of using the
+// resolved emoji the report carries, and pluralised the peak count as "pods"
+// for node and volume incidents too. There is one resolved message now, and
+// Slack only decides which container it goes in.
 func buildIncidentResolvedBlocks(inc *model.Incident) *slackClient.Blocks {
 	r := reportFor(inc, model.ActionResolved, nil, nil)
-	label := r.Summary.Label
-	if label == "" {
-		label = r.Reason
-	}
-	subject := r.Name
-	if r.Namespace != "" && !strings.HasPrefix(subject, r.Namespace+"/") &&
-		!strings.Contains(subject, " ") {
-		subject = r.Namespace + "/" + subject
-	}
-	header := fmt.Sprintf("✅ *Resolved — %s*", label)
-	if subject != "" {
-		header += " — " + subject
-	}
-
-	var info []string
-	if r.Summary.Duration != "" {
-		info = append(info, "lasted "+r.Summary.Duration)
-	}
-	if r.Summary.Count > 1 {
-		info = append(info, fmt.Sprintf("%d occurrences", r.Summary.Count))
-	}
-	if r.Summary.Peak > 1 {
-		info = append(
-			info,
-			fmt.Sprintf("peak %d %s", r.Summary.Peak, resourcePlural(inc)),
-		)
-	}
-	if r.Identity != nil && r.Identity.Node != "" {
-		info = append(info, "node `"+r.Identity.Node+"`")
-	}
-	text := header
-	if len(info) > 0 {
-		text += "\n_" + strings.Join(info, "  ·  ") + "_"
-	}
+	text := message.NewSlackRenderer().RenderResolved(r)
 	return &slackClient.Blocks{
-		BlockSet: []slackClient.Block{markdownSection(text)},
+		BlockSet: []slackClient.Block{
+			markdownSection(truncateField(text)),
+		},
 	}
 }

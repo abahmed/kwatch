@@ -25,6 +25,7 @@ func (e *Engine) flushGroupBuffers(now time.Time) []transition {
 	merged := e.mergeNamespaceFanOut(ready, now)
 	pending = append(pending, merged.transitions...)
 	e.pruneFanOutWindows(now)
+	pending = append(pending, e.pruneGroupState(now)...)
 
 	for _, gk := range ready {
 		if merged.consumed[gk] {

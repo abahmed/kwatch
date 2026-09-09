@@ -2,7 +2,8 @@ package filter
 
 import (
 	apiv1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/klog/v2"
+
+	"github.com/abahmed/kwatch/internal/observe"
 )
 
 type PodOwnersFilter struct{}
@@ -11,20 +12,15 @@ func (f PodOwnersFilter) Detect(ctx *Context) Status {
 	return StatusAlert
 }
 
-// adoptGrandparent replaces owner with the first owner reference of the
-// workload fetched via get, reporting whether resolution still holds.
-func adoptGrandparent(owner *apiv1.OwnerReference, namespace, label string, get func() (apiv1.Object, error)) bool {
-	obj, err := get()
-	if err != nil {
-		klog.ErrorS(err, label, "name", owner.Name, "namespace", namespace)
-		return false
-	}
-	if refs := obj.GetOwnerReferences(); len(refs) > 0 {
-		*owner = refs[0]
-	}
-	return true
-}
-
+// Enrich resolves the workload a pod belongs to and records it on the
+// context, so every detector downstream keys its findings the same way.
+//
+// The walk up the owner chain used to be written out here a second time,
+// beside the one the monitors use. Two implementations of "who owns this
+// pod" is how a kubelet-derived incident and a crash incident about the same
+// Deployment ended up under different keys, and neither could resolve the
+// other. There is one walk now, in observe.PodOwners; this only decides which
+// caches it may read.
 func (f PodOwnersFilter) Enrich(ctx *Context) bool {
 	if ctx.Owner != nil || ctx.Pod == nil {
 		return false
@@ -32,55 +28,22 @@ func (f PodOwnersFilter) Enrich(ctx *Context) bool {
 	if len(ctx.Pod.OwnerReferences) == 0 {
 		return false
 	}
-
-	owner := ctx.Pod.OwnerReferences[0]
-	resolved := true
-
-	switch owner.Kind {
-	case "ReplicaSet":
-		if ctx.RSLister != nil {
-			resolved = adoptGrandparent(&owner, ctx.Pod.Namespace, "failed to get ReplicaSet via lister", func() (apiv1.Object, error) {
-				return ctx.RSLister.ReplicaSets(ctx.Pod.Namespace).Get(owner.Name)
-			})
-		} else {
-			resolved = adoptGrandparent(&owner, ctx.Pod.Namespace, "failed to get ReplicaSet via API", func() (apiv1.Object, error) {
-				return ctx.Client.AppsV1().ReplicaSets(ctx.Pod.Namespace).Get(
-					ctx.Ctx,
-					owner.Name,
-					apiv1.GetOptions{})
-			})
-		}
-	case "DaemonSet":
-		if ctx.DSLister != nil {
-			resolved = adoptGrandparent(&owner, ctx.Pod.Namespace, "failed to get DaemonSet via lister", func() (apiv1.Object, error) {
-				return ctx.DSLister.DaemonSets(ctx.Pod.Namespace).Get(owner.Name)
-			})
-		} else {
-			resolved = adoptGrandparent(&owner, ctx.Pod.Namespace, "failed to get DaemonSet via API", func() (apiv1.Object, error) {
-				return ctx.Client.AppsV1().DaemonSets(ctx.Pod.Namespace).Get(
-					ctx.Ctx,
-					owner.Name,
-					apiv1.GetOptions{})
-			})
-		}
-	case "StatefulSet":
-		if ctx.SSLister != nil {
-			resolved = adoptGrandparent(&owner, ctx.Pod.Namespace, "failed to get StatefulSet via lister", func() (apiv1.Object, error) {
-				return ctx.SSLister.StatefulSets(ctx.Pod.Namespace).Get(owner.Name)
-			})
-		} else {
-			resolved = adoptGrandparent(&owner, ctx.Pod.Namespace, "failed to get StatefulSet via API", func() (apiv1.Object, error) {
-				return ctx.Client.AppsV1().StatefulSets(ctx.Pod.Namespace).Get(
-					ctx.Ctx,
-					owner.Name,
-					apiv1.GetOptions{})
-			})
-		}
+	owner := observe.PodOwners{
+		RS: ctx.RSLister,
+		DS: ctx.DSLister,
+		SS: ctx.SSLister,
+		// The API fallback matters here and only here: the filters run in
+		// unit tests and in a kwatch whose informers are not wired, where a
+		// lister is nil but the client works.
+		Client: ctx.Client,
+		Ctx:    ctx.Ctx,
+	}.OwnerOf(ctx.Pod)
+	if owner.Name == "" {
+		// Unresolved. Leaving ctx.Owner nil is the honest answer: the
+		// detectors then key by the pod rather than by a guess.
+		return false
 	}
-
-	if resolved {
-		ctx.Owner = &owner
-	}
+	ctx.Owner = &apiv1.OwnerReference{Kind: owner.Kind, Name: owner.Name}
 	return false
 }
 

@@ -16,6 +16,7 @@ import (
 	"github.com/abahmed/kwatch/internal/config"
 	"github.com/abahmed/kwatch/internal/handler"
 	"github.com/abahmed/kwatch/internal/model"
+	"github.com/abahmed/kwatch/internal/observe"
 )
 
 func newTestController(
@@ -38,6 +39,7 @@ type mockHandler struct {
 	nodeDel        []bool
 	err            error
 	seenBaseline   map[string]map[string]int64
+	activeNodes    []string
 	startupSummary map[string]int
 }
 
@@ -119,6 +121,7 @@ func (m *mockHandler) ProcessHorizontalPodAutoscaler(
 	return m.err
 }
 func (m *mockHandler) SetListers(handler.Listers)       {}
+func (m *mockHandler) Owners() observe.OwnerResolver    { return nil }
 func (m *mockHandler) SetNamespaceScope([]string, bool) {}
 func (m *mockHandler) SweepTLSSecrets()                 {}
 func (m *mockHandler) SetBaseline(baseline map[string]map[string]int64) {
@@ -126,8 +129,15 @@ func (m *mockHandler) SetBaseline(baseline map[string]map[string]int64) {
 	defer m.mu.Unlock()
 	m.seenBaseline = baseline
 }
-func (m *mockHandler) SetActiveNodeIncidents([]string)    {}
-func (m *mockHandler) ClearBaselineForPod(string, string) {}
+func (m *mockHandler) SetActiveNodeIncidents(nodes []string) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	m.activeNodes = append(m.activeNodes, nodes...)
+}
+func (m *mockHandler) ClearBaselineForPod(
+	string, string, model.ObjectRef,
+) {
+}
 func (m *mockHandler) ReportStartupSummary(suppressed map[string]int) {
 	m.mu.Lock()
 	defer m.mu.Unlock()

@@ -3,6 +3,7 @@ package pvc
 import (
 	"context"
 	"fmt"
+	"strings"
 	"sync"
 	"time"
 
@@ -12,9 +13,9 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/klog/v2"
 
-	"github.com/abahmed/kwatch/internal/event"
 	"github.com/abahmed/kwatch/internal/k8s"
 	"github.com/abahmed/kwatch/internal/model"
+	"github.com/abahmed/kwatch/internal/observe"
 	"github.com/abahmed/kwatch/internal/state"
 )
 
@@ -24,6 +25,20 @@ type PvcUsage struct {
 	Namespace       string
 	PodName         string
 	UsagePercentage float64
+}
+
+// key identifies a usage observation by its claim, not by the bound
+// PersistentVolume.
+//
+// The PV name was the incident identity, which made storage incidents
+// unjoinable to everything else kwatch reports: silence rules, the API
+// status checks above and the insight engine all speak in
+// "namespace/claim", and no operator recognises "pvc-8f3a-..." as their
+// volume. Keying by the claim also means a claim that is deleted and
+// re-created under the same name continues one incident instead of
+// stranding the old PV name in the notified set forever.
+func (u *PvcUsage) key() string {
+	return u.Namespace + "/" + u.Name
 }
 
 const stuckVolumeDeletionGrace = 10 * time.Minute
@@ -116,14 +131,13 @@ func (p *PvcMonitor) checkVolumeStatus(ctx context.Context) {
 				hint = fmt.Sprintf("PVC %s has been terminating for %s with finalizers: %v",
 					key, p.now().Sub(pvc.DeletionTimestamp.Time).Round(time.Minute), pvc.Finalizers)
 			}
-			p.reportSignal(&event.Signal{
-				Resource: "pvc", Namespace: pvc.Namespace, PodName: pvc.Name,
-				Owner: key, Reason: constant.ReasonPersistentVolumeClaim,
-				Labels: pvc.Labels,
-				Hint:   hint,
-			})
+			p.report(observe.Object(
+				"pvc", pvc, constant.ReasonPersistentVolumeClaim,
+			).WithHint(hint))
 		} else {
-			p.correlator.ResolveByResource("pvc", key)
+			p.correlator.Resolve(
+				model.NewObjectRef("pvc", pvc.Namespace, pvc.Name), "",
+			)
 		}
 	}
 
@@ -146,13 +160,13 @@ func (p *PvcMonitor) checkVolumeStatus(ctx context.Context) {
 				hint = fmt.Sprintf("PV %s has been terminating for %s with finalizers: %v",
 					pv.Name, p.now().Sub(pv.DeletionTimestamp.Time).Round(time.Minute), pv.Finalizers)
 			}
-			p.reportSignal(&event.Signal{
-				Resource: "pv", PodName: pv.Name, Owner: pv.Name,
-				Reason: constant.ReasonPersistentVolume, Labels: pv.Labels,
-				Hint: hint,
-			})
+			p.report(observe.ClusterObject(
+				"pv", pv.Name, constant.ReasonPersistentVolume,
+			).WithLabels(pv.Labels).WithHint(hint))
 		} else {
-			p.correlator.ResolveByResource("pv", pv.Name)
+			p.correlator.Resolve(
+				model.ObjectRef{Kind: "pv", Name: pv.Name}, "",
+			)
 		}
 	}
 }
@@ -226,12 +240,13 @@ func (p *PvcMonitor) effectiveClear() float64 {
 // incident alive and evicts entries that fell below the clear level.
 func (p *PvcMonitor) cacheSample(now time.Time, u *PvcUsage, clear float64) {
 	if u.UsagePercentage >= clear {
-		p.lastUsage[u.PVName] = state.PvcSample{
+		p.lastUsage[u.key()] = state.PvcSample{
 			Pct: u.UsagePercentage, Namespace: u.Namespace,
 			Name: u.Name, PodName: u.PodName, Seen: now,
+			PVName: u.PVName,
 		}
 	} else {
-		delete(p.lastUsage, u.PVName)
+		delete(p.lastUsage, u.key())
 	}
 }
 
@@ -239,8 +254,9 @@ func (p *PvcMonitor) cacheSample(now time.Time, u *PvcUsage, clear float64) {
 // B8: SampleNode (isSweep=false) only signals the rising edge; the sweep
 // re-signals unconditionally (edgeAction dedups).
 func (p *PvcMonitor) signalIfOver(u *PvcUsage, isSweep bool, currentNotified map[string]bool) {
-	wasNotified := p.notifiedPvc[u.PVName]
-	currentNotified[u.PVName] = true
+	key := u.key()
+	wasNotified := p.notifiedPvc[key]
+	currentNotified[key] = true
 	if p.firstScan {
 		return
 	}
@@ -249,38 +265,42 @@ func (p *PvcMonitor) signalIfOver(u *PvcUsage, isSweep bool, currentNotified map
 		if u.UsagePercentage >= p.config.CriticalThreshold {
 			severity = model.SeverityHigh
 		}
-		p.reportSignal(&event.Signal{
-			Resource: "pvc", PodName: u.PodName, Namespace: u.Namespace,
-			Reason: constant.ReasonVolumeUsageHigh, Hint: fmt.Sprintf("VolumeUsage(%.0f%%)", u.UsagePercentage),
-			Severity: severity, Owner: u.PVName,
-		})
+		p.report(observe.VolumeUsage(
+			u.Namespace, u.Name, u.PodName, constant.ReasonVolumeUsageHigh,
+		).WithSeverity(severity).WithFacts(volumeFacts(u.PVName)).
+			WithHint(fmt.Sprintf(
+				"VolumeUsage(%.0f%%)", u.UsagePercentage,
+			)))
 	}
 }
 
 // resolveStale resolves or retains incidents for PVs no longer over threshold.
-func (p *PvcMonitor) resolveStale(seen, boundPV, currentNotified map[string]bool, clear float64) {
-	for pvName := range p.notifiedPvc {
-		if currentNotified[pvName] {
+func (p *PvcMonitor) resolveStale(
+	seen, bound, currentNotified map[string]bool,
+	clear float64,
+) {
+	for key := range p.notifiedPvc {
+		if currentNotified[key] {
 			continue
 		}
 		switch {
-		case seen[pvName]:
+		case seen[key]:
 			// mounted this cycle and fell below clear → genuine resolve
-			p.correlator.ResolveByResource("pvc", pvName)
-			delete(p.lastUsage, pvName)
-		case !boundPV[pvName]:
+			p.resolveClaim(key)
+			delete(p.lastUsage, key)
+		case !bound[key]:
 			// PVC deleted → genuine resolve + evict
-			p.correlator.ResolveByResource("pvc", pvName)
-			delete(p.lastUsage, pvName)
+			p.resolveClaim(key)
+			delete(p.lastUsage, key)
 		default:
 			// bound but unmounted → usage is static; keep firing on the
 			// still-accurate sample (resolves only when re-mounted < clear,
 			// or the PVC is deleted, above).
-			if s, ok := p.lastUsage[pvName]; ok && s.Pct >= clear {
-				currentNotified[pvName] = true
+			if s, ok := p.lastUsage[key]; ok && s.Pct >= clear {
+				currentNotified[key] = true
 			} else {
-				p.correlator.ResolveByResource("pvc", pvName)
-				delete(p.lastUsage, pvName)
+				p.resolveClaim(key)
+				delete(p.lastUsage, key)
 			}
 		}
 	}
@@ -297,13 +317,13 @@ func (p *PvcMonitor) apply(pvcUsages []*PvcUsage, pvByPVC map[string]string, inc
 	seen := make(map[string]bool, len(pvcUsages))
 
 	for _, pvc := range pvcUsages {
-		seen[pvc.PVName] = true
+		seen[pvc.key()] = true
 		p.cacheSample(now, pvc, clear)
 
 		if pvc.UsagePercentage >= p.config.Threshold {
 			p.signalIfOver(pvc, isSweep, currentNotified)
-		} else if p.notifiedPvc[pvc.PVName] && pvc.UsagePercentage >= clear {
-			currentNotified[pvc.PVName] = true
+		} else if p.notifiedPvc[pvc.key()] && pvc.UsagePercentage >= clear {
+			currentNotified[pvc.key()] = true
 		}
 	}
 
@@ -312,15 +332,17 @@ func (p *PvcMonitor) apply(pvcUsages []*PvcUsage, pvByPVC map[string]string, inc
 		p.firstScan = false
 	}
 
-	boundPV := make(map[string]bool, len(pvByPVC))
-	for _, pvName := range pvByPVC {
-		if pvName != "" {
-			boundPV[pvName] = true
-		}
+	// pvByPVC is keyed by "namespace/claim" -- the same identity the
+	// incidents now use -- so its key set is exactly "claims that still
+	// exist". Values (PV names) are empty for unbound claims, which used
+	// to make an unbound claim look deleted.
+	bound := make(map[string]bool, len(pvByPVC))
+	for key := range pvByPVC {
+		bound[key] = true
 	}
 
 	if !incomplete {
-		p.resolveStale(seen, boundPV, currentNotified, clear)
+		p.resolveStale(seen, bound, currentNotified, clear)
 	}
 
 	if !incomplete {
@@ -330,4 +352,11 @@ func (p *PvcMonitor) apply(pvcUsages []*PvcUsage, pvByPVC map[string]string, inc
 			p.notifiedPvc[k] = true
 		}
 	}
+}
+
+// resolveClaim resolves the usage incident for a claim named
+// "namespace/claim", which is how the usage cache keys them.
+func (p *PvcMonitor) resolveClaim(key string) {
+	namespace, name, _ := strings.Cut(key, "/")
+	p.correlator.Resolve(model.NewObjectRef("pvc", namespace, name), "")
 }

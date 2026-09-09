@@ -16,7 +16,7 @@ func TestSmartGroupingFoldRekeysMember(t *testing.T) {
 	e.now = mockClock(now)
 
 	sigLog := "connection refused:5432"
-	e.Process(
+	e.processEvent(
 		event.Event{
 			PodName:   "p1",
 			Namespace: "ns",
@@ -26,7 +26,7 @@ func TestSmartGroupingFoldRekeysMember(t *testing.T) {
 		"dep1",
 		nil,
 	)
-	e.Process(
+	e.processEvent(
 		event.Event{
 			PodName:   "p2",
 			Namespace: "ns",
@@ -52,7 +52,7 @@ func TestSmartGroupingFoldRekeysMember(t *testing.T) {
 
 	// A high-frequency member migrates to its folded incident key.
 	cs := &model.ContainerState{RestartCount: 6}
-	e.Process(
+	e.processEvent(
 		event.Event{
 			PodName:   "p1",
 			Namespace: "ns",
@@ -75,10 +75,10 @@ func TestSmartGroupingFoldRekeysMember(t *testing.T) {
 	)
 
 	// Resolving only dep2 leaves the folded dep1 member active.
-	e.MarkResolved("ns:dep2:CrashLoopBackOff:")
+	e.markResolved("ns:dep2:CrashLoopBackOff:")
 	require.Equal(t, []model.IncidentAction{model.ActionCreate}, actions)
 
-	e.MarkResolved("ns:dep1:CrashLoopHighFrequency:")
+	e.markResolved("ns:dep1:CrashLoopHighFrequency:")
 	require.Equal(
 		t,
 		[]model.IncidentAction{model.ActionCreate, model.ActionResolved},

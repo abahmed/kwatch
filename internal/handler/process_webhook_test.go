@@ -83,8 +83,8 @@ func TestDetectMutatingWebhookServiceMissing(t *testing.T) {
 	sigs := DetectMutatingWebhookIssue(mwc, hasService)
 	assert.Len(t, sigs, 1)
 	assert.Equal(t, "WebhookBackendNotFound", sigs[0].Reason)
-	assert.Equal(t, "mutatingwebhookconfiguration", sigs[0].Resource)
-	assert.Equal(t, "test-mwc", sigs[0].Owner)
+	assert.Equal(t, "mutatingwebhookconfiguration", sigs[0].Subject.Kind)
+	assert.Equal(t, "test-mwc", sigs[0].OwnerPath())
 }
 
 func TestDetectMutatingWebhookMultipleHooks(t *testing.T) {
@@ -181,7 +181,7 @@ func TestDetectValidatingWebhookServiceMissing(t *testing.T) {
 	sigs := DetectValidatingWebhookIssue(vwc, hasService)
 	assert.Len(t, sigs, 1)
 	assert.Equal(t, "WebhookBackendNotFound", sigs[0].Reason)
-	assert.Equal(t, "validatingwebhookconfiguration", sigs[0].Resource)
+	assert.Equal(t, "validatingwebhookconfiguration", sigs[0].Subject.Kind)
 }
 
 func TestProcessMutatingWebhookObjectCreatesAndResolves(t *testing.T) {

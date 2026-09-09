@@ -9,7 +9,8 @@ import (
 	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/klog/v2"
 
-	"github.com/abahmed/kwatch/internal/event"
+	"github.com/abahmed/kwatch/internal/model"
+	"github.com/abahmed/kwatch/internal/observe"
 )
 
 // controlPlaneSelectors maps component names to their well-known label
@@ -25,7 +26,7 @@ var controlPlaneSelectors = map[string]string{
 }
 
 // DetectControlPlanePodIssue checks a pod for control-plane failure conditions.
-func DetectControlPlanePodIssue(pod *corev1.Pod) *event.Signal {
+func DetectControlPlanePodIssue(pod *corev1.Pod) *model.Observation {
 	if pod == nil {
 		return nil
 	}
@@ -60,42 +61,44 @@ func DetectControlPlanePodIssue(pod *corev1.Pod) *event.Signal {
 	// Check if pod is Pending (Unschedulable)
 	for _, c := range pod.Status.Conditions {
 		if c.Type == corev1.PodScheduled && c.Status == corev1.ConditionFalse {
-			key := pod.Namespace + "/" + pod.Name
-			return &event.Signal{
-				Resource:  "controlplane",
-				Namespace: pod.Namespace,
-				PodName:   pod.Name,
-				Reason:    constant.ReasonControlPlaneComponentFailure,
-				Owner:     key,
-				Labels:    pod.Labels,
-				Severity:  "high",
-				Hint: fmt.Sprintf(
-					"control-plane component %s/%s: %s: %s",
-					pod.Namespace,
-					pod.Name,
-					c.Reason,
-					c.Message,
-				),
-			}
+			return controlPlaneObservation(pod).WithHint(fmt.Sprintf(
+				"control-plane component %s/%s: %s: %s",
+				pod.Namespace,
+				pod.Name,
+				c.Reason,
+				c.Message,
+			))
 		}
 	}
 
 	return nil
 }
 
-func controlPlaneContainerIssue(pod *corev1.Pod, cs corev1.ContainerStatus) *event.Signal {
+func controlPlaneContainerIssue(
+	pod *corev1.Pod, cs corev1.ContainerStatus,
+) *model.Observation {
 	reason := controlPlaneContainerReason(cs)
 	if reason == "" {
 		return nil
 	}
-	key := pod.Namespace + "/" + pod.Name
-	return &event.Signal{
-		Resource: "controlplane", Namespace: pod.Namespace, PodName: pod.Name,
-		Container: cs.Name, Image: cs.Image, RestartCount: cs.RestartCount,
-		Reason: constant.ReasonControlPlaneComponentFailure, Owner: key,
-		Labels: pod.Labels, Severity: "high",
-		Hint: fmt.Sprintf("control-plane component %s/%s: container %s has issue: %s", pod.Namespace, pod.Name, cs.Name, reason),
-	}
+	obs := controlPlaneObservation(pod)
+	obs.Container = cs.Name
+	obs.Image = cs.Image
+	obs.RestartCount = cs.RestartCount
+	return obs.WithHint(fmt.Sprintf(
+		"control-plane component %s/%s: container %s has issue: %s",
+		pod.Namespace, pod.Name, cs.Name, reason,
+	))
+}
+
+// controlPlaneObservation is the shape every control-plane finding shares: a
+// "controlplane" subject named after the pod, keyed by "namespace/pod" so the
+// kube-apiserver on one node is a different incident from the one next to it.
+func controlPlaneObservation(pod *corev1.Pod) *model.Observation {
+	return observe.ObjectNamed(
+		"controlplane", pod.Namespace, pod.Name,
+		constant.ReasonControlPlaneComponentFailure,
+	).WithLabels(pod.Labels).WithSeverity(model.SeverityHigh)
 }
 
 func controlPlaneContainerReason(cs corev1.ContainerStatus) string {
@@ -139,7 +142,7 @@ func (h *handler) ProcessControlPlanePod(pod *corev1.Pod) error {
 	}
 	sig := DetectControlPlanePodIssue(pod)
 	if sig != nil {
-		h.signalEvent(sig)
+		h.observe(sig)
 	}
 	return nil
 }

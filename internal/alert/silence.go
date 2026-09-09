@@ -75,7 +75,7 @@ func matchesSilence(sm silenceMatcher, inc *model.Incident) bool {
 	if len(sm.reasons) > 0 && !anyEq(sm.reasons, inc.Reason) {
 		return false
 	}
-	if len(sm.podPattern) > 0 && !anyRegex(sm.podPattern, inc.Name) {
+	if len(sm.podPattern) > 0 && !anyPodMatches(sm.podPattern, inc) {
 		return false
 	}
 	if len(sm.containerNames) > 0 && !anyContainer(sm.containerNames, inc) {
@@ -105,6 +105,28 @@ func matchesSilence(sm silenceMatcher, inc *model.Incident) bool {
 func anyEq(items []string, want string) bool {
 	for _, it := range items {
 		if it == want {
+			return true
+		}
+	}
+	return false
+}
+
+// anyPodMatches tests a podNamePatterns rule against the pods an incident is
+// actually about.
+//
+// Matching inc.Name alone matched the wrong thing for the commonest kind of
+// incident there is: a pod incident's Name is its owning workload, so a rule
+// written against pod names ("payments-.*-[a-z0-9]{5}") silenced nothing. The
+// evidence pod and the incident's own resource list are the pod names.
+func anyPodMatches(patterns []*regexp.Regexp, inc *model.Incident) bool {
+	if anyRegex(patterns, inc.Name) || anyRegex(patterns, inc.EvidencePod) {
+		return true
+	}
+	if inc.Resource != "pod" {
+		return false
+	}
+	for pod := range inc.Resources {
+		if anyRegex(patterns, pod) {
 			return true
 		}
 	}

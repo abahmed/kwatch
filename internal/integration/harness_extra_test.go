@@ -15,7 +15,7 @@ func TestOwnerGroupingSameReason(t *testing.T) {
 
 	// First pod
 	ev1 := makeEvent("pod", "pod-a", "default", "CrashLoopBackOff", "main", "")
-	inc1, action1 := eng.Process(ev1, owner, cs)
+	inc1, action1 := eng.Process(ownedBy(ev1, owner, cs))
 	if action1 != model.ActionCreate {
 		t.Fatalf("expected ActionCreate for first pod, got %s", action1)
 	}
@@ -29,11 +29,11 @@ func TestOwnerGroupingSameReason(t *testing.T) {
 	// Second pod with same owner+reason → same incident key, edge-triggered
 	// skip
 	ev2 := makeEvent("pod", "pod-b", "default", "CrashLoopBackOff", "main", "")
-	inc2, action2 := eng.Process(
+	inc2, action2 := eng.Process(ownedBy(
 		ev2,
 		owner,
 		makeContainerState(1, "CrashLoopBackOff", 137),
-	)
+	))
 	if action2 != model.ActionSkip {
 		t.Fatalf("expected ActionSkip for grouped second pod, got %s", action2)
 	}
@@ -56,7 +56,7 @@ func TestOwnerGroupingSameReason(t *testing.T) {
 	}
 
 	// Resolve
-	eng.MarkResolved(inc1.Key)
+	eng.Resolve(inc1.Ref(), inc1.Reason)
 
 	// Expect 2 notifications: the create we recorded + the resolved from hook
 	if rec.Len() != 2 {

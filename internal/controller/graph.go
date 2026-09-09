@@ -2,10 +2,12 @@ package controller
 
 import (
 	"fmt"
+	"maps"
 	"strings"
 
 	coordinationv1 "k8s.io/api/coordination/v1"
 	corev1 "k8s.io/api/core/v1"
+	"k8s.io/apimachinery/pkg/api/equality"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/klog/v2"
@@ -70,9 +72,27 @@ func (c *Controller) addPodToGraphChecked(pod *corev1.Pod) error {
 	return nil
 }
 
+// clusterCABundles are the ConfigMaps the API server publishes into every
+// namespace and the kubelet projects into every Pod's service-account volume.
+// Every Pod references them, so as graph dependencies they carry no signal:
+// they cannot single out a workload, they never change in a way a workload
+// notices, and they make every incident in a namespace read as a
+// shared-dependency failure ("24 pods share kube-root-ca.crt").
+var clusterCABundles = map[string]bool{
+	"kube-root-ca.crt":         true,
+	"openshift-service-ca.crt": true,
+}
+
+func (c *Controller) addConfigMapEdge(ns, podName, name, edgeType string) {
+	if name == "" || clusterCABundles[name] {
+		return
+	}
+	c.graph.AddEdge("pod", ns, podName, "configmap", ns, name, edgeType)
+}
+
 func (c *Controller) addPodVolumeToGraph(ns, podName string, vol corev1.Volume) {
 	if cm := vol.ConfigMap; cm != nil {
-		c.graph.AddEdge("pod", ns, podName, "configmap", ns, cm.Name, "mounts")
+		c.addConfigMapEdge(ns, podName, cm.Name, "mounts")
 	}
 	if secret := vol.Secret; secret != nil {
 		c.graph.AddEdge("pod", ns, podName, "secret", ns, secret.SecretName, "mounts")
@@ -83,7 +103,9 @@ func (c *Controller) addPodVolumeToGraph(ns, podName string, vol corev1.Volume) 
 	if projected := vol.Projected; projected != nil {
 		for _, source := range projected.Sources {
 			if source.ConfigMap != nil {
-				c.graph.AddEdge("pod", ns, podName, "configmap", ns, source.ConfigMap.Name, graphEdgeProjects)
+				c.addConfigMapEdge(
+					ns, podName, source.ConfigMap.Name, graphEdgeProjects,
+				)
 			}
 			if source.Secret != nil {
 				c.graph.AddEdge("pod", ns, podName, "secret", ns, source.Secret.Name, graphEdgeProjects)
@@ -142,7 +164,13 @@ func (c *Controller) removePodFromGraph(namespace, name string) {
 	c.graph.RemoveNode("pod", namespace, name)
 }
 
-func (c *Controller) rebuildPodGraph(pod *corev1.Pod) {
+// rebuildPodGraph refreshes one pod's relationships.
+//
+// selectorsChanged says whether the pod's labels moved, which is the only
+// thing that can change what selects it: without that, a namespace of
+// NetworkPolicies and PodDisruptionBudgets was rebuilt on every pod event,
+// including the status-only churn a crash loop produces.
+func (c *Controller) rebuildPodGraph(pod *corev1.Pod, selectorsChanged bool) {
 	if c.graph == nil {
 		return
 	}
@@ -154,10 +182,64 @@ func (c *Controller) rebuildPodGraph(pod *corev1.Pod) {
 	}
 
 	podKey := "pod/" + pod.Namespace + "/" + pod.Name
-	c.graph.ReplaceMatchingEdges(func(edge kwcontext.Edge) bool {
+	// Every edge the match can select touches this pod, so the replacement
+	// is bounded by the pod's own degree. The generic form walked every edge
+	// in the cluster graph under the write lock, once per pod event.
+	c.graph.ReplaceMatchingEdgesAround(podKey, func(edge kwcontext.Edge) bool {
 		return edge.From == podKey || (edge.To == podKey && edge.Type == "selects")
 	}, next.graph.Edges())
-	c.refreshPodSelectorEdges(pod.Namespace)
+	if selectorsChanged {
+		c.refreshPodSelectorEdges(pod.Namespace)
+	}
+}
+
+// podGraphInputsChanged reports whether an update touched anything the pod's
+// graph edges are built from. A crash-looping pod produces a stream of status
+// updates that change none of it.
+func podGraphInputsChanged(old, new *corev1.Pod) bool {
+	if old == nil || new == nil {
+		return true
+	}
+	if old.Spec.NodeName != new.Spec.NodeName ||
+		old.Spec.ServiceAccountName != new.Spec.ServiceAccountName ||
+		!maps.Equal(old.Labels, new.Labels) ||
+		len(old.OwnerReferences) != len(new.OwnerReferences) ||
+		!equality.Semantic.DeepEqual(old.Spec.Volumes, new.Spec.Volumes) ||
+		!equality.Semantic.DeepEqual(
+			old.Spec.ImagePullSecrets, new.Spec.ImagePullSecrets,
+		) {
+		return true
+	}
+	return containerRefsChanged(old, new)
+}
+
+// containerRefsChanged reports whether any container's environment
+// references moved. Those are the ConfigMap and Secret edges.
+func containerRefsChanged(old, new *corev1.Pod) bool {
+	if len(old.Spec.Containers) != len(new.Spec.Containers) ||
+		len(old.Spec.InitContainers) != len(new.Spec.InitContainers) {
+		return true
+	}
+	for i := range old.Spec.Containers {
+		if containerEnvChanged(
+			&old.Spec.Containers[i], &new.Spec.Containers[i],
+		) {
+			return true
+		}
+	}
+	for i := range old.Spec.InitContainers {
+		if containerEnvChanged(
+			&old.Spec.InitContainers[i], &new.Spec.InitContainers[i],
+		) {
+			return true
+		}
+	}
+	return false
+}
+
+func containerEnvChanged(old, new *corev1.Container) bool {
+	return !equality.Semantic.DeepEqual(old.Env, new.Env) ||
+		!equality.Semantic.DeepEqual(old.EnvFrom, new.EnvFrom)
 }
 
 // refreshPodSelectorEdges keeps selector-based relationships accurate when a
@@ -193,7 +275,7 @@ func (c *Controller) refreshPodSelectorEdges(namespace string) {
 func (c *Controller) addContainerEnvToGraph(ns, podName string, ctr corev1.Container) {
 	for _, envFrom := range ctr.EnvFrom {
 		if cm := envFrom.ConfigMapRef; cm != nil {
-			c.graph.AddEdge("pod", ns, podName, "configmap", ns, cm.Name, "env_from")
+			c.addConfigMapEdge(ns, podName, cm.Name, "env_from")
 		}
 		if s := envFrom.SecretRef; s != nil {
 			c.graph.AddEdge("pod", ns, podName, "secret", ns, s.Name, "env_from")
@@ -202,7 +284,7 @@ func (c *Controller) addContainerEnvToGraph(ns, podName string, ctr corev1.Conta
 	for _, env := range ctr.Env {
 		if env.ValueFrom != nil {
 			if cm := env.ValueFrom.ConfigMapKeyRef; cm != nil {
-				c.graph.AddEdge("pod", ns, podName, "configmap", ns, cm.Name, "env_ref")
+				c.addConfigMapEdge(ns, podName, cm.Name, "env_ref")
 			}
 			if s := env.ValueFrom.SecretKeyRef; s != nil {
 				c.graph.AddEdge("pod", ns, podName, "secret", ns, s.Name, "env_ref")

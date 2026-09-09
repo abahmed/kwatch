@@ -242,7 +242,7 @@ func TestNotReadyFilterReportsRealDuration(t *testing.T) {
 	f := NotReadyFilter{Threshold: DefaultNotReadyThreshold}
 	c := detectAt(f, bootingPod(3*time.Hour, true, nil), time.Hour)
 	assert.Equal(t, StatusAlert, c.Status)
-	assert.Contains(t, c.PodMsg, "3h0m0s ago")
+	assert.Contains(t, c.PodMsg, "3h ago")
 	assert.NotContains(t, c.PodMsg, "1m0s")
 }
 
@@ -261,7 +261,7 @@ func TestNotReadyFilterRestartGraceDoesNotFalsifyDuration(t *testing.T) {
 	assert.Contains(
 		t,
 		c.PodMsg,
-		"3h0m0s ago",
+		"3h ago",
 		"the grace period gates the alert, not the truth",
 	)
 }

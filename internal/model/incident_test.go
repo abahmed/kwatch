@@ -64,6 +64,16 @@ func TestPersistedIncidentToIncident(t *testing.T) {
 			Resource:  pi.Resource,
 			OwnerKind: pi.OwnerKind,
 			ID:        "",
+			// Identity is recovered from the persisted name: a pod incident
+			// is keyed by its owning workload, so both references name it.
+			Object: ObjectRef{
+				Kind: "pod", Namespace: pi.Namespace, Name: pi.Name,
+			},
+			Owner: ObjectRef{
+				Kind:      pi.OwnerKind,
+				Namespace: pi.Namespace,
+				Name:      pi.Name,
+			},
 		},
 		Status: Status{
 			Count:         pi.Count,

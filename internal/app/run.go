@@ -3,9 +3,9 @@ package app
 import (
 	"context"
 	"fmt"
-	"strings"
 	"time"
 
+	"k8s.io/client-go/kubernetes"
 	"k8s.io/klog/v2"
 
 	"github.com/abahmed/kwatch/internal/alert"
@@ -23,7 +23,6 @@ import (
 	"github.com/abahmed/kwatch/internal/insight"
 	"github.com/abahmed/kwatch/internal/k8s"
 	"github.com/abahmed/kwatch/internal/kubeletmetrics"
-	"github.com/abahmed/kwatch/internal/model"
 	"github.com/abahmed/kwatch/internal/pvc"
 	"github.com/abahmed/kwatch/internal/startup"
 	"github.com/abahmed/kwatch/internal/upgrader"
@@ -42,7 +41,8 @@ type serverDeps struct {
 	pvcMonitor     *pvc.PvcMonitor
 	hbMonitor      *heartbeat.HeartbeatMonitor
 	ctl            *controller.Controller
-	incidentCh     chan []model.PersistedIncident
+	kubeClient     kubernetes.Interface
+	incidentCh     chan stateSnapshot
 	incidentSaver  incidentSaver
 	incidentDone   <-chan struct{}
 	feedbackDone   <-chan struct{}
@@ -163,17 +163,7 @@ func RunWithClock(now func() time.Time) int {
 		persist.saveFeedback,
 	)
 	correlator.SetClock(now)
-	insightEngine.SetActiveChecker(func(kind, namespace, name string) bool {
-		for _, inc := range correlator.ActiveIncidents() {
-			for _, key := range insight.IncidentGraphKeys(inc) {
-				parts := strings.SplitN(key, "/", 3)
-				if len(parts) == 3 && parts[0] == kind && parts[1] == namespace && parts[2] == name {
-					return true
-				}
-			}
-		}
-		return false
-	})
+	insightEngine.SetActiveChecker(newActiveGraphKeyChecker(correlator, now))
 
 	correlator.SetAuditLogger(auditLogger)
 
@@ -203,6 +193,9 @@ func RunWithClock(now func() time.Time) int {
 		return 1
 	}
 	healthServer.SetInformerLister(ctl)
+	// The informer caches are the only thing that can tell a resolved
+	// incident from an unheard-from one, and they exist only now.
+	correlator.SetSubjectPresence(ctl.ResourceExists)
 	namespaces, watchAll := ctl.NamespaceScope()
 	securityMonitor.SetNamespaces(namespaces)
 	securityMonitor.SetAllNamespaces(watchAll)
@@ -211,6 +204,8 @@ func RunWithClock(now func() time.Time) int {
 	pvcMonitor.SetClock(now)
 	if persist.incidentSaver != nil {
 		restoreIncidents(ctx, stateMgr, correlator, ctl.NamespaceAllowed)
+		restoreProviderThreads(ctx, stateMgr, am, correlator)
+		restoreEngineState(ctx, stateMgr, correlator)
 	}
 	ctl.SetTracker(tracker)
 	ctl.SetGraph(graph)
@@ -233,7 +228,7 @@ func RunWithClock(now func() time.Time) int {
 	)
 
 	metricsRun := configureMetricsMonitor(
-		cfg, ctl, k8sClient, correlator, healthServer,
+		cfg, ctl, k8sClient, correlator, healthServer, h.Owners(),
 	)
 
 	var tlsSweep func()
@@ -250,6 +245,9 @@ func RunWithClock(now func() time.Time) int {
 		kubeletMonitor := kubeletmetrics.New(k8sClient, cfg.KubeletTelemetryMonitor, correlator)
 		kubeletMonitor.SetNamespaceScope(namespaces, watchAll)
 		kubeletMonitor.SetNamespaceFilter(ctl.NamespaceAllowed)
+		kubeletMonitor.SetOwnerResolver(h.Owners())
+		kubeletMonitor.SetPodLister(ctl.PodLister())
+		kubeletMonitor.SetNodeLister(ctl.NodeLister())
 		kubeletMonitor.SetClock(now)
 		if cfg.KubeletTelemetryMonitor.PersistState {
 			kubeletMonitor.SetStateStore(stateMgr)
@@ -278,6 +276,7 @@ func RunWithClock(now func() time.Time) int {
 		pvcMonitor:      pvcMonitor,
 		hbMonitor:       hbMonitor,
 		ctl:             ctl,
+		kubeClient:      k8sClient,
 		incidentCh:      persist.incidentCh,
 		incidentSaver:   persist.incidentSaver,
 		incidentDone:    persist.incidentDone,

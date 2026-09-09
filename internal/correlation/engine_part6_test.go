@@ -27,7 +27,7 @@ func TestCleanupCooldownExpires(t *testing.T) {
 		Namespace: "ns",
 		Reason:    "CrashLoopBackOff",
 	}
-	_, action := e.Process(ev, "dep", nil)
+	_, action := e.processEvent(ev, "dep", nil)
 	assert.Equal(t, model.ActionCreate, action)
 
 	// Advance past Window + 1s so cooldown expires
@@ -42,7 +42,7 @@ func TestCleanupCooldownExpires(t *testing.T) {
 	e.now = mockClock(fakeNow)
 
 	// Same event — should create new incident (cooldown expired)
-	inc, action := e.Process(ev, "dep", nil)
+	inc, action := e.processEvent(ev, "dep", nil)
 	assert.Equal(t, model.ActionCreate, action)
 	assert.NotNil(t, inc)
 }
@@ -54,7 +54,7 @@ func TestSuppressedOwnersTracked(t *testing.T) {
 	})
 
 	// Create node incident and populate inhibition
-	e.Process(
+	e.processEvent(
 		event.Event{
 			Resource: "node",
 			PodName:  "node-1",
@@ -66,7 +66,7 @@ func TestSuppressedOwnersTracked(t *testing.T) {
 	)
 
 	// Suppress pods from different owners on the same node
-	e.Process(
+	e.processEvent(
 		event.Event{
 			PodName:   "p1",
 			Namespace: "ns",
@@ -76,7 +76,7 @@ func TestSuppressedOwnersTracked(t *testing.T) {
 		"deploy-1",
 		nil,
 	)
-	e.Process(
+	e.processEvent(
 		event.Event{
 			PodName:   "p2",
 			Namespace: "ns",
@@ -86,7 +86,7 @@ func TestSuppressedOwnersTracked(t *testing.T) {
 		"deploy-1",
 		nil,
 	)
-	e.Process(
+	e.processEvent(
 		event.Event{
 			PodName:   "p3",
 			Namespace: "ns",
@@ -113,7 +113,7 @@ func TestUnschedulableSuppressedDuringNodeIncident(t *testing.T) {
 	})
 
 	// Create node incident
-	e.Process(
+	e.processEvent(
 		event.Event{
 			Resource: "node",
 			PodName:  "node-1",
@@ -131,7 +131,7 @@ func TestUnschedulableSuppressedDuringNodeIncident(t *testing.T) {
 		NodeName:  "",
 		Reason:    "Unschedulable",
 	}
-	_, action := e.Process(ev, "deploy-1", nil)
+	_, action := e.processEvent(ev, "deploy-1", nil)
 	assert.Equal(t, model.ActionSkip, action)
 
 	// Verify SuppressedPods incremented on the node incident
@@ -241,7 +241,7 @@ func TestSnapshotAllRestoreIncidentsRoundTrip(t *testing.T) {
 		Namespace: "ns",
 		Reason:    "CrashLoopBackOff",
 	}
-	inc, _ := e.Process(ev, "dep", &model.ContainerState{RestartCount: 2})
+	inc, _ := e.processEvent(ev, "dep", &model.ContainerState{RestartCount: 2})
 	require.NotNil(t, inc)
 	require.NotEmpty(t, inc.Key)
 
@@ -284,7 +284,7 @@ func TestSnapshotPersistedRoundTrip(t *testing.T) {
 		Namespace: "ns",
 		Reason:    "CrashLoopBackOff",
 	}
-	inc, _ := e.Process(ev, "dep", &model.ContainerState{RestartCount: 2})
+	inc, _ := e.processEvent(ev, "dep", &model.ContainerState{RestartCount: 2})
 	require.NotNil(t, inc)
 
 	snap := e.SnapshotPersisted()

@@ -11,8 +11,8 @@ import (
 	"k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/klog/v2"
 
-	"github.com/abahmed/kwatch/internal/correlation"
-	"github.com/abahmed/kwatch/internal/event"
+	"github.com/abahmed/kwatch/internal/model"
+	"github.com/abahmed/kwatch/internal/observe"
 )
 
 // newNodeGracePeriod is how long a newly-created node is allowed to stay
@@ -34,7 +34,7 @@ func (h *handler) ProcessNode(key string, deleted bool) error {
 
 	if deleted {
 		h.clearAllNodePressure(name)
-		h.correlator.ResolveByResource("node", name)
+		h.correlator.Resolve(nodeRef(name), "")
 		return nil
 	}
 
@@ -42,7 +42,7 @@ func (h *handler) ProcessNode(key string, deleted bool) error {
 	if err != nil {
 		if errors.IsNotFound(err) {
 			h.clearAllNodePressure(name)
-			h.correlator.ResolveByResource("node", name)
+			h.correlator.Resolve(nodeRef(name), "")
 			return nil
 		}
 		return fmt.Errorf("failed to get node %s from cache: %w", name, err)
@@ -68,10 +68,18 @@ func NodeConditionReason(c corev1.NodeCondition) string {
 	return ""
 }
 
+// nodeRef is the subject a node's incidents are about.
+//
+// Node conditions keep their own explicit handling rather than going through
+// the findings reconciler: each condition has its own sustain timer, and
+// resolving one has to refresh the inhibition flag that suppresses the pods
+// on that node. Deriving those side effects from a diff would hide them.
+func nodeRef(name string) model.ObjectRef {
+	return model.ObjectRef{Kind: "node", Name: name}
+}
+
 func (h *handler) resolveNodeCondition(nodeName, stableReason string) {
-	h.correlator.MarkResolved(
-		correlation.BuildKey("", nodeName, stableReason, ""),
-	)
+	h.correlator.Resolve(nodeRef(nodeName), stableReason)
 	// Refresh the inhibition flag even when no incident existed to resolve
 	// (e.g. a baselined NodeNotReady recovered) so pods stop being suppressed.
 	h.correlator.RefreshNodeInhibition(nodeName)
@@ -116,15 +124,7 @@ func (h *handler) emitNodeAlert(
 		hint = c.Reason + ": " + c.Message
 	}
 
-	h.signalEvent(&event.Signal{
-		Resource: "node",
-		PodName:  node.Name,
-		NodeName: node.Name,
-		Reason:   stableReason,
-		Owner:    node.Name,
-		Labels:   node.Labels,
-		Hint:     hint,
-	})
+	h.observe(observe.Node(node, stableReason).WithHint(hint))
 }
 
 func (h *handler) ProcessNodeObject(node *corev1.Node, deleted bool) error {
@@ -134,7 +134,7 @@ func (h *handler) ProcessNodeObject(node *corev1.Node, deleted bool) error {
 
 	if deleted {
 		h.clearAllNodePressure(node.Name)
-		h.correlator.ResolveByResource("node", node.Name)
+		h.correlator.Resolve(nodeRef(node.Name), "")
 		return nil
 	}
 
@@ -171,17 +171,19 @@ func (h *handler) ProcessNodeObject(node *corev1.Node, deleted bool) error {
 		}
 	}
 
-	if sig := DetectNodeDeletionIssue(node, h.now()); sig != nil {
-		h.signalEvent(sig)
+	if obs := DetectNodeDeletionIssue(node, h.now()); obs != nil {
+		h.observe(obs)
 	} else {
-		h.correlator.MarkResolved(correlation.BuildKey(
-			"", node.Name, constant.ReasonNodeStuckTerminating, "",
-		))
+		h.correlator.Resolve(
+			nodeRef(node.Name), constant.ReasonNodeStuckTerminating,
+		)
 	}
 	return nil
 }
 
-func DetectNodeDeletionIssue(node *corev1.Node, now time.Time) *event.Signal {
+func DetectNodeDeletionIssue(
+	node *corev1.Node, now time.Time,
+) *model.Observation {
 	if node == nil || node.DeletionTimestamp == nil || len(node.Finalizers) == 0 {
 		return nil
 	}
@@ -189,12 +191,12 @@ func DetectNodeDeletionIssue(node *corev1.Node, now time.Time) *event.Signal {
 	if age < stuckNodeDeletionGrace {
 		return nil
 	}
-	return &event.Signal{
-		Resource: "node", NodeName: node.Name, PodName: node.Name,
-		Owner: node.Name, Reason: constant.ReasonNodeStuckTerminating,
-		Labels: node.Labels,
-		Hint:   fmt.Sprintf("node %s has been terminating for %s with finalizers: %s", node.Name, age.Round(time.Minute), strings.Join(node.Finalizers, ", ")),
-	}
+	return observe.Node(node, constant.ReasonNodeStuckTerminating).
+		WithHint(fmt.Sprintf(
+			"node %s has been terminating for %s with finalizers: %s",
+			node.Name, age.Round(time.Minute),
+			strings.Join(node.Finalizers, ", "),
+		))
 }
 
 func (h *handler) markFirstNodePressure(key string) time.Time {

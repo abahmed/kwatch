@@ -17,7 +17,7 @@ func TestSmartGroupingFoldRekeysAllMembers(t *testing.T) {
 	e.now = mockClock(now)
 
 	sigLog := "connection refused:5432"
-	e.Process(
+	e.processEvent(
 		event.Event{
 			PodName:   "p1",
 			Namespace: "ns",
@@ -27,7 +27,7 @@ func TestSmartGroupingFoldRekeysAllMembers(t *testing.T) {
 		"dep1",
 		nil,
 	)
-	e.Process(
+	e.processEvent(
 		event.Event{
 			PodName:   "p2",
 			Namespace: "ns",
@@ -54,7 +54,7 @@ func TestSmartGroupingFoldRekeysAllMembers(t *testing.T) {
 	// Both members fold → both migrate to folded keys. The group still tracks
 	// them (the loops are ongoing), so it must NOT resolve.
 	cs := &model.ContainerState{RestartCount: 6}
-	e.Process(
+	e.processEvent(
 		event.Event{
 			PodName:   "p1",
 			Namespace: "ns",
@@ -64,7 +64,7 @@ func TestSmartGroupingFoldRekeysAllMembers(t *testing.T) {
 		"dep1",
 		cs,
 	)
-	e.Process(
+	e.processEvent(
 		event.Event{
 			PodName:   "p2",
 			Namespace: "ns",
@@ -83,13 +83,13 @@ func TestSmartGroupingFoldRekeysAllMembers(t *testing.T) {
 		"folding must not resolve the group on the next tick either")
 }
 
-func TestResolveByResourceReleasesGroupMember(t *testing.T) {
+func TestResolveReleasesGroupMember(t *testing.T) {
 	now := time.Date(2025, 1, 1, 0, 0, 0, 0, time.UTC)
 	e := newSmartGroupingEngine()
 	e.now = mockClock(now)
 
 	sigLog := "connection refused:5432"
-	e.Process(
+	e.processEvent(
 		event.Event{
 			PodName:   "p1",
 			Namespace: "ns",
@@ -99,7 +99,7 @@ func TestResolveByResourceReleasesGroupMember(t *testing.T) {
 		"dep1",
 		nil,
 	)
-	e.Process(
+	e.processEvent(
 		event.Event{
 			PodName:   "p2",
 			Namespace: "ns",
@@ -123,9 +123,11 @@ func TestResolveByResourceReleasesGroupMember(t *testing.T) {
 	e.checkLifecycle()
 	require.Equal(t, []model.IncidentAction{model.ActionCreate}, actions)
 
-	// Resolving one member via ResolveByResource must not emit a group
-	// resolve until every member has resolved.
-	e.ResolveByResource("pod", "dep2")
+	// Resolving one member by subject must not emit a group resolve until
+	// every member has resolved.
+	e.Resolve(
+		model.ObjectRef{Kind: "pod", Namespace: "ns", Name: "dep2"}, "",
+	)
 	require.Equal(
 		t,
 		[]model.IncidentAction{model.ActionCreate},
@@ -133,7 +135,9 @@ func TestResolveByResourceReleasesGroupMember(t *testing.T) {
 		"group not fully resolved yet",
 	)
 
-	e.ResolveByResource("pod", "dep1")
+	e.Resolve(
+		model.ObjectRef{Kind: "pod", Namespace: "ns", Name: "dep1"}, "",
+	)
 	require.Equal(
 		t,
 		[]model.IncidentAction{model.ActionCreate, model.ActionResolved},
@@ -147,7 +151,7 @@ func TestSmartGroupingNewOccurrenceCreatesAgain(t *testing.T) {
 	e.now = mockClock(now)
 
 	sigLog := "connection refused:5432"
-	e.Process(
+	e.processEvent(
 		event.Event{
 			PodName:   "p1",
 			Namespace: "ns",
@@ -157,7 +161,7 @@ func TestSmartGroupingNewOccurrenceCreatesAgain(t *testing.T) {
 		"dep1",
 		nil,
 	)
-	e.Process(
+	e.processEvent(
 		event.Event{
 			PodName:   "p2",
 			Namespace: "ns",
@@ -182,8 +186,8 @@ func TestSmartGroupingNewOccurrenceCreatesAgain(t *testing.T) {
 	require.Equal(t, []model.IncidentAction{model.ActionCreate}, actions)
 
 	// All members resolve → batch group resolve resets the flush state.
-	e.MarkResolved("ns:dep1:CrashLoopBackOff:")
-	e.MarkResolved("ns:dep2:CrashLoopBackOff:")
+	e.markResolved("ns:dep1:CrashLoopBackOff:")
+	e.markResolved("ns:dep2:CrashLoopBackOff:")
 	require.Equal(
 		t,
 		[]model.IncidentAction{model.ActionCreate, model.ActionResolved},
@@ -193,7 +197,7 @@ func TestSmartGroupingNewOccurrenceCreatesAgain(t *testing.T) {
 	// A new occurrence of the same group (after the member cooldown) must
 	// CREATE again rather than updating the previously-resolved key.
 	e.now = mockClock(now.Add(11*time.Minute + 2*time.Second))
-	e.Process(
+	e.processEvent(
 		event.Event{
 			PodName:   "p3",
 			Namespace: "ns",
@@ -203,7 +207,7 @@ func TestSmartGroupingNewOccurrenceCreatesAgain(t *testing.T) {
 		"dep1",
 		nil,
 	)
-	e.Process(
+	e.processEvent(
 		event.Event{
 			PodName:   "p4",
 			Namespace: "ns",
@@ -224,12 +228,12 @@ func TestSmartGroupingNewOccurrenceCreatesAgain(t *testing.T) {
 
 func TestSmartGroupingOwnerScope(t *testing.T) {
 	e := newSmartGroupingEngine()
-	e.Process(
+	e.processEvent(
 		event.Event{PodName: "p1", Namespace: "ns", Reason: "OOMKilled"},
 		"dep1",
 		nil,
 	)
-	e.Process(
+	e.processEvent(
 		event.Event{PodName: "p2", Namespace: "ns", Reason: "OOMKilled"},
 		"dep2",
 		nil,
@@ -248,7 +252,7 @@ func TestSmartGroupingOwnerScope(t *testing.T) {
 
 func TestSmartGroupingNodeScope(t *testing.T) {
 	e := newSmartGroupingEngine()
-	e.Process(
+	e.processEvent(
 		event.Event{
 			PodName:  "node-1",
 			Resource: "node",
@@ -258,7 +262,7 @@ func TestSmartGroupingNodeScope(t *testing.T) {
 		"node-1",
 		nil,
 	)
-	e.Process(
+	e.processEvent(
 		event.Event{
 			PodName:  "node-2",
 			Resource: "node",
@@ -280,7 +284,7 @@ func TestSmartGroupingNodeScope(t *testing.T) {
 func TestSmartGroupingSignatureScope(t *testing.T) {
 	e := newSmartGroupingEngine()
 	sigLog := "connection refused:5432"
-	e.Process(
+	e.processEvent(
 		event.Event{
 			PodName:   "p1",
 			Namespace: "ns1",
@@ -290,7 +294,7 @@ func TestSmartGroupingSignatureScope(t *testing.T) {
 		"dep1",
 		nil,
 	)
-	e.Process(
+	e.processEvent(
 		event.Event{
 			PodName:   "p2",
 			Namespace: "ns2",
@@ -313,12 +317,12 @@ func TestSmartGroupingSignatureScope(t *testing.T) {
 func TestSmartGroupingSignatureFallback(t *testing.T) {
 	e := newSmartGroupingEngine()
 	// No logs set → no signature match → owner-scoped fallback
-	e.Process(
+	e.processEvent(
 		event.Event{PodName: "p1", Namespace: "ns", Reason: "CrashLoopBackOff"},
 		"dep1",
 		nil,
 	)
-	e.Process(
+	e.processEvent(
 		event.Event{PodName: "p2", Namespace: "ns", Reason: "CrashLoopBackOff"},
 		"dep2",
 		nil,
@@ -344,12 +348,12 @@ func TestSmartGroupingImagePerImage(t *testing.T) {
 		PodName: "p1", Namespace: "ns", Reason: "ImagePullBackOff",
 		Image: "nginx:latest", Message: msg,
 	}
-	e.Process(ev, "dep1", nil)
+	e.processEvent(ev, "dep1", nil)
 	ev2 := event.Event{
 		PodName: "p2", Namespace: "ns", Reason: "ImagePullBackOff",
 		Image: "nginx:latest", Message: msg,
 	}
-	e.Process(ev2, "dep2", nil)
+	e.processEvent(ev2, "dep2", nil)
 
 	e.mu.Lock()
 	gk := "ImagePullBackOff|img|nginx:latest|ns|ns"
@@ -366,12 +370,12 @@ func TestSmartGroupingImageGlobal(t *testing.T) {
 		PodName: "p1", Namespace: "ns1", Reason: "ImagePullBackOff",
 		Image: "nginx:latest", Message: msg,
 	}
-	e.Process(ev, "dep1", nil)
+	e.processEvent(ev, "dep1", nil)
 	ev2 := event.Event{
 		PodName: "p2", Namespace: "ns2", Reason: "ImagePullBackOff",
 		Image: "alpine:latest", Message: msg,
 	}
-	e.Process(ev2, "dep2", nil)
+	e.processEvent(ev2, "dep2", nil)
 
 	e.mu.Lock()
 	gk := "ImagePullBackOff|global|rate_limit"

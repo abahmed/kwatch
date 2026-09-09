@@ -33,95 +33,28 @@ func severityValueError(mapName, key, value string) string {
 	)
 }
 
-// ValidateConfig checks the config for common misconfiguration issues and
-// returns a list of human-readable problems.
+// ValidateConfig renders the semantic validation for `kwatch lint`.
+//
+// It used to be a second, independently written validator: it checked
+// maxRecentLogLines, workers, healthCheck.port and the PVC hysteresis that
+// Validate did not, while Validate checked the escalation tier ordering, the
+// resolveHoldDown-versus-window relationship and the baseline ceiling that it
+// did not. So `kwatch lint` could pass a config the process would refuse to
+// start on, and vice versa -- the one thing a config linter must never do.
+// One validator, two renderings. Warnings are deliberately not included:
+// they must not decide lint's exit status, so the command prints them
+// separately.
 func ValidateConfig(cfg *Config) []string {
-	var errs []string
-	for _, err := range validateApp(cfg.App) {
+	errs := make([]string, 0)
+	for _, err := range Validate(cfg) {
 		errs = append(errs, err.Error())
 	}
-
 	if len(cfg.Alert) == 0 {
+		// Only lint reports this: a running kwatch with no provider is a
+		// legitimate configuration (it still exposes /incidents and metrics),
+		// but it is almost never what someone linting a file intended.
 		errs = append(errs, "no alert providers configured")
 	}
-
-	if cfg.HealthCheck.Enabled && cfg.HealthCheck.Port <= 0 {
-		errs = append(
-			errs,
-			"healthCheck.port must be > 0 when healthCheck.enabled is true",
-		)
-	}
-
-	if cfg.MaxRecentLogLines < 0 {
-		errs = append(errs, "maxRecentLogLines must be >= 0")
-	}
-	errs = append(errs, validateMaintenance(cfg)...)
-
-	errs = append(errs, validatePvcWatch(cfg)...)
-
-	if cfg.Correlation.Window <= 0 {
-		errs = append(errs, "correlation.window must be > 0")
-	}
-	if cfg.Correlation.LifecycleInterval <= 0 {
-		errs = append(errs, "correlation.lifecycleInterval must be > 0")
-	}
-	if cfg.Correlation.MaxBaseline < 0 {
-		errs = append(errs, "correlation.maxBaseline must be >= 0")
-	}
-
-	if cfg.Correlation.Escalation.Enabled {
-		for i, t := range cfg.Correlation.Escalation.Tiers {
-			if t <= 0 {
-				errs = append(
-					errs,
-					fmt.Sprintf(
-						"correlation.escalation.tiers[%d] must be > 0",
-						i,
-					),
-				)
-			}
-		}
-	}
-
-	if cfg.PendingPodMonitor.Enabled && cfg.PendingPodMonitor.Threshold <= 0 {
-		errs = append(errs, "pendingPodMonitor.threshold must be > 0")
-	}
-
-	if cfg.Workers < 1 {
-		errs = append(errs, "workers must be >= 1")
-	}
-
-	if cfg.AuditLog.Enabled && cfg.AuditLog.Output == "" {
-		errs = append(
-			errs,
-			"auditLog.output must be \"stdout\" or a valid file path when "+
-				"auditLog.enabled is true",
-		)
-	}
-
-	for _, name := range unknownProviders(cfg) {
-		errs = append(errs, fmt.Sprintf("unknown alert provider %q", name))
-	}
-
-	errs = append(errs, validateRetryJitter(cfg)...)
-
-	for _, k := range InvalidSeverityKeys(cfg.SeverityByReason) {
-		errs = append(
-			errs,
-			severityValueError("severityByReason", k, cfg.SeverityByReason[k]),
-		)
-	}
-	for _, k := range InvalidSeverityKeys(cfg.SeverityByOwnerKind) {
-		errs = append(
-			errs,
-			severityValueError(
-				"severityByOwnerKind",
-				k,
-				cfg.SeverityByOwnerKind[k],
-			),
-		)
-	}
-
 	return errs
 }
 
@@ -156,44 +89,6 @@ func validateRetryJitter(cfg *Config) []string {
 		}
 	}
 	return errs
-}
-
-// pvcWatchConfigErrors validates the PvcMonitor watch thresholds.
-func pvcConfigErrors(m *PvcMonitor) []string {
-	var errs []string
-	if m.Interval <= 0 {
-		errs = append(errs, "pvcMonitor.interval must be > 0")
-	}
-	if m.Threshold < 0 || m.Threshold > 100 {
-		errs = append(errs, "pvcMonitor.threshold must be between 0 and 100")
-	}
-	if m.CriticalThreshold < 0 || m.CriticalThreshold > 100 {
-		errs = append(
-			errs,
-			"pvcMonitor.criticalThreshold must be between 0 and 100",
-		)
-	}
-	if m.CriticalThreshold > 0 && m.Threshold > 0 &&
-		m.CriticalThreshold < m.Threshold {
-		errs = append(
-			errs,
-			"pvcMonitor.criticalThreshold should be >= threshold",
-		)
-	}
-	if m.ClearThreshold < 0 || m.ClearThreshold > m.Threshold {
-		errs = append(
-			errs,
-			"pvcMonitor.clearThreshold must be between 0 and threshold",
-		)
-	}
-	return errs
-}
-
-func validatePvcWatch(cfg *Config) []string {
-	if !cfg.PvcMonitor.Enabled {
-		return nil
-	}
-	return pvcConfigErrors(&cfg.PvcMonitor)
 }
 
 func unknownProviders(cfg *Config) []string {

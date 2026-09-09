@@ -12,11 +12,10 @@ import (
 	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/klog/v2"
 
-	"github.com/abahmed/kwatch/internal/correlation"
-	"github.com/abahmed/kwatch/internal/event"
 	"github.com/abahmed/kwatch/internal/filter"
 	"github.com/abahmed/kwatch/internal/k8s"
 	"github.com/abahmed/kwatch/internal/model"
+	"github.com/abahmed/kwatch/internal/observe"
 )
 
 func (h *handler) executeContainersFilters(ctx *filter.Context) {
@@ -82,57 +81,38 @@ func (h *handler) executeContainersFilters(ctx *filter.Context) {
 			continue
 		}
 
-		ownerName := ""
-		if ctx.Owner != nil {
-			ownerName = ctx.Owner.Name
-		} else if len(ctx.Pod.OwnerReferences) == 0 {
-			ownerName = ctx.Pod.Name
-		}
+		owner := contextOwner(ctx)
 
 		klog.V(2).InfoS(
 			"container only issue",
 			"container", ctx.Container.Container.Name,
 			"pod", ctx.Pod.Name,
-			"owner", ownerName,
+			"owner", owner.Name,
 			"reason", ctx.Container.Reason,
 			"message", ctx.Container.Msg,
 			"exitCode", ctx.Container.ExitCode)
 
-		ownerKind := ""
-		if ctx.Owner != nil {
-			ownerKind = ctx.Owner.Kind
-		}
-
 		hint, facts := h.buildContainerHint(ctx)
-		h.signalEvent(&event.Signal{
-			Resource:        "pod",
-			PodName:         ctx.Pod.Name,
-			PodUID:          string(ctx.Pod.UID),
-			PodLineageID:    podLineageID(ctx.Pod),
-			PodGenerateName: ctx.Pod.GenerateName,
-			Container:       ctx.Container.Container.Name,
-			Image:           ctx.Container.Container.Image,
-			Message:         ctx.Container.Msg,
-			Namespace:       ctx.Pod.Namespace,
-			NodeName:        ctx.Pod.Spec.NodeName,
-			Reason:          ctx.Container.Reason,
-			Events:          k8s.GetPodEventsStr(ctx.Events),
-			Logs:            ctx.Container.Logs,
-			Labels:          ctx.Pod.Labels,
-			OwnerKind:       ownerKind,
-			RestartCount:    ctx.Container.Container.RestartCount,
-			Hint:            hint,
-			Facts:           facts,
-			Owner:           ownerName,
-			ContainerState: &model.ContainerState{
-				RestartCount:     ctx.Container.Container.RestartCount,
-				LastTerminatedOn: ctx.Container.LastTerminatedOn,
-				Reason:           ctx.Container.Reason,
-				Msg:              ctx.Container.Msg,
-				ExitCode:         ctx.Container.ExitCode,
-				Status:           ctx.Container.Status,
-			},
-		})
+		obs := observe.PodOwnedBy(
+			ctx.Pod, ctx.Container.Container.Name,
+			ctx.Container.Reason, owner,
+		).WithHint(hint).WithFacts(facts).
+			WithMessage(ctx.Container.Msg).
+			WithEvidence(
+				ctx.Container.Logs,
+				k8s.GetPodEventsStr(ctx.Events),
+				&model.ContainerState{
+					RestartCount:     ctx.Container.Container.RestartCount,
+					LastTerminatedOn: ctx.Container.LastTerminatedOn,
+					Reason:           ctx.Container.Reason,
+					Msg:              ctx.Container.Msg,
+					ExitCode:         ctx.Container.ExitCode,
+					Status:           ctx.Container.Status,
+				},
+			)
+		obs.Image = ctx.Container.Container.Image
+		obs.RestartCount = ctx.Container.Container.RestartCount
+		h.observe(obs)
 	}
 }
 
@@ -316,42 +296,24 @@ func (h *handler) emitHighRestartAlert(
 	ctx *filter.Context,
 	container *corev1.ContainerStatus,
 ) {
-	owner := correlation.ResolveOwnerName(
-		ctx.Pod,
-		h.listers.RS,
-		h.listers.DS,
-		h.listers.SS,
-	)
-	if owner == "" {
+	owner := h.Owners().OwnerOf(ctx.Pod)
+	if owner.Name == "" {
 		return
 	}
 
 	lastReason, lastEC := lastTermInfo(container)
 
-	h.signalEvent(&event.Signal{
-		Resource:        "pod",
-		PodName:         ctx.Pod.Name,
-		PodUID:          string(ctx.Pod.UID),
-		PodLineageID:    podLineageID(ctx.Pod),
-		PodGenerateName: ctx.Pod.GenerateName,
-		Container:       container.Name,
-		Image:           container.Image,
-		Namespace:       ctx.Pod.Namespace,
-		NodeName:        ctx.Pod.Spec.NodeName,
-		Reason:          constant.ReasonHighRestartCount,
-		Labels:          ctx.Pod.Labels,
-		RestartCount:    container.RestartCount,
-		Hint: fmt.Sprintf(
-			"container restarted %d times (last exit: %s, code %d)",
-			container.RestartCount,
-			lastReason,
-			lastEC,
-		),
-		Owner: owner,
-		ContainerState: &model.ContainerState{
-			RestartCount: container.RestartCount,
-			Reason:       lastReason,
-			ExitCode:     lastEC,
-		},
+	obs := observe.PodOwnedBy(
+		ctx.Pod, container.Name, constant.ReasonHighRestartCount, owner,
+	).WithHint(fmt.Sprintf(
+		"container restarted %d times (last exit: %s, code %d)",
+		container.RestartCount, lastReason, lastEC,
+	)).WithEvidence("", "", &model.ContainerState{
+		RestartCount: container.RestartCount,
+		Reason:       lastReason,
+		ExitCode:     lastEC,
 	})
+	obs.Image = container.Image
+	obs.RestartCount = container.RestartCount
+	h.observe(obs)
 }

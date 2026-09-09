@@ -22,6 +22,7 @@ const (
 	pvcConfigMapName       = "kwatch-pvc"
 	changesConfigMapName   = "kwatch-changes"
 	rcaConfigMapName       = "kwatch-rca"
+	telemetryConfigMapName = "kwatch-telemetry"
 	initKey                = "kwatch-init"
 	clusterIDKey           = "cluster-id"
 	versionKey             = "version"
@@ -33,7 +34,13 @@ const (
 	telemetryLastSentKey   = "telemetry-last-sent"
 	baselineKey            = "baseline"
 	incidentsKey           = "incidents"
-	pvcUsageKey            = "pvc-usage"
+	// groupsKey is a separate entry so the incident payload keeps the exact
+	// format older releases read: a version that does not know about groups
+	// still restores incidents, and this one restores both.
+	groupsKey   = "groups"
+	threadsKey  = "threads"
+	engineKey   = "engine"
+	pvcUsageKey = "pvc-usage"
 )
 
 // PvcSample is the persisted representation of a single PVC usage observation.
@@ -45,6 +52,9 @@ type PvcSample struct {
 	// path).
 	PodName string    `json:"pod"`
 	Seen    time.Time `json:"seen"`
+	// PVName is the bound PersistentVolume, kept as evidence only. The
+	// sample is keyed by the claim, so a re-bound claim keeps its history.
+	PVName string `json:"pv,omitempty"`
 }
 
 type StateManager struct {
@@ -56,6 +66,12 @@ type StateManager struct {
 	pvcMgr       *RetryConfigMapManager // kwatch-pvc
 	changesMgr   *RetryConfigMapManager // kwatch-changes
 	rcaMgr       *RetryConfigMapManager // kwatch-rca
+	// telemetryMgr owns kwatch-telemetry. The kubelet monitor's per-cgroup
+	// snapshot map is the largest thing kwatch persists and it grew with the
+	// cluster; sharing kwatch-state meant one big cluster could push that
+	// ConfigMap past its 1MB limit and fail every unrelated state write with
+	// it.
+	telemetryMgr *RetryConfigMapManager // kwatch-telemetry
 	now          func() time.Time
 }
 
@@ -95,6 +111,11 @@ func NewStateManager(
 			client,
 			namespace,
 			rcaConfigMapName,
+		),
+		telemetryMgr: NewRetryConfigMapManager(
+			client,
+			namespace,
+			telemetryConfigMapName,
 		),
 		now: clock.Now,
 	}

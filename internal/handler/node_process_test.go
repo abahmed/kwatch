@@ -11,8 +11,8 @@ import (
 
 	"github.com/abahmed/kwatch/internal/config"
 	"github.com/abahmed/kwatch/internal/correlation"
-	"github.com/abahmed/kwatch/internal/event"
 	"github.com/abahmed/kwatch/internal/model"
+	"github.com/abahmed/kwatch/internal/observe"
 )
 
 func TestProcessNodeNilObject(t *testing.T) {
@@ -142,7 +142,15 @@ func TestProcessNodeRecoveryClearsStaleInhibition(t *testing.T) {
 	assert.NoError(t, h.ProcessNodeObject(healthy, false))
 
 	// A subsequent pod incident on that node must alert normally.
-	inc, action := e.Process(event.Event{PodName: "p", Namespace: "ns", NodeName: "test-node", Reason: "CrashLoopBackOff"}, "dep", nil)
+	obs := observe.PodOwnedBy(
+		&corev1.Pod{
+			ObjectMeta: metav1.ObjectMeta{Name: "p", Namespace: "ns"},
+			Spec:       corev1.PodSpec{NodeName: "test-node"},
+		},
+		"", "CrashLoopBackOff",
+		model.ObjectRef{Namespace: "ns", Name: "dep"},
+	)
+	inc, action := e.Process(obs)
 	assert.Equal(t, model.ActionCreate, action)
 	assert.NotNil(t, inc)
 }

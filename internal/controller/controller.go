@@ -68,6 +68,12 @@ type Controller struct {
 	hpaLister     autoscalingv2lister.HorizontalPodAutoscalerLister
 	secretLister  corev1lister.SecretLister
 	maxBaseline   int
+	// seedThresholds are the sustain windows the startup seeding applies, so
+	// a seeded key matches the one the live path will build. Passing zero
+	// here used the detectors' built-in defaults, which are not necessarily
+	// the operator's configured ones -- and a key that differs from the live
+	// key is a baseline entry that suppresses nothing.
+	seedThresholds seedThresholds
 
 	tracker              *kwcontext.ChangeTracker
 	graph                *kwcontext.ResourceGraph
@@ -260,6 +266,7 @@ func New(
 		replicaSet:          newResourcePipeline("replicaset", "replicasets-status"),
 		podLister:           podLister,
 		maxBaseline:         maxBaseline,
+		seedThresholds:      newSeedThresholds(cfg),
 		watchAll:            scope.all,
 		forbiddenNamespaces: makeNamespaceSet(cfg.ForbiddenNamespaces),
 		now:                 clock.Now,

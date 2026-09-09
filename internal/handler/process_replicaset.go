@@ -8,7 +8,8 @@ import (
 	"k8s.io/client-go/tools/cache"
 
 	"github.com/abahmed/kwatch/internal/constant"
-	"github.com/abahmed/kwatch/internal/event"
+	"github.com/abahmed/kwatch/internal/model"
+	"github.com/abahmed/kwatch/internal/observe"
 )
 
 func (h *handler) ProcessReplicaSet(key string, deleted bool) error {
@@ -16,31 +17,30 @@ func (h *handler) ProcessReplicaSet(key string, deleted bool) error {
 	if err != nil {
 		return fmt.Errorf("invalid replicaset key %q: %w", key, err)
 	}
-	owner := namespace + "/" + name
+	subject := model.NewObjectRef("replicaset", namespace, name)
 	if deleted {
-		h.correlator.ResolveByResource("replicaset", owner)
+		h.reconcileGone(subject)
 		return nil
 	}
 	rs, err := h.listers.RS.ReplicaSets(namespace).Get(name)
 	if err != nil {
 		if errors.IsNotFound(err) {
-			h.correlator.ResolveByResource("replicaset", owner)
+			h.reconcileGone(subject)
 			return nil
 		}
-		return fmt.Errorf("failed to get replicaset %s from cache: %w", owner, err)
+		return fmt.Errorf(
+			"failed to get replicaset %s/%s from cache: %w",
+			namespace, name, err,
+		)
 	}
-	if sig := DetectReplicaSetIssue(rs); sig != nil {
-		h.signalEvent(sig)
-	} else {
-		h.correlator.ResolveByResource("replicaset", owner)
-	}
+	h.reconcile(subject, findings(DetectReplicaSetIssue(rs)))
 	return nil
 }
 
 // DetectReplicaSetIssue uses the controller's ReplicaFailure condition. The
 // condition is important even when a Deployment exists: it carries causes
 // such as quota, limit range, node selector and kubelet/finalizer failures.
-func DetectReplicaSetIssue(rs *appsv1.ReplicaSet) *event.Signal {
+func DetectReplicaSetIssue(rs *appsv1.ReplicaSet) *model.Observation {
 	if rs == nil {
 		return nil
 	}
@@ -53,12 +53,9 @@ func DetectReplicaSetIssue(rs *appsv1.ReplicaSet) *event.Signal {
 		if condition.Message != "" {
 			hint += ": " + condition.Message
 		}
-		return &event.Signal{
-			Resource: "replicaset", Namespace: rs.Namespace,
-			PodName: rs.Name, Owner: rs.Namespace + "/" + rs.Name,
-			Reason: constant.ReasonReplicaSetFailure,
-			Labels: rs.Labels, Hint: hint,
-		}
+		return observe.Object(
+			"replicaset", rs, constant.ReasonReplicaSetFailure,
+		).WithHint(hint)
 	}
 	return nil
 }

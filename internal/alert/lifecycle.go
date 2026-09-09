@@ -78,7 +78,20 @@ func (a *AlertManager) Start(ctx context.Context) {
 func (a *AlertManager) runProvider(entry *providerEntry, ctx context.Context) {
 	defer a.providerWg.Done()
 	for job := range entry.ch {
-		a.deliverOne(ctx, entry, job.inc, job.action, job.insight)
+		// Routing is decided before pacing. A job this provider does not
+		// want is not a delivery, and making it wait its turn spent the
+		// provider's send slot on nothing: with a route that matches one
+		// namespace, a storm elsewhere throttled the alerts that did match.
+		if job.kind == jobIncident && !shouldDeliver(entry.routes, job.inc) {
+			continue
+		}
+		// Pace before delivering: the queue absorbs the burst, the provider
+		// sees a rate it tolerates. A cancelled context stops delivery but
+		// still drains the channel so shutdown is not blocked.
+		if a.waitForSendSlot(ctx, entry.provider.Name()) {
+			a.deliverOne(ctx, entry, job)
+			a.flushDigest(ctx, entry)
+		}
 	}
 }
 
@@ -95,6 +108,14 @@ func (a *AlertManager) shutdown() {
 	copy(entries, a.entries)
 	a.mu.Unlock()
 
+	// Anything still queued when we get here is delivered by the per-provider
+	// worker before it returns (providerWg.Wait below), but a process killed
+	// mid-shutdown loses the queue. That now includes plain messages and
+	// events, which used to be sent synchronously by their caller: the
+	// startup notification can be lost if kwatch is killed within the pacing
+	// delay of starting. Accepted -- the alternative is holding informer
+	// startup behind a slow provider, which is what the synchronous path did.
+	//
 	// 1) close provider channels under a.mu so fanOut (also under a.mu) never
 	//    sends on a closed channel.
 	a.mu.Lock()

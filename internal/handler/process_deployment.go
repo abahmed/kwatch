@@ -11,8 +11,8 @@ import (
 	"k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/client-go/tools/cache"
 
-	"github.com/abahmed/kwatch/internal/correlation"
-	"github.com/abahmed/kwatch/internal/event"
+	"github.com/abahmed/kwatch/internal/model"
+	"github.com/abahmed/kwatch/internal/observe"
 )
 
 func (h *handler) ProcessDeployment(key string, deleted bool) error {
@@ -23,7 +23,7 @@ func (h *handler) ProcessDeployment(key string, deleted bool) error {
 
 	if deleted {
 		h.clearFirstUnavailableDeploy(namespace + "/" + name)
-		h.correlator.ResolveByResource("deployment", namespace+"/"+name)
+		h.reconcileGone(model.NewObjectRef("deployment", namespace, name))
 		return nil
 	}
 
@@ -31,7 +31,9 @@ func (h *handler) ProcessDeployment(key string, deleted bool) error {
 	if err != nil {
 		if errors.IsNotFound(err) {
 			h.clearFirstUnavailableDeploy(namespace + "/" + name)
-			h.correlator.ResolveByResource("deployment", namespace+"/"+name)
+			h.reconcileGone(
+				model.NewObjectRef("deployment", namespace, name),
+			)
 			return nil
 		}
 		return fmt.Errorf(
@@ -47,7 +49,7 @@ func (h *handler) ProcessDeployment(key string, deleted bool) error {
 
 // DetectDeploymentIssue returns a Signal if the Deployment has a stuck
 // rollout or unavailable replicas. Used for baseline seeding at startup.
-func DetectDeploymentIssue(deploy *appsv1.Deployment) *event.Signal {
+func DetectDeploymentIssue(deploy *appsv1.Deployment) *model.Observation {
 	if deploy == nil {
 		return nil
 	}
@@ -55,13 +57,7 @@ func DetectDeploymentIssue(deploy *appsv1.Deployment) *event.Signal {
 		if c.Type == appsv1.DeploymentProgressing &&
 			c.Status == corev1.ConditionFalse &&
 			c.Reason == constant.ReasonProgressDeadlineExceeded {
-			return &event.Signal{
-				Resource:  "deployment",
-				Reason:    c.Reason,
-				Namespace: deploy.Namespace,
-				Owner:     deploy.Namespace + "/" + deploy.Name,
-				Labels:    deploy.Labels,
-			}
+			return observe.Object("deployment", deploy, c.Reason)
 		}
 	}
 	return nil
@@ -70,12 +66,13 @@ func DetectDeploymentIssue(deploy *appsv1.Deployment) *event.Signal {
 // DetectDeploymentConditions preserves the condition type as a stable signal
 // instead of reducing every unhealthy Deployment to replica availability.
 // ProgressDeadlineExceeded keeps its historical reason for compatibility.
-func DetectDeploymentConditions(deploy *appsv1.Deployment) []*event.Signal {
+func DetectDeploymentConditions(
+	deploy *appsv1.Deployment,
+) []*model.Observation {
 	if deploy == nil {
 		return nil
 	}
-	owner := deploy.Namespace + "/" + deploy.Name
-	var out []*event.Signal
+	var out []*model.Observation
 	for _, condition := range deploy.Status.Conditions {
 		if condition.Status != corev1.ConditionFalse &&
 			condition.Status != corev1.ConditionUnknown &&
@@ -98,10 +95,9 @@ func DetectDeploymentConditions(deploy *appsv1.Deployment) []*event.Signal {
 		if condition.Message != "" {
 			hint = condition.Reason + ": " + condition.Message
 		}
-		out = append(out, &event.Signal{
-			Resource: "deployment", Namespace: deploy.Namespace, PodName: deploy.Name,
-			Owner: owner, Reason: reason, Labels: deploy.Labels, Hint: hint,
-		})
+		out = append(
+			out, observe.Object("deployment", deploy, reason).WithHint(hint),
+		)
 	}
 	return out
 }
@@ -129,19 +125,17 @@ func availabilityHintDeploy(deploy *appsv1.Deployment) string {
 // DetectDeploymentUnavailable returns a Signal when a Deployment has replicas
 // that are not available, ignoring mid-rollout metadata sync (stale observed
 // generation). Used for baseline seeding at startup.
-func DetectDeploymentUnavailable(deploy *appsv1.Deployment) *event.Signal {
+func DetectDeploymentUnavailable(
+	deploy *appsv1.Deployment,
+) *model.Observation {
 	if deploy == nil {
 		return nil
 	}
 	if deploymentUnavailable(deploy) &&
 		deploy.Status.ObservedGeneration >= deploy.Generation {
-		return &event.Signal{
-			Resource:  "deployment",
-			Namespace: deploy.Namespace,
-			Reason:    constant.ReasonDeploymentUnavailable,
-			Owner:     deploy.Namespace + "/" + deploy.Name,
-			Labels:    deploy.Labels,
-		}
+		return observe.Object(
+			"deployment", deploy, constant.ReasonDeploymentUnavailable,
+		)
 	}
 	return nil
 }
@@ -176,48 +170,33 @@ func (h *handler) ProcessDeploymentObject(
 		return nil
 	}
 
+	subject := model.NewObjectRef(
+		"deployment", deploy.Namespace, deploy.Name,
+	)
 	key := deploy.Namespace + "/" + deploy.Name
 
-	if deleted {
+	if deleted || h.inMaintenance(deploy.Annotations) {
 		h.clearFirstUnavailableDeploy(key)
-		h.correlator.ResolveByResource("deployment", key)
-		return nil
-	}
-	if h.inMaintenance(deploy.Annotations) {
-		h.clearFirstUnavailableDeploy(key)
-		h.correlator.ResolveByResource("deployment", key)
+		h.reconcileGone(subject)
 		return nil
 	}
 
-	// Existing: ProgressDeadlineExceeded
-	if sig := DetectDeploymentIssue(deploy); sig != nil {
+	// ProgressDeadlineExceeded speaks for the whole Deployment: it is the
+	// rollout's own verdict, and the condition findings below only restate
+	// it.
+	if obs := DetectDeploymentIssue(deploy); obs != nil {
 		h.clearFirstUnavailableDeploy(key)
-		h.signalEvent(sig)
+		h.reconcile(subject, findings(obs))
 		return nil
 	}
 
-	conditionSignals := DetectDeploymentConditions(deploy)
-	for _, sig := range conditionSignals {
-		h.signalEvent(sig)
-	}
-	if len(conditionSignals) == 0 {
-		for _, reason := range []string{
-			constant.ReasonDeploymentProgressing,
-			constant.ReasonDeploymentAvailable,
-			constant.ReasonDeploymentReplicaFailure,
-		} {
-			h.correlator.MarkResolved(correlation.BuildKey(
-				deploy.Namespace, key, reason, "",
-			))
-		}
-	}
+	current := DetectDeploymentConditions(deploy)
 
-	// New: DeploymentUnavailable — replicas exist but are not ready/available.
-	// Only alert when the observed generation matches (not mid-rollout metadata
-	// sync).
-	if sig := DetectDeploymentUnavailable(deploy); sig != nil {
+	// DeploymentUnavailable — replicas exist but are not ready. Only alert
+	// once the observed generation has caught up (not a mid-rollout metadata
+	// sync) and the shortfall has lasted.
+	if obs := DetectDeploymentUnavailable(deploy); obs != nil {
 		first := h.markFirstUnavailableDeploy(key)
-
 		sustained := adaptiveSustained(
 			h.config.RolloutMonitor.SustainedMinutes,
 			h.config.AdaptiveThresholds,
@@ -225,18 +204,21 @@ func (h *handler) ProcessDeploymentObject(
 			deploy.Status.UnavailableReplicas,
 		)
 		if sustained > 0 && h.now().Sub(first) < sustained {
+			// Still settling: report the conditions that stand and change
+			// nothing else.
+			for _, condition := range current {
+				h.observe(condition)
+			}
 			return nil
 		}
-
-		sig.Hint = availabilityHintDeploy(deploy)
-		h.signalEvent(sig)
-		return nil
+		current = append(
+			current, obs.WithHint(availabilityHintDeploy(deploy)),
+		)
+	} else {
+		h.clearFirstUnavailableDeploy(key)
 	}
 
-	h.clearFirstUnavailableDeploy(key)
-	if len(conditionSignals) == 0 {
-		h.correlator.ResolveByResource("deployment", key)
-	}
+	h.reconcile(subject, current)
 	return nil
 }
 

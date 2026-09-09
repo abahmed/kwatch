@@ -66,9 +66,7 @@ func newCorrelator(
 	}
 
 	holder.engine = correlation.NewEngine(correlation.Config{
-		Window: time.Duration(
-			cfg.Correlation.Window,
-		) * time.Minute,
+		Window: cfg.Correlation.Window.Duration(),
 		LifecycleInterval: time.Duration(
 			cfg.Correlation.LifecycleInterval,
 		) * time.Minute,
@@ -83,15 +81,11 @@ func newCorrelator(
 		RenotifyIntervalBySeverity: renotifyIntervalBySeverity(
 			cfg.Correlation.Renotify.IntervalBySeverity,
 		),
-		RenotifyMaxPerIncident: cfg.Correlation.Renotify.MaxPerIncident,
-		Runbooks:               cfg.Runbooks,
-		ResolveHoldDown: time.Duration(
-			cfg.Correlation.ResolveHoldDown,
-		) * time.Second,
-		MaxBaseline: cfg.Correlation.MaxBaseline,
-		SmartGroupingWindow: time.Duration(
-			cfg.SmartGrouping.WindowSeconds,
-		) * time.Second,
+		RenotifyMaxPerIncident:   cfg.Correlation.Renotify.MaxPerIncident,
+		Runbooks:                 cfg.Runbooks,
+		ResolveHoldDown:          cfg.Correlation.ResolveHoldDown.Duration(),
+		MaxBaseline:              cfg.Correlation.MaxBaseline,
+		SmartGroupingWindow:      cfg.SmartGrouping.WindowSeconds.Duration(),
 		NamespaceFanOutThreshold: cfg.SmartGrouping.NamespaceFanOutThreshold,
 		DependenciesOf:           dependencyResolver(opts.graph),
 		LifecycleHook:            lifecycleHook(opts, holder),
@@ -189,11 +183,32 @@ func massFailureHook(opts *engineOptions, holder *engineHolder) func() {
 
 		current := make(map[string]insight.MassFailure, len(mfs))
 		for _, mf := range mfs {
+			if coveredByNodeIncident(mf.SharedDependency, incList) {
+				continue
+			}
 			current[mf.SharedDependency] = mf
 		}
 		notifyNewMassFailures(holder, current)
 		resolveClearedMassFailures(holder, current)
 	}
+}
+
+// coveredByNodeIncident reports whether a shared-dependency failure on a node
+// is already being told as an incident on that node. The node incident is the
+// cause and carries its own impact summary; announcing the blast radius
+// separately is the same event twice.
+func coveredByNodeIncident(depKey string, incidents []*model.Incident) bool {
+	const nodePrefix = "node//"
+	if !strings.HasPrefix(depKey, nodePrefix) {
+		return false
+	}
+	node := strings.TrimPrefix(depKey, nodePrefix)
+	for _, inc := range incidents {
+		if inc.Ref() == (model.ObjectRef{Kind: "node", Name: node}) {
+			return true
+		}
+	}
+	return false
 }
 
 // notifyNewMassFailures fires active incidents for mass failures the engine is
@@ -244,15 +259,11 @@ func massFailureID(key model.IncidentKey) string {
 // into something readable. Cluster-scoped resources carry an empty namespace,
 // which rendered as "node//ip-10-0-0-1" before.
 func describeDependency(depKey string) string {
-	parts := strings.SplitN(depKey, "/", 3)
-	if len(parts) != 3 {
+	ref, ok := model.ParseObjectKey(depKey)
+	if !ok {
 		return depKey
 	}
-	kind, ns, name := parts[0], parts[1], parts[2]
-	if ns == "" {
-		return kind + " " + name
-	}
-	return kind + " " + ns + "/" + name
+	return ref.Describe()
 }
 
 // resolveClearedMassFailures resolves tracked mass failures whose shared
@@ -330,4 +341,13 @@ func restoreIncidents(
 	}
 	correlator.RestoreIncidents(restored)
 	klog.InfoS("restored incidents from configmap", "count", len(persisted))
+
+	// Groups come second: RestoreGroups drops members whose incident did not
+	// come back, so it needs the restored incident set to compare against.
+	groups, err := stateMgr.LoadPersistedGroups(ctx)
+	if err != nil {
+		klog.ErrorS(err, "failed to restore smart group state from configmap")
+		return
+	}
+	correlator.RestoreGroups(groups)
 }
