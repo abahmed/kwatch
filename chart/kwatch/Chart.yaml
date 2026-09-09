@@ -1,0 +1,30 @@
+apiVersion: v2
+name: kwatch
+version: "0.8.0"
+appVersion: "v0.8.0"
+description: monitor all changes in your Kubernetes(K8s) cluster, detects crashes
+  in your running apps in realtime, and publishes notifications to your channels (Slack,
+  Discord, etc.) instantly
+type: application
+home: https://kwatch.dev
+icon: https://kwatch.dev/img/kwatch-logo.png
+sources:
+  - https://github.com/abahmed/kwatch
+keywords:
+  - kwatch
+  - kubernetes
+  - monitoring
+  - crash-reporting
+  - event-notifier
+maintainers:
+  - email: mohaamer5@gmail.com
+    name: Maha Gamal Amer
+    url: github.com/MahaGamal
+  - email: a.ahmed1026@gmail.com
+    name: Abdelrahman Ahmed
+    url: github.com/abahmed
+  - email: yaserkalali.work@gmail.com
+    name: yaser
+    url: github.com/yaskinny
+
+

@@ -1,0 +1,136 @@
+{{- $fullName := include "kwatch.fullname" . -}}
+{{- $releasePrefix := include "kwatch.releasePrefix" . -}}
+{{- $_ := set $.Release "Prefix" $releasePrefix }}
+{{- if .Capabilities.APIVersions.Has "apps/v1" }}
+apiVersion: apps/v1
+{{- else }}
+apiVersion: apps/v1beta2
+{{- end }}
+kind: Deployment
+metadata:
+  name: {{ include "kwatch.fullname" . }}
+  labels:
+    app: {{ include "kwatch.name" . }}
+    chart: {{ include "kwatch.chart" . }}
+    release: {{ .Release.Name }}
+    helm.sh/chart: {{ include "kwatch.chart" . }}
+    app.kubernetes.io/name: {{ include "kwatch.name" . }}
+    app.kubernetes.io/instance: {{ .Release.Name }}
+    app.kubernetes.io/managed-by: {{ .Release.Service }}
+    app.kubernetes.io/component: server
+spec:
+  replicas: {{ .Values.server.replicaCount }}
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: {{ include "kwatch.name" . }}
+      app.kubernetes.io/instance: {{ .Release.Name }}
+      app.kubernetes.io/component: server
+{{- with .Values.server.updateStrategy }}
+  strategy:
+    {{- toYaml . | nindent 4 }}
+{{- end }}
+  template:
+    metadata:
+      labels:
+        app: {{ include "kwatch.name" . }}
+        chart: {{ include "kwatch.chart" . }}
+        release: {{ .Release.Name }}
+        helm.sh/chart: {{ include "kwatch.chart" . }}
+        app.kubernetes.io/name: {{ include "kwatch.name" . }}
+        app.kubernetes.io/instance: {{ .Release.Name }}
+        app.kubernetes.io/component: server
+      {{- with .Values.server.podLabels }}
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+    {{- with .Values.server.podAnnotations }}
+      annotations:
+      {{- range $key, $value := . }}
+        {{ $key }}: {{ $value | quote }}
+      {{- end }}
+    {{- end }}
+    spec:
+      containers:
+        - name: {{ .Chart.Name }}
+          image: "{{ .Values.image.repository }}:{{ .Values.image.tag }}"
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+        {{- with .Values.server.command }}
+          command:
+            {{- . | toYaml | nindent 12 }}
+        {{- end }}
+        {{- with .Values.server.args }}
+          args:
+            {{- . | toYaml | nindent 12 }}
+        {{- end }}
+        {{- with .Values.server.resources }}
+          resources:
+            {{- toYaml . | nindent 12 }}
+        {{- end }}
+        {{- with .Values.server.health.livenessProbe }}
+          livenessProbe:
+            {{- toYaml . | nindent 12 }}
+        {{- end }}
+        {{- with .Values.server.health.readinessProbe }}
+          readinessProbe:
+            {{- toYaml . | nindent 12 }}
+        {{- end }}
+          env:
+          {{- range $key, $value := .Values.server.env }}
+            - name: {{ $key }}
+              value: {{ tpl $value $ | quote }}
+          {{- end }}
+          {{- if .Values.server.envVarSource }}
+          {{- range $key, $value := .Values.server.envVarSource }}
+            - name: {{ $key }}
+              valueFrom: {{ tpl $value $ }}
+          {{- end }}
+          {{- end }}
+          {{- if .Values.global }}
+          {{- range $key, $value := .Values.global.env }}
+            - name: {{ $key }}
+              value: {{ tpl $value $ | quote }}
+          {{- end }}
+          {{- end }}
+          {{- with .Values.server.securityContext }}
+          securityContext:
+          {{ toYaml . | nindent 12 }}
+          {{- end }}
+          {{- with .Values.server.containerVolumeMounts }}
+          volumeMounts:
+          {{- tpl (toYaml . )  $ | nindent 12 }}
+          {{- end }}
+    {{- if .Values.server.antiAffinity }}
+      affinity:
+      {{- if eq .Values.server.antiAffinity "hard" }}
+        podAntiAffinity:
+          requiredDuringSchedulingIgnoredDuringExecution:
+            - topologyKey: "kubernetes.io/hostname"
+              labelSelector:
+                matchLabels:
+                  app.kubernetes.io/name: {{ include "kwatch.name" . }}
+                  app.kubernetes.io/instance: {{ .Release.Name }}
+                  app.kubernetes.io/component: server
+      {{- else if eq .Values.server.antiAffinity "soft" }}
+        podAntiAffinity:
+          preferredDuringSchedulingIgnoredDuringExecution:
+          - weight: 1
+            podAffinityTerm:
+              topologyKey: kubernetes.io/hostname
+              labelSelector:
+                matchLabels:
+                  app.kubernetes.io/name: {{ include "kwatch.name" . }}
+                  app.kubernetes.io/instance: {{ .Release.Name }}
+                  app.kubernetes.io/component: server
+      {{- end }}
+    {{- end }}
+    {{- with .Values.server.nodeSelector }}
+      nodeSelector:
+        {{- toYaml . | nindent 8 }}
+    {{- end }}
+    {{- with .Values.server.tolerations }}
+      tolerations:
+        {{- toYaml . | nindent 8 }}
+    {{- end }}
+    {{- with .Values.server.volumes }}
+      volumes:
+        {{- tpl (toYaml . )  $ | nindent 8 }}
+    {{- end }}
