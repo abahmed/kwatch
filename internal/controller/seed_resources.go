@@ -3,6 +3,7 @@ package controller
 import (
 	"time"
 
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/klog/v2"
 
@@ -264,7 +265,9 @@ func (c *Controller) seedHPAs(rec *baselineRecorder) {
 
 func (c *Controller) seedServices(rec *baselineRecorder) {
 	// Services — seed service-endpoint issues
-	if c.serviceLister != nil && c.endpointSliceLister != nil {
+	if c.service != nil && c.service.startWorkers &&
+		c.serviceLister != nil &&
+		c.endpointSliceLister != nil {
 		svcs, err := c.serviceLister.List(labels.Everything())
 		if err != nil {
 			klog.ErrorS(err, "failed to list services for baseline seeding")
@@ -307,13 +310,19 @@ func (c *Controller) seedServices(rec *baselineRecorder) {
 }
 
 // hasService is a helper seeded by controllers that reference a service.
-func (c *Controller) hasService() func(ns, name string) bool {
-	return func(ns, name string) bool {
+func (c *Controller) hasService() handler.ServiceLookup {
+	return func(ns, name string) (bool, error) {
 		if c.serviceLister == nil {
-			return true
+			return true, nil
 		}
 		_, err := c.serviceLister.Services(ns).Get(name)
-		return err == nil
+		if apierrors.IsNotFound(err) {
+			return false, nil
+		}
+		if err != nil {
+			return false, err
+		}
+		return true, nil
 	}
 }
 
@@ -327,7 +336,7 @@ func (c *Controller) seedControllersWithSvc(rec *baselineRecorder) {
 
 func (c *Controller) seedMwcs(
 	rec *baselineRecorder,
-	hasSvc func(ns, name string) bool,
+	hasSvc handler.ServiceLookup,
 ) {
 	// Admission webhooks — seed webhook-backend issues
 	if c.mwcLister != nil {
@@ -340,11 +349,22 @@ func (c *Controller) seedMwcs(
 			)
 		} else {
 			for _, mwc := range mwcs {
-				sigs := handler.DetectMutatingWebhookIssue(mwc, hasSvc)
-				sigs = append(sigs, handler.DetectWebhookEndpointIssues(
+				sigs, err := handler.DetectMutatingWebhookIssueWithLookup(
+					mwc, hasSvc,
+				)
+				if err != nil {
+					klog.ErrorS(err, "skipping mutating webhook baseline")
+					continue
+				}
+				endpointSigs, err := handler.DetectWebhookEndpointIssuesWithError(
 					c.endpointSliceLister, mwc.Name, mwc.Namespace,
 					mwc.Labels, handler.MutatingWebhookServices(mwc),
-				)...)
+				)
+				if err != nil {
+					klog.ErrorS(err, "skipping mutating webhook endpoint baseline")
+					continue
+				}
+				sigs = append(sigs, endpointSigs...)
 				for _, sig := range sigs {
 					rec.seed(sig)
 				}
@@ -355,7 +375,7 @@ func (c *Controller) seedMwcs(
 
 func (c *Controller) seedVwcs(
 	rec *baselineRecorder,
-	hasSvc func(ns, name string) bool,
+	hasSvc handler.ServiceLookup,
 ) {
 	if c.vwcLister != nil {
 		vwcs, err := c.vwcLister.List(labels.Everything())
@@ -367,11 +387,22 @@ func (c *Controller) seedVwcs(
 			)
 		} else {
 			for _, vwc := range vwcs {
-				sigs := handler.DetectValidatingWebhookIssue(vwc, hasSvc)
-				sigs = append(sigs, handler.DetectWebhookEndpointIssues(
+				sigs, err := handler.DetectValidatingWebhookIssueWithLookup(
+					vwc, hasSvc,
+				)
+				if err != nil {
+					klog.ErrorS(err, "skipping validating webhook baseline")
+					continue
+				}
+				endpointSigs, err := handler.DetectWebhookEndpointIssuesWithError(
 					c.endpointSliceLister, vwc.Name, vwc.Namespace,
 					vwc.Labels, handler.ValidatingWebhookServices(vwc),
-				)...)
+				)
+				if err != nil {
+					klog.ErrorS(err, "skipping validating webhook endpoint baseline")
+					continue
+				}
+				sigs = append(sigs, endpointSigs...)
 				for _, sig := range sigs {
 					rec.seed(sig)
 				}
@@ -382,7 +413,7 @@ func (c *Controller) seedVwcs(
 
 func (c *Controller) seedIngresses(
 	rec *baselineRecorder,
-	hasSvc func(ns, name string) bool,
+	hasSvc handler.ServiceLookup,
 ) {
 	// Ingresses — seed ingress-backend issues
 	if c.ingressLister != nil {
@@ -391,7 +422,13 @@ func (c *Controller) seedIngresses(
 			klog.ErrorS(err, "failed to list ingresses for baseline seeding")
 		} else {
 			for _, ing := range ings {
-				for _, sig := range handler.DetectIngressIssue(ing, hasSvc) {
+				sigs, err := handler.DetectIngressIssueWithLookup(ing, hasSvc)
+				if err != nil {
+					klog.ErrorS(err, "skipping ingress baseline",
+						"namespace", ing.Namespace, "name", ing.Name)
+					continue
+				}
+				for _, sig := range sigs {
 					rec.seed(sig)
 				}
 			}

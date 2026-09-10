@@ -88,13 +88,32 @@ func (c *Controller) changeRecordingHandler(resource string, enqueue func(interf
 // watch registers HasSynced and a change-recording event handler for every
 // informer feeding the pipeline, and marks its workers to start.
 func (c *Controller) watch(p *resourcePipeline, informers ...cache.SharedIndexInformer) {
+	c.watchWithHandler(
+		p,
+		true,
+		c.changeRecordingHandler(p.trackResource(), p.enqueue),
+		informers...,
+	)
+}
+
+// watchWithHandler registers an informer handler and its cache sync function.
+// Some dependency resources need event-specific fan-out in addition to their
+// normal queue, while a consumer may need their cache without workers.
+func (c *Controller) watchWithHandler(
+	p *resourcePipeline,
+	startWorkers bool,
+	handler cache.ResourceEventHandler,
+	informers ...cache.SharedIndexInformer,
+) {
 	for _, inf := range informers {
 		c.informers = append(c.informers, inf)
 		_ = inf.SetWatchErrorHandler(func(_ *cache.Reflector, err error) { c.recordInformerWatchError(err) })
 		p.synced = append(p.synced, inf.HasSynced)
-		inf.AddEventHandler(c.changeRecordingHandler(p.trackResource(), p.enqueue))
+		inf.AddEventHandler(handler)
 	}
-	p.startWorkers = true
+	if startWorkers {
+		p.startWorkers = true
+	}
 }
 
 // listen hooks up event handlers without touching synced; used when the

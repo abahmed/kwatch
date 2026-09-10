@@ -64,11 +64,15 @@ func permissionsForConfig(cfg *config.Config) ([]Permission, []Permission) {
 }
 
 func infrastructurePermissions(cfg *config.Config) []Permission {
-	permissions := []Permission{
-		{Resource: "configmaps", Verb: "get"},
-		{Resource: "configmaps", Verb: "create"},
-		{Resource: "configmaps", Verb: "update"},
-		{Resource: "configmaps", Verb: "patch"},
+	permissions := []Permission{{Resource: "configmaps", Verb: "create"}}
+	for _, name := range persistenceConfigMapNames() {
+		for _, verb := range []string{"get", "update", "patch"} {
+			permissions = append(permissions, Permission{
+				Name:     name,
+				Resource: "configmaps",
+				Verb:     verb,
+			})
+		}
 	}
 	if cfg != nil && cfg.CrdConfig.Enabled {
 		permissions = append(permissions, permissionResources(Permission{
@@ -77,6 +81,21 @@ func infrastructurePermissions(cfg *config.Config) []Permission {
 		})...)
 	}
 	return permissions
+}
+
+func persistenceConfigMapNames() []string {
+	return []string{
+		"kwatch-state",
+		"kwatch-baseline",
+		"kwatch-incidents",
+		"kwatch-groups",
+		"kwatch-threads",
+		"kwatch-engine",
+		"kwatch-pvc",
+		"kwatch-changes",
+		"kwatch-rca",
+		"kwatch-telemetry",
+	}
 }
 
 type permissionBuilder struct {

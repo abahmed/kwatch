@@ -1,6 +1,8 @@
 package discord
 
 import (
+	"errors"
+	"net/http"
 	"strings"
 	"testing"
 
@@ -119,4 +121,24 @@ func TestChunks(t *testing.T) {
 	result = util.Chunks(exactChunk, 1024)
 	assert.Equal(1, len(result))
 	assert.Equal(1024, len(result[0]))
+}
+
+func TestDiscordHTTPClientErrorsAreClassified(t *testing.T) {
+	err := &discordgo.RESTError{
+		Response: &http.Response{
+			StatusCode: http.StatusBadRequest,
+			Status:     "400 Bad Request",
+		},
+	}
+	classified := wrapDiscordRateLimit(err)
+	assert.True(t, event.IsPermanent(classified))
+
+	transient := &discordgo.RESTError{
+		Response: &http.Response{
+			StatusCode: http.StatusBadGateway,
+			Status:     "502 Bad Gateway",
+		},
+	}
+	assert.False(t, event.IsPermanent(wrapDiscordRateLimit(transient)))
+	assert.False(t, event.IsPermanent(wrapDiscordRateLimit(errors.New("network"))))
 }

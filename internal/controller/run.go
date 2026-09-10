@@ -4,6 +4,7 @@ import (
 	"context"
 	"time"
 
+	"k8s.io/apimachinery/pkg/labels"
 	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
 	"k8s.io/apimachinery/pkg/util/wait"
 	"k8s.io/client-go/tools/cache"
@@ -58,6 +59,9 @@ func (c *Controller) Run(ctx context.Context, workers int) error {
 		}
 	}()
 	c.buildSeenSet()
+	if c.lease.startWorkers {
+		go c.runLeaseSweep(ctx)
+	}
 	if c.cpPod.startWorkers {
 		c.handler.SweepControlPlane()
 	}
@@ -102,4 +106,52 @@ func (c *Controller) Run(ctx context.Context, workers int) error {
 	<-ctx.Done()
 	klog.InfoS("shutting down workers")
 	return nil
+}
+
+const (
+	defaultNodeLeaseStaleSeconds = 90
+	maxLeaseSweepInterval        = 30 * time.Second
+)
+
+func leaseSweepInterval(staleSeconds int) time.Duration {
+	if staleSeconds <= 0 {
+		staleSeconds = defaultNodeLeaseStaleSeconds
+	}
+	if staleSeconds >= int(maxLeaseSweepInterval.Seconds())*3 {
+		return maxLeaseSweepInterval
+	}
+	interval := time.Duration(staleSeconds) * time.Second / 3
+	if interval < time.Second {
+		return time.Second
+	}
+	return interval
+}
+
+func (c *Controller) runLeaseSweep(ctx context.Context) {
+	ticker := time.NewTicker(leaseSweepInterval(
+		c.seedThresholds.nodeLeaseStaleSeconds,
+	))
+	defer ticker.Stop()
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case <-ticker.C:
+			c.enqueueLeaseSweep()
+		}
+	}
+}
+
+func (c *Controller) enqueueLeaseSweep() {
+	if c.leaseLister == nil || c.lease == nil {
+		return
+	}
+	leases, err := c.leaseLister.List(labels.Everything())
+	if err != nil {
+		klog.ErrorS(err, "failed to list node leases for periodic sweep")
+		return
+	}
+	for _, lease := range leases {
+		c.lease.enqueue(lease)
+	}
 }

@@ -280,5 +280,9 @@ func wrapDiscordRateLimit(err error) error {
 			RetryAfter: rle.RetryAfter,
 		}
 	}
+	var restErr *discordgo.RESTError
+	if errors.As(err, &restErr) && restErr.Response != nil {
+		return event.ClassifyHTTP(restErr.Response.StatusCode, err)
+	}
 	return err
 }

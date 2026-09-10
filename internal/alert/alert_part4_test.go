@@ -60,6 +60,27 @@ func TestFanOutSaturatedQueueRecordsDeadLetter(t *testing.T) {
 	assert.Contains(t, dlList[0].Error, "queue saturated")
 }
 
+func TestFanOutSaturatedQueueDigestsEveryJobKind(t *testing.T) {
+	provider := &fakeProvider{}
+	ch := make(chan deliverJob, channelCap)
+	for i := 0; i < channelCap; i++ {
+		ch <- deliverJob{kind: jobMessage, msg: "queued"}
+	}
+	am := &AlertManager{entries: []providerEntry{{
+		provider: provider,
+		ch:       ch,
+	}}}
+
+	am.mu.Lock()
+	am.fanOut(deliverJob{kind: jobEvent, ev: &event.Event{Reason: "BackOff"}})
+	am.mu.Unlock()
+
+	state, text := am.takeDigest(provider.Name())
+	require.NotNil(t, state)
+	assert.Equal(t, 1, state.total)
+	assert.Contains(t, text, "BackOff")
+}
+
 // Permanent failures are not retried and must not block later alerts.
 func TestSendWithRetryStopsOnPermanentError(t *testing.T) {
 	attempts := 0

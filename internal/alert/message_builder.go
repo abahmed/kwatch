@@ -48,7 +48,7 @@ func eventPodName(inc *model.Incident) string {
 
 // NotifyIncident enqueues an incident for delivery to all providers.
 // When Start has been called, delivery is asynchronous via per-provider
-// buffered channels (non-blocking; drops oldest on full).
+// buffered channels (non-blocking; drops the arriving job when full).
 // Before Start, delivery is synchronous (deliverAllSync).
 // insight is optional; nil means no structured analysis available.
 

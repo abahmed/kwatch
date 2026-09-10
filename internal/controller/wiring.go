@@ -99,11 +99,11 @@ func (c *Controller) wireService(cfg *config.Config, fs factorySet) {
 		})
 	}
 	if !cfg.ServiceMonitor.Enabled {
+		c.wireEndpointSlices(cfg, fs)
 		return
 	}
-	c.endpointSliceLister = fs.endpointSliceLister()
 	c.service.startWorkers = true
-	c.watch(c.endpointSlice, fs.endpointSliceInformers()...)
+	c.wireEndpointSlices(cfg, fs)
 }
 
 func (c *Controller) wireAdmissionWebhooks(cfg *config.Config, fs factorySet) {

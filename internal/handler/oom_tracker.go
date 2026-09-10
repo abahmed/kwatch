@@ -28,6 +28,15 @@ func newOomTracker(threshold int, window time.Duration) *oomTracker {
 	}
 }
 
+func (t *oomTracker) SetClock(now func() time.Time) {
+	if now == nil {
+		return
+	}
+	t.mu.Lock()
+	t.now = now
+	t.mu.Unlock()
+}
+
 const maxOomEntries = 100
 const maxOomKeys = 500
 

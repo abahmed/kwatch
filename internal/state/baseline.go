@@ -38,12 +38,20 @@ func (s *StateManager) GetBaseline(
 			}
 			return result
 		}
+		// An existing dedicated ConfigMap is authoritative, including when
+		// its payload was intentionally cleared after a size failure.
+		if _, ok := cm.BinaryData[baselineKey]; ok {
+			return nil
+		}
 		if raw, ok := cm.Data[baselineKey]; ok && raw != "" {
 			if err := json.Unmarshal([]byte(raw), &result); err != nil {
 				klog.ErrorS(err, "failed to unmarshal baseline")
 				return nil
 			}
 			return result
+		}
+		if _, ok := cm.Data[baselineKey]; ok {
+			return nil
 		}
 	}
 
@@ -86,11 +94,10 @@ func (s *StateManager) SaveBaseline(
 				baselineMaxBytes,
 			)
 		}
-		if cm.BinaryData == nil {
-			cm.BinaryData = map[string][]byte{}
+		setBinaryPayload(cm, baselineKey, data)
+		if err := validateConfigMapData(cm); err != nil {
+			return fmt.Errorf("baseline payload: %w", err)
 		}
-		cm.BinaryData[baselineKey] = data
-		delete(cm.Data, baselineKey)
 		return nil
 	})
 }

@@ -22,6 +22,8 @@ type namespaceScope struct {
 	forbidden  []string
 }
 
+const nodeLeaseNamespace = "kube-node-lease"
+
 var namespaceResolveTimeout = 30 * time.Second
 
 func resolveNamespaces(cfg *config.Config, clientset kubernetes.Interface) (namespaceScope, error) {
@@ -53,6 +55,7 @@ func newFactories(
 	forbiddenNamespaces []string,
 	resync time.Duration,
 ) (factorySet, []informers.SharedInformerFactory) {
+	nodeLeaseFactory := newNodeLeaseFactory(client, resync)
 	if scope.all || len(scope.namespaces) == 1 {
 		var opts []informers.SharedInformerOption
 		if len(scope.namespaces) == 1 {
@@ -72,12 +75,23 @@ func newFactories(
 		// MutatingWebhookConfigurations, ValidatingWebhookConfigurations) that
 		// must NOT inherit the namespace field selector.
 		clusterFactory := informers.NewSharedInformerFactoryWithOptions(client, resync, informerMemoryOptions()...)
-		return factorySet{global: factory, clusterScoped: clusterFactory}, []informers.SharedInformerFactory{factory, clusterFactory}
+		return factorySet{
+			global:           factory,
+			clusterScoped:    clusterFactory,
+			nodeLeaseFactory: nodeLeaseFactory,
+		}, []informers.SharedInformerFactory{
+			factory, clusterFactory, nodeLeaseFactory,
+		}
 	}
 
 	if len(scope.namespaces) == 0 {
 		clusterFactory := informers.NewSharedInformerFactoryWithOptions(client, resync, informerMemoryOptions()...)
-		return factorySet{clusterScoped: clusterFactory}, []informers.SharedInformerFactory{clusterFactory}
+		return factorySet{
+			clusterScoped:    clusterFactory,
+			nodeLeaseFactory: nodeLeaseFactory,
+		}, []informers.SharedInformerFactory{
+			clusterFactory, nodeLeaseFactory,
+		}
 	}
 
 	factories := make([]informers.SharedInformerFactory, 0, len(scope.namespaces))
@@ -95,11 +109,27 @@ func newFactories(
 		resync,
 		informerMemoryOptions()...,
 	)
-	factories = append(factories, clusterFactory)
+	factories = append(factories, clusterFactory, nodeLeaseFactory)
 	return factorySet{
-		perNamespace:  factories[:len(factories)-1],
-		clusterScoped: clusterFactory,
+		perNamespace:     factories[:len(factories)-2],
+		clusterScoped:    clusterFactory,
+		nodeLeaseFactory: nodeLeaseFactory,
 	}, factories
+}
+
+func newNodeLeaseFactory(
+	client kubernetes.Interface,
+	resync time.Duration,
+) informers.SharedInformerFactory {
+	opts := []informers.SharedInformerOption{
+		informers.WithNamespace(nodeLeaseNamespace),
+	}
+	opts = append(opts, informerMemoryOptions()...)
+	return informers.NewSharedInformerFactoryWithOptions(
+		client,
+		resync,
+		opts...,
+	)
 }
 
 // informerMemoryOptions removes server-managed field ownership metadata from
@@ -135,7 +165,8 @@ func informerExcludedNamespaces(forbidden []string) string {
 }
 
 type factorySet struct {
-	global        informers.SharedInformerFactory
-	perNamespace  []informers.SharedInformerFactory
-	clusterScoped informers.SharedInformerFactory
+	global           informers.SharedInformerFactory
+	perNamespace     []informers.SharedInformerFactory
+	clusterScoped    informers.SharedInformerFactory
+	nodeLeaseFactory informers.SharedInformerFactory
 }

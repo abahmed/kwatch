@@ -51,6 +51,9 @@ func (r *RetryConfigMapManager) UpdateWithRetry(
 			if updErr := updater(cm); updErr != nil {
 				return updErr
 			}
+			if err := validateConfigMapData(cm); err != nil {
+				return err
+			}
 			if _, cErr := r.client.CoreV1().ConfigMaps(r.namespace).Create(ctx, cm, metav1.CreateOptions{}); cErr != nil {
 				if apierrors.IsAlreadyExists(cErr) {
 					continue
@@ -68,6 +71,9 @@ func (r *RetryConfigMapManager) UpdateWithRetry(
 		}
 
 		if err := updater(cm); err != nil {
+			return err
+		}
+		if err := validateConfigMapData(cm); err != nil {
 			return err
 		}
 

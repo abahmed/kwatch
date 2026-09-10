@@ -455,9 +455,15 @@ no volume, no backend to run. It writes the things it can't afford to forget:
 | ConfigMap | What it holds |
 |:--|:--|
 | `kwatch-state` | Cluster identity, upgrade bookkeeping, and a `last-seen` liveness stamp |
-| `kwatch-incidents` | Every active incident (so a restart doesn't forget what's broken), trimmed to the freshest that fit if the cluster is large enough to exceed a ConfigMap; alongside them, the **smart groups** that speak for those incidents and the **chat thread ids** they were announced under |
 | `kwatch-baseline` | The pre-existing problems seen at startup |
+| `kwatch-incidents` | Active and recently resolved incidents, trimmed to the freshest entries that fit if the cluster is large enough to exceed a ConfigMap |
+| `kwatch-groups` | Smart groups that speak for related incidents |
+| `kwatch-threads` | Provider conversation or thread IDs associated with incidents |
+| `kwatch-engine` | Correlation engine state needed to resume lifecycle decisions |
 | `kwatch-pvc` | Last-known disk usage for PVC monitoring |
+| `kwatch-changes` | Recent resource-change history used for diagnosis |
+| `kwatch-rca` | Persisted root-cause analysis state |
+| `kwatch-telemetry` | Kubelet telemetry snapshots used to resume telemetry baselines |
 
 State written by kwatch 0.10.x used a different layout; it is read and migrated on the first
 start of a newer version, so an upgrade keeps its incident memory instead of re-announcing

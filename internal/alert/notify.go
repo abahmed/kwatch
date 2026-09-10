@@ -60,21 +60,7 @@ func (a *AlertManager) enqueue(job deliverJob) {
 		ctx = context.Background()
 	}
 	for _, entry := range entries {
-		if err := a.dispatch(
-			ctx, entry, job, deliverOpts{retry: entry.retry},
-		); err != nil {
-			klog.ErrorS(err, "failed to send",
-				"provider", entry.provider.Name(), "key", job.key())
-			if entry.fallback == nil {
-				continue
-			}
-			if fbErr := a.deliverFallback(
-				ctx, entry.fallback, entry.provider.Name(), job,
-			); fbErr != nil {
-				klog.ErrorS(fbErr, "fallback provider failed",
-					"provider", entry.fallback.provider.Name())
-			}
-		}
+		a.deliverOne(ctx, entry, job)
 	}
 }
 
@@ -116,6 +102,10 @@ func (a *AlertManager) NotifyIncident(
 	action model.IncidentAction,
 	insight *insight.Insight,
 ) {
+	if inc == nil {
+		klog.ErrorS(nil, "cannot deliver a nil incident")
+		return
+	}
 	if action == model.ActionSkip {
 		return
 	}

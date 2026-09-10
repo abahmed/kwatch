@@ -189,6 +189,41 @@ func TestIncidentFallbackUsesEventDeliveryInterface(t *testing.T) {
 	assert.Zero(t, fallback.messageCalls)
 }
 
+func TestIncidentFallbackHonorsFallbackRoutes(t *testing.T) {
+	primary := &errorRecorderProvider{
+		name: "Primary",
+		err:  errors.New("fail"),
+	}
+	fallback := &errorRecorderProvider{name: "Fallback"}
+	am := AlertManager{entries: []providerEntry{{
+		provider: primary,
+		retry: retryConfig{
+			maxAttempts: 1,
+			delay:       time.Millisecond,
+		},
+		fallback: &providerEntry{
+			provider: fallback,
+			routes: []config.AlertRoute{{
+				Namespaces: []string{"ops"},
+			}},
+			retry: retryConfig{
+				maxAttempts: 1,
+				delay:       time.Millisecond,
+			},
+		},
+	}}}
+
+	am.NotifyIncident(&model.Incident{
+		Subject: model.Subject{
+			Key:       "default:pod:Error",
+			Namespace: "default",
+			Reason:    "Error",
+		},
+	}, model.ActionCreate, nil)
+
+	assert.Zero(t, fallback.callCount)
+}
+
 func TestExtractRetryYAMLInt(t *testing.T) {
 	// YAML v3 unmarshals integers as int, not float64.
 	cfg := map[string]interface{}{
@@ -258,6 +293,60 @@ func TestSendWithRetrySuccess(t *testing.T) {
 	if err != nil {
 		t.Fatalf("expected nil, got %v", err)
 	}
+}
+
+func TestSendWithRetryNormalizesEmptyConfig(t *testing.T) {
+	attempts := 0
+	err := sendWithRetry(context.Background(), func() error {
+		attempts++
+		return errors.New("failed")
+	}, retryConfig{}, "test")
+
+	require.Error(t, err)
+	assert.Equal(t, 1, attempts)
+}
+
+func TestFlushDigestUsesEventDelivery(t *testing.T) {
+	provider := &eventFallbackProvider{}
+	am := AlertManager{}
+	entry := &providerEntry{
+		provider: provider,
+		retry: retryConfig{
+			maxAttempts: 1,
+			delay:       time.Millisecond,
+		},
+	}
+	am.digestAdd(provider.Name(), incidentJob(&model.Incident{
+		Subject: model.Subject{Reason: "Error"},
+	}, model.ActionCreate, nil))
+
+	am.flushDigest(context.Background(), entry)
+
+	assert.Equal(t, 1, provider.eventCalls)
+	assert.Zero(t, provider.messageCalls)
+}
+
+func TestFlushDigestRestoresAfterFailure(t *testing.T) {
+	provider := &errorRecorderProvider{name: "Digest", err: errors.New("failed")}
+	am := AlertManager{}
+	entry := &providerEntry{
+		provider: provider,
+		retry: retryConfig{
+			maxAttempts: 1,
+			delay:       time.Millisecond,
+		},
+	}
+	am.digestAdd(provider.Name(), incidentJob(&model.Incident{
+		Subject: model.Subject{Reason: "Error"},
+	}, model.ActionCreate, nil))
+
+	am.flushDigest(context.Background(), entry)
+
+	am.pacer.mu.Lock()
+	state := am.pacer.digests[provider.Name()]
+	am.pacer.mu.Unlock()
+	require.NotNil(t, state)
+	assert.Equal(t, 1, state.total)
 }
 
 func TestNotifyIncidentEventDeliveryProviderPropagatesActionAndDedup(

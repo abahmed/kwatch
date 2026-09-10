@@ -26,8 +26,11 @@ echo "$OUT1" | grep -q "allowPrivilegeEscalation: false" || {
 echo "$OUT1" | grep -q "type: RuntimeDefault" || {
   echo "FAIL: seccomp profile missing"; exit 1;
 }
-echo "$OUT1" | grep -q 'resourceNames: \["kwatch-state"' || {
+echo "$OUT1" | grep -q "resourceNames:" || {
   echo "FAIL: state ConfigMap RBAC is not restricted"; exit 1;
+}
+echo "$OUT1" | grep -q '  - "kwatch-telemetry"' || {
+  echo "FAIL: telemetry ConfigMap RBAC is missing"; exit 1;
 }
 echo "PASS: security context"
 

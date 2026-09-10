@@ -183,6 +183,7 @@ func RunWithClock(now func() time.Time) int {
 	)
 
 	h := handler.NewHandler(k8sClient, cfg, correlator, am)
+	h.SetClock(now)
 
 	ctl, cleanup, err := controller.New(k8sClient, cfg, h)
 	if err != nil {

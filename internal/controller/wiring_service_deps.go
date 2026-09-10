@@ -80,24 +80,30 @@ func (c *Controller) enqueueIngressesForService(service *corev1.Service) {
 // enqueueWebhooksForService re-enqueues only the webhook configurations whose
 // client config names this Service.
 func (c *Controller) enqueueWebhooksForService(service *corev1.Service) {
-	if c.mwc.startWorkers && c.mwcLister != nil {
+	c.enqueueWebhooksForServiceKey(service.Namespace, service.Name)
+}
+
+func (c *Controller) enqueueWebhooksForServiceKey(namespace, name string) {
+	if c.mwc != nil && c.mwc.startWorkers && c.mwcLister != nil {
 		if items, err := c.mwcLister.List(labels.Everything()); err == nil {
 			for _, item := range items {
 				if webhookRefsService(
 					handler.MutatingWebhookServices(item),
-					service,
+					namespace,
+					name,
 				) {
 					c.mwc.enqueue(item)
 				}
 			}
 		}
 	}
-	if c.vwc.startWorkers && c.vwcLister != nil {
+	if c.vwc != nil && c.vwc.startWorkers && c.vwcLister != nil {
 		if items, err := c.vwcLister.List(labels.Everything()); err == nil {
 			for _, item := range items {
 				if webhookRefsService(
 					handler.ValidatingWebhookServices(item),
-					service,
+					namespace,
+					name,
 				) {
 					c.vwc.enqueue(item)
 				}
@@ -108,13 +114,13 @@ func (c *Controller) enqueueWebhooksForService(service *corev1.Service) {
 
 func webhookRefsService(
 	refs []*admissionregistrationv1.ServiceReference,
-	service *corev1.Service,
+	namespace, name string,
 ) bool {
 	for _, ref := range refs {
 		if ref == nil {
 			continue
 		}
-		if ref.Namespace == service.Namespace && ref.Name == service.Name {
+		if ref.Namespace == namespace && ref.Name == name {
 			return true
 		}
 	}

@@ -61,11 +61,10 @@ func (s *StateManager) SavePvcUsage(
 				baselineMaxBytes,
 			)
 		}
-		if cm.BinaryData == nil {
-			cm.BinaryData = map[string][]byte{}
+		setBinaryPayload(cm, pvcUsageKey, data)
+		if err := validateConfigMapData(cm); err != nil {
+			return fmt.Errorf("pvc usage payload: %w", err)
 		}
-		cm.BinaryData[pvcUsageKey] = data
-		delete(cm.Data, pvcUsageKey)
 		return nil
 	})
 }

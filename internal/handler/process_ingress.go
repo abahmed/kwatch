@@ -22,6 +22,27 @@ func DetectIngressIssue(
 	if ing == nil || hasService == nil {
 		return nil
 	}
+	findings, err := DetectIngressIssueWithLookup(
+		ing,
+		func(ns, name string) (bool, error) {
+			return hasService(ns, name), nil
+		},
+	)
+	if err != nil {
+		return nil
+	}
+	return findings
+}
+
+// DetectIngressIssueWithLookup is the error-aware detector used by live
+// processing. NotFound is a missing backend; other errors are unknown.
+func DetectIngressIssueWithLookup(
+	ing *networkingv1.Ingress,
+	lookup ServiceLookup,
+) ([]*model.Observation, error) {
+	if ing == nil || lookup == nil {
+		return nil, nil
+	}
 	var sigs []*model.Observation
 	ns := ing.Namespace
 
@@ -34,7 +55,16 @@ func DetectIngressIssue(
 				continue
 			}
 			svcName := path.Backend.Service.Name
-			if !hasService(ns, svcName) {
+			exists, err := lookup(ns, svcName)
+			if err != nil {
+				return nil, fmt.Errorf(
+					"lookup ingress backend Service %s/%s: %w",
+					ns,
+					svcName,
+					err,
+				)
+			}
+			if !exists {
 				sigs = append(sigs, observe.Object(
 					"ingress", ing, constant.ReasonIngressBackendNotFound,
 				).WithHint(fmt.Sprintf(
@@ -51,7 +81,16 @@ func DetectIngressIssue(
 	if ing.Spec.DefaultBackend != nil &&
 		ing.Spec.DefaultBackend.Service != nil {
 		svcName := ing.Spec.DefaultBackend.Service.Name
-		if !hasService(ns, svcName) {
+		exists, err := lookup(ns, svcName)
+		if err != nil {
+			return nil, fmt.Errorf(
+				"lookup ingress default backend Service %s/%s: %w",
+				ns,
+				svcName,
+				err,
+			)
+		}
+		if !exists {
 			sigs = append(sigs, observe.Object(
 				"ingress", ing, constant.ReasonIngressBackendNotFound,
 			).WithHint(fmt.Sprintf(
@@ -63,7 +102,7 @@ func DetectIngressIssue(
 		}
 	}
 
-	return sigs
+	return sigs, nil
 }
 
 func (h *handler) ProcessIngress(key string, deleted bool) error {
@@ -104,14 +143,13 @@ func (h *handler) ProcessIngressObject(
 		return nil
 	}
 
-	hasService := func(ns, name string) bool {
-		if h.listers.Service == nil {
-			return true
-		}
-		_, err := h.listers.Service.Services(ns).Get(name)
-		return err == nil
+	findings, err := DetectIngressIssueWithLookup(
+		ing,
+		h.serviceLookup(),
+	)
+	if err != nil {
+		return fmt.Errorf("evaluate ingress %s/%s: %w", ing.Namespace, ing.Name, err)
 	}
-
-	h.reconcile(subject, DetectIngressIssue(ing, hasService))
+	h.reconcile(subject, findings)
 	return nil
 }

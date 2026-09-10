@@ -7,10 +7,6 @@ import (
 	"strings"
 	"sync"
 	"time"
-
-	"k8s.io/klog/v2"
-
-	"github.com/abahmed/kwatch/internal/model"
 )
 
 // Notifications used to leave for the provider as fast as the engine produced
@@ -94,15 +90,21 @@ func (a *AlertManager) waitForSendSlot(
 // digestAdd records a notification that could not be queued.
 func (a *AlertManager) digestAdd(
 	provider string,
-	inc *model.Incident,
-	action model.IncidentAction,
+	job deliverJob,
 ) {
-	if inc == nil {
-		return
-	}
-	reason := inc.Reason
-	if reason == "" {
-		reason = action.String()
+	reason := "message"
+	switch job.kind {
+	case jobIncident:
+		if job.inc != nil {
+			reason = job.inc.Reason
+			if reason == "" {
+				reason = job.action.String()
+			}
+		}
+	case jobEvent:
+		if job.ev != nil && job.ev.Reason != "" {
+			reason = job.ev.Reason
+		}
 	}
 	a.pacer.mu.Lock()
 	defer a.pacer.mu.Unlock()
@@ -118,18 +120,37 @@ func (a *AlertManager) digestAdd(
 	state.total++
 }
 
-// takeDigest removes and renders the pending digest for a provider. The empty
-// string means there was nothing pending.
-func (a *AlertManager) takeDigest(provider string) string {
+// takeDigest claims and renders the pending digest for a provider. The caller
+// must restore the state when delivery does not complete.
+func (a *AlertManager) takeDigest(
+	provider string,
+) (*digestState, string) {
 	a.pacer.mu.Lock()
 	state := a.pacer.digests[provider]
 	if state == nil || state.total == 0 {
 		a.pacer.mu.Unlock()
-		return ""
+		return nil, ""
 	}
 	delete(a.pacer.digests, provider)
 	a.pacer.mu.Unlock()
-	return renderDigest(state)
+	return state, renderDigest(state)
+}
+
+func (a *AlertManager) restoreDigest(provider string, state *digestState) {
+	if state == nil || state.total == 0 {
+		return
+	}
+	a.pacer.mu.Lock()
+	defer a.pacer.mu.Unlock()
+	current := a.pacer.digests[provider]
+	if current == nil {
+		current = &digestState{byReason: make(map[string]int)}
+		a.pacer.digests[provider] = current
+	}
+	for reason, count := range state.byReason {
+		current.byReason[reason] += count
+	}
+	current.total += state.total
 }
 
 // renderDigest names the most frequent reasons and counts the rest, so a
@@ -173,15 +194,18 @@ func renderDigest(state *digestState) string {
 // slot like any other delivery so the digest itself cannot cause a burst.
 func (a *AlertManager) flushDigest(ctx context.Context, entry *providerEntry) {
 	name := entry.provider.Name()
-	text := a.takeDigest(name)
+	state, text := a.takeDigest(name)
 	if text == "" {
 		return
 	}
 	if !a.waitForSendSlot(ctx, name) {
+		a.restoreDigest(name, state)
 		return
 	}
-	if err := entry.provider.SendMessage(text); err != nil {
-		klog.ErrorS(err, "failed to deliver notification digest",
-			"provider", name)
+	if !a.deliverOne(ctx, entry, deliverJob{
+		kind: jobMessage,
+		msg:  text,
+	}) {
+		a.restoreDigest(name, state)
 	}
 }

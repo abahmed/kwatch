@@ -203,7 +203,10 @@ func podGraphInputsChanged(old, new *corev1.Pod) bool {
 	if old.Spec.NodeName != new.Spec.NodeName ||
 		old.Spec.ServiceAccountName != new.Spec.ServiceAccountName ||
 		!maps.Equal(old.Labels, new.Labels) ||
-		len(old.OwnerReferences) != len(new.OwnerReferences) ||
+		!equality.Semantic.DeepEqual(
+			old.OwnerReferences,
+			new.OwnerReferences,
+		) ||
 		!equality.Semantic.DeepEqual(old.Spec.Volumes, new.Spec.Volumes) ||
 		!equality.Semantic.DeepEqual(
 			old.Spec.ImagePullSecrets, new.Spec.ImagePullSecrets,

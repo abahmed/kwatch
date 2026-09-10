@@ -239,7 +239,7 @@ func (c *Controller) wireGraphHandlers(fs factorySet, cfg *config.Config) {
 			inf.AddEventHandler(c.graphHandler("poddisruptionbudget", c.rebuildPodDisruptionBudget))
 		}
 	}
-	if cfg.ServiceMonitor.Enabled {
+	if c.endpointSliceLister != nil {
 		for _, inf := range fs.endpointSliceInformers() {
 			inf.AddEventHandler(c.graphHandler("endpointslice", c.rebuildEndpointSlice))
 		}

@@ -108,6 +108,25 @@ type retryConfig struct {
 	jitterFactor  float64
 }
 
+func normalizeRetryConfig(rc retryConfig) retryConfig {
+	if rc.maxAttempts < 1 {
+		rc.maxAttempts = 1
+	}
+	if rc.delay <= 0 {
+		rc.delay = time.Second
+	}
+	if rc.maxBackoff < 0 {
+		rc.maxBackoff = defaultMaxBackoff
+	}
+	if rc.jitterFactor < 0 {
+		rc.jitterFactor = 0
+	}
+	if rc.jitterFactor > 1 {
+		rc.jitterFactor = 1
+	}
+	return rc
+}
+
 // coerceInt tolerates the int, int64, and float64 encodings seen across
 // YAML, JSON, and CRD config paths.
 func coerceInt(v interface{}) int {
@@ -188,7 +207,7 @@ func extractRetry(cfg map[string]interface{}) retryConfig {
 	applyRetryDuration(rm, "delay", &rc.delay)
 	applyRetryDuration(rm, "maxBackoff", &rc.maxBackoff)
 	applyRetryJitter(rm, &rc)
-	return rc
+	return normalizeRetryConfig(rc)
 }
 
 // Init initializes AlertManager with provided config.
@@ -286,6 +305,7 @@ func sendWithRetry(
 	rc retryConfig,
 	providerName string,
 ) error {
+	rc = normalizeRetryConfig(rc)
 	var lastErr error
 	for attempt := 1; attempt <= rc.maxAttempts; attempt++ {
 		if err := sendFn(); err != nil {

@@ -2,6 +2,7 @@ package slack
 
 import (
 	"errors"
+	"net/http"
 	"strings"
 	"testing"
 	"time"
@@ -302,6 +303,14 @@ func TestSlackErrorClassification(t *testing.T) {
 		"network errors stay retryable",
 	)
 	assert.Nil(t, wrapSlackRateLimit(nil))
+}
+
+func TestSlackHTTPStatusErrorsAreClassified(t *testing.T) {
+	badRequest := slackClient.StatusCodeError{Code: http.StatusBadRequest}
+	assert.True(t, event.IsPermanent(wrapSlackRateLimit(badRequest)))
+
+	serverError := slackClient.StatusCodeError{Code: http.StatusBadGateway}
+	assert.False(t, event.IsPermanent(wrapSlackRateLimit(serverError)))
 }
 
 // The rich (token) Slack path builds its blocks from the incident alone and

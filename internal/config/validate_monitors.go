@@ -217,6 +217,17 @@ func validateTlsMonitor(cfg *Config) []error {
 	return errs
 }
 
+func validateClusterResourceMonitor(cfg *Config) []error {
+	if cfg.ClusterResourceMonitor.NodeLeaseStaleSeconds < 0 {
+		return []error{
+			errors.New(
+				"clusterResourceMonitor.nodeLeaseStaleSeconds must be >= 0",
+			),
+		}
+	}
+	return nil
+}
+
 func validateMonitors(cfg *Config) []error {
 	var errs []error
 	for _, rule := range cfg.CrdConfig.FailureConditions {
@@ -232,6 +243,7 @@ func validateMonitors(cfg *Config) []error {
 		}
 	}
 	errs = append(errs, validateHeartbeatMonitor(cfg)...)
+	errs = append(errs, validateClusterResourceMonitor(cfg)...)
 	if cfg.SmartGrouping.NamespaceFanOutThreshold < 0 {
 		errs = append(
 			errs,

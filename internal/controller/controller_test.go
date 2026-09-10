@@ -4,14 +4,18 @@ import (
 	"context"
 	"sync"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	admissionregistrationv1 "k8s.io/api/admissionregistration/v1"
 	corev1 "k8s.io/api/core/v1"
 	discoveryv1 "k8s.io/api/discovery/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/client-go/informers"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/kubernetes/fake"
+	"k8s.io/client-go/tools/cache"
 
 	"github.com/abahmed/kwatch/internal/config"
 	"github.com/abahmed/kwatch/internal/handler"
@@ -121,6 +125,7 @@ func (m *mockHandler) ProcessHorizontalPodAutoscaler(
 	return m.err
 }
 func (m *mockHandler) SetListers(handler.Listers)       {}
+func (m *mockHandler) SetClock(func() time.Time)        {}
 func (m *mockHandler) Owners() observe.OwnerResolver    { return nil }
 func (m *mockHandler) SetNamespaceScope([]string, bool) {}
 func (m *mockHandler) SweepTLSSecrets()                 {}
@@ -288,6 +293,111 @@ func TestNewWithNodeResourceMonitorOnly(t *testing.T) {
 	assert.NotNil(ctrl.nodeLister)
 	// But the node event worker must stay off.
 	assert.Nil(ctrl.node.synced)
+}
+
+func TestNewWiresEndpointSlicesForAdmissionWebhookMonitor(t *testing.T) {
+	client := fake.NewSimpleClientset()
+	cfg := &config.Config{
+		AdmissionWebhookMonitor: config.AdmissionWebhookMonitor{Enabled: true},
+	}
+
+	ctrl, cleanup := newTestController(t, client, cfg, &mockHandler{})
+	defer cleanup()
+
+	assert.NotNil(t, ctrl.endpointSliceLister)
+	assert.NotEmpty(t, ctrl.endpointSlice.synced)
+	assert.False(t, ctrl.endpointSlice.startWorkers)
+}
+
+func TestEndpointSliceDeleteRequeuesServiceFromTombstone(t *testing.T) {
+	ctrl := &Controller{
+		service:       newResourcePipeline("service", "services"),
+		endpointSlice: newResourcePipeline("endpointslice", "endpointslices"),
+	}
+	epSlice := &discoveryv1.EndpointSlice{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "web-hash",
+			Namespace: "ns",
+			Labels: map[string]string{
+				endpointSliceServiceLabel: "web",
+			},
+		},
+	}
+	tombstone := cache.DeletedFinalStateUnknown{
+		Key: "ns/web-hash",
+		Obj: epSlice,
+	}
+
+	ctrl.endpointSliceEventHandler(true).DeleteFunc(tombstone)
+	item, shutdown := ctrl.service.queue.Get()
+	defer ctrl.service.queue.Done(item)
+	defer ctrl.service.queue.ShutDown()
+
+	assert.False(t, shutdown)
+	assert.Equal(t, "ns/web", item)
+}
+
+func TestEndpointSliceEventRequeuesMatchingWebhooks(t *testing.T) {
+	client := fake.NewSimpleClientset()
+	factory := informers.NewSharedInformerFactory(client, 0)
+	mwcInformer := factory.Admissionregistration().V1().
+		MutatingWebhookConfigurations()
+	vwcInformer := factory.Admissionregistration().V1().
+		ValidatingWebhookConfigurations()
+	serviceRef := &admissionregistrationv1.ServiceReference{
+		Namespace: "ns",
+		Name:      "web",
+	}
+	mwc := &admissionregistrationv1.MutatingWebhookConfiguration{
+		ObjectMeta: metav1.ObjectMeta{Name: "mwc"},
+		Webhooks: []admissionregistrationv1.MutatingWebhook{{
+			ClientConfig: admissionregistrationv1.WebhookClientConfig{
+				Service: serviceRef,
+			},
+		}},
+	}
+	vwc := &admissionregistrationv1.ValidatingWebhookConfiguration{
+		ObjectMeta: metav1.ObjectMeta{Name: "vwc"},
+		Webhooks: []admissionregistrationv1.ValidatingWebhook{{
+			ClientConfig: admissionregistrationv1.WebhookClientConfig{
+				Service: serviceRef,
+			},
+		}},
+	}
+	require.NoError(t, mwcInformer.Informer().GetIndexer().Add(mwc))
+	require.NoError(t, vwcInformer.Informer().GetIndexer().Add(vwc))
+
+	ctrl := &Controller{
+		mwc:       newResourcePipeline("mwc", "mwc"),
+		vwc:       newResourcePipeline("vwc", "vwc"),
+		mwcLister: mwcInformer.Lister(),
+		vwcLister: vwcInformer.Lister(),
+	}
+	ctrl.mwc.startWorkers = true
+	ctrl.vwc.startWorkers = true
+	epSlice := &discoveryv1.EndpointSlice{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "web-hash",
+			Namespace: "ns",
+			Labels: map[string]string{
+				endpointSliceServiceLabel: "web",
+			},
+		},
+	}
+
+	ctrl.endpointSliceEventHandler(false).AddFunc(epSlice)
+
+	mwcItem, mwcShutdown := ctrl.mwc.queue.Get()
+	vwcItem, vwcShutdown := ctrl.vwc.queue.Get()
+	defer ctrl.mwc.queue.Done(mwcItem)
+	defer ctrl.vwc.queue.Done(vwcItem)
+	defer ctrl.mwc.queue.ShutDown()
+	defer ctrl.vwc.queue.ShutDown()
+
+	assert.False(t, mwcShutdown)
+	assert.False(t, vwcShutdown)
+	assert.Equal(t, "mwc", mwcItem)
+	assert.Equal(t, "vwc", vwcItem)
 }
 
 func TestNewWithSingleNamespace(t *testing.T) {

@@ -13,6 +13,8 @@ func Validate(cfg *Config) []error {
 	errs = append(errs, validateCorrelation(cfg)...)
 	errs = append(errs, validateMonitors(cfg)...)
 	errs = append(errs, validatePvc(cfg)...)
+	errs = append(errs, validateSelectors(cfg)...)
+	errs = append(errs, validateAlertRetries(cfg)...)
 	if cfg.PendingPodMonitor.Enabled && cfg.PendingPodMonitor.Threshold <= 0 {
 		errs = append(
 			errs,

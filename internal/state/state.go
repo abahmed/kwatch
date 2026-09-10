@@ -19,6 +19,9 @@ const (
 	stateConfigMapName     = "kwatch-state"
 	baselineConfigMapName  = "kwatch-baseline"
 	incidentsConfigMapName = "kwatch-incidents"
+	groupsConfigMapName    = "kwatch-groups"
+	threadsConfigMapName   = "kwatch-threads"
+	engineConfigMapName    = "kwatch-engine"
 	pvcConfigMapName       = "kwatch-pvc"
 	changesConfigMapName   = "kwatch-changes"
 	rcaConfigMapName       = "kwatch-rca"
@@ -63,6 +66,9 @@ type StateManager struct {
 	stateMgr     *RetryConfigMapManager // kwatch-state
 	baselineMgr  *RetryConfigMapManager // kwatch-baseline
 	incidentsMgr *RetryConfigMapManager // kwatch-incidents
+	groupsMgr    *RetryConfigMapManager // kwatch-groups
+	threadsMgr   *RetryConfigMapManager // kwatch-threads
+	engineMgr    *RetryConfigMapManager // kwatch-engine
 	pvcMgr       *RetryConfigMapManager // kwatch-pvc
 	changesMgr   *RetryConfigMapManager // kwatch-changes
 	rcaMgr       *RetryConfigMapManager // kwatch-rca
@@ -96,6 +102,21 @@ func NewStateManager(
 			client,
 			namespace,
 			incidentsConfigMapName,
+		),
+		groupsMgr: NewRetryConfigMapManager(
+			client,
+			namespace,
+			groupsConfigMapName,
+		),
+		threadsMgr: NewRetryConfigMapManager(
+			client,
+			namespace,
+			threadsConfigMapName,
+		),
+		engineMgr: NewRetryConfigMapManager(
+			client,
+			namespace,
+			engineConfigMapName,
 		),
 		pvcMgr: NewRetryConfigMapManager(
 			client,

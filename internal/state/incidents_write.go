@@ -9,10 +9,8 @@ import (
 	"github.com/abahmed/kwatch/internal/model"
 )
 
-// The writers below each stage one part of the correlation snapshot into the
-// incidents ConfigMap. They are plain functions rather than methods so
-// SaveIncidentState can apply all four inside a single update while each
-// single-part Save* still applies only its own.
+// The writers below stage one payload into its dedicated ConfigMap. They are
+// plain functions so each Save* method shares the same empty/delete behavior.
 
 // applyIncidents stores the incident list. Unlike the other three parts an
 // oversized payload is an error: the caller must not go on to write state
@@ -38,10 +36,7 @@ func applyIncidents(incidents any) func(*corev1.ConfigMap) error {
 				baselineMaxBytes,
 			)
 		}
-		if cm.BinaryData == nil {
-			cm.BinaryData = map[string][]byte{}
-		}
-		cm.BinaryData[incidentsKey] = data
+		setBinaryPayload(cm, incidentsKey, data)
 		return nil
 	}
 }
@@ -51,7 +46,7 @@ func applyGroups(
 ) func(*corev1.ConfigMap) error {
 	return func(cm *corev1.ConfigMap) error {
 		if len(groups) == 0 {
-			delete(cm.BinaryData, groupsKey)
+			deletePayload(cm, groupsKey)
 			return nil
 		}
 		data, err := gzJSON(groups)
@@ -64,13 +59,14 @@ func applyGroups(
 			// dropped rather than failing the incident save with it.
 			klog.ErrorS(nil, "group state too large for ConfigMap, skipping",
 				"size", len(data), "max", baselineMaxBytes)
-			delete(cm.BinaryData, groupsKey)
+			deletePayload(cm, groupsKey)
 			return nil
 		}
-		if cm.BinaryData == nil {
-			cm.BinaryData = map[string][]byte{}
+		setBinaryPayload(cm, groupsKey, data)
+		if err := validateConfigMapData(cm); err != nil {
+			klog.ErrorS(err, "group ConfigMap data exceeds budget, skipping")
+			deletePayload(cm, groupsKey)
 		}
-		cm.BinaryData[groupsKey] = data
 		return nil
 	}
 }
@@ -80,7 +76,7 @@ func applyThreads(
 ) func(*corev1.ConfigMap) error {
 	return func(cm *corev1.ConfigMap) error {
 		if len(threads) == 0 {
-			delete(cm.BinaryData, threadsKey)
+			deletePayload(cm, threadsKey)
 			return nil
 		}
 		data, err := gzJSON(threads)
@@ -93,13 +89,14 @@ func applyThreads(
 			// dropped rather than failing the save it travels with.
 			klog.ErrorS(nil, "thread state too large for ConfigMap, skipping",
 				"size", len(data), "max", baselineMaxBytes)
-			delete(cm.BinaryData, threadsKey)
+			deletePayload(cm, threadsKey)
 			return nil
 		}
-		if cm.BinaryData == nil {
-			cm.BinaryData = map[string][]byte{}
+		setBinaryPayload(cm, threadsKey, data)
+		if err := validateConfigMapData(cm); err != nil {
+			klog.ErrorS(err, "thread ConfigMap data exceeds budget, skipping")
+			deletePayload(cm, threadsKey)
 		}
-		cm.BinaryData[threadsKey] = data
 		return nil
 	}
 }
@@ -109,7 +106,7 @@ func applyEngineState(
 ) func(*corev1.ConfigMap) error {
 	return func(cm *corev1.ConfigMap) error {
 		if isEmptyEngineState(engine) {
-			delete(cm.BinaryData, engineKey)
+			deletePayload(cm, engineKey)
 			return nil
 		}
 		data, err := gzJSON(engine)
@@ -122,13 +119,14 @@ func applyEngineState(
 			// is dropped rather than failing the incident save with it.
 			klog.ErrorS(nil, "engine state too large for ConfigMap, skipping",
 				"size", len(data), "max", baselineMaxBytes)
-			delete(cm.BinaryData, engineKey)
+			deletePayload(cm, engineKey)
 			return nil
 		}
-		if cm.BinaryData == nil {
-			cm.BinaryData = map[string][]byte{}
+		setBinaryPayload(cm, engineKey, data)
+		if err := validateConfigMapData(cm); err != nil {
+			klog.ErrorS(err, "engine ConfigMap data exceeds budget, skipping")
+			deletePayload(cm, engineKey)
 		}
-		cm.BinaryData[engineKey] = data
 		return nil
 	}
 }

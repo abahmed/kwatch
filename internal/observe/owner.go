@@ -55,7 +55,10 @@ func (p PodOwners) OwnerOf(pod *corev1.Pod) model.ObjectRef {
 	if len(pod.OwnerReferences) == 0 {
 		return SelfOwner("Pod", pod.Namespace, pod.Name)
 	}
-	owner := pod.OwnerReferences[0]
+	owner, ok := controllerOwnerReference(pod.OwnerReferences)
+	if !ok {
+		return model.ObjectRef{}
+	}
 	parent, resolved := p.parentOf(pod.Namespace, owner)
 	if !resolved {
 		return model.ObjectRef{}
@@ -98,9 +101,38 @@ func (p PodOwners) parentOf(
 		return nil, false
 	}
 	if refs := obj.GetOwnerReferences(); len(refs) > 0 {
-		return &refs[0], true
+		parent, ok := controllerOwnerReference(refs)
+		if ok {
+			return &parent, true
+		}
 	}
 	return nil, true
+}
+
+// controllerOwnerReference selects the Kubernetes controller owner. A single
+// unmarked owner remains a compatibility case for older or hand-built objects;
+// multiple unmarked owners are ambiguous and must not be guessed.
+func controllerOwnerReference(
+	refs []metav1.OwnerReference,
+) (metav1.OwnerReference, bool) {
+	var controller *metav1.OwnerReference
+	for i := range refs {
+		ref := &refs[i]
+		if ref.Controller == nil || !*ref.Controller {
+			continue
+		}
+		if controller != nil {
+			return metav1.OwnerReference{}, false
+		}
+		controller = ref
+	}
+	if controller != nil {
+		return *controller, true
+	}
+	if len(refs) == 1 {
+		return refs[0], true
+	}
+	return metav1.OwnerReference{}, false
 }
 
 func (p PodOwners) replicaSetGetter(

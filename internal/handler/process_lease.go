@@ -38,12 +38,25 @@ func (h *handler) ProcessLease(key string, deleted bool) error {
 		}
 		return fmt.Errorf("failed to get lease %s from cache: %w", key, err)
 	}
-	if sig := DetectNodeLeaseIssue(lease, h.now(), h.config.ClusterResourceMonitor.NodeLeaseStaleSeconds); sig != nil {
-		h.observe(sig)
-	} else {
-		h.resolveNodeLease(name)
-	}
+	h.processLeaseObject(lease, h.now())
 	return nil
+}
+
+func (h *handler) processLeaseObject(
+	lease *coordinationv1.Lease,
+	now time.Time,
+) {
+	if sig := DetectNodeLeaseIssue(
+		lease,
+		now,
+		h.config.ClusterResourceMonitor.NodeLeaseStaleSeconds,
+	); sig != nil {
+		h.observe(sig)
+		return
+	}
+	if lease != nil {
+		h.resolveNodeLease(lease.Name)
+	}
 }
 
 func DetectNodeLeaseIssue(

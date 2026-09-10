@@ -179,6 +179,113 @@ func TestSaveAndGetPersistedIncidentsRoundTrip(t *testing.T) {
 	)
 }
 
+func TestSaveIncidentStateUsesDedicatedConfigMaps(t *testing.T) {
+	ctx := context.Background()
+	client := fake.NewSimpleClientset()
+	sm := NewStateManager(client, "kwatch")
+	now := time.Now().UTC().Truncate(time.Second)
+	incidents := []model.PersistedIncident{{
+		Key:       "ns:dep:Error:",
+		Reason:    "Error",
+		Namespace: "ns",
+		Name:      "dep",
+		LastSeen:  now,
+	}}
+	groups := []model.PersistedGroup{{
+		GroupKey:    "Error|ns|dep",
+		IncidentKey: "ns:dep:Error:",
+		Reason:      "Error",
+		Members:     []model.IncidentKey{"ns:dep:Error:"},
+	}}
+	threads := map[string]map[string]string{
+		"slack": {"ns:dep:Error:": "thread-1"},
+	}
+	engine := model.PersistedEngineState{
+		Cooldowns: []model.PersistedCooldown{{
+			Key:     "ns:dep:Error:",
+			Expires: now.Add(time.Minute),
+		}},
+	}
+
+	require.NoError(t, sm.SaveIncidentState(
+		ctx, incidents, groups, threads, engine,
+	))
+
+	for _, tc := range []struct {
+		name string
+		key  string
+	}{
+		{name: incidentsConfigMapName, key: incidentsKey},
+		{name: groupsConfigMapName, key: groupsKey},
+		{name: threadsConfigMapName, key: threadsKey},
+		{name: engineConfigMapName, key: engineKey},
+	} {
+		cm, err := client.CoreV1().ConfigMaps("kwatch").Get(
+			ctx, tc.name, metav1.GetOptions{},
+		)
+		require.NoError(t, err)
+		assert.NotEmpty(t, cm.BinaryData[tc.key], tc.name)
+	}
+
+	legacy, err := client.CoreV1().ConfigMaps("kwatch").Get(
+		ctx, incidentsConfigMapName, metav1.GetOptions{},
+	)
+	require.NoError(t, err)
+	assert.Empty(t, legacy.BinaryData[groupsKey])
+	assert.Empty(t, legacy.BinaryData[threadsKey])
+	assert.Empty(t, legacy.BinaryData[engineKey])
+
+	loadedGroups, err := sm.LoadPersistedGroups(ctx)
+	require.NoError(t, err)
+	assert.Equal(t, groups, loadedGroups)
+	loadedThreads, err := sm.LoadProviderThreads(ctx)
+	require.NoError(t, err)
+	assert.Equal(t, threads, loadedThreads)
+	loadedEngine, err := sm.LoadEngineState(ctx)
+	require.NoError(t, err)
+	assert.Equal(t, engine, loadedEngine)
+}
+
+func TestDedicatedStateLoadFallsBackToLegacyIncidentConfigMap(t *testing.T) {
+	ctx := context.Background()
+	client := fake.NewSimpleClientset()
+	sm := NewStateManager(client, "kwatch")
+	groups := []model.PersistedGroup{{GroupKey: "legacy"}}
+	threads := map[string]map[string]string{
+		"slack": {"legacy": "thread-1"},
+	}
+	engine := model.PersistedEngineState{
+		FanOut: []model.PersistedFanOutWindow{{Scope: "legacy"}},
+	}
+	legacy := &corev1.ConfigMap{
+		ObjectMeta: metav1.ObjectMeta{
+			Name: "kwatch-incidents", Namespace: "kwatch",
+		},
+		BinaryData: map[string][]byte{},
+	}
+	var err error
+	legacy.BinaryData[groupsKey], err = gzJSON(groups)
+	require.NoError(t, err)
+	legacy.BinaryData[threadsKey], err = gzJSON(threads)
+	require.NoError(t, err)
+	legacy.BinaryData[engineKey], err = gzJSON(engine)
+	require.NoError(t, err)
+	_, err = client.CoreV1().ConfigMaps("kwatch").Create(
+		ctx, legacy, metav1.CreateOptions{},
+	)
+	require.NoError(t, err)
+
+	gotGroups, err := sm.LoadPersistedGroups(ctx)
+	require.NoError(t, err)
+	assert.Equal(t, groups, gotGroups)
+	gotThreads, err := sm.LoadProviderThreads(ctx)
+	require.NoError(t, err)
+	assert.Equal(t, threads, gotThreads)
+	gotEngine, err := sm.LoadEngineState(ctx)
+	require.NoError(t, err)
+	assert.Equal(t, engine, gotEngine)
+}
+
 func TestSaveBaselineTooLarge(t *testing.T) {
 	assert := assert.New(t)
 	client := fake.NewSimpleClientset()

@@ -38,8 +38,8 @@ func (h *handler) detectWebhookEndpointIssues(
 	name, namespace string,
 	labelsMap map[string]string,
 	refs []*admissionregistrationv1.ServiceReference,
-) []*model.Observation {
-	return DetectWebhookEndpointIssues(
+) ([]*model.Observation, error) {
+	return DetectWebhookEndpointIssuesWithError(
 		h.listers.EndpointSlice, name, namespace, labelsMap, refs,
 	)
 }
@@ -56,8 +56,26 @@ func DetectWebhookEndpointIssues(
 	labelsMap map[string]string,
 	refs []*admissionregistrationv1.ServiceReference,
 ) []*model.Observation {
-	if epLister == nil {
+	findings, err := DetectWebhookEndpointIssuesWithError(
+		epLister, name, namespace, labelsMap, refs,
+	)
+	if err != nil {
 		return nil
+	}
+	return findings
+}
+
+// DetectWebhookEndpointIssuesWithError is the error-aware endpoint detector
+// used by live processing and startup seeding. A cache List error means the
+// endpoint state is unknown, not healthy.
+func DetectWebhookEndpointIssuesWithError(
+	epLister discoveryv1lister.EndpointSliceLister,
+	name, namespace string,
+	labelsMap map[string]string,
+	refs []*admissionregistrationv1.ServiceReference,
+) ([]*model.Observation, error) {
+	if epLister == nil {
+		return nil, nil
 	}
 	var out []*model.Observation
 	seen := make(map[string]bool)
@@ -74,7 +92,11 @@ func DetectWebhookEndpointIssues(
 			labels.Set{"kubernetes.io/service-name": ref.Name}.AsSelector(),
 		)
 		if err != nil {
-			continue
+			return nil, fmt.Errorf(
+				"list endpoint slices for webhook service %s: %w",
+				key,
+				err,
+			)
 		}
 		ready := false
 		for _, slice := range slices {
@@ -98,5 +120,5 @@ func DetectWebhookEndpointIssues(
 			)))
 		}
 	}
-	return out
+	return out, nil
 }

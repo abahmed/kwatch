@@ -785,8 +785,10 @@ disclosed, not merely moved.
 The shipped manifests and chart run kwatch as a non-root user with a read-only
 root filesystem, disabled privilege escalation, all Linux capabilities dropped,
 and the `RuntimeDefault` seccomp profile. The namespace manifest also requests
-the Kubernetes `restricted` Pod Security profile. The runtime state Role is
-limited to kwatch's six state ConfigMaps; the ClusterRole remains read-only.
+the Kubernetes `restricted` Pod Security profile. The runtime state Role keeps
+ConfigMap writes named to kwatch's ten persistence ConfigMaps; creation remains
+available so missing maps can be created during a fresh install or upgrade. The
+ClusterRole remains read-only.
 
 Keep the Secret protected with least-privilege RBAC, enable encryption at rest
 for Secrets in the API server/etcd, and rotate provider credentials if access

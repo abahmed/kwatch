@@ -19,6 +19,7 @@ type Permission struct {
 	Namespace      string `json:"namespace,omitempty"`
 	Group          string `json:"group"`
 	Resource       string `json:"resource"`
+	Name           string `json:"name,omitempty"`
 	Verb           string `json:"verb"`
 	NonResourceURL string `json:"nonResourceURL,omitempty"`
 }
@@ -345,6 +346,7 @@ func (m *Monitor) allowed(ctx context.Context, permission Permission) (bool, err
 			Namespace: permission.Namespace,
 			Group:     permission.Group,
 			Resource:  permission.Resource,
+			Name:      permission.Name,
 			Verb:      permission.Verb,
 		}
 	}

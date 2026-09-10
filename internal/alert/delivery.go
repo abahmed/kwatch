@@ -58,6 +58,9 @@ func (a *AlertManager) deliverFallback(
 	primary string,
 	job deliverJob,
 ) error {
+	if job.kind == jobIncident && !shouldDeliver(entry.routes, job.inc) {
+		return nil
+	}
 	opts := deliverOpts{retry: fallbackRetryConfig(entry.retry)}
 	if entry.provider.Name() != primary {
 		opts.prefix = "[fallback — primary " + primary + " failed] "
@@ -80,10 +83,7 @@ const dlqCap = 100
 const defaultMaxBackoff = 30 * time.Second
 
 func fallbackRetryConfig(rc retryConfig) retryConfig {
-	if rc.maxAttempts < 1 {
-		rc.maxAttempts = 1
-	}
-	return rc
+	return normalizeRetryConfig(rc)
 }
 
 func (a *AlertManager) recordDeadLetter(
@@ -109,17 +109,19 @@ func (a *AlertManager) deliverOne(
 	ctx context.Context,
 	entry *providerEntry,
 	job deliverJob,
-) {
+) bool {
+	delivered := false
 	util.WithProviderContext(entry.provider.Name(), ctx, func() {
-		a.deliverOneWithContext(ctx, entry, job)
+		delivered = a.deliverOneWithContext(ctx, entry, job)
 	})
+	return delivered
 }
 
 func (a *AlertManager) deliverOneWithContext(
 	ctx context.Context,
 	entry *providerEntry,
 	job deliverJob,
-) {
+) bool {
 	p := entry.provider
 	metrics.DefaultRegistry().NotificationsTotal.Add(1)
 
@@ -129,26 +131,29 @@ func (a *AlertManager) deliverOneWithContext(
 		klog.V(4).InfoS("incident filtered by route",
 			"provider", p.Name(),
 			"key", job.key())
-		return
+		return true
 	}
 
 	err := a.dispatch(ctx, entry, job, deliverOpts{retry: entry.retry})
 	if err == nil {
-		return
+		return true
 	}
 	metrics.DefaultRegistry().NotificationsDropped.Add(1)
 	klog.ErrorS(err, "failed to send",
 		"provider", p.Name(), "key", job.key())
 	a.recordDeadLetter(entry, job, err)
 	if entry.fallback == nil {
-		return
+		return false
 	}
 	if fbErr := a.deliverFallback(
 		ctx, entry.fallback, p.Name(), job,
 	); fbErr != nil {
 		klog.ErrorS(fbErr, "fallback delivery failed",
 			"provider", entry.fallback.provider.Name())
+		a.recordDeadLetter(entry.fallback, job, fbErr)
+		return false
 	}
+	return true
 }
 
 // buildMessage produces a formatted message string for the given incident.
@@ -172,7 +177,7 @@ func (a *AlertManager) fanOut(job deliverJob) {
 			// Nothing is lost silently — the dropped job goes to the
 			// dead-letter queue, which is readable over the health endpoint.
 			metrics.DefaultRegistry().NotificationsDropped.Add(1)
-			a.digestAdd(entry.provider.Name(), job.inc, job.action)
+			a.digestAdd(entry.provider.Name(), job)
 			a.recordDeadLetter(
 				&entry,
 				job,
@@ -196,25 +201,6 @@ func (a *AlertManager) deliverAllSync(
 		if !shouldDeliver(entry.routes, inc) {
 			continue
 		}
-		err := a.dispatch(
-			context.Background(), entry, job,
-			deliverOpts{retry: entry.retry},
-		)
-		if err == nil {
-			continue
-		}
-		metrics.DefaultRegistry().NotificationsDropped.Add(1)
-		klog.ErrorS(err, "sync delivery failed",
-			"provider", entry.provider.Name(), "key", job.key())
-		if entry.fallback == nil {
-			continue
-		}
-		if fbErr := a.deliverFallback(
-			context.Background(), entry.fallback,
-			entry.provider.Name(), job,
-		); fbErr != nil {
-			klog.ErrorS(fbErr, "sync fallback delivery failed",
-				"provider", entry.fallback.provider.Name())
-		}
+		a.deliverOne(context.Background(), entry, job)
 	}
 }

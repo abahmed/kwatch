@@ -135,9 +135,10 @@ func startBaselineSaver(ctx context.Context, stateMgr interface {
 // startIncidentSaver saves incident snapshots to the ConfigMap whenever a
 // snapshot arrives on the channel. On ctx cancellation it saves the final
 // snapshot before returning.
-// stateSnapshot is the pair that must be written together: incidents, and the
-// smart groups that speak for them. Saved a tick apart they can disagree about
-// which incidents a group is waiting on.
+// stateSnapshot is the correlation snapshot sent to the state writers. The
+// payloads are stored in dedicated ConfigMaps, so a restart can observe a
+// partially newer auxiliary snapshot and safely discard references to absent
+// incidents.
 type stateSnapshot struct {
 	incidents []model.PersistedIncident
 	groups    []model.PersistedGroup
@@ -275,9 +276,8 @@ func waitFeedbackSaver(deps *serverDeps) bool {
 // saveIncidentSnapshot writes the snapshot unless it matches lastSaved, and
 // returns the fingerprint now on record.
 //
-// The four parts go in one update. They share a ConfigMap, and writing them
-// separately meant four reads and four updates per change -- with a window in
-// between where the group state named incidents that had not been written.
+// The four parts go to dedicated ConfigMaps. The state writer orders auxiliary
+// writes before cleaning legacy keys to keep upgrades recoverable.
 func saveIncidentSnapshot(
 	stateMgr incidentSaver,
 	snap stateSnapshot,

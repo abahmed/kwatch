@@ -73,6 +73,10 @@ func wrapSlackRateLimit(err error) error {
 			RetryAfter: rle.RetryAfter,
 		}
 	}
+	var statusErr interface{ HTTPStatusCode() int }
+	if errors.As(err, &statusErr) {
+		return event.ClassifyHTTP(statusErr.HTTPStatusCode(), err)
+	}
 	if permanentSlackErrors[strings.TrimSpace(err.Error())] {
 		return event.Permanent(err)
 	}

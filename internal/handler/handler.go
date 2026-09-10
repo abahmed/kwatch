@@ -45,6 +45,8 @@ type Handler interface {
 	// SetListers installs every informer-backed lookup in one call, once the
 	// controller has wired its informers.
 	SetListers(Listers)
+	// SetClock installs the clock used by time-sensitive detectors.
+	SetClock(func() time.Time)
 	// Owners is the pod-ownership resolver this pipeline keys incidents by,
 	// for monitors outside this package that emit pod incidents. Sharing it
 	// is what keeps a kubelet-derived incident and a status-derived one about
@@ -129,6 +131,17 @@ func NewHandler(
 	// test that moves time forward expires cached log tails with it.
 	h.logCache = filter.NewLogCache(func() time.Time { return h.now() })
 	return h
+}
+
+// SetClock installs the clock shared by handler detectors and trackers.
+func (h *handler) SetClock(now func() time.Time) {
+	if now == nil {
+		return
+	}
+	h.now = now
+	if h.oomTracker != nil {
+		h.oomTracker.SetClock(now)
+	}
 }
 
 func (h *handler) ProcessNodeResourceOvercommit(

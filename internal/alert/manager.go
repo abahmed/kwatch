@@ -199,6 +199,7 @@ func (a *AlertManager) Init(
 	}
 	a.mu.Lock()
 	a.entries = entries
+	a.pacer = sendPacer{}
 	a.started = false
 	a.stopped = false
 	a.ctx = nil

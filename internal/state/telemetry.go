@@ -58,10 +58,7 @@ func (s *StateManager) SaveRCAFeedback(ctx context.Context, records []insight.RC
 		return fmt.Errorf("rca feedback exceeds %d bytes", maxRCAFeedbackBytes)
 	}
 	return s.rcaMgr.UpdateWithRetry(ctx, func(cm *corev1.ConfigMap) error {
-		if cm.Data == nil {
-			cm.Data = make(map[string]string)
-		}
-		cm.Data[rcaFeedbackKey] = string(data)
+		setStringPayload(cm, rcaFeedbackKey, string(data))
 		return nil
 	})
 }
@@ -92,10 +89,7 @@ func (s *StateManager) SaveChangeHistory(ctx context.Context, changes []kwcontex
 		}
 		if len(data) <= maxChangeHistoryBytes {
 			return s.changesMgr.UpdateWithRetry(ctx, func(cm *corev1.ConfigMap) error {
-				if cm.Data == nil {
-					cm.Data = make(map[string]string)
-				}
-				cm.Data[changeHistoryStateKey] = string(data)
+				setStringPayload(cm, changeHistoryStateKey, string(data))
 				return nil
 			})
 		}
@@ -118,9 +112,9 @@ func (s *StateManager) LoadTelemetryState(ctx context.Context) ([]byte, error) {
 		ctx, telemetryConfigMapName, metav1.GetOptions{},
 	)
 	if err == nil {
-		if raw := cm.Data[telemetryStateKey]; raw != "" {
-			return []byte(raw), nil
-		}
+		// An existing dedicated ConfigMap is authoritative. In particular, an
+		// empty value must not resurrect stale telemetry from kwatch-state.
+		return []byte(cm.Data[telemetryStateKey]), nil
 	} else if !apierrors.IsNotFound(err) {
 		return nil, err
 	}
@@ -149,10 +143,7 @@ func (s *StateManager) SaveTelemetryState(
 	return s.telemetryMgr.UpdateWithRetry(
 		ctx,
 		func(cm *corev1.ConfigMap) error {
-			if cm.Data == nil {
-				cm.Data = make(map[string]string)
-			}
-			cm.Data[telemetryStateKey] = string(data)
+			setStringPayload(cm, telemetryStateKey, string(data))
 			return nil
 		},
 	)

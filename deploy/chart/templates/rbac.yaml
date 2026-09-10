@@ -105,10 +105,17 @@ rules:
   verbs: ["create"]
 - apiGroups: [""]
   resources: ["configmaps"]
-  verbs: ["get", "update", "patch"]
-- apiGroups: [""]
-  resources: ["configmaps"]
-  resourceNames: ["kwatch-state", "kwatch-baseline", "kwatch-incidents", "kwatch-pvc", "kwatch-changes", "kwatch-rca"]
+  resourceNames:
+  - "kwatch-state"
+  - "kwatch-baseline"
+  - "kwatch-incidents"
+  - "kwatch-groups"
+  - "kwatch-threads"
+  - "kwatch-engine"
+  - "kwatch-pvc"
+  - "kwatch-changes"
+  - "kwatch-rca"
+  - "kwatch-telemetry"
   verbs: ["get", "update", "patch"]
 
 ---

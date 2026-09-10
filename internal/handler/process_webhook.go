@@ -29,6 +29,27 @@ func DetectMutatingWebhookIssue(
 	if mwc == nil || hasService == nil {
 		return nil
 	}
+	findings, err := DetectMutatingWebhookIssueWithLookup(
+		mwc,
+		func(ns, name string) (bool, error) {
+			return hasService(ns, name), nil
+		},
+	)
+	if err != nil {
+		return nil
+	}
+	return findings
+}
+
+// DetectMutatingWebhookIssueWithLookup is the error-aware detector used by
+// live processing. NotFound is a finding; every other lookup error is unknown.
+func DetectMutatingWebhookIssueWithLookup(
+	mwc *admissionregistrationv1.MutatingWebhookConfiguration,
+	lookup ServiceLookup,
+) ([]*model.Observation, error) {
+	if mwc == nil || lookup == nil {
+		return nil, nil
+	}
 	var sigs []*model.Observation
 	for _, w := range mwc.Webhooks {
 		ref := serviceRef(w.ClientConfig.Service)
@@ -37,7 +58,16 @@ func DetectMutatingWebhookIssue(
 		}
 		svc := w.ClientConfig.Service
 		ns, name := svc.Namespace, svc.Name
-		if !hasService(ns, name) {
+		exists, err := lookup(ns, name)
+		if err != nil {
+			return nil, fmt.Errorf(
+				"lookup mutating webhook Service %s/%s: %w",
+				ns,
+				name,
+				err,
+			)
+		}
+		if !exists {
 			sigs = append(sigs, observe.Object(
 				"mutatingwebhookconfiguration", mwc,
 				constant.ReasonWebhookBackendNotFound,
@@ -49,7 +79,7 @@ func DetectMutatingWebhookIssue(
 			)))
 		}
 	}
-	return sigs
+	return sigs, nil
 }
 
 // DetectValidatingWebhookIssue checks a ValidatingWebhookConfiguration for
@@ -62,6 +92,27 @@ func DetectValidatingWebhookIssue(
 	if vwc == nil || hasService == nil {
 		return nil
 	}
+	findings, err := DetectValidatingWebhookIssueWithLookup(
+		vwc,
+		func(ns, name string) (bool, error) {
+			return hasService(ns, name), nil
+		},
+	)
+	if err != nil {
+		return nil
+	}
+	return findings
+}
+
+// DetectValidatingWebhookIssueWithLookup is the error-aware detector used by
+// live processing. NotFound is a finding; every other lookup error is unknown.
+func DetectValidatingWebhookIssueWithLookup(
+	vwc *admissionregistrationv1.ValidatingWebhookConfiguration,
+	lookup ServiceLookup,
+) ([]*model.Observation, error) {
+	if vwc == nil || lookup == nil {
+		return nil, nil
+	}
 	var sigs []*model.Observation
 	for _, w := range vwc.Webhooks {
 		ref := serviceRef(w.ClientConfig.Service)
@@ -70,7 +121,16 @@ func DetectValidatingWebhookIssue(
 		}
 		svc := w.ClientConfig.Service
 		ns, name := svc.Namespace, svc.Name
-		if !hasService(ns, name) {
+		exists, err := lookup(ns, name)
+		if err != nil {
+			return nil, fmt.Errorf(
+				"lookup validating webhook Service %s/%s: %w",
+				ns,
+				name,
+				err,
+			)
+		}
+		if !exists {
 			sigs = append(sigs, observe.Object(
 				"validatingwebhookconfiguration", vwc,
 				constant.ReasonWebhookBackendNotFound,
@@ -82,7 +142,7 @@ func DetectValidatingWebhookIssue(
 			)))
 		}
 	}
-	return sigs
+	return sigs, nil
 }
 
 func (h *handler) ProcessMutatingWebhookConfiguration(
@@ -120,27 +180,31 @@ func (h *handler) ProcessMutatingWebhookConfigurationObject(
 		return nil
 	}
 
-	hasService := func(ns, name string) bool {
-		if h.listers.Service == nil {
-			return true // can't check, assume ok
-		}
-		_, err := h.listers.Service.Services(ns).Get(name)
-		return err == nil
+	serviceFindings, err := DetectMutatingWebhookIssueWithLookup(
+		mwc,
+		h.serviceLookup(),
+	)
+	if err != nil {
+		return fmt.Errorf("evaluate mutating webhook %s: %w", mwc.Name, err)
+	}
+	endpointFindings, err := h.detectWebhookEndpointIssues(
+		mwc.Name, mwc.Namespace, mwc.Labels,
+		MutatingWebhookServices(mwc),
+	)
+	if err != nil {
+		return fmt.Errorf("evaluate mutating webhook endpoints %s: %w", mwc.Name, err)
 	}
 
 	h.reconcile(
 		model.NewObjectRef("mutatingwebhookconfiguration", "", mwc.Name),
-		DetectMutatingWebhookIssue(mwc, hasService),
+		serviceFindings,
 	)
 	// The endpoint findings are about the webhook's backing Service, which is
 	// a subject of its own -- resolving the configuration would not answer
 	// for them.
 	h.reconcile(
 		model.NewObjectRef("webhook", mwc.Namespace, mwc.Name),
-		h.detectWebhookEndpointIssues(
-			mwc.Name, mwc.Namespace, mwc.Labels,
-			MutatingWebhookServices(mwc),
-		),
+		endpointFindings,
 	)
 	return nil
 }
@@ -180,24 +244,32 @@ func (h *handler) ProcessValidatingWebhookConfigurationObject(
 		return nil
 	}
 
-	hasService := func(ns, name string) bool {
-		if h.listers.Service == nil {
-			return true
-		}
-		_, err := h.listers.Service.Services(ns).Get(name)
-		return err == nil
+	serviceFindings, err := DetectValidatingWebhookIssueWithLookup(
+		vwc,
+		h.serviceLookup(),
+	)
+	if err != nil {
+		return fmt.Errorf("evaluate validating webhook %s: %w", vwc.Name, err)
+	}
+	endpointFindings, err := h.detectWebhookEndpointIssues(
+		vwc.Name, vwc.Namespace, vwc.Labels,
+		ValidatingWebhookServices(vwc),
+	)
+	if err != nil {
+		return fmt.Errorf(
+			"evaluate validating webhook endpoints %s: %w",
+			vwc.Name,
+			err,
+		)
 	}
 
 	h.reconcile(
 		model.NewObjectRef("validatingwebhookconfiguration", "", vwc.Name),
-		DetectValidatingWebhookIssue(vwc, hasService),
+		serviceFindings,
 	)
 	h.reconcile(
 		model.NewObjectRef("webhook", vwc.Namespace, vwc.Name),
-		h.detectWebhookEndpointIssues(
-			vwc.Name, vwc.Namespace, vwc.Labels,
-			ValidatingWebhookServices(vwc),
-		),
+		endpointFindings,
 	)
 	return nil
 }

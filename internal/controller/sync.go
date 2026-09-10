@@ -64,7 +64,7 @@ func (c *Controller) syncEndpointSlice(_ context.Context, key string) error {
 		}
 		return err
 	}
-	serviceName := epSlice.Labels["kubernetes.io/service-name"]
+	serviceName := epSlice.Labels[endpointSliceServiceLabel]
 	if serviceName == "" {
 		return nil
 	}

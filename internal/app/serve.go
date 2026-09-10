@@ -125,10 +125,8 @@ func serve(ctx context.Context, deps *serverDeps) int {
 
 	go func() {
 		defer close(deps.controllerDone)
-		// The startup message goes out on its own goroutine: Notify delivers
-		// synchronously with per-provider retries, so one unreachable
-		// provider held up informer start and readiness behind three
-		// backoffs.
+		// The startup message goes out on its own goroutine so it cannot delay
+		// informer start and readiness behind provider delivery.
 		go deps.notifyStartup()
 
 		workers := deps.cfg.Workers

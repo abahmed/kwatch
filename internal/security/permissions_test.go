@@ -1,7 +1,13 @@
 package security
 
 import (
+	"context"
 	"testing"
+
+	authorizationv1 "k8s.io/api/authorization/v1"
+	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/client-go/kubernetes/fake"
+	ktesting "k8s.io/client-go/testing"
 
 	"github.com/abahmed/kwatch/internal/config"
 )
@@ -55,6 +61,68 @@ func TestInfrastructurePermissionsUseRuntimeNamespace(t *testing.T) {
 		monitor.infrastructure, "kwatchconfigs", "kwatch.abahmed.dev",
 	) {
 		t.Fatal("KwatchConfig permission is missing")
+	}
+}
+
+func TestInfrastructureConfigMapPermissionsAreNamed(t *testing.T) {
+	permissions := infrastructurePermissions(config.DefaultConfig())
+	wanted := persistenceConfigMapNames()
+
+	for _, name := range wanted {
+		for _, verb := range []string{"get", "update", "patch"} {
+			found := false
+			for _, permission := range permissions {
+				if permission.Resource == "configmaps" &&
+					permission.Name == name && permission.Verb == verb {
+					found = true
+					break
+				}
+			}
+			if !found {
+				t.Fatalf("missing named ConfigMap permission: %s %s", verb, name)
+			}
+		}
+	}
+
+	for _, permission := range permissions {
+		if permission.Resource == "configmaps" &&
+			permission.Verb != "create" && permission.Name == "" {
+			t.Fatalf("non-create ConfigMap permission is not named: %+v", permission)
+		}
+	}
+}
+
+func TestAllowedSendsResourceName(t *testing.T) {
+	client := fake.NewSimpleClientset()
+	client.PrependReactor(
+		"create",
+		"selfsubjectaccessreviews",
+		func(action ktesting.Action) (bool, runtime.Object, error) {
+			create := action.(ktesting.CreateAction)
+			review := create.GetObject().(*authorizationv1.SelfSubjectAccessReview)
+			if review.Spec.ResourceAttributes.Name != "kwatch-state" {
+				t.Fatalf("resource name was not sent: %+v",
+					review.Spec.ResourceAttributes)
+			}
+			return true, &authorizationv1.SelfSubjectAccessReview{
+				Status: authorizationv1.SubjectAccessReviewStatus{
+					Allowed: true,
+				},
+			}, nil
+		},
+	)
+
+	monitor := New(client)
+	allowed, err := monitor.allowed(context.Background(), Permission{
+		Name:     "kwatch-state",
+		Resource: "configmaps",
+		Verb:     "update",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !allowed {
+		t.Fatal("named permission was unexpectedly denied")
 	}
 }
 
