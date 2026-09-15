@@ -15,20 +15,23 @@ type HeartbeatMonitor struct {
 	client *http.Client
 }
 
-// NewHeartbeatMonitor builds a monitor with an optional shared HTTP client.
-// The default keeps the constructor backward compatible for callers outside
-// the application composition root.
+// NewHeartbeatMonitor builds a monitor with its shared HTTP client.
 func NewHeartbeatMonitor(
-	cfg *config.HeartbeatMonitor, clients ...*http.Client,
+	cfg *config.HeartbeatMonitor, client *http.Client,
 ) *HeartbeatMonitor {
-	client := http.DefaultClient
-	if len(clients) > 0 && clients[0] != nil {
-		client = clients[0]
-	}
 	return &HeartbeatMonitor{
 		config: cfg,
 		client: client,
 	}
+}
+
+// NewHeartbeatMonitorWithRuntime builds the monitor from the immutable
+// runtime snapshot used by application composition.
+func NewHeartbeatMonitorWithRuntime(
+	runtime config.RuntimeConfig, client *http.Client,
+) *HeartbeatMonitor {
+	cfg := runtime.HeartbeatMonitor()
+	return NewHeartbeatMonitor(&cfg, client)
 }
 
 func (m *HeartbeatMonitor) Start(ctx context.Context) {
@@ -61,6 +64,10 @@ func (m *HeartbeatMonitor) Start(ctx context.Context) {
 }
 
 func (m *HeartbeatMonitor) ping(ctx context.Context) {
+	if m.client == nil {
+		klog.ErrorS(nil, "heartbeat ping skipped: HTTP client is not configured")
+		return
+	}
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, m.config.URL, nil)
 	if err != nil {
 		klog.ErrorS(err, "heartbeat ping: failed to create request")

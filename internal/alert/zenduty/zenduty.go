@@ -1,6 +1,7 @@
 package zenduty
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"slices"
@@ -8,9 +9,9 @@ import (
 
 	"k8s.io/klog/v2"
 
-	"github.com/abahmed/kwatch/internal/alert/util"
-	"github.com/abahmed/kwatch/internal/config"
+	"github.com/abahmed/kwatch/internal/delivery/transport"
 	"github.com/abahmed/kwatch/internal/event"
+	"github.com/abahmed/kwatch/internal/format"
 	"github.com/abahmed/kwatch/internal/model"
 )
 
@@ -20,7 +21,7 @@ const (
 	zendutyAPIURL       = "https://www.zenduty.com/api/events"
 )
 
-var AlertTypes = []string{
+var alertTypes = []string{
 	"critical",
 	"acknowledged",
 	"resolved",
@@ -30,12 +31,13 @@ var AlertTypes = []string{
 }
 
 type Zenduty struct {
+	sender         transport.Sender
 	integrationkey string
 	url            string
 	alertType      string
 
 	// reference for general app configuration
-	appCfg *config.App
+	clusterName string
 }
 
 type zendutyPayload struct {
@@ -46,7 +48,12 @@ type zendutyPayload struct {
 }
 
 // NewZenduty returns new zenduty instance
-func NewZenduty(config map[string]interface{}, appCfg *config.App) *Zenduty {
+
+func NewZenduty(
+	config map[string]interface{},
+	clusterName string,
+	dependencies transport.Dependencies,
+) *Zenduty {
 	integrationKey, ok := config["integrationKey"].(string)
 	if !ok || len(integrationKey) == 0 {
 		klog.InfoS("initializing zenduty with empty webhook url")
@@ -60,15 +67,16 @@ func NewZenduty(config map[string]interface{}, appCfg *config.App) *Zenduty {
 	// "critical" meant a CPU-throttling warning arrived at the level whose
 	// job is to page, which is how integrations end up muted.
 	alertType, ok := config["alertType"].(string)
-	if !ok || !slices.Contains(AlertTypes, alertType) {
+	if !ok || !slices.Contains(alertTypes, alertType) {
 		alertType = ""
 	}
 
 	return &Zenduty{
+		sender:         transport.NewSender(dependencies),
 		integrationkey: integrationKey,
 		url:            zendutyAPIURL,
 		alertType:      alertType,
-		appCfg:         appCfg,
+		clusterName:    clusterName,
 	}
 }
 
@@ -80,23 +88,26 @@ func (z *Zenduty) Name() string {
 func (z *Zenduty) UsesEventDelivery() {}
 
 // SendMessage sends text message to the provider
-func (z *Zenduty) SendMessage(msg string) error {
+func (z *Zenduty) SendMessage(ctx context.Context, msg string) error {
 	return nil
 }
 
 // SendEvent sends event to the provider
-func (z *Zenduty) SendEvent(e *event.Event) error {
+func (z *Zenduty) SendEvent(ctx context.Context, e *event.Event) error {
 	if e.Action == "resolved" {
-		return z.resolveAlert(e.DedupKey)
+		return z.resolveAlert(ctx, e.DedupKey)
 	}
 	b, err := z.buildMessage(e)
 	if err != nil {
 		return err
 	}
-	return z.sendAPI(b)
+	return z.sendAPI(ctx, b)
 }
 
-func (z *Zenduty) resolveAlert(entityID string) error {
+func (z *Zenduty) resolveAlert(
+	ctx context.Context,
+	entityID string,
+) error {
 	payload := zendutyPayload{
 		AlertType: "resolved",
 		EntityID:  entityID,
@@ -106,18 +117,19 @@ func (z *Zenduty) resolveAlert(entityID string) error {
 	if err != nil {
 		return fmt.Errorf("failed to marshal zenduty resolve payload: %w", err)
 	}
-	return z.sendAPI(body)
+	return z.sendAPI(ctx, body)
 }
 
 // sendAPI sends http request to Zenduty API
-func (z *Zenduty) sendAPI(content []byte) error {
-	_, err := util.Send(
-		util.Request{
-			Provider: "Zenduty",
-			URL:      z.url + "/" + z.integrationkey + "/",
-			Body:     content,
-		},
-	)
+func (z *Zenduty) sendAPI(
+	ctx context.Context,
+	content []byte,
+) error {
+	_, err := z.sender.Send(ctx, transport.Request{
+		Provider: "Zenduty",
+		URL:      z.url + "/" + z.integrationkey + "/",
+		Body:     content,
+	})
 	return err
 }
 
@@ -155,7 +167,7 @@ func (z *Zenduty) buildMessage(e *event.Event) ([]byte, error) {
 	var summaryParts []string
 	summaryParts = append(
 		summaryParts,
-		fmt.Sprintf("Reason: %s", util.OrDefault(e.Reason, "unknown")),
+		fmt.Sprintf("Reason: %s", format.OrDefault(e.Reason, "unknown")),
 	)
 	if e.PodName != "" {
 		summaryParts = append(summaryParts, fmt.Sprintf("Pod: %s", e.PodName))
@@ -175,10 +187,10 @@ func (z *Zenduty) buildMessage(e *event.Event) ([]byte, error) {
 	if e.NodeName != "" {
 		summaryParts = append(summaryParts, fmt.Sprintf("Node: %s", e.NodeName))
 	}
-	if z.appCfg.ClusterName != "" {
+	if z.clusterName != "" {
 		summaryParts = append(
 			summaryParts,
-			fmt.Sprintf("Cluster: %s", z.appCfg.ClusterName),
+			fmt.Sprintf("Cluster: %s", z.clusterName),
 		)
 	}
 

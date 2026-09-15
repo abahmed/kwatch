@@ -52,7 +52,7 @@ func TestAnalyzeStaleConfigChangeIsNotBlamed(t *testing.T) {
 		Timestamp: now.Add(-dependencyChangeWindow - time.Minute),
 	})
 	e := NewEngine(graph, tracker)
-	e.SetClock(func() time.Time { return now })
+	e.now = func() time.Time { return now }
 
 	ins := e.Analyze(&model.Incident{Subject: model.Subject{
 		Resource: "pod", Namespace: "ns1", Name: "p1",
@@ -72,7 +72,7 @@ func TestAnalyzeReasonCauseOutranksGraph(t *testing.T) {
 		Type: context.ChangeUpdate, Timestamp: now.Add(-time.Minute),
 	})
 	e := NewEngine(graph, tracker)
-	e.SetClock(func() time.Time { return now })
+	e.now = func() time.Time { return now }
 
 	ins := e.Analyze(&model.Incident{Subject: model.Subject{
 		Resource: "pod", Namespace: "ns1", Name: "p1",

@@ -39,19 +39,19 @@ func TestGetKubeconfigPathDefault(t *testing.T) {
 	assert.Equal(expected, path)
 }
 
-func TestCreateClientInvalidKubeconfig(t *testing.T) {
+func TestNewKubernetesClientInvalidKubeconfig(t *testing.T) {
 	assert := assert.New(t)
 
 	os.Setenv("KUBECONFIG", "/nonexistent/kubeconfig")
 	defer os.Unsetenv("KUBECONFIG")
 
 	cfg := &config.App{}
-	_, err := CreateClient(cfg)
+	_, err := NewKubernetesClient(cfg)
 	assert.NotNil(err)
 	assert.Contains(err.Error(), "cannot build kubernetes out of cluster config")
 }
 
-func TestCreateClientInvalidKubeconfigContent(t *testing.T) {
+func TestNewKubernetesClientInvalidKubeconfigContent(t *testing.T) {
 	assert := assert.New(t)
 
 	tmpFile, err := os.CreateTemp("", "kubeconfig-*")
@@ -66,11 +66,11 @@ func TestCreateClientInvalidKubeconfigContent(t *testing.T) {
 	defer os.Unsetenv("KUBECONFIG")
 
 	cfg := &config.App{}
-	_, err = CreateClient(cfg)
+	_, err = NewKubernetesClient(cfg)
 	assert.NotNil(err)
 }
 
-func TestCreateClientValidKubeconfig(t *testing.T) {
+func TestNewKubernetesClientValidKubeconfig(t *testing.T) {
 	assert := assert.New(t)
 
 	kubeconfigContent := `apiVersion: v1
@@ -102,12 +102,12 @@ users:
 	defer os.Unsetenv("KUBECONFIG")
 
 	cfg := &config.App{}
-	client, err := CreateClient(cfg)
+	client, err := NewKubernetesClient(cfg)
 	assert.Nil(err)
 	assert.NotNil(client)
 }
 
-func TestCreateClientWithProxyURL(t *testing.T) {
+func TestNewKubernetesClientWithProxyURL(t *testing.T) {
 	assert := assert.New(t)
 
 	kubeconfigContent := `apiVersion: v1
@@ -141,7 +141,7 @@ users:
 	cfg := &config.App{
 		ProxyURL: "http://proxy:8080",
 	}
-	client, err := CreateClient(cfg)
+	client, err := NewKubernetesClient(cfg)
 	assert.Nil(err)
 	assert.NotNil(client)
 }

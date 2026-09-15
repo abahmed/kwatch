@@ -2,7 +2,9 @@
 # Following Kubernetes community conventions
 
 .PHONY: build test test-short lint vet clean verify verify-fmt verify-unit \
-	verify-all verify-catalogs line-check docker-build docker-build-latest help
+	verify-all verify-catalogs docs-verify line-check docker-build \
+	docker-build-latest architecture-check test-layout-check help \
+	verify-focused verify-fast
 
 # Binary names
 BINARY_NAME := kwatch
@@ -38,7 +40,11 @@ help:
 	@echo "  make vet           Run go vet"
 	@echo "  make lint          Run linting (requires golangci-lint)"
 	@echo "  make verify        Run the complete required validation gate"
+	@echo "  make verify-focused PKGS=... Validate only changed package groups"
 	@echo "  make verify-catalogs Verify checked-in generated catalogs"
+	@echo "  make docs-verify    Verify code-owned documentation metadata"
+	@echo "  make architecture-check Check package dependency boundaries"
+	@echo "  make test-layout-check Check responsibility-based test filenames"
 	@echo "  make line-check    Check new Go lines for an 80-column maximum"
 	@echo "  make verify-fmt    Verify code formatting"
 	@echo "  make verify-unit   Run unit tests"
@@ -94,7 +100,52 @@ verify-unit:
 
 # Run the repository's required validation gate. Keep this in the same order
 # as AGENTS.md so local verification and CI verification cannot drift.
-verify: build vet test lint line-check verify-catalogs
+verify: build vet test lint line-check architecture-check test-layout-check \
+	verify-catalogs \
+	docs-verify
+
+# Run the fast package-scoped gate during incremental refactors. The caller
+# must provide Go package patterns, for example:
+#   make verify-focused PKGS="./internal/incident ./internal/delivery/..."
+verify-focused:
+	@test -n "$(PKGS)" || { \
+		echo "PKGS is required; pass one or more Go package patterns"; \
+		exit 2; \
+	}
+	$(GOTEST) -run '^$$' $(PKGS)
+	$(GOTEST) $(PKGS)
+	$(GOVET) $(PKGS)
+	@command -v golangci-lint > /dev/null || { \
+		echo "golangci-lint is required; install it with go install"; \
+		exit 1; \
+	}
+	golangci-lint run $(PKGS)
+	$(MAKE) line-check architecture-check test-layout-check
+	@git diff --check
+
+# Run only package tests, vet, and lint after a small local edit. The focused
+# workstream target additionally runs repository-wide cheap checks.
+verify-fast:
+	@test -n "$(PKGS)" || { \
+		echo "PKGS is required; pass one or more Go package patterns"; \
+		exit 2; \
+	}
+	$(GOTEST) $(PKGS)
+	$(GOVET) $(PKGS)
+	@command -v golangci-lint > /dev/null || { \
+		echo "golangci-lint is required; install it with go install"; \
+		exit 1; \
+	}
+	golangci-lint run $(PKGS)
+
+# Documentation published by kwatch.dev is sourced from the website
+# repository. This target verifies the code-side contract and generated
+# catalogs without pretending that the website is a second source of truth.
+docs-verify: verify-catalogs
+	@test -s AGENTS.md
+	@test -s CONTRIBUTING.md
+	@grep -q "kwatch.dev/docs" AGENTS.md
+	@grep -q "kwatch.dev/docs" CONTRIBUTING.md
 
 verify-catalogs:
 	@tmp=$$(mktemp -d); trap 'rm -rf "$$tmp"' EXIT; \
@@ -112,6 +163,16 @@ verify-all: verify
 # generated code or unrelated provider payload literals.
 line-check:
 	@sh scripts/check-line-length.sh
+
+# Check package direction and keep transitional implementation imports from
+# spreading back into new production code.
+architecture-check:
+	@sh scripts/check-architecture.sh
+	@$(GOCMD) test ./internal/architecture
+
+# Keep test files discoverable by behavior instead of edit-history fragments.
+test-layout-check:
+	@sh scripts/check-test-layout.sh
 
 # Clean build artifacts
 clean:

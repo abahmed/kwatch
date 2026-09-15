@@ -214,7 +214,7 @@ func TestTestAlertHandlerNoAM(t *testing.T) {
 func TestTestAlertHandlerMethodNotAllowed(t *testing.T) {
 	assert := assert.New(t)
 	am := &fakeAlertSender{}
-	h := &HealthServer{alertManager: am}
+	h := &HealthServer{deliveryManager: am}
 
 	req := httptest.NewRequest(http.MethodGet, "/test-alert", nil)
 	w := httptest.NewRecorder()
@@ -226,7 +226,7 @@ func TestTestAlertHandlerMethodNotAllowed(t *testing.T) {
 
 func TestTestAlertHandler(t *testing.T) {
 	am := &fakeAlertSender{}
-	h := &HealthServer{alertManager: am}
+	h := &HealthServer{deliveryManager: am}
 
 	req := httptest.NewRequest(http.MethodPost, "/test-alert", bytes.NewReader([]byte{}))
 	w := httptest.NewRecorder()
@@ -354,9 +354,9 @@ func TestPprofEndpointsRegisteredWithGuard(t *testing.T) {
 }
 
 type fakeDeadLetterLister struct {
-	letters interface{}
+	letters []model.DeadLetterEntry
 }
 
-func (f *fakeDeadLetterLister) DeadLetters() interface{} {
+func (f *fakeDeadLetterLister) DeadLetters() []model.DeadLetterEntry {
 	return f.letters
 }

@@ -59,7 +59,9 @@ func (l failingServiceNamespaceLister) Get(string) (*corev1.Service, error) {
 // newGraphTestGraph builds a Controller wired with real informer listers backed
 // by a fake clientset, plus a fresh ResourceGraph.
 func newGraphTestGraph(objects ...runtime.Object) (*Controller, context.CancelFunc) {
-	c := &Controller{graph: kwcontext.NewResourceGraph()}
+	c := &Controller{
+		graphRuntime: graphRuntime{graph: kwcontext.NewResourceGraph()},
+	}
 	client := fake.NewSimpleClientset(objects...)
 	ctx, cancel := context.WithCancel(context.Background())
 	factory := informers.NewSharedInformerFactory(client, 0)
@@ -222,7 +224,9 @@ func TestAddPodToGraphServiceAccountEdge(t *testing.T) {
 
 func TestBuildGraphPreservesExistingStateWhenPodListFails(t *testing.T) {
 	c := &Controller{
-		graph:     kwcontext.NewResourceGraph(),
+		graphRuntime: graphRuntime{
+			graph: kwcontext.NewResourceGraph(),
+		},
 		podLister: failingPodLister{err: errors.New("cache unavailable")},
 	}
 	c.graph.AddEdge("pod", "ns1", "existing", "node", "", "node1", "scheduled_on")
@@ -234,7 +238,9 @@ func TestBuildGraphPreservesExistingStateWhenPodListFails(t *testing.T) {
 
 func TestRebuildPodGraphPreservesExistingEdgesWhenServiceListFails(t *testing.T) {
 	c := &Controller{
-		graph:         kwcontext.NewResourceGraph(),
+		graphRuntime: graphRuntime{
+			graph: kwcontext.NewResourceGraph(),
+		},
 		serviceLister: failingServiceLister{err: errors.New("cache unavailable")},
 	}
 	c.graph.AddEdge("pod", "ns1", "p1", "node", "", "node1", "scheduled_on")
@@ -250,7 +256,9 @@ func TestRebuildPodGraphPreservesExistingEdgesWhenServiceListFails(t *testing.T)
 }
 
 func TestRebuildPodGraphReplacesOnlyPodOwnedEdges(t *testing.T) {
-	c := &Controller{graph: kwcontext.NewResourceGraph()}
+	c := &Controller{
+		graphRuntime: graphRuntime{graph: kwcontext.NewResourceGraph()},
+	}
 	c.graph.AddEdge("pod", "ns1", "p1", "node", "", "node1", "scheduled_on")
 	c.graph.AddEdge("endpointslice", "ns1", "slice1", "pod", "ns1", "p1", "targets")
 

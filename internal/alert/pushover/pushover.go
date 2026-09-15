@@ -1,30 +1,36 @@
 package pushover
 
 import (
+	"context"
 	"net/url"
 	"strconv"
 
 	"k8s.io/klog/v2"
 
-	"github.com/abahmed/kwatch/internal/alert/util"
-	"github.com/abahmed/kwatch/internal/config"
+	"github.com/abahmed/kwatch/internal/delivery/transport"
 	"github.com/abahmed/kwatch/internal/event"
 )
 
 const pushoverAPIURL = "https://api.pushover.net/1/messages.json"
 
 type Pushover struct {
+	sender   transport.Sender
 	url      string
 	token    string
 	user     string
 	title    string
 	priority int
 
-	appCfg *config.App
+	clusterName string
 }
 
 // NewPushover returns a new Pushover object
-func NewPushover(config map[string]interface{}, appCfg *config.App) *Pushover {
+
+func NewPushover(
+	config map[string]interface{},
+	clusterName string,
+	dependencies transport.Dependencies,
+) *Pushover {
 	token, ok := config["token"].(string)
 	if !ok || len(token) == 0 {
 		klog.InfoS("initializing pushover with empty token")
@@ -52,12 +58,13 @@ func NewPushover(config map[string]interface{}, appCfg *config.App) *Pushover {
 	klog.InfoS("initializing pushover", "title", title)
 
 	return &Pushover{
-		url:      pushoverAPIURL,
-		token:    token,
-		user:     user,
-		title:    title,
-		priority: priority,
-		appCfg:   appCfg,
+		sender:      transport.NewSender(dependencies),
+		url:         pushoverAPIURL,
+		token:       token,
+		user:        user,
+		title:       title,
+		priority:    priority,
+		clusterName: clusterName,
 	}
 }
 
@@ -67,13 +74,13 @@ func (p *Pushover) Name() string {
 }
 
 // SendEvent sends event to the provider
-func (p *Pushover) SendEvent(e *event.Event) error {
-	msg := e.FormatText(p.appCfg.ClusterName, "")
-	return p.SendMessage(msg)
+func (p *Pushover) SendEvent(ctx context.Context, e *event.Event) error {
+	msg := e.FormatText(p.clusterName, "")
+	return p.SendMessage(ctx, msg)
 }
 
 // SendMessage sends text message to the provider
-func (p *Pushover) SendMessage(msg string) error {
+func (p *Pushover) SendMessage(ctx context.Context, msg string) error {
 	form := url.Values{}
 	form.Set("token", p.token)
 	form.Set("user", p.user)
@@ -85,8 +92,9 @@ func (p *Pushover) SendMessage(msg string) error {
 		form.Set("priority", strconv.Itoa(p.priority))
 	}
 
-	_, err := util.Post(
-		p.Name(), p.url, []byte(form.Encode()),
-		"application/x-www-form-urlencoded", nil)
+	_, err := p.sender.Send(ctx, transport.Request{
+		Provider: p.Name(), URL: p.url, Body: []byte(form.Encode()),
+		ContentType: "application/x-www-form-urlencoded",
+	})
 	return err
 }

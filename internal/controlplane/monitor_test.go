@@ -9,7 +9,7 @@ import (
 
 	"github.com/abahmed/kwatch/internal/config"
 	"github.com/abahmed/kwatch/internal/constant"
-	"github.com/abahmed/kwatch/internal/correlation"
+	"github.com/abahmed/kwatch/internal/incident"
 	"github.com/abahmed/kwatch/internal/model"
 )
 
@@ -132,7 +132,7 @@ func TestIsComponentPod(t *testing.T) {
 
 func TestObserveUsesFailureAndRecoveryThresholds(t *testing.T) {
 	var actions []model.IncidentAction
-	engine := correlation.NewEngine(correlation.Config{
+	engine := incident.NewEngine(incident.Config{
 		LifecycleHook: func(_ *model.Incident, action model.IncidentAction) {
 			actions = append(actions, action)
 		},
@@ -142,10 +142,10 @@ func TestObserveUsesFailureAndRecoveryThresholds(t *testing.T) {
 			FailureThreshold:  2,
 			RecoveryThreshold: 2,
 		},
-		correlator: engine,
-		failures:   make(map[string]int),
-		recoveries: make(map[string]int),
-		failing:    make(map[string]bool),
+		incidentSink: engine,
+		failures:     make(map[string]int),
+		recoveries:   make(map[string]int),
+		failing:      make(map[string]bool),
 	}
 
 	monitor.observe("api-server", false,
@@ -180,11 +180,11 @@ func TestControlPlaneStatusReturnsIndependentCopy(t *testing.T) {
 		},
 	}}
 
-	copyStatus := monitor.ControlPlaneStatus().(Status)
+	copyStatus := monitor.ControlPlaneStatus()
 	copyStatus.Components["etcd"] = EndpointStatus{Name: "changed"}
 	copyStatus.Components["new"] = EndpointStatus{Name: "new"}
 
-	original := monitor.ControlPlaneStatus().(Status)
+	original := monitor.ControlPlaneStatus()
 	if original.Components["etcd"].Name != "etcd" {
 		t.Fatal("mutating returned component changed monitor state")
 	}

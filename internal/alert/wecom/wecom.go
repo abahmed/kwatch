@@ -1,12 +1,12 @@
 package wecom
 
 import (
+	"context"
 	"encoding/json"
 
 	"k8s.io/klog/v2"
 
-	"github.com/abahmed/kwatch/internal/alert/util"
-	"github.com/abahmed/kwatch/internal/config"
+	"github.com/abahmed/kwatch/internal/delivery/transport"
 	"github.com/abahmed/kwatch/internal/event"
 )
 
@@ -16,13 +16,19 @@ type wecomPayload struct {
 }
 
 type Wecom struct {
+	sender  transport.Sender
 	webhook string
 
-	appCfg *config.App
+	clusterName string
 }
 
 // NewWecom returns a new Wecom object
-func NewWecom(config map[string]interface{}, appCfg *config.App) *Wecom {
+
+func NewWecom(
+	config map[string]interface{},
+	clusterName string,
+	dependencies transport.Dependencies,
+) *Wecom {
 	webhook, ok := config["webhook"].(string)
 	if !ok || len(webhook) == 0 {
 		klog.InfoS("initializing wecom with empty webhook")
@@ -32,8 +38,9 @@ func NewWecom(config map[string]interface{}, appCfg *config.App) *Wecom {
 	klog.InfoS("initializing wecom with webhook configured")
 
 	return &Wecom{
-		webhook: webhook,
-		appCfg:  appCfg,
+		sender:      transport.NewSender(dependencies),
+		webhook:     webhook,
+		clusterName: clusterName,
 	}
 }
 
@@ -43,13 +50,13 @@ func (s *Wecom) Name() string {
 }
 
 // SendEvent sends event to the provider
-func (s *Wecom) SendEvent(e *event.Event) error {
-	msg := e.FormatText(s.appCfg.ClusterName, "")
-	return s.SendMessage(msg)
+func (s *Wecom) SendEvent(ctx context.Context, e *event.Event) error {
+	msg := e.FormatText(s.clusterName, "")
+	return s.SendMessage(ctx, msg)
 }
 
 // SendMessage sends text message to the provider
-func (s *Wecom) SendMessage(msg string) error {
+func (s *Wecom) SendMessage(ctx context.Context, msg string) error {
 	payload := wecomPayload{
 		MsgType: "markdown",
 		Markdown: map[string]string{
@@ -62,6 +69,9 @@ func (s *Wecom) SendMessage(msg string) error {
 		return err
 	}
 
-	_, err = util.Post(s.Name(), s.webhook, body, "application/json", nil)
+	_, err = s.sender.Send(ctx, transport.Request{
+		Provider: s.Name(), URL: s.webhook, Body: body,
+		ContentType: "application/json",
+	})
 	return err
 }

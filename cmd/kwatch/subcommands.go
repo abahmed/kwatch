@@ -2,14 +2,17 @@ package main
 
 import (
 	"bufio"
+	"context"
 	"encoding/json"
 	"fmt"
 	"io"
 	"sort"
 	"strings"
 
-	"github.com/abahmed/kwatch/internal/alert"
+	"github.com/abahmed/kwatch/internal/alert/catalog"
+	"github.com/abahmed/kwatch/internal/client"
 	"github.com/abahmed/kwatch/internal/config"
+	"github.com/abahmed/kwatch/internal/delivery"
 	"github.com/abahmed/kwatch/internal/event"
 )
 
@@ -51,9 +54,12 @@ func runLint(strict, check bool, out, errOut io.Writer) int {
 		}
 	}
 	if check {
-		am := &alert.AlertManager{}
-		am.Init(cfg.Alert, &cfg.App)
-		results := am.VerifyAll()
+		runtime := config.RuntimeConfigFor(cfg)
+		am := delivery.NewManagerWithDependencies(delivery.Dependencies{
+			HTTPClient: client.NewHTTPClientWithRuntime(runtime),
+		})
+		am.InitRuntime(runtime, catalog.NewProvider)
+		results := am.VerifyAll(context.Background())
 		hasErr := false
 		names := make([]string, 0, len(results))
 		for name := range results {
@@ -94,15 +100,14 @@ func runReplay(dryRun bool, in io.Reader, out, errOut io.Writer) int {
 		return 1
 	}
 
-	providers := make([]string, 0, len(cfg.Alert))
-	for k := range cfg.Alert {
-		providers = append(providers, k)
-	}
-	sort.Strings(providers)
-	am := &alert.AlertManager{}
-	am.Init(cfg.Alert, &cfg.App)
-	am.SetSilences(cfg.Silences)
-	am.SetTemplates(cfg.Templates)
+	runtime := config.RuntimeConfigFor(cfg)
+	providers := runtime.ProviderNames()
+	am := delivery.NewManagerWithDependencies(delivery.Dependencies{
+		HTTPClient: client.NewHTTPClientWithRuntime(runtime),
+	})
+	am.InitRuntime(runtime, catalog.NewProvider)
+	am.SetSilences(runtime.Silences())
+	am.SetTemplates(runtime.Templates())
 
 	scanner := bufio.NewScanner(in)
 	for scanner.Scan() {

@@ -77,20 +77,21 @@ func (t *ChangeTracker) Restore(changes []Change) {
 
 const defaultTrackedChanges = 1000
 
-func NewChangeTracker(capacity int) *ChangeTracker {
+// NewChangeTrackerWithClock constructs a change tracker with an explicit
+// clock supplied by application composition.
+func NewChangeTrackerWithClock(
+	capacity int,
+	timeSource clock.Clock,
+) *ChangeTracker {
 	if capacity <= 0 {
 		capacity = defaultTrackedChanges
 	}
+	if timeSource == nil {
+		timeSource = clock.RealClock{}
+	}
 	return &ChangeTracker{
 		buffer: make([]Change, capacity),
-		now:    clock.Now,
-	}
-}
-
-// SetClock injects the clock used by the convenience history query.
-func (t *ChangeTracker) SetClock(now func() time.Time) {
-	if now != nil {
-		t.now = now
+		now:    timeSource.Now,
 	}
 }
 
@@ -108,7 +109,7 @@ func (t *ChangeTracker) RecentChangesBefore(age time.Duration) []Change {
 	if t.now != nil {
 		return t.RecentChangesBeforeAt(age, t.now())
 	}
-	return t.RecentChangesBeforeAt(age, clock.Now())
+	return t.RecentChangesBeforeAt(age, time.Time{})
 }
 
 func (t *ChangeTracker) RecentChangesBeforeAt(

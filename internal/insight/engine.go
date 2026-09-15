@@ -6,6 +6,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/abahmed/kwatch/internal/clock"
 	context "github.com/abahmed/kwatch/internal/graphcontext"
 	"github.com/abahmed/kwatch/internal/model"
 )
@@ -33,20 +34,25 @@ type Engine struct {
 	feedback *FeedbackStore
 }
 
-// SetActiveChecker supplies the correlation engine's live incident view. The
-// callback is deliberately narrow so insight does not depend on correlation.
+// Dependencies contains the optional application-owned collaborators used by
+// insight analysis. Keeping them together makes construction complete before
+// the engine is exposed to incident processing.
+type Dependencies struct {
+	Clock         clock.Clock
+	FeedbackStore *FeedbackStore
+	ActiveChecker func(kind, namespace, name string) bool
+}
+
+// SetActiveChecker supplies the incident engine's live incident view. The
+// callback is deliberately narrow so insight does not depend on lifecycle
+// ownership.
 func (e *Engine) SetActiveChecker(checker func(kind, namespace, name string) bool) {
 	e.activeChecker = checker
 }
 
-// SetClock injects the clock used for recent-change analysis.
-func (e *Engine) SetClock(now func() time.Time) {
-	if now != nil {
-		e.now = now
-	}
+func (e *Engine) SetFeedbackStore(store *FeedbackStore) {
+	e.feedback = store
 }
-
-func (e *Engine) SetFeedbackStore(store *FeedbackStore) { e.feedback = store }
 
 func (e *Engine) ObserveOutcome(inc *model.Incident, action model.IncidentAction, pattern string) {
 	if e.feedback != nil {
@@ -54,11 +60,37 @@ func (e *Engine) ObserveOutcome(inc *model.Incident, action model.IncidentAction
 	}
 }
 
-func NewEngine(
+// NewEngineWithClock constructs insight analysis with an explicit clock.
+func NewEngineWithClock(
 	graph *context.ResourceGraph,
 	tracker *context.ChangeTracker,
+	timeSource clock.Clock,
 ) *Engine {
-	return &Engine{graph: graph, tracker: tracker, now: time.Now}
+	if timeSource == nil {
+		timeSource = clock.RealClock{}
+	}
+	return &Engine{
+		graph: graph, tracker: tracker, now: timeSource.Now,
+	}
+}
+
+// NewEngineWithDependencies constructs insight with all runtime collaborators
+// supplied at the composition root.
+func NewEngineWithDependencies(
+	graph *context.ResourceGraph,
+	tracker *context.ChangeTracker,
+	dependencies Dependencies,
+) *Engine {
+	if dependencies.Clock == nil {
+		dependencies.Clock = clock.RealClock{}
+	}
+	return &Engine{
+		graph:         graph,
+		tracker:       tracker,
+		now:           dependencies.Clock.Now,
+		feedback:      dependencies.FeedbackStore,
+		activeChecker: dependencies.ActiveChecker,
+	}
 }
 
 func (e *Engine) Analyze(inc *model.Incident) *Insight {
@@ -70,159 +102,6 @@ func (e *Engine) Analyze(inc *model.Incident) *Insight {
 	e.scoreInsight(inc, ins)
 
 	return ins
-}
-
-// scoreInsight turns topology and observed signals into an explainable
-// confidence value. A graph relationship alone is intentionally weak evidence;
-// a matching node/workload failure, event, or recent change raises confidence.
-func (e *Engine) scoreInsight(inc *model.Incident, ins *Insight) {
-	if inc == nil {
-		return
-	}
-	evidenceBefore := e.appendObservedEvidence(inc, ins)
-	e.setPatternConfidence(ins)
-	e.applyInsightAdjustments(inc, ins, evidenceBefore)
-	ins.NextSteps = nextSteps(inc)
-}
-
-func (e *Engine) appendObservedEvidence(inc *model.Incident, ins *Insight) int {
-	if inc.OwnerUnhealthy {
-		ins.Evidence = append(ins.Evidence, "the owning workload is unhealthy")
-	}
-	if inc.Facts.MemoryLeak {
-		ins.Evidence = append(ins.Evidence, fmt.Sprintf(
-			"repeated OOM kills were observed in a %d-minute window",
-			inc.Facts.OOMWindowMin,
-		))
-	}
-	if inc.Facts.ProbeEndpoint != "" {
-		ins.Evidence = append(ins.Evidence, "probe failed: "+inc.Facts.ProbeEndpoint)
-	}
-	if inc.Facts.SchedulingDelay > 0 {
-		ins.Evidence = append(ins.Evidence, fmt.Sprintf(
-			"the workload has remained unscheduled for %s",
-			inc.Facts.SchedulingDelay.Round(time.Second),
-		))
-	}
-	if inc.Facts.PullSecretsSet {
-		ins.Evidence = append(ins.Evidence, "the pod declares image pull secrets")
-	}
-	if inc.Facts.Volume != "" {
-		ins.Evidence = append(
-			ins.Evidence, "bound volume: "+inc.Facts.Volume,
-		)
-	}
-	if len(ins.RecentChanges) > 0 {
-		ins.Evidence = append(ins.Evidence, "a related resource changed shortly before the incident")
-	}
-	evidenceBefore := len(ins.Evidence)
-	e.appendActiveDependencyEvidence(inc, ins)
-	return evidenceBefore
-}
-
-func (e *Engine) setPatternConfidence(ins *Insight) {
-	switch ins.Pattern {
-	case "node_failure":
-		ins.Confidence = 0.90
-	case "rollout_failure", "storage_failure", "storage_attachment_failure":
-		ins.Confidence = 0.85
-	case "dependency_change", "config_error":
-		ins.Confidence = 0.60
-	case "resource_limit":
-		// The reported metric is the cause by definition.
-		ins.Confidence = 0.85
-	case "node_pressure":
-		ins.Confidence = 0.80
-	case "metrics_unavailable":
-		ins.Confidence = 0.70
-	case "root_cause":
-		ins.Confidence = 0.40
-	}
-}
-
-func (e *Engine) applyInsightAdjustments(inc *model.Incident, ins *Insight, evidenceBefore int) {
-	e.applyFeedbackBias(inc, ins)
-	if ins.Confidence > 0 && len(ins.Evidence) == 0 {
-		ins.Confidence *= 0.65
-	}
-	if ins.Confidence > 0 && evidenceBefore == 0 && len(ins.Evidence) > 0 {
-		ins.Confidence = minFloat(ins.Confidence+0.10, 1)
-	}
-}
-
-func (e *Engine) appendActiveDependencyEvidence(
-	inc *model.Incident,
-	ins *Insight,
-) {
-	if e.activeChecker == nil || e.graph == nil {
-		return
-	}
-	for _, dependency := range dependenciesFor(e.graph, inc) {
-		ref, ok := model.ParseObjectKey(dependency)
-		if !ok || !e.activeChecker(ref.Kind, ref.Namespace, ref.Name) {
-			continue
-		}
-		label := ref.Describe()
-		ins.Evidence = append(ins.Evidence, "an active incident is already reported for "+label)
-		return
-	}
-}
-
-func minFloat(a, b float64) float64 {
-	if a < b {
-		return a
-	}
-	return b
-}
-
-func (e *Engine) applyFeedbackBias(inc *model.Incident, ins *Insight) {
-	if e.feedback == nil || ins.Pattern == "" {
-		return
-	}
-	ins.Confidence = minFloat(ins.Confidence+e.feedback.Bias(feedbackKey(inc, ins.Pattern)), 1)
-	if ins.Confidence < 0 {
-		ins.Confidence = 0
-	}
-}
-
-func nextSteps(inc *model.Incident) []string {
-	if inc == nil {
-		return nil
-	}
-	name := inc.Ref().Name
-	if inc.Resource == "pod" && len(inc.Resources) > 0 {
-		pods := make([]string, 0, len(inc.Resources))
-		for pod := range inc.Resources {
-			pods = append(pods, pod)
-		}
-		sort.Strings(pods)
-		name = pods[0]
-	}
-	switch inc.Resource {
-	case "pod":
-		return []string{"kubectl describe pod " + name + namespaceArg(inc.Namespace), "kubectl logs " + name + namespaceArg(inc.Namespace) + " --all-containers"}
-	case "node":
-		return []string{"kubectl describe node " + name, "kubectl get pods -A --field-selector spec.nodeName=" + name}
-	case "deployment":
-		return []string{"kubectl rollout status deployment/" + name + namespaceArg(inc.Namespace), "kubectl rollout history deployment/" + name + namespaceArg(inc.Namespace)}
-	case "pvc", "persistentvolumeclaim":
-		// Storage incidents carry the resource kind "pvc", which is the
-		// vocabulary the graph and the PVC monitor use; the longer spelling
-		// never matched an incident, so PVC alerts arrived with no next step.
-		return []string{
-			"kubectl describe pvc " + name + namespaceArg(inc.Namespace),
-			"kubectl get pv" + namespaceArg(inc.Namespace),
-		}
-	default:
-		return nil
-	}
-}
-
-func namespaceArg(namespace string) string {
-	if namespace == "" {
-		return ""
-	}
-	return " -n " + namespace
 }
 
 // EnrichMassFailure fills in the root-cause sentence and recent-changes for a
@@ -304,7 +183,7 @@ func IncidentGraphKeys(inc *model.Incident) []string {
 // dependenciesFor unions the dependencies of all graph nodes belonging to the
 // incident, deduplicating results.
 // DependenciesFor returns the shared-dependency keys an incident touches in
-// the resource graph. Exported so the correlation engine can ask "is this
+// the resource graph. Exported so the incident engine can ask "is this
 // failure already covered by a mass-failure alert?" without owning a graph.
 func DependenciesFor(
 	graph *context.ResourceGraph,

@@ -24,8 +24,11 @@ func TestNewPvcMonitor(t *testing.T) {
 	pvc := NewPvcMonitor(client, cfg, nil, nil)
 	assert.NotNil(pvc)
 	assert.Equal(client, pvc.client)
-	assert.Equal(cfg, pvc.config)
+	assert.Equal(*cfg, pvc.config)
 	assert.NotNil(pvc.notifiedPvc)
+
+	cfg.Enabled = false
+	assert.True(pvc.config.Enabled)
 }
 
 func TestNewPvcMonitorNilConfig(t *testing.T) {
@@ -35,7 +38,7 @@ func TestNewPvcMonitorNilConfig(t *testing.T) {
 
 	pvc := NewPvcMonitor(client, nil, nil, nil)
 	assert.NotNil(pvc)
-	assert.Nil(pvc.config)
+	assert.Equal(config.PvcMonitor{}, pvc.config)
 }
 
 func TestStartDisabled(t *testing.T) {

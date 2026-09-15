@@ -10,7 +10,6 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/abahmed/kwatch/internal/config"
 	"github.com/abahmed/kwatch/internal/model"
 )
 
@@ -94,7 +93,7 @@ func hostileIncident(events int, msgLen int) *model.Incident {
 }
 
 func TestSlackPayloadStaysWithinEveryLimit(t *testing.T) {
-	app := &config.App{ClusterName: "dev"}
+	app := "dev"
 	for _, tc := range []struct {
 		name   string
 		events int

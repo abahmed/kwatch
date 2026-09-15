@@ -1,13 +1,13 @@
 package googlechat
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 
 	"k8s.io/klog/v2"
 
-	"github.com/abahmed/kwatch/internal/alert/util"
-	"github.com/abahmed/kwatch/internal/config"
+	"github.com/abahmed/kwatch/internal/delivery/transport"
 	"github.com/abahmed/kwatch/internal/event"
 	"github.com/abahmed/kwatch/internal/insight"
 	"github.com/abahmed/kwatch/internal/message"
@@ -15,11 +15,12 @@ import (
 )
 
 type GoogleChat struct {
+	sender  transport.Sender
 	webhook string
 	text    string
 
 	// reference for general app configuration
-	appCfg *config.App
+	clusterName string
 }
 
 type payload struct {
@@ -27,9 +28,11 @@ type payload struct {
 }
 
 // NewGoogleChat returns new google chat instance
+
 func NewGoogleChat(
 	config map[string]interface{},
-	appCfg *config.App,
+	clusterName string,
+	dependencies transport.Dependencies,
 ) *GoogleChat {
 	webhook, ok := config["webhook"].(string)
 	if !ok || len(webhook) == 0 {
@@ -42,9 +45,10 @@ func NewGoogleChat(
 	text, _ := config["text"].(string)
 
 	return &GoogleChat{
-		webhook: webhook,
-		text:    text,
-		appCfg:  appCfg,
+		sender:      transport.NewSender(dependencies),
+		webhook:     webhook,
+		text:        text,
+		clusterName: clusterName,
 	}
 }
 
@@ -54,60 +58,62 @@ func (g *GoogleChat) Name() string {
 }
 
 // SendEvent sends event to the provider
-func (g *GoogleChat) SendEvent(e *event.Event) error {
-	formattedMsg := e.FormatText(g.appCfg.ClusterName, g.text)
+func (g *GoogleChat) SendEvent(ctx context.Context, e *event.Event) error {
+	formattedMsg := e.FormatText(g.clusterName, g.text)
 	b, err := g.buildRequestBody(formattedMsg)
 	if err != nil {
 		return err
 	}
-	return g.sendAPI(b)
+	return g.sendAPI(ctx, b)
 }
 
-func (g *GoogleChat) sendAPI(reqBody []byte) error {
-	_, err := util.Send(
-		util.Request{Provider: "GoogleChat", URL: g.webhook, Body: reqBody},
-	)
+func (g *GoogleChat) sendAPI(ctx context.Context, reqBody []byte) error {
+	_, err := g.sender.Send(ctx, transport.Request{
+		Provider: "GoogleChat", URL: g.webhook, Body: reqBody,
+	})
 	return err
 }
 
 // SendMessage sends text message to the provider
-func (g *GoogleChat) SendMessage(msg string) error {
+func (g *GoogleChat) SendMessage(ctx context.Context, msg string) error {
 	b, err := g.buildRequestBody(msg)
 	if err != nil {
 		return err
 	}
-	return g.sendAPI(b)
+	return g.sendAPI(ctx, b)
 }
 
-// SendIncident implements alert.ThreadProvider.
+// SendIncident implements delivery.ThreadProvider.
 // It renders the incident using the Report model and PlaintextRenderer,
 // producing a context-adaptive text message.
 func (g *GoogleChat) SendIncident(
+	ctx context.Context,
 	inc *model.Incident,
 	action model.IncidentAction,
 ) error {
-	return g.SendIncidentWithInsight(inc, action, nil)
+	return g.SendIncidentWithInsight(ctx, inc, action, nil)
 }
 
-// SendIncidentWithInsight implements alert.InsightThreadProvider, so the
+// SendIncidentWithInsight implements delivery.InsightThreadProvider, so the
 // diagnosis — likely cause, impact, recent changes — is rendered rather than
 // dropped on the way to this provider.
 func (g *GoogleChat) SendIncidentWithInsight(
+	ctx context.Context,
 	inc *model.Incident,
 	action model.IncidentAction,
 	ins *insight.Insight,
 ) error {
-	text := util.RenderIncidentWithInsight(
+	text := message.RenderIncidentWithInsight(
 		inc,
 		action,
 		ins,
 		message.NewPlainTextRenderer(),
-		g.appCfg.ClusterName,
+		g.clusterName,
 	)
 	if text == "" {
 		return nil
 	}
-	return g.SendMessage(text)
+	return g.SendMessage(ctx, text)
 }
 
 func (g *GoogleChat) buildRequestBody(text string) ([]byte, error) {

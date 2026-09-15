@@ -1,0 +1,345 @@
+package incident
+
+import (
+	"testing"
+	"time"
+
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+
+	"github.com/abahmed/kwatch/internal/event"
+	"github.com/abahmed/kwatch/internal/model"
+)
+
+func TestMarkResolvedIdempotent(t *testing.T) {
+	var resolves int
+	e := NewEngine(Config{
+		Window: 10 * time.Minute,
+		LifecycleHook: func(inc *model.Incident, action model.IncidentAction) {
+			if action == model.ActionResolved {
+				resolves++
+			}
+		},
+	})
+
+	ev := event.Event{
+		PodName:   "p1",
+		Namespace: "ns",
+		Reason:    "CrashLoopBackOff",
+	}
+	inc, action := e.processEvent(ev, "dep", nil)
+	assert.Equal(t, model.ActionCreate, action)
+	assert.NotNil(t, inc)
+
+	// First MarkResolved should fire the hook
+	e.markResolved(inc.Key)
+	assert.Equal(t, 1, resolves)
+
+	// Second MarkResolved (same key) must NOT fire again
+	e.markResolved(inc.Key)
+	assert.Equal(
+		t,
+		1,
+		resolves,
+		"MarkResolved must be idempotent — hook fired twice",
+	)
+}
+
+func TestMarkResolvedNonexistentKeyNoOp(t *testing.T) {
+	var resolves int
+	e := NewEngine(Config{
+		Window: 10 * time.Minute,
+		LifecycleHook: func(inc *model.Incident, action model.IncidentAction) {
+			if action == model.ActionResolved {
+				resolves++
+			}
+		},
+	})
+	e.markResolved("nonexistent")
+	assert.Equal(t, 0, resolves)
+}
+
+func TestResolveHoldDownDelaysResolve(t *testing.T) {
+	fakeNow := time.Date(2025, 1, 1, 0, 0, 0, 0, time.UTC)
+	var resolves int
+	e := NewEngine(Config{
+		Window:          10 * time.Minute,
+		ResolveHoldDown: 10 * time.Minute,
+		LifecycleHook: func(inc *model.Incident, action model.IncidentAction) {
+			if action == model.ActionResolved {
+				resolves++
+			}
+		},
+	})
+	e.now = mockClock(fakeNow)
+
+	ev := event.Event{
+		Namespace: "default",
+		PodName:   "pod-1",
+		Reason:    "CrashLoopBackOff",
+	}
+	inc, action := e.processEvent(ev, "deploy-1", nil)
+	assert.Equal(t, model.ActionCreate, action)
+
+	// MarkResolved should NOT fire the hook immediately
+	e.markResolved(inc.Key)
+	assert.Equal(t, 0, resolves)
+	live := e.state[inc.Key]
+	if live != nil {
+		assert.Equal(t, model.StatePendingResolve, live.State)
+		assert.Equal(t, fakeNow.Add(10*time.Minute), live.ResolveAt)
+	}
+}
+
+func TestCleanupFinalizesPendingResolveWithNotification(t *testing.T) {
+	fakeNow := time.Date(2025, 1, 1, 0, 0, 0, 0, time.UTC)
+	var resolves int
+	e := NewEngine(Config{
+		Window:          10 * time.Minute,
+		ResolveHoldDown: 20 * time.Minute,
+		LifecycleHook: func(inc *model.Incident, action model.IncidentAction) {
+			if action == model.ActionResolved {
+				resolves++
+			}
+		},
+	})
+	e.now = mockClock(fakeNow)
+
+	ev := event.Event{
+		Namespace: "default",
+		PodName:   "pod-1",
+		Reason:    "CrashLoopBackOff",
+	}
+	inc, action := e.processEvent(ev, "deploy-1", nil)
+	assert.Equal(t, model.ActionCreate, action)
+
+	// MarkResolved schedules the resolve (ResolveAt = +20m); no notify yet.
+	e.markResolved(inc.Key)
+	assert.Equal(t, 0, resolves)
+	if live := e.state[inc.Key]; live != nil {
+		assert.Equal(t, model.StatePendingResolve, live.State)
+	}
+
+	// Advance past the cleanup window (+10m) but before ResolveAt (+20m):
+	// cleanup reaps the incident first and must emit a resolved
+	// notification instead of silently dropping it.
+	fakeNow = fakeNow.Add(11 * time.Minute)
+	e.now = mockClock(fakeNow)
+	e.cleanup()
+
+	assert.Equal(
+		t,
+		1,
+		resolves,
+		"cleanup must notify a resolved transition for pending-resolve "+
+			"incidents",
+	)
+	assert.Empty(t, e.state, "cleanup must remove the finalized incident")
+}
+
+func TestResolveHoldDownRevivesOnRecurrence(t *testing.T) {
+	fakeNow := time.Date(2025, 1, 1, 0, 0, 0, 0, time.UTC)
+	var resolves int
+	e := NewEngine(Config{
+		Window:          10 * time.Minute,
+		ResolveHoldDown: 10 * time.Minute,
+		LifecycleHook: func(inc *model.Incident, action model.IncidentAction) {
+			if action == model.ActionResolved {
+				resolves++
+			}
+		},
+	})
+	e.now = mockClock(fakeNow)
+
+	ev := event.Event{
+		Namespace: "default",
+		PodName:   "pod-1",
+		Reason:    "CrashLoopBackOff",
+	}
+	inc, action := e.processEvent(ev, "deploy-1", nil)
+	assert.Equal(t, model.ActionCreate, action)
+
+	// Pending resolve
+	e.markResolved(inc.Key)
+	assert.Equal(t, 0, resolves)
+	live := e.state[inc.Key]
+	if live != nil {
+		assert.Equal(t, model.StatePendingResolve, live.State)
+	}
+
+	// Recurrence within cooldown — should revive (skip) and cancel the
+	// pending resolve
+	_, action = e.processEvent(ev, "deploy-1", nil)
+	assert.Equal(
+		t,
+		model.ActionSkip,
+		action,
+		"revive within cooldown must skip, not update",
+	)
+	live2 := e.state[inc.Key]
+	if live2 != nil {
+		assert.Equal(
+			t,
+			model.StateActive,
+			live2.State,
+			"pending resolve must be revoked",
+		)
+		assert.True(t, live2.ResolveAt.IsZero(), "ResolveAt must be cleared")
+	}
+	assert.Equal(t, 0, resolves, "hook must not fire")
+}
+
+func TestProcessResolvedIncidentSilentlyRevives(t *testing.T) {
+	fakeNow := time.Date(2025, 1, 1, 0, 0, 0, 0, time.UTC)
+	e := NewEngine(Config{
+		Window: 10 * time.Minute,
+	})
+	e.now = mockClock(fakeNow)
+
+	ev := event.Event{
+		Namespace: "default",
+		PodName:   "pod-1",
+		Reason:    "CrashLoopBackOff",
+	}
+	inc, action := e.processEvent(ev, "deploy-1", nil)
+	assert.Equal(t, model.ActionCreate, action)
+	key := inc.Key
+
+	// Immediately resolve — MarkResolved also arms the cooldown.
+	e.markResolved(key)
+	live := e.state[key]
+	if live != nil {
+		assert.Equal(t, model.StateResolved, live.State)
+	}
+
+	// Recurrence within cooldown — revived, but silent. Announcing again
+	// this soon after the resolve is the flip-flop the cooldown exists to
+	// prevent; dropping the recurrence outright, which is what used to
+	// happen, lost the fact that the problem came straight back.
+	_, action = e.processEvent(ev, "deploy-1", nil)
+	assert.Equal(
+		t,
+		model.ActionSkip,
+		action,
+		"recurrence within cooldown must not announce",
+	)
+	live = e.state[key]
+	require.NotNil(t, live)
+	assert.Equal(
+		t,
+		model.StateActive,
+		live.State,
+		"recurrence within cooldown must revive the incident",
+	)
+	assert.Equal(t, 2, live.Count, "and must be counted")
+
+	// Past the cooldown the incident is simply still active, so a further
+	// report says nothing new. Renotify is what tells the operator it is
+	// still broken.
+	fakeNow = fakeNow.Add(11 * time.Minute)
+	e.now = mockClock(fakeNow)
+	inc2, action := e.processEvent(ev, "deploy-1", nil)
+	assert.Equal(t, model.ActionSkip, action)
+	assert.Equal(t, key, inc2.Key)
+	assert.Equal(t, model.StateActive, inc2.State)
+}
+
+func TestIncidentKeyMatchesProcess(t *testing.T) {
+	tests := []struct {
+		name  string
+		ev    event.Event
+		owner string
+		cs    *model.ContainerState
+	}{
+		{
+			name: "CrashLoopBackOff with cs",
+			ev: event.Event{
+				Namespace: "default",
+				Reason:    "CrashLoopBackOff",
+			},
+			owner: "deploy-1",
+			cs:    &model.ContainerState{RestartCount: 3},
+		},
+		{
+			name: "CrashLoopBackOff high frequency",
+			ev: event.Event{
+				Namespace: "default",
+				Reason:    "CrashLoopBackOff",
+			},
+			owner: "deploy-1",
+			cs:    &model.ContainerState{RestartCount: 10},
+		},
+		{
+			name: "normalized reason",
+			ev: event.Event{
+				Namespace: "default",
+				Reason:    "CrashLoopBackOff 42",
+			},
+			owner: "deploy-1",
+			cs:    &model.ContainerState{RestartCount: 1},
+		},
+		{
+			name:  "empty container",
+			ev:    event.Event{Namespace: "default", Reason: "OOMKilled"},
+			owner: "deploy-1",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			key1 := IncidentKey(tt.ev, tt.owner, tt.cs)
+
+			e := newTestEngine()
+			inc, _ := e.processEvent(tt.ev, tt.owner, tt.cs)
+			require.NotNil(t, inc, "Process must produce an incident")
+			assert.Equal(t, key1, inc.Key, "IncidentKey must match Process key")
+		})
+	}
+}
+
+func TestCheckLifecycleFinalizesPendingResolve(t *testing.T) {
+	fakeNow := time.Date(2025, 1, 1, 0, 0, 0, 0, time.UTC)
+	var resolved int
+	var baselineChanged bool
+	e := NewEngine(Config{
+		Window:          10 * time.Minute,
+		ResolveHoldDown: 1 * time.Millisecond,
+		LifecycleHook: func(inc *model.Incident, action model.IncidentAction) {
+			if action == model.ActionResolved {
+				resolved++
+			}
+		},
+		OnBaselineChange: func(_ map[string]map[string]int64) {
+			baselineChanged = true
+		},
+	})
+	e.now = mockClock(fakeNow)
+
+	ev := event.Event{
+		Namespace: "default",
+		PodName:   "pod-1",
+		Reason:    "CrashLoopBackOff",
+	}
+	inc, action := e.processEvent(ev, "deploy-1", nil)
+	assert.Equal(t, model.ActionCreate, action)
+
+	e.markResolved(inc.Key)
+	live := e.state[inc.Key]
+	if live != nil {
+		assert.Equal(t, model.StatePendingResolve, live.State)
+	}
+
+	e.now = mockClock(fakeNow.Add(2 * time.Millisecond))
+	e.checkLifecycle()
+
+	assert.Equal(t, 1, resolved)
+	assert.True(
+		t,
+		baselineChanged,
+		"OnBaselineChange must fire when pending resolve finalizes",
+	)
+	live = e.state[inc.Key]
+	if live != nil {
+		assert.Equal(t, model.StateResolved, live.State)
+	}
+}

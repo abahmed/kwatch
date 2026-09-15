@@ -1,0 +1,282 @@
+package delivery
+
+import (
+	"context"
+	"strings"
+	"time"
+
+	"k8s.io/klog/v2"
+)
+
+// AddProvider appends a provider entry for testing or late registration.
+
+func (a *Manager) AddProvider(p Provider) {
+	if isNilProvider(p) {
+		klog.InfoS("nil alert provider was not added")
+		return
+	}
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	if a.stopped {
+		klog.InfoS("delivery manager is stopping; provider was not added",
+			"provider", p.Name())
+		return
+	}
+	entry := providerEntry{
+		provider: p,
+		retry: retryConfig{
+			maxAttempts: 1,
+			delay:       time.Second,
+			maxBackoff:  defaultMaxBackoff,
+		},
+		ch: make(chan deliverJob, channelCap),
+	}
+	if a.generation == nil {
+		a.generation = a.currentGenerationLocked()
+	}
+	if a.generation == nil {
+		a.generation = newProviderGeneration(nil)
+	}
+	entries := make(map[string]providerEntry,
+		len(a.generation.entries)+1)
+	for name, existing := range a.generation.entries {
+		entries[name] = existing
+	}
+	name := strings.ToLower(p.Name())
+	if _, exists := entries[name]; exists {
+		klog.InfoS("alert provider is already registered",
+			"provider", p.Name())
+		return
+	}
+	entries[name] = entry
+	order := append([]string(nil), a.generation.order...)
+	order = append(order, name)
+	a.generation = &providerGeneration{entries: entries, order: order}
+	if a.started {
+		if a.workerCount == 0 {
+			a.workerDone = make(chan struct{})
+			a.done = a.workerDone
+		}
+		ctx := a.workerCtx
+		if ctx == nil {
+			ctx = context.Background()
+		}
+		a.workerCount++
+		// Pass a value to the worker. The channel remains shared with the
+		// entry stored by the manager, while the worker cannot point into a
+		// slice that may be reallocated by a later registration.
+		go a.runProvider(entry, ctx)
+	}
+}
+
+// Start launches a worker goroutine for each provider that processes
+// queued deliveries. Workers drain and stop when ctx is cancelled.
+
+func (a *Manager) Start(ctx context.Context) {
+	if ctx == nil {
+		ctx = context.Background()
+	}
+	a.mu.Lock()
+	if a.started && !a.stopped {
+		a.mu.Unlock()
+		return
+	}
+	if a.generation == nil {
+		a.generation = a.currentGenerationLocked()
+	}
+	if a.generation == nil {
+		a.generation = newProviderGeneration(nil)
+	}
+	if a.stopped {
+		a.generation = cloneProviderGeneration(a.generation, true)
+	}
+	a.started = true
+	a.stopped = false
+	a.ctx = ctx
+	generation := cloneProviderGeneration(a.generation, false)
+	a.workerCtx, a.cancelWorker = context.WithCancel(ctx)
+	a.workerDone = make(chan struct{})
+	a.workerCount = len(generation.order)
+	if a.workerCount == 0 {
+		close(a.workerDone)
+	}
+	a.done = a.workerDone
+	for _, name := range generation.order {
+		entry := generation.entries[name]
+		go a.runProvider(entry, a.workerCtx)
+	}
+	a.mu.Unlock()
+}
+
+func (a *Manager) runProvider(entry providerEntry, ctx context.Context) {
+	defer a.workerFinished()
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case job, ok := <-entry.ch:
+			if !ok {
+				return
+			}
+			// Routing is decided before pacing. A job this provider does not
+			// want is not a delivery, and making it wait its turn spent the
+			// provider's send slot on nothing: with a route that matches one
+			// namespace, a storm elsewhere throttled the alerts that did match.
+			if job.kind == jobIncident && !shouldDeliver(entry.routes, job.inc) {
+				continue
+			}
+			// Pace before delivering: the queue absorbs the burst, the provider
+			// sees a rate it tolerates. Cancellation stops delivery promptly.
+			if a.waitForSendSlot(ctx, entry.provider.Name()) {
+				a.deliverOne(ctx, &entry, job)
+				a.flushDigest(ctx, &entry)
+			}
+		}
+	}
+}
+
+func (a *Manager) workerFinished() {
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	if a.workerCount == 0 {
+		return
+	}
+	a.workerCount--
+	if a.workerCount == 0 && a.workerDone != nil {
+		close(a.workerDone)
+	}
+}
+
+// shutdown waits for all delivery workers to finish (used in tests).
+
+func (a *Manager) shutdown() {
+	_ = a.shutdownContext(context.Background())
+}
+
+func (a *Manager) shutdownContext(ctx context.Context) error {
+	a.mu.Lock()
+	if a.stopped {
+		done := a.workerDone
+		cancel := a.cancelWorker
+		a.mu.Unlock()
+		return waitForWorkers(ctx, done, cancel)
+	}
+	a.stopped = true
+	generation := cloneProviderGeneration(a.generation, false)
+	done := a.workerDone
+	cancel := a.cancelWorker
+	a.mu.Unlock()
+
+	// Anything still queued when we get here is delivered by the per-provider
+	// worker before it returns, but a process killed
+	// mid-shutdown loses the queue. That now includes plain messages and
+	// events, which used to be sent synchronously by their caller: the
+	// startup notification can be lost if kwatch is killed within the pacing
+	// delay of starting. Accepted -- the alternative is holding informer
+	// startup behind a slow provider, which is what the synchronous path did.
+	//
+	// 1) close provider channels under a.mu so fanOut (also under a.mu) never
+	//    sends on a closed channel.
+	a.mu.Lock()
+	if generation != nil {
+		for _, name := range generation.order {
+			if ch := generation.entries[name].ch; ch != nil {
+				close(ch)
+			}
+		}
+	}
+	a.mu.Unlock()
+	if done == nil {
+		return nil
+	}
+	return waitForWorkers(ctx, done, cancel)
+}
+
+func waitForWorkers(
+	ctx context.Context,
+	done <-chan struct{},
+	cancel context.CancelFunc,
+) error {
+	if done == nil {
+		return nil
+	}
+	select {
+	case <-done:
+		return nil
+	case <-ctx.Done():
+		if cancel != nil {
+			cancel()
+		}
+		return ctx.Err()
+	}
+}
+
+// Stop stops all provider workers and waits for the current generation to
+// drain. The application owns this call, which keeps delivery lifecycle
+// visible to the application supervisor instead of hiding a context watcher
+// inside the manager.
+func (a *Manager) Stop(ctx context.Context) error {
+	if ctx == nil {
+		ctx = context.Background()
+	}
+	return a.shutdownContext(ctx)
+}
+
+func cloneProviderGeneration(
+	generation *providerGeneration,
+	newChannels bool,
+) *providerGeneration {
+	if generation == nil {
+		return nil
+	}
+	clone := &providerGeneration{
+		entries: make(map[string]providerEntry, len(generation.entries)),
+		order:   append([]string(nil), generation.order...),
+	}
+	for name, entry := range generation.entries {
+		if newChannels {
+			entry.ch = make(chan deliverJob, channelCap)
+		}
+		clone.entries[name] = entry
+	}
+	return clone
+}
+
+func generationEntries(generation *providerGeneration) []providerEntry {
+	if generation == nil {
+		return nil
+	}
+	entries := make([]providerEntry, 0, len(generation.order))
+	for _, name := range generation.order {
+		entries = append(entries, generation.entries[name])
+	}
+	return entries
+}
+
+// Done returns a channel that is closed when the Manager has fully
+// drained and shut down (all provider workers finished).
+
+func (a *Manager) Done() <-chan struct{} {
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	if a.done != nil {
+		return a.done
+	}
+	ch := make(chan struct{})
+	close(ch)
+	return ch
+}
+
+// DeadLetters returns a copy of the dead-letter ring buffer.
+
+func (a *Manager) DeadLetters() []DeadLetterEntry {
+	a.dlqMu.Lock()
+	defer a.dlqMu.Unlock()
+	n := a.dlqCount
+	out := make([]DeadLetterEntry, n)
+	for i := 0; i < n; i++ {
+		idx := (a.dlqHead - n + i + dlqCap) % dlqCap
+		out[i] = a.dlqRing[idx]
+	}
+	return out
+}

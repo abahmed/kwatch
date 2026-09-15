@@ -1,28 +1,34 @@
 package threema
 
 import (
+	"context"
 	"net/url"
 
 	"k8s.io/klog/v2"
 
-	"github.com/abahmed/kwatch/internal/alert/util"
-	"github.com/abahmed/kwatch/internal/config"
+	"github.com/abahmed/kwatch/internal/delivery/transport"
 	"github.com/abahmed/kwatch/internal/event"
 )
 
 const threemaAPIURL = "https://gateway.threema.ch/push_simple"
 
 type Threema struct {
+	sender    transport.Sender
 	url       string
 	gatewayID string
 	secret    string
 	to        string
 
-	appCfg *config.App
+	clusterName string
 }
 
 // NewThreema returns a new Threema object
-func NewThreema(config map[string]interface{}, appCfg *config.App) *Threema {
+
+func NewThreema(
+	config map[string]interface{},
+	clusterName string,
+	dependencies transport.Dependencies,
+) *Threema {
 	gatewayID, ok := config["gatewayId"].(string)
 	if !ok || len(gatewayID) == 0 {
 		klog.InfoS("initializing threema with empty gatewayId")
@@ -44,11 +50,12 @@ func NewThreema(config map[string]interface{}, appCfg *config.App) *Threema {
 	klog.InfoS("initializing threema", "gatewayId", gatewayID)
 
 	return &Threema{
-		url:       threemaAPIURL,
-		gatewayID: gatewayID,
-		secret:    secret,
-		to:        to,
-		appCfg:    appCfg,
+		sender:      transport.NewSender(dependencies),
+		url:         threemaAPIURL,
+		gatewayID:   gatewayID,
+		secret:      secret,
+		to:          to,
+		clusterName: clusterName,
 	}
 }
 
@@ -58,13 +65,13 @@ func (s *Threema) Name() string {
 }
 
 // SendEvent sends event to the provider
-func (s *Threema) SendEvent(e *event.Event) error {
-	msg := e.FormatText(s.appCfg.ClusterName, "")
-	return s.SendMessage(msg)
+func (s *Threema) SendEvent(ctx context.Context, e *event.Event) error {
+	msg := e.FormatText(s.clusterName, "")
+	return s.SendMessage(ctx, msg)
 }
 
 // SendMessage sends text message to the provider
-func (s *Threema) SendMessage(msg string) error {
+func (s *Threema) SendMessage(ctx context.Context, msg string) error {
 	form := url.Values{}
 	form.Set("from", s.gatewayID)
 	form.Set("to", s.to)
@@ -72,6 +79,9 @@ func (s *Threema) SendMessage(msg string) error {
 	form.Set("text", msg)
 
 	body := []byte(form.Encode())
-	_, err := util.Post(s.Name(), s.url, body, "application/x-www-form-urlencoded", nil)
+	_, err := s.sender.Send(ctx, transport.Request{
+		Provider: s.Name(), URL: s.url, Body: body,
+		ContentType: "application/x-www-form-urlencoded",
+	})
 	return err
 }

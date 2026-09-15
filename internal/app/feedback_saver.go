@@ -1,0 +1,91 @@
+package app
+
+import (
+	"context"
+	"time"
+
+	"k8s.io/klog/v2"
+
+	"github.com/abahmed/kwatch/internal/insight"
+)
+
+type feedbackSaver interface {
+	SaveRCAFeedback(context.Context, []insight.RCARecord) error
+}
+
+func trySendFeedbackSnapshot(
+	ch chan []insight.RCARecord,
+	snapshot []insight.RCARecord,
+) {
+	select {
+	case ch <- snapshot:
+	default:
+		select {
+		case <-ch:
+		default:
+		}
+		select {
+		case ch <- snapshot:
+		default:
+		}
+	}
+}
+
+// startFeedbackSaver keeps ConfigMap I/O out of the incident lifecycle hook.
+// Feedback is advisory state, so the newest coalesced snapshot is sufficient.
+func startFeedbackSaver(
+	ctx context.Context,
+	persistenceManager feedbackSaver,
+	ch <-chan []insight.RCARecord,
+	done chan<- struct{},
+) {
+	defer close(done)
+	var pending []insight.RCARecord
+	ticker := time.NewTicker(10 * time.Second)
+	defer ticker.Stop()
+	save := func(timeout time.Duration) {
+		if pending == nil {
+			return
+		}
+		fctx, cancel := context.WithTimeout(context.Background(), timeout)
+		err := persistenceManager.SaveRCAFeedback(fctx, pending)
+		if err != nil {
+			klog.ErrorS(err, "failed to persist RCA feedback")
+			cancel()
+			return
+		}
+		cancel()
+		pending = nil
+	}
+	for {
+		select {
+		case snapshot := <-ch:
+			pending = snapshot
+		case <-ticker.C:
+			save(5 * time.Second)
+		case <-ctx.Done():
+			for {
+				select {
+				case snapshot := <-ch:
+					pending = snapshot
+				default:
+					save(5 * time.Second)
+					return
+				}
+			}
+		}
+	}
+}
+
+func waitFeedbackSaver(deps *serverDeps) bool {
+	if deps.feedbackDone == nil {
+		return true
+	}
+	select {
+	case <-deps.feedbackDone:
+		return true
+	case <-time.After(componentShutdownTimeout):
+		recordShutdownTimeout("feedback-saver")
+		return false
+	}
+}

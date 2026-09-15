@@ -1,6 +1,7 @@
 package teamsworkflow
 
 import (
+	"context"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -8,14 +9,22 @@ import (
 
 	"github.com/stretchr/testify/assert"
 
-	"github.com/abahmed/kwatch/internal/config"
+	"github.com/abahmed/kwatch/internal/delivery/transport"
 	"github.com/abahmed/kwatch/internal/event"
 )
+
+var testDeps = transport.Dependencies{
+	HTTPClient: http.DefaultClient,
+}
+
+func testAppConfig() string {
+	return "dev"
+}
 
 func TestEmptyConfig(t *testing.T) {
 	assert := assert.New(t)
 
-	c := NewTeamsWorkflow(map[string]interface{}{}, &config.App{ClusterName: "dev"})
+	c := NewTeamsWorkflow(map[string]interface{}{}, testAppConfig(), testDeps)
 	assert.Nil(c)
 }
 
@@ -25,7 +34,7 @@ func TestTeamsWorkflow(t *testing.T) {
 	configMap := map[string]interface{}{
 		"webhook": "https://prod-00.westeurope.logic.azure.com/triggers/manual/run/abc",
 	}
-	c := NewTeamsWorkflow(configMap, &config.App{ClusterName: "dev"})
+	c := NewTeamsWorkflow(configMap, testAppConfig(), testDeps)
 	assert.NotNil(c)
 	assert.Equal(c.Name(), "Teams Workflow")
 }
@@ -46,10 +55,10 @@ func TestSendMessage(t *testing.T) {
 	configMap := map[string]interface{}{
 		"webhook": "https://prod-00.westeurope.logic.azure.com/triggers/manual/run/abc",
 	}
-	c := NewTeamsWorkflow(configMap, &config.App{ClusterName: "dev"})
+	c := NewTeamsWorkflow(configMap, testAppConfig(), testDeps)
 	c.webhook = s.URL
 
-	assert.Nil(c.SendMessage("test"))
+	assert.Nil(c.SendMessage(context.Background(), "test"))
 	assert.Contains(gotBody, `"type":"message"`)
 	assert.Contains(gotBody, `"contentType":"application/vnd.microsoft.card.adaptive"`)
 	assert.Contains(gotBody, `"text":"test"`)
@@ -69,10 +78,10 @@ func TestSendMessageError(t *testing.T) {
 	configMap := map[string]interface{}{
 		"webhook": "https://prod-00.westeurope.logic.azure.com/triggers/manual/run/abc",
 	}
-	c := NewTeamsWorkflow(configMap, &config.App{ClusterName: "dev"})
+	c := NewTeamsWorkflow(configMap, testAppConfig(), testDeps)
 	c.webhook = s.URL
 
-	assert.NotNil(c.SendMessage("test"))
+	assert.NotNil(c.SendMessage(context.Background(), "test"))
 }
 
 func TestSendEvent(t *testing.T) {
@@ -90,7 +99,7 @@ func TestSendEvent(t *testing.T) {
 	configMap := map[string]interface{}{
 		"webhook": "https://prod-00.westeurope.logic.azure.com/triggers/manual/run/abc",
 	}
-	c := NewTeamsWorkflow(configMap, &config.App{ClusterName: "dev"})
+	c := NewTeamsWorkflow(configMap, testAppConfig(), testDeps)
 	c.webhook = s.URL
 
 	ev := event.Event{
@@ -98,7 +107,7 @@ func TestSendEvent(t *testing.T) {
 		Namespace: "default",
 		Reason:    "OOMKILLED",
 	}
-	assert.Nil(c.SendEvent(&ev))
+	assert.Nil(c.SendEvent(context.Background(), &ev))
 }
 
 func TestInvalidHttpRequest(t *testing.T) {
@@ -107,11 +116,11 @@ func TestInvalidHttpRequest(t *testing.T) {
 	configMap := map[string]interface{}{
 		"webhook": "https://prod-00.westeurope.logic.azure.com/triggers/manual/run/abc",
 	}
-	c := NewTeamsWorkflow(configMap, &config.App{ClusterName: "dev"})
+	c := NewTeamsWorkflow(configMap, testAppConfig(), testDeps)
 	c.webhook = "h ttp://localhost/%s"
 
-	assert.NotNil(c.SendMessage("test"))
+	assert.NotNil(c.SendMessage(context.Background(), "test"))
 
 	c.webhook = "http://localhost:132323/%s"
-	assert.NotNil(c.SendMessage("test"))
+	assert.NotNil(c.SendMessage(context.Background(), "test"))
 }

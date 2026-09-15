@@ -7,6 +7,7 @@ import (
 
 	kwcontext "github.com/abahmed/kwatch/internal/graphcontext"
 	"github.com/abahmed/kwatch/internal/metrics"
+	"github.com/abahmed/kwatch/internal/observe"
 )
 
 func (c *Controller) SetReadyFunc(fn func()) { c.readyFn = fn }
@@ -76,4 +77,14 @@ func (c *Controller) ServiceLister() corev1lister.ServiceLister {
 
 func (c *Controller) NodeLister() corev1lister.NodeLister {
 	return c.nodeLister
+}
+
+// OwnerResolver exposes the controller's synchronized owner caches to
+// integrations that need attribution without depending on controller state.
+func (c *Controller) OwnerResolver() observe.OwnerResolver {
+	return observe.PodOwners{
+		RS: c.rsLister,
+		DS: c.dsLister,
+		SS: c.ssLister,
+	}
 }

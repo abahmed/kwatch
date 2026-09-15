@@ -4,8 +4,8 @@ import (
 	"sync"
 	"time"
 
-	"github.com/abahmed/kwatch/internal/correlation"
 	"github.com/abahmed/kwatch/internal/insight"
+	"github.com/abahmed/kwatch/internal/model"
 )
 
 // activeKeyTTL bounds how stale the active-incident view used for evidence may
@@ -20,7 +20,7 @@ const activeKeyTTL = 2 * time.Second
 // diagnosis. On a cluster holding a few hundred incidents that is tens of
 // thousands of string splits per notification, on the delivery path.
 func newActiveGraphKeyChecker(
-	engine *correlation.Engine,
+	activeIncidents func() map[model.IncidentKey]*model.Incident,
 	now func() time.Time,
 ) func(kind, namespace, name string) bool {
 	var (
@@ -33,7 +33,7 @@ func newActiveGraphKeyChecker(
 		defer mu.Unlock()
 		if keys == nil || now().After(expires) {
 			keys = make(map[string]bool)
-			for _, inc := range engine.ActiveIncidents() {
+			for _, inc := range activeIncidents() {
 				for _, key := range insight.IncidentGraphKeys(inc) {
 					keys[key] = true
 				}

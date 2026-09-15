@@ -1,14 +1,15 @@
 package pagerduty
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 
 	"k8s.io/klog/v2"
 
-	"github.com/abahmed/kwatch/internal/alert/util"
-	"github.com/abahmed/kwatch/internal/config"
+	"github.com/abahmed/kwatch/internal/delivery/transport"
 	"github.com/abahmed/kwatch/internal/event"
+	"github.com/abahmed/kwatch/internal/format"
 	"github.com/abahmed/kwatch/internal/model"
 )
 
@@ -43,17 +44,20 @@ type pagerdutyCustomDetails struct {
 }
 
 type Pagerduty struct {
+	sender         transport.Sender
 	integrationKey string
 	url            string
 
 	// reference for general app configuration
-	appCfg *config.App
+	clusterName string
 }
 
 // NewPagerDuty returns new PagerDuty instance
+
 func NewPagerDuty(
 	config map[string]interface{},
-	appCfg *config.App,
+	clusterName string,
+	dependencies transport.Dependencies,
 ) *Pagerduty {
 	integrationKey, ok := config["integrationKey"].(string)
 	if !ok || len(integrationKey) == 0 {
@@ -64,9 +68,10 @@ func NewPagerDuty(
 	klog.InfoS("initializing pagerduty with the provided integration key")
 
 	return &Pagerduty{
+		sender:         transport.NewSender(dependencies),
 		integrationKey: integrationKey,
 		url:            pagerdutyAPIURL,
-		appCfg:         appCfg,
+		clusterName:    clusterName,
 	}
 }
 
@@ -78,19 +83,19 @@ func (p *Pagerduty) Name() string {
 func (p *Pagerduty) UsesEventDelivery() {}
 
 // SendEvent sends event to the provider
-func (p *Pagerduty) SendEvent(ev *event.Event) error {
+func (p *Pagerduty) SendEvent(ctx context.Context, ev *event.Event) error {
 	reqBody, err := p.buildRequestBodyPagerDuty(ev, p.integrationKey)
 	if err != nil {
 		return err
 	}
-	_, err = util.Send(
-		util.Request{Provider: "PagerDuty", URL: p.url, Body: []byte(reqBody)},
-	)
+	_, err = p.sender.Send(ctx, transport.Request{
+		Provider: "PagerDuty", URL: p.url, Body: []byte(reqBody),
+	})
 	return err
 }
 
 // SendMessage sends text message to the provider
-func (p *Pagerduty) SendMessage(msg string) error {
+func (p *Pagerduty) SendMessage(ctx context.Context, msg string) error {
 	return nil
 }
 
@@ -123,14 +128,14 @@ func (p *Pagerduty) buildRequestBodyPagerDuty(
 		eventAction = "resolve"
 	}
 
-	summary := fmt.Sprintf("Alert: %s", util.OrDefault(ev.Reason, "unknown"))
+	summary := fmt.Sprintf("Alert: %s", format.OrDefault(ev.Reason, "unknown"))
 	if ev.ContainerName != "" {
 		summary = fmt.Sprintf(defaultEventTitle, ev.ContainerName)
 	}
 
-	source := util.OrDefault(
+	source := format.OrDefault(
 		ev.ContainerName,
-		util.OrDefault(ev.PodName, "unknown"),
+		format.OrDefault(ev.PodName, "unknown"),
 	)
 
 	payload := pagerdutyPayload{
@@ -142,14 +147,14 @@ func (p *Pagerduty) buildRequestBodyPagerDuty(
 			Source:   source,
 			Severity: pagerdutySeverity(ev.Severity),
 			CustomDetail: pagerdutyCustomDetails{
-				Cluster:   p.appCfg.ClusterName,
+				Cluster:   p.clusterName,
 				Name:      ev.PodName,
 				Container: ev.ContainerName,
 				Namespace: ev.Namespace,
 				Node:      ev.NodeName,
 				Reason:    ev.Reason,
-				Events:    util.OrDefault(ev.Events, ""),
-				Logs:      util.OrDefault(ev.Logs, ""),
+				Events:    format.OrDefault(ev.Events, ""),
+				Logs:      format.OrDefault(ev.Logs, ""),
 			},
 		},
 	}

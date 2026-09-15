@@ -4,8 +4,6 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/abahmed/kwatch/internal/alert/util"
-	"github.com/abahmed/kwatch/internal/config"
 	"github.com/abahmed/kwatch/internal/insight"
 	"github.com/abahmed/kwatch/internal/message"
 	"github.com/abahmed/kwatch/internal/model"
@@ -73,7 +71,7 @@ func evidenceTitle(title string, inc *model.Incident) string {
 // fixed-size code blocks.
 func chunkedSections(title, text string) []slackClient.Block {
 	blocks := []slackClient.Block{markdownSection(title)}
-	for _, chunk := range util.Chunks(text, chunkSize) {
+	for _, chunk := range message.Chunks(text, chunkSize) {
 		blocks = append(blocks, markdownSection("```"+chunk+"```"))
 	}
 	return blocks
@@ -108,13 +106,9 @@ func reportFor(
 	inc *model.Incident,
 	action model.IncidentAction,
 	ins *insight.Insight,
-	appCfg *config.App,
+	clusterName string,
 ) *message.Report {
-	cluster := ""
-	if appCfg != nil {
-		cluster = appCfg.ClusterName
-	}
-	return message.NewReportBuilder(cluster).Build(inc, action, ins)
+	return message.NewReportBuilder(clusterName).Build(inc, action, ins)
 }
 
 // headline is the one line a reader sees first: what happened, to what.

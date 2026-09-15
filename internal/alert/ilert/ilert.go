@@ -1,13 +1,13 @@
 package ilert
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 
 	"k8s.io/klog/v2"
 
-	"github.com/abahmed/kwatch/internal/alert/util"
-	"github.com/abahmed/kwatch/internal/config"
+	"github.com/abahmed/kwatch/internal/delivery/transport"
 	"github.com/abahmed/kwatch/internal/event"
 )
 
@@ -21,15 +21,21 @@ type ilertPayload struct {
 }
 
 type Ilert struct {
+	sender         transport.Sender
 	url            string
 	integrationKey string
 	priority       string
 
-	appCfg *config.App
+	clusterName string
 }
 
 // NewIlert returns a new Ilert object
-func NewIlert(config map[string]interface{}, appCfg *config.App) *Ilert {
+
+func NewIlert(
+	config map[string]interface{},
+	clusterName string,
+	dependencies transport.Dependencies,
+) *Ilert {
 	integrationKey, ok := config["integrationKey"].(string)
 	if !ok || len(integrationKey) == 0 {
 		klog.InfoS("initializing ilert with empty integrationKey")
@@ -44,10 +50,11 @@ func NewIlert(config map[string]interface{}, appCfg *config.App) *Ilert {
 	klog.InfoS("initializing ilert", "priority", priority)
 
 	return &Ilert{
+		sender:         transport.NewSender(dependencies),
 		url:            fmt.Sprintf(ilertAPIURL, integrationKey),
 		integrationKey: integrationKey,
 		priority:       priority,
-		appCfg:         appCfg,
+		clusterName:    clusterName,
 	}
 }
 
@@ -57,12 +64,12 @@ func (i *Ilert) Name() string {
 }
 
 // SendEvent sends event to the provider
-func (i *Ilert) SendEvent(e *event.Event) error {
-	return i.SendMessage(e.FormatText(i.appCfg.ClusterName, ""))
+func (i *Ilert) SendEvent(ctx context.Context, e *event.Event) error {
+	return i.SendMessage(ctx, e.FormatText(i.clusterName, ""))
 }
 
 // SendMessage sends text message to the provider
-func (i *Ilert) SendMessage(msg string) error {
+func (i *Ilert) SendMessage(ctx context.Context, msg string) error {
 	payload := ilertPayload{
 		EventType: "ALERT",
 		Summary:   msg,
@@ -75,6 +82,9 @@ func (i *Ilert) SendMessage(msg string) error {
 		return err
 	}
 
-	_, err = util.Post(i.Name(), i.url, body, "application/json", nil)
+	_, err = i.sender.Send(ctx, transport.Request{
+		Provider: i.Name(), URL: i.url, Body: body,
+		ContentType: "application/json",
+	})
 	return err
 }

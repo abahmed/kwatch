@@ -79,7 +79,9 @@ func TestEnqueueLeaseSweepQueuesAllLeases(t *testing.T) {
 		t.Fatal(err)
 	}
 	c := &Controller{
-		lease:       newResourcePipeline("lease", "leases"),
+		pipelineSet: pipelineSet{
+			lease: newResourcePipeline("lease", "leases"),
+		},
 		leaseLister: factory.Coordination().V1().Leases().Lister(),
 	}
 	defer c.lease.shutdown()

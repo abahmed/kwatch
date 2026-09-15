@@ -13,7 +13,9 @@ documentation, bug reports, and ideas are all welcome.
 - 💬 Ask in [Discord](https://discord.gg/kzJszdKmJ7)
 
 For a large change, open an issue or discuss it in Discord before coding. This
-helps us agree on the approach and avoids duplicated work.
+helps us agree on the approach and avoids duplicated work. The complete
+contributor guide, architecture tour, extension workflows, and documentation
+guide live at [kwatch.dev/docs](https://kwatch.dev/docs).
 
 ## 🛠️ Local development
 
@@ -28,7 +30,7 @@ make verify
 ```
 
 The gate builds the binary, runs `go vet`, runs the tests, checks formatting and
-line length, and runs `golangci-lint`.
+line length, checks package boundaries, and runs `golangci-lint`.
 
 ## 📐 Code and documentation rules
 
@@ -36,6 +38,8 @@ line length, and runs `golangci-lint`.
   [AGENTS.md](./AGENTS.md).
 - Inject clocks and I/O collaborators when behavior depends on time or a
   network/API call.
+- Keep dependency direction explicit; use `make architecture-check` when
+  adding or moving packages.
 - Add focused tests for behavior changes.
 - Keep docs task-focused: explain the goal, show a complete command, and use
   fake credentials.
@@ -46,14 +50,17 @@ line length, and runs `golangci-lint`.
 ## 📚 Where documentation belongs
 
 - [README](./README.md): short product explanation and quick install.
-- [`docs/configuration.md`](./docs/configuration.md): every setting and monitor.
-- [`docs/providers.md`](./docs/providers.md): every alert provider.
-- [`docs/architecture.md`](./docs/architecture.md): design and runtime behavior.
-- [`docs/kwatch-sh.md`](./docs/kwatch-sh.md): interactive manager behavior.
-- [kwatch.dev](https://kwatch.dev): beginner guides and the public docs site.
+- [AGENTS.md](./AGENTS.md): code and agent conventions for this repository.
+- [kwatch.dev/docs](https://kwatch.dev/docs): canonical published tutorials,
+  how-to guides, reference, architecture, operations, and contributor docs.
+- `deploy/*-catalog.tsv`: generated metadata consumed by installers and the
+  documentation synchronization workflow.
+- `docs/`: source-tree release, legal, security, and offline references that
+  are not duplicated as public technical pages.
 
-When adding a feature, update the short README section and the detailed
-reference. Keep the two repositories consistent.
+When adding a feature, update code, tests, generated catalogs, and the
+appropriate canonical website documentation in the same change or through the
+automated documentation PR workflow.
 
 ## 🚧 Unreleased features
 

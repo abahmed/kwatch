@@ -11,10 +11,19 @@ import (
 	"github.com/abahmed/kwatch/internal/observe"
 )
 
+// observationStateKey identifies one kubelet signal for hysteresis. The key
+// is local monitor state; incident identity remains owned by incident.Engine.
+func observationStateKey(obs *model.Observation) string {
+	if obs == nil {
+		return ""
+	}
+	return obs.Subject.Key() + ":" + obs.Reason
+}
+
 func (m *Monitor) report(
 	node, reason string, severity model.Severity, hint string,
 ) {
-	m.correlator.Process(
+	m.incidentSink.Process(
 		observe.NodeNamed(node, reason).
 			WithSeverity(severity).WithHint(hint),
 	)
@@ -24,7 +33,7 @@ func (m *Monitor) reportContainer(
 	pod *corev1.Pod, container string, owner model.ObjectRef,
 	severity model.Severity, percent float64,
 ) {
-	m.correlator.Process(
+	m.incidentSink.Process(
 		observe.PodOwnedBy(
 			pod, container, constant.ReasonContainerCPUThrottled, owner,
 		).WithSeverity(severity).WithHint(fmt.Sprintf(
@@ -35,7 +44,7 @@ func (m *Monitor) reportContainer(
 }
 
 func (m *Monitor) resolve(node, reason string) {
-	m.correlator.Resolve(
+	m.incidentSink.Resolve(
 		model.ObjectRef{Kind: "node", Name: node}, reason,
 	)
 }
@@ -51,7 +60,7 @@ func (m *Monitor) resolveContainer(namespace, pod, container string) {
 	if obj == nil {
 		obs.Subject.Namespace, obs.Subject.Name = namespace, pod
 	}
-	m.correlator.ResolveObserved(obs)
+	m.incidentSink.ResolveObserved(obs)
 }
 
 // podOwner returns the incident owner for a pod the way the rest of the

@@ -5,11 +5,11 @@ import (
 
 	"k8s.io/klog/v2"
 
-	"github.com/abahmed/kwatch/internal/correlation"
-	"github.com/abahmed/kwatch/internal/state"
+	"github.com/abahmed/kwatch/internal/incident"
+	"github.com/abahmed/kwatch/internal/persistence"
 )
 
-// threadRestorer is the narrow slice of the alert manager needed to hand
+// threadRestorer is the narrow slice of the delivery manager needed to hand
 // saved conversation ids back to their providers.
 type threadRestorer interface {
 	RestoreThreads(map[string]map[string]string)
@@ -23,14 +23,14 @@ type threadRestorer interface {
 // alert threaded under a week-old message nobody is reading.
 func restoreProviderThreads(
 	ctx context.Context,
-	stateMgr *state.StateManager,
+	persistenceManager persistence.IncidentStore,
 	am threadRestorer,
-	correlator *correlation.Engine,
+	incidentEngine *incident.Engine,
 ) {
 	if am == nil {
 		return
 	}
-	saved, err := stateMgr.LoadProviderThreads(ctx)
+	saved, err := persistenceManager.LoadProviderThreads(ctx)
 	if err != nil {
 		klog.ErrorS(err, "failed to restore provider thread state")
 		return
@@ -39,7 +39,7 @@ func restoreProviderThreads(
 		return
 	}
 	live := make(map[string]bool)
-	for _, inc := range correlator.ActiveIncidents() {
+	for _, inc := range incidentEngine.ActiveIncidents() {
 		live[string(inc.Key)] = true
 	}
 	kept := make(map[string]map[string]string, len(saved))
@@ -68,13 +68,13 @@ func restoreProviderThreads(
 // incidents that did not return are dropped rather than resurrected.
 func restoreEngineState(
 	ctx context.Context,
-	stateMgr *state.StateManager,
-	correlator *correlation.Engine,
+	persistenceManager persistence.IncidentStore,
+	incidentEngine *incident.Engine,
 ) {
-	engine, err := stateMgr.LoadEngineState(ctx)
+	engine, err := persistenceManager.LoadEngineState(ctx)
 	if err != nil {
 		klog.ErrorS(err, "failed to restore engine state from configmap")
 		return
 	}
-	correlator.RestoreEngineState(engine)
+	incidentEngine.RestoreEngineState(engine)
 }

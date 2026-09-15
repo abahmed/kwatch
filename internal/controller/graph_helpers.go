@@ -30,8 +30,8 @@ func endpointAddress(ep discoveryv1.Endpoint) string {
 	return "unknown"
 }
 
-func (c *Controller) rebuildPersistentVolumeClaim(obj interface{}) {
-	if c.graph == nil {
+func (b *graphBuilder) rebuildPersistentVolumeClaim(obj interface{}) {
+	if b.graph == nil {
 		return
 	}
 	pvc, ok := obj.(*corev1.PersistentVolumeClaim)
@@ -49,21 +49,21 @@ func (c *Controller) rebuildPersistentVolumeClaim(obj interface{}) {
 			Kind: "storageclass", Name: *sc, Type: graphEdgeUsesSC,
 		})
 	}
-	c.graph.ReplaceOutgoingEdges("pvc", pvc.Namespace, pvc.Name, targets)
+	b.graph.ReplaceOutgoingEdges("pvc", pvc.Namespace, pvc.Name, targets)
 }
 
 // rebuildPersistentVolume links a PV to the node(s) it can be scheduled on via
 // node affinity (used by local PVs), so a node failure surfaces the volumes
 // affected. The affinity selector is resolved against the node informer cache.
-func (c *Controller) rebuildPersistentVolume(obj interface{}) {
-	if c.graph == nil {
+func (b *graphBuilder) rebuildPersistentVolume(obj interface{}) {
+	if b.graph == nil {
 		return
 	}
 	pv, ok := obj.(*corev1.PersistentVolume)
 	if !ok {
 		return
 	}
-	if err := c.rebuildPersistentVolumeChecked(pv); err != nil {
+	if err := b.rebuildPersistentVolumeChecked(pv); err != nil {
 		klog.ErrorS(
 			err,
 			"failed to rebuild persistentvolume graph edges; keeping previous edges",
@@ -72,10 +72,10 @@ func (c *Controller) rebuildPersistentVolume(obj interface{}) {
 	}
 }
 
-func (c *Controller) rebuildPersistentVolumeChecked(
+func (b *graphBuilder) rebuildPersistentVolumeChecked(
 	pv *corev1.PersistentVolume,
 ) error {
-	nodeNames, err := c.persistentVolumeNodeNames(pv)
+	nodeNames, err := b.persistentVolumeNodeNames(pv)
 	if err != nil {
 		return err
 	}
@@ -90,15 +90,15 @@ func (c *Controller) rebuildPersistentVolumeChecked(
 			Kind: "storageclass", Name: pv.Spec.StorageClassName, Type: graphEdgeUsesSC,
 		})
 	}
-	c.graph.ReplaceOutgoingEdges("persistentvolume", "", pv.Name, targets)
+	b.graph.ReplaceOutgoingEdges("persistentvolume", "", pv.Name, targets)
 	return nil
 }
 
-func (c *Controller) persistentVolumeNodeNames(
+func (b *graphBuilder) persistentVolumeNodeNames(
 	pv *corev1.PersistentVolume,
 ) ([]string, error) {
 	if pv.Spec.NodeAffinity == nil ||
-		pv.Spec.NodeAffinity.Required == nil || c.nodeLister == nil {
+		pv.Spec.NodeAffinity.Required == nil || b.nodeLister == nil {
 		return nil, nil
 	}
 	var names []string
@@ -107,7 +107,7 @@ func (c *Controller) persistentVolumeNodeNames(
 		if err != nil {
 			return nil, fmt.Errorf("build node selector: %w", err)
 		}
-		nodes, err := c.nodeLister.List(selector)
+		nodes, err := b.nodeLister.List(selector)
 		if err != nil {
 			return nil, fmt.Errorf("list matching nodes: %w", err)
 		}

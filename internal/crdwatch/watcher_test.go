@@ -1,6 +1,7 @@
 package crdwatch
 
 import (
+	"errors"
 	"testing"
 
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
@@ -58,4 +59,20 @@ func TestWatcherIgnoresMalformedObjects(t *testing.T) {
 		ready:   true,
 	}
 	watcher.changed(struct{}{})
+}
+
+func TestWatcherReportsDiscoveryDegradation(t *testing.T) {
+	var reported error
+	watcher := &Watcher{
+		started:    true,
+		statusSink: func(err error) { reported = err },
+	}
+
+	watcher.reportError(errors.New("discovery unavailable"))
+
+	status := watcher.Status()
+	if reported == nil || status.State != "degraded" ||
+		status.LastError == "" {
+		t.Fatalf("status = %+v, reported = %v", status, reported)
+	}
 }

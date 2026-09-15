@@ -1,13 +1,13 @@
 package goalert
 
 import (
+	"context"
 	"encoding/json"
 	"strings"
 
 	"k8s.io/klog/v2"
 
-	"github.com/abahmed/kwatch/internal/alert/util"
-	"github.com/abahmed/kwatch/internal/config"
+	"github.com/abahmed/kwatch/internal/delivery/transport"
 	"github.com/abahmed/kwatch/internal/event"
 )
 
@@ -23,15 +23,21 @@ type goalertPayload struct {
 }
 
 type Goalert struct {
+	sender    transport.Sender
 	url       string
 	token     string
 	serviceID string
 
-	appCfg *config.App
+	clusterName string
 }
 
 // NewGoalert returns a new Goalert object
-func NewGoalert(config map[string]interface{}, appCfg *config.App) *Goalert {
+
+func NewGoalert(
+	config map[string]interface{},
+	clusterName string,
+	dependencies transport.Dependencies,
+) *Goalert {
 	token, ok := config["token"].(string)
 	if !ok || len(token) == 0 {
 		klog.InfoS("initializing goalert with empty token")
@@ -52,10 +58,11 @@ func NewGoalert(config map[string]interface{}, appCfg *config.App) *Goalert {
 	klog.InfoS("initializing goalert", "url", server, "serviceID", serviceID)
 
 	return &Goalert{
-		url:       strings.TrimRight(server, "/") + goalertAPIPath,
-		token:     token,
-		serviceID: serviceID,
-		appCfg:    appCfg,
+		sender:      transport.NewSender(dependencies),
+		url:         strings.TrimRight(server, "/") + goalertAPIPath,
+		token:       token,
+		serviceID:   serviceID,
+		clusterName: clusterName,
 	}
 }
 
@@ -65,13 +72,13 @@ func (s *Goalert) Name() string {
 }
 
 // SendEvent sends event to the provider
-func (s *Goalert) SendEvent(e *event.Event) error {
-	msg := e.FormatText(s.appCfg.ClusterName, "")
-	return s.SendMessage(msg)
+func (s *Goalert) SendEvent(ctx context.Context, e *event.Event) error {
+	msg := e.FormatText(s.clusterName, "")
+	return s.SendMessage(ctx, msg)
 }
 
 // SendMessage sends text message to the provider
-func (s *Goalert) SendMessage(msg string) error {
+func (s *Goalert) SendMessage(ctx context.Context, msg string) error {
 	payload := goalertPayload{
 		Type:    "incident.create",
 		Service: s.serviceID,
@@ -83,8 +90,11 @@ func (s *Goalert) SendMessage(msg string) error {
 		return err
 	}
 
-	_, err = util.Post(s.Name(), s.url, body, "application/json", map[string]string{
-		"Authorization": "Bearer " + s.token,
+	_, err = s.sender.Send(ctx, transport.Request{
+		Provider: s.Name(), URL: s.url, Body: body,
+		ContentType: "application/json", Headers: map[string]string{
+			"Authorization": "Bearer " + s.token,
+		},
 	})
 	return err
 }

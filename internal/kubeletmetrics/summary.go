@@ -11,7 +11,6 @@ import (
 	"k8s.io/klog/v2"
 
 	"github.com/abahmed/kwatch/internal/constant"
-	"github.com/abahmed/kwatch/internal/correlation"
 	"github.com/abahmed/kwatch/internal/model"
 	"github.com/abahmed/kwatch/internal/observe"
 )
@@ -152,14 +151,14 @@ func (m *Monitor) reportUsage(
 ) {
 	owner := m.podOwner(pod, pod.Namespace, pod.Name)
 	obs := observe.PodOwnedBy(pod, container, reason, owner)
-	key := correlation.ObservationKey(obs)
+	key := observationStateKey(obs)
 	warning, critical = m.adaptiveUsageThreshold(
 		usageBaselineKey(pod, container, reason), percent, warning, critical,
 	)
 	if percent < warning {
 		m.observe(
 			string(key), false, func() {},
-			func() { m.correlator.ResolveObserved(obs) },
+			func() { m.incidentSink.ResolveObserved(obs) },
 		)
 		return
 	}
@@ -169,7 +168,7 @@ func (m *Monitor) reportUsage(
 	}
 	m.observe(string(key), true,
 		func() {
-			m.correlator.Process(
+			m.incidentSink.Process(
 				obs.WithSeverity(severity).WithHint(fmt.Sprintf(
 					"container %s %s usage is %.0f%% of its limit (%s/%s)",
 					container, unit, percent, usage, limit,

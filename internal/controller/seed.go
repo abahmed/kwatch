@@ -8,10 +8,11 @@ import (
 	"k8s.io/klog/v2"
 
 	"github.com/abahmed/kwatch/internal/constant"
-	"github.com/abahmed/kwatch/internal/correlation"
-	"github.com/abahmed/kwatch/internal/filter"
-	"github.com/abahmed/kwatch/internal/handler"
+	"github.com/abahmed/kwatch/internal/incident"
 	"github.com/abahmed/kwatch/internal/model"
+	nodemonitor "github.com/abahmed/kwatch/internal/monitor/node"
+	podmonitor "github.com/abahmed/kwatch/internal/monitor/pod"
+	"github.com/abahmed/kwatch/internal/monitor/pod/policy"
 	"github.com/abahmed/kwatch/internal/observe"
 )
 
@@ -48,7 +49,7 @@ func (r *baselineRecorder) add(key model.IncidentKey, pod string) {
 	}
 	r.baseline[ks][pod] = r.now.Unix()
 
-	if pk := correlation.ParseKey(key); pk.Owner != "" {
+	if pk := incident.ParseKey(key); pk.Owner != "" {
 		r.suppressed[pk.Owner+"/"+pk.Reason]++
 	}
 }
@@ -72,14 +73,14 @@ func (r *baselineRecorder) seed(obs *model.Observation) {
 	if obs.Subject.Kind == "pod" {
 		pod = obs.Subject.Name
 	}
-	r.add(correlation.ObservationKey(obs), pod)
+	r.add(incident.ObservationKey(obs), pod)
 }
 
 // seedControlPlane records CP signals under the actual pod name.
 func (r *baselineRecorder) seedControlPlane(
 	pod *corev1.Pod, obs *model.Observation,
 ) {
-	r.add(correlation.ObservationKey(obs), pod.Name)
+	r.add(incident.ObservationKey(obs), pod.Name)
 }
 
 // buildSeenSet records what was already broken when kwatch started, so those
@@ -101,17 +102,21 @@ func (c *Controller) buildSeenSet() {
 
 	rec := newBaselineRecorder(c.nowTime(), c.maxBaseline)
 
-	podListers := handler.Listers{
+	podListers := podmonitor.ReferenceListers{
 		Secret:         c.secretLister,
 		ConfigMap:      c.configMapLister,
 		ServiceAccount: c.serviceAccountLister,
 	}
 	for _, pod := range pods {
 		c.emitBaseline(rec, pod)
-		if sig := handler.DetectPodDeletionIssue(pod, c.nowTime()); sig != nil {
+		if sig := podmonitor.DetectDeletionIssue(
+			pod, c.nowTime(),
+		); sig != nil {
 			rec.seed(sig)
 		}
-		for _, sig := range handler.DetectPodReferenceIssues(pod, podListers) {
+		for _, sig := range podmonitor.DetectReferenceIssues(
+			pod, podListers,
+		) {
 			rec.seed(sig)
 		}
 	}
@@ -122,11 +127,24 @@ func (c *Controller) buildSeenSet() {
 	c.seedControllersWithSvc(rec)
 	c.seedControlPlaneBaseline(rec)
 
-	if len(rec.baseline) > 0 {
+	if len(rec.baseline) > 0 && c.components.Baseline != nil {
 		klog.V(4).InfoS("Seen set built", "count", len(rec.baseline))
-		c.handler.SetBaseline(rec.baseline)
+		c.components.Baseline.SetBaseline(rec.baseline)
 	}
-	c.handler.ReportStartupSummary(rec.suppressed)
+	select {
+	case c.startupSummaryCh <- cloneSummaryCounts(rec.suppressed):
+	default:
+		// A direct test or embedded caller may seed more than once. Keep the
+		// first startup snapshot and never block controller reconciliation.
+	}
+}
+
+func cloneSummaryCounts(counts map[string]int) map[string]int {
+	copy := make(map[string]int, len(counts))
+	for key, count := range counts {
+		copy[key] = count
+	}
+	return copy
 }
 
 // emitBaseline records container, scheduling and node issues for one pod.
@@ -153,9 +171,9 @@ func (c *Controller) emitBaseline(rec *baselineRecorder, pod *corev1.Pod) {
 			continue
 		}
 		obs := observe.PodOwnedBy(pod, cs.Name, reason, owner)
-		obs.Message = filter.ContainerIssueMessage(&cs)
+		obs.Message = policy.ContainerIssueMessage(&cs)
 		obs.RestartCount = cs.RestartCount
-		rec.add(correlation.ObservationKey(obs), pod.Name)
+		rec.add(incident.ObservationKey(obs), pod.Name)
 		hadContainerIssue = true
 	}
 
@@ -164,7 +182,7 @@ func (c *Controller) emitBaseline(rec *baselineRecorder, pod *corev1.Pod) {
 	}
 	if reason := c.podLevelSeedReason(pod); reason != "" {
 		obs := observe.PodOwnedBy(pod, ".", reason, owner)
-		rec.add(correlation.ObservationKey(obs), pod.Name)
+		rec.add(incident.ObservationKey(obs), pod.Name)
 	}
 }
 
@@ -214,7 +232,7 @@ func (c *Controller) podLevelSeedReason(pod *corev1.Pod) string {
 // containerIssueReason is the shared rule the live container detector uses,
 // so a seeded baseline key matches the key the live signal will produce.
 func containerIssueReason(cs *corev1.ContainerStatus) string {
-	return filter.ContainerIssueReason(cs)
+	return policy.ContainerIssueReason(cs)
 }
 
 // seedNodeBaseline pre-populates the active node incidents so pod suppression
@@ -240,14 +258,14 @@ func (c *Controller) seedNodeBaseline() {
 	var activeNodeIncidents []string
 	for _, n := range nodes {
 		for _, cond := range n.Status.Conditions {
-			if handler.NodeConditionReason(cond) == "" {
+			if nodemonitor.ConditionReason(cond) == "" {
 				continue
 			}
 			activeNodeIncidents = append(activeNodeIncidents, n.Name)
 			break
 		}
 	}
-	if len(activeNodeIncidents) > 0 {
-		c.handler.SetActiveNodeIncidents(activeNodeIncidents)
+	if len(activeNodeIncidents) > 0 && c.components.Baseline != nil {
+		c.components.Baseline.SetActiveNodeIncidents(activeNodeIncidents)
 	}
 }

@@ -47,9 +47,13 @@ func (m *Monitor) backingService(
 	services := schema.GroupVersionResource{
 		Group: "", Version: "v1", Resource: "services",
 	}
+	ctx := m.currentContext()
+	if ctx == nil {
+		return serviceSpec{}, false
+	}
 	service, err := m.client.Resource(services).
 		Namespace(namespace).
-		Get(m.ctx, name, metav1.GetOptions{})
+		Get(ctx, name, metav1.GetOptions{})
 	if err != nil {
 		return serviceSpec{}, false
 	}

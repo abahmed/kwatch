@@ -1,14 +1,14 @@
 package sensugo
 
 import (
+	"context"
 	"encoding/json"
 	"strings"
 	"time"
 
 	"k8s.io/klog/v2"
 
-	"github.com/abahmed/kwatch/internal/alert/util"
-	"github.com/abahmed/kwatch/internal/config"
+	"github.com/abahmed/kwatch/internal/delivery/transport"
 	"github.com/abahmed/kwatch/internal/event"
 )
 
@@ -35,17 +35,23 @@ type sensuPayload struct {
 }
 
 type Sensugo struct {
+	sender    transport.Sender
 	url       string
 	apiKey    string
 	namespace string
 	entity    string
 
-	appCfg *config.App
-	now    func() time.Time
+	clusterName string
+	now         func() time.Time
 }
 
 // NewSensugo returns a new Sensugo object
-func NewSensugo(config map[string]interface{}, appCfg *config.App) *Sensugo {
+
+func NewSensugo(
+	config map[string]interface{},
+	clusterName string,
+	dependencies transport.Dependencies,
+) *Sensugo {
 	url, ok := config["url"].(string)
 	if !ok || len(url) == 0 {
 		klog.InfoS("initializing sensugo with empty url")
@@ -71,19 +77,14 @@ func NewSensugo(config map[string]interface{}, appCfg *config.App) *Sensugo {
 	klog.InfoS("initializing sensugo", "url", url, "namespace", namespace)
 
 	return &Sensugo{
-		url:       strings.TrimRight(url, "/") + strings.Replace(sensuAPIPath, "%s", namespace, 1),
-		apiKey:    apiKey,
-		namespace: namespace,
-		entity:    entity,
-		appCfg:    appCfg,
-		now:       time.Now,
-	}
-}
-
-// SetClock injects the timestamp source used in Sensu events.
-func (s *Sensugo) SetClock(now func() time.Time) {
-	if now != nil {
-		s.now = now
+		sender: transport.NewSender(dependencies),
+		url: strings.TrimRight(url, "/") +
+			strings.Replace(sensuAPIPath, "%s", namespace, 1),
+		apiKey:      apiKey,
+		namespace:   namespace,
+		entity:      entity,
+		clusterName: clusterName,
+		now:         dependencies.Now,
 	}
 }
 
@@ -93,13 +94,13 @@ func (s *Sensugo) Name() string {
 }
 
 // SendEvent sends event to the provider
-func (s *Sensugo) SendEvent(e *event.Event) error {
-	msg := e.FormatText(s.appCfg.ClusterName, "")
-	return s.SendMessage(msg)
+func (s *Sensugo) SendEvent(ctx context.Context, e *event.Event) error {
+	msg := e.FormatText(s.clusterName, "")
+	return s.SendMessage(ctx, msg)
 }
 
 // SendMessage sends text message to the provider
-func (s *Sensugo) SendMessage(msg string) error {
+func (s *Sensugo) SendMessage(ctx context.Context, msg string) error {
 	payload := sensuPayload{
 		Entity: sensuEntity{
 			Metadata: sensuMetadata{Name: s.entity},
@@ -117,8 +118,11 @@ func (s *Sensugo) SendMessage(msg string) error {
 		return err
 	}
 
-	_, err = util.Post(s.Name(), s.url, body, "application/json", map[string]string{
-		"Authorization": "Key " + s.apiKey,
+	_, err = s.sender.Send(ctx, transport.Request{
+		Provider: s.Name(), URL: s.url, Body: body,
+		ContentType: "application/json", Headers: map[string]string{
+			"Authorization": "Key " + s.apiKey,
+		},
 	})
 	return err
 }

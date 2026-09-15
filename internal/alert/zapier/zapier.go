@@ -1,12 +1,12 @@
 package zapier
 
 import (
+	"context"
 	"encoding/json"
 
 	"k8s.io/klog/v2"
 
-	"github.com/abahmed/kwatch/internal/alert/util"
-	"github.com/abahmed/kwatch/internal/config"
+	"github.com/abahmed/kwatch/internal/delivery/transport"
 	"github.com/abahmed/kwatch/internal/event"
 )
 
@@ -17,14 +17,20 @@ type zapierPayload struct {
 }
 
 type Zapier struct {
-	url   string
-	title string
+	sender transport.Sender
+	url    string
+	title  string
 
-	appCfg *config.App
+	clusterName string
 }
 
 // NewZapier returns a new Zapier object
-func NewZapier(config map[string]interface{}, appCfg *config.App) *Zapier {
+
+func NewZapier(
+	config map[string]interface{},
+	clusterName string,
+	dependencies transport.Dependencies,
+) *Zapier {
 	url, ok := config["url"].(string)
 	if !ok || len(url) == 0 {
 		klog.InfoS("initializing zapier with empty url")
@@ -36,9 +42,10 @@ func NewZapier(config map[string]interface{}, appCfg *config.App) *Zapier {
 	klog.InfoS("initializing zapier", "title", title)
 
 	return &Zapier{
-		url:    url,
-		title:  title,
-		appCfg: appCfg,
+		sender:      transport.NewSender(dependencies),
+		url:         url,
+		title:       title,
+		clusterName: clusterName,
 	}
 }
 
@@ -48,13 +55,13 @@ func (z *Zapier) Name() string {
 }
 
 // SendEvent sends event to the provider
-func (z *Zapier) SendEvent(e *event.Event) error {
-	msg := e.FormatText(z.appCfg.ClusterName, "")
-	return z.SendMessage(msg)
+func (z *Zapier) SendEvent(ctx context.Context, e *event.Event) error {
+	msg := e.FormatText(z.clusterName, "")
+	return z.SendMessage(ctx, msg)
 }
 
 // SendMessage sends text message to the provider
-func (z *Zapier) SendMessage(msg string) error {
+func (z *Zapier) SendMessage(ctx context.Context, msg string) error {
 	payload := zapierPayload{
 		Title:   z.title,
 		Message: msg,
@@ -66,6 +73,9 @@ func (z *Zapier) SendMessage(msg string) error {
 		return err
 	}
 
-	_, err = util.Post(z.Name(), z.url, body, "application/json", nil)
+	_, err = z.sender.Send(ctx, transport.Request{
+		Provider: z.Name(), URL: z.url, Body: body,
+		ContentType: "application/json",
+	})
 	return err
 }

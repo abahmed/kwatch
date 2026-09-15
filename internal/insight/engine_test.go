@@ -92,7 +92,7 @@ func TestAnalyzeConfigError(t *testing.T) {
 		Type: context.ChangeUpdate, Timestamp: now.Add(-time.Minute),
 	})
 	e := NewEngine(graph, tracker)
-	e.SetClock(func() time.Time { return now })
+	e.now = func() time.Time { return now }
 	inc := &model.Incident{
 		Subject: model.Subject{
 			Resource:  "pod",
@@ -117,7 +117,7 @@ func TestAnalyzeSecretError(t *testing.T) {
 		Type: context.ChangeUpdate, Timestamp: now.Add(-time.Minute),
 	})
 	e := NewEngine(graph, tracker)
-	e.SetClock(func() time.Time { return now })
+	e.now = func() time.Time { return now }
 	inc := &model.Incident{
 		Subject: model.Subject{
 			Resource:  "pod",

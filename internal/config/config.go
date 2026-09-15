@@ -128,7 +128,7 @@ type Config struct {
 	// If 0, no periodic resync occurs (event-driven only).
 	//
 	// It is not only a freshness knob: resyncs re-run every detector, which is
-	// what re-reports a problem that is still happening. The correlation engine
+	// what re-reports a problem that is still happening. The incident engine
 	// closes an incident nothing has re-reported for a whole
 	// Correlation.Window, so a resync interval at or above that window (or 0)
 	// means incidents get closed while still broken. config.Warnings says so
@@ -224,6 +224,10 @@ type Config struct {
 	// SuppressionIndex is compiled from both Silences and deprecated ignore*
 	// fields for efficient detect-time lookup. Populated by LoadConfig.
 	Suppression SuppressionIndex
+
+	// Runtime is the defensive snapshot of derived configuration used by
+	// composition and runtime components. It is never decoded from YAML.
+	Runtime RuntimeConfig `yaml:"-"`
 	// syntheticSilences counts trailing rules generated from legacy ignore*
 	// fields. It is derived state and is never serialized.
 	syntheticSilences int

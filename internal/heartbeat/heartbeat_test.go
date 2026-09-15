@@ -14,7 +14,7 @@ import (
 
 func TestHeartbeatDisabled(t *testing.T) {
 	cfg := &config.HeartbeatMonitor{Enabled: false}
-	m := NewHeartbeatMonitor(cfg)
+	m := NewHeartbeatMonitor(cfg, http.DefaultClient)
 
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel()
@@ -25,7 +25,7 @@ func TestHeartbeatDisabled(t *testing.T) {
 
 func TestHeartbeatNoURL(t *testing.T) {
 	cfg := &config.HeartbeatMonitor{Enabled: true, URL: ""}
-	m := NewHeartbeatMonitor(cfg)
+	m := NewHeartbeatMonitor(cfg, http.DefaultClient)
 
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel()
@@ -42,7 +42,7 @@ func TestHeartbeatPing(t *testing.T) {
 	defer srv.Close()
 
 	cfg := &config.HeartbeatMonitor{Enabled: true, URL: srv.URL}
-	m := NewHeartbeatMonitor(cfg)
+	m := NewHeartbeatMonitor(cfg, http.DefaultClient)
 
 	// call ping directly (not via ticker)
 	m.ping(context.Background())
@@ -57,7 +57,7 @@ func TestHeartbeatPingHTTPerror(t *testing.T) {
 	defer srv.Close()
 
 	cfg := &config.HeartbeatMonitor{Enabled: true, URL: srv.URL}
-	m := NewHeartbeatMonitor(cfg)
+	m := NewHeartbeatMonitor(cfg, http.DefaultClient)
 
 	m.ping(context.Background())
 }

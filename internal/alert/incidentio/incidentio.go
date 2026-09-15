@@ -1,12 +1,12 @@
 package incidentio
 
 import (
+	"context"
 	"encoding/json"
 
 	"k8s.io/klog/v2"
 
-	"github.com/abahmed/kwatch/internal/alert/util"
-	"github.com/abahmed/kwatch/internal/config"
+	"github.com/abahmed/kwatch/internal/delivery/transport"
 	"github.com/abahmed/kwatch/internal/event"
 )
 
@@ -19,14 +19,20 @@ type incidentioPayload struct {
 }
 
 type Incidentio struct {
+	sender transport.Sender
 	url    string
 	apiKey string
 
-	appCfg *config.App
+	clusterName string
 }
 
 // NewIncidentio returns a new Incidentio object
-func NewIncidentio(config map[string]interface{}, appCfg *config.App) *Incidentio {
+
+func NewIncidentio(
+	config map[string]interface{},
+	clusterName string,
+	dependencies transport.Dependencies,
+) *Incidentio {
 	url, ok := config["url"].(string)
 	if !ok || len(url) == 0 {
 		klog.InfoS("initializing incidentio with empty url")
@@ -38,9 +44,10 @@ func NewIncidentio(config map[string]interface{}, appCfg *config.App) *Incidenti
 	klog.InfoS("initializing incidentio")
 
 	return &Incidentio{
-		url:    url,
-		apiKey: apiKey,
-		appCfg: appCfg,
+		sender:      transport.NewSender(dependencies),
+		url:         url,
+		apiKey:      apiKey,
+		clusterName: clusterName,
 	}
 }
 
@@ -50,12 +57,12 @@ func (i *Incidentio) Name() string {
 }
 
 // SendEvent sends event to the provider
-func (i *Incidentio) SendEvent(e *event.Event) error {
+func (i *Incidentio) SendEvent(ctx context.Context, e *event.Event) error {
 	payload := incidentioPayload{
 		EventType: "kwatch.incident",
 		Source:    "kwatch",
 		Severity:  string(e.Severity),
-		Message:   e.FormatText(i.appCfg.ClusterName, ""),
+		Message:   e.FormatText(i.clusterName, ""),
 		Payload: map[string]interface{}{
 			"pod":       e.PodName,
 			"container": e.ContainerName,
@@ -70,11 +77,11 @@ func (i *Incidentio) SendEvent(e *event.Event) error {
 		return err
 	}
 
-	return i.send(body)
+	return i.send(ctx, body)
 }
 
 // SendMessage sends text message to the provider
-func (i *Incidentio) SendMessage(msg string) error {
+func (i *Incidentio) SendMessage(ctx context.Context, msg string) error {
 	payload := incidentioPayload{
 		EventType: "kwatch.incident",
 		Source:    "kwatch",
@@ -86,15 +93,18 @@ func (i *Incidentio) SendMessage(msg string) error {
 		return err
 	}
 
-	return i.send(body)
+	return i.send(ctx, body)
 }
 
-func (i *Incidentio) send(body []byte) error {
+func (i *Incidentio) send(ctx context.Context, body []byte) error {
 	headers := map[string]string{}
 	if len(i.apiKey) > 0 {
 		headers["Authorization"] = "Bearer " + i.apiKey
 	}
 
-	_, err := util.Post(i.Name(), i.url, body, "application/json", headers)
+	_, err := i.sender.Send(ctx, transport.Request{
+		Provider: i.Name(), URL: i.url, Body: body,
+		ContentType: "application/json", Headers: headers,
+	})
 	return err
 }

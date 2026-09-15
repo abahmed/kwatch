@@ -4,57 +4,11 @@ import (
 	"fmt"
 
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
-	"k8s.io/client-go/dynamic/dynamicinformer"
-	"k8s.io/client-go/tools/cache"
-	"k8s.io/klog/v2"
 
 	"github.com/abahmed/kwatch/internal/constant"
-	"github.com/abahmed/kwatch/internal/k8s"
 	"github.com/abahmed/kwatch/internal/model"
 	"github.com/abahmed/kwatch/internal/observe"
 )
-
-func (m *Monitor) startAdmissionInformers(
-	factory dynamicinformer.DynamicSharedInformerFactory,
-) {
-	if m.resourceAvailable(validatingAdmissionPolicyGVR) {
-		policyInformer := factory.
-			ForResource(validatingAdmissionPolicyGVR).Informer()
-		if err := policyInformer.SetTransform(k8s.TrimManagedFields); err != nil {
-			klog.ErrorS(err, "statuswatch: set policy cache transform")
-			return
-		}
-		if _, err := policyInformer.AddEventHandler(
-			cache.ResourceEventHandlerFuncs{
-				AddFunc: m.processAdmissionPolicy,
-				UpdateFunc: func(_, obj interface{}) {
-					m.processAdmissionPolicy(obj)
-				},
-				DeleteFunc: m.deleteAdmissionPolicy,
-			},
-		); err != nil {
-			klog.ErrorS(err, "statuswatch: register admission policy informer")
-		}
-	}
-	if !m.resourceAvailable(validatingAdmissionBindingGVR) {
-		return
-	}
-	bindingInformer := factory.
-		ForResource(validatingAdmissionBindingGVR).Informer()
-	if err := bindingInformer.SetTransform(k8s.TrimManagedFields); err != nil {
-		klog.ErrorS(err, "statuswatch: set binding cache transform")
-		return
-	}
-	if _, err := bindingInformer.AddEventHandler(cache.ResourceEventHandlerFuncs{
-		AddFunc: m.processAdmissionBinding,
-		UpdateFunc: func(_, obj interface{}) {
-			m.processAdmissionBinding(obj)
-		},
-		DeleteFunc: m.deleteAdmissionBinding,
-	}); err != nil {
-		klog.ErrorS(err, "statuswatch: register admission policy binding informer")
-	}
-}
 
 func (m *Monitor) processAdmissionPolicy(obj interface{}) {
 	u, ok := obj.(*unstructured.Unstructured)
@@ -65,7 +19,7 @@ func (m *Monitor) processAdmissionPolicy(obj interface{}) {
 	m.admissionPolicies[u.GetName()] = struct{}{}
 	m.mu.Unlock()
 	if sig := admissionPolicySignal(u); sig != nil {
-		m.correlator.Process(sig)
+		m.incidentSink.Process(sig)
 	} else {
 		m.resolve(
 			"validatingadmissionpolicy", "", u.GetName(),
@@ -94,7 +48,7 @@ func (m *Monitor) processAdmissionBindingObject(u *unstructured.Unstructured) {
 	if policy != "" && !exists {
 		// The hand-built event here also dropped the subject's name, so the
 		// incident never said which binding was broken.
-		m.correlator.Process(
+		m.incidentSink.Process(
 			observe.ClusterObject(
 				"validatingadmissionpolicybinding", u.GetName(),
 				constant.ReasonAdmissionBindingInvalid,

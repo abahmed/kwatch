@@ -1,14 +1,14 @@
 package jira
 
 import (
+	"context"
 	"encoding/base64"
 	"encoding/json"
 	"strings"
 
 	"k8s.io/klog/v2"
 
-	"github.com/abahmed/kwatch/internal/alert/util"
-	"github.com/abahmed/kwatch/internal/config"
+	"github.com/abahmed/kwatch/internal/delivery/transport"
 	"github.com/abahmed/kwatch/internal/event"
 )
 
@@ -26,17 +26,23 @@ type jiraPayload struct {
 }
 
 type Jira struct {
+	sender     transport.Sender
 	url        string
 	user       string
 	apiToken   string
 	projectKey string
 	issueType  string
 
-	appCfg *config.App
+	clusterName string
 }
 
 // NewJira returns a new Jira object
-func NewJira(config map[string]interface{}, appCfg *config.App) *Jira {
+
+func NewJira(
+	config map[string]interface{},
+	clusterName string,
+	dependencies transport.Dependencies,
+) *Jira {
 	url, ok := config["url"].(string)
 	if !ok || len(url) == 0 {
 		klog.InfoS("initializing jira with empty url")
@@ -69,12 +75,13 @@ func NewJira(config map[string]interface{}, appCfg *config.App) *Jira {
 	klog.InfoS("initializing jira", "url", url, "projectKey", projectKey, "issueType", issueType)
 
 	return &Jira{
-		url:        strings.TrimRight(url, "/") + jiraAPIPath,
-		user:       user,
-		apiToken:   apiToken,
-		projectKey: projectKey,
-		issueType:  issueType,
-		appCfg:     appCfg,
+		sender:      transport.NewSender(dependencies),
+		url:         strings.TrimRight(url, "/") + jiraAPIPath,
+		user:        user,
+		apiToken:    apiToken,
+		projectKey:  projectKey,
+		issueType:   issueType,
+		clusterName: clusterName,
 	}
 }
 
@@ -84,16 +91,16 @@ func (s *Jira) Name() string {
 }
 
 // SendEvent sends event to the provider
-func (s *Jira) SendEvent(e *event.Event) error {
-	msg := e.FormatText(s.appCfg.ClusterName, "")
-	return s.SendMessage(msg)
+func (s *Jira) SendEvent(ctx context.Context, e *event.Event) error {
+	msg := e.FormatText(s.clusterName, "")
+	return s.SendMessage(ctx, msg)
 }
 
 // SendMessage sends text message to the provider
-func (s *Jira) SendMessage(msg string) error {
+func (s *Jira) SendMessage(ctx context.Context, msg string) error {
 	title := "kwatch alert"
-	if len(s.appCfg.ClusterName) > 0 {
-		title = "kwatch alert: " + s.appCfg.ClusterName
+	if len(s.clusterName) > 0 {
+		title = "kwatch alert: " + s.clusterName
 	}
 
 	payload := jiraPayload{
@@ -111,8 +118,11 @@ func (s *Jira) SendMessage(msg string) error {
 	}
 
 	auth := "Basic " + base64.StdEncoding.EncodeToString([]byte(s.user+":"+s.apiToken))
-	_, err = util.Post(s.Name(), s.url, body, "application/json", map[string]string{
-		"Authorization": auth,
+	_, err = s.sender.Send(ctx, transport.Request{
+		Provider: s.Name(), URL: s.url, Body: body,
+		ContentType: "application/json", Headers: map[string]string{
+			"Authorization": auth,
+		},
 	})
 	return err
 }

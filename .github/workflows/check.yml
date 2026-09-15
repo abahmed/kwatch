@@ -39,6 +39,10 @@ jobs:
         version: v2.13.1
     - name: Build
       run: go build -o kwatch ./cmd/kwatch
+    - name: Verify architecture boundaries
+      run: sh scripts/check-architecture.sh
+    - name: Verify test layout
+      run: sh scripts/check-test-layout.sh
     - name: Verify configuration catalog
       run: |
         go run ./cmd/configcatalog -output /tmp/kwatch-config-catalog.tsv

@@ -2,274 +2,118 @@ package controller
 
 import (
 	"fmt"
-	"sync"
 	"time"
 
 	"k8s.io/client-go/kubernetes"
-	admregv1lister "k8s.io/client-go/listers/admissionregistration/v1"
-	appsv1lister "k8s.io/client-go/listers/apps/v1"
-	autoscalingv2lister "k8s.io/client-go/listers/autoscaling/v2"
-	batchv1lister "k8s.io/client-go/listers/batch/v1"
-	coordinationv1lister "k8s.io/client-go/listers/coordination/v1"
-	corev1lister "k8s.io/client-go/listers/core/v1"
-	discoveryv1lister "k8s.io/client-go/listers/discovery/v1"
-	networkingv1lister "k8s.io/client-go/listers/networking/v1"
-	policyv1lister "k8s.io/client-go/listers/policy/v1"
-	storagev1lister "k8s.io/client-go/listers/storage/v1"
-	"k8s.io/client-go/tools/cache"
 
-	"github.com/abahmed/kwatch/internal/clock"
 	"github.com/abahmed/kwatch/internal/config"
-	"github.com/abahmed/kwatch/internal/correlation"
-	kwcontext "github.com/abahmed/kwatch/internal/graphcontext"
-	"github.com/abahmed/kwatch/internal/handler"
-	"github.com/abahmed/kwatch/internal/metrics"
+	"github.com/abahmed/kwatch/internal/incident"
 )
 
 type Controller struct {
-	handler handler.Handler
-	client  kubernetes.Interface
+	components RuntimeSet
+	client     kubernetes.Interface
 
-	// One pipeline per watched kind with its own queue and workers.
-	pod           *resourcePipeline
-	node          *resourcePipeline
-	deployment    *resourcePipeline
-	job           *resourcePipeline
-	daemonSet     *resourcePipeline
-	statefulSet   *resourcePipeline
-	pdb           *resourcePipeline
-	cronJob       *resourcePipeline
-	hpa           *resourcePipeline
-	service       *resourcePipeline
-	endpointSlice *resourcePipeline
-	mwc           *resourcePipeline
-	vwc           *resourcePipeline
-	ingress       *resourcePipeline
-	netpol        *resourcePipeline
-	cpPod         *resourcePipeline
-	resourceQuota *resourcePipeline
-	limitRange    *resourcePipeline
-	namespace     *resourcePipeline
-	lease         *resourcePipeline
-	replicaSet    *resourcePipeline
+	pipelineSet
 
-	podLister     corev1lister.PodLister
-	nodeLister    corev1lister.NodeLister
-	deployLister  appsv1lister.DeploymentLister
-	jobLister     batchv1lister.JobLister
-	cronJobLister batchv1lister.CronJobLister
-	rsLister      appsv1lister.ReplicaSetLister
-	dsLister      appsv1lister.DaemonSetLister
-	ssLister      appsv1lister.StatefulSetLister
-	pdbLister     policyv1lister.PodDisruptionBudgetLister
-	eventLister   corev1lister.EventLister
-	// one per event informer, all indexed by "byPod"
-	eventIndexers []cache.Indexer
-	hpaLister     autoscalingv2lister.HorizontalPodAutoscalerLister
-	secretLister  corev1lister.SecretLister
-	maxBaseline   int
+	baselineRuntime
 	// seedThresholds are the sustain windows the startup seeding applies, so
 	// a seeded key matches the one the live path will build. Passing zero
 	// here used the detectors' built-in defaults, which are not necessarily
 	// the operator's configured ones -- and a key that differs from the live
 	// key is a baseline entry that suppresses nothing.
-	seedThresholds seedThresholds
+	graphRuntime
+	sourceSet
 
-	tracker              *kwcontext.ChangeTracker
-	graph                *kwcontext.ResourceGraph
-	configMapLister      corev1lister.ConfigMapLister
-	configMapSynced      []cache.InformerSynced
-	pvcLister            corev1lister.PersistentVolumeClaimLister
-	pvLister             corev1lister.PersistentVolumeLister
-	serviceAccountLister corev1lister.ServiceAccountLister
-	storageClassLister   storagev1lister.StorageClassLister
-
-	rsSynced      []cache.InformerSynced
-	dsSynced      []cache.InformerSynced
-	ssSynced      []cache.InformerSynced
-	eventsSynced  []cache.InformerSynced
-	secretsSynced []cache.InformerSynced
-	graphSynced   []cache.InformerSynced
-
-	serviceLister       corev1lister.ServiceLister
-	endpointSliceLister discoveryv1lister.EndpointSliceLister
-	mwcLister           admregv1lister.MutatingWebhookConfigurationLister
-	vwcLister           admregv1lister.ValidatingWebhookConfigurationLister
-	ingressLister       networkingv1lister.IngressLister
-	netpolLister        networkingv1lister.NetworkPolicyLister
-	cpPodLister         corev1lister.PodLister
-	resourceQuotaLister corev1lister.ResourceQuotaLister
-	limitRangeLister    corev1lister.LimitRangeLister
-	namespaceLister     corev1lister.NamespaceLister
-	leaseLister         coordinationv1lister.LeaseLister
-
-	nodeResourceCfg *config.NodeResourceMonitor
-
-	readyFn                  func()
-	watchAll                 bool
-	allowedNamespaces        map[string]struct{}
-	forbiddenNamespaces      map[string]struct{}
-	informerMu               sync.RWMutex
-	informerEvents           int64
-	informerWatchErrors      int64
-	informerLastEvent        time.Time
-	informerLastWatchError   time.Time
-	informerLastWatchMessage string
-	informers                []cache.SharedIndexInformer
-	now                      func() time.Time
-}
-
-type InformerStatus struct {
-	State                  string        `json:"state"`
-	LastEvent              time.Time     `json:"lastEvent"`
-	LastWatchError         time.Time     `json:"lastWatchError"`
-	WatchErrors            int64         `json:"watchErrors"`
-	Events                 int64         `json:"events"`
-	EventAge               time.Duration `json:"eventAge"`
-	WatchHealthy           bool          `json:"watchHealthy"`
-	LastError              string        `json:"lastError,omitempty"`
-	InformerCount          int           `json:"informerCount"`
-	Unsynced               int           `json:"unsynced"`
-	WithoutResourceVersion int           `json:"withoutResourceVersion"`
-}
-
-func (c *Controller) nowTime() time.Time {
-	if c.now != nil {
-		return c.now()
-	}
-	return clock.Now()
-}
-
-func (c *Controller) InformerStatus() interface{} {
-	c.informerMu.RLock()
-	defer c.informerMu.RUnlock()
-	now := c.nowTime()
-	status := InformerStatus{State: "unavailable", LastEvent: c.informerLastEvent, LastWatchError: c.informerLastWatchError, WatchErrors: c.informerWatchErrors, Events: c.informerEvents, LastError: c.informerLastWatchMessage, WatchHealthy: c.informerWatchErrors == 0 || now.Sub(c.informerLastWatchError) > 5*time.Minute, InformerCount: len(c.informers)}
-	for _, informer := range c.informers {
-		if !informer.HasSynced() {
-			status.Unsynced++
-		}
-		if informer.LastSyncResourceVersion() == "" {
-			status.WithoutResourceVersion++
-		}
-	}
-	if !status.LastEvent.IsZero() {
-		status.EventAge = now.Sub(status.LastEvent)
-	}
-	switch {
-	case status.Unsynced > 0:
-		status.State = "partial"
-	case status.InformerCount > 0 && !status.WatchHealthy:
-		status.State = "unavailable"
-	case status.InformerCount > 0:
-		status.State = "healthy"
-	}
-	return status
-}
-
-func (c *Controller) recordInformerEvent() {
-	c.informerMu.Lock()
-	c.informerEvents++
-	metrics.DefaultRegistry().InformerEvents.Add(1)
-	c.informerLastEvent = c.nowTime()
-	c.informerMu.Unlock()
-}
-
-func (c *Controller) recordInformerWatchError(err error) {
-	c.informerMu.Lock()
-	c.informerWatchErrors++
-	metrics.DefaultRegistry().InformerWatchErrors.Add(1)
-	c.informerLastWatchError = c.nowTime()
-	c.informerLastWatchMessage = err.Error()
-	c.informerMu.Unlock()
-}
-
-// allPipelines returns every pipeline in a fixed order for iteration over
-// shutdown, cache sync, and worker start.
-func (c *Controller) allPipelines() []*resourcePipeline {
-	return []*resourcePipeline{
-		c.pod, c.node, c.deployment, c.job, c.daemonSet, c.statefulSet,
-		c.pdb, c.cronJob, c.hpa, c.service, c.endpointSlice, c.mwc,
-		c.vwc, c.ingress, c.netpol, c.cpPod, c.resourceQuota, c.limitRange, c.namespace, c.lease, c.replicaSet,
-	}
-}
-
-// activePipelines returns the pipelines whose watches were wired during New.
-func (c *Controller) activePipelines() []*resourcePipeline {
-	var active []*resourcePipeline
-	for _, p := range c.allPipelines() {
-		if p.startWorkers {
-			active = append(active, p)
-		}
-	}
-	return active
+	readyFn          func()
+	startupSummaryCh chan map[string]int
+	scopeState
+	diagnosticState
+	now func() time.Time
 }
 
 // resolveNamespaces decides which namespaces to watch.
 // If NamespaceSelector is set, it lists namespaces via k8s API using the label
 // selector. Otherwise it uses the static AllowedNamespaces/ForbiddenNamespaces.
 
-func New(
+// NewWithRuntimeConfig constructs a controller from the immutable runtime
+// snapshot. The YAML-facing Config remains at the application boundary.
+func NewWithRuntimeConfig(
 	client kubernetes.Interface,
-	cfg *config.Config,
-	h handler.Handler,
+	runtime config.RuntimeConfig,
+	components RuntimeSet,
+	now func() time.Time,
 ) (*Controller, func(), error) {
-	resync := time.Duration(cfg.ResyncSeconds) * time.Second
+	resync := runtime.ResyncInterval()
 
-	scope, err := resolveNamespaces(cfg, client)
+	scope, err := resolveNamespaces(runtime, client)
 	if err != nil {
 		return nil, nil, fmt.Errorf("resolve namespaces: %w", err)
 	}
 
-	fs, factories := newFactories(client, scope, cfg.ForbiddenNamespaces, resync)
+	fs, factories := newFactories(
+		client, scope, runtime.ForbiddenNamespaces(), resync,
+	)
 
 	podLister := fs.podLister()
 	podInformers := fs.podInformers()
 
-	maxBaseline := cfg.Correlation.MaxBaseline
+	maxBaseline := runtime.MaxBaseline()
 	if maxBaseline <= 0 {
-		maxBaseline = correlation.DefaultMaxBaseline
+		maxBaseline = incident.DefaultMaxBaseline
 	}
 
 	c := &Controller{
-		handler:       h,
-		client:        client,
-		pod:           newResourcePipeline("pod", "pods"),
-		node:          newResourcePipeline("node", "nodes"),
-		deployment:    newResourcePipeline("deployment", "deployments"),
-		job:           newResourcePipeline("job", "jobs"),
-		daemonSet:     newResourcePipeline("daemonset", "daemonsets"),
-		statefulSet:   newResourcePipeline("statefulset", "statefulsets"),
-		pdb:           newResourcePipeline("pdb", "poddisruptionbudgets"),
-		cronJob:       newResourcePipeline("cronjob", "cronjobs"),
-		hpa:           newResourcePipeline("hpa", "horizontalpodautoscalers"),
-		service:       newResourcePipeline("service", "services"),
-		endpointSlice: newResourcePipeline("endpointslice", "endpointslices"),
-		mwc: newResourcePipeline(
-			"mutatingwebhookconfiguration",
-			"mutatingwebhookconfigurations",
-		),
-		vwc: newResourcePipeline(
-			"validatingwebhookconfiguration",
-			"validatingwebhookconfigurations",
-		),
-		ingress: newResourcePipeline("ingress", "ingresses"),
-		netpol:  newResourcePipeline("networkpolicy", "networkpolicies"),
-		cpPod: newResourcePipeline(
-			"controlplane pod",
-			"controlplanepods",
-		),
-		resourceQuota:       newResourcePipeline("resourcequota", "resourcequotas"),
-		limitRange:          newResourcePipeline("limitrange", "limitranges"),
-		namespace:           newResourcePipeline("namespace", "namespaces"),
-		lease:               newResourcePipeline("lease", "leases"),
-		replicaSet:          newResourcePipeline("replicaset", "replicasets-status"),
-		podLister:           podLister,
-		maxBaseline:         maxBaseline,
-		seedThresholds:      newSeedThresholds(cfg),
-		watchAll:            scope.all,
-		forbiddenNamespaces: makeNamespaceSet(cfg.ForbiddenNamespaces),
-		now:                 clock.Now,
+		components: components,
+		client:     client,
+		baselineRuntime: baselineRuntime{
+			maxBaseline:    maxBaseline,
+			seedThresholds: newSeedThresholds(runtime),
+		},
+		graphRuntime: graphRuntime{},
+		pipelineSet: pipelineSet{
+			pod:           newResourcePipeline("pod", "pods"),
+			node:          newResourcePipeline("node", "nodes"),
+			deployment:    newResourcePipeline("deployment", "deployments"),
+			job:           newResourcePipeline("job", "jobs"),
+			daemonSet:     newResourcePipeline("daemonset", "daemonsets"),
+			statefulSet:   newResourcePipeline("statefulset", "statefulsets"),
+			pdb:           newResourcePipeline("pdb", "poddisruptionbudgets"),
+			cronJob:       newResourcePipeline("cronjob", "cronjobs"),
+			hpa:           newResourcePipeline("hpa", "horizontalpodautoscalers"),
+			service:       newResourcePipeline("service", "services"),
+			endpointSlice: newResourcePipeline("endpointslice", "endpointslices"),
+			mwc: newResourcePipeline(
+				"mutatingwebhookconfiguration",
+				"mutatingwebhookconfigurations",
+			),
+			vwc: newResourcePipeline(
+				"validatingwebhookconfiguration",
+				"validatingwebhookconfigurations",
+			),
+			ingress: newResourcePipeline("ingress", "ingresses"),
+			netpol:  newResourcePipeline("networkpolicy", "networkpolicies"),
+			cpPod: newResourcePipeline(
+				"controlplane pod",
+				"controlplanepods",
+			),
+			resourceQuota: newResourcePipeline(
+				"resourcequota", "resourcequotas",
+			),
+			limitRange: newResourcePipeline("limitrange", "limitranges"),
+			namespace:  newResourcePipeline("namespace", "namespaces"),
+			lease:      newResourcePipeline("lease", "leases"),
+			replicaSet: newResourcePipeline("replicaset", "replicasets-status"),
+		},
+		podLister: podLister,
+		scopeState: scopeState{
+			watchAll: scope.all,
+			forbiddenNamespaces: makeNamespaceSet(
+				runtime.ForbiddenNamespaces(),
+			),
+		},
+		now:              now,
+		startupSummaryCh: make(chan map[string]int, 1),
 	}
 	if !scope.all {
 		c.allowedNamespaces = make(map[string]struct{}, len(scope.namespaces))
@@ -279,6 +123,7 @@ func New(
 	}
 	for _, pipeline := range c.allPipelines() {
 		pipeline.now = c.nowTime
+		pipeline.queueDepth = c.queueDepth
 	}
 
 	c.pod.startWorkers = true
@@ -312,76 +157,49 @@ func New(
 		inf.AddEventHandler(c.podEventHandler())
 	}
 
-	c.wireNode(cfg, fs)
-	c.wireRollout(cfg, fs)
-	c.wireJobs(cfg, fs)
-	c.wireDaemonSetMonitor(cfg, fs)
-	c.wireCronJobs(cfg, fs)
-	c.wireHPA(cfg, fs)
-	c.wireService(cfg, fs)
-	c.wireAdmissionWebhooks(cfg, fs)
-	c.wireIngress(cfg, fs)
-	c.wireNetpol(cfg, fs)
-	c.wireClusterResources(cfg, fs)
-	if cfg.ControlPlaneMonitor.Enabled {
+	c.wireNode(runtime, fs)
+	c.wireRollout(runtime, fs)
+	c.wireJobs(runtime, fs)
+	c.wireDaemonSetMonitor(runtime, fs)
+	c.wireCronJobs(runtime, fs)
+	c.wireHPA(runtime, fs)
+	c.wireService(runtime, fs)
+	c.wireAdmissionWebhooks(runtime, fs)
+	c.wireIngress(runtime, fs)
+	c.wireNetpol(runtime, fs)
+	c.wireClusterResources(runtime, fs)
+	if runtime.ControlPlaneMonitor().Enabled {
 		factories = append(factories, c.wireControlPlane(client, resync))
 	}
-	c.wireReplicaSet(cfg, fs)
+	c.wireReplicaSet(runtime, fs)
 	c.wireDaemonSetLister(fs)
-	c.wireStatefulSet(cfg, fs)
-	c.wirePDB(cfg, fs)
+	c.wireStatefulSet(runtime, fs)
+	c.wirePDB(runtime, fs)
 	factories = append(factories, c.wireEvents(client, resync, scope)...)
-	if cfg.ClusterAutoscalerMonitor.Enabled {
-		factories = append(factories, wireClusterAutoscaler(h, client, resync))
+	if runtime.ClusterAutoscalerMonitor().Enabled {
+		factories = append(
+			factories,
+			wireClusterAutoscaler(c.components.Integration.Events, client, resync),
+		)
 	}
 	c.wireConfigMap(fs)
 	c.wireGraphSupport(fs)
-	c.wireGraphHandlers(fs, cfg)
-	if cfg.TlsMonitor.Enabled {
+	c.wireGraphHandlers(fs, runtime)
+	if runtime.TlsMonitor().Enabled {
 		factories = append(factories, c.wireTLS(client, resync, scope)...)
 	}
 
-	// Every informer is wired; hand the handler its lookups in one go. A
-	// lister for a disabled monitor is nil, which the handler treats as
-	// "not available" the same way the old per-lister setters did by never
-	// being called.
-	h.SetListers(handler.Listers{
-		Pod:            c.podLister,
-		Node:           c.nodeLister,
-		Deploy:         c.deployLister,
-		Job:            c.jobLister,
-		CronJob:        c.cronJobLister,
-		RS:             c.rsLister,
-		DS:             c.dsLister,
-		SS:             c.ssLister,
-		PDB:            c.pdbLister,
-		Event:          c.eventLister,
-		EventsByPod:    c.eventsByPod,
-		HPA:            c.hpaLister,
-		MWC:            c.mwcLister,
-		VWC:            c.vwcLister,
-		Service:        c.serviceLister,
-		EndpointSlice:  c.endpointSliceLister,
-		ConfigMap:      c.configMapLister,
-		Secret:         c.secretLister,
-		ServiceAccount: c.serviceAccountLister,
-		Netpol:         c.netpolLister,
-		Ingress:        c.ingressLister,
-		ResourceQuota:  c.resourceQuotaLister,
-		LimitRange:     c.limitRangeLister,
-		Namespace:      c.namespaceLister,
-		Lease:          c.leaseLister,
-		CPPod:          c.cpPodLister,
-	})
-	h.SetNamespaceScope(scope.namespaces, scope.all)
+	if err := configureDirectRuntimes(c, components); err != nil {
+		return nil, nil, fmt.Errorf("configure monitor sources: %w", err)
+	}
 
 	stopCh := make(chan struct{})
 	for _, f := range factories {
 		f.Start(stopCh)
 	}
 
-	if cfg.NodeResourceMonitor.Enabled {
-		nc := cfg.NodeResourceMonitor
+	if runtime.NodeResourceMonitor().Enabled {
+		nc := runtime.NodeResourceMonitor()
 		c.nodeResourceCfg = &nc
 	}
 
@@ -393,4 +211,21 @@ func New(
 	}
 
 	return c, cleanup, nil
+}
+
+func (c *Controller) queueDepth() int64 {
+	var depth int64
+	for _, pipeline := range c.allPipelines() {
+		if pipeline != nil {
+			depth += int64(pipeline.queue.Len())
+		}
+	}
+	return depth
+}
+
+// StartupSummaries returns the one-time baseline summary stream. The
+// controller publishes counts only; application lifecycle code decides
+// whether and how to deliver a notification.
+func (c *Controller) StartupSummaries() <-chan map[string]int {
+	return c.startupSummaryCh
 }

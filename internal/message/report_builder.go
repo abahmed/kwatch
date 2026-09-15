@@ -22,22 +22,18 @@ type ReportBuilder struct {
 	now func() time.Time
 }
 
-// NewReportBuilder returns a ReportBuilder with the given cluster name.
-func NewReportBuilder(cluster string) *ReportBuilder {
+// NewReportBuilderWithClock returns a ReportBuilder with an explicit clock.
+func NewReportBuilderWithClock(
+	cluster string,
+	timeSource clock.Clock,
+) *ReportBuilder {
+	if timeSource == nil {
+		timeSource = clock.RealClock{}
+	}
 	return &ReportBuilder{
 		cluster: cluster,
-		now:     clock.Now,
+		now:     timeSource.Now,
 	}
-}
-
-// SetClock injects the clock change ages are measured against. It is the last
-// renderer that read the wall clock directly, which made "updated 3m ago"
-// untestable without waiting three minutes.
-func (rb *ReportBuilder) SetClock(now func() time.Time) *ReportBuilder {
-	if now != nil {
-		rb.now = now
-	}
-	return rb
 }
 
 // Build produces a Report from the given incident, action, and optional
@@ -157,7 +153,7 @@ func (rb *ReportBuilder) populateDiagnosis(
 		d.Confidence = ins.Confidence
 		d.Evidence = append([]string(nil), ins.Evidence...)
 	}
-	// Topology the correlation engine resolved from live Service selectors.
+	// Topology the incident engine resolved from live Service selectors.
 	// It is impact, and belongs with the rest of the impact.
 	if d.Impact == "" && len(inc.AffectedServices) > 0 {
 		label := "service"

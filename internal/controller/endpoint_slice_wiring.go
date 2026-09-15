@@ -13,9 +13,12 @@ const endpointSliceServiceLabel = "kubernetes.io/service-name"
 // wireEndpointSlices gives Service and admission-webhook monitoring the same
 // EndpointSlice cache. The cache is also required for startup baseline checks
 // when only admission-webhook monitoring is enabled.
-func (c *Controller) wireEndpointSlices(cfg *config.Config, fs factorySet) {
-	serviceMonitor := cfg.ServiceMonitor.Enabled
-	webhookMonitor := cfg.AdmissionWebhookMonitor.Enabled
+func (c *Controller) wireEndpointSlices(
+	runtime config.RuntimeConfig,
+	fs factorySet,
+) {
+	serviceMonitor := runtime.ServiceMonitor().Enabled
+	webhookMonitor := runtime.AdmissionWebhookMonitor().Enabled
 	if !serviceMonitor && !webhookMonitor {
 		return
 	}

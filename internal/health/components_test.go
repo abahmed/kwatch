@@ -6,6 +6,8 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"testing"
+
+	"github.com/abahmed/kwatch/internal/metrics"
 )
 
 // A failed optional monitor must not make kwatch NotReady.
@@ -43,7 +45,7 @@ func TestOptionalComponentErrorKeepsReadiness(t *testing.T) {
 	if response.Status != "degraded" {
 		t.Fatalf("health did not report degraded: %q", response.Status)
 	}
-	if response.Degraded["status"] != "stopped" {
+	if response.Degraded["status"] != "component_stopped" {
 		t.Fatalf("health did not name the failed component: %v",
 			response.Degraded)
 	}
@@ -83,5 +85,30 @@ func TestReadinessFollowsController(t *testing.T) {
 	)
 	if recorder.Code != http.StatusOK {
 		t.Fatalf("ready server reported unready: %d", recorder.Code)
+	}
+}
+
+func TestComponentErrorUsesSafeReasonAndCountsTransitions(t *testing.T) {
+	server := &HealthServer{}
+	before := metrics.DefaultRegistry().ComponentDegradations.Load()
+	server.SetComponentError(
+		"provider",
+		errors.New("provider token=secret failed to send payload"),
+	)
+	server.SetComponentError(
+		"provider",
+		errors.New("provider token=another-secret failed to send payload"),
+	)
+
+	if got := server.ComponentErrors()["provider"]; got != "component_failed" {
+		t.Fatalf("unexpected public component reason: %q", got)
+	}
+	if got := metrics.DefaultRegistry().ComponentDegradations.Load() -
+		before; got != 1 {
+		t.Fatalf("degradation metric changed by %d, want one transition", got)
+	}
+	status := server.ComponentStatuses()["provider"]
+	if status.Reason != "component_failed" {
+		t.Fatalf("unexpected component status reason: %q", status.Reason)
 	}
 }

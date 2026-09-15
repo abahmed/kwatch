@@ -1,7 +1,8 @@
 package constant
 
 // Incident and event reasons form the shared vocabulary used across the
-// signal emission sites (handler, resource, pvc), the correlation grouping
+// signal emission sites (monitor families, resource, pvc), and incident
+// grouping
 // logic, message labels, and enrichment hints. Keeping them as constants
 // guarantees the emitted string always matches the string that is grouped,
 // labeled, and looked up elsewhere in the codebase.

@@ -1,13 +1,13 @@
 package homeassistant
 
 import (
+	"context"
 	"encoding/json"
 	"strings"
 
 	"k8s.io/klog/v2"
 
-	"github.com/abahmed/kwatch/internal/alert/util"
-	"github.com/abahmed/kwatch/internal/config"
+	"github.com/abahmed/kwatch/internal/delivery/transport"
 	"github.com/abahmed/kwatch/internal/event"
 )
 
@@ -20,15 +20,21 @@ type homeAssistantPayload struct {
 }
 
 type HomeAssistant struct {
+	sender  transport.Sender
 	url     string
 	token   string
 	service string
 
-	appCfg *config.App
+	clusterName string
 }
 
 // NewHomeAssistant returns a new HomeAssistant object
-func NewHomeAssistant(config map[string]interface{}, appCfg *config.App) *HomeAssistant {
+
+func NewHomeAssistant(
+	config map[string]interface{},
+	clusterName string,
+	dependencies transport.Dependencies,
+) *HomeAssistant {
 	token, ok := config["token"].(string)
 	if !ok || len(token) == 0 {
 		klog.InfoS("initializing homeassistant with empty token")
@@ -48,10 +54,12 @@ func NewHomeAssistant(config map[string]interface{}, appCfg *config.App) *HomeAs
 	klog.InfoS("initializing homeassistant", "url", server, "service", service)
 
 	return &HomeAssistant{
-		url:     strings.TrimRight(server, "/") + "/api/services/notify/" + service,
-		token:   token,
-		service: service,
-		appCfg:  appCfg,
+		sender: transport.NewSender(dependencies),
+		url: strings.TrimRight(server, "/") +
+			"/api/services/notify/" + service,
+		token:       token,
+		service:     service,
+		clusterName: clusterName,
 	}
 }
 
@@ -61,13 +69,13 @@ func (h *HomeAssistant) Name() string {
 }
 
 // SendEvent sends event to the provider
-func (h *HomeAssistant) SendEvent(e *event.Event) error {
-	msg := e.FormatText(h.appCfg.ClusterName, "")
-	return h.SendMessage(msg)
+func (h *HomeAssistant) SendEvent(ctx context.Context, e *event.Event) error {
+	msg := e.FormatText(h.clusterName, "")
+	return h.SendMessage(ctx, msg)
 }
 
 // SendMessage sends text message to the provider
-func (h *HomeAssistant) SendMessage(msg string) error {
+func (h *HomeAssistant) SendMessage(ctx context.Context, msg string) error {
 	payload := homeAssistantPayload{
 		Title:   "kwatch alert",
 		Message: msg,
@@ -78,8 +86,11 @@ func (h *HomeAssistant) SendMessage(msg string) error {
 		return err
 	}
 
-	_, err = util.Post(h.Name(), h.url, body, "application/json", map[string]string{
-		"Authorization": "Bearer " + h.token,
+	_, err = h.sender.Send(ctx, transport.Request{
+		Provider: h.Name(), URL: h.url, Body: body,
+		ContentType: "application/json", Headers: map[string]string{
+			"Authorization": "Bearer " + h.token,
+		},
 	})
 	return err
 }

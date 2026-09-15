@@ -7,6 +7,14 @@ import (
 	"time"
 )
 
+// OrDefault returns value when it is non-empty, otherwise fallback.
+func OrDefault(value, fallback string) string {
+	if value == "" {
+		return fallback
+	}
+	return value
+}
+
 // ShortImage reduces an image reference to what a reader needs: the image
 // name with its tag or digest. The registry host and the repository path
 // say where it came from, not what it is, and they triple the line length:

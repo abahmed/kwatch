@@ -1,16 +1,15 @@
 package matrix
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
-	"net/http"
 	"net/url"
 	"regexp"
 
 	"k8s.io/klog/v2"
 
-	"github.com/abahmed/kwatch/internal/alert/util"
-	"github.com/abahmed/kwatch/internal/config"
+	"github.com/abahmed/kwatch/internal/delivery/transport"
 	"github.com/abahmed/kwatch/internal/event"
 	"github.com/abahmed/kwatch/internal/insight"
 	"github.com/abahmed/kwatch/internal/message"
@@ -20,6 +19,7 @@ import (
 var htmlTagRegex = regexp.MustCompile(`<.*?>`)
 
 type Matrix struct {
+	sender         transport.Sender
 	homeServer     string
 	accessToken    string
 	internalRoomID string
@@ -27,11 +27,16 @@ type Matrix struct {
 	text           string
 
 	// reference for general app configuration
-	appCfg *config.App
+	clusterName string
 }
 
 // NewMatrix returns new Matrix instance
-func NewMatrix(config map[string]interface{}, appCfg *config.App) *Matrix {
+
+func NewMatrix(
+	config map[string]interface{},
+	clusterName string,
+	dependencies transport.Dependencies,
+) *Matrix {
 	homeServer, ok := config["homeServer"].(string)
 	if !ok || len(homeServer) == 0 {
 		klog.InfoS("initializing matrix with empty homeServer")
@@ -54,12 +59,13 @@ func NewMatrix(config map[string]interface{}, appCfg *config.App) *Matrix {
 	text, _ := config["text"].(string)
 
 	return &Matrix{
+		sender:         transport.NewSender(dependencies),
 		homeServer:     homeServer,
 		accessToken:    accessToken,
 		internalRoomID: internalRoomID,
 		title:          title,
 		text:           text,
-		appCfg:         appCfg,
+		clusterName:    clusterName,
 	}
 }
 
@@ -67,46 +73,51 @@ func (m *Matrix) Name() string {
 	return "Matrix"
 }
 
-func (m *Matrix) SendMessage(msg string) error {
-	return m.sendAPI(msg)
+func (m *Matrix) SendMessage(ctx context.Context, msg string) error {
+	return m.sendAPI(ctx, msg)
 }
 
-// SendIncident implements alert.ThreadProvider.
+// SendIncident implements delivery.ThreadProvider.
 // It renders the incident using the Report model and PlaintextRenderer,
 // producing a context-adaptive text message.
 func (m *Matrix) SendIncident(
+	ctx context.Context,
 	inc *model.Incident,
 	action model.IncidentAction,
 ) error {
-	return m.SendIncidentWithInsight(inc, action, nil)
+	return m.SendIncidentWithInsight(ctx, inc, action, nil)
 }
 
-// SendIncidentWithInsight implements alert.InsightThreadProvider, so the
+// SendIncidentWithInsight implements delivery.InsightThreadProvider, so the
 // diagnosis — likely cause, impact, recent changes — is rendered rather than
 // dropped on the way to this provider.
 func (m *Matrix) SendIncidentWithInsight(
+	ctx context.Context,
 	inc *model.Incident,
 	action model.IncidentAction,
 	ins *insight.Insight,
 ) error {
-	text := util.RenderIncidentWithInsight(
+	text := message.RenderIncidentWithInsight(
 		inc,
 		action,
 		ins,
 		message.NewPlainTextRenderer(),
-		m.appCfg.ClusterName,
+		m.clusterName,
 	)
 	if text == "" {
 		return nil
 	}
-	return m.SendMessage(text)
+	return m.SendMessage(ctx, text)
 }
 
-func (m *Matrix) SendEvent(e *event.Event) error {
-	return m.sendAPI(e.FormatHtml(m.appCfg.ClusterName, m.text))
+func (m *Matrix) SendEvent(ctx context.Context, e *event.Event) error {
+	return m.sendAPI(ctx, e.FormatHtml(m.clusterName, m.text))
 }
 
-func (m *Matrix) sendAPI(formattedMsg string) error {
+func (m *Matrix) sendAPI(
+	ctx context.Context,
+	formattedMsg string,
+) error {
 	plainMsg := stripHtmlRegex(formattedMsg)
 
 	payload := struct {
@@ -126,14 +137,14 @@ func (m *Matrix) sendAPI(formattedMsg string) error {
 		return err
 	}
 
-	_, err = util.Send(util.Request{
+	_, err = m.sender.Send(ctx, transport.Request{
 		Provider: "Matrix",
-		Method:   http.MethodPut,
+		Method:   "PUT",
 		URL: fmt.Sprintf(
 			"%s/_matrix/client/v3/rooms/%s/send/m.room.message/%s",
 			m.homeServer,
 			url.PathEscape(m.internalRoomID),
-			util.RandomString(24),
+			randomRoomIDPart(24),
 		),
 		Body:    msgBytes,
 		Headers: map[string]string{"Authorization": "Bearer " + m.accessToken},

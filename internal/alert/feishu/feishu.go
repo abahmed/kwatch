@@ -1,13 +1,13 @@
 package feishu
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 
 	"k8s.io/klog/v2"
 
-	"github.com/abahmed/kwatch/internal/alert/util"
-	"github.com/abahmed/kwatch/internal/config"
+	"github.com/abahmed/kwatch/internal/delivery/transport"
 	"github.com/abahmed/kwatch/internal/event"
 	"github.com/abahmed/kwatch/internal/insight"
 	"github.com/abahmed/kwatch/internal/message"
@@ -15,11 +15,12 @@ import (
 )
 
 type FeiShu struct {
+	sender  transport.Sender
 	webhook string
 	title   string
 
 	// reference for general app configuration
-	appCfg *config.App
+	clusterName string
 }
 
 type feiShuWebhookContent struct {
@@ -53,7 +54,12 @@ type feiShuRequestBody struct {
 }
 
 // NewFeiShu returns new feishu web bot instance
-func NewFeiShu(config map[string]interface{}, appCfg *config.App) *FeiShu {
+
+func NewFeiShu(
+	config map[string]interface{},
+	clusterName string,
+	dependencies transport.Dependencies,
+) *FeiShu {
 	webhook, ok := config["webhook"].(string)
 	if !ok || len(webhook) == 0 {
 		klog.InfoS("initializing Fei Shu with empty webhook url")
@@ -65,9 +71,10 @@ func NewFeiShu(config map[string]interface{}, appCfg *config.App) *FeiShu {
 	title, _ := config["title"].(string)
 
 	return &FeiShu{
-		webhook: webhook,
-		title:   title,
-		appCfg:  appCfg,
+		sender:      transport.NewSender(dependencies),
+		webhook:     webhook,
+		title:       title,
+		clusterName: clusterName,
 	}
 
 }
@@ -78,61 +85,66 @@ func (f *FeiShu) Name() string {
 }
 
 // SendEvent sends event to the provider
-func (f *FeiShu) SendEvent(e *event.Event) error {
+func (f *FeiShu) SendEvent(ctx context.Context, e *event.Event) error {
 	body, err := f.buildRequestBodyFeiShu(
-		e.FormatMarkdown(f.appCfg.ClusterName, "", ""),
+		e.FormatMarkdown(f.clusterName, "", ""),
 	)
 	if err != nil {
 		return err
 	}
-	return f.sendByFeiShuApi(body)
+	return f.sendByFeiShuApi(ctx, body)
 }
 
-func (f *FeiShu) sendByFeiShuApi(reqBody string) error {
-	_, err := util.Send(
-		util.Request{Provider: "Feishu", URL: f.webhook, Body: []byte(reqBody)},
-	)
+func (f *FeiShu) sendByFeiShuApi(
+	ctx context.Context,
+	reqBody string,
+) error {
+	_, err := f.sender.Send(ctx, transport.Request{
+		Provider: "Feishu", URL: f.webhook, Body: []byte(reqBody),
+	})
 	return err
 }
 
 // SendMessage sends text message to the provider
-func (f *FeiShu) SendMessage(msg string) error {
+func (f *FeiShu) SendMessage(ctx context.Context, msg string) error {
 	body, err := f.buildRequestBodyFeiShu(msg)
 	if err != nil {
 		return err
 	}
-	return f.sendByFeiShuApi(body)
+	return f.sendByFeiShuApi(ctx, body)
 }
 
-// SendIncident implements alert.ThreadProvider.
+// SendIncident implements delivery.ThreadProvider.
 // It renders the incident using the Report model and PlaintextRenderer,
 // producing a context-adaptive text message.
 func (f *FeiShu) SendIncident(
+	ctx context.Context,
 	inc *model.Incident,
 	action model.IncidentAction,
 ) error {
-	return f.SendIncidentWithInsight(inc, action, nil)
+	return f.SendIncidentWithInsight(ctx, inc, action, nil)
 }
 
-// SendIncidentWithInsight implements alert.InsightThreadProvider, so the
+// SendIncidentWithInsight implements delivery.InsightThreadProvider, so the
 // diagnosis — likely cause, impact, recent changes — is rendered rather than
 // dropped on the way to this provider.
 func (f *FeiShu) SendIncidentWithInsight(
+	ctx context.Context,
 	inc *model.Incident,
 	action model.IncidentAction,
 	ins *insight.Insight,
 ) error {
-	text := util.RenderIncidentWithInsight(
+	text := message.RenderIncidentWithInsight(
 		inc,
 		action,
 		ins,
 		message.NewPlainTextRenderer(),
-		f.appCfg.ClusterName,
+		f.clusterName,
 	)
 	if text == "" {
 		return nil
 	}
-	return f.SendMessage(text)
+	return f.SendMessage(ctx, text)
 }
 
 func (f *FeiShu) buildRequestBodyFeiShu(

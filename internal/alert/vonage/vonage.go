@@ -1,29 +1,35 @@
 package vonage
 
 import (
+	"context"
 	"net/url"
 
 	"k8s.io/klog/v2"
 
-	"github.com/abahmed/kwatch/internal/alert/util"
-	"github.com/abahmed/kwatch/internal/config"
+	"github.com/abahmed/kwatch/internal/delivery/transport"
 	"github.com/abahmed/kwatch/internal/event"
 )
 
 const vonageAPIURL = "https://rest.nexmo.com/sms/json"
 
 type Vonage struct {
+	sender    transport.Sender
 	url       string
 	apiKey    string
 	apiSecret string
 	from      string
 	to        string
 
-	appCfg *config.App
+	clusterName string
 }
 
 // NewVonage returns a new Vonage object
-func NewVonage(config map[string]interface{}, appCfg *config.App) *Vonage {
+
+func NewVonage(
+	config map[string]interface{},
+	clusterName string,
+	dependencies transport.Dependencies,
+) *Vonage {
 	apiKey, ok := config["apiKey"].(string)
 	if !ok || len(apiKey) == 0 {
 		klog.InfoS("initializing vonage with empty apiKey")
@@ -51,12 +57,13 @@ func NewVonage(config map[string]interface{}, appCfg *config.App) *Vonage {
 	klog.InfoS("initializing vonage", "from", from, "to", to)
 
 	return &Vonage{
-		url:       vonageAPIURL,
-		apiKey:    apiKey,
-		apiSecret: apiSecret,
-		from:      from,
-		to:        to,
-		appCfg:    appCfg,
+		sender:      transport.NewSender(dependencies),
+		url:         vonageAPIURL,
+		apiKey:      apiKey,
+		apiSecret:   apiSecret,
+		from:        from,
+		to:          to,
+		clusterName: clusterName,
 	}
 }
 
@@ -66,13 +73,13 @@ func (v *Vonage) Name() string {
 }
 
 // SendEvent sends event to the provider
-func (v *Vonage) SendEvent(e *event.Event) error {
-	msg := e.FormatText(v.appCfg.ClusterName, "")
-	return v.SendMessage(msg)
+func (v *Vonage) SendEvent(ctx context.Context, e *event.Event) error {
+	msg := e.FormatText(v.clusterName, "")
+	return v.SendMessage(ctx, msg)
 }
 
 // SendMessage sends text message to the provider
-func (v *Vonage) SendMessage(msg string) error {
+func (v *Vonage) SendMessage(ctx context.Context, msg string) error {
 	form := url.Values{}
 	form.Set("api_key", v.apiKey)
 	form.Set("api_secret", v.apiSecret)
@@ -80,8 +87,9 @@ func (v *Vonage) SendMessage(msg string) error {
 	form.Set("to", v.to)
 	form.Set("text", msg)
 
-	_, err := util.Post(
-		v.Name(), v.url, []byte(form.Encode()),
-		"application/x-www-form-urlencoded", nil)
+	_, err := v.sender.Send(ctx, transport.Request{
+		Provider: v.Name(), URL: v.url, Body: []byte(form.Encode()),
+		ContentType: "application/x-www-form-urlencoded",
+	})
 	return err
 }

@@ -1,14 +1,16 @@
 package ses
 
 import (
+	"context"
 	"fmt"
 	"net/url"
 	"strings"
+	"time"
 
 	"k8s.io/klog/v2"
 
-	"github.com/abahmed/kwatch/internal/alert/util"
-	"github.com/abahmed/kwatch/internal/config"
+	"github.com/abahmed/kwatch/internal/delivery/signing"
+	"github.com/abahmed/kwatch/internal/delivery/transport"
 	"github.com/abahmed/kwatch/internal/event"
 )
 
@@ -19,6 +21,7 @@ const (
 )
 
 type Ses struct {
+	sender          transport.Sender
 	url             string
 	region          string
 	accessKeyID     string
@@ -26,12 +29,18 @@ type Ses struct {
 	from            string
 	to              []string
 	subject         string
+	now             func() time.Time
 
-	appCfg *config.App
+	clusterName string
 }
 
 // NewSes returns a new Ses object
-func NewSes(config map[string]interface{}, appCfg *config.App) *Ses {
+
+func NewSes(
+	config map[string]interface{},
+	clusterName string,
+	dependencies transport.Dependencies,
+) *Ses {
 	accessKeyID, ok := config["accessKeyId"].(string)
 	if !ok || len(accessKeyID) == 0 {
 		klog.InfoS("initializing ses with empty accessKeyId")
@@ -77,6 +86,7 @@ func NewSes(config map[string]interface{}, appCfg *config.App) *Ses {
 	klog.InfoS("initializing ses", "region", region, "from", from)
 
 	return &Ses{
+		sender:          transport.NewSender(dependencies),
 		url:             fmt.Sprintf(sesURLFormat, region),
 		region:          region,
 		accessKeyID:     accessKeyID,
@@ -84,7 +94,8 @@ func NewSes(config map[string]interface{}, appCfg *config.App) *Ses {
 		from:            from,
 		to:              recipients,
 		subject:         subject,
-		appCfg:          appCfg,
+		clusterName:     clusterName,
+		now:             dependencies.Now,
 	}
 }
 
@@ -94,13 +105,13 @@ func (s *Ses) Name() string {
 }
 
 // SendEvent sends event to the provider
-func (s *Ses) SendEvent(e *event.Event) error {
-	msg := e.FormatText(s.appCfg.ClusterName, "")
-	return s.SendMessage(msg)
+func (s *Ses) SendEvent(ctx context.Context, e *event.Event) error {
+	msg := e.FormatText(s.clusterName, "")
+	return s.SendMessage(ctx, msg)
 }
 
 // SendMessage sends text message to the provider
-func (s *Ses) SendMessage(msg string) error {
+func (s *Ses) SendMessage(ctx context.Context, msg string) error {
 	subject := s.subject
 	if len(subject) == 0 {
 		subject = "kwatch alert"
@@ -121,13 +132,16 @@ func (s *Ses) SendMessage(msg string) error {
 	body := []byte(form.Encode())
 	contentType := "application/x-www-form-urlencoded"
 
-	headers, err := util.SignAWSV4(
+	headers, err := signing.SignAWSV4At(
 		s.accessKeyID, s.secretAccessKey, s.region, sesServiceName,
-		"POST", s.url, body)
+		"POST", s.url, body, s.now())
 	if err != nil {
 		return err
 	}
 
-	_, err = util.Post(s.Name(), s.url, body, contentType, headers)
+	_, err = s.sender.Send(ctx, transport.Request{
+		Provider: s.Name(), URL: s.url, Body: body,
+		ContentType: contentType, Headers: headers,
+	})
 	return err
 }

@@ -1,12 +1,12 @@
 package webex
 
 import (
+	"context"
 	"encoding/json"
 
 	"k8s.io/klog/v2"
 
-	"github.com/abahmed/kwatch/internal/alert/util"
-	"github.com/abahmed/kwatch/internal/config"
+	"github.com/abahmed/kwatch/internal/delivery/transport"
 	"github.com/abahmed/kwatch/internal/event"
 )
 
@@ -20,16 +20,22 @@ type webexPayload struct {
 }
 
 type Webex struct {
+	sender        transport.Sender
 	url           string
 	accessToken   string
 	roomID        string
 	toPersonEmail string
 
-	appCfg *config.App
+	clusterName string
 }
 
 // NewWebex returns a new Webex object
-func NewWebex(config map[string]interface{}, appCfg *config.App) *Webex {
+
+func NewWebex(
+	config map[string]interface{},
+	clusterName string,
+	dependencies transport.Dependencies,
+) *Webex {
 	accessToken, ok := config["accessToken"].(string)
 	if !ok || len(accessToken) == 0 {
 		klog.InfoS("initializing webex with empty accessToken")
@@ -46,11 +52,12 @@ func NewWebex(config map[string]interface{}, appCfg *config.App) *Webex {
 	klog.InfoS("initializing webex", "roomId", roomID, "toPersonEmail", toPersonEmail)
 
 	return &Webex{
+		sender:        transport.NewSender(dependencies),
 		url:           webexAPIURL,
 		accessToken:   accessToken,
 		roomID:        roomID,
 		toPersonEmail: toPersonEmail,
-		appCfg:        appCfg,
+		clusterName:   clusterName,
 	}
 }
 
@@ -60,13 +67,13 @@ func (w *Webex) Name() string {
 }
 
 // SendEvent sends event to the provider
-func (w *Webex) SendEvent(e *event.Event) error {
-	msg := e.FormatMarkdown(w.appCfg.ClusterName, "", "\n\n")
-	return w.SendMessage(msg)
+func (w *Webex) SendEvent(ctx context.Context, e *event.Event) error {
+	msg := e.FormatMarkdown(w.clusterName, "", "\n\n")
+	return w.SendMessage(ctx, msg)
 }
 
 // SendMessage sends text message to the provider
-func (w *Webex) SendMessage(msg string) error {
+func (w *Webex) SendMessage(ctx context.Context, msg string) error {
 	payload := webexPayload{
 		RoomID:        w.roomID,
 		ToPersonEmail: w.toPersonEmail,
@@ -78,8 +85,11 @@ func (w *Webex) SendMessage(msg string) error {
 		return err
 	}
 
-	_, err = util.Post(w.Name(), w.url, body, "application/json", map[string]string{
-		"Authorization": "Bearer " + w.accessToken,
+	_, err = w.sender.Send(ctx, transport.Request{
+		Provider: w.Name(), URL: w.url, Body: body,
+		ContentType: "application/json", Headers: map[string]string{
+			"Authorization": "Bearer " + w.accessToken,
+		},
 	})
 	return err
 }

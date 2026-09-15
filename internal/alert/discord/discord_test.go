@@ -1,6 +1,7 @@
 package discord
 
 import (
+	"context"
 	"errors"
 	"net/http"
 	"strings"
@@ -9,9 +10,9 @@ import (
 	discordgo "github.com/bwmarrin/discordgo"
 	"github.com/stretchr/testify/assert"
 
-	"github.com/abahmed/kwatch/internal/alert/util"
-	"github.com/abahmed/kwatch/internal/config"
+	"github.com/abahmed/kwatch/internal/delivery/transport"
 	"github.com/abahmed/kwatch/internal/event"
+	"github.com/abahmed/kwatch/internal/message"
 )
 
 func mockedSend(
@@ -23,10 +24,18 @@ func mockedSend(
 	return nil, nil
 }
 
+func newTestDiscord(
+	values map[string]interface{}, clusterName string,
+) *Discord {
+	return NewDiscord(values, clusterName, transport.Dependencies{
+		HTTPClient: http.DefaultClient,
+	})
+}
+
 func TestDiscordEmptyConfig(t *testing.T) {
 	assert := assert.New(t)
 
-	c := NewDiscord(map[string]interface{}{}, &config.App{ClusterName: "dev"})
+	c := newTestDiscord(map[string]interface{}{}, "dev")
 	assert.Nil(c)
 }
 
@@ -36,7 +45,7 @@ func TestDiscordInvalidConfig(t *testing.T) {
 	configMap := map[string]interface{}{
 		"webhook": "testtest",
 	}
-	c := NewDiscord(configMap, &config.App{ClusterName: "dev"})
+	c := newTestDiscord(configMap, "dev")
 	assert.Nil(c)
 }
 
@@ -46,7 +55,7 @@ func TestDiscord(t *testing.T) {
 	configMap := map[string]interface{}{
 		"webhook": "test/test",
 	}
-	c := NewDiscord(configMap, &config.App{ClusterName: "dev"})
+	c := newTestDiscord(configMap, "dev")
 	assert.NotNil(c)
 
 	assert.Equal(c.Name(), "Discord")
@@ -58,11 +67,11 @@ func TestSendMessage(t *testing.T) {
 	configMap := map[string]interface{}{
 		"webhook": "test/test",
 	}
-	c := NewDiscord(configMap, &config.App{ClusterName: "dev"})
+	c := newTestDiscord(configMap, "dev")
 	assert.NotNil(c)
 
 	c.send = mockedSend
-	assert.Nil(c.SendMessage("test"))
+	assert.Nil(c.SendMessage(context.Background(), "test"))
 }
 
 func TestSendEvent(t *testing.T) {
@@ -71,7 +80,7 @@ func TestSendEvent(t *testing.T) {
 	configMap := map[string]interface{}{
 		"webhook": "test/test",
 	}
-	c := NewDiscord(configMap, &config.App{ClusterName: "dev"})
+	c := newTestDiscord(configMap, "dev")
 	assert.NotNil(c)
 
 	c.send = mockedSend
@@ -102,23 +111,23 @@ func TestSendEvent(t *testing.T) {
 		Events: "BackOff Back-off restarting failed container\n" +
 			"event3\nevent5\nevent6-event8-event11-event12",
 	}
-	assert.Nil(c.SendEvent(&ev))
+	assert.Nil(c.SendEvent(context.Background(), &ev))
 }
 
 func TestChunks(t *testing.T) {
 	assert := assert.New(t)
 
-	result := util.Chunks("short", 1024)
+	result := message.Chunks("short", 1024)
 	assert.Equal([]string{"short"}, result)
 
 	longString := strings.Repeat("a", 2000)
-	result = util.Chunks(longString, 1024)
+	result = message.Chunks(longString, 1024)
 	assert.Equal(2, len(result))
 	assert.Equal(1024, len(result[0]))
 	assert.Equal(976, len(result[1]))
 
 	exactChunk := strings.Repeat("b", 1024)
-	result = util.Chunks(exactChunk, 1024)
+	result = message.Chunks(exactChunk, 1024)
 	assert.Equal(1, len(result))
 	assert.Equal(1024, len(result[0]))
 }

@@ -6,7 +6,6 @@ import (
 	"strings"
 	"time"
 
-	"github.com/abahmed/kwatch/internal/clock"
 	context "github.com/abahmed/kwatch/internal/graphcontext"
 	"github.com/abahmed/kwatch/internal/model"
 )
@@ -204,14 +203,10 @@ func incidentSubjectKey(inc *model.Incident) string {
 	return inc.Ref().Key()
 }
 
-// Describe renders the mass failure for humans, with change ages measured
-// against the wall clock.
-func (mf MassFailure) Describe() string {
-	return mf.describeAt(clock.Now())
-}
-
-// describeAt is Describe with an explicit clock, for deterministic tests.
-func (mf MassFailure) describeAt(now time.Time) string {
+// DescribeAt renders the mass failure for humans using the supplied time.
+// Keeping the reference time explicit makes output deterministic and avoids
+// hiding a wall-clock dependency inside a value renderer.
+func (mf MassFailure) DescribeAt(now time.Time) string {
 	base := fmt.Sprintf(
 		"%d %s workloads share %s",
 		mf.AffectedCount,

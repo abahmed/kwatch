@@ -2,25 +2,28 @@ package app
 
 import (
 	"context"
+	"fmt"
 	"os"
 	"os/signal"
-	"sync"
 	"syscall"
 	"time"
 
 	"k8s.io/klog/v2"
 
-	"github.com/abahmed/kwatch/internal/client"
-	"github.com/abahmed/kwatch/internal/controller"
 	"github.com/abahmed/kwatch/internal/crdwatch"
 	"github.com/abahmed/kwatch/internal/k8s"
+	"github.com/abahmed/kwatch/internal/metrics"
+)
+
+const (
+	backgroundShutdownTimeout = 10 * time.Second
+	componentShutdownTimeout  = 10 * time.Second
 )
 
 // serve starts the controller loop and background monitors, then waits for
 // shutdown, returning the process exit code.
 func serve(ctx context.Context, deps *serverDeps) int {
-	var wg sync.WaitGroup
-	errCh := make(chan error, 1)
+	supervisor := newComponentSupervisor()
 	if deps.initialized == nil {
 		ready := make(chan struct{})
 		close(ready)
@@ -29,137 +32,46 @@ func serve(ctx context.Context, deps *serverDeps) int {
 	if deps.controllerDone == nil {
 		deps.controllerDone = make(chan struct{})
 	}
+	if deps.startPersistence != nil {
+		deps.startPersistence(ctx, supervisor)
+	}
+	supervisor.startOwned(ctx, componentSpec{
+		name:     "health-server",
+		required: true,
+		run:      deps.healthServer.Serve,
+	})
 
-	wg.Add(4)
-	if deps.tlsSweep != nil {
-		wg.Add(1)
+	optionalComponents := []componentSpec{
+		{name: "status", run: componentRun(deps.statusRun)},
+		{name: "metrics", run: componentRun(deps.metricsRun)},
+		{name: "probe", run: componentRun(deps.probeRun)},
+		{name: "kubelet", run: componentRun(deps.kubeletRun)},
+		{name: "storage-graph", run: componentRun(deps.storageRun)},
+		{name: "network-graph", run: componentRun(deps.networkRun)},
+		{name: "rbac", run: componentRun(deps.securityRun)},
+		{name: "control-plane", run: componentRun(deps.controlPlaneRun)},
+		{name: "telemetry", run: componentRun(deps.telemetryRun)},
+		{name: "upgrader", run: componentRun(deps.upgradeRun)},
 	}
-	optionalMonitors := []func(context.Context){deps.statusRun, deps.metricsRun, deps.probeRun, deps.kubeletRun, deps.storageRun, deps.networkRun, deps.securityRun, deps.controlPlaneRun, deps.telemetryRun}
-	for _, monitor := range optionalMonitors {
-		startOptionalMonitor(ctx, &wg, deps.initialized, monitor)
-	}
-
-	go func() {
-		defer wg.Done()
-		deps.correlator.StartCleanup(ctx)
-	}()
-	go func() {
-		defer wg.Done()
-		if !waitForInitialization(ctx, deps.initialized) {
-			return
-		}
-		deps.pvcMonitor.Start(ctx)
-	}()
-	go func() {
-		defer wg.Done()
-		deps.hbMonitor.Start(ctx)
-	}()
-	go func() {
-		defer wg.Done()
-		interval := 60 * time.Second
-		ticker := time.NewTicker(interval)
-		defer ticker.Stop()
-		// Share the incident-snapshot tick rather than adding another timer:
-		// one ConfigMap write a minute is already the cadence here, and it
-		// bounds the reported gap to a minute of resolution.
-		if deps.recordAlive != nil {
-			deps.recordAlive(ctx)
-		}
-		for {
-			select {
-			case <-ctx.Done():
-				return
-			case <-ticker.C:
-				trySendIncidentSnapshot(
-					deps.incidentCh,
-					stateSnapshot{
-						incidents: deps.correlator.SnapshotPersisted(),
-						groups:    deps.correlator.SnapshotGroups(),
-						threads:   deps.alertManager.SnapshotThreads(),
-						engine:    deps.correlator.SnapshotEngineState(),
-					},
-				)
-				if deps.recordAlive != nil {
-					deps.recordAlive(ctx)
-				}
-			}
-		}
-	}()
-	if deps.tlsSweep != nil {
-		go func() {
-			defer wg.Done()
-			deps.tlsSweep()
-			ticker := time.NewTicker(24 * time.Hour)
-			defer ticker.Stop()
-			for {
-				select {
-				case <-ctx.Done():
-					return
-				case <-ticker.C:
-					deps.tlsSweep()
-				}
-			}
-		}()
-	}
-	if deps.cfg.CrdConfig.Enabled {
-		wg.Add(1)
-		go func() {
-			defer wg.Done()
-			startCRDWatcher(ctx, deps)
-		}()
-	}
-	if deps.cfg.NamespaceSelector != "" {
-		wg.Add(1)
-		go func() {
-			defer wg.Done()
-			namespaces, _ := deps.ctl.NamespaceScope()
-			controller.WatchNamespaceScope(
-				ctx,
-				deps.kubeClient,
-				deps.cfg.NamespaceSelector,
-				namespaces,
-				deps.cancel,
-			)
-		}()
+	for _, component := range optionalComponents {
+		supervisor.startOptional(
+			ctx, deps.initialized, component, deps.healthServer,
+		)
 	}
 
-	go func() {
-		defer close(deps.controllerDone)
-		// The startup message goes out on its own goroutine so it cannot delay
-		// informer start and readiness behind provider delivery.
-		go deps.notifyStartup()
+	startCoreComponents(ctx, deps, supervisor)
 
-		workers := deps.cfg.Workers
-		if workers < 1 {
-			workers = 1
-		}
-		if err := deps.ctl.Run(ctx, workers); err != nil {
-			errCh <- err
-			return
-		}
-		errCh <- nil
-	}()
-
-	return waitShutdown(deps, &wg, errCh)
+	return waitShutdown(deps, supervisor)
 }
 
-func startOptionalMonitor(
-	ctx context.Context,
-	wg *sync.WaitGroup,
-	initialized <-chan struct{},
-	monitor func(context.Context),
-) {
-	if monitor == nil {
-		return
+func componentRun(run func(context.Context)) func(context.Context) error {
+	if run == nil {
+		return nil
 	}
-	wg.Add(1)
-	go func() {
-		defer wg.Done()
-		if !waitForInitialization(ctx, initialized) {
-			return
-		}
-		monitor(ctx)
-	}()
+	return func(ctx context.Context) error {
+		run(ctx)
+		return nil
+	}
 }
 
 func waitForInitialization(
@@ -175,24 +87,35 @@ func waitForInitialization(
 }
 
 // startCRDWatcher launches the CRD watcher against the cluster rest config.
-func startCRDWatcher(ctx context.Context, deps *serverDeps) {
-	restCfg, err := client.GetRestConfig(&deps.cfg.App)
-	if err != nil {
-		klog.ErrorS(err, "failed to get rest config for CRD watcher")
-		return
-	}
-	resync := time.Duration(deps.cfg.ResyncSeconds) * time.Second
-	w := crdwatch.New(deps.cfg, restCfg, k8s.GetNamespace(), resync, deps.cancel)
+func startCRDWatcher(ctx context.Context, deps *serverDeps) error {
+	resync := deps.runtime.ResyncInterval()
+	w := crdwatch.NewWithClient(
+		deps.runtime, deps.clients.Dynamic, k8s.GetNamespace(), resync,
+		deps.cancel,
+	)
+	w.SetStatusSink(func(err error) {
+		deps.healthServer.SetComponentError("crd-watcher", err)
+	})
 	if err := w.Start(ctx); err != nil {
-		klog.ErrorS(err, "CRD watcher error")
+		return fmt.Errorf("crd watcher: %w", err)
 	}
+	status := w.Status()
+	if status.WaitingForCRD {
+		deps.healthServer.SetComponentStatus(
+			"crd-watcher", "waiting", "optional_api_unavailable", false,
+		)
+	} else if status.Ready {
+		deps.healthServer.SetComponentStatus(
+			"crd-watcher", "running", "", true,
+		)
+	}
+	return nil
 }
 
 // waitShutdown blocks until a signal or controller failure, then drains.
 func waitShutdown(
 	deps *serverDeps,
-	wg *sync.WaitGroup,
-	errCh <-chan error,
+	supervisor *componentSupervisor,
 ) int {
 	sigCh := make(chan os.Signal, 1)
 	signal.Notify(sigCh, os.Interrupt, syscall.SIGTERM)
@@ -202,33 +125,40 @@ func waitShutdown(
 	select {
 	case <-sigCh:
 		klog.InfoS("shutting down gracefully...")
-	case err := <-errCh:
+	case err := <-supervisor.errCh:
 		if err != nil {
 			klog.ErrorS(err, "controller startup failed, shutting down")
 			exitCode = 1
 		}
 	}
 	deps.cancel()
+	stopHealthServer(deps)
 	controllerStopped := waitController(deps)
 
 	// Every producer should stop before the final snapshot. Keep a hard bound
 	// so a misbehaving dependency cannot prevent the process from terminating.
 	backgroundDone := make(chan struct{})
 	go func() {
-		wg.Wait()
+		supervisor.wg.Wait()
 		close(backgroundDone)
 	}()
 	backgroundStopped := false
 	select {
 	case <-backgroundDone:
 		backgroundStopped = true
-	case <-time.After(10 * time.Second):
-		klog.InfoS("timed out waiting for background tasks")
+	case <-time.After(backgroundShutdownTimeout):
+		recordShutdownTimeout("background-tasks")
 	}
 	if controllerStopped && backgroundStopped {
 		incidentStopped := waitIncidentSaver(deps)
+		baselineStopped := waitPersistenceComponent(
+			deps.baselineDone, "baseline-saver",
+		)
+		changeStopped := waitPersistenceComponent(
+			deps.changeDone, "change-history-saver",
+		)
 		feedbackStopped := waitFeedbackSaver(deps)
-		if incidentStopped && feedbackStopped {
+		if incidentStopped && baselineStopped && changeStopped && feedbackStopped {
 			saveFinalIncidentSnapshot(deps)
 		} else {
 			klog.InfoS(
@@ -241,17 +171,14 @@ func waitShutdown(
 		)
 	}
 
-	select {
-	case <-deps.alertManager.Done():
-	case <-time.After(10 * time.Second):
-		klog.InfoS("timed out waiting for alert manager to drain")
+	shutdownCtx, cancel := context.WithTimeout(
+		context.Background(), componentShutdownTimeout,
+	)
+	if err := deps.deliveryManager.Stop(shutdownCtx); err != nil {
+		metrics.DefaultRegistry().ShutdownTimeouts.Add(1)
+		klog.ErrorS(err, "timed out waiting for delivery manager to drain")
 	}
-	shutdownCtx, sc := context.WithTimeout(context.Background(), 10*time.Second)
-	deps.healthServer.SetReady(false)
-	if err := deps.healthServer.Stop(shutdownCtx); err != nil {
-		klog.ErrorS(err, "failed to stop health check server")
-	}
-	sc()
+	cancel()
 	if deps.closeAudit != nil {
 		if err := deps.closeAudit(); err != nil {
 			klog.ErrorS(err, "failed to close audit logger")
@@ -261,18 +188,36 @@ func waitShutdown(
 	return exitCode
 }
 
+func stopHealthServer(deps *serverDeps) {
+	shutdownCtx, cancel := context.WithTimeout(
+		context.Background(), componentShutdownTimeout,
+	)
+	defer cancel()
+	deps.healthServer.SetReady(false)
+	if err := deps.healthServer.Stop(shutdownCtx); err != nil {
+		recordShutdownTimeout("health-server")
+		klog.ErrorS(err, "failed to stop health check server")
+	}
+}
+
 func waitController(deps *serverDeps) bool {
 	if deps.controllerDone == nil {
 		return true
 	}
 	// The controller owns the event workers that can still mutate the
-	// correlator. Its Run method observes the canceled context, so waiting here
+	// incidentEngine. Its Run method observes the canceled context, so waiting
+	// here
 	// is required before taking the final snapshot.
 	select {
 	case <-deps.controllerDone:
 		return true
-	case <-time.After(10 * time.Second):
-		klog.InfoS("timed out waiting for controller")
+	case <-time.After(componentShutdownTimeout):
+		recordShutdownTimeout("controller")
 		return false
 	}
+}
+
+func recordShutdownTimeout(component string) {
+	metrics.DefaultRegistry().ShutdownTimeouts.Add(1)
+	klog.InfoS("timed out waiting for component", "component", component)
 }

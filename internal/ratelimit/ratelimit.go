@@ -6,6 +6,8 @@ import (
 	"strconv"
 	"strings"
 	"time"
+
+	"github.com/abahmed/kwatch/internal/clock"
 )
 
 type Error struct {
@@ -22,6 +24,13 @@ func (e *Error) Error() string {
 func (e *Error) Unwrap() error { return e.Err }
 
 func ParseRetryAfter(resp *http.Response) time.Duration {
+	return ParseRetryAfterAt(resp, clock.RealClock{}.Now())
+}
+
+// ParseRetryAfterAt is the deterministic form used by retry logic and tests.
+// HTTP-date values are relative to the supplied time rather than the process
+// clock.
+func ParseRetryAfterAt(resp *http.Response, now time.Time) time.Duration {
 	if resp == nil {
 		return 0
 	}
@@ -33,7 +42,7 @@ func ParseRetryAfter(resp *http.Response) time.Duration {
 		return time.Duration(s) * time.Second
 	}
 	if t, err := http.ParseTime(v); err == nil {
-		if d := time.Until(t); d > 0 {
+		if d := t.Sub(now); d > 0 {
 			return d
 		}
 	}

@@ -5,15 +5,15 @@ import (
 	"testing"
 	"time"
 
-	"github.com/abahmed/kwatch/internal/correlation"
 	"github.com/abahmed/kwatch/internal/enricher"
+	"github.com/abahmed/kwatch/internal/incident"
 	"github.com/abahmed/kwatch/internal/model"
 	"github.com/abahmed/kwatch/internal/observe"
 )
 
 // defaultConfig returns a basic Config suitable for integration tests.
-func defaultConfig(rec *recordingAlertManager) correlation.Config {
-	return correlation.Config{
+func defaultConfig(rec *recordingDelivery) incident.Config {
+	return incident.Config{
 		Window:            10 * time.Minute,
 		LifecycleInterval: 1 * time.Minute,
 		ResolveHoldDown:   0,
@@ -25,23 +25,23 @@ func defaultConfig(rec *recordingAlertManager) correlation.Config {
 }
 
 // alertEntry holds a single (incident, action) notification captured by the
-// recording alert manager.
+// recording delivery sink.
 type alertEntry struct {
 	inc    *model.Incident
 	action model.IncidentAction
 }
 
-// recordingAlertManager captures (incident, action) pairs for assertion in
-// integration tests. It stands in for the real alert.AlertManager, wired
-// through the correlation engine's LifecycleHook — the engine announces every
+// recordingDelivery captures (incident, action) pairs for assertion in
+// integration tests. It stands in for the real delivery.Manager, wired
+// through the incident engine's LifecycleHook — the engine announces every
 // decision itself, including the ones Process returns, so tests must not
 // record the return value a second time.
-type recordingAlertManager struct {
+type recordingDelivery struct {
 	mu       sync.Mutex
 	notified []alertEntry
 }
 
-func (r *recordingAlertManager) NotifyIncident(
+func (r *recordingDelivery) NotifyIncident(
 	inc *model.Incident,
 	action model.IncidentAction,
 	_ ...interface{},
@@ -51,13 +51,13 @@ func (r *recordingAlertManager) NotifyIncident(
 	r.mu.Unlock()
 }
 
-func (r *recordingAlertManager) Len() int {
+func (r *recordingDelivery) Len() int {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	return len(r.notified)
 }
 
-func (r *recordingAlertManager) Get(
+func (r *recordingDelivery) Get(
 	i int,
 ) (*model.Incident, model.IncidentAction) {
 	r.mu.Lock()
@@ -68,11 +68,11 @@ func (r *recordingAlertManager) Get(
 	return r.notified[i].inc, r.notified[i].action
 }
 
-// newTestEngine returns a correlation.Engine configured for deterministic
+// newTestEngine returns a incident.Engine configured for deterministic
 // integration testing: no startup quiet period, no resolve hold-down, and a
 // LifecycleHook that feeds lifecycle transitions into the supplied recorder.
-func newTestEngine(rec *recordingAlertManager) *correlation.Engine {
-	return correlation.NewEngine(correlation.Config{
+func newTestEngine(rec *recordingDelivery) *incident.Engine {
+	return incident.NewEngine(incident.Config{
 		Window:            10 * time.Minute,
 		LifecycleInterval: 1 * time.Minute,
 		ResolveHoldDown:   0,
@@ -133,7 +133,7 @@ func makeContainerState(
 // produces an ActionResolved notification. Subsequent events for the same
 // key are suppressed (edge-triggered ActionSkip) until the state transitions.
 func TestCrashLoopPodCreatesAndResolves(t *testing.T) {
-	rec := &recordingAlertManager{}
+	rec := &recordingDelivery{}
 	eng := newTestEngine(rec)
 
 	ev := makeEvent(
@@ -155,7 +155,7 @@ func TestCrashLoopPodCreatesAndResolves(t *testing.T) {
 	if inc == nil {
 		t.Fatal("expected non-nil incident")
 	}
-	if inc.Key != correlation.BuildKey(
+	if inc.Key != incident.BuildKey(
 		ev.Subject.Namespace,
 		owner,
 		"CrashLoopBackOff",
@@ -210,7 +210,7 @@ func TestCrashLoopPodCreatesAndResolves(t *testing.T) {
 // (e.g. MemoryPressure) creates an incident and that clearing the condition
 // resolves it — producing exactly one (create, resolved) pair.
 func TestNodeConditionCreateAndResolve(t *testing.T) {
-	rec := &recordingAlertManager{}
+	rec := &recordingDelivery{}
 	eng := newTestEngine(rec)
 
 	ev := makeEvent("node", "worker-1", "", "MemoryPressure", "", "worker-1")
@@ -251,8 +251,8 @@ func TestNodeConditionCreateAndResolve(t *testing.T) {
 // inhibition is enabled, pod incidents on a node with an active node incident
 // are silently suppressed.
 func TestInhibitionSuppressesPodsDuringNodeFailure(t *testing.T) {
-	rec := &recordingAlertManager{}
-	eng := correlation.NewEngine(correlation.Config{
+	rec := &recordingDelivery{}
+	eng := incident.NewEngine(incident.Config{
 		Window:                    10 * time.Minute,
 		LifecycleInterval:         1 * time.Minute,
 		ResolveHoldDown:           0,
@@ -310,10 +310,10 @@ func TestInhibitionSuppressesPodsDuringNodeFailure(t *testing.T) {
 // was previously seen (seeded via SetBaseline) is suppressed on first contact,
 // preventing re-paging after restart.
 func TestBaselineSuppressesRestartRepage(t *testing.T) {
-	rec := &recordingAlertManager{}
+	rec := &recordingDelivery{}
 	eng := newTestEngine(rec)
 
-	key := correlation.BuildKey(
+	key := incident.BuildKey(
 		"default",
 		"my-deployment",
 		"CrashLoopBackOff",

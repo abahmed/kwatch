@@ -2,6 +2,18 @@ package model
 
 import "time"
 
+// PVCSample is the persisted representation of one PVC usage observation.
+// It belongs to the model so monitors depend on a value type, not on the
+// persistence implementation that stores it.
+type PVCSample struct {
+	Pct       float64   `json:"pct"`
+	Namespace string    `json:"ns"`
+	Name      string    `json:"name"`
+	PodName   string    `json:"pod"`
+	Seen      time.Time `json:"seen"`
+	PVName    string    `json:"pv,omitempty"`
+}
+
 // PersistedIncident is a lightweight serializable subset of Incident,
 // stored in the kwatch-incidents ConfigMap to survive restarts.
 type PersistedIncident struct {
@@ -150,7 +162,7 @@ type PersistedGroup struct {
 	LastNotifiedAt time.Time `json:"lastNotifiedAt"`
 }
 
-// PersistedEngineState is the correlation engine's remaining working memory:
+// PersistedEngineState is the incident engine's remaining working memory:
 // the bookkeeping that is neither an incident nor a group, but whose loss
 // after a restart is still visible to whoever reads the channel.
 //

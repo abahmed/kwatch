@@ -9,7 +9,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/labels"
 
-	"github.com/abahmed/kwatch/internal/handler"
+	"github.com/abahmed/kwatch/internal/monitor/security"
 )
 
 // enqueueServiceDependents rechecks the objects whose detectors read this
@@ -88,7 +88,7 @@ func (c *Controller) enqueueWebhooksForServiceKey(namespace, name string) {
 		if items, err := c.mwcLister.List(labels.Everything()); err == nil {
 			for _, item := range items {
 				if webhookRefsService(
-					handler.MutatingWebhookServices(item),
+					security.MutatingWebhookServices(item),
 					namespace,
 					name,
 				) {
@@ -101,7 +101,7 @@ func (c *Controller) enqueueWebhooksForServiceKey(namespace, name string) {
 		if items, err := c.vwcLister.List(labels.Everything()); err == nil {
 			for _, item := range items {
 				if webhookRefsService(
-					handler.ValidatingWebhookServices(item),
+					security.ValidatingWebhookServices(item),
 					namespace,
 					name,
 				) {

@@ -2,7 +2,7 @@ package upgrader
 
 import (
 	"context"
-	"errors"
+	"net/http"
 	"testing"
 
 	"github.com/google/go-github/v55/github"
@@ -12,9 +12,9 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes/fake"
 
-	"github.com/abahmed/kwatch/internal/alert"
 	"github.com/abahmed/kwatch/internal/config"
-	"github.com/abahmed/kwatch/internal/state"
+	"github.com/abahmed/kwatch/internal/delivery"
+	"github.com/abahmed/kwatch/internal/persistence"
 	"github.com/abahmed/kwatch/internal/version"
 )
 
@@ -35,41 +35,57 @@ func (m *MockGitHubClient) GetLatestRelease(ctx context.Context, owner, repo str
 	return r0, r1, args.Error(2)
 }
 
-type MockAlertManager struct {
+type recordingNotifier struct {
 	mock.Mock
 	NotifyCalled  bool
 	NotifyLastMsg string
 }
 
-func (m *MockAlertManager) Notify(msg string) {
+func (m *recordingNotifier) Notify(msg string) {
 	m.NotifyCalled = true
 	m.NotifyLastMsg = msg
 	m.Called(msg)
+}
+
+func newTestUpgrader(
+	upgraderConfig *config.Upgrader,
+	deliveryManager *delivery.Manager,
+	persistenceManager *persistence.Manager,
+) *Upgrader {
+	return NewUpgrader(
+		upgraderConfig,
+		deliveryManager,
+		persistenceManager,
+		http.DefaultClient,
+	)
 }
 
 func TestNewUpgrader(t *testing.T) {
 	assert := assert.New(t)
 
 	upgraderConfig := &config.Upgrader{}
-	alertMgr := &alert.AlertManager{}
-	stateMgr := state.NewStateManager(fake.NewSimpleClientset(), "kwatch")
+	deliveryManager := &delivery.Manager{}
+	persistenceManager := persistence.NewManager(
+		fake.NewSimpleClientset(),
+		"kwatch",
+	)
 
-	u := NewUpgrader(upgraderConfig, alertMgr, stateMgr)
+	u := newTestUpgrader(upgraderConfig, deliveryManager, persistenceManager)
 	assert.NotNil(u)
 	assert.Equal(upgraderConfig, u.config)
-	assert.Equal(alertMgr, u.alertManager)
-	assert.Equal(stateMgr, u.stateManager)
+	assert.Equal(deliveryManager, u.deliveryManager)
+	assert.Equal(persistenceManager, u.persistenceManager)
 }
 
-func TestNewUpgraderNilStateManager(t *testing.T) {
+func TestNewUpgraderNilPersistenceManager(t *testing.T) {
 	assert := assert.New(t)
 
 	upgraderConfig := &config.Upgrader{}
-	alertMgr := &alert.AlertManager{}
+	deliveryManager := &delivery.Manager{}
 
-	u := NewUpgrader(upgraderConfig, alertMgr, nil)
+	u := newTestUpgrader(upgraderConfig, deliveryManager, nil)
 	assert.NotNil(u)
-	assert.Nil(u.stateManager)
+	assert.Nil(u.persistenceManager)
 }
 
 func TestCheckUpdatesDisabled(t *testing.T) {
@@ -78,10 +94,13 @@ func TestCheckUpdatesDisabled(t *testing.T) {
 	upgraderConfig := &config.Upgrader{
 		DisableUpdateCheck: true,
 	}
-	alertMgr := &alert.AlertManager{}
-	stateMgr := state.NewStateManager(fake.NewSimpleClientset(), "kwatch")
+	deliveryManager := &delivery.Manager{}
+	persistenceManager := persistence.NewManager(
+		fake.NewSimpleClientset(),
+		"kwatch",
+	)
 
-	u := NewUpgrader(upgraderConfig, alertMgr, stateMgr)
+	u := newTestUpgrader(upgraderConfig, deliveryManager, persistenceManager)
 	assert.NotNil(u)
 }
 
@@ -91,14 +110,17 @@ func TestUpgraderFields(t *testing.T) {
 	upgraderConfig := &config.Upgrader{
 		DisableUpdateCheck: true,
 	}
-	alertMgr := &alert.AlertManager{}
-	stateMgr := state.NewStateManager(fake.NewSimpleClientset(), "kwatch")
+	deliveryManager := &delivery.Manager{}
+	persistenceManager := persistence.NewManager(
+		fake.NewSimpleClientset(),
+		"kwatch",
+	)
 
-	u := NewUpgrader(upgraderConfig, alertMgr, stateMgr)
+	u := newTestUpgrader(upgraderConfig, deliveryManager, persistenceManager)
 	assert.NotNil(u)
 	assert.Equal(upgraderConfig, u.config)
-	assert.Equal(alertMgr, u.alertManager)
-	assert.Equal(stateMgr, u.stateManager)
+	assert.Equal(deliveryManager, u.deliveryManager)
+	assert.Equal(persistenceManager, u.persistenceManager)
 	assert.True(u.config.DisableUpdateCheck)
 }
 
@@ -126,10 +148,13 @@ func TestUpgraderWithDisabledConfig(t *testing.T) {
 	upgraderConfig := &config.Upgrader{
 		DisableUpdateCheck: true,
 	}
-	alertMgr := &alert.AlertManager{}
-	stateMgr := state.NewStateManager(fake.NewSimpleClientset(), "kwatch")
+	deliveryManager := &delivery.Manager{}
+	persistenceManager := persistence.NewManager(
+		fake.NewSimpleClientset(),
+		"kwatch",
+	)
 
-	u := NewUpgrader(upgraderConfig, alertMgr, stateMgr)
+	u := newTestUpgrader(upgraderConfig, deliveryManager, persistenceManager)
 	assert.NotNil(u)
 	assert.True(u.config.DisableUpdateCheck)
 }
@@ -140,10 +165,13 @@ func TestUpgraderWithEnabledConfig(t *testing.T) {
 	upgraderConfig := &config.Upgrader{
 		DisableUpdateCheck: false,
 	}
-	alertMgr := &alert.AlertManager{}
-	stateMgr := state.NewStateManager(fake.NewSimpleClientset(), "kwatch")
+	deliveryManager := &delivery.Manager{}
+	persistenceManager := persistence.NewManager(
+		fake.NewSimpleClientset(),
+		"kwatch",
+	)
 
-	u := NewUpgrader(upgraderConfig, alertMgr, stateMgr)
+	u := newTestUpgrader(upgraderConfig, deliveryManager, persistenceManager)
 	assert.NotNil(u)
 	assert.False(u.config.DisableUpdateCheck)
 }
@@ -152,51 +180,61 @@ func TestUpgraderConfigDefaults(t *testing.T) {
 	assert := assert.New(t)
 
 	upgraderConfig := &config.Upgrader{}
-	alertMgr := &alert.AlertManager{}
-	stateMgr := state.NewStateManager(fake.NewSimpleClientset(), "kwatch")
+	deliveryManager := &delivery.Manager{}
+	persistenceManager := persistence.NewManager(
+		fake.NewSimpleClientset(),
+		"kwatch",
+	)
 
-	u := NewUpgrader(upgraderConfig, alertMgr, stateMgr)
+	u := newTestUpgrader(upgraderConfig, deliveryManager, persistenceManager)
 	assert.NotNil(u)
 	assert.False(u.config.DisableUpdateCheck)
 }
 
-func TestUpgraderNilConfigNilStateManager(t *testing.T) {
+func TestUpgraderNilConfigNilPersistenceManager(t *testing.T) {
 	assert := assert.New(t)
 
-	alertMgr := &alert.AlertManager{}
+	deliveryManager := &delivery.Manager{}
 
-	u := NewUpgrader(nil, alertMgr, nil)
+	u := newTestUpgrader(nil, deliveryManager, nil)
 	assert.NotNil(u)
 	assert.NotNil(u.config)
-	assert.Nil(u.stateManager)
+	assert.Nil(u.persistenceManager)
 }
 
-func TestUpgraderReuseStateManager(t *testing.T) {
+func TestUpgraderReusePersistenceManager(t *testing.T) {
 	assert := assert.New(t)
 
 	upgraderConfig := &config.Upgrader{}
-	alertMgr := &alert.AlertManager{}
-	sharedStateMgr := state.NewStateManager(fake.NewSimpleClientset(), "kwatch")
+	deliveryManager := &delivery.Manager{}
+	sharedPersistenceManager := persistence.NewManager(
+		fake.NewSimpleClientset(),
+		"kwatch",
+	)
 
-	u1 := NewUpgrader(upgraderConfig, alertMgr, sharedStateMgr)
-	u2 := NewUpgrader(upgraderConfig, alertMgr, sharedStateMgr)
+	u1 := newTestUpgrader(
+		upgraderConfig, deliveryManager, sharedPersistenceManager,
+	)
+	u2 := newTestUpgrader(
+		upgraderConfig, deliveryManager, sharedPersistenceManager,
+	)
 
-	assert.Equal(u1.stateManager, u2.stateManager)
-	assert.Equal(u1.stateManager, sharedStateMgr)
-	assert.Equal(u2.stateManager, sharedStateMgr)
+	assert.Equal(u1.persistenceManager, u2.persistenceManager)
+	assert.Equal(u1.persistenceManager, sharedPersistenceManager)
+	assert.Equal(u2.persistenceManager, sharedPersistenceManager)
 }
 
-func TestUpgraderStateManager(t *testing.T) {
+func TestUpgraderPersistenceManager(t *testing.T) {
 	assert := assert.New(t)
 
 	client := fake.NewSimpleClientset()
-	stateMgr := state.NewStateManager(client, "kwatch")
+	persistenceManager := persistence.NewManager(client, "kwatch")
 	upgraderConfig := &config.Upgrader{}
-	alertMgr := &alert.AlertManager{}
+	deliveryManager := &delivery.Manager{}
 
-	u := NewUpgrader(upgraderConfig, alertMgr, stateMgr)
+	u := newTestUpgrader(upgraderConfig, deliveryManager, persistenceManager)
 	assert.NotNil(u)
-	assert.Equal(stateMgr, u.stateManager)
+	assert.Equal(persistenceManager, u.persistenceManager)
 }
 
 func TestUpgraderGetNotifiedVersion(t *testing.T) {
@@ -218,138 +256,14 @@ func TestUpgraderGetNotifiedVersion(t *testing.T) {
 		context.Background(), cm, metav1.CreateOptions{})
 	assert.Nil(err)
 
-	stateMgr := state.NewStateManager(client, namespace)
+	persistenceManager := persistence.NewManager(client, namespace)
 	upgraderConfig := &config.Upgrader{}
-	alertMgr := &alert.AlertManager{}
+	deliveryManager := &delivery.Manager{}
 
-	u := NewUpgrader(upgraderConfig, alertMgr, stateMgr)
+	u := newTestUpgrader(upgraderConfig, deliveryManager, persistenceManager)
 	assert.NotNil(u)
-	assert.Equal("v2.0.0", u.stateManager.GetNotifiedVersion(context.Background()))
-}
-
-func TestCheckReleaseGitHubError(t *testing.T) {
-	mockGithub := new(MockGitHubClient)
-	mockGithub.On("GetLatestRelease", mock.Anything, "abahmed", "kwatch").
-		Return(nil, nil, errors.New("rate limit exceeded"))
-
-	u := NewUpgrader(&config.Upgrader{}, &alert.AlertManager{}, nil)
-	u.githubClient = mockGithub
-
-	u.checkRelease(context.Background())
-
-	mockGithub.AssertExpectations(t)
-}
-
-func TestCheckReleaseNilTagName(t *testing.T) {
-	mockGithub := new(MockGitHubClient)
-	mockGithub.On("GetLatestRelease", mock.Anything, "abahmed", "kwatch").
-		Return(&github.RepositoryRelease{}, nil, nil)
-
-	u := NewUpgrader(&config.Upgrader{}, &alert.AlertManager{}, nil)
-	u.githubClient = mockGithub
-
-	u.checkRelease(context.Background())
-
-	mockGithub.AssertExpectations(t)
-}
-
-func TestCheckReleaseSameVersion(t *testing.T) {
-	mockGithub := new(MockGitHubClient)
-	currentVersion := version.Short()
-	mockGithub.On("GetLatestRelease", mock.Anything, "abahmed", "kwatch").
-		Return(&github.RepositoryRelease{TagName: &currentVersion}, nil, nil)
-
-	u := NewUpgrader(&config.Upgrader{}, &alert.AlertManager{}, nil)
-	u.githubClient = mockGithub
-
-	u.checkRelease(context.Background())
-
-	mockGithub.AssertExpectations(t)
-}
-
-func TestCheckReleaseAlreadyNotified(t *testing.T) {
-	newVersion := "v99.0.0"
-	mockGithub := new(MockGitHubClient)
-	mockGithub.On("GetLatestRelease", mock.Anything, "abahmed", "kwatch").
-		Return(&github.RepositoryRelease{TagName: &newVersion}, nil, nil)
-
-	client := fake.NewSimpleClientset()
-	cm := &corev1.ConfigMap{
-		ObjectMeta: metav1.ObjectMeta{
-			Name:      "kwatch-state",
-			Namespace: "kwatch",
-		},
-		Data: map[string]string{
-			"notified-version": newVersion,
-		},
-	}
-	_, err := client.CoreV1().ConfigMaps("kwatch").Create(context.Background(), cm, metav1.CreateOptions{})
-	assert.Nil(t, err)
-
-	stateMgr := state.NewStateManager(client, "kwatch")
-
-	u := NewUpgrader(&config.Upgrader{}, &alert.AlertManager{}, stateMgr)
-	u.githubClient = mockGithub
-
-	u.checkRelease(context.Background())
-
-	mockGithub.AssertExpectations(t)
-}
-
-func TestCheckReleaseNewVersionNotifies(t *testing.T) {
-	newVersion := "v99.0.0"
-	mockGithub := new(MockGitHubClient)
-	mockGithub.On("GetLatestRelease", mock.Anything, "abahmed", "kwatch").
-		Return(&github.RepositoryRelease{TagName: &newVersion}, nil, nil)
-
-	mockAlert := new(MockAlertManager)
-	mockAlert.On("Notify", mock.AnythingOfType("string")).Return()
-
-	stateMgr := state.NewStateManager(fake.NewSimpleClientset(), "kwatch")
-
-	u := NewUpgrader(&config.Upgrader{}, &alert.AlertManager{}, stateMgr)
-	u.githubClient = mockGithub
-	u.alertManager = mockAlert
-
-	u.checkRelease(context.Background())
-
-	mockGithub.AssertExpectations(t)
-	mockAlert.AssertExpectations(t)
-	assert.True(t, mockAlert.NotifyCalled)
-}
-
-func TestCheckReleaseNewVersionSetsState(t *testing.T) {
-	newVersion := "v99.0.0"
-	mockGithub := new(MockGitHubClient)
-	mockGithub.On("GetLatestRelease", mock.Anything, "abahmed", "kwatch").
-		Return(&github.RepositoryRelease{TagName: &newVersion}, nil, nil)
-
-	mockAlert := new(MockAlertManager)
-	mockAlert.On("Notify", mock.AnythingOfType("string")).Return()
-
-	client := fake.NewSimpleClientset()
-	cm := &corev1.ConfigMap{
-		ObjectMeta: metav1.ObjectMeta{
-			Name:      "kwatch-state",
-			Namespace: "kwatch",
-		},
-		Data: map[string]string{},
-	}
-	_, err := client.CoreV1().ConfigMaps("kwatch").Create(context.Background(), cm, metav1.CreateOptions{})
-	assert.Nil(t, err)
-
-	stateMgr := state.NewStateManager(client, "kwatch")
-
-	u := NewUpgrader(&config.Upgrader{}, &alert.AlertManager{}, stateMgr)
-	u.githubClient = mockGithub
-	u.alertManager = mockAlert
-
-	u.checkRelease(context.Background())
-
-	mockGithub.AssertExpectations(t)
-	mockAlert.AssertExpectations(t)
-	assert.True(t, mockAlert.NotifyCalled)
-
-	notifiedVersion := stateMgr.GetNotifiedVersion(context.Background())
-	assert.Equal(t, newVersion, notifiedVersion)
+	assert.Equal(
+		"v2.0.0",
+		u.persistenceManager.GetNotifiedVersion(context.Background()),
+	)
 }

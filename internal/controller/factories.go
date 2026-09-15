@@ -26,12 +26,15 @@ const nodeLeaseNamespace = "kube-node-lease"
 
 var namespaceResolveTimeout = 30 * time.Second
 
-func resolveNamespaces(cfg *config.Config, clientset kubernetes.Interface) (namespaceScope, error) {
-	if cfg.NamespaceSelector != "" {
+func resolveNamespaces(
+	runtime config.RuntimeConfig,
+	clientset kubernetes.Interface,
+) (namespaceScope, error) {
+	if runtime.NamespaceSelector() != "" {
 		ctx, cancel := context.WithTimeout(context.Background(), namespaceResolveTimeout)
 		defer cancel()
 		list, err := clientset.CoreV1().Namespaces().List(ctx, metav1.ListOptions{
-			LabelSelector: cfg.NamespaceSelector,
+			LabelSelector: runtime.NamespaceSelector(),
 		})
 		if err != nil {
 			return namespaceScope{}, fmt.Errorf("namespaceSelector list failed: %w", err)
@@ -42,10 +45,11 @@ func resolveNamespaces(cfg *config.Config, clientset kubernetes.Interface) (name
 		}
 		return namespaceScope{namespaces: ns}, nil
 	}
+	allowed := runtime.AllowedNamespaces()
 	return namespaceScope{
-		namespaces: cfg.AllowedNamespaces,
-		all:        len(cfg.AllowedNamespaces) == 0,
-		forbidden:  cfg.ForbiddenNamespaces,
+		namespaces: allowed,
+		all:        len(allowed) == 0,
+		forbidden:  runtime.ForbiddenNamespaces(),
 	}, nil
 }
 

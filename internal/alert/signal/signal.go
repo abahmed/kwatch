@@ -1,13 +1,13 @@
 package signal
 
 import (
+	"context"
 	"encoding/json"
 	"strings"
 
 	"k8s.io/klog/v2"
 
-	"github.com/abahmed/kwatch/internal/alert/util"
-	"github.com/abahmed/kwatch/internal/config"
+	"github.com/abahmed/kwatch/internal/delivery/transport"
 	"github.com/abahmed/kwatch/internal/event"
 )
 
@@ -20,15 +20,21 @@ type signalPayload struct {
 }
 
 type Signal struct {
+	sender transport.Sender
 	url    string
 	number string
 	to     string
 
-	appCfg *config.App
+	clusterName string
 }
 
 // NewSignal returns a new Signal object
-func NewSignal(config map[string]interface{}, appCfg *config.App) *Signal {
+
+func NewSignal(
+	config map[string]interface{},
+	clusterName string,
+	dependencies transport.Dependencies,
+) *Signal {
 	number, ok := config["number"].(string)
 	if !ok || len(number) == 0 {
 		klog.InfoS("initializing signal with empty number")
@@ -49,10 +55,11 @@ func NewSignal(config map[string]interface{}, appCfg *config.App) *Signal {
 	klog.InfoS("initializing signal", "url", server, "number", number)
 
 	return &Signal{
-		url:    strings.TrimRight(server, "/") + "/v2/send",
-		number: number,
-		to:     to,
-		appCfg: appCfg,
+		sender:      transport.NewSender(dependencies),
+		url:         strings.TrimRight(server, "/") + "/v2/send",
+		number:      number,
+		to:          to,
+		clusterName: clusterName,
 	}
 }
 
@@ -62,13 +69,13 @@ func (s *Signal) Name() string {
 }
 
 // SendEvent sends event to the provider
-func (s *Signal) SendEvent(e *event.Event) error {
-	msg := e.FormatText(s.appCfg.ClusterName, "")
-	return s.SendMessage(msg)
+func (s *Signal) SendEvent(ctx context.Context, e *event.Event) error {
+	msg := e.FormatText(s.clusterName, "")
+	return s.SendMessage(ctx, msg)
 }
 
 // SendMessage sends text message to the provider
-func (s *Signal) SendMessage(msg string) error {
+func (s *Signal) SendMessage(ctx context.Context, msg string) error {
 	payload := signalPayload{
 		Message:    msg,
 		Number:     s.number,
@@ -80,6 +87,9 @@ func (s *Signal) SendMessage(msg string) error {
 		return err
 	}
 
-	_, err = util.Post(s.Name(), s.url, body, "application/json", nil)
+	_, err = s.sender.Send(ctx, transport.Request{
+		Provider: s.Name(), URL: s.url, Body: body,
+		ContentType: "application/json",
+	})
 	return err
 }

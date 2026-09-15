@@ -128,9 +128,9 @@ func (f Facts) clone() Facts {
 // Incident is one problem kwatch is tracking. It is written by several
 // subsystems, so it is composed of five parts, each with one owner:
 //
-//   - Subject: what the incident is about. Set by correlation.newIncident;
+//   - Subject: what the incident is about. Set by incident.newIncident;
 //     the enricher may refresh Image and NodeName as replicas come and go.
-//   - Status: what is happening now. Refreshed by the correlation engine on
+//   - Status: what is happening now. Refreshed by the incident engine on
 //     every matching event.
 //   - Evidence: why, and what we saw. Filled by the enricher from the event.
 //   - Attribution: how it relates to other incidents. Filled by the
@@ -140,7 +140,7 @@ func (f Facts) clone() Facts {
 //
 // The parts are embedded, so inc.Reason and inc.Count read as before; only
 // composite literals name the part. Renderers read Incident and never write
-// it; the alert manager receives a clone.
+// it; the delivery manager receives a clone.
 type Incident struct {
 	Subject
 	Status
@@ -246,7 +246,7 @@ type Attribution struct {
 	SuppressedPodSummaries []PodSummary
 }
 
-// Delivery is the correlation engine's notification bookkeeping. Only the
+// Delivery is the incident engine's notification bookkeeping. Only the
 // engine writes it: NotifiedSig is the last announced state (edge detection
 // compares against it), LastNotifiedAt and RenotifyCount drive the renotify
 // budget.

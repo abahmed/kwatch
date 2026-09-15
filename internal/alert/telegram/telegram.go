@@ -1,6 +1,7 @@
 package telegram
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"strings"
@@ -8,9 +9,9 @@ import (
 
 	"k8s.io/klog/v2"
 
-	"github.com/abahmed/kwatch/internal/alert/util"
-	"github.com/abahmed/kwatch/internal/config"
+	"github.com/abahmed/kwatch/internal/delivery/transport"
 	"github.com/abahmed/kwatch/internal/event"
+	"github.com/abahmed/kwatch/internal/format"
 	"github.com/abahmed/kwatch/internal/insight"
 	"github.com/abahmed/kwatch/internal/message"
 	"github.com/abahmed/kwatch/internal/model"
@@ -35,16 +36,22 @@ type telegramPayload struct {
 }
 
 type Telegram struct {
+	sender transport.Sender
 	token  string
 	chatId string
 	url    string
 
 	// reference for general app configuration
-	appCfg *config.App
+	clusterName string
 }
 
 // NewTelegram returns a new Telegram object
-func NewTelegram(config map[string]interface{}, appCfg *config.App) *Telegram {
+
+func NewTelegram(
+	config map[string]interface{},
+	clusterName string,
+	dependencies transport.Dependencies,
+) *Telegram {
 	token, ok := config["token"].(string)
 	if !ok || len(token) == 0 {
 		klog.InfoS("initializing telegram with empty token")
@@ -64,10 +71,11 @@ func NewTelegram(config map[string]interface{}, appCfg *config.App) *Telegram {
 
 	// returns a new telegram object
 	return &Telegram{
-		token:  token,
-		chatId: chatId,
-		url:    telegramAPIURL,
-		appCfg: appCfg,
+		sender:      transport.NewSender(dependencies),
+		token:       token,
+		chatId:      chatId,
+		url:         telegramAPIURL,
+		clusterName: clusterName,
 	}
 }
 
@@ -77,9 +85,9 @@ func (t *Telegram) Name() string {
 }
 
 // Verify checks credentials via Telegram getMe API.
-func (t *Telegram) Verify() error {
+func (t *Telegram) Verify(ctx context.Context) error {
 	url := fmt.Sprintf(telegramGetMeURL, t.token)
-	_, err := util.Send(util.Request{
+	_, err := t.sender.Send(ctx, transport.Request{
 		Provider: "Telegram",
 		Method:   "GET",
 		URL:      url,
@@ -88,7 +96,7 @@ func (t *Telegram) Verify() error {
 }
 
 // SendEvent sends event to the provider
-func (t *Telegram) SendEvent(e *event.Event) error {
+func (t *Telegram) SendEvent(ctx context.Context, e *event.Event) error {
 	klog.V(4).InfoS(
 		"sending to telegram event",
 		"namespace", e.Namespace,
@@ -98,46 +106,51 @@ func (t *Telegram) SendEvent(e *event.Event) error {
 	)
 
 	reqBody := t.buildRequestBodyTelegram(e, t.chatId, "")
-	return t.sendByTelegramApi(reqBody)
+	return t.sendByTelegramApi(ctx, reqBody)
 }
 
 // SendMessage sends text message to the provider
-func (t *Telegram) SendMessage(msg string) error {
-	klog.V(4).InfoS("sending to telegram msg", "msg", msg)
+func (t *Telegram) SendMessage(ctx context.Context, msg string) error {
+	klog.V(4).InfoS(
+		"sending message to telegram",
+		"messageLength", len(msg),
+	)
 
 	reqBody := t.buildRequestBodyTelegram(new(event.Event), t.chatId, msg)
-	return t.sendByTelegramApi(reqBody)
+	return t.sendByTelegramApi(ctx, reqBody)
 }
 
-// SendIncident implements alert.ThreadProvider.
+// SendIncident implements delivery.ThreadProvider.
 // It renders the incident using the Report model and PlaintextRenderer,
 // producing a context-adaptive text message.
 func (t *Telegram) SendIncident(
+	ctx context.Context,
 	inc *model.Incident,
 	action model.IncidentAction,
 ) error {
-	return t.SendIncidentWithInsight(inc, action, nil)
+	return t.SendIncidentWithInsight(ctx, inc, action, nil)
 }
 
-// SendIncidentWithInsight implements alert.InsightThreadProvider, so the
+// SendIncidentWithInsight implements delivery.InsightThreadProvider, so the
 // diagnosis — likely cause, impact, recent changes — is rendered rather than
 // dropped on the way to this provider.
 func (t *Telegram) SendIncidentWithInsight(
+	ctx context.Context,
 	inc *model.Incident,
 	action model.IncidentAction,
 	ins *insight.Insight,
 ) error {
-	text := util.RenderIncidentWithInsight(
+	text := message.RenderIncidentWithInsight(
 		inc,
 		action,
 		ins,
 		message.NewPlainTextRenderer(),
-		t.appCfg.ClusterName,
+		t.clusterName,
 	)
 	if text == "" {
 		return nil
 	}
-	return t.SendMessage(text)
+	return t.SendMessage(ctx, text)
 }
 
 func (t *Telegram) buildRequestBodyTelegram(
@@ -150,7 +163,7 @@ func (t *Telegram) buildRequestBodyTelegram(
 		var parts []string
 		parts = append(
 			parts,
-			fmt.Sprintf("*Reason:* %s", util.OrDefault(e.Reason, "unknown")),
+			fmt.Sprintf("*Reason:* %s", format.OrDefault(e.Reason, "unknown")),
 		)
 
 		if e.PodName != "" {
@@ -168,10 +181,10 @@ func (t *Telegram) buildRequestBodyTelegram(
 		if e.NodeName != "" {
 			parts = append(parts, fmt.Sprintf("*Node:* %s", e.NodeName))
 		}
-		if t.appCfg.ClusterName != "" {
+		if t.clusterName != "" {
 			parts = append(
 				parts,
-				fmt.Sprintf("*Cluster:* %s", t.appCfg.ClusterName),
+				fmt.Sprintf("*Cluster:* %s", t.clusterName),
 			)
 		}
 
@@ -207,8 +220,11 @@ func (t *Telegram) buildRequestBodyTelegram(
 	return string(bodyBytes)
 }
 
-func (t *Telegram) sendByTelegramApi(reqBody string) error {
-	_, err := util.Send(util.Request{
+func (t *Telegram) sendByTelegramApi(
+	ctx context.Context,
+	reqBody string,
+) error {
+	_, err := t.sender.Send(ctx, transport.Request{
 		Provider: "Telegram",
 		URL:      fmt.Sprintf(t.url, t.token),
 		Body:     []byte(reqBody),

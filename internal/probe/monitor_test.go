@@ -1,6 +1,8 @@
 package probe
 
 import (
+	"context"
+	"errors"
 	"net/http"
 	"testing"
 	"time"
@@ -12,21 +14,59 @@ import (
 	kwcontext "github.com/abahmed/kwatch/internal/graphcontext"
 )
 
-func TestNewWithClientUsesInjectedHTTPClient(t *testing.T) {
+type testResolver struct {
+	addresses []string
+	err       error
+}
+
+func (r testResolver) LookupHost(
+	context.Context, string,
+) ([]string, error) {
+	return r.addresses, r.err
+}
+
+func TestNewUsesInjectedHTTPClient(t *testing.T) {
 	client := &http.Client{}
-	monitor := NewWithClient(
+	monitor := New(
 		config.ActiveProbeMonitor{TimeoutSeconds: 7},
 		nil,
 		client,
 	)
-	if monitor.client == client {
-		t.Fatal("active probe monitor should not mutate the injected client")
+	if monitor.client != client {
+		t.Fatal("active probe monitor should reuse the injected client")
 	}
-	if monitor.client.Timeout != 7*time.Second {
-		t.Fatalf("expected fallback timeout, got %s", monitor.client.Timeout)
+	if monitor.timeout != 7*time.Second {
+		t.Fatalf("expected probe timeout, got %s", monitor.timeout)
+	}
+	if client.Timeout != 0 {
+		t.Fatal("active probe monitor should not mutate the shared client")
 	}
 	if monitor.client.Transport != client.Transport {
 		t.Fatal("active probe monitor did not retain the shared transport")
+	}
+}
+
+func TestDNSProbeUsesInjectedResolver(t *testing.T) {
+	monitor := New(config.ActiveProbeMonitor{}, nil, &http.Client{})
+	monitor.SetResolver(testResolver{addresses: []string{"10.0.0.1"}})
+
+	ok, detail := monitor.dns(
+		context.Background(), config.DNSProbeTarget{Host: "api.example"},
+	)
+	if !ok || detail != "DNS resolved to 1 address(es)" {
+		t.Fatalf("unexpected DNS result: %v, %q", ok, detail)
+	}
+}
+
+func TestDNSProbeReportsResolverError(t *testing.T) {
+	monitor := New(config.ActiveProbeMonitor{}, nil, &http.Client{})
+	monitor.SetResolver(testResolver{err: errors.New("lookup failed")})
+
+	ok, detail := monitor.dns(
+		context.Background(), config.DNSProbeTarget{Host: "api.example"},
+	)
+	if ok || detail != "lookup failed" {
+		t.Fatalf("unexpected DNS error result: %v, %q", ok, detail)
 	}
 }
 

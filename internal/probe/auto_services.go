@@ -310,6 +310,6 @@ func (m *Monitor) resolveRemovedTarget(target autoProbeTarget) {
 		constant.ReasonActiveProbeFailure,
 		constant.ReasonActiveProbeLatency,
 	} {
-		m.correlator.Resolve(probeRef(target.owner), reason)
+		m.incidentSink.Resolve(probeRef(target.owner), reason)
 	}
 }

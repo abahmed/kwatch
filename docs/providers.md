@@ -32,7 +32,7 @@ plain credentials and `${ENV_VAR}` substitutions for sensitive fields.
 - **Reliability is built in.** Every provider shares the same routing, retry, and fallback
   controls (shown at the top under Slack — they apply to all providers).
 - **One HTTP path.** Every provider that talks HTTP sends through the same helper
-  (`alert/util.Send`), so a `429` is always honoured with its `Retry-After`, a `4xx` is never
+  (`delivery/transport`), so a `429` is always honoured with its `Retry-After`, a `4xx` is never
   retried (the payload will not get better), and a `5xx` or network error always is. A
   provider cannot have its own idea of what a status code means — the linter rejects raw
   `net/http` calls under `internal/alert/`.

@@ -1,12 +1,12 @@
 package messagebird
 
 import (
+	"context"
 	"encoding/json"
 
 	"k8s.io/klog/v2"
 
-	"github.com/abahmed/kwatch/internal/alert/util"
-	"github.com/abahmed/kwatch/internal/config"
+	"github.com/abahmed/kwatch/internal/delivery/transport"
 	"github.com/abahmed/kwatch/internal/event"
 )
 
@@ -19,16 +19,22 @@ type messagebirdPayload struct {
 }
 
 type Messagebird struct {
+	sender    transport.Sender
 	url       string
 	accessKey string
 	from      string
 	to        string
 
-	appCfg *config.App
+	clusterName string
 }
 
 // NewMessagebird returns a new Messagebird object
-func NewMessagebird(config map[string]interface{}, appCfg *config.App) *Messagebird {
+
+func NewMessagebird(
+	config map[string]interface{},
+	clusterName string,
+	dependencies transport.Dependencies,
+) *Messagebird {
 	accessKey, ok := config["accessKey"].(string)
 	if !ok || len(accessKey) == 0 {
 		klog.InfoS("initializing messagebird with empty accessKey")
@@ -50,11 +56,12 @@ func NewMessagebird(config map[string]interface{}, appCfg *config.App) *Messageb
 	klog.InfoS("initializing messagebird", "from", from, "to", to)
 
 	return &Messagebird{
-		url:       messagebirdAPIURL,
-		accessKey: accessKey,
-		from:      from,
-		to:        to,
-		appCfg:    appCfg,
+		sender:      transport.NewSender(dependencies),
+		url:         messagebirdAPIURL,
+		accessKey:   accessKey,
+		from:        from,
+		to:          to,
+		clusterName: clusterName,
 	}
 }
 
@@ -64,13 +71,13 @@ func (m *Messagebird) Name() string {
 }
 
 // SendEvent sends event to the provider
-func (m *Messagebird) SendEvent(e *event.Event) error {
-	msg := e.FormatText(m.appCfg.ClusterName, "")
-	return m.SendMessage(msg)
+func (m *Messagebird) SendEvent(ctx context.Context, e *event.Event) error {
+	msg := e.FormatText(m.clusterName, "")
+	return m.SendMessage(ctx, msg)
 }
 
 // SendMessage sends text message to the provider
-func (m *Messagebird) SendMessage(msg string) error {
+func (m *Messagebird) SendMessage(ctx context.Context, msg string) error {
 	payload := messagebirdPayload{
 		Originator: m.from,
 		Recipients: []string{m.to},
@@ -82,8 +89,11 @@ func (m *Messagebird) SendMessage(msg string) error {
 		return err
 	}
 
-	_, err = util.Post(m.Name(), m.url, body, "application/json", map[string]string{
-		"Authorization": "AccessKey " + m.accessKey,
+	_, err = m.sender.Send(ctx, transport.Request{
+		Provider: m.Name(), URL: m.url, Body: body,
+		ContentType: "application/json", Headers: map[string]string{
+			"Authorization": "AccessKey " + m.accessKey,
+		},
 	})
 	return err
 }

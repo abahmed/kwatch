@@ -10,8 +10,6 @@ import (
 	"k8s.io/client-go/kubernetes"
 	corev1lister "k8s.io/client-go/listers/core/v1"
 	"k8s.io/client-go/tools/cache"
-
-	"github.com/abahmed/kwatch/internal/handler"
 )
 
 // wireEvents wires the pod-event informers. It returns the additional factory
@@ -25,7 +23,9 @@ func (c *Controller) wireEvents(
 	if !scope.all && len(scope.namespaces) == 0 {
 		return eventFactories
 	}
-	warningFactories := wireWarningEvents(c.handler, client, resync, scope)
+	warningFactories := wireWarningEvents(
+		c.components.Integration.Events, client, resync, scope,
+	)
 	eventFactories = append(eventFactories, warningFactories...)
 	for _, factory := range warningFactories {
 		c.eventsSynced = append(c.eventsSynced, factory.Core().V1().Events().Informer().HasSynced)
@@ -111,7 +111,7 @@ func (c *Controller) wireEvents(
 // resource-level failures. Pod Events remain on the indexed informer above so
 // their richer log/container context is preserved.
 func wireWarningEvents(
-	h handler.Handler,
+	h EventProcessor,
 	client kubernetes.Interface,
 	resync time.Duration,
 	scope namespaceScope,
@@ -196,7 +196,7 @@ func (c *Controller) eventsByPod(
 // wireClusterAutoscaler wires the cluster-autoscaler event informer and returns
 // its dedicated factory.
 func wireClusterAutoscaler(
-	h handler.Handler,
+	h EventProcessor,
 	client kubernetes.Interface,
 	resync time.Duration,
 ) informers.SharedInformerFactory {

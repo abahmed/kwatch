@@ -19,7 +19,12 @@ func TestRecordChangeUsesInjectedClock(t *testing.T) {
 	const want = "2026-08-31T12:34:56Z"
 	now, err := time.Parse(time.RFC3339, want)
 	require.NoError(t, err)
-	controller := &Controller{tracker: kwcontext.NewChangeTracker(10), now: func() time.Time { return now }}
+	controller := &Controller{
+		graphRuntime: graphRuntime{
+			tracker: kwcontext.NewChangeTracker(10),
+		},
+		now: func() time.Time { return now },
+	}
 	obj := &corev1.Service{ObjectMeta: metav1.ObjectMeta{Name: "api", Namespace: "prod"}}
 
 	controller.recordChange(kwcontext.ChangeUpdate, "service", obj)
@@ -40,10 +45,14 @@ func TestServiceDependentsFallbackWhenGraphHasNoEdge(t *testing.T) {
 	require.NoError(t, factory.Networking().V1().Ingresses().Informer().GetStore().Add(&networkingIngress))
 
 	controller := &Controller{
-		graph:         kwcontext.NewResourceGraph(),
-		ingress:       newResourcePipeline("ingress", "ingresses-test"),
-		mwc:           newResourcePipeline("mwc", "mwc-test"),
-		vwc:           newResourcePipeline("vwc", "vwc-test"),
+		graphRuntime: graphRuntime{
+			graph: kwcontext.NewResourceGraph(),
+		},
+		pipelineSet: pipelineSet{
+			ingress: newResourcePipeline("ingress", "ingresses-test"),
+			mwc:     newResourcePipeline("mwc", "mwc-test"),
+			vwc:     newResourcePipeline("vwc", "vwc-test"),
+		},
 		ingressLister: factory.Networking().V1().Ingresses().Lister(),
 	}
 	controller.ingress.startWorkers = true

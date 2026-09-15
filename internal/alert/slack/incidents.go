@@ -1,19 +1,20 @@
 package slack
 
 import (
+	"context"
 	"sort"
 
-	"github.com/abahmed/kwatch/internal/alert/util"
 	"github.com/abahmed/kwatch/internal/insight"
 	"github.com/abahmed/kwatch/internal/model"
 
 	slackClient "github.com/slack-go/slack"
 )
 
-// SendIncident implements alert.ThreadProvider.
+// SendIncident implements delivery.ThreadProvider.
 // In token mode it posts rich blocks and threads updates.
 // In webhook mode it falls back to SendMessage.
 func (s *Slack) SendIncident(
+	ctx context.Context,
 	inc *model.Incident,
 	action model.IncidentAction,
 ) error {
@@ -21,17 +22,19 @@ func (s *Slack) SendIncident(
 		return nil
 	}
 	if s.compact {
-		return s.SendMessage(formatIncidentText(inc, action))
+		return s.SendMessage(ctx, formatIncidentText(inc, action))
 	}
 	if s.postBlocksFn != nil || s.apiClient != nil {
-		return s.sendIncidentWithToken(inc, action, nil)
+		return s.sendIncidentWithToken(ctx, inc, action, nil)
 	}
-	return s.SendMessage(formatIncidentText(inc, action))
+	return s.SendMessage(ctx, formatIncidentText(inc, action))
 }
 
-// SendIncidentWithInsight implements alert.InsightThreadProvider: the same as
+// SendIncidentWithInsight implements delivery.InsightThreadProvider. It is the
+// same as
 // SendIncident, with the diagnosis rendered as its own block.
 func (s *Slack) SendIncidentWithInsight(
+	ctx context.Context,
 	inc *model.Incident,
 	action model.IncidentAction,
 	ins *insight.Insight,
@@ -40,29 +43,40 @@ func (s *Slack) SendIncidentWithInsight(
 		return nil
 	}
 	if s.compact {
-		return s.SendMessage(formatIncidentText(inc, action))
+		return s.SendMessage(ctx, formatIncidentText(inc, action))
 	}
 	if s.postBlocksFn != nil || s.apiClient != nil {
-		return s.sendIncidentWithToken(inc, action, ins)
+		return s.sendIncidentWithToken(ctx, inc, action, ins)
 	}
-	return s.SendMessage(formatIncidentText(inc, action))
+	return s.SendMessage(ctx, formatIncidentText(inc, action))
 }
 
 func (s *Slack) sendIncidentWithToken(
+	ctx context.Context,
 	inc *model.Incident,
 	action model.IncidentAction,
 	ins *insight.Insight,
 ) error {
 	key := string(inc.Key)
 
-	post := s.postBlocks
+	post := func(
+		blocks *slackClient.Blocks,
+		threadTS string,
+	) (string, error) {
+		return s.postBlocks(ctx, blocks, threadTS)
+	}
 	if s.postBlocksFn != nil {
-		post = s.postBlocksFn
+		post = func(
+			blocks *slackClient.Blocks,
+			threadTS string,
+		) (string, error) {
+			return s.postBlocksFn(blocks, threadTS)
+		}
 	}
 
 	switch action {
 	case model.ActionCreate:
-		blocks := buildIncidentBlocksWithInsight(inc, s.appCfg, ins)
+		blocks := buildIncidentBlocksWithInsight(inc, s.clusterName, ins)
 		ts, err := post(blocks, "")
 		if err != nil {
 			return err
@@ -138,6 +152,7 @@ func (s *Slack) popThread(key string) string {
 }
 
 func (s *Slack) postBlocks(
+	ctx context.Context,
 	blocks *slackClient.Blocks,
 	threadTS string,
 ) (string, error) {
@@ -149,14 +164,14 @@ func (s *Slack) postBlocks(
 		opts = append(opts, slackClient.MsgOptionTS(threadTS))
 	}
 	_, ts, err := s.apiClient.PostMessageContext(
-		util.ProviderContext(s.Name()),
+		ctx,
 		s.channel,
 		opts...,
 	)
 	return ts, wrapSlackRateLimit(err)
 }
 
-// SnapshotThreads implements alert.ThreadStateProvider.
+// SnapshotThreads implements delivery.ThreadStateProvider.
 func (s *Slack) SnapshotThreads() map[string]string {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -170,7 +185,7 @@ func (s *Slack) SnapshotThreads() map[string]string {
 	return out
 }
 
-// RestoreThreads implements alert.ThreadStateProvider. Restored keys are
+// RestoreThreads implements delivery.ThreadStateProvider. Restored keys are
 // appended to the eviction order in a stable sequence so the bound still
 // applies, and existing live threads always win over saved ones.
 func (s *Slack) RestoreThreads(saved map[string]string) {

@@ -14,10 +14,10 @@ import (
 	v1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
-
 	"k8s.io/client-go/kubernetes/fake"
-
 	k8stesting "k8s.io/client-go/testing"
+
+	"github.com/abahmed/kwatch/internal/config"
 )
 
 func TestGetPodContainerLogs(t *testing.T) {
@@ -311,12 +311,13 @@ func TestGetPodEventsSuccess(t *testing.T) {
 	assert.Equal(1, len(result.Items))
 }
 
-func TestGetDefaultClient(t *testing.T) {
+func TestNewHTTPClient(t *testing.T) {
 	assert := assert.New(t)
 
-	client := GetDefaultClient()
+	client := NewHTTPClient(config.ApplicationRuntime{})
 	assert.NotNil(client)
 	assert.Equal(DefaultHTTPTimeout, client.Timeout)
+	assert.NotNil(client.Transport)
 }
 
 // Events are unbounded in Kubernetes; a churning pod accumulates hundreds. An

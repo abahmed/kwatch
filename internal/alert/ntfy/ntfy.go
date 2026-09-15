@@ -1,13 +1,13 @@
 package ntfy
 
 import (
+	"context"
 	"encoding/json"
 	"strings"
 
 	"k8s.io/klog/v2"
 
-	"github.com/abahmed/kwatch/internal/alert/util"
-	"github.com/abahmed/kwatch/internal/config"
+	"github.com/abahmed/kwatch/internal/delivery/transport"
 	"github.com/abahmed/kwatch/internal/event"
 )
 
@@ -22,16 +22,22 @@ type ntfyPayload struct {
 }
 
 type Ntfy struct {
+	sender   transport.Sender
 	url      string
 	token    string
 	title    string
 	priority int
 
-	appCfg *config.App
+	clusterName string
 }
 
 // NewNtfy returns a new Ntfy object
-func NewNtfy(config map[string]interface{}, appCfg *config.App) *Ntfy {
+
+func NewNtfy(
+	config map[string]interface{},
+	clusterName string,
+	dependencies transport.Dependencies,
+) *Ntfy {
 	topic, ok := config["topic"].(string)
 	if !ok || len(topic) == 0 {
 		klog.InfoS("initializing ntfy with empty topic")
@@ -59,11 +65,13 @@ func NewNtfy(config map[string]interface{}, appCfg *config.App) *Ntfy {
 	klog.InfoS("initializing ntfy", "url", server, "title", title)
 
 	return &Ntfy{
-		url:      strings.TrimRight(server, "/") + "/" + strings.TrimLeft(topic, "/"),
-		token:    token,
-		title:    title,
-		priority: priority,
-		appCfg:   appCfg,
+		sender: transport.NewSender(dependencies),
+		url: strings.TrimRight(server, "/") + "/" +
+			strings.TrimLeft(topic, "/"),
+		token:       token,
+		title:       title,
+		priority:    priority,
+		clusterName: clusterName,
 	}
 }
 
@@ -73,13 +81,13 @@ func (n *Ntfy) Name() string {
 }
 
 // SendEvent sends event to the provider
-func (n *Ntfy) SendEvent(e *event.Event) error {
-	msg := e.FormatText(n.appCfg.ClusterName, "")
-	return n.SendMessage(msg)
+func (n *Ntfy) SendEvent(ctx context.Context, e *event.Event) error {
+	msg := e.FormatText(n.clusterName, "")
+	return n.SendMessage(ctx, msg)
 }
 
 // SendMessage sends text message to the provider
-func (n *Ntfy) SendMessage(msg string) error {
+func (n *Ntfy) SendMessage(ctx context.Context, msg string) error {
 	payload := ntfyPayload{
 		Title:    n.title,
 		Message:  msg,
@@ -97,6 +105,9 @@ func (n *Ntfy) SendMessage(msg string) error {
 		headers["Authorization"] = "Bearer " + n.token
 	}
 
-	_, err = util.Post(n.Name(), n.url, body, "application/json", headers)
+	_, err = n.sender.Send(ctx, transport.Request{
+		Provider: n.Name(), URL: n.url, Body: body,
+		ContentType: "application/json", Headers: headers,
+	})
 	return err
 }

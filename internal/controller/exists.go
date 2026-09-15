@@ -236,7 +236,7 @@ func lookupExists(resource string) (existsFn, bool) {
 // ResourceExists reports whether the object an incident is about is still in
 // the informer cache, and whether this controller can answer at all.
 //
-// The correlation engine closes an incident it has not heard about for a whole
+// The incident engine closes an incident it has not heard about for a whole
 // window. That is right when the object is gone, and wrong when the object is
 // still there and simply stopped producing events -- a Deployment stuck on a
 // failed rollout writes nothing further, and the incident was resolved while

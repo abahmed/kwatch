@@ -1,6 +1,7 @@
 package sendgrid
 
 import (
+	"context"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -8,14 +9,22 @@ import (
 
 	"github.com/stretchr/testify/assert"
 
-	"github.com/abahmed/kwatch/internal/config"
+	"github.com/abahmed/kwatch/internal/delivery/transport"
 	"github.com/abahmed/kwatch/internal/event"
 )
+
+var testDeps = transport.Dependencies{
+	HTTPClient: http.DefaultClient,
+}
+
+func testAppConfig() string {
+	return "dev"
+}
 
 func TestEmptyConfig(t *testing.T) {
 	assert := assert.New(t)
 
-	c := NewSendgrid(map[string]interface{}{}, &config.App{ClusterName: "dev"})
+	c := NewSendgrid(map[string]interface{}{}, testAppConfig(), testDeps)
 	assert.Nil(c)
 }
 
@@ -27,7 +36,7 @@ func TestSendgrid(t *testing.T) {
 		"from":   "kwatch@example.com",
 		"to":     []interface{}{"ops@example.com"},
 	}
-	c := NewSendgrid(configMap, &config.App{ClusterName: "dev"})
+	c := NewSendgrid(configMap, testAppConfig(), testDeps)
 	assert.NotNil(c)
 	assert.Equal(c.Name(), "Sendgrid")
 	assert.Equal(c.url, "https://api.sendgrid.com/v3/mail/send")
@@ -36,13 +45,34 @@ func TestSendgrid(t *testing.T) {
 func TestSendgridInvalidConfig(t *testing.T) {
 	assert := assert.New(t)
 
-	c := NewSendgrid(map[string]interface{}{"from": "f", "to": []interface{}{"t"}}, &config.App{ClusterName: "dev"})
+	c := NewSendgrid(
+		map[string]interface{}{
+			"from": "f",
+			"to":   []interface{}{"t"},
+		},
+		testAppConfig(),
+		testDeps,
+	)
 	assert.Nil(c)
 
-	c = NewSendgrid(map[string]interface{}{"apiKey": "a", "to": []interface{}{"t"}}, &config.App{ClusterName: "dev"})
+	c = NewSendgrid(
+		map[string]interface{}{
+			"apiKey": "a",
+			"to":     []interface{}{"t"},
+		},
+		testAppConfig(),
+		testDeps,
+	)
 	assert.Nil(c)
 
-	c = NewSendgrid(map[string]interface{}{"apiKey": "a", "from": "f"}, &config.App{ClusterName: "dev"})
+	c = NewSendgrid(
+		map[string]interface{}{
+			"apiKey": "a",
+			"from":   "f",
+		},
+		testAppConfig(),
+		testDeps,
+	)
 	assert.Nil(c)
 }
 
@@ -67,10 +97,10 @@ func TestSendMessage(t *testing.T) {
 		"to":      []interface{}{"ops@example.com", "dev@example.com"},
 		"subject": "kwatch alert",
 	}
-	c := NewSendgrid(configMap, &config.App{ClusterName: "dev"})
+	c := NewSendgrid(configMap, testAppConfig(), testDeps)
 	c.url = s.URL
 
-	assert.Nil(c.SendMessage("hello"))
+	assert.Nil(c.SendMessage(context.Background(), "hello"))
 	assert.Equal("Bearer test", gotAuth)
 	assert.Contains(gotBody, `"email":"ops@example.com"`)
 	assert.Contains(gotBody, `"email":"dev@example.com"`)
@@ -93,10 +123,10 @@ func TestSendMessageError(t *testing.T) {
 		"from":   "kwatch@example.com",
 		"to":     []interface{}{"ops@example.com"},
 	}
-	c := NewSendgrid(configMap, &config.App{ClusterName: "dev"})
+	c := NewSendgrid(configMap, testAppConfig(), testDeps)
 	c.url = s.URL
 
-	assert.NotNil(c.SendMessage("test"))
+	assert.NotNil(c.SendMessage(context.Background(), "test"))
 }
 
 func TestSendEvent(t *testing.T) {
@@ -116,7 +146,7 @@ func TestSendEvent(t *testing.T) {
 		"from":   "kwatch@example.com",
 		"to":     []interface{}{"ops@example.com"},
 	}
-	c := NewSendgrid(configMap, &config.App{ClusterName: "dev"})
+	c := NewSendgrid(configMap, testAppConfig(), testDeps)
 	c.url = s.URL
 
 	ev := event.Event{
@@ -124,7 +154,7 @@ func TestSendEvent(t *testing.T) {
 		Namespace: "default",
 		Reason:    "OOMKILLED",
 	}
-	assert.Nil(c.SendEvent(&ev))
+	assert.Nil(c.SendEvent(context.Background(), &ev))
 }
 
 func TestInvalidHttpRequest(t *testing.T) {
@@ -135,11 +165,11 @@ func TestInvalidHttpRequest(t *testing.T) {
 		"from":   "kwatch@example.com",
 		"to":     []interface{}{"ops@example.com"},
 	}
-	c := NewSendgrid(configMap, &config.App{ClusterName: "dev"})
+	c := NewSendgrid(configMap, testAppConfig(), testDeps)
 	c.url = "h ttp://localhost/%s"
 
-	assert.NotNil(c.SendMessage("test"))
+	assert.NotNil(c.SendMessage(context.Background(), "test"))
 
 	c.url = "http://localhost:132323/%s"
-	assert.NotNil(c.SendMessage("test"))
+	assert.NotNil(c.SendMessage(context.Background(), "test"))
 }

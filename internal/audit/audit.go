@@ -53,7 +53,7 @@ type AuditLogger struct {
 func NewLogger(cfg Config) *AuditLogger {
 	now := cfg.Now
 	if now == nil {
-		now = time.Now
+		now = func() time.Time { return time.Time{} }
 	}
 	l := &AuditLogger{cfg: cfg, now: now}
 	if !cfg.Enabled {

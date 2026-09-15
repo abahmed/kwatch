@@ -13,7 +13,9 @@ import (
 // carries no signal and made every incident in a namespace read as a shared
 // failure of that ConfigMap.
 func TestAddPodVolumeToGraphSkipsClusterCABundle(t *testing.T) {
-	c := &Controller{graph: kwcontext.NewResourceGraph()}
+	c := &Controller{
+		graphRuntime: graphRuntime{graph: kwcontext.NewResourceGraph()},
+	}
 	c.addPodVolumeToGraph("ns1", "p1", corev1.Volume{
 		Name: "kube-api-access-abcde",
 		VolumeSource: corev1.VolumeSource{Projected: &corev1.ProjectedVolumeSource{

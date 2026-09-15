@@ -42,13 +42,91 @@ The Go code follows a one-way dependency flow:
 cmd/kwatch
     └── internal/app                 composition root
           ├── controller             informers, queues, graph wiring
-          ├── handler → filter       detection and suppression
+          ├── monitor families       typed detection policy
+          │     ├── pod/policy       pure Pod/container decisions
+          │     ├── pod              family orchestration
+          │     │   ├── policy       deterministic detection
+          │     │   └── enrichment   Kubernetes-backed evidence
           │     └── observe          objects → observations, pod ownership
-          ├── correlation             incident lifecycle and notifications
+          ├── filter                  pure detect-time suppression matching
+          ├── incident                incident lifecycle and decisions
           ├── insight                 cause, impact, and change analysis
-          ├── alert/*                 provider adapters and delivery
-          └── state/startup/upgrader  persistence and integrations
+          ├── delivery/*              routing, retry, and transport policy
+          ├── alert/catalog            statically linked provider construction
+          ├── alert/*                  provider payload adapters
+          ├── persistence              typed stores, migrations, and recovery
+          └── startup                  lifecycle state and startup summaries
 ```
+
+These are the canonical runtime boundaries. The retired correlation,
+alert-manager, and state-manager package boundaries are intentionally absent;
+their responsibilities now have one discoverable owner each.
+
+Monitor families are cohesive resource domains, not one package per watched
+Kubernetes kind. The concrete `pod`, `workload`, `node`, `network`, and
+`security`, and `cluster` packages own detection policy; storage, telemetry, and control-plane
+components remain in their existing cohesive lifecycle packages. A family
+produces observations and receives typed, read-only dependencies. It never
+owns incident identity, delivery, or persistence. `controller.RuntimeSet`
+gives the controller narrow capability interfaces defined at the controller
+composition boundary, and all production resource processing is directly
+family-wired.
+
+Pod/container policy is intentionally separate from enrichment. The
+`monitor/pod/policy` package evaluates Kubernetes object state using an
+injected clock and configuration only. Event lookup, owner resolution, log
+fetching, and suppression enrichment live in
+`internal/monitor/pod/enrichment`. The compiled suppression index is built by
+`internal/config`, while pure matching is centralized in `internal/filter`;
+neither package mutates source data or knows about incident delivery.
+
+The direct Pod runtime owns queue lookup, policy evaluation, reference checks,
+and recovery. Baseline summary construction is an application-startup
+concern. The controller only seeds baseline state; `startup.BuildSummary`
+creates the one notification in the application lifecycle.
+
+Workload queue processing is now wired directly to the family-owned runtimes
+in `monitor/workload` for Deployment, ReplicaSet, Job, DaemonSet, StatefulSet,
+CronJob, HPA, and PDB. The aggregate workload adapter has been removed from
+controller dispatch. Each runtime owns lookup and lifecycle policy; the
+incident engine remains the only lifecycle emitter.
+
+Optional Gateway API, storage, status, and KwatchConfig resources share
+informer construction and transform mechanics through
+`internal/k8s/dynamicwatch`. That package reports discovery and cache-sync
+state, while `networkgraph`, `storagegraph`, and `statuswatch` retain separate
+domain semantics. `crdwatch` remains a special watcher for late-installed
+KwatchConfig resources and restart-on-change behavior.
+
+The published deployment is intentionally single-replica and has no Lease
+leader election. This keeps observation and delivery ownership unambiguous;
+high availability is a separate future design requiring explicit failover and
+deduplication semantics.
+
+The controller's dependency graph is built by `graphBuilder`, which receives
+only the listers and graph state required for a rebuild. This keeps graph
+construction independent from controller queues, lifecycle state, and
+informer diagnostics.
+
+Controller queue depth is an aggregate across active pipelines, not the last
+queue that happened to receive an event. Informer and monitor source gaps are
+reported as bounded diagnostic names; a missing lister skips detection and
+does not synthesize a create or resolve event.
+
+Delivery has the same explicit boundary. The application supplies the static
+provider catalog through `Manager.InitRuntime` and the immutable
+`config.RuntimeConfig` snapshot. Every provider implements the context-aware
+delivery contract directly, including rich incident/thread capabilities, and
+the manager dispatches to it without a transitional adapter. Routes, retry
+limits, and fallback names are compiled before delivery starts.
+HTTP adapters use the application-owned client through the shared
+`delivery/transport` boundary, never hidden context values or package globals.
+
+Every family and integration receives synchronized sources through one typed
+`ConfigureSources` operation before processing starts. Compatibility setter
+methods are isolated from production composition. Health diagnostics use safe
+reason codes, and persistence reports all migration operations from a startup
+cycle rather than exposing only the final migration result.
 
 Shared leaf packages (`model`, `event`, `graphcontext`, `constant`, and
 `format`) contain data and pure helpers. They must not import orchestration,
@@ -70,11 +148,11 @@ project:
 - Tests use `Test<Type><Behavior>` and describe observable behavior rather than
   implementation order.
 
-When a public name must change, keep a small compatibility wrapper and mark it
-deprecated. Remove the wrapper only after all repository imports and supported
-external call sites have migrated.
+Internal package names should converge on the canonical domain vocabulary. Keep
+compatibility only where it is part of a supported external behavior or a
+persisted/configuration format; make those seams explicit and test them.
 
-### Two doors into the correlation engine
+### Two doors into the incident engine
 
 Everything a detector or monitor has to say goes through one of two methods,
 and nothing else:
@@ -103,7 +181,7 @@ call site. It also owns `OwnerResolver`: one walk up the owner chain
 monitors and the startup baseline. Three private copies of that walk is how
 one broken Deployment used to arrive as three unrelated alerts.
 
-This mirrors the rule on the way out: `correlation/emit.go` is the only place
+This mirrors the rule on the way out: `incident/emit.go` is the only place
 a notification leaves the engine.
 
 Two vocabularies meet on an observation, and the distinction is deliberate:
@@ -120,10 +198,11 @@ group, and rewritten as replicas come and go — so nothing that has to answer
 
 ### Recovery is derived, not remembered
 
-`internal/handler/reconcile.go` keeps, per watched object, the set of reasons
-last reported for it. Each pass hands the reconciler everything currently
-wrong with that object; whatever was in the last set and is not in this one is
-resolved, and an object with nothing wrong resolves as a whole.
+`internal/incident` keeps, per watched object, the set of reasons last reported
+for it. Each pass hands the engine everything currently wrong with that object;
+whatever was in the last set and is not in this one is resolved, and an object
+with nothing wrong resolves as a whole. Monitor runtimes prepare observations
+and delegate reconciliation to `Engine.Reconcile`/`ReconcileGone`.
 
 Every detector used to carry its own `else { resolve }` branch naming the
 exact reasons it could produce. A reason added without a matching branch

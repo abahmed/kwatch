@@ -1,22 +1,13 @@
 package health
 
 import (
-	"context"
-	"crypto/subtle"
-	"encoding/json"
 	"net"
 	"net/http"
-	"net/http/pprof"
-	"strconv"
 	"sync"
 	"sync/atomic"
-	"time"
-
-	"k8s.io/klog/v2"
 
 	"github.com/abahmed/kwatch/internal/config"
 	"github.com/abahmed/kwatch/internal/event"
-	"github.com/abahmed/kwatch/internal/metrics"
 	"github.com/abahmed/kwatch/internal/model"
 )
 
@@ -30,49 +21,59 @@ type TestAlertSender interface {
 }
 
 type DeadLetterLister interface {
-	DeadLetters() interface{}
+	DeadLetters() []model.DeadLetterEntry
 }
 
-type TelemetryLister interface {
-	TelemetryStatus() interface{}
-}
-
-type SecurityLister interface {
-	SecurityStatus() interface{}
-}
-
-type ControlPlaneLister interface {
-	ControlPlaneStatus() interface{}
-}
-
-type InformerLister interface {
-	InformerStatus() interface{}
+// StatusProvider returns an already typed JSON status document. The health
+// package does not need to know every monitor's private status structure, but
+// it does require an explicit serialization boundary instead of interface{}
+// values flowing through every handler.
+type StatusProvider interface {
+	StatusJSON() ([]byte, error)
 }
 
 type HealthServer struct {
 	server             *http.Server
+	listener           net.Listener
 	port               int
 	enabled            bool
 	pprof              bool
 	diagnostics        bool
 	diagnosticsToken   string
 	incidentAPI        IncidentLister
-	alertManager       TestAlertSender
+	deliveryManager    TestAlertSender
 	deadLetterLister   DeadLetterLister
-	telemetryLister    TelemetryLister
-	securityLister     SecurityLister
-	controlPlaneLister ControlPlaneLister
-	informerLister     InformerLister
+	telemetryLister    StatusProvider
+	securityLister     StatusProvider
+	controlPlaneLister StatusProvider
+	informerLister     StatusProvider
+	persistenceLister  StatusProvider
 	ready              atomic.Bool
 	componentMu        sync.RWMutex
 	componentErrors    map[string]string
+	componentStatus    map[string]ComponentStatus
+	lifecycleMu        sync.Mutex
+	started            bool
+	stopped            bool
+	stopErr            error
+	serveErr           error
+	serveErrors        chan error
 }
 
 type HealthResponse struct {
 	Status string `json:"status"`
 	// Degraded names the optional components that failed to start, with the
 	// reason. Empty when everything kwatch was asked to run is running.
-	Degraded map[string]string `json:"degraded,omitempty"`
+	Degraded   map[string]string          `json:"degraded,omitempty"`
+	Components map[string]ComponentStatus `json:"components,omitempty"`
+}
+
+// ComponentStatus is the safe diagnostic state for one runtime component.
+// Details remain in logs; this type intentionally contains only bounded data.
+type ComponentStatus struct {
+	State     string `json:"state"`
+	Available bool   `json:"available"`
+	Reason    string `json:"reason,omitempty"`
 }
 
 func NewHealthServer(cfg config.HealthCheck) *HealthServer {
@@ -83,211 +84,40 @@ func NewHealthServer(cfg config.HealthCheck) *HealthServer {
 		diagnostics:      cfg.Diagnostics,
 		diagnosticsToken: cfg.DiagnosticsToken,
 		componentErrors:  make(map[string]string),
+		componentStatus:  make(map[string]ComponentStatus),
+		serveErrors:      make(chan error, 1),
 	}
 	return h
-}
-
-func (h *HealthServer) guard(next http.HandlerFunc) http.HandlerFunc {
-	return func(w http.ResponseWriter, r *http.Request) {
-		if !h.requireDiagnosticsAuth(w, r) {
-			return
-		}
-		next(w, r)
-	}
-}
-
-func (h *HealthServer) requireDiagnosticsAuth(w http.ResponseWriter, r *http.Request) bool {
-	if h.diagnosticsToken == "" {
-		return true
-	}
-	token := r.Header.Get("Authorization")
-	if subtle.ConstantTimeCompare([]byte(token), []byte("Bearer "+h.diagnosticsToken)) == 1 {
-		return true
-	}
-	w.Header().Set("Content-Type", "text/plain")
-	w.WriteHeader(http.StatusUnauthorized)
-	if _, err := w.Write([]byte("unauthorized")); err != nil {
-		klog.ErrorS(err, "health: write unauthorized response")
-	}
-	return false
 }
 
 func (h *HealthServer) SetIncidentAPI(lister IncidentLister) {
 	h.incidentAPI = lister
 }
 
-func (h *HealthServer) SetAlertManager(a TestAlertSender) {
-	h.alertManager = a
+func (h *HealthServer) SetDeliveryManager(sender TestAlertSender) {
+	h.deliveryManager = sender
 }
 
 func (h *HealthServer) SetDeadLetterLister(l DeadLetterLister) {
 	h.deadLetterLister = l
 }
 
-func (h *HealthServer) SetTelemetryLister(l TelemetryLister) {
+func (h *HealthServer) SetTelemetryLister(l StatusProvider) {
 	h.telemetryLister = l
 }
 
-func (h *HealthServer) SetSecurityLister(l SecurityLister) {
+func (h *HealthServer) SetSecurityLister(l StatusProvider) {
 	h.securityLister = l
 }
 
-func (h *HealthServer) SetControlPlaneLister(l ControlPlaneLister) {
+func (h *HealthServer) SetControlPlaneLister(l StatusProvider) {
 	h.controlPlaneLister = l
 }
 
-func (h *HealthServer) SetInformerLister(l InformerLister) {
+func (h *HealthServer) SetInformerLister(l StatusProvider) {
 	h.informerLister = l
 }
 
-func (h *HealthServer) Start(ctx context.Context) error {
-	if !h.enabled {
-		klog.V(4).InfoS("health check is disabled")
-		return nil
-	}
-
-	mux := http.NewServeMux()
-	mux.HandleFunc("/healthz", h.healthzHandler)
-	mux.HandleFunc("/health", h.healthHandler)
-	mux.HandleFunc("/readyz", h.readyzHandler)
-	if h.diagnostics {
-		mux.HandleFunc("/incidents", h.incidentsHandler)
-		mux.HandleFunc("/test-alert", h.testAlertHandler)
-		mux.HandleFunc("/deadletters", h.deadLettersHandler)
-	}
-	mux.HandleFunc("/kubelet", h.guard(h.kubeletHandler))
-	mux.HandleFunc("/security", h.guard(h.securityHandler))
-	mux.HandleFunc("/controlplane", h.guard(h.controlPlaneHandler))
-	mux.HandleFunc("/informer", h.guard(h.informerHandler))
-
-	mux.Handle("/metrics", metrics.DefaultRegistry().Handler())
-
-	if h.pprof {
-		mux.HandleFunc("/debug/pprof/", h.guard(pprof.Index))
-		mux.HandleFunc("/debug/pprof/cmdline", h.guard(pprof.Cmdline))
-		mux.HandleFunc("/debug/pprof/profile", h.guard(pprof.Profile))
-		mux.HandleFunc("/debug/pprof/symbol", h.guard(pprof.Symbol))
-		mux.HandleFunc("/debug/pprof/trace", h.guard(pprof.Trace))
-		mux.HandleFunc("/debug/pprof/heap", h.guard(pprof.Handler("heap").ServeHTTP))
-		mux.HandleFunc("/debug/pprof/goroutine", h.guard(pprof.Handler("goroutine").ServeHTTP))
-		mux.HandleFunc("/debug/pprof/block", h.guard(pprof.Handler("block").ServeHTTP))
-		mux.HandleFunc("/debug/pprof/threadcreate", h.guard(pprof.Handler("threadcreate").ServeHTTP))
-		mux.HandleFunc("/debug/pprof/mutex", h.guard(pprof.Handler("mutex").ServeHTTP))
-	}
-
-	h.server = &http.Server{
-		Addr:              ":" + strconv.Itoa(h.port),
-		Handler:           mux,
-		ReadHeaderTimeout: 5 * time.Second,
-		ReadTimeout:       5 * time.Second,
-		WriteTimeout:      10 * time.Second,
-		IdleTimeout:       60 * time.Second,
-	}
-
-	ln, err := net.Listen("tcp", h.server.Addr)
-	if err != nil {
-		return err
-	}
-
-	go func() {
-		klog.InfoS("starting health check server", "port", h.port)
-		if err := h.server.Serve(ln); err != nil && err != http.ErrServerClosed {
-			klog.ErrorS(err, "health check server error")
-		}
-	}()
-	if ctx != nil {
-		go func() {
-			<-ctx.Done()
-			shutdownCtx, cancel := context.WithTimeout(
-				context.Background(), 10*time.Second,
-			)
-			defer cancel()
-			if err := h.Stop(shutdownCtx); err != nil {
-				klog.ErrorS(err, "health check context shutdown failed")
-			}
-		}()
-	}
-
-	return nil
-}
-
-func (h *HealthServer) Stop(ctx context.Context) error {
-	if h.server == nil {
-		return nil
-	}
-	return h.server.Shutdown(ctx)
-}
-
-func (h *HealthServer) healthzHandler(w http.ResponseWriter, r *http.Request) {
-	w.Header().Set("Content-Type", "text/plain")
-	w.WriteHeader(http.StatusOK)
-	if _, err := w.Write([]byte("OK")); err != nil {
-		klog.ErrorS(err, "health: write healthz response")
-	}
-}
-
-func (h *HealthServer) healthHandler(w http.ResponseWriter, r *http.Request) {
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(http.StatusOK)
-	response := HealthResponse{Status: "ok"}
-	if degraded := h.ComponentErrors(); len(degraded) > 0 {
-		response.Status = "degraded"
-		response.Degraded = degraded
-	}
-	if err := json.NewEncoder(w).Encode(response); err != nil {
-		klog.ErrorS(err, "health: encode health response")
-	}
-}
-
-func (h *HealthServer) SetReady(v bool) {
-	h.ready.Store(v)
-}
-
-func (h *HealthServer) SetComponentError(name string, err error) {
-	h.componentMu.Lock()
-	defer h.componentMu.Unlock()
-	if h.componentErrors == nil {
-		h.componentErrors = make(map[string]string)
-	}
-	if err == nil {
-		delete(h.componentErrors, name)
-		return
-	}
-	h.componentErrors[name] = err.Error()
-}
-
-// ComponentErrors reports the components that failed to start or stopped,
-// so an operator can see a degraded optional monitor on /health.
-func (h *HealthServer) ComponentErrors() map[string]string {
-	h.componentMu.RLock()
-	defer h.componentMu.RUnlock()
-	out := make(map[string]string, len(h.componentErrors))
-	for name, message := range h.componentErrors {
-		out[name] = message
-	}
-	return out
-}
-
-// readyzHandler reports whether kwatch is watching the cluster.
-//
-// It deliberately does not fail for a component error. Every component that
-// reports one is an optional monitor -- the generic status watcher, the
-// storage and network graph builders, runtime metrics, the control-plane
-// probe -- and any of them can fail simply because the cluster does not serve
-// that API. Gating readiness on them made a cluster missing an optional API
-// permanently NotReady, so Kubernetes restarted a kwatch that was working.
-// Degraded components are reported through /health instead.
-func (h *HealthServer) readyzHandler(w http.ResponseWriter, r *http.Request) {
-	w.Header().Set("Content-Type", "text/plain")
-	if !h.ready.Load() {
-		w.WriteHeader(http.StatusServiceUnavailable)
-		if _, err := w.Write([]byte("not ready")); err != nil {
-			klog.ErrorS(err, "health: write not-ready response")
-		}
-		return
-	}
-	w.WriteHeader(http.StatusOK)
-	if _, err := w.Write([]byte("OK")); err != nil {
-		klog.ErrorS(err, "health: write readyz response")
-	}
+func (h *HealthServer) SetPersistenceLister(l StatusProvider) {
+	h.persistenceLister = l
 }

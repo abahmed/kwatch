@@ -2,6 +2,7 @@ package controller
 
 import (
 	"context"
+	"sync"
 	"time"
 
 	"k8s.io/apimachinery/pkg/labels"
@@ -15,8 +16,15 @@ import (
 	"github.com/abahmed/kwatch/internal/resource"
 )
 
+const (
+	graphRebuildInterval        = 60 * time.Minute
+	graphPruneInterval          = 5 * time.Minute
+	defaultNodeResourceInterval = 5 * time.Minute
+)
+
 func (c *Controller) Run(ctx context.Context, workers int) error {
 	defer utilruntime.HandleCrash()
+	var goroutines sync.WaitGroup
 	for _, p := range c.allPipelines() {
 		defer p.shutdown()
 	}
@@ -40,10 +48,12 @@ func (c *Controller) Run(ctx context.Context, workers int) error {
 	}
 	c.buildGraph()
 	c.recordGraphSize()
+	goroutines.Add(1)
 	go func() {
-		rebuildTicker := time.NewTicker(60 * time.Minute)
+		defer goroutines.Done()
+		rebuildTicker := time.NewTicker(graphRebuildInterval)
 		defer rebuildTicker.Stop()
-		pruneTicker := time.NewTicker(5 * time.Minute)
+		pruneTicker := time.NewTicker(graphPruneInterval)
 		defer pruneTicker.Stop()
 		for {
 			select {
@@ -60,20 +70,26 @@ func (c *Controller) Run(ctx context.Context, workers int) error {
 	}()
 	c.buildSeenSet()
 	if c.lease.startWorkers {
-		go c.runLeaseSweep(ctx)
+		goroutines.Add(1)
+		go func() {
+			defer goroutines.Done()
+			c.runLeaseSweep(ctx)
+		}()
 	}
 	if c.cpPod.startWorkers {
-		c.handler.SweepControlPlane()
+		c.components.Integration.ControlPlane.SweepControlPlane()
 	}
 	if c.readyFn != nil {
 		c.readyFn()
 	}
 
 	if c.nodeResourceCfg != nil {
+		goroutines.Add(1)
 		go func(cfg *config.NodeResourceMonitor) {
+			defer goroutines.Done()
 			interval := time.Duration(cfg.IntervalSeconds) * time.Second
 			if interval <= 0 {
-				interval = 300 * time.Second
+				interval = defaultNodeResourceInterval
 			}
 			mon := resource.NewMonitor(resource.Config{
 				Interval:   interval,
@@ -86,7 +102,7 @@ func (c *Controller) Run(ctx context.Context, workers int) error {
 				Client:                    c.client,
 			}, c.nodeLister, c.podLister)
 			mon.Run(ctx, func(obs *model.Observation) {
-				c.handler.ProcessNodeResourceOvercommit(
+				c.components.Node.Processor.ProcessNodeResourceOvercommit(
 					obs.Reason,
 					obs.NodeName,
 					obs.Hint,
@@ -99,12 +115,22 @@ func (c *Controller) Run(ctx context.Context, workers int) error {
 	klog.InfoS("starting workers")
 	for i := 0; i < workers; i++ {
 		for _, p := range c.activePipelines() {
-			go wait.UntilWithContext(ctx, p.worker, time.Second)
+			goroutines.Add(1)
+			go func(p *resourcePipeline) {
+				defer goroutines.Done()
+				wait.UntilWithContext(ctx, p.worker, time.Second)
+			}(p)
 		}
 	}
 
 	<-ctx.Done()
 	klog.InfoS("shutting down workers")
+	// Queue workers block in Get until their queue is shut down. Close the
+	// queues before waiting so every goroutine owned by Run can finish.
+	for _, p := range c.allPipelines() {
+		p.shutdown()
+	}
+	goroutines.Wait()
 	return nil
 }
 

@@ -18,7 +18,7 @@ func Warnings(cfg *Config) []string {
 
 // resyncWarnings covers the relationship the resolve path depends on.
 //
-// The correlation engine closes an incident it has not heard about for a
+// The incident engine closes an incident it has not heard about for a
 // whole correlation.window. That is only sound because periodic informer
 // resyncs re-deliver every object, the detectors re-run, and anything still
 // broken re-reports itself inside the window -- silence therefore means

@@ -94,7 +94,7 @@ func validateRetryJitter(cfg *Config) []string {
 func unknownProviders(cfg *Config) []string {
 	var unknown []string
 	for name := range cfg.Alert {
-		if !KnownProviders[strings.ToLower(name)] {
+		if !IsKnownProvider(name) {
 			unknown = append(unknown, name)
 		}
 	}

@@ -125,7 +125,54 @@ func TestCanWatchVersionSkipsForbiddenResource(t *testing.T) {
 	)
 	monitor := &Monitor{client: client, ctx: context.Background()}
 
-	if monitor.canWatchVersion(gvr, "apps") {
+	if monitor.canWatchVersion(context.Background(), gvr, "apps") {
 		t.Fatal("forbidden custom resource should not start an informer")
+	}
+}
+
+func TestMonitorStopClearsLifecycleState(t *testing.T) {
+	canceled := false
+	monitor := &Monitor{
+		started:    true,
+		generation: 4,
+		cancel:     func() { canceled = true },
+		ctx:        context.Background(),
+		factories: map[string]dynamicinformer.DynamicSharedInformerFactory{
+			"widgets": nil,
+		},
+		stops: map[string]context.CancelFunc{
+			"widgets": func() {},
+		},
+		crdVersions: map[string]map[string]struct{}{
+			"widgets.example.io": {"widgets": {}},
+		},
+	}
+
+	monitor.Stop()
+
+	if !canceled {
+		t.Fatal("Stop did not cancel the monitor context")
+	}
+	if monitor.started || monitor.cancel != nil || monitor.ctx != nil {
+		t.Fatalf("Stop left lifecycle state active: %+v", monitor)
+	}
+	if len(monitor.factories) != 0 || len(monitor.stops) != 0 ||
+		len(monitor.crdVersions) != 0 {
+		t.Fatal("Stop left canceled informer state registered")
+	}
+}
+
+func TestMonitorIgnoresStaleLifecycleReset(t *testing.T) {
+	monitor := &Monitor{
+		started:    true,
+		generation: 2,
+		ctx:        context.Background(),
+		cancel:     func() {},
+	}
+
+	monitor.resetLifecycle(1)
+
+	if !monitor.started || monitor.generation != 2 || monitor.ctx == nil {
+		t.Fatal("stale lifecycle reset changed the active generation")
 	}
 }
