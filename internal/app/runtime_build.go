@@ -3,6 +3,7 @@ package app
 import (
 	"context"
 	"fmt"
+	"sync"
 	"time"
 
 	"k8s.io/klog/v2"
@@ -31,11 +32,11 @@ func buildServerDeps(
 	now func() time.Time,
 ) (*serverDeps, error) {
 	persist := configurePersistence(ctx, boot.persistence, now)
-	if report := boot.persistence.MigrationReport(); len(report) > 0 {
+	if report := boot.persistence.MigrationReport(); len(report.Operations) > 0 {
 		migrationState := "running"
 		migrationReason := ""
 		migrationAvailable := true
-		for _, result := range report {
+		for _, result := range report.Operations {
 			if result.Status == persistence.MigrationFailed ||
 				result.Status == persistence.MigrationUnsupported {
 				migrationState = "degraded"
@@ -51,8 +52,8 @@ func buildServerDeps(
 	}
 	graph := kwcontext.NewResourceGraph()
 	auditLogger := audit.NewLogger(audit.Config{
-		Enabled: runtime.AuditLog().Enabled,
-		Output:  runtime.AuditLog().Output,
+		Enabled: runtime.Lifecycle().AuditLog().Enabled,
+		Output:  runtime.Lifecycle().AuditLog().Output,
 		Now:     now,
 	})
 
@@ -73,6 +74,23 @@ func buildServerDeps(
 		},
 	)
 	var ctl *controller.Controller
+	initialized := make(chan struct{})
+	var readyOnce sync.Once
+	ready := func() {
+		status := ctl.InformerStatus()
+		if len(status.UnavailableSources) > 0 {
+			boot.healthServer.SetComponentStatus(
+				"informer", "degraded", "source_not_configured", false,
+			)
+			boot.healthServer.SetReady(false)
+			return
+		}
+		boot.healthServer.SetComponentStatus(
+			"informer", "running", "", true,
+		)
+		boot.healthServer.SetReady(true)
+		readyOnce.Do(func() { close(initialized) })
+	}
 	incidentEngine = newIncidentEngine(
 		runtime,
 		now,
@@ -113,13 +131,19 @@ func buildServerDeps(
 	var cleanup func()
 	var err error
 	ctl, cleanup, err = newMonitorController(
-		boot.clients.Kubernetes, runtime, monitors, now,
+		boot.clients.Kubernetes, runtime, monitors,
+		controller.RuntimeDependencies{
+			Tracker: persist.tracker,
+			Graph:   graph,
+			Ready:   ready,
+			Now:     now,
+		},
 	)
 	if err != nil {
 		closeAuditLogger(auditLogger)
 		return nil, fmt.Errorf("create controller: %w", err)
 	}
-	initialized := configureControllerRuntime(
+	configureControllerRuntime(
 		ctx,
 		runtime,
 		boot,
@@ -127,7 +151,6 @@ func buildServerDeps(
 		persist,
 		incidentEngine,
 		pvcMonitor,
-		graph,
 	)
 	optional := configureOptionalRuns(
 		runtime,

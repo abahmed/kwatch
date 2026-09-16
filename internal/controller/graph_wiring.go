@@ -30,17 +30,17 @@ func (c *Controller) wireGraphHandlers(
 		inf.AddEventHandler(c.graphHandler("storageclass", func(interface{}) {}))
 	}
 
-	if runtime.JobMonitor().Enabled {
+	if runtime.Monitors().Job().Enabled {
 		for _, inf := range fs.jobInformers() {
 			inf.AddEventHandler(c.graphHandler("job", c.rebuildJob))
 		}
 	}
-	if runtime.IngressMonitor().Enabled {
+	if runtime.Monitors().Ingress().Enabled {
 		for _, inf := range fs.ingressInformers() {
 			inf.AddEventHandler(c.graphHandler("ingress", c.rebuildIngress))
 		}
 	}
-	if runtime.HpaMonitor().Enabled {
+	if runtime.Monitors().HPA().Enabled {
 		for _, inf := range fs.hpaInformers() {
 			inf.AddEventHandler(c.graphHandler(
 				"horizontalpodautoscaler",
@@ -48,14 +48,14 @@ func (c *Controller) wireGraphHandlers(
 			))
 		}
 	}
-	if runtime.NetworkPolicyMonitor().Enabled {
+	if runtime.Monitors().NetworkPolicy().Enabled {
 		for _, inf := range fs.netpolInformers() {
 			inf.AddEventHandler(c.graphHandler(
 				"networkpolicy", c.rebuildNetworkPolicy,
 			))
 		}
 	}
-	if runtime.PdbMonitor().Enabled {
+	if runtime.Monitors().PDB().Enabled {
 		for _, inf := range fs.pdbInformers() {
 			inf.AddEventHandler(c.graphHandler(
 				"poddisruptionbudget", c.rebuildPodDisruptionBudget,

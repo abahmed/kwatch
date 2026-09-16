@@ -18,6 +18,9 @@ type Sources struct {
 func (m *Monitor) ConfigureSources(sources Sources) error {
 	m.lifecycleMu.Lock()
 	defer m.lifecycleMu.Unlock()
+	if m.started {
+		return fmt.Errorf("network graph sources cannot change after start")
+	}
 	if m.configured {
 		return fmt.Errorf("network graph sources are already configured")
 	}

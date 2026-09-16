@@ -5,12 +5,9 @@ import (
 
 	corev1lister "k8s.io/client-go/listers/core/v1"
 
-	kwcontext "github.com/abahmed/kwatch/internal/graphcontext"
 	"github.com/abahmed/kwatch/internal/metrics"
 	"github.com/abahmed/kwatch/internal/observe"
 )
-
-func (c *Controller) SetReadyFunc(fn func()) { c.readyFn = fn }
 
 func (c *Controller) NamespaceAllowed(namespace string) bool {
 	if _, forbidden := c.forbiddenNamespaces[namespace]; forbidden {
@@ -45,8 +42,6 @@ func (c *Controller) NamespaceScope() ([]string, bool) {
 	return namespaces, false
 }
 
-func (c *Controller) SetTracker(t *kwcontext.ChangeTracker) { c.tracker = t }
-
 // recordGraphSize publishes the graph's size so an empty graph — and therefore
 // empty diagnoses — is visible on /metrics instead of only in the alerts that
 // arrive without a cause.
@@ -58,7 +53,6 @@ func (c *Controller) recordGraphSize() {
 	metrics.DefaultRegistry().GraphNodes.Store(int64(nodes))
 	metrics.DefaultRegistry().GraphEdges.Store(int64(edges))
 }
-func (c *Controller) SetGraph(g *kwcontext.ResourceGraph) { c.graph = g }
 
 // PodLister, ServiceLister and NodeLister expose the informer caches the
 // controller already keeps synced.

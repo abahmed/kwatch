@@ -30,11 +30,11 @@ func resolveNamespaces(
 	runtime config.RuntimeConfig,
 	clientset kubernetes.Interface,
 ) (namespaceScope, error) {
-	if runtime.NamespaceSelector() != "" {
+	if runtime.Scope().NamespaceSelector() != "" {
 		ctx, cancel := context.WithTimeout(context.Background(), namespaceResolveTimeout)
 		defer cancel()
 		list, err := clientset.CoreV1().Namespaces().List(ctx, metav1.ListOptions{
-			LabelSelector: runtime.NamespaceSelector(),
+			LabelSelector: runtime.Scope().NamespaceSelector(),
 		})
 		if err != nil {
 			return namespaceScope{}, fmt.Errorf("namespaceSelector list failed: %w", err)
@@ -45,11 +45,11 @@ func resolveNamespaces(
 		}
 		return namespaceScope{namespaces: ns}, nil
 	}
-	allowed := runtime.AllowedNamespaces()
+	allowed := runtime.Scope().AllowedNamespaces()
 	return namespaceScope{
 		namespaces: allowed,
 		all:        len(allowed) == 0,
-		forbidden:  runtime.ForbiddenNamespaces(),
+		forbidden:  runtime.Scope().ForbiddenNamespaces(),
 	}, nil
 }
 

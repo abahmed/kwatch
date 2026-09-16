@@ -27,9 +27,7 @@ func NewReportBuilderWithClock(
 	cluster string,
 	timeSource clock.Clock,
 ) *ReportBuilder {
-	if timeSource == nil {
-		timeSource = clock.RealClock{}
-	}
+	timeSource = clock.Require(timeSource)
 	return &ReportBuilder{
 		cluster: cluster,
 		now:     timeSource.Now,

@@ -180,3 +180,18 @@ func TestMonitorIgnoresStaleLifecycleReset(t *testing.T) {
 		t.Fatal("stale lifecycle reset changed the active generation")
 	}
 }
+
+func TestStatusIncludesGenerationAndWatcherReason(t *testing.T) {
+	monitor := &Monitor{
+		started:       true,
+		generation:    7,
+		staticWatcher: nil,
+	}
+	status := monitor.Status()
+	if status.Generation != 7 {
+		t.Fatalf("status generation = %d, want 7", status.Generation)
+	}
+	if status.Reason != "source_not_configured" {
+		t.Fatalf("status reason = %q, want source_not_configured", status.Reason)
+	}
+}

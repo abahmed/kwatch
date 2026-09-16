@@ -28,14 +28,15 @@ func newNetworkGraphRun(
 	dynamicClient dynamic.Interface,
 	discoveryClient discovery.DiscoveryInterface,
 ) func(context.Context) error {
-	if !runtime.ClusterResourceMonitor().Enabled ||
-		(!runtime.ServiceMonitor().Enabled &&
-			!runtime.IngressMonitor().Enabled &&
-			!runtime.NetworkPolicyMonitor().Enabled) {
+	if !runtime.Monitors().ClusterResource().Enabled ||
+		(!runtime.Monitors().Service().Enabled &&
+			!runtime.Monitors().Ingress().Enabled &&
+			!runtime.Monitors().NetworkPolicy().Enabled) {
 		return nil
 	}
 	graphMonitor := networkgraph.NewWithClients(
-		dynamicClient, discoveryClient, graph, runtime.ResyncInterval(),
+		dynamicClient, discoveryClient, graph,
+		runtime.Lifecycle().ResyncInterval(),
 	)
 	namespaces, watchAll := ctl.NamespaceScope()
 	if err := graphMonitor.ConfigureSources(networkgraph.Sources{
@@ -87,11 +88,12 @@ func newStorageGraphRun(
 	dynamicClient dynamic.Interface,
 	discoveryClient discovery.DiscoveryInterface,
 ) func(context.Context) error {
-	if !runtime.ClusterResourceMonitor().Enabled {
+	if !runtime.Monitors().ClusterResource().Enabled {
 		return nil
 	}
 	graphMonitor := storagegraph.NewWithClients(
-		dynamicClient, discoveryClient, graph, runtime.ResyncInterval(),
+		dynamicClient, discoveryClient, graph,
+		runtime.Lifecycle().ResyncInterval(),
 	)
 	namespaces, watchAll := ctl.NamespaceScope()
 	if err := graphMonitor.ConfigureSources(storagegraph.Sources{

@@ -14,6 +14,7 @@ import (
 	"k8s.io/client-go/kubernetes/fake"
 	"k8s.io/client-go/util/workqueue"
 
+	"github.com/abahmed/kwatch/internal/clock"
 	"github.com/abahmed/kwatch/internal/config"
 	"github.com/abahmed/kwatch/internal/incident"
 )
@@ -199,6 +200,7 @@ func TestBuildSeenSetReportsEmptySummaryOnNoBrokenPods(t *testing.T) {
 // it circulated with backoff for the life of the process.
 func TestProcessNextItemGivesUpAfterMaxRetries(t *testing.T) {
 	p := newResourcePipeline("pod", "pods")
+	p.now = clock.RealClock{}.Now
 	// The production limiter backs off exponentially into the minutes; the
 	// test only cares about the count, so requeue with no delay.
 	p.queue = workqueue.NewTypedRateLimitingQueueWithConfig(

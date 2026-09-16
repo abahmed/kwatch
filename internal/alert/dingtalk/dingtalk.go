@@ -36,7 +36,7 @@ type DingTalk struct {
 	secret      string
 	url         string
 	title       string
-	now         func() time.Time
+	clockSource clock.Clock
 
 	// reference for general app configuration
 	clusterName string
@@ -67,7 +67,7 @@ func NewDingTalk(
 		title:       title,
 		secret:      secret,
 		clusterName: clusterName,
-		now:         dependencies.Now,
+		clockSource: clock.Require(dependencies.Clock),
 	}
 }
 
@@ -151,6 +151,7 @@ func (d *DingTalk) SendIncidentWithInsight(
 		ins,
 		message.NewPlainTextRenderer(),
 		d.clusterName,
+		d.clockSource,
 	)
 	if text == "" {
 		return nil
@@ -161,11 +162,7 @@ func (d *DingTalk) SendIncidentWithInsight(
 func (d *DingTalk) sendAPI(ctx context.Context, msg string) error {
 	url := fmt.Sprintf(d.url, d.accessToken)
 	if len(d.secret) != 0 {
-		now := time.Time{}
-		if d.now != nil {
-			now = d.now()
-		}
-		url += getSignatureAt(d.secret, now)
+		url += getSignatureAt(d.secret, d.clockSource.Now())
 	}
 	data, err := d.sender.Send(ctx, transport.Request{
 		Provider: "DingTalk", URL: url, Body: []byte(msg),
@@ -189,10 +186,6 @@ func (d *DingTalk) sendAPI(ctx context.Context, msg string) error {
 		)
 	}
 	return nil
-}
-
-func getSignature(secret string) string {
-	return getSignatureAt(secret, clock.RealClock{}.Now())
 }
 
 func getSignatureAt(secret string, now time.Time) string {

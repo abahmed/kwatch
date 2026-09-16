@@ -147,4 +147,5 @@ type diagnosticState struct {
 	informerLastWatchError   time.Time
 	informerLastWatchMessage string
 	informers                []cache.SharedIndexInformer
+	sourceUnavailable        map[string]bool
 }

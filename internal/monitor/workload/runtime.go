@@ -154,7 +154,7 @@ func (r *runtimeSupport) reconcileGone(subject model.ObjectRef) {
 }
 
 func (r *runtimeSupport) maintenance(annotations map[string]string) bool {
-	return inMaintenance(r.runtime.Maintenance(), annotations, r.now())
+	return inMaintenance(r.runtime.Monitors().Maintenance(), annotations, r.now())
 }
 
 type firstSeen struct {
@@ -185,8 +185,8 @@ func prepareObservation(runtime config.RuntimeConfig, obs *model.Observation) {
 	if obs == nil {
 		return
 	}
-	obs.IncludeEvents = runtime.IncludeEvents()
-	obs.IncludeLogs = runtime.IncludeLogs()
+	obs.IncludeEvents = runtime.Monitors().IncludeEvents()
+	obs.IncludeLogs = runtime.Monitors().IncludeLogs()
 }
 
 // adaptiveSustained adds bounded grace only for a large workload with a small

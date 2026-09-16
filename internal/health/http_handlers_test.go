@@ -9,6 +9,7 @@ import (
 
 	"github.com/stretchr/testify/assert"
 
+	"github.com/abahmed/kwatch/internal/clock"
 	"github.com/abahmed/kwatch/internal/config"
 	"github.com/abahmed/kwatch/internal/model"
 )
@@ -34,7 +35,9 @@ func TestSetReady(t *testing.T) {
 }
 
 func TestHealthServerStopIsIdempotent(t *testing.T) {
-	server := NewHealthServer(config.HealthCheck{Port: 0, Enabled: true})
+	server := NewHealthServerWithClock(
+		config.HealthCheck{Port: 0, Enabled: true}, clock.RealClock{},
+	)
 	assert.NoError(t, startForTest(server))
 	assert.NoError(t, server.Stop(context.Background()))
 	assert.NoError(t, server.Stop(context.Background()))
@@ -42,7 +45,9 @@ func TestHealthServerStopIsIdempotent(t *testing.T) {
 }
 
 func TestConfigureDependenciesRejectsChangesAfterOpen(t *testing.T) {
-	server := NewHealthServer(config.HealthCheck{Port: 0, Enabled: true})
+	server := NewHealthServerWithClock(
+		config.HealthCheck{Port: 0, Enabled: true}, clock.RealClock{},
+	)
 	assert.NoError(t, server.Open())
 	defer server.Stop(context.Background())
 	assert.Error(t, server.ConfigureDependencies(Dependencies{}))

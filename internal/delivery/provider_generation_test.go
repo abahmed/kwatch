@@ -70,3 +70,15 @@ func TestProviderGenerationPreservesDeterministicOrder(t *testing.T) {
 
 	require.Equal(t, []string{"zulu", "alpha", "bravo"}, generation.order)
 }
+
+func TestProviderGenerationIgnoresDuplicateNames(t *testing.T) {
+	first := &errorRecorderProvider{name: "duplicate"}
+	second := &errorRecorderProvider{name: "DUPLICATE"}
+
+	generation := newProviderGeneration([]providerEntry{
+		{provider: first}, {provider: second},
+	})
+
+	require.Equal(t, []string{"duplicate"}, generation.order)
+	require.Same(t, first, generation.entries["duplicate"].provider)
+}

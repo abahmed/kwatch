@@ -43,4 +43,13 @@ users:
 	require.NotNil(t, clients.REST)
 	require.NotNil(t, clients.HTTP)
 	require.NotNil(t, clients.Resolver)
+	require.NotNil(t, clients.Clock)
+}
+
+func TestNewClientSetRequiresExplicitDependencies(t *testing.T) {
+	runtime := config.RuntimeConfigFor(&config.Config{})
+	_, err := NewClientSetWithRuntime(runtime, nil, nil)
+	if err == nil {
+		t.Fatal("expected missing resolver and clock to be rejected")
+	}
 }

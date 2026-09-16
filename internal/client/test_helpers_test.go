@@ -1,8 +1,11 @@
 package client
 
 import (
+	"net"
+
 	"k8s.io/client-go/kubernetes"
 
+	"github.com/abahmed/kwatch/internal/clock"
 	"github.com/abahmed/kwatch/internal/config"
 )
 
@@ -11,7 +14,7 @@ func newTestClientSet(appConfig *config.App) (ClientSet, error) {
 		appConfig = &config.App{}
 	}
 	runtime := config.RuntimeConfigFor(&config.Config{App: *appConfig})
-	return NewClientSetWithRuntime(runtime)
+	return NewClientSetWithRuntime(runtime, &net.Resolver{}, clock.RealClock{})
 }
 
 func newTestKubernetesClient(

@@ -131,9 +131,6 @@ func (p *resourcePipeline) recordQueueDepth() {
 }
 
 func (p *resourcePipeline) nowTime() time.Time {
-	if p.now == nil {
-		return time.Time{}
-	}
 	return p.now()
 }
 

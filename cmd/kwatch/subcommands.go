@@ -11,6 +11,7 @@ import (
 
 	"github.com/abahmed/kwatch/internal/alert/catalog"
 	"github.com/abahmed/kwatch/internal/client"
+	"github.com/abahmed/kwatch/internal/clock"
 	"github.com/abahmed/kwatch/internal/config"
 	"github.com/abahmed/kwatch/internal/delivery"
 	"github.com/abahmed/kwatch/internal/event"
@@ -57,6 +58,7 @@ func runLint(strict, check bool, out, errOut io.Writer) int {
 		runtime := config.RuntimeConfigFor(cfg)
 		am := delivery.NewManagerWithDependencies(delivery.Dependencies{
 			HTTPClient: client.NewHTTPClientWithRuntime(runtime),
+			Clock:      clock.RealClock{},
 		})
 		am.InitRuntime(runtime, catalog.NewProvider)
 		results := am.VerifyAll(context.Background())
@@ -101,9 +103,10 @@ func runReplay(dryRun bool, in io.Reader, out, errOut io.Writer) int {
 	}
 
 	runtime := config.RuntimeConfigFor(cfg)
-	providers := runtime.ProviderNames()
+	providers := runtime.Delivery().ProviderNames()
 	am := delivery.NewManagerWithDependencies(delivery.Dependencies{
 		HTTPClient: client.NewHTTPClientWithRuntime(runtime),
+		Clock:      clock.RealClock{},
 	})
 	am.InitRuntime(runtime, catalog.NewProvider)
 

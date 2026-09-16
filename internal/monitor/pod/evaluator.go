@@ -41,14 +41,12 @@ func NewPolicyEvaluatorWithRuntimeConfig(
 	lastState func(string, string, string) *model.ContainerState,
 	runtimeClock clock.Clock,
 ) *PolicyEvaluator {
-	if runtimeClock == nil {
-		runtimeClock = clock.RealClock{}
-	}
+	runtimeClock = clock.Require(runtimeClock)
 	var tracker *oomTracker
-	if runtime.OomMonitor().Enabled {
+	if runtime.Monitors().OOM().Enabled {
 		tracker = newOOMTracker(
-			runtime.OomMonitor().Threshold,
-			time.Duration(runtime.OomMonitor().WindowMinutes)*time.Minute,
+			runtime.Monitors().OOM().Threshold,
+			time.Duration(runtime.Monitors().OOM().WindowMinutes)*time.Minute,
 			runtimeClock,
 		)
 	}
@@ -183,8 +181,8 @@ func (e *PolicyEvaluator) observe(obs *model.Observation) {
 	if obs == nil || e.sink == nil {
 		return
 	}
-	obs.IncludeEvents = e.runtime.IncludeEvents()
-	obs.IncludeLogs = e.runtime.IncludeLogs()
+	obs.IncludeEvents = e.runtime.Monitors().IncludeEvents()
+	obs.IncludeLogs = e.runtime.Monitors().IncludeLogs()
 	e.sink.Process(obs)
 }
 
@@ -202,7 +200,7 @@ func contextOwner(ctx *enrichment.Context) model.ObjectRef {
 }
 
 func (e *PolicyEvaluator) highRestartEnabled(ctx *enrichment.Context) bool {
-	threshold := e.runtime.ContainerRestartThreshold()
+	threshold := e.runtime.Monitors().ContainerRestartThreshold()
 	return ctx.Container != nil && threshold > 0 &&
 		int(ctx.Container.Container.RestartCount) >= threshold &&
 		!podTerminatingOrDisrupted(ctx.Pod) &&
@@ -235,11 +233,11 @@ func (e *PolicyEvaluator) highRestartSuppressed(
 			reason = terminated.Reason
 		}
 	}
-	allowed := e.runtime.AllowedReasons()
+	allowed := e.runtime.Scope().AllowedReasons()
 	if len(allowed) > 0 && !slices.Contains(allowed, reason) {
 		return true
 	}
-	forbidden := e.runtime.ForbiddenReasons()
+	forbidden := e.runtime.Scope().ForbiddenReasons()
 	if len(forbidden) > 0 && slices.Contains(forbidden, reason) {
 		return true
 	}
@@ -307,7 +305,7 @@ func (e *PolicyEvaluator) podIssueHint(
 	if ctx.PodReason != "Unschedulable" {
 		return hint, facts
 	}
-	if e.runtime.ScheduleMonitor().Enabled {
+	if e.runtime.Monitors().Schedule().Enabled {
 		if delay := e.unschedulableDelay(ctx); delay > 30*time.Second {
 			facts.SchedulingDelay = delay
 			hint = fmt.Sprintf(

@@ -9,6 +9,7 @@ import (
 
 	"k8s.io/klog/v2"
 
+	"github.com/abahmed/kwatch/internal/clock"
 	"github.com/abahmed/kwatch/internal/delivery/transport"
 	"github.com/abahmed/kwatch/internal/event"
 	"github.com/abahmed/kwatch/internal/insight"
@@ -23,10 +24,10 @@ const (
 type Teams struct {
 	sender transport.Sender
 	// The HTTP trigger URL for the Power Automate flow
-	webhook string
-	title   string
-	text    string
-	now     func() time.Time
+	webhook     string
+	title       string
+	text        string
+	clockSource clock.Clock
 
 	// reference for general app configuration
 	clusterName string
@@ -62,7 +63,7 @@ func NewTeams(
 		title:       title,
 		text:        text,
 		clusterName: clusterName,
-		now:         dependencies.Now,
+		clockSource: clock.Require(dependencies.Clock),
 	}
 }
 
@@ -115,6 +116,7 @@ func (t *Teams) SendIncidentWithInsight(
 		ins,
 		message.NewPlainTextRenderer(),
 		t.clusterName,
+		t.clockSource,
 	)
 	if text == "" {
 		return nil
@@ -212,7 +214,7 @@ func (t *Teams) buildRequestBodyTeams(e *event.Event) ([]byte, error) {
 						"type": "TextBlock",
 						"text": fmt.Sprintf(
 							"Time: %s",
-							t.now().Format(time.RFC1123)),
+							t.clockSource.Now().Format(time.RFC1123)),
 					})
 					return body
 				}(),

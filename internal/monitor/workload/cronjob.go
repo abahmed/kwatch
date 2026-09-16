@@ -167,7 +167,7 @@ func (r *CronJobRuntime) processCronJobObject(
 	if obs != nil && obs.Reason == constant.ReasonCronJobSuspended {
 		first := r.first.mark(key, r.support.now())
 		sustained := time.Duration(
-			r.support.runtime.CronJobMonitor().SustainedMinutes,
+			r.support.runtime.Monitors().CronJob().SustainedMinutes,
 		) * time.Minute
 		if sustained > 0 && r.support.now().Sub(first) < sustained {
 			return nil

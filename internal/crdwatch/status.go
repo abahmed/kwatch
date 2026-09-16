@@ -12,14 +12,6 @@ type Status struct {
 	LastError      string `json:"lastError,omitempty"`
 }
 
-// SetStatusSink connects discovery failures to the application health
-// boundary. The sink is optional for monitors that do not expose health.
-func (w *Watcher) SetStatusSink(sink func(error)) {
-	w.mu.Lock()
-	w.statusSink = sink
-	w.mu.Unlock()
-}
-
 // Status returns the current CRD watcher state for diagnostics.
 func (w *Watcher) Status() Status {
 	if w == nil {
@@ -30,6 +22,9 @@ func (w *Watcher) Status() Status {
 	state := "stopped"
 	if w.started {
 		state = "running"
+	}
+	if w.started && !w.ready && w.lastError == "" {
+		state = "waiting"
 	}
 	if w.lastError != "" {
 		state = "degraded"
@@ -46,6 +41,7 @@ func (w *Watcher) Status() Status {
 func (w *Watcher) reportError(err error) {
 	w.mu.Lock()
 	sink := w.statusSink
+	stateSink := w.stateSink
 	if err == nil {
 		w.lastError = ""
 	} else {
@@ -54,6 +50,9 @@ func (w *Watcher) reportError(err error) {
 	w.mu.Unlock()
 	if sink != nil {
 		sink(err)
+	}
+	if stateSink != nil {
+		stateSink(w.Status())
 	}
 }
 

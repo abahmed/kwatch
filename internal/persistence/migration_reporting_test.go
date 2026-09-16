@@ -26,7 +26,7 @@ func TestMarkAsInitializedReportsFutureStateSchema(t *testing.T) {
 	))
 
 	report := store.MigrationReport()
-	result := report[len(report)-1]
+	result := report.Operations[len(report.Operations)-1]
 	require.Equal(t, "state", result.Store)
 	require.Equal(t, MigrationUnsupported, result.Status)
 	require.True(t, result.Recoverable)
@@ -52,8 +52,9 @@ func TestMigrationResultRecordsBaselineFailure(t *testing.T) {
 	_, err := store.MigrateLegacyBaselineWithResult(context.Background())
 	require.Error(t, err)
 	report := store.MigrationReport()
-	require.Equal(t, MigrationFailed, report[len(report)-1].Status)
-	require.Equal(t, "baseline", report[len(report)-1].Store)
+	result := report.Operations[len(report.Operations)-1]
+	require.Equal(t, MigrationFailed, result.Status)
+	require.Equal(t, "baseline", result.Store)
 }
 
 func TestMarkAsInitializedReportsMalformedSchemaWithoutOverwriting(
@@ -74,7 +75,7 @@ func TestMarkAsInitializedReportsMalformedSchemaWithoutOverwriting(
 	))
 
 	report := store.MigrationReport()
-	result := report[len(report)-1]
+	result := report.Operations[len(report.Operations)-1]
 	require.Equal(t, MigrationFailed, result.Status)
 	require.Equal(t, "state schema version is malformed", result.Detail)
 	require.NotContains(t, result.Detail, "not-a-version")
@@ -102,12 +103,18 @@ func TestMigrationReportContainsAllStartupOperations(t *testing.T) {
 	require.NoError(t, err)
 
 	report := store.MigrationReport()
-	require.Len(t, report, 2)
-	require.Equal(t, "state", report[0].Store)
-	require.Equal(t, "baseline", report[1].Store)
-	require.Equal(t, "kwatch-state", report[0].SourceFormat)
-	require.Equal(t, "kwatch-state/baseline", report[1].SourceFormat)
+	require.Len(t, report.Operations, 2)
+	require.Equal(t, "state", report.Operations[0].Store)
+	require.Equal(t, "baseline", report.Operations[1].Store)
+	require.Equal(t, "kwatch-state", report.Operations[0].SourceFormat)
+	require.Equal(
+		t, "kwatch-state/baseline", report.Operations[1].SourceFormat,
+	)
+	require.False(t, report.StartedAt.IsZero())
+	require.False(t, report.CompletedAt.IsZero())
 
-	report[0].Detail = "mutated"
-	require.NotEqual(t, "mutated", store.MigrationReport()[0].Detail)
+	report.Operations[0].Detail = "mutated"
+	require.NotEqual(
+		t, "mutated", store.MigrationReport().Operations[0].Detail,
+	)
 }

@@ -16,7 +16,7 @@ import (
 )
 
 func TestFanOutSaturatedQueueRecordsDeadLetter(t *testing.T) {
-	am := &Manager{}
+	am := newTestManager()
 	ch := make(chan deliverJob, channelCap)
 	inc := &model.Incident{
 		Subject: model.Subject{
@@ -134,7 +134,7 @@ func (p *fakeInsightProvider) SendIncidentWithInsight(
 // the plain SendIncident would silently drop the cause, impact and changes.
 func TestDeliverOnePrefersInsightCapableProvider(t *testing.T) {
 	fp := &fakeInsightProvider{}
-	am := &Manager{}
+	am := newTestManager()
 	entry := providerEntry{provider: fp, retry: retryConfig{maxAttempts: 1}}
 	inc := &model.Incident{
 		Subject: model.Subject{

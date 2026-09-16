@@ -42,7 +42,7 @@ func (r *TLSRuntime) SweepTLSSecrets() error {
 	if secretLister == nil || !r.runtime.Compiled() {
 		return nil
 	}
-	policy := r.runtime.TlsMonitor()
+	policy := r.runtime.Monitors().TLS()
 	threshold := policy.Threshold
 	if threshold <= 0 {
 		threshold = 30
@@ -91,6 +91,6 @@ func (r *TLSRuntime) prepare(observation *model.Observation) {
 	if observation == nil {
 		return
 	}
-	observation.IncludeEvents = r.runtime.IncludeEvents()
-	observation.IncludeLogs = r.runtime.IncludeLogs()
+	observation.IncludeEvents = r.runtime.Monitors().IncludeEvents()
+	observation.IncludeLogs = r.runtime.Monitors().IncludeLogs()
 }

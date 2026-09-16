@@ -60,10 +60,8 @@ func NewPvcMonitorWithRuntimeAndClock(
 	stateStore StateStore,
 	timeSource clock.Clock,
 ) *PvcMonitor {
-	monitorConfig := runtime.PvcMonitor()
-	if timeSource == nil {
-		timeSource = clock.RealClock{}
-	}
+	monitorConfig := runtime.Monitors().PVC()
+	timeSource = clock.Require(timeSource)
 	return newPvcMonitor(
 		client, monitorConfig, incidentSink, stateStore, timeSource.Now,
 	)
@@ -76,9 +74,7 @@ func newPvcMonitor(
 	stateStore StateStore,
 	now func() time.Time,
 ) *PvcMonitor {
-	if now == nil {
-		now = clock.RealClock{}.Now
-	}
+	now = clock.RequireFunc(now)
 	return &PvcMonitor{
 		client:       client,
 		config:       monitorConfig,

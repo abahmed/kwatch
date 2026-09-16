@@ -169,8 +169,8 @@ func (r *StatefulSetRuntime) unavailableSustained(
 		return false
 	}
 	sustained := adaptiveSustained(
-		r.support.runtime.StatefulSetMonitor().SustainedMinutes,
-		r.support.runtime.AdaptiveThresholds(),
+		r.support.runtime.Monitors().StatefulSet().SustainedMinutes,
+		r.support.runtime.Monitors().AdaptiveThresholds(),
 		StatefulSetReplicas(ss),
 		StatefulSetReplicas(ss)-ss.Status.ReadyReplicas,
 	)

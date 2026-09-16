@@ -14,6 +14,7 @@ import (
 	corev1lister "k8s.io/client-go/listers/core/v1"
 	"k8s.io/client-go/tools/cache"
 
+	"github.com/abahmed/kwatch/internal/clock"
 	"github.com/abahmed/kwatch/internal/config"
 	"github.com/abahmed/kwatch/internal/constant"
 	"github.com/abahmed/kwatch/internal/model"
@@ -83,9 +84,7 @@ func NewRuntimeWithRuntimeConfig(
 	containerLogs enrichment.ContainerLogFetcher,
 	now func() time.Time,
 ) *Runtime {
-	if now == nil {
-		now = func() time.Time { return time.Time{} }
-	}
+	now = clock.RequireFunc(now)
 	return &Runtime{
 		client:        client,
 		runtime:       runtime,
@@ -199,9 +198,7 @@ func (r *Runtime) ProcessPodObject(
 	sources := r.sources
 	now := r.now
 	r.mu.Unlock()
-	if now == nil {
-		now = func() time.Time { return time.Time{} }
-	}
+	now = clock.RequireFunc(now)
 	ctx := &enrichment.Context{
 		Sources: enrichment.Sources{
 			Ctx:           parent,
@@ -265,8 +262,8 @@ func (r *Runtime) process(observation *model.Observation) {
 	if observation == nil || r.sink == nil {
 		return
 	}
-	observation.IncludeEvents = r.runtime.IncludeEvents()
-	observation.IncludeLogs = r.runtime.IncludeLogs()
+	observation.IncludeEvents = r.runtime.Monitors().IncludeEvents()
+	observation.IncludeLogs = r.runtime.Monitors().IncludeLogs()
 	r.sink.Process(observation)
 }
 

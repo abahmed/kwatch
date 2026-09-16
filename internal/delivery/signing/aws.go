@@ -7,8 +7,6 @@ import (
 	"net/url"
 	"strings"
 	"time"
-
-	"github.com/abahmed/kwatch/internal/clock"
 )
 
 const (
@@ -18,28 +16,7 @@ const (
 	awsContentType = "application/x-www-form-urlencoded"
 )
 
-// SignAWSV4 computes SigV4 authorization headers for an AWS Query/JSON API
-// request. The body must be URL-encoded form data and the endpoint a plain
-// https URL. It returns the X-Amz-Date and Authorization headers to send.
-func SignAWSV4(
-	accessKey, secretKey, region, service, method, rawURL string,
-	body []byte,
-) (map[string]string, error) {
-	return SignAWSV4At(
-		accessKey,
-		secretKey,
-		region,
-		service,
-		method,
-		rawURL,
-		body,
-		clock.RealClock{}.Now(),
-	)
-}
-
-// SignAWSV4At signs a request using the supplied time. Keeping the time at
-// this boundary makes signatures deterministic without changing callers that
-// use the production wrapper.
+// SignAWSV4At signs a request using the supplied time.
 func SignAWSV4At(
 	accessKey, secretKey, region, service, method, rawURL string,
 	body []byte,

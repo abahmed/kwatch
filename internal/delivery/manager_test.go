@@ -70,7 +70,7 @@ func (p *fakeProviderWithError) Name() string {
 
 func TestManagerNoConfig(t *testing.T) {
 	assert := assert.New(t)
-	am := Manager{}
+	am := *newTestManager()
 	am.InitRuntime(config.RuntimeConfigFor(&config.Config{}), nil)
 	assert.Len(managerEntries(&am), 0)
 }
@@ -83,7 +83,7 @@ func TestGetProvidersUnknownSkipped(t *testing.T) {
 		"notaprovider": {"key": "val"},
 	}
 
-	am := Manager{}
+	am := *newTestManager()
 	initTestManager(
 		&am,
 		alertMap, &config.App{ClusterName: "dev"}, catalog.NewProvider,
@@ -150,7 +150,7 @@ func TestGetProviders(t *testing.T) {
 		},
 	}
 
-	am := Manager{}
+	am := *newTestManager()
 	initTestManager(
 		&am,
 		alertMap, &config.App{ClusterName: "dev"}, catalog.NewProvider,
@@ -163,7 +163,7 @@ func TestGetProviders(t *testing.T) {
 }
 
 func TestSendProvidersEvent(t *testing.T) {
-	am := Manager{}
+	am := *newTestManager()
 	appendManagerEntries(&am, providerEntry{
 		provider: &fakeProvider{},
 		retry:    retryConfig{maxAttempts: 1},
@@ -177,7 +177,7 @@ func TestSendProvidersEvent(t *testing.T) {
 }
 
 func TestSendProvidersMsg(t *testing.T) {
-	am := Manager{}
+	am := *newTestManager()
 	appendManagerEntries(&am, providerEntry{
 		provider: &fakeProvider{},
 		retry:    retryConfig{maxAttempts: 1},
@@ -191,7 +191,7 @@ func TestSendProvidersMsg(t *testing.T) {
 }
 
 func TestNotifyIncidentCreate(t *testing.T) {
-	am := Manager{}
+	am := *newTestManager()
 	appendManagerEntries(&am, providerEntry{
 		provider: &fakeProvider{},
 		retry:    retryConfig{maxAttempts: 1},
@@ -218,7 +218,7 @@ func TestNotifyIncidentCreate(t *testing.T) {
 }
 
 func TestNotifyIncidentUpdate(t *testing.T) {
-	am := Manager{}
+	am := *newTestManager()
 	appendManagerEntries(&am, providerEntry{
 		provider: &fakeProvider{},
 		retry:    retryConfig{maxAttempts: 1},
@@ -249,7 +249,7 @@ func TestNotifyIncidentUpdate(t *testing.T) {
 }
 
 func TestNotifyIncidentSkip(t *testing.T) {
-	am := Manager{}
+	am := *newTestManager()
 	appendManagerEntries(&am, providerEntry{
 		provider: &fakeProvider{},
 		retry:    retryConfig{maxAttempts: 1},
@@ -293,7 +293,7 @@ func (p *fakeThreadProvider) SendIncident(
 
 func TestNotifyIncidentCallsThreadProvider(t *testing.T) {
 	tp := &fakeThreadProvider{}
-	am := Manager{}
+	am := *newTestManager()
 	appendManagerEntries(&am, providerEntry{
 		provider: tp,
 		retry:    retryConfig{maxAttempts: 1},
@@ -314,7 +314,7 @@ func TestNotifyIncidentCallsThreadProvider(t *testing.T) {
 
 func TestNotifyIncidentThreadProviderWithSkip(t *testing.T) {
 	tp := &fakeThreadProvider{}
-	am := Manager{}
+	am := *newTestManager()
 	appendManagerEntries(&am, providerEntry{
 		provider: tp,
 		retry:    retryConfig{maxAttempts: 1},
@@ -334,7 +334,7 @@ func TestNotifyIncidentThreadProviderWithSkip(t *testing.T) {
 
 func TestNotifyIncidentThreadProviderClamped(t *testing.T) {
 	tp := &fakeThreadProvider{}
-	am := Manager{}
+	am := *newTestManager()
 	appendManagerEntries(&am, providerEntry{
 		provider: tp,
 		retry: retryConfig{

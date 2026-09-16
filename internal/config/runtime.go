@@ -64,9 +64,7 @@ type runtimePersistence struct {
 }
 
 type runtimeIncident struct {
-	config           IncidentRuntime
-	severityByOwner  map[string]string
-	severityByReason map[string]string
+	config IncidentRuntime
 }
 
 type runtimeMonitors struct {
@@ -219,9 +217,9 @@ func CompileRuntimeConfig(c *Config) RuntimeConfig {
 				SmartGroupingWindow:      c.SmartGrouping.WindowSeconds.Duration(),
 				NamespaceFanOutThreshold: c.SmartGrouping.NamespaceFanOutThreshold,
 				MaxBaseline:              c.Correlation.MaxBaseline,
+				severityByOwnerKind:      cloneStringMap(c.SeverityByOwnerKind),
+				severityByReason:         cloneStringMap(c.SeverityByReason),
 			},
-			severityByOwner:  cloneStringMap(c.SeverityByOwnerKind),
-			severityByReason: cloneStringMap(c.SeverityByReason),
 		},
 	}
 }
@@ -250,6 +248,8 @@ type IncidentRuntime struct {
 	SmartGroupingWindow        time.Duration
 	NamespaceFanOutThreshold   int
 	MaxBaseline                int
+	severityByOwnerKind        map[string]string
+	severityByReason           map[string]string
 }
 
 func cloneInts(values []int) []int { return append([]int(nil), values...) }

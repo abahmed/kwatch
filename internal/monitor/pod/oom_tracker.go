@@ -26,9 +26,7 @@ func newOOMTracker(
 	window time.Duration,
 	runtimeClock clock.Clock,
 ) *oomTracker {
-	if runtimeClock == nil {
-		runtimeClock = clock.RealClock{}
-	}
+	runtimeClock = clock.Require(runtimeClock)
 	return &oomTracker{
 		records:     make(map[string][]oomEvent),
 		threshold:   threshold,

@@ -7,6 +7,7 @@ import (
 
 	"k8s.io/klog/v2"
 
+	"github.com/abahmed/kwatch/internal/clock"
 	"github.com/abahmed/kwatch/internal/delivery/transport"
 	"github.com/abahmed/kwatch/internal/event"
 	"github.com/abahmed/kwatch/internal/insight"
@@ -21,6 +22,7 @@ type GoogleChat struct {
 
 	// reference for general app configuration
 	clusterName string
+	clockSource clock.Clock
 }
 
 type payload struct {
@@ -49,6 +51,7 @@ func NewGoogleChat(
 		webhook:     webhook,
 		text:        text,
 		clusterName: clusterName,
+		clockSource: clock.Require(dependencies.Clock),
 	}
 }
 
@@ -109,6 +112,7 @@ func (g *GoogleChat) SendIncidentWithInsight(
 		ins,
 		message.NewPlainTextRenderer(),
 		g.clusterName,
+		g.clockSource,
 	)
 	if text == "" {
 		return nil

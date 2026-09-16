@@ -90,3 +90,11 @@ func TestWatcherReportsOptionalAvailabilityTransitions(t *testing.T) {
 		t.Fatal("second outage was not reported")
 	}
 }
+
+func TestStatusReportsWaitingForMissingCRD(t *testing.T) {
+	watcher := &Watcher{started: true}
+	status := watcher.Status()
+	if status.State != "waiting" || !status.WaitingForCRD {
+		t.Fatalf("status = %+v, want waiting state", status)
+	}
+}

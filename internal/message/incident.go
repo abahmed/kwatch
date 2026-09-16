@@ -13,9 +13,10 @@ func RenderIncident(
 	action model.IncidentAction,
 	renderer Renderer,
 	clusterName string,
+	timeSource clock.Clock,
 ) string {
 	return RenderIncidentWithInsight(
-		inc, action, nil, renderer, clusterName,
+		inc, action, nil, renderer, clusterName, timeSource,
 	)
 }
 
@@ -27,12 +28,13 @@ func RenderIncidentWithInsight(
 	ins *insight.Insight,
 	renderer Renderer,
 	clusterName string,
+	timeSource clock.Clock,
 ) string {
 	if action == model.ActionSkip {
 		return ""
 	}
 	report := NewReportBuilderWithClock(
-		clusterName, clock.RealClock{},
+		clusterName, clock.Require(timeSource),
 	).Build(inc, action, ins)
 	return RenderAction(renderer, report)
 }

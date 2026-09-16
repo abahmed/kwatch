@@ -107,7 +107,7 @@ func TestFormatResolvedMessageGolden(t *testing.T) {
 }
 
 func TestSilenceByNamespace(t *testing.T) {
-	am := Manager{}
+	am := *newTestManager()
 	setTestSilences(&am, []config.SilenceRule{
 		{Namespaces: []string{"kube-system"}},
 	})
@@ -136,7 +136,7 @@ func TestSilenceByNamespace(t *testing.T) {
 }
 
 func TestSilenceByReason(t *testing.T) {
-	am := Manager{}
+	am := *newTestManager()
 	setTestSilences(&am, []config.SilenceRule{
 		{Reasons: []string{"BackOff"}},
 	})
@@ -165,7 +165,7 @@ func TestSilenceByReason(t *testing.T) {
 }
 
 func TestSilenceByEventMessage(t *testing.T) {
-	am := Manager{}
+	am := *newTestManager()
 	setTestSilences(&am, []config.SilenceRule{
 		{EventMessages: []string{"failed to sync configmap cache"}},
 	})
@@ -263,7 +263,7 @@ func TestShouldDeliverNoRoutes(t *testing.T) {
 }
 
 func TestCompileTemplates(t *testing.T) {
-	am := Manager{}
+	am := *newTestManager()
 	setTestTemplates(&am, map[string]string{
 		"crashloopbackoff": "ALERT {{.Incident.Name}} — {{.Action}}",
 	})
@@ -276,7 +276,7 @@ func TestCompileTemplates(t *testing.T) {
 }
 
 func TestCompileTemplatesEmpty(t *testing.T) {
-	am := Manager{}
+	am := *newTestManager()
 	setTestTemplates(&am, nil)
 	if am.templates != nil {
 		t.Fatal("expected nil templates")

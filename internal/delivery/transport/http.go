@@ -40,12 +40,6 @@ type client struct {
 	now        func() time.Time
 }
 
-// New creates a transport sender backed by the supplied application-owned
-// client. A nil client is rejected when a request is sent.
-func New(httpClient *http.Client) Sender {
-	return NewWithDependencies(Dependencies{HTTPClient: httpClient})
-}
-
 // NewWithDependencies constructs a sender with all outbound dependencies
 // fixed at provider construction time.
 func NewWithDependencies(dependencies Dependencies) Sender {

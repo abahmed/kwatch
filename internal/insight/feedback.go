@@ -25,16 +25,10 @@ type FeedbackStore struct {
 
 const maxFeedbackRecords = 500
 
-func NewFeedbackStore() *FeedbackStore {
-	return NewFeedbackStoreWithClock(clock.RealClock{})
-}
-
 // NewFeedbackStoreWithClock fixes the time source at construction so feedback
 // timestamps cannot change underneath concurrent observations.
 func NewFeedbackStoreWithClock(now clock.Clock) *FeedbackStore {
-	if now == nil {
-		now = clock.RealClock{}
-	}
+	now = clock.Require(now)
 	return &FeedbackStore{
 		records: make(map[string]RCARecord),
 		active:  make(map[string]string),

@@ -45,6 +45,7 @@ type Watcher struct {
 	restart             func()
 	restartRequested    bool
 	statusSink          func(error)
+	stateSink           func(Status)
 	lastError           string
 	optionalUnavailable bool
 }
@@ -57,15 +58,18 @@ func NewWithClient(
 	namespace string,
 	resync time.Duration,
 	restart func(),
+	statusSink func(error),
+	stateSink func(Status),
 ) *Watcher {
 	return &Watcher{
 		runtime: runtime, dynamicClient: dynamicClient, namespace: namespace,
 		resync: resync, seen: make(map[string]string), restart: restart,
+		statusSink: statusSink, stateSink: stateSink,
 	}
 }
 
 func (w *Watcher) Start(ctx context.Context) error {
-	if !w.runtime.CrdConfig().Enabled {
+	if !w.runtime.Monitors().CRD().Enabled {
 		klog.V(4).InfoS("CRD watcher is disabled")
 		return nil
 	}

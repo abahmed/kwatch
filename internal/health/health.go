@@ -94,19 +94,13 @@ type ComponentStatus struct {
 	LastTransition time.Time `json:"lastTransition,omitempty"`
 }
 
-func NewHealthServer(cfg config.HealthCheck) *HealthServer {
-	return NewHealthServerWithClock(cfg, clock.RealClock{})
-}
-
 // NewHealthServerWithClock constructs health state with an explicit clock so
 // transition timestamps remain deterministic in tests and embedded callers.
 func NewHealthServerWithClock(
 	cfg config.HealthCheck,
 	clockSource clock.Clock,
 ) *HealthServer {
-	if clockSource == nil {
-		clockSource = clock.RealClock{}
-	}
+	clockSource = clock.Require(clockSource)
 	h := &HealthServer{
 		port:             cfg.Port,
 		enabled:          cfg.Enabled,

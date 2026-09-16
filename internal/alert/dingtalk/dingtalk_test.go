@@ -5,15 +5,18 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
 
+	"github.com/abahmed/kwatch/internal/clock"
 	"github.com/abahmed/kwatch/internal/delivery/transport"
 	"github.com/abahmed/kwatch/internal/event"
 )
 
 var testDeps = transport.Dependencies{
 	HTTPClient: http.DefaultClient,
+	Clock:      clock.RealClock{},
 }
 
 func testAppConfig() string {
@@ -321,7 +324,10 @@ func TestComputeHmacSha256(t *testing.T) {
 func TestGetSignature(t *testing.T) {
 	assert := assert.New(t)
 
-	result := getSignature("testSecret")
+	result := getSignatureAt(
+		"testSecret",
+		time.Date(2026, 9, 12, 10, 11, 12, 0, time.UTC),
+	)
 	assert.Contains(result, "timestamp=")
 	assert.Contains(result, "sign=")
 }

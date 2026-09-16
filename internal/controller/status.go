@@ -27,9 +27,6 @@ type InformerStatus struct {
 }
 
 func (c *Controller) nowTime() time.Time {
-	if c.now == nil {
-		return time.Time{}
-	}
 	return c.now()
 }
 

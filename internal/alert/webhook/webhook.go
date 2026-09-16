@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/abahmed/kwatch/internal/clock"
 	"github.com/abahmed/kwatch/internal/delivery/transport"
 	"github.com/abahmed/kwatch/internal/event"
 	"github.com/abahmed/kwatch/internal/insight"
@@ -32,6 +33,7 @@ type Webhook struct {
 	username    string
 	password    string
 	clusterName string
+	clockSource clock.Clock
 }
 
 func (w *Webhook) SendMessage(ctx context.Context, msg string) error {
@@ -100,6 +102,7 @@ func NewWebhook(
 		username:    a.UserName,
 		password:    a.Password,
 		clusterName: clusterName,
+		clockSource: clock.Require(dependencies.Clock),
 	}
 }
 
@@ -165,6 +168,7 @@ func (w *Webhook) SendIncidentWithInsight(
 		ins,
 		message.NewPlainTextRenderer(),
 		w.clusterName,
+		w.clockSource,
 	)
 	if text == "" {
 		return nil

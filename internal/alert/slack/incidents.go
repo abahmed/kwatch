@@ -22,12 +22,16 @@ func (s *Slack) SendIncident(
 		return nil
 	}
 	if s.compact {
-		return s.SendMessage(ctx, formatIncidentText(inc, action))
+		return s.SendMessage(ctx, formatIncidentText(
+			inc, action, s.clockSource,
+		))
 	}
 	if s.postBlocksFn != nil || s.apiClient != nil {
 		return s.sendIncidentWithToken(ctx, inc, action, nil)
 	}
-	return s.SendMessage(ctx, formatIncidentText(inc, action))
+	return s.SendMessage(ctx, formatIncidentText(
+		inc, action, s.clockSource,
+	))
 }
 
 // SendIncidentWithInsight implements delivery.InsightThreadProvider. It is the
@@ -43,12 +47,16 @@ func (s *Slack) SendIncidentWithInsight(
 		return nil
 	}
 	if s.compact {
-		return s.SendMessage(ctx, formatIncidentText(inc, action))
+		return s.SendMessage(ctx, formatIncidentText(
+			inc, action, s.clockSource,
+		))
 	}
 	if s.postBlocksFn != nil || s.apiClient != nil {
 		return s.sendIncidentWithToken(ctx, inc, action, ins)
 	}
-	return s.SendMessage(ctx, formatIncidentText(inc, action))
+	return s.SendMessage(ctx, formatIncidentText(
+		inc, action, s.clockSource,
+	))
 }
 
 func (s *Slack) sendIncidentWithToken(
@@ -76,7 +84,9 @@ func (s *Slack) sendIncidentWithToken(
 
 	switch action {
 	case model.ActionCreate:
-		blocks := buildIncidentBlocksWithInsight(inc, s.clusterName, ins)
+		blocks := buildIncidentBlocksWithInsight(
+			inc, s.clusterName, ins, s.clockSource,
+		)
 		ts, err := post(blocks, "")
 		if err != nil {
 			return err
@@ -86,13 +96,15 @@ func (s *Slack) sendIncidentWithToken(
 
 	case model.ActionUpdate:
 		threadTS := s.loadThread(key)
-		blocks := buildIncidentUpdateBlocksWithInsight(inc, ins)
+		blocks := buildIncidentUpdateBlocksWithInsight(
+			inc, ins, s.clockSource,
+		)
 		_, err := post(blocks, threadTS)
 		return err
 
 	case model.ActionResolved:
 		threadTS := s.popThread(key)
-		blocks := buildIncidentResolvedBlocks(inc)
+		blocks := buildIncidentResolvedBlocks(inc, s.clockSource)
 		_, err := post(blocks, threadTS)
 		return err
 	}

@@ -11,6 +11,7 @@ import (
 	slackClient "github.com/slack-go/slack"
 	"github.com/stretchr/testify/assert"
 
+	"github.com/abahmed/kwatch/internal/clock"
 	"github.com/abahmed/kwatch/internal/event"
 	kwcontext "github.com/abahmed/kwatch/internal/graphcontext"
 	"github.com/abahmed/kwatch/internal/insight"
@@ -24,6 +25,7 @@ func TestSendIncidentTokenCreate(t *testing.T) {
 	s := &Slack{
 		channel:     "#alerts",
 		clusterName: "dev",
+		clockSource: clock.RealClock{},
 	}
 
 	var capturedBlocks *slackClient.Blocks
@@ -55,6 +57,7 @@ func TestSendIncidentTokenUpdate(t *testing.T) {
 	s := &Slack{
 		channel:     "#alerts",
 		clusterName: "dev",
+		clockSource: clock.RealClock{},
 		threadMap: map[string]string{
 			"default:deploy-1:CrashLoopBackOff": "12345.67890",
 		},
@@ -82,6 +85,7 @@ func TestSendIncidentTokenUpdateNoThread(t *testing.T) {
 	s := &Slack{
 		channel:     "#alerts",
 		clusterName: "dev",
+		clockSource: clock.RealClock{},
 		// no threadMap set — first update should still work (no thread)
 	}
 
@@ -104,6 +108,7 @@ func TestSendIncidentTokenSkip(t *testing.T) {
 	s := &Slack{
 		channel:     "#alerts",
 		clusterName: "dev",
+		clockSource: clock.RealClock{},
 	}
 
 	called := false
@@ -123,7 +128,7 @@ func TestBuildIncidentBlocks(t *testing.T) {
 	assert := assert.New(t)
 
 	inc := testIncident()
-	blocks := buildIncidentBlocks(inc, "prod-cluster")
+	blocks := buildIncidentBlocks(inc, "prod-cluster", clock.RealClock{})
 
 	assert.NotNil(blocks)
 	assert.Greater(len(blocks.BlockSet), 0)
@@ -133,7 +138,7 @@ func TestBuildIncidentUpdateBlocks(t *testing.T) {
 	assert := assert.New(t)
 
 	inc := testIncident()
-	blocks := buildIncidentUpdateBlocks(inc)
+	blocks := buildIncidentUpdateBlocks(inc, clock.RealClock{})
 
 	assert.NotNil(blocks)
 	// header (pod has Resources)
@@ -144,11 +149,13 @@ func TestFormatIncidentText(t *testing.T) {
 	assert := assert.New(t)
 
 	inc := testIncident()
-	text := formatIncidentText(inc, model.ActionCreate)
+	text := formatIncidentText(inc, model.ActionCreate, clock.RealClock{})
 	assert.Contains(text, "CrashLoopBackOff")
 	assert.Contains(text, "deploy-1")
 
-	textUpdate := formatIncidentText(inc, model.ActionUpdate)
+	textUpdate := formatIncidentText(
+		inc, model.ActionUpdate, clock.RealClock{},
+	)
 	assert.Contains(textUpdate, "CrashLoopBackOff")
 }
 
@@ -161,7 +168,7 @@ func TestBuildIncidentBlocksWithLogsEvents(t *testing.T) {
 	inc.IncludeEvents = true
 	inc.IncludeLogs = true
 
-	blocks := buildIncidentBlocks(inc, "prod-cluster")
+	blocks := buildIncidentBlocks(inc, "prod-cluster", clock.RealClock{})
 
 	assert.NotNil(blocks)
 	foundEvents := false
@@ -189,7 +196,7 @@ func TestBuildIncidentUpdateBlocksWithLogsEvents(t *testing.T) {
 	inc.IncludeEvents = true
 	inc.IncludeLogs = true
 
-	blocks := buildIncidentUpdateBlocks(inc)
+	blocks := buildIncidentUpdateBlocks(inc, clock.RealClock{})
 
 	assert.NotNil(blocks)
 	assert.Greater(
@@ -208,7 +215,7 @@ func TestFormatIncidentTextWithLogsEvents(t *testing.T) {
 	inc.IncludeEvents = true
 	inc.IncludeLogs = true
 
-	text := formatIncidentText(inc, model.ActionCreate)
+	text := formatIncidentText(inc, model.ActionCreate, clock.RealClock{})
 	assert.Contains(text, "Events:")
 	assert.Contains(text, "Warning Unhealthy")
 	assert.Contains(text, "Logs:")
@@ -224,7 +231,9 @@ func TestFormatIncidentTextUpdateWithLogsEvents(t *testing.T) {
 	inc.IncludeEvents = true
 	inc.IncludeLogs = true
 
-	text := formatIncidentText(inc, model.ActionUpdate)
+	text := formatIncidentText(
+		inc, model.ActionUpdate, clock.RealClock{},
+	)
 	assert.Contains(text, "Events:")
 	assert.Contains(text, "Warning BackOff")
 	assert.Contains(text, "Logs:")
@@ -355,23 +364,29 @@ func TestIncidentBlocksRenderDiagnosis(t *testing.T) {
 			},
 		},
 	}
-	text := flatten(buildIncidentBlocksWithInsight(inc, app, ins))
+	text := flatten(buildIncidentBlocksWithInsight(
+		inc, app, ins, clock.RealClock{},
+	))
 	assert.NotContains(t, text, "Why:")
 	assert.Contains(t, text, "node ip-10-0-81-7 may be unhealthy")
 	assert.Contains(
 		t,
 		text,
-		message.Narrative(reportFor(inc, model.ActionCreate, ins, app)),
+		message.Narrative(reportFor(
+			inc, model.ActionCreate, ins, app, clock.RealClock{},
+		)),
 	)
 	assert.Contains(t, text, "12 pods on this node")
 	assert.Contains(t, text, "configmap dev/api-config update")
 
-	plain := flatten(buildIncidentBlocksWithInsight(inc, app, nil))
+	plain := flatten(buildIncidentBlocksWithInsight(
+		inc, app, nil, clock.RealClock{},
+	))
 	assert.NotContains(t, plain, "Diagnosis", "no diagnosis, no section")
 	assert.Equal(
 		t,
 		plain,
-		flatten(buildIncidentBlocks(inc, app)),
+		flatten(buildIncidentBlocks(inc, app, clock.RealClock{})),
 		"the old entry point is unchanged",
 	)
 }

@@ -7,7 +7,7 @@ import (
 type ContainerKillingEnricher struct{}
 
 func (enricher ContainerKillingEnricher) Enrich(ctx *Context) bool {
-	if !ctx.Runtime.IgnoreFailedGracefulShutdown() ||
+	if !ctx.Runtime.Monitors().IgnoreGracefulKill() ||
 		ctx.Events == nil || ctx.Container == nil {
 		return false
 	}

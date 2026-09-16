@@ -13,17 +13,18 @@ import (
 
 // wireNode sets up the node informer when either monitor is enabled.
 func (c *Controller) wireNode(runtime config.RuntimeConfig, fs factorySet) {
-	if runtime.NodeMonitor().Enabled || runtime.NodeResourceMonitor().Enabled {
+	if runtime.Monitors().Node().Enabled ||
+		runtime.Monitors().NodeResource().Enabled {
 		c.nodeLister = fs.nodeLister()
 
-		if runtime.NodeMonitor().Enabled {
+		if runtime.Monitors().Node().Enabled {
 			c.watch(c.node, fs.nodeInformer())
 		}
 	}
 }
 
 func (c *Controller) wireRollout(runtime config.RuntimeConfig, fs factorySet) {
-	if !runtime.RolloutMonitor().Enabled {
+	if !runtime.Monitors().Rollout().Enabled {
 		return
 	}
 	c.deployLister = fs.deployLister()
@@ -31,7 +32,7 @@ func (c *Controller) wireRollout(runtime config.RuntimeConfig, fs factorySet) {
 }
 
 func (c *Controller) wireJobs(runtime config.RuntimeConfig, fs factorySet) {
-	if !runtime.JobMonitor().Enabled {
+	if !runtime.Monitors().Job().Enabled {
 		return
 	}
 	c.jobLister = fs.jobLister()
@@ -41,14 +42,14 @@ func (c *Controller) wireJobs(runtime config.RuntimeConfig, fs factorySet) {
 func (c *Controller) wireDaemonSetMonitor(
 	runtime config.RuntimeConfig, fs factorySet,
 ) {
-	if !runtime.DaemonSetMonitor().Enabled {
+	if !runtime.Monitors().DaemonSet().Enabled {
 		return
 	}
 	c.watch(c.daemonSet, fs.dsInformers()...)
 }
 
 func (c *Controller) wireCronJobs(runtime config.RuntimeConfig, fs factorySet) {
-	if !runtime.CronJobMonitor().Enabled {
+	if !runtime.Monitors().CronJob().Enabled {
 		return
 	}
 	c.cronJobLister = fs.cronJobLister()
@@ -56,7 +57,7 @@ func (c *Controller) wireCronJobs(runtime config.RuntimeConfig, fs factorySet) {
 }
 
 func (c *Controller) wireHPA(runtime config.RuntimeConfig, fs factorySet) {
-	if !runtime.HpaMonitor().Enabled {
+	if !runtime.Monitors().HPA().Enabled {
 		return
 	}
 	c.hpaLister = fs.hpaLister()
@@ -64,8 +65,9 @@ func (c *Controller) wireHPA(runtime config.RuntimeConfig, fs factorySet) {
 }
 
 func (c *Controller) wireService(runtime config.RuntimeConfig, fs factorySet) {
-	if !runtime.ServiceMonitor().Enabled && !runtime.IngressMonitor().Enabled &&
-		!runtime.AdmissionWebhookMonitor().Enabled {
+	if !runtime.Monitors().Service().Enabled &&
+		!runtime.Monitors().Ingress().Enabled &&
+		!runtime.Monitors().AdmissionWebhook().Enabled {
 		return
 	}
 	c.serviceLister = fs.serviceLister()
@@ -79,28 +81,28 @@ func (c *Controller) wireService(runtime config.RuntimeConfig, fs factorySet) {
 		inf.AddEventHandler(cache.ResourceEventHandlerFuncs{
 			AddFunc: func(obj interface{}) {
 				c.recordChange(kwcontext.ChangeCreate, "service", obj)
-				if runtime.ServiceMonitor().Enabled {
+				if runtime.Monitors().Service().Enabled {
 					c.service.enqueue(obj)
 				}
 				c.enqueueServiceDependents(obj)
 			},
 			UpdateFunc: func(old, obj interface{}) {
 				c.recordChangeUpdate("service", old, obj)
-				if runtime.ServiceMonitor().Enabled {
+				if runtime.Monitors().Service().Enabled {
 					c.service.enqueue(obj)
 				}
 				c.enqueueServiceDependents(obj)
 			},
 			DeleteFunc: func(obj interface{}) {
 				c.recordChange(kwcontext.ChangeDelete, "service", obj)
-				if runtime.ServiceMonitor().Enabled {
+				if runtime.Monitors().Service().Enabled {
 					c.service.enqueue(obj)
 				}
 				c.enqueueServiceDependents(obj)
 			},
 		})
 	}
-	if !runtime.ServiceMonitor().Enabled {
+	if !runtime.Monitors().Service().Enabled {
 		c.wireEndpointSlices(runtime, fs)
 		return
 	}
@@ -111,7 +113,7 @@ func (c *Controller) wireService(runtime config.RuntimeConfig, fs factorySet) {
 func (c *Controller) wireAdmissionWebhooks(
 	runtime config.RuntimeConfig, fs factorySet,
 ) {
-	if !runtime.AdmissionWebhookMonitor().Enabled {
+	if !runtime.Monitors().AdmissionWebhook().Enabled {
 		return
 	}
 	mwcLister := fs.mwcLister()
@@ -125,7 +127,7 @@ func (c *Controller) wireAdmissionWebhooks(
 }
 
 func (c *Controller) wireIngress(runtime config.RuntimeConfig, fs factorySet) {
-	if !runtime.IngressMonitor().Enabled {
+	if !runtime.Monitors().Ingress().Enabled {
 		return
 	}
 	c.ingressLister = fs.ingressLister()
@@ -133,7 +135,7 @@ func (c *Controller) wireIngress(runtime config.RuntimeConfig, fs factorySet) {
 }
 
 func (c *Controller) wireNetpol(runtime config.RuntimeConfig, fs factorySet) {
-	if !runtime.NetworkPolicyMonitor().Enabled {
+	if !runtime.Monitors().NetworkPolicy().Enabled {
 		return
 	}
 	c.netpolLister = fs.netpolLister()
@@ -143,7 +145,7 @@ func (c *Controller) wireNetpol(runtime config.RuntimeConfig, fs factorySet) {
 func (c *Controller) wireClusterResources(
 	runtime config.RuntimeConfig, fs factorySet,
 ) {
-	if !runtime.ClusterResourceMonitor().Enabled {
+	if !runtime.Monitors().ClusterResource().Enabled {
 		return
 	}
 	c.resourceQuotaLister = fs.resourceQuotaLister()
@@ -197,7 +199,7 @@ func (c *Controller) wireStatefulSet(
 	}
 	c.ssSynced = ssSynced
 
-	if runtime.StatefulSetMonitor().Enabled {
+	if runtime.Monitors().StatefulSet().Enabled {
 		c.listen(c.statefulSet, ssInformers...)
 	}
 }
@@ -209,7 +211,7 @@ func (c *Controller) wireStatefulSet(
 // partially populated cache, so PDBs in the other namespaces were not seeded
 // and were re-announced as new after every restart.
 func (c *Controller) wirePDB(runtime config.RuntimeConfig, fs factorySet) {
-	if !runtime.PdbMonitor().Enabled {
+	if !runtime.Monitors().PDB().Enabled {
 		return
 	}
 	pdbInformers := fs.pdbInformers()
@@ -237,7 +239,7 @@ func (c *Controller) wireReplicaSet(
 		rsSynced = append(rsSynced, inf.HasSynced)
 	}
 	c.rsSynced = rsSynced
-	if runtime.ClusterResourceMonitor().Enabled {
+	if runtime.Monitors().ClusterResource().Enabled {
 		c.watch(c.replicaSet, rsInformers...)
 	}
 

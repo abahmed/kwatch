@@ -18,9 +18,23 @@ var providerNames = []string{
 	"webhook", "wecom", "zapier", "zenduty", "zulip",
 }
 
+var providerAliases = map[string]string{
+	"incident.io": "incidentio",
+}
+
 // Names returns all accepted provider keys in deterministic order.
 func Names() []string {
 	result := append([]string(nil), providerNames...)
 	sort.Strings(result)
+	return result
+}
+
+// Aliases returns the intentional alternate provider keys. The returned map
+// is detached so callers cannot change catalog identity at runtime.
+func Aliases() map[string]string {
+	result := make(map[string]string, len(providerAliases))
+	for alias, canonical := range providerAliases {
+		result[alias] = canonical
+	}
 	return result
 }

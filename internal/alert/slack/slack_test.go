@@ -9,6 +9,7 @@ import (
 	slackClient "github.com/slack-go/slack"
 	"github.com/stretchr/testify/assert"
 
+	"github.com/abahmed/kwatch/internal/clock"
 	"github.com/abahmed/kwatch/internal/delivery/transport"
 	"github.com/abahmed/kwatch/internal/event"
 	"github.com/abahmed/kwatch/internal/message"
@@ -24,6 +25,7 @@ func newTestSlack(
 ) *Slack {
 	return NewSlack(values, clusterName, transport.Dependencies{
 		HTTPClient: http.DefaultClient,
+		Clock:      clock.RealClock{},
 	})
 }
 

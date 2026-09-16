@@ -108,9 +108,10 @@ func reportFor(
 	action model.IncidentAction,
 	ins *insight.Insight,
 	clusterName string,
+	timeSource clock.Clock,
 ) *message.Report {
 	return message.NewReportBuilderWithClock(
-		clusterName, clock.RealClock{},
+		clusterName, clock.Require(timeSource),
 	).Build(inc, action, ins)
 }
 
@@ -191,10 +192,11 @@ func metaParts(r *message.Report, inc *model.Incident) []string {
 func formatIncidentText(
 	inc *model.Incident,
 	action model.IncidentAction,
+	timeSource clock.Clock,
 ) string {
 	renderer := message.NewSlackRenderer()
 	report := message.NewReportBuilderWithClock(
-		"", clock.RealClock{},
+		"", clock.Require(timeSource),
 	).Build(inc, action, nil)
 	return message.RenderAction(renderer, report)
 }

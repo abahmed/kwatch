@@ -98,10 +98,35 @@ func configureDirectRuntimes(
 			return err
 		}
 	}
-	metrics.DefaultRegistry().SourceUnavailable.Add(
-		int64(len(c.unavailableSources())),
-	)
+	c.recordSourceUnavailableTransitions()
 	return nil
+}
+
+// recordSourceUnavailableTransitions counts each enabled source becoming
+// unavailable once. Repeated diagnostics must not inflate the counter.
+func (c *Controller) recordSourceUnavailableTransitions() {
+	current := make(map[string]bool)
+	for _, source := range c.unavailableSources() {
+		current[source] = true
+	}
+	c.informerMu.Lock()
+	previous := c.sourceUnavailable
+	if previous == nil {
+		previous = make(map[string]bool)
+	}
+	transitions := 0
+	for source := range current {
+		if !previous[source] {
+			transitions++
+		}
+	}
+	c.sourceUnavailable = current
+	c.informerMu.Unlock()
+	if transitions > 0 {
+		metrics.DefaultRegistry().SourceUnavailable.Add(
+			int64(transitions),
+		)
+	}
 }
 
 func configureIncidentSources(

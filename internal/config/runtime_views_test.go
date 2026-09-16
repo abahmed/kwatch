@@ -38,5 +38,5 @@ func TestRuntimeConfigGroupedViewsAreDefensive(t *testing.T) {
 		freshRoute["namespaces"].([]interface{})[0])
 
 	monitor := runtime.Monitors()
-	require.Equal(t, runtime.NodeMonitor(), monitor.Node())
+	require.Equal(t, runtime.Monitors().Node(), monitor.Node())
 }

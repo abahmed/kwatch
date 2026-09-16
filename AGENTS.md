@@ -504,8 +504,9 @@ incident. Disabled pipelines are omitted from this diagnostic list.
 
 Dynamic watcher status includes skipped optional resources and cache-sync
 failures. CRD discovery failures are reported to the application health
-boundary through the watcher's status sink; waiting for a missing CRD is a
-normal degraded/waiting state, not a process restart condition.
+boundary through the status sink injected during construction; waiting for a
+missing CRD is a normal degraded/waiting state, not a process restart
+condition.
 
 Persistence migrations return structured `MigrationResult` values and retain
 the complete startup-cycle `MigrationReport`. Migration status and failures

@@ -25,7 +25,7 @@ func configureProbeRunner(
 	httpClient *http.Client,
 	resolver probe.HostResolver,
 ) func(context.Context) error {
-	probeConfig := runtime.ActiveProbeMonitor()
+	probeConfig := runtime.Monitors().ActiveProbe()
 	if !probeConfig.Enabled || !activeProbesEnabled(probeConfig) {
 		return nil
 	}

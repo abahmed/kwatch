@@ -10,6 +10,7 @@ import (
 	discordgo "github.com/bwmarrin/discordgo"
 	"github.com/stretchr/testify/assert"
 
+	"github.com/abahmed/kwatch/internal/clock"
 	"github.com/abahmed/kwatch/internal/delivery/transport"
 	"github.com/abahmed/kwatch/internal/event"
 	"github.com/abahmed/kwatch/internal/message"
@@ -29,6 +30,7 @@ func newTestDiscord(
 ) *Discord {
 	return NewDiscord(values, clusterName, transport.Dependencies{
 		HTTPClient: http.DefaultClient,
+		Clock:      clock.RealClock{},
 	})
 }
 

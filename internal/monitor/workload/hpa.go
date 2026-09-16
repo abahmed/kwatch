@@ -182,7 +182,7 @@ func (r *HPARuntime) processHPAObject(
 			hadError = true
 			first := r.scalingError.mark(key, r.support.now())
 			sustained := time.Duration(
-				r.support.runtime.HpaMonitor().SustainedMinutes,
+				r.support.runtime.Monitors().HPA().SustainedMinutes,
 			) * time.Minute
 			if sustained <= 0 || r.support.now().Sub(first) >= sustained {
 				current = append(current, obs)
@@ -201,8 +201,8 @@ func (r *HPARuntime) processHPAObject(
 	}
 	first := r.maxed.mark(key, r.support.now())
 	sustained := adaptiveSustained(
-		r.support.runtime.HpaMonitor().SustainedMinutes,
-		r.support.runtime.AdaptiveThresholds(),
+		r.support.runtime.Monitors().HPA().SustainedMinutes,
+		r.support.runtime.Monitors().AdaptiveThresholds(),
 		hpa.Spec.MaxReplicas,
 		hpa.Spec.MaxReplicas-hpa.Status.CurrentReplicas,
 	)

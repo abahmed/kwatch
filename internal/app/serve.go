@@ -48,23 +48,54 @@ func serve(ctx context.Context, deps *serverDeps) int {
 		run:      deps.healthServer.Serve,
 	})
 
+	// The required controller must own the initialization gate before optional
+	// monitors are allowed to start. This keeps startup ordering explicit.
+	startCoreComponents(ctx, deps, supervisor)
 	optionalComponents := []componentSpec{
-		{name: "status", run: deps.statusRun},
-		{name: "metrics", run: deps.metricsRun},
-		{name: "probe", run: deps.probeRun},
-		{name: "kubelet", run: deps.kubeletRun},
-		{name: "storage-graph", run: deps.storageRun},
-		{name: "network-graph", run: deps.networkRun},
-		{name: "rbac", run: deps.securityRun},
-		{name: "control-plane", run: deps.controlPlaneRun},
-		{name: "telemetry", run: deps.telemetryRun},
-		{name: "upgrader", run: deps.upgradeRun},
+		{
+			name: "status", onError: degrade(deps, "status"),
+			run: deps.statusRun,
+		},
+		{
+			name: "metrics", onError: degrade(deps, "metrics"),
+			run: deps.metricsRun,
+		},
+		{
+			name: "probe", onError: degrade(deps, "probe"),
+			run: deps.probeRun,
+		},
+		{
+			name: "kubelet", onError: degrade(deps, "kubelet"),
+			run: deps.kubeletRun,
+		},
+		{
+			name: "storage-graph", onError: degrade(deps, "storage-graph"),
+			run: deps.storageRun,
+		},
+		{
+			name: "network-graph", onError: degrade(deps, "network-graph"),
+			run: deps.networkRun,
+		},
+		{
+			name: "rbac", onError: degrade(deps, "rbac"),
+			run: deps.securityRun,
+		},
+		{
+			name: "control-plane", onError: degrade(deps, "control-plane"),
+			run: deps.controlPlaneRun,
+		},
+		{
+			name: "telemetry", onError: degrade(deps, "telemetry"),
+			run: deps.telemetryRun,
+		},
+		{
+			name: "upgrader", onError: degrade(deps, "upgrader"),
+			run: deps.upgradeRun,
+		},
 	}
 	for _, component := range optionalComponents {
 		supervisor.startOptional(ctx, deps.initialized, component)
 	}
-
-	startCoreComponents(ctx, deps, supervisor)
 
 	return waitShutdown(deps, supervisor)
 }
@@ -83,28 +114,41 @@ func waitForInitialization(
 
 // startCRDWatcher launches the CRD watcher against the cluster rest config.
 func startCRDWatcher(ctx context.Context, deps *serverDeps) error {
-	resync := deps.runtime.ResyncInterval()
+	resync := deps.runtime.Lifecycle().ResyncInterval()
 	w := crdwatch.NewWithClient(
 		deps.runtime, deps.clients.Dynamic, k8s.GetNamespace(), resync,
 		deps.cancel,
+		func(err error) {
+			if err != nil {
+				klog.ErrorS(err, "CRD watcher degraded",
+					"component", "crd-watcher")
+			}
+		},
+		func(status crdwatch.Status) {
+			if status.State == "waiting" {
+				deps.healthServer.SetComponentStatus(
+					"crd-watcher", "waiting",
+					"optional_api_unavailable", false,
+				)
+				return
+			}
+			if status.State == "degraded" {
+				deps.healthServer.SetComponentStatus(
+					"crd-watcher", "degraded", status.LastError, false,
+				)
+				return
+			}
+			if status.Ready {
+				deps.healthServer.SetComponentStatus(
+					"crd-watcher", "running", "", true,
+				)
+			}
+		},
 	)
-	w.SetStatusSink(func(err error) {
-		deps.healthServer.SetComponentError("crd-watcher", err)
-	})
 	if err := w.Start(ctx); err != nil {
 		return fmt.Errorf("crd watcher: %w", err)
 	}
 	defer w.Stop()
-	status := w.Status()
-	if status.WaitingForCRD {
-		deps.healthServer.SetComponentStatus(
-			"crd-watcher", "waiting", "optional_api_unavailable", false,
-		)
-	} else if status.Ready {
-		deps.healthServer.SetComponentStatus(
-			"crd-watcher", "running", "", true,
-		)
-	}
 	<-ctx.Done()
 	return nil
 }

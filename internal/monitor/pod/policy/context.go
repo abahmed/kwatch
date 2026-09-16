@@ -5,6 +5,7 @@ import (
 
 	corev1 "k8s.io/api/core/v1"
 
+	"github.com/abahmed/kwatch/internal/clock"
 	"github.com/abahmed/kwatch/internal/config"
 	"github.com/abahmed/kwatch/internal/model"
 )
@@ -41,31 +42,31 @@ func (c *Context) runtime() config.RuntimeConfig {
 }
 
 func (c *Context) allowedNamespaces() []string {
-	return c.runtime().AllowedNamespaces()
+	return c.runtime().Scope().AllowedNamespaces()
 }
 
 func (c *Context) forbiddenNamespaces() []string {
-	return c.runtime().ForbiddenNamespaces()
+	return c.runtime().Scope().ForbiddenNamespaces()
 }
 
 func (c *Context) allowedReasons() []string {
-	return c.runtime().AllowedReasons()
+	return c.runtime().Scope().AllowedReasons()
 }
 
 func (c *Context) forbiddenReasons() []string {
-	return c.runtime().ForbiddenReasons()
+	return c.runtime().Scope().ForbiddenReasons()
 }
 
 func (c *Context) suppressionIndex() config.SuppressionIndex {
-	return c.runtime().SuppressionIndex()
+	return c.runtime().Scope().SuppressionIndex()
 }
 
 func (c *Context) watchStartTime() time.Time {
-	return c.runtime().WatchStartTime()
+	return c.runtime().Lifecycle().WatchStartTime()
 }
 
 func (c *Context) maintenance() config.MaintenanceConfig {
-	return c.runtime().Maintenance()
+	return c.runtime().Monitors().Maintenance()
 }
 
 // Findings are the policy conclusions about the Pod.
@@ -82,8 +83,5 @@ type Findings struct {
 type ContainerContext = model.ContainerContext
 
 func (c *Context) now() time.Time {
-	if c.Now != nil {
-		return c.Now()
-	}
-	return time.Time{}
+	return clock.RequireFunc(c.Now)()
 }

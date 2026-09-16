@@ -102,16 +102,19 @@ func TestComponentErrorUsesSafeReasonAndCountsTransitions(t *testing.T) {
 		"provider",
 		errors.New("provider token=another-secret failed to send payload"),
 	)
+	server.SetComponentStatus(
+		"provider", "degraded", "rate_limited", false,
+	)
 
 	if got := server.ComponentErrors()["provider"]; got != "component_failed" {
-		t.Fatalf("unexpected public component reason: %q", got)
+		t.Fatalf("unexpected component error reason: %q", got)
 	}
 	if got := metrics.DefaultRegistry().ComponentDegradations.Load() -
 		before; got != 1 {
 		t.Fatalf("degradation metric changed by %d, want one transition", got)
 	}
 	status := server.ComponentStatuses()["provider"]
-	if status.Reason != "component_failed" {
+	if status.Reason != "rate_limited" {
 		t.Fatalf("unexpected component status reason: %q", status.Reason)
 	}
 }

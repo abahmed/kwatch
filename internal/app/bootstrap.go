@@ -3,6 +3,7 @@ package app
 import (
 	"context"
 	"fmt"
+	"net"
 	"time"
 
 	"github.com/abahmed/kwatch/internal/alert/catalog"
@@ -39,8 +40,10 @@ func newBootstrap(
 	now func() time.Time,
 ) (*bootstrap, error) {
 	runtime := config.RuntimeConfigFor(cfg)
-	upgraderConfig := runtime.Upgrader()
-	clients, err := client.NewClientSetWithRuntime(runtime)
+	upgraderConfig := runtime.Lifecycle().Upgrader()
+	clients, err := client.NewClientSetWithRuntime(
+		runtime, &net.Resolver{}, clock.Func(now),
+	)
 	if err != nil {
 		return nil, fmt.Errorf("create application clients: %w", err)
 	}
@@ -52,7 +55,7 @@ func newBootstrap(
 	// The CRD overlay may change monitor, alert, or startup settings. Rebuild
 	// the immutable snapshot before composing any domain component.
 	runtime = config.RuntimeConfigFor(cfg)
-	upgraderConfig = runtime.Upgrader()
+	upgraderConfig = runtime.Lifecycle().Upgrader()
 
 	persistenceManager := persistence.NewManagerWithClock(
 		clients.Kubernetes, k8s.GetNamespace(), clock.Func(now),
@@ -68,7 +71,7 @@ func newBootstrap(
 	}
 
 	healthServer := health.NewHealthServerWithClock(
-		runtime.HealthCheck(), clock.Func(now),
+		runtime.Lifecycle().HealthCheck(), clock.Func(now),
 	)
 	securityMonitor := configureSecurityMonitor(runtime, clients.Kubernetes, now)
 
@@ -85,7 +88,7 @@ func newBootstrap(
 		clients.HTTP,
 	)
 	telemetryRun := configureTelemetryRunner(
-		runtime.Telemetry(),
+		runtime.Lifecycle().Telemetry(),
 		persistenceManager,
 		startupResult.ClusterID,
 		startupResult.CurrentVersion,

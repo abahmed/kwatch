@@ -14,6 +14,13 @@ func startCoreComponents(
 	deps *serverDeps,
 	supervisor *componentSupervisor,
 ) {
+	supervisor.startOwned(ctx, componentSpec{
+		name:     "controller",
+		required: true,
+		run: func(ctx context.Context) error {
+			return runController(ctx, deps)
+		},
+	})
 	components := []componentSpec{
 		{
 			name:    "incident-cleanup",
@@ -53,7 +60,7 @@ func startCoreComponents(
 			},
 		})
 	}
-	if deps.runtime.CrdConfig().Enabled {
+	if deps.runtime.Monitors().CRD().Enabled {
 		components = append(components, componentSpec{
 			name: "crd-watcher", onError: degrade(deps, "crd-watcher"),
 			run: func(componentCtx context.Context) error {
@@ -61,7 +68,7 @@ func startCoreComponents(
 			},
 		})
 	}
-	if deps.runtime.NamespaceSelector() != "" {
+	if deps.runtime.Scope().NamespaceSelector() != "" {
 		components = append(components, componentSpec{
 			name:    "namespace-scope-watcher",
 			onError: degrade(deps, "namespace-scope-watcher"),
@@ -71,15 +78,8 @@ func startCoreComponents(
 		})
 	}
 	for _, component := range components {
-		supervisor.startOwned(ctx, component)
+		supervisor.startOptional(ctx, deps.initialized, component)
 	}
-	supervisor.startOwned(ctx, componentSpec{
-		name:     "controller",
-		required: true,
-		run: func(ctx context.Context) error {
-			return runController(ctx, deps)
-		},
-	})
 }
 
 func degrade(deps *serverDeps, name string) func(error) {
@@ -170,7 +170,7 @@ func runNamespaceScopeWatcher(ctx context.Context, deps *serverDeps) error {
 	controller.WatchNamespaceScope(
 		ctx,
 		deps.clients.Kubernetes,
-		deps.runtime.NamespaceSelector(),
+		deps.runtime.Scope().NamespaceSelector(),
 		namespaces,
 		deps.cancel,
 	)
@@ -182,7 +182,7 @@ func runController(ctx context.Context, deps *serverDeps) error {
 	// Startup delivery belongs to this owned controller lifecycle goroutine.
 	// Delivery itself remains queued and non-blocking.
 	deps.notifyStartup()
-	workers := deps.runtime.Workers()
+	workers := deps.runtime.Lifecycle().Workers()
 	if workers < 1 {
 		workers = 1
 	}

@@ -326,17 +326,14 @@ func (r *Runtime) prepare(observation *model.Observation) {
 	if observation == nil {
 		return
 	}
-	observation.IncludeEvents = r.runtime.IncludeEvents()
-	observation.IncludeLogs = r.runtime.IncludeLogs()
+	observation.IncludeEvents = r.runtime.Monitors().IncludeEvents()
+	observation.IncludeLogs = r.runtime.Monitors().IncludeLogs()
 }
 
 func (r *Runtime) nowTime() time.Time {
 	r.mu.Lock()
 	now := r.now
 	r.mu.Unlock()
-	if now == nil {
-		return time.Time{}
-	}
 	return now()
 }
 

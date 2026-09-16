@@ -46,7 +46,7 @@ func (enricher ContainerLogsEnricher) Enrich(ctx *Context) bool {
 		func() string { return fetchContainerLogs(ctx) },
 	)
 
-	if filter.MatchesLog(ctx.Runtime.SuppressionIndex(), logs) {
+	if filter.MatchesLog(ctx.Runtime.Scope().SuppressionIndex(), logs) {
 		klog.InfoS(
 			"skipping container logs as it matches the ignore log pattern",
 			"container", container.Name)
@@ -98,7 +98,7 @@ func fetchContainerLogs(ctx *Context) string {
 		container.Name,
 		ctx.Pod.Namespace,
 		previousLogs,
-		ctx.Runtime.MaxRecentLogLines())
+		ctx.Runtime.Monitors().MaxRecentLogLines())
 
 	// After a crash the runtime may already have collected the previous
 	// container; the current one's startup output is still worth having.
@@ -109,7 +109,7 @@ func fetchContainerLogs(ctx *Context) string {
 			container.Name,
 			ctx.Pod.Namespace,
 			!previousLogs,
-			ctx.Runtime.MaxRecentLogLines())
+			ctx.Runtime.Monitors().MaxRecentLogLines())
 	}
 	if LogsUnavailable(logs) {
 		logs = ""

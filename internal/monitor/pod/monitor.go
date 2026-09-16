@@ -30,12 +30,6 @@ func NewWithRuntimeConfig(runtime config.RuntimeConfig) *Monitor {
 	}
 }
 
-// SetPodEnrichers replaces the pod enrichment chain for deterministic tests.
-// Production wiring should use the defaults created by New.
-func (m *Monitor) SetPodEnrichers(enrichers []enrichment.Enricher) {
-	m.podEnrichers = append([]enrichment.Enricher(nil), enrichers...)
-}
-
 // DetectPod runs the pure pod detector stage. It returns false when the pod
 // should not continue through pod-level enrichment.
 func (m *Monitor) DetectPod(ctx *enrichment.Context) bool {

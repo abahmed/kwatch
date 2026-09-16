@@ -220,8 +220,8 @@ func (r *Runtime) prepare(observation *model.Observation) {
 	if observation == nil {
 		return
 	}
-	observation.IncludeEvents = r.runtime.IncludeEvents()
-	observation.IncludeLogs = r.runtime.IncludeLogs()
+	observation.IncludeEvents = r.runtime.Monitors().IncludeEvents()
+	observation.IncludeLogs = r.runtime.Monitors().IncludeLogs()
 }
 
 func (r *Runtime) reconcile(
@@ -234,8 +234,8 @@ func (r *Runtime) reconcile(
 		if observation == nil {
 			continue
 		}
-		observation.IncludeEvents = r.runtime.IncludeEvents()
-		observation.IncludeLogs = r.runtime.IncludeLogs()
+		observation.IncludeEvents = r.runtime.Monitors().IncludeEvents()
+		observation.IncludeLogs = r.runtime.Monitors().IncludeLogs()
 	}
 	r.sink.Reconcile(subject, observations)
 }
@@ -280,9 +280,9 @@ func (r *Runtime) sourcesSnapshot() Sources {
 }
 
 func (r *Runtime) sustainedMinutes() int {
-	return r.runtime.ClusterResourceMonitor().SustainedMinutes
+	return r.runtime.Monitors().ClusterResource().SustainedMinutes
 }
 
 func (r *Runtime) leaseStaleSeconds() int {
-	return r.runtime.ClusterResourceMonitor().NodeLeaseStaleSeconds
+	return r.runtime.Monitors().ClusterResource().NodeLeaseStaleSeconds
 }

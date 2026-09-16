@@ -246,8 +246,8 @@ func (r *Runtime) reconcile(
 	}
 	for _, finding := range findings {
 		if finding != nil {
-			finding.IncludeEvents = r.runtime.IncludeEvents()
-			finding.IncludeLogs = r.runtime.IncludeLogs()
+			finding.IncludeEvents = r.runtime.Monitors().IncludeEvents()
+			finding.IncludeLogs = r.runtime.Monitors().IncludeLogs()
 		}
 	}
 	r.sink.Reconcile(subject, findings)

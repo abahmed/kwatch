@@ -159,7 +159,7 @@ func composeMonitorComponents(
 		tlsConfig:       tlsConfig,
 		startupSummary: func(suppressed map[string]int) {
 			if inc := startup.BuildSummary(
-				runtime.ReportStartupBaseline(), suppressed,
+				runtime.Monitors().ReportStartup(), suppressed,
 			); inc != nil {
 				deliveryManager.NotifyIncident(
 					inc, model.ActionCreate, nil,
@@ -174,7 +174,7 @@ func composeTLSRuntime(
 	incidentEngine *incident.Engine,
 	now func() time.Time,
 ) (controller.TLSProcessor, controller.TLSConfig) {
-	if !runtime.TlsMonitor().Enabled {
+	if !runtime.Monitors().TLS().Enabled {
 		return nil, nil
 	}
 	tlsRuntime := securitymonitor.NewTLSRuntimeWithRuntimeConfig(
@@ -187,12 +187,12 @@ func newMonitorController(
 	clientset kubernetes.Interface,
 	runtime config.RuntimeConfig,
 	components monitorComponents,
-	now func() time.Time,
+	dependencies controller.RuntimeDependencies,
 ) (*controller.Controller, func(), error) {
 	return controller.NewWithRuntimeConfig(
 		clientset,
 		runtime,
 		components.components,
-		now,
+		dependencies,
 	)
 }

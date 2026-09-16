@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"strings"
 
+	"github.com/abahmed/kwatch/internal/clock"
 	"github.com/abahmed/kwatch/internal/constant"
 	"github.com/abahmed/kwatch/internal/delivery/transport"
 	"github.com/abahmed/kwatch/internal/event"
@@ -38,6 +39,7 @@ type Discord struct {
 
 	// reference for general app configuration
 	clusterName string
+	clockSource clock.Clock
 }
 
 // NewDiscord returns new Discord instance
@@ -82,6 +84,7 @@ func NewDiscord(
 		text:        text,
 		send:        discordClient.WebhookExecute,
 		clusterName: clusterName,
+		clockSource: clock.Require(dependencies.Clock),
 	}
 }
 
@@ -277,6 +280,7 @@ func (d *Discord) SendIncidentWithInsight(
 		ins,
 		message.NewDiscordRenderer(),
 		d.clusterName,
+		d.clockSource,
 	)
 	if text == "" {
 		return nil

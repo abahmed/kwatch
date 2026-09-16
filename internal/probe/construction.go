@@ -28,9 +28,7 @@ func NewWithDependencies(
 	if timeout <= 0 {
 		timeout = 5 * time.Second
 	}
-	if timeSource == nil {
-		timeSource = clock.RealClock{}
-	}
+	timeSource = clock.Require(timeSource)
 	return &Monitor{
 		cfg: cfg, incidentSink: incidentSink,
 		watchAll: true,

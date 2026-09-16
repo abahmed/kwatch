@@ -6,6 +6,8 @@ import (
 	"time"
 
 	corev1 "k8s.io/api/core/v1"
+
+	"github.com/abahmed/kwatch/internal/clock"
 )
 
 // logCacheTTL is how long a container's log tail stays reusable.
@@ -36,13 +38,9 @@ type LogCache struct {
 	m   map[string]logCacheEntry
 }
 
-// NewLogCache builds a cache reading the given clock. A nil clock creates a
-// deterministic zero-time cache for isolated fixtures; production Pod
-// composition always passes its application clock.
+// NewLogCache builds a cache reading the given application clock.
 func NewLogCache(now func() time.Time) *LogCache {
-	if now == nil {
-		now = func() time.Time { return time.Time{} }
-	}
+	now = clock.RequireFunc(now)
 	return &LogCache{now: now, m: map[string]logCacheEntry{}}
 }
 

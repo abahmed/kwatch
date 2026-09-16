@@ -212,8 +212,8 @@ func (r *DeploymentRuntime) processDeploymentObject(
 	if obs := DetectDeploymentUnavailable(deploy); obs != nil {
 		first := r.first.mark(key, r.support.now())
 		sustained := adaptiveSustained(
-			r.support.runtime.RolloutMonitor().SustainedMinutes,
-			r.support.runtime.AdaptiveThresholds(),
+			r.support.runtime.Monitors().Rollout().SustainedMinutes,
+			r.support.runtime.Monitors().AdaptiveThresholds(),
 			DeploymentDesiredReplicas(deploy),
 			deploy.Status.UnavailableReplicas,
 		)

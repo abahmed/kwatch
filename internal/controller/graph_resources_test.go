@@ -17,6 +17,7 @@ import (
 	"k8s.io/client-go/kubernetes/fake"
 	corev1lister "k8s.io/client-go/listers/core/v1"
 
+	"github.com/abahmed/kwatch/internal/clock"
 	kwcontext "github.com/abahmed/kwatch/internal/graphcontext"
 )
 
@@ -61,6 +62,7 @@ func (l failingServiceNamespaceLister) Get(string) (*corev1.Service, error) {
 func newGraphTestGraph(objects ...runtime.Object) (*Controller, context.CancelFunc) {
 	c := &Controller{
 		graphRuntime: graphRuntime{graph: kwcontext.NewResourceGraph()},
+		now:          clock.RealClock{}.Now,
 	}
 	client := fake.NewSimpleClientset(objects...)
 	ctx, cancel := context.WithCancel(context.Background())
@@ -228,6 +230,7 @@ func TestBuildGraphPreservesExistingStateWhenPodListFails(t *testing.T) {
 			graph: kwcontext.NewResourceGraph(),
 		},
 		podLister: failingPodLister{err: errors.New("cache unavailable")},
+		now:       clock.RealClock{}.Now,
 	}
 	c.graph.AddEdge("pod", "ns1", "existing", "node", "", "node1", "scheduled_on")
 

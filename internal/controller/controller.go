@@ -42,9 +42,12 @@ func NewWithRuntimeConfig(
 	client kubernetes.Interface,
 	runtime config.RuntimeConfig,
 	components RuntimeSet,
-	now func() time.Time,
+	dependencies RuntimeDependencies,
 ) (*Controller, func(), error) {
-	resync := runtime.ResyncInterval()
+	if dependencies.Now == nil {
+		return nil, nil, fmt.Errorf("controller clock is required")
+	}
+	resync := runtime.Lifecycle().ResyncInterval()
 
 	scope, err := resolveNamespaces(runtime, client)
 	if err != nil {
@@ -52,13 +55,13 @@ func NewWithRuntimeConfig(
 	}
 
 	fs, factories := newFactories(
-		client, scope, runtime.ForbiddenNamespaces(), resync,
+		client, scope, runtime.Scope().ForbiddenNamespaces(), resync,
 	)
 
 	podLister := fs.podLister()
 	podInformers := fs.podInformers()
 
-	maxBaseline := runtime.MaxBaseline()
+	maxBaseline := runtime.Persistence().MaxBaseline()
 	if maxBaseline <= 0 {
 		maxBaseline = incident.DefaultMaxBaseline
 	}
@@ -109,12 +112,15 @@ func NewWithRuntimeConfig(
 		scopeState: scopeState{
 			watchAll: scope.all,
 			forbiddenNamespaces: makeNamespaceSet(
-				runtime.ForbiddenNamespaces(),
+				runtime.Scope().ForbiddenNamespaces(),
 			),
 		},
-		now:              now,
+		now:              dependencies.Now,
+		readyFn:          dependencies.Ready,
 		startupSummaryCh: make(chan map[string]int, 1),
 	}
+	c.tracker = dependencies.Tracker
+	c.graph = dependencies.Graph
 	if !scope.all {
 		c.allowedNamespaces = make(map[string]struct{}, len(scope.namespaces))
 		for _, namespace := range scope.namespaces {
@@ -168,7 +174,7 @@ func NewWithRuntimeConfig(
 	c.wireIngress(runtime, fs)
 	c.wireNetpol(runtime, fs)
 	c.wireClusterResources(runtime, fs)
-	if runtime.ControlPlaneMonitor().Enabled {
+	if runtime.Monitors().ControlPlane().Enabled {
 		factories = append(factories, c.wireControlPlane(client, resync))
 	}
 	c.wireReplicaSet(runtime, fs)
@@ -176,7 +182,7 @@ func NewWithRuntimeConfig(
 	c.wireStatefulSet(runtime, fs)
 	c.wirePDB(runtime, fs)
 	factories = append(factories, c.wireEvents(client, resync, scope)...)
-	if runtime.ClusterAutoscalerMonitor().Enabled {
+	if runtime.Monitors().ClusterAutoscaler().Enabled {
 		factories = append(
 			factories,
 			wireClusterAutoscaler(c.components.Integration.Events, client, resync),
@@ -185,7 +191,7 @@ func NewWithRuntimeConfig(
 	c.wireConfigMap(fs)
 	c.wireGraphSupport(fs)
 	c.wireGraphHandlers(fs, runtime)
-	if runtime.TlsMonitor().Enabled {
+	if runtime.Monitors().TLS().Enabled {
 		factories = append(factories, c.wireTLS(client, resync, scope)...)
 	}
 
@@ -198,8 +204,8 @@ func NewWithRuntimeConfig(
 		f.Start(stopCh)
 	}
 
-	if runtime.NodeResourceMonitor().Enabled {
-		nc := runtime.NodeResourceMonitor()
+	if runtime.Monitors().NodeResource().Enabled {
+		nc := runtime.Monitors().NodeResource()
 		c.nodeResourceCfg = &nc
 	}
 

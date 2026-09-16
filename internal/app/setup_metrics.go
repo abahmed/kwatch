@@ -21,11 +21,11 @@ func configureMetricsMonitor(
 	owners observe.OwnerResolver,
 	dynamicClient dynamic.Interface,
 ) func(context.Context) error {
-	if !runtime.RuntimeMetricsMonitor().Enabled {
+	if !runtime.Monitors().Metrics().Enabled {
 		return nil
 	}
 	metricsMonitor := metricsapi.NewWithClient(
-		dynamicClient, clientset, runtime.RuntimeMetricsMonitor(), incidentSink,
+		dynamicClient, clientset, runtime.Monitors().Metrics(), incidentSink,
 	)
 	namespaces, watchAll := ctl.NamespaceScope()
 	if err := metricsMonitor.ConfigureSources(metricsapi.Sources{

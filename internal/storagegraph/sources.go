@@ -20,6 +20,9 @@ type Sources struct {
 func (m *Monitor) ConfigureSources(sources Sources) error {
 	m.lifecycleMu.Lock()
 	defer m.lifecycleMu.Unlock()
+	if m.started {
+		return fmt.Errorf("storage graph sources cannot change after start")
+	}
 	if m.configured {
 		return fmt.Errorf("storage graph sources are already configured")
 	}

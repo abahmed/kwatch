@@ -9,6 +9,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/abahmed/kwatch/internal/clock"
 	"github.com/abahmed/kwatch/internal/ratelimit"
 )
 
@@ -28,7 +29,10 @@ func TestSendClassifiesRateLimitResponse(t *testing.T) {
 	)
 	defer server.Close()
 
-	_, err := New(http.DefaultClient).Send(context.Background(), Request{
+	_, err := NewWithDependencies(Dependencies{
+		HTTPClient: http.DefaultClient,
+		Clock:      clock.RealClock{},
+	}).Send(context.Background(), Request{
 		Provider: "test", URL: server.URL,
 	})
 	if err == nil {
@@ -66,7 +70,10 @@ func TestSendUsesExplicitClient(t *testing.T) {
 			}, nil
 		}),
 	}
-	body, err := New(client).Send(context.Background(), Request{
+	body, err := NewWithDependencies(Dependencies{
+		HTTPClient: client,
+		Clock:      clock.RealClock{},
+	}).Send(context.Background(), Request{
 		Provider: "test", URL: "http://injected",
 	})
 	if err != nil {
@@ -90,7 +97,10 @@ func TestSendHonorsContextCancellation(t *testing.T) {
 		}),
 	}
 
-	_, err := New(client).Send(ctx, Request{
+	_, err := NewWithDependencies(Dependencies{
+		HTTPClient: client,
+		Clock:      clock.RealClock{},
+	}).Send(ctx, Request{
 		Provider: "test",
 		URL:      "http://cancelled",
 	})

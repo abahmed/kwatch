@@ -6,6 +6,7 @@ import (
 	"strings"
 	"sync"
 
+	"github.com/abahmed/kwatch/internal/clock"
 	"github.com/abahmed/kwatch/internal/constant"
 	"github.com/abahmed/kwatch/internal/delivery/transport"
 	"github.com/abahmed/kwatch/internal/event"
@@ -24,6 +25,7 @@ type Slack struct {
 	text        string
 	channel     string
 	clusterName string
+	clockSource clock.Clock
 
 	// webhook mode
 	webhook string
@@ -88,6 +90,7 @@ func NewSlack(
 			text:        text,
 			compact:     compact,
 			clusterName: clusterName,
+			clockSource: clock.Require(dependencies.Clock),
 			apiClient: slackClient.New(
 				token,
 				slackClient.OptionHTTPClient(httpClient),
@@ -113,6 +116,7 @@ func NewSlack(
 		compact:          compact,
 		maxThreadMapSize: 1000,
 		clusterName:      clusterName,
+		clockSource:      clock.Require(dependencies.Clock),
 		sendContext: func(
 			ctx context.Context,
 			url string,

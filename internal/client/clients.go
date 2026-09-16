@@ -2,7 +2,7 @@ package client
 
 import (
 	"context"
-	"net"
+	"fmt"
 	"net/http"
 
 	corev1 "k8s.io/api/core/v1"
@@ -12,6 +12,7 @@ import (
 	"k8s.io/client-go/kubernetes/scheme"
 	"k8s.io/client-go/rest"
 
+	"github.com/abahmed/kwatch/internal/clock"
 	"github.com/abahmed/kwatch/internal/config"
 	"github.com/abahmed/kwatch/internal/k8s"
 )
@@ -33,15 +34,24 @@ type ClientSet struct {
 	REST       rest.Interface
 	HTTP       *http.Client
 	Resolver   HostResolver
+	Clock      clock.Clock
 }
 
 // NewClientSetWithRuntime constructs clients from the immutable runtime
 // snapshot used by application composition.
 func NewClientSetWithRuntime(
 	runtime config.RuntimeConfig,
+	resolver HostResolver,
+	timeSource clock.Clock,
 ) (ClientSet, error) {
+	if resolver == nil {
+		return ClientSet{}, fmt.Errorf("client resolver is required")
+	}
+	if timeSource == nil {
+		return ClientSet{}, fmt.Errorf("client clock is required")
+	}
 	appConfig := runtime.Application()
-	return newClientSet(appConfig)
+	return newClientSet(appConfig, resolver, timeSource)
 }
 
 // NewHTTPClientWithRuntime builds the shared outbound client from the
@@ -52,7 +62,11 @@ func NewHTTPClientWithRuntime(runtime config.RuntimeConfig) *http.Client {
 	return k8s.NewHTTPClient(appConfig)
 }
 
-func newClientSet(appConfig config.ApplicationRuntime) (ClientSet, error) {
+func newClientSet(
+	appConfig config.ApplicationRuntime,
+	resolver HostResolver,
+	timeSource clock.Clock,
+) (ClientSet, error) {
 	restConfig, err := getRestConfig(appConfig)
 	if err != nil {
 		return ClientSet{}, err
@@ -83,6 +97,7 @@ func newClientSet(appConfig config.ApplicationRuntime) (ClientSet, error) {
 		Discovery:  discoveryClient,
 		REST:       restClient,
 		HTTP:       k8s.NewHTTPClient(appConfig),
-		Resolver:   &net.Resolver{},
+		Resolver:   resolver,
+		Clock:      timeSource,
 	}, nil
 }

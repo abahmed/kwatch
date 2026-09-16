@@ -185,32 +185,32 @@ func (d DeliveryRuntime) Runbooks() map[string]string {
 	return cloneStringMap(d.values.runbooks)
 }
 
-// OperationsRuntime groups lifecycle, health, telemetry, and worker settings.
-type OperationsRuntime struct {
+// LifecycleRuntime groups lifecycle, health, telemetry, and worker settings.
+type LifecycleRuntime struct {
 	values runtimeOperations
 }
 
-func (o OperationsRuntime) Telemetry() Telemetry {
+func (o LifecycleRuntime) Telemetry() Telemetry {
 	return o.values.telemetry
 }
 
-func (o OperationsRuntime) Upgrader() Upgrader { return o.values.upgrader }
+func (o LifecycleRuntime) Upgrader() Upgrader { return o.values.upgrader }
 
-func (o OperationsRuntime) HealthCheck() HealthCheck {
+func (o LifecycleRuntime) HealthCheck() HealthCheck {
 	return o.values.healthCheck
 }
 
-func (o OperationsRuntime) AuditLog() AuditLogConfig {
+func (o LifecycleRuntime) AuditLog() AuditLogConfig {
 	return o.values.auditLog
 }
 
-func (o OperationsRuntime) ResyncInterval() time.Duration {
+func (o LifecycleRuntime) ResyncInterval() time.Duration {
 	return o.values.resync
 }
 
-func (o OperationsRuntime) Workers() int { return o.values.workers }
+func (o LifecycleRuntime) Workers() int { return o.values.workers }
 
-func (o OperationsRuntime) WatchStartTime() time.Time {
+func (o LifecycleRuntime) WatchStartTime() time.Time {
 	return o.values.watchStart
 }
 
@@ -221,6 +221,36 @@ type PersistenceRuntime struct {
 
 func (p PersistenceRuntime) MaxBaseline() int {
 	return p.values.maxBaseline
+}
+
+func (i IncidentRuntime) SeverityByOwnerKind() map[string]string {
+	return cloneStringMap(i.severityByOwnerKind)
+}
+
+func (i IncidentRuntime) SeverityByReason() map[string]string {
+	return cloneStringMap(i.severityByReason)
+}
+
+func (r RuntimeConfig) Incident() IncidentRuntime {
+	result := r.incident.config
+	result.EscalationTiers = cloneInts(result.EscalationTiers)
+	result.RenotifyIntervalBySeverity = cloneDurationMap(
+		result.RenotifyIntervalBySeverity,
+	)
+	return result
+}
+
+func cloneDurationMap(
+	values map[string]time.Duration,
+) map[string]time.Duration {
+	if values == nil {
+		return nil
+	}
+	result := make(map[string]time.Duration, len(values))
+	for key, value := range values {
+		result[key] = value
+	}
+	return result
 }
 
 func (r RuntimeConfig) Scope() ScopeRuntime {
@@ -235,8 +265,9 @@ func (r RuntimeConfig) Delivery() DeliveryRuntime {
 	return DeliveryRuntime{values: cloneRuntimeDelivery(r.delivery)}
 }
 
-func (r RuntimeConfig) Operations() OperationsRuntime {
-	return OperationsRuntime{values: r.operations}
+// Lifecycle returns the grouped application lifecycle settings.
+func (r RuntimeConfig) Lifecycle() LifecycleRuntime {
+	return LifecycleRuntime{values: r.operations}
 }
 
 func (r RuntimeConfig) Persistence() PersistenceRuntime {

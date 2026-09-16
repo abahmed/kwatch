@@ -172,8 +172,8 @@ func (r *DaemonSetRuntime) unavailableSustained(
 	}
 	unavailable := ds.Status.DesiredNumberScheduled - ds.Status.NumberReady
 	sustained := adaptiveSustained(
-		r.support.runtime.DaemonSetMonitor().SustainedMinutes,
-		r.support.runtime.AdaptiveThresholds(),
+		r.support.runtime.Monitors().DaemonSet().SustainedMinutes,
+		r.support.runtime.Monitors().AdaptiveThresholds(),
 		ds.Status.DesiredNumberScheduled,
 		unavailable,
 	)

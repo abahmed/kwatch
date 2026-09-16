@@ -11,6 +11,7 @@ import (
 
 	"github.com/stretchr/testify/assert"
 
+	"github.com/abahmed/kwatch/internal/clock"
 	"github.com/abahmed/kwatch/internal/config"
 	"github.com/abahmed/kwatch/internal/event"
 	"github.com/abahmed/kwatch/internal/model"
@@ -39,7 +40,9 @@ func (f *fakeAlertSender) Notify(msg string) {
 func TestNewHealthServer(t *testing.T) {
 	assert := assert.New(t)
 
-	server := NewHealthServer(config.HealthCheck{Port: 8080, Enabled: true})
+	server := NewHealthServerWithClock(
+		config.HealthCheck{Port: 8080, Enabled: true}, clock.RealClock{},
+	)
 	assert.NotNil(server)
 	assert.Equal(8080, server.port)
 	assert.True(server.enabled)
@@ -48,7 +51,9 @@ func TestNewHealthServer(t *testing.T) {
 func TestNewHealthServerDisabled(t *testing.T) {
 	assert := assert.New(t)
 
-	server := NewHealthServer(config.HealthCheck{Port: 8080, Enabled: false})
+	server := NewHealthServerWithClock(
+		config.HealthCheck{Port: 8080, Enabled: false}, clock.RealClock{},
+	)
 	assert.NotNil(server)
 	assert.Equal(8080, server.port)
 	assert.False(server.enabled)
@@ -95,7 +100,9 @@ func TestHealthHandler(t *testing.T) {
 func TestHealthServerStartDisabled(t *testing.T) {
 	assert := assert.New(t)
 
-	server := NewHealthServer(config.HealthCheck{Port: 8080, Enabled: false})
+	server := NewHealthServerWithClock(
+		config.HealthCheck{Port: 8080, Enabled: false}, clock.RealClock{},
+	)
 	err := startForTest(server)
 	assert.Nil(err)
 }
@@ -103,7 +110,9 @@ func TestHealthServerStartDisabled(t *testing.T) {
 func TestHealthServerStartEnabled(t *testing.T) {
 	assert := assert.New(t)
 
-	server := NewHealthServer(config.HealthCheck{Port: 8080, Enabled: true})
+	server := NewHealthServerWithClock(
+		config.HealthCheck{Port: 8080, Enabled: true}, clock.RealClock{},
+	)
 	err := startForTest(server)
 	assert.Nil(err)
 
@@ -123,7 +132,9 @@ func TestHealthServerStartEnabled(t *testing.T) {
 func TestHealthServerStop(t *testing.T) {
 	assert := assert.New(t)
 
-	server := NewHealthServer(config.HealthCheck{Port: 8080, Enabled: true})
+	server := NewHealthServerWithClock(
+		config.HealthCheck{Port: 8080, Enabled: true}, clock.RealClock{},
+	)
 	err := startForTest(server)
 	assert.Nil(err)
 
@@ -134,7 +145,9 @@ func TestHealthServerStop(t *testing.T) {
 func TestHealthServerStopNilServer(t *testing.T) {
 	assert := assert.New(t)
 
-	server := NewHealthServer(config.HealthCheck{Port: 8080, Enabled: true})
+	server := NewHealthServerWithClock(
+		config.HealthCheck{Port: 8080, Enabled: true}, clock.RealClock{},
+	)
 	err := server.Stop(context.Background())
 	assert.Nil(err)
 }

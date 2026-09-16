@@ -27,12 +27,12 @@ func configureStatusMonitor(
 	dynamicClient dynamic.Interface,
 	discoveryClient discovery.DiscoveryInterface,
 ) func(context.Context) error {
-	if !runtime.ClusterResourceMonitor().Enabled {
+	if !runtime.Monitors().ClusterResource().Enabled {
 		return nil
 	}
 	statusMonitor := statuswatch.NewWithClientsAndClock(
 		dynamicClient, discoveryClient, incidentSink,
-		runtime.ResyncInterval(), clock.Func(now),
+		runtime.Lifecycle().ResyncInterval(), clock.Func(now),
 	)
 	namespaces, watchAll := ctl.NamespaceScope()
 	if err := statusMonitor.ConfigureSources(statuswatch.Sources{
@@ -44,8 +44,8 @@ func configureStatusMonitor(
 		return nil
 	}
 	if err := statusMonitor.ConfigurePolicy(
-		runtime.CrdConfig().FailureConditions,
-		runtime.CrdConfig().GraphReferences,
+		runtime.Monitors().CRD().FailureConditions,
+		runtime.Monitors().CRD().GraphReferences,
 	); err != nil {
 		healthServer.SetComponentError("status", err)
 		klog.ErrorS(err, "invalid generic status policy")

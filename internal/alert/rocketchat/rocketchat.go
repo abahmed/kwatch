@@ -7,6 +7,7 @@ import (
 
 	"k8s.io/klog/v2"
 
+	"github.com/abahmed/kwatch/internal/clock"
 	"github.com/abahmed/kwatch/internal/delivery/transport"
 	"github.com/abahmed/kwatch/internal/event"
 	"github.com/abahmed/kwatch/internal/insight"
@@ -21,6 +22,7 @@ type RocketChat struct {
 
 	// reference for general app configuration
 	clusterName string
+	clockSource clock.Clock
 }
 
 type rocketChatWebhookPayload struct {
@@ -49,6 +51,7 @@ func NewRocketChat(
 		webhook:     webhook,
 		text:        text,
 		clusterName: clusterName,
+		clockSource: clock.Require(dependencies.Clock),
 	}
 }
 
@@ -112,6 +115,7 @@ func (r *RocketChat) SendIncidentWithInsight(
 		ins,
 		message.NewPlainTextRenderer(),
 		r.clusterName,
+		r.clockSource,
 	)
 	if text == "" {
 		return nil

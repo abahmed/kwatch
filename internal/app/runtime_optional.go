@@ -73,7 +73,7 @@ func configureOptionalRuns(
 		runtime, graph, ctl, boot.healthServer,
 		boot.clients.Dynamic, boot.clients.Discovery,
 	)
-	if runtime.KubeletTelemetryMonitor().Enabled {
+	if runtime.Monitors().KubeletTelemetry().Enabled {
 		runs.kubeletRun, runs.telemetry = configureKubeletRun(
 			runtime, boot, ctl, incidentEngine, namespaces, watchAll, now,
 		)
@@ -92,12 +92,12 @@ func configureKubeletRun(
 ) (func(context.Context) error, health.StatusProvider) {
 	monitor := kubeletmetrics.NewWithClock(
 		boot.clients.Kubernetes,
-		runtime.KubeletTelemetryMonitor(),
+		runtime.Monitors().KubeletTelemetry(),
 		incidentEngine,
 		clock.Func(now),
 	)
 	var stateStore kubeletmetrics.StateStore
-	if runtime.KubeletTelemetryMonitor().PersistState {
+	if runtime.Monitors().KubeletTelemetry().PersistState {
 		stateStore = boot.persistence
 	}
 	if err := monitor.ConfigureSources(kubeletmetrics.Sources{

@@ -147,7 +147,7 @@ func TestControllerPodEvent(t *testing.T) {
 				namespace, previous, maxLines,
 			)
 		},
-		time.Now,
+		controller.RuntimeDependencies{Now: time.Now},
 	)
 	ctrl, cleanup, err := controller.NewWithRuntimeConfig(
 		client,

@@ -7,10 +7,26 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
+func signForTest(
+	accessKey, secretKey, region, service, method, rawURL string,
+	body []byte,
+) (map[string]string, error) {
+	return SignAWSV4At(
+		accessKey,
+		secretKey,
+		region,
+		service,
+		method,
+		rawURL,
+		body,
+		time.Date(2026, 9, 12, 10, 11, 12, 0, time.UTC),
+	)
+}
+
 func TestSignAWSV4Headers(t *testing.T) {
 	assert := assert.New(t)
 
-	headers, err := SignAWSV4(
+	headers, err := signForTest(
 		"AKIA123", "secret", "us-east-1", "ses", "POST",
 		"https://email.us-east-1.amazonaws.com/",
 		[]byte("Action=SendEmail&Version=2010-12-01"),
@@ -33,23 +49,23 @@ func TestSignAWSV4Headers(t *testing.T) {
 func TestSignAWSV4Deterministic(t *testing.T) {
 	assert := assert.New(t)
 
-	h1, err := SignAWSV4(
+	h1, err := signForTest(
 		"k", "s", "us-east-1", "sns", "POST",
 		"https://sns.us-east-1.amazonaws.com/", []byte("a=1"),
 	)
 	assert.Nil(err)
-	h2, err := SignAWSV4(
+	h2, err := signForTest(
 		"k", "s", "us-east-1", "sns", "POST",
 		"https://sns.us-east-1.amazonaws.com/", []byte("a=1"),
 	)
 	assert.Nil(err)
 	// A different region must sign differently: it is part of the scope.
-	h3, err := SignAWSV4(
+	h3, err := signForTest(
 		"k", "s", "us-west-2", "sns", "POST",
 		"https://sns.us-west-2.amazonaws.com/", []byte("a=1"),
 	)
 	assert.Nil(err)
-	h4, err := SignAWSV4(
+	h4, err := signForTest(
 		"k", "other", "us-east-1", "sns", "POST",
 		"https://sns.us-east-1.amazonaws.com/", []byte("a=1"),
 	)
@@ -83,7 +99,7 @@ func TestSignAWSV4AtUsesProvidedTime(t *testing.T) {
 func TestSignAWSV4InvalidURL(t *testing.T) {
 	assert := assert.New(t)
 
-	_, err := SignAWSV4(
+	_, err := signForTest(
 		"k", "s", "us-east-1", "sns", "POST", "h ttp://bad", nil,
 	)
 	assert.NotNil(err)

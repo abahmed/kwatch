@@ -8,6 +8,7 @@ import (
 	coordinationv1 "k8s.io/api/coordination/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
+	"github.com/abahmed/kwatch/internal/clock"
 	kwcontext "github.com/abahmed/kwatch/internal/graphcontext"
 )
 
@@ -15,7 +16,10 @@ import (
 // the incident's own object as "a related resource that changed 0s ago".
 func TestRecordChangeUpdateSkipsStatusOnlyWrites(t *testing.T) {
 	tracker := newTestChangeTracker(10)
-	c := &Controller{graphRuntime: graphRuntime{tracker: tracker}}
+	c := &Controller{
+		graphRuntime: graphRuntime{tracker: tracker},
+		now:          clock.RealClock{}.Now,
+	}
 	replicas := int32(2)
 	before := &appsv1.Deployment{
 		ObjectMeta: metav1.ObjectMeta{Name: "web", Namespace: "ns"},
@@ -39,7 +43,10 @@ func TestRecordChangeUpdateSkipsStatusOnlyWrites(t *testing.T) {
 // A node lease renews every ten seconds; that heartbeat is never a change.
 func TestRecordChangeUpdateIgnoresLeaseRenewals(t *testing.T) {
 	tracker := newTestChangeTracker(10)
-	c := &Controller{graphRuntime: graphRuntime{tracker: tracker}}
+	c := &Controller{
+		graphRuntime: graphRuntime{tracker: tracker},
+		now:          clock.RealClock{}.Now,
+	}
 	before := &coordinationv1.Lease{
 		ObjectMeta: metav1.ObjectMeta{
 			Name: "n1", Namespace: "kube-node-lease",

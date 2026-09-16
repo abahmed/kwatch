@@ -17,8 +17,8 @@ func (c *Controller) wireEndpointSlices(
 	runtime config.RuntimeConfig,
 	fs factorySet,
 ) {
-	serviceMonitor := runtime.ServiceMonitor().Enabled
-	webhookMonitor := runtime.AdmissionWebhookMonitor().Enabled
+	serviceMonitor := runtime.Monitors().Service().Enabled
+	webhookMonitor := runtime.Monitors().AdmissionWebhook().Enabled
 	if !serviceMonitor && !webhookMonitor {
 		return
 	}

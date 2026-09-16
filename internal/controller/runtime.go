@@ -1,9 +1,22 @@
 package controller
 
 import (
+	"time"
+
+	kwcontext "github.com/abahmed/kwatch/internal/graphcontext"
 	clustermonitor "github.com/abahmed/kwatch/internal/monitor/cluster"
 	workloadmonitor "github.com/abahmed/kwatch/internal/monitor/workload"
 )
+
+// RuntimeDependencies are the controller's non-informer dependencies. They
+// are supplied at construction so graph, change-tracking, and readiness state
+// cannot be replaced after workers begin processing events.
+type RuntimeDependencies struct {
+	Tracker *kwcontext.ChangeTracker
+	Graph   *kwcontext.ResourceGraph
+	Ready   func()
+	Now     func() time.Time
+}
 
 // RuntimeSet contains the family runtimes assembled by the application. The
 // controller owns this composition boundary because it dispatches queues and

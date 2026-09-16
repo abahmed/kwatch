@@ -9,6 +9,7 @@ import (
 
 	"k8s.io/klog/v2"
 
+	"github.com/abahmed/kwatch/internal/clock"
 	"github.com/abahmed/kwatch/internal/delivery/transport"
 	"github.com/abahmed/kwatch/internal/event"
 	"github.com/abahmed/kwatch/internal/format"
@@ -43,6 +44,7 @@ type Telegram struct {
 
 	// reference for general app configuration
 	clusterName string
+	clockSource clock.Clock
 }
 
 // NewTelegram returns a new Telegram object
@@ -76,6 +78,7 @@ func NewTelegram(
 		chatId:      chatId,
 		url:         telegramAPIURL,
 		clusterName: clusterName,
+		clockSource: clock.Require(dependencies.Clock),
 	}
 }
 
@@ -146,6 +149,7 @@ func (t *Telegram) SendIncidentWithInsight(
 		ins,
 		message.NewPlainTextRenderer(),
 		t.clusterName,
+		t.clockSource,
 	)
 	if text == "" {
 		return nil

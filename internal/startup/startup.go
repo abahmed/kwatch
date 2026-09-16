@@ -58,7 +58,7 @@ func NewStartupManagerWithRuntime(
 	now clock.Clock,
 ) *StartupManager {
 	return newStartupManager(
-		state, runtime.DisableStartupMessage(), now,
+		state, runtime.Application().DisableStartupMessage, now,
 	)
 }
 
@@ -67,9 +67,7 @@ func newStartupManager(
 	disableStartupMessage bool,
 	now clock.Clock,
 ) *StartupManager {
-	if now == nil {
-		now = clock.RealClock{}
-	}
+	now = clock.Require(now)
 	sm := &StartupManager{
 		persistenceManager:    state,
 		disableStartupMessage: disableStartupMessage,

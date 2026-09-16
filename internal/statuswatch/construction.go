@@ -23,9 +23,7 @@ func NewWithClientsAndClock(
 	resync time.Duration,
 	timeSource clock.Clock,
 ) *Monitor {
-	if timeSource == nil {
-		timeSource = clock.RealClock{}
-	}
+	timeSource = clock.Require(timeSource)
 	statusMonitor := &Monitor{
 		client:            client,
 		discoveryClient:   discoveryClient,

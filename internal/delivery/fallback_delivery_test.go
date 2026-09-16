@@ -15,7 +15,7 @@ func TestNotifyIncidentEventDeliveryProviderPropagatesActionAndDedup(
 	t *testing.T,
 ) {
 	fp := &fakeRecordingEventProvider{}
-	am := Manager{}
+	am := *newTestManager()
 	appendManagerEntries(&am, providerEntry{
 		provider: fp,
 		retry:    retryConfig{maxAttempts: 1},
@@ -72,7 +72,7 @@ func (p *fakeRecordingEventProvider) UsesEventDelivery() {}
 // A late NotifyIncident after shutdown must be a no-op, not a send-on-closed
 // panic: shutdown closes provider channels and fanOut must not send on them.
 func TestNotifyIncidentAfterShutdownIsNoop(t *testing.T) {
-	am := &Manager{}
+	am := newTestManager()
 	setManagerEntries(am, []providerEntry{{
 		provider: &fakeProvider{},
 		retry:    retryConfig{maxAttempts: 1},
@@ -94,7 +94,7 @@ func TestNotifyIncidentAfterShutdownIsNoop(t *testing.T) {
 }
 
 func TestManagerCanRestartAfterShutdown(t *testing.T) {
-	am := &Manager{}
+	am := newTestManager()
 	setManagerEntries(am, []providerEntry{{
 		provider: &fakeProvider{},
 		retry:    retryConfig{maxAttempts: 1},

@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"time"
 
 	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
@@ -30,6 +31,15 @@ type MigrationResult struct {
 	Recoverable           bool            `json:"recoverable"`
 	MonitoringMayContinue bool            `json:"monitoringMayContinue"`
 	Detail                string          `json:"detail"`
+}
+
+// MigrationReport groups every migration operation observed during one
+// startup cycle. Operations are copied when the report crosses the manager
+// boundary so diagnostics cannot mutate persistence state.
+type MigrationReport struct {
+	Operations  []MigrationResult `json:"operations"`
+	StartedAt   time.Time         `json:"startedAt"`
+	CompletedAt time.Time         `json:"completedAt"`
 }
 
 // MigrateLegacyBaselineWithResult performs the legacy baseline migration and

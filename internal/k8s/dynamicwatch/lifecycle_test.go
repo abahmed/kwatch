@@ -4,6 +4,7 @@ import (
 	"context"
 	"sync"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/require"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -87,6 +88,24 @@ func TestWatcherReplaceStopsPreviousGeneration(t *testing.T) {
 	require.NoError(t, watcher.Replace(ctx, specs))
 	require.Equal(t, 1, watcher.Status().InformerCount)
 	watcher.Stop()
+}
+
+func TestGenerationWaitCompletesAfterStop(t *testing.T) {
+	watcher := NewWatcher(
+		fake.NewSimpleDynamicClient(runtime.NewScheme()),
+		nil, 0, nil, nil,
+	)
+	ctx := context.Background()
+	generation, err := watcher.StartGeneration(ctx, nil)
+	if err != nil {
+		t.Fatalf("StartGeneration() error = %v", err)
+	}
+	generation.Stop()
+	waitCtx, cancel := context.WithTimeout(ctx, time.Second)
+	defer cancel()
+	if !generation.Wait(waitCtx) {
+		t.Fatal("generation did not report completion after Stop")
+	}
 }
 
 func TestStaleGenerationCannotStopReplacement(t *testing.T) {

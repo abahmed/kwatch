@@ -10,6 +10,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"github.com/abahmed/kwatch/internal/clock"
 	"github.com/abahmed/kwatch/internal/model"
 )
 
@@ -107,9 +108,11 @@ func TestSlackPayloadStaysWithinEveryLimit(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			inc := hostileIncident(tc.events, tc.msgLen)
 			for _, b := range []*slackClient.Blocks{
-				buildIncidentBlocksWithInsight(inc, app, nil),
-				buildIncidentUpdateBlocks(inc),
-				buildIncidentResolvedBlocks(inc),
+				buildIncidentBlocksWithInsight(
+					inc, app, nil, clock.RealClock{},
+				),
+				buildIncidentUpdateBlocks(inc, clock.RealClock{}),
+				buildIncidentResolvedBlocks(inc, clock.RealClock{}),
 			} {
 				fields, fieldChars, sectionChars, blocks := payloadStats(b)
 				assert.LessOrEqual(

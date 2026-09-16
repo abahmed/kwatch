@@ -41,10 +41,10 @@ func permissionsForRuntime(
 	addControlPlaneSecurityPermissions(&builder, runtime)
 	addClusterResourcePermissions(&builder, runtime)
 	builder.addNamespaced(
-		runtime.RuntimeMetricsMonitor().Enabled,
+		runtime.Monitors().Metrics().Enabled,
 		Permission{Resource: "pods", Group: "metrics.k8s.io"},
 	)
-	if runtime.IncludeLogs() {
+	if runtime.Monitors().IncludeLogs() {
 		builder.namespaced = append(builder.namespaced, Permission{
 			Resource: "pods/log",
 			Verb:     "get",
@@ -53,7 +53,7 @@ func permissionsForRuntime(
 	// The CRD watcher is startup/live infrastructure and is independent of
 	// workload monitors; it must retain access when the installed CRD exists.
 	builder.addCluster(
-		runtime.CrdConfig().Enabled,
+		runtime.Monitors().CRD().Enabled,
 		Permission{
 			Resource: "customresourcedefinitions",
 			Group:    "apiextensions.k8s.io",
@@ -75,7 +75,7 @@ func infrastructurePermissionsForRuntime(
 			})
 		}
 	}
-	if runtime.CrdConfig().Enabled {
+	if runtime.Monitors().CRD().Enabled {
 		permissions = append(permissions, permissionResources(Permission{
 			Resource: "kwatchconfigs",
 			Group:    "kwatch.abahmed.dev",
@@ -120,18 +120,20 @@ func (b *permissionBuilder) addCluster(enabled bool, resources ...Permission) {
 func addWorkloadPermissions(
 	b *permissionBuilder, runtime config.RuntimeConfig,
 ) {
-	b.addNamespaced(runtime.RolloutMonitor().Enabled, apps("deployments")...)
-	b.addNamespaced(runtime.RolloutMonitor().Enabled, apps("replicasets")...)
-	b.addNamespaced(runtime.StatefulSetMonitor().Enabled, apps("statefulsets")...)
-	b.addNamespaced(runtime.DaemonSetMonitor().Enabled, apps("daemonsets")...)
-	b.addNamespaced(runtime.JobMonitor().Enabled, batch("jobs")...)
-	b.addNamespaced(runtime.CronJobMonitor().Enabled, batch("cronjobs")...)
+	b.addNamespaced(runtime.Monitors().Rollout().Enabled, apps("deployments")...)
+	b.addNamespaced(runtime.Monitors().Rollout().Enabled, apps("replicasets")...)
 	b.addNamespaced(
-		runtime.HpaMonitor().Enabled,
+		runtime.Monitors().StatefulSet().Enabled, apps("statefulsets")...,
+	)
+	b.addNamespaced(runtime.Monitors().DaemonSet().Enabled, apps("daemonsets")...)
+	b.addNamespaced(runtime.Monitors().Job().Enabled, batch("jobs")...)
+	b.addNamespaced(runtime.Monitors().CronJob().Enabled, batch("cronjobs")...)
+	b.addNamespaced(
+		runtime.Monitors().HPA().Enabled,
 		autoscaling("horizontalpodautoscalers")...,
 	)
 	b.addNamespaced(
-		runtime.PdbMonitor().Enabled,
+		runtime.Monitors().PDB().Enabled,
 		policy("poddisruptionbudgets")...,
 	)
 }
@@ -139,29 +141,32 @@ func addWorkloadPermissions(
 func addNetworkPermissions(
 	b *permissionBuilder, runtime config.RuntimeConfig,
 ) {
-	service := runtime.ServiceMonitor().Enabled ||
-		(runtime.ActiveProbeMonitor().Enabled &&
-			runtime.ActiveProbeMonitor().AutoServices)
-	ingress := runtime.IngressMonitor().Enabled
+	service := runtime.Monitors().Service().Enabled ||
+		(runtime.Monitors().ActiveProbe().Enabled &&
+			runtime.Monitors().ActiveProbe().AutoServices)
+	ingress := runtime.Monitors().Ingress().Enabled
 	b.addNamespaced(
 		service,
 		Permission{Resource: "services"},
 		Permission{Resource: "endpointslices", Group: "discovery.k8s.io"},
 	)
 	b.addNamespaced(
-		ingress || runtime.AdmissionWebhookMonitor().Enabled,
+		ingress || runtime.Monitors().AdmissionWebhook().Enabled,
 		Permission{Resource: "services"},
 	)
 	b.addNamespaced(
-		service || ingress || runtime.AdmissionWebhookMonitor().Enabled,
+		service || ingress || runtime.Monitors().AdmissionWebhook().Enabled,
 		Permission{Resource: "endpointslices", Group: "discovery.k8s.io"},
 	)
 	b.addNamespaced(ingress, networking("ingresses")...)
 	b.addNamespaced(
-		runtime.NetworkPolicyMonitor().Enabled,
+		runtime.Monitors().NetworkPolicy().Enabled,
 		networking("networkpolicies")...,
 	)
-	b.addNamespaced(runtime.TlsMonitor().Enabled, Permission{Resource: "secrets"})
+	b.addNamespaced(
+		runtime.Monitors().TLS().Enabled,
+		Permission{Resource: "secrets"},
+	)
 }
 
 func addNodeStoragePermissions(
@@ -171,14 +176,14 @@ func addNodeStoragePermissions(
 	// endpoint, so it needs nodes and nodes/proxy just as the node monitors
 	// do. Leaving it out of this set meant a PVC-only configuration reported
 	// full RBAC while every usage sweep was being denied.
-	nodes := runtime.NodeMonitor().Enabled ||
-		runtime.NodeResourceMonitor().Enabled ||
-		runtime.KubeletTelemetryMonitor().Enabled ||
-		runtime.ControlPlaneMonitor().Enabled || runtime.PvcMonitor().Enabled
+	nodes := runtime.Monitors().Node().Enabled ||
+		runtime.Monitors().NodeResource().Enabled ||
+		runtime.Monitors().KubeletTelemetry().Enabled ||
+		runtime.Monitors().ControlPlane().Enabled || runtime.Monitors().PVC().Enabled
 	b.addCluster(
 		nodes, Permission{Resource: "nodes"}, Permission{Resource: "nodes/proxy"},
 	)
-	b.addCluster(runtime.PvcMonitor().Enabled,
+	b.addCluster(runtime.Monitors().PVC().Enabled,
 		Permission{Resource: "persistentvolumes"},
 		Permission{Resource: "storageclasses", Group: "storage.k8s.io"},
 		Permission{Resource: "volumeattachments", Group: "storage.k8s.io"})
@@ -188,21 +193,21 @@ func addControlPlaneSecurityPermissions(
 	b *permissionBuilder, runtime config.RuntimeConfig,
 ) {
 	b.addCluster(
-		runtime.ControlPlaneMonitor().Enabled,
+		runtime.Monitors().ControlPlane().Enabled,
 		Permission{Resource: "pods"},
 		Permission{Resource: "pods/proxy"},
 	)
-	if runtime.ControlPlaneMonitor().Enabled {
+	if runtime.Monitors().ControlPlane().Enabled {
 		b.cluster = append(b.cluster, Permission{
 			NonResourceURL: "/readyz",
 			Verb:           "get",
 		})
 	}
 	b.addCluster(
-		runtime.ControlPlaneMonitor().Enabled,
+		runtime.Monitors().ControlPlane().Enabled,
 		Permission{Resource: "apiservices", Group: "apiregistration.k8s.io"},
 	)
-	b.addCluster(runtime.AdmissionWebhookMonitor().Enabled,
+	b.addCluster(runtime.Monitors().AdmissionWebhook().Enabled,
 		Permission{
 			Resource: "mutatingwebhookconfigurations",
 			Group:    "admissionregistration.k8s.io",
@@ -217,7 +222,7 @@ func addControlPlaneSecurityPermissions(
 func addClusterResourcePermissions(
 	b *permissionBuilder, runtime config.RuntimeConfig,
 ) {
-	if !runtime.ClusterResourceMonitor().Enabled {
+	if !runtime.Monitors().ClusterResource().Enabled {
 		return
 	}
 	b.addNamespaced(

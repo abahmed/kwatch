@@ -7,6 +7,7 @@ import (
 
 	"github.com/stretchr/testify/require"
 
+	"github.com/abahmed/kwatch/internal/clock"
 	"github.com/abahmed/kwatch/internal/config"
 	"github.com/abahmed/kwatch/internal/delivery/transport"
 	"github.com/abahmed/kwatch/internal/event"
@@ -38,7 +39,7 @@ func TestManagerAddProviderAfterStartUsesStoredQueue(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
-	manager := NewManager()
+	manager := NewManagerWithDependencies(Dependencies{Clock: clock.RealClock{}})
 	manager.Start(ctx)
 
 	provider := &recordingProvider{
@@ -76,7 +77,7 @@ func TestManagerReconfigurationRestartsProviderWorkers(t *testing.T) {
 		created = append(created, provider)
 		return provider
 	}
-	manager := NewManager()
+	manager := NewManagerWithDependencies(Dependencies{Clock: clock.RealClock{}})
 	manager.InitRuntime(runtime, factory)
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
@@ -114,7 +115,7 @@ func TestManagerReconfigurationDoesNotUseOldGeneration(t *testing.T) {
 		created = append(created, provider)
 		return provider
 	}
-	manager := NewManager()
+	manager := NewManagerWithDependencies(Dependencies{Clock: clock.RealClock{}})
 	manager.InitRuntime(runtime, factory)
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
@@ -137,7 +138,7 @@ func TestManagerReconfigurationDoesNotUseOldGeneration(t *testing.T) {
 }
 
 func TestManagerStopBeforeStartIsSafe(t *testing.T) {
-	manager := NewManager()
+	manager := NewManagerWithDependencies(Dependencies{Clock: clock.RealClock{}})
 	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
 	defer cancel()
 
@@ -147,7 +148,7 @@ func TestManagerStopBeforeStartIsSafe(t *testing.T) {
 }
 
 func TestManagerStopIsExplicitAfterContextCancellation(t *testing.T) {
-	manager := NewManager()
+	manager := NewManagerWithDependencies(Dependencies{Clock: clock.RealClock{}})
 	ctx, cancel := context.WithCancel(context.Background())
 	manager.Start(ctx)
 	cancel()

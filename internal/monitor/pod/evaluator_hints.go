@@ -81,19 +81,19 @@ func (e *PolicyEvaluator) repeatingOOMHint(
 	ctx.Container.Reason = constant.ReasonOOMRepeating
 	facts := model.Facts{
 		OOMCount:     count,
-		OOMWindowMin: e.runtime.OomMonitor().WindowMinutes,
+		OOMWindowMin: e.runtime.Monitors().OOM().WindowMinutes,
 		MemoryLeak:   true,
 	}
 	if timeline := e.oomTracker.history(key); timeline != "" {
 		facts.OOMTimeline = "[" + timeline + "]"
 		return fmt.Sprintf(
 			"OOMKilled %d times in %dm — potential memory leak [%s]",
-			count, e.runtime.OomMonitor().WindowMinutes, timeline,
+			count, e.runtime.Monitors().OOM().WindowMinutes, timeline,
 		), facts, true
 	}
 	return fmt.Sprintf(
 		"OOMKilled %d times in %dm — potential memory leak",
-		count, e.runtime.OomMonitor().WindowMinutes,
+		count, e.runtime.Monitors().OOM().WindowMinutes,
 	), facts, true
 }
 

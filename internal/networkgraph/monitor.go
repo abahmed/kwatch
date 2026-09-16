@@ -25,6 +25,7 @@ type Monitor struct {
 	dynamicWatcher  *dynamicwatch.Watcher
 	generation      dynamicwatch.Generation
 	configured      bool
+	started         bool
 	lifecycleMu     sync.Mutex
 }
 
@@ -58,6 +59,7 @@ func (m *Monitor) Start(ctx context.Context) error {
 	)
 	if err == nil && generation.Valid() {
 		m.generation = generation
+		m.started = true
 	}
 	return err
 }
@@ -65,9 +67,9 @@ func (m *Monitor) Start(ctx context.Context) error {
 // Stop ends all Gateway API informers owned by the monitor.
 func (m *Monitor) Stop() {
 	m.lifecycleMu.Lock()
+	defer m.lifecycleMu.Unlock()
 	watcher := m.dynamicWatcher
 	generation := m.generation
-	m.lifecycleMu.Unlock()
 	if watcher != nil {
 		if generation.Valid() {
 			generation.Stop()
@@ -75,6 +77,8 @@ func (m *Monitor) Stop() {
 			watcher.Stop()
 		}
 	}
+	m.started = false
+	m.generation = dynamicwatch.Generation{}
 }
 
 // Status reports optional Gateway API watcher health.

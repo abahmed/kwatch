@@ -116,19 +116,19 @@ type seedThresholds struct {
 
 func newSeedThresholds(runtime config.RuntimeConfig) seedThresholds {
 	pending := time.Duration(
-		runtime.PendingPodMonitor().Threshold,
+		runtime.Monitors().PendingPod().Threshold,
 	) * time.Second
 	if pending <= 0 {
 		pending = defaultPendingPodThreshold
 	}
-	cluster := runtime.ClusterResourceMonitor()
+	cluster := runtime.Monitors().ClusterResource()
 	return seedThresholds{
 		namespaceSustainedMinutes: cluster.SustainedMinutes,
 		nodeLeaseStaleSeconds:     cluster.NodeLeaseStaleSeconds,
 		pendingPod:                pending,
 		notReady:                  policy.DefaultNotReadyThreshold,
-		pendingPodEnabled:         runtime.PendingPodMonitor().Enabled,
-		notReadyEnabled:           runtime.NotReadyMonitor().Enabled,
+		pendingPodEnabled:         runtime.Monitors().PendingPod().Enabled,
+		notReadyEnabled:           runtime.Monitors().NotReady().Enabled,
 	}
 }
 

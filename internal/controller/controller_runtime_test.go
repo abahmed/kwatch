@@ -15,6 +15,7 @@ import (
 	"k8s.io/client-go/tools/cache"
 	"k8s.io/client-go/util/workqueue"
 
+	"github.com/abahmed/kwatch/internal/clock"
 	"github.com/abahmed/kwatch/internal/config"
 	"github.com/abahmed/kwatch/internal/incident"
 )
@@ -158,6 +159,7 @@ func TestRunPodDeduplication(t *testing.T) {
 		podLister:  f.Core().V1().Pods().Lister(),
 	}
 	ctrl.pod = newResourcePipeline("pod", "pods")
+	ctrl.pod.now = clock.RealClock{}.Now
 	ctrl.pod.queue = q
 	ctrl.pod.syncFn = ctrl.syncPod
 
@@ -189,6 +191,7 @@ func TestMultipleWorkers(t *testing.T) {
 		podLister:  f.Core().V1().Pods().Lister(),
 	}
 	ctrl.pod = newResourcePipeline("pod", "pods")
+	ctrl.pod.now = clock.RealClock{}.Now
 	ctrl.pod.queue = q
 	ctrl.pod.syncFn = ctrl.syncPod
 

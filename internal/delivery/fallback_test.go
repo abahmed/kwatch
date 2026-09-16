@@ -20,12 +20,12 @@ func testRetryConfig(settings map[string]interface{}) retryConfig {
 	runtime := config.CompileRuntimeConfig(&config.Config{
 		Alert: map[string]map[string]interface{}{"test": settings},
 	})
-	providers := runtime.Providers()
+	providers := runtime.Delivery().Providers()
 	return retryConfigFromRuntime(providers[0].Retry)
 }
 
 func TestFallbackResolve(t *testing.T) {
-	am := Manager{}
+	am := *newTestManager()
 	initTestManager(&am, map[string]map[string]interface{}{
 		"slack": {
 			"webhook":  "test",
@@ -62,7 +62,7 @@ func TestFallbackResolve(t *testing.T) {
 }
 
 func TestFallbackResolveUnknown(t *testing.T) {
-	am := Manager{}
+	am := *newTestManager()
 	initTestManager(&am, map[string]map[string]interface{}{
 		"slack": {
 			"webhook":  "test",
@@ -109,7 +109,7 @@ func TestFallbackUsedOnExhaustion(t *testing.T) {
 	primary := &errorRecorderProvider{name: "Primary", err: nil}
 	fb := &errorRecorderProvider{name: "Fallback", err: nil}
 
-	am := Manager{}
+	am := *newTestManager()
 	setManagerEntries(&am, []providerEntry{
 		{
 			provider:     primary,
@@ -153,7 +153,7 @@ func TestFallbackMessageTruncatedToFallbackMaxBytes(t *testing.T) {
 	primary := &errorRecorderProvider{name: "Primary", err: nil}
 	fb := &errorRecorderProvider{name: "Fallback", err: nil}
 
-	am := Manager{}
+	am := *newTestManager()
 	setManagerEntries(&am, []providerEntry{
 		{
 			provider:     primary,
@@ -349,7 +349,7 @@ func TestSendWithRetryNormalizesEmptyConfig(t *testing.T) {
 
 func TestFlushDigestUsesEventDelivery(t *testing.T) {
 	provider := &eventFallbackProvider{}
-	am := Manager{}
+	am := *newTestManager()
 	entry := &providerEntry{
 		provider: provider,
 		retry: retryConfig{
@@ -369,7 +369,7 @@ func TestFlushDigestUsesEventDelivery(t *testing.T) {
 
 func TestFlushDigestRestoresAfterFailure(t *testing.T) {
 	provider := &errorRecorderProvider{name: "Digest", err: errors.New("failed")}
-	am := Manager{}
+	am := *newTestManager()
 	entry := &providerEntry{
 		provider: provider,
 		retry: retryConfig{

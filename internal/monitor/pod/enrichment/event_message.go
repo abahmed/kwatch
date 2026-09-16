@@ -14,7 +14,7 @@ func (enricher EventMessageEnricher) Enrich(ctx *Context) bool {
 	}
 	for _, ev := range *ctx.Events {
 		if filter.MatchesEventMessage(
-			ctx.Runtime.SuppressionIndex(),
+			ctx.Runtime.Scope().SuppressionIndex(),
 			ev.Message,
 		) {
 			return true

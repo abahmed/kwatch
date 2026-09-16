@@ -5,6 +5,7 @@ import (
 	"errors"
 	"testing"
 
+	"github.com/abahmed/kwatch/internal/clock"
 	"github.com/abahmed/kwatch/internal/config"
 	"github.com/abahmed/kwatch/internal/delivery"
 	"github.com/abahmed/kwatch/internal/health"
@@ -17,11 +18,15 @@ func TestWaitShutdownReturnsFailureForControllerError(t *testing.T) {
 	close(controllerDone)
 
 	deps := &serverDeps{
-		cancel:          cancel,
-		controllerDone:  controllerDone,
-		deliveryManager: delivery.NewManager(),
-		healthServer:    health.NewHealthServer(config.HealthCheck{}),
-		cleanup:         func() {},
+		cancel:         cancel,
+		controllerDone: controllerDone,
+		deliveryManager: delivery.NewManagerWithDependencies(
+			delivery.Dependencies{Clock: clock.RealClock{}},
+		),
+		healthServer: health.NewHealthServerWithClock(
+			config.HealthCheck{}, clock.RealClock{},
+		),
+		cleanup: func() {},
 	}
 	supervisor := newComponentSupervisor()
 	supervisor.errCh <- errors.New("cache sync failed")

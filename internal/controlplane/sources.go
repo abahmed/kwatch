@@ -26,8 +26,7 @@ func (m *Monitor) ConfigureSources(sources Sources) error {
 	}
 	m.configured = true
 	m.podLister = sources.PodLister
-	if sources.Resolver != nil {
-		m.resolver = sources.Resolver
-	}
+	// Assign nil explicitly so a reused monitor cannot retain a stale resolver.
+	m.resolver = sources.Resolver
 	return nil
 }

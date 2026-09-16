@@ -87,7 +87,8 @@ func (h *HealthServer) setComponentStatusLocked(
 		previous.Available != status.Available ||
 		previous.Reason != status.Reason
 	if changed {
-		if status.State == "degraded" {
+		if status.State == "degraded" &&
+			(!exists || previous.State != "degraded") {
 			metrics.DefaultRegistry().ComponentDegradations.Add(1)
 		}
 		if h.clock != nil {

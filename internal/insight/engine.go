@@ -43,17 +43,6 @@ type Dependencies struct {
 	ActiveChecker func(kind, namespace, name string) bool
 }
 
-// SetActiveChecker supplies the incident engine's live incident view. The
-// callback is deliberately narrow so insight does not depend on lifecycle
-// ownership.
-func (e *Engine) SetActiveChecker(checker func(kind, namespace, name string) bool) {
-	e.activeChecker = checker
-}
-
-func (e *Engine) SetFeedbackStore(store *FeedbackStore) {
-	e.feedback = store
-}
-
 func (e *Engine) ObserveOutcome(inc *model.Incident, action model.IncidentAction, pattern string) {
 	if e.feedback != nil {
 		e.feedback.Observe(inc, action, pattern)
@@ -66,9 +55,7 @@ func NewEngineWithClock(
 	tracker *context.ChangeTracker,
 	timeSource clock.Clock,
 ) *Engine {
-	if timeSource == nil {
-		timeSource = clock.RealClock{}
-	}
+	timeSource = clock.Require(timeSource)
 	return &Engine{
 		graph: graph, tracker: tracker, now: timeSource.Now,
 	}
@@ -81,9 +68,7 @@ func NewEngineWithDependencies(
 	tracker *context.ChangeTracker,
 	dependencies Dependencies,
 ) *Engine {
-	if dependencies.Clock == nil {
-		dependencies.Clock = clock.RealClock{}
-	}
+	dependencies.Clock = clock.Require(dependencies.Clock)
 	return &Engine{
 		graph:         graph,
 		tracker:       tracker,

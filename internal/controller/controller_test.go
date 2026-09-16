@@ -27,7 +27,7 @@ func newTestController(
 	t.Helper()
 	ctrl, cleanup, err := NewWithRuntimeConfig(
 		client, config.RuntimeConfigFor(cfg), componentsFor(h),
-		clock.RealClock{}.Now,
+		RuntimeDependencies{Now: clock.RealClock{}.Now},
 	)
 	require.NoError(t, err)
 	return ctrl, cleanup

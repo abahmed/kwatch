@@ -175,9 +175,7 @@ type Engine struct {
 // Application composition must use this constructor so time-based decisions
 // do not depend on package-level wall-clock state.
 func NewEngineWithClock(cfg Config, runtimeClock clock.Clock) *Engine {
-	if runtimeClock == nil {
-		runtimeClock = clock.RealClock{}
-	}
+	runtimeClock = clock.Require(runtimeClock)
 	cfg.Now = runtimeClock.Now
 	return newEngine(cfg)
 }

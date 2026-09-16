@@ -62,9 +62,6 @@ type Manager struct {
 }
 
 func (a *Manager) nowTime() time.Time {
-	if a.now == nil {
-		return time.Time{}
-	}
 	return a.now()
 }
 
@@ -124,7 +121,14 @@ func (a *Manager) initRuntime(
 	activeContext := a.ctx
 	a.mu.Unlock()
 	if active {
-		a.shutdown()
+		reconfigureCtx, cancel := context.WithTimeout(
+			context.Background(), 10*time.Second,
+		)
+		if err := a.shutdownContext(reconfigureCtx); err != nil {
+			klog.ErrorS(err,
+				"delivery generation did not drain during reconfiguration")
+		}
+		cancel()
 	}
 	clusterName := runtime.Application().ClusterName
 	providerContext := transport.ProviderContext{
@@ -132,7 +136,7 @@ func (a *Manager) initRuntime(
 		Dependencies: a.providerDeps,
 	}
 
-	providers := runtime.Providers()
+	providers := runtime.Delivery().Providers()
 	entries := make([]providerEntry, 0, len(providers))
 	for _, provider := range providers {
 		lowerCaseKey := strings.ToLower(provider.Name)
@@ -208,8 +212,9 @@ func (a *Manager) initRuntime(
 	a.done = nil
 	a.mu.Unlock()
 	a.cfgMu.Lock()
-	a.silences = compileSilences(runtime.Silences())
-	a.templates = compileTemplates(runtime.Templates())
+	deliveryRuntime := runtime.Delivery()
+	a.silences = compileSilences(deliveryRuntime.Silences())
+	a.templates = compileTemplates(deliveryRuntime.Templates())
 	a.cfgMu.Unlock()
 	if active {
 		if err := a.Start(activeContext); err != nil {
@@ -225,6 +230,13 @@ func newProviderGeneration(entries []providerEntry) *providerGeneration {
 	}
 	for _, entry := range entries {
 		name := strings.ToLower(entry.provider.Name())
+		if _, exists := generation.entries[name]; exists {
+			klog.InfoS(
+				"duplicate provider entry ignored",
+				"provider", entry.provider.Name(),
+			)
+			continue
+		}
 		generation.entries[name] = entry
 		generation.order = append(generation.order, name)
 	}

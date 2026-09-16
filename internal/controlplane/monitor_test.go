@@ -1,6 +1,8 @@
 package controlplane
 
 import (
+	"context"
+	"fmt"
 	"testing"
 	"time"
 
@@ -12,6 +14,24 @@ import (
 	"github.com/abahmed/kwatch/internal/incident"
 	"github.com/abahmed/kwatch/internal/model"
 )
+
+type testResolver struct{}
+
+func (testResolver) LookupHost(
+	_ context.Context, _ string,
+) ([]string, error) {
+	return nil, fmt.Errorf("not implemented")
+}
+
+func TestConfigureSourcesClearsUnavailableResolver(t *testing.T) {
+	monitor := &Monitor{resolver: testResolver{}}
+	if err := monitor.ConfigureSources(Sources{}); err != nil {
+		t.Fatalf("ConfigureSources() error = %v", err)
+	}
+	if monitor.resolver != nil {
+		t.Fatal("ConfigureSources retained a stale resolver")
+	}
+}
 
 func TestControlPlaneState(t *testing.T) {
 	checked := time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)

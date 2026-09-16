@@ -124,8 +124,8 @@ func (r *PDBRuntime) processPDBObject(
 	}
 	first := r.first.mark(key, r.support.now())
 	sustained := adaptiveSustained(
-		r.support.runtime.PdbMonitor().SustainedMinutes,
-		r.support.runtime.AdaptiveThresholds(),
+		r.support.runtime.Monitors().PDB().SustainedMinutes,
+		r.support.runtime.Monitors().AdaptiveThresholds(),
 		pdb.Status.DesiredHealthy,
 		pdb.Status.DesiredHealthy-pdb.Status.CurrentHealthy,
 	)

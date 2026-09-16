@@ -32,7 +32,7 @@ func applyStartupConfig(
 	dynamicClient dynamic.Interface,
 	namespace string,
 ) error {
-	if !config.RuntimeConfigFor(cfg).CrdConfig().Enabled {
+	if !config.RuntimeConfigFor(cfg).Monitors().CRD().Enabled {
 		return nil
 	}
 	dc := dynamicClient

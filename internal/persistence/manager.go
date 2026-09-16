@@ -14,7 +14,6 @@ import (
 	"k8s.io/klog/v2"
 
 	"github.com/abahmed/kwatch/internal/clock"
-	"github.com/abahmed/kwatch/internal/metrics"
 )
 
 const (
@@ -68,7 +67,7 @@ type Manager struct {
 	telemetryMgr    *RetryConfigMapManager // kwatch-telemetry
 	now             func() time.Time
 	migrationMu     sync.RWMutex
-	migrationReport []MigrationResult
+	migrationReport MigrationReport
 }
 
 // NewManagerWithClock constructs the persistence manager with an explicit
@@ -78,9 +77,7 @@ func NewManagerWithClock(
 	namespace string,
 	timeSource clock.Clock,
 ) *Manager {
-	if timeSource == nil {
-		timeSource = clock.RealClock{}
-	}
+	timeSource = clock.Require(timeSource)
 	return &Manager{
 		client:    client,
 		namespace: namespace,
@@ -319,40 +316,6 @@ func migrateStateData(data map[string]string) MigrationResult {
 		result.Detail = "upgraded state schema"
 	}
 	return result
-}
-
-// MigrationReport returns all migration outcomes recorded for the current
-// startup cycle. The returned slice is independent of manager state.
-func (s *Manager) MigrationReport() []MigrationResult {
-	s.migrationMu.RLock()
-	defer s.migrationMu.RUnlock()
-	return append([]MigrationResult(nil), s.migrationReport...)
-}
-
-func (s *Manager) resetMigrationReport() {
-	s.migrationMu.Lock()
-	s.migrationReport = nil
-	s.migrationMu.Unlock()
-}
-
-func (s *Manager) recordMigrationResult(
-	result MigrationResult,
-	err error,
-) {
-	if err != nil {
-		result.Status = MigrationFailed
-		if result.Detail == "" {
-			result.Detail = "migration operation failed"
-		}
-	}
-	s.migrationMu.Lock()
-	s.migrationReport = append(s.migrationReport, result)
-	s.migrationMu.Unlock()
-	metrics.DefaultRegistry().PersistenceMigrations.Add(1)
-	if result.Status == MigrationFailed ||
-		result.Status == MigrationUnsupported {
-		metrics.DefaultRegistry().PersistenceMigrationErr.Add(1)
-	}
 }
 
 // Helpers for ConfigMap lifecycle and metadata.

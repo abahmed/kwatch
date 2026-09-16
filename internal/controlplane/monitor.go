@@ -56,9 +56,7 @@ func NewWithRESTDependencies(
 	resolver HostResolver,
 	timeSource clock.Clock,
 ) *Monitor {
-	if timeSource == nil {
-		timeSource = clock.RealClock{}
-	}
+	timeSource = clock.Require(timeSource)
 	return &Monitor{
 		client:       client,
 		restClient:   restClient,

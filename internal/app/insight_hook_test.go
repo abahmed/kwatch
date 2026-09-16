@@ -36,7 +36,10 @@ func TestLifecycleHookAttachesDiagnosis(t *testing.T) {
 	}
 	var calls []call
 	opts := &engineOptions{
-		auditLogger: audit.NewLogger(audit.Config{Enabled: false}),
+		auditLogger: audit.NewLogger(audit.Config{
+			Enabled: false,
+			Now:     clock.RealClock{}.Now,
+		}),
 		insightEngine: insight.NewEngineWithClock(
 			graph, nil, clock.RealClock{},
 		),

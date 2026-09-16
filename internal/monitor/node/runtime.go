@@ -145,7 +145,7 @@ func (r *Runtime) emit(
 	node *corev1.Node, condition corev1.NodeCondition, reason string,
 ) {
 	if r.runtime.Compiled() {
-		index := r.runtime.SuppressionIndex()
+		index := r.runtime.Scope().SuppressionIndex()
 		if filter.MatchesNodeReason(index, condition.Reason) ||
 			filter.MatchesNodeMessage(index, condition.Message) {
 			klog.V(4).InfoS(
@@ -181,8 +181,8 @@ func (r *Runtime) process(obs *model.Observation) {
 	if obs == nil || r.sink == nil {
 		return
 	}
-	obs.IncludeEvents = r.runtime.IncludeEvents()
-	obs.IncludeLogs = r.runtime.IncludeLogs()
+	obs.IncludeEvents = r.runtime.Monitors().IncludeEvents()
+	obs.IncludeLogs = r.runtime.Monitors().IncludeLogs()
 	r.sink.Process(obs)
 }
 
@@ -200,14 +200,11 @@ func (r *Runtime) nowTime() time.Time {
 	r.mu.Lock()
 	now := r.now
 	r.mu.Unlock()
-	if now == nil {
-		return time.Time{}
-	}
 	return now()
 }
 
 func (r *Runtime) sustainedMinutes() int {
-	return r.runtime.NodeMonitor().SustainedMinutes
+	return r.runtime.Monitors().Node().SustainedMinutes
 }
 
 func (r *Runtime) mark(key string, now time.Time) time.Time {

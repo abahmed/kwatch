@@ -86,9 +86,7 @@ func NewChangeTrackerWithClock(
 	if capacity <= 0 {
 		capacity = defaultTrackedChanges
 	}
-	if timeSource == nil {
-		timeSource = clock.RealClock{}
-	}
+	timeSource = clock.Require(timeSource)
 	return &ChangeTracker{
 		buffer: make([]Change, capacity),
 		now:    timeSource.Now,
@@ -106,10 +104,7 @@ func (t *ChangeTracker) Record(c Change) {
 }
 
 func (t *ChangeTracker) RecentChangesBefore(age time.Duration) []Change {
-	if t.now != nil {
-		return t.RecentChangesBeforeAt(age, t.now())
-	}
-	return t.RecentChangesBeforeAt(age, time.Time{})
+	return t.RecentChangesBeforeAt(age, t.now())
 }
 
 func (t *ChangeTracker) RecentChangesBeforeAt(

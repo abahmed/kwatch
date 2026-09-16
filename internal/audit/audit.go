@@ -10,6 +10,7 @@ import (
 
 	"k8s.io/klog/v2"
 
+	"github.com/abahmed/kwatch/internal/clock"
 	"github.com/abahmed/kwatch/internal/model"
 )
 
@@ -52,9 +53,7 @@ type AuditLogger struct {
 
 func NewLogger(cfg Config) *AuditLogger {
 	now := cfg.Now
-	if now == nil {
-		now = func() time.Time { return time.Time{} }
-	}
+	now = clock.RequireFunc(now)
 	l := &AuditLogger{cfg: cfg, now: now}
 	if !cfg.Enabled {
 		return l

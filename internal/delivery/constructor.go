@@ -14,17 +14,9 @@ type Dependencies struct {
 	Clock      clock.Clock
 }
 
-// NewManager creates an empty delivery manager for isolated tests.
-func NewManager() *Manager {
-	return NewManagerWithDependencies(Dependencies{})
-}
-
 // NewManagerWithDependencies constructs delivery with explicit dependencies.
 func NewManagerWithDependencies(deps Dependencies) *Manager {
-	now := deps.Clock
-	if now == nil {
-		now = clock.RealClock{}
-	}
+	now := clock.Require(deps.Clock)
 	return &Manager{
 		providerDeps: transport.Dependencies{
 			HTTPClient: deps.HTTPClient,

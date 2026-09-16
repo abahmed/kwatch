@@ -17,13 +17,13 @@ func BuildPodDetectorsWithRuntimeConfig(
 		policy.PodNameRule{},
 		policy.PodStatusRule{},
 	}
-	if runtime.Maintenance().Enabled {
+	if runtime.Monitors().Maintenance().Enabled {
 		detectors = append(detectors, policy.MaintenanceRule{})
 	}
 
-	if runtime.PendingPodMonitor().Enabled {
+	if runtime.Monitors().PendingPod().Enabled {
 		threshold := time.Duration(
-			runtime.PendingPodMonitor().Threshold,
+			runtime.Monitors().PendingPod().Threshold,
 		) * time.Second
 		if threshold <= 0 {
 			threshold = 300 * time.Second
@@ -34,7 +34,7 @@ func BuildPodDetectorsWithRuntimeConfig(
 		)
 	}
 
-	if runtime.NotReadyMonitor().Enabled {
+	if runtime.Monitors().NotReady().Enabled {
 		detectors = append(
 			detectors,
 			policy.NotReadyRule{
@@ -43,7 +43,7 @@ func BuildPodDetectorsWithRuntimeConfig(
 		)
 	}
 
-	if runtime.IgnoreDisruptionTerminations() {
+	if runtime.Monitors().IgnoreDisruptions() {
 		detectors = prependDisruptionRule(detectors)
 	}
 	return detectors
@@ -73,11 +73,11 @@ func BuildContainerDetectorsWithRuntimeConfig(
 		policy.NoiseRule{},
 		policy.ContainerMessageRule{},
 	}
-	if runtime.Maintenance().Enabled {
+	if runtime.Monitors().Maintenance().Enabled {
 		detectors = append(detectors, policy.MaintenanceRule{})
 	}
 
-	if runtime.IgnoreDisruptionTerminations() {
+	if runtime.Monitors().IgnoreDisruptions() {
 		detectors = prependDisruptionRule(detectors)
 	}
 	return detectors

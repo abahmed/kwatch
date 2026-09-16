@@ -8,6 +8,7 @@ import (
 
 	"k8s.io/klog/v2"
 
+	"github.com/abahmed/kwatch/internal/clock"
 	"github.com/abahmed/kwatch/internal/constant"
 	"github.com/abahmed/kwatch/internal/delivery/transport"
 	"github.com/abahmed/kwatch/internal/event"
@@ -24,6 +25,7 @@ type Mattermost struct {
 
 	// reference for general app configuration
 	clusterName string
+	clockSource clock.Clock
 }
 
 type mmField struct {
@@ -67,6 +69,7 @@ func NewMattermost(
 		title:       title,
 		text:        text,
 		clusterName: clusterName,
+		clockSource: clock.Require(dependencies.Clock),
 	}
 }
 
@@ -132,6 +135,7 @@ func (m *Mattermost) SendIncidentWithInsight(
 		ins,
 		message.NewPlainTextRenderer(),
 		m.clusterName,
+		m.clockSource,
 	)
 	if text == "" {
 		return nil

@@ -29,28 +29,30 @@ func TestCompileRuntimeConfigCopiesDerivedValues(t *testing.T) {
 	}
 
 	runtime := CompileRuntimeConfig(cfg)
-	allowed := runtime.AllowedNamespaces()
-	providers := runtime.ProviderNames()
+	allowed := runtime.Scope().AllowedNamespaces()
+	providers := runtime.Delivery().ProviderNames()
 	allowed[0] = "changed"
 	providers[0] = "changed"
 
-	require.Equal(t, []string{"team-a"}, runtime.AllowedNamespaces())
-	require.Equal(t, []string{"Slack"}, runtime.ProviderNames())
-	require.Equal(t, []string{"Evicted"}, runtime.ForbiddenReasons())
-	require.Equal(t, 17*time.Second, runtime.ResyncInterval())
-	require.Equal(t, 3, runtime.Workers())
-	require.Equal(t, "team=platform", runtime.NamespaceSelector())
-	require.Equal(t, 42, runtime.MaxBaseline())
-	require.True(t, runtime.NodeMonitor().Enabled)
-	templates := runtime.Templates()
-	runbooks := runtime.Runbooks()
-	silences := runtime.Silences()
+	require.Equal(t, []string{"team-a"}, runtime.Scope().AllowedNamespaces())
+	require.Equal(t, []string{"Slack"}, runtime.Delivery().ProviderNames())
+	require.Equal(t, []string{"Evicted"}, runtime.Scope().ForbiddenReasons())
+	require.Equal(t, 17*time.Second, runtime.Lifecycle().ResyncInterval())
+	require.Equal(t, 3, runtime.Lifecycle().Workers())
+	require.Equal(t, "team=platform", runtime.Scope().NamespaceSelector())
+	require.Equal(t, 42, runtime.Persistence().MaxBaseline())
+	require.True(t, runtime.Monitors().Node().Enabled)
+	templates := runtime.Delivery().Templates()
+	runbooks := runtime.Delivery().Runbooks()
+	silences := runtime.Delivery().Silences()
 	templates["warning"] = "changed"
 	runbooks["CrashLoopBackOff"] = "changed"
 	silences[0].Namespaces[0] = "changed"
-	require.Equal(t, "{{.Message}}", runtime.Templates()["warning"])
-	require.Equal(t, "https://runbook", runtime.Runbooks()["CrashLoopBackOff"])
-	require.Equal(t, "team-a", runtime.Silences()[0].Namespaces[0])
+	require.Equal(t, "{{.Message}}", runtime.Delivery().Templates()["warning"])
+	require.Equal(
+		t, "https://runbook", runtime.Delivery().Runbooks()["CrashLoopBackOff"],
+	)
+	require.Equal(t, "team-a", runtime.Delivery().Silences()[0].Namespaces[0])
 }
 
 func TestCompileRuntimeConfigCopiesProviderTemplates(t *testing.T) {
@@ -63,11 +65,11 @@ func TestCompileRuntimeConfigCopiesProviderTemplates(t *testing.T) {
 	}}
 
 	runtime := CompileRuntimeConfig(cfg)
-	providers := runtime.Providers()
+	providers := runtime.Delivery().Providers()
 	require.Len(t, providers, 1)
 	providers[0].Templates["warning"] = "changed"
 
-	actual := runtime.Providers()
+	actual := runtime.Delivery().Providers()
 	require.Equal(t, "{{.Message}}", actual[0].Templates["warning"])
 }
 
@@ -84,11 +86,11 @@ func TestCompileRuntimeConfigCapturesSharedOutputPolicy(t *testing.T) {
 
 	runtime := CompileRuntimeConfig(cfg)
 
-	require.False(t, runtime.IncludeEvents())
-	require.True(t, runtime.IncludeLogs())
-	require.Equal(t, "ops", runtime.Maintenance().Annotation)
-	require.Equal(t, int64(25), runtime.MaxRecentLogLines())
-	require.True(t, runtime.ReportStartupBaseline())
+	require.False(t, runtime.Monitors().IncludeEvents())
+	require.True(t, runtime.Monitors().IncludeLogs())
+	require.Equal(t, "ops", runtime.Monitors().Maintenance().Annotation)
+	require.Equal(t, int64(25), runtime.Monitors().MaxRecentLogLines())
+	require.True(t, runtime.Monitors().ReportStartup())
 }
 
 func TestCompileRuntimeConfigCopiesIntegrationPolicies(t *testing.T) {
@@ -112,21 +114,21 @@ func TestCompileRuntimeConfigCopiesIntegrationPolicies(t *testing.T) {
 	}
 
 	runtime := CompileRuntimeConfig(cfg)
-	probe := runtime.ActiveProbeMonitor()
-	conditions := runtime.CrdConfig()
+	probe := runtime.Monitors().ActiveProbe()
+	conditions := runtime.Monitors().CRD()
 	probe.HTTP[0].URL = "changed"
 	probe.ExcludeNamespaces[0] = "changed"
 	conditions.FailureConditions[0] = "changed"
 
-	require.True(t, runtime.PvcMonitor().Enabled)
-	require.Equal(t, "https://hb", runtime.HeartbeatMonitor().URL)
-	require.True(t, runtime.RuntimeMetricsMonitor().Enabled)
-	require.True(t, runtime.KubeletTelemetryMonitor().PersistState)
-	require.Equal(t, "https://api", runtime.ActiveProbeMonitor().HTTP[0].URL)
+	require.True(t, runtime.Monitors().PVC().Enabled)
+	require.Equal(t, "https://hb", runtime.Monitors().Heartbeat().URL)
+	require.True(t, runtime.Monitors().Metrics().Enabled)
+	require.True(t, runtime.Monitors().KubeletTelemetry().PersistState)
+	require.Equal(t, "https://api", runtime.Monitors().ActiveProbe().HTTP[0].URL)
 	require.Equal(t, []string{"noisy"},
-		runtime.ActiveProbeMonitor().ExcludeNamespaces)
+		runtime.Monitors().ActiveProbe().ExcludeNamespaces)
 	require.Equal(t, []string{"Ready=False"},
-		runtime.CrdConfig().FailureConditions)
+		runtime.Monitors().CRD().FailureConditions)
 }
 
 func TestRuntimeConfigForCompilesDirectConfigurationWithoutMutation(
@@ -142,10 +144,10 @@ func TestRuntimeConfigForCompilesDirectConfigurationWithoutMutation(
 
 	runtime := RuntimeConfigFor(cfg)
 
-	require.False(t, runtime.IncludeEvents())
-	require.Equal(t, []string{"team-a"}, runtime.AllowedNamespaces())
-	require.Equal(t, []string{"Webhook"}, runtime.ProviderNames())
-	require.Equal(t, 9*time.Second, runtime.ResyncInterval())
+	require.False(t, runtime.Monitors().IncludeEvents())
+	require.Equal(t, []string{"team-a"}, runtime.Scope().AllowedNamespaces())
+	require.Equal(t, []string{"Webhook"}, runtime.Delivery().ProviderNames())
+	require.Equal(t, 9*time.Second, runtime.Lifecycle().ResyncInterval())
 	require.False(t, cfg.Runtime.Compiled())
 }
 
@@ -166,7 +168,7 @@ func TestRuntimeConfigCompilesProviderDeliveryPolicy(t *testing.T) {
 		},
 	}}
 
-	providers := CompileRuntimeConfig(cfg).Providers()
+	providers := CompileRuntimeConfig(cfg).Delivery().Providers()
 	require.Len(t, providers, 1)
 	require.Equal(t, "Webhook", providers[0].Name)
 	require.Equal(t, "Slack", providers[0].FallbackName)
@@ -177,7 +179,7 @@ func TestRuntimeConfigCompilesProviderDeliveryPolicy(t *testing.T) {
 
 	providers[0].Settings["url"] = "changed"
 	providers[0].Routes[0].Namespaces[0] = "changed"
-	fresh := CompileRuntimeConfig(cfg).Providers()
+	fresh := CompileRuntimeConfig(cfg).Delivery().Providers()
 	require.Equal(t, "https://example.test/hook", fresh[0].Settings["url"])
 	require.Equal(t, []string{"ops"}, fresh[0].Routes[0].Namespaces)
 }
@@ -204,8 +206,8 @@ func TestRuntimeConfigCopiesIncidentPolicies(t *testing.T) {
 	incident := runtime.Incident()
 	incident.EscalationTiers[0] = 99
 	incident.RenotifyIntervalBySeverity["high"] = time.Hour
-	owners := runtime.SeverityByOwnerKind()
-	reasons := runtime.SeverityByReason()
+	owners := runtime.Incident().SeverityByOwnerKind()
+	reasons := runtime.Incident().SeverityByReason()
 	owners["Deployment"] = "low"
 	reasons["Evicted"] = "high"
 
@@ -214,7 +216,9 @@ func TestRuntimeConfigCopiesIncidentPolicies(t *testing.T) {
 		t, 5*time.Minute,
 		runtime.Incident().RenotifyIntervalBySeverity["high"],
 	)
-	require.Equal(t, "high", runtime.SeverityByOwnerKind()["Deployment"])
-	require.Equal(t, "normal", runtime.SeverityByReason()["Evicted"])
-	require.Equal(t, start, runtime.WatchStartTime())
+	require.Equal(
+		t, "high", runtime.Incident().SeverityByOwnerKind()["Deployment"],
+	)
+	require.Equal(t, "normal", runtime.Incident().SeverityByReason()["Evicted"])
+	require.Equal(t, start, runtime.Lifecycle().WatchStartTime())
 }

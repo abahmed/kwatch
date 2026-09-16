@@ -5,7 +5,6 @@ import (
 
 	"github.com/abahmed/kwatch/internal/config"
 	"github.com/abahmed/kwatch/internal/controller"
-	kwcontext "github.com/abahmed/kwatch/internal/graphcontext"
 	"github.com/abahmed/kwatch/internal/incident"
 	"github.com/abahmed/kwatch/internal/k8s"
 	"github.com/abahmed/kwatch/internal/pvc"
@@ -20,8 +19,7 @@ func configureControllerRuntime(
 	persist persistenceSetup,
 	incidentEngine *incident.Engine,
 	pvcMonitor *pvc.PvcMonitor,
-	graph *kwcontext.ResourceGraph,
-) <-chan struct{} {
+) {
 	namespaces, watchAll := ctl.NamespaceScope()
 	if err := boot.securityMonitor.ConfigureSources(rbac.Sources{
 		Namespaces: namespaces, AllNamespaces: watchAll,
@@ -30,8 +28,9 @@ func configureControllerRuntime(
 		boot.healthServer.SetComponentError("rbac", err)
 	}
 	if err := pvcMonitor.ConfigureSources(pvc.Sources{
-		Allowed: namespaces, Forbidden: runtime.ForbiddenNamespaces(),
-		WatchAll: watchAll, NamespaceAllowed: ctl.NamespaceAllowed,
+		Allowed:   namespaces,
+		Forbidden: runtime.Scope().ForbiddenNamespaces(),
+		WatchAll:  watchAll, NamespaceAllowed: ctl.NamespaceAllowed,
 	}); err != nil {
 		boot.healthServer.SetComponentError("pvc", err)
 	}
@@ -50,23 +49,4 @@ func configureControllerRuntime(
 		)
 		restoreEngineState(ctx, boot.persistence, incidentEngine)
 	}
-	ctl.SetTracker(persist.tracker)
-	ctl.SetGraph(graph)
-	initialized := make(chan struct{})
-	ctl.SetReadyFunc(func() {
-		status := ctl.InformerStatus()
-		if len(status.UnavailableSources) > 0 {
-			boot.healthServer.SetComponentStatus(
-				"informer", "degraded", "source_not_configured", false,
-			)
-			boot.healthServer.SetReady(false)
-			return
-		}
-		boot.healthServer.SetComponentStatus(
-			"informer", "running", "", true,
-		)
-		boot.healthServer.SetReady(true)
-		close(initialized)
-	})
-	return initialized
 }

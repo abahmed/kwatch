@@ -1,6 +1,7 @@
 package networkgraph
 
 import (
+	"strings"
 	"testing"
 
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
@@ -8,6 +9,14 @@ import (
 
 	kwcontext "github.com/abahmed/kwatch/internal/graphcontext"
 )
+
+func TestConfigureSourcesRejectsChangesAfterStart(t *testing.T) {
+	monitor := &Monitor{started: true}
+	err := monitor.ConfigureSources(Sources{Namespaces: []string{"apps"}})
+	if err == nil || !strings.Contains(err.Error(), "after start") {
+		t.Fatalf("ConfigureSources error = %v, want started error", err)
+	}
+}
 
 func TestRebuildHTTPRouteLinksGatewayAndService(t *testing.T) {
 	graph := kwcontext.NewResourceGraph()

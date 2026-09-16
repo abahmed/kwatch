@@ -116,9 +116,7 @@ func NewWithRuntimeConfig(
 	runtime config.RuntimeConfig,
 	timeSource clock.Clock,
 ) *Monitor {
-	if timeSource == nil {
-		timeSource = clock.RealClock{}
-	}
+	timeSource = clock.Require(timeSource)
 	return newConfiguredMonitor(client, runtime, timeSource.Now, false)
 }
 
@@ -144,10 +142,7 @@ func newConfiguredMonitor(
 }
 
 func (m *Monitor) nowTime() time.Time {
-	if m.now != nil {
-		return m.now()
-	}
-	return time.Time{}
+	return m.now()
 }
 
 func (m *Monitor) check(ctx context.Context) {

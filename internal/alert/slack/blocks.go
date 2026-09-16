@@ -3,6 +3,7 @@ package slack
 import (
 	"strings"
 
+	"github.com/abahmed/kwatch/internal/clock"
 	"github.com/abahmed/kwatch/internal/constant"
 	"github.com/abahmed/kwatch/internal/insight"
 	"github.com/abahmed/kwatch/internal/message"
@@ -14,16 +15,20 @@ import (
 func buildIncidentBlocks(
 	inc *model.Incident,
 	clusterName string,
+	timeSource clock.Clock,
 ) *slackClient.Blocks {
-	return buildIncidentBlocksWithInsight(inc, clusterName, nil)
+	return buildIncidentBlocksWithInsight(
+		inc, clusterName, nil, timeSource,
+	)
 }
 
 func buildIncidentBlocksWithInsight(
 	inc *model.Incident,
 	clusterName string,
 	ins *insight.Insight,
+	timeSource clock.Clock,
 ) *slackClient.Blocks {
-	r := reportFor(inc, model.ActionCreate, ins, clusterName)
+	r := reportFor(inc, model.ActionCreate, ins, clusterName, timeSource)
 
 	blocks := []slackClient.Block{markdownSection(headline(r))}
 
@@ -73,15 +78,19 @@ func buildIncidentBlocksWithInsight(
 	}
 }
 
-func buildIncidentUpdateBlocks(inc *model.Incident) *slackClient.Blocks {
-	return buildIncidentUpdateBlocksWithInsight(inc, nil)
+func buildIncidentUpdateBlocks(
+	inc *model.Incident,
+	timeSource clock.Clock,
+) *slackClient.Blocks {
+	return buildIncidentUpdateBlocksWithInsight(inc, nil, timeSource)
 }
 
 func buildIncidentUpdateBlocksWithInsight(
 	inc *model.Incident,
 	ins *insight.Insight,
+	timeSource clock.Clock,
 ) *slackClient.Blocks {
-	r := reportFor(inc, model.ActionUpdate, ins, "")
+	r := reportFor(inc, model.ActionUpdate, ins, "", timeSource)
 
 	// Updates land in the thread under the original alert, so they carry only
 	// what moved: the headline, the current state, and the meta strip — as a
@@ -126,8 +135,11 @@ func buildIncidentUpdateBlocksWithInsight(
 // resolved emoji the report carries, and pluralised the peak count as "pods"
 // for node and volume incidents too. There is one resolved message now, and
 // Slack only decides which container it goes in.
-func buildIncidentResolvedBlocks(inc *model.Incident) *slackClient.Blocks {
-	r := reportFor(inc, model.ActionResolved, nil, "")
+func buildIncidentResolvedBlocks(
+	inc *model.Incident,
+	timeSource clock.Clock,
+) *slackClient.Blocks {
+	r := reportFor(inc, model.ActionResolved, nil, "", timeSource)
 	text := message.NewSlackRenderer().RenderResolved(r)
 	return &slackClient.Blocks{
 		BlockSet: []slackClient.Block{

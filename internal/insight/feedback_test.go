@@ -9,7 +9,7 @@ import (
 )
 
 func TestFeedbackRequiresObservationsBeforeBias(t *testing.T) {
-	store := NewFeedbackStore()
+	store := NewFeedbackStoreWithClock(clock.RealClock{})
 	inc := &model.Incident{Subject: model.Subject{Key: "pod/prod/api|crash", Reason: "CrashLoopBackOff"}}
 	for i := 0; i < 2; i++ {
 		store.Observe(inc, model.ActionCreate, "rollout")

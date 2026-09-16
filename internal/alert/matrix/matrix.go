@@ -9,6 +9,7 @@ import (
 
 	"k8s.io/klog/v2"
 
+	"github.com/abahmed/kwatch/internal/clock"
 	"github.com/abahmed/kwatch/internal/delivery/transport"
 	"github.com/abahmed/kwatch/internal/event"
 	"github.com/abahmed/kwatch/internal/insight"
@@ -28,6 +29,7 @@ type Matrix struct {
 
 	// reference for general app configuration
 	clusterName string
+	clockSource clock.Clock
 }
 
 // NewMatrix returns new Matrix instance
@@ -66,6 +68,7 @@ func NewMatrix(
 		title:          title,
 		text:           text,
 		clusterName:    clusterName,
+		clockSource:    clock.Require(dependencies.Clock),
 	}
 }
 
@@ -103,6 +106,7 @@ func (m *Matrix) SendIncidentWithInsight(
 		ins,
 		message.NewPlainTextRenderer(),
 		m.clusterName,
+		m.clockSource,
 	)
 	if text == "" {
 		return nil

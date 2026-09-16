@@ -40,6 +40,7 @@ type Watcher struct {
 	skippedGVR  []schema.GroupVersionResource
 	unavailable map[string]bool
 	cancel      context.CancelFunc
+	done        chan struct{}
 	started     bool
 	generation  uint64
 }
@@ -51,6 +52,7 @@ type Generation struct {
 	number    uint64
 	informers []cache.SharedIndexInformer
 	cancel    context.CancelFunc
+	done      <-chan struct{}
 }
 
 // Valid reports whether the handle refers to a started watcher generation.
@@ -104,6 +106,7 @@ func (w *Watcher) StartGeneration(
 	w.mu.Unlock()
 	runCtx, cancel := context.WithCancel(ctx)
 	started := false
+	done := make(chan struct{})
 	defer func() {
 		if !started {
 			cancel()
@@ -145,6 +148,7 @@ func (w *Watcher) StartGeneration(
 	w.informers = informers
 	w.skippedGVR = skipped
 	w.cancel = cancel
+	w.done = done
 	w.started = true
 	w.generation++
 	generation := w.generation
@@ -162,7 +166,7 @@ func (w *Watcher) StartGeneration(
 	return Generation{
 		watcher: w, number: generation,
 		informers: append([]cache.SharedIndexInformer(nil), informers...),
-		cancel:    cancel,
+		cancel:    cancel, done: done,
 	}, nil
 }
 
@@ -194,6 +198,23 @@ func (g Generation) WaitForCacheSync(ctx context.Context) bool {
 	return waitForInformers(ctx, g.informers)
 }
 
+// Wait reports whether this generation has stopped before ctx expires. It is
+// a lifecycle signal and is safe for repeated callers.
+func (g Generation) Wait(ctx context.Context) bool {
+	if !g.Valid() || g.done == nil {
+		return true
+	}
+	if ctx == nil {
+		ctx = context.Background()
+	}
+	select {
+	case <-g.done:
+		return true
+	case <-ctx.Done():
+		return false
+	}
+}
+
 func (w *Watcher) clearStarted(ctx context.Context, generation uint64) {
 	<-ctx.Done()
 	w.mu.Lock()
@@ -213,7 +234,7 @@ func (w *Watcher) Stop() {
 	generation := Generation{
 		watcher: w, number: w.generation,
 		informers: append([]cache.SharedIndexInformer(nil), w.informers...),
-		cancel:    w.cancel,
+		cancel:    w.cancel, done: w.done,
 	}
 	w.mu.Unlock()
 	w.stopGeneration(generation)
@@ -260,13 +281,20 @@ func (w *Watcher) currentGeneration() Generation {
 	return Generation{
 		watcher: w, number: w.generation,
 		informers: append([]cache.SharedIndexInformer(nil), w.informers...),
-		cancel:    w.cancel,
+		cancel:    w.cancel, done: w.done,
 	}
 }
 
 func (w *Watcher) clearStateLocked() {
+	if !w.started {
+		return
+	}
 	w.started = false
 	w.cancel = nil
+	if w.done != nil {
+		close(w.done)
+	}
+	w.done = nil
 	w.factories = nil
 	w.informers = nil
 	w.skippedGVR = nil

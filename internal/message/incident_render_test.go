@@ -4,6 +4,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/abahmed/kwatch/internal/clock"
 	"github.com/abahmed/kwatch/internal/model"
 )
 
@@ -11,6 +12,7 @@ func TestRenderIncidentSkipsSuppressedAction(t *testing.T) {
 	inc := &model.Incident{Subject: model.Subject{Key: "pod:test"}}
 	if got := RenderIncident(
 		inc, model.ActionSkip, NewPlainTextRenderer(), "cluster",
+		clock.RealClock{},
 	); got != "" {
 		t.Fatalf("RenderIncident() = %q, want empty", got)
 	}
@@ -23,6 +25,7 @@ func TestRenderIncidentIncludesReason(t *testing.T) {
 	}}
 	got := RenderIncident(
 		inc, model.ActionCreate, NewPlainTextRenderer(), "cluster",
+		clock.RealClock{},
 	)
 	if !strings.Contains(got, "OOMKilled") {
 		t.Fatalf("rendered incident %q does not contain reason", got)

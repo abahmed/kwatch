@@ -8,6 +8,24 @@ type Clock interface {
 	Now() time.Time
 }
 
+// Require rejects an omitted clock at a canonical construction boundary.
+// The application owns the real clock; domain packages must not silently
+// create one when a dependency is missing.
+func Require(source Clock) Clock {
+	if source == nil {
+		panic("clock dependency is required")
+	}
+	return source
+}
+
+// RequireFunc adapts the same fail-fast rule for internal function seams.
+func RequireFunc(now func() time.Time) func() time.Time {
+	if now == nil {
+		panic("clock function is required")
+	}
+	return now
+}
+
 // Func adapts a function to Clock for existing composition code.
 type Func func() time.Time
 

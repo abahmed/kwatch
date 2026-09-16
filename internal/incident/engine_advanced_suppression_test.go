@@ -322,14 +322,18 @@ func TestBuildImageSummaryEmptyImage(t *testing.T) {
 }
 
 func TestSetSeverityMap(t *testing.T) {
+	severity := map[string]string{"CrashLoopBackOff": "critical"}
 	e := newTestEngine(Config{
 		Window:   10 * time.Minute,
-		Enricher: &enricher.DefaultEnricher{},
+		Enricher: &enricher.DefaultEnricher{SeverityByReason: severity},
 	})
-	sm := map[string]string{"CrashLoopBackOff": "critical"}
-	e.SetSeverityMap(sm)
+	if e.config.Enricher == nil {
+		t.Fatal("expected configured enricher")
+	}
 
 	// Engine with non-DefaultEnricher should not panic
 	e2 := newTestEngine(Config{Window: 10 * time.Minute})
-	e2.SetSeverityMap(sm)
+	if e2.config.Enricher == nil {
+		t.Fatal("expected default enricher")
+	}
 }
