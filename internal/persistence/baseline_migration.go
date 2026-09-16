@@ -23,6 +23,7 @@ const (
 // MigrationResult records an operator-useful migration outcome without
 // exposing persistence implementation details to startup code.
 type MigrationResult struct {
+	Store                 string          `json:"store"`
 	SourceFormat          string          `json:"sourceFormat"`
 	DestinationFormat     string          `json:"destinationFormat"`
 	Status                MigrationStatus `json:"status"`
@@ -45,6 +46,7 @@ func (s *Manager) migrateLegacyBaselineWithResult(
 	ctx context.Context,
 ) (MigrationResult, error) {
 	result := MigrationResult{
+		Store:                 "baseline",
 		SourceFormat:          "kwatch-state/baseline",
 		DestinationFormat:     "kwatch-baseline/baseline",
 		Status:                MigrationNotRequired,

@@ -12,33 +12,10 @@ import (
 	"k8s.io/client-go/kubernetes"
 
 	"github.com/abahmed/kwatch/internal/event"
-	"github.com/abahmed/kwatch/internal/kubelet"
 )
-
-// MaxEventsInMessage remains the compatibility name for callers of the
-// original Kubernetes helper. Event formatting is owned by internal/event.
-const MaxEventsInMessage = event.MaxPodEventsInMessage
 
 func GetPodEventsStr(events *[]v1.Event) string {
 	return event.FormatPodEvents(events)
-}
-
-// GetPodContainerLogs is kept as a compatibility wrapper for callers of the
-// original Kubernetes helper package.
-func GetPodContainerLogs(
-	ctx context.Context,
-	c kubernetes.Interface, name, container, namespace string,
-	previous bool,
-	maxRecentLogLines int64) string {
-	return kubelet.GetPodContainerLogs(
-		ctx,
-		c,
-		name,
-		container,
-		namespace,
-		previous,
-		maxRecentLogLines,
-	)
 }
 
 // GetPodEvents retrieves the events for a specific pod

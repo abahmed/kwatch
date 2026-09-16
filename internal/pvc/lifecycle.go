@@ -7,14 +7,14 @@ import (
 	"k8s.io/klog/v2"
 )
 
-func (p *PvcMonitor) Start(ctx context.Context) {
+func (p *PvcMonitor) Start(ctx context.Context) error {
 	if !p.config.Enabled {
-		return
+		return nil
 	}
 	p.mu.Lock()
 	if p.started {
 		p.mu.Unlock()
-		return
+		return nil
 	}
 	p.started = true
 	p.mu.Unlock()
@@ -35,7 +35,7 @@ func (p *PvcMonitor) Start(ctx context.Context) {
 		select {
 		case <-ctx.Done():
 			klog.InfoS("pvc monitor stopped")
-			return
+			return nil
 		case <-ticker.C:
 			p.checkUsage(ctx)
 			p.persist(ctx)

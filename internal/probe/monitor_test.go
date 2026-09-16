@@ -27,7 +27,7 @@ func (r testResolver) LookupHost(
 
 func TestNewUsesInjectedHTTPClient(t *testing.T) {
 	client := &http.Client{}
-	monitor := New(
+	monitor := newTestMonitor(
 		config.ActiveProbeMonitor{TimeoutSeconds: 7},
 		nil,
 		client,
@@ -47,8 +47,8 @@ func TestNewUsesInjectedHTTPClient(t *testing.T) {
 }
 
 func TestDNSProbeUsesInjectedResolver(t *testing.T) {
-	monitor := New(config.ActiveProbeMonitor{}, nil, &http.Client{})
-	monitor.SetResolver(testResolver{addresses: []string{"10.0.0.1"}})
+	monitor := newTestMonitor(config.ActiveProbeMonitor{}, nil, &http.Client{})
+	setTestResolver(monitor, testResolver{addresses: []string{"10.0.0.1"}})
 
 	ok, detail := monitor.dns(
 		context.Background(), config.DNSProbeTarget{Host: "api.example"},
@@ -59,8 +59,8 @@ func TestDNSProbeUsesInjectedResolver(t *testing.T) {
 }
 
 func TestDNSProbeReportsResolverError(t *testing.T) {
-	monitor := New(config.ActiveProbeMonitor{}, nil, &http.Client{})
-	monitor.SetResolver(testResolver{err: errors.New("lookup failed")})
+	monitor := newTestMonitor(config.ActiveProbeMonitor{}, nil, &http.Client{})
+	setTestResolver(monitor, testResolver{err: errors.New("lookup failed")})
 
 	ok, detail := monitor.dns(
 		context.Background(), config.DNSProbeTarget{Host: "api.example"},

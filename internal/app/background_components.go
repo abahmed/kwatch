@@ -70,17 +70,23 @@ func runIncidentCleanup(ctx context.Context, deps *serverDeps) error {
 	return nil
 }
 
+func runDelivery(ctx context.Context, deps *serverDeps) error {
+	if err := deps.deliveryManager.Start(ctx); err != nil {
+		return err
+	}
+	<-ctx.Done()
+	return nil
+}
+
 func runPVCMonitor(ctx context.Context, deps *serverDeps) error {
 	if !waitForInitialization(ctx, deps.initialized) {
 		return nil
 	}
-	deps.pvcMonitor.Start(ctx)
-	return nil
+	return deps.pvcMonitor.Start(ctx)
 }
 
 func runHeartbeat(ctx context.Context, deps *serverDeps) error {
-	deps.hbMonitor.Start(ctx)
-	return nil
+	return deps.hbMonitor.Start(ctx)
 }
 
 func runIncidentSnapshots(ctx context.Context, deps *serverDeps) error {
@@ -112,7 +118,9 @@ func runIncidentSnapshots(ctx context.Context, deps *serverDeps) error {
 }
 
 func runTLSSweep(ctx context.Context, deps *serverDeps) error {
-	deps.tlsSweep()
+	if err := deps.tlsSweep(); err != nil {
+		return err
+	}
 	const interval = 24 * time.Hour
 	ticker := time.NewTicker(interval)
 	defer ticker.Stop()
@@ -121,7 +129,9 @@ func runTLSSweep(ctx context.Context, deps *serverDeps) error {
 		case <-ctx.Done():
 			return nil
 		case <-ticker.C:
-			deps.tlsSweep()
+			if err := deps.tlsSweep(); err != nil {
+				return err
+			}
 		}
 	}
 }

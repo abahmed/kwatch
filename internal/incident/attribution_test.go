@@ -17,7 +17,7 @@ import (
 func attributionEngine(t *testing.T) *Engine {
 	t.Helper()
 	deadNodeMass := MassFailureKey("node//node-2")
-	e := NewEngine(Config{
+	e := newTestEngine(Config{
 		Window:                    10 * time.Minute,
 		InhibitNodeSuppressesPods: true,
 		DependenciesOf: func(inc *model.Incident) []string {
@@ -283,7 +283,7 @@ func TestAttributionOutranksCooldown(t *testing.T) {
 // which made exactly that happen; every resolve path now shares one helper.
 func TestHoldDownDoesNotArmCooldown(t *testing.T) {
 	now := time.Date(2025, 1, 1, 0, 0, 0, 0, time.UTC)
-	e := NewEngine(
+	e := newTestEngine(
 		Config{Window: 10 * time.Minute, ResolveHoldDown: 5 * time.Minute},
 	)
 	e.now = mockClock(now)

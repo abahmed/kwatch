@@ -101,7 +101,7 @@ func TestDedicatedEmptyPayloadDoesNotFallBackToLegacy(t *testing.T) {
 			},
 		},
 	)
-	sm := NewManager(client, "kwatch")
+	sm := newTestManager(client, "kwatch")
 
 	assert.Nil(t, sm.GetBaseline(ctx))
 	telemetry, err := sm.LoadTelemetryState(ctx)

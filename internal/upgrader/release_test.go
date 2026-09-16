@@ -14,7 +14,6 @@ import (
 
 	"github.com/abahmed/kwatch/internal/config"
 	"github.com/abahmed/kwatch/internal/delivery"
-	"github.com/abahmed/kwatch/internal/persistence"
 	"github.com/abahmed/kwatch/internal/version"
 )
 
@@ -76,7 +75,7 @@ func TestCheckReleaseAlreadyNotified(t *testing.T) {
 	)
 	assert.Nil(t, err)
 
-	persistenceManager := persistence.NewManager(client, "kwatch")
+	persistenceManager := newTestPersistenceManager(client, "kwatch")
 	u := newTestUpgrader(
 		&config.Upgrader{}, &delivery.Manager{}, persistenceManager,
 	)
@@ -96,7 +95,7 @@ func TestCheckReleaseNewVersionNotifies(t *testing.T) {
 	notifier := new(recordingNotifier)
 	notifier.On("Notify", mock.AnythingOfType("string")).Return()
 
-	persistenceManager := persistence.NewManager(
+	persistenceManager := newTestPersistenceManager(
 		fake.NewSimpleClientset(), "kwatch",
 	)
 	u := newTestUpgrader(
@@ -133,7 +132,7 @@ func TestCheckReleaseNewVersionSetsState(t *testing.T) {
 	)
 	assert.Nil(t, err)
 
-	persistenceManager := persistence.NewManager(client, "kwatch")
+	persistenceManager := newTestPersistenceManager(client, "kwatch")
 	u := newTestUpgrader(
 		&config.Upgrader{}, &delivery.Manager{}, persistenceManager,
 	)

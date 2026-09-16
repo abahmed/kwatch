@@ -132,7 +132,7 @@ func TestIsComponentPod(t *testing.T) {
 
 func TestObserveUsesFailureAndRecoveryThresholds(t *testing.T) {
 	var actions []model.IncidentAction
-	engine := incident.NewEngine(incident.Config{
+	engine := newTestIncidentEngine(incident.Config{
 		LifecycleHook: func(_ *model.Incident, action model.IncidentAction) {
 			actions = append(actions, action)
 		},

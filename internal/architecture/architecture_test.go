@@ -77,7 +77,7 @@ var forbiddenImports = map[string][]string{
 	},
 }
 
-func TestCompatibilityClientConstructionIsExplicit(t *testing.T) {
+func TestClientConstructionHasOneOwner(t *testing.T) {
 	root := repositoryRoot(t)
 	directories := []string{
 		"internal/networkgraph", "internal/storagegraph",
@@ -87,9 +87,6 @@ func TestCompatibilityClientConstructionIsExplicit(t *testing.T) {
 	for _, directory := range directories {
 		files := goFiles(t, filepath.Join(root, directory))
 		for _, filename := range files {
-			if filepath.Base(filename) == "compat.go" {
-				continue
-			}
 			contents, err := os.ReadFile(filename)
 			if err != nil {
 				t.Fatalf("read %s: %v", filename, err)
@@ -99,10 +96,8 @@ func TestCompatibilityClientConstructionIsExplicit(t *testing.T) {
 				"rest.RESTClientFor",
 			} {
 				if strings.Contains(string(contents), forbidden) {
-					t.Errorf(
-						"%s constructs %s outside compat.go",
-						filename, forbidden,
-					)
+					t.Errorf("%s constructs %s outside client composition",
+						filename, forbidden)
 				}
 			}
 		}
@@ -144,8 +139,7 @@ func TestDynamicInformerConstructionHasOneOwner(t *testing.T) {
 	root := repositoryRoot(t)
 	dynamicwatch := filepath.Join(root, "internal", "k8s", "dynamicwatch")
 	for _, filename := range goFilesRecursive(t, filepath.Join(root, "internal")) {
-		if strings.HasPrefix(filename, dynamicwatch) ||
-			filepath.Base(filename) == "compat.go" {
+		if strings.HasPrefix(filename, dynamicwatch) {
 			continue
 		}
 		file := parseFile(t, filename)
@@ -163,8 +157,6 @@ func TestRawConfigurationStaysAtApprovedBoundaries(t *testing.T) {
 	root := repositoryRoot(t)
 	approved := []string{
 		"internal/config/", "internal/app/", "internal/crdwatch/",
-		"internal/controller/compat.go", "internal/delivery/compat.go",
-		"internal/rbac/compat.go", "internal/client/compat.go",
 		"cmd/configcatalog/",
 	}
 	for _, filename := range goFilesRecursive(t, root) {
@@ -196,7 +188,7 @@ func TestRawConfigurationStaysAtApprovedBoundaries(t *testing.T) {
 	}
 }
 
-func TestCompatibilityConstructorsStayInCompatibilityFiles(t *testing.T) {
+func TestRetiredCompatibilityConstructorsAreAbsent(t *testing.T) {
 	root := repositoryRoot(t)
 	checks := []struct {
 		name   string
@@ -210,11 +202,14 @@ func TestCompatibilityConstructorsStayInCompatibilityFiles(t *testing.T) {
 			name:   "clock fallback",
 			needle: "clock.From(",
 		},
+		{
+			name:   "delivery initializer",
+			needle: "InitWithFactory(",
+		},
 	}
 	for _, check := range checks {
 		for _, filename := range goFilesRecursive(t, root) {
-			if filepath.Base(filename) == "compat.go" ||
-				strings.HasSuffix(filename, "_test.go") ||
+			if strings.HasSuffix(filename, "_test.go") ||
 				strings.HasPrefix(
 					filename,
 					filepath.Join(root, "internal", "clock"),
@@ -226,12 +221,31 @@ func TestCompatibilityConstructorsStayInCompatibilityFiles(t *testing.T) {
 				t.Fatalf("read %s: %v", filename, err)
 			}
 			if strings.Contains(string(contents), check.needle) {
-				t.Errorf(
-					"%s compatibility constructor used outside compat.go: %s",
-					check.name, filename,
-				)
+				t.Errorf("%s remains in production code: %s", check.name, filename)
 			}
 		}
+	}
+}
+
+func TestTransitionalCompatibilityFilesAreAbsent(t *testing.T) {
+	root := repositoryRoot(t)
+	files := make([]string, 0)
+	err := filepath.WalkDir(root, func(
+		path string, entry fs.DirEntry, err error,
+	) error {
+		if err != nil {
+			return err
+		}
+		if !entry.IsDir() && filepath.Base(path) == "compat.go" {
+			files = append(files, path)
+		}
+		return nil
+	})
+	if err != nil {
+		t.Fatalf("find compatibility files: %v", err)
+	}
+	if len(files) > 0 {
+		t.Fatalf("transitional compatibility files remain: %v", files)
 	}
 }
 

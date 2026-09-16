@@ -20,7 +20,7 @@ func configureMetricsMonitor(
 	incidentSink monitor.ObservationSink,
 	owners observe.OwnerResolver,
 	dynamicClient dynamic.Interface,
-) func(context.Context) {
+) func(context.Context) error {
 	if !runtime.RuntimeMetricsMonitor().Enabled {
 		return nil
 	}
@@ -33,7 +33,7 @@ func configureMetricsMonitor(
 		Allowed: ctl.NamespaceAllowed, Namespaces: namespaces,
 		WatchAll: watchAll,
 	}); err != nil {
-		return nil
+		return func(context.Context) error { return err }
 	}
 	return metricsMonitor.Start
 }

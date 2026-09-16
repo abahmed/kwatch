@@ -15,7 +15,7 @@ import (
 )
 
 func TestMassFailureSetClone(t *testing.T) {
-	e := NewEngine(Config{Window: 10 * time.Minute})
+	e := newTestEngine(Config{Window: 10 * time.Minute})
 	e.AddMassFailure(&model.Incident{
 		Subject: model.Subject{
 			Key:      MassFailureKey("node//n1"),
@@ -37,7 +37,7 @@ func TestMassFailureSetClone(t *testing.T) {
 }
 
 func TestSnapshotAllEmpty(t *testing.T) {
-	e := NewEngine(Config{
+	e := newTestEngine(Config{
 		Window: 10 * time.Minute,
 	})
 	snap := e.SnapshotAll()
@@ -46,7 +46,7 @@ func TestSnapshotAllEmpty(t *testing.T) {
 }
 
 func TestActiveIncidentsDoesNotClearDirty(t *testing.T) {
-	e := NewEngine(Config{
+	e := newTestEngine(Config{
 		Window: 10 * time.Minute,
 	})
 	ev := event.Event{
@@ -70,7 +70,7 @@ func TestActiveIncidentsDoesNotClearDirty(t *testing.T) {
 
 func TestRestoreIncidentsBumpsLastSeen(t *testing.T) {
 	fakeNow := time.Date(2025, 1, 1, 0, 0, 0, 0, time.UTC)
-	e := NewEngine(Config{
+	e := newTestEngine(Config{
 		Window: 10 * time.Minute,
 	})
 	e.now = mockClock(fakeNow)
@@ -80,7 +80,7 @@ func TestRestoreIncidentsBumpsLastSeen(t *testing.T) {
 	originalLastSeen := inc.LastSeen
 
 	snap := e.SnapshotAll()
-	e2 := NewEngine(Config{
+	e2 := newTestEngine(Config{
 		Window: 10 * time.Minute,
 		Baseline: map[string]map[string]int64{
 			string(inc.Key): {"pod-1": fakeNow.Add(time.Second).Unix()},
@@ -103,10 +103,10 @@ func TestRestoreIncidentsBumpsLastSeen(t *testing.T) {
 }
 
 func TestIsOwnerHealthyDeploymentHealthy(t *testing.T) {
-	e := NewEngine(Config{
+	e := newTestEngine(Config{
 		Window: 10 * time.Minute,
 	})
-	e.SetDeployLister(&mockDeployLister{
+	setTestDeployLister(e, &mockDeployLister{
 		getFn: func(ns, name string) (*appsv1.Deployment, error) {
 			return &appsv1.Deployment{
 				ObjectMeta: metav1.ObjectMeta{Generation: 2},
@@ -133,10 +133,10 @@ func TestIsOwnerHealthyDeploymentHealthy(t *testing.T) {
 }
 
 func TestIsOwnerHealthyDeploymentUnhealthy(t *testing.T) {
-	e := NewEngine(Config{
+	e := newTestEngine(Config{
 		Window: 10 * time.Minute,
 	})
-	e.SetDeployLister(&mockDeployLister{
+	setTestDeployLister(e, &mockDeployLister{
 		getFn: func(ns, name string) (*appsv1.Deployment, error) {
 			return &appsv1.Deployment{
 				ObjectMeta: metav1.ObjectMeta{Generation: 2},
@@ -162,10 +162,10 @@ func TestIsOwnerHealthyDeploymentUnhealthy(t *testing.T) {
 }
 
 func TestIsOwnerHealthyDeploymentNotObserved(t *testing.T) {
-	e := NewEngine(Config{
+	e := newTestEngine(Config{
 		Window: 10 * time.Minute,
 	})
-	e.SetDeployLister(&mockDeployLister{
+	setTestDeployLister(e, &mockDeployLister{
 		getFn: func(ns, name string) (*appsv1.Deployment, error) {
 			return &appsv1.Deployment{
 				ObjectMeta: metav1.ObjectMeta{Generation: 2},
@@ -191,10 +191,10 @@ func TestIsOwnerHealthyDeploymentNotObserved(t *testing.T) {
 }
 
 func TestIsOwnerHealthyDeploymentNotFound(t *testing.T) {
-	e := NewEngine(Config{
+	e := newTestEngine(Config{
 		Window: 10 * time.Minute,
 	})
-	e.SetDeployLister(&mockDeployLister{
+	setTestDeployLister(e, &mockDeployLister{
 		getFn: func(ns, name string) (*appsv1.Deployment, error) {
 			return nil, fmt.Errorf("not found")
 		},
@@ -227,7 +227,7 @@ func TestIsOwnerHealthyDeploymentNotFound(t *testing.T) {
 }
 
 func TestIsOwnerHealthyNonPodResource(t *testing.T) {
-	e := NewEngine(Config{
+	e := newTestEngine(Config{
 		Window: 10 * time.Minute,
 	})
 
@@ -243,7 +243,7 @@ func TestIsOwnerHealthyNonPodResource(t *testing.T) {
 }
 
 func TestIsOwnerHealthyNilListers(t *testing.T) {
-	e := NewEngine(Config{
+	e := newTestEngine(Config{
 		Window: 10 * time.Minute,
 	})
 
@@ -259,10 +259,10 @@ func TestIsOwnerHealthyNilListers(t *testing.T) {
 }
 
 func TestIsOwnerHealthyStatefulSet(t *testing.T) {
-	e := NewEngine(Config{
+	e := newTestEngine(Config{
 		Window: 10 * time.Minute,
 	})
-	e.SetStatefulSetLister(&mockSSLister{
+	setTestStatefulSetLister(e, &mockSSLister{
 		getFn: func(ns, name string) (*appsv1.StatefulSet, error) {
 			return &appsv1.StatefulSet{
 				ObjectMeta: metav1.ObjectMeta{Generation: 2},
@@ -289,10 +289,10 @@ func TestIsOwnerHealthyStatefulSet(t *testing.T) {
 }
 
 func TestIsOwnerHealthyDaemonSet(t *testing.T) {
-	e := NewEngine(Config{
+	e := newTestEngine(Config{
 		Window: 10 * time.Minute,
 	})
-	e.SetDaemonSetLister(&mockDSLister{
+	setTestDaemonSetLister(e, &mockDSLister{
 		getFn: func(ns, name string) (*appsv1.DaemonSet, error) {
 			return &appsv1.DaemonSet{
 				Status: appsv1.DaemonSetStatus{
@@ -316,10 +316,10 @@ func TestIsOwnerHealthyDaemonSet(t *testing.T) {
 }
 
 func TestIsOwnerHealthyDaemonSetUnhealthy(t *testing.T) {
-	e := NewEngine(Config{
+	e := newTestEngine(Config{
 		Window: 10 * time.Minute,
 	})
-	e.SetDaemonSetLister(&mockDSLister{
+	setTestDaemonSetLister(e, &mockDSLister{
 		getFn: func(ns, name string) (*appsv1.DaemonSet, error) {
 			return &appsv1.DaemonSet{
 				Status: appsv1.DaemonSetStatus{
@@ -344,7 +344,7 @@ func TestIsOwnerHealthyDaemonSetUnhealthy(t *testing.T) {
 
 func TestClearBaselineForPodClearsCooldown(t *testing.T) {
 	fakeNow := time.Date(2025, 1, 1, 0, 0, 0, 0, time.UTC)
-	e := NewEngine(Config{
+	e := newTestEngine(Config{
 		Window: 10 * time.Minute,
 	})
 	e.now = mockClock(fakeNow)
@@ -372,7 +372,7 @@ func TestClearBaselineForPodClearsCooldown(t *testing.T) {
 // namespace: that is what let a resolve ping-pong with a re-create.
 func TestClearBaselineForPodLeavesOtherOwnersCooldowns(t *testing.T) {
 	fakeNow := time.Date(2025, 1, 1, 0, 0, 0, 0, time.UTC)
-	e := NewEngine(Config{Window: 10 * time.Minute})
+	e := newTestEngine(Config{Window: 10 * time.Minute})
 	e.now = mockClock(fakeNow)
 
 	other := BuildKey("ns", "other-dep", "CrashLoopBackOff", "")

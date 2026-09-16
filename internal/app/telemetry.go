@@ -19,7 +19,7 @@ func configureTelemetryRunner(
 	clusterID, version string,
 	now func() time.Time,
 	client *http.Client,
-) func(context.Context) {
+) func(context.Context) error {
 	if !telemetryConfig.Enabled || version == "dev" ||
 		os.Getenv("CI") != "" ||
 		persistenceManager == nil || clusterID == "" || version == "" {
@@ -36,7 +36,7 @@ func configureTelemetryRunner(
 		"endpoint", telemetry.Endpoint,
 		"interval", telemetry.WeeklyInterval,
 	)
-	return func(ctx context.Context) {
+	return func(ctx context.Context) error {
 		ticker := time.NewTicker(telemetry.WeeklyInterval)
 		defer ticker.Stop()
 		send := func() {
@@ -70,7 +70,7 @@ func configureTelemetryRunner(
 			case <-ticker.C:
 				send()
 			case <-ctx.Done():
-				return
+				return nil
 			}
 		}
 	}

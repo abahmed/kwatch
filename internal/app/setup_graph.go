@@ -27,7 +27,7 @@ func newNetworkGraphRun(
 	healthServer *health.HealthServer,
 	dynamicClient dynamic.Interface,
 	discoveryClient discovery.DiscoveryInterface,
-) func(context.Context) {
+) func(context.Context) error {
 	if !runtime.ClusterResourceMonitor().Enabled ||
 		(!runtime.ServiceMonitor().Enabled &&
 			!runtime.IngressMonitor().Enabled &&
@@ -45,11 +45,11 @@ func newNetworkGraphRun(
 		healthServer.SetComponentError("network-graph", err)
 		return nil
 	}
-	return func(ctx context.Context) {
+	return func(ctx context.Context) error {
 		if err := graphMonitor.Start(ctx); err != nil {
 			healthServer.SetComponentError("network-graph", err)
 			klog.ErrorS(err, "network graph monitor stopped")
-			return
+			return err
 		}
 		syncCtx, cancel := context.WithTimeout(
 			ctx, optionalWatcherSyncTimeout,
@@ -59,18 +59,19 @@ func newNetworkGraphRun(
 			err := fmt.Errorf("optional network watcher cache sync failed")
 			healthServer.SetComponentError("network-graph", err)
 			klog.ErrorS(err, "network graph watcher degraded")
-			return
+			return err
 		}
 		if status := graphMonitor.Status(); status.Skipped > 0 {
 			healthServer.SetComponentStatus(
 				"network-graph",
 				"degraded", "optional_api_unavailable", false,
 			)
-			return
+			return nil
 		}
 		healthServer.SetComponentStatus(
 			"network-graph", "running", "", true,
 		)
+		return nil
 	}
 }
 
@@ -82,7 +83,7 @@ func newStorageGraphRun(
 	healthServer *health.HealthServer,
 	dynamicClient dynamic.Interface,
 	discoveryClient discovery.DiscoveryInterface,
-) func(context.Context) {
+) func(context.Context) error {
 	if !runtime.ClusterResourceMonitor().Enabled {
 		return nil
 	}
@@ -98,11 +99,11 @@ func newStorageGraphRun(
 		healthServer.SetComponentError("storage-graph", err)
 		return nil
 	}
-	return func(ctx context.Context) {
+	return func(ctx context.Context) error {
 		if err := graphMonitor.Start(ctx); err != nil {
 			healthServer.SetComponentError("storage-graph", err)
 			klog.ErrorS(err, "storage graph monitor stopped")
-			return
+			return err
 		}
 		syncCtx, cancel := context.WithTimeout(
 			ctx, optionalWatcherSyncTimeout,
@@ -112,17 +113,18 @@ func newStorageGraphRun(
 			err := fmt.Errorf("optional storage watcher cache sync failed")
 			healthServer.SetComponentError("storage-graph", err)
 			klog.ErrorS(err, "storage graph watcher degraded")
-			return
+			return err
 		}
 		if status := graphMonitor.Status(); status.Skipped > 0 {
 			healthServer.SetComponentStatus(
 				"storage-graph",
 				"degraded", "optional_api_unavailable", false,
 			)
-			return
+			return nil
 		}
 		healthServer.SetComponentStatus(
 			"storage-graph", "running", "", true,
 		)
+		return nil
 	}
 }

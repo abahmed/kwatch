@@ -7,7 +7,7 @@ Accepted
 ## Decision
 
 Persistence records every migration operation in a startup-cycle
-`MigrationReport`. `LastMigration` remains as a compatibility accessor. Reports
+`MigrationReport`; there is no last-result compatibility accessor. Reports
 contain source and destination formats, bounded status, recoverability,
 continuation safety, and safe operator context.
 

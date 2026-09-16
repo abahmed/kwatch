@@ -82,7 +82,7 @@ func TestEnrichMassFailureRootCause(t *testing.T) {
 	// on cm1 itself as the root.
 	graph.AddEdge("pod", "ns", "p1", "configmap", "ns", "cm1", "mounts")
 
-	tracker := context.NewChangeTracker(0)
+	tracker := newTestChangeTracker(0)
 	tracker.Record(context.Change{
 		Resource:  "configmap",
 		Namespace: "ns",
@@ -91,7 +91,7 @@ func TestEnrichMassFailureRootCause(t *testing.T) {
 		Timestamp: time.Now().Add(-30 * time.Second),
 	})
 
-	e := NewEngine(graph, tracker)
+	e := newTestEngine(graph, tracker)
 	mf := e.EnrichMassFailure(MassFailure{
 		SharedDependency: "configmap/ns/cm1",
 		AffectedCount:    4,
@@ -115,7 +115,7 @@ func TestEnrichMassFailureDeepRoot(t *testing.T) {
 	graph.AddEdge("persistentvolume", "", "pv-1", "node", "", "n1", "local_at")
 	graph.AddEdge("pod", "ns", "p1", "persistentvolume", "", "pv-1", "binds")
 
-	e := NewEngine(graph, context.NewChangeTracker(0))
+	e := newTestEngine(graph, newTestChangeTracker(0))
 	mf := e.EnrichMassFailure(MassFailure{
 		SharedDependency: "persistentvolume//pv-1",
 		AffectedCount:    4,

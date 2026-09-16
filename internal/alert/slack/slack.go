@@ -28,8 +28,8 @@ type Slack struct {
 	// webhook mode
 	webhook string
 	send    func(string, *slackClient.WebhookMessage) error
-	// sendContext is the production transport. send remains as a small test
-	// and compatibility seam for webhook behavior.
+	// sendContext is the production transport. send remains a small test seam
+	// for webhook behavior.
 	sendContext func(context.Context, string, *slackClient.WebhookMessage) error
 
 	// token mode

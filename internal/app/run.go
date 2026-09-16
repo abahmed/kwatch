@@ -15,7 +15,7 @@ import (
 
 // Run loads config and wires all monitors, then runs until shutdown.
 func Run() int {
-	return RunWithClock(clock.Now)
+	return RunWithClock(clock.RealClock{}.Now)
 }
 
 // RunWithClock runs kwatch with an injected clock, primarily for deterministic

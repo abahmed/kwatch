@@ -80,10 +80,18 @@ func (h *HealthServer) setComponentStatusLocked(
 		h.componentStatus = make(map[string]ComponentStatus)
 	}
 	previous, exists := h.componentStatus[name]
-	if !exists || previous != status {
+	changed := !exists || previous.State != status.State ||
+		previous.Available != status.Available ||
+		previous.Reason != status.Reason
+	if changed {
 		if status.State == "degraded" {
 			metrics.DefaultRegistry().ComponentDegradations.Add(1)
 		}
+		if h.clock != nil {
+			status.LastTransition = h.clock.Now()
+		}
+	} else {
+		status.LastTransition = previous.LastTransition
 	}
 	h.componentStatus[name] = status
 }

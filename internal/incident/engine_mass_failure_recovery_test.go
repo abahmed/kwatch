@@ -14,7 +14,7 @@ import (
 func TestMassFailureSuppressionReleasesSurvivorsWhenItClears(t *testing.T) {
 	now := time.Date(2025, 1, 1, 0, 0, 0, 0, time.UTC)
 	deadNode := MassFailureKey("node//ip-10-0-81-7")
-	e := NewEngine(Config{
+	e := newTestEngine(Config{
 		Window: 10 * time.Minute,
 		DependenciesOf: func(inc *model.Incident) []string {
 			if inc.NodeName != "" {

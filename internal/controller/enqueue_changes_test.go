@@ -14,7 +14,7 @@ import (
 // A controller writing status is not a change anyone made. Recorded, it named
 // the incident's own object as "a related resource that changed 0s ago".
 func TestRecordChangeUpdateSkipsStatusOnlyWrites(t *testing.T) {
-	tracker := kwcontext.NewChangeTracker(10)
+	tracker := newTestChangeTracker(10)
 	c := &Controller{graphRuntime: graphRuntime{tracker: tracker}}
 	replicas := int32(2)
 	before := &appsv1.Deployment{
@@ -38,7 +38,7 @@ func TestRecordChangeUpdateSkipsStatusOnlyWrites(t *testing.T) {
 
 // A node lease renews every ten seconds; that heartbeat is never a change.
 func TestRecordChangeUpdateIgnoresLeaseRenewals(t *testing.T) {
-	tracker := kwcontext.NewChangeTracker(10)
+	tracker := newTestChangeTracker(10)
 	c := &Controller{graphRuntime: graphRuntime{tracker: tracker}}
 	before := &coordinationv1.Lease{
 		ObjectMeta: metav1.ObjectMeta{

@@ -95,7 +95,7 @@ func TestPvcMapCachesAndReturnsWithinTTL(t *testing.T) {
 	ctx := context.Background()
 	client := fake.NewSimpleClientset()
 	cfg := &config.PvcMonitor{Enabled: true, Threshold: 80}
-	m := NewPvcMonitor(client, cfg, nil, nil)
+	m := newTestPvcMonitorWithState(client, cfg, nil, nil)
 
 	// Create a PVC in the fake cluster
 	pvc := &v1.PersistentVolumeClaim{
@@ -135,7 +135,7 @@ func TestPvcMapRefreshesAfterTTL(t *testing.T) {
 	ctx := context.Background()
 	client := fake.NewSimpleClientset()
 	cfg := &config.PvcMonitor{Enabled: true, Threshold: 80}
-	m := NewPvcMonitor(client, cfg, nil, nil)
+	m := newTestPvcMonitorWithState(client, cfg, nil, nil)
 
 	// Create a PVC
 	pvc := &v1.PersistentVolumeClaim{
@@ -175,7 +175,7 @@ func TestPvcMapEmptyWithNoPVCs(t *testing.T) {
 	ctx := context.Background()
 	client := fake.NewSimpleClientset()
 	cfg := &config.PvcMonitor{Enabled: true, Threshold: 80}
-	m := NewPvcMonitor(client, cfg, nil, nil)
+	m := newTestPvcMonitorWithState(client, cfg, nil, nil)
 
 	result := m.pvcMap(ctx)
 	assert.NotNil(t, result)
@@ -190,7 +190,7 @@ func TestPvcMapReturnsMapNotNilOnAPIFailure(t *testing.T) {
 	// With a nil client, the API call will fail; pvcMap should fall back to
 	// the last good map (nil initially, so returns nil).
 	cfg := &config.PvcMonitor{Enabled: true, Threshold: 80}
-	m := NewPvcMonitor(nil, cfg, nil, nil)
+	m := newTestPvcMonitorWithState(nil, cfg, nil, nil)
 
 	result := m.pvcMap(context.Background())
 	assert.NotNil(t, result, "no client → empty map, not nil")

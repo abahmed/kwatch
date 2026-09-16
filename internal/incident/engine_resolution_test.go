@@ -13,7 +13,7 @@ import (
 
 func TestMarkResolvedIdempotent(t *testing.T) {
 	var resolves int
-	e := NewEngine(Config{
+	e := newTestEngine(Config{
 		Window: 10 * time.Minute,
 		LifecycleHook: func(inc *model.Incident, action model.IncidentAction) {
 			if action == model.ActionResolved {
@@ -47,7 +47,7 @@ func TestMarkResolvedIdempotent(t *testing.T) {
 
 func TestMarkResolvedNonexistentKeyNoOp(t *testing.T) {
 	var resolves int
-	e := NewEngine(Config{
+	e := newTestEngine(Config{
 		Window: 10 * time.Minute,
 		LifecycleHook: func(inc *model.Incident, action model.IncidentAction) {
 			if action == model.ActionResolved {
@@ -62,7 +62,7 @@ func TestMarkResolvedNonexistentKeyNoOp(t *testing.T) {
 func TestResolveHoldDownDelaysResolve(t *testing.T) {
 	fakeNow := time.Date(2025, 1, 1, 0, 0, 0, 0, time.UTC)
 	var resolves int
-	e := NewEngine(Config{
+	e := newTestEngine(Config{
 		Window:          10 * time.Minute,
 		ResolveHoldDown: 10 * time.Minute,
 		LifecycleHook: func(inc *model.Incident, action model.IncidentAction) {
@@ -94,7 +94,7 @@ func TestResolveHoldDownDelaysResolve(t *testing.T) {
 func TestCleanupFinalizesPendingResolveWithNotification(t *testing.T) {
 	fakeNow := time.Date(2025, 1, 1, 0, 0, 0, 0, time.UTC)
 	var resolves int
-	e := NewEngine(Config{
+	e := newTestEngine(Config{
 		Window:          10 * time.Minute,
 		ResolveHoldDown: 20 * time.Minute,
 		LifecycleHook: func(inc *model.Incident, action model.IncidentAction) {
@@ -140,7 +140,7 @@ func TestCleanupFinalizesPendingResolveWithNotification(t *testing.T) {
 func TestResolveHoldDownRevivesOnRecurrence(t *testing.T) {
 	fakeNow := time.Date(2025, 1, 1, 0, 0, 0, 0, time.UTC)
 	var resolves int
-	e := NewEngine(Config{
+	e := newTestEngine(Config{
 		Window:          10 * time.Minute,
 		ResolveHoldDown: 10 * time.Minute,
 		LifecycleHook: func(inc *model.Incident, action model.IncidentAction) {
@@ -191,7 +191,7 @@ func TestResolveHoldDownRevivesOnRecurrence(t *testing.T) {
 
 func TestProcessResolvedIncidentSilentlyRevives(t *testing.T) {
 	fakeNow := time.Date(2025, 1, 1, 0, 0, 0, 0, time.UTC)
-	e := NewEngine(Config{
+	e := newTestEngine(Config{
 		Window: 10 * time.Minute,
 	})
 	e.now = mockClock(fakeNow)
@@ -301,7 +301,7 @@ func TestCheckLifecycleFinalizesPendingResolve(t *testing.T) {
 	fakeNow := time.Date(2025, 1, 1, 0, 0, 0, 0, time.UTC)
 	var resolved int
 	var baselineChanged bool
-	e := NewEngine(Config{
+	e := newTestEngine(Config{
 		Window:          10 * time.Minute,
 		ResolveHoldDown: 1 * time.Millisecond,
 		LifecycleHook: func(inc *model.Incident, action model.IncidentAction) {

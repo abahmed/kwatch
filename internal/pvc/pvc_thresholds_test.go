@@ -9,6 +9,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"k8s.io/client-go/kubernetes/fake"
 
+	"github.com/abahmed/kwatch/internal/clock"
 	"github.com/abahmed/kwatch/internal/config"
 	"github.com/abahmed/kwatch/internal/enricher"
 	"github.com/abahmed/kwatch/internal/incident"
@@ -38,7 +39,7 @@ func TestPodStruct(t *testing.T) {
 }
 
 func TestPvcStableReasonDedup(t *testing.T) {
-	incidentEngine := incident.NewEngine(incident.Config{
+	incidentEngine := newConfiguredIncidentEngine(incident.Config{
 		Window: 10 * time.Minute,
 	})
 
@@ -59,7 +60,7 @@ func TestPvcStableReasonDedup(t *testing.T) {
 }
 
 func TestPvcStableReasonDifferentPercentages(t *testing.T) {
-	incidentEngine := incident.NewEngine(incident.Config{
+	incidentEngine := newConfiguredIncidentEngine(incident.Config{
 		Window: 10 * time.Minute,
 	})
 
@@ -83,7 +84,7 @@ func TestPvcStableReasonDifferentPercentages(t *testing.T) {
 }
 
 func TestPvcSeverityWarnTier(t *testing.T) {
-	incidentEngine := incident.NewEngine(incident.Config{
+	incidentEngine := newConfiguredIncidentEngine(incident.Config{
 		Window:   10 * time.Minute,
 		Enricher: &enricher.DefaultEnricher{},
 	})
@@ -99,7 +100,7 @@ func TestPvcSeverityWarnTier(t *testing.T) {
 }
 
 func TestPvcSeverityCriticalTier(t *testing.T) {
-	incidentEngine := incident.NewEngine(incident.Config{
+	incidentEngine := newConfiguredIncidentEngine(incident.Config{
 		Window:   10 * time.Minute,
 		Enricher: &enricher.DefaultEnricher{},
 	})
@@ -115,7 +116,7 @@ func TestPvcSeverityCriticalTier(t *testing.T) {
 }
 
 func TestPvcSeverityUpgradeFromWarnToCritical(t *testing.T) {
-	incidentEngine := incident.NewEngine(incident.Config{
+	incidentEngine := newConfiguredIncidentEngine(incident.Config{
 		Window:   10 * time.Minute,
 		Enricher: &enricher.DefaultEnricher{},
 	})
@@ -153,7 +154,7 @@ func TestPvcFirstScanInitializedTrue(t *testing.T) {
 	client := fake.NewSimpleClientset()
 	cfg := &config.PvcMonitor{Enabled: true, Threshold: 80}
 
-	pvc := NewPvcMonitor(client, cfg, nil, nil)
+	pvc := newTestPvcMonitorWithState(client, cfg, nil, nil)
 	assert.True(pvc.firstScan, "firstScan should initialize to true")
 }
 
@@ -163,7 +164,7 @@ func TestPvcFirstScanSetToFalseAfterCheckUsage(t *testing.T) {
 	client := fake.NewSimpleClientset()
 	cfg := &config.PvcMonitor{Enabled: true, Threshold: 80}
 
-	pvc := NewPvcMonitor(client, cfg, nil, nil)
+	pvc := newTestPvcMonitorWithState(client, cfg, nil, nil)
 	assert.True(pvc.firstScan)
 
 	pvc.checkUsage(context.Background())
@@ -177,7 +178,7 @@ func TestPvcFirstScanSeedsNotifiedOnOverThreshold(t *testing.T) {
 	client := fake.NewSimpleClientset()
 	cfg := &config.PvcMonitor{Enabled: true, Threshold: 80}
 
-	pvc := NewPvcMonitor(client, cfg, nil, nil)
+	pvc := newTestPvcMonitorWithState(client, cfg, nil, nil)
 	assert.True(pvc.firstScan)
 
 	// Simulate what checkUsage does: over-threshold PVCs during firstScan
@@ -202,16 +203,22 @@ func newTestPvcMonitor(
 	cfg *config.PvcMonitor,
 	incidentEngine *incident.Engine,
 ) *PvcMonitor {
-	m := NewPvcMonitor(fake.NewSimpleClientset(), cfg, incidentEngine, nil)
+	m := newTestPvcMonitorWithState(
+		fake.NewSimpleClientset(), cfg, incidentEngine, nil,
+	)
 	m.firstScan = false // tests that check signal behavior need firstScan=false
 	return m
 }
 
 func newTestIncidentEngine() *incident.Engine {
-	return incident.NewEngine(incident.Config{
+	return newConfiguredIncidentEngine(incident.Config{
 		Window:   10 * time.Minute,
 		Enricher: &enricher.DefaultEnricher{},
 	})
+}
+
+func newConfiguredIncidentEngine(cfg incident.Config) *incident.Engine {
+	return incident.NewEngineWithClock(cfg, clock.RealClock{})
 }
 
 func TestApplyMountedHighKeepsNotified(t *testing.T) {

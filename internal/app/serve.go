@@ -32,6 +32,13 @@ func serve(ctx context.Context, deps *serverDeps) int {
 	if deps.controllerDone == nil {
 		deps.controllerDone = make(chan struct{})
 	}
+	supervisor.startOwned(ctx, componentSpec{
+		name:     "delivery",
+		required: true,
+		run: func(ctx context.Context) error {
+			return runDelivery(ctx, deps)
+		},
+	})
 	if deps.startPersistence != nil {
 		deps.startPersistence(ctx, supervisor)
 	}
@@ -42,16 +49,16 @@ func serve(ctx context.Context, deps *serverDeps) int {
 	})
 
 	optionalComponents := []componentSpec{
-		{name: "status", run: componentRun(deps.statusRun)},
-		{name: "metrics", run: componentRun(deps.metricsRun)},
-		{name: "probe", run: componentRun(deps.probeRun)},
-		{name: "kubelet", run: componentRun(deps.kubeletRun)},
-		{name: "storage-graph", run: componentRun(deps.storageRun)},
-		{name: "network-graph", run: componentRun(deps.networkRun)},
-		{name: "rbac", run: componentRun(deps.securityRun)},
-		{name: "control-plane", run: componentRun(deps.controlPlaneRun)},
-		{name: "telemetry", run: componentRun(deps.telemetryRun)},
-		{name: "upgrader", run: componentRun(deps.upgradeRun)},
+		{name: "status", run: deps.statusRun},
+		{name: "metrics", run: deps.metricsRun},
+		{name: "probe", run: deps.probeRun},
+		{name: "kubelet", run: deps.kubeletRun},
+		{name: "storage-graph", run: deps.storageRun},
+		{name: "network-graph", run: deps.networkRun},
+		{name: "rbac", run: deps.securityRun},
+		{name: "control-plane", run: deps.controlPlaneRun},
+		{name: "telemetry", run: deps.telemetryRun},
+		{name: "upgrader", run: deps.upgradeRun},
 	}
 	for _, component := range optionalComponents {
 		supervisor.startOptional(
@@ -62,16 +69,6 @@ func serve(ctx context.Context, deps *serverDeps) int {
 	startCoreComponents(ctx, deps, supervisor)
 
 	return waitShutdown(deps, supervisor)
-}
-
-func componentRun(run func(context.Context)) func(context.Context) error {
-	if run == nil {
-		return nil
-	}
-	return func(ctx context.Context) error {
-		run(ctx)
-		return nil
-	}
 }
 
 func waitForInitialization(

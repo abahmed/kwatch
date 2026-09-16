@@ -35,7 +35,7 @@ users:
 	require.NoError(t, file.Close())
 	t.Setenv("KUBECONFIG", file.Name())
 
-	clients, err := NewClientSet(&config.App{ProxyURL: "http://proxy:8080"})
+	clients, err := newTestClientSet(&config.App{ProxyURL: "http://proxy:8080"})
 	require.NoError(t, err)
 	require.NotNil(t, clients.Kubernetes)
 	require.NotNil(t, clients.Dynamic)

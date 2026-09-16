@@ -15,12 +15,6 @@ func mockClock(t time.Time) func() time.Time {
 	return func() time.Time { return t }
 }
 
-func newTestEngine() *Engine {
-	return NewEngine(Config{
-		Window: 10 * time.Minute,
-	})
-}
-
 func TestNewEngine(t *testing.T) {
 	e := newTestEngine()
 	assert.NotNil(t, e)

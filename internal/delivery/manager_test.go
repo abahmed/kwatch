@@ -71,7 +71,7 @@ func (p *fakeProviderWithError) Name() string {
 func TestManagerNoConfig(t *testing.T) {
 	assert := assert.New(t)
 	am := Manager{}
-	am.Init(nil, nil)
+	am.InitRuntime(config.RuntimeConfigFor(&config.Config{}), nil)
 	assert.Len(managerEntries(&am), 0)
 }
 
@@ -84,7 +84,8 @@ func TestGetProvidersUnknownSkipped(t *testing.T) {
 	}
 
 	am := Manager{}
-	am.InitWithFactory(
+	initTestManager(
+		&am,
 		alertMap, &config.App{ClusterName: "dev"}, catalog.NewProvider,
 	)
 
@@ -150,7 +151,8 @@ func TestGetProviders(t *testing.T) {
 	}
 
 	am := Manager{}
-	am.InitWithFactory(
+	initTestManager(
+		&am,
 		alertMap, &config.App{ClusterName: "dev"}, catalog.NewProvider,
 	)
 

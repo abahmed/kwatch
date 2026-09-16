@@ -7,14 +7,14 @@ import (
 	"github.com/abahmed/kwatch/internal/constant"
 )
 
-func (m *Monitor) Start(ctx context.Context) {
+func (m *Monitor) Start(ctx context.Context) error {
 	if !m.cfg.Enabled {
-		return
+		return nil
 	}
 	m.mu.Lock()
 	if m.started {
 		m.mu.Unlock()
-		return
+		return nil
 	}
 	m.started = true
 	m.mu.Unlock()
@@ -28,7 +28,7 @@ func (m *Monitor) Start(ctx context.Context) {
 	for {
 		select {
 		case <-ctx.Done():
-			return
+			return nil
 		case <-ticker.C:
 			m.check(ctx)
 		}

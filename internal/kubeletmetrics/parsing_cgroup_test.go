@@ -55,7 +55,7 @@ func TestParseCountersWithoutIDLabelStillPairs(t *testing.T) {
 // Kubelet-derived incidents must land on the same workload key as the rest of
 // the pipeline, or one Deployment's replicas arrive as separate alerts.
 func TestPodOwnerPrefersResolver(t *testing.T) {
-	m := New(nil, testConfig(), nil)
+	m := newTestMonitor(nil, testConfig(), nil)
 	pod := &corev1.Pod{ObjectMeta: metav1.ObjectMeta{
 		Name: "web-7d8d7-abc", Namespace: "app",
 		OwnerReferences: []metav1.OwnerReference{
@@ -68,7 +68,7 @@ func TestPodOwnerPrefersResolver(t *testing.T) {
 		t.Fatalf("without a resolver expected pod-keyed owner, got %q", got)
 	}
 
-	m.SetOwnerResolver(observe.OwnerFunc(
+	setTestOwnerResolver(m, observe.OwnerFunc(
 		func(*corev1.Pod) model.ObjectRef {
 			return model.ObjectRef{Kind: "Deployment", Name: "web"}
 		},
@@ -77,7 +77,7 @@ func TestPodOwnerPrefersResolver(t *testing.T) {
 		t.Fatalf("expected resolver's owner, got %q", got)
 	}
 
-	m.SetOwnerResolver(observe.OwnerFunc(
+	setTestOwnerResolver(m, observe.OwnerFunc(
 		func(*corev1.Pod) model.ObjectRef { return model.ObjectRef{} },
 	))
 	got = m.podOwner(pod, "app", pod.Name)
@@ -87,8 +87,8 @@ func TestPodOwnerPrefersResolver(t *testing.T) {
 }
 
 func TestPodOwnerOwnerlessPodIsItself(t *testing.T) {
-	m := New(nil, testConfig(), nil)
-	m.SetOwnerResolver(observe.OwnerFunc(
+	m := newTestMonitor(nil, testConfig(), nil)
+	setTestOwnerResolver(m, observe.OwnerFunc(
 		func(*corev1.Pod) model.ObjectRef { return model.ObjectRef{} },
 	))
 	pod := &corev1.Pod{ObjectMeta: metav1.ObjectMeta{

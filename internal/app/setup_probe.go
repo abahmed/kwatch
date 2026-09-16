@@ -24,7 +24,7 @@ func configureProbeRunner(
 	now func() time.Time,
 	httpClient *http.Client,
 	resolver probe.HostResolver,
-) func(context.Context) {
+) func(context.Context) error {
 	probeConfig := runtime.ActiveProbeMonitor()
 	if !probeConfig.Enabled || !activeProbesEnabled(probeConfig) {
 		return nil
@@ -42,7 +42,7 @@ func configureProbeRunner(
 		Graph: graph, Namespaces: namespaces, WatchAll: watchAll,
 		Allowed: ctl.NamespaceAllowed,
 	}); err != nil {
-		return nil
+		return func(context.Context) error { return err }
 	}
 	return monitor.Start
 }

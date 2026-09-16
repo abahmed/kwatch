@@ -77,7 +77,7 @@ func TestRemovePodReleasesBaselineScopedToNamespace(t *testing.T) {
 
 func TestResolvedIncidentSilentlyRevives(t *testing.T) {
 	fakeNow := time.Date(2025, 1, 1, 0, 0, 0, 0, time.UTC)
-	e := NewEngine(Config{
+	e := newTestEngine(Config{
 		Window: 10 * time.Minute,
 	})
 	e.now = mockClock(fakeNow)
@@ -118,7 +118,7 @@ func TestResolvedIncidentSilentlyRevives(t *testing.T) {
 
 func TestPendingReviveSkips(t *testing.T) {
 	var resolved int
-	e := NewEngine(Config{
+	e := newTestEngine(Config{
 		Window:          10 * time.Minute,
 		ResolveHoldDown: 60 * time.Minute,
 		LifecycleHook: func(inc *model.Incident, action model.IncidentAction) {
@@ -242,7 +242,7 @@ func TestLastContainerStateKeyedByContainer(t *testing.T) {
 
 func TestNodeEventSkipsBaseline(t *testing.T) {
 	fakeNow := time.Date(2025, 1, 1, 0, 0, 0, 0, time.UTC)
-	e := NewEngine(Config{
+	e := newTestEngine(Config{
 		Window: 10 * time.Minute,
 	})
 	e.now = mockClock(fakeNow)
@@ -274,7 +274,7 @@ func TestNodeEventSkipsBaseline(t *testing.T) {
 
 func TestNodeBaselineDoesNotBlockPodSuppression(t *testing.T) {
 	fakeNow := time.Date(2025, 1, 1, 0, 0, 0, 0, time.UTC)
-	e := NewEngine(Config{
+	e := newTestEngine(Config{
 		Window:                    10 * time.Minute,
 		InhibitNodeSuppressesPods: true,
 	})
@@ -297,7 +297,7 @@ func TestNodeBaselineDoesNotBlockPodSuppression(t *testing.T) {
 
 func TestCleanupCooldownSuppressesRecreate(t *testing.T) {
 	fakeNow := time.Date(2025, 1, 1, 0, 0, 0, 0, time.UTC)
-	e := NewEngine(Config{
+	e := newTestEngine(Config{
 		Window: 10 * time.Minute,
 	})
 	e.now = mockClock(fakeNow)
@@ -335,7 +335,7 @@ func TestCleanupCooldownSuppressesRecreate(t *testing.T) {
 
 func TestMarkResolvedSetsCooldown(t *testing.T) {
 	fakeNow := time.Date(2025, 1, 1, 0, 0, 0, 0, time.UTC)
-	e := NewEngine(Config{
+	e := newTestEngine(Config{
 		Window: 10 * time.Minute,
 	})
 	e.now = mockClock(fakeNow)

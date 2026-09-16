@@ -26,7 +26,7 @@ func testRetryConfig(settings map[string]interface{}) retryConfig {
 
 func TestFallbackResolve(t *testing.T) {
 	am := Manager{}
-	am.InitWithFactory(map[string]map[string]interface{}{
+	initTestManager(&am, map[string]map[string]interface{}{
 		"slack": {
 			"webhook":  "test",
 			"fallback": "pagerduty",
@@ -63,7 +63,7 @@ func TestFallbackResolve(t *testing.T) {
 
 func TestFallbackResolveUnknown(t *testing.T) {
 	am := Manager{}
-	am.InitWithFactory(map[string]map[string]interface{}{
+	initTestManager(&am, map[string]map[string]interface{}{
 		"slack": {
 			"webhook":  "test",
 			"fallback": "nonexistent",

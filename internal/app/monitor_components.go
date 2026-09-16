@@ -13,7 +13,7 @@ import (
 	"github.com/abahmed/kwatch/internal/delivery"
 	"github.com/abahmed/kwatch/internal/health"
 	"github.com/abahmed/kwatch/internal/incident"
-	"github.com/abahmed/kwatch/internal/k8s"
+	"github.com/abahmed/kwatch/internal/kubelet"
 	"github.com/abahmed/kwatch/internal/model"
 	clustermonitor "github.com/abahmed/kwatch/internal/monitor/cluster"
 	networkmonitor "github.com/abahmed/kwatch/internal/monitor/network"
@@ -28,7 +28,7 @@ type monitorComponents struct {
 	components      controller.RuntimeSet
 	tlsProcessor    controller.TLSProcessor
 	tlsConfig       controller.TLSConfig
-	controlPlaneRun func(context.Context)
+	controlPlaneRun func(context.Context) error
 	startupSummary  func(map[string]int)
 }
 
@@ -58,7 +58,7 @@ func composeMonitorComponents(
 			previous bool,
 			maxLines int64,
 		) string {
-			return k8s.GetPodContainerLogs(
+			return kubelet.GetPodContainerLogs(
 				ctx, clientset, podName, containerName,
 				namespace, previous, maxLines,
 			)

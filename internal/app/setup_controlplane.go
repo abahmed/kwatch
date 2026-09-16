@@ -22,7 +22,7 @@ func configureControlPlaneMonitor(
 	healthServer *health.HealthServer,
 	incidentSink monitor.ObservationSink,
 	now func() time.Time,
-) (func(context.Context), *controlplane.Monitor) {
+) (func(context.Context) error, *controlplane.Monitor) {
 	if !runtime.ControlPlaneMonitor().Enabled {
 		return nil, nil
 	}

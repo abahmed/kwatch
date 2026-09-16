@@ -157,10 +157,10 @@ func TestSmartGroupingSeverityInheritance(t *testing.T) {
 func TestCascadingSuppressionSuppressesPodWhenDeploymentUnavailable(
 	t *testing.T,
 ) {
-	e := NewEngine(Config{
+	e := newTestEngine(Config{
 		Window: 10 * time.Minute,
 	})
-	e.SetDeployLister(&mockDeployLister{
+	setTestDeployLister(e, &mockDeployLister{
 		getFn: func(ns, name string) (*appsv1.Deployment, error) {
 			return &appsv1.Deployment{
 				ObjectMeta: metav1.ObjectMeta{Generation: 2},
@@ -213,10 +213,10 @@ func TestCascadingSuppressionSuppressesPodWhenDeploymentUnavailable(
 }
 
 func TestCascadingSuppressionNoSuppressionWhenDeploymentHealthy(t *testing.T) {
-	e := NewEngine(Config{
+	e := newTestEngine(Config{
 		Window: 10 * time.Minute,
 	})
-	e.SetDeployLister(&mockDeployLister{
+	setTestDeployLister(e, &mockDeployLister{
 		getFn: func(ns, name string) (*appsv1.Deployment, error) {
 			return &appsv1.Deployment{
 				ObjectMeta: metav1.ObjectMeta{Generation: 2},

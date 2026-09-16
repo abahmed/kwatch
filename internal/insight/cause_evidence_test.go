@@ -15,7 +15,7 @@ import (
 func TestAnalyzeDoesNotBlameUnchangedConfigMap(t *testing.T) {
 	graph := context.NewResourceGraph()
 	graph.AddEdge("pod", "ns1", "p1", "configmap", "ns1", "cm1", "mounts")
-	e := NewEngine(graph, context.NewChangeTracker(10))
+	e := newTestEngine(graph, newTestChangeTracker(10))
 
 	ins := e.Analyze(&model.Incident{Subject: model.Subject{
 		Resource: "pod", Namespace: "ns1", Name: "p1",
@@ -32,7 +32,7 @@ func TestAnalyzeRootFallbackSkipsUnchangedSecret(t *testing.T) {
 	graph := context.NewResourceGraph()
 	graph.AddEdge("pod", "ns1", "p1", "serviceaccount", "ns1", "sa", "uses_sa")
 	graph.AddEdge("serviceaccount", "ns1", "sa", "secret", "ns1", "tok", "x")
-	e := NewEngine(graph, context.NewChangeTracker(10))
+	e := newTestEngine(graph, newTestChangeTracker(10))
 
 	ins := e.Analyze(&model.Incident{Subject: model.Subject{
 		Resource: "pod", Namespace: "ns1", Name: "p1",
@@ -45,13 +45,13 @@ func TestAnalyzeStaleConfigChangeIsNotBlamed(t *testing.T) {
 	graph := context.NewResourceGraph()
 	graph.AddEdge("pod", "ns1", "p1", "configmap", "ns1", "cm1", "mounts")
 	now := time.Date(2025, 1, 1, 12, 0, 0, 0, time.UTC)
-	tracker := context.NewChangeTracker(10)
+	tracker := newTestChangeTracker(10)
 	tracker.Record(context.Change{
 		Resource: "configmap", Namespace: "ns1", Name: "cm1",
 		Type:      context.ChangeUpdate,
 		Timestamp: now.Add(-dependencyChangeWindow - time.Minute),
 	})
-	e := NewEngine(graph, tracker)
+	e := newTestEngine(graph, tracker)
 	e.now = func() time.Time { return now }
 
 	ins := e.Analyze(&model.Incident{Subject: model.Subject{
@@ -66,12 +66,12 @@ func TestAnalyzeReasonCauseOutranksGraph(t *testing.T) {
 	graph := context.NewResourceGraph()
 	graph.AddEdge("pod", "ns1", "p1", "configmap", "ns1", "cm1", "mounts")
 	now := time.Date(2025, 1, 1, 12, 0, 0, 0, time.UTC)
-	tracker := context.NewChangeTracker(10)
+	tracker := newTestChangeTracker(10)
 	tracker.Record(context.Change{
 		Resource: "configmap", Namespace: "ns1", Name: "cm1",
 		Type: context.ChangeUpdate, Timestamp: now.Add(-time.Minute),
 	})
-	e := NewEngine(graph, tracker)
+	e := newTestEngine(graph, tracker)
 	e.now = func() time.Time { return now }
 
 	ins := e.Analyze(&model.Incident{Subject: model.Subject{
@@ -90,7 +90,7 @@ func TestAnalyzeHPAMetricsFailureIsNotDeploymentHealth(t *testing.T) {
 		"horizontalpodautoscaler", "ns1", "web",
 		"deployment", "ns1", "web", "scales",
 	)
-	e := NewEngine(graph, context.NewChangeTracker(10))
+	e := newTestEngine(graph, newTestChangeTracker(10))
 
 	ins := e.Analyze(&model.Incident{Subject: model.Subject{
 		Resource: "horizontalpodautoscaler", Namespace: "ns1",
@@ -107,7 +107,7 @@ func TestAnalyzeNodeIncidentNeverBlamesLease(t *testing.T) {
 	graph.AddEdge(
 		"node", "", "n1", "lease", "kube-node-lease", "n1", "heartbeat",
 	)
-	e := NewEngine(graph, context.NewChangeTracker(10))
+	e := newTestEngine(graph, newTestChangeTracker(10))
 
 	ins := e.Analyze(&model.Incident{Subject: model.Subject{
 		Resource: "node", Name: "n1", NodeName: "n1",
@@ -123,7 +123,7 @@ func TestAnalyzeLeaseIsNotARoot(t *testing.T) {
 	graph.AddEdge(
 		"node", "", "n1", "lease", "kube-node-lease", "n1", "heartbeat",
 	)
-	e := NewEngine(graph, context.NewChangeTracker(10))
+	e := newTestEngine(graph, newTestChangeTracker(10))
 
 	ins := e.Analyze(&model.Incident{Subject: model.Subject{
 		Resource: "node", Name: "n1", NodeName: "n1",

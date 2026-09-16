@@ -15,7 +15,7 @@ func TestNewManager(t *testing.T) {
 	client := fake.NewSimpleClientset()
 	namespace := "kwatch"
 
-	sm := NewManager(client, namespace)
+	sm := newTestManager(client, namespace)
 	assert.NotNil(sm)
 	assert.Equal(namespace, sm.namespace)
 	assert.NotNil(sm.configMapStore)
@@ -26,7 +26,7 @@ func TestNewManager(t *testing.T) {
 func TestIsFirstRunNoConfigMap(t *testing.T) {
 	assert := assert.New(t)
 	client := fake.NewSimpleClientset()
-	sm := NewManager(client, "kwatch")
+	sm := newTestManager(client, "kwatch")
 
 	isFirstRun, err := sm.IsFirstRun(context.Background())
 	assert.Nil(err)
@@ -36,7 +36,7 @@ func TestIsFirstRunNoConfigMap(t *testing.T) {
 func TestIsFirstRunWithConfigMap(t *testing.T) {
 	assert := assert.New(t)
 	client := fake.NewSimpleClientset()
-	sm := NewManager(client, "kwatch")
+	sm := newTestManager(client, "kwatch")
 
 	cm := &corev1.ConfigMap{
 		ObjectMeta: metav1.ObjectMeta{
@@ -64,7 +64,7 @@ func TestIsFirstRunWithConfigMap(t *testing.T) {
 func TestGetStoredVersionNoConfigMap(t *testing.T) {
 	assert := assert.New(t)
 	client := fake.NewSimpleClientset()
-	sm := NewManager(client, "kwatch")
+	sm := newTestManager(client, "kwatch")
 
 	version := sm.GetStoredVersion(context.Background())
 	assert.Equal("", version)
@@ -73,7 +73,7 @@ func TestGetStoredVersionNoConfigMap(t *testing.T) {
 func TestGetStoredVersionWithConfigMap(t *testing.T) {
 	assert := assert.New(t)
 	client := fake.NewSimpleClientset()
-	sm := NewManager(client, "kwatch")
+	sm := newTestManager(client, "kwatch")
 
 	cm := &corev1.ConfigMap{
 		ObjectMeta: metav1.ObjectMeta{
@@ -100,7 +100,7 @@ func TestGetStoredVersionWithConfigMap(t *testing.T) {
 func TestEnsureClusterIDNoConfigMap(t *testing.T) {
 	assert := assert.New(t)
 	client := fake.NewSimpleClientset()
-	sm := NewManager(client, "kwatch")
+	sm := newTestManager(client, "kwatch")
 
 	clusterID, err := sm.EnsureClusterID(context.Background())
 	assert.Nil(err)
@@ -111,7 +111,7 @@ func TestEnsureClusterIDNoConfigMap(t *testing.T) {
 func TestEnsureClusterIDPreservesExisting(t *testing.T) {
 	assert := assert.New(t)
 	client := fake.NewSimpleClientset()
-	sm := NewManager(client, "kwatch")
+	sm := newTestManager(client, "kwatch")
 
 	existingID := "existing-cluster-id"
 	cm := &corev1.ConfigMap{
@@ -140,7 +140,7 @@ func TestEnsureClusterIDPreservesExisting(t *testing.T) {
 func TestMarkAsInitializedCreateConfigMap(t *testing.T) {
 	assert := assert.New(t)
 	client := fake.NewSimpleClientset()
-	sm := NewManager(client, "kwatch")
+	sm := newTestManager(client, "kwatch")
 
 	err := sm.MarkAsInitialized(
 		context.Background(),
@@ -167,7 +167,7 @@ func TestMarkAsInitializedCreateConfigMap(t *testing.T) {
 func TestMarkAsInitializedUpdateConfigMap(t *testing.T) {
 	assert := assert.New(t)
 	client := fake.NewSimpleClientset()
-	sm := NewManager(client, "kwatch")
+	sm := newTestManager(client, "kwatch")
 
 	cm := &corev1.ConfigMap{
 		ObjectMeta: metav1.ObjectMeta{
@@ -212,7 +212,7 @@ func TestMarkAsInitializedUpdateConfigMap(t *testing.T) {
 func TestGetClusterIDNoConfigMap(t *testing.T) {
 	assert := assert.New(t)
 	client := fake.NewSimpleClientset()
-	sm := NewManager(client, "kwatch")
+	sm := newTestManager(client, "kwatch")
 
 	clusterID, err := sm.GetClusterID(context.Background())
 	assert.NotNil(err)
@@ -222,7 +222,7 @@ func TestGetClusterIDNoConfigMap(t *testing.T) {
 func TestGetClusterIDWithConfigMap(t *testing.T) {
 	assert := assert.New(t)
 	client := fake.NewSimpleClientset()
-	sm := NewManager(client, "kwatch")
+	sm := newTestManager(client, "kwatch")
 
 	cm := &corev1.ConfigMap{
 		ObjectMeta: metav1.ObjectMeta{
@@ -250,7 +250,7 @@ func TestGetClusterIDWithConfigMap(t *testing.T) {
 func TestGetNotifiedVersionNoConfigMap(t *testing.T) {
 	assert := assert.New(t)
 	client := fake.NewSimpleClientset()
-	sm := NewManager(client, "kwatch")
+	sm := newTestManager(client, "kwatch")
 
 	version := sm.GetNotifiedVersion(context.Background())
 	assert.Equal("", version)
@@ -259,7 +259,7 @@ func TestGetNotifiedVersionNoConfigMap(t *testing.T) {
 func TestGetNotifiedVersionWithConfigMap(t *testing.T) {
 	assert := assert.New(t)
 	client := fake.NewSimpleClientset()
-	sm := NewManager(client, "kwatch")
+	sm := newTestManager(client, "kwatch")
 
 	cm := &corev1.ConfigMap{
 		ObjectMeta: metav1.ObjectMeta{
@@ -286,7 +286,7 @@ func TestGetNotifiedVersionWithConfigMap(t *testing.T) {
 func TestSetNotifiedVersionCreatesConfigMap(t *testing.T) {
 	assert := assert.New(t)
 	client := fake.NewSimpleClientset()
-	sm := NewManager(client, "kwatch")
+	sm := newTestManager(client, "kwatch")
 
 	err := sm.SetNotifiedVersion(context.Background(), "v2.0.0")
 	assert.Nil(err)
@@ -298,7 +298,7 @@ func TestSetNotifiedVersionCreatesConfigMap(t *testing.T) {
 func TestSetNotifiedVersionSuccess(t *testing.T) {
 	assert := assert.New(t)
 	client := fake.NewSimpleClientset()
-	sm := NewManager(client, "kwatch")
+	sm := newTestManager(client, "kwatch")
 
 	cm := &corev1.ConfigMap{
 		ObjectMeta: metav1.ObjectMeta{
@@ -326,7 +326,7 @@ func TestSetNotifiedVersionSuccess(t *testing.T) {
 func TestSetNotifiedVersionUpdatesExisting(t *testing.T) {
 	assert := assert.New(t)
 	client := fake.NewSimpleClientset()
-	sm := NewManager(client, "kwatch")
+	sm := newTestManager(client, "kwatch")
 
 	cm := &corev1.ConfigMap{
 		ObjectMeta: metav1.ObjectMeta{

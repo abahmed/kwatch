@@ -21,7 +21,7 @@ func TestNewPvcMonitor(t *testing.T) {
 		Threshold: 80,
 		Interval:  5,
 	}
-	pvc := NewPvcMonitor(client, cfg, nil, nil)
+	pvc := newTestPvcMonitorWithState(client, cfg, nil, nil)
 	assert.NotNil(pvc)
 	assert.Equal(client, pvc.client)
 	assert.Equal(*cfg, pvc.config)
@@ -36,7 +36,7 @@ func TestNewPvcMonitorNilConfig(t *testing.T) {
 
 	client := fake.NewSimpleClientset()
 
-	pvc := NewPvcMonitor(client, nil, nil, nil)
+	pvc := newTestPvcMonitorWithState(client, nil, nil, nil)
 	assert.NotNil(pvc)
 	assert.Equal(config.PvcMonitor{}, pvc.config)
 }
@@ -47,7 +47,7 @@ func TestStartDisabled(t *testing.T) {
 		Enabled: false,
 	}
 
-	pvc := NewPvcMonitor(client, cfg, nil, nil)
+	pvc := newTestPvcMonitorWithState(client, cfg, nil, nil)
 	pvc.Start(context.Background())
 }
 
@@ -57,7 +57,7 @@ func TestCleanupUnderThreshold(t *testing.T) {
 	client := fake.NewSimpleClientset()
 	cfg := &config.PvcMonitor{}
 
-	pvc := NewPvcMonitor(client, cfg, nil, nil)
+	pvc := newTestPvcMonitorWithState(client, cfg, nil, nil)
 
 	for i := 0; i < 100; i++ {
 		pvc.notifiedPvc[string(rune(i))] = true
@@ -74,7 +74,7 @@ func TestCleanupOverThreshold(t *testing.T) {
 	client := fake.NewSimpleClientset()
 	cfg := &config.PvcMonitor{}
 
-	pvc := NewPvcMonitor(client, cfg, nil, nil)
+	pvc := newTestPvcMonitorWithState(client, cfg, nil, nil)
 
 	for i := 0; i < 1001; i++ {
 		pvc.notifiedPvc[string(rune(i))] = true
@@ -90,7 +90,7 @@ func TestCleanupExactlyThreshold(t *testing.T) {
 	client := fake.NewSimpleClientset()
 	cfg := &config.PvcMonitor{}
 
-	pvc := NewPvcMonitor(client, cfg, nil, nil)
+	pvc := newTestPvcMonitorWithState(client, cfg, nil, nil)
 
 	for i := 0; i < 1000; i++ {
 		pvc.notifiedPvc[string(rune(i))] = true
@@ -104,7 +104,7 @@ func TestPvcMonitorConcurrency(t *testing.T) {
 	client := fake.NewSimpleClientset()
 	cfg := &config.PvcMonitor{}
 
-	pvc := NewPvcMonitor(client, cfg, nil, nil)
+	pvc := newTestPvcMonitorWithState(client, cfg, nil, nil)
 
 	var wg sync.WaitGroup
 	for i := 0; i < 100; i++ {
@@ -246,7 +246,7 @@ func TestCheckUsageNoNodes(t *testing.T) {
 		Threshold: 80,
 	}
 
-	pvc := NewPvcMonitor(client, cfg, nil, nil)
+	pvc := newTestPvcMonitorWithState(client, cfg, nil, nil)
 	pvc.checkUsage(context.Background())
 
 	assert.Equal(0, len(pvc.notifiedPvc))
@@ -261,7 +261,7 @@ func TestCheckUsageAlreadyNotified(t *testing.T) {
 		Threshold: 80,
 	}
 
-	pvc := NewPvcMonitor(client, cfg, nil, nil)
+	pvc := newTestPvcMonitorWithState(client, cfg, nil, nil)
 	pvc.notifiedPvc["existing-pv"] = true
 
 	assert.True(pvc.notifiedPvc["existing-pv"])
@@ -276,7 +276,7 @@ func TestCheckUsageUnderThreshold(t *testing.T) {
 		Threshold: 90,
 	}
 
-	pvc := NewPvcMonitor(client, cfg, nil, nil)
+	pvc := newTestPvcMonitorWithState(client, cfg, nil, nil)
 
 	usage := &PvcUsage{
 		Name:            "test-pvc",
@@ -302,7 +302,7 @@ func TestCheckUsageOverThreshold(t *testing.T) {
 		Threshold: 80,
 	}
 
-	pvc := NewPvcMonitor(client, cfg, nil, nil)
+	pvc := newTestPvcMonitorWithState(client, cfg, nil, nil)
 
 	usage := &PvcUsage{
 		Name:            "test-pvc",

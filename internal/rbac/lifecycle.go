@@ -7,11 +7,11 @@ import (
 
 // Start performs an initial permission audit and then refreshes it at the
 // deliberately slow interval used by the security monitor.
-func (m *Monitor) Start(ctx context.Context) {
+func (m *Monitor) Start(ctx context.Context) error {
 	m.mu.Lock()
 	if m.started {
 		m.mu.Unlock()
-		return
+		return nil
 	}
 	m.started = true
 	configured := m.configured
@@ -21,10 +21,10 @@ func (m *Monitor) Start(ctx context.Context) {
 		m.status.State = "unavailable"
 		m.status.Available = false
 		m.mu.Unlock()
-		return
+		return nil
 	}
 	if m.client == nil {
-		return
+		return nil
 	}
 	const checkInterval = 15 * time.Minute
 	m.check(ctx)
@@ -33,7 +33,7 @@ func (m *Monitor) Start(ctx context.Context) {
 	for {
 		select {
 		case <-ctx.Done():
-			return
+			return nil
 		case <-ticker.C:
 			m.check(ctx)
 		}

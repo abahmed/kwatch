@@ -5,7 +5,9 @@ import (
 	"net/http"
 	"sync"
 	"sync/atomic"
+	"time"
 
+	"github.com/abahmed/kwatch/internal/clock"
 	"github.com/abahmed/kwatch/internal/config"
 	"github.com/abahmed/kwatch/internal/event"
 	"github.com/abahmed/kwatch/internal/model"
@@ -52,6 +54,7 @@ type HealthServer struct {
 	componentMu        sync.RWMutex
 	componentErrors    map[string]string
 	componentStatus    map[string]ComponentStatus
+	clock              clock.Clock
 	lifecycleMu        sync.Mutex
 	started            bool
 	stopped            bool
@@ -71,12 +74,25 @@ type HealthResponse struct {
 // ComponentStatus is the safe diagnostic state for one runtime component.
 // Details remain in logs; this type intentionally contains only bounded data.
 type ComponentStatus struct {
-	State     string `json:"state"`
-	Available bool   `json:"available"`
-	Reason    string `json:"reason,omitempty"`
+	State          string    `json:"state"`
+	Available      bool      `json:"available"`
+	Reason         string    `json:"reason,omitempty"`
+	LastTransition time.Time `json:"lastTransition,omitempty"`
 }
 
 func NewHealthServer(cfg config.HealthCheck) *HealthServer {
+	return NewHealthServerWithClock(cfg, clock.RealClock{})
+}
+
+// NewHealthServerWithClock constructs health state with an explicit clock so
+// transition timestamps remain deterministic in tests and embedded callers.
+func NewHealthServerWithClock(
+	cfg config.HealthCheck,
+	clockSource clock.Clock,
+) *HealthServer {
+	if clockSource == nil {
+		clockSource = clock.RealClock{}
+	}
 	h := &HealthServer{
 		port:             cfg.Port,
 		enabled:          cfg.Enabled,
@@ -86,6 +102,7 @@ func NewHealthServer(cfg config.HealthCheck) *HealthServer {
 		componentErrors:  make(map[string]string),
 		componentStatus:  make(map[string]ComponentStatus),
 		serveErrors:      make(chan error, 1),
+		clock:            clockSource,
 	}
 	return h
 }

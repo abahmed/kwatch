@@ -29,8 +29,8 @@ type bootstrap struct {
 	securityMonitor *rbac.Monitor
 	deliveryManager *delivery.Manager
 	clients         client.ClientSet
-	telemetryRun    func(context.Context)
-	upgradeRun      func(context.Context)
+	telemetryRun    func(context.Context) error
+	upgradeRun      func(context.Context) error
 }
 
 func newBootstrap(
@@ -67,7 +67,9 @@ func newBootstrap(
 		return nil, fmt.Errorf("run startup: %w", err)
 	}
 
-	healthServer := health.NewHealthServer(runtime.HealthCheck())
+	healthServer := health.NewHealthServerWithClock(
+		runtime.HealthCheck(), clock.Func(now),
+	)
 	securityMonitor := configureSecurityMonitor(runtime, clients.Kubernetes, now)
 	healthServer.SetSecurityLister(securityMonitor)
 
@@ -76,7 +78,6 @@ func newBootstrap(
 		Clock:      clock.Func(now),
 	})
 	deliveryManager.InitRuntime(runtime, catalog.NewProvider)
-	configureDelivery(ctx, deliveryManager)
 
 	upgrader := upgrader.NewUpgrader(
 		&upgraderConfig,

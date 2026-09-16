@@ -20,7 +20,7 @@ func TestMigrateLegacyBaselineMovesAndClearsPayload(t *testing.T) {
 			baselineKey: `{"ns:deployment/api:Error:":{"pod":1}}`,
 		},
 	})
-	store := NewManager(client, "kwatch")
+	store := newTestManager(client, "kwatch")
 
 	result, err := store.MigrateLegacyBaselineWithResult(ctx)
 	require.NoError(t, err)
@@ -44,7 +44,7 @@ func TestMigrateLegacyBaselineReturnsCompletionResult(t *testing.T) {
 			baselineKey: `{"ns:deployment/api:Error:":{"pod":1}}`,
 		},
 	})
-	store := NewManager(client, "kwatch")
+	store := newTestManager(client, "kwatch")
 
 	result, err := store.MigrateLegacyBaselineWithResult(
 		context.Background(),
@@ -57,7 +57,7 @@ func TestMigrateLegacyBaselineReturnsCompletionResult(t *testing.T) {
 }
 
 func TestMigrateLegacyBaselineReportsNotRequired(t *testing.T) {
-	store := NewManager(fake.NewSimpleClientset(), "kwatch")
+	store := newTestManager(fake.NewSimpleClientset(), "kwatch")
 
 	result, err := store.MigrateLegacyBaselineWithResult(
 		context.Background(),
@@ -75,7 +75,7 @@ func TestMigrateLegacyBaselineReportsCorruptPayload(t *testing.T) {
 		},
 		Data: map[string]string{baselineKey: "not-json"},
 	})
-	store := NewManager(client, "kwatch")
+	store := newTestManager(client, "kwatch")
 
 	result, err := store.MigrateLegacyBaselineWithResult(context.Background())
 	require.Error(t, err)

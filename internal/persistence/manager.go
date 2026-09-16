@@ -68,7 +68,6 @@ type Manager struct {
 	telemetryMgr    *RetryConfigMapManager // kwatch-telemetry
 	now             func() time.Time
 	migrationMu     sync.RWMutex
-	lastMigration   MigrationResult
 	migrationReport []MigrationResult
 }
 
@@ -281,6 +280,7 @@ func (s *Manager) MarkAsInitialized(
 // incident loader handles the legacy map format).
 func migrateStateData(data map[string]string) MigrationResult {
 	result := MigrationResult{
+		Store:                 "state",
 		SourceFormat:          "kwatch-state",
 		DestinationFormat:     "kwatch-state/schema-v" + currentStateSchema,
 		Status:                MigrationNotRequired,
@@ -321,13 +321,6 @@ func migrateStateData(data map[string]string) MigrationResult {
 	return result
 }
 
-// LastMigration returns the most recent structured migration outcome.
-func (s *Manager) LastMigration() MigrationResult {
-	s.migrationMu.RLock()
-	defer s.migrationMu.RUnlock()
-	return s.lastMigration
-}
-
 // MigrationReport returns all migration outcomes recorded for the current
 // startup cycle. The returned slice is independent of manager state.
 func (s *Manager) MigrationReport() []MigrationResult {
@@ -353,7 +346,6 @@ func (s *Manager) recordMigrationResult(
 		}
 	}
 	s.migrationMu.Lock()
-	s.lastMigration = result
 	s.migrationReport = append(s.migrationReport, result)
 	s.migrationMu.Unlock()
 	metrics.DefaultRegistry().PersistenceMigrations.Add(1)

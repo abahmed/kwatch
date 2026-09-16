@@ -74,10 +74,10 @@ func TestCascadingSuppressionNoSuppressionForResolvedParent(t *testing.T) {
 }
 
 func TestNewIncidentAnnotatesDependentServices(t *testing.T) {
-	e := NewEngine(Config{
+	e := newTestEngine(Config{
 		Window: 10 * time.Minute,
 	})
-	e.SetServiceLister(&mockServiceLister{
+	setTestServiceLister(e, &mockServiceLister{
 		listFn: func(ns string) ([]*corev1.Service, error) {
 			return []*corev1.Service{
 				{
@@ -115,10 +115,10 @@ func TestNewIncidentAnnotatesDependentServices(t *testing.T) {
 }
 
 func TestNewIncidentAnnotatesParentUnhealthy(t *testing.T) {
-	e := NewEngine(Config{
+	e := newTestEngine(Config{
 		Window: 10 * time.Minute,
 	})
-	e.SetDeployLister(&mockDeployLister{
+	setTestDeployLister(e, &mockDeployLister{
 		getFn: func(ns, name string) (*appsv1.Deployment, error) {
 			return &appsv1.Deployment{
 				ObjectMeta: metav1.ObjectMeta{Generation: 2},
@@ -151,10 +151,10 @@ func TestNewIncidentAnnotatesParentUnhealthy(t *testing.T) {
 }
 
 func TestNewIncidentDoesNotAnnotateParentWhenHealthy(t *testing.T) {
-	e := NewEngine(Config{
+	e := newTestEngine(Config{
 		Window: 10 * time.Minute,
 	})
-	e.SetDeployLister(&mockDeployLister{
+	setTestDeployLister(e, &mockDeployLister{
 		getFn: func(ns, name string) (*appsv1.Deployment, error) {
 			return &appsv1.Deployment{
 				ObjectMeta: metav1.ObjectMeta{Generation: 2},
@@ -322,7 +322,7 @@ func TestBuildImageSummaryEmptyImage(t *testing.T) {
 }
 
 func TestSetSeverityMap(t *testing.T) {
-	e := NewEngine(Config{
+	e := newTestEngine(Config{
 		Window:   10 * time.Minute,
 		Enricher: &enricher.DefaultEnricher{},
 	})
@@ -330,6 +330,6 @@ func TestSetSeverityMap(t *testing.T) {
 	e.SetSeverityMap(sm)
 
 	// Engine with non-DefaultEnricher should not panic
-	e2 := NewEngine(Config{Window: 10 * time.Minute})
+	e2 := newTestEngine(Config{Window: 10 * time.Minute})
 	e2.SetSeverityMap(sm)
 }

@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/abahmed/kwatch/internal/clock"
 	"github.com/abahmed/kwatch/internal/insight"
 	"github.com/abahmed/kwatch/internal/message"
 	"github.com/abahmed/kwatch/internal/model"
@@ -108,7 +109,9 @@ func reportFor(
 	ins *insight.Insight,
 	clusterName string,
 ) *message.Report {
-	return message.NewReportBuilder(clusterName).Build(inc, action, ins)
+	return message.NewReportBuilderWithClock(
+		clusterName, clock.RealClock{},
+	).Build(inc, action, ins)
 }
 
 // headline is the one line a reader sees first: what happened, to what.
@@ -190,7 +193,9 @@ func formatIncidentText(
 	action model.IncidentAction,
 ) string {
 	renderer := message.NewSlackRenderer()
-	report := message.NewReportBuilder("").Build(inc, action, nil)
+	report := message.NewReportBuilderWithClock(
+		"", clock.RealClock{},
+	).Build(inc, action, nil)
 	return message.RenderAction(renderer, report)
 }
 

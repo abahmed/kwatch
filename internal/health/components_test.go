@@ -6,7 +6,10 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"testing"
+	"time"
 
+	"github.com/abahmed/kwatch/internal/clock"
+	"github.com/abahmed/kwatch/internal/config"
 	"github.com/abahmed/kwatch/internal/metrics"
 )
 
@@ -110,5 +113,37 @@ func TestComponentErrorUsesSafeReasonAndCountsTransitions(t *testing.T) {
 	status := server.ComponentStatuses()["provider"]
 	if status.Reason != "component_failed" {
 		t.Fatalf("unexpected component status reason: %q", status.Reason)
+	}
+}
+
+func TestComponentStatusRecordsOnlyTransitionTime(t *testing.T) {
+	first := time.Date(2026, 1, 2, 3, 4, 5, 0, time.UTC)
+	second := first.Add(time.Minute)
+	now := first
+	server := NewHealthServerWithClock(
+		config.HealthCheck{},
+		clock.Func(func() time.Time { return now }),
+	)
+
+	server.SetComponentStatus("watcher", "degraded", "cache_sync_failed", false)
+	status := server.ComponentStatuses()["watcher"]
+	if !status.LastTransition.Equal(first) {
+		t.Fatalf("first transition = %v, want %v",
+			status.LastTransition, first)
+	}
+
+	now = second
+	server.SetComponentStatus("watcher", "degraded", "cache_sync_failed", false)
+	status = server.ComponentStatuses()["watcher"]
+	if !status.LastTransition.Equal(first) {
+		t.Fatalf("repeated status changed transition time to %v",
+			status.LastTransition)
+	}
+
+	server.SetComponentStatus("watcher", "running", "", true)
+	status = server.ComponentStatuses()["watcher"]
+	if !status.LastTransition.Equal(second) {
+		t.Fatalf("recovery transition = %v, want %v",
+			status.LastTransition, second)
 	}
 }

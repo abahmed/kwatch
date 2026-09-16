@@ -1,6 +1,7 @@
 package message
 
 import (
+	"github.com/abahmed/kwatch/internal/clock"
 	"github.com/abahmed/kwatch/internal/insight"
 	"github.com/abahmed/kwatch/internal/model"
 )
@@ -30,6 +31,8 @@ func RenderIncidentWithInsight(
 	if action == model.ActionSkip {
 		return ""
 	}
-	report := NewReportBuilder(clusterName).Build(inc, action, ins)
+	report := NewReportBuilderWithClock(
+		clusterName, clock.RealClock{},
+	).Build(inc, action, ins)
 	return RenderAction(renderer, report)
 }

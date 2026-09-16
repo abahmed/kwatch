@@ -96,7 +96,7 @@ func TestHealthServerStartDisabled(t *testing.T) {
 	assert := assert.New(t)
 
 	server := NewHealthServer(config.HealthCheck{Port: 8080, Enabled: false})
-	err := server.Start(context.Background())
+	err := startForTest(server)
 	assert.Nil(err)
 }
 
@@ -104,7 +104,7 @@ func TestHealthServerStartEnabled(t *testing.T) {
 	assert := assert.New(t)
 
 	server := NewHealthServer(config.HealthCheck{Port: 8080, Enabled: true})
-	err := server.Start(context.Background())
+	err := startForTest(server)
 	assert.Nil(err)
 
 	// Test /healthz endpoint
@@ -124,7 +124,7 @@ func TestHealthServerStop(t *testing.T) {
 	assert := assert.New(t)
 
 	server := NewHealthServer(config.HealthCheck{Port: 8080, Enabled: true})
-	err := server.Start(context.Background())
+	err := startForTest(server)
 	assert.Nil(err)
 
 	err = server.Stop(context.Background())

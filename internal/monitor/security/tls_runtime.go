@@ -34,13 +34,13 @@ func (r *TLSRuntime) beginProcessing() {
 }
 
 // SweepTLSSecrets evaluates all cached TLS Secrets.
-func (r *TLSRuntime) SweepTLSSecrets() {
+func (r *TLSRuntime) SweepTLSSecrets() error {
 	r.beginProcessing()
 	r.mu.Lock()
 	secretLister := r.secret
 	r.mu.Unlock()
 	if secretLister == nil || !r.runtime.Compiled() {
-		return
+		return nil
 	}
 	policy := r.runtime.TlsMonitor()
 	threshold := policy.Threshold
@@ -52,11 +52,12 @@ func (r *TLSRuntime) SweepTLSSecrets() {
 	secrets, err := secretLister.List(labels.Everything())
 	if err != nil {
 		klog.ErrorS(err, "tls sweep: failed to list secrets from cache")
-		return
+		return err
 	}
 	for _, secret := range secrets {
 		r.processSecret(secret, warnWindow, criticalDays)
 	}
+	return nil
 }
 
 func (r *TLSRuntime) processSecret(

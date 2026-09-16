@@ -14,8 +14,7 @@ type Dependencies struct {
 	Clock      clock.Clock
 }
 
-// NewManager creates an empty delivery manager for tests and compatibility
-// callers. Production composition should use NewManagerWithDependencies.
+// NewManager creates an empty delivery manager for isolated tests.
 func NewManager() *Manager {
 	return NewManagerWithDependencies(Dependencies{})
 }

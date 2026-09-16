@@ -78,7 +78,11 @@ func TestRebuildGraphTracksCustomResourceOwner(t *testing.T) {
 func TestGraphReferenceRulesTraverseArrays(t *testing.T) {
 	graph := kwcontext.NewResourceGraph()
 	monitor := &Monitor{graph: graph}
-	monitor.SetGraphReferenceRules([]string{"spec.backendRefs.name=service"})
+	if err := monitor.ConfigurePolicy(
+		nil, []string{"spec.backendRefs.name=service"},
+	); err != nil {
+		t.Fatalf("configure graph reference policy: %v", err)
+	}
 	obj := &unstructured.Unstructured{Object: map[string]interface{}{
 		"metadata": map[string]interface{}{"name": "route", "namespace": "apps"},
 		"spec": map[string]interface{}{"backendRefs": []interface{}{

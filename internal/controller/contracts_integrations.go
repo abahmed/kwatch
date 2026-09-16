@@ -17,7 +17,7 @@ type ControlPlaneConfig interface {
 }
 
 type TLSProcessor interface {
-	SweepTLSSecrets()
+	SweepTLSSecrets() error
 }
 
 type TLSConfig interface {

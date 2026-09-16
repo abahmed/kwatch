@@ -67,7 +67,7 @@ func TestKubeletProxyEndpointsAndRetry(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	monitor := New(client, testConfig(), nil)
+	monitor := newTestMonitor(client, testConfig(), nil)
 	monitor.checkSummary(context.Background(), testNode("node-a"), nil)
 	monitor.checkCadvisor(context.Background(), testNode("node-a"))
 	monitor.checkRuntimeMetrics(context.Background(), testNode("node-a"))

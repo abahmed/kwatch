@@ -49,7 +49,8 @@ architecture unless a change explicitly expands its scope.
   not be hidden behind arbitrary numbered fragments.
 - Match the package name to the final directory component. For example,
   `internal/graphcontext` must declare `package graphcontext`.
-- Add short comments only where they explain an invariant, compatibility rule,
+- Add short comments only where they explain an invariant, persisted-format
+  compatibility rule,
   or non-obvious decision. Avoid decorative separator comments and restating
   the code.
 - Prefer small functions with one responsibility. Extract `build*`, `parse*`,
@@ -60,10 +61,10 @@ architecture unless a change explicitly expands its scope.
   collaborators through constructors or setters. Production code must not
   call `time.Now()` directly when a decision can be tested with a fake clock.
 - Keep package globals immutable or narrowly scoped. Use an explicit registry
-  or dependency seam for mutable process state; retain compatibility aliases
-  only when removing them would break external users.
-- Use `metrics.DefaultRegistry()` at internal call sites. Do not introduce new
-  direct uses of `metrics.Default` or hidden singleton clients.
+  or dependency seam for mutable process state; do not add transitional
+  aliases or wrappers.
+- Use `metrics.DefaultRegistry()` at internal call sites; do not introduce
+  hidden singleton clients.
 - Construct shared Kubernetes or HTTP clients in `internal/app` and pass them
   into monitors, providers, and integrations that need them.
 - Import `internal/graphcontext` with an explicit alias when the standard
@@ -112,11 +113,11 @@ architecture unless a change explicitly expands its scope.
 - Keep tests deterministic: use injected clocks and fake clients rather than
   sleeps, wall-clock assertions, or live network calls.
 - Add or update focused tests for every behavior change, especially lifecycle
-  transitions, suppression decisions, retries, persistence, and compatibility.
+  transitions, suppression decisions, retries, and persisted-format migration.
 - Do not mechanically rewrite unrelated files. Review `git diff` after each
   refactor and preserve user changes already present in the worktree.
-- Do not remove a legacy package or alias until `rg` confirms there are no
-  remaining imports and the full repository gate passes.
+- Remove transitional APIs once their callers are migrated. Confirm with
+  `rg`, then run focused validation and the full repository gate.
 
 ## Package map
 
@@ -168,19 +169,18 @@ delivery and integrations must not reparse raw YAML maps in production.
 `internal/client.ClientSet` is the application-owned client boundary. Build
 typed, dynamic, discovery, REST, HTTP, DNS, and kubelet dependencies once in
 the composition root and pass only the narrow client each component needs.
-Legacy constructors that accept a REST configuration belong in an explicitly
-named `compat.go` file and must not be used by production composition.
+All production constructors receive application-owned clients and runtime
+dependencies directly. Transitional compatibility constructors were removed
+before the first stable release.
 
 `controller.Controller` groups queue pipelines, typed family source views,
 namespace scope, and informer diagnostics in focused state bundles. The
 controller remains the single owner of synchronized informer sources; family
 runtimes receive only their matching view through explicit wiring.
 
-`controller.NewWithRuntimeConfig` is the canonical composition entrypoint. The
-older `controller.New` form only adapts direct test or compatibility callers;
-new application code must pass the already compiled `config.RuntimeConfig`.
-The same rule applies to family constructors ending in
-`WithRuntimeConfig`.
+`controller.NewWithRuntimeConfig` is the composition entrypoint. Application
+code and tests pass the already compiled `config.RuntimeConfig`; family
+constructors follow the same rule.
 
 `incident.AttributionSources` is the only source boundary used by incident
 attribution. The incident package must not retain Kubernetes listers or import
@@ -189,8 +189,7 @@ composition, before processing starts.
 
 The application owns lifecycle goroutines and shutdown. Health starts and
 stops only its HTTP server; the application calls `Open`, supervises `Serve`,
-and calls `Stop`. The legacy `Start` method is compatibility-only and must not
-be used by application composition. Health must not create a second
+and calls `Stop`. Health must not create a second
 context-shutdown goroutine. Every background persistence saver, watcher,
 ticker, and worker has an owner, cancellation path, bounded shutdown, and
 observable failure.
@@ -199,9 +198,8 @@ The PVC monitor snapshots state while holding its mutex, releases the lock,
 then emits observations or performs persistence I/O. No callback into an
 incident or delivery boundary may run while the PVC state lock is held.
 
-Provider and watcher compatibility constructors are isolated in `compat.go`.
-New production code must use shared transport and application-owned clients;
-it must not add a second raw HTTP, retry, status-classification, dynamic
+Providers and watchers use shared transport and application-owned clients. New
+code must not add a second raw HTTP, retry, status-classification, dynamic
 informer, or REST-client implementation.
 
 RCA is split by behavior inside `internal/insight`: cause evidence and root
@@ -278,8 +276,8 @@ Persistence consumers should use the narrow contracts in
 `internal/persistence/interfaces.go` (`BaselineStore`, `IncidentStore`,
 `FeedbackStore`, `ChangeHistoryStore`, and `TelemetryStore`). PVC state uses
 the consumer-owned `pvc.StateStore` port. The concrete manager belongs at the
-composition root. Legacy `any` methods remain
-only for compatibility fixtures and must not become new production call sites.
+composition root. Legacy `any` APIs are isolated to persisted-format migration
+code and are not runtime ports.
 
 Provider identities are defined by the dependency-free provider catalog leaf;
 the static alert catalog must have exactly one factory for every identity,
@@ -400,9 +398,7 @@ family-owned runtimes in `monitor/workload` directly through the matching
 `RuntimeSet` capability and configures all workload listers in one operation
 through `workload.SourceConfig` and `workload.Sources`. Deployment, ReplicaSet,
 Job, DaemonSet, StatefulSet, CronJob, HPA, and PDB queue processing now use
-direct family wiring in production. Resource-specific `Set*Lister` methods
-and `SetSources` methods remain package-level compatibility seams in
-`compat.go`, not controller wiring points; canonical family wiring uses one
+direct family wiring in production. Canonical family wiring uses one
 error-returning `ConfigureSources` operation.
 The aggregate workload capability has been removed. New controller wiring must
 use the specific family capability for each resource kind.
@@ -422,8 +418,8 @@ setters or add family-crossing policy dependencies.
 
 The same one-time source rule applies to TLS, control-plane, probe, metrics,
 kubelet metrics, PVC, status, graph, and RBAC integrations. Their canonical
-source bundles are configured before processing starts; legacy setters are
-compatibility-only and live in `compat.go`.
+source bundles are configured before processing starts; source mutation after
+startup is rejected.
 
 Optional Gateway API, storage, status, and KwatchConfig resources share
 informer construction and transform mechanics through
@@ -459,9 +455,7 @@ user documentation, and release notes when behavior changes.
 
 The application passes `catalog.NewProvider` to
 `delivery.Manager.InitRuntime`. Delivery must not import concrete provider
-packages. `InitWithFactory` remains a compatibility entry point for callers
-that still have raw alert maps; new production code must pass `RuntimeConfig`.
-`Manager.Init` remains an empty-manager compatibility helper.
+packages. Production and test composition pass `RuntimeConfig` directly.
 
 The delivery manager invokes providers directly through the canonical
 context-aware contract. There is no legacy provider adapter or context bridge.
@@ -508,9 +502,9 @@ boundary through the watcher's status sink; waiting for a missing CRD is a
 normal degraded/waiting state, not a process restart condition.
 
 Persistence migrations return structured `MigrationResult` values and retain
-the complete startup-cycle `MigrationReport` plus the latest-result
-compatibility accessor. Migration status and failures contribute to bounded
-SRE metrics; persisted keys and formats remain compatibility-bound.
+the complete startup-cycle `MigrationReport`. Migration status and failures
+contribute to bounded SRE metrics; persisted keys and formats remain
+compatibility-bound.
 
 Health diagnostics expose bounded component state and safe reason codes. Raw
 error strings remain in logs only. `/healthz` is liveness, `/readyz` describes

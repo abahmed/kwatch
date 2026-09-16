@@ -51,10 +51,6 @@ type Registry struct {
 
 var defaultRegistry = &Registry{}
 
-// Default is retained as a compatibility alias. New internal code must use
-// DefaultRegistry so the process-wide registry remains behind one boundary.
-var Default = defaultRegistry
-
 // DefaultRegistry returns the process-wide metrics registry through the
 // package boundary used by internal components.
 func DefaultRegistry() *Registry {

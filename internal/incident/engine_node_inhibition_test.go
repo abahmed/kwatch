@@ -11,7 +11,7 @@ import (
 )
 
 func TestEscalationSecondCrossingIsCritical(t *testing.T) {
-	e := NewEngine(Config{
+	e := newTestEngine(Config{
 		Window:            10 * time.Minute,
 		EscalationEnabled: true,
 		EscalationTiers:   []int{1, 3, 5},
@@ -55,7 +55,7 @@ func TestEscalationDisabledIsNoop(t *testing.T) {
 // BUG-2: inhibition tests.
 
 func TestInhibitionSuppressesPodOnBrokenNode(t *testing.T) {
-	e := NewEngine(Config{
+	e := newTestEngine(Config{
 		Window:                    10 * time.Minute,
 		InhibitNodeSuppressesPods: true,
 	})
@@ -78,7 +78,7 @@ func TestInhibitionSuppressesPodOnBrokenNode(t *testing.T) {
 }
 
 func TestInhibitionFlagOffDoesNotSuppress(t *testing.T) {
-	e := NewEngine(Config{
+	e := newTestEngine(Config{
 		Window:                    10 * time.Minute,
 		InhibitNodeSuppressesPods: false,
 	})
@@ -106,7 +106,7 @@ func TestInhibitionFlagOffDoesNotSuppress(t *testing.T) {
 }
 
 func TestInhibitionOtherNodeUnaffected(t *testing.T) {
-	e := NewEngine(Config{
+	e := newTestEngine(Config{
 		Window:                    10 * time.Minute,
 		InhibitNodeSuppressesPods: true,
 	})
@@ -131,7 +131,7 @@ func TestInhibitionOtherNodeUnaffected(t *testing.T) {
 }
 
 func TestInhibitionLiftsOnNodeResolve(t *testing.T) {
-	e := NewEngine(Config{
+	e := newTestEngine(Config{
 		Window:                    10 * time.Minute,
 		InhibitNodeSuppressesPods: true,
 	})
@@ -157,7 +157,7 @@ func TestInhibitionLiftsOnNodeResolve(t *testing.T) {
 }
 
 func TestInhibitionLiftsOnNodeResolveDuringHoldDown(t *testing.T) {
-	e := NewEngine(Config{
+	e := newTestEngine(Config{
 		Window:                    10 * time.Minute,
 		ResolveHoldDown:           5 * time.Minute,
 		InhibitNodeSuppressesPods: true,
@@ -195,7 +195,7 @@ func TestInhibitionLiftsOnNodeResolveDuringHoldDown(t *testing.T) {
 }
 
 func TestInhibitionMarkResolvedHoldDownClearsFlag(t *testing.T) {
-	e := NewEngine(Config{
+	e := newTestEngine(Config{
 		Window:                    10 * time.Minute,
 		ResolveHoldDown:           5 * time.Minute,
 		InhibitNodeSuppressesPods: true,
@@ -223,7 +223,7 @@ func TestInhibitionMarkResolvedHoldDownClearsFlag(t *testing.T) {
 }
 
 func TestInhibitionSuppressedCounter(t *testing.T) {
-	e := NewEngine(Config{
+	e := newTestEngine(Config{
 		Window:                    10 * time.Minute,
 		InhibitNodeSuppressesPods: true,
 	})
@@ -257,7 +257,7 @@ func TestInhibitionSuppressedCounter(t *testing.T) {
 }
 
 func TestInhibitionOvercommitDoesNotSuppressPods(t *testing.T) {
-	e := NewEngine(Config{
+	e := newTestEngine(Config{
 		Window:                    10 * time.Minute,
 		InhibitNodeSuppressesPods: true,
 	})
@@ -294,7 +294,7 @@ func TestInhibitionOvercommitDoesNotSuppressPods(t *testing.T) {
 }
 
 func TestInhibitionOvercommitDoesNotSuppressUnschedulable(t *testing.T) {
-	e := NewEngine(Config{
+	e := newTestEngine(Config{
 		Window:                    10 * time.Minute,
 		InhibitNodeSuppressesPods: true,
 	})
@@ -326,7 +326,7 @@ func TestInhibitionOvercommitDoesNotSuppressUnschedulable(t *testing.T) {
 }
 
 func TestInhibitionRecoveredBaselineNodeClearsFlag(t *testing.T) {
-	e := NewEngine(Config{
+	e := newTestEngine(Config{
 		Window:                    10 * time.Minute,
 		InhibitNodeSuppressesPods: true,
 	})
@@ -353,7 +353,7 @@ func TestInhibitionRecoveredBaselineNodeClearsFlag(t *testing.T) {
 }
 
 func TestInhibitionRefreshKeepsFlagWithOtherIncidents(t *testing.T) {
-	e := NewEngine(Config{
+	e := newTestEngine(Config{
 		Window:                    10 * time.Minute,
 		InhibitNodeSuppressesPods: true,
 	})

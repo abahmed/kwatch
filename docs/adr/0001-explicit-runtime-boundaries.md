@@ -30,8 +30,9 @@ packages own detection and observation behavior.
 - Recovery and notification decisions have one owner.
 - More wiring is visible in the composition root, which is intentional and
   easier to review than hidden registries.
-- Compatibility adapters and migrations are temporary, named seams and must
-  be removed only after import and behavior checks prove they are unused.
+- Transitional compatibility adapters were removed before the first stable
+  release. Persisted-data migrations remain because they protect existing
+  release-candidate installations.
 
 ## Alternatives rejected
 

@@ -26,7 +26,7 @@ func configureStatusMonitor(
 	now func() time.Time,
 	dynamicClient dynamic.Interface,
 	discoveryClient discovery.DiscoveryInterface,
-) func(context.Context) {
+) func(context.Context) error {
 	if !runtime.ClusterResourceMonitor().Enabled {
 		return nil
 	}
@@ -43,33 +43,28 @@ func configureStatusMonitor(
 		healthServer.SetComponentError("status", err)
 		return nil
 	}
-	if err := statusMonitor.SetConditionRules(
+	if err := statusMonitor.ConfigurePolicy(
 		runtime.CrdConfig().FailureConditions,
-	); err != nil {
-		healthServer.SetComponentError("status", err)
-		klog.ErrorS(err, "invalid generic status condition rules")
-		return nil
-	}
-	if err := statusMonitor.SetGraphReferenceRules(
 		runtime.CrdConfig().GraphReferences,
 	); err != nil {
 		healthServer.SetComponentError("status", err)
-		klog.ErrorS(err, "invalid generic status graph reference rules")
+		klog.ErrorS(err, "invalid generic status policy")
 		return nil
 	}
-	return func(ctx context.Context) {
+	return func(ctx context.Context) error {
 		if err := statusMonitor.Start(ctx); err != nil {
 			healthServer.SetComponentError("status", err)
 			klog.ErrorS(err, "generic status monitor stopped")
-			return
+			return err
 		}
 		status := statusMonitor.Status()
 		if len(status.SkippedResources) > 0 {
 			healthServer.SetComponentStatus(
 				"status", "degraded", "optional_api_unavailable", false,
 			)
-			return
+			return nil
 		}
 		healthServer.SetComponentStatus("status", "running", "", true)
+		return nil
 	}
 }

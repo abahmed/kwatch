@@ -61,7 +61,7 @@ func TestBaselineExpiredPrunes(t *testing.T) {
 }
 
 func TestRemovePodClearsSeen(t *testing.T) {
-	e := NewEngine(Config{
+	e := newTestEngine(Config{
 		Window: 10 * time.Minute,
 	})
 
@@ -100,7 +100,7 @@ func TestRemovePodClearsSeen(t *testing.T) {
 }
 
 func TestOwnerLevelBaselineFallsBackToEmptyPod(t *testing.T) {
-	e := NewEngine(Config{
+	e := newTestEngine(Config{
 		Window: 10 * time.Minute,
 		Baseline: map[string]map[string]int64{
 			"ns:ns/web:ServiceNoEndpoints:": {"": time.Now().Unix()},
@@ -120,7 +120,7 @@ func TestOwnerLevelBaselineFallsBackToEmptyPod(t *testing.T) {
 }
 
 func TestOwnerLevelBaselineNoEmptyPod(t *testing.T) {
-	e := NewEngine(Config{
+	e := newTestEngine(Config{
 		Window: 10 * time.Minute,
 		Baseline: map[string]map[string]int64{
 			"ns:ns/web:ServiceNoEndpoints:": {"web": time.Now().Unix()},
@@ -138,7 +138,7 @@ func TestOwnerLevelBaselineNoEmptyPod(t *testing.T) {
 }
 
 func TestStsOwnedPodsGroupByStsName(t *testing.T) {
-	e := NewEngine(Config{
+	e := newTestEngine(Config{
 		Window: 10 * time.Minute,
 		Enricher: &enricher.DefaultEnricher{
 			SeverityByOwnerKind: map[string]string{"StatefulSet": "high"},
@@ -214,7 +214,7 @@ func TestSnapshotEmpty(t *testing.T) {
 }
 
 func TestRenotifyConfig(t *testing.T) {
-	e := NewEngine(Config{
+	e := newTestEngine(Config{
 		Window: 10 * time.Minute,
 		RenotifyIntervalBySeverity: map[string]time.Duration{
 			"default": 1 * time.Minute,
@@ -231,7 +231,7 @@ func TestRenotifyConfig(t *testing.T) {
 
 func TestRevivedIncidentResetsRenotifyBudget(t *testing.T) {
 	fakeNow := time.Date(2025, 1, 1, 0, 0, 0, 0, time.UTC)
-	e := NewEngine(Config{
+	e := newTestEngine(Config{
 		Window: 10 * time.Minute,
 		RenotifyIntervalBySeverity: map[string]time.Duration{
 			"default": 1 * time.Minute,
@@ -322,7 +322,7 @@ func TestRevivedIncidentResetsRenotifyBudget(t *testing.T) {
 // BUG-1: escalation tests.
 
 func escTestEngine() *Engine {
-	return NewEngine(Config{
+	return newTestEngine(Config{
 		Window:            10 * time.Minute,
 		EscalationEnabled: true,
 		EscalationTiers:   []int{3, 10, 50},

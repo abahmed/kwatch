@@ -21,7 +21,7 @@ import (
 // exactly this error in production. This reproduces it and proves recovery.
 func TestLegacyIncidentStateIsMigratedOnLoad(t *testing.T) {
 	ctx := context.Background()
-	sm := NewManager(fake.NewSimpleClientset(), "kwatch")
+	sm := newTestManager(fake.NewSimpleClientset(), "kwatch")
 	now := time.Now().UTC().Truncate(time.Second)
 
 	legacy := map[string]any{

@@ -6,8 +6,8 @@ import (
 )
 
 // RuntimeConfig is the immutable, derived configuration used at runtime.
-// The YAML-facing Config remains the compatibility boundary; this value keeps
-// normalization and compilation out of monitor construction.
+// The YAML-facing Config is confined to loading and overlay boundaries; this
+// value keeps normalization and compilation out of monitor construction.
 type RuntimeConfig struct {
 	compiled    bool
 	application ApplicationRuntime

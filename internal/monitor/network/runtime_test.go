@@ -35,7 +35,7 @@ func TestNetworkRuntimeReconcilesRestrictivePolicy(t *testing.T) {
 	runtime := NewRuntimeWithRuntimeConfig(
 		config.RuntimeConfig{}, sink, time.Now,
 	)
-	runtime.SetSources(Sources{
+	runtime.ConfigureSources(Sources{
 		NetworkPolicy: networkingv1lister.NewNetworkPolicyLister(indexer),
 	})
 

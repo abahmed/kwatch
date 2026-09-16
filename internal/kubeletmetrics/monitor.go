@@ -83,14 +83,14 @@ func NewWithClock(
 	}
 }
 
-func (m *Monitor) Start(ctx context.Context) {
+func (m *Monitor) Start(ctx context.Context) error {
 	if !m.cfg.Enabled || m.client == nil {
-		return
+		return nil
 	}
 	m.mu.Lock()
 	if m.started {
 		m.mu.Unlock()
-		return
+		return nil
 	}
 	m.started = true
 	m.mu.Unlock()
@@ -105,7 +105,7 @@ func (m *Monitor) Start(ctx context.Context) {
 	for {
 		select {
 		case <-ctx.Done():
-			return
+			return nil
 		case <-ticker.C:
 			m.sweep(ctx)
 		}

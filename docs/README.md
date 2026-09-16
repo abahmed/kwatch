@@ -29,7 +29,7 @@ implementation-only notes may remain beside code when they are not published.
 - [Contributor architecture guide](./contributor-architecture.md) — package
   ownership and extension workflows for source-tree contributors.
 - [Architecture ADRs](./adr/) — accepted decisions behind runtime boundaries
-  and compatibility seams.
+  and persisted-format migration seams.
 - [Release integrity](./release-integrity.md) — image, manifest, and chart
   verification.
 - [Licensing](./licensing.md) — project and dependency licensing.

@@ -33,10 +33,10 @@ func TestSetReady(t *testing.T) {
 
 func TestHealthServerStopIsIdempotent(t *testing.T) {
 	server := NewHealthServer(config.HealthCheck{Port: 0, Enabled: true})
-	assert.NoError(t, server.Start(context.Background()))
+	assert.NoError(t, startForTest(server))
 	assert.NoError(t, server.Stop(context.Background()))
 	assert.NoError(t, server.Stop(context.Background()))
-	assert.Error(t, server.Start(context.Background()))
+	assert.Error(t, startForTest(server))
 }
 
 func TestReadyzHandlerNotReady(t *testing.T) {

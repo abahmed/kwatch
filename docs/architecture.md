@@ -123,8 +123,7 @@ HTTP adapters use the application-owned client through the shared
 `delivery/transport` boundary, never hidden context values or package globals.
 
 Every family and integration receives synchronized sources through one typed
-`ConfigureSources` operation before processing starts. Compatibility setter
-methods are isolated from production composition. Health diagnostics use safe
+`ConfigureSources` operation before processing starts. Health diagnostics use safe
 reason codes, and persistence reports all migration operations from a startup
 cycle rather than exposing only the final migration result.
 
@@ -148,9 +147,9 @@ project:
 - Tests use `Test<Type><Behavior>` and describe observable behavior rather than
   implementation order.
 
-Internal package names should converge on the canonical domain vocabulary. Keep
-compatibility only where it is part of a supported external behavior or a
-persisted/configuration format; make those seams explicit and test them.
+Internal package names should converge on the canonical domain vocabulary.
+Transitional APIs are removed before the first stable release; only persisted
+and external configuration formats retain explicit, tested compatibility paths.
 
 ### Two doors into the incident engine
 

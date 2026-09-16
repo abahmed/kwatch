@@ -39,16 +39,6 @@ func (r RuntimeConfig) DisableStartupMessage() bool {
 	return r.application.DisableStartupMessage
 }
 
-// WithApplicationIdentity returns a copy with the compatibility application
-// identity replaced. It is used only by legacy delivery initialization.
-func WithApplicationIdentity(
-	r RuntimeConfig,
-	clusterName string,
-) RuntimeConfig {
-	r.application.ClusterName = clusterName
-	return r
-}
-
 // Telemetry returns the normalized adoption telemetry policy.
 func (r RuntimeConfig) Telemetry() Telemetry { return r.operations.telemetry }
 

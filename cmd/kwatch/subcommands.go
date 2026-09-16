@@ -106,8 +106,6 @@ func runReplay(dryRun bool, in io.Reader, out, errOut io.Writer) int {
 		HTTPClient: client.NewHTTPClientWithRuntime(runtime),
 	})
 	am.InitRuntime(runtime, catalog.NewProvider)
-	am.SetSilences(runtime.Silences())
-	am.SetTemplates(runtime.Templates())
 
 	scanner := bufio.NewScanner(in)
 	for scanner.Scan() {

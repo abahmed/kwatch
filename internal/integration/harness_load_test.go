@@ -4,13 +4,12 @@ import (
 	"fmt"
 	"testing"
 
-	"github.com/abahmed/kwatch/internal/incident"
 	"github.com/abahmed/kwatch/internal/model"
 )
 
 func TestBoundedStateUnderLoad(t *testing.T) {
 	rec := &recordingDelivery{}
-	eng := incident.NewEngine(defaultConfig(rec))
+	eng := newTestIncidentEngine(defaultConfig(rec))
 
 	// 10 distinct owners × 100 events each = 1000 total events
 	distinctOwners := 10
@@ -49,7 +48,7 @@ func TestBoundedStateUnderLoad(t *testing.T) {
 // under bulk-load conditions.
 func BenchmarkProcess(b *testing.B) {
 	rec := &recordingDelivery{}
-	eng := incident.NewEngine(defaultConfig(rec))
+	eng := newTestIncidentEngine(defaultConfig(rec))
 
 	owner := "dep-bench"
 	cs := makeContainerState(1, "CrashLoopBackOff", 137)

@@ -12,7 +12,7 @@ import (
 )
 
 func newSmartGroupingEngine() *Engine {
-	return NewEngine(Config{
+	return newTestEngine(Config{
 		Window:              10 * time.Minute,
 		SmartGroupingWindow: 60 * time.Second,
 	})
@@ -69,7 +69,7 @@ func TestSmartGroupingBuffersSameReason(t *testing.T) {
 func TestNamespaceFanOutCollapsesIntoOneAlert(t *testing.T) {
 	now := time.Date(2025, 1, 1, 0, 0, 0, 0, time.UTC)
 	newEngine := func(threshold int) *Engine {
-		e := NewEngine(
+		e := newTestEngine(
 			Config{
 				Window:                   10 * time.Minute,
 				SmartGroupingWindow:      60 * time.Second,
@@ -246,7 +246,7 @@ func TestNamespaceFanOutCollapsesIntoOneAlert(t *testing.T) {
 // is seeded directly here, as any future path that produces one would leave it.
 func TestNamespaceFanOutClosesTheGroupItAbsorbs(t *testing.T) {
 	now := time.Date(2025, 1, 1, 0, 0, 0, 0, time.UTC)
-	e := NewEngine(
+	e := newTestEngine(
 		Config{
 			Window:                   10 * time.Minute,
 			SmartGroupingWindow:      60 * time.Second,
@@ -309,7 +309,7 @@ func TestNamespaceFanOutClosesTheGroupItAbsorbs(t *testing.T) {
 
 func TestNamespaceFanOutDoesNotMergeNodeScopedGroups(t *testing.T) {
 	now := time.Date(2025, 1, 1, 0, 0, 0, 0, time.UTC)
-	e := NewEngine(
+	e := newTestEngine(
 		Config{
 			Window:                   10 * time.Minute,
 			SmartGroupingWindow:      60 * time.Second,

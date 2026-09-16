@@ -16,7 +16,7 @@ import (
 
 func TestCleanupCooldownExpires(t *testing.T) {
 	fakeNow := time.Date(2025, 1, 1, 0, 0, 0, 0, time.UTC)
-	e := NewEngine(Config{
+	e := newTestEngine(Config{
 		Window: 10 * time.Minute,
 	})
 	e.now = mockClock(fakeNow)
@@ -48,7 +48,7 @@ func TestCleanupCooldownExpires(t *testing.T) {
 }
 
 func TestSuppressedOwnersTracked(t *testing.T) {
-	e := NewEngine(Config{
+	e := newTestEngine(Config{
 		Window:                    10 * time.Minute,
 		InhibitNodeSuppressesPods: true,
 	})
@@ -107,7 +107,7 @@ func TestSuppressedOwnersTracked(t *testing.T) {
 }
 
 func TestUnschedulableSuppressedDuringNodeIncident(t *testing.T) {
-	e := NewEngine(Config{
+	e := newTestEngine(Config{
 		Window:                    10 * time.Minute,
 		InhibitNodeSuppressesPods: true,
 	})
@@ -233,7 +233,7 @@ func (m *mockDSNsLister) List(
 }
 
 func TestSnapshotAllRestoreIncidentsRoundTrip(t *testing.T) {
-	e := NewEngine(Config{
+	e := newTestEngine(Config{
 		Window: 10 * time.Minute,
 	})
 	ev := event.Event{
@@ -256,7 +256,7 @@ func TestSnapshotAllRestoreIncidentsRoundTrip(t *testing.T) {
 	assert.Equal(t, inc.State, snapped.State)
 
 	// Restore into a fresh engine with matching baseline
-	e2 := NewEngine(Config{
+	e2 := newTestEngine(Config{
 		Window: 10 * time.Minute,
 		Baseline: map[string]map[string]int64{
 			string(inc.Key): {"pod-1": time.Now().Unix()},
@@ -276,7 +276,7 @@ func TestSnapshotAllRestoreIncidentsRoundTrip(t *testing.T) {
 }
 
 func TestSnapshotPersistedRoundTrip(t *testing.T) {
-	e := NewEngine(Config{
+	e := newTestEngine(Config{
 		Window: 10 * time.Minute,
 	})
 	ev := event.Event{
@@ -294,7 +294,7 @@ func TestSnapshotPersistedRoundTrip(t *testing.T) {
 	assert.Equal(t, inc.Reason, snap[0].Reason)
 	assert.Equal(t, inc.State, snap[0].State)
 
-	e2 := NewEngine(Config{
+	e2 := newTestEngine(Config{
 		Window: 10 * time.Minute,
 		Baseline: map[string]map[string]int64{
 			string(inc.Key): {"pod-1": time.Now().Unix()},
@@ -309,7 +309,7 @@ func TestSnapshotPersistedRoundTrip(t *testing.T) {
 }
 
 func TestMassFailurePersistenceRoundTrip(t *testing.T) {
-	e := NewEngine(Config{
+	e := newTestEngine(Config{
 		Window: 10 * time.Minute,
 	})
 	mfKey := MassFailureKey("configmap/ns/app-cfg")
@@ -345,7 +345,7 @@ func TestMassFailurePersistenceRoundTrip(t *testing.T) {
 
 	// Restore into a fresh engine WITHOUT any baseline: mass failures bypass
 	// the baseline gate, so they survive restarts.
-	e2 := NewEngine(Config{Window: 10 * time.Minute})
+	e2 := newTestEngine(Config{Window: 10 * time.Minute})
 	restored := make(map[model.IncidentKey]*model.Incident, len(snap))
 	for i := range snap {
 		restored[snap[i].Key] = snap[i].ToIncident()

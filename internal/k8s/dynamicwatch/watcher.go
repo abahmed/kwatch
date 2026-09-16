@@ -38,6 +38,7 @@ type Watcher struct {
 	factories   []dynamicinformer.DynamicSharedInformerFactory
 	informers   []cache.SharedIndexInformer
 	skippedGVR  []schema.GroupVersionResource
+	unavailable map[string]bool
 	cancel      context.CancelFunc
 	started     bool
 	generation  uint64
@@ -119,7 +120,6 @@ func (w *Watcher) StartGeneration(
 	for _, spec := range specs {
 		if !ResourceAvailable(w.discovery, spec.GVR) {
 			skipped = append(skipped, spec.GVR)
-			metrics.DefaultRegistry().OptionalAPIUnavailable.Add(1)
 			continue
 		}
 		for _, namespace := range namespaces(spec.Namespaced) {
@@ -140,6 +140,7 @@ func (w *Watcher) StartGeneration(
 	}
 
 	w.mu.Lock()
+	unavailableTransitions := w.updateUnavailableLocked(skipped)
 	w.factories = factories
 	w.informers = informers
 	w.skippedGVR = skipped
@@ -148,6 +149,11 @@ func (w *Watcher) StartGeneration(
 	w.generation++
 	generation := w.generation
 	w.mu.Unlock()
+	if unavailableTransitions > 0 {
+		metrics.DefaultRegistry().OptionalAPIUnavailable.Add(
+			int64(unavailableTransitions),
+		)
+	}
 	for _, factory := range factories {
 		factory.Start(runCtx.Done())
 	}
@@ -264,6 +270,22 @@ func (w *Watcher) clearStateLocked() {
 	w.factories = nil
 	w.informers = nil
 	w.skippedGVR = nil
+}
+
+func (w *Watcher) updateUnavailableLocked(
+	skipped []schema.GroupVersionResource,
+) int {
+	current := make(map[string]bool, len(skipped))
+	transitions := 0
+	for _, gvr := range skipped {
+		key := gvr.String()
+		current[key] = true
+		if !w.unavailable[key] {
+			transitions++
+		}
+	}
+	w.unavailable = current
+	return transitions
 }
 
 // WaitForCacheSync waits for every dynamic informer created by Start.

@@ -76,13 +76,13 @@ func NewUpgrader(
 	}
 }
 
-func (u *Upgrader) CheckUpdates(ctx context.Context) {
+func (u *Upgrader) CheckUpdates(ctx context.Context) error {
 	if u.config.DisableUpdateCheck ||
 		version.Short() == "dev" {
 		if u.config.DisableUpdateCheck {
 			klog.InfoS("update check disabled", "component", "upgrader")
 		}
-		return
+		return nil
 	}
 
 	if u.isPrerelease(version.Short()) {
@@ -93,7 +93,7 @@ func (u *Upgrader) CheckUpdates(ctx context.Context) {
 			"version",
 			version.Short(),
 		)
-		return
+		return nil
 	}
 
 	u.checkRelease(ctx)
@@ -105,7 +105,7 @@ func (u *Upgrader) CheckUpdates(ctx context.Context) {
 		select {
 		case <-ctx.Done():
 			klog.InfoS("upgrader stopped")
-			return
+			return nil
 		case <-ticker.C:
 			u.checkRelease(ctx)
 		}

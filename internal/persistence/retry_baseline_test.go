@@ -19,7 +19,7 @@ import (
 func TestMarkAsInitializedUpdateMissingKeys(t *testing.T) {
 	assert := assert.New(t)
 	client := fake.NewSimpleClientset()
-	sm := NewManager(client, "kwatch")
+	sm := newTestManager(client, "kwatch")
 
 	cm := &corev1.ConfigMap{
 		ObjectMeta: metav1.ObjectMeta{
@@ -63,7 +63,7 @@ func TestMarkAsInitializedUpdateMissingKeys(t *testing.T) {
 func TestMarkAsInitializedPreservesExistingClusterID(t *testing.T) {
 	assert := assert.New(t)
 	client := fake.NewSimpleClientset()
-	sm := NewManager(client, "kwatch")
+	sm := newTestManager(client, "kwatch")
 
 	cm := &corev1.ConfigMap{
 		ObjectMeta: metav1.ObjectMeta{
@@ -236,7 +236,7 @@ func TestNewRetryConfigMapManager(t *testing.T) {
 func TestGetBaselineNoConfigMap(t *testing.T) {
 	assert := assert.New(t)
 	client := fake.NewSimpleClientset()
-	sm := NewManager(client, "kwatch")
+	sm := newTestManager(client, "kwatch")
 
 	result := sm.GetBaseline(context.Background())
 	assert.Nil(result)
@@ -246,7 +246,7 @@ func TestSaveAndGetBaseline(t *testing.T) {
 	assert := assert.New(t)
 	client := fake.NewSimpleClientset()
 
-	sm := NewManager(client, "kwatch")
+	sm := newTestManager(client, "kwatch")
 
 	baseline := map[string]map[string]int64{
 		"default:deploy-1:CrashLoopBackOff:app": {"pod-1": 1718064000},
@@ -276,7 +276,7 @@ func TestSaveBaselineOverwrites(t *testing.T) {
 	assert := assert.New(t)
 	client := fake.NewSimpleClientset()
 
-	sm := NewManager(client, "kwatch")
+	sm := newTestManager(client, "kwatch")
 
 	err := sm.SaveBaseline(
 		context.Background(),
@@ -303,7 +303,7 @@ func TestSaveAndGetPvcUsage(t *testing.T) {
 	assert := assert.New(t)
 	client := fake.NewSimpleClientset()
 
-	sm := NewManager(client, "kwatch")
+	sm := newTestManager(client, "kwatch")
 
 	usage := map[string]model.PVCSample{
 		"pv-1": {
@@ -339,7 +339,7 @@ func TestSaveAndGetPvcUsage(t *testing.T) {
 func TestGetPvcUsageNoConfigMap(t *testing.T) {
 	assert := assert.New(t)
 	client := fake.NewSimpleClientset()
-	sm := NewManager(client, "kwatch")
+	sm := newTestManager(client, "kwatch")
 
 	result := sm.GetPvcUsage(context.Background())
 	assert.Nil(result)
@@ -369,7 +369,7 @@ func TestLegacyBaselineMigration(t *testing.T) {
 	)
 	assert.Nil(err)
 
-	sm := NewManager(client, "kwatch")
+	sm := newTestManager(client, "kwatch")
 
 	loaded := sm.GetBaseline(context.Background())
 	assert.NotNil(loaded)

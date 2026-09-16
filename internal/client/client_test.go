@@ -46,7 +46,7 @@ func TestNewKubernetesClientInvalidKubeconfig(t *testing.T) {
 	defer os.Unsetenv("KUBECONFIG")
 
 	cfg := &config.App{}
-	_, err := NewKubernetesClient(cfg)
+	_, err := newTestKubernetesClient(cfg)
 	assert.NotNil(err)
 	assert.Contains(err.Error(), "cannot build kubernetes out of cluster config")
 }
@@ -66,7 +66,7 @@ func TestNewKubernetesClientInvalidKubeconfigContent(t *testing.T) {
 	defer os.Unsetenv("KUBECONFIG")
 
 	cfg := &config.App{}
-	_, err = NewKubernetesClient(cfg)
+	_, err = newTestKubernetesClient(cfg)
 	assert.NotNil(err)
 }
 
@@ -102,7 +102,7 @@ users:
 	defer os.Unsetenv("KUBECONFIG")
 
 	cfg := &config.App{}
-	client, err := NewKubernetesClient(cfg)
+	client, err := newTestKubernetesClient(cfg)
 	assert.Nil(err)
 	assert.NotNil(client)
 }
@@ -141,7 +141,7 @@ users:
 	cfg := &config.App{
 		ProxyURL: "http://proxy:8080",
 	}
-	client, err := NewKubernetesClient(cfg)
+	client, err := newTestKubernetesClient(cfg)
 	assert.Nil(err)
 	assert.NotNil(client)
 }

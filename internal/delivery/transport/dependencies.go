@@ -26,8 +26,8 @@ type ProviderContext struct {
 }
 
 // Now returns the configured time for provider payloads and signatures. A
-// zero value keeps compatibility-created providers deterministic; production
-// composition always supplies the application clock.
+// zero dependency is deterministic for isolated test fixtures; production
+// composition supplies the application clock.
 func (d Dependencies) Now() time.Time {
 	if d.Clock == nil {
 		return time.Time{}

@@ -19,13 +19,15 @@ func TestMarkAsInitializedReportsFutureStateSchema(t *testing.T) {
 			stateSchemaVersionKey: "99",
 		},
 	})
-	store := NewManager(client, "kwatch")
+	store := newTestManager(client, "kwatch")
 
 	require.NoError(t, store.MarkAsInitialized(
 		context.Background(), "cluster", "version",
 	))
 
-	result := store.LastMigration()
+	report := store.MigrationReport()
+	result := report[len(report)-1]
+	require.Equal(t, "state", result.Store)
 	require.Equal(t, MigrationUnsupported, result.Status)
 	require.True(t, result.Recoverable)
 	require.True(t, result.MonitoringMayContinue)
@@ -45,11 +47,13 @@ func TestMigrationResultRecordsBaselineFailure(t *testing.T) {
 		},
 		Data: map[string]string{baselineKey: "invalid"},
 	})
-	store := NewManager(client, "kwatch")
+	store := newTestManager(client, "kwatch")
 
 	_, err := store.MigrateLegacyBaselineWithResult(context.Background())
 	require.Error(t, err)
-	require.Equal(t, MigrationFailed, store.LastMigration().Status)
+	report := store.MigrationReport()
+	require.Equal(t, MigrationFailed, report[len(report)-1].Status)
+	require.Equal(t, "baseline", report[len(report)-1].Store)
 }
 
 func TestMarkAsInitializedReportsMalformedSchemaWithoutOverwriting(
@@ -63,13 +67,14 @@ func TestMarkAsInitializedReportsMalformedSchemaWithoutOverwriting(
 			stateSchemaVersionKey: "not-a-version",
 		},
 	})
-	store := NewManager(client, "kwatch")
+	store := newTestManager(client, "kwatch")
 
 	require.NoError(t, store.MarkAsInitialized(
 		context.Background(), "cluster", "version",
 	))
 
-	result := store.LastMigration()
+	report := store.MigrationReport()
+	result := report[len(report)-1]
 	require.Equal(t, MigrationFailed, result.Status)
 	require.Equal(t, "state schema version is malformed", result.Detail)
 	require.NotContains(t, result.Detail, "not-a-version")
@@ -88,7 +93,7 @@ func TestMigrationReportContainsAllStartupOperations(t *testing.T) {
 		},
 		Data: map[string]string{stateSchemaVersionKey: "1"},
 	})
-	store := NewManager(client, "kwatch")
+	store := newTestManager(client, "kwatch")
 
 	require.NoError(t, store.MarkAsInitialized(
 		context.Background(), "cluster", "version",
@@ -98,6 +103,8 @@ func TestMigrationReportContainsAllStartupOperations(t *testing.T) {
 
 	report := store.MigrationReport()
 	require.Len(t, report, 2)
+	require.Equal(t, "state", report[0].Store)
+	require.Equal(t, "baseline", report[1].Store)
 	require.Equal(t, "kwatch-state", report[0].SourceFormat)
 	require.Equal(t, "kwatch-state/baseline", report[1].SourceFormat)
 

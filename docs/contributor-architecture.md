@@ -83,8 +83,9 @@ responsibility it changes instead of growing the package's coordinator file.
    `cluster.SourceConfig` and `cluster.Sources`; network and security runtimes
 use their corresponding `SourceConfig` and `Sources` types.
 TLS, RBAC, control-plane, probe, metrics, kubelet metrics, PVC, and watcher
-integrations follow the same one-time `ConfigureSources` rule. Compatibility
-setters are kept only in `compat.go` and are not valid application wiring.
+integrations follow the same one-time `ConfigureSources` rule. Production code
+uses only these canonical source bundles; transitional setter shims have been
+removed before the first stable release.
 5. Keep informer, queue, tombstone, and cache-sync ownership in the
    controller.
 6. Add semantic unit tests and controller integration tests.
@@ -94,8 +95,7 @@ Do not add a method to a universal monitor interface. Put new detection in the
 cohesive monitor family that owns the resource, with explicit dependencies.
 
 Health lifecycle is application-owned: composition calls `HealthServer.Open`,
-the supervisor runs `HealthServer.Serve`, and shutdown calls `Stop`. The
-compatibility `Start` method is not a production composition path.
+the supervisor runs `HealthServer.Serve`, and shutdown calls `Stop`.
 
 Health responses expose bounded component states and reason codes. Detailed
 errors belong in redacted logs, not public diagnostics. A missing lister is an

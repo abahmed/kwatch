@@ -13,15 +13,15 @@ import (
 )
 
 type optionalRuns struct {
-	tlsSweep        func()
-	statusRun       func(context.Context)
-	metricsRun      func(context.Context)
-	probeRun        func(context.Context)
-	kubeletRun      func(context.Context)
-	storageRun      func(context.Context)
-	networkRun      func(context.Context)
-	securityRun     func(context.Context)
-	controlPlaneRun func(context.Context)
+	tlsSweep        func() error
+	statusRun       func(context.Context) error
+	metricsRun      func(context.Context) error
+	probeRun        func(context.Context) error
+	kubeletRun      func(context.Context) error
+	storageRun      func(context.Context) error
+	networkRun      func(context.Context) error
+	securityRun     func(context.Context) error
+	controlPlaneRun func(context.Context) error
 }
 
 func configureOptionalRuns(
@@ -87,7 +87,7 @@ func configureKubeletRun(
 	namespaces []string,
 	watchAll bool,
 	now func() time.Time,
-) func(context.Context) {
+) func(context.Context) error {
 	monitor := kubeletmetrics.NewWithClock(
 		boot.clients.Kubernetes,
 		runtime.KubeletTelemetryMonitor(),
@@ -104,7 +104,7 @@ func configureKubeletRun(
 		PodLister: ctl.PodLister(), NodeLister: ctl.NodeLister(),
 		StateStore: stateStore,
 	}); err != nil {
-		return nil
+		return func(context.Context) error { return err }
 	}
 	boot.healthServer.SetTelemetryLister(monitor)
 	return monitor.Start

@@ -1,7 +1,6 @@
 package app
 
 import (
-	"context"
 	"time"
 
 	"github.com/abahmed/kwatch/internal/audit"
@@ -14,15 +13,6 @@ import (
 	"github.com/abahmed/kwatch/internal/insight"
 	"github.com/abahmed/kwatch/internal/model"
 )
-
-// configureDelivery starts delivery after InitRuntime has compiled the
-// immutable routing, template, and silence snapshot.
-func configureDelivery(
-	ctx context.Context,
-	am *delivery.Manager,
-) {
-	am.Start(ctx)
-}
 
 // engineHolder carries the engine through hook registration so the hooks can
 // reference it after construction completes.

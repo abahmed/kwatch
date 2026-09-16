@@ -5,6 +5,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/abahmed/kwatch/internal/clock"
 	"github.com/abahmed/kwatch/internal/config"
 )
 
@@ -16,7 +17,11 @@ func TestStartReturnsExplicitUpgradeAndDowntimeDecision(t *testing.T) {
 		lastSeen:  now.Add(-10 * time.Minute),
 		clusterID: "cluster-1",
 	}
-	manager := NewStartupManager(store, &config.App{})
+	manager := NewStartupManagerWithRuntime(
+		store,
+		config.RuntimeConfigFor(&config.Config{}),
+		clock.RealClock{},
+	)
 	manager.now = func() time.Time { return now }
 	result, err := manager.Start(context.Background())
 	if err != nil {

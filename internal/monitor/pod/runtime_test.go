@@ -56,7 +56,7 @@ func TestRuntimeIgnoresStalePodDeletion(t *testing.T) {
 	runtime := NewRuntimeWithRuntimeConfig(
 		nil, config.RuntimeConfig{}, sink, nil, nil, time.Now,
 	)
-	runtime.SetSources(RuntimeSources{Pod: newPodLister(
+	runtime.ConfigureSources(RuntimeSources{Pod: newPodLister(
 		&corev1.Pod{ObjectMeta: metav1.ObjectMeta{
 			Namespace: "apps", Name: "api", UID: "new",
 		}},

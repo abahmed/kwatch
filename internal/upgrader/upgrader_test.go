@@ -65,7 +65,7 @@ func TestNewUpgrader(t *testing.T) {
 
 	upgraderConfig := &config.Upgrader{}
 	deliveryManager := &delivery.Manager{}
-	persistenceManager := persistence.NewManager(
+	persistenceManager := newTestPersistenceManager(
 		fake.NewSimpleClientset(),
 		"kwatch",
 	)
@@ -95,7 +95,7 @@ func TestCheckUpdatesDisabled(t *testing.T) {
 		DisableUpdateCheck: true,
 	}
 	deliveryManager := &delivery.Manager{}
-	persistenceManager := persistence.NewManager(
+	persistenceManager := newTestPersistenceManager(
 		fake.NewSimpleClientset(),
 		"kwatch",
 	)
@@ -111,7 +111,7 @@ func TestUpgraderFields(t *testing.T) {
 		DisableUpdateCheck: true,
 	}
 	deliveryManager := &delivery.Manager{}
-	persistenceManager := persistence.NewManager(
+	persistenceManager := newTestPersistenceManager(
 		fake.NewSimpleClientset(),
 		"kwatch",
 	)
@@ -149,7 +149,7 @@ func TestUpgraderWithDisabledConfig(t *testing.T) {
 		DisableUpdateCheck: true,
 	}
 	deliveryManager := &delivery.Manager{}
-	persistenceManager := persistence.NewManager(
+	persistenceManager := newTestPersistenceManager(
 		fake.NewSimpleClientset(),
 		"kwatch",
 	)
@@ -166,7 +166,7 @@ func TestUpgraderWithEnabledConfig(t *testing.T) {
 		DisableUpdateCheck: false,
 	}
 	deliveryManager := &delivery.Manager{}
-	persistenceManager := persistence.NewManager(
+	persistenceManager := newTestPersistenceManager(
 		fake.NewSimpleClientset(),
 		"kwatch",
 	)
@@ -181,7 +181,7 @@ func TestUpgraderConfigDefaults(t *testing.T) {
 
 	upgraderConfig := &config.Upgrader{}
 	deliveryManager := &delivery.Manager{}
-	persistenceManager := persistence.NewManager(
+	persistenceManager := newTestPersistenceManager(
 		fake.NewSimpleClientset(),
 		"kwatch",
 	)
@@ -207,7 +207,7 @@ func TestUpgraderReusePersistenceManager(t *testing.T) {
 
 	upgraderConfig := &config.Upgrader{}
 	deliveryManager := &delivery.Manager{}
-	sharedPersistenceManager := persistence.NewManager(
+	sharedPersistenceManager := newTestPersistenceManager(
 		fake.NewSimpleClientset(),
 		"kwatch",
 	)
@@ -228,7 +228,7 @@ func TestUpgraderPersistenceManager(t *testing.T) {
 	assert := assert.New(t)
 
 	client := fake.NewSimpleClientset()
-	persistenceManager := persistence.NewManager(client, "kwatch")
+	persistenceManager := newTestPersistenceManager(client, "kwatch")
 	upgraderConfig := &config.Upgrader{}
 	deliveryManager := &delivery.Manager{}
 
@@ -256,7 +256,7 @@ func TestUpgraderGetNotifiedVersion(t *testing.T) {
 		context.Background(), cm, metav1.CreateOptions{})
 	assert.Nil(err)
 
-	persistenceManager := persistence.NewManager(client, namespace)
+	persistenceManager := newTestPersistenceManager(client, namespace)
 	upgraderConfig := &config.Upgrader{}
 	deliveryManager := &delivery.Manager{}
 

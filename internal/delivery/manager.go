@@ -68,27 +68,6 @@ func (a *Manager) nowTime() time.Time {
 	return a.now()
 }
 
-func (a *Manager) SetTemplates(tpl map[string]string) {
-	if len(tpl) == 0 {
-		a.cfgMu.Lock()
-		a.templates = nil
-		a.cfgMu.Unlock()
-		return
-	}
-	templates := make(map[string]*template.Template, len(tpl))
-	for reason, raw := range tpl {
-		t, err := template.New(reason).Option("missingkey=zero").Parse(raw)
-		if err != nil {
-			klog.ErrorS(err, "invalid template, skipping", "reason", reason)
-			continue
-		}
-		templates[strings.ToLower(reason)] = t
-	}
-	a.cfgMu.Lock()
-	a.templates = templates
-	a.cfgMu.Unlock()
-}
-
 func (a *Manager) globalTemplates() map[string]*template.Template {
 	a.cfgMu.RLock()
 	defer a.cfgMu.RUnlock()
@@ -233,7 +212,9 @@ func (a *Manager) initRuntime(
 	a.templates = compileTemplates(runtime.Templates())
 	a.cfgMu.Unlock()
 	if active {
-		a.Start(activeContext)
+		if err := a.Start(activeContext); err != nil {
+			klog.ErrorS(err, "failed to restart delivery workers")
+		}
 	}
 }
 
@@ -253,9 +234,6 @@ func newProviderGeneration(entries []providerEntry) *providerGeneration {
 func (a *Manager) currentGenerationLocked() *providerGeneration {
 	return a.generation
 }
-
-// SetSilences configures silence rules on the delivery manager.
-// Must be called after Init.
 
 func (a *Manager) VerifyAll(ctx context.Context) map[string]error {
 	result := make(map[string]error)

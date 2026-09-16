@@ -37,7 +37,7 @@ type LogCache struct {
 }
 
 // NewLogCache builds a cache reading the given clock. A nil clock creates a
-// deterministic zero-time cache for compatibility callers; production Pod
+// deterministic zero-time cache for isolated fixtures; production Pod
 // composition always passes its application clock.
 func NewLogCache(now func() time.Time) *LogCache {
 	if now == nil {

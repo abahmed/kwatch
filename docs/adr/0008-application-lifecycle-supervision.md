@@ -11,9 +11,8 @@ reporting, and bounded shutdown. Health owns only its HTTP listener. Delivery
 workers expose explicit completion and observe cancellation during pacing and
 retry waits.
 
-Compatibility `Start` methods may remain for embedded callers, but application
-composition uses `Open`, `Serve`, and `Stop` or the component supervisor
-directly.
+Application composition uses `Open`, `Serve`, and `Stop` or the component
+supervisor directly; no transitional lifecycle wrapper is retained.
 
 ## Consequences
 

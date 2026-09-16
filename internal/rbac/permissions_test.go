@@ -17,7 +17,7 @@ func TestPermissionsFollowEnabledMonitors(t *testing.T) {
 	cfg.RolloutMonitor.Enabled = false
 	cfg.TlsMonitor.Enabled = false
 	cfg.PvcMonitor.Enabled = false
-	cluster, namespaced := permissionsForConfig(cfg)
+	cluster, namespaced := testPermissionsForConfig(cfg)
 
 	if hasPermission(namespaced, "deployments", "apps") {
 		t.Fatal("disabled rollout monitor should not require deployments")
@@ -38,7 +38,7 @@ func TestPermissionsFollowEnabledMonitors(t *testing.T) {
 	cfg.RolloutMonitor.Enabled = true
 	cfg.TlsMonitor.Enabled = true
 	cfg.PvcMonitor.Enabled = true
-	cluster, namespaced = permissionsForConfig(cfg)
+	cluster, namespaced = testPermissionsForConfig(cfg)
 	if !hasPermission(namespaced, "deployments", "apps") ||
 		!hasPermission(namespaced, "secrets", "") ||
 		!hasPermission(cluster, "persistentvolumes", "") {
@@ -49,8 +49,12 @@ func TestPermissionsFollowEnabledMonitors(t *testing.T) {
 func TestInfrastructurePermissionsUseRuntimeNamespace(t *testing.T) {
 	cfg := config.DefaultConfig()
 	cfg.CrdConfig.Enabled = true
-	monitor := NewWithConfig(nil, cfg)
-	monitor.SetInfrastructureNamespace("kwatch")
+	monitor := newTestConfiguredMonitor(nil, cfg)
+	if err := monitor.ConfigureSources(Sources{
+		InfrastructureNamespace: "kwatch",
+	}); err != nil {
+		t.Fatalf("configure sources: %v", err)
+	}
 
 	for _, permission := range monitor.infrastructure {
 		if permission.Namespace != "kwatch" {
@@ -65,7 +69,7 @@ func TestInfrastructurePermissionsUseRuntimeNamespace(t *testing.T) {
 }
 
 func TestInfrastructureConfigMapPermissionsAreNamed(t *testing.T) {
-	permissions := infrastructurePermissions(config.DefaultConfig())
+	permissions := testInfrastructurePermissions(config.DefaultConfig())
 	wanted := persistenceConfigMapNames()
 
 	for _, name := range wanted {
@@ -112,7 +116,7 @@ func TestAllowedSendsResourceName(t *testing.T) {
 		},
 	)
 
-	monitor := New(client)
+	monitor := newTestFullMonitor(client)
 	allowed, err := monitor.allowed(context.Background(), Permission{
 		Name:     "kwatch-state",
 		Resource: "configmaps",
@@ -132,7 +136,7 @@ func TestOptionalMonitorsRequireTheirRuntimePermissions(t *testing.T) {
 	cfg.ActiveProbeMonitor.AutoServices = true
 	cfg.RuntimeMetricsMonitor.Enabled = true
 
-	_, namespaced := permissionsForConfig(cfg)
+	_, namespaced := testPermissionsForConfig(cfg)
 	if !hasPermission(namespaced, "services", "") {
 		t.Fatal("automatic probes require Service list access")
 	}
@@ -143,7 +147,7 @@ func TestOptionalMonitorsRequireTheirRuntimePermissions(t *testing.T) {
 
 func TestDynamicResourcesUseTheirKubernetesScope(t *testing.T) {
 	cfg := config.DefaultConfig()
-	cluster, namespaced := permissionsForConfig(cfg)
+	cluster, namespaced := testPermissionsForConfig(cfg)
 
 	for _, resource := range []string{
 		"volumesnapshots", "gateways", "httproutes", "referencegrants",

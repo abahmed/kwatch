@@ -22,15 +22,6 @@ type silenceMatcher struct {
 	nodeMessages   []string
 }
 
-// Provider interface
-
-func (a *Manager) SetSilences(rules []config.SilenceRule) {
-	built := compileSilences(rules)
-	a.cfgMu.Lock()
-	a.silences = built
-	a.cfgMu.Unlock()
-}
-
 func compileSilences(rules []config.SilenceRule) []silenceMatcher {
 	built := make([]silenceMatcher, 0, len(rules))
 	for _, sr := range rules {

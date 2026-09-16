@@ -11,16 +11,15 @@ import (
 
 	"github.com/abahmed/kwatch/internal/config"
 	"github.com/abahmed/kwatch/internal/model"
-	"github.com/abahmed/kwatch/internal/persistence"
 )
 
 func TestPersistWritesToConfigMap(t *testing.T) {
 	client := fake.NewSimpleClientset()
-	sm := persistence.NewManager(client, "kwatch")
+	sm := newTestPersistenceManager(client, "kwatch")
 
 	cfg := &config.PvcMonitor{Enabled: true, Threshold: 80}
 	incidentEngine := newTestIncidentEngine()
-	m := NewPvcMonitor(client, cfg, incidentEngine, sm)
+	m := newTestPvcMonitorWithState(client, cfg, incidentEngine, sm)
 
 	// Populate lastUsage via apply
 	m.apply([]*PvcUsage{
@@ -95,7 +94,7 @@ func TestCloneSamplesDoesNotShareMap(t *testing.T) {
 
 func TestPersistenceRoundTripRestoresIncidents(t *testing.T) {
 	client := fake.NewSimpleClientset()
-	sm := persistence.NewManager(client, "kwatch")
+	sm := newTestPersistenceManager(client, "kwatch")
 
 	// Pre-populate the ConfigMap with a high PVC sample (simulates prior run)
 	preExisting := map[string]model.PVCSample{
@@ -114,7 +113,7 @@ func TestPersistenceRoundTripRestoresIncidents(t *testing.T) {
 	// Create a PvcMonitor with the SAME state manager (simulates restart)
 	cfg := &config.PvcMonitor{Enabled: true, Threshold: 80, CriticalThreshold: 90}
 	incidentEngine := newTestIncidentEngine()
-	m := NewPvcMonitor(client, cfg, incidentEngine, sm)
+	m := newTestPvcMonitorWithState(client, cfg, incidentEngine, sm)
 
 	// Simulate Start's seed block (which runs before first checkUsage)
 	if seed := sm.GetPvcUsage(context.Background()); seed != nil {
@@ -157,7 +156,7 @@ func TestPersistenceRoundTripRestoresIncidents(t *testing.T) {
 
 func TestPersistenceRoundTripKeepFiringWithoutRemount(t *testing.T) {
 	client := fake.NewSimpleClientset()
-	sm := persistence.NewManager(client, "kwatch")
+	sm := newTestPersistenceManager(client, "kwatch")
 
 	// Pre-populate ConfigMap with a high PVC sample
 	preExisting := map[string]model.PVCSample{
@@ -171,7 +170,7 @@ func TestPersistenceRoundTripKeepFiringWithoutRemount(t *testing.T) {
 
 	cfg := &config.PvcMonitor{Enabled: true, Threshold: 80, ClearThreshold: 75}
 	incidentEngine := newTestIncidentEngine()
-	m := NewPvcMonitor(client, cfg, incidentEngine, sm)
+	m := newTestPvcMonitorWithState(client, cfg, incidentEngine, sm)
 
 	// Seed from configmap (same as Start)
 	if seed := sm.GetPvcUsage(context.Background()); seed != nil {
@@ -203,12 +202,12 @@ func TestPersistenceRoundTripKeepFiringWithoutRemount(t *testing.T) {
 
 func TestPersistenceRoundTripNoPreviousState(t *testing.T) {
 	client := fake.NewSimpleClientset()
-	sm := persistence.NewManager(client, "kwatch")
+	sm := newTestPersistenceManager(client, "kwatch")
 
 	// No pre-existing ConfigMap
 	cfg := &config.PvcMonitor{Enabled: true, Threshold: 80}
 	incidentEngine := newTestIncidentEngine()
-	m := NewPvcMonitor(client, cfg, incidentEngine, sm)
+	m := newTestPvcMonitorWithState(client, cfg, incidentEngine, sm)
 
 	// Seed from ConfigMap (should return nil since there's no data)
 	assert.Nil(t, sm.GetPvcUsage(context.Background()))

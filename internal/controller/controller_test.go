@@ -11,7 +11,9 @@ import (
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/kubernetes/fake"
 
+	"github.com/abahmed/kwatch/internal/clock"
 	"github.com/abahmed/kwatch/internal/config"
+	kwcontext "github.com/abahmed/kwatch/internal/graphcontext"
 	"github.com/abahmed/kwatch/internal/model"
 	"github.com/abahmed/kwatch/internal/observe"
 )
@@ -23,9 +25,18 @@ func newTestController(
 	h *mockHandler,
 ) (*Controller, func()) {
 	t.Helper()
-	ctrl, cleanup, err := New(client, cfg, componentsFor(h))
+	ctrl, cleanup, err := NewWithRuntimeConfig(
+		client, config.RuntimeConfigFor(cfg), componentsFor(h),
+		clock.RealClock{}.Now,
+	)
 	require.NoError(t, err)
 	return ctrl, cleanup
+}
+
+func newTestChangeTracker(capacity int) *kwcontext.ChangeTracker {
+	return kwcontext.NewChangeTrackerWithClock(
+		capacity, clock.RealClock{},
+	)
 }
 
 func componentsFor(h *mockHandler) RuntimeSet {
@@ -154,7 +165,7 @@ func (m *mockHandler) ProcessHorizontalPodAutoscaler(
 }
 func (m *mockHandler) Owners() observe.OwnerResolver    { return nil }
 func (m *mockHandler) SetNamespaceScope([]string, bool) {}
-func (m *mockHandler) SweepTLSSecrets()                 {}
+func (m *mockHandler) SweepTLSSecrets() error           { return nil }
 func (m *mockHandler) SetBaseline(baseline map[string]map[string]int64) {
 	m.mu.Lock()
 	defer m.mu.Unlock()

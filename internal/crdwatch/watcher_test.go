@@ -76,3 +76,17 @@ func TestWatcherReportsDiscoveryDegradation(t *testing.T) {
 		t.Fatalf("status = %+v, reported = %v", status, reported)
 	}
 }
+
+func TestWatcherReportsOptionalAvailabilityTransitions(t *testing.T) {
+	watcher := &Watcher{}
+	if !watcher.markOptionalUnavailable() {
+		t.Fatal("first unavailable state was not reported")
+	}
+	if watcher.markOptionalUnavailable() {
+		t.Fatal("repeated unavailable state was reported")
+	}
+	watcher.clearOptionalUnavailable()
+	if !watcher.markOptionalUnavailable() {
+		t.Fatal("second outage was not reported")
+	}
+}

@@ -65,7 +65,7 @@ func TestFoldMigratesIncidentNotRecreates(t *testing.T) {
 // flush is their single re-notification channel.
 func TestRenotifySkipsGroupedIncidents(t *testing.T) {
 	now := time.Date(2025, 1, 1, 0, 0, 0, 0, time.UTC)
-	e := NewEngine(Config{
+	e := newTestEngine(Config{
 		Window:              10 * time.Minute,
 		SmartGroupingWindow: 60 * time.Second,
 		RenotifyIntervalBySeverity: map[string]time.Duration{
@@ -138,7 +138,7 @@ func (e *Engine) hasGroupIncident() bool {
 
 func TestRenotifyStillFiresForNonGrouped(t *testing.T) {
 	now := time.Date(2025, 1, 1, 0, 0, 0, 0, time.UTC)
-	e := NewEngine(Config{
+	e := newTestEngine(Config{
 		Window:              10 * time.Minute,
 		SmartGroupingWindow: 60 * time.Second,
 		RenotifyIntervalBySeverity: map[string]time.Duration{
@@ -233,7 +233,7 @@ func TestCascadingSuppressionAcrossOwnerEncodings(t *testing.T) {
 // the same owner+reason key.
 func TestBaselineSiblingsPreservedOnResolve(t *testing.T) {
 	now := time.Now().Unix()
-	e := NewEngine(Config{
+	e := newTestEngine(Config{
 		Window:      10 * time.Minute,
 		BaselineTTL: 24 * time.Hour,
 		Baseline: map[string]map[string]int64{
@@ -282,7 +282,7 @@ func TestBaselineSiblingsPreservedOnResolve(t *testing.T) {
 // un-baseline the other affected pods cluster-wide.
 func TestBaselineGlobalScopePreservedOnResolve(t *testing.T) {
 	now := time.Now().Unix()
-	e := NewEngine(Config{
+	e := newTestEngine(Config{
 		Window:      10 * time.Minute,
 		BaselineTTL: 24 * time.Hour,
 		Baseline: map[string]map[string]int64{

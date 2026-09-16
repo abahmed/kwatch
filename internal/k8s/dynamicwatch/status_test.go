@@ -18,6 +18,32 @@ func TestWatcherStatusReportsUnavailableWithoutResources(t *testing.T) {
 	}
 }
 
+func TestWatcherTracksOptionalAvailabilityTransitions(t *testing.T) {
+	gvr := schema.GroupVersionResource{
+		Group: "example.io", Version: "v1", Resource: "widgets",
+	}
+	watcher := &Watcher{}
+
+	if got := watcher.updateUnavailableLocked([]schema.GroupVersionResource{
+		gvr,
+	}); got != 1 {
+		t.Fatalf("first unavailable state reported %d transitions", got)
+	}
+	if got := watcher.updateUnavailableLocked([]schema.GroupVersionResource{
+		gvr,
+	}); got != 0 {
+		t.Fatalf("repeated unavailable state reported %d transitions", got)
+	}
+	if got := watcher.updateUnavailableLocked(nil); got != 0 {
+		t.Fatalf("recovery reported %d transitions", got)
+	}
+	if got := watcher.updateUnavailableLocked([]schema.GroupVersionResource{
+		gvr,
+	}); got != 1 {
+		t.Fatalf("second outage reported %d transitions", got)
+	}
+}
+
 func TestWatcherStatusReportsSkippedResourcesAsDegraded(t *testing.T) {
 	watcher := Watcher{
 		skippedGVR: []schema.GroupVersionResource{

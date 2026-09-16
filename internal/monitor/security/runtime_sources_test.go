@@ -40,7 +40,7 @@ func TestWebhookSkipsUnavailableDependencyListers(t *testing.T) {
 	runtime := NewRuntimeWithRuntimeConfig(
 		config.RuntimeConfig{}, sink,
 	)
-	runtime.SetSources(Sources{
+	runtime.ConfigureSources(Sources{
 		MutatingWebhooks: admv1lister.NewMutatingWebhookConfigurationLister(indexer),
 	})
 

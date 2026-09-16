@@ -10,6 +10,7 @@ import (
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/kubernetes/fake"
 
+	"github.com/abahmed/kwatch/internal/clock"
 	"github.com/abahmed/kwatch/internal/config"
 	"github.com/abahmed/kwatch/internal/persistence"
 )
@@ -20,8 +21,16 @@ func newTestStartupManager(
 	alertConfig map[string]map[string]interface{},
 	appConfig *config.App,
 ) *StartupManager {
-	return NewStartupManager(
-		persistence.NewManager(client, namespace), appConfig,
+	var cfg config.Config
+	if appConfig != nil {
+		cfg.App = *appConfig
+	}
+	cfg.Alert = alertConfig
+	return NewStartupManagerWithRuntime(
+		persistence.NewManagerWithClock(
+			client, namespace, clock.RealClock{},
+		),
+		config.RuntimeConfigFor(&cfg), clock.RealClock{},
 	)
 }
 

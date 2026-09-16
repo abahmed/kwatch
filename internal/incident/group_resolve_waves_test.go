@@ -16,7 +16,7 @@ import (
 func TestGroupResolveTrackerKeepsEarlierWaves(t *testing.T) {
 	now := time.Date(2025, 1, 1, 0, 0, 0, 0, time.UTC)
 	var resolved []model.IncidentKey
-	e := NewEngine(Config{
+	e := newTestEngine(Config{
 		Window:                   10 * time.Minute,
 		SmartGroupingWindow:      60 * time.Second,
 		NamespaceFanOutThreshold: 2,

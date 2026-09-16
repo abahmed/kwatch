@@ -110,11 +110,11 @@ func (m *Monitor) nowTime() time.Time {
 	return m.now()
 }
 
-func (m *Monitor) Start(ctx context.Context) {
+func (m *Monitor) Start(ctx context.Context) error {
 	m.mu.Lock()
 	if m.started {
 		m.mu.Unlock()
-		return
+		return nil
 	}
 	m.started = true
 	m.mu.Unlock()
@@ -128,7 +128,7 @@ func (m *Monitor) Start(ctx context.Context) {
 	for {
 		select {
 		case <-ctx.Done():
-			return
+			return nil
 		case <-ticker.C:
 			m.check(ctx)
 		}

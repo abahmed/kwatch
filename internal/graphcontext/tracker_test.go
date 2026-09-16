@@ -8,16 +8,16 @@ import (
 )
 
 func TestNewChangeTracker(t *testing.T) {
-	tr := NewChangeTracker(0)
+	tr := newTestChangeTracker(0)
 	assert.NotNil(t, tr)
 	assert.Equal(t, defaultTrackedChanges, len(tr.buffer))
 
-	tr2 := NewChangeTracker(50)
+	tr2 := newTestChangeTracker(50)
 	assert.Equal(t, 50, len(tr2.buffer))
 }
 
 func TestRecentChangesBefore(t *testing.T) {
-	tr := NewChangeTracker(100)
+	tr := newTestChangeTracker(100)
 	now := time.Now()
 	tr.Record(Change{Resource: "pod", Name: "p1", Timestamp: now})
 	tr.Record(Change{

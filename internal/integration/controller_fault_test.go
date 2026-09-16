@@ -20,7 +20,7 @@ import (
 	"github.com/abahmed/kwatch/internal/enricher"
 	"github.com/abahmed/kwatch/internal/event"
 	"github.com/abahmed/kwatch/internal/incident"
-	"github.com/abahmed/kwatch/internal/k8s"
+	"github.com/abahmed/kwatch/internal/kubelet"
 	"github.com/abahmed/kwatch/internal/model"
 	podmonitor "github.com/abahmed/kwatch/internal/monitor/pod"
 )
@@ -142,7 +142,7 @@ func TestControllerPodEvent(t *testing.T) {
 			previous bool,
 			maxLines int64,
 		) string {
-			return k8s.GetPodContainerLogs(
+			return kubelet.GetPodContainerLogs(
 				ctx, client, podName, containerName,
 				namespace, previous, maxLines,
 			)

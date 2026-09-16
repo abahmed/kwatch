@@ -13,7 +13,7 @@ import (
 func TestLifecycleDeadlinesTriggerAtExactTimestamp(t *testing.T) {
 	now := time.Date(2025, 1, 1, 0, 0, 0, 0, time.UTC)
 	var actions []model.IncidentAction
-	e := NewEngine(Config{
+	e := newTestEngine(Config{
 		Window:          10 * time.Minute,
 		ResolveHoldDown: 5 * time.Minute,
 		LifecycleHook: func(_ *model.Incident, action model.IncidentAction) {

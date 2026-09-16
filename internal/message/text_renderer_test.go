@@ -61,7 +61,7 @@ func sampleReport(action model.IncidentAction) *Report {
 			},
 		},
 	}
-	return NewReportBuilder("dev").Build(inc, action, ins)
+	return newTestReportBuilder("dev").Build(inc, action, ins)
 }
 
 func TestTextRendererReadsTopDown(t *testing.T) {
@@ -116,7 +116,7 @@ func TestTextRendererReadsTopDown(t *testing.T) {
 }
 
 func TestTextRendererGroupSubjectIsUsedVerbatim(t *testing.T) {
-	r := NewReportBuilder("").Build(&model.Incident{
+	r := newTestReportBuilder("").Build(&model.Incident{
 		Subject: model.Subject{
 			Reason:    "ContainersNotReady",
 			Namespace: "dev",

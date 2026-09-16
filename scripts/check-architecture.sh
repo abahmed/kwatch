@@ -9,6 +9,13 @@ cd "$root_dir"
 
 status=0
 
+if compatibility_files=$(rg --files internal cmd -g 'compat.go' 2>/dev/null) &&
+	[ -n "$compatibility_files" ]; then
+	echo "architecture violation: transitional compatibility files remain"
+	echo "$compatibility_files"
+	status=1
+fi
+
 provider_upper_layer_pattern=$(printf '%s%s' \
 	'"github.com/abahmed/kwatch/internal/(app|controller|handler|' \
 	'incident|persistence|k8s)"')
@@ -252,108 +259,6 @@ report_matches \
 	--glob '*.go' \
 	--glob '!**/*_test.go'
 
-report_matches \
-	"provider falls back to process-wide HTTP client" \
-	'http[.]DefaultClient' \
-	internal/alert \
-	--glob '*.go' \
-	--glob '!**/*_test.go'
-
-# Time and shutdown ownership are explicit. The real clock is created only in
-# the clock package; health compatibility is the only allowed convenience
-# goroutine because application composition uses Open/Serve/Stop.
-report_matches \
-	"production code reads the global wall clock" \
-	'(time[.]Now[(]|clock[.]Now[(])' \
-	internal \
-	--glob '*.go' \
-	--glob '!**/*_test.go' \
-	--glob '!**/clock/clock.go'
-
-report_matches \
-	"health owns a shutdown goroutine" \
-	'go[[:space:]]+func' \
-	internal/health \
-	--glob '*.go' \
-	--glob '!**/*_test.go' \
-	--glob '!compat.go'
-
-report_matches \
-	"incident source setter used outside compatibility" \
-	'SetAttributionSources' \
-	internal/incident \
-	--glob '*.go' \
-	--glob '!compat.go' \
-	--glob '!**/*_test.go'
-
-report_matches \
-	"TLS source setter used outside compatibility" \
-	'SetSecretLister' \
-	internal/monitor/security \
-	--glob '*.go' \
-	--glob '!compat.go' \
-	--glob '!**/*_test.go'
-
-report_matches \
-	"runtime integration uses the process-wide DNS resolver" \
-	'net[.]DefaultResolver' \
-	internal \
-	--glob '*.go' \
-	--glob '!**/*_test.go' \
-	--glob '!internal/app/**'
-
-# Raw YAML configuration is an input concern. Domain packages consume the
-# compiled runtime snapshot so their dependencies remain explicit and stable.
-report_matches \
-	"domain package consumes raw YAML configuration" \
-	'\*config[.]Config|\bconfig[.]Config[[:space:]]*\{' \
-	internal/monitor internal/incident internal/insight internal/delivery \
-	internal/persistence internal/pvc internal/controller internal/health \
-	internal/probe internal/controlplane internal/statuswatch \
-	--glob '*.go' \
-	--glob '!**/*_test.go' \
-	--glob '!**/compat.go'
-
-# Domain decisions must use an injected clock. The clock package is the only
-# production boundary allowed to read wall time directly.
-report_matches \
-	"production code reads wall clock directly" \
-	'time[.]Now[[:space:]]*[(]' \
-	internal cmd \
-	--glob '*.go' \
-	--glob '!**/*_test.go' \
-	--glob '!internal/clock/**'
-
-# Generic dynamic informer construction belongs in dynamicwatch. This keeps
-# cache-sync and optional-resource lifecycle behavior consistent.
-report_matches \
-	"dynamic informer constructed outside dynamicwatch" \
-	'dynamicinformer[.]New[A-Za-z]*Informer' \
-	internal \
-	--glob '*.go' \
-	--glob '!**/*_test.go' \
-	--glob '!internal/k8s/dynamicwatch/**'
-
-# Health owns its listener, while app owns shutdown and cancellation. A
-# goroutine in the canonical health implementation would create a second
-# lifecycle owner; compatibility shims are isolated in compat.go.
-report_matches \
-	"health package owns a shutdown goroutine" \
-	'go[[:space:]]+func' \
-	internal/health \
-	--glob '*.go' \
-	--glob '!**/*_test.go' \
-	--glob '!**/compat.go'
-
-# External clients are application-owned. A default client hides transport
-# configuration and makes cancellation and tests unpredictable.
-report_matches \
-	"production code uses the process-wide HTTP client" \
-	'http[.]DefaultClient' \
-	internal cmd \
-	--glob '*.go' \
-	--glob '!**/*_test.go'
-
 # Dynamic informer construction belongs to dynamicwatch. Domain packages may
 # use its shared factory, but must not create a second lifecycle implementation.
 report_matches \
@@ -362,16 +267,14 @@ report_matches \
 	internal \
 	--glob '*.go' \
 	--glob '!**/*_test.go' \
-	--glob '!internal/k8s/dynamicwatch/**' \
-	--glob '!**/compat.go'
+	--glob '!internal/k8s/dynamicwatch/**'
 
 report_matches \
-	"dynamic client construction outside compatibility code" \
+	"dynamic client construction outside client composition" \
 	'(dynamic\\.NewForConfig|discovery\\.NewDiscoveryClientForConfig|rest\\.RESTClientFor)' \
 	internal \
 	--glob '*.go' \
 	--glob '!**/*_test.go' \
-	--glob '!**/compat.go' \
 	--glob '!internal/client/**'
 
 report_matches \
@@ -399,7 +302,7 @@ report_matches \
 
 # The YAML model is a loading boundary, not a runtime dependency. These are
 # the only production locations allowed to retain it: decoding, application
-# bootstrap, CRD overlays, migrations, command metadata, and compatibility.
+# bootstrap, CRD overlays, migrations, and command metadata.
 raw_config_files=$(rg -l \
 	'config[.]Config|[*]config[.]Config' \
 	internal cmd \
@@ -408,8 +311,6 @@ raw_config_files=$(rg -l \
 for raw_config_file in $raw_config_files; do
 	case "$raw_config_file" in
 		internal/config/*|internal/app/*|internal/crdwatch/*|\
-		internal/controller/compat.go|internal/delivery/compat.go|\
-		internal/rbac/compat.go|internal/client/compat.go|\
 		cmd/configcatalog/*)
 			;;
 		*)
@@ -427,9 +328,8 @@ report_matches \
 	--glob '*.go' \
 	--glob '!**/*_test.go'
 
-# REST and dynamic client construction is an application concern. Explicitly
-# named compatibility files may retain the old constructors for embedded
-# callers while production composition uses internal/client.ClientSet.
+# REST and dynamic client construction is an application concern. Production
+# composition uses internal/client.ClientSet.
 for construction_dir in \
 	internal/networkgraph \
 	internal/storagegraph \
@@ -439,12 +339,11 @@ for construction_dir in \
 	internal/crdwatch
 do
 	report_matches \
-		"client construction outside compatibility boundary ($construction_dir)" \
+		"client construction outside client composition ($construction_dir)" \
 		'(dynamic\.NewForConfig|discovery\.NewDiscoveryClientForConfig|rest\.RESTClientFor)' \
 		"$construction_dir" \
 		--glob '*.go' \
-		--glob '!**/*_test.go' \
-		--glob '!**/compat.go'
+		--glob '!**/*_test.go'
 done
 
 # Optional dynamic monitors share informer construction. CRD-specific restart
@@ -487,33 +386,47 @@ report_matches \
 
 report_matches \
 	"production code calls the global clock helper directly" \
-	'clock\.Now\(' \
+	'(^|[^[:alnum:]_.])clock\.Now\(' \
 	internal cmd \
 	--glob '*.go' \
 	--glob '!**/*_test.go' \
 	--glob '!internal/clock/clock.go'
 
 report_matches \
-	"production code uses the compatibility incident constructor" \
+	"retired incident constructor remains" \
 	'incident\.NewEngine\(' \
 	internal cmd \
 	--glob '*.go' \
-	--glob '!**/*_test.go' \
-	--glob '!**/compat.go'
+	--glob '!**/*_test.go'
 
 report_matches \
-	"production code uses the compatibility clock fallback" \
+	"retired clock fallback remains" \
 	'clock\.From\(' \
 	internal cmd \
 	--glob '*.go' \
 	--glob '!**/*_test.go' \
-	--glob '!**/compat.go' \
 	--glob '!internal/clock/**'
 
 report_matches \
 	"feedback clock can be mutated after construction" \
 	'func \(.*\*FeedbackStore\) SetClock\(' \
 	internal/insight \
+	--glob '*.go' \
+	--glob '!**/*_test.go'
+
+# Runtime configuration and component lifecycle are canonical in production.
+# Retired compatibility setters and void-runner adapters must not return.
+report_matches \
+	"delivery configuration setter used outside compatibility" \
+	'func \(.*\*Manager\) Set(Templates|Silences)\(' \
+	internal/delivery \
+	--glob '*.go' \
+	--glob '!**/*_test.go'
+
+report_matches \
+	"application discards component runner errors" \
+	'componentRun\(' \
+	internal/app \
 	--glob '*.go' \
 	--glob '!**/*_test.go'
 

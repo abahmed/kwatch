@@ -48,14 +48,14 @@ func TestFindDependentServicesNoLister(t *testing.T) {
 
 func TestFindDependentServicesNoLabels(t *testing.T) {
 	e := newTestEngine()
-	e.SetServiceLister(&mockServiceLister{})
+	setTestServiceLister(e, &mockServiceLister{})
 	got := dependentServices(e.attributionSources, "ns", nil)
 	assert.Nil(t, got)
 }
 
 func TestFindDependentServicesMatch(t *testing.T) {
 	e := newTestEngine()
-	e.SetServiceLister(&mockServiceLister{
+	setTestServiceLister(e, &mockServiceLister{
 		listFn: func(ns string) ([]*corev1.Service, error) {
 			return []*corev1.Service{
 				{
@@ -78,7 +78,7 @@ func TestFindDependentServicesMatch(t *testing.T) {
 
 func TestFindDependentServicesNoMatch(t *testing.T) {
 	e := newTestEngine()
-	e.SetServiceLister(&mockServiceLister{
+	setTestServiceLister(e, &mockServiceLister{
 		listFn: func(ns string) ([]*corev1.Service, error) {
 			return []*corev1.Service{
 				{
@@ -101,7 +101,7 @@ func TestFindDependentServicesNoMatch(t *testing.T) {
 
 func TestFindDependentServicesMultiple(t *testing.T) {
 	e := newTestEngine()
-	e.SetServiceLister(&mockServiceLister{
+	setTestServiceLister(e, &mockServiceLister{
 		listFn: func(ns string) ([]*corev1.Service, error) {
 			return []*corev1.Service{
 				{
@@ -144,7 +144,7 @@ func TestFindDependentServicesMultiple(t *testing.T) {
 
 func TestFindDependentServicesEmptySelector(t *testing.T) {
 	e := newTestEngine()
-	e.SetServiceLister(&mockServiceLister{
+	setTestServiceLister(e, &mockServiceLister{
 		listFn: func(ns string) ([]*corev1.Service, error) {
 			return []*corev1.Service{
 				{

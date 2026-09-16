@@ -65,7 +65,12 @@ func TestTLSRuntimeUsesCachedSecrets(t *testing.T) {
 	}); err != nil {
 		t.Fatal(err)
 	}
-	runtime.SetSecretLister(corev1lister.NewSecretLister(indexer))
+	err := runtime.ConfigureSources(TLSSources{
+		Secrets: corev1lister.NewSecretLister(indexer),
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
 	runtime.SweepTLSSecrets()
 	if len(sink.observations) != 0 {
 		t.Fatalf(

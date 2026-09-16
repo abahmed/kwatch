@@ -43,7 +43,7 @@ func TestIngressSkipsWhenServiceListerIsUnavailable(t *testing.T) {
 	runtime := NewRuntimeWithRuntimeConfig(
 		config.RuntimeConfig{}, &networkSinkRecorder{}, time.Now,
 	)
-	runtime.SetSources(Sources{
+	runtime.ConfigureSources(Sources{
 		Ingresses: networkingv1lister.NewIngressLister(indexer),
 	})
 

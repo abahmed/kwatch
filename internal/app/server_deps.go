@@ -43,17 +43,17 @@ type serverDeps struct {
 	recordAlive     func(context.Context)
 	closeAudit      func() error
 	cleanup         func()
-	tlsSweep        func()
-	statusRun       func(context.Context)
-	metricsRun      func(context.Context)
-	probeRun        func(context.Context)
-	kubeletRun      func(context.Context)
-	storageRun      func(context.Context)
-	networkRun      func(context.Context)
-	securityRun     func(context.Context)
-	controlPlaneRun func(context.Context)
-	telemetryRun    func(context.Context)
-	upgradeRun      func(context.Context)
+	tlsSweep        func() error
+	statusRun       func(context.Context) error
+	metricsRun      func(context.Context) error
+	probeRun        func(context.Context) error
+	kubeletRun      func(context.Context) error
+	storageRun      func(context.Context) error
+	networkRun      func(context.Context) error
+	securityRun     func(context.Context) error
+	controlPlaneRun func(context.Context) error
+	telemetryRun    func(context.Context) error
+	upgradeRun      func(context.Context) error
 }
 
 // componentSpec names a background component and records whether its failure

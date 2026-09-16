@@ -13,7 +13,7 @@ import (
 )
 
 func TestReconcileResolvesReasonsThatDisappear(t *testing.T) {
-	e := NewEngine(Config{Window: 10})
+	e := newTestEngine(Config{Window: 10})
 	subject := model.NewObjectRef("service", "default", "api")
 	obs := observe.ObjectNamed(
 		"service", "default", "api", "NoReadyEndpoints",
@@ -32,7 +32,7 @@ func TestReconcileResolvesReasonsThatDisappear(t *testing.T) {
 }
 
 func TestReconcileGoneClosesWorkloadAndPodSubjects(t *testing.T) {
-	e := NewEngine(Config{Window: 10})
+	e := newTestEngine(Config{Window: 10})
 	workload := model.NewObjectRef("deployment", "default", "api")
 	deploymentObs := observe.ObjectNamed(
 		"deployment", "default", "api", "RolloutStuck",

@@ -72,7 +72,7 @@ func (r *recordingDelivery) Get(
 // integration testing: no startup quiet period, no resolve hold-down, and a
 // LifecycleHook that feeds lifecycle transitions into the supplied recorder.
 func newTestEngine(rec *recordingDelivery) *incident.Engine {
-	return incident.NewEngine(incident.Config{
+	return newTestIncidentEngine(incident.Config{
 		Window:            10 * time.Minute,
 		LifecycleInterval: 1 * time.Minute,
 		ResolveHoldDown:   0,
@@ -252,7 +252,7 @@ func TestNodeConditionCreateAndResolve(t *testing.T) {
 // are silently suppressed.
 func TestInhibitionSuppressesPodsDuringNodeFailure(t *testing.T) {
 	rec := &recordingDelivery{}
-	eng := incident.NewEngine(incident.Config{
+	eng := newTestIncidentEngine(incident.Config{
 		Window:                    10 * time.Minute,
 		LifecycleInterval:         1 * time.Minute,
 		ResolveHoldDown:           0,

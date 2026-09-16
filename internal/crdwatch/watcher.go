@@ -31,37 +31,26 @@ var gvr = schema.GroupVersionResource{
 // than a brief, explicit restart.
 
 type Watcher struct {
-	runtime          config.RuntimeConfig
-	dynamicClient    dynamic.Interface
-	legacyClient     func() (dynamic.Interface, error)
-	namespace        string
-	resync           time.Duration
-	mu               sync.Mutex
-	lifecycleMu      sync.Mutex
-	seen             map[string]string
-	ready            bool
-	started          bool
-	generation       uint64
-	cancel           context.CancelFunc
-	restart          func()
-	restartRequested bool
-	statusSink       func(error)
-	lastError        string
-}
-
-// Status describes CRD discovery and informer health without exposing the
-// watcher's internal clients or lifecycle handles.
-type Status struct {
-	State          string `json:"state"`
-	WaitingForCRD  bool   `json:"waitingForCRD"`
-	Ready          bool   `json:"ready"`
-	RestartRequest bool   `json:"restartRequested"`
-	LastError      string `json:"lastError,omitempty"`
+	runtime             config.RuntimeConfig
+	dynamicClient       dynamic.Interface
+	namespace           string
+	resync              time.Duration
+	mu                  sync.Mutex
+	lifecycleMu         sync.Mutex
+	seen                map[string]string
+	ready               bool
+	started             bool
+	generation          uint64
+	cancel              context.CancelFunc
+	restart             func()
+	restartRequested    bool
+	statusSink          func(error)
+	lastError           string
+	optionalUnavailable bool
 }
 
 // NewWithClient constructs the watcher from the application-owned dynamic
-// client. It is the production constructor; New remains for compatibility
-// callers that still provide a REST configuration directly.
+// client.
 func NewWithClient(
 	runtime config.RuntimeConfig,
 	dynamicClient dynamic.Interface,
@@ -72,51 +61,6 @@ func NewWithClient(
 	return &Watcher{
 		runtime: runtime, dynamicClient: dynamicClient, namespace: namespace,
 		resync: resync, seen: make(map[string]string), restart: restart,
-	}
-}
-
-// SetStatusSink connects discovery failures to the application health
-// boundary. The sink is optional so compatibility callers remain unaffected.
-func (w *Watcher) SetStatusSink(sink func(error)) {
-	w.mu.Lock()
-	w.statusSink = sink
-	w.mu.Unlock()
-}
-
-// Status returns the current CRD watcher state for diagnostics.
-func (w *Watcher) Status() Status {
-	if w == nil {
-		return Status{State: "unavailable"}
-	}
-	w.mu.Lock()
-	defer w.mu.Unlock()
-	state := "stopped"
-	if w.started {
-		state = "running"
-	}
-	if w.lastError != "" {
-		state = "degraded"
-	}
-	return Status{
-		State:          state,
-		WaitingForCRD:  w.started && !w.ready,
-		Ready:          w.ready,
-		RestartRequest: w.restartRequested,
-		LastError:      w.lastError,
-	}
-}
-
-func (w *Watcher) reportError(err error) {
-	w.mu.Lock()
-	sink := w.statusSink
-	if err == nil {
-		w.lastError = ""
-	} else {
-		w.lastError = safeWatcherReason(err.Error())
-	}
-	w.mu.Unlock()
-	if sink != nil {
-		sink(err)
 	}
 }
 
@@ -150,13 +94,6 @@ func (w *Watcher) Start(ctx context.Context) error {
 	}()
 
 	dc := w.dynamicClient
-	if dc == nil && w.legacyClient != nil {
-		var err error
-		dc, err = w.legacyClient()
-		if err != nil {
-			return fmt.Errorf("crdwatch: failed to create dynamic client: %w", err)
-		}
-	}
 	if dc == nil {
 		err := fmt.Errorf("crdwatch: dynamic client is not configured")
 		w.reportError(err)
@@ -169,7 +106,9 @@ func (w *Watcher) Start(ctx context.Context) error {
 		runCtx, metav1.ListOptions{Limit: 1},
 	); err != nil {
 		if errors.IsNotFound(err) {
-			metrics.DefaultRegistry().OptionalAPIUnavailable.Add(1)
+			if w.markOptionalUnavailable() {
+				metrics.DefaultRegistry().OptionalAPIUnavailable.Add(1)
+			}
 			klog.InfoS(
 				"CRD kwatchconfigs.kwatch.abahmed.dev not found; " +
 					"waiting for installation",
@@ -184,6 +123,7 @@ func (w *Watcher) Start(ctx context.Context) error {
 		w.reportError(wrapped)
 		return wrapped
 	}
+	w.clearOptionalUnavailable()
 	if err := w.startInformer(runCtx, dc, false); err != nil {
 		w.reportError(err)
 		return err
@@ -192,6 +132,22 @@ func (w *Watcher) Start(ctx context.Context) error {
 	complete = true
 	go w.resetWhenDone(runCtx, generation)
 	return nil
+}
+
+func (w *Watcher) markOptionalUnavailable() bool {
+	w.mu.Lock()
+	defer w.mu.Unlock()
+	if w.optionalUnavailable {
+		return false
+	}
+	w.optionalUnavailable = true
+	return true
+}
+
+func (w *Watcher) clearOptionalUnavailable() {
+	w.mu.Lock()
+	w.optionalUnavailable = false
+	w.mu.Unlock()
 }
 
 // Stop cancels the KwatchConfig informer or discovery wait. It is safe to

@@ -11,7 +11,7 @@ import (
 )
 
 func TestAnalyzeNoGraph(t *testing.T) {
-	e := NewEngine(nil, nil)
+	e := newTestEngine(nil, nil)
 	inc := &model.Incident{
 		Subject: model.Subject{
 			Resource:  "pod",
@@ -28,7 +28,7 @@ func TestAnalyzeNodeFailure(t *testing.T) {
 	graph := context.NewResourceGraph()
 	graph.AddEdge("pod", "ns1", "p1", "node", "", "n1", "scheduled_on")
 
-	e := NewEngine(graph, context.NewChangeTracker(10))
+	e := newTestEngine(graph, newTestChangeTracker(10))
 	inc := &model.Incident{
 		Subject: model.Subject{
 			Resource:  "pod",
@@ -49,11 +49,11 @@ func TestAnalyzeRootCausePrefersRecentDependencyChange(t *testing.T) {
 	graph.AddEdge("service", "ns1", "api", "configmap", "ns1", "old", "backed_by")
 	graph.AddEdge("service", "ns1", "api", "secret", "ns1", "new", "backed_by")
 	now := time.Date(2026, 8, 30, 12, 0, 0, 0, time.UTC)
-	tracker := context.NewChangeTracker(10)
+	tracker := newTestChangeTracker(10)
 	tracker.Record(context.Change{Resource: "configmap", Namespace: "ns1", Name: "old", Type: context.ChangeUpdate, Timestamp: now.Add(-9 * time.Minute)})
 	tracker.Record(context.Change{Resource: "secret", Namespace: "ns1", Name: "new", Type: context.ChangeUpdate, Timestamp: now.Add(-30 * time.Second)})
 
-	e := NewEngine(graph, tracker)
+	e := newTestEngine(graph, tracker)
 	e.now = func() time.Time { return now }
 	ins := e.Analyze(&model.Incident{Subject: model.Subject{
 		Resource: "pod", Namespace: "ns1", Name: "p1",
@@ -66,7 +66,7 @@ func TestAnalyzeRolloutFailure(t *testing.T) {
 	graph := context.NewResourceGraph()
 	graph.AddEdge("pod", "ns1", "p1", "deployment", "ns1", "dep1", "owned_by")
 
-	e := NewEngine(graph, context.NewChangeTracker(10))
+	e := newTestEngine(graph, newTestChangeTracker(10))
 	inc := &model.Incident{
 		Subject: model.Subject{
 			Resource:  "pod",
@@ -86,12 +86,12 @@ func TestAnalyzeConfigError(t *testing.T) {
 	graph.AddEdge("pod", "ns1", "p1", "configmap", "ns1", "cm1", "mounts")
 
 	now := time.Date(2025, 1, 1, 12, 0, 0, 0, time.UTC)
-	tracker := context.NewChangeTracker(10)
+	tracker := newTestChangeTracker(10)
 	tracker.Record(context.Change{
 		Resource: "configmap", Namespace: "ns1", Name: "cm1",
 		Type: context.ChangeUpdate, Timestamp: now.Add(-time.Minute),
 	})
-	e := NewEngine(graph, tracker)
+	e := newTestEngine(graph, tracker)
 	e.now = func() time.Time { return now }
 	inc := &model.Incident{
 		Subject: model.Subject{
@@ -111,12 +111,12 @@ func TestAnalyzeSecretError(t *testing.T) {
 	graph.AddEdge("pod", "ns1", "p1", "secret", "ns1", "s1", "env_from")
 
 	now := time.Date(2025, 1, 1, 12, 0, 0, 0, time.UTC)
-	tracker := context.NewChangeTracker(10)
+	tracker := newTestChangeTracker(10)
 	tracker.Record(context.Change{
 		Resource: "secret", Namespace: "ns1", Name: "s1",
 		Type: context.ChangeUpdate, Timestamp: now.Add(-time.Minute),
 	})
-	e := NewEngine(graph, tracker)
+	e := newTestEngine(graph, tracker)
 	e.now = func() time.Time { return now }
 	inc := &model.Incident{
 		Subject: model.Subject{
@@ -136,7 +136,7 @@ func TestAnalyzeImpactNode(t *testing.T) {
 	graph.AddEdge("pod", "ns1", "p1", "node", "", "n1", "scheduled_on")
 	graph.AddEdge("pod", "ns1", "p2", "node", "", "n1", "scheduled_on")
 
-	e := NewEngine(graph, context.NewChangeTracker(10))
+	e := newTestEngine(graph, newTestChangeTracker(10))
 	inc := &model.Incident{
 		Subject: model.Subject{
 			Resource: "node",
@@ -153,7 +153,7 @@ func TestAnalyzeImpactWorkload(t *testing.T) {
 	graph.AddEdge("pod", "ns1", "p1", "deployment", "ns1", "dep1", "owned_by")
 	graph.AddEdge("pod", "ns1", "p2", "deployment", "ns1", "dep1", "owned_by")
 
-	e := NewEngine(graph, context.NewChangeTracker(10))
+	e := newTestEngine(graph, newTestChangeTracker(10))
 	inc := &model.Incident{
 		Subject: model.Subject{
 			Resource:  "deployment",
@@ -170,13 +170,13 @@ func TestAnalyzeImpactWorkload(t *testing.T) {
 // "pod p1 created 3m ago" under "what changed" for an alert about p1 says
 // nothing, so it is ignored — the owner's rollout is what matters.
 func TestAnalyzeRecentChangesIgnoresThePodItself(t *testing.T) {
-	tracker := context.NewChangeTracker(100)
+	tracker := newTestChangeTracker(100)
 	tracker.Record(context.Change{
 		Resource: "pod", Namespace: "ns1", Name: "p1",
 		Type: context.ChangeCreate, Timestamp: time.Now(),
 	})
 
-	e := NewEngine(nil, tracker)
+	e := newTestEngine(nil, tracker)
 	inc := &model.Incident{
 		Subject: model.Subject{
 			Resource:  "pod",
@@ -196,7 +196,7 @@ func TestAnalyzeRecentChangesIgnoresThePodItself(t *testing.T) {
 // The owning Deployment being updated just before its pods fail is the single
 // most useful thing an alert can say: it is a rollout.
 func TestAnalyzeRecentChangesBlamesTheRollout(t *testing.T) {
-	tracker := context.NewChangeTracker(100)
+	tracker := newTestChangeTracker(100)
 	tracker.Record(context.Change{
 		Resource: "deployment", Namespace: "ns1", Name: "api",
 		Type: context.ChangeUpdate, Timestamp: time.Now().Add(-2 * time.Minute),
@@ -206,7 +206,7 @@ func TestAnalyzeRecentChangesBlamesTheRollout(t *testing.T) {
 		Type: context.ChangeCreate, Timestamp: time.Now(),
 	})
 
-	e := NewEngine(nil, tracker)
+	e := newTestEngine(nil, tracker)
 	inc := &model.Incident{
 		Subject: model.Subject{
 			Resource:  "pod",
@@ -231,12 +231,12 @@ func TestAnalyzeRecentChangesBlamesTheRollout(t *testing.T) {
 // A non-pod resource's own change is still relevant: a ConfigMap alert
 // about a ConfigMap that was just edited.
 func TestAnalyzeRecentChangesDirectForNonPod(t *testing.T) {
-	tracker := context.NewChangeTracker(100)
+	tracker := newTestChangeTracker(100)
 	tracker.Record(context.Change{
 		Resource: "configmap", Namespace: "ns1", Name: "cfg",
 		Type: context.ChangeUpdate, Timestamp: time.Now(),
 	})
-	e := NewEngine(nil, tracker)
+	e := newTestEngine(nil, tracker)
 	ins := e.Analyze(&model.Incident{
 		Subject: model.Subject{
 			Resource:  "configmap",
@@ -251,7 +251,7 @@ func TestAnalyzePVCError(t *testing.T) {
 	graph := context.NewResourceGraph()
 	graph.AddEdge("pod", "ns1", "p1", "pvc", "ns1", "pvc1", "mounts")
 
-	e := NewEngine(graph, context.NewChangeTracker(10))
+	e := newTestEngine(graph, newTestChangeTracker(10))
 	inc := &model.Incident{
 		Subject: model.Subject{
 			Resource:  "pod",
@@ -269,7 +269,7 @@ func TestAnalyzeImpactPodService(t *testing.T) {
 	graph := context.NewResourceGraph()
 	graph.AddEdge("service", "ns1", "svc1", "pod", "ns1", "p1", "selects")
 
-	e := NewEngine(graph, context.NewChangeTracker(10))
+	e := newTestEngine(graph, newTestChangeTracker(10))
 	inc := &model.Incident{
 		Subject: model.Subject{
 			Resource:  "pod",
@@ -289,7 +289,7 @@ func TestAnalyzeImpactConfigMap(t *testing.T) {
 	graph.AddEdge("pod", "ns1", "p1", "configmap", "ns1", "cm1", "mounts")
 	graph.AddEdge("pod", "ns1", "p2", "configmap", "ns1", "cm1", "mounts")
 
-	e := NewEngine(graph, context.NewChangeTracker(10))
+	e := newTestEngine(graph, newTestChangeTracker(10))
 	inc := &model.Incident{
 		Subject: model.Subject{
 			Resource:  "configmap",
@@ -306,7 +306,7 @@ func TestAnalyzeImpactSecret(t *testing.T) {
 	graph := context.NewResourceGraph()
 	graph.AddEdge("pod", "ns1", "p1", "secret", "ns1", "s1", "env_from")
 
-	e := NewEngine(graph, context.NewChangeTracker(10))
+	e := newTestEngine(graph, newTestChangeTracker(10))
 	inc := &model.Incident{
 		Subject: model.Subject{
 			Resource:  "secret",
@@ -325,7 +325,7 @@ func TestAnalyzeImpactPVC(t *testing.T) {
 	graph.AddEdge("pod", "ns1", "p2", "pvc", "ns1", "pv1", "mounts")
 	graph.AddEdge("pod", "ns1", "p3", "pvc", "ns1", "pv1", "mounts")
 
-	e := NewEngine(graph, context.NewChangeTracker(10))
+	e := newTestEngine(graph, newTestChangeTracker(10))
 	inc := &model.Incident{
 		Subject: model.Subject{
 			Resource:  "pvc",
@@ -342,13 +342,13 @@ func TestAnalyzeImpactPVC(t *testing.T) {
 // reported as a fallback, which made every alert in a busy namespace list
 // some other pod's deletion as if it mattered.
 func TestAnalyzeRecentChangesIgnoresUnrelatedNamespaceChurn(t *testing.T) {
-	tracker := context.NewChangeTracker(100)
+	tracker := newTestChangeTracker(100)
 	tracker.Record(context.Change{
 		Resource: "pod", Namespace: "ns1", Name: "p2",
 		Type: context.ChangeDelete, Timestamp: time.Now(),
 	})
 
-	e := NewEngine(nil, tracker)
+	e := newTestEngine(nil, tracker)
 	inc := &model.Incident{
 		Subject: model.Subject{
 			Resource:  "pod",

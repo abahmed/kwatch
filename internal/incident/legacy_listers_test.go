@@ -71,25 +71,37 @@ func (e *Engine) legacySources() *legacyListerSources {
 	return sources
 }
 
-func (e *Engine) SetDeployLister(l appsv1lister.DeploymentLister) {
+func setTestDeployLister(
+	e *Engine,
+	l appsv1lister.DeploymentLister,
+) {
 	e.mu.Lock()
 	defer e.mu.Unlock()
 	e.legacySources().deployments = l
 }
 
-func (e *Engine) SetStatefulSetLister(l appsv1lister.StatefulSetLister) {
+func setTestStatefulSetLister(
+	e *Engine,
+	l appsv1lister.StatefulSetLister,
+) {
 	e.mu.Lock()
 	defer e.mu.Unlock()
 	e.legacySources().statefulSet = l
 }
 
-func (e *Engine) SetDaemonSetLister(l appsv1lister.DaemonSetLister) {
+func setTestDaemonSetLister(
+	e *Engine,
+	l appsv1lister.DaemonSetLister,
+) {
 	e.mu.Lock()
 	defer e.mu.Unlock()
 	e.legacySources().daemonSet = l
 }
 
-func (e *Engine) SetServiceLister(l corev1lister.ServiceLister) {
+func setTestServiceLister(
+	e *Engine,
+	l corev1lister.ServiceLister,
+) {
 	e.mu.Lock()
 	defer e.mu.Unlock()
 	e.legacySources().services = l

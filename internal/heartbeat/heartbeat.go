@@ -34,13 +34,13 @@ func NewHeartbeatMonitorWithRuntime(
 	return NewHeartbeatMonitor(&cfg, client)
 }
 
-func (m *HeartbeatMonitor) Start(ctx context.Context) {
+func (m *HeartbeatMonitor) Start(ctx context.Context) error {
 	if m.config == nil || !m.config.Enabled {
-		return
+		return nil
 	}
 	if m.config.URL == "" {
 		klog.InfoS("heartbeat monitor disabled: no URL configured")
-		return
+		return nil
 	}
 
 	interval := time.Duration(m.config.Interval) * time.Second
@@ -56,7 +56,7 @@ func (m *HeartbeatMonitor) Start(ctx context.Context) {
 		select {
 		case <-ctx.Done():
 			klog.InfoS("heartbeat monitor stopped")
-			return
+			return nil
 		case <-ticker.C:
 			m.ping(ctx)
 		}

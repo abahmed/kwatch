@@ -72,14 +72,14 @@ func (a *Manager) AddProvider(p Provider) {
 // Start launches a worker goroutine for each provider that processes
 // queued deliveries. Workers drain and stop when ctx is cancelled.
 
-func (a *Manager) Start(ctx context.Context) {
+func (a *Manager) Start(ctx context.Context) error {
 	if ctx == nil {
 		ctx = context.Background()
 	}
 	a.mu.Lock()
 	if a.started && !a.stopped {
 		a.mu.Unlock()
-		return
+		return nil
 	}
 	if a.generation == nil {
 		a.generation = a.currentGenerationLocked()
@@ -106,6 +106,7 @@ func (a *Manager) Start(ctx context.Context) {
 		go a.runProvider(entry, a.workerCtx)
 	}
 	a.mu.Unlock()
+	return nil
 }
 
 func (a *Manager) runProvider(entry providerEntry, ctx context.Context) {

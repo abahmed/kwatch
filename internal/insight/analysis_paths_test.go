@@ -11,7 +11,7 @@ import (
 )
 
 func TestAnalyzeRecentChangesCap(t *testing.T) {
-	tracker := context.NewChangeTracker(100)
+	tracker := newTestChangeTracker(100)
 	now := time.Now()
 	// Five edits to the workload itself; the alert shows the three most
 	// recent rather than a wall of them.
@@ -25,7 +25,7 @@ func TestAnalyzeRecentChangesCap(t *testing.T) {
 		})
 	}
 
-	e := NewEngine(nil, tracker)
+	e := newTestEngine(nil, tracker)
 	inc := &model.Incident{
 		Subject: model.Subject{
 			Resource:  "deploy",
@@ -44,14 +44,14 @@ func TestAnalyzeDependencyChangeDoesNotClobberCause(t *testing.T) {
 	graph.AddEdge("pod", "ns1", "p1", "configmap", "ns1", "cm1", "mounts")
 	graph.AddEdge("pod", "ns1", "p1", "node", "", "n1", "scheduled_on")
 
-	tracker := context.NewChangeTracker(100)
+	tracker := newTestChangeTracker(100)
 	// The configmap was changed recently — an irrelevant-but-present signal.
 	tracker.Record(context.Change{
 		Resource: "configmap", Namespace: "ns1", Name: "cm1",
 		Type: context.ChangeUpdate, Timestamp: time.Now(),
 	})
 
-	e := NewEngine(graph, tracker)
+	e := newTestEngine(graph, tracker)
 	inc := &model.Incident{
 		Subject: model.Subject{
 			Resource:  "pod",
@@ -85,7 +85,7 @@ func TestAnalyzeImpactTransitiveThroughService(t *testing.T) {
 		"routes_to",
 	)
 
-	e := NewEngine(graph, context.NewChangeTracker(10))
+	e := newTestEngine(graph, newTestChangeTracker(10))
 	inc := &model.Incident{
 		Subject: model.Subject{
 			Resource: "node",
@@ -110,7 +110,7 @@ func TestAnalyzeImpactConfigMapBlastRadius(t *testing.T) {
 	graph.AddEdge("service", "ns1", "svc1", "pod", "ns1", "p1", "selects")
 	graph.AddEdge("service", "ns1", "svc1", "pod", "ns1", "p2", "selects")
 
-	e := NewEngine(graph, context.NewChangeTracker(10))
+	e := newTestEngine(graph, newTestChangeTracker(10))
 	inc := &model.Incident{
 		Subject: model.Subject{
 			Resource:  "configmap",
@@ -132,7 +132,7 @@ func TestAnalyzeImpactServiceAccountOnly(t *testing.T) {
 	graph := context.NewResourceGraph()
 	graph.AddEdge("pod", "ns1", "p1", "serviceaccount", "ns1", "sa1", "uses_sa")
 
-	e := NewEngine(graph, context.NewChangeTracker(10))
+	e := newTestEngine(graph, newTestChangeTracker(10))
 	inc := &model.Incident{
 		Subject: model.Subject{
 			Resource:  "serviceaccount",
@@ -152,7 +152,7 @@ func TestAnalyzeRootCauseNodeViaPVChain(t *testing.T) {
 	graph.AddEdge("pod", "ns1", "p1", "persistentvolume", "", "pv-1", "binds")
 	graph.AddEdge("persistentvolume", "", "pv-1", "node", "", "n1", "local_at")
 
-	e := NewEngine(graph, context.NewChangeTracker(10))
+	e := newTestEngine(graph, newTestChangeTracker(10))
 	inc := &model.Incident{
 		Subject: model.Subject{
 			Resource:  "pod",
@@ -174,7 +174,7 @@ func TestAnalyzeRootCausePVCIncident(t *testing.T) {
 	graph.AddEdge("pvc", "ns1", "pc1", "persistentvolume", "", "pv-9", "binds")
 	graph.AddEdge("persistentvolume", "", "pv-9", "node", "", "n9", "local_to")
 
-	e := NewEngine(graph, context.NewChangeTracker(10))
+	e := newTestEngine(graph, newTestChangeTracker(10))
 	inc := &model.Incident{
 		Subject: model.Subject{
 			Resource:  "pvc",
@@ -191,7 +191,7 @@ func TestAnalyzeRootCausePVCIncident(t *testing.T) {
 
 func TestAnalyzeNoDeps(t *testing.T) {
 	graph := context.NewResourceGraph()
-	e := NewEngine(graph, context.NewChangeTracker(10))
+	e := newTestEngine(graph, newTestChangeTracker(10))
 	inc := &model.Incident{
 		Subject: model.Subject{
 			Resource:  "pod",
@@ -229,7 +229,7 @@ func TestAnalyzePodIncidentKeyedByOwnerName(t *testing.T) {
 		"owned_by",
 	)
 
-	e := NewEngine(graph, context.NewChangeTracker(10))
+	e := newTestEngine(graph, newTestChangeTracker(10))
 	inc := &model.Incident{
 		Subject: model.Subject{
 			Resource:  "pod",
@@ -255,7 +255,7 @@ func TestAnalyzeWorkloadIncidentNamespaceName(t *testing.T) {
 	graph.AddEdge("pod", "ns1", "p2", "deployment", "ns1", "dep1", "owned_by")
 	graph.AddEdge("service", "ns1", "svc1", "pod", "ns1", "p1", "selects")
 
-	e := NewEngine(graph, context.NewChangeTracker(10))
+	e := newTestEngine(graph, newTestChangeTracker(10))
 	inc := &model.Incident{
 		Subject: model.Subject{
 			Resource:  "deployment",

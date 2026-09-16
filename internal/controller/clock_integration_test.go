@@ -21,7 +21,7 @@ func TestRecordChangeUsesInjectedClock(t *testing.T) {
 	require.NoError(t, err)
 	controller := &Controller{
 		graphRuntime: graphRuntime{
-			tracker: kwcontext.NewChangeTracker(10),
+			tracker: newTestChangeTracker(10),
 		},
 		now: func() time.Time { return now },
 	}

@@ -20,7 +20,7 @@ func TestEngineBackedBaselineRoundTrip(t *testing.T) {
 	assert := assert.New(t)
 	ctx := context.Background()
 	client := fake.NewSimpleClientset()
-	sm := NewManager(client, "kwatch")
+	sm := newTestManager(client, "kwatch")
 
 	// Save a realistic baseline (same format as controller.buildSeenSet
 	// produces)
@@ -36,7 +36,7 @@ func TestEngineBackedBaselineRoundTrip(t *testing.T) {
 	assert.Equal(baseline, loaded)
 
 	// Feed loaded baseline into the incident engine (as app startup does).
-	e := incident.NewEngine(incident.Config{
+	e := newTestIncidentEngine(incident.Config{
 		Window:   10 * time.Minute,
 		Baseline: loaded,
 	})
@@ -56,7 +56,7 @@ func TestSaveAndGetIncidents(t *testing.T) {
 	assert := assert.New(t)
 	ctx := context.Background()
 	client := fake.NewSimpleClientset()
-	sm := NewManager(client, "kwatch")
+	sm := newTestManager(client, "kwatch")
 
 	incidents := []map[string]interface{}{
 		{
@@ -95,7 +95,7 @@ func TestGetIncidentsNoConfigMap(t *testing.T) {
 	assert := assert.New(t)
 	ctx := context.Background()
 	client := fake.NewSimpleClientset()
-	sm := NewManager(client, "kwatch")
+	sm := newTestManager(client, "kwatch")
 
 	var loaded []map[string]interface{}
 	err := sm.GetIncidents(ctx, &loaded)
@@ -107,7 +107,7 @@ func TestSaveIncidentsOverwrites(t *testing.T) {
 	assert := assert.New(t)
 	ctx := context.Background()
 	client := fake.NewSimpleClientset()
-	sm := NewManager(client, "kwatch")
+	sm := newTestManager(client, "kwatch")
 
 	first := []map[string]interface{}{
 		{"key": "ns:dep-1:Error:", "count": 1},
@@ -138,7 +138,7 @@ func TestSaveAndGetPersistedIncidentsRoundTrip(t *testing.T) {
 	assert := assert.New(t)
 	ctx := context.Background()
 	client := fake.NewSimpleClientset()
-	sm := NewManager(client, "kwatch")
+	sm := newTestManager(client, "kwatch")
 
 	now := time.Now().Truncate(time.Second)
 	incidents := []model.PersistedIncident{
@@ -181,7 +181,7 @@ func TestSaveAndGetPersistedIncidentsRoundTrip(t *testing.T) {
 func TestSaveIncidentStateUsesDedicatedConfigMaps(t *testing.T) {
 	ctx := context.Background()
 	client := fake.NewSimpleClientset()
-	sm := NewManager(client, "kwatch")
+	sm := newTestManager(client, "kwatch")
 	now := time.Now().UTC().Truncate(time.Second)
 	incidents := []model.PersistedIncident{{
 		Key:       "ns:dep:Error:",
@@ -248,7 +248,7 @@ func TestSaveIncidentStateUsesDedicatedConfigMaps(t *testing.T) {
 func TestDedicatedStateLoadFallsBackToLegacyIncidentConfigMap(t *testing.T) {
 	ctx := context.Background()
 	client := fake.NewSimpleClientset()
-	sm := NewManager(client, "kwatch")
+	sm := newTestManager(client, "kwatch")
 	groups := []model.PersistedGroup{{GroupKey: "legacy"}}
 	threads := map[string]map[string]string{
 		"slack": {"legacy": "thread-1"},
@@ -288,7 +288,7 @@ func TestDedicatedStateLoadFallsBackToLegacyIncidentConfigMap(t *testing.T) {
 func TestSaveBaselineTooLarge(t *testing.T) {
 	assert := assert.New(t)
 	client := fake.NewSimpleClientset()
-	sm := NewManager(client, "kwatch")
+	sm := newTestManager(client, "kwatch")
 	// Build a baseline large enough that even gzipped it exceeds
 	// configMapPayloadMaxBytes (~1,032,192). Use many entries with unique keys
 	// to minimise gzip leverage.
