@@ -51,6 +51,7 @@ func newNetworkGraphRun(
 			klog.ErrorS(err, "network graph monitor stopped")
 			return err
 		}
+		defer graphMonitor.Stop()
 		syncCtx, cancel := context.WithTimeout(
 			ctx, optionalWatcherSyncTimeout,
 		)
@@ -66,11 +67,13 @@ func newNetworkGraphRun(
 				"network-graph",
 				"degraded", "optional_api_unavailable", false,
 			)
+			<-ctx.Done()
 			return nil
 		}
 		healthServer.SetComponentStatus(
 			"network-graph", "running", "", true,
 		)
+		<-ctx.Done()
 		return nil
 	}
 }
@@ -105,6 +108,7 @@ func newStorageGraphRun(
 			klog.ErrorS(err, "storage graph monitor stopped")
 			return err
 		}
+		defer graphMonitor.Stop()
 		syncCtx, cancel := context.WithTimeout(
 			ctx, optionalWatcherSyncTimeout,
 		)
@@ -120,11 +124,13 @@ func newStorageGraphRun(
 				"storage-graph",
 				"degraded", "optional_api_unavailable", false,
 			)
+			<-ctx.Done()
 			return nil
 		}
 		healthServer.SetComponentStatus(
 			"storage-graph", "running", "", true,
 		)
+		<-ctx.Done()
 		return nil
 	}
 }

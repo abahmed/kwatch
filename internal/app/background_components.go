@@ -15,23 +15,39 @@ func startCoreComponents(
 	supervisor *componentSupervisor,
 ) {
 	components := []componentSpec{
-		{name: "incident-cleanup", run: func(componentCtx context.Context) error {
-			return runIncidentCleanup(componentCtx, deps)
-		}},
-		{name: "pvc-monitor", run: func(componentCtx context.Context) error {
-			return runPVCMonitor(componentCtx, deps)
-		}},
-		{name: "heartbeat", run: func(componentCtx context.Context) error {
-			return runHeartbeat(componentCtx, deps)
-		}},
-		{name: "incident-snapshots", run: func(componentCtx context.Context) error {
-			return runIncidentSnapshots(componentCtx, deps)
-		}},
+		{
+			name:    "incident-cleanup",
+			onError: degrade(deps, "incident-cleanup"),
+			run: func(componentCtx context.Context) error {
+				return runIncidentCleanup(componentCtx, deps)
+			},
+		},
+		{
+			name:    "pvc-monitor",
+			onError: degrade(deps, "pvc-monitor"),
+			run: func(componentCtx context.Context) error {
+				return runPVCMonitor(componentCtx, deps)
+			},
+		},
+		{
+			name:    "heartbeat",
+			onError: degrade(deps, "heartbeat"),
+			run: func(componentCtx context.Context) error {
+				return runHeartbeat(componentCtx, deps)
+			},
+		},
+		{
+			name:    "incident-snapshots",
+			onError: degrade(deps, "incident-snapshots"),
+			run: func(componentCtx context.Context) error {
+				return runIncidentSnapshots(componentCtx, deps)
+			},
+		},
 	}
 
 	if deps.tlsSweep != nil {
 		components = append(components, componentSpec{
-			name: "tls-sweep",
+			name: "tls-sweep", onError: degrade(deps, "tls-sweep"),
 			run: func(componentCtx context.Context) error {
 				return runTLSSweep(componentCtx, deps)
 			},
@@ -39,7 +55,7 @@ func startCoreComponents(
 	}
 	if deps.runtime.CrdConfig().Enabled {
 		components = append(components, componentSpec{
-			name: "crd-watcher",
+			name: "crd-watcher", onError: degrade(deps, "crd-watcher"),
 			run: func(componentCtx context.Context) error {
 				return runCRDWatcher(componentCtx, deps)
 			},
@@ -47,7 +63,8 @@ func startCoreComponents(
 	}
 	if deps.runtime.NamespaceSelector() != "" {
 		components = append(components, componentSpec{
-			name: "namespace-scope-watcher",
+			name:    "namespace-scope-watcher",
+			onError: degrade(deps, "namespace-scope-watcher"),
 			run: func(componentCtx context.Context) error {
 				return runNamespaceScopeWatcher(componentCtx, deps)
 			},
@@ -63,6 +80,14 @@ func startCoreComponents(
 			return runController(ctx, deps)
 		},
 	})
+}
+
+func degrade(deps *serverDeps, name string) func(error) {
+	return func(err error) {
+		if deps.healthServer != nil {
+			deps.healthServer.SetComponentError(name, err)
+		}
+	}
 }
 
 func runIncidentCleanup(ctx context.Context, deps *serverDeps) error {

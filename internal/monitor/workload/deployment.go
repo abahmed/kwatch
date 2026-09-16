@@ -142,7 +142,7 @@ type DeploymentProcessor interface {
 // DeploymentConfig wires informer and clock dependencies into a direct
 // Deployment processor.
 type DeploymentConfig interface {
-	SetLister(appsv1lister.DeploymentLister)
+	configureLister(appsv1lister.DeploymentLister)
 }
 
 // DeploymentRuntime owns Deployment lookup and rollout lifecycle policy.
@@ -153,8 +153,8 @@ type DeploymentRuntime struct {
 }
 
 // NewDeploymentRuntime constructs the direct Deployment family adapter.
-// SetLister supplies the informer-backed Deployment cache.
-func (r *DeploymentRuntime) SetLister(
+// configureLister supplies the informer-backed Deployment cache.
+func (r *DeploymentRuntime) configureLister(
 	lister appsv1lister.DeploymentLister,
 ) {
 	r.support.configureSource(func() { r.lister = lister })

@@ -71,7 +71,6 @@ func newBootstrap(
 		runtime.HealthCheck(), clock.Func(now),
 	)
 	securityMonitor := configureSecurityMonitor(runtime, clients.Kubernetes, now)
-	healthServer.SetSecurityLister(securityMonitor)
 
 	deliveryManager := delivery.NewManagerWithDependencies(delivery.Dependencies{
 		HTTPClient: clients.HTTP,

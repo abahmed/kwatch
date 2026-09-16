@@ -11,7 +11,6 @@ import (
 	"github.com/abahmed/kwatch/internal/clock"
 	"github.com/abahmed/kwatch/internal/config"
 	"github.com/abahmed/kwatch/internal/controller"
-	"github.com/abahmed/kwatch/internal/delivery"
 	kwcontext "github.com/abahmed/kwatch/internal/graphcontext"
 	"github.com/abahmed/kwatch/internal/health"
 	"github.com/abahmed/kwatch/internal/heartbeat"
@@ -32,7 +31,6 @@ func buildServerDeps(
 	now func() time.Time,
 ) (*serverDeps, error) {
 	persist := configurePersistence(ctx, boot.persistence, now)
-	boot.healthServer.SetPersistenceLister(boot.persistence)
 	if report := boot.persistence.MigrationReport(); len(report) > 0 {
 		migrationState := "running"
 		migrationReason := ""
@@ -93,10 +91,6 @@ func buildServerDeps(
 		persist.feedbackStore,
 		persist.saveFeedback,
 	)
-	configureIncidentHealth(
-		boot.healthServer, incidentEngine, boot.deliveryManager,
-	)
-
 	pvcMonitor := pvc.NewPvcMonitorWithRuntimeAndClock(
 		boot.clients.Kubernetes,
 		runtime,
@@ -112,7 +106,6 @@ func buildServerDeps(
 		boot.clients.Kubernetes,
 		boot.clients,
 		incidentEngine,
-		boot.healthServer,
 		boot.deliveryManager,
 		now,
 	)
@@ -136,11 +129,6 @@ func buildServerDeps(
 		pvcMonitor,
 		graph,
 	)
-	if err := boot.healthServer.Open(); err != nil {
-		cleanup()
-		closeAuditLogger(auditLogger)
-		return nil, fmt.Errorf("start health check server: %w", err)
-	}
 	optional := configureOptionalRuns(
 		runtime,
 		boot,
@@ -150,6 +138,25 @@ func buildServerDeps(
 		monitors,
 		now,
 	)
+	if err := boot.healthServer.ConfigureDependencies(health.Dependencies{
+		Incident:     incidentEngine,
+		Delivery:     boot.deliveryManager,
+		DeadLetters:  boot.deliveryManager,
+		Telemetry:    optional.telemetry,
+		Security:     boot.securityMonitor,
+		ControlPlane: monitors.controlPlane,
+		Informer:     ctl,
+		Persistence:  boot.persistence,
+	}); err != nil {
+		cleanup()
+		closeAuditLogger(auditLogger)
+		return nil, fmt.Errorf("configure health dependencies: %w", err)
+	}
+	if err := boot.healthServer.Open(); err != nil {
+		cleanup()
+		closeAuditLogger(auditLogger)
+		return nil, fmt.Errorf("start health check server: %w", err)
+	}
 	return makeServerDeps(
 		ctx,
 		cancel,
@@ -166,16 +173,6 @@ func buildServerDeps(
 		monitors.startupSummary,
 		initialized,
 	), nil
-}
-
-func configureIncidentHealth(
-	healthServer *health.HealthServer,
-	incidentEngine *incident.Engine,
-	deliveryManager *delivery.Manager,
-) {
-	healthServer.SetIncidentAPI(incidentEngine)
-	healthServer.SetDeliveryManager(deliveryManager)
-	healthServer.SetDeadLetterLister(deliveryManager)
 }
 
 func closeAuditLogger(logger *audit.AuditLogger) {

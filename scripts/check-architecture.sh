@@ -434,6 +434,20 @@ report_matches \
 # metrics. Rejecting the dynamic API keeps resource names and error strings
 # from becoming unbounded cardinality if metrics are extended later.
 report_matches \
+	"workload exposes mutable lister wiring" \
+	'func \\(.*\\*.*Runtime\\) SetLister\\(' \
+	internal/monitor/workload \
+	--glob '*.go' \
+	--glob '!**/*_test.go'
+
+report_matches \
+	"health owns a context shutdown watcher" \
+	'go[[:space:]]+.*(ctx|context).*Done|go[[:space:]]+.*Shutdown' \
+	internal/health \
+	--glob '*.go' \
+	--glob '!**/*_test.go'
+
+report_matches \
 	"production code uses dynamic Prometheus label values" \
 	'WithLabelValues\(' \
 	internal \

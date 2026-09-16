@@ -60,9 +60,10 @@ func NewReplicaSetRuntimeWithRuntimeConfig(
 	}
 }
 
-// SetLister supplies the informer-backed ReplicaSet cache after controller
+// configureLister supplies the informer-backed ReplicaSet cache after
+// controller
 // construction.
-func (r *ReplicaSetRuntime) SetLister(
+func (r *ReplicaSetRuntime) configureLister(
 	lister appsv1lister.ReplicaSetLister,
 ) {
 	r.support.configureSource(func() { r.lister = lister })

@@ -61,9 +61,7 @@ func serve(ctx context.Context, deps *serverDeps) int {
 		{name: "upgrader", run: deps.upgradeRun},
 	}
 	for _, component := range optionalComponents {
-		supervisor.startOptional(
-			ctx, deps.initialized, component, deps.healthServer,
-		)
+		supervisor.startOptional(ctx, deps.initialized, component)
 	}
 
 	startCoreComponents(ctx, deps, supervisor)
@@ -96,6 +94,7 @@ func startCRDWatcher(ctx context.Context, deps *serverDeps) error {
 	if err := w.Start(ctx); err != nil {
 		return fmt.Errorf("crd watcher: %w", err)
 	}
+	defer w.Stop()
 	status := w.Status()
 	if status.WaitingForCRD {
 		deps.healthServer.SetComponentStatus(
@@ -106,6 +105,7 @@ func startCRDWatcher(ctx context.Context, deps *serverDeps) error {
 			"crd-watcher", "running", "", true,
 		)
 	}
+	<-ctx.Done()
 	return nil
 }
 

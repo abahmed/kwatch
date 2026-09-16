@@ -5,9 +5,6 @@ import (
 	"errors"
 	"testing"
 	"time"
-
-	"github.com/abahmed/kwatch/internal/config"
-	"github.com/abahmed/kwatch/internal/health"
 )
 
 func TestComponentSupervisorReportsRequiredFailure(t *testing.T) {
@@ -41,20 +38,20 @@ func TestComponentSupervisorReportsRequiredFailure(t *testing.T) {
 
 func TestComponentSupervisorMarksOptionalFailureDegraded(t *testing.T) {
 	supervisor := newComponentSupervisor()
-	healthServer := health.NewHealthServer(config.HealthCheck{})
 	initialized := make(chan struct{})
 	close(initialized)
 	started := make(chan struct{})
+	var gotError error
 	supervisor.startOptional(
 		context.Background(), initialized,
 		componentSpec{
-			name: "optional-test-component",
+			name:    "optional-test-component",
+			onError: func(err error) { gotError = err },
 			run: func(context.Context) error {
 				close(started)
 				return errors.New("optional failure")
 			},
 		},
-		healthServer,
 	)
 
 	select {
@@ -64,9 +61,8 @@ func TestComponentSupervisorMarksOptionalFailureDegraded(t *testing.T) {
 	}
 	supervisor.wg.Wait()
 
-	got := healthServer.ComponentErrors()["optional-test-component"]
-	if got != "component_failed" {
-		t.Fatalf("optional failure reason = %q", got)
+	if gotError == nil || gotError.Error() != "optional failure" {
+		t.Fatalf("optional failure callback = %v", gotError)
 	}
 	select {
 	case err := <-supervisor.errCh:

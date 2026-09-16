@@ -67,6 +67,9 @@ func (h *HealthServer) SetComponentStatus(
 ) {
 	h.componentMu.Lock()
 	defer h.componentMu.Unlock()
+	if available && state == "running" {
+		delete(h.componentErrors, name)
+	}
 	h.setComponentStatusLocked(name, ComponentStatus{
 		State: state, Available: available, Reason: reason,
 	})

@@ -65,7 +65,7 @@ func TestReplicaSetRuntimeReconcilesDetectedFailure(t *testing.T) {
 	runtime := NewReplicaSetRuntimeWithRuntimeConfig(
 		config.RuntimeConfig{}, sink, time.Now,
 	)
-	runtime.SetLister(appsv1listers.NewReplicaSetLister(indexer))
+	runtime.configureLister(appsv1listers.NewReplicaSetLister(indexer))
 
 	if err := runtime.ProcessReplicaSet("default/worker", false); err != nil {
 		t.Fatalf("ProcessReplicaSet() returned error: %v", err)
@@ -88,7 +88,7 @@ func TestReplicaSetRuntimeReconcilesDeletedObject(t *testing.T) {
 	runtime := NewReplicaSetRuntimeWithRuntimeConfig(
 		config.RuntimeConfig{}, sink, time.Now,
 	)
-	runtime.SetLister(appsv1listers.NewReplicaSetLister(cache.NewIndexer(
+	runtime.configureLister(appsv1listers.NewReplicaSetLister(cache.NewIndexer(
 		cache.MetaNamespaceKeyFunc,
 		cache.Indexers{},
 	)))

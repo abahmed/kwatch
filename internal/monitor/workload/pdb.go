@@ -54,7 +54,7 @@ type PDBProcessor interface {
 
 // PDBConfig wires informer and clock dependencies into a direct runtime.
 type PDBConfig interface {
-	SetLister(policyv1lister.PodDisruptionBudgetLister)
+	configureLister(policyv1lister.PodDisruptionBudgetLister)
 }
 
 // PDBRuntime owns PDB lookup and sustained blocking policy.
@@ -65,8 +65,8 @@ type PDBRuntime struct {
 }
 
 // NewPDBRuntime constructs the direct PDB family adapter.
-// SetLister supplies the informer-backed PDB cache.
-func (r *PDBRuntime) SetLister(
+// configureLister supplies the informer-backed PDB cache.
+func (r *PDBRuntime) configureLister(
 	lister policyv1lister.PodDisruptionBudgetLister,
 ) {
 	r.support.configureSource(func() { r.lister = lister })

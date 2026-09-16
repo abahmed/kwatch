@@ -1,6 +1,7 @@
 package health
 
 import (
+	"fmt"
 	"net"
 	"net/http"
 	"sync"
@@ -17,7 +18,7 @@ type IncidentLister interface {
 	Snapshot() []model.IncidentView
 }
 
-type TestAlertSender interface {
+type AlertSender interface {
 	NotifyEvent(event event.Event)
 	Notify(msg string)
 }
@@ -34,6 +35,19 @@ type StatusProvider interface {
 	StatusJSON() ([]byte, error)
 }
 
+// Dependencies are configured once before Open. Keeping this boundary typed
+// makes health wiring visible at the application composition root.
+type Dependencies struct {
+	Incident     IncidentLister
+	Delivery     AlertSender
+	DeadLetters  DeadLetterLister
+	Telemetry    StatusProvider
+	Security     StatusProvider
+	ControlPlane StatusProvider
+	Informer     StatusProvider
+	Persistence  StatusProvider
+}
+
 type HealthServer struct {
 	server             *http.Server
 	listener           net.Listener
@@ -43,7 +57,7 @@ type HealthServer struct {
 	diagnostics        bool
 	diagnosticsToken   string
 	incidentAPI        IncidentLister
-	deliveryManager    TestAlertSender
+	deliveryManager    AlertSender
 	deadLetterLister   DeadLetterLister
 	telemetryLister    StatusProvider
 	securityLister     StatusProvider
@@ -107,34 +121,23 @@ func NewHealthServerWithClock(
 	return h
 }
 
-func (h *HealthServer) SetIncidentAPI(lister IncidentLister) {
-	h.incidentAPI = lister
-}
-
-func (h *HealthServer) SetDeliveryManager(sender TestAlertSender) {
-	h.deliveryManager = sender
-}
-
-func (h *HealthServer) SetDeadLetterLister(l DeadLetterLister) {
-	h.deadLetterLister = l
-}
-
-func (h *HealthServer) SetTelemetryLister(l StatusProvider) {
-	h.telemetryLister = l
-}
-
-func (h *HealthServer) SetSecurityLister(l StatusProvider) {
-	h.securityLister = l
-}
-
-func (h *HealthServer) SetControlPlaneLister(l StatusProvider) {
-	h.controlPlaneLister = l
-}
-
-func (h *HealthServer) SetInformerLister(l StatusProvider) {
-	h.informerLister = l
-}
-
-func (h *HealthServer) SetPersistenceLister(l StatusProvider) {
-	h.persistenceLister = l
+// ConfigureDependencies supplies all diagnostic providers before the server
+// opens its listener. Dependency mutation after startup is rejected.
+func (h *HealthServer) ConfigureDependencies(
+	deps Dependencies,
+) error {
+	h.lifecycleMu.Lock()
+	defer h.lifecycleMu.Unlock()
+	if h.started {
+		return fmt.Errorf("health dependencies cannot change after start")
+	}
+	h.incidentAPI = deps.Incident
+	h.deliveryManager = deps.Delivery
+	h.deadLetterLister = deps.DeadLetters
+	h.telemetryLister = deps.Telemetry
+	h.securityLister = deps.Security
+	h.controlPlaneLister = deps.ControlPlane
+	h.informerLister = deps.Informer
+	h.persistenceLister = deps.Persistence
+	return nil
 }

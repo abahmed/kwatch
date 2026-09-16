@@ -8,6 +8,7 @@ import (
 	"github.com/abahmed/kwatch/internal/config"
 	"github.com/abahmed/kwatch/internal/controller"
 	kwcontext "github.com/abahmed/kwatch/internal/graphcontext"
+	"github.com/abahmed/kwatch/internal/health"
 	"github.com/abahmed/kwatch/internal/incident"
 	"github.com/abahmed/kwatch/internal/kubeletmetrics"
 )
@@ -22,6 +23,7 @@ type optionalRuns struct {
 	networkRun      func(context.Context) error
 	securityRun     func(context.Context) error
 	controlPlaneRun func(context.Context) error
+	telemetry       health.StatusProvider
 }
 
 func configureOptionalRuns(
@@ -72,7 +74,7 @@ func configureOptionalRuns(
 		boot.clients.Dynamic, boot.clients.Discovery,
 	)
 	if runtime.KubeletTelemetryMonitor().Enabled {
-		runs.kubeletRun = configureKubeletRun(
+		runs.kubeletRun, runs.telemetry = configureKubeletRun(
 			runtime, boot, ctl, incidentEngine, namespaces, watchAll, now,
 		)
 	}
@@ -87,7 +89,7 @@ func configureKubeletRun(
 	namespaces []string,
 	watchAll bool,
 	now func() time.Time,
-) func(context.Context) error {
+) (func(context.Context) error, health.StatusProvider) {
 	monitor := kubeletmetrics.NewWithClock(
 		boot.clients.Kubernetes,
 		runtime.KubeletTelemetryMonitor(),
@@ -104,8 +106,7 @@ func configureKubeletRun(
 		PodLister: ctl.PodLister(), NodeLister: ctl.NodeLister(),
 		StateStore: stateStore,
 	}); err != nil {
-		return func(context.Context) error { return err }
+		return func(context.Context) error { return err }, nil
 	}
-	boot.healthServer.SetTelemetryLister(monitor)
-	return monitor.Start
+	return monitor.Start, monitor
 }

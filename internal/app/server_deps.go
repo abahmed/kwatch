@@ -63,4 +63,5 @@ type componentSpec struct {
 	name     string
 	required bool
 	run      func(context.Context) error
+	onError  func(error)
 }

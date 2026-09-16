@@ -6,8 +6,6 @@ import (
 	"sync"
 
 	"k8s.io/klog/v2"
-
-	"github.com/abahmed/kwatch/internal/health"
 )
 
 // componentSupervisor owns application-launched goroutines and the single
@@ -37,6 +35,9 @@ func (s *componentSupervisor) startOwned(
 				s.report(fmt.Errorf("%s: %w", component.name, err))
 				return
 			}
+			if component.onError != nil {
+				component.onError(err)
+			}
 			klog.ErrorS(err, "application component stopped",
 				"component", component.name)
 		}
@@ -47,7 +48,6 @@ func (s *componentSupervisor) startOptional(
 	ctx context.Context,
 	initialized <-chan struct{},
 	component componentSpec,
-	healthServer *health.HealthServer,
 ) {
 	if component.run == nil {
 		return
@@ -68,7 +68,9 @@ func (s *componentSupervisor) startOptional(
 				s.report(fmt.Errorf("%s: %w", component.name, err))
 				return
 			}
-			healthServer.SetComponentError(component.name, err)
+			if component.onError != nil {
+				component.onError(err)
+			}
 			klog.ErrorS(err, "optional component stopped",
 				"component", component.name)
 		}

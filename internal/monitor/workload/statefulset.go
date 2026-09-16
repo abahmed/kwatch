@@ -80,7 +80,7 @@ type StatefulSetProcessor interface {
 
 // StatefulSetConfig wires informer and clock dependencies.
 type StatefulSetConfig interface {
-	SetLister(appsv1lister.StatefulSetLister)
+	configureLister(appsv1lister.StatefulSetLister)
 }
 
 // StatefulSetRuntime owns StatefulSet lookup and availability lifecycle policy.
@@ -91,8 +91,8 @@ type StatefulSetRuntime struct {
 }
 
 // NewStatefulSetRuntime constructs the direct StatefulSet family adapter.
-// SetLister supplies the informer-backed StatefulSet cache.
-func (r *StatefulSetRuntime) SetLister(
+// configureLister supplies the informer-backed StatefulSet cache.
+func (r *StatefulSetRuntime) configureLister(
 	lister appsv1lister.StatefulSetLister,
 ) {
 	r.support.configureSource(func() { r.lister = lister })

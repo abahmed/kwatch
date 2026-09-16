@@ -37,7 +37,7 @@ func TestDeploymentRuntimeReconcilesRolloutFailure(t *testing.T) {
 	runtime := NewDeploymentRuntimeWithRuntimeConfig(
 		config.RuntimeConfig{}, sink, time.Now,
 	)
-	runtime.SetLister(appsv1lister.NewDeploymentLister(indexer))
+	runtime.configureLister(appsv1lister.NewDeploymentLister(indexer))
 
 	if err := runtime.ProcessDeployment("default/api", false); err != nil {
 		t.Fatalf("ProcessDeployment() returned error: %v", err)
@@ -165,7 +165,7 @@ func TestWorkloadRuntimeIgnoresLateSourceConfiguration(t *testing.T) {
 			Reason: constant.ReasonProgressDeadlineExceeded,
 		}}},
 	}
-	runtime.SetLister(appsv1lister.NewDeploymentLister(
+	runtime.configureLister(appsv1lister.NewDeploymentLister(
 		workloadIndexer(t, deploy),
 	))
 	if err := runtime.ProcessDeployment("default/api", false); err != nil {
@@ -194,7 +194,7 @@ func TestDaemonSetRuntimeReconcilesCondition(t *testing.T) {
 	runtime := NewDaemonSetRuntimeWithRuntimeConfig(
 		config.RuntimeConfig{}, sink, nil, time.Now,
 	)
-	runtime.SetLister(appsv1lister.NewDaemonSetLister(indexer))
+	runtime.configureLister(appsv1lister.NewDaemonSetLister(indexer))
 
 	if err := runtime.ProcessDaemonSet("default/agent", false); err != nil {
 		t.Fatalf("ProcessDaemonSet() returned error: %v", err)
@@ -217,7 +217,7 @@ func TestStatefulSetRuntimeReconcilesUnavailableReplicas(t *testing.T) {
 	runtime := NewStatefulSetRuntimeWithRuntimeConfig(
 		config.RuntimeConfig{}, sink, time.Now,
 	)
-	runtime.SetLister(appsv1lister.NewStatefulSetLister(indexer))
+	runtime.configureLister(appsv1lister.NewStatefulSetLister(indexer))
 
 	if err := runtime.ProcessStatefulSet("default/database", false); err != nil {
 		t.Fatalf("ProcessStatefulSet() returned error: %v", err)
@@ -239,7 +239,7 @@ func TestCronJobRuntimeReconcilesSuspension(t *testing.T) {
 	runtime := NewCronJobRuntimeWithRuntimeConfig(
 		config.RuntimeConfig{}, sink, time.Now,
 	)
-	runtime.SetLister(batchv1lister.NewCronJobLister(indexer))
+	runtime.configureLister(batchv1lister.NewCronJobLister(indexer))
 	runtime.support.now = func() time.Time {
 		return time.Date(2026, 1, 1, 12, 0, 0, 0, time.UTC)
 	}
@@ -267,7 +267,7 @@ func TestHPARuntimeReconcilesMaxedOutAutoscaler(t *testing.T) {
 	runtime := NewHPARuntimeWithRuntimeConfig(
 		config.RuntimeConfig{}, sink, time.Now,
 	)
-	runtime.SetLister(
+	runtime.configureLister(
 		autoscalingv2lister.NewHorizontalPodAutoscalerLister(indexer),
 	)
 
@@ -301,7 +301,7 @@ func TestPDBRuntimeReconcilesBlockingBudget(t *testing.T) {
 	runtime := NewPDBRuntimeWithRuntimeConfig(
 		config.RuntimeConfig{}, sink, time.Now,
 	)
-	runtime.SetLister(
+	runtime.configureLister(
 		policyv1lister.NewPodDisruptionBudgetLister(indexer),
 	)
 

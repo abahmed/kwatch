@@ -12,7 +12,7 @@ import (
 
 // ReplicaSetConfig is the source-wiring contract for ReplicaSetRuntime.
 type ReplicaSetConfig interface {
-	SetLister(appsv1lister.ReplicaSetLister)
+	configureLister(appsv1lister.ReplicaSetLister)
 }
 
 // Sources is the complete informer-backed source view for workload
@@ -80,28 +80,28 @@ func (s *SourceConfiguration) ConfigureSources(sources Sources) error {
 	}
 	s.configured = true
 	if s.deployments != nil {
-		s.deployments.SetLister(sources.Deployments)
+		s.deployments.configureLister(sources.Deployments)
 	}
 	if s.replicaSets != nil {
-		s.replicaSets.SetLister(sources.ReplicaSets)
+		s.replicaSets.configureLister(sources.ReplicaSets)
 	}
 	if s.daemonSets != nil {
-		s.daemonSets.SetLister(sources.DaemonSets)
+		s.daemonSets.configureLister(sources.DaemonSets)
 	}
 	if s.statefulSets != nil {
-		s.statefulSets.SetLister(sources.StatefulSets)
+		s.statefulSets.configureLister(sources.StatefulSets)
 	}
 	if s.jobs != nil {
-		s.jobs.SetLister(sources.Jobs)
+		s.jobs.configureLister(sources.Jobs)
 	}
 	if s.cronJobs != nil {
-		s.cronJobs.SetLister(sources.CronJobs)
+		s.cronJobs.configureLister(sources.CronJobs)
 	}
 	if s.hpas != nil {
-		s.hpas.SetLister(sources.HPAs)
+		s.hpas.configureLister(sources.HPAs)
 	}
 	if s.pdbs != nil {
-		s.pdbs.SetLister(sources.PDBs)
+		s.pdbs.configureLister(sources.PDBs)
 	}
 	return nil
 }

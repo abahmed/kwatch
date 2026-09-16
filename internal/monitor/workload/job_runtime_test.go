@@ -37,7 +37,7 @@ func TestJobRuntimeReconcilesDetectedFailure(t *testing.T) {
 	runtime := NewJobRuntimeWithRuntimeConfig(
 		config.RuntimeConfig{}, sink, time.Now,
 	)
-	runtime.SetLister(batchv1listers.NewJobLister(indexer))
+	runtime.configureLister(batchv1listers.NewJobLister(indexer))
 
 	if err := runtime.ProcessJob("default/backup", false); err != nil {
 		t.Fatalf("ProcessJob() returned error: %v", err)
@@ -73,7 +73,7 @@ func TestJobRuntimeReconcilesCompletedJobAsGone(t *testing.T) {
 	runtime := NewJobRuntimeWithRuntimeConfig(
 		config.RuntimeConfig{}, sink, time.Now,
 	)
-	runtime.SetLister(batchv1listers.NewJobLister(indexer))
+	runtime.configureLister(batchv1listers.NewJobLister(indexer))
 
 	if err := runtime.ProcessJob("default/backup", false); err != nil {
 		t.Fatalf("ProcessJob() returned error: %v", err)

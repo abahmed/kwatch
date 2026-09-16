@@ -80,7 +80,7 @@ type JobProcessor interface {
 
 // JobConfig supplies informer and clock dependencies to a direct Job runtime.
 type JobConfig interface {
-	SetLister(batchv1lister.JobLister)
+	configureLister(batchv1lister.JobLister)
 }
 
 // JobRuntime owns Job lookup and lifecycle reconciliation while the detectors
@@ -91,8 +91,9 @@ type JobRuntime struct {
 }
 
 // NewJobRuntime constructs the direct Job family adapter.
-// SetLister supplies the informer-backed Job cache after controller setup.
-func (r *JobRuntime) SetLister(lister batchv1lister.JobLister) {
+// configureLister supplies the informer-backed Job cache after controller
+// setup.
+func (r *JobRuntime) configureLister(lister batchv1lister.JobLister) {
 	r.support.configureSource(func() { r.lister = lister })
 }
 

@@ -29,6 +29,7 @@ type monitorComponents struct {
 	tlsProcessor    controller.TLSProcessor
 	tlsConfig       controller.TLSConfig
 	controlPlaneRun func(context.Context) error
+	controlPlane    health.StatusProvider
 	startupSummary  func(map[string]int)
 }
 
@@ -37,7 +38,6 @@ func composeMonitorComponents(
 	clientset kubernetes.Interface,
 	clients client.ClientSet,
 	incidentEngine *incident.Engine,
-	healthServer *health.HealthServer,
 	deliveryManager *delivery.Manager,
 	now func() time.Time,
 ) monitorComponents {
@@ -87,7 +87,7 @@ func composeMonitorComponents(
 	)
 	controlPlaneRun, controlPlaneRuntime := configureControlPlaneMonitor(
 		runtime, clientset, clients.REST, clients.Resolver,
-		healthServer, incidentEngine, now,
+		incidentEngine, now,
 	)
 	deploymentRuntime := workload.NewDeploymentRuntimeWithRuntimeConfig(
 		runtime, incidentEngine, now,
@@ -154,6 +154,7 @@ func composeMonitorComponents(
 			Baseline: podRuntime,
 		},
 		controlPlaneRun: controlPlaneRun,
+		controlPlane:    controlPlaneRuntime,
 		tlsProcessor:    tlsProcessor,
 		tlsConfig:       tlsConfig,
 		startupSummary: func(suppressed map[string]int) {

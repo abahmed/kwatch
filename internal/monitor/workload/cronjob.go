@@ -105,7 +105,7 @@ type CronJobProcessor interface {
 
 // CronJobConfig wires informer and clock dependencies into a direct runtime.
 type CronJobConfig interface {
-	SetLister(batchv1lister.CronJobLister)
+	configureLister(batchv1lister.CronJobLister)
 }
 
 // CronJobRuntime owns CronJob lookup and suspension lifecycle policy.
@@ -116,8 +116,10 @@ type CronJobRuntime struct {
 }
 
 // NewCronJobRuntime constructs the direct CronJob family adapter.
-// SetLister supplies the informer-backed CronJob cache.
-func (r *CronJobRuntime) SetLister(lister batchv1lister.CronJobLister) {
+// configureLister supplies the informer-backed CronJob cache.
+func (r *CronJobRuntime) configureLister(
+	lister batchv1lister.CronJobLister,
+) {
 	r.support.configureSource(func() { r.lister = lister })
 }
 

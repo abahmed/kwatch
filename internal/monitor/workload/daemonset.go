@@ -70,7 +70,7 @@ type DaemonSetProcessor interface {
 
 // DaemonSetConfig wires informer, clock, and sustain dependencies.
 type DaemonSetConfig interface {
-	SetLister(appsv1lister.DaemonSetLister)
+	configureLister(appsv1lister.DaemonSetLister)
 }
 
 // DaemonSetRuntime owns DaemonSet lookup and availability lifecycle policy.
@@ -81,8 +81,10 @@ type DaemonSetRuntime struct {
 }
 
 // NewDaemonSetRuntime constructs the direct DaemonSet family adapter.
-// SetLister supplies the informer-backed DaemonSet cache.
-func (r *DaemonSetRuntime) SetLister(lister appsv1lister.DaemonSetLister) {
+// configureLister supplies the informer-backed DaemonSet cache.
+func (r *DaemonSetRuntime) configureLister(
+	lister appsv1lister.DaemonSetLister,
+) {
 	r.support.configureSource(func() { r.lister = lister })
 }
 

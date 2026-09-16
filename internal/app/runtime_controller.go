@@ -22,7 +22,6 @@ func configureControllerRuntime(
 	pvcMonitor *pvc.PvcMonitor,
 	graph *kwcontext.ResourceGraph,
 ) <-chan struct{} {
-	boot.healthServer.SetInformerLister(ctl)
 	namespaces, watchAll := ctl.NamespaceScope()
 	if err := boot.securityMonitor.ConfigureSources(rbac.Sources{
 		Namespaces: namespaces, AllNamespaces: watchAll,

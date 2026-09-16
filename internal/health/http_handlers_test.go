@@ -13,12 +13,14 @@ import (
 	"github.com/abahmed/kwatch/internal/model"
 )
 
-func TestSetDeadLetterLister(t *testing.T) {
+func TestConfigureDependenciesSetsDeadLetters(t *testing.T) {
 	h := &HealthServer{}
 	assert.Nil(t, h.deadLetterLister)
-	h.SetDeadLetterLister(&fakeDeadLetterLister{
-		letters: []model.DeadLetterEntry{{Key: "a"}},
-	})
+	assert.NoError(t, h.ConfigureDependencies(Dependencies{
+		DeadLetters: &fakeDeadLetterLister{
+			letters: []model.DeadLetterEntry{{Key: "a"}},
+		},
+	}))
 	assert.NotNil(t, h.deadLetterLister)
 }
 
@@ -37,6 +39,13 @@ func TestHealthServerStopIsIdempotent(t *testing.T) {
 	assert.NoError(t, server.Stop(context.Background()))
 	assert.NoError(t, server.Stop(context.Background()))
 	assert.Error(t, startForTest(server))
+}
+
+func TestConfigureDependenciesRejectsChangesAfterOpen(t *testing.T) {
+	server := NewHealthServer(config.HealthCheck{Port: 0, Enabled: true})
+	assert.NoError(t, server.Open())
+	defer server.Stop(context.Background())
+	assert.Error(t, server.ConfigureDependencies(Dependencies{}))
 }
 
 func TestReadyzHandlerNotReady(t *testing.T) {
@@ -143,8 +152,10 @@ func TestDiagnosticsDisabled(t *testing.T) {
 
 func TestDiagnosticsEnabled(t *testing.T) {
 	h := &HealthServer{diagnostics: true}
-	h.SetIncidentAPI(&fakeIncidentLister{snap: []model.IncidentView{}})
-	h.SetDeliveryManager(&fakeAlertSender{})
+	assert.NoError(t, h.ConfigureDependencies(Dependencies{
+		Incident: &fakeIncidentLister{snap: []model.IncidentView{}},
+		Delivery: &fakeAlertSender{},
+	}))
 	mux := http.NewServeMux()
 	mux.HandleFunc("/healthz", h.healthzHandler)
 	mux.HandleFunc("/health", h.healthHandler)

@@ -194,6 +194,11 @@ context-shutdown goroutine. Every background persistence saver, watcher,
 ticker, and worker has an owner, cancellation path, bounded shutdown, and
 observable failure.
 
+Health diagnostics are wired once through `health.Dependencies` before
+`HealthServer.Open`; production code must not use individual health dependency
+setters. A component returning to the running state clears its previous safe
+degradation reason.
+
 The PVC monitor snapshots state while holding its mutex, releases the lock,
 then emits observations or performs persistence I/O. No callback into an
 incident or delivery boundary may run while the PVC state lock is held.
@@ -399,7 +404,8 @@ family-owned runtimes in `monitor/workload` directly through the matching
 through `workload.SourceConfig` and `workload.Sources`. Deployment, ReplicaSet,
 Job, DaemonSet, StatefulSet, CronJob, HPA, and PDB queue processing now use
 direct family wiring in production. Canonical family wiring uses one
-error-returning `ConfigureSources` operation.
+error-returning `ConfigureSources` operation; resource-specific lister setup is
+private to the workload package and is not an exported production seam.
 The aggregate workload capability has been removed. New controller wiring must
 use the specific family capability for each resource kind.
 

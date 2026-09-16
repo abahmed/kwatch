@@ -107,7 +107,7 @@ type HPAProcessor interface {
 
 // HPAConfig wires informer and clock dependencies into a direct runtime.
 type HPAConfig interface {
-	SetLister(autoscalingv2lister.HorizontalPodAutoscalerLister)
+	configureLister(autoscalingv2lister.HorizontalPodAutoscalerLister)
 }
 
 // HPARuntime owns HPA lookup and sustained scaling policy.
@@ -119,8 +119,8 @@ type HPARuntime struct {
 }
 
 // NewHPARuntime constructs the direct HPA family adapter.
-// SetLister supplies the informer-backed HPA cache.
-func (r *HPARuntime) SetLister(
+// configureLister supplies the informer-backed HPA cache.
+func (r *HPARuntime) configureLister(
 	lister autoscalingv2lister.HorizontalPodAutoscalerLister,
 ) {
 	r.support.configureSource(func() { r.lister = lister })

@@ -55,6 +55,9 @@ func TestWatcherStatusReportsSkippedResourcesAsDegraded(t *testing.T) {
 	if got.State != "degraded" || got.Skipped != 1 {
 		t.Fatalf("Status() = %+v, want one degraded resource", got)
 	}
+	if got.Reason != "optional_api_unavailable" {
+		t.Fatalf("Status().Reason = %q", got.Reason)
+	}
 	if len(got.SkippedResources) != 1 ||
 		got.SkippedResources[0] != "example.io/v1, Resource=widgets" {
 		t.Fatalf("Status().SkippedResources = %v", got.SkippedResources)

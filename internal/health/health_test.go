@@ -328,7 +328,11 @@ func TestGuardWithInvalidTokenReturns401(t *testing.T) {
 
 func TestPprofEndpointsRegisteredWithGuard(t *testing.T) {
 	h := &HealthServer{diagnostics: true, pprof: true, diagnosticsToken: "tok"}
-	h.SetIncidentAPI(&fakeIncidentLister{snap: []model.IncidentView{}})
+	if err := h.ConfigureDependencies(Dependencies{
+		Incident: &fakeIncidentLister{snap: []model.IncidentView{}},
+	}); err != nil {
+		t.Fatal(err)
+	}
 	mux := http.NewServeMux()
 	mux.HandleFunc("/healthz", h.healthzHandler)
 	mux.HandleFunc("/incidents", h.incidentsHandler)

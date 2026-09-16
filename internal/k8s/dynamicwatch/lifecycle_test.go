@@ -38,6 +38,9 @@ func TestWatcherStartIsIdempotentAndStopIsSafe(t *testing.T) {
 	defer cancel()
 	require.NoError(t, watcher.Start(ctx, specs))
 	require.NoError(t, watcher.Start(ctx, specs))
+	if got := watcher.Status().Generation; got != 1 {
+		t.Fatalf("Status().Generation = %d, want 1", got)
+	}
 
 	var wg sync.WaitGroup
 	errs := make(chan error, 8)
