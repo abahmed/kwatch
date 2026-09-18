@@ -10,7 +10,10 @@ import (
 	"github.com/abahmed/kwatch/internal/model"
 )
 
-func (e *Engine) StartCleanup(ctx context.Context) {
+// RunCleanup owns the incident cleanup and lifecycle ticker until ctx is
+// canceled. The application supervisor calls this directly so the component
+// cannot report success while its cleanup loop is still running.
+func (e *Engine) RunCleanup(ctx context.Context) {
 	cleanupInterval := e.config.Window / 2
 	if cleanupInterval < 30*time.Second {
 		cleanupInterval = 30 * time.Second

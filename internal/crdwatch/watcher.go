@@ -8,15 +8,11 @@ import (
 
 	"k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/meta"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/client-go/dynamic"
-	"k8s.io/client-go/tools/cache"
 	"k8s.io/klog/v2"
 
 	"github.com/abahmed/kwatch/internal/config"
-	"github.com/abahmed/kwatch/internal/k8s"
-	"github.com/abahmed/kwatch/internal/k8s/dynamicwatch"
 	"github.com/abahmed/kwatch/internal/metrics"
 )
 
@@ -40,6 +36,7 @@ type Watcher struct {
 	seen                map[string]string
 	ready               bool
 	started             bool
+	resetting           bool
 	generation          uint64
 	cancel              context.CancelFunc
 	restart             func()
@@ -48,6 +45,8 @@ type Watcher struct {
 	stateSink           func(Status)
 	lastError           string
 	optionalUnavailable bool
+	done                chan struct{}
+	runWG               *sync.WaitGroup
 }
 
 // NewWithClient constructs the watcher from the application-owned dynamic
@@ -88,11 +87,15 @@ func (w *Watcher) Start(ctx context.Context) error {
 	w.generation++
 	generation := w.generation
 	w.cancel = cancel
+	w.done = make(chan struct{})
+	w.runWG = &sync.WaitGroup{}
+	runWG := w.runWG
 	w.mu.Unlock()
 	complete := false
 	defer func() {
 		if !complete {
 			cancel()
+			runWG.Wait()
 			w.resetLifecycle(generation)
 		}
 	}()
@@ -106,9 +109,7 @@ func (w *Watcher) Start(ctx context.Context) error {
 
 	// Pre-flight: check if the CRD is installed. If it is installed later,
 	// keep watching for it instead of requiring a process restart.
-	if _, err := dc.Resource(gvr).Namespace(w.namespace).List(
-		runCtx, metav1.ListOptions{Limit: 1},
-	); err != nil {
+	if _, err := w.listCRD(runCtx, dc); err != nil {
 		if errors.IsNotFound(err) {
 			if w.markOptionalUnavailable() {
 				metrics.DefaultRegistry().OptionalAPIUnavailable.Add(1)
@@ -119,8 +120,7 @@ func (w *Watcher) Start(ctx context.Context) error {
 			)
 			complete = true
 			w.reportError(nil)
-			go w.waitForCRD(runCtx, dc)
-			go w.resetWhenDone(runCtx, generation)
+			go w.runWaitingGeneration(runCtx, dc, generation)
 			return nil
 		}
 		wrapped := fmt.Errorf("crdwatch: preflight check failed: %w", err)
@@ -134,7 +134,7 @@ func (w *Watcher) Start(ctx context.Context) error {
 	}
 	w.reportError(nil)
 	complete = true
-	go w.resetWhenDone(runCtx, generation)
+	go w.waitForGenerationStop(runCtx, generation)
 	return nil
 }
 
@@ -156,111 +156,76 @@ func (w *Watcher) clearOptionalUnavailable() {
 
 // Stop cancels the KwatchConfig informer or discovery wait. It is safe to
 // call more than once and does not alter the late-install policy.
-func (w *Watcher) Stop() {
+func (w *Watcher) Stop(ctx context.Context) error {
 	if w == nil {
-		return
+		return nil
 	}
 	w.lifecycleMu.Lock()
 	defer w.lifecycleMu.Unlock()
 	w.mu.Lock()
 	cancel := w.cancel
 	generation := w.generation
+	done := w.done
 	w.mu.Unlock()
 	if cancel != nil {
 		cancel()
 	}
+	if done != nil {
+		if ctx == nil {
+			var stopCancel context.CancelFunc
+			ctx, stopCancel = context.WithTimeout(
+				context.Background(), 10*time.Second,
+			)
+			defer stopCancel()
+		}
+		select {
+		case <-done:
+		case <-ctx.Done():
+			klog.ErrorS(
+				fmt.Errorf("CRD watcher generation did not stop"),
+				"CRD watcher shutdown timed out",
+				"generation", generation,
+			)
+			return ctx.Err()
+		}
+	}
 	w.resetLifecycle(generation)
+	return nil
 }
 
-func (w *Watcher) resetWhenDone(
+func (w *Watcher) waitForGenerationStop(
 	ctx context.Context,
 	generation uint64,
 ) {
 	<-ctx.Done()
+	w.mu.Lock()
+	runWG := w.runWG
+	w.mu.Unlock()
+	if runWG != nil {
+		runWG.Wait()
+	}
 	w.resetLifecycle(generation)
 }
 
 func (w *Watcher) resetLifecycle(generation uint64) {
 	w.mu.Lock()
 	defer w.mu.Unlock()
-	if w.generation != generation {
+	if w.generation != generation || !w.started || w.resetting {
 		return
 	}
+	w.resetting = true
 	w.started = false
 	w.cancel = nil
+	done := w.done
+	w.done = nil
+	w.runWG = nil
+	w.resetting = false
 	w.ready = false
 	w.seen = make(map[string]string)
 	w.restartRequested = false
-}
-
-func (w *Watcher) waitForCRD(ctx context.Context, dc dynamic.Interface) {
-	ticker := time.NewTicker(time.Minute)
-	defer ticker.Stop()
-	for {
-		select {
-		case <-ctx.Done():
-			return
-		case <-ticker.C:
-			list, err := dc.Resource(gvr).Namespace(w.namespace).List(
-				ctx, metav1.ListOptions{Limit: 1},
-			)
-			if err != nil {
-				if !errors.IsNotFound(err) {
-					klog.V(2).InfoS("CRD watcher discovery unavailable", "error", err)
-					w.reportError(err)
-				}
-				continue
-			}
-			if w.restartForLateConfig(len(list.Items)) {
-				return
-			}
-			if err := w.startInformer(ctx, dc, true); err != nil {
-				klog.ErrorS(err, "CRD watcher failed to start after installation")
-				w.reportError(err)
-			} else {
-				w.reportError(nil)
-			}
-			return
-		}
+	if done != nil {
+		close(done)
 	}
-}
-
-func (w *Watcher) startInformer(
-	ctx context.Context,
-	dc dynamic.Interface,
-	restartOnInitial bool,
-) error {
-
-	factory, inf, err := dynamicwatch.NewInformer(
-		dc, w.resync, w.namespace, gvr, k8s.TrimManagedFields,
-	)
-	if err != nil {
-		return fmt.Errorf("crdwatch: create informer: %w", err)
-	}
-
-	if _, err := inf.AddEventHandler(cache.ResourceEventHandlerFuncs{
-		AddFunc:    w.changed,
-		UpdateFunc: func(_, obj interface{}) { w.changed(obj) },
-		DeleteFunc: w.deleted,
-	}); err != nil {
-		return fmt.Errorf("crdwatch: failed to register event handler: %w", err)
-	}
-
-	factory.Start(ctx.Done())
-	metrics.DefaultRegistry().WatcherSyncs.Add(1)
-	if !cache.WaitForCacheSync(ctx.Done(), inf.HasSynced) {
-		metrics.DefaultRegistry().WatcherSyncFailures.Add(1)
-		return fmt.Errorf("crdwatch: failed to sync informer cache")
-	}
-
-	initial := inf.GetStore().List()
-	w.seedKnown(initial)
-	if restartOnInitial {
-		w.restartForLateConfig(len(initial))
-	}
-
-	klog.InfoS("CRD watcher started", "namespace", w.namespace)
-	return nil
 }
 
 func (w *Watcher) restartForLateConfig(count int) bool {

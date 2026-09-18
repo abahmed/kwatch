@@ -16,6 +16,23 @@ func (s *Manager) MigrationReport() MigrationReport {
 	}
 }
 
+// RecordMigrationResult lets the application include restore operations in
+// the same startup-cycle report as schema migrations. The manager still owns
+// copying and metric accounting; callers cannot mutate the report in place.
+func (s *Manager) RecordMigrationResult(
+	result MigrationResult,
+	err error,
+) {
+	s.recordMigrationResult(result, err)
+}
+
+// BeginMigrationReport starts a new startup-cycle report. Application
+// composition calls this before restore so reads, migrations, and writes are
+// visible in one diagnostic snapshot.
+func (s *Manager) BeginMigrationReport() {
+	s.resetMigrationReport()
+}
+
 func (s *Manager) resetMigrationReport() {
 	s.migrationMu.Lock()
 	s.migrationReport = MigrationReport{StartedAt: s.nowTime()}
@@ -26,7 +43,7 @@ func (s *Manager) recordMigrationResult(
 	result MigrationResult,
 	err error,
 ) {
-	if err != nil {
+	if err != nil && result.Status != MigrationUnsupported {
 		result.Status = MigrationFailed
 		if result.Detail == "" {
 			result.Detail = "migration operation failed"

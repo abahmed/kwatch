@@ -57,7 +57,11 @@ func configureStatusMonitor(
 			klog.ErrorS(err, "generic status monitor stopped")
 			return err
 		}
-		defer statusMonitor.Stop()
+		defer func() {
+			if err := statusMonitor.Stop(nil); err != nil {
+				healthServer.SetComponentError("status", err)
+			}
+		}()
 		status := statusMonitor.Status()
 		if len(status.SkippedResources) > 0 {
 			healthServer.SetComponentStatus(

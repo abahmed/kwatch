@@ -3,6 +3,7 @@ package statuswatch
 import (
 	"context"
 	"errors"
+	"sync"
 	"testing"
 
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
@@ -136,10 +137,12 @@ func TestCanWatchVersionSkipsForbiddenResource(t *testing.T) {
 
 func TestMonitorStopClearsLifecycleState(t *testing.T) {
 	canceled := false
+	done := make(chan struct{})
 	monitor := &Monitor{
 		started:    true,
 		generation: 4,
 		cancel:     func() { canceled = true },
+		done:       done,
 		ctx:        context.Background(),
 		factories: map[string]dynamicinformer.DynamicSharedInformerFactory{
 			"widgets": nil,
@@ -152,10 +155,17 @@ func TestMonitorStopClearsLifecycleState(t *testing.T) {
 		},
 	}
 
-	monitor.Stop()
+	if err := monitor.Stop(context.Background()); err != nil {
+		t.Fatalf("stop monitor: %v", err)
+	}
 
 	if !canceled {
 		t.Fatal("Stop did not cancel the monitor context")
+	}
+	select {
+	case <-done:
+	default:
+		t.Fatal("Stop did not signal monitor completion")
 	}
 	if monitor.started || monitor.cancel != nil || monitor.ctx != nil {
 		t.Fatalf("Stop left lifecycle state active: %+v", monitor)
@@ -174,7 +184,9 @@ func TestMonitorIgnoresStaleLifecycleReset(t *testing.T) {
 		cancel:     func() {},
 	}
 
-	monitor.resetLifecycle(1)
+	if err := monitor.resetLifecycle(context.Background(), 1); err != nil {
+		t.Fatalf("reset lifecycle: %v", err)
+	}
 
 	if !monitor.started || monitor.generation != 2 || monitor.ctx == nil {
 		t.Fatal("stale lifecycle reset changed the active generation")
@@ -193,5 +205,39 @@ func TestStatusIncludesGenerationAndWatcherReason(t *testing.T) {
 	}
 	if status.Reason != "source_not_configured" {
 		t.Fatalf("status reason = %q, want source_not_configured", status.Reason)
+	}
+}
+
+func TestLifecycleResetIsIdempotentWhenStopRacesCancellation(t *testing.T) {
+	done := make(chan struct{})
+	monitor := &Monitor{
+		started:     true,
+		generation:  3,
+		done:        done,
+		factories:   make(map[string]dynamicinformer.DynamicSharedInformerFactory),
+		stops:       make(map[string]context.CancelFunc),
+		versionDone: make(map[string]chan struct{}),
+		crdVersions: make(map[string]map[string]struct{}),
+	}
+
+	var group sync.WaitGroup
+	group.Add(2)
+	for i := 0; i < 2; i++ {
+		go func() {
+			defer group.Done()
+			if err := monitor.resetLifecycle(context.Background(), 3); err != nil {
+				t.Errorf("reset lifecycle: %v", err)
+			}
+		}()
+	}
+	group.Wait()
+
+	if monitor.started {
+		t.Fatal("racing lifecycle resets left the monitor started")
+	}
+	select {
+	case <-done:
+	default:
+		t.Fatal("reset did not signal monitor completion")
 	}
 }

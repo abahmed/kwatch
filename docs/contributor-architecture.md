@@ -151,8 +151,8 @@ review in the same change.
 
 ## Operating model
 
-The current deployment is intentionally single-replica and does not use Lease
-leader election. This keeps observation and delivery ownership unambiguous.
-High availability requires a separate design for leader ownership, failover,
-deduplication, and persisted state coordination; it is not implicit in adding
-another replica.
+The deployment uses two replicas and Lease leader election. One leader owns
+observation, delivery, and mutable persistence; other replicas are standby.
+The application supervisor gates active components on leadership and stops the
+active generation when the Lease is lost. A one-replica deployment remains
+supported as an advanced low-resource mode without self-failover.

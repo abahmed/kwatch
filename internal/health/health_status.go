@@ -6,6 +6,7 @@ import (
 	"errors"
 	"net/http"
 	"strings"
+	"time"
 
 	"k8s.io/klog/v2"
 
@@ -26,6 +27,7 @@ func (h *HealthServer) healthHandler(w http.ResponseWriter, _ *http.Request) {
 	response := HealthResponse{
 		Status:     "ok",
 		Components: h.ComponentStatuses(),
+		Leadership: h.LeadershipStatus(),
 	}
 	if degraded := h.ComponentErrors(); len(degraded) > 0 {
 		response.Status = "degraded"
@@ -37,6 +39,58 @@ func (h *HealthServer) healthHandler(w http.ResponseWriter, _ *http.Request) {
 }
 
 func (h *HealthServer) SetReady(value bool) { h.ready.Store(value) }
+
+// Ready reports whether required monitoring is currently available.
+func (h *HealthServer) Ready() bool { return h.ready.Load() }
+
+// SetLeadership records the current election role and updates the leadership
+// component without exposing Kubernetes Lease internals.
+func (h *HealthServer) SetLeadership(status LeadershipStatus) {
+	h.componentMu.Lock()
+	defer h.componentMu.Unlock()
+	previous := h.leadership
+	if status.LastTransition.IsZero() {
+		if previous.Role == status.Role &&
+			previous.Identity == status.Identity &&
+			previous.LossReason == status.LossReason {
+			status.LastTransition = previous.LastTransition
+		} else if h.clock != nil {
+			status.LastTransition = h.clock.Now()
+		}
+	}
+	h.leadership = status
+	available := status.Role == "leader"
+	state := status.Role
+	if state == "leader" {
+		state = "running"
+	}
+	h.setComponentStatusLocked("leadership", ComponentStatus{
+		State: state, Available: available,
+		Reason: normalizeReason(status.LossReason),
+	})
+}
+
+// LeadershipStatus returns a detached health snapshot.
+func (h *HealthServer) LeadershipStatus() *LeadershipStatus {
+	h.componentMu.RLock()
+	defer h.componentMu.RUnlock()
+	if h.leadership.Role == "" {
+		return nil
+	}
+	status := h.leadership
+	return &status
+}
+
+// SetLeadershipRenewal records the last successful Lease write for the
+// current leader. Stale callbacks cannot update a standby or stopped role.
+func (h *HealthServer) SetLeadershipRenewal(renewal time.Time) {
+	h.componentMu.Lock()
+	defer h.componentMu.Unlock()
+	if h.leadership.Role != "leader" {
+		return
+	}
+	h.leadership.LastRenewal = renewal
+}
 
 func (h *HealthServer) SetComponentError(name string, err error) {
 	h.componentMu.Lock()
@@ -67,8 +121,17 @@ func (h *HealthServer) SetComponentStatus(
 ) {
 	h.componentMu.Lock()
 	defer h.componentMu.Unlock()
+	if h.componentErrors == nil {
+		h.componentErrors = make(map[string]string)
+	}
+	reason = normalizeReason(reason)
 	if available && state == "running" {
 		delete(h.componentErrors, name)
+	}
+	if !available && (state == "degraded" || state == "waiting") {
+		if _, exists := h.componentErrors[name]; !exists {
+			h.componentErrors[name] = reason
+		}
 	}
 	h.setComponentStatusLocked(name, ComponentStatus{
 		State: state, Available: available, Reason: reason,
@@ -129,6 +192,27 @@ func safeComponentReason(err error) string {
 	case strings.Contains(message, "stopped"):
 		return "component_stopped"
 	default:
+		return "component_failed"
+	}
+}
+
+// normalizeReason keeps status values inside a small, documented vocabulary.
+// Callers may report a detailed internal error through logs, but public health
+// responses must never become an arbitrary error transport.
+func normalizeReason(reason string) string {
+	switch reason {
+	case "", "cache_sync_failed", "cache_sync_timeout",
+		"source_not_configured", "source_configuration_failed",
+		"optional_api_unavailable", "discovery_failed", "component_stalled",
+		"persistence_restore_failed", "persistence_write_failed",
+		"provider_shutdown_timeout", "component_failed", "component_stopped",
+		"timeout", "canceled", "rate_limited", "standby", "shutdown",
+		"leadership_lost", "cache_sync_pending", "watcher_failed":
+		return reason
+	default:
+		if reason == "" {
+			return ""
+		}
 		return "component_failed"
 	}
 }

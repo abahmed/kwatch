@@ -40,7 +40,7 @@ func (s *Manager) GetClusterID(ctx context.Context) (string, error) {
 	return cm.Data[clusterIDKey], nil
 }
 
-func (s *Manager) GetStoredVersion(ctx context.Context) string {
+func (s *Manager) GetStoredVersion(ctx context.Context) (string, error) {
 	cm, err := s.client.CoreV1().ConfigMaps(
 		s.namespace,
 	).Get(
@@ -49,9 +49,12 @@ func (s *Manager) GetStoredVersion(ctx context.Context) string {
 		metav1.GetOptions{},
 	)
 	if err != nil {
-		return ""
+		if apierrors.IsNotFound(err) {
+			return "", nil
+		}
+		return "", err
 	}
-	return cm.Data[versionKey]
+	return cm.Data[versionKey], nil
 }
 
 // GetStateSchemaVersion reports the persisted state format. An empty value is

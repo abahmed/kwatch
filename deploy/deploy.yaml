@@ -119,6 +119,36 @@ subjects:
 kind: Role
 apiVersion: rbac.authorization.k8s.io/v1
 metadata:
+  name: kwatch-leader-election
+  namespace: kwatch
+  labels:
+    app.kubernetes.io/instance: kwatch
+    app.kubernetes.io/managed-by: kwatch.sh
+rules:
+- apiGroups: ["coordination.k8s.io"]
+  resources: ["leases"]
+  verbs: ["create", "get", "update", "patch", "watch"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: kwatch-leader-election
+  namespace: kwatch
+  labels:
+    app.kubernetes.io/instance: kwatch
+    app.kubernetes.io/managed-by: kwatch.sh
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: kwatch-leader-election
+subjects:
+- kind: ServiceAccount
+  name: kwatch
+  namespace: kwatch
+---
+kind: Role
+apiVersion: rbac.authorization.k8s.io/v1
+metadata:
   name: kwatch-configmap-manager
   namespace: kwatch
   labels:
@@ -170,9 +200,12 @@ metadata:
     app.kubernetes.io/instance: kwatch
     app.kubernetes.io/managed-by: kwatch.sh
 spec:
-  replicas: 1
+  replicas: 2
   strategy:
-    type: Recreate
+    type: RollingUpdate
+    rollingUpdate:
+      maxUnavailable: 0%
+      maxSurge: 1
   selector:
     matchLabels:
       app: kwatch
@@ -184,10 +217,18 @@ spec:
         app.kubernetes.io/instance: kwatch
     spec:
       restartPolicy: Always
+      terminationGracePeriodSeconds: 60
       serviceAccountName: kwatch
       automountServiceAccountToken: true
       securityContext:
         fsGroup: 1000
+      topologySpreadConstraints:
+      - maxSkew: 1
+        topologyKey: kubernetes.io/hostname
+        whenUnsatisfiable: ScheduleAnyway
+        labelSelector:
+          matchLabels:
+            app: kwatch
       containers:
       - name: kwatch
         image: ghcr.io/abahmed/kwatch:v0.10.5
@@ -215,6 +256,12 @@ spec:
             valueFrom:
               fieldRef:
                 fieldPath: metadata.namespace
+          - name: POD_NAME
+            valueFrom:
+              fieldRef:
+                fieldPath: metadata.name
+          - name: KWATCH_LEADER_ELECTION_NAME
+            value: "kwatch-leader"
           - name: GOMEMLIMIT
             valueFrom:
               resourceFieldRef:
@@ -244,3 +291,18 @@ spec:
         secret:
           secretName: kwatch
           defaultMode: 0400
+---
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: kwatch
+  namespace: kwatch
+  labels:
+    app.kubernetes.io/instance: kwatch
+    app.kubernetes.io/managed-by: kwatch.sh
+spec:
+  minAvailable: 1
+  selector:
+    matchLabels:
+      app: kwatch
+      app.kubernetes.io/instance: kwatch

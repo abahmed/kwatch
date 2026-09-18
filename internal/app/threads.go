@@ -26,17 +26,17 @@ func restoreProviderThreads(
 	persistenceManager persistence.IncidentStore,
 	am threadRestorer,
 	incidentEngine *incident.Engine,
-) {
+) error {
 	if am == nil {
-		return
+		return nil
 	}
 	saved, err := persistenceManager.LoadProviderThreads(ctx)
 	if err != nil {
 		klog.ErrorS(err, "failed to restore provider thread state")
-		return
+		return err
 	}
 	if len(saved) == 0 {
-		return
+		return nil
 	}
 	live := make(map[string]bool)
 	for _, inc := range incidentEngine.ActiveIncidents() {
@@ -57,10 +57,11 @@ func restoreProviderThreads(
 		}
 	}
 	if total == 0 {
-		return
+		return nil
 	}
 	am.RestoreThreads(kept)
 	klog.InfoS("restored provider threads from configmap", "count", total)
+	return nil
 }
 
 // restoreEngineState reinstates the correlation bookkeeping that is neither
@@ -70,11 +71,12 @@ func restoreEngineState(
 	ctx context.Context,
 	persistenceManager persistence.IncidentStore,
 	incidentEngine *incident.Engine,
-) {
+) error {
 	engine, err := persistenceManager.LoadEngineState(ctx)
 	if err != nil {
 		klog.ErrorS(err, "failed to restore engine state from configmap")
-		return
+		return err
 	}
 	incidentEngine.RestoreEngineState(engine)
+	return nil
 }

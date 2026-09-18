@@ -50,6 +50,6 @@ type IncidentStore interface {
 
 // TelemetryStore persists the last telemetry heartbeat.
 type TelemetryStore interface {
-	GetTelemetryLastSent(context.Context) time.Time
+	GetTelemetryLastSent(context.Context) (time.Time, error)
 	SetTelemetryLastSent(context.Context, time.Time) error
 }

@@ -6,6 +6,7 @@ import (
 	"fmt"
 
 	corev1 "k8s.io/api/core/v1"
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/klog/v2"
 )
@@ -22,6 +23,19 @@ const configMapPayloadMaxBytes = configMapDataLimit - 16*1024
 func (s *Manager) GetBaseline(
 	ctx context.Context,
 ) map[string]map[string]int64 {
+	result, err := s.GetBaselineWithError(ctx)
+	if err != nil {
+		klog.ErrorS(err, "failed to load baseline")
+	}
+	return result
+}
+
+// GetBaselineWithError is the fail-closed baseline load used by application
+// activation. A missing ConfigMap is a valid first-run state; API and decode
+// errors must not be mistaken for an empty baseline.
+func (s *Manager) GetBaselineWithError(
+	ctx context.Context,
+) (map[string]map[string]int64, error) {
 	var result map[string]map[string]int64
 
 	cm, err := s.client.CoreV1().ConfigMaps(
@@ -34,26 +48,26 @@ func (s *Manager) GetBaseline(
 	if err == nil {
 		if gz, ok := cm.BinaryData[baselineKey]; ok && len(gz) > 0 {
 			if err := gunzipJSON(gz, &result); err != nil {
-				klog.ErrorS(err, "failed to gunzip baseline")
-				return nil
+				return nil, fmt.Errorf("decode baseline: %w", err)
 			}
-			return result
+			return result, nil
 		}
 		// An existing dedicated ConfigMap is authoritative, including when
 		// its payload was intentionally cleared after a size failure.
 		if _, ok := cm.BinaryData[baselineKey]; ok {
-			return nil
+			return nil, nil
 		}
 		if raw, ok := cm.Data[baselineKey]; ok && raw != "" {
 			if err := json.Unmarshal([]byte(raw), &result); err != nil {
-				klog.ErrorS(err, "failed to unmarshal baseline")
-				return nil
+				return nil, fmt.Errorf("decode baseline: %w", err)
 			}
-			return result
+			return result, nil
 		}
 		if _, ok := cm.Data[baselineKey]; ok {
-			return nil
+			return nil, nil
 		}
+	} else if !apierrors.IsNotFound(err) {
+		return nil, fmt.Errorf("read baseline configmap: %w", err)
 	}
 
 	// migration: fall back to the pre-split location
@@ -67,14 +81,15 @@ func (s *Manager) GetBaseline(
 	); err == nil {
 		if raw, ok := old.Data[baselineKey]; ok && raw != "" {
 			if err := json.Unmarshal([]byte(raw), &result); err != nil {
-				klog.ErrorS(err, "failed to unmarshal legacy baseline")
-				return nil
+				return nil, fmt.Errorf("decode legacy baseline: %w", err)
 			}
-			return result
+			return result, nil
 		}
+	} else if !apierrors.IsNotFound(err) {
+		return nil, fmt.Errorf("read legacy baseline: %w", err)
 	}
 
-	return nil
+	return nil, nil
 }
 
 func (s *Manager) SaveBaseline(

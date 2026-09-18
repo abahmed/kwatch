@@ -88,11 +88,13 @@ func newServeMux(h *HealthServer) *http.ServeMux {
 		mux.HandleFunc("/test-alert", h.testAlertHandler)
 		mux.HandleFunc("/deadletters", h.deadLettersHandler)
 	}
-	mux.HandleFunc("/kubelet", h.kubeletHandler)
-	mux.HandleFunc("/security", h.securityHandler)
-	mux.HandleFunc("/controlplane", h.controlPlaneHandler)
-	mux.HandleFunc("/informer", h.informerHandler)
-	mux.HandleFunc("/persistence", h.persistenceHandler)
+	mux.HandleFunc("/kubelet", h.guard(h.kubeletHandler))
+	mux.HandleFunc("/security", h.guard(h.securityHandler))
+	mux.HandleFunc(
+		"/controlplane", h.guard(h.controlPlaneHandler),
+	)
+	mux.HandleFunc("/informer", h.guard(h.informerHandler))
+	mux.HandleFunc("/persistence", h.guard(h.persistenceHandler))
 	mux.Handle("/metrics", metrics.DefaultRegistry().Handler())
 	if h.pprof {
 		mux.HandleFunc("/debug/pprof/", h.guard(pprof.Index))

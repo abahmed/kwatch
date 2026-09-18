@@ -20,6 +20,9 @@ func (h *HealthServer) requireDiagnosticsAuth(
 	w http.ResponseWriter,
 	r *http.Request,
 ) bool {
+	// An empty token is permitted for unit-test servers and for the public
+	// liveness/readiness endpoints. Production configuration rejects enabling
+	// protected diagnostics without a token before this handler is reachable.
 	if h.diagnosticsToken == "" {
 		return true
 	}

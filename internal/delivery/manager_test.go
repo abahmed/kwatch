@@ -75,7 +75,7 @@ func TestManagerNoConfig(t *testing.T) {
 	assert.Len(managerEntries(&am), 0)
 }
 
-func TestGetProvidersUnknownSkipped(t *testing.T) {
+func TestGetProvidersRejectsUnknown(t *testing.T) {
 	assert := assert.New(t)
 
 	alertMap := map[string]map[string]interface{}{
@@ -84,12 +84,13 @@ func TestGetProvidersUnknownSkipped(t *testing.T) {
 	}
 
 	am := *newTestManager()
-	initTestManager(
+	err := initTestManager(
 		&am,
 		alertMap, &config.App{ClusterName: "dev"}, catalog.NewProvider,
 	)
 
-	assert.Len(managerEntries(&am), 1)
+	assert.Error(err)
+	assert.Empty(managerEntries(&am))
 }
 
 func TestGetProviders(t *testing.T) {

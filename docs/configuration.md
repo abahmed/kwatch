@@ -137,29 +137,32 @@ tests.
 | `healthCheck.port` | Port to serve health on (default: 8060) |
 | `healthCheck.pprof` | 🔬 Go profiling endpoints (default: false) |
 | `healthCheck.diagnostics` | 🩺 Extra endpoints: `/incidents`, `/test-alert`, `/deadletters` |
-| `healthCheck.diagnosticsToken` | 🔑 Optional Bearer token; must use `${file:/absolute/path}` |
+| `healthCheck.diagnosticsToken` | 🔑 Bearer token for diagnostics and pprof; use `${file:/absolute/path}` |
 
 **Endpoints:**
 - `GET /healthz` — ✅ Liveness
-- `GET /readyz` — ✅ Readiness. Ready once every informer cache has synced. If one never does —
-  a missing RBAC rule, an API group the cluster does not serve — kwatch exits after **5 minutes**
-  with an error naming the unsynced resource, rather than sitting not-ready forever with only
-  reflector errors in the log to explain why.
-- `GET /health` — `{"status": "ok"}`
+- `GET /readyz` — ✅ Readiness. Ready when the leader has restored required state,
+  configured required sources, and synchronized required informer caches. Optional
+  API absence remains degraded and does not fail readiness. An unrecoverable
+  required startup or cache failure causes the active process to stop so
+  Kubernetes can restart or replace it.
+- `GET /health` — JSON containing overall status, leadership, component states,
+  and bounded degradation reasons.
 - `GET /metrics` — 📊 Prometheus-format metrics (incidents, notifications, baseline, dependency-graph size/rebuild latency, queues, and informer activity). It does not require Prometheus to be installed.
 
 Informer caches discard Kubernetes `managedFields` metadata at ingestion time
 to reduce memory on apply-heavy clusters. Labels, annotations, spec, status,
 resource versions, and deletion metadata remain intact for detection and graph
 analysis.
-- `GET /incidents` — 📋 All active incidents (requires `diagnostics: true`)
-- `POST /test-alert` — 📤 Send a test alert (requires `diagnostics: true`)
-- `GET /deadletters` — 💀 Recent delivery failures (requires `diagnostics: true`)
+- `GET /incidents` — 📋 All active incidents (requires diagnostics and its token)
+- `POST /test-alert` — 📤 Send a test alert (requires diagnostics and its token)
+- `GET /deadletters` — 💀 Recent delivery failures (requires diagnostics and its token)
 
 > **Know when alerts are being lost.** A notification a provider rejects is dead-lettered,
 > counted in `kwatch_notifications_dropped_total`, and — with `diagnostics: true` — listed
 > at `/deadletters`. Diagnostics are off by default because `/test-alert` accepts
-> unauthenticated POSTs; if you turn them on, set `diagnosticsToken`. Either way, alert on
+> unauthenticated POSTs in test-only servers; production validation requires
+> `diagnosticsToken` whenever diagnostics or pprof is enabled. Either way, alert on
 > the counter: it is the difference between "no incidents" and "no deliveries".
 
 ## 🔐 Kubernetes permissions and graceful degradation

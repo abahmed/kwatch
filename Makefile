@@ -4,7 +4,8 @@
 .PHONY: build test test-short lint vet clean verify verify-fmt verify-unit \
 	verify-all verify-catalogs docs-verify line-check docker-build \
 	docker-build-latest architecture-check test-layout-check help \
-	verify-focused verify-fast
+	verify-focused verify-fast verify-race verify-security \
+	verify-manifests verify-docs verify-operational
 
 # Binary names
 BINARY_NAME := kwatch
@@ -40,6 +41,11 @@ help:
 	@echo "  make vet           Run go vet"
 	@echo "  make lint          Run linting (requires golangci-lint)"
 	@echo "  make verify        Run the complete required validation gate"
+	@echo "  make verify-race   Run the serialized race-test gate"
+	@echo "  make verify-security Run dependency and image security checks"
+	@echo "  make verify-manifests Validate Helm and Kubernetes manifests"
+	@echo "  make verify-operational Run the disposable Kind production smoke test"
+	@echo "  make verify-docs   Validate code-owned documentation metadata"
 	@echo "  make verify-focused PKGS=... Validate only changed package groups"
 	@echo "  make verify-catalogs Verify checked-in generated catalogs"
 	@echo "  make docs-verify    Verify code-owned documentation metadata"
@@ -138,10 +144,54 @@ verify-fast:
 	}
 	golangci-lint run $(PKGS)
 
+# Run the expensive race suite explicitly at a workstream or release
+# milestone instead of making every focused edit pay its cost.
+verify-race:
+	$(GOTEST) -race -p 1 ./...
+
+# Security tooling is intentionally explicit. A missing scanner fails the
+# target so release automation cannot accidentally report an unscanned build.
+verify-security:
+	./scripts/security-check.sh
+
+# Validate the chart without creating a cluster. The lifecycle test remains a
+# CI/operational check because it requires kind and Docker.
+verify-manifests:
+	@command -v helm > /dev/null || { \
+		echo "helm is required; install it before running verify-manifests"; \
+		exit 1; \
+	}
+	helm lint deploy/chart
+	./deploy/chart/test_helm.sh
+	./scripts/check-manifest-parity.sh
+	./scripts/check-release-consistency.sh
+
+verify-operational:
+	@command -v kind > /dev/null || { \
+		echo "kind is required; run this target in CI or a disposable cluster"; \
+		exit 1; \
+	}
+	@command -v kubectl > /dev/null || { \
+		echo "kubectl is required; run this target in CI or a disposable cluster"; \
+		exit 1; \
+	}
+	@command -v helm > /dev/null || { \
+		echo "helm is required; run it in CI or a disposable cluster"; \
+		exit 1; \
+	}
+	@command -v docker > /dev/null || { \
+		echo "docker is required; run it in CI or a disposable cluster"; \
+		exit 1; \
+	}
+	./scripts/test-kind-production.sh
+
+verify-docs: docs-verify
+
 # Documentation published by kwatch.dev is sourced from the website
 # repository. This target verifies the code-side contract and generated
 # catalogs without pretending that the website is a second source of truth.
 docs-verify: verify-catalogs
+	./scripts/check-docs.sh
 	@test -s AGENTS.md
 	@test -s CONTRIBUTING.md
 	@grep -q "kwatch.dev/docs" AGENTS.md

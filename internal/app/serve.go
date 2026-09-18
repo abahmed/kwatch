@@ -23,7 +23,14 @@ const (
 // serve starts the controller loop and background monitors, then waits for
 // shutdown, returning the process exit code.
 func serve(ctx context.Context, deps *serverDeps) int {
-	supervisor := newComponentSupervisor()
+	if ctx == nil {
+		ctx = context.Background()
+	}
+	// The context passed to serve is the application lifecycle boundary. Keep
+	// it on the dependency bundle so waitShutdown observes parent cancellation
+	// even when bootstrap did not provide a separate derived context.
+	deps.ctx = ctx
+	supervisor := newComponentSupervisor(deps.clients.Clock.Now)
 	if deps.initialized == nil {
 		ready := make(chan struct{})
 		close(ready)
@@ -32,70 +39,20 @@ func serve(ctx context.Context, deps *serverDeps) int {
 	if deps.controllerDone == nil {
 		deps.controllerDone = make(chan struct{})
 	}
+	if deps.runtime.Lifecycle().HealthCheck().Enabled {
+		supervisor.startOwned(ctx, componentSpec{
+			name:     "health-server",
+			required: true,
+			run:      deps.healthServer.Serve,
+		})
+	}
 	supervisor.startOwned(ctx, componentSpec{
-		name:     "delivery",
+		name:     "leader-election",
 		required: true,
 		run: func(ctx context.Context) error {
-			return runDelivery(ctx, deps)
+			return runLeaderElection(ctx, deps)
 		},
 	})
-	if deps.startPersistence != nil {
-		deps.startPersistence(ctx, supervisor)
-	}
-	supervisor.startOwned(ctx, componentSpec{
-		name:     "health-server",
-		required: true,
-		run:      deps.healthServer.Serve,
-	})
-
-	// The required controller must own the initialization gate before optional
-	// monitors are allowed to start. This keeps startup ordering explicit.
-	startCoreComponents(ctx, deps, supervisor)
-	optionalComponents := []componentSpec{
-		{
-			name: "status", onError: degrade(deps, "status"),
-			run: deps.statusRun,
-		},
-		{
-			name: "metrics", onError: degrade(deps, "metrics"),
-			run: deps.metricsRun,
-		},
-		{
-			name: "probe", onError: degrade(deps, "probe"),
-			run: deps.probeRun,
-		},
-		{
-			name: "kubelet", onError: degrade(deps, "kubelet"),
-			run: deps.kubeletRun,
-		},
-		{
-			name: "storage-graph", onError: degrade(deps, "storage-graph"),
-			run: deps.storageRun,
-		},
-		{
-			name: "network-graph", onError: degrade(deps, "network-graph"),
-			run: deps.networkRun,
-		},
-		{
-			name: "rbac", onError: degrade(deps, "rbac"),
-			run: deps.securityRun,
-		},
-		{
-			name: "control-plane", onError: degrade(deps, "control-plane"),
-			run: deps.controlPlaneRun,
-		},
-		{
-			name: "telemetry", onError: degrade(deps, "telemetry"),
-			run: deps.telemetryRun,
-		},
-		{
-			name: "upgrader", onError: degrade(deps, "upgrader"),
-			run: deps.upgradeRun,
-		},
-	}
-	for _, component := range optionalComponents {
-		supervisor.startOptional(ctx, deps.initialized, component)
-	}
 
 	return waitShutdown(deps, supervisor)
 }
@@ -134,7 +91,8 @@ func startCRDWatcher(ctx context.Context, deps *serverDeps) error {
 			}
 			if status.State == "degraded" {
 				deps.healthServer.SetComponentStatus(
-					"crd-watcher", "degraded", status.LastError, false,
+					"crd-watcher", "degraded",
+					crdWatcherReason(status.LastError), false,
 				)
 				return
 			}
@@ -148,9 +106,19 @@ func startCRDWatcher(ctx context.Context, deps *serverDeps) error {
 	if err := w.Start(ctx); err != nil {
 		return fmt.Errorf("crd watcher: %w", err)
 	}
-	defer w.Stop()
+	defer func() { _ = w.Stop(nil) }()
 	<-ctx.Done()
 	return nil
+}
+
+func crdWatcherReason(reason string) string {
+	switch reason {
+	case "cache_sync_failed", "source_not_configured",
+		"optional_api_unavailable", "watcher_failed":
+		return reason
+	default:
+		return "watcher_failed"
+	}
 }
 
 // waitShutdown blocks until a signal or controller failure, then drains.
@@ -162,6 +130,10 @@ func waitShutdown(
 	signal.Notify(sigCh, os.Interrupt, syscall.SIGTERM)
 	defer signal.Stop(sigCh)
 
+	applicationContext := deps.ctx
+	if applicationContext == nil {
+		applicationContext = context.Background()
+	}
 	exitCode := 0
 	select {
 	case <-sigCh:
@@ -171,6 +143,8 @@ func waitShutdown(
 			klog.ErrorS(err, "controller startup failed, shutting down")
 			exitCode = 1
 		}
+	case <-applicationContext.Done():
+		klog.InfoS("shutting down because the application context was canceled")
 	}
 	deps.cancel()
 	stopHealthServer(deps)
@@ -190,7 +164,8 @@ func waitShutdown(
 	case <-time.After(backgroundShutdownTimeout):
 		recordShutdownTimeout("background-tasks")
 	}
-	if controllerStopped && backgroundStopped {
+	if controllerStopped && backgroundStopped &&
+		deps.persistenceGate.enabled() {
 		incidentStopped := waitIncidentSaver(deps)
 		baselineStopped := waitPersistenceComponent(
 			deps.baselineDone, "baseline-saver",

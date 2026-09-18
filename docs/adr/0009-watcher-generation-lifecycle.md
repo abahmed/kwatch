@@ -1,4 +1,4 @@
-# ADR 0006: Generation-scoped optional watchers
+# ADR 0009: Generation-scoped optional watchers
 
 ## Status
 

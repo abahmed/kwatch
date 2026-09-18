@@ -66,7 +66,8 @@ func TestGetStoredVersionNoConfigMap(t *testing.T) {
 	client := fake.NewSimpleClientset()
 	sm := newTestManager(client, "kwatch")
 
-	version := sm.GetStoredVersion(context.Background())
+	version, err := sm.GetStoredVersion(context.Background())
+	assert.Nil(err)
 	assert.Equal("", version)
 }
 
@@ -93,7 +94,8 @@ func TestGetStoredVersionWithConfigMap(t *testing.T) {
 	)
 	assert.Nil(err)
 
-	version := sm.GetStoredVersion(context.Background())
+	version, err := sm.GetStoredVersion(context.Background())
+	assert.Nil(err)
 	assert.Equal("v0.10.0", version)
 }
 

@@ -107,7 +107,7 @@ func (s *Manager) migrateLegacyBaselineWithResult(
 	var b map[string]map[string]int64
 	if err := json.Unmarshal([]byte(raw), &b); err != nil {
 		result.Recoverable = false
-		result.MonitoringMayContinue = true
+		result.MonitoringMayContinue = false
 		result.Detail = "legacy baseline payload is corrupt"
 		return result, fmt.Errorf("decode legacy baseline: %w", err)
 	}

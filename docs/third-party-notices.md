@@ -11,6 +11,7 @@ listed where a dependency contains a separately licensed fork or subpackage.
 
 ## Apache-2.0
 
+- [github.com/prometheus/client_golang](https://github.com/prometheus/client_golang/blob/v1.24.1/LICENSE)
 - [github.com/go-logr/logr](https://github.com/go-logr/logr/blob/v1.4.4/LICENSE)
 - [github.com/go-openapi/jsonpointer](https://github.com/go-openapi/jsonpointer/blob/v1.0.0/LICENSE)
 - [github.com/go-openapi/jsonreference](https://github.com/go-openapi/jsonreference/blob/v1.0.1/LICENSE)
@@ -61,6 +62,7 @@ listed where a dependency contains a separately licensed fork or subpackage.
 
 ## MIT
 
+- [github.com/stretchr/testify](https://github.com/stretchr/testify/blob/v1.12.1/LICENSE)
 - [github.com/emicklei/go-restful/v3](https://github.com/emicklei/go-restful/blob/v3.13.0/LICENSE)
 - [github.com/fxamacker/cbor/v2](https://github.com/fxamacker/cbor/blob/v2.9.3/LICENSE)
 - [github.com/json-iterator/go](https://github.com/json-iterator/go/blob/v1.1.12/LICENSE)

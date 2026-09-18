@@ -44,11 +44,22 @@ func (p *PvcMonitor) persist(ctx context.Context) {
 	}
 }
 
-func (p *PvcMonitor) restore(ctx context.Context) {
+func (p *PvcMonitor) restore(ctx context.Context) error {
 	if p.state == nil {
-		return
+		return nil
 	}
-	seed := p.state.GetPvcUsage(ctx)
+	var (
+		seed map[string]model.PVCSample
+		err  error
+	)
+	if state, ok := p.state.(errorStateStore); ok {
+		seed, err = state.GetPvcUsageWithError(ctx)
+	} else {
+		seed = p.state.GetPvcUsage(ctx)
+	}
+	if err != nil {
+		return err
+	}
 	p.mu.Lock()
 	if seed != nil {
 		p.lastUsage = cloneSamples(seed)
@@ -81,4 +92,5 @@ func (p *PvcMonitor) restore(ctx context.Context) {
 	for _, obs := range restore {
 		p.report(obs)
 	}
+	return nil
 }

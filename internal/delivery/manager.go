@@ -2,9 +2,11 @@ package delivery
 
 import (
 	"context"
+	"fmt"
 	"reflect"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"text/template"
 	"time"
 
@@ -52,7 +54,8 @@ type Manager struct {
 	dlqHead      int
 	dlqCount     int
 
-	done chan struct{}
+	done         chan struct{}
+	lastProgress atomic.Int64
 
 	ctx context.Context
 	now func() time.Time
@@ -63,6 +66,19 @@ type Manager struct {
 
 func (a *Manager) nowTime() time.Time {
 	return a.now()
+}
+
+// LastProgress implements the application lifecycle progress contract.
+func (a *Manager) LastProgress() time.Time {
+	value := a.lastProgress.Load()
+	if value == 0 {
+		return time.Time{}
+	}
+	return time.Unix(0, value)
+}
+
+func (a *Manager) touchProgress() {
+	a.lastProgress.Store(a.nowTime().UnixNano())
 }
 
 func (a *Manager) globalTemplates() map[string]*template.Template {
@@ -108,28 +124,18 @@ type ProviderFactory func(
 func (a *Manager) InitRuntime(
 	runtime config.RuntimeConfig,
 	factory ProviderFactory,
-) {
-	a.initRuntime(runtime, factory)
+) error {
+	return a.initRuntime(runtime, factory)
 }
 
 func (a *Manager) initRuntime(
 	runtime config.RuntimeConfig,
 	factory ProviderFactory,
-) {
+) error {
 	a.mu.Lock()
 	active := a.started && !a.stopped
 	activeContext := a.ctx
 	a.mu.Unlock()
-	if active {
-		reconfigureCtx, cancel := context.WithTimeout(
-			context.Background(), 10*time.Second,
-		)
-		if err := a.shutdownContext(reconfigureCtx); err != nil {
-			klog.ErrorS(err,
-				"delivery generation did not drain during reconfiguration")
-		}
-		cancel()
-	}
 	clusterName := runtime.Application().ClusterName
 	providerContext := transport.ProviderContext{
 		ClusterName:  clusterName,
@@ -146,18 +152,12 @@ func (a *Manager) initRuntime(
 		}
 		if pvdr == nil {
 			if config.IsKnownProvider(lowerCaseKey) {
-				klog.InfoS(
-					"alert provider has missing or invalid credentials, "+
-						"skipping",
-					"name",
+				return fmt.Errorf(
+					"provider %q could not be constructed; check its settings",
 					provider.Name,
 				)
-			} else {
-				klog.InfoS(
-					"unknown alert provider, skipping", "name", provider.Name,
-				)
 			}
-			continue
+			return fmt.Errorf("unknown alert provider %q", provider.Name)
 		}
 		if !isNilProvider(pvdr) {
 			entries = append(entries, providerEntry{
@@ -202,6 +202,21 @@ func (a *Manager) initRuntime(
 			"provider", providerName,
 		)
 	}
+	if err := validateProviderNames(entries); err != nil {
+		return err
+	}
+	if active {
+		reconfigureCtx, cancel := context.WithTimeout(
+			context.Background(), 10*time.Second,
+		)
+		if err := a.shutdownContext(reconfigureCtx); err != nil {
+			klog.ErrorS(err,
+				"delivery generation did not drain during reconfiguration")
+			cancel()
+			return err
+		}
+		cancel()
+	}
 	a.mu.Lock()
 	a.generation = newProviderGeneration(entries)
 	a.pacer = sendPacer{}
@@ -219,8 +234,22 @@ func (a *Manager) initRuntime(
 	if active {
 		if err := a.Start(activeContext); err != nil {
 			klog.ErrorS(err, "failed to restart delivery workers")
+			return err
 		}
 	}
+	return nil
+}
+
+func validateProviderNames(entries []providerEntry) error {
+	seen := make(map[string]struct{}, len(entries))
+	for _, entry := range entries {
+		name := strings.ToLower(entry.provider.Name())
+		if _, exists := seen[name]; exists {
+			return fmt.Errorf("duplicate provider name %q", entry.provider.Name())
+		}
+		seen[name] = struct{}{}
+	}
+	return nil
 }
 
 func newProviderGeneration(entries []providerEntry) *providerGeneration {

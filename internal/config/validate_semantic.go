@@ -32,6 +32,14 @@ func Validate(cfg *Config) []error {
 			"healthCheck.port must be > 0 when healthCheck.enabled is true",
 		))
 	}
+	if cfg.HealthCheck.Enabled &&
+		(cfg.HealthCheck.Diagnostics || cfg.HealthCheck.Pprof) &&
+		cfg.HealthCheck.DiagnosticsToken == "" {
+		errs = append(errs, errors.New(
+			"healthCheck.diagnosticsToken must be set when diagnostics or "+
+				"pprof is enabled",
+		))
+	}
 	if cfg.Correlation.MaxBaseline < 0 {
 		errs = append(errs, errors.New("correlation.maxBaseline must be >= 0"))
 	}

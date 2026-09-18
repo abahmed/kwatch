@@ -35,30 +35,6 @@ func (p *recordingProvider) SendEvent(
 	return nil
 }
 
-func TestManagerAddProviderAfterStartUsesStoredQueue(t *testing.T) {
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
-
-	manager := NewManagerWithDependencies(Dependencies{Clock: clock.RealClock{}})
-	manager.Start(ctx)
-
-	provider := &recordingProvider{
-		name:     "late-provider",
-		messages: make(chan string, 1),
-	}
-	manager.AddProvider(provider)
-	manager.Notify("late registration")
-
-	select {
-	case message := <-provider.messages:
-		require.Equal(t, "late registration", message)
-	case <-time.After(time.Second):
-		t.Fatal("late provider did not receive a queued message")
-	}
-
-	manager.shutdown()
-}
-
 func TestManagerReconfigurationRestartsProviderWorkers(t *testing.T) {
 	runtime := config.RuntimeConfigFor(&config.Config{
 		Alert: map[string]map[string]interface{}{

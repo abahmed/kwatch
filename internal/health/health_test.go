@@ -227,7 +227,7 @@ func TestTestAlertHandlerNoAM(t *testing.T) {
 func TestTestAlertHandlerMethodNotAllowed(t *testing.T) {
 	assert := assert.New(t)
 	am := &fakeAlertSender{}
-	h := &HealthServer{deliveryManager: am}
+	h := &HealthServer{deliveryManager: am, clock: clock.RealClock{}}
 
 	req := httptest.NewRequest(http.MethodGet, "/test-alert", nil)
 	w := httptest.NewRecorder()
@@ -239,7 +239,7 @@ func TestTestAlertHandlerMethodNotAllowed(t *testing.T) {
 
 func TestTestAlertHandler(t *testing.T) {
 	am := &fakeAlertSender{}
-	h := &HealthServer{deliveryManager: am}
+	h := &HealthServer{deliveryManager: am, clock: clock.RealClock{}}
 
 	req := httptest.NewRequest(http.MethodPost, "/test-alert", bytes.NewReader([]byte{}))
 	w := httptest.NewRecorder()
@@ -257,6 +257,24 @@ func TestTestAlertHandler(t *testing.T) {
 	}
 	if len(am.msgs) != 0 {
 		t.Fatalf("expected no plain message (NotifyEvent is the single notification), got %d", len(am.msgs))
+	}
+}
+
+func TestTestAlertHandlerRateLimitsRepeatedRequests(t *testing.T) {
+	h := &HealthServer{
+		deliveryManager: &fakeAlertSender{},
+		clock:           clock.RealClock{},
+	}
+	request := httptest.NewRequest(http.MethodPost, "/test-alert", nil)
+	first := httptest.NewRecorder()
+	h.testAlertHandler(first, request)
+	if first.Code != http.StatusOK {
+		t.Fatalf("first test alert status = %d", first.Code)
+	}
+	second := httptest.NewRecorder()
+	h.testAlertHandler(second, request)
+	if second.Code != http.StatusTooManyRequests {
+		t.Fatalf("second test alert status = %d, want 429", second.Code)
 	}
 }
 

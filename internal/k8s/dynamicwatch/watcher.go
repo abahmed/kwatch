@@ -11,9 +11,14 @@ import (
 	"k8s.io/client-go/dynamic"
 	"k8s.io/client-go/dynamic/dynamicinformer"
 	"k8s.io/client-go/tools/cache"
+	"k8s.io/klog/v2"
 
 	"github.com/abahmed/kwatch/internal/metrics"
 )
+
+const generationStopTimeout = 10 * time.Second
+
+const discoveryTimeout = 10 * time.Second
 
 // ResourceSpec describes one optional dynamic resource and its callbacks.
 // Dynamic watcher mechanics stay here; graph packages retain all domain
@@ -41,6 +46,7 @@ type Watcher struct {
 	unavailable map[string]bool
 	cancel      context.CancelFunc
 	done        chan struct{}
+	runWG       *sync.WaitGroup
 	started     bool
 	generation  uint64
 }
@@ -107,6 +113,7 @@ func (w *Watcher) StartGeneration(
 	runCtx, cancel := context.WithCancel(ctx)
 	started := false
 	done := make(chan struct{})
+	runWG := &sync.WaitGroup{}
 	defer func() {
 		if !started {
 			cancel()
@@ -121,7 +128,14 @@ func (w *Watcher) StartGeneration(
 	informers := make([]cache.SharedIndexInformer, 0)
 	skipped := make([]schema.GroupVersionResource, 0)
 	for _, spec := range specs {
-		if !ResourceAvailable(w.discovery, spec.GVR) {
+		discoveryCtx, discoveryCancel := context.WithTimeout(
+			runCtx, discoveryTimeout,
+		)
+		available := ResourceAvailableContext(
+			discoveryCtx, w.discovery, spec.GVR,
+		)
+		discoveryCancel()
+		if !available {
 			skipped = append(skipped, spec.GVR)
 			continue
 		}
@@ -149,6 +163,7 @@ func (w *Watcher) StartGeneration(
 	w.skippedGVR = skipped
 	w.cancel = cancel
 	w.done = done
+	w.runWG = runWG
 	w.started = true
 	w.generation++
 	generation := w.generation
@@ -158,10 +173,14 @@ func (w *Watcher) StartGeneration(
 			int64(unavailableTransitions),
 		)
 	}
-	for _, factory := range factories {
-		factory.Start(runCtx.Done())
+	for _, informer := range informers {
+		runWG.Add(1)
+		go func(informer cache.SharedIndexInformer) {
+			defer runWG.Done()
+			informer.Run(runCtx.Done())
+		}(informer)
 	}
-	go w.clearStarted(runCtx, generation)
+	go w.clearStarted(runCtx, generation, runWG)
 	started = true
 	return Generation{
 		watcher: w, number: generation,
@@ -180,17 +199,19 @@ func (w *Watcher) Replace(
 	if w == nil {
 		return fmt.Errorf("dynamic watcher has no client")
 	}
-	w.Stop()
+	if err := w.Stop(ctx); err != nil {
+		return err
+	}
 	return w.Start(ctx, specs)
 }
 
 // Stop cancels this generation. A stale generation cannot clear state that
 // belongs to a newer replacement.
-func (g Generation) Stop() {
+func (g Generation) Stop(ctx context.Context) error {
 	if g.watcher == nil {
-		return
+		return nil
 	}
-	g.watcher.stopGeneration(g)
+	return g.watcher.stopGeneration(ctx, g)
 }
 
 // WaitForCacheSync waits only for informers owned by this generation.
@@ -215,8 +236,13 @@ func (g Generation) Wait(ctx context.Context) bool {
 	}
 }
 
-func (w *Watcher) clearStarted(ctx context.Context, generation uint64) {
+func (w *Watcher) clearStarted(
+	ctx context.Context,
+	generation uint64,
+	runWG *sync.WaitGroup,
+) {
 	<-ctx.Done()
+	runWG.Wait()
 	w.mu.Lock()
 	if w.generation == generation {
 		w.clearStateLocked()
@@ -226,9 +252,9 @@ func (w *Watcher) clearStarted(ctx context.Context, generation uint64) {
 
 // Stop cancels all informers owned by the watcher. It is safe to call Stop
 // more than once and gives callers a clear lifecycle seam for reconfiguration.
-func (w *Watcher) Stop() {
+func (w *Watcher) Stop(ctx context.Context) error {
 	if w == nil {
-		return
+		return nil
 	}
 	w.mu.Lock()
 	generation := Generation{
@@ -237,19 +263,46 @@ func (w *Watcher) Stop() {
 		cancel:    w.cancel, done: w.done,
 	}
 	w.mu.Unlock()
-	w.stopGeneration(generation)
+	return w.stopGeneration(ctx, generation)
 }
 
-func (w *Watcher) stopGeneration(generation Generation) {
+func (w *Watcher) stopGeneration(
+	ctx context.Context,
+	generation Generation,
+) error {
 	w.lifecycleMu.Lock()
 	defer w.lifecycleMu.Unlock()
 	w.mu.Lock()
-	if w.generation == generation.number && w.started {
-		w.clearStateLocked()
-	}
+	current := w.generation == generation.number && w.started
+	cancel := generation.cancel
+	done := generation.done
 	w.mu.Unlock()
-	if generation.cancel != nil {
-		generation.cancel()
+	if !current {
+		return nil
+	}
+	if cancel != nil {
+		cancel()
+	}
+	if done == nil {
+		return nil
+	}
+	if ctx == nil {
+		var cancel context.CancelFunc
+		ctx, cancel = context.WithTimeout(
+			context.Background(), generationStopTimeout,
+		)
+		defer cancel()
+	}
+	select {
+	case <-done:
+		return nil
+	case <-ctx.Done():
+		klog.ErrorS(
+			fmt.Errorf("watcher generation did not stop"),
+			"dynamic watcher shutdown timed out",
+			"generation", generation.number,
+		)
+		return ctx.Err()
 	}
 }
 
@@ -295,6 +348,7 @@ func (w *Watcher) clearStateLocked() {
 		close(w.done)
 	}
 	w.done = nil
+	w.runWG = nil
 	w.factories = nil
 	w.informers = nil
 	w.skippedGVR = nil
@@ -322,51 +376,4 @@ func (w *Watcher) WaitForCacheSync(ctx context.Context) bool {
 		return false
 	}
 	return w.currentGeneration().WaitForCacheSync(ctx)
-}
-
-// Status summarizes the optional watcher without exposing informer objects.
-type Status struct {
-	State            string   `json:"state"`
-	Generation       uint64   `json:"generation,omitempty"`
-	Reason           string   `json:"reason,omitempty"`
-	InformerCount    int      `json:"informerCount"`
-	Synced           int      `json:"synced"`
-	Unsynced         int      `json:"unsynced"`
-	Skipped          int      `json:"skipped"`
-	SkippedResources []string `json:"skippedResources,omitempty"`
-}
-
-// Status returns synchronization state suitable for a health adapter.
-func (w *Watcher) Status() Status {
-	if w == nil {
-		return Status{State: "unavailable"}
-	}
-	w.mu.RLock()
-	defer w.mu.RUnlock()
-	status := Status{
-		State: "unavailable", Generation: w.generation,
-		InformerCount: len(w.informers),
-		Skipped:       len(w.skippedGVR),
-	}
-	for _, gvr := range w.skippedGVR {
-		status.SkippedResources = append(
-			status.SkippedResources, gvr.String(),
-		)
-	}
-	for _, informer := range w.informers {
-		if informer.HasSynced() {
-			status.Synced++
-		} else {
-			status.Unsynced++
-		}
-	}
-	switch {
-	case status.Unsynced > 0:
-		status.State, status.Reason = "partial", "cache_sync_pending"
-	case status.InformerCount > 0:
-		status.State = "healthy"
-	case status.Skipped > 0:
-		status.State, status.Reason = "degraded", "optional_api_unavailable"
-	}
-	return status
 }

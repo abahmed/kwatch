@@ -21,7 +21,7 @@ func TestMarkAsInitializedReportsFutureStateSchema(t *testing.T) {
 	})
 	store := newTestManager(client, "kwatch")
 
-	require.NoError(t, store.MarkAsInitialized(
+	require.Error(t, store.MarkAsInitialized(
 		context.Background(), "cluster", "version",
 	))
 
@@ -30,7 +30,7 @@ func TestMarkAsInitializedReportsFutureStateSchema(t *testing.T) {
 	require.Equal(t, "state", result.Store)
 	require.Equal(t, MigrationUnsupported, result.Status)
 	require.True(t, result.Recoverable)
-	require.True(t, result.MonitoringMayContinue)
+	require.False(t, result.MonitoringMayContinue)
 	require.Equal(t, "kwatch-state/schema-v2", result.DestinationFormat)
 
 	cm, err := client.CoreV1().ConfigMaps("kwatch").Get(
@@ -70,7 +70,7 @@ func TestMarkAsInitializedReportsMalformedSchemaWithoutOverwriting(
 	})
 	store := newTestManager(client, "kwatch")
 
-	require.NoError(t, store.MarkAsInitialized(
+	require.Error(t, store.MarkAsInitialized(
 		context.Background(), "cluster", "version",
 	))
 

@@ -31,6 +31,12 @@ jobs:
       run: |
         actionlint_bin="$(go env GOPATH)/bin/actionlint"
         "$actionlint_bin"
+    - name: Install ShellCheck
+      run: |
+        sudo apt-get update
+        sudo apt-get install --no-install-recommends --yes shellcheck
+    - name: Lint shell scripts
+      run: shellcheck scripts/*.sh deploy/chart/*.sh
     - name: Lint
       uses: golangci/golangci-lint-action@ba0d7d2ec06a0ea1cb5fa41b2e4a3ab91d21278a # v9
       with:

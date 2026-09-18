@@ -63,10 +63,11 @@ alert-manager, and state-manager package boundaries are intentionally absent;
 their responsibilities now have one discoverable owner each.
 
 Monitor families are cohesive resource domains, not one package per watched
-Kubernetes kind. The concrete `pod`, `workload`, `node`, `network`, and
-`security`, and `cluster` packages own detection policy; storage, telemetry, and control-plane
-components remain in their existing cohesive lifecycle packages. A family
-produces observations and receives typed, read-only dependencies. It never
+Kubernetes kind. The concrete `pod`, `workload`, `node`, `network`, `security`,
+and `cluster` packages own detection policy. Storage, telemetry, and
+control-plane components remain in their existing cohesive lifecycle packages.
+Each family produces observations and receives typed, read-only dependencies.
+It never
 owns incident identity, delivery, or persistence. `controller.RuntimeSet`
 gives the controller narrow capability interfaces defined at the controller
 composition boundary, and all production resource processing is directly
@@ -98,10 +99,12 @@ state, while `networkgraph`, `storagegraph`, and `statuswatch` retain separate
 domain semantics. `crdwatch` remains a special watcher for late-installed
 KwatchConfig resources and restart-on-change behavior.
 
-The published deployment is intentionally single-replica and has no Lease
-leader election. This keeps observation and delivery ownership unambiguous;
-high availability is a separate future design requiring explicit failover and
-deduplication semantics.
+The published deployment uses two replicas and Lease leader election. Exactly
+one replica owns observation, delivery, and mutable persistence; the remaining
+replicas are standby. One-replica operation remains an advanced override and
+has no Kwatch self-failover. Election prevents ordinary duplicate processing,
+but does not provide exactly-once external notification or protect against a
+total cluster/API/network failure.
 
 The controller's dependency graph is built by `graphBuilder`, which receives
 only the listers and graph state required for a rebuild. This keeps graph
@@ -137,7 +140,8 @@ of reaching into global state.
 Naming follows Go conventions and the domain vocabulary already used by the
 project:
 
-- Constructors use `New<Type>`; optional wiring uses `Set<Type>`.
+- Constructors use `New<Type>`. Source wiring uses one-time
+  `ConfigureSources`; mutable setters are not production wiring points.
 - Lifecycle methods use explicit verbs such as `Process`, `Resolve`,
   `Snapshot`, `Start`, `Stop`, and `Validate`.
 - Files are lower-case and responsibility-oriented (`group_flush.go`,
@@ -554,16 +558,20 @@ as a new top-level message, leaving the original alert above it with no reply. B
 persisted with the incidents, and thread ids are only restored for incidents that actually came
 back — otherwise a recurrence next week would thread under a message nobody is reading.
 
-The point: if kwatch restarts, is rescheduled, or its pod is recreated, it **resumes exactly
-where it left off** — active incidents stay active, and it doesn't re-report everything as
-brand new. That also enables the startup *baseline* check: kwatch snapshots the problems that
-already existed when it boots, and `reportStartupBaseline` tells you about them once (so you
-know what your cluster already looks like), without treating them as fresh crashes.
+The point: if kwatch restarts, is rescheduled, or its pod is recreated, persisted state lets it
+resume incident identity and grouping instead of re-reporting everything as brand new. A
+takeover also records the monitoring gap, because no in-cluster election can observe events
+while every Kwatch replica is down. That state enables the startup *baseline* check: kwatch
+snapshots the problems that already existed when it boots, and `reportStartupBaseline` tells
+you about them once (so you know what your cluster already looks like), without treating them
+as fresh crashes.
 
 ### 🕳️ Knowing when nobody was watching
 
-kwatch runs as a single replica, so it shares fate with the cluster it reports on: when nodes
-go away, kwatch goes away too — precisely when the gap matters most. Silence is ambiguous, and
+Kwatch keeps a standby replica, so a process or Pod failure can be detected by
+the other Kwatch instance. It still shares fate with the cluster it reports on:
+when the cluster, node, API, or network path disappears, both instances may be
+unable to observe it. Silence is ambiguous, and
 "nothing was wrong" and "nothing was looking" should not look the same in your chat channel.
 
 So kwatch stamps a `last-seen` timestamp into `kwatch-state` once a minute, riding the same

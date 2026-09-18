@@ -75,14 +75,31 @@ type HealthServer struct {
 	stopErr            error
 	serveErr           error
 	serveErrors        chan error
+	testAlertMu        sync.Mutex
+	lastTestAlert      time.Time
+	leadership         LeadershipStatus
 }
 
 type HealthResponse struct {
-	Status string `json:"status"`
+	Status     string            `json:"status"`
+	Leadership *LeadershipStatus `json:"leadership,omitempty"`
 	// Degraded names the optional components that failed to start, with the
 	// reason. Empty when everything kwatch was asked to run is running.
 	Degraded   map[string]string          `json:"degraded,omitempty"`
 	Components map[string]ComponentStatus `json:"components,omitempty"`
+}
+
+// LeadershipStatus is the safe, bounded election state exposed by health.
+// It deliberately contains no Lease object or arbitrary API error text.
+type LeadershipStatus struct {
+	Role           string    `json:"role"`
+	Identity       string    `json:"identity,omitempty"`
+	Epoch          int64     `json:"epoch,omitempty"`
+	AcquiredAt     time.Time `json:"acquiredAt,omitempty"`
+	LastRenewal    time.Time `json:"lastRenewal,omitempty"`
+	LastTransition time.Time `json:"lastTransition,omitempty"`
+	TakeoverCount  int64     `json:"takeoverCount,omitempty"`
+	LossReason     string    `json:"lossReason,omitempty"`
 }
 
 // ComponentStatus is the safe diagnostic state for one runtime component.

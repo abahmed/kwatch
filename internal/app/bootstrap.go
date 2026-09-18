@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"net"
+	"sync"
 	"time"
 
 	"github.com/abahmed/kwatch/internal/alert/catalog"
@@ -32,6 +33,9 @@ type bootstrap struct {
 	clients         client.ClientSet
 	telemetryRun    func(context.Context) error
 	upgradeRun      func(context.Context) error
+	clock           clock.Clock
+	activateOnce    sync.Once
+	activateErr     error
 }
 
 func newBootstrap(
@@ -40,9 +44,10 @@ func newBootstrap(
 	now func() time.Time,
 ) (*bootstrap, error) {
 	runtime := config.RuntimeConfigFor(cfg)
+	clockSource := clock.Func(now)
 	upgraderConfig := runtime.Lifecycle().Upgrader()
 	clients, err := client.NewClientSetWithRuntime(
-		runtime, &net.Resolver{}, clock.Func(now),
+		runtime, &net.Resolver{}, clockSource,
 	)
 	if err != nil {
 		return nil, fmt.Errorf("create application clients: %w", err)
@@ -56,6 +61,15 @@ func newBootstrap(
 	// the immutable snapshot before composing any domain component.
 	runtime = config.RuntimeConfigFor(cfg)
 	upgraderConfig = runtime.Lifecycle().Upgrader()
+	// The overlay can change proxy, TLS, authentication, or timeout settings.
+	// Rebuild the complete client bundle so every consumer observes the final
+	// immutable runtime snapshot rather than the pre-overlay settings.
+	clients, err = client.NewClientSetWithRuntime(
+		runtime, &net.Resolver{}, clockSource,
+	)
+	if err != nil {
+		return nil, fmt.Errorf("rebuild application clients: %w", err)
+	}
 
 	persistenceManager := persistence.NewManagerWithClock(
 		clients.Kubernetes, k8s.GetNamespace(), clock.Func(now),
@@ -63,12 +77,8 @@ func newBootstrap(
 	startupManager := startup.NewStartupManagerWithRuntime(
 		persistenceManager,
 		runtime,
-		clock.Func(now),
+		clockSource,
 	)
-	startupResult, err := startupManager.Start(ctx)
-	if err != nil {
-		return nil, fmt.Errorf("run startup: %w", err)
-	}
 
 	healthServer := health.NewHealthServerWithClock(
 		runtime.Lifecycle().HealthCheck(), clock.Func(now),
@@ -77,9 +87,13 @@ func newBootstrap(
 
 	deliveryManager := delivery.NewManagerWithDependencies(delivery.Dependencies{
 		HTTPClient: clients.HTTP,
-		Clock:      clock.Func(now),
+		Clock:      clockSource,
 	})
-	deliveryManager.InitRuntime(runtime, catalog.NewProvider)
+	if err := deliveryManager.InitRuntime(
+		runtime, catalog.NewProvider,
+	); err != nil {
+		return nil, fmt.Errorf("initialize delivery providers: %w", err)
+	}
 
 	upgrader := upgrader.NewUpgrader(
 		&upgraderConfig,
@@ -87,25 +101,40 @@ func newBootstrap(
 		persistenceManager,
 		clients.HTTP,
 	)
-	telemetryRun := configureTelemetryRunner(
-		runtime.Lifecycle().Telemetry(),
-		persistenceManager,
-		startupResult.ClusterID,
-		startupResult.CurrentVersion,
-		now,
-		clients.HTTP,
-	)
-
 	return &bootstrap{
 		runtime:         runtime,
 		clients:         clients,
 		persistence:     persistenceManager,
 		startupManager:  startupManager,
-		startupResult:   startupResult,
 		healthServer:    healthServer,
 		securityMonitor: securityMonitor,
 		deliveryManager: deliveryManager,
-		telemetryRun:    telemetryRun,
 		upgradeRun:      upgrader.CheckUpdates,
+		clock:           clockSource,
 	}, nil
+}
+
+// activate performs startup writes only after this process has acquired the
+// application Lease. Standby Pods may construct read-only dependencies, but
+// they must not mutate shared persistence or startup state.
+func (b *bootstrap) activate(ctx context.Context) error {
+	b.activateOnce.Do(func() {
+		result, err := b.startupManager.Start(ctx)
+		if err != nil {
+			recordRequiredRestore(b.persistence, "startup-metadata", err)
+			b.activateErr = fmt.Errorf("run startup: %w", err)
+			return
+		}
+		recordRequiredRestore(b.persistence, "startup-metadata", nil)
+		b.startupResult = result
+		b.telemetryRun = configureTelemetryRunner(
+			b.runtime.Lifecycle().Telemetry(),
+			b.persistence,
+			result.ClusterID,
+			result.CurrentVersion,
+			b.clock.Now,
+			b.clients.HTTP,
+		)
+	})
+	return b.activateErr
 }

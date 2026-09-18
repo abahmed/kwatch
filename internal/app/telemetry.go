@@ -41,13 +41,18 @@ func configureTelemetryRunner(
 		defer ticker.Stop()
 		send := func() {
 			sentAt := now()
-			if !telemetry.ShouldSend(
-				persistenceManager.GetTelemetryLastSent(ctx), sentAt,
-			) {
+			lastSent, err := persistenceManager.GetTelemetryLastSent(ctx)
+			if err != nil {
+				klog.V(3).InfoS(
+					"failed to load telemetry heartbeat state", "error", err,
+				)
+				return
+			}
+			if !telemetry.ShouldSend(lastSent, sentAt) {
 				return
 			}
 			reportCtx, cancel := context.WithTimeout(ctx, 3*time.Second)
-			err := telemetry.Report(
+			err = telemetry.Report(
 				reportCtx,
 				client,
 				telemetry.Endpoint,

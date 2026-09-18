@@ -18,7 +18,10 @@ func (p *PvcMonitor) Start(ctx context.Context) error {
 	}
 	p.started = true
 	p.mu.Unlock()
-	p.restore(ctx)
+	if err := p.restore(ctx); err != nil {
+		klog.ErrorS(err, "pvc monitor: restore usage failed")
+		return err
+	}
 	p.checkUsage(ctx)
 	p.persist(ctx)
 

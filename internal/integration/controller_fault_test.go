@@ -17,6 +17,7 @@ import (
 	"github.com/abahmed/kwatch/internal/config"
 	"github.com/abahmed/kwatch/internal/controller"
 	"github.com/abahmed/kwatch/internal/delivery"
+	"github.com/abahmed/kwatch/internal/delivery/transport"
 	"github.com/abahmed/kwatch/internal/enricher"
 	"github.com/abahmed/kwatch/internal/event"
 	"github.com/abahmed/kwatch/internal/incident"
@@ -105,8 +106,17 @@ func TestControllerPodEvent(t *testing.T) {
 	deliveryManager := delivery.NewManagerWithDependencies(
 		delivery.Dependencies{Clock: clock.RealClock{}},
 	)
-	deliveryManager.InitRuntime(runtime, nil)
-	deliveryManager.AddProvider(rec)
+	runtime = config.RuntimeConfigFor(&config.Config{
+		App:   config.App{DisableStartupMessage: true},
+		Alert: map[string]map[string]interface{}{"recorder": {}},
+	})
+	if err := deliveryManager.InitRuntime(runtime, func(
+		_ string, _ map[string]interface{}, _ transport.ProviderContext,
+	) delivery.Provider {
+		return rec
+	}); err != nil {
+		t.Fatal(err)
+	}
 
 	// The engine is the only thing that notifies; the Pod runtime just feeds it.
 	// This mirrors the application composition wiring.
@@ -147,7 +157,7 @@ func TestControllerPodEvent(t *testing.T) {
 				namespace, previous, maxLines,
 			)
 		},
-		controller.RuntimeDependencies{Now: time.Now},
+		time.Now,
 	)
 	ctrl, cleanup, err := controller.NewWithRuntimeConfig(
 		client,
@@ -158,7 +168,7 @@ func TestControllerPodEvent(t *testing.T) {
 			},
 			Baseline: podRuntime,
 		},
-		time.Now,
+		controller.RuntimeDependencies{Now: time.Now},
 	)
 	if err != nil {
 		t.Fatalf("controller.New failed: %v", err)

@@ -7,6 +7,10 @@ nameOverride: ""
 # -- Override the full app name used in templates
 fullnameOverride: ""
 
+# -- Number of Kwatch Pods. Two provides automatic process failover through
+# Kubernetes Lease election; one is an advanced low-resource mode.
+replicaCount: 2
+
 image:
   repository: ghcr.io/abahmed/kwatch
   # -- Overrides the image tag (defaults to .Chart.AppVersion)
@@ -30,6 +34,16 @@ podSecurityContext:
 
 service:
   port: 8060
+
+# -- Time allowed for workers and persistence savers to stop cleanly.
+terminationGracePeriodSeconds: 60
+
+# -- Optional network isolation. When enabled, provide ingress rules for the
+# health clients and egress rules for the Kubernetes API, DNS, and providers.
+networkPolicy:
+  enabled: false
+  ingress: []
+  egress: []
 
 resources:
   limits:

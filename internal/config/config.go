@@ -368,9 +368,9 @@ type HealthCheck struct {
 	// Disabled by default.
 	Diagnostics bool `yaml:"diagnostics"`
 
-	// DiagnosticsToken is an optional Bearer token required to access
-	// diagnostic endpoints (/incidents, /test-alert, /deadletters).
-	// When empty, diagnostic endpoints are unauthenticated.
+	// DiagnosticsToken is the Bearer token required to access diagnostic
+	// endpoints. Production validation requires it when diagnostics or pprof
+	// is enabled.
 	DiagnosticsToken string `yaml:"diagnosticsToken"`
 }
 

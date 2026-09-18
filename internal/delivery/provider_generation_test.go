@@ -24,7 +24,7 @@ func TestProviderGenerationResolvesFallbackByStableName(t *testing.T) {
 		provider: &errorRecorderProvider{name: "Later"},
 	})
 	setManagerEntries(&manager, entries)
-	resolved, ok := manager.fallbackFor("fallback", nil)
+	resolved, ok := manager.fallbackFor("fallback", manager.generation)
 	require.True(t, ok)
 	require.Same(t, fallback, resolved.provider)
 }

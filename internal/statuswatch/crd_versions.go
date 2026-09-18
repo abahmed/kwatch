@@ -148,8 +148,24 @@ func (m *Monitor) watchVersion(
 	}
 	m.factories[key] = factory
 	m.stops[key] = stop
+	done := make(chan struct{})
+	if m.versionDone == nil {
+		m.versionDone = make(map[string]chan struct{})
+	}
+	m.versionDone[key] = done
+	runWG := m.runWG
 	m.mu.Unlock()
-	factory.Start(versionCtx.Done())
+	if runWG == nil {
+		stop()
+		close(done)
+		return
+	}
+	runWG.Add(1)
+	go func() {
+		defer runWG.Done()
+		defer close(done)
+		informer.Run(versionCtx.Done())
+	}()
 }
 
 func (m *Monitor) canWatchVersion(
@@ -178,10 +194,23 @@ func (m *Monitor) canWatchVersion(
 func (m *Monitor) stopVersion(key string) {
 	m.mu.Lock()
 	stop := m.stops[key]
+	done := m.versionDone[key]
 	delete(m.stops, key)
 	delete(m.factories, key)
+	delete(m.versionDone, key)
 	m.mu.Unlock()
 	if stop != nil {
 		stop()
+	}
+	if done != nil {
+		select {
+		case <-done:
+		case <-time.After(10 * time.Second):
+			klog.ErrorS(
+				context.DeadlineExceeded,
+				"statuswatch: CRD informer shutdown timed out",
+				"resource", key,
+			)
+		}
 	}
 }

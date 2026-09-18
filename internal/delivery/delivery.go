@@ -83,16 +83,28 @@ func (a *Manager) recordDeadLetter(
 	a.dlqMu.Lock()
 	defer a.dlqMu.Unlock()
 	a.dlqRing[a.dlqHead] = DeadLetterEntry{
-		Provider:  entry.provider.Name(),
-		Key:       job.key(),
-		Action:    job.action,
-		Error:     err.Error(),
+		Provider: entry.provider.Name(),
+		Key:      job.key(),
+		Action:   job.action,
+		// Keep provider and transport errors in structured logs only. Dead
+		// letters are exposed through diagnostics and retain only a bounded
+		// reason code.
+		Error:     deadLetterReason(err),
 		Timestamp: a.nowTime(),
 	}
 	a.dlqHead = (a.dlqHead + 1) % dlqCap
 	if a.dlqCount < dlqCap {
 		a.dlqCount++
 	}
+}
+
+func deadLetterReason(err error) string {
+	if err != nil && strings.Contains(
+		strings.ToLower(err.Error()), "queue saturated",
+	) {
+		return "queue_saturated"
+	}
+	return "delivery_failed"
 }
 
 // deliverOne handles the full send, retry, dead-letter and fallback for one
@@ -110,6 +122,13 @@ func (a *Manager) deliverOneWithContext(
 	entry *providerEntry,
 	job deliverJob,
 ) bool {
+	if job.generation == nil {
+		a.mu.Lock()
+		job.generation = cloneProviderGeneration(
+			a.currentGenerationLocked(), false,
+		)
+		a.mu.Unlock()
+	}
 	p := entry.provider
 	metrics.DefaultRegistry().NotificationsTotal.Add(1)
 
@@ -159,12 +178,6 @@ func (a *Manager) fallbackFor(
 		return providerEntry{}, false
 	}
 	if generation != nil {
-		fallback, ok := generation.entries[strings.ToLower(name)]
-		return fallback, ok
-	}
-	a.mu.Lock()
-	defer a.mu.Unlock()
-	if generation := a.currentGenerationLocked(); generation != nil {
 		fallback, ok := generation.entries[strings.ToLower(name)]
 		return fallback, ok
 	}

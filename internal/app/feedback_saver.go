@@ -38,6 +38,8 @@ func startFeedbackSaver(
 	persistenceManager feedbackSaver,
 	ch <-chan []insight.RCARecord,
 	done chan<- struct{},
+	report func(error),
+	canWrite func() bool,
 ) {
 	defer close(done)
 	var pending []insight.RCARecord
@@ -47,12 +49,22 @@ func startFeedbackSaver(
 		if pending == nil {
 			return
 		}
+		if !writesAllowed(canWrite) {
+			pending = nil
+			return
+		}
 		fctx, cancel := context.WithTimeout(context.Background(), timeout)
 		err := persistenceManager.SaveRCAFeedback(fctx, pending)
 		if err != nil {
 			klog.ErrorS(err, "failed to persist RCA feedback")
+			if report != nil {
+				report(err)
+			}
 			cancel()
 			return
+		}
+		if report != nil {
+			report(nil)
 		}
 		cancel()
 		pending = nil

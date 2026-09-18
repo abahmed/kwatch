@@ -294,6 +294,27 @@ report_matches \
 	--glob '!internal/clock/**'
 
 report_matches \
+	"production code uses a process-wide HTTP client" \
+	'http\\.DefaultClient' \
+	internal cmd \
+	--glob '*.go' \
+	--glob '!**/*_test.go'
+
+report_matches \
+	"production code uses a process-wide DNS resolver" \
+	'net\\.DefaultResolver' \
+	internal cmd \
+	--glob '*.go' \
+	--glob '!**/*_test.go'
+
+report_matches \
+	"production code hides dependencies in context values" \
+	'context\\.WithValue\\(' \
+	internal cmd \
+	--glob '*.go' \
+	--glob '!**/*_test.go'
+
+report_matches \
 	"production code uses the compatibility delivery initializer" \
 	'InitWithFactory\(' \
 	internal/app \
@@ -311,7 +332,7 @@ raw_config_files=$(rg -l \
 for raw_config_file in $raw_config_files; do
 	case "$raw_config_file" in
 		internal/config/*|internal/app/*|internal/crdwatch/*|\
-		cmd/configcatalog/*)
+		cmd/configcatalog/*|cmd/kwatch/*)
 			;;
 		*)
 			echo "architecture violation: raw config.Config runtime consumer"
@@ -344,6 +365,23 @@ do
 		"$construction_dir" \
 		--glob '*.go' \
 		--glob '!**/*_test.go'
+done
+
+client_construction_files=$(rg -l \
+	'kubernetes\\.NewForConfig|dynamic\\.NewForConfig|discovery\\.NewDiscoveryClientForConfig|rest\\.RESTClientFor' \
+	internal cmd \
+	--glob '*.go' \
+	--glob '!**/*_test.go' || true)
+for client_file in $client_construction_files; do
+	case "$client_file" in
+		internal/client/*|internal/app/*)
+			;;
+		*)
+			echo "architecture violation: local Kubernetes client construction"
+			echo "$client_file"
+			status=1
+			;;
+	esac
 done
 
 # Optional dynamic monitors share informer construction. CRD-specific restart

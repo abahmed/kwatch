@@ -25,16 +25,20 @@ type Monitor struct {
 	resync            time.Duration
 	ctx               context.Context
 	cancel            context.CancelFunc
+	done              chan struct{}
 	namespaceAllowed  func(string) bool
 	namespaces        []string
 	watchAll          bool
 	mu                sync.Mutex
 	lifecycleMu       sync.Mutex
 	started           bool
+	resetting         bool
 	configured        bool
 	generation        uint64
+	runWG             *sync.WaitGroup
 	factories         map[string]dynamicwatch.Factory
 	stops             map[string]context.CancelFunc
+	versionDone       map[string]chan struct{}
 	staticWatcher     *dynamicwatch.Watcher
 	staticGeneration  dynamicwatch.Generation
 	crdVersions       map[string]map[string]struct{}

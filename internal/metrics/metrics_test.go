@@ -37,6 +37,9 @@ func TestHandlerExposesStableMetricContract(t *testing.T) {
 	r.PersistenceMigrationErr.Store(7)
 	r.ShutdownTimeouts.Store(8)
 	r.SourceUnavailable.Store(9)
+	r.LeadershipAcquisitions.Store(10)
+	r.LeadershipLosses.Store(11)
+	r.LeaderTakeovers.Store(12)
 
 	rr := httptest.NewRecorder()
 	r.Handler().ServeHTTP(
@@ -54,6 +57,9 @@ func TestHandlerExposesStableMetricContract(t *testing.T) {
 		"kwatch_persistence_migration_errors_total 7",
 		"kwatch_shutdown_timeouts_total 8",
 		"kwatch_source_unavailable_total 9",
+		"kwatch_leadership_acquisitions_total 10",
+		"kwatch_leadership_losses_total 11",
+		"kwatch_leader_takeovers_total 12",
 	} {
 		if !strings.Contains(body, metric) {
 			t.Fatalf("metrics output is missing %q", metric)

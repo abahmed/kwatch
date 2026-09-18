@@ -150,3 +150,17 @@ func TestComponentStatusRecordsOnlyTransitionTime(t *testing.T) {
 			status.LastTransition, second)
 	}
 }
+
+func TestComponentStatusSanitizesArbitraryReasons(t *testing.T) {
+	server := &HealthServer{}
+	server.SetComponentStatus(
+		"watcher", "degraded", "token=secret https://example.invalid", false,
+	)
+	status := server.ComponentStatuses()["watcher"]
+	if status.Reason != "component_failed" {
+		t.Fatalf("reason = %q, want safe bounded reason", status.Reason)
+	}
+	if got := server.ComponentErrors()["watcher"]; got != "component_failed" {
+		t.Fatalf("component error = %q, want safe bounded reason", got)
+	}
+}

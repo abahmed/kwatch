@@ -38,6 +38,12 @@ type resourcePipeline struct {
 	queueDepth   func() int64
 }
 
+type sourceRequirement struct {
+	name      string
+	pipeline  *resourcePipeline
+	available func() bool
+}
+
 func newResourcePipeline(name, queueName string) *resourcePipeline {
 	return &resourcePipeline{
 		name:      name,

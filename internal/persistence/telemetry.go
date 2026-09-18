@@ -38,6 +38,9 @@ func (s *Manager) LoadRCAFeedback(
 			ctx, stateConfigMapName, metav1.GetOptions{},
 		)
 		if err != nil {
+			if apierrors.IsNotFound(err) {
+				return nil, nil
+			}
 			return nil, err
 		}
 	}
@@ -86,8 +89,14 @@ func (s *Manager) LoadChangeHistory(
 			ctx, stateConfigMapName, metav1.GetOptions{},
 		)
 		if err != nil {
+			if apierrors.IsNotFound(err) {
+				return nil, nil
+			}
 			return nil, err
 		}
+	}
+	if cm.Data[changeHistoryStateKey] == "" {
+		return nil, nil
 	}
 	var changes []kwcontext.Change
 	if err := json.Unmarshal(

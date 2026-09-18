@@ -6,6 +6,7 @@ import (
 	"fmt"
 
 	corev1 "k8s.io/api/core/v1"
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/klog/v2"
 
@@ -15,6 +16,19 @@ import (
 // PVC-usage persistence.
 
 func (s *Manager) GetPvcUsage(ctx context.Context) map[string]model.PVCSample {
+	usage, err := s.GetPvcUsageWithError(ctx)
+	if err != nil {
+		return nil
+	}
+	return usage
+}
+
+// GetPvcUsageWithError distinguishes an empty first run from an unavailable
+// or corrupt persisted snapshot. The PVC runtime uses this boundary to avoid
+// silently starting with incomplete hysteresis state.
+func (s *Manager) GetPvcUsageWithError(
+	ctx context.Context,
+) (map[string]model.PVCSample, error) {
 	cm, err := s.client.CoreV1().ConfigMaps(
 		s.namespace,
 	).Get(
@@ -23,26 +37,27 @@ func (s *Manager) GetPvcUsage(ctx context.Context) map[string]model.PVCSample {
 		metav1.GetOptions{},
 	)
 	if err != nil {
-		return nil
+		if apierrors.IsNotFound(err) {
+			return nil, nil
+		}
+		return nil, err
 	}
 	if gz, ok := cm.BinaryData[pvcUsageKey]; ok && len(gz) > 0 {
 		var result map[string]model.PVCSample
 		if err := gunzipJSON(gz, &result); err != nil {
-			klog.ErrorS(err, "failed to gunzip pvc usage")
-			return nil
+			return nil, fmt.Errorf("decode pvc usage: %w", err)
 		}
-		return result
+		return result, nil
 	}
 	raw, ok := cm.Data[pvcUsageKey]
 	if !ok || raw == "" {
-		return nil
+		return nil, nil
 	}
 	var result map[string]model.PVCSample
 	if err := json.Unmarshal([]byte(raw), &result); err != nil {
-		klog.ErrorS(err, "failed to unmarshal pvc usage")
-		return nil
+		return nil, fmt.Errorf("decode pvc usage: %w", err)
 	}
-	return result
+	return result, nil
 }
 
 func (s *Manager) SavePvcUsage(

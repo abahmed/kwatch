@@ -28,6 +28,15 @@ implementation-only notes may remain beside code when they are not published.
   notes; the published architecture is maintained on `kwatch.dev`.
 - [Contributor architecture guide](./contributor-architecture.md) — package
   ownership and extension workflows for source-tree contributors.
+- [Production operations](./production-operations.md) — readiness, failover,
+  recovery, outage handling, and release operations.
+- [Configuration notes](./configuration.md) — offline configuration and
+  endpoint notes; the published reference remains on `kwatch.dev`.
+- [Provider notes](./providers.md) — offline provider behavior and transport
+  notes; the published reference remains on `kwatch.dev`.
+- [Kubernetes coverage](./kubernetes-coverage.md) — monitored resources and
+  graceful degradation boundaries.
+- [Permission matrix](./feature-permissions.md) — feature-to-RBAC guidance.
 - [Architecture ADRs](./adr/) — accepted decisions behind runtime boundaries
   and persisted-format migration seams.
 - [Release integrity](./release-integrity.md) — image, manifest, and chart

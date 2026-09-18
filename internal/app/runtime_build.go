@@ -18,7 +18,6 @@ import (
 	"github.com/abahmed/kwatch/internal/incident"
 	"github.com/abahmed/kwatch/internal/insight"
 	"github.com/abahmed/kwatch/internal/model"
-	"github.com/abahmed/kwatch/internal/persistence"
 	"github.com/abahmed/kwatch/internal/pvc"
 )
 
@@ -31,25 +30,9 @@ func buildServerDeps(
 	boot *bootstrap,
 	now func() time.Time,
 ) (*serverDeps, error) {
-	persist := configurePersistence(ctx, boot.persistence, now)
-	if report := boot.persistence.MigrationReport(); len(report.Operations) > 0 {
-		migrationState := "running"
-		migrationReason := ""
-		migrationAvailable := true
-		for _, result := range report.Operations {
-			if result.Status == persistence.MigrationFailed ||
-				result.Status == persistence.MigrationUnsupported {
-				migrationState = "degraded"
-				migrationReason = "persistence_migration_failed"
-				migrationAvailable = false
-				break
-			}
-		}
-		boot.healthServer.SetComponentStatus(
-			"persistence", migrationState, migrationReason,
-			migrationAvailable,
-		)
-	}
+	persist := configurePersistence(
+		ctx, boot.persistence, runtime, now, boot.healthServer,
+	)
 	graph := kwcontext.NewResourceGraph()
 	auditLogger := audit.NewLogger(audit.Config{
 		Enabled: runtime.Lifecycle().AuditLog().Enabled,
@@ -143,7 +126,7 @@ func buildServerDeps(
 		closeAuditLogger(auditLogger)
 		return nil, fmt.Errorf("create controller: %w", err)
 	}
-	configureControllerRuntime(
+	if err := configureControllerRuntime(
 		ctx,
 		runtime,
 		boot,
@@ -151,7 +134,11 @@ func buildServerDeps(
 		persist,
 		incidentEngine,
 		pvcMonitor,
-	)
+	); err != nil {
+		cleanup()
+		closeAuditLogger(auditLogger)
+		return nil, err
+	}
 	optional := configureOptionalRuns(
 		runtime,
 		boot,
@@ -180,7 +167,7 @@ func buildServerDeps(
 		closeAuditLogger(auditLogger)
 		return nil, fmt.Errorf("start health check server: %w", err)
 	}
-	return makeServerDeps(
+	deps := makeServerDeps(
 		ctx,
 		cancel,
 		runtime,
@@ -195,7 +182,20 @@ func buildServerDeps(
 		auditLogger,
 		monitors.startupSummary,
 		initialized,
-	), nil
+	)
+	deps.activate = func(activeCtx context.Context) error {
+		if err := persist.activate(
+			activeCtx, incidentEngine.SetBaseline,
+		); err != nil {
+			return fmt.Errorf("activate persistence: %w", err)
+		}
+		if err := boot.activate(activeCtx); err != nil {
+			return err
+		}
+		deps.telemetryRun = boot.telemetryRun
+		return nil
+	}
+	return deps, nil
 }
 
 func closeAuditLogger(logger *audit.AuditLogger) {

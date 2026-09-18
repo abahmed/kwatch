@@ -13,37 +13,42 @@ import (
 // cheap for hot paths; the Prometheus collector below owns exposition and
 // validates the metric contract through the standard client library.
 type Registry struct {
-	IncidentsCreate         atomic.Int64
-	IncidentsUpdate         atomic.Int64
-	IncidentsResolved       atomic.Int64
-	IncidentsGrouped        atomic.Int64
-	NotificationsTotal      atomic.Int64
-	NotificationsDropped    atomic.Int64
-	BaselineSize            atomic.Int64
-	ActiveIncidents         atomic.Int64
-	GraphNodes              atomic.Int64
-	GraphEdges              atomic.Int64
-	APIServerProbeErrors    atomic.Int64
-	APIServerLatencyMs      atomic.Int64
-	ControlPlaneProbeErrors atomic.Int64
-	InformerWatchErrors     atomic.Int64
-	InformerEvents          atomic.Int64
-	QueueDepth              atomic.Int64
-	ProcessingLatencyMs     atomic.Int64
-	GraphRebuilds           atomic.Int64
-	GraphRebuildLatencyMs   atomic.Int64
-	DeliveryRetries         atomic.Int64
-	DeliveryTerminalErrors  atomic.Int64
-	DeliveryDeadLetters     atomic.Int64
-	DeliveryQueueSaturated  atomic.Int64
-	PersistenceMigrations   atomic.Int64
-	PersistenceMigrationErr atomic.Int64
-	OptionalAPIUnavailable  atomic.Int64
-	WatcherSyncs            atomic.Int64
-	WatcherSyncFailures     atomic.Int64
-	ComponentDegradations   atomic.Int64
-	ShutdownTimeouts        atomic.Int64
-	SourceUnavailable       atomic.Int64
+	IncidentsCreate          atomic.Int64
+	IncidentsUpdate          atomic.Int64
+	IncidentsResolved        atomic.Int64
+	IncidentsGrouped         atomic.Int64
+	NotificationsTotal       atomic.Int64
+	NotificationsDropped     atomic.Int64
+	BaselineSize             atomic.Int64
+	ActiveIncidents          atomic.Int64
+	GraphNodes               atomic.Int64
+	GraphEdges               atomic.Int64
+	APIServerProbeErrors     atomic.Int64
+	APIServerLatencyMs       atomic.Int64
+	ControlPlaneProbeErrors  atomic.Int64
+	InformerWatchErrors      atomic.Int64
+	InformerEvents           atomic.Int64
+	QueueDepth               atomic.Int64
+	ProcessingLatencyMs      atomic.Int64
+	GraphRebuilds            atomic.Int64
+	GraphRebuildLatencyMs    atomic.Int64
+	DeliveryRetries          atomic.Int64
+	DeliveryTerminalErrors   atomic.Int64
+	DeliveryDeadLetters      atomic.Int64
+	DeliveryQueueSaturated   atomic.Int64
+	PersistenceMigrations    atomic.Int64
+	PersistenceMigrationErr  atomic.Int64
+	OptionalAPIUnavailable   atomic.Int64
+	WatcherSyncs             atomic.Int64
+	WatcherSyncFailures      atomic.Int64
+	ComponentDegradations    atomic.Int64
+	ComponentStalls          atomic.Int64
+	ComponentUnexpectedStops atomic.Int64
+	ShutdownTimeouts         atomic.Int64
+	SourceUnavailable        atomic.Int64
+	LeadershipAcquisitions   atomic.Int64
+	LeadershipLosses         atomic.Int64
+	LeaderTakeovers          atomic.Int64
 
 	registryOnce sync.Once
 	registry     *prometheus.Registry
@@ -131,10 +136,20 @@ var metricDescs = []*prometheus.Desc{
 		"Dynamic watcher cache synchronization failures", nil, nil),
 	prometheus.NewDesc("kwatch_component_degradations_total",
 		"Optional component degradation events", nil, nil),
+	prometheus.NewDesc("kwatch_component_stalls_total",
+		"Required component stall detections", nil, nil),
+	prometheus.NewDesc("kwatch_component_unexpected_stops_total",
+		"Unexpected component stops", nil, nil),
 	prometheus.NewDesc("kwatch_shutdown_timeouts_total",
 		"Component shutdown timeouts", nil, nil),
 	prometheus.NewDesc("kwatch_source_unavailable_total",
 		"Required monitor source capabilities unavailable", nil, nil),
+	prometheus.NewDesc("kwatch_leadership_acquisitions_total",
+		"Leader election acquisitions", nil, nil),
+	prometheus.NewDesc("kwatch_leadership_losses_total",
+		"Leader election losses", nil, nil),
+	prometheus.NewDesc("kwatch_leader_takeovers_total",
+		"Leader election takeovers", nil, nil),
 }
 
 // Describe implements prometheus.Collector.
@@ -189,8 +204,13 @@ func (r *Registry) Collect(ch chan<- prometheus.Metric) {
 	r.collectCounter(ch, 23, r.WatcherSyncs.Load())
 	r.collectCounter(ch, 24, r.WatcherSyncFailures.Load())
 	r.collectCounter(ch, 25, r.ComponentDegradations.Load())
-	r.collectCounter(ch, 26, r.ShutdownTimeouts.Load())
-	r.collectCounter(ch, 27, r.SourceUnavailable.Load())
+	r.collectCounter(ch, 26, r.ComponentStalls.Load())
+	r.collectCounter(ch, 27, r.ComponentUnexpectedStops.Load())
+	r.collectCounter(ch, 28, r.ShutdownTimeouts.Load())
+	r.collectCounter(ch, 29, r.SourceUnavailable.Load())
+	r.collectCounter(ch, 30, r.LeadershipAcquisitions.Load())
+	r.collectCounter(ch, 31, r.LeadershipLosses.Load())
+	r.collectCounter(ch, 32, r.LeaderTakeovers.Load())
 }
 
 func (r *Registry) collectCounter(

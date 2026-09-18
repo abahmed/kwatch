@@ -2,6 +2,7 @@ package persistence
 
 import (
 	"context"
+	"fmt"
 	"strconv"
 	"sync"
 	"time"
@@ -146,9 +147,10 @@ func (s *Manager) SetLastSeen(ctx context.Context, t time.Time) error {
 	})
 }
 
-// GetLastSeen returns when kwatch last recorded itself alive. The zero time
-// means there is no record — a first run, or an install predating this key.
-func (s *Manager) GetLastSeen(ctx context.Context) time.Time {
+// GetLastSeen returns when kwatch last recorded itself alive. A missing
+// ConfigMap or key is a valid first-run state; other errors remain visible to
+// startup so monitoring cannot begin with an unknown gap.
+func (s *Manager) GetLastSeen(ctx context.Context) (time.Time, error) {
 	cm, err := s.client.CoreV1().ConfigMaps(
 		s.namespace,
 	).Get(
@@ -157,39 +159,43 @@ func (s *Manager) GetLastSeen(ctx context.Context) time.Time {
 		metav1.GetOptions{},
 	)
 	if err != nil {
-		return time.Time{}
+		if apierrors.IsNotFound(err) {
+			return time.Time{}, nil
+		}
+		return time.Time{}, fmt.Errorf("load last-seen state: %w", err)
 	}
 	raw, ok := cm.Data[lastSeenKey]
 	if !ok || raw == "" {
-		return time.Time{}
+		return time.Time{}, nil
 	}
 	t, err := time.Parse(time.RFC3339, raw)
 	if err != nil {
-		klog.V(2).InfoS("ignoring unparsable last-seen value", "value", raw)
-		return time.Time{}
+		return time.Time{}, fmt.Errorf("parse last-seen state: %w", err)
 	}
-	return t
+	return t, nil
 }
 
 // GetTelemetryLastSent returns the last time the adoption heartbeat was
-// successfully sent. The zero time means no heartbeat has been sent yet.
-func (s *Manager) GetTelemetryLastSent(ctx context.Context) time.Time {
+// successfully sent. A missing key means no heartbeat has been sent yet.
+func (s *Manager) GetTelemetryLastSent(ctx context.Context) (time.Time, error) {
 	cm, err := s.client.CoreV1().ConfigMaps(
 		s.namespace,
 	).Get(ctx, stateConfigMapName, metav1.GetOptions{})
 	if err != nil {
-		return time.Time{}
+		if apierrors.IsNotFound(err) {
+			return time.Time{}, nil
+		}
+		return time.Time{}, fmt.Errorf("load telemetry state: %w", err)
 	}
 	raw := cm.Data[telemetryLastSentKey]
 	if raw == "" {
-		return time.Time{}
+		return time.Time{}, nil
 	}
 	t, err := time.Parse(time.RFC3339, raw)
 	if err != nil {
-		klog.V(2).InfoS("ignoring unparsable telemetry last-sent value", "value", raw)
-		return time.Time{}
+		return time.Time{}, fmt.Errorf("parse telemetry state: %w", err)
 	}
-	return t
+	return t, nil
 }
 
 // SetTelemetryLastSent records the last successful adoption heartbeat.
@@ -208,6 +214,9 @@ func (s *Manager) EnsureClusterID(ctx context.Context) (string, error) {
 	if err == nil && clusterID != "" {
 		return clusterID, nil
 	}
+	if err != nil && !apierrors.IsNotFound(err) {
+		return "", err
+	}
 	return uuid.New().String(), nil
 }
 
@@ -215,7 +224,6 @@ func (s *Manager) MarkAsInitialized(
 	ctx context.Context,
 	clusterID, version string,
 ) error {
-	s.resetMigrationReport()
 	_, err := s.client.CoreV1().ConfigMaps(
 		s.namespace,
 	).Get(
@@ -237,6 +245,15 @@ func (s *Manager) MarkAsInitialized(
 		); err != nil {
 			return err
 		}
+		s.recordMigrationResult(MigrationResult{
+			Store:                 "state",
+			SourceFormat:          "kwatch-state/absent",
+			DestinationFormat:     "kwatch-state/schema-v" + currentStateSchema,
+			Status:                MigrationCompleted,
+			Recoverable:           true,
+			MonitoringMayContinue: true,
+			Detail:                "created initial state",
+		}, nil)
 		klog.InfoS(
 			"created state configmap with cluster ID",
 			"clusterID",
@@ -248,6 +265,10 @@ func (s *Manager) MarkAsInitialized(
 	var migration MigrationResult
 	err = s.configMapStore.UpdateWithRetry(ctx, func(c *corev1.ConfigMap) error {
 		migration = migrateStateData(c.Data)
+		if migration.Status == MigrationFailed ||
+			migration.Status == MigrationUnsupported {
+			return fmt.Errorf("state migration %s", migration.Status)
+		}
 		if _, exists := c.Data[initKey]; !exists {
 			c.Data[initKey] = "true"
 		}
@@ -307,6 +328,7 @@ func migrateStateData(data map[string]string) MigrationResult {
 	current, _ := strconv.Atoi(currentStateSchema)
 	if stored > current {
 		result.Status = MigrationUnsupported
+		result.MonitoringMayContinue = false
 		result.Detail = "state schema is newer than this binary supports"
 		return result
 	}

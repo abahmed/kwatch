@@ -64,20 +64,21 @@ func (m *Monitor) Start(ctx context.Context) error {
 }
 
 // Stop ends all storage informers owned by the monitor.
-func (m *Monitor) Stop() {
+func (m *Monitor) Stop(ctx context.Context) error {
 	m.lifecycleMu.Lock()
-	defer m.lifecycleMu.Unlock()
 	watcher := m.dynamicWatcher
 	generation := m.generation
-	if watcher != nil {
-		if generation.Valid() {
-			generation.Stop()
-		} else {
-			watcher.Stop()
-		}
-	}
 	m.started = false
 	m.generation = dynamicwatch.Generation{}
+	m.lifecycleMu.Unlock()
+	if watcher != nil {
+		if generation.Valid() {
+			return generation.Stop(ctx)
+		} else {
+			return watcher.Stop(ctx)
+		}
+	}
+	return nil
 }
 
 // Status reports optional storage API watcher health.

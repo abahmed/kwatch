@@ -2,6 +2,7 @@ package crdwatch
 
 import (
 	"errors"
+	"sync"
 	"testing"
 
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
@@ -96,5 +97,29 @@ func TestStatusReportsWaitingForMissingCRD(t *testing.T) {
 	status := watcher.Status()
 	if status.State != "waiting" || !status.WaitingForCRD {
 		t.Fatalf("status = %+v, want waiting state", status)
+	}
+}
+
+func TestLifecycleResetIsIdempotentWhenStopRacesCancellation(t *testing.T) {
+	done := make(chan struct{})
+	watcher := &Watcher{started: true, generation: 4, done: done}
+
+	var group sync.WaitGroup
+	group.Add(2)
+	for i := 0; i < 2; i++ {
+		go func() {
+			defer group.Done()
+			watcher.resetLifecycle(4)
+		}()
+	}
+	group.Wait()
+
+	if watcher.started {
+		t.Fatal("racing lifecycle resets left the watcher started")
+	}
+	select {
+	case <-done:
+	default:
+		t.Fatal("reset did not signal watcher completion")
 	}
 }

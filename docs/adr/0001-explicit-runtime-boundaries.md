@@ -41,5 +41,5 @@ packages own detection and observation behavior.
 - Runtime Go plugins were rejected in favor of static, deterministic wiring.
 - A second public documentation source was rejected; `kwatch.dev` remains
   canonical.
-- Leader election was deferred because high availability needs an explicit
+- Leader election is implemented separately because high availability needs an explicit
   ownership and deduplication design.

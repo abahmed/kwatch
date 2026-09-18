@@ -31,6 +31,7 @@ func NewWithClientsAndClock(
 		resync:            resync,
 		factories:         make(map[string]dynamicwatch.Factory),
 		stops:             make(map[string]context.CancelFunc),
+		versionDone:       make(map[string]chan struct{}),
 		crdVersions:       make(map[string]map[string]struct{}),
 		conditionRules:    defaultConditionRules(),
 		now:               timeSource.Now,

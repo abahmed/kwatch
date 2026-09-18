@@ -53,8 +53,8 @@ func (s *testStateStore) IsFirstRun(context.Context) (bool, error) {
 	return s.firstRun, nil
 }
 
-func (s *testStateStore) GetStoredVersion(context.Context) string {
-	return s.version
+func (s *testStateStore) GetStoredVersion(context.Context) (string, error) {
+	return s.version, nil
 }
 
 func (s *testStateStore) MarkAsInitialized(
@@ -63,8 +63,8 @@ func (s *testStateStore) MarkAsInitialized(
 	return nil
 }
 
-func (s *testStateStore) GetLastSeen(context.Context) time.Time {
-	return s.lastSeen
+func (s *testStateStore) GetLastSeen(context.Context) (time.Time, error) {
+	return s.lastSeen, nil
 }
 
 func (s *testStateStore) SetLastSeen(

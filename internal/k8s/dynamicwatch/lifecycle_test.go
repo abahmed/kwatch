@@ -58,8 +58,8 @@ func TestWatcherStartIsIdempotentAndStopIsSafe(t *testing.T) {
 		require.NoError(t, err)
 	}
 
-	watcher.Stop()
-	watcher.Stop()
+	require.NoError(t, watcher.Stop(nil))
+	require.NoError(t, watcher.Stop(nil))
 	if got := watcher.Status(); got.State != "unavailable" {
 		t.Fatalf("Status after Stop = %+v, want unavailable", got)
 	}
@@ -87,7 +87,7 @@ func TestWatcherReplaceStopsPreviousGeneration(t *testing.T) {
 	require.NoError(t, watcher.Start(ctx, specs))
 	require.NoError(t, watcher.Replace(ctx, specs))
 	require.Equal(t, 1, watcher.Status().InformerCount)
-	watcher.Stop()
+	require.NoError(t, watcher.Stop(nil))
 }
 
 func TestGenerationWaitCompletesAfterStop(t *testing.T) {
@@ -100,7 +100,7 @@ func TestGenerationWaitCompletesAfterStop(t *testing.T) {
 	if err != nil {
 		t.Fatalf("StartGeneration() error = %v", err)
 	}
-	generation.Stop()
+	require.NoError(t, generation.Stop(nil))
 	waitCtx, cancel := context.WithTimeout(ctx, time.Second)
 	defer cancel()
 	if !generation.Wait(waitCtx) {
@@ -127,14 +127,14 @@ func TestStaleGenerationCannotStopReplacement(t *testing.T) {
 	ctx := context.Background()
 	first, err := watcher.StartGeneration(ctx, specs)
 	require.NoError(t, err)
-	first.Stop()
+	require.NoError(t, first.Stop(nil))
 	second, err := watcher.StartGeneration(ctx, specs)
 	require.NoError(t, err)
 	require.True(t, second.Valid())
 
-	first.Stop()
+	require.NoError(t, first.Stop(nil))
 	if got := watcher.Status(); got.State == "unavailable" {
 		t.Fatalf("stale generation stopped replacement: %+v", got)
 	}
-	second.Stop()
+	require.NoError(t, second.Stop(nil))
 }

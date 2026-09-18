@@ -52,7 +52,11 @@ func newNetworkGraphRun(
 			klog.ErrorS(err, "network graph monitor stopped")
 			return err
 		}
-		defer graphMonitor.Stop()
+		defer func() {
+			if err := graphMonitor.Stop(nil); err != nil {
+				healthServer.SetComponentError("network-graph", err)
+			}
+		}()
 		syncCtx, cancel := context.WithTimeout(
 			ctx, optionalWatcherSyncTimeout,
 		)
@@ -110,7 +114,11 @@ func newStorageGraphRun(
 			klog.ErrorS(err, "storage graph monitor stopped")
 			return err
 		}
-		defer graphMonitor.Stop()
+		defer func() {
+			if err := graphMonitor.Stop(nil); err != nil {
+				healthServer.SetComponentError("storage-graph", err)
+			}
+		}()
 		syncCtx, cancel := context.WithTimeout(
 			ctx, optionalWatcherSyncTimeout,
 		)

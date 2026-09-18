@@ -20,9 +20,9 @@ import (
 type StateStore interface {
 	EnsureClusterID(context.Context) (string, error)
 	IsFirstRun(context.Context) (bool, error)
-	GetStoredVersion(context.Context) string
+	GetStoredVersion(context.Context) (string, error)
 	MarkAsInitialized(context.Context, string, string) error
-	GetLastSeen(context.Context) time.Time
+	GetLastSeen(context.Context) (time.Time, error)
 	SetLastSeen(context.Context, time.Time) error
 }
 
@@ -77,33 +77,34 @@ func newStartupManager(
 }
 
 // Start loads and records startup state, returning the decision needed by the
-// application lifecycle. Nonessential state lookup failures remain nonfatal,
-// preserving the historical startup behavior.
+// application lifecycle. State needed to fence a new active generation is
+// fail-closed: an API or RBAC error must not look like a first run.
 func (s *StartupManager) Start(ctx context.Context) (Result, error) {
 	clusterID, err := s.persistenceManager.EnsureClusterID(ctx)
 	if err != nil {
-		klog.InfoS("failed to get/create cluster ID", "error", err)
-		clusterID = ""
+		return Result{}, fmt.Errorf("load cluster ID: %w", err)
 	}
 
 	isFirstRun, err := s.persistenceManager.IsFirstRun(ctx)
 	if err != nil {
-		// Unknown state is not a first install. Avoid sending a misleading
-		// welcome message when the API is temporarily unavailable or RBAC is
-		// incomplete; initialization below will log its own failure as well.
-		klog.InfoS("failed to determine whether this is the first run", "error", err)
-		isFirstRun = false
+		return Result{}, fmt.Errorf("load startup state: %w", err)
 	}
 
 	s.currentVersion = version.Short()
-	storedVersion := s.persistenceManager.GetStoredVersion(ctx)
+	storedVersion, err := s.persistenceManager.GetStoredVersion(ctx)
+	if err != nil {
+		return Result{}, fmt.Errorf("load stored version: %w", err)
+	}
 	isUpgrade := storedVersion != "" && storedVersion != s.currentVersion
 
 	// How long was nobody watching? kwatch runs as a single replica, so it
 	// goes down with the cluster it is meant to report on — exactly when the
 	// gap matters most. Saying so is the difference between "no alerts" and
 	// "no alerts because nothing was looking".
-	s.downtime = s.measureDowntime(ctx)
+	s.downtime, err = s.measureDowntime(ctx)
+	if err != nil {
+		return Result{}, fmt.Errorf("load monitoring gap: %w", err)
+	}
 
 	s.shouldNotify = (isFirstRun || isUpgrade || s.downtime > 0) &&
 		!s.disableStartupMessage
@@ -113,8 +114,7 @@ func (s *StartupManager) Start(ctx context.Context) (Result, error) {
 		clusterID,
 		s.currentVersion,
 	); err != nil {
-		klog.InfoS("failed to mark as initialized", "error", err)
-		return s.result(false, false, s.clusterID), nil
+		return Result{}, fmt.Errorf("persist startup state: %w", err)
 	}
 	s.clusterID = clusterID
 
@@ -153,16 +153,21 @@ func (s *StartupManager) TelemetryIdentity() (string, string) {
 const minReportableDowntime = 5 * time.Minute
 
 // measureDowntime compares the last recorded liveness stamp with now.
-func (s *StartupManager) measureDowntime(ctx context.Context) time.Duration {
-	last := s.persistenceManager.GetLastSeen(ctx)
+func (s *StartupManager) measureDowntime(
+	ctx context.Context,
+) (time.Duration, error) {
+	last, err := s.persistenceManager.GetLastSeen(ctx)
+	if err != nil {
+		return 0, err
+	}
 	if last.IsZero() {
-		return 0
+		return 0, nil
 	}
 	gap := s.now().Sub(last)
 	if gap < minReportableDowntime {
-		return 0
+		return 0, nil
 	}
-	return gap
+	return gap, nil
 }
 
 // RecordAlive stamps the liveness marker used to measure the next gap.

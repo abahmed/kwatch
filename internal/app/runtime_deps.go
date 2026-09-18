@@ -27,7 +27,7 @@ func makeServerDeps(
 	startupSummary func(map[string]int),
 	initialized <-chan struct{},
 ) *serverDeps {
-	return &serverDeps{
+	deps := &serverDeps{
 		ctx: ctx, cancel: cancel, runtime: runtime, clients: boot.clients,
 		healthServer:    boot.healthServer,
 		deliveryManager: boot.deliveryManager,
@@ -38,6 +38,7 @@ func makeServerDeps(
 		changeDone: persist.changeDone, feedbackDone: persist.feedbackDone,
 		startPersistence: persist.start,
 		initialized:      initialized, controllerDone: make(chan struct{}),
+		controllerProgress: newComponentProgress(boot.clock.Now()),
 		notifyStartup: func() {
 			if msg, ok := boot.startupManager.StartupMessage(); ok {
 				boot.deliveryManager.Notify(msg)
@@ -54,4 +55,6 @@ func makeServerDeps(
 		upgradeRun:           boot.upgradeRun,
 		notifyStartupSummary: startupSummary,
 	}
+	deps.persistenceGate = newPersistenceGate()
+	return deps
 }

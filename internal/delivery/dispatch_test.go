@@ -55,7 +55,7 @@ func TestFanOutSaturatedQueueRecordsDeadLetter(t *testing.T) {
 	assert.Len(t, dl, 1)
 	assert.Equal(t, "arriving-job", dl[0].Key,
 		"the job that could not be queued is the one recorded")
-	assert.Contains(t, dl[0].Error, "queue saturated")
+	assert.Equal(t, "queue_saturated", dl[0].Error)
 }
 
 func TestFanOutSaturatedQueueDigestsEveryJobKind(t *testing.T) {

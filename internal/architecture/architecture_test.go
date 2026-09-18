@@ -157,7 +157,7 @@ func TestRawConfigurationStaysAtApprovedBoundaries(t *testing.T) {
 	root := repositoryRoot(t)
 	approved := []string{
 		"internal/config/", "internal/app/", "internal/crdwatch/",
-		"cmd/configcatalog/",
+		"cmd/configcatalog/", "cmd/kwatch/",
 	}
 	for _, filename := range goFilesRecursive(t, root) {
 		if strings.HasSuffix(filename, "_test.go") {

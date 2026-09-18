@@ -92,7 +92,9 @@ func (m *Monitor) Start(ctx context.Context) error {
 	}
 	m.started = true
 	m.mu.Unlock()
-	m.loadState(ctx)
+	if err := m.loadState(ctx); err != nil {
+		return err
+	}
 	interval := time.Duration(m.cfg.IntervalSeconds) * time.Second
 	if interval <= 0 {
 		interval = time.Minute

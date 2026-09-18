@@ -2,6 +2,7 @@ package app
 
 import (
 	"context"
+	"fmt"
 	"time"
 
 	"github.com/abahmed/kwatch/internal/controller"
@@ -17,35 +18,40 @@ func startCoreComponents(
 	supervisor.startOwned(ctx, componentSpec{
 		name:     "controller",
 		required: true,
+		progress: deps.controllerProgress,
 		run: func(ctx context.Context) error {
 			return runController(ctx, deps)
 		},
 	})
 	components := []componentSpec{
 		{
-			name:    "incident-cleanup",
-			onError: degrade(deps, "incident-cleanup"),
+			name:      "incident-cleanup",
+			onError:   degrade(deps, "incident-cleanup"),
+			onHealthy: recoverComponent(deps, "incident-cleanup"),
 			run: func(componentCtx context.Context) error {
 				return runIncidentCleanup(componentCtx, deps)
 			},
 		},
 		{
-			name:    "pvc-monitor",
-			onError: degrade(deps, "pvc-monitor"),
+			name:      "pvc-monitor",
+			onError:   degrade(deps, "pvc-monitor"),
+			onHealthy: recoverComponent(deps, "pvc-monitor"),
 			run: func(componentCtx context.Context) error {
 				return runPVCMonitor(componentCtx, deps)
 			},
 		},
 		{
-			name:    "heartbeat",
-			onError: degrade(deps, "heartbeat"),
+			name:      "heartbeat",
+			onError:   degrade(deps, "heartbeat"),
+			onHealthy: recoverComponent(deps, "heartbeat"),
 			run: func(componentCtx context.Context) error {
 				return runHeartbeat(componentCtx, deps)
 			},
 		},
 		{
-			name:    "incident-snapshots",
-			onError: degrade(deps, "incident-snapshots"),
+			name:      "incident-snapshots",
+			onError:   degrade(deps, "incident-snapshots"),
+			onHealthy: recoverComponent(deps, "incident-snapshots"),
 			run: func(componentCtx context.Context) error {
 				return runIncidentSnapshots(componentCtx, deps)
 			},
@@ -55,6 +61,7 @@ func startCoreComponents(
 	if deps.tlsSweep != nil {
 		components = append(components, componentSpec{
 			name: "tls-sweep", onError: degrade(deps, "tls-sweep"),
+			onHealthy: recoverComponent(deps, "tls-sweep"),
 			run: func(componentCtx context.Context) error {
 				return runTLSSweep(componentCtx, deps)
 			},
@@ -70,8 +77,9 @@ func startCoreComponents(
 	}
 	if deps.runtime.Scope().NamespaceSelector() != "" {
 		components = append(components, componentSpec{
-			name:    "namespace-scope-watcher",
-			onError: degrade(deps, "namespace-scope-watcher"),
+			name:      "namespace-scope-watcher",
+			onError:   degrade(deps, "namespace-scope-watcher"),
+			onHealthy: recoverComponent(deps, "namespace-scope-watcher"),
 			run: func(componentCtx context.Context) error {
 				return runNamespaceScopeWatcher(componentCtx, deps)
 			},
@@ -90,8 +98,16 @@ func degrade(deps *serverDeps, name string) func(error) {
 	}
 }
 
+func recoverComponent(deps *serverDeps, name string) func() {
+	return func() {
+		if deps.healthServer != nil {
+			deps.healthServer.SetComponentStatus(name, "running", "", true)
+		}
+	}
+}
+
 func runIncidentCleanup(ctx context.Context, deps *serverDeps) error {
-	deps.incidentEngine.StartCleanup(ctx)
+	deps.incidentEngine.RunCleanup(ctx)
 	return nil
 }
 
@@ -99,8 +115,19 @@ func runDelivery(ctx context.Context, deps *serverDeps) error {
 	if err := deps.deliveryManager.Start(ctx); err != nil {
 		return err
 	}
-	<-ctx.Done()
-	return nil
+	if !deps.deliveryManager.HasProviders() {
+		<-ctx.Done()
+		return nil
+	}
+	select {
+	case <-ctx.Done():
+		return nil
+	case <-deps.deliveryManager.Done():
+		if ctx.Err() != nil {
+			return nil
+		}
+		return fmt.Errorf("delivery workers stopped unexpectedly")
+	}
 }
 
 func runPVCMonitor(ctx context.Context, deps *serverDeps) error {
@@ -118,7 +145,7 @@ func runIncidentSnapshots(ctx context.Context, deps *serverDeps) error {
 	const interval = 60 * time.Second
 	ticker := time.NewTicker(interval)
 	defer ticker.Stop()
-	if deps.recordAlive != nil {
+	if deps.recordAlive != nil && deps.persistenceGate.enabled() {
 		deps.recordAlive(ctx)
 	}
 	for {
@@ -135,7 +162,7 @@ func runIncidentSnapshots(ctx context.Context, deps *serverDeps) error {
 					engine:    deps.incidentEngine.SnapshotEngineState(),
 				},
 			)
-			if deps.recordAlive != nil {
+			if deps.recordAlive != nil && deps.persistenceGate.enabled() {
 				deps.recordAlive(ctx)
 			}
 		}
@@ -179,6 +206,9 @@ func runNamespaceScopeWatcher(ctx context.Context, deps *serverDeps) error {
 
 func runController(ctx context.Context, deps *serverDeps) error {
 	defer close(deps.controllerDone)
+	if deps.controllerProgress != nil {
+		deps.controllerProgress.Touch(deps.clients.Clock.Now())
+	}
 	// Startup delivery belongs to this owned controller lifecycle goroutine.
 	// Delivery itself remains queued and non-blocking.
 	deps.notifyStartup()
@@ -190,6 +220,8 @@ func runController(ctx context.Context, deps *serverDeps) error {
 	go func() {
 		runErr <- deps.ctl.Run(ctx, workers)
 	}()
+	heartbeat := time.NewTicker(10 * time.Second)
+	defer heartbeat.Stop()
 	for {
 		select {
 		case suppressed := <-deps.ctl.StartupSummaries():
@@ -198,6 +230,10 @@ func runController(ctx context.Context, deps *serverDeps) error {
 			}
 		case err := <-runErr:
 			return err
+		case now := <-heartbeat.C:
+			if deps.controllerProgress != nil {
+				deps.controllerProgress.Touch(now)
+			}
 		case <-ctx.Done():
 			return <-runErr
 		}

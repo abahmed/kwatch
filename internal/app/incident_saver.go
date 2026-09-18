@@ -53,7 +53,9 @@ func startIncidentSaver(
 	ctx context.Context,
 	persistenceManager incidentSaver,
 	ch <-chan stateSnapshot,
-) {
+	report func(error),
+	canWrite func() bool,
+) error {
 	var pending stateSnapshot
 	var havePending bool
 	// Avoid repeated writes when lifecycle ticks serialize identical state.
@@ -62,9 +64,14 @@ func startIncidentSaver(
 		select {
 		case snap := <-ch:
 			pending, havePending = snap, true
-			lastSaved = saveIncidentSnapshot(
+			var err error
+			lastSaved, err = saveIncidentSnapshot(
 				persistenceManager, pending, 10*time.Second, lastSaved,
+				report, canWrite,
 			)
+			if err != nil {
+				return err
+			}
 		case <-ctx.Done():
 			for {
 				select {
@@ -72,11 +79,12 @@ func startIncidentSaver(
 					pending, havePending = snap, true
 				default:
 					if havePending {
-						saveIncidentSnapshot(
+						_, _ = saveIncidentSnapshot(
 							persistenceManager, pending, 5*time.Second, lastSaved,
+							report, canWrite,
 						)
 					}
-					return
+					return nil
 				}
 			}
 		}
@@ -120,7 +128,7 @@ func saveFinalIncidentSnapshot(deps *serverDeps) {
 		threads = deps.deliveryManager.SnapshotThreads()
 	}
 	engineState := deps.incidentEngine.SnapshotEngineState()
-	saveIncidentSnapshot(
+	_, _ = saveIncidentSnapshot(
 		deps.incidentSaver,
 		stateSnapshot{
 			incidents: deps.incidentEngine.FreezeAndSnapshotPersisted(),
@@ -129,8 +137,10 @@ func saveFinalIncidentSnapshot(deps *serverDeps) {
 			engine:    engineState,
 		},
 		5*time.Second,
-		// The shutdown snapshot is unconditional: there is no later retry.
+		// Do not write after the process has lost the Lease.
 		0,
+		nil,
+		deps.persistenceGate.enabled,
 	)
 }
 
@@ -139,10 +149,15 @@ func saveIncidentSnapshot(
 	snap stateSnapshot,
 	timeout time.Duration,
 	lastSaved uint64,
-) uint64 {
+	report func(error),
+	canWrite func() bool,
+) (uint64, error) {
+	if !writesAllowed(canWrite) {
+		return lastSaved, nil
+	}
 	sig, ok := snapshotFingerprint(snap)
 	if ok && sig == lastSaved {
-		return lastSaved
+		return lastSaved, nil
 	}
 	fctx, cancel := context.WithTimeout(context.Background(), timeout)
 	defer cancel()
@@ -151,12 +166,18 @@ func saveIncidentSnapshot(
 	)
 	if err != nil {
 		klog.ErrorS(err, "failed to save correlation state")
-		return lastSaved
+		if report != nil {
+			report(err)
+		}
+		return lastSaved, err
+	}
+	if report != nil {
+		report(nil)
 	}
 	if !ok {
-		return lastSaved
+		return lastSaved, nil
 	}
-	return sig
+	return sig, nil
 }
 
 // snapshotFingerprint provides a deterministic write-suppression key.

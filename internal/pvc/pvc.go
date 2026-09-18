@@ -51,6 +51,10 @@ type StateStore interface {
 	SavePvcUsage(context.Context, map[string]model.PVCSample) error
 }
 
+type errorStateStore interface {
+	GetPvcUsageWithError(context.Context) (map[string]model.PVCSample, error)
+}
+
 // NewPvcMonitorWithRuntimeAndClock builds the monitor from the immutable
 // runtime snapshot and an explicit application clock.
 func NewPvcMonitorWithRuntimeAndClock(

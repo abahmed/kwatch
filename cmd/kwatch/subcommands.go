@@ -55,39 +55,53 @@ func runLint(strict, check bool, out, errOut io.Writer) int {
 		}
 	}
 	if check {
-		runtime := config.RuntimeConfigFor(cfg)
-		am := delivery.NewManagerWithDependencies(delivery.Dependencies{
-			HTTPClient: client.NewHTTPClientWithRuntime(runtime),
-			Clock:      clock.RealClock{},
-		})
-		am.InitRuntime(runtime, catalog.NewProvider)
-		results := am.VerifyAll(context.Background())
-		hasErr := false
-		names := make([]string, 0, len(results))
-		for name := range results {
-			names = append(names, name)
-		}
-		sort.Strings(names)
-		for _, name := range names {
-			err := results[name]
-			if err != nil {
-				if _, writeErr := fmt.Fprintf(
-					errOut, "  %s: FAIL — %v\n", name, err,
-				); writeErr != nil {
-					return 1
-				}
-				hasErr = true
-			} else {
-				if _, writeErr := fmt.Fprintf(out, "  %s: OK\n", name); writeErr != nil {
-					return 1
-				}
-			}
-		}
-		if hasErr {
+		if verifyProviders(cfg, out, errOut) != 0 {
 			return 1
 		}
 	}
 	if _, err := fmt.Fprintln(out, "config OK"); err != nil {
+		return 1
+	}
+	return 0
+}
+
+func verifyProviders(cfg *config.Config, out, errOut io.Writer) int {
+	runtime := config.RuntimeConfigFor(cfg)
+	am := delivery.NewManagerWithDependencies(delivery.Dependencies{
+		HTTPClient: client.NewHTTPClientWithRuntime(runtime),
+		Clock:      clock.RealClock{},
+	})
+	if err := am.InitRuntime(runtime, catalog.NewProvider); err != nil {
+		if _, writeErr := fmt.Fprintf(
+			errOut, "ERROR: initialize providers: %v\n", err,
+		); writeErr != nil {
+			return 1
+		}
+		return 1
+	}
+	results := am.VerifyAll(context.Background())
+	hasErr := false
+	names := make([]string, 0, len(results))
+	for name := range results {
+		names = append(names, name)
+	}
+	sort.Strings(names)
+	for _, name := range names {
+		err := results[name]
+		if err != nil {
+			if _, writeErr := fmt.Fprintf(
+				errOut, "  %s: FAIL — %v\n", name, err,
+			); writeErr != nil {
+				return 1
+			}
+			hasErr = true
+			continue
+		}
+		if _, writeErr := fmt.Fprintf(out, "  %s: OK\n", name); writeErr != nil {
+			return 1
+		}
+	}
+	if hasErr {
 		return 1
 	}
 	return 0
@@ -108,7 +122,14 @@ func runReplay(dryRun bool, in io.Reader, out, errOut io.Writer) int {
 		HTTPClient: client.NewHTTPClientWithRuntime(runtime),
 		Clock:      clock.RealClock{},
 	})
-	am.InitRuntime(runtime, catalog.NewProvider)
+	if err := am.InitRuntime(runtime, catalog.NewProvider); err != nil {
+		if _, writeErr := fmt.Fprintf(
+			errOut, "ERROR: initialize providers: %v\n", err,
+		); writeErr != nil {
+			return 1
+		}
+		return 1
+	}
 
 	scanner := bufio.NewScanner(in)
 	for scanner.Scan() {

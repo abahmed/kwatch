@@ -80,7 +80,9 @@ architecture unless a change explicitly expands its scope.
 
 ### Naming standard
 
-- Use `New<Type>` for constructors and `Set<Type>` for optional wiring. Keep
+- Use `New<Type>` for constructors. Use `Set<Type>` only for narrow optional
+  state that is explicitly documented; source wiring must use one-time
+  `ConfigureSources` and must not use mutable production setters. Keep
   constructor arguments ordered as configuration, required dependencies, then
   optional dependencies.
 - Name methods after the domain action: `Process`, `Resolve`, `Snapshot`, and
@@ -433,10 +435,12 @@ informer construction and transform mechanics through
 semantics. `crdwatch` remains separate because it owns late-install and
 restart behavior for KwatchConfig resources.
 
-The deployment currently runs one Kwatch replica and does not use Kubernetes
-Lease leader election. This is an explicit operating constraint. Do not add
-leader election as an incidental refactor; high availability requires a
-separate failover and deduplication design.
+The deployment runs two Kwatch replicas by default with Kubernetes Lease leader
+election. Exactly one replica owns observation, delivery, and mutable
+persistence; all other replicas are standby and do not start active monitor
+workers. A one-replica override is supported for constrained clusters but has
+no Kwatch self-failover. Do not add active-active processing without a separate
+deduplication and persistence design.
 
 ### Provider checklist
 
@@ -568,3 +572,147 @@ path, recovery guidance, and tests.
 Do not use a broad mechanical rewrite to conceal domain changes. Preserve
 load-bearing behavior listed above unless an ADR explicitly approves a new
 contract.
+
+## Working in the current tree
+
+Inspect `git status` before editing. Existing dirty changes belong to the user;
+preserve them and review overlapping diffs before applying a refactor. Never
+reset, clean, or overwrite unrelated work. The `/Users/macos/kwatch.dev`
+repository is independent and must not be edited as part of code changes.
+
+This project has not reached a stable public API release. Do not add internal
+compatibility constructors, setters, aliases, or wrappers merely to preserve
+old tests or historical call paths. Migrate callers to the canonical contract
+and remove the obsolete seam. Persisted data is different: preserve its format
+through explicit versioned migrations, backups, and round-trip tests.
+
+Before adding a long-running component, define its owner, required or optional
+classification, cancellation path, completion handle, startup and shutdown
+deadlines, progress signal, health reason, metrics, and deterministic tests.
+Before adding a provider or monitor, follow the extension checklists below and
+run the smallest focused package validation first.
+
+## Production-grade guardrails
+
+Kwatch is operated with two replicas and Lease election by default. Only the
+leader runs monitoring, delivery, and mutable persistence; standby Pods keep
+health and election alive so one failed leader can be replaced. A one-replica
+`Recreate` deployment remains an advanced low-resource mode without
+self-failover. Election does not protect against total cluster, node, API, or
+network failure and does not promise exactly-once external delivery.
+
+Production readiness means that required readiness, bounded shutdown, safe
+persistence recovery, Kubernetes and provider outage behavior, bounded queues,
+safe diagnostics, reviewed RBAC, signed release artifacts, and upgrade/rollback
+procedures are tested and documented. Do not claim zero-loss delivery,
+zero-downtime upgrades, or HA without evidence and an approved design.
+
+The default deployment uses a 60-second termination grace period and a
+multi-replica PodDisruptionBudget with `minAvailable: 1`. The chart renders the
+budget only when more than one replica is configured; one-replica deployments
+remain supported without self-failover.
+
+The application supervisor treats an unexpected component return as a failure.
+Required components have bounded startup and stall deadlines; components that
+can be idle must still report lifecycle progress. A required failure or stall
+removes readiness, cancels the active generation, fences delivery and
+persistence, releases leadership, and lets Kubernetes restart the Pod.
+Optional components retry with `1s, 2s, 4s, 8s` backoff capped at `60s`; the
+backoff resets after a minute of healthy execution. Component completion is
+awaited during shutdown instead of being inferred from sleeps.
+
+The application composition root owns Kubernetes, dynamic, discovery, REST,
+HTTP, DNS, kubelet, and clock construction. Domain constructors receive narrow
+explicit dependencies. Production code must not silently use default clients,
+resolvers, nil clocks, locally constructed clients, or clients stored in
+contexts.
+
+`RuntimeConfig` is the only production runtime configuration boundary. The YAML
+model remains external and stable; derived policies are compiled once. Runtime
+views and accessors return detached values. Delivery and integrations must not
+reparse raw configuration or add a second normalization path.
+
+Family sources are configured once before processing starts. A missing lister or
+source means that capability is unavailable: skip detection and do not create or
+resolve a synthetic incident. Report the condition using bounded reason codes.
+Disabled pipelines must not report degradation. Compatibility setters, when
+they exist, are not production wiring points.
+
+The application owns component goroutines and shutdown. Every worker, ticker,
+retry timer, informer, and watcher needs an owner, cancellation path, bounded
+wait, and observable failure behavior. Health owns only its HTTP listener.
+Shutdown must stop producers before final persistence and must respond to both
+signals and parent-context cancellation.
+
+Watcher replacement is synchronous at the lifecycle boundary: cancellation is
+issued first and the previous generation completion handle is awaited before a
+replacement is published. CRD discovery and informer goroutines participate in
+the same completion boundary. Provider generations are built through runtime
+initialization; there is no production late-registration mutation seam. Runtime
+changes replace the complete immutable provider generation and in-flight
+fallback stays within the generation that accepted the job.
+
+Canonical dynamic and CRD watcher stop operations accept a caller-owned
+context and return a bounded error. Domain monitor `Stop` methods must not hide
+watcher shutdown errors; application-owned lifecycle wrappers record them as
+safe `shutdown_timeout` or `component_failed` states.
+
+Health and public diagnostics expose safe status codes only. Never expose raw
+errors, credentials, tokens, complete payloads, secret-bearing URLs, incident
+internals, or arbitrary Kubernetes object data. Metrics use fixed bounded labels
+and transition-based counters.
+
+Provider generations are immutable and use stable names for lookup and fallback.
+Providers validate, render, and call shared transport; delivery owns retries,
+status classification, pacing, and queue policy. Slack and Discord SDK calls
+are the only approved transport exceptions and require the rules in
+`docs/adr/0005-sdk-provider-transport-exceptions.md`.
+
+Provider runtime initialization validates the complete configured generation
+before replacing an active generation. Unknown or unconstructable configured
+providers return an error to the composition root; fallback lookup remains
+generation-bound and missing fallback names are disabled deterministically.
+Provider construction is the only supported registration path; tests replace
+the complete generation rather than mutating provider storage.
+
+Persisted formats are compatibility contracts. Any persisted change requires an
+explicit schema version, migration or reset path, backup/recovery guidance, and
+round-trip tests. Migration diagnostics must report every startup operation with
+safe bounded outcomes.
+
+## Change checklists
+
+When changing a monitor, provider, filter, RCA rule, persistence field,
+configuration field, metric, integration, RBAC rule, or deployment manifest:
+
+1. Use the existing ownership seam and do not introduce an upward dependency.
+2. Add deterministic focused tests for success, failure, cancellation, and
+   recovery where applicable.
+3. Run `make architecture-check`, catalog checks, test-layout checks, and
+   `git diff --check` after the workstream rather than after every edit.
+4. Update generated catalogs or manifests when their source metadata changes.
+5. Review health, metrics, logging, redaction, and shutdown behavior.
+6. Review configuration, migration, upgrade, rollback, and release-note impact.
+7. Update the canonical website through its separate reviewed synchronization
+   workflow; do not treat local documentation as a second public source.
+
+For monitor and integration changes, verify source configuration, optional API
+degradation, missing-lister behavior, namespace filtering, and readiness.
+For provider changes, verify context cancellation, transport classification,
+fallback generation, payload limits, redaction, and catalog registration.
+For persistence changes, verify old formats, corruption, conflicts, trimming,
+partial writes, recovery, and complete migration reports.
+For deployment or RBAC changes, render and lint the chart, inspect the raw
+manifest, review least privilege, and document operational consequences.
+
+Use focused validation for local work:
+
+```sh
+make verify-fast PKGS="./internal/changed/package/..."
+make verify-focused PKGS="./internal/changed/package/..."
+```
+
+Run targeted race tests for concurrency changes. Run the full race suite,
+security scans, Kind tests, outage tests, and release verification at completed
+milestones or final handoff. Record unavailable tools instead of treating them
+as passed.

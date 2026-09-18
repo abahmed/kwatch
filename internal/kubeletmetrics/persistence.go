@@ -8,22 +8,20 @@ import (
 	"k8s.io/klog/v2"
 )
 
-func (m *Monitor) loadState(ctx context.Context) {
+func (m *Monitor) loadState(ctx context.Context) error {
 	if !m.cfg.PersistState || m.store == nil {
-		return
+		return nil
 	}
 	data, err := m.store.LoadTelemetryState(ctx)
 	if err != nil {
-		klog.ErrorS(err, "failed to load kubelet telemetry state")
-		return
+		return err
 	}
 	if len(data) == 0 {
-		return
+		return nil
 	}
 	var state persistedState
 	if err := json.Unmarshal(data, &state); err != nil {
-		klog.ErrorS(err, "failed to decode kubelet telemetry state")
-		return
+		return err
 	}
 	m.mu.Lock()
 	if state.Previous != nil {
@@ -42,6 +40,7 @@ func (m *Monitor) loadState(ctx context.Context) {
 		m.baselines = state.Baselines
 	}
 	m.mu.Unlock()
+	return nil
 }
 
 func (m *Monitor) saveState(ctx context.Context) {

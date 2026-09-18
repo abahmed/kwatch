@@ -23,7 +23,13 @@ guide live at [kwatch.dev/docs](https://kwatch.dev/docs).
 2. Create a short-lived branch from `main`.
 3. Read [AGENTS.md](./AGENTS.md) before changing Go code.
 4. Make a focused change with tests and documentation.
-5. Run the full verification gate:
+5. Run the smallest relevant package checks while iterating:
+
+```bash
+make verify-fast PKGS="./internal/changed/package/..."
+```
+
+6. Run the full verification gate at the end of a coherent workstream:
 
 ```bash
 make verify
@@ -59,8 +65,9 @@ line length, checks package boundaries, and runs `golangci-lint`.
   are not duplicated as public technical pages.
 
 When adding a feature, update code, tests, generated catalogs, and the
-appropriate canonical website documentation in the same change or through the
-automated documentation PR workflow.
+appropriate canonical website documentation through the separate reviewed
+documentation synchronization workflow. The website repository is independent
+and must not be overwritten from a code change.
 
 ## 🚧 Unreleased features
 

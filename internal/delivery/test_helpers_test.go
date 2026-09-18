@@ -40,12 +40,12 @@ func initTestManager(
 	alertSettings map[string]map[string]interface{},
 	appConfig *config.App,
 	factory ProviderFactory,
-) {
+) error {
 	cfg := &config.Config{Alert: alertSettings}
 	if appConfig != nil {
 		cfg.App = *appConfig
 	}
-	manager.InitRuntime(config.RuntimeConfigFor(cfg), factory)
+	return manager.InitRuntime(config.RuntimeConfigFor(cfg), factory)
 }
 
 func setTestSilences(manager *Manager, rules []config.SilenceRule) {

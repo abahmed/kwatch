@@ -88,8 +88,9 @@ func TestDeadLettersHandlerNoLister(t *testing.T) {
 }
 
 func TestDeadLettersHandlerWithData(t *testing.T) {
-	expected := []model.DeadLetterEntry{{Key: "key", Error: "value"}}
-	h := &HealthServer{deadLetterLister: &fakeDeadLetterLister{letters: expected}}
+	input := []model.DeadLetterEntry{{Key: "key", Error: "secret webhook URL"}}
+	expected := []model.DeadLetterEntry{{Key: "key", Error: "delivery_failed"}}
+	h := &HealthServer{deadLetterLister: &fakeDeadLetterLister{letters: input}}
 	req := httptest.NewRequest(http.MethodGet, "/deadletters", nil)
 	w := httptest.NewRecorder()
 	h.deadLettersHandler(w, req)
@@ -156,7 +157,7 @@ func TestDiagnosticsDisabled(t *testing.T) {
 }
 
 func TestDiagnosticsEnabled(t *testing.T) {
-	h := &HealthServer{diagnostics: true}
+	h := &HealthServer{diagnostics: true, clock: clock.RealClock{}}
 	assert.NoError(t, h.ConfigureDependencies(Dependencies{
 		Incident: &fakeIncidentLister{snap: []model.IncidentView{}},
 		Delivery: &fakeAlertSender{},

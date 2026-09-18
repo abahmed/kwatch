@@ -75,35 +75,65 @@ func (c *Controller) InformerStatus() InformerStatus {
 // monitor that is turned off is not degraded.
 func (c *Controller) unavailableSources() []string {
 	var unavailable []string
-	add := func(pipeline *resourcePipeline, name string, missing bool) {
-		if pipeline != nil && pipeline.startWorkers && missing {
-			unavailable = append(unavailable, name)
+	for _, requirement := range c.sourceRequirements() {
+		if requirement.pipeline != nil &&
+			requirement.pipeline.startWorkers &&
+			requirement.available != nil && !requirement.available() {
+			unavailable = append(unavailable, requirement.name)
 		}
 	}
-	add(c.pod, "pod", c.podLister == nil)
-	add(c.pod, "event", c.eventLister == nil)
-	add(c.node, "node", c.nodeLister == nil)
-	add(c.service, "service", c.serviceLister == nil)
-	add(c.endpointSlice, "endpoint-slice", c.endpointSliceLister == nil)
-	add(c.ingress, "ingress", c.ingressLister == nil)
-	add(c.netpol, "network-policy", c.netpolLister == nil)
-	add(c.mwc, "mutating-webhook", c.mwcLister == nil)
-	add(c.vwc, "validating-webhook", c.vwcLister == nil)
-	add(c.resourceQuota, "resource-quota", c.resourceQuotaLister == nil)
-	add(c.limitRange, "limit-range", c.limitRangeLister == nil)
-	add(c.namespace, "namespace", c.namespaceLister == nil)
-	add(c.lease, "lease", c.leaseLister == nil)
-	add(c.deployment, "deployment", c.deployLister == nil)
-	add(c.replicaSet, "replicaset", c.rsLister == nil)
-	add(c.daemonSet, "daemonset", c.dsLister == nil)
-	add(c.statefulSet, "statefulset", c.ssLister == nil)
-	add(c.job, "job", c.jobLister == nil)
-	add(c.cronJob, "cronjob", c.cronJobLister == nil)
-	add(c.hpa, "hpa", c.hpaLister == nil)
-	add(c.pdb, "pdb", c.pdbLister == nil)
-	add(c.cpPod, "control-plane-pod", c.cpPodLister == nil)
-	add(c.pod, "secret", c.secretLister == nil)
 	return unavailable
+}
+
+func (c *Controller) sourceRequirements() []sourceRequirement {
+	return []sourceRequirement{
+		{name: "pod", pipeline: c.pod,
+			available: func() bool { return c.podLister != nil }},
+		{name: "event", pipeline: c.pod,
+			available: func() bool { return c.eventLister != nil }},
+		{name: "secret", pipeline: c.pod,
+			available: func() bool { return c.secretLister != nil }},
+		{name: "node", pipeline: c.node,
+			available: func() bool { return c.nodeLister != nil }},
+		{name: "service", pipeline: c.service,
+			available: func() bool { return c.serviceLister != nil }},
+		{name: "endpoint-slice", pipeline: c.endpointSlice,
+			available: func() bool { return c.endpointSliceLister != nil }},
+		{name: "ingress", pipeline: c.ingress,
+			available: func() bool { return c.ingressLister != nil }},
+		{name: "network-policy", pipeline: c.netpol,
+			available: func() bool { return c.netpolLister != nil }},
+		{name: "mutating-webhook", pipeline: c.mwc,
+			available: func() bool { return c.mwcLister != nil }},
+		{name: "validating-webhook", pipeline: c.vwc,
+			available: func() bool { return c.vwcLister != nil }},
+		{name: "resource-quota", pipeline: c.resourceQuota,
+			available: func() bool { return c.resourceQuotaLister != nil }},
+		{name: "limit-range", pipeline: c.limitRange,
+			available: func() bool { return c.limitRangeLister != nil }},
+		{name: "namespace", pipeline: c.namespace,
+			available: func() bool { return c.namespaceLister != nil }},
+		{name: "lease", pipeline: c.lease,
+			available: func() bool { return c.leaseLister != nil }},
+		{name: "deployment", pipeline: c.deployment,
+			available: func() bool { return c.deployLister != nil }},
+		{name: "replicaset", pipeline: c.replicaSet,
+			available: func() bool { return c.rsLister != nil }},
+		{name: "daemonset", pipeline: c.daemonSet,
+			available: func() bool { return c.dsLister != nil }},
+		{name: "statefulset", pipeline: c.statefulSet,
+			available: func() bool { return c.ssLister != nil }},
+		{name: "job", pipeline: c.job,
+			available: func() bool { return c.jobLister != nil }},
+		{name: "cronjob", pipeline: c.cronJob,
+			available: func() bool { return c.cronJobLister != nil }},
+		{name: "hpa", pipeline: c.hpa,
+			available: func() bool { return c.hpaLister != nil }},
+		{name: "pdb", pipeline: c.pdb,
+			available: func() bool { return c.pdbLister != nil }},
+		{name: "control-plane-pod", pipeline: c.cpPod,
+			available: func() bool { return c.cpPodLister != nil }},
+	}
 }
 
 // StatusJSON implements the health status boundary.

@@ -2,72 +2,8 @@ package delivery
 
 import (
 	"context"
-	"strings"
 	"time"
-
-	"k8s.io/klog/v2"
 )
-
-// AddProvider appends a provider entry for testing or late registration.
-
-func (a *Manager) AddProvider(p Provider) {
-	if isNilProvider(p) {
-		klog.InfoS("nil alert provider was not added")
-		return
-	}
-	a.mu.Lock()
-	defer a.mu.Unlock()
-	if a.stopped {
-		klog.InfoS("delivery manager is stopping; provider was not added",
-			"provider", p.Name())
-		return
-	}
-	entry := providerEntry{
-		provider: p,
-		retry: retryConfig{
-			maxAttempts: 1,
-			delay:       time.Second,
-			maxBackoff:  defaultMaxBackoff,
-		},
-		ch: make(chan deliverJob, channelCap),
-	}
-	if a.generation == nil {
-		a.generation = a.currentGenerationLocked()
-	}
-	if a.generation == nil {
-		a.generation = newProviderGeneration(nil)
-	}
-	entries := make(map[string]providerEntry,
-		len(a.generation.entries)+1)
-	for name, existing := range a.generation.entries {
-		entries[name] = existing
-	}
-	name := strings.ToLower(p.Name())
-	if _, exists := entries[name]; exists {
-		klog.InfoS("alert provider is already registered",
-			"provider", p.Name())
-		return
-	}
-	entries[name] = entry
-	order := append([]string(nil), a.generation.order...)
-	order = append(order, name)
-	a.generation = &providerGeneration{entries: entries, order: order}
-	if a.started {
-		if a.workerCount == 0 {
-			a.workerDone = make(chan struct{})
-			a.done = a.workerDone
-		}
-		ctx := a.workerCtx
-		if ctx == nil {
-			ctx = context.Background()
-		}
-		a.workerCount++
-		// Pass a value to the worker. The channel remains shared with the
-		// entry stored by the manager, while the worker cannot point into a
-		// slice that may be reallocated by a later registration.
-		go a.runProvider(entry, ctx)
-	}
-}
 
 // Start launches a worker goroutine for each provider that processes
 // queued deliveries. Workers drain and stop when ctx is cancelled.
@@ -106,19 +42,33 @@ func (a *Manager) Start(ctx context.Context) error {
 		go a.runProvider(entry, a.workerCtx)
 	}
 	a.mu.Unlock()
+	a.touchProgress()
 	return nil
+}
+
+// HasProviders reports whether delivery has active provider workers. An empty
+// provider set is valid and waits for shutdown rather than failing startup.
+func (a *Manager) HasProviders() bool {
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	return a.generation != nil && len(a.generation.order) > 0
 }
 
 func (a *Manager) runProvider(entry providerEntry, ctx context.Context) {
 	defer a.workerFinished()
+	ticker := time.NewTicker(10 * time.Second)
+	defer ticker.Stop()
 	for {
 		select {
 		case <-ctx.Done():
 			return
+		case <-ticker.C:
+			a.touchProgress()
 		case job, ok := <-entry.ch:
 			if !ok {
 				return
 			}
+			a.touchProgress()
 			// Routing is decided before pacing. A job this provider does not
 			// want is not a delivery, and making it wait its turn spent the
 			// provider's send slot on nothing: with a route that matches one
@@ -131,6 +81,7 @@ func (a *Manager) runProvider(entry providerEntry, ctx context.Context) {
 			if a.waitForSendSlot(ctx, entry.provider.Name()) {
 				a.deliverOne(ctx, &entry, job)
 				a.flushDigest(ctx, &entry)
+				a.touchProgress()
 			}
 		}
 	}
