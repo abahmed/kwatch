@@ -107,7 +107,7 @@ func TestDeadLettersHandlerAuthFails(t *testing.T) {
 	h := &HealthServer{diagnosticsToken: "secret"}
 	req := httptest.NewRequest(http.MethodGet, "/deadletters", nil)
 	w := httptest.NewRecorder()
-	h.deadLettersHandler(w, req)
+	h.guard(h.deadLettersHandler)(w, req)
 	resp := w.Result()
 	assert.Equal(t, http.StatusUnauthorized, resp.StatusCode)
 }

@@ -16,7 +16,7 @@ import (
 
 type Monitor struct {
 	client          dynamic.Interface
-	discoveryClient discovery.DiscoveryInterface
+	discoveryClient discovery.DiscoveryInterfaceWithContext
 	graph           *kwcontext.ResourceGraph
 	resync          time.Duration
 	allowed         func(string) bool
@@ -32,7 +32,7 @@ type Monitor struct {
 // NewWithClients constructs the Gateway graph monitor with shared clients.
 func NewWithClients(
 	client dynamic.Interface,
-	discoveryClient discovery.DiscoveryInterface,
+	discoveryClient discovery.DiscoveryInterfaceWithContext,
 	graph *kwcontext.ResourceGraph,
 	resync time.Duration,
 ) *Monitor {

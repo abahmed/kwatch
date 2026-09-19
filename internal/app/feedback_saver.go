@@ -40,6 +40,7 @@ func startFeedbackSaver(
 	done chan<- struct{},
 	report func(error),
 	canWrite func() bool,
+	progress func(),
 ) {
 	defer close(done)
 	var pending []insight.RCARecord
@@ -72,8 +73,14 @@ func startFeedbackSaver(
 	for {
 		select {
 		case snapshot := <-ch:
+			if progress != nil {
+				progress()
+			}
 			pending = snapshot
 		case <-ticker.C:
+			if progress != nil {
+				progress()
+			}
 			save(5 * time.Second)
 		case <-ctx.Done():
 			for {

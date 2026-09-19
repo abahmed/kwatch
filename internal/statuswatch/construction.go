@@ -18,7 +18,7 @@ import (
 // NewWithClientsAndClock constructs status watching with an explicit clock.
 func NewWithClientsAndClock(
 	client dynamic.Interface,
-	discoveryClient discovery.DiscoveryInterface,
+	discoveryClient discovery.DiscoveryInterfaceWithContext,
 	incidentSink monitor.ObservationSink,
 	resync time.Duration,
 	timeSource clock.Clock,

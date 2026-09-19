@@ -33,7 +33,7 @@ type ResourceSpec struct {
 // dynamic APIs. A watcher can be inspected without exposing its factories.
 type Watcher struct {
 	client     dynamic.Interface
-	discovery  discovery.DiscoveryInterface
+	discovery  discovery.DiscoveryInterfaceWithContext
 	resync     time.Duration
 	namespaces func(bool) []string
 	transform  cache.TransformFunc
@@ -70,7 +70,7 @@ func (g Generation) Valid() bool {
 // must return the namespace list for the supplied namespaced flag.
 func NewWatcher(
 	client dynamic.Interface,
-	discoveryClient discovery.DiscoveryInterface,
+	discoveryClient discovery.DiscoveryInterfaceWithContext,
 	resync time.Duration,
 	namespaces func(bool) []string,
 	transform cache.TransformFunc,

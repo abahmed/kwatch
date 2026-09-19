@@ -20,7 +20,7 @@ import (
 // status fields are deliberately ignored to prevent operator noise.
 type Monitor struct {
 	client            dynamic.Interface
-	discoveryClient   discovery.DiscoveryInterface
+	discoveryClient   discovery.DiscoveryInterfaceWithContext
 	incidentSink      monitor.ObservationSink
 	resync            time.Duration
 	ctx               context.Context

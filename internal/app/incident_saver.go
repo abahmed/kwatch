@@ -55,14 +55,20 @@ func startIncidentSaver(
 	ch <-chan stateSnapshot,
 	report func(error),
 	canWrite func() bool,
+	progress func(),
 ) error {
 	var pending stateSnapshot
 	var havePending bool
 	// Avoid repeated writes when lifecycle ticks serialize identical state.
 	var lastSaved uint64
+	stopHeartbeat := startProgressHeartbeat(ctx, progress)
+	defer stopHeartbeat()
 	for {
 		select {
 		case snap := <-ch:
+			if progress != nil {
+				progress()
+			}
 			pending, havePending = snap, true
 			var err error
 			lastSaved, err = saveIncidentSnapshot(

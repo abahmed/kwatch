@@ -25,7 +25,7 @@ func configureStatusMonitor(
 	healthServer *health.HealthServer,
 	now func() time.Time,
 	dynamicClient dynamic.Interface,
-	discoveryClient discovery.DiscoveryInterface,
+	discoveryClient discovery.DiscoveryInterfaceWithContext,
 ) func(context.Context) error {
 	if !runtime.Monitors().ClusterResource().Enabled {
 		return nil

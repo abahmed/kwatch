@@ -227,7 +227,10 @@ func TestTestAlertHandlerNoAM(t *testing.T) {
 func TestTestAlertHandlerMethodNotAllowed(t *testing.T) {
 	assert := assert.New(t)
 	am := &fakeAlertSender{}
-	h := &HealthServer{deliveryManager: am, clock: clock.RealClock{}}
+	h := &HealthServer{
+		deliveryManager: am,
+		clock:           clock.RealClock{},
+	}
 
 	req := httptest.NewRequest(http.MethodGet, "/test-alert", nil)
 	w := httptest.NewRecorder()
@@ -239,7 +242,10 @@ func TestTestAlertHandlerMethodNotAllowed(t *testing.T) {
 
 func TestTestAlertHandler(t *testing.T) {
 	am := &fakeAlertSender{}
-	h := &HealthServer{deliveryManager: am, clock: clock.RealClock{}}
+	h := &HealthServer{
+		deliveryManager: am,
+		clock:           clock.RealClock{},
+	}
 
 	req := httptest.NewRequest(http.MethodPost, "/test-alert", bytes.NewReader([]byte{}))
 	w := httptest.NewRecorder()
@@ -282,7 +288,12 @@ func TestRequireDiagnosticsAuthEmptyToken(t *testing.T) {
 	h := &HealthServer{diagnosticsToken: ""}
 	req := httptest.NewRequest(http.MethodGet, "/debug/pprof/", nil)
 	w := httptest.NewRecorder()
-	assert.True(t, h.requireDiagnosticsAuth(w, req), "empty token must allow all requests")
+	assert.False(
+		t,
+		h.requireDiagnosticsAuth(w, req),
+		"empty token must reject diagnostics",
+	)
+	assert.Equal(t, http.StatusUnauthorized, w.Code)
 }
 
 func TestRequireDiagnosticsAuthValidToken(t *testing.T) {
@@ -290,7 +301,11 @@ func TestRequireDiagnosticsAuthValidToken(t *testing.T) {
 	req := httptest.NewRequest(http.MethodGet, "/debug/pprof/", nil)
 	req.Header.Set("Authorization", "Bearer secret123")
 	w := httptest.NewRecorder()
-	assert.True(t, h.requireDiagnosticsAuth(w, req), "valid Bearer token must authenticate")
+	assert.True(
+		t,
+		h.requireDiagnosticsAuth(w, req),
+		"valid Bearer token must authenticate",
+	)
 }
 
 func TestRequireDiagnosticsAuthInvalidToken(t *testing.T) {
@@ -312,13 +327,17 @@ func TestRequireDiagnosticsAuthMissingHeader(t *testing.T) {
 	h := &HealthServer{diagnosticsToken: "secret123"}
 	req := httptest.NewRequest(http.MethodGet, "/debug/pprof/", nil)
 	w := httptest.NewRecorder()
-	assert.False(t, h.requireDiagnosticsAuth(w, req), "missing Authorization must reject")
+	assert.False(
+		t,
+		h.requireDiagnosticsAuth(w, req),
+		"missing Authorization must reject",
+	)
 
 	resp := w.Result()
 	assert.Equal(t, http.StatusUnauthorized, resp.StatusCode)
 }
 
-func TestGuardWithoutTokenCallsHandler(t *testing.T) {
+func TestGuardWithoutTokenRejectsRequest(t *testing.T) {
 	h := &HealthServer{diagnosticsToken: ""}
 	called := false
 	handler := h.guard(func(w http.ResponseWriter, r *http.Request) {
@@ -327,7 +346,8 @@ func TestGuardWithoutTokenCallsHandler(t *testing.T) {
 	req := httptest.NewRequest(http.MethodGet, "/debug/pprof/", nil)
 	w := httptest.NewRecorder()
 	handler(w, req)
-	assert.True(t, called, "handler must be called when no token is set")
+	assert.False(t, called, "handler must not be called without a token")
+	assert.Equal(t, http.StatusUnauthorized, w.Code)
 }
 
 func TestGuardWithValidTokenCallsHandler(t *testing.T) {
@@ -364,12 +384,7 @@ func TestPprofEndpointsRegisteredWithGuard(t *testing.T) {
 	}); err != nil {
 		t.Fatal(err)
 	}
-	mux := http.NewServeMux()
-	mux.HandleFunc("/healthz", h.healthzHandler)
-	mux.HandleFunc("/incidents", h.incidentsHandler)
-	if h.pprof {
-		mux.HandleFunc("/debug/pprof/", h.guard(http.NotFound))
-	}
+	mux := newServeMux(h)
 	ts := httptest.NewServer(mux)
 	defer ts.Close()
 
@@ -385,6 +400,13 @@ func TestPprofEndpointsRegisteredWithGuard(t *testing.T) {
 	resp, err = http.DefaultClient.Do(req)
 	assert.Nil(t, err)
 	assert.Equal(t, http.StatusOK, resp.StatusCode)
+	resp.Body.Close()
+
+	// Protected diagnostic endpoints require the configured token.
+	req, _ = http.NewRequest(http.MethodGet, ts.URL+"/incidents", nil)
+	resp, err = http.DefaultClient.Do(req)
+	assert.Nil(t, err)
+	assert.Equal(t, http.StatusUnauthorized, resp.StatusCode)
 	resp.Body.Close()
 }
 

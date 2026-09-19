@@ -26,18 +26,17 @@ func Namespaces(
 // Permanent discovery failures are skipped; transient failures are allowed to
 // reach the informer so its normal retry behavior can recover.
 func ResourceAvailable(
-	client discovery.DiscoveryInterface,
+	client discovery.DiscoveryInterfaceWithContext,
 	gvr schema.GroupVersionResource,
 ) bool {
 	return ResourceAvailableContext(context.Background(), client, gvr)
 }
 
-// ResourceAvailableContext uses client-go's context-aware discovery path when
-// the application client provides it. Legacy discovery implementations are
-// kept for tests and compatibility; they cannot be canceled by this package.
+// ResourceAvailableContext requires client-go's context-aware discovery path so
+// discovery cannot outlive a watcher generation.
 func ResourceAvailableContext(
 	ctx context.Context,
-	client discovery.DiscoveryInterface,
+	client discovery.DiscoveryInterfaceWithContext,
 	gvr schema.GroupVersionResource,
 ) bool {
 	if client == nil {
@@ -46,14 +45,8 @@ func ResourceAvailableContext(
 	if ctx == nil {
 		ctx = context.Background()
 	}
-	if contextual, ok := client.(discovery.DiscoveryInterfaceWithContext); ok {
-		resources, err := contextual.ServerResourcesForGroupVersionWithContext(
-			ctx, gvr.GroupVersion().String(),
-		)
-		return resourceIsAvailable(resources, err, gvr)
-	}
-	resources, err := client.ServerResourcesForGroupVersion(
-		gvr.GroupVersion().String(),
+	resources, err := client.ServerResourcesForGroupVersionWithContext(
+		ctx, gvr.GroupVersion().String(),
 	)
 	return resourceIsAvailable(resources, err, gvr)
 }

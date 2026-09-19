@@ -30,7 +30,7 @@ type HostResolver interface {
 type ClientSet struct {
 	Kubernetes kubernetes.Interface
 	Dynamic    dynamic.Interface
-	Discovery  discovery.DiscoveryInterface
+	Discovery  discovery.DiscoveryInterfaceWithContext
 	REST       rest.Interface
 	HTTP       *http.Client
 	Resolver   HostResolver

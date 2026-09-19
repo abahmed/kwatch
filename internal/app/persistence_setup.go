@@ -87,9 +87,11 @@ func configurePersistence(
 		supervisor *componentSupervisor,
 		canWrite func() bool,
 	) {
+		changeProgress := newComponentProgress(now())
 		supervisor.startOwned(ctx, componentSpec{
 			name:     "change-history-saver",
 			required: true,
+			progress: changeProgress,
 			onHealthy: func() {
 				if healthServer != nil {
 					healthServer.SetComponentStatus(
@@ -105,12 +107,15 @@ func configurePersistence(
 						healthServer, "change-history-saver", true,
 					),
 					canWrite,
+					func() { changeProgress.Touch(now()) },
 				)
 			},
 		})
+		baselineProgress := newComponentProgress(now())
 		supervisor.startOwned(ctx, componentSpec{
 			name:     "baseline-saver",
 			required: true,
+			progress: baselineProgress,
 			onHealthy: func() {
 				if healthServer != nil {
 					healthServer.SetComponentStatus(
@@ -124,12 +129,15 @@ func configurePersistence(
 					ctx, persistenceManager, baselineCh, 0,
 					persistenceStatus(healthServer, "baseline-saver", true),
 					canWrite,
+					func() { baselineProgress.Touch(now()) },
 				)
 			},
 		})
+		incidentProgress := newComponentProgress(now())
 		supervisor.startOwned(ctx, componentSpec{
 			name:     "incident-saver",
 			required: true,
+			progress: incidentProgress,
 			onHealthy: func() {
 				if healthServer != nil {
 					healthServer.SetComponentStatus(
@@ -143,11 +151,14 @@ func configurePersistence(
 					ctx, persistenceManager, incidentCh,
 					persistenceStatus(healthServer, "incident-saver", true),
 					canWrite,
+					func() { incidentProgress.Touch(now()) },
 				)
 			},
 		})
+		feedbackProgress := newComponentProgress(now())
 		supervisor.startOwned(ctx, componentSpec{
-			name: "feedback-saver",
+			name:     "feedback-saver",
+			progress: feedbackProgress,
 			onHealthy: func() {
 				if healthServer != nil {
 					healthServer.SetComponentStatus(
@@ -160,6 +171,7 @@ func configurePersistence(
 					ctx, persistenceManager, feedbackCh, feedbackDone,
 					persistenceStatus(healthServer, "feedback-saver", false),
 					canWrite,
+					func() { feedbackProgress.Touch(now()) },
 				)
 				return nil
 			},
@@ -345,14 +357,20 @@ func startChangeHistorySaver(
 	tracker *kwcontext.ChangeTracker,
 	report func(error),
 	canWrite func() bool,
+	progress func(),
 ) error {
 	ticker := time.NewTicker(time.Minute)
 	defer ticker.Stop()
+	stopHeartbeat := startProgressHeartbeat(ctx, progress)
+	defer stopHeartbeat()
 	for {
 		select {
 		case <-ctx.Done():
 			return nil
 		case <-ticker.C:
+			if progress != nil {
+				progress()
+			}
 			if !writesAllowed(canWrite) {
 				return nil
 			}

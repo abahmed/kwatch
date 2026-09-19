@@ -28,6 +28,66 @@ case "$replicas" in
 	(*[!0-9]*|''|0) echo "KWATCH_REPLICAS must be positive" >&2; exit 2;;
 esac
 
+wait_for_running_replicas() {
+	local expected="$1"
+	for attempt in $(seq 1 90); do
+		local count
+		count=$(kubectl get pods --namespace "$namespace" \
+			-l "app.kubernetes.io/instance=$release" \
+			--field-selector=status.phase=Running --no-headers |
+			wc -l | tr -d ' ')
+		if [[ "$count" == "$expected" ]]; then
+			return 0
+		fi
+		sleep 2
+	done
+	echo "expected $expected running Pods" >&2
+	kubectl get pods --namespace "$namespace" \
+		-l "app.kubernetes.io/instance=$release" >&2 || true
+	return 1
+}
+
+wait_for_deployment_rollout() {
+	local expected="$1"
+	for attempt in $(seq 1 90); do
+		local desired updated current
+		desired=$(kubectl get deployment "$release" \
+			--namespace "$namespace" -o jsonpath='{.spec.replicas}')
+		updated=$(kubectl get deployment "$release" \
+			--namespace "$namespace" -o jsonpath='{.status.updatedReplicas}')
+		current=$(kubectl get deployment "$release" \
+			--namespace "$namespace" -o jsonpath='{.status.replicas}')
+		if [[ "$desired" == "$expected" && "$updated" == "$expected" &&
+			"$current" == "$expected" ]] &&
+			wait_for_running_replicas "$expected"; then
+			return 0
+		fi
+		sleep 2
+	done
+	echo "Deployment rollout did not complete" >&2
+	kubectl get deployment "$release" --namespace "$namespace" -o yaml >&2 || true
+	return 1
+}
+
+assert_one_ready_pod() {
+	local ready_count ready_pod
+	ready_pod=$(kubectl get pods --namespace "$namespace" \
+		-l "app.kubernetes.io/instance=$release" \
+		-o jsonpath='{range .items[*]}{.metadata.name}{"\t"}'\
+'{range .status.conditions[?(@.type=="Ready")]}{.status}{end}{"\n"}{end}' |
+		awk '$2 == "True" {print $1}')
+	ready_count=$(printf '%s\n' "$ready_pod" |
+		awk 'NF {count++} END {print count+0}')
+	if [[ "$ready_count" != 1 ]]; then
+		echo "expected exactly one ready active Pod, got $ready_count" >&2
+		return 1
+	fi
+	if [[ -n "${leader_pod:-}" && "$ready_pod" != "$leader_pod" ]]; then
+		echo "ready Pod $ready_pod is not Lease holder $leader_pod" >&2
+		return 1
+	fi
+}
+
 echo "Installing $release in $namespace"
 kubectl create namespace "$namespace" --dry-run=client -o yaml |
 	kubectl apply -f - >/dev/null
@@ -50,11 +110,7 @@ helm install "$release" deploy/chart \
 	--set config.crd.enabled=true \
 	--wait=false
 
-kubectl rollout status deployment/"$release" \
-	--namespace "$namespace" --timeout=180s
-kubectl wait pod --namespace "$namespace" \
-	--for=jsonpath='{.status.phase}'=Running \
-	-l "app.kubernetes.io/instance=$release" --timeout=180s
+wait_for_deployment_rollout "$replicas"
 
 leader_pod=""
 for attempt in $(seq 1 60); do
@@ -81,17 +137,6 @@ fi
 kubectl wait pod "$leader_pod" --namespace "$namespace" \
 	--for=condition=Ready --timeout=180s
 
-assert_one_ready_pod() {
-	local ready_count
-	ready_count=$(kubectl get pods --namespace "$namespace" \
-		-l "app.kubernetes.io/instance=$release" \
-		-o custom-columns='NAME:.metadata.name,READY:.status.containerStatuses[0].ready' \
-		--no-headers | awk '$2 == "true" {count++} END {print count+0}')
-	if [[ "$ready_count" != 1 ]]; then
-		echo "expected exactly one ready active Pod, got $ready_count" >&2
-		exit 1
-	fi
-}
 assert_one_ready_pod
 
 if [[ "$replicas" -gt 1 ]]; then
@@ -133,28 +178,6 @@ wait_for_leader() {
 		sleep 2
 	done
 	echo "leader did not change after the expected transition" >&2
-	exit 1
-}
-
-wait_for_running_replicas() {
-	local expected="$1"
-	kubectl wait pod --namespace "$namespace" \
-		--for=jsonpath='{.status.phase}'=Running \
-		-l "app.kubernetes.io/instance=$release" --timeout=180s
-	for attempt in $(seq 1 90); do
-		local count
-		count=$(kubectl get pods --namespace "$namespace" \
-			-l "app.kubernetes.io/instance=$release" \
-			--field-selector=status.phase=Running --no-headers | wc -l |
-			tr -d ' ')
-		if [[ "$count" == "$expected" ]]; then
-			return 0
-		fi
-		sleep 2
-	done
-	echo "expected $expected running Pods" >&2
-	kubectl get pods --namespace "$namespace" \
-		-l "app.kubernetes.io/instance=$release" >&2 || true
 	exit 1
 }
 
@@ -313,8 +336,7 @@ curl --fail --silent "http://127.0.0.1:$port/readyz" >/dev/null
 
 echo "Testing restart and upgrade retention"
 kubectl rollout restart deployment/"$release" --namespace "$namespace"
-kubectl rollout status deployment/"$release" \
-	--namespace "$namespace" --timeout=180s
+wait_for_deployment_rollout "$replicas"
 leader_pod=$(kubectl get lease "${release}-leader" \
 	--namespace "$namespace" -o jsonpath='{.spec.holderIdentity}')
 kubectl wait pod "$leader_pod" --namespace "$namespace" \
@@ -332,8 +354,7 @@ helm upgrade "$release" deploy/chart \
 	--set config.crd.enabled=true \
 	--set podAnnotations.operational-test=upgraded \
 	--wait=false
-kubectl rollout status deployment/"$release" \
-	--namespace "$namespace" --timeout=180s
+wait_for_deployment_rollout "$replicas"
 leader_pod=$(kubectl get lease "${release}-leader" \
 	--namespace "$namespace" -o jsonpath='{.spec.holderIdentity}')
 kubectl wait pod "$leader_pod" --namespace "$namespace" \
@@ -344,8 +365,7 @@ kubectl get configmap kwatch-state --namespace "$namespace" >/dev/null
 
 echo "Testing rollback retention"
 helm rollback "$release" 1 --namespace "$namespace" --wait=false
-kubectl rollout status deployment/"$release" \
-	--namespace "$namespace" --timeout=180s
+wait_for_deployment_rollout "$replicas"
 leader_pod=$(kubectl get lease "${release}-leader" \
 	--namespace "$namespace" -o jsonpath='{.spec.holderIdentity}')
 kubectl wait pod "$leader_pod" --namespace "$namespace" \
@@ -364,8 +384,7 @@ if [[ "${KWATCH_NODE_RECOVERY:-true}" == true ]]; then
 	docker stop "$node" >/dev/null
 	docker start "$node" >/dev/null
 	kubectl wait node --all --for=condition=Ready --timeout=180s
-	kubectl rollout status deployment/"$release" \
-		--namespace "$namespace" --timeout=180s
+	wait_for_deployment_rollout "$replicas"
 	wait_http /healthz
 fi
 

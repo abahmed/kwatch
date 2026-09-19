@@ -20,11 +20,17 @@ func (h *HealthServer) requireDiagnosticsAuth(
 	w http.ResponseWriter,
 	r *http.Request,
 ) bool {
-	// An empty token is permitted for unit-test servers and for the public
-	// liveness/readiness endpoints. Production configuration rejects enabling
-	// protected diagnostics without a token before this handler is reachable.
+	// Protected diagnostics never allow anonymous access. Liveness, readiness,
+	// health, and metrics are registered separately and do not use this guard.
 	if h.diagnosticsToken == "" {
-		return true
+		w.Header().Set("Content-Type", "text/plain")
+		w.WriteHeader(http.StatusUnauthorized)
+		if _, err := w.Write([]byte(
+			"diagnostics authentication is not configured",
+		)); err != nil {
+			klog.ErrorS(err, "health: write diagnostics configuration response")
+		}
+		return false
 	}
 	token := r.Header.Get("Authorization")
 	if subtle.ConstantTimeCompare(

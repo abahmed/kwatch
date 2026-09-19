@@ -17,7 +17,7 @@ func startBaselineSaver(
 	interval time.Duration,
 ) {
 	_ = startBaselineSaverWithStatus(
-		ctx, persistenceManager, ch, interval, nil, nil,
+		ctx, persistenceManager, ch, interval, nil, nil, nil,
 	)
 }
 
@@ -30,6 +30,7 @@ func startBaselineSaverWithStatus(
 	interval time.Duration,
 	report func(error),
 	canWrite func() bool,
+	progress func(),
 ) error {
 	if interval <= 0 {
 		interval = 10 * time.Second
@@ -37,6 +38,8 @@ func startBaselineSaverWithStatus(
 	var pending map[string]map[string]int64
 	var timer *time.Timer
 	var timerC <-chan time.Time
+	stopHeartbeat := startProgressHeartbeat(ctx, progress)
+	defer stopHeartbeat()
 	for {
 		select {
 		case b := <-ch:
@@ -44,19 +47,12 @@ func startBaselineSaverWithStatus(
 				continue
 			}
 			pending = b
-			if timer == nil {
-				timer = time.NewTimer(interval)
-			} else {
-				if !timer.Stop() {
-					select {
-					case <-timer.C:
-					default:
-					}
-				}
-				timer.Reset(interval)
-			}
+			timer = resetBaselineTimer(timer, interval)
 			timerC = timer.C
 		case <-timerC:
+			if progress != nil {
+				progress()
+			}
 			if !writesAllowed(canWrite) {
 				return nil
 			}
@@ -93,6 +89,20 @@ func startBaselineSaverWithStatus(
 			return nil
 		}
 	}
+}
+
+func resetBaselineTimer(timer *time.Timer, interval time.Duration) *time.Timer {
+	if timer == nil {
+		return time.NewTimer(interval)
+	}
+	if !timer.Stop() {
+		select {
+		case <-timer.C:
+		default:
+		}
+	}
+	timer.Reset(interval)
+	return timer
 }
 
 func saveBaseline(

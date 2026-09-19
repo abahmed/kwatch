@@ -65,20 +65,27 @@ jobs:
         run: |
           docker run --rm \
             -v /var/run/docker.sock:/var/run/docker.sock \
-            aquasec/trivy:0.69.0 image \
+            aquasec/trivy@sha256:33f816d414b9d582d25bb737ffa4a632ae34e222f7ec1b50252cef0ce2266006 image \
             --severity HIGH,CRITICAL --exit-code 1 kwatch:security
 
-      - name: Generate CycloneDX SBOM
+      - name: Generate source CycloneDX SBOM
         run: |
           mkdir -p _output/security
           docker run --rm \
             -v "$PWD:/src:ro" \
-            anchore/syft:v1.20.0 dir:/src \
-            -o cyclonedx-json > _output/security/sbom.cdx.json
+            anchore/syft@sha256:b46e597614ddc78621e560af3fabf9346e35462ea1c886a38b30bcc7ca601a73b \
+            dir:/src -o cyclonedx-json > _output/security/source-sbom.cdx.json
+
+      - name: Generate image CycloneDX SBOM
+        run: |
+          docker run --rm \
+            -v /var/run/docker.sock:/var/run/docker.sock \
+            anchore/syft@sha256:b46e597614ddc78621e560af3fabf9346e35462ea1c886a38b30bcc7ca601a73b \
+            kwatch:security -o cyclonedx-json > _output/security/image-sbom.cdx.json
 
       - name: Upload SBOM
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: kwatch-sbom-${{ github.sha }}
-          path: _output/security/sbom.cdx.json
+          path: _output/security/*.cdx.json
           if-no-files-found: error

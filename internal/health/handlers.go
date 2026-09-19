@@ -116,9 +116,6 @@ func (h *HealthServer) writeStatus(
 func (h *HealthServer) incidentsHandler(
 	w http.ResponseWriter, r *http.Request,
 ) {
-	if !h.requireDiagnosticsAuth(w, r) {
-		return
-	}
 	if r.Method != http.MethodGet {
 		w.WriteHeader(http.StatusMethodNotAllowed)
 		return
@@ -145,9 +142,6 @@ func (h *HealthServer) incidentsHandler(
 func (h *HealthServer) testAlertHandler(
 	w http.ResponseWriter, r *http.Request,
 ) {
-	if !h.requireDiagnosticsAuth(w, r) {
-		return
-	}
 	if r.Method != http.MethodPost {
 		w.Header().Set("Content-Type", "text/plain")
 		w.WriteHeader(http.StatusMethodNotAllowed)
@@ -200,9 +194,6 @@ func (h *HealthServer) allowTestAlert() bool {
 func (h *HealthServer) deadLettersHandler(
 	w http.ResponseWriter, r *http.Request,
 ) {
-	if !h.requireDiagnosticsAuth(w, r) {
-		return
-	}
 	if r.Method != http.MethodGet {
 		w.WriteHeader(http.StatusMethodNotAllowed)
 		return

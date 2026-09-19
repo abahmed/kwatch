@@ -26,7 +26,7 @@ func newNetworkGraphRun(
 	ctl *controller.Controller,
 	healthServer *health.HealthServer,
 	dynamicClient dynamic.Interface,
-	discoveryClient discovery.DiscoveryInterface,
+	discoveryClient discovery.DiscoveryInterfaceWithContext,
 ) func(context.Context) error {
 	if !runtime.Monitors().ClusterResource().Enabled ||
 		(!runtime.Monitors().Service().Enabled &&
@@ -90,7 +90,7 @@ func newStorageGraphRun(
 	ctl *controller.Controller,
 	healthServer *health.HealthServer,
 	dynamicClient dynamic.Interface,
-	discoveryClient discovery.DiscoveryInterface,
+	discoveryClient discovery.DiscoveryInterfaceWithContext,
 ) func(context.Context) error {
 	if !runtime.Monitors().ClusterResource().Enabled {
 		return nil

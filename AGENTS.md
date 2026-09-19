@@ -716,3 +716,36 @@ Run targeted race tests for concurrency changes. Run the full race suite,
 security scans, Kind tests, outage tests, and release verification at completed
 milestones or final handoff. Record unavailable tools instead of treating them
 as passed.
+
+## Final operational safeguards
+
+The production Kind harness distinguishes Pod readiness from container
+readiness: standbys are expected to be running but not ready, while exactly one
+Lease holder must be ready. Rollout checks therefore wait for all expected Pods
+to be running and assert the ready Pod matches the Lease holder.
+
+Managed installs rewrite the Lease name with the release identity so separate
+managed installations cannot share a Lease. Direct raw-manifest installs use
+the manifest's explicit installation identity and must change it when multiple
+installations share a namespace.
+
+Dynamic discovery dependencies must implement client-go's context-aware
+discovery interface. Do not add a fallback to an unbounded, contextless
+discovery call; discovery must stop with its watcher generation.
+
+Protected diagnostics, including informer, persistence, security, kubelet,
+control-plane, incident, dead-letter, test-alert, and pprof endpoints, require
+the configured bearer token. Liveness, readiness, health, and metrics remain
+separate public operational endpoints. Empty diagnostic credentials must never
+turn a protected handler into an anonymous endpoint.
+
+Required persistence savers report periodic progress even when their input is
+idle. New periodic components must either expose equivalent progress or be
+explicitly classified as idle-safe; otherwise the supervisor cannot distinguish
+healthy idleness from a stalled component.
+
+The security workflow pins scanner and SBOM container images by digest and
+publishes source and image CycloneDX SBOMs. OpenSSF Scorecard runs separately.
+When local Docker, Kind, kubectl, ShellCheck, or actionlint are unavailable,
+the corresponding CI checks remain mandatory and must be reported as pending,
+never as locally passed.

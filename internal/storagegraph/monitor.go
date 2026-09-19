@@ -17,7 +17,7 @@ import (
 
 type Monitor struct {
 	client          dynamic.Interface
-	discoveryClient discovery.DiscoveryInterface
+	discoveryClient discovery.DiscoveryInterfaceWithContext
 	graph           *kwcontext.ResourceGraph
 	resync          time.Duration
 	incidentSink    monitor.ObservationSink
@@ -34,7 +34,7 @@ type Monitor struct {
 // NewWithClients constructs the storage graph monitor with shared clients.
 func NewWithClients(
 	client dynamic.Interface,
-	discoveryClient discovery.DiscoveryInterface,
+	discoveryClient discovery.DiscoveryInterfaceWithContext,
 	graph *kwcontext.ResourceGraph,
 	resync time.Duration,
 ) *Monitor {
