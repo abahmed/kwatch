@@ -87,13 +87,24 @@ func TestRawDeploymentHasProductionShape(t *testing.T) {
 	if !ok {
 		t.Fatal("deployment container has unexpected shape")
 	}
-	for _, probe := range []string{"livenessProbe", "readinessProbe"} {
-		if _, ok := container[probe]; !ok {
-			t.Fatalf("container is missing %s", probe)
-		}
-	}
+	assertProbePath(t, container, "livenessProbe", "/healthz")
+	assertProbePath(t, container, "readinessProbe", "/availabilityz")
 	if !hasLeaseRole || !hasConfigMapRole {
 		t.Fatal("raw deployment is missing required persistence/election RBAC")
+	}
+}
+
+func assertProbePath(
+	t *testing.T,
+	container map[string]interface{},
+	probe, want string,
+) {
+	t.Helper()
+	path, found, err := unstructured.NestedString(
+		container, probe, "httpGet", "path",
+	)
+	if err != nil || !found || path != want {
+		t.Fatalf("%s path = %q, want %q", probe, path, want)
 	}
 }
 

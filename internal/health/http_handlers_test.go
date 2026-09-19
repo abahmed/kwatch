@@ -78,6 +78,24 @@ func TestReadyzHandlerReady(t *testing.T) {
 	assert.Equal(t, "OK", string(body[:n]))
 }
 
+func TestAvailabilityzFollowsElectionParticipation(t *testing.T) {
+	h := &HealthServer{}
+	req := httptest.NewRequest(http.MethodGet, "/availabilityz", nil)
+	w := httptest.NewRecorder()
+	h.availabilityzHandler(w, req)
+	assert.Equal(t, http.StatusServiceUnavailable, w.Result().StatusCode)
+
+	h.SetLeadership(LeadershipStatus{Role: "standby"})
+	w = httptest.NewRecorder()
+	h.availabilityzHandler(w, req)
+	assert.Equal(t, http.StatusOK, w.Result().StatusCode)
+
+	h.SetLeadership(LeadershipStatus{Role: "stopped"})
+	w = httptest.NewRecorder()
+	h.availabilityzHandler(w, req)
+	assert.Equal(t, http.StatusServiceUnavailable, w.Result().StatusCode)
+}
+
 func TestDeadLettersHandlerNoLister(t *testing.T) {
 	h := &HealthServer{}
 	req := httptest.NewRequest(http.MethodGet, "/deadletters", nil)

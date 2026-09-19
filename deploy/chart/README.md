@@ -87,6 +87,10 @@ Helm upgrades the `KwatchConfig` CRD automatically. The chart keeps the CRD
 when the release is removed so configuration resources are not deleted by
 surprise.
 
+The chart uses `/availabilityz` for the Kubernetes Deployment probe because a
+standby is intentionally not monitoring-ready. Use `/readyz` when checking
+whether the active leader can monitor the cluster.
+
 ## 🧹 Uninstall
 
 ```bash

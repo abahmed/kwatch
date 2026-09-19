@@ -256,3 +256,26 @@ func (h *HealthServer) readyzHandler(w http.ResponseWriter, _ *http.Request) {
 		klog.ErrorS(err, "health: write readyz response")
 	}
 }
+
+// availabilityzHandler reports whether this Pod is participating in the
+// application lifecycle. It differs from /readyz: standby Pods are
+// available for a rolling update but are not ready to run monitoring work.
+func (h *HealthServer) availabilityzHandler(
+	w http.ResponseWriter,
+	_ *http.Request,
+) {
+	status := h.LeadershipStatus()
+	if status == nil || (status.Role != "leader" && status.Role != "standby") {
+		w.Header().Set("Content-Type", "text/plain")
+		w.WriteHeader(http.StatusServiceUnavailable)
+		if _, err := w.Write([]byte("not available")); err != nil {
+			klog.ErrorS(err, "health: write unavailable response")
+		}
+		return
+	}
+	w.Header().Set("Content-Type", "text/plain")
+	w.WriteHeader(http.StatusOK)
+	if _, err := w.Write([]byte("OK")); err != nil {
+		klog.ErrorS(err, "health: write availability response")
+	}
+}

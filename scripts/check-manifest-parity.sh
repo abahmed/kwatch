@@ -12,7 +12,11 @@ grep -Fq 'replicas: 2' "$manifest" || {
 	exit 1
 }
 grep -Fq 'maxUnavailable: 0%' "$manifest" || {
-	echo "manifest parity: rolling updates must preserve a standby" >&2
+	echo "manifest parity: rolling update availability policy is missing" >&2
+	exit 1
+}
+grep -Fq 'path: /availabilityz' "$manifest" || {
+	echo "manifest parity: deployment availability probe is missing" >&2
 	exit 1
 }
 grep -Fq 'terminationGracePeriodSeconds: 60' "$manifest" || {

@@ -146,6 +146,8 @@ tests.
   API absence remains degraded and does not fail readiness. An unrecoverable
   required startup or cache failure causes the active process to stop so
   Kubernetes can restart or replace it.
+- `GET /availabilityz` — ✅ Deployment availability. A leader or standby
+  participating in Lease election can pass the rolling-update probe.
 - `GET /health` — JSON containing overall status, leadership, component states,
   and bounded degradation reasons.
 - `GET /metrics` — 📊 Prometheus-format metrics (incidents, notifications, baseline, dependency-graph size/rebuild latency, queues, and informer activity). It does not require Prometheus to be installed.

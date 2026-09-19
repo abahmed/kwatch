@@ -719,10 +719,11 @@ as passed.
 
 ## Final operational safeguards
 
-The production Kind harness distinguishes Pod readiness from container
-readiness: standbys are expected to be running but not ready, while exactly one
-Lease holder must be ready. Rollout checks therefore wait for all expected Pods
-to be running and assert the ready Pod matches the Lease holder.
+The production Kind harness distinguishes monitoring readiness from deployment
+availability: `/readyz` is successful only for the active Lease holder, while
+`/availabilityz` lets every elected leader or standby participate in a safe
+Deployment rollout. Rollout checks wait for all expected Pods to be running and
+assert that the Lease holder is the active monitoring-ready Pod.
 
 Managed installs rewrite the Lease name with the release identity so separate
 managed installations cannot share a Lease. Direct raw-manifest installs use

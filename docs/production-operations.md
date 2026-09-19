@@ -40,6 +40,9 @@ existing installations do not lose connectivity during an upgrade.
 
 - `/healthz` reports process liveness.
 - `/readyz` reports whether required monitoring infrastructure is ready.
+- `/availabilityz` reports whether the Pod is participating in election and can
+  be safely retained during a Deployment rollout. It is the Kubernetes
+  Deployment probe, not monitoring readiness.
 - `/health` reports optional monitor degradation and safe reason codes.
 
 An absent optional Kubernetes API is reported as degraded and does not create a

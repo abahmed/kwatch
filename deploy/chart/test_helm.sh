@@ -23,10 +23,13 @@ grep -Fq "type: RollingUpdate" <<<"$OUT1" || {
 	echo "FAIL: default strategy not RollingUpdate"; exit 1;
 }
 grep -Fq "maxUnavailable: 0%" <<<"$OUT1" || {
-	echo "FAIL: standby rollout availability policy is missing"; exit 1;
+	echo "FAIL: rolling update availability policy is missing"; exit 1;
 }
 grep -Fq "maxSurge: 1" <<<"$OUT1" || {
 	echo "FAIL: rollout surge policy is missing"; exit 1;
+}
+grep -Fq "path: /availabilityz" <<<"$OUT1" || {
+  echo "FAIL: deployment availability probe is missing"; exit 1;
 }
 grep -Fq "terminationGracePeriodSeconds: 60" <<<"$OUT1" || {
   echo "FAIL: termination grace period is not configured"; exit 1;

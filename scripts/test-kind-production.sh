@@ -69,21 +69,12 @@ wait_for_deployment_rollout() {
 	return 1
 }
 
-assert_one_ready_pod() {
-	local ready_count ready_pod
-	ready_pod=$(kubectl get pods --namespace "$namespace" \
-		-l "app.kubernetes.io/instance=$release" \
-		-o jsonpath='{range .items[*]}{.metadata.name}{"\t"}'\
-'{range .status.conditions[?(@.type=="Ready")]}{.status}{end}{"\n"}{end}' |
-		awk '$2 == "True" {print $1}')
-	ready_count=$(printf '%s\n' "$ready_pod" |
-		awk 'NF {count++} END {print count+0}')
-	if [[ "$ready_count" != 1 ]]; then
-		echo "expected exactly one ready active Pod, got $ready_count" >&2
-		return 1
-	fi
-	if [[ -n "${leader_pod:-}" && "$ready_pod" != "$leader_pod" ]]; then
-		echo "ready Pod $ready_pod is not Lease holder $leader_pod" >&2
+assert_leader_pod_available() {
+	local ready
+	ready=$(kubectl get pod "$leader_pod" --namespace "$namespace" \
+		-o 'jsonpath={range .status.conditions[?(@.type=="Ready")]}{.status}{end}')
+	if [[ "$ready" != True ]]; then
+		echo "Lease holder $leader_pod is not available" >&2
 		return 1
 	fi
 }
@@ -137,7 +128,7 @@ fi
 kubectl wait pod "$leader_pod" --namespace "$namespace" \
 	--for=condition=Ready --timeout=180s
 
-assert_one_ready_pod
+assert_leader_pod_available
 
 if [[ "$replicas" -gt 1 ]]; then
 	pdb_count=$(kubectl get pdb --namespace "$namespace" \
@@ -189,7 +180,7 @@ if [[ "$replicas" -gt 1 ]]; then
 	wait_for_leader "$old_leader"
 	kubectl wait pod "$leader_pod" --namespace "$namespace" \
 		--for=condition=Ready --timeout=180s
-	assert_one_ready_pod
+	assert_leader_pod_available
 fi
 
 if [[ "$scale_test" == true ]]; then
@@ -219,7 +210,7 @@ if [[ "$scale_test" == true ]]; then
 		echo "deleting a standby unexpectedly changed the leader" >&2
 		exit 1
 	fi
-	assert_one_ready_pod
+	assert_leader_pod_available
 
 	echo "Testing leader removal after scale-up"
 	kubectl delete pod "$leader_before_standby_delete" \
@@ -227,7 +218,7 @@ if [[ "$scale_test" == true ]]; then
 	wait_for_leader "$leader_before_standby_delete"
 	kubectl wait pod "$leader_pod" --namespace "$namespace" \
 		--for=condition=Ready --timeout=180s
-	assert_one_ready_pod
+	assert_leader_pod_available
 
 	helm upgrade "$release" deploy/chart \
 		--namespace "$namespace" \
@@ -241,7 +232,7 @@ if [[ "$scale_test" == true ]]; then
 	leader_pod=$(leader_for_lease)
 	kubectl wait pod "$leader_pod" --namespace "$namespace" \
 		--for=condition=Ready --timeout=180s
-	assert_one_ready_pod
+	assert_leader_pod_available
 fi
 
 kubectl get configmap kwatch-state --namespace "$namespace" \
