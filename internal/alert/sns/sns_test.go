@@ -1,6 +1,7 @@
 package sns
 
 import (
+	"context"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -8,14 +9,24 @@ import (
 
 	"github.com/stretchr/testify/assert"
 
-	"github.com/abahmed/kwatch/internal/config"
+	"github.com/abahmed/kwatch/internal/clock"
+	"github.com/abahmed/kwatch/internal/delivery/transport"
 	"github.com/abahmed/kwatch/internal/event"
 )
+
+var testDeps = transport.Dependencies{
+	HTTPClient: http.DefaultClient,
+	Clock:      clock.RealClock{},
+}
+
+func testAppConfig() string {
+	return "dev"
+}
 
 func TestEmptyConfig(t *testing.T) {
 	assert := assert.New(t)
 
-	c := NewSns(map[string]interface{}{}, &config.App{ClusterName: "dev"})
+	c := NewSns(map[string]interface{}{}, testAppConfig(), testDeps)
 	assert.Nil(c)
 }
 
@@ -27,7 +38,7 @@ func TestSns(t *testing.T) {
 		"secretAccessKey": "test",
 		"topicArn":        "arn:aws:sns:us-east-1:123456789012:kwatch",
 	}
-	c := NewSns(configMap, &config.App{ClusterName: "dev"})
+	c := NewSns(configMap, testAppConfig(), testDeps)
 	assert.NotNil(c)
 	assert.Equal(c.Name(), "SNS")
 	assert.Equal(c.url, "https://sns.us-east-1.amazonaws.com/")
@@ -42,7 +53,7 @@ func TestSnsCustomRegion(t *testing.T) {
 		"region":          "us-east-1",
 		"targetArn":       "arn:aws:sns:us-east-1:123456789012:kwatch",
 	}
-	c := NewSns(configMap, &config.App{ClusterName: "dev"})
+	c := NewSns(configMap, testAppConfig(), testDeps)
 	assert.NotNil(c)
 	assert.Equal(c.url, "https://sns.us-east-1.amazonaws.com/")
 }
@@ -50,13 +61,34 @@ func TestSnsCustomRegion(t *testing.T) {
 func TestSnsInvalidConfig(t *testing.T) {
 	assert := assert.New(t)
 
-	c := NewSns(map[string]interface{}{"secretAccessKey": "s", "topicArn": "t"}, &config.App{ClusterName: "dev"})
+	c := NewSns(
+		map[string]interface{}{
+			"secretAccessKey": "s",
+			"topicArn":        "t",
+		},
+		testAppConfig(),
+		testDeps,
+	)
 	assert.Nil(c)
 
-	c = NewSns(map[string]interface{}{"accessKeyId": "a", "topicArn": "t"}, &config.App{ClusterName: "dev"})
+	c = NewSns(
+		map[string]interface{}{
+			"accessKeyId": "a",
+			"topicArn":    "t",
+		},
+		testAppConfig(),
+		testDeps,
+	)
 	assert.Nil(c)
 
-	c = NewSns(map[string]interface{}{"accessKeyId": "a", "secretAccessKey": "s"}, &config.App{ClusterName: "dev"})
+	c = NewSns(
+		map[string]interface{}{
+			"accessKeyId":     "a",
+			"secretAccessKey": "s",
+		},
+		testAppConfig(),
+		testDeps,
+	)
 	assert.Nil(c)
 }
 
@@ -83,10 +115,10 @@ func TestSendMessage(t *testing.T) {
 		"topicArn":        "arn:aws:sns:us-east-1:123456789012:kwatch",
 		"subject":         "kwatch alert",
 	}
-	c := NewSns(configMap, &config.App{ClusterName: "dev"})
+	c := NewSns(configMap, testAppConfig(), testDeps)
 	c.url = s.URL
 
-	assert.Nil(c.SendMessage("hello"))
+	assert.Nil(c.SendMessage(context.Background(), "hello"))
 	assert.Contains(gotAuth, "AWS4-HMAC-SHA256")
 	assert.Contains(gotAuth, "Credential=AKIA123/")
 	assert.Contains(gotAuth, "SignedHeaders=content-type;host;x-amz-date")
@@ -117,10 +149,10 @@ func TestSendMessageTargetArn(t *testing.T) {
 		"secretAccessKey": "test",
 		"targetArn":       "arn:aws:sns:us-east-1:123456789012:endpoint",
 	}
-	c := NewSns(configMap, &config.App{ClusterName: "dev"})
+	c := NewSns(configMap, testAppConfig(), testDeps)
 	c.url = s.URL
 
-	assert.Nil(c.SendMessage("hello"))
+	assert.Nil(c.SendMessage(context.Background(), "hello"))
 	assert.Contains(gotBody, "TargetArn=arn%3Aaws%3Asns%3Aus-east-1%3A123456789012%3Aendpoint")
 	assert.NotContains(gotBody, "TopicArn")
 }
@@ -140,10 +172,10 @@ func TestSendMessageError(t *testing.T) {
 		"secretAccessKey": "test",
 		"topicArn":        "arn:aws:sns:us-east-1:123456789012:kwatch",
 	}
-	c := NewSns(configMap, &config.App{ClusterName: "dev"})
+	c := NewSns(configMap, testAppConfig(), testDeps)
 	c.url = s.URL
 
-	assert.NotNil(c.SendMessage("test"))
+	assert.NotNil(c.SendMessage(context.Background(), "test"))
 }
 
 func TestSendEvent(t *testing.T) {
@@ -163,7 +195,7 @@ func TestSendEvent(t *testing.T) {
 		"secretAccessKey": "test",
 		"topicArn":        "arn:aws:sns:us-east-1:123456789012:kwatch",
 	}
-	c := NewSns(configMap, &config.App{ClusterName: "dev"})
+	c := NewSns(configMap, testAppConfig(), testDeps)
 	c.url = s.URL
 
 	ev := event.Event{
@@ -171,7 +203,7 @@ func TestSendEvent(t *testing.T) {
 		Namespace: "default",
 		Reason:    "OOMKILLED",
 	}
-	assert.Nil(c.SendEvent(&ev))
+	assert.Nil(c.SendEvent(context.Background(), &ev))
 }
 
 func TestInvalidHttpRequest(t *testing.T) {
@@ -182,11 +214,11 @@ func TestInvalidHttpRequest(t *testing.T) {
 		"secretAccessKey": "test",
 		"topicArn":        "arn:aws:sns:us-east-1:123456789012:kwatch",
 	}
-	c := NewSns(configMap, &config.App{ClusterName: "dev"})
+	c := NewSns(configMap, testAppConfig(), testDeps)
 	c.url = "h ttp://localhost/%s"
 
-	assert.NotNil(c.SendMessage("test"))
+	assert.NotNil(c.SendMessage(context.Background(), "test"))
 
 	c.url = "http://localhost:132323/%s"
-	assert.NotNil(c.SendMessage("test"))
+	assert.NotNil(c.SendMessage(context.Background(), "test"))
 }

@@ -6,9 +6,14 @@ metadata:
   labels:
     {{- include "kwatch.labels" . | nindent 4 }}
 spec:
-  replicas: 1
+  replicas: {{ .Values.replicaCount }}
   strategy:
-    type: Recreate
+    type: {{ if gt (int .Values.replicaCount) 1 }}RollingUpdate{{ else }}Recreate{{ end }}
+    {{- if gt (int .Values.replicaCount) 1 }}
+    rollingUpdate:
+      maxUnavailable: 0%
+      maxSurge: 1
+    {{- end }}
   selector:
     matchLabels:
       {{- include "kwatch.selectorLabels" . | nindent 6 }}
@@ -16,7 +21,12 @@ spec:
     metadata:
       annotations:
         {{- if .Values.configSecretName }}
+        {{- $configSecret := lookup "v1" "Secret" .Release.Namespace .Values.configSecretName }}
+        {{- if $configSecret }}
+        checksum/config-secret: {{ toJson $configSecret.data | sha256sum }}
+        {{- else }}
         checksum/config-secret: {{ .Values.configSecretName | sha256sum }}
+        {{- end }}
         {{- else }}
         checksum/config: {{ include (print $.Template.BasePath "/configmap.yaml") . | sha256sum }}
         {{- end }}
@@ -30,6 +40,7 @@ spec:
         {{- end }}
     spec:
       restartPolicy: Always
+      terminationGracePeriodSeconds: {{ .Values.terminationGracePeriodSeconds }}
       serviceAccountName:  {{ .Release.Name }}
       automountServiceAccountToken: true
       {{- with .Values.podSecurityContext }}
@@ -57,6 +68,12 @@ spec:
               valueFrom:
                 fieldRef:
                   fieldPath: metadata.namespace
+            - name: POD_NAME
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.name
+            - name: KWATCH_LEADER_ELECTION_NAME
+              value: {{ printf "%s-leader" (include "kwatch.fullname" .) | quote }}
             - name: GOMEMLIMIT
               valueFrom:
                 resourceFieldRef:
@@ -70,7 +87,7 @@ spec:
             periodSeconds: 15
           readinessProbe:
             httpGet:
-              path: /readyz
+              path: /availabilityz
               port: health
             initialDelaySeconds: 5
             periodSeconds: 10
@@ -84,6 +101,13 @@ spec:
       affinity:
         {{- toYaml . | nindent 8 }}
       {{- end }}
+      topologySpreadConstraints:
+        - maxSkew: 1
+          topologyKey: kubernetes.io/hostname
+          whenUnsatisfiable: ScheduleAnyway
+          labelSelector:
+            matchLabels:
+              {{- include "kwatch.selectorLabels" . | nindent 14 }}
       {{- with .Values.tolerations }}
       tolerations:
         {{- toYaml . | nindent 8 }}

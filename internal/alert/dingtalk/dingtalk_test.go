@@ -1,20 +1,32 @@
 package dingtalk
 
 import (
+	"context"
 	"net/http"
 	"net/http/httptest"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
 
-	"github.com/abahmed/kwatch/internal/config"
+	"github.com/abahmed/kwatch/internal/clock"
+	"github.com/abahmed/kwatch/internal/delivery/transport"
 	"github.com/abahmed/kwatch/internal/event"
 )
+
+var testDeps = transport.Dependencies{
+	HTTPClient: http.DefaultClient,
+	Clock:      clock.RealClock{},
+}
+
+func testAppConfig() string {
+	return "dev"
+}
 
 func TestEmptyConfig(t *testing.T) {
 	assert := assert.New(t)
 
-	c := NewDingTalk(map[string]interface{}{}, &config.App{ClusterName: "dev"})
+	c := NewDingTalk(map[string]interface{}{}, testAppConfig(), testDeps)
 	assert.Nil(c)
 }
 
@@ -24,7 +36,7 @@ func TestDingTalk(t *testing.T) {
 	configMap := map[string]interface{}{
 		"accessToken": "testToken",
 	}
-	c := NewDingTalk(configMap, &config.App{ClusterName: "dev"})
+	c := NewDingTalk(configMap, testAppConfig(), testDeps)
 	assert.NotNil(c)
 
 	assert.Equal(c.Name(), "DingTalk")
@@ -44,11 +56,11 @@ func TestSendMessage(t *testing.T) {
 		"accessToken": "testToken",
 		"secret":      "secret1",
 	}
-	c := NewDingTalk(configMap, &config.App{ClusterName: "dev"})
+	c := NewDingTalk(configMap, testAppConfig(), testDeps)
 	assert.NotNil(c)
 	c.url = s.URL + "/send?accessToken=%s"
 
-	assert.Nil(c.SendMessage("test"))
+	assert.Nil(c.SendMessage(context.Background(), "test"))
 }
 
 func TestSendMessageInvalidBody(t *testing.T) {
@@ -64,11 +76,11 @@ func TestSendMessageInvalidBody(t *testing.T) {
 	configMap := map[string]interface{}{
 		"accessToken": "testToken",
 	}
-	c := NewDingTalk(configMap, &config.App{ClusterName: "dev"})
+	c := NewDingTalk(configMap, testAppConfig(), testDeps)
 	assert.NotNil(c)
 	c.url = s.URL + "/send?accessToken=%s"
 
-	assert.NotNil(c.SendMessage("test"))
+	assert.NotNil(c.SendMessage(context.Background(), "test"))
 }
 
 func TestSendMessageInvalidJson(t *testing.T) {
@@ -84,11 +96,11 @@ func TestSendMessageInvalidJson(t *testing.T) {
 	configMap := map[string]interface{}{
 		"accessToken": "testToken",
 	}
-	c := NewDingTalk(configMap, &config.App{ClusterName: "dev"})
+	c := NewDingTalk(configMap, testAppConfig(), testDeps)
 	assert.NotNil(c)
 	c.url = s.URL + "/send?accessToken=%s"
 
-	assert.NotNil(c.SendMessage("test"))
+	assert.NotNil(c.SendMessage(context.Background(), "test"))
 }
 
 func TestSendMessageErrorResponse(t *testing.T) {
@@ -104,11 +116,11 @@ func TestSendMessageErrorResponse(t *testing.T) {
 	configMap := map[string]interface{}{
 		"accessToken": "testToken",
 	}
-	c := NewDingTalk(configMap, &config.App{ClusterName: "dev"})
+	c := NewDingTalk(configMap, testAppConfig(), testDeps)
 	assert.NotNil(c)
 	c.url = s.URL + "/send?accessToken=%s"
 
-	assert.NotNil(c.SendMessage("test"))
+	assert.NotNil(c.SendMessage(context.Background(), "test"))
 }
 
 func TestSendEvent(t *testing.T) {
@@ -124,7 +136,7 @@ func TestSendEvent(t *testing.T) {
 	configMap := map[string]interface{}{
 		"accessToken": "testToken",
 	}
-	c := NewDingTalk(configMap, &config.App{ClusterName: "dev"})
+	c := NewDingTalk(configMap, testAppConfig(), testDeps)
 	assert.NotNil(c)
 	c.url = s.URL + "/send?accessToken=%s"
 
@@ -137,7 +149,7 @@ func TestSendEvent(t *testing.T) {
 		Events: "event1-event2-event3-event1-event2-event3-event1-event2-" +
 			"event3\nevent5\nevent6-event8-event11-event12",
 	}
-	assert.Nil(c.SendEvent(&ev))
+	assert.Nil(c.SendEvent(context.Background(), &ev))
 }
 
 func TestInvaildHttpRequest(t *testing.T) {
@@ -146,20 +158,20 @@ func TestInvaildHttpRequest(t *testing.T) {
 	configMap := map[string]interface{}{
 		"accessToken": "testToken",
 	}
-	c := NewDingTalk(configMap, &config.App{ClusterName: "dev"})
+	c := NewDingTalk(configMap, testAppConfig(), testDeps)
 	assert.NotNil(c)
 	c.url = "h ttp://localhost" + "/send?accessToken=%s"
 
-	assert.NotNil(c.SendMessage("test"))
+	assert.NotNil(c.SendMessage(context.Background(), "test"))
 
 	configMap = map[string]interface{}{
 		"accessToken": "testToken",
 	}
-	c = NewDingTalk(configMap, &config.App{ClusterName: "dev"})
+	c = NewDingTalk(configMap, testAppConfig(), testDeps)
 	assert.NotNil(c)
 	c.url = "http://localhost:132323" + "/send?accessToken=%s"
 
-	assert.NotNil(c.SendMessage("test"))
+	assert.NotNil(c.SendMessage(context.Background(), "test"))
 }
 
 func TestNewDingTalkWithTitle(t *testing.T) {
@@ -170,7 +182,7 @@ func TestNewDingTalkWithTitle(t *testing.T) {
 		"title":       "Custom Title",
 		"secret":      "secret123",
 	}
-	c := NewDingTalk(configMap, &config.App{ClusterName: "dev"})
+	c := NewDingTalk(configMap, testAppConfig(), testDeps)
 	assert.NotNil(c)
 	assert.Equal("Custom Title", c.title)
 	assert.Equal("secret123", c.secret)
@@ -189,7 +201,7 @@ func TestSendEventWithDefaultTitle(t *testing.T) {
 	configMap := map[string]interface{}{
 		"accessToken": "testToken",
 	}
-	c := NewDingTalk(configMap, &config.App{ClusterName: "dev"})
+	c := NewDingTalk(configMap, testAppConfig(), testDeps)
 	assert.NotNil(c)
 	c.url = s.URL + "/send?accessToken=%s"
 
@@ -200,7 +212,7 @@ func TestSendEventWithDefaultTitle(t *testing.T) {
 		Reason:        "OOMKILLED",
 		Logs:          "test logs",
 	}
-	err := c.SendEvent(ev)
+	err := c.SendEvent(context.Background(), ev)
 	assert.Nil(err)
 }
 
@@ -218,11 +230,11 @@ func TestSendMessageWithSecret(t *testing.T) {
 		"accessToken": "testToken",
 		"secret":      "testSecret123",
 	}
-	c := NewDingTalk(configMap, &config.App{ClusterName: "dev"})
+	c := NewDingTalk(configMap, testAppConfig(), testDeps)
 	assert.NotNil(c)
 	c.url = s.URL + "/send?accessToken=%s"
 
-	err := c.SendMessage("test message with secret")
+	err := c.SendMessage(context.Background(), "test message with secret")
 	assert.Nil(err)
 }
 
@@ -241,7 +253,7 @@ func TestSendEventWithSecret(t *testing.T) {
 		"secret":      "testSecret456",
 		"title":       "Custom Event Title",
 	}
-	c := NewDingTalk(configMap, &config.App{ClusterName: "dev"})
+	c := NewDingTalk(configMap, testAppConfig(), testDeps)
 	assert.NotNil(c)
 	c.url = s.URL + "/send?accessToken=%s"
 
@@ -252,7 +264,7 @@ func TestSendEventWithSecret(t *testing.T) {
 		Reason:        "CrashLoopBackOff",
 		Logs:          "crash logs",
 	}
-	err := c.SendEvent(ev)
+	err := c.SendEvent(context.Background(), ev)
 	assert.Nil(err)
 }
 
@@ -269,14 +281,14 @@ func TestSendMessageJsonMarshalError(t *testing.T) {
 	configMap := map[string]interface{}{
 		"accessToken": "testToken",
 	}
-	c := NewDingTalk(configMap, &config.App{ClusterName: "dev"})
+	c := NewDingTalk(configMap, testAppConfig(), testDeps)
 	assert.NotNil(c)
 	c.url = s.URL + "/send?accessToken=%s"
 
 	ev := &event.Event{
 		PodName: "test",
 	}
-	err := c.SendEvent(ev)
+	err := c.SendEvent(context.Background(), ev)
 	assert.Nil(err)
 }
 
@@ -293,11 +305,11 @@ func TestSendAPIResponseReadError(t *testing.T) {
 	configMap := map[string]interface{}{
 		"accessToken": "testToken",
 	}
-	c := NewDingTalk(configMap, &config.App{ClusterName: "dev"})
+	c := NewDingTalk(configMap, testAppConfig(), testDeps)
 	assert.NotNil(c)
 	c.url = s.URL + "/send?accessToken=%s"
 
-	err := c.SendMessage("test")
+	err := c.SendMessage(context.Background(), "test")
 	assert.NotNil(err)
 }
 
@@ -312,7 +324,10 @@ func TestComputeHmacSha256(t *testing.T) {
 func TestGetSignature(t *testing.T) {
 	assert := assert.New(t)
 
-	result := getSignature("testSecret")
+	result := getSignatureAt(
+		"testSecret",
+		time.Date(2026, 9, 12, 10, 11, 12, 0, time.UTC),
+	)
 	assert.Contains(result, "timestamp=")
 	assert.Contains(result, "sign=")
 }
@@ -330,11 +345,11 @@ func TestSendMessageInvalidJsonResponse(t *testing.T) {
 	configMap := map[string]interface{}{
 		"accessToken": "testToken",
 	}
-	c := NewDingTalk(configMap, &config.App{ClusterName: "dev"})
+	c := NewDingTalk(configMap, testAppConfig(), testDeps)
 	assert.NotNil(c)
 	c.url = s.URL + "/send?accessToken=%s"
 
-	err := c.SendMessage("test")
+	err := c.SendMessage(context.Background(), "test")
 	assert.NotNil(err)
 }
 
@@ -351,7 +366,7 @@ func TestSendEventEmptyTitle(t *testing.T) {
 	configMap := map[string]interface{}{
 		"accessToken": "testToken",
 	}
-	c := NewDingTalk(configMap, &config.App{ClusterName: "dev"})
+	c := NewDingTalk(configMap, testAppConfig(), testDeps)
 	assert.NotNil(c)
 	c.url = s.URL + "/send?accessToken=%s"
 	c.title = ""
@@ -363,6 +378,6 @@ func TestSendEventEmptyTitle(t *testing.T) {
 		Reason:        "OOMKILLED",
 		Logs:          "test logs",
 	}
-	err := c.SendEvent(ev)
+	err := c.SendEvent(context.Background(), ev)
 	assert.Nil(err)
 }

@@ -11,6 +11,7 @@ import (
 
 	"github.com/stretchr/testify/assert"
 
+	"github.com/abahmed/kwatch/internal/clock"
 	"github.com/abahmed/kwatch/internal/config"
 	"github.com/abahmed/kwatch/internal/event"
 	"github.com/abahmed/kwatch/internal/model"
@@ -39,7 +40,9 @@ func (f *fakeAlertSender) Notify(msg string) {
 func TestNewHealthServer(t *testing.T) {
 	assert := assert.New(t)
 
-	server := NewHealthServer(config.HealthCheck{Port: 8080, Enabled: true})
+	server := NewHealthServerWithClock(
+		config.HealthCheck{Port: 8080, Enabled: true}, clock.RealClock{},
+	)
 	assert.NotNil(server)
 	assert.Equal(8080, server.port)
 	assert.True(server.enabled)
@@ -48,7 +51,9 @@ func TestNewHealthServer(t *testing.T) {
 func TestNewHealthServerDisabled(t *testing.T) {
 	assert := assert.New(t)
 
-	server := NewHealthServer(config.HealthCheck{Port: 8080, Enabled: false})
+	server := NewHealthServerWithClock(
+		config.HealthCheck{Port: 8080, Enabled: false}, clock.RealClock{},
+	)
 	assert.NotNil(server)
 	assert.Equal(8080, server.port)
 	assert.False(server.enabled)
@@ -95,16 +100,20 @@ func TestHealthHandler(t *testing.T) {
 func TestHealthServerStartDisabled(t *testing.T) {
 	assert := assert.New(t)
 
-	server := NewHealthServer(config.HealthCheck{Port: 8080, Enabled: false})
-	err := server.Start(context.Background())
+	server := NewHealthServerWithClock(
+		config.HealthCheck{Port: 8080, Enabled: false}, clock.RealClock{},
+	)
+	err := startForTest(server)
 	assert.Nil(err)
 }
 
 func TestHealthServerStartEnabled(t *testing.T) {
 	assert := assert.New(t)
 
-	server := NewHealthServer(config.HealthCheck{Port: 8080, Enabled: true})
-	err := server.Start(context.Background())
+	server := NewHealthServerWithClock(
+		config.HealthCheck{Port: 8080, Enabled: true}, clock.RealClock{},
+	)
+	err := startForTest(server)
 	assert.Nil(err)
 
 	// Test /healthz endpoint
@@ -123,8 +132,10 @@ func TestHealthServerStartEnabled(t *testing.T) {
 func TestHealthServerStop(t *testing.T) {
 	assert := assert.New(t)
 
-	server := NewHealthServer(config.HealthCheck{Port: 8080, Enabled: true})
-	err := server.Start(context.Background())
+	server := NewHealthServerWithClock(
+		config.HealthCheck{Port: 8080, Enabled: true}, clock.RealClock{},
+	)
+	err := startForTest(server)
 	assert.Nil(err)
 
 	err = server.Stop(context.Background())
@@ -134,7 +145,9 @@ func TestHealthServerStop(t *testing.T) {
 func TestHealthServerStopNilServer(t *testing.T) {
 	assert := assert.New(t)
 
-	server := NewHealthServer(config.HealthCheck{Port: 8080, Enabled: true})
+	server := NewHealthServerWithClock(
+		config.HealthCheck{Port: 8080, Enabled: true}, clock.RealClock{},
+	)
 	err := server.Stop(context.Background())
 	assert.Nil(err)
 }
@@ -214,7 +227,10 @@ func TestTestAlertHandlerNoAM(t *testing.T) {
 func TestTestAlertHandlerMethodNotAllowed(t *testing.T) {
 	assert := assert.New(t)
 	am := &fakeAlertSender{}
-	h := &HealthServer{alertManager: am}
+	h := &HealthServer{
+		deliveryManager: am,
+		clock:           clock.RealClock{},
+	}
 
 	req := httptest.NewRequest(http.MethodGet, "/test-alert", nil)
 	w := httptest.NewRecorder()
@@ -226,7 +242,10 @@ func TestTestAlertHandlerMethodNotAllowed(t *testing.T) {
 
 func TestTestAlertHandler(t *testing.T) {
 	am := &fakeAlertSender{}
-	h := &HealthServer{alertManager: am}
+	h := &HealthServer{
+		deliveryManager: am,
+		clock:           clock.RealClock{},
+	}
 
 	req := httptest.NewRequest(http.MethodPost, "/test-alert", bytes.NewReader([]byte{}))
 	w := httptest.NewRecorder()
@@ -247,11 +266,34 @@ func TestTestAlertHandler(t *testing.T) {
 	}
 }
 
+func TestTestAlertHandlerRateLimitsRepeatedRequests(t *testing.T) {
+	h := &HealthServer{
+		deliveryManager: &fakeAlertSender{},
+		clock:           clock.RealClock{},
+	}
+	request := httptest.NewRequest(http.MethodPost, "/test-alert", nil)
+	first := httptest.NewRecorder()
+	h.testAlertHandler(first, request)
+	if first.Code != http.StatusOK {
+		t.Fatalf("first test alert status = %d", first.Code)
+	}
+	second := httptest.NewRecorder()
+	h.testAlertHandler(second, request)
+	if second.Code != http.StatusTooManyRequests {
+		t.Fatalf("second test alert status = %d, want 429", second.Code)
+	}
+}
+
 func TestRequireDiagnosticsAuthEmptyToken(t *testing.T) {
 	h := &HealthServer{diagnosticsToken: ""}
 	req := httptest.NewRequest(http.MethodGet, "/debug/pprof/", nil)
 	w := httptest.NewRecorder()
-	assert.True(t, h.requireDiagnosticsAuth(w, req), "empty token must allow all requests")
+	assert.False(
+		t,
+		h.requireDiagnosticsAuth(w, req),
+		"empty token must reject diagnostics",
+	)
+	assert.Equal(t, http.StatusUnauthorized, w.Code)
 }
 
 func TestRequireDiagnosticsAuthValidToken(t *testing.T) {
@@ -259,7 +301,11 @@ func TestRequireDiagnosticsAuthValidToken(t *testing.T) {
 	req := httptest.NewRequest(http.MethodGet, "/debug/pprof/", nil)
 	req.Header.Set("Authorization", "Bearer secret123")
 	w := httptest.NewRecorder()
-	assert.True(t, h.requireDiagnosticsAuth(w, req), "valid Bearer token must authenticate")
+	assert.True(
+		t,
+		h.requireDiagnosticsAuth(w, req),
+		"valid Bearer token must authenticate",
+	)
 }
 
 func TestRequireDiagnosticsAuthInvalidToken(t *testing.T) {
@@ -281,13 +327,17 @@ func TestRequireDiagnosticsAuthMissingHeader(t *testing.T) {
 	h := &HealthServer{diagnosticsToken: "secret123"}
 	req := httptest.NewRequest(http.MethodGet, "/debug/pprof/", nil)
 	w := httptest.NewRecorder()
-	assert.False(t, h.requireDiagnosticsAuth(w, req), "missing Authorization must reject")
+	assert.False(
+		t,
+		h.requireDiagnosticsAuth(w, req),
+		"missing Authorization must reject",
+	)
 
 	resp := w.Result()
 	assert.Equal(t, http.StatusUnauthorized, resp.StatusCode)
 }
 
-func TestGuardWithoutTokenCallsHandler(t *testing.T) {
+func TestGuardWithoutTokenRejectsRequest(t *testing.T) {
 	h := &HealthServer{diagnosticsToken: ""}
 	called := false
 	handler := h.guard(func(w http.ResponseWriter, r *http.Request) {
@@ -296,7 +346,8 @@ func TestGuardWithoutTokenCallsHandler(t *testing.T) {
 	req := httptest.NewRequest(http.MethodGet, "/debug/pprof/", nil)
 	w := httptest.NewRecorder()
 	handler(w, req)
-	assert.True(t, called, "handler must be called when no token is set")
+	assert.False(t, called, "handler must not be called without a token")
+	assert.Equal(t, http.StatusUnauthorized, w.Code)
 }
 
 func TestGuardWithValidTokenCallsHandler(t *testing.T) {
@@ -328,13 +379,12 @@ func TestGuardWithInvalidTokenReturns401(t *testing.T) {
 
 func TestPprofEndpointsRegisteredWithGuard(t *testing.T) {
 	h := &HealthServer{diagnostics: true, pprof: true, diagnosticsToken: "tok"}
-	h.SetIncidentAPI(&fakeIncidentLister{snap: []model.IncidentView{}})
-	mux := http.NewServeMux()
-	mux.HandleFunc("/healthz", h.healthzHandler)
-	mux.HandleFunc("/incidents", h.incidentsHandler)
-	if h.pprof {
-		mux.HandleFunc("/debug/pprof/", h.guard(http.NotFound))
+	if err := h.ConfigureDependencies(Dependencies{
+		Incident: &fakeIncidentLister{snap: []model.IncidentView{}},
+	}); err != nil {
+		t.Fatal(err)
 	}
+	mux := newServeMux(h)
 	ts := httptest.NewServer(mux)
 	defer ts.Close()
 
@@ -351,12 +401,19 @@ func TestPprofEndpointsRegisteredWithGuard(t *testing.T) {
 	assert.Nil(t, err)
 	assert.Equal(t, http.StatusOK, resp.StatusCode)
 	resp.Body.Close()
+
+	// Protected diagnostic endpoints require the configured token.
+	req, _ = http.NewRequest(http.MethodGet, ts.URL+"/incidents", nil)
+	resp, err = http.DefaultClient.Do(req)
+	assert.Nil(t, err)
+	assert.Equal(t, http.StatusUnauthorized, resp.StatusCode)
+	resp.Body.Close()
 }
 
 type fakeDeadLetterLister struct {
-	letters interface{}
+	letters []model.DeadLetterEntry
 }
 
-func (f *fakeDeadLetterLister) DeadLetters() interface{} {
+func (f *fakeDeadLetterLister) DeadLetters() []model.DeadLetterEntry {
 	return f.letters
 }

@@ -1,13 +1,13 @@
 package alerta
 
 import (
+	"context"
 	"encoding/json"
 	"strings"
 
 	"k8s.io/klog/v2"
 
-	"github.com/abahmed/kwatch/internal/alert/util"
-	"github.com/abahmed/kwatch/internal/config"
+	"github.com/abahmed/kwatch/internal/delivery/transport"
 	"github.com/abahmed/kwatch/internal/event"
 )
 
@@ -23,16 +23,22 @@ type alertaPayload struct {
 }
 
 type Alerta struct {
+	sender      transport.Sender
 	url         string
 	apiKey      string
 	environment string
 	service     string
 
-	appCfg *config.App
+	clusterName string
 }
 
 // NewAlerta returns a new Alerta object
-func NewAlerta(config map[string]interface{}, appCfg *config.App) *Alerta {
+
+func NewAlerta(
+	config map[string]interface{},
+	clusterName string,
+	dependencies transport.Dependencies,
+) *Alerta {
 	url, ok := config["url"].(string)
 	if !ok || len(url) == 0 {
 		klog.InfoS("initializing alerta with empty url")
@@ -58,11 +64,12 @@ func NewAlerta(config map[string]interface{}, appCfg *config.App) *Alerta {
 	klog.InfoS("initializing alerta", "url", url, "environment", environment)
 
 	return &Alerta{
+		sender:      transport.NewSender(dependencies),
 		url:         strings.TrimRight(url, "/") + alertaAPIPath,
 		apiKey:      apiKey,
 		environment: environment,
 		service:     service,
-		appCfg:      appCfg,
+		clusterName: clusterName,
 	}
 }
 
@@ -72,16 +79,16 @@ func (s *Alerta) Name() string {
 }
 
 // SendEvent sends event to the provider
-func (s *Alerta) SendEvent(e *event.Event) error {
-	msg := e.FormatText(s.appCfg.ClusterName, "")
-	return s.SendMessage(msg)
+func (s *Alerta) SendEvent(ctx context.Context, e *event.Event) error {
+	msg := e.FormatText(s.clusterName, "")
+	return s.SendMessage(ctx, msg)
 }
 
 // SendMessage sends text message to the provider
-func (s *Alerta) SendMessage(msg string) error {
+func (s *Alerta) SendMessage(ctx context.Context, msg string) error {
 	resource := "kwatch"
-	if len(s.appCfg.ClusterName) > 0 {
-		resource = "kwatch/" + s.appCfg.ClusterName
+	if len(s.clusterName) > 0 {
+		resource = "kwatch/" + s.clusterName
 	}
 
 	payload := alertaPayload{
@@ -98,8 +105,11 @@ func (s *Alerta) SendMessage(msg string) error {
 		return err
 	}
 
-	_, err = util.Post(s.Name(), s.url, body, "application/json", map[string]string{
-		"Authorization": "Key " + s.apiKey,
+	_, err = s.sender.Send(ctx, transport.Request{
+		Provider: s.Name(), URL: s.url, Body: body,
+		ContentType: "application/json", Headers: map[string]string{
+			"Authorization": "Key " + s.apiKey,
+		},
 	})
 	return err
 }

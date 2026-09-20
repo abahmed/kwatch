@@ -1,6 +1,7 @@
 package zenduty
 
 import (
+	"context"
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
@@ -8,14 +9,22 @@ import (
 
 	"github.com/stretchr/testify/assert"
 
-	"github.com/abahmed/kwatch/internal/config"
+	"github.com/abahmed/kwatch/internal/delivery/transport"
 	"github.com/abahmed/kwatch/internal/event"
 )
+
+var testDeps = transport.Dependencies{
+	HTTPClient: http.DefaultClient,
+}
+
+func testAppConfig() string {
+	return "dev"
+}
 
 func TestZendutyEmptyConfig(t *testing.T) {
 	assert := assert.New(t)
 
-	c := NewZenduty(map[string]interface{}{}, &config.App{ClusterName: "dev"})
+	c := NewZenduty(map[string]interface{}{}, testAppConfig(), testDeps)
 	assert.Nil(c)
 }
 
@@ -25,7 +34,7 @@ func TestZenduty(t *testing.T) {
 	configMap := map[string]interface{}{
 		"integrationKey": "testtest",
 	}
-	c := NewZenduty(configMap, &config.App{ClusterName: "dev"})
+	c := NewZenduty(configMap, testAppConfig(), testDeps)
 	assert.NotNil(c)
 
 	assert.Equal(c.Name(), "Zenduty")
@@ -37,10 +46,10 @@ func TestSendMessage(t *testing.T) {
 	configMap := map[string]interface{}{
 		"integrationKey": "test",
 	}
-	c := NewZenduty(configMap, &config.App{ClusterName: "dev"})
+	c := NewZenduty(configMap, testAppConfig(), testDeps)
 	assert.NotNil(c)
 
-	assert.Nil(c.SendMessage("test"))
+	assert.Nil(c.SendMessage(context.Background(), "test"))
 }
 
 func TestSendEventCreateIncludesEntityID(t *testing.T) {
@@ -58,7 +67,7 @@ func TestSendEventCreateIncludesEntityID(t *testing.T) {
 	configMap := map[string]interface{}{
 		"integrationKey": "test",
 	}
-	c := NewZenduty(configMap, &config.App{ClusterName: "dev"})
+	c := NewZenduty(configMap, testAppConfig(), testDeps)
 	c.url = s.URL
 	a.NotNil(c)
 
@@ -70,7 +79,7 @@ func TestSendEventCreateIncludesEntityID(t *testing.T) {
 		Action:        "create",
 		DedupKey:      "entity-456",
 	}
-	a.Nil(c.SendEvent(&ev))
+	a.Nil(c.SendEvent(context.Background(), &ev))
 
 	a.Equal("entity-456", captured.EntityID, "DedupKey must map to entity_id on create")
 }
@@ -90,7 +99,7 @@ func TestSendEventResolveSendsResolvedAlertType(t *testing.T) {
 	configMap := map[string]interface{}{
 		"integrationKey": "test",
 	}
-	c := NewZenduty(configMap, &config.App{ClusterName: "dev"})
+	c := NewZenduty(configMap, testAppConfig(), testDeps)
 	c.url = s.URL
 	a.NotNil(c)
 
@@ -102,7 +111,7 @@ func TestSendEventResolveSendsResolvedAlertType(t *testing.T) {
 		Action:        "resolved",
 		DedupKey:      "entity-456",
 	}
-	a.Nil(c.SendEvent(&ev))
+	a.Nil(c.SendEvent(context.Background(), &ev))
 
 	a.Equal("resolved", captured.AlertType, "resolved action must set alert_type to resolved")
 	a.Equal("entity-456", captured.EntityID, "EntityID must be passed on resolve")
@@ -122,7 +131,7 @@ func TestSendEvent(t *testing.T) {
 	configMap := map[string]interface{}{
 		"integrationKey": "test",
 	}
-	c := NewZenduty(configMap, &config.App{ClusterName: "dev"})
+	c := NewZenduty(configMap, testAppConfig(), testDeps)
 	assert.NotNil(c)
 
 	c.url = s.URL
@@ -137,7 +146,7 @@ func TestSendEvent(t *testing.T) {
 		Events: "event1-event2-event3-event1-event2-event3-event1-event2-" +
 			"event3\nevent5\nevent6-event8-event11-event12",
 	}
-	assert.Nil(c.SendEvent(&ev))
+	assert.Nil(c.SendEvent(context.Background(), &ev))
 }
 
 func TestSendEventError(t *testing.T) {
@@ -153,7 +162,7 @@ func TestSendEventError(t *testing.T) {
 	configMap := map[string]interface{}{
 		"integrationKey": "test",
 	}
-	c := NewZenduty(configMap, &config.App{ClusterName: "dev"})
+	c := NewZenduty(configMap, testAppConfig(), testDeps)
 	assert.NotNil(c)
 
 	c.url = s.URL
@@ -168,7 +177,7 @@ func TestSendEventError(t *testing.T) {
 		Events: "event1-event2-event3-event1-event2-event3-event1-event2-" +
 			"event3\nevent5\nevent6-event8-event11-event12",
 	}
-	assert.NotNil(c.SendEvent(&ev))
+	assert.NotNil(c.SendEvent(context.Background(), &ev))
 }
 
 func TestInvaildHttpRequest(t *testing.T) {
@@ -177,7 +186,7 @@ func TestInvaildHttpRequest(t *testing.T) {
 	configMap := map[string]interface{}{
 		"integrationKey": "test",
 	}
-	c := NewZenduty(configMap, &config.App{ClusterName: "dev"})
+	c := NewZenduty(configMap, testAppConfig(), testDeps)
 	assert.NotNil(c)
 	c.url = "h ttp://localhost"
 
@@ -191,11 +200,11 @@ func TestInvaildHttpRequest(t *testing.T) {
 		Events: "event1-event2-event3-event1-event2-event3-event1-event2-" +
 			"event3\nevent5\nevent6-event8-event11-event12",
 	}
-	assert.NotNil(c.SendEvent(&ev))
+	assert.NotNil(c.SendEvent(context.Background(), &ev))
 
-	c = NewZenduty(configMap, &config.App{ClusterName: "dev"})
+	c = NewZenduty(configMap, testAppConfig(), testDeps)
 	assert.NotNil(c)
 	c.url = "http://localhost:132323"
 
-	assert.NotNil(c.SendEvent(&ev))
+	assert.NotNil(c.SendEvent(context.Background(), &ev))
 }

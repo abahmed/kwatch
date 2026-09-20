@@ -8,26 +8,73 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	corev1 "k8s.io/api/core/v1"
-	discoveryv1 "k8s.io/api/discovery/v1"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/kubernetes/fake"
 
+	"github.com/abahmed/kwatch/internal/clock"
 	"github.com/abahmed/kwatch/internal/config"
-	"github.com/abahmed/kwatch/internal/handler"
+	kwcontext "github.com/abahmed/kwatch/internal/graphcontext"
 	"github.com/abahmed/kwatch/internal/model"
+	"github.com/abahmed/kwatch/internal/observe"
 )
 
 func newTestController(
 	t testing.TB,
 	client kubernetes.Interface,
 	cfg *config.Config,
-	h handler.Handler,
+	h *mockHandler,
 ) (*Controller, func()) {
 	t.Helper()
-	ctrl, cleanup, err := New(client, cfg, h)
+	ctrl, cleanup, err := NewWithRuntimeConfig(
+		client, config.RuntimeConfigFor(cfg), componentsFor(h),
+		RuntimeDependencies{Now: clock.RealClock{}.Now},
+	)
 	require.NoError(t, err)
+	// Unit tests that inspect listers directly opt into informer startup. The
+	// production application starts them only after leadership is acquired.
+	ctrl.startInformers()
 	return ctrl, cleanup
+}
+
+func newTestChangeTracker(capacity int) *kwcontext.ChangeTracker {
+	return kwcontext.NewChangeTrackerWithClock(
+		capacity, clock.RealClock{},
+	)
+}
+
+func componentsFor(h *mockHandler) RuntimeSet {
+	return RuntimeSet{
+		Pod: PodRuntime{
+			Processor: h,
+		},
+		Node: NodeRuntime{
+			Processor: h,
+		},
+		Workload: WorkloadRuntime{
+			Deployments:  h,
+			DaemonSets:   h,
+			StatefulSets: h,
+			CronJobs:     h,
+			HPAs:         h,
+			PDBs:         h,
+			ReplicaSets:  h,
+			Jobs:         h,
+		},
+		Network: NetworkRuntime{
+			Processor: h,
+		},
+		Security: SecurityRuntime{
+			Processor: h,
+		},
+		Cluster: ClusterRuntime{
+			Processor: h,
+		},
+		Integration: IntegrationRuntime{
+			ControlPlane: h,
+			Events:       h,
+		},
+		Baseline: h,
+	}
 }
 
 type mockHandler struct {
@@ -38,6 +85,7 @@ type mockHandler struct {
 	nodeDel        []bool
 	err            error
 	seenBaseline   map[string]map[string]int64
+	activeNodes    []string
 	startupSummary map[string]int
 }
 
@@ -118,22 +166,23 @@ func (m *mockHandler) ProcessHorizontalPodAutoscaler(
 ) error {
 	return m.err
 }
-func (m *mockHandler) SetListers(handler.Listers)       {}
+func (m *mockHandler) Owners() observe.OwnerResolver    { return nil }
 func (m *mockHandler) SetNamespaceScope([]string, bool) {}
-func (m *mockHandler) SweepTLSSecrets()                 {}
+func (m *mockHandler) SweepTLSSecrets() error           { return nil }
 func (m *mockHandler) SetBaseline(baseline map[string]map[string]int64) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	m.seenBaseline = baseline
 }
-func (m *mockHandler) SetActiveNodeIncidents([]string)    {}
-func (m *mockHandler) ClearBaselineForPod(string, string) {}
-func (m *mockHandler) ReportStartupSummary(suppressed map[string]int) {
+func (m *mockHandler) SetActiveNodeIncidents(nodes []string) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
-	m.startupSummary = suppressed
+	m.activeNodes = append(m.activeNodes, nodes...)
 }
-
+func (m *mockHandler) ClearBaselineForPod(
+	string, string, model.ObjectRef,
+) {
+}
 func (m *mockHandler) ProcessMutatingWebhookConfiguration(
 	string,
 	bool,
@@ -278,68 +327,4 @@ func TestNewWithNodeResourceMonitorOnly(t *testing.T) {
 	assert.NotNil(ctrl.nodeLister)
 	// But the node event worker must stay off.
 	assert.Nil(ctrl.node.synced)
-}
-
-func TestNewWithSingleNamespace(t *testing.T) {
-	assert := assert.New(t)
-
-	client := fake.NewSimpleClientset()
-	cfg := &config.Config{
-		AllowedNamespaces: []string{"production"},
-	}
-	h := &mockHandler{}
-
-	ctrl, cleanup := newTestController(t, client, cfg, h)
-	defer cleanup()
-
-	assert.NotNil(ctrl)
-	assert.NotNil(ctrl.podLister)
-}
-
-func TestSyncEndpointSliceResolvesServiceByLabel(t *testing.T) {
-	assert := assert.New(t)
-
-	svc := &corev1.Service{
-		ObjectMeta: metav1.ObjectMeta{Name: "web", Namespace: "ns"},
-		Spec: corev1.ServiceSpec{
-			ClusterIP: "10.0.0.1",
-			Selector:  map[string]string{"app": "web"},
-		},
-	}
-	epSlice := &discoveryv1.EndpointSlice{
-		ObjectMeta: metav1.ObjectMeta{
-			Name:      "web-hash",
-			Namespace: "ns",
-			Labels:    map[string]string{"kubernetes.io/service-name": "web"},
-		},
-	}
-	client := fake.NewSimpleClientset(svc, epSlice)
-	cfg := &config.Config{
-		ServiceMonitor: config.ServiceMonitor{Enabled: true},
-	}
-	h := &mockHandler{}
-	ctrl, cleanup := newTestController(t, client, cfg, h)
-	defer cleanup()
-
-	// The slice name ("web-hash") must NOT be looked up as the service name.
-	err := ctrl.syncEndpointSlice(context.Background(), "ns/web-hash")
-	assert.Nil(err)
-}
-
-func TestSyncEndpointSliceIgnoresUnlabeled(t *testing.T) {
-	assert := assert.New(t)
-
-	epSlice := &discoveryv1.EndpointSlice{
-		ObjectMeta: metav1.ObjectMeta{Name: "web-hash", Namespace: "ns"},
-	}
-	client := fake.NewSimpleClientset(epSlice)
-	cfg := &config.Config{
-		ServiceMonitor: config.ServiceMonitor{Enabled: true},
-	}
-	h := &mockHandler{}
-	ctrl, cleanup := newTestController(t, client, cfg, h)
-	defer cleanup()
-
-	err := ctrl.syncEndpointSlice(context.Background(), "ns/web-hash")
-	assert.Nil(err)
 }

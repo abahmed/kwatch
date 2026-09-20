@@ -7,10 +7,32 @@ import (
 	"github.com/stretchr/testify/assert"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/kubernetes/fake"
 
+	"github.com/abahmed/kwatch/internal/clock"
 	"github.com/abahmed/kwatch/internal/config"
+	"github.com/abahmed/kwatch/internal/persistence"
 )
+
+func newTestStartupManager(
+	client kubernetes.Interface,
+	namespace string,
+	alertConfig map[string]map[string]interface{},
+	appConfig *config.App,
+) *StartupManager {
+	var cfg config.Config
+	if appConfig != nil {
+		cfg.App = *appConfig
+	}
+	cfg.Alert = alertConfig
+	return NewStartupManagerWithRuntime(
+		persistence.NewManagerWithClock(
+			client, namespace, clock.RealClock{},
+		),
+		config.RuntimeConfigFor(&cfg), clock.RealClock{},
+	)
+}
 
 func TestNewStartupManager(t *testing.T) {
 	assert := assert.New(t)
@@ -20,10 +42,9 @@ func TestNewStartupManager(t *testing.T) {
 	alertCfg := make(map[string]map[string]interface{})
 	appCfg := &config.App{}
 
-	sm := NewStartupManager(client, namespace, alertCfg, appCfg)
+	sm := newTestStartupManager(client, namespace, alertCfg, appCfg)
 	assert.NotNil(sm)
-	assert.NotNil(sm.stateManager)
-	assert.NotNil(sm.alertManager)
+	assert.NotNil(sm.persistenceManager)
 }
 
 func TestNewStartupManagerWithNilAlertConfig(t *testing.T) {
@@ -33,12 +54,11 @@ func TestNewStartupManagerWithNilAlertConfig(t *testing.T) {
 	namespace := "kwatch"
 	appCfg := &config.App{}
 
-	sm := NewStartupManager(client, namespace, nil, appCfg)
+	sm := newTestStartupManager(client, namespace, nil, appCfg)
 	assert.NotNil(sm)
-	assert.NotNil(sm.alertManager)
 }
 
-func TestGetAlertManager(t *testing.T) {
+func TestStartupMessageDisabled(t *testing.T) {
 	assert := assert.New(t)
 
 	client := fake.NewSimpleClientset()
@@ -46,9 +66,8 @@ func TestGetAlertManager(t *testing.T) {
 	alertCfg := make(map[string]map[string]interface{})
 	appCfg := &config.App{}
 
-	sm := NewStartupManager(client, namespace, alertCfg, appCfg)
+	sm := newTestStartupManager(client, namespace, alertCfg, appCfg)
 	assert.NotNil(sm)
-	assert.NotNil(sm.GetAlertManager())
 }
 
 func TestHandleStartupFirstRun(t *testing.T) {
@@ -61,13 +80,13 @@ func TestHandleStartupFirstRun(t *testing.T) {
 		DisableStartupMessage: true,
 	}
 
-	sm := NewStartupManager(client, namespace, alertCfg, appCfg)
+	sm := newTestStartupManager(client, namespace, alertCfg, appCfg)
 	assert.NotNil(sm)
 
 	err := sm.HandleStartup(context.Background())
 	assert.Nil(err)
 
-	isFirstRun, _ := sm.stateManager.IsFirstRun(context.Background())
+	isFirstRun, _ := sm.persistenceManager.IsFirstRun(context.Background())
 	assert.False(isFirstRun)
 
 	cm, _ := client.CoreV1().ConfigMaps(namespace).Get(
@@ -104,7 +123,7 @@ func TestHandleStartupUpgrade(t *testing.T) {
 		DisableStartupMessage: true,
 	}
 
-	sm := NewStartupManager(client, namespace, alertCfg, appCfg)
+	sm := newTestStartupManager(client, namespace, alertCfg, appCfg)
 	assert.NotNil(sm)
 
 	err = sm.HandleStartup(context.Background())
@@ -143,7 +162,7 @@ func TestHandleStartupPreservesClusterID(t *testing.T) {
 		DisableStartupMessage: true,
 	}
 
-	sm := NewStartupManager(client, namespace, alertCfg, appCfg)
+	sm := newTestStartupManager(client, namespace, alertCfg, appCfg)
 
 	err = sm.HandleStartup(context.Background())
 	assert.Nil(err)
@@ -179,7 +198,7 @@ func TestHandleStartupSameVersion(t *testing.T) {
 		DisableStartupMessage: true,
 	}
 
-	sm := NewStartupManager(client, namespace, alertCfg, appCfg)
+	sm := newTestStartupManager(client, namespace, alertCfg, appCfg)
 
 	err = sm.HandleStartup(context.Background())
 	assert.Nil(err)
@@ -189,7 +208,7 @@ func TestHandleStartupSameVersion(t *testing.T) {
 	assert.Equal("dev", updatedCM.Data["version"])
 }
 
-func TestGetStateManager(t *testing.T) {
+func TestGetPersistenceManager(t *testing.T) {
 	assert := assert.New(t)
 
 	client := fake.NewSimpleClientset()
@@ -197,9 +216,9 @@ func TestGetStateManager(t *testing.T) {
 	alertCfg := make(map[string]map[string]interface{})
 	appCfg := &config.App{}
 
-	sm := NewStartupManager(client, namespace, alertCfg, appCfg)
+	sm := newTestStartupManager(client, namespace, alertCfg, appCfg)
 	assert.NotNil(sm)
-	assert.NotNil(sm.GetStateManager())
+	assert.NotNil(sm.GetPersistenceManager())
 }
 
 func TestHandleStartupWithStartupMessageEnabled(t *testing.T) {
@@ -212,11 +231,11 @@ func TestHandleStartupWithStartupMessageEnabled(t *testing.T) {
 		DisableStartupMessage: false,
 	}
 
-	sm := NewStartupManager(client, namespace, alertCfg, appCfg)
+	sm := newTestStartupManager(client, namespace, alertCfg, appCfg)
 
 	err := sm.HandleStartup(context.Background())
 	assert.Nil(err)
 
-	isFirstRun, _ := sm.stateManager.IsFirstRun(context.Background())
+	isFirstRun, _ := sm.persistenceManager.IsFirstRun(context.Background())
 	assert.False(isFirstRun)
 }

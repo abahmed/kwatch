@@ -1,6 +1,7 @@
 package teams
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"strings"
@@ -8,9 +9,8 @@ import (
 
 	"k8s.io/klog/v2"
 
-	"github.com/abahmed/kwatch/internal/alert/util"
 	"github.com/abahmed/kwatch/internal/clock"
-	"github.com/abahmed/kwatch/internal/config"
+	"github.com/abahmed/kwatch/internal/delivery/transport"
 	"github.com/abahmed/kwatch/internal/event"
 	"github.com/abahmed/kwatch/internal/insight"
 	"github.com/abahmed/kwatch/internal/message"
@@ -22,13 +22,15 @@ const (
 )
 
 type Teams struct {
+	sender transport.Sender
 	// The HTTP trigger URL for the Power Automate flow
-	webhook string
-	title   string
-	text    string
+	webhook     string
+	title       string
+	text        string
+	clockSource clock.Clock
 
 	// reference for general app configuration
-	appCfg *config.App
+	clusterName string
 }
 
 type teamsFlowPayload struct {
@@ -38,7 +40,12 @@ type teamsFlowPayload struct {
 }
 
 // NewTeams returns new team instance
-func NewTeams(config map[string]interface{}, appCfg *config.App) *Teams {
+
+func NewTeams(
+	config map[string]interface{},
+	clusterName string,
+	dependencies transport.Dependencies,
+) *Teams {
 	webhook, ok := config["webhook"].(string)
 	if !ok || len(webhook) == 0 {
 		klog.InfoS("initializing Teams with empty flow url")
@@ -51,10 +58,12 @@ func NewTeams(config map[string]interface{}, appCfg *config.App) *Teams {
 	text, _ := config["text"].(string)
 
 	return &Teams{
-		webhook: webhook,
-		title:   title,
-		text:    text,
-		appCfg:  appCfg,
+		sender:      transport.NewSender(dependencies),
+		webhook:     webhook,
+		title:       title,
+		text:        text,
+		clusterName: clusterName,
+		clockSource: clock.Require(dependencies.Clock),
 	}
 }
 
@@ -64,59 +73,62 @@ func (t *Teams) Name() string {
 }
 
 // SendEvent sends event to the Power Automate flow
-func (t *Teams) SendEvent(e *event.Event) error {
+func (t *Teams) SendEvent(ctx context.Context, e *event.Event) error {
 	b, err := t.buildRequestBodyTeams(e)
 	if err != nil {
 		return err
 	}
-	return t.sendAPI(b)
+	return t.sendAPI(ctx, b)
 }
 
 // SendMessage sends plain text message to the Power Automate flow
-func (t *Teams) SendMessage(msg string) error {
+func (t *Teams) SendMessage(ctx context.Context, msg string) error {
 	b, err := t.buildRequestBodyMessage(msg)
 	if err != nil {
 		return err
 	}
-	return t.sendAPI(b)
+	return t.sendAPI(ctx, b)
 }
 
-// SendIncident implements alert.ThreadProvider.
+// SendIncident implements delivery.ThreadProvider.
 // It renders the incident using the Report model and PlaintextRenderer,
 // producing a context-adaptive text message.
 func (t *Teams) SendIncident(
+	ctx context.Context,
 	inc *model.Incident,
 	action model.IncidentAction,
 ) error {
-	return t.SendIncidentWithInsight(inc, action, nil)
+	return t.SendIncidentWithInsight(ctx, inc, action, nil)
 }
 
-// SendIncidentWithInsight implements alert.InsightThreadProvider, so the
+// SendIncidentWithInsight implements delivery.InsightThreadProvider, so the
 // diagnosis — likely cause, impact, recent changes — is rendered rather than
 // dropped on the way to this provider.
 func (t *Teams) SendIncidentWithInsight(
+	ctx context.Context,
 	inc *model.Incident,
 	action model.IncidentAction,
 	ins *insight.Insight,
 ) error {
-	text := util.RenderIncidentWithInsight(
+	text := message.RenderIncidentWithInsight(
 		inc,
 		action,
 		ins,
 		message.NewPlainTextRenderer(),
-		t.appCfg.ClusterName,
+		t.clusterName,
+		t.clockSource,
 	)
 	if text == "" {
 		return nil
 	}
-	return t.SendMessage(text)
+	return t.SendMessage(ctx, text)
 }
 
 // SendApi send the given payload to the Power Automate flow with retry logic
-func (t *Teams) sendAPI(payload []byte) error {
-	body, err := util.Send(
-		util.Request{Provider: "Teams", URL: t.webhook, Body: payload},
-	)
+func (t *Teams) sendAPI(ctx context.Context, payload []byte) error {
+	body, err := t.sender.Send(ctx, transport.Request{
+		Provider: "Teams", URL: t.webhook, Body: payload,
+	})
 	if err != nil &&
 		strings.Contains(string(body), "TriggerInputSchemaMismatch") {
 		// The flow's trigger schema does not accept our payload; no retry
@@ -140,7 +152,7 @@ func (t *Teams) buildRequestBodyTeams(e *event.Event) ([]byte, error) {
 	}
 
 	// Format the message with markdown
-	msg := e.FormatMarkdown(t.appCfg.ClusterName, t.text, "\n\n")
+	msg := e.FormatMarkdown(t.clusterName, t.text, "\n\n")
 
 	// Create the attachment for the message with full event details
 	attachments := []map[string]interface{}{
@@ -202,7 +214,7 @@ func (t *Teams) buildRequestBodyTeams(e *event.Event) ([]byte, error) {
 						"type": "TextBlock",
 						"text": fmt.Sprintf(
 							"Time: %s",
-							clock.Now().Format(time.RFC1123)),
+							t.clockSource.Now().Format(time.RFC1123)),
 					})
 					return body
 				}(),

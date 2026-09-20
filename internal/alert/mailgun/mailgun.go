@@ -1,20 +1,21 @@
 package mailgun
 
 import (
+	"context"
 	"encoding/base64"
 	"net/url"
 	"strings"
 
 	"k8s.io/klog/v2"
 
-	"github.com/abahmed/kwatch/internal/alert/util"
-	"github.com/abahmed/kwatch/internal/config"
+	"github.com/abahmed/kwatch/internal/delivery/transport"
 	"github.com/abahmed/kwatch/internal/event"
 )
 
 const mailgunAPIURL = "https://api.mailgun.net/v3"
 
 type Mailgun struct {
+	sender  transport.Sender
 	url     string
 	apiKey  string
 	domain  string
@@ -22,11 +23,16 @@ type Mailgun struct {
 	to      []string
 	subject string
 
-	appCfg *config.App
+	clusterName string
 }
 
 // NewMailgun returns a new Mailgun object
-func NewMailgun(config map[string]interface{}, appCfg *config.App) *Mailgun {
+
+func NewMailgun(
+	config map[string]interface{},
+	clusterName string,
+	dependencies transport.Dependencies,
+) *Mailgun {
 	apiKey, ok := config["apiKey"].(string)
 	if !ok || len(apiKey) == 0 {
 		klog.InfoS("initializing mailgun with empty apiKey")
@@ -72,13 +78,14 @@ func NewMailgun(config map[string]interface{}, appCfg *config.App) *Mailgun {
 	klog.InfoS("initializing mailgun", "domain", domain, "from", from)
 
 	return &Mailgun{
-		url:     strings.TrimRight(server, "/") + "/" + domain + "/messages",
-		apiKey:  apiKey,
-		domain:  domain,
-		from:    from,
-		to:      recipients,
-		subject: subject,
-		appCfg:  appCfg,
+		sender:      transport.NewSender(dependencies),
+		url:         strings.TrimRight(server, "/") + "/" + domain + "/messages",
+		apiKey:      apiKey,
+		domain:      domain,
+		from:        from,
+		to:          recipients,
+		subject:     subject,
+		clusterName: clusterName,
 	}
 }
 
@@ -88,13 +95,13 @@ func (s *Mailgun) Name() string {
 }
 
 // SendEvent sends event to the provider
-func (s *Mailgun) SendEvent(e *event.Event) error {
-	msg := e.FormatText(s.appCfg.ClusterName, "")
-	return s.SendMessage(msg)
+func (s *Mailgun) SendEvent(ctx context.Context, e *event.Event) error {
+	msg := e.FormatText(s.clusterName, "")
+	return s.SendMessage(ctx, msg)
 }
 
 // SendMessage sends text message to the provider
-func (s *Mailgun) SendMessage(msg string) error {
+func (s *Mailgun) SendMessage(ctx context.Context, msg string) error {
 	subject := s.subject
 	if len(subject) == 0 {
 		subject = "kwatch alert"
@@ -111,8 +118,11 @@ func (s *Mailgun) SendMessage(msg string) error {
 	body := []byte(form.Encode())
 
 	auth := "Basic " + base64.StdEncoding.EncodeToString([]byte("api:"+s.apiKey))
-	_, err := util.Post(s.Name(), s.url, body, "application/x-www-form-urlencoded", map[string]string{
-		"Authorization": auth,
+	_, err := s.sender.Send(ctx, transport.Request{
+		Provider: s.Name(), URL: s.url, Body: body,
+		ContentType: "application/x-www-form-urlencoded", Headers: map[string]string{
+			"Authorization": auth,
+		},
 	})
 	return err
 }

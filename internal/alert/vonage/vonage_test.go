@@ -1,6 +1,7 @@
 package vonage
 
 import (
+	"context"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -8,14 +9,22 @@ import (
 
 	"github.com/stretchr/testify/assert"
 
-	"github.com/abahmed/kwatch/internal/config"
+	"github.com/abahmed/kwatch/internal/delivery/transport"
 	"github.com/abahmed/kwatch/internal/event"
 )
+
+var testDeps = transport.Dependencies{
+	HTTPClient: http.DefaultClient,
+}
+
+func testAppConfig() string {
+	return "dev"
+}
 
 func TestEmptyConfig(t *testing.T) {
 	assert := assert.New(t)
 
-	c := NewVonage(map[string]interface{}{}, &config.App{ClusterName: "dev"})
+	c := NewVonage(map[string]interface{}{}, testAppConfig(), testDeps)
 	assert.Nil(c)
 }
 
@@ -28,7 +37,7 @@ func TestVonage(t *testing.T) {
 		"from":      "kwatch",
 		"to":        "+12025550100",
 	}
-	c := NewVonage(configMap, &config.App{ClusterName: "dev"})
+	c := NewVonage(configMap, testAppConfig(), testDeps)
 	assert.NotNil(c)
 	assert.Equal(c.Name(), "Vonage")
 }
@@ -36,16 +45,48 @@ func TestVonage(t *testing.T) {
 func TestVonageInvalidConfig(t *testing.T) {
 	assert := assert.New(t)
 
-	c := NewVonage(map[string]interface{}{"apiSecret": "s", "from": "f", "to": "t"}, &config.App{ClusterName: "dev"})
+	c := NewVonage(
+		map[string]interface{}{
+			"apiSecret": "s",
+			"from":      "f",
+			"to":        "t",
+		},
+		testAppConfig(),
+		testDeps,
+	)
 	assert.Nil(c)
 
-	c = NewVonage(map[string]interface{}{"apiKey": "a", "from": "f", "to": "t"}, &config.App{ClusterName: "dev"})
+	c = NewVonage(
+		map[string]interface{}{
+			"apiKey": "a",
+			"from":   "f",
+			"to":     "t",
+		},
+		testAppConfig(),
+		testDeps,
+	)
 	assert.Nil(c)
 
-	c = NewVonage(map[string]interface{}{"apiKey": "a", "apiSecret": "s", "to": "t"}, &config.App{ClusterName: "dev"})
+	c = NewVonage(
+		map[string]interface{}{
+			"apiKey":    "a",
+			"apiSecret": "s",
+			"to":        "t",
+		},
+		testAppConfig(),
+		testDeps,
+	)
 	assert.Nil(c)
 
-	c = NewVonage(map[string]interface{}{"apiKey": "a", "apiSecret": "s", "from": "f"}, &config.App{ClusterName: "dev"})
+	c = NewVonage(
+		map[string]interface{}{
+			"apiKey":    "a",
+			"apiSecret": "s",
+			"from":      "f",
+		},
+		testAppConfig(),
+		testDeps,
+	)
 	assert.Nil(c)
 }
 
@@ -68,10 +109,10 @@ func TestSendMessage(t *testing.T) {
 		"from":      "kwatch",
 		"to":        "+12025550100",
 	}
-	c := NewVonage(configMap, &config.App{ClusterName: "dev"})
+	c := NewVonage(configMap, testAppConfig(), testDeps)
 	c.url = s.URL
 
-	assert.Nil(c.SendMessage("hello"))
+	assert.Nil(c.SendMessage(context.Background(), "hello"))
 	assert.Contains(gotBody, "api_key=test")
 	assert.Contains(gotBody, "from=kwatch")
 	assert.Contains(gotBody, "text=hello")
@@ -93,10 +134,29 @@ func TestSendMessageError(t *testing.T) {
 		"from":      "kwatch",
 		"to":        "+12025550100",
 	}
-	c := NewVonage(configMap, &config.App{ClusterName: "dev"})
+	c := NewVonage(configMap, testAppConfig(), testDeps)
 	c.url = s.URL
 
-	assert.NotNil(c.SendMessage("test"))
+	assert.NotNil(c.SendMessage(context.Background(), "test"))
+}
+
+func TestSendMessageReportsAPIErrorBody(t *testing.T) {
+	s := httptest.NewServer(http.HandlerFunc(
+		func(w http.ResponseWriter, r *http.Request) {
+			_, _ = w.Write([]byte(
+				`{"messages":[{"status":"2","error-text":"bad credentials"}]}`,
+			))
+		},
+	))
+	defer s.Close()
+
+	c := NewVonage(map[string]interface{}{
+		"apiKey": "test", "apiSecret": "secret", "from": "kwatch",
+		"to": "+12025550100",
+	}, testAppConfig(), testDeps)
+	c.url = s.URL
+
+	assert.Error(t, c.SendMessage(context.Background(), "test"))
 }
 
 func TestSendEvent(t *testing.T) {
@@ -117,7 +177,7 @@ func TestSendEvent(t *testing.T) {
 		"from":      "kwatch",
 		"to":        "+12025550100",
 	}
-	c := NewVonage(configMap, &config.App{ClusterName: "dev"})
+	c := NewVonage(configMap, testAppConfig(), testDeps)
 	c.url = s.URL
 
 	ev := event.Event{
@@ -125,7 +185,7 @@ func TestSendEvent(t *testing.T) {
 		Namespace: "default",
 		Reason:    "OOMKILLED",
 	}
-	assert.Nil(c.SendEvent(&ev))
+	assert.Nil(c.SendEvent(context.Background(), &ev))
 }
 
 func TestInvalidHttpRequest(t *testing.T) {
@@ -137,11 +197,11 @@ func TestInvalidHttpRequest(t *testing.T) {
 		"from":      "kwatch",
 		"to":        "+12025550100",
 	}
-	c := NewVonage(configMap, &config.App{ClusterName: "dev"})
+	c := NewVonage(configMap, testAppConfig(), testDeps)
 	c.url = "h ttp://localhost/%s"
 
-	assert.NotNil(c.SendMessage("test"))
+	assert.NotNil(c.SendMessage(context.Background(), "test"))
 
 	c.url = "http://localhost:132323/%s"
-	assert.NotNil(c.SendMessage("test"))
+	assert.NotNil(c.SendMessage(context.Background(), "test"))
 }

@@ -14,17 +14,19 @@ import (
 	v1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
-
 	"k8s.io/client-go/kubernetes/fake"
-
 	k8stesting "k8s.io/client-go/testing"
+
+	"github.com/abahmed/kwatch/internal/config"
+	"github.com/abahmed/kwatch/internal/event"
+	"github.com/abahmed/kwatch/internal/kubelet"
 )
 
 func TestGetPodContainerLogs(t *testing.T) {
 	assert := assert.New(t)
 
 	client := fake.NewSimpleClientset()
-	logs := GetPodContainerLogs(
+	logs := kubelet.GetPodContainerLogs(
 		context.Background(),
 		client,
 		"test",
@@ -51,7 +53,7 @@ func TestGetPodContainerLogsError(t *testing.T) {
 		},
 	)
 
-	logs := GetPodContainerLogs(
+	logs := kubelet.GetPodContainerLogs(
 		context.Background(),
 		client,
 		"test-pod",
@@ -311,12 +313,13 @@ func TestGetPodEventsSuccess(t *testing.T) {
 	assert.Equal(1, len(result.Items))
 }
 
-func TestGetDefaultClient(t *testing.T) {
+func TestNewHTTPClient(t *testing.T) {
 	assert := assert.New(t)
 
-	client := GetDefaultClient()
+	client := NewHTTPClient(config.ApplicationRuntime{})
 	assert.NotNil(client)
 	assert.Equal(DefaultHTTPTimeout, client.Timeout)
+	assert.NotNil(client.Transport)
 }
 
 // Events are unbounded in Kubernetes; a churning pod accumulates hundreds. An
@@ -333,7 +336,10 @@ func TestGetPodEventsStrKeepsNewestUpToCap(t *testing.T) {
 	}
 	out := GetPodEventsStr(&events)
 	lines := strings.Split(out, "\n")
-	assert.Len(t, lines, MaxEventsInMessage+1, "cap plus the omission note")
+	assert.Len(
+		t, lines, event.MaxPodEventsInMessage+1,
+		"cap plus the omission note",
+	)
 	assert.Contains(t, lines[0], "260 earlier event(s) omitted")
 	assert.Contains(t, out, "Event299", "the newest event survives")
 	assert.NotContains(t, out, "Event000", "the oldest is shed first")

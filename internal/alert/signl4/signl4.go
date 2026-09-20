@@ -1,13 +1,13 @@
 package signl4
 
 import (
+	"context"
 	"encoding/json"
 	"strings"
 
 	"k8s.io/klog/v2"
 
-	"github.com/abahmed/kwatch/internal/alert/util"
-	"github.com/abahmed/kwatch/internal/config"
+	"github.com/abahmed/kwatch/internal/delivery/transport"
 	"github.com/abahmed/kwatch/internal/event"
 )
 
@@ -22,16 +22,22 @@ type signl4Payload struct {
 }
 
 type Signl4 struct {
+	sender     transport.Sender
 	url        string
 	teamSecret string
 	title      string
 	user       string
 
-	appCfg *config.App
+	clusterName string
 }
 
 // NewSignl4 returns a new Signl4 object
-func NewSignl4(config map[string]interface{}, appCfg *config.App) *Signl4 {
+
+func NewSignl4(
+	config map[string]interface{},
+	clusterName string,
+	dependencies transport.Dependencies,
+) *Signl4 {
 	teamSecret, ok := config["teamSecret"].(string)
 	if !ok || len(teamSecret) == 0 {
 		klog.InfoS("initializing signl4 with empty teamSecret")
@@ -49,11 +55,12 @@ func NewSignl4(config map[string]interface{}, appCfg *config.App) *Signl4 {
 	klog.InfoS("initializing signl4", "title", title)
 
 	return &Signl4{
-		url:        strings.TrimRight(server, "/") + "/" + teamSecret,
-		teamSecret: teamSecret,
-		title:      title,
-		user:       user,
-		appCfg:     appCfg,
+		sender:      transport.NewSender(dependencies),
+		url:         strings.TrimRight(server, "/") + "/" + teamSecret,
+		teamSecret:  teamSecret,
+		title:       title,
+		user:        user,
+		clusterName: clusterName,
 	}
 }
 
@@ -63,13 +70,13 @@ func (s *Signl4) Name() string {
 }
 
 // SendEvent sends event to the provider
-func (s *Signl4) SendEvent(e *event.Event) error {
-	msg := e.FormatText(s.appCfg.ClusterName, "")
-	return s.SendMessage(msg)
+func (s *Signl4) SendEvent(ctx context.Context, e *event.Event) error {
+	msg := e.FormatText(s.clusterName, "")
+	return s.SendMessage(ctx, msg)
 }
 
 // SendMessage sends text message to the provider
-func (s *Signl4) SendMessage(msg string) error {
+func (s *Signl4) SendMessage(ctx context.Context, msg string) error {
 	title := s.title
 	if len(title) == 0 {
 		title = "kwatch alert"
@@ -88,6 +95,9 @@ func (s *Signl4) SendMessage(msg string) error {
 		return err
 	}
 
-	_, err = util.Post(s.Name(), s.url, body, "application/json", nil)
+	_, err = s.sender.Send(ctx, transport.Request{
+		Provider: s.Name(), URL: s.url, Body: body,
+		ContentType: "application/json",
+	})
 	return err
 }

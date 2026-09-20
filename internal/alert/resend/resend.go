@@ -1,30 +1,36 @@
 package resend
 
 import (
+	"context"
 	"encoding/json"
 	"strings"
 
 	"k8s.io/klog/v2"
 
-	"github.com/abahmed/kwatch/internal/alert/util"
-	"github.com/abahmed/kwatch/internal/config"
+	"github.com/abahmed/kwatch/internal/delivery/transport"
 	"github.com/abahmed/kwatch/internal/event"
 )
 
 const resendAPIURL = "https://api.resend.com/emails"
 
 type Resend struct {
+	sender  transport.Sender
 	url     string
 	apiKey  string
 	from    string
 	to      []string
 	subject string
 
-	appCfg *config.App
+	clusterName string
 }
 
 // NewResend returns a new Resend object
-func NewResend(config map[string]interface{}, appCfg *config.App) *Resend {
+
+func NewResend(
+	config map[string]interface{},
+	clusterName string,
+	dependencies transport.Dependencies,
+) *Resend {
 	apiKey, ok := config["apiKey"].(string)
 	if !ok || len(apiKey) == 0 {
 		klog.InfoS("initializing resend with empty apiKey")
@@ -59,12 +65,13 @@ func NewResend(config map[string]interface{}, appCfg *config.App) *Resend {
 	klog.InfoS("initializing resend", "from", from)
 
 	return &Resend{
-		url:     resendAPIURL,
-		apiKey:  apiKey,
-		from:    from,
-		to:      recipients,
-		subject: subject,
-		appCfg:  appCfg,
+		sender:      transport.NewSender(dependencies),
+		url:         resendAPIURL,
+		apiKey:      apiKey,
+		from:        from,
+		to:          recipients,
+		subject:     subject,
+		clusterName: clusterName,
 	}
 }
 
@@ -74,13 +81,13 @@ func (s *Resend) Name() string {
 }
 
 // SendEvent sends event to the provider
-func (s *Resend) SendEvent(e *event.Event) error {
-	msg := e.FormatText(s.appCfg.ClusterName, "")
-	return s.SendMessage(msg)
+func (s *Resend) SendEvent(ctx context.Context, e *event.Event) error {
+	msg := e.FormatText(s.clusterName, "")
+	return s.SendMessage(ctx, msg)
 }
 
 // SendMessage sends text message to the provider
-func (s *Resend) SendMessage(msg string) error {
+func (s *Resend) SendMessage(ctx context.Context, msg string) error {
 	subject := s.subject
 	if len(subject) == 0 {
 		subject = "kwatch alert"
@@ -98,8 +105,11 @@ func (s *Resend) SendMessage(msg string) error {
 		return err
 	}
 
-	_, err = util.Post(s.Name(), s.url, body, "application/json", map[string]string{
-		"Authorization": "Bearer " + s.apiKey,
+	_, err = s.sender.Send(ctx, transport.Request{
+		Provider: s.Name(), URL: s.url, Body: body,
+		ContentType: "application/json", Headers: map[string]string{
+			"Authorization": "Bearer " + s.apiKey,
+		},
 	})
 	return err
 }

@@ -4,28 +4,19 @@ import (
 	"sort"
 	"strings"
 	"sync"
-	"time"
 
 	"github.com/abahmed/kwatch/internal/clock"
 	"github.com/abahmed/kwatch/internal/model"
 )
 
-type RCARecord struct {
-	Fingerprint     string    `json:"fingerprint"`
-	CauseClass      string    `json:"causeClass"`
-	Observations    int       `json:"observations"`
-	Resolved        int       `json:"resolved"`
-	Recurred        int       `json:"recurred"`
-	UnknownOutcomes int       `json:"unknownOutcomes"`
-	ConfidenceBias  float64   `json:"confidenceBias"`
-	LastOutcome     string    `json:"lastOutcome"`
-	LastSeen        time.Time `json:"lastSeen"`
-}
+// RCARecord remains an insight alias for callers that work with diagnosis,
+// while the persisted wire type is owned by the shared model package.
+type RCARecord = model.RCARecord
 
 type FeedbackStore struct {
 	mu      sync.RWMutex
 	records map[string]RCARecord
-	now     func() time.Time
+	now     clock.Clock
 	// active remembers the diagnosis attached to a live incident. Resolve
 	// notifications do not carry the original Insight, so using only the
 	// reason would incorrectly update every learned pattern for that reason.
@@ -34,18 +25,14 @@ type FeedbackStore struct {
 
 const maxFeedbackRecords = 500
 
-func NewFeedbackStore() *FeedbackStore {
+// NewFeedbackStoreWithClock fixes the time source at construction so feedback
+// timestamps cannot change underneath concurrent observations.
+func NewFeedbackStoreWithClock(now clock.Clock) *FeedbackStore {
+	now = clock.Require(now)
 	return &FeedbackStore{
 		records: make(map[string]RCARecord),
 		active:  make(map[string]string),
-		now:     clock.Now,
-	}
-}
-
-// SetClock injects the clock used for feedback timestamps.
-func (s *FeedbackStore) SetClock(now func() time.Time) {
-	if now != nil {
-		s.now = now
+		now:     now,
 	}
 }
 
@@ -55,6 +42,7 @@ func (s *FeedbackStore) Observe(inc *model.Incident, action model.IncidentAction
 	}
 	key := feedbackKey(inc, pattern)
 	s.mu.Lock()
+	now := s.now
 	incidentKey := ""
 	if inc != nil {
 		incidentKey = string(inc.Key)
@@ -70,7 +58,7 @@ func (s *FeedbackStore) Observe(inc *model.Incident, action model.IncidentAction
 	}
 	record := s.records[key]
 	record.Fingerprint, record.CauseClass = key, pattern
-	record.LastSeen = s.now()
+	record.LastSeen = now.Now()
 	if action == model.ActionResolved {
 		record.Resolved++
 		record.LastOutcome = "resolved"
@@ -132,7 +120,10 @@ func (s *FeedbackStore) Snapshot() []RCARecord {
 		out = append(out, record)
 	}
 	sort.Slice(out, func(i, j int) bool {
-		return out[i].LastSeen.Before(out[j].LastSeen)
+		if !out[i].LastSeen.Equal(out[j].LastSeen) {
+			return out[i].LastSeen.Before(out[j].LastSeen)
+		}
+		return out[i].Fingerprint < out[j].Fingerprint
 	})
 	return out
 }

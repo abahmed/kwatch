@@ -9,23 +9,35 @@ import (
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/dynamic"
-	"k8s.io/client-go/rest"
 
 	"gopkg.in/yaml.v3"
 
 	"github.com/abahmed/kwatch/internal/config"
 )
 
-// ApplyStartupConfig overlays the optional KwatchConfig before components are
-// constructed. A CRD is deliberately a startup-only source; live changes
-// cause a restart through Watcher.
-func ApplyStartupConfig(ctx context.Context, cfg *config.Config, restCfg *rest.Config, namespace string) error {
-	if !cfg.CrdConfig.Enabled {
+// ApplyStartupConfigWithClient applies the startup overlay using the shared
+// application-owned dynamic client.
+func ApplyStartupConfigWithClient(
+	ctx context.Context,
+	cfg *config.Config,
+	dynamicClient dynamic.Interface,
+	namespace string,
+) error {
+	return applyStartupConfig(ctx, cfg, dynamicClient, namespace)
+}
+
+func applyStartupConfig(
+	ctx context.Context,
+	cfg *config.Config,
+	dynamicClient dynamic.Interface,
+	namespace string,
+) error {
+	if !config.RuntimeConfigFor(cfg).Monitors().CRD().Enabled {
 		return nil
 	}
-	dc, err := dynamic.NewForConfig(restCfg)
-	if err != nil {
-		return err
+	dc := dynamicClient
+	if dc == nil {
+		return fmt.Errorf("crdwatch: dynamic client is not configured")
 	}
 	list, err := dc.Resource(gvr).Namespace(namespace).List(ctx, metav1.ListOptions{})
 	if err != nil {

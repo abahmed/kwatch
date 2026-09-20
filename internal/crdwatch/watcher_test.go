@@ -1,6 +1,8 @@
 package crdwatch
 
 import (
+	"errors"
+	"sync"
 	"testing"
 
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
@@ -58,4 +60,66 @@ func TestWatcherIgnoresMalformedObjects(t *testing.T) {
 		ready:   true,
 	}
 	watcher.changed(struct{}{})
+}
+
+func TestWatcherReportsDiscoveryDegradation(t *testing.T) {
+	var reported error
+	watcher := &Watcher{
+		started:    true,
+		statusSink: func(err error) { reported = err },
+	}
+
+	watcher.reportError(errors.New("discovery unavailable"))
+
+	status := watcher.Status()
+	if reported == nil || status.State != "degraded" ||
+		status.LastError == "" {
+		t.Fatalf("status = %+v, reported = %v", status, reported)
+	}
+}
+
+func TestWatcherReportsOptionalAvailabilityTransitions(t *testing.T) {
+	watcher := &Watcher{}
+	if !watcher.markOptionalUnavailable() {
+		t.Fatal("first unavailable state was not reported")
+	}
+	if watcher.markOptionalUnavailable() {
+		t.Fatal("repeated unavailable state was reported")
+	}
+	watcher.clearOptionalUnavailable()
+	if !watcher.markOptionalUnavailable() {
+		t.Fatal("second outage was not reported")
+	}
+}
+
+func TestStatusReportsWaitingForMissingCRD(t *testing.T) {
+	watcher := &Watcher{started: true}
+	status := watcher.Status()
+	if status.State != "waiting" || !status.WaitingForCRD {
+		t.Fatalf("status = %+v, want waiting state", status)
+	}
+}
+
+func TestLifecycleResetIsIdempotentWhenStopRacesCancellation(t *testing.T) {
+	done := make(chan struct{})
+	watcher := &Watcher{started: true, generation: 4, done: done}
+
+	var group sync.WaitGroup
+	group.Add(2)
+	for i := 0; i < 2; i++ {
+		go func() {
+			defer group.Done()
+			watcher.resetLifecycle(4)
+		}()
+	}
+	group.Wait()
+
+	if watcher.started {
+		t.Fatal("racing lifecycle resets left the watcher started")
+	}
+	select {
+	case <-done:
+	default:
+		t.Fatal("reset did not signal watcher completion")
+	}
 }

@@ -1,6 +1,8 @@
 package controlplane
 
 import (
+	"context"
+	"fmt"
 	"testing"
 	"time"
 
@@ -9,9 +11,27 @@ import (
 
 	"github.com/abahmed/kwatch/internal/config"
 	"github.com/abahmed/kwatch/internal/constant"
-	"github.com/abahmed/kwatch/internal/correlation"
+	"github.com/abahmed/kwatch/internal/incident"
 	"github.com/abahmed/kwatch/internal/model"
 )
+
+type testResolver struct{}
+
+func (testResolver) LookupHost(
+	_ context.Context, _ string,
+) ([]string, error) {
+	return nil, fmt.Errorf("not implemented")
+}
+
+func TestConfigureSourcesClearsUnavailableResolver(t *testing.T) {
+	monitor := &Monitor{resolver: testResolver{}}
+	if err := monitor.ConfigureSources(Sources{}); err != nil {
+		t.Fatalf("ConfigureSources() error = %v", err)
+	}
+	if monitor.resolver != nil {
+		t.Fatal("ConfigureSources retained a stale resolver")
+	}
+}
 
 func TestControlPlaneState(t *testing.T) {
 	checked := time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)
@@ -132,7 +152,7 @@ func TestIsComponentPod(t *testing.T) {
 
 func TestObserveUsesFailureAndRecoveryThresholds(t *testing.T) {
 	var actions []model.IncidentAction
-	engine := correlation.NewEngine(correlation.Config{
+	engine := newTestIncidentEngine(incident.Config{
 		LifecycleHook: func(_ *model.Incident, action model.IncidentAction) {
 			actions = append(actions, action)
 		},
@@ -142,9 +162,10 @@ func TestObserveUsesFailureAndRecoveryThresholds(t *testing.T) {
 			FailureThreshold:  2,
 			RecoveryThreshold: 2,
 		},
-		correlator: engine,
-		failures:   make(map[string]int),
-		recoveries: make(map[string]int),
+		incidentSink: engine,
+		failures:     make(map[string]int),
+		recoveries:   make(map[string]int),
+		failing:      make(map[string]bool),
 	}
 
 	monitor.observe("api-server", false,
@@ -179,11 +200,11 @@ func TestControlPlaneStatusReturnsIndependentCopy(t *testing.T) {
 		},
 	}}
 
-	copyStatus := monitor.ControlPlaneStatus().(Status)
+	copyStatus := monitor.ControlPlaneStatus()
 	copyStatus.Components["etcd"] = EndpointStatus{Name: "changed"}
 	copyStatus.Components["new"] = EndpointStatus{Name: "new"}
 
-	original := monitor.ControlPlaneStatus().(Status)
+	original := monitor.ControlPlaneStatus()
 	if original.Components["etcd"].Name != "etcd" {
 		t.Fatal("mutating returned component changed monitor state")
 	}

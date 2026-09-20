@@ -1,22 +1,16 @@
 package health
 
 import (
-	"context"
-	"crypto/subtle"
-	"encoding/json"
+	"fmt"
 	"net"
 	"net/http"
-	"net/http/pprof"
-	"strconv"
 	"sync"
 	"sync/atomic"
 	"time"
 
-	"k8s.io/klog/v2"
-
+	"github.com/abahmed/kwatch/internal/clock"
 	"github.com/abahmed/kwatch/internal/config"
 	"github.com/abahmed/kwatch/internal/event"
-	"github.com/abahmed/kwatch/internal/metrics"
 	"github.com/abahmed/kwatch/internal/model"
 )
 
@@ -24,55 +18,106 @@ type IncidentLister interface {
 	Snapshot() []model.IncidentView
 }
 
-type TestAlertSender interface {
+type AlertSender interface {
 	NotifyEvent(event event.Event)
 	Notify(msg string)
 }
 
 type DeadLetterLister interface {
-	DeadLetters() interface{}
+	DeadLetters() []model.DeadLetterEntry
 }
 
-type TelemetryLister interface {
-	TelemetryStatus() interface{}
+// StatusProvider returns an already typed JSON status document. The health
+// package does not need to know every monitor's private status structure, but
+// it does require an explicit serialization boundary instead of interface{}
+// values flowing through every handler.
+type StatusProvider interface {
+	StatusJSON() ([]byte, error)
 }
 
-type SecurityLister interface {
-	SecurityStatus() interface{}
-}
-
-type ControlPlaneLister interface {
-	ControlPlaneStatus() interface{}
-}
-
-type InformerLister interface {
-	InformerStatus() interface{}
+// Dependencies are configured once before Open. Keeping this boundary typed
+// makes health wiring visible at the application composition root.
+type Dependencies struct {
+	Incident     IncidentLister
+	Delivery     AlertSender
+	DeadLetters  DeadLetterLister
+	Telemetry    StatusProvider
+	Security     StatusProvider
+	ControlPlane StatusProvider
+	Informer     StatusProvider
+	Persistence  StatusProvider
 }
 
 type HealthServer struct {
 	server             *http.Server
+	listener           net.Listener
 	port               int
 	enabled            bool
 	pprof              bool
 	diagnostics        bool
 	diagnosticsToken   string
 	incidentAPI        IncidentLister
-	alertManager       TestAlertSender
+	deliveryManager    AlertSender
 	deadLetterLister   DeadLetterLister
-	telemetryLister    TelemetryLister
-	securityLister     SecurityLister
-	controlPlaneLister ControlPlaneLister
-	informerLister     InformerLister
+	telemetryLister    StatusProvider
+	securityLister     StatusProvider
+	controlPlaneLister StatusProvider
+	informerLister     StatusProvider
+	persistenceLister  StatusProvider
 	ready              atomic.Bool
 	componentMu        sync.RWMutex
 	componentErrors    map[string]string
+	componentStatus    map[string]ComponentStatus
+	clock              clock.Clock
+	lifecycleMu        sync.Mutex
+	started            bool
+	stopped            bool
+	stopErr            error
+	serveErr           error
+	serveErrors        chan error
+	testAlertMu        sync.Mutex
+	lastTestAlert      time.Time
+	leadership         LeadershipStatus
 }
 
 type HealthResponse struct {
-	Status string `json:"status"`
+	Status     string            `json:"status"`
+	Leadership *LeadershipStatus `json:"leadership,omitempty"`
+	// Degraded names the optional components that failed to start, with the
+	// reason. Empty when everything kwatch was asked to run is running.
+	Degraded   map[string]string          `json:"degraded,omitempty"`
+	Components map[string]ComponentStatus `json:"components,omitempty"`
 }
 
-func NewHealthServer(cfg config.HealthCheck) *HealthServer {
+// LeadershipStatus is the safe, bounded election state exposed by health.
+// It deliberately contains no Lease object or arbitrary API error text.
+type LeadershipStatus struct {
+	Role           string    `json:"role"`
+	Identity       string    `json:"identity,omitempty"`
+	Epoch          int64     `json:"epoch,omitempty"`
+	AcquiredAt     time.Time `json:"acquiredAt,omitempty"`
+	LastRenewal    time.Time `json:"lastRenewal,omitempty"`
+	LastTransition time.Time `json:"lastTransition,omitempty"`
+	TakeoverCount  int64     `json:"takeoverCount,omitempty"`
+	LossReason     string    `json:"lossReason,omitempty"`
+}
+
+// ComponentStatus is the safe diagnostic state for one runtime component.
+// Details remain in logs; this type intentionally contains only bounded data.
+type ComponentStatus struct {
+	State          string    `json:"state"`
+	Available      bool      `json:"available"`
+	Reason         string    `json:"reason,omitempty"`
+	LastTransition time.Time `json:"lastTransition,omitempty"`
+}
+
+// NewHealthServerWithClock constructs health state with an explicit clock so
+// transition timestamps remain deterministic in tests and embedded callers.
+func NewHealthServerWithClock(
+	cfg config.HealthCheck,
+	clockSource clock.Clock,
+) *HealthServer {
+	clockSource = clock.Require(clockSource)
 	h := &HealthServer{
 		port:             cfg.Port,
 		enabled:          cfg.Enabled,
@@ -80,191 +125,30 @@ func NewHealthServer(cfg config.HealthCheck) *HealthServer {
 		diagnostics:      cfg.Diagnostics,
 		diagnosticsToken: cfg.DiagnosticsToken,
 		componentErrors:  make(map[string]string),
+		componentStatus:  make(map[string]ComponentStatus),
+		serveErrors:      make(chan error, 1),
+		clock:            clockSource,
 	}
 	return h
 }
 
-func (h *HealthServer) guard(next http.HandlerFunc) http.HandlerFunc {
-	return func(w http.ResponseWriter, r *http.Request) {
-		if !h.requireDiagnosticsAuth(w, r) {
-			return
-		}
-		next(w, r)
+// ConfigureDependencies supplies all diagnostic providers before the server
+// opens its listener. Dependency mutation after startup is rejected.
+func (h *HealthServer) ConfigureDependencies(
+	deps Dependencies,
+) error {
+	h.lifecycleMu.Lock()
+	defer h.lifecycleMu.Unlock()
+	if h.started {
+		return fmt.Errorf("health dependencies cannot change after start")
 	}
-}
-
-func (h *HealthServer) requireDiagnosticsAuth(w http.ResponseWriter, r *http.Request) bool {
-	if h.diagnosticsToken == "" {
-		return true
-	}
-	token := r.Header.Get("Authorization")
-	if subtle.ConstantTimeCompare([]byte(token), []byte("Bearer "+h.diagnosticsToken)) == 1 {
-		return true
-	}
-	w.Header().Set("Content-Type", "text/plain")
-	w.WriteHeader(http.StatusUnauthorized)
-	if _, err := w.Write([]byte("unauthorized")); err != nil {
-		klog.ErrorS(err, "health: write unauthorized response")
-	}
-	return false
-}
-
-func (h *HealthServer) SetIncidentAPI(lister IncidentLister) {
-	h.incidentAPI = lister
-}
-
-func (h *HealthServer) SetAlertManager(a TestAlertSender) {
-	h.alertManager = a
-}
-
-func (h *HealthServer) SetDeadLetterLister(l DeadLetterLister) {
-	h.deadLetterLister = l
-}
-
-func (h *HealthServer) SetTelemetryLister(l TelemetryLister) {
-	h.telemetryLister = l
-}
-
-func (h *HealthServer) SetSecurityLister(l SecurityLister) {
-	h.securityLister = l
-}
-
-func (h *HealthServer) SetControlPlaneLister(l ControlPlaneLister) {
-	h.controlPlaneLister = l
-}
-
-func (h *HealthServer) SetInformerLister(l InformerLister) {
-	h.informerLister = l
-}
-
-func (h *HealthServer) Start(ctx context.Context) error {
-	if !h.enabled {
-		klog.V(4).InfoS("health check is disabled")
-		return nil
-	}
-
-	mux := http.NewServeMux()
-	mux.HandleFunc("/healthz", h.healthzHandler)
-	mux.HandleFunc("/health", h.healthHandler)
-	mux.HandleFunc("/readyz", h.readyzHandler)
-	if h.diagnostics {
-		mux.HandleFunc("/incidents", h.incidentsHandler)
-		mux.HandleFunc("/test-alert", h.testAlertHandler)
-		mux.HandleFunc("/deadletters", h.deadLettersHandler)
-	}
-	mux.HandleFunc("/kubelet", h.guard(h.kubeletHandler))
-	mux.HandleFunc("/security", h.guard(h.securityHandler))
-	mux.HandleFunc("/controlplane", h.guard(h.controlPlaneHandler))
-	mux.HandleFunc("/informer", h.guard(h.informerHandler))
-
-	mux.Handle("/metrics", metrics.DefaultRegistry().Handler())
-
-	if h.pprof {
-		mux.HandleFunc("/debug/pprof/", h.guard(pprof.Index))
-		mux.HandleFunc("/debug/pprof/cmdline", h.guard(pprof.Cmdline))
-		mux.HandleFunc("/debug/pprof/profile", h.guard(pprof.Profile))
-		mux.HandleFunc("/debug/pprof/symbol", h.guard(pprof.Symbol))
-		mux.HandleFunc("/debug/pprof/trace", h.guard(pprof.Trace))
-		mux.HandleFunc("/debug/pprof/heap", h.guard(pprof.Handler("heap").ServeHTTP))
-		mux.HandleFunc("/debug/pprof/goroutine", h.guard(pprof.Handler("goroutine").ServeHTTP))
-		mux.HandleFunc("/debug/pprof/block", h.guard(pprof.Handler("block").ServeHTTP))
-		mux.HandleFunc("/debug/pprof/threadcreate", h.guard(pprof.Handler("threadcreate").ServeHTTP))
-		mux.HandleFunc("/debug/pprof/mutex", h.guard(pprof.Handler("mutex").ServeHTTP))
-	}
-
-	h.server = &http.Server{
-		Addr:              ":" + strconv.Itoa(h.port),
-		Handler:           mux,
-		ReadHeaderTimeout: 5 * time.Second,
-		ReadTimeout:       5 * time.Second,
-		WriteTimeout:      10 * time.Second,
-		IdleTimeout:       60 * time.Second,
-	}
-
-	ln, err := net.Listen("tcp", h.server.Addr)
-	if err != nil {
-		return err
-	}
-
-	go func() {
-		klog.InfoS("starting health check server", "port", h.port)
-		if err := h.server.Serve(ln); err != nil && err != http.ErrServerClosed {
-			klog.ErrorS(err, "health check server error")
-		}
-	}()
-	if ctx != nil {
-		go func() {
-			<-ctx.Done()
-			shutdownCtx, cancel := context.WithTimeout(
-				context.Background(), 10*time.Second,
-			)
-			defer cancel()
-			if err := h.Stop(shutdownCtx); err != nil {
-				klog.ErrorS(err, "health check context shutdown failed")
-			}
-		}()
-	}
-
+	h.incidentAPI = deps.Incident
+	h.deliveryManager = deps.Delivery
+	h.deadLetterLister = deps.DeadLetters
+	h.telemetryLister = deps.Telemetry
+	h.securityLister = deps.Security
+	h.controlPlaneLister = deps.ControlPlane
+	h.informerLister = deps.Informer
+	h.persistenceLister = deps.Persistence
 	return nil
-}
-
-func (h *HealthServer) Stop(ctx context.Context) error {
-	if h.server == nil {
-		return nil
-	}
-	return h.server.Shutdown(ctx)
-}
-
-func (h *HealthServer) healthzHandler(w http.ResponseWriter, r *http.Request) {
-	w.Header().Set("Content-Type", "text/plain")
-	w.WriteHeader(http.StatusOK)
-	if _, err := w.Write([]byte("OK")); err != nil {
-		klog.ErrorS(err, "health: write healthz response")
-	}
-}
-
-func (h *HealthServer) healthHandler(w http.ResponseWriter, r *http.Request) {
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(http.StatusOK)
-	if err := json.NewEncoder(w).Encode(HealthResponse{Status: "ok"}); err != nil {
-		klog.ErrorS(err, "health: encode health response")
-	}
-}
-
-func (h *HealthServer) SetReady(v bool) {
-	h.ready.Store(v)
-}
-
-func (h *HealthServer) SetComponentError(name string, err error) {
-	h.componentMu.Lock()
-	defer h.componentMu.Unlock()
-	if h.componentErrors == nil {
-		h.componentErrors = make(map[string]string)
-	}
-	if err == nil {
-		delete(h.componentErrors, name)
-		return
-	}
-	h.componentErrors[name] = err.Error()
-}
-
-func (h *HealthServer) componentsHealthy() bool {
-	h.componentMu.RLock()
-	defer h.componentMu.RUnlock()
-	return len(h.componentErrors) == 0
-}
-
-func (h *HealthServer) readyzHandler(w http.ResponseWriter, r *http.Request) {
-	w.Header().Set("Content-Type", "text/plain")
-	if !h.ready.Load() || !h.componentsHealthy() {
-		w.WriteHeader(http.StatusServiceUnavailable)
-		if _, err := w.Write([]byte("not ready")); err != nil {
-			klog.ErrorS(err, "health: write not-ready response")
-		}
-		return
-	}
-	w.WriteHeader(http.StatusOK)
-	if _, err := w.Write([]byte("OK")); err != nil {
-		klog.ErrorS(err, "health: write readyz response")
-	}
 }

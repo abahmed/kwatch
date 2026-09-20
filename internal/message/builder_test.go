@@ -12,7 +12,7 @@ import (
 )
 
 func TestReportBuilderCreate(t *testing.T) {
-	rb := NewReportBuilder("test-cluster")
+	rb := newTestReportBuilder("test-cluster")
 	inc := &model.Incident{
 		Subject: model.Subject{
 			Name:      "p1",
@@ -45,7 +45,7 @@ func TestReportBuilderCreate(t *testing.T) {
 }
 
 func TestReportBuilderCreateWithInsight(t *testing.T) {
-	rb := NewReportBuilder("test-cluster")
+	rb := newTestReportBuilder("test-cluster")
 	inc := &model.Incident{
 		Subject: model.Subject{
 			Name:      "p1",
@@ -73,7 +73,7 @@ func TestReportBuilderCreateWithInsight(t *testing.T) {
 }
 
 func TestReportBuilderCreateWithChanges(t *testing.T) {
-	rb := NewReportBuilder("test-cluster")
+	rb := newTestReportBuilder("test-cluster")
 	inc := &model.Incident{
 		Subject: model.Subject{
 			Name:      "p1",
@@ -101,7 +101,7 @@ func TestReportBuilderCreateWithChanges(t *testing.T) {
 }
 
 func TestReportBuilderUpdate(t *testing.T) {
-	rb := NewReportBuilder("test-cluster")
+	rb := newTestReportBuilder("test-cluster")
 	inc := &model.Incident{
 		Subject: model.Subject{
 			Name:      "p1",
@@ -123,7 +123,7 @@ func TestReportBuilderUpdate(t *testing.T) {
 }
 
 func TestReportBuilderResolved(t *testing.T) {
-	rb := NewReportBuilder("test-cluster")
+	rb := newTestReportBuilder("test-cluster")
 	inc := &model.Incident{
 		Subject: model.Subject{
 			Name:      "p1",
@@ -144,7 +144,7 @@ func TestReportBuilderResolved(t *testing.T) {
 }
 
 func TestReportBuilderOOMTypeSpecific(t *testing.T) {
-	rb := NewReportBuilder("test-cluster")
+	rb := newTestReportBuilder("test-cluster")
 	inc := &model.Incident{
 		Subject: model.Subject{
 			Name:          "p1",
@@ -177,7 +177,7 @@ func TestReportBuilderOOMTypeSpecific(t *testing.T) {
 }
 
 func TestReportBuilderOOMLeak(t *testing.T) {
-	rb := NewReportBuilder("test-cluster")
+	rb := newTestReportBuilder("test-cluster")
 	inc := &model.Incident{
 		Subject: model.Subject{
 			Name:      "p1",
@@ -211,7 +211,7 @@ func TestReportBuilderOOMLeak(t *testing.T) {
 }
 
 func TestReportBuilderImageTypeSpecific(t *testing.T) {
-	rb := NewReportBuilder("test-cluster")
+	rb := newTestReportBuilder("test-cluster")
 	inc := &model.Incident{
 		Subject: model.Subject{
 			Name:      "p1",
@@ -245,7 +245,7 @@ func TestReportBuilderImageTypeSpecific(t *testing.T) {
 }
 
 func TestReportBuilderPendingTypeSpecific(t *testing.T) {
-	rb := NewReportBuilder("test-cluster")
+	rb := newTestReportBuilder("test-cluster")
 	inc := &model.Incident{
 		Subject: model.Subject{
 			Name:      "p1",
@@ -280,7 +280,7 @@ func TestReportBuilderPendingTypeSpecific(t *testing.T) {
 }
 
 func TestReportBuilderSuppressedPods(t *testing.T) {
-	rb := NewReportBuilder("test-cluster")
+	rb := newTestReportBuilder("test-cluster")
 	inc := &model.Incident{
 		Subject: model.Subject{
 			Name:      "node1",
@@ -307,7 +307,7 @@ func TestReportBuilderSuppressedPods(t *testing.T) {
 }
 
 func TestReportBuilderSkip(t *testing.T) {
-	rb := NewReportBuilder("test-cluster")
+	rb := newTestReportBuilder("test-cluster")
 	report := rb.Build(&model.Incident{}, model.ActionSkip, nil)
 	assert.Equal(t, "unknown", report.Action)
 }

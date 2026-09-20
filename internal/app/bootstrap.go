@@ -1,0 +1,140 @@
+package app
+
+import (
+	"context"
+	"fmt"
+	"net"
+	"sync"
+	"time"
+
+	"github.com/abahmed/kwatch/internal/alert/catalog"
+	"github.com/abahmed/kwatch/internal/client"
+	"github.com/abahmed/kwatch/internal/clock"
+	"github.com/abahmed/kwatch/internal/config"
+	"github.com/abahmed/kwatch/internal/delivery"
+	"github.com/abahmed/kwatch/internal/health"
+	"github.com/abahmed/kwatch/internal/k8s"
+	"github.com/abahmed/kwatch/internal/persistence"
+	"github.com/abahmed/kwatch/internal/rbac"
+	"github.com/abahmed/kwatch/internal/startup"
+	"github.com/abahmed/kwatch/internal/upgrader"
+)
+
+// bootstrap contains infrastructure and startup state that must exist before
+// domain engines or monitor families can be composed.
+type bootstrap struct {
+	runtime         config.RuntimeConfig
+	persistence     *persistence.Manager
+	startupManager  *startup.StartupManager
+	startupResult   startup.Result
+	healthServer    *health.HealthServer
+	securityMonitor *rbac.Monitor
+	deliveryManager *delivery.Manager
+	clients         client.ClientSet
+	telemetryRun    func(context.Context) error
+	upgradeRun      func(context.Context) error
+	clock           clock.Clock
+	activateOnce    sync.Once
+	activateErr     error
+}
+
+func newBootstrap(
+	ctx context.Context,
+	cfg *config.Config,
+	now func() time.Time,
+) (*bootstrap, error) {
+	runtime := config.RuntimeConfigFor(cfg)
+	clockSource := clock.Func(now)
+	upgraderConfig := runtime.Lifecycle().Upgrader()
+	clients, err := client.NewClientSetWithRuntime(
+		runtime, &net.Resolver{}, clockSource,
+	)
+	if err != nil {
+		return nil, fmt.Errorf("create application clients: %w", err)
+	}
+	if err := applyStartupCRD(
+		ctx, cfg, clients.Dynamic,
+	); err != nil {
+		return nil, fmt.Errorf("apply startup CRD configuration: %w", err)
+	}
+	// The CRD overlay may change monitor, alert, or startup settings. Rebuild
+	// the immutable snapshot before composing any domain component.
+	runtime = config.RuntimeConfigFor(cfg)
+	upgraderConfig = runtime.Lifecycle().Upgrader()
+	// The overlay can change proxy, TLS, authentication, or timeout settings.
+	// Rebuild the complete client bundle so every consumer observes the final
+	// immutable runtime snapshot rather than the pre-overlay settings.
+	clients, err = client.NewClientSetWithRuntime(
+		runtime, &net.Resolver{}, clockSource,
+	)
+	if err != nil {
+		return nil, fmt.Errorf("rebuild application clients: %w", err)
+	}
+
+	persistenceManager := persistence.NewManagerWithClock(
+		clients.Kubernetes, k8s.GetNamespace(), clock.Func(now),
+	)
+	startupManager := startup.NewStartupManagerWithRuntime(
+		persistenceManager,
+		runtime,
+		clockSource,
+	)
+
+	healthServer := health.NewHealthServerWithClock(
+		runtime.Lifecycle().HealthCheck(), clock.Func(now),
+	)
+	securityMonitor := configureSecurityMonitor(runtime, clients.Kubernetes, now)
+
+	deliveryManager := delivery.NewManagerWithDependencies(delivery.Dependencies{
+		HTTPClient: clients.HTTP,
+		Clock:      clockSource,
+	})
+	if err := deliveryManager.InitRuntime(
+		runtime, catalog.NewProvider,
+	); err != nil {
+		return nil, fmt.Errorf("initialize delivery providers: %w", err)
+	}
+
+	upgrader := upgrader.NewUpgrader(
+		&upgraderConfig,
+		deliveryManager,
+		persistenceManager,
+		clients.HTTP,
+	)
+	return &bootstrap{
+		runtime:         runtime,
+		clients:         clients,
+		persistence:     persistenceManager,
+		startupManager:  startupManager,
+		healthServer:    healthServer,
+		securityMonitor: securityMonitor,
+		deliveryManager: deliveryManager,
+		upgradeRun:      upgrader.CheckUpdates,
+		clock:           clockSource,
+	}, nil
+}
+
+// activate performs startup writes only after this process has acquired the
+// application Lease. Standby Pods may construct read-only dependencies, but
+// they must not mutate shared persistence or startup state.
+func (b *bootstrap) activate(ctx context.Context) error {
+	b.activateOnce.Do(func() {
+		result, err := b.startupManager.Start(ctx)
+		if err != nil {
+			recordRequiredRestore(b.persistence, "startup-metadata", err)
+			b.activateErr = fmt.Errorf("run startup: %w", err)
+			return
+		}
+		recordRequiredRestore(b.persistence, "startup-metadata", nil)
+		b.startupResult = result
+		b.telemetryRun = configureTelemetryRunner(
+			b.runtime.Lifecycle().Telemetry(),
+			b.persistence,
+			result.ClusterID,
+			result.CurrentVersion,
+			b.clock.Now,
+			b.clients.HTTP,
+		)
+	})
+	return b.activateErr
+}

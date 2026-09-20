@@ -1,0 +1,106 @@
+package signing
+
+import (
+	"testing"
+	"time"
+
+	"github.com/stretchr/testify/assert"
+)
+
+func signForTest(
+	accessKey, secretKey, region, service, method, rawURL string,
+	body []byte,
+) (map[string]string, error) {
+	return SignAWSV4At(
+		accessKey,
+		secretKey,
+		region,
+		service,
+		method,
+		rawURL,
+		body,
+		time.Date(2026, 9, 12, 10, 11, 12, 0, time.UTC),
+	)
+}
+
+func TestSignAWSV4Headers(t *testing.T) {
+	assert := assert.New(t)
+
+	headers, err := signForTest(
+		"AKIA123", "secret", "us-east-1", "ses", "POST",
+		"https://email.us-east-1.amazonaws.com/",
+		[]byte("Action=SendEmail&Version=2010-12-01"),
+	)
+	assert.Nil(err)
+	assert.NotNil(headers["X-Amz-Date"])
+	assert.Contains(headers["Authorization"], "AWS4-HMAC-SHA256")
+	assert.Contains(headers["Authorization"], "Credential=AKIA123/")
+	assert.Contains(
+		headers["Authorization"],
+		"/us-east-1/ses/aws4_request",
+	)
+	assert.Contains(
+		headers["Authorization"],
+		"SignedHeaders=content-type;host;x-amz-date",
+	)
+	assert.Contains(headers["Authorization"], "Signature=")
+}
+
+func TestSignAWSV4Deterministic(t *testing.T) {
+	assert := assert.New(t)
+
+	h1, err := signForTest(
+		"k", "s", "us-east-1", "sns", "POST",
+		"https://sns.us-east-1.amazonaws.com/", []byte("a=1"),
+	)
+	assert.Nil(err)
+	h2, err := signForTest(
+		"k", "s", "us-east-1", "sns", "POST",
+		"https://sns.us-east-1.amazonaws.com/", []byte("a=1"),
+	)
+	assert.Nil(err)
+	// A different region must sign differently: it is part of the scope.
+	h3, err := signForTest(
+		"k", "s", "us-west-2", "sns", "POST",
+		"https://sns.us-west-2.amazonaws.com/", []byte("a=1"),
+	)
+	assert.Nil(err)
+	h4, err := signForTest(
+		"k", "other", "us-east-1", "sns", "POST",
+		"https://sns.us-east-1.amazonaws.com/", []byte("a=1"),
+	)
+	assert.Nil(err)
+
+	assert.Equal(h1, h2)
+	assert.NotEqual(h1, h3)
+	assert.NotEqual(h1, h4)
+}
+
+func TestSignAWSV4AtUsesProvidedTime(t *testing.T) {
+	now := time.Date(2026, 9, 12, 10, 11, 12, 0, time.UTC)
+	headers, err := SignAWSV4At(
+		"access",
+		"secret",
+		"us-east-1",
+		"sns",
+		"POST",
+		"https://sns.us-east-1.amazonaws.com/",
+		[]byte("a=1"),
+		now,
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := headers["X-Amz-Date"]; got != "20260912T101112Z" {
+		t.Fatalf("X-Amz-Date = %q", got)
+	}
+}
+
+func TestSignAWSV4InvalidURL(t *testing.T) {
+	assert := assert.New(t)
+
+	_, err := signForTest(
+		"k", "s", "us-east-1", "sns", "POST", "h ttp://bad", nil,
+	)
+	assert.NotNil(err)
+}

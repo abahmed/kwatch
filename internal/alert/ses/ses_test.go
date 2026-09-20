@@ -1,6 +1,7 @@
 package ses
 
 import (
+	"context"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -8,14 +9,24 @@ import (
 
 	"github.com/stretchr/testify/assert"
 
-	"github.com/abahmed/kwatch/internal/config"
+	"github.com/abahmed/kwatch/internal/clock"
+	"github.com/abahmed/kwatch/internal/delivery/transport"
 	"github.com/abahmed/kwatch/internal/event"
 )
+
+var testDeps = transport.Dependencies{
+	HTTPClient: http.DefaultClient,
+	Clock:      clock.RealClock{},
+}
+
+func testAppConfig() string {
+	return "dev"
+}
 
 func TestEmptyConfig(t *testing.T) {
 	assert := assert.New(t)
 
-	c := NewSes(map[string]interface{}{}, &config.App{ClusterName: "dev"})
+	c := NewSes(map[string]interface{}{}, testAppConfig(), testDeps)
 	assert.Nil(c)
 }
 
@@ -28,7 +39,7 @@ func TestSes(t *testing.T) {
 		"from":            "kwatch@example.com",
 		"to":              "ops@example.com",
 	}
-	c := NewSes(configMap, &config.App{ClusterName: "dev"})
+	c := NewSes(configMap, testAppConfig(), testDeps)
 	assert.NotNil(c)
 	assert.Equal(c.Name(), "SES")
 	assert.Equal(c.url, "https://email.us-east-1.amazonaws.com/")
@@ -44,7 +55,7 @@ func TestSesCustomRegion(t *testing.T) {
 		"from":            "kwatch@example.com",
 		"to":              "ops@example.com",
 	}
-	c := NewSes(configMap, &config.App{ClusterName: "dev"})
+	c := NewSes(configMap, testAppConfig(), testDeps)
 	assert.NotNil(c)
 	assert.Equal(c.url, "https://email.us-east-1.amazonaws.com/")
 }
@@ -58,7 +69,7 @@ func TestSesMultiTo(t *testing.T) {
 		"from":            "kwatch@example.com",
 		"to":              "ops@example.com, dev@example.com",
 	}
-	c := NewSes(configMap, &config.App{ClusterName: "dev"})
+	c := NewSes(configMap, testAppConfig(), testDeps)
 	assert.NotNil(c)
 	assert.Len(c.to, 2)
 }
@@ -66,16 +77,48 @@ func TestSesMultiTo(t *testing.T) {
 func TestSesInvalidConfig(t *testing.T) {
 	assert := assert.New(t)
 
-	c := NewSes(map[string]interface{}{"secretAccessKey": "s", "from": "f", "to": "t"}, &config.App{ClusterName: "dev"})
+	c := NewSes(
+		map[string]interface{}{
+			"secretAccessKey": "s",
+			"from":            "f",
+			"to":              "t",
+		},
+		testAppConfig(),
+		testDeps,
+	)
 	assert.Nil(c)
 
-	c = NewSes(map[string]interface{}{"accessKeyId": "a", "from": "f", "to": "t"}, &config.App{ClusterName: "dev"})
+	c = NewSes(
+		map[string]interface{}{
+			"accessKeyId": "a",
+			"from":        "f",
+			"to":          "t",
+		},
+		testAppConfig(),
+		testDeps,
+	)
 	assert.Nil(c)
 
-	c = NewSes(map[string]interface{}{"accessKeyId": "a", "secretAccessKey": "s", "to": "t"}, &config.App{ClusterName: "dev"})
+	c = NewSes(
+		map[string]interface{}{
+			"accessKeyId":     "a",
+			"secretAccessKey": "s",
+			"to":              "t",
+		},
+		testAppConfig(),
+		testDeps,
+	)
 	assert.Nil(c)
 
-	c = NewSes(map[string]interface{}{"accessKeyId": "a", "secretAccessKey": "s", "from": "f"}, &config.App{ClusterName: "dev"})
+	c = NewSes(
+		map[string]interface{}{
+			"accessKeyId":     "a",
+			"secretAccessKey": "s",
+			"from":            "f",
+		},
+		testAppConfig(),
+		testDeps,
+	)
 	assert.Nil(c)
 }
 
@@ -104,10 +147,10 @@ func TestSendMessage(t *testing.T) {
 		"from":            "kwatch@example.com",
 		"to":              "ops@example.com",
 	}
-	c := NewSes(configMap, &config.App{ClusterName: "dev"})
+	c := NewSes(configMap, testAppConfig(), testDeps)
 	c.url = s.URL
 
-	assert.Nil(c.SendMessage("hello"))
+	assert.Nil(c.SendMessage(context.Background(), "hello"))
 	assert.Contains(gotCT, "application/x-www-form-urlencoded")
 	assert.NotEmpty(gotDate)
 	assert.Contains(gotAuth, "AWS4-HMAC-SHA256")
@@ -138,10 +181,10 @@ func TestSendMessageError(t *testing.T) {
 		"from":            "kwatch@example.com",
 		"to":              "ops@example.com",
 	}
-	c := NewSes(configMap, &config.App{ClusterName: "dev"})
+	c := NewSes(configMap, testAppConfig(), testDeps)
 	c.url = s.URL
 
-	assert.NotNil(c.SendMessage("test"))
+	assert.NotNil(c.SendMessage(context.Background(), "test"))
 }
 
 func TestSendEvent(t *testing.T) {
@@ -162,7 +205,7 @@ func TestSendEvent(t *testing.T) {
 		"from":            "kwatch@example.com",
 		"to":              "ops@example.com",
 	}
-	c := NewSes(configMap, &config.App{ClusterName: "dev"})
+	c := NewSes(configMap, testAppConfig(), testDeps)
 	c.url = s.URL
 
 	ev := event.Event{
@@ -170,7 +213,7 @@ func TestSendEvent(t *testing.T) {
 		Namespace: "default",
 		Reason:    "OOMKILLED",
 	}
-	assert.Nil(c.SendEvent(&ev))
+	assert.Nil(c.SendEvent(context.Background(), &ev))
 }
 
 func TestInvalidHttpRequest(t *testing.T) {
@@ -182,11 +225,11 @@ func TestInvalidHttpRequest(t *testing.T) {
 		"from":            "kwatch@example.com",
 		"to":              "ops@example.com",
 	}
-	c := NewSes(configMap, &config.App{ClusterName: "dev"})
+	c := NewSes(configMap, testAppConfig(), testDeps)
 	c.url = "h ttp://localhost/%s"
 
-	assert.NotNil(c.SendMessage("test"))
+	assert.NotNil(c.SendMessage(context.Background(), "test"))
 
 	c.url = "http://localhost:132323/%s"
-	assert.NotNil(c.SendMessage("test"))
+	assert.NotNil(c.SendMessage(context.Background(), "test"))
 }

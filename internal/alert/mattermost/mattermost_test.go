@@ -1,20 +1,31 @@
 package mattermost
 
 import (
+	"context"
 	"net/http"
 	"net/http/httptest"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
 
-	"github.com/abahmed/kwatch/internal/config"
+	"github.com/abahmed/kwatch/internal/clock"
+	"github.com/abahmed/kwatch/internal/delivery/transport"
 	"github.com/abahmed/kwatch/internal/event"
 )
+
+var testDeps = transport.Dependencies{
+	HTTPClient: http.DefaultClient,
+	Clock:      clock.RealClock{},
+}
+
+func testAppConfig() string {
+	return "dev"
+}
 
 func TestMattermostEmptyConfig(t *testing.T) {
 	assert := assert.New(t)
 
-	c := NewMattermost(map[string]interface{}{}, &config.App{ClusterName: "dev"})
+	c := NewMattermost(map[string]interface{}{}, testAppConfig(), testDeps)
 	assert.Nil(c)
 }
 
@@ -24,7 +35,7 @@ func TestMattermost(t *testing.T) {
 	configMap := map[string]interface{}{
 		"webhook": "testtest",
 	}
-	c := NewMattermost(configMap, &config.App{ClusterName: "dev"})
+	c := NewMattermost(configMap, testAppConfig(), testDeps)
 	assert.NotNil(c)
 
 	assert.Equal(c.Name(), "Mattermost")
@@ -43,10 +54,10 @@ func TestSendMessage(t *testing.T) {
 	configMap := map[string]interface{}{
 		"webhook": s.URL,
 	}
-	c := NewMattermost(configMap, &config.App{ClusterName: "dev"})
+	c := NewMattermost(configMap, testAppConfig(), testDeps)
 	assert.NotNil(c)
 
-	assert.Nil(c.SendMessage("test"))
+	assert.Nil(c.SendMessage(context.Background(), "test"))
 }
 
 func TestSendMessageError(t *testing.T) {
@@ -62,10 +73,10 @@ func TestSendMessageError(t *testing.T) {
 	configMap := map[string]interface{}{
 		"webhook": s.URL,
 	}
-	c := NewMattermost(configMap, &config.App{ClusterName: "dev"})
+	c := NewMattermost(configMap, testAppConfig(), testDeps)
 	assert.NotNil(c)
 
-	assert.NotNil(c.SendMessage("test"))
+	assert.NotNil(c.SendMessage(context.Background(), "test"))
 }
 
 func TestSendEvent(t *testing.T) {
@@ -81,7 +92,7 @@ func TestSendEvent(t *testing.T) {
 	configMap := map[string]interface{}{
 		"webhook": s.URL,
 	}
-	c := NewMattermost(configMap, &config.App{ClusterName: "dev"})
+	c := NewMattermost(configMap, testAppConfig(), testDeps)
 	assert.NotNil(c)
 
 	ev := event.Event{
@@ -93,7 +104,7 @@ func TestSendEvent(t *testing.T) {
 		Events: "event1-event2-event3-event1-event2-event3-event1-event2-" +
 			"event3\nevent5\nevent6-event8-event11-event12",
 	}
-	assert.Nil(c.SendEvent(&ev))
+	assert.Nil(c.SendEvent(context.Background(), &ev))
 }
 
 func TestInvaildHttpRequest(t *testing.T) {
@@ -102,16 +113,16 @@ func TestInvaildHttpRequest(t *testing.T) {
 	configMap := map[string]interface{}{
 		"webhook": "h ttp://localhost",
 	}
-	c := NewMattermost(configMap, &config.App{ClusterName: "dev"})
+	c := NewMattermost(configMap, testAppConfig(), testDeps)
 	assert.NotNil(c)
 
-	assert.NotNil(c.SendMessage("test"))
+	assert.NotNil(c.SendMessage(context.Background(), "test"))
 
 	configMap = map[string]interface{}{
 		"webhook": "http://localhost:132323",
 	}
-	c = NewMattermost(configMap, &config.App{ClusterName: "dev"})
+	c = NewMattermost(configMap, testAppConfig(), testDeps)
 	assert.NotNil(c)
 
-	assert.NotNil(c.SendMessage("test"))
+	assert.NotNil(c.SendMessage(context.Background(), "test"))
 }

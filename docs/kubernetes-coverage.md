@@ -130,7 +130,7 @@ traversed automatically.
 The detection path supports startup baselines, persisted incidents, stable
 identity keys, sustained windows, cooldowns, disruption suppression, node
 inhibition, resolution, and scope-aware storage checks. Signals are sent through
-the correlation engine so live, periodic, startup, and recovery decisions share
+the incident engine so live, periodic, startup, and recovery decisions share
 the same lifecycle and deduplication rules.
 
 Security diagnostics include a periodic RBAC self-check for the cluster-scoped

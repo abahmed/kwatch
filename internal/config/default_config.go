@@ -1,15 +1,31 @@
 package config
 
+import "github.com/abahmed/kwatch/internal/model"
+
 func DefaultConfig() *Config {
 	return &Config{
-		App:                          App{LogFormatter: "text"},
-		Telemetry:                    Telemetry{Enabled: true},
+		App: App{LogFormatter: "text"},
+		// Opt-in. The payload is small and anonymous -- a per-cluster UUID
+		// and the kwatch version, once a week -- but it still leaves the
+		// cluster, and a monitoring tool should not be the thing that
+		// surprises an operator by making an outbound call they did not ask
+		// for. Turning it on logs exactly what is sent.
+		Telemetry:                    Telemetry{Enabled: false},
 		IgnoreFailedGracefulShutdown: true,
 		ReportStartupBaseline:        true,
 		MaxRecentLogLines:            50,
-		ResyncSeconds:                0,
-		Workers:                      1,
-		AdaptiveThresholds:           true,
+		// Detection is event-driven, so an object whose controller stops
+		// writing to it is never re-examined -- and the stale sweep then
+		// resolves it after Correlation.Window even though it is still
+		// broken. A periodic resync re-observes every object, which keeps
+		// "still failing" true and makes sustained-minutes monitors fire
+		// without needing an unrelated update to arrive.
+		ResyncSeconds: 300,
+		Workers:       1,
+		// Zero leaves cumulative-restart alerting off: a restart count that
+		// never resets would alert forever on a pod that recovered weeks ago.
+		ContainerRestartThreshold: 0,
+		AdaptiveThresholds:        true,
 		Maintenance: MaintenanceConfig{
 			Enabled:         true,
 			Annotation:      "kwatch.io/maintenance",
@@ -72,7 +88,7 @@ func DefaultConfig() *Config {
 		},
 		RuntimeMetricsMonitor: RuntimeMetricsMonitor{
 			Enabled: false, IntervalSeconds: 60,
-			MemoryWarningPercent: 90, MemoryCriticalPercent: 100,
+			MemoryWarningPercent: 90, MemoryCriticalPercent: 95,
 			CPUWarningPercent: 90, CPUCriticalPercent: 100,
 		},
 		ActiveProbeMonitor: ActiveProbeMonitor{
@@ -82,10 +98,10 @@ func DefaultConfig() *Config {
 		},
 		KubeletTelemetryMonitor: KubeletTelemetryMonitor{
 			Enabled: true, IntervalSeconds: 60, FailureThreshold: 2, RecoveryThreshold: 2, PersistState: true,
-			MemoryWarningPercent: 90, MemoryCriticalPercent: 100,
+			MemoryWarningPercent: 90, MemoryCriticalPercent: 95,
 			EphemeralStorageWarningPercent: 90, EphemeralStorageCriticalPercent: 95,
 			CPUWarningPercent: 90, CPUCriticalPercent: 100,
-			CPUThrottlingWarningPercent: 25, CPUThrottlingCriticalPercent: 50,
+			CPUThrottlingWarningPercent: 50, CPUThrottlingCriticalPercent: 75,
 			PSIWarningPercent: 20, PSICriticalPercent: 50,
 			NetworkErrorRateWarning: 1, NetworkErrorRateCritical: 10,
 			RuntimeErrorRateWarning: 1, RuntimeErrorRateCritical: 10,
@@ -112,7 +128,13 @@ func DefaultConfig() *Config {
 		ControlPlaneMonitor:     ControlPlaneMonitor{Enabled: true, IntervalSeconds: 30, APIServerLatencyWarningMs: 1000, FailureThreshold: 2, RecoveryThreshold: 2},
 		IngressMonitor:          IngressMonitor{Enabled: true},
 		NetworkPolicyMonitor:    NetworkPolicyMonitor{Enabled: true},
-		ClusterResourceMonitor:  ClusterResourceMonitor{Enabled: true, SustainedMinutes: 10},
+		ClusterResourceMonitor: ClusterResourceMonitor{
+			Enabled:          true,
+			SustainedMinutes: 10,
+			// A lease renews every 10s and node-lifecycle marks a node
+			// Unknown at 40s, so 90s means "clearly gone", not a blip.
+			NodeLeaseStaleSeconds: 90,
+		},
 		SmartGrouping: SmartGrouping{
 			WindowSeconds:            60,
 			NamespaceFanOutThreshold: 3,
@@ -122,7 +144,9 @@ func DefaultConfig() *Config {
 			Window:            10,
 			LifecycleInterval: 1,
 			ResolveHoldDown:   300,
-			CooldownMinutes:   10,
+			// Deprecated and ignored; kept so an existing YAML that sets it
+			// still validates. The post-resolve cooldown is Window.
+			CooldownMinutes: 10,
 			// Two tiers, because there are two steps above normal: the first
 			// crossing raises to high, the second to critical. A third tier had
 			// nothing left to escalate to and was silently ignored.
@@ -131,7 +155,19 @@ func DefaultConfig() *Config {
 			// only
 			// applies once it is on. Declared here so the default is visible in
 			// one place instead of buried in the engine's fallback.
-			Renotify: RenotifyConfig{MaxPerIncident: 3},
+			// A problem nobody has fixed should say so again, on a cadence
+			// that matches how urgent it is. Off by default meant a critical
+			// incident was announced once and never mentioned again.
+			Renotify: RenotifyConfig{
+				MaxPerIncident: 3,
+				IntervalBySeverity: map[string]int{
+					string(model.SeverityCritical): 10,
+					string(model.SeverityHigh):     30,
+					string(model.SeverityMedium):   60,
+					string(model.SeverityWarning):  60,
+					"default":                      60,
+				},
+			},
 		},
 		AuditLog: AuditLogConfig{Enabled: true, Output: "stdout"},
 	}

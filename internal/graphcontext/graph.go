@@ -1,6 +1,10 @@
 package graphcontext
 
-import "sync"
+import (
+	"sync"
+
+	"github.com/abahmed/kwatch/internal/model"
+)
 
 type Edge struct {
 	From string
@@ -55,7 +59,7 @@ func (g *ResourceGraph) Size() (nodes, edges int) {
 }
 
 func resourceKey(kind, namespace, name string) string {
-	return kind + "/" + namespace + "/" + name
+	return model.ObjectKey(kind, namespace, name)
 }
 
 func edgeKey(from, to, edgeType string) string {

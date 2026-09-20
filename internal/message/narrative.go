@@ -7,6 +7,36 @@ import (
 
 // Narrative is the provider-neutral explanation of an incident. Providers
 // may wrap it in native formatting, but must not rebuild its meaning.
+// weakCause is the confidence below which a diagnosis is a suggestion rather
+// than a finding.
+//
+// The insight engine will name a cause from graph topology alone -- this
+// workload depends on that ConfigMap, the ConfigMap changed recently -- and
+// then halve its own confidence for having no supporting evidence. The result
+// was a 26% guess introduced with the same words as a 90% certainty:
+// "The strongest signal points to ...". Reading the number is not the reader's
+// job; the sentence should carry its own weight.
+const weakCause = 0.35
+
+// causeSentence states the diagnosis in proportion to how much kwatch
+// actually knows.
+func causeSentence(d *DiagnosisSection) string {
+	cause := strings.TrimSuffix(d.Cause, ".")
+	lead := "The strongest signal points to "
+	if d.Confidence > 0 && d.Confidence < weakCause {
+		lead = "On weak evidence, one possibility is "
+	}
+	if d.Confidence > 0 {
+		return fmt.Sprintf(
+			"%s%s (%.0f%% confidence).",
+			lead,
+			cause,
+			d.Confidence*100,
+		)
+	}
+	return lead + cause + "."
+}
+
 func Narrative(r *Report) string {
 	if r == nil {
 		return ""
@@ -17,17 +47,19 @@ func Narrative(r *Report) string {
 	}
 	if r.Diagnosis != nil {
 		if r.Diagnosis.Cause != "" {
-			cause := "The strongest signal points to " + strings.TrimSuffix(r.Diagnosis.Cause, ".")
-			if r.Diagnosis.Confidence > 0 {
-				cause += fmt.Sprintf(" (%.0f%% confidence)", r.Diagnosis.Confidence*100)
-			}
-			sentences = append(sentences, cause+".")
+			sentences = append(sentences, causeSentence(r.Diagnosis))
 		}
 		if r.Diagnosis.Impact != "" {
 			sentences = append(sentences, capitalizeSentence(r.Diagnosis.Impact)+".")
 		}
 		if len(r.Diagnosis.Evidence) > 0 {
-			sentences = append(sentences, "This is supported by "+strings.Join(r.Diagnosis.Evidence, "; ")+".")
+			// "This is supported by warning events were observed" is not a
+			// sentence; a labelled list is.
+			sentences = append(
+				sentences,
+				"Supporting evidence: "+
+					strings.Join(r.Diagnosis.Evidence, "; ")+".",
+			)
 		}
 		if len(r.Diagnosis.NextSteps) > 0 {
 			sentences = append(sentences, "Start by "+strings.ToLower(strings.TrimSuffix(r.Diagnosis.NextSteps[0], "."))+".")
@@ -57,7 +89,8 @@ func ChangeSummary(r *Report) string {
 			field := c.Fields[0]
 			part += ": " + field.Path
 			if field.Before != "" && field.After != "" {
-				part += " changed from " + field.Before + " to " + field.After
+				part += " changed from " + clipValue(field.Before) +
+					" to " + clipValue(field.After)
 			}
 			if c.Additional > 0 {
 				part += fmt.Sprintf(" (+%d more fields)", c.Additional)
@@ -66,6 +99,18 @@ func ChangeSummary(r *Report) string {
 		parts = append(parts, part)
 	}
 	return "A recent change may be related: " + strings.Join(parts, "; ")
+}
+
+// maxChangeValue bounds one field value in a change summary. A replaced
+// container image or a resized limit fits easily; a serialized manifest does
+// not belong in a chat message at all.
+const maxChangeValue = 60
+
+func clipValue(value string) string {
+	if len(value) <= maxChangeValue {
+		return value
+	}
+	return value[:maxChangeValue-1] + "…"
 }
 
 func capitalizeSentence(value string) string {

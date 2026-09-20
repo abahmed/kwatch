@@ -1,6 +1,7 @@
 package email
 
 import (
+	"context"
 	"fmt"
 	"math"
 	"strconv"
@@ -9,9 +10,8 @@ import (
 	gomail "gopkg.in/mail.v2"
 	"k8s.io/klog/v2"
 
-	"github.com/abahmed/kwatch/internal/alert/util"
-	"github.com/abahmed/kwatch/internal/config"
 	"github.com/abahmed/kwatch/internal/event"
+	"github.com/abahmed/kwatch/internal/format"
 )
 
 type Email struct {
@@ -19,12 +19,14 @@ type Email struct {
 	to   string
 	send func(m ...*gomail.Message) error
 
+	smtpConfig smtpConfig
+
 	// reference for general app configuration
-	appCfg *config.App
+	clusterName string
 }
 
 // NewEmail returns new email instance
-func NewEmail(config map[string]interface{}, appCfg *config.App) *Email {
+func NewEmail(config map[string]interface{}, clusterName string) *Email {
 	from, ok := config["from"].(string)
 	if !ok || len(from) == 0 {
 		klog.InfoS("initializing email with an empty from")
@@ -65,14 +67,14 @@ func NewEmail(config map[string]interface{}, appCfg *config.App) *Email {
 		return nil
 	}
 
-	d := gomail.NewDialer(host, portNumber, from, password)
-	d.StartTLSPolicy = gomail.MandatoryStartTLS
-
 	return &Email{
-		from:   from,
-		to:     to,
-		send:   d.DialAndSend,
-		appCfg: appCfg,
+		from: from,
+		to:   to,
+		smtpConfig: smtpConfig{
+			host: host, port: portNumber,
+			username: from, password: password,
+		},
+		clusterName: clusterName,
 	}
 }
 
@@ -84,7 +86,10 @@ func (e *Email) Name() string {
 func (e *Email) UsesEventDelivery() {}
 
 // SendEvent sends event to the provider
-func (e *Email) SendEvent(event *event.Event) error {
+func (e *Email) SendEvent(ctx context.Context, event *event.Event) error {
+	if err := ctx.Err(); err != nil {
+		return err
+	}
 	subject, body := e.buildMessageSubjectAndBody(event)
 
 	m := gomail.NewMessage()
@@ -93,11 +98,17 @@ func (e *Email) SendEvent(event *event.Event) error {
 	m.SetHeader("Subject", subject)
 	m.SetBody("text/plain", body)
 
-	return e.send(m)
+	if e.send != nil {
+		return e.send(m)
+	}
+	return sendSMTP(ctx, e.smtpConfig, e.from, e.to, m)
 }
 
 // SendMessage sends text message to the provider
-func (e *Email) SendMessage(s string) error {
+func (e *Email) SendMessage(ctx context.Context, s string) error {
+	if err := ctx.Err(); err != nil {
+		return err
+	}
 	return nil
 }
 
@@ -111,7 +122,9 @@ func (e *Email) buildMessageSubjectAndBody(
 	}
 
 	var parts []string
-	parts = append(parts, fmt.Sprintf("Reason: %s", util.OrDefault(ev.Reason, "unknown")))
+	parts = append(parts, fmt.Sprintf(
+		"Reason: %s", format.OrDefault(ev.Reason, "unknown"),
+	))
 
 	if ev.PodName != "" {
 		parts = append(parts, fmt.Sprintf("Pod: %s", ev.PodName))
@@ -125,8 +138,8 @@ func (e *Email) buildMessageSubjectAndBody(
 	if ev.NodeName != "" {
 		parts = append(parts, fmt.Sprintf("Node: %s", ev.NodeName))
 	}
-	if e.appCfg.ClusterName != "" {
-		parts = append(parts, fmt.Sprintf("Cluster: %s", e.appCfg.ClusterName))
+	if e.clusterName != "" {
+		parts = append(parts, fmt.Sprintf("Cluster: %s", e.clusterName))
 	}
 
 	body := strings.Join(parts, "\n")

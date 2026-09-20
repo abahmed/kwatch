@@ -1,12 +1,12 @@
 package n8n
 
 import (
+	"context"
 	"encoding/json"
 
 	"k8s.io/klog/v2"
 
-	"github.com/abahmed/kwatch/internal/alert/util"
-	"github.com/abahmed/kwatch/internal/config"
+	"github.com/abahmed/kwatch/internal/delivery/transport"
 	"github.com/abahmed/kwatch/internal/event"
 )
 
@@ -17,15 +17,21 @@ type n8nPayload struct {
 }
 
 type N8n struct {
-	url   string
-	token string
-	title string
+	sender transport.Sender
+	url    string
+	token  string
+	title  string
 
-	appCfg *config.App
+	clusterName string
 }
 
 // NewN8n returns a new N8n object
-func NewN8n(config map[string]interface{}, appCfg *config.App) *N8n {
+
+func NewN8n(
+	config map[string]interface{},
+	clusterName string,
+	dependencies transport.Dependencies,
+) *N8n {
 	url, ok := config["url"].(string)
 	if !ok || len(url) == 0 {
 		klog.InfoS("initializing n8n with empty url")
@@ -38,10 +44,11 @@ func NewN8n(config map[string]interface{}, appCfg *config.App) *N8n {
 	klog.InfoS("initializing n8n", "title", title)
 
 	return &N8n{
-		url:    url,
-		token:  token,
-		title:  title,
-		appCfg: appCfg,
+		sender:      transport.NewSender(dependencies),
+		url:         url,
+		token:       token,
+		title:       title,
+		clusterName: clusterName,
 	}
 }
 
@@ -51,13 +58,13 @@ func (n *N8n) Name() string {
 }
 
 // SendEvent sends event to the provider
-func (n *N8n) SendEvent(e *event.Event) error {
-	msg := e.FormatText(n.appCfg.ClusterName, "")
-	return n.SendMessage(msg)
+func (n *N8n) SendEvent(ctx context.Context, e *event.Event) error {
+	msg := e.FormatText(n.clusterName, "")
+	return n.SendMessage(ctx, msg)
 }
 
 // SendMessage sends text message to the provider
-func (n *N8n) SendMessage(msg string) error {
+func (n *N8n) SendMessage(ctx context.Context, msg string) error {
 	payload := n8nPayload{
 		Title:   n.title,
 		Message: msg,
@@ -74,6 +81,9 @@ func (n *N8n) SendMessage(msg string) error {
 		headers["Authorization"] = "Bearer " + n.token
 	}
 
-	_, err = util.Post(n.Name(), n.url, body, "application/json", headers)
+	_, err = n.sender.Send(ctx, transport.Request{
+		Provider: n.Name(), URL: n.url, Body: body,
+		ContentType: "application/json", Headers: headers,
+	})
 	return err
 }

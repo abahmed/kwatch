@@ -1,31 +1,37 @@
 package zulip
 
 import (
+	"context"
 	"encoding/base64"
 	"net/url"
 	"strings"
 
 	"k8s.io/klog/v2"
 
-	"github.com/abahmed/kwatch/internal/alert/util"
-	"github.com/abahmed/kwatch/internal/config"
+	"github.com/abahmed/kwatch/internal/delivery/transport"
 	"github.com/abahmed/kwatch/internal/event"
 )
 
 const zulipAPIURL = "https://api.zulip.com"
 
 type Zulip struct {
+	sender  transport.Sender
 	url     string
 	email   string
 	token   string
 	channel string
 	title   string
 
-	appCfg *config.App
+	clusterName string
 }
 
 // NewZulip returns a new Zulip object
-func NewZulip(config map[string]interface{}, appCfg *config.App) *Zulip {
+
+func NewZulip(
+	config map[string]interface{},
+	clusterName string,
+	dependencies transport.Dependencies,
+) *Zulip {
 	email, ok := config["email"].(string)
 	if !ok || len(email) == 0 {
 		klog.InfoS("initializing zulip with empty email")
@@ -54,12 +60,13 @@ func NewZulip(config map[string]interface{}, appCfg *config.App) *Zulip {
 	klog.InfoS("initializing zulip", "url", server, "channel", channel)
 
 	return &Zulip{
-		url:     strings.TrimRight(server, "/") + "/api/v1/messages",
-		email:   email,
-		token:   token,
-		channel: channel,
-		title:   title,
-		appCfg:  appCfg,
+		sender:      transport.NewSender(dependencies),
+		url:         strings.TrimRight(server, "/") + "/api/v1/messages",
+		email:       email,
+		token:       token,
+		channel:     channel,
+		title:       title,
+		clusterName: clusterName,
 	}
 }
 
@@ -69,13 +76,13 @@ func (z *Zulip) Name() string {
 }
 
 // SendEvent sends event to the provider
-func (z *Zulip) SendEvent(e *event.Event) error {
-	msg := e.FormatText(z.appCfg.ClusterName, "")
-	return z.SendMessage(msg)
+func (z *Zulip) SendEvent(ctx context.Context, e *event.Event) error {
+	msg := e.FormatText(z.clusterName, "")
+	return z.SendMessage(ctx, msg)
 }
 
 // SendMessage sends text message to the provider
-func (z *Zulip) SendMessage(msg string) error {
+func (z *Zulip) SendMessage(ctx context.Context, msg string) error {
 	subject := z.title
 	if len(subject) == 0 {
 		subject = "kwatch alert"
@@ -89,11 +96,11 @@ func (z *Zulip) SendMessage(msg string) error {
 
 	auth := "Basic " + base64.StdEncoding.EncodeToString([]byte(z.email+":"+z.token))
 
-	_, err := util.Post(
-		z.Name(), z.url, []byte(form.Encode()),
-		"application/x-www-form-urlencoded",
-		map[string]string{
+	_, err := z.sender.Send(ctx, transport.Request{
+		Provider: z.Name(), URL: z.url, Body: []byte(form.Encode()),
+		ContentType: "application/x-www-form-urlencoded", Headers: map[string]string{
 			"Authorization": auth,
-		})
+		},
+	})
 	return err
 }

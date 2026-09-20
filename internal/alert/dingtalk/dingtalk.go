@@ -1,19 +1,20 @@
 package dingtalk
 
 import (
+	"context"
 	"crypto/hmac"
 	"crypto/sha256"
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
 	"net/url"
+	"time"
 
 	"k8s.io/klog/v2"
 
-	"github.com/abahmed/kwatch/internal/alert/util"
 	"github.com/abahmed/kwatch/internal/clock"
-	"github.com/abahmed/kwatch/internal/config"
 	"github.com/abahmed/kwatch/internal/constant"
+	"github.com/abahmed/kwatch/internal/delivery/transport"
 	"github.com/abahmed/kwatch/internal/event"
 	"github.com/abahmed/kwatch/internal/insight"
 	"github.com/abahmed/kwatch/internal/message"
@@ -30,17 +31,24 @@ type dingResponse struct {
 }
 
 type DingTalk struct {
+	sender      transport.Sender
 	accessToken string
 	secret      string
 	url         string
 	title       string
+	clockSource clock.Clock
 
 	// reference for general app configuration
-	appCfg *config.App
+	clusterName string
 }
 
 // NewDingTalk returns new DingTalk instance
-func NewDingTalk(config map[string]interface{}, appCfg *config.App) *DingTalk {
+
+func NewDingTalk(
+	config map[string]interface{},
+	clusterName string,
+	dependencies transport.Dependencies,
+) *DingTalk {
 	accessToken, ok := config["accessToken"].(string)
 	if !ok || len(accessToken) == 0 {
 		klog.InfoS("initializing dingtalk with empty access token")
@@ -53,11 +61,13 @@ func NewDingTalk(config map[string]interface{}, appCfg *config.App) *DingTalk {
 	secret, _ := config["secret"].(string)
 
 	return &DingTalk{
+		sender:      transport.NewSender(dependencies),
 		accessToken: accessToken,
 		url:         dingTalkAPIURL,
 		title:       title,
 		secret:      secret,
-		appCfg:      appCfg,
+		clusterName: clusterName,
+		clockSource: clock.Require(dependencies.Clock),
 	}
 }
 
@@ -67,13 +77,13 @@ func (d *DingTalk) Name() string {
 }
 
 // SendEvent sends event to the provider
-func (d *DingTalk) SendEvent(e *event.Event) error {
+func (d *DingTalk) SendEvent(ctx context.Context, e *event.Event) error {
 	title := d.title
 	if len(title) == 0 {
 		title = constant.DefaultTitle
 	}
 
-	msg := e.FormatMarkdown(d.appCfg.ClusterName, "", "")
+	msg := e.FormatMarkdown(d.clusterName, "", "")
 
 	payload := struct {
 		MsgType  string `json:"msgtype"`
@@ -92,11 +102,11 @@ func (d *DingTalk) SendEvent(e *event.Event) error {
 		return err
 	}
 
-	return d.sendAPI(string(bodyBytes))
+	return d.sendAPI(ctx, string(bodyBytes))
 }
 
 // SendMessage sends text message to the provider
-func (d *DingTalk) SendMessage(msg string) error {
+func (d *DingTalk) SendMessage(ctx context.Context, msg string) error {
 	payload := struct {
 		MsgType string `json:"msgtype"`
 		Text    struct {
@@ -112,48 +122,51 @@ func (d *DingTalk) SendMessage(msg string) error {
 		return err
 	}
 
-	return d.sendAPI(string(bodyBytes))
+	return d.sendAPI(ctx, string(bodyBytes))
 }
 
-// SendIncident implements alert.ThreadProvider.
+// SendIncident implements delivery.ThreadProvider.
 // It renders the incident using the Report model and PlaintextRenderer,
 // producing a context-adaptive text message.
 func (d *DingTalk) SendIncident(
+	ctx context.Context,
 	inc *model.Incident,
 	action model.IncidentAction,
 ) error {
-	return d.SendIncidentWithInsight(inc, action, nil)
+	return d.SendIncidentWithInsight(ctx, inc, action, nil)
 }
 
-// SendIncidentWithInsight implements alert.InsightThreadProvider, so the
+// SendIncidentWithInsight implements delivery.InsightThreadProvider, so the
 // diagnosis — likely cause, impact, recent changes — is rendered rather than
 // dropped on the way to this provider.
 func (d *DingTalk) SendIncidentWithInsight(
+	ctx context.Context,
 	inc *model.Incident,
 	action model.IncidentAction,
 	ins *insight.Insight,
 ) error {
-	text := util.RenderIncidentWithInsight(
+	text := message.RenderIncidentWithInsight(
 		inc,
 		action,
 		ins,
 		message.NewPlainTextRenderer(),
-		d.appCfg.ClusterName,
+		d.clusterName,
+		d.clockSource,
 	)
 	if text == "" {
 		return nil
 	}
-	return d.SendMessage(text)
+	return d.SendMessage(ctx, text)
 }
 
-func (d *DingTalk) sendAPI(msg string) error {
+func (d *DingTalk) sendAPI(ctx context.Context, msg string) error {
 	url := fmt.Sprintf(d.url, d.accessToken)
 	if len(d.secret) != 0 {
-		url += getSignature(d.secret)
+		url += getSignatureAt(d.secret, d.clockSource.Now())
 	}
-	data, err := util.Send(
-		util.Request{Provider: "DingTalk", URL: url, Body: []byte(msg)},
-	)
+	data, err := d.sender.Send(ctx, transport.Request{
+		Provider: "DingTalk", URL: url, Body: []byte(msg),
+	})
 	if err != nil {
 		return err
 	}
@@ -175,8 +188,8 @@ func (d *DingTalk) sendAPI(msg string) error {
 	return nil
 }
 
-func getSignature(secret string) string {
-	timeStr := fmt.Sprintf("%d", clock.Now().UnixNano()/1e6)
+func getSignatureAt(secret string, now time.Time) string {
+	timeStr := fmt.Sprintf("%d", now.UnixNano()/1e6)
 
 	sign := fmt.Sprintf("%s\n%s", timeStr, secret)
 	signData := computeHmacSha256(sign, secret)

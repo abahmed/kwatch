@@ -52,3 +52,16 @@ with a patch version when needed. The release workflow publishes checksums, imag
 digests, provenance, and a Cosign signature so consumers can verify the repaired
 artifact before upgrading.
 
+## Artifact verification
+
+For a release, verify the published `SHA256SUMS` file before using an archive or
+binary. Verify the container by digest, then verify its Cosign signature and
+provenance attestation against the Kwatch repository before deployment. The
+release-integrity guide documents the commands and expected repository identity.
+Do not treat a mutable image tag as a security identity.
+
+Dependency and container scans run in scheduled CI. Findings are triaged by
+severity and exploitability; a high or critical finding in a shipped artifact
+blocks the next release unless the release owner records a documented exception
+and mitigation. The required exception fields and 90-day maximum lifetime are
+documented in [the vulnerability-exception policy](docs/vulnerability-exceptions.md).

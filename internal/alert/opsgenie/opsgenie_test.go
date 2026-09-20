@@ -1,6 +1,7 @@
 package opsgenie
 
 import (
+	"context"
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
@@ -8,14 +9,22 @@ import (
 
 	"github.com/stretchr/testify/assert"
 
-	"github.com/abahmed/kwatch/internal/config"
+	"github.com/abahmed/kwatch/internal/delivery/transport"
 	"github.com/abahmed/kwatch/internal/event"
 )
+
+var testDeps = transport.Dependencies{
+	HTTPClient: http.DefaultClient,
+}
+
+func testAppConfig() string {
+	return "dev"
+}
 
 func TestOpsgenieEmptyConfig(t *testing.T) {
 	assert := assert.New(t)
 
-	c := NewOpsgenie(map[string]interface{}{}, &config.App{ClusterName: "dev"})
+	c := NewOpsgenie(map[string]interface{}{}, testAppConfig(), testDeps)
 	assert.Nil(c)
 }
 
@@ -25,7 +34,7 @@ func TestOpsgenie(t *testing.T) {
 	configMap := map[string]interface{}{
 		"apiKey": "testtest",
 	}
-	c := NewOpsgenie(configMap, &config.App{ClusterName: "dev"})
+	c := NewOpsgenie(configMap, testAppConfig(), testDeps)
 	assert.NotNil(c)
 
 	assert.Equal(c.Name(), "Opsgenie")
@@ -37,10 +46,10 @@ func TestSendMessage(t *testing.T) {
 	configMap := map[string]interface{}{
 		"apiKey": "test",
 	}
-	c := NewOpsgenie(configMap, &config.App{ClusterName: "dev"})
+	c := NewOpsgenie(configMap, testAppConfig(), testDeps)
 	assert.NotNil(c)
 
-	assert.Nil(c.SendMessage("test"))
+	assert.Nil(c.SendMessage(context.Background(), "test"))
 }
 
 func TestSendEventCreateIncludesAlias(t *testing.T) {
@@ -58,7 +67,7 @@ func TestSendEventCreateIncludesAlias(t *testing.T) {
 	configMap := map[string]interface{}{
 		"apiKey": "test",
 	}
-	c := NewOpsgenie(configMap, &config.App{ClusterName: "dev"})
+	c := NewOpsgenie(configMap, testAppConfig(), testDeps)
 	c.url = s.URL
 	a.NotNil(c)
 
@@ -70,7 +79,7 @@ func TestSendEventCreateIncludesAlias(t *testing.T) {
 		Action:        "create",
 		DedupKey:      "alias-123",
 	}
-	a.Nil(c.SendEvent(&ev))
+	a.Nil(c.SendEvent(context.Background(), &ev))
 
 	a.Equal("alias-123", captured.Alias, "DedupKey must map to alias on create")
 }
@@ -90,7 +99,7 @@ func TestSendEventResolveCallsCloseEndpoint(t *testing.T) {
 	configMap := map[string]interface{}{
 		"apiKey": "test",
 	}
-	c := NewOpsgenie(configMap, &config.App{ClusterName: "dev"})
+	c := NewOpsgenie(configMap, testAppConfig(), testDeps)
 	c.url = s.URL
 	c.closeURL = s.URL + "/v2/alerts/%s/close?identifierType=alias"
 	a.NotNil(c)
@@ -103,7 +112,7 @@ func TestSendEventResolveCallsCloseEndpoint(t *testing.T) {
 		Action:        "resolved",
 		DedupKey:      "alias-123",
 	}
-	a.Nil(c.SendEvent(&ev))
+	a.Nil(c.SendEvent(context.Background(), &ev))
 	a.True(closeCalled, "resolved action must call close endpoint")
 }
 
@@ -121,7 +130,7 @@ func TestSendEvent(t *testing.T) {
 	configMap := map[string]interface{}{
 		"apiKey": "test",
 	}
-	c := NewOpsgenie(configMap, &config.App{ClusterName: "dev"})
+	c := NewOpsgenie(configMap, testAppConfig(), testDeps)
 	assert.NotNil(c)
 
 	c.url = s.URL
@@ -135,7 +144,7 @@ func TestSendEvent(t *testing.T) {
 		Events: "event1-event2-event3-event1-event2-event3-event1-event2-" +
 			"event3\nevent5\nevent6-event8-event11-event12",
 	}
-	assert.Nil(c.SendEvent(&ev))
+	assert.Nil(c.SendEvent(context.Background(), &ev))
 }
 
 func TestSendEventError(t *testing.T) {
@@ -151,7 +160,7 @@ func TestSendEventError(t *testing.T) {
 	configMap := map[string]interface{}{
 		"apiKey": "test",
 	}
-	c := NewOpsgenie(configMap, &config.App{ClusterName: "dev"})
+	c := NewOpsgenie(configMap, testAppConfig(), testDeps)
 	assert.NotNil(c)
 
 	c.url = s.URL
@@ -165,7 +174,7 @@ func TestSendEventError(t *testing.T) {
 		Events: "event1-event2-event3-event1-event2-event3-event1-event2-" +
 			"event3\nevent5\nevent6-event8-event11-event12",
 	}
-	assert.NotNil(c.SendEvent(&ev))
+	assert.NotNil(c.SendEvent(context.Background(), &ev))
 }
 
 func TestInvaildHttpRequest(t *testing.T) {
@@ -174,7 +183,7 @@ func TestInvaildHttpRequest(t *testing.T) {
 	configMap := map[string]interface{}{
 		"apiKey": "test",
 	}
-	c := NewOpsgenie(configMap, &config.App{ClusterName: "dev"})
+	c := NewOpsgenie(configMap, testAppConfig(), testDeps)
 	assert.NotNil(c)
 	c.url = "h ttp://localhost"
 
@@ -187,11 +196,11 @@ func TestInvaildHttpRequest(t *testing.T) {
 		Events: "event1-event2-event3-event1-event2-event3-event1-event2-" +
 			"event3\nevent5\nevent6-event8-event11-event12",
 	}
-	assert.NotNil(c.SendEvent(&ev))
+	assert.NotNil(c.SendEvent(context.Background(), &ev))
 
-	c = NewOpsgenie(configMap, &config.App{ClusterName: "dev"})
+	c = NewOpsgenie(configMap, testAppConfig(), testDeps)
 	assert.NotNil(c)
 	c.url = "http://localhost:132323"
 
-	assert.NotNil(c.SendEvent(&ev))
+	assert.NotNil(c.SendEvent(context.Background(), &ev))
 }

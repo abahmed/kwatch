@@ -4,8 +4,7 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/abahmed/kwatch/internal/alert/util"
-	"github.com/abahmed/kwatch/internal/config"
+	"github.com/abahmed/kwatch/internal/clock"
 	"github.com/abahmed/kwatch/internal/insight"
 	"github.com/abahmed/kwatch/internal/message"
 	"github.com/abahmed/kwatch/internal/model"
@@ -63,7 +62,7 @@ func evidenceTitle(title string, inc *model.Incident) string {
 	if pod == "" {
 		return title
 	}
-	if len(inc.Resources) <= 1 && inc.Name == pod {
+	if len(inc.Resources) <= 1 && inc.Ref().Name == pod {
 		return title
 	}
 	return fmt.Sprintf("%s — from `%s`", title, pod)
@@ -73,7 +72,7 @@ func evidenceTitle(title string, inc *model.Incident) string {
 // fixed-size code blocks.
 func chunkedSections(title, text string) []slackClient.Block {
 	blocks := []slackClient.Block{markdownSection(title)}
-	for _, chunk := range util.Chunks(text, chunkSize) {
+	for _, chunk := range message.Chunks(text, chunkSize) {
 		blocks = append(blocks, markdownSection("```"+chunk+"```"))
 	}
 	return blocks
@@ -108,13 +107,12 @@ func reportFor(
 	inc *model.Incident,
 	action model.IncidentAction,
 	ins *insight.Insight,
-	appCfg *config.App,
+	clusterName string,
+	timeSource clock.Clock,
 ) *message.Report {
-	cluster := ""
-	if appCfg != nil {
-		cluster = appCfg.ClusterName
-	}
-	return message.NewReportBuilder(cluster).Build(inc, action, ins)
+	return message.NewReportBuilderWithClock(
+		clusterName, clock.Require(timeSource),
+	).Build(inc, action, ins)
 }
 
 // headline is the one line a reader sees first: what happened, to what.
@@ -194,17 +192,13 @@ func metaParts(r *message.Report, inc *model.Incident) []string {
 func formatIncidentText(
 	inc *model.Incident,
 	action model.IncidentAction,
+	timeSource clock.Clock,
 ) string {
 	renderer := message.NewSlackRenderer()
-	report := message.NewReportBuilder("").Build(inc, action, nil)
+	report := message.NewReportBuilderWithClock(
+		"", clock.Require(timeSource),
+	).Build(inc, action, nil)
 	return message.RenderAction(renderer, report)
-}
-
-func resourcePlural(inc *model.Incident) string {
-	if inc.Resource != "" {
-		return inc.Resource + "s"
-	}
-	return "resources"
 }
 
 func plainSection(txt string) slackClient.SectionBlock {

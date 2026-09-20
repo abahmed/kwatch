@@ -27,3 +27,44 @@ func TestHandlerUsesStableOrderAndGETOnly(t *testing.T) {
 		t.Fatalf("POST status = %d", post.Code)
 	}
 }
+
+func TestHandlerExposesStableMetricContract(t *testing.T) {
+	r := &Registry{}
+	r.InformerHandlerPanics.Store(13)
+	r.QueueDepth.Store(3)
+	r.NotificationsTotal.Store(4)
+	r.GraphNodes.Store(5)
+	r.DeliveryRetries.Store(6)
+	r.PersistenceMigrationErr.Store(7)
+	r.ShutdownTimeouts.Store(8)
+	r.SourceUnavailable.Store(9)
+	r.LeadershipAcquisitions.Store(10)
+	r.LeadershipLosses.Store(11)
+	r.LeaderTakeovers.Store(12)
+
+	rr := httptest.NewRecorder()
+	r.Handler().ServeHTTP(
+		rr,
+		httptest.NewRequest(http.MethodGet, "/metrics", nil),
+	)
+	body := rr.Body.String()
+	for _, metric := range []string{
+		"# TYPE kwatch_queue_depth gauge",
+		"kwatch_queue_depth 3",
+		"# TYPE kwatch_notifications_total counter",
+		"kwatch_notifications_total 4",
+		"kwatch_graph_nodes 5",
+		"kwatch_delivery_retries_total 6",
+		"kwatch_persistence_migration_errors_total 7",
+		"kwatch_shutdown_timeouts_total 8",
+		"kwatch_source_unavailable_total 9",
+		"kwatch_leadership_acquisitions_total 10",
+		"kwatch_leadership_losses_total 11",
+		"kwatch_leader_takeovers_total 12",
+		"kwatch_informer_handler_panics_total 13",
+	} {
+		if !strings.Contains(body, metric) {
+			t.Fatalf("metrics output is missing %q", metric)
+		}
+	}
+}

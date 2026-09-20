@@ -93,9 +93,9 @@ type PvcMonitor struct {
 	// By default, this value is true
 	Enabled bool `yaml:"enabled"`
 
-	// Interval is the frequency (in minutes) to check pvc usage in the cluster
-	// By default, this value is 5
-	Interval int `yaml:"interval"`
+	// Interval is the frequency to check pvc usage in the cluster. A bare
+	// number counts minutes; "5m" is also accepted. Default 5.
+	Interval Minutes `yaml:"interval"`
 
 	// Threshold is the percentage of accepted pvc usage. if current usage
 	// exceeds this value, it will send a notification (warn tier).
@@ -248,7 +248,13 @@ type ActiveProbeMonitor struct {
 	HTTP              []HTTPProbeTarget `yaml:"http"`
 	TCP               []TCPProbeTarget  `yaml:"tcp"`
 	DNS               []DNSProbeTarget  `yaml:"dns"`
-	AutoServices      bool              `yaml:"autoServices"`
+	// AutoServices probes every Service port in scope from kwatch's own pod.
+	// That is a real TCP connection from a real pod, so a NetworkPolicy that
+	// does not admit kwatch reports the Service as down when it is fine.
+	AutoServices bool `yaml:"autoServices"`
+	// ExcludeNamespaces are namespaces AutoServices skips entirely. Use it
+	// for namespaces with default-deny ingress that do not admit kwatch.
+	ExcludeNamespaces []string `yaml:"excludeNamespaces"`
 }
 
 type HTTPProbeTarget struct {

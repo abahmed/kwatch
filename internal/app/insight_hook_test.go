@@ -8,8 +8,9 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/abahmed/kwatch/internal/audit"
-	"github.com/abahmed/kwatch/internal/correlation"
+	"github.com/abahmed/kwatch/internal/clock"
 	kwcontext "github.com/abahmed/kwatch/internal/graphcontext"
+	"github.com/abahmed/kwatch/internal/incident"
 	"github.com/abahmed/kwatch/internal/insight"
 	"github.com/abahmed/kwatch/internal/model"
 )
@@ -35,8 +36,13 @@ func TestLifecycleHookAttachesDiagnosis(t *testing.T) {
 	}
 	var calls []call
 	opts := &engineOptions{
-		auditLogger:   audit.NewLogger(audit.Config{Enabled: false}),
-		insightEngine: insight.NewEngine(graph, nil),
+		auditLogger: audit.NewLogger(audit.Config{
+			Enabled: false,
+			Now:     clock.RealClock{}.Now,
+		}),
+		insightEngine: insight.NewEngineWithClock(
+			graph, nil, clock.RealClock{},
+		),
 		notify: func(
 			_ *model.Incident, a model.IncidentAction, ins *insight.Insight,
 		) {
@@ -44,7 +50,9 @@ func TestLifecycleHookAttachesDiagnosis(t *testing.T) {
 		},
 	}
 	holder := &engineHolder{
-		engine: correlation.NewEngine(correlation.Config{Window: time.Minute}),
+		engine: incident.NewEngineWithClock(
+			incident.Config{Window: time.Minute}, clock.RealClock{},
+		),
 	}
 	hook := lifecycleHook(opts, holder)
 

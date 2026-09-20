@@ -19,5 +19,5 @@ package model
 //   - Group: "__group__:<group key>" for incidents synthesized by smart
 //     grouping (one notification summarizing many members).
 //
-// Keys are built and parsed in the correlation package (BuildKey, ParseKey).
+// Keys are built and parsed in the incident package (BuildKey, ParseKey).
 type IncidentKey string

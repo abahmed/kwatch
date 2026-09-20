@@ -9,3 +9,10 @@ A clear and concise description of what the problem is. Ex. I'm always frustrate
 
 **Describe the solution you'd like**
 A clear and concise description of what you want to happen.
+
+**Operational impact**
+Describe configuration, RBAC, resource, persistence, metric, alert, or
+documentation changes that the proposal would require.
+
+**Compatibility**
+Mention affected versions, providers, monitors, or persisted data when known.

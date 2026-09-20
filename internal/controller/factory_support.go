@@ -10,25 +10,19 @@ import (
 )
 
 func (fs factorySet) leaseLister() coordinationv1lister.LeaseLister {
-	if fs.global != nil {
-		return fs.global.Coordination().V1().Leases().Lister()
+	if fs.nodeLeaseFactory == nil {
+		return nil
 	}
-	listers := make([]coordinationv1lister.LeaseLister, 0, len(fs.perNamespace))
-	for _, f := range fs.perNamespace {
-		listers = append(listers, f.Coordination().V1().Leases().Lister())
-	}
-	return &multiLeaseLister{listers: listers}
+	return fs.nodeLeaseFactory.Coordination().V1().Leases().Lister()
 }
 
 func (fs factorySet) leaseInformers() []cache.SharedIndexInformer {
-	if fs.global != nil {
-		return []cache.SharedIndexInformer{fs.global.Coordination().V1().Leases().Informer()}
+	if fs.nodeLeaseFactory == nil {
+		return nil
 	}
-	out := make([]cache.SharedIndexInformer, 0, len(fs.perNamespace))
-	for _, f := range fs.perNamespace {
-		out = append(out, f.Coordination().V1().Leases().Informer())
+	return []cache.SharedIndexInformer{
+		fs.nodeLeaseFactory.Coordination().V1().Leases().Informer(),
 	}
-	return out
 }
 
 func (fs factorySet) ingressLister() networkingv1lister.IngressLister {

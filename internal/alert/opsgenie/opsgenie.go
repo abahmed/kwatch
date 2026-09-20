@@ -1,15 +1,16 @@
 package opsgenie
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"strings"
 
 	"k8s.io/klog/v2"
 
-	"github.com/abahmed/kwatch/internal/alert/util"
-	"github.com/abahmed/kwatch/internal/config"
+	"github.com/abahmed/kwatch/internal/delivery/transport"
 	"github.com/abahmed/kwatch/internal/event"
+	"github.com/abahmed/kwatch/internal/model"
 )
 
 const (
@@ -21,6 +22,7 @@ const (
 )
 
 type Opsgenie struct {
+	sender   transport.Sender
 	apikey   string
 	url      string
 	closeURL string
@@ -28,7 +30,7 @@ type Opsgenie struct {
 	text     string
 
 	// reference for general app configuration
-	appCfg *config.App
+	clusterName string
 }
 
 type ogPayload struct {
@@ -40,7 +42,12 @@ type ogPayload struct {
 }
 
 // NewOpsgenie returns new opsgenie instance
-func NewOpsgenie(config map[string]interface{}, appCfg *config.App) *Opsgenie {
+
+func NewOpsgenie(
+	config map[string]interface{},
+	clusterName string,
+	dependencies transport.Dependencies,
+) *Opsgenie {
 	apiKey, ok := config["apiKey"].(string)
 	if !ok || len(apiKey) == 0 {
 		klog.InfoS("initializing opsgenie with empty webhook url")
@@ -53,12 +60,13 @@ func NewOpsgenie(config map[string]interface{}, appCfg *config.App) *Opsgenie {
 	text, _ := config["text"].(string)
 
 	return &Opsgenie{
-		apikey:   apiKey,
-		url:      opsgenieAPIURL,
-		closeURL: opsgenieCloseURL,
-		title:    title,
-		text:     text,
-		appCfg:   appCfg,
+		sender:      transport.NewSender(dependencies),
+		apikey:      apiKey,
+		url:         opsgenieAPIURL,
+		closeURL:    opsgenieCloseURL,
+		title:       title,
+		text:        text,
+		clusterName: clusterName,
 	}
 }
 
@@ -70,24 +78,27 @@ func (o *Opsgenie) Name() string {
 func (o *Opsgenie) UsesEventDelivery() {}
 
 // SendMessage sends text message to the provider
-func (o *Opsgenie) SendMessage(msg string) error {
+func (o *Opsgenie) SendMessage(ctx context.Context, msg string) error {
 	return nil
 }
 
 // SendEvent sends event to the provider
-func (o *Opsgenie) SendEvent(e *event.Event) error {
+func (o *Opsgenie) SendEvent(ctx context.Context, e *event.Event) error {
 	if e.Action == "resolved" && e.DedupKey != "" {
-		return o.closeAlert(e.DedupKey)
+		return o.closeAlert(ctx, e.DedupKey)
 	}
 	b, err := o.buildMessage(e)
 	if err != nil {
 		return err
 	}
-	return o.sendAPI(b)
+	return o.sendAPI(ctx, b)
 }
 
-func (o *Opsgenie) closeAlert(alias string) error {
-	_, err := util.Send(util.Request{
+func (o *Opsgenie) closeAlert(
+	ctx context.Context,
+	alias string,
+) error {
+	_, err := o.sender.Send(ctx, transport.Request{
 		Provider: "Opsgenie",
 		URL:      fmt.Sprintf(o.closeURL, alias),
 		Body:     []byte(`{}`),
@@ -97,8 +108,11 @@ func (o *Opsgenie) closeAlert(alias string) error {
 }
 
 // sendAPI sends http request to Opsgenie API
-func (o *Opsgenie) sendAPI(content []byte) error {
-	_, err := util.Send(util.Request{
+func (o *Opsgenie) sendAPI(
+	ctx context.Context,
+	content []byte,
+) error {
+	_, err := o.sender.Send(ctx, transport.Request{
 		Provider: "Opsgenie",
 		URL:      o.url,
 		Body:     content,
@@ -107,9 +121,28 @@ func (o *Opsgenie) sendAPI(content []byte) error {
 	return err
 }
 
+// opsgeniePriority maps kwatch's severity onto Opsgenie's P1-P5 scale.
+//
+// Every alert used to be filed as P1, the level whose whole purpose is to
+// page immediately. A warning arriving at P1 trains people to ignore P1.
+// An unknown severity is P3, which notifies without paging.
+func opsgeniePriority(sev model.Severity) string {
+	switch sev {
+	case model.SeverityCritical:
+		return "P1"
+	case model.SeverityHigh:
+		return "P2"
+	case model.SeverityMedium, model.SeverityWarning:
+		return "P3"
+	case model.SeverityNormal:
+		return "P4"
+	}
+	return "P3"
+}
+
 func (o *Opsgenie) buildMessage(e *event.Event) ([]byte, error) {
 	payload := ogPayload{
-		Priority: "P1",
+		Priority: opsgeniePriority(e.Severity),
 	}
 
 	logs := strings.TrimSpace(e.Logs)
@@ -131,8 +164,8 @@ func (o *Opsgenie) buildMessage(e *event.Event) ([]byte, error) {
 	payload.Description = text
 	payload.Alias = e.DedupKey
 	details := map[string]string{}
-	if o.appCfg.ClusterName != "" {
-		details["Cluster"] = o.appCfg.ClusterName
+	if o.clusterName != "" {
+		details["Cluster"] = o.clusterName
 	}
 	if e.PodName != "" {
 		details["Name"] = e.PodName

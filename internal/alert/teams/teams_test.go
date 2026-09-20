@@ -1,6 +1,7 @@
 package teams
 
 import (
+	"context"
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
@@ -8,14 +9,24 @@ import (
 
 	"github.com/stretchr/testify/assert"
 
-	"github.com/abahmed/kwatch/internal/config"
+	"github.com/abahmed/kwatch/internal/clock"
+	"github.com/abahmed/kwatch/internal/delivery/transport"
 	"github.com/abahmed/kwatch/internal/event"
 )
+
+var testDeps = transport.Dependencies{
+	HTTPClient: http.DefaultClient,
+	Clock:      clock.RealClock{},
+}
+
+func testAppConfig() string {
+	return "dev"
+}
 
 func TestEmptyConfig(t *testing.T) {
 	assert := assert.New(t)
 
-	c := NewTeams(map[string]interface{}{}, &config.App{ClusterName: "dev"})
+	c := NewTeams(map[string]interface{}{}, testAppConfig(), testDeps)
 	assert.Nil(c)
 }
 
@@ -25,7 +36,7 @@ func TestTelegram(t *testing.T) {
 	configMap := map[string]interface{}{
 		"webhook": "http://example.com",
 	}
-	c := NewTeams(configMap, &config.App{ClusterName: "dev"})
+	c := NewTeams(configMap, testAppConfig(), testDeps)
 	assert.NotNil(c)
 
 	assert.Equal(c.Name(), "Microsoft Teams")
@@ -37,8 +48,8 @@ func TestNewTeams(t *testing.T) {
 		"title":   "Test Title",
 		"text":    "Test Text",
 	}
-	appCfg := &config.App{ClusterName: "dev"}
-	teams := NewTeams(configMap, appCfg)
+	appCfg := testAppConfig()
+	teams := NewTeams(configMap, appCfg, testDeps)
 	assert.NotNil(t, teams)
 	assert.Equal(t, "http://example.com", teams.webhook)
 	assert.Equal(t, "Test Title", teams.title)
@@ -49,8 +60,8 @@ func TestSendEvent(t *testing.T) {
 	configMap := map[string]interface{}{
 		"webhook": "http://example.com",
 	}
-	appCfg := &config.App{ClusterName: "dev"}
-	teams := NewTeams(configMap, appCfg)
+	appCfg := testAppConfig()
+	teams := NewTeams(configMap, appCfg, testDeps)
 
 	e := &event.Event{
 		PodName:   "test-pod",
@@ -67,7 +78,7 @@ func TestSendEvent(t *testing.T) {
 	defer server.Close()
 
 	teams.webhook = server.URL
-	err := teams.SendEvent(e)
+	err := teams.SendEvent(context.Background(), e)
 	assert.NoError(t, err)
 }
 
@@ -75,8 +86,8 @@ func TestSendMessage(t *testing.T) {
 	configMap := map[string]interface{}{
 		"webhook": "http://localhost",
 	}
-	appCfg := &config.App{ClusterName: "dev"}
-	teams := NewTeams(configMap, appCfg)
+	appCfg := testAppConfig()
+	teams := NewTeams(configMap, appCfg, testDeps)
 
 	server := httptest.NewServer(
 		http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -85,7 +96,7 @@ func TestSendMessage(t *testing.T) {
 	defer server.Close()
 
 	teams.webhook = server.URL
-	err := teams.SendMessage("test message")
+	err := teams.SendMessage(context.Background(), "test message")
 	assert.NoError(t, err)
 }
 
@@ -103,11 +114,11 @@ func TestSendMessageErrorSchemaMismatch(t *testing.T) {
 	configMap := map[string]interface{}{
 		"webhook": s.URL,
 	}
-	appCfg := &config.App{ClusterName: "dev"}
-	c := NewTeams(configMap, appCfg)
+	appCfg := testAppConfig()
+	c := NewTeams(configMap, appCfg, testDeps)
 	assert.NotNil(c)
 
-	assert.NotNil(c.SendMessage("test"))
+	assert.NotNil(c.SendMessage(context.Background(), "test"))
 }
 
 func TestSendMessageErrorBadRequest(t *testing.T) {
@@ -123,11 +134,11 @@ func TestSendMessageErrorBadRequest(t *testing.T) {
 	configMap := map[string]interface{}{
 		"webhook": s.URL,
 	}
-	appCfg := &config.App{ClusterName: "dev"}
-	c := NewTeams(configMap, appCfg)
+	appCfg := testAppConfig()
+	c := NewTeams(configMap, appCfg, testDeps)
 	assert.NotNil(c)
 
-	assert.NotNil(c.SendMessage("test"))
+	assert.NotNil(c.SendMessage(context.Background(), "test"))
 }
 
 func TestSendMessageErrorAccepted(t *testing.T) {
@@ -143,11 +154,14 @@ func TestSendMessageErrorAccepted(t *testing.T) {
 	configMap := map[string]interface{}{
 		"webhook": s.URL,
 	}
-	appCfg := &config.App{ClusterName: "dev"}
-	c := NewTeams(configMap, appCfg)
+	appCfg := testAppConfig()
+	c := NewTeams(configMap, appCfg, testDeps)
 	assert.NotNil(c)
 
-	assert.Nil(c.SendMessage("test"), "202 Accepted is now success")
+	assert.Nil(
+		c.SendMessage(context.Background(), "test"),
+		"202 Accepted is now success",
+	)
 }
 
 func TestSendMessageErrorServer(t *testing.T) {
@@ -163,11 +177,11 @@ func TestSendMessageErrorServer(t *testing.T) {
 	configMap := map[string]interface{}{
 		"webhook": s.URL,
 	}
-	appCfg := &config.App{ClusterName: "dev"}
-	c := NewTeams(configMap, appCfg)
+	appCfg := testAppConfig()
+	c := NewTeams(configMap, appCfg, testDeps)
 	assert.NotNil(c)
 
-	assert.NotNil(c.SendMessage("test"))
+	assert.NotNil(c.SendMessage(context.Background(), "test"))
 }
 
 func TestSendAPI(t *testing.T) {
@@ -180,35 +194,35 @@ func TestSendAPI(t *testing.T) {
 	configMap := map[string]interface{}{
 		"webhook": server.URL,
 	}
-	appCfg := &config.App{ClusterName: "dev"}
-	teams := NewTeams(configMap, appCfg)
+	appCfg := testAppConfig()
+	teams := NewTeams(configMap, appCfg, testDeps)
 
 	payload :=
 		[]byte(`{"title":"Test Title","text":"Test Text","attachments":[]}`)
-	err := teams.sendAPI(payload)
+	err := teams.sendAPI(context.Background(), payload)
 	assert.NoError(t, err)
 }
 
 func TestInvaildHttpRequest(t *testing.T) {
 	assert := assert.New(t)
 
-	appCfg := &config.App{ClusterName: "dev"}
+	appCfg := testAppConfig()
 
 	configMap := map[string]interface{}{
 		"webhook": "h ttp://localhost/%s",
 	}
 
-	c := NewTeams(configMap, appCfg)
+	c := NewTeams(configMap, appCfg, testDeps)
 	assert.NotNil(c)
-	assert.NotNil(c.SendMessage("test"))
+	assert.NotNil(c.SendMessage(context.Background(), "test"))
 
 	configMap = map[string]interface{}{
 		"webhook": "http://localhost:132323",
 	}
 
-	c = NewTeams(configMap, appCfg)
+	c = NewTeams(configMap, appCfg, testDeps)
 	assert.NotNil(c)
-	assert.NotNil(c.SendMessage("test"))
+	assert.NotNil(c.SendMessage(context.Background(), "test"))
 }
 
 func TestBuildRequestBodyTeams(t *testing.T) {
@@ -217,8 +231,7 @@ func TestBuildRequestBodyTeams(t *testing.T) {
 		"title":   "Test Title",
 		"text":    "Test Text",
 	}
-	appCfg := &config.App{}
-	teams := NewTeams(configMap, appCfg)
+	teams := NewTeams(configMap, "", testDeps)
 
 	e := &event.Event{
 		PodName:       "test-pod",
@@ -247,8 +260,7 @@ func TestBuildRequestBodyMessage(t *testing.T) {
 	configMap := map[string]interface{}{
 		"webhook": "http://example.com",
 	}
-	appCfg := &config.App{}
-	teams := NewTeams(configMap, appCfg)
+	teams := NewTeams(configMap, "", testDeps)
 
 	payload, err := teams.buildRequestBodyMessage("test message")
 	assert.NoError(t, err)
@@ -266,8 +278,8 @@ func TestNewTeamsIgnoresLegacyRetrySettings(t *testing.T) {
 		"maxRetries": 5,
 		"retryDelay": 10,
 	}
-	appCfg := &config.App{ClusterName: "dev"}
-	teams := NewTeams(configMap, appCfg)
+	appCfg := testAppConfig()
+	teams := NewTeams(configMap, appCfg, testDeps)
 	assert.NotNil(t, teams)
 }
 
@@ -275,8 +287,8 @@ func TestBuildRequestBodyTeamsGolden(t *testing.T) {
 	configMap := map[string]interface{}{
 		"webhook": "http://example.com",
 	}
-	appCfg := &config.App{ClusterName: "production"}
-	teams := NewTeams(configMap, appCfg)
+	clusterName := "production"
+	teams := NewTeams(configMap, clusterName, testDeps)
 
 	e := &event.Event{
 		PodName:   "my-pod",
@@ -296,8 +308,8 @@ func TestBuildRequestBodyTeamsDefaultTitle(t *testing.T) {
 	configMap := map[string]interface{}{
 		"webhook": "http://example.com",
 	}
-	appCfg := &config.App{}
-	teams := NewTeams(configMap, appCfg)
+	clusterName := ""
+	teams := NewTeams(configMap, clusterName, testDeps)
 
 	e := &event.Event{
 		PodName:       "test-pod",
@@ -324,8 +336,8 @@ func TestSendEventWithCustomTitle(t *testing.T) {
 		"title":   "Custom Title",
 		"text":    "Custom Text",
 	}
-	appCfg := &config.App{ClusterName: "dev"}
-	teams := NewTeams(configMap, appCfg)
+	appCfg := testAppConfig()
+	teams := NewTeams(configMap, appCfg, testDeps)
 
 	e := &event.Event{
 		PodName:       "test-pod",
@@ -344,45 +356,6 @@ func TestSendEventWithCustomTitle(t *testing.T) {
 	defer server.Close()
 
 	teams.webhook = server.URL
-	err := teams.SendEvent(e)
+	err := teams.SendEvent(context.Background(), e)
 	assert.NoError(t, err)
-}
-
-func TestSendMessageBadRequestWithBody(t *testing.T) {
-	configMap := map[string]interface{}{
-		"webhook": "http://example.com",
-	}
-	appCfg := &config.App{ClusterName: "dev"}
-	teams := NewTeams(configMap, appCfg)
-
-	server := httptest.NewServer(
-		http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			w.WriteHeader(http.StatusBadRequest)
-			w.Write([]byte(`{"error": "bad request details"}`))
-		}))
-	defer server.Close()
-
-	teams.webhook = server.URL
-	err := teams.SendMessage("test message")
-	assert.Error(t, err)
-}
-
-func TestSendMessage202AcceptedSucceeds(t *testing.T) {
-	configMap := map[string]interface{}{
-		"webhook":    "http://example.com",
-		"maxRetries": 3,
-		"retryDelay": 1,
-	}
-	appCfg := &config.App{ClusterName: "dev"}
-	teams := NewTeams(configMap, appCfg)
-
-	server := httptest.NewServer(
-		http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			w.WriteHeader(http.StatusAccepted)
-		}))
-	defer server.Close()
-
-	teams.webhook = server.URL
-	err := teams.SendMessage("test message")
-	assert.NoError(t, err, "202 Accepted is now treated as success")
 }

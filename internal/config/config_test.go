@@ -70,7 +70,10 @@ func TestEmptyConfig(t *testing.T) {
 	cfg, _ := LoadConfig()
 	assert.NotNil(cfg)
 	assert.Equal(int64(50), cfg.MaxRecentLogLines)
-	assert.Equal(0, cfg.ResyncSeconds)
+	// Periodic resync is on by default: without it an object that stops
+	// changing is never re-observed, and the stale sweep then resolves it
+	// while it is still broken.
+	assert.Equal(300, cfg.ResyncSeconds)
 	assert.Equal(true, cfg.PendingPodMonitor.Enabled)
 	assert.Equal(true, cfg.RolloutMonitor.Enabled)
 	assert.Equal(true, cfg.JobMonitor.Enabled)

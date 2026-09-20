@@ -3,11 +3,11 @@ package controller
 import (
 	"sort"
 
-	kwcontext "github.com/abahmed/kwatch/internal/graphcontext"
-	"github.com/abahmed/kwatch/internal/metrics"
-)
+	corev1lister "k8s.io/client-go/listers/core/v1"
 
-func (c *Controller) SetReadyFunc(fn func()) { c.readyFn = fn }
+	"github.com/abahmed/kwatch/internal/metrics"
+	"github.com/abahmed/kwatch/internal/observe"
+)
 
 func (c *Controller) NamespaceAllowed(namespace string) bool {
 	if _, forbidden := c.forbiddenNamespaces[namespace]; forbidden {
@@ -42,8 +42,6 @@ func (c *Controller) NamespaceScope() ([]string, bool) {
 	return namespaces, false
 }
 
-func (c *Controller) SetTracker(t *kwcontext.ChangeTracker) { c.tracker = t }
-
 // recordGraphSize publishes the graph's size so an empty graph — and therefore
 // empty diagnoses — is visible on /metrics instead of only in the alerts that
 // arrive without a cause.
@@ -55,4 +53,32 @@ func (c *Controller) recordGraphSize() {
 	metrics.DefaultRegistry().GraphNodes.Store(int64(nodes))
 	metrics.DefaultRegistry().GraphEdges.Store(int64(edges))
 }
-func (c *Controller) SetGraph(g *kwcontext.ResourceGraph) { c.graph = g }
+
+// PodLister, ServiceLister and NodeLister expose the informer caches the
+// controller already keeps synced.
+//
+// The out-of-band monitors -- kubelet telemetry, runtime metrics, active
+// probes -- each listed the same objects from the API server on their own
+// interval. Sharing the cache removes several cluster-wide LISTs a minute and
+// removes the possibility of two components disagreeing about what exists.
+// A nil return means that informer is not wired, and the caller keeps its own
+// fallback.
+func (c *Controller) PodLister() corev1lister.PodLister { return c.podLister }
+
+func (c *Controller) ServiceLister() corev1lister.ServiceLister {
+	return c.serviceLister
+}
+
+func (c *Controller) NodeLister() corev1lister.NodeLister {
+	return c.nodeLister
+}
+
+// OwnerResolver exposes the controller's synchronized owner caches to
+// integrations that need attribution without depending on controller state.
+func (c *Controller) OwnerResolver() observe.OwnerResolver {
+	return observe.PodOwners{
+		RS: c.rsLister,
+		DS: c.dsLister,
+		SS: c.ssLister,
+	}
+}

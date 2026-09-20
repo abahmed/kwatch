@@ -8,16 +8,12 @@ import (
 
 	"k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/meta"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/client-go/dynamic"
-	"k8s.io/client-go/dynamic/dynamicinformer"
-	"k8s.io/client-go/rest"
-	"k8s.io/client-go/tools/cache"
 	"k8s.io/klog/v2"
 
 	"github.com/abahmed/kwatch/internal/config"
-	"github.com/abahmed/kwatch/internal/k8s"
+	"github.com/abahmed/kwatch/internal/metrics"
 )
 
 var gvr = schema.GroupVersionResource{
@@ -31,122 +27,228 @@ var gvr = schema.GroupVersionResource{
 // than a brief, explicit restart.
 
 type Watcher struct {
-	cfg         *config.Config
-	restConfig  *rest.Config
-	namespace   string
-	resync      time.Duration
-	mu          sync.Mutex
-	seen        map[string]string
-	ready       bool
-	restart     func()
-	restartOnce sync.Once
+	runtime             config.RuntimeConfig
+	dynamicClient       dynamic.Interface
+	namespace           string
+	resync              time.Duration
+	mu                  sync.Mutex
+	lifecycleMu         sync.Mutex
+	seen                map[string]string
+	ready               bool
+	started             bool
+	resetting           bool
+	generation          uint64
+	cancel              context.CancelFunc
+	restart             func()
+	restartRequested    bool
+	statusSink          func(error)
+	stateSink           func(Status)
+	lastError           string
+	optionalUnavailable bool
+	done                chan struct{}
+	runWG               *sync.WaitGroup
 }
 
-func New(cfg *config.Config, restConfig *rest.Config, namespace string, resync time.Duration, restart func()) *Watcher {
+// NewWithClient constructs the watcher from the application-owned dynamic
+// client.
+func NewWithClient(
+	runtime config.RuntimeConfig,
+	dynamicClient dynamic.Interface,
+	namespace string,
+	resync time.Duration,
+	restart func(),
+	statusSink func(error),
+	stateSink func(Status),
+) *Watcher {
 	return &Watcher{
-		cfg: cfg, restConfig: restConfig, namespace: namespace,
+		runtime: runtime, dynamicClient: dynamicClient, namespace: namespace,
 		resync: resync, seen: make(map[string]string), restart: restart,
+		statusSink: statusSink, stateSink: stateSink,
 	}
 }
 
 func (w *Watcher) Start(ctx context.Context) error {
-	if !w.cfg.CrdConfig.Enabled {
+	if !w.runtime.Monitors().CRD().Enabled {
 		klog.V(4).InfoS("CRD watcher is disabled")
 		return nil
 	}
+	if ctx == nil {
+		ctx = context.Background()
+	}
+	w.lifecycleMu.Lock()
+	defer w.lifecycleMu.Unlock()
+	w.mu.Lock()
+	if w.started {
+		w.mu.Unlock()
+		return nil
+	}
+	runCtx, cancel := context.WithCancel(ctx)
+	w.started = true
+	w.generation++
+	generation := w.generation
+	w.cancel = cancel
+	w.done = make(chan struct{})
+	w.runWG = &sync.WaitGroup{}
+	runWG := w.runWG
+	w.mu.Unlock()
+	complete := false
+	defer func() {
+		if !complete {
+			cancel()
+			runWG.Wait()
+			w.resetLifecycle(generation)
+		}
+	}()
 
-	dc, err := dynamic.NewForConfig(w.restConfig)
-	if err != nil {
-		return fmt.Errorf("crdwatch: failed to create dynamic client: %w", err)
+	dc := w.dynamicClient
+	if dc == nil {
+		err := fmt.Errorf("crdwatch: dynamic client is not configured")
+		w.reportError(err)
+		return err
 	}
 
 	// Pre-flight: check if the CRD is installed. If it is installed later,
 	// keep watching for it instead of requiring a process restart.
-	if _, err := dc.Resource(gvr).Namespace(w.namespace).List(ctx, metav1.ListOptions{Limit: 1}); err != nil {
+	if _, err := w.listCRD(runCtx, dc); err != nil {
 		if errors.IsNotFound(err) {
-			klog.InfoS("CRD kwatchconfigs.kwatch.abahmed.dev not found; waiting for installation")
-			go w.waitForCRD(ctx, dc)
+			if w.markOptionalUnavailable() {
+				metrics.DefaultRegistry().OptionalAPIUnavailable.Add(1)
+			}
+			klog.InfoS(
+				"CRD kwatchconfigs.kwatch.abahmed.dev not found; " +
+					"waiting for installation",
+			)
+			complete = true
+			w.reportError(nil)
+			go w.runWaitingGeneration(runCtx, dc, generation)
 			return nil
 		}
-		return fmt.Errorf("crdwatch: preflight check failed: %w", err)
+		wrapped := fmt.Errorf("crdwatch: preflight check failed: %w", err)
+		w.reportError(wrapped)
+		return wrapped
 	}
-	return w.startInformer(ctx, dc, false)
+	w.clearOptionalUnavailable()
+	if err := w.startInformer(runCtx, dc, false); err != nil {
+		w.reportError(err)
+		return err
+	}
+	w.reportError(nil)
+	complete = true
+	go w.waitForGenerationStop(runCtx, generation)
+	return nil
 }
 
-func (w *Watcher) waitForCRD(ctx context.Context, dc dynamic.Interface) {
-	ticker := time.NewTicker(time.Minute)
-	defer ticker.Stop()
-	for {
-		select {
-		case <-ctx.Done():
-			return
-		case <-ticker.C:
-			list, err := dc.Resource(gvr).Namespace(w.namespace).List(
-				ctx, metav1.ListOptions{Limit: 1},
+func (w *Watcher) markOptionalUnavailable() bool {
+	w.mu.Lock()
+	defer w.mu.Unlock()
+	if w.optionalUnavailable {
+		return false
+	}
+	w.optionalUnavailable = true
+	return true
+}
+
+func (w *Watcher) clearOptionalUnavailable() {
+	w.mu.Lock()
+	w.optionalUnavailable = false
+	w.mu.Unlock()
+}
+
+// Stop cancels the KwatchConfig informer or discovery wait. It is safe to
+// call more than once and does not alter the late-install policy.
+func (w *Watcher) Stop(ctx context.Context) error {
+	if w == nil {
+		return nil
+	}
+	w.lifecycleMu.Lock()
+	defer w.lifecycleMu.Unlock()
+	w.mu.Lock()
+	cancel := w.cancel
+	generation := w.generation
+	done := w.done
+	w.mu.Unlock()
+	if cancel != nil {
+		cancel()
+	}
+	if done != nil {
+		if ctx == nil {
+			var stopCancel context.CancelFunc
+			ctx, stopCancel = context.WithTimeout(
+				context.Background(), 10*time.Second,
 			)
-			if err != nil {
-				if !errors.IsNotFound(err) {
-					klog.V(2).InfoS("CRD watcher discovery unavailable", "error", err)
-				}
-				continue
-			}
-			if w.restartForLateConfig(len(list.Items)) {
-				return
-			}
-			if err := w.startInformer(ctx, dc, true); err != nil {
-				klog.ErrorS(err, "CRD watcher failed to start after installation")
-			}
-			return
+			defer stopCancel()
+		}
+		select {
+		case <-done:
+		case <-ctx.Done():
+			klog.ErrorS(
+				fmt.Errorf("CRD watcher generation did not stop"),
+				"CRD watcher shutdown timed out",
+				"generation", generation,
+			)
+			return ctx.Err()
 		}
 	}
+	w.resetLifecycle(generation)
+	return nil
 }
 
-func (w *Watcher) startInformer(
+func (w *Watcher) waitForGenerationStop(
 	ctx context.Context,
-	dc dynamic.Interface,
-	restartOnInitial bool,
-) error {
-
-	factory := dynamicinformer.NewFilteredDynamicSharedInformerFactory(dc, w.resync, w.namespace, nil)
-	inf := factory.ForResource(gvr).Informer()
-	if err := inf.SetTransform(k8s.TrimManagedFields); err != nil {
-		return fmt.Errorf("crdwatch: set cache transform: %w", err)
+	generation uint64,
+) {
+	<-ctx.Done()
+	w.mu.Lock()
+	runWG := w.runWG
+	w.mu.Unlock()
+	if runWG != nil {
+		runWG.Wait()
 	}
+	w.resetLifecycle(generation)
+}
 
-	if _, err := inf.AddEventHandler(cache.ResourceEventHandlerFuncs{
-		AddFunc:    w.changed,
-		UpdateFunc: func(_, obj interface{}) { w.changed(obj) },
-		DeleteFunc: w.deleted,
-	}); err != nil {
-		return fmt.Errorf("crdwatch: failed to register event handler: %w", err)
+func (w *Watcher) resetLifecycle(generation uint64) {
+	w.mu.Lock()
+	defer w.mu.Unlock()
+	if w.generation != generation || !w.started || w.resetting {
+		return
 	}
-
-	factory.Start(ctx.Done())
-	if !cache.WaitForCacheSync(ctx.Done(), inf.HasSynced) {
-		return fmt.Errorf("crdwatch: failed to sync informer cache")
+	w.resetting = true
+	w.started = false
+	w.cancel = nil
+	done := w.done
+	w.done = nil
+	w.runWG = nil
+	w.resetting = false
+	w.ready = false
+	w.seen = make(map[string]string)
+	w.restartRequested = false
+	if done != nil {
+		close(done)
 	}
-
-	initial := inf.GetStore().List()
-	w.seedKnown(initial)
-	if restartOnInitial {
-		w.restartForLateConfig(len(initial))
-	}
-
-	klog.InfoS("CRD watcher started", "namespace", w.namespace)
-	return nil
 }
 
 func (w *Watcher) restartForLateConfig(count int) bool {
 	if count == 0 || w.restart == nil {
 		return false
 	}
-	w.restartOnce.Do(func() {
-		klog.InfoS(
-			"KwatchConfig appeared after startup; restarting to apply configuration",
-		)
-		w.restart()
-	})
+	w.requestRestart(
+		"KwatchConfig appeared after startup; restarting to apply configuration",
+	)
 	return true
+}
+
+func (w *Watcher) requestRestart(message string) {
+	w.mu.Lock()
+	if w.restartRequested || w.restart == nil {
+		w.mu.Unlock()
+		return
+	}
+	w.restartRequested = true
+	restart := w.restart
+	w.mu.Unlock()
+	klog.InfoS(message)
+	restart()
 }
 
 func (w *Watcher) seedKnown(objects []interface{}) {
@@ -183,10 +285,7 @@ func (w *Watcher) changed(obj interface{}) {
 	if known && previous == version {
 		return
 	}
-	w.restartOnce.Do(func() {
-		klog.InfoS("KwatchConfig changed; restarting to apply configuration")
-		w.restart()
-	})
+	w.requestRestart("KwatchConfig changed; restarting to apply configuration")
 }
 
 func (w *Watcher) deleted(obj interface{}) {
@@ -203,8 +302,5 @@ func (w *Watcher) deleted(obj interface{}) {
 	if !ready || !known {
 		return
 	}
-	w.restartOnce.Do(func() {
-		klog.InfoS("KwatchConfig changed; restarting to apply configuration")
-		w.restart()
-	})
+	w.requestRestart("KwatchConfig changed; restarting to apply configuration")
 }

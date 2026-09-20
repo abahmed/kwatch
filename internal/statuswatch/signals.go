@@ -4,7 +4,8 @@ import (
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 
 	"github.com/abahmed/kwatch/internal/constant"
-	"github.com/abahmed/kwatch/internal/event"
+	"github.com/abahmed/kwatch/internal/model"
+	"github.com/abahmed/kwatch/internal/observe"
 )
 
 func admissionWarningText(warnings []interface{}) string {
@@ -21,11 +22,17 @@ func admissionWarningText(warnings []interface{}) string {
 	return "invalid CEL expression"
 }
 
+// failureSignal reports the first condition on an object that the rules
+// consider a failure.
+//
+// The owner is derived from the object rather than passed in: every caller
+// computed the same "namespace/name", and a caller that computed it
+// differently would key its incidents where nothing else could resolve them.
 func failureSignal(
 	u *unstructured.Unstructured,
-	resource, owner string,
+	resource string,
 	rules map[string]map[string]bool,
-) *event.Signal {
+) *model.Observation {
 	conditions, found, _ := unstructured.NestedSlice(
 		u.Object,
 		"status",
@@ -53,15 +60,7 @@ func failureSignal(
 		if message != "" {
 			hint += " — " + message
 		}
-		return &event.Signal{
-			Resource:  resource,
-			Namespace: u.GetNamespace(),
-			PodName:   u.GetName(),
-			Owner:     owner,
-			Reason:    reasonFor(resource),
-			Labels:    u.GetLabels(),
-			Hint:      hint,
-		}
+		return observeObject(u, resource).WithHint(hint)
 	}
 	return nil
 }
@@ -85,15 +84,14 @@ func reasonFor(resource string) string {
 	return constant.ReasonCustomResourceFailure
 }
 
-func resourceOwnerParts(namespace, name string) string {
-	if namespace == "" {
-		return name
-	}
-	return namespace + "/" + name
-}
-
-func resourceOwner(u *unstructured.Unstructured) string {
-	return resourceOwnerParts(u.GetNamespace(), u.GetName())
+// observeObject is the observation every status watch produces: the watched
+// object as its own subject and owner, with the reason its kind maps to.
+func observeObject(
+	u *unstructured.Unstructured, resource string,
+) *model.Observation {
+	return observe.ObjectNamed(
+		resource, u.GetNamespace(), u.GetName(), reasonFor(resource),
+	).WithLabels(u.GetLabels())
 }
 
 func nestedStringValues(value interface{}, path []string) []string {

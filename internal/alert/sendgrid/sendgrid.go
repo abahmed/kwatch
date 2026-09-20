@@ -1,12 +1,12 @@
 package sendgrid
 
 import (
+	"context"
 	"encoding/json"
 
 	"k8s.io/klog/v2"
 
-	"github.com/abahmed/kwatch/internal/alert/util"
-	"github.com/abahmed/kwatch/internal/config"
+	"github.com/abahmed/kwatch/internal/delivery/transport"
 	"github.com/abahmed/kwatch/internal/event"
 )
 
@@ -33,17 +33,23 @@ type sendgridPayload struct {
 }
 
 type Sendgrid struct {
+	sender  transport.Sender
 	url     string
 	apiKey  string
 	from    string
 	to      []string
 	subject string
 
-	appCfg *config.App
+	clusterName string
 }
 
 // NewSendgrid returns a new Sendgrid object
-func NewSendgrid(config map[string]interface{}, appCfg *config.App) *Sendgrid {
+
+func NewSendgrid(
+	config map[string]interface{},
+	clusterName string,
+	dependencies transport.Dependencies,
+) *Sendgrid {
 	apiKey, ok := config["apiKey"].(string)
 	if !ok || len(apiKey) == 0 {
 		klog.InfoS("initializing sendgrid with empty apiKey")
@@ -78,12 +84,13 @@ func NewSendgrid(config map[string]interface{}, appCfg *config.App) *Sendgrid {
 	klog.InfoS("initializing sendgrid", "from", from)
 
 	return &Sendgrid{
-		url:     sendgridAPIURL,
-		apiKey:  apiKey,
-		from:    from,
-		to:      recipients,
-		subject: subject,
-		appCfg:  appCfg,
+		sender:      transport.NewSender(dependencies),
+		url:         sendgridAPIURL,
+		apiKey:      apiKey,
+		from:        from,
+		to:          recipients,
+		subject:     subject,
+		clusterName: clusterName,
 	}
 }
 
@@ -93,13 +100,13 @@ func (s *Sendgrid) Name() string {
 }
 
 // SendEvent sends event to the provider
-func (s *Sendgrid) SendEvent(e *event.Event) error {
-	msg := e.FormatText(s.appCfg.ClusterName, "")
-	return s.SendMessage(msg)
+func (s *Sendgrid) SendEvent(ctx context.Context, e *event.Event) error {
+	msg := e.FormatText(s.clusterName, "")
+	return s.SendMessage(ctx, msg)
 }
 
 // SendMessage sends text message to the provider
-func (s *Sendgrid) SendMessage(msg string) error {
+func (s *Sendgrid) SendMessage(ctx context.Context, msg string) error {
 	subject := s.subject
 	if len(subject) == 0 {
 		subject = "kwatch alert"
@@ -124,8 +131,11 @@ func (s *Sendgrid) SendMessage(msg string) error {
 		return err
 	}
 
-	_, err = util.Post(s.Name(), s.url, body, "application/json", map[string]string{
-		"Authorization": "Bearer " + s.apiKey,
+	_, err = s.sender.Send(ctx, transport.Request{
+		Provider: s.Name(), URL: s.url, Body: body,
+		ContentType: "application/json", Headers: map[string]string{
+			"Authorization": "Bearer " + s.apiKey,
+		},
 	})
 	return err
 }

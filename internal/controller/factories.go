@@ -22,14 +22,25 @@ type namespaceScope struct {
 	forbidden  []string
 }
 
+const nodeLeaseNamespace = "kube-node-lease"
+
 var namespaceResolveTimeout = 30 * time.Second
 
-func resolveNamespaces(cfg *config.Config, clientset kubernetes.Interface) (namespaceScope, error) {
-	if cfg.NamespaceSelector != "" {
-		ctx, cancel := context.WithTimeout(context.Background(), namespaceResolveTimeout)
+func resolveNamespaces(
+	ctx context.Context,
+	runtime config.RuntimeConfig,
+	clientset kubernetes.Interface,
+) (namespaceScope, error) {
+	if ctx == nil {
+		// Compatibility callers construct controllers without an application
+		// context. Production composition always supplies one.
+		ctx = context.Background()
+	}
+	if runtime.Scope().NamespaceSelector() != "" {
+		ctx, cancel := context.WithTimeout(ctx, namespaceResolveTimeout)
 		defer cancel()
 		list, err := clientset.CoreV1().Namespaces().List(ctx, metav1.ListOptions{
-			LabelSelector: cfg.NamespaceSelector,
+			LabelSelector: runtime.Scope().NamespaceSelector(),
 		})
 		if err != nil {
 			return namespaceScope{}, fmt.Errorf("namespaceSelector list failed: %w", err)
@@ -40,10 +51,11 @@ func resolveNamespaces(cfg *config.Config, clientset kubernetes.Interface) (name
 		}
 		return namespaceScope{namespaces: ns}, nil
 	}
+	allowed := runtime.Scope().AllowedNamespaces()
 	return namespaceScope{
-		namespaces: cfg.AllowedNamespaces,
-		all:        len(cfg.AllowedNamespaces) == 0,
-		forbidden:  cfg.ForbiddenNamespaces,
+		namespaces: allowed,
+		all:        len(allowed) == 0,
+		forbidden:  runtime.Scope().ForbiddenNamespaces(),
 	}, nil
 }
 
@@ -53,6 +65,7 @@ func newFactories(
 	forbiddenNamespaces []string,
 	resync time.Duration,
 ) (factorySet, []informers.SharedInformerFactory) {
+	nodeLeaseFactory := newNodeLeaseFactory(client, resync)
 	if scope.all || len(scope.namespaces) == 1 {
 		var opts []informers.SharedInformerOption
 		if len(scope.namespaces) == 1 {
@@ -72,12 +85,23 @@ func newFactories(
 		// MutatingWebhookConfigurations, ValidatingWebhookConfigurations) that
 		// must NOT inherit the namespace field selector.
 		clusterFactory := informers.NewSharedInformerFactoryWithOptions(client, resync, informerMemoryOptions()...)
-		return factorySet{global: factory, clusterScoped: clusterFactory}, []informers.SharedInformerFactory{factory, clusterFactory}
+		return factorySet{
+			global:           factory,
+			clusterScoped:    clusterFactory,
+			nodeLeaseFactory: nodeLeaseFactory,
+		}, []informers.SharedInformerFactory{
+			factory, clusterFactory, nodeLeaseFactory,
+		}
 	}
 
 	if len(scope.namespaces) == 0 {
 		clusterFactory := informers.NewSharedInformerFactoryWithOptions(client, resync, informerMemoryOptions()...)
-		return factorySet{clusterScoped: clusterFactory}, []informers.SharedInformerFactory{clusterFactory}
+		return factorySet{
+			clusterScoped:    clusterFactory,
+			nodeLeaseFactory: nodeLeaseFactory,
+		}, []informers.SharedInformerFactory{
+			clusterFactory, nodeLeaseFactory,
+		}
 	}
 
 	factories := make([]informers.SharedInformerFactory, 0, len(scope.namespaces))
@@ -95,11 +119,27 @@ func newFactories(
 		resync,
 		informerMemoryOptions()...,
 	)
-	factories = append(factories, clusterFactory)
+	factories = append(factories, clusterFactory, nodeLeaseFactory)
 	return factorySet{
-		perNamespace:  factories[:len(factories)-1],
-		clusterScoped: clusterFactory,
+		perNamespace:     factories[:len(factories)-2],
+		clusterScoped:    clusterFactory,
+		nodeLeaseFactory: nodeLeaseFactory,
 	}, factories
+}
+
+func newNodeLeaseFactory(
+	client kubernetes.Interface,
+	resync time.Duration,
+) informers.SharedInformerFactory {
+	opts := []informers.SharedInformerOption{
+		informers.WithNamespace(nodeLeaseNamespace),
+	}
+	opts = append(opts, informerMemoryOptions()...)
+	return informers.NewSharedInformerFactoryWithOptions(
+		client,
+		resync,
+		opts...,
+	)
 }
 
 // informerMemoryOptions removes server-managed field ownership metadata from
@@ -135,7 +175,8 @@ func informerExcludedNamespaces(forbidden []string) string {
 }
 
 type factorySet struct {
-	global        informers.SharedInformerFactory
-	perNamespace  []informers.SharedInformerFactory
-	clusterScoped informers.SharedInformerFactory
+	global           informers.SharedInformerFactory
+	perNamespace     []informers.SharedInformerFactory
+	clusterScoped    informers.SharedInformerFactory
+	nodeLeaseFactory informers.SharedInformerFactory
 }

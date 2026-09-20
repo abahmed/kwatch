@@ -7,6 +7,10 @@ nameOverride: ""
 # -- Override the full app name used in templates
 fullnameOverride: ""
 
+# -- Number of Kwatch Pods. Two provides automatic process failover through
+# Kubernetes Lease election; one is an advanced low-resource mode.
+replicaCount: 2
+
 image:
   repository: ghcr.io/abahmed/kwatch
   # -- Overrides the image tag (defaults to .Chart.AppVersion)
@@ -31,6 +35,16 @@ podSecurityContext:
 service:
   port: 8060
 
+# -- Time allowed for workers and persistence savers to stop cleanly.
+terminationGracePeriodSeconds: 60
+
+# -- Optional network isolation. When enabled, provide ingress rules for the
+# health clients and egress rules for the Kubernetes API, DNS, and providers.
+networkPolicy:
+  enabled: false
+  ingress: []
+  egress: []
+
 resources:
   limits:
     memory: 256Mi
@@ -53,7 +67,9 @@ podLabels: {}
 
 # kwatch configuration
 # All detection monitors are ON by default; see docs.
-# resyncSeconds defaults to 0 (event-driven). workers defaults to 1 — raise on large
+# resyncSeconds defaults to 300: resyncs are what re-confirm a problem that is
+# still happening, so keep it well below correlation.window (default 10m) or
+# kwatch will close incidents that never recovered. workers defaults to 1 — raise on large
 # clusters (≈1 per few-thousand pods); each worker fans out to ≤7 goroutines.
 # TLS monitoring is opt-in in the interactive installer (it reads TLS Secrets).
 # The chart's read-only Secret permission is retained because the dependency

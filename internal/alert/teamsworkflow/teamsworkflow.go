@@ -1,12 +1,12 @@
 package teamsworkflow
 
 import (
+	"context"
 	"encoding/json"
 
 	"k8s.io/klog/v2"
 
-	"github.com/abahmed/kwatch/internal/alert/util"
-	"github.com/abahmed/kwatch/internal/config"
+	"github.com/abahmed/kwatch/internal/delivery/transport"
 	"github.com/abahmed/kwatch/internal/event"
 )
 
@@ -33,13 +33,19 @@ type teamsPayload struct {
 }
 
 type TeamsWorkflow struct {
+	sender  transport.Sender
 	webhook string
 
-	appCfg *config.App
+	clusterName string
 }
 
 // NewTeamsWorkflow returns a new TeamsWorkflow object
-func NewTeamsWorkflow(config map[string]interface{}, appCfg *config.App) *TeamsWorkflow {
+
+func NewTeamsWorkflow(
+	config map[string]interface{},
+	clusterName string,
+	dependencies transport.Dependencies,
+) *TeamsWorkflow {
 	webhook, ok := config["webhook"].(string)
 	if !ok || len(webhook) == 0 {
 		klog.InfoS("initializing teams workflow with empty webhook url")
@@ -49,8 +55,9 @@ func NewTeamsWorkflow(config map[string]interface{}, appCfg *config.App) *TeamsW
 	klog.InfoS("initializing Teams Workflow with webhook url")
 
 	return &TeamsWorkflow{
-		webhook: webhook,
-		appCfg:  appCfg,
+		sender:      transport.NewSender(dependencies),
+		webhook:     webhook,
+		clusterName: clusterName,
 	}
 }
 
@@ -60,13 +67,13 @@ func (t *TeamsWorkflow) Name() string {
 }
 
 // SendEvent sends event to the provider
-func (t *TeamsWorkflow) SendEvent(e *event.Event) error {
-	msg := e.FormatMarkdown(t.appCfg.ClusterName, "", "\n\n")
-	return t.SendMessage(msg)
+func (t *TeamsWorkflow) SendEvent(ctx context.Context, e *event.Event) error {
+	msg := e.FormatMarkdown(t.clusterName, "", "\n\n")
+	return t.SendMessage(ctx, msg)
 }
 
 // SendMessage sends text message to the provider
-func (t *TeamsWorkflow) SendMessage(msg string) error {
+func (t *TeamsWorkflow) SendMessage(ctx context.Context, msg string) error {
 	payload := teamsPayload{
 		Type: "message",
 		Attachments: []adaptiveCardAttachment{
@@ -88,6 +95,9 @@ func (t *TeamsWorkflow) SendMessage(msg string) error {
 		return err
 	}
 
-	_, err = util.Post(t.Name(), t.webhook, body, "application/json", nil)
+	_, err = t.sender.Send(ctx, transport.Request{
+		Provider: t.Name(), URL: t.webhook, Body: body,
+		ContentType: "application/json",
+	})
 	return err
 }

@@ -1,12 +1,13 @@
 package webhook
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"strings"
 
-	"github.com/abahmed/kwatch/internal/alert/util"
-	"github.com/abahmed/kwatch/internal/config"
+	"github.com/abahmed/kwatch/internal/clock"
+	"github.com/abahmed/kwatch/internal/delivery/transport"
 	"github.com/abahmed/kwatch/internal/event"
 	"github.com/abahmed/kwatch/internal/insight"
 	"github.com/abahmed/kwatch/internal/message"
@@ -26,19 +27,33 @@ type Authentication struct {
 }
 
 type Webhook struct {
-	webhook  string
-	headers  []KeyValue
-	username string
-	password string
-	appCfg   *config.App
+	sender      transport.Sender
+	webhook     string
+	headers     []KeyValue
+	username    string
+	password    string
+	clusterName string
+	clockSource clock.Clock
 }
 
-func (w *Webhook) SendMessage(msg string) error {
-	return nil
+func (w *Webhook) SendMessage(ctx context.Context, msg string) error {
+	payload, err := json.Marshal(map[string]string{
+		"Cluster": w.clusterName,
+		"Message": msg,
+	})
+	if err != nil {
+		return fmt.Errorf("marshal webhook message: %w", err)
+	}
+	_, err = w.sender.Send(ctx, w.request(payload))
+	return err
 }
 
-// NewSlack returns new Slack instance
-func NewWebhook(config map[string]interface{}, appCfg *config.App) *Webhook {
+// NewWebhook constructs a Webhook provider from its settings.
+func NewWebhook(
+	config map[string]interface{},
+	clusterName string,
+	dependencies transport.Dependencies,
+) *Webhook {
 	url, ok := config["url"].(string)
 	if !ok || len(url) == 0 {
 		klog.InfoS("initializing webhook with empty url")
@@ -81,11 +96,13 @@ func NewWebhook(config map[string]interface{}, appCfg *config.App) *Webhook {
 	klog.InfoS("initializing webhook with configured authentication")
 
 	return &Webhook{
-		webhook:  url,
-		headers:  headers,
-		username: a.UserName,
-		password: a.Password,
-		appCfg:   appCfg,
+		sender:      transport.NewSender(dependencies),
+		webhook:     url,
+		headers:     headers,
+		username:    a.UserName,
+		password:    a.Password,
+		clusterName: clusterName,
+		clockSource: clock.Require(dependencies.Clock),
 	}
 }
 
@@ -95,19 +112,19 @@ func (w *Webhook) Name() string {
 }
 
 // SendEvent sends event to the provider
-func (w *Webhook) SendEvent(ev *event.Event) error {
+func (w *Webhook) SendEvent(ctx context.Context, ev *event.Event) error {
 	reqBody, err := w.buildRequestBody(ev)
 	if err != nil {
 		return err
 	}
-	_, err = util.Send(w.request(reqBody))
+	_, err = w.sender.Send(ctx, w.request(reqBody))
 	return err
 }
 
 // request builds the call every webhook delivery makes: the user's headers
 // and optional basic auth on top of a JSON POST.
-func (w *Webhook) request(body []byte) util.Request {
-	r := util.Request{
+func (w *Webhook) request(body []byte) transport.Request {
+	r := transport.Request{
 		Provider: "Webhook",
 		URL:      w.webhook,
 		Body:     body,
@@ -117,7 +134,7 @@ func (w *Webhook) request(body []byte) util.Request {
 		r.Headers[header.Name] = header.Value
 	}
 	if len(w.username) > 0 && len(w.password) > 0 {
-		r.BasicAuth = &util.BasicAuth{
+		r.BasicAuth = &transport.BasicAuth{
 			Username: w.username,
 			Password: w.password,
 		}
@@ -125,37 +142,40 @@ func (w *Webhook) request(body []byte) util.Request {
 	return r
 }
 
-// SendIncident implements alert.ThreadProvider.
+// SendIncident implements delivery.ThreadProvider.
 // It renders the incident using the Report model and PlaintextRenderer,
 // producing a context-adaptive text message, then POSTs it as JSON.
 func (w *Webhook) SendIncident(
+	ctx context.Context,
 	inc *model.Incident,
 	action model.IncidentAction,
 ) error {
-	return w.SendIncidentWithInsight(inc, action, nil)
+	return w.SendIncidentWithInsight(ctx, inc, action, nil)
 }
 
-// SendIncidentWithInsight implements alert.InsightThreadProvider, so the
+// SendIncidentWithInsight implements delivery.InsightThreadProvider, so the
 // diagnosis — likely cause, impact, recent changes — is rendered rather than
 // dropped on the way to this provider.
 func (w *Webhook) SendIncidentWithInsight(
+	ctx context.Context,
 	inc *model.Incident,
 	action model.IncidentAction,
 	ins *insight.Insight,
 ) error {
-	text := util.RenderIncidentWithInsight(
+	text := message.RenderIncidentWithInsight(
 		inc,
 		action,
 		ins,
 		message.NewPlainTextRenderer(),
-		w.appCfg.ClusterName,
+		w.clusterName,
+		w.clockSource,
 	)
 	if text == "" {
 		return nil
 	}
 
 	payload, err := json.Marshal(map[string]interface{}{
-		"Cluster": w.appCfg.ClusterName,
+		"Cluster": w.clusterName,
 		"Name":    inc.Name,
 		"Reason":  inc.Reason,
 		"Message": text,
@@ -163,7 +183,7 @@ func (w *Webhook) SendIncidentWithInsight(
 	if err != nil {
 		return fmt.Errorf("failed to marshal webhook incident payload: %w", err)
 	}
-	_, err = util.Send(w.request(payload))
+	_, err = w.sender.Send(ctx, w.request(payload))
 	return err
 }
 
@@ -181,7 +201,7 @@ func (w *Webhook) buildRequestBody(
 	}
 
 	postBody, err := json.Marshal(map[string]interface{}{
-		"Cluster":   w.appCfg.ClusterName,
+		"Cluster":   w.clusterName,
 		"Name":      ev.PodName,
 		"Container": ev.ContainerName,
 		"Namespace": ev.Namespace,

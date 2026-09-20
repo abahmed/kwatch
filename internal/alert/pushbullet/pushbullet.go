@@ -1,12 +1,12 @@
 package pushbullet
 
 import (
+	"context"
 	"encoding/json"
 
 	"k8s.io/klog/v2"
 
-	"github.com/abahmed/kwatch/internal/alert/util"
-	"github.com/abahmed/kwatch/internal/config"
+	"github.com/abahmed/kwatch/internal/delivery/transport"
 	"github.com/abahmed/kwatch/internal/event"
 )
 
@@ -19,14 +19,20 @@ type pushbulletPayload struct {
 }
 
 type Pushbullet struct {
+	sender      transport.Sender
 	url         string
 	accessToken string
 
-	appCfg *config.App
+	clusterName string
 }
 
 // NewPushbullet returns a new Pushbullet object
-func NewPushbullet(config map[string]interface{}, appCfg *config.App) *Pushbullet {
+
+func NewPushbullet(
+	config map[string]interface{},
+	clusterName string,
+	dependencies transport.Dependencies,
+) *Pushbullet {
 	accessToken, ok := config["accessToken"].(string)
 	if !ok || len(accessToken) == 0 {
 		klog.InfoS("initializing pushbullet with empty accessToken")
@@ -36,9 +42,10 @@ func NewPushbullet(config map[string]interface{}, appCfg *config.App) *Pushbulle
 	klog.InfoS("initializing pushbullet")
 
 	return &Pushbullet{
+		sender:      transport.NewSender(dependencies),
 		url:         pushbulletAPIURL,
 		accessToken: accessToken,
-		appCfg:      appCfg,
+		clusterName: clusterName,
 	}
 }
 
@@ -48,16 +55,16 @@ func (s *Pushbullet) Name() string {
 }
 
 // SendEvent sends event to the provider
-func (s *Pushbullet) SendEvent(e *event.Event) error {
-	msg := e.FormatText(s.appCfg.ClusterName, "")
-	return s.SendMessage(msg)
+func (s *Pushbullet) SendEvent(ctx context.Context, e *event.Event) error {
+	msg := e.FormatText(s.clusterName, "")
+	return s.SendMessage(ctx, msg)
 }
 
 // SendMessage sends text message to the provider
-func (s *Pushbullet) SendMessage(msg string) error {
+func (s *Pushbullet) SendMessage(ctx context.Context, msg string) error {
 	title := "kwatch alert"
-	if len(s.appCfg.ClusterName) > 0 {
-		title = "kwatch alert: " + s.appCfg.ClusterName
+	if len(s.clusterName) > 0 {
+		title = "kwatch alert: " + s.clusterName
 	}
 
 	payload := pushbulletPayload{
@@ -71,8 +78,11 @@ func (s *Pushbullet) SendMessage(msg string) error {
 		return err
 	}
 
-	_, err = util.Post(s.Name(), s.url, body, "application/json", map[string]string{
-		"Access-Token": s.accessToken,
+	_, err = s.sender.Send(ctx, transport.Request{
+		Provider: s.Name(), URL: s.url, Body: body,
+		ContentType: "application/json", Headers: map[string]string{
+			"Access-Token": s.accessToken,
+		},
 	})
 	return err
 }

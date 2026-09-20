@@ -33,7 +33,7 @@ func ShouldSend(lastSent, now time.Time) bool {
 // successful 2xx response; callers should persist the send time only then.
 func Report(ctx context.Context, client *http.Client, endpoint, clusterID, version string) error {
 	if client == nil {
-		client = &http.Client{Timeout: 2 * time.Second}
+		return fmt.Errorf("telemetry client is nil")
 	}
 	if endpoint == "" || !uuidPattern.MatchString(clusterID) || !versionPattern.MatchString(version) {
 		return fmt.Errorf("invalid telemetry identity")

@@ -1,6 +1,7 @@
 package pushover
 
 import (
+	"context"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -9,14 +10,24 @@ import (
 
 	"github.com/stretchr/testify/assert"
 
-	"github.com/abahmed/kwatch/internal/config"
+	"github.com/abahmed/kwatch/internal/clock"
+	"github.com/abahmed/kwatch/internal/delivery/transport"
 	"github.com/abahmed/kwatch/internal/event"
 )
+
+var testDeps = transport.Dependencies{
+	HTTPClient: http.DefaultClient,
+	Clock:      clock.RealClock{},
+}
+
+func testAppConfig() string {
+	return "dev"
+}
 
 func TestEmptyConfig(t *testing.T) {
 	assert := assert.New(t)
 
-	c := NewPushover(map[string]interface{}{}, &config.App{ClusterName: "dev"})
+	c := NewPushover(map[string]interface{}{}, testAppConfig(), testDeps)
 	assert.Nil(c)
 }
 
@@ -27,7 +38,7 @@ func TestPushover(t *testing.T) {
 		"token": "test",
 		"user":  "user123",
 	}
-	c := NewPushover(configMap, &config.App{ClusterName: "dev"})
+	c := NewPushover(configMap, testAppConfig(), testDeps)
 	assert.NotNil(c)
 	assert.Equal(c.Name(), "Pushover")
 }
@@ -35,11 +46,58 @@ func TestPushover(t *testing.T) {
 func TestPushoverInvalidConfig(t *testing.T) {
 	assert := assert.New(t)
 
-	c := NewPushover(map[string]interface{}{"user": "user123"}, &config.App{ClusterName: "dev"})
+	c := NewPushover(
+		map[string]interface{}{
+			"user": "user123",
+		},
+		testAppConfig(),
+		testDeps,
+	)
 	assert.Nil(c)
 
-	c = NewPushover(map[string]interface{}{"token": "test"}, &config.App{ClusterName: "dev"})
+	c = NewPushover(
+		map[string]interface{}{
+			"token": "test",
+		},
+		testAppConfig(),
+		testDeps,
+	)
 	assert.Nil(c)
+
+	c = NewPushover(
+		map[string]interface{}{
+			"token":    "test",
+			"user":     "user123",
+			"priority": 3,
+		},
+		testAppConfig(),
+		testDeps,
+	)
+	assert.Nil(c)
+
+	c = NewPushover(
+		map[string]interface{}{
+			"token":    "test",
+			"user":     "user123",
+			"priority": 2,
+		},
+		testAppConfig(),
+		testDeps,
+	)
+	assert.Nil(c)
+
+	c = NewPushover(
+		map[string]interface{}{
+			"token":    "test",
+			"user":     "user123",
+			"priority": 2,
+			"retry":    30,
+			"expire":   10800,
+		},
+		testAppConfig(),
+		testDeps,
+	)
+	assert.NotNil(c)
 }
 
 func TestSendMessage(t *testing.T) {
@@ -63,10 +121,10 @@ func TestSendMessage(t *testing.T) {
 		"title":    "kwatch",
 		"priority": 1,
 	}
-	c := NewPushover(configMap, &config.App{ClusterName: "dev"})
+	c := NewPushover(configMap, testAppConfig(), testDeps)
 	c.url = s.URL
 
-	assert.Nil(c.SendMessage("hello alert"))
+	assert.Nil(c.SendMessage(context.Background(), "hello alert"))
 	assert.Contains(gotCT, "application/x-www-form-urlencoded")
 	assert.Contains(gotBody, "token=test")
 	assert.Contains(gotBody, "user=user123")
@@ -89,10 +147,10 @@ func TestSendMessageError(t *testing.T) {
 		"token": "test",
 		"user":  "user123",
 	}
-	c := NewPushover(configMap, &config.App{ClusterName: "dev"})
+	c := NewPushover(configMap, testAppConfig(), testDeps)
 	c.url = s.URL
 
-	assert.NotNil(c.SendMessage("test"))
+	assert.NotNil(c.SendMessage(context.Background(), "test"))
 }
 
 func TestSendEvent(t *testing.T) {
@@ -111,7 +169,7 @@ func TestSendEvent(t *testing.T) {
 		"token": "test",
 		"user":  "user123",
 	}
-	c := NewPushover(configMap, &config.App{ClusterName: "dev"})
+	c := NewPushover(configMap, testAppConfig(), testDeps)
 	c.url = s.URL
 
 	ev := event.Event{
@@ -119,7 +177,7 @@ func TestSendEvent(t *testing.T) {
 		Namespace: "default",
 		Reason:    "OOMKILLED",
 	}
-	assert.Nil(c.SendEvent(&ev))
+	assert.Nil(c.SendEvent(context.Background(), &ev))
 }
 
 func TestInvalidHttpRequest(t *testing.T) {
@@ -129,13 +187,13 @@ func TestInvalidHttpRequest(t *testing.T) {
 		"token": "test",
 		"user":  "user123",
 	}
-	c := NewPushover(configMap, &config.App{ClusterName: "dev"})
+	c := NewPushover(configMap, testAppConfig(), testDeps)
 	c.url = "h ttp://localhost/%s"
 
-	assert.NotNil(c.SendMessage("test"))
+	assert.NotNil(c.SendMessage(context.Background(), "test"))
 
 	c.url = "http://localhost:132323/%s"
-	assert.NotNil(c.SendMessage("test"))
+	assert.NotNil(c.SendMessage(context.Background(), "test"))
 }
 
 func TestPushoverBuildsForm(t *testing.T) {
@@ -145,7 +203,7 @@ func TestPushoverBuildsForm(t *testing.T) {
 		"token": "test",
 		"user":  "user123",
 	}
-	c := NewPushover(configMap, &config.App{ClusterName: "dev"})
+	c := NewPushover(configMap, testAppConfig(), testDeps)
 	c.url = "https://api.pushover.net/1/messages.json"
 
 	assert.True(strings.HasPrefix(c.url, "https://api.pushover.net"))

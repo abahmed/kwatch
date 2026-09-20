@@ -34,7 +34,7 @@ func catalogLines() ([]string, error) {
 	lines := []string{catalogHeader}
 	seen := make(map[string]bool)
 	for _, field := range config.ProviderCatalog() {
-		if !config.KnownProviders[field.Provider] {
+		if !config.IsKnownProvider(field.Provider) {
 			return nil, fmt.Errorf(
 				"provider catalog contains unknown provider %q",
 				field.Provider,

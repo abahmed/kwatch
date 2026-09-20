@@ -1,6 +1,7 @@
 package flock
 
 import (
+	"context"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -8,14 +9,22 @@ import (
 
 	"github.com/stretchr/testify/assert"
 
-	"github.com/abahmed/kwatch/internal/config"
+	"github.com/abahmed/kwatch/internal/delivery/transport"
 	"github.com/abahmed/kwatch/internal/event"
 )
+
+var testDeps = transport.Dependencies{
+	HTTPClient: http.DefaultClient,
+}
+
+func testAppConfig() string {
+	return "dev"
+}
 
 func TestEmptyConfig(t *testing.T) {
 	assert := assert.New(t)
 
-	c := NewFlock(map[string]interface{}{}, &config.App{ClusterName: "dev"})
+	c := NewFlock(map[string]interface{}{}, testAppConfig(), testDeps)
 	assert.Nil(c)
 }
 
@@ -25,7 +34,7 @@ func TestFlock(t *testing.T) {
 	configMap := map[string]interface{}{
 		"webhook": "https://api.flock.com/hooks/sendMessage?token=test",
 	}
-	c := NewFlock(configMap, &config.App{ClusterName: "dev"})
+	c := NewFlock(configMap, testAppConfig(), testDeps)
 	assert.NotNil(c)
 	assert.Equal(c.Name(), "Flock")
 }
@@ -46,9 +55,9 @@ func TestSendMessage(t *testing.T) {
 	configMap := map[string]interface{}{
 		"webhook": s.URL,
 	}
-	c := NewFlock(configMap, &config.App{ClusterName: "dev"})
+	c := NewFlock(configMap, testAppConfig(), testDeps)
 
-	assert.Nil(c.SendMessage("hello"))
+	assert.Nil(c.SendMessage(context.Background(), "hello"))
 	assert.Contains(gotBody, `"text":"hello"`)
 }
 
@@ -65,9 +74,9 @@ func TestSendMessageError(t *testing.T) {
 	configMap := map[string]interface{}{
 		"webhook": s.URL,
 	}
-	c := NewFlock(configMap, &config.App{ClusterName: "dev"})
+	c := NewFlock(configMap, testAppConfig(), testDeps)
 
-	assert.NotNil(c.SendMessage("test"))
+	assert.NotNil(c.SendMessage(context.Background(), "test"))
 }
 
 func TestSendEvent(t *testing.T) {
@@ -85,14 +94,14 @@ func TestSendEvent(t *testing.T) {
 	configMap := map[string]interface{}{
 		"webhook": s.URL,
 	}
-	c := NewFlock(configMap, &config.App{ClusterName: "dev"})
+	c := NewFlock(configMap, testAppConfig(), testDeps)
 
 	ev := event.Event{
 		PodName:   "test-pod",
 		Namespace: "default",
 		Reason:    "OOMKILLED",
 	}
-	assert.Nil(c.SendEvent(&ev))
+	assert.Nil(c.SendEvent(context.Background(), &ev))
 }
 
 func TestInvalidHttpRequest(t *testing.T) {
@@ -101,7 +110,7 @@ func TestInvalidHttpRequest(t *testing.T) {
 	configMap := map[string]interface{}{
 		"webhook": "h ttp://localhost",
 	}
-	c := NewFlock(configMap, &config.App{ClusterName: "dev"})
+	c := NewFlock(configMap, testAppConfig(), testDeps)
 
-	assert.NotNil(c.SendMessage("test"))
+	assert.NotNil(c.SendMessage(context.Background(), "test"))
 }

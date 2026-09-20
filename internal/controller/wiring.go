@@ -1,12 +1,8 @@
 package controller
 
 import (
-	"strings"
 	"time"
 
-	corev1 "k8s.io/api/core/v1"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/client-go/informers"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/tools/cache"
@@ -16,58 +12,62 @@ import (
 )
 
 // wireNode sets up the node informer when either monitor is enabled.
-func (c *Controller) wireNode(cfg *config.Config, fs factorySet) {
-	if cfg.NodeMonitor.Enabled || cfg.NodeResourceMonitor.Enabled {
+func (c *Controller) wireNode(runtime config.RuntimeConfig, fs factorySet) {
+	if runtime.Monitors().Node().Enabled ||
+		runtime.Monitors().NodeResource().Enabled {
 		c.nodeLister = fs.nodeLister()
 
-		if cfg.NodeMonitor.Enabled {
+		if runtime.Monitors().Node().Enabled {
 			c.watch(c.node, fs.nodeInformer())
 		}
 	}
 }
 
-func (c *Controller) wireRollout(cfg *config.Config, fs factorySet) {
-	if !cfg.RolloutMonitor.Enabled {
+func (c *Controller) wireRollout(runtime config.RuntimeConfig, fs factorySet) {
+	if !runtime.Monitors().Rollout().Enabled {
 		return
 	}
 	c.deployLister = fs.deployLister()
 	c.watch(c.deployment, fs.deployInformers()...)
 }
 
-func (c *Controller) wireJobs(cfg *config.Config, fs factorySet) {
-	if !cfg.JobMonitor.Enabled {
+func (c *Controller) wireJobs(runtime config.RuntimeConfig, fs factorySet) {
+	if !runtime.Monitors().Job().Enabled {
 		return
 	}
 	c.jobLister = fs.jobLister()
 	c.watch(c.job, fs.jobInformers()...)
 }
 
-func (c *Controller) wireDaemonSetMonitor(cfg *config.Config, fs factorySet) {
-	if !cfg.DaemonSetMonitor.Enabled {
+func (c *Controller) wireDaemonSetMonitor(
+	runtime config.RuntimeConfig, fs factorySet,
+) {
+	if !runtime.Monitors().DaemonSet().Enabled {
 		return
 	}
 	c.watch(c.daemonSet, fs.dsInformers()...)
 }
 
-func (c *Controller) wireCronJobs(cfg *config.Config, fs factorySet) {
-	if !cfg.CronJobMonitor.Enabled {
+func (c *Controller) wireCronJobs(runtime config.RuntimeConfig, fs factorySet) {
+	if !runtime.Monitors().CronJob().Enabled {
 		return
 	}
 	c.cronJobLister = fs.cronJobLister()
 	c.watch(c.cronJob, fs.cronJobInformers()...)
 }
 
-func (c *Controller) wireHPA(cfg *config.Config, fs factorySet) {
-	if !cfg.HpaMonitor.Enabled {
+func (c *Controller) wireHPA(runtime config.RuntimeConfig, fs factorySet) {
+	if !runtime.Monitors().HPA().Enabled {
 		return
 	}
 	c.hpaLister = fs.hpaLister()
 	c.watch(c.hpa, fs.hpaInformers()...)
 }
 
-func (c *Controller) wireService(cfg *config.Config, fs factorySet) {
-	if !cfg.ServiceMonitor.Enabled && !cfg.IngressMonitor.Enabled &&
-		!cfg.AdmissionWebhookMonitor.Enabled {
+func (c *Controller) wireService(runtime config.RuntimeConfig, fs factorySet) {
+	if !runtime.Monitors().Service().Enabled &&
+		!runtime.Monitors().Ingress().Enabled &&
+		!runtime.Monitors().AdmissionWebhook().Enabled {
 		return
 	}
 	c.serviceLister = fs.serviceLister()
@@ -78,88 +78,43 @@ func (c *Controller) wireService(cfg *config.Config, fs factorySet) {
 	}
 
 	for _, inf := range serviceInformers {
-		inf.AddEventHandler(cache.ResourceEventHandlerFuncs{
-			AddFunc: func(obj interface{}) {
-				c.recordChange(kwcontext.ChangeCreate, "service", obj)
-				if cfg.ServiceMonitor.Enabled {
-					c.service.enqueue(obj)
-				}
-				c.enqueueServiceDependents(obj)
-			},
-			UpdateFunc: func(old, obj interface{}) {
-				c.recordChangeUpdate("service", old, obj)
-				if cfg.ServiceMonitor.Enabled {
-					c.service.enqueue(obj)
-				}
-				c.enqueueServiceDependents(obj)
-			},
-			DeleteFunc: func(obj interface{}) {
-				c.recordChange(kwcontext.ChangeDelete, "service", obj)
-				if cfg.ServiceMonitor.Enabled {
-					c.service.enqueue(obj)
-				}
-				c.enqueueServiceDependents(obj)
-			},
-		})
+		inf.AddEventHandler(safeEventHandler("service",
+			cache.ResourceEventHandlerFuncs{
+				AddFunc: func(obj interface{}) {
+					c.recordChange(kwcontext.ChangeCreate, "service", obj)
+					if runtime.Monitors().Service().Enabled {
+						c.service.enqueue(obj)
+					}
+					c.enqueueServiceDependents(obj)
+				},
+				UpdateFunc: func(old, obj interface{}) {
+					c.recordChangeUpdate("service", old, obj)
+					if runtime.Monitors().Service().Enabled {
+						c.service.enqueue(obj)
+					}
+					c.enqueueServiceDependents(obj)
+				},
+				DeleteFunc: func(obj interface{}) {
+					c.recordChange(kwcontext.ChangeDelete, "service", obj)
+					if runtime.Monitors().Service().Enabled {
+						c.service.enqueue(obj)
+					}
+					c.enqueueServiceDependents(obj)
+				},
+			}))
 	}
-	if !cfg.ServiceMonitor.Enabled {
+	if !runtime.Monitors().Service().Enabled {
+		c.wireEndpointSlices(runtime, fs)
 		return
 	}
-	c.endpointSliceLister = fs.endpointSliceLister()
 	c.service.startWorkers = true
-	c.watch(c.endpointSlice, fs.endpointSliceInformers()...)
+	c.wireEndpointSlices(runtime, fs)
 }
 
-// enqueueServiceDependents rechecks objects whose detector reads the Service
-// lister. A Service change can resolve an Ingress or admission-webhook issue
-// without changing the referencing object itself.
-func (c *Controller) enqueueServiceDependents(obj interface{}) {
-	if c.ingress.startWorkers && c.graph != nil {
-		if service, ok := obj.(*corev1.Service); ok {
-			keys := c.graph.DependentsByType("service", service.Namespace, service.Name, "ingress")
-			for _, key := range keys {
-				c.ingress.enqueue(strings.TrimPrefix(key, "ingress/"))
-			}
-			// The graph is an optimization, not the source of truth. It can be
-			// briefly stale while an Ingress and Service are updated together;
-			// always recheck the lister-backed Ingress set so a real dependency
-			// cannot be missed.
-			c.enqueueAllIngresses()
-		} else {
-			c.enqueueAllIngresses()
-		}
-	} else if c.ingress.startWorkers && c.ingressLister != nil {
-		c.enqueueAllIngresses()
-	}
-	if c.mwc.startWorkers && c.mwcLister != nil {
-		if items, err := c.mwcLister.List(labels.Everything()); err == nil {
-			for _, item := range items {
-				c.mwc.enqueue(item)
-			}
-		}
-	}
-	if c.vwc.startWorkers && c.vwcLister != nil {
-		if items, err := c.vwcLister.List(labels.Everything()); err == nil {
-			for _, item := range items {
-				c.vwc.enqueue(item)
-			}
-		}
-	}
-}
-
-func (c *Controller) enqueueAllIngresses() {
-	if c.ingressLister == nil {
-		return
-	}
-	if items, err := c.ingressLister.Ingresses(metav1.NamespaceAll).List(labels.Everything()); err == nil {
-		for _, item := range items {
-			c.ingress.enqueue(item)
-		}
-	}
-}
-
-func (c *Controller) wireAdmissionWebhooks(cfg *config.Config, fs factorySet) {
-	if !cfg.AdmissionWebhookMonitor.Enabled {
+func (c *Controller) wireAdmissionWebhooks(
+	runtime config.RuntimeConfig, fs factorySet,
+) {
+	if !runtime.Monitors().AdmissionWebhook().Enabled {
 		return
 	}
 	mwcLister := fs.mwcLister()
@@ -172,24 +127,26 @@ func (c *Controller) wireAdmissionWebhooks(cfg *config.Config, fs factorySet) {
 	c.watch(c.vwc, fs.vwcInformer())
 }
 
-func (c *Controller) wireIngress(cfg *config.Config, fs factorySet) {
-	if !cfg.IngressMonitor.Enabled {
+func (c *Controller) wireIngress(runtime config.RuntimeConfig, fs factorySet) {
+	if !runtime.Monitors().Ingress().Enabled {
 		return
 	}
 	c.ingressLister = fs.ingressLister()
 	c.watch(c.ingress, fs.ingressInformers()...)
 }
 
-func (c *Controller) wireNetpol(cfg *config.Config, fs factorySet) {
-	if !cfg.NetworkPolicyMonitor.Enabled {
+func (c *Controller) wireNetpol(runtime config.RuntimeConfig, fs factorySet) {
+	if !runtime.Monitors().NetworkPolicy().Enabled {
 		return
 	}
 	c.netpolLister = fs.netpolLister()
 	c.watch(c.netpol, fs.netpolInformers()...)
 }
 
-func (c *Controller) wireClusterResources(cfg *config.Config, fs factorySet) {
-	if !cfg.ClusterResourceMonitor.Enabled {
+func (c *Controller) wireClusterResources(
+	runtime config.RuntimeConfig, fs factorySet,
+) {
+	if !runtime.Monitors().ClusterResource().Enabled {
 		return
 	}
 	c.resourceQuotaLister = fs.resourceQuotaLister()
@@ -230,7 +187,9 @@ func (c *Controller) wireControlPlane(
 
 // wireStatefulSet always wires the lister for graph support; queue handlers are
 // only attached when the statefulset monitor is enabled.
-func (c *Controller) wireStatefulSet(cfg *config.Config, fs factorySet) {
+func (c *Controller) wireStatefulSet(
+	runtime config.RuntimeConfig, fs factorySet,
+) {
 	ssInformers := fs.ssInformers()
 
 	c.ssLister = fs.ssLister()
@@ -241,15 +200,19 @@ func (c *Controller) wireStatefulSet(cfg *config.Config, fs factorySet) {
 	}
 	c.ssSynced = ssSynced
 
-	if cfg.StatefulSetMonitor.Enabled {
+	if runtime.Monitors().StatefulSet().Enabled {
 		c.listen(c.statefulSet, ssInformers...)
 	}
 }
 
-// wirePDB wires the pdb monitor. Only the first informer's HasSynced is
-// awaited, matching the historical single-sync behavior.
-func (c *Controller) wirePDB(cfg *config.Config, fs factorySet) {
-	if !cfg.PdbMonitor.Enabled {
+// wirePDB wires the pdb monitor.
+//
+// Every informer is awaited, not just the first. With one factory per watched
+// namespace, awaiting only the first meant baseline seeding ran against a
+// partially populated cache, so PDBs in the other namespaces were not seeded
+// and were re-announced as new after every restart.
+func (c *Controller) wirePDB(runtime config.RuntimeConfig, fs factorySet) {
+	if !runtime.Monitors().PDB().Enabled {
 		return
 	}
 	pdbInformers := fs.pdbInformers()
@@ -258,13 +221,17 @@ func (c *Controller) wirePDB(cfg *config.Config, fs factorySet) {
 	}
 
 	c.pdbLister = fs.pdbLister()
-	c.pdb.synced = []cache.InformerSynced{pdbInformers[0].HasSynced}
+	for _, inf := range pdbInformers {
+		c.pdb.synced = append(c.pdb.synced, inf.HasSynced)
+	}
 
 	c.listen(c.pdb, pdbInformers...)
 }
 
 // wireReplicaSet wires the replicaset lister used by owner resolution.
-func (c *Controller) wireReplicaSet(cfg *config.Config, fs factorySet) {
+func (c *Controller) wireReplicaSet(
+	runtime config.RuntimeConfig, fs factorySet,
+) {
 	c.rsLister = fs.rsLister()
 
 	rsInformers := fs.rsInformers()
@@ -273,7 +240,7 @@ func (c *Controller) wireReplicaSet(cfg *config.Config, fs factorySet) {
 		rsSynced = append(rsSynced, inf.HasSynced)
 	}
 	c.rsSynced = rsSynced
-	if cfg.ClusterResourceMonitor.Enabled {
+	if runtime.Monitors().ClusterResource().Enabled {
 		c.watch(c.replicaSet, rsInformers...)
 	}
 

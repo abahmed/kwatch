@@ -7,6 +7,14 @@ import (
 	"time"
 )
 
+// OrDefault returns value when it is non-empty, otherwise fallback.
+func OrDefault(value, fallback string) string {
+	if value == "" {
+		return fallback
+	}
+	return value
+}
+
 // ShortImage reduces an image reference to what a reader needs: the image
 // name with its tag or digest. The registry host and the repository path
 // say where it came from, not what it is, and they triple the line length:
@@ -74,7 +82,11 @@ func Plural(n int, word string) string {
 	if n == 1 {
 		return fmt.Sprintf("1 %s", word)
 	}
-	return fmt.Sprintf("%d %ss", n, word)
+	suffix := "s"
+	if strings.HasSuffix(word, "s") {
+		suffix = ""
+	}
+	return fmt.Sprintf("%d %s%s", n, word, suffix)
 }
 
 // Duration renders d for people: "5s", "2m30s", "2h15m". Sub-second detail is
@@ -85,8 +97,15 @@ func Duration(d time.Duration) string {
 	if d < time.Minute {
 		return fmt.Sprintf("%ds", int(d.Seconds()))
 	}
+	// A trailing zero unit is noise: "1m0s" is "1m", "2h0m" is "2h".
 	if d < time.Hour {
-		return fmt.Sprintf("%dm%ds", int(d.Minutes()), int(d.Seconds())%60)
+		if s := int(d.Seconds()) % 60; s != 0 {
+			return fmt.Sprintf("%dm%ds", int(d.Minutes()), s)
+		}
+		return fmt.Sprintf("%dm", int(d.Minutes()))
 	}
-	return fmt.Sprintf("%dh%dm", int(d.Hours()), int(d.Minutes())%60)
+	if m := int(d.Minutes()) % 60; m != 0 {
+		return fmt.Sprintf("%dh%dm", int(d.Hours()), m)
+	}
+	return fmt.Sprintf("%dh", int(d.Hours()))
 }

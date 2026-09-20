@@ -42,12 +42,93 @@ The Go code follows a one-way dependency flow:
 cmd/kwatch
     └── internal/app                 composition root
           ├── controller             informers, queues, graph wiring
-          ├── handler → filter       detection and suppression
-          ├── correlation             incident lifecycle and notifications
+          ├── monitor families       typed detection policy
+          │     ├── pod/policy       pure Pod/container decisions
+          │     ├── pod              family orchestration
+          │     │   ├── policy       deterministic detection
+          │     │   └── enrichment   Kubernetes-backed evidence
+          │     └── observe          objects → observations, pod ownership
+          ├── filter                  pure detect-time suppression matching
+          ├── incident                incident lifecycle and decisions
           ├── insight                 cause, impact, and change analysis
-          ├── alert/*                 provider adapters and delivery
-          └── state/startup/upgrader  persistence and integrations
+          ├── delivery/*              routing, retry, and transport policy
+          ├── alert/catalog            statically linked provider construction
+          ├── alert/*                  provider payload adapters
+          ├── persistence              typed stores, migrations, and recovery
+          └── startup                  lifecycle state and startup summaries
 ```
+
+These are the canonical runtime boundaries. The retired correlation,
+alert-manager, and state-manager package boundaries are intentionally absent;
+their responsibilities now have one discoverable owner each.
+
+Monitor families are cohesive resource domains, not one package per watched
+Kubernetes kind. The concrete `pod`, `workload`, `node`, `network`, `security`,
+and `cluster` packages own detection policy. Storage, telemetry, and
+control-plane components remain in their existing cohesive lifecycle packages.
+Each family produces observations and receives typed, read-only dependencies.
+It never
+owns incident identity, delivery, or persistence. `controller.RuntimeSet`
+gives the controller narrow capability interfaces defined at the controller
+composition boundary, and all production resource processing is directly
+family-wired.
+
+Pod/container policy is intentionally separate from enrichment. The
+`monitor/pod/policy` package evaluates Kubernetes object state using an
+injected clock and configuration only. Event lookup, owner resolution, log
+fetching, and suppression enrichment live in
+`internal/monitor/pod/enrichment`. The compiled suppression index is built by
+`internal/config`, while pure matching is centralized in `internal/filter`;
+neither package mutates source data or knows about incident delivery.
+
+The direct Pod runtime owns queue lookup, policy evaluation, reference checks,
+and recovery. Baseline summary construction is an application-startup
+concern. The controller only seeds baseline state; `startup.BuildSummary`
+creates the one notification in the application lifecycle.
+
+Workload queue processing is now wired directly to the family-owned runtimes
+in `monitor/workload` for Deployment, ReplicaSet, Job, DaemonSet, StatefulSet,
+CronJob, HPA, and PDB. The aggregate workload adapter has been removed from
+controller dispatch. Each runtime owns lookup and lifecycle policy; the
+incident engine remains the only lifecycle emitter.
+
+Optional Gateway API, storage, status, and KwatchConfig resources share
+informer construction and transform mechanics through
+`internal/k8s/dynamicwatch`. That package reports discovery and cache-sync
+state, while `networkgraph`, `storagegraph`, and `statuswatch` retain separate
+domain semantics. `crdwatch` remains a special watcher for late-installed
+KwatchConfig resources and restart-on-change behavior.
+
+The published deployment uses two replicas and Lease leader election. Exactly
+one replica owns observation, delivery, and mutable persistence; the remaining
+replicas are standby. One-replica operation remains an advanced override and
+has no Kwatch self-failover. Election prevents ordinary duplicate processing,
+but does not provide exactly-once external notification or protect against a
+total cluster/API/network failure.
+
+The controller's dependency graph is built by `graphBuilder`, which receives
+only the listers and graph state required for a rebuild. This keeps graph
+construction independent from controller queues, lifecycle state, and
+informer diagnostics.
+
+Controller queue depth is an aggregate across active pipelines, not the last
+queue that happened to receive an event. Informer and monitor source gaps are
+reported as bounded diagnostic names; a missing lister skips detection and
+does not synthesize a create or resolve event.
+
+Delivery has the same explicit boundary. The application supplies the static
+provider catalog through `Manager.InitRuntime` and the immutable
+`config.RuntimeConfig` snapshot. Every provider implements the context-aware
+delivery contract directly, including rich incident/thread capabilities, and
+the manager dispatches to it without a transitional adapter. Routes, retry
+limits, and fallback names are compiled before delivery starts.
+HTTP adapters use the application-owned client through the shared
+`delivery/transport` boundary, never hidden context values or package globals.
+
+Every family and integration receives synchronized sources through one typed
+`ConfigureSources` operation before processing starts. Health diagnostics use safe
+reason codes, and persistence reports all migration operations from a startup
+cycle rather than exposing only the final migration result.
 
 Shared leaf packages (`model`, `event`, `graphcontext`, `constant`, and
 `format`) contain data and pure helpers. They must not import orchestration,
@@ -59,7 +140,8 @@ of reaching into global state.
 Naming follows Go conventions and the domain vocabulary already used by the
 project:
 
-- Constructors use `New<Type>`; optional wiring uses `Set<Type>`.
+- Constructors use `New<Type>`. Source wiring uses one-time
+  `ConfigureSources`; mutable setters are not production wiring points.
 - Lifecycle methods use explicit verbs such as `Process`, `Resolve`,
   `Snapshot`, `Start`, `Stop`, and `Validate`.
 - Files are lower-case and responsibility-oriented (`group_flush.go`,
@@ -69,9 +151,74 @@ project:
 - Tests use `Test<Type><Behavior>` and describe observable behavior rather than
   implementation order.
 
-When a public name must change, keep a small compatibility wrapper and mark it
-deprecated. Remove the wrapper only after all repository imports and supported
-external call sites have migrated.
+Internal package names should converge on the canonical domain vocabulary.
+Transitional APIs are removed before the first stable release; only persisted
+and external configuration formats retain explicit, tested compatibility paths.
+
+### Two doors into the incident engine
+
+Everything a detector or monitor has to say goes through one of two methods,
+and nothing else:
+
+- `Engine.Process(observation)` — "this is what I am looking at, and this is
+  what I found." A `model.Observation` carries the subject and its owner as
+  typed references (`model.ObjectRef`) plus the finding; turning it into the
+  event the pipeline carries happens in exactly one place
+  (`event.FromObservation`). Producers used to assemble that event themselves,
+  in eight packages, and each copy forgot a different field: labels (which
+  silently disabled every label-based silence rule for that producer's
+  incidents), the pod UID (which the engine needs to tell a replacement pod
+  from the original), the object's own name.
+- `Engine.Resolve(subject, reason)` and `ResolveObserved(observation)` —
+  "this recovered." The subject is a typed reference and an empty reason means
+  "nothing is wrong with it any more", so a caller never spells out an
+  incident key; six packages used to. Group, mass-failure and cross-namespace
+  incidents are left alone by a subject resolve, because they speak for many
+  subjects at once.
+
+The `observe` package builds observations from Kubernetes objects —
+`observe.Pod`, `Object`, `Node`, `Namespace`, `ClusterObject`, `Synthetic` —
+so a subject's identity is read off the object instead of typed out at the
+call site. It also owns `OwnerResolver`: one walk up the owner chain
+(ReplicaSet → Deployment), shared by the pod pipeline, the kubelet and metrics
+monitors and the startup baseline. Three private copies of that walk is how
+one broken Deployment used to arrive as three unrelated alerts.
+
+This mirrors the rule on the way out: `incident/emit.go` is the only place
+a notification leaves the engine.
+
+Two vocabularies meet on an observation, and the distinction is deliberate:
+`Subject.Kind` is kwatch's resource word (`pod`, `deployment`, lower case),
+which incident keys and silence rules use, while `Owner.Kind` is the
+Kubernetes Kind (`Deployment`), which is what an operator writes in
+`severityByOwnerKind` and what the alert prints.
+
+An incident carries the same two references (`Object` and `Owner`), decided
+once when it is created. `Incident.Name` is display text — a bare workload
+name for pods, `namespace/name` for objects, a whole sentence for a smart
+group, and rewritten as replicas come and go — so nothing that has to answer
+"is this the same thing?" reads it.
+
+### Recovery is derived, not remembered
+
+`internal/incident` keeps, per watched object, the set of reasons last reported
+for it. Each pass hands the engine everything currently wrong with that object;
+whatever was in the last set and is not in this one is resolved, and an object
+with nothing wrong resolves as a whole. Monitor runtimes prepare observations
+and delegate reconciliation to `Engine.Reconcile`/`ReconcileGone`.
+
+Every detector used to carry its own `else { resolve }` branch naming the
+exact reasons it could produce. A reason added without a matching branch
+opened an incident nothing could close, and a branch that resolved the whole
+object closed incidents another detector was still reporting. Diffing makes
+both mistakes unrepresentable.
+
+Three paths keep their explicit handling, because for them recovery is not a
+diff: node conditions (each has its own sustain timer, and resolving one has
+to refresh the flag that suppresses the pods on that node), the pod pipeline
+(a container's recovery is answered by `ResolveHealthyPodContainers`, which
+checks that the other replicas are gone before closing anything), and the
+event-driven producers, which have no object state to compare against.
 
 ---
 
@@ -104,6 +251,12 @@ message in your chat:
    (routing, retries, and fallback are configurable). Every notification, whatever triggered
    it, leaves through one door: it is audited, diagnosed and delivered the same way whether
    it came from a live event, a timer, a group flush or a mass failure clearing.
+   Deliveries to one provider are **paced** (a couple of seconds apart), because forty
+   incidents opening in one minute used to become forty requests and earn a rate-limit that
+   delayed everything queued behind them. If a burst is big enough to saturate the queue
+   anyway, what could not be sent individually arrives as **one digest** naming the most
+   common reasons — a storm reads as a line, not a wall, and nothing disappears silently
+   into the dead-letter queue where nobody would see it.
 
 Think of kwatch as a detective: it doesn't just shout "it broke!" — it investigates, names
 the suspect, and tells you who else might be hurt.
@@ -138,13 +291,21 @@ escalation — and Slack renders them as a **🧠 Diagnosis** block under the al
 you are on a large cluster and diagnoses come back empty, check `kwatch_graph_nodes` and
 `kwatch_graph_edges` on `/metrics`: an empty graph explains nothing.
 
-1. **What likely caused this?** It checks the incident's own tree first:
+1. **What likely caused this?** Some reasons are their own explanation and are answered
+   before the graph is consulted: a throttled container is at its **CPU limit**, a container
+   near its **memory limit** is about to be OOM-killed, an HPA reporting
+   `FailedGetResourceMetric` has no **metrics-server** data, a `NodePressureStall` is a node
+   under pressure. Blaming a mounted ConfigMap for any of those was a guess dressed as a
+   diagnosis. For everything else it checks the incident's own tree:
    - the **node** is in its dependencies → *"node worker-2 may be unhealthy"* — the 
      machine itself is probably the problem
    - the **owning workload** is unhealthy → *"owning Deployment orders-api is unhealthy"* —
      a bad rollout, not a random crash
-   - a **ConfigMap, Secret, or PVC** it depends on → *"referenced Secret may have changed or
-     is misconfigured"*
+   - a **ConfigMap or Secret** it depends on **that was updated in the last 15 minutes** →
+     *"referenced Secret my-app/db-creds changed shortly before this incident"*. Merely
+     depending on one is not evidence — every pod mounts `kube-root-ca.crt` — so an unchanged
+     ConfigMap or Secret is never blamed, here or in the root-cause walk below
+   - a **PVC** it depends on → *"referenced PVC may be unavailable"*
 
    If none of the obvious suspects pan out, it walks the dependency chain **backward to the
    deepest root** (a node, a persistent volume, a storage class, a ConfigMap, a Secret, or a
@@ -211,8 +372,9 @@ incident — and unrelated churn elsewhere in the namespace is ignored.
 > **Example — the ConfigMap that started it all.** Three pods in `my-app` all start
 > CrashLooping at once. Without context, that's three unrelated alerts. kwatch sees all
 > three pods mount `my-app/config.yaml`, looks back, and finds that ConfigMap was updated
-> moments ago. One message: *"referenced ConfigMap may have changed — updated 3m ago — 3
-> pods affected, 1 service."* That's the whole story in one line.
+> moments ago. One message: *"referenced ConfigMap my-app/config.yaml changed shortly before
+> this incident — updated 3m ago — 3 pods affected, 1 service."* That's the whole story in
+> one line.
 
 ---
 
@@ -253,11 +415,37 @@ one stable record per problem is what stops alert storms.
 - **SKIP** — an event that doesn't deserve a notification right now (already reported, still
   in a cooldown, silenced, part of a group).
 
+**How kwatch knows a problem stopped.** Two things can close an incident, and they are not
+the same claim. An *observed* recovery is the detector saying the condition is gone. The other
+is silence: nothing has re-reported the problem for a whole `correlation.window`. Silence is
+only trustworthy because periodic informer resyncs (`resyncSeconds`, default 300) re-deliver
+every object and re-run every detector, so anything still broken re-reports itself inside the
+window. That relationship is load-bearing — if `resyncSeconds` is 0 or longer than the window,
+nothing re-confirms an incident and kwatch would close problems that are still happening, so
+it warns about that combination at startup.
+
+Two safeguards sit on top of silence:
+
+- kwatch asks the informer cache whether the object is **still there**. An incident whose Pods,
+  Deployment or Node still exist is not closed on silence alone — it is held for up to four
+  windows first, because a workload wedged on a failed rollout stops producing events without
+  ever recovering.
+- That grace is only for incidents about **state**. An incident kwatch could only ever learn
+  from a point-in-time Kubernetes Event — a `FailedMount`, a `FailedScheduling`, an autoscaler
+  that could not add nodes — gets none of it: the object still existing says nothing about
+  whether the event will happen again, so it closes on silence like anything unreported.
+- A resolve that came from silence rather than observation says so, in the message: *"closed
+  after no further reports; the underlying problem was not observed to recover."* An operator
+  reading "✅ resolved" should not have to guess which of the two it was.
+
 Two behaviors keep this honest:
 
 - **Cooldown after resolve.** When an incident resolves, kwatch arms a cooldown (the window,
-  default 10 minutes). If the identical problem reappears inside that window, it's revived
-  **silently** — no "resolved → crash → resolved → crash" ping-pong in your chat.
+  default 10 minutes). If the identical problem reappears inside that window the incident is
+  revived **silently** — the same incident, the same thread, counters and evidence still
+  updated, but no "resolved → crash → resolved → crash" ping-pong in your chat. The recurrence
+  is never dropped: whatever comes next, an escalation or the eventual resolve, speaks on the
+  incident that was already open.
 - **Escalation.** When a crash keeps repeating, kwatch raises its hand. With escalation on
   (default), repeated restarts climb tiers (defaults `[3, 10]` restarts) and each crossing is
   *notified again* with a higher severity — the first crash is a papercut, the third is
@@ -273,15 +461,14 @@ Two behaviors keep this honest:
 ### How kwatch decides whether to speak
 
 Every event — a crashing container, a node condition, a stuck rollout — goes through the
-same five stages, in this order. Each stage can end the story.
+same four stages, in this order. Each stage can end the story.
 
 | # | Stage | Question | If yes |
 |:--|:--|:--|:--|
 | 1 | **Baseline** | Was this already broken when kwatch started? | Stay quiet; it is not news. |
 | 2 | **Attribution** | Is this a *symptom* of something kwatch already knows about? | Record it against the cause — count it, list it — and let the cause's alert speak for it. |
-| 3 | **Cooldown** | Did this exact problem resolve a few minutes ago? | Revive silently; no "resolved → crash → resolved" ping-pong. |
-| 4 | **Identity** | Which incident is this? | Update the existing one (or fold a crash loop into its canonical key) instead of opening a new one. |
-| 5 | **Announcement** | Should it speak now? | Buffer it for its group, or send on the edge — only when something observable changed. |
+| 3 | **Identity** | Which incident is this? | Update the existing one (or fold a crash loop into its canonical key) instead of opening a new one. Inside the post-resolve cooldown that update is silent; with no incident left to revive, the cooldown suppresses a new one. |
+| 4 | **Announcement** | Should it speak now? | Buffer it for its group, or send on the edge — only when something observable changed. |
 
 Attribution recognises three kinds of cause, checked from broadest to narrowest:
 
@@ -295,9 +482,9 @@ Attribution recognises three kinds of cause, checked from broadest to narrowest:
 3. **The owning workload.** The pod's own Deployment or Job already has an incident (a
    stuck rollout, a failed job). The pod is folded into it.
 
-Attribution runs *before* the cooldown check on purpose: a pod whose incident is cooling
-down is still its owner's symptom and keeps being counted against it, instead of vanishing
-into "cooldown".
+Attribution runs *before* identity on purpose: a pod whose incident is cooling down is still
+its owner's symptom and keeps being counted against it, instead of vanishing into
+"cooldown".
 
 Every one of these decisions is written to the [audit log](configuration.md#audit-log) —
 once per incident, not once per poll — so "why didn't kwatch tell me?" always has an answer.
@@ -350,24 +537,41 @@ no volume, no backend to run. It writes the things it can't afford to forget:
 | ConfigMap | What it holds |
 |:--|:--|
 | `kwatch-state` | Cluster identity, upgrade bookkeeping, and a `last-seen` liveness stamp |
-| `kwatch-incidents` | Every active incident (so a restart doesn't forget what's broken), trimmed to the freshest that fit if the cluster is large enough to exceed a ConfigMap |
 | `kwatch-baseline` | The pre-existing problems seen at startup |
+| `kwatch-incidents` | Active and recently resolved incidents, trimmed to the freshest entries that fit if the cluster is large enough to exceed a ConfigMap |
+| `kwatch-groups` | Smart groups that speak for related incidents |
+| `kwatch-threads` | Provider conversation or thread IDs associated with incidents |
+| `kwatch-engine` | Correlation engine state needed to resume lifecycle decisions |
 | `kwatch-pvc` | Last-known disk usage for PVC monitoring |
+| `kwatch-changes` | Recent resource-change history used for diagnosis |
+| `kwatch-rca` | Persisted root-cause analysis state |
+| `kwatch-telemetry` | Kubelet telemetry snapshots used to resume telemetry baselines |
 
 State written by kwatch 0.10.x used a different layout; it is read and migrated on the first
 start of a newer version, so an upgrade keeps its incident memory instead of re-announcing
 everything already broken.
 
-The point: if kwatch restarts, is rescheduled, or its pod is recreated, it **resumes exactly
-where it left off** — active incidents stay active, and it doesn't re-report everything as
-brand new. That also enables the startup *baseline* check: kwatch snapshots the problems that
-already existed when it boots, and `reportStartupBaseline` tells you about them once (so you
-know what your cluster already looks like), without treating them as fresh crashes.
+Incidents alone were not enough to resume cleanly. A group is the notification channel for its
+members, so a restart that remembered the members but forgot the group gave you forty separate
+green ticks for one recovery; and a restart that forgot the thread id posted the "✅ resolved"
+as a new top-level message, leaving the original alert above it with no reply. Both are
+persisted with the incidents, and thread ids are only restored for incidents that actually came
+back — otherwise a recurrence next week would thread under a message nobody is reading.
+
+The point: if kwatch restarts, is rescheduled, or its pod is recreated, persisted state lets it
+resume incident identity and grouping instead of re-reporting everything as brand new. A
+takeover also records the monitoring gap, because no in-cluster election can observe events
+while every Kwatch replica is down. That state enables the startup *baseline* check: kwatch
+snapshots the problems that already existed when it boots, and `reportStartupBaseline` tells
+you about them once (so you know what your cluster already looks like), without treating them
+as fresh crashes.
 
 ### 🕳️ Knowing when nobody was watching
 
-kwatch runs as a single replica, so it shares fate with the cluster it reports on: when nodes
-go away, kwatch goes away too — precisely when the gap matters most. Silence is ambiguous, and
+Kwatch keeps a standby replica, so a process or Pod failure can be detected by
+the other Kwatch instance. It still shares fate with the cluster it reports on:
+when the cluster, node, API, or network path disappears, both instances may be
+unable to observe it. Silence is ambiguous, and
 "nothing was wrong" and "nothing was looking" should not look the same in your chat channel.
 
 So kwatch stamps a `last-seen` timestamp into `kwatch-state` once a minute, riding the same

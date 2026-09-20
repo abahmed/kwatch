@@ -2,26 +2,31 @@ package kubeletmetrics
 
 import (
 	"context"
-	"strings"
+	"encoding/json"
 	"sync"
 	"time"
 
 	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes"
+	corev1lister "k8s.io/client-go/listers/core/v1"
 
+	"github.com/abahmed/kwatch/internal/clock"
 	"github.com/abahmed/kwatch/internal/config"
-	"github.com/abahmed/kwatch/internal/correlation"
+	"github.com/abahmed/kwatch/internal/monitor"
+	"github.com/abahmed/kwatch/internal/observe"
 )
 
 type Monitor struct {
-	client     kubernetes.Interface
-	correlator *correlation.Engine
-	cfg        config.KubeletTelemetryMonitor
-	previous   map[string]metricSnapshot
-	failures   map[string]int
-	successes  map[string]int
+	client       kubernetes.Interface
+	incidentSink monitor.ObservationSink
+	cfg          config.KubeletTelemetryMonitor
+	previous     map[string]metricSnapshot
+	failures     map[string]int
+	successes    map[string]int
+	// failing marks the signals that have actually crossed the failure
+	// threshold, so a signal that has always been healthy never resolves.
+	failing    map[string]bool
 	stateSeen  map[string]time.Time
 	baselines  map[string]usageBaseline
 	now        func() time.Time
@@ -34,6 +39,21 @@ type Monitor struct {
 	namespaces []string
 	watchAll   bool
 	allowed    func(string) bool
+	// owners resolves a pod to the workload its incidents are keyed by; nil
+	// falls back to keying by pod.
+	owners observe.OwnerResolver
+	// nodeLister reads the controller's node informer cache.
+	nodeLister corev1lister.NodeLister
+	// podLister reads the controller's pod informer cache.
+	//
+	// This monitor used to LIST every pod from the API server on every sweep
+	// -- once a minute, paged at 500 -- while the controller already held a
+	// synced pod informer for the same objects. One cluster-wide LIST per
+	// minute per monitor is load the API server does not need to carry, and
+	// two views of the same pods can disagree.
+	podLister  corev1lister.PodLister
+	configured bool
+	started    bool
 }
 
 type StateStore interface {
@@ -41,27 +61,40 @@ type StateStore interface {
 	SaveTelemetryState(context.Context, []byte) error
 }
 
-func New(
+// NewWithClock constructs the kubelet monitor with an explicit clock.
+func NewWithClock(
 	client kubernetes.Interface,
 	cfg config.KubeletTelemetryMonitor,
-	correlator *correlation.Engine,
+	incidentSink monitor.ObservationSink,
+	timeSource clock.Clock,
 ) *Monitor {
+	timeSource = clock.Require(timeSource)
 	return &Monitor{
-		client: client, cfg: cfg, correlator: correlator, watchAll: true,
+		client: client, cfg: cfg, incidentSink: incidentSink, watchAll: true,
 		previous: make(map[string]metricSnapshot),
 		failures: make(map[string]int), successes: make(map[string]int),
+		failing:   make(map[string]bool),
 		stateSeen: make(map[string]time.Time),
 		baselines: make(map[string]usageBaseline),
 		endpoint:  make(map[string]endpointStatus),
-		podCache:  make(map[string]*corev1.Pod), now: time.Now,
+		podCache:  make(map[string]*corev1.Pod), now: timeSource.Now,
 	}
 }
 
-func (m *Monitor) Start(ctx context.Context) {
+func (m *Monitor) Start(ctx context.Context) error {
 	if !m.cfg.Enabled || m.client == nil {
-		return
+		return nil
 	}
-	m.loadState(ctx)
+	m.mu.Lock()
+	if m.started {
+		m.mu.Unlock()
+		return nil
+	}
+	m.started = true
+	m.mu.Unlock()
+	if err := m.loadState(ctx); err != nil {
+		return err
+	}
 	interval := time.Duration(m.cfg.IntervalSeconds) * time.Second
 	if interval <= 0 {
 		interval = time.Minute
@@ -72,7 +105,7 @@ func (m *Monitor) Start(ctx context.Context) {
 	for {
 		select {
 		case <-ctx.Done():
-			return
+			return nil
 		case <-ticker.C:
 			m.sweep(ctx)
 		}
@@ -153,29 +186,13 @@ func (m *Monitor) Snapshot() Status {
 	return status
 }
 
-func (m *Monitor) TelemetryStatus() interface{} {
+func (m *Monitor) TelemetryStatus() Status {
 	return m.Snapshot()
 }
 
-func (m *Monitor) SetStateStore(store StateStore) { m.store = store }
-
-func (m *Monitor) SetClock(now func() time.Time) {
-	if now != nil {
-		m.now = now
-	}
-}
-
-func (m *Monitor) SetNamespaceScope(namespaces []string, watchAll bool) {
-	m.mu.Lock()
-	m.namespaces = append([]string(nil), namespaces...)
-	m.watchAll = watchAll
-	m.mu.Unlock()
-}
-
-func (m *Monitor) SetNamespaceFilter(allowed func(string) bool) {
-	m.mu.Lock()
-	m.allowed = allowed
-	m.mu.Unlock()
+// StatusJSON implements the health status boundary.
+func (m *Monitor) StatusJSON() ([]byte, error) {
+	return json.Marshal(m.Snapshot())
 }
 
 func (m *Monitor) recordEndpoint(node, endpoint string, err error) {
@@ -194,105 +211,4 @@ func (m *Monitor) recordEndpoint(node, endpoint string, err error) {
 	status.RBACDenied = status.RBACDenied || denied
 	m.endpoint[node] = status
 	m.mu.Unlock()
-}
-
-func (m *Monitor) pruneSnapshots(nodes []corev1.Node) {
-	active := make(map[string]struct{}, len(nodes))
-	for _, node := range nodes {
-		active[node.Name] = struct{}{}
-	}
-	m.mu.Lock()
-	defer m.mu.Unlock()
-	for key := range m.previous {
-		node, ok := snapshotNode(key)
-		if ok {
-			if _, exists := active[node]; !exists {
-				delete(m.previous, key)
-			}
-		}
-	}
-	for node := range m.endpoint {
-		if _, exists := active[node]; !exists {
-			delete(m.endpoint, node)
-		}
-	}
-}
-
-func snapshotNode(key string) (string, bool) {
-	parts := strings.SplitN(key, "/", 3)
-	if len(parts) < 2 {
-		return "", false
-	}
-	if parts[0] == "network" || parts[0] == "runtime" {
-		return parts[1], true
-	}
-	if parts[0] == "cpu" && len(parts) == 3 {
-		return parts[1], true
-	}
-	return "", false
-}
-
-func (m *Monitor) pods(ctx context.Context) map[string]*corev1.Pod {
-	now := m.now()
-	m.mu.Lock()
-	if now.Sub(m.podCacheAt) < 15*time.Second && len(m.podCache) > 0 {
-		cached := m.podCache
-		m.mu.Unlock()
-		return cached
-	}
-	m.mu.Unlock()
-	m.mu.Lock()
-	namespaces := append([]string(nil), m.namespaces...)
-	watchAll := m.watchAll
-	allowed := m.allowed
-	m.mu.Unlock()
-	if !watchAll && len(namespaces) == 0 {
-		return map[string]*corev1.Pod{}
-	}
-	result := make(map[string]*corev1.Pod)
-	if watchAll {
-		namespaces = []string{""}
-	}
-	for _, namespace := range namespaces {
-		continueToken := ""
-		for {
-			pods, err := m.client.CoreV1().Pods(namespace).List(
-				ctx, metav1.ListOptions{Limit: 500, Continue: continueToken},
-			)
-			if err != nil {
-				return nil
-			}
-			for i := range pods.Items {
-				pod := &pods.Items[i]
-				if allowed != nil && !allowed(pod.Namespace) {
-					continue
-				}
-				result[pod.Namespace+"/"+pod.Name] = pod
-			}
-			continueToken = pods.Continue
-			if continueToken == "" {
-				break
-			}
-		}
-	}
-	m.mu.Lock()
-	m.podCache, m.podCacheAt = result, now
-	m.mu.Unlock()
-	return result
-}
-
-func (m *Monitor) nodes(ctx context.Context) ([]corev1.Node, error) {
-	var result []corev1.Node
-	continueToken := ""
-	for {
-		nodes, err := m.client.CoreV1().Nodes().List(ctx, metav1.ListOptions{Limit: 500, Continue: continueToken})
-		if err != nil {
-			return nil, err
-		}
-		result = append(result, nodes.Items...)
-		continueToken = nodes.Continue
-		if continueToken == "" {
-			return result, nil
-		}
-	}
 }

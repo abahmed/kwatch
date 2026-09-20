@@ -1,13 +1,13 @@
 package github
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 
 	"k8s.io/klog/v2"
 
-	"github.com/abahmed/kwatch/internal/alert/util"
-	"github.com/abahmed/kwatch/internal/config"
+	"github.com/abahmed/kwatch/internal/delivery/transport"
 	"github.com/abahmed/kwatch/internal/event"
 )
 
@@ -19,16 +19,22 @@ type githubPayload struct {
 }
 
 type Github struct {
-	url   string
-	token string
-	owner string
-	repo  string
+	sender transport.Sender
+	url    string
+	token  string
+	owner  string
+	repo   string
 
-	appCfg *config.App
+	clusterName string
 }
 
 // NewGithub returns a new Github object
-func NewGithub(config map[string]interface{}, appCfg *config.App) *Github {
+
+func NewGithub(
+	config map[string]interface{},
+	clusterName string,
+	dependencies transport.Dependencies,
+) *Github {
 	token, ok := config["token"].(string)
 	if !ok || len(token) == 0 {
 		klog.InfoS("initializing github with empty token")
@@ -55,11 +61,12 @@ func NewGithub(config map[string]interface{}, appCfg *config.App) *Github {
 	klog.InfoS("initializing github", "owner", owner, "repo", repo)
 
 	return &Github{
-		url:    fmt.Sprintf("%s/repos/%s/%s/issues", server, owner, repo),
-		token:  token,
-		owner:  owner,
-		repo:   repo,
-		appCfg: appCfg,
+		sender:      transport.NewSender(dependencies),
+		url:         fmt.Sprintf("%s/repos/%s/%s/issues", server, owner, repo),
+		token:       token,
+		owner:       owner,
+		repo:        repo,
+		clusterName: clusterName,
 	}
 }
 
@@ -69,15 +76,15 @@ func (g *Github) Name() string {
 }
 
 // SendEvent sends event to the provider
-func (g *Github) SendEvent(e *event.Event) error {
-	msg := e.FormatMarkdown(g.appCfg.ClusterName, "", "\n\n")
-	return g.SendMessage(msg)
+func (g *Github) SendEvent(ctx context.Context, e *event.Event) error {
+	msg := e.FormatMarkdown(g.clusterName, "", "\n\n")
+	return g.SendMessage(ctx, msg)
 }
 
 // SendMessage sends text message to the provider
-func (g *Github) SendMessage(msg string) error {
-	title := fmt.Sprintf("kwatch alert: %s", g.appCfg.ClusterName)
-	if g.appCfg.ClusterName == "" {
+func (g *Github) SendMessage(ctx context.Context, msg string) error {
+	title := fmt.Sprintf("kwatch alert: %s", g.clusterName)
+	if g.clusterName == "" {
 		title = "kwatch alert"
 	}
 
@@ -91,9 +98,12 @@ func (g *Github) SendMessage(msg string) error {
 		return err
 	}
 
-	_, err = util.Post(g.Name(), g.url, body, "application/json", map[string]string{
-		"Authorization": "Bearer " + g.token,
-		"Accept":        "application/vnd.github+json",
+	_, err = g.sender.Send(ctx, transport.Request{
+		Provider: g.Name(), URL: g.url, Body: body,
+		ContentType: "application/json", Headers: map[string]string{
+			"Authorization": "Bearer " + g.token,
+			"Accept":        "application/vnd.github+json",
+		},
 	})
 	return err
 }

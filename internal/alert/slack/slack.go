@@ -1,15 +1,16 @@
 package slack
 
 import (
+	"context"
 	"fmt"
 	"strings"
 	"sync"
 
-	"github.com/abahmed/kwatch/internal/alert/util"
-	"github.com/abahmed/kwatch/internal/config"
+	"github.com/abahmed/kwatch/internal/clock"
 	"github.com/abahmed/kwatch/internal/constant"
+	"github.com/abahmed/kwatch/internal/delivery/transport"
 	"github.com/abahmed/kwatch/internal/event"
-	"github.com/abahmed/kwatch/internal/k8s"
+	"github.com/abahmed/kwatch/internal/message"
 
 	slackClient "github.com/slack-go/slack"
 	"k8s.io/klog/v2"
@@ -20,14 +21,18 @@ const (
 )
 
 type Slack struct {
-	title   string
-	text    string
-	channel string
-	appCfg  *config.App
+	title       string
+	text        string
+	channel     string
+	clusterName string
+	clockSource clock.Clock
 
 	// webhook mode
 	webhook string
-	send    func(url string, msg *slackClient.WebhookMessage) error
+	send    func(string, *slackClient.WebhookMessage) error
+	// sendContext is the production transport. send remains a small test seam
+	// for webhook behavior.
+	sendContext func(context.Context, string, *slackClient.WebhookMessage) error
 
 	// token mode
 	token     string
@@ -35,7 +40,10 @@ type Slack struct {
 
 	// thread support
 	threadMap map[string]string
-	mu        sync.Mutex
+	// threadOrder is insertion order for threadMap, so the map can be bounded
+	// by evicting the oldest thread rather than refusing to record new ones.
+	threadOrder []string
+	mu          sync.Mutex
 
 	// maxThreadMapSize bounds the thread map to prevent unbounded growth.
 	// When exceeded, new threads are not tracked (updates/resolves still work
@@ -52,7 +60,12 @@ type Slack struct {
 }
 
 // NewSlack returns new Slack instance
-func NewSlack(config map[string]interface{}, appCfg *config.App) *Slack {
+func NewSlack(
+	config map[string]interface{},
+	clusterName string,
+	dependencies transport.Dependencies,
+) *Slack {
+	httpClient := dependencies.HTTPClient
 	title, _ := config["title"].(string)
 	text, _ := config["text"].(string)
 	compact, _ := config["compact"].(bool)
@@ -71,15 +84,16 @@ func NewSlack(config map[string]interface{}, appCfg *config.App) *Slack {
 			channel,
 		)
 		return &Slack{
-			token:   token,
-			channel: channel,
-			title:   title,
-			text:    text,
-			compact: compact,
-			appCfg:  appCfg,
+			token:       token,
+			channel:     channel,
+			title:       title,
+			text:        text,
+			compact:     compact,
+			clusterName: clusterName,
+			clockSource: clock.Require(dependencies.Clock),
 			apiClient: slackClient.New(
 				token,
-				slackClient.OptionHTTPClient(k8s.GetDefaultClient()),
+				slackClient.OptionHTTPClient(httpClient),
 			),
 			maxThreadMapSize: 1000,
 		}
@@ -101,10 +115,15 @@ func NewSlack(config map[string]interface{}, appCfg *config.App) *Slack {
 		text:             text,
 		compact:          compact,
 		maxThreadMapSize: 1000,
-		appCfg:           appCfg,
-		send: func(url string, msg *slackClient.WebhookMessage) error {
+		clusterName:      clusterName,
+		clockSource:      clock.Require(dependencies.Clock),
+		sendContext: func(
+			ctx context.Context,
+			url string,
+			msg *slackClient.WebhookMessage,
+		) error {
 			return slackClient.PostWebhookCustomHTTPContext(
-				util.ProviderContext("Slack"), url, k8s.GetDefaultClient(), msg,
+				ctx, url, httpClient, msg,
 			)
 		},
 	}
@@ -116,9 +135,9 @@ func (s *Slack) Name() string {
 }
 
 // Verify checks credentials via Slack auth.test (token mode) or webhook URL.
-func (s *Slack) Verify() error {
+func (s *Slack) Verify(ctx context.Context) error {
 	if s.apiClient != nil {
-		_, err := s.apiClient.AuthTest()
+		_, err := s.apiClient.AuthTestContext(ctx)
 		return err
 	}
 	if s.webhook == "" {
@@ -127,8 +146,11 @@ func (s *Slack) Verify() error {
 	return nil
 }
 
-// SendEvent sends event to the provider
-func (s *Slack) SendEvent(ev *event.Event) error {
+// SendEvent sends an event using the caller's cancellation context.
+func (s *Slack) SendEvent(
+	ctx context.Context,
+	ev *event.Event,
+) error {
 	klog.InfoS(
 		"sending to slack event",
 		"namespace", ev.Namespace,
@@ -143,7 +165,7 @@ func (s *Slack) SendEvent(ev *event.Event) error {
 			"K8s Alert: %s - %s (%s)",
 			ev.PodName, ev.Reason, ev.Namespace,
 		)
-		return s.sendAPI(&slackClient.WebhookMessage{
+		return s.sendAPI(ctx, &slackClient.WebhookMessage{
 			Text: text,
 		})
 	}
@@ -166,7 +188,7 @@ func (s *Slack) SendEvent(ev *event.Event) error {
 		slackClient.SectionBlock{
 			Type: "section",
 			Fields: []*slackClient.TextBlockObject{
-				markdownF("*Cluster*\n%s", s.appCfg.ClusterName),
+				markdownF("*Cluster*\n%s", s.clusterName),
 				markdownF("*Name*\n%s", ev.PodName),
 				markdownF("*Container*\n%s", ev.ContainerName),
 				markdownF("*Namespace*\n%s", ev.Namespace),
@@ -183,7 +205,7 @@ func (s *Slack) SendEvent(ev *event.Event) error {
 			blocks = append(blocks,
 				markdownSection(":mag: *Events*"))
 
-			for _, chunk := range util.Chunks(events, chunkSize) {
+			for _, chunk := range message.Chunks(events, chunkSize) {
 				blocks = append(blocks,
 					markdownSection("```"+chunk+"```"))
 			}
@@ -197,7 +219,7 @@ func (s *Slack) SendEvent(ev *event.Event) error {
 			blocks = append(blocks,
 				markdownSection(":memo: *Logs*"))
 
-			for _, chunk := range util.Chunks(logs, chunkSize) {
+			for _, chunk := range message.Chunks(logs, chunkSize) {
 				blocks = append(blocks,
 					markdownSection("```"+chunk+"```"))
 			}
@@ -205,16 +227,16 @@ func (s *Slack) SendEvent(ev *event.Event) error {
 	}
 
 	// send message
-	return s.sendAPI(&slackClient.WebhookMessage{
+	return s.sendAPI(ctx, &slackClient.WebhookMessage{
 		Blocks: &slackClient.Blocks{
 			BlockSet: append(blocks, markdownSection(constant.Footer)),
 		},
 	})
 }
 
-// SendMessage sends text message to the provider
-func (s *Slack) SendMessage(msg string) error {
-	return s.sendAPI(&slackClient.WebhookMessage{
+// SendMessage sends text using the caller's cancellation context.
+func (s *Slack) SendMessage(ctx context.Context, msg string) error {
+	return s.sendAPI(ctx, &slackClient.WebhookMessage{
 		Text: msg,
 	})
 }

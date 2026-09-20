@@ -1,6 +1,7 @@
 package incidentio
 
 import (
+	"context"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -8,15 +9,23 @@ import (
 
 	"github.com/stretchr/testify/assert"
 
-	"github.com/abahmed/kwatch/internal/config"
+	"github.com/abahmed/kwatch/internal/delivery/transport"
 	"github.com/abahmed/kwatch/internal/event"
 	"github.com/abahmed/kwatch/internal/model"
 )
 
+var testDeps = transport.Dependencies{
+	HTTPClient: http.DefaultClient,
+}
+
+func testAppConfig() string {
+	return "dev"
+}
+
 func TestEmptyConfig(t *testing.T) {
 	assert := assert.New(t)
 
-	c := NewIncidentio(map[string]interface{}{}, &config.App{ClusterName: "dev"})
+	c := NewIncidentio(map[string]interface{}{}, testAppConfig(), testDeps)
 	assert.Nil(c)
 }
 
@@ -26,7 +35,7 @@ func TestIncidentio(t *testing.T) {
 	configMap := map[string]interface{}{
 		"url": "https://webhooks.incident.io/abc",
 	}
-	c := NewIncidentio(configMap, &config.App{ClusterName: "dev"})
+	c := NewIncidentio(configMap, testAppConfig(), testDeps)
 	assert.NotNil(c)
 	assert.Equal(c.Name(), "Incident.io")
 }
@@ -50,10 +59,10 @@ func TestSendMessage(t *testing.T) {
 		"url":    "https://webhooks.incident.io/abc",
 		"apiKey": "test",
 	}
-	c := NewIncidentio(configMap, &config.App{ClusterName: "dev"})
+	c := NewIncidentio(configMap, testAppConfig(), testDeps)
 	c.url = s.URL
 
-	assert.Nil(c.SendMessage("hello"))
+	assert.Nil(c.SendMessage(context.Background(), "hello"))
 	assert.Equal("Bearer test", gotAuth)
 	assert.Contains(gotBody, `"event_type":"kwatch.incident"`)
 	assert.Contains(gotBody, `"message":"hello"`)
@@ -72,10 +81,10 @@ func TestSendMessageError(t *testing.T) {
 	configMap := map[string]interface{}{
 		"url": "https://webhooks.incident.io/abc",
 	}
-	c := NewIncidentio(configMap, &config.App{ClusterName: "dev"})
+	c := NewIncidentio(configMap, testAppConfig(), testDeps)
 	c.url = s.URL
 
-	assert.NotNil(c.SendMessage("test"))
+	assert.NotNil(c.SendMessage(context.Background(), "test"))
 }
 
 func TestSendEvent(t *testing.T) {
@@ -94,7 +103,7 @@ func TestSendEvent(t *testing.T) {
 	configMap := map[string]interface{}{
 		"url": "https://webhooks.incident.io/abc",
 	}
-	c := NewIncidentio(configMap, &config.App{ClusterName: "dev"})
+	c := NewIncidentio(configMap, testAppConfig(), testDeps)
 	c.url = s.URL
 
 	ev := event.Event{
@@ -103,7 +112,7 @@ func TestSendEvent(t *testing.T) {
 		Reason:    "OOMKILLED",
 		Severity:  model.SeverityHigh,
 	}
-	assert.Nil(c.SendEvent(&ev))
+	assert.Nil(c.SendEvent(context.Background(), &ev))
 }
 
 func TestInvalidHttpRequest(t *testing.T) {
@@ -112,11 +121,11 @@ func TestInvalidHttpRequest(t *testing.T) {
 	configMap := map[string]interface{}{
 		"url": "https://webhooks.incident.io/abc",
 	}
-	c := NewIncidentio(configMap, &config.App{ClusterName: "dev"})
+	c := NewIncidentio(configMap, testAppConfig(), testDeps)
 	c.url = "h ttp://localhost/%s"
 
-	assert.NotNil(c.SendMessage("test"))
+	assert.NotNil(c.SendMessage(context.Background(), "test"))
 
 	c.url = "http://localhost:132323/%s"
-	assert.NotNil(c.SendMessage("test"))
+	assert.NotNil(c.SendMessage(context.Background(), "test"))
 }

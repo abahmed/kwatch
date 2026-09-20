@@ -32,7 +32,7 @@ plain credentials and `${ENV_VAR}` substitutions for sensitive fields.
 - **Reliability is built in.** Every provider shares the same routing, retry, and fallback
   controls (shown at the top under Slack — they apply to all providers).
 - **One HTTP path.** Every provider that talks HTTP sends through the same helper
-  (`alert/util.Send`), so a `429` is always honoured with its `Retry-After`, a `4xx` is never
+  (`delivery/transport`), so a `429` is always honoured with its `Retry-After`, a `4xx` is never
   retried (the payload will not get better), and a `5xx` or network error always is. A
   provider cannot have its own idea of what a status code means — the linter rejects raw
   `net/http` calls under `internal/alert/`.
@@ -284,7 +284,9 @@ alert:
 |:---|---|
 | `alert.pushover.token` | 🔑 Application token |
 | `alert.pushover.user` | 👤 User or group key |
-| `alert.pushover.priority` | 🎚️ Priority (optional) |
+| `alert.pushover.priority` | 🎚️ Priority from -2 to 2 (optional) |
+| `alert.pushover.retry` | ⏱️ Emergency retry interval in seconds |
+| `alert.pushover.expire` | ⌛ Emergency expiration in seconds |
 | `alert.pushover.title` | ✏️ Custom title |
 
 ### 🟣 Webex
@@ -673,13 +675,14 @@ alert:
 
 | Parameter | What it does |
 |:---|---|
-| `alert.goalert.url` | 🔗 GoAlert URL (default: `https://goalert.example.com`) |
+| `alert.goalert.url` | 🔗 GoAlert server URL (required) |
 | `alert.goalert.token` | 🔑 API token |
 | `alert.goalert.serviceId` | 🆔 Service ID |
 
 ```yaml
 alert:
   goalert:
+    url: "https://goalert.example.invalid"
     token: "${file:/config/goalert-token}"
     serviceId: "SVC123"
 ```

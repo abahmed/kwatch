@@ -118,12 +118,12 @@ func TestProviderCatalogSecretFlagsMatchRuntimePolicy(t *testing.T) {
 	}
 }
 
-func TestProviderCatalogCoversKnownProviders(t *testing.T) {
+func TestProviderCatalogCoversKnownProviderNames(t *testing.T) {
 	covered := make(map[string]bool)
 	for _, field := range ProviderCatalog() {
 		covered[field.Provider] = true
 	}
-	for provider := range KnownProviders {
+	for _, provider := range KnownProviderNames() {
 		if provider == "incident.io" {
 			continue
 		}

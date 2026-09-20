@@ -1,28 +1,38 @@
 package slack
 
 import (
+	"context"
 	"errors"
 	"net/http"
 	"strings"
 
-	"github.com/abahmed/kwatch/internal/alert/util"
+	"github.com/abahmed/kwatch/internal/delivery/transport"
 	"github.com/abahmed/kwatch/internal/event"
 	"github.com/abahmed/kwatch/internal/ratelimit"
 
 	slackClient "github.com/slack-go/slack"
 )
 
-func (s *Slack) sendAPI(msg *slackClient.WebhookMessage) error {
+func (s *Slack) sendAPI(
+	ctx context.Context,
+	msg *slackClient.WebhookMessage,
+) error {
 	if s.apiClient != nil {
-		return s.sendAPIWithToken(msg)
+		return s.sendAPIWithToken(ctx, msg)
 	}
 	if len(s.channel) > 0 {
 		msg.Channel = s.channel
 	}
-	return s.send(s.webhook, msg)
+	if s.send != nil {
+		return s.send(s.webhook, msg)
+	}
+	return s.sendContext(ctx, s.webhook, msg)
 }
 
-func (s *Slack) sendAPIWithToken(msg *slackClient.WebhookMessage) error {
+func (s *Slack) sendAPIWithToken(
+	ctx context.Context,
+	msg *slackClient.WebhookMessage,
+) error {
 	opts := []slackClient.MsgOption{}
 	if len(msg.Text) > 0 {
 		opts = append(opts, slackClient.MsgOptionText(msg.Text, false))
@@ -31,7 +41,7 @@ func (s *Slack) sendAPIWithToken(msg *slackClient.WebhookMessage) error {
 		opts = append(opts, slackClient.MsgOptionBlocks(msg.Blocks.BlockSet...))
 	}
 	_, _, err := s.apiClient.PostMessageContext(
-		util.ProviderContext(s.Name()),
+		ctx,
 		s.channel,
 		opts...,
 	)
@@ -72,6 +82,10 @@ func wrapSlackRateLimit(err error) error {
 			StatusCode: http.StatusTooManyRequests,
 			RetryAfter: rle.RetryAfter,
 		}
+	}
+	var statusErr interface{ HTTPStatusCode() int }
+	if errors.As(err, &statusErr) {
+		return transport.ClassifyHTTPStatus(statusErr.HTTPStatusCode(), err)
 	}
 	if permanentSlackErrors[strings.TrimSpace(err.Error())] {
 		return event.Permanent(err)

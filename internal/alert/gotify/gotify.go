@@ -1,13 +1,13 @@
 package gotify
 
 import (
+	"context"
 	"encoding/json"
 	"strings"
 
 	"k8s.io/klog/v2"
 
-	"github.com/abahmed/kwatch/internal/alert/util"
-	"github.com/abahmed/kwatch/internal/config"
+	"github.com/abahmed/kwatch/internal/delivery/transport"
 	"github.com/abahmed/kwatch/internal/event"
 )
 
@@ -20,16 +20,22 @@ type gotifyPayload struct {
 }
 
 type Gotify struct {
+	sender   transport.Sender
 	url      string
 	token    string
 	title    string
 	priority int
 
-	appCfg *config.App
+	clusterName string
 }
 
 // NewGotify returns a new Gotify object
-func NewGotify(config map[string]interface{}, appCfg *config.App) *Gotify {
+
+func NewGotify(
+	config map[string]interface{},
+	clusterName string,
+	dependencies transport.Dependencies,
+) *Gotify {
 	server, ok := config["url"].(string)
 	if !ok || len(server) == 0 {
 		klog.InfoS("initializing gotify with empty url")
@@ -57,11 +63,12 @@ func NewGotify(config map[string]interface{}, appCfg *config.App) *Gotify {
 	klog.InfoS("initializing gotify", "url", server, "title", title)
 
 	return &Gotify{
-		url:      strings.TrimRight(server, "/") + gotifyAPIURL,
-		token:    token,
-		title:    title,
-		priority: priority,
-		appCfg:   appCfg,
+		sender:      transport.NewSender(dependencies),
+		url:         strings.TrimRight(server, "/") + gotifyAPIURL,
+		token:       token,
+		title:       title,
+		priority:    priority,
+		clusterName: clusterName,
 	}
 }
 
@@ -71,13 +78,13 @@ func (g *Gotify) Name() string {
 }
 
 // SendEvent sends event to the provider
-func (g *Gotify) SendEvent(e *event.Event) error {
-	msg := e.FormatText(g.appCfg.ClusterName, "")
-	return g.SendMessage(msg)
+func (g *Gotify) SendEvent(ctx context.Context, e *event.Event) error {
+	msg := e.FormatText(g.clusterName, "")
+	return g.SendMessage(ctx, msg)
 }
 
 // SendMessage sends text message to the provider
-func (g *Gotify) SendMessage(msg string) error {
+func (g *Gotify) SendMessage(ctx context.Context, msg string) error {
 	payload := gotifyPayload{
 		Title:    g.title,
 		Message:  msg,
@@ -89,8 +96,11 @@ func (g *Gotify) SendMessage(msg string) error {
 		return err
 	}
 
-	_, err = util.Post(g.Name(), g.url, body, "application/json", map[string]string{
-		"X-Gotify-Key": g.token,
+	_, err = g.sender.Send(ctx, transport.Request{
+		Provider: g.Name(), URL: g.url, Body: body,
+		ContentType: "application/json", Headers: map[string]string{
+			"X-Gotify-Key": g.token,
+		},
 	})
 	return err
 }

@@ -155,7 +155,7 @@ func TestScanMassFailures(t *testing.T) {
 func TestScanMassFailuresDetectsSharedDependency(t *testing.T) {
 	graph := context.NewResourceGraph()
 	for i := 0; i < 5; i++ {
-		podName := "p"
+		podName := fmt.Sprintf("p%d", i)
 		graph.AddEdge("pod", "ns", podName, "node", "", "n1", "scheduled_on")
 	}
 
@@ -165,7 +165,7 @@ func TestScanMassFailuresDetectsSharedDependency(t *testing.T) {
 			Subject: model.Subject{
 				Resource:  "pod",
 				Namespace: "ns",
-				Name:      "p",
+				Name:      fmt.Sprintf("p%d", i),
 				Reason:    "CrashLoopBackOff",
 			},
 			Status: model.Status{
@@ -209,7 +209,7 @@ func TestScanMassFailuresSkipsResolved(t *testing.T) {
 func TestScanMassFailuresMultipleSharedDeps(t *testing.T) {
 	graph := context.NewResourceGraph()
 	for i := 0; i < 5; i++ {
-		podName := "p"
+		podName := fmt.Sprintf("p%d", i)
 		graph.AddEdge("pod", "ns", podName, "node", "", "n1", "scheduled_on")
 		graph.AddEdge("pod", "ns", podName, "configmap", "ns", "cm1", "mounts")
 	}
@@ -220,7 +220,7 @@ func TestScanMassFailuresMultipleSharedDeps(t *testing.T) {
 			Subject: model.Subject{
 				Resource:  "pod",
 				Namespace: "ns",
-				Name:      "p",
+				Name:      fmt.Sprintf("p%d", i),
 			},
 			Status: model.Status{
 				State: model.StateActive,
@@ -278,48 +278,40 @@ func TestDynamicThresholdConfigMapBelowMin(t *testing.T) {
 
 func TestScanMassFailuresPodIncidentUsesResources(t *testing.T) {
 	graph := context.NewResourceGraph()
-	// 4 pods on the same node, all owned by dep1.
+	// One pod from each of four Deployments, all on the same node. The graph
+	// knows the pods, not the owners, so the incidents must be resolved to
+	// graph nodes through their Resources.
 	for i := 0; i < 4; i++ {
-		podName := fmt.Sprintf("dep1-7d8d7-%d", i)
+		dep := fmt.Sprintf("dep%d", i)
+		podName := dep + "-7d8d7-0"
 		graph.AddEdge("pod", "ns", podName, "node", "", "n1", "scheduled_on")
-		graph.AddEdge(
-			"pod",
-			"ns",
-			podName,
-			"deployment",
-			"ns",
-			"dep1",
-			"owned_by",
-		)
+		graph.AddEdge("pod", "ns", podName, "deployment", "ns", dep, "owned_by")
 	}
 
 	incidents := make([]*model.Incident, 0)
 	for i := 0; i < 4; i++ {
+		dep := fmt.Sprintf("dep%d", i)
 		incidents = append(incidents, &model.Incident{
 			Subject: model.Subject{
 				Resource:  "pod",
 				Namespace: "ns",
-				Name:      "dep1",
+				Name:      dep,
 				Reason:    "CrashLoopBackOff",
 			},
 			Status: model.Status{
-				State: model.StateActive,
-				Resources: map[string]bool{
-					fmt.Sprintf("dep1-7d8d7-%d", i): true,
-				},
+				State:     model.StateActive,
+				Resources: map[string]bool{dep + "-7d8d7-0": true},
 			},
 		},
 		)
 	}
 
 	mfs := ScanMassFailures(incidents, graph)
-	if assert.Len(t, mfs, 2) {
-		deps := map[string]int{}
-		for _, mf := range mfs {
-			deps[mf.SharedDependency] = mf.AffectedCount
-		}
-		assert.Equal(t, 4, deps["node//n1"])
-		assert.Equal(t, 4, deps["deployment/ns/dep1"])
+	// The node is shared by four workloads; each Deployment is shared by
+	// nothing but its own pod, so only the node is a mass failure.
+	if assert.Len(t, mfs, 1) {
+		assert.Equal(t, "node//n1", mfs[0].SharedDependency)
+		assert.Equal(t, 4, mfs[0].AffectedCount)
 	}
 }
 

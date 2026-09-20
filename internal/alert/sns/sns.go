@@ -1,13 +1,15 @@
 package sns
 
 import (
+	"context"
 	"fmt"
 	"net/url"
+	"time"
 
 	"k8s.io/klog/v2"
 
-	"github.com/abahmed/kwatch/internal/alert/util"
-	"github.com/abahmed/kwatch/internal/config"
+	"github.com/abahmed/kwatch/internal/delivery/signing"
+	"github.com/abahmed/kwatch/internal/delivery/transport"
 	"github.com/abahmed/kwatch/internal/event"
 )
 
@@ -18,6 +20,7 @@ const (
 )
 
 type Sns struct {
+	sender          transport.Sender
 	url             string
 	region          string
 	accessKeyID     string
@@ -25,12 +28,18 @@ type Sns struct {
 	topicArn        string
 	targetArn       string
 	subject         string
+	now             func() time.Time
 
-	appCfg *config.App
+	clusterName string
 }
 
 // NewSns returns a new Sns object
-func NewSns(config map[string]interface{}, appCfg *config.App) *Sns {
+
+func NewSns(
+	config map[string]interface{},
+	clusterName string,
+	dependencies transport.Dependencies,
+) *Sns {
 	accessKeyID, ok := config["accessKeyId"].(string)
 	if !ok || len(accessKeyID) == 0 {
 		klog.InfoS("initializing sns with empty accessKeyId")
@@ -60,6 +69,7 @@ func NewSns(config map[string]interface{}, appCfg *config.App) *Sns {
 	klog.InfoS("initializing sns", "region", region, "topicArn", topicArn)
 
 	return &Sns{
+		sender:          transport.NewSender(dependencies),
 		url:             fmt.Sprintf(snsURLFormat, region),
 		region:          region,
 		accessKeyID:     accessKeyID,
@@ -67,7 +77,8 @@ func NewSns(config map[string]interface{}, appCfg *config.App) *Sns {
 		topicArn:        topicArn,
 		targetArn:       targetArn,
 		subject:         subject,
-		appCfg:          appCfg,
+		clusterName:     clusterName,
+		now:             dependencies.Now,
 	}
 }
 
@@ -77,13 +88,13 @@ func (s *Sns) Name() string {
 }
 
 // SendEvent sends event to the provider
-func (s *Sns) SendEvent(e *event.Event) error {
-	msg := e.FormatText(s.appCfg.ClusterName, "")
-	return s.SendMessage(msg)
+func (s *Sns) SendEvent(ctx context.Context, e *event.Event) error {
+	msg := e.FormatText(s.clusterName, "")
+	return s.SendMessage(ctx, msg)
 }
 
 // SendMessage sends text message to the provider
-func (s *Sns) SendMessage(msg string) error {
+func (s *Sns) SendMessage(ctx context.Context, msg string) error {
 	form := url.Values{}
 	form.Set("Action", "Publish")
 	form.Set("Version", "2010-03-31")
@@ -100,13 +111,16 @@ func (s *Sns) SendMessage(msg string) error {
 	body := []byte(form.Encode())
 	contentType := "application/x-www-form-urlencoded"
 
-	headers, err := util.SignAWSV4(
+	headers, err := signing.SignAWSV4At(
 		s.accessKeyID, s.secretAccessKey, s.region, snsServiceName,
-		"POST", s.url, body)
+		"POST", s.url, body, s.now())
 	if err != nil {
 		return err
 	}
 
-	_, err = util.Post(s.Name(), s.url, body, contentType, headers)
+	_, err = s.sender.Send(ctx, transport.Request{
+		Provider: s.Name(), URL: s.url, Body: body,
+		ContentType: contentType, Headers: headers,
+	})
 	return err
 }

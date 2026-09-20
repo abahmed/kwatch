@@ -1,6 +1,7 @@
 package wecom
 
 import (
+	"context"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -8,14 +9,22 @@ import (
 
 	"github.com/stretchr/testify/assert"
 
-	"github.com/abahmed/kwatch/internal/config"
+	"github.com/abahmed/kwatch/internal/delivery/transport"
 	"github.com/abahmed/kwatch/internal/event"
 )
+
+var testDeps = transport.Dependencies{
+	HTTPClient: http.DefaultClient,
+}
+
+func testAppConfig() string {
+	return "dev"
+}
 
 func TestEmptyConfig(t *testing.T) {
 	assert := assert.New(t)
 
-	c := NewWecom(map[string]interface{}{}, &config.App{ClusterName: "dev"})
+	c := NewWecom(map[string]interface{}{}, testAppConfig(), testDeps)
 	assert.Nil(c)
 }
 
@@ -25,7 +34,7 @@ func TestWecom(t *testing.T) {
 	configMap := map[string]interface{}{
 		"webhook": "https://qyapi.weixin.qq.com/cgi-bin/webhook/send?key=test",
 	}
-	c := NewWecom(configMap, &config.App{ClusterName: "dev"})
+	c := NewWecom(configMap, testAppConfig(), testDeps)
 	assert.NotNil(c)
 	assert.Equal(c.Name(), "WeCom")
 }
@@ -46,9 +55,9 @@ func TestSendMessage(t *testing.T) {
 	configMap := map[string]interface{}{
 		"webhook": s.URL,
 	}
-	c := NewWecom(configMap, &config.App{ClusterName: "dev"})
+	c := NewWecom(configMap, testAppConfig(), testDeps)
 
-	assert.Nil(c.SendMessage("hello"))
+	assert.Nil(c.SendMessage(context.Background(), "hello"))
 	assert.Contains(gotBody, `"msgtype":"markdown"`)
 	assert.Contains(gotBody, `"content":"hello"`)
 }
@@ -66,9 +75,24 @@ func TestSendMessageError(t *testing.T) {
 	configMap := map[string]interface{}{
 		"webhook": s.URL,
 	}
-	c := NewWecom(configMap, &config.App{ClusterName: "dev"})
+	c := NewWecom(configMap, testAppConfig(), testDeps)
 
-	assert.NotNil(c.SendMessage("test"))
+	assert.NotNil(c.SendMessage(context.Background(), "test"))
+}
+
+func TestSendMessageReportsAPIErrorBody(t *testing.T) {
+	s := httptest.NewServer(http.HandlerFunc(
+		func(w http.ResponseWriter, r *http.Request) {
+			_, _ = w.Write([]byte(`{"errcode":40001,"errmsg":"invalid token"}`))
+		},
+	))
+	defer s.Close()
+
+	c := NewWecom(
+		map[string]interface{}{"webhook": s.URL},
+		testAppConfig(), testDeps,
+	)
+	assert.Error(t, c.SendMessage(context.Background(), "test"))
 }
 
 func TestSendEvent(t *testing.T) {
@@ -86,14 +110,14 @@ func TestSendEvent(t *testing.T) {
 	configMap := map[string]interface{}{
 		"webhook": s.URL,
 	}
-	c := NewWecom(configMap, &config.App{ClusterName: "dev"})
+	c := NewWecom(configMap, testAppConfig(), testDeps)
 
 	ev := event.Event{
 		PodName:   "test-pod",
 		Namespace: "default",
 		Reason:    "OOMKILLED",
 	}
-	assert.Nil(c.SendEvent(&ev))
+	assert.Nil(c.SendEvent(context.Background(), &ev))
 }
 
 func TestInvalidHttpRequest(t *testing.T) {
@@ -102,7 +126,7 @@ func TestInvalidHttpRequest(t *testing.T) {
 	configMap := map[string]interface{}{
 		"webhook": "h ttp://localhost",
 	}
-	c := NewWecom(configMap, &config.App{ClusterName: "dev"})
+	c := NewWecom(configMap, testAppConfig(), testDeps)
 
-	assert.NotNil(c.SendMessage("test"))
+	assert.NotNil(c.SendMessage(context.Background(), "test"))
 }

@@ -17,4 +17,20 @@ A clear and concise description of what you expected to happen.
 A clear and concise description of what really happens.
 
 **Version/Commit**
-A version or commit of kwatch
+A version or commit of kwatch.
+
+**Installation method**
+Helm, raw manifest, kwatch manager, or another method.
+
+**Kubernetes environment**
+- Kubernetes version:
+- Cloud or distribution:
+- Container runtime:
+
+**Configuration and logs**
+Paste the smallest redacted configuration and relevant logs. Never include
+tokens, credentials, webhook URLs, Secret data, or complete sensitive payloads.
+
+**Reproduction**
+Is this reproducible after restart or only during an outage? Include the
+smallest safe reproduction and any health, readiness, or metric output.

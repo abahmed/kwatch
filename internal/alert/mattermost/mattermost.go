@@ -1,15 +1,16 @@
 package mattermost
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"strings"
 
 	"k8s.io/klog/v2"
 
-	"github.com/abahmed/kwatch/internal/alert/util"
-	"github.com/abahmed/kwatch/internal/config"
+	"github.com/abahmed/kwatch/internal/clock"
 	"github.com/abahmed/kwatch/internal/constant"
+	"github.com/abahmed/kwatch/internal/delivery/transport"
 	"github.com/abahmed/kwatch/internal/event"
 	"github.com/abahmed/kwatch/internal/insight"
 	"github.com/abahmed/kwatch/internal/message"
@@ -17,12 +18,14 @@ import (
 )
 
 type Mattermost struct {
+	sender  transport.Sender
 	webhook string
 	title   string
 	text    string
 
 	// reference for general app configuration
-	appCfg *config.App
+	clusterName string
+	clockSource clock.Clock
 }
 
 type mmField struct {
@@ -43,9 +46,11 @@ type mmPayload struct {
 }
 
 // NewMattermost returns new mattermost instance
+
 func NewMattermost(
 	config map[string]interface{},
-	appCfg *config.App,
+	clusterName string,
+	dependencies transport.Dependencies,
 ) *Mattermost {
 	webhook, ok := config["webhook"].(string)
 	if !ok || len(webhook) == 0 {
@@ -59,10 +64,12 @@ func NewMattermost(
 	text, _ := config["text"].(string)
 
 	return &Mattermost{
-		webhook: webhook,
-		title:   title,
-		text:    text,
-		appCfg:  appCfg,
+		sender:      transport.NewSender(dependencies),
+		webhook:     webhook,
+		title:       title,
+		text:        text,
+		clusterName: clusterName,
+		clockSource: clock.Require(dependencies.Clock),
 	}
 }
 
@@ -72,18 +79,21 @@ func (m *Mattermost) Name() string {
 }
 
 // SendMessage sends text message to the provider
-func (m *Mattermost) SendMessage(msg string) error {
-	klog.V(4).InfoS("sending to mattermost msg", "msg", msg)
+func (m *Mattermost) SendMessage(ctx context.Context, msg string) error {
+	klog.V(4).InfoS(
+		"sending message to mattermost",
+		"messageLength", len(msg),
+	)
 
 	b, err := m.buildMessage(nil, &msg)
 	if err != nil {
 		return err
 	}
-	return m.sendAPI(b)
+	return m.sendAPI(ctx, b)
 }
 
 // SendEvent sends event to the provider
-func (m *Mattermost) SendEvent(e *event.Event) error {
+func (m *Mattermost) SendEvent(ctx context.Context, e *event.Event) error {
 	klog.V(4).InfoS(
 		"sending to mattermost event",
 		"namespace", e.Namespace,
@@ -96,44 +106,47 @@ func (m *Mattermost) SendEvent(e *event.Event) error {
 	if err != nil {
 		return err
 	}
-	return m.sendAPI(b)
+	return m.sendAPI(ctx, b)
 }
 
-// SendIncident implements alert.ThreadProvider.
+// SendIncident implements delivery.ThreadProvider.
 // It renders the incident using the Report model and PlaintextRenderer,
 // producing a context-adaptive text message.
 func (m *Mattermost) SendIncident(
+	ctx context.Context,
 	inc *model.Incident,
 	action model.IncidentAction,
 ) error {
-	return m.SendIncidentWithInsight(inc, action, nil)
+	return m.SendIncidentWithInsight(ctx, inc, action, nil)
 }
 
-// SendIncidentWithInsight implements alert.InsightThreadProvider, so the
+// SendIncidentWithInsight implements delivery.InsightThreadProvider, so the
 // diagnosis — likely cause, impact, recent changes — is rendered rather than
 // dropped on the way to this provider.
 func (m *Mattermost) SendIncidentWithInsight(
+	ctx context.Context,
 	inc *model.Incident,
 	action model.IncidentAction,
 	ins *insight.Insight,
 ) error {
-	text := util.RenderIncidentWithInsight(
+	text := message.RenderIncidentWithInsight(
 		inc,
 		action,
 		ins,
 		message.NewPlainTextRenderer(),
-		m.appCfg.ClusterName,
+		m.clusterName,
+		m.clockSource,
 	)
 	if text == "" {
 		return nil
 	}
-	return m.SendMessage(text)
+	return m.SendMessage(ctx, text)
 }
 
-func (m *Mattermost) sendAPI(content []byte) error {
-	_, err := util.Send(
-		util.Request{Provider: "Mattermost", URL: m.webhook, Body: content},
-	)
+func (m *Mattermost) sendAPI(ctx context.Context, content []byte) error {
+	_, err := m.sender.Send(ctx, transport.Request{
+		Provider: "Mattermost", URL: m.webhook, Body: content,
+	})
 	return err
 }
 
@@ -161,12 +174,12 @@ func (m *Mattermost) buildMessage(e *event.Event, msg *string) ([]byte, error) {
 		}
 
 		mmFields := []mmField{}
-		if m.appCfg.ClusterName != "" {
+		if m.clusterName != "" {
 			mmFields = append(
 				mmFields,
 				mmField{
 					Title: "Cluster",
-					Value: m.appCfg.ClusterName,
+					Value: m.clusterName,
 					Short: true,
 				},
 			)

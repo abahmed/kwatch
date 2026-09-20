@@ -1,14 +1,14 @@
 package gitlab
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"strings"
 
 	"k8s.io/klog/v2"
 
-	"github.com/abahmed/kwatch/internal/alert/util"
-	"github.com/abahmed/kwatch/internal/config"
+	"github.com/abahmed/kwatch/internal/delivery/transport"
 	"github.com/abahmed/kwatch/internal/event"
 )
 
@@ -20,15 +20,21 @@ type gitlabPayload struct {
 }
 
 type Gitlab struct {
+	sender    transport.Sender
 	url       string
 	token     string
 	projectID string
 
-	appCfg *config.App
+	clusterName string
 }
 
 // NewGitlab returns a new Gitlab object
-func NewGitlab(config map[string]interface{}, appCfg *config.App) *Gitlab {
+
+func NewGitlab(
+	config map[string]interface{},
+	clusterName string,
+	dependencies transport.Dependencies,
+) *Gitlab {
 	token, ok := config["token"].(string)
 	if !ok || len(token) == 0 {
 		klog.InfoS("initializing gitlab with empty token")
@@ -49,10 +55,15 @@ func NewGitlab(config map[string]interface{}, appCfg *config.App) *Gitlab {
 	klog.InfoS("initializing gitlab", "url", server, "projectId", projectID)
 
 	return &Gitlab{
-		url:       fmt.Sprintf("%s/projects/%s/issues", strings.TrimRight(server, "/"), projectID),
-		token:     token,
-		projectID: projectID,
-		appCfg:    appCfg,
+		sender: transport.NewSender(dependencies),
+		url: fmt.Sprintf(
+			"%s/projects/%s/issues",
+			strings.TrimRight(server, "/"),
+			projectID,
+		),
+		token:       token,
+		projectID:   projectID,
+		clusterName: clusterName,
 	}
 }
 
@@ -62,15 +73,15 @@ func (g *Gitlab) Name() string {
 }
 
 // SendEvent sends event to the provider
-func (g *Gitlab) SendEvent(e *event.Event) error {
-	msg := e.FormatMarkdown(g.appCfg.ClusterName, "", "\n\n")
-	return g.SendMessage(msg)
+func (g *Gitlab) SendEvent(ctx context.Context, e *event.Event) error {
+	msg := e.FormatMarkdown(g.clusterName, "", "\n\n")
+	return g.SendMessage(ctx, msg)
 }
 
 // SendMessage sends text message to the provider
-func (g *Gitlab) SendMessage(msg string) error {
-	title := fmt.Sprintf("kwatch alert: %s", g.appCfg.ClusterName)
-	if g.appCfg.ClusterName == "" {
+func (g *Gitlab) SendMessage(ctx context.Context, msg string) error {
+	title := fmt.Sprintf("kwatch alert: %s", g.clusterName)
+	if g.clusterName == "" {
 		title = "kwatch alert"
 	}
 
@@ -84,8 +95,11 @@ func (g *Gitlab) SendMessage(msg string) error {
 		return err
 	}
 
-	_, err = util.Post(g.Name(), g.url, body, "application/json", map[string]string{
-		"PRIVATE-TOKEN": g.token,
+	_, err = g.sender.Send(ctx, transport.Request{
+		Provider: g.Name(), URL: g.url, Body: body,
+		ContentType: "application/json", Headers: map[string]string{
+			"PRIVATE-TOKEN": g.token,
+		},
 	})
 	return err
 }

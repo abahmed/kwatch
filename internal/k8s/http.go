@@ -18,12 +18,6 @@ const (
 	DefaultHTTPTimeout = 30 * time.Second
 )
 
-var defaultClient *http.Client
-
-func init() {
-	defaultClient = &http.Client{Timeout: DefaultHTTPTimeout}
-}
-
 func defaultTransport() *http.Transport {
 	return &http.Transport{
 		Proxy: http.ProxyFromEnvironment,
@@ -39,9 +33,10 @@ func defaultTransport() *http.Transport {
 	}
 }
 
-// InitHTTPClient configures the shared HTTP transport based on app config.
-// Must be called before any provider sends messages.
-func InitHTTPClient(cfg *config.App) {
+// NewHTTPClient builds the application-owned outbound client from config.
+// Callers pass the returned client to components that perform HTTP requests;
+// no process-wide mutable client is required.
+func NewHTTPClient(cfg config.ApplicationRuntime) *http.Client {
 	transport := defaultTransport()
 
 	if cfg.ProxyURL != "" {
@@ -57,7 +52,10 @@ func InitHTTPClient(cfg *config.App) {
 		InsecureSkipVerify: cfg.InsecureSkipTLSVerify, // #nosec G402
 	}
 	if cfg.InsecureSkipTLSVerify {
-		klog.Warning("InsecureSkipTLSVerify is enabled — outbound TLS certificate verification DISABLED")
+		klog.Warning(
+			"outbound TLS certificate verification is disabled " +
+				"because insecureSkipTLSVerify is enabled",
+		)
 	}
 
 	if cfg.CABundlePath != "" {
@@ -71,8 +69,8 @@ func InitHTTPClient(cfg *config.App) {
 			if caCertPool.AppendCertsFromPEM(caCert) {
 				tlsCfg.RootCAs = caCertPool
 			} else {
-				klog.Warning(
-					"outbound CA bundle contains no valid certificates: ",
+				klog.Warningf(
+					"outbound CA bundle contains no valid certificates: %s",
 					cfg.CABundlePath,
 				)
 			}
@@ -80,10 +78,8 @@ func InitHTTPClient(cfg *config.App) {
 	}
 
 	transport.TLSClientConfig = tlsCfg
-	defaultClient.Transport = transport
-}
-
-// GetDefaultClient returns the shared default HTTP client.
-func GetDefaultClient() *http.Client {
-	return defaultClient
+	return &http.Client{
+		Timeout:   DefaultHTTPTimeout,
+		Transport: transport,
+	}
 }

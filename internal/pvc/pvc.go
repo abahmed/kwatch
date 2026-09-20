@@ -2,21 +2,16 @@ package pvc
 
 import (
 	"context"
-	"fmt"
+	"sort"
 	"sync"
 	"time"
 
-	corev1 "k8s.io/api/core/v1"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes"
-	"k8s.io/klog/v2"
 
+	"github.com/abahmed/kwatch/internal/clock"
 	"github.com/abahmed/kwatch/internal/config"
-	"github.com/abahmed/kwatch/internal/constant"
-	"github.com/abahmed/kwatch/internal/correlation"
-	"github.com/abahmed/kwatch/internal/event"
 	"github.com/abahmed/kwatch/internal/model"
-	"github.com/abahmed/kwatch/internal/state"
+	"github.com/abahmed/kwatch/internal/monitor"
 )
 
 const (
@@ -25,285 +20,103 @@ const (
 )
 
 type PvcMonitor struct {
-	client              kubernetes.Interface
-	config              *config.PvcMonitor
-	correlator          *correlation.Engine
-	state               *state.StateManager // persistence; nil only in unit tests
-	notifiedPvc         map[string]bool
-	lastUsage           map[string]state.PvcSample // last observed sample per PV name (survives unmount)
-	pvByPVC             map[string]string          // cached PVC→PV map (shared by sweep + per-node sample)
-	pvByPVCAt           time.Time                  // when pvByPVC was last refreshed
-	now                 func() time.Time
-	mu                  sync.RWMutex
-	firstScan           bool
-	sem                 chan struct{}                                                                              // bounds concurrent getNodeUsage calls
-	getNodeUsageFn      func(ctx context.Context, nodeName string, pvByPVC map[string]string) ([]*PvcUsage, error) // test override
+	client         kubernetes.Interface
+	config         config.PvcMonitor
+	incidentSink   monitor.ObservationSink
+	state          StateStore
+	notifiedPvc    map[string]bool
+	lastUsage      map[string]model.PVCSample
+	pvByPVC        map[string]string
+	pvByPVCAt      time.Time
+	now            func() time.Time
+	mu             sync.RWMutex
+	firstScan      bool
+	sem            chan struct{}
+	getNodeUsageFn func(
+		ctx context.Context,
+		nodeName string,
+		pvByPVC map[string]string,
+	) ([]*PvcUsage, error)
 	allowedNamespaces   map[string]struct{}
 	forbiddenNamespaces map[string]struct{}
 	namespaceFilter     func(string) bool
 	watchAll            bool
+	configured          bool
+	started             bool
 }
 
-// SetNamespaceScope keeps the periodic API-based storage checks aligned with
-// the informer scope used by the controller. Empty scope means all namespaces.
-func (p *PvcMonitor) SetNamespaceScope(
-	allowed, forbidden []string,
-	all ...bool,
-) {
-	p.mu.Lock()
-	defer p.mu.Unlock()
-	p.allowedNamespaces = make(map[string]struct{}, len(allowed))
-	for _, namespace := range allowed {
-		p.allowedNamespaces[namespace] = struct{}{}
-	}
-	p.forbiddenNamespaces = make(map[string]struct{}, len(forbidden))
-	for _, namespace := range forbidden {
-		p.forbiddenNamespaces[namespace] = struct{}{}
-	}
-	p.watchAll = len(allowed) == 0
-	if len(all) > 0 {
-		p.watchAll = all[0]
-	}
-	p.pvByPVC = nil
-	p.pvByPVCAt = time.Time{}
+// StateStore is the only persistence capability required by the PVC monitor.
+type StateStore interface {
+	GetPvcUsage(context.Context) map[string]model.PVCSample
+	SavePvcUsage(context.Context, map[string]model.PVCSample) error
 }
 
-func (p *PvcMonitor) listPVCs(
-	ctx context.Context,
-) ([]corev1.PersistentVolumeClaim, error) {
-	p.mu.RLock()
-	namespaces := make([]string, 0, len(p.allowedNamespaces))
-	for namespace := range p.allowedNamespaces {
-		namespaces = append(namespaces, namespace)
-	}
-	watchAll := p.watchAll
-	p.mu.RUnlock()
-	if watchAll {
-		namespaces = []string{""}
-	}
-	var result []corev1.PersistentVolumeClaim
-	for _, namespace := range namespaces {
-		continueToken := ""
-		for {
-			list, err := p.client.CoreV1().PersistentVolumeClaims(namespace).List(
-				ctx, metav1.ListOptions{Limit: 500, Continue: continueToken},
-			)
-			if err != nil {
-				return nil, err
-			}
-			result = append(result, list.Items...)
-			continueToken = list.Continue
-			if continueToken == "" {
-				break
-			}
-		}
-	}
-	return result, nil
+type errorStateStore interface {
+	GetPvcUsageWithError(context.Context) (map[string]model.PVCSample, error)
 }
 
-// SetNamespaceFilter lets the controller provide its resolved namespace
-// selector, including dynamic NamespaceSelector configuration.
-func (p *PvcMonitor) SetNamespaceFilter(filter func(string) bool) {
-	p.mu.Lock()
-	defer p.mu.Unlock()
-	p.namespaceFilter = filter
-	p.pvByPVC = nil
-	p.pvByPVCAt = time.Time{}
-}
-
-func (p *PvcMonitor) namespaceAllowed(namespace string) bool {
-	p.mu.RLock()
-	defer p.mu.RUnlock()
-	return p.namespaceAllowedLocked(namespace)
-}
-
-func (p *PvcMonitor) namespaceAllowedLocked(namespace string) bool {
-	if p.namespaceFilter != nil {
-		return p.namespaceFilter(namespace)
-	}
-	if _, forbidden := p.forbiddenNamespaces[namespace]; forbidden {
-		return false
-	}
-	if len(p.allowedNamespaces) > 0 {
-		_, allowed := p.allowedNamespaces[namespace]
-		return allowed
-	}
-	return true
-}
-
-const pvByPVCTTL = 60 * time.Second
-
-// pvcMap returns the PVC→PV name map, refreshing from the API server at most
-// once per pvByPVCTTL. Shared by checkUsage (sweep) and per-node sample (event-driven).
-func (p *PvcMonitor) pvcMap(ctx context.Context) map[string]string {
-	p.mu.RLock()
-	if p.pvByPVC != nil && p.now().Sub(p.pvByPVCAt) < pvByPVCTTL {
-		m := p.pvByPVC
-		p.mu.RUnlock()
-		return m
-	}
-	p.mu.RUnlock()
-
-	m := make(map[string]string)
-	if p.client == nil {
-		return m
-	}
-	if pvcs, err := p.listPVCs(ctx); err == nil {
-		for i := range pvcs {
-			c := &pvcs[i]
-			if !p.namespaceAllowed(c.Namespace) {
-				continue
-			}
-			m[c.Namespace+"/"+c.Name] = c.Spec.VolumeName
-		}
-		p.mu.Lock()
-		p.pvByPVC, p.pvByPVCAt = m, p.now()
-		p.mu.Unlock()
-	} else {
-		klog.ErrorS(err, "pvc monitor: list PVCs")
-		p.mu.RLock()
-		m = p.pvByPVC // fall back to last good map
-		p.mu.RUnlock()
-	}
-	return m
-}
-
-func NewPvcMonitor(
+// NewPvcMonitorWithRuntimeAndClock builds the monitor from the immutable
+// runtime snapshot and an explicit application clock.
+func NewPvcMonitorWithRuntimeAndClock(
 	client kubernetes.Interface,
-	config *config.PvcMonitor,
-	correlator *correlation.Engine,
-	stateMgr *state.StateManager,
+	runtime config.RuntimeConfig,
+	incidentSink monitor.ObservationSink,
+	stateStore StateStore,
+	timeSource clock.Clock,
 ) *PvcMonitor {
+	monitorConfig := runtime.Monitors().PVC()
+	timeSource = clock.Require(timeSource)
+	return newPvcMonitor(
+		client, monitorConfig, incidentSink, stateStore, timeSource.Now,
+	)
+}
+
+func newPvcMonitor(
+	client kubernetes.Interface,
+	monitorConfig config.PvcMonitor,
+	incidentSink monitor.ObservationSink,
+	stateStore StateStore,
+	now func() time.Time,
+) *PvcMonitor {
+	now = clock.RequireFunc(now)
 	return &PvcMonitor{
-		client:      client,
-		config:      config,
-		correlator:  correlator,
-		state:       stateMgr,
-		notifiedPvc: make(map[string]bool),
-		lastUsage:   make(map[string]state.PvcSample),
-		now:         time.Now,
-		firstScan:   true,
-		watchAll:    true,
-		sem:         make(chan struct{}, maxConcurrentSamples),
+		client:       client,
+		config:       monitorConfig,
+		incidentSink: incidentSink,
+		state:        stateStore,
+		notifiedPvc:  make(map[string]bool),
+		lastUsage:    make(map[string]model.PVCSample),
+		now:          now,
+		firstScan:    true,
+		watchAll:     true,
+		sem:          make(chan struct{}, maxConcurrentSamples),
 	}
 }
 
-// SetClock injects the clock used for PVC cache TTLs and lifecycle decisions.
-func (p *PvcMonitor) SetClock(now func() time.Time) {
-	if now != nil {
-		p.mu.Lock()
-		p.now = now
-		p.mu.Unlock()
-	}
-}
-
-func (p *PvcMonitor) Start(ctx context.Context) {
-	if p.config == nil || !p.config.Enabled {
-		return
-	}
-
-	// Seed the in-memory cache from persisted state so a restart keeps
-	// firing on high-but-unmounted PVCs without waiting for a re-mount.
-	// notifiedPvc is re-derived from lastUsage rather than persisted separately
-	// — avoids the phantom held-state problem (B2) and saves a ConfigMap key.
-	if p.state != nil {
-		seed := p.state.GetPvcUsage(ctx)
-		p.mu.Lock()
-		if seed != nil {
-			p.lastUsage = seed
+// rekeyByClaim restores the stable claim identity used by live observations.
+func rekeyByClaim(
+	usage map[string]model.PVCSample,
+) map[string]model.PVCSample {
+	result := make(map[string]model.PVCSample, len(usage))
+	for _, sample := range usage {
+		if sample.Namespace == "" || sample.Name == "" {
+			continue
 		}
-		var restore []*event.Signal
-		for pv, s := range p.lastUsage {
-			if !p.namespaceAllowedLocked(s.Namespace) {
-				delete(p.lastUsage, pv)
-				delete(p.notifiedPvc, pv)
-				continue
-			}
-			if s.Pct >= p.config.Threshold {
-				p.notifiedPvc[pv] = true
-				sev := model.SeverityNormal
-				if s.Pct >= p.config.CriticalThreshold {
-					sev = model.SeverityHigh
-				}
-				restore = append(restore, &event.Signal{
-					Resource: "pvc", PodName: s.PodName, Namespace: s.Namespace,
-					Reason: constant.ReasonVolumeUsageHigh, Hint: fmt.Sprintf("VolumeUsage(%.0f%%)", s.Pct),
-					Severity: sev, Owner: pv,
-				})
-			}
+		key := sample.Namespace + "/" + sample.Name
+		if existing, ok := result[key]; ok && existing.Seen.After(sample.Seen) {
+			continue
 		}
-		p.mu.Unlock()
-		for _, sig := range restore {
-			p.reportSignal(sig)
-		}
+		result[key] = sample
 	}
-
-	p.checkUsage(ctx)
-	p.persist(ctx) // B3: persist the initial sweep too (previously only the ticker loop persisted)
-
-	interval := time.Duration(p.config.Interval) * time.Minute
-	if interval <= 0 {
-		interval = 5 * time.Minute
-	}
-	ticker := time.NewTicker(interval)
-	cleanupTicker := time.NewTicker(1 * time.Hour)
-	defer ticker.Stop()
-	defer cleanupTicker.Stop()
-
-	for {
-		select {
-		case <-ctx.Done():
-			klog.InfoS("pvc monitor stopped")
-			return
-		case <-ticker.C:
-			p.checkUsage(ctx)
-			p.persist(ctx)
-		case <-cleanupTicker.C:
-			p.cleanup()
-		}
-	}
+	return result
 }
 
-func (p *PvcMonitor) reportSignal(s *event.Signal) {
-	ev := event.Event{
-		Resource:  s.Resource,
-		PodName:   s.PodName,
-		Namespace: s.Namespace,
-		Reason:    s.Reason,
-		Hint:      s.Hint,
-		Severity:  s.Severity,
-	}
-	p.correlator.Process(ev, s.Owner, nil)
-}
-
-// persist snapshots lastUsage to the kwatch-pvc ConfigMap. Called ONLY from the
-// periodic sweep only, not from per-node samples — otherwise a burst of Running
-// pods would write etcd on every sample (write-amplification). A crash loses at
-// most the deltas since the last sweep (≤ interval), and the next sweep
-// re-observes every mounted volume anyway.
-// notifiedPvc is intentionally not persisted — it is re-derived from lastUsage on seed.
-func (p *PvcMonitor) persist(ctx context.Context) {
-	if p.state == nil {
-		return
-	}
-	p.mu.RLock()
-	usage := make(map[string]state.PvcSample, len(p.lastUsage))
-	for k, v := range p.lastUsage {
-		usage[k] = v
-	}
-	p.mu.RUnlock()
-	if err := p.state.SavePvcUsage(ctx, usage); err != nil {
-		klog.ErrorS(err, "pvc monitor: persist usage failed")
-	}
-}
-
-func (p *PvcMonitor) cleanup() {
-	p.mu.Lock()
-	defer p.mu.Unlock()
-
-	count := len(p.notifiedPvc)
-	if count > 1000 {
-		klog.V(4).InfoS("pvc monitor: clearing stale entries from notifiedPvc cache", "count", count)
-		p.notifiedPvc = make(map[string]bool)
-	}
+func sortObservations(observations []*model.Observation) {
+	sort.Slice(observations, func(i, j int) bool {
+		left, right := observations[i].Subject, observations[j].Subject
+		if left.Namespace != right.Namespace {
+			return left.Namespace < right.Namespace
+		}
+		return left.Name < right.Name
+	})
 }

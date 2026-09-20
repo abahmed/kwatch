@@ -1,12 +1,13 @@
 package wecom
 
 import (
+	"context"
 	"encoding/json"
+	"fmt"
 
 	"k8s.io/klog/v2"
 
-	"github.com/abahmed/kwatch/internal/alert/util"
-	"github.com/abahmed/kwatch/internal/config"
+	"github.com/abahmed/kwatch/internal/delivery/transport"
 	"github.com/abahmed/kwatch/internal/event"
 )
 
@@ -15,14 +16,25 @@ type wecomPayload struct {
 	Markdown map[string]string `json:"markdown"`
 }
 
+type wecomResponse struct {
+	ErrorCode int    `json:"errcode"`
+	ErrorText string `json:"errmsg"`
+}
+
 type Wecom struct {
+	sender  transport.Sender
 	webhook string
 
-	appCfg *config.App
+	clusterName string
 }
 
 // NewWecom returns a new Wecom object
-func NewWecom(config map[string]interface{}, appCfg *config.App) *Wecom {
+
+func NewWecom(
+	config map[string]interface{},
+	clusterName string,
+	dependencies transport.Dependencies,
+) *Wecom {
 	webhook, ok := config["webhook"].(string)
 	if !ok || len(webhook) == 0 {
 		klog.InfoS("initializing wecom with empty webhook")
@@ -32,8 +44,9 @@ func NewWecom(config map[string]interface{}, appCfg *config.App) *Wecom {
 	klog.InfoS("initializing wecom with webhook configured")
 
 	return &Wecom{
-		webhook: webhook,
-		appCfg:  appCfg,
+		sender:      transport.NewSender(dependencies),
+		webhook:     webhook,
+		clusterName: clusterName,
 	}
 }
 
@@ -43,13 +56,13 @@ func (s *Wecom) Name() string {
 }
 
 // SendEvent sends event to the provider
-func (s *Wecom) SendEvent(e *event.Event) error {
-	msg := e.FormatText(s.appCfg.ClusterName, "")
-	return s.SendMessage(msg)
+func (s *Wecom) SendEvent(ctx context.Context, e *event.Event) error {
+	msg := e.FormatText(s.clusterName, "")
+	return s.SendMessage(ctx, msg)
 }
 
 // SendMessage sends text message to the provider
-func (s *Wecom) SendMessage(msg string) error {
+func (s *Wecom) SendMessage(ctx context.Context, msg string) error {
 	payload := wecomPayload{
 		MsgType: "markdown",
 		Markdown: map[string]string{
@@ -61,7 +74,22 @@ func (s *Wecom) SendMessage(msg string) error {
 	if err != nil {
 		return err
 	}
-
-	_, err = util.Post(s.Name(), s.webhook, body, "application/json", nil)
-	return err
+	responseBody, err := s.sender.Send(ctx, transport.Request{
+		Provider: s.Name(), URL: s.webhook, Body: body,
+		ContentType: "application/json",
+	})
+	if err != nil {
+		return err
+	}
+	if len(responseBody) == 0 {
+		return nil
+	}
+	var response wecomResponse
+	if err := json.Unmarshal(responseBody, &response); err != nil {
+		return fmt.Errorf("wecom returned invalid response")
+	}
+	if response.ErrorCode != 0 {
+		return fmt.Errorf("wecom request failed with code %d", response.ErrorCode)
+	}
+	return nil
 }

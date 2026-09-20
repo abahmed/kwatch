@@ -2,9 +2,10 @@ package config
 
 // Correlation config struct
 type Correlation struct {
-	// Window is the time window (in minutes) for correlating events.
-	// Events outside this window start a new incident.
-	Window int `yaml:"window"`
+	// Window is the time window for correlating events. Events outside this
+	// window start a new incident. A bare number counts minutes; a duration
+	// string ("10m", "1h") is also accepted.
+	Window Minutes `yaml:"window"`
 
 	// LifecycleInterval is the interval (in minutes) for checking
 	// lifecycle transitions (stale, resolved). Default 1.
@@ -13,7 +14,8 @@ type Correlation struct {
 	// ResolveHoldDown is the seconds to wait after a condition clears before
 	// emitting "resolved". If it recurs within this window the incident stays
 	// open (flap dampening). Default 300. Set to 0 to resolve immediately.
-	ResolveHoldDown int `yaml:"resolveHoldDown"`
+	// A bare number counts seconds; "5m" is also accepted.
+	ResolveHoldDown Seconds `yaml:"resolveHoldDown"`
 
 	// Escalation configures restart-count-based severity escalation.
 	Escalation EscalationConfig `yaml:"escalation"`
@@ -26,11 +28,12 @@ type Correlation struct {
 	// Default 5000.
 	MaxBaseline int `yaml:"maxBaseline"`
 
-	// CooldownMinutes is the minimum time (in minutes) between re-alerts
-	// for the same container crash reason. When a container crashes with
-	// the same reason/message/exit code, subsequent alerts are suppressed
-	// until this cooldown expires. Default 10. Set to 0 to disable the
-	// cooldown (always re-alert on identical crashes).
+	// CooldownMinutes is accepted and ignored. It used to gate a
+	// container-reason pre-filter that dropped repeated crashes before the
+	// engine saw them, which defeated the engine's own post-resolve
+	// cooldown. That cooldown is Window, and it is now the only one.
+	//
+	// Deprecated: use correlation.window.
 	CooldownMinutes int `yaml:"cooldownMinutes"`
 }
 

@@ -99,15 +99,16 @@ type AuditLogConfig struct {
 }
 
 type CorrelationConfig struct {
-	Window            int           `json:"window,omitempty"`
-	Cooldown          int           `json:"cooldown,omitempty"`
-	StaleThreshold    int           `json:"staleThreshold,omitempty"`
-	LifecycleInterval int           `json:"lifecycleInterval,omitempty"`
-	ResolveHoldDown   int           `json:"resolveHoldDown,omitempty"`
-	CooldownMinutes   int           `json:"cooldownMinutes,omitempty"`
-	MaxBaseline       int           `json:"maxBaseline,omitempty"`
-	Escalation        MonitorConfig `json:"escalation,omitempty"`
-	Renotify          MonitorConfig `json:"renotify,omitempty"`
+	Window            int `json:"window,omitempty"`
+	Cooldown          int `json:"cooldown,omitempty"`
+	StaleThreshold    int `json:"staleThreshold,omitempty"`
+	LifecycleInterval int `json:"lifecycleInterval,omitempty"`
+	ResolveHoldDown   int `json:"resolveHoldDown,omitempty"`
+	// Deprecated: accepted and ignored; the post-resolve cooldown is Window.
+	CooldownMinutes int           `json:"cooldownMinutes,omitempty"`
+	MaxBaseline     int           `json:"maxBaseline,omitempty"`
+	Escalation      MonitorConfig `json:"escalation,omitempty"`
+	Renotify        MonitorConfig `json:"renotify,omitempty"`
 }
 
 type PvcMonitorConfig struct {

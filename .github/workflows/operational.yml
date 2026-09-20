@@ -1,0 +1,65 @@
+name: Operational validation
+
+on:
+  workflow_dispatch:
+    inputs:
+      load_count:
+        description: "Number of disposable Pods used for the event-burst test"
+        required: false
+        default: "50"
+        type: string
+  schedule:
+    - cron: "17 3 * * 6"
+
+concurrency:
+  group: operational-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  kind-production:
+    name: Kind production smoke and recovery
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - replicas: 1
+            scale_test: false
+          - replicas: 2
+            scale_test: false
+          - replicas: 3
+            scale_test: false
+          - replicas: 4
+            scale_test: false
+          - replicas: 5
+            scale_test: false
+          - replicas: 2
+            scale_test: true
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+
+      - name: Install Helm
+        uses: azure/setup-helm@9bc31f4ebc9c6b171d7bfbaa5d006ae7abdb4310 # v5
+
+      - name: Create disposable Kubernetes cluster
+        uses: helm/kind-action@06c1ae10762d3b9c1644e7fe69596ae519e015a2 # v1.15.0
+
+      - name: Build image
+        run: docker build --tag kwatch:ci .
+
+      - name: Run production smoke test
+        env:
+          KWATCH_LOAD_COUNT: ${{ inputs.load_count || '50' }}
+          KWATCH_REPLICAS: ${{ matrix.replicas }}
+          KWATCH_SCALE_TEST: ${{ matrix.scale_test }}
+        run: ./scripts/test-kind-production.sh
+
+      - name: Collect cluster diagnostics
+        if: always()
+        run: |
+          kubectl get pods --all-namespaces -o wide || true
+          kubectl get events --all-namespaces --sort-by=.lastTimestamp || true

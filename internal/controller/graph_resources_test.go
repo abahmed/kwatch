@@ -17,6 +17,7 @@ import (
 	"k8s.io/client-go/kubernetes/fake"
 	corev1lister "k8s.io/client-go/listers/core/v1"
 
+	"github.com/abahmed/kwatch/internal/clock"
 	kwcontext "github.com/abahmed/kwatch/internal/graphcontext"
 )
 
@@ -59,7 +60,10 @@ func (l failingServiceNamespaceLister) Get(string) (*corev1.Service, error) {
 // newGraphTestGraph builds a Controller wired with real informer listers backed
 // by a fake clientset, plus a fresh ResourceGraph.
 func newGraphTestGraph(objects ...runtime.Object) (*Controller, context.CancelFunc) {
-	c := &Controller{graph: kwcontext.NewResourceGraph()}
+	c := &Controller{
+		graphRuntime: graphRuntime{graph: kwcontext.NewResourceGraph()},
+		now:          clock.RealClock{}.Now,
+	}
 	client := fake.NewSimpleClientset(objects...)
 	ctx, cancel := context.WithCancel(context.Background())
 	factory := informers.NewSharedInformerFactory(client, 0)
@@ -95,7 +99,7 @@ func TestRebuildPodGraphRefreshesSelectorEdges(t *testing.T) {
 	c, cancel := newGraphTestGraph(policy, budget, pod)
 	defer cancel()
 
-	c.rebuildPodGraph(pod)
+	c.rebuildPodGraph(pod, true)
 
 	assert.Equal(t, []string{"pod/ns1/p1"}, c.graph.DependenciesOf("networkpolicy", "ns1", "deny"))
 	assert.Equal(t, []string{"pod/ns1/p1"}, c.graph.DependenciesOf("poddisruptionbudget", "ns1", "pdb"))
@@ -222,8 +226,11 @@ func TestAddPodToGraphServiceAccountEdge(t *testing.T) {
 
 func TestBuildGraphPreservesExistingStateWhenPodListFails(t *testing.T) {
 	c := &Controller{
-		graph:     kwcontext.NewResourceGraph(),
+		graphRuntime: graphRuntime{
+			graph: kwcontext.NewResourceGraph(),
+		},
 		podLister: failingPodLister{err: errors.New("cache unavailable")},
+		now:       clock.RealClock{}.Now,
 	}
 	c.graph.AddEdge("pod", "ns1", "existing", "node", "", "node1", "scheduled_on")
 
@@ -234,7 +241,9 @@ func TestBuildGraphPreservesExistingStateWhenPodListFails(t *testing.T) {
 
 func TestRebuildPodGraphPreservesExistingEdgesWhenServiceListFails(t *testing.T) {
 	c := &Controller{
-		graph:         kwcontext.NewResourceGraph(),
+		graphRuntime: graphRuntime{
+			graph: kwcontext.NewResourceGraph(),
+		},
 		serviceLister: failingServiceLister{err: errors.New("cache unavailable")},
 	}
 	c.graph.AddEdge("pod", "ns1", "p1", "node", "", "node1", "scheduled_on")
@@ -243,21 +252,23 @@ func TestRebuildPodGraphPreservesExistingEdgesWhenServiceListFails(t *testing.T)
 	c.rebuildPodGraph(&corev1.Pod{
 		ObjectMeta: metav1.ObjectMeta{Name: "p1", Namespace: "ns1"},
 		Spec:       corev1.PodSpec{NodeName: "node2"},
-	})
+	}, true)
 
 	assert.Equal(t, []string{"node//node1"}, c.graph.DependenciesOf("pod", "ns1", "p1"))
 	assert.Equal(t, []string{"endpointslice/ns1/slice1"}, c.graph.DependentsOf("pod", "ns1", "p1"))
 }
 
 func TestRebuildPodGraphReplacesOnlyPodOwnedEdges(t *testing.T) {
-	c := &Controller{graph: kwcontext.NewResourceGraph()}
+	c := &Controller{
+		graphRuntime: graphRuntime{graph: kwcontext.NewResourceGraph()},
+	}
 	c.graph.AddEdge("pod", "ns1", "p1", "node", "", "node1", "scheduled_on")
 	c.graph.AddEdge("endpointslice", "ns1", "slice1", "pod", "ns1", "p1", "targets")
 
 	c.rebuildPodGraph(&corev1.Pod{
 		ObjectMeta: metav1.ObjectMeta{Name: "p1", Namespace: "ns1"},
 		Spec:       corev1.PodSpec{NodeName: "node2"},
-	})
+	}, true)
 
 	assert.Equal(t, []string{"node//node2"}, c.graph.DependenciesOf("pod", "ns1", "p1"))
 	assert.Equal(t, []string{"endpointslice/ns1/slice1"}, c.graph.DependentsOf("pod", "ns1", "p1"))

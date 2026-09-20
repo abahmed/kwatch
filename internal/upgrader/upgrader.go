@@ -12,10 +12,8 @@ import (
 	"github.com/google/go-github/v55/github"
 	"k8s.io/klog/v2"
 
-	"github.com/abahmed/kwatch/internal/alert"
 	"github.com/abahmed/kwatch/internal/config"
 	"github.com/abahmed/kwatch/internal/constant"
-	"github.com/abahmed/kwatch/internal/state"
 	"github.com/abahmed/kwatch/internal/version"
 )
 
@@ -34,6 +32,9 @@ func (c *GitHubClient) GetLatestRelease(
 	ctx context.Context,
 	owner, repo string,
 ) (*github.RepositoryRelease, *github.Response, error) {
+	if c.client == nil {
+		return nil, nil, fmt.Errorf("github HTTP client is not configured")
+	}
 	client := github.NewClient(c.client)
 	return client.Repositories.GetLatestRelease(ctx, owner, repo)
 }
@@ -48,17 +49,17 @@ type VersionTracker interface {
 }
 
 type Upgrader struct {
-	config       *config.Upgrader
-	alertManager Notifier
-	stateManager VersionTracker
-	githubClient GitHubReleaseChecker
+	config             *config.Upgrader
+	deliveryManager    Notifier
+	persistenceManager VersionTracker
+	githubClient       GitHubReleaseChecker
 }
 
 func NewUpgrader(
 	upCfg *config.Upgrader,
-	alertManager *alert.AlertManager,
-	stateManager *state.StateManager,
-	clients ...*http.Client,
+	deliveryManager Notifier,
+	persistenceManager VersionTracker,
+	httpClient *http.Client,
 ) *Upgrader {
 	if upCfg == nil {
 		upCfg = &config.Upgrader{}
@@ -67,33 +68,32 @@ func NewUpgrader(
 		os.Getenv("SKIP_UPGRADE_CHECK") == "true" {
 		upCfg.DisableUpdateCheck = true
 	}
-	client := http.DefaultClient
-	if len(clients) > 0 && clients[0] != nil {
-		client = clients[0]
-	}
 	return &Upgrader{
-		config:       upCfg,
-		alertManager: alertManager,
-		stateManager: stateManager,
-		githubClient: &GitHubClient{client: client},
+		config:             upCfg,
+		deliveryManager:    deliveryManager,
+		persistenceManager: persistenceManager,
+		githubClient:       &GitHubClient{client: httpClient},
 	}
 }
 
-func (u *Upgrader) CheckUpdates(ctx context.Context) {
+func (u *Upgrader) CheckUpdates(ctx context.Context) error {
 	if u.config.DisableUpdateCheck ||
 		version.Short() == "dev" {
 		if u.config.DisableUpdateCheck {
-			klog.Infof("update check disabled")
+			klog.InfoS("update check disabled", "component", "upgrader")
 		}
-		return
+		return nil
 	}
 
 	if u.isPrerelease(version.Short()) {
-		klog.Infof(
-			"prerelease build (%s), skipping update check",
+		klog.InfoS(
+			"prerelease build; skipping update check",
+			"component",
+			"upgrader",
+			"version",
 			version.Short(),
 		)
-		return
+		return nil
 	}
 
 	u.checkRelease(ctx)
@@ -105,7 +105,7 @@ func (u *Upgrader) CheckUpdates(ctx context.Context) {
 		select {
 		case <-ctx.Done():
 			klog.InfoS("upgrader stopped")
-			return
+			return nil
 		case <-ticker.C:
 			u.checkRelease(ctx)
 		}
@@ -138,8 +138,8 @@ func (u *Upgrader) checkRelease(ctx context.Context) {
 		return
 	}
 
-	if u.stateManager != nil {
-		notifiedVersion := u.stateManager.GetNotifiedVersion(ctx)
+	if u.persistenceManager != nil {
+		notifiedVersion := u.persistenceManager.GetNotifiedVersion(ctx)
 		if notifiedVersion == *r.TagName {
 			klog.V(4).InfoS(
 				"already notified about version, skipping",
@@ -148,10 +148,10 @@ func (u *Upgrader) checkRelease(ctx context.Context) {
 		}
 	}
 
-	u.alertManager.Notify(fmt.Sprintf(constant.KwatchUpdateMsg, *r.TagName))
+	u.deliveryManager.Notify(fmt.Sprintf(constant.KwatchUpdateMsg, *r.TagName))
 
-	if u.stateManager != nil {
-		if err := u.stateManager.SetNotifiedVersion(
+	if u.persistenceManager != nil {
+		if err := u.persistenceManager.SetNotifiedVersion(
 			ctx,
 			*r.TagName,
 		); err != nil {

@@ -1,13 +1,14 @@
 package rocketchat
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 
 	"k8s.io/klog/v2"
 
-	"github.com/abahmed/kwatch/internal/alert/util"
-	"github.com/abahmed/kwatch/internal/config"
+	"github.com/abahmed/kwatch/internal/clock"
+	"github.com/abahmed/kwatch/internal/delivery/transport"
 	"github.com/abahmed/kwatch/internal/event"
 	"github.com/abahmed/kwatch/internal/insight"
 	"github.com/abahmed/kwatch/internal/message"
@@ -15,11 +16,13 @@ import (
 )
 
 type RocketChat struct {
+	sender  transport.Sender
 	webhook string
 	text    string
 
 	// reference for general app configuration
-	appCfg *config.App
+	clusterName string
+	clockSource clock.Clock
 }
 
 type rocketChatWebhookPayload struct {
@@ -27,9 +30,11 @@ type rocketChatWebhookPayload struct {
 }
 
 // NewRocketChat returns new rocket chat instance
+
 func NewRocketChat(
 	config map[string]interface{},
-	appCfg *config.App,
+	clusterName string,
+	dependencies transport.Dependencies,
 ) *RocketChat {
 	webhook, ok := config["webhook"].(string)
 	if !ok || len(webhook) == 0 {
@@ -42,9 +47,11 @@ func NewRocketChat(
 	text, _ := config["text"].(string)
 
 	return &RocketChat{
-		webhook: webhook,
-		text:    text,
-		appCfg:  appCfg,
+		sender:      transport.NewSender(dependencies),
+		webhook:     webhook,
+		text:        text,
+		clusterName: clusterName,
+		clockSource: clock.Require(dependencies.Clock),
 	}
 }
 
@@ -54,60 +61,66 @@ func (r *RocketChat) Name() string {
 }
 
 // SendEvent sends event to the provider
-func (r *RocketChat) SendEvent(e *event.Event) error {
-	formattedMsg := e.FormatMarkdown(r.appCfg.ClusterName, r.text, "")
+func (r *RocketChat) SendEvent(ctx context.Context, e *event.Event) error {
+	formattedMsg := e.FormatMarkdown(r.clusterName, r.text, "")
 	b, err := r.buildRequestBodyRocketChat(formattedMsg)
 	if err != nil {
 		return err
 	}
-	return r.sendByRocketChatApi(b)
+	return r.sendByRocketChatApi(ctx, b)
 }
 
-func (r *RocketChat) sendByRocketChatApi(reqBody []byte) error {
-	_, err := util.Send(
-		util.Request{Provider: "RocketChat", URL: r.webhook, Body: reqBody},
-	)
+func (r *RocketChat) sendByRocketChatApi(
+	ctx context.Context,
+	reqBody []byte,
+) error {
+	_, err := r.sender.Send(ctx, transport.Request{
+		Provider: "RocketChat", URL: r.webhook, Body: reqBody,
+	})
 	return err
 }
 
 // SendMessage sends text message to the provider
-func (r *RocketChat) SendMessage(msg string) error {
+func (r *RocketChat) SendMessage(ctx context.Context, msg string) error {
 	b, err := r.buildRequestBodyRocketChat(msg)
 	if err != nil {
 		return err
 	}
-	return r.sendByRocketChatApi(b)
+	return r.sendByRocketChatApi(ctx, b)
 }
 
-// SendIncident implements alert.ThreadProvider.
+// SendIncident implements delivery.ThreadProvider.
 // It renders the incident using the Report model and PlaintextRenderer,
 // producing a context-adaptive text message.
 func (r *RocketChat) SendIncident(
+	ctx context.Context,
 	inc *model.Incident,
 	action model.IncidentAction,
 ) error {
-	return r.SendIncidentWithInsight(inc, action, nil)
+	return r.SendIncidentWithInsight(ctx, inc, action, nil)
 }
 
-// SendIncidentWithInsight implements alert.InsightThreadProvider, so the
+// SendIncidentWithInsight implements delivery.InsightThreadProvider, so the
 // diagnosis — likely cause, impact, recent changes — is rendered rather than
 // dropped on the way to this provider.
 func (r *RocketChat) SendIncidentWithInsight(
+	ctx context.Context,
 	inc *model.Incident,
 	action model.IncidentAction,
 	ins *insight.Insight,
 ) error {
-	text := util.RenderIncidentWithInsight(
+	text := message.RenderIncidentWithInsight(
 		inc,
 		action,
 		ins,
 		message.NewPlainTextRenderer(),
-		r.appCfg.ClusterName,
+		r.clusterName,
+		r.clockSource,
 	)
 	if text == "" {
 		return nil
 	}
-	return r.SendMessage(text)
+	return r.SendMessage(ctx, text)
 }
 
 func (r *RocketChat) buildRequestBodyRocketChat(text string) ([]byte, error) {

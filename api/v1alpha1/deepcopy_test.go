@@ -68,3 +68,37 @@ func TestKwatchConfigSpecDeepCopyCopiesMonitorFields(t *testing.T) {
 		in.ActiveProbeMonitor["http"].([]interface{})[0],
 	)
 }
+
+func TestKwatchConfigSpecDeepCopyDetachesMutableFields(t *testing.T) {
+	includeEvents := true
+	includeLogs := false
+	in := &KwatchConfigSpec{
+		IncludeEvents: &includeEvents,
+		IncludeLogs:   &includeLogs,
+		Correlation: CorrelationConfig{
+			Escalation: MonitorConfig{
+				"levels": []interface{}{"high"},
+			},
+			Renotify: MonitorConfig{
+				"minutes": []interface{}{float64(5)},
+			},
+		},
+	}
+
+	out := in.DeepCopy()
+	*out.IncludeEvents = false
+	*out.IncludeLogs = true
+	out.Correlation.Escalation["levels"].([]interface{})[0] = "low"
+	out.Correlation.Renotify["minutes"].([]interface{})[0] = float64(10)
+
+	assert.True(t, *in.IncludeEvents)
+	assert.False(t, *in.IncludeLogs)
+	assert.Equal(
+		t, "high",
+		in.Correlation.Escalation["levels"].([]interface{})[0],
+	)
+	assert.Equal(
+		t, float64(5),
+		in.Correlation.Renotify["minutes"].([]interface{})[0],
+	)
+}

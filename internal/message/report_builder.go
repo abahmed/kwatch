@@ -5,6 +5,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/abahmed/kwatch/internal/clock"
 	"github.com/abahmed/kwatch/internal/constant"
 	"github.com/abahmed/kwatch/internal/format"
 	"github.com/abahmed/kwatch/internal/insight"
@@ -21,11 +22,15 @@ type ReportBuilder struct {
 	now func() time.Time
 }
 
-// NewReportBuilder returns a ReportBuilder with the given cluster name.
-func NewReportBuilder(cluster string) *ReportBuilder {
+// NewReportBuilderWithClock returns a ReportBuilder with an explicit clock.
+func NewReportBuilderWithClock(
+	cluster string,
+	timeSource clock.Clock,
+) *ReportBuilder {
+	timeSource = clock.Require(timeSource)
 	return &ReportBuilder{
 		cluster: cluster,
-		now:     time.Now,
+		now:     timeSource.Now,
 	}
 }
 
@@ -82,7 +87,9 @@ func (rb *ReportBuilder) populateIdentity(r *Report, inc *model.Incident) {
 
 	// Node issues: only node identity
 	if inc.Resource == "node" {
-		r.Identity = &IdentitySection{Node: format.ShortNode(inc.Name)}
+		r.Identity = &IdentitySection{
+			Node: format.ShortNode(inc.Ref().Name),
+		}
 		return
 	}
 
@@ -144,7 +151,7 @@ func (rb *ReportBuilder) populateDiagnosis(
 		d.Confidence = ins.Confidence
 		d.Evidence = append([]string(nil), ins.Evidence...)
 	}
-	// Topology the correlation engine resolved from live Service selectors.
+	// Topology the incident engine resolved from live Service selectors.
 	// It is impact, and belongs with the rest of the impact.
 	if d.Impact == "" && len(inc.AffectedServices) > 0 {
 		label := "service"
@@ -236,7 +243,8 @@ func (rb *ReportBuilder) populateChanges(r *Report, ins *insight.Insight) {
 	items := make([]ChangeItem, 0, len(ins.RecentChanges))
 	seen := make(map[string]bool)
 	for _, c := range ins.RecentChanges {
-		key := c.Resource + "/" + c.Namespace + "/" + c.Name + c.Type.String()
+		key := model.ObjectKey(c.Resource, c.Namespace, c.Name) +
+			c.Type.String()
 		if seen[key] {
 			continue
 		}

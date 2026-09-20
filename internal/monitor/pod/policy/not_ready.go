@@ -1,0 +1,226 @@
+package policy
+
+import (
+	"fmt"
+	"math"
+	"time"
+
+	corev1 "k8s.io/api/core/v1"
+
+	"github.com/abahmed/kwatch/internal/constant"
+	"github.com/abahmed/kwatch/internal/format"
+)
+
+// maxStartupBudget caps how long a probe definition can defer an alert. A
+// pod declaring an hour of startup budget should still be reported well
+// before that.
+const maxStartupBudget = 15 * time.Minute
+
+// probeBudget is how long a probe allows a container to take before it is
+// considered failed: the initial delay plus every permitted retry.
+func probeBudget(p *corev1.Probe) time.Duration {
+	if p == nil {
+		return 0
+	}
+	period := p.PeriodSeconds
+	if period <= 0 {
+		period = 10 // Kubernetes default
+	}
+	failures := p.FailureThreshold
+	if failures <= 0 {
+		failures = 3 // Kubernetes default
+	}
+	return time.Duration(p.InitialDelaySeconds)*time.Second +
+		time.Duration(failures)*time.Duration(period)*time.Second
+}
+
+// StartupBudget returns the longest startup allowance any container in the
+// pod declares. Kubernetes already knows how long the workload expects to
+// take; deriving the threshold from it beats guessing a single constant for
+// every workload in every cluster.
+func StartupBudget(pod *corev1.Pod) time.Duration {
+	var longest time.Duration
+	all := make(
+		[]corev1.Container,
+		0,
+		len(pod.Spec.Containers)+len(pod.Spec.InitContainers),
+	)
+	all = append(all, pod.Spec.InitContainers...)
+	all = append(all, pod.Spec.Containers...)
+	for i := range all {
+		c := &all[i]
+		b := probeBudget(c.StartupProbe)
+		if b == 0 {
+			b = probeBudget(c.ReadinessProbe)
+		}
+		if b > longest {
+			longest = b
+		}
+	}
+	if longest > maxStartupBudget {
+		return maxStartupBudget
+	}
+	return longest
+}
+
+// hasEverBeenReady reports whether the pod reached readiness at some point.
+// A pod that has never been ready is still starting — a rollout — whereas one
+// that was ready and stopped being ready has actually degraded. They deserve
+// different patience and different wording.
+//
+// Kubernetes keeps no readiness history, so this is inferred: a container
+// currently Ready settles it; otherwise, PodReady flipping to False well after
+// the pod was created means it must have been True in between. A pod that has
+// never been ready carries a PodReady=False transition stamped at creation.
+// Restart count is deliberately not used — a container killed by its liveness
+// probe before ever passing readiness restarts too, and that is the classic
+// slow-start case this distinction exists to protect.
+func hasEverBeenReady(
+	pod *corev1.Pod,
+	notReadySince time.Time,
+	startupBudget time.Duration,
+) bool {
+	for _, cs := range pod.Status.ContainerStatuses {
+		if cs.Ready {
+			return true
+		}
+	}
+	for _, c := range pod.Status.Conditions {
+		if c.Type == corev1.PodReady && c.Status == corev1.ConditionTrue {
+			return true
+		}
+	}
+	created := pod.CreationTimestamp.Time
+	if created.IsZero() || notReadySince.IsZero() {
+		return false
+	}
+	return notReadySince.Sub(created) > startupBudget
+}
+
+// firstStartUnreadyFor is how long a pod that has never been ready has kept
+// its application waiting. PodReady=False is stamped when the pod is
+// scheduled, but the application cannot begin until its init containers have
+// run and its image has been pulled -- a minute or more on a freshly scaled
+// node -- so the clock starts when the application container actually did,
+// or every cold-node rollout alerts at 1m0s for a process seconds old.
+func firstStartUnreadyFor(
+	pod *corev1.Pod,
+	lastTransition, now time.Time,
+) time.Duration {
+	if started := latestContainerStart(pod); started.After(lastTransition) {
+		return now.Sub(started)
+	}
+	return now.Sub(lastTransition)
+}
+
+// latestContainerStart returns the most recent time any application
+// container entered Running, or zero when none has.
+func latestContainerStart(pod *corev1.Pod) time.Time {
+	var latest time.Time
+	for _, cs := range pod.Status.ContainerStatuses {
+		if cs.State.Running == nil {
+			continue
+		}
+		if at := cs.State.Running.StartedAt.Time; at.After(latest) {
+			latest = at
+		}
+	}
+	return latest
+}
+
+// NotReadyRule alerts when a pod has been not ready (PodReady=False) for
+// longer than Threshold even though all its containers are running and have
+// not crashed. The container detectors intentionally skip running containers
+// with no restarts, so the classic "readiness probe failing while the app is
+// up" case would otherwise produce no alert at all.
+type NotReadyRule struct {
+	Threshold time.Duration
+}
+
+func (rule NotReadyRule) Detect(ctx *Context) Decision {
+	if ctx.Pod == nil {
+		return DecisionDefer
+	}
+	if ctx.Pod.Status.Phase != corev1.PodRunning {
+		return DecisionDefer
+	}
+
+	// A container-level failure (crash, waiting, terminated with non-zero
+	// exit) is handled by the container pipeline — don't double-alert here.
+	for _, cs := range ctx.Pod.Status.ContainerStatuses {
+		if cs.State.Waiting != nil {
+			return DecisionDefer
+		}
+		if cs.State.Terminated != nil && cs.State.Terminated.ExitCode != 0 &&
+			cs.State.Terminated.Reason != "Completed" {
+			return DecisionDefer
+		}
+	}
+
+	// Already alerting for this pod at pod level with the same reason.
+	if ctx.PodLastState != nil &&
+		ctx.PodLastState.Reason == constant.ReasonContainersNotReady {
+		return DecisionDefer
+	}
+
+	var lastTransition time.Time
+	for _, c := range ctx.Pod.Status.Conditions {
+		if c.Type == corev1.PodReady {
+			if c.Status == corev1.ConditionTrue {
+				return DecisionDefer
+			}
+			lastTransition = c.LastTransitionTime.Time
+			break
+		}
+	}
+	if lastTransition.IsZero() {
+		return DecisionDefer
+	}
+
+	// How long the pod has actually been unready. Reported to the user, and
+	// never clamped — a pod unready for three hours must not claim one minute.
+	notReadyFor := ctx.now().Sub(lastTransition)
+
+	// A pod that has never been ready is mid-startup, so give it whatever
+	// budget its own probes declare. One that was ready and degraded gets the
+	// plain floor, because that is a real regression.
+	budget := StartupBudget(ctx.Pod)
+	if budget < rule.Threshold {
+		budget = rule.Threshold
+	}
+	everReady := hasEverBeenReady(ctx.Pod, lastTransition, budget)
+	threshold := rule.Threshold
+	if !everReady {
+		threshold = budget
+		notReadyFor = firstStartUnreadyFor(ctx.Pod, lastTransition, ctx.now())
+	}
+
+	// Separately, do not alert within one threshold of kwatch starting up:
+	// on restart every pre-existing condition would otherwise fire at once.
+	// This gates the alert only; it never alters the duration reported above.
+	sinceWatch := time.Duration(math.MaxInt64)
+	watchStart := ctx.watchStartTime()
+	if !watchStart.IsZero() {
+		sinceWatch = ctx.now().Sub(watchStart)
+	}
+	if notReadyFor < threshold || sinceWatch < rule.Threshold {
+		return DecisionDefer
+	}
+
+	ctx.PodHasIssues = true
+	ctx.ContainersHasIssues = false
+	ctx.PodReason = constant.ReasonContainersNotReady
+	if everReady {
+		ctx.PodMsg = fmt.Sprintf("pod stopped being ready %s ago",
+			format.Duration(notReadyFor))
+	} else {
+		ctx.PodMsg = fmt.Sprintf(
+			"pod has never become ready — %s since its container started "+
+				"(allowed %s)",
+			format.Duration(notReadyFor),
+			format.Duration(threshold),
+		)
+	}
+
+	return DecisionAlert
+}

@@ -19,7 +19,12 @@ func TestRecordChangeUsesInjectedClock(t *testing.T) {
 	const want = "2026-08-31T12:34:56Z"
 	now, err := time.Parse(time.RFC3339, want)
 	require.NoError(t, err)
-	controller := &Controller{tracker: kwcontext.NewChangeTracker(10), now: func() time.Time { return now }}
+	controller := &Controller{
+		graphRuntime: graphRuntime{
+			tracker: newTestChangeTracker(10),
+		},
+		now: func() time.Time { return now },
+	}
 	obj := &corev1.Service{ObjectMeta: metav1.ObjectMeta{Name: "api", Namespace: "prod"}}
 
 	controller.recordChange(kwcontext.ChangeUpdate, "service", obj)
@@ -28,6 +33,8 @@ func TestRecordChangeUsesInjectedClock(t *testing.T) {
 	require.Equal(t, now, changes[0].Timestamp)
 }
 
+// A Service change must reach the Ingresses that name it even when the graph
+// holds no edge for the pair yet -- the Ingress spec is the authority.
 func TestServiceDependentsFallbackWhenGraphHasNoEdge(t *testing.T) {
 	client := fake.NewSimpleClientset()
 	factory := informers.NewSharedInformerFactory(client, 0)
@@ -38,10 +45,14 @@ func TestServiceDependentsFallbackWhenGraphHasNoEdge(t *testing.T) {
 	require.NoError(t, factory.Networking().V1().Ingresses().Informer().GetStore().Add(&networkingIngress))
 
 	controller := &Controller{
-		graph:         kwcontext.NewResourceGraph(),
-		ingress:       newResourcePipeline("ingress", "ingresses-test"),
-		mwc:           newResourcePipeline("mwc", "mwc-test"),
-		vwc:           newResourcePipeline("vwc", "vwc-test"),
+		graphRuntime: graphRuntime{
+			graph: kwcontext.NewResourceGraph(),
+		},
+		pipelineSet: pipelineSet{
+			ingress: newResourcePipeline("ingress", "ingresses-test"),
+			mwc:     newResourcePipeline("mwc", "mwc-test"),
+			vwc:     newResourcePipeline("vwc", "vwc-test"),
+		},
 		ingressLister: factory.Networking().V1().Ingresses().Lister(),
 	}
 	controller.ingress.startWorkers = true
@@ -53,4 +64,9 @@ func TestServiceDependentsFallbackWhenGraphHasNoEdge(t *testing.T) {
 
 var networkingIngress = networkingv1.Ingress{
 	ObjectMeta: metav1.ObjectMeta{Name: "api-ingress", Namespace: "prod"},
+	Spec: networkingv1.IngressSpec{
+		DefaultBackend: &networkingv1.IngressBackend{
+			Service: &networkingv1.IngressServiceBackend{Name: "api"},
+		},
+	},
 }

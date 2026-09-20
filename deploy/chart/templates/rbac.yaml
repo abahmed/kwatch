@@ -97,6 +97,34 @@ subjects:
 kind: Role
 apiVersion: rbac.authorization.k8s.io/v1
 metadata:
+  name: {{ .Release.Name }}-leader-election
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "kwatch.labels" . | nindent 4 }}
+rules:
+- apiGroups: ["coordination.k8s.io"]
+  resources: ["leases"]
+  verbs: ["create", "get", "update", "patch", "watch"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: {{ .Release.Name }}-leader-election
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "kwatch.labels" . | nindent 4 }}
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: {{ .Release.Name }}-leader-election
+subjects:
+- kind: ServiceAccount
+  name: {{ .Release.Name }}
+  namespace: {{ .Release.Namespace }}
+---
+kind: Role
+apiVersion: rbac.authorization.k8s.io/v1
+metadata:
   name: {{ .Release.Name }}-configmap-manager
   namespace: {{ .Release.Namespace }}
 rules:
@@ -105,10 +133,17 @@ rules:
   verbs: ["create"]
 - apiGroups: [""]
   resources: ["configmaps"]
-  verbs: ["get", "update", "patch"]
-- apiGroups: [""]
-  resources: ["configmaps"]
-  resourceNames: ["kwatch-state", "kwatch-baseline", "kwatch-incidents", "kwatch-pvc", "kwatch-changes", "kwatch-rca"]
+  resourceNames:
+  - "kwatch-state"
+  - "kwatch-baseline"
+  - "kwatch-incidents"
+  - "kwatch-groups"
+  - "kwatch-threads"
+  - "kwatch-engine"
+  - "kwatch-pvc"
+  - "kwatch-changes"
+  - "kwatch-rca"
+  - "kwatch-telemetry"
   verbs: ["get", "update", "patch"]
 
 ---

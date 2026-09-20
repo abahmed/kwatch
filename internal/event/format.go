@@ -2,6 +2,7 @@ package event
 
 import (
 	"fmt"
+	"html"
 	"strings"
 )
 
@@ -56,40 +57,57 @@ func (e *Event) FormatHtml(clusterName, text string) string {
 	if text == "" {
 		text = defaultEventText(e)
 	}
+	text = html.EscapeString(text)
 
 	var parts []string
 	parts = append(parts, text)
 
 	if clusterName != "" {
-		parts = append(parts, fmt.Sprintf("<b>Cluster:</b> %s", clusterName))
+		parts = append(parts, fmt.Sprintf(
+			"<b>Cluster:</b> %s", html.EscapeString(clusterName),
+		))
 	}
 	if e.PodName != "" {
-		parts = append(parts, fmt.Sprintf("<b>Pod:</b> %s", e.PodName))
+		parts = append(parts, fmt.Sprintf(
+			"<b>Pod:</b> %s", html.EscapeString(e.PodName),
+		))
 	}
 	if e.ContainerName != "" {
-		parts = append(parts, fmt.Sprintf("<b>Container:</b> %s", e.ContainerName))
+		parts = append(parts, fmt.Sprintf(
+			"<b>Container:</b> %s", html.EscapeString(e.ContainerName),
+		))
 	}
 	if e.Namespace != "" {
-		parts = append(parts, fmt.Sprintf("<b>Namespace:</b> %s", e.Namespace))
+		parts = append(parts, fmt.Sprintf(
+			"<b>Namespace:</b> %s", html.EscapeString(e.Namespace),
+		))
 	}
 	if e.NodeName != "" {
-		parts = append(parts, fmt.Sprintf("<b>Node:</b> %s", e.NodeName))
+		parts = append(parts, fmt.Sprintf(
+			"<b>Node:</b> %s", html.EscapeString(e.NodeName),
+		))
 	}
 	if e.Reason != "" {
-		parts = append(parts, fmt.Sprintf("<b>Reason:</b> %s", e.Reason))
+		parts = append(parts, fmt.Sprintf(
+			"<b>Reason:</b> %s", html.EscapeString(e.Reason),
+		))
 	}
 
 	if e.IncludeEvents {
 		events := strings.TrimSpace(e.Events)
 		if len(events) > 0 {
-			parts = append(parts, "<b>Events:</b><br/><blockquote>"+strings.ReplaceAll(events, "\n", "<br/>")+"</blockquote>")
+			parts = append(parts, "<b>Events:</b><br/><blockquote>"+
+				strings.ReplaceAll(
+					html.EscapeString(events), "\n", "<br/>",
+				)+"</blockquote>")
 		}
 	}
 
 	if e.IncludeLogs {
 		logs := strings.TrimSpace(e.Logs)
 		if len(logs) > 0 {
-			parts = append(parts, "<b>Logs:</b><br/><blockquote>"+strings.ReplaceAll(logs, "\n", "<br/>")+"</blockquote>")
+			parts = append(parts, "<b>Logs:</b><br/><blockquote>"+
+				strings.ReplaceAll(html.EscapeString(logs), "\n", "<br/>")+"</blockquote>")
 		}
 	}
 

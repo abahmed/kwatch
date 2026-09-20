@@ -1,17 +1,17 @@
 package discord
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"net/http"
 	"strings"
 
-	"github.com/abahmed/kwatch/internal/alert/util"
-	"github.com/abahmed/kwatch/internal/config"
+	"github.com/abahmed/kwatch/internal/clock"
 	"github.com/abahmed/kwatch/internal/constant"
+	"github.com/abahmed/kwatch/internal/delivery/transport"
 	"github.com/abahmed/kwatch/internal/event"
 	"github.com/abahmed/kwatch/internal/insight"
-	"github.com/abahmed/kwatch/internal/k8s"
 	"github.com/abahmed/kwatch/internal/message"
 	"github.com/abahmed/kwatch/internal/model"
 	"github.com/abahmed/kwatch/internal/ratelimit"
@@ -22,25 +22,34 @@ import (
 
 const (
 	chunkSize = 1024
+	maxFields = 25
 )
 
 type Discord struct {
-	id    string
-	token string
-	title string
-	text  string
-	send  func(webhookID,
+	httpClient *http.Client
+	sender     transport.Sender
+	id         string
+	token      string
+	title      string
+	text       string
+	send       func(webhookID,
 		token string,
 		wait bool,
 		data *discordgo.WebhookParams,
 		options ...discordgo.RequestOption) (st *discordgo.Message, err error)
 
 	// reference for general app configuration
-	appCfg *config.App
+	clusterName string
+	clockSource clock.Clock
 }
 
 // NewDiscord returns new Discord instance
-func NewDiscord(config map[string]interface{}, appCfg *config.App) *Discord {
+func NewDiscord(
+	config map[string]interface{},
+	clusterName string,
+	dependencies transport.Dependencies,
+) *Discord {
+	httpClient := dependencies.HTTPClient
 	webhook, ok := config["webhook"].(string)
 	if !ok || len(webhook) == 0 {
 		klog.InfoS("initializing discord with empty webhook url")
@@ -62,18 +71,21 @@ func NewDiscord(config map[string]interface{}, appCfg *config.App) *Discord {
 		klog.ErrorS(err, "initializing discord client")
 		return nil
 	}
-	discordClient.Client = k8s.GetDefaultClient()
+	discordClient.Client = httpClient
 
 	title, _ := config["title"].(string)
 	text, _ := config["text"].(string)
 
 	return &Discord{
-		id:     webhookID,
-		token:  webhookToken,
-		title:  title,
-		text:   text,
-		send:   discordClient.WebhookExecute,
-		appCfg: appCfg,
+		httpClient:  httpClient,
+		sender:      transport.NewSender(dependencies),
+		id:          webhookID,
+		token:       webhookToken,
+		title:       title,
+		text:        text,
+		send:        discordClient.WebhookExecute,
+		clusterName: clusterName,
+		clockSource: clock.Require(dependencies.Clock),
 	}
 }
 
@@ -83,9 +95,9 @@ func (d *Discord) Name() string {
 }
 
 // Verify checks webhook credentials by issuing a GET to the webhook URL.
-func (d *Discord) Verify() error {
+func (d *Discord) Verify(ctx context.Context) error {
 	url := fmt.Sprintf("https://discord.com/api/webhooks/%s/%s", d.id, d.token)
-	_, err := util.Send(util.Request{
+	_, err := d.sender.Send(ctx, transport.Request{
 		Provider: "Discord",
 		Method:   http.MethodGet,
 		URL:      url,
@@ -93,8 +105,11 @@ func (d *Discord) Verify() error {
 	return err
 }
 
-// SendEvent sends event to the provider
-func (d *Discord) SendEvent(ev *event.Event) error {
+// SendEvent sends an event using the caller's cancellation context.
+func (d *Discord) SendEvent(
+	ctx context.Context,
+	ev *event.Event,
+) error {
 	klog.V(4).InfoS(
 		"sending to discord event",
 		"namespace", ev.Namespace,
@@ -105,9 +120,9 @@ func (d *Discord) SendEvent(ev *event.Event) error {
 
 	// initialize fields with basic info
 	fields := []*discordgo.MessageEmbedField{}
-	if d.appCfg.ClusterName != "" {
+	if d.clusterName != "" {
 		fields = append(fields, &discordgo.MessageEmbedField{
-			Name: "Cluster", Value: d.appCfg.ClusterName, Inline: true,
+			Name: "Cluster", Value: d.clusterName, Inline: true,
 		})
 	}
 	if ev.PodName != "" {
@@ -140,7 +155,12 @@ func (d *Discord) SendEvent(ev *event.Event) error {
 	if ev.IncludeEvents {
 		events := strings.TrimSpace(ev.Events)
 		if len(events) > 0 {
-			for _, chunk := range util.Chunks(events, chunkSize) {
+			parts := message.Chunks(events, chunkSize)
+			for i, chunk := range parts {
+				if len(fields) >= maxFields {
+					appendDiscordTruncation(&fields, len(parts)-i)
+					break
+				}
 				fields = append(fields, &discordgo.MessageEmbedField{
 					Name:  ":mag: Events",
 					Value: "```\n" + chunk + "```",
@@ -155,29 +175,19 @@ func (d *Discord) SendEvent(ev *event.Event) error {
 		if len(logs) > 0 {
 			logData := logs
 
-			const maxFields = 25
-			var totalFields int
-			parts := util.Chunks(logData, chunkSize)
-			for _, chunk := range parts {
+			parts := message.Chunks(logData, chunkSize)
+			for i, chunk := range parts {
+				if len(fields) >= maxFields {
+					appendDiscordTruncation(&fields, len(parts)-i)
+					break
+				}
 				name := ":memo: Logs"
-				totalFields++
 				if len(parts) > 1 {
 					name = fmt.Sprintf(
 						":memo: Logs (%d/%d)",
-						totalFields,
+						i+1,
 						len(parts),
 					)
-				}
-				if totalFields > maxFields {
-					remaining := len(parts) - (totalFields - 1)
-					fields = append(fields, &discordgo.MessageEmbedField{
-						Name: ":memo: Logs",
-						Value: fmt.Sprintf(
-							"… (truncated, %d more chunk(s))",
-							remaining,
-						),
-					})
-					break
 				}
 				fields = append(fields, &discordgo.MessageEmbedField{
 					Name:  name,
@@ -217,13 +227,29 @@ func (d *Discord) SendEvent(ev *event.Event) error {
 				},
 			},
 		},
-		discordgo.WithContext(util.ProviderContext(d.Name())),
+		discordgo.WithContext(ctx),
 	)
 	return wrapDiscordRateLimit(err)
 }
 
-// SendMessage sends text message to the provider
-func (d *Discord) SendMessage(msg string) error {
+func appendDiscordTruncation(
+	fields *[]*discordgo.MessageEmbedField,
+	remaining int,
+) {
+	if len(*fields) >= maxFields {
+		return
+	}
+	*fields = append(*fields, &discordgo.MessageEmbedField{
+		Name:  ":warning: Evidence truncated",
+		Value: fmt.Sprintf("… (truncated, %d more chunk(s))", remaining),
+	})
+}
+
+// SendMessage sends text using the caller's cancellation context.
+func (d *Discord) SendMessage(
+	ctx context.Context,
+	msg string,
+) error {
 	// send message
 	_, err := d.send(
 		d.id,
@@ -232,40 +258,43 @@ func (d *Discord) SendMessage(msg string) error {
 		&discordgo.WebhookParams{
 			Content: msg,
 		},
-		discordgo.WithContext(util.ProviderContext(d.Name())),
+		discordgo.WithContext(ctx),
 	)
 	return wrapDiscordRateLimit(err)
 }
 
-// SendIncident implements alert.ThreadProvider.
+// SendIncident implements delivery.ThreadProvider.
 // It renders the incident using the Report model and DiscordRenderer,
 // producing a rich embed with context-adaptive fields.
 func (d *Discord) SendIncident(
+	ctx context.Context,
 	inc *model.Incident,
 	action model.IncidentAction,
 ) error {
-	return d.SendIncidentWithInsight(inc, action, nil)
+	return d.SendIncidentWithInsight(ctx, inc, action, nil)
 }
 
-// SendIncidentWithInsight implements alert.InsightThreadProvider, so the
+// SendIncidentWithInsight implements delivery.InsightThreadProvider, so the
 // diagnosis — likely cause, impact, recent changes — is rendered rather than
 // dropped on the way to this provider.
 func (d *Discord) SendIncidentWithInsight(
+	ctx context.Context,
 	inc *model.Incident,
 	action model.IncidentAction,
 	ins *insight.Insight,
 ) error {
-	text := util.RenderIncidentWithInsight(
+	text := message.RenderIncidentWithInsight(
 		inc,
 		action,
 		ins,
 		message.NewDiscordRenderer(),
-		d.appCfg.ClusterName,
+		d.clusterName,
+		d.clockSource,
 	)
 	if text == "" {
 		return nil
 	}
-	return d.SendMessage(text)
+	return d.SendMessage(ctx, text)
 }
 
 func wrapDiscordRateLimit(err error) error {
@@ -279,6 +308,10 @@ func wrapDiscordRateLimit(err error) error {
 			StatusCode: http.StatusTooManyRequests,
 			RetryAfter: rle.RetryAfter,
 		}
+	}
+	var restErr *discordgo.RESTError
+	if errors.As(err, &restErr) && restErr.Response != nil {
+		return transport.ClassifyHTTPStatus(restErr.Response.StatusCode, err)
 	}
 	return err
 }

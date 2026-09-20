@@ -1,15 +1,18 @@
 package slack
 
 import (
+	"context"
+	"net/http"
 	"testing"
 	"time"
 
 	slackClient "github.com/slack-go/slack"
 	"github.com/stretchr/testify/assert"
 
-	"github.com/abahmed/kwatch/internal/alert/util"
-	"github.com/abahmed/kwatch/internal/config"
+	"github.com/abahmed/kwatch/internal/clock"
+	"github.com/abahmed/kwatch/internal/delivery/transport"
 	"github.com/abahmed/kwatch/internal/event"
+	"github.com/abahmed/kwatch/internal/message"
 	"github.com/abahmed/kwatch/internal/model"
 )
 
@@ -17,12 +20,21 @@ func mockedSend(url string, msg *slackClient.WebhookMessage) error {
 	return nil
 }
 
+func newTestSlack(
+	values map[string]interface{}, clusterName string,
+) *Slack {
+	return NewSlack(values, clusterName, transport.Dependencies{
+		HTTPClient: http.DefaultClient,
+		Clock:      clock.RealClock{},
+	})
+}
+
 // --- webhook mode tests ---
 
 func TestSlackEmptyConfig(t *testing.T) {
 	assert := assert.New(t)
 
-	s := NewSlack(map[string]interface{}{}, &config.App{ClusterName: "dev"})
+	s := newTestSlack(map[string]interface{}{}, "dev")
 	assert.Nil(s)
 }
 
@@ -32,7 +44,7 @@ func TestSlackWebhook(t *testing.T) {
 	configMap := map[string]interface{}{
 		"webhook": "testtest",
 	}
-	s := NewSlack(configMap, &config.App{ClusterName: "dev"})
+	s := newTestSlack(configMap, "dev")
 	assert.NotNil(s)
 	assert.Equal("Slack", s.Name())
 }
@@ -44,7 +56,7 @@ func TestSlackWebhookWithChannel(t *testing.T) {
 		"webhook": "testtest",
 		"channel": "#alerts",
 	}
-	s := NewSlack(configMap, &config.App{ClusterName: "dev"})
+	s := newTestSlack(configMap, "dev")
 	assert.NotNil(s)
 	assert.Equal("#alerts", s.channel)
 }
@@ -52,22 +64,22 @@ func TestSlackWebhookWithChannel(t *testing.T) {
 func TestSendMessageWebhook(t *testing.T) {
 	assert := assert.New(t)
 
-	s := NewSlack(map[string]interface{}{
+	s := newTestSlack(map[string]interface{}{
 		"webhook": "testtest",
 		"channel": "test",
-	}, &config.App{ClusterName: "dev"})
+	}, "dev")
 	assert.NotNil(s)
 
 	s.send = mockedSend
-	assert.Nil(s.SendMessage("test"))
+	assert.Nil(s.SendMessage(context.Background(), "test"))
 }
 
 func TestSendEventWebhook(t *testing.T) {
 	assert := assert.New(t)
 
-	s := NewSlack(map[string]interface{}{
+	s := newTestSlack(map[string]interface{}{
 		"webhook": "testtest",
-	}, &config.App{ClusterName: "dev"})
+	}, "dev")
 	assert.NotNil(s)
 
 	s.send = mockedSend
@@ -82,16 +94,16 @@ func TestSendEventWebhook(t *testing.T) {
 		Events: "BackOff Back-off restarting failed " +
 			"container\nevent3\nevent5",
 	}
-	assert.Nil(s.SendEvent(ev))
+	assert.Nil(s.SendEvent(context.Background(), ev))
 }
 
 func TestSendEventWebhookCompact(t *testing.T) {
 	assert := assert.New(t)
 
-	s := NewSlack(map[string]interface{}{
+	s := newTestSlack(map[string]interface{}{
 		"webhook": "testtest",
 		"compact": true,
-	}, &config.App{ClusterName: "dev"})
+	}, "dev")
 	assert.NotNil(s)
 	assert.True(s.compact)
 
@@ -107,17 +119,17 @@ func TestSendEventWebhookCompact(t *testing.T) {
 		Namespace:     "default",
 		Reason:        "OOMKILLED",
 	}
-	assert.Nil(s.SendEvent(ev))
+	assert.Nil(s.SendEvent(context.Background(), ev))
 	assert.Equal("K8s Alert: test-pod - OOMKILLED (default)", lastText)
 }
 
 func TestSendEventWebhookCompactFalse(t *testing.T) {
 	assert := assert.New(t)
 
-	s := NewSlack(map[string]interface{}{
+	s := newTestSlack(map[string]interface{}{
 		"webhook": "testtest",
 		"compact": false,
-	}, &config.App{ClusterName: "dev"})
+	}, "dev")
 	assert.NotNil(s)
 	assert.False(s.compact)
 }
@@ -125,9 +137,9 @@ func TestSendEventWebhookCompactFalse(t *testing.T) {
 func TestSendEventWebhookWithLargeLogs(t *testing.T) {
 	assert := assert.New(t)
 
-	s := NewSlack(map[string]interface{}{
+	s := newTestSlack(map[string]interface{}{
 		"webhook": "testtest",
-	}, &config.App{ClusterName: "dev"})
+	}, "dev")
 	assert.NotNil(s)
 
 	s.send = mockedSend
@@ -147,7 +159,7 @@ func TestSendEventWebhookWithLargeLogs(t *testing.T) {
 		Reason:        "OOMKILLED",
 		Logs:          longLog,
 	}
-	assert.Nil(s.SendEvent(ev))
+	assert.Nil(s.SendEvent(context.Background(), ev))
 }
 
 // --- token mode tests ---
@@ -159,7 +171,7 @@ func TestSlackTokenMode(t *testing.T) {
 		"token":   "xoxb-test-token",
 		"channel": "#alerts",
 	}
-	s := NewSlack(configMap, &config.App{ClusterName: "dev"})
+	s := newTestSlack(configMap, "dev")
 	assert.NotNil(s)
 	assert.Equal("Slack", s.Name())
 	assert.Equal("#alerts", s.channel)
@@ -173,7 +185,7 @@ func TestSlackTokenMissingChannel(t *testing.T) {
 	configMap := map[string]interface{}{
 		"token": "xoxb-test-token",
 	}
-	s := NewSlack(configMap, &config.App{ClusterName: "dev"})
+	s := newTestSlack(configMap, "dev")
 	assert.Nil(s)
 }
 
@@ -184,7 +196,7 @@ func TestSlackTokenEmptyChannel(t *testing.T) {
 		"token":   "xoxb-test-token",
 		"channel": "",
 	}
-	s := NewSlack(configMap, &config.App{ClusterName: "dev"})
+	s := newTestSlack(configMap, "dev")
 	assert.Nil(s)
 }
 
@@ -196,7 +208,7 @@ func TestSlackWebhookPreferWebhookOverToken(t *testing.T) {
 		"token":   "",
 		"channel": "#alerts",
 	}
-	s := NewSlack(configMap, &config.App{ClusterName: "dev"})
+	s := newTestSlack(configMap, "dev")
 	assert.NotNil(s)
 	// Empty token should fall through to webhook mode
 	assert.Equal("https://hooks.slack.com/test", s.webhook)
@@ -206,28 +218,28 @@ func TestSlackWebhookPreferWebhookOverToken(t *testing.T) {
 func TestSendMessageTokenMode(t *testing.T) {
 	assert := assert.New(t)
 
-	s := NewSlack(map[string]interface{}{
+	s := newTestSlack(map[string]interface{}{
 		"token":   "xoxb-test-token",
 		"channel": "#alerts",
-	}, &config.App{ClusterName: "dev"})
+	}, "dev")
 	assert.NotNil(s)
 
 	// sendAPIWithToken will fail because the token is fake,
 	// but we're testing the dispatch path
-	err := s.SendMessage("test message")
+	err := s.SendMessage(context.Background(), "test message")
 	assert.Error(err) // fake token, API call fails
 }
 
 func TestSendMessageWebhookMode(t *testing.T) {
 	assert := assert.New(t)
 
-	s := NewSlack(map[string]interface{}{
+	s := newTestSlack(map[string]interface{}{
 		"webhook": "testtest",
-	}, &config.App{ClusterName: "dev"})
+	}, "dev")
 	assert.NotNil(s)
 
 	s.send = mockedSend
-	assert.Nil(s.SendMessage("test message"))
+	assert.Nil(s.SendMessage(context.Background(), "test message"))
 }
 
 // --- helper tests ---
@@ -235,13 +247,13 @@ func TestSendMessageWebhookMode(t *testing.T) {
 func TestChunks(t *testing.T) {
 	assert := assert.New(t)
 
-	result := util.Chunks("abc", 5)
+	result := message.Chunks("abc", 5)
 	assert.Equal([]string{"abc"}, result)
 
-	result = util.Chunks("abcdef", 3)
+	result = message.Chunks("abcdef", 3)
 	assert.Equal([]string{"abc", "def"}, result)
 
-	result = util.Chunks("abcdefg", 3)
+	result = message.Chunks("abcdefg", 3)
 	assert.Equal([]string{"abc", "def", "g"}, result)
 }
 
@@ -284,9 +296,9 @@ func testIncident() *model.Incident {
 func TestSendIncidentWebhookCreate(t *testing.T) {
 	assert := assert.New(t)
 
-	s := NewSlack(map[string]interface{}{
+	s := newTestSlack(map[string]interface{}{
 		"webhook": "testtest",
-	}, &config.App{ClusterName: "dev"})
+	}, "dev")
 	assert.NotNil(s)
 
 	var lastMsg string
@@ -295,7 +307,7 @@ func TestSendIncidentWebhookCreate(t *testing.T) {
 		return nil
 	}
 
-	err := s.SendIncident(testIncident(), model.ActionCreate)
+	err := s.SendIncident(context.Background(), testIncident(), model.ActionCreate)
 	assert.Nil(err)
 	assert.Contains(lastMsg, "CrashLoopBackOff")
 	assert.Contains(lastMsg, "deploy-1")
@@ -304,9 +316,9 @@ func TestSendIncidentWebhookCreate(t *testing.T) {
 func TestSendIncidentWebhookUpdate(t *testing.T) {
 	assert := assert.New(t)
 
-	s := NewSlack(map[string]interface{}{
+	s := newTestSlack(map[string]interface{}{
 		"webhook": "testtest",
-	}, &config.App{ClusterName: "dev"})
+	}, "dev")
 	assert.NotNil(s)
 
 	var lastMsg string
@@ -315,7 +327,7 @@ func TestSendIncidentWebhookUpdate(t *testing.T) {
 		return nil
 	}
 
-	err := s.SendIncident(testIncident(), model.ActionUpdate)
+	err := s.SendIncident(context.Background(), testIncident(), model.ActionUpdate)
 	assert.Nil(err)
 	assert.Contains(lastMsg, "CrashLoopBackOff")
 }
@@ -323,10 +335,10 @@ func TestSendIncidentWebhookUpdate(t *testing.T) {
 func TestSendIncidentWebhookCompact(t *testing.T) {
 	assert := assert.New(t)
 
-	s := NewSlack(map[string]interface{}{
+	s := newTestSlack(map[string]interface{}{
 		"webhook": "testtest",
 		"compact": true,
-	}, &config.App{ClusterName: "dev"})
+	}, "dev")
 	assert.NotNil(s)
 	assert.True(s.compact)
 
@@ -336,7 +348,7 @@ func TestSendIncidentWebhookCompact(t *testing.T) {
 		return nil
 	}
 
-	err := s.SendIncident(testIncident(), model.ActionCreate)
+	err := s.SendIncident(context.Background(), testIncident(), model.ActionCreate)
 	assert.Nil(err)
 	assert.Contains(lastText, "CrashLoopBackOff")
 	assert.Contains(lastText, "deploy-1")
@@ -345,9 +357,9 @@ func TestSendIncidentWebhookCompact(t *testing.T) {
 func TestSendIncidentWebhookSkip(t *testing.T) {
 	assert := assert.New(t)
 
-	s := NewSlack(map[string]interface{}{
+	s := newTestSlack(map[string]interface{}{
 		"webhook": "testtest",
-	}, &config.App{ClusterName: "dev"})
+	}, "dev")
 	assert.NotNil(s)
 
 	called := false
@@ -356,7 +368,7 @@ func TestSendIncidentWebhookSkip(t *testing.T) {
 		return nil
 	}
 
-	err := s.SendIncident(testIncident(), model.ActionSkip)
+	err := s.SendIncident(context.Background(), testIncident(), model.ActionSkip)
 	assert.Nil(err)
 	assert.False(called)
 }

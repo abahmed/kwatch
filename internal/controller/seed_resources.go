@@ -1,10 +1,16 @@
 package controller
 
 import (
+	"time"
+
 	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/klog/v2"
 
-	"github.com/abahmed/kwatch/internal/handler"
+	"github.com/abahmed/kwatch/internal/config"
+	clustermonitor "github.com/abahmed/kwatch/internal/monitor/cluster"
+	"github.com/abahmed/kwatch/internal/monitor/network"
+	"github.com/abahmed/kwatch/internal/monitor/pod/policy"
+	"github.com/abahmed/kwatch/internal/monitor/workload"
 )
 
 func (c *Controller) seedControllers(rec *baselineRecorder) {
@@ -30,7 +36,7 @@ func (c *Controller) seedReplicaSets(rec *baselineRecorder) {
 		return
 	}
 	for _, rs := range sets {
-		if sig := handler.DetectReplicaSetIssue(rs); sig != nil {
+		if sig := workload.DetectReplicaSetIssue(rs); sig != nil {
 			rec.seed(sig)
 		}
 	}
@@ -43,7 +49,7 @@ func (c *Controller) seedClusterResources(rec *baselineRecorder) {
 			klog.ErrorS(err, "failed to list resource quotas for baseline seeding")
 		} else {
 			for _, quota := range quotas {
-				if sig := handler.DetectResourceQuotaIssue(quota); sig != nil {
+				if sig := clustermonitor.DetectResourceQuotaIssue(quota); sig != nil {
 					rec.seed(sig)
 				}
 			}
@@ -55,7 +61,7 @@ func (c *Controller) seedClusterResources(rec *baselineRecorder) {
 			klog.ErrorS(err, "failed to list limit ranges for baseline seeding")
 		} else {
 			for _, limitRange := range limitRanges {
-				if sig := handler.DetectLimitRangeIssue(limitRange); sig != nil {
+				if sig := clustermonitor.DetectLimitRangeIssue(limitRange); sig != nil {
 					rec.seed(sig)
 				}
 			}
@@ -67,7 +73,15 @@ func (c *Controller) seedClusterResources(rec *baselineRecorder) {
 			klog.ErrorS(err, "failed to list namespaces for baseline seeding")
 		} else {
 			for _, namespace := range namespaces {
-				if sig := handler.DetectNamespaceIssue(namespace, c.nowTime(), 0); sig != nil {
+				if sig := clustermonitor.DetectNamespaceIssue(
+					namespace, c.nowTime(),
+					c.seedThresholds.namespaceSustainedMinutes,
+				); sig != nil {
+					rec.seed(sig)
+				}
+				if sig := clustermonitor.DetectPodSecurityLabelIssue(
+					namespace,
+				); sig != nil {
 					rec.seed(sig)
 				}
 			}
@@ -79,13 +93,48 @@ func (c *Controller) seedClusterResources(rec *baselineRecorder) {
 			klog.ErrorS(err, "failed to list node leases for baseline seeding")
 		} else {
 			for _, lease := range leases {
-				if sig := handler.DetectNodeLeaseIssue(lease, c.nowTime(), 0); sig != nil {
+				if sig := clustermonitor.DetectNodeLeaseIssue(
+					lease, c.nowTime(),
+					c.seedThresholds.nodeLeaseStaleSeconds,
+				); sig != nil {
 					rec.seed(sig)
 				}
 			}
 		}
 	}
 }
+
+// seedThresholds are the configured sustain windows the seeding pass uses.
+type seedThresholds struct {
+	namespaceSustainedMinutes int
+	nodeLeaseStaleSeconds     int
+	pendingPod                time.Duration
+	notReady                  time.Duration
+	pendingPodEnabled         bool
+	notReadyEnabled           bool
+}
+
+func newSeedThresholds(runtime config.RuntimeConfig) seedThresholds {
+	pending := time.Duration(
+		runtime.Monitors().PendingPod().Threshold,
+	) * time.Second
+	if pending <= 0 {
+		pending = defaultPendingPodThreshold
+	}
+	cluster := runtime.Monitors().ClusterResource()
+	return seedThresholds{
+		namespaceSustainedMinutes: cluster.SustainedMinutes,
+		nodeLeaseStaleSeconds:     cluster.NodeLeaseStaleSeconds,
+		pendingPod:                pending,
+		notReady:                  policy.DefaultNotReadyThreshold,
+		pendingPodEnabled:         runtime.Monitors().PendingPod().Enabled,
+		notReadyEnabled:           runtime.Monitors().NotReady().Enabled,
+	}
+}
+
+// defaultPendingPodThreshold mirrors the pod pipeline's fallback, so a seeded
+// key matches the live one when the config leaves the threshold unset.
+const defaultPendingPodThreshold = 300 * time.Second
 
 func (c *Controller) seedDaemonSets(rec *baselineRecorder) {
 	if c.dsLister != nil {
@@ -94,10 +143,10 @@ func (c *Controller) seedDaemonSets(rec *baselineRecorder) {
 			klog.ErrorS(err, "failed to list daemonsets for baseline seeding")
 		} else {
 			for _, ds := range dss {
-				if sig := handler.DetectDaemonSetIssue(ds); sig != nil {
+				if sig := workload.DetectDaemonSetIssue(ds); sig != nil {
 					rec.seed(sig)
 				}
-				for _, sig := range handler.DetectDaemonSetConditions(ds) {
+				for _, sig := range workload.DetectDaemonSetConditions(ds) {
 					rec.seed(sig)
 				}
 			}
@@ -112,10 +161,10 @@ func (c *Controller) seedStatefulSets(rec *baselineRecorder) {
 			klog.ErrorS(err, "failed to list statefulsets for baseline seeding")
 		} else {
 			for _, ss := range sss {
-				if sig := handler.DetectStatefulSetIssue(ss); sig != nil {
+				if sig := workload.DetectStatefulSetIssue(ss); sig != nil {
 					rec.seed(sig)
 				}
-				for _, sig := range handler.DetectStatefulSetConditions(ss) {
+				for _, sig := range workload.DetectStatefulSetConditions(ss) {
 					rec.seed(sig)
 				}
 			}
@@ -133,7 +182,7 @@ func (c *Controller) seedPdbs(rec *baselineRecorder) {
 			)
 		} else {
 			for _, pdb := range pdbs {
-				if sig := handler.DetectPdbIssue(pdb); sig != nil {
+				if sig := workload.DetectPDBIssue(pdb); sig != nil {
 					rec.seed(sig)
 				}
 			}
@@ -148,14 +197,14 @@ func (c *Controller) seedDeployments(rec *baselineRecorder) {
 			klog.ErrorS(err, "failed to list deployments for baseline seeding")
 		} else {
 			for _, deploy := range deploys {
-				sig := handler.DetectDeploymentIssue(deploy)
+				sig := workload.DetectDeploymentIssue(deploy)
 				if sig == nil {
-					sig = handler.DetectDeploymentUnavailable(deploy)
+					sig = workload.DetectDeploymentUnavailable(deploy)
 				}
 				if sig != nil {
 					rec.seed(sig)
 				}
-				for _, conditionSig := range handler.DetectDeploymentConditions(deploy) {
+				for _, conditionSig := range workload.DetectDeploymentConditions(deploy) {
 					rec.seed(conditionSig)
 				}
 			}
@@ -170,10 +219,10 @@ func (c *Controller) seedJobs(rec *baselineRecorder) {
 			klog.ErrorS(err, "failed to list jobs for baseline seeding")
 		} else {
 			for _, job := range jobs {
-				if sig := handler.DetectJobIssue(job); sig != nil {
+				if sig := workload.DetectJobIssue(job); sig != nil {
 					rec.seed(sig)
 				}
-				if sig := handler.DetectJobExecutionIssue(job, c.nowTime()); sig != nil {
+				if sig := workload.DetectJobExecutionIssue(job, c.nowTime()); sig != nil {
 					rec.seed(sig)
 				}
 			}
@@ -188,7 +237,7 @@ func (c *Controller) seedCronJobs(rec *baselineRecorder) {
 			klog.ErrorS(err, "failed to list cronjobs for baseline seeding")
 		} else {
 			for _, cj := range cjs {
-				if sig := handler.DetectCronJobIssue(
+				if sig := workload.DetectCronJobIssue(
 					cj,
 					c.nowTime(),
 				); sig != nil {
@@ -211,7 +260,7 @@ func (c *Controller) seedHPAs(rec *baselineRecorder) {
 			)
 		} else {
 			for _, hpa := range hpas {
-				for _, sig := range handler.DetectHPAIssues(hpa) {
+				for _, sig := range workload.DetectHPAIssues(hpa) {
 					rec.seed(sig)
 				}
 			}
@@ -221,13 +270,19 @@ func (c *Controller) seedHPAs(rec *baselineRecorder) {
 
 func (c *Controller) seedServices(rec *baselineRecorder) {
 	// Services — seed service-endpoint issues
-	if c.serviceLister != nil && c.endpointSliceLister != nil {
+	if c.service != nil && c.service.startWorkers &&
+		c.serviceLister != nil &&
+		c.endpointSliceLister != nil {
 		svcs, err := c.serviceLister.List(labels.Everything())
 		if err != nil {
 			klog.ErrorS(err, "failed to list services for baseline seeding")
 		} else {
 			for _, svc := range svcs {
-				if sig := handler.DetectServiceStatusIssue(svc, c.nowTime()); sig != nil {
+				if sig := network.DetectServiceStatusIssue(
+					svc,
+					c.nowTime(),
+					network.DefaultServiceSustainedSeconds,
+				); sig != nil {
 					rec.seed(sig)
 				}
 				sel := labels.Set{
@@ -249,138 +304,14 @@ func (c *Controller) seedServices(rec *baselineRecorder) {
 					)
 					continue
 				}
-				if sig := handler.DetectServiceEndpointIssue(
+				if sig := network.DetectServiceEndpointIssue(
 					svc,
 					epSlices,
 				); sig != nil {
 					rec.seed(sig)
 				}
-				if sig := handler.DetectServicePortIssue(svc, epSlices); sig != nil {
+				if sig := network.DetectServicePortIssue(svc, epSlices); sig != nil {
 					rec.seed(sig)
-				}
-			}
-		}
-	}
-}
-
-// hasService is a helper seeded by controllers that reference a service.
-func (c *Controller) hasService() func(ns, name string) bool {
-	return func(ns, name string) bool {
-		if c.serviceLister == nil {
-			return true
-		}
-		_, err := c.serviceLister.Services(ns).Get(name)
-		return err == nil
-	}
-}
-
-// seedControllersWithSvc seeds MWC/VWC and NetworkPolicies
-func (c *Controller) seedControllersWithSvc(rec *baselineRecorder) {
-	hasSvc := c.hasService()
-	c.seedMwcs(rec, hasSvc)
-	c.seedVwcs(rec, hasSvc)
-	c.seedIngresses(rec, hasSvc)
-}
-
-func (c *Controller) seedMwcs(
-	rec *baselineRecorder,
-	hasSvc func(ns, name string) bool,
-) {
-	// Admission webhooks — seed webhook-backend issues
-	if c.mwcLister != nil {
-		mwcs, err := c.mwcLister.List(labels.Everything())
-		if err != nil {
-			klog.ErrorS(
-				err,
-				"failed to list mutating webhook configurations for baseline "+
-					"seeding",
-			)
-		} else {
-			for _, mwc := range mwcs {
-				sigs := handler.DetectMutatingWebhookIssue(mwc, hasSvc)
-				for _, sig := range sigs {
-					rec.seed(sig)
-				}
-			}
-		}
-	}
-}
-
-func (c *Controller) seedVwcs(
-	rec *baselineRecorder,
-	hasSvc func(ns, name string) bool,
-) {
-	if c.vwcLister != nil {
-		vwcs, err := c.vwcLister.List(labels.Everything())
-		if err != nil {
-			klog.ErrorS(
-				err,
-				"failed to list validating webhook configurations for "+
-					"baseline seeding",
-			)
-		} else {
-			for _, vwc := range vwcs {
-				sigs := handler.DetectValidatingWebhookIssue(vwc, hasSvc)
-				for _, sig := range sigs {
-					rec.seed(sig)
-				}
-			}
-		}
-	}
-}
-
-func (c *Controller) seedIngresses(
-	rec *baselineRecorder,
-	hasSvc func(ns, name string) bool,
-) {
-	// Ingresses — seed ingress-backend issues
-	if c.ingressLister != nil {
-		ings, err := c.ingressLister.List(labels.Everything())
-		if err != nil {
-			klog.ErrorS(err, "failed to list ingresses for baseline seeding")
-		} else {
-			for _, ing := range ings {
-				for _, sig := range handler.DetectIngressIssue(ing, hasSvc) {
-					rec.seed(sig)
-				}
-			}
-		}
-	}
-}
-
-func (c *Controller) seedNetworkPolicies(rec *baselineRecorder) {
-	// NetworkPolicies — seed restrictive-policy issues
-	if c.netpolLister != nil {
-		policies, err := c.netpolLister.List(labels.Everything())
-		if err != nil {
-			klog.ErrorS(
-				err,
-				"failed to list network policies for baseline seeding",
-			)
-		} else {
-			for _, policy := range policies {
-				if sig := handler.DetectNetworkPolicyIssue(policy); sig != nil {
-					rec.seed(sig)
-				}
-			}
-		}
-	}
-}
-
-func (c *Controller) seedControlPlaneBaseline(rec *baselineRecorder) {
-	// Control-plane — seed CP component failures. Unlike other owner-level
-	// signals, CP signals carry PodName, so we seed with the actual pod name.
-	if c.cpPod.startWorkers && c.cpPodLister != nil {
-		pods, err := c.cpPodLister.List(labels.Everything())
-		if err != nil {
-			klog.ErrorS(
-				err,
-				"failed to list control-plane pods for baseline seeding",
-			)
-		} else {
-			for _, pod := range pods {
-				if sig := handler.DetectControlPlanePodIssue(pod); sig != nil {
-					rec.seedControlPlane(pod, sig)
 				}
 			}
 		}

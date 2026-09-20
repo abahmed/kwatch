@@ -5,15 +5,15 @@ import (
 	"testing"
 	"time"
 
-	"github.com/abahmed/kwatch/internal/correlation"
 	"github.com/abahmed/kwatch/internal/enricher"
-	"github.com/abahmed/kwatch/internal/event"
+	"github.com/abahmed/kwatch/internal/incident"
 	"github.com/abahmed/kwatch/internal/model"
+	"github.com/abahmed/kwatch/internal/observe"
 )
 
 // defaultConfig returns a basic Config suitable for integration tests.
-func defaultConfig(rec *recordingAlertManager) correlation.Config {
-	return correlation.Config{
+func defaultConfig(rec *recordingDelivery) incident.Config {
+	return incident.Config{
 		Window:            10 * time.Minute,
 		LifecycleInterval: 1 * time.Minute,
 		ResolveHoldDown:   0,
@@ -25,23 +25,23 @@ func defaultConfig(rec *recordingAlertManager) correlation.Config {
 }
 
 // alertEntry holds a single (incident, action) notification captured by the
-// recording alert manager.
+// recording delivery sink.
 type alertEntry struct {
 	inc    *model.Incident
 	action model.IncidentAction
 }
 
-// recordingAlertManager captures (incident, action) pairs for assertion in
-// integration tests. It stands in for the real alert.AlertManager, wired
-// through the correlation engine's LifecycleHook — the engine announces every
+// recordingDelivery captures (incident, action) pairs for assertion in
+// integration tests. It stands in for the real delivery.Manager, wired
+// through the incident engine's LifecycleHook — the engine announces every
 // decision itself, including the ones Process returns, so tests must not
 // record the return value a second time.
-type recordingAlertManager struct {
+type recordingDelivery struct {
 	mu       sync.Mutex
 	notified []alertEntry
 }
 
-func (r *recordingAlertManager) NotifyIncident(
+func (r *recordingDelivery) NotifyIncident(
 	inc *model.Incident,
 	action model.IncidentAction,
 	_ ...interface{},
@@ -51,13 +51,13 @@ func (r *recordingAlertManager) NotifyIncident(
 	r.mu.Unlock()
 }
 
-func (r *recordingAlertManager) Len() int {
+func (r *recordingDelivery) Len() int {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	return len(r.notified)
 }
 
-func (r *recordingAlertManager) Get(
+func (r *recordingDelivery) Get(
 	i int,
 ) (*model.Incident, model.IncidentAction) {
 	r.mu.Lock()
@@ -68,11 +68,11 @@ func (r *recordingAlertManager) Get(
 	return r.notified[i].inc, r.notified[i].action
 }
 
-// newTestEngine returns a correlation.Engine configured for deterministic
+// newTestEngine returns a incident.Engine configured for deterministic
 // integration testing: no startup quiet period, no resolve hold-down, and a
 // LifecycleHook that feeds lifecycle transitions into the supplied recorder.
-func newTestEngine(rec *recordingAlertManager) *correlation.Engine {
-	return correlation.NewEngine(correlation.Config{
+func newTestEngine(rec *recordingDelivery) *incident.Engine {
+	return newTestIncidentEngine(incident.Config{
 		Window:            10 * time.Minute,
 		LifecycleInterval: 1 * time.Minute,
 		ResolveHoldDown:   0,
@@ -83,21 +83,31 @@ func newTestEngine(rec *recordingAlertManager) *correlation.Engine {
 	})
 }
 
-// makeEvent is a shorthand for building an event.Event with commonly-used
+// makeEvent is a shorthand for building an observation with commonly-used
 // fields set.
 func makeEvent(
 	resource, podName, namespace, reason, containerName, nodeName string,
-) event.Event {
-	return event.Event{
-		Resource:      resource,
-		PodName:       podName,
-		Namespace:     namespace,
-		Reason:        reason,
-		ContainerName: containerName,
-		NodeName:      nodeName,
-		IncludeEvents: true,
-		IncludeLogs:   true,
+) *model.Observation {
+	obs := observe.ObjectNamed(resource, namespace, podName, reason)
+	obs.Container = containerName
+	obs.NodeName = nodeName
+	obs.IncludeEvents = true
+	obs.IncludeLogs = true
+	return obs
+}
+
+// ownedBy attaches the workload an observation's incidents are keyed by, and
+// the container state behind it. The owner carries no kind, which is how a
+// producer says "key it here" without claiming a workload kind for the alert.
+func ownedBy(
+	obs *model.Observation, owner string, cs *model.ContainerState,
+) *model.Observation {
+	copied := *obs
+	copied.Owner = model.ObjectRef{
+		Namespace: obs.Subject.Namespace, Name: owner,
 	}
+	copied.ContainerState = cs
+	return &copied
 }
 
 // makeContainerState builds a model.ContainerState for use in engine Process
@@ -123,7 +133,7 @@ func makeContainerState(
 // produces an ActionResolved notification. Subsequent events for the same
 // key are suppressed (edge-triggered ActionSkip) until the state transitions.
 func TestCrashLoopPodCreatesAndResolves(t *testing.T) {
-	rec := &recordingAlertManager{}
+	rec := &recordingDelivery{}
 	eng := newTestEngine(rec)
 
 	ev := makeEvent(
@@ -138,15 +148,15 @@ func TestCrashLoopPodCreatesAndResolves(t *testing.T) {
 	cs := makeContainerState(3, "CrashLoopBackOff", 137)
 
 	// First occurrence: incident is created
-	inc, action := eng.Process(ev, owner, cs)
+	inc, action := eng.Process(ownedBy(ev, owner, cs))
 	if action != model.ActionCreate {
 		t.Fatalf("expected ActionCreate, got %s", action)
 	}
 	if inc == nil {
 		t.Fatal("expected non-nil incident")
 	}
-	if inc.Key != correlation.BuildKey(
-		ev.Namespace,
+	if inc.Key != incident.BuildKey(
+		ev.Subject.Namespace,
 		owner,
 		"CrashLoopBackOff",
 		"",
@@ -156,9 +166,7 @@ func TestCrashLoopPodCreatesAndResolves(t *testing.T) {
 
 	// Second occurrence: edge-triggered → skip (same NotifiedSig)
 	inc2, action2 := eng.Process(
-		ev,
-		owner,
-		makeContainerState(4, "CrashLoopBackOff", 137),
+		ownedBy(ev, owner, makeContainerState(4, "CrashLoopBackOff", 137)),
 	)
 	if action2 != model.ActionSkip {
 		t.Fatalf("expected ActionSkip (edge-triggered), got %s", action2)
@@ -168,7 +176,7 @@ func TestCrashLoopPodCreatesAndResolves(t *testing.T) {
 	}
 
 	// Resolve
-	eng.MarkResolved(inc.Key)
+	eng.Resolve(inc.Ref(), inc.Reason)
 
 	// Two notifications: the create we recorded, and the resolved from
 	// LifecycleHook
@@ -202,13 +210,13 @@ func TestCrashLoopPodCreatesAndResolves(t *testing.T) {
 // (e.g. MemoryPressure) creates an incident and that clearing the condition
 // resolves it — producing exactly one (create, resolved) pair.
 func TestNodeConditionCreateAndResolve(t *testing.T) {
-	rec := &recordingAlertManager{}
+	rec := &recordingDelivery{}
 	eng := newTestEngine(rec)
 
 	ev := makeEvent("node", "worker-1", "", "MemoryPressure", "", "worker-1")
 	owner := "worker-1"
 
-	inc, action := eng.Process(ev, owner, nil)
+	inc, action := eng.Process(ownedBy(ev, owner, nil))
 	if action != model.ActionCreate {
 		t.Fatalf(
 			"expected ActionCreate for node MemoryPressure, got %s",
@@ -220,7 +228,7 @@ func TestNodeConditionCreateAndResolve(t *testing.T) {
 	}
 
 	// Resolve
-	eng.MarkResolved(inc.Key)
+	eng.Resolve(inc.Ref(), inc.Reason)
 
 	if rec.Len() != 2 {
 		t.Fatalf(
@@ -243,8 +251,8 @@ func TestNodeConditionCreateAndResolve(t *testing.T) {
 // inhibition is enabled, pod incidents on a node with an active node incident
 // are silently suppressed.
 func TestInhibitionSuppressesPodsDuringNodeFailure(t *testing.T) {
-	rec := &recordingAlertManager{}
-	eng := correlation.NewEngine(correlation.Config{
+	rec := &recordingDelivery{}
+	eng := newTestIncidentEngine(incident.Config{
 		Window:                    10 * time.Minute,
 		LifecycleInterval:         1 * time.Minute,
 		ResolveHoldDown:           0,
@@ -257,7 +265,7 @@ func TestInhibitionSuppressesPodsDuringNodeFailure(t *testing.T) {
 
 	// Create a node incident on worker-1
 	nodeEv := makeEvent("node", "worker-1", "", "NodeNotReady", "", "worker-1")
-	nodeInc, nodeAction := eng.Process(nodeEv, "worker-1", nil)
+	nodeInc, nodeAction := eng.Process(ownedBy(nodeEv, "worker-1", nil))
 	if nodeAction != model.ActionCreate {
 		t.Fatalf("expected ActionCreate for node incident, got %s", nodeAction)
 	}
@@ -271,11 +279,11 @@ func TestInhibitionSuppressesPodsDuringNodeFailure(t *testing.T) {
 		"app",
 		"worker-1",
 	)
-	_, podAction := eng.Process(
+	_, podAction := eng.Process(ownedBy(
 		podEv,
 		"my-deployment",
 		makeContainerState(1, "CrashLoopBackOff", 1),
-	)
+	))
 	if podAction != model.ActionSkip {
 		t.Fatalf("expected ActionSkip (node-inhibited), got %s", podAction)
 	}
@@ -289,7 +297,7 @@ func TestInhibitionSuppressesPodsDuringNodeFailure(t *testing.T) {
 	}
 
 	// After node resolves, pod should be allowed
-	eng.MarkResolved(nodeInc.Key)
+	eng.Resolve(nodeInc.Ref(), nodeInc.Reason)
 	if rec.Len() != 2 {
 		t.Fatalf(
 			"expected 2 notifications after node resolve, got %d",
@@ -302,10 +310,10 @@ func TestInhibitionSuppressesPodsDuringNodeFailure(t *testing.T) {
 // was previously seen (seeded via SetBaseline) is suppressed on first contact,
 // preventing re-paging after restart.
 func TestBaselineSuppressesRestartRepage(t *testing.T) {
-	rec := &recordingAlertManager{}
+	rec := &recordingDelivery{}
 	eng := newTestEngine(rec)
 
-	key := correlation.BuildKey(
+	key := incident.BuildKey(
 		"default",
 		"my-deployment",
 		"CrashLoopBackOff",
@@ -318,11 +326,11 @@ func TestBaselineSuppressesRestartRepage(t *testing.T) {
 	})
 
 	ev := makeEvent("pod", "my-pod", "default", "CrashLoopBackOff", "main", "")
-	inc, action := eng.Process(
+	inc, action := eng.Process(ownedBy(
 		ev,
 		"my-deployment",
 		makeContainerState(3, "CrashLoopBackOff", 137),
-	)
+	))
 	if action != model.ActionSkip {
 		t.Fatalf("expected ActionSkip for baselined pod, got %s", action)
 	}

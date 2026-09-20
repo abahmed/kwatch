@@ -10,8 +10,8 @@ import (
 	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
 	"k8s.io/client-go/tools/cache"
 	"k8s.io/client-go/util/workqueue"
+	"k8s.io/klog/v2"
 
-	"github.com/abahmed/kwatch/internal/clock"
 	"github.com/abahmed/kwatch/internal/metrics"
 )
 
@@ -35,13 +35,19 @@ type resourcePipeline struct {
 	queue        workqueue.TypedRateLimitingInterface[string]
 	synced       []cache.InformerSynced
 	syncFn       func(ctx context.Context, key string) error
+	queueDepth   func() int64
+}
+
+type sourceRequirement struct {
+	name      string
+	pipeline  *resourcePipeline
+	available func() bool
 }
 
 func newResourcePipeline(name, queueName string) *resourcePipeline {
 	return &resourcePipeline{
 		name:      name,
 		queueName: queueName,
-		now:       clock.Now,
 		queue: workqueue.NewTypedRateLimitingQueueWithConfig(
 			workqueue.DefaultTypedControllerRateLimiter[string](),
 			workqueue.TypedRateLimitingQueueConfig[string]{Name: queueName},
@@ -63,6 +69,7 @@ func (p *resourcePipeline) enqueue(obj interface{}) {
 		return
 	}
 	p.queue.Add(key)
+	p.recordQueueDepth()
 }
 
 func (p *resourcePipeline) processNextItem(ctx context.Context) bool {
@@ -76,9 +83,9 @@ func (p *resourcePipeline) processNextItem(ctx context.Context) bool {
 		metrics.DefaultRegistry().ProcessingLatencyMs.Store(
 			p.nowTime().Sub(started).Milliseconds(),
 		)
-		metrics.DefaultRegistry().QueueDepth.Store(int64(p.queue.Len()))
+		p.recordQueueDepth()
 	}()
-	metrics.DefaultRegistry().QueueDepth.Store(int64(p.queue.Len()))
+	p.recordQueueDepth()
 	if err := p.syncFn(ctx, key); err != nil {
 		// Retry transient errors with backoff first. A still-failing resource
 		// then moves to a slow recovery cadence, while permanent errors are
@@ -101,6 +108,15 @@ func (p *resourcePipeline) processNextItem(ctx context.Context) bool {
 		if retryable {
 			p.queue.AddAfter(key, syncRecoveryDelay)
 			reason = fmt.Sprintf("scheduling recovery retry in %s after %d attempts", syncRecoveryDelay, maxSyncRetries)
+		} else {
+			// Nothing will look at this object again until it changes or the
+			// informer resyncs, so the gap in coverage is worth an error the
+			// operator can actually find.
+			klog.ErrorS(err,
+				"giving up on resource after repeated sync failures; "+
+					"it is unmonitored until its next change or resync",
+				"kind", p.name, "key", key,
+				"attempts", maxSyncRetries)
 		}
 		utilruntime.HandleError(
 			fmt.Errorf("error syncing %s %q: %s, %s", p.name, key, err.Error(), reason),
@@ -112,11 +128,16 @@ func (p *resourcePipeline) processNextItem(ctx context.Context) bool {
 	return true
 }
 
-func (p *resourcePipeline) nowTime() time.Time {
-	if p.now != nil {
-		return p.now()
+func (p *resourcePipeline) recordQueueDepth() {
+	if p.queueDepth != nil {
+		metrics.DefaultRegistry().QueueDepth.Store(p.queueDepth())
+		return
 	}
-	return clock.Now()
+	metrics.DefaultRegistry().QueueDepth.Store(int64(p.queue.Len()))
+}
+
+func (p *resourcePipeline) nowTime() time.Time {
+	return p.now()
 }
 
 func shouldRetrySyncError(ctx context.Context, err error) bool {

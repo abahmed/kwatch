@@ -15,7 +15,7 @@ reportStartupBaseline|Noise reduction|Summarize issues that already existed when
 correlation.window|Incident memory|Minutes in which related signals are correlated.|active|
 correlation.lifecycleInterval|Incident memory|Minutes between lifecycle and resolution sweeps.|active|
 correlation.resolveHoldDown|Incident memory|Seconds a signal must stay healthy before resolving.|active|
-correlation.cooldownMinutes|Incident memory|Minimum minutes before the same incident can notify again.|active|
+correlation.cooldownMinutes|Incident memory|Accepted and ignored; the post-resolve cooldown is correlation.window.|deprecated|correlation.window
 correlation.maxBaseline|Incident memory|Maximum persisted baseline entries.|active|
 correlation.escalation|Incident memory|JSON object controlling restart-count severity escalation.|active|
 correlation.renotify|Incident memory|JSON object controlling periodic re-notification.|active|
@@ -111,11 +111,12 @@ activeProbeMonitor.timeoutSeconds|Monitors|Timeout for each active probe.|active
 activeProbeMonitor.failureThreshold|Monitors|Consecutive probe failures before alerting.|active|
 activeProbeMonitor.recoveryThreshold|Monitors|Consecutive successes before resolving a probe incident.|active|
 activeProbeMonitor.autoServices|Monitors|Probe discoverable Service ports automatically; opt in to avoid unexpected traffic.|active|
+activeProbeMonitor.excludeNamespaces|Monitors|Namespaces automatic Service probing skips, for default-deny ingress that does not admit kwatch.|active|
 activeProbeMonitor.http|Monitors|JSON array of HTTP probe targets with optional paths, headers, and latency limits.|active|
 activeProbeMonitor.tcp|Monitors|JSON array of TCP probe targets.|active|
 activeProbeMonitor.dns|Monitors|JSON array of DNS probe targets.|active|
 upgrader.disableUpdateCheck|Operations|Disable the update notification.|active|
-telemetry.enabled|Operations|Send the adoption heartbeat.|active|
+telemetry.enabled|Operations|Send the weekly adoption heartbeat.|active|
 maintenance.enabled|Operations|Honor maintenance annotations while preserving cluster-level alerts.|active|
 maintenance.annotation|Operations|Annotation that marks deliberate maintenance on a resource.|active|
 maintenance.untilAnnotation|Operations|Optional annotation containing the maintenance expiry timestamp.|active|

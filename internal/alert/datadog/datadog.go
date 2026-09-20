@@ -1,13 +1,13 @@
 package datadog
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 
 	"k8s.io/klog/v2"
 
-	"github.com/abahmed/kwatch/internal/alert/util"
-	"github.com/abahmed/kwatch/internal/config"
+	"github.com/abahmed/kwatch/internal/delivery/transport"
 	"github.com/abahmed/kwatch/internal/event"
 )
 
@@ -21,6 +21,7 @@ type datadogPayload struct {
 }
 
 type Datadog struct {
+	sender    transport.Sender
 	url       string
 	apiKey    string
 	appKey    string
@@ -28,11 +29,16 @@ type Datadog struct {
 	alertType string
 	tags      []string
 
-	appCfg *config.App
+	clusterName string
 }
 
 // NewDatadog returns a new Datadog object
-func NewDatadog(config map[string]interface{}, appCfg *config.App) *Datadog {
+
+func NewDatadog(
+	config map[string]interface{},
+	clusterName string,
+	dependencies transport.Dependencies,
+) *Datadog {
 	apiKey, ok := config["apiKey"].(string)
 	if !ok || len(apiKey) == 0 {
 		klog.InfoS("initializing datadog with empty apiKey")
@@ -64,13 +70,14 @@ func NewDatadog(config map[string]interface{}, appCfg *config.App) *Datadog {
 	klog.InfoS("initializing datadog", "site", site, "title", title)
 
 	return &Datadog{
-		url:       fmt.Sprintf("https://api.%s/api/v1/events", site),
-		apiKey:    apiKey,
-		appKey:    appKey,
-		title:     title,
-		alertType: alertType,
-		tags:      tags,
-		appCfg:    appCfg,
+		sender:      transport.NewSender(dependencies),
+		url:         fmt.Sprintf("https://api.%s/api/v1/events", site),
+		apiKey:      apiKey,
+		appKey:      appKey,
+		title:       title,
+		alertType:   alertType,
+		tags:        tags,
+		clusterName: clusterName,
 	}
 }
 
@@ -80,13 +87,13 @@ func (d *Datadog) Name() string {
 }
 
 // SendEvent sends event to the provider
-func (d *Datadog) SendEvent(e *event.Event) error {
-	msg := e.FormatText(d.appCfg.ClusterName, "")
-	return d.SendMessage(msg)
+func (d *Datadog) SendEvent(ctx context.Context, e *event.Event) error {
+	msg := e.FormatText(d.clusterName, "")
+	return d.SendMessage(ctx, msg)
 }
 
 // SendMessage sends text message to the provider
-func (d *Datadog) SendMessage(msg string) error {
+func (d *Datadog) SendMessage(ctx context.Context, msg string) error {
 	title := d.title
 	if len(title) == 0 {
 		title = "kwatch alert"
@@ -111,6 +118,9 @@ func (d *Datadog) SendMessage(msg string) error {
 		headers["DD-APPLICATION-KEY"] = d.appKey
 	}
 
-	_, err = util.Post(d.Name(), d.url, body, "application/json", headers)
+	_, err = d.sender.Send(ctx, transport.Request{
+		Provider: d.Name(), URL: d.url, Body: body,
+		ContentType: "application/json", Headers: headers,
+	})
 	return err
 }
