@@ -30,7 +30,7 @@ esac
 
 wait_for_running_replicas() {
 	local expected="$1"
-	for attempt in $(seq 1 90); do
+	for _ in $(seq 1 90); do
 		local count
 		count=$(kubectl get pods --namespace "$namespace" \
 			-l "app.kubernetes.io/instance=$release" \
@@ -49,7 +49,7 @@ wait_for_running_replicas() {
 
 wait_for_deployment_rollout() {
 	local expected="$1"
-	for attempt in $(seq 1 90); do
+	for _ in $(seq 1 90); do
 		local desired updated current
 		desired=$(kubectl get deployment "$release" \
 			--namespace "$namespace" -o jsonpath='{.spec.replicas}')
@@ -104,7 +104,7 @@ helm install "$release" deploy/chart \
 wait_for_deployment_rollout "$replicas"
 
 leader_pod=""
-for attempt in $(seq 1 60); do
+for _ in $(seq 1 60); do
 	leader_pod=$(kubectl get lease "${release}-leader" \
 		--namespace "$namespace" \
 		-o jsonpath='{.spec.holderIdentity}' 2>/dev/null || true)
@@ -158,7 +158,7 @@ leader_for_lease() {
 wait_for_leader() {
 	local previous="${1:-}"
 	local current=""
-	for attempt in $(seq 1 90); do
+	for _ in $(seq 1 90); do
 		current=$(leader_for_lease)
 		if [[ -n "$current" && "$current" != "$previous" ]] && \
 			kubectl get pod "$current" --namespace "$namespace" \
@@ -202,7 +202,7 @@ if [[ "$scale_test" == true ]]; then
 	test -n "$standby_pod"
 	kubectl delete pod "$standby_pod" --namespace "$namespace" \
 		--wait=false >/dev/null
-	for attempt in $(seq 1 90); do
+	for _ in $(seq 1 90); do
 		[[ "$(leader_for_lease)" == "$leader_before_standby_delete" ]] && break
 		sleep 2
 	done
@@ -272,8 +272,7 @@ start_port_forward() {
 
 wait_http() {
 	local path="$1"
-	local attempt
-	for attempt in $(seq 1 60); do
+	for _ in $(seq 1 60); do
 		if curl --fail --silent "http://127.0.0.1:$port$path" >/dev/null;
 		then return 0; fi
 		sleep 2

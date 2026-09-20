@@ -73,14 +73,14 @@ jobs:
           mkdir -p _output/security
           docker run --rm \
             -v "$PWD:/src:ro" \
-            anchore/syft@sha256:b46e597614ddc78621e560af3fabf9346e35462ea1c886a38b30bcc7ca601a73b \
+            anchore/syft@sha256:500e2d872ac019436926e8322b4fc1f39441d94d21f6f4046c6ff29b30e8cb02 \
             dir:/src -o cyclonedx-json > _output/security/source-sbom.cdx.json
 
       - name: Generate image CycloneDX SBOM
         run: |
           docker run --rm \
             -v /var/run/docker.sock:/var/run/docker.sock \
-            anchore/syft@sha256:b46e597614ddc78621e560af3fabf9346e35462ea1c886a38b30bcc7ca601a73b \
+            anchore/syft@sha256:500e2d872ac019436926e8322b4fc1f39441d94d21f6f4046c6ff29b30e8cb02 \
             kwatch:security -o cyclonedx-json > _output/security/image-sbom.cdx.json
 
       - name: Upload SBOM

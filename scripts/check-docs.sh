@@ -2,7 +2,7 @@
 
 set -eu
 
-root_dir=$(CDPATH= cd -- "$(dirname "$0")/.." && pwd)
+root_dir=$(CDPATH='' cd -- "$(dirname "$0")/.." && pwd)
 cd "$root_dir"
 
 tmp_dir=$(mktemp -d)
@@ -23,7 +23,7 @@ grep -Fq 'ConfigureSources' docs/architecture.md || {
   echo "documentation: architecture source contract is missing" >&2
   exit 1
 }
-if grep -Fq 'optional wiring uses `Set<Type>`' docs/architecture.md; then
+if grep -Fq "optional wiring uses \`Set<Type>\`" docs/architecture.md; then
   echo "documentation: stale mutable source-wiring guidance" >&2
   exit 1
 fi

@@ -4,10 +4,10 @@
 # import-level guard, not a replacement for design review or Go compilation.
 set -eu
 
-root_dir=$(CDPATH= cd -- "$(dirname "$0")/.." && pwd)
+root_dir=$(CDPATH='' cd -- "$(dirname "$0")/.." && pwd)
 cd "$root_dir"
 
-# shellcheck source=require-command.sh
+# shellcheck disable=SC1091
 . "$root_dir/scripts/require-command.sh"
 require_command rg
 
@@ -37,7 +37,7 @@ filter_forbidden_pattern=$(printf '%s' \
 	'"github.com/abahmed/kwatch/internal/(app|controller|handler|' \
 	'incident|insight|delivery|alert|persistence|startup|upgrader|k8s)"')
 
-monitor_upper_layer_pattern=$(printf '%s%s%s' \
+monitor_upper_layer_pattern=$(printf '%s%s' \
 	'"github.com/abahmed/kwatch/internal/(app|controller|handler|' \
 	'delivery|alert|persistence|startup|upgrader|k8s)"')
 

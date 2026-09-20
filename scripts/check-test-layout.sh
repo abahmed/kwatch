@@ -2,8 +2,8 @@
 
 set -eu
 
-script_dir=$(CDPATH= cd -- "$(dirname "$0")" && pwd)
-# shellcheck source=require-command.sh
+script_dir=$(CDPATH='' cd -- "$(dirname "$0")" && pwd)
+# shellcheck disable=SC1091
 . "$script_dir/require-command.sh"
 require_command rg
 
