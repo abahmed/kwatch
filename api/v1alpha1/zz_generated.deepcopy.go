@@ -209,6 +209,16 @@ func (in *KwatchConfigSpec) DeepCopyInto(out *KwatchConfigSpec) {
 		*out = new(bool)
 		**out = **in
 	}
+	if in.IncludeEvents != nil {
+		in, out := &in.IncludeEvents, &out.IncludeEvents
+		*out = new(bool)
+		**out = **in
+	}
+	if in.IncludeLogs != nil {
+		in, out := &in.IncludeLogs, &out.IncludeLogs
+		*out = new(bool)
+		**out = **in
+	}
 	if in.SeverityByOwnerKind != nil {
 		in, out := &in.SeverityByOwnerKind, &out.SeverityByOwnerKind
 		*out = make(map[string]string, len(*in))
@@ -232,6 +242,12 @@ func (in *KwatchConfigSpec) DeepCopyInto(out *KwatchConfigSpec) {
 	}
 	deepCopySpecMaps(in, out)
 	out.Correlation = in.Correlation
+	out.Correlation.Escalation = deepCopyMonitorConfig(
+		in.Correlation.Escalation,
+	)
+	out.Correlation.Renotify = deepCopyMonitorConfig(
+		in.Correlation.Renotify,
+	)
 	out.PvcMonitor = in.PvcMonitor
 	out.Maintenance = in.Maintenance
 	out.Telemetry = in.Telemetry
@@ -249,34 +265,30 @@ func deepCopySpecMaps(in, out *KwatchConfigSpec) {
 	if in.Upgrader != nil {
 		out.Upgrader = runtime.DeepCopyJSONValue(in.Upgrader).(map[string]interface{})
 	}
-	copyMonitor := func(v MonitorConfig) MonitorConfig {
-		if v == nil {
-			return nil
-		}
-		return runtime.DeepCopyJSONValue(map[string]interface{}(v)).(map[string]interface{})
-	}
-	out.ScheduleMonitor = copyMonitor(in.ScheduleMonitor)
-	out.OomMonitor = copyMonitor(in.OomMonitor)
-	out.PendingPodMonitor = copyMonitor(in.PendingPodMonitor)
-	out.NotReadyMonitor = copyMonitor(in.NotReadyMonitor)
-	out.StatefulSetMonitor = copyMonitor(in.StatefulSetMonitor)
-	out.PdbMonitor = copyMonitor(in.PdbMonitor)
-	out.NodeResourceMonitor = copyMonitor(in.NodeResourceMonitor)
-	out.ClusterAutoscalerMonitor = copyMonitor(in.ClusterAutoscalerMonitor)
-	out.HpaMonitor = copyMonitor(in.HpaMonitor)
-	out.TlsMonitor = copyMonitor(in.TlsMonitor)
-	out.ServiceMonitor = copyMonitor(in.ServiceMonitor)
-	out.AdmissionWebhookMonitor = copyMonitor(in.AdmissionWebhookMonitor)
-	out.ControlPlaneMonitor = copyMonitor(in.ControlPlaneMonitor)
-	out.IngressMonitor = copyMonitor(in.IngressMonitor)
-	out.NetworkPolicyMonitor = copyMonitor(in.NetworkPolicyMonitor)
-	out.ClusterResourceMonitor = copyMonitor(in.ClusterResourceMonitor)
-	out.RuntimeMetricsMonitor = copyMonitor(in.RuntimeMetricsMonitor)
-	out.ActiveProbeMonitor = copyMonitor(in.ActiveProbeMonitor)
-	out.KubeletTelemetryMonitor = copyMonitor(in.KubeletTelemetryMonitor)
-	out.Crd = copyMonitor(in.Crd)
-	out.SmartGrouping = copyMonitor(in.SmartGrouping)
-	out.Inhibition = copyMonitor(in.Inhibition)
+	out.ScheduleMonitor = deepCopyMonitorConfig(in.ScheduleMonitor)
+	out.OomMonitor = deepCopyMonitorConfig(in.OomMonitor)
+	out.PendingPodMonitor = deepCopyMonitorConfig(in.PendingPodMonitor)
+	out.NotReadyMonitor = deepCopyMonitorConfig(in.NotReadyMonitor)
+	out.StatefulSetMonitor = deepCopyMonitorConfig(in.StatefulSetMonitor)
+	out.PdbMonitor = deepCopyMonitorConfig(in.PdbMonitor)
+	out.NodeResourceMonitor = deepCopyMonitorConfig(in.NodeResourceMonitor)
+	out.ClusterAutoscalerMonitor = deepCopyMonitorConfig(
+		in.ClusterAutoscalerMonitor,
+	)
+	out.HpaMonitor = deepCopyMonitorConfig(in.HpaMonitor)
+	out.TlsMonitor = deepCopyMonitorConfig(in.TlsMonitor)
+	out.ServiceMonitor = deepCopyMonitorConfig(in.ServiceMonitor)
+	out.AdmissionWebhookMonitor = deepCopyMonitorConfig(in.AdmissionWebhookMonitor)
+	out.ControlPlaneMonitor = deepCopyMonitorConfig(in.ControlPlaneMonitor)
+	out.IngressMonitor = deepCopyMonitorConfig(in.IngressMonitor)
+	out.NetworkPolicyMonitor = deepCopyMonitorConfig(in.NetworkPolicyMonitor)
+	out.ClusterResourceMonitor = deepCopyMonitorConfig(in.ClusterResourceMonitor)
+	out.RuntimeMetricsMonitor = deepCopyMonitorConfig(in.RuntimeMetricsMonitor)
+	out.ActiveProbeMonitor = deepCopyMonitorConfig(in.ActiveProbeMonitor)
+	out.KubeletTelemetryMonitor = deepCopyMonitorConfig(in.KubeletTelemetryMonitor)
+	out.Crd = deepCopyMonitorConfig(in.Crd)
+	out.SmartGrouping = deepCopyMonitorConfig(in.SmartGrouping)
+	out.Inhibition = deepCopyMonitorConfig(in.Inhibition)
 	if in.Templates != nil {
 		out.Templates = make(map[string]string, len(in.Templates))
 		for k, v := range in.Templates {
@@ -289,6 +301,15 @@ func deepCopySpecMaps(in, out *KwatchConfigSpec) {
 			out.Runbooks[k] = v
 		}
 	}
+}
+
+func deepCopyMonitorConfig(v MonitorConfig) MonitorConfig {
+	if v == nil {
+		return nil
+	}
+	return runtime.DeepCopyJSONValue(
+		map[string]interface{}(v),
+	).(map[string]interface{})
 }
 
 func (in *KwatchConfigSpec) DeepCopy() *KwatchConfigSpec {

@@ -22,6 +22,7 @@ import (
 
 const (
 	chunkSize = 1024
+	maxFields = 25
 )
 
 type Discord struct {
@@ -154,7 +155,12 @@ func (d *Discord) SendEvent(
 	if ev.IncludeEvents {
 		events := strings.TrimSpace(ev.Events)
 		if len(events) > 0 {
-			for _, chunk := range message.Chunks(events, chunkSize) {
+			parts := message.Chunks(events, chunkSize)
+			for i, chunk := range parts {
+				if len(fields) >= maxFields {
+					appendDiscordTruncation(&fields, len(parts)-i)
+					break
+				}
 				fields = append(fields, &discordgo.MessageEmbedField{
 					Name:  ":mag: Events",
 					Value: "```\n" + chunk + "```",
@@ -169,29 +175,19 @@ func (d *Discord) SendEvent(
 		if len(logs) > 0 {
 			logData := logs
 
-			const maxFields = 25
-			var totalFields int
 			parts := message.Chunks(logData, chunkSize)
-			for _, chunk := range parts {
+			for i, chunk := range parts {
+				if len(fields) >= maxFields {
+					appendDiscordTruncation(&fields, len(parts)-i)
+					break
+				}
 				name := ":memo: Logs"
-				totalFields++
 				if len(parts) > 1 {
 					name = fmt.Sprintf(
 						":memo: Logs (%d/%d)",
-						totalFields,
+						i+1,
 						len(parts),
 					)
-				}
-				if totalFields > maxFields {
-					remaining := len(parts) - (totalFields - 1)
-					fields = append(fields, &discordgo.MessageEmbedField{
-						Name: ":memo: Logs",
-						Value: fmt.Sprintf(
-							"… (truncated, %d more chunk(s))",
-							remaining,
-						),
-					})
-					break
 				}
 				fields = append(fields, &discordgo.MessageEmbedField{
 					Name:  name,
@@ -234,6 +230,19 @@ func (d *Discord) SendEvent(
 		discordgo.WithContext(ctx),
 	)
 	return wrapDiscordRateLimit(err)
+}
+
+func appendDiscordTruncation(
+	fields *[]*discordgo.MessageEmbedField,
+	remaining int,
+) {
+	if len(*fields) >= maxFields {
+		return
+	}
+	*fields = append(*fields, &discordgo.MessageEmbedField{
+		Name:  ":warning: Evidence truncated",
+		Value: fmt.Sprintf("… (truncated, %d more chunk(s))", remaining),
+	})
 }
 
 // SendMessage sends text using the caller's cancellation context.

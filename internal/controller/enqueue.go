@@ -109,7 +109,7 @@ func (c *Controller) watchWithHandler(
 		c.informers = append(c.informers, inf)
 		_ = inf.SetWatchErrorHandler(func(_ *cache.Reflector, err error) { c.recordInformerWatchError(err) })
 		p.synced = append(p.synced, inf.HasSynced)
-		inf.AddEventHandler(handler)
+		inf.AddEventHandler(safeEventHandler(p.trackResource(), handler))
 	}
 	if startWorkers {
 		p.startWorkers = true
@@ -122,7 +122,10 @@ func (c *Controller) listen(p *resourcePipeline, informers ...cache.SharedIndexI
 	for _, inf := range informers {
 		c.informers = append(c.informers, inf)
 		_ = inf.SetWatchErrorHandler(func(_ *cache.Reflector, err error) { c.recordInformerWatchError(err) })
-		inf.AddEventHandler(c.changeRecordingHandler(p.trackResource(), p.enqueue))
+		inf.AddEventHandler(safeEventHandler(
+			p.trackResource(),
+			c.changeRecordingHandler(p.trackResource(), p.enqueue),
+		))
 	}
 	p.startWorkers = true
 }

@@ -51,7 +51,8 @@ func (m *Monitor) Start(ctx context.Context) error {
 	if err != nil {
 		return fmt.Errorf("statuswatch: create APIService informer: %w", err)
 	}
-	if _, err := apiInformer.AddEventHandler(
+	if _, err := apiInformer.AddEventHandler(k8s.SafeEventHandler(
+		"statuswatch", apiServiceGVR.String(),
 		cache.ResourceEventHandlerFuncs{
 			AddFunc: m.processAPIService,
 			UpdateFunc: func(_, obj interface{}) {
@@ -59,7 +60,7 @@ func (m *Monitor) Start(ctx context.Context) error {
 			},
 			DeleteFunc: m.resolveAPIService,
 		},
-	); err != nil {
+	)); err != nil {
 		return err
 	}
 	_, crdInformer, err := dynamicwatch.NewInformer(
@@ -68,7 +69,8 @@ func (m *Monitor) Start(ctx context.Context) error {
 	if err != nil {
 		return fmt.Errorf("statuswatch: create CRD informer: %w", err)
 	}
-	if _, err := crdInformer.AddEventHandler(
+	if _, err := crdInformer.AddEventHandler(k8s.SafeEventHandler(
+		"statuswatch", crdGVR.String(),
 		cache.ResourceEventHandlerFuncs{
 			AddFunc: m.watchCRD,
 			UpdateFunc: func(_, obj interface{}) {
@@ -76,7 +78,7 @@ func (m *Monitor) Start(ctx context.Context) error {
 			},
 			DeleteFunc: m.deleteCRD,
 		},
-	); err != nil {
+	)); err != nil {
 		return err
 	}
 	if err := m.startStaticWatcher(runCtx); err != nil {

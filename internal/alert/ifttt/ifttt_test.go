@@ -95,6 +95,20 @@ func TestSendMessageError(t *testing.T) {
 	assert.NotNil(c.SendMessage(context.Background(), "test"))
 }
 
+func TestSendMessageRejectsSuccessfulHTTPErrorBody(t *testing.T) {
+	s := httptest.NewServer(
+		http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			_, _ = w.Write([]byte(`{"errors":["invalid key"]}`))
+		}))
+	defer s.Close()
+
+	c := NewIfttt(map[string]interface{}{"key": "abc123"},
+		testAppConfig(), testDeps)
+	c.url = s.URL
+
+	assert.Error(t, c.SendMessage(context.Background(), "test"))
+}
+
 func TestSendEvent(t *testing.T) {
 	assert := assert.New(t)
 

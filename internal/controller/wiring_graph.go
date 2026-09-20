@@ -16,24 +16,29 @@ func (c *Controller) wireConfigMap(fs factorySet) {
 	c.configMapLister = cmLister
 	for _, inf := range cmInformers {
 		c.configMapSynced = append(c.configMapSynced, inf.HasSynced)
-		inf.AddEventHandler(cache.ResourceEventHandlerFuncs{
-			AddFunc: func(obj interface{}) {
-				c.recordChange(kwcontext.ChangeCreate, "configmap", obj)
-			},
-			UpdateFunc: func(old, new interface{}) {
-				c.recordChangeUpdate("configmap", old, new)
-			},
-			DeleteFunc: func(obj interface{}) {
-				c.recordChange(kwcontext.ChangeDelete, "configmap", obj)
-				if c.graph != nil {
-					if key, err := cache.DeletionHandlingMetaNamespaceKeyFunc(obj); err == nil {
-						if ns, name, splitErr := cache.SplitMetaNamespaceKey(key); splitErr == nil {
-							c.graph.RemoveNode("configmap", ns, name)
+		inf.AddEventHandler(safeEventHandler("configmap",
+			cache.ResourceEventHandlerFuncs{
+				AddFunc: func(obj interface{}) {
+					c.recordChange(kwcontext.ChangeCreate, "configmap", obj)
+				},
+				UpdateFunc: func(old, new interface{}) {
+					c.recordChangeUpdate("configmap", old, new)
+				},
+				DeleteFunc: func(obj interface{}) {
+					c.recordChange(kwcontext.ChangeDelete, "configmap", obj)
+					if c.graph != nil {
+						if key, err := cache.DeletionHandlingMetaNamespaceKeyFunc(
+							obj,
+						); err == nil {
+							if ns, name, splitErr := cache.SplitMetaNamespaceKey(
+								key,
+							); splitErr == nil {
+								c.graph.RemoveNode("configmap", ns, name)
+							}
 						}
 					}
-				}
-			},
-		})
+				},
+			}))
 	}
 }
 
@@ -58,24 +63,29 @@ func (c *Controller) wireGraphSupport(fs factorySet) {
 	}
 	for _, inf := range fs.secretInformers() {
 		c.graphSynced = append(c.graphSynced, inf.HasSynced)
-		inf.AddEventHandler(cache.ResourceEventHandlerFuncs{
-			AddFunc: func(obj interface{}) {
-				c.recordChange(kwcontext.ChangeCreate, "secret", obj)
-			},
-			UpdateFunc: func(old, obj interface{}) {
-				c.recordChangeUpdate("secret", old, obj)
-			},
-			DeleteFunc: func(obj interface{}) {
-				c.recordChange(kwcontext.ChangeDelete, "secret", obj)
-				if c.graph != nil {
-					if key, err := cache.DeletionHandlingMetaNamespaceKeyFunc(obj); err == nil {
-						if ns, name, splitErr := cache.SplitMetaNamespaceKey(key); splitErr == nil {
-							c.graph.RemoveNode("secret", ns, name)
+		inf.AddEventHandler(safeEventHandler("secret",
+			cache.ResourceEventHandlerFuncs{
+				AddFunc: func(obj interface{}) {
+					c.recordChange(kwcontext.ChangeCreate, "secret", obj)
+				},
+				UpdateFunc: func(old, obj interface{}) {
+					c.recordChangeUpdate("secret", old, obj)
+				},
+				DeleteFunc: func(obj interface{}) {
+					c.recordChange(kwcontext.ChangeDelete, "secret", obj)
+					if c.graph != nil {
+						if key, err := cache.DeletionHandlingMetaNamespaceKeyFunc(
+							obj,
+						); err == nil {
+							if ns, name, splitErr := cache.SplitMetaNamespaceKey(
+								key,
+							); splitErr == nil {
+								c.graph.RemoveNode("secret", ns, name)
+							}
 						}
 					}
-				}
-			},
-		})
+				},
+			}))
 	}
 	// Cluster-scoped listers only exist when a global/cluster factory was
 	// created; watching multiple namespaces skips PV and storage class edges.

@@ -2,6 +2,7 @@ package delivery
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"reflect"
 	"strings"
@@ -27,32 +28,54 @@ type providerEntry struct {
 	ch           chan deliverJob
 }
 
+type generationState string
+
+// ErrNoReconfiguration means the manager completion belonged to shutdown or
+// an unexpected worker stop rather than a generation replacement.
+var ErrNoReconfiguration = errors.New(
+	"no delivery reconfiguration pending",
+)
+
+const (
+	generationAccepting generationState = "accepting"
+	generationDraining  generationState = "draining"
+	generationStopped   generationState = "stopped"
+	generationFailed    generationState = "failed"
+)
+
 // providerGeneration is an immutable lookup snapshot for one configured
 // provider set. Entries are values so a reconfiguration cannot invalidate a
 // fallback while an older delivery is still finishing.
 type providerGeneration struct {
 	entries map[string]providerEntry
 	order   []string
+	state   generationState
 }
 
 type Manager struct {
-	generation   *providerGeneration
-	silences     []silenceMatcher
-	templates    map[string]*template.Template
-	clusterName  string
-	providerDeps transport.Dependencies
-	started      bool
-	stopped      bool
-	mu           sync.Mutex
-	cfgMu        sync.RWMutex
-	workerCount  int
-	workerDone   chan struct{}
-	workerCtx    context.Context
-	cancelWorker context.CancelFunc
-	dlqMu        sync.Mutex
-	dlqRing      [dlqCap]DeadLetterEntry
-	dlqHead      int
-	dlqCount     int
+	generation      *providerGeneration
+	silences        []silenceMatcher
+	templates       map[string]*template.Template
+	clusterName     string
+	providerDeps    transport.Dependencies
+	started         bool
+	stopped         bool
+	reconfiguring   bool
+	reconfigureDone chan struct{}
+	reconfigureErr  error
+	reconfigureWait bool
+	generationStuck bool
+	mu              sync.Mutex
+	cfgMu           sync.RWMutex
+	workerCount     int
+	workerDone      chan struct{}
+	workerCtx       context.Context
+	cancelWorker    context.CancelFunc
+	pending         []deliverJob
+	dlqMu           sync.Mutex
+	dlqRing         [dlqCap]DeadLetterEntry
+	dlqHead         int
+	dlqCount        int
 
 	done         chan struct{}
 	lastProgress atomic.Int64
@@ -135,67 +158,55 @@ func (a *Manager) initRuntime(
 	a.mu.Lock()
 	active := a.started && !a.stopped
 	activeContext := a.ctx
+	if a.generationStuck && a.workerCount > 0 {
+		a.mu.Unlock()
+		return fmt.Errorf("previous delivery generation is still stopping")
+	}
 	a.mu.Unlock()
 	clusterName := runtime.Application().ClusterName
-	providerContext := transport.ProviderContext{
-		ClusterName:  clusterName,
-		Dependencies: a.providerDeps,
+	entries, err := buildProviderEntries(runtime, factory, clusterName,
+		a.providerDeps)
+	if err != nil {
+		return err
 	}
+	if active {
+		if err := a.drainForReconfiguration(); err != nil {
+			return err
+		}
+	}
+	a.publishRuntime(entries, runtime, clusterName)
+	if active {
+		if err := a.Start(activeContext); err != nil {
+			klog.ErrorS(err, "failed to restart delivery workers")
+			a.finishReconfiguration(err)
+			return err
+		}
+		a.finishReconfiguration(nil)
+	}
+	return nil
+}
 
+func buildProviderEntries(
+	runtime config.RuntimeConfig,
+	factory ProviderFactory,
+	clusterName string,
+	deps transport.Dependencies,
+) ([]providerEntry, error) {
+	providerContext := transport.ProviderContext{
+		ClusterName: clusterName, Dependencies: deps,
+	}
 	providers := runtime.Delivery().Providers()
 	entries := make([]providerEntry, 0, len(providers))
 	for _, provider := range providers {
-		lowerCaseKey := strings.ToLower(provider.Name)
-		var pvdr Provider
-		if factory != nil {
-			pvdr = factory(lowerCaseKey, provider.Settings, providerContext)
+		entry, err := buildProviderEntry(provider, factory, providerContext)
+		if err != nil {
+			return nil, err
 		}
-		if pvdr == nil {
-			if config.IsKnownProvider(lowerCaseKey) {
-				return fmt.Errorf(
-					"provider %q could not be constructed; check its settings",
-					provider.Name,
-				)
-			}
-			return fmt.Errorf("unknown alert provider %q", provider.Name)
-		}
-		if !isNilProvider(pvdr) {
-			entries = append(entries, providerEntry{
-				provider:     pvdr,
-				routes:       provider.Routes,
-				retry:        retryConfigFromRuntime(provider.Retry),
-				fallbackName: provider.FallbackName,
-				templates:    compileTemplates(provider.Templates),
-				maxBytes:     defaultMaxBytes(pvdr.Name()),
-				ch:           make(chan deliverJob, channelCap),
-			})
+		if entry != nil {
+			entries = append(entries, *entry)
 		}
 	}
-	// Validate fallback names after all providers are initialized. Production
-	// dispatch resolves names against the current immutable generation.
-	for i := range entries {
-		if entries[i].fallbackName != "" {
-			found := false
-			for j := range entries {
-				if strings.EqualFold(
-					entries[j].provider.Name(),
-					entries[i].fallbackName,
-				) {
-					found = true
-					break
-				}
-			}
-			if !found {
-				klog.InfoS(
-					"fallback provider not found, skipping",
-					"provider",
-					entries[i].provider.Name(),
-					"fallback",
-					entries[i].fallbackName,
-				)
-			}
-		}
-	}
+	logMissingFallbacks(entries)
 	for _, providerName := range sanitizeFallbackCycles(entries) {
 		klog.InfoS(
 			"fallback cycle detected; disabling fallback",
@@ -203,22 +214,100 @@ func (a *Manager) initRuntime(
 		)
 	}
 	if err := validateProviderNames(entries); err != nil {
+		return nil, err
+	}
+	return entries, nil
+}
+
+func buildProviderEntry(
+	provider config.ProviderRuntime,
+	factory ProviderFactory,
+	providerContext transport.ProviderContext,
+) (*providerEntry, error) {
+	name := strings.ToLower(provider.Name)
+	var instance Provider
+	if factory != nil {
+		instance = factory(name, provider.Settings, providerContext)
+	}
+	if instance == nil {
+		if config.IsKnownProvider(name) {
+			return nil, fmt.Errorf(
+				"provider %q could not be constructed; check its settings",
+				provider.Name,
+			)
+		}
+		return nil, fmt.Errorf("unknown alert provider %q", provider.Name)
+	}
+	if isNilProvider(instance) {
+		return nil, nil
+	}
+	return &providerEntry{
+		provider: instance, routes: provider.Routes,
+		retry:        retryConfigFromRuntime(provider.Retry),
+		fallbackName: provider.FallbackName,
+		templates:    compileTemplates(provider.Templates),
+		maxBytes:     defaultMaxBytes(instance.Name()),
+		ch:           make(chan deliverJob, channelCap),
+	}, nil
+}
+
+func logMissingFallbacks(entries []providerEntry) {
+	for i := range entries {
+		fallback := entries[i].fallbackName
+		if fallback == "" || hasProvider(entries, fallback) {
+			continue
+		}
+		klog.InfoS(
+			"fallback provider not found, skipping",
+			"provider", entries[i].provider.Name(),
+			"fallback", fallback,
+		)
+	}
+}
+
+func hasProvider(entries []providerEntry, name string) bool {
+	for _, entry := range entries {
+		if strings.EqualFold(entry.provider.Name(), name) {
+			return true
+		}
+	}
+	return false
+}
+
+func (a *Manager) drainForReconfiguration() error {
+	a.mu.Lock()
+	if a.reconfiguring {
+		a.mu.Unlock()
+		return fmt.Errorf("delivery reconfiguration already in progress")
+	}
+	a.reconfiguring = true
+	a.reconfigureDone = make(chan struct{})
+	a.reconfigureErr = nil
+	a.reconfigureWait = true
+	if a.generation != nil {
+		a.generation.state = generationDraining
+	}
+	a.mu.Unlock()
+	reconfigureCtx, cancel := context.WithTimeout(
+		context.Background(), 10*time.Second,
+	)
+	defer cancel()
+	if err := a.shutdownContext(reconfigureCtx); err != nil {
+		klog.ErrorS(err,
+			"delivery generation did not drain during reconfiguration")
+		a.finishReconfiguration(err)
 		return err
 	}
-	if active {
-		reconfigureCtx, cancel := context.WithTimeout(
-			context.Background(), 10*time.Second,
-		)
-		if err := a.shutdownContext(reconfigureCtx); err != nil {
-			klog.ErrorS(err,
-				"delivery generation did not drain during reconfiguration")
-			cancel()
-			return err
-		}
-		cancel()
-	}
+	return nil
+}
+
+func (a *Manager) publishRuntime(
+	items []providerEntry,
+	runtime config.RuntimeConfig,
+	clusterName string,
+) {
 	a.mu.Lock()
-	a.generation = newProviderGeneration(entries)
+	a.generation = newProviderGeneration(items)
 	a.pacer = sendPacer{}
 	a.clusterName = clusterName
 	a.started = false
@@ -231,13 +320,53 @@ func (a *Manager) initRuntime(
 	a.silences = compileSilences(deliveryRuntime.Silences())
 	a.templates = compileTemplates(deliveryRuntime.Templates())
 	a.cfgMu.Unlock()
-	if active {
-		if err := a.Start(activeContext); err != nil {
-			klog.ErrorS(err, "failed to restart delivery workers")
-			return err
-		}
+}
+
+// IsReconfiguring reports whether workers are stopping as part of a runtime
+// generation replacement rather than application shutdown.
+func (a *Manager) IsReconfiguring() bool {
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	return a.reconfiguring
+}
+
+func (a *Manager) finishReconfiguration(err error) {
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	if !a.reconfiguring {
+		return
 	}
-	return nil
+	a.reconfiguring = false
+	a.reconfigureErr = err
+	if a.reconfigureDone != nil {
+		close(a.reconfigureDone)
+	}
+}
+
+// WaitForReconfiguration waits until an in-progress generation replacement
+// has either started the new workers or failed.
+func (a *Manager) WaitForReconfiguration(ctx context.Context) error {
+	a.mu.Lock()
+	done := a.reconfigureDone
+	pending := a.reconfigureWait
+	a.mu.Unlock()
+	if done == nil || !pending {
+		return ErrNoReconfiguration
+	}
+	if ctx == nil {
+		ctx = context.Background()
+	}
+	select {
+	case <-done:
+		a.mu.Lock()
+		err := a.reconfigureErr
+		a.reconfigureWait = false
+		a.reconfigureDone = nil
+		a.mu.Unlock()
+		return err
+	case <-ctx.Done():
+		return ctx.Err()
+	}
 }
 
 func validateProviderNames(entries []providerEntry) error {
@@ -256,6 +385,7 @@ func newProviderGeneration(entries []providerEntry) *providerGeneration {
 	generation := &providerGeneration{
 		entries: make(map[string]providerEntry, len(entries)),
 		order:   make([]string, 0, len(entries)),
+		state:   generationAccepting,
 	}
 	for _, entry := range entries {
 		name := strings.ToLower(entry.provider.Name())

@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"unicode/utf8"
 
 	"k8s.io/klog/v2"
 
@@ -64,6 +65,7 @@ func (n *NewRelic) SendEvent(ctx context.Context, e *event.Event) error {
 
 // SendMessage sends text message to the provider
 func (n *NewRelic) SendMessage(ctx context.Context, msg string) error {
+	msg = truncateMessage(msg, 64*1024)
 	eventPayload := map[string]interface{}{
 		"eventType": "KwatchAlert",
 		"cluster":   n.clusterName,
@@ -82,4 +84,15 @@ func (n *NewRelic) SendMessage(ctx context.Context, msg string) error {
 		},
 	})
 	return err
+}
+
+func truncateMessage(value string, maxBytes int) string {
+	if len(value) <= maxBytes {
+		return value
+	}
+	cut := maxBytes - len("\n…(truncated)")
+	for cut > 0 && !utf8.RuneStart(value[cut]) {
+		cut--
+	}
+	return value[:cut] + "\n…(truncated)"
 }

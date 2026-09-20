@@ -46,7 +46,7 @@ func startFeedbackSaver(
 	var pending []insight.RCARecord
 	ticker := time.NewTicker(10 * time.Second)
 	defer ticker.Stop()
-	save := func(timeout time.Duration) {
+	save := func(writeCtx context.Context, timeout time.Duration) {
 		if pending == nil {
 			return
 		}
@@ -54,7 +54,7 @@ func startFeedbackSaver(
 			pending = nil
 			return
 		}
-		fctx, cancel := context.WithTimeout(context.Background(), timeout)
+		fctx, cancel := context.WithTimeout(writeCtx, timeout)
 		err := persistenceManager.SaveRCAFeedback(fctx, pending)
 		if err != nil {
 			klog.ErrorS(err, "failed to persist RCA feedback")
@@ -81,14 +81,14 @@ func startFeedbackSaver(
 			if progress != nil {
 				progress()
 			}
-			save(5 * time.Second)
+			save(ctx, 5*time.Second)
 		case <-ctx.Done():
 			for {
 				select {
 				case snapshot := <-ch:
 					pending = snapshot
 				default:
-					save(5 * time.Second)
+					save(ctx, 5*time.Second)
 					return
 				}
 			}

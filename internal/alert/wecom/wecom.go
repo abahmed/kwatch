@@ -3,6 +3,7 @@ package wecom
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 
 	"k8s.io/klog/v2"
 
@@ -13,6 +14,11 @@ import (
 type wecomPayload struct {
 	MsgType  string            `json:"msgtype"`
 	Markdown map[string]string `json:"markdown"`
+}
+
+type wecomResponse struct {
+	ErrorCode int    `json:"errcode"`
+	ErrorText string `json:"errmsg"`
 }
 
 type Wecom struct {
@@ -68,10 +74,22 @@ func (s *Wecom) SendMessage(ctx context.Context, msg string) error {
 	if err != nil {
 		return err
 	}
-
-	_, err = s.sender.Send(ctx, transport.Request{
+	responseBody, err := s.sender.Send(ctx, transport.Request{
 		Provider: s.Name(), URL: s.webhook, Body: body,
 		ContentType: "application/json",
 	})
-	return err
+	if err != nil {
+		return err
+	}
+	if len(responseBody) == 0 {
+		return nil
+	}
+	var response wecomResponse
+	if err := json.Unmarshal(responseBody, &response); err != nil {
+		return fmt.Errorf("wecom returned invalid response")
+	}
+	if response.ErrorCode != 0 {
+		return fmt.Errorf("wecom request failed with code %d", response.ErrorCode)
+	}
+	return nil
 }

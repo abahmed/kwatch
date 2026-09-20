@@ -32,7 +32,11 @@ func ParseRetryAfterAt(resp *http.Response, now time.Time) time.Duration {
 	if v == "" {
 		return 0
 	}
-	if s, err := strconv.Atoi(v); err == nil && s >= 0 {
+	if s, err := strconv.ParseInt(v, 10, 64); err == nil && s >= 0 {
+		const maxRetryAfter = 24 * time.Hour
+		if s > int64(maxRetryAfter/time.Second) {
+			return maxRetryAfter
+		}
 		return time.Duration(s) * time.Second
 	}
 	if t, err := http.ParseTime(v); err == nil {

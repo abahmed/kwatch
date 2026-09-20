@@ -125,11 +125,12 @@ func (m *Monitor) watchVersion(
 		klog.ErrorS(err, "statuswatch: create CRD informer", "resource", gvr)
 		return
 	}
-	_, err = informer.AddEventHandler(cache.ResourceEventHandlerFuncs{
-		AddFunc:    m.processCR,
-		UpdateFunc: func(_, obj interface{}) { m.processCR(obj) },
-		DeleteFunc: m.resolveCR,
-	})
+	_, err = informer.AddEventHandler(k8s.SafeEventHandler(
+		"statuswatch", gvr.String(), cache.ResourceEventHandlerFuncs{
+			AddFunc:    m.processCR,
+			UpdateFunc: func(_, obj interface{}) { m.processCR(obj) },
+			DeleteFunc: m.resolveCR,
+		}))
 	if err != nil {
 		klog.ErrorS(err, "statuswatch: register CRD informer", "resource", key)
 		return

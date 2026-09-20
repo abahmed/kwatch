@@ -11,6 +11,7 @@ import (
 	"net/http"
 	"strings"
 	"time"
+	"unicode/utf8"
 
 	"github.com/abahmed/kwatch/internal/event"
 	"github.com/abahmed/kwatch/internal/ratelimit"
@@ -151,7 +152,11 @@ func responseSummary(body []byte) string {
 		}
 	}
 	if len(text) > maxSummaryBytes {
-		return text[:maxSummaryBytes] + "…"
+		cut := maxSummaryBytes
+		for cut > 0 && !utf8.RuneStart(text[cut]) {
+			cut--
+		}
+		return text[:cut] + "…"
 	}
 	return text
 }

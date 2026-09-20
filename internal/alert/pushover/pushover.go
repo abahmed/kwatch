@@ -20,6 +20,8 @@ type Pushover struct {
 	user     string
 	title    string
 	priority int
+	retry    int
+	expire   int
 
 	clusterName string
 }
@@ -54,6 +56,20 @@ func NewPushover(
 	case int64:
 		priority = int(v)
 	}
+	if priority < -2 || priority > 2 {
+		klog.InfoS("initializing pushover with invalid priority",
+			"priority", priority)
+		return nil
+	}
+	retry := integerSetting(config["retry"])
+	expire := integerSetting(config["expire"])
+	if priority == 2 && (retry < 30 || expire < 1 || expire > 10800) {
+		klog.InfoS(
+			"pushover emergency priority requires valid retry and expire",
+			"retry", retry, "expire", expire,
+		)
+		return nil
+	}
 
 	klog.InfoS("initializing pushover", "title", title)
 
@@ -64,6 +80,8 @@ func NewPushover(
 		user:        user,
 		title:       title,
 		priority:    priority,
+		retry:       retry,
+		expire:      expire,
 		clusterName: clusterName,
 	}
 }
@@ -91,10 +109,27 @@ func (p *Pushover) SendMessage(ctx context.Context, msg string) error {
 	if p.priority != 0 {
 		form.Set("priority", strconv.Itoa(p.priority))
 	}
+	if p.priority == 2 {
+		form.Set("retry", strconv.Itoa(p.retry))
+		form.Set("expire", strconv.Itoa(p.expire))
+	}
 
 	_, err := p.sender.Send(ctx, transport.Request{
 		Provider: p.Name(), URL: p.url, Body: []byte(form.Encode()),
 		ContentType: "application/x-www-form-urlencoded",
 	})
 	return err
+}
+
+func integerSetting(value interface{}) int {
+	switch v := value.(type) {
+	case int:
+		return v
+	case int64:
+		return int(v)
+	case float64:
+		return int(v)
+	default:
+		return 0
+	}
 }

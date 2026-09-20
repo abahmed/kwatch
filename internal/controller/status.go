@@ -32,7 +32,6 @@ func (c *Controller) nowTime() time.Time {
 
 func (c *Controller) InformerStatus() InformerStatus {
 	c.informerMu.RLock()
-	defer c.informerMu.RUnlock()
 	now := c.nowTime()
 	status := InformerStatus{
 		State:          "unavailable",
@@ -53,7 +52,12 @@ func (c *Controller) InformerStatus() InformerStatus {
 			status.WithoutResourceVersion++
 		}
 	}
+	c.informerMu.RUnlock()
 	status.UnavailableSources = c.unavailableSources()
+	// Source availability can change after initial wiring when a controller
+	// generation is rebuilt. Refresh transition metrics at the diagnostics
+	// boundary so recovery and later loss are both observable.
+	c.recordSourceUnavailableTransitions()
 	if !status.LastEvent.IsZero() {
 		status.EventAge = now.Sub(status.LastEvent)
 	}

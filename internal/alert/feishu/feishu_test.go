@@ -121,6 +121,21 @@ func TestSendMessageError(t *testing.T) {
 	assertions.NotNil(c.SendMessage(context.Background(), "test"))
 }
 
+func TestSendMessageReportsAPIErrorBody(t *testing.T) {
+	s := httptest.NewServer(http.HandlerFunc(
+		func(w http.ResponseWriter, r *http.Request) {
+			_, _ = w.Write([]byte(`{"code":999,"msg":"invalid signature"}`))
+		},
+	))
+	defer s.Close()
+
+	c := NewFeiShu(
+		map[string]interface{}{"webhook": s.URL},
+		testAppConfig(), testDeps,
+	)
+	assert.Error(t, c.SendMessage(context.Background(), "test"))
+}
+
 func TestSendEvent(t *testing.T) {
 	assertions := assert.New(t)
 

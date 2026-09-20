@@ -2,6 +2,7 @@ package config
 
 import (
 	"fmt"
+	"math"
 	"sort"
 	"strings"
 
@@ -73,7 +74,14 @@ func validateRetryJitter(cfg *Config) []string {
 		if r, ok := p["retry"]; ok {
 			if rm, ok := r.(map[string]interface{}); ok {
 				if jf, ok := rm["jitterFactor"]; ok {
-					f, _ := jf.(float64)
+					f, ok := numericFloat(jf)
+					if !ok {
+						errs = append(errs, fmt.Sprintf(
+							"alert.%s.retry.jitterFactor must be a number between "+
+								"0 and 1", name,
+						))
+						continue
+					}
 					if f < 0 || f > 1 {
 						errs = append(
 							errs,
@@ -89,6 +97,38 @@ func validateRetryJitter(cfg *Config) []string {
 		}
 	}
 	return errs
+}
+
+func numericFloat(value interface{}) (float64, bool) {
+	switch v := value.(type) {
+	case float64:
+		return v, !math.IsNaN(v) && !math.IsInf(v, 0)
+	case float32:
+		f := float64(v)
+		return f, !math.IsNaN(f) && !math.IsInf(f, 0)
+	case int:
+		return float64(v), true
+	case int8:
+		return float64(v), true
+	case int16:
+		return float64(v), true
+	case int32:
+		return float64(v), true
+	case int64:
+		return float64(v), true
+	case uint:
+		return float64(v), true
+	case uint8:
+		return float64(v), true
+	case uint16:
+		return float64(v), true
+	case uint32:
+		return float64(v), true
+	case uint64:
+		return float64(v), true
+	default:
+		return 0, false
+	}
 }
 
 func unknownProviders(cfg *Config) []string {

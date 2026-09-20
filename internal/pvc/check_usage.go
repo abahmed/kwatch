@@ -40,11 +40,15 @@ func (p *PvcMonitor) checkUsage(ctx context.Context) {
 	}
 	results := make([]nodeResult, len(nodeNames))
 	var waitGroup sync.WaitGroup
+	canceled := false
 	for i, nodeName := range nodeNames {
 		select {
 		case p.sem <- struct{}{}:
 		case <-ctx.Done():
-			return
+			canceled = true
+		}
+		if canceled {
+			break
 		}
 		waitGroup.Add(1)
 		go func(index int, name string) {
@@ -55,6 +59,9 @@ func (p *PvcMonitor) checkUsage(ctx context.Context) {
 		}(i, nodeName)
 	}
 	waitGroup.Wait()
+	if canceled || ctx.Err() != nil {
+		return
+	}
 
 	var usages []*PvcUsage
 	incomplete := false

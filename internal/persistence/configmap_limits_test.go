@@ -13,6 +13,8 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes/fake"
 
+	kwcontext "github.com/abahmed/kwatch/internal/graphcontext"
+
 	"github.com/abahmed/kwatch/internal/model"
 )
 
@@ -25,6 +27,38 @@ func TestConfigMapDataSizeCountsKeysAndValues(t *testing.T) {
 	}
 
 	assert.Equal(t, int64(8), configMapDataSize(cm))
+}
+
+func TestSaveChangeHistoryRejectsOneOversizedEntry(t *testing.T) {
+	manager := newTestManager(
+		fake.NewSimpleClientset(), "kwatch",
+	)
+	changes := []kwcontext.Change{{Detail: strings.Repeat("x", 70*1024)}}
+
+	start := time.Now()
+	err := manager.SaveChangeHistory(context.Background(), changes)
+
+	require.Error(t, err)
+	assert.Less(t, time.Since(start), time.Second)
+}
+
+func TestSaveChangeHistoryKeepsNewestEntriesWhenTrimming(t *testing.T) {
+	manager := newTestManager(
+		fake.NewSimpleClientset(), "kwatch",
+	)
+	changes := []kwcontext.Change{
+		{Detail: strings.Repeat("old", 20*1024)},
+		{Detail: strings.Repeat("middle", 12*1024)},
+		{Detail: "newest"},
+	}
+
+	require.NoError(t, manager.SaveChangeHistory(
+		context.Background(), changes,
+	))
+	loaded, err := manager.LoadChangeHistory(context.Background())
+	require.NoError(t, err)
+	require.NotEmpty(t, loaded)
+	assert.Equal(t, "newest", loaded[len(loaded)-1].Detail)
 }
 
 func TestPayloadHelpersReplaceBothConfigMapFields(t *testing.T) {

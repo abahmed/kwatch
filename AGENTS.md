@@ -18,6 +18,36 @@ The repository also enforces formatting and line length. Run the complete gate
 with `make verify`; it includes `line-check` and `git diff --check` should be
 clean before handoff.
 
+## Reliability invariants
+
+The following rules are enforced by the current implementation and must remain
+true when extending the system:
+
+- Delivery reconfiguration is a generation transition, not an application
+  failure. Old provider queues drain before replacement; jobs accepted before
+  replacement keep their generation and fallback lookup.
+- Notifications created before delivery starts wait in a bounded pending queue.
+  They must never perform provider I/O on the caller goroutine or use a
+  background context for live delivery.
+- Required persistence savers use the active lifecycle context for periodic
+  writes and a bounded final-write context during shutdown. A disabled write
+  gate is a clean stop, not an unexpected component crash.
+- A missing or unavailable source skips detection and never creates or resolves
+  a synthetic incident. Source diagnostics use bounded reason codes and exclude
+  disabled pipelines.
+- Matrix HTML escapes all event-derived data while preserving only Kwatch's
+  generated tags. Provider response bodies are parsed when an HTTP 2xx can
+  still contain a provider-level error.
+- GoAlert requires an explicit real endpoint; placeholder example URLs must
+  never receive credentials. Pushover priority `2` requires valid `retry` and
+  `expire` values; priority `1` does not.
+- Any new long-running loop must expose cancellation, completion, progress or
+  synchronization state, and a bounded shutdown path. Tests must use event
+  completion rather than sleeps.
+- Generated Kubernetes deep-copy code must detach pointers, maps, slices, and
+  nested monitor configuration before a CRD object is handed to another
+  controller or goroutine.
+
 - Linters: errcheck, gocritic, gocyclo, govet, ineffassign, unparam, unused (`.golangci.yml`).
 - **Cyclomatic complexity limit is 20** (`gocyclo min-complexity: 20`), tests included. When a
   function exceeds it, extract helpers or table data instead of raising the threshold.
@@ -679,6 +709,36 @@ Persisted formats are compatibility contracts. Any persisted change requires an
 explicit schema version, migration or reset path, backup/recovery guidance, and
 round-trip tests. Migration diagnostics must report every startup operation with
 safe bounded outcomes.
+
+## Current lifecycle safeguards
+
+Application readiness is coordinated per leadership epoch. A leader is not ready
+until restore, required informer sources, required persistence writers, the
+incident engine, and configured delivery are all active. Standby replicas remain
+live for election and health serving but are never ready for monitoring. A stale
+callback from an earlier epoch must not restore readiness or clear a newer failure.
+
+Delivery generations have explicit `accepting`, `draining`, `stopped`, and
+`failed` states. Reconfiguration publishes a new generation only after the old
+one has stopped. A successful replacement is not a component failure; a failed
+drain is surfaced to the required delivery supervisor. Manager shutdown and
+generation replacement have separate completion signals.
+
+Final persistence writes are created by the application shutdown coordinator with
+a bounded context and must pass the current leadership/write fence immediately
+before I/O. Saver loops use their active generation context; they must not create
+detached background writes that can outlive shutdown or leadership loss.
+
+CRD and dynamic watcher generations own their discovery and informer goroutines.
+Failure paths cancel and wait for those routines before retrying or replacing a
+generation. Public status uses safe reason codes only. A new watcher must not be
+published while an old generation can still deliver callbacks or clear status.
+
+Provider payload limits are explicit catalog policy. Providers with protocol
+limits use deterministic truncation; providers whose limits are owned by their
+renderer are marked `provider_owned` rather than receiving an arbitrary default.
+Every provider must have a policy entry, and payloads and secret-bearing details
+must never be logged in full.
 
 ## Change checklists
 

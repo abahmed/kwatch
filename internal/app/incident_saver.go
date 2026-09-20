@@ -64,6 +64,9 @@ func startIncidentSaver(
 	stopHeartbeat := startProgressHeartbeat(ctx, progress)
 	defer stopHeartbeat()
 	for {
+		if !writesAllowed(canWrite) {
+			return errComponentCleanStop
+		}
 		select {
 		case snap := <-ch:
 			if progress != nil {
@@ -72,7 +75,7 @@ func startIncidentSaver(
 			pending, havePending = snap, true
 			var err error
 			lastSaved, err = saveIncidentSnapshot(
-				persistenceManager, pending, 10*time.Second, lastSaved,
+				ctx, persistenceManager, pending, 10*time.Second, lastSaved,
 				report, canWrite,
 			)
 			if err != nil {
@@ -86,7 +89,8 @@ func startIncidentSaver(
 				default:
 					if havePending {
 						_, _ = saveIncidentSnapshot(
-							persistenceManager, pending, 5*time.Second, lastSaved,
+							ctx, persistenceManager, pending,
+							5*time.Second, lastSaved,
 							report, canWrite,
 						)
 					}
@@ -123,7 +127,7 @@ func waitPersistenceComponent(done <-chan struct{}, name string) bool {
 	}
 }
 
-func saveFinalIncidentSnapshot(deps *serverDeps) {
+func saveFinalIncidentSnapshot(ctx context.Context, deps *serverDeps) {
 	if deps.incidentSaver == nil || deps.incidentEngine == nil {
 		return
 	}
@@ -135,7 +139,7 @@ func saveFinalIncidentSnapshot(deps *serverDeps) {
 	}
 	engineState := deps.incidentEngine.SnapshotEngineState()
 	_, _ = saveIncidentSnapshot(
-		deps.incidentSaver,
+		ctx, deps.incidentSaver,
 		stateSnapshot{
 			incidents: deps.incidentEngine.FreezeAndSnapshotPersisted(),
 			groups:    groups,
@@ -151,6 +155,7 @@ func saveFinalIncidentSnapshot(deps *serverDeps) {
 }
 
 func saveIncidentSnapshot(
+	ctx context.Context,
 	persistenceManager incidentSaver,
 	snap stateSnapshot,
 	timeout time.Duration,
@@ -165,7 +170,7 @@ func saveIncidentSnapshot(
 	if ok && sig == lastSaved {
 		return lastSaved, nil
 	}
-	fctx, cancel := context.WithTimeout(context.Background(), timeout)
+	fctx, cancel := context.WithTimeout(ctx, timeout)
 	defer cancel()
 	err := persistenceManager.SaveIncidentState(
 		fctx, snap.incidents, snap.groups, snap.threads, snap.engine,

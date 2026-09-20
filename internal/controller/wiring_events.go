@@ -120,18 +120,19 @@ func wireWarningEvents(
 	add := func(opts ...informers.SharedInformerOption) {
 		factory := informers.NewSharedInformerFactoryWithOptions(client, resync, opts...)
 		informer := factory.Core().V1().Events().Informer()
-		informer.AddEventHandler(cache.ResourceEventHandlerFuncs{
-			AddFunc: func(obj interface{}) {
-				if ev, ok := obj.(*corev1.Event); ok {
-					h.ProcessWarningEvent(ev)
-				}
-			},
-			UpdateFunc: func(_, obj interface{}) {
-				if ev, ok := obj.(*corev1.Event); ok {
-					h.ProcessWarningEvent(ev)
-				}
-			},
-		})
+		informer.AddEventHandler(safeEventHandler(
+			"warning-event", cache.ResourceEventHandlerFuncs{
+				AddFunc: func(obj interface{}) {
+					if ev, ok := obj.(*corev1.Event); ok {
+						h.ProcessWarningEvent(ev)
+					}
+				},
+				UpdateFunc: func(_, obj interface{}) {
+					if ev, ok := obj.(*corev1.Event); ok {
+						h.ProcessWarningEvent(ev)
+					}
+				},
+			}))
 		factories = append(factories, factory)
 	}
 	if scope.all || len(scope.namespaces) == 1 {
@@ -219,17 +220,18 @@ func wireClusterAutoscaler(
 			return nil, nil
 		},
 	}))
-	caEventInformer.AddEventHandler(cache.ResourceEventHandlerFuncs{
-		AddFunc: func(obj interface{}) {
-			if ev, ok := obj.(*corev1.Event); ok {
-				h.ProcessClusterAutoscalerEvent(ev)
-			}
-		},
-		UpdateFunc: func(_, obj interface{}) {
-			if ev, ok := obj.(*corev1.Event); ok {
-				h.ProcessClusterAutoscalerEvent(ev)
-			}
-		},
-	})
+	caEventInformer.AddEventHandler(safeEventHandler(
+		"cluster-autoscaler-event", cache.ResourceEventHandlerFuncs{
+			AddFunc: func(obj interface{}) {
+				if ev, ok := obj.(*corev1.Event); ok {
+					h.ProcessClusterAutoscalerEvent(ev)
+				}
+			},
+			UpdateFunc: func(_, obj interface{}) {
+				if ev, ok := obj.(*corev1.Event); ok {
+					h.ProcessClusterAutoscalerEvent(ev)
+				}
+			},
+		}))
 	return caFactory
 }

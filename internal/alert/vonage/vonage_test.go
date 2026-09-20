@@ -140,6 +140,25 @@ func TestSendMessageError(t *testing.T) {
 	assert.NotNil(c.SendMessage(context.Background(), "test"))
 }
 
+func TestSendMessageReportsAPIErrorBody(t *testing.T) {
+	s := httptest.NewServer(http.HandlerFunc(
+		func(w http.ResponseWriter, r *http.Request) {
+			_, _ = w.Write([]byte(
+				`{"messages":[{"status":"2","error-text":"bad credentials"}]}`,
+			))
+		},
+	))
+	defer s.Close()
+
+	c := NewVonage(map[string]interface{}{
+		"apiKey": "test", "apiSecret": "secret", "from": "kwatch",
+		"to": "+12025550100",
+	}, testAppConfig(), testDeps)
+	c.url = s.URL
+
+	assert.Error(t, c.SendMessage(context.Background(), "test"))
+}
+
 func TestSendEvent(t *testing.T) {
 	assert := assert.New(t)
 

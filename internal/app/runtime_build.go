@@ -30,8 +30,9 @@ func buildServerDeps(
 	boot *bootstrap,
 	now func() time.Time,
 ) (*serverDeps, error) {
+	readiness := newReadinessCoordinator(boot.healthServer)
 	persist := configurePersistence(
-		ctx, boot.persistence, runtime, now, boot.healthServer,
+		ctx, boot.persistence, runtime, now, boot.healthServer, readiness,
 	)
 	graph := kwcontext.NewResourceGraph()
 	auditLogger := audit.NewLogger(audit.Config{
@@ -65,13 +66,13 @@ func buildServerDeps(
 			boot.healthServer.SetComponentStatus(
 				"informer", "degraded", "source_not_configured", false,
 			)
-			boot.healthServer.SetReady(false)
+			readiness.setCurrent("controller", false)
 			return
 		}
 		boot.healthServer.SetComponentStatus(
 			"informer", "running", "", true,
 		)
-		boot.healthServer.SetReady(true)
+		readiness.setCurrent("controller", true)
 		readyOnce.Do(func() { close(initialized) })
 	}
 	incidentEngine = newIncidentEngine(
@@ -182,16 +183,21 @@ func buildServerDeps(
 		auditLogger,
 		monitors.startupSummary,
 		initialized,
+		readiness,
 	)
 	deps.activate = func(activeCtx context.Context) error {
 		if err := persist.activate(
 			activeCtx, incidentEngine.SetBaseline,
 		); err != nil {
+			readiness.setCurrent("restore", false)
 			return fmt.Errorf("activate persistence: %w", err)
 		}
 		if err := boot.activate(activeCtx); err != nil {
+			readiness.setCurrent("restore", false)
 			return err
 		}
+		readiness.setCurrent("restore", true)
+		readiness.setCurrent("incident", true)
 		deps.telemetryRun = boot.telemetryRun
 		return nil
 	}

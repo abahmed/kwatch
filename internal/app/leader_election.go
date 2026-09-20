@@ -60,6 +60,11 @@ func (c *leaderCallbacks) onStartedLeading(leaderCtx context.Context) {
 	c.started.Store(true)
 	c.deps.persistenceGate.enable()
 	currentEpoch := c.epoch.Add(1)
+	if c.deps.readiness != nil {
+		c.deps.readiness.begin(
+			currentEpoch, c.deps.deliveryManager.HasProviders(),
+		)
+	}
 	metrics.DefaultRegistry().LeadershipAcquisitions.Add(1)
 	c.deps.healthServer.SetReady(false)
 	takeoverCount := c.takeovers.Load()
@@ -94,6 +99,9 @@ func (c *leaderCallbacks) onStoppedLeading() {
 	if loss {
 		c.deps.persistenceGate.disable()
 		metrics.DefaultRegistry().LeadershipLosses.Add(1)
+	}
+	if c.deps.readiness != nil {
+		c.deps.readiness.end(c.epoch.Load())
 	}
 	c.deps.healthServer.SetReady(false)
 	reason := "shutdown"
@@ -279,6 +287,11 @@ func startActiveComponents(
 		name:     "delivery",
 		required: true,
 		progress: deliveryProgress(deps),
+		onHealthy: func() {
+			if deps.readiness != nil {
+				deps.readiness.setCurrent("delivery", true)
+			}
+		},
 		run: func(ctx context.Context) error {
 			return runDelivery(ctx, deps)
 		},
@@ -287,6 +300,10 @@ func startActiveComponents(
 		deps.startPersistence(
 			ctx, supervisor, deps.persistenceGate.enabled,
 		)
+	} else if deps.readiness != nil {
+		// Tests and embedded callers may not install persistence writers.
+		// They must not wait forever on a gate they deliberately omitted.
+		deps.readiness.setCurrent("persistence-writers", true)
 	}
 	startCoreComponents(ctx, deps, supervisor)
 	for _, component := range activeOptionalComponents(deps) {
@@ -304,38 +321,36 @@ func deliveryProgress(deps *serverDeps) progressReporter {
 
 func activeOptionalComponents(deps *serverDeps) []componentSpec {
 	return []componentSpec{
-		{name: "status", onError: degrade(deps, "status"),
-			onHealthy: recoverComponent(deps, "status"), run: deps.statusRun},
-		{name: "metrics", onError: degrade(deps, "metrics"),
-			onHealthy: recoverComponent(deps, "metrics"), run: deps.metricsRun},
-		{name: "probe", onError: degrade(deps, "probe"),
-			onHealthy: recoverComponent(deps, "probe"), run: deps.probeRun},
-		{name: "kubelet", onError: degrade(deps, "kubelet"),
-			onHealthy: recoverComponent(deps, "kubelet"), run: deps.kubeletRun},
-		{
-			name: "storage-graph", onError: degrade(deps, "storage-graph"),
-			onHealthy: recoverComponent(deps, "storage-graph"),
-			run:       deps.storageRun,
+		monitoredRun(deps, "status", deps.statusRun),
+		monitoredRun(deps, "metrics", deps.metricsRun),
+		monitoredRun(deps, "probe", deps.probeRun),
+		monitoredRun(deps, "kubelet", deps.kubeletRun),
+		monitoredRun(deps, "storage-graph", deps.storageRun),
+		monitoredRun(deps, "network-graph", deps.networkRun),
+		monitoredRun(deps, "rbac", deps.securityRun),
+		monitoredRun(deps, "control-plane", deps.controlPlaneRun),
+		monitoredRun(deps, "telemetry", deps.telemetryRun),
+		monitoredRun(deps, "upgrader", deps.upgradeRun),
+	}
+}
+
+func monitoredRun(
+	deps *serverDeps,
+	name string,
+	run func(context.Context) error,
+) componentSpec {
+	if run == nil {
+		return componentSpec{name: name}
+	}
+	progress := newComponentProgress(componentStartTime(deps))
+	return componentSpec{
+		name:      name,
+		onError:   degrade(deps, name),
+		onHealthy: recoverComponent(deps, name),
+		progress:  progress,
+		run: func(ctx context.Context) error {
+			return runWithProgress(ctx, deps, progress, run)
 		},
-		{
-			name: "network-graph", onError: degrade(deps, "network-graph"),
-			onHealthy: recoverComponent(deps, "network-graph"),
-			run:       deps.networkRun,
-		},
-		{name: "rbac", onError: degrade(deps, "rbac"),
-			onHealthy: recoverComponent(deps, "rbac"), run: deps.securityRun},
-		{
-			name: "control-plane", onError: degrade(deps, "control-plane"),
-			onHealthy: recoverComponent(deps, "control-plane"),
-			run:       deps.controlPlaneRun,
-		},
-		{
-			name: "telemetry", onError: degrade(deps, "telemetry"),
-			onHealthy: recoverComponent(deps, "telemetry"),
-			run:       deps.telemetryRun,
-		},
-		{name: "upgrader", onError: degrade(deps, "upgrader"),
-			onHealthy: recoverComponent(deps, "upgrader"), run: deps.upgradeRun},
 	}
 }
 

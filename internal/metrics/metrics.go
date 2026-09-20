@@ -28,6 +28,7 @@ type Registry struct {
 	ControlPlaneProbeErrors  atomic.Int64
 	InformerWatchErrors      atomic.Int64
 	InformerEvents           atomic.Int64
+	InformerHandlerPanics    atomic.Int64
 	QueueDepth               atomic.Int64
 	ProcessingLatencyMs      atomic.Int64
 	GraphRebuilds            atomic.Int64
@@ -96,6 +97,8 @@ var metricDescs = []*prometheus.Desc{
 		"Informer watch interruptions", nil, nil),
 	prometheus.NewDesc("kwatch_informer_events_total",
 		"Informer events received by kwatch", nil, nil),
+	prometheus.NewDesc("kwatch_informer_handler_panics_total",
+		"Informer event handler panics recovered by kwatch", nil, nil),
 	prometheus.NewDesc("kwatch_queue_depth",
 		"Current aggregate workqueue depth", nil, nil),
 	prometheus.NewDesc("kwatch_processing_latency_milliseconds",
@@ -184,33 +187,34 @@ func (r *Registry) Collect(ch chan<- prometheus.Metric) {
 	r.collectCounter(ch, 3, r.ControlPlaneProbeErrors.Load())
 	r.collectCounter(ch, 4, r.InformerWatchErrors.Load())
 	r.collectCounter(ch, 5, r.InformerEvents.Load())
-	r.collectGauge(ch, 6, r.QueueDepth.Load())
-	r.collectGauge(ch, 7, r.ProcessingLatencyMs.Load())
-	r.collectCounter(ch, 8, r.GraphRebuilds.Load())
-	r.collectGauge(ch, 9, r.GraphRebuildLatencyMs.Load())
-	r.collectCounter(ch, 10, r.NotificationsTotal.Load())
-	r.collectCounter(ch, 11, r.NotificationsDropped.Load())
-	r.collectGauge(ch, 12, r.ActiveIncidents.Load())
-	r.collectGauge(ch, 13, r.BaselineSize.Load())
-	r.collectGauge(ch, 14, r.GraphNodes.Load())
-	r.collectGauge(ch, 15, r.GraphEdges.Load())
-	r.collectCounter(ch, 16, r.DeliveryRetries.Load())
-	r.collectCounter(ch, 17, r.DeliveryTerminalErrors.Load())
-	r.collectCounter(ch, 18, r.DeliveryDeadLetters.Load())
-	r.collectCounter(ch, 19, r.DeliveryQueueSaturated.Load())
-	r.collectCounter(ch, 20, r.PersistenceMigrations.Load())
-	r.collectCounter(ch, 21, r.PersistenceMigrationErr.Load())
-	r.collectCounter(ch, 22, r.OptionalAPIUnavailable.Load())
-	r.collectCounter(ch, 23, r.WatcherSyncs.Load())
-	r.collectCounter(ch, 24, r.WatcherSyncFailures.Load())
-	r.collectCounter(ch, 25, r.ComponentDegradations.Load())
-	r.collectCounter(ch, 26, r.ComponentStalls.Load())
-	r.collectCounter(ch, 27, r.ComponentUnexpectedStops.Load())
-	r.collectCounter(ch, 28, r.ShutdownTimeouts.Load())
-	r.collectCounter(ch, 29, r.SourceUnavailable.Load())
-	r.collectCounter(ch, 30, r.LeadershipAcquisitions.Load())
-	r.collectCounter(ch, 31, r.LeadershipLosses.Load())
-	r.collectCounter(ch, 32, r.LeaderTakeovers.Load())
+	r.collectCounter(ch, 6, r.InformerHandlerPanics.Load())
+	r.collectGauge(ch, 7, r.QueueDepth.Load())
+	r.collectGauge(ch, 8, r.ProcessingLatencyMs.Load())
+	r.collectCounter(ch, 9, r.GraphRebuilds.Load())
+	r.collectGauge(ch, 10, r.GraphRebuildLatencyMs.Load())
+	r.collectCounter(ch, 11, r.NotificationsTotal.Load())
+	r.collectCounter(ch, 12, r.NotificationsDropped.Load())
+	r.collectGauge(ch, 13, r.ActiveIncidents.Load())
+	r.collectGauge(ch, 14, r.BaselineSize.Load())
+	r.collectGauge(ch, 15, r.GraphNodes.Load())
+	r.collectGauge(ch, 16, r.GraphEdges.Load())
+	r.collectCounter(ch, 17, r.DeliveryRetries.Load())
+	r.collectCounter(ch, 18, r.DeliveryTerminalErrors.Load())
+	r.collectCounter(ch, 19, r.DeliveryDeadLetters.Load())
+	r.collectCounter(ch, 20, r.DeliveryQueueSaturated.Load())
+	r.collectCounter(ch, 21, r.PersistenceMigrations.Load())
+	r.collectCounter(ch, 22, r.PersistenceMigrationErr.Load())
+	r.collectCounter(ch, 23, r.OptionalAPIUnavailable.Load())
+	r.collectCounter(ch, 24, r.WatcherSyncs.Load())
+	r.collectCounter(ch, 25, r.WatcherSyncFailures.Load())
+	r.collectCounter(ch, 26, r.ComponentDegradations.Load())
+	r.collectCounter(ch, 27, r.ComponentStalls.Load())
+	r.collectCounter(ch, 28, r.ComponentUnexpectedStops.Load())
+	r.collectCounter(ch, 29, r.ShutdownTimeouts.Load())
+	r.collectCounter(ch, 30, r.SourceUnavailable.Load())
+	r.collectCounter(ch, 31, r.LeadershipAcquisitions.Load())
+	r.collectCounter(ch, 32, r.LeadershipLosses.Load())
+	r.collectCounter(ch, 33, r.LeaderTakeovers.Load())
 }
 
 func (r *Registry) collectCounter(

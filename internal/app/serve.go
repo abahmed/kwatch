@@ -175,7 +175,11 @@ func waitShutdown(
 		)
 		feedbackStopped := waitFeedbackSaver(deps)
 		if incidentStopped && baselineStopped && changeStopped && feedbackStopped {
-			saveFinalIncidentSnapshot(deps)
+			finalCtx, cancel := context.WithTimeout(
+				context.Background(), componentShutdownTimeout,
+			)
+			saveFinalIncidentSnapshot(finalCtx, deps)
+			cancel()
 		} else {
 			klog.InfoS(
 				"skipping final incident snapshot while savers are still running",

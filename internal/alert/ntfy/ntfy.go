@@ -3,6 +3,7 @@ package ntfy
 import (
 	"context"
 	"encoding/json"
+	"net/url"
 	"strings"
 
 	"k8s.io/klog/v2"
@@ -67,7 +68,7 @@ func NewNtfy(
 	return &Ntfy{
 		sender: transport.NewSender(dependencies),
 		url: strings.TrimRight(server, "/") + "/" +
-			strings.TrimLeft(topic, "/"),
+			url.PathEscape(strings.TrimLeft(topic, "/")),
 		token:       token,
 		title:       title,
 		priority:    priority,

@@ -6,6 +6,8 @@ import (
 
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	corev1lister "k8s.io/client-go/listers/core/v1"
+	"k8s.io/client-go/tools/cache"
 
 	"github.com/abahmed/kwatch/internal/config"
 	"github.com/abahmed/kwatch/internal/constant"
@@ -49,6 +51,26 @@ func TestNodeRuntimeSkipsDeletedNodeWhenListerIsUnavailable(t *testing.T) {
 	if sink.resolutions != 0 {
 		t.Fatalf("unavailable Node lister resolved %d incidents",
 			sink.resolutions)
+	}
+}
+
+func TestNodeRuntimeResolvesNotFoundFromSynchronizedLister(t *testing.T) {
+	sink := &nodeSinkRecorder{}
+	runtime := NewRuntimeWithRuntimeConfig(
+		config.RuntimeConfig{}, sink, nil, time.Now,
+	)
+	lister := corev1lister.NewNodeLister(
+		cache.NewIndexer(cache.MetaNamespaceKeyFunc, nil),
+	)
+	if err := runtime.ConfigureSources(Sources{Nodes: lister}); err != nil {
+		t.Fatalf("ConfigureSources() returned error: %v", err)
+	}
+
+	if err := runtime.ProcessNode("worker-1", false); err != nil {
+		t.Fatalf("ProcessNode() returned error: %v", err)
+	}
+	if sink.resolutions != 1 {
+		t.Fatalf("NotFound node resolved %d times, want 1", sink.resolutions)
 	}
 }
 

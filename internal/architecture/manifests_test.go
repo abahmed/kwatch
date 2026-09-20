@@ -1,9 +1,11 @@
 package architecture
 
 import (
+	"bytes"
 	"fmt"
 	"io"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"testing"
 
@@ -94,6 +96,163 @@ func TestRawDeploymentHasProductionShape(t *testing.T) {
 	}
 }
 
+func TestHelmDefaultMatchesRawDeploymentSafety(t *testing.T) {
+	if _, err := exec.LookPath("helm"); err != nil {
+		t.Skip("helm is unavailable")
+	}
+	root := repositoryRoot(t)
+	raw := readManifestFile(t, filepath.Join(root, "deploy", "deploy.yaml"))
+	rendered := renderHelm(t, filepath.Join(root, "deploy", "chart"))
+	rawDeployment := findManifestKind(t, raw, "Deployment")
+	chartDeployment := findManifestKind(t, rendered, "Deployment")
+
+	compareManifestField(t, rawDeployment, chartDeployment,
+		"spec", "replicas")
+	compareManifestField(t, rawDeployment, chartDeployment,
+		"spec", "strategy", "type")
+	compareManifestField(t, rawDeployment, chartDeployment,
+		"spec", "template", "spec", "terminationGracePeriodSeconds")
+	compareManifestField(t, rawDeployment, chartDeployment,
+		"spec", "template", "spec", "securityContext")
+	compareTopologySpread(t, rawDeployment, chartDeployment)
+	compareContainerProbe(t, rawDeployment, chartDeployment, "livenessProbe")
+	compareContainerProbe(t, rawDeployment, chartDeployment, "readinessProbe")
+}
+
+func TestHelmSingleReplicaOmitsDisruptionBudget(t *testing.T) {
+	if _, err := exec.LookPath("helm"); err != nil {
+		t.Skip("helm is unavailable")
+	}
+	root := repositoryRoot(t)
+	rendered := renderHelm(
+		t, filepath.Join(root, "deploy", "chart"), "--set", "replicaCount=1",
+	)
+	deployment := findManifestKind(t, rendered, "Deployment")
+	strategy, _, err := unstructured.NestedString(
+		deployment.Object, "spec", "strategy", "type",
+	)
+	if err != nil || strategy != "Recreate" {
+		t.Fatalf("single replica strategy = %q, want Recreate", strategy)
+	}
+	for _, document := range rendered {
+		if document.GetKind() == "PodDisruptionBudget" {
+			t.Fatal("single replica rendering must omit PodDisruptionBudget")
+		}
+	}
+}
+
+func readManifestFile(t *testing.T, path string) []unstructured.Unstructured {
+	t.Helper()
+	file, err := os.Open(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer file.Close()
+	return decodeManifestDocuments(t, file)
+}
+
+func renderHelm(
+	t *testing.T,
+	chart string,
+	args ...string,
+) []unstructured.Unstructured {
+	t.Helper()
+	commandArgs := []string{"template", "architecture", chart}
+	commandArgs = append(commandArgs, args...)
+	output, err := exec.Command("helm", commandArgs...).CombinedOutput()
+	if err != nil {
+		t.Fatalf("helm template failed: %v\n%s", err, output)
+	}
+	return decodeManifestDocuments(t, bytes.NewReader(output))
+}
+
+func findManifestKind(
+	t *testing.T,
+	documents []unstructured.Unstructured,
+	kind string,
+) *unstructured.Unstructured {
+	t.Helper()
+	for index := range documents {
+		if documents[index].GetKind() == kind {
+			return &documents[index]
+		}
+	}
+	t.Fatalf("manifest is missing %s", kind)
+	return nil
+}
+
+func compareManifestField(
+	t *testing.T,
+	left *unstructured.Unstructured,
+	right *unstructured.Unstructured,
+	fields ...string,
+) {
+	t.Helper()
+	leftValue, leftFound, leftErr := unstructured.NestedFieldNoCopy(
+		left.Object, fields...,
+	)
+	rightValue, rightFound, rightErr := unstructured.NestedFieldNoCopy(
+		right.Object, fields...,
+	)
+	if leftErr != nil || rightErr != nil || !leftFound || !rightFound {
+		t.Fatalf("manifest field %v is missing", fields)
+	}
+	if fmt.Sprint(leftValue) != fmt.Sprint(rightValue) {
+		t.Fatalf("manifest field %v differs: %v != %v", fields,
+			leftValue, rightValue)
+	}
+}
+
+func compareContainerProbe(
+	t *testing.T,
+	left *unstructured.Unstructured,
+	right *unstructured.Unstructured,
+	probe string,
+) {
+	t.Helper()
+	leftContainers, _, _ := unstructured.NestedSlice(
+		left.Object, "spec", "template", "spec", "containers",
+	)
+	rightContainers, _, _ := unstructured.NestedSlice(
+		right.Object, "spec", "template", "spec", "containers",
+	)
+	leftContainer := leftContainers[0].(map[string]interface{})
+	rightContainer := rightContainers[0].(map[string]interface{})
+	leftPath, _, _ := unstructured.NestedString(
+		leftContainer, probe, "httpGet", "path",
+	)
+	rightPath, _, _ := unstructured.NestedString(
+		rightContainer, probe, "httpGet", "path",
+	)
+	if leftPath != rightPath {
+		t.Fatalf("%s path differs: %q != %q", probe, leftPath, rightPath)
+	}
+}
+
+func compareTopologySpread(
+	t *testing.T,
+	left *unstructured.Unstructured,
+	right *unstructured.Unstructured,
+) {
+	t.Helper()
+	leftValues, _, _ := unstructured.NestedSlice(
+		left.Object, "spec", "template", "spec", "topologySpreadConstraints",
+	)
+	rightValues, _, _ := unstructured.NestedSlice(
+		right.Object, "spec", "template", "spec", "topologySpreadConstraints",
+	)
+	if len(leftValues) != len(rightValues) || len(leftValues) == 0 {
+		t.Fatal("topology spread settings are not equivalent")
+	}
+	leftValue := leftValues[0].(map[string]interface{})
+	rightValue := rightValues[0].(map[string]interface{})
+	leftKey, _, _ := unstructured.NestedString(leftValue, "topologyKey")
+	rightKey, _, _ := unstructured.NestedString(rightValue, "topologyKey")
+	if leftKey != rightKey {
+		t.Fatalf("topology key differs: %q != %q", leftKey, rightKey)
+	}
+}
+
 func assertProbePath(
 	t *testing.T,
 	container map[string]interface{},
@@ -110,10 +269,10 @@ func assertProbePath(
 
 func decodeManifestDocuments(
 	t *testing.T,
-	file *os.File,
+	reader io.Reader,
 ) []unstructured.Unstructured {
 	t.Helper()
-	decoder := utilyaml.NewYAMLOrJSONDecoder(file, 4096)
+	decoder := utilyaml.NewYAMLOrJSONDecoder(reader, 4096)
 	var documents []unstructured.Unstructured
 	for {
 		var document map[string]interface{}

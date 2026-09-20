@@ -2,6 +2,7 @@ package heartbeat
 
 import (
 	"context"
+	"io"
 	"net/http"
 	"time"
 
@@ -78,6 +79,7 @@ func (m *HeartbeatMonitor) ping(ctx context.Context) {
 		klog.ErrorS(err, "heartbeat ping failed")
 		return
 	}
+	_, _ = io.Copy(io.Discard, resp.Body)
 	if err := resp.Body.Close(); err != nil {
 		klog.ErrorS(err, "heartbeat ping: failed to close response body")
 	}

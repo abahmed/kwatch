@@ -19,6 +19,15 @@ func TestDefaultMaxBytes(t *testing.T) {
 	assert.Equal(t, 0, defaultMaxBytes("webhook"))
 }
 
+func TestProviderPayloadPolicyIsExplicit(t *testing.T) {
+	for name, policy := range payloadPolicies {
+		assert.Equal(t, payloadBounded, policy.mode, name)
+		assert.Positive(t, policy.maxBytes, name)
+	}
+	assert.Equal(t, payloadProviderOwn, providerPayloadPolicy("webhook").mode)
+	assert.Zero(t, providerPayloadPolicy("webhook").maxBytes)
+}
+
 func TestFormatIncidentMessage(t *testing.T) {
 	now := time.Now()
 	inc := &model.Incident{

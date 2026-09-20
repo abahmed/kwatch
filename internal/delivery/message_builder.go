@@ -53,7 +53,7 @@ func eventPodName(inc *model.Incident) string {
 // NotifyIncident enqueues an incident for delivery to all providers.
 // When Start has been called, delivery is asynchronous via per-provider
 // buffered channels (non-blocking; drops the arriving job when full).
-// Before Start, delivery is synchronous (deliverAllSync).
+// Before Start, delivery is retained in the bounded pending queue.
 // insight is optional; nil means no structured analysis available.
 
 func (a *Manager) buildMessage(
@@ -181,16 +181,5 @@ func trimEvidence(inc *model.Incident, budget int) {
 }
 
 func defaultMaxBytes(providerName string) int {
-	switch strings.ToLower(providerName) {
-	case "telegram":
-		return 4096
-	case "teams":
-		return 28000
-	case "slack":
-		return 40000
-	case "discord":
-		return 2000
-	default:
-		return 0 // unlimited
-	}
+	return providerPayloadPolicy(providerName).maxBytes
 }

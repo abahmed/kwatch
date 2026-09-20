@@ -2,6 +2,8 @@ package vonage
 
 import (
 	"context"
+	"encoding/json"
+	"fmt"
 	"net/url"
 
 	"k8s.io/klog/v2"
@@ -21,6 +23,13 @@ type Vonage struct {
 	to        string
 
 	clusterName string
+}
+
+type response struct {
+	Messages []struct {
+		Status string `json:"status"`
+		Error  string `json:"error-text"`
+	} `json:"messages"`
 }
 
 // NewVonage returns a new Vonage object
@@ -87,9 +96,24 @@ func (v *Vonage) SendMessage(ctx context.Context, msg string) error {
 	form.Set("to", v.to)
 	form.Set("text", msg)
 
-	_, err := v.sender.Send(ctx, transport.Request{
+	body, err := v.sender.Send(ctx, transport.Request{
 		Provider: v.Name(), URL: v.url, Body: []byte(form.Encode()),
 		ContentType: "application/x-www-form-urlencoded",
 	})
-	return err
+	if err != nil {
+		return err
+	}
+	if len(body) == 0 {
+		return nil
+	}
+	var result response
+	if err := json.Unmarshal(body, &result); err != nil {
+		return fmt.Errorf("vonage returned invalid response")
+	}
+	for _, message := range result.Messages {
+		if message.Status != "0" {
+			return fmt.Errorf("vonage message failed with status %s", message.Status)
+		}
+	}
+	return nil
 }

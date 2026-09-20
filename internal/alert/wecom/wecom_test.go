@@ -80,6 +80,21 @@ func TestSendMessageError(t *testing.T) {
 	assert.NotNil(c.SendMessage(context.Background(), "test"))
 }
 
+func TestSendMessageReportsAPIErrorBody(t *testing.T) {
+	s := httptest.NewServer(http.HandlerFunc(
+		func(w http.ResponseWriter, r *http.Request) {
+			_, _ = w.Write([]byte(`{"errcode":40001,"errmsg":"invalid token"}`))
+		},
+	))
+	defer s.Close()
+
+	c := NewWecom(
+		map[string]interface{}{"webhook": s.URL},
+		testAppConfig(), testDeps,
+	)
+	assert.Error(t, c.SendMessage(context.Background(), "test"))
+}
+
 func TestSendEvent(t *testing.T) {
 	assert := assert.New(t)
 

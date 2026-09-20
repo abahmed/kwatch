@@ -21,6 +21,8 @@ const (
 
 var errComponentStopped = errors.New("component stopped unexpectedly")
 
+var errComponentCleanStop = errors.New("component stopped cleanly")
+
 var errComponentStalled = errors.New("component stalled")
 
 var errComponentShutdown = errors.New("component shutdown timed out")
@@ -55,6 +57,9 @@ func (s *componentSupervisor) startOwned(
 			component.onHealthy()
 		}
 		err := s.runComponent(ctx, component)
+		if errors.Is(err, errComponentCleanStop) {
+			return
+		}
 		if err == nil && ctx.Err() == nil {
 			err = errComponentStopped
 			metrics.DefaultRegistry().ComponentUnexpectedStops.Add(1)
@@ -105,6 +110,9 @@ func (s *componentSupervisor) startOptional(
 				component.onHealthy()
 			}
 			err := s.runComponent(ctx, component)
+			if errors.Is(err, errComponentCleanStop) {
+				return
+			}
 			if err == nil && ctx.Err() == nil {
 				err = errComponentStopped
 				metrics.DefaultRegistry().ComponentUnexpectedStops.Add(1)

@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 
 	"github.com/abahmed/kwatch/internal/alert/catalog"
 	"github.com/abahmed/kwatch/internal/config"
@@ -271,6 +272,7 @@ func TestNotifyIncidentSkip(t *testing.T) {
 type fakeThreadProvider struct {
 	lastInc *model.Incident
 	lastAct model.IncidentAction
+	done    chan struct{}
 }
 
 func (p *fakeThreadProvider) SendMessage(context.Context, string) error {
@@ -289,16 +291,23 @@ func (p *fakeThreadProvider) SendIncident(
 ) error {
 	p.lastInc = inc
 	p.lastAct = action
+	if p.done != nil {
+		close(p.done)
+	}
 	return nil
 }
 
 func TestNotifyIncidentCallsThreadProvider(t *testing.T) {
-	tp := &fakeThreadProvider{}
+	tp := &fakeThreadProvider{done: make(chan struct{})}
 	am := *newTestManager()
 	appendManagerEntries(&am, providerEntry{
 		provider: tp,
 		retry:    retryConfig{maxAttempts: 1},
 	})
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	require.NoError(t, am.Start(ctx))
+	defer am.shutdown()
 
 	inc := &model.Incident{
 		Subject: model.Subject{
@@ -308,8 +317,14 @@ func TestNotifyIncidentCallsThreadProvider(t *testing.T) {
 	}
 
 	am.NotifyIncident(inc, model.ActionCreate, nil)
+	select {
+	case <-tp.done:
+	case <-time.After(time.Second):
+		t.Fatal("thread provider was not called")
+	}
 
-	assert.Equal(t, inc, tp.lastInc)
+	assert.Equal(t, inc.Key, tp.lastInc.Key)
+	assert.Equal(t, inc.Name, tp.lastInc.Name)
 	assert.Equal(t, model.ActionCreate, tp.lastAct)
 }
 
@@ -320,6 +335,10 @@ func TestNotifyIncidentThreadProviderWithSkip(t *testing.T) {
 		provider: tp,
 		retry:    retryConfig{maxAttempts: 1},
 	})
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	require.NoError(t, am.Start(ctx))
+	defer am.shutdown()
 
 	inc := &model.Incident{
 		Subject: model.Subject{
@@ -334,7 +353,7 @@ func TestNotifyIncidentThreadProviderWithSkip(t *testing.T) {
 }
 
 func TestNotifyIncidentThreadProviderClamped(t *testing.T) {
-	tp := &fakeThreadProvider{}
+	tp := &fakeThreadProvider{done: make(chan struct{})}
 	am := *newTestManager()
 	appendManagerEntries(&am, providerEntry{
 		provider: tp,
@@ -345,6 +364,10 @@ func TestNotifyIncidentThreadProviderClamped(t *testing.T) {
 		},
 		maxBytes: 2000,
 	})
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	require.NoError(t, am.Start(ctx))
+	defer am.shutdown()
 
 	bigLog := strings.Repeat("error: something failed\n", 300)
 	inc := &model.Incident{
@@ -368,6 +391,11 @@ func TestNotifyIncidentThreadProviderClamped(t *testing.T) {
 	}
 
 	am.NotifyIncident(inc, model.ActionCreate, nil)
+	select {
+	case <-tp.done:
+	case <-time.After(time.Second):
+		t.Fatal("thread provider was not called")
+	}
 
 	assert.NotNil(t, tp.lastInc)
 	assert.Less(t, len(tp.lastInc.Logs), len(bigLog))

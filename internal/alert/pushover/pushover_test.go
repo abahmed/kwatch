@@ -63,6 +63,41 @@ func TestPushoverInvalidConfig(t *testing.T) {
 		testDeps,
 	)
 	assert.Nil(c)
+
+	c = NewPushover(
+		map[string]interface{}{
+			"token":    "test",
+			"user":     "user123",
+			"priority": 3,
+		},
+		testAppConfig(),
+		testDeps,
+	)
+	assert.Nil(c)
+
+	c = NewPushover(
+		map[string]interface{}{
+			"token":    "test",
+			"user":     "user123",
+			"priority": 2,
+		},
+		testAppConfig(),
+		testDeps,
+	)
+	assert.Nil(c)
+
+	c = NewPushover(
+		map[string]interface{}{
+			"token":    "test",
+			"user":     "user123",
+			"priority": 2,
+			"retry":    30,
+			"expire":   10800,
+		},
+		testAppConfig(),
+		testDeps,
+	)
+	assert.NotNil(c)
 }
 
 func TestSendMessage(t *testing.T) {

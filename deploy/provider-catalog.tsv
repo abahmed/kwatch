@@ -53,7 +53,9 @@ ntfy|ntfy|title|string|false|false|||Custom title
 ntfy|ntfy|priority|integer|false|false|integer|4|Priority 1-5 (default: 4)
 pushover|Pushover|token|string|true|true|||Application token
 pushover|Pushover|user|string|true|true|||User or group key
-pushover|Pushover|priority|integer|false|false|integer||Priority (optional)
+pushover|Pushover|priority|integer|false|false|integer||Priority from -2 to 2 (optional)
+pushover|Pushover|retry|integer|false|false|integer||Emergency retry interval in seconds
+pushover|Pushover|expire|integer|false|false|integer||Emergency expiration in seconds
 pushover|Pushover|title|string|false|false|||Custom title
 webex|Webex|accessToken|string|true|true|||Bot access token
 webex|Webex|roomId|string|false|false|||Room ID (at least one destination required)|destination|at-least-one
@@ -165,7 +167,7 @@ resend|Resend|apiKey|string|true|true|||API key
 resend|Resend|from|string|true|false|||From address
 resend|Resend|to|string|true|false|||Recipients (comma-separated)
 resend|Resend|subject|string|false|false|||Email subject
-goalert|GoAlert|url|string|false|false|url|https://goalert.example.com|GoAlert URL (default: https://goalert.example.com)
+goalert|GoAlert|url|string|true|false|url||GoAlert server URL
 goalert|GoAlert|token|string|true|true|||API token
 goalert|GoAlert|serviceId|string|true|false|||Service ID
 alerta|Alerta|url|string|true|false|url||Alerta server URL

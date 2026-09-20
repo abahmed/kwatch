@@ -78,29 +78,30 @@ func (c *Controller) wireService(runtime config.RuntimeConfig, fs factorySet) {
 	}
 
 	for _, inf := range serviceInformers {
-		inf.AddEventHandler(cache.ResourceEventHandlerFuncs{
-			AddFunc: func(obj interface{}) {
-				c.recordChange(kwcontext.ChangeCreate, "service", obj)
-				if runtime.Monitors().Service().Enabled {
-					c.service.enqueue(obj)
-				}
-				c.enqueueServiceDependents(obj)
-			},
-			UpdateFunc: func(old, obj interface{}) {
-				c.recordChangeUpdate("service", old, obj)
-				if runtime.Monitors().Service().Enabled {
-					c.service.enqueue(obj)
-				}
-				c.enqueueServiceDependents(obj)
-			},
-			DeleteFunc: func(obj interface{}) {
-				c.recordChange(kwcontext.ChangeDelete, "service", obj)
-				if runtime.Monitors().Service().Enabled {
-					c.service.enqueue(obj)
-				}
-				c.enqueueServiceDependents(obj)
-			},
-		})
+		inf.AddEventHandler(safeEventHandler("service",
+			cache.ResourceEventHandlerFuncs{
+				AddFunc: func(obj interface{}) {
+					c.recordChange(kwcontext.ChangeCreate, "service", obj)
+					if runtime.Monitors().Service().Enabled {
+						c.service.enqueue(obj)
+					}
+					c.enqueueServiceDependents(obj)
+				},
+				UpdateFunc: func(old, obj interface{}) {
+					c.recordChangeUpdate("service", old, obj)
+					if runtime.Monitors().Service().Enabled {
+						c.service.enqueue(obj)
+					}
+					c.enqueueServiceDependents(obj)
+				},
+				DeleteFunc: func(obj interface{}) {
+					c.recordChange(kwcontext.ChangeDelete, "service", obj)
+					if runtime.Monitors().Service().Enabled {
+						c.service.enqueue(obj)
+					}
+					c.enqueueServiceDependents(obj)
+				},
+			}))
 	}
 	if !runtime.Monitors().Service().Enabled {
 		c.wireEndpointSlices(runtime, fs)

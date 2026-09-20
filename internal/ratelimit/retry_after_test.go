@@ -37,3 +37,12 @@ func TestParseRetryAfterAtRejectsInvalidValues(t *testing.T) {
 		}
 	}
 }
+
+func TestParseRetryAfterAtCapsVeryLargeSeconds(t *testing.T) {
+	resp := &http.Response{Header: http.Header{
+		"Retry-After": []string{"9223372036854775807"},
+	}}
+	if got := ParseRetryAfterAt(resp, time.Time{}); got != 24*time.Hour {
+		t.Fatalf("retry delay = %s, want 24h", got)
+	}
+}

@@ -39,3 +39,26 @@ func startProgressHeartbeat(
 		<-done
 	}
 }
+
+// runWithProgress keeps lifecycle-only progress attached to the component
+// that owns the run function. The heartbeat stops before the run function
+// returns, so it cannot outlive that component generation.
+func runWithProgress(
+	ctx context.Context,
+	deps *serverDeps,
+	progress *componentProgress,
+	run func(context.Context) error,
+) error {
+	if run == nil {
+		return nil
+	}
+	if progress == nil || deps == nil || deps.clients.Clock == nil {
+		return run(ctx)
+	}
+	progress.Touch(deps.clients.Clock.Now())
+	stopHeartbeat := startProgressHeartbeat(ctx, func() {
+		progress.Touch(deps.clients.Clock.Now())
+	})
+	defer stopHeartbeat()
+	return run(ctx)
+}

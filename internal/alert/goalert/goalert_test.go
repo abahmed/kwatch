@@ -34,11 +34,12 @@ func TestGoalert(t *testing.T) {
 	configMap := map[string]interface{}{
 		"token":     "test",
 		"serviceId": "SVC123",
+		"url":       "https://goalert.example.test",
 	}
 	c := NewGoalert(configMap, testAppConfig(), testDeps)
 	assert.NotNil(c)
 	assert.Equal(c.Name(), "GoAlert")
-	assert.Equal(c.url, "https://goalert.example.com/api/v2/events")
+	assert.Equal(c.url, "https://goalert.example.test/api/v2/events")
 }
 
 func TestGoalertCustomURL(t *testing.T) {
@@ -88,6 +89,7 @@ func TestSendMessage(t *testing.T) {
 	configMap := map[string]interface{}{
 		"token":     "test",
 		"serviceId": "SVC123",
+		"url":       "https://goalert.example.test",
 	}
 	c := NewGoalert(configMap, testAppConfig(), testDeps)
 	c.url = s.URL
@@ -112,6 +114,7 @@ func TestSendMessageError(t *testing.T) {
 	configMap := map[string]interface{}{
 		"token":     "test",
 		"serviceId": "SVC123",
+		"url":       "https://goalert.example.test",
 	}
 	c := NewGoalert(configMap, testAppConfig(), testDeps)
 	c.url = s.URL
@@ -134,6 +137,7 @@ func TestSendEvent(t *testing.T) {
 	configMap := map[string]interface{}{
 		"token":     "test",
 		"serviceId": "SVC123",
+		"url":       "https://goalert.example.test",
 	}
 	c := NewGoalert(configMap, testAppConfig(), testDeps)
 	c.url = s.URL
@@ -152,6 +156,7 @@ func TestInvalidHttpRequest(t *testing.T) {
 	configMap := map[string]interface{}{
 		"token":     "test",
 		"serviceId": "SVC123",
+		"url":       "https://goalert.example.test",
 	}
 	c := NewGoalert(configMap, testAppConfig(), testDeps)
 	c.url = "h ttp://localhost/%s"

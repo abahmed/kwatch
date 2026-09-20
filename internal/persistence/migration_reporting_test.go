@@ -118,3 +118,35 @@ func TestMigrationReportContainsAllStartupOperations(t *testing.T) {
 		t, "mutated", store.MigrationReport().Operations[0].Detail,
 	)
 }
+
+func TestMigrationReportPreservesCompleteStartupCycle(t *testing.T) {
+	store := newTestManager(fake.NewSimpleClientset(), "kwatch")
+	store.BeginMigrationReport()
+	for _, name := range []string{
+		"startup-metadata", "state-schema", "baseline", "incidents",
+		"groups", "threads", "engine", "pvc-state", "telemetry",
+		"feedback", "change-history",
+	} {
+		store.RecordMigrationResult(MigrationResult{
+			Store:                 name,
+			SourceFormat:          "source/" + name,
+			DestinationFormat:     "runtime/" + name,
+			Status:                MigrationCompleted,
+			Recoverable:           true,
+			MonitoringMayContinue: true,
+			Detail:                "restored",
+		}, nil)
+	}
+
+	report := store.MigrationReport()
+	if len(report.Operations) != 11 {
+		t.Fatalf("migration operations = %d, want 11", len(report.Operations))
+	}
+	if report.StartedAt.IsZero() || report.CompletedAt.IsZero() {
+		t.Fatal("complete migration report must have lifecycle timestamps")
+	}
+	report.Operations[0].Store = "mutated"
+	if store.MigrationReport().Operations[0].Store == "mutated" {
+		t.Fatal("migration report operations must be detached")
+	}
+}

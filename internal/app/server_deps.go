@@ -24,6 +24,7 @@ type serverDeps struct {
 	runtime          config.RuntimeConfig
 	clients          client.ClientSet
 	healthServer     *health.HealthServer
+	readiness        *readinessCoordinator
 	deliveryManager  *delivery.Manager
 	incidentEngine   *incident.Engine
 	pvcMonitor       *pvc.PvcMonitor

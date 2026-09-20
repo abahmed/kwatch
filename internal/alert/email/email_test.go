@@ -2,9 +2,14 @@ package email
 
 import (
 	"context"
+	"fmt"
+	"io"
+	"net"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 	gomail "gopkg.in/mail.v2"
 
 	"github.com/abahmed/kwatch/internal/event"
@@ -133,4 +138,41 @@ func TestSendEvent(t *testing.T) {
 			"event3\nevent5\nevent6-event8-event11-event12",
 	}
 	assert.Nil(c.SendEvent(context.Background(), &ev))
+}
+
+func TestSendEventHonorsCancellationBeforeSMTPDial(t *testing.T) {
+	configMap := map[string]interface{}{
+		"from": "test@test.com", "to": "to@test.com",
+		"password": "password", "host": "127.0.0.1", "port": "587",
+	}
+	c := NewEmail(configMap, "dev")
+	require.NotNil(t, c)
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	err := c.SendEvent(ctx, &event.Event{Reason: "test"})
+	assert.ErrorIs(t, err, context.Canceled)
+}
+
+func TestSendEventCancellationClosesSMTPConnection(t *testing.T) {
+	listener, err := net.Listen("tcp", "127.0.0.1:0")
+	require.NoError(t, err)
+	defer listener.Close()
+	go func() {
+		conn, acceptErr := listener.Accept()
+		if acceptErr == nil {
+			defer conn.Close()
+			_, _ = io.Copy(io.Discard, conn)
+		}
+	}()
+
+	c := NewEmail(map[string]interface{}{
+		"from": "test@test.com", "to": "to@test.com",
+		"password": "password", "host": "127.0.0.1",
+		"port": fmt.Sprint(listener.Addr().(*net.TCPAddr).Port),
+	}, "dev")
+	require.NotNil(t, c)
+	ctx, cancel := context.WithTimeout(context.Background(), 50*time.Millisecond)
+	defer cancel()
+	err = c.SendEvent(ctx, &event.Event{Reason: "test"})
+	assert.ErrorIs(t, err, context.DeadlineExceeded)
 }

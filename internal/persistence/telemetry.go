@@ -112,7 +112,7 @@ func (s *Manager) SaveChangeHistory(
 	ctx context.Context,
 	changes []kwcontext.Change,
 ) error {
-	for len(changes) > 0 {
+	for len(changes) > 1 {
 		data, err := json.Marshal(changes)
 		if err != nil {
 			return err
@@ -129,6 +129,25 @@ func (s *Manager) SaveChangeHistory(
 		// Keep the newest half; history is context, not incident state, and
 		// must never block updates to the state ConfigMap.
 		changes = changes[len(changes)/2:]
+	}
+	if len(changes) == 1 {
+		data, err := json.Marshal(changes)
+		if err != nil {
+			return err
+		}
+		if len(data) > maxChangeHistoryBytes {
+			return fmt.Errorf(
+				"single change history entry exceeds %d bytes",
+				maxChangeHistoryBytes,
+			)
+		}
+		return s.changesMgr.UpdateWithRetry(
+			ctx,
+			func(cm *corev1.ConfigMap) error {
+				setStringPayload(cm, changeHistoryStateKey, string(data))
+				return nil
+			},
+		)
 	}
 	return fmt.Errorf("change history exceeds %d bytes", maxChangeHistoryBytes)
 }

@@ -10,62 +10,85 @@ func (c *Controller) wireGraphHandlers(
 	c.wireNodeAndLeaseGraphHandlers(fs)
 	if c.serviceLister != nil {
 		for _, inf := range fs.serviceInformers() {
-			inf.AddEventHandler(c.graphHandler("service", c.rebuildService))
+			inf.AddEventHandler(safeEventHandler(
+				"service", c.graphHandler("service", c.rebuildService),
+			))
 		}
 	}
 	for _, inf := range fs.rsInformers() {
-		inf.AddEventHandler(c.graphHandler(
-			"replicaset", func(obj interface{}) { c.rebuildReplicaSet(obj) },
+		inf.AddEventHandler(safeEventHandler(
+			"replicaset",
+			c.graphHandler(
+				"replicaset",
+				func(obj interface{}) { c.rebuildReplicaSet(obj) },
+			),
 		))
 	}
 	for _, inf := range fs.pvcInformers() {
-		inf.AddEventHandler(c.graphHandler("pvc", c.rebuildPersistentVolumeClaim))
+		inf.AddEventHandler(safeEventHandler(
+			"pvc", c.graphHandler("pvc", c.rebuildPersistentVolumeClaim),
+		))
 	}
 	for _, inf := range fs.persistentVolumeInformers() {
-		inf.AddEventHandler(c.graphHandler(
-			"persistentvolume", c.rebuildPersistentVolume,
+		inf.AddEventHandler(safeEventHandler(
+			"persistentvolume",
+			c.graphHandler("persistentvolume", c.rebuildPersistentVolume),
 		))
 	}
 	for _, inf := range fs.storageClassInformers() {
-		inf.AddEventHandler(c.graphHandler("storageclass", func(interface{}) {}))
+		inf.AddEventHandler(safeEventHandler(
+			"storageclass", c.graphHandler("storageclass", func(interface{}) {}),
+		))
 	}
 
 	if runtime.Monitors().Job().Enabled {
 		for _, inf := range fs.jobInformers() {
-			inf.AddEventHandler(c.graphHandler("job", c.rebuildJob))
+			inf.AddEventHandler(safeEventHandler(
+				"job", c.graphHandler("job", c.rebuildJob),
+			))
 		}
 	}
 	if runtime.Monitors().Ingress().Enabled {
 		for _, inf := range fs.ingressInformers() {
-			inf.AddEventHandler(c.graphHandler("ingress", c.rebuildIngress))
+			inf.AddEventHandler(safeEventHandler(
+				"ingress", c.graphHandler("ingress", c.rebuildIngress),
+			))
 		}
 	}
 	if runtime.Monitors().HPA().Enabled {
 		for _, inf := range fs.hpaInformers() {
-			inf.AddEventHandler(c.graphHandler(
+			inf.AddEventHandler(safeEventHandler(
 				"horizontalpodautoscaler",
-				c.rebuildHorizontalPodAutoscaler,
+				c.graphHandler(
+					"horizontalpodautoscaler",
+					c.rebuildHorizontalPodAutoscaler,
+				),
 			))
 		}
 	}
 	if runtime.Monitors().NetworkPolicy().Enabled {
 		for _, inf := range fs.netpolInformers() {
-			inf.AddEventHandler(c.graphHandler(
-				"networkpolicy", c.rebuildNetworkPolicy,
+			inf.AddEventHandler(safeEventHandler(
+				"networkpolicy",
+				c.graphHandler("networkpolicy", c.rebuildNetworkPolicy),
 			))
 		}
 	}
 	if runtime.Monitors().PDB().Enabled {
 		for _, inf := range fs.pdbInformers() {
-			inf.AddEventHandler(c.graphHandler(
-				"poddisruptionbudget", c.rebuildPodDisruptionBudget,
+			inf.AddEventHandler(safeEventHandler(
+				"poddisruptionbudget",
+				c.graphHandler(
+					"poddisruptionbudget", c.rebuildPodDisruptionBudget,
+				),
 			))
 		}
 	}
 	if c.endpointSliceLister != nil {
 		for _, inf := range fs.endpointSliceInformers() {
-			inf.AddEventHandler(c.graphHandler(
-				"endpointslice", c.rebuildEndpointSlice,
+			inf.AddEventHandler(safeEventHandler(
+				"endpointslice",
+				c.graphHandler("endpointslice", c.rebuildEndpointSlice),
 			))
 		}
 	}
@@ -74,11 +97,15 @@ func (c *Controller) wireGraphHandlers(
 func (c *Controller) wireNodeAndLeaseGraphHandlers(fs factorySet) {
 	if c.nodeLister != nil {
 		inf := fs.nodeInformer()
-		inf.AddEventHandler(c.graphHandler("node", c.rebuildNodeGraph))
+		inf.AddEventHandler(safeEventHandler(
+			"node", c.graphHandler("node", c.rebuildNodeGraph),
+		))
 	}
 	if c.leaseLister != nil {
 		for _, inf := range fs.leaseInformers() {
-			inf.AddEventHandler(c.graphHandler("lease", c.rebuildLeaseGraph))
+			inf.AddEventHandler(safeEventHandler(
+				"lease", c.graphHandler("lease", c.rebuildLeaseGraph),
+			))
 		}
 	}
 }

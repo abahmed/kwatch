@@ -5,10 +5,10 @@ import (
 	"fmt"
 	"io"
 	"net/http"
-	"strconv"
 	"time"
 
 	"github.com/abahmed/kwatch/internal/model"
+	"github.com/abahmed/kwatch/internal/ratelimit"
 )
 
 // RetryAfterError wraps an error with an optional Retry-After duration.
@@ -71,20 +71,26 @@ func ClassifyHTTP(code int, err error) error {
 // header.
 // Other 4xx statuses return a PermanentError so they are not retried.
 func CheckHTTPResponse(resp *http.Response, provider string) error {
+	return CheckHTTPResponseAt(resp, provider, time.Time{})
+}
+
+// CheckHTTPResponseAt is the deterministic form used when HTTP-date
+// Retry-After values must be interpreted relative to an injected clock.
+func CheckHTTPResponseAt(
+	resp *http.Response,
+	provider string,
+	now time.Time,
+) error {
 	_, _ = io.Copy(
 		io.Discard,
 		resp.Body,
 	) // best-effort drain; frees the conn on Close()
-	if resp.StatusCode < 300 {
+	if resp.StatusCode >= http.StatusOK &&
+		resp.StatusCode < http.StatusMultipleChoices {
 		return nil
 	}
 	if resp.StatusCode == http.StatusTooManyRequests {
-		d := time.Duration(0)
-		if ra := resp.Header.Get("Retry-After"); ra != "" {
-			if secs, err := strconv.Atoi(ra); err == nil && secs > 0 {
-				d = time.Duration(secs) * time.Second
-			}
-		}
+		d := ratelimit.ParseRetryAfterAt(resp, now)
 		return &RetryAfterError{
 			Err: fmt.Errorf(
 				"call to %s returned status %d",

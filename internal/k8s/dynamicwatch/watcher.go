@@ -13,6 +13,7 @@ import (
 	"k8s.io/client-go/tools/cache"
 	"k8s.io/klog/v2"
 
+	"github.com/abahmed/kwatch/internal/k8s"
 	"github.com/abahmed/kwatch/internal/metrics"
 )
 
@@ -146,7 +147,9 @@ func (w *Watcher) StartGeneration(
 			if err != nil {
 				return Generation{}, err
 			}
-			if _, err := informer.AddEventHandler(spec.Handlers); err != nil {
+			if _, err := informer.AddEventHandler(k8s.SafeEventHandler(
+				"dynamicwatch", spec.GVR.String(), spec.Handlers,
+			)); err != nil {
 				return Generation{}, fmt.Errorf(
 					"register %s informer: %w", spec.GVR, err,
 				)

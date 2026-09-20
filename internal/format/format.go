@@ -82,7 +82,11 @@ func Plural(n int, word string) string {
 	if n == 1 {
 		return fmt.Sprintf("1 %s", word)
 	}
-	return fmt.Sprintf("%d %ss", n, word)
+	suffix := "s"
+	if strings.HasSuffix(word, "s") {
+		suffix = ""
+	}
+	return fmt.Sprintf("%d %s%s", n, word, suffix)
 }
 
 // Duration renders d for people: "5s", "2m30s", "2h15m". Sub-second detail is

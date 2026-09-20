@@ -2,10 +2,12 @@ package app
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"time"
 
 	"github.com/abahmed/kwatch/internal/controller"
+	"github.com/abahmed/kwatch/internal/delivery"
 )
 
 // startCoreComponents starts the long-running components owned directly by
@@ -24,70 +26,61 @@ func startCoreComponents(
 		},
 	})
 	components := []componentSpec{
-		{
-			name:      "incident-cleanup",
-			onError:   degrade(deps, "incident-cleanup"),
-			onHealthy: recoverComponent(deps, "incident-cleanup"),
-			run: func(componentCtx context.Context) error {
-				return runIncidentCleanup(componentCtx, deps)
-			},
-		},
-		{
-			name:      "pvc-monitor",
-			onError:   degrade(deps, "pvc-monitor"),
-			onHealthy: recoverComponent(deps, "pvc-monitor"),
-			run: func(componentCtx context.Context) error {
-				return runPVCMonitor(componentCtx, deps)
-			},
-		},
-		{
-			name:      "heartbeat",
-			onError:   degrade(deps, "heartbeat"),
-			onHealthy: recoverComponent(deps, "heartbeat"),
-			run: func(componentCtx context.Context) error {
-				return runHeartbeat(componentCtx, deps)
-			},
-		},
-		{
-			name:      "incident-snapshots",
-			onError:   degrade(deps, "incident-snapshots"),
-			onHealthy: recoverComponent(deps, "incident-snapshots"),
-			run: func(componentCtx context.Context) error {
-				return runIncidentSnapshots(componentCtx, deps)
-			},
-		},
+		monitoredComponent(deps, "incident-cleanup", runIncidentCleanup),
+		monitoredComponent(deps, "pvc-monitor", runPVCMonitor),
+		monitoredComponent(deps, "heartbeat", runHeartbeat),
+		monitoredComponent(deps, "incident-snapshots", runIncidentSnapshots),
 	}
 
 	if deps.tlsSweep != nil {
-		components = append(components, componentSpec{
-			name: "tls-sweep", onError: degrade(deps, "tls-sweep"),
-			onHealthy: recoverComponent(deps, "tls-sweep"),
-			run: func(componentCtx context.Context) error {
-				return runTLSSweep(componentCtx, deps)
-			},
-		})
+		components = append(
+			components,
+			monitoredComponent(deps, "tls-sweep", runTLSSweep),
+		)
 	}
 	if deps.runtime.Monitors().CRD().Enabled {
-		components = append(components, componentSpec{
-			name: "crd-watcher", onError: degrade(deps, "crd-watcher"),
-			run: func(componentCtx context.Context) error {
-				return runCRDWatcher(componentCtx, deps)
-			},
-		})
+		components = append(
+			components,
+			monitoredComponent(deps, "crd-watcher", runCRDWatcher),
+		)
 	}
 	if deps.runtime.Scope().NamespaceSelector() != "" {
-		components = append(components, componentSpec{
-			name:      "namespace-scope-watcher",
-			onError:   degrade(deps, "namespace-scope-watcher"),
-			onHealthy: recoverComponent(deps, "namespace-scope-watcher"),
-			run: func(componentCtx context.Context) error {
-				return runNamespaceScopeWatcher(componentCtx, deps)
-			},
-		})
+		components = append(
+			components,
+			monitoredComponent(
+				deps, "namespace-scope-watcher", runNamespaceScopeWatcher,
+			),
+		)
 	}
 	for _, component := range components {
 		supervisor.startOptional(ctx, deps.initialized, component)
 	}
+}
+
+func monitoredComponent(
+	deps *serverDeps,
+	name string,
+	run func(context.Context, *serverDeps) error,
+) componentSpec {
+	progress := newComponentProgress(componentStartTime(deps))
+	return componentSpec{
+		name:      name,
+		onError:   degrade(deps, name),
+		onHealthy: recoverComponent(deps, name),
+		progress:  progress,
+		run: func(ctx context.Context) error {
+			return runWithProgress(ctx, deps, progress, func(ctx context.Context) error {
+				return run(ctx, deps)
+			})
+		},
+	}
+}
+
+func componentStartTime(deps *serverDeps) time.Time {
+	if deps == nil || deps.clients.Clock == nil {
+		return time.Time{}
+	}
+	return deps.clients.Clock.Now()
 }
 
 func degrade(deps *serverDeps, name string) func(error) {
@@ -125,6 +118,11 @@ func runDelivery(ctx context.Context, deps *serverDeps) error {
 	case <-deps.deliveryManager.Done():
 		if ctx.Err() != nil {
 			return nil
+		}
+		if err := deps.deliveryManager.WaitForReconfiguration(ctx); err == nil {
+			return runDelivery(ctx, deps)
+		} else if !errors.Is(err, delivery.ErrNoReconfiguration) {
+			return err
 		}
 		return fmt.Errorf("delivery workers stopped unexpectedly")
 	}

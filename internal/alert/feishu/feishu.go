@@ -55,6 +55,10 @@ type feiShuRequestBody struct {
 	Card    feiShuCard `json:"card"`
 }
 
+type feiShuResponse struct {
+	Code int `json:"code"`
+}
+
 // NewFeiShu returns new feishu web bot instance
 
 func NewFeiShu(
@@ -102,10 +106,23 @@ func (f *FeiShu) sendByFeiShuApi(
 	ctx context.Context,
 	reqBody string,
 ) error {
-	_, err := f.sender.Send(ctx, transport.Request{
+	body, err := f.sender.Send(ctx, transport.Request{
 		Provider: "Feishu", URL: f.webhook, Body: []byte(reqBody),
 	})
-	return err
+	if err != nil {
+		return err
+	}
+	if len(body) == 0 {
+		return nil
+	}
+	var response feiShuResponse
+	if err := json.Unmarshal(body, &response); err != nil {
+		return fmt.Errorf("feishu returned invalid response")
+	}
+	if response.Code != 0 {
+		return fmt.Errorf("feishu request failed with code %d", response.Code)
+	}
+	return nil
 }
 
 // SendMessage sends text message to the provider

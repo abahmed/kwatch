@@ -30,6 +30,7 @@ func TestHandlerUsesStableOrderAndGETOnly(t *testing.T) {
 
 func TestHandlerExposesStableMetricContract(t *testing.T) {
 	r := &Registry{}
+	r.InformerHandlerPanics.Store(13)
 	r.QueueDepth.Store(3)
 	r.NotificationsTotal.Store(4)
 	r.GraphNodes.Store(5)
@@ -60,6 +61,7 @@ func TestHandlerExposesStableMetricContract(t *testing.T) {
 		"kwatch_leadership_acquisitions_total 10",
 		"kwatch_leadership_losses_total 11",
 		"kwatch_leader_takeovers_total 12",
+		"kwatch_informer_handler_panics_total 13",
 	} {
 		if !strings.Contains(body, metric) {
 			t.Fatalf("metrics output is missing %q", metric)

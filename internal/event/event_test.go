@@ -1,7 +1,9 @@
 package event
 
 import (
+	"io"
 	"net/http"
+	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -175,6 +177,24 @@ func TestFormatHtmlEmptyEventsLogs(t *testing.T) {
 	assert.Contains(result, "test-cluster")
 }
 
+func TestFormatHtmlEscapesEventData(t *testing.T) {
+	e := Event{
+		PodName:       "pod<&",
+		Reason:        "<script>alert(1)</script>",
+		Events:        "<event>\n& details",
+		Logs:          "<log>\n\"quoted\"",
+		IncludeEvents: true,
+		IncludeLogs:   true,
+	}
+
+	result := e.FormatHtml("cluster<&", "<custom>")
+	assert.NotContains(t, result, "<script>")
+	assert.NotContains(t, result, "<event>")
+	assert.NotContains(t, result, "<log>")
+	assert.Contains(t, result, "&lt;script&gt;")
+	assert.Contains(t, result, "&amp; details")
+}
+
 func TestFormatText(t *testing.T) {
 	assert := assert.New(t)
 
@@ -273,4 +293,21 @@ func TestIsPermanentHTTPStatus(t *testing.T) {
 			t.Errorf("status %d: permanent=%v, want %v", code, got, want)
 		}
 	}
+}
+
+func TestCheckHTTPResponseAcceptsOnlyTwoHundredStatuses(t *testing.T) {
+	for _, status := range []int{http.StatusContinue, http.StatusMultipleChoices} {
+		resp := &http.Response{
+			StatusCode: status,
+			Body:       io.NopCloser(strings.NewReader("")),
+			Header:     http.Header{},
+		}
+		assert.Error(t, CheckHTTPResponse(resp, "test"))
+	}
+	resp := &http.Response{
+		StatusCode: http.StatusNoContent,
+		Body:       io.NopCloser(strings.NewReader("")),
+		Header:     http.Header{},
+	}
+	assert.NoError(t, CheckHTTPResponse(resp, "test"))
 }

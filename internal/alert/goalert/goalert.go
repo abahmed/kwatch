@@ -12,7 +12,6 @@ import (
 )
 
 const (
-	goalertAPIURL  = "https://goalert.example.com"
 	goalertAPIPath = "/api/v2/events"
 )
 
@@ -50,9 +49,10 @@ func NewGoalert(
 		return nil
 	}
 
-	server := goalertAPIURL
-	if u, ok := config["url"].(string); ok && len(u) > 0 {
-		server = u
+	server, ok := config["url"].(string)
+	if !ok || strings.TrimSpace(server) == "" {
+		klog.InfoS("initializing goalert with empty url")
+		return nil
 	}
 
 	klog.InfoS("initializing goalert", "url", server, "serviceID", serviceID)

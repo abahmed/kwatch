@@ -40,46 +40,24 @@ func configurePersistence(
 	runtime config.RuntimeConfig,
 	now func() time.Time,
 	healthServer *health.HealthServer,
+	readiness *readinessCoordinator,
 ) persistenceSetup {
 	persistenceManager.BeginMigrationReport()
-	tracker, trackerErr := loadChangeTracker(ctx, persistenceManager, now)
-	recordOptionalRestore(
-		persistenceManager, "change-history", trackerErr,
+	restored := restorePersistenceState(
+		ctx, persistenceManager, runtime, now,
 	)
+	tracker := restored.tracker
 	changeDone := make(chan struct{})
 
 	baselineCh := make(chan map[string]map[string]int64, 64)
-	baseline, baselineErr := persistenceManager.GetBaselineWithError(ctx)
-	recordRequiredRestore(
-		persistenceManager, "baseline", baselineErr,
-	)
+	baseline := restored.baseline
 	baselineDone := make(chan struct{})
 
 	incidentDone := make(chan struct{})
 	incidentCh := make(chan stateSnapshot, 1)
 	var incidentSaverForRun incidentSaver = persistenceManager
 
-	feedbackStore, feedbackErr := loadFeedbackStore(
-		ctx, persistenceManager, now,
-	)
-	recordOptionalRestore(
-		persistenceManager, "feedback", feedbackErr,
-	)
-	var pvcErr error
-	if runtime.Monitors().PVC().Enabled {
-		_, pvcErr = persistenceManager.GetPvcUsageWithError(ctx)
-		recordRequiredRestore(persistenceManager, "pvc-state", pvcErr)
-	} else {
-		recordNotRequiredRestore(persistenceManager, "pvc-state")
-	}
-	if runtime.Monitors().KubeletTelemetry().PersistState {
-		_, telemetryErr := persistenceManager.LoadTelemetryState(ctx)
-		recordOptionalRestore(
-			persistenceManager, "telemetry", telemetryErr,
-		)
-	} else {
-		recordNotRequiredRestore(persistenceManager, "telemetry")
-	}
+	feedbackStore := restored.feedbackStore
 	feedbackDone := make(chan struct{})
 	feedbackCh := make(chan []insight.RCARecord, 1)
 	start := func(
@@ -87,95 +65,11 @@ func configurePersistence(
 		supervisor *componentSupervisor,
 		canWrite func() bool,
 	) {
-		changeProgress := newComponentProgress(now())
-		supervisor.startOwned(ctx, componentSpec{
-			name:     "change-history-saver",
-			required: true,
-			progress: changeProgress,
-			onHealthy: func() {
-				if healthServer != nil {
-					healthServer.SetComponentStatus(
-						"change-history-saver", "running", "", true,
-					)
-				}
-			},
-			run: func(ctx context.Context) error {
-				defer close(changeDone)
-				return startChangeHistorySaver(
-					ctx, persistenceManager, tracker,
-					persistenceStatus(
-						healthServer, "change-history-saver", true,
-					),
-					canWrite,
-					func() { changeProgress.Touch(now()) },
-				)
-			},
-		})
-		baselineProgress := newComponentProgress(now())
-		supervisor.startOwned(ctx, componentSpec{
-			name:     "baseline-saver",
-			required: true,
-			progress: baselineProgress,
-			onHealthy: func() {
-				if healthServer != nil {
-					healthServer.SetComponentStatus(
-						"baseline-saver", "running", "", true,
-					)
-				}
-			},
-			run: func(ctx context.Context) error {
-				defer close(baselineDone)
-				return startBaselineSaverWithStatus(
-					ctx, persistenceManager, baselineCh, 0,
-					persistenceStatus(healthServer, "baseline-saver", true),
-					canWrite,
-					func() { baselineProgress.Touch(now()) },
-				)
-			},
-		})
-		incidentProgress := newComponentProgress(now())
-		supervisor.startOwned(ctx, componentSpec{
-			name:     "incident-saver",
-			required: true,
-			progress: incidentProgress,
-			onHealthy: func() {
-				if healthServer != nil {
-					healthServer.SetComponentStatus(
-						"incident-saver", "running", "", true,
-					)
-				}
-			},
-			run: func(ctx context.Context) error {
-				defer close(incidentDone)
-				return startIncidentSaver(
-					ctx, persistenceManager, incidentCh,
-					persistenceStatus(healthServer, "incident-saver", true),
-					canWrite,
-					func() { incidentProgress.Touch(now()) },
-				)
-			},
-		})
-		feedbackProgress := newComponentProgress(now())
-		supervisor.startOwned(ctx, componentSpec{
-			name:     "feedback-saver",
-			progress: feedbackProgress,
-			onHealthy: func() {
-				if healthServer != nil {
-					healthServer.SetComponentStatus(
-						"feedback-saver", "running", "", true,
-					)
-				}
-			},
-			run: func(ctx context.Context) error {
-				startFeedbackSaver(
-					ctx, persistenceManager, feedbackCh, feedbackDone,
-					persistenceStatus(healthServer, "feedback-saver", false),
-					canWrite,
-					func() { feedbackProgress.Touch(now()) },
-				)
-				return nil
-			},
-		})
+		startPersistenceSavers(
+			ctx, supervisor, persistenceManager, tracker, baselineCh,
+			incidentCh, feedbackCh, changeDone, baselineDone, incidentDone,
+			feedbackDone, canWrite, now, healthServer, readiness,
+		)
 	}
 
 	setup := persistenceSetup{
@@ -183,7 +77,7 @@ func configurePersistence(
 		baselineDone: baselineDone, changeDone: changeDone,
 		incidentCh: incidentCh, incidentDone: incidentDone,
 		incidentSaver: incidentSaverForRun, feedbackStore: feedbackStore,
-		restoreErr:   pvcErr,
+		restoreErr:   restored.requiredErr,
 		feedbackDone: feedbackDone,
 		saveFeedback: feedbackSnapshotSaver(feedbackCh, feedbackStore),
 		start:        start,
@@ -192,11 +86,8 @@ func configurePersistence(
 		ctx context.Context,
 		applyBaseline func(map[string]map[string]int64),
 	) error {
-		if baselineErr != nil || setup.restoreErr != nil {
-			restoreErr := baselineErr
-			if restoreErr == nil {
-				restoreErr = setup.restoreErr
-			}
+		if setup.restoreErr != nil {
+			restoreErr := setup.restoreErr
 			if healthServer != nil {
 				healthServer.SetComponentError("persistence", restoreErr)
 			}
@@ -247,6 +138,7 @@ func persistenceStatus(
 	healthServer *health.HealthServer,
 	name string,
 	required bool,
+	readiness *readinessCoordinator,
 ) func(error) {
 	return func(err error) {
 		if healthServer == nil {
@@ -255,8 +147,191 @@ func persistenceStatus(
 		healthServer.SetComponentError(name, err)
 		if required && err != nil {
 			healthServer.SetReady(false)
+			if readiness != nil {
+				readiness.writerFailed()
+			}
 		}
 	}
+}
+
+type restoredPersistenceState struct {
+	tracker       *kwcontext.ChangeTracker
+	baseline      map[string]map[string]int64
+	feedbackStore *insight.FeedbackStore
+	requiredErr   error
+}
+
+func restorePersistenceState(
+	ctx context.Context,
+	manager *persistence.Manager,
+	runtime config.RuntimeConfig,
+	now func() time.Time,
+) restoredPersistenceState {
+	tracker, trackerErr := loadChangeTracker(ctx, manager, now)
+	recordOptionalRestore(manager, "change-history", trackerErr)
+	baseline, baselineErr := manager.GetBaselineWithError(ctx)
+	recordRequiredRestore(manager, "baseline", baselineErr)
+	feedbackStore, feedbackErr := loadFeedbackStore(ctx, manager, now)
+	recordOptionalRestore(manager, "feedback", feedbackErr)
+
+	requiredErr := baselineErr
+	if runtime.Monitors().PVC().Enabled {
+		_, pvcErr := manager.GetPvcUsageWithError(ctx)
+		recordRequiredRestore(manager, "pvc-state", pvcErr)
+		if requiredErr == nil {
+			requiredErr = pvcErr
+		}
+	} else {
+		recordNotRequiredRestore(manager, "pvc-state")
+	}
+	if runtime.Monitors().KubeletTelemetry().PersistState {
+		_, telemetryErr := manager.LoadTelemetryState(ctx)
+		recordOptionalRestore(manager, "telemetry", telemetryErr)
+	} else {
+		recordNotRequiredRestore(manager, "telemetry")
+	}
+	return restoredPersistenceState{
+		tracker: tracker, baseline: baseline, feedbackStore: feedbackStore,
+		requiredErr: requiredErr,
+	}
+}
+
+func startPersistenceSavers(
+	ctx context.Context,
+	supervisor *componentSupervisor,
+	manager *persistence.Manager,
+	tracker *kwcontext.ChangeTracker,
+	baselineCh chan map[string]map[string]int64,
+	incidentCh chan stateSnapshot,
+	feedbackCh chan []insight.RCARecord,
+	changeDone chan struct{},
+	baselineDone chan struct{},
+	incidentDone chan struct{},
+	feedbackDone chan struct{},
+	canWrite func() bool,
+	now func() time.Time,
+	healthServer *health.HealthServer,
+	readiness *readinessCoordinator,
+) {
+	startRequiredSaver(
+		ctx, supervisor, "change-history-saver", changeDone,
+		now, func() {
+			if healthServer != nil {
+				healthServer.SetComponentStatus(
+					"change-history-saver", "running", "", true,
+				)
+			}
+		}, func(ctx context.Context, progress func()) error {
+			return startChangeHistorySaver(
+				ctx, manager, tracker,
+				persistenceStatus(
+					healthServer, "change-history-saver", true, readiness,
+				),
+				canWrite, progress,
+			)
+		},
+		readiness,
+	)
+	startRequiredSaver(
+		ctx, supervisor, "baseline-saver", baselineDone,
+		now, func() {
+			if healthServer != nil {
+				healthServer.SetComponentStatus(
+					"baseline-saver", "running", "", true,
+				)
+			}
+		}, func(ctx context.Context, progress func()) error {
+			return startBaselineSaverWithStatus(
+				ctx, manager, baselineCh, 0,
+				persistenceStatus(healthServer, "baseline-saver", true, readiness),
+				canWrite, progress,
+			)
+		},
+		readiness,
+	)
+	startRequiredSaver(
+		ctx, supervisor, "incident-saver", incidentDone,
+		now, func() {
+			if healthServer != nil {
+				healthServer.SetComponentStatus(
+					"incident-saver", "running", "", true,
+				)
+			}
+		}, func(ctx context.Context, progress func()) error {
+			return startIncidentSaver(
+				ctx, manager, incidentCh,
+				persistenceStatus(healthServer, "incident-saver", true, readiness),
+				canWrite, progress,
+			)
+		},
+		readiness,
+	)
+	startOptionalSaver(
+		ctx, supervisor, "feedback-saver", feedbackDone, now,
+		func() {
+			if healthServer != nil {
+				healthServer.SetComponentStatus(
+					"feedback-saver", "running", "", true,
+				)
+			}
+		},
+		func(ctx context.Context, progress func()) error {
+			startFeedbackSaver(
+				ctx, manager, feedbackCh, feedbackDone,
+				persistenceStatus(healthServer, "feedback-saver", false, readiness),
+				canWrite, progress,
+			)
+			return nil
+		},
+	)
+}
+
+func startRequiredSaver(
+	ctx context.Context,
+	supervisor *componentSupervisor,
+	name string,
+	done chan struct{},
+	now func() time.Time,
+	onHealthy func(),
+	run func(context.Context, func()) error,
+	readiness *readinessCoordinator,
+) {
+	progress := newComponentProgress(now())
+	supervisor.startOwned(ctx, componentSpec{
+		name: name, required: true, progress: progress,
+		onHealthy: func() {
+			if onHealthy != nil {
+				onHealthy()
+			}
+			if readiness != nil {
+				readiness.writerStarted()
+			}
+		},
+		run: func(ctx context.Context) error {
+			defer close(done)
+			return run(ctx, func() { progress.Touch(now()) })
+		},
+	})
+}
+
+func startOptionalSaver(
+	ctx context.Context,
+	supervisor *componentSupervisor,
+	name string,
+	done chan struct{},
+	now func() time.Time,
+	onHealthy func(),
+	run func(context.Context, func()) error,
+) {
+	progress := newComponentProgress(now())
+	supervisor.startOwned(ctx, componentSpec{
+		name: name, progress: progress,
+		onHealthy: onHealthy,
+		run: func(ctx context.Context) error {
+			defer close(done)
+			return run(ctx, func() { progress.Touch(now()) })
+		},
+	})
 }
 
 func loadChangeTracker(
@@ -364,6 +439,9 @@ func startChangeHistorySaver(
 	stopHeartbeat := startProgressHeartbeat(ctx, progress)
 	defer stopHeartbeat()
 	for {
+		if !writesAllowed(canWrite) {
+			return errComponentCleanStop
+		}
 		select {
 		case <-ctx.Done():
 			return nil
@@ -372,7 +450,7 @@ func startChangeHistorySaver(
 				progress()
 			}
 			if !writesAllowed(canWrite) {
-				return nil
+				return errComponentCleanStop
 			}
 			if err := persistenceManager.SaveChangeHistory(
 				ctx,

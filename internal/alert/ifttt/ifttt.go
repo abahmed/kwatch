@@ -19,6 +19,10 @@ type iftttPayload struct {
 	Value3 string `json:"value3"`
 }
 
+type iftttResponse struct {
+	Errors []json.RawMessage `json:"errors"`
+}
+
 type Ifttt struct {
 	sender transport.Sender
 	url    string
@@ -80,9 +84,22 @@ func (i *Ifttt) SendMessage(ctx context.Context, msg string) error {
 		return err
 	}
 
-	_, err = i.sender.Send(ctx, transport.Request{
+	responseBody, err := i.sender.Send(ctx, transport.Request{
 		Provider: i.Name(), URL: i.url, Body: body,
 		ContentType: "application/json",
 	})
-	return err
+	if err != nil {
+		return err
+	}
+	if len(responseBody) == 0 {
+		return nil
+	}
+	var response iftttResponse
+	if err := json.Unmarshal(responseBody, &response); err != nil {
+		return fmt.Errorf("ifttt returned invalid response")
+	}
+	if len(response.Errors) > 0 {
+		return fmt.Errorf("ifttt response reported errors")
+	}
+	return nil
 }

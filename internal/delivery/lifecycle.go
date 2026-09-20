@@ -2,6 +2,7 @@ package delivery
 
 import (
 	"context"
+	"fmt"
 	"time"
 )
 
@@ -13,6 +14,10 @@ func (a *Manager) Start(ctx context.Context) error {
 		ctx = context.Background()
 	}
 	a.mu.Lock()
+	if a.generationStuck && a.workerCount > 0 {
+		a.mu.Unlock()
+		return fmt.Errorf("previous delivery generation is still stopping")
+	}
 	if a.started && !a.stopped {
 		a.mu.Unlock()
 		return nil
@@ -23,9 +28,10 @@ func (a *Manager) Start(ctx context.Context) error {
 	if a.generation == nil {
 		a.generation = newProviderGeneration(nil)
 	}
-	if a.stopped {
-		a.generation = cloneProviderGeneration(a.generation, true)
-	}
+	a.generation.state = generationAccepting
+	// Start always owns a fresh set of channels. This also makes test and
+	// composition generations that were built without channels safe to run.
+	a.generation = cloneProviderGeneration(a.generation, true)
 	a.started = true
 	a.stopped = false
 	a.ctx = ctx
@@ -41,6 +47,10 @@ func (a *Manager) Start(ctx context.Context) error {
 		entry := generation.entries[name]
 		go a.runProvider(entry, a.workerCtx)
 	}
+	for _, job := range a.pending {
+		a.fanOut(job)
+	}
+	a.pending = nil
 	a.mu.Unlock()
 	a.touchProgress()
 	return nil
@@ -95,6 +105,7 @@ func (a *Manager) workerFinished() {
 	}
 	a.workerCount--
 	if a.workerCount == 0 && a.workerDone != nil {
+		a.generationStuck = false
 		close(a.workerDone)
 	}
 }
@@ -114,6 +125,9 @@ func (a *Manager) shutdownContext(ctx context.Context) error {
 		return waitForWorkers(ctx, done, cancel)
 	}
 	a.stopped = true
+	if a.generation != nil {
+		a.generation.state = generationStopped
+	}
 	generation := cloneProviderGeneration(a.generation, false)
 	done := a.workerDone
 	cancel := a.cancelWorker
@@ -141,7 +155,49 @@ func (a *Manager) shutdownContext(ctx context.Context) error {
 	if done == nil {
 		return nil
 	}
-	return waitForWorkers(ctx, done, cancel)
+	err := waitForWorkers(ctx, done, cancel)
+	if err != nil {
+		a.mu.Lock()
+		a.generationStuck = true
+		if a.generation != nil {
+			a.generation.state = generationFailed
+		}
+		a.mu.Unlock()
+		a.drainQueuedJobs(generation, "delivery_shutdown")
+	}
+	return err
+}
+
+// drainQueuedJobs records jobs that remained after cancellation or a bounded
+// shutdown timeout. Workers may have consumed some jobs concurrently; only
+// jobs still in the closed channels are recorded here.
+func (a *Manager) drainQueuedJobs(
+	generation *providerGeneration,
+	reason string,
+) {
+	if generation == nil {
+		return
+	}
+	for _, name := range generation.order {
+		entry := generation.entries[name]
+		if entry.ch == nil {
+			continue
+		}
+		for {
+			select {
+			case job, ok := <-entry.ch:
+				if !ok {
+					break
+				}
+				a.recordDeadLetter(&entry, job, fmt.Errorf("%s", reason))
+			default:
+				break
+			}
+			if len(entry.ch) == 0 {
+				break
+			}
+		}
+	}
 }
 
 func waitForWorkers(
@@ -184,6 +240,7 @@ func cloneProviderGeneration(
 	clone := &providerGeneration{
 		entries: make(map[string]providerEntry, len(generation.entries)),
 		order:   append([]string(nil), generation.order...),
+		state:   generation.state,
 	}
 	for name, entry := range generation.entries {
 		if newChannels {

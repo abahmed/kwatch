@@ -160,7 +160,7 @@ func NewWithRuntimeConfig(
 
 	for _, inf := range podInformers {
 		c.pod.synced = append(c.pod.synced, inf.HasSynced)
-		inf.AddEventHandler(c.podEventHandler())
+		inf.AddEventHandler(safeEventHandler("pod", c.podEventHandler()))
 	}
 
 	c.wireNode(runtime, fs)

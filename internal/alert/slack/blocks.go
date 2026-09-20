@@ -70,7 +70,9 @@ func buildIncidentBlocksWithInsight(
 		}
 	}
 	if r.Runbook != "" {
-		blocks = append(blocks, markdownSection("📖 "+r.Runbook))
+		blocks = append(blocks, markdownSection(
+			"📖 "+truncateField(r.Runbook),
+		))
 	}
 
 	return &slackClient.Blocks{

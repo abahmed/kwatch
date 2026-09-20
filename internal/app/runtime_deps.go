@@ -26,10 +26,12 @@ func makeServerDeps(
 	auditLogger *audit.AuditLogger,
 	startupSummary func(map[string]int),
 	initialized <-chan struct{},
+	readiness *readinessCoordinator,
 ) *serverDeps {
 	deps := &serverDeps{
 		ctx: ctx, cancel: cancel, runtime: runtime, clients: boot.clients,
 		healthServer:    boot.healthServer,
+		readiness:       readiness,
 		deliveryManager: boot.deliveryManager,
 		incidentEngine:  incidentEngine, pvcMonitor: pvcMonitor,
 		hbMonitor: hbMonitor, ctl: ctl,

@@ -221,30 +221,3 @@ func (a *Manager) fanOut(job deliverJob) {
 		}
 	}
 }
-
-// deliverAllSync sends directly to every provider, bypassing the queue. It
-// is only for callers that run before Start -- kwatch replay -- where there
-// are no provider workers to pick a job up.
-func (a *Manager) deliverAllSync(
-	inc *model.Incident,
-	action model.IncidentAction,
-	ins *insight.Insight,
-) {
-	job := incidentJob(inc, action, ins)
-	a.mu.Lock()
-	generation := cloneProviderGeneration(
-		a.currentGenerationLocked(), false,
-	)
-	a.mu.Unlock()
-	if generation == nil {
-		return
-	}
-	job.generation = generation
-	for _, name := range generation.order {
-		entry := generation.entries[name]
-		if !shouldDeliver(entry.routes, inc) {
-			continue
-		}
-		a.deliverOne(context.Background(), &entry, job)
-	}
-}

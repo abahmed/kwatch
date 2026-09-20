@@ -284,7 +284,9 @@ alert:
 |:---|---|
 | `alert.pushover.token` | 🔑 Application token |
 | `alert.pushover.user` | 👤 User or group key |
-| `alert.pushover.priority` | 🎚️ Priority (optional) |
+| `alert.pushover.priority` | 🎚️ Priority from -2 to 2 (optional) |
+| `alert.pushover.retry` | ⏱️ Emergency retry interval in seconds |
+| `alert.pushover.expire` | ⌛ Emergency expiration in seconds |
 | `alert.pushover.title` | ✏️ Custom title |
 
 ### 🟣 Webex
@@ -673,13 +675,14 @@ alert:
 
 | Parameter | What it does |
 |:---|---|
-| `alert.goalert.url` | 🔗 GoAlert URL (default: `https://goalert.example.com`) |
+| `alert.goalert.url` | 🔗 GoAlert server URL (required) |
 | `alert.goalert.token` | 🔑 API token |
 | `alert.goalert.serviceId` | 🆔 Service ID |
 
 ```yaml
 alert:
   goalert:
+    url: "https://goalert.example.invalid"
     token: "${file:/config/goalert-token}"
     serviceId: "SVC123"
 ```

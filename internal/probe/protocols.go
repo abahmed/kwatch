@@ -3,6 +3,7 @@ package probe
 import (
 	"context"
 	"fmt"
+	"io"
 	"net"
 	"net/http"
 	"time"
@@ -28,6 +29,7 @@ func (m *Monitor) http(
 	if err != nil {
 		return false, err.Error(), constant.ReasonActiveProbeFailure
 	}
+	_, _ = io.Copy(io.Discard, resp.Body)
 	_ = resp.Body.Close()
 	latency := m.nowTime().Sub(started)
 	expected := target.ExpectedStatus

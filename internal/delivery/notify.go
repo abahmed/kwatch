@@ -2,6 +2,7 @@ package delivery
 
 import (
 	"context"
+	"fmt"
 
 	"k8s.io/klog/v2"
 
@@ -36,36 +37,37 @@ func (a *Manager) NotifyEvent(ev event.Event) {
 	a.enqueue(deliverJob{kind: jobEvent, ev: &ev})
 }
 
-// enqueue fans a job out to every provider queue, falling back to synchronous
-// delivery before Start when no worker exists to pick it up.
+// enqueue retains jobs until workers exist. It never performs provider I/O on
+// the caller's goroutine before Start.
 func (a *Manager) enqueue(job deliverJob) {
 	a.mu.Lock()
-	started, stopped := a.started, a.stopped
-	if stopped {
+	if a.stopped {
+		if a.reconfiguring && len(a.pending) < channelCap {
+			a.pending = append(a.pending, job)
+			a.mu.Unlock()
+			return
+		}
 		a.mu.Unlock()
 		return
 	}
-	if started {
+	if a.started {
 		a.fanOut(job)
 		a.mu.Unlock()
 		return
 	}
-	generation := cloneProviderGeneration(
-		a.currentGenerationLocked(), false,
-	)
-	ctx := a.ctx
-	a.mu.Unlock()
-	if ctx == nil {
-		ctx = context.Background()
-	}
-	if generation == nil {
+	if len(a.pending) >= channelCap {
+		generation := a.currentGenerationLocked()
+		if generation != nil && len(generation.order) > 0 {
+			entry := generation.entries[generation.order[0]]
+			a.recordDeadLetter(
+				&entry, job, fmt.Errorf("pending delivery queue saturated"),
+			)
+		}
+		a.mu.Unlock()
 		return
 	}
-	job.generation = generation
-	for _, name := range generation.order {
-		entry := generation.entries[name]
-		a.deliverOne(ctx, &entry, job)
-	}
+	a.pending = append(a.pending, job)
+	a.mu.Unlock()
 }
 
 // ThreadProvider is an optional interface for providers that support
@@ -109,7 +111,7 @@ type EventDeliveryProvider interface {
 func (a *Manager) NotifyIncident(
 	inc *model.Incident,
 	action model.IncidentAction,
-	insight *insight.Insight,
+	insightValue *insight.Insight,
 ) {
 	if inc == nil {
 		klog.ErrorS(nil, "cannot deliver a nil incident")
@@ -146,12 +148,18 @@ func (a *Manager) NotifyIncident(
 		return
 	}
 	if !started {
-		a.deliverAllSync(inc, action, insight)
+		snap := inc.Clone()
+		var copiedInsight *insight.Insight
+		if insightValue != nil {
+			copy := *insightValue
+			copiedInsight = &copy
+		}
+		a.enqueue(incidentJob(snap, action, copiedInsight))
 		return
 	}
 
 	snap := inc.Clone()
-	ins := insight
+	ins := insightValue
 	if ins != nil {
 		cp := *ins
 		ins = &cp

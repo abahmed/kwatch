@@ -18,7 +18,7 @@ func (m *Monitor) startStaticWatcher(ctx context.Context) error {
 		return fmt.Errorf("statuswatch: static watcher is not configured")
 	}
 	generation, err := m.staticWatcher.StartGeneration(
-		ctx, m.staticWatchSpecs(),
+		ctx, m.staticWatchSpecs(ctx),
 	)
 	if err == nil && generation.Valid() {
 		m.mu.Lock()
@@ -28,14 +28,17 @@ func (m *Monitor) startStaticWatcher(ctx context.Context) error {
 	return err
 }
 
-func (m *Monitor) staticWatchSpecs() []dynamicwatch.ResourceSpec {
+func (m *Monitor) staticWatchSpecs(
+	ctx context.Context,
+) []dynamicwatch.ResourceSpec {
 	specs := make([]dynamicwatch.ResourceSpec, 0,
 		len(staticStatusWatches)+2)
 	for _, watched := range staticStatusWatches {
 		watched := watched
 		if watched.resource == "endpoints" &&
-			dynamicwatch.ResourceAvailable(m.discoveryClient,
-				endpointSlicesGVR()) {
+			dynamicwatch.ResourceAvailableContext(
+				ctx, m.discoveryClient, endpointSlicesGVR(),
+			) {
 			continue
 		}
 		specs = append(specs, dynamicwatch.ResourceSpec{

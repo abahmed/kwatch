@@ -94,11 +94,12 @@ func (w *Watcher) startInformer(
 		return fmt.Errorf("crdwatch: create informer: %w", err)
 	}
 
-	if _, err := inf.AddEventHandler(cache.ResourceEventHandlerFuncs{
-		AddFunc:    w.changed,
-		UpdateFunc: func(_, obj interface{}) { w.changed(obj) },
-		DeleteFunc: w.deleted,
-	}); err != nil {
+	if _, err := inf.AddEventHandler(k8s.SafeEventHandler(
+		"crdwatch", gvr.String(), cache.ResourceEventHandlerFuncs{
+			AddFunc:    w.changed,
+			UpdateFunc: func(_, obj interface{}) { w.changed(obj) },
+			DeleteFunc: w.deleted,
+		})); err != nil {
 		return fmt.Errorf("crdwatch: failed to register event handler: %w", err)
 	}
 
@@ -108,14 +109,22 @@ func (w *Watcher) startInformer(
 	if runWG == nil {
 		return fmt.Errorf("crdwatch: lifecycle is not active")
 	}
+	informerCtx, informerCancel := context.WithCancel(ctx)
+	informerDone := make(chan struct{})
 	runWG.Add(1)
 	go func() {
 		defer runWG.Done()
-		inf.Run(ctx.Done())
+		defer close(informerDone)
+		defer informerCancel()
+		inf.Run(informerCtx.Done())
 	}()
+	syncCtx, cancel := context.WithTimeout(ctx, 5*time.Minute)
+	defer cancel()
 	metrics.DefaultRegistry().WatcherSyncs.Add(1)
-	if !cache.WaitForCacheSync(ctx.Done(), inf.HasSynced) {
+	if !cache.WaitForCacheSync(syncCtx.Done(), inf.HasSynced) {
 		metrics.DefaultRegistry().WatcherSyncFailures.Add(1)
+		informerCancel()
+		<-informerDone
 		return fmt.Errorf("crdwatch: failed to sync informer cache")
 	}
 

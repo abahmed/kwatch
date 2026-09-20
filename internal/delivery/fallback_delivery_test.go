@@ -14,12 +14,18 @@ import (
 func TestNotifyIncidentEventDeliveryProviderPropagatesActionAndDedup(
 	t *testing.T,
 ) {
-	fp := &fakeRecordingEventProvider{}
+	fp := &fakeRecordingEventProvider{done: make(chan struct{})}
 	am := *newTestManager()
 	appendManagerEntries(&am, providerEntry{
 		provider: fp,
 		retry:    retryConfig{maxAttempts: 1},
 	})
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	if err := am.Start(ctx); err != nil {
+		t.Fatal(err)
+	}
+	defer am.shutdown()
 
 	inc := &model.Incident{
 		Subject: model.Subject{
@@ -39,6 +45,11 @@ func TestNotifyIncidentEventDeliveryProviderPropagatesActionAndDedup(
 	}
 
 	am.NotifyIncident(inc, model.ActionResolved, nil)
+	select {
+	case <-fp.done:
+	case <-time.After(time.Second):
+		t.Fatal("event provider was not called")
+	}
 
 	if fp.lastEvent == nil {
 		t.Fatal("expected SendEvent to be called")
@@ -49,6 +60,7 @@ func TestNotifyIncidentEventDeliveryProviderPropagatesActionAndDedup(
 
 type fakeRecordingEventProvider struct {
 	lastEvent *event.Event
+	done      chan struct{}
 }
 
 func (p *fakeRecordingEventProvider) SendMessage(
@@ -63,6 +75,9 @@ func (p *fakeRecordingEventProvider) SendEvent(
 	evt *event.Event,
 ) error {
 	p.lastEvent = evt
+	if p.done != nil {
+		close(p.done)
+	}
 	return nil
 }
 

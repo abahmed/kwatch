@@ -20,6 +20,9 @@ func warnDeprecatedIgnoreFields(config *Config) {
 	if len(config.IgnoreNodeMessages) > 0 {
 		klog.Warning("ignoreNodeMessages is deprecated; use silences instead")
 	}
+	if len(config.IgnorePodNames) > 0 {
+		klog.Warning("ignorePodNames is deprecated; use silences instead")
+	}
 }
 
 // appendIgnoreFieldSilences converts deprecated ignore* config fields into
