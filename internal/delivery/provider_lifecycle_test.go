@@ -11,6 +11,7 @@ import (
 	"github.com/abahmed/kwatch/internal/config"
 	"github.com/abahmed/kwatch/internal/delivery/transport"
 	"github.com/abahmed/kwatch/internal/event"
+	"github.com/abahmed/kwatch/internal/model"
 )
 
 type recordingProvider struct {
@@ -251,6 +252,50 @@ func TestManagerRetainsNotificationsDuringReconfiguration(t *testing.T) {
 	_ = manager.Stop(context.Background())
 }
 
+func TestManagerRetainsIncidentsDuringReconfiguration(t *testing.T) {
+	first := &recordingProvider{
+		name: "first", messages: make(chan string, 1),
+	}
+	second := &recordingProvider{
+		name: "second", messages: make(chan string, 1),
+	}
+	manager := managerWithEntries([]providerEntry{{provider: first}})
+
+	manager.mu.Lock()
+	manager.started = true
+	manager.reconfiguring = true
+	manager.stopped = true
+	manager.mu.Unlock()
+	manager.NotifyIncident(&model.Incident{
+		Subject: model.Subject{
+			Key:      "apps:deployment:CrashLoopBackOff",
+			Name:     "api",
+			Reason:   "CrashLoopBackOff",
+			Resource: "deployment",
+		},
+	}, model.ActionCreate, nil)
+
+	manager.mu.Lock()
+	manager.reconfiguring = false
+	manager.stopped = false
+	manager.generation = newProviderGeneration([]providerEntry{{
+		provider: second,
+		ch:       make(chan deliverJob, channelCap),
+	}})
+	manager.started = false
+	manager.mu.Unlock()
+	require.NoError(t, manager.Start(context.Background()))
+	require.Eventually(t, func() bool {
+		select {
+		case <-second.messages:
+			return true
+		default:
+			return false
+		}
+	}, time.Second, time.Millisecond)
+	require.NoError(t, manager.Stop(context.Background()))
+}
+
 func TestManagerReportsReconfigurationResultOnce(t *testing.T) {
 	manager := NewManagerWithDependencies(Dependencies{
 		Clock: clock.RealClock{},
@@ -285,4 +330,39 @@ func TestManagerReportsSuccessfulReconfiguration(t *testing.T) {
 
 	require.NoError(t,
 		manager.WaitForReconfiguration(context.Background()))
+}
+
+func TestManagerDoneRemainsOpenDuringReconfiguration(t *testing.T) {
+	runtime := config.RuntimeConfigFor(&config.Config{
+		Alert: map[string]map[string]interface{}{"slack": {}},
+	})
+	factory := func(
+		name string,
+		_ map[string]interface{},
+		_ transport.ProviderContext,
+	) Provider {
+		return &recordingProvider{
+			name: name, messages: make(chan string, 1),
+		}
+	}
+	manager := NewManagerWithDependencies(Dependencies{
+		Clock: clock.RealClock{},
+	})
+	require.NoError(t, manager.InitRuntime(runtime, factory))
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	require.NoError(t, manager.Start(ctx))
+	require.NoError(t, manager.InitRuntime(runtime, factory))
+
+	select {
+	case <-manager.Done():
+		t.Fatal("manager Done closed before manager shutdown")
+	default:
+	}
+	require.NoError(t, manager.Stop(context.Background()))
+	select {
+	case <-manager.Done():
+	case <-time.After(time.Second):
+		t.Fatal("manager Done did not close after shutdown")
+	}
 }

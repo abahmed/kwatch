@@ -88,11 +88,13 @@ func startIncidentSaver(
 					pending, havePending = snap, true
 				default:
 					if havePending {
+						fctx, cancel := finalWriteContext(ctx)
 						_, _ = saveIncidentSnapshot(
-							ctx, persistenceManager, pending,
+							fctx, persistenceManager, pending,
 							5*time.Second, lastSaved,
 							report, canWrite,
 						)
+						cancel()
 					}
 					return nil
 				}

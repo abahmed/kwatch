@@ -282,6 +282,36 @@ func TestRetiredMonitorRuntimePackageHasNoProductionCode(t *testing.T) {
 	}
 }
 
+func TestGoFilesRecursiveMissingDirectoryIsEmpty(t *testing.T) {
+	dir := filepath.Join(t.TempDir(), "retired")
+	if files := goFilesRecursive(t, dir); len(files) != 0 {
+		t.Fatalf("missing directory returned Go files: %v", files)
+	}
+}
+
+func TestGoFilesRecursiveEmptyDirectoryIsEmpty(t *testing.T) {
+	dir := t.TempDir()
+	if files := goFilesRecursive(t, dir); len(files) != 0 {
+		t.Fatalf("empty directory returned Go files: %v", files)
+	}
+}
+
+func TestGoFilesRecursiveFindsProductionFiles(t *testing.T) {
+	dir := filepath.Join(t.TempDir(), "retired")
+	if err := os.MkdirAll(filepath.Join(dir, "nested"), 0o755); err != nil {
+		t.Fatalf("create test directory: %v", err)
+	}
+	filename := filepath.Join(dir, "nested", "runtime.go")
+	contents := []byte("package runtime\n")
+	if err := os.WriteFile(filename, contents, 0o644); err != nil {
+		t.Fatalf("write test Go file: %v", err)
+	}
+	files := goFilesRecursive(t, dir)
+	if len(files) != 1 || files[0] != filename {
+		t.Fatalf("found Go files = %v, want [%s]", files, filename)
+	}
+}
+
 func repositoryRoot(t *testing.T) string {
 	t.Helper()
 	_, filename, _, ok := runtime.Caller(0)
@@ -297,6 +327,12 @@ func goFiles(t *testing.T, dir string) []string {
 
 func goFilesRecursive(t *testing.T, dir string) []string {
 	t.Helper()
+	if _, err := os.Stat(dir); err != nil {
+		if os.IsNotExist(err) {
+			return []string{}
+		}
+		t.Fatalf("stat Go files in %s: %v", dir, err)
+	}
 	files := make([]string, 0)
 	err := filepath.WalkDir(dir, func(
 		path string, entry fs.DirEntry, err error,

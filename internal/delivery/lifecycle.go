@@ -14,6 +14,11 @@ func (a *Manager) Start(ctx context.Context) error {
 		ctx = context.Background()
 	}
 	a.mu.Lock()
+	a.ensureLifecycleChannelsLocked()
+	if a.managerDoneClosed {
+		a.mu.Unlock()
+		return fmt.Errorf("delivery manager is stopped")
+	}
 	if a.generationStuck && a.workerCount > 0 {
 		a.mu.Unlock()
 		return fmt.Errorf("previous delivery generation is still stopping")
@@ -42,7 +47,6 @@ func (a *Manager) Start(ctx context.Context) error {
 	if a.workerCount == 0 {
 		close(a.workerDone)
 	}
-	a.done = a.workerDone
 	for _, name := range generation.order {
 		entry := generation.entries[name]
 		go a.runProvider(entry, a.workerCtx)
@@ -107,6 +111,9 @@ func (a *Manager) workerFinished() {
 	if a.workerCount == 0 && a.workerDone != nil {
 		a.generationStuck = false
 		close(a.workerDone)
+		if a.stopped && !a.reconfiguring {
+			a.closeManagerDoneLocked()
+		}
 	}
 }
 
@@ -122,7 +129,15 @@ func (a *Manager) shutdownContext(ctx context.Context) error {
 		done := a.workerDone
 		cancel := a.cancelWorker
 		a.mu.Unlock()
-		return waitForWorkers(ctx, done, cancel)
+		err := waitForWorkers(ctx, done, cancel)
+		if err == nil {
+			a.mu.Lock()
+			if !a.reconfiguring {
+				a.closeManagerDoneLocked()
+			}
+			a.mu.Unlock()
+		}
+		return err
 	}
 	a.stopped = true
 	if a.generation != nil {
@@ -153,6 +168,11 @@ func (a *Manager) shutdownContext(ctx context.Context) error {
 	}
 	a.mu.Unlock()
 	if done == nil {
+		a.mu.Lock()
+		if !a.reconfiguring {
+			a.closeManagerDoneLocked()
+		}
+		a.mu.Unlock()
 		return nil
 	}
 	err := waitForWorkers(ctx, done, cancel)
@@ -164,6 +184,13 @@ func (a *Manager) shutdownContext(ctx context.Context) error {
 		}
 		a.mu.Unlock()
 		a.drainQueuedJobs(generation, "delivery_shutdown")
+	}
+	if err == nil {
+		a.mu.Lock()
+		if !a.reconfiguring {
+			a.closeManagerDoneLocked()
+		}
+		a.mu.Unlock()
 	}
 	return err
 }
@@ -268,12 +295,8 @@ func generationEntries(generation *providerGeneration) []providerEntry {
 func (a *Manager) Done() <-chan struct{} {
 	a.mu.Lock()
 	defer a.mu.Unlock()
-	if a.done != nil {
-		return a.done
-	}
-	ch := make(chan struct{})
-	close(ch)
-	return ch
+	a.ensureLifecycleChannelsLocked()
+	return a.managerDone
 }
 
 // DeadLetters returns a copy of the dead-letter ring buffer.

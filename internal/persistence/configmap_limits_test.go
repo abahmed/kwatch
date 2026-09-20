@@ -42,6 +42,16 @@ func TestSaveChangeHistoryRejectsOneOversizedEntry(t *testing.T) {
 	assert.Less(t, time.Since(start), time.Second)
 }
 
+func TestSaveChangeHistoryEmptySnapshotIsNoOp(t *testing.T) {
+	manager := newTestManager(
+		fake.NewSimpleClientset(), "kwatch",
+	)
+
+	require.NoError(t, manager.SaveChangeHistory(
+		context.Background(), nil,
+	))
+}
+
 func TestSaveChangeHistoryKeepsNewestEntriesWhenTrimming(t *testing.T) {
 	manager := newTestManager(
 		fake.NewSimpleClientset(), "kwatch",

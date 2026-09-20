@@ -140,31 +140,25 @@ func (a *Manager) NotifyIncident(
 		inc.Count,
 	)
 
-	a.mu.Lock()
-	started := a.started
-	stopped := a.stopped
-	a.mu.Unlock()
-	if stopped {
-		return
-	}
-	if !started {
-		snap := inc.Clone()
-		var copiedInsight *insight.Insight
-		if insightValue != nil {
-			copy := *insightValue
-			copiedInsight = &copy
-		}
-		a.enqueue(incidentJob(snap, action, copiedInsight))
-		return
-	}
-
 	snap := inc.Clone()
 	ins := insightValue
 	if ins != nil {
-		cp := *ins
-		ins = &cp
+		copy := *ins
+		ins = &copy
 	}
 	job := incidentJob(snap, action, ins)
+	a.mu.Lock()
+	started := a.started
+	stopped := a.stopped
+	reconfiguring := a.reconfiguring
+	a.mu.Unlock()
+	if stopped && !reconfiguring {
+		return
+	}
+	if !started || reconfiguring {
+		a.enqueue(job)
+		return
+	}
 
 	a.mu.Lock()
 	stopped = a.stopped

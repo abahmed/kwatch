@@ -19,6 +19,11 @@ guide live at [kwatch.dev/docs](https://kwatch.dev/docs).
 
 ## 🛠️ Local development
 
+Install Go, `golangci-lint`, and ripgrep (`rg`) before running repository
+checks. Helm is also required when changing the chart. Validation scripts fail
+clearly if `rg` is unavailable because it is the repository's fast-search
+dependency.
+
 1. Fork and clone the repository.
 2. Create a short-lived branch from `main`.
 3. Read [AGENTS.md](./AGENTS.md) before changing Go code.

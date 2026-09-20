@@ -94,7 +94,10 @@ type templateData struct {
 }
 
 func truncateMsg(s string, maxLen int) string {
-	if maxLen <= 0 || len(s) <= maxLen {
+	if maxLen <= 0 {
+		return ""
+	}
+	if len(s) <= maxLen {
 		return s
 	}
 	suffix := "\n…(truncated)"

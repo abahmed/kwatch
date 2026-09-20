@@ -106,7 +106,17 @@ func startCRDWatcher(ctx context.Context, deps *serverDeps) error {
 	if err := w.Start(ctx); err != nil {
 		return fmt.Errorf("crd watcher: %w", err)
 	}
-	defer func() { _ = w.Stop(nil) }()
+	defer func() {
+		stopCtx, cancel := context.WithTimeout(
+			context.Background(), componentShutdownTimeout,
+		)
+		defer cancel()
+		if err := w.Stop(stopCtx); err != nil {
+			metrics.DefaultRegistry().ShutdownTimeouts.Add(1)
+			klog.ErrorS(err, "CRD watcher shutdown timed out",
+				"component", "crd-watcher")
+		}
+	}()
 	<-ctx.Done()
 	return nil
 }

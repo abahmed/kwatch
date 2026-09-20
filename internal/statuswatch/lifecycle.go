@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"sync"
+	"time"
 
 	"k8s.io/client-go/tools/cache"
 	"k8s.io/klog/v2"
@@ -42,7 +43,9 @@ func (m *Monitor) Start(ctx context.Context) error {
 	defer func() {
 		if !complete {
 			cancel()
-			_ = m.resetLifecycle(context.Background(), generation)
+			stopCtx, stopCancel := lifecycleStopContext(nil)
+			_ = m.resetLifecycle(stopCtx, generation)
+			stopCancel()
 		}
 	}()
 	_, apiInformer, err := dynamicwatch.NewInformer(
@@ -124,7 +127,9 @@ func (m *Monitor) Stop(ctx context.Context) error {
 	m.lifecycleMu.Lock()
 	defer m.lifecycleMu.Unlock()
 	if ctx == nil {
-		ctx = context.Background()
+		var cancel context.CancelFunc
+		ctx, cancel = lifecycleStopContext(nil)
+		defer cancel()
 	}
 	m.mu.Lock()
 	cancel := m.cancel
@@ -149,7 +154,20 @@ func (m *Monitor) Stop(ctx context.Context) error {
 
 func (m *Monitor) resetWhenDone(ctx context.Context, generation uint64) {
 	<-ctx.Done()
-	_ = m.resetLifecycle(context.Background(), generation)
+	stopCtx, stopCancel := lifecycleStopContext(nil)
+	defer stopCancel()
+	_ = m.resetLifecycle(stopCtx, generation)
+}
+
+const lifecycleStopTimeout = 10 * time.Second
+
+func lifecycleStopContext(
+	ctx context.Context,
+) (context.Context, context.CancelFunc) {
+	if ctx != nil {
+		return ctx, func() {}
+	}
+	return context.WithTimeout(context.Background(), lifecycleStopTimeout)
 }
 
 func (m *Monitor) resetLifecycle(

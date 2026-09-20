@@ -26,6 +26,8 @@ func NewManagerWithDependencies(deps Dependencies) *Manager {
 				Clock:      deps.Clock,
 			}),
 		},
-		now: now.Now,
+		now:               now.Now,
+		managerDone:       make(chan struct{}),
+		reconfigureEvents: make(chan struct{}, 1),
 	}
 }

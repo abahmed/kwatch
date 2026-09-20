@@ -53,7 +53,11 @@ func newNetworkGraphRun(
 			return err
 		}
 		defer func() {
-			if err := graphMonitor.Stop(nil); err != nil {
+			stopCtx, cancel := context.WithTimeout(
+				context.Background(), componentShutdownTimeout,
+			)
+			defer cancel()
+			if err := graphMonitor.Stop(stopCtx); err != nil {
 				healthServer.SetComponentError("network-graph", err)
 			}
 		}()
@@ -115,7 +119,11 @@ func newStorageGraphRun(
 			return err
 		}
 		defer func() {
-			if err := graphMonitor.Stop(nil); err != nil {
+			stopCtx, cancel := context.WithTimeout(
+				context.Background(), componentShutdownTimeout,
+			)
+			defer cancel()
+			if err := graphMonitor.Stop(stopCtx); err != nil {
 				healthServer.SetComponentError("storage-graph", err)
 			}
 		}()

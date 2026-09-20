@@ -67,7 +67,10 @@ func (a *Manager) dispatchMessage(
 			return sendEvent(ctx, p, ev)
 		}, opts.retry, p.Name())
 	}
-	truncated := truncateMsg(msg, entry.maxBytes)
+	truncated := msg
+	if entry.maxBytes > 0 {
+		truncated = truncateMsg(msg, entry.maxBytes)
+	}
 	return sendWithRetry(ctx, func() error {
 		return sendMessage(ctx, p, truncated)
 	}, opts.retry, p.Name())
@@ -105,7 +108,10 @@ func (a *Manager) dispatchIncident(
 		}, opts.retry, p.Name())
 	}
 	raw := a.buildMessage(job.inc, job.action, job.insight, tpl)
-	msg := truncateMsg(opts.prefix+raw, entry.maxBytes)
+	msg := opts.prefix + raw
+	if entry.maxBytes > 0 {
+		msg = truncateMsg(msg, entry.maxBytes)
+	}
 	return sendWithRetry(ctx, func() error {
 		return sendMessage(ctx, p, msg)
 	}, opts.retry, p.Name())

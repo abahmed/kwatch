@@ -19,6 +19,23 @@ func TestDefaultMaxBytes(t *testing.T) {
 	assert.Equal(t, 0, defaultMaxBytes("webhook"))
 }
 
+func TestProviderCatalogIdentitySelectsPayloadPolicy(t *testing.T) {
+	entry := providerEntry{
+		catalogName: "teams",
+		provider: &recordingProvider{
+			name: "Microsoft Teams", messages: make(chan string, 1),
+		},
+	}
+
+	assert.Equal(t, "teams", entry.lookupName())
+	assert.Equal(t, 28000, defaultMaxBytes(entry.lookupName()))
+}
+
+func TestTruncateMsgRejectsNonPositiveBudget(t *testing.T) {
+	assert.Empty(t, truncateMsg("sensitive payload", 0))
+	assert.Empty(t, truncateMsg("sensitive payload", -1))
+}
+
 func TestProviderPayloadPolicyIsExplicit(t *testing.T) {
 	for name, policy := range payloadPolicies {
 		assert.Equal(t, payloadBounded, policy.mode, name)

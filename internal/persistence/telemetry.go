@@ -149,7 +149,7 @@ func (s *Manager) SaveChangeHistory(
 			},
 		)
 	}
-	return fmt.Errorf("change history exceeds %d bytes", maxChangeHistoryBytes)
+	return nil
 }
 
 // maxTelemetryStateBytes bounds the kubelet telemetry snapshot. It is

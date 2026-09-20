@@ -19,6 +19,7 @@ import (
 )
 
 type providerEntry struct {
+	catalogName  string
 	provider     Provider
 	routes       []config.AlertRoute
 	retry        retryConfig
@@ -77,8 +78,10 @@ type Manager struct {
 	dlqHead         int
 	dlqCount        int
 
-	done         chan struct{}
-	lastProgress atomic.Int64
+	managerDone       chan struct{}
+	managerDoneClosed bool
+	reconfigureEvents chan struct{}
+	lastProgress      atomic.Int64
 
 	ctx context.Context
 	now func() time.Time
@@ -242,11 +245,11 @@ func buildProviderEntry(
 		return nil, nil
 	}
 	return &providerEntry{
-		provider: instance, routes: provider.Routes,
+		catalogName: name, provider: instance, routes: provider.Routes,
 		retry:        retryConfigFromRuntime(provider.Retry),
 		fallbackName: provider.FallbackName,
 		templates:    compileTemplates(provider.Templates),
-		maxBytes:     defaultMaxBytes(instance.Name()),
+		maxBytes:     defaultMaxBytes(name),
 		ch:           make(chan deliverJob, channelCap),
 	}, nil
 }
@@ -267,7 +270,7 @@ func logMissingFallbacks(entries []providerEntry) {
 
 func hasProvider(entries []providerEntry, name string) bool {
 	for _, entry := range entries {
-		if strings.EqualFold(entry.provider.Name(), name) {
+		if strings.EqualFold(entry.lookupName(), name) {
 			return true
 		}
 	}
@@ -276,6 +279,7 @@ func hasProvider(entries []providerEntry, name string) bool {
 
 func (a *Manager) drainForReconfiguration() error {
 	a.mu.Lock()
+	a.ensureLifecycleChannelsLocked()
 	if a.reconfiguring {
 		a.mu.Unlock()
 		return fmt.Errorf("delivery reconfiguration already in progress")
@@ -313,7 +317,6 @@ func (a *Manager) publishRuntime(
 	a.started = false
 	a.stopped = false
 	a.ctx = nil
-	a.done = nil
 	a.mu.Unlock()
 	a.cfgMu.Lock()
 	deliveryRuntime := runtime.Delivery()
@@ -340,6 +343,14 @@ func (a *Manager) finishReconfiguration(err error) {
 	a.reconfigureErr = err
 	if a.reconfigureDone != nil {
 		close(a.reconfigureDone)
+	}
+	if err != nil && a.workerCount == 0 {
+		a.closeManagerDoneLocked()
+	} else if a.reconfigureEvents != nil {
+		select {
+		case a.reconfigureEvents <- struct{}{}:
+		default:
+		}
 	}
 }
 
@@ -369,12 +380,39 @@ func (a *Manager) WaitForReconfiguration(ctx context.Context) error {
 	}
 }
 
+// ReconfigurationEvents notifies the application when a generation replacement
+// has completed. It is separate from Done, which represents manager shutdown.
+func (a *Manager) ReconfigurationEvents() <-chan struct{} {
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	a.ensureLifecycleChannelsLocked()
+	return a.reconfigureEvents
+}
+
+func (a *Manager) ensureLifecycleChannelsLocked() {
+	if a.managerDone == nil {
+		a.managerDone = make(chan struct{})
+	}
+	if a.reconfigureEvents == nil {
+		a.reconfigureEvents = make(chan struct{}, 1)
+	}
+}
+
+func (a *Manager) closeManagerDoneLocked() {
+	a.ensureLifecycleChannelsLocked()
+	if a.managerDoneClosed {
+		return
+	}
+	a.managerDoneClosed = true
+	close(a.managerDone)
+}
+
 func validateProviderNames(entries []providerEntry) error {
 	seen := make(map[string]struct{}, len(entries))
 	for _, entry := range entries {
-		name := strings.ToLower(entry.provider.Name())
+		name := entry.lookupName()
 		if _, exists := seen[name]; exists {
-			return fmt.Errorf("duplicate provider name %q", entry.provider.Name())
+			return fmt.Errorf("duplicate provider name %q", name)
 		}
 		seen[name] = struct{}{}
 	}
@@ -388,7 +426,7 @@ func newProviderGeneration(entries []providerEntry) *providerGeneration {
 		state:   generationAccepting,
 	}
 	for _, entry := range entries {
-		name := strings.ToLower(entry.provider.Name())
+		name := entry.lookupName()
 		if _, exists := generation.entries[name]; exists {
 			klog.InfoS(
 				"duplicate provider entry ignored",

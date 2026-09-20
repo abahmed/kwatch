@@ -444,6 +444,20 @@ func startChangeHistorySaver(
 		}
 		select {
 		case <-ctx.Done():
+			if writesAllowed(canWrite) {
+				fctx, cancel := finalWriteContext(ctx)
+				if err := persistenceManager.SaveChangeHistory(
+					fctx, tracker.Snapshot(),
+				); err != nil {
+					klog.ErrorS(err, "failed to persist final change history")
+					if report != nil {
+						report(err)
+					}
+				} else if report != nil {
+					report(nil)
+				}
+				cancel()
+			}
 			return nil
 		case <-ticker.C:
 			if progress != nil {

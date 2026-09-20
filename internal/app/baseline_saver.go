@@ -46,6 +46,9 @@ func startBaselineSaverWithStatus(
 			if b == nil {
 				continue
 			}
+			if progress != nil {
+				progress()
+			}
 			pending = b
 			timer = resetBaselineTimer(timer, interval)
 			timerC = timer.C
@@ -72,7 +75,7 @@ func startBaselineSaverWithStatus(
 				timer.Stop()
 			}
 			if pending != nil && writesAllowed(canWrite) {
-				fctx, cancel := context.WithTimeout(ctx, 5*time.Second)
+				fctx, cancel := finalWriteContext(ctx)
 				if err := persistenceManager.SaveBaseline(fctx, pending); err != nil {
 					klog.ErrorS(err, "failed to save final baseline")
 					if report != nil {

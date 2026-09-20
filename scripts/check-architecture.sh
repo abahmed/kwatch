@@ -7,6 +7,10 @@ set -eu
 root_dir=$(CDPATH= cd -- "$(dirname "$0")/.." && pwd)
 cd "$root_dir"
 
+# shellcheck source=require-command.sh
+. "$root_dir/scripts/require-command.sh"
+require_command rg
+
 status=0
 
 if compatibility_files=$(rg --files internal cmd -g 'compat.go' 2>/dev/null) &&

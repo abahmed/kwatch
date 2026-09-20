@@ -112,19 +112,27 @@ func runDelivery(ctx context.Context, deps *serverDeps) error {
 		<-ctx.Done()
 		return nil
 	}
-	select {
-	case <-ctx.Done():
-		return nil
-	case <-deps.deliveryManager.Done():
-		if ctx.Err() != nil {
+	for {
+		select {
+		case <-ctx.Done():
 			return nil
+		case <-deps.deliveryManager.ReconfigurationEvents():
+			err := deps.deliveryManager.WaitForReconfiguration(ctx)
+			if err == nil {
+				continue
+			}
+			if !errors.Is(err, delivery.ErrNoReconfiguration) {
+				return err
+			}
+			return fmt.Errorf(
+				"delivery reconfiguration completed without result",
+			)
+		case <-deps.deliveryManager.Done():
+			if ctx.Err() != nil {
+				return nil
+			}
+			return fmt.Errorf("delivery workers stopped unexpectedly")
 		}
-		if err := deps.deliveryManager.WaitForReconfiguration(ctx); err == nil {
-			return runDelivery(ctx, deps)
-		} else if !errors.Is(err, delivery.ErrNoReconfiguration) {
-			return err
-		}
-		return fmt.Errorf("delivery workers stopped unexpectedly")
 	}
 }
 

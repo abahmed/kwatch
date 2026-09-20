@@ -88,7 +88,9 @@ func startFeedbackSaver(
 				case snapshot := <-ch:
 					pending = snapshot
 				default:
-					save(ctx, 5*time.Second)
+					fctx, cancel := finalWriteContext(ctx)
+					save(fctx, 5*time.Second)
+					cancel()
 					return
 				}
 			}

@@ -31,10 +31,10 @@ jobs:
       run: |
         actionlint_bin="$(go env GOPATH)/bin/actionlint"
         "$actionlint_bin"
-    - name: Install ShellCheck
+    - name: Install ShellCheck and ripgrep
       run: |
         sudo apt-get update
-        sudo apt-get install --no-install-recommends --yes shellcheck
+        sudo apt-get install --no-install-recommends --yes shellcheck ripgrep
     - name: Lint shell scripts
       run: shellcheck scripts/*.sh deploy/chart/*.sh
     - name: Lint

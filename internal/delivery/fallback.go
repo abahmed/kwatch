@@ -8,12 +8,12 @@ import "strings"
 func sanitizeFallbackCycles(entries []providerEntry) []string {
 	indexes := make(map[string]int, len(entries))
 	for index, entry := range entries {
-		indexes[strings.ToLower(entry.provider.Name())] = index
+		indexes[entry.lookupName()] = index
 	}
 
 	var disabled []string
 	for index := range entries {
-		current := strings.ToLower(entries[index].provider.Name())
+		current := entries[index].lookupName()
 		seen := make(map[string]struct{})
 		for current != "" {
 			if _, exists := seen[current]; exists {
@@ -30,4 +30,11 @@ func sanitizeFallbackCycles(entries []providerEntry) []string {
 		}
 	}
 	return disabled
+}
+
+func (entry providerEntry) lookupName() string {
+	if entry.catalogName != "" {
+		return strings.ToLower(entry.catalogName)
+	}
+	return strings.ToLower(entry.provider.Name())
 }
