@@ -45,7 +45,7 @@ RUN --mount=type=cache,target=/go/pkg/mod \
       -ldflags "-X github.com/abahmed/kwatch/internal/version.version=${RELEASE_VERSION} -X github.com/abahmed/kwatch/internal/version.gitCommitID=${GIT_COMMIT} -X github.com/abahmed/kwatch/internal/version.buildDate=${BUILD_DATE}" \
       -o kwatch ./cmd/kwatch
 
-FROM alpine:3.24@sha256:28bd5fe8b56d1bd048e5babf5b10710ebe0bae67db86916198a6eec434943f8b
+FROM alpine:3.24@sha256:294b683cb724975bec92580e1e685676bd4b50bda910ddb8c51d4cabeaec77e6
 LABEL maintainer="Abdelrahman Ahmed <a.ahmed1026@gmail.com>"
 
 # Keep the release identity in the image itself. The publish workflow supplies

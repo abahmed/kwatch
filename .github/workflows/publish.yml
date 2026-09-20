@@ -647,7 +647,7 @@ jobs:
           - Source commit: \`$(git rev-list -n 1 "$TAG")\`
           - Image: \`$IMAGE@$IMAGE_DIGEST\`
           - Verification files: [checksums](https://github.com/$GITHUB_REPOSITORY/releases/download/$TAG/kwatch-${TAG}-SHA256SUMS), [signed checksums](https://github.com/$GITHUB_REPOSITORY/releases/download/$TAG/kwatch-${TAG}-SHA256SUMS.sigstore.json), [manifest](https://github.com/$GITHUB_REPOSITORY/releases/download/$TAG/kwatch-${TAG}-release.json)
-          - SBOMs: `kwatch-${TAG}-source-sbom.cdx.json` and `kwatch-${TAG}-image-sbom.cdx.json`
+          - SBOMs: \`kwatch-${TAG}-source-sbom.cdx.json\` and \`kwatch-${TAG}-image-sbom.cdx.json\`
 
           Verify the image with:
 
