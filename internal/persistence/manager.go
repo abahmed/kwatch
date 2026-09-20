@@ -247,6 +247,7 @@ func (s *Manager) MarkAsInitialized(
 		}
 		s.recordMigrationResult(MigrationResult{
 			Store:                 "state",
+			Operation:             OperationInit,
 			SourceFormat:          "kwatch-state/absent",
 			DestinationFormat:     "kwatch-state/schema-v" + currentStateSchema,
 			Status:                MigrationCompleted,
@@ -299,6 +300,7 @@ func (s *Manager) MarkAsInitialized(
 func migrateStateData(data map[string]string) MigrationResult {
 	result := MigrationResult{
 		Store:                 "state",
+		Operation:             OperationMigrate,
 		SourceFormat:          "kwatch-state",
 		DestinationFormat:     "kwatch-state/schema-v" + currentStateSchema,
 		Status:                MigrationNotRequired,

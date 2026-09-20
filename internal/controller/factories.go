@@ -27,11 +27,17 @@ const nodeLeaseNamespace = "kube-node-lease"
 var namespaceResolveTimeout = 30 * time.Second
 
 func resolveNamespaces(
+	ctx context.Context,
 	runtime config.RuntimeConfig,
 	clientset kubernetes.Interface,
 ) (namespaceScope, error) {
+	if ctx == nil {
+		// Compatibility callers construct controllers without an application
+		// context. Production composition always supplies one.
+		ctx = context.Background()
+	}
 	if runtime.Scope().NamespaceSelector() != "" {
-		ctx, cancel := context.WithTimeout(context.Background(), namespaceResolveTimeout)
+		ctx, cancel := context.WithTimeout(ctx, namespaceResolveTimeout)
 		defer cancel()
 		list, err := clientset.CoreV1().Namespaces().List(ctx, metav1.ListOptions{
 			LabelSelector: runtime.Scope().NamespaceSelector(),

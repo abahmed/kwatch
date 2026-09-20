@@ -485,6 +485,7 @@ jobs:
     permissions:
       contents: write
       packages: read
+      id-token: write
     steps:
       - name: Check out the release tag
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
@@ -504,6 +505,27 @@ jobs:
         with:
           name: kwatch-helm-evidence-${{ needs.push_to_registry.outputs.tag }}
           path: /tmp/kwatch-evidence/helm
+
+      - name: Generate release SBOMs
+        env:
+          IMAGE: ghcr.io/abahmed/kwatch
+          IMAGE_DIGEST: ${{ needs.push_to_registry.outputs.digest }}
+          TAG: ${{ needs.push_to_registry.outputs.tag }}
+        run: |
+          set -euo pipefail
+          output=/tmp/kwatch-evidence/final
+          mkdir -p "$output"
+          docker pull "${IMAGE}@${IMAGE_DIGEST}"
+          docker run --rm \
+            -v "$GITHUB_WORKSPACE:/src:ro" \
+            anchore/syft@sha256:b46e597614ddc78621e560af3fabf9346e35462ea1c886a38b30bcc7ca601a73b \
+            dir:/src -o cyclonedx-json \
+            > "$output/kwatch-${TAG}-source-sbom.cdx.json"
+          docker run --rm \
+            -v /var/run/docker.sock:/var/run/docker.sock \
+            anchore/syft@sha256:b46e597614ddc78621e560af3fabf9346e35462ea1c886a38b30bcc7ca601a73b \
+            "docker:${IMAGE}@${IMAGE_DIGEST}" -o cyclonedx-json \
+            > "$output/kwatch-${TAG}-image-sbom.cdx.json"
 
       - name: Create checksums and release manifest
         env:
@@ -525,6 +547,11 @@ jobs:
 
           source_archive="$output/kwatch-${TAG}-source.tar.gz"
           git archive --format=tar --prefix="kwatch-${TAG}/" "$TAG" | gzip -n > "$source_archive"
+
+          source_sbom_name="kwatch-${TAG}-source-sbom.cdx.json"
+          image_sbom_name="kwatch-${TAG}-image-sbom.cdx.json"
+          test -s "$output/$source_sbom_name"
+          test -s "$output/$image_sbom_name"
 
           printf '%s\n' \
             "image=$IMAGE" \
@@ -552,14 +579,33 @@ jobs:
             --arg workflow "$GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID" \
             --arg chart "${chart_file:+$(basename "$chart_file")}" \
             --arg chart_sha "$chart_sha" \
+            --arg source_sbom "$source_sbom_name" \
+            --arg image_sbom "$image_sbom_name" \
+            --arg checksums "kwatch-${TAG}-SHA256SUMS" \
             '{schemaVersion:1, version:$tag,
               source:{repository:"https://github.com/abahmed/kwatch", tag:$tag, commit:$commit},
               image:{reference:$image, tag:$tag, digest:$digest, cosignSigned:true},
+              sbom:{source:$source_sbom, image:$image_sbom},
+              integrity:{checksums:$checksums, checksumSignature:
+                ("kwatch-" + $tag + "-SHA256SUMS.sigstore.json")},
               build:{workflow:$workflow}}
               + (if $chart == "" then {} else {helm:{artifact:$chart, sha256:$chart_sha}} end)' \
             > "$output/kwatch-${TAG}-release.json"
 
           (cd "$output" && sha256sum kwatch-* > "kwatch-${TAG}-SHA256SUMS")
+
+      - name: Install Cosign
+        uses: sigstore/cosign-installer@6f9f17788090df1f26f669e9d70d6ae9567deba6 # v4.1.2
+
+      - name: Sign release checksums
+        env:
+          TAG: ${{ needs.push_to_registry.outputs.tag }}
+        run: |
+          set -euo pipefail
+          output=/tmp/kwatch-evidence/final
+          checksums="$output/kwatch-${TAG}-SHA256SUMS"
+          bundle="$output/kwatch-${TAG}-SHA256SUMS.sigstore.json"
+          cosign sign-blob --yes --bundle "$bundle" "$checksums"
 
       - name: Upload evidence to GitHub Release
         env:
@@ -600,7 +646,8 @@ jobs:
           - Source tag: [\`$TAG\`](https://github.com/$GITHUB_REPOSITORY/tree/$TAG)
           - Source commit: \`$(git rev-list -n 1 "$TAG")\`
           - Image: \`$IMAGE@$IMAGE_DIGEST\`
-          - Verification files: [checksums](https://github.com/$GITHUB_REPOSITORY/releases/download/$TAG/kwatch-${TAG}-SHA256SUMS), [manifest](https://github.com/$GITHUB_REPOSITORY/releases/download/$TAG/kwatch-${TAG}-release.json)
+          - Verification files: [checksums](https://github.com/$GITHUB_REPOSITORY/releases/download/$TAG/kwatch-${TAG}-SHA256SUMS), [signed checksums](https://github.com/$GITHUB_REPOSITORY/releases/download/$TAG/kwatch-${TAG}-SHA256SUMS.sigstore.json), [manifest](https://github.com/$GITHUB_REPOSITORY/releases/download/$TAG/kwatch-${TAG}-release.json)
+          - SBOMs: `kwatch-${TAG}-source-sbom.cdx.json` and `kwatch-${TAG}-image-sbom.cdx.json`
 
           Verify the image with:
 
@@ -678,6 +725,18 @@ jobs:
             "${IMAGE}@${DIGEST}" >/tmp/cosign-verify.json
           test -s /tmp/cosign-verify.json
 
+      - name: Verify image provenance
+        env:
+          IMAGE: ghcr.io/abahmed/kwatch
+          DIGEST: ${{ needs.push_to_registry.outputs.digest }}
+        run: |
+          set -euo pipefail
+          gh attestation verify \
+            "oci://${IMAGE}@${DIGEST}" \
+            --repo "$GITHUB_REPOSITORY" \
+            --signer-workflow "$GITHUB_REPOSITORY/.github/workflows/publish.yml" \
+            --predicate-type "https://slsa.dev/provenance/v1"
+
       - name: Verify container image
         env:
           IMAGE: ghcr.io/abahmed/kwatch
@@ -694,6 +753,18 @@ jobs:
           docker run --rm "${IMAGE}@${DIGEST}" version --json > /tmp/version.json
           test "$(jq -r .version /tmp/version.json)" = "${{ needs.push_to_registry.outputs.tag }}"
           test "$(jq -r .commit /tmp/version.json)" = "$revision"
+
+      - name: Scan the published image digest
+        env:
+          IMAGE: ghcr.io/abahmed/kwatch
+          DIGEST: ${{ needs.push_to_registry.outputs.digest }}
+        run: |
+          set -euo pipefail
+          docker run --rm \
+            -v /var/run/docker.sock:/var/run/docker.sock \
+            aquasec/trivy@sha256:33f816d414b9d582d25bb737ffa4a632ae34e222f7ec1b50252cef0ce2266006 image \
+            --severity HIGH,CRITICAL --exit-code 1 \
+            "${IMAGE}@${DIGEST}"
 
       - name: Verify release checksums and source mapping
         env:
@@ -712,6 +783,23 @@ jobs:
           test "$(jq -r .source.tag "$manifest")" = "$TAG"
           test "$(jq -r .source.commit "$manifest")" = "$(git -C "$GITHUB_WORKSPACE" rev-list -n 1 "$TAG")"
           test "$(jq -r .image.digest "$manifest")" = "$EXPECTED_DIGEST"
+          source_sbom=$(jq -r .sbom.source "$manifest")
+          image_sbom=$(jq -r .sbom.image "$manifest")
+          test -s "$source_sbom"
+          test -s "$image_sbom"
+          jq -e '.bomFormat == "CycloneDX"' "$source_sbom" >/dev/null
+          jq -e '.bomFormat == "CycloneDX"' "$image_sbom" >/dev/null
+
+      - name: Verify signed release checksums
+        env:
+          TAG: ${{ needs.push_to_registry.outputs.tag }}
+        run: |
+          set -euo pipefail
+          cosign verify-blob \
+            --bundle "kwatch-${TAG}-SHA256SUMS.sigstore.json" \
+            --certificate-oidc-issuer=https://token.actions.githubusercontent.com \
+            --certificate-identity-regexp='^https://github.com/abahmed/kwatch/.github/workflows/publish.yml@' \
+            "kwatch-${TAG}-SHA256SUMS"
 
       - name: Verify public Helm repository
         if: ${{ !contains(needs.push_to_registry.outputs.tag, '-rc.') }}

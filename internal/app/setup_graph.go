@@ -53,9 +53,7 @@ func newNetworkGraphRun(
 			return err
 		}
 		defer func() {
-			stopCtx, cancel := context.WithTimeout(
-				context.Background(), componentShutdownTimeout,
-			)
+			stopCtx, cancel := boundedShutdownContext(ctx)
 			defer cancel()
 			if err := graphMonitor.Stop(stopCtx); err != nil {
 				healthServer.SetComponentError("network-graph", err)
@@ -119,9 +117,7 @@ func newStorageGraphRun(
 			return err
 		}
 		defer func() {
-			stopCtx, cancel := context.WithTimeout(
-				context.Background(), componentShutdownTimeout,
-			)
+			stopCtx, cancel := boundedShutdownContext(ctx)
 			defer cancel()
 			if err := graphMonitor.Stop(stopCtx); err != nil {
 				healthServer.SetComponentError("storage-graph", err)

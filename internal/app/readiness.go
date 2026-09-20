@@ -10,13 +10,14 @@ import (
 // session. Optional components report through health but do not participate in
 // this gate.
 type readinessCoordinator struct {
-	mu       sync.Mutex
-	health   *health.HealthServer
-	epoch    int64
-	leader   bool
-	required map[string]bool
-	ready    map[string]bool
-	writers  int
+	mu              sync.Mutex
+	health          *health.HealthServer
+	epoch           int64
+	leader          bool
+	required        map[string]bool
+	ready           map[string]bool
+	writers         map[string]bool
+	requiredWriters map[string]struct{}
 }
 
 func newReadinessCoordinator(
@@ -43,7 +44,8 @@ func (r *readinessCoordinator) begin(
 		r.required["delivery"] = true
 	}
 	r.ready = make(map[string]bool, len(r.required))
-	r.writers = 0
+	r.writers = make(map[string]bool)
+	r.requiredWriters = make(map[string]struct{})
 	r.setHealthLocked(false)
 }
 
@@ -81,24 +83,43 @@ func (r *readinessCoordinator) setForEpoch(
 	r.setHealthLocked(r.readyNowLocked())
 }
 
-func (r *readinessCoordinator) writerStarted() {
+func (r *readinessCoordinator) registerRequiredWriter(name string) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	if !r.leader {
 		return
 	}
-	r.writers++
-	if r.writers >= 3 {
-		r.ready["persistence-writers"] = true
+	if name == "" {
+		return
 	}
+	r.requiredWriters[name] = struct{}{}
+	r.ready["persistence-writers"] = false
 	r.setHealthLocked(r.readyNowLocked())
 }
 
-func (r *readinessCoordinator) writerFailed() {
+func (r *readinessCoordinator) writerStarted(name string) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	if !r.leader {
 		return
+	}
+	if name != "" {
+		r.writers[name] = true
+	}
+	ready := len(r.requiredWriters) > 0 &&
+		len(r.writers) >= len(r.requiredWriters)
+	r.ready["persistence-writers"] = ready
+	r.setHealthLocked(r.readyNowLocked())
+}
+
+func (r *readinessCoordinator) writerFailed(name string) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	if !r.leader {
+		return
+	}
+	if name != "" {
+		delete(r.writers, name)
 	}
 	r.ready["persistence-writers"] = false
 	r.setHealthLocked(false)

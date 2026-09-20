@@ -25,7 +25,6 @@ type persistenceSetup struct {
 	incidentDone  chan struct{}
 	incidentSaver incidentSaver
 	feedbackStore *insight.FeedbackStore
-	restoreErr    error
 	feedbackDone  chan struct{}
 	saveFeedback  func()
 	activate      func(context.Context, func(map[string]map[string]int64)) error
@@ -35,29 +34,24 @@ type persistenceSetup struct {
 }
 
 func configurePersistence(
-	ctx context.Context,
 	persistenceManager *persistence.Manager,
 	runtime config.RuntimeConfig,
 	now func() time.Time,
 	healthServer *health.HealthServer,
 	readiness *readinessCoordinator,
 ) persistenceSetup {
-	persistenceManager.BeginMigrationReport()
-	restored := restorePersistenceState(
-		ctx, persistenceManager, runtime, now,
-	)
-	tracker := restored.tracker
-	changeDone := make(chan struct{})
+	tracker := kwcontext.NewChangeTrackerWithClock(0, clock.Func(now))
+	baseline := make(map[string]map[string]int64)
+	feedbackStore := insight.NewFeedbackStoreWithClock(clock.Func(now))
 
 	baselineCh := make(chan map[string]map[string]int64, 64)
-	baseline := restored.baseline
 	baselineDone := make(chan struct{})
 
+	changeDone := make(chan struct{})
 	incidentDone := make(chan struct{})
 	incidentCh := make(chan stateSnapshot, 1)
 	var incidentSaverForRun incidentSaver = persistenceManager
 
-	feedbackStore := restored.feedbackStore
 	feedbackDone := make(chan struct{})
 	feedbackCh := make(chan []insight.RCARecord, 1)
 	start := func(
@@ -77,7 +71,6 @@ func configurePersistence(
 		baselineDone: baselineDone, changeDone: changeDone,
 		incidentCh: incidentCh, incidentDone: incidentDone,
 		incidentSaver: incidentSaverForRun, feedbackStore: feedbackStore,
-		restoreErr:   restored.requiredErr,
 		feedbackDone: feedbackDone,
 		saveFeedback: feedbackSnapshotSaver(feedbackCh, feedbackStore),
 		start:        start,
@@ -86,8 +79,12 @@ func configurePersistence(
 		ctx context.Context,
 		applyBaseline func(map[string]map[string]int64),
 	) error {
-		if setup.restoreErr != nil {
-			restoreErr := setup.restoreErr
+		persistenceManager.BeginMigrationReport()
+		restored := restorePersistenceState(
+			ctx, persistenceManager, runtime, tracker, feedbackStore,
+		)
+		if restored.requiredErr != nil {
+			restoreErr := restored.requiredErr
 			if healthServer != nil {
 				healthServer.SetComponentError("persistence", restoreErr)
 			}
@@ -126,8 +123,33 @@ func configurePersistence(
 				"persistence migration %s", result.Status,
 			)
 		}
+		// A legacy baseline is written by the migration after the initial
+		// restore read. Reload it before activation so the incident engine
+		// cannot start with a stale empty baseline.
+		if result.Status == persistence.MigrationCompleted {
+			baseline, reloadErr := persistenceManager.GetBaselineWithError(ctx)
+			managerResult := persistence.MigrationResult{
+				Store:                 "baseline",
+				Operation:             persistence.OperationRecover,
+				SourceFormat:          "kwatch-baseline/baseline",
+				DestinationFormat:     "runtime/baseline",
+				Status:                persistence.MigrationCompleted,
+				Recoverable:           reloadErr == nil,
+				MonitoringMayContinue: reloadErr == nil,
+				Detail:                "reloaded migrated baseline",
+			}
+			if reloadErr != nil {
+				managerResult.Status = persistence.MigrationFailed
+				managerResult.Detail = "migrated baseline could not be reloaded"
+			}
+			persistenceManager.RecordMigrationResult(managerResult, reloadErr)
+			if reloadErr != nil {
+				return fmt.Errorf("reload migrated baseline: %w", reloadErr)
+			}
+			restored.baseline = baseline
+		}
 		if applyBaseline != nil {
-			applyBaseline(baseline)
+			applyBaseline(restored.baseline)
 		}
 		return nil
 	}
@@ -148,30 +170,29 @@ func persistenceStatus(
 		if required && err != nil {
 			healthServer.SetReady(false)
 			if readiness != nil {
-				readiness.writerFailed()
+				readiness.writerFailed(name)
 			}
 		}
 	}
 }
 
 type restoredPersistenceState struct {
-	tracker       *kwcontext.ChangeTracker
-	baseline      map[string]map[string]int64
-	feedbackStore *insight.FeedbackStore
-	requiredErr   error
+	baseline    map[string]map[string]int64
+	requiredErr error
 }
 
 func restorePersistenceState(
 	ctx context.Context,
 	manager *persistence.Manager,
 	runtime config.RuntimeConfig,
-	now func() time.Time,
+	tracker *kwcontext.ChangeTracker,
+	feedbackStore *insight.FeedbackStore,
 ) restoredPersistenceState {
-	tracker, trackerErr := loadChangeTracker(ctx, manager, now)
+	trackerErr := restoreChangeTracker(ctx, manager, tracker)
 	recordOptionalRestore(manager, "change-history", trackerErr)
 	baseline, baselineErr := manager.GetBaselineWithError(ctx)
 	recordRequiredRestore(manager, "baseline", baselineErr)
-	feedbackStore, feedbackErr := loadFeedbackStore(ctx, manager, now)
+	feedbackErr := restoreFeedbackStore(ctx, manager, feedbackStore)
 	recordOptionalRestore(manager, "feedback", feedbackErr)
 
 	requiredErr := baselineErr
@@ -191,8 +212,8 @@ func restorePersistenceState(
 		recordNotRequiredRestore(manager, "telemetry")
 	}
 	return restoredPersistenceState{
-		tracker: tracker, baseline: baseline, feedbackStore: feedbackStore,
 		requiredErr: requiredErr,
+		baseline:    baseline,
 	}
 }
 
@@ -213,6 +234,11 @@ func startPersistenceSavers(
 	healthServer *health.HealthServer,
 	readiness *readinessCoordinator,
 ) {
+	if readiness != nil {
+		readiness.registerRequiredWriter("change-history-saver")
+		readiness.registerRequiredWriter("baseline-saver")
+		readiness.registerRequiredWriter("incident-saver")
+	}
 	startRequiredSaver(
 		ctx, supervisor, "change-history-saver", changeDone,
 		now, func() {
@@ -304,7 +330,7 @@ func startRequiredSaver(
 				onHealthy()
 			}
 			if readiness != nil {
-				readiness.writerStarted()
+				readiness.writerStarted(name)
 			}
 		},
 		run: func(ctx context.Context) error {
@@ -334,30 +360,28 @@ func startOptionalSaver(
 	})
 }
 
-func loadChangeTracker(
+func restoreChangeTracker(
 	ctx context.Context,
 	persistenceManager persistence.ChangeHistoryStore,
-	now func() time.Time,
-) (*kwcontext.ChangeTracker, error) {
-	tracker := kwcontext.NewChangeTrackerWithClock(0, clock.Func(now))
+	tracker *kwcontext.ChangeTracker,
+) error {
 	changes, err := persistenceManager.LoadChangeHistory(ctx)
-	if err == nil {
+	if err == nil && tracker != nil {
 		tracker.Restore(changes)
 	}
-	return tracker, err
+	return err
 }
 
-func loadFeedbackStore(
+func restoreFeedbackStore(
 	ctx context.Context,
 	persistenceManager persistence.FeedbackStore,
-	now func() time.Time,
-) (*insight.FeedbackStore, error) {
-	store := insight.NewFeedbackStoreWithClock(clock.Func(now))
+	store *insight.FeedbackStore,
+) error {
 	records, err := persistenceManager.LoadRCAFeedback(ctx)
-	if err == nil {
+	if err == nil && store != nil {
 		store.Restore(records)
 	}
-	return store, err
+	return err
 }
 
 func recordOptionalRestore(
@@ -373,6 +397,7 @@ func recordOptionalRestore(
 	}
 	manager.RecordMigrationResult(persistence.MigrationResult{
 		Store:                 store,
+		Operation:             persistence.OperationRestore,
 		SourceFormat:          "kwatch-" + store,
 		DestinationFormat:     "runtime/" + store,
 		Status:                status,
@@ -395,6 +420,7 @@ func recordRequiredRestore(
 	}
 	manager.RecordMigrationResult(persistence.MigrationResult{
 		Store:                 store,
+		Operation:             persistence.OperationRestore,
 		SourceFormat:          "kwatch-" + store,
 		DestinationFormat:     "runtime/" + store,
 		Status:                status,
@@ -410,6 +436,7 @@ func recordNotRequiredRestore(
 ) {
 	manager.RecordMigrationResult(persistence.MigrationResult{
 		Store:                 store,
+		Operation:             persistence.OperationRestore,
 		SourceFormat:          "not-required",
 		DestinationFormat:     "runtime/" + store,
 		Status:                persistence.MigrationNotRequired,

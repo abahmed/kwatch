@@ -58,9 +58,7 @@ func configureStatusMonitor(
 			return err
 		}
 		defer func() {
-			stopCtx, cancel := context.WithTimeout(
-				context.Background(), componentShutdownTimeout,
-			)
+			stopCtx, cancel := boundedShutdownContext(ctx)
 			defer cancel()
 			if err := statusMonitor.Stop(stopCtx); err != nil {
 				healthServer.SetComponentError("status", err)

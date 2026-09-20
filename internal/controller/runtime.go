@@ -1,6 +1,7 @@
 package controller
 
 import (
+	"context"
 	"time"
 
 	kwcontext "github.com/abahmed/kwatch/internal/graphcontext"
@@ -12,6 +13,7 @@ import (
 // are supplied at construction so graph, change-tracking, and readiness state
 // cannot be replaced after workers begin processing events.
 type RuntimeDependencies struct {
+	Context context.Context
 	Tracker *kwcontext.ChangeTracker
 	Graph   *kwcontext.ResourceGraph
 	Ready   func()

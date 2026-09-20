@@ -4,6 +4,16 @@ This note records the implementation baseline for the verified remediation pass.
 
 ## Confirmed fixes
 
+- Mutable persistence, incident, group, baseline, feedback, and engine restore
+  is deferred until the process owns a leadership epoch; standby Pods only
+  construct immutable dependencies and serve health/election.
+- Required persistence writers are registered explicitly for each active runtime
+  instead of relying on a hard-coded writer count.
+- Controller namespace-selector resolution receives the application lifecycle
+  context in production composition.
+- Migration results identify their operation phase (`restore`, `migrate`,
+  `recover`, `write`, or `initialize`) so restore and migration entries cannot
+  be confused.
 - Saver final writes use bounded contexts detached from canceled component
   contexts and remain fenced by the persistence gate.
 - Change-history saves treat an empty snapshot as a successful no-op.

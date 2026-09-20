@@ -107,9 +107,7 @@ func startCRDWatcher(ctx context.Context, deps *serverDeps) error {
 		return fmt.Errorf("crd watcher: %w", err)
 	}
 	defer func() {
-		stopCtx, cancel := context.WithTimeout(
-			context.Background(), componentShutdownTimeout,
-		)
+		stopCtx, cancel := boundedShutdownContext(ctx)
 		defer cancel()
 		if err := w.Stop(stopCtx); err != nil {
 			metrics.DefaultRegistry().ShutdownTimeouts.Add(1)
@@ -185,9 +183,7 @@ func waitShutdown(
 		)
 		feedbackStopped := waitFeedbackSaver(deps)
 		if incidentStopped && baselineStopped && changeStopped && feedbackStopped {
-			finalCtx, cancel := context.WithTimeout(
-				context.Background(), componentShutdownTimeout,
-			)
+			finalCtx, cancel := boundedShutdownContext(applicationContext)
 			saveFinalIncidentSnapshot(finalCtx, deps)
 			cancel()
 		} else {
@@ -201,9 +197,7 @@ func waitShutdown(
 		)
 	}
 
-	shutdownCtx, cancel := context.WithTimeout(
-		context.Background(), componentShutdownTimeout,
-	)
+	shutdownCtx, cancel := boundedShutdownContext(applicationContext)
 	if err := deps.deliveryManager.Stop(shutdownCtx); err != nil {
 		metrics.DefaultRegistry().ShutdownTimeouts.Add(1)
 		klog.ErrorS(err, "timed out waiting for delivery manager to drain")
@@ -219,9 +213,7 @@ func waitShutdown(
 }
 
 func stopHealthServer(deps *serverDeps) {
-	shutdownCtx, cancel := context.WithTimeout(
-		context.Background(), componentShutdownTimeout,
-	)
+	shutdownCtx, cancel := boundedShutdownContext(deps.ctx)
 	defer cancel()
 	deps.healthServer.SetReady(false)
 	if err := deps.healthServer.Stop(shutdownCtx); err != nil {

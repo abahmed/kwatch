@@ -63,4 +63,5 @@ Do not treat a mutable image tag as a security identity.
 Dependency and container scans run in scheduled CI. Findings are triaged by
 severity and exploitability; a high or critical finding in a shipped artifact
 blocks the next release unless the release owner records a documented exception
-and mitigation.
+and mitigation. The required exception fields and 90-day maximum lifetime are
+documented in [the vulnerability-exception policy](docs/vulnerability-exceptions.md).

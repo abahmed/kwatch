@@ -805,8 +805,35 @@ idle. New periodic components must either expose equivalent progress or be
 explicitly classified as idle-safe; otherwise the supervisor cannot distinguish
 healthy idleness from a stalled component.
 
+Standby replicas may construct immutable dependencies and serve health/election,
+but they must not restore incidents, groups, baselines, provider threads, engine
+state, or other mutable monitoring state before acquiring the Lease. Active
+restore, required cache synchronization, source configuration, and saver startup
+belong to the current leadership epoch. A restore failure keeps that epoch
+not-ready and prevents monitoring and delivery from starting.
+
+Migration reports distinguish restore, migrate, recover, write, and initialize
+operations. Do not add an ambiguous duplicate result for the same store without
+recording the operation phase explicitly. Legacy and future persisted formats
+must remain preserved and diagnosable.
+
+Kubernetes list/watch code must handle reflector relists, expired resource
+versions, watch closure, tombstones, handler panics, queue retries, and API
+throttling without creating duplicate workers or synthetic incidents. Required
+cache loss removes readiness; optional API loss degrades health only.
+
+Production controller construction receives its application lifecycle context
+through `controller.RuntimeDependencies`. Compatibility callers may use the
+bounded fallback, but new production code must not introduce unbounded
+`context.Background()` calls for namespace resolution, watcher shutdown,
+transport, or persistence writes.
+
 The security workflow pins scanner and SBOM container images by digest and
-publishes source and image CycloneDX SBOMs. OpenSSF Scorecard runs separately.
+publishes source and image CycloneDX SBOMs. The release workflow also generates
+SBOMs for the exact release tag and image digest, signs the release checksum
+manifest with Cosign, verifies image provenance, and scans the published image
+digest. Vulnerability exceptions must be time-bounded and documented according
+to `docs/vulnerability-exceptions.md`. OpenSSF Scorecard runs separately.
 When local Docker, Kind, kubectl, ShellCheck, or actionlint are unavailable,
 the corresponding CI checks remain mandatory and must be reported as pending,
 never as locally passed.

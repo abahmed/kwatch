@@ -30,6 +30,9 @@ func newTestController(
 		RuntimeDependencies{Now: clock.RealClock{}.Now},
 	)
 	require.NoError(t, err)
+	// Unit tests that inspect listers directly opt into informer startup. The
+	// production application starts them only after leadership is acquired.
+	ctrl.startInformers()
 	return ctrl, cleanup
 }
 

@@ -21,16 +21,30 @@ const (
 	MigrationUnsupported MigrationStatus = "unsupported"
 )
 
+// MigrationOperation identifies the phase represented by a report entry.
+// Keeping it separate from Store avoids ambiguous duplicate entries when a
+// store is both restored and migrated during one startup epoch.
+type MigrationOperation string
+
+const (
+	OperationRestore MigrationOperation = "restore"
+	OperationMigrate MigrationOperation = "migrate"
+	OperationRecover MigrationOperation = "recover"
+	OperationWrite   MigrationOperation = "write"
+	OperationInit    MigrationOperation = "initialize"
+)
+
 // MigrationResult records an operator-useful migration outcome without
 // exposing persistence implementation details to startup code.
 type MigrationResult struct {
-	Store                 string          `json:"store"`
-	SourceFormat          string          `json:"sourceFormat"`
-	DestinationFormat     string          `json:"destinationFormat"`
-	Status                MigrationStatus `json:"status"`
-	Recoverable           bool            `json:"recoverable"`
-	MonitoringMayContinue bool            `json:"monitoringMayContinue"`
-	Detail                string          `json:"detail"`
+	Store                 string             `json:"store"`
+	Operation             MigrationOperation `json:"operation"`
+	SourceFormat          string             `json:"sourceFormat"`
+	DestinationFormat     string             `json:"destinationFormat"`
+	Status                MigrationStatus    `json:"status"`
+	Recoverable           bool               `json:"recoverable"`
+	MonitoringMayContinue bool               `json:"monitoringMayContinue"`
+	Detail                string             `json:"detail"`
 }
 
 // MigrationReport groups every migration operation observed during one
@@ -57,6 +71,7 @@ func (s *Manager) migrateLegacyBaselineWithResult(
 ) (MigrationResult, error) {
 	result := MigrationResult{
 		Store:                 "baseline",
+		Operation:             OperationMigrate,
 		SourceFormat:          "kwatch-state/baseline",
 		DestinationFormat:     "kwatch-baseline/baseline",
 		Status:                MigrationNotRequired,

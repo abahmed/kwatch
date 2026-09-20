@@ -32,7 +32,7 @@ func buildServerDeps(
 ) (*serverDeps, error) {
 	readiness := newReadinessCoordinator(boot.healthServer)
 	persist := configurePersistence(
-		ctx, boot.persistence, runtime, now, boot.healthServer, readiness,
+		boot.persistence, runtime, now, boot.healthServer, readiness,
 	)
 	graph := kwcontext.NewResourceGraph()
 	auditLogger := audit.NewLogger(audit.Config{
@@ -117,6 +117,7 @@ func buildServerDeps(
 	ctl, cleanup, err = newMonitorController(
 		boot.clients.Kubernetes, runtime, monitors,
 		controller.RuntimeDependencies{
+			Context: ctx,
 			Tracker: persist.tracker,
 			Graph:   graph,
 			Ready:   ready,
@@ -128,12 +129,9 @@ func buildServerDeps(
 		return nil, fmt.Errorf("create controller: %w", err)
 	}
 	if err := configureControllerRuntime(
-		ctx,
 		runtime,
 		boot,
 		ctl,
-		persist,
-		incidentEngine,
 		pvcMonitor,
 	); err != nil {
 		cleanup()
@@ -191,6 +189,12 @@ func buildServerDeps(
 		); err != nil {
 			readiness.setCurrent("restore", false)
 			return fmt.Errorf("activate persistence: %w", err)
+		}
+		if err := restoreControllerRuntime(
+			activeCtx, boot, ctl, incidentEngine,
+		); err != nil {
+			readiness.setCurrent("restore", false)
+			return err
 		}
 		if err := boot.activate(activeCtx); err != nil {
 			readiness.setCurrent("restore", false)

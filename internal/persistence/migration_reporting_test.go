@@ -28,6 +28,7 @@ func TestMarkAsInitializedReportsFutureStateSchema(t *testing.T) {
 	report := store.MigrationReport()
 	result := report.Operations[len(report.Operations)-1]
 	require.Equal(t, "state", result.Store)
+	require.Equal(t, OperationMigrate, result.Operation)
 	require.Equal(t, MigrationUnsupported, result.Status)
 	require.True(t, result.Recoverable)
 	require.False(t, result.MonitoringMayContinue)
@@ -55,6 +56,7 @@ func TestMigrationResultRecordsBaselineFailure(t *testing.T) {
 	result := report.Operations[len(report.Operations)-1]
 	require.Equal(t, MigrationFailed, result.Status)
 	require.Equal(t, "baseline", result.Store)
+	require.Equal(t, OperationMigrate, result.Operation)
 }
 
 func TestMarkAsInitializedReportsMalformedSchemaWithoutOverwriting(
@@ -106,6 +108,8 @@ func TestMigrationReportContainsAllStartupOperations(t *testing.T) {
 	require.Len(t, report.Operations, 2)
 	require.Equal(t, "state", report.Operations[0].Store)
 	require.Equal(t, "baseline", report.Operations[1].Store)
+	require.Equal(t, OperationMigrate, report.Operations[0].Operation)
+	require.Equal(t, OperationMigrate, report.Operations[1].Operation)
 	require.Equal(t, "kwatch-state", report.Operations[0].SourceFormat)
 	require.Equal(
 		t, "kwatch-state/baseline", report.Operations[1].SourceFormat,
@@ -129,6 +133,7 @@ func TestMigrationReportPreservesCompleteStartupCycle(t *testing.T) {
 	} {
 		store.RecordMigrationResult(MigrationResult{
 			Store:                 name,
+			Operation:             OperationRestore,
 			SourceFormat:          "source/" + name,
 			DestinationFormat:     "runtime/" + name,
 			Status:                MigrationCompleted,

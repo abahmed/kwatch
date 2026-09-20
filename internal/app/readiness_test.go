@@ -68,3 +68,24 @@ func TestReadinessEndsWithLeadership(t *testing.T) {
 	readiness.end(3)
 	require.False(t, server.Ready())
 }
+
+func TestReadinessUsesRegisteredPersistenceWriters(t *testing.T) {
+	server := health.NewHealthServerWithClock(
+		config.HealthCheck{}, clock.RealClock{},
+	)
+	readiness := newReadinessCoordinator(server)
+	readiness.begin(4, false)
+	readiness.registerRequiredWriter("baseline-saver")
+	readiness.registerRequiredWriter("incident-saver")
+	for _, name := range []string{
+		"restore", "controller", "incident",
+	} {
+		readiness.setCurrent(name, true)
+	}
+	readiness.writerStarted("baseline-saver")
+	require.False(t, server.Ready())
+	readiness.writerStarted("incident-saver")
+	require.True(t, server.Ready())
+	readiness.writerFailed("incident-saver")
+	require.False(t, server.Ready())
+}

@@ -280,6 +280,7 @@ func hasProvider(entries []providerEntry, name string) bool {
 func (a *Manager) drainForReconfiguration() error {
 	a.mu.Lock()
 	a.ensureLifecycleChannelsLocked()
+	activeContext := a.ctx
 	if a.reconfiguring {
 		a.mu.Unlock()
 		return fmt.Errorf("delivery reconfiguration already in progress")
@@ -292,8 +293,11 @@ func (a *Manager) drainForReconfiguration() error {
 		a.generation.state = generationDraining
 	}
 	a.mu.Unlock()
+	if activeContext == nil {
+		activeContext = context.Background()
+	}
 	reconfigureCtx, cancel := context.WithTimeout(
-		context.Background(), 10*time.Second,
+		context.WithoutCancel(activeContext), 10*time.Second,
 	)
 	defer cancel()
 	if err := a.shutdownContext(reconfigureCtx); err != nil {

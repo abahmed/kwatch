@@ -43,6 +43,11 @@ func (s *Manager) recordMigrationResult(
 	result MigrationResult,
 	err error,
 ) {
+	if result.Operation == "" {
+		// Keep older internal callers compatible while making every published
+		// report entry explicit.
+		result.Operation = OperationMigrate
+	}
 	if err != nil && result.Status != MigrationUnsupported {
 		result.Status = MigrationFailed
 		if result.Detail == "" {

@@ -2,8 +2,11 @@ package controller
 
 import (
 	"fmt"
+	"sync"
+	"sync/atomic"
 	"time"
 
+	"k8s.io/client-go/informers"
 	"k8s.io/client-go/kubernetes"
 
 	"github.com/abahmed/kwatch/internal/config"
@@ -29,7 +32,12 @@ type Controller struct {
 	startupSummaryCh chan map[string]int
 	scopeState
 	diagnosticState
-	now func() time.Time
+	now       func() time.Time
+	factories []informers.SharedInformerFactory
+	startOnce sync.Once
+	stopOnce  sync.Once
+	started   atomic.Bool
+	stopCh    chan struct{}
 }
 
 // resolveNamespaces decides which namespaces to watch.
@@ -49,7 +57,7 @@ func NewWithRuntimeConfig(
 	}
 	resync := runtime.Lifecycle().ResyncInterval()
 
-	scope, err := resolveNamespaces(runtime, client)
+	scope, err := resolveNamespaces(dependencies.Context, runtime, client)
 	if err != nil {
 		return nil, nil, fmt.Errorf("resolve namespaces: %w", err)
 	}
@@ -199,10 +207,8 @@ func NewWithRuntimeConfig(
 		return nil, nil, fmt.Errorf("configure monitor sources: %w", err)
 	}
 
-	stopCh := make(chan struct{})
-	for _, f := range factories {
-		f.Start(stopCh)
-	}
+	c.factories = factories
+	c.stopCh = make(chan struct{})
 
 	if runtime.Monitors().NodeResource().Enabled {
 		nc := runtime.Monitors().NodeResource()
@@ -210,13 +216,31 @@ func NewWithRuntimeConfig(
 	}
 
 	cleanup := func() {
-		close(stopCh)
-		for _, f := range factories {
-			f.Shutdown()
-		}
+		c.stopInformers()
 	}
 
 	return c, cleanup, nil
+}
+
+func (c *Controller) startInformers() {
+	c.startOnce.Do(func() {
+		c.started.Store(true)
+		for _, factory := range c.factories {
+			factory.Start(c.stopCh)
+		}
+	})
+}
+
+func (c *Controller) stopInformers() {
+	if !c.started.Load() {
+		return
+	}
+	c.stopOnce.Do(func() {
+		close(c.stopCh)
+		for _, factory := range c.factories {
+			factory.Shutdown()
+		}
+	})
 }
 
 func (c *Controller) queueDepth() int64 {

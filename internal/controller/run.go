@@ -24,6 +24,8 @@ const (
 
 func (c *Controller) Run(ctx context.Context, workers int) error {
 	defer utilruntime.HandleCrash()
+	c.startInformers()
+	defer c.stopInformers()
 	var goroutines sync.WaitGroup
 	for _, p := range c.allPipelines() {
 		defer p.shutdown()
