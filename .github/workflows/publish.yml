@@ -796,6 +796,7 @@ jobs:
           TAG: ${{ needs.push_to_registry.outputs.tag }}
         run: |
           set -euo pipefail
+          cd /tmp/release-assets
           cosign verify-blob \
             --bundle "kwatch-${TAG}-SHA256SUMS.sigstore.json" \
             --certificate-oidc-issuer=https://token.actions.githubusercontent.com \
