@@ -727,6 +727,7 @@ jobs:
 
       - name: Verify image provenance
         env:
+          GH_TOKEN: ${{ github.token }}
           IMAGE: ghcr.io/abahmed/kwatch
           DIGEST: ${{ needs.push_to_registry.outputs.digest }}
         run: |
