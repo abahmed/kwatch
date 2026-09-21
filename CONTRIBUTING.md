@@ -41,7 +41,12 @@ make verify
 ```
 
 The gate builds the binary, runs `go vet`, runs the tests, checks formatting and
-line length, checks package boundaries, and runs `golangci-lint`.
+line length, checks package boundaries, enforces coverage thresholds, and runs
+`golangci-lint`. Use `make coverage-check` to run the coverage gate separately.
+The coverage gate uses a race-enabled, repository-wide profile and requires at
+least 75% aggregate statement coverage plus 70% for each core runtime package
+listed in `scripts/check-coverage.sh`. Generated deep-copy code is the only
+documented exclusion.
 
 ## 📐 Code and documentation rules
 
@@ -51,7 +56,8 @@ line length, checks package boundaries, and runs `golangci-lint`.
   network/API call.
 - Keep dependency direction explicit; use `make architecture-check` when
   adding or moving packages.
-- Add focused tests for behavior changes.
+- Add focused tests for every behavior change, including success, failure,
+  cancellation, and recovery paths where they exist.
 - Keep docs task-focused: explain the goal, show a complete command, and use
   fake credentials.
 - Explain Kubernetes terms the first time you use them.

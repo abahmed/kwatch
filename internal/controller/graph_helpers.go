@@ -142,6 +142,9 @@ func toSelectionOperator(
 	op corev1.NodeSelectorOperator,
 ) (selection.Operator, error) {
 	s := strings.ToLower(string(op))
+	if op == corev1.NodeSelectorOpDoesNotExist {
+		return selection.DoesNotExist, nil
+	}
 	switch selection.Operator(s) {
 	case selection.In, selection.NotIn, selection.Exists,
 		selection.DoesNotExist, selection.GreaterThan, selection.LessThan:

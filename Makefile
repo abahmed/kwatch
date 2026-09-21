@@ -5,7 +5,7 @@
 	verify-all verify-catalogs docs-verify line-check docker-build \
 	docker-build-latest architecture-check test-layout-check help \
 	verify-focused verify-fast verify-race verify-security \
-	verify-manifests verify-docs verify-operational
+	verify-manifests verify-docs verify-operational coverage coverage-check
 
 # Binary names
 BINARY_NAME := kwatch
@@ -54,6 +54,8 @@ help:
 	@echo "  make line-check    Check new Go lines for an 80-column maximum"
 	@echo "  make verify-fmt    Verify code formatting"
 	@echo "  make verify-unit   Run unit tests"
+	@echo "  make coverage      Run race-enabled tests and write coverage.txt"
+	@echo "  make coverage-check Run tests and enforce coverage thresholds"
 	@echo "  make verify-all    Run all verification scripts"
 	@echo "  make clean         Clean build artifacts"
 	@echo ""
@@ -104,11 +106,21 @@ verify-unit:
 	@echo "Running unit tests..."
 	$(GOTEST) -short ./...
 
+coverage:
+	@echo "Running race-enabled tests with coverage..."
+	$(GOTEST) -race --coverprofile=coverage.txt \
+		--covermode=atomic ./...
+
+coverage-check: coverage
+	./scripts/check-coverage.sh coverage.txt
+
 # Run the repository's required validation gate. Keep this in the same order
 # as AGENTS.md so local verification and CI verification cannot drift.
-verify: build vet test lint line-check architecture-check test-layout-check \
+verify: build vet test lint coverage-check line-check architecture-check \
+	test-layout-check \
 	verify-catalogs \
 	docs-verify
+	@git diff --check
 
 # Run the fast package-scoped gate during incremental refactors. The caller
 # must provide Go package patterns, for example:

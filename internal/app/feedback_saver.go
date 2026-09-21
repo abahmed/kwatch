@@ -37,12 +37,10 @@ func startFeedbackSaver(
 	ctx context.Context,
 	persistenceManager feedbackSaver,
 	ch <-chan []insight.RCARecord,
-	done chan<- struct{},
 	report func(error),
 	canWrite func() bool,
 	progress func(),
 ) {
-	defer close(done)
 	var pending []insight.RCARecord
 	ticker := time.NewTicker(10 * time.Second)
 	defer ticker.Stop()
