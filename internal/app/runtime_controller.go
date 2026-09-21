@@ -44,9 +44,10 @@ func restoreControllerRuntime(
 	ctl *controller.Controller,
 	incidentEngine *incident.Engine,
 ) error {
-	if err := restoreIncidents(
+	aliases, err := restoreIncidents(
 		ctx, boot.persistence, incidentEngine, ctl.NamespaceAllowed,
-	); err != nil {
+	)
+	if err != nil {
 		recordRestoreResult(boot.persistence, "incidents", err)
 		return fmt.Errorf("restore incidents: %w", err)
 	}
@@ -57,7 +58,7 @@ func restoreControllerRuntime(
 	}
 	recordRestoreResult(boot.persistence, "groups", nil)
 	if err := restoreProviderThreads(
-		ctx, boot.persistence, boot.deliveryManager, incidentEngine,
+		ctx, boot.persistence, boot.deliveryManager, incidentEngine, aliases,
 	); err != nil {
 		recordRestoreResult(boot.persistence, "threads", err)
 		return fmt.Errorf("restore provider threads: %w", err)

@@ -50,6 +50,10 @@ type Registry struct {
 	LeadershipAcquisitions   atomic.Int64
 	LeadershipLosses         atomic.Int64
 	LeaderTakeovers          atomic.Int64
+	TelemetryAttempts        atomic.Int64
+	TelemetrySuccesses       atomic.Int64
+	TelemetryRetries         atomic.Int64
+	TelemetryFailures        [5]atomic.Int64
 
 	registryOnce sync.Once
 	registry     *prometheus.Registry
@@ -153,6 +157,29 @@ var metricDescs = []*prometheus.Desc{
 		"Leader election losses", nil, nil),
 	prometheus.NewDesc("kwatch_leader_takeovers_total",
 		"Leader election takeovers", nil, nil),
+	prometheus.NewDesc("kwatch_telemetry_attempts_total",
+		"Adoption telemetry HTTP attempts", nil, nil),
+	prometheus.NewDesc("kwatch_telemetry_successes_total",
+		"Successful adoption telemetry reports", nil, nil),
+	prometheus.NewDesc("kwatch_telemetry_failures_total",
+		"Failed adoption telemetry operations", []string{"reason"}, nil),
+	prometheus.NewDesc("kwatch_telemetry_retries_total",
+		"Adoption telemetry retries", nil, nil),
+}
+
+var telemetryFailureReasons = [...]string{
+	"state_read", "invalid_identity", "network", "http_status", "state_write",
+}
+
+// IncTelemetryFailure records one failure using a bounded reason label.
+func (r *Registry) IncTelemetryFailure(reason string) {
+	for i, allowed := range telemetryFailureReasons {
+		if reason == allowed {
+			r.TelemetryFailures[i].Add(1)
+			return
+		}
+	}
+	r.TelemetryFailures[2].Add(1)
 }
 
 // Describe implements prometheus.Collector.
@@ -215,6 +242,15 @@ func (r *Registry) Collect(ch chan<- prometheus.Metric) {
 	r.collectCounter(ch, 31, r.LeadershipAcquisitions.Load())
 	r.collectCounter(ch, 32, r.LeadershipLosses.Load())
 	r.collectCounter(ch, 33, r.LeaderTakeovers.Load())
+	r.collectCounter(ch, 34, r.TelemetryAttempts.Load())
+	r.collectCounter(ch, 35, r.TelemetrySuccesses.Load())
+	for i, reason := range telemetryFailureReasons {
+		ch <- prometheus.MustNewConstMetric(
+			metricDescs[36], prometheus.CounterValue,
+			float64(r.TelemetryFailures[i].Load()), reason,
+		)
+	}
+	r.collectCounter(ch, 37, r.TelemetryRetries.Load())
 }
 
 func (r *Registry) collectCounter(

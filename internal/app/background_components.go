@@ -65,6 +65,7 @@ func monitoredComponent(
 	progress := newComponentProgress(componentStartTime(deps))
 	return componentSpec{
 		name:      name,
+		cleanStop: name == "heartbeat",
 		onError:   degrade(deps, name),
 		onHealthy: recoverComponent(deps, name),
 		progress:  progress,

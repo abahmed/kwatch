@@ -61,3 +61,36 @@ func TestHeartbeatPingHTTPerror(t *testing.T) {
 
 	m.ping(context.Background())
 }
+
+func TestHeartbeatStartStopsWhenContextIsCanceled(t *testing.T) {
+	cfg := &config.HeartbeatMonitor{
+		Enabled:  true,
+		URL:      "http://heartbeat.invalid",
+		Interval: 1,
+	}
+	m := NewHeartbeatMonitor(cfg, http.DefaultClient)
+	if NewHeartbeatMonitorWithRuntime(
+		config.RuntimeConfigFor(&config.Config{
+			HeartbeatMonitor: *cfg,
+		}), http.DefaultClient,
+	) == nil {
+		t.Fatal("runtime constructor returned nil")
+	}
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	if err := m.Start(ctx); err != nil {
+		t.Fatalf("Start returned error: %v", err)
+	}
+}
+
+func TestHeartbeatPingHandlesMissingClientAndInvalidURL(t *testing.T) {
+	cfg := &config.HeartbeatMonitor{
+		Enabled: true,
+		URL:     "http://heartbeat.invalid",
+	}
+	NewHeartbeatMonitor(cfg, nil).ping(context.Background())
+	NewHeartbeatMonitor(&config.HeartbeatMonitor{
+		Enabled: true,
+		URL:     "://invalid",
+	}, http.DefaultClient).ping(context.Background())
+}

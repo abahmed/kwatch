@@ -32,6 +32,7 @@ type bootstrap struct {
 	deliveryManager *delivery.Manager
 	clients         client.ClientSet
 	telemetryRun    func(context.Context) error
+	telemetryStatus *adoptionTelemetryStatus
 	upgradeRun      func(context.Context) error
 	clock           clock.Clock
 	activateOnce    sync.Once
@@ -109,6 +110,7 @@ func newBootstrap(
 		healthServer:    healthServer,
 		securityMonitor: securityMonitor,
 		deliveryManager: deliveryManager,
+		telemetryStatus: newAdoptionTelemetryStatus(),
 		upgradeRun:      upgrader.CheckUpdates,
 		clock:           clockSource,
 	}, nil
@@ -134,6 +136,7 @@ func (b *bootstrap) activate(ctx context.Context) error {
 			result.CurrentVersion,
 			b.clock.Now,
 			b.clients.HTTP,
+			b.telemetryStatus,
 		)
 	})
 	return b.activateErr

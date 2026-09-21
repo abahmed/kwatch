@@ -38,6 +38,7 @@ func (e *Engine) AddMassFailure(inc *model.Incident) bool {
 		return false
 	}
 	stored := inc.Clone()
+	stored.ID = incidentID(key)
 	stored.FirstSeen = e.now()
 	stored.LastSeen = stored.FirstSeen
 	if stored.State != model.StateResolved {

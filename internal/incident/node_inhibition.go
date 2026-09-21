@@ -37,7 +37,7 @@ func recordSuppressedPod(
 			model.PodSummary{
 				Namespace:    ev.Namespace,
 				PodName:      ev.PodName,
-				Reason:       ev.Reason,
+				Reason:       normalizeReason(ev.Reason),
 				RestartCount: ev.RestartCount,
 			},
 		)

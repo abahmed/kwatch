@@ -2,6 +2,7 @@ package incident
 
 import (
 	"sort"
+	"strings"
 	"time"
 
 	"k8s.io/klog/v2"
@@ -121,15 +122,20 @@ func (e *Engine) RestoreEngineState(saved model.PersistedEngineState) {
 	now := e.now()
 	restored := 0
 	for _, cd := range saved.Cooldowns {
+		cd.Key = CanonicalIncidentKey(cd.Key)
 		// An expired cooldown is not worth reviving, and reviving one would
 		// silence a recurrence that should be announced.
 		if cd.Key == "" || !now.Before(cd.Expires) {
 			continue
 		}
-		e.cleanupCooldown[cd.Key] = cd.Expires
+		if previous, ok := e.cleanupCooldown[cd.Key]; !ok ||
+			cd.Expires.After(previous) {
+			e.cleanupCooldown[cd.Key] = cd.Expires
+		}
 		restored++
 	}
 	for _, pu := range saved.PodUIDs {
+		pu.Key = CanonicalIncidentKey(pu.Key)
 		if pu.Key == "" || len(pu.UIDs) == 0 {
 			continue
 		}
@@ -137,6 +143,9 @@ func (e *Engine) RestoreEngineState(saved model.PersistedEngineState) {
 			continue
 		}
 		uids := make(map[string]string, len(pu.UIDs))
+		for pod, uid := range e.podResourceUIDs[pu.Key] {
+			uids[pod] = uid
+		}
 		for pod, uid := range pu.UIDs {
 			uids[pod] = uid
 		}
@@ -186,9 +195,22 @@ func (e *Engine) restoreFanOutWindows(
 		if pw.Scope == "" {
 			continue
 		}
+		pw.Scope = canonicalFanOutScope(pw.Scope)
 		// A window that has already elapsed would be pruned on the next
 		// flush anyway.
 		if now.Sub(pw.FirstSeen) > e.config.SmartGroupingWindow {
+			continue
+		}
+		if existing := e.fanOutWindows[pw.Scope]; existing != nil {
+			if pw.FirstSeen.Before(existing.firstSeen) {
+				existing.firstSeen = pw.FirstSeen
+			}
+			for _, owner := range pw.Owners {
+				existing.owners[owner] = true
+			}
+			for owner, key := range pw.Announced {
+				existing.announced[owner] = CanonicalIncidentKey(key)
+			}
 			continue
 		}
 		w := &ownerWindow{
@@ -200,10 +222,18 @@ func (e *Engine) restoreFanOutWindows(
 			w.owners[owner] = true
 		}
 		for owner, key := range pw.Announced {
-			w.announced[owner] = key
+			w.announced[owner] = CanonicalIncidentKey(key)
 		}
 		e.fanOutWindows[pw.Scope] = w
 		restored++
 	}
 	return restored
+}
+
+func canonicalFanOutScope(scope string) string {
+	parts := strings.SplitN(scope, "|", 2)
+	if len(parts) != 2 {
+		return scope
+	}
+	return normalizeReason(parts[0]) + "|" + parts[1]
 }

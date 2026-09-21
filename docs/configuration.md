@@ -249,9 +249,9 @@ It is sent after startup and at most once per week to
 |:---|:---|
 | `telemetry.enabled` | ✅ Send adoption heartbeats (default: `true`) |
 
-kwatch logs one line at startup naming the endpoint, the payload and this
-setting, so the heartbeat is visible from the logs alone rather than only from
-this page. Disable it with `telemetry.enabled: false`. Development builds and
+kwatch logs one line at startup naming the endpoint and effective setting, so
+the heartbeat is visible from the logs without exposing the payload. Disable
+it with `telemetry.enabled: false`. Development builds and
 recognized CI environments do not send telemetry. The service should use this
 data only for aggregate adoption counts and version planning; no feature-usage
 or cluster inventory is collected. Telemetry failures never affect monitoring

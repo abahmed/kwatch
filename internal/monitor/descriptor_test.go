@@ -48,3 +48,44 @@ func TestRegistryReturnsIndependentResourceSlices(t *testing.T) {
 		t.Fatalf("registry returned mutable internal data: %#v", second)
 	}
 }
+
+func TestRegistryValidatesDescriptorsAndListsInOrder(t *testing.T) {
+	base := Descriptor{
+		Name:        "base",
+		Description: "Base monitor",
+		Feature:     feature.PodDetection,
+	}
+	for _, descriptor := range []Descriptor{
+		{},
+		{Name: "missing-description", Feature: feature.PodDetection},
+		{Name: "missing-feature", Description: "missing"},
+	} {
+		if _, err := NewRegistry(descriptor); err == nil {
+			t.Fatalf("descriptor %#v was accepted", descriptor)
+		}
+	}
+	var nilRegistry *Registry
+	if _, ok := nilRegistry.Lookup("missing"); ok || nilRegistry.List() != nil {
+		t.Fatal("nil registry returned metadata")
+	}
+	r, err := NewRegistry(base, Descriptor{
+		Name:        "alpha",
+		Description: "Alpha monitor",
+		Feature:     feature.NodeDetection,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	list := r.List()
+	if len(list) != 2 || list[0].Name != "alpha" || list[1].Name != "base" {
+		t.Fatalf("registry list = %#v", list)
+	}
+	list[0].Resources = append(list[0].Resources, "changed")
+	if _, ok := r.Lookup("missing"); ok {
+		t.Fatal("unknown descriptor was found")
+	}
+	var nilReceiver *Registry
+	if err := nilReceiver.Register(base); err == nil {
+		t.Fatal("nil registry accepted registration")
+	}
+}

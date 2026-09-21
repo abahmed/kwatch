@@ -78,3 +78,27 @@ func (e *Engine) ActiveIncidents() map[model.IncidentKey]*model.Incident {
 	}
 	return out
 }
+
+// ActiveNotificationKeys includes live members and synthetic group threads.
+// Provider restoration uses it so a migrated group keeps its conversation.
+func (e *Engine) ActiveNotificationKeys() map[model.IncidentKey]bool {
+	e.mu.Lock()
+	defer e.mu.Unlock()
+	keys := make(map[model.IncidentKey]bool, len(e.state))
+	for key, inc := range e.state {
+		if inc.State != model.StateResolved {
+			keys[key] = true
+		}
+	}
+	for key, inc := range e.massFailures {
+		if inc.State != model.StateResolved {
+			keys[key] = true
+		}
+	}
+	for _, tracker := range e.groupResolveTrackers {
+		if tracker != nil && tracker.groupIncKey != "" {
+			keys[CanonicalIncidentKey(tracker.groupIncKey)] = true
+		}
+	}
+	return keys
+}

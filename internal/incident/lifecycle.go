@@ -26,6 +26,7 @@ func (e *Engine) refreshIncident(
 	now time.Time,
 	silent bool,
 ) (*model.Incident, model.IncidentAction) {
+	inc.Reason = normalizeReason(ev.Reason)
 	// A revival starts a fresh renotify budget. Otherwise an incident that
 	// resolved after maxing out renotify would never be re-notified again
 	// when the same problem recurs.

@@ -112,6 +112,18 @@ func classifyImagePullScope(msg string) string {
 	}
 }
 
+func sharedMetricsAPIFailure(ev event.Event) bool {
+	message := strings.ToLower(ev.Message + " " + ev.Hint)
+	return containsAny(
+		message,
+		"metrics.k8s.io",
+		"unable to fetch metrics",
+		"server currently unable to handle the request",
+		"failed to get memory utilization",
+		"failed to get cpu utilization",
+	)
+}
+
 // ownerGroupKey is the owner-scoped grouping key: every incident with the
 // same reason, in the same namespace, under the same workload shares it.
 func ownerGroupKey(reason, namespace, owner string) string {
@@ -221,6 +233,12 @@ func computeGroupKey(r string, ev event.Event, owner, sig string) string {
 		constant.ReasonCronJobNotScheduled,
 		constant.ReasonVolumeUsageHigh,
 		constant.ReasonPreExistingAtStartup:
+		return ownerGroupKey(r, ev.Namespace, owner)
+
+	case constant.ReasonFailedGetResourceMetric:
+		if sharedMetricsAPIFailure(ev) {
+			return encodeScopedGroupKey(r, "global", "metrics-api")
+		}
 		return ownerGroupKey(r, ev.Namespace, owner)
 
 	case constant.ReasonCrashLoopBackOff,

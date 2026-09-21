@@ -303,7 +303,7 @@ func startPersistenceSavers(
 		},
 		func(ctx context.Context, progress func()) error {
 			startFeedbackSaver(
-				ctx, manager, feedbackCh, feedbackDone,
+				ctx, manager, feedbackCh,
 				persistenceStatus(healthServer, "feedback-saver", false, readiness),
 				canWrite, progress,
 			)

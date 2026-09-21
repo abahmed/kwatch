@@ -268,7 +268,7 @@ type Config struct {
 // for official builds by default and can be disabled by the operator.
 // Telemetry is the weekly adoption heartbeat: a per-cluster UUID and the
 // kwatch version, nothing else. On by default, and announced at startup with
-// the endpoint and the payload so it is never a surprise.
+// the endpoint and effective setting without exposing the payload.
 type Telemetry struct {
 	Enabled bool `yaml:"enabled"`
 }

@@ -90,6 +90,9 @@ func newServeMux(h *HealthServer) *http.ServeMux {
 		mux.HandleFunc("/deadletters", h.guard(h.deadLettersHandler))
 	}
 	mux.HandleFunc("/kubelet", h.guard(h.kubeletHandler))
+	mux.HandleFunc(
+		"/telemetry", h.guard(h.adoptionTelemetryHandler),
+	)
 	mux.HandleFunc("/security", h.guard(h.securityHandler))
 	mux.HandleFunc(
 		"/controlplane", h.guard(h.controlPlaneHandler),

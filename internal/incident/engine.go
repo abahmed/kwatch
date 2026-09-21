@@ -256,6 +256,7 @@ var knownRetryReasons = map[string]bool{
 }
 
 func normalizeReason(reason string) string {
+	reason = strings.TrimSpace(reason)
 	if reason == constant.ReasonErrImagePull {
 		return constant.ReasonImagePullBackOff
 	}
@@ -278,7 +279,7 @@ func normalizeReason(reason string) string {
 			if base == constant.ReasonErrImagePull {
 				return constant.ReasonImagePullBackOff
 			}
-			return base
+			return normalizeReason(base)
 		}
 	}
 	return reason

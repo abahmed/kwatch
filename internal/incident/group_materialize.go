@@ -2,7 +2,6 @@ package incident
 
 import (
 	"fmt"
-	"hash/crc32"
 	"strings"
 	"time"
 
@@ -117,10 +116,7 @@ func (e *Engine) buildGroupIncident(
 	}
 	groupInc := &model.Incident{
 		Subject: model.Subject{
-			ID: fmt.Sprintf(
-				"%08x",
-				crc32.ChecksumIEEE([]byte(groupIncKey)),
-			),
+			ID:        incidentID(groupIncKey),
 			Key:       groupIncKey,
 			Reason:    active[0].reason,
 			Name:      summary,

@@ -20,6 +20,7 @@ func (e *Engine) SetBaseline(b map[string]map[string]int64) {
 		e.baseline = make(map[string]map[string]int64)
 	}
 	for key, pods := range b {
+		key = string(CanonicalIncidentKey(model.IncidentKey(key)))
 		for pod, ts := range pods {
 			if now.Sub(time.Unix(ts, 0)) < ttl {
 				e.baselineBucket(key)[pod] = ts

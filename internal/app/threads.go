@@ -6,6 +6,7 @@ import (
 	"k8s.io/klog/v2"
 
 	"github.com/abahmed/kwatch/internal/incident"
+	"github.com/abahmed/kwatch/internal/model"
 	"github.com/abahmed/kwatch/internal/persistence"
 )
 
@@ -26,6 +27,7 @@ func restoreProviderThreads(
 	persistenceManager persistence.IncidentStore,
 	am threadRestorer,
 	incidentEngine *incident.Engine,
+	aliases incident.KeyAliases,
 ) error {
 	if am == nil {
 		return nil
@@ -39,20 +41,25 @@ func restoreProviderThreads(
 		return nil
 	}
 	live := make(map[string]bool)
-	for _, inc := range incidentEngine.ActiveIncidents() {
-		live[string(inc.Key)] = true
+	for key := range incidentEngine.ActiveNotificationKeys() {
+		live[string(key)] = true
 	}
 	kept := make(map[string]map[string]string, len(saved))
 	total := 0
 	for provider, threads := range saved {
-		for key, ts := range threads {
-			if !live[key] {
+		for rawKey, ts := range threads {
+			key := incident.ResolveKeyAlias(
+				aliases, model.IncidentKey(rawKey),
+			)
+			key = incident.CanonicalIncidentKey(key)
+			keyString := string(key)
+			if !live[keyString] {
 				continue
 			}
 			if kept[provider] == nil {
 				kept[provider] = make(map[string]string)
 			}
-			kept[provider][key] = ts
+			kept[provider][keyString] = ts
 			total++
 		}
 	}

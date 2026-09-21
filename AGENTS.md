@@ -11,12 +11,15 @@ source.
 Every change must pass before you are done:
 
 ```sh
-go build ./... && go vet ./... && go test ./... && golangci-lint run
+make verify
 ```
 
 The repository also enforces formatting and line length. Run the complete gate
-with `make verify`; it includes `line-check` and `git diff --check` should be
-clean before handoff.
+with `make verify`; it includes race-enabled coverage enforcement, `line-check`,
+and `git diff --check` should be clean before handoff.
+Coverage enforcement requires at least 75% aggregate statement coverage and at
+least 70% in every package listed as core runtime by
+`scripts/check-coverage.sh`. Only generated deep-copy code is excluded.
 
 ## Reliability invariants
 
@@ -144,8 +147,16 @@ architecture unless a change explicitly expands its scope.
   choose the smallest focused test command.
 - Keep tests deterministic: use injected clocks and fake clients rather than
   sleeps, wall-clock assertions, or live network calls.
-- Add or update focused tests for every behavior change, especially lifecycle
-  transitions, suppression decisions, retries, and persisted-format migration.
+- Add or update focused tests for every behavior change before the work is
+  complete, especially lifecycle transitions, suppression decisions, retries,
+  and persisted-format migration.
+- Cover success, failure, cancellation, and recovery paths wherever the
+  changed behavior has those states. New long-running loops require tests for
+  cancellation, completion, progress, and bounded shutdown.
+- Use targeted race tests for concurrency changes. Do not defer required tests
+  to a follow-up; documentation-only, generated-only, and truly mechanical
+  changes are the only exceptions, and the change rationale must record the
+  exception.
 - Do not mechanically rewrite unrelated files. Review `git diff` after each
   refactor and preserve user changes already present in the worktree.
 - Remove transitional APIs once their callers are migrated. Confirm with
@@ -746,8 +757,9 @@ When changing a monitor, provider, filter, RCA rule, persistence field,
 configuration field, metric, integration, RBAC rule, or deployment manifest:
 
 1. Use the existing ownership seam and do not introduce an upward dependency.
-2. Add deterministic focused tests for success, failure, cancellation, and
-   recovery where applicable.
+2. Add or update deterministic focused tests for success, failure,
+   cancellation, and recovery where those paths exist. This is required for
+   behavior changes, not an optional follow-up.
 3. Run `make architecture-check`, catalog checks, test-layout checks, and
    `git diff --check` after the workstream rather than after every edit.
 4. Update generated catalogs or manifests when their source metadata changes.

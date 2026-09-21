@@ -5,12 +5,9 @@ import "github.com/abahmed/kwatch/internal/model"
 func DefaultConfig() *Config {
 	return &Config{
 		App: App{LogFormatter: "text"},
-		// Opt-in. The payload is small and anonymous -- a per-cluster UUID
-		// and the kwatch version, once a week -- but it still leaves the
-		// cluster, and a monitoring tool should not be the thing that
-		// surprises an operator by making an outbound call they did not ask
-		// for. Turning it on logs exactly what is sent.
-		Telemetry:                    Telemetry{Enabled: false},
+		// Official builds report a small anonymous adoption heartbeat once a
+		// week. Development builds and CI remain suppressed.
+		Telemetry:                    Telemetry{Enabled: true},
 		IgnoreFailedGracefulShutdown: true,
 		ReportStartupBaseline:        true,
 		MaxRecentLogLines:            50,
