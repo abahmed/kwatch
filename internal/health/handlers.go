@@ -44,6 +44,19 @@ func (h *HealthServer) kubeletHandler(w http.ResponseWriter, r *http.Request) {
 	h.writeStatus(w, h.telemetryLister, "kubelet telemetry")
 }
 
+func (h *HealthServer) adoptionTelemetryHandler(
+	w http.ResponseWriter, r *http.Request,
+) {
+	if !h.requireDiagnosticsAuth(w, r) {
+		return
+	}
+	if h.adoptionTelemetryLister == nil {
+		w.WriteHeader(http.StatusServiceUnavailable)
+		return
+	}
+	h.writeStatus(w, h.adoptionTelemetryLister, "adoption telemetry")
+}
+
 func (h *HealthServer) securityHandler(w http.ResponseWriter, r *http.Request) {
 	if !h.requireDiagnosticsAuth(w, r) {
 		return

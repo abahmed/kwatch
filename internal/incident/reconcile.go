@@ -30,7 +30,7 @@ func (r *observationReconciler) diff(
 	current := make(map[string]struct{}, len(observations))
 	for _, obs := range observations {
 		if obs != nil && obs.Reason != "" {
-			current[obs.Reason] = struct{}{}
+			current[normalizeReason(obs.Reason)] = struct{}{}
 		}
 	}
 

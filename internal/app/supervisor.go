@@ -61,6 +61,9 @@ func (s *componentSupervisor) startOwned(
 			return
 		}
 		if err == nil && ctx.Err() == nil {
+			if component.cleanStop {
+				return
+			}
 			err = errComponentStopped
 			metrics.DefaultRegistry().ComponentUnexpectedStops.Add(1)
 		}
@@ -110,29 +113,12 @@ func (s *componentSupervisor) startOptional(
 				component.onHealthy()
 			}
 			err := s.runComponent(ctx, component)
-			if errors.Is(err, errComponentCleanStop) {
+			var stop bool
+			err, stop = normalizeComponentExit(ctx, component, err)
+			if stop {
 				return
 			}
-			if err == nil && ctx.Err() == nil {
-				err = errComponentStopped
-				metrics.DefaultRegistry().ComponentUnexpectedStops.Add(1)
-			}
-			if ctx.Err() != nil &&
-				(err == nil || errors.Is(err, context.Canceled)) {
-				return
-			}
-			if errors.Is(err, errComponentShutdown) {
-				if component.onError != nil {
-					component.onError(err)
-				}
-				// A component that ignores cancellation cannot be safely
-				// restarted in this process. Escalate the timeout so the
-				// application exits and Kubernetes can replace the Pod.
-				s.report(fmt.Errorf("%s: %w", component.name, err))
-				return
-			}
-			if component.required {
-				s.report(fmt.Errorf("%s: %w", component.name, err))
+			if s.handleTerminalOptionalExit(component, err) {
 				return
 			}
 			if component.onError != nil {
@@ -161,6 +147,47 @@ func (s *componentSupervisor) startOptional(
 	}()
 }
 
+func normalizeComponentExit(
+	ctx context.Context,
+	component componentSpec,
+	err error,
+) (error, bool) {
+	if errors.Is(err, errComponentCleanStop) {
+		return nil, true
+	}
+	if err == nil && ctx.Err() == nil {
+		if component.cleanStop {
+			return nil, true
+		}
+		err = errComponentStopped
+		metrics.DefaultRegistry().ComponentUnexpectedStops.Add(1)
+	}
+	if ctx.Err() != nil &&
+		(err == nil || errors.Is(err, context.Canceled)) {
+		return nil, true
+	}
+	return err, false
+}
+
+func (s *componentSupervisor) handleTerminalOptionalExit(
+	component componentSpec,
+	err error,
+) bool {
+	if errors.Is(err, errComponentShutdown) {
+		if component.onError != nil {
+			component.onError(err)
+		}
+		// A component that ignores cancellation cannot be safely restarted.
+		s.report(fmt.Errorf("%s: %w", component.name, err))
+		return true
+	}
+	if component.required {
+		s.report(fmt.Errorf("%s: %w", component.name, err))
+		return true
+	}
+	return false
+}
+
 func (s *componentSupervisor) runComponent(
 	ctx context.Context,
 	component componentSpec,
@@ -182,7 +209,11 @@ func (s *componentSupervisor) runComponent(
 		startupTimeout = defaultComponentStartup
 	}
 	if component.progress == nil || stallTimeout <= 0 {
-		return waitForComponent(ctx, runCtx, cancel, runDone)
+		err := waitForComponent(ctx, runCtx, cancel, runDone)
+		if err == nil && component.cleanStop {
+			return errComponentCleanStop
+		}
+		return err
 	}
 
 	startedAt := s.now()
@@ -192,6 +223,9 @@ func (s *componentSupervisor) runComponent(
 		select {
 		case err := <-runDone:
 			if err == nil && ctx.Err() == nil {
+				if component.cleanStop {
+					return errComponentCleanStop
+				}
 				return errComponentStopped
 			}
 			return err

@@ -1,8 +1,6 @@
 package incident
 
 import (
-	"fmt"
-	"hash/crc32"
 	"time"
 
 	"github.com/abahmed/kwatch/internal/event"
@@ -205,10 +203,7 @@ func (e *Engine) closeGroupTracker(gk string) {
 func (t *groupResolveTracker) resolvedIncident() *model.Incident {
 	return &model.Incident{
 		Subject: model.Subject{
-			ID: fmt.Sprintf(
-				"%08x",
-				crc32.ChecksumIEEE([]byte(t.groupIncKey)),
-			),
+			ID:     incidentID(t.groupIncKey),
 			Key:    t.groupIncKey,
 			Reason: t.reason,
 			Name:   t.summary,

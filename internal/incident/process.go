@@ -1,8 +1,6 @@
 package incident
 
 import (
-	"fmt"
-	"hash/crc32"
 	"sort"
 	"time"
 
@@ -186,10 +184,10 @@ func (e *Engine) newIncident(
 ) *model.Incident {
 	inc := &model.Incident{
 		Subject: model.Subject{
-			ID:          fmt.Sprintf("%08x", crc32.ChecksumIEEE([]byte(key))),
+			ID:          incidentID(key),
 			Fingerprint: StableFingerprint(ev, owner, cs),
 			Key:         key,
-			Reason:      ev.Reason,
+			Reason:      normalizeReason(ev.Reason),
 			Namespace:   ev.Namespace,
 			Resource:    res,
 			Name:        owner,

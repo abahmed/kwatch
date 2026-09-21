@@ -76,6 +76,7 @@ type componentSpec struct {
 	progress       progressReporter
 	startupTimeout time.Duration
 	stallTimeout   time.Duration
+	cleanStop      bool
 }
 
 // progressReporter is intentionally a lifecycle-only interface. Domain

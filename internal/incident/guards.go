@@ -25,9 +25,9 @@ func (e *Engine) auditSkipOnce(
 		Subject: model.Subject{
 			Key:       key,
 			Namespace: ev.Namespace,
-			Reason:    ev.Reason,
+			Reason:    normalizeReason(ev.Reason),
 			NodeName:  ev.NodeName,
-			ID:        string(key),
+			ID:        incidentID(key),
 		},
 	},
 

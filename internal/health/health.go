@@ -38,46 +38,48 @@ type StatusProvider interface {
 // Dependencies are configured once before Open. Keeping this boundary typed
 // makes health wiring visible at the application composition root.
 type Dependencies struct {
-	Incident     IncidentLister
-	Delivery     AlertSender
-	DeadLetters  DeadLetterLister
-	Telemetry    StatusProvider
-	Security     StatusProvider
-	ControlPlane StatusProvider
-	Informer     StatusProvider
-	Persistence  StatusProvider
+	Incident          IncidentLister
+	Delivery          AlertSender
+	DeadLetters       DeadLetterLister
+	Telemetry         StatusProvider
+	AdoptionTelemetry StatusProvider
+	Security          StatusProvider
+	ControlPlane      StatusProvider
+	Informer          StatusProvider
+	Persistence       StatusProvider
 }
 
 type HealthServer struct {
-	server             *http.Server
-	listener           net.Listener
-	port               int
-	enabled            bool
-	pprof              bool
-	diagnostics        bool
-	diagnosticsToken   string
-	incidentAPI        IncidentLister
-	deliveryManager    AlertSender
-	deadLetterLister   DeadLetterLister
-	telemetryLister    StatusProvider
-	securityLister     StatusProvider
-	controlPlaneLister StatusProvider
-	informerLister     StatusProvider
-	persistenceLister  StatusProvider
-	ready              atomic.Bool
-	componentMu        sync.RWMutex
-	componentErrors    map[string]string
-	componentStatus    map[string]ComponentStatus
-	clock              clock.Clock
-	lifecycleMu        sync.Mutex
-	started            bool
-	stopped            bool
-	stopErr            error
-	serveErr           error
-	serveErrors        chan error
-	testAlertMu        sync.Mutex
-	lastTestAlert      time.Time
-	leadership         LeadershipStatus
+	server                  *http.Server
+	listener                net.Listener
+	port                    int
+	enabled                 bool
+	pprof                   bool
+	diagnostics             bool
+	diagnosticsToken        string
+	incidentAPI             IncidentLister
+	deliveryManager         AlertSender
+	deadLetterLister        DeadLetterLister
+	telemetryLister         StatusProvider
+	adoptionTelemetryLister StatusProvider
+	securityLister          StatusProvider
+	controlPlaneLister      StatusProvider
+	informerLister          StatusProvider
+	persistenceLister       StatusProvider
+	ready                   atomic.Bool
+	componentMu             sync.RWMutex
+	componentErrors         map[string]string
+	componentStatus         map[string]ComponentStatus
+	clock                   clock.Clock
+	lifecycleMu             sync.Mutex
+	started                 bool
+	stopped                 bool
+	stopErr                 error
+	serveErr                error
+	serveErrors             chan error
+	testAlertMu             sync.Mutex
+	lastTestAlert           time.Time
+	leadership              LeadershipStatus
 }
 
 type HealthResponse struct {
@@ -146,6 +148,7 @@ func (h *HealthServer) ConfigureDependencies(
 	h.deliveryManager = deps.Delivery
 	h.deadLetterLister = deps.DeadLetters
 	h.telemetryLister = deps.Telemetry
+	h.adoptionTelemetryLister = deps.AdoptionTelemetry
 	h.securityLister = deps.Security
 	h.controlPlaneLister = deps.ControlPlane
 	h.informerLister = deps.Informer

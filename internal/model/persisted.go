@@ -26,6 +26,7 @@ type PersistedIncident struct {
 	Count          int             `json:"count"`
 	FirstSeen      time.Time       `json:"firstSeen"`
 	LastSeen       time.Time       `json:"lastSeen"`
+	LastUpdate     time.Time       `json:"lastUpdate,omitempty"`
 	Resources      map[string]bool `json:"resources"`
 	PeakResources  int             `json:"peakResources"`
 	OwnerKind      string          `json:"ownerKind"`
@@ -58,6 +59,7 @@ func (inc *Incident) ToPersisted() PersistedIncident {
 		Count:          inc.Count,
 		FirstSeen:      inc.FirstSeen,
 		LastSeen:       inc.LastSeen,
+		LastUpdate:     inc.LastUpdate,
 		Resources:      resources,
 		PeakResources:  inc.PeakResources,
 		OwnerKind:      inc.OwnerKind,
@@ -109,7 +111,7 @@ func (pi *PersistedIncident) ToIncident() *Incident {
 			State:         pi.State,
 			ResolveAt:     pi.ResolveAt,
 			Containers:    make(map[string]bool),
-			LastUpdate:    pi.LastSeen,
+			LastUpdate:    pi.LastUpdate,
 		},
 		Evidence: Evidence{
 			Hint:  pi.Hint,
@@ -123,6 +125,9 @@ func (pi *PersistedIncident) ToIncident() *Incident {
 			LastNotifiedAt: pi.LastNotifiedAt,
 			RenotifyCount:  pi.RenotifyCount,
 		},
+	}
+	if inc.LastUpdate.IsZero() {
+		inc.LastUpdate = inc.LastSeen
 	}
 	inc.SetObject()
 	if pi.OwnerKind != "" {

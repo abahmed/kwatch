@@ -64,10 +64,23 @@ func (e *Engine) RestoreIncidents(
 	}
 	now := e.now()
 	restored := 0
-	for key, inc := range incidents {
+	canonical := make(map[model.IncidentKey]*model.Incident, len(incidents))
+	for rawKey, inc := range incidents {
 		if inc == nil {
 			continue
 		}
+		inc = inc.Clone()
+		key := CanonicalIncidentKey(rawKey)
+		inc.Key = key
+		inc.Reason = normalizeReason(inc.Reason)
+		inc.SuppressedBy = CanonicalIncidentKey(inc.SuppressedBy)
+		if previous := canonical[key]; previous != nil {
+			mergeRestoredIncident(previous, inc)
+			continue
+		}
+		canonical[key] = inc
+	}
+	for key, inc := range canonical {
 		if IsMassFailureKey(key) {
 			if _, exists := e.massFailures[key]; exists {
 				continue
@@ -106,6 +119,9 @@ func (e *Engine) restoreMassFailure(
 		return
 	}
 	clone := inc.Clone()
+	clone.Key = CanonicalIncidentKey(key)
+	clone.Reason = normalizeReason(clone.Reason)
+	clone.ID = incidentID(clone.Key)
 	if clone.Fingerprint == "" {
 		clone.Fingerprint = legacyFingerprint(clone.Key)
 	}
@@ -116,6 +132,7 @@ func (e *Engine) restoreMassFailure(
 }
 
 func prepareRestoredIncident(inc *model.Incident, now time.Time) {
+	inc.ID = incidentID(inc.Key)
 	if inc.Fingerprint == "" {
 		inc.Fingerprint = legacyFingerprint(inc.Key)
 	}

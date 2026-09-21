@@ -345,6 +345,7 @@ func monitoredRun(
 	progress := newComponentProgress(componentStartTime(deps))
 	return componentSpec{
 		name:      name,
+		cleanStop: name == "upgrader",
 		onError:   degrade(deps, name),
 		onHealthy: recoverComponent(deps, name),
 		progress:  progress,

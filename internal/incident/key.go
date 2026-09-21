@@ -3,11 +3,62 @@ package incident
 import (
 	"crypto/sha256"
 	"encoding/hex"
+	"fmt"
+	"hash/crc32"
 	"strings"
 
 	"github.com/abahmed/kwatch/internal/event"
 	"github.com/abahmed/kwatch/internal/model"
 )
+
+// incidentID derives the short stable identifier used in logs and provider
+// deduplication. It is based only on the canonical incident key.
+func incidentID(key model.IncidentKey) string {
+	return fmt.Sprintf("%08x", crc32.ChecksumIEEE([]byte(key)))
+}
+
+// IncidentID returns the stable identifier for any incident key, including
+// synthetic group and mass-failure keys.
+func IncidentID(key model.IncidentKey) string { return incidentID(key) }
+
+// CanonicalIncidentKey rewrites a persisted or external key to the current
+// reason vocabulary while preserving its key shape.
+func CanonicalIncidentKey(key model.IncidentKey) model.IncidentKey {
+	if key == "" {
+		return ""
+	}
+	if IsGroupKey(key) {
+		return model.IncidentKey(
+			groupKeyPrefix + CanonicalGroupKey(
+				strings.TrimPrefix(string(key), groupKeyPrefix),
+			),
+		)
+	}
+	parts := ParseKey(key)
+	if parts.IsMassFailure {
+		return key
+	}
+	if parts.IsGlobal {
+		return GlobalKey(normalizeReason(parts.Reason), parts.Scope)
+	}
+	return BuildKey(
+		parts.Namespace,
+		parts.Owner,
+		normalizeReason(parts.Reason),
+		parts.Container,
+	)
+}
+
+// CanonicalGroupKey rewrites the reason component of any supported smart
+// group key. Scope fields remain unchanged.
+func CanonicalGroupKey(key string) string {
+	if key == "" {
+		return ""
+	}
+	parts := strings.Split(key, "|")
+	parts[0] = normalizeReason(parts[0])
+	return strings.Join(parts, "|")
+}
 
 // Incident keys follow the format documented on model.IncidentKey. This file
 // is the single source of truth for building and parsing them, and for the

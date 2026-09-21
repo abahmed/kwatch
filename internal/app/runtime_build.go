@@ -148,14 +148,15 @@ func buildServerDeps(
 		now,
 	)
 	if err := boot.healthServer.ConfigureDependencies(health.Dependencies{
-		Incident:     incidentEngine,
-		Delivery:     boot.deliveryManager,
-		DeadLetters:  boot.deliveryManager,
-		Telemetry:    optional.telemetry,
-		Security:     boot.securityMonitor,
-		ControlPlane: monitors.controlPlane,
-		Informer:     ctl,
-		Persistence:  boot.persistence,
+		Incident:          incidentEngine,
+		Delivery:          boot.deliveryManager,
+		DeadLetters:       boot.deliveryManager,
+		Telemetry:         optional.telemetry,
+		AdoptionTelemetry: boot.telemetryStatus,
+		Security:          boot.securityMonitor,
+		ControlPlane:      monitors.controlPlane,
+		Informer:          ctl,
+		Persistence:       boot.persistence,
 	}); err != nil {
 		cleanup()
 		closeAuditLogger(auditLogger)

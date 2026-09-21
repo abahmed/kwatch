@@ -6,7 +6,6 @@ import (
 	"k8s.io/klog/v2"
 
 	"github.com/abahmed/kwatch/internal/incident"
-	"github.com/abahmed/kwatch/internal/model"
 	"github.com/abahmed/kwatch/internal/persistence"
 )
 
@@ -16,30 +15,29 @@ func restoreIncidents(
 	persistenceManager persistence.IncidentStore,
 	incidentEngine *incident.Engine,
 	allowed func(string) bool,
-) error {
+) (incident.KeyAliases, error) {
 	persisted, err := persistenceManager.LoadPersistedIncidents(ctx)
 	if err != nil {
 		// Restarting without correlation memory is recoverable, but it may
 		// announce already-broken resources again as new incidents.
 		klog.ErrorS(err, "failed to restore incidents from configmap")
-		return err
+		return nil, err
 	}
 	incidentEngine.FilterBaseline(allowed)
 	if len(persisted) == 0 {
-		return nil
+		return nil, nil
 	}
-	restored := make(map[model.IncidentKey]*model.Incident, len(persisted))
-	for i := range persisted {
-		inc := persisted[i].ToIncident()
+	restored, aliases := incident.RestoreIncidentRecords(persisted)
+	for key, inc := range restored {
 		if inc.Namespace != "" && allowed != nil && !allowed(inc.Namespace) {
+			delete(restored, key)
 			continue
 		}
-		restored[inc.Key] = inc
 	}
 	incidentEngine.RestoreIncidents(restored)
 	klog.InfoS("restored incidents from configmap", "count", len(persisted))
 
-	return nil
+	return aliases, nil
 }
 
 // restoreGroups loads smart-group state after incidents have been restored.

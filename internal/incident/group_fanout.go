@@ -1,8 +1,6 @@
 package incident
 
 import (
-	"fmt"
-	"hash/crc32"
 	"sort"
 	"time"
 
@@ -274,7 +272,7 @@ func (e *Engine) foldAnnouncedGroup(
 	}
 	return transition{&model.Incident{
 		Subject: model.Subject{
-			ID:        fmt.Sprintf("%08x", crc32.ChecksumIEEE([]byte(key))),
+			ID:        incidentID(key),
 			Key:       key,
 			Reason:    reason,
 			Namespace: ns,

@@ -1,8 +1,6 @@
 package app
 
 import (
-	"fmt"
-	"hash/crc32"
 	"strings"
 
 	"k8s.io/klog/v2"
@@ -64,7 +62,7 @@ func notifyNewMassFailures(
 		klog.V(2).InfoS("mass failure detected", "message", description)
 		inc := &model.Incident{
 			Subject: model.Subject{
-				ID:        massFailureID(incKey),
+				ID:        incident.IncidentID(incKey),
 				Key:       incKey,
 				Reason:    mf.Reason,
 				Namespace: mf.Namespace,
@@ -83,11 +81,6 @@ func notifyNewMassFailures(
 
 		holder.engine.AddMassFailure(inc)
 	}
-}
-
-// massFailureID derives the stable short id every provider displays.
-func massFailureID(key model.IncidentKey) string {
-	return fmt.Sprintf("%08x", crc32.ChecksumIEEE([]byte(key)))
 }
 
 // describeDependency turns an internal dependency key into readable text.

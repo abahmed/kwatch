@@ -80,8 +80,24 @@ func (e *Engine) RestoreGroups(groups []model.PersistedGroup) {
 	defer e.mu.Unlock()
 	e.dirty = true
 	restored := 0
-	for i := range groups {
-		pg := &groups[i]
+	canonical := make(map[string]model.PersistedGroup, len(groups))
+	for _, source := range groups {
+		pg := source
+		if pg.GroupKey == "" {
+			continue
+		}
+		pg.GroupKey = CanonicalGroupKey(pg.GroupKey)
+		pg.IncidentKey = CanonicalIncidentKey(pg.IncidentKey)
+		pg.Reason = normalizeReason(pg.Reason)
+		if previous, ok := canonical[pg.GroupKey]; ok {
+			mergePersistedGroup(&previous, pg)
+			canonical[pg.GroupKey] = previous
+			continue
+		}
+		canonical[pg.GroupKey] = pg
+	}
+	for _, value := range canonical {
+		pg := &value
 		if pg.GroupKey == "" {
 			continue
 		}
@@ -97,11 +113,13 @@ func (e *Engine) RestoreGroups(groups []model.PersistedGroup) {
 		}
 		members := make(map[model.IncidentKey]bool)
 		for _, key := range pg.Members {
+			key = CanonicalIncidentKey(key)
 			if _, live := e.state[key]; live {
 				members[key] = false
 			}
 		}
 		for _, key := range pg.Resolved {
+			key = CanonicalIncidentKey(key)
 			if _, live := e.state[key]; live {
 				members[key] = true
 			}
@@ -127,5 +145,60 @@ func (e *Engine) RestoreGroups(groups []model.PersistedGroup) {
 	}
 	if restored > 0 {
 		klog.InfoS("restored smart groups from ConfigMap", "count", restored)
+	}
+}
+
+func mergePersistedGroup(dst *model.PersistedGroup, src model.PersistedGroup) {
+	if dst.IncidentKey == "" {
+		dst.IncidentKey = src.IncidentKey
+	}
+	if dst.Reason == "" {
+		dst.Reason = src.Reason
+	}
+	if dst.Summary == "" {
+		dst.Summary = src.Summary
+	}
+	if dst.TotalCount < src.TotalCount {
+		dst.TotalCount = src.TotalCount
+	}
+	if dst.FirstSeen.IsZero() || (!src.FirstSeen.IsZero() &&
+		src.FirstSeen.Before(dst.FirstSeen)) {
+		dst.FirstSeen = src.FirstSeen
+	}
+	if src.LastSeen.After(dst.LastSeen) {
+		dst.LastSeen = src.LastSeen
+	}
+	if src.LastNotifiedAt.After(dst.LastNotifiedAt) {
+		dst.LastNotifiedAt = src.LastNotifiedAt
+	}
+	dst.Notified = dst.Notified || src.Notified
+	if dst.Severity.Rank() < src.Severity.Rank() {
+		dst.Severity = src.Severity
+	}
+	active := make(map[model.IncidentKey]bool, len(dst.Members))
+	for _, key := range dst.Members {
+		active[CanonicalIncidentKey(key)] = true
+	}
+	for _, key := range src.Members {
+		active[CanonicalIncidentKey(key)] = true
+	}
+	resolved := make(map[model.IncidentKey]bool, len(dst.Resolved))
+	for _, key := range dst.Resolved {
+		resolved[CanonicalIncidentKey(key)] = true
+	}
+	for _, key := range src.Resolved {
+		if !active[CanonicalIncidentKey(key)] {
+			resolved[CanonicalIncidentKey(key)] = true
+		}
+	}
+	dst.Members = dst.Members[:0]
+	for key := range active {
+		dst.Members = append(dst.Members, key)
+	}
+	dst.Resolved = dst.Resolved[:0]
+	for key := range resolved {
+		if !active[key] {
+			dst.Resolved = append(dst.Resolved, key)
+		}
 	}
 }
