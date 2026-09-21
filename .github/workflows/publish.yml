@@ -518,12 +518,12 @@ jobs:
           docker pull "${IMAGE}@${IMAGE_DIGEST}"
           docker run --rm \
             -v "$GITHUB_WORKSPACE:/src:ro" \
-            anchore/syft@sha256:b46e597614ddc78621e560af3fabf9346e35462ea1c886a38b30bcc7ca601a73b \
+            anchore/syft@sha256:500e2d872ac019436926e8322b4fc1f39441d94d21f6f4046c6ff29b30e8cb02 \
             dir:/src -o cyclonedx-json \
             > "$output/kwatch-${TAG}-source-sbom.cdx.json"
           docker run --rm \
             -v /var/run/docker.sock:/var/run/docker.sock \
-            anchore/syft@sha256:b46e597614ddc78621e560af3fabf9346e35462ea1c886a38b30bcc7ca601a73b \
+            anchore/syft@sha256:500e2d872ac019436926e8322b4fc1f39441d94d21f6f4046c6ff29b30e8cb02 \
             "docker:${IMAGE}@${IMAGE_DIGEST}" -o cyclonedx-json \
             > "$output/kwatch-${TAG}-image-sbom.cdx.json"
 
