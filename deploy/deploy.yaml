@@ -231,7 +231,7 @@ spec:
             app: kwatch
       containers:
       - name: kwatch
-        image: ghcr.io/abahmed/kwatch:v0.10.5
+        image: ghcr.io/abahmed/kwatch:v1.0.0-rc.7
         imagePullPolicy: IfNotPresent
         securityContext:
           runAsNonRoot: true
