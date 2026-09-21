@@ -10,6 +10,7 @@ import (
 	"github.com/abahmed/kwatch/internal/clock"
 	"github.com/abahmed/kwatch/internal/config"
 	"github.com/abahmed/kwatch/internal/controller"
+	"github.com/abahmed/kwatch/internal/controlplane"
 	"github.com/abahmed/kwatch/internal/delivery"
 	"github.com/abahmed/kwatch/internal/health"
 	"github.com/abahmed/kwatch/internal/incident"
@@ -89,6 +90,9 @@ func composeMonitorComponents(
 		runtime, clientset, clients.REST, clients.Resolver,
 		incidentEngine, now,
 	)
+	integrationRuntime, controlPlaneStatus := composeIntegrationRuntime(
+		controlPlaneRuntime, tlsProcessor, tlsConfig, eventRuntime,
+	)
 	deploymentRuntime := workload.NewDeploymentRuntimeWithRuntimeConfig(
 		runtime, incidentEngine, now,
 	)
@@ -144,17 +148,11 @@ func composeMonitorComponents(
 			Cluster: controller.ClusterRuntime{
 				Processor: clusterRuntime, Config: clusterRuntime,
 			},
-			Integration: controller.IntegrationRuntime{
-				ControlPlane:       controlPlaneRuntime,
-				ControlPlaneConfig: controlPlaneRuntime,
-				TLS:                tlsProcessor,
-				TLSConfig:          tlsConfig,
-				Events:             eventRuntime,
-			},
-			Baseline: podRuntime,
+			Integration: integrationRuntime,
+			Baseline:    podRuntime,
 		},
 		controlPlaneRun: controlPlaneRun,
-		controlPlane:    controlPlaneRuntime,
+		controlPlane:    controlPlaneStatus,
 		tlsProcessor:    tlsProcessor,
 		tlsConfig:       tlsConfig,
 		startupSummary: func(suppressed map[string]int) {
@@ -167,6 +165,25 @@ func composeMonitorComponents(
 			}
 		},
 	}
+}
+
+func composeIntegrationRuntime(
+	controlPlane *controlplane.Monitor,
+	tlsProcessor controller.TLSProcessor,
+	tlsConfig controller.TLSConfig,
+	eventRuntime controller.EventProcessor,
+) (controller.IntegrationRuntime, health.StatusProvider) {
+	integration := controller.IntegrationRuntime{
+		TLS:       tlsProcessor,
+		TLSConfig: tlsConfig,
+		Events:    eventRuntime,
+	}
+	if controlPlane == nil {
+		return integration, nil
+	}
+	integration.ControlPlane = controlPlane
+	integration.ControlPlaneConfig = controlPlane
+	return integration, controlPlane
 }
 
 func composeTLSRuntime(

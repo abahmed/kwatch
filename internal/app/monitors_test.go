@@ -28,3 +28,17 @@ func TestNewMonitorRegistryContainsRuntimeModules(t *testing.T) {
 		}
 	}
 }
+
+func TestComposeIntegrationRuntimeDisablesControlPlane(t *testing.T) {
+	integration, status := composeIntegrationRuntime(nil, nil, nil, nil)
+
+	if integration.ControlPlane != nil {
+		t.Fatal("disabled control-plane processor should remain nil")
+	}
+	if integration.ControlPlaneConfig != nil {
+		t.Fatal("disabled control-plane configuration should remain nil")
+	}
+	if status != nil {
+		t.Fatal("disabled control-plane status provider should remain nil")
+	}
+}
