@@ -149,12 +149,10 @@ Kwatch image, source manifests applied with `kubectl`, and Go tests built on
 `sigs.k8s.io/e2e-framework`. It does not use Helm or `kwatch.sh`; those
 installation paths have separate validation.
 
-The manual issue-reproduction workflow uses `cmd/e2eissue` to fetch only a
-public issue body, parse marked blocks, reject secrets and commands, rewrite
-namespaces and images, and run the sanitized resources in Kind. It never
-executes issue-provided shell. Version comparisons use two disposable
-clusters and classify the result instead of treating a locally rebuilt image
-as byte-identical to a published release.
+Issue reproductions are converted into permanent sanitized scenarios before
+they enter the release suite. The semantic workflow runs the committed
+scenario code in Kind; it does not execute issue-provided commands or depend
+on an issue-reproduction workflow.
 
 Use `test/e2e/README.md` for the complete scenario contribution workflow.
 Every new scenario must update `test/e2e/coverage/coverage.yaml`, use bounded

@@ -4,9 +4,9 @@ The scenario suite runs the real Kwatch container inside a disposable Kind
 cluster. It installs Kwatch from the source manifests in `deploy/` with
 `kubectl`; it does not use Helm or the interactive `kwatch.sh` manager.
 
-The installer and Helm chart have separate validation. Keeping them out of the
-semantic suite makes a failed incident, grouping, delivery, or recovery test
-an actual Kwatch runtime failure rather than a release-packaging failure.
+The installer and Helm chart are separate from the semantic suite. Keeping
+packaging paths out of it makes a failed incident, grouping, delivery, or
+recovery test an actual Kwatch runtime failure.
 
 ## Local run
 
@@ -30,14 +30,9 @@ Kind, and removes them and the cluster after the run. Images are never pushed
 or uploaded.
 
 The manual `scenarios.yml` workflow resolves the latest `main` commit to an
-immutable SHA before building. It accepts a scenario regex,
-family, shard, reported version/image metadata, and `compare_with_main` for
-issue triage. Comparison runs the reported image and the resolved source in
-two disposable Kind clusters and writes a classification artifact. The
-reported image is pulled only into the runner's local Docker cache, then
-removed; it is never pushed or uploaded. Any reported source ref is recorded
-as metadata only; workflow execution always uses the resolved latest `main`
-source.
+immutable SHA before building and runs the complete scenario suite, including
+the extended Kind cases. It accepts a scenario regex, family, shard, and
+optional cluster retention for debugging.
 
 ## Architecture
 
@@ -71,30 +66,11 @@ Every supported Kwatch monitor must have coverage for relevant lifecycle
 profiles: startup failure, delayed failure, one-shot failure, recurring
 failure, simultaneous failures, grouping, shared-node impact, and recovery.
 
-## Issue reproductions
+## Extended Kind coverage
 
-Issue bodies are untrusted input. Only marked `kwatch-config`,
-`kwatch-resources`, and `kwatch-expectation` blocks may be imported. Secrets,
-commands, private image references, privileged resources, and host mounts are
-rejected. A maintainer must sanitize and commit a permanent scenario before it
-becomes part of release validation.
-
-For a reported release, run the reproduction against the released image when
-available and against the exact latest `main` SHA in a separate cluster. The
-version helper records `fixed_on_main`, `still_failing`,
-`regression_on_main`, `not_reproduced`, and `invalid_reproduction`; an
-unsupported environment is recorded separately in coverage metadata.
-
-The manual `issue-reproduction.yml` workflow runs `go run ./cmd/e2eissue` for
-public issues. It accepts only marked blocks, rejects secrets and commands,
-rewrites namespaces and images, and can run the sanitized bundle in Kind.
-The GitHub token is used only for the read-only API request.
-
-## Extended Kind environment
-
-The manual `kind-extended-scenarios.yml` workflow creates a disposable Kind
-cluster and installs metrics-server before running scenarios that need APIs
-not present in the base Kind suite. It covers the contract for:
+The same manual workflow installs metrics-server in the disposable Kind
+cluster before running scenarios that need APIs not present in a base Kind
+cluster. It covers:
 
 - Metrics API and HPA failure;
 - CSI `VolumeAttachment` failure;
@@ -102,13 +78,9 @@ not present in the base Kind suite. It covers the contract for:
 - expired TLS certificates.
 
 The workflow builds and loads temporary local images into Kind. It does not
-push, upload, or retain those images. It collects only sanitized resources,
-events, logs, and test results. Use `keep_cluster=true` for debugging; the
-cluster and temporary images are removed automatically otherwise.
-
-The separate `installer.yml` workflow validates the downloaded `kwatch.sh`
-syntax, help interface, and manager version output. It is not part of the
-semantic runtime installation path.
+push, upload, or retain those images. It collects resources, events, logs, and
+test results. Use `keep_cluster=true` for debugging; the cluster and temporary
+images are removed automatically otherwise.
 
 ## Diagnostics
 

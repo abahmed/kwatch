@@ -18,26 +18,6 @@ on:
         required: false
         default: ""
         type: string
-      reported_version:
-        description: "Reported Kwatch version for issue reproduction"
-        required: false
-        default: ""
-        type: string
-      reported_source_ref:
-        description: "Metadata label for the reported image; never executed"
-        required: false
-        default: ""
-        type: string
-      reported_image:
-        description: "Existing reported image, if approved for comparison"
-        required: false
-        default: ""
-        type: string
-      compare_with_main:
-        description: "Record comparison mode for a reported reproduction"
-        required: false
-        default: false
-        type: boolean
       keep_cluster:
         description: "Keep the Kind cluster after failure"
         required: false
@@ -98,8 +78,7 @@ jobs:
             echo "resolved_sha=$SOURCE_SHA"
           } > "${RUNNER_TEMP}/kwatch-source.txt"
 
-      - name: Run real-cluster scenarios
-        if: ${{ !inputs.compare_with_main }}
+      - name: Run all Kind scenarios
         env:
           ARTIFACTS: "${{ runner.temp }}/kwatch-e2e"
           KIND_CLUSTER_NAME: "kwatch-e2e-${{ github.run_id }}"
@@ -107,29 +86,9 @@ jobs:
           SCENARIO_REGEX: "${{ inputs.scenario }}"
           SCENARIO_FAMILY: "${{ inputs.family }}"
           SCENARIO_SHARD: "${{ inputs.shard }}"
-          REPORTED_VERSION: "${{ inputs.reported_version }}"
-          REPORTED_SOURCE_REF: "${{ inputs.reported_source_ref }}"
-          REPORTED_IMAGE: "${{ inputs.reported_image }}"
-          COMPARE_WITH_MAIN: "${{ inputs.compare_with_main }}"
           SOURCE_REF: main
           SUITE_TIMEOUT: "${{ inputs.suite_timeout }}"
         run: ./scripts/test-kind-scenarios.sh
-
-      - name: Run reported-version comparison
-        if: ${{ inputs.compare_with_main }}
-        env:
-          ARTIFACTS: "${{ runner.temp }}/kwatch-e2e/compare"
-          REPORTED_IMAGE: "${{ inputs.reported_image }}"
-          REPORTED_VERSION: "${{ inputs.reported_version }}"
-          SOURCE_REF: main
-          SCENARIO_REGEX: "${{ inputs.scenario }}"
-          SUITE_TIMEOUT: "${{ inputs.suite_timeout }}"
-        run: |
-          test -n "$REPORTED_IMAGE" || {
-            echo "reported_image is required when compare_with_main is true" >&2
-            exit 2
-          }
-          ./scripts/test-kind-scenario-compare.sh
 
       - name: Upload scenario diagnostics
         if: always()

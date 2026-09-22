@@ -15,6 +15,7 @@ cd "$root_dir"
 : "${SOURCE_REF:=main}"
 : "${BUILD_DATE:=$(date -u +%Y-%m-%dT%H:%M:%SZ)}"
 : "${KWATCH_CONFIG_FILE:=test/e2e/testdata/base-config.yaml}"
+: "${METRICS_SERVER_VERSION:=v0.7.2}"
 
 install_only=false
 case "${1:-}" in
@@ -66,10 +67,6 @@ kwatch_config_file=$KWATCH_CONFIG_FILE
 scenario_regex=${SCENARIO_REGEX:-TestScenario}
 scenario_family=${SCENARIO_FAMILY:-}
 scenario_shard=${SCENARIO_SHARD:-}
-reported_version=${REPORTED_VERSION:-}
-reported_image=${REPORTED_IMAGE:-}
-reported_source_ref=${REPORTED_SOURCE_REF:-}
-compare_with_main=${COMPARE_WITH_MAIN:-false}
 started_at=${started_at:-unknown}
 EOF
 	cat >"$ARTIFACTS/results.json" <<EOF
@@ -148,6 +145,15 @@ kind load docker-image "$KWATCH_IMAGE" --name "$KIND_CLUSTER_NAME"
 kind load docker-image "$receiver_image" --name "$KIND_CLUSTER_NAME"
 kind load docker-image "$workload_image" --name "$KIND_CLUSTER_NAME"
 
+kubectl apply -f "https://github.com/kubernetes-sigs/metrics-server/\
+releases/download/$METRICS_SERVER_VERSION/components.yaml"
+kubectl -n kube-system patch deployment metrics-server --type=json \
+	-p='[{"op":"add","path":"/spec/template/spec/containers/0/args/-","value":"--kubelet-insecure-tls"}]'
+kubectl -n kube-system rollout status deployment/metrics-server \
+	--timeout=5m
+kubectl wait --for=condition=Available \
+	apiservice/v1beta1.metrics.k8s.io --timeout=5m
+
 kubectl apply -f deploy/crd.yaml
 kubectl wait --for=condition=Established \
 	crd/kwatchconfigs.kwatch.abahmed.dev --timeout=120s
@@ -218,6 +224,7 @@ fi
 
 set +e
 KWATCH_E2E="$KWATCH_E2E" \
+	KWATCH_EXTENDED=true \
 	KWATCH_IMAGE="$KWATCH_IMAGE" \
 	WORKLOAD_IMAGE="$workload_image" \
 	SCENARIO_TIMEOUT="${SCENARIO_TIMEOUT:-10m}" \

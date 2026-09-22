@@ -175,11 +175,9 @@ cluster operations that need Kwatch-specific control. Do not build a second
 scenario DSL or execute arbitrary shell from YAML. YAML is limited to
 fixtures, configuration, coverage metadata, and sanitized issue input.
 
-The manual workflows are intentionally separate: `scenarios.yml` validates
-runtime behavior from source manifests, `issue-reproduction.yml` sanitizes and
-runs public issue data, and `installer.yml` validates the downloaded
-`kwatch.sh` interface. A reported image may be pulled for comparison, but it
-must be removed after the run and must never be pushed or uploaded.
+The manual `scenarios.yml` workflow validates all semantic runtime behavior
+from source manifests in one disposable Kind cluster. Installer validation is
+separate from this suite and is not a semantic scenario dependency.
 
 Before adding a scenario:
 
