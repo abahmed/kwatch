@@ -84,7 +84,6 @@ jobs:
       - name: Resolve source commit
         run: |
           set -euo pipefail
-          SOURCE_REF=main
           SOURCE_SHA="$(git ls-remote origin \
             refs/heads/main | cut -f1)"
           test -n "$SOURCE_SHA"
