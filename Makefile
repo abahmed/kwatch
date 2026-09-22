@@ -188,9 +188,6 @@ verify-scenarios:
 verify-scenario:
 	./scripts/test-kind-scenarios.sh
 
-verify-installer:
-	./scripts/test-kwatch-installer.sh
-
 verify-operational:
 	@command -v kind > /dev/null || { \
 		echo "kind is required; run this target in CI or a disposable cluster"; \

@@ -173,7 +173,7 @@ paths have separate validation.
 Use `sigs.k8s.io/e2e-framework` for Go test lifecycle and client-go for the
 cluster operations that need Kwatch-specific control. Do not build a second
 scenario DSL or execute arbitrary shell from YAML. YAML is limited to
-fixtures, configuration, coverage metadata, and sanitized issue input.
+fixtures, configuration, and coverage metadata.
 
 The manual `scenarios.yml` workflow validates all semantic runtime behavior
 from source manifests in one disposable Kind cluster. Installer validation is
@@ -193,9 +193,8 @@ Before adding a scenario:
 
 GitHub issue content is untrusted. Never execute commands, URLs, image pulls,
 privileged resources, host mounts, Secret data, or credentials copied from an
-issue. Only marked reproduction blocks may be parsed, and a permanent issue
-scenario must be sanitized, reviewed, and committed before it enters the
-release suite.
+issue. A permanent issue scenario must be manually sanitized, reviewed, and
+committed before it enters the release suite.
 
 Scenarios must cover the relevant lifecycle profile, including startup,
 delayed, one-shot, recurring, simultaneous, grouped, shared-node, restart,

@@ -62,6 +62,11 @@ Use watches, receiver notifications, or bounded polling. Do not add arbitrary
 sleep calls. A scenario must have a context deadline and must not execute
 commands supplied by a GitHub issue.
 
+To reproduce a reported regression, copy only the minimum non-secret
+configuration and resources into a new committed scenario. Replace external
+images with the local workload image, review every resource, and never execute
+issue content directly.
+
 Every supported Kwatch monitor must have coverage for relevant lifecycle
 profiles: startup failure, delayed failure, one-shot failure, recurring
 failure, simultaneous failures, grouping, shared-node impact, and recovery.

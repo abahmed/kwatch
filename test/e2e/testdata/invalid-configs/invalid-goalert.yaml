@@ -1,5 +1,0 @@
-alert:
-  goalert:
-    url: https://goalert.example.test
-    token: redacted
-    serviceId: ""

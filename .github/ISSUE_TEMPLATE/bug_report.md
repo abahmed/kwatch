@@ -42,23 +42,12 @@ the permanent scenario.
 Paste the smallest redacted configuration and relevant logs. Never include
 tokens, credentials, webhook URLs, Secret data, or complete sensitive payloads.
 
-If possible, use these marked blocks. They are input for a reviewed,
-sandboxed reproduction only; commands and secrets are not accepted:
-
-```kwatch-config
-# redacted Kwatch configuration
-```
-
-```kwatch-resources
-# smallest Kubernetes resources needed to reproduce the issue
-```
-
-```kwatch-expectation
-# expected and observed Kwatch behavior
-```
+Include the smallest redacted Kwatch configuration and Kubernetes resources
+needed to reproduce the issue. Maintainers may convert them into a reviewed,
+committed Kind scenario.
 
 **Reproduction**
 Is this reproducible after restart or only during an outage? Include the
 smallest safe reproduction and any health, readiness, or metric output.
 Credentials, Secret data, private image references, and host access must never
-be included. The marked blocks are parsed as data and are never executed.
+be included. Issue content is never executed directly.

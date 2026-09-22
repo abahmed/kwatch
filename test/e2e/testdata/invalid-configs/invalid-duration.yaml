@@ -1,5 +1,0 @@
-correlation:
-  window: 0m
-  lifecycleInterval: 1m
-healthCheck:
-  enabled: true

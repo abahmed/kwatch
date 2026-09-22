@@ -111,9 +111,9 @@ configuration source and let the catalog command generate the installer data.
 
 The real-cluster scenario guide is in
 [`test/e2e/README.md`](test/e2e/README.md). It explains how to add a scenario,
-update coverage, reproduce a safe GitHub issue, and run the manual Kind
-workflow. The semantic suite uses source manifests and `kubectl`; installer
-and Helm validation remain separate.
+update coverage, convert a report into a reviewed regression test, and run the
+manual Kind workflow. The semantic suite uses source manifests and `kubectl`;
+installer and Helm validation remain separate.
 
 ## 📤 Pull requests
 
