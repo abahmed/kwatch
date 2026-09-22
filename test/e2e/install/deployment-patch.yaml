@@ -1,0 +1,12 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: kwatch
+  namespace: kwatch
+spec:
+  replicas: 2
+  template:
+    spec:
+      containers:
+      - name: kwatch
+        imagePullPolicy: Never

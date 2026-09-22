@@ -27,6 +27,7 @@ listed where a dependency contains a separately licensed fork or subpackage.
 - [k8s.io/kube-openapi](https://github.com/kubernetes/kube-openapi/blob/be32def86098/LICENSE)
 - [k8s.io/utils](https://github.com/kubernetes/utils/blob/cf1189d6abe3/LICENSE)
 - [sigs.k8s.io/json](https://github.com/kubernetes-sigs/json/blob/2d320260d730/LICENSE)
+- [sigs.k8s.io/e2e-framework](https://github.com/kubernetes-sigs/e2e-framework/blob/v0.7.0/LICENSE)
 - [sigs.k8s.io/randfill](https://github.com/kubernetes-sigs/randfill/blob/v1.0.0/LICENSE)
 - [sigs.k8s.io/structured-merge-diff/v6](https://github.com/kubernetes-sigs/structured-merge-diff/blob/v6.4.2/LICENSE)
 - [sigs.k8s.io/yaml](https://github.com/kubernetes-sigs/yaml/blob/v1.6.0/LICENSE)

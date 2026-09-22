@@ -49,6 +49,9 @@ NR == 1 { next }
 	key = $1
 	file = key
 	sub(/:[0-9][0-9]*\..*/, "", file)
+	if (file ~ /\/test\/e2e\//) {
+		next
+	}
 	if (file ~ /\/zz_generated\.deepcopy\.go$/) {
 		next
 	}

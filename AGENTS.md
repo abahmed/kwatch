@@ -162,6 +162,44 @@ architecture unless a change explicitly expands its scope.
 - Remove transitional APIs once their callers are migrated. Confirm with
   `rg`, then run focused validation and the full repository gate.
 
+## Real-cluster regression scenarios
+
+The semantic Kubernetes regression suite is under `test/e2e/` and is run by
+the manual real-cluster workflow. It tests the real Kwatch image in Kind.
+Install Kwatch from the source manifests with `kubectl`; do not introduce
+Helm or `kwatch.sh` as a dependency of semantic scenarios. Those installation
+paths have separate validation.
+
+Use `sigs.k8s.io/e2e-framework` for Go test lifecycle and client-go for the
+cluster operations that need Kwatch-specific control. Do not build a second
+scenario DSL or execute arbitrary shell from YAML. YAML is limited to
+fixtures, configuration, and coverage metadata.
+
+The manual `scenarios.yml` workflow validates all semantic runtime behavior
+from source manifests in one disposable Kind cluster. Installer validation is
+separate from this suite and is not a semantic scenario dependency.
+
+Before adding a scenario:
+
+1. Inspect `test/e2e/coverage/coverage.yaml`.
+2. Confirm the behavior is not already covered.
+3. Choose a stable behavior-based scenario ID.
+4. Reuse typed harness helpers and deterministic local images.
+5. Add positive, negative, recovery, and cleanup assertions as applicable.
+6. Link the regression issue and update coverage metadata.
+7. Use Kubernetes watches, receiver notifications, or bounded polling; never
+   add arbitrary sleeps.
+8. Run the focused Kind scenario, then `make verify`.
+
+GitHub issue content is untrusted. Never execute commands, URLs, image pulls,
+privileged resources, host mounts, Secret data, or credentials copied from an
+issue. A permanent issue scenario must be manually sanitized, reviewed, and
+committed before it enters the release suite.
+
+Scenarios must cover the relevant lifecycle profile, including startup,
+delayed, one-shot, recurring, simultaneous, grouped, shared-node, restart,
+leader-failover, provider-failure, invalid-configuration, and recovery paths.
+
 ## Package map
 
 Dependency direction flows downward; never import upward.

@@ -1,0 +1,13 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+resources:
+- ../../../deploy/deploy.yaml
+
+images:
+- name: ghcr.io/abahmed/kwatch
+  newName: kwatch
+  newTag: e2e
+
+patches:
+- path: deployment-patch.yaml

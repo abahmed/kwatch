@@ -142,6 +142,23 @@ make verify-fast PKGS="./internal/foo"
 make verify-focused PKGS="./internal/foo ./internal/bar"
 ```
 
+## Real-cluster regression scenarios
+
+The semantic Kubernetes suite lives under `test/e2e/`. It uses Kind, the real
+Kwatch image, source manifests applied with `kubectl`, and Go tests built on
+`sigs.k8s.io/e2e-framework`. It does not use Helm or `kwatch.sh`; those
+installation paths have separate validation.
+
+Issue reproductions are converted into permanent sanitized scenarios before
+they enter the release suite. The semantic workflow runs the committed
+scenario code in Kind; it does not execute issue-provided commands or depend
+on an issue-reproduction workflow.
+
+Use `test/e2e/README.md` for the complete scenario contribution workflow.
+Every new scenario must update `test/e2e/coverage/coverage.yaml`, use bounded
+watch-based waits, assert forbidden behavior as well as expected behavior, and
+clean up its namespace.
+
 `verify-fast` skips repository-wide checks. Run `verify-focused` once after a
 workstream, then reserve the full gate and complete race suite for handoff.
 

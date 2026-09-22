@@ -1,0 +1,48 @@
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: kwatch-e2e-system
+  labels:
+    pod-security.kubernetes.io/enforce: restricted
+    pod-security.kubernetes.io/audit: restricted
+    pod-security.kubernetes.io/warn: restricted
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: kwatch-e2e-receiver
+  namespace: kwatch-e2e-system
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: kwatch-e2e-receiver
+  template:
+    metadata:
+      labels:
+        app: kwatch-e2e-receiver
+    spec:
+      containers:
+      - name: receiver
+        image: kwatch-e2e-receiver:e2e
+        imagePullPolicy: Never
+        ports:
+        - name: http
+          containerPort: 8080
+        readinessProbe:
+          httpGet:
+            path: /healthz
+            port: http
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: kwatch-e2e-receiver
+  namespace: kwatch-e2e-system
+spec:
+  selector:
+    app: kwatch-e2e-receiver
+  ports:
+  - name: http
+    port: 8080
+    targetPort: http

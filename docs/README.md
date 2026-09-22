@@ -15,6 +15,8 @@ implementation-only notes may remain beside code when they are not published.
 
 - [Project README](../README.md) — product overview and quick installation.
 - [`kwatch.sh` manager](./kwatch-sh.md) — installer and day-to-day manager.
+- [Real-cluster scenarios](../test/e2e/README.md) — regression scenarios and
+  the contributor workflow.
 - [Configuration catalog](../deploy/config-catalog.tsv) — generated settings
   metadata used by the installer and documentation pipeline.
 - [Provider catalog](../deploy/provider-catalog.tsv) — generated provider

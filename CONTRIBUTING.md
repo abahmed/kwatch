@@ -107,6 +107,14 @@ The release workflow also publishes the configuration and feature catalogs used
 by [`kwatch.sh`](https://kwatch.dev/kwatch.sh). Add new settings to the Go
 configuration source and let the catalog command generate the installer data.
 
+## Real-cluster regression scenarios
+
+The real-cluster scenario guide is in
+[`test/e2e/README.md`](test/e2e/README.md). It explains how to add a scenario,
+update coverage, convert a report into a reviewed regression test, and run the
+manual Kind workflow. The semantic suite uses source manifests and `kubectl`;
+installer and Helm validation remain separate.
+
 ## 📤 Pull requests
 
 Open pull requests against `main` and include:
