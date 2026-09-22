@@ -158,7 +158,8 @@ kubectl wait --for=condition=Available \
 kubectl apply -f deploy/crd.yaml
 kubectl wait --for=condition=Established \
 	crd/kwatchconfigs.kwatch.abahmed.dev --timeout=120s
-kubectl apply -k test/e2e/install
+kubectl kustomize test/e2e/install \
+	--load-restrictor LoadRestrictionsNone | kubectl apply -f -
 kubectl create secret generic kwatch \
 	--namespace kwatch \
 	--from-file=config.yaml="$KWATCH_CONFIG_FILE" \
