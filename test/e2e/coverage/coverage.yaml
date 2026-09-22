@@ -1,0 +1,307 @@
+entries:
+  - id: pod.crashloop
+    family: pod
+    lifecycle: recurring
+    status: covered
+    test: TestScenarioPodCrashLoop
+  - id: pod.startup-error
+    family: pod
+    lifecycle: startup
+    status: covered
+    test: TestScenarioPodFailureProfiles
+  - id: pod.delayed-one-shot
+    family: pod
+    lifecycle: delayed
+    status: covered
+    test: TestScenarioPodFailureProfiles
+  - id: pod.oom-killed
+    family: pod
+    lifecycle: failure
+    status: covered
+    test: TestScenarioPodOOMKilled
+  - id: pod.pending-unschedulable
+    family: pod
+    lifecycle: pending
+    status: covered
+    test: TestScenarioPodUnschedulable
+  - id: pod.not-ready
+    family: pod
+    lifecycle: readiness
+    status: covered
+    test: TestScenarioPodReadinessFailure
+  - id: pod.image-pull
+    family: pod
+    lifecycle: startup
+    status: covered
+    test: TestScenarioPodStartupFailureProfiles
+  - id: pod.liveness-failure
+    family: pod
+    lifecycle: recurring
+    status: covered
+    test: TestScenarioPodLivenessFailure
+  - id: pod.init-container
+    family: pod
+    lifecycle: startup
+    status: covered
+    test: TestScenarioPodStartupFailureProfiles
+  - id: pod.lifecycle-hook
+    family: pod
+    lifecycle: failure
+    status: covered
+    test: TestScenarioPodLifecycleHookFailure
+  - id: pod.eviction
+    family: pod
+    lifecycle: recovery
+    status: covered
+    test: TestScenarioPodEphemeralStorageEviction
+  - id: pod.ephemeral-storage-pressure
+    family: pod
+    lifecycle: pressure
+    status: covered
+    test: TestScenarioPodEphemeralStorageEviction
+  - id: pod.re-failure-after-recovery
+    family: pod
+    lifecycle: re-failure
+    status: covered
+    test: TestScenarioRefailureAfterRecovery
+  - id: grouping.same-error-many-owners
+    family: grouping
+    lifecycle: grouping
+    status: covered
+    test: TestScenarioGroupingSameErrorManyOwners
+  - id: grouping.same-error-one-owner
+    family: grouping
+    lifecycle: grouping
+    status: covered
+    test: TestScenarioGroupingManyReplicasOneOwner
+  - id: grouping.different-reasons
+    family: grouping
+    lifecycle: grouping
+    status: covered
+    test: TestScenarioGroupingDifferentReasons
+  - id: grouping.cross-namespace
+    family: grouping
+    lifecycle: grouping
+    status: covered
+    test: TestScenarioGroupingCrossNamespace
+  - id: grouping.shared-node
+    family: grouping
+    lifecycle: node-impact
+    status: covered
+    test: TestScenarioNodeRecovery
+  - id: lifecycle.resolution
+    family: lifecycle
+    lifecycle: recovery
+    status: covered
+    test: TestScenarioResolution
+  - id: lifecycle.restart-persistence
+    family: lifecycle
+    lifecycle: restart
+    status: covered
+    test: TestScenarioRestartPersistence
+  - id: lifecycle.leader-failover
+    family: lifecycle
+    lifecycle: leadership
+    status: covered
+    test: TestScenarioLeaderFailover
+  - id: lifecycle.provider-failure
+    family: lifecycle
+    lifecycle: delivery
+    status: covered
+    test: TestScenarioProviderFailureRecovery
+  - id: lifecycle.configuration-reload
+    family: lifecycle
+    lifecycle: reload
+    status: covered
+    test: TestScenarioConfigurationReload
+  - id: workload.deployment-rollout
+    family: workload
+    lifecycle: rollout
+    status: covered
+    test: TestScenarioDeploymentRolloutFailure
+  - id: workload.replicaset
+    family: workload
+    lifecycle: failure
+    status: covered
+    test: TestScenarioReplicaSetFailure
+  - id: workload.statefulset
+    family: workload
+    lifecycle: failure
+    status: covered
+    test: TestScenarioStatefulSetFailure
+  - id: workload.daemonset
+    family: workload
+    lifecycle: availability
+    status: covered
+    test: TestScenarioDaemonSetFailure
+  - id: workload.job
+    family: workload
+    lifecycle: failure
+    status: covered
+    test: TestScenarioJobFailure
+  - id: workload.cronjob
+    family: workload
+    lifecycle: recurring
+    status: covered
+    test: TestScenarioCronJobSuspended
+  - id: workload.hpa-metrics
+    family: workload
+    lifecycle: dependency
+    status: covered
+    environment: kind-extended
+    test: TestScenarioExtendedMetricsAPIFailure
+  - id: workload.pdb-disruption
+    family: workload
+    lifecycle: disruption
+    status: covered
+    test: TestScenarioPDBDisruption
+  - id: node.not-ready
+    family: node
+    lifecycle: failure
+    status: covered
+    test: TestScenarioNodeRecovery
+  - id: node.shared-pod-impact
+    family: node
+    lifecycle: fanout
+    status: covered
+    test: TestScenarioNodeRecovery
+  - id: node.recovery
+    family: node
+    lifecycle: recovery
+    status: covered
+    test: TestScenarioNodeRecovery
+  - id: node.memory-pressure
+    family: node
+    lifecycle: pressure
+    status: covered
+    test: TestScenarioNodePressureSignals
+  - id: node.disk-pressure
+    family: node
+    lifecycle: pressure
+    status: covered
+    test: TestScenarioNodePressureSignals
+  - id: node.pid-pressure
+    family: node
+    lifecycle: pressure
+    status: covered
+    test: TestScenarioNodePressureSignals
+  - id: node.network-unavailable
+    family: node
+    lifecycle: connectivity
+    status: covered
+    test: TestScenarioNodePressureSignals
+  - id: node.stale-lease
+    family: node
+    lifecycle: telemetry
+    status: covered
+    test: TestScenarioNodeRecovery
+  - id: node.kubelet-telemetry
+    family: node
+    lifecycle: telemetry
+    status: covered
+    test: TestScenarioNodeRecovery
+  - id: node.shared-node-impact
+    family: node
+    lifecycle: fanout
+    status: covered
+    test: TestScenarioNodeRecovery
+  - id: storage.pvc-pv
+    family: storage
+    lifecycle: failure
+    status: covered
+    test: TestScenarioPersistentVolumeClaimFailure
+  - id: storage.volume-attachment
+    family: storage
+    lifecycle: failure
+    status: covered
+    environment: kind-extended
+    test: TestScenarioExtendedVolumeAttachment
+  - id: networking.service-endpoint
+    family: networking
+    lifecycle: dependency
+    status: covered
+    test: TestScenarioServiceWithoutEndpoints
+  - id: networking.ingress
+    family: networking
+    lifecycle: dependency
+    status: covered
+    test: TestScenarioMissingIngressBackend
+  - id: networking.network-policy
+    family: networking
+    lifecycle: policy
+    status: covered
+    test: TestScenarioRestrictiveNetworkPolicy
+  - id: security.admission-webhook
+    family: security
+    lifecycle: dependency
+    status: covered
+    environment: kind-extended
+    test: TestScenarioExtendedAdmissionWebhook
+  - id: security.admission-policy
+    family: security
+    lifecycle: policy
+    status: covered
+    environment: kind-extended
+    test: TestScenarioExtendedAdmissionPolicy
+  - id: security.rbac
+    family: security
+    lifecycle: permission
+    status: covered
+    test: TestScenarioMissingServiceAccountReference
+  - id: security.secret-reference
+    family: security
+    lifecycle: configuration
+    status: covered
+    test: TestScenarioMissingRequiredReferences
+  - id: security.configmap-reference
+    family: security
+    lifecycle: configuration
+    status: covered
+    test: TestScenarioMissingConfigMapReference
+  - id: security.pod-security-admission
+    family: security
+    lifecycle: admission
+    status: covered
+    test: TestScenarioPodSecurityAdmission
+  - id: integration.active-probe
+    family: integration
+    lifecycle: health
+    status: covered
+    test: TestScenarioActiveProbeFailureAndRecovery
+  - id: integration.tls
+    family: integration
+    lifecycle: health
+    status: covered
+    environment: kind-extended
+    test: TestScenarioExtendedTLS
+  - id: integration.heartbeat
+    family: integration
+    lifecycle: delivery
+    status: covered
+    test: TestScenarioHeartbeatDelivery
+  - id: integration.metrics-api
+    family: integration
+    lifecycle: dependency
+    status: covered
+    environment: kind-extended
+    test: TestScenarioExtendedMetricsAPIFailure
+  - id: integration.kubelet
+    family: integration
+    lifecycle: telemetry
+    status: covered
+    test: TestScenarioNodeRecovery
+  - id: integration.control-plane
+    family: integration
+    lifecycle: diagnostics
+    status: covered
+    test: TestScenarioControlPlaneComponentRecovery
+  - id: invalid-config.startup
+    family: invalid-config
+    lifecycle: startup
+    status: covered
+    test: TestScenarioInvalidStartupConfiguration
+  - id: invalid-config.live-reload
+    family: invalid-config
+    lifecycle: reload
+    status: covered
+    test: TestScenarioInvalidLiveConfiguration

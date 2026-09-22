@@ -1,0 +1,78 @@
+app:
+  clusterName: e2e
+  disableStartupMessage: true
+
+healthCheck:
+  enabled: true
+  diagnostics: true
+  diagnosticsToken: "${file:/config/diagnostics-token}"
+
+auditLog:
+  enabled: true
+  output: stdout
+
+alert:
+  webhook:
+    url: "http://kwatch-e2e-receiver.kwatch-e2e-system.svc.cluster.local:8080/webhook"
+
+smartGrouping:
+  windowSeconds: 5
+  namespaceFanOutThreshold: 3
+
+correlation:
+  window: 2m
+  lifecycleInterval: 1m
+  resolveHoldDown: 0s
+
+crd:
+  enabled: true
+
+pendingPodMonitor:
+  enabled: true
+  threshold: 5s
+
+rolloutMonitor:
+  enabled: true
+  sustainedMinutes: 0
+
+statefulSetMonitor:
+  enabled: true
+  sustainedMinutes: 0
+
+daemonSetMonitor:
+  enabled: true
+  sustainedMinutes: 0
+
+cronJobMonitor:
+  enabled: true
+  sustainedMinutes: 0
+
+pdbMonitor:
+  enabled: true
+  sustainedMinutes: 0
+
+clusterResourceMonitor:
+  enabled: true
+  nodeLeaseStaleSeconds: 5
+
+nodeMonitor:
+  enabled: true
+  sustainedMinutes: 0
+
+hpaMonitor:
+  enabled: true
+  sustainedMinutes: 0
+
+tlsMonitor:
+  enabled: true
+  threshold: 30
+  criticalThreshold: 3
+
+admissionWebhookMonitor:
+  enabled: true
+
+controlPlaneMonitor:
+  enabled: true
+  intervalSeconds: 1
+  failureThreshold: 1
+  recoveryThreshold: 1

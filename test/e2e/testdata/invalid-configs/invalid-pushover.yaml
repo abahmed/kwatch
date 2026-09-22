@@ -1,0 +1,7 @@
+alert:
+  pushover:
+    token: redacted
+    user: redacted
+    priority: 2
+    retry: 0
+    expire: 0

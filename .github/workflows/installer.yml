@@ -1,0 +1,36 @@
+name: kwatch.sh installer validation
+
+on:
+  workflow_dispatch:
+    inputs:
+      installer_url:
+        description: "Installer URL to validate"
+        required: false
+        default: "https://kwatch.dev/kwatch.sh"
+        type: string
+
+permissions:
+  contents: read
+
+jobs:
+  installer:
+    name: Installer syntax and interface smoke test
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+
+      - name: Run installer checks
+        env:
+          INSTALLER_URL: "${{ inputs.installer_url }}"
+          ARTIFACTS: "${{ runner.temp }}/kwatch-installer"
+        run: ./scripts/test-kwatch-installer.sh
+
+      - name: Upload installer evidence
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: kwatch-installer-${{ github.run_id }}
+          path: ${{ runner.temp }}/kwatch-installer
+          if-no-files-found: warn

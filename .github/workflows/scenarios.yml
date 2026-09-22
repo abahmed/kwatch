@@ -1,0 +1,152 @@
+name: Real-cluster scenarios
+
+on:
+  workflow_dispatch:
+    inputs:
+      scenario:
+        description: "Optional scenario test regex"
+        required: false
+        default: "TestScenario"
+        type: string
+      family:
+        description: "Optional scenario family"
+        required: false
+        default: ""
+        type: string
+      shard:
+        description: "Optional shard value"
+        required: false
+        default: ""
+        type: string
+      source_ref:
+        description: "Ref to resolve before the immutable checkout"
+        required: false
+        default: "main"
+        type: string
+      reported_version:
+        description: "Reported Kwatch version for issue reproduction"
+        required: false
+        default: ""
+        type: string
+      reported_source_ref:
+        description: "Source tag or ref matching the reported image"
+        required: false
+        default: ""
+        type: string
+      reported_image:
+        description: "Existing reported image, if approved for comparison"
+        required: false
+        default: ""
+        type: string
+      compare_with_main:
+        description: "Record comparison mode for a reported reproduction"
+        required: false
+        default: false
+        type: boolean
+      keep_cluster:
+        description: "Keep the Kind cluster after failure"
+        required: false
+        default: false
+        type: boolean
+      suite_timeout:
+        description: "Maximum Go test duration"
+        required: false
+        default: "60m"
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: scenarios-${{ github.workflow }}
+  cancel-in-progress: false
+
+jobs:
+  scenarios:
+    name: Kind regression scenarios
+    runs-on: ubuntu-latest
+    timeout-minutes: 75
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          ref: ${{ inputs.source_ref }}
+          fetch-depth: 1
+
+      - name: Set up Go
+        uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: go.mod
+
+      - name: Install Kind
+        run: |
+          curl -fsSL -o kind \
+            https://kind.sigs.k8s.io/dl/v0.30.0/kind-linux-amd64
+          chmod +x kind
+          sudo mv kind /usr/local/bin/kind
+          kind version
+
+      - name: Resolve source commit
+        env:
+          SOURCE_REF: "${{ inputs.source_ref }}"
+        run: |
+          SOURCE_SHA="$(git ls-remote origin \
+            "refs/heads/${SOURCE_REF}" | cut -f1)"
+          if [ -z "$SOURCE_SHA" ]; then
+            SOURCE_SHA="$(git ls-remote origin "refs/tags/${SOURCE_REF}" \
+              | cut -f1)"
+          fi
+          test -n "$SOURCE_SHA"
+          git fetch --depth=1 origin "$SOURCE_SHA"
+          git checkout --detach "$SOURCE_SHA"
+          {
+            echo "SOURCE_SHA=$SOURCE_SHA"
+            echo "REQUESTED_REF=$SOURCE_REF"
+          } >> "$GITHUB_ENV"
+          {
+            echo "requested_ref=$SOURCE_REF"
+            echo "resolved_sha=$SOURCE_SHA"
+          } > "${RUNNER_TEMP}/kwatch-source.txt"
+
+      - name: Run real-cluster scenarios
+        if: ${{ !inputs.compare_with_main }}
+        env:
+          ARTIFACTS: "${{ runner.temp }}/kwatch-e2e"
+          KIND_CLUSTER_NAME: "kwatch-e2e-${{ github.run_id }}"
+          KEEP_CLUSTER: "${{ inputs.keep_cluster }}"
+          SCENARIO_REGEX: "${{ inputs.scenario }}"
+          SCENARIO_FAMILY: "${{ inputs.family }}"
+          SCENARIO_SHARD: "${{ inputs.shard }}"
+          REPORTED_VERSION: "${{ inputs.reported_version }}"
+          REPORTED_SOURCE_REF: "${{ inputs.reported_source_ref }}"
+          REPORTED_IMAGE: "${{ inputs.reported_image }}"
+          COMPARE_WITH_MAIN: "${{ inputs.compare_with_main }}"
+          SOURCE_REF: "${{ inputs.source_ref }}"
+          SUITE_TIMEOUT: "${{ inputs.suite_timeout }}"
+        run: ./scripts/test-kind-scenarios.sh
+
+      - name: Run reported-version comparison
+        if: ${{ inputs.compare_with_main }}
+        env:
+          ARTIFACTS: "${{ runner.temp }}/kwatch-e2e/compare"
+          REPORTED_IMAGE: "${{ inputs.reported_image }}"
+          REPORTED_VERSION: "${{ inputs.reported_version }}"
+          SOURCE_REF: "${{ inputs.source_ref }}"
+          SCENARIO_REGEX: "${{ inputs.scenario }}"
+          SUITE_TIMEOUT: "${{ inputs.suite_timeout }}"
+        run: |
+          test -n "$REPORTED_IMAGE" || {
+            echo "reported_image is required when compare_with_main is true" >&2
+            exit 2
+          }
+          ./scripts/test-kind-scenario-compare.sh
+
+      - name: Upload scenario diagnostics
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: kwatch-e2e-${{ github.run_id }}
+          path: |
+            ${{ runner.temp }}/kwatch-e2e
+            ${{ runner.temp }}/kwatch-source.txt
+          if-no-files-found: warn

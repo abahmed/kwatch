@@ -7,6 +7,8 @@
 	verify-focused verify-fast verify-race verify-security \
 	verify-manifests verify-docs verify-operational coverage coverage-check
 
+.PHONY: verify-scenarios verify-scenario verify-kind-extended-scenarios
+
 # Binary names
 BINARY_NAME := kwatch
 CMD_DIR := cmd/kwatch
@@ -45,6 +47,9 @@ help:
 	@echo "  make verify-security Run dependency and image security checks"
 	@echo "  make verify-manifests Validate Helm and Kubernetes manifests"
 	@echo "  make verify-operational Run the disposable Kind production smoke test"
+	@echo "  make verify-scenarios  Run real-cluster regression scenarios"
+	@echo "  make verify-scenario   Run selected real-cluster scenarios"
+	@echo "  make verify-kind-extended-scenarios Run extended Kind scenarios"
 	@echo "  make verify-docs   Validate code-owned documentation metadata"
 	@echo "  make verify-focused PKGS=... Validate only changed package groups"
 	@echo "  make verify-catalogs Verify checked-in generated catalogs"
@@ -177,6 +182,18 @@ verify-manifests:
 	./deploy/chart/test_helm.sh
 	./scripts/check-manifest-parity.sh
 	./scripts/check-release-consistency.sh
+
+verify-scenarios:
+	./scripts/test-kind-scenarios.sh
+
+verify-scenario:
+	./scripts/test-kind-scenarios.sh
+
+verify-kind-extended-scenarios:
+	./scripts/test-kind-extended-scenarios.sh
+
+verify-installer:
+	./scripts/test-kwatch-installer.sh
 
 verify-operational:
 	@command -v kind > /dev/null || { \
