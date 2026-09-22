@@ -135,6 +135,8 @@ fi
 
 receiver_image="kwatch-e2e-receiver:${source_sha}"
 workload_image="kwatch-e2e-workload:${source_sha}"
+receiver_host="kwatch-e2e-receiver.kwatch-e2e-system.svc.cluster.local"
+receiver_url="http://${receiver_host}:8080/webhook"
 docker build --load --tag "$receiver_image" test/e2e/receiver
 docker build --load --tag "$workload_image" test/e2e/workload
 built_images="$built_images $receiver_image $workload_image"
@@ -158,17 +160,18 @@ kubectl wait --for=condition=Available \
 kubectl apply -f deploy/crd.yaml
 kubectl wait --for=condition=Established \
 	crd/kwatchconfigs.kwatch.abahmed.dev --timeout=120s
-kubectl kustomize test/e2e/install \
-	--load-restrictor LoadRestrictionsNone | kubectl apply -f -
+kubectl create namespace kwatch --dry-run=client -o yaml | kubectl apply -f -
 kubectl create secret generic kwatch \
 	--namespace kwatch \
 	--from-file=config.yaml="$KWATCH_CONFIG_FILE" \
 	--from-literal=diagnostics-token=e2e-token \
+	--from-literal=webhook-url="$receiver_url" \
 	--dry-run=client -o yaml | kubectl apply -f -
+kubectl kustomize test/e2e/install \
+	--load-restrictor LoadRestrictionsNone | \
+	sed "s|image: kwatch:e2e$|image: $KWATCH_IMAGE|" | kubectl apply -f -
 sed "s#kwatch-e2e-receiver:e2e#$receiver_image#g" \
 	test/e2e/receiver/deployment.yaml | kubectl apply -f -
-kubectl -n kwatch set image deployment/kwatch \
-		kwatch="$KWATCH_IMAGE"
 kubectl -n kwatch scale deployment/kwatch --replicas="$KWATCH_REPLICAS"
 kubectl -n kwatch rollout status deployment/kwatch --timeout=10m
 kubectl -n kwatch annotate deployment/kwatch \
