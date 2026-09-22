@@ -13,7 +13,7 @@ auditLog:
 
 alert:
   webhook:
-    url: "http://kwatch-e2e-receiver.kwatch-e2e-system.svc.cluster.local:8080/webhook"
+    url: "${file:/config/webhook-url}"
 
 smartGrouping:
   windowSeconds: 5
