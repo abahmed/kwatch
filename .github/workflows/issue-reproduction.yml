@@ -7,11 +7,6 @@ on:
         description: "Public GitHub issue containing marked reproduction blocks"
         required: true
         type: string
-      source_ref:
-        description: "Source ref to test; main is resolved to an immutable SHA"
-        required: false
-        default: "main"
-        type: string
       reported_image:
         description: "Published image to compare against main (optional)"
         required: false
@@ -23,7 +18,7 @@ on:
         default: ""
         type: string
       reported_source_ref:
-        description: "Source tag or ref matching the reported image"
+        description: "Metadata label for the reported image; never executed"
         required: false
         default: ""
         type: string
@@ -51,7 +46,7 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
-          ref: ${{ inputs.source_ref }}
+          ref: main
           fetch-depth: 1
 
       - name: Set up Go
@@ -60,14 +55,9 @@ jobs:
           go-version-file: go.mod
 
       - name: Resolve source commit
-        env:
-          SOURCE_REF: "${{ inputs.source_ref }}"
         run: |
           set -euo pipefail
-          SOURCE_SHA="$(git ls-remote origin "refs/heads/$SOURCE_REF" | cut -f1)"
-          if [ -z "$SOURCE_SHA" ]; then
-            SOURCE_SHA="$(git ls-remote origin "refs/tags/$SOURCE_REF" | cut -f1)"
-          fi
+          SOURCE_SHA="$(git ls-remote origin refs/heads/main | cut -f1)"
           test -n "$SOURCE_SHA"
           git fetch --depth=1 origin "$SOURCE_SHA"
           git checkout --detach "$SOURCE_SHA"
@@ -100,7 +90,7 @@ jobs:
           KWATCH_CONFIG_FILE: "${{ runner.temp }}/kwatch-issue/config.yaml"
           KIND_CLUSTER_NAME: "kwatch-issue-${{ github.run_id }}"
           SCENARIO_REGEX: "TestScenarioImportedIssue"
-          SOURCE_REF: "${{ inputs.source_ref }}"
+          SOURCE_REF: main
           REPORTED_IMAGE: "${{ inputs.reported_image }}"
           REPORTED_VERSION: "${{ inputs.reported_version }}"
           REPORTED_SOURCE_REF: "${{ inputs.reported_source_ref }}"

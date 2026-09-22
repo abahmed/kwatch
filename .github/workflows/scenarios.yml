@@ -18,18 +18,13 @@ on:
         required: false
         default: ""
         type: string
-      source_ref:
-        description: "Ref to resolve before the immutable checkout"
-        required: false
-        default: "main"
-        type: string
       reported_version:
         description: "Reported Kwatch version for issue reproduction"
         required: false
         default: ""
         type: string
       reported_source_ref:
-        description: "Source tag or ref matching the reported image"
+        description: "Metadata label for the reported image; never executed"
         required: false
         default: ""
         type: string
@@ -70,7 +65,7 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
-          ref: ${{ inputs.source_ref }}
+          ref: main
           fetch-depth: 1
 
       - name: Set up Go
@@ -87,24 +82,20 @@ jobs:
           kind version
 
       - name: Resolve source commit
-        env:
-          SOURCE_REF: "${{ inputs.source_ref }}"
         run: |
+          set -euo pipefail
+          SOURCE_REF=main
           SOURCE_SHA="$(git ls-remote origin \
-            "refs/heads/${SOURCE_REF}" | cut -f1)"
-          if [ -z "$SOURCE_SHA" ]; then
-            SOURCE_SHA="$(git ls-remote origin "refs/tags/${SOURCE_REF}" \
-              | cut -f1)"
-          fi
+            refs/heads/main | cut -f1)"
           test -n "$SOURCE_SHA"
           git fetch --depth=1 origin "$SOURCE_SHA"
           git checkout --detach "$SOURCE_SHA"
           {
             echo "SOURCE_SHA=$SOURCE_SHA"
-            echo "REQUESTED_REF=$SOURCE_REF"
+            echo "REQUESTED_REF=main"
           } >> "$GITHUB_ENV"
           {
-            echo "requested_ref=$SOURCE_REF"
+            echo "requested_ref=main"
             echo "resolved_sha=$SOURCE_SHA"
           } > "${RUNNER_TEMP}/kwatch-source.txt"
 
@@ -121,7 +112,7 @@ jobs:
           REPORTED_SOURCE_REF: "${{ inputs.reported_source_ref }}"
           REPORTED_IMAGE: "${{ inputs.reported_image }}"
           COMPARE_WITH_MAIN: "${{ inputs.compare_with_main }}"
-          SOURCE_REF: "${{ inputs.source_ref }}"
+          SOURCE_REF: main
           SUITE_TIMEOUT: "${{ inputs.suite_timeout }}"
         run: ./scripts/test-kind-scenarios.sh
 
@@ -131,7 +122,7 @@ jobs:
           ARTIFACTS: "${{ runner.temp }}/kwatch-e2e/compare"
           REPORTED_IMAGE: "${{ inputs.reported_image }}"
           REPORTED_VERSION: "${{ inputs.reported_version }}"
-          SOURCE_REF: "${{ inputs.source_ref }}"
+          SOURCE_REF: main
           SCENARIO_REGEX: "${{ inputs.scenario }}"
           SUITE_TIMEOUT: "${{ inputs.suite_timeout }}"
         run: |

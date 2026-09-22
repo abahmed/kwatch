@@ -29,13 +29,15 @@ The script builds temporary images with `docker build --load`, loads them into
 Kind, and removes them and the cluster after the run. Images are never pushed
 or uploaded.
 
-The manual `scenarios.yml` workflow resolves `source_ref` to an immutable SHA
-before building. Its default is `main`. It also accepts a scenario regex,
+The manual `scenarios.yml` workflow resolves the latest `main` commit to an
+immutable SHA before building. It accepts a scenario regex,
 family, shard, reported version/image metadata, and `compare_with_main` for
 issue triage. Comparison runs the reported image and the resolved source in
 two disposable Kind clusters and writes a classification artifact. The
 reported image is pulled only into the runner's local Docker cache, then
-removed; it is never pushed or uploaded.
+removed; it is never pushed or uploaded. Any reported source ref is recorded
+as metadata only; workflow execution always uses the resolved latest `main`
+source.
 
 ## Architecture
 

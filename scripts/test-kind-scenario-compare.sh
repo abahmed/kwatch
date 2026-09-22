@@ -15,13 +15,12 @@ cd "$root_dir"
 
 reported_artifacts="$ARTIFACTS/reported"
 main_artifacts="$ARTIFACTS/main"
-reported_root="$ARTIFACTS/reported-source"
-reported_source_sha=""
 mkdir -p "$reported_artifacts" "$main_artifacts"
 
 pull_cleanup=false
 cleanup() {
-	status=$?
+	status=${1:-$?}
+	trap - EXIT INT TERM
 	if [ "$pull_cleanup" = true ]; then
 		docker image rm "$REPORTED_IMAGE" >/dev/null 2>&1 || true
 	fi
@@ -29,17 +28,9 @@ cleanup() {
 }
 trap cleanup EXIT INT TERM
 
-if [ -n "$REPORTED_SOURCE_REF" ]; then
-	git fetch --depth=1 origin "$REPORTED_SOURCE_REF"
-	reported_source_sha=$(git rev-parse FETCH_HEAD)
-	mkdir -p "$reported_root"
-	git archive "FETCH_HEAD" | tar -x -C "$reported_root"
-else
-	reported_root="$root_dir"
-	printf '%s\n' \
-		"reported source ref is unset; using current source manifests" \
-		>"$ARTIFACTS/reported-source-warning.txt"
-fi
+printf '%s\n' \
+	"reported source ref is metadata only; using current main manifests" \
+	>"$ARTIFACTS/reported-source-warning.txt"
 
 command -v docker >/dev/null 2>&1 || {
 	echo "required tool is missing: docker" >&2
@@ -79,8 +70,7 @@ run_version() {
 }
 
 run_version reported "kwatch-e2e-reported-$$" \
-	"$REPORTED_IMAGE" "$reported_artifacts" "$reported_root" \
-	"$reported_source_sha"
+	"$REPORTED_IMAGE" "$reported_artifacts" "$root_dir" ""
 run_version main "kwatch-e2e-main-$$" \
 	kwatch:e2e "$main_artifacts" "$root_dir" ""
 
@@ -110,6 +100,6 @@ cat "$ARTIFACTS/comparison.json"
 
 if [ "$classification" = fixed_on_main ] ||
 	[ "$classification" = not_reproduced ]; then
-	exit 0
+	cleanup 0
 fi
-exit 1
+cleanup 1

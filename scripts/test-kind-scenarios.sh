@@ -105,7 +105,8 @@ EOF
 }
 
 cleanup() {
-	status=$?
+	status=${1:-$?}
+	trap - EXIT INT TERM
 	collect_diagnostics
 	if [ "$KEEP_CLUSTER" != true ]; then
 		kind delete cluster --name "$KIND_CLUSTER_NAME" >/dev/null 2>&1 || true
@@ -174,7 +175,7 @@ kubectl -n kwatch-e2e-system rollout status \
 	deployment/kwatch-e2e-receiver --timeout=5m
 
 if [ "$install_only" = true ]; then
-	exit 0
+	cleanup 0
 fi
 
 scenario_regex="${SCENARIO_REGEX:-TestScenario}"
@@ -232,4 +233,4 @@ KWATCH_E2E="$KWATCH_E2E" \
 test_status=$?
 set -e
 cat "$ARTIFACTS/go-test.log"
-exit "$test_status"
+cleanup "$test_status"

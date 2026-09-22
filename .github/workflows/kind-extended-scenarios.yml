@@ -3,11 +3,6 @@ name: Extended Kind scenarios
 on:
   workflow_dispatch:
     inputs:
-      source_ref:
-        description: "Source ref; main is resolved to an immutable SHA"
-        required: false
-        default: "main"
-        type: string
       scenario:
         description: "Extended Kind scenario test regex"
         required: false
@@ -31,7 +26,7 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
-          ref: ${{ inputs.source_ref }}
+          ref: main
           fetch-depth: 1
 
       - name: Set up Go
@@ -48,16 +43,9 @@ jobs:
           kind version
 
       - name: Resolve source commit
-        env:
-          SOURCE_REF: "${{ inputs.source_ref }}"
         run: |
           set -euo pipefail
-          SOURCE_SHA="$(git ls-remote origin "refs/heads/$SOURCE_REF" \
-            | cut -f1)"
-          if [ -z "$SOURCE_SHA" ]; then
-            SOURCE_SHA="$(git ls-remote origin "refs/tags/$SOURCE_REF" \
-              | cut -f1)"
-          fi
+          SOURCE_SHA="$(git ls-remote origin refs/heads/main | cut -f1)"
           test -n "$SOURCE_SHA"
           git fetch --depth=1 origin "$SOURCE_SHA"
           git checkout --detach "$SOURCE_SHA"
@@ -69,7 +57,7 @@ jobs:
           KEEP_CLUSTER: "${{ inputs.keep_cluster }}"
           KIND_CLUSTER_NAME: "kwatch-extended-${{ github.run_id }}"
           ARTIFACTS: "${{ runner.temp }}/kwatch-kind-extended-e2e"
-          SOURCE_REF: "${{ inputs.source_ref }}"
+          SOURCE_REF: main
         run: ./scripts/test-kind-extended-scenarios.sh
 
       - name: Upload extended Kind diagnostics

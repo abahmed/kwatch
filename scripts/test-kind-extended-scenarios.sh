@@ -55,7 +55,8 @@ EOF
 }
 
 cleanup() {
-	status=$?
+	status=${1:-$?}
+	trap - EXIT INT TERM
 	if [ "$cluster_created" = true ]; then
 		collect_diagnostics
 		if [ "$KEEP_CLUSTER" != true ]; then
@@ -133,16 +134,17 @@ kubectl -n kwatch-e2e-system rollout status \
 	deployment/kwatch-e2e-receiver --timeout=5m
 
 set +e
-KWATCH_E2E=true \
-KWATCH_EXTENDED=true \
-KWATCH_IMAGE="$KWATCH_IMAGE" \
-WORKLOAD_IMAGE="$WORKLOAD_IMAGE" \
-SCENARIO_REGEX="$SCENARIO_REGEX" \
-SUITE_TIMEOUT="$SUITE_TIMEOUT" \
-go test -tags=e2e -count=1 ./test/e2e/... \
+env \
+	KWATCH_E2E=true \
+	KWATCH_EXTENDED=true \
+	KWATCH_IMAGE="$KWATCH_IMAGE" \
+	WORKLOAD_IMAGE="$WORKLOAD_IMAGE" \
+	SCENARIO_REGEX="$SCENARIO_REGEX" \
+	SUITE_TIMEOUT="$SUITE_TIMEOUT" \
+	go test -tags=e2e -count=1 ./test/e2e/... \
 	-timeout "$SUITE_TIMEOUT" -run "$SCENARIO_REGEX" \
 	>"$ARTIFACTS/go-test.log" 2>&1
 status=$?
 set -e
 cat "$ARTIFACTS/go-test.log"
-exit "$status"
+cleanup "$status"
