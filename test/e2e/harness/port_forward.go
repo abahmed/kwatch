@@ -79,28 +79,57 @@ func readForwardedPort(stdout, stderr io.Reader) (int, error) {
 	deadline := time.NewTimer(30 * time.Second)
 	defer deadline.Stop()
 	lines := make(chan string, 2)
+	done := make(chan struct{}, 2)
+	stop := make(chan struct{})
+	defer close(stop)
 	read := func(reader io.Reader) {
 		scanner := bufio.NewScanner(reader)
 		for scanner.Scan() {
-			lines <- scanner.Text()
+			select {
+			case lines <- scanner.Text():
+			case <-stop:
+				return
+			}
+		}
+		select {
+		case done <- struct{}{}:
+		case <-stop:
 		}
 	}
 	go read(stdout)
 	go read(stderr)
+	closed := 0
 	for {
 		select {
 		case line := <-lines:
-			match := forwardedPortPattern.FindStringSubmatch(line)
-			if len(match) == 2 {
-				port, err := strconv.Atoi(match[1])
-				if err == nil {
-					return port, nil
-				}
+			if port, ok := parseForwardedPort(line); ok {
+				return port, nil
 			}
 		case <-deadline.C:
 			return 0, fmt.Errorf("port-forward did not report a local port")
+		case <-done:
+			closed++
+			if closed == 2 {
+				for len(lines) > 0 {
+					if port, ok := parseForwardedPort(<-lines); ok {
+						return port, nil
+					}
+				}
+				return 0, fmt.Errorf(
+					"port-forward exited before reporting a local port",
+				)
+			}
 		}
 	}
+}
+
+func parseForwardedPort(line string) (int, bool) {
+	match := forwardedPortPattern.FindStringSubmatch(line)
+	if len(match) != 2 {
+		return 0, false
+	}
+	port, err := strconv.Atoi(match[1])
+	return port, err == nil
 }
 
 func (p *PortForward) URL(path string) string {

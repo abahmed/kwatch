@@ -123,6 +123,7 @@ require_tool go
 
 started_at=$(date -u +%Y-%m-%dT%H:%M:%SZ)
 source_sha=${KWATCH_SOURCE_SHA:-$(git rev-parse HEAD)}
+mkdir -p "$ARTIFACTS"
 if [ "$KWATCH_IMAGE" = kwatch:e2e ]; then
 	KWATCH_IMAGE="kwatch:e2e-${source_sha}"
 	docker build --load --tag "$KWATCH_IMAGE" \
@@ -213,10 +214,10 @@ if [ -n "${SCENARIO_FAMILY:-}" ]; then
 	lifecycle) scenario_regex="TestScenario(Resolution|Restart|Leader|Provider|Configuration)" ;;
 	node) scenario_regex="TestScenarioNode" ;;
 	workload) scenario_regex="TestScenario(Deployment|Job|CronJob|StatefulSet|DaemonSet|PDB|ReplicaSet)" ;;
-	storage) scenario_regex="TestScenarioPersistentVolumeClaim" ;;
+	storage) scenario_regex="TestScenario(PersistentVolumeClaim|ExtendedVolumeAttachment)" ;;
 	networking) scenario_regex="TestScenario(Service|MissingIngress)" ;;
-	security) scenario_regex="TestScenario(Missing|InvalidStartup)" ;;
-	integration) scenario_regex="TestScenario(ActiveProbe|Heartbeat|NodeRecovery|ControlPlane)" ;;
+	security) scenario_regex="TestScenario(Missing|InvalidStartup|ExtendedAdmission)" ;;
+	integration) scenario_regex="TestScenario(ActiveProbe|Heartbeat|NodeRecovery|ControlPlane|ExtendedTLS|ExtendedMetrics)" ;;
 	invalid-config) scenario_regex="TestScenarioInvalid" ;;
 	*) echo "unknown SCENARIO_FAMILY: $SCENARIO_FAMILY" >&2; exit 2 ;;
 	esac

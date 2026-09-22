@@ -29,6 +29,11 @@ type ReceiverRequest struct {
 	JSON     json.RawMessage `json:"json"`
 }
 
+type DeliveryMatch struct {
+	Name   string
+	Reason string
+}
+
 func NewReceiverClient(environment *Environment) *ReceiverClient {
 	return &ReceiverClient{
 		environment: environment,
@@ -81,6 +86,49 @@ func (r *ReceiverClient) WaitForCount(
 	err := wait.PollUntilContextTimeout(ctx, 250*time.Millisecond,
 		10*time.Minute, true, func(ctx context.Context) (bool, error) {
 			current, err := r.Requests(ctx)
+			if err != nil {
+				return false, nil
+			}
+			requests = current
+			return len(current) >= count, nil
+		})
+	return requests, err
+}
+
+func (r *ReceiverClient) Matching(
+	ctx context.Context,
+	match DeliveryMatch,
+) ([]ReceiverRequest, error) {
+	requests, err := r.Requests(ctx)
+	if err != nil {
+		return nil, err
+	}
+	matched := make([]ReceiverRequest, 0, len(requests))
+	for _, request := range requests {
+		var payload map[string]any
+		if json.Unmarshal(request.JSON, &payload) != nil {
+			continue
+		}
+		if match.Name != "" && payload["Name"] != match.Name {
+			continue
+		}
+		if match.Reason != "" && payload["Reason"] != match.Reason {
+			continue
+		}
+		matched = append(matched, request)
+	}
+	return matched, nil
+}
+
+func (r *ReceiverClient) WaitForMatchCount(
+	ctx context.Context,
+	match DeliveryMatch,
+	count int,
+) ([]ReceiverRequest, error) {
+	var requests []ReceiverRequest
+	err := wait.PollUntilContextTimeout(ctx, 250*time.Millisecond,
+		10*time.Minute, true, func(ctx context.Context) (bool, error) {
+			current, err := r.Matching(ctx, match)
 			if err != nil {
 				return false, nil
 			}

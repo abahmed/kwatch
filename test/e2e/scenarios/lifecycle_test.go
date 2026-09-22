@@ -136,6 +136,9 @@ func TestScenarioRestartPersistence(t *testing.T) {
 		e *harness.Environment,
 	) {
 		namespace := uniqueNamespace(t.Name())
+		if err := e.Receiver.Clear(ctx); err != nil {
+			t.Fatal(err)
+		}
 		if err := createNamespace(ctx, e, namespace); err != nil {
 			t.Fatal(err)
 		}
@@ -151,6 +154,14 @@ func TestScenarioRestartPersistence(t *testing.T) {
 			Action:    "create",
 			Count:     1,
 		}); err != nil {
+			t.Fatal(err)
+		}
+		deliveryMatch := harness.DeliveryMatch{
+			Name: "persistent", Reason: "CrashLoopBackOff",
+		}
+		if _, err := e.Receiver.WaitForMatchCount(
+			ctx, deliveryMatch, 1,
+		); err != nil {
 			t.Fatal(err)
 		}
 		leader, err := e.WaitForLeaseHolder(ctx, "kwatch", "kwatch-leader")
@@ -169,18 +180,12 @@ func TestScenarioRestartPersistence(t *testing.T) {
 		); err != nil {
 			t.Fatal(err)
 		}
-		entries, err := e.Audit.WaitFor(ctx, harness.AuditMatch{
-			Namespace: namespace,
-			Resource:  "persistent",
-			Reason:    "CrashLoopBackOff",
-			Action:    "create",
-			Count:     1,
-		})
+		entries, err := e.Receiver.Matching(ctx, deliveryMatch)
 		if err != nil {
 			t.Fatal(err)
 		}
 		if len(entries) != 1 {
-			t.Fatalf("restart duplicated incident creation: %d", len(entries))
+			t.Fatalf("restart changed delivery count: %d", len(entries))
 		}
 		if err := e.AssertHealthy(ctx); err != nil {
 			t.Fatal(err)

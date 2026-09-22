@@ -48,11 +48,6 @@ jobs:
           ref: main
           fetch-depth: 1
 
-      - name: Set up Go
-        uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
-        with:
-          go-version-file: go.mod
-
       - name: Install Kind
         run: |
           curl -fsSL -o kind \
@@ -77,6 +72,11 @@ jobs:
             echo "requested_ref=main"
             echo "resolved_sha=$SOURCE_SHA"
           } > "${RUNNER_TEMP}/kwatch-source.txt"
+
+      - name: Set up Go
+        uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: go.mod
 
       - name: Run all Kind scenarios
         env:

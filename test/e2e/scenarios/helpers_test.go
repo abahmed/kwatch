@@ -35,12 +35,14 @@ func createNamespace(
 
 func cleanupNamespace(t *testing.T, e *harness.Environment, name string) {
 	t.Helper()
-	diagnosticsCtx, diagnosticsCancel := context.WithTimeout(
-		context.Background(), 45*time.Second,
-	)
-	defer diagnosticsCancel()
-	if err := e.CaptureDiagnostics(diagnosticsCtx); err != nil {
-		t.Errorf("capture diagnostics: %v", err)
+	if t.Failed() {
+		diagnosticsCtx, diagnosticsCancel := context.WithTimeout(
+			context.Background(), 45*time.Second,
+		)
+		defer diagnosticsCancel()
+		if err := e.CaptureDiagnostics(diagnosticsCtx); err != nil {
+			t.Errorf("capture diagnostics: %v", err)
+		}
 	}
 	cleanupCtx, cancel := context.WithTimeout(
 		context.Background(), 2*time.Minute,
@@ -78,6 +80,9 @@ func runScenario(
 			t.Fatal(err)
 		}
 		t.Cleanup(func() {
+			if !t.Failed() {
+				return
+			}
 			captureCtx, cancel := context.WithTimeout(
 				context.Background(), 45*time.Second,
 			)
@@ -86,7 +91,11 @@ func runScenario(
 				t.Errorf("capture diagnostics: %v", err)
 			}
 		})
-		run(ctx, t, environment)
+		scenarioCtx, cancel := context.WithTimeout(
+			ctx, config.ScenarioTimeout,
+		)
+		defer cancel()
+		run(scenarioCtx, t, environment)
 		return ctx
 	}).Feature()
 	frameworkEnvironment.Test(t, feature)
