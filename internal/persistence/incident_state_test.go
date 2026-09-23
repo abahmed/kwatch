@@ -305,10 +305,9 @@ func TestSaveBaselineTooLarge(t *testing.T) {
 	assert.Contains(err.Error(), "exceeds budget")
 }
 
-// A snapshot too large for a ConfigMap used to save nothing at all, so a big
-// cluster silently lost every incident on each restart. Keeping the freshest
-// incidents that fit is strictly better than keeping none.
-func TestIncidentStateTrimsToBudgetInsteadOfDroppingAll(t *testing.T) {
+// Active incidents are not disposable history. The persistence writer keeps
+// the complete set so SavePersistedIncidents can shard it atomically.
+func TestIncidentStateKeepsActiveIncidentsForSharding(t *testing.T) {
 	now := time.Now().UTC()
 	// Deliberately incompressible payloads so gzip cannot rescue the size.
 	// A short repeating pattern would simply be compressed away.
@@ -344,25 +343,11 @@ func TestIncidentStateTrimsToBudgetInsteadOfDroppingAll(t *testing.T) {
 
 	kept := trimIncidentsToBudget(big)
 	require.NotEmpty(t, kept, "must keep something rather than nothing")
-	require.Less(t, len(kept), len(big))
+	require.Len(t, kept, len(big))
 
-	fitted, err := gzJSON(kept)
-	require.NoError(t, err)
-	assert.LessOrEqual(
-		t,
-		len(fitted),
-		configMapPayloadMaxBytes,
-		"trimmed payload must fit",
-	)
-
-	// The freshest incident survives; the stalest does not.
+	// The original order is retained for deterministic shard construction.
 	assert.Equal(t, model.IncidentKey("ns:dep-0000:Error:"), kept[0].Key)
-	for _, inc := range kept {
-		assert.NotEqual(t, model.IncidentKey("ns:dep-3999:Error:"), inc.Key,
-			"the stalest incident should be shed first")
-	}
-	t.Logf("%d incidents (%d gz-bytes) -> kept %d (%d gz-bytes, budget %d)",
-		len(big), len(raw), len(kept), len(fitted), configMapPayloadMaxBytes)
+	t.Logf("%d incidents (%d gz-bytes) retained for sharding", len(big), len(raw))
 }
 
 // A snapshot that already fits must pass through untouched.

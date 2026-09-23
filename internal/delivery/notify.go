@@ -8,6 +8,7 @@ import (
 
 	"github.com/abahmed/kwatch/internal/event"
 	"github.com/abahmed/kwatch/internal/insight"
+	"github.com/abahmed/kwatch/internal/message"
 	"github.com/abahmed/kwatch/internal/model"
 )
 
@@ -93,6 +94,13 @@ type InsightThreadProvider interface {
 		action model.IncidentAction,
 		ins *insight.Insight,
 	) error
+}
+
+// StructuredNotificationProvider receives the semantic notification composed
+// once by delivery. It is preferred over legacy provider-specific renderers.
+type StructuredNotificationProvider interface {
+	Provider
+	SendNotification(context.Context, *message.Notification) error
 }
 
 // EventDeliveryProvider is a marker interface for providers whose real

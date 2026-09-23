@@ -1,6 +1,10 @@
 package incident
 
 import (
+	"crypto/sha256"
+	"encoding/hex"
+	"encoding/json"
+	"sort"
 	"strconv"
 	"strings"
 	"sync"
@@ -74,7 +78,50 @@ func notifSig(inc *model.Incident) string {
 	if inc.State == model.StateResolved {
 		st = "resolved"
 	}
-	return st + "|" + string(inc.Severity)
+	fingerprint := notificationFingerprint(inc)
+	return st + "|" + string(inc.Severity) + "|" + fingerprint
+}
+
+// notificationFingerprint contains only changes a user can act on. In
+// particular, observation count and polling timestamps are deliberately
+// absent, so informer resyncs cannot create notification noise.
+func notificationFingerprint(inc *model.Incident) string {
+	services := append([]string(nil), inc.AffectedServices...)
+	sort.Strings(services)
+	memberCount := 0
+	if IsGroupKey(inc.Key) {
+		memberCount = len(inc.AffectedMembers)
+		if memberCount == 0 {
+			memberCount = len(inc.Resources)
+		}
+	}
+	value := struct {
+		Reason      string
+		Severity    model.Severity
+		Resource    string
+		Namespace   string
+		Object      model.ObjectRef
+		Owner       model.ObjectRef
+		Container   string
+		Image       string
+		Node        string
+		Services    []string
+		MemberCount int
+		Facts       model.Facts
+		Suppressed  model.IncidentKey
+	}{
+		Reason: inc.Reason, Severity: inc.Severity, Resource: inc.Resource,
+		Namespace: inc.Namespace, Object: inc.Object, Owner: inc.Owner,
+		Container: inc.ContainerName, Image: inc.Image, Node: inc.NodeName,
+		Services: services, MemberCount: memberCount, Facts: inc.Facts,
+		Suppressed: inc.SuppressedBy,
+	}
+	data, err := json.Marshal(value)
+	if err != nil {
+		return "unknown"
+	}
+	hash := sha256.Sum256(data)
+	return hex.EncodeToString(hash[:8])
 }
 
 // edgeAction returns the action to notify, or ActionSkip if nothing changed.
@@ -82,23 +129,35 @@ func (e *Engine) edgeAction(inc *model.Incident) model.IncidentAction {
 	// Something else is speaking for this incident. It resolves and expires
 	// silently; ReleaseSuppressed clears the flag before asking again.
 	if inc.SuppressedBy != "" {
+		metrics.DefaultRegistry().RootCauseSuppressions.Add(1)
 		return model.ActionSkip
 	}
 	sig := notifSig(inc)
 	if sig == inc.NotifiedSig {
+		metrics.DefaultRegistry().DuplicateTransitions.Add(1)
 		return model.ActionSkip
 	}
 	prev := inc.NotifiedSig
 	inc.NotifiedSig = sig
 	inc.LastNotifiedAt = e.now()
+	inc.Revision++
+	inc.LastRenderedHash = notificationFingerprint(inc)
+	inc.LastAffectedCount = len(inc.Resources)
+	if len(inc.AffectedMembers) > 0 {
+		inc.LastAffectedCount = len(inc.AffectedMembers)
+	}
 	if inc.State == model.StateResolved {
+		inc.LastAction = model.ActionResolved
+		inc.LastRecoveryRevision = inc.Revision
 		metrics.DefaultRegistry().IncidentsResolved.Add(1)
 		return model.ActionResolved
 	}
 	if prev == "" {
+		inc.LastAction = model.ActionCreate
 		metrics.DefaultRegistry().IncidentsCreate.Add(1)
 		return model.ActionCreate
 	}
+	inc.LastAction = model.ActionUpdate
 	metrics.DefaultRegistry().IncidentsUpdate.Add(1)
 	return model.ActionUpdate
 }

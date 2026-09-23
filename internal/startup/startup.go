@@ -3,14 +3,17 @@ package startup
 import (
 	"context"
 	"fmt"
+	"os"
 	"time"
 
+	"github.com/google/uuid"
 	"k8s.io/klog/v2"
 
 	"github.com/abahmed/kwatch/internal/clock"
 	"github.com/abahmed/kwatch/internal/config"
 	"github.com/abahmed/kwatch/internal/constant"
 	"github.com/abahmed/kwatch/internal/format"
+	"github.com/abahmed/kwatch/internal/model"
 	"github.com/abahmed/kwatch/internal/version"
 )
 
@@ -26,6 +29,37 @@ type StateStore interface {
 	SetLastSeen(context.Context, time.Time) error
 }
 
+type startupAnnouncementStore interface {
+	ClaimStartupAnnouncement(context.Context, string) (bool, error)
+}
+
+type runtimeSessionStore interface {
+	GetRuntimeSession(context.Context) (model.RuntimeSession, error)
+	SaveRuntimeSession(context.Context, model.RuntimeSession) error
+}
+
+// RestartEvidence is the bounded, application-owned evidence used to explain
+// an incomplete monitoring session. Startup does not depend on client-go;
+// the application supplies this value through EvidenceSource.
+type RestartEvidence struct {
+	PodReason       string
+	ContainerReason string
+	NodeObserved    bool
+	NodeReady       bool
+	NodeReason      string
+	LeaseLost       bool
+	APIUnavailable  bool
+}
+
+// EvidenceSource adapts Kubernetes state to the startup classification
+// contract. Implementations must return bounded fields and may report no
+// evidence when the previous object has already been removed.
+type EvidenceSource interface {
+	ReadRestartEvidence(
+		context.Context, model.RuntimeSession,
+	) (RestartEvidence, error)
+}
+
 type StartupManager struct {
 	persistenceManager    StateStore
 	disableStartupMessage bool
@@ -35,6 +69,9 @@ type StartupManager struct {
 	downtime       time.Duration
 	currentVersion string
 	clusterID      string
+	session        model.RuntimeSession
+	restartReason  string
+	evidenceSource EvidenceSource
 	now            func() time.Time
 }
 
@@ -48,6 +85,7 @@ type Result struct {
 	Upgrade        bool
 	Downtime       time.Duration
 	ShouldNotify   bool
+	RestartReason  string
 }
 
 // NewStartupManagerWithRuntime constructs startup from the immutable runtime
@@ -56,10 +94,15 @@ func NewStartupManagerWithRuntime(
 	state StateStore,
 	runtime config.RuntimeConfig,
 	now clock.Clock,
+	evidence ...EvidenceSource,
 ) *StartupManager {
-	return newStartupManager(
+	manager := newStartupManager(
 		state, runtime.Application().DisableStartupMessage, now,
 	)
+	if len(evidence) > 0 {
+		manager.evidenceSource = evidence[0]
+	}
+	return manager
 }
 
 func newStartupManager(
@@ -105,9 +148,27 @@ func (s *StartupManager) Start(ctx context.Context) (Result, error) {
 	if err != nil {
 		return Result{}, fmt.Errorf("load monitoring gap: %w", err)
 	}
+	if err := s.loadRuntimeSession(ctx); err != nil {
+		return Result{}, fmt.Errorf("load runtime session: %w", err)
+	}
 
 	s.shouldNotify = (isFirstRun || isUpgrade || s.downtime > 0) &&
 		!s.disableStartupMessage
+	if s.restartReason == "internal_failure" &&
+		!s.disableStartupMessage {
+		s.shouldNotify = true
+	}
+	if s.shouldNotify {
+		claimed, claimErr := s.claimStartupAnnouncement(
+			ctx, isFirstRun, isUpgrade,
+		)
+		if claimErr != nil {
+			return Result{}, fmt.Errorf(
+				"claim startup announcement: %w", claimErr,
+			)
+		}
+		s.shouldNotify = claimed
+	}
 
 	if err := s.persistenceManager.MarkAsInitialized(
 		ctx,
@@ -119,6 +180,56 @@ func (s *StartupManager) Start(ctx context.Context) (Result, error) {
 	s.clusterID = clusterID
 
 	return s.result(isFirstRun, isUpgrade, clusterID), nil
+}
+
+func (s *StartupManager) loadRuntimeSession(ctx context.Context) error {
+	store, ok := s.persistenceManager.(runtimeSessionStore)
+	if !ok {
+		return nil
+	}
+	previous, err := store.GetRuntimeSession(ctx)
+	if err != nil {
+		return err
+	}
+	s.restartReason = classifyRestart(previous)
+	if s.evidenceSource != nil && previous.SessionID != "" &&
+		previous.EndedAt.IsZero() {
+		evidence, evidenceErr := s.evidenceSource.ReadRestartEvidence(
+			ctx, previous,
+		)
+		if evidenceErr != nil {
+			klog.V(2).InfoS(
+				"restart evidence unavailable", "error", evidenceErr,
+			)
+		} else {
+			s.restartReason = classifyWithEvidence(
+				previous, evidence, s.restartReason,
+			)
+		}
+	}
+	s.session = model.RuntimeSession{
+		SessionID:     uuid.NewString(),
+		PodName:       os.Getenv("POD_NAME"),
+		PodUID:        os.Getenv("POD_UID"),
+		NodeName:      os.Getenv("NODE_NAME"),
+		StartedAt:     s.now(),
+		LastHeartbeat: s.now(),
+	}
+	return store.SaveRuntimeSession(ctx, s.session)
+}
+
+func (s *StartupManager) claimStartupAnnouncement(
+	ctx context.Context,
+	firstRun, upgrade bool,
+) (bool, error) {
+	store, ok := s.persistenceManager.(startupAnnouncementStore)
+	if !ok {
+		return true, nil
+	}
+	key := startupClaimKey(
+		s.currentVersion, firstRun, upgrade, s.downtime, s.restartReason,
+	)
+	return store.ClaimStartupAnnouncement(ctx, key)
 }
 
 // HandleStartup is retained for callers that only need the historical error
@@ -139,6 +250,7 @@ func (s *StartupManager) result(
 		Upgrade:        upgrade,
 		Downtime:       s.downtime,
 		ShouldNotify:   s.shouldNotify,
+		RestartReason:  s.restartReason,
 	}
 }
 
@@ -175,6 +287,140 @@ func (s *StartupManager) RecordAlive(ctx context.Context) {
 	if err := s.persistenceManager.SetLastSeen(ctx, s.now()); err != nil {
 		klog.V(2).InfoS("failed to record liveness stamp", "error", err)
 	}
+	if store, ok := s.persistenceManager.(runtimeSessionStore); ok &&
+		s.session.SessionID != "" {
+		s.session.LastHeartbeat = s.now()
+		if err := store.SaveRuntimeSession(ctx, s.session); err != nil {
+			klog.V(2).InfoS("failed to record runtime session", "error", err)
+		}
+	}
+}
+
+// EndSession marks a controlled process stop. An unmarked session is used as
+// evidence of an unexpected termination on the next active start.
+func (s *StartupManager) EndSession(ctx context.Context, reason string) {
+	if s.session.SessionID == "" {
+		return
+	}
+	store, ok := s.persistenceManager.(runtimeSessionStore)
+	if !ok {
+		return
+	}
+	s.session.EndedAt = s.now()
+	s.session.EndReason = normalizeRestartReason(reason)
+	if err := store.SaveRuntimeSession(ctx, s.session); err != nil {
+		klog.V(2).InfoS("failed to close runtime session", "error", err)
+	}
+}
+
+// RecordFailure preserves bounded failure evidence before the final session
+// marker is written. The raw error remains in logs only; persisted state must
+// be safe to expose through diagnostics.
+func (s *StartupManager) RecordFailure(
+	ctx context.Context, component, code string,
+) {
+	if s.session.SessionID == "" {
+		return
+	}
+	store, ok := s.persistenceManager.(runtimeSessionStore)
+	if !ok {
+		return
+	}
+	s.session.FailedComponent = boundedFailureField(component)
+	s.session.FailureCode = normalizeFailureCode(code)
+	if err := store.SaveRuntimeSession(ctx, s.session); err != nil {
+		klog.V(2).InfoS("failed to persist runtime failure", "error", err)
+	}
+}
+
+func boundedFailureField(value string) string {
+	if len(value) > 64 {
+		return value[:64]
+	}
+	return value
+}
+
+func normalizeFailureCode(code string) string {
+	switch code {
+	case "api_unavailable", "leader_handoff", "internal_failure":
+		return code
+	default:
+		return "internal_failure"
+	}
+}
+
+func classifyRestart(previous model.RuntimeSession) string {
+	if previous.SessionID == "" {
+		return ""
+	}
+	if previous.FailureCode != "" {
+		return normalizeRestartReason(previous.FailureCode)
+	}
+	if previous.EndReason != "" {
+		return normalizeRestartReason(previous.EndReason)
+	}
+	if !previous.EndedAt.IsZero() {
+		return ""
+	}
+	if previous.NodeName != "" && previous.NodeName != os.Getenv("NODE_NAME") {
+		return "node_disruption"
+	}
+	if previous.PodName != "" && previous.PodName != os.Getenv("POD_NAME") {
+		return "deployment_rollout"
+	}
+	return "internal_failure"
+}
+
+func classifyWithEvidence(
+	previous model.RuntimeSession,
+	evidence RestartEvidence,
+	fallback string,
+) string {
+	if previous.FailureCode != "" || previous.EndReason != "" {
+		return fallback
+	}
+	if evidence.APIUnavailable {
+		return "api_unavailable"
+	}
+	if evidence.ContainerReason == "OOMKilled" ||
+		evidence.PodReason == "OOMKilled" {
+		return "oom_killed"
+	}
+	if evidence.PodReason == "Evicted" {
+		return "eviction"
+	}
+	if evidence.LeaseLost {
+		return "leader_handoff"
+	}
+	if !evidence.NodeReady &&
+		(evidence.NodeObserved || evidence.NodeReason != "") {
+		return "node_disruption"
+	}
+	return fallback
+}
+
+func startupClaimKey(
+	version string,
+	firstRun, upgrade bool,
+	downtime time.Duration,
+	restartReason string,
+) string {
+	return fmt.Sprintf(
+		"%s|first=%t|upgrade=%t|downtime=%d|reason=%s",
+		version, firstRun, upgrade,
+		downtime.Round(time.Minute).Nanoseconds(), restartReason,
+	)
+}
+
+func normalizeRestartReason(reason string) string {
+	switch reason {
+	case "graceful_shutdown", "deployment_rollout", "leader_handoff",
+		"node_disruption", "eviction", "oom_killed", "internal_failure",
+		"api_unavailable", "unknown":
+		return reason
+	default:
+		return "unknown"
+	}
 }
 
 // StartupMessage returns the one-time startup message when the application
@@ -189,7 +435,7 @@ func (s *StartupManager) StartupMessage() (string, bool) {
 		gapEnd := s.now()
 		gapStart := gapEnd.Add(-s.downtime)
 		msg += fmt.Sprintf(
-			"\n:warning: No monitoring between %s and %s UTC (%s) — anything "+
+			"\n⚠️ No monitoring between %s and %s UTC (%s) — anything "+
 				"that broke in that window went unreported.",
 			gapStart.UTC().Format("15:04"),
 			gapEnd.UTC().Format("15:04"),
@@ -201,7 +447,32 @@ func (s *StartupManager) StartupMessage() (string, bool) {
 			s.downtime.Round(time.Minute),
 		)
 	}
+	if s.restartReason != "" {
+		msg += fmt.Sprintf("\n⚠️ Monitoring resumed after %s.",
+			humanRestartReason(s.restartReason))
+	}
 	return msg, true
+}
+
+func humanRestartReason(reason string) string {
+	switch reason {
+	case "node_disruption":
+		return "a node disruption"
+	case "deployment_rollout":
+		return "a Kwatch rollout"
+	case "leader_handoff":
+		return "a leader handoff"
+	case "eviction":
+		return "an eviction"
+	case "oom_killed":
+		return "an out-of-memory termination"
+	case "api_unavailable":
+		return "a Kubernetes API outage"
+	case "internal_failure":
+		return "an unexpected Kwatch stop"
+	default:
+		return "an interrupted monitoring session"
+	}
 }
 
 // GetPersistenceManager returns the restart-safe persistence manager.

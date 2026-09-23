@@ -7,6 +7,7 @@ import (
 	"github.com/abahmed/kwatch/internal/clock"
 	"github.com/abahmed/kwatch/internal/insight"
 	"github.com/abahmed/kwatch/internal/message"
+	"github.com/abahmed/kwatch/internal/metrics"
 	"github.com/abahmed/kwatch/internal/model"
 
 	slackClient "github.com/slack-go/slack"
@@ -45,6 +46,7 @@ func capBlocks(blocks []slackClient.Block) []slackClient.Block {
 	}
 	kept := blocks[:maxBlocksPerMessage-1]
 	omitted := len(blocks) - len(kept)
+	metrics.DefaultRegistry().RenderedDetailsOmitted.Add(int64(omitted))
 	return append(kept, markdownSection(
 		fmt.Sprintf(
 			"_%d more block(s) omitted to stay within Slack's limit._",
@@ -176,9 +178,6 @@ func metaParts(r *message.Report, inc *model.Incident) []string {
 		if r.State.ExitCode > 0 {
 			parts = append(parts, fmt.Sprintf("exit %d", r.State.ExitCode))
 		}
-	}
-	if r.Summary.Count > 1 {
-		parts = append(parts, fmt.Sprintf("seen ×%d", r.Summary.Count))
 	}
 	if r.Summary.Duration != "" {
 		parts = append(parts, r.Summary.Duration)

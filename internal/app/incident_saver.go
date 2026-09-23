@@ -59,6 +59,9 @@ func startIncidentSaver(
 ) error {
 	var pending stateSnapshot
 	var havePending bool
+	var retryTimer *time.Timer
+	var retryC <-chan time.Time
+	retryDelay := time.Second
 	// Avoid repeated writes when lifecycle ticks serialize identical state.
 	var lastSaved uint64
 	stopHeartbeat := startProgressHeartbeat(ctx, progress)
@@ -73,14 +76,48 @@ func startIncidentSaver(
 				progress()
 			}
 			pending, havePending = snap, true
+			if retryC == nil {
+				var err error
+				lastSaved, err = saveIncidentSnapshot(
+					ctx, persistenceManager, pending, 10*time.Second,
+					lastSaved, report, canWrite,
+				)
+				if err != nil {
+					retryTimer = resetRetryTimer(retryTimer, retryDelay)
+					retryC = retryTimer.C
+					if retryDelay < time.Minute {
+						retryDelay *= 2
+						if retryDelay > time.Minute {
+							retryDelay = time.Minute
+						}
+					}
+				} else {
+					retryDelay = time.Second
+				}
+			}
+		case <-retryC:
+			if !havePending || !writesAllowed(canWrite) {
+				continue
+			}
 			var err error
 			lastSaved, err = saveIncidentSnapshot(
-				ctx, persistenceManager, pending, 10*time.Second, lastSaved,
-				report, canWrite,
+				ctx, persistenceManager, pending, 10*time.Second,
+				lastSaved, report, canWrite,
 			)
 			if err != nil {
-				return err
+				retryTimer = resetRetryTimer(retryTimer, retryDelay)
+				retryC = retryTimer.C
+				if retryDelay < time.Minute {
+					retryDelay *= 2
+					if retryDelay > time.Minute {
+						retryDelay = time.Minute
+					}
+				}
+				continue
 			}
+			retryDelay = time.Second
+			stopRetryTimer(retryTimer)
+			retryC = nil
 		case <-ctx.Done():
 			for {
 				select {

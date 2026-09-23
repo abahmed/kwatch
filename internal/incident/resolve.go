@@ -96,7 +96,24 @@ func (e *Engine) ResolveObserved(obs *model.Observation) {
 	if obs == nil {
 		return
 	}
-	e.markResolved(ObservationKey(obs))
+	e.markResolvedWithResolution(
+		ObservationKey(obs), recoveryResolution(obs),
+	)
+}
+
+func recoveryResolution(obs *model.Observation) *model.Resolution {
+	name := obs.Subject.Describe()
+	if name == "" {
+		name = "the condition"
+	}
+	evidence := "a healthy observation was received"
+	if obs.Hint != "" {
+		evidence = "healthy observation: " + obs.Hint
+	}
+	return &model.Resolution{
+		Summary:  name + " recovered",
+		Evidence: evidence,
+	}
 }
 
 // subjectScoped reports whether a key belongs to exactly one Kubernetes

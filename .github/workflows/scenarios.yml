@@ -28,6 +28,22 @@ on:
         required: false
         default: "60m"
         type: string
+      reported_ref:
+        description: "Release tag or commit to compare with main"
+        required: false
+        default: ""
+        type: string
+      reported_version:
+        description: "Optional human-readable reported Kwatch version"
+        required: false
+        default: ""
+        type: string
+      compare_with_main:
+        description: >-
+          Run the reported ref and latest main in separate Kind clusters
+        required: false
+        default: false
+        type: boolean
 
 permissions:
   contents: read
@@ -40,7 +56,7 @@ jobs:
   scenarios:
     name: Kind regression scenarios
     runs-on: ubuntu-latest
-    timeout-minutes: 75
+    timeout-minutes: 150
     steps:
       - name: Checkout repository
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
@@ -88,11 +104,26 @@ jobs:
           SCENARIO_SHARD: "${{ inputs.shard }}"
           SOURCE_REF: main
           SUITE_TIMEOUT: "${{ inputs.suite_timeout }}"
-        run: ./scripts/test-kind-scenarios.sh
+          REPORTED_REF: "${{ inputs.reported_ref }}"
+          REPORTED_VERSION: "${{ inputs.reported_version }}"
+          COMPARE_WITH_MAIN: "${{ inputs.compare_with_main }}"
+        run: |
+          set -euo pipefail
+          if [ "$COMPARE_WITH_MAIN" = true ]; then
+            test -n "$REPORTED_REF" || {
+              echo "reported_ref is required in compare mode" >&2
+              exit 2
+            }
+            ./scripts/test-kind-scenarios-compare.sh
+          else
+            ./scripts/test-kind-scenarios.sh
+          fi
 
       - name: Upload scenario diagnostics
         if: always()
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        # actions/upload-artifact v7.0.1
+        uses: >-
+          actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
         with:
           name: kwatch-e2e-${{ github.run_id }}
           path: |

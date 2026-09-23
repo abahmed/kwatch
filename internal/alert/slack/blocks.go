@@ -53,7 +53,8 @@ func buildIncidentBlocksWithInsight(
 	}
 
 	if inc.IncludeEvents {
-		if events := strings.TrimSpace(inc.Events); events != "" {
+		events := strings.TrimSpace(message.RedactEvidence(inc.Events))
+		if events != "" {
 			blocks = append(
 				blocks,
 				chunkedSections(
@@ -63,7 +64,8 @@ func buildIncidentBlocksWithInsight(
 		}
 	}
 	if inc.IncludeLogs {
-		if logs := strings.TrimSpace(inc.Logs); logs != "" {
+		logs := strings.TrimSpace(message.RedactEvidence(inc.Logs))
+		if logs != "" {
 			blocks = append(
 				blocks,
 				chunkedSections(evidenceTitle(":memo: *Logs*", inc), logs)...)
@@ -110,7 +112,8 @@ func buildIncidentUpdateBlocksWithInsight(
 	blocks := []slackClient.Block{markdownSection(text)}
 
 	if inc.IncludeEvents {
-		if events := strings.TrimSpace(inc.Events); events != "" {
+		events := strings.TrimSpace(message.RedactEvidence(inc.Events))
+		if events != "" {
 			blocks = append(
 				blocks,
 				chunkedSections(
@@ -120,7 +123,7 @@ func buildIncidentUpdateBlocksWithInsight(
 		}
 	}
 	if inc.IncludeLogs {
-		if logs := strings.TrimSpace(inc.Logs); logs != "" {
+		if logs := strings.TrimSpace(message.RedactEvidence(inc.Logs)); logs != "" {
 			blocks = append(
 				blocks,
 				chunkedSections(evidenceTitle(":memo: *Logs*", inc), logs)...)

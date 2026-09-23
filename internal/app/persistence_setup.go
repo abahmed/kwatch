@@ -305,7 +305,7 @@ func startPersistenceSavers(
 			startFeedbackSaver(
 				ctx, manager, feedbackCh,
 				persistenceStatus(healthServer, "feedback-saver", false, readiness),
-				canWrite, progress,
+				canWrite, now, progress,
 			)
 			return nil
 		},
@@ -461,10 +461,59 @@ func startChangeHistorySaver(
 	canWrite func() bool,
 	progress func(),
 ) error {
-	ticker := time.NewTicker(time.Minute)
+	return startChangeHistorySaverWithInterval(
+		ctx, persistenceManager, tracker, report, canWrite, progress,
+		time.Minute,
+	)
+}
+
+func startChangeHistorySaverWithInterval(
+	ctx context.Context,
+	persistenceManager persistence.ChangeHistoryStore,
+	tracker *kwcontext.ChangeTracker,
+	report func(error),
+	canWrite func() bool,
+	progress func(),
+	interval time.Duration,
+) error {
+	ticker := time.NewTicker(interval)
 	defer ticker.Stop()
+	var retryTimer *time.Timer
+	var retryC <-chan time.Time
+	retryDelay := time.Second
 	stopHeartbeat := startProgressHeartbeat(ctx, progress)
 	defer stopHeartbeat()
+	attempt := func() {
+		if !writesAllowed(canWrite) {
+			return
+		}
+		writeCtx, cancel := context.WithTimeout(ctx, 10*time.Second)
+		err := persistenceManager.SaveChangeHistory(
+			writeCtx, tracker.Snapshot(),
+		)
+		cancel()
+		if err != nil {
+			klog.ErrorS(err, "failed to persist recent change history")
+			if report != nil {
+				report(err)
+			}
+			retryTimer = resetRetryTimer(retryTimer, retryDelay)
+			retryC = retryTimer.C
+			if retryDelay < time.Minute {
+				retryDelay *= 2
+				if retryDelay > time.Minute {
+					retryDelay = time.Minute
+				}
+			}
+			return
+		}
+		if report != nil {
+			report(nil)
+		}
+		retryDelay = time.Second
+		stopRetryTimer(retryTimer)
+		retryC = nil
+	}
 	for {
 		if !writesAllowed(canWrite) {
 			return errComponentCleanStop
@@ -493,18 +542,28 @@ func startChangeHistorySaver(
 			if !writesAllowed(canWrite) {
 				return errComponentCleanStop
 			}
-			if err := persistenceManager.SaveChangeHistory(
-				ctx,
-				tracker.Snapshot(),
-			); err != nil {
-				klog.ErrorS(err, "failed to persist recent change history")
-				if report != nil {
-					report(err)
-				}
-				return err
-			} else if report != nil {
-				report(nil)
-			}
+			attempt()
+		case <-retryC:
+			attempt()
 		}
+	}
+}
+
+func resetRetryTimer(timer *time.Timer, delay time.Duration) *time.Timer {
+	if timer == nil {
+		return time.NewTimer(delay)
+	}
+	stopRetryTimer(timer)
+	timer.Reset(delay)
+	return timer
+}
+
+func stopRetryTimer(timer *time.Timer) {
+	if timer == nil || timer.Stop() {
+		return
+	}
+	select {
+	case <-timer.C:
+	default:
 	}
 }

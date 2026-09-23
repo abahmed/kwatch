@@ -98,6 +98,11 @@ spec:
                   type: boolean
                 includeLogs:
                   type: boolean
+                message:
+                  type: object
+                  properties:
+                    includePrivateLogAddresses:
+                      type: boolean
                 severityByReason:
                   type: object
                   additionalProperties:

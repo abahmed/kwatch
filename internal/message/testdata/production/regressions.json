@@ -1,0 +1,28 @@
+{
+  "cases": [
+    {
+      "id": "oversized-change-history",
+      "observed": "persistence compaction must keep monitoring alive"
+    },
+    {
+      "id": "repeated-startup-baseline",
+      "observed": "one startup announcement per session generation"
+    },
+    {
+      "id": "consecutive-resolutions",
+      "observed": "one resolution per incident lifecycle"
+    },
+    {
+      "id": "shared-metrics-api-failure",
+      "observed": "one root incident for affected HPAs"
+    },
+    {
+      "id": "spot-node-disruption",
+      "observed": "node root with suppressed child delivery"
+    },
+    {
+      "id": "human-alert-without-confidence",
+      "observed": "verified context without confidence percentages"
+    }
+  ]
+}

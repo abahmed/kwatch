@@ -123,7 +123,8 @@ func TestNamespaceFanOutCollapsesIntoOneAlert(t *testing.T) {
 		return
 	}
 
-	// Six owners: the first alerts now; at window end, one alert for all six.
+	// Six owners stay buffered together; at window end, one alert covers all
+	// six without an earlier individual notification.
 	e := newEngine(3)
 	direct := fail(
 		e,
@@ -135,12 +136,7 @@ func TestNamespaceFanOutCollapsesIntoOneAlert(t *testing.T) {
 		"tdesk",
 		"fleet",
 	)
-	assert.Equal(
-		t,
-		[]model.IncidentAction{model.ActionCreate},
-		direct,
-		"only the first owner alerts before the window",
-	)
+	assert.Empty(t, direct, "the first grouping wave is buffered")
 	got := collect(e)
 	n, group := groupCreates(got)
 	require.Equal(t, 1, n, "a namespace-wide fan-out is one event, not six")
@@ -150,31 +146,21 @@ func TestNamespaceFanOutCollapsesIntoOneAlert(t *testing.T) {
 		group.Count,
 		"the collapsed alert must account for every owner, the first included",
 	)
-	var noted, falselyResolved bool
+	var falselyResolved bool
 	for _, g := range got {
 		if g.inc.Key == "dev:readify:ContainersNotReady:" {
-			if g.action == model.ActionUpdate {
-				noted = true
-			}
 			if g.action == model.ActionResolved {
 				falselyResolved = true
 			}
 		}
 	}
-	assert.True(
-		t,
-		noted,
-		"the first owner's thread gets a note pointing at the namespace-wide "+
-			"alert",
-	)
 	assert.False(
 		t,
 		falselyResolved,
 		"a pod that is still down must never be marked resolved",
 	)
 
-	// The first owner recovers later: its own thread gets the resolve.
-	// (collect installed a hook bound to its own slice; rebind to ours.)
+	// One member recovering does not resolve the group or emit a child alert.
 	got = nil
 	e.config.LifecycleHook = func(
 		inc *model.Incident, a model.IncidentAction,
@@ -189,19 +175,16 @@ func TestNamespaceFanOutCollapsesIntoOneAlert(t *testing.T) {
 			ownResolve = true
 		}
 	}
-	assert.True(
-		t,
-		ownResolve,
-		"the first owner resolves on its own thread when it actually recovers",
-	)
+	assert.False(t, ownResolve, "the group owns member resolution")
 
 	// Below the threshold: both owners are plain incidents.
 	e2 := newEngine(3)
 	direct2 := fail(e2, "dev", "readify", "api")
 	got2 := collect(e2)
-	assert.Len(t, direct2, 1, "first owner immediate")
-	require.Len(t, got2, 1, "second owner released as itself at window end")
+	assert.Empty(t, direct2, "both owners wait for the grouping window")
+	require.Len(t, got2, 2, "both owners are released at window end")
 	assert.False(t, IsGroupKey(got2[0].inc.Key))
+	assert.False(t, IsGroupKey(got2[1].inc.Key))
 	assert.Equal(t, model.ActionCreate, got2[0].action)
 
 	// Different namespaces do not merge with each other.

@@ -46,8 +46,10 @@ func makeServerDeps(
 				boot.deliveryManager.Notify(msg)
 			}
 		},
-		recordAlive: boot.startupManager.RecordAlive,
-		closeAudit:  auditLogger.Close, cleanup: cleanup,
+		endSession:    boot.startupManager.EndSession,
+		recordFailure: boot.startupManager.RecordFailure,
+		recordAlive:   boot.startupManager.RecordAlive,
+		closeAudit:    auditLogger.Close, cleanup: cleanup,
 		tlsSweep: optional.tlsSweep, statusRun: optional.statusRun,
 		metricsRun: optional.metricsRun, probeRun: optional.probeRun,
 		kubeletRun: optional.kubeletRun, storageRun: optional.storageRun,

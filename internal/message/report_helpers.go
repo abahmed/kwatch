@@ -58,7 +58,7 @@ func actionEmoji(action model.IncidentAction, severity model.Severity) string {
 		case model.SeverityHigh:
 			return "🟠"
 		case model.SeverityWarning, model.SeverityMedium:
-			return "🟡"
+			return "🟠"
 		default:
 			return "🔵"
 		}

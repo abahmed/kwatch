@@ -110,6 +110,7 @@ func buildServerDeps(
 		incidentEngine,
 		boot.deliveryManager,
 		now,
+		func() bool { return boot.startupResult.ShouldNotify },
 	)
 
 	var cleanup func()

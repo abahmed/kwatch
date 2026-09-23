@@ -1,5 +1,7 @@
 package message
 
+import "github.com/abahmed/kwatch/internal/model"
+
 // Report is a structured, provider-agnostic representation of an incident
 // notification. Sections are populated selectively based on the incident's
 // reason — nil sections are omitted by renderers.
@@ -24,6 +26,7 @@ type Report struct {
 	Runbook     string
 	Fingerprint string
 	Timeline    string
+	Resolution  *model.Resolution
 
 	// Type-specific sections (populated only for relevant reasons)
 	OOM     *OOMSection

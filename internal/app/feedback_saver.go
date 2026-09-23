@@ -39,9 +39,12 @@ func startFeedbackSaver(
 	ch <-chan []insight.RCARecord,
 	report func(error),
 	canWrite func() bool,
+	now func() time.Time,
 	progress func(),
 ) {
 	var pending []insight.RCARecord
+	var retryDelay time.Duration
+	var nextRetry time.Time
 	ticker := time.NewTicker(10 * time.Second)
 	defer ticker.Stop()
 	save := func(writeCtx context.Context, timeout time.Duration) {
@@ -50,6 +53,12 @@ func startFeedbackSaver(
 		}
 		if !writesAllowed(canWrite) {
 			pending = nil
+			retryDelay = 0
+			nextRetry = time.Time{}
+			return
+		}
+		currentTime := now()
+		if !nextRetry.IsZero() && currentTime.Before(nextRetry) {
 			return
 		}
 		fctx, cancel := context.WithTimeout(writeCtx, timeout)
@@ -60,6 +69,15 @@ func startFeedbackSaver(
 				report(err)
 			}
 			cancel()
+			if retryDelay == 0 {
+				retryDelay = time.Second
+			} else if retryDelay < time.Minute {
+				retryDelay *= 2
+				if retryDelay > time.Minute {
+					retryDelay = time.Minute
+				}
+			}
+			nextRetry = currentTime.Add(retryDelay)
 			return
 		}
 		if report != nil {
@@ -67,6 +85,8 @@ func startFeedbackSaver(
 		}
 		cancel()
 		pending = nil
+		retryDelay = 0
+		nextRetry = time.Time{}
 	}
 	for {
 		select {

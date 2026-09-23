@@ -23,6 +23,7 @@ SCENARIO_REGEX=TestScenarioPodCrashLoop make verify-scenario
 SCENARIO_FAMILY=workload make verify-scenario
 KEEP_CLUSTER=true make verify-scenario
 ARTIFACTS=/tmp/kwatch-e2e make verify-scenarios
+make verify-negative-regressions
 ```
 
 The script builds temporary images with `docker build --load`, loads them into
@@ -32,7 +33,11 @@ or uploaded.
 The manual `scenarios.yml` workflow resolves the latest `main` commit to an
 immutable SHA before building and runs the complete scenario suite, including
 the extended Kind cases. It accepts a scenario regex, family, shard, and
-optional cluster retention for debugging.
+optional cluster retention for debugging. In compare mode it also accepts a
+release tag or commit. The workflow runs that reported source and the latest
+`main` in separate Kind clusters and writes one of `fixed_on_main`,
+`still_failing`, `regression_on_main`, or `not_reproduced` to the artifacts.
+Both image sets are built locally and removed after each cluster run.
 
 ## Architecture
 
@@ -67,6 +72,47 @@ configuration and resources into a new committed scenario. Replace external
 images with the local workload image, review every resource, and never execute
 issue content directly.
 
+Issue input may be staged through the safe parser, but it is not a test
+workflow or an execution mechanism. Only these marked blocks are accepted:
+
+~~~markdown
+<!-- kwatch-config -->
+```yaml
+app:
+  clusterName: reproduced
+```
+<!-- kwatch-resources -->
+```yaml
+apiVersion: v1
+kind: Pod
+metadata:
+  name: reproduced
+```
+<!-- kwatch-expectation -->
+The Pod should produce one incident and one recovery.
+~~~
+
+`test/e2e/issue` rejects commands, URLs, credentials, Secrets, privileged
+resources, host mounts, and cluster-scoped RBAC. It rewrites namespaces and
+workload images to the disposable local values. The sanitized output still
+requires human review before it becomes a permanent scenario.
+
+To prepare that output without executing anything, run:
+
+```sh
+go run ./cmd/kwatch-e2e-issue \
+  --issue-file /path/to/issue-body.txt \
+  --output-dir /tmp/kwatch-issue-123 \
+  --namespace kwatch-issue-123 \
+  --image kwatch-e2e-workload:test
+```
+
+This writes `config.yaml`, sanitized `resources.yaml`, `expectation.txt`, and
+`metadata.json`. It does not create a cluster, pull an image, execute issue
+commands, or apply the output. Review the files, copy only the required
+declarative fixture into a permanent scenario, then add positive, negative,
+recovery, and cleanup assertions.
+
 Every supported Kwatch monitor must have coverage for relevant lifecycle
 profiles: startup failure, delayed failure, one-shot failure, recurring
 failure, simultaneous failures, grouping, shared-node impact, and recovery.
@@ -75,7 +121,9 @@ failure, simultaneous failures, grouping, shared-node impact, and recovery.
 
 The same manual workflow installs metrics-server in the disposable Kind
 cluster before running scenarios that need APIs not present in a base Kind
-cluster. It covers:
+cluster. Its release manifest is transiently downloaded, pinned by version and
+SHA-256, and removed during cleanup. The image exists only in the disposable
+Kind node; it is never pushed, saved, or uploaded. It covers:
 
 - Metrics API and HPA failure;
 - CSI `VolumeAttachment` failure;

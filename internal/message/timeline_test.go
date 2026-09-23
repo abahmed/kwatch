@@ -85,3 +85,26 @@ func TestNarrativeEvidenceReadsAsASentence(t *testing.T) {
 	assert.Contains(t, out, "Supporting evidence: warning events were observed.")
 	assert.NotContains(t, out, "This is supported by")
 }
+
+func TestNarrativeOmitsWeakCauseAndConfidence(t *testing.T) {
+	r := &Report{Diagnosis: &DiagnosisSection{
+		Cause:      "a recent change may be related",
+		Pattern:    "recent_change",
+		Confidence: 0.42,
+	}}
+
+	out := Narrative(r)
+	assert.NotContains(t, out, "recent change may be related")
+	assert.NotContains(t, out, "%")
+}
+
+func TestNarrativeRendersVerifiedCauseWithoutConfidence(t *testing.T) {
+	r := &Report{Diagnosis: &DiagnosisSection{
+		Cause:   "the node is not ready",
+		Pattern: "node_failure",
+	}}
+
+	out := Narrative(r)
+	assert.Equal(t, "Cause: the node is not ready.", out)
+	assert.NotContains(t, out, "%")
+}

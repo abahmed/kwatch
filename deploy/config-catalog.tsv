@@ -5,6 +5,7 @@ maxRecentLogLines|integer|50|Alerts|Maximum recent log lines attached to an inci
 containerRestartThreshold|integer|0|Alerts|Alert when a container reaches this cumulative restart count; zero disables it.|active|
 includeEvents|boolean|true|Alerts|Include recent Kubernetes events in incident messages.|active|
 includeLogs|boolean|true|Alerts|Include recent container logs in incident messages.|active|
+message.includePrivateLogAddresses|boolean|false|Alerts|Keep private application addresses visible in evidence; credentials remain redacted.|active|
 namespaces|list|all|Scope|Comma-separated namespaces to watch; leave empty to watch every namespace.|active|
 namespaceSelector|string|empty|Scope|Kubernetes label selector used to choose namespaces.|active|
 reasons|list|all|Scope|Comma-separated event reasons to allow or exclude with a leading !.|active|

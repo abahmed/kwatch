@@ -16,10 +16,26 @@ import (
 // It applies context-adaptive field selection: only sections relevant
 // to the incident's reason are populated.
 type ReportBuilder struct {
-	cluster string
+	cluster                    string
+	includePrivateLogAddresses bool
 	// now is the clock change ages are measured against; injectable for
 	// deterministic tests.
 	now func() time.Time
+}
+
+// NewReportBuilderWithPolicy constructs a builder with the explicit evidence
+// rendering policy used by provider delivery.
+func NewReportBuilderWithPolicy(
+	cluster string,
+	timeSource clock.Clock,
+	includePrivateLogAddresses bool,
+) *ReportBuilder {
+	timeSource = clock.Require(timeSource)
+	return &ReportBuilder{
+		cluster:                    cluster,
+		now:                        timeSource.Now,
+		includePrivateLogAddresses: includePrivateLogAddresses,
+	}
 }
 
 // NewReportBuilderWithClock returns a ReportBuilder with an explicit clock.
@@ -27,11 +43,7 @@ func NewReportBuilderWithClock(
 	cluster string,
 	timeSource clock.Clock,
 ) *ReportBuilder {
-	timeSource = clock.Require(timeSource)
-	return &ReportBuilder{
-		cluster: cluster,
-		now:     timeSource.Now,
-	}
+	return NewReportBuilderWithPolicy(cluster, timeSource, false)
 }
 
 // Build produces a Report from the given incident, action, and optional
@@ -54,6 +66,10 @@ func (rb *ReportBuilder) Build(
 	}
 
 	r.Summary = rb.buildSummary(inc, action)
+	if inc.Resolution != nil {
+		resolution := *inc.Resolution
+		r.Resolution = &resolution
+	}
 	rb.populateIdentity(r, inc)
 	rb.populateState(r, inc)
 	rb.populateDiagnosis(r, inc, ins)
@@ -228,10 +244,14 @@ func (rb *ReportBuilder) populateEvidence(r *Report, inc *model.Incident) {
 
 	r.Evidence = &EvidenceSection{}
 	if inc.IncludeLogs {
-		r.Evidence.Logs = inc.Logs
+		r.Evidence.Logs = RedactEvidenceWithPolicy(
+			inc.Logs, rb.includePrivateLogAddresses,
+		)
 	}
 	if inc.IncludeEvents {
-		r.Evidence.Events = inc.Events
+		r.Evidence.Events = RedactEvidenceWithPolicy(
+			inc.Events, rb.includePrivateLogAddresses,
+		)
 	}
 }
 

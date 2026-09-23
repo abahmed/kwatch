@@ -124,7 +124,8 @@ func TestUnschedulableSuppressedDuringNodeIncident(t *testing.T) {
 		nil,
 	)
 
-	// Unschedulable pod (empty NodeName) — should be suppressed
+	// An unschedulable Pod has no node evidence, so it must not be assigned to
+	// an arbitrary unavailable node.
 	ev := event.Event{
 		PodName:   "p1",
 		Namespace: "ns",
@@ -132,13 +133,13 @@ func TestUnschedulableSuppressedDuringNodeIncident(t *testing.T) {
 		Reason:    "Unschedulable",
 	}
 	_, action := e.processEvent(ev, "deploy-1", nil)
-	assert.Equal(t, model.ActionSkip, action)
+	assert.Equal(t, model.ActionCreate, action)
 
-	// Verify SuppressedPods incremented on the node incident
+	// The node incident remains limited to its bound Pod symptoms.
 	nodeInc := e.findNodeIncident("node-1")
 	if assert.NotNil(t, nodeInc) {
-		assert.Equal(t, 1, nodeInc.SuppressedPods)
-		assert.Equal(t, 1, nodeInc.SuppressedOwners["deploy-1"])
+		assert.Equal(t, 0, nodeInc.SuppressedPods)
+		assert.Empty(t, nodeInc.SuppressedOwners)
 	}
 }
 

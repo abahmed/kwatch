@@ -33,6 +33,7 @@ func (e *Engine) refreshIncident(
 	revived := inc.State == model.StateResolved ||
 		inc.State == model.StatePendingResolve
 	inc.State = model.StateActive
+	inc.Resolution = nil
 	inc.ResolveAt = time.Time{}
 	if revived {
 		inc.RenotifyCount = 0
@@ -89,12 +90,39 @@ func (e *Engine) resolveLocked(
 	inc *model.Incident,
 	now time.Time,
 ) transition {
+	return e.resolveLockedWithResolution(key, inc, now, nil)
+}
+
+func (e *Engine) resolveLockedWithResolution(
+	key model.IncidentKey,
+	inc *model.Incident,
+	now time.Time,
+	resolution *model.Resolution,
+) transition {
+	lastSeen := inc.LastSeen
 	inc.State = model.StateResolved
 	// LastSeen is the end of the incident timeline. A resolve can be caused by
 	// a clean status observation or by a stale/hold-down sweep, so retaining the
 	// last failure timestamp makes the rendered resolution point misleading.
 	inc.LastSeen = now
 	inc.LastUpdate = now
+	if resolution == nil {
+		resolution = &model.Resolution{
+			ObservedAt: now,
+			Summary:    "the condition recovered",
+			Evidence:   "recovery was verified by the lifecycle check",
+			HealthyFor: now.Sub(lastSeen),
+		}
+	} else {
+		resolution = cloneResolution(resolution)
+		if resolution.ObservedAt.IsZero() {
+			resolution.ObservedAt = now
+		}
+		if resolution.HealthyFor == 0 {
+			resolution.HealthyFor = now.Sub(lastSeen)
+		}
+	}
+	inc.Resolution = resolution
 	if inc.Resource == "node" {
 		e.refreshNodeInhibition(inc.Ref().Name)
 	}
@@ -109,6 +137,14 @@ func (e *Engine) resolveLocked(
 		return transition{groupInc, groupAction}
 	}
 	return transition{inc.Clone(), e.edgeAction(inc)}
+}
+
+func cloneResolution(source *model.Resolution) *model.Resolution {
+	if source == nil {
+		return nil
+	}
+	copy := *source
+	return &copy
 }
 
 // holdDownLocked parks a recovered incident until ResolveHoldDown elapses, so
@@ -130,6 +166,13 @@ func (e *Engine) holdDownLocked(inc *model.Incident, now time.Time) {
 // recovered (Resolve) or hand back the observation (ResolveObserved), and
 // never spell a key.
 func (e *Engine) markResolved(key model.IncidentKey) {
+	e.markResolvedWithResolution(key, nil)
+}
+
+func (e *Engine) markResolvedWithResolution(
+	key model.IncidentKey,
+	resolution *model.Resolution,
+) {
 	e.mu.Lock()
 	if e.frozen {
 		e.mu.Unlock()
@@ -159,7 +202,7 @@ func (e *Engine) markResolved(key model.IncidentKey) {
 		e.mu.Unlock()
 		return
 	}
-	t := e.resolveLocked(key, inc, now)
+	t := e.resolveLockedWithResolution(key, inc, now, resolution)
 	e.mu.Unlock()
 
 	e.emit(t)

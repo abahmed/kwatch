@@ -16,6 +16,11 @@ migrated. Current versions are left unchanged. Unsupported future versions and
 malformed metadata are preserved and reported; they are never silently
 overwritten.
 
+Incident shard format v4 changes oversized incident storage: shards use a
+checksum-based generation name and the manifest is the publication point.
+Readers continue to accept format v3 fixed shard names. A rollback to a
+pre-v4 binary requires a backup or reset of a v4 sharded incident snapshot.
+
 ## Consequences
 
 Startup and health diagnostics can show the complete migration outcome rather

@@ -14,8 +14,7 @@ import (
 // Three kinds of cause are recognised, checked in this order — the broadest
 // explanation wins:
 //
-//  1. a node-level condition on the pod's node (or, for a pod with no node,
-//     any active node condition — it probably cannot schedule because of it);
+//  1. a node-level condition on the pod's node;
 //  2. a mass failure on a shared dependency the resource depends on;
 //  3. an incident on the pod's own owning workload (a stuck rollout, a
 //     failing Job).
@@ -89,9 +88,9 @@ func (e *Engine) attribute(
 }
 
 // nodeCauseFor reports whether an active node-level incident explains a pod
-// event, and which node incident to credit. Pods bound to an inhibited node
-// are symptoms of it; unschedulable pods (no node yet) are attributed to the
-// most constrained node when any node is down. Caller must hold e.mu.
+// event, and which node incident to credit. A Pod without a bound node has no
+// evidence tying it to one node, so it remains a scheduling or namespace
+// incident instead of being assigned to an arbitrary unavailable node.
 func (e *Engine) nodeCauseFor(
 	ev event.Event,
 	res string,
@@ -105,10 +104,7 @@ func (e *Engine) nodeCauseFor(
 		}
 		return e.findNodeIncident(ev.NodeName), true
 	}
-	if len(e.activeNodeIncidents) == 0 {
-		return nil, false
-	}
-	return e.findMostConstrainedNodeIncident(), true
+	return nil, false
 }
 
 // coveringMassFailure reports the mass-failure incident, if any, that already

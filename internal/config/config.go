@@ -5,9 +5,19 @@ import (
 	"time"
 )
 
+// MessageConfig controls optional presentation details. Credential redaction
+// is always enabled; this flag only permits private application addresses in
+// otherwise redacted evidence.
+type MessageConfig struct {
+	IncludePrivateLogAddresses bool `yaml:"includePrivateLogAddresses"`
+}
+
 type Config struct {
 	// App general configuration
 	App App `yaml:"app"`
+
+	// Message controls provider-facing evidence rendering.
+	Message MessageConfig `yaml:"message"`
 
 	// Telemetry configures the minimal adoption heartbeat.
 	Telemetry Telemetry `yaml:"telemetry"`

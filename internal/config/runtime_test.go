@@ -93,6 +93,16 @@ func TestCompileRuntimeConfigCapturesSharedOutputPolicy(t *testing.T) {
 	require.True(t, runtime.Monitors().ReportStartup())
 }
 
+func TestCompileRuntimeConfigCapturesMessagePolicy(t *testing.T) {
+	cfg := &Config{Message: MessageConfig{
+		IncludePrivateLogAddresses: true,
+	}}
+
+	runtime := CompileRuntimeConfig(cfg)
+
+	require.True(t, runtime.Delivery().IncludePrivateLogAddresses())
+}
+
 func TestCompileRuntimeConfigCopiesIntegrationPolicies(t *testing.T) {
 	cfg := &Config{
 		PvcMonitor:       PvcMonitor{Enabled: true, Threshold: 80},

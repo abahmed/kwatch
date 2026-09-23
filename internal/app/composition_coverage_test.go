@@ -24,7 +24,7 @@ func TestCompositionBuildsMonitorFamiliesAndOptionalBranches(t *testing.T) {
 	runtime := config.RuntimeConfigFor(&config.Config{})
 	components := composeMonitorComponents(
 		runtime, clientset, client.ClientSet{}, engine,
-		deliveryManager, time.Now,
+		deliveryManager, time.Now, nil,
 	)
 	if components.components.Pod.Processor == nil ||
 		components.components.Workload.SourceConfig == nil {

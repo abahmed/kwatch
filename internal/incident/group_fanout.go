@@ -48,9 +48,9 @@ func (e *Engine) mergeNamespaceFanOut(
 		keys := buckets[scope]
 		entries, firstSeen := e.activeEntriesAcross(keys, now)
 
-		// The first owner in this window was announced immediately rather than
-		// buffered. It is still part of the fan-out: count it, fold it in, and
-		// close its individual thread so the namespace-wide alert owns it.
+		// All eligible owners are buffered during the window. This makes the
+		// first wave atomic from a user's point of view: either one group is
+		// emitted at expiry or the lone member is emitted as an individual.
 		announced := e.announcedEntriesFor(scope, entries)
 		if len(keys)+len(announced) < threshold {
 			continue

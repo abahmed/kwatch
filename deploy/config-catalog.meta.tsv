@@ -5,6 +5,7 @@ maxRecentLogLines|Alerts|Maximum recent log lines attached to an incident.|activ
 containerRestartThreshold|Alerts|Alert when a container reaches this cumulative restart count; zero disables it.|active|
 includeEvents|Alerts|Include recent Kubernetes events in incident messages.|active|
 includeLogs|Alerts|Include recent container logs in incident messages.|active|
+message.includePrivateLogAddresses|Alerts|Keep private application addresses visible in evidence; credentials remain redacted.|active|
 namespaces|Scope|Comma-separated namespaces to watch; leave empty to watch every namespace.|active|
 namespaceSelector|Scope|Kubernetes label selector used to choose namespaces.|active|
 reasons|Scope|Comma-separated event reasons to allow or exclude with a leading !.|active|
