@@ -35,60 +35,144 @@ func startBaselineSaverWithStatus(
 	if interval <= 0 {
 		interval = 10 * time.Second
 	}
-	var pending map[string]map[string]int64
-	var timer *time.Timer
-	var timerC <-chan time.Time
+	state := baselineSaverState{}
 	stopHeartbeat := startProgressHeartbeat(ctx, progress)
 	defer stopHeartbeat()
 	for {
 		select {
 		case b := <-ch:
-			if b == nil {
-				continue
-			}
-			if progress != nil {
-				progress()
-			}
-			pending = b
-			timer = resetBaselineTimer(timer, interval)
-			timerC = timer.C
-		case <-timerC:
+			state.accept(b, interval, progress)
+		case <-state.timerC:
 			if progress != nil {
 				progress()
 			}
 			if !writesAllowed(canWrite) {
 				return errComponentCleanStop
 			}
-			if err := saveBaseline(
-				ctx, persistenceManager, pending, canWrite,
-			); err != nil {
-				klog.ErrorS(err, "failed to save baseline")
-				if report != nil {
-					report(err)
-				}
-				return err
-			} else if report != nil {
-				report(nil)
-			}
+			state.save(ctx, persistenceManager, canWrite, report)
+		case <-state.retryC:
+			state.retry(ctx, persistenceManager, canWrite, report)
 		case <-ctx.Done():
-			if timer != nil {
-				timer.Stop()
-			}
-			if pending != nil && writesAllowed(canWrite) {
-				fctx, cancel := finalWriteContext(ctx)
-				if err := persistenceManager.SaveBaseline(fctx, pending); err != nil {
-					klog.ErrorS(err, "failed to save final baseline")
-					if report != nil {
-						report(err)
-					}
-				} else if report != nil {
-					report(nil)
-				}
-				cancel()
-			}
+			state.finish(ctx, persistenceManager, canWrite, report)
 			return nil
 		}
 	}
+}
+
+type baselineSaverState struct {
+	pending    map[string]map[string]int64
+	timer      *time.Timer
+	timerC     <-chan time.Time
+	retryTimer *time.Timer
+	retryC     <-chan time.Time
+	retryDelay time.Duration
+}
+
+func (s *baselineSaverState) accept(
+	baseline map[string]map[string]int64,
+	interval time.Duration,
+	progress func(),
+) {
+	if baseline == nil {
+		return
+	}
+	if progress != nil {
+		progress()
+	}
+	s.pending = baseline
+	s.timer = resetBaselineTimer(s.timer, interval)
+	s.timerC = s.timer.C
+}
+
+func (s *baselineSaverState) save(
+	ctx context.Context,
+	persistenceManager interface {
+		SaveBaseline(context.Context, map[string]map[string]int64) error
+	},
+	canWrite func() bool,
+	report func(error),
+) {
+	err := saveBaseline(ctx, persistenceManager, s.pending, canWrite)
+	if err != nil {
+		klog.ErrorS(err, "failed to save baseline")
+		if report != nil {
+			report(err)
+		}
+		s.scheduleRetry()
+		return
+	}
+	s.resetRetry(report)
+}
+
+func (s *baselineSaverState) retry(
+	ctx context.Context,
+	persistenceManager interface {
+		SaveBaseline(context.Context, map[string]map[string]int64) error
+	},
+	canWrite func() bool,
+	report func(error),
+) {
+	if s.pending == nil || !writesAllowed(canWrite) {
+		return
+	}
+	err := saveBaseline(ctx, persistenceManager, s.pending, canWrite)
+	if err != nil {
+		klog.ErrorS(err, "failed to retry baseline")
+		if report != nil {
+			report(err)
+		}
+		s.scheduleRetry()
+		return
+	}
+	s.resetRetry(report)
+}
+
+func (s *baselineSaverState) scheduleRetry() {
+	if s.retryDelay == 0 {
+		s.retryDelay = time.Second
+	}
+	s.retryTimer = resetRetryTimer(s.retryTimer, s.retryDelay)
+	s.retryC = s.retryTimer.C
+	s.retryDelay *= 2
+	if s.retryDelay > time.Minute {
+		s.retryDelay = time.Minute
+	}
+}
+
+func (s *baselineSaverState) resetRetry(report func(error)) {
+	if report != nil {
+		report(nil)
+	}
+	s.retryDelay = time.Second
+	stopRetryTimer(s.retryTimer)
+	s.retryC = nil
+}
+
+func (s *baselineSaverState) finish(
+	ctx context.Context,
+	persistenceManager interface {
+		SaveBaseline(context.Context, map[string]map[string]int64) error
+	},
+	canWrite func() bool,
+	report func(error),
+) {
+	if s.timer != nil {
+		s.timer.Stop()
+	}
+	if s.pending == nil || !writesAllowed(canWrite) {
+		return
+	}
+	fctx, cancel := finalWriteContext(ctx)
+	err := persistenceManager.SaveBaseline(fctx, s.pending)
+	if err != nil {
+		klog.ErrorS(err, "failed to save final baseline")
+		if report != nil {
+			report(err)
+		}
+	} else if report != nil {
+		report(nil)
+	}
+	cancel()
 }
 
 func resetBaselineTimer(timer *time.Timer, interval time.Duration) *time.Timer {

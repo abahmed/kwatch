@@ -7,34 +7,36 @@ import (
 
 // Narrative is the provider-neutral explanation of an incident. Providers
 // may wrap it in native formatting, but must not rebuild its meaning.
-// weakCause is the confidence below which a diagnosis is a suggestion rather
-// than a finding.
-//
-// The insight engine will name a cause from graph topology alone -- this
-// workload depends on that ConfigMap, the ConfigMap changed recently -- and
-// then halve its own confidence for having no supporting evidence. The result
-// was a 26% guess introduced with the same words as a 90% certainty:
-// "The strongest signal points to ...". Reading the number is not the reader's
-// job; the sentence should carry its own weight.
-const weakCause = 0.35
+const minimumCauseConfidence = 0.75
 
 // causeSentence states the diagnosis in proportion to how much kwatch
 // actually knows.
 func causeSentence(d *DiagnosisSection) string {
+	if !causeIsRenderable(d) {
+		return ""
+	}
 	cause := strings.TrimSuffix(d.Cause, ".")
-	lead := "The strongest signal points to "
-	if d.Confidence > 0 && d.Confidence < weakCause {
-		lead = "On weak evidence, one possibility is "
+	return "Cause: " + cause + "."
+}
+
+func causeIsRenderable(d *DiagnosisSection) bool {
+	if d == nil || strings.TrimSpace(d.Cause) == "" {
+		return false
 	}
-	if d.Confidence > 0 {
-		return fmt.Sprintf(
-			"%s%s (%.0f%% confidence).",
-			lead,
-			cause,
-			d.Confidence*100,
-		)
+	if deterministicPattern(d.Pattern) {
+		return true
 	}
-	return lead + cause + "."
+	return d.Confidence >= minimumCauseConfidence && len(d.Evidence) > 0
+}
+
+func deterministicPattern(pattern string) bool {
+	switch pattern {
+	case "node_failure", "metrics_api_failure", "service_no_endpoints",
+		"webhook_backend_failure", "owner_unhealthy", "rollout_failure":
+		return true
+	default:
+		return false
+	}
 }
 
 func Narrative(r *Report) string {

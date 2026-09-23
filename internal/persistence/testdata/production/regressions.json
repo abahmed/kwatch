@@ -1,0 +1,25 @@
+{
+  "cases": [
+    {
+      "id": "oversized-change-history",
+      "detailBytes": 71680,
+      "expected": "compaction-without-restart"
+    },
+    {
+      "id": "repeated-startup-baseline",
+      "expected": "one-announcement-claim"
+    },
+    {
+      "id": "consecutive-resolutions",
+      "expected": "one-resolution-per-lifecycle"
+    },
+    {
+      "id": "shared-hpa-failure",
+      "expected": "one-metrics-api-root"
+    },
+    {
+      "id": "node-disruption",
+      "expected": "root-with-suppressed-children"
+    }
+  ]
+}

@@ -52,11 +52,12 @@ type runtimeScope struct {
 }
 
 type runtimeDelivery struct {
-	providerNames []string
-	providers     []ProviderRuntime
-	silences      []SilenceRule
-	templates     map[string]string
-	runbooks      map[string]string
+	providerNames              []string
+	providers                  []ProviderRuntime
+	silences                   []SilenceRule
+	templates                  map[string]string
+	runbooks                   map[string]string
+	includePrivateLogAddresses bool
 }
 
 type runtimePersistence struct {
@@ -148,11 +149,12 @@ func CompileRuntimeConfig(c *Config) RuntimeConfig {
 			suppression:         cloneSuppressionIndex(suppression),
 		},
 		delivery: runtimeDelivery{
-			providerNames: providers,
-			providers:     compileProviderRuntimes(c.Alert, providers),
-			silences:      cloneSilenceRules(c.Silences),
-			templates:     cloneStringMap(c.Templates),
-			runbooks:      cloneStringMap(c.Runbooks),
+			providerNames:              providers,
+			providers:                  compileProviderRuntimes(c.Alert, providers),
+			silences:                   cloneSilenceRules(c.Silences),
+			templates:                  cloneStringMap(c.Templates),
+			runbooks:                   cloneStringMap(c.Runbooks),
+			includePrivateLogAddresses: c.Message.IncludePrivateLogAddresses,
 		},
 		monitors: runtimeMonitors{
 			node:              c.NodeMonitor,

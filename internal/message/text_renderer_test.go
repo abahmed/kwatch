@@ -85,7 +85,7 @@ func TestTextRendererReadsTopDown(t *testing.T) {
 	// Diagnosis comes before the hint and the details without exposing a form.
 	cause, hint, meta := strings.Index(
 		out,
-		"The strongest signal points to",
+		"Cause:",
 	), strings.Index(
 		out,
 		"Hint:",
@@ -149,8 +149,7 @@ func TestTextRendererGroupSubjectIsUsedVerbatim(t *testing.T) {
 		"· Deployment",
 		"the first member's kind does not label a group",
 	)
-	assert.Contains(t, out, "Seen: ×6")
-	assert.Contains(t, out, "Peak: 6 pods")
+	assert.Contains(t, out, "Affected: 6 pods")
 }
 
 // The three text renderers must say the same thing; only the markup may
@@ -196,7 +195,7 @@ func TestTextRendererResolvedIsOneBreath(t *testing.T) {
 	assert.Equal(
 		t,
 		"✅ Resolved — Pod not ready — dev/api · "+
-			"ContainersNotReady\nlasted 2m · 3 occurrences · node ip-10-0-81-7",
+			"ContainersNotReady\nlasted 2m · node ip-10-0-81-7",
 		out,
 	)
 }

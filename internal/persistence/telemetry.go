@@ -10,7 +10,9 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/klog/v2"
 
+	"github.com/abahmed/kwatch/internal/change"
 	kwcontext "github.com/abahmed/kwatch/internal/graphcontext"
+	"github.com/abahmed/kwatch/internal/metrics"
 	"github.com/abahmed/kwatch/internal/model"
 )
 
@@ -21,6 +23,12 @@ const changeHistoryStateKey = "change-history"
 const maxChangeHistoryBytes = 64 * 1024
 
 const maxRCAFeedbackBytes = 64 * 1024
+
+const (
+	maxChangeDetailBytes = 4 * 1024
+	maxChangeFields      = 20
+	maxChangeValueBytes  = 512
+)
 
 const rcaFeedbackKey = "records"
 
@@ -112,23 +120,34 @@ func (s *Manager) SaveChangeHistory(
 	ctx context.Context,
 	changes []kwcontext.Change,
 ) error {
+	originalCount := len(changes)
+	changes = compactChangeHistory(changes)
+	if len(changes) != originalCount {
+		metrics.DefaultRegistry().PersistenceCompactions.Add(1)
+	}
 	for len(changes) > 1 {
 		data, err := json.Marshal(changes)
 		if err != nil {
 			return err
 		}
 		if len(data) <= maxChangeHistoryBytes {
-			return s.changesMgr.UpdateWithRetry(
+			err = s.changesMgr.UpdateWithRetry(
 				ctx,
 				func(cm *corev1.ConfigMap) error {
 					setStringPayload(cm, changeHistoryStateKey, string(data))
 					return nil
 				},
 			)
+			if err == nil {
+				s.recordPersistenceSuccess(len(data))
+			}
+			return err
 		}
 		// Keep the newest half; history is context, not incident state, and
 		// must never block updates to the state ConfigMap.
-		changes = changes[len(changes)/2:]
+		removed := len(changes) / 2
+		metrics.DefaultRegistry().PersistenceOmitted.Add(int64(removed))
+		changes = changes[removed:]
 	}
 	if len(changes) == 1 {
 		data, err := json.Marshal(changes)
@@ -137,19 +156,68 @@ func (s *Manager) SaveChangeHistory(
 		}
 		if len(data) > maxChangeHistoryBytes {
 			return fmt.Errorf(
-				"single change history entry exceeds %d bytes",
+				"compacted change history exceeds %d bytes",
 				maxChangeHistoryBytes,
 			)
 		}
-		return s.changesMgr.UpdateWithRetry(
+		err = s.changesMgr.UpdateWithRetry(
 			ctx,
 			func(cm *corev1.ConfigMap) error {
 				setStringPayload(cm, changeHistoryStateKey, string(data))
 				return nil
 			},
 		)
+		if err == nil {
+			s.recordPersistenceSuccess(len(data))
+		}
+		return err
 	}
 	return nil
+}
+
+// compactChangeHistory bounds user-controlled Kubernetes values before the
+// snapshot is encoded. A single giant object must never make the required
+// history saver fail and take the active leader down.
+func compactChangeHistory(changes []kwcontext.Change) []kwcontext.Change {
+	out := make([]kwcontext.Change, len(changes))
+	for i, current := range changes {
+		current.Detail = compactText(current.Detail, maxChangeDetailBytes)
+		if len(current.Fields) > maxChangeFields {
+			omitted := len(current.Fields) - maxChangeFields
+			current.Additional += omitted
+			metrics.DefaultRegistry().PersistenceOmitted.Add(int64(omitted))
+			current.Fields = current.Fields[:maxChangeFields]
+		}
+		fields := make([]change.FieldChange, len(current.Fields))
+		for j, field := range current.Fields {
+			before, after := field.Before, field.After
+			field.Before = compactText(field.Before, maxChangeValueBytes)
+			field.After = compactText(field.After, maxChangeValueBytes)
+			if before != field.Before || after != field.After {
+				metrics.DefaultRegistry().PersistenceCompactions.Add(1)
+			}
+			fields[j] = field
+		}
+		current.Fields = fields
+		out[i] = current
+	}
+	return out
+}
+
+func compactText(value string, limit int) string {
+	if len(value) <= limit {
+		return value
+	}
+	if limit <= len("…") {
+		return "…"
+	}
+	return value[:limit-len("…")] + "…"
+}
+
+func (s *Manager) recordPersistenceSuccess(size int) {
+	registry := metrics.DefaultRegistry()
+	registry.PersistencePayloadBytes.Store(int64(size))
+	registry.PersistenceLastSuccess.Store(s.now().Unix())
 }
 
 // maxTelemetryStateBytes bounds the kubelet telemetry snapshot. It is

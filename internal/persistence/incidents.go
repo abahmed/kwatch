@@ -53,19 +53,30 @@ func (s *Manager) savePersistedIncidents(
 	incidents []model.PersistedIncident,
 	cleanLegacy bool,
 ) error {
-	return s.incidentsMgr.UpdateWithRetry(ctx, func(cm *corev1.ConfigMap) error {
-		if err := applyIncidents(trimIncidentsToBudget(incidents))(cm); err != nil {
-			return err
-		}
-		if cleanLegacy {
-			// Remove auxiliary keys from the legacy combined ConfigMap only
-			// after their dedicated writes have succeeded.
-			deletePayload(cm, groupsKey)
-			deletePayload(cm, threadsKey)
-			deletePayload(cm, engineKey)
-		}
-		return nil
-	})
+	trimmed := trimIncidentsToBudget(incidents)
+	if data, err := gzJSON(trimmed); err == nil &&
+		len(data) > configMapPayloadMaxBytes {
+		return s.saveIncidentShards(ctx, trimmed, cleanLegacy)
+	}
+	if err := s.incidentsMgr.UpdateWithRetry(
+		ctx, func(cm *corev1.ConfigMap) error {
+			if err := applyIncidents(trimmed)(cm); err != nil {
+				return err
+			}
+			deletePayload(cm, incidentManifestKey)
+			if cleanLegacy {
+				// Remove auxiliary keys from the legacy combined ConfigMap only
+				// after their dedicated writes have succeeded.
+				deletePayload(cm, groupsKey)
+				deletePayload(cm, threadsKey)
+				deletePayload(cm, engineKey)
+			}
+			return nil
+		},
+	); err != nil {
+		return err
+	}
+	return s.garbageCollectIncidentShards(ctx, "")
 }
 
 // trimIncidentsToBudget keeps the largest deterministic prefix that fits the
@@ -89,7 +100,6 @@ func trimIncidentsToBudget(
 		len(data) <= configMapPayloadMaxBytes {
 		return incidents
 	}
-
 	// Active state must survive before resolved history. LastSeen breaks ties
 	// within a state, and Key makes the result stable when timestamps match.
 	trimmed := make([]model.PersistedIncident, len(incidents))
@@ -106,6 +116,19 @@ func trimIncidentsToBudget(
 		}
 		return left.Key < right.Key
 	})
+
+	// The active and pending states are never dropped. If they do not fit,
+	// the caller shards the full snapshot. Only resolved history is eligible
+	// for removal before that point.
+	mandatory := 0
+	for mandatory < len(trimmed) &&
+		trimmed[mandatory].State != model.StateResolved {
+		mandatory++
+	}
+	mandatoryData, mandatoryErr := gzJSON(trimmed[:mandatory])
+	if mandatoryErr != nil || len(mandatoryData) > configMapPayloadMaxBytes {
+		return trimmed
+	}
 
 	// Gzip size grows monotonically for this JSON prefix in practice. The
 	// upper-biased search finds the maximum fitting prefix in O(log n) encodes.
@@ -124,7 +147,7 @@ func trimIncidentsToBudget(
 		}
 		high = middle - 1
 	}
-	if low == 0 {
+	if low < mandatory {
 		// A single incident can itself contain an unexpectedly large hint or
 		// fact. Preserve the old value and let applyIncidents return an error
 		// rather than replacing it with an empty snapshot.
@@ -163,6 +186,9 @@ func incidentStatePriority(state model.IncidentState) int {
 func (s *Manager) LoadPersistedIncidents(
 	ctx context.Context,
 ) ([]model.PersistedIncident, error) {
+	if incidents, found, err := s.loadIncidentShards(ctx); found {
+		return incidents, err
+	}
 	var incidents []model.PersistedIncident
 	err := s.GetIncidents(ctx, &incidents)
 	if err == nil {

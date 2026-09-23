@@ -260,6 +260,14 @@ spec:
             valueFrom:
               fieldRef:
                 fieldPath: metadata.name
+          - name: POD_UID
+            valueFrom:
+              fieldRef:
+                fieldPath: metadata.uid
+          - name: NODE_NAME
+            valueFrom:
+              fieldRef:
+                fieldPath: spec.nodeName
           - name: KWATCH_LEADER_ELECTION_NAME
             value: "kwatch-leader"
           - name: GOMEMLIMIT

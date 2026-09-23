@@ -11,6 +11,7 @@ import (
 	"k8s.io/klog/v2"
 
 	"github.com/abahmed/kwatch/internal/clock"
+	"github.com/abahmed/kwatch/internal/insight"
 	"github.com/abahmed/kwatch/internal/model"
 )
 
@@ -24,17 +25,25 @@ const (
 )
 
 type Entry struct {
-	Timestamp   time.Time `json:"ts"`
-	Action      Action    `json:"action"`
-	IncidentKey string    `json:"incidentKey"`
-	IncidentID  string    `json:"id,omitempty"`
-	Namespace   string    `json:"namespace,omitempty"`
-	Reason      string    `json:"reason,omitempty"`
-	Severity    string    `json:"severity,omitempty"`
-	Name        string    `json:"name,omitempty"`
-	Count       int       `json:"count,omitempty"`
-	Duration    string    `json:"duration,omitempty"`
-	SkipReason  string    `json:"skipReason,omitempty"`
+	Timestamp     time.Time `json:"ts"`
+	Action        Action    `json:"action"`
+	IncidentKey   string    `json:"incidentKey"`
+	IncidentID    string    `json:"id,omitempty"`
+	Namespace     string    `json:"namespace,omitempty"`
+	Reason        string    `json:"reason,omitempty"`
+	Severity      string    `json:"severity,omitempty"`
+	Name          string    `json:"name,omitempty"`
+	Count         int       `json:"count,omitempty"`
+	Duration      string    `json:"duration,omitempty"`
+	SkipReason    string    `json:"skipReason,omitempty"`
+	DeliveryID    string    `json:"deliveryId,omitempty"`
+	Revision      uint64    `json:"revision,omitempty"`
+	GroupKey      string    `json:"groupKey,omitempty"`
+	AffectedCount int       `json:"affectedCount,omitempty"`
+	Pattern       string    `json:"pattern,omitempty"`
+	Confidence    float64   `json:"confidence,omitempty"`
+	EvidenceCount int       `json:"evidenceCount,omitempty"`
+	RenderingHash string    `json:"renderingHash,omitempty"`
 }
 
 type Config struct {
@@ -98,6 +107,14 @@ func (l *AuditLogger) actionFromIncidentAction(a model.IncidentAction) Action {
 }
 
 func (l *AuditLogger) LogIncident(inc *model.Incident, action model.IncidentAction) {
+	l.LogIncidentWithInsight(inc, action, nil)
+}
+
+func (l *AuditLogger) LogIncidentWithInsight(
+	inc *model.Incident,
+	action model.IncidentAction,
+	ins *insight.Insight,
+) {
 	if !l.cfg.Enabled {
 		return
 	}
@@ -105,18 +122,38 @@ func (l *AuditLogger) LogIncident(inc *model.Incident, action model.IncidentActi
 	if !inc.FirstSeen.IsZero() && !inc.LastSeen.IsZero() {
 		duration = inc.LastSeen.Sub(inc.FirstSeen).Round(time.Second).String()
 	}
-	l.log(Entry{
-		Timestamp:   l.now(),
-		Action:      l.actionFromIncidentAction(action),
-		IncidentKey: string(inc.Key),
-		IncidentID:  inc.ID,
-		Namespace:   inc.Namespace,
-		Reason:      inc.Reason,
-		Severity:    string(inc.Severity),
-		Name:        inc.Name,
-		Count:       inc.Count,
-		Duration:    duration,
-	})
+	entry := Entry{
+		Timestamp:     l.now(),
+		Action:        l.actionFromIncidentAction(action),
+		IncidentKey:   string(inc.Key),
+		IncidentID:    inc.ID,
+		Namespace:     inc.Namespace,
+		Reason:        inc.Reason,
+		Severity:      string(inc.Severity),
+		Name:          inc.Name,
+		Count:         inc.Count,
+		Duration:      duration,
+		DeliveryID:    inc.DeliveryID(action),
+		Revision:      inc.Revision,
+		AffectedCount: affectedCount(inc),
+		RenderingHash: inc.LastRenderedHash,
+	}
+	if inc.SuppressedBy != "" {
+		entry.GroupKey = string(inc.SuppressedBy)
+	}
+	if ins != nil {
+		entry.Pattern = ins.Pattern
+		entry.Confidence = ins.Confidence
+		entry.EvidenceCount = len(ins.Evidence)
+	}
+	l.log(entry)
+}
+
+func affectedCount(inc *model.Incident) int {
+	if len(inc.AffectedMembers) > 0 {
+		return len(inc.AffectedMembers)
+	}
+	return inc.PeakResources
 }
 
 func (l *AuditLogger) LogSkip(inc *model.Incident, skipReason string) {

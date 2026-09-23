@@ -1,6 +1,7 @@
 package model
 
 import (
+	"fmt"
 	"time"
 )
 
@@ -21,6 +22,19 @@ type PodSummary struct {
 	PodName      string
 	Reason       string
 	RestartCount int
+}
+
+// AffectedResource is one concrete member represented by a grouped incident.
+// It keeps group rendering independent from the first member's presentation.
+type AffectedResource struct {
+	Ref          ObjectRef     `json:"ref"`
+	Owner        ObjectRef     `json:"owner,omitempty"`
+	Pod          string        `json:"pod,omitempty"`
+	Container    string        `json:"container,omitempty"`
+	Node         string        `json:"node,omitempty"`
+	Reason       string        `json:"reason"`
+	State        IncidentState `json:"state"`
+	RestartCount int           `json:"restartCount,omitempty"`
 }
 
 type IncidentAction int
@@ -201,6 +215,15 @@ type Status struct {
 	// LastContainerState is the most recent container status seen for this
 	// incident; renderers show its message and exit code.
 	LastContainerState *ContainerState
+	Resolution         *Resolution
+	AffectedMembers    []AffectedResource
+}
+
+type Resolution struct {
+	ObservedAt time.Time
+	Summary    string
+	Evidence   string
+	HealthyFor time.Duration
 }
 
 // Evidence is the explanation attached to an incident and the material it
@@ -251,9 +274,23 @@ type Attribution struct {
 // compares against it), LastNotifiedAt and RenotifyCount drive the renotify
 // budget.
 type Delivery struct {
-	NotifiedSig    string
-	LastNotifiedAt time.Time
-	RenotifyCount  int
+	NotifiedSig          string
+	LastNotifiedAt       time.Time
+	RenotifyCount        int
+	Revision             uint64
+	LastAction           IncidentAction
+	LastRenderedHash     string
+	LastAffectedCount    int
+	LastRecoveryRevision uint64
+}
+
+// DeliveryID identifies one user-visible lifecycle transition. It remains
+// stable across provider retries and process restarts.
+func (inc *Incident) DeliveryID(action IncidentAction) string {
+	if inc == nil {
+		return ""
+	}
+	return fmt.Sprintf("%s:%d:%s", inc.ID, inc.Revision, action)
 }
 
 // Clone returns a deep copy of the incident, safe for concurrent use.
@@ -274,6 +311,15 @@ func (inc *Incident) Clone() *Incident {
 	if inc.LastContainerState != nil {
 		cs := *inc.LastContainerState
 		c.LastContainerState = &cs
+	}
+	if inc.Resolution != nil {
+		resolution := *inc.Resolution
+		c.Resolution = &resolution
+	}
+	if len(inc.AffectedMembers) > 0 {
+		c.AffectedMembers = append(
+			[]AffectedResource(nil), inc.AffectedMembers...,
+		)
 	}
 	if inc.SuppressedOwners != nil {
 		c.SuppressedOwners = make(map[string]int, len(inc.SuppressedOwners))

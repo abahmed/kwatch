@@ -31,10 +31,10 @@ func lifecycleHook(
 			}
 		}
 		if action != model.ActionSkip {
-			opts.auditLogger.LogIncident(inc, action)
 			if diagnosis == nil && action != model.ActionResolved {
 				diagnosis = opts.diagnose(inc, action)
 			}
+			opts.auditLogger.LogIncidentWithInsight(inc, action, diagnosis)
 			opts.notify(inc, action, diagnosis)
 		}
 		metrics.DefaultRegistry().ActiveIncidents.Store(

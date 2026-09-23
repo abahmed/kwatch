@@ -32,13 +32,18 @@ const (
 	clusterIDKey           = "cluster-id"
 	versionKey             = "version"
 	stateSchemaVersionKey  = "state-schema-version"
-	currentStateSchema     = "2"
+	currentStateSchema     = "3"
+	currentIncidentSchema  = "4"
 	firstRunKey            = "first-run"
 	notifiedVersionKey     = "notified-version"
 	lastSeenKey            = "last-seen"
+	runtimeSessionKey      = "runtime-session"
+	startupAnnouncementKey = "startup-announcement"
 	telemetryLastSentKey   = "telemetry-last-sent"
 	baselineKey            = "baseline"
 	incidentsKey           = "incidents"
+	incidentManifestKey    = "incidents-manifest"
+	incidentShardPrefix    = "kwatch-incidents-"
 	// groupsKey is a separate entry so the incident payload keeps the exact
 	// format older releases read: a version that does not know about groups
 	// still restores incidents, and this one restores both.

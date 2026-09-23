@@ -77,6 +77,13 @@ Kwatch state ConfigMaps. Migration failures are reported through the health
 diagnostics and must be resolved or rolled back using the release notes before
 restarting the workload.
 
+Incident shard format v4 writes large snapshots as checksum-verified,
+generation-named ConfigMaps. Shards are written first and the manifest is
+published last, so an interrupted write leaves the prior generation restorable.
+The loader accepts format v3's fixed shard names and migrates them on the next
+successful save. Before rolling back to a binary that predates format v4,
+retain a backup of `kwatch-incidents` and restore the pre-v4 incident data.
+
 ## Outages and capacity
 
 Kubernetes API and provider outages are handled through bounded retries and

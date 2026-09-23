@@ -4,9 +4,11 @@ import (
 	"context"
 	"text/template"
 
+	"github.com/abahmed/kwatch/internal/clock"
 	"github.com/abahmed/kwatch/internal/constant"
 	"github.com/abahmed/kwatch/internal/event"
 	"github.com/abahmed/kwatch/internal/insight"
+	"github.com/abahmed/kwatch/internal/message"
 	"github.com/abahmed/kwatch/internal/model"
 )
 
@@ -87,6 +89,12 @@ func (a *Manager) dispatchIncident(
 	if len(tpl) == 0 {
 		tpl = a.globalTemplates()
 	}
+	if sp, ok := p.(StructuredNotificationProvider); ok {
+		n := a.buildNotification(job.inc, job.action, job.insight)
+		return sendWithRetry(ctx, func() error {
+			return sp.SendNotification(ctx, n)
+		}, opts.retry, p.Name())
+	}
 	if ip, ok := p.(InsightThreadProvider); ok {
 		inc := a.fitIncident(entry, job, tpl)
 		return sendWithRetry(ctx, func() error {
@@ -115,6 +123,27 @@ func (a *Manager) dispatchIncident(
 	return sendWithRetry(ctx, func() error {
 		return sendMessage(ctx, p, msg)
 	}, opts.retry, p.Name())
+}
+
+func (a *Manager) buildNotification(
+	inc *model.Incident,
+	action model.IncidentAction,
+	ins *insight.Insight,
+) *message.Notification {
+	rb := message.NewReportBuilderWithPolicy(
+		a.clusterName, clock.Func(a.nowTime),
+		a.includePrivateLogAddresses,
+	)
+	report := rb.Build(inc, action, ins)
+	pattern, confidence, evidence := "", 0.0, 0
+	if ins != nil {
+		pattern = ins.Pattern
+		confidence = ins.Confidence
+		evidence = len(ins.Evidence)
+	}
+	return message.NotificationFromReport(
+		report, inc, pattern, confidence, evidence,
+	)
 }
 
 func sendEvent(

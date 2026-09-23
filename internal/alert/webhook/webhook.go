@@ -121,6 +121,30 @@ func (w *Webhook) SendEvent(ctx context.Context, ev *event.Event) error {
 	return err
 }
 
+// SendNotification delivers the provider-neutral semantic notification. It
+// keeps webhook consumers independent from Slack's presentation model while
+// retaining the same action, summary, evidence, and safe command data.
+func (w *Webhook) SendNotification(
+	ctx context.Context,
+	n *message.Notification,
+) error {
+	if n == nil || n.Action == model.ActionSkip {
+		return nil
+	}
+	payload, err := json.Marshal(struct {
+		Cluster      string                `json:"cluster"`
+		Notification *message.Notification `json:"notification"`
+	}{
+		Cluster:      w.clusterName,
+		Notification: n,
+	})
+	if err != nil {
+		return fmt.Errorf("marshal webhook notification: %w", err)
+	}
+	_, err = w.sender.Send(ctx, w.request(payload))
+	return err
+}
+
 // request builds the call every webhook delivery makes: the user's headers
 // and optional basic auth on top of a JSON POST.
 func (w *Webhook) request(body []byte) transport.Request {

@@ -13,47 +13,59 @@ import (
 // cheap for hot paths; the Prometheus collector below owns exposition and
 // validates the metric contract through the standard client library.
 type Registry struct {
-	IncidentsCreate          atomic.Int64
-	IncidentsUpdate          atomic.Int64
-	IncidentsResolved        atomic.Int64
-	IncidentsGrouped         atomic.Int64
-	NotificationsTotal       atomic.Int64
-	NotificationsDropped     atomic.Int64
-	BaselineSize             atomic.Int64
-	ActiveIncidents          atomic.Int64
-	GraphNodes               atomic.Int64
-	GraphEdges               atomic.Int64
-	APIServerProbeErrors     atomic.Int64
-	APIServerLatencyMs       atomic.Int64
-	ControlPlaneProbeErrors  atomic.Int64
-	InformerWatchErrors      atomic.Int64
-	InformerEvents           atomic.Int64
-	InformerHandlerPanics    atomic.Int64
-	QueueDepth               atomic.Int64
-	ProcessingLatencyMs      atomic.Int64
-	GraphRebuilds            atomic.Int64
-	GraphRebuildLatencyMs    atomic.Int64
-	DeliveryRetries          atomic.Int64
-	DeliveryTerminalErrors   atomic.Int64
-	DeliveryDeadLetters      atomic.Int64
-	DeliveryQueueSaturated   atomic.Int64
-	PersistenceMigrations    atomic.Int64
-	PersistenceMigrationErr  atomic.Int64
-	OptionalAPIUnavailable   atomic.Int64
-	WatcherSyncs             atomic.Int64
-	WatcherSyncFailures      atomic.Int64
-	ComponentDegradations    atomic.Int64
-	ComponentStalls          atomic.Int64
-	ComponentUnexpectedStops atomic.Int64
-	ShutdownTimeouts         atomic.Int64
-	SourceUnavailable        atomic.Int64
-	LeadershipAcquisitions   atomic.Int64
-	LeadershipLosses         atomic.Int64
-	LeaderTakeovers          atomic.Int64
-	TelemetryAttempts        atomic.Int64
-	TelemetrySuccesses       atomic.Int64
-	TelemetryRetries         atomic.Int64
-	TelemetryFailures        [5]atomic.Int64
+	IncidentsCreate            atomic.Int64
+	IncidentsUpdate            atomic.Int64
+	IncidentsResolved          atomic.Int64
+	IncidentsGrouped           atomic.Int64
+	NotificationsTotal         atomic.Int64
+	NotificationsDropped       atomic.Int64
+	BaselineSize               atomic.Int64
+	ActiveIncidents            atomic.Int64
+	GraphNodes                 atomic.Int64
+	GraphEdges                 atomic.Int64
+	APIServerProbeErrors       atomic.Int64
+	APIServerLatencyMs         atomic.Int64
+	ControlPlaneProbeErrors    atomic.Int64
+	InformerWatchErrors        atomic.Int64
+	InformerEvents             atomic.Int64
+	InformerHandlerPanics      atomic.Int64
+	QueueDepth                 atomic.Int64
+	ProcessingLatencyMs        atomic.Int64
+	GraphRebuilds              atomic.Int64
+	GraphRebuildLatencyMs      atomic.Int64
+	DeliveryRetries            atomic.Int64
+	DeliveryTerminalErrors     atomic.Int64
+	DeliveryDeadLetters        atomic.Int64
+	DeliveryQueueSaturated     atomic.Int64
+	PersistenceMigrations      atomic.Int64
+	PersistenceMigrationErr    atomic.Int64
+	OptionalAPIUnavailable     atomic.Int64
+	WatcherSyncs               atomic.Int64
+	WatcherSyncFailures        atomic.Int64
+	ComponentDegradations      atomic.Int64
+	ComponentStalls            atomic.Int64
+	ComponentUnexpectedStops   atomic.Int64
+	ShutdownTimeouts           atomic.Int64
+	SourceUnavailable          atomic.Int64
+	LeadershipAcquisitions     atomic.Int64
+	LeadershipLosses           atomic.Int64
+	LeaderTakeovers            atomic.Int64
+	TelemetryAttempts          atomic.Int64
+	TelemetrySuccesses         atomic.Int64
+	TelemetryRetries           atomic.Int64
+	TelemetryFailures          [5]atomic.Int64
+	PersistenceRetries         atomic.Int64
+	PersistenceCompactions     atomic.Int64
+	PersistenceOmitted         atomic.Int64
+	PersistencePayloadBytes    atomic.Int64
+	PersistenceLastSuccess     atomic.Int64
+	DuplicateTransitions       atomic.Int64
+	GroupSize                  atomic.Int64
+	GroupedChildCount          atomic.Int64
+	RootCauseSuppressions      atomic.Int64
+	RenderedDetailsOmitted     atomic.Int64
+	RedactedValues             atomic.Int64
+	StartupSummariesSuppressed atomic.Int64
 
 	registryOnce sync.Once
 	registry     *prometheus.Registry
@@ -165,6 +177,30 @@ var metricDescs = []*prometheus.Desc{
 		"Failed adoption telemetry operations", []string{"reason"}, nil),
 	prometheus.NewDesc("kwatch_telemetry_retries_total",
 		"Adoption telemetry retries", nil, nil),
+	prometheus.NewDesc("kwatch_persistence_retries_total",
+		"Persistence write retries", nil, nil),
+	prometheus.NewDesc("kwatch_persistence_compactions_total",
+		"Persistence payload compactions", nil, nil),
+	prometheus.NewDesc("kwatch_persistence_omitted_total",
+		"Persistence entries omitted during compaction", nil, nil),
+	prometheus.NewDesc("kwatch_persistence_payload_bytes",
+		"Latest persistence payload size", nil, nil),
+	prometheus.NewDesc("kwatch_persistence_last_success_timestamp_seconds",
+		"Unix timestamp of the last successful persistence write", nil, nil),
+	prometheus.NewDesc("kwatch_lifecycle_duplicate_transitions_total",
+		"Duplicate lifecycle transitions suppressed", nil, nil),
+	prometheus.NewDesc("kwatch_group_size",
+		"Latest smart-group member count", nil, nil),
+	prometheus.NewDesc("kwatch_grouped_children_total",
+		"Grouped child incidents", nil, nil),
+	prometheus.NewDesc("kwatch_root_cause_suppressions_total",
+		"Child incidents suppressed by root causes", nil, nil),
+	prometheus.NewDesc("kwatch_rendered_details_omitted_total",
+		"Provider detail sections omitted by bounds", nil, nil),
+	prometheus.NewDesc("kwatch_redacted_values_total",
+		"Sensitive values redacted before rendering", nil, nil),
+	prometheus.NewDesc("kwatch_startup_summaries_suppressed_total",
+		"Startup summaries suppressed as routine restarts", nil, nil),
 }
 
 var telemetryFailureReasons = [...]string{
@@ -251,6 +287,18 @@ func (r *Registry) Collect(ch chan<- prometheus.Metric) {
 		)
 	}
 	r.collectCounter(ch, 37, r.TelemetryRetries.Load())
+	r.collectCounter(ch, 38, r.PersistenceRetries.Load())
+	r.collectCounter(ch, 39, r.PersistenceCompactions.Load())
+	r.collectCounter(ch, 40, r.PersistenceOmitted.Load())
+	r.collectGauge(ch, 41, r.PersistencePayloadBytes.Load())
+	r.collectGauge(ch, 42, r.PersistenceLastSuccess.Load())
+	r.collectCounter(ch, 43, r.DuplicateTransitions.Load())
+	r.collectGauge(ch, 44, r.GroupSize.Load())
+	r.collectCounter(ch, 45, r.GroupedChildCount.Load())
+	r.collectCounter(ch, 46, r.RootCauseSuppressions.Load())
+	r.collectCounter(ch, 47, r.RenderedDetailsOmitted.Load())
+	r.collectCounter(ch, 48, r.RedactedValues.Load())
+	r.collectCounter(ch, 49, r.StartupSummariesSuppressed.Load())
 }
 
 func (r *Registry) collectCounter(

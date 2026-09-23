@@ -2,10 +2,9 @@ package incident
 
 import (
 	"fmt"
-	"strings"
 	"time"
 
-	"github.com/abahmed/kwatch/internal/enricher"
+	"github.com/abahmed/kwatch/internal/metrics"
 	"github.com/abahmed/kwatch/internal/model"
 )
 
@@ -66,8 +65,9 @@ func (e *Engine) flushOneGroup(
 		e.groupFlushStates[gk],
 		now,
 		e.groupRenotifyCooldown(),
+		len(active),
 	)
-	e.applyGroupFlush(gk, action, now, firstSeen)
+	e.applyGroupFlush(gk, action, now, firstSeen, len(active))
 	// Fold this wave's members into the group's tracker so a later flush can
 	// still batch resolve. The tracker is maintained on every flush path --
 	// including the cooldown-suppressed skip -- so a sustained group keeps a
@@ -91,8 +91,9 @@ func (e *Engine) flushOneGroup(
 	return transition{groupInc, action}, true
 }
 
-// buildGroupIncident assembles the synthetic incident for a flushed group,
-// copying rich data (logs, events, runbook) from the first member.
+// buildGroupIncident assembles a synthetic incident from group-level facts.
+// Member evidence remains on each member and is rendered as bounded affected
+// resource detail; it must never make one member look like the whole group.
 // Caller must hold e.mu.
 func (e *Engine) buildGroupIncident(
 	gk string,
@@ -114,6 +115,24 @@ func (e *Engine) buildGroupIncident(
 			resources[ge.podName] = true
 		}
 	}
+	members := affectedMembers(e, active)
+	if tracker := e.groupResolveTrackers[gk]; tracker != nil {
+		known := make(map[model.IncidentKey]bool, len(active))
+		for _, member := range active {
+			known[member.key] = true
+		}
+		for key := range tracker.members {
+			if known[key] {
+				continue
+			}
+			if inc, ok := e.state[key]; ok {
+				members = append(members, affectedMember(inc, nil))
+				for pod := range inc.Resources {
+					resources[pod] = true
+				}
+			}
+		}
+	}
 	groupInc := &model.Incident{
 		Subject: model.Subject{
 			ID:        incidentID(groupIncKey),
@@ -124,54 +143,56 @@ func (e *Engine) buildGroupIncident(
 			Resource:  active[0].kind,
 		},
 		Status: model.Status{
-			Resources:     resources,
-			PeakResources: len(resources),
-			Count:         len(active),
-			FirstSeen:     firstSeen,
-			LastSeen:      now,
-			Severity:      sev,
+			Resources:       resources,
+			PeakResources:   len(resources),
+			Count:           len(active),
+			FirstSeen:       firstSeen,
+			LastSeen:        now,
+			Severity:        sev,
+			AffectedMembers: members,
 		},
 		Evidence: model.Evidence{
 			Hint: summary,
 		},
 	}
+	registry := metrics.DefaultRegistry()
+	registry.GroupSize.Store(int64(len(active)))
+	registry.GroupedChildCount.Add(int64(len(active)))
 
-	if mem, ok := e.state[active[0].key]; ok {
-		e.carryGroupMemberData(groupInc, mem, summary)
-	}
 	return groupInc
 }
 
-// carryGroupMemberData forwards actionable diagnostics from a group member
-// incident to the group notification. Caller must hold e.mu.
-func (e *Engine) carryGroupMemberData(
-	groupInc, mem *model.Incident,
-	summary string,
-) {
-	if mem.Hint != "" && !strings.Contains(mem.Hint, summary) {
-		groupInc.Hint = enricher.CombineHints(groupInc.Hint, mem.Hint)
+func affectedMembers(e *Engine, entries []groupEntry) []model.AffectedResource {
+	members := make([]model.AffectedResource, 0, len(entries))
+	for _, entry := range entries {
+		inc, ok := e.state[entry.key]
+		if !ok {
+			continue
+		}
+		members = append(members, affectedMember(inc, &entry))
 	}
-	groupInc.Facts = mem.Facts
-	groupInc.Logs = mem.Logs
-	groupInc.IncludeLogs = mem.IncludeLogs
-	groupInc.Events = mem.Events
-	groupInc.EvidencePod = mem.EvidencePod
-	groupInc.AffectedServices = append([]string(nil), mem.AffectedServices...)
-	groupInc.OwnerUnhealthy = mem.OwnerUnhealthy
-	groupInc.IncludeEvents = mem.IncludeEvents
-	groupInc.ContainerName = mem.ContainerName
-	groupInc.OwnerKind = mem.OwnerKind
-	groupInc.Runbook = mem.Runbook
-	groupInc.Image = mem.Image
-	groupInc.NodeName = mem.NodeName
-	groupInc.RestartCount = mem.RestartCount
-	if mem.LastContainerState != nil {
-		cs := *mem.LastContainerState
-		groupInc.LastContainerState = &cs
+	return members
+}
+
+func affectedMember(
+	inc *model.Incident,
+	entry *groupEntry,
+) model.AffectedResource {
+	ref := inc.Ref()
+	pod, container, node, reason := "", "", inc.NodeName, inc.Reason
+	if entry != nil {
+		pod, container, node, reason = entry.podName, entry.containerName,
+			entry.nodeName, entry.reason
+		if pod != "" {
+			ref = model.ObjectRef{
+				Kind: "pod", Namespace: inc.Namespace, Name: pod,
+			}
+		}
 	}
-	groupInc.Containers = make(map[string]bool)
-	for c := range mem.Containers {
-		groupInc.Containers[c] = true
+	return model.AffectedResource{
+		Ref: ref, Owner: inc.Owner, Pod: pod, Container: container,
+		Node: node, Reason: reason, State: inc.State,
+		RestartCount: inc.RestartCount,
 	}
 }
 
@@ -232,9 +253,14 @@ func decideGroupFlush(
 	fs *groupFlushState,
 	now time.Time,
 	cooldown time.Duration,
+	memberCount int,
 ) model.IncidentAction {
 	if fs == nil || !fs.notified {
 		return model.ActionCreate
+	}
+	if memberCount > fs.lastMemberCount &&
+		memberCount-fs.lastMemberCount < memberUpdateThreshold(fs.lastMemberCount) {
+		return model.ActionSkip
 	}
 	if now.After(fs.lastNotifiedAt.Add(cooldown)) {
 		return model.ActionUpdate
@@ -249,17 +275,28 @@ func (e *Engine) applyGroupFlush(
 	gk string,
 	action model.IncidentAction,
 	now, firstSeen time.Time,
+	memberCount int,
 ) {
 	switch action {
 	case model.ActionCreate:
 		e.groupFlushStates[gk] = &groupFlushState{
-			notified:       true,
-			lastNotifiedAt: now,
-			firstSeen:      firstSeen,
+			notified:        true,
+			lastNotifiedAt:  now,
+			firstSeen:       firstSeen,
+			lastMemberCount: memberCount,
 		}
 	case model.ActionUpdate:
 		if fs := e.groupFlushStates[gk]; fs != nil {
 			fs.lastNotifiedAt = now
+			fs.lastMemberCount = memberCount
 		}
 	}
+}
+
+func memberUpdateThreshold(previous int) int {
+	threshold := (previous + 3) / 4
+	if threshold < 3 {
+		return 3
+	}
+	return threshold
 }

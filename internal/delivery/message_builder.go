@@ -62,8 +62,9 @@ func (a *Manager) buildMessage(
 	ins *insight.Insight,
 	templates map[string]*template.Template,
 ) string {
-	rb := message.NewReportBuilderWithClock(
+	rb := message.NewReportBuilderWithPolicy(
 		a.clusterName, clock.Func(a.nowTime),
+		a.includePrivateLogAddresses,
 	)
 	report := rb.Build(inc, action, ins)
 	renderer := message.NewPlainTextRenderer()

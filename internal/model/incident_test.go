@@ -183,3 +183,30 @@ func TestPersistedIncidentJSONRoundTripPreservesResolveAt(t *testing.T) {
 		t.Errorf("LastSeen = %v, want %v", got.LastSeen, now)
 	}
 }
+
+func TestPersistedIncidentRoundTripPreservesGroupMembers(t *testing.T) {
+	inc := &Incident{
+		Subject: Subject{Key: "group:one", Resource: "pod"},
+		Status: Status{AffectedMembers: []AffectedResource{{
+			Ref: ObjectRef{Kind: "pod", Namespace: "payments", Name: "api-1"},
+			Owner: ObjectRef{
+				Kind: "Deployment", Namespace: "payments", Name: "api",
+			},
+			Pod: "api-1", Reason: "CrashLoopBackOff", State: StateActive,
+		}},
+		},
+	}
+	data, err := json.Marshal(inc.ToPersisted())
+	if err != nil {
+		t.Fatalf("marshal: %v", err)
+	}
+	var restored PersistedIncident
+	if err := json.Unmarshal(data, &restored); err != nil {
+		t.Fatalf("unmarshal: %v", err)
+	}
+	got := restored.ToIncident()
+	if !reflect.DeepEqual(got.AffectedMembers, inc.AffectedMembers) {
+		t.Fatalf("members = %#v, want %#v", got.AffectedMembers,
+			inc.AffectedMembers)
+	}
+}

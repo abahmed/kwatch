@@ -4,7 +4,8 @@ import "github.com/abahmed/kwatch/internal/model"
 
 func DefaultConfig() *Config {
 	return &Config{
-		App: App{LogFormatter: "text"},
+		App:     App{LogFormatter: "text"},
+		Message: MessageConfig{IncludePrivateLogAddresses: false},
 		// Official builds report a small anonymous adoption heartbeat once a
 		// week. Development builds and CI remain suppressed.
 		Telemetry:                    Telemetry{Enabled: true},

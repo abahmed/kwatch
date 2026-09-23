@@ -79,6 +79,9 @@ func newBootstrap(
 		persistenceManager,
 		runtime,
 		clockSource,
+		newKubernetesRestartEvidence(
+			clients.Kubernetes, k8s.GetNamespace(),
+		),
 	)
 
 	healthServer := health.NewHealthServerWithClock(

@@ -2,6 +2,22 @@ package model
 
 import "time"
 
+// RuntimeSession records the last active process generation. An incomplete
+// session is evidence of an unclean stop, but its reason is kept bounded so
+// it is safe to expose in diagnostics.
+type RuntimeSession struct {
+	SessionID       string    `json:"sessionID"`
+	PodName         string    `json:"podName,omitempty"`
+	PodUID          string    `json:"podUID,omitempty"`
+	NodeName        string    `json:"nodeName,omitempty"`
+	StartedAt       time.Time `json:"startedAt"`
+	LastHeartbeat   time.Time `json:"lastHeartbeat"`
+	EndedAt         time.Time `json:"endedAt,omitempty"`
+	EndReason       string    `json:"endReason,omitempty"`
+	FailedComponent string    `json:"failedComponent,omitempty"`
+	FailureCode     string    `json:"failureCode,omitempty"`
+}
+
 // PVCSample is the persisted representation of one PVC usage observation.
 // It belongs to the model so monitors depend on a value type, not on the
 // persistence implementation that stores it.
@@ -17,30 +33,37 @@ type PVCSample struct {
 // PersistedIncident is a lightweight serializable subset of Incident,
 // stored in the kwatch-incidents ConfigMap to survive restarts.
 type PersistedIncident struct {
-	Key            IncidentKey     `json:"key"`
-	Fingerprint    string          `json:"fingerprint,omitempty"`
-	Reason         string          `json:"reason"`
-	Namespace      string          `json:"namespace"`
-	Name           string          `json:"name"`
-	Resource       string          `json:"resource"`
-	Count          int             `json:"count"`
-	FirstSeen      time.Time       `json:"firstSeen"`
-	LastSeen       time.Time       `json:"lastSeen"`
-	LastUpdate     time.Time       `json:"lastUpdate,omitempty"`
-	Resources      map[string]bool `json:"resources"`
-	PeakResources  int             `json:"peakResources"`
-	OwnerKind      string          `json:"ownerKind"`
-	RestartCount   int             `json:"restartCount"`
-	Hint           string          `json:"hint"`
-	Facts          Facts           `json:"facts,omitempty"`
-	Severity       Severity        `json:"severity"`
-	State          IncidentState   `json:"state"`
-	ResolveAt      time.Time       `json:"resolveAt,omitempty"`
-	NotifiedSig    string          `json:"notifiedSig"`
-	LastNotifiedAt time.Time       `json:"lastNotifiedAt"`
-	RenotifyCount  int             `json:"renotifyCount"`
-	SuppressedBy   IncidentKey     `json:"suppressedBy,omitempty"`
-	Transient      bool            `json:"transient,omitempty"`
+	Key                  IncidentKey        `json:"key"`
+	Fingerprint          string             `json:"fingerprint,omitempty"`
+	Reason               string             `json:"reason"`
+	Namespace            string             `json:"namespace"`
+	Name                 string             `json:"name"`
+	Resource             string             `json:"resource"`
+	Count                int                `json:"count"`
+	FirstSeen            time.Time          `json:"firstSeen"`
+	LastSeen             time.Time          `json:"lastSeen"`
+	LastUpdate           time.Time          `json:"lastUpdate,omitempty"`
+	Resources            map[string]bool    `json:"resources"`
+	PeakResources        int                `json:"peakResources"`
+	OwnerKind            string             `json:"ownerKind"`
+	RestartCount         int                `json:"restartCount"`
+	Hint                 string             `json:"hint"`
+	Facts                Facts              `json:"facts,omitempty"`
+	Severity             Severity           `json:"severity"`
+	State                IncidentState      `json:"state"`
+	ResolveAt            time.Time          `json:"resolveAt,omitempty"`
+	NotifiedSig          string             `json:"notifiedSig"`
+	LastNotifiedAt       time.Time          `json:"lastNotifiedAt"`
+	RenotifyCount        int                `json:"renotifyCount"`
+	Revision             uint64             `json:"revision,omitempty"`
+	LastAction           IncidentAction     `json:"lastAction,omitempty"`
+	LastRenderedHash     string             `json:"lastRenderedHash,omitempty"`
+	LastAffectedCount    int                `json:"lastAffectedCount,omitempty"`
+	LastRecoveryRevision uint64             `json:"lastRecoveryRevision,omitempty"`
+	Resolution           *Resolution        `json:"resolution,omitempty"`
+	AffectedMembers      []AffectedResource `json:"affectedMembers,omitempty"`
+	SuppressedBy         IncidentKey        `json:"suppressedBy,omitempty"`
+	Transient            bool               `json:"transient,omitempty"`
 }
 
 // ToPersisted converts an Incident into its serializable subset.
@@ -50,30 +73,38 @@ func (inc *Incident) ToPersisted() PersistedIncident {
 		resources[k] = v
 	}
 	return PersistedIncident{
-		Key:            inc.Key,
-		Fingerprint:    inc.Fingerprint,
-		Reason:         inc.Reason,
-		Namespace:      inc.Namespace,
-		Name:           inc.Name,
-		Resource:       inc.Resource,
-		Count:          inc.Count,
-		FirstSeen:      inc.FirstSeen,
-		LastSeen:       inc.LastSeen,
-		LastUpdate:     inc.LastUpdate,
-		Resources:      resources,
-		PeakResources:  inc.PeakResources,
-		OwnerKind:      inc.OwnerKind,
-		RestartCount:   inc.RestartCount,
-		Hint:           inc.Hint,
-		Facts:          inc.Facts.clone(),
-		Severity:       inc.Severity,
-		State:          inc.State,
-		ResolveAt:      inc.ResolveAt,
-		NotifiedSig:    inc.NotifiedSig,
-		LastNotifiedAt: inc.LastNotifiedAt,
-		RenotifyCount:  inc.RenotifyCount,
-		SuppressedBy:   inc.SuppressedBy,
-		Transient:      inc.Transient,
+		Key:                  inc.Key,
+		Fingerprint:          inc.Fingerprint,
+		Reason:               inc.Reason,
+		Namespace:            inc.Namespace,
+		Name:                 inc.Name,
+		Resource:             inc.Resource,
+		Count:                inc.Count,
+		FirstSeen:            inc.FirstSeen,
+		LastSeen:             inc.LastSeen,
+		LastUpdate:           inc.LastUpdate,
+		Resources:            resources,
+		PeakResources:        inc.PeakResources,
+		OwnerKind:            inc.OwnerKind,
+		RestartCount:         inc.RestartCount,
+		Hint:                 inc.Hint,
+		Facts:                inc.Facts.clone(),
+		Severity:             inc.Severity,
+		State:                inc.State,
+		ResolveAt:            inc.ResolveAt,
+		NotifiedSig:          inc.NotifiedSig,
+		LastNotifiedAt:       inc.LastNotifiedAt,
+		RenotifyCount:        inc.RenotifyCount,
+		Revision:             inc.Revision,
+		LastAction:           inc.LastAction,
+		LastRenderedHash:     inc.LastRenderedHash,
+		LastAffectedCount:    inc.LastAffectedCount,
+		LastRecoveryRevision: inc.LastRecoveryRevision,
+		Resolution:           inc.Resolution,
+		AffectedMembers: append([]AffectedResource(nil),
+			inc.AffectedMembers...),
+		SuppressedBy: inc.SuppressedBy,
+		Transient:    inc.Transient,
 	}
 }
 
@@ -112,6 +143,9 @@ func (pi *PersistedIncident) ToIncident() *Incident {
 			ResolveAt:     pi.ResolveAt,
 			Containers:    make(map[string]bool),
 			LastUpdate:    pi.LastUpdate,
+			Resolution:    pi.Resolution,
+			AffectedMembers: append([]AffectedResource(nil),
+				pi.AffectedMembers...),
 		},
 		Evidence: Evidence{
 			Hint:  pi.Hint,
@@ -121,9 +155,14 @@ func (pi *PersistedIncident) ToIncident() *Incident {
 			SuppressedBy: pi.SuppressedBy,
 		},
 		Delivery: Delivery{
-			NotifiedSig:    pi.NotifiedSig,
-			LastNotifiedAt: pi.LastNotifiedAt,
-			RenotifyCount:  pi.RenotifyCount,
+			NotifiedSig:          pi.NotifiedSig,
+			LastNotifiedAt:       pi.LastNotifiedAt,
+			RenotifyCount:        pi.RenotifyCount,
+			Revision:             pi.Revision,
+			LastAction:           pi.LastAction,
+			LastRenderedHash:     pi.LastRenderedHash,
+			LastAffectedCount:    pi.LastAffectedCount,
+			LastRecoveryRevision: pi.LastRecoveryRevision,
 		},
 	}
 	if inc.LastUpdate.IsZero() {
@@ -163,8 +202,9 @@ type PersistedGroup struct {
 	Severity   Severity      `json:"severity"`
 	// Notified and LastNotifiedAt carry the flush state, so a restored group
 	// updates its existing notification instead of creating a second one.
-	Notified       bool      `json:"notified"`
-	LastNotifiedAt time.Time `json:"lastNotifiedAt"`
+	Notified        bool      `json:"notified"`
+	LastNotifiedAt  time.Time `json:"lastNotifiedAt"`
+	LastMemberCount int       `json:"lastMemberCount,omitempty"`
 }
 
 // PersistedEngineState is the incident engine's remaining working memory:

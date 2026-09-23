@@ -68,3 +68,43 @@ func TestHandlerExposesStableMetricContract(t *testing.T) {
 		}
 	}
 }
+
+func TestHandlerExposesReliabilityMetrics(t *testing.T) {
+	r := &Registry{}
+	r.PersistenceRetries.Store(2)
+	r.PersistenceCompactions.Store(3)
+	r.PersistenceOmitted.Store(4)
+	r.PersistencePayloadBytes.Store(5)
+	r.PersistenceLastSuccess.Store(6)
+	r.DuplicateTransitions.Store(7)
+	r.GroupSize.Store(8)
+	r.GroupedChildCount.Store(9)
+	r.RootCauseSuppressions.Store(10)
+	r.RenderedDetailsOmitted.Store(11)
+	r.RedactedValues.Store(12)
+	r.StartupSummariesSuppressed.Store(13)
+
+	rr := httptest.NewRecorder()
+	r.Handler().ServeHTTP(
+		rr, httptest.NewRequest(http.MethodGet, "/metrics", nil),
+	)
+	body := rr.Body.String()
+	for _, metric := range []string{
+		"kwatch_persistence_retries_total 2",
+		"kwatch_persistence_compactions_total 3",
+		"kwatch_persistence_omitted_total 4",
+		"kwatch_persistence_payload_bytes 5",
+		"kwatch_persistence_last_success_timestamp_seconds 6",
+		"kwatch_lifecycle_duplicate_transitions_total 7",
+		"kwatch_group_size 8",
+		"kwatch_grouped_children_total 9",
+		"kwatch_root_cause_suppressions_total 10",
+		"kwatch_rendered_details_omitted_total 11",
+		"kwatch_redacted_values_total 12",
+		"kwatch_startup_summaries_suppressed_total 13",
+	} {
+		if !strings.Contains(body, metric) {
+			t.Fatalf("metrics output is missing %q", metric)
+		}
+	}
+}

@@ -13,6 +13,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes/fake"
 
+	"github.com/abahmed/kwatch/internal/change"
 	kwcontext "github.com/abahmed/kwatch/internal/graphcontext"
 
 	"github.com/abahmed/kwatch/internal/model"
@@ -29,17 +30,46 @@ func TestConfigMapDataSizeCountsKeysAndValues(t *testing.T) {
 	assert.Equal(t, int64(8), configMapDataSize(cm))
 }
 
-func TestSaveChangeHistoryRejectsOneOversizedEntry(t *testing.T) {
+func TestSaveChangeHistoryCompactsOneOversizedEntry(t *testing.T) {
 	manager := newTestManager(
 		fake.NewSimpleClientset(), "kwatch",
 	)
 	changes := []kwcontext.Change{{Detail: strings.Repeat("x", 70*1024)}}
 
 	start := time.Now()
-	err := manager.SaveChangeHistory(context.Background(), changes)
-
-	require.Error(t, err)
+	require.NoError(t, manager.SaveChangeHistory(context.Background(), changes))
 	assert.Less(t, time.Since(start), time.Second)
+	loaded, err := manager.LoadChangeHistory(context.Background())
+	require.NoError(t, err)
+	require.Len(t, loaded, 1)
+	assert.LessOrEqual(t, len(loaded[0].Detail), maxChangeDetailBytes)
+	assert.True(t, strings.HasSuffix(loaded[0].Detail, "…"))
+}
+
+func TestCompactChangeHistoryPreservesIdentityAndCountsOmittedFields(
+	t *testing.T,
+) {
+	fields := make([]change.FieldChange, maxChangeFields+2)
+	for i := range fields {
+		fields[i] = change.FieldChange{
+			Path: "spec.value", Before: strings.Repeat("b", 600),
+			After: strings.Repeat("a", 600), Action: "updated",
+		}
+	}
+	input := []kwcontext.Change{{
+		Resource: "Deployment", Namespace: "prod", Name: "api",
+		Type: kwcontext.ChangeUpdate, Fields: fields,
+	}}
+
+	got := compactChangeHistory(input)
+	require.Len(t, got, 1)
+	assert.Equal(t, "Deployment", got[0].Resource)
+	assert.Equal(t, "prod", got[0].Namespace)
+	assert.Equal(t, "api", got[0].Name)
+	assert.Equal(t, 2, got[0].Additional)
+	require.Len(t, got[0].Fields, maxChangeFields)
+	assert.Len(t, got[0].Fields[0].Before, maxChangeValueBytes)
+	assert.True(t, strings.HasSuffix(got[0].Fields[0].Before, "…"))
 }
 
 func TestSaveChangeHistoryEmptySnapshotIsNoOp(t *testing.T) {

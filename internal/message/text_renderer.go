@@ -110,9 +110,6 @@ func (t textRenderer) RenderResolved(r *Report) string {
 	if r.Summary.Duration != "" {
 		info = append(info, "lasted "+r.Summary.Duration)
 	}
-	if r.Summary.Count > 1 {
-		info = append(info, fmt.Sprintf("%d occurrences", r.Summary.Count))
-	}
 	if r.Summary.Peak > 1 {
 		info = append(info, fmt.Sprintf(
 			"peak %d %s", r.Summary.Peak, resourcePlural(r),
@@ -120,6 +117,14 @@ func (t textRenderer) RenderResolved(r *Report) string {
 	}
 	if r.Identity != nil && r.Identity.Node != "" {
 		info = append(info, "node "+t.m.mono(r.Identity.Node))
+	}
+	if r.Resolution != nil {
+		if r.Resolution.Summary != "" {
+			info = append(info, r.Resolution.Summary)
+		}
+		if r.Resolution.Evidence != "" {
+			info = append(info, r.Resolution.Evidence)
+		}
 	}
 	if len(info) == 0 {
 		return head
@@ -219,11 +224,9 @@ func (t textRenderer) meta(r *Report) string {
 			parts = append(parts, fmt.Sprintf("Restarts: %d", r.State.Restarts))
 		}
 	}
-	if r.Summary.Count > 1 {
-		parts = append(parts, fmt.Sprintf("Seen: ×%d", r.Summary.Count))
-	}
 	if r.Summary.Peak > 1 {
-		parts = append(parts, fmt.Sprintf("Peak: %d pods", r.Summary.Peak))
+		parts = append(parts, fmt.Sprintf("Affected: %d %s",
+			r.Summary.Peak, resourcePlural(r)))
 	}
 	if r.Summary.Duration != "" {
 		parts = append(parts, "Duration: "+r.Summary.Duration)

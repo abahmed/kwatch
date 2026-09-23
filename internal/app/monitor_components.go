@@ -15,6 +15,7 @@ import (
 	"github.com/abahmed/kwatch/internal/health"
 	"github.com/abahmed/kwatch/internal/incident"
 	"github.com/abahmed/kwatch/internal/kubelet"
+	"github.com/abahmed/kwatch/internal/metrics"
 	"github.com/abahmed/kwatch/internal/model"
 	clustermonitor "github.com/abahmed/kwatch/internal/monitor/cluster"
 	networkmonitor "github.com/abahmed/kwatch/internal/monitor/network"
@@ -41,6 +42,7 @@ func composeMonitorComponents(
 	incidentEngine *incident.Engine,
 	deliveryManager *delivery.Manager,
 	now func() time.Time,
+	startupShouldNotify func() bool,
 ) monitorComponents {
 	podEvaluator := podmonitor.NewPolicyEvaluatorWithRuntimeConfig(
 		runtime,
@@ -156,6 +158,10 @@ func composeMonitorComponents(
 		tlsProcessor:    tlsProcessor,
 		tlsConfig:       tlsConfig,
 		startupSummary: func(suppressed map[string]int) {
+			if startupShouldNotify != nil && !startupShouldNotify() {
+				metrics.DefaultRegistry().StartupSummariesSuppressed.Add(1)
+				return
+			}
 			if inc := startup.BuildSummary(
 				runtime.Monitors().ReportStartup(), suppressed,
 			); inc != nil {

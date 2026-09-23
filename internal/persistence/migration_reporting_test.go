@@ -32,7 +32,7 @@ func TestMarkAsInitializedReportsFutureStateSchema(t *testing.T) {
 	require.Equal(t, MigrationUnsupported, result.Status)
 	require.True(t, result.Recoverable)
 	require.False(t, result.MonitoringMayContinue)
-	require.Equal(t, "kwatch-state/schema-v2", result.DestinationFormat)
+	require.Equal(t, "kwatch-state/schema-v3", result.DestinationFormat)
 
 	cm, err := client.CoreV1().ConfigMaps("kwatch").Get(
 		context.Background(), stateConfigMapName, metav1.GetOptions{},

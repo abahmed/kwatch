@@ -147,6 +147,13 @@ func TestAppBaselineAndPersistenceStatusHelpers(t *testing.T) {
 	if _, ok := healthServer.ComponentErrors()["store"]; !ok {
 		t.Fatal("persistence status did not update health")
 	}
+	readiness := newReadinessCoordinator(healthServer)
+	readiness.begin(1, false)
+	requiredStatus := persistenceStatus(
+		healthServer, "required-store", true, readiness,
+	)
+	requiredStatus(errors.New("timeout"))
+	requiredStatus(nil)
 }
 
 func TestAppRestoreRecordHelpers(t *testing.T) {
@@ -251,7 +258,7 @@ func TestAppSaverLifecycleHelpers(t *testing.T) {
 		fake.NewSimpleClientset(), "kwatch", clock.RealClock{},
 	)
 	startFeedbackSaver(ctx, manager, make(chan []insight.RCARecord),
-		nil, func() bool { return true }, nil)
+		nil, func() bool { return true }, time.Now, nil)
 	if err := startIncidentSaver(ctx, manager, make(chan stateSnapshot),
 		nil, func() bool { return true }, nil); err != nil {
 		t.Fatalf("incident saver returned error: %v", err)
@@ -466,7 +473,8 @@ func TestAppOptionalCompositionAndControllerRuntime(t *testing.T) {
 		t.Fatalf("configureControllerRuntime() error = %v", err)
 	}
 	components := composeMonitorComponents(
-		runtime, clientset, boot.clients, engine, deliveryManager, time.Now,
+		runtime, clientset, boot.clients, engine, deliveryManager,
+		time.Now, nil,
 	)
 	created, cleanup, err := newMonitorController(
 		clientset, runtime, components, controller.RuntimeDependencies{

@@ -2,6 +2,7 @@ package slack
 
 import (
 	"context"
+	"encoding/json"
 	"sort"
 
 	"github.com/abahmed/kwatch/internal/insight"
@@ -187,12 +188,18 @@ func (s *Slack) postBlocks(
 func (s *Slack) SnapshotThreads() map[string]string {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	if len(s.threadMap) == 0 {
+	if len(s.threadMap) == 0 && len(s.conversations) == 0 {
 		return nil
 	}
-	out := make(map[string]string, len(s.threadMap))
+	out := make(map[string]string, len(s.threadMap)+len(s.conversations))
 	for key, ts := range s.threadMap {
 		out[key] = ts
+	}
+	for key, state := range s.conversations {
+		encoded, err := json.Marshal(state)
+		if err == nil {
+			out[key] = string(encoded)
+		}
 	}
 	return out
 }
@@ -211,6 +218,13 @@ func (s *Slack) RestoreThreads(saved map[string]string) {
 	sort.Strings(keys)
 	for _, key := range keys {
 		if ts := saved[key]; ts != "" {
+			var state conversationState
+			if json.Unmarshal([]byte(ts), &state) == nil &&
+				state.ThreadTS != "" {
+				s.saveConversation(key, state)
+				s.adoptThread(key, state.ThreadTS)
+				continue
+			}
 			s.adoptThread(key, ts)
 		}
 	}

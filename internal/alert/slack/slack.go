@@ -3,6 +3,7 @@ package slack
 import (
 	"context"
 	"fmt"
+	"hash/fnv"
 	"strings"
 	"sync"
 
@@ -17,7 +18,8 @@ import (
 )
 
 const (
-	chunkSize = 2000
+	chunkSize             = 2000
+	conversationLockCount = 64
 )
 
 type Slack struct {
@@ -42,8 +44,10 @@ type Slack struct {
 	threadMap map[string]string
 	// threadOrder is insertion order for threadMap, so the map can be bounded
 	// by evicting the oldest thread rather than refusing to record new ones.
-	threadOrder []string
-	mu          sync.Mutex
+	threadOrder       []string
+	conversations     map[string]conversationState
+	mu                sync.Mutex
+	conversationLocks [conversationLockCount]sync.Mutex
 
 	// maxThreadMapSize bounds the thread map to prevent unbounded growth.
 	// When exceeded, new threads are not tracked (updates/resolves still work
@@ -57,6 +61,12 @@ type Slack struct {
 	postBlocksFn func(
 		blocks *slackClient.Blocks, threadTS string,
 	) (string, error)
+}
+
+func (s *Slack) conversationLock(key string) *sync.Mutex {
+	hash := fnv.New32a()
+	_, _ = hash.Write([]byte(key))
+	return &s.conversationLocks[hash.Sum32()%conversationLockCount]
 }
 
 // NewSlack returns new Slack instance
@@ -96,6 +106,7 @@ func NewSlack(
 				slackClient.OptionHTTPClient(httpClient),
 			),
 			maxThreadMapSize: 1000,
+			conversations:    make(map[string]conversationState),
 		}
 	}
 
@@ -117,6 +128,7 @@ func NewSlack(
 		maxThreadMapSize: 1000,
 		clusterName:      clusterName,
 		clockSource:      clock.Require(dependencies.Clock),
+		conversations:    make(map[string]conversationState),
 		sendContext: func(
 			ctx context.Context,
 			url string,
@@ -127,6 +139,22 @@ func NewSlack(
 			)
 		},
 	}
+}
+
+func (s *Slack) saveConversation(key string, state conversationState) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.conversations == nil {
+		s.conversations = make(map[string]conversationState)
+	}
+	s.conversations[key] = state
+}
+
+func (s *Slack) deleteConversation(key string) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	delete(s.conversations, key)
+	s.forgetThread(key)
 }
 
 // Name returns name of the provider

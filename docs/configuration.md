@@ -125,6 +125,7 @@ talks to the outside world.
 | `app.caBundlePath` | 📜 Path to a PEM CA bundle for outbound HTTP |
 | `includeEvents` | 📋 Include K8s events in alerts (default: true). At most the 40 most recent are attached; older ones are summarised as `... N earlier event(s) omitted`. A churning pod can accumulate hundreds, and an unbounded list pushes the message past the chat provider's size limits, which loses the whole alert rather than just the surplus |
 | `includeLogs` | 📋 Include container logs in alerts (default: true) |
+| `message.includePrivateLogAddresses` | 🌐 Keep private application addresses visible in evidence; credentials remain redacted (default: false) |
 
 ## 💓 Health checks
 

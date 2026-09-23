@@ -77,7 +77,7 @@ func (e *Engine) tryGroupIncident(
 		return false
 	}
 	plan := planGroupEntry(inc, ev, owner)
-	if e.firstOwnerInWindow(
+	if e.config.NamespaceFanOutThreshold <= 0 && e.firstOwnerInWindow(
 		plan.key,
 		plan.entry.reason,
 		ev.Namespace,
@@ -85,7 +85,7 @@ func (e *Engine) tryGroupIncident(
 		inc.Key,
 		now,
 	) {
-		return false // announce now; nothing to group yet
+		return false
 	}
 	e.bufferGroupEntry(plan, now)
 	inc.NotifiedSig = notifSig(inc)
@@ -214,6 +214,11 @@ func (t *groupResolveTracker) resolvedIncident() *model.Incident {
 			LastSeen:  t.lastSeen,
 			State:     model.StateResolved,
 			Severity:  t.severity,
+			Resolution: &model.Resolution{
+				ObservedAt: t.lastSeen,
+				Summary:    "all grouped members recovered",
+				Evidence:   "every tracked member passed a recovery check",
+			},
 		},
 		Evidence: model.Evidence{
 			Hint: t.summary,

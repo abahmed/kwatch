@@ -45,6 +45,8 @@ type serverDeps struct {
 	controllerDone       chan struct{}
 	controllerProgress   *componentProgress
 	notifyStartup        func()
+	endSession           func(context.Context, string)
+	recordFailure        func(context.Context, string, string)
 	notifyStartupSummary func(map[string]int)
 	// recordAlive stamps the liveness marker that lets the next start report
 	// how long monitoring was down.

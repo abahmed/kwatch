@@ -30,19 +30,14 @@ type groupEntry struct {
 }
 
 // ownerWindow records which owners have failed the same way in one namespace
-// during the current grouping window, and which of them were announced
-// immediately rather than buffered.
-//
-// An owner-scoped group ("reason|namespace|owner") can only ever hold one
-// incident, because the incident key is owner-scoped too — so buffering the
-// first owner never groups anything; it only delays the most common alert by a
-// whole window. The first owner is therefore announced at once. Buffering
-// starts with the second owner, which is the earliest moment a namespace-wide
-// fan-out can be told apart from an isolated failure.
+// during the current grouping window. Entries remain buffered until the
+// window expires so a namespace-wide failure can produce one message from the
+// complete first wave instead of an individual alert followed by a group.
 type ownerWindow struct {
 	firstSeen time.Time
 	owners    map[string]bool
-	// owner → incident key announced immediately
+	// announced is retained for persisted-state compatibility. New windows do
+	// not populate it; restored older windows are still safe to read.
 	announced map[string]model.IncidentKey
 }
 
@@ -60,7 +55,8 @@ type groupFlushState struct {
 	lastNotifiedAt time.Time
 	// firstSeen is when the group first became active, carried across
 	// re-flushes so reported durations reflect the real age of the problem.
-	firstSeen time.Time
+	firstSeen       time.Time
+	lastMemberCount int
 }
 
 type groupResolveTracker struct {

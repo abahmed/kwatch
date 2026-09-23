@@ -8,6 +8,8 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes/fake"
+
+	"github.com/abahmed/kwatch/internal/model"
 )
 
 func TestLastSeenAndTelemetryStateRoundTrip(t *testing.T) {
@@ -38,6 +40,38 @@ func TestLastSeenAndTelemetryStateRoundTrip(t *testing.T) {
 	state, err := manager.LoadTelemetryState(context.Background())
 	if err != nil || string(state) != "state" {
 		t.Fatalf("LoadTelemetryState() = %q, %v", state, err)
+	}
+}
+
+func TestRuntimeSessionRoundTrip(t *testing.T) {
+	manager := newTestManager(fake.NewSimpleClientset(), "kwatch")
+	want := model.RuntimeSession{
+		SessionID: "session-1", PodName: "kwatch-0", NodeName: "worker-a",
+		StartedAt: time.Date(2026, 9, 21, 12, 0, 0, 0, time.UTC),
+	}
+	if err := manager.SaveRuntimeSession(context.Background(), want); err != nil {
+		t.Fatalf("SaveRuntimeSession() error = %v", err)
+	}
+	got, err := manager.GetRuntimeSession(context.Background())
+	if err != nil || got.SessionID != want.SessionID ||
+		got.NodeName != want.NodeName {
+		t.Fatalf("GetRuntimeSession() = %+v, %v", got, err)
+	}
+}
+
+func TestStartupAnnouncementClaimIsAtomic(t *testing.T) {
+	manager := newTestManager(fake.NewSimpleClientset(), "kwatch")
+	first, err := manager.ClaimStartupAnnouncement(
+		context.Background(), "v1|first=true",
+	)
+	if err != nil || !first {
+		t.Fatalf("first claim = %t, %v", first, err)
+	}
+	second, err := manager.ClaimStartupAnnouncement(
+		context.Background(), "v1|first=true",
+	)
+	if err != nil || second {
+		t.Fatalf("second claim = %t, %v", second, err)
 	}
 }
 

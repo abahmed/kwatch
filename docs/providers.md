@@ -25,10 +25,11 @@ plain credentials and `${ENV_VAR}` substitutions for sensitive fields.
   Discord, Teams), paging for serious stuff (PagerDuty, Opsgenie, SIGNL4, Squadcast), email
   or SMS if you want a paper trail, and the **Custom Webhook** if you have anything else in
   mind.
-- **Every provider says the same thing.** All 56 providers render from one report — the
-  plain-English headline, the diagnosis (why, impact, what changed), the deduplicated hint,
-  the short image and node names, the evidence. Slack in token mode lays it out as blocks;
-  everyone else gets the same content as text. No provider is a second-class citizen.
+- **Every provider says the same thing.** All providers receive one composed
+  semantic report. Chat providers render it in their native format; text
+  providers receive the same bounded human-readable content; and the generic
+  Webhook provider receives structured notification JSON. No provider is a
+  second-class citizen.
 - **Reliability is built in.** Every provider shares the same routing, retry, and fallback
   controls (shown at the top under Slack — they apply to all providers).
 - **One HTTP path.** Every provider that talks HTTP sends through the same helper

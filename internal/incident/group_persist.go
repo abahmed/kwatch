@@ -38,6 +38,7 @@ func (e *Engine) SnapshotGroups() []model.PersistedGroup {
 			pg.Notified = fs.notified
 			pg.LastNotifiedAt = fs.lastNotifiedAt
 			pg.FirstSeen = fs.firstSeen
+			pg.LastMemberCount = fs.lastMemberCount
 		}
 		if tracker := e.groupResolveTrackers[gk]; tracker != nil {
 			pg.IncidentKey = tracker.groupIncKey
@@ -103,9 +104,10 @@ func (e *Engine) RestoreGroups(groups []model.PersistedGroup) {
 		}
 		if pg.Notified {
 			e.groupFlushStates[pg.GroupKey] = &groupFlushState{
-				notified:       true,
-				lastNotifiedAt: pg.LastNotifiedAt,
-				firstSeen:      pg.FirstSeen,
+				notified:        true,
+				lastNotifiedAt:  pg.LastNotifiedAt,
+				firstSeen:       pg.FirstSeen,
+				lastMemberCount: pg.LastMemberCount,
 			}
 		}
 		if pg.IncidentKey == "" {

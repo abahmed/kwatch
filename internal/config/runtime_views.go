@@ -185,6 +185,10 @@ func (d DeliveryRuntime) Runbooks() map[string]string {
 	return cloneStringMap(d.values.runbooks)
 }
 
+func (d DeliveryRuntime) IncludePrivateLogAddresses() bool {
+	return d.values.includePrivateLogAddresses
+}
+
 // LifecycleRuntime groups lifecycle, health, telemetry, and worker settings.
 type LifecycleRuntime struct {
 	values runtimeOperations

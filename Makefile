@@ -7,7 +7,7 @@
 	verify-focused verify-fast verify-race verify-security \
 	verify-manifests verify-docs verify-operational coverage coverage-check
 
-.PHONY: verify-scenarios verify-scenario
+.PHONY: verify-scenarios verify-scenario verify-negative-regressions
 
 # Binary names
 BINARY_NAME := kwatch
@@ -49,6 +49,7 @@ help:
 	@echo "  make verify-operational Run the disposable Kind production smoke test"
 	@echo "  make verify-scenarios  Run real-cluster regression scenarios"
 	@echo "  make verify-scenario   Run selected real-cluster scenarios"
+	@echo "  make verify-negative-regressions  Run safety regression checks"
 	@echo "  make verify-docs   Validate code-owned documentation metadata"
 	@echo "  make verify-focused PKGS=... Validate only changed package groups"
 	@echo "  make verify-catalogs Verify checked-in generated catalogs"
@@ -187,6 +188,9 @@ verify-scenarios:
 
 verify-scenario:
 	./scripts/test-kind-scenarios.sh
+
+verify-negative-regressions:
+	./scripts/test-negative-regressions.sh
 
 verify-operational:
 	@command -v kind > /dev/null || { \

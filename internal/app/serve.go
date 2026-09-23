@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"os/signal"
+	"strings"
 	"syscall"
 	"time"
 
@@ -143,17 +144,20 @@ func waitShutdown(
 		applicationContext = context.Background()
 	}
 	exitCode := 0
+	var failureErr error
 	select {
 	case <-sigCh:
 		klog.InfoS("shutting down gracefully...")
 	case err := <-supervisor.errCh:
 		if err != nil {
+			failureErr = err
 			klog.ErrorS(err, "controller startup failed, shutting down")
 			exitCode = 1
 		}
 	case <-applicationContext.Done():
 		klog.InfoS("shutting down because the application context was canceled")
 	}
+	recordStartupFailureIfNeeded(deps, exitCode, failureErr)
 	deps.cancel()
 	stopHealthServer(deps)
 	controllerStopped := waitController(deps)
@@ -208,8 +212,47 @@ func waitShutdown(
 			klog.ErrorS(err, "failed to close audit logger")
 		}
 	}
+	if deps.endSession != nil {
+		reason := "graceful_shutdown"
+		if exitCode != 0 {
+			reason = "internal_failure"
+		}
+		deps.endSession(context.Background(), reason)
+	}
 	deps.cleanup()
 	return exitCode
+}
+
+func recordStartupFailureIfNeeded(
+	deps *serverDeps, exitCode int, failureErr error,
+) {
+	if exitCode != 0 {
+		recordStartupFailure(deps, failureErr)
+	}
+}
+
+func recordStartupFailure(deps *serverDeps, failureErr error) {
+	if deps.recordFailure == nil {
+		return
+	}
+	component, code := "application", "internal_failure"
+	if failureErr != nil {
+		parts := strings.SplitN(failureErr.Error(), ":", 2)
+		if strings.TrimSpace(parts[0]) != "" {
+			component = strings.TrimSpace(parts[0])
+		}
+		lower := strings.ToLower(failureErr.Error())
+		if strings.Contains(lower, "kubernetes") ||
+			strings.Contains(lower, "api") ||
+			strings.Contains(lower, "cache sync") {
+			code = "api_unavailable"
+		}
+		if strings.Contains(lower, "leadership") ||
+			strings.Contains(lower, "leader-election") {
+			code = "leader_handoff"
+		}
+	}
+	deps.recordFailure(context.Background(), component, code)
 }
 
 func stopHealthServer(deps *serverDeps) {
