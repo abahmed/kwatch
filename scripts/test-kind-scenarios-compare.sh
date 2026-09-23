@@ -28,7 +28,7 @@ mkdir -p "$ARTIFACTS/reported" "$ARTIFACTS/main"
 reported_sha=$(git rev-parse "$REPORTED_REF^{commit}" 2>/dev/null || true)
 if [ -z "$reported_sha" ]; then
 	git fetch --depth=1 origin "$REPORTED_REF"
-	reported_sha=$(git rev-parse FETCH_HEAD^{commit})
+	reported_sha=$(git rev-parse 'FETCH_HEAD^{commit}')
 fi
 
 reported_root=$(mktemp -d "${TMPDIR:-/tmp}/kwatch-reported.XXXXXX")
