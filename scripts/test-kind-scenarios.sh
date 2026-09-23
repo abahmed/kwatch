@@ -119,6 +119,7 @@ EOF
 	kind export logs "$ARTIFACTS/kind-logs" \
 		--name "$KIND_CLUSTER_NAME" >/dev/null 2>&1 || true
 	if ! "$harness_root/scripts/check-e2e-artifacts.sh" "$ARTIFACTS"; then
+		find "$ARTIFACTS" -type f -exec rm -f {} +
 		printf '%s\n' 'artifact safety check failed' \
 			>"$ARTIFACTS/artifact-safety-failed.txt"
 	fi
@@ -145,7 +146,7 @@ capture_http_diagnostics() {
 		return
 	fi
 	printf '%s\n' "$leader_pod" >"$ARTIFACTS/kwatch/leader.txt"
-	kubectl -n kwatch port-forward "pod/$leader_pod" 18081:8080 \
+	kubectl -n kwatch port-forward "pod/$leader_pod" 18081:8060 \
 		>"$ARTIFACTS/kwatch/port-forward.log" 2>&1 &
 	kwatch_forward=$!
 	wait_for_http http://127.0.0.1:18081/healthz || true
@@ -163,11 +164,11 @@ find_kwatch_leader() {
 	for pod in $(kubectl -n kwatch get pods -l app=kwatch \
 		-o jsonpath='{range .items[*]}{.metadata.name}{"\n"}{end}' \
 		2>/dev/null || true); do
-		kubectl -n kwatch port-forward "pod/$pod" "$port:8080" \
+		kubectl -n kwatch port-forward "pod/$pod" "$port:8060" \
 			>/dev/null 2>&1 &
 		forward=$!
-		if wait_for_http "http://127.0.0.1:$port/availabilityz" &&
-			curl -fsS "http://127.0.0.1:$port/availabilityz" \
+		if wait_for_http "http://127.0.0.1:$port/readyz" &&
+			curl -fsS "http://127.0.0.1:$port/readyz" \
 			>/dev/null 2>&1; then
 			leader_pod=$pod
 			kill "$forward" >/dev/null 2>&1 || true
@@ -275,9 +276,11 @@ if [ "$metrics_checksum" != "$METRICS_SERVER_MANIFEST_SHA256" ]; then
 	exit 1
 fi
 kubectl apply -f "$metrics_manifest"
+metrics_patch='[{"op":"add","path":'
+metrics_patch="${metrics_patch}\"/spec/template/spec/containers/0/args/-\","
+metrics_patch="${metrics_patch}\"value\":\"--kubelet-insecure-tls\"}]"
 kubectl -n kube-system patch deployment metrics-server --type=json \
-	-p='[{"op":"add","path":"/spec/template/spec/containers/0/args/-",\
-"value":"--kubelet-insecure-tls"}]'
+	-p "$metrics_patch"
 kubectl -n kube-system rollout status deployment/metrics-server \
 	--timeout=5m
 kubectl wait --for=condition=Available \
