@@ -11,7 +11,7 @@ fi
 patterns='KWATCH_E2E_CANARY_|client-certificate-data:|client-key-data:|'
 patterns="${patterns}Bearer [^[]|Basic [^[]|diagnostics-token|kind: Secret|"
 patterns="${patterns}password[=:][^[]|api[_-]*key[=:][^[]"
-if rg -n -i --hidden --glob '!*.png' "$patterns" "$artifacts";
+if grep -RIqiE --exclude='*.png' "$patterns" "$artifacts";
 then
 	echo "unsafe content found in E2E artifacts" >&2
 	exit 1
