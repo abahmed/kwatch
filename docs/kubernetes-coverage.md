@@ -77,9 +77,11 @@ the categories below intentionally use different signal sources.
   mount/unmount and provisioning failures continue to come from Kubernetes
   Warning Events and PVC/PV status.
 - Runtime metrics: built-in kubelet Summary API collection of actual
-  per-container CPU and memory usage against declared limits. The optional
-  Metrics API integration is retained for users who already run Metrics Server,
-  but is disabled by default and is not required.
+  per-container CPU and memory usage against declared limits.
+- Metrics API evidence: HPA and metrics-related failures are enriched by the
+  optional `v1beta1.metrics.k8s.io` APIService and backing EndpointSlice health.
+  Missing or unavailable Metrics APIs remain capability evidence, not synthetic
+  incidents; there is no separate Metrics Server monitor configuration.
 - Active probes: opt-in HTTP, TCP, and DNS checks for explicitly configured
   targets through `activeProbeMonitor`, with consecutive-failure and recovery
   thresholds. Targets are never inferred automatically from Services.

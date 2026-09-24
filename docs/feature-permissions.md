@@ -12,7 +12,7 @@ Use this matrix when disabling features for a least-privilege deployment.
 | Network and admission | Services, Endpoints, EndpointSlices, Ingresses, NetworkPolicies, webhook and admission policy resources | get/list/watch |
 | Storage and PVC | PersistentVolumeClaims, PersistentVolumes, StorageClasses, VolumeAttachments, CSI drivers, snapshots | get/list/watch |
 | Kubelet and logs | `nodes/proxy`, `pods/log`, `pods/proxy` | get/list/watch |
-| Optional metrics | `metrics.k8s.io/pods` | get/list/watch |
+| Metrics API evidence | APIService `v1beta1.metrics.k8s.io`, Services, EndpointSlices | get/list/watch |
 | RBAC health | SelfSubjectAccessReviews | create |
 | CRD overlay | KwatchConfig and CustomResourceDefinitions | get/list/watch |
 | Persistence and election | Namespaced ConfigMaps and Leases | create/get/update/patch/watch |
