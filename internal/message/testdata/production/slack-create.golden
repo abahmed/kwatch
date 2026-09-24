@@ -1,7 +1,5 @@
-🟠 *Pod keeps restarting* — payments/checkout · CrashLoopBackOff · *high*
-Cause: the node is not ready. 3 replicas are unavailable. Supporting evidence: NodeNotReady.
-Container: api · Image: registry/checkout:v4 · Node: worker-a · Duration: for 3m · Cluster: production
-Events:
-```NodeNotReady```
-Logs:
+🟠 *Pod keeps restarting* — payments/checkout
+The node is not ready. 3 replicas are unavailable.
+Container `api`, node `worker-a`, active for 3m.
+Recent container logs from `api`:
 ```connection refused```

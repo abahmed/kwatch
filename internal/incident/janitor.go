@@ -146,6 +146,11 @@ func (e *Engine) checkLifecycle() {
 		pending = append(pending, e.flushGroupBuffers(now)...)
 	}
 
+	// A promoted root cause may recover before one of its symptoms. Release
+	// those symptoms so they can continue as independent incidents instead of
+	// remaining silently attached to a closed parent.
+	pending = append(pending, e.releaseOrphanedSuppressionsLocked()...)
+
 	e.mu.Unlock()
 
 	e.emit(pending...)
@@ -155,6 +160,29 @@ func (e *Engine) checkLifecycle() {
 	if baselineChanged {
 		e.publishBaseline()
 	}
+}
+
+func (e *Engine) releaseOrphanedSuppressionsLocked() []transition {
+	active := make(map[model.IncidentKey]bool)
+	for key, inc := range e.state {
+		if inc.State == model.StateActive {
+			active[key] = true
+		}
+	}
+	var pending []transition
+	for _, inc := range e.state {
+		if inc.SuppressedBy == "" || active[inc.SuppressedBy] {
+			continue
+		}
+		inc.SuppressedBy = ""
+		if inc.State != model.StateActive {
+			continue
+		}
+		if action := e.edgeAction(inc); action != model.ActionSkip {
+			pending = append(pending, transition{inc.Clone(), action})
+		}
+	}
+	return pending
 }
 
 // finalizePendingResolves resolves incidents whose resolve hold-down has

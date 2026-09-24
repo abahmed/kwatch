@@ -115,8 +115,12 @@ func (e *Email) SendMessage(ctx context.Context, s string) error {
 func (e *Email) buildMessageSubjectAndBody(
 	ev *event.Event) (string, string) {
 	subject := "⛑ Kwatch alert"
-	if ev.ContainerName != "" {
-		subject = fmt.Sprintf("⛑ Kwatch detected a crash in pod %s", ev.ContainerName)
+	if narrative := strings.TrimSpace(ev.Narrative); narrative != "" {
+		subject = emailFirstLine(narrative, 150)
+	} else if ev.ContainerName != "" {
+		subject = fmt.Sprintf(
+			"⛑ Kwatch detected a crash in pod %s", ev.ContainerName,
+		)
 	} else if ev.PodName != "" {
 		subject = fmt.Sprintf("⛑ Kwatch detected a crash in pod %s", ev.PodName)
 	}
@@ -143,15 +147,18 @@ func (e *Email) buildMessageSubjectAndBody(
 	}
 
 	body := strings.Join(parts, "\n")
+	if narrative := strings.TrimSpace(ev.Narrative); narrative != "" {
+		body = narrative
+	}
 
-	if ev.IncludeLogs {
+	if ev.Narrative == "" && ev.IncludeLogs {
 		logs := strings.TrimSpace(ev.Logs)
 		if len(logs) > 0 {
 			body += "\n\nLogs:\n" + logs
 		}
 	}
 
-	if ev.IncludeEvents {
+	if ev.Narrative == "" && ev.IncludeEvents {
 		events := strings.TrimSpace(ev.Events)
 		if len(events) > 0 {
 			body += "\n\nEvents:\n" + events
@@ -159,4 +166,12 @@ func (e *Email) buildMessageSubjectAndBody(
 	}
 
 	return subject, body
+}
+
+func emailFirstLine(value string, limit int) string {
+	line := strings.SplitN(strings.TrimSpace(value), "\n", 2)[0]
+	if len(line) <= limit {
+		return line
+	}
+	return line[:limit-1] + "…"
 }

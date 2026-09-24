@@ -316,9 +316,6 @@ func TestAppRestoreEmptyStateHelpers(t *testing.T) {
 
 func TestAppDisabledRuntimeBranches(t *testing.T) {
 	runtime := config.RuntimeConfigFor(&config.Config{})
-	if configureMetricsMonitor(runtime, nil, nil, nil, nil, nil) != nil {
-		t.Fatal("disabled metrics monitor returned a runner")
-	}
 	if configureProbeRunner(runtime, nil, nil, nil, nil, time.Now,
 		nil, nil) != nil {
 		t.Fatal("disabled probe monitor returned a runner")
@@ -513,9 +510,10 @@ func TestAppOptionalCompositionAndControllerRuntime(t *testing.T) {
 	}
 	deps := makeServerDeps(
 		context.Background(), func() {}, runtime, boot, ctl, func() {},
-		persistenceSetup{}, engine, pvcMonitor,
+		persistenceSetup{}, engine, nil, pvcMonitor,
 		heartbeat.NewHeartbeatMonitor(nil, nil), optional,
-		audit.NewLogger(audit.Config{Now: time.Now}), nil, nil, nil,
+		audit.NewLogger(audit.Config{Now: time.Now}), nil,
+		make(chan struct{}), nil,
 	)
 	if deps == nil || deps.persistenceGate == nil {
 		t.Fatal("makeServerDeps() omitted lifecycle state")
@@ -534,9 +532,6 @@ func TestAppOptionalCompositionAndControllerRuntime(t *testing.T) {
 
 func TestAppEnabledOptionalConfigurationBranches(t *testing.T) {
 	cfg := &config.Config{
-		RuntimeMetricsMonitor: config.RuntimeMetricsMonitor{
-			Enabled: true, IntervalSeconds: 1,
-		},
 		ActiveProbeMonitor: config.ActiveProbeMonitor{
 			Enabled: true, AutoServices: true,
 		},
@@ -556,11 +551,6 @@ func TestAppEnabledOptionalConfigurationBranches(t *testing.T) {
 	healthServer := health.NewHealthServerWithClock(
 		config.HealthCheck{}, clock.RealClock{},
 	)
-	if configureMetricsMonitor(
-		runtime, ctl, clientset, nil, nil, dynamicClient,
-	) == nil {
-		t.Fatal("enabled metrics monitor returned no runner")
-	}
 	if configureProbeRunner(
 		runtime, ctl, nil, clientset, kwcontext.NewResourceGraph(),
 		time.Now, nil, nil,
@@ -595,7 +585,7 @@ func TestAppEnabledOptionalConfigurationBranches(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel()
 	for _, run := range []func(context.Context) error{
-		runs.metricsRun, runs.probeRun, runs.statusRun, runs.storageRun,
+		runs.probeRun, runs.statusRun, runs.storageRun,
 		runs.networkRun,
 	} {
 		if run != nil {

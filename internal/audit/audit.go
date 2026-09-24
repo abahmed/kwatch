@@ -25,25 +25,45 @@ const (
 )
 
 type Entry struct {
-	Timestamp     time.Time `json:"ts"`
-	Action        Action    `json:"action"`
-	IncidentKey   string    `json:"incidentKey"`
-	IncidentID    string    `json:"id,omitempty"`
-	Namespace     string    `json:"namespace,omitempty"`
-	Reason        string    `json:"reason,omitempty"`
-	Severity      string    `json:"severity,omitempty"`
-	Name          string    `json:"name,omitempty"`
-	Count         int       `json:"count,omitempty"`
-	Duration      string    `json:"duration,omitempty"`
-	SkipReason    string    `json:"skipReason,omitempty"`
-	DeliveryID    string    `json:"deliveryId,omitempty"`
-	Revision      uint64    `json:"revision,omitempty"`
-	GroupKey      string    `json:"groupKey,omitempty"`
-	AffectedCount int       `json:"affectedCount,omitempty"`
-	Pattern       string    `json:"pattern,omitempty"`
-	Confidence    float64   `json:"confidence,omitempty"`
-	EvidenceCount int       `json:"evidenceCount,omitempty"`
-	RenderingHash string    `json:"renderingHash,omitempty"`
+	Timestamp      time.Time   `json:"ts"`
+	Action         Action      `json:"action"`
+	IncidentKey    string      `json:"incidentKey"`
+	IncidentID     string      `json:"id,omitempty"`
+	Namespace      string      `json:"namespace,omitempty"`
+	Reason         string      `json:"reason,omitempty"`
+	Severity       string      `json:"severity,omitempty"`
+	Name           string      `json:"name,omitempty"`
+	Count          int         `json:"count,omitempty"`
+	Duration       string      `json:"duration,omitempty"`
+	SkipReason     string      `json:"skipReason,omitempty"`
+	DeliveryID     string      `json:"deliveryId,omitempty"`
+	Revision       uint64      `json:"revision,omitempty"`
+	GroupKey       string      `json:"groupKey,omitempty"`
+	AffectedCount  int         `json:"affectedCount,omitempty"`
+	Pattern        string      `json:"pattern,omitempty"`
+	Confidence     float64     `json:"confidence,omitempty"`
+	EvidenceCount  int         `json:"evidenceCount,omitempty"`
+	CauseState     string      `json:"causeState,omitempty"`
+	RootCause      string      `json:"rootCause,omitempty"`
+	Candidates     []Candidate `json:"candidates,omitempty"`
+	Contradictions []string    `json:"contradictions,omitempty"`
+	Timeline       []Timeline  `json:"timeline,omitempty"`
+	Decision       string      `json:"decision,omitempty"`
+	DecisionReason string      `json:"decisionReason,omitempty"`
+	RenderingHash  string      `json:"renderingHash,omitempty"`
+}
+
+type Candidate struct {
+	Resource      string   `json:"resource"`
+	Score         int      `json:"score"`
+	Supporting    []string `json:"supporting,omitempty"`
+	Contradicting []string `json:"contradicting,omitempty"`
+}
+
+type Timeline struct {
+	Timestamp time.Time `json:"ts"`
+	Kind      string    `json:"kind"`
+	Summary   string    `json:"summary"`
 }
 
 type Config struct {
@@ -72,7 +92,12 @@ func NewLogger(cfg Config) *AuditLogger {
 	} else {
 		f, err := os.OpenFile(cfg.Output, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0600)
 		if err != nil {
-			klog.ErrorS(err, "failed to open audit log file, falling back to stdout", "path", cfg.Output)
+			klog.ErrorS(
+				err,
+				"failed to open audit log file, falling back to stdout",
+				"path",
+				cfg.Output,
+			)
 			l.writer = os.Stdout
 		} else {
 			l.writer = f
@@ -106,7 +131,10 @@ func (l *AuditLogger) actionFromIncidentAction(a model.IncidentAction) Action {
 	}
 }
 
-func (l *AuditLogger) LogIncident(inc *model.Incident, action model.IncidentAction) {
+func (l *AuditLogger) LogIncident(
+	inc *model.Incident,
+	action model.IncidentAction,
+) {
 	l.LogIncidentWithInsight(inc, action, nil)
 }
 
@@ -142,9 +170,38 @@ func (l *AuditLogger) LogIncidentWithInsight(
 		entry.GroupKey = string(inc.SuppressedBy)
 	}
 	if ins != nil {
+		if ins.Severity != "" {
+			entry.Severity = string(ins.Severity)
+		}
 		entry.Pattern = ins.Pattern
 		entry.Confidence = ins.Confidence
 		entry.EvidenceCount = len(ins.Evidence)
+		entry.CauseState = string(ins.CauseState)
+		entry.RootCause = ins.RootCause.Describe()
+		entry.Contradictions = append(
+			[]string(nil), ins.Contradictions...,
+		)
+		entry.Decision = "notify"
+		entry.DecisionReason = ins.SuppressReason
+		if ins.SuppressReason != "" {
+			entry.Decision = "suppress"
+		}
+		for _, point := range ins.Timeline {
+			entry.Timeline = append(entry.Timeline, Timeline{
+				Timestamp: point.At,
+				Kind:      point.Kind,
+				Summary:   point.Summary,
+			})
+		}
+		for _, candidate := range ins.Candidates {
+			entry.Candidates = append(entry.Candidates, Candidate{
+				Resource: candidate.Ref.Describe(), Score: candidate.Score,
+				Supporting: append([]string(nil), candidate.Supporting...),
+				Contradicting: append(
+					[]string(nil), candidate.Contradicting...,
+				),
+			})
+		}
 	}
 	l.log(entry)
 }

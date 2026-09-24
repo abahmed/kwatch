@@ -28,7 +28,6 @@ github.com/abahmed/kwatch/internal/monitor/network
 github.com/abahmed/kwatch/internal/monitor/cluster
 github.com/abahmed/kwatch/internal/monitor/security
 github.com/abahmed/kwatch/internal/probe
-github.com/abahmed/kwatch/internal/metricsapi
 github.com/abahmed/kwatch/internal/kubeletmetrics
 github.com/abahmed/kwatch/internal/statuswatch
 github.com/abahmed/kwatch/internal/resource

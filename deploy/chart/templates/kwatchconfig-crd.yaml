@@ -95,6 +95,8 @@ spec:
                 adaptiveThresholds:
                   type: boolean
                 includeEvents:
+                  description: >-
+                    Deprecated and ignored. Kwatch analyzes events internally.
                   type: boolean
                 includeLogs:
                   type: boolean
@@ -244,9 +246,6 @@ spec:
                   type: object
                   x-kubernetes-preserve-unknown-fields: true
                 clusterResourceMonitor:
-                  type: object
-                  x-kubernetes-preserve-unknown-fields: true
-                runtimeMetricsMonitor:
                   type: object
                   x-kubernetes-preserve-unknown-fields: true
                 tlsMonitor:

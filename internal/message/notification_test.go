@@ -7,6 +7,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"github.com/abahmed/kwatch/internal/insight"
 	"github.com/abahmed/kwatch/internal/model"
 )
 
@@ -27,7 +28,9 @@ func TestNotificationFromReportBuildsSummaryAndDetails(t *testing.T) {
 		},
 		Diagnosis: &DiagnosisSection{
 			Cause: "the node is not ready", Pattern: "node_failure",
-			Impact: "3 replicas are unavailable", NextSteps: []string{"inspect"},
+			Impact:     "3 replicas are unavailable",
+			CauseState: insight.CauseConfirmed, Confidence: 0.9,
+			Evidence: []string{"NodeNotReady"},
 		},
 		Evidence: &EvidenceSection{
 			Events: "NodeNotReady", Logs: "connection refused",
@@ -53,13 +56,8 @@ func TestNotificationFromReportBuildsSummaryAndDetails(t *testing.T) {
 	assert.Equal(t, model.ActionCreate, notification.Action)
 	assert.Equal(t, "the node is not ready", notification.Summary.Cause)
 	assert.Equal(t, "3 replicas are unavailable", notification.Summary.Impact)
-	require.NotNil(t, notification.Summary.PrimaryAction)
-	assert.Equal(
-		t,
-		[]string{"kubectl", "describe", "deployment", "checkout", "-n", "payments"},
-		notification.Summary.PrimaryAction.Args,
-	)
-	assert.Len(t, notification.Details, 8)
+	assert.Nil(t, notification.Summary.PrimaryAction)
+	assert.Len(t, notification.Details, 7)
 }
 
 func TestNotificationOmitsWeakCauseAndUnsafeGroupCommand(t *testing.T) {
@@ -79,8 +77,7 @@ func TestNotificationOmitsWeakCauseAndUnsafeGroupCommand(t *testing.T) {
 	require.NotNil(t, notification)
 	assert.Equal(t, model.ActionSkip, notification.Action)
 	assert.Empty(t, notification.Summary.Cause)
-	require.NotNil(t, notification.Summary.PrimaryAction)
-	assert.Equal(t, "get", notification.Summary.PrimaryAction.Args[1])
+	assert.Nil(t, notification.Summary.PrimaryAction)
 }
 
 func TestNotificationFromReportRejectsNilInputs(t *testing.T) {

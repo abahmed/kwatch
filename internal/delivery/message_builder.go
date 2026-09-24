@@ -16,21 +16,22 @@ import (
 func incidentToEvent(
 	inc *model.Incident,
 	action model.IncidentAction,
+	narrative string,
 ) *event.Event {
 	return &event.Event{
+		Narrative:     narrative,
 		Resource:      inc.Resource,
 		PodName:       eventPodName(inc),
 		ContainerName: inc.ContainerName,
 		Namespace:     inc.Namespace,
 		NodeName:      inc.NodeName,
 		Reason:        inc.Reason,
-		Events:        inc.Events,
 		Logs:          inc.Logs,
 		OwnerKind:     inc.OwnerKind,
 		RestartCount:  inc.RestartCount,
 		Hint:          inc.Hint,
 		Severity:      inc.Severity,
-		IncludeEvents: inc.IncludeEvents,
+		IncludeEvents: false,
 		IncludeLogs:   inc.IncludeLogs,
 		Action:        action.String(),
 		DedupKey:      inc.ID,
@@ -62,6 +63,11 @@ func (a *Manager) buildMessage(
 	ins *insight.Insight,
 	templates map[string]*template.Template,
 ) string {
+	// Raw Kubernetes event text is internal evidence. Keep it out of both the
+	// standard renderer and user-configured delivery templates.
+	inc = inc.Clone()
+	inc.Events = ""
+	inc.IncludeEvents = false
 	rb := message.NewReportBuilderWithPolicy(
 		a.clusterName, clock.Func(a.nowTime),
 		a.includePrivateLogAddresses,

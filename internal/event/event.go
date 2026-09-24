@@ -113,6 +113,9 @@ func CheckHTTPResponseAt(
 
 // Event used to represent info needed by providers to send messages
 type Event struct {
+	// Narrative is the provider-neutral incident explanation composed by
+	// delivery. Legacy direct event callers leave it empty.
+	Narrative    string
 	Resource     string // "pod", "node", "pvc"
 	PodName      string
 	PodUID       string // UID of the concrete Pod instance

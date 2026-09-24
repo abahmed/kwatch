@@ -131,7 +131,7 @@ func TestSmartGroupingSingleMemberEmitsIncidentNotGroup(t *testing.T) {
 
 	// Two members that share a real dimension still become a group.
 	sigLog := "connection refused:5432"
-	e2 := newSmartGroupingEngine()
+	e2 := newFanOutGroupingEngine()
 	e2.now = mockClock(now)
 	e2.processEvent(
 		event.Event{
@@ -168,7 +168,7 @@ func TestSmartGroupingSingleMemberEmitsIncidentNotGroup(t *testing.T) {
 
 func TestSmartGroupingFlushAfterWindow(t *testing.T) {
 	now := time.Date(2025, 1, 1, 0, 0, 0, 0, time.UTC)
-	e := newSmartGroupingEngine()
+	e := newFanOutGroupingEngine()
 	e.now = mockClock(now)
 
 	sigLog := "connection refused:5432"
@@ -239,7 +239,7 @@ func TestSmartGroupingDifferentReasonsSeparate(t *testing.T) {
 
 func TestSmartGroupingResolvedNotIncluded(t *testing.T) {
 	now := time.Date(2025, 1, 1, 0, 0, 0, 0, time.UTC)
-	e := newSmartGroupingEngine()
+	e := newFanOutGroupingEngine()
 	e.now = mockClock(now)
 
 	// Three members share a signature, so removing one still leaves a real

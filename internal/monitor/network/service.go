@@ -39,7 +39,10 @@ func DetectServiceEndpointIssue(
 		"service", svc, constant.ReasonServiceNoEndpoints,
 	).WithHint(fmt.Sprintf(
 		"service %s has selectors but no ready endpoints", key,
-	))
+	)).WithFacts(model.Facts{
+		EndpointsObserved: true,
+		HealthyEndpoints:  0,
+	})
 }
 
 // DetectServicePortIssue reports Service ports absent from EndpointSlices.

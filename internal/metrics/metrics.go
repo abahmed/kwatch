@@ -66,6 +66,12 @@ type Registry struct {
 	RenderedDetailsOmitted     atomic.Int64
 	RedactedValues             atomic.Int64
 	StartupSummariesSuppressed atomic.Int64
+	InsightAnalyses            atomic.Int64
+	InsightConfirmed           atomic.Int64
+	InsightLikely              atomic.Int64
+	InsightUnknown             atomic.Int64
+	InsightReevaluations       atomic.Int64
+	InsightRolloutSuppressions atomic.Int64
 
 	registryOnce sync.Once
 	registry     *prometheus.Registry
@@ -201,6 +207,15 @@ var metricDescs = []*prometheus.Desc{
 		"Sensitive values redacted before rendering", nil, nil),
 	prometheus.NewDesc("kwatch_startup_summaries_suppressed_total",
 		"Startup summaries suppressed as routine restarts", nil, nil),
+	prometheus.NewDesc("kwatch_insight_analyses_total",
+		"Incident cause analyses completed", nil, nil),
+	prometheus.NewDesc("kwatch_insight_causes_total",
+		"Cause analyses by confidence state", []string{"state"}, nil),
+	prometheus.NewDesc("kwatch_insight_reevaluations_total",
+		"Active incidents reevaluated with newer evidence", nil, nil),
+	prometheus.NewDesc("kwatch_insight_rollout_suppressions_total",
+		"Provisional rollout symptoms suppressed while capacity remained",
+		nil, nil),
 }
 
 var telemetryFailureReasons = [...]string{
@@ -299,6 +314,21 @@ func (r *Registry) Collect(ch chan<- prometheus.Metric) {
 	r.collectCounter(ch, 47, r.RenderedDetailsOmitted.Load())
 	r.collectCounter(ch, 48, r.RedactedValues.Load())
 	r.collectCounter(ch, 49, r.StartupSummariesSuppressed.Load())
+	r.collectCounter(ch, 50, r.InsightAnalyses.Load())
+	ch <- prometheus.MustNewConstMetric(
+		metricDescs[51], prometheus.CounterValue,
+		float64(r.InsightConfirmed.Load()), "confirmed",
+	)
+	ch <- prometheus.MustNewConstMetric(
+		metricDescs[51], prometheus.CounterValue,
+		float64(r.InsightLikely.Load()), "likely",
+	)
+	ch <- prometheus.MustNewConstMetric(
+		metricDescs[51], prometheus.CounterValue,
+		float64(r.InsightUnknown.Load()), "unknown",
+	)
+	r.collectCounter(ch, 52, r.InsightReevaluations.Load())
+	r.collectCounter(ch, 53, r.InsightRolloutSuppressions.Load())
 }
 
 func (r *Registry) collectCounter(

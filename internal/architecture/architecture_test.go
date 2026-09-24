@@ -64,7 +64,6 @@ var forbiddenImports = map[string][]string{
 	},
 	"internal/pvc":            {"internal/persistence"},
 	"internal/kubeletmetrics": {"internal/incident"},
-	"internal/metricsapi":     {"internal/incident"},
 	"internal/probe":          {"internal/incident"},
 	"internal/resource":       {"internal/incident"},
 	"internal/rbac":           {"internal/incident"},
@@ -81,7 +80,7 @@ func TestClientConstructionHasOneOwner(t *testing.T) {
 	root := repositoryRoot(t)
 	directories := []string{
 		"internal/networkgraph", "internal/storagegraph",
-		"internal/statuswatch", "internal/metricsapi", "internal/controlplane",
+		"internal/statuswatch", "internal/controlplane",
 		"internal/crdwatch",
 	}
 	for _, directory := range directories {

@@ -2,6 +2,7 @@ package insight
 
 import (
 	"fmt"
+	"sort"
 	"strings"
 	"time"
 
@@ -58,21 +59,98 @@ func (e *Engine) appendDependencyChanges(
 	if len(depChanges) == 0 {
 		return false
 	}
+	sort.SliceStable(depChanges, func(i, j int) bool {
+		left := changeCausalityScore(depChanges[i], inc, e.now())
+		right := changeCausalityScore(depChanges[j], inc, e.now())
+		if left != right {
+			return left > right
+		}
+		return depChanges[i].Timestamp.After(depChanges[j].Timestamp)
+	})
 	if len(depChanges) > 3 {
 		depChanges = depChanges[:3]
 	}
 	ins.RecentChanges = depChanges
+	appendChangeEvidence(ins, depChanges[0])
 	// Only enhance the cause with dependency-change info when no
 	// more specific diagnosis was produced (e.g. node_failure or
 	// rollout_failure); otherwise the generic update wording would
 	// hide the actual root cause.
 	if ins.Cause == "" && ins.Pattern == "" {
 		c := depChanges[0]
-		ins.Cause = fmt.Sprintf("%s %s/%s was updated %s before this incident — likely related",
+		ins.Cause = fmt.Sprintf(
+			"%s %s/%s was updated %s before this incident — likely related",
 			c.Resource, c.Namespace, c.Name, ageOf(c.Timestamp, e.now()))
 		ins.Pattern = "dependency_change"
 	}
 	return true
+}
+
+func appendChangeEvidence(ins *Insight, change context.Change) {
+	for _, field := range change.Fields {
+		path := strings.ToLower(field.Path)
+		var explanation string
+		switch {
+		case containsAny(path, "image", "command", "args"):
+			explanation = "the failing workload's executable configuration changed"
+		case containsAny(path, "selector", "port", "endpoint"):
+			explanation = "service routing changed before endpoints became unhealthy"
+		case containsAny(path, "volume", "storage", "claim"):
+			explanation = "storage configuration changed before the failure"
+		case containsAny(path, "affinity", "toleration", "nodeselector"):
+			explanation = "pod placement rules changed before scheduling failed"
+		case containsAny(path, "resources", "request", "limit"):
+			explanation = "resource requests or limits changed before the failure"
+		case containsAny(path, "configmap", "secret", "env"):
+			explanation = "runtime configuration changed before the failure"
+		}
+		if explanation != "" {
+			ins.Evidence = appendUniqueStrings(ins.Evidence, explanation)
+			return
+		}
+	}
+}
+
+func changeCausalityScore(
+	change context.Change,
+	inc *model.Incident,
+	now time.Time,
+) int {
+	score := recencyScore(change.Timestamp, now)
+	if change.Type == context.ChangeDelete {
+		score += 50
+	}
+	for _, field := range change.Fields {
+		path := strings.ToLower(field.Path)
+		switch {
+		case containsAny(path, "image", "command", "args"):
+			score += 40
+		case containsAny(path, "selector", "port", "endpoint"):
+			score += 35
+		case containsAny(path, "volume", "storage", "claim"):
+			score += 35
+		case containsAny(path, "affinity", "toleration", "nodeselector"):
+			score += 30
+		case containsAny(path, "resources", "request", "limit"):
+			score += 25
+		case containsAny(path, "configmap", "secret", "env"):
+			score += 20
+		}
+	}
+	if inc != nil && change.Resource == inc.Resource &&
+		change.Namespace == inc.Namespace {
+		score += 10
+	}
+	return score
+}
+
+func containsAny(value string, options ...string) bool {
+	for _, option := range options {
+		if strings.Contains(value, option) {
+			return true
+		}
+	}
+	return false
 }
 
 // workloadKinds are the owners whose spec change is a rollout.
@@ -120,6 +198,7 @@ func (e *Engine) checkRecentChanges(inc *model.Incident, ins *Insight) {
 	if inc.Resource == "pod" {
 		if rollout := ownerRolloutChanges(recent, inc); len(rollout) > 0 {
 			ins.RecentChanges = rollout[:min(len(rollout), 3)]
+			appendChangeEvidence(ins, rollout[0])
 			if ins.Cause == "" {
 				c := rollout[0]
 				ins.Cause = fmt.Sprintf(

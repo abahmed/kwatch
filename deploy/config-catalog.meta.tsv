@@ -3,12 +3,12 @@ workers|Performance|Number of Kubernetes work queues processed in parallel.|acti
 resyncSeconds|Performance|Periodic safety resync interval in seconds; zero keeps event-driven mode.|active|
 maxRecentLogLines|Alerts|Maximum recent log lines attached to an incident.|active|
 containerRestartThreshold|Alerts|Alert when a container reaches this cumulative restart count; zero disables it.|active|
-includeEvents|Alerts|Include recent Kubernetes events in incident messages.|active|
 includeLogs|Alerts|Include recent container logs in incident messages.|active|
 message.includePrivateLogAddresses|Alerts|Keep private application addresses visible in evidence; credentials remain redacted.|active|
 namespaces|Scope|Comma-separated namespaces to watch; leave empty to watch every namespace.|active|
 namespaceSelector|Scope|Kubernetes label selector used to choose namespaces.|active|
 reasons|Scope|Comma-separated event reasons to allow or exclude with a leading !.|active|
+includeEvents|Alerts|Deprecated compatibility field; Kwatch analyzes events internally.|deprecated|
 ignoreFailedGracefulShutdown|Noise reduction|Ignore forceful container termination during an intentional shutdown.|active|
 ignoreDisruptionTerminations|Noise reduction|Ignore pods being deliberately evicted, preempted, or disrupted.|active|
 adaptiveThresholds|Noise reduction|Add bounded grace during normal partial rollouts.|active|
@@ -73,12 +73,6 @@ nodeResourceMonitor.filesystemWarningPercent|Monitors|Node filesystem usage warn
 nodeResourceMonitor.filesystemCriticalPercent|Monitors|Node filesystem usage critical threshold.|active|
 nodeResourceMonitor.inodeWarningPercent|Monitors|Node inode usage warning threshold.|active|
 nodeResourceMonitor.inodeCriticalPercent|Monitors|Node inode usage critical threshold.|active|
-runtimeMetricsMonitor.enabled|Monitors|Use metrics.k8s.io when available for workload usage diagnostics.|active|
-runtimeMetricsMonitor.intervalSeconds|Monitors|Seconds between runtime metrics checks.|active|
-runtimeMetricsMonitor.memoryWarningPercent|Monitors|Memory usage warning percentage when metrics.k8s.io is available.|active|
-runtimeMetricsMonitor.memoryCriticalPercent|Monitors|Memory usage critical percentage when metrics.k8s.io is available.|active|
-runtimeMetricsMonitor.cpuWarningPercent|Monitors|CPU usage warning percentage when metrics.k8s.io is available.|active|
-runtimeMetricsMonitor.cpuCriticalPercent|Monitors|CPU usage critical percentage when metrics.k8s.io is available.|active|
 clusterAutoscalerMonitor.enabled|Monitors|Watch built-in cluster-autoscaler evidence from Kubernetes resources and events.|active|
 tlsMonitor.threshold|Monitors|Days before certificate expiry to warn.|active|
 tlsMonitor.criticalThreshold|Monitors|Days before certificate expiry for a high-severity alert.|active|

@@ -309,7 +309,7 @@ func TestSendIncidentWebhookCreate(t *testing.T) {
 
 	err := s.SendIncident(context.Background(), testIncident(), model.ActionCreate)
 	assert.Nil(err)
-	assert.Contains(lastMsg, "CrashLoopBackOff")
+	assert.Contains(lastMsg, "Container keeps crashing")
 	assert.Contains(lastMsg, "deploy-1")
 }
 
@@ -329,7 +329,7 @@ func TestSendIncidentWebhookUpdate(t *testing.T) {
 
 	err := s.SendIncident(context.Background(), testIncident(), model.ActionUpdate)
 	assert.Nil(err)
-	assert.Contains(lastMsg, "CrashLoopBackOff")
+	assert.Contains(lastMsg, "Container keeps crashing")
 }
 
 func TestSendIncidentWebhookCompact(t *testing.T) {
@@ -350,7 +350,7 @@ func TestSendIncidentWebhookCompact(t *testing.T) {
 
 	err := s.SendIncident(context.Background(), testIncident(), model.ActionCreate)
 	assert.Nil(err)
-	assert.Contains(lastText, "CrashLoopBackOff")
+	assert.Contains(lastText, "Container keeps crashing")
 	assert.Contains(lastText, "deploy-1")
 }
 

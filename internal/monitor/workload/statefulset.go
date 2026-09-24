@@ -21,7 +21,10 @@ func DetectStatefulSetIssue(ss *appsv1.StatefulSet) *model.Observation {
 	}
 	return observe.Object(
 		"statefulset", ss, constant.ReasonStsUnavailable,
-	).WithHint(StatefulSetAvailabilityHint(ss))
+	).WithHint(StatefulSetAvailabilityHint(ss)).WithFacts(model.Facts{
+		DesiredReplicas: StatefulSetReplicas(ss),
+		ReadyReplicas:   ss.Status.ReadyReplicas,
+	})
 }
 
 // DetectStatefulSetConditions returns findings for non-true conditions.

@@ -22,8 +22,6 @@ func (e *Engine) buildGroupSummary(entries []groupEntry) string {
 	switch detectGroupScope(entries) {
 	case "node":
 		return e.buildNodeSummary(entries)
-	case "signature":
-		return e.buildSignatureSummary(entries)
 	case "image":
 		return e.buildImageSummary(entries)
 	case "owner":
@@ -43,13 +41,6 @@ func detectGroupScope(entries []groupEntry) string {
 	)
 	if len(nodes) == 1 && isNodeLevelReason(r) {
 		return "node"
-	}
-	sigs := uniqueNonEmptyStr(
-		entries,
-		func(e groupEntry) string { return e.logSignature },
-	)
-	if len(sigs) == 1 {
-		return "signature"
 	}
 	imgs := uniqueNonEmptyStr(
 		entries,
@@ -160,12 +151,6 @@ func (e *Engine) buildNodeSummary(entries []groupEntry) string {
 		s += fmt.Sprintf(" across %s", format.Plural(len(owners), "workload"))
 	}
 	return s
-}
-
-// "api, readify, tracking — same error: connection refused:5432"
-func (e *Engine) buildSignatureSummary(entries []groupEntry) string {
-	return fmt.Sprintf("%s — same error: %s",
-		format.JoinNames(ownerRefs(entries, true), 5), entries[0].logSignature)
 }
 
 // "image api:1.2.0 — api, api-worker"  or, for a

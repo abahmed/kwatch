@@ -74,10 +74,6 @@ func (m MonitorRuntime) Heartbeat() HeartbeatMonitor {
 	return m.values.heartbeat
 }
 
-func (m MonitorRuntime) Metrics() RuntimeMetricsMonitor {
-	return m.values.runtimeMetrics
-}
-
 func (m MonitorRuntime) ActiveProbe() ActiveProbeMonitor {
 	return cloneActiveProbeMonitor(m.values.activeProbe)
 }
@@ -130,7 +126,9 @@ func (m MonitorRuntime) Schedule() ScheduleMonitor {
 
 func (m MonitorRuntime) OOM() OomMonitor { return m.values.oom }
 
-func (m MonitorRuntime) IncludeEvents() bool { return m.values.includeEvents }
+// IncludeEvents is retained for configuration compatibility. Kubernetes
+// events are internal analysis evidence and are never rendered to users.
+func (m MonitorRuntime) IncludeEvents() bool { return false }
 
 func (m MonitorRuntime) IncludeLogs() bool { return m.values.includeLogs }
 

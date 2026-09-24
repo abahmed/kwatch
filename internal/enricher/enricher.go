@@ -50,16 +50,14 @@ func (e *DefaultEnricher) Enrich(ev *event.Event, inc *model.Incident) {
 	if !ev.Facts.IsZero() {
 		inc.Facts = ev.Facts
 	}
-	// CD-3: signature-based hints for common patterns
-	if sh := SignatureHint(ev.Logs); sh != "" {
-		inc.Hint = combineHints(inc.Hint, sh)
-	}
 	inc.Logs = clampEvidence(ev.Logs, maxIncidentLogs)
 	inc.Events = clampEvidence(ev.Events, maxIncidentEvents)
 	// Remember which replica this evidence came from; the incident is keyed by
 	// owner and will outlive it.
 	inc.EvidencePod = ev.PodName
-	inc.IncludeEvents = ev.IncludeEvents
+	// Events remain available to correlation and audit, but providers never
+	// receive raw Kubernetes event text as user-facing evidence.
+	inc.IncludeEvents = false
 	inc.IncludeLogs = ev.IncludeLogs
 	newSev := ev.Severity
 	if newSev == "" {

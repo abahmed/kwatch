@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"strings"
 
 	"k8s.io/klog/v2"
 
@@ -129,7 +130,10 @@ func (p *Pagerduty) buildRequestBodyPagerDuty(
 	}
 
 	summary := fmt.Sprintf("Alert: %s", format.OrDefault(ev.Reason, "unknown"))
-	if ev.ContainerName != "" {
+	if narrative := strings.TrimSpace(ev.Narrative); narrative != "" {
+		summary = strings.SplitN(narrative, "\n", 2)[0]
+	}
+	if ev.Narrative == "" && ev.ContainerName != "" {
 		summary = fmt.Sprintf(defaultEventTitle, ev.ContainerName)
 	}
 
@@ -153,8 +157,8 @@ func (p *Pagerduty) buildRequestBodyPagerDuty(
 				Namespace: ev.Namespace,
 				Node:      ev.NodeName,
 				Reason:    ev.Reason,
-				Events:    format.OrDefault(ev.Events, ""),
-				Logs:      format.OrDefault(ev.Logs, ""),
+				Events:    "",
+				Logs:      format.OrDefault(ev.Narrative, ev.Logs),
 			},
 		},
 	}

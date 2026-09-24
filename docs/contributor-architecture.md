@@ -60,8 +60,8 @@ and engine, but each owns one analysis concern.
 
 Supporting monitors follow the same rule. `internal/probe` separates target
 configuration, lifecycle dispatch, graph linking, protocol probes, automatic
-Service discovery, and failure-state transitions. `internal/metricsapi`
-separates construction, lifecycle, API collection, and threshold policy.
+Service discovery, and failure-state transitions. Metrics API evidence is
+collected by the application and analyzed through `internal/insight`.
 `internal/statuswatch` separates construction, configuration compilation,
 informer lifecycle, static processing, CRD handling, and admission handling.
 `internal/resource` separates lifecycle, filesystem signals, and node

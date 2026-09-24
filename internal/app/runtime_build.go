@@ -55,6 +55,9 @@ func buildServerDeps(
 			Clock:         clock.Func(now),
 			FeedbackStore: persist.feedbackStore,
 			ActiveChecker: activeChecker,
+			MetricsAPIInspector: newMetricsAPIInspector(
+				ctx, boot.clients.Dynamic, boot.clients.Kubernetes,
+			),
 		},
 	)
 	var ctl *controller.Controller
@@ -177,6 +180,7 @@ func buildServerDeps(
 		cleanup,
 		persist,
 		incidentEngine,
+		graph.Changes(),
 		pvcMonitor,
 		hbMonitor,
 		optional,

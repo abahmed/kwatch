@@ -102,7 +102,7 @@ func TestAnalyzeConfigError(t *testing.T) {
 	}
 	ins := e.Analyze(inc)
 
-	assert.Contains(t, ins.Cause, "ConfigMap")
+	assert.Contains(t, ins.Cause, "configmap")
 	assert.Equal(t, "config_error", ins.Pattern)
 }
 
@@ -127,7 +127,7 @@ func TestAnalyzeSecretError(t *testing.T) {
 	}
 	ins := e.Analyze(inc)
 
-	assert.Contains(t, ins.Cause, "Secret")
+	assert.Contains(t, ins.Cause, "secret")
 	assert.Equal(t, "config_error", ins.Pattern)
 }
 

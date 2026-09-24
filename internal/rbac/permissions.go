@@ -40,10 +40,6 @@ func permissionsForRuntime(
 	addNodeStoragePermissions(&builder, runtime)
 	addControlPlaneSecurityPermissions(&builder, runtime)
 	addClusterResourcePermissions(&builder, runtime)
-	builder.addNamespaced(
-		runtime.Monitors().Metrics().Enabled,
-		Permission{Resource: "pods", Group: "metrics.k8s.io"},
-	)
 	if runtime.Monitors().IncludeLogs() {
 		builder.namespaced = append(builder.namespaced, Permission{
 			Resource: "pods/log",

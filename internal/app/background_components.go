@@ -30,6 +30,9 @@ func startCoreComponents(
 		monitoredComponent(deps, "pvc-monitor", runPVCMonitor),
 		monitoredComponent(deps, "heartbeat", runHeartbeat),
 		monitoredComponent(deps, "incident-snapshots", runIncidentSnapshots),
+		monitoredComponent(
+			deps, "incident-reevaluation", runIncidentReevaluation,
+		),
 	}
 
 	if deps.tlsSweep != nil {
@@ -54,6 +57,25 @@ func startCoreComponents(
 	}
 	for _, component := range components {
 		supervisor.startOptional(ctx, deps.initialized, component)
+	}
+}
+
+func runIncidentReevaluation(
+	ctx context.Context,
+	deps *serverDeps,
+) error {
+	const escalationCheckInterval = time.Minute
+	ticker := time.NewTicker(escalationCheckInterval)
+	defer ticker.Stop()
+	for {
+		select {
+		case <-ctx.Done():
+			return nil
+		case <-deps.graphChanges:
+			deps.incidentEngine.ReevaluateActive()
+		case <-ticker.C:
+			deps.incidentEngine.ReevaluateActive()
+		}
 	}
 }
 

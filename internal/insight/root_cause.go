@@ -20,12 +20,35 @@ type modelCauseRef struct {
 	score     int
 }
 
+type rootCacheEntry struct {
+	revision uint64
+	roots    []modelCauseRef
+}
+
+const (
+	maxInvestigationDepth = 8
+	maxInvestigationNodes = 512
+)
+
 // rootCauses walks every graph node represented by the incident and returns
 // the deepest dependency resources as candidate root causes.
 func (e *Engine) rootCauses(inc *model.Incident) []modelCauseRef {
 	if e.graph == nil {
 		return nil
 	}
+	cacheKey := strings.Join(graphKeysForIncident(inc), "|")
+	revision := e.graph.Revision()
+	e.cacheMu.Lock()
+	if e.rootCache == nil {
+		e.rootCache = make(map[string]rootCacheEntry)
+	}
+	if cached, ok := e.rootCache[cacheKey]; ok &&
+		cached.revision == revision {
+		roots := append([]modelCauseRef(nil), cached.roots...)
+		e.cacheMu.Unlock()
+		return roots
+	}
+	e.cacheMu.Unlock()
 	var roots []modelCauseRef
 	for _, key := range graphKeysForIncident(inc) {
 		roots = appendRoots(roots, walkBackToRoots(e.graph, key))
@@ -34,6 +57,15 @@ func (e *Engine) rootCauses(inc *model.Incident) []modelCauseRef {
 		return nil
 	}
 	sortRoots(roots)
+	e.cacheMu.Lock()
+	if len(e.rootCache) >= 1024 {
+		e.rootCache = make(map[string]rootCacheEntry)
+	}
+	e.rootCache[cacheKey] = rootCacheEntry{
+		revision: revision,
+		roots:    append([]modelCauseRef(nil), roots...),
+	}
+	e.cacheMu.Unlock()
 	return roots
 }
 
@@ -51,8 +83,15 @@ func walkBackToRoots(
 	visited := map[string]bool{startKey: true}
 	best := make(map[string]int)
 	for len(queue) > 0 {
+		if len(visited) >= maxInvestigationNodes {
+			break
+		}
 		current := queue[0]
 		queue = queue[1:]
+		if current.depth >= maxInvestigationDepth {
+			best[current.key] = current.depth
+			continue
+		}
 		parts := strings.SplitN(current.key, "/", 3)
 		deps := graph.DependenciesOf(parts[0], parts[1], parts[2])
 		if len(deps) == 0 {

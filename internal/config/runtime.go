@@ -80,7 +80,6 @@ type runtimeMonitors struct {
 	job                JobMonitor
 	pvc                PvcMonitor
 	heartbeat          HeartbeatMonitor
-	runtimeMetrics     RuntimeMetricsMonitor
 	activeProbe        ActiveProbeMonitor
 	kubeletTelemetry   KubeletTelemetryMonitor
 	crd                CrdConfig
@@ -96,7 +95,6 @@ type runtimeMonitors struct {
 	containerRestart   int
 	schedule           ScheduleMonitor
 	oom                OomMonitor
-	includeEvents      bool
 	includeLogs        bool
 	maintenance        MaintenanceConfig
 	pendingPod         PendingPodMonitor
@@ -168,7 +166,6 @@ func CompileRuntimeConfig(c *Config) RuntimeConfig {
 			job:               c.JobMonitor,
 			pvc:               c.PvcMonitor,
 			heartbeat:         c.HeartbeatMonitor,
-			runtimeMetrics:    c.RuntimeMetricsMonitor,
 			activeProbe:       cloneActiveProbeMonitor(c.ActiveProbeMonitor),
 			kubeletTelemetry:  c.KubeletTelemetryMonitor,
 			crd: CrdConfig{
@@ -188,7 +185,6 @@ func CompileRuntimeConfig(c *Config) RuntimeConfig {
 			containerRestart:   c.ContainerRestartThreshold,
 			schedule:           c.ScheduleMonitor,
 			oom:                c.OomMonitor,
-			includeEvents:      c.IncludeEvents == nil || *c.IncludeEvents,
 			includeLogs:        c.IncludeLogs == nil || *c.IncludeLogs,
 			maintenance:        c.Maintenance,
 			pendingPod:         c.PendingPodMonitor,

@@ -283,7 +283,6 @@ func deepCopySpecMaps(in, out *KwatchConfigSpec) {
 	out.IngressMonitor = deepCopyMonitorConfig(in.IngressMonitor)
 	out.NetworkPolicyMonitor = deepCopyMonitorConfig(in.NetworkPolicyMonitor)
 	out.ClusterResourceMonitor = deepCopyMonitorConfig(in.ClusterResourceMonitor)
-	out.RuntimeMetricsMonitor = deepCopyMonitorConfig(in.RuntimeMetricsMonitor)
 	out.ActiveProbeMonitor = deepCopyMonitorConfig(in.ActiveProbeMonitor)
 	out.KubeletTelemetryMonitor = deepCopyMonitorConfig(in.KubeletTelemetryMonitor)
 	out.Crd = deepCopyMonitorConfig(in.Crd)

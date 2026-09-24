@@ -9,13 +9,14 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"github.com/abahmed/kwatch/internal/clock"
 	kwcontext "github.com/abahmed/kwatch/internal/graphcontext"
 	"github.com/abahmed/kwatch/internal/insight"
 	"github.com/abahmed/kwatch/internal/model"
 )
 
 func sampleReport(action model.IncidentAction) *Report {
-	now := time.Now()
+	now := time.Date(2026, 1, 1, 12, 0, 0, 0, time.UTC)
 	inc := &model.Incident{
 		Subject: model.Subject{
 			Reason:        "ContainersNotReady",
@@ -48,9 +49,12 @@ func sampleReport(action model.IncidentAction) *Report {
 	}
 
 	ins := &insight.Insight{
-		Cause:   "node ip-10-0-81-7 may be unhealthy",
-		Pattern: "node_failure",
-		Impact:  "affects service api",
+		Cause:      "node ip-10-0-81-7 may be unhealthy",
+		Pattern:    "node_failure",
+		Impact:     "affects service api",
+		CauseState: insight.CauseConfirmed,
+		Confidence: 0.9,
+		Evidence:   []string{"node evidence"},
 		RecentChanges: []kwcontext.Change{
 			{
 				Resource:  "deployment",
@@ -61,7 +65,9 @@ func sampleReport(action model.IncidentAction) *Report {
 			},
 		},
 	}
-	return newTestReportBuilder("dev").Build(inc, action, ins)
+	return NewReportBuilderWithClock(
+		"dev", clock.Func(func() time.Time { return now }),
+	).Build(inc, action, ins)
 }
 
 func TestTextRendererReadsTopDown(t *testing.T) {
@@ -71,33 +77,12 @@ func TestTextRendererReadsTopDown(t *testing.T) {
 	// Headline: human label first, then what it happened to, then the raw code.
 	assert.Equal(
 		t,
-		"🟠 Pod not ready — dev/api · Deployment · "+
-			"ContainersNotReady · high",
+		"🟠 Pod not ready — dev/api · Deployment",
 		lines[0],
 	)
-	// The reason appears exactly once, not four times.
-	assert.Equal(t, 1, strings.Count(out, "ContainersNotReady"))
-	// The state message leads the natural-language explanation and is not
-	// repeated in the hint.
-	assert.True(t, strings.HasPrefix(lines[1], "pod stopped being ready 2m ago"))
-	assert.Contains(t, out, "Timeline:")
-	assert.Equal(t, 1, strings.Count(out, "pod stopped being ready"))
-	// Diagnosis comes before the hint and the details without exposing a form.
-	cause, hint, meta := strings.Index(
-		out,
-		"Cause:",
-	), strings.Index(
-		out,
-		"Hint:",
-	), strings.Index(
-		out,
-		"Container:",
-	)
-	assert.True(
-		t,
-		cause < hint && hint < meta,
-		"order must be cause → hint → details",
-	)
+	assert.Contains(t, out, "Node ip-10-0-81-7 may be unhealthy.")
+	assert.NotContains(t, out, "ContainersNotReady")
+	assert.NotContains(t, out, "Timeline:")
 	// A change carries its age.
 	assert.Regexp(
 		t,
@@ -107,9 +92,10 @@ func TestTextRendererReadsTopDown(t *testing.T) {
 		out,
 	)
 	// Short names, no registry, no domain.
-	assert.Contains(t, out, "Image: api:1.2.0")
+	assert.Contains(t, out, "Container api")
+	assert.NotContains(t, out, "api:1.2.0")
 	assert.NotContains(t, out, "amazonaws")
-	assert.Contains(t, out, "Node: ip-10-0-81-7")
+	assert.Contains(t, out, "node ip-10-0-81-7")
 	assert.NotContains(t, out, "compute.internal")
 	// No blank lines from empty sections.
 	assert.NotContains(t, out, "\n\n")
@@ -149,7 +135,7 @@ func TestTextRendererGroupSubjectIsUsedVerbatim(t *testing.T) {
 		"· Deployment",
 		"the first member's kind does not label a group",
 	)
-	assert.Contains(t, out, "Affected: 6 pods")
+	assert.Contains(t, out, "6 affected pods")
 }
 
 // The three text renderers must say the same thing; only the markup may
@@ -162,6 +148,7 @@ func TestTextRenderersAgreeModuloMarkup(t *testing.T) {
 		s = fence.ReplaceAllString(s, "\n")
 		s = strings.ReplaceAll(s, "\n\n", "\n")
 		s = strings.ReplaceAll(s, "💡", "Hint:")
+		s = strings.ReplaceAll(s, "`", "")
 		return strings.TrimSpace(s)
 	}
 	actions := []model.IncidentAction{
@@ -194,8 +181,8 @@ func TestTextRendererResolvedIsOneBreath(t *testing.T) {
 	out := NewPlainTextRenderer().RenderResolved(r)
 	assert.Equal(
 		t,
-		"✅ Resolved — Pod not ready — dev/api · "+
-			"ContainersNotReady\nlasted 2m · node ip-10-0-81-7",
+		"✅ Resolved — Pod not ready — dev/api\n"+
+			"lasted 2m · node ip-10-0-81-7",
 		out,
 	)
 }
