@@ -9,7 +9,8 @@ if [ ! -d "$artifacts" ]; then
 fi
 
 patterns='KWATCH_E2E_CANARY_|client-certificate-data:|client-key-data:|'
-patterns="${patterns}Bearer [^[]|Basic [^[]|diagnostics-token|kind: Secret|"
+patterns="${patterns}Bearer [^[]|Basic [^[]|e2e-token|kind: Secret|"
+patterns="${patterns}diagnostics[_-]*token[=:][^[]|"
 patterns="${patterns}password[=:][^[]|api[_-]*key[=:][^[]"
 if grep -RIqiE --exclude='*.png' "$patterns" "$artifacts";
 then
