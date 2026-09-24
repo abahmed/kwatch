@@ -3,6 +3,8 @@ package message
 import (
 	"fmt"
 	"strings"
+
+	"github.com/abahmed/kwatch/internal/insight"
 )
 
 // Narrative is the provider-neutral explanation of an incident. Providers
@@ -10,33 +12,25 @@ import (
 const minimumCauseConfidence = 0.75
 
 // causeSentence states the diagnosis in proportion to how much kwatch
-// actually knows.
+// actually knows. It deliberately avoids a fixed "Cause:" label so the
+// notification reads as an explanation rather than a populated form.
 func causeSentence(d *DiagnosisSection) string {
 	if !causeIsRenderable(d) {
 		return ""
 	}
 	cause := strings.TrimSuffix(d.Cause, ".")
-	return "Cause: " + cause + "."
+	if d.CauseState == insight.CauseLikely {
+		cause = "likely, " + cause
+	}
+	return capitalizeSentence(cause) + "."
 }
 
 func causeIsRenderable(d *DiagnosisSection) bool {
 	if d == nil || strings.TrimSpace(d.Cause) == "" {
 		return false
 	}
-	if deterministicPattern(d.Pattern) {
-		return true
-	}
-	return d.Confidence >= minimumCauseConfidence && len(d.Evidence) > 0
-}
-
-func deterministicPattern(pattern string) bool {
-	switch pattern {
-	case "node_failure", "metrics_api_failure", "service_no_endpoints",
-		"webhook_backend_failure", "owner_unhealthy", "rollout_failure":
-		return true
-	default:
-		return false
-	}
+	return d.CauseState != insight.CauseUnknown &&
+		d.Confidence >= minimumCauseConfidence && len(d.Evidence) > 0
 }
 
 func Narrative(r *Report) string {
@@ -44,30 +38,66 @@ func Narrative(r *Report) string {
 		return ""
 	}
 	var sentences []string
-	if r.State != nil && r.State.Message != "" {
-		sentences = append(sentences, r.State.Message)
-	}
 	if r.Diagnosis != nil {
-		if r.Diagnosis.Cause != "" {
-			sentences = append(sentences, causeSentence(r.Diagnosis))
+		cause := causeSentence(r.Diagnosis)
+		if cause != "" {
+			sentences = append(sentences, cause)
 		}
 		if r.Diagnosis.Impact != "" {
-			sentences = append(sentences, capitalizeSentence(r.Diagnosis.Impact)+".")
-		}
-		if len(r.Diagnosis.Evidence) > 0 {
-			// "This is supported by warning events were observed" is not a
-			// sentence; a labelled list is.
 			sentences = append(
 				sentences,
-				"Supporting evidence: "+
-					strings.Join(r.Diagnosis.Evidence, "; ")+".",
+				impactSentence(r.Diagnosis.Impact),
 			)
 		}
-		if len(r.Diagnosis.NextSteps) > 0 {
-			sentences = append(sentences, "Start by "+strings.ToLower(strings.TrimSuffix(r.Diagnosis.NextSteps[0], "."))+".")
+		if r.Diagnosis.ReplicaState != "" {
+			sentences = append(sentences, r.Diagnosis.ReplicaState+".")
+		}
+		if r.Diagnosis.Flapping != nil {
+			sentences = append(sentences, fmt.Sprintf(
+				"🔁 This incident changed state %d times in %s.",
+				r.Diagnosis.Flapping.Transitions,
+				r.Diagnosis.Flapping.Window,
+			))
+		}
+		if r.Diagnosis.Baseline != "" {
+			sentences = append(
+				sentences, "📈 "+capitalizeSentence(
+					r.Diagnosis.Baseline,
+				)+".",
+			)
+		}
+		if r.Diagnosis.Maintenance != "" {
+			sentences = append(
+				sentences, "🚧 "+capitalizeSentence(
+					r.Diagnosis.Maintenance,
+				)+".",
+			)
+		}
+		if r.Diagnosis.Provisional && cause == "" &&
+			r.Diagnosis.UnknownSummary != "" {
+			sentences = append(
+				sentences, r.Diagnosis.UnknownSummary+".",
+			)
+		}
+		if r.Diagnosis.LogSignal != nil {
+			sentences = append(
+				sentences, "🧾 Logs suggest "+
+					r.Diagnosis.LogSignal.Summary+".",
+			)
 		}
 	}
 	return strings.Join(sentences, " ")
+}
+
+func impactSentence(impact string) string {
+	impact = strings.TrimSuffix(strings.TrimSpace(impact), ".")
+	if impact == "" {
+		return ""
+	}
+	if strings.HasPrefix(impact, "affects ") {
+		return "This affects " + strings.TrimPrefix(impact, "affects ") + "."
+	}
+	return capitalizeSentence(impact) + "."
 }
 
 // ChangeSummary returns the same compact change explanation used by every
@@ -83,7 +113,12 @@ func ChangeSummary(r *Report) string {
 			parts = append(parts, fmt.Sprintf("+%d more", len(r.Changes.Items)-show))
 			break
 		}
-		part := fmt.Sprintf("%s %s %s", c.Resource, c.Reference, strings.ToLower(c.Type))
+		part := fmt.Sprintf(
+			"%s %s %s",
+			c.Resource,
+			c.Reference,
+			strings.ToLower(c.Type),
+		)
 		if c.Age != "" {
 			part += " " + c.Age + " ago"
 		}

@@ -1,6 +1,7 @@
 package incident
 
 import (
+	"sort"
 	"time"
 
 	"github.com/abahmed/kwatch/internal/event"
@@ -169,25 +170,83 @@ func (e *Engine) pruneFanOutWindows(now time.Time) {
 // on a member that no longer exists.
 func (e *Engine) groupMemberResolved(
 	key model.IncidentKey,
+	now time.Time,
 ) (groupInc *model.Incident, action model.IncidentAction, tracked bool) {
 	for gk, tracker := range e.groupResolveTrackers {
-		if _, ok := tracker.members[key]; ok {
-			tracker.members[key] = true
-			allResolved := true
-			for _, resolved := range tracker.members {
-				if !resolved {
-					allResolved = false
-					break
-				}
-			}
-			if !allResolved {
+		if resolved, ok := tracker.members[key]; ok {
+			if resolved {
 				return nil, model.ActionSkip, true
+			}
+			before := resolvedGroupMembers(tracker.members)
+			tracker.members[key] = true
+			tracker.lastSeen = now
+			after := before + 1
+			if after < len(tracker.members) {
+				if recoveryBand(before, len(tracker.members)) ==
+					recoveryBand(after, len(tracker.members)) {
+					return nil, model.ActionSkip, true
+				}
+				return tracker.partialRecoveryIncident(e.state, after),
+					model.ActionUpdate, true
 			}
 			e.closeGroupTracker(gk)
 			return tracker.resolvedIncident(), model.ActionResolved, true
 		}
 	}
 	return nil, model.ActionSkip, false
+}
+
+func resolvedGroupMembers(members map[model.IncidentKey]bool) int {
+	count := 0
+	for _, resolved := range members {
+		if resolved {
+			count++
+		}
+	}
+	return count
+}
+
+func recoveryBand(resolved, total int) int {
+	if total <= 0 {
+		return 0
+	}
+	return resolved * 4 / total
+}
+
+func (t *groupResolveTracker) partialRecoveryIncident(
+	state map[model.IncidentKey]*model.Incident,
+	resolved int,
+) *model.Incident {
+	members := make([]model.AffectedResource, 0, len(t.members))
+	for key, recovered := range t.members {
+		inc := state[key]
+		if inc == nil {
+			continue
+		}
+		memberState := model.StateActive
+		if recovered {
+			memberState = model.StateResolved
+		}
+		members = append(members, model.AffectedResource{
+			Ref: inc.Ref(), Owner: inc.Owner, Reason: inc.Reason,
+			State: memberState, RestartCount: inc.RestartCount,
+		})
+	}
+	sort.Slice(members, func(i, j int) bool {
+		return members[i].Ref.Key() < members[j].Ref.Key()
+	})
+	return &model.Incident{
+		Subject: model.Subject{
+			ID: incidentID(t.groupIncKey), Key: t.groupIncKey,
+			Reason: t.reason, Name: t.summary,
+		},
+		Status: model.Status{
+			Count: t.totalCount, FirstSeen: t.firstSeen, LastSeen: t.lastSeen,
+			State: model.StateActive, Severity: t.severity,
+			AffectedMembers: members,
+		},
+		Delivery: model.Delivery{Revision: uint64(resolved + 1)},
+	}
 }
 
 // closeGroupTracker forgets a finished group. The flush state goes with the

@@ -162,6 +162,12 @@ var reasonLabels = map[string]string{
 // reasonLabel returns the human phrase for a reason, or the reason itself
 // when there is none.
 func reasonLabel(reason string) string {
+	switch reason {
+	case constant.ReasonFailedGetResourceMetric,
+		constant.ReasonFailedComputeMetricsReplicas,
+		constant.ReasonFailedGetMetrics:
+		return "Autoscaling metrics unavailable"
+	}
 	if label, ok := reasonLabels[reason]; ok {
 		return label
 	}

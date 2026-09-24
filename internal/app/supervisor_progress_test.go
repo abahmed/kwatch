@@ -14,7 +14,7 @@ func TestActiveOptionalComponentsHaveProgressOwnership(t *testing.T) {
 	run := func(context.Context) error { return nil }
 	deps := &serverDeps{
 		clients:   client.ClientSet{Clock: clock.RealClock{}},
-		statusRun: run, metricsRun: run, probeRun: run,
+		statusRun: run, probeRun: run,
 		kubeletRun: run, storageRun: run, networkRun: run,
 		securityRun: run, controlPlaneRun: run, telemetryRun: run,
 		upgradeRun: run,

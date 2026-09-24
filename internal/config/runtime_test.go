@@ -107,9 +107,6 @@ func TestCompileRuntimeConfigCopiesIntegrationPolicies(t *testing.T) {
 	cfg := &Config{
 		PvcMonitor:       PvcMonitor{Enabled: true, Threshold: 80},
 		HeartbeatMonitor: HeartbeatMonitor{Enabled: true, URL: "https://hb"},
-		RuntimeMetricsMonitor: RuntimeMetricsMonitor{
-			Enabled: true, MemoryWarningPercent: 80,
-		},
 		ActiveProbeMonitor: ActiveProbeMonitor{
 			Enabled:           true,
 			HTTP:              []HTTPProbeTarget{{Name: "api", URL: "https://api"}},
@@ -132,7 +129,6 @@ func TestCompileRuntimeConfigCopiesIntegrationPolicies(t *testing.T) {
 
 	require.True(t, runtime.Monitors().PVC().Enabled)
 	require.Equal(t, "https://hb", runtime.Monitors().Heartbeat().URL)
-	require.True(t, runtime.Monitors().Metrics().Enabled)
 	require.True(t, runtime.Monitors().KubeletTelemetry().PersistState)
 	require.Equal(t, "https://api", runtime.Monitors().ActiveProbe().HTTP[0].URL)
 	require.Equal(t, []string{"noisy"},

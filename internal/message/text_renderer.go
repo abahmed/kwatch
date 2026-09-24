@@ -6,7 +6,8 @@ import (
 )
 
 // markup is the only thing that differs between text providers: how to bold,
-// how to fence code, how to write a link. Everything else — what to say and in
+// how to fence code, and how to write a link. Everything else — what to say
+// and in
 // what order — is shared, so the 55 text providers cannot drift apart.
 type markup struct {
 	bold func(string) string
@@ -59,12 +60,8 @@ type textRenderer struct{ m markup }
 func (t textRenderer) RenderCreate(r *Report) string {
 	lines := []string{t.headline(r)}
 	lines = append(lines, t.story(r))
-	if r.Timeline != "" {
-		lines = append(lines, "Timeline: "+r.Timeline)
-	}
 	lines = append(lines, t.changes(r))
-	lines = append(lines, t.hint(r))
-	lines = append(lines, t.meta(r))
+	lines = append(lines, t.context(r))
 	lines = append(lines, t.typeSpecific(r)...)
 	lines = append(lines, t.suppressed(r)...)
 	lines = append(lines, t.evidence(r)...)
@@ -79,10 +76,7 @@ func (t textRenderer) RenderCreate(r *Report) string {
 func (t textRenderer) RenderUpdate(r *Report) string {
 	lines := []string{t.headline(r)}
 	lines = append(lines, t.story(r))
-	if r.Timeline != "" {
-		lines = append(lines, "Timeline: "+r.Timeline)
-	}
-	lines = append(lines, t.meta(r))
+	lines = append(lines, t.context(r))
 	lines = append(lines, t.typeSpecific(r)...)
 	lines = append(lines, t.evidence(r)...)
 	return joinNonEmpty(lines)
@@ -102,9 +96,6 @@ func (t textRenderer) RenderResolved(r *Report) string {
 	)
 	if subj := subjectOf(r); subj != "" {
 		head += " — " + subj
-	}
-	if labelOf(r) != r.Reason {
-		head += " · " + r.Reason
 	}
 	var info []string
 	if r.Summary.Duration != "" {
@@ -178,12 +169,6 @@ func (t textRenderer) headline(r *Report) string {
 		!strings.Contains(r.Name, r.Identity.OwnerKind) {
 		h += " · " + r.Identity.OwnerKind
 	}
-	if labelOf(r) != r.Reason {
-		h += " · " + r.Reason
-	}
-	if r.Severity != "" && r.Severity != "normal" {
-		h += " · " + t.m.bold(r.Severity)
-	}
 	return h
 }
 
@@ -192,56 +177,45 @@ func (t textRenderer) changes(r *Report) string {
 	return ChangeSummary(r)
 }
 
-func (t textRenderer) hint(r *Report) string {
-	if r.Diagnosis == nil || r.Diagnosis.Hint == "" {
-		return ""
-	}
-	return t.m.hint + " " + r.Diagnosis.Hint
-}
-
-// meta is the identifying detail, one line, only what is set.
-func (t textRenderer) meta(r *Report) string {
-	var parts []string
+// context adds only operationally useful details in sentence form. It avoids
+// the fixed label row used by the previous template-style renderer.
+func (t textRenderer) context(r *Report) string {
+	var facts []string
 	if r.Identity != nil {
 		if r.Identity.Container != "" {
-			parts = append(parts, "Container: "+r.Identity.Container)
-		}
-		if r.Identity.Image != "" {
-			parts = append(parts, "Image: "+r.Identity.Image)
+			facts = append(facts, "container "+t.m.mono(r.Identity.Container))
 		}
 		if r.Identity.Node != "" {
-			parts = append(parts, "Node: "+r.Identity.Node)
+			facts = append(facts, "node "+t.m.mono(r.Identity.Node))
 		}
 	}
 	if r.State != nil {
 		if r.State.ExitCode > 0 {
-			parts = append(
-				parts,
-				fmt.Sprintf("Exit code: %d", r.State.ExitCode),
-			)
+			facts = append(facts, fmt.Sprintf("exit code %d", r.State.ExitCode))
 		}
 		if r.State.Restarts > 0 {
-			parts = append(parts, fmt.Sprintf("Restarts: %d", r.State.Restarts))
+			facts = append(facts, fmt.Sprintf("%d restarts", r.State.Restarts))
 		}
 	}
 	if r.Summary.Peak > 1 {
-		parts = append(parts, fmt.Sprintf("Affected: %d %s",
+		facts = append(facts, fmt.Sprintf("%d affected %s",
 			r.Summary.Peak, resourcePlural(r)))
 	}
 	if r.Summary.Duration != "" {
-		parts = append(parts, "Duration: "+r.Summary.Duration)
+		facts = append(facts, "active for "+r.Summary.Duration)
 	}
-	if r.Cluster != "" {
-		parts = append(parts, "Cluster: "+r.Cluster)
+	if len(facts) == 0 {
+		return ""
 	}
-	return strings.Join(parts, " · ")
+	return capitalizeSentence(strings.Join(facts, ", ")) + "."
 }
 
 func (t textRenderer) typeSpecific(r *Report) []string {
 	var out []string
 	if r.OOM != nil {
 		if r.OOM.MemoryLimit != "" {
-			out = append(out, "Memory limit: "+r.OOM.MemoryLimit)
+			out = append(out,
+				"🧠 The container memory limit is "+r.OOM.MemoryLimit+".")
 		}
 		if r.OOM.IsLeak {
 			out = append(
@@ -254,21 +228,24 @@ func (t textRenderer) typeSpecific(r *Report) []string {
 			)
 		}
 		if r.OOM.Timeline != "" {
-			out = append(out, "Memory before crash: "+r.OOM.Timeline)
+			out = append(out,
+				"Memory usage before the crash was "+r.OOM.Timeline+".")
 		}
 	}
 	if r.Probe != nil {
-		out = append(
-			out,
-			fmt.Sprintf("Probe: %s %s", r.Probe.ProbeType, r.Probe.Endpoint),
-		)
+		out = append(out, fmt.Sprintf(
+			"🩺 The %s probe to %s is failing.",
+			r.Probe.ProbeType, r.Probe.Endpoint,
+		))
 	}
 	if r.Image != nil && r.Image.RegistryHint != "" {
 		out = append(out, r.Image.RegistryHint)
 	}
 	if r.Pending != nil {
 		if r.Pending.Delay != "" {
-			out = append(out, "Scheduling delay: "+r.Pending.Delay)
+			out = append(out,
+				"⏳ The pod has been waiting to schedule for "+
+					r.Pending.Delay+".")
 		}
 		out = append(out, r.Pending.ResourceRequests...)
 	}
@@ -292,8 +269,9 @@ func (t textRenderer) suppressed(r *Report) []string {
 	}
 	out := []string{
 		fmt.Sprintf(
-			"⚠️ %d other pod(s) %s also failed (grouped to reduce noise)",
+			"🔗 %d other %s %s also failed; Kwatch grouped them here.",
 			r.SuppressedPods,
+			pluralWord(r.SuppressedPods, "pod", "pods"),
 			suppressedScope(r),
 		),
 	}
@@ -313,16 +291,24 @@ func (t textRenderer) suppressed(r *Report) []string {
 	return out
 }
 
+func pluralWord(count int, singular, plural string) string {
+	if count == 1 {
+		return singular
+	}
+	return plural
+}
+
 func (t textRenderer) evidence(r *Report) []string {
 	if r.Evidence == nil {
 		return nil
 	}
 	var out []string
-	if r.Evidence.Events != "" {
-		out = append(out, "Events:", t.m.code(r.Evidence.Events))
-	}
 	if r.Evidence.Logs != "" {
-		out = append(out, "Logs:", t.m.code(r.Evidence.Logs))
+		label := "Recent container logs"
+		if r.Identity != nil && r.Identity.Container != "" {
+			label += " from " + t.m.mono(r.Identity.Container)
+		}
+		out = append(out, label+":", t.m.code(r.Evidence.Logs))
 	}
 	return out
 }

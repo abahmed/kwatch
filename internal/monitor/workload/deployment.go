@@ -107,7 +107,10 @@ func DetectDeploymentUnavailable(
 	}
 	return observe.Object(
 		"deployment", deploy, constant.ReasonDeploymentUnavailable,
-	)
+	).WithFacts(model.Facts{
+		DesiredReplicas: DeploymentDesiredReplicas(deploy),
+		ReadyReplicas:   deploy.Status.ReadyReplicas,
+	})
 }
 
 // DeploymentDesiredReplicas returns the configured or observed replica count.

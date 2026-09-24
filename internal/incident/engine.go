@@ -88,32 +88,33 @@ func notifSig(inc *model.Incident) string {
 func notificationFingerprint(inc *model.Incident) string {
 	services := append([]string(nil), inc.AffectedServices...)
 	sort.Strings(services)
-	memberCount := 0
-	if IsGroupKey(inc.Key) {
-		memberCount = len(inc.AffectedMembers)
-		if memberCount == 0 {
-			memberCount = len(inc.Resources)
-		}
+	facts := stableNotificationFacts(inc.Facts)
+	memberCount := len(inc.AffectedMembers)
+	activeMemberCount := activeAffectedMemberCount(inc.AffectedMembers)
+	if IsGroupKey(inc.Key) && memberCount == 0 {
+		memberCount = len(inc.Resources)
 	}
 	value := struct {
-		Reason      string
-		Severity    model.Severity
-		Resource    string
-		Namespace   string
-		Object      model.ObjectRef
-		Owner       model.ObjectRef
-		Container   string
-		Image       string
-		Node        string
-		Services    []string
-		MemberCount int
-		Facts       model.Facts
-		Suppressed  model.IncidentKey
+		Reason        string
+		Severity      model.Severity
+		Resource      string
+		Namespace     string
+		Object        model.ObjectRef
+		Owner         model.ObjectRef
+		Container     string
+		Image         string
+		Node          string
+		Services      []string
+		MemberCount   int
+		ActiveMembers int
+		Facts         model.Facts
+		Suppressed    model.IncidentKey
 	}{
 		Reason: inc.Reason, Severity: inc.Severity, Resource: inc.Resource,
 		Namespace: inc.Namespace, Object: inc.Object, Owner: inc.Owner,
 		Container: inc.ContainerName, Image: inc.Image, Node: inc.NodeName,
-		Services: services, MemberCount: memberCount, Facts: inc.Facts,
+		Services: services, MemberCount: memberCount,
+		ActiveMembers: activeMemberCount, Facts: facts,
 		Suppressed: inc.SuppressedBy,
 	}
 	data, err := json.Marshal(value)
@@ -122,6 +123,28 @@ func notificationFingerprint(inc *model.Incident) string {
 	}
 	hash := sha256.Sum256(data)
 	return hex.EncodeToString(hash[:8])
+}
+
+func activeAffectedMemberCount(members []model.AffectedResource) int {
+	count := 0
+	for _, member := range members {
+		if member.State == model.StateActive {
+			count++
+		}
+	}
+	return count
+}
+
+// stableNotificationFacts removes observation details that naturally change
+// on every reconciliation but do not change the operational story. They stay
+// on the incident for diagnosis and audit; they do not create chat updates.
+func stableNotificationFacts(facts model.Facts) model.Facts {
+	facts.OOMTimeline = ""
+	facts.OOMCount = 0
+	facts.SchedulingDelay = 0
+	facts.MetricPod = ""
+	facts.MetricContainer = ""
+	return facts
 }
 
 // edgeAction returns the action to notify, or ActionSkip if nothing changed.
@@ -322,7 +345,7 @@ func normalizeReason(reason string) string {
 	// The HPA controller emits FailedGetResourceMetric,
 	// FailedComputeMetricsReplicas and FailedGetMetrics for the one condition
 	// of having no metrics. Kept apart they were two or three alerts per HPA
-	// for a single metrics-server outage.
+	// for one underlying metrics-availability condition.
 	switch reason {
 	case constant.ReasonFailedComputeMetricsReplicas,
 		constant.ReasonFailedGetMetrics:

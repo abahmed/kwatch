@@ -27,7 +27,7 @@ func TestRenderIncidentIncludesReason(t *testing.T) {
 		inc, model.ActionCreate, NewPlainTextRenderer(), "cluster",
 		clock.RealClock{},
 	)
-	if !strings.Contains(got, "OOMKilled") {
-		t.Fatalf("rendered incident %q does not contain reason", got)
+	if !strings.Contains(got, "Out of memory") {
+		t.Fatalf("rendered incident %q does not contain label", got)
 	}
 }

@@ -2,8 +2,10 @@ package insight
 
 import (
 	"fmt"
+	"strings"
 	"time"
 
+	"github.com/abahmed/kwatch/internal/constant"
 	"github.com/abahmed/kwatch/internal/model"
 )
 
@@ -24,6 +26,12 @@ func (e *Engine) appendObservedEvidence(
 	inc *model.Incident,
 	ins *Insight,
 ) int {
+	if isMetricsFailureReason(inc.Reason) {
+		ins.Evidence = append(
+			ins.Evidence,
+			"the HPA reported that required metrics could not be obtained",
+		)
+	}
 	if inc.OwnerUnhealthy {
 		ins.Evidence = append(ins.Evidence, "the owning workload is unhealthy")
 	}
@@ -57,6 +65,20 @@ func (e *Engine) appendObservedEvidence(
 			"bound volume: "+inc.Facts.Volume,
 		)
 	}
+	if inc.Facts.MetricFailure != "" {
+		detail := "Kubernetes classified the HPA failure as " +
+			strings.ReplaceAll(inc.Facts.MetricFailure, "_", " ")
+		if inc.Facts.MetricName != "" {
+			detail += " for " + inc.Facts.MetricName
+		}
+		ins.Evidence = append(ins.Evidence, detail)
+	}
+	if inc.Facts.FailureDomain != "" {
+		ins.Evidence = append(
+			ins.Evidence,
+			"Kubernetes reported a "+inc.Facts.FailureDomain+" failure",
+		)
+	}
 	if len(ins.RecentChanges) > 0 {
 		ins.Evidence = append(
 			ins.Evidence,
@@ -75,15 +97,34 @@ func (e *Engine) setPatternConfidence(ins *Insight) {
 	case "rollout_failure", "storage_failure", "storage_attachment_failure":
 		ins.Confidence = 0.85
 	case "dependency_change", "config_error":
-		ins.Confidence = 0.60
+		ins.Confidence = 0.65
 	case "resource_limit":
 		ins.Confidence = 0.85
 	case "node_pressure":
 		ins.Confidence = 0.80
 	case "metrics_unavailable":
-		ins.Confidence = 0.70
+		ins.Confidence = 0.90
+	case "metrics_api_failure", "hpa_missing_request", "hpa_invalid_metric":
+		ins.Confidence = 0.95
+	case "hpa_missing_pod_metrics":
+		ins.Confidence = 0.90
+	case "scheduling_failure", "admission_failure",
+		"network_failure", "api_discovery_failure", "workload_failure",
+		"scaling_failure", "configuration_failure", "health_check_failure":
+		ins.Confidence = 0.95
 	case "root_cause":
 		ins.Confidence = 0.40
+	}
+}
+
+func isMetricsFailureReason(reason string) bool {
+	switch reason {
+	case constant.ReasonFailedGetResourceMetric,
+		constant.ReasonFailedComputeMetricsReplicas,
+		constant.ReasonFailedGetMetrics:
+		return true
+	default:
+		return false
 	}
 }
 

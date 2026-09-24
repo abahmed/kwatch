@@ -12,7 +12,7 @@ import (
 
 func TestSmartGroupingFoldRekeysMember(t *testing.T) {
 	now := time.Date(2025, 1, 1, 0, 0, 0, 0, time.UTC)
-	e := newSmartGroupingEngine()
+	e := newFanOutGroupingEngine()
 	e.now = mockClock(now)
 
 	sigLog := "connection refused:5432"
@@ -76,12 +76,19 @@ func TestSmartGroupingFoldRekeysMember(t *testing.T) {
 
 	// Resolving only dep2 leaves the folded dep1 member active.
 	e.markResolved("ns:dep2:CrashLoopBackOff:")
-	require.Equal(t, []model.IncidentAction{model.ActionCreate}, actions)
+	require.Equal(t, []model.IncidentAction{
+		model.ActionCreate,
+		model.ActionUpdate,
+	}, actions)
 
 	e.markResolved("ns:dep1:CrashLoopHighFrequency:")
 	require.Equal(
 		t,
-		[]model.IncidentAction{model.ActionCreate, model.ActionResolved},
+		[]model.IncidentAction{
+			model.ActionCreate,
+			model.ActionUpdate,
+			model.ActionResolved,
+		},
 		actions,
 	)
 }

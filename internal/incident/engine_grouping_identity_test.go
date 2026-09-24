@@ -13,7 +13,7 @@ import (
 
 func TestSmartGroupingFoldRekeysAllMembers(t *testing.T) {
 	now := time.Date(2025, 1, 1, 0, 0, 0, 0, time.UTC)
-	e := newSmartGroupingEngine()
+	e := newFanOutGroupingEngine()
 	e.now = mockClock(now)
 
 	sigLog := "connection refused:5432"
@@ -85,7 +85,7 @@ func TestSmartGroupingFoldRekeysAllMembers(t *testing.T) {
 
 func TestResolveReleasesGroupMember(t *testing.T) {
 	now := time.Date(2025, 1, 1, 0, 0, 0, 0, time.UTC)
-	e := newSmartGroupingEngine()
+	e := newFanOutGroupingEngine()
 	e.now = mockClock(now)
 
 	sigLog := "connection refused:5432"
@@ -130,7 +130,10 @@ func TestResolveReleasesGroupMember(t *testing.T) {
 	)
 	require.Equal(
 		t,
-		[]model.IncidentAction{model.ActionCreate},
+		[]model.IncidentAction{
+			model.ActionCreate,
+			model.ActionUpdate,
+		},
 		actions,
 		"group not fully resolved yet",
 	)
@@ -140,14 +143,18 @@ func TestResolveReleasesGroupMember(t *testing.T) {
 	)
 	require.Equal(
 		t,
-		[]model.IncidentAction{model.ActionCreate, model.ActionResolved},
+		[]model.IncidentAction{
+			model.ActionCreate,
+			model.ActionUpdate,
+			model.ActionResolved,
+		},
 		actions,
 	)
 }
 
 func TestSmartGroupingNewOccurrenceCreatesAgain(t *testing.T) {
 	now := time.Date(2025, 1, 1, 0, 0, 0, 0, time.UTC)
-	e := newSmartGroupingEngine()
+	e := newFanOutGroupingEngine()
 	e.now = mockClock(now)
 
 	sigLog := "connection refused:5432"
@@ -190,7 +197,11 @@ func TestSmartGroupingNewOccurrenceCreatesAgain(t *testing.T) {
 	e.markResolved("ns:dep2:CrashLoopBackOff:")
 	require.Equal(
 		t,
-		[]model.IncidentAction{model.ActionCreate, model.ActionResolved},
+		[]model.IncidentAction{
+			model.ActionCreate,
+			model.ActionUpdate,
+			model.ActionResolved,
+		},
 		actions,
 	)
 
@@ -220,8 +231,8 @@ func TestSmartGroupingNewOccurrenceCreatesAgain(t *testing.T) {
 	e.now = mockClock(now.Add(12*time.Minute + 5*time.Second))
 	e.checkLifecycle()
 
-	require.Len(t, actions, 3)
-	assert.Equal(t, model.ActionCreate, actions[2])
+	require.Len(t, actions, 4)
+	assert.Equal(t, model.ActionCreate, actions[3])
 }
 
 // Reason-adaptive scope tests.
@@ -281,15 +292,14 @@ func TestSmartGroupingNodeScope(t *testing.T) {
 	assert.True(t, has2, "node-2 group must exist")
 }
 
-func TestSmartGroupingSignatureScope(t *testing.T) {
+func TestSmartGroupingDoesNotUseLogSignatureScope(t *testing.T) {
 	e := newSmartGroupingEngine()
-	sigLog := "connection refused:5432"
 	e.processEvent(
 		event.Event{
 			PodName:   "p1",
-			Namespace: "ns1",
+			Namespace: "ns",
 			Reason:    "CrashLoopBackOff",
-			Logs:      sigLog,
+			Logs:      "connection refused:5432",
 		},
 		"dep1",
 		nil,
@@ -297,21 +307,21 @@ func TestSmartGroupingSignatureScope(t *testing.T) {
 	e.processEvent(
 		event.Event{
 			PodName:   "p2",
-			Namespace: "ns2",
+			Namespace: "ns",
 			Reason:    "CrashLoopBackOff",
-			Logs:      sigLog,
+			Logs:      "database unavailable",
 		},
 		"dep2",
 		nil,
 	)
 
-	gk := "CrashLoopBackOff|sig|Postgres unreachable — check the DB " +
-		"Service/endpoints + connection string."
 	e.mu.Lock()
-	pg, ok := e.groupBuffers[gk]
+	_, hasSignature := e.groupBuffers["CrashLoopBackOff|sig|"]
+	pg, ok := e.groupBuffers["CrashLoopBackOff|ns|dep2"]
 	e.mu.Unlock()
-	require.True(t, ok, "signature-scoped group must exist")
-	assert.Equal(t, 2, len(pg.entries), "both owners in same signature group")
+	require.True(t, ok, "the second owner must be buffered")
+	assert.Len(t, pg.entries, 1)
+	assert.False(t, hasSignature, "raw logs must not define group identity")
 }
 
 func TestSmartGroupingSignatureFallback(t *testing.T) {

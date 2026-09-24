@@ -92,6 +92,22 @@ func (c *Controller) wireGraphHandlers(
 			))
 		}
 	}
+	if runtime.Monitors().AdmissionWebhook().Enabled {
+		fs.mwcInformer().AddEventHandler(safeEventHandler(
+			"mutatingwebhookconfiguration",
+			c.graphHandler(
+				"mutatingwebhookconfiguration",
+				c.rebuildMutatingWebhookGraph,
+			),
+		))
+		fs.vwcInformer().AddEventHandler(safeEventHandler(
+			"validatingwebhookconfiguration",
+			c.graphHandler(
+				"validatingwebhookconfiguration",
+				c.rebuildValidatingWebhookGraph,
+			),
+		))
+	}
 }
 
 func (c *Controller) wireNodeAndLeaseGraphHandlers(fs factorySet) {

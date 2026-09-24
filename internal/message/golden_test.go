@@ -9,6 +9,7 @@ import (
 
 	"github.com/stretchr/testify/require"
 
+	"github.com/abahmed/kwatch/internal/insight"
 	"github.com/abahmed/kwatch/internal/model"
 )
 
@@ -31,7 +32,7 @@ func TestProductionRenderingGoldens(t *testing.T) {
 	update.Action = "update"
 	update.Summary.Emoji = "🔄"
 	update.Summary.Label = "Pod is still restarting"
-	update.Summary.Duration = "for 6m"
+	update.Summary.Duration = "6m"
 	assertGolden(t, "plain-update.golden",
 		NewPlainTextRenderer().RenderUpdate(update))
 	assertGolden(t, "slack-update.golden",
@@ -40,7 +41,7 @@ func TestProductionRenderingGoldens(t *testing.T) {
 	reopen.Action = "update"
 	reopen.Summary.Emoji = "🔄"
 	reopen.Summary.Label = "Pod restarted again"
-	reopen.Summary.Duration = "for 6m"
+	reopen.Summary.Duration = "6m"
 	assertGolden(t, "plain-reopen.golden",
 		NewPlainTextRenderer().RenderUpdate(reopen))
 	assertGolden(t, "plain-resolved.golden", NewPlainTextRenderer().RenderResolved(
@@ -54,15 +55,16 @@ func productionReport() *Report {
 		Action: "create", Severity: "high", Reason: "CrashLoopBackOff",
 		Cluster: "production", Namespace: "payments", Resource: "pod",
 		Name: "checkout", Summary: SummarySection{
-			Emoji: "🟠", Label: "Pod keeps restarting", Duration: "for 3m",
+			Emoji: "🟠", Label: "Pod keeps restarting", Duration: "3m",
 		},
 		Identity: &IdentitySection{
 			Container: "api", Image: "registry/checkout:v4", Node: "worker-a",
 		},
 		Diagnosis: &DiagnosisSection{
 			Cause: "the node is not ready", Pattern: "node_failure",
-			Confidence: 0.9, Evidence: []string{"NodeNotReady"},
-			Impact: "3 replicas are unavailable",
+			Confidence: 0.9, CauseState: insight.CauseConfirmed,
+			Evidence: []string{"NodeNotReady"},
+			Impact:   "3 replicas are unavailable",
 		},
 		Evidence: &EvidenceSection{
 			Events: "NodeNotReady", Logs: "connection refused",

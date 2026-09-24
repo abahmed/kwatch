@@ -42,7 +42,6 @@ stringData:
       - "<optional_substring>"
     namespaceSelector:
       "<label_selector>"     # k8s label selector, mutually exclusive with namespaces
-    includeEvents: <boolean>  # include events section in alerts (default true)
     includeLogs: <boolean>    # include logs section in alerts (default true)
 
     # ── Severity ──────────────────────────────────────────

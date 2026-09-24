@@ -65,12 +65,12 @@ func TestFormatIncidentMessage(t *testing.T) {
 	}
 
 	msg := testBuildMessage(inc, model.ActionCreate, "test-cluster")
-	assert.Contains(t, msg, "CrashLoopBackOff")
+	assert.Contains(t, msg, "Container keeps crashing")
 	assert.Contains(t, msg, "deploy")
 	assert.Contains(t, msg, "2")
 
 	msgUpdate := testBuildMessage(inc, model.ActionUpdate, "test-cluster")
-	assert.Contains(t, msgUpdate, "CrashLoopBackOff")
+	assert.Contains(t, msgUpdate, "Container keeps crashing")
 	assert.Contains(t, msgUpdate, "2")
 }
 
@@ -100,12 +100,11 @@ func TestFormatIncidentMessageWithLogsEvents(t *testing.T) {
 	}
 
 	msg := testBuildMessage(inc, model.ActionCreate, "test-cluster")
-	assert.Contains(t, msg, "Logs")
+	assert.Contains(t, msg, "Recent container logs:")
 	assert.Contains(t, msg, "line1")
 	assert.Contains(t, msg, "line2")
-	assert.Contains(t, msg, "Events")
-	assert.Contains(t, msg, "Pulling image")
-	assert.Contains(t, msg, "BackOff restart")
+	assert.NotContains(t, msg, "Pulling image")
+	assert.NotContains(t, msg, "BackOff restart")
 }
 
 func TestFormatResolvedMessageGolden(t *testing.T) {
@@ -129,7 +128,7 @@ func TestFormatResolvedMessageGolden(t *testing.T) {
 	msg := testBuildMessage(inc, model.ActionResolved, "test-cluster")
 	assert.Contains(t, msg, "Resolved")
 	assert.Contains(t, msg, "deploy")
-	assert.Contains(t, msg, "OOMKilled")
+	assert.Contains(t, msg, "Out of memory")
 }
 
 func TestSilenceByNamespace(t *testing.T) {
@@ -406,7 +405,7 @@ func TestFormatIncidentMessageUnregisteredReason(t *testing.T) {
 			"crashloopbackoff": "OVERRIDE",
 		},
 	)
-	if !strings.Contains(msg, "NodeNotReady") {
+	if !strings.Contains(msg, "Node is not ready") {
 		t.Errorf("expected default message to contain reason, got %q", msg)
 	}
 }

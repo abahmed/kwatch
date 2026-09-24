@@ -1,6 +1,9 @@
 package message
 
-import "github.com/abahmed/kwatch/internal/model"
+import (
+	"github.com/abahmed/kwatch/internal/insight"
+	"github.com/abahmed/kwatch/internal/model"
+)
 
 // Report is a structured, provider-agnostic representation of an incident
 // notification. Sections are populated selectively based on the incident's
@@ -67,13 +70,21 @@ type StateSection struct {
 
 // DiagnosisSection holds diagnostic context.
 type DiagnosisSection struct {
-	Hint       string
-	Cause      string
-	Impact     string
-	Pattern    string
-	Confidence float64
-	Evidence   []string
-	NextSteps  []string
+	Hint           string
+	Cause          string
+	Impact         string
+	Pattern        string
+	Confidence     float64
+	Evidence       []string
+	NextSteps      []string
+	CauseState     insight.CauseState
+	Provisional    bool
+	ReplicaState   string
+	UnknownSummary string
+	Maintenance    string
+	Flapping       *insight.FlappingSummary
+	LogSignal      *insight.LogSignal
+	Baseline       string
 }
 
 // EvidenceSection holds logs and events.

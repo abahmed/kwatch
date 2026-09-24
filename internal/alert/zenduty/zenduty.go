@@ -159,7 +159,9 @@ func (z *Zenduty) buildMessage(e *event.Event) ([]byte, error) {
 	}
 
 	msg := defaultZendutyTitle
-	if e.PodName != "" {
+	if narrative := strings.TrimSpace(e.Narrative); narrative != "" {
+		msg = zendutyFirstLine(narrative, 130)
+	} else if e.PodName != "" {
 		msg = fmt.Sprintf(defaultZendutyTitle, e.PodName)
 	}
 	payload.Message = msg
@@ -195,15 +197,18 @@ func (z *Zenduty) buildMessage(e *event.Event) ([]byte, error) {
 	}
 
 	summary := strings.Join(summaryParts, " · ")
+	if narrative := strings.TrimSpace(e.Narrative); narrative != "" {
+		summary = narrative
+	}
 
-	if e.IncludeLogs {
+	if e.Narrative == "" && e.IncludeLogs {
 		logs := strings.TrimSpace(e.Logs)
 		if len(logs) > 0 {
 			summary += "\n\nLogs:\n" + logs
 		}
 	}
 
-	if e.IncludeEvents {
+	if e.Narrative == "" && e.IncludeEvents {
 		events := strings.TrimSpace(e.Events)
 		if len(events) > 0 {
 			summary += "\n\nEvents:\n" + events
@@ -217,4 +222,12 @@ func (z *Zenduty) buildMessage(e *event.Event) ([]byte, error) {
 		return nil, fmt.Errorf("failed to marshal zenduty payload: %w", err)
 	}
 	return str, nil
+}
+
+func zendutyFirstLine(value string, limit int) string {
+	line := strings.SplitN(strings.TrimSpace(value), "\n", 2)[0]
+	if len(line) <= limit {
+		return line
+	}
+	return line[:limit-1] + "…"
 }

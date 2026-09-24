@@ -29,6 +29,8 @@ type ResourceGraph struct {
 	edgeCounts   map[string]int
 	outgoing     map[string]map[string]bool
 	incoming     map[string]map[string]bool
+	revision     uint64
+	changed      chan struct{}
 }
 
 func NewResourceGraph() *ResourceGraph {
@@ -39,6 +41,22 @@ func NewResourceGraph() *ResourceGraph {
 		edgeCounts:   make(map[string]int),
 		outgoing:     make(map[string]map[string]bool),
 		incoming:     make(map[string]map[string]bool),
+		changed:      make(chan struct{}, 1),
+	}
+}
+
+// Changes coalesces topology mutations into a bounded wake-up signal. The
+// current graph is always the source of truth; consumers never depend on
+// receiving one event per edge.
+func (g *ResourceGraph) Changes() <-chan struct{} {
+	return g.changed
+}
+
+func (g *ResourceGraph) markChangedLocked() {
+	g.revision++
+	select {
+	case g.changed <- struct{}{}:
+	default:
 	}
 }
 
@@ -56,6 +74,14 @@ func (g *ResourceGraph) Size() (nodes, edges int) {
 		seen[k] = struct{}{}
 	}
 	return len(seen), len(g.edges)
+}
+
+// Revision changes whenever graph relationships change. Analysis caches use
+// it to discard conclusions derived from an older cluster topology.
+func (g *ResourceGraph) Revision() uint64 {
+	g.mu.RLock()
+	defer g.mu.RUnlock()
+	return g.revision
 }
 
 func resourceKey(kind, namespace, name string) string {
@@ -178,6 +204,7 @@ func (g *ResourceGraph) addEdgeLocked(edge Edge) {
 		g.dependents[to][from] = true
 	}
 	g.edgeCounts[pair]++
+	g.markChangedLocked()
 	g.edges[key] = edge
 	if g.outgoing[from] == nil {
 		g.outgoing[from] = make(map[string]bool)

@@ -66,8 +66,9 @@ func TestFoldMigratesIncidentNotRecreates(t *testing.T) {
 func TestRenotifySkipsGroupedIncidents(t *testing.T) {
 	now := time.Date(2025, 1, 1, 0, 0, 0, 0, time.UTC)
 	e := newTestEngine(Config{
-		Window:              10 * time.Minute,
-		SmartGroupingWindow: 60 * time.Second,
+		Window:                   10 * time.Minute,
+		SmartGroupingWindow:      60 * time.Second,
+		NamespaceFanOutThreshold: 2,
 		RenotifyIntervalBySeverity: map[string]time.Duration{
 			"default": 30 * time.Second,
 		},

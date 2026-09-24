@@ -16,7 +16,6 @@ import (
 type optionalRuns struct {
 	tlsSweep        func() error
 	statusRun       func(context.Context) error
-	metricsRun      func(context.Context) error
 	probeRun        func(context.Context) error
 	kubeletRun      func(context.Context) error
 	storageRun      func(context.Context) error
@@ -46,14 +45,6 @@ func configureOptionalRuns(
 	runs.statusRun = configureStatusMonitor(
 		runtime, ctl, graph, incidentEngine, boot.healthServer, now,
 		boot.clients.Dynamic, boot.clients.Discovery,
-	)
-	runs.metricsRun = configureMetricsMonitor(
-		runtime,
-		ctl,
-		boot.clients.Kubernetes,
-		incidentEngine,
-		ctl.OwnerResolver(),
-		boot.clients.Dynamic,
 	)
 	runs.probeRun = configureProbeRunner(
 		runtime,

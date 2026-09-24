@@ -12,6 +12,26 @@ func TestNewResourceGraph(t *testing.T) {
 	assert.Empty(t, g.Edges())
 }
 
+func TestGraphChangesCoalescesTopologyWakeups(t *testing.T) {
+	g := NewResourceGraph()
+	g.AddEdge("pod", "apps", "api", "node", "", "worker", "scheduled_on")
+	g.AddEdge("pod", "apps", "api", "service", "apps", "api", "selects")
+	select {
+	case <-g.Changes():
+	default:
+		t.Fatal("graph mutation did not publish a change")
+	}
+	select {
+	case <-g.Changes():
+	default:
+	}
+	select {
+	case <-g.Changes():
+		t.Fatal("coalesced graph mutation published an unbounded wakeup")
+	default:
+	}
+}
+
 func TestAddEdge(t *testing.T) {
 	g := NewResourceGraph()
 	g.AddEdge("pod", "ns1", "p1", "node", "", "n1", "scheduled_on")

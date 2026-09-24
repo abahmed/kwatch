@@ -216,9 +216,8 @@ report_matches \
 # Runtime integrations report observations through narrow monitor contracts.
 # They must not reach into incident lifecycle implementation directly.
 for integration_dir in \
-	internal/kubeletmetrics \
-	internal/metricsapi \
-	internal/probe \
+internal/kubeletmetrics \
+internal/probe \
 	internal/pvc \
 	internal/resource \
 	internal/rbac \
@@ -356,11 +355,10 @@ report_matches \
 # REST and dynamic client construction is an application concern. Production
 # composition uses internal/client.ClientSet.
 for construction_dir in \
-	internal/networkgraph \
-	internal/storagegraph \
-	internal/statuswatch \
-	internal/metricsapi \
-	internal/controlplane \
+internal/networkgraph \
+internal/storagegraph \
+internal/statuswatch \
+internal/controlplane \
 	internal/crdwatch
 do
 	report_matches \

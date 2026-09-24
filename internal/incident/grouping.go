@@ -5,7 +5,6 @@ import (
 	"time"
 
 	"github.com/abahmed/kwatch/internal/constant"
-	"github.com/abahmed/kwatch/internal/enricher"
 	"github.com/abahmed/kwatch/internal/event"
 	"github.com/abahmed/kwatch/internal/model"
 )
@@ -21,7 +20,6 @@ type groupEntry struct {
 	containerName string
 	image         string
 	nodeName      string
-	logSignature  string
 
 	// prevNotifiedSig is the member's notification signature from before
 	// buffering overwrote it. A group of one is emitted as the member itself,
@@ -109,14 +107,17 @@ func classifyImagePullScope(msg string) string {
 }
 
 func sharedMetricsAPIFailure(ev event.Event) bool {
+	if ev.Facts.MetricFailure != "" {
+		return ev.Facts.MetricFailure == "api_unavailable"
+	}
 	message := strings.ToLower(ev.Message + " " + ev.Hint)
 	return containsAny(
 		message,
-		"metrics.k8s.io",
-		"unable to fetch metrics",
 		"server currently unable to handle the request",
-		"failed to get memory utilization",
-		"failed to get cpu utilization",
+		"no known available metric versions found",
+		"metrics api is unavailable",
+		"the metrics api is unavailable",
+		"service unavailable",
 	)
 }
 
@@ -137,20 +138,6 @@ func encodeImageGroupKey(reason, image, namespace string) string {
 func groupNamespace(kind, value string) string {
 	if kind == "ns" || kind == "cp" {
 		return value
-	}
-	return ""
-}
-
-// groupSignature is the log-derived identity used when the same crash message
-// appears across otherwise unrelated workloads. Only the log-bearing reasons
-// have one, and it is computed once per incident: extracting a signature walks
-// the whole log tail, and grouping used to do it twice for every event.
-func groupSignature(r, logs string) string {
-	switch r {
-	case constant.ReasonCrashLoopBackOff,
-		constant.ReasonBackOff,
-		constant.ReasonError:
-		return enricher.SignatureHint(logs)
 	}
 	return ""
 }
@@ -177,9 +164,8 @@ func planGroupEntry(
 	owner string,
 ) groupPlan {
 	r := normalizeReason(ev.Reason)
-	sig := groupSignature(r, ev.Logs)
 	return groupPlan{
-		key: computeGroupKey(r, ev, owner, sig),
+		key: computeGroupKey(r, ev, owner),
 		entry: groupEntry{
 			key:             inc.Key,
 			prevNotifiedSig: inc.NotifiedSig,
@@ -191,15 +177,13 @@ func planGroupEntry(
 			containerName:   ev.ContainerName,
 			image:           ev.Image,
 			nodeName:        ev.NodeName,
-			logSignature:    sig,
 		},
 	}
 }
 
-// computeGroupKey maps a reason onto the scope its incidents should share.
-// sig is the precomputed log signature from groupSignature; it is only
-// consulted for the log-bearing reasons.
-func computeGroupKey(r string, ev event.Event, owner, sig string) string {
+// computeGroupKey maps a reason onto the structured scope its incidents
+// should share. Application log content never participates in identity.
+func computeGroupKey(r string, ev event.Event, owner string) string {
 	switch r {
 	case constant.ReasonOOMKilled,
 		constant.ReasonOOMRepeating,
@@ -240,9 +224,6 @@ func computeGroupKey(r string, ev event.Event, owner, sig string) string {
 	case constant.ReasonCrashLoopBackOff,
 		constant.ReasonBackOff,
 		constant.ReasonError:
-		if sig != "" {
-			return encodeScopedGroupKey(r, "sig", sig)
-		}
 		return ownerGroupKey(r, ev.Namespace, owner)
 
 	case constant.ReasonImagePullBackOff, constant.ReasonErrImagePull:

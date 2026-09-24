@@ -79,6 +79,24 @@ func (e *Engine) ActiveIncidents() map[model.IncidentKey]*model.Incident {
 	return out
 }
 
+// ReevaluateActive asks the lifecycle boundary to reconsider every active
+// incident against the latest dependency graph. The hook performs diagnosis
+// and suppresses unchanged conclusions. No provider I/O occurs under e.mu.
+func (e *Engine) ReevaluateActive() {
+	e.mu.Lock()
+	transitions := make([]transition, 0, len(e.state))
+	for _, inc := range e.state {
+		if inc.State == model.StateResolved || inc.SuppressedBy != "" {
+			continue
+		}
+		transitions = append(transitions, transition{
+			inc: inc.Clone(), action: model.ActionReevaluate,
+		})
+	}
+	e.mu.Unlock()
+	e.emit(transitions...)
+}
+
 // ActiveNotificationKeys includes live members and synthetic group threads.
 // Provider restoration uses it so a migrated group keeps its conversation.
 func (e *Engine) ActiveNotificationKeys() map[model.IncidentKey]bool {

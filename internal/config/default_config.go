@@ -84,11 +84,6 @@ func DefaultConfig() *Config {
 			InodeWarningPercent:       90,
 			InodeCriticalPercent:      95,
 		},
-		RuntimeMetricsMonitor: RuntimeMetricsMonitor{
-			Enabled: false, IntervalSeconds: 60,
-			MemoryWarningPercent: 90, MemoryCriticalPercent: 95,
-			CPUWarningPercent: 90, CPUCriticalPercent: 100,
-		},
 		ActiveProbeMonitor: ActiveProbeMonitor{
 			IntervalSeconds: 30, TimeoutSeconds: 5,
 			FailureThreshold: 3, RecoveryThreshold: 2,

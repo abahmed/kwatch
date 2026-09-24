@@ -66,7 +66,11 @@ func (r *EventRuntime) ProcessWarningEvent(ev *corev1.Event) {
 		ev.InvolvedObject.Namespace,
 		ev.InvolvedObject.Name,
 		ev.Reason,
-	).WithSeverity(model.SeverityWarning).WithHint(hint)
+	).WithSeverity(model.SeverityWarning).WithHint(hint).
+		WithMessage(ev.Message)
+	if facts := eventFacts(ev); !facts.IsZero() {
+		observation.WithFacts(facts)
+	}
 	observation.Transient = true
 	r.process(observation)
 }
@@ -88,7 +92,9 @@ func (r *EventRuntime) ProcessClusterAutoscalerEvent(ev *corev1.Event) {
 		}
 		observation := observe.Synthetic(
 			"cluster-autoscaler", "cluster-autoscaler", ev.Reason,
-		).WithSeverity(model.SeverityWarning).WithHint(hint)
+		).WithSeverity(model.SeverityWarning).WithHint(hint).
+			WithMessage(ev.Message).
+			WithFacts(autoscalerEventFacts(strings.ToLower(ev.Message)))
 		observation.NodeName = ev.InvolvedObject.Name
 		observation.Transient = true
 		r.process(observation)

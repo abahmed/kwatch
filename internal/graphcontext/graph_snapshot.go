@@ -28,6 +28,7 @@ func (g *ResourceGraph) ReplaceWith(next *ResourceGraph) {
 	g.edgeCounts = edgeCounts
 	g.outgoing = outgoing
 	g.incoming = incoming
+	g.markChangedLocked()
 }
 
 func (g *ResourceGraph) Clear() {
@@ -39,6 +40,7 @@ func (g *ResourceGraph) Clear() {
 	g.edgeCounts = make(map[string]int)
 	g.outgoing = make(map[string]map[string]bool)
 	g.incoming = make(map[string]map[string]bool)
+	g.markChangedLocked()
 }
 
 // Prune removes all nodes of the given kind whose key is not present in the
@@ -84,6 +86,7 @@ func (g *ResourceGraph) removeNodeLocked(node string) {
 func (g *ResourceGraph) removeEdgeLocked(edge Edge) {
 	key := edgeKey(edge.From, edge.To, edge.Type)
 	delete(g.edges, key)
+	g.markChangedLocked()
 	if edges := g.outgoing[edge.From]; edges != nil {
 		delete(edges, key)
 		if len(edges) == 0 {

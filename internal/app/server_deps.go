@@ -27,6 +27,7 @@ type serverDeps struct {
 	readiness        *readinessCoordinator
 	deliveryManager  *delivery.Manager
 	incidentEngine   *incident.Engine
+	graphChanges     <-chan struct{}
 	pvcMonitor       *pvc.PvcMonitor
 	hbMonitor        *heartbeat.HeartbeatMonitor
 	ctl              *controller.Controller
@@ -55,7 +56,6 @@ type serverDeps struct {
 	cleanup         func()
 	tlsSweep        func() error
 	statusRun       func(context.Context) error
-	metricsRun      func(context.Context) error
 	probeRun        func(context.Context) error
 	kubeletRun      func(context.Context) error
 	storageRun      func(context.Context) error

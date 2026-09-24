@@ -133,10 +133,30 @@ func (e *Engine) resolveLockedWithResolution(
 	e.cleanupCooldown[key] = now.Add(e.config.Window)
 	// A group member's resolve is folded into the group's: one "all
 	// recovered" message replaces N individual ones.
-	if groupInc, groupAction, tracked := e.groupMemberResolved(key); tracked {
+	if groupInc, groupAction, tracked := e.groupMemberResolved(key, now); tracked {
 		return transition{groupInc, groupAction}
 	}
+	if inc.SuppressedBy != "" {
+		if parent := e.state[inc.SuppressedBy]; parent != nil &&
+			parent.State == model.StateActive {
+			markAffectedMemberResolved(parent, inc)
+			if action := e.edgeAction(parent); action != model.ActionSkip {
+				return transition{parent.Clone(), action}
+			}
+			return transition{}
+		}
+	}
 	return transition{inc.Clone(), e.edgeAction(inc)}
+}
+
+func markAffectedMemberResolved(parent, child *model.Incident) {
+	for index := range parent.AffectedMembers {
+		member := &parent.AffectedMembers[index]
+		if member.Ref == child.Ref() && member.Reason == child.Reason {
+			member.State = model.StateResolved
+			return
+		}
+	}
 }
 
 func cloneResolution(source *model.Resolution) *model.Resolution {

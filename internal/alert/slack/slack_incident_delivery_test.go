@@ -150,13 +150,13 @@ func TestFormatIncidentText(t *testing.T) {
 
 	inc := testIncident()
 	text := formatIncidentText(inc, model.ActionCreate, clock.RealClock{})
-	assert.Contains(text, "CrashLoopBackOff")
+	assert.Contains(text, "Container keeps crashing")
 	assert.Contains(text, "deploy-1")
 
 	textUpdate := formatIncidentText(
 		inc, model.ActionUpdate, clock.RealClock{},
 	)
-	assert.Contains(textUpdate, "CrashLoopBackOff")
+	assert.Contains(textUpdate, "Container keeps crashing")
 }
 
 func TestBuildIncidentBlocksWithLogsEvents(t *testing.T) {
@@ -183,7 +183,10 @@ func TestBuildIncidentBlocksWithLogsEvents(t *testing.T) {
 			}
 		}
 	}
-	assert.True(foundEvents, "Events block should be present")
+	assert.False(
+		foundEvents,
+		"incident notifications use the shared narrative for event evidence",
+	)
 	assert.True(foundLogs, "Logs block should be present")
 }
 
@@ -216,9 +219,8 @@ func TestFormatIncidentTextWithLogsEvents(t *testing.T) {
 	inc.IncludeLogs = true
 
 	text := formatIncidentText(inc, model.ActionCreate, clock.RealClock{})
-	assert.Contains(text, "Events:")
-	assert.Contains(text, "Warning Unhealthy")
-	assert.Contains(text, "Logs:")
+	assert.NotContains(text, "Warning Unhealthy")
+	assert.Contains(text, "Recent container logs:")
 	assert.Contains(text, "Error: timeout")
 }
 
@@ -234,9 +236,8 @@ func TestFormatIncidentTextUpdateWithLogsEvents(t *testing.T) {
 	text := formatIncidentText(
 		inc, model.ActionUpdate, clock.RealClock{},
 	)
-	assert.Contains(text, "Events:")
-	assert.Contains(text, "Warning BackOff")
-	assert.Contains(text, "Logs:")
+	assert.NotContains(text, "Warning BackOff")
+	assert.Contains(text, "Recent container logs:")
 	assert.Contains(text, "Error: crash")
 }
 
@@ -351,9 +352,12 @@ func TestIncidentBlocksRenderDiagnosis(t *testing.T) {
 	}
 
 	ins := &insight.Insight{
-		Cause:   "node ip-10-0-81-7 may be unhealthy",
-		Pattern: "node_failure",
-		Impact:  "12 pods on this node, affecting 3 services",
+		Cause:      "node ip-10-0-81-7 may be unhealthy",
+		CauseState: insight.CauseConfirmed,
+		Confidence: 0.9,
+		Pattern:    "node_failure",
+		Impact:     "12 pods on this node, affecting 3 services",
+		Evidence:   []string{"node condition reports NotReady"},
 		RecentChanges: []kwcontext.Change{
 			{
 				Resource:  "configmap",
@@ -368,7 +372,7 @@ func TestIncidentBlocksRenderDiagnosis(t *testing.T) {
 		inc, app, ins, clock.RealClock{},
 	))
 	assert.NotContains(t, text, "Why:")
-	assert.Contains(t, text, "node ip-10-0-81-7 may be unhealthy")
+	assert.Contains(t, text, "Node ip-10-0-81-7 may be unhealthy")
 	assert.Contains(
 		t,
 		text,

@@ -83,6 +83,12 @@ func TestHandlerExposesReliabilityMetrics(t *testing.T) {
 	r.RenderedDetailsOmitted.Store(11)
 	r.RedactedValues.Store(12)
 	r.StartupSummariesSuppressed.Store(13)
+	r.InsightAnalyses.Store(14)
+	r.InsightConfirmed.Store(15)
+	r.InsightLikely.Store(16)
+	r.InsightUnknown.Store(17)
+	r.InsightReevaluations.Store(18)
+	r.InsightRolloutSuppressions.Store(19)
 
 	rr := httptest.NewRecorder()
 	r.Handler().ServeHTTP(
@@ -102,6 +108,12 @@ func TestHandlerExposesReliabilityMetrics(t *testing.T) {
 		"kwatch_rendered_details_omitted_total 11",
 		"kwatch_redacted_values_total 12",
 		"kwatch_startup_summaries_suppressed_total 13",
+		"kwatch_insight_analyses_total 14",
+		"kwatch_insight_causes_total{state=\"confirmed\"} 15",
+		"kwatch_insight_causes_total{state=\"likely\"} 16",
+		"kwatch_insight_causes_total{state=\"unknown\"} 17",
+		"kwatch_insight_reevaluations_total 18",
+		"kwatch_insight_rollout_suppressions_total 19",
 	} {
 		if !strings.Contains(body, metric) {
 			t.Fatalf("metrics output is missing %q", metric)

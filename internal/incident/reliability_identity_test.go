@@ -87,8 +87,7 @@ func TestSharedMetricsFailureUsesGlobalGroupOnlyWithEvidence(t *testing.T) {
 			"unable to handle the request",
 	}
 	key := computeGroupKey(
-		constant.ReasonFailedGetResourceMetric,
-		metricsFailure, "api", "",
+		constant.ReasonFailedGetResourceMetric, metricsFailure, "api",
 	)
 	assert.Equal(
 		t,
@@ -102,8 +101,7 @@ func TestSharedMetricsFailureUsesGlobalGroupOnlyWithEvidence(t *testing.T) {
 		t,
 		constant.ReasonFailedGetResourceMetric+"|prod|api",
 		computeGroupKey(
-			constant.ReasonFailedGetResourceMetric,
-			invalid, "api", "",
+			constant.ReasonFailedGetResourceMetric, invalid, "api",
 		),
 	)
 }

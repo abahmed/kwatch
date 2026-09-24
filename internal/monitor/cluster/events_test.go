@@ -74,6 +74,85 @@ func TestEventRuntimeIgnoresOldWarning(t *testing.T) {
 	}
 }
 
+func TestEventRuntimeIgnoresNonClusterWarnings(t *testing.T) {
+	now := time.Date(2026, 1, 2, 3, 4, 5, 0, time.UTC)
+	sink := &eventSink{}
+	runtime := NewEventRuntimeWithRuntimeConfig(
+		config.RuntimeConfig{}, sink, time.Now,
+	)
+	runtime.now = func() time.Time { return now }
+	for _, event := range []*corev1.Event{
+		nil,
+		{Type: corev1.EventTypeNormal, Reason: "FailedMount"},
+		{
+			Type: corev1.EventTypeWarning, Reason: "FailedMount",
+			InvolvedObject: corev1.ObjectReference{Kind: "Pod"},
+		},
+		{
+			Type: corev1.EventTypeWarning, Reason: "FailedMount",
+			Source: corev1.EventSource{Component: "cluster-autoscaler"},
+		},
+		{
+			Type: corev1.EventTypeWarning, Reason: "Unrelated",
+		},
+	} {
+		runtime.ProcessWarningEvent(event)
+	}
+	if len(sink.observations) != 0 {
+		t.Fatalf("got %d observations, want none", len(sink.observations))
+	}
+}
+
+func TestEventTimeUsesNewestAvailableSource(t *testing.T) {
+	want := time.Date(2026, 1, 2, 3, 4, 5, 0, time.UTC)
+	tests := []struct {
+		name  string
+		event corev1.Event
+	}{
+		{
+			name: "event time",
+			event: corev1.Event{
+				EventTime: metav1.MicroTime{Time: want},
+			},
+		},
+		{
+			name: "series time",
+			event: corev1.Event{
+				Series: &corev1.EventSeries{
+					LastObservedTime: metav1.MicroTime{Time: want},
+				},
+			},
+		},
+		{
+			name: "last timestamp",
+			event: corev1.Event{
+				LastTimestamp: metav1.Time{Time: want},
+			},
+		},
+		{
+			name: "first timestamp",
+			event: corev1.Event{
+				FirstTimestamp: metav1.Time{Time: want},
+			},
+		},
+		{
+			name: "creation timestamp",
+			event: corev1.Event{
+				ObjectMeta: metav1.ObjectMeta{CreationTimestamp: metav1.Time{
+					Time: want,
+				}},
+			},
+		},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			if got := eventTime(&test.event); !got.Equal(want) {
+				t.Fatalf("event time = %v, want %v", got, want)
+			}
+		})
+	}
+}
+
 func TestEventRuntimeSustainsAndResolvesAutoscalerFailure(t *testing.T) {
 	now := time.Date(2026, 1, 2, 3, 4, 5, 0, time.UTC)
 	sink := &eventSink{}

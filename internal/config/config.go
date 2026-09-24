@@ -99,7 +99,8 @@ type Config struct {
 	// to watch. Mutually exclusive with Namespaces.
 	NamespaceSelector string `yaml:"namespaceSelector"`
 
-	// IncludeEvents if false, events section is omitted from alert messages.
+	// IncludeEvents is deprecated and retained for configuration compatibility.
+	// Kubernetes events are always internal analysis evidence.
 	IncludeEvents *bool `yaml:"includeEvents"`
 
 	// IncludeLogs if false, logs section is omitted from alert messages.
@@ -182,10 +183,6 @@ type Config struct {
 
 	// NodeResourceMonitor configures node resource overcommit prediction.
 	NodeResourceMonitor NodeResourceMonitor `yaml:"nodeResourceMonitor"`
-
-	// RuntimeMetricsMonitor optionally compares usage through metrics.k8s.io.
-	// Standalone usage monitoring is provided by KubeletTelemetryMonitor.
-	RuntimeMetricsMonitor RuntimeMetricsMonitor `yaml:"runtimeMetricsMonitor"`
 
 	// ActiveProbeMonitor performs explicitly configured HTTP, TCP, and DNS
 	// checks. It is opt-in because Kubernetes cannot infer safe probe targets.

@@ -134,14 +134,10 @@ func TestOptionalMonitorsRequireTheirRuntimePermissions(t *testing.T) {
 	cfg := config.DefaultConfig()
 	cfg.ActiveProbeMonitor.Enabled = true
 	cfg.ActiveProbeMonitor.AutoServices = true
-	cfg.RuntimeMetricsMonitor.Enabled = true
 
 	_, namespaced := testPermissionsForConfig(cfg)
 	if !hasPermission(namespaced, "services", "") {
 		t.Fatal("automatic probes require Service list access")
-	}
-	if !hasPermission(namespaced, "pods", "metrics.k8s.io") {
-		t.Fatal("runtime metrics require PodMetrics list access")
 	}
 }
 

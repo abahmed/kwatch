@@ -151,12 +151,19 @@ func (o *Opsgenie) buildMessage(e *event.Event) ([]byte, error) {
 	// use custom title if it's provided, otherwise use default
 	title := o.title
 	if len(title) == 0 {
-		title = fmt.Sprintf(defaultOpsgenieTitle, e.PodName)
+		if narrative := strings.TrimSpace(e.Narrative); narrative != "" {
+			title = firstLine(narrative, 130)
+		} else {
+			title = fmt.Sprintf(defaultOpsgenieTitle, e.PodName)
+		}
 	}
 	payload.Message = title
 
 	// use custom text if it's provided, otherwise use default
 	text := o.text
+	if narrative := strings.TrimSpace(e.Narrative); narrative != "" {
+		text = narrative
+	}
 	if len(text) == 0 {
 		text = fmt.Sprintf(defaultOpsgenieText, e.ContainerName, e.PodName)
 	}
@@ -182,10 +189,10 @@ func (o *Opsgenie) buildMessage(e *event.Event) ([]byte, error) {
 	if e.Reason != "" {
 		details["Reason"] = e.Reason
 	}
-	if len(events) > 0 {
+	if e.Narrative == "" && len(events) > 0 {
 		details["Events"] = events
 	}
-	if len(logs) > 0 {
+	if e.Narrative == "" && len(logs) > 0 {
 		details["Logs"] = logs
 	}
 	payload.Details = details
@@ -195,4 +202,12 @@ func (o *Opsgenie) buildMessage(e *event.Event) ([]byte, error) {
 		return nil, fmt.Errorf("failed to marshal opsgenie payload: %w", err)
 	}
 	return str, nil
+}
+
+func firstLine(value string, limit int) string {
+	line := strings.SplitN(strings.TrimSpace(value), "\n", 2)[0]
+	if len(line) <= limit {
+		return line
+	}
+	return line[:limit-1] + "…"
 }

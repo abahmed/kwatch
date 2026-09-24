@@ -44,6 +44,9 @@ const (
 	ActionUpdate
 	ActionSkip
 	ActionResolved
+	// ActionReevaluate is an internal diagnosis refresh. Delivery renders it
+	// as an update only when the causal explanation materially changed.
+	ActionReevaluate
 )
 
 func (a IncidentAction) String() string {
@@ -56,6 +59,8 @@ func (a IncidentAction) String() string {
 		return "skip"
 	case ActionResolved:
 		return "resolved"
+	case ActionReevaluate:
+		return "reevaluate"
 	default:
 		return "unknown"
 	}
@@ -90,6 +95,30 @@ type IncidentView struct {
 // section. Producers fill these in at the moment they build the hint;
 // renderers read them and never look inside the hint again.
 type Facts struct {
+	// DesiredReplicas and ReadyReplicas capture workload availability at the
+	// observation that opened or materially updated the incident.
+	DesiredReplicas int32 `json:"desiredReplicas,omitempty"`
+	ReadyReplicas   int32 `json:"readyReplicas,omitempty"`
+	// HealthyEndpoints is set with EndpointsObserved for Service findings so
+	// zero remains a meaningful measured value.
+	HealthyEndpoints  int  `json:"healthyEndpoints,omitempty"`
+	EndpointsObserved bool `json:"endpointsObserved,omitempty"`
+	// FailureDomain and FailureCode are normalized Kubernetes Event evidence.
+	// Dependency is the referenced object when the Event identifies one.
+	FailureDomain string    `json:"failureDomain,omitempty"`
+	FailureCode   string    `json:"failureCode,omitempty"`
+	Dependency    ObjectRef `json:"dependency,omitempty"`
+	// MetricFailure classifies an HPA event from its structured Kubernetes
+	// message. It is evidence about the failure mode, not the provider serving
+	// the Metrics API. Stable values are api_unavailable, missing_pod_metrics,
+	// missing_request, and invalid_metric.
+	MetricFailure string `json:"metricFailure,omitempty"`
+	// MetricName is the resource or external metric named by the HPA event.
+	MetricName string `json:"metricName,omitempty"`
+	// MetricContainer and MetricPod identify the target named by Kubernetes
+	// when the failure is narrower than the whole scale target.
+	MetricContainer string `json:"metricContainer,omitempty"`
+	MetricPod       string `json:"metricPod,omitempty"`
 	// MemoryLimit is the container's memory limit when it was OOM-killed,
 	// e.g. "256Mi". Empty when no limit was set.
 	MemoryLimit string `json:"memoryLimit,omitempty"`
@@ -120,13 +149,25 @@ type Facts struct {
 
 // IsZero reports whether no fact is set.
 func (f Facts) IsZero() bool {
-	return f.MemoryLimit == "" && f.OOMTimeline == "" && f.OOMCount == 0 &&
-		f.OOMWindowMin == 0 &&
-		!f.MemoryLeak &&
-		f.ProbeEndpoint == "" &&
-		!f.PullSecretsSet &&
-		f.SchedulingDelay == 0 &&
-		len(f.ResourceRequests) == 0 &&
+	return f.zeroAvailability() && f.zeroFailure() && f.zeroEvidence()
+}
+
+func (f Facts) zeroAvailability() bool {
+	return f.DesiredReplicas == 0 && f.ReadyReplicas == 0 &&
+		f.HealthyEndpoints == 0 && !f.EndpointsObserved
+}
+
+func (f Facts) zeroFailure() bool {
+	return f.FailureDomain == "" && f.FailureCode == "" &&
+		f.Dependency.Name == "" && f.MetricFailure == "" &&
+		f.MetricName == "" && f.MetricContainer == "" && f.MetricPod == ""
+}
+
+func (f Facts) zeroEvidence() bool {
+	return f.MemoryLimit == "" && f.OOMTimeline == "" &&
+		f.OOMCount == 0 && f.OOMWindowMin == 0 && !f.MemoryLeak &&
+		f.ProbeEndpoint == "" && !f.PullSecretsSet &&
+		f.SchedulingDelay == 0 && len(f.ResourceRequests) == 0 &&
 		f.Volume == ""
 }
 

@@ -110,7 +110,12 @@ func (a *Manager) dispatchIncident(
 		}, opts.retry, p.Name())
 	}
 	if _, ok := p.(EventDeliveryProvider); ok {
-		ev := incidentToEvent(job.inc, job.action)
+		raw := a.buildMessage(job.inc, job.action, job.insight, tpl)
+		narrative := opts.prefix + raw
+		if entry.maxBytes > 0 {
+			narrative = truncateMsg(narrative, entry.maxBytes)
+		}
+		ev := incidentToEvent(job.inc, job.action, narrative)
 		return sendWithRetry(ctx, func() error {
 			return sendEvent(ctx, p, ev)
 		}, opts.retry, p.Name())
@@ -169,12 +174,15 @@ func (a *Manager) fitIncident(
 	job deliverJob,
 	tpl map[string]*template.Template,
 ) *model.Incident {
+	clean := job.inc.Clone()
+	clean.Events = ""
+	clean.IncludeEvents = false
 	if entry.maxBytes <= 0 {
-		return job.inc
+		return clean
 	}
-	raw := a.buildMessage(job.inc, job.action, job.insight, tpl)
+	raw := a.buildMessage(clean, job.action, job.insight, tpl)
 	return a.clampIncidentForProvider(
-		job.inc, job.action, job.insight, entry.maxBytes, tpl, len(raw),
+		clean, job.action, job.insight, entry.maxBytes, tpl, len(raw),
 	)
 }
 

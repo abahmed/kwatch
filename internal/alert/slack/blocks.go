@@ -44,24 +44,8 @@ func buildIncidentBlocksWithInsight(
 	if changes := message.ChangeSummary(r); changes != "" {
 		blocks = append(blocks, markdownSection(truncateField(changes)))
 	}
-	if r.Diagnosis != nil && r.Diagnosis.Hint != "" {
-		blocks = append(blocks, markdownSection("💡 "+truncateField(r.Diagnosis.Hint)))
-	}
-
 	if c, ok := contextLine(metaParts(r, inc)); ok {
 		blocks = append(blocks, c)
-	}
-
-	if inc.IncludeEvents {
-		events := strings.TrimSpace(message.RedactEvidence(inc.Events))
-		if events != "" {
-			blocks = append(
-				blocks,
-				chunkedSections(
-					evidenceTitle(":mag: *Events*", inc),
-					events,
-				)...)
-		}
 	}
 	if inc.IncludeLogs {
 		logs := strings.TrimSpace(message.RedactEvidence(inc.Logs))
@@ -111,17 +95,6 @@ func buildIncidentUpdateBlocksWithInsight(
 	}
 	blocks := []slackClient.Block{markdownSection(text)}
 
-	if inc.IncludeEvents {
-		events := strings.TrimSpace(message.RedactEvidence(inc.Events))
-		if events != "" {
-			blocks = append(
-				blocks,
-				chunkedSections(
-					evidenceTitle(":mag: *Events*", inc),
-					events,
-				)...)
-		}
-	}
 	if inc.IncludeLogs {
 		if logs := strings.TrimSpace(message.RedactEvidence(inc.Logs)); logs != "" {
 			blocks = append(

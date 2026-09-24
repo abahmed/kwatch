@@ -23,7 +23,10 @@ func DetectDaemonSetIssue(ds *appsv1.DaemonSet) *model.Observation {
 		ds.Status.NumberUnavailable > 0 {
 		return observe.Object(
 			"daemonset", ds, constant.ReasonDaemonSetUnavailable,
-		).WithHint(DaemonSetAvailabilityHint(ds))
+		).WithHint(DaemonSetAvailabilityHint(ds)).WithFacts(model.Facts{
+			DesiredReplicas: ds.Status.DesiredNumberScheduled,
+			ReadyReplicas:   ds.Status.NumberReady,
+		})
 	}
 	return nil
 }

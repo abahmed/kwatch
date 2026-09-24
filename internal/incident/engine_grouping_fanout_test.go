@@ -18,6 +18,12 @@ func newSmartGroupingEngine() *Engine {
 	})
 }
 
+func newFanOutGroupingEngine() *Engine {
+	e := newSmartGroupingEngine()
+	e.config.NamespaceFanOutThreshold = 2
+	return e
+}
+
 // The first owner to fail in a namespace is announced at once; grouping only
 // starts holding incidents back from the second owner, which is the earliest
 // point a fan-out can be told apart from an isolated failure.

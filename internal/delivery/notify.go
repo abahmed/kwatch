@@ -27,6 +27,10 @@ func (a *Manager) Notify(msg string) {
 
 // NotifyEvent queues a legacy event for every provider.
 func (a *Manager) NotifyEvent(ev event.Event) {
+	// Kubernetes event text is an analysis input, never provider content.
+	// Legacy callers receive the same boundary as incident delivery.
+	ev.Events = ""
+	ev.IncludeEvents = false
 	klog.InfoS(
 		"sending event",
 		"resource", ev.Resource,

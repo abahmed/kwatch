@@ -61,7 +61,7 @@ func TestSmartGroupingIncidentHasNotifiedSig(t *testing.T) {
 
 func TestSmartGroupingReFlushUpdateNotCreate(t *testing.T) {
 	now := time.Date(2025, 1, 1, 0, 0, 0, 0, time.UTC)
-	e := newSmartGroupingEngine()
+	e := newFanOutGroupingEngine()
 	e.now = mockClock(now)
 
 	// Two owners sharing a log signature form one genuine group. A buffer
@@ -150,7 +150,7 @@ func TestSmartGroupingReFlushUpdateNotCreate(t *testing.T) {
 
 func TestSmartGroupingReFlushCooldownSuppresses(t *testing.T) {
 	now := time.Date(2025, 1, 1, 0, 0, 0, 0, time.UTC)
-	e := newSmartGroupingEngine()
+	e := newFanOutGroupingEngine()
 	e.now = mockClock(now)
 
 	sigLog := "connection refused:5432"
@@ -221,7 +221,7 @@ func TestSmartGroupingReFlushCooldownSuppresses(t *testing.T) {
 
 func TestSmartGroupingReGroupAfterCooldownSkip(t *testing.T) {
 	now := time.Date(2025, 1, 1, 0, 0, 0, 0, time.UTC)
-	e := newSmartGroupingEngine()
+	e := newFanOutGroupingEngine()
 	e.now = mockClock(now)
 
 	sigLog := "connection refused:5432"

@@ -322,7 +322,6 @@ func deliveryProgress(deps *serverDeps) progressReporter {
 func activeOptionalComponents(deps *serverDeps) []componentSpec {
 	return []componentSpec{
 		monitoredRun(deps, "status", deps.statusRun),
-		monitoredRun(deps, "metrics", deps.metricsRun),
 		monitoredRun(deps, "probe", deps.probeRun),
 		monitoredRun(deps, "kubelet", deps.kubeletRun),
 		monitoredRun(deps, "storage-graph", deps.storageRun),

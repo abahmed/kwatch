@@ -35,6 +35,8 @@ const (
 	causeNodeCondition
 	// a mass failure on a dependency already speaks for it
 	causeSharedDependency
+	// an active incident on a graph dependency is the promoted root cause
+	causeGraphDependency
 	// the owning workload has its own active incident
 	causeOwnerWorkload
 )
@@ -48,6 +50,8 @@ func (k causeKind) auditReason() string {
 	case causeSharedDependency:
 		return "mass_failure"
 	case causeOwnerWorkload:
+		return "cascading_suppression"
+	case causeGraphDependency:
 		return "cascading_suppression"
 	}
 	return ""
@@ -65,6 +69,8 @@ type cause struct {
 	mass model.IncidentKey
 	// owner is the workload incident for causeOwnerWorkload.
 	owner *model.Incident
+	// dependency is an active incident on a graph dependency.
+	dependency *model.Incident
 }
 
 // attribute decides, without side effects, what the event is a symptom of.
@@ -81,10 +87,89 @@ func (e *Engine) attribute(
 	if massKey, ok := e.coveringMassFailure(ev, key, res); ok {
 		return cause{kind: causeSharedDependency, mass: massKey}
 	}
+	if dependency, ok := e.activeDependencyIncident(ev, key, res); ok {
+		return cause{kind: causeGraphDependency, dependency: dependency}
+	}
 	if inc, ok := e.ownerIncidentFor(ev, owner, res); ok {
 		return cause{kind: causeOwnerWorkload, owner: inc}
 	}
 	return cause{}
+}
+
+// activeDependencyIncident promotes an already-confirmed incident on a graph
+// dependency above a newly observed symptom. It never suppresses an incident
+// that has already spoken; doing so would orphan its provider conversation.
+func (e *Engine) activeDependencyIncident(
+	ev event.Event,
+	key model.IncidentKey,
+	res string,
+) (*model.Incident, bool) {
+	if res == "node" || e.config.DependenciesOf == nil {
+		return nil, false
+	}
+	if inc, exists := e.state[key]; exists && inc.NotifiedSig != "" {
+		return nil, false
+	}
+	probe := &model.Incident{Subject: model.Subject{
+		Resource: res, Namespace: ev.Namespace, Name: ev.PodName,
+	}}
+	dependencies := e.config.DependenciesOf(probe)
+	sort.Strings(dependencies)
+	var candidates []*model.Incident
+	seen := make(map[model.IncidentKey]bool)
+	for _, dependency := range dependencies {
+		ref, ok := model.ParseObjectKey(dependency)
+		if !ok {
+			continue
+		}
+		keys := make([]string, 0, len(e.state))
+		for candidateKey := range e.state {
+			keys = append(keys, string(candidateKey))
+		}
+		sort.Strings(keys)
+		for _, candidateKey := range keys {
+			candidate := e.state[model.IncidentKey(candidateKey)]
+			if candidate.State != model.StateActive || candidate.Key == key ||
+				candidate.Ref() != ref {
+				continue
+			}
+			if !seen[candidate.Key] {
+				seen[candidate.Key] = true
+				candidates = append(candidates, candidate)
+			}
+		}
+	}
+	if len(candidates) == 0 {
+		return nil, false
+	}
+	sort.SliceStable(candidates, func(i, j int) bool {
+		left, right := candidates[i], candidates[j]
+		if left.Severity.Rank() != right.Severity.Rank() {
+			return left.Severity.Rank() > right.Severity.Rank()
+		}
+		leftPriority := dependencyCausePriority(left.Resource)
+		rightPriority := dependencyCausePriority(right.Resource)
+		if leftPriority != rightPriority {
+			return leftPriority > rightPriority
+		}
+		return left.Key < right.Key
+	})
+	return candidates[0], true
+}
+
+func dependencyCausePriority(resource string) int {
+	switch resource {
+	case "node":
+		return 5
+	case "persistentvolume", "pvc", "storageclass", "volumeattachment":
+		return 4
+	case "service", "endpointslice", "gateway", "ingress":
+		return 3
+	case "configmap", "secret", "serviceaccount":
+		return 2
+	default:
+		return 1
+	}
 }
 
 // nodeCauseFor reports whether an active node-level incident explains a pod
@@ -240,6 +325,26 @@ func (e *Engine) recordSymptom(
 		inc.SuppressedBy = c.mass
 		return inc, model.ActionSkip
 
+	case causeGraphDependency:
+		inc, exists := e.state[key]
+		if !exists {
+			inc = e.newIncident(ev, owner, cs, key, res, now, pre)
+			e.state[key] = inc
+			e.indexIncident(inc)
+		} else {
+			inc.State = model.StateActive
+			inc.ResolveAt = time.Time{}
+			addResource(inc, ev.PodName)
+			inc.Count++
+			inc.LastSeen = now
+			inc.LastUpdate = now
+		}
+		e.rememberPodResource(key, ev)
+		inc.SuppressedBy = c.dependency.Key
+		recordAffectedMember(c.dependency, inc)
+		c.dependency.LastSeen = now
+		return c.dependency, e.edgeAction(c.dependency)
+
 	case causeOwnerWorkload:
 		// The symptom pods are recorded as suppressed, not as resources.
 		// Resources is the list of objects the incident is about, and its
@@ -252,6 +357,25 @@ func (e *Engine) recordSymptom(
 		return nil, model.ActionSkip
 	}
 	return nil, model.ActionSkip
+}
+
+func recordAffectedMember(parent, child *model.Incident) {
+	if parent == nil || child == nil {
+		return
+	}
+	for index := range parent.AffectedMembers {
+		member := &parent.AffectedMembers[index]
+		if member.Ref == child.Ref() && member.Reason == child.Reason {
+			member.State = child.State
+			member.RestartCount = child.RestartCount
+			return
+		}
+	}
+	parent.AffectedMembers = append(parent.AffectedMembers,
+		model.AffectedResource{
+			Ref: child.Ref(), Owner: child.Owner, Reason: child.Reason,
+			State: child.State, RestartCount: child.RestartCount,
+		})
 }
 
 // addResource records a pod against an incident and keeps the peak count.

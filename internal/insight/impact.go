@@ -32,10 +32,44 @@ func (e *Engine) describeImpact(inc *model.Incident, ins *Insight) {
 			counts["service"] = len(names["service"])
 		}
 	}
+	if availability := availabilityImpact(inc); availability != "" {
+		ins.Impact = joinImpact(availability, namedImpact(counts, names))
+		return
+	}
 	if len(counts) == 0 {
 		return
 	}
 	ins.Impact = formatImpactSummary(inc, counts, names)
+}
+
+func availabilityImpact(inc *model.Incident) string {
+	if inc == nil {
+		return ""
+	}
+	if inc.Facts.EndpointsObserved && inc.Facts.HealthyEndpoints == 0 {
+		return "the service has 0 healthy endpoints and cannot receive traffic"
+	}
+	desired := inc.Facts.DesiredReplicas
+	ready := inc.Facts.ReadyReplicas
+	if desired <= 0 || ready >= desired {
+		return ""
+	}
+	if ready == 0 {
+		return fmt.Sprintf(
+			"all %d desired replicas are unavailable", desired,
+		)
+	}
+	return fmt.Sprintf(
+		"%d/%d replicas are ready, reducing workload capacity",
+		ready, desired,
+	)
+}
+
+func joinImpact(availability, named string) string {
+	if named == "" {
+		return availability
+	}
+	return availability + "; it affects " + named
 }
 
 func containsStr(list []string, s string) bool {
@@ -60,6 +94,9 @@ func (e *Engine) impactReach(
 	names := make(map[string][]string)
 	seen := make(map[string]bool)
 	for _, k := range keys {
+		if len(seen) >= maxImpactResources {
+			break
+		}
 		if seen[k] {
 			continue
 		}
@@ -67,15 +104,14 @@ func (e *Engine) impactReach(
 		parts := strings.SplitN(k, "/", 3)
 		deps := e.graph.TraverseDependents(parts[0], parts[1], parts[2])
 		for _, d := range deps {
+			if len(seen) >= maxImpactResources {
+				break
+			}
 			if seen[d] {
 				continue
 			}
 			seen[d] = true
 			dp := strings.SplitN(d, "/", 3)
-			if e.activeChecker != nil && len(dp) == 3 &&
-				!e.activeChecker(dp[0], dp[1], dp[2]) {
-				continue
-			}
 			kind := dp[0]
 			counts[kind]++
 			if len(dp) == 3 {
@@ -93,50 +129,46 @@ var impactOrder = []string{
 	"secret", "configmap", "storageclass", "serviceaccount",
 	"deployment", "replicaset", "statefulset", "daemonset", "job", "cronjob",
 	"horizontalpodautoscaler", "poddisruptionbudget", "endpointslice",
+	"gateway", "httproute", "grpcroute", "tcproute", "tlsroute",
+	"mutatingwebhookconfiguration", "validatingwebhookconfiguration",
 }
 
+const maxImpactResources = 2048
+
 func pluralLabel(kind string) string {
-	switch kind {
-	case "pod":
-		return "pods"
-	case "service":
-		return "services"
-	case "ingress":
-		return "ingresses"
-	case "node":
-		return "nodes"
-	case "pvc":
-		return "PVCs"
-	case "persistentvolume":
-		return "persistent volumes"
-	case "secret":
-		return "secrets"
-	case "configmap":
-		return "configmaps"
-	case "storageclass":
-		return "storage classes"
-	case "serviceaccount":
-		return "service accounts"
-	case "deployment":
-		return "deployments"
-	case "replicaset":
-		return "replica sets"
-	case "statefulset":
-		return "statefulsets"
-	case "daemonset":
-		return "daemonsets"
-	case "job":
-		return "jobs"
-	case "cronjob":
-		return "cronjobs"
-	case "horizontalpodautoscaler":
-		return "HPAs"
-	case "poddisruptionbudget":
-		return "PDBs"
-	case "endpointslice":
-		return "endpoint slices"
+	if label, ok := pluralLabels[kind]; ok {
+		return label
 	}
 	return kind + "s"
+}
+
+var pluralLabels = map[string]string{
+	"pod":                            "pods",
+	"service":                        "services",
+	"ingress":                        "ingresses",
+	"node":                           "nodes",
+	"pvc":                            "PVCs",
+	"persistentvolume":               "persistent volumes",
+	"secret":                         "secrets",
+	"configmap":                      "configmaps",
+	"storageclass":                   "storage classes",
+	"serviceaccount":                 "service accounts",
+	"deployment":                     "deployments",
+	"replicaset":                     "replica sets",
+	"statefulset":                    "statefulsets",
+	"daemonset":                      "daemonsets",
+	"job":                            "jobs",
+	"cronjob":                        "cronjobs",
+	"horizontalpodautoscaler":        "HPAs",
+	"poddisruptionbudget":            "PDBs",
+	"endpointslice":                  "endpoint slices",
+	"gateway":                        "gateways",
+	"httproute":                      "HTTP routes",
+	"grpcroute":                      "gRPC routes",
+	"tcproute":                       "TCP routes",
+	"tlsroute":                       "TLS routes",
+	"mutatingwebhookconfiguration":   "mutating webhook configurations",
+	"validatingwebhookconfiguration": "validating webhook configurations",
 }
 
 // formatImpactSummary turns the per-kind counts into a human sentence. When the
@@ -145,7 +177,11 @@ func pluralLabel(kind string) string {
 // exposure so operators see the full blast radius.
 // namedKinds are listed by name in the impact summary. A reader acts on
 // "services api, readify"; "2 services" only tells them to go look.
-var namedKinds = []string{"service", "ingress"}
+var namedKinds = []string{
+	"service", "ingress", "gateway", "httproute", "grpcroute", "tcproute",
+	"tlsroute", "mutatingwebhookconfiguration",
+	"validatingwebhookconfiguration",
+}
 
 const maxNamedImpact = 4
 

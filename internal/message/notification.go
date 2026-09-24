@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/abahmed/kwatch/internal/insight"
 	"github.com/abahmed/kwatch/internal/model"
 )
 
@@ -116,9 +117,6 @@ func NotificationFromReport(
 	if report.Diagnosis != nil {
 		n.Summary.Cause = causeText(report.Diagnosis)
 		n.Summary.Impact = report.Diagnosis.Impact
-		if len(report.Diagnosis.NextSteps) > 0 {
-			n.Summary.PrimaryAction = commandFor(report, inc)
-		}
 	}
 	if n.Summary.Impact == "" && len(inc.AffectedMembers) > 0 {
 		n.Summary.Impact = pluralCount(
@@ -132,14 +130,14 @@ func NotificationFromReport(
 }
 
 func causeText(d *DiagnosisSection) string {
-	if d == nil || strings.TrimSpace(d.Cause) == "" {
+	if !causeIsRenderable(d) {
 		return ""
 	}
-	if deterministicPattern(d.Pattern) ||
-		(d.Confidence >= minimumCauseConfidence && len(d.Evidence) > 0) {
-		return strings.TrimSuffix(strings.TrimSpace(d.Cause), ".")
+	cause := strings.TrimSuffix(strings.TrimSpace(d.Cause), ".")
+	if d.CauseState == insight.CauseLikely {
+		return "Likely: " + cause
 	}
-	return ""
+	return cause
 }
 
 func notificationDetails(report *Report) []NotificationSection {
@@ -162,12 +160,6 @@ func notificationDetails(report *Report) []NotificationSection {
 		}
 	}
 	if report.Evidence != nil {
-		if report.Evidence.Events != "" {
-			details = append(details, NotificationSection{
-				Kind: "events", Title: "Events",
-				Lines: []string{report.Evidence.Events},
-			})
-		}
 		if report.Evidence.Logs != "" {
 			details = append(details, NotificationSection{
 				Kind: "logs", Title: "Logs",
@@ -216,30 +208,6 @@ func notificationDetails(report *Report) []NotificationSection {
 		})
 	}
 	return details
-}
-
-func commandFor(report *Report, inc *model.Incident) *Command {
-	if report == nil || inc == nil {
-		return nil
-	}
-	ref := inc.Ref()
-	if ref.Name == "" && report.Name != "" {
-		ref = model.NewObjectRef(
-			report.Resource, report.Namespace, report.Name,
-		)
-	}
-	if ref.Name == "" || strings.ContainsAny(ref.Name, " \n\t") {
-		args := []string{"kubectl", "get", report.Resource}
-		if report.Namespace != "" {
-			args = append(args, "-n", report.Namespace)
-		}
-		return &Command{Label: "List affected resources", Args: args}
-	}
-	args := []string{"kubectl", "describe", ref.Kind, ref.Name}
-	if report.Namespace != "" {
-		args = append(args, "-n", report.Namespace)
-	}
-	return &Command{Label: "Inspect resource", Args: args}
 }
 
 func pluralCount(count int, label string) string {

@@ -15,7 +15,7 @@ import (
 )
 
 func TestSmartGroupingImageAuth(t *testing.T) {
-	e := newSmartGroupingEngine()
+	e := newFanOutGroupingEngine()
 	msg := "unauthorized: authentication required"
 	ev := event.Event{
 		PodName: "p1", Namespace: "ns", Reason: "ImagePullBackOff",
@@ -37,7 +37,7 @@ func TestSmartGroupingImageAuth(t *testing.T) {
 }
 
 func TestSmartGroupingNamespaceScope(t *testing.T) {
-	e := newSmartGroupingEngine()
+	e := newFanOutGroupingEngine()
 	e.processEvent(
 		event.Event{
 			PodName:   "p1",
@@ -89,16 +89,15 @@ func TestSmartGroupingCrossNamespace(t *testing.T) {
 
 func TestSmartGroupingEntryLimit(t *testing.T) {
 	e := newSmartGroupingEngine()
-	sigLog := "connection refused:5432"
-	gk := "CrashLoopBackOff|sig|Postgres unreachable — check the DB " +
-		"Service/endpoints + connection string."
+	gk := "ImagePullBackOff|ns|ns"
 
 	for i := 0; i < 1002; i++ {
 		ev := event.Event{
 			PodName:   fmt.Sprintf("p%d", i),
 			Namespace: "ns",
-			Reason:    "CrashLoopBackOff",
-			Logs:      sigLog,
+			Reason:    "ImagePullBackOff",
+			Image:     fmt.Sprintf("image:%d", i),
+			Message:   "unauthorized: authentication required",
 		}
 		e.processEvent(ev, fmt.Sprintf("dep%d", i), nil)
 	}
@@ -118,7 +117,7 @@ func TestSmartGroupingEntryLimit(t *testing.T) {
 
 func TestSmartGroupingSeverityInheritance(t *testing.T) {
 	now := time.Date(2025, 1, 1, 0, 0, 0, 0, time.UTC)
-	e := newSmartGroupingEngine()
+	e := newFanOutGroupingEngine()
 	e.now = mockClock(now)
 
 	sigLog := "connection refused:5432"

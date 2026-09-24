@@ -151,52 +151,6 @@ func (rb *ReportBuilder) populateState(r *Report, inc *model.Incident) {
 	}
 }
 
-func (rb *ReportBuilder) populateDiagnosis(
-	r *Report,
-	inc *model.Incident,
-	ins *insight.Insight,
-) {
-	d := &DiagnosisSection{
-		Hint: dedupeHint(inc.Hint, r.Name, r.Summary.Label, stateMessage(inc)),
-	}
-	if ins != nil {
-		d.Cause = ins.Cause
-		d.Pattern = ins.Pattern
-		d.NextSteps = append([]string(nil), ins.NextSteps...)
-		d.Impact = ins.Impact
-		d.Confidence = ins.Confidence
-		d.Evidence = append([]string(nil), ins.Evidence...)
-	}
-	// Topology the incident engine resolved from live Service selectors.
-	// It is impact, and belongs with the rest of the impact.
-	if d.Impact == "" && len(inc.AffectedServices) > 0 {
-		label := "service"
-		if len(inc.AffectedServices) > 1 {
-			label = "services"
-		}
-		d.Impact = "affects " + label + " " + format.JoinNames(
-			inc.AffectedServices,
-			4,
-		)
-	}
-	if inc.OwnerUnhealthy && inc.OwnerKind != "" && d.Cause == "" {
-		d.Cause = fmt.Sprintf(
-			"owning %s is unhealthy — this looks like a rollout, not an "+
-				"isolated crash",
-			inc.OwnerKind,
-		)
-		d.Pattern = "rollout_failure"
-	}
-	r.Diagnosis = d
-}
-
-func stateMessage(inc *model.Incident) string {
-	if inc.LastContainerState == nil {
-		return ""
-	}
-	return inc.LastContainerState.Msg
-}
-
 // dedupeHint removes hint fragments that merely repeat text shown elsewhere
 // in the message: the incident's own name, its human label, or the state
 // message. The hint is for what is *not* already on screen.
@@ -235,10 +189,10 @@ func dedupeHint(hint string, shown ...string) string {
 }
 
 func (rb *ReportBuilder) populateEvidence(r *Report, inc *model.Incident) {
-	if inc.Logs == "" && inc.Events == "" {
+	if inc.Logs == "" {
 		return
 	}
-	if !inc.IncludeLogs && !inc.IncludeEvents {
+	if !inc.IncludeLogs {
 		return
 	}
 
@@ -246,11 +200,6 @@ func (rb *ReportBuilder) populateEvidence(r *Report, inc *model.Incident) {
 	if inc.IncludeLogs {
 		r.Evidence.Logs = RedactEvidenceWithPolicy(
 			inc.Logs, rb.includePrivateLogAddresses,
-		)
-	}
-	if inc.IncludeEvents {
-		r.Evidence.Events = RedactEvidenceWithPolicy(
-			inc.Events, rb.includePrivateLogAddresses,
 		)
 	}
 }
@@ -281,7 +230,13 @@ func (rb *ReportBuilder) populateChanges(r *Report, ins *insight.Insight) {
 			Additional: c.Additional,
 		})
 		for _, field := range c.Fields {
-			items[len(items)-1].Fields = append(items[len(items)-1].Fields, FieldChange{Path: field.Path, Before: field.Before, After: field.After, Action: field.Action})
+			items[len(items)-1].Fields = append(
+				items[len(items)-1].Fields,
+				FieldChange{
+					Path: field.Path, Before: field.Before,
+					After: field.After, Action: field.Action,
+				},
+			)
 		}
 	}
 

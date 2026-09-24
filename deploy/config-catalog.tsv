@@ -3,7 +3,6 @@ workers|integer|1|Performance|Number of Kubernetes work queues processed in para
 resyncSeconds|integer|0|Performance|Periodic safety resync interval in seconds; zero keeps event-driven mode.|active|
 maxRecentLogLines|integer|50|Alerts|Maximum recent log lines attached to an incident.|active|
 containerRestartThreshold|integer|0|Alerts|Alert when a container reaches this cumulative restart count; zero disables it.|active|
-includeEvents|boolean|true|Alerts|Include recent Kubernetes events in incident messages.|active|
 includeLogs|boolean|true|Alerts|Include recent container logs in incident messages.|active|
 message.includePrivateLogAddresses|boolean|false|Alerts|Keep private application addresses visible in evidence; credentials remain redacted.|active|
 namespaces|list|all|Scope|Comma-separated namespaces to watch; leave empty to watch every namespace.|active|
@@ -72,12 +71,6 @@ nodeResourceMonitor.filesystemWarningPercent|float|90|Monitors|Node filesystem u
 nodeResourceMonitor.filesystemCriticalPercent|float|95|Monitors|Node filesystem usage critical threshold.|active|
 nodeResourceMonitor.inodeWarningPercent|float|90|Monitors|Node inode usage warning threshold.|active|
 nodeResourceMonitor.inodeCriticalPercent|float|95|Monitors|Node inode usage critical threshold.|active|
-runtimeMetricsMonitor.enabled|boolean|false|Monitors|Use metrics.k8s.io when available for workload usage diagnostics.|active|
-runtimeMetricsMonitor.intervalSeconds|integer|60|Monitors|Seconds between runtime metrics checks.|active|
-runtimeMetricsMonitor.memoryWarningPercent|integer|90|Monitors|Memory usage warning percentage when metrics.k8s.io is available.|active|
-runtimeMetricsMonitor.memoryCriticalPercent|integer|95|Monitors|Memory usage critical percentage when metrics.k8s.io is available.|active|
-runtimeMetricsMonitor.cpuWarningPercent|integer|90|Monitors|CPU usage warning percentage when metrics.k8s.io is available.|active|
-runtimeMetricsMonitor.cpuCriticalPercent|integer|100|Monitors|CPU usage critical percentage when metrics.k8s.io is available.|active|
 clusterAutoscalerMonitor.enabled|boolean|true|Monitors|Watch built-in cluster-autoscaler evidence from Kubernetes resources and events.|active|
 tlsMonitor.threshold|integer|30|Monitors|Days before certificate expiry to warn.|active|
 tlsMonitor.criticalThreshold|integer|3|Monitors|Days before certificate expiry for a high-severity alert.|active|
@@ -146,3 +139,4 @@ ignoreNodeReasons|list|legacy|Compatibility|Legacy node-reason suppression field
 ignoreNodeMessages|list|legacy|Compatibility|Legacy node-message suppression field.|deprecated|silences
 heartbeatMonitor.url|string|empty|Security|External dead-man heartbeat URL; stored only through a mounted Secret.|secret|
 healthCheck.diagnosticsToken|string|empty|Security|Bearer token for diagnostic endpoints; stored only through a mounted Secret.|secret|
+includeEvents|boolean|empty|Alerts|Deprecated compatibility field; Kwatch analyzes events internally.|deprecated|

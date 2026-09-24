@@ -82,7 +82,7 @@ func TestNarrativeEvidenceReadsAsASentence(t *testing.T) {
 		Evidence:   []string{"warning events were observed"},
 	}}
 	out := Narrative(r)
-	assert.Contains(t, out, "Supporting evidence: warning events were observed.")
+	assert.Equal(t, "The node is under pressure.", out)
 	assert.NotContains(t, out, "This is supported by")
 }
 
@@ -100,11 +100,12 @@ func TestNarrativeOmitsWeakCauseAndConfidence(t *testing.T) {
 
 func TestNarrativeRendersVerifiedCauseWithoutConfidence(t *testing.T) {
 	r := &Report{Diagnosis: &DiagnosisSection{
-		Cause:   "the node is not ready",
-		Pattern: "node_failure",
+		Cause: "the node is not ready", Pattern: "node_failure",
+		CauseState: insight.CauseConfirmed, Confidence: 0.9,
+		Evidence: []string{"node evidence"},
 	}}
 
 	out := Narrative(r)
-	assert.Equal(t, "Cause: the node is not ready.", out)
+	assert.Equal(t, "The node is not ready.", out)
 	assert.NotContains(t, out, "%")
 }

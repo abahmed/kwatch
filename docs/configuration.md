@@ -123,7 +123,7 @@ talks to the outside world.
 | `app.logFormatter` | Log format: `text` (default) or `json` |
 | `app.insecureSkipTLSVerify` | 🔓 Skip TLS verification on outbound HTTP (default: false) |
 | `app.caBundlePath` | 📜 Path to a PEM CA bundle for outbound HTTP |
-| `includeEvents` | 📋 Include K8s events in alerts (default: true). At most the 40 most recent are attached; older ones are summarised as `... N earlier event(s) omitted`. A churning pod can accumulate hundreds, and an unbounded list pushes the message past the chat provider's size limits, which loses the whole alert rather than just the surplus |
+| `includeEvents` | ⚠️ Deprecated compatibility field; Kwatch always analyzes events internally. Use the incident message content and `includeLogs` for notification rendering. |
 | `includeLogs` | 📋 Include container logs in alerts (default: true) |
 | `message.includePrivateLogAddresses` | 🌐 Keep private application addresses visible in evidence; credentials remain redacted (default: false) |
 
@@ -676,8 +676,8 @@ silences:
 ```
 
 The match is a case-sensitive substring of an attached Event message. It
-suppresses the whole incident; `includeEvents` only controls whether matching
-or non-matching Events are rendered in the notification.
+suppresses the whole incident; event evidence is analyzed internally and is
+rendered according to the provider's incident format.
 
 ### 🚫 Inhibition — no double alerts
 

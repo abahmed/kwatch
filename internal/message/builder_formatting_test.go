@@ -34,7 +34,7 @@ func TestPlainTextRendererCreate(t *testing.T) {
 	}
 	msg := renderer.RenderCreate(report)
 	assert.Contains(t, msg, "OOMKilled")
-	assert.Contains(t, msg, "Memory limit: 256Mi")
+	assert.Contains(t, msg, "container memory limit is 256Mi")
 }
 
 func TestFormatChanges(t *testing.T) {
