@@ -301,9 +301,17 @@ sed "s#kwatch-e2e-receiver:e2e#$receiver_image#g" \
 	test/e2e/receiver/deployment.yaml | kubectl apply -f -
 kubectl -n kwatch set image deployment/kwatch \
 		kwatch="$KWATCH_IMAGE"
+kwatch_patch=$(cat <<'EOF'
+spec:
+  template:
+    spec:
+      containers:
+        - name: kwatch
+          imagePullPolicy: Never
+EOF
+)
 kubectl -n kwatch patch deployment kwatch --type=strategic \
-	-p '{"spec":{"template":{"spec":{"containers":[{"name":"kwatch",\
-"imagePullPolicy":"Never"}]}}}}'
+	-p "$kwatch_patch"
 kubectl -n kwatch scale deployment/kwatch --replicas="$KWATCH_REPLICAS"
 kubectl -n kwatch rollout status deployment/kwatch --timeout=10m
 kubectl -n kwatch annotate deployment/kwatch \
