@@ -119,10 +119,25 @@ EOF
 	kind export logs "$ARTIFACTS/kind-logs" \
 		--name "$KIND_CLUSTER_NAME" >/dev/null 2>&1 || true
 	if ! "$harness_root/scripts/check-e2e-artifacts.sh" "$ARTIFACTS"; then
-		find "$ARTIFACTS" -type f -exec rm -f {} +
-		printf '%s\n' 'artifact safety check failed' \
-			>"$ARTIFACTS/artifact-safety-failed.txt"
+		quarantine_unsafe_artifacts
 	fi
+}
+
+quarantine_unsafe_artifacts() {
+	quarantine_log="$ARTIFACTS/artifact-safety-quarantine.txt"
+	printf '%s\n' \
+		'artifact safety check found one or more unsafe files' \
+		>"$quarantine_log"
+	while IFS= read -r artifact; do
+		if ! "$harness_root/scripts/check-e2e-artifacts.sh" "$artifact";
+		then
+			printf 'removed=%s\n' "${artifact#"$ARTIFACTS"/}" \
+				>>"$quarantine_log"
+			rm -f "$artifact"
+		fi
+	done <<EOF
+$(find "$ARTIFACTS" -type f ! -name 'artifact-safety-quarantine.txt')
+EOF
 }
 
 capture_http_diagnostics() {
