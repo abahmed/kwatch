@@ -184,7 +184,14 @@ func TestScenarioMissingServiceAccountReference(t *testing.T) {
 			t.Fatal(err)
 		}
 		defer cleanupNamespace(t, e, namespace)
-		_, err := e.Client.CoreV1().Pods(namespace).Create(ctx, &corev1.Pod{
+		_, err := e.Client.CoreV1().ServiceAccounts(namespace).Create(ctx,
+			&corev1.ServiceAccount{
+				ObjectMeta: metav1.ObjectMeta{Name: "missing-service-account"},
+			}, metav1.CreateOptions{})
+		if err != nil {
+			t.Fatal(err)
+		}
+		pod, err := e.Client.CoreV1().Pods(namespace).Create(ctx, &corev1.Pod{
 			ObjectMeta: metav1.ObjectMeta{Name: "missing-service-account"},
 			Spec: corev1.PodSpec{
 				ServiceAccountName: "missing-service-account",
@@ -196,6 +203,17 @@ func TestScenarioMissingServiceAccountReference(t *testing.T) {
 			},
 		}, metav1.CreateOptions{})
 		if err != nil {
+			t.Fatal(err)
+		}
+		if err := e.Client.CoreV1().ServiceAccounts(namespace).Delete(
+			ctx, "missing-service-account", metav1.DeleteOptions{},
+		); err != nil {
+			t.Fatal(err)
+		}
+		pod.Labels = map[string]string{"kwatch-e2e": "missing-service-account"}
+		if _, err := e.Client.CoreV1().Pods(namespace).Update(
+			ctx, pod, metav1.UpdateOptions{},
+		); err != nil {
 			t.Fatal(err)
 		}
 		if _, err := e.Audit.WaitFor(ctx, harness.AuditMatch{

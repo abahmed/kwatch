@@ -90,7 +90,12 @@ func TestScenarioInvalidLiveConfiguration(t *testing.T) {
 		}()
 		waitCtx, cancel := context.WithTimeout(ctx, 2*time.Minute)
 		defer cancel()
-		if err := e.AssertHealthy(waitCtx); err != nil {
+		if err := wait.PollUntilContextTimeout(
+			waitCtx, 500*time.Millisecond, 2*time.Minute, true,
+			func(ctx context.Context) (bool, error) {
+				return e.AssertHealthy(ctx) == nil, nil
+			},
+		); err != nil {
 			t.Fatal(err)
 		}
 		if err := e.AssertNoRuntimePanic(ctx); err != nil {
@@ -145,6 +150,15 @@ func TestScenarioInvalidStartupConfiguration(t *testing.T) {
 						{Name: "POD_NAME", Value: podName},
 						{Name: "KWATCH_LEADER_ELECTION_NAME",
 							Value: "kwatch-invalid-startup"},
+					},
+					SecurityContext: &corev1.SecurityContext{
+						AllowPrivilegeEscalation: boolPtr(false),
+						Capabilities: &corev1.Capabilities{
+							Drop: []corev1.Capability{"ALL"},
+						},
+						SeccompProfile: &corev1.SeccompProfile{
+							Type: corev1.SeccompProfileTypeRuntimeDefault,
+						},
 					},
 					VolumeMounts: []corev1.VolumeMount{{
 						Name: "config", MountPath: "/config",
