@@ -21,7 +21,7 @@ smartGrouping:
 
 correlation:
   window: 2m
-  lifecycleInterval: 1m
+  lifecycleInterval: 1
   resolveHoldDown: 0s
 
 crd:
@@ -29,7 +29,7 @@ crd:
 
 pendingPodMonitor:
   enabled: true
-  threshold: 5s
+  threshold: 5
 
 rolloutMonitor:
   enabled: true
