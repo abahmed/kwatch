@@ -2,9 +2,9 @@
 
 set -eu
 
-artifacts=${1:?artifact directory is required}
-if [ ! -d "$artifacts" ]; then
-	echo "artifact directory does not exist: $artifacts" >&2
+artifacts=${1:?artifact path is required}
+if [ ! -e "$artifacts" ]; then
+	echo "artifact path does not exist: $artifacts" >&2
 	exit 2
 fi
 
