@@ -100,7 +100,10 @@ var reasonLabels = map[string]string{
 	constant.ReasonContainersNotReady:   "Pod not ready",
 
 	// workloads
-	constant.ReasonDeploymentUnavailable: "Deployment below desired replicas",
+	constant.ReasonDeploymentUnavailable:    "Deployment below desired replicas",
+	constant.ReasonDeploymentAvailable:      "Deployment has unavailable replicas",
+	constant.ReasonDeploymentProgressing:    "Deployment rollout has stalled",
+	constant.ReasonDeploymentReplicaFailure: "Deployment cannot create replicas",
 
 	constant.ReasonDaemonSetUnavailable: "DaemonSet below desired replicas",
 

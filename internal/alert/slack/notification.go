@@ -132,7 +132,10 @@ func notificationRootBlocks(n *message.Notification) *slackClient.Blocks {
 }
 
 func notificationDetailBlocks(n *message.Notification) *slackClient.Blocks {
-	blocks := []slackClient.Block{markdownSection(notificationSummaryText(n))}
+	blocks := []slackClient.Block{}
+	if n.Action != model.ActionCreate {
+		blocks = append(blocks, markdownSection(notificationSummaryText(n)))
+	}
 	for _, section := range n.Details {
 		for _, line := range section.Lines {
 			line = strings.TrimSpace(line)
@@ -149,39 +152,42 @@ func notificationDetailBlocks(n *message.Notification) *slackClient.Blocks {
 
 func notificationSummaryText(n *message.Notification) string {
 	s := n.Summary
-	text := s.Emoji + " *" + s.Title + "*"
-	if s.Location.Namespace != "" {
-		text += " — " + s.Location.Namespace + "/" + s.Location.Name
-	} else if s.Location.Name != "" {
-		text += " — " + s.Location.Name
+	title := s.Title
+	if n.Action == model.ActionResolved {
+		title = "Recovered: " + title
 	}
-	location := []string{}
+	text := s.Emoji + " *" + title + "*"
+	name := s.Location.Name
+	if s.Location.Namespace != "" && name != "" &&
+		!strings.HasPrefix(name, s.Location.Namespace+"/") {
+		name = s.Location.Namespace + "/" + name
+	}
+	if name != "" {
+		text += " — " + name
+	}
 	if s.Location.Cluster != "" {
-		location = append(location, s.Location.Cluster)
+		text += " · " + s.Location.Cluster
 	}
-	if s.Location.Resource != "" {
-		location = append(location, s.Location.Resource)
-	}
-	if len(location) > 0 {
-		text += "\n📍 " + strings.Join(location, " · ")
-	}
-	if s.Impact != "" {
-		text += "\n🧩 " + s.Impact
-	}
-	if s.Cause != "" {
-		text += "\n🔍 " + s.Cause
-	}
-	if s.Timing != "" {
-		text += "\n⏱ " + s.Timing
-	}
-	if s.PrimaryAction != nil {
-		text += "\n🛠 " + s.PrimaryAction.Label + ": `" +
-			strings.Join(s.PrimaryAction.Args, " ") + "`"
-	}
-	if s.Severity != "" && s.Severity != "normal" {
-		text += " · " + s.Severity
+	if s.Story != "" {
+		text += "\n" + s.Story
+	} else if n.Action != model.ActionResolved {
+		text += legacyNotificationFacts(s)
 	}
 	return truncateField(text)
+}
+
+func legacyNotificationFacts(s message.NotificationSummary) string {
+	var facts []string
+	if s.Cause != "" {
+		facts = append(facts, s.Cause)
+	}
+	if s.Impact != "" {
+		facts = append(facts, s.Impact)
+	}
+	if len(facts) == 0 {
+		return ""
+	}
+	return "\n" + strings.Join(facts, " ")
 }
 
 func renderNotificationText(n *message.Notification) string {

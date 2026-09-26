@@ -110,10 +110,10 @@ func (t textRenderer) RenderResolved(r *Report) string {
 		info = append(info, "node "+t.m.mono(r.Identity.Node))
 	}
 	if r.Resolution != nil {
-		if r.Resolution.Summary != "" {
+		if meaningfulRecoveryDetail(r.Resolution.Summary) {
 			info = append(info, r.Resolution.Summary)
 		}
-		if r.Resolution.Evidence != "" {
+		if meaningfulRecoveryDetail(r.Resolution.Evidence) {
 			info = append(info, r.Resolution.Evidence)
 		}
 	}

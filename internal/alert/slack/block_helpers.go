@@ -193,10 +193,21 @@ func formatIncidentText(
 	action model.IncidentAction,
 	timeSource clock.Clock,
 ) string {
+	return formatIncidentTextWithInsight(
+		inc, action, nil, timeSource,
+	)
+}
+
+func formatIncidentTextWithInsight(
+	inc *model.Incident,
+	action model.IncidentAction,
+	ins *insight.Insight,
+	timeSource clock.Clock,
+) string {
 	renderer := message.NewSlackRenderer()
 	report := message.NewReportBuilderWithClock(
 		"", clock.Require(timeSource),
-	).Build(inc, action, nil)
+	).Build(inc, action, ins)
 	return message.RenderAction(renderer, report)
 }
 

@@ -9,7 +9,7 @@ import (
 
 // Narrative is the provider-neutral explanation of an incident. Providers
 // may wrap it in native formatting, but must not rebuild its meaning.
-const minimumCauseConfidence = 0.75
+const minimumCauseConfidence = 0.65
 
 // causeSentence states the diagnosis in proportion to how much kwatch
 // actually knows. It deliberately avoids a fixed "Cause:" label so the
@@ -42,6 +42,11 @@ func Narrative(r *Report) string {
 		cause := causeSentence(r.Diagnosis)
 		if cause != "" {
 			sentences = append(sentences, cause)
+		} else if hint := usefulHint(r.Diagnosis); hint != "" {
+			sentences = append(
+				sentences,
+				capitalizeSentence(strings.TrimSuffix(hint, "."))+".",
+			)
 		}
 		if r.Diagnosis.Impact != "" {
 			sentences = append(
@@ -49,7 +54,8 @@ func Narrative(r *Report) string {
 				impactSentence(r.Diagnosis.Impact),
 			)
 		}
-		if r.Diagnosis.ReplicaState != "" {
+		if r.Diagnosis.ReplicaState != "" &&
+			r.Diagnosis.Impact == "" {
 			sentences = append(sentences, r.Diagnosis.ReplicaState+".")
 		}
 		if r.Diagnosis.Flapping != nil {
@@ -73,12 +79,6 @@ func Narrative(r *Report) string {
 				)+".",
 			)
 		}
-		if r.Diagnosis.Provisional && cause == "" &&
-			r.Diagnosis.UnknownSummary != "" {
-			sentences = append(
-				sentences, r.Diagnosis.UnknownSummary+".",
-			)
-		}
 		if r.Diagnosis.LogSignal != nil {
 			sentences = append(
 				sentences, "🧾 Logs suggest "+
@@ -87,6 +87,13 @@ func Narrative(r *Report) string {
 		}
 	}
 	return strings.Join(sentences, " ")
+}
+
+func usefulHint(d *DiagnosisSection) string {
+	if d == nil || d.Impact != "" || d.ReplicaState != "" {
+		return ""
+	}
+	return strings.TrimSpace(d.Hint)
 }
 
 func impactSentence(impact string) string {

@@ -27,6 +27,7 @@ type NotificationSummary struct {
 	Title         string   `json:"title"`
 	Severity      string   `json:"severity"`
 	Location      Location `json:"location"`
+	Story         string   `json:"story,omitempty"`
 	Impact        string   `json:"impact,omitempty"`
 	Timing        string   `json:"timing,omitempty"`
 	Cause         string   `json:"cause,omitempty"`
@@ -107,6 +108,7 @@ func NotificationFromReport(
 				Name:      report.Name,
 			},
 			Timing: report.Summary.Duration,
+			Story:  notificationStory(report),
 		},
 		Diagnostic: DiagnosticMetadata{
 			Pattern:       insPattern,
@@ -140,25 +142,69 @@ func causeText(d *DiagnosisSection) string {
 	return cause
 }
 
+func notificationStory(report *Report) string {
+	if report.Action != "resolved" {
+		story := Narrative(report)
+		if report.OOM != nil && report.OOM.MemoryLimit != "" {
+			story = joinStory(
+				story,
+				"The container memory limit is "+
+					report.OOM.MemoryLimit+".",
+			)
+		}
+		if report.Probe != nil && report.Probe.Endpoint != "" &&
+			!strings.Contains(story, report.Probe.Endpoint) {
+			story = joinStory(story, fmt.Sprintf(
+				"The %s probe to %s is failing.",
+				report.Probe.ProbeType, report.Probe.Endpoint,
+			))
+		}
+		if report.Pending != nil && report.Pending.Delay != "" &&
+			!strings.Contains(story, report.Pending.Delay) {
+			story = joinStory(
+				story, "The pod has waited "+report.Pending.Delay+
+					" to schedule.",
+			)
+		}
+		if report.Pending != nil &&
+			len(report.Pending.ResourceRequests) > 0 {
+			story = joinStory(
+				story, "Requested resources: "+
+					strings.Join(report.Pending.ResourceRequests, "; ")+".",
+			)
+		}
+		return story
+	}
+	if report.Resolution == nil {
+		return ""
+	}
+	parts := []string{}
+	if report.Summary.Duration != "" {
+		parts = append(parts, "Recovered after "+report.Summary.Duration+".")
+	}
+	for _, detail := range []string{
+		report.Resolution.Summary,
+		report.Resolution.Evidence,
+	} {
+		if !meaningfulRecoveryDetail(detail) {
+			continue
+		}
+		parts = append(parts, capitalizeSentence(
+			strings.TrimSuffix(detail, "."),
+		)+".")
+	}
+	return strings.Join(parts, " ")
+}
+
+func joinStory(story, detail string) string {
+	if story == "" {
+		return detail
+	}
+	return story + " " + detail
+}
+
 func notificationDetails(report *Report) []NotificationSection {
 	var details []NotificationSection
-	if report.Identity != nil {
-		var lines []string
-		if report.Identity.Container != "" {
-			lines = append(lines, "Container: "+report.Identity.Container)
-		}
-		if report.Identity.Image != "" {
-			lines = append(lines, "Image: "+report.Identity.Image)
-		}
-		if report.Identity.Node != "" {
-			lines = append(lines, "Node: "+report.Identity.Node)
-		}
-		if len(lines) > 0 {
-			details = append(details, NotificationSection{
-				Kind: "identity", Title: "Location", Lines: lines,
-			})
-		}
-	}
 	if report.Evidence != nil {
 		if report.Evidence.Logs != "" {
 			details = append(details, NotificationSection{
@@ -167,44 +213,9 @@ func notificationDetails(report *Report) []NotificationSection {
 			})
 		}
 	}
-	if report.OOM != nil {
-		var lines []string
-		if report.OOM.MemoryLimit != "" {
-			lines = append(lines, "Memory limit: "+report.OOM.MemoryLimit)
-		}
-		if report.OOM.Timeline != "" {
-			lines = append(lines, "Memory timeline: "+report.OOM.Timeline)
-		}
-		if len(lines) > 0 {
-			details = append(details, NotificationSection{
-				Kind: "memory", Title: "Memory", Lines: lines,
-			})
-		}
-	}
-	if report.Probe != nil {
-		details = append(details, NotificationSection{
-			Kind: "probe", Title: "Probe",
-			Lines: []string{report.Probe.ProbeType + " " + report.Probe.Endpoint},
-		})
-	}
-	if report.Pending != nil && len(report.Pending.ResourceRequests) > 0 {
-		details = append(details, NotificationSection{
-			Kind: "scheduling", Title: "Scheduling",
-			Lines: report.Pending.ResourceRequests,
-		})
-	}
 	if report.Runbook != "" {
 		details = append(details, NotificationSection{
 			Kind: "runbook", Title: "Runbook", Lines: []string{report.Runbook},
-		})
-	}
-	if report.Resolution != nil {
-		lines := []string{report.Resolution.Summary}
-		if report.Resolution.Evidence != "" {
-			lines = append(lines, report.Resolution.Evidence)
-		}
-		details = append(details, NotificationSection{
-			Kind: "recovery", Title: "Recovery", Lines: lines,
 		})
 	}
 	return details
