@@ -114,7 +114,7 @@ func matchingEntries(entries []AuditEntry, match AuditMatch) []AuditEntry {
 		if match.Namespace != "" && entry.Namespace != match.Namespace {
 			continue
 		}
-		if match.Resource != "" && entry.Name != match.Resource {
+		if match.Resource != "" && !resourceMatches(entry, match) {
 			continue
 		}
 		if match.Reason != "" && entry.Reason != match.Reason {
@@ -126,4 +126,12 @@ func matchingEntries(entries []AuditEntry, match AuditMatch) []AuditEntry {
 		result = append(result, entry)
 	}
 	return result
+}
+
+func resourceMatches(entry AuditEntry, match AuditMatch) bool {
+	if entry.Name == match.Resource {
+		return true
+	}
+	return match.Namespace != "" &&
+		entry.Name == match.Namespace+"/"+match.Resource
 }
