@@ -56,8 +56,64 @@ func TestNotificationFromReportBuildsSummaryAndDetails(t *testing.T) {
 	assert.Equal(t, model.ActionCreate, notification.Action)
 	assert.Equal(t, "the node is not ready", notification.Summary.Cause)
 	assert.Equal(t, "3 replicas are unavailable", notification.Summary.Impact)
+	assert.Contains(t, notification.Summary.Story, "The node is not ready.")
+	assert.Contains(t, notification.Summary.Story, "memory limit is 256Mi")
+	assert.Contains(t, notification.Summary.Story, "readiness probe")
+	assert.Contains(t, notification.Summary.Story, "Requested resources: cpu=2")
 	assert.Nil(t, notification.Summary.PrimaryAction)
-	assert.Len(t, notification.Details, 7)
+	assert.Len(t, notification.Details, 2)
+	assert.Equal(t, "Logs", notification.Details[0].Title)
+	assert.Equal(t, "Runbook", notification.Details[1].Title)
+}
+
+func TestNotificationOmitsIrrelevantDetails(t *testing.T) {
+	report := &Report{
+		Action: "create", Namespace: "payments", Resource: "service",
+		Name: "checkout", Summary: SummarySection{Label: "No endpoints"},
+	}
+	incident := &model.Incident{Subject: model.Subject{ID: "incident-3"}}
+
+	notification := NotificationFromReport(report, incident, "", 0, 0)
+	require.NotNil(t, notification)
+	assert.Empty(t, notification.Summary.Story)
+	assert.Empty(t, notification.Details)
+}
+
+func TestNotificationRecoveryOmitsBoilerplateKeepsEvidence(t *testing.T) {
+	report := &Report{
+		Action:  "resolved",
+		Summary: SummarySection{Duration: "5m"},
+		Resolution: &model.Resolution{
+			Summary:  "the condition recovered",
+			Evidence: "the replacement pod is ready",
+		},
+	}
+	incident := &model.Incident{Subject: model.Subject{ID: "incident-4"}}
+
+	notification := NotificationFromReport(report, incident, "", 0, 0)
+	require.NotNil(t, notification)
+	assert.Contains(t, notification.Summary.Story, "Recovered after 5m.")
+	assert.Contains(t, notification.Summary.Story, "The replacement pod is ready.")
+	assert.NotContains(t, notification.Summary.Story, "condition recovered")
+
+	for _, renderer := range []Renderer{
+		NewPlainTextRenderer(), NewSlackRenderer(), NewDiscordRenderer(),
+	} {
+		text := renderer.RenderResolved(report)
+		assert.Contains(t, text, "replacement pod is ready")
+		assert.NotContains(t, text, "condition recovered")
+	}
+}
+
+func TestTextRendererDoesNotDuplicateNamespace(t *testing.T) {
+	report := &Report{
+		Action: "create", Namespace: "payments", Name: "payments/checkout",
+		Summary: SummarySection{Emoji: "🔴", Label: "Checkout failed"},
+	}
+
+	text := NewPlainTextRenderer().RenderCreate(report)
+	assert.Contains(t, text, "payments/checkout")
+	assert.NotContains(t, text, "payments/payments/checkout")
 }
 
 func TestNotificationOmitsWeakCauseAndUnsafeGroupCommand(t *testing.T) {
