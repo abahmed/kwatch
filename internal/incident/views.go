@@ -85,8 +85,10 @@ func (e *Engine) ActiveIncidents() map[model.IncidentKey]*model.Incident {
 func (e *Engine) ReevaluateActive() {
 	e.mu.Lock()
 	transitions := make([]transition, 0, len(e.state))
+	grouped := e.groupedKeys()
 	for _, inc := range e.state {
-		if inc.State == model.StateResolved || inc.SuppressedBy != "" {
+		if inc.State == model.StateResolved || inc.SuppressedBy != "" ||
+			grouped[inc.Key] {
 			continue
 		}
 		transitions = append(transitions, transition{

@@ -7,6 +7,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/abahmed/kwatch/internal/clock"
+	"github.com/abahmed/kwatch/internal/constant"
 	"github.com/abahmed/kwatch/internal/event"
 	"github.com/abahmed/kwatch/internal/model"
 )
@@ -56,4 +57,28 @@ func TestReevaluateActiveSkipsResolvedIncidents(t *testing.T) {
 	e.mu.Unlock()
 	e.ReevaluateActive()
 	require.False(t, called)
+}
+
+func TestReevaluateActiveSkipsBufferedServiceUntilFlush(t *testing.T) {
+	now := time.Date(2026, 9, 27, 12, 0, 0, 0, time.UTC)
+	e := newSmartGroupingEngine()
+	e.now = mockClock(now)
+	var actions []model.IncidentAction
+	e.config.LifecycleHook = func(
+		_ *model.Incident, action model.IncidentAction,
+	) {
+		actions = append(actions, action)
+	}
+	_, action := e.processEvent(event.Event{
+		Resource: "service", Namespace: "apps", PodName: "api",
+		Reason: constant.ReasonServiceNoEndpoints,
+	}, "api", nil)
+	require.Equal(t, model.ActionSkip, action)
+	e.ReevaluateActive()
+	require.Empty(t, actions)
+	e.now = mockClock(now.Add(61 * time.Second))
+	e.checkLifecycle()
+	require.Equal(t, []model.IncidentAction{
+		model.ActionCreate,
+	}, actions)
 }

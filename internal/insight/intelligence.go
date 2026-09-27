@@ -221,6 +221,9 @@ func (e *Engine) ShouldAnnounceReevaluation(
 	e.stateMu.Lock()
 	defer e.stateMu.Unlock()
 	state := e.states[inc.Key]
+	if !state.delivered && state.suppressed.IsZero() {
+		return false
+	}
 	changed := state.diagnosis != signature
 	state.diagnosis = signature
 	e.states[inc.Key] = state

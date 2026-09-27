@@ -48,6 +48,7 @@ func TestCauseCandidatesPreferRecentActiveDependency(t *testing.T) {
 func TestShouldAnnounceReevaluationOnlyWhenDiagnosisChanges(t *testing.T) {
 	e := newTestEngine(nil, nil)
 	inc := &model.Incident{Subject: model.Subject{Key: "pod/apps/api"}}
+	e.RecordDelivery(inc, nil)
 	first := &Insight{
 		CauseState: CauseLikely,
 		RootCause:  model.ObjectRef{Kind: "node", Name: "n1"},
@@ -72,6 +73,7 @@ func TestShouldAnnounceReevaluationOnlyWhenDiagnosisChanges(t *testing.T) {
 func TestReevaluationIgnoresImpactAndUnconfirmedRootChurn(t *testing.T) {
 	e := newTestEngine(nil, nil)
 	inc := &model.Incident{Subject: model.Subject{Key: "pod/apps/api"}}
+	e.RecordDelivery(inc, nil)
 	first := &Insight{
 		CauseState: CauseUnknown,
 		RootCause:  model.ObjectRef{Kind: "node", Name: "n1"},
@@ -104,6 +106,39 @@ func TestRecordDeliverySeedsReevaluationSignature(t *testing.T) {
 	e.RecordDelivery(inc, ins)
 	if e.ShouldAnnounceReevaluation(inc, ins) {
 		t.Fatal("unchanged delivered diagnosis was announced")
+	}
+}
+
+func TestReevaluationWaitsForFirstDelivery(t *testing.T) {
+	e := newTestEngine(nil, nil)
+	inc := &model.Incident{Subject: model.Subject{Key: "pod/apps/api"}}
+	ins := &Insight{
+		CauseState: CauseLikely,
+		RootCause:  model.ObjectRef{Kind: "node", Name: "worker"},
+		Pattern:    "node_failure", Severity: model.SeverityWarning,
+	}
+	if e.ShouldAnnounceReevaluation(inc, ins) {
+		t.Fatal("undelivered incident was announced by reevaluation")
+	}
+	e.RecordDelivery(inc, nil)
+	if !e.ShouldAnnounceReevaluation(inc, ins) {
+		t.Fatal("new diagnosis after delivery was suppressed")
+	}
+}
+
+func TestReevaluationCanReleaseSuppressedFirstDelivery(t *testing.T) {
+	e := newTestEngine(nil, nil)
+	inc := &model.Incident{Subject: model.Subject{Key: "pod/apps/api"}}
+	e.states[inc.Key] = analysisState{
+		suppressed: time.Date(2026, 9, 27, 12, 0, 0, 0, time.UTC),
+	}
+	ins := &Insight{
+		CauseState: CauseLikely,
+		RootCause:  model.ObjectRef{Kind: "node", Name: "worker"},
+		Pattern:    "node_failure", Severity: model.SeverityWarning,
+	}
+	if !e.ShouldAnnounceReevaluation(inc, ins) {
+		t.Fatal("suppressed incident could not make first delivery")
 	}
 }
 
