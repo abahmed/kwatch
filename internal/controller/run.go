@@ -110,7 +110,7 @@ func (c *Controller) Run(ctx context.Context, workers int) error {
 					obs.Hint,
 					obs.Severity,
 				)
-			})
+			}, c.components.Node.Processor.ResolveNodeResource)
 		}(c.nodeResourceCfg)
 	}
 

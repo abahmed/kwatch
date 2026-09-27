@@ -6,7 +6,6 @@ import (
 
 	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
 	"github.com/abahmed/kwatch/internal/model"
 )
@@ -14,9 +13,7 @@ import (
 func (s *Manager) GetRuntimeSession(
 	ctx context.Context,
 ) (model.RuntimeSession, error) {
-	cm, err := s.client.CoreV1().ConfigMaps(s.namespace).Get(
-		ctx, stateConfigMapName, metav1.GetOptions{},
-	)
+	cm, err := s.getConfigMap(ctx, stateConfigMapName)
 	if apierrors.IsNotFound(err) {
 		return model.RuntimeSession{}, nil
 	}
@@ -71,13 +68,7 @@ func (s *Manager) ClaimStartupAnnouncement(
 }
 
 func (s *Manager) IsFirstRun(ctx context.Context) (bool, error) {
-	cm, err := s.client.CoreV1().ConfigMaps(
-		s.namespace,
-	).Get(
-		ctx,
-		stateConfigMapName,
-		metav1.GetOptions{},
-	)
+	cm, err := s.getConfigMap(ctx, stateConfigMapName)
 	if err != nil {
 		if apierrors.IsNotFound(err) {
 			return true, nil
@@ -89,13 +80,7 @@ func (s *Manager) IsFirstRun(ctx context.Context) (bool, error) {
 }
 
 func (s *Manager) GetClusterID(ctx context.Context) (string, error) {
-	cm, err := s.client.CoreV1().ConfigMaps(
-		s.namespace,
-	).Get(
-		ctx,
-		stateConfigMapName,
-		metav1.GetOptions{},
-	)
+	cm, err := s.getConfigMap(ctx, stateConfigMapName)
 	if err != nil {
 		return "", err
 	}
@@ -103,13 +88,7 @@ func (s *Manager) GetClusterID(ctx context.Context) (string, error) {
 }
 
 func (s *Manager) GetStoredVersion(ctx context.Context) (string, error) {
-	cm, err := s.client.CoreV1().ConfigMaps(
-		s.namespace,
-	).Get(
-		ctx,
-		stateConfigMapName,
-		metav1.GetOptions{},
-	)
+	cm, err := s.getConfigMap(ctx, stateConfigMapName)
 	if err != nil {
 		if apierrors.IsNotFound(err) {
 			return "", nil
@@ -122,11 +101,7 @@ func (s *Manager) GetStoredVersion(ctx context.Context) (string, error) {
 // GetStateSchemaVersion reports the persisted state format. An empty value is
 // a legacy installation that predates explicit schema tracking.
 func (s *Manager) GetStateSchemaVersion(ctx context.Context) string {
-	cm, err := s.client.CoreV1().ConfigMaps(s.namespace).Get(
-		ctx,
-		stateConfigMapName,
-		metav1.GetOptions{},
-	)
+	cm, err := s.getConfigMap(ctx, stateConfigMapName)
 	if err != nil {
 		return ""
 	}
@@ -134,13 +109,7 @@ func (s *Manager) GetStateSchemaVersion(ctx context.Context) string {
 }
 
 func (s *Manager) GetNotifiedVersion(ctx context.Context) string {
-	cm, err := s.client.CoreV1().ConfigMaps(
-		s.namespace,
-	).Get(
-		ctx,
-		stateConfigMapName,
-		metav1.GetOptions{},
-	)
+	cm, err := s.getConfigMap(ctx, stateConfigMapName)
 	if err != nil {
 		return ""
 	}

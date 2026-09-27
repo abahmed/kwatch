@@ -122,7 +122,7 @@ func TestSendMessage(t *testing.T) {
 	assert.Equal(expectedAuth, gotAuth)
 	assert.Contains(gotBody, `"project":{"key":"OPS"}`)
 	assert.Contains(gotBody, `"issuetype":{"name":"Task"}`)
-	assert.Contains(gotBody, `"summary":"kwatch alert: dev"`)
+	assert.Contains(gotBody, `"summary":"[dev] kwatch alert"`)
 	assert.Contains(gotBody, `"description":"hello"`)
 }
 

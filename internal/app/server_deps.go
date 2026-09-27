@@ -2,6 +2,7 @@ package app
 
 import (
 	"context"
+	"sync"
 	"sync/atomic"
 	"time"
 
@@ -46,7 +47,11 @@ type serverDeps struct {
 	controllerDone  chan struct{}
 	// controllerStarted is set once runController begins. Standby replicas
 	// never run the controller, so shutdown must not wait for it.
-	controllerStarted    atomic.Bool
+	controllerStarted atomic.Bool
+	// releaseLease is set after a graceful active session so shutdown can
+	// hand over the Lease once delivery and final writes are done.
+	leaseMu              sync.Mutex
+	releaseLease         func(context.Context)
 	controllerProgress   *componentProgress
 	notifyStartup        func()
 	endSession           func(context.Context, string)
@@ -114,4 +119,16 @@ func (p *componentProgress) LastProgress() time.Time {
 		return time.Time{}
 	}
 	return time.Unix(0, value)
+}
+
+func (d *serverDeps) setLeaseRelease(release func(context.Context)) {
+	d.leaseMu.Lock()
+	d.releaseLease = release
+	d.leaseMu.Unlock()
+}
+
+func (d *serverDeps) leaseRelease() func(context.Context) {
+	d.leaseMu.Lock()
+	defer d.leaseMu.Unlock()
+	return d.releaseLease
 }

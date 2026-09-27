@@ -133,7 +133,8 @@ func (r *Runtime) processMutating(
 	}
 	if r.endpointListerAvailable() {
 		endpointFindings, err := r.endpointFindings(
-			configuration.Name, configuration.Namespace, configuration.Labels,
+			MutatingWebhookKind, configuration.Name,
+			configuration.Namespace, configuration.Labels,
 			MutatingWebhookServices(configuration),
 		)
 		if err != nil {
@@ -143,7 +144,10 @@ func (r *Runtime) processMutating(
 			)
 		}
 		r.reconcile(
-			model.NewObjectRef("webhook", configuration.Namespace, configuration.Name),
+			model.NewObjectRef(
+				MutatingWebhookKind, configuration.Namespace,
+				configuration.Name,
+			),
 			endpointFindings,
 		)
 	}
@@ -170,7 +174,8 @@ func (r *Runtime) processValidating(
 	}
 	if r.endpointListerAvailable() {
 		endpointFindings, err := r.endpointFindings(
-			configuration.Name, configuration.Namespace, configuration.Labels,
+			ValidatingWebhookKind, configuration.Name,
+			configuration.Namespace, configuration.Labels,
 			ValidatingWebhookServices(configuration),
 		)
 		if err != nil {
@@ -180,7 +185,10 @@ func (r *Runtime) processValidating(
 			)
 		}
 		r.reconcile(
-			model.NewObjectRef("webhook", configuration.Namespace, configuration.Name),
+			model.NewObjectRef(
+				ValidatingWebhookKind, configuration.Namespace,
+				configuration.Name,
+			),
 			endpointFindings,
 		)
 	}
@@ -226,7 +234,7 @@ func (r *Runtime) serviceExists(namespace, name string) (bool, error) {
 }
 
 func (r *Runtime) endpointFindings(
-	name, namespace string,
+	kind, name, namespace string,
 	labelsMap map[string]string,
 	refs []*admissionregistrationv1.ServiceReference,
 ) ([]*model.Observation, error) {
@@ -234,7 +242,7 @@ func (r *Runtime) endpointFindings(
 	lister := r.endpointList
 	r.mu.RUnlock()
 	return DetectWebhookEndpointIssuesWithError(
-		lister, name, namespace, labelsMap, refs,
+		lister, kind, name, namespace, labelsMap, refs,
 	)
 }
 
@@ -261,6 +269,16 @@ func (r *Runtime) forget(kind, name string) {
 		r.sink.ReconcileGone(model.NewObjectRef(kind, "", name))
 	}
 	if r.endpointListerAvailable() {
-		r.sink.ReconcileGone(model.NewObjectRef("webhook", "", name))
+		r.sink.ReconcileGone(
+			model.NewObjectRef(webhookEndpointKind(kind), "", name),
+		)
 	}
+}
+
+// webhookEndpointKind maps a configuration kind to its endpoint subject kind.
+func webhookEndpointKind(configurationKind string) string {
+	if configurationKind == "validatingwebhookconfiguration" {
+		return ValidatingWebhookKind
+	}
+	return MutatingWebhookKind
 }

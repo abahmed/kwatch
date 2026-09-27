@@ -97,9 +97,9 @@ func TestSendMessage(t *testing.T) {
 	c.url = s.URL
 
 	assert.Nil(c.SendMessage(context.Background(), "hello"))
-	assert.Contains(gotBody, `"message_type":"CRITICAL"`)
-	assert.Contains(gotBody, `"entity_id":"dev"`)
-	assert.Contains(gotBody, `"entity_display_name":"kwatch alert"`)
+	assert.Contains(gotBody, `"message_type":"INFO"`)
+	assert.Contains(gotBody, `"entity_id":"kwatch-notice"`)
+	assert.Contains(gotBody, `"entity_display_name":"hello"`)
 	assert.Contains(gotBody, `"state_message":"hello"`)
 }
 

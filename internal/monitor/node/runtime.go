@@ -163,6 +163,13 @@ func (r *Runtime) emit(
 	r.process(obs)
 }
 
+// ResolveNodeResource resolves a periodic node-resource finding whose level
+// the latest check no longer reports.
+func (r *Runtime) ResolveNodeResource(nodeName, reason string) {
+	r.beginProcessing()
+	r.resolveNode(nodeName, reason)
+}
+
 // ProcessNodeResourceOvercommit reports a periodic node-resource finding.
 func (r *Runtime) ProcessNodeResourceOvercommit(
 	reason, nodeName, hint string, severity model.Severity,

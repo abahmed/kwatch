@@ -6,7 +6,6 @@ import (
 
 	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/klog/v2"
 
 	"github.com/abahmed/kwatch/internal/model"
@@ -313,9 +312,7 @@ func (s *Manager) loadPayload(
 	name, key string,
 	out any,
 ) (bool, error) {
-	cm, err := s.client.CoreV1().ConfigMaps(s.namespace).Get(
-		ctx, name, metav1.GetOptions{},
-	)
+	cm, err := s.getConfigMap(ctx, name)
 	if apierrors.IsNotFound(err) {
 		return false, nil
 	}

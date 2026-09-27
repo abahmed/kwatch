@@ -44,11 +44,12 @@ func (m *Monitor) processCR(obj interface{}) {
 		return
 	}
 	m.rebuildGraph(u)
-	if sig := failureSignal(u, "customresource", m.conditionRules); sig != nil {
+	kind := customResourceKind(u)
+	if sig := failureSignal(u, kind, m.conditionRules); sig != nil {
 		m.incidentSink.Process(sig)
 	} else {
 		m.resolve(
-			"customresource", u.GetNamespace(), u.GetName(),
+			kind, u.GetNamespace(), u.GetName(),
 			constant.ReasonCustomResourceFailure,
 		)
 	}
@@ -64,13 +65,11 @@ func (m *Monitor) resolveCR(obj interface{}) {
 		(m.namespaceAllowed != nil && !m.namespaceAllowed(namespace)) {
 		return
 	}
+	kind := customResourceKind(deletedObject(obj))
 	if m.graph != nil {
-		m.graph.RemoveNode("customresource", namespace, name)
+		m.graph.RemoveNode(kind, namespace, name)
 	}
-	m.resolve(
-		"customresource", namespace, name,
-		constant.ReasonCustomResourceFailure,
-	)
+	m.resolve(kind, namespace, name, constant.ReasonCustomResourceFailure)
 }
 
 func (m *Monitor) rebuildGraph(u *unstructured.Unstructured) {
@@ -97,6 +96,25 @@ func (m *Monitor) rebuildGraph(u *unstructured.Unstructured) {
 		}
 	}
 	m.graph.ReplaceOutgoingEdges(
-		"customresource", u.GetNamespace(), u.GetName(), targets,
+		customResourceKind(u), u.GetNamespace(), u.GetName(), targets,
 	)
+}
+
+// customResourceKind is the lower-case Kind of a custom resource. Custom
+// resources of different kinds often share a name; tracking them all as
+// "customresource" made them resolve each other and merge graph nodes.
+func customResourceKind(u *unstructured.Unstructured) string {
+	if u == nil || u.GetKind() == "" {
+		return "customresource"
+	}
+	return strings.ToLower(u.GetKind())
+}
+
+// deletedObject unwraps an informer delete notification.
+func deletedObject(obj interface{}) *unstructured.Unstructured {
+	if tombstone, ok := obj.(cache.DeletedFinalStateUnknown); ok {
+		obj = tombstone.Obj
+	}
+	u, _ := obj.(*unstructured.Unstructured)
+	return u
 }

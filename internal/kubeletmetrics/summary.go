@@ -155,9 +155,10 @@ func (m *Monitor) reportUsage(
 	warning, critical = m.adaptiveUsageThreshold(
 		usageBaselineKey(pod, container, reason), percent, warning, critical,
 	)
+	group := owner.Key() + "|" + container + "|" + reason
 	if percent < warning {
-		m.observe(
-			string(key), false, func() {},
+		m.observeOwned(
+			string(key), group, false, func() {},
 			func() { m.incidentSink.ResolveObserved(obs) },
 		)
 		return
@@ -166,7 +167,7 @@ func (m *Monitor) reportUsage(
 	if percent >= critical {
 		severity = model.SeverityCritical
 	}
-	m.observe(string(key), true,
+	m.observeOwned(string(key), group, true,
 		func() {
 			m.incidentSink.Process(
 				obs.WithSeverity(severity).WithHint(fmt.Sprintf(

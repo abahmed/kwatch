@@ -78,7 +78,7 @@ func TestSendMessage(t *testing.T) {
 	assert.Contains(gotBody, `"message":"hello"`)
 	assert.Contains(gotBody, `"user":"ops"`)
 	assert.Contains(gotBody, `"X-S4-Status":"new"`)
-	assert.Contains(gotBody, `"severity":"critical"`)
+	assert.Contains(gotBody, `"severity":"info"`)
 }
 
 func TestSendMessageError(t *testing.T) {

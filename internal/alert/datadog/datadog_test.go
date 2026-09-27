@@ -84,7 +84,7 @@ func TestSendMessage(t *testing.T) {
 	assert.Equal("app-test", gotAppKey)
 	assert.Contains(gotBody, `"title":"kwatch"`)
 	assert.Contains(gotBody, `"text":"hello"`)
-	assert.Contains(gotBody, `"alert_type":"warning"`)
+	assert.Contains(gotBody, `"alert_type":"info"`)
 	assert.Contains(gotBody, `"tags"`)
 	assert.Contains(gotBody, "cluster:prod")
 }

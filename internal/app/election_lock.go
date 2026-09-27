@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"os"
+	"strings"
 	"time"
 
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -93,6 +94,13 @@ func electionLeaseName() string {
 	return leaderLeaseName
 }
 
+// installationStatePrefix names this installation's state ConfigMaps after
+// its Lease, so installations that do not share a Lease do not share state.
+// The default Lease keeps the historical kwatch-* names.
+func installationStatePrefix() string {
+	return strings.TrimSuffix(electionLeaseName(), "-leader")
+}
+
 func podIdentity() (string, error) {
 	if identity := os.Getenv("POD_NAME"); identity != "" {
 		return identity, nil
@@ -103,4 +111,26 @@ func podIdentity() (string, error) {
 	}
 	klog.InfoS("using host identity for leader election", "identity", identity)
 	return identity, nil
+}
+
+// releaseLease gives up the Lease if this replica still holds it, the same
+// way client-go does, so a standby can take over without waiting for expiry.
+func releaseLease(
+	ctx context.Context,
+	lock resourcelock.Interface,
+	identity string,
+	now func() time.Time,
+) {
+	record, _, err := lock.Get(ctx)
+	if err != nil || record == nil || record.HolderIdentity != identity {
+		return
+	}
+	released := metav1.NewTime(now())
+	record.HolderIdentity = ""
+	record.LeaseDurationSeconds = 1
+	record.RenewTime = released
+	record.AcquireTime = released
+	if err := lock.Update(ctx, *record); err != nil {
+		klog.ErrorS(err, "failed to release leader election lease")
+	}
 }

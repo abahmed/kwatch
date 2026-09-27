@@ -83,10 +83,10 @@ func TestSendMessage(t *testing.T) {
 
 	assert.Nil(c.SendMessage(context.Background(), "hello"))
 	assert.Equal("Key test", gotAuth)
-	assert.Contains(gotBody, `"resource":"kwatch/dev"`)
+	assert.Contains(gotBody, `"resource":"dev/kwatch-notice"`)
 	assert.Contains(gotBody, `"event":"kwatch"`)
 	assert.Contains(gotBody, `"environment":"Production"`)
-	assert.Contains(gotBody, `"severity":"critical"`)
+	assert.Contains(gotBody, `"severity":"informational"`)
 	assert.Contains(gotBody, `"service":["kwatch"]`)
 	assert.Contains(gotBody, `"text":"hello"`)
 }

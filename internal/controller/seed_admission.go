@@ -58,7 +58,8 @@ func (c *Controller) seedMwcs(
 					continue
 				}
 				endpointSigs, err := security.DetectWebhookEndpointIssuesWithError(
-					c.endpointSliceLister, mwc.Name, mwc.Namespace,
+					c.endpointSliceLister, security.MutatingWebhookKind,
+					mwc.Name, mwc.Namespace,
 					mwc.Labels, security.MutatingWebhookServices(mwc),
 				)
 				if err != nil {
@@ -96,7 +97,8 @@ func (c *Controller) seedVwcs(
 					continue
 				}
 				endpointSigs, err := security.DetectWebhookEndpointIssuesWithError(
-					c.endpointSliceLister, vwc.Name, vwc.Namespace,
+					c.endpointSliceLister, security.ValidatingWebhookKind,
+					vwc.Name, vwc.Namespace,
 					vwc.Labels, security.ValidatingWebhookServices(vwc),
 				)
 				if err != nil {

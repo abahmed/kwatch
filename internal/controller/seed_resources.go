@@ -3,10 +3,12 @@ package controller
 import (
 	"time"
 
+	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/klog/v2"
 
 	"github.com/abahmed/kwatch/internal/config"
+	"github.com/abahmed/kwatch/internal/filter"
 	clustermonitor "github.com/abahmed/kwatch/internal/monitor/cluster"
 	"github.com/abahmed/kwatch/internal/monitor/network"
 	"github.com/abahmed/kwatch/internal/monitor/pod/policy"
@@ -112,6 +114,9 @@ type seedThresholds struct {
 	notReady                  time.Duration
 	pendingPodEnabled         bool
 	notReadyEnabled           bool
+	// nodeSuppression is the detect-time filter the node runtime applies;
+	// seeding must honour it or a silenced node condition hides its pods.
+	nodeSuppression *config.SuppressionIndex
 }
 
 func newSeedThresholds(runtime config.RuntimeConfig) seedThresholds {
@@ -122,7 +127,13 @@ func newSeedThresholds(runtime config.RuntimeConfig) seedThresholds {
 		pending = defaultPendingPodThreshold
 	}
 	cluster := runtime.Monitors().ClusterResource()
+	var nodeSuppression *config.SuppressionIndex
+	if runtime.Compiled() {
+		index := runtime.Scope().SuppressionIndex()
+		nodeSuppression = &index
+	}
 	return seedThresholds{
+		nodeSuppression:           nodeSuppression,
 		namespaceSustainedMinutes: cluster.SustainedMinutes,
 		nodeLeaseStaleSeconds:     cluster.NodeLeaseStaleSeconds,
 		pendingPod:                pending,
@@ -316,4 +327,15 @@ func (c *Controller) seedServices(rec *baselineRecorder) {
 			}
 		}
 	}
+}
+
+// nodeConditionSuppressed mirrors the node runtime's detect-time filter.
+func (t seedThresholds) nodeConditionSuppressed(
+	condition corev1.NodeCondition,
+) bool {
+	if t.nodeSuppression == nil {
+		return false
+	}
+	return filter.MatchesNodeReason(*t.nodeSuppression, condition.Reason) ||
+		filter.MatchesNodeMessage(*t.nodeSuppression, condition.Message)
 }

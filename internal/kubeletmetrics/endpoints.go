@@ -98,13 +98,14 @@ func (m *Monitor) checkCadvisor(ctx context.Context, node *corev1.Node) {
 			continue
 		}
 		owner := m.podOwner(m.cachedPod(namespace, pod), namespace, pod)
+		group := owner.Key() + "|" + container + "|throttling"
 		if percent >= m.cfg.CPUThrottlingWarningPercent {
 			severity := model.SeverityWarning
 			if percent >= m.cfg.CPUThrottlingCriticalPercent {
 				severity = model.SeverityCritical
 			}
 			incidentKey := "cpu/" + node.Name + "/" + key
-			m.observe(incidentKey, true,
+			m.observeOwned(incidentKey, group, true,
 				func() {
 					m.reportContainer(
 						m.cachedPod(namespace, pod), container, owner,
@@ -114,8 +115,8 @@ func (m *Monitor) checkCadvisor(ctx context.Context, node *corev1.Node) {
 				func() {})
 		} else if namespace != "" && pod != "" {
 			incidentKey := "cpu/" + node.Name + "/" + key
-			m.observe(
-				incidentKey, false, func() {},
+			m.observeOwned(
+				incidentKey, group, false, func() {},
 				func() { m.resolveContainer(namespace, pod, container) },
 			)
 		}

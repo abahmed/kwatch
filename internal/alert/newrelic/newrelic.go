@@ -59,24 +59,42 @@ func (n *NewRelic) Name() string {
 }
 
 // SendEvent sends event to the provider
+// UsesEventDelivery routes incidents through SendEvent, which carries the
+// incident key and action as queryable event attributes.
+func (n *NewRelic) UsesEventDelivery() {}
+
+// SendEvent records one KwatchAlert event with the incident key and action,
+// so New Relic queries and alert conditions can follow an incident.
 func (n *NewRelic) SendEvent(ctx context.Context, e *event.Event) error {
-	return n.SendMessage(ctx, e.FormatText(n.clusterName, ""))
+	action := e.Action
+	if e.IsNotice() {
+		action = "notice"
+	}
+	return n.send(ctx, map[string]interface{}{
+		"eventType":   "KwatchAlert",
+		"cluster":     n.clusterName,
+		"message":     truncateMessage(e.AlertBody(n.clusterName), 64*1024),
+		"title":       e.AlertTitle(250),
+		"incidentKey": e.AlertKey(),
+		"action":      action,
+		"reason":      e.Reason,
+		"namespace":   e.Namespace,
+		"severity":    string(e.Severity),
+	})
 }
 
-// SendMessage sends text message to the provider
+// SendMessage records a plain notice.
 func (n *NewRelic) SendMessage(ctx context.Context, msg string) error {
-	msg = truncateMessage(msg, 64*1024)
-	eventPayload := map[string]interface{}{
-		"eventType": "KwatchAlert",
-		"cluster":   n.clusterName,
-		"message":   msg,
-	}
+	return n.SendEvent(ctx, &event.Event{PodName: msg, Reason: "notify"})
+}
 
+func (n *NewRelic) send(
+	ctx context.Context, eventPayload map[string]interface{},
+) error {
 	body, err := json.Marshal([]interface{}{eventPayload})
 	if err != nil {
 		return err
 	}
-
 	_, err = n.sender.Send(ctx, transport.Request{
 		Provider: n.Name(), URL: n.url, Body: body,
 		ContentType: "application/json", Headers: map[string]string{

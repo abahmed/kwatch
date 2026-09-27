@@ -8,7 +8,6 @@ import (
 
 	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
 // MigrationStatus describes the outcome of a persistence migration.
@@ -81,13 +80,7 @@ func (s *Manager) migrateLegacyBaselineWithResult(
 	}
 
 	// Already in the dedicated CM? nothing to migrate.
-	if cm, err := s.client.CoreV1().ConfigMaps(
-		s.namespace,
-	).Get(
-		ctx,
-		baselineConfigMapName,
-		metav1.GetOptions{},
-	); err == nil {
+	if cm, err := s.getConfigMap(ctx, baselineConfigMapName); err == nil {
 		if len(cm.BinaryData[baselineKey]) > 0 || cm.Data[baselineKey] != "" {
 			err := s.clearLegacyBaseline(ctx)
 			if err != nil {
@@ -102,13 +95,7 @@ func (s *Manager) migrateLegacyBaselineWithResult(
 			"read dedicated baseline configmap: %w", err,
 		)
 	}
-	old, err := s.client.CoreV1().ConfigMaps(
-		s.namespace,
-	).Get(
-		ctx,
-		stateConfigMapName,
-		metav1.GetOptions{},
-	)
+	old, err := s.getConfigMap(ctx, stateConfigMapName)
 	if err != nil {
 		if apierrors.IsNotFound(err) {
 			return result, nil

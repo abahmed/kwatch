@@ -7,7 +7,6 @@ import (
 
 	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/klog/v2"
 )
 
@@ -38,13 +37,7 @@ func (s *Manager) GetBaselineWithError(
 ) (map[string]map[string]int64, error) {
 	var result map[string]map[string]int64
 
-	cm, err := s.client.CoreV1().ConfigMaps(
-		s.namespace,
-	).Get(
-		ctx,
-		baselineConfigMapName,
-		metav1.GetOptions{},
-	)
+	cm, err := s.getConfigMap(ctx, baselineConfigMapName)
 	if err == nil {
 		if gz, ok := cm.BinaryData[baselineKey]; ok && len(gz) > 0 {
 			if err := gunzipJSON(gz, &result); err != nil {
@@ -72,13 +65,7 @@ func (s *Manager) GetBaselineWithError(
 
 	// migration: fall back to the pre-split location
 	// kwatch-state.data[baseline]
-	if old, err := s.client.CoreV1().ConfigMaps(
-		s.namespace,
-	).Get(
-		ctx,
-		stateConfigMapName,
-		metav1.GetOptions{},
-	); err == nil {
+	if old, err := s.getConfigMap(ctx, stateConfigMapName); err == nil {
 		if raw, ok := old.Data[baselineKey]; ok && raw != "" {
 			if err := json.Unmarshal([]byte(raw), &result); err != nil {
 				return nil, fmt.Errorf("decode legacy baseline: %w", err)

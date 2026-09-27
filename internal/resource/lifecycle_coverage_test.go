@@ -22,7 +22,7 @@ func TestRunStopsWhenContextIsCanceled(t *testing.T) {
 		corev1listers.NewPodLister(podIndex))
 	monitor.Run(ctx, func(*model.Observation) {
 		t.Fatal("canceled monitor invoked callback")
-	})
+	}, nil)
 }
 
 func TestCheckSkipsNodesWithoutAllocatableResources(t *testing.T) {

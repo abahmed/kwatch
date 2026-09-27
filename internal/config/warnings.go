@@ -13,7 +13,17 @@ func Warnings(cfg *Config) []string {
 	if cfg == nil {
 		return nil
 	}
-	return resyncWarnings(cfg)
+	return append(resyncWarnings(cfg), providerWarnings(cfg)...)
+}
+
+// providerWarnings flags providers whose upstream service no longer exists.
+func providerWarnings(cfg *Config) []string {
+	if _, ok := cfg.Alert["line"]; ok {
+		return []string{"alert.line uses LINE Notify, which LINE shut down " +
+			"on 2025-03-31; notifications to it will fail. Use another " +
+			"provider such as webhook."}
+	}
+	return nil
 }
 
 // resyncWarnings covers the relationship the resolve path depends on.

@@ -63,6 +63,7 @@ func infrastructurePermissionsForRuntime(
 ) []Permission {
 	permissions := []Permission{
 		{Resource: "configmaps", Verb: "create"},
+		{Resource: "configmaps", Verb: "get"},
 		{Resource: "configmaps", Verb: "list"},
 		{Resource: "configmaps", Verb: "update"},
 		{Resource: "configmaps", Verb: "delete"},

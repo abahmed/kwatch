@@ -4,22 +4,21 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"net/url"
+	"strconv"
 	"strings"
 
 	"k8s.io/klog/v2"
 
+	"github.com/abahmed/kwatch/internal/alert/issues"
 	"github.com/abahmed/kwatch/internal/delivery/transport"
 	"github.com/abahmed/kwatch/internal/event"
 )
 
 const gitlabAPIURL = "https://gitlab.com/api/v4"
 
-type gitlabPayload struct {
-	Title       string `json:"title"`
-	Description string `json:"description"`
-}
-
 type Gitlab struct {
+	issues    *issues.Map
 	sender    transport.Sender
 	url       string
 	token     string
@@ -55,11 +54,13 @@ func NewGitlab(
 	klog.InfoS("initializing gitlab", "url", server, "projectId", projectID)
 
 	return &Gitlab{
+		issues: issues.NewMap(),
 		sender: transport.NewSender(dependencies),
 		url: fmt.Sprintf(
 			"%s/projects/%s/issues",
 			strings.TrimRight(server, "/"),
-			projectID,
+			// A "group/project" path must be one escaped path segment.
+			url.PathEscape(projectID),
 		),
 		token:       token,
 		projectID:   projectID,
@@ -73,33 +74,98 @@ func (g *Gitlab) Name() string {
 }
 
 // SendEvent sends event to the provider
+// UsesEventDelivery routes incidents through SendEvent, which carries the
+// action and a stable key so one issue follows one incident.
+func (g *Gitlab) UsesEventDelivery() {}
+
+// SendEvent opens one issue per incident, comments on updates and closes it
+// on recovery.
 func (g *Gitlab) SendEvent(ctx context.Context, e *event.Event) error {
-	msg := e.FormatMarkdown(g.clusterName, "", "\n\n")
-	return g.SendMessage(ctx, msg)
+	return g.issues.Deliver(ctx, g, e, g.issueTitle(e), g.issueBody(e))
 }
 
-// SendMessage sends text message to the provider
+// SendMessage files a standalone issue for a plain message.
 func (g *Gitlab) SendMessage(ctx context.Context, msg string) error {
-	title := fmt.Sprintf("kwatch alert: %s", g.clusterName)
-	if g.clusterName == "" {
-		title = "kwatch alert"
-	}
+	_, err := g.Create(ctx, g.issueTitle(nil), msg)
+	return err
+}
 
-	payload := gitlabPayload{
-		Title:       title,
-		Description: msg,
+func (g *Gitlab) issueTitle(e *event.Event) string {
+	title := "kwatch alert"
+	if e != nil {
+		title = e.AlertTitle(200)
 	}
+	if g.clusterName != "" {
+		title = "[" + g.clusterName + "] " + title
+	}
+	return title
+}
 
-	body, err := json.Marshal(payload)
+func (g *Gitlab) issueBody(e *event.Event) string {
+	if strings.TrimSpace(e.Narrative) == "" {
+		return e.FormatMarkdown(g.clusterName, "", "\n\n")
+	}
+	return e.AlertBody(g.clusterName)
+}
+
+// Create implements issues.Tracker.
+func (g *Gitlab) Create(
+	ctx context.Context, title, body string,
+) (string, error) {
+	response, err := g.call(ctx, "POST", g.url, map[string]string{
+		"title": title, "description": body,
+	})
 	if err != nil {
+		return "", err
+	}
+	var created struct {
+		IID int `json:"iid"`
+	}
+	if err := json.Unmarshal(response, &created); err != nil ||
+		created.IID == 0 {
+		return "", nil
+	}
+	return strconv.Itoa(created.IID), nil
+}
+
+// Comment implements issues.Tracker.
+func (g *Gitlab) Comment(ctx context.Context, id, body string) error {
+	_, err := g.call(ctx, "POST",
+		g.url+"/"+id+"/notes", map[string]string{"body": body})
+	return err
+}
+
+// Close implements issues.Tracker.
+func (g *Gitlab) Close(ctx context.Context, id, body string) error {
+	if err := g.Comment(ctx, id, body); err != nil {
 		return err
 	}
+	_, err := g.call(ctx, "PUT",
+		g.url+"/"+id, map[string]string{"state_event": "close"})
+	return err
+}
 
-	_, err = g.sender.Send(ctx, transport.Request{
-		Provider: g.Name(), URL: g.url, Body: body,
+func (g *Gitlab) call(
+	ctx context.Context, method, url string, payload interface{},
+) ([]byte, error) {
+	body, err := json.Marshal(payload)
+	if err != nil {
+		return nil, err
+	}
+	return g.sender.Send(ctx, transport.Request{
+		Provider: g.Name(), Method: method, URL: url, Body: body,
 		ContentType: "application/json", Headers: map[string]string{
 			"PRIVATE-TOKEN": g.token,
 		},
 	})
-	return err
+}
+
+// SnapshotThreads implements delivery.ThreadStateProvider.
+func (g *Gitlab) SnapshotThreads() map[string]string {
+	return g.issues.SnapshotThreads()
+}
+
+// RestoreThreads implements delivery.ThreadStateProvider.
+func (g *Gitlab) RestoreThreads(saved map[string]string) {
+	g.issues.RestoreThreads(saved)
 }

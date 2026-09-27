@@ -154,12 +154,12 @@ func (m *Mattermost) buildMessage(e *event.Event, msg *string) ([]byte, error) {
 	payload := mmPayload{}
 
 	if msg != nil && len(*msg) > 0 {
-		payload.Text = *msg
+		payload.Text = message.NeutralizeMentions(*msg)
 	}
 
 	if e != nil {
-		logs := strings.TrimSpace(e.Logs)
-		events := strings.TrimSpace(e.Events)
+		logs := message.NeutralizeMentions(strings.TrimSpace(e.Logs))
+		events := message.NeutralizeMentions(strings.TrimSpace(e.Events))
 
 		// use custom title if it's provided, otherwise use default
 		title := m.title

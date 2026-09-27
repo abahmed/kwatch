@@ -118,8 +118,10 @@ func assertLeaderElectionConfig(
 		electionConfig.RetryPeriod != leaderRetryPeriod {
 		t.Fatalf("unexpected election timings: %+v", electionConfig)
 	}
-	if !electionConfig.ReleaseOnCancel {
-		t.Fatal("voluntary shutdown should release the Lease")
+	// kwatch releases the Lease itself after delivery drains and final
+	// state is written; client-go's early release would overlap leaders.
+	if electionConfig.ReleaseOnCancel {
+		t.Fatal("client-go must not release the Lease on cancel")
 	}
 	tracking, ok := electionConfig.Lock.(*renewalTrackingLock)
 	if !ok {

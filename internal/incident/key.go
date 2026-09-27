@@ -7,6 +7,7 @@ import (
 	"hash/crc32"
 	"strings"
 
+	"github.com/abahmed/kwatch/internal/constant"
 	"github.com/abahmed/kwatch/internal/event"
 	"github.com/abahmed/kwatch/internal/model"
 )
@@ -75,7 +76,20 @@ func BuildKey(namespace, owner, reason, container string) model.IncidentKey {
 // have no Kubernetes owner reference. A plain ownerless Pod remains keyed by
 // its actual name because Kubernetes provides no evidence that another Pod is
 // its replacement.
+// kindQualifiedReasons name findings whose subjects of different kinds often
+// share a name (mutating and validating webhook configurations, custom
+// resources of different kinds). Keys omit the kind, so these reasons carry
+// it in the owner slot to keep such incidents apart.
+var kindQualifiedReasons = map[string]bool{
+	constant.ReasonWebhookNoEndpoints:    true,
+	constant.ReasonCustomResourceFailure: true,
+}
+
 func incidentOwner(ev event.Event, owner string) string {
+	if owner != "" && ev.Resource != "" &&
+		kindQualifiedReasons[normalizeReason(ev.Reason)] {
+		return ev.Resource + "." + owner
+	}
 	if ev.Resource == "pod" && ev.OwnerKind == "" &&
 		(owner == "" || owner == ev.PodName) {
 		if lineage := strings.TrimSpace(ev.PodLineageID); lineage != "" {

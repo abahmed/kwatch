@@ -31,6 +31,42 @@ func (g *ResourceGraph) ReplaceWith(next *ResourceGraph) {
 	g.markChangedLocked()
 }
 
+// ReplaceWithPreserving replaces the graph with next but keeps current edges
+// whose source kind next does not produce at all. A rebuild from informer
+// caches only knows the kinds those caches cover; edges owned by dynamic
+// watchers (Gateway API, storage failures, custom resources, probe targets)
+// would otherwise vanish until their objects changed again.
+func (g *ResourceGraph) ReplaceWithPreserving(next *ResourceGraph) {
+	if next == nil || g == next {
+		return
+	}
+	next.mu.RLock()
+	built := make(map[string]bool)
+	for _, edge := range next.edges {
+		built[edgeKind(edge.From)] = true
+	}
+	next.mu.RUnlock()
+	g.mu.RLock()
+	var carried []Edge
+	for _, edge := range g.edges {
+		if !built[edgeKind(edge.From)] {
+			carried = append(carried, edge)
+		}
+	}
+	g.mu.RUnlock()
+	next.mu.Lock()
+	for _, edge := range carried {
+		next.addEdgeLocked(edge)
+	}
+	next.mu.Unlock()
+	g.ReplaceWith(next)
+}
+
+func edgeKind(node string) string {
+	kind, _, _ := strings.Cut(node, "/")
+	return kind
+}
+
 func (g *ResourceGraph) Clear() {
 	g.mu.Lock()
 	defer g.mu.Unlock()

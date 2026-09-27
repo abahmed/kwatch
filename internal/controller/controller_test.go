@@ -264,6 +264,8 @@ func (m *mockHandler) ProcessNodeResourceOvercommit(
 ) {
 }
 
+func (m *mockHandler) ResolveNodeResource(string, string) {}
+
 func (m *mockHandler) ProcessClusterAutoscalerEvent(
 	*corev1.Event,
 ) {

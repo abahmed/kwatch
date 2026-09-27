@@ -94,30 +94,35 @@ func (s *Sensugo) Name() string {
 }
 
 // SendEvent sends event to the provider
-func (s *Sensugo) SendEvent(ctx context.Context, e *event.Event) error {
-	msg := e.FormatText(s.clusterName, "")
-	return s.SendMessage(ctx, msg)
-}
+// UsesEventDelivery routes incidents through SendEvent, which carries the
+// action and a stable key so Sensu can clear the check.
+func (s *Sensugo) UsesEventDelivery() {}
 
-// SendMessage sends text message to the provider
-func (s *Sensugo) SendMessage(ctx context.Context, msg string) error {
+// SendEvent reports one Sensu check per kwatch incident: status 2 while it is
+// firing and 0 once it resolves, so the event clears.
+func (s *Sensugo) SendEvent(ctx context.Context, e *event.Event) error {
+	status := 2
+	switch {
+	case e.IsResolve():
+		status = 0
+	case e.IsNotice():
+		status = 1
+	}
 	payload := sensuPayload{
 		Entity: sensuEntity{
 			Metadata: sensuMetadata{Name: s.entity},
 		},
 		Check: sensuCheck{
-			Metadata: sensuMetadata{Name: "kwatch"},
-			Status:   1,
-			Output:   msg,
+			Metadata: sensuMetadata{Name: e.AlertKey()},
+			Status:   status,
+			Output:   e.AlertBody(s.clusterName),
 			Issued:   s.now().Unix(),
 		},
 	}
-
 	body, err := json.Marshal(payload)
 	if err != nil {
 		return err
 	}
-
 	_, err = s.sender.Send(ctx, transport.Request{
 		Provider: s.Name(), URL: s.url, Body: body,
 		ContentType: "application/json", Headers: map[string]string{
@@ -125,4 +130,9 @@ func (s *Sensugo) SendMessage(ctx context.Context, msg string) error {
 		},
 	})
 	return err
+}
+
+// SendMessage sends a plain notice as a warning check.
+func (s *Sensugo) SendMessage(ctx context.Context, msg string) error {
+	return s.SendEvent(ctx, &event.Event{PodName: msg, Reason: "notify"})
 }

@@ -28,7 +28,7 @@ func (c *Controller) buildGraph() {
 			"failed to rebuild dependency graph; keeping previous graph")
 		return
 	}
-	c.graph.ReplaceWith(next.graph)
+	c.graph.ReplaceWithPreserving(next.graph)
 	klog.V(4).InfoS(
 		"dependency graph built from informer cache",
 		"edges", len(c.graph.Edges()),

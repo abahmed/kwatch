@@ -70,33 +70,38 @@ func (s *SplunkOncall) Name() string {
 }
 
 // SendEvent sends event to the provider
+// UsesEventDelivery routes incidents through SendEvent, which carries the
+// action and a stable key so Splunk On-Call can resolve the alert.
+func (s *SplunkOncall) UsesEventDelivery() {}
+
+// SendEvent opens, updates or recovers one Splunk On-Call incident per kwatch
+// incident, keyed by entity_id.
 func (s *SplunkOncall) SendEvent(ctx context.Context, e *event.Event) error {
-	msg := e.FormatText(s.clusterName, "")
-	return s.SendMessage(ctx, msg)
-}
-
-// SendMessage sends text message to the provider
-func (s *SplunkOncall) SendMessage(ctx context.Context, msg string) error {
-	entityID := "kwatch"
-	if len(s.clusterName) > 0 {
-		entityID = s.clusterName
+	messageType := "CRITICAL"
+	switch {
+	case e.IsResolve():
+		messageType = "RECOVERY"
+	case e.IsNotice():
+		messageType = "INFO"
 	}
-
 	payload := splunkOnCallPayload{
-		MessageType:       "CRITICAL",
-		EntityID:          entityID,
-		EntityDisplayName: "kwatch alert",
-		StateMessage:      msg,
+		MessageType:       messageType,
+		EntityID:          e.AlertKey(),
+		EntityDisplayName: e.AlertTitle(250),
+		StateMessage:      e.AlertBody(s.clusterName),
 	}
-
 	body, err := json.Marshal(payload)
 	if err != nil {
 		return err
 	}
-
 	_, err = s.sender.Send(ctx, transport.Request{
 		Provider: s.Name(), URL: s.url, Body: body,
 		ContentType: "application/json",
 	})
 	return err
+}
+
+// SendMessage sends a plain notice as an informational alert.
+func (s *SplunkOncall) SendMessage(ctx context.Context, msg string) error {
+	return s.SendEvent(ctx, &event.Event{PodName: msg, Reason: "notify"})
 }

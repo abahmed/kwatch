@@ -258,7 +258,8 @@ func (c *Controller) seedNodeBaseline() {
 	var activeNodeIncidents []string
 	for _, n := range nodes {
 		for _, cond := range n.Status.Conditions {
-			if nodemonitor.ConditionReason(cond) == "" {
+			if nodemonitor.ConditionReason(cond) == "" ||
+				c.seedThresholds.nodeConditionSuppressed(cond) {
 				continue
 			}
 			activeNodeIncidents = append(activeNodeIncidents, n.Name)

@@ -102,6 +102,37 @@ func (m *Monitor) cachedPod(namespace, name string) *corev1.Pod {
 	return pod.DeepCopy()
 }
 
+// observeOwned is observe for pod signals whose incident is keyed by the
+// owning workload. The owner-level incident is resolved only when no other
+// replica in the same group is still failing, so one healthy replica does
+// not close an incident its siblings still have.
+func (m *Monitor) observeOwned(
+	key, group string, failing bool, report, resolve func(),
+) {
+	m.mu.Lock()
+	if m.groups == nil {
+		m.groups = make(map[string]string)
+	}
+	m.groups[key] = group
+	m.mu.Unlock()
+	m.observe(key, failing, report, func() {
+		if !m.groupStillFailing(key, group) {
+			resolve()
+		}
+	})
+}
+
+func (m *Monitor) groupStillFailing(except, group string) bool {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	for key, failing := range m.failing {
+		if failing && key != except && m.groups[key] == group {
+			return true
+		}
+	}
+	return false
+}
+
 func (m *Monitor) observe(key string, failing bool, report, resolve func()) {
 	failureThreshold := m.cfg.FailureThreshold
 	if failureThreshold <= 0 {
@@ -162,6 +193,7 @@ func (m *Monitor) pruneSignalState() {
 			delete(m.failures, key)
 			delete(m.successes, key)
 			delete(m.failing, key)
+			delete(m.groups, key)
 		}
 	}
 	for key, baseline := range m.baselines {
