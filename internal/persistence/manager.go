@@ -54,6 +54,9 @@ const (
 )
 
 type Manager struct {
+	// prefix scopes ConfigMap names to one installation; empty keeps the
+	// historical kwatch-* names. See name.
+	prefix         string
 	client         kubernetes.Interface
 	namespace      string
 	configMapStore *RetryConfigMapManager // kwatch-state
@@ -82,60 +85,67 @@ func NewManagerWithClock(
 	client kubernetes.Interface,
 	namespace string,
 	timeSource clock.Clock,
+	options ...Option,
 ) *Manager {
 	timeSource = clock.Require(timeSource)
+	settings := managerSettings{}
+	for _, option := range options {
+		option(&settings)
+	}
+	names := statePrefix(settings.prefix)
 	return &Manager{
+		prefix:    settings.prefix,
 		client:    client,
 		namespace: namespace,
 		configMapStore: NewRetryConfigMapManager(
 			client,
 			namespace,
-			stateConfigMapName,
+			names(stateConfigMapName),
 		),
 		baselineMgr: NewRetryConfigMapManager(
 			client,
 			namespace,
-			baselineConfigMapName,
+			names(baselineConfigMapName),
 		),
 		incidentsMgr: NewRetryConfigMapManager(
 			client,
 			namespace,
-			incidentsConfigMapName,
+			names(incidentsConfigMapName),
 		),
 		groupsMgr: NewRetryConfigMapManager(
 			client,
 			namespace,
-			groupsConfigMapName,
+			names(groupsConfigMapName),
 		),
 		threadsMgr: NewRetryConfigMapManager(
 			client,
 			namespace,
-			threadsConfigMapName,
+			names(threadsConfigMapName),
 		),
 		engineMgr: NewRetryConfigMapManager(
 			client,
 			namespace,
-			engineConfigMapName,
+			names(engineConfigMapName),
 		),
 		pvcMgr: NewRetryConfigMapManager(
 			client,
 			namespace,
-			pvcConfigMapName,
+			names(pvcConfigMapName),
 		),
 		changesMgr: NewRetryConfigMapManager(
 			client,
 			namespace,
-			changesConfigMapName,
+			names(changesConfigMapName),
 		),
 		rcaMgr: NewRetryConfigMapManager(
 			client,
 			namespace,
-			rcaConfigMapName,
+			names(rcaConfigMapName),
 		),
 		telemetryMgr: NewRetryConfigMapManager(
 			client,
 			namespace,
-			telemetryConfigMapName,
+			names(telemetryConfigMapName),
 		),
 		now: timeSource.Now,
 	}
@@ -156,13 +166,7 @@ func (s *Manager) SetLastSeen(ctx context.Context, t time.Time) error {
 // ConfigMap or key is a valid first-run state; other errors remain visible to
 // startup so monitoring cannot begin with an unknown gap.
 func (s *Manager) GetLastSeen(ctx context.Context) (time.Time, error) {
-	cm, err := s.client.CoreV1().ConfigMaps(
-		s.namespace,
-	).Get(
-		ctx,
-		stateConfigMapName,
-		metav1.GetOptions{},
-	)
+	cm, err := s.getConfigMap(ctx, stateConfigMapName)
 	if err != nil {
 		if apierrors.IsNotFound(err) {
 			return time.Time{}, nil
@@ -183,9 +187,7 @@ func (s *Manager) GetLastSeen(ctx context.Context) (time.Time, error) {
 // GetTelemetryLastSent returns the last time the adoption heartbeat was
 // successfully sent. A missing key means no heartbeat has been sent yet.
 func (s *Manager) GetTelemetryLastSent(ctx context.Context) (time.Time, error) {
-	cm, err := s.client.CoreV1().ConfigMaps(
-		s.namespace,
-	).Get(ctx, stateConfigMapName, metav1.GetOptions{})
+	cm, err := s.getConfigMap(ctx, stateConfigMapName)
 	if err != nil {
 		if apierrors.IsNotFound(err) {
 			return time.Time{}, nil
@@ -229,13 +231,7 @@ func (s *Manager) MarkAsInitialized(
 	ctx context.Context,
 	clusterID, version string,
 ) error {
-	_, err := s.client.CoreV1().ConfigMaps(
-		s.namespace,
-	).Get(
-		ctx,
-		stateConfigMapName,
-		metav1.GetOptions{},
-	)
+	_, err := s.getConfigMap(ctx, stateConfigMapName)
 	if err != nil {
 		if !apierrors.IsNotFound(err) {
 			return err
@@ -358,7 +354,7 @@ func (s *Manager) createConfigMap(
 			Kind:       "ConfigMap",
 		},
 		ObjectMeta: metav1.ObjectMeta{
-			Name:      stateConfigMapName,
+			Name:      s.name(stateConfigMapName),
 			Namespace: s.namespace,
 		},
 		Data: map[string]string{

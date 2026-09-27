@@ -42,9 +42,17 @@ func ValidatingWebhookServices(
 
 // DetectWebhookEndpointIssuesWithError reports webhook backends whose Service
 // has no EndpointSlice endpoint able to receive traffic.
+// Webhook endpoint findings use one subject kind per configuration kind.
+// Mutating and validating configurations commonly share a name; with one
+// shared kind their incidents resolved each other.
+const (
+	MutatingWebhookKind   = "mutatingwebhook"
+	ValidatingWebhookKind = "validatingwebhook"
+)
+
 func DetectWebhookEndpointIssuesWithError(
 	epLister discoveryv1lister.EndpointSliceLister,
-	name, namespace string,
+	kind, name, namespace string,
 	labelsMap map[string]string,
 	refs []*admissionregistrationv1.ServiceReference,
 ) ([]*model.Observation, error) {
@@ -75,7 +83,7 @@ func DetectWebhookEndpointIssuesWithError(
 			continue
 		}
 		findings = append(findings, observe.ObjectNamed(
-			"webhook", namespace, name,
+			kind, namespace, name,
 			constant.ReasonWebhookNoEndpoints,
 		).WithLabels(labelsMap).WithHint(fmt.Sprintf(
 			"webhook %s backend service %s has no usable endpoints",

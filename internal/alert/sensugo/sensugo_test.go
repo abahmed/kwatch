@@ -99,7 +99,8 @@ func TestSendMessage(t *testing.T) {
 	assert.Nil(c.SendMessage(context.Background(), "hello"))
 	assert.Equal("Key test", gotAuth)
 	assert.Contains(gotBody, `"entity":{"metadata":{"name":"kwatch"}}`)
-	assert.Contains(gotBody, `"check":{"metadata":{"name":"kwatch"},"status":1`)
+	assert.Contains(gotBody,
+		`"check":{"metadata":{"name":"kwatch-notice"},"status":1`)
 	assert.Contains(gotBody, `"output":"hello"`)
 }
 

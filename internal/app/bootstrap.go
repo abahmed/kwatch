@@ -74,6 +74,7 @@ func newBootstrap(
 
 	persistenceManager := persistence.NewManagerWithClock(
 		clients.Kubernetes, k8s.GetNamespace(), clock.Func(now),
+		persistence.WithStatePrefix(installationStatePrefix()),
 	)
 	startupManager := startup.NewStartupManagerWithRuntime(
 		persistenceManager,

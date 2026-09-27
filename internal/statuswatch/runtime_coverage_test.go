@@ -133,7 +133,7 @@ func TestCustomResourceAndCRDVersionLifecycleBranches(t *testing.T) {
 			"group": "example.io", "scope": "Namespaced",
 			"names": map[string]interface{}{"plural": "widgets"},
 			"versions": []interface{}{map[string]interface{}{
-				"name": "v1", "served": true,
+				"name": "v1", "served": true, "storage": true,
 				"subresources": map[string]interface{}{
 					"status": map[string]interface{}{},
 				},

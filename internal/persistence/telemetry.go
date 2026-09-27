@@ -7,7 +7,6 @@ import (
 
 	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/klog/v2"
 
 	"github.com/abahmed/kwatch/internal/change"
@@ -35,16 +34,12 @@ const rcaFeedbackKey = "records"
 func (s *Manager) LoadRCAFeedback(
 	ctx context.Context,
 ) ([]model.RCARecord, error) {
-	cm, err := s.client.CoreV1().ConfigMaps(s.namespace).Get(
-		ctx, rcaConfigMapName, metav1.GetOptions{},
-	)
+	cm, err := s.getConfigMap(ctx, rcaConfigMapName)
 	if err != nil {
 		if !apierrors.IsNotFound(err) {
 			return nil, err
 		}
-		cm, err = s.client.CoreV1().ConfigMaps(s.namespace).Get(
-			ctx, stateConfigMapName, metav1.GetOptions{},
-		)
+		cm, err = s.getConfigMap(ctx, stateConfigMapName)
 		if err != nil {
 			if apierrors.IsNotFound(err) {
 				return nil, nil
@@ -86,16 +81,12 @@ func (s *Manager) SaveRCAFeedback(
 func (s *Manager) LoadChangeHistory(
 	ctx context.Context,
 ) ([]kwcontext.Change, error) {
-	cm, err := s.client.CoreV1().ConfigMaps(s.namespace).Get(
-		ctx, changesConfigMapName, metav1.GetOptions{},
-	)
+	cm, err := s.getConfigMap(ctx, changesConfigMapName)
 	if err != nil {
 		if !apierrors.IsNotFound(err) {
 			return nil, err
 		}
-		cm, err = s.client.CoreV1().ConfigMaps(s.namespace).Get(
-			ctx, stateConfigMapName, metav1.GetOptions{},
-		)
+		cm, err = s.getConfigMap(ctx, stateConfigMapName)
 		if err != nil {
 			if apierrors.IsNotFound(err) {
 				return nil, nil
@@ -228,9 +219,7 @@ const maxTelemetryStateBytes = 512 * 1024
 // LoadTelemetryState reads the kubelet telemetry snapshot, falling back to
 // the shared state ConfigMap where earlier releases wrote it.
 func (s *Manager) LoadTelemetryState(ctx context.Context) ([]byte, error) {
-	cm, err := s.client.CoreV1().ConfigMaps(s.namespace).Get(
-		ctx, telemetryConfigMapName, metav1.GetOptions{},
-	)
+	cm, err := s.getConfigMap(ctx, telemetryConfigMapName)
 	if err == nil {
 		// An existing dedicated ConfigMap is authoritative. In particular, an
 		// empty value must not resurrect stale telemetry from kwatch-state.
@@ -238,9 +227,7 @@ func (s *Manager) LoadTelemetryState(ctx context.Context) ([]byte, error) {
 	} else if !apierrors.IsNotFound(err) {
 		return nil, err
 	}
-	legacy, err := s.client.CoreV1().ConfigMaps(s.namespace).Get(
-		ctx, stateConfigMapName, metav1.GetOptions{},
-	)
+	legacy, err := s.getConfigMap(ctx, stateConfigMapName)
 	if err != nil {
 		if apierrors.IsNotFound(err) {
 			return nil, nil

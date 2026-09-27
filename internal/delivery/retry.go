@@ -148,11 +148,11 @@ func retryDelay(
 	}
 	var retryAfter *event.RetryAfterError
 	if errors.As(err, &retryAfter) && retryAfter.RetryAfter > 0 {
-		return retryAfter.RetryAfter, true
+		return capServerRetryAfter(retryAfter.RetryAfter), true
 	}
 	var rateLimit *ratelimit.Error
 	if errors.As(err, &rateLimit) && rateLimit.RetryAfter > 0 {
-		return rateLimit.RetryAfter, true
+		return capServerRetryAfter(rateLimit.RetryAfter), true
 	}
 	return delay, false
 }
@@ -166,4 +166,16 @@ func sleepWithContext(ctx context.Context, delay time.Duration) error {
 	case <-timer.C:
 		return nil
 	}
+}
+
+// maxServerRetryAfter bounds a provider-requested wait. The wait runs on the
+// provider's only worker, so an unbounded Retry-After (up to a day, or any
+// HTTP date) would stall every queued notification behind it.
+const maxServerRetryAfter = time.Minute
+
+func capServerRetryAfter(wait time.Duration) time.Duration {
+	if wait > maxServerRetryAfter {
+		return maxServerRetryAfter
+	}
+	return wait
 }

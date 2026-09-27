@@ -64,6 +64,11 @@ type PersistedIncident struct {
 	AffectedMembers      []AffectedResource `json:"affectedMembers,omitempty"`
 	SuppressedBy         IncidentKey        `json:"suppressedBy,omitempty"`
 	Transient            bool               `json:"transient,omitempty"`
+	// Additive fields: absent in older states and ignored by older readers.
+	ContainerName string          `json:"containerName,omitempty"`
+	Containers    map[string]bool `json:"containers,omitempty"`
+	NodeName      string          `json:"nodeName,omitempty"`
+	Image         string          `json:"image,omitempty"`
 }
 
 // ToPersisted converts an Incident into its serializable subset.
@@ -103,8 +108,12 @@ func (inc *Incident) ToPersisted() PersistedIncident {
 		Resolution:           inc.Resolution,
 		AffectedMembers: append([]AffectedResource(nil),
 			inc.AffectedMembers...),
-		SuppressedBy: inc.SuppressedBy,
-		Transient:    inc.Transient,
+		SuppressedBy:  inc.SuppressedBy,
+		Transient:     inc.Transient,
+		ContainerName: inc.ContainerName,
+		Containers:    cloneBoolMap(inc.Containers),
+		NodeName:      inc.NodeName,
+		Image:         inc.Image,
 	}
 }
 
@@ -118,14 +127,17 @@ func (pi *PersistedIncident) ToIncident() *Incident {
 	}
 	inc := &Incident{
 		Subject: Subject{
-			Key:         pi.Key,
-			Fingerprint: pi.Fingerprint,
-			Reason:      pi.Reason,
-			Namespace:   pi.Namespace,
-			Name:        pi.Name,
-			Resource:    pi.Resource,
-			OwnerKind:   pi.OwnerKind,
-			Transient:   pi.Transient,
+			Key:           pi.Key,
+			Fingerprint:   pi.Fingerprint,
+			Reason:        pi.Reason,
+			Namespace:     pi.Namespace,
+			Name:          pi.Name,
+			Resource:      pi.Resource,
+			OwnerKind:     pi.OwnerKind,
+			Transient:     pi.Transient,
+			ContainerName: pi.ContainerName,
+			NodeName:      pi.NodeName,
+			Image:         pi.Image,
 		},
 		// Object and Owner are references, not stored text: they are
 		// recovered from the persisted name below so an incident written by
@@ -141,7 +153,7 @@ func (pi *PersistedIncident) ToIncident() *Incident {
 			Severity:      pi.Severity,
 			State:         pi.State,
 			ResolveAt:     pi.ResolveAt,
-			Containers:    make(map[string]bool),
+			Containers:    restoredContainers(pi.Containers),
 			LastUpdate:    pi.LastUpdate,
 			Resolution:    pi.Resolution,
 			AffectedMembers: append([]AffectedResource(nil),
@@ -260,4 +272,23 @@ type PersistedFanOutWindow struct {
 	// were alerted individually to the incident they were announced under.
 	Owners    []string               `json:"owners,omitempty"`
 	Announced map[string]IncidentKey `json:"announced,omitempty"`
+}
+
+func cloneBoolMap(in map[string]bool) map[string]bool {
+	if len(in) == 0 {
+		return nil
+	}
+	out := make(map[string]bool, len(in))
+	for key, value := range in {
+		out[key] = value
+	}
+	return out
+}
+
+func restoredContainers(saved map[string]bool) map[string]bool {
+	out := make(map[string]bool, len(saved))
+	for key, value := range saved {
+		out[key] = value
+	}
+	return out
 }

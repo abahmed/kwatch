@@ -64,8 +64,8 @@ func TestSendMessage(t *testing.T) {
 
 	assert.Nil(c.SendMessage(context.Background(), "hello"))
 	assert.Equal("Bearer test", gotAuth)
-	assert.Contains(gotBody, `"event_type":"kwatch.incident"`)
-	assert.Contains(gotBody, `"message":"hello"`)
+	assert.Contains(gotBody, `"status":"firing"`)
+	assert.Contains(gotBody, `"deduplication_key":"kwatch-notice"`)
 }
 
 func TestSendMessageError(t *testing.T) {

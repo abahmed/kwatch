@@ -12,13 +12,16 @@ import (
 )
 
 const (
-	goalertAPIPath = "/api/v2/events"
+	goalertAPIPath = "/api/v2/generic/incoming"
 )
 
+// goalertPayload is GoAlert's generic incoming alert. The integration token
+// selects the service; dedup identifies the alert and action=close ends it.
 type goalertPayload struct {
-	Type    string `json:"type"`
-	Service string `json:"serviceID,omitempty"`
-	Message string `json:"message,omitempty"`
+	Summary string `json:"summary"`
+	Details string `json:"details,omitempty"`
+	Action  string `json:"action,omitempty"`
+	Dedup   string `json:"dedup"`
 }
 
 type Goalert struct {
@@ -72,24 +75,25 @@ func (s *Goalert) Name() string {
 }
 
 // SendEvent sends event to the provider
+// UsesEventDelivery routes incidents through SendEvent, which carries the
+// action and a stable key so GoAlert can close the alert.
+func (s *Goalert) UsesEventDelivery() {}
+
+// SendEvent creates or closes one GoAlert alert per kwatch incident, keyed by
+// dedup.
 func (s *Goalert) SendEvent(ctx context.Context, e *event.Event) error {
-	msg := e.FormatText(s.clusterName, "")
-	return s.SendMessage(ctx, msg)
-}
-
-// SendMessage sends text message to the provider
-func (s *Goalert) SendMessage(ctx context.Context, msg string) error {
 	payload := goalertPayload{
-		Type:    "incident.create",
-		Service: s.serviceID,
-		Message: msg,
+		Summary: e.AlertTitle(250),
+		Details: e.AlertBody(s.clusterName),
+		Dedup:   e.AlertKey(),
 	}
-
+	if e.IsResolve() {
+		payload.Action = "close"
+	}
 	body, err := json.Marshal(payload)
 	if err != nil {
 		return err
 	}
-
 	_, err = s.sender.Send(ctx, transport.Request{
 		Provider: s.Name(), URL: s.url, Body: body,
 		ContentType: "application/json", Headers: map[string]string{
@@ -97,4 +101,9 @@ func (s *Goalert) SendMessage(ctx context.Context, msg string) error {
 		},
 	})
 	return err
+}
+
+// SendMessage sends a plain notice as one deduplicated alert.
+func (s *Goalert) SendMessage(ctx context.Context, msg string) error {
+	return s.SendEvent(ctx, &event.Event{PodName: msg, Reason: "notify"})
 }

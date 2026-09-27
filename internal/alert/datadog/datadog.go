@@ -18,6 +18,8 @@ type datadogPayload struct {
 	Text      string   `json:"text"`
 	Tags      []string `json:"tags,omitempty"`
 	AlertType string   `json:"alert_type,omitempty"`
+
+	AggregationKey string `json:"aggregation_key,omitempty"`
 }
 
 type Datadog struct {
@@ -87,40 +89,49 @@ func (d *Datadog) Name() string {
 }
 
 // SendEvent sends event to the provider
-func (d *Datadog) SendEvent(ctx context.Context, e *event.Event) error {
-	msg := e.FormatText(d.clusterName, "")
-	return d.SendMessage(ctx, msg)
-}
+// UsesEventDelivery routes incidents through SendEvent, which carries the
+// action and a stable key so Datadog groups one incident's events.
+func (d *Datadog) UsesEventDelivery() {}
 
-// SendMessage sends text message to the provider
-func (d *Datadog) SendMessage(ctx context.Context, msg string) error {
+// SendEvent posts a Datadog event aggregated per kwatch incident; resolves
+// are posted with alert_type success.
+func (d *Datadog) SendEvent(ctx context.Context, e *event.Event) error {
 	title := d.title
 	if len(title) == 0 {
-		title = "kwatch alert"
+		title = e.AlertTitle(100)
 	}
-
+	alertType := d.alertType
+	switch {
+	case e.IsResolve():
+		alertType = "success"
+	case e.IsNotice():
+		alertType = "info"
+	}
 	payload := datadogPayload{
-		Title:     title,
-		Text:      msg,
-		Tags:      d.tags,
-		AlertType: d.alertType,
+		Title:          title,
+		Text:           e.AlertBody(d.clusterName),
+		Tags:           d.tags,
+		AlertType:      alertType,
+		AggregationKey: e.AlertKey(),
 	}
-
 	body, err := json.Marshal(payload)
 	if err != nil {
 		return err
 	}
-
 	headers := map[string]string{
 		"DD-API-KEY": d.apiKey,
 	}
 	if len(d.appKey) > 0 {
 		headers["DD-APPLICATION-KEY"] = d.appKey
 	}
-
 	_, err = d.sender.Send(ctx, transport.Request{
 		Provider: d.Name(), URL: d.url, Body: body,
 		ContentType: "application/json", Headers: headers,
 	})
 	return err
+}
+
+// SendMessage sends a plain notice as an informational event.
+func (d *Datadog) SendMessage(ctx context.Context, msg string) error {
+	return d.SendEvent(ctx, &event.Event{PodName: msg, Reason: "notify"})
 }

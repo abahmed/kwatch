@@ -19,7 +19,7 @@ func TestDetectWebhookEndpointIssuesReportsUnavailableBackend(t *testing.T) {
 
 	findings, err := DetectWebhookEndpointIssuesWithError(
 		lister,
-		"webhook",
+		MutatingWebhookKind, "webhook",
 		"default",
 		map[string]string{"app": "admission"},
 		[]*admissionregistrationv1.ServiceReference{{
@@ -58,7 +58,7 @@ func TestDetectWebhookEndpointIssuesAcceptsReadyBackend(t *testing.T) {
 
 	findings, err := DetectWebhookEndpointIssuesWithError(
 		discoveryv1lister.NewEndpointSliceLister(indexer),
-		"webhook",
+		MutatingWebhookKind, "webhook",
 		"default",
 		nil,
 		[]*admissionregistrationv1.ServiceReference{{

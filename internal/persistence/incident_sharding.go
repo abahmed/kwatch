@@ -44,7 +44,7 @@ func (s *Manager) saveIncidentShards(
 	checksum := hex.EncodeToString(hash.Sum(nil))
 	generation := checksum[:16]
 	for i, data := range dataByShard {
-		name := incidentShardName(generation, i)
+		name := incidentShardName(s.shardPrefix(), generation, i)
 		mgr := NewRetryConfigMapManager(s.client, s.namespace, name)
 		if err := mgr.UpdateWithRetry(ctx, func(cm *corev1.ConfigMap) error {
 			setBinaryPayload(cm, incidentsKey, data)
@@ -78,8 +78,8 @@ func (s *Manager) saveIncidentShards(
 	return s.garbageCollectIncidentShards(ctx, generation)
 }
 
-func incidentShardName(generation string, index int) string {
-	return fmt.Sprintf("%s%s-%03d", incidentShardPrefix, generation, index)
+func incidentShardName(prefix, generation string, index int) string {
+	return fmt.Sprintf("%s%s-%03d", prefix, generation, index)
 }
 
 func (s *Manager) garbageCollectIncidentShards(
@@ -92,11 +92,11 @@ func (s *Manager) garbageCollectIncidentShards(
 		return err
 	}
 	for _, cm := range list.Items {
-		if !strings.HasPrefix(cm.Name, incidentShardPrefix) {
+		if !strings.HasPrefix(cm.Name, s.shardPrefix()) {
 			continue
 		}
 		if generation != "" && strings.HasPrefix(
-			cm.Name, incidentShardPrefix+generation+"-",
+			cm.Name, s.shardPrefix()+generation+"-",
 		) {
 			continue
 		}
@@ -142,9 +142,7 @@ func splitIncidentShards(
 func (s *Manager) loadIncidentShards(
 	ctx context.Context,
 ) ([]model.PersistedIncident, bool, error) {
-	cm, err := s.client.CoreV1().ConfigMaps(s.namespace).Get(
-		ctx, incidentsConfigMapName, metav1.GetOptions{},
-	)
+	cm, err := s.getConfigMap(ctx, incidentsConfigMapName)
 	if apierrors.IsNotFound(err) {
 		return nil, false, nil
 	}
@@ -165,7 +163,7 @@ func (s *Manager) loadIncidentShards(
 	hash := sha256.New()
 	var incidents []model.PersistedIncident
 	for i := 0; i < manifest.ShardCount; i++ {
-		name := manifestShardName(manifest, i)
+		name := manifestShardName(s.shardPrefix(), manifest, i)
 		shard, getErr := s.client.CoreV1().ConfigMaps(s.namespace).Get(
 			ctx, name, metav1.GetOptions{},
 		)
@@ -189,9 +187,11 @@ func (s *Manager) loadIncidentShards(
 	return incidents, true, nil
 }
 
-func manifestShardName(manifest incidentShardManifest, index int) string {
+func manifestShardName(
+	prefix string, manifest incidentShardManifest, index int,
+) string {
 	if manifest.Schema == currentIncidentSchema {
-		return incidentShardName(manifest.Generation, index)
+		return incidentShardName(prefix, manifest.Generation, index)
 	}
-	return fmt.Sprintf("%s%03d", incidentShardPrefix, index)
+	return fmt.Sprintf("%s%03d", prefix, index)
 }

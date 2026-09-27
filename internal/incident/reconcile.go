@@ -212,7 +212,9 @@ func (e *Engine) podRecoveryResolves(
 	podName string,
 	healthy map[string]bool,
 ) bool {
-	if inc == nil || inc.Resource != "pod" {
+	// A cross-namespace global incident (registry rate limit, DNS, TLS)
+	// cannot be answered by one namespace's pod recovering.
+	if inc == nil || inc.Resource != "pod" || IsGlobalKey(inc.Key) {
 		return false
 	}
 	if inc.State == model.StateResolved ||

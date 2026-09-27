@@ -39,7 +39,7 @@ func TestGoalert(t *testing.T) {
 	c := NewGoalert(configMap, testAppConfig(), testDeps)
 	assert.NotNil(c)
 	assert.Equal(c.Name(), "GoAlert")
-	assert.Equal(c.url, "https://goalert.example.test/api/v2/events")
+	assert.Equal(c.url, "https://goalert.example.test/api/v2/generic/incoming")
 }
 
 func TestGoalertCustomURL(t *testing.T) {
@@ -52,7 +52,7 @@ func TestGoalertCustomURL(t *testing.T) {
 	}
 	c := NewGoalert(configMap, testAppConfig(), testDeps)
 	assert.NotNil(c)
-	assert.Equal(c.url, "https://goalert.example.org/api/v2/events")
+	assert.Equal(c.url, "https://goalert.example.org/api/v2/generic/incoming")
 }
 
 func TestGoalertInvalidConfig(t *testing.T) {
@@ -96,9 +96,9 @@ func TestSendMessage(t *testing.T) {
 
 	assert.Nil(c.SendMessage(context.Background(), "hello"))
 	assert.Equal("Bearer test", gotAuth)
-	assert.Contains(gotBody, `"type":"incident.create"`)
-	assert.Contains(gotBody, `"serviceID":"SVC123"`)
-	assert.Contains(gotBody, `"message":"hello"`)
+	assert.Contains(gotBody, `"summary":"hello"`)
+	assert.Contains(gotBody, `"dedup":"kwatch-notice"`)
+	assert.Contains(gotBody, `"details":"hello"`)
 }
 
 func TestSendMessageError(t *testing.T) {

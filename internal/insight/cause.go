@@ -97,7 +97,7 @@ func (e *Engine) determineGraphCause(inc *model.Incident, ins *Insight) {
 	if len(deps) == 0 {
 		return
 	}
-	if determineNamedDependencyCause(inc, ins, deps) {
+	if e.determineNamedDependencyCause(inc, ins, deps) {
 		return
 	}
 	if e.determineDirectDependencyCause(ins, deps) {
@@ -109,17 +109,22 @@ func (e *Engine) determineGraphCause(inc *model.Incident, ins *Insight) {
 	}
 	e.rankRootsByEvidence(roots)
 	roots = e.dropUnchangedConfigRoots(roots)
+	roots = e.dropHealthyNodeRoots(roots)
 	if len(roots) > 0 {
 		ins.Cause, ins.Pattern = describeRootCauses(roots)
 	}
 }
 
-func determineNamedDependencyCause(
+func (e *Engine) determineNamedDependencyCause(
 	inc *model.Incident,
 	ins *Insight,
 	deps []string,
 ) bool {
-	if inc.NodeName != "" {
+	// Every pod depends on its node and owner in the graph, so the edge
+	// alone is not evidence. Name the node only when it has an active
+	// incident, and the owner only when the engine saw it unhealthy.
+	if inc.NodeName != "" && e.activeChecker != nil &&
+		e.activeChecker("node", "", inc.NodeName) {
 		nodeKey := "node//" + inc.NodeName
 		for _, dependency := range deps {
 			if dependency == nodeKey {
@@ -131,7 +136,7 @@ func determineNamedDependencyCause(
 			}
 		}
 	}
-	if inc.Resource != "pod" || inc.OwnerKind == "" {
+	if inc.Resource != "pod" || inc.OwnerKind == "" || !inc.OwnerUnhealthy {
 		return false
 	}
 	ownerPrefix := strings.ToLower(inc.OwnerKind) + "/" + inc.Namespace + "/"
@@ -317,6 +322,23 @@ func (e *Engine) dropUnchangedConfigRoots(
 
 // changedRecently reports whether the tracker saw an update to the resource
 // behind a "kind/namespace/name" graph key within dependencyChangeWindow.
+// dropHealthyNodeRoots removes node roots with no active incident. Every pod
+// reaches its node in the graph, so reachability alone would name the node
+// as the cause of every application crash.
+func (e *Engine) dropHealthyNodeRoots(
+	roots []modelCauseRef,
+) []modelCauseRef {
+	out := make([]modelCauseRef, 0, len(roots))
+	for _, root := range roots {
+		if root.Kind == "node" && (e.activeChecker == nil ||
+			!e.activeChecker("node", "", root.Name)) {
+			continue
+		}
+		out = append(out, root)
+	}
+	return out
+}
+
 func (e *Engine) changedRecently(depKey string) bool {
 	if e.tracker == nil {
 		return false

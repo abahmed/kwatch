@@ -127,7 +127,10 @@ metadata:
 rules:
 - apiGroups: [""]
   resources: ["configmaps"]
-  verbs: ["create"]
+  # Incident shards use generated <prefix>-incidents-<generation>-NNN names
+  # and non-default installations use prefixed state names, so reads,
+  # rewrites and shard garbage collection cannot be name-scoped.
+  verbs: ["create", "get", "list", "update", "delete"]
 - apiGroups: [""]
   resources: ["configmaps"]
   resourceNames:

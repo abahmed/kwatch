@@ -262,6 +262,9 @@ type Engine struct {
 	attributionConfigured bool
 	processingStarted     bool
 	auditLogger           SkipLogger
+	// emitMu guards emitted, the last announced revision per incident.
+	emitMu  sync.Mutex
+	emitted map[model.IncidentKey]uint64
 	// true when state has changed since last SnapshotAll
 	dirty bool
 	now   func() time.Time

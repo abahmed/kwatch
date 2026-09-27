@@ -17,6 +17,11 @@ func (s *Slack) sendAPI(
 	ctx context.Context,
 	msg *slackClient.WebhookMessage,
 ) error {
+	if msg.Text != "" {
+		escaped := *msg
+		escaped.Text = escapeMrkdwn(msg.Text)
+		msg = &escaped
+	}
 	if s.apiClient != nil {
 		return s.sendAPIWithToken(ctx, msg)
 	}
@@ -75,6 +80,7 @@ func wrapSlackRateLimit(err error) error {
 	if err == nil {
 		return nil
 	}
+	err = transport.RedactURLError(err)
 	var rle *slackClient.RateLimitedError
 	if errors.As(err, &rle) {
 		return &ratelimit.Error{

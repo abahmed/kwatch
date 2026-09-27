@@ -234,6 +234,7 @@ func runNamespaceScopeWatcher(ctx context.Context, deps *serverDeps) error {
 }
 
 func runController(ctx context.Context, deps *serverDeps) error {
+	deps.controllerStarted.Store(true)
 	defer close(deps.controllerDone)
 	if deps.controllerProgress != nil {
 		deps.controllerProgress.Touch(deps.clients.Clock.Now())

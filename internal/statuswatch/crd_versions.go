@@ -55,7 +55,10 @@ func (m *Monitor) watchCRD(obj interface{}) {
 		}
 		version, _ := versionSpec["name"].(string)
 		served, _ := versionSpec["served"].(bool)
-		if version == "" || !served {
+		storage, _ := versionSpec["storage"].(bool)
+		// Every served version exposes the same objects; watching each one
+		// duplicated caches and processing. The storage version is enough.
+		if version == "" || !served || !storage {
 			continue
 		}
 		if _, enabled, _ := unstructured.NestedFieldNoCopy(

@@ -26,6 +26,12 @@ type analysisState struct {
 	diagnosis   string
 	suppressed  time.Time
 	delivered   bool
+	// withheld records that a delivery of this incident was suppressed, so
+	// its first real delivery must be a create. Absent state (for example
+	// after a restart) never turns an update into a create.
+	withheld bool
+	// reopened records a resolve; a recurrence starts a new conversation.
+	reopened bool
 }
 
 func (e *Engine) applyIntelligence(inc *model.Incident, ins *Insight) {
@@ -186,6 +192,7 @@ func (e *Engine) applyRolloutSuppression(
 	}
 	if e.now().Sub(state.suppressed) < rolloutGrace {
 		ins.SuppressReason = "expected_rollout_with_capacity"
+		state.withheld = true
 	} else {
 		ins.Evidence = appendUniqueStrings(
 			ins.Evidence,
@@ -262,7 +269,7 @@ func (e *Engine) DeliveryAction(
 	e.stateMu.Lock()
 	defer e.stateMu.Unlock()
 	state := e.states[inc.Key]
-	if !state.delivered {
+	if (state.withheld || state.reopened) && !state.delivered {
 		return model.ActionCreate
 	}
 	return requested
@@ -279,6 +286,7 @@ func (e *Engine) RecordDelivery(
 	defer e.stateMu.Unlock()
 	state := e.states[inc.Key]
 	state.delivered = true
+	state.reopened = false
 	if ins != nil {
 		state.diagnosis = diagnosisSignature(ins)
 	}
@@ -340,6 +348,8 @@ func (e *Engine) observeState(
 		state.suppressed = time.Time{}
 		state.diagnosis = ""
 		state.delivered = false
+		state.withheld = false
+		state.reopened = true
 	}
 	e.states[inc.Key] = state
 	e.pruneStatesLocked()

@@ -11,13 +11,14 @@ import (
 )
 
 type incidentioPayload struct {
-	EventType string                 `json:"event_type"`
-	Source    string                 `json:"source"`
-	Severity  string                 `json:"severity,omitempty"`
-	Message   string                 `json:"message"`
-	Payload   map[string]interface{} `json:"payload,omitempty"`
+	Title            string                 `json:"title"`
+	Description      string                 `json:"description,omitempty"`
+	Status           string                 `json:"status"`
+	DeduplicationKey string                 `json:"deduplication_key"`
+	Metadata         map[string]interface{} `json:"metadata,omitempty"`
 }
 
+// Incidentio sends events to an incident.io HTTP alert source.
 type Incidentio struct {
 	sender transport.Sender
 	url    string
@@ -26,8 +27,7 @@ type Incidentio struct {
 	clusterName string
 }
 
-// NewIncidentio returns a new Incidentio object
-
+// NewIncidentio returns new Incident.io instance.
 func NewIncidentio(
 	config map[string]interface{},
 	clusterName string,
@@ -38,11 +38,8 @@ func NewIncidentio(
 		klog.InfoS("initializing incidentio with empty url")
 		return nil
 	}
-
 	apiKey, _ := config["apiKey"].(string)
-
 	klog.InfoS("initializing incidentio")
-
 	return &Incidentio{
 		sender:      transport.NewSender(dependencies),
 		url:         url,
@@ -51,60 +48,53 @@ func NewIncidentio(
 	}
 }
 
-// Name returns name of the provider
+// Name returns name of the provider.
 func (i *Incidentio) Name() string {
 	return "Incident.io"
 }
 
-// SendEvent sends event to the provider
+// UsesEventDelivery routes incidents through SendEvent, which carries the
+// action and a stable key so incident.io can resolve the alert.
+func (i *Incidentio) UsesEventDelivery() {}
+
+// SendEvent fires or resolves one incident.io alert per kwatch incident,
+// keyed by deduplication_key.
 func (i *Incidentio) SendEvent(ctx context.Context, e *event.Event) error {
+	status := "firing"
+	if e.IsResolve() {
+		status = "resolved"
+	}
 	payload := incidentioPayload{
-		EventType: "kwatch.incident",
-		Source:    "kwatch",
-		Severity:  string(e.Severity),
-		Message:   e.FormatText(i.clusterName, ""),
-		Payload: map[string]interface{}{
+		Title:            e.AlertTitle(250),
+		Description:      e.AlertBody(i.clusterName),
+		Status:           status,
+		DeduplicationKey: e.AlertKey(),
+		Metadata: map[string]interface{}{
+			"cluster":   i.clusterName,
 			"pod":       e.PodName,
 			"container": e.ContainerName,
 			"namespace": e.Namespace,
 			"node":      e.NodeName,
 			"reason":    e.Reason,
+			"severity":  string(e.Severity),
 		},
 	}
-
 	body, err := json.Marshal(payload)
 	if err != nil {
 		return err
 	}
-
-	return i.send(ctx, body)
-}
-
-// SendMessage sends text message to the provider
-func (i *Incidentio) SendMessage(ctx context.Context, msg string) error {
-	payload := incidentioPayload{
-		EventType: "kwatch.incident",
-		Source:    "kwatch",
-		Message:   msg,
-	}
-
-	body, err := json.Marshal(payload)
-	if err != nil {
-		return err
-	}
-
-	return i.send(ctx, body)
-}
-
-func (i *Incidentio) send(ctx context.Context, body []byte) error {
 	headers := map[string]string{}
 	if len(i.apiKey) > 0 {
 		headers["Authorization"] = "Bearer " + i.apiKey
 	}
-
-	_, err := i.sender.Send(ctx, transport.Request{
+	_, err = i.sender.Send(ctx, transport.Request{
 		Provider: i.Name(), URL: i.url, Body: body,
 		ContentType: "application/json", Headers: headers,
 	})
 	return err
+}
+
+// SendMessage sends a plain notice as one deduplicated alert.
+func (i *Incidentio) SendMessage(ctx context.Context, msg string) error {
+	return i.SendEvent(ctx, &event.Event{PodName: msg, Reason: "notify"})
 }

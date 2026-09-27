@@ -162,7 +162,9 @@ func (c *Config) BuildSuppressionIndex() SuppressionIndex {
 	b := newSuppressionBuilder()
 
 	for _, sr := range c.Silences {
-		b.addRule(sr)
+		if detectTimeRule(sr) {
+			b.addRule(sr)
+		}
 	}
 	// Also include deprecated ignore* fields directly (they may also appear as
 	// synthetic SilenceRules, but this ensures they're present regardless).
@@ -174,4 +176,26 @@ func (c *Config) BuildSuppressionIndex() SuppressionIndex {
 	b.addNodeReasons(c.IgnoreNodeReasons)
 	b.addNodeMessages(c.IgnoreNodeMessages)
 	return b.idx
+}
+
+// detectTimeRule reports whether a silence can be enforced by the flat
+// detect-time index. The index matches each field on its own, so it can only
+// represent a rule with one matcher and no namespace or reason scope; any
+// other rule would suppress far more than it says. Those rules are applied
+// with their full AND semantics by delivery-time silence matching instead.
+func detectTimeRule(sr SilenceRule) bool {
+	if len(sr.Namespaces) > 0 || len(sr.Reasons) > 0 {
+		return false
+	}
+	matchers := 0
+	for _, field := range [][]string{
+		sr.PodNamePatterns, sr.ContainerNames, sr.LogPatterns,
+		sr.ContainerMessages, sr.EventMessages, sr.NodeReasons,
+		sr.NodeMessages,
+	} {
+		if len(field) > 0 {
+			matchers++
+		}
+	}
+	return matchers == 1
 }

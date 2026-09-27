@@ -226,8 +226,13 @@ func (r *DeploymentRuntime) processDeploymentObject(
 			deploy.Status.UnavailableReplicas,
 		)
 		if sustained > 0 && r.support.now().Sub(first) < sustained {
+			// Available=False and Progressing are what every rollout looks
+			// like; only a replica failure is news before the sustain window.
 			for _, condition := range current {
-				r.support.observe(condition)
+				if condition.Reason ==
+					constant.ReasonDeploymentReplicaFailure {
+					r.support.observe(condition)
+				}
 			}
 			return nil
 		}

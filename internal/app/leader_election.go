@@ -210,9 +210,10 @@ func runLeaderElectionWithRunner(
 		RetryPeriod:   leaderRetryPeriod,
 		WatchDog:      nil,
 		Callbacks:     callbacks.callbacks(),
-		// Release after the active session has stopped so voluntary Pod
-		// termination and scale-down do not make standbys wait for expiry.
-		ReleaseOnCancel: true,
+		// client-go would release as soon as the context is cancelled, while
+		// the active session is still draining delivery and writing state.
+		// kwatch releases explicitly once shutdown has finished instead.
+		ReleaseOnCancel: false,
 		Name:            "kwatch",
 	})
 	if err != nil {
@@ -223,6 +224,13 @@ func runLeaderElectionWithRunner(
 	if callbacks.started.Load() {
 		if err := waitForActiveSession(callbacks.activeDone); err != nil {
 			return err
+		}
+		if ctx.Err() != nil {
+			deps.setLeaseRelease(func(releaseCtx context.Context) {
+				releaseLease(
+					releaseCtx, lock, identity, deps.clients.Clock.Now,
+				)
+			})
 		}
 	}
 	select {
@@ -241,8 +249,9 @@ func runActiveComponents(ctx context.Context, deps *serverDeps) error {
 		deps.persistenceGate.enable()
 		defer deps.persistenceGate.disable()
 	}
-	activeCtx, cancel := context.WithCancel(ctx)
+	activeCtx, cancel := context.WithCancel(applicationContext(deps))
 	defer cancel()
+	go fenceOnLeadershipLoss(ctx, activeCtx, deps, cancel)
 	if deps.activate != nil {
 		if err := deps.activate(activeCtx); err != nil {
 			if deps.healthServer != nil {
@@ -372,5 +381,32 @@ func waitForActiveSession(done <-chan struct{}) error {
 		return nil
 	case <-time.After(componentShutdownTimeout):
 		return fmt.Errorf("active leader session did not stop")
+	}
+}
+
+func applicationContext(deps *serverDeps) context.Context {
+	if deps.ctx != nil {
+		return deps.ctx
+	}
+	return context.Background()
+}
+
+// fenceOnLeadershipLoss stops the active session when the leader context
+// ends. On a real loss (the application is still running) persistence is
+// fenced first: client-go cancels the leader context before it runs
+// OnStoppedLeading, and savers would otherwise make a last write without the
+// Lease.
+func fenceOnLeadershipLoss(
+	leaderCtx, activeCtx context.Context,
+	deps *serverDeps,
+	cancel context.CancelFunc,
+) {
+	select {
+	case <-leaderCtx.Done():
+		if applicationContext(deps).Err() == nil {
+			deps.persistenceGate.disable()
+		}
+		cancel()
+	case <-activeCtx.Done():
 	}
 }

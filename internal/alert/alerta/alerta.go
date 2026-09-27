@@ -79,32 +79,41 @@ func (s *Alerta) Name() string {
 }
 
 // SendEvent sends event to the provider
+// UsesEventDelivery routes incidents through SendEvent, which carries the
+// action and a stable key so Alerta can close the alert.
+func (s *Alerta) UsesEventDelivery() {}
+
+// SendEvent raises or closes one Alerta alert per kwatch incident. Alerta
+// deduplicates on environment, resource and event, so the resource carries
+// the incident key.
 func (s *Alerta) SendEvent(ctx context.Context, e *event.Event) error {
-	msg := e.FormatText(s.clusterName, "")
-	return s.SendMessage(ctx, msg)
-}
-
-// SendMessage sends text message to the provider
-func (s *Alerta) SendMessage(ctx context.Context, msg string) error {
-	resource := "kwatch"
+	resource := e.AlertKey()
 	if len(s.clusterName) > 0 {
-		resource = "kwatch/" + s.clusterName
+		resource = s.clusterName + "/" + resource
 	}
-
+	severity := "critical"
+	switch {
+	case e.IsResolve():
+		severity = "normal"
+	case e.IsNotice():
+		severity = "informational"
+	}
+	eventName := e.Reason
+	if eventName == "" || e.IsNotice() {
+		eventName = "kwatch"
+	}
 	payload := alertaPayload{
 		Resource:    resource,
-		Event:       "kwatch",
+		Event:       eventName,
 		Environment: s.environment,
-		Severity:    "critical",
+		Severity:    severity,
 		Service:     []string{s.service},
-		Text:        msg,
+		Text:        e.AlertBody(s.clusterName),
 	}
-
 	body, err := json.Marshal(payload)
 	if err != nil {
 		return err
 	}
-
 	_, err = s.sender.Send(ctx, transport.Request{
 		Provider: s.Name(), URL: s.url, Body: body,
 		ContentType: "application/json", Headers: map[string]string{
@@ -112,4 +121,9 @@ func (s *Alerta) SendMessage(ctx context.Context, msg string) error {
 		},
 	})
 	return err
+}
+
+// SendMessage sends a plain notice as an informational alert.
+func (s *Alerta) SendMessage(ctx context.Context, msg string) error {
+	return s.SendEvent(ctx, &event.Event{PodName: msg, Reason: "notify"})
 }

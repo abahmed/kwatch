@@ -1,6 +1,7 @@
 package app
 
 import (
+	"errors"
 	"testing"
 
 	"github.com/stretchr/testify/require"
@@ -88,4 +89,33 @@ func TestReadinessUsesRegisteredPersistenceWriters(t *testing.T) {
 	require.True(t, server.Ready())
 	readiness.writerFailed("incident-saver")
 	require.False(t, server.Ready())
+}
+
+func TestReadinessRecoversAfterTransientWriterFailure(t *testing.T) {
+	healthServer := health.NewHealthServerWithClock(
+		config.HealthCheck{}, clock.RealClock{},
+	)
+	readiness := newReadinessCoordinator(healthServer)
+	readiness.begin(1, false)
+	for _, name := range []string{
+		"restore", "controller", "incident",
+	} {
+		readiness.setCurrent(name, true)
+	}
+	readiness.registerRequiredWriter("incident-saver")
+	readiness.writerStarted("incident-saver")
+	if !healthServer.Ready() {
+		t.Fatal("leader should be ready once all writers started")
+	}
+	status := persistenceStatus(
+		healthServer, "incident-saver", true, readiness,
+	)
+	status(errors.New("conflict"))
+	if healthServer.Ready() {
+		t.Fatal("a failed required write must remove readiness")
+	}
+	status(nil)
+	if !healthServer.Ready() {
+		t.Fatal("a successful write must restore readiness")
+	}
 }

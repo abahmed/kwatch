@@ -95,3 +95,17 @@ func TestWaitShutdownReturnsWhenApplicationContextIsCanceled(t *testing.T) {
 		t.Fatalf("session reason = %q", reason)
 	}
 }
+
+func TestWaitControllerSkipsStandbyThatNeverStarted(t *testing.T) {
+	deps := &serverDeps{controllerDone: make(chan struct{})}
+	done := make(chan bool, 1)
+	go func() { done <- waitController(deps) }()
+	select {
+	case stopped := <-done:
+		if !stopped {
+			t.Fatal("standby controller reported as not stopped")
+		}
+	case <-time.After(time.Second):
+		t.Fatal("standby shutdown waited for a controller that never ran")
+	}
+}

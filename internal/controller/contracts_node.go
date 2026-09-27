@@ -9,6 +9,7 @@ import (
 type NodeProcessor interface {
 	ProcessNode(string, bool) error
 	ProcessNodeResourceOvercommit(string, string, string, model.Severity)
+	ResolveNodeResource(string, string)
 }
 
 type NodeConfig interface {

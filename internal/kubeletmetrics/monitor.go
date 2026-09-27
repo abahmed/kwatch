@@ -26,7 +26,9 @@ type Monitor struct {
 	successes    map[string]int
 	// failing marks the signals that have actually crossed the failure
 	// threshold, so a signal that has always been healthy never resolves.
-	failing    map[string]bool
+	failing map[string]bool
+	// groups maps a pod signal key to its owner group; see observeOwned.
+	groups     map[string]string
 	stateSeen  map[string]time.Time
 	baselines  map[string]usageBaseline
 	now        func() time.Time

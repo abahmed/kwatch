@@ -7,7 +7,6 @@ import (
 
 	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/klog/v2"
 
 	"github.com/abahmed/kwatch/internal/model"
@@ -29,13 +28,7 @@ func (s *Manager) GetPvcUsage(ctx context.Context) map[string]model.PVCSample {
 func (s *Manager) GetPvcUsageWithError(
 	ctx context.Context,
 ) (map[string]model.PVCSample, error) {
-	cm, err := s.client.CoreV1().ConfigMaps(
-		s.namespace,
-	).Get(
-		ctx,
-		pvcConfigMapName,
-		metav1.GetOptions{},
-	)
+	cm, err := s.getConfigMap(ctx, pvcConfigMapName)
 	if err != nil {
 		if apierrors.IsNotFound(err) {
 			return nil, nil

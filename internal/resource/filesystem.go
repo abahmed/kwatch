@@ -16,17 +16,18 @@ import (
 
 func (m *Monitor) checkFilesystem(
 	ctx context.Context,
-) []*model.Observation {
+) ([]*model.Observation, []string) {
 	if m.client == nil ||
 		(m.cfg.FilesystemWarningPercent <= 0 &&
 			m.cfg.InodeWarningPercent <= 0) {
-		return nil
+		return nil, nil
 	}
 	nodes, err := m.nodeLister.List(labels.Everything())
 	if err != nil {
-		return nil
+		return nil, nil
 	}
 	var signals []*model.Observation
+	var evaluated []string
 	for _, node := range nodes {
 		body, err := k8s.GetNodeSummary(ctx, m.client, node.Name)
 		if err != nil {
@@ -36,12 +37,13 @@ func (m *Monitor) checkFilesystem(
 		if json.Unmarshal(body, &summary) != nil || summary.Node.FS == nil {
 			continue
 		}
+		evaluated = append(evaluated, node.Name)
 		signals = append(
 			signals,
 			filesystemSignals(node, summary.Node.FS, m.cfg)...,
 		)
 	}
-	return signals
+	return signals, evaluated
 }
 
 func filesystemSignals(

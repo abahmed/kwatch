@@ -417,3 +417,12 @@ type fakeDeadLetterLister struct {
 func (f *fakeDeadLetterLister) DeadLetters() []model.DeadLetterEntry {
 	return f.letters
 }
+
+func TestWriteTimeoutAllowsDefaultCPUProfile(t *testing.T) {
+	if got := writeTimeout(true); got <= 30*time.Second {
+		t.Fatalf("pprof write timeout %s blocks the 30s profile", got)
+	}
+	if got := writeTimeout(false); got != 10*time.Second {
+		t.Fatalf("default write timeout = %s", got)
+	}
+}

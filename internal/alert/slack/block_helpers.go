@@ -98,7 +98,7 @@ func contextLine(parts []string) (slackClient.Block, bool) {
 		"",
 		slackClient.NewTextBlockObject(
 			slackClient.MarkdownType,
-			text,
+			escapeMrkdwn(text),
 			false,
 			false,
 		),
@@ -227,7 +227,7 @@ func markdownSection(txt string) slackClient.SectionBlock {
 		Type: "section",
 		Text: slackClient.NewTextBlockObject(
 			slackClient.MarkdownType,
-			txt,
+			escapeMrkdwn(txt),
 			false,
 			true),
 	}
@@ -236,7 +236,16 @@ func markdownSection(txt string) slackClient.SectionBlock {
 func markdownF(format string, a ...interface{}) *slackClient.TextBlockObject {
 	return slackClient.NewTextBlockObject(
 		slackClient.MarkdownType,
-		truncateField(fmt.Sprintf(format, a...)),
+		escapeMrkdwn(truncateField(fmt.Sprintf(format, a...))),
 		false,
 		true)
+}
+
+// mrkdwnEscaper escapes the three characters Slack treats as control
+// sequences. Event text such as "<!channel>" or "<@U123>" from workload logs
+// must render literally instead of notifying people.
+var mrkdwnEscaper = strings.NewReplacer("&", "&amp;", "<", "&lt;", ">", "&gt;")
+
+func escapeMrkdwn(text string) string {
+	return mrkdwnEscaper.Replace(text)
 }

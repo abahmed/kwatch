@@ -215,6 +215,7 @@ func (d *Discord) SendEvent(
 		d.token,
 		false,
 		&discordgo.WebhookParams{
+			AllowedMentions: noMentions(),
 			Embeds: []*discordgo.MessageEmbed{
 				{
 					Color:       13041664,
@@ -256,7 +257,8 @@ func (d *Discord) SendMessage(
 		d.token,
 		false,
 		&discordgo.WebhookParams{
-			Content: msg,
+			AllowedMentions: noMentions(),
+			Content:         msg,
 		},
 		discordgo.WithContext(ctx),
 	)
@@ -301,6 +303,7 @@ func wrapDiscordRateLimit(err error) error {
 	if err == nil {
 		return nil
 	}
+	err = transport.RedactURLError(err)
 	var rle *discordgo.RateLimitError
 	if errors.As(err, &rle) {
 		return &ratelimit.Error{
@@ -314,4 +317,12 @@ func wrapDiscordRateLimit(err error) error {
 		return transport.ClassifyHTTPStatus(restErr.Response.StatusCode, err)
 	}
 	return err
+}
+
+// noMentions disables @everyone, @here, user and role pings. Messages carry
+// workload logs, which must never be able to notify a whole server.
+func noMentions() *discordgo.MessageAllowedMentions {
+	return &discordgo.MessageAllowedMentions{
+		Parse: []discordgo.AllowedMentionType{},
+	}
 }

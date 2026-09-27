@@ -63,7 +63,7 @@ func TestSendMessage(t *testing.T) {
 	assert.Nil(c.SendMessage(context.Background(), "hello"))
 	assert.Contains(gotBody, `"eventType":"ALERT"`)
 	assert.Contains(gotBody, `"summary":"hello"`)
-	assert.Contains(gotBody, `"priority":"CRITICAL"`)
+	assert.Contains(gotBody, `"priority":"LOW"`)
 }
 
 func TestSendMessageError(t *testing.T) {

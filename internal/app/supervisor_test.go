@@ -153,3 +153,30 @@ func TestComponentSupervisorTreatsUnexpectedStopAsFailure(t *testing.T) {
 	}
 	supervisor.wg.Wait()
 }
+
+func TestOptionalBackoffGrowsAndCaps(t *testing.T) {
+	delay := optionalRestartInitial
+	var sleeps []time.Duration
+	for range 9 {
+		var sleep time.Duration
+		sleep, delay = optionalBackoff(delay, time.Second)
+		sleeps = append(sleeps, sleep)
+	}
+	want := []time.Duration{
+		time.Second, 2 * time.Second, 4 * time.Second, 8 * time.Second,
+		16 * time.Second, 32 * time.Second, time.Minute, time.Minute,
+		time.Minute,
+	}
+	for i := range want {
+		if sleeps[i] != want[i] {
+			t.Fatalf("sleep %d = %s, want %s", i, sleeps[i], want[i])
+		}
+	}
+}
+
+func TestOptionalBackoffResetsAfterHealthyRun(t *testing.T) {
+	sleep, next := optionalBackoff(time.Minute, time.Hour)
+	if sleep != optionalRestartInitial || next != 2*time.Second {
+		t.Fatalf("sleep=%s next=%s after a healthy run", sleep, next)
+	}
+}

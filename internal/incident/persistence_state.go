@@ -161,5 +161,13 @@ func prepareRestoredIncident(inc *model.Incident, now time.Time) {
 	}
 	inc.LastSeen = now
 	inc.LastUpdate = now
+	// Only an incident that was actually announced carries its signature
+	// across a restart. Suppressed children and members of a group buffer
+	// that never flushed (buffers are not persisted) must stay unannounced,
+	// or they are never delivered once released.
+	if inc.Revision == 0 && inc.LastRenderedHash == "" {
+		inc.NotifiedSig = ""
+		return
+	}
 	inc.NotifiedSig = notifSig(inc)
 }

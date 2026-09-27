@@ -9,6 +9,7 @@ import (
 	"github.com/abahmed/kwatch/internal/event"
 	"github.com/abahmed/kwatch/internal/insight"
 	"github.com/abahmed/kwatch/internal/message"
+	"github.com/abahmed/kwatch/internal/metrics"
 	"github.com/abahmed/kwatch/internal/model"
 )
 
@@ -53,6 +54,7 @@ func (a *Manager) enqueue(job deliverJob) {
 			return
 		}
 		a.mu.Unlock()
+		recordStoppedDrop()
 		return
 	}
 	if a.started {
@@ -165,6 +167,7 @@ func (a *Manager) NotifyIncident(
 	reconfiguring := a.reconfiguring
 	a.mu.Unlock()
 	if stopped && !reconfiguring {
+		recordStoppedDrop()
 		return
 	}
 	if !started || reconfiguring {
@@ -178,4 +181,12 @@ func (a *Manager) NotifyIncident(
 		a.fanOut(job)
 	}
 	a.mu.Unlock()
+}
+
+// recordStoppedDrop counts a notification that arrived after delivery
+// stopped, or while a reconfiguration's pending queue was full, so the loss
+// is visible instead of silent.
+func recordStoppedDrop() {
+	metrics.DefaultRegistry().NotificationsDropped.Add(1)
+	klog.V(2).InfoS("notification dropped; delivery is not accepting jobs")
 }

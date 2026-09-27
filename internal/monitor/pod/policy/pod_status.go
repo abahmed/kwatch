@@ -16,7 +16,11 @@ type PodStatusRule struct{}
 // bare Added events without conditions.
 func skipNonIssuePod(ctx *Context) (Decision, bool) {
 	if ctx.Pod.Status.Phase == corev1.PodSucceeded ||
-		(strings.EqualFold(ctx.EvType, "Added") && len(ctx.Pod.Status.Conditions) == 0) {
+		(strings.EqualFold(ctx.EvType, "Added") &&
+			len(ctx.Pod.Status.Conditions) == 0 &&
+			// Pods rejected at admission (OutOfcpu, NodeAffinity, ...)
+			// fail without ever gaining a condition.
+			ctx.Pod.Status.Phase != corev1.PodFailed) {
 		ctx.PodHasIssues = false
 		ctx.ContainersHasIssues = false
 		return DecisionSuppress, true

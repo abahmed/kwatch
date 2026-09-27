@@ -125,7 +125,7 @@ func (r *RocketChat) SendIncidentWithInsight(
 
 func (r *RocketChat) buildRequestBodyRocketChat(text string) ([]byte, error) {
 	msgPayload := &rocketChatWebhookPayload{
-		Text: text,
+		Text: message.NeutralizeMentions(text),
 	}
 
 	jsonBytes, err := json.Marshal(msgPayload)

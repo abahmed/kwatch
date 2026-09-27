@@ -61,7 +61,13 @@ func permissionsForRuntime(
 func infrastructurePermissionsForRuntime(
 	runtime config.RuntimeConfig,
 ) []Permission {
-	permissions := []Permission{{Resource: "configmaps", Verb: "create"}}
+	permissions := []Permission{
+		{Resource: "configmaps", Verb: "create"},
+		{Resource: "configmaps", Verb: "get"},
+		{Resource: "configmaps", Verb: "list"},
+		{Resource: "configmaps", Verb: "update"},
+		{Resource: "configmaps", Verb: "delete"},
+	}
 	for _, name := range persistenceConfigMapNames() {
 		for _, verb := range []string{"get", "update", "patch"} {
 			permissions = append(permissions, Permission{

@@ -1,6 +1,8 @@
 package incident
 
-import "github.com/abahmed/kwatch/internal/model"
+import (
+	"github.com/abahmed/kwatch/internal/model"
+)
 
 // transition is a decided lifecycle change waiting to be announced.
 type transition struct {
@@ -28,9 +30,39 @@ func (e *Engine) emit(ts ...transition) {
 		if t.inc == nil || t.action == model.ActionSkip {
 			continue
 		}
+		if e.staleEmission(t.inc) {
+			continue
+		}
 		hook(t.inc, t.action)
 	}
 }
+
+// staleEmission reports whether a newer revision of the incident was already
+// announced. Decisions are made under e.mu but announced after it is
+// released, so two workers can race; without this an update decided before
+// a resolve could be delivered after it.
+func (e *Engine) staleEmission(inc *model.Incident) bool {
+	if inc.Revision == 0 {
+		return false
+	}
+	e.emitMu.Lock()
+	defer e.emitMu.Unlock()
+	if e.emitted == nil {
+		e.emitted = make(map[model.IncidentKey]uint64)
+	}
+	if last := e.emitted[inc.Key]; inc.Revision < last {
+		return true
+	}
+	e.emitted[inc.Key] = inc.Revision
+	if len(e.emitted) > maxEmittedRevisions {
+		e.emitted = map[model.IncidentKey]uint64{inc.Key: inc.Revision}
+	}
+	return false
+}
+
+// maxEmittedRevisions bounds the revision memory; clearing it only loses the
+// ordering guard for incidents in flight at that moment.
+const maxEmittedRevisions = 10000
 
 // publishBaseline snapshots the baseline under the lock and hands the copy to
 // OnBaselineChange. Callers must not hold e.mu.

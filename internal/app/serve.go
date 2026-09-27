@@ -207,6 +207,7 @@ func waitShutdown(
 		klog.ErrorS(err, "timed out waiting for delivery manager to drain")
 	}
 	cancel()
+	releaseLeaseAfterShutdown(deps, applicationContext)
 	if deps.closeAudit != nil {
 		if err := deps.closeAudit(); err != nil {
 			klog.ErrorS(err, "failed to close audit logger")
@@ -266,7 +267,9 @@ func stopHealthServer(deps *serverDeps) {
 }
 
 func waitController(deps *serverDeps) bool {
-	if deps.controllerDone == nil {
+	// Standby replicas never start the controller; waiting for it only
+	// delayed their shutdown and counted a false shutdown timeout.
+	if deps.controllerDone == nil || !deps.controllerStarted.Load() {
 		return true
 	}
 	// The controller owns the event workers that can still mutate the
@@ -285,4 +288,16 @@ func waitController(deps *serverDeps) bool {
 func recordShutdownTimeout(component string) {
 	metrics.DefaultRegistry().ShutdownTimeouts.Add(1)
 	klog.InfoS("timed out waiting for component", "component", component)
+}
+
+// releaseLeaseAfterShutdown hands the Lease over only after delivery drained
+// and state was written, so the next leader never overlaps with this one.
+func releaseLeaseAfterShutdown(deps *serverDeps, parent context.Context) {
+	release := deps.leaseRelease()
+	if release == nil {
+		return
+	}
+	ctx, cancel := boundedShutdownContext(parent)
+	defer cancel()
+	release(ctx)
 }
