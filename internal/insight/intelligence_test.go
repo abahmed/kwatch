@@ -265,9 +265,11 @@ func TestAnalysisStateBoundsTransitionsAndResetsOnRecovery(t *testing.T) {
 func TestDeliveryActionCreatesFirstEventualNotificationAndResets(t *testing.T) {
 	e := newTestEngine(nil, nil)
 	inc := &model.Incident{Subject: model.Subject{Key: "pod/apps/api"}}
+	// Unknown state (for example after a restart) must not turn an update
+	// for an already announced incident into a duplicate create.
 	if got := e.DeliveryAction(inc, model.ActionUpdate); got !=
-		model.ActionCreate {
-		t.Fatalf("first eventual action = %v, want create", got)
+		model.ActionUpdate {
+		t.Fatalf("update with unknown state = %v, want update", got)
 	}
 	e.RecordDelivery(inc, nil)
 	if got := e.DeliveryAction(inc, model.ActionUpdate); got !=

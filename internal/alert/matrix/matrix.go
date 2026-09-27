@@ -4,8 +4,10 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"html"
 	"net/url"
 	"regexp"
+	"strings"
 
 	"k8s.io/klog/v2"
 
@@ -77,7 +79,10 @@ func (m *Matrix) Name() string {
 }
 
 func (m *Matrix) SendMessage(ctx context.Context, msg string) error {
-	return m.sendAPI(ctx, msg)
+	// Rendered messages are plain text built from event data; escape them
+	// before they become the HTML body so logs cannot inject markup.
+	formatted := strings.ReplaceAll(html.EscapeString(msg), "\n", "<br/>")
+	return m.sendBodies(ctx, msg, formatted)
 }
 
 // SendIncident implements delivery.ThreadProvider.
@@ -115,14 +120,14 @@ func (m *Matrix) SendIncidentWithInsight(
 }
 
 func (m *Matrix) SendEvent(ctx context.Context, e *event.Event) error {
-	return m.sendAPI(ctx, e.FormatHtml(m.clusterName, m.text))
+	formatted := e.FormatHtml(m.clusterName, m.text)
+	return m.sendBodies(ctx, stripHtmlRegex(formatted), formatted)
 }
 
-func (m *Matrix) sendAPI(
+func (m *Matrix) sendBodies(
 	ctx context.Context,
-	formattedMsg string,
+	plainMsg, formattedMsg string,
 ) error {
-	plainMsg := stripHtmlRegex(formattedMsg)
 
 	payload := struct {
 		Msgtype       string `json:"msgtype"`

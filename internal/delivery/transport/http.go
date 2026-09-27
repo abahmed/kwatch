@@ -6,9 +6,11 @@ package transport
 import (
 	"bytes"
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
+	"net/url"
 	"strings"
 	"time"
 	"unicode/utf8"
@@ -99,7 +101,7 @@ func (c *client) Send(ctx context.Context, r Request) ([]byte, error) {
 	}
 	response, err := c.httpClient.Do(req)
 	if err != nil {
-		return nil, err
+		return nil, RedactURLError(err)
 	}
 	defer func() {
 		// The request has already completed. Closing errors are not useful to
@@ -159,4 +161,26 @@ func responseSummary(body []byte) string {
 		return text[:cut] + "…"
 	}
 	return text
+}
+
+// RedactURLError removes the request URL from client errors. Provider URLs
+// often carry credentials in the path or query (bot tokens, webhook secrets,
+// integration keys), and callers log these errors.
+func RedactURLError(err error) error {
+	var urlErr *url.Error
+	if !errors.As(err, &urlErr) {
+		return err
+	}
+	redacted := *urlErr
+	redacted.URL = redactedURL(urlErr.URL)
+	return &redacted
+}
+
+// redactedURL keeps only the scheme and host of a request URL.
+func redactedURL(raw string) string {
+	parsed, err := url.Parse(raw)
+	if err != nil || parsed.Host == "" {
+		return "[redacted]"
+	}
+	return parsed.Scheme + "://" + parsed.Host + "/[redacted]"
 }

@@ -41,6 +41,7 @@ func Diff(oldObj, newObj interface{}) Result {
 		result.Additional = len(fields) - maxFields
 		fields = fields[:maxFields]
 	}
+	redactSensitiveValues(fields)
 	result.Fields = fields
 	return result
 }
@@ -218,4 +219,33 @@ func stringify(value interface{}) string {
 	}
 	b, _ := json.Marshal(value)
 	return string(b)
+}
+
+// redactedValue replaces a sensitive before/after value.
+const redactedValue = "<redacted>"
+
+// redactSensitiveValues hides values that commonly hold credentials. Change
+// fields are rendered into notifications and persisted in a ConfigMap, and
+// plain env values and ConfigMap data carry passwords as often as Secrets do.
+func redactSensitiveValues(fields []FieldChange) {
+	for i := range fields {
+		if !sensitivePath(fields[i].Path) {
+			continue
+		}
+		if fields[i].Before != "" {
+			fields[i].Before = redactedValue
+		}
+		if fields[i].After != "" {
+			fields[i].After = redactedValue
+		}
+	}
+}
+
+func sensitivePath(path string) bool {
+	for _, prefix := range []string{"data.", "binaryData.", "stringData."} {
+		if strings.HasPrefix(path, prefix) {
+			return true
+		}
+	}
+	return strings.Contains(path, ".env.") || strings.HasSuffix(path, ".env")
 }

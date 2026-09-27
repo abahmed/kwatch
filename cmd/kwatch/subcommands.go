@@ -8,6 +8,7 @@ import (
 	"io"
 	"sort"
 	"strings"
+	"time"
 
 	"github.com/abahmed/kwatch/internal/alert/catalog"
 	"github.com/abahmed/kwatch/internal/client"
@@ -131,6 +132,15 @@ func runReplay(dryRun bool, in io.Reader, out, errOut io.Writer) int {
 		return 1
 	}
 
+	if !dryRun {
+		// Queued jobs are only sent by started workers; drain them before
+		// exiting so replayed events are actually delivered.
+		if err := am.Start(context.Background()); err != nil {
+			_, _ = fmt.Fprintf(errOut, "ERROR: start delivery: %v\n", err)
+			return 1
+		}
+		defer stopReplayDelivery(am, errOut)
+	}
 	scanner := bufio.NewScanner(in)
 	for scanner.Scan() {
 		line := strings.TrimSpace(scanner.Text())
@@ -174,4 +184,17 @@ func runReplay(dryRun bool, in io.Reader, out, errOut io.Writer) int {
 		return 1
 	}
 	return 0
+}
+
+// replayDrainTimeout bounds how long replay waits for queued deliveries.
+const replayDrainTimeout = 2 * time.Minute
+
+func stopReplayDelivery(am *delivery.Manager, errOut io.Writer) {
+	ctx, cancel := context.WithTimeout(
+		context.Background(), replayDrainTimeout,
+	)
+	defer cancel()
+	if err := am.Stop(ctx); err != nil {
+		_, _ = fmt.Fprintf(errOut, "ERROR: delivery did not drain: %v\n", err)
+	}
 }

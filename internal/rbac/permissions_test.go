@@ -88,10 +88,15 @@ func TestInfrastructureConfigMapPermissionsAreNamed(t *testing.T) {
 		}
 	}
 
+	// Incident shards have generated names, so shard writes and garbage
+	// collection need these unnamed namespace-local verbs; nothing else.
+	unnamed := map[string]bool{
+		"create": true, "list": true, "update": true, "delete": true,
+	}
 	for _, permission := range permissions {
 		if permission.Resource == "configmaps" &&
-			permission.Verb != "create" && permission.Name == "" {
-			t.Fatalf("non-create ConfigMap permission is not named: %+v", permission)
+			permission.Name == "" && !unnamed[permission.Verb] {
+			t.Fatalf("unexpected unnamed ConfigMap permission: %+v", permission)
 		}
 	}
 }

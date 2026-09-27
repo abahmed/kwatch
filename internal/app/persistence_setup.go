@@ -167,12 +167,20 @@ func persistenceStatus(
 			return
 		}
 		healthServer.SetComponentError(name, err)
-		if required && err != nil {
-			healthServer.SetReady(false)
-			if readiness != nil {
-				readiness.writerFailed(name)
+		if !required || readiness == nil {
+			if required && err != nil {
+				healthServer.SetReady(false)
 			}
+			return
 		}
+		if err != nil {
+			healthServer.SetReady(false)
+			readiness.writerFailed(name)
+			return
+		}
+		// A successful write after a failure makes the writer healthy
+		// again; without this one transient error left readiness false.
+		readiness.writerStarted(name)
 	}
 }
 

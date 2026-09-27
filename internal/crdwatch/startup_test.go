@@ -71,3 +71,21 @@ func TestNormalizeLegacySpecDoesNotOverrideNestedThreshold(t *testing.T) {
 		spec["pendingPodMonitor"].(map[string]interface{})["threshold"],
 	)
 }
+
+func TestRejectSecretConfigRejectsTransportAndDiagnosticsFields(t *testing.T) {
+	for _, path := range [][2]string{
+		{"app", "proxyURL"},
+		{"app", "insecureSkipTLSVerify"},
+		{"app", "caBundlePath"},
+		{"healthCheck", "pprof"},
+		{"healthCheck", "diagnostics"},
+		{"auditLog", "output"},
+	} {
+		spec := map[string]interface{}{
+			path[0]: map[string]interface{}{path[1]: "x"},
+		}
+		assert.ErrorContains(
+			t, rejectSecretConfig(spec), path[0]+"."+path[1],
+		)
+	}
+}

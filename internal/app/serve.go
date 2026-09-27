@@ -266,7 +266,9 @@ func stopHealthServer(deps *serverDeps) {
 }
 
 func waitController(deps *serverDeps) bool {
-	if deps.controllerDone == nil {
+	// Standby replicas never start the controller; waiting for it only
+	// delayed their shutdown and counted a false shutdown timeout.
+	if deps.controllerDone == nil || !deps.controllerStarted.Load() {
 		return true
 	}
 	// The controller owns the event workers that can still mutate the

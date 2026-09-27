@@ -51,7 +51,7 @@ func TestAnalyzeDependencyChangeDoesNotClobberCause(t *testing.T) {
 		Type: context.ChangeUpdate, Timestamp: time.Now(),
 	})
 
-	e := newTestEngine(graph, tracker)
+	e := withActiveNode(newTestEngine(graph, tracker), "n1")
 	inc := &model.Incident{
 		Subject: model.Subject{
 			Resource:  "pod",
@@ -65,7 +65,7 @@ func TestAnalyzeDependencyChangeDoesNotClobberCause(t *testing.T) {
 
 	// The node is the specific diagnosis; the configmap update must not
 	// override it with a generic dependency_change wording.
-	assert.Equal(t, "node n1 may be unhealthy", ins.Cause)
+	assert.Contains(t, ins.Cause, "node n1 may be unhealthy")
 	assert.Equal(t, "node_failure", ins.Pattern)
 	assert.Len(t, ins.RecentChanges, 1) // still surfaced as context
 }
@@ -229,7 +229,9 @@ func TestAnalyzePodIncidentKeyedByOwnerName(t *testing.T) {
 		"owned_by",
 	)
 
-	e := newTestEngine(graph, newTestChangeTracker(10))
+	e := withActiveNode(
+		newTestEngine(graph, newTestChangeTracker(10)), "n1",
+	)
 	inc := &model.Incident{
 		Subject: model.Subject{
 			Resource:  "pod",

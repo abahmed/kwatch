@@ -59,8 +59,10 @@ func DetectJobExecutionIssue(
 			*job.Spec.ActiveDeadlineSeconds,
 		))
 	}
+	// Kubernetes fails a Job once failures exceed backoffLimit; the retry
+	// that reaches the limit is still allowed to run.
 	if job.Spec.BackoffLimit != nil &&
-		job.Status.Failed >= *job.Spec.BackoffLimit &&
+		job.Status.Failed > *job.Spec.BackoffLimit &&
 		job.Status.CompletionTime == nil {
 		return observe.Object(
 			"job", job, constant.ReasonJobBackoffLimitExceeded,

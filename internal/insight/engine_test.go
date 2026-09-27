@@ -28,7 +28,9 @@ func TestAnalyzeNodeFailure(t *testing.T) {
 	graph := context.NewResourceGraph()
 	graph.AddEdge("pod", "ns1", "p1", "node", "", "n1", "scheduled_on")
 
-	e := newTestEngine(graph, newTestChangeTracker(10))
+	e := withActiveNode(
+		newTestEngine(graph, newTestChangeTracker(10)), "n1",
+	)
 	inc := &model.Incident{
 		Subject: model.Subject{
 			Resource:  "pod",
@@ -74,6 +76,7 @@ func TestAnalyzeRolloutFailure(t *testing.T) {
 			Name:      "p1",
 			OwnerKind: "Deployment",
 		},
+		Evidence: model.Evidence{OwnerUnhealthy: true},
 	}
 	ins := e.Analyze(inc)
 

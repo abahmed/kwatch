@@ -127,7 +127,9 @@ metadata:
 rules:
 - apiGroups: [""]
   resources: ["configmaps"]
-  verbs: ["create"]
+  # Incident shards use generated kwatch-incidents-<generation>-NNN names;
+  # rewriting and garbage-collecting them needs list, update and delete.
+  verbs: ["create", "list", "update", "delete"]
 - apiGroups: [""]
   resources: ["configmaps"]
   resourceNames:

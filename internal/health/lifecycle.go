@@ -37,7 +37,7 @@ func (h *HealthServer) Open() error {
 		Handler:           mux,
 		ReadHeaderTimeout: 5 * time.Second,
 		ReadTimeout:       5 * time.Second,
-		WriteTimeout:      10 * time.Second,
+		WriteTimeout:      writeTimeout(h.pprof),
 		IdleTimeout:       60 * time.Second,
 	}
 	ln, err := net.Listen("tcp", h.server.Addr)
@@ -158,3 +158,13 @@ func (h *HealthServer) ServeError() error {
 }
 
 func (h *HealthServer) ServeErrors() <-chan error { return h.serveErrors }
+
+// writeTimeout bounds response writes. net/http/pprof refuses profiles longer
+// than the server WriteTimeout, and its CPU profile defaults to 30s, so the
+// bound is raised only when pprof is enabled.
+func writeTimeout(pprofEnabled bool) time.Duration {
+	if pprofEnabled {
+		return 65 * time.Second
+	}
+	return 10 * time.Second
+}

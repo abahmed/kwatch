@@ -108,6 +108,8 @@ func (s *componentSupervisor) startOptional(
 				component.onHealthy()
 			}
 			err := s.runComponent(ctx, component)
+			var sleep time.Duration
+			sleep, delay = optionalBackoff(delay, s.now().Sub(startedAt))
 			var stop bool
 			err, stop = normalizeComponentExit(ctx, component, err)
 			if stop {
@@ -120,8 +122,8 @@ func (s *componentSupervisor) startOptional(
 				component.onError(err)
 			}
 			klog.ErrorS(err, "optional component stopped; retrying",
-				"component", component.name, "retryIn", delay)
-			timer := time.NewTimer(delay)
+				"component", component.name, "retryIn", sleep)
+			timer := time.NewTimer(sleep)
 			select {
 			case <-ctx.Done():
 				if !timer.Stop() {
@@ -129,14 +131,6 @@ func (s *componentSupervisor) startOptional(
 				}
 				return
 			case <-timer.C:
-			}
-			if delay < optionalRestartMaximum/2 {
-				delay *= 2
-			} else {
-				delay = optionalRestartMaximum
-			}
-			if s.now().Sub(startedAt) >= time.Minute {
-				delay = optionalRestartInitial
 			}
 		}
 	}()
@@ -299,4 +293,21 @@ func (s *componentSupervisor) report(err error) {
 	default:
 		klog.ErrorS(err, "application component failure was already reported")
 	}
+}
+
+// optionalBackoff returns how long to wait before restarting an optional
+// component and the delay to use after that. A run that stayed up for a
+// minute was healthy, so it restarts promptly; the run time is measured
+// before sleeping so the backoff itself never counts as healthy runtime.
+func optionalBackoff(
+	delay, ranFor time.Duration,
+) (time.Duration, time.Duration) {
+	if ranFor >= time.Minute || delay <= 0 {
+		delay = optionalRestartInitial
+	}
+	next := delay * 2
+	if next > optionalRestartMaximum {
+		next = optionalRestartMaximum
+	}
+	return delay, next
 }

@@ -40,10 +40,13 @@ type serverDeps struct {
 	startPersistence func(
 		context.Context, *componentSupervisor, func() bool,
 	)
-	activate             func(context.Context) error
-	persistenceGate      *persistenceGate
-	initialized          <-chan struct{}
-	controllerDone       chan struct{}
+	activate        func(context.Context) error
+	persistenceGate *persistenceGate
+	initialized     <-chan struct{}
+	controllerDone  chan struct{}
+	// controllerStarted is set once runController begins. Standby replicas
+	// never run the controller, so shutdown must not wait for it.
+	controllerStarted    atomic.Bool
 	controllerProgress   *componentProgress
 	notifyStartup        func()
 	endSession           func(context.Context, string)

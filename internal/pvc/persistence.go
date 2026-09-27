@@ -29,6 +29,12 @@ func (p *PvcMonitor) resolve(subject model.ObjectRef) {
 }
 
 // persist saves a defensive state snapshot after producers have finished.
+func (p *PvcMonitor) resolveReason(subject model.ObjectRef, reason string) {
+	if p.incidentSink != nil {
+		p.incidentSink.Resolve(subject, reason)
+	}
+}
+
 func (p *PvcMonitor) persist(ctx context.Context) {
 	if p.state == nil {
 		return

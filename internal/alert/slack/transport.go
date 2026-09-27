@@ -75,6 +75,7 @@ func wrapSlackRateLimit(err error) error {
 	if err == nil {
 		return nil
 	}
+	err = transport.RedactURLError(err)
 	var rle *slackClient.RateLimitedError
 	if errors.As(err, &rle) {
 		return &ratelimit.Error{

@@ -14,13 +14,15 @@ import (
 )
 
 func (m *Monitor) check(ctx context.Context) {
-	probeCtx, cancel := context.WithTimeout(ctx, defaultProbeTimeout)
-	defer cancel()
 	m.mu.Lock()
 	m.status.LastCheck = m.nowTime()
 	m.mu.Unlock()
-	m.checkAPIServer(probeCtx)
-	m.checkCoreDNS(probeCtx)
+	// Each probe gets its own deadline: a slow API server must not use up
+	// the DNS and component probes' time and turn into false alerts.
+	withProbeTimeout(ctx, m.checkAPIServer)
+	withProbeTimeout(ctx, m.checkCoreDNS)
+	probeCtx, cancel := context.WithTimeout(ctx, defaultProbeTimeout)
+	defer cancel()
 	pods, err := m.componentPods(probeCtx)
 	if err != nil {
 		m.markComponentsUnavailable(err)
@@ -28,7 +30,9 @@ func (m *Monitor) check(ctx context.Context) {
 		return
 	}
 	for _, component := range controlPlaneComponents {
-		m.checkComponent(probeCtx, component, pods)
+		withProbeTimeout(ctx, func(componentCtx context.Context) {
+			m.checkComponent(componentCtx, component, pods)
+		})
 	}
 	m.mu.Lock()
 	m.status.LastCheck = m.nowTime()
@@ -173,4 +177,10 @@ func (m *Monitor) observe(key string, healthy bool, reason, hint string) {
 			model.ObjectRef{Kind: "controlplane", Name: key}, reason,
 		)
 	}
+}
+
+func withProbeTimeout(ctx context.Context, probe func(context.Context)) {
+	probeCtx, cancel := context.WithTimeout(ctx, defaultProbeTimeout)
+	defer cancel()
+	probe(probeCtx)
 }

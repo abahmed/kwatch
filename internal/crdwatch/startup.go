@@ -105,9 +105,18 @@ func rejectSecretConfig(spec interface{}) error {
 				"credentials through config.yaml file references",
 		)
 	}
+	// Outbound transport, TLS trust, diagnostics exposure and file paths
+	// change who can observe provider credentials; they stay in the mounted
+	// config, which needs more privilege to edit than a KwatchConfig.
 	for _, path := range [][]string{
 		{"healthCheck", "diagnosticsToken"},
+		{"healthCheck", "pprof"},
+		{"healthCheck", "diagnostics"},
 		{"heartbeatMonitor", "url"},
+		{"app", "proxyURL"},
+		{"app", "insecureSkipTLSVerify"},
+		{"app", "caBundlePath"},
+		{"auditLog", "output"},
 	} {
 		section, ok := root[path[0]].(map[string]interface{})
 		if !ok {
@@ -116,7 +125,7 @@ func rejectSecretConfig(spec interface{}) error {
 		if _, exists := section[path[1]]; exists {
 			return fmt.Errorf(
 				"KwatchConfig.spec.%s.%s is forbidden; configure it "+
-					"through a mounted Secret",
+					"in the mounted configuration",
 				path[0],
 				path[1],
 			)

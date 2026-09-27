@@ -111,7 +111,12 @@ func (p *PvcMonitor) checkVolumeStatus(ctx context.Context) {
 				"pvc", pvc, constant.ReasonPersistentVolumeClaim,
 			).WithHint(hint))
 		} else {
-			p.resolve(model.NewObjectRef("pvc", pvc.Namespace, pvc.Name))
+			// Resolve only the status finding; usage incidents share this
+			// subject and are resolved by the usage sweep.
+			p.resolveReason(
+				model.NewObjectRef("pvc", pvc.Namespace, pvc.Name),
+				constant.ReasonPersistentVolumeClaim,
+			)
 		}
 	}
 
@@ -146,7 +151,10 @@ func (p *PvcMonitor) checkVolumeStatus(ctx context.Context) {
 				"pv", pv.Name, constant.ReasonPersistentVolume,
 			).WithLabels(pv.Labels).WithHint(hint))
 		} else {
-			p.resolve(model.ObjectRef{Kind: "pv", Name: pv.Name})
+			p.resolveReason(
+				model.ObjectRef{Kind: "pv", Name: pv.Name},
+				constant.ReasonPersistentVolume,
+			)
 		}
 	}
 }

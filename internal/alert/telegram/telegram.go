@@ -33,7 +33,7 @@ func maskString(s string) string {
 type telegramPayload struct {
 	ChatID    string `json:"chat_id"`
 	Text      string `json:"text"`
-	ParseMode string `json:"parse_mode"`
+	ParseMode string `json:"parse_mode,omitempty"`
 }
 
 type Telegram struct {
@@ -164,32 +164,22 @@ func (t *Telegram) buildRequestBodyTelegram(
 	// build text will be sent in the message
 	txt := ""
 	if len(customMsg) == 0 {
-		var parts []string
-		parts = append(
-			parts,
-			fmt.Sprintf("*Reason:* %s", format.OrDefault(e.Reason, "unknown")),
-		)
-
-		if e.PodName != "" {
-			parts = append(parts, fmt.Sprintf("*Pod:* %s", e.PodName))
+		parts := []string{
+			"*Reason:* " + escapeMarkdown(format.OrDefault(e.Reason, "unknown")),
 		}
-		if e.ContainerName != "" {
-			parts = append(
-				parts,
-				fmt.Sprintf("*Container:* %s", e.ContainerName),
-			)
-		}
-		if e.Namespace != "" {
-			parts = append(parts, fmt.Sprintf("*Namespace:* %s", e.Namespace))
-		}
-		if e.NodeName != "" {
-			parts = append(parts, fmt.Sprintf("*Node:* %s", e.NodeName))
-		}
-		if t.clusterName != "" {
-			parts = append(
-				parts,
-				fmt.Sprintf("*Cluster:* %s", t.clusterName),
-			)
+		for _, field := range []struct{ label, value string }{
+			{"Pod", e.PodName},
+			{"Container", e.ContainerName},
+			{"Namespace", e.Namespace},
+			{"Node", e.NodeName},
+			{"Cluster", t.clusterName},
+		} {
+			if field.value != "" {
+				parts = append(
+					parts,
+					"*"+field.label+":* "+escapeMarkdown(field.value),
+				)
+			}
 		}
 
 		txt = "⛑ Kwatch alert\n" + strings.Join(parts, "\n")
@@ -197,24 +187,25 @@ func (t *Telegram) buildRequestBodyTelegram(
 		if e.IncludeLogs {
 			logs := strings.TrimSpace(e.Logs)
 			if len(logs) > 0 {
-				txt += "\n\n*Logs:*\n" + logs
+				txt += "\n\n*Logs:*\n" + escapeMarkdown(logs)
 			}
 		}
 
 		if e.IncludeEvents {
 			events := strings.TrimSpace(e.Events)
 			if len(events) > 0 {
-				txt += "\n\n*Events:*\n" + events
+				txt += "\n\n*Events:*\n" + escapeMarkdown(events)
 			}
 		}
 	} else {
 		txt = customMsg
 	}
 
-	payload := telegramPayload{
-		ChatID:    chatId,
-		Text:      txt,
-		ParseMode: "MARKDOWN",
+	payload := telegramPayload{ChatID: chatId, Text: txt}
+	// Rendered messages are plain text; only the event layout above uses
+	// Markdown, with every event-derived value escaped.
+	if len(customMsg) == 0 {
+		payload.ParseMode = "MARKDOWN"
 	}
 
 	bodyBytes, err := json.Marshal(payload)
@@ -247,4 +238,14 @@ func (t *Telegram) sendByTelegramApi(
 		},
 	})
 	return err
+}
+
+// markdownEscaper escapes the legacy Telegram Markdown entity characters so
+// pod names, logs and messages cannot break parsing or inject formatting.
+var markdownEscaper = strings.NewReplacer(
+	"_", "\\_", "*", "\\*", "`", "\\`", "[", "\\[",
+)
+
+func escapeMarkdown(value string) string {
+	return markdownEscaper.Replace(value)
 }
