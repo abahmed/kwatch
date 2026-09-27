@@ -7,19 +7,33 @@ import (
 )
 
 func (r *Runtime) sustainServiceFinding(
-	key string,
+	serviceKey, kind string,
 	finding *model.Observation,
 	duration time.Duration,
 ) *model.Observation {
+	key := serviceKey + ":" + kind
 	if finding == nil {
 		r.clearServiceKey(key)
 		return nil
 	}
 	now := r.nowTime()
-	if now.Sub(r.mark(key, now)) < duration {
+	remaining := r.mark(key, now).Add(duration).Sub(now)
+	if remaining > 0 {
+		r.scheduleServiceRecheck(serviceKey, remaining)
 		return nil
 	}
 	return finding
+}
+
+func (r *Runtime) scheduleServiceRecheck(
+	key string, delay time.Duration,
+) {
+	r.mu.Lock()
+	requeue := r.requeueService
+	r.mu.Unlock()
+	if requeue != nil {
+		requeue(key, delay)
+	}
 }
 
 func (r *Runtime) mark(key string, now time.Time) time.Time {

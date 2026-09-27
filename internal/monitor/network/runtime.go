@@ -32,16 +32,17 @@ type Runtime struct {
 	sink    monitor.ReconciliationSink
 	now     func() time.Time
 
-	mu            sync.Mutex
-	services      corev1lister.ServiceLister
-	pods          corev1lister.PodLister
-	nodes         corev1lister.NodeLister
-	endpointSlice discoveryv1lister.EndpointSliceLister
-	ingresses     networkingv1lister.IngressLister
-	networkPolicy networkingv1lister.NetworkPolicyLister
-	firstSeen     map[string]time.Time
-	started       bool
-	configured    bool
+	mu             sync.Mutex
+	services       corev1lister.ServiceLister
+	pods           corev1lister.PodLister
+	nodes          corev1lister.NodeLister
+	endpointSlice  discoveryv1lister.EndpointSliceLister
+	ingresses      networkingv1lister.IngressLister
+	networkPolicy  networkingv1lister.NetworkPolicyLister
+	requeueService func(string, time.Duration)
+	firstSeen      map[string]time.Time
+	started        bool
+	configured     bool
 }
 
 // ConfigureSources wires all network sources once.
@@ -61,6 +62,7 @@ func (r *Runtime) ConfigureSources(sources Sources) error {
 	r.endpointSlice = sources.EndpointSlice
 	r.ingresses = sources.Ingresses
 	r.networkPolicy = sources.NetworkPolicy
+	r.requeueService = sources.RequeueService
 	return nil
 }
 
@@ -157,10 +159,10 @@ func (r *Runtime) ProcessServiceObject(
 		enrichServiceEndpointFinding(finding, pods, nodeLister)
 	}
 	endpointFinding = r.sustainServiceFinding(
-		key+":outage", endpointFinding, serviceSustain,
+		key, "outage", endpointFinding, serviceSustain,
 	)
 	degradedFinding = r.sustainServiceFinding(
-		key+":degraded", degradedFinding, degradedServiceSustain,
+		key, "degraded", degradedFinding, degradedServiceSustain,
 	)
 	r.reconcile(subject, []*model.Observation{
 		endpointFinding,
