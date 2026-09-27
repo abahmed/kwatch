@@ -47,7 +47,7 @@ concurrency:
 jobs:
   release:
     name: ${{ inputs.dry_run && 'Preview' || 'Cut' }} ${{ inputs.command }} release
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
       - name: Guard branch
         if: github.ref != 'refs/heads/main'

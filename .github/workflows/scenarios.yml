@@ -55,7 +55,7 @@ concurrency:
 jobs:
   scenarios:
     name: Kind regression scenarios
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 150
     env:
       SOURCE_REF: >-

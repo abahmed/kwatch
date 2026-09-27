@@ -17,7 +17,7 @@ concurrency:
 jobs:
   push_to_registry:
     name: Push Docker image to GitHub Container Registry
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     permissions:
       packages: write
       contents: read
@@ -234,7 +234,7 @@ jobs:
     # created. This keeps the chart repository aligned with the stable install
     # instructions while still allowing RC manifests to be tested from git.
     if: ${{ (github.event_name == 'release' && github.event.release.prerelease == false) || (github.event_name == 'workflow_dispatch' && !contains(inputs.tag, '-rc')) }}
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 10
     concurrency:
       group: helm-chart-publish
@@ -372,7 +372,7 @@ jobs:
     name: Update kwatch.dev release metadata
     if: ${{ always() && needs.push_to_registry.result == 'success' && (needs.publish_helm_chart.result == 'success' || needs.publish_helm_chart.result == 'skipped') }}
     needs: [push_to_registry, publish_helm_chart]
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 15
     permissions:
       contents: read
@@ -480,7 +480,7 @@ jobs:
     name: Publish release evidence
     if: ${{ always() && needs.push_to_registry.result == 'success' && (needs.publish_helm_chart.result == 'success' || contains(needs.push_to_registry.outputs.tag, '-rc.')) }}
     needs: [push_to_registry, publish_helm_chart]
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 10
     permissions:
       contents: write
@@ -679,7 +679,7 @@ jobs:
     name: Verify published artifacts
     if: ${{ always() && needs.push_to_registry.result == 'success' && needs.publish_release_evidence.result == 'success' }}
     needs: [push_to_registry, publish_helm_chart, update_website, publish_release_evidence]
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 15
     permissions:
       contents: read
