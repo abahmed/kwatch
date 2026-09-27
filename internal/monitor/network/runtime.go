@@ -23,6 +23,8 @@ const serviceSustain = time.Duration(
 	DefaultServiceSustainedSeconds,
 ) * time.Second
 
+const degradedServiceSustain = 5 * time.Minute
+
 // Runtime owns queue processing for Service, Ingress, and NetworkPolicy.
 // Detection remains in the pure functions in this package.
 type Runtime struct {
@@ -30,14 +32,17 @@ type Runtime struct {
 	sink    monitor.ReconciliationSink
 	now     func() time.Time
 
-	mu            sync.Mutex
-	services      corev1lister.ServiceLister
-	endpointSlice discoveryv1lister.EndpointSliceLister
-	ingresses     networkingv1lister.IngressLister
-	networkPolicy networkingv1lister.NetworkPolicyLister
-	firstSeen     map[string]time.Time
-	started       bool
-	configured    bool
+	mu             sync.Mutex
+	services       corev1lister.ServiceLister
+	pods           corev1lister.PodLister
+	nodes          corev1lister.NodeLister
+	endpointSlice  discoveryv1lister.EndpointSliceLister
+	ingresses      networkingv1lister.IngressLister
+	networkPolicy  networkingv1lister.NetworkPolicyLister
+	requeueService func(string, time.Duration)
+	firstSeen      map[string]time.Time
+	started        bool
+	configured     bool
 }
 
 // ConfigureSources wires all network sources once.
@@ -52,9 +57,12 @@ func (r *Runtime) ConfigureSources(sources Sources) error {
 	}
 	r.configured = true
 	r.services = sources.Services
+	r.pods = sources.Pods
+	r.nodes = sources.Nodes
 	r.endpointSlice = sources.EndpointSlice
 	r.ingresses = sources.Ingresses
 	r.networkPolicy = sources.NetworkPolicy
+	r.requeueService = sources.RequeueService
 	return nil
 }
 
@@ -76,8 +84,9 @@ func (r *Runtime) ProcessService(key string, deleted bool) error {
 	r.mu.Lock()
 	lister := r.services
 	endpointLister := r.endpointSlice
+	podLister := r.pods
 	r.mu.Unlock()
-	if lister == nil || endpointLister == nil {
+	if lister == nil || endpointLister == nil || podLister == nil {
 		return nil
 	}
 	if deleted {
@@ -107,8 +116,10 @@ func (r *Runtime) ProcessServiceObject(
 	}
 	r.mu.Lock()
 	eplist := r.endpointSlice
+	podLister := r.pods
+	nodeLister := r.nodes
 	r.mu.Unlock()
-	if eplist == nil {
+	if eplist == nil || podLister == nil {
 		return nil
 	}
 	subject := model.NewObjectRef("service", svc.Namespace, svc.Name)
@@ -127,19 +138,35 @@ func (r *Runtime) ProcessServiceObject(
 			svc.Namespace, svc.Name, err,
 		)
 	}
-	var endpointFinding *model.Observation
 	key := svc.Namespace + "/" + svc.Name
-	if finding := DetectServiceEndpointIssue(svc, epSlices); finding != nil {
-		now := r.nowTime()
-		first := r.mark(key, now)
-		if now.Sub(first) >= serviceSustain {
-			endpointFinding = finding
+	var pods []*corev1.Pod
+	if len(svc.Spec.Selector) > 0 {
+		pods, err = podLister.Pods(svc.Namespace).List(
+			labels.SelectorFromSet(svc.Spec.Selector),
+		)
+		if err != nil {
+			return fmt.Errorf("list backend pods for %s/%s: %w",
+				svc.Namespace, svc.Name, err)
 		}
-	} else {
-		r.clearService(svc.Namespace, svc.Name)
 	}
+	endpointFinding := DetectServiceEndpointIssue(svc, epSlices)
+	degradedFinding := DetectServiceBackendDegradation(
+		svc, epSlices, pods,
+	)
+	for _, finding := range []*model.Observation{
+		endpointFinding, degradedFinding,
+	} {
+		enrichServiceEndpointFinding(finding, pods, nodeLister)
+	}
+	endpointFinding = r.sustainServiceFinding(
+		key, "outage", endpointFinding, serviceSustain,
+	)
+	degradedFinding = r.sustainServiceFinding(
+		key, "degraded", degradedFinding, degradedServiceSustain,
+	)
 	r.reconcile(subject, []*model.Observation{
 		endpointFinding,
+		degradedFinding,
 		DetectServicePortIssue(svc, epSlices),
 		DetectServiceStatusIssue(svc, r.nowTime(),
 			float64(DefaultServiceSustainedSeconds)),
@@ -335,20 +362,4 @@ func (r *Runtime) nowTime() time.Time {
 	now := r.now
 	r.mu.Unlock()
 	return now()
-}
-
-func (r *Runtime) mark(key string, now time.Time) time.Time {
-	r.mu.Lock()
-	defer r.mu.Unlock()
-	if first, ok := r.firstSeen[key]; ok {
-		return first
-	}
-	r.firstSeen[key] = now
-	return now
-}
-
-func (r *Runtime) clearService(namespace, name string) {
-	r.mu.Lock()
-	delete(r.firstSeen, namespace+"/"+name)
-	r.mu.Unlock()
 }

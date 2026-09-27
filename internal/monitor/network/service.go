@@ -45,6 +45,52 @@ func DetectServiceEndpointIssue(
 	})
 }
 
+// DetectServiceBackendDegradation reports sustained partial backend loss.
+// Ready endpoints keep the Service available, so this is never an outage.
+func DetectServiceBackendDegradation(
+	svc *corev1.Service,
+	epSlices []*discoveryv1.EndpointSlice,
+	pods []*corev1.Pod,
+) *model.Observation {
+	if svc == nil || len(svc.Spec.Selector) == 0 ||
+		svc.Spec.ClusterIP == "None" || svc.Spec.ClusterIP == "" ||
+		svc.Spec.Type == corev1.ServiceTypeExternalName || len(pods) < 2 {
+		return nil
+	}
+	readyEndpoints := 0
+	for _, slice := range epSlices {
+		for _, endpoint := range slice.Endpoints {
+			if EndpointCanReceiveTraffic(endpoint) {
+				readyEndpoints++
+			}
+		}
+	}
+	if readyEndpoints == 0 {
+		return nil
+	}
+	readyPods, unreadyPods := 0, 0
+	for _, pod := range pods {
+		if pod.DeletionTimestamp != nil {
+			continue
+		}
+		if podReady(pod) {
+			readyPods++
+		} else {
+			unreadyPods++
+		}
+	}
+	if readyPods == 0 || unreadyPods == 0 {
+		return nil
+	}
+	return observe.Object(
+		"service", svc, constant.ReasonServiceBackendsDegraded,
+	).WithHint("some selected backend pods are unready while the " +
+		"service still has ready endpoints").WithFacts(model.Facts{
+		EndpointsObserved: true,
+		HealthyEndpoints:  readyEndpoints,
+	}).WithSeverity(model.SeverityWarning)
+}
+
 // DetectServicePortIssue reports Service ports absent from EndpointSlices.
 func DetectServicePortIssue(
 	svc *corev1.Service,
@@ -57,24 +103,12 @@ func DetectServicePortIssue(
 	observedNames, observedNumbers := endpointPortObservations(epSlices)
 	for name := range names {
 		if !observedNames[name] {
-			return servicePortMismatch(
-				svc,
-				fmt.Sprintf(
-					"named port %q is not published by its EndpointSlices",
-					name,
-				),
-			)
+			return servicePortMismatch(svc, "named port", name)
 		}
 	}
 	for port := range numbers {
 		if !observedNumbers[port] {
-			return servicePortMismatch(
-				svc,
-				fmt.Sprintf(
-					"target port %s is not published by its EndpointSlices",
-					port,
-				),
-			)
+			return servicePortMismatch(svc, "target port", port)
 		}
 	}
 	return nil
@@ -173,12 +207,20 @@ func endpointPortObservations(
 
 func servicePortMismatch(
 	svc *corev1.Service,
-	detail string,
+	kind, value string,
 ) *model.Observation {
 	key := svc.Namespace + "/" + svc.Name
+	detail := fmt.Sprintf(
+		"%s %q is not published by its EndpointSlices", kind, value,
+	)
 	return observe.Object(
 		"service", svc, constant.ReasonServicePortMismatch,
-	).WithHint(fmt.Sprintf("service %s %s", key, detail))
+	).WithHint(fmt.Sprintf("service %s %s", key, detail)).WithFacts(
+		model.Facts{
+			MissingServicePortKind:  kind,
+			MissingServicePortValue: value,
+		},
+	)
 }
 
 func servicePortKey(protocol corev1.Protocol, port int32) string {

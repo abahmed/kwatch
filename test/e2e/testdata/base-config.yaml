@@ -53,7 +53,8 @@ pdbMonitor:
 
 clusterResourceMonitor:
   enabled: true
-  nodeLeaseStaleSeconds: 5
+  # Kind renews healthy node Leases about every 10s.
+  nodeLeaseStaleSeconds: 90
 
 nodeMonitor:
   enabled: true

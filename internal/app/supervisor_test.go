@@ -47,6 +47,28 @@ func TestComponentSupervisorReportsRequiredFailure(t *testing.T) {
 	supervisor.wg.Wait()
 }
 
+func TestComponentSupervisorTreatsCancellationAsCleanStop(t *testing.T) {
+	supervisor := newComponentSupervisor(time.Now)
+	ctx, cancel := context.WithCancel(context.Background())
+	started := make(chan struct{})
+	supervisor.startOwned(ctx, componentSpec{
+		name: "delivery", required: true,
+		run: func(ctx context.Context) error {
+			close(started)
+			<-ctx.Done()
+			return ctx.Err()
+		},
+	})
+	<-started
+	cancel()
+	supervisor.wg.Wait()
+	select {
+	case err := <-supervisor.errCh:
+		t.Fatalf("canceled component reported failure: %v", err)
+	default:
+	}
+}
+
 func TestComponentSupervisorMarksOptionalFailureDegraded(t *testing.T) {
 	supervisor := newComponentSupervisor(time.Now)
 	ctx, cancel := context.WithCancel(context.Background())

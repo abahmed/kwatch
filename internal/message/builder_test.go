@@ -362,5 +362,5 @@ func TestSlackRendererCreate(t *testing.T) {
 	assert.Contains(t, msg, "p1")
 	assert.Contains(t, msg, "Container `c1`")
 	assert.Contains(t, msg, "node `n1`")
-	assert.NotContains(t, msg, "OOMKill")
+	assert.Contains(t, msg, "OOMKill.")
 }

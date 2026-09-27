@@ -55,7 +55,12 @@ func DetectDeploymentConditions(
 		}
 		observations = append(
 			observations,
-			observe.Object("deployment", deploy, reason).WithHint(hint),
+			observe.Object("deployment", deploy, reason).
+				WithHint(hint).
+				WithFacts(model.Facts{
+					DesiredReplicas: DeploymentDesiredReplicas(deploy),
+					ReadyReplicas:   deploy.Status.ReadyReplicas,
+				}),
 		)
 	}
 	return observations

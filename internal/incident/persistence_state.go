@@ -1,11 +1,13 @@
 package incident
 
 import (
+	"fmt"
 	"sort"
 	"time"
 
 	"k8s.io/klog/v2"
 
+	"github.com/abahmed/kwatch/internal/constant"
 	"github.com/abahmed/kwatch/internal/model"
 )
 
@@ -23,6 +25,14 @@ func (e *Engine) FreezeAndSnapshotPersisted() []model.PersistedIncident {
 	defer e.mu.Unlock()
 	e.frozen = true
 	return e.snapshotPersistedLocked()
+}
+
+// Freeze stops new incident transitions as soon as active ownership ends.
+// A later final snapshot remains safe and includes the state already held.
+func (e *Engine) Freeze() {
+	e.mu.Lock()
+	e.frozen = true
+	e.mu.Unlock()
 }
 
 // Caller must hold e.mu.
@@ -120,7 +130,20 @@ func (e *Engine) restoreMassFailure(
 	}
 	clone := inc.Clone()
 	clone.Key = CanonicalIncidentKey(key)
-	clone.Reason = normalizeReason(clone.Reason)
+	ref, ok := model.ParseObjectKey(ParseKey(key).MassDependencyKey)
+	if ok {
+		clone.Reason = constant.ReasonSharedDependencyFailure
+		clone.Object = ref
+		clone.Namespace = ref.Namespace
+		clone.Resource = ref.Kind
+		clone.Name = ref.Name
+		clone.Hint = fmt.Sprintf(
+			"%d affected workloads share %s",
+			clone.Count, ref.Describe(),
+		)
+	} else {
+		clone.Reason = normalizeReason(clone.Reason)
+	}
 	clone.ID = incidentID(clone.Key)
 	if clone.Fingerprint == "" {
 		clone.Fingerprint = legacyFingerprint(clone.Key)

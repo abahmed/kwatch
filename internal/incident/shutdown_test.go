@@ -30,3 +30,15 @@ func TestFreezeAndSnapshotPersistedRejectsLateMutations(t *testing.T) {
 	assert.Equal(t, model.ActionSkip, lateAction)
 	assert.Equal(t, snapshot, e.SnapshotPersisted())
 }
+
+func TestFreezeRejectsLateFindingsBeforeFinalSnapshot(t *testing.T) {
+	e := newTestEngine()
+	e.Freeze()
+	inc, action := e.processEvent(event.Event{
+		Namespace: "default", PodName: "pod-1",
+		Reason: "CrashLoopBackOff",
+	}, "deployment-1", nil)
+	assert.Nil(t, inc)
+	assert.Equal(t, model.ActionSkip, action)
+	assert.Empty(t, e.FreezeAndSnapshotPersisted())
+}

@@ -73,6 +73,17 @@ func (e *Engine) appendObservedEvidence(
 		}
 		ins.Evidence = append(ins.Evidence, detail)
 	}
+	if inc.Facts.SharedFailingNode != "" {
+		evidence := fmt.Sprintf(
+			"%d selected backend pods are unready on node %s; "+
+				"NodeReady is not true",
+			inc.Facts.UnreadyBackendPods, inc.Facts.SharedFailingNode,
+		)
+		if inc.Facts.NodeFailureReason != "" {
+			evidence += " (" + inc.Facts.NodeFailureReason + ")"
+		}
+		ins.Evidence = append(ins.Evidence, evidence)
+	}
 	if inc.Facts.FailureDomain != "" {
 		ins.Evidence = append(
 			ins.Evidence,
@@ -94,6 +105,8 @@ func (e *Engine) setPatternConfidence(ins *Insight) {
 	switch ins.Pattern {
 	case "node_failure":
 		ins.Confidence = 0.90
+	case "service_node_failure":
+		ins.Confidence = 0.85
 	case "rollout_failure", "storage_failure", "storage_attachment_failure":
 		ins.Confidence = 0.85
 	case "dependency_change", "config_error":

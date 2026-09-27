@@ -95,27 +95,41 @@ func notificationFingerprint(inc *model.Incident) string {
 		memberCount = len(inc.Resources)
 	}
 	value := struct {
-		Reason        string
-		Severity      model.Severity
-		Resource      string
-		Namespace     string
-		Object        model.ObjectRef
-		Owner         model.ObjectRef
-		Container     string
-		Image         string
-		Node          string
-		Services      []string
-		MemberCount   int
-		ActiveMembers int
-		Facts         model.Facts
-		Suppressed    model.IncidentKey
+		Reason           string
+		Severity         model.Severity
+		Resource         string
+		Namespace        string
+		Object           model.ObjectRef
+		Owner            model.ObjectRef
+		Container        string
+		Image            string
+		Node             string
+		Services         []string
+		MemberCount      int
+		ActiveMembers    int
+		Facts            model.Facts
+		MissingPortKind  string
+		MissingPortValue string
+		BackendPods      int
+		BackendsObserved bool
+		UnreadyPods      int
+		FailingNode      string
+		NodeReason       string
+		Suppressed       model.IncidentKey
 	}{
 		Reason: inc.Reason, Severity: inc.Severity, Resource: inc.Resource,
 		Namespace: inc.Namespace, Object: inc.Object, Owner: inc.Owner,
 		Container: inc.ContainerName, Image: inc.Image, Node: inc.NodeName,
 		Services: services, MemberCount: memberCount,
 		ActiveMembers: activeMemberCount, Facts: facts,
-		Suppressed: inc.SuppressedBy,
+		MissingPortKind:  facts.MissingServicePortKind,
+		MissingPortValue: facts.MissingServicePortValue,
+		BackendPods:      facts.BackendPods,
+		BackendsObserved: facts.BackendsObserved,
+		UnreadyPods:      facts.UnreadyBackendPods,
+		FailingNode:      facts.SharedFailingNode,
+		NodeReason:       facts.NodeFailureReason,
+		Suppressed:       inc.SuppressedBy,
 	}
 	data, err := json.Marshal(value)
 	if err != nil {

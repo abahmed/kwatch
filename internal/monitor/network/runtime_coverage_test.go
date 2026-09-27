@@ -43,6 +43,8 @@ func TestNetworkRuntimeProcessesServiceAndIngressFromListers(t *testing.T) {
 		ObjectMeta: metav1.ObjectMeta{Namespace: "apps", Name: "api"},
 	}
 	services := cache.NewIndexer(cache.MetaNamespaceKeyFunc, cache.Indexers{})
+	pods := cache.NewIndexer(cache.MetaNamespaceKeyFunc,
+		cache.Indexers{cache.NamespaceIndex: cache.MetaNamespaceIndexFunc})
 	ingresses := cache.NewIndexer(cache.MetaNamespaceKeyFunc, cache.Indexers{})
 	endpoints := cache.NewIndexer(cache.MetaNamespaceKeyFunc, cache.Indexers{})
 	if err := services.Add(service); err != nil {
@@ -57,6 +59,7 @@ func TestNetworkRuntimeProcessesServiceAndIngressFromListers(t *testing.T) {
 	)
 	if err := runtime.ConfigureSources(Sources{
 		Services:      corev1lister.NewServiceLister(services),
+		Pods:          corev1lister.NewPodLister(pods),
 		Ingresses:     networkingv1lister.NewIngressLister(ingresses),
 		EndpointSlice: discoveryv1lister.NewEndpointSliceLister(endpoints),
 	}); err != nil {

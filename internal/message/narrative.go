@@ -9,7 +9,7 @@ import (
 
 // Narrative is the provider-neutral explanation of an incident. Providers
 // may wrap it in native formatting, but must not rebuild its meaning.
-const minimumCauseConfidence = 0.75
+const minimumCauseConfidence = 0.65
 
 // causeSentence states the diagnosis in proportion to how much kwatch
 // actually knows. It deliberately avoids a fixed "Cause:" label so the
@@ -18,18 +18,19 @@ func causeSentence(d *DiagnosisSection) string {
 	if !causeIsRenderable(d) {
 		return ""
 	}
-	cause := strings.TrimSuffix(d.Cause, ".")
+	cause := strings.TrimSuffix(strings.TrimSpace(d.Cause), ".")
 	if d.CauseState == insight.CauseLikely {
-		cause = "likely, " + cause
+		return "🔎 Likely cause: " + cause + "."
 	}
-	return capitalizeSentence(cause) + "."
+	return "🔎 Cause: " + cause + "."
 }
 
 func causeIsRenderable(d *DiagnosisSection) bool {
 	if d == nil || strings.TrimSpace(d.Cause) == "" {
 		return false
 	}
-	return d.CauseState != insight.CauseUnknown &&
+	return (d.CauseState == insight.CauseConfirmed ||
+		d.CauseState == insight.CauseLikely) &&
 		d.Confidence >= minimumCauseConfidence && len(d.Evidence) > 0
 }
 
@@ -42,14 +43,20 @@ func Narrative(r *Report) string {
 		cause := causeSentence(r.Diagnosis)
 		if cause != "" {
 			sentences = append(sentences, cause)
+		} else if hint := usefulHint(r.Diagnosis); hint != "" {
+			sentences = append(
+				sentences,
+				capitalizeSentence(strings.TrimSuffix(hint, "."))+".",
+			)
 		}
 		if r.Diagnosis.Impact != "" {
 			sentences = append(
 				sentences,
-				impactSentence(r.Diagnosis.Impact),
+				"💥 "+impactSentence(r.Diagnosis.Impact),
 			)
 		}
-		if r.Diagnosis.ReplicaState != "" {
+		if r.Diagnosis.ReplicaState != "" &&
+			r.Diagnosis.Impact == "" {
 			sentences = append(sentences, r.Diagnosis.ReplicaState+".")
 		}
 		if r.Diagnosis.Flapping != nil {
@@ -73,12 +80,6 @@ func Narrative(r *Report) string {
 				)+".",
 			)
 		}
-		if r.Diagnosis.Provisional && cause == "" &&
-			r.Diagnosis.UnknownSummary != "" {
-			sentences = append(
-				sentences, r.Diagnosis.UnknownSummary+".",
-			)
-		}
 		if r.Diagnosis.LogSignal != nil {
 			sentences = append(
 				sentences, "🧾 Logs suggest "+
@@ -86,7 +87,14 @@ func Narrative(r *Report) string {
 			)
 		}
 	}
-	return strings.Join(sentences, " ")
+	return strings.Join(sentences, "\n")
+}
+
+func usefulHint(d *DiagnosisSection) string {
+	if d == nil || d.Impact != "" || d.ReplicaState != "" {
+		return ""
+	}
+	return strings.TrimSpace(d.Hint)
 }
 
 func impactSentence(impact string) string {

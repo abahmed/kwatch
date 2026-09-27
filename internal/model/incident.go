@@ -103,6 +103,12 @@ type Facts struct {
 	// zero remains a meaningful measured value.
 	HealthyEndpoints  int  `json:"healthyEndpoints,omitempty"`
 	EndpointsObserved bool `json:"endpointsObserved,omitempty"`
+	// Backend details are recomputed from informer caches after restart.
+	BackendPods        int    `json:"-"`
+	BackendsObserved   bool   `json:"-"`
+	UnreadyBackendPods int    `json:"-"`
+	SharedFailingNode  string `json:"-"`
+	NodeFailureReason  string `json:"-"`
 	// FailureDomain and FailureCode are normalized Kubernetes Event evidence.
 	// Dependency is the referenced object when the Event identifies one.
 	FailureDomain string    `json:"failureDomain,omitempty"`
@@ -119,6 +125,9 @@ type Facts struct {
 	// when the failure is narrower than the whole scale target.
 	MetricContainer string `json:"metricContainer,omitempty"`
 	MetricPod       string `json:"metricPod,omitempty"`
+	// MissingServicePort identifies the port absent from EndpointSlices.
+	MissingServicePortKind  string `json:"-"`
+	MissingServicePortValue string `json:"-"`
 	// MemoryLimit is the container's memory limit when it was OOM-killed,
 	// e.g. "256Mi". Empty when no limit was set.
 	MemoryLimit string `json:"memoryLimit,omitempty"`
@@ -154,13 +163,17 @@ func (f Facts) IsZero() bool {
 
 func (f Facts) zeroAvailability() bool {
 	return f.DesiredReplicas == 0 && f.ReadyReplicas == 0 &&
-		f.HealthyEndpoints == 0 && !f.EndpointsObserved
+		f.HealthyEndpoints == 0 && !f.EndpointsObserved &&
+		f.BackendPods == 0 && !f.BackendsObserved &&
+		f.UnreadyBackendPods == 0 &&
+		f.SharedFailingNode == "" && f.NodeFailureReason == ""
 }
 
 func (f Facts) zeroFailure() bool {
 	return f.FailureDomain == "" && f.FailureCode == "" &&
 		f.Dependency.Name == "" && f.MetricFailure == "" &&
-		f.MetricName == "" && f.MetricContainer == "" && f.MetricPod == ""
+		f.MetricName == "" && f.MetricContainer == "" && f.MetricPod == "" &&
+		f.MissingServicePortKind == "" && f.MissingServicePortValue == ""
 }
 
 func (f Facts) zeroEvidence() bool {

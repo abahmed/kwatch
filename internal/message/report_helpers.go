@@ -100,7 +100,10 @@ var reasonLabels = map[string]string{
 	constant.ReasonContainersNotReady:   "Pod not ready",
 
 	// workloads
-	constant.ReasonDeploymentUnavailable: "Deployment below desired replicas",
+	constant.ReasonDeploymentUnavailable:    "Deployment below desired replicas",
+	constant.ReasonDeploymentAvailable:      "Deployment has unavailable replicas",
+	constant.ReasonDeploymentProgressing:    "Deployment rollout has stalled",
+	constant.ReasonDeploymentReplicaFailure: "Deployment cannot create replicas",
 
 	constant.ReasonDaemonSetUnavailable: "DaemonSet below desired replicas",
 
@@ -118,11 +121,13 @@ var reasonLabels = map[string]string{
 	constant.ReasonPdbViolation:        "Disruption budget violated",
 
 	// networking
-	constant.ReasonServiceNoEndpoints:     "Service has no healthy backends",
-	constant.ReasonIngressBackendNotFound: "Ingress points at missing service",
-	constant.ReasonWebhookBackendNotFound: "Admission webhook has no backend",
-	constant.ReasonTLSCertExpired:         "TLS certificate expired",
-	constant.ReasonTLSCertExpiringSoon:    "TLS certificate expiring soon",
+	constant.ReasonServiceNoEndpoints:      "Service has no healthy backends",
+	constant.ReasonServiceBackendsDegraded: "Service has unhealthy backends",
+	constant.ReasonSharedDependencyFailure: "Shared dependency affects workloads",
+	constant.ReasonIngressBackendNotFound:  "Ingress points at missing service",
+	constant.ReasonWebhookBackendNotFound:  "Admission webhook has no backend",
+	constant.ReasonTLSCertExpired:          "TLS certificate expired",
+	constant.ReasonTLSCertExpiringSoon:     "TLS certificate expiring soon",
 
 	// cluster
 	constant.ReasonControlPlaneComponentFailure:     "Control-plane component failing",

@@ -256,10 +256,16 @@ func runActiveComponents(ctx context.Context, deps *serverDeps) error {
 	select {
 	case err := <-supervisor.errCh:
 		cancel()
+		if deps.incidentEngine != nil {
+			deps.incidentEngine.Freeze()
+		}
 		waitForSupervisor(supervisor)
 		return err
 	case <-ctx.Done():
 		cancel()
+		if deps.incidentEngine != nil {
+			deps.incidentEngine.Freeze()
+		}
 		waitForSupervisor(supervisor)
 		return nil
 	}

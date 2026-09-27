@@ -18,7 +18,7 @@ concurrency:
 jobs:
   kind-production:
     name: Kind production smoke and recovery
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 35
     strategy:
       fail-fast: false

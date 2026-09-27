@@ -57,15 +57,10 @@ func (s *componentSupervisor) startOwned(
 			component.onHealthy()
 		}
 		err := s.runComponent(ctx, component)
-		if errors.Is(err, errComponentCleanStop) {
+		var stop bool
+		err, stop = normalizeComponentExit(ctx, component, err)
+		if stop {
 			return
-		}
-		if err == nil && ctx.Err() == nil {
-			if component.cleanStop {
-				return
-			}
-			err = errComponentStopped
-			metrics.DefaultRegistry().ComponentUnexpectedStops.Add(1)
 		}
 		if err != nil {
 			if component.required {

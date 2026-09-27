@@ -27,6 +27,10 @@ func (e *Engine) finalizeAssessment(
 				ins.Evidence, top.Supporting...,
 			)
 			ins.Confidence = min(float64(top.Score)/100, 0.99)
+			if top.Pattern == "root_cause" {
+				// Topology and another alert identify a lead, not proof.
+				ins.Confidence = min(ins.Confidence, 0.60)
+			}
 		}
 		ins.Contradictions = append(
 			ins.Contradictions,
@@ -68,7 +72,7 @@ func (e *Engine) causeCandidates(
 	var candidates []CauseCandidate
 	if ins.Cause != "" {
 		candidates = append(candidates, CauseCandidate{
-			Ref: inc.Ref(), Pattern: ins.Pattern,
+			Ref: causeCandidateRef(inc, ins), Pattern: ins.Pattern,
 			Explanation: ins.Cause,
 			Score:       int(ins.Confidence * 100),
 			Supporting:  append([]string(nil), ins.Evidence...),
@@ -80,6 +84,10 @@ func (e *Engine) causeCandidates(
 	for _, root := range roots {
 		ref := model.ObjectRef{
 			Kind: root.Kind, Namespace: root.Namespace, Name: root.Name,
+		}
+		// The subject's active incident confirms the symptom, not its cause.
+		if ref == inc.Ref() {
+			continue
 		}
 		candidate := CauseCandidate{Ref: ref, Score: root.score + root.depth*10}
 		if ref.Namespace != "" && ref.Namespace != inc.Namespace {
@@ -106,6 +114,12 @@ func (e *Engine) causeCandidates(
 				)
 			}
 		}
+		if candidate.Pattern == "root_cause" && ins.Cause != "" {
+			// A generic graph lead cannot displace a specific finding.
+			candidate.Score = min(
+				candidate.Score, int(ins.Confidence*100)-1,
+			)
+		}
 		candidates = append(candidates, candidate)
 	}
 	candidates = mergeCandidates(candidates)
@@ -116,6 +130,19 @@ func (e *Engine) causeCandidates(
 		candidates = candidates[:maxCauseCandidates]
 	}
 	return candidates
+}
+
+func causeCandidateRef(
+	inc *model.Incident,
+	ins *Insight,
+) model.ObjectRef {
+	if ins.Pattern == "service_node_failure" &&
+		inc.Facts.SharedFailingNode != "" {
+		return model.ObjectRef{
+			Kind: "node", Name: inc.Facts.SharedFailingNode,
+		}
+	}
+	return inc.Ref()
 }
 
 func mergeCandidates(candidates []CauseCandidate) []CauseCandidate {

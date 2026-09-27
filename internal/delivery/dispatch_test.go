@@ -10,6 +10,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"github.com/abahmed/kwatch/internal/config"
 	"github.com/abahmed/kwatch/internal/event"
 	"github.com/abahmed/kwatch/internal/insight"
 	"github.com/abahmed/kwatch/internal/model"
@@ -77,6 +78,40 @@ func TestFanOutSaturatedQueueDigestsEveryJobKind(t *testing.T) {
 	require.NotNil(t, state)
 	assert.Equal(t, 1, state.total)
 	assert.Contains(t, text, "BackOff")
+}
+
+func TestFanOutCoalescesUpdateWithoutDeadLetter(t *testing.T) {
+	am := newTestManager()
+	ch := make(chan deliverJob, 1)
+	ch <- queueIncident("api", model.ActionCreate, 1)
+	setManagerEntries(am, []providerEntry{{
+		provider: &fakeProvider{}, ch: ch,
+	}})
+	am.mu.Lock()
+	am.fanOut(queueIncident("api", model.ActionUpdate, 2))
+	am.mu.Unlock()
+	assert.Empty(t, am.DeadLetters())
+	queued := <-ch
+	assert.Equal(t, model.ActionCreate, queued.action)
+	assert.Equal(t, uint64(2), queued.inc.Revision)
+}
+
+func TestFanOutFiltersRoutesBeforeQueueing(t *testing.T) {
+	am := newTestManager()
+	ch := make(chan deliverJob, 1)
+	setManagerEntries(am, []providerEntry{{
+		provider: &fakeProvider{}, ch: ch,
+		routes: []config.AlertRoute{{
+			Namespaces: []string{"production"},
+		}},
+	}})
+	job := queueIncident("api", model.ActionCreate, 1)
+	job.inc.Namespace = "staging"
+	am.mu.Lock()
+	am.fanOut(job)
+	am.mu.Unlock()
+	assert.Empty(t, ch)
+	assert.Empty(t, am.DeadLetters())
 }
 
 // Permanent failures are not retried and must not block later alerts.

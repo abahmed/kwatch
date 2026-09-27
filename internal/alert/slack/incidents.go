@@ -48,15 +48,15 @@ func (s *Slack) SendIncidentWithInsight(
 		return nil
 	}
 	if s.compact {
-		return s.SendMessage(ctx, formatIncidentText(
-			inc, action, s.clockSource,
+		return s.SendMessage(ctx, formatIncidentTextWithInsight(
+			inc, action, ins, s.clockSource,
 		))
 	}
 	if s.postBlocksFn != nil || s.apiClient != nil {
 		return s.sendIncidentWithToken(ctx, inc, action, ins)
 	}
-	return s.SendMessage(ctx, formatIncidentText(
-		inc, action, s.clockSource,
+	return s.SendMessage(ctx, formatIncidentTextWithInsight(
+		inc, action, ins, s.clockSource,
 	))
 }
 

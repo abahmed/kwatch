@@ -42,7 +42,7 @@ cronJobMonitor.enabled|boolean|true|Monitors|Watch CronJobs for missed or suspen
 cronJobMonitor.sustainedMinutes|integer|5|Monitors|Minutes a CronJob condition must persist before alerting.|active|
 hpaMonitor.enabled|boolean|true|Monitors|Watch HPAs that remain constrained or maxed out.|active|
 hpaMonitor.sustainedMinutes|integer|20|Monitors|Minutes an HPA must remain constrained before alerting.|active|
-serviceMonitor.enabled|boolean|true|Monitors|Watch Services with no ready backends.|active|
+serviceMonitor.enabled|boolean|true|Monitors|Watch Services with missing or degraded ready backends.|active|
 ingressMonitor.enabled|boolean|true|Monitors|Watch Ingress backend availability.|active|
 networkPolicyMonitor.enabled|boolean|true|Monitors|Detect evidence of restrictive NetworkPolicies.|active|
 admissionWebhookMonitor.enabled|boolean|true|Monitors|Watch admission webhook availability and failures.|active|

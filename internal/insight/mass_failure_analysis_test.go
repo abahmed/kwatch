@@ -20,9 +20,9 @@ func TestMassFailureDescribe(t *testing.T) {
 	}
 	desc := mf.DescribeAt(time.Now())
 	assert.Contains(t, desc, "5")
-	assert.Contains(t, desc, "pod")
+	assert.Contains(t, desc, "affected workloads")
 	assert.Contains(t, desc, "node n1")
-	assert.Contains(t, desc, "CrashLoopBackOff")
+	assert.NotContains(t, desc, "CrashLoopBackOff")
 	assert.NotContains(t, desc, "threshold")
 }
 

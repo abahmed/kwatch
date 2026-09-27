@@ -255,7 +255,8 @@ func computeGroupKey(r string, ev event.Event, owner string) string {
 		constant.ReasonNodeResourceCritical:
 		return encodeScopedGroupKey(r, "node", ev.NodeName)
 
-	case constant.ReasonServiceNoEndpoints:
+	case constant.ReasonServiceNoEndpoints,
+		constant.ReasonServiceBackendsDegraded:
 		return encodeScopedGroupKey(r, "svc", ev.Namespace+"/"+ev.PodName)
 
 	case constant.ReasonControlPlaneComponentFailure:

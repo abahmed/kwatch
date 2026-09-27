@@ -47,7 +47,7 @@ func lifecycleHook(
 				}
 				opts.notify(deliveryIncident, action, diagnosis)
 				if opts.insightEngine != nil {
-					opts.insightEngine.RecordDelivery(inc)
+					opts.insightEngine.RecordDelivery(inc, diagnosis)
 				}
 			}
 		}
