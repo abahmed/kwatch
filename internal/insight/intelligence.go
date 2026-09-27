@@ -228,12 +228,18 @@ func (e *Engine) ShouldAnnounceReevaluation(
 }
 
 func diagnosisSignature(ins *Insight) string {
+	root := ""
+	pattern := ""
+	if ins.CauseState == CauseLikely ||
+		ins.CauseState == CauseConfirmed {
+		root = ins.RootCause.Key()
+		pattern = ins.Pattern
+	}
 	return fmt.Sprintf(
-		"%s|%s|%s|%s|%s|%s|%t",
+		"%s|%s|%s|%s|%s|%t",
 		ins.CauseState,
-		ins.RootCause.Key(),
-		ins.Pattern,
-		ins.Impact,
+		root,
+		pattern,
 		ins.Severity,
 		ins.SuppressReason,
 		ins.Flapping != nil,
@@ -259,7 +265,10 @@ func (e *Engine) DeliveryAction(
 	return requested
 }
 
-func (e *Engine) RecordDelivery(inc *model.Incident) {
+func (e *Engine) RecordDelivery(
+	inc *model.Incident,
+	ins *Insight,
+) {
 	if inc == nil || inc.State == model.StateResolved {
 		return
 	}
@@ -267,6 +276,9 @@ func (e *Engine) RecordDelivery(inc *model.Incident) {
 	defer e.stateMu.Unlock()
 	state := e.states[inc.Key]
 	state.delivered = true
+	if ins != nil {
+		state.diagnosis = diagnosisSignature(ins)
+	}
 	e.states[inc.Key] = state
 }
 

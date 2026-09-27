@@ -372,7 +372,7 @@ func TestIncidentBlocksRenderDiagnosis(t *testing.T) {
 		inc, app, ins, clock.RealClock{},
 	))
 	assert.NotContains(t, text, "Why:")
-	assert.Contains(t, text, "Node ip-10-0-81-7 may be unhealthy")
+	assert.Contains(t, text, "node ip-10-0-81-7 may be unhealthy")
 	assert.Contains(
 		t,
 		text,

@@ -56,14 +56,16 @@ func TestNotificationFromReportBuildsSummaryAndDetails(t *testing.T) {
 	assert.Equal(t, model.ActionCreate, notification.Action)
 	assert.Equal(t, "the node is not ready", notification.Summary.Cause)
 	assert.Equal(t, "3 replicas are unavailable", notification.Summary.Impact)
-	assert.Contains(t, notification.Summary.Story, "The node is not ready.")
+	assert.Contains(t, notification.Summary.Story,
+		"🔎 Cause: the node is not ready.")
 	assert.Contains(t, notification.Summary.Story, "memory limit is 256Mi")
 	assert.Contains(t, notification.Summary.Story, "readiness probe")
 	assert.Contains(t, notification.Summary.Story, "Requested resources: cpu=2")
 	assert.Nil(t, notification.Summary.PrimaryAction)
-	assert.Len(t, notification.Details, 2)
-	assert.Equal(t, "Logs", notification.Details[0].Title)
-	assert.Equal(t, "Runbook", notification.Details[1].Title)
+	assert.Len(t, notification.Details, 3)
+	assert.Equal(t, "🧾 Evidence", notification.Details[0].Title)
+	assert.Equal(t, "Logs", notification.Details[1].Title)
+	assert.Equal(t, "Runbook", notification.Details[2].Title)
 }
 
 func TestNotificationOmitsIrrelevantDetails(t *testing.T) {

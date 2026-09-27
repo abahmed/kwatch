@@ -375,9 +375,12 @@ days to go. Off by default.
 
 | Parameter | What it does |
 |:---|---|
-| `serviceMonitor.enabled` | 🔗 Watch for services with zero ready endpoints (default: true) |
+| `serviceMonitor.enabled` | 🔗 Watch for Services with zero ready endpoints or sustained partial backend loss (default: true) |
 
-Detects when a Service's backing Endpoints object has zero ready addresses, indicating no healthy pods are available to serve traffic. Includes a 60-second debounce to avoid flapping during rolling updates or brief endpoint transitions.
+Detects when a Service has zero ready EndpointSlice backends after 60 seconds,
+or when some selected Pods stay unready for five minutes while other backends
+still serve traffic. Notifications distinguish an outage from reduced capacity
+and name a shared failing Node only when its Ready condition supports it.
 
 ### 🧩 Admission Webhook Monitor
 

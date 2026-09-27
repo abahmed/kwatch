@@ -41,6 +41,25 @@ func TestAnalyzeRootFallbackSkipsUnchangedSecret(t *testing.T) {
 	assert.NotContains(t, ins.Cause, "secret tok")
 }
 
+func TestAnalyzeDoesNotConfirmSubjectAsItsOwnCause(t *testing.T) {
+	graph := context.NewResourceGraph()
+	graph.AddEdge(
+		"pod", "ns1", "web-1", "deployment", "ns1", "web", "owned_by",
+	)
+	e := newTestEngine(graph, newTestChangeTracker(10))
+	e.activeChecker = func(kind, namespace, name string) bool {
+		return kind == "deployment" && namespace == "ns1" && name == "web"
+	}
+
+	ins := e.Analyze(&model.Incident{Subject: model.Subject{
+		Resource: "deployment", Namespace: "ns1", Name: "ns1/web",
+		Reason: constant.ReasonDeploymentAvailable,
+	}})
+
+	assert.NotEqual(t, CauseConfirmed, ins.CauseState)
+	assert.NotContains(t, ins.Cause, "underlying deployment ns1/web")
+}
+
 func TestAnalyzeStaleConfigChangeIsNotBlamed(t *testing.T) {
 	graph := context.NewResourceGraph()
 	graph.AddEdge("pod", "ns1", "p1", "configmap", "ns1", "cm1", "mounts")
@@ -99,6 +118,26 @@ func TestAnalyzeHPAMetricsFailureIsNotDeploymentHealth(t *testing.T) {
 
 	assert.Equal(t, "metrics_unavailable", ins.Pattern)
 	assert.NotContains(t, ins.Cause, "deployment")
+}
+
+func TestAnalyzeActiveDeploymentDoesNotReplaceHPAMetricCause(t *testing.T) {
+	graph := context.NewResourceGraph()
+	graph.AddEdge(
+		"horizontalpodautoscaler", "ns1", "web",
+		"deployment", "ns1", "web", "scales",
+	)
+	e := newTestEngine(graph, newTestChangeTracker(10))
+	e.activeChecker = func(kind, namespace, name string) bool {
+		return kind == "deployment" && namespace == "ns1" && name == "web"
+	}
+
+	ins := e.Analyze(&model.Incident{Subject: model.Subject{
+		Resource: "horizontalpodautoscaler", Namespace: "ns1",
+		Name: "ns1/web", Reason: constant.ReasonFailedGetResourceMetric,
+	}})
+
+	assert.Equal(t, "metrics_unavailable", ins.Pattern)
+	assert.NotContains(t, ins.Cause, "underlying deployment")
 }
 
 // A node's heartbeat lease renews every ten seconds; it is never the cause.

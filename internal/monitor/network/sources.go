@@ -10,6 +10,8 @@ import (
 // queue processing. Named fields make family wiring reviewable at a glance.
 type Sources struct {
 	Services      corev1lister.ServiceLister
+	Pods          corev1lister.PodLister
+	Nodes         corev1lister.NodeLister
 	EndpointSlice discoveryv1lister.EndpointSliceLister
 	Ingresses     networkingv1lister.IngressLister
 	NetworkPolicy networkingv1lister.NetworkPolicyLister

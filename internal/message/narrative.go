@@ -18,18 +18,19 @@ func causeSentence(d *DiagnosisSection) string {
 	if !causeIsRenderable(d) {
 		return ""
 	}
-	cause := strings.TrimSuffix(d.Cause, ".")
+	cause := strings.TrimSuffix(strings.TrimSpace(d.Cause), ".")
 	if d.CauseState == insight.CauseLikely {
-		cause = "likely, " + cause
+		return "🔎 Likely cause: " + cause + "."
 	}
-	return capitalizeSentence(cause) + "."
+	return "🔎 Cause: " + cause + "."
 }
 
 func causeIsRenderable(d *DiagnosisSection) bool {
 	if d == nil || strings.TrimSpace(d.Cause) == "" {
 		return false
 	}
-	return d.CauseState != insight.CauseUnknown &&
+	return (d.CauseState == insight.CauseConfirmed ||
+		d.CauseState == insight.CauseLikely) &&
 		d.Confidence >= minimumCauseConfidence && len(d.Evidence) > 0
 }
 
@@ -51,7 +52,7 @@ func Narrative(r *Report) string {
 		if r.Diagnosis.Impact != "" {
 			sentences = append(
 				sentences,
-				impactSentence(r.Diagnosis.Impact),
+				"💥 "+impactSentence(r.Diagnosis.Impact),
 			)
 		}
 		if r.Diagnosis.ReplicaState != "" &&
@@ -86,7 +87,7 @@ func Narrative(r *Report) string {
 			)
 		}
 	}
-	return strings.Join(sentences, " ")
+	return strings.Join(sentences, "\n")
 }
 
 func usefulHint(d *DiagnosisSection) string {

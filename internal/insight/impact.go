@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/abahmed/kwatch/internal/constant"
 	"github.com/abahmed/kwatch/internal/format"
 	"github.com/abahmed/kwatch/internal/model"
 )
@@ -48,6 +49,13 @@ func availabilityImpact(inc *model.Incident) string {
 	}
 	if inc.Facts.EndpointsObserved && inc.Facts.HealthyEndpoints == 0 {
 		return "the service has 0 healthy endpoints and cannot receive traffic"
+	}
+	if inc.Reason == constant.ReasonServiceBackendsDegraded &&
+		inc.Facts.HealthyEndpoints > 0 {
+		return fmt.Sprintf(
+			"the service still has %d ready endpoints, but capacity is reduced",
+			inc.Facts.HealthyEndpoints,
+		)
 	}
 	desired := inc.Facts.DesiredReplicas
 	ready := inc.Facts.ReadyReplicas

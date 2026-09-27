@@ -1,5 +1,6 @@
 🔄 *Pod is still restarting* — payments/checkout
-The node is not ready. 3 replicas are unavailable.
+🔎 Cause: the node is not ready.
+💥 3 replicas are unavailable.
 Container `api`, node `worker-a`, active for 6m.
 Recent container logs from `api`:
 ```connection refused```

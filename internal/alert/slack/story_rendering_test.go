@@ -102,7 +102,7 @@ func TestSlackFallbackPreservesInsightStory(t *testing.T) {
 	require.NoError(t, s.SendIncidentWithInsight(
 		context.Background(), testIncident(), model.ActionCreate, insight,
 	))
-	require.Contains(t, text, "Node worker-a is unhealthy.")
+	require.Contains(t, text, "🔎 Cause: node worker-a is unhealthy.")
 	require.Contains(t, text, "This affects checkout.")
 }
 

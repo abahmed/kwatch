@@ -51,6 +51,8 @@ func configureDirectRuntimes(
 		if err := components.Network.Config.ConfigureSources(
 			networkmonitor.Sources{
 				Services:      c.serviceLister,
+				Pods:          c.podLister,
+				Nodes:         c.nodeLister,
 				EndpointSlice: c.endpointSliceLister,
 				Ingresses:     c.ingressLister,
 				NetworkPolicy: c.netpolLister,

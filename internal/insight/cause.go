@@ -54,6 +54,9 @@ var reasonCauses = map[string]struct{ cause, pattern string }{
 }
 
 func (e *Engine) determineCause(inc *model.Incident, ins *Insight) {
+	if determineServiceBackendCause(inc, ins) {
+		return
+	}
 	if determineStructuredEventCause(inc, ins) {
 		return
 	}
@@ -65,6 +68,25 @@ func (e *Engine) determineCause(inc *model.Incident, ins *Insight) {
 		return
 	}
 	e.determineGraphCause(inc, ins)
+}
+
+func determineServiceBackendCause(
+	inc *model.Incident,
+	ins *Insight,
+) bool {
+	if (inc.Reason != constant.ReasonServiceNoEndpoints &&
+		inc.Reason != constant.ReasonServiceBackendsDegraded) ||
+		inc.Facts.SharedFailingNode == "" {
+		return false
+	}
+	ins.Cause = fmt.Sprintf(
+		"%d of %d backend pods are unready on node %s, which Kubernetes "+
+			"reports as not ready",
+		inc.Facts.UnreadyBackendPods, inc.Facts.BackendPods,
+		inc.Facts.SharedFailingNode,
+	)
+	ins.Pattern = "service_node_failure"
+	return true
 }
 
 func (e *Engine) determineGraphCause(inc *model.Incident, ins *Insight) {

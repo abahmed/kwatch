@@ -10,6 +10,7 @@ import (
 	"k8s.io/apimachinery/pkg/labels"
 	appsv1lister "k8s.io/client-go/listers/apps/v1"
 
+	"github.com/abahmed/kwatch/internal/constant"
 	"github.com/abahmed/kwatch/internal/event"
 	"github.com/abahmed/kwatch/internal/model"
 )
@@ -353,6 +354,13 @@ func TestMassFailurePersistenceRoundTrip(t *testing.T) {
 	}
 	e2.RestoreIncidents(restored)
 	assert.True(t, e2.HasMassFailure(mfKey))
+	migrated := e2.MassFailureSet()[mfKey]
+	require.NotNil(t, migrated)
+	assert.Equal(t, constant.ReasonSharedDependencyFailure,
+		migrated.Reason)
+	assert.Equal(t, model.NewObjectRef("configmap", "ns", "app-cfg"),
+		migrated.Ref())
+	assert.NotContains(t, migrated.Hint, "CrashLoopBackOff")
 
 	// Removing it clears the store.
 	assert.True(t, e2.RemoveMassFailure(mfKey))

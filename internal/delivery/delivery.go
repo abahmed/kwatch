@@ -195,29 +195,30 @@ func (a *Manager) fanOut(job deliverJob) {
 	job.generation = generation
 	for _, name := range generation.order {
 		entry := generation.entries[name]
-		select {
-		case entry.ch <- job:
-		default:
-			// Saturated. Drop the arriving job rather than evicting a queued
-			// one.
-			//
-			// During a storm the earliest notifications are the ones worth
-			// keeping: they are the root cause, and everything after tends to
-			// be downstream symptoms of it. Evicting the oldest also risks
-			// discarding an incident's CREATE while keeping a later UPDATE for
-			// it, which reaches the channel as an edit to something that was
-			// never announced.
-			//
-			// Nothing is lost silently — the dropped job goes to the
-			// dead-letter queue, which is readable over the health endpoint.
-			metrics.DefaultRegistry().NotificationsDropped.Add(1)
-			metrics.DefaultRegistry().DeliveryQueueSaturated.Add(1)
-			a.digestAdd(entry.provider.Name(), job)
-			a.recordDeadLetter(
-				&entry,
-				job,
-				fmt.Errorf("delivery queue saturated"),
-			)
+		if job.kind == jobIncident &&
+			!shouldDeliver(entry.routes, job.inc) {
+			continue
+		}
+		accepted, dropped := offerQueuedJob(entry.ch, job)
+		if dropped != nil {
+			a.recordQueueDrop(entry, *dropped)
+		}
+		if !accepted {
+			// No replaceable update remains. Preserve queued creates and
+			// recoveries; record the overflow for diagnostics and digesting.
+			a.recordQueueDrop(entry, job)
 		}
 	}
+}
+
+func (a *Manager) recordQueueDrop(
+	entry providerEntry,
+	job deliverJob,
+) {
+	metrics.DefaultRegistry().NotificationsDropped.Add(1)
+	metrics.DefaultRegistry().DeliveryQueueSaturated.Add(1)
+	a.digestAdd(entry.provider.Name(), job)
+	a.recordDeadLetter(
+		&entry, job, fmt.Errorf("delivery queue saturated"),
+	)
 }

@@ -30,6 +30,7 @@ type Report struct {
 	Fingerprint string
 	Timeline    string
 	Resolution  *model.Resolution
+	Facts       model.Facts
 
 	// Type-specific sections (populated only for relevant reasons)
 	OOM     *OOMSection

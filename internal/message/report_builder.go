@@ -63,6 +63,7 @@ func (rb *ReportBuilder) Build(
 		Cluster:     rb.cluster,
 		Runbook:     inc.Runbook,
 		Fingerprint: inc.Fingerprint,
+		Facts:       inc.Facts,
 	}
 
 	r.Summary = rb.buildSummary(inc, action)

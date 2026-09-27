@@ -69,6 +69,44 @@ func TestShouldAnnounceReevaluationOnlyWhenDiagnosisChanges(t *testing.T) {
 	}
 }
 
+func TestReevaluationIgnoresImpactAndUnconfirmedRootChurn(t *testing.T) {
+	e := newTestEngine(nil, nil)
+	inc := &model.Incident{Subject: model.Subject{Key: "pod/apps/api"}}
+	first := &Insight{
+		CauseState: CauseUnknown,
+		RootCause:  model.ObjectRef{Kind: "node", Name: "n1"},
+		Pattern:    "root_cause", Impact: "one pod",
+		Severity: model.SeverityWarning,
+	}
+	if !e.ShouldAnnounceReevaluation(inc, first) {
+		t.Fatal("first diagnosis was not announced")
+	}
+	changed := *first
+	changed.RootCause.Name = "n2"
+	changed.Impact = "two pods"
+	if e.ShouldAnnounceReevaluation(inc, &changed) {
+		t.Fatal("unconfirmed graph and impact churn was announced")
+	}
+	changed.CauseState = CauseLikely
+	if !e.ShouldAnnounceReevaluation(inc, &changed) {
+		t.Fatal("supported cause was not announced")
+	}
+}
+
+func TestRecordDeliverySeedsReevaluationSignature(t *testing.T) {
+	e := newTestEngine(nil, nil)
+	inc := &model.Incident{Subject: model.Subject{Key: "pod/apps/api"}}
+	ins := &Insight{
+		CauseState: CauseLikely, Pattern: "node_failure",
+		RootCause: model.ObjectRef{Kind: "node", Name: "n1"},
+		Severity:  model.SeverityHigh,
+	}
+	e.RecordDelivery(inc, ins)
+	if e.ShouldAnnounceReevaluation(inc, ins) {
+		t.Fatal("unchanged delivered diagnosis was announced")
+	}
+}
+
 func TestRolloutSuppressionExpiresAtTenMinutes(t *testing.T) {
 	now := time.Date(2026, 9, 24, 12, 0, 0, 0, time.UTC)
 	tracker := context.NewChangeTrackerWithClock(10, clock.Func(func() time.Time {
@@ -196,7 +234,7 @@ func TestDeliveryActionCreatesFirstEventualNotificationAndResets(t *testing.T) {
 		model.ActionCreate {
 		t.Fatalf("first eventual action = %v, want create", got)
 	}
-	e.RecordDelivery(inc)
+	e.RecordDelivery(inc, nil)
 	if got := e.DeliveryAction(inc, model.ActionUpdate); got !=
 		model.ActionUpdate {
 		t.Fatalf("delivered action = %v, want update", got)

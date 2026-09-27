@@ -62,6 +62,20 @@ func TestDetectServicePortIssueFindsMissingNamedAndNumericPorts(t *testing.T) {
 	if got == nil || got.Reason != constant.ReasonServicePortMismatch {
 		t.Fatalf("missing named port signal = %+v", got)
 	}
+	if got.Facts.MissingServicePortKind != "named port" ||
+		got.Facts.MissingServicePortValue != "http" {
+		t.Fatalf("missing named port facts = %+v", got.Facts)
+	}
+	name := "http"
+	slice.Ports[0].Name = &name
+	slice.Ports[0].Port = func() *int32 { value := int32(9090); return &value }()
+	got = DetectServicePortIssue(
+		service, []*discoveryv1.EndpointSlice{slice},
+	)
+	if got == nil || got.Facts.MissingServicePortKind != "target port" ||
+		got.Facts.MissingServicePortValue != "TCP/8080" {
+		t.Fatalf("missing target port facts = %+v", got)
+	}
 }
 
 func TestDetectServiceStatusIssueUsesConditionsAndSustainWindow(t *testing.T) {

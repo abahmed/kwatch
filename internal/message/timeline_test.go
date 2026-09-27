@@ -78,11 +78,12 @@ func TestChangeSummaryClipsLongValues(t *testing.T) {
 func TestNarrativeEvidenceReadsAsASentence(t *testing.T) {
 	r := &Report{Diagnosis: &DiagnosisSection{
 		Cause:      "the node is under pressure",
+		CauseState: insight.CauseLikely,
 		Confidence: 0.8,
 		Evidence:   []string{"warning events were observed"},
 	}}
 	out := Narrative(r)
-	assert.Equal(t, "The node is under pressure.", out)
+	assert.Equal(t, "🔎 Likely cause: the node is under pressure.", out)
 	assert.NotContains(t, out, "This is supported by")
 }
 
@@ -106,6 +107,6 @@ func TestNarrativeRendersVerifiedCauseWithoutConfidence(t *testing.T) {
 	}}
 
 	out := Narrative(r)
-	assert.Equal(t, "The node is not ready.", out)
+	assert.Equal(t, "🔎 Cause: the node is not ready.", out)
 	assert.NotContains(t, out, "%")
 }

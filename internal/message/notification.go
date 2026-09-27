@@ -145,6 +145,13 @@ func causeText(d *DiagnosisSection) string {
 func notificationStory(report *Report) string {
 	if report.Action != "resolved" {
 		story := Narrative(report)
+		if detail := caseFactsStory(report); detail != "" {
+			story = joinStory(story, detail)
+		}
+		if report.Diagnosis != nil &&
+			!causeIsRenderable(report.Diagnosis) {
+			story = joinStory(story, "🔎 Cause not confirmed yet.")
+		}
 		if report.OOM != nil && report.OOM.MemoryLimit != "" {
 			story = joinStory(
 				story,
@@ -200,11 +207,31 @@ func joinStory(story, detail string) string {
 	if story == "" {
 		return detail
 	}
-	return story + " " + detail
+	return story + "\n" + detail
 }
 
 func notificationDetails(report *Report) []NotificationSection {
 	var details []NotificationSection
+	if report.Diagnosis != nil && len(report.Diagnosis.Evidence) > 0 {
+		lines := report.Diagnosis.Evidence
+		if len(lines) > 2 {
+			lines = lines[:2]
+		}
+		title := "🧾 Observed"
+		if causeIsRenderable(report.Diagnosis) {
+			title = "🧾 Evidence"
+		}
+		details = append(details, NotificationSection{
+			Kind: "evidence", Title: title,
+			Lines: append([]string(nil), lines...),
+		})
+	}
+	if change := ChangeSummary(report); change != "" {
+		details = append(details, NotificationSection{
+			Kind: "change", Title: "🕒 Recent change",
+			Lines: []string{change},
+		})
+	}
 	if report.Evidence != nil {
 		if report.Evidence.Logs != "" {
 			details = append(details, NotificationSection{

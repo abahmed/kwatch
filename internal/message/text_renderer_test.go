@@ -80,7 +80,7 @@ func TestTextRendererReadsTopDown(t *testing.T) {
 		"🟠 Pod not ready — dev/api · Deployment",
 		lines[0],
 	)
-	assert.Contains(t, out, "Node ip-10-0-81-7 may be unhealthy.")
+	assert.Contains(t, out, "node ip-10-0-81-7 may be unhealthy.")
 	assert.NotContains(t, out, "ContainersNotReady")
 	assert.NotContains(t, out, "Timeline:")
 	// A change carries its age.

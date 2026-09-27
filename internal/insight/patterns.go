@@ -79,11 +79,8 @@ func ScanMassFailures(
 
 	shared := make(map[string]*depEntry)
 
-	// Walk the incidents in a stable order. The entry kept per dependency is
-	// whichever incident arrived first, and it supplies the reason,
-	// namespace and kind the mass-failure alert prints; taken in map order
-	// those three could change from tick to tick while nothing about the
-	// failure had, so the same outage re-rendered with different wording.
+	// Stable ordering keeps diagnostic metadata deterministic. The shared
+	// alert uses the dependency's identity, never the first symptom's kind.
 	ordered := make([]*model.Incident, 0, len(incidents))
 	ordered = append(ordered, incidents...)
 	sort.Slice(ordered, func(a, b int) bool {
@@ -208,14 +205,10 @@ func incidentSubjectKey(inc *model.Incident) string {
 // hiding a wall-clock dependency inside a value renderer.
 func (mf MassFailure) DescribeAt(now time.Time) string {
 	base := fmt.Sprintf(
-		"%d %s workloads share %s",
+		"%d affected workloads share %s",
 		mf.AffectedCount,
-		mf.ResourceKind,
 		describeDependency(mf.SharedDependency),
 	)
-	if mf.Reason != "" {
-		base += " and are all failing with " + mf.Reason
-	}
 	if mf.RootCause != "" {
 		base += "; root cause: " + mf.RootCause
 	}

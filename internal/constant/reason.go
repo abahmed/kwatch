@@ -116,6 +116,8 @@ const (
 
 	// Service and routing reasons.
 	ReasonServiceNoEndpoints               = "ServiceNoEndpoints"
+	ReasonServiceBackendsDegraded          = "ServiceBackendsDegraded"
+	ReasonSharedDependencyFailure          = "SharedDependencyFailure"
 	ReasonServicePortMismatch              = "ServicePortMismatch"
 	ReasonLoadBalancerPending              = "LoadBalancerProvisioning"
 	ReasonIngressBackendNotFound           = "IngressBackendNotFound"
