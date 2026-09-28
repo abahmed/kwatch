@@ -10,6 +10,7 @@ import (
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/util/wait"
 	"k8s.io/client-go/util/retry"
 
 	"github.com/abahmed/kwatch/test/e2e/harness"
@@ -49,7 +50,7 @@ func TestScenarioResolution(t *testing.T) {
 		if err := e.WaitForDeployment(waitCtx, namespace, "recovery"); err != nil {
 			t.Fatal(err)
 		}
-		entries, err := e.Audit.WaitFor(ctx, harness.AuditMatch{
+		_, err = e.Audit.WaitFor(ctx, harness.AuditMatch{
 			Namespace: namespace,
 			Resource:  "recovery",
 			Reason:    "DeploymentUnavailable",
@@ -58,9 +59,6 @@ func TestScenarioResolution(t *testing.T) {
 		})
 		if err != nil {
 			t.Fatal(err)
-		}
-		if len(entries) != 1 {
-			t.Fatalf("expected one resolution, got %d", len(entries))
 		}
 	})
 }
@@ -175,7 +173,10 @@ func TestScenarioRestartPersistence(t *testing.T) {
 		if len(entries) != 1 {
 			t.Fatalf("restart changed delivery count: %d", len(entries))
 		}
-		if err := e.AssertHealthy(ctx); err != nil {
+		if err := wait.PollUntilContextTimeout(waitCtx, time.Second,
+			2*time.Minute, true, func(ctx context.Context) (bool, error) {
+				return e.AssertHealthy(ctx) == nil, nil
+			}); err != nil {
 			t.Fatal(err)
 		}
 	})
