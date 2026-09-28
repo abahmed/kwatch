@@ -2,6 +2,7 @@ package persistence
 
 import (
 	"context"
+	"crypto/sha256"
 	"fmt"
 	"strconv"
 	"sync"
@@ -224,7 +225,29 @@ func (s *Manager) EnsureClusterID(ctx context.Context) (string, error) {
 	if err != nil && !apierrors.IsNotFound(err) {
 		return "", err
 	}
-	return uuid.New().String(), nil
+	return s.derivedClusterID(ctx), nil
+}
+
+// derivedClusterID hashes the kube-system namespace UID so a reinstall in the
+// same cluster keeps one anonymous identity. The UID itself never leaves the
+// cluster. A random ID is the fallback when the namespace is unreadable.
+func (s *Manager) derivedClusterID(ctx context.Context) string {
+	ns, err := s.client.CoreV1().Namespaces().Get(
+		ctx, "kube-system", metav1.GetOptions{},
+	)
+	if err != nil || ns.UID == "" {
+		return uuid.New().String()
+	}
+	return ClusterIDFromUID(string(ns.UID))
+}
+
+// ClusterIDFromUID formats a salted SHA-256 of uid as a version 4 UUID.
+func ClusterIDFromUID(uid string) string {
+	sum := sha256.Sum256([]byte("kwatch-cluster-id:" + uid))
+	id, _ := uuid.FromBytes(sum[:16])
+	id[6] = (id[6] & 0x0f) | 0x40
+	id[8] = (id[8] & 0x3f) | 0x80
+	return id.String()
 }
 
 func (s *Manager) MarkAsInitialized(

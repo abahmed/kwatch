@@ -73,17 +73,20 @@ func configureTelemetryRunnerWithOptions(
 		return nil
 	}
 	status.configure(true, "waiting", "")
-	klog.InfoS("adoption telemetry configured",
-		"enabled", true, "endpoint", telemetry.Endpoint,
+	klog.InfoS("adoption telemetry enabled: a weekly anonymous "+
+		"cluster ID and the kwatch version are sent; set "+
+		"telemetry.enabled=false or KWATCH_TELEMETRY=false to disable",
+		"endpoint", telemetry.Endpoint,
 		"interval", telemetry.WeeklyInterval,
 		"retryMaximum", telemetryRetryDelays[len(telemetryRetryDelays)-1],
 	)
 	return func(ctx context.Context) error {
 		failure := -1
+		var sent time.Time
 		for {
 			delay, retry := sendTelemetry(
 				ctx, persistenceManager, clusterID, version,
-				now, client, options.endpoint, status,
+				now, client, options.endpoint, status, &sent,
 			)
 			if ctx.Err() != nil {
 				return nil
@@ -112,6 +115,8 @@ func telemetrySkipReason(
 	switch {
 	case !cfg.Enabled:
 		return "disabled"
+	case telemetryEnvDisabled():
+		return "disabled_env"
 	case version == "dev":
 		return "dev_build"
 	case os.Getenv("CI") != "":
@@ -127,6 +132,20 @@ func telemetrySkipReason(
 	}
 }
 
+// telemetryEnvDisabled lets operators opt out without editing config.
+func telemetryEnvDisabled() bool {
+	switch strings.ToLower(strings.TrimSpace(
+		os.Getenv("KWATCH_TELEMETRY"),
+	)) {
+	case "false", "0", "off", "no":
+		return true
+	}
+	return false
+}
+
+// sendTelemetry sends at most one heartbeat per interval. sent remembers the
+// last successful report in memory so a failed state write never causes the
+// same heartbeat to be sent again.
 func sendTelemetry(
 	ctx context.Context,
 	store persistence.TelemetryStore,
@@ -135,6 +154,7 @@ func sendTelemetry(
 	client *http.Client,
 	endpoint string,
 	status *adoptionTelemetryStatus,
+	sent *time.Time,
 ) (time.Duration, bool) {
 	sentAt := now()
 	lastSent, err := store.GetTelemetryLastSent(ctx)
@@ -142,6 +162,9 @@ func sendTelemetry(
 		return telemetryFailure(
 			status, "state_read", time.Minute, err, now,
 		)
+	}
+	if sent != nil && sent.After(lastSent) {
+		lastSent = *sent
 	}
 	if !telemetry.ShouldSend(lastSent, sentAt) {
 		next := lastSent.Add(telemetry.WeeklyInterval)
@@ -163,10 +186,15 @@ func sendTelemetry(
 		reason := telemetryFailureReason(err)
 		return telemetryFailure(status, reason, time.Minute, err, now)
 	}
-	if err := store.SetTelemetryLastSent(ctx, sentAt); err != nil {
-		return telemetryFailure(status, "state_write", time.Minute, err, now)
+	if sent != nil {
+		*sent = sentAt
 	}
 	metrics.DefaultRegistry().TelemetrySuccesses.Add(1)
+	if err := store.SetTelemetryLastSent(ctx, sentAt); err != nil {
+		metrics.DefaultRegistry().IncTelemetryFailure("state_write")
+		klog.ErrorS(err, "adoption telemetry state write failed",
+			"reason", "state_write")
+	}
 	next := sentAt.Add(telemetry.WeeklyInterval)
 	status.success(sentAt, next)
 	klog.InfoS("adoption telemetry sent", "nextAttempt", next)
