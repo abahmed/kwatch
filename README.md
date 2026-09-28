@@ -114,10 +114,23 @@ Mattermost, Rocket.Chat, Matrix, webhooks, Jira, and Datadog.
 Connect one or more channels in a few steps. See the
 [alert channel guide](https://kwatch.dev/docs/channels) for the full list.
 
-## 🔐 Safe by default
+## 🔐 Trust and privacy
 
-Credentials stay in Kubernetes Secrets. The installer handles them for you.
-Sensitive values are never stored in plain text configuration.
+kwatch runs inside your cluster with read access to it, so the source is open
+for you to review at any time.
+
+- **Your data stays in your cluster.** Alerts go only to the channels you
+  configure. No hosted account is required.
+- **Credentials stay in Kubernetes Secrets.** The installer handles them for
+  you. Known secret patterns are redacted from logs and alert text.
+- **Read-only access.** kwatch reads cluster state. It writes only its own
+  ConfigMaps and leader-election Lease in its namespace.
+- **Minimal adoption telemetry.** Once a week kwatch sends an anonymous
+  cluster ID and the kwatch version, nothing else. The ID is a one-way hash,
+  so it cannot be traced back to your cluster. This helps us know how many
+  clusters use kwatch. Turn it off with `telemetry.enabled: false` in the
+  config or `KWATCH_TELEMETRY=false` in the environment. The startup log says
+  whether it is on.
 
 ## ⚙️ Make kwatch fit your team
 
