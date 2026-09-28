@@ -347,6 +347,76 @@ can reference it ("the last v2.3 rollout failed the same way").
   has at most one status emoji. Plain, markdown and HTML variants feed every
   provider.
 
+### Situational awareness
+
+For correct deductions, kwatch needs context beyond individual failures.
+The model therefore tracks the following as first-class facts, and rules
+use them.
+
+1. **Expected disruption.** Operations that cause failures by design:
+   - node drain and cordon;
+   - control-plane or node upgrades (version changes on nodes);
+   - autoscaler scale-down and node replacement;
+   - spot interruption and termination events;
+   - rollouts and HPA scaling in progress;
+   - Job pods completing;
+   - user maintenance windows.
+
+   Signals inside an expected disruption are classified as expected. They
+   alert only when they exceed its normal envelope, for example pods still
+   unready long after a drain finished, or a PDB blocking the drain.
+2. **Topology.** Zone, region, node pool, instance type, kernel, kubelet
+   and container runtime version are attributes of every node, and
+   therefore of every pod. Failures that share one of these, and only
+   these, point to it: a zone outage, a bad node image, or a runtime
+   version regression.
+3. **Workload configuration.** The model also tracks:
+   - requests and limits against actual usage;
+   - probe definitions (port, path, timeouts) against the baseline ready
+     time;
+   - replica count, PDB, anti-affinity, priority, restartPolicy.
+
+   With this, the root can be "memory limit too low for normal usage" (OOM
+   at a steady level) rather than "leak" (growing), "readiness probe
+   timeout shorter than the app's usual startup", or "single replica, no
+   redundancy".
+4. **Pod anatomy.** Init containers, native sidecars (restartable init
+   containers), ephemeral containers, Job completion and terminating pods
+   each have their own semantics. A sidecar crash is not reported as the
+   main app failing. A completed Job pod is not a failure.
+5. **Multiple simultaneous causes.** Independent problems stay separate.
+   Merging requires a proven rule. One entity can be affected by two
+   problems, and each message states only its own part.
+6. **Negative evidence.** Healthy siblings, unaffected nodes, zones and
+   revisions, and consumers of the same Secret that work fine are used
+   actively to reject candidate causes.
+7. **Data quality awareness.** Source health lowers confidence:
+   - informer lag or re-list;
+   - missing RBAC;
+   - an unreachable kubelet;
+   - log fetch failures;
+   - a degraded store.
+
+   Kwatch never blames or resolves something based on missing data. It
+   says "cannot verify X" instead.
+8. **Kwatch self-health.** Delivery failing, store near full or failing,
+   Lock lost, and sources degraded are surfaced as kwatch's own problems
+   (notify tier, rate-limited). They are never mixed into cluster
+   problems.
+9. **Startup.** On a cold start, problems that already exist are
+   collected and sent as one startup summary, not as N separate alerts.
+   On a warm start, the saved state continues and nothing is re-announced.
+10. **User intent.** Existing configuration maps into policy without new
+    concepts: namespace and reason filters, silences, maintenance windows,
+    severity overrides and per-provider routing.
+11. **Time.** API server timestamps are the order of record. Event series
+    (`count`, `lastTimestamp`) are respected, and clock skew between nodes
+    is tolerated with a small ordering margin.
+12. **Store security.** Values are redacted before they are written, and
+    Secret data is stored only as hashes. Files are mode 0600, and
+    encryption at rest relies on the volume. The store is never exposed
+    over the network.
+
 ## Resource catalog: failures and links
 
 This catalog is the minimum built-in coverage. "Links" are the relations
@@ -537,6 +607,26 @@ unmet contradictions lower the score.
     - No upstream candidate passes. The root is the workload itself.
     - The story shows the strongest error evidence and never invents a
       cause.
+
+21. **Topology → workloads**
+    - Supports: the failures share one zone, node pool, instance type, or
+      kernel or runtime version, and only it; siblings elsewhere are
+      healthy.
+22. **Workload configuration → own failures**
+    - Supports: OOM at a steady usage near the limit (limit too low, versus
+      a leak that grows); a readiness or liveness timeout shorter than the
+      baseline startup; a probe port or path mismatch with the container
+      ports; a single replica during node loss.
+23. **Expected disruption → quiet**
+    - Supports: signals fall inside a drain, upgrade, scale-down, rollout
+      or maintenance window and stay within the expected envelope.
+    - The result is to classify as expected, not to alert, unless the
+      envelope is exceeded.
+24. **Sidecar and init containers**
+    - Supports: a failing sidecar or init container blocks or restarts the
+      pod.
+    - The root is that container (for example a mesh proxy or a secrets
+      injector), not the app.
 
 Rules are added over time (for example, from a node agent: "process
 saturation → container slow") without touching the engine.
@@ -734,7 +824,9 @@ Labelled scenarios cover one case per rule above: bad deploy, Secret key
 removed, node memory pressure, node lost (spot), CoreDNS down, blocking
 webhook, quota exhausted, PVC full, registry auth, metrics-server down,
 NetworkPolicy change, RBAC change, certificate expired, capacity pending,
-and an operator CR failure. They also cover negative cases: a healthy node
+an operator CR failure, a zone or node-pool failure, a memory limit too
+low, a probe timeout too short, a failing sidecar, and a node drain within
+its envelope (must stay quiet). They also cover negative cases: a healthy node
 with a crashing app must not blame the node.
 
 ## Rollout
