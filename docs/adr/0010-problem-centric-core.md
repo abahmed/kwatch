@@ -287,9 +287,9 @@ A few rules need code, such as parsing error text. They implement the same
 
 This catalog is the minimum built-in coverage. "Links" are the relations
 the model extracts. "Root when" is the rule condition that lets this
-resource be blamed for its dependents' failures. Gateway API and common
-operators (cert-manager, CSI snapshotter) are included because kwatch
-already watches them.
+resource be blamed for its dependents' failures. Coverage is Kubernetes
+itself. Gateway API and CSI VolumeSnapshots are included because kwatch
+already monitors them and both are Kubernetes SIG projects.
 
 ### Workloads
 
@@ -328,7 +328,7 @@ already watches them.
 | --- | --- | --- | --- |
 | ConfigMap | Missing (referenced), changed | referenced by Pods | Missing; or changed shortly before its consumers failed |
 | Secret | Missing, changed, TLS cert expired or expiring, pull Secret invalid | referenced by Pods, Ingresses, SAs | Missing, changed, or expired, and the consumers' errors fit |
-| PersistentVolumeClaim | Pending (no PV or provisioner), resize failed, usage high or full, inode high | mounted by Pods, bound to PV | Pending or full → root for pods that mount it |
+| PersistentVolumeClaim | Pending (no PV, provisioner or capacity), Lost, resize pending or failed, usage high or full and growth rate ("full in ~6h", from kubelet volume stats stored over time), inodes high, mounted by no pod for a long time (orphaned), Multi-Attach conflicts, access-mode mismatch | mounted by Pods, bound to PV, StorageClass, VolumeAttachment | Pending, Lost or full → root for pods that mount it; a predicted fill is a proactive warning |
 | PersistentVolume | Failed or Released stuck, node affinity conflict | bound PVC, StorageClass | PV failure → PVC → pods |
 | StorageClass | Provisioner missing, bad parameters | used by PVCs | All PVCs of the class Pending with provisioning errors |
 | VolumeAttachment | Attach or detach error, stuck | PV ↔ Node | FailedAttachVolume / Multi-Attach for dependent pods |
@@ -371,7 +371,7 @@ already watches them.
 | RuntimeClass | Handler missing on nodes | referenced by Pods | Pods using it fail on nodes without the handler |
 | ResourceClaim / ResourceSlice / DeviceClass / DeviceTaintRule (DRA) | Claim unallocated, device tainted | referenced by Pods, on nodes | Pods pending or evicted for devices |
 | apiserver / etcd / scheduler / controller-manager (virtual + static pods) | Probe failures, latency, component pods failing, leader Lease stale | cluster-wide | Wide, simultaneous symptoms: everything Pending (scheduler), no reconciliation (controller-manager), API errors |
-| cluster-autoscaler / Karpenter (events, CRDs) | FailedToScaleUp, NotTriggerScaleUp, NodeClaim failures | capacity for Pending pods | Pending pods with an autoscaler failure → capacity root |
+| cluster-autoscaler (Kubernetes Events) | FailedToScaleUp, NotTriggerScaleUp | capacity for Pending pods | Pending pods with an autoscaler failure → capacity root |
 | Event | Warning events (every reason kwatch knows today) | involved object | Evidence only. Events attach to their entity |
 | ComponentStatus | Deprecated; used only if present | components | Evidence only |
 
@@ -386,26 +386,15 @@ Additional built-in kinds:
 | ResourceClaimTemplate | Template invalid, claims fail to generate | generates ResourceClaims | Pods pending for devices after its change |
 | cluster (virtual) | Control-plane/kubelet version skew, deprecated APIs in use, cluster certificates expiring | all | Upgrade-related failures; proactive warnings (digest tier) |
 
-### Ecosystem add-ons (optional schemas)
+### Custom resources
 
-Most clusters run these. Each gets an entity schema, links and rules as an
-optional plugin, enabled when its CRD exists. Any other CRD is still
-covered by the generic rule: a status condition failing (`Ready=False`,
-`Degraded=True`, `Synced=False`) makes it a root candidate for the objects
-it owns.
-
-| Add-on | Kinds | Failures | Links | Root when |
-| --- | --- | --- | --- | --- |
-| cert-manager | Certificate, Issuer, ClusterIssuer, CertificateRequest, Order, Challenge | Not ready, renewal failed, ACME challenge failing, issuer not ready | Certificate → Secret → Ingress/Gateway | TLS Secret expired or not renewed → HTTPS failures |
-| Karpenter / Cluster Autoscaler | NodePool, NodeClaim, EC2NodeClass | Launch failed, insufficient capacity, disruption loops | NodeClaim → Node; NodePool → pending pods | Pending pods with a provisioning failure |
-| KEDA | ScaledObject, ScaledJob, TriggerAuthentication | Scaler errors, trigger auth failing | → Deployment/Job, → external source | Workload not scaling because the scaler fails |
-| VPA | VerticalPodAutoscaler | Recommendation missing, evictions for resize | → workload | Frequent restarts caused by VPA updates |
-| Argo CD / Flux | Application, Kustomization, HelmRelease, GitRepository | Sync failed, degraded, drift | → every managed object | A sync just applied the change that broke workloads (actor and revision) |
-| Argo Rollouts | Rollout, AnalysisRun | Aborted, degraded, analysis failed | → ReplicaSets | Canary failure → the Rollout change |
-| External Secrets | ExternalSecret, SecretStore | Sync failed, store unreachable | → Secret → Pods | Secret not updated or missing → consumer failures |
-| Istio / Linkerd | VirtualService, DestinationRule, sidecar status | Config rejected, sidecar not ready | → Services, Pods | Mesh config change before traffic errors |
-| Prometheus Operator | Prometheus, Alertmanager, ServiceMonitor | Not reconciled | → StatefulSets | Monitoring stack down (digest) |
-| Velero | Backup, Restore, Schedule | Failed, partially failed | → namespaces, PVs | Backup failures (notify tier, no cascade) |
+Built-in coverage is limited to Kubernetes itself. Third-party add-ons
+(cert-manager, Karpenter, KEDA, Argo, Flux and others) get no dedicated
+schemas for now. They can be added later as optional plugins without
+touching the core. Until then, any custom resource is covered by one
+generic rule: a failing status condition (`Ready=False`, `Degraded=True`,
+`Synced=False`) makes it a root candidate for the objects it owns through
+ownerReferences.
 
 ### External and future sources
 
@@ -577,6 +566,38 @@ Lease kwatch-lock   hold before sending or writing; stop on loss
 | **emptyDir** (evaluation) | No StorageClass | Same store; state lost when the pod is deleted or moved |
 
 There is one `Store` implementation (bbolt) and no alternative backends.
+
+## What the store enables
+
+Without the 1 MiB ConfigMap limit, kwatch keeps the history it needs to
+reason over time. Each capability below uses only the store and existing
+sources.
+
+| Capability | How the store is used | Example message |
+| --- | --- | --- |
+| **Predict before failure** | Time series of PVC and node filesystem usage, inodes, and container memory across restarts; certificate expiry | "PVC orders-db is 82% full and grows 3%/h — full in ~6h" · "payments memory grows ~40 MiB/h across restarts (likely leak)" |
+| **Learned normal instead of fixed thresholds** | Per-workload baselines: restarts/day, ready time, pending time, Job duration, usual log errors | "batch-report ran 48m, usually 12m" · silent for a pod that always restarts once at 03:00 |
+| **Change memory** | Every change with actor, kept across restarts; diff of the state saved at shutdown and the state at start | "While kwatch was down: payments image v2.2→v2.3, Secret db-creds changed" |
+| **Deploy outcomes** | History of rollouts and what followed each | "The last 3 deploys of payments caused crash loops for ~5m; this one too" |
+| **Recurrence and flapping** | Problem history keyed by root and kind | "3rd time this week, last Tue for 12m, resolved without a change" |
+| **Evidence that outlives pods** | Log excerpts, termination messages and events stored with the problem | Crash output still shown after the pod was deleted or the events expired |
+| **Self-tuning noise** | Outcomes per problem kind: self-resolved quickly, how often, whether anyone acted (a change followed) | Kinds that always self-heal within 2 minutes move to digest automatically; the move is shown in the weekly report and can be reverted |
+| **Learned dependencies** | `calls` relations from log and probe evidence with decay | "orders fails because it calls payments (seen in its errors), which is down" |
+| **Capacity trends** | Node count, pending frequency, requests vs allocatable over time | "Pending pods waited 3× longer this week; cluster CPU requests are 92% of allocatable" |
+| **Incident timeline and postmortem** | Full problem record: timeline, chain, evidence, changes, resolution | One-command export of a problem as Markdown for a postmortem |
+| **Reports** | Aggregates over problems | Weekly: top problems, time to resolve, noisiest workloads, recurring issues, predicted risks |
+| **Ask the cluster** | Query API over the store (protected endpoint) and CLI | `kwatch explain deploy/payments` · `kwatch what-changed --since 1h` · `kwatch history pvc/orders-db` |
+| **Scorecard from the store** | Decisions and problems recorded directly | `kwatch scorecard` runs on the live store, not on exported logs |
+
+Order of delivery:
+
+1. The core itself: model, change memory, problems, flapping and
+   recurrence, evidence that outlives pods.
+2. Baselines, predictions (PVC and node disk fill, memory leak,
+   certificates), and deploy outcomes.
+3. Query API and CLI, postmortem export, scorecard from the store.
+4. Reports, self-tuning noise and capacity trends. These are candidates
+   for the paid tier.
 
 ## Flapping and recurring issues
 
