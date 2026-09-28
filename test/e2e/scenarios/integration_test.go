@@ -111,6 +111,9 @@ heartbeatMonitor:
 				Data: map[string][]byte{
 					"config.yaml":       []byte(config),
 					"diagnostics-token": []byte("e2e-token"),
+					"webhook-url": []byte(
+						"http://kwatch-e2e-receiver.kwatch-e2e-system:8080/webhook",
+					),
 				},
 			}, metav1.CreateOptions{})
 		if err != nil {
@@ -147,6 +150,15 @@ heartbeatMonitor:
 						{Name: "POD_NAME", Value: podName},
 						{Name: "KWATCH_LEADER_ELECTION_NAME",
 							Value: "kwatch-heartbeat"},
+					},
+					SecurityContext: &corev1.SecurityContext{
+						AllowPrivilegeEscalation: boolPtr(false),
+						Capabilities: &corev1.Capabilities{
+							Drop: []corev1.Capability{"ALL"},
+						},
+						SeccompProfile: &corev1.SeccompProfile{
+							Type: corev1.SeccompProfileTypeRuntimeDefault,
+						},
 					},
 					VolumeMounts: []corev1.VolumeMount{{
 						Name: "config", MountPath: "/config",

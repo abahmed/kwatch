@@ -210,6 +210,12 @@ func TestScenarioMissingServiceAccountReference(t *testing.T) {
 		); err != nil {
 			t.Fatal(err)
 		}
+		pod, err = e.Client.CoreV1().Pods(namespace).Get(
+			ctx, pod.Name, metav1.GetOptions{},
+		)
+		if err != nil {
+			t.Fatal(err)
+		}
 		pod.Labels = map[string]string{"kwatch-e2e": "missing-service-account"}
 		if _, err := e.Client.CoreV1().Pods(namespace).Update(
 			ctx, pod, metav1.UpdateOptions{},
