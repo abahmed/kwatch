@@ -164,6 +164,30 @@ implicit for every pod. Inferred relations carry a weight and an expiry.
   source exists), and usual error lines. "Unusual for this one" is a
   first-class input.
 
+### Keeping the cluster view current
+
+The model is always the current cluster state, not a periodic snapshot.
+
+- **Live:** informers stream every add, update and delete as it happens,
+  including every catalog kind the RBAC allows. The model updates within
+  about a second. Periodic re-lists repair anything a watch missed, and
+  the model reconciles against them.
+- **Complete:** discovery runs at start and whenever CRDs or APIServices
+  change, so newly installed APIs and add-ons are watched without a
+  restart (building on the rediscovery added in step 4).
+- **Warm start:** on restart the model loads from the disk snapshot, then
+  informers reconcile it with the API. Kwatch knows the previous state
+  immediately, and what changed while it was down becomes changes, not a
+  blind "everything created".
+- **Time dimension:** the store keeps history, so kwatch can compare now
+  with before: "3 nodes fewer than an hour ago", "replicas were 6 before
+  the HPA hit its max", "this Secret changed while kwatch was down". It
+  can also answer "what did the cluster look like at 10:02?".
+- **Gaps are explicit:** a kind that cannot be watched (no RBAC, API
+  missing) is marked unknown in the model. Rules that depend on it
+  report "cannot verify X" instead of guessing, and health lists the
+  missing permission.
+
 ### 2. Signals: detectors
 
 A detector is `func(entity, state, history, baseline) []Signal`. A signal has:
@@ -350,6 +374,38 @@ already watches them.
 | cluster-autoscaler / Karpenter (events, CRDs) | FailedToScaleUp, NotTriggerScaleUp, NodeClaim failures | capacity for Pending pods | Pending pods with an autoscaler failure → capacity root |
 | Event | Warning events (every reason kwatch knows today) | involved object | Evidence only. Events attach to their entity |
 | ComponentStatus | Deprecated; used only if present | components | Evidence only |
+
+Additional built-in kinds:
+
+| Kind | Failure signals | Links | Root when |
+| --- | --- | --- | --- |
+| kube-proxy (virtual, per node) | Pods down, sync errors, conntrack full | part-of Node, programs Services | Service traffic fails only from pods on that node |
+| StorageVersionMigration / StorageVersion | Migration failed or stuck | CRD or resource | Reads of that resource fail after an upgrade |
+| LeaseCandidate | Component cannot win or renew its leader Lease | control-plane component | Controllers not reconciling during an upgrade |
+| CompositePodGroup | Group unschedulable | groups PodGroups | Capacity or quota for the gang |
+| ResourceClaimTemplate | Template invalid, claims fail to generate | generates ResourceClaims | Pods pending for devices after its change |
+| cluster (virtual) | Control-plane/kubelet version skew, deprecated APIs in use, cluster certificates expiring | all | Upgrade-related failures; proactive warnings (digest tier) |
+
+### Ecosystem add-ons (optional schemas)
+
+Most clusters run these. Each gets an entity schema, links and rules as an
+optional plugin, enabled when its CRD exists. Any other CRD is still
+covered by the generic rule: a status condition failing (`Ready=False`,
+`Degraded=True`, `Synced=False`) makes it a root candidate for the objects
+it owns.
+
+| Add-on | Kinds | Failures | Links | Root when |
+| --- | --- | --- | --- | --- |
+| cert-manager | Certificate, Issuer, ClusterIssuer, CertificateRequest, Order, Challenge | Not ready, renewal failed, ACME challenge failing, issuer not ready | Certificate → Secret → Ingress/Gateway | TLS Secret expired or not renewed → HTTPS failures |
+| Karpenter / Cluster Autoscaler | NodePool, NodeClaim, EC2NodeClass | Launch failed, insufficient capacity, disruption loops | NodeClaim → Node; NodePool → pending pods | Pending pods with a provisioning failure |
+| KEDA | ScaledObject, ScaledJob, TriggerAuthentication | Scaler errors, trigger auth failing | → Deployment/Job, → external source | Workload not scaling because the scaler fails |
+| VPA | VerticalPodAutoscaler | Recommendation missing, evictions for resize | → workload | Frequent restarts caused by VPA updates |
+| Argo CD / Flux | Application, Kustomization, HelmRelease, GitRepository | Sync failed, degraded, drift | → every managed object | A sync just applied the change that broke workloads (actor and revision) |
+| Argo Rollouts | Rollout, AnalysisRun | Aborted, degraded, analysis failed | → ReplicaSets | Canary failure → the Rollout change |
+| External Secrets | ExternalSecret, SecretStore | Sync failed, store unreachable | → Secret → Pods | Secret not updated or missing → consumer failures |
+| Istio / Linkerd | VirtualService, DestinationRule, sidecar status | Config rejected, sidecar not ready | → Services, Pods | Mesh config change before traffic errors |
+| Prometheus Operator | Prometheus, Alertmanager, ServiceMonitor | Not reconciled | → StatefulSets | Monitoring stack down (digest) |
+| Velero | Backup, Restore, Schedule | Failed, partially failed | → namespaces, PVs | Backup failures (notify tier, no cascade) |
 
 ### External and future sources
 
