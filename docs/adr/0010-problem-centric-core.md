@@ -2,7 +2,7 @@
 
 ## Status
 
-Proposed — needs maintainer review before implementation starts.
+Accepted (2026-09-28).
 
 ## Context
 
