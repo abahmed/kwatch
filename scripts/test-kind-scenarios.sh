@@ -40,6 +40,7 @@ built_images=""
 sanitize_bin=""
 metrics_manifest=""
 kubeconfig_file=""
+test_log_tail=""
 
 require_tool() {
 	if ! command -v "$1" >/dev/null 2>&1; then
@@ -217,6 +218,10 @@ wait_for_http() {
 cleanup() {
 	status=${1:-$?}
 	trap - EXIT INT TERM
+	if [ -n "$test_log_tail" ]; then
+		kill "$test_log_tail" >/dev/null 2>&1 || true
+		wait "$test_log_tail" >/dev/null 2>&1 || true
+	fi
 	collect_diagnostics
 	if [ "$KEEP_CLUSTER" != true ]; then
 		kind delete cluster --name "$KIND_CLUSTER_NAME" >/dev/null 2>&1 || true
@@ -406,8 +411,14 @@ KWATCH_E2E="$KWATCH_E2E" \
 	go test -tags=e2e -count=1 ./test/e2e/... \
 		-timeout "$SUITE_TIMEOUT" \
 		-run "$scenario_regex" \
-		>"$ARTIFACTS/go-test.log" 2>&1
+		>"$ARTIFACTS/go-test.log" 2>&1 &
+test_pid=$!
+tail -n +1 -f "$ARTIFACTS/go-test.log" &
+test_log_tail=$!
+wait "$test_pid"
 test_status=$?
+kill "$test_log_tail" >/dev/null 2>&1 || true
+wait "$test_log_tail" >/dev/null 2>&1 || true
+test_log_tail=""
 set -e
-cat "$ARTIFACTS/go-test.log"
 cleanup "$test_status"
