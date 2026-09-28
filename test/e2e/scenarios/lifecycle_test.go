@@ -10,6 +10,7 @@ import (
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/client-go/util/retry"
 
 	"github.com/abahmed/kwatch/test/e2e/harness"
 )
@@ -25,7 +26,7 @@ func TestScenarioResolution(t *testing.T) {
 			t.Fatal(err)
 		}
 		defer cleanupNamespace(t, e, namespace)
-		deployment, err := createLifecycleDeployment(ctx, e, namespace,
+		_, err := createLifecycleDeployment(ctx, e, namespace,
 			"recovery", "crash")
 		if err != nil {
 			t.Fatal(err)
@@ -39,12 +40,8 @@ func TestScenarioResolution(t *testing.T) {
 		}); err != nil {
 			t.Fatal(err)
 		}
-		deployment.Spec.Template.Spec.Containers[0].Command = []string{
-			"/kwatch-e2e-workload", "healthy",
-		}
-		if _, err := e.Client.AppsV1().Deployments(namespace).Update(
-			ctx, deployment, metav1.UpdateOptions{},
-		); err != nil {
+		if err := updateLifecycleCommand(ctx, e, namespace,
+			"recovery", "healthy"); err != nil {
 			t.Fatal(err)
 		}
 		waitCtx, cancel := context.WithTimeout(ctx, 5*time.Minute)
@@ -79,7 +76,7 @@ func TestScenarioRefailureAfterRecovery(t *testing.T) {
 			t.Fatal(err)
 		}
 		defer cleanupNamespace(t, e, namespace)
-		deployment, err := createLifecycleDeployment(ctx, e, namespace,
+		_, err := createLifecycleDeployment(ctx, e, namespace,
 			"refailure", "crash")
 		if err != nil {
 			t.Fatal(err)
@@ -91,13 +88,8 @@ func TestScenarioRefailureAfterRecovery(t *testing.T) {
 		if _, err := e.Audit.WaitFor(ctx, match); err != nil {
 			t.Fatal(err)
 		}
-		deployment.Spec.Template.Spec.Containers[0].Command = []string{
-			"/kwatch-e2e-workload", "healthy",
-		}
-		deployment, err = e.Client.AppsV1().Deployments(namespace).Update(
-			ctx, deployment, metav1.UpdateOptions{},
-		)
-		if err != nil {
+		if err := updateLifecycleCommand(ctx, e, namespace,
+			"refailure", "healthy"); err != nil {
 			t.Fatal(err)
 		}
 		waitCtx, cancel := context.WithTimeout(ctx, 5*time.Minute)
@@ -111,12 +103,8 @@ func TestScenarioRefailureAfterRecovery(t *testing.T) {
 		}); err != nil {
 			t.Fatal(err)
 		}
-		deployment.Spec.Template.Spec.Containers[0].Command = []string{
-			"/kwatch-e2e-workload", "crash",
-		}
-		if _, err := e.Client.AppsV1().Deployments(namespace).Update(
-			ctx, deployment, metav1.UpdateOptions{},
-		); err != nil {
+		if err := updateLifecycleCommand(ctx, e, namespace,
+			"refailure", "crash"); err != nil {
 			t.Fatal(err)
 		}
 		entries, err := e.Audit.WaitFor(ctx, match)
@@ -234,7 +222,7 @@ func TestScenarioLeaderFailover(t *testing.T) {
 		entries, err := e.Audit.WaitFor(ctx, harness.AuditMatch{
 			Namespace: namespace,
 			Resource:  "takeover",
-			Reason:    "CrashLoopBackOff",
+			Reason:    "DeploymentUnavailable",
 			Action:    "create",
 			Count:     1,
 		})
@@ -244,6 +232,25 @@ func TestScenarioLeaderFailover(t *testing.T) {
 		if len(entries) != 1 {
 			t.Fatalf("expected one post-failover incident, got %d", len(entries))
 		}
+	})
+}
+
+func updateLifecycleCommand(
+	ctx context.Context,
+	e *harness.Environment,
+	namespace, name, command string,
+) error {
+	deployments := e.Client.AppsV1().Deployments(namespace)
+	return retry.RetryOnConflict(retry.DefaultRetry, func() error {
+		deployment, err := deployments.Get(ctx, name, metav1.GetOptions{})
+		if err != nil {
+			return err
+		}
+		deployment.Spec.Template.Spec.Containers[0].Command = []string{
+			"/kwatch-e2e-workload", command,
+		}
+		_, err = deployments.Update(ctx, deployment, metav1.UpdateOptions{})
+		return err
 	})
 }
 

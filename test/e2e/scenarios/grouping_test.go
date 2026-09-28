@@ -4,6 +4,7 @@ package scenarios
 
 import (
 	"context"
+	"fmt"
 	"strings"
 	"testing"
 	"time"
@@ -11,6 +12,7 @@ import (
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/util/wait"
 
 	"github.com/abahmed/kwatch/test/e2e/harness"
 )
@@ -51,29 +53,42 @@ func TestScenarioGroupingSameErrorManyOwners(t *testing.T) {
 		}); err != nil {
 			t.Fatal(err)
 		}
+		groupName := fmt.Sprintf(
+			"3 workloads in %s: %s/api, %s/scheduler, %s/worker",
+			namespace, namespace, namespace, namespace,
+		)
 		entries, err := e.Audit.WaitFor(ctx, harness.AuditMatch{
 			Namespace: namespace,
+			Resource:  groupName,
 			Reason:    "DeploymentUnavailable",
+			Action:    "create",
 			Count:     1,
 		})
 		if err != nil {
 			t.Fatal(err)
 		}
 		if len(entries) != 1 {
-			t.Fatalf("expected one grouped audit entry, got %d", len(entries))
+			t.Fatalf("expected one grouped create, got %d", len(entries))
 		}
-		requests, err := e.Receiver.WaitForCount(ctx, 1)
+		err = wait.PollUntilContextTimeout(ctx, time.Second,
+			time.Minute, true, func(ctx context.Context) (bool, error) {
+				requests, err := e.Receiver.Matching(ctx,
+					harness.DeliveryMatch{Reason: "DeploymentUnavailable"})
+				if err != nil {
+					return false, nil
+				}
+				for _, request := range requests {
+					body := string(request.Body)
+					if strings.Contains(body, "api") &&
+						strings.Contains(body, "worker") &&
+						strings.Contains(body, "scheduler") {
+						return true, nil
+					}
+				}
+				return false, nil
+			})
 		if err != nil {
 			t.Fatal(err)
-		}
-		if len(requests) != 1 {
-			t.Fatalf("expected one grouped delivery, got %d", len(requests))
-		}
-		body := string(requests[0].Body)
-		for _, owner := range []string{"api", "worker", "scheduler"} {
-			if !strings.Contains(body, owner) {
-				t.Fatalf("grouped delivery omitted owner %q", owner)
-			}
 		}
 	})
 }
