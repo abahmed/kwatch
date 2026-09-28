@@ -405,10 +405,10 @@ KWATCH_E2E="$KWATCH_E2E" \
 	KWATCH_EXTENDED=true \
 	KWATCH_IMAGE="$KWATCH_IMAGE" \
 	WORKLOAD_IMAGE="$workload_image" \
-	SCENARIO_TIMEOUT="${SCENARIO_TIMEOUT:-10m}" \
+	SCENARIO_TIMEOUT="${SCENARIO_TIMEOUT:-5m}" \
 	SCENARIO_FAMILY="${SCENARIO_FAMILY:-}" \
 	SCENARIO_SHARD="${SCENARIO_SHARD:-}" \
-	go test -v -tags=e2e -count=1 ./test/e2e/... \
+	go test -json -tags=e2e -count=1 ./test/e2e/... \
 		-timeout "$SUITE_TIMEOUT" \
 		-run "$scenario_regex" \
 		>"$ARTIFACTS/go-test.log" 2>&1 &

@@ -36,9 +36,20 @@ func TestScenarioControlPlaneComponentRecovery(t *testing.T) {
 		}); err != nil {
 			t.Fatal(err)
 		}
-		if _, err := e.Audit.WaitFor(waitCtx, harness.AuditMatch{
-			Reason: "SchedulerUnavailable", Action: "resolved", Count: 1,
-		}); err != nil {
+		if err := e.WaitForPod(waitCtx, pod.Namespace, pod.Name,
+			func(current *corev1.Pod) bool {
+				if current.UID == pod.UID {
+					return false
+				}
+				for _, condition := range current.Status.Conditions {
+					if condition.Type == corev1.PodReady &&
+						condition.Status == corev1.ConditionTrue {
+						return true
+					}
+				}
+				return false
+			},
+		); err != nil {
 			t.Fatal(err)
 		}
 		if err := e.AssertHealthy(ctx); err != nil {

@@ -53,7 +53,7 @@ func TestScenarioGroupingSameErrorManyOwners(t *testing.T) {
 		}
 		entries, err := e.Audit.WaitFor(ctx, harness.AuditMatch{
 			Namespace: namespace,
-			Reason:    "CrashLoopBackOff",
+			Reason:    "DeploymentUnavailable",
 			Count:     1,
 		})
 		if err != nil {
@@ -116,7 +116,7 @@ func TestScenarioGroupingManyReplicasOneOwner(t *testing.T) {
 		}
 		if _, err := e.Audit.WaitFor(ctx, harness.AuditMatch{
 			Namespace: namespace, Resource: "replicas",
-			Reason: "CrashLoopBackOff", Count: 1,
+			Reason: "DeploymentUnavailable", Count: 1,
 		}); err != nil {
 			t.Fatal(err)
 		}

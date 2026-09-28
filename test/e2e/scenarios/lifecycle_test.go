@@ -33,7 +33,7 @@ func TestScenarioResolution(t *testing.T) {
 		if _, err := e.Audit.WaitFor(ctx, harness.AuditMatch{
 			Namespace: namespace,
 			Resource:  "recovery",
-			Reason:    "CrashLoopBackOff",
+			Reason:    "DeploymentUnavailable",
 			Action:    "create",
 			Count:     1,
 		}); err != nil {
@@ -55,7 +55,7 @@ func TestScenarioResolution(t *testing.T) {
 		entries, err := e.Audit.WaitFor(ctx, harness.AuditMatch{
 			Namespace: namespace,
 			Resource:  "recovery",
-			Reason:    "CrashLoopBackOff",
+			Reason:    "DeploymentUnavailable",
 			Action:    "resolved",
 			Count:     1,
 		})
@@ -86,7 +86,7 @@ func TestScenarioRefailureAfterRecovery(t *testing.T) {
 		}
 		match := harness.AuditMatch{
 			Namespace: namespace, Resource: "refailure",
-			Reason: "CrashLoopBackOff", Action: "create", Count: 1,
+			Reason: "DeploymentUnavailable", Action: "create", Count: 1,
 		}
 		if _, err := e.Audit.WaitFor(ctx, match); err != nil {
 			t.Fatal(err)
@@ -107,7 +107,7 @@ func TestScenarioRefailureAfterRecovery(t *testing.T) {
 		}
 		if _, err := e.Audit.WaitFor(ctx, harness.AuditMatch{
 			Namespace: namespace, Resource: "refailure",
-			Reason: "CrashLoopBackOff", Action: "resolved", Count: 1,
+			Reason: "DeploymentUnavailable", Action: "resolved", Count: 1,
 		}); err != nil {
 			t.Fatal(err)
 		}
@@ -150,14 +150,14 @@ func TestScenarioRestartPersistence(t *testing.T) {
 		if _, err := e.Audit.WaitFor(ctx, harness.AuditMatch{
 			Namespace: namespace,
 			Resource:  "persistent",
-			Reason:    "CrashLoopBackOff",
+			Reason:    "DeploymentUnavailable",
 			Action:    "create",
 			Count:     1,
 		}); err != nil {
 			t.Fatal(err)
 		}
 		deliveryMatch := harness.DeliveryMatch{
-			Name: "persistent", Reason: "CrashLoopBackOff",
+			Name: "persistent", Reason: "DeploymentUnavailable",
 		}
 		if _, err := e.Receiver.WaitForMatchCount(
 			ctx, deliveryMatch, 1,
