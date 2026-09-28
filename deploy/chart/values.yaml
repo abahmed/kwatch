@@ -7,10 +7,6 @@ nameOverride: ""
 # -- Override the full app name used in templates
 fullnameOverride: ""
 
-# -- Number of Kwatch Pods. Two provides automatic process failover through
-# Kubernetes Lease election; one is an advanced low-resource mode.
-replicaCount: 2
-
 image:
   repository: ghcr.io/abahmed/kwatch
   # -- Overrides the image tag (defaults to .Chart.AppVersion)
@@ -53,9 +49,27 @@ resources:
     memory: 128Mi
     cpu: 100m
 
+# -- State store volume (ADR 0010). Kwatch keeps problems, change history
+# and baselines on disk. Set existingClaim to reuse a PVC, or emptyDir for
+# evaluation clusters without storage (state is lost when the pod moves).
+persistence:
+  size: 2Gi
+  storageClass: ""
+  existingClaim: ""
+  emptyDir: false
+
 nodeSelector: {}
 
-tolerations: []
+# -- Move off a failed node after 30s; the Lease stops the old pod writing.
+tolerations:
+  - key: node.kubernetes.io/not-ready
+    operator: Exists
+    effect: NoExecute
+    tolerationSeconds: 30
+  - key: node.kubernetes.io/unreachable
+    operator: Exists
+    effect: NoExecute
+    tolerationSeconds: 30
 
 affinity: {}
 

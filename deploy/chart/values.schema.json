@@ -15,11 +15,15 @@
         "default": "",
         "description": "Override the full app name used in templates"
       },
-      "replicaCount": {
-        "type": "integer",
-        "minimum": 1,
-        "default": 2,
-        "description": "Number of Kwatch Pods; two enables automatic failover"
+      "persistence": {
+        "type": "object",
+        "description": "State store volume",
+        "properties": {
+          "size": { "type": "string", "default": "2Gi" },
+          "storageClass": { "type": "string", "default": "" },
+          "existingClaim": { "type": "string", "default": "" },
+          "emptyDir": { "type": "boolean", "default": false }
+        }
       },
       "image": {
         "type": "object",

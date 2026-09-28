@@ -7,37 +7,27 @@ cd "$root_dir"
 
 manifest=deploy/deploy.yaml
 
-grep -Fq 'replicas: 2' "$manifest" || {
-	echo "manifest parity: raw deployment must default to two replicas" >&2
-	exit 1
+require() {
+	grep -Fq "$1" "$manifest" || {
+		echo "manifest parity: $2" >&2
+		exit 1
+	}
 }
-grep -Fq 'maxUnavailable: 0%' "$manifest" || {
-	echo "manifest parity: rolling update availability policy is missing" >&2
+
+# ADR 0010: one writer with a Lease lock and a persistent state volume.
+require 'replicas: 1' "raw deployment must run one replica"
+require 'type: Recreate' "single-writer deployment must use Recreate"
+require 'path: /availabilityz' "deployment availability probe is missing"
+require 'terminationGracePeriodSeconds: 60' \
+	"shutdown grace must be at least 60 seconds"
+require 'name: kwatch-leader-election' "Lease RBAC is missing"
+require 'readOnlyRootFilesystem: true' "read-only filesystem is missing"
+require 'kind: PersistentVolumeClaim' "state volume claim is missing"
+require 'mountPath: /var/lib/kwatch' "state volume is not mounted"
+require 'tolerationSeconds: 30' "fast node-failure tolerations are missing"
+if grep -Fq 'kind: PodDisruptionBudget' "$manifest"; then
+	echo "manifest parity: a single-writer deployment must not have a PDB" >&2
 	exit 1
-}
-grep -Fq 'path: /availabilityz' "$manifest" || {
-	echo "manifest parity: deployment availability probe is missing" >&2
-	exit 1
-}
-grep -Fq 'terminationGracePeriodSeconds: 60' "$manifest" || {
-	echo "manifest parity: shutdown grace must be at least 60 seconds" >&2
-	exit 1
-}
-grep -Fq 'kind: PodDisruptionBudget' "$manifest" || {
-	echo "manifest parity: multi-replica deployment needs a PDB" >&2
-	exit 1
-}
-grep -Fq 'name: kwatch-leader-election' "$manifest" || {
-	echo "manifest parity: Lease RBAC is missing" >&2
-	exit 1
-}
-grep -Fq 'topologyKey: kubernetes.io/hostname' "$manifest" || {
-	echo "manifest parity: pod placement spreading is missing" >&2
-	exit 1
-}
-grep -Fq 'readOnlyRootFilesystem: true' "$manifest" || {
-	echo "manifest parity: read-only filesystem is missing" >&2
-	exit 1
-}
+fi
 
 echo "manifest parity: PASS"

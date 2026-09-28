@@ -200,12 +200,11 @@ metadata:
     app.kubernetes.io/instance: kwatch
     app.kubernetes.io/managed-by: kwatch.sh
 spec:
-  replicas: 2
+  # One replica: the Lease is a lock that guarantees a single writer, and
+  # Recreate keeps two pods from sharing the RWO data volume.
+  replicas: 1
   strategy:
-    type: RollingUpdate
-    rollingUpdate:
-      maxUnavailable: 0%
-      maxSurge: 1
+    type: Recreate
   selector:
     matchLabels:
       app: kwatch
@@ -222,13 +221,17 @@ spec:
       automountServiceAccountToken: true
       securityContext:
         fsGroup: 1000
-      topologySpreadConstraints:
-      - maxSkew: 1
-        topologyKey: kubernetes.io/hostname
-        whenUnsatisfiable: ScheduleAnyway
-        labelSelector:
-          matchLabels:
-            app: kwatch
+      # Move off a failed node quickly; the Lease stops the old pod from
+      # writing if it is still running.
+      tolerations:
+      - key: node.kubernetes.io/not-ready
+        operator: Exists
+        effect: NoExecute
+        tolerationSeconds: 30
+      - key: node.kubernetes.io/unreachable
+        operator: Exists
+        effect: NoExecute
+        tolerationSeconds: 30
       containers:
       - name: kwatch
         image: ghcr.io/abahmed/kwatch:v0.10.5
@@ -249,6 +252,8 @@ spec:
         volumeMounts:
           - name: config-volume
             mountPath: /config
+          - name: data
+            mountPath: /var/lib/kwatch
         env:
           - name: CONFIG_FILE
             value: "/config/config.yaml"
@@ -270,6 +275,8 @@ spec:
                 fieldPath: spec.nodeName
           - name: KWATCH_LEADER_ELECTION_NAME
             value: "kwatch-leader"
+          - name: KWATCH_DATA_DIR
+            value: "/var/lib/kwatch"
           - name: GOMEMLIMIT
             valueFrom:
               resourceFieldRef:
@@ -299,18 +306,22 @@ spec:
         secret:
           secretName: kwatch
           defaultMode: 0400
+      - name: data
+        persistentVolumeClaim:
+          claimName: kwatch-data
 ---
-apiVersion: policy/v1
-kind: PodDisruptionBudget
+# State store: problems, change history and baselines (ADR 0010). Uses the
+# cluster's default StorageClass.
+apiVersion: v1
+kind: PersistentVolumeClaim
 metadata:
-  name: kwatch
+  name: kwatch-data
   namespace: kwatch
   labels:
     app.kubernetes.io/instance: kwatch
     app.kubernetes.io/managed-by: kwatch.sh
 spec:
-  minAvailable: 1
-  selector:
-    matchLabels:
-      app: kwatch
-      app.kubernetes.io/instance: kwatch
+  accessModes: ["ReadWriteOnce"]
+  resources:
+    requests:
+      storage: 2Gi

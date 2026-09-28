@@ -13,20 +13,11 @@ grep -Fq "livenessProbe" <<<"$OUT1" || {
 grep -Fq "readinessProbe" <<<"$OUT1" || {
   echo "FAIL: readinessProbe missing"; exit 1;
 }
-grep -Fq "replicas: 2" <<<"$OUT1" || {
-  echo "FAIL: default replicas not 2"; exit 1;
+grep -Fq "replicas: 1" <<<"$OUT1" || {
+  echo "FAIL: deployment must run one replica"; exit 1;
 }
-grep -Fq "strategy:" <<<"$OUT1" || {
-  echo "FAIL: strategy missing"; exit 1;
-}
-grep -Fq "type: RollingUpdate" <<<"$OUT1" || {
-	echo "FAIL: default strategy not RollingUpdate"; exit 1;
-}
-grep -Fq "maxUnavailable: 0%" <<<"$OUT1" || {
-	echo "FAIL: rolling update availability policy is missing"; exit 1;
-}
-grep -Fq "maxSurge: 1" <<<"$OUT1" || {
-	echo "FAIL: rollout surge policy is missing"; exit 1;
+grep -Fq "type: Recreate" <<<"$OUT1" || {
+  echo "FAIL: deployment strategy must be Recreate"; exit 1;
 }
 grep -Fq "path: /availabilityz" <<<"$OUT1" || {
   echo "FAIL: deployment availability probe is missing"; exit 1;
@@ -34,23 +25,27 @@ grep -Fq "path: /availabilityz" <<<"$OUT1" || {
 grep -Fq "terminationGracePeriodSeconds: 60" <<<"$OUT1" || {
   echo "FAIL: termination grace period is not configured"; exit 1;
 }
-grep -Fq "kind: PodDisruptionBudget" <<<"$OUT1" || {
-  echo "FAIL: default disruption budget is missing"; exit 1;
+if grep -Fq "kind: PodDisruptionBudget" <<<"$OUT1"; then
+  echo "FAIL: a single-writer deployment must not have a PDB"; exit 1;
+fi
+grep -Fq "kind: PersistentVolumeClaim" <<<"$OUT1" || {
+  echo "FAIL: state volume claim is missing"; exit 1;
+}
+grep -Fq "mountPath: /var/lib/kwatch" <<<"$OUT1" || {
+  echo "FAIL: state volume is not mounted"; exit 1;
 }
 echo "PASS: default"
 
-echo "=== single replica override ==="
-OUT_SINGLE=$(helm template test-single . --set replicaCount=1 2>&1)
-grep -Fq "replicas: 1" <<<"$OUT_SINGLE" || {
-  echo "FAIL: single replica override missing"; exit 1;
-}
-grep -Fq "type: Recreate" <<<"$OUT_SINGLE" || {
-  echo "FAIL: single replica strategy not Recreate"; exit 1;
-}
-if grep -Fq "kind: PodDisruptionBudget" <<<"$OUT_SINGLE"; then
-  echo "FAIL: single replica must not create a disruption budget"; exit 1;
+echo "=== evaluation without storage ==="
+OUT_EPHEMERAL=$(helm template test-ephemeral . \
+  --set persistence.emptyDir=true 2>&1)
+if grep -Fq "kind: PersistentVolumeClaim" <<<"$OUT_EPHEMERAL"; then
+  echo "FAIL: emptyDir mode must not create a claim"; exit 1;
 fi
-echo "PASS: single replica override"
+grep -Fq "emptyDir: {}" <<<"$OUT_EPHEMERAL" || {
+  echo "FAIL: emptyDir volume missing"; exit 1;
+}
+echo "PASS: evaluation without storage"
 
 echo "=== memory limit ==="
 grep -Fq "memory: 256Mi" <<<"$OUT1" || {
