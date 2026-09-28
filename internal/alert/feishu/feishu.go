@@ -2,8 +2,13 @@ package feishu
 
 import (
 	"context"
+	"crypto/hmac"
+	"crypto/sha256"
+	"encoding/base64"
 	"encoding/json"
 	"fmt"
+	"strconv"
+	"time"
 
 	"k8s.io/klog/v2"
 
@@ -19,6 +24,8 @@ type FeiShu struct {
 	sender  transport.Sender
 	webhook string
 	title   string
+	// secret enables the bot's signature verification when set.
+	secret string
 
 	// reference for general app configuration
 	clusterName string
@@ -51,8 +58,10 @@ type feiShuCard struct {
 }
 
 type feiShuRequestBody struct {
-	MsgType string     `json:"msg_type"`
-	Card    feiShuCard `json:"card"`
+	Timestamp string     `json:"timestamp,omitempty"`
+	Sign      string     `json:"sign,omitempty"`
+	MsgType   string     `json:"msg_type"`
+	Card      feiShuCard `json:"card"`
 }
 
 type feiShuResponse struct {
@@ -191,9 +200,22 @@ func (f *FeiShu) buildRequestBodyFeiShu(
 			},
 		},
 	}
+	if f.secret != "" {
+		body.Timestamp, body.Sign = feiShuSignature(
+			f.secret, f.clockSource.Now(),
+		)
+	}
 	jsonBytes, err := json.Marshal(body)
 	if err != nil {
 		return "", fmt.Errorf("failed to marshal feishu body: %w", err)
 	}
 	return string(jsonBytes), nil
+}
+
+// feiShuSignature implements Feishu custom bot signing: the HMAC-SHA256 key
+// is "timestamp\nsecret" over an empty message, base64 encoded.
+func feiShuSignature(secret string, now time.Time) (string, string) {
+	timestamp := strconv.FormatInt(now.Unix(), 10)
+	mac := hmac.New(sha256.New, []byte(timestamp+"\n"+secret))
+	return timestamp, base64.StdEncoding.EncodeToString(mac.Sum(nil))
 }

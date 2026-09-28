@@ -94,6 +94,16 @@ func runCommand(
 				}
 			}
 			return runReplay(dryRun, in, out, errOut)
+		default:
+			// A typo must not silently start a full monitoring instance.
+			if _, err := fmt.Fprintf(
+				errOut,
+				"unknown command %q (commands: version, lint, replay)\n",
+				args[0],
+			); err != nil {
+				return 2
+			}
+			return 2
 		}
 	}
 

@@ -178,15 +178,7 @@ func waitShutdown(
 	}
 	if controllerStopped && backgroundStopped &&
 		deps.persistenceGate.enabled() {
-		incidentStopped := waitIncidentSaver(deps)
-		baselineStopped := waitPersistenceComponent(
-			deps.baselineDone, "baseline-saver",
-		)
-		changeStopped := waitPersistenceComponent(
-			deps.changeDone, "change-history-saver",
-		)
-		feedbackStopped := waitFeedbackSaver(deps)
-		if incidentStopped && baselineStopped && changeStopped && feedbackStopped {
+		if waitSavers(deps) {
 			finalCtx, cancel := boundedShutdownContext(applicationContext)
 			saveFinalIncidentSnapshot(finalCtx, deps)
 			cancel()
@@ -292,6 +284,34 @@ func recordShutdownTimeout(component string) {
 
 // releaseLeaseAfterShutdown hands the Lease over only after delivery drained
 // and state was written, so the next leader never overlaps with this one.
+// waitSavers waits for every persistence saver concurrently. Waiting one
+// after another let each slow saver add its own timeout to shutdown.
+func waitSavers(deps *serverDeps) bool {
+	waits := []func() bool{
+		func() bool { return waitIncidentSaver(deps) },
+		func() bool {
+			return waitPersistenceComponent(
+				deps.baselineDone, "baseline-saver",
+			)
+		},
+		func() bool {
+			return waitPersistenceComponent(
+				deps.changeDone, "change-history-saver",
+			)
+		},
+		func() bool { return waitFeedbackSaver(deps) },
+	}
+	results := make(chan bool, len(waits))
+	for _, wait := range waits {
+		go func() { results <- wait() }()
+	}
+	stopped := true
+	for range waits {
+		stopped = <-results && stopped
+	}
+	return stopped
+}
+
 func releaseLeaseAfterShutdown(deps *serverDeps, parent context.Context) {
 	release := deps.leaseRelease()
 	if release == nil {

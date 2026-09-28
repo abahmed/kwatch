@@ -148,7 +148,7 @@ func (e *Engine) daemonSetHealthy(
 	if ds == nil {
 		return true
 	}
-	return ds.Status.DesiredNumberScheduled > 0 &&
-		ds.Status.NumberUnavailable == 0 &&
+	// Desired 0 (no matching nodes) has nothing to run and is healthy.
+	return ds.Status.NumberUnavailable == 0 &&
 		ds.Status.UpdatedNumberScheduled == ds.Status.DesiredNumberScheduled
 }

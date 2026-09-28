@@ -109,3 +109,59 @@ func TestWaitControllerSkipsStandbyThatNeverStarted(t *testing.T) {
 		t.Fatal("standby shutdown waited for a controller that never ran")
 	}
 }
+
+func TestWaitSaversReturnsTrueWhenAllDone(t *testing.T) {
+	baselineDone := make(chan struct{})
+	changeDone := make(chan struct{})
+	incidentDone := make(chan struct{})
+	feedbackDone := make(chan struct{})
+	close(baselineDone)
+	close(changeDone)
+	close(incidentDone)
+	close(feedbackDone)
+	deps := &serverDeps{
+		baselineDone: baselineDone,
+		changeDone:   changeDone,
+		incidentDone: incidentDone,
+		feedbackDone: feedbackDone,
+	}
+	if !waitSavers(deps) {
+		t.Fatal("waitSavers returned false when all done channels closed")
+	}
+}
+
+func TestWaitSaversWaitsConcurrently(t *testing.T) {
+	baselineDone := make(chan struct{})
+	changeDone := make(chan struct{})
+	incidentDone := make(chan struct{})
+	feedbackDone := make(chan struct{})
+	done := make(chan struct{})
+	go func() {
+		close(baselineDone)
+		close(changeDone)
+		close(incidentDone)
+		close(feedbackDone)
+		done <- struct{}{}
+	}()
+	deps := &serverDeps{
+		baselineDone: baselineDone,
+		changeDone:   changeDone,
+		incidentDone: incidentDone,
+		feedbackDone: feedbackDone,
+	}
+	result := make(chan bool, 1)
+	go func() { result <- waitSavers(deps) }()
+	select {
+	case res := <-result:
+		if !res {
+			t.Fatal("waitSavers returned false")
+		}
+		select {
+		case <-done:
+		default:
+			t.Fatal("channels were not closed before waitSavers returned")
+		}
+	case <-time.After(time.Second):
+		t.Fatal("waitSavers did not return in time")
+	}
+}

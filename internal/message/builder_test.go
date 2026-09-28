@@ -364,3 +364,53 @@ func TestSlackRendererCreate(t *testing.T) {
 	assert.Contains(t, msg, "node `n1`")
 	assert.Contains(t, msg, "OOMKill.")
 }
+
+func TestReportBuilderRedactsContainerStateMessage(t *testing.T) {
+	rb := newTestReportBuilder("test-cluster")
+	inc := &model.Incident{
+		Subject: model.Subject{
+			Name:      "p1",
+			Namespace: "ns1",
+			Resource:  "pod",
+			Reason:    "CrashLoopBackOff",
+		},
+		Status: model.Status{
+			FirstSeen: time.Now().Add(-5 * time.Minute),
+			LastSeen:  time.Now(),
+			LastContainerState: &model.ContainerState{
+				Msg: "error: password=hunter2 secret failed",
+			},
+		},
+	}
+
+	report := rb.Build(inc, model.ActionCreate, nil)
+	assert.NotNil(t, report.State)
+	assert.NotContains(t, report.State.Message, "hunter2")
+	assert.Contains(t, report.State.Message, "[redacted]")
+	assert.Contains(t, report.State.Message, "error")
+}
+
+func TestReportBuilderRedactsDiagnosisHint(t *testing.T) {
+	rb := newTestReportBuilder("test-cluster")
+	inc := &model.Incident{
+		Subject: model.Subject{
+			Name:      "p1",
+			Namespace: "ns1",
+			Resource:  "pod",
+			Reason:    "CrashLoopBackOff",
+		},
+		Status: model.Status{
+			FirstSeen: time.Now().Add(-5 * time.Minute),
+			LastSeen:  time.Now(),
+		},
+		Evidence: model.Evidence{
+			Hint: "api_key: secret123 is invalid",
+		},
+	}
+
+	report := rb.Build(inc, model.ActionCreate, nil)
+	assert.NotNil(t, report.Diagnosis)
+	assert.NotContains(t, report.Diagnosis.Hint, "secret123")
+	assert.Contains(t, report.Diagnosis.Hint, "[redacted]")
+	assert.Contains(t, report.Diagnosis.Hint, "api_key")
+}

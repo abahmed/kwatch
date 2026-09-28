@@ -269,7 +269,21 @@ func TestBuildRequestBodyMessage(t *testing.T) {
 	assert.NoError(t, err)
 	assert.Equal(t, "New Alert", result.Title)
 	assert.Equal(t, "test message", result.Text)
-	assert.Empty(t, result.Attachment)
+	assert.Len(t, result.Attachment, 1)
+	assert.Equal(t, "application/vnd.microsoft.card.adaptive",
+		result.Attachment[0]["contentType"])
+	content, ok := result.Attachment[0]["content"].(map[string]interface{})
+	assert.True(t, ok, "content should be a map")
+	body, ok := content["body"].([]interface{})
+	assert.True(t, ok, "body should be a slice")
+	assert.Len(t, body, 2)
+	titleBlock := body[0].(map[string]interface{})
+	assert.Equal(t, "TextBlock", titleBlock["type"])
+	assert.Equal(t, "New Alert", titleBlock["text"])
+	assert.Equal(t, "Bolder", titleBlock["weight"])
+	msgBlock := body[1].(map[string]interface{})
+	assert.Equal(t, "TextBlock", msgBlock["type"])
+	assert.Equal(t, "test message", msgBlock["text"])
 }
 
 func TestNewTeamsIgnoresLegacyRetrySettings(t *testing.T) {

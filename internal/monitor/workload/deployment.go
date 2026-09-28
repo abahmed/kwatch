@@ -236,8 +236,10 @@ func (r *DeploymentRuntime) processDeploymentObject(
 			}
 			return nil
 		}
+		// Available=False states the same fact as DeploymentUnavailable;
+		// reporting both sent two alerts for one problem.
 		current = append(
-			current,
+			withoutReason(current, constant.ReasonDeploymentAvailable),
 			obs.WithHint(AvailabilityHint(deploy)),
 		)
 	} else {
@@ -249,4 +251,16 @@ func (r *DeploymentRuntime) processDeploymentObject(
 
 func (r *DeploymentRuntime) clearFirst(key string) {
 	r.first.clear(key)
+}
+
+func withoutReason(
+	observations []*model.Observation, reason string,
+) []*model.Observation {
+	out := observations[:0]
+	for _, observation := range observations {
+		if observation.Reason != reason {
+			out = append(out, observation)
+		}
+	}
+	return out
 }

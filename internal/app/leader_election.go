@@ -9,8 +9,10 @@ import (
 	"time"
 
 	"k8s.io/apimachinery/pkg/util/validation"
+	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/tools/leaderelection"
 
+	"github.com/abahmed/kwatch/internal/client"
 	"github.com/abahmed/kwatch/internal/health"
 	"github.com/abahmed/kwatch/internal/metrics"
 )
@@ -199,7 +201,7 @@ func runLeaderElectionWithRunner(
 		activeDone:     make(chan struct{}),
 	}
 	lock := &renewalTrackingLock{
-		delegate:  newLeaseLock(deps.clients.Kubernetes, identity),
+		delegate:  newLeaseLock(electionClient(deps.clients), identity),
 		onRenewal: callbacks.recordRenewal,
 	}
 
@@ -409,4 +411,13 @@ func fenceOnLeadershipLoss(
 		cancel()
 	case <-activeCtx.Done():
 	}
+}
+
+// electionClient prefers the dedicated Lease client and falls back to the
+// shared client for test compositions that do not build one.
+func electionClient(clients client.ClientSet) kubernetes.Interface {
+	if clients.Election != nil {
+		return clients.Election
+	}
+	return clients.Kubernetes
 }

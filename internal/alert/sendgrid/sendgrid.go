@@ -3,6 +3,7 @@ package sendgrid
 import (
 	"context"
 	"encoding/json"
+	"strings"
 
 	"k8s.io/klog/v2"
 
@@ -62,18 +63,7 @@ func NewSendgrid(
 		return nil
 	}
 
-	to, ok := config["to"].([]interface{})
-	if !ok || len(to) == 0 {
-		klog.InfoS("initializing sendgrid with empty to")
-		return nil
-	}
-
-	var recipients []string
-	for _, t := range to {
-		if s, ok := t.(string); ok && len(s) > 0 {
-			recipients = append(recipients, s)
-		}
-	}
+	recipients := parseRecipients(config["to"])
 	if len(recipients) == 0 {
 		klog.InfoS("initializing sendgrid with empty to")
 		return nil
@@ -138,4 +128,27 @@ func (s *Sendgrid) SendMessage(ctx context.Context, msg string) error {
 		},
 	})
 	return err
+}
+
+// parseRecipients accepts a YAML list or, like the other email providers, a
+// comma-separated string.
+func parseRecipients(value interface{}) []string {
+	var raw []string
+	switch to := value.(type) {
+	case string:
+		raw = strings.Split(to, ",")
+	case []interface{}:
+		for _, item := range to {
+			if s, ok := item.(string); ok {
+				raw = append(raw, s)
+			}
+		}
+	}
+	recipients := make([]string, 0, len(raw))
+	for _, r := range raw {
+		if r = strings.TrimSpace(r); r != "" {
+			recipients = append(recipients, r)
+		}
+	}
+	return recipients
 }

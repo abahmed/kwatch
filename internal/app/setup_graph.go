@@ -13,6 +13,7 @@ import (
 	"github.com/abahmed/kwatch/internal/controller"
 	kwcontext "github.com/abahmed/kwatch/internal/graphcontext"
 	"github.com/abahmed/kwatch/internal/health"
+	"github.com/abahmed/kwatch/internal/k8s/dynamicwatch"
 	"github.com/abahmed/kwatch/internal/monitor"
 	"github.com/abahmed/kwatch/internal/networkgraph"
 	"github.com/abahmed/kwatch/internal/storagegraph"
@@ -47,41 +48,7 @@ func newNetworkGraphRun(
 		return nil
 	}
 	return func(ctx context.Context) error {
-		if err := graphMonitor.Start(ctx); err != nil {
-			healthServer.SetComponentError("network-graph", err)
-			klog.ErrorS(err, "network graph monitor stopped")
-			return err
-		}
-		defer func() {
-			stopCtx, cancel := boundedShutdownContext(ctx)
-			defer cancel()
-			if err := graphMonitor.Stop(stopCtx); err != nil {
-				healthServer.SetComponentError("network-graph", err)
-			}
-		}()
-		syncCtx, cancel := context.WithTimeout(
-			ctx, optionalWatcherSyncTimeout,
-		)
-		defer cancel()
-		if !graphMonitor.WaitForCacheSync(syncCtx) {
-			err := fmt.Errorf("optional network watcher cache sync failed")
-			healthServer.SetComponentError("network-graph", err)
-			klog.ErrorS(err, "network graph watcher degraded")
-			return err
-		}
-		if status := graphMonitor.Status(); status.Skipped > 0 {
-			healthServer.SetComponentStatus(
-				"network-graph",
-				"degraded", "optional_api_unavailable", false,
-			)
-			<-ctx.Done()
-			return nil
-		}
-		healthServer.SetComponentStatus(
-			"network-graph", "running", "", true,
-		)
-		<-ctx.Done()
-		return nil
+		return runOptionalGraph(ctx, graphMonitor, healthServer, "network-graph")
 	}
 }
 
@@ -111,40 +78,96 @@ func newStorageGraphRun(
 		return nil
 	}
 	return func(ctx context.Context) error {
-		if err := graphMonitor.Start(ctx); err != nil {
-			healthServer.SetComponentError("storage-graph", err)
-			klog.ErrorS(err, "storage graph monitor stopped")
-			return err
-		}
-		defer func() {
-			stopCtx, cancel := boundedShutdownContext(ctx)
-			defer cancel()
-			if err := graphMonitor.Stop(stopCtx); err != nil {
-				healthServer.SetComponentError("storage-graph", err)
-			}
-		}()
-		syncCtx, cancel := context.WithTimeout(
-			ctx, optionalWatcherSyncTimeout,
-		)
+		return runOptionalGraph(ctx, graphMonitor, healthServer, "storage-graph")
+	}
+}
+
+// optionalRediscoveryInterval is how often a degraded optional watcher checks
+// whether its missing APIs were installed after startup.
+var optionalRediscoveryInterval = 5 * time.Minute
+
+type optionalGraphMonitor interface {
+	Start(context.Context) error
+	Stop(context.Context) error
+	WaitForCacheSync(context.Context) bool
+	Status() dynamicwatch.Status
+	Rediscover(context.Context) (bool, error)
+}
+
+// runOptionalGraph owns one optional dynamic watcher: start, cache sync,
+// health, periodic rediscovery of late-installed APIs, and bounded stop.
+func runOptionalGraph(
+	ctx context.Context,
+	graphMonitor optionalGraphMonitor,
+	healthServer *health.HealthServer,
+	name string,
+) error {
+	if err := graphMonitor.Start(ctx); err != nil {
+		healthServer.SetComponentError(name, err)
+		klog.ErrorS(err, "optional graph monitor stopped", "component", name)
+		return err
+	}
+	defer func() {
+		stopCtx, cancel := boundedShutdownContext(ctx)
 		defer cancel()
-		if !graphMonitor.WaitForCacheSync(syncCtx) {
-			err := fmt.Errorf("optional storage watcher cache sync failed")
-			healthServer.SetComponentError("storage-graph", err)
-			klog.ErrorS(err, "storage graph watcher degraded")
+		if err := graphMonitor.Stop(stopCtx); err != nil {
+			healthServer.SetComponentError(name, err)
+		}
+	}()
+	if err := syncOptionalGraph(
+		ctx, graphMonitor, healthServer, name,
+	); err != nil {
+		return err
+	}
+	ticker := time.NewTicker(optionalRediscoveryInterval)
+	defer ticker.Stop()
+	for {
+		select {
+		case <-ctx.Done():
+			return nil
+		case <-ticker.C:
+		}
+		if graphMonitor.Status().Skipped == 0 {
+			continue
+		}
+		replaced, err := graphMonitor.Rediscover(ctx)
+		if err != nil {
+			healthServer.SetComponentError(name, err)
 			return err
 		}
-		if status := graphMonitor.Status(); status.Skipped > 0 {
-			healthServer.SetComponentStatus(
-				"storage-graph",
-				"degraded", "optional_api_unavailable", false,
-			)
-			<-ctx.Done()
-			return nil
+		if !replaced {
+			continue
 		}
+		klog.InfoS("optional API installed; watcher restarted",
+			"component", name)
+		if err := syncOptionalGraph(
+			ctx, graphMonitor, healthServer, name,
+		); err != nil {
+			return err
+		}
+	}
+}
+
+func syncOptionalGraph(
+	ctx context.Context,
+	graphMonitor optionalGraphMonitor,
+	healthServer *health.HealthServer,
+	name string,
+) error {
+	syncCtx, cancel := context.WithTimeout(ctx, optionalWatcherSyncTimeout)
+	defer cancel()
+	if !graphMonitor.WaitForCacheSync(syncCtx) {
+		err := fmt.Errorf("optional watcher cache sync failed")
+		healthServer.SetComponentError(name, err)
+		klog.ErrorS(err, "optional graph watcher degraded", "component", name)
+		return err
+	}
+	if graphMonitor.Status().Skipped > 0 {
 		healthServer.SetComponentStatus(
-			"storage-graph", "running", "", true,
+			name, "degraded", "optional_api_unavailable", false,
 		)
-		<-ctx.Done()
 		return nil
 	}
+	healthServer.SetComponentStatus(name, "running", "", true)
+	return nil
 }

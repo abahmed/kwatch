@@ -101,6 +101,9 @@ func (c *Controller) syncCpPod(_ context.Context, key string) error {
 	pod, err := c.cpPodLister.Pods(namespace).Get(name)
 	if err != nil {
 		if errors.IsNotFound(err) {
+			c.components.Integration.ControlPlane.ResolveControlPlanePod(
+				namespace, name,
+			)
 			return nil
 		}
 		return err

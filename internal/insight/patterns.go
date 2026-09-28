@@ -100,7 +100,9 @@ func ScanMassFailures(
 		deps := dependenciesFor(graph, inc)
 		seen := make(map[string]bool)
 		for _, d := range deps {
-			if seen[d] {
+			// A node lease mirrors node health; the node itself is the
+			// shared dependency, so the lease would only duplicate it.
+			if seen[d] || strings.HasPrefix(d, "lease/") {
 				continue
 			}
 			seen[d] = true
@@ -128,12 +130,18 @@ func ScanMassFailures(
 		if count < th {
 			continue
 		}
+		// The alert is about the dependency, so it carries the
+		// dependency's namespace, not the first symptom's.
+		namespace := ""
+		if ref, ok := model.ParseObjectKey(depKey); ok {
+			namespace = ref.Namespace
+		}
 		results = append(results, MassFailure{
 			SharedDependency: depKey,
 			AffectedCount:    count,
 			Threshold:        th,
 			Reason:           entry.inc.Reason,
-			Namespace:        entry.inc.Namespace,
+			Namespace:        namespace,
 			ResourceKind:     entry.inc.Resource,
 		})
 	}

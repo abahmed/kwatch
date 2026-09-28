@@ -24,6 +24,7 @@ type Sns struct {
 	url             string
 	region          string
 	accessKeyID     string
+	sessionToken    string
 	secretAccessKey string
 	topicArn        string
 	targetArn       string
@@ -40,6 +41,7 @@ func NewSns(
 	clusterName string,
 	dependencies transport.Dependencies,
 ) *Sns {
+	sessionToken, _ := config["sessionToken"].(string)
 	accessKeyID, ok := config["accessKeyId"].(string)
 	if !ok || len(accessKeyID) == 0 {
 		klog.InfoS("initializing sns with empty accessKeyId")
@@ -73,6 +75,7 @@ func NewSns(
 		url:             fmt.Sprintf(snsURLFormat, region),
 		region:          region,
 		accessKeyID:     accessKeyID,
+		sessionToken:    sessionToken,
 		secretAccessKey: secretAccessKey,
 		topicArn:        topicArn,
 		targetArn:       targetArn,
@@ -112,7 +115,10 @@ func (s *Sns) SendMessage(ctx context.Context, msg string) error {
 	contentType := "application/x-www-form-urlencoded"
 
 	headers, err := signing.SignAWSV4At(
-		s.accessKeyID, s.secretAccessKey, s.region, snsServiceName,
+		signing.Credentials{
+			AccessKeyID: s.accessKeyID, SecretAccessKey: s.secretAccessKey,
+			SessionToken: s.sessionToken,
+		}, s.region, snsServiceName,
 		"POST", s.url, body, s.now())
 	if err != nil {
 		return err

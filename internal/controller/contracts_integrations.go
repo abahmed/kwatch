@@ -9,6 +9,7 @@ import (
 
 type ControlPlaneProcessor interface {
 	ProcessControlPlanePod(*corev1.Pod) error
+	ResolveControlPlanePod(namespace, name string)
 	SweepControlPlane()
 }
 

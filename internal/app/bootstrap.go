@@ -62,15 +62,9 @@ func newBootstrap(
 	// the immutable snapshot before composing any domain component.
 	runtime = config.RuntimeConfigFor(cfg)
 	upgraderConfig = runtime.Lifecycle().Upgrader()
-	// The overlay can change proxy, TLS, authentication, or timeout settings.
-	// Rebuild the complete client bundle so every consumer observes the final
-	// immutable runtime snapshot rather than the pre-overlay settings.
-	clients, err = client.NewClientSetWithRuntime(
-		runtime, &net.Resolver{}, clockSource,
-	)
-	if err != nil {
-		return nil, fmt.Errorf("rebuild application clients: %w", err)
-	}
+	// The overlay can change outbound proxy, TLS, or timeout settings. Only
+	// the outbound HTTP client depends on them; Kubernetes clients are kept.
+	clients.HTTP = client.NewHTTPClientWithRuntime(runtime)
 
 	persistenceManager := persistence.NewManagerWithClock(
 		clients.Kubernetes, k8s.GetNamespace(), clock.Func(now),

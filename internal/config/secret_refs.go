@@ -30,6 +30,7 @@ var sensitiveFieldNames = map[string]bool{
 	"secret":          true,
 	"secretaccesskey": true,
 	"servicekey":      true,
+	"sessiontoken":    true,
 	"teamsecret":      true,
 	"token":           true,
 }

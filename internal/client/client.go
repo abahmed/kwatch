@@ -2,8 +2,6 @@ package client
 
 import (
 	"fmt"
-	"net/http"
-	"net/url"
 	"os"
 	"path/filepath"
 
@@ -11,8 +9,6 @@ import (
 	"k8s.io/client-go/tools/clientcmd"
 	"k8s.io/client-go/util/homedir"
 	"k8s.io/klog/v2"
-
-	"github.com/abahmed/kwatch/internal/config"
 )
 
 func getKubeconfigPath() string {
@@ -24,13 +20,29 @@ func getKubeconfigPath() string {
 	return kubeconfigPath
 }
 
-func getRestConfig(appConfig config.ApplicationRuntime) (*rest.Config, error) {
+// getRestConfig builds the Kubernetes API configuration. The application
+// proxy is intentionally not applied: it is for outbound alert traffic, and
+// routing API credentials through it would expose them to the proxy.
+func getRestConfig() (*rest.Config, error) {
 	clientConfig, err := loadRestConfig()
 	if err != nil {
 		return nil, err
 	}
-	applyApplicationRuntime(clientConfig, appConfig)
+	// Keep typed, dynamic, discovery, and CRD clients at the same throughput
+	// settings. Otherwise only the typed client gets the large-cluster tuning.
+	clientConfig.QPS = 50
+	clientConfig.Burst = 100
 	return clientConfig, nil
+}
+
+// electionRestConfig copies base with a small dedicated rate limit for
+// Lease traffic.
+func electionRestConfig(base *rest.Config) *rest.Config {
+	cfg := rest.CopyConfig(base)
+	cfg.QPS = 5
+	cfg.Burst = 10
+	cfg.RateLimiter = nil
+	return cfg
 }
 
 func loadRestConfig() (*rest.Config, error) {
@@ -44,20 +56,4 @@ func loadRestConfig() (*rest.Config, error) {
 		}
 	}
 	return clientConfig, nil
-}
-
-func applyApplicationRuntime(
-	clientConfig *rest.Config,
-	appConfig config.ApplicationRuntime,
-) {
-	if len(appConfig.ProxyURL) > 0 &&
-		clientConfig.Proxy == nil {
-		if p, err := url.Parse(appConfig.ProxyURL); err == nil {
-			clientConfig.Proxy = http.ProxyURL(p)
-		}
-	}
-	// Keep typed, dynamic, discovery, and CRD clients at the same throughput
-	// settings. Otherwise only the typed client gets the large-cluster tuning.
-	clientConfig.QPS = 50
-	clientConfig.Burst = 100
 }

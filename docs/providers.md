@@ -138,7 +138,9 @@ search.
 | Parameter | What it does |
 |:---|---|
 | `alert.email.from` | 📤 From address |
-| `alert.email.password` | 🔑 From password |
+| `alert.email.password` | 🔑 SMTP password (optional for a relay without authentication) |
+| `alert.email.username` | 👤 SMTP username (optional, defaults to `from`) |
+| `alert.email.tls` | 🔒 `required` (default) or `none` for a trusted relay |
 | `alert.email.host` | 🖥️ SMTP host |
 | `alert.email.port` | 🔌 SMTP port |
 | `alert.email.to` | 📥 Receiver email |
@@ -208,6 +210,7 @@ Father to get a `token` and a `chatId`.
 | `alert.opsgenie.apiKey` | 🔑 API Key |
 | `alert.opsgenie.title` | ✏️ Custom title |
 | `alert.opsgenie.text` | ✏️ Custom text |
+| `alert.opsgenie.region` | 🌍 API region: `us` (default) or `eu` |
 
 ### 🏗️ Matrix
 
@@ -233,6 +236,7 @@ Father to get a `token` and a `chatId`.
 |:---|---|
 | `alert.feishu.webhook` | 🔗 Webhook URL |
 | `alert.feishu.title` | ✏️ Custom title |
+| `alert.feishu.secret` | 🔑 Signing secret (optional, when signature verification is on) |
 
 ### 🛡️ Zenduty
 
@@ -554,6 +558,7 @@ alert:
 |:---|---|
 | `alert.ses.accessKeyId` | 🔑 AWS access key ID |
 | `alert.ses.secretAccessKey` | 🔑 AWS secret access key |
+| `alert.ses.sessionToken` | 🎟️ Session token for temporary credentials (optional) |
 | `alert.ses.region` | 🌍 AWS region (default: `us-east-1`) |
 | `alert.ses.from` | 📤 Verified sender address |
 | `alert.ses.to` | 📥 Recipients (comma-separated) |
@@ -575,6 +580,7 @@ alert:
 |:---|---|
 | `alert.sns.accessKeyId` | 🔑 AWS access key ID |
 | `alert.sns.secretAccessKey` | 🔑 AWS secret access key |
+| `alert.sns.sessionToken` | 🎟️ Session token for temporary credentials (optional) |
 | `alert.sns.region` | 🌍 AWS region (default: `us-east-1`) |
 | `alert.sns.topicArn` | 📢 SNS topic ARN (optional when using `targetArn`) |
 | `alert.sns.targetArn` | 📢 SNS endpoint or target ARN (alternative to `topicArn`) |

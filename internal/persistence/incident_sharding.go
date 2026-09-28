@@ -160,10 +160,16 @@ func (s *Manager) loadIncidentShards(
 	if manifest.ShardCount <= 0 || manifest.ShardCount > 1000 {
 		return nil, true, fmt.Errorf("invalid incident shard count")
 	}
+	// A manifest read through the legacy-name fallback points at shards
+	// written before installation prefixes existed.
+	prefix := s.shardPrefix()
+	if cm.Name == incidentsConfigMapName {
+		prefix = incidentShardPrefix
+	}
 	hash := sha256.New()
 	var incidents []model.PersistedIncident
 	for i := 0; i < manifest.ShardCount; i++ {
-		name := manifestShardName(s.shardPrefix(), manifest, i)
+		name := manifestShardName(prefix, manifest, i)
 		shard, getErr := s.client.CoreV1().ConfigMaps(s.namespace).Get(
 			ctx, name, metav1.GetOptions{},
 		)

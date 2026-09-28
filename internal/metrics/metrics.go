@@ -6,6 +6,7 @@ import (
 	"sync/atomic"
 
 	"github.com/prometheus/client_golang/prometheus"
+	"github.com/prometheus/client_golang/prometheus/collectors"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 )
 
@@ -88,7 +89,13 @@ func DefaultRegistry() *Registry {
 func (r *Registry) initPrometheus() {
 	r.registryOnce.Do(func() {
 		r.registry = prometheus.NewRegistry()
-		r.registry.MustRegister(r)
+		r.registry.MustRegister(
+			r,
+			collectors.NewGoCollector(),
+			collectors.NewProcessCollector(
+				collectors.ProcessCollectorOpts{},
+			),
+		)
 	})
 }
 

@@ -17,8 +17,8 @@ const (
 	defaultOpsgenieTitle = "kwatch detected a crash in pod: %s"
 	defaultOpsgenieText  = "There is an issue with container (%s) in pod (%s)"
 	opsgenieAPIURL       = "https://api.opsgenie.com/v2/alerts"
-	opsgenieCloseURL     = "https://api.opsgenie.com/v2/alerts/%s/close" +
-		"?identifierType=alias"
+	opsgenieEUAPIURL     = "https://api.eu.opsgenie.com/v2/alerts"
+	opsgenieCloseSuffix  = "/%s/close?identifierType=alias"
 )
 
 type Opsgenie struct {
@@ -58,12 +58,22 @@ func NewOpsgenie(
 
 	title, _ := config["title"].(string)
 	text, _ := config["text"].(string)
+	apiURL := opsgenieAPIURL
+	switch region, _ := config["region"].(string); region {
+	case "", "us":
+	case "eu":
+		apiURL = opsgenieEUAPIURL
+	default:
+		klog.InfoS("initializing opsgenie with an invalid region",
+			"region", region)
+		return nil
+	}
 
 	return &Opsgenie{
 		sender:      transport.NewSender(dependencies),
 		apikey:      apiKey,
-		url:         opsgenieAPIURL,
-		closeURL:    opsgenieCloseURL,
+		url:         apiURL,
+		closeURL:    apiURL + opsgenieCloseSuffix,
 		title:       title,
 		text:        text,
 		clusterName: clusterName,

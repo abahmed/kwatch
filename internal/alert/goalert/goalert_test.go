@@ -46,13 +46,13 @@ func TestGoalertCustomURL(t *testing.T) {
 	assert := assert.New(t)
 
 	configMap := map[string]interface{}{
-		"url":       "https://goalert.example.org",
+		"url":       "https://goalert.internal.test",
 		"token":     "test",
 		"serviceId": "SVC123",
 	}
 	c := NewGoalert(configMap, testAppConfig(), testDeps)
 	assert.NotNil(c)
-	assert.Equal(c.url, "https://goalert.example.org/api/v2/generic/incoming")
+	assert.Equal(c.url, "https://goalert.internal.test/api/v2/generic/incoming")
 }
 
 func TestGoalertInvalidConfig(t *testing.T) {

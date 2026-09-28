@@ -242,6 +242,8 @@ func (m *mockHandler) ProcessControlPlanePod(
 
 func (m *mockHandler) SweepControlPlane() {}
 
+func (m *mockHandler) ResolveControlPlanePod(string, string) {}
+
 func (m *mockHandler) ProcessStatefulSet(
 	string,
 	bool,

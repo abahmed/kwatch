@@ -99,6 +99,10 @@ func DetectServicePortIssue(
 	if svc == nil || len(svc.Spec.Ports) == 0 || len(epSlices) == 0 {
 		return nil
 	}
+	epSlices = slicesWithEndpoints(epSlices)
+	if len(epSlices) == 0 {
+		return nil
+	}
 	names, numbers := servicePortExpectations(svc)
 	observedNames, observedNumbers := endpointPortObservations(epSlices)
 	for name := range names {
@@ -121,7 +125,10 @@ func DetectServiceStatusIssue(
 	now time.Time,
 	sustainedSeconds float64,
 ) *model.Observation {
-	if svc == nil {
+	// Service conditions are set by load balancer controllers; on other
+	// Service types they describe unrelated controllers and are not a
+	// pending load balancer.
+	if svc == nil || svc.Spec.Type != corev1.ServiceTypeLoadBalancer {
 		return nil
 	}
 	key := svc.Namespace + "/" + svc.Name
@@ -138,8 +145,7 @@ func DetectServiceStatusIssue(
 			"service", svc, constant.ReasonLoadBalancerPending,
 		).WithHint(hint)
 	}
-	if svc.Spec.Type != corev1.ServiceTypeLoadBalancer ||
-		serviceHasLoadBalancerAddress(svc) {
+	if serviceHasLoadBalancerAddress(svc) {
 		return nil
 	}
 	if now.Sub(svc.CreationTimestamp.Time) <
@@ -203,6 +209,20 @@ func endpointPortObservations(
 		}
 	}
 	return names, numbers
+}
+
+// slicesWithEndpoints drops empty slices: they carry no port evidence, and
+// the EndpointSlice controller leaves them behind while pods roll.
+func slicesWithEndpoints(
+	epSlices []*discoveryv1.EndpointSlice,
+) []*discoveryv1.EndpointSlice {
+	out := make([]*discoveryv1.EndpointSlice, 0, len(epSlices))
+	for _, slice := range epSlices {
+		if slice != nil && len(slice.Endpoints) > 0 {
+			out = append(out, slice)
+		}
+	}
+	return out
 }
 
 func servicePortMismatch(

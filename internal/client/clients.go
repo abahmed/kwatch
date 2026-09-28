@@ -29,12 +29,15 @@ type HostResolver interface {
 // second client from configuration.
 type ClientSet struct {
 	Kubernetes kubernetes.Interface
-	Dynamic    dynamic.Interface
-	Discovery  discovery.DiscoveryInterfaceWithContext
-	REST       rest.Interface
-	HTTP       *http.Client
-	Resolver   HostResolver
-	Clock      clock.Clock
+	// Election has its own rate limiter so heavy lists and log fetches on
+	// Kubernetes cannot delay Lease renewals past the renew deadline.
+	Election  kubernetes.Interface
+	Dynamic   dynamic.Interface
+	Discovery discovery.DiscoveryInterfaceWithContext
+	REST      rest.Interface
+	HTTP      *http.Client
+	Resolver  HostResolver
+	Clock     clock.Clock
 }
 
 // NewClientSetWithRuntime constructs clients from the immutable runtime
@@ -67,11 +70,17 @@ func newClientSet(
 	resolver HostResolver,
 	timeSource clock.Clock,
 ) (ClientSet, error) {
-	restConfig, err := getRestConfig(appConfig)
+	restConfig, err := getRestConfig()
 	if err != nil {
 		return ClientSet{}, err
 	}
 	kubernetesClient, err := kubernetes.NewForConfig(restConfig)
+	if err != nil {
+		return ClientSet{}, err
+	}
+	electionClient, err := kubernetes.NewForConfig(
+		electionRestConfig(restConfig),
+	)
 	if err != nil {
 		return ClientSet{}, err
 	}
@@ -93,6 +102,7 @@ func newClientSet(
 	}
 	return ClientSet{
 		Kubernetes: kubernetesClient,
+		Election:   electionClient,
 		Dynamic:    dynamicClient,
 		Discovery:  discoveryClient,
 		REST:       restClient,

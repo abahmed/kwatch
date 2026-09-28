@@ -15,6 +15,8 @@ import (
 
 	"github.com/abahmed/kwatch/internal/clock"
 	"github.com/abahmed/kwatch/internal/config"
+	"github.com/abahmed/kwatch/internal/constant"
+	"github.com/abahmed/kwatch/internal/model"
 	"github.com/abahmed/kwatch/internal/monitor"
 )
 
@@ -73,14 +75,30 @@ func NewWithRESTDependencies(
 
 // ProcessControlPlanePod evaluates one Pod from the controller event stream.
 func (m *Monitor) ProcessControlPlanePod(pod *corev1.Pod) error {
-	if pod == nil || ComponentNameFromLabels(pod.Labels) == "" {
+	if pod == nil || ComponentNameFromLabels(pod.Labels) == "" ||
+		m.incidentSink == nil {
 		return nil
 	}
-	if observation := DetectPodIssue(pod); observation != nil &&
-		m.incidentSink != nil {
+	if observation := DetectPodIssue(pod); observation != nil {
 		m.incidentSink.Process(observation)
+		return nil
 	}
+	// A healthy pod clears its earlier failure; without this the incident
+	// only ever closed through the stale-incident janitor.
+	m.ResolveControlPlanePod(pod.Namespace, pod.Name)
 	return nil
+}
+
+// ResolveControlPlanePod clears the failure of a recovered or deleted
+// control-plane Pod.
+func (m *Monitor) ResolveControlPlanePod(namespace, name string) {
+	if m.incidentSink == nil {
+		return
+	}
+	m.incidentSink.Resolve(
+		model.NewObjectRef("controlplane", namespace, name),
+		constant.ReasonControlPlaneComponentFailure,
+	)
 }
 
 // SweepControlPlane evaluates the control-plane Pod cache after startup.

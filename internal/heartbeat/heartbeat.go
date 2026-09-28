@@ -9,6 +9,7 @@ import (
 	"k8s.io/klog/v2"
 
 	"github.com/abahmed/kwatch/internal/config"
+	"github.com/abahmed/kwatch/internal/delivery/transport"
 )
 
 type HeartbeatMonitor struct {
@@ -53,6 +54,9 @@ func (m *HeartbeatMonitor) Start(ctx context.Context) error {
 	defer ticker.Stop()
 
 	klog.InfoS("heartbeat monitor started", "interval", interval)
+	// Ping immediately so a restart does not leave a gap of one interval
+	// that the external monitor would report as downtime.
+	m.ping(ctx)
 	for {
 		select {
 		case <-ctx.Done():
@@ -64,19 +68,28 @@ func (m *HeartbeatMonitor) Start(ctx context.Context) error {
 	}
 }
 
+// pingTimeout bounds one ping so a hung endpoint cannot delay the next one.
+const pingTimeout = 10 * time.Second
+
 func (m *HeartbeatMonitor) ping(ctx context.Context) {
 	if m.client == nil {
 		klog.ErrorS(nil, "heartbeat ping skipped: HTTP client is not configured")
 		return
 	}
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, m.config.URL, nil)
+	ctx, cancel := context.WithTimeout(ctx, pingTimeout)
+	defer cancel()
+	req, err := http.NewRequestWithContext(
+		ctx, http.MethodGet, m.config.URL, nil,
+	)
 	if err != nil {
-		klog.ErrorS(err, "heartbeat ping: failed to create request")
+		klog.ErrorS(transport.RedactURLError(err),
+			"heartbeat ping: failed to create request")
 		return
 	}
 	resp, err := m.client.Do(req)
 	if err != nil {
-		klog.ErrorS(err, "heartbeat ping failed")
+		// The URL often embeds a token; never log it.
+		klog.ErrorS(transport.RedactURLError(err), "heartbeat ping failed")
 		return
 	}
 	_, _ = io.Copy(io.Discard, resp.Body)

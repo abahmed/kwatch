@@ -72,7 +72,7 @@ func (m *Monitor) watchCRD(obj interface{}) {
 		for _, namespace := range m.watchNamespaces(scope == "Namespaced") {
 			key := versionKey(gvr, namespace)
 			desired[key] = struct{}{}
-			m.watchVersion(gvr, namespace)
+			m.watchVersionAsync(gvr, namespace)
 		}
 	}
 	m.reconcileCRDVersions(crd.GetName(), desired)
@@ -103,6 +103,27 @@ func versionKey(gvr schema.GroupVersionResource, namespace string) string {
 	return gvr.String() + "|" + namespace
 }
 
+// watchVersionAsync keeps the probe List and informer setup off the CRD
+// event handler, so one slow or denied resource does not stall every other
+// CRD event behind it.
+func (m *Monitor) watchVersionAsync(
+	gvr schema.GroupVersionResource,
+	namespace string,
+) {
+	m.mu.Lock()
+	runWG := m.runWG
+	active := m.started
+	m.mu.Unlock()
+	if runWG == nil || !active {
+		return
+	}
+	runWG.Add(1)
+	go func() {
+		defer runWG.Done()
+		m.watchVersion(gvr, namespace)
+	}()
+}
+
 func (m *Monitor) watchVersion(
 	gvr schema.GroupVersionResource,
 	namespace string,
@@ -117,10 +138,24 @@ func (m *Monitor) watchVersion(
 		m.mu.Unlock()
 		return
 	}
-	m.mu.Unlock()
-	if !m.canWatchVersion(runCtx, gvr, namespace) {
+	if until, denied := m.deniedUntil[key]; denied &&
+		m.now().Before(until) {
+		m.mu.Unlock()
 		return
 	}
+	m.mu.Unlock()
+	if !m.canWatchVersion(runCtx, gvr, namespace) {
+		m.mu.Lock()
+		if m.deniedUntil == nil {
+			m.deniedUntil = make(map[string]time.Time)
+		}
+		m.deniedUntil[key] = m.now().Add(deniedRetryInterval)
+		m.mu.Unlock()
+		return
+	}
+	m.mu.Lock()
+	delete(m.deniedUntil, key)
+	m.mu.Unlock()
 	factory, informer, err := dynamicwatch.NewInformer(
 		m.client, m.resync, namespace, gvr, k8s.TrimManagedFields,
 	)

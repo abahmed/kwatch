@@ -3,6 +3,7 @@ package goalert
 import (
 	"context"
 	"encoding/json"
+	"net/url"
 	"strings"
 
 	"k8s.io/klog/v2"
@@ -58,7 +59,12 @@ func NewGoalert(
 		return nil
 	}
 
-	klog.InfoS("initializing goalert", "url", server, "serviceID", serviceID)
+	host, valid := goalertHost(server)
+	if !valid {
+		klog.InfoS("initializing goalert with an invalid or example url")
+		return nil
+	}
+	klog.InfoS("initializing goalert", "host", host, "serviceID", serviceID)
 
 	return &Goalert{
 		sender:      transport.NewSender(dependencies),
@@ -106,4 +112,24 @@ func (s *Goalert) SendEvent(ctx context.Context, e *event.Event) error {
 // SendMessage sends a plain notice as one deduplicated alert.
 func (s *Goalert) SendMessage(ctx context.Context, msg string) error {
 	return s.SendEvent(ctx, &event.Event{PodName: msg, Reason: "notify"})
+}
+
+// goalertHost validates the configured server. Reserved example domains
+// (RFC 2606) are rejected so a copied sample config never sends the
+// integration token to a host nobody controls.
+func goalertHost(server string) (string, bool) {
+	parsed, err := url.Parse(strings.TrimSpace(server))
+	if err != nil || parsed.Hostname() == "" ||
+		(parsed.Scheme != "https" && parsed.Scheme != "http") {
+		return "", false
+	}
+	host := strings.ToLower(parsed.Hostname())
+	for _, reserved := range []string{
+		"example.com", "example.net", "example.org", "example",
+	} {
+		if host == reserved || strings.HasSuffix(host, "."+reserved) {
+			return "", false
+		}
+	}
+	return host, true
 }

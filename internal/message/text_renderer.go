@@ -136,15 +136,18 @@ func labelOf(r *Report) string {
 // sentence ("6 workloads in dev: …") and is used as is; a single
 // resource is qualified with its namespace.
 func subjectOf(r *Report) string {
-	name := r.Name
-	if name == "" {
-		return ""
-	}
-	if strings.Contains(name, " ") || r.Namespace == "" ||
-		strings.HasPrefix(name, r.Namespace+"/") {
+	return QualifiedName(r.Namespace, r.Name)
+}
+
+// QualifiedName prefixes name with its namespace unless it is already
+// qualified ("ns/name", or any other "a/b" reference) or is a sentence
+// describing a group. Renderers share it so none prints "ns/ns/name".
+func QualifiedName(namespace, name string) string {
+	if name == "" || namespace == "" ||
+		strings.ContainsAny(name, " /") {
 		return name
 	}
-	return r.Namespace + "/" + name
+	return namespace + "/" + name
 }
 
 func isGroupSubject(r *Report) bool { return strings.Contains(r.Name, " ") }

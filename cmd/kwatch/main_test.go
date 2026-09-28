@@ -35,7 +35,7 @@ func TestRunCommandVersion(t *testing.T) {
 	}
 }
 
-func TestRunCommandDelegatesUnknownCommand(t *testing.T) {
+func TestRunCommandRejectsUnknownCommand(t *testing.T) {
 	var out, errOut bytes.Buffer
 	called := false
 
@@ -50,12 +50,15 @@ func TestRunCommandDelegatesUnknownCommand(t *testing.T) {
 		},
 	)
 
-	if code != 7 || !called {
-		t.Fatalf(
-			"unknown command returned %d, called=%v; want 7 and delegated",
-			code,
-			called,
-		)
+	if code != 2 {
+		t.Fatalf("unknown command returned %d, want 2", code)
+	}
+	if called {
+		t.Fatal("unknown command unexpectedly called runApp")
+	}
+	if !strings.Contains(errOut.String(), "unknown command") {
+		t.Fatalf("error output = %q, want 'unknown command'",
+			errOut.String())
 	}
 }
 

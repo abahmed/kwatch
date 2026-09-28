@@ -68,14 +68,10 @@ func (s *Slack) sendIncidentWithToken(
 ) error {
 	key := string(inc.Key)
 
-	post := func(
-		blocks *slackClient.Blocks,
-		threadTS string,
-	) (string, error) {
-		return s.postBlocks(ctx, blocks, threadTS)
-	}
+	post := s.postBlocks
 	if s.postBlocksFn != nil {
 		post = func(
+			_ context.Context,
 			blocks *slackClient.Blocks,
 			threadTS string,
 		) (string, error) {
@@ -88,7 +84,7 @@ func (s *Slack) sendIncidentWithToken(
 		blocks := buildIncidentBlocksWithInsight(
 			inc, s.clusterName, ins, s.clockSource,
 		)
-		ts, err := post(blocks, "")
+		ts, err := post(ctx, blocks, "")
 		if err != nil {
 			return err
 		}
@@ -100,13 +96,16 @@ func (s *Slack) sendIncidentWithToken(
 		blocks := buildIncidentUpdateBlocksWithInsight(
 			inc, ins, s.clockSource,
 		)
-		_, err := post(blocks, threadTS)
+		newTS, err := postWithThreadFallback(ctx, post, blocks, threadTS)
+		if err == nil && newTS != threadTS {
+			s.saveThread(key, newTS)
+		}
 		return err
 
 	case model.ActionResolved:
 		threadTS := s.popThread(key)
 		blocks := buildIncidentResolvedBlocks(inc, s.clockSource)
-		_, err := post(blocks, threadTS)
+		_, err := postWithThreadFallback(ctx, post, blocks, threadTS)
 		return err
 	}
 

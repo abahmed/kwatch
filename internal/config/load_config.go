@@ -29,90 +29,103 @@ func LintStrict() error {
 	if err := validateSecretReferences(string(raw)); err != nil {
 		return err
 	}
-	expanded, err := expandEnv(string(raw))
+	document, err := expandConfigDocument(string(raw))
+	if err != nil || document == nil {
+		return err
+	}
+	resolved, err := yaml.Marshal(document)
 	if err != nil {
 		return err
 	}
-	expanded, err = expandFileRefs(expanded)
-	if err != nil {
-		return err
-	}
-	if strings.TrimSpace(expanded) == "" {
-		return nil
-	}
-	dec := yaml.NewDecoder(strings.NewReader(expanded))
+	dec := yaml.NewDecoder(strings.NewReader(string(resolved)))
 	dec.KnownFields(true)
 	var tmp Config
 	return dec.Decode(&tmp)
 }
 
-// expandEnv replaces ${VAR} with the environment value (braced-only;
-// bare $ is preserved for passwords/hashes). A referenced variable that is
-// not set in the environment is reported as an error rather than silently
-// expanding to an empty string, which would corrupt the configuration.
+// expandConfigDocument parses the config and then resolves ${VAR} and exact
+// ${file:/path} references inside scalar values only. Expanding after parsing
+// keeps secret values from changing the YAML structure: a value containing a
+// quote, colon, or newline stays one string. Bare $ is preserved for
+// passwords and hashes. A referenced variable that is not set is an error
+// rather than an empty string that would corrupt the configuration.
 var envVarRe = regexp.MustCompile(`\$\{(\w+)\}`)
 var fileRefRe = regexp.MustCompile(`^\$\{file:(/[^}]*)\}$`)
 
-func expandEnv(s string) (string, error) {
+func expandConfigDocument(raw string) (*yaml.Node, error) {
+	if strings.TrimSpace(raw) == "" {
+		return nil, nil
+	}
+	var document yaml.Node
+	if err := yaml.Unmarshal([]byte(raw), &document); err != nil {
+		return nil, err
+	}
+	if document.Kind == 0 {
+		return nil, nil
+	}
 	unset := map[string]bool{}
-	out := envVarRe.ReplaceAllStringFunc(s, func(m string) string {
-		groups := envVarRe.FindStringSubmatch(m)
-		if groups == nil {
-			return m
-		}
-		v, ok := os.LookupEnv(groups[1])
-		if !ok {
-			unset[groups[1]] = true
-			return m
-		}
-		return v
-	})
+	if err := expandNode(&document, unset); err != nil {
+		return nil, err
+	}
 	if len(unset) > 0 {
 		names := make([]string, 0, len(unset))
 		for n := range unset {
 			names = append(names, n)
 		}
 		sort.Strings(names)
-		return "", fmt.Errorf("environment variable(s) referenced in config are not set: %s", strings.Join(names, ", "))
+		return nil, fmt.Errorf(
+			"environment variable(s) referenced in config are not set: %s",
+			strings.Join(names, ", "),
+		)
 	}
-	return out, nil
+	return &document, nil
 }
 
-// expandFileRefs resolves exact ${file:/path} scalar references after YAML
-// parsing so secret values remain correctly escaped when YAML is re-encoded.
-func expandFileRefs(s string) (string, error) {
-	if strings.TrimSpace(s) == "" {
-		return s, nil
-	}
-	var document yaml.Node
-	if err := yaml.Unmarshal([]byte(s), &document); err != nil {
-		return "", err
-	}
-	if err := resolveFileRefNodes(&document); err != nil {
-		return "", err
-	}
-	resolved, err := yaml.Marshal(&document)
-	if err != nil {
-		return "", err
-	}
-	return string(resolved), nil
-}
-
-func resolveFileRefNodes(node *yaml.Node) error {
-	if node.Kind == yaml.ScalarNode && node.Tag == "!!str" {
-		match := fileRefRe.FindStringSubmatch(node.Value)
-		if match != nil {
-			value, err := os.ReadFile(match[1]) // #nosec G304 -- operator-selected config reference
-			if err != nil {
-				return fmt.Errorf("config file reference %q could not be read: %w", match[1], err)
-			}
-			node.Value = strings.TrimRight(string(value), "\r\n")
+func expandNode(node *yaml.Node, unset map[string]bool) error {
+	if node.Kind == yaml.ScalarNode {
+		if err := expandScalar(node, unset); err != nil {
+			return err
 		}
 	}
 	for _, child := range node.Content {
-		if err := resolveFileRefNodes(child); err != nil {
+		if err := expandNode(child, unset); err != nil {
 			return err
 		}
+	}
+	return nil
+}
+
+func expandScalar(node *yaml.Node, unset map[string]bool) error {
+	if match := fileRefRe.FindStringSubmatch(node.Value); match != nil {
+		// #nosec G304 -- operator-selected config reference
+		value, err := os.ReadFile(match[1])
+		if err != nil {
+			return fmt.Errorf(
+				"config file reference %q could not be read: %w",
+				match[1], err,
+			)
+		}
+		node.Value = strings.TrimRight(string(value), "\r\n")
+		return nil
+	}
+	if !envVarRe.MatchString(node.Value) {
+		return nil
+	}
+	node.Value = envVarRe.ReplaceAllStringFunc(
+		node.Value, func(m string) string {
+			name := envVarRe.FindStringSubmatch(m)[1]
+			v, ok := os.LookupEnv(name)
+			if !ok {
+				unset[name] = true
+				return m
+			}
+			return v
+		},
+	)
+	// A plain `port: ${PORT}` must decode as the value's natural type, as it
+	// did with text expansion. Quoted scalars stay strings.
+	if node.Style == 0 {
+		node.Tag = ""
 	}
 	return nil
 }
@@ -149,19 +162,14 @@ func parseConfigFile() (*Config, error) {
 		return nil, err
 	}
 
-	expanded, err := expandEnv(string(yamlFile))
+	document, err := expandConfigDocument(string(yamlFile))
 	if err != nil {
-		klog.ErrorS(err, "failed to expand environment variables in config", "file", configFile)
+		klog.ErrorS(err, "failed to expand references in config",
+			"file", configFile)
 		return nil, err
 	}
-	expanded, err = expandFileRefs(expanded)
-	if err != nil {
-		klog.ErrorS(err, "failed to resolve file references in config", "file", configFile)
-		return nil, err
-	}
-
-	if strings.TrimSpace(expanded) != "" {
-		if err = yaml.Unmarshal([]byte(expanded), config); err != nil {
+	if document != nil {
+		if err = document.Decode(config); err != nil {
 			klog.InfoS("unable to parse config file", "error", err.Error())
 			return nil, err
 		}

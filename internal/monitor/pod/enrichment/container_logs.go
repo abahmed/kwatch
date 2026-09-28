@@ -3,6 +3,7 @@ package enrichment
 import (
 	"context"
 	"strings"
+	"time"
 
 	"k8s.io/klog/v2"
 
@@ -14,6 +15,15 @@ import (
 // when the runtime has already removed the container whose logs were asked
 // for. Posted as-is it read as the application's own last words.
 const unavailableLogsPrefix = "unable to retrieve container logs for"
+
+// logsUnavailableText replaces logs that could not be read. It is never
+// cached, so the next report tries the kubelet again.
+const logsUnavailableText = "[logs unavailable — kubelet timeout or " +
+	"container not yet logged]"
+
+// logFetchBudget bounds all kubelet reads for one container, including the
+// fallback from previous to current logs.
+const logFetchBudget = 12 * time.Second
 
 // LogsUnavailable identifies the kubelet response used when the container's
 // previous log stream has already been removed.
@@ -43,7 +53,10 @@ func (enricher ContainerLogsEnricher) Enrich(ctx *Context) bool {
 
 	logs := ctx.LogCache.Do(
 		LogCacheKey(ctx.Pod, container),
-		func() string { return fetchContainerLogs(ctx) },
+		func() (string, bool) {
+			logs := fetchContainerLogs(ctx)
+			return logs, logs != logsUnavailableText
+		},
 	)
 
 	if filter.MatchesLog(ctx.Runtime.Scope().SuppressionIndex(), logs) {
@@ -63,8 +76,7 @@ func fetchContainerLogs(ctx *Context) string {
 	fetcher := ctx.ContainerLogs
 	if fetcher == nil {
 		if ctx.Client == nil {
-			return "[logs unavailable — kubelet timeout or container not yet " +
-				"logged]"
+			return logsUnavailableText
 		}
 		fetcher = func(
 			fetchCtx context.Context,
@@ -87,6 +99,8 @@ func fetchContainerLogs(ctx *Context) string {
 	if fetchCtx == nil {
 		fetchCtx = context.Background()
 	}
+	fetchCtx, cancel := context.WithTimeout(fetchCtx, logFetchBudget)
+	defer cancel()
 	// Always fetch previous container logs when restarts exist so that
 	// the crash output (not the current container's possibly-empty startup)
 	// is included in the notification.
@@ -115,8 +129,7 @@ func fetchContainerLogs(ctx *Context) string {
 		logs = ""
 	}
 	if logs == "" {
-		return "[logs unavailable — kubelet timeout or container not yet " +
-			"logged]"
+		return logsUnavailableText
 	}
 	return logs
 }

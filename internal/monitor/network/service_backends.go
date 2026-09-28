@@ -69,3 +69,13 @@ func podReady(pod *corev1.Pod) bool {
 	}
 	return false
 }
+
+// hasLiveBackend reports whether any selected pod is not being deleted.
+func hasLiveBackend(pods []*corev1.Pod) bool {
+	for _, pod := range pods {
+		if pod.DeletionTimestamp == nil {
+			return true
+		}
+	}
+	return false
+}

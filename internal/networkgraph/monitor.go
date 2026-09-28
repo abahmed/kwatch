@@ -119,3 +119,22 @@ func (m *Monitor) WaitForCacheSync(ctx context.Context) bool {
 func (m *Monitor) StatusJSON() ([]byte, error) {
 	return json.Marshal(m.Status())
 }
+
+// Rediscover replaces the watcher generation when a previously missing
+// optional API has been installed. It reports whether a replacement ran.
+// The old generation is stopped and awaited before the new one starts.
+func (m *Monitor) Rediscover(ctx context.Context) (bool, error) {
+	m.lifecycleMu.Lock()
+	watcher := m.dynamicWatcher
+	generation := m.generation
+	m.lifecycleMu.Unlock()
+	if watcher == nil || !watcher.SkippedNowAvailable(ctx) {
+		return false, nil
+	}
+	if generation.Valid() {
+		if err := generation.Stop(ctx); err != nil {
+			return false, err
+		}
+	}
+	return true, m.Start(ctx)
+}

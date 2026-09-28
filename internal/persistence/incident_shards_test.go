@@ -136,6 +136,46 @@ func TestPersistedIncidentsLoadSchemaThreeFixedShards(t *testing.T) {
 	require.Equal(t, incidents, loaded)
 }
 
+func TestPersistedIncidentsLoadLegacyShardWithCustomPrefix(t *testing.T) {
+	client := fake.NewSimpleClientset()
+	incidents := []model.PersistedIncident{{
+		Key: "ns:legacy", Name: "legacy", State: model.StateActive,
+	}}
+	data, err := gzJSON(incidents)
+	require.NoError(t, err)
+	checksum := sha256.Sum256(data)
+	checksumHex := hex.EncodeToString(checksum[:])
+	manifest, err := json.Marshal(incidentShardManifest{
+		Schema: "4", ShardCount: 1,
+		Generation: checksumHex[:16], Checksum: checksumHex,
+	})
+	require.NoError(t, err)
+	_, err = client.CoreV1().ConfigMaps("kwatch").Create(
+		context.Background(), &corev1.ConfigMap{
+			ObjectMeta: metav1.ObjectMeta{Name: incidentsConfigMapName},
+			Data: map[string]string{
+				incidentManifestKey: string(manifest),
+			},
+		}, metav1.CreateOptions{},
+	)
+	require.NoError(t, err)
+	_, err = client.CoreV1().ConfigMaps("kwatch").Create(
+		context.Background(), &corev1.ConfigMap{
+			ObjectMeta: metav1.ObjectMeta{
+				Name: incidentShardPrefix + checksumHex[:16] + "-000",
+			},
+			BinaryData: map[string][]byte{incidentsKey: data},
+		}, metav1.CreateOptions{},
+	)
+	require.NoError(t, err)
+
+	manager := newTestManager(client, "kwatch")
+
+	loaded, err := manager.LoadPersistedIncidents(context.Background())
+	require.NoError(t, err)
+	require.Equal(t, incidents, loaded)
+}
+
 func shardedTestIncidents(prefix string) []model.PersistedIncident {
 	incidents := make([]model.PersistedIncident, 0, 1800)
 	seed := uint64(0x9e3779b97f4a7c15)

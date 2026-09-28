@@ -26,7 +26,8 @@ func (rule PendingPodRule) Detect(ctx *Context) Decision {
 	if !watchStart.IsZero() && watchStart.After(refTime) {
 		refTime = watchStart
 	}
-	if ctx.now().Sub(refTime) < rule.Threshold {
+	if waited := ctx.now().Sub(refTime); waited < rule.Threshold {
+		ctx.requestRecheck(rule.Threshold - waited)
 		return DecisionDefer
 	}
 

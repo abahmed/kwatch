@@ -51,7 +51,14 @@ type Monitor struct {
 	// needs, from the informer cache instead of a live API read.
 	serviceLister corev1lister.ServiceLister
 	now           func() time.Time
+	// deniedUntil backs off versions that could not be listed, usually
+	// because RBAC denies them, so every resync does not re-list them.
+	deniedUntil map[string]time.Time
 }
+
+// deniedRetryInterval is how long an unlistable custom resource version is
+// skipped before the next CRD resync tries it again.
+const deniedRetryInterval = 30 * time.Minute
 
 type graphReferenceRule struct {
 	path []string

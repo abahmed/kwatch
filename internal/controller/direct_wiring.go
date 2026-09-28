@@ -35,6 +35,7 @@ func configureDirectRuntimes(
 				EventsByPod: c.eventsByPod, Secret: c.secretLister,
 				ConfigMap:      c.configMapLister,
 				ServiceAccount: c.serviceAccountLister,
+				RequeuePod:     c.pod.queue.AddAfter,
 			},
 		); err != nil {
 			return err

@@ -32,6 +32,10 @@ var warningEventReasons = map[string]struct{}{
 	"NodeNotReady": {}, "KubeletNotReady": {}, "Unhealthy": {},
 }
 
+var caScaleUpSuccessReasons = map[string]struct{}{
+	"TriggeredScaleUp": {}, "ScaledUpGroup": {},
+}
+
 // EventRuntime converts failure-shaped Kubernetes Events into observations.
 // It owns only Event policy and its small amount of sustain state.
 type EventRuntime struct {
@@ -41,6 +45,8 @@ type EventRuntime struct {
 	mu        sync.Mutex
 	now       func() time.Time
 	caBlocked map[string]time.Time
+	// caLastSeen is when each failure reason was last reported.
+	caLastSeen map[string]time.Time
 }
 
 // ProcessWarningEvent handles recent resource-level Warning Events.
@@ -77,7 +83,7 @@ func (r *EventRuntime) ProcessWarningEvent(ev *corev1.Event) {
 
 // ProcessClusterAutoscalerEvent handles sustained Cluster Autoscaler failures.
 func (r *EventRuntime) ProcessClusterAutoscalerEvent(ev *corev1.Event) {
-	if ev == nil {
+	if ev == nil || !r.recentEvent(ev, r.nowTime()) {
 		return
 	}
 	if ev.Reason == "FailedToScaleUp" || ev.Reason == "NotTriggerScaleUp" {
@@ -95,9 +101,18 @@ func (r *EventRuntime) ProcessClusterAutoscalerEvent(ev *corev1.Event) {
 		).WithSeverity(model.SeverityWarning).WithHint(hint).
 			WithMessage(ev.Message).
 			WithFacts(autoscalerEventFacts(strings.ToLower(ev.Message)))
-		observation.NodeName = ev.InvolvedObject.Name
+		// The involved object is usually the pending Pod, not a node.
+		if ev.InvolvedObject.Kind == "Node" {
+			observation.NodeName = ev.InvolvedObject.Name
+		}
 		observation.Transient = true
 		r.process(observation)
+		return
+	}
+	// Only a successful scale-up clears the failure. Unrelated autoscaler
+	// events (scale-down, status updates) used to resolve it every few
+	// seconds, so the incident flapped.
+	if _, ok := caScaleUpSuccessReasons[ev.Reason]; !ok {
 		return
 	}
 	r.clearCA()
@@ -123,11 +138,17 @@ func (r *EventRuntime) process(observation *model.Observation) {
 func (r *EventRuntime) markCA(reason string, now time.Time) time.Time {
 	r.mu.Lock()
 	defer r.mu.Unlock()
+	// A failure not repeated within the sustain window starts a new
+	// window, so an old failure does not make a new one alert at once.
 	first, ok := r.caBlocked[reason]
-	if !ok {
+	if !ok || now.Sub(r.caLastSeen[reason]) > caSustainedMinutes*time.Minute {
 		first = now
 		r.caBlocked[reason] = first
 	}
+	if r.caLastSeen == nil {
+		r.caLastSeen = make(map[string]time.Time)
+	}
+	r.caLastSeen[reason] = now
 	return first
 }
 
@@ -135,6 +156,7 @@ func (r *EventRuntime) clearCA() {
 	r.mu.Lock()
 	delete(r.caBlocked, "FailedToScaleUp")
 	delete(r.caBlocked, "NotTriggerScaleUp")
+	clear(r.caLastSeen)
 	r.mu.Unlock()
 }
 

@@ -55,6 +55,9 @@ type RuntimeSources struct {
 	Secret         corev1lister.SecretLister
 	ConfigMap      corev1lister.ConfigMapLister
 	ServiceAccount corev1lister.ServiceAccountLister
+	// RequeuePod revisits a pod key after a delay, when a time-based rule
+	// becomes due. Optional; nil falls back to informer resync.
+	RequeuePod func(key string, delay time.Duration)
 }
 
 // Runtime owns Pod queue lookup and lifecycle recovery. Detection policy is
@@ -219,6 +222,12 @@ func (r *Runtime) ProcessPodObject(
 	if r.evaluator != nil {
 		r.evaluator.EvaluatePod(ctx)
 		r.evaluator.EvaluateContainers(ctx)
+	}
+	if ctx.RecheckAfter > 0 && sources.RequeuePod != nil {
+		// A second past the deadline so the rule is due when re-run.
+		sources.RequeuePod(
+			pod.Namespace+"/"+pod.Name, ctx.RecheckAfter+time.Second,
+		)
 	}
 	owner := observe.PodOwners{
 		RS: sources.RS,

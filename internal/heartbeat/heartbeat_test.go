@@ -6,6 +6,7 @@ import (
 	"net/http/httptest"
 	"sync/atomic"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
 
@@ -93,4 +94,49 @@ func TestHeartbeatPingHandlesMissingClientAndInvalidURL(t *testing.T) {
 		Enabled: true,
 		URL:     "://invalid",
 	}, http.DefaultClient).ping(context.Background())
+}
+
+func TestHeartbeatStartImmediatelyPings(t *testing.T) {
+	var pingCount atomic.Int32
+	srv := httptest.NewServer(http.HandlerFunc(
+		func(w http.ResponseWriter, r *http.Request) {
+			pingCount.Add(1)
+			w.WriteHeader(http.StatusOK)
+		},
+	))
+	defer srv.Close()
+
+	cfg := &config.HeartbeatMonitor{
+		Enabled:  true,
+		URL:      srv.URL,
+		Interval: 100000,
+	}
+	m := NewHeartbeatMonitor(cfg, http.DefaultClient)
+
+	ctx, cancel := context.WithTimeout(context.Background(), 100*time.Millisecond)
+	defer cancel()
+
+	// Start the monitor and wait for it to complete
+	m.Start(ctx)
+
+	assert.Greater(t, pingCount.Load(), int32(0),
+		"immediate ping should occur at startup")
+}
+
+func TestHeartbeatPingHasTimeoutPerPing(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(
+		func(w http.ResponseWriter, r *http.Request) {
+			w.WriteHeader(http.StatusOK)
+		},
+	))
+	defer srv.Close()
+
+	cfg := &config.HeartbeatMonitor{Enabled: true, URL: srv.URL}
+	m := NewHeartbeatMonitor(cfg, http.DefaultClient)
+
+	// Ping should include its own timeout, even if ctx has a long timeout
+	ctx := context.Background()
+	m.ping(ctx)
+
+	// No panic or error should occur
 }

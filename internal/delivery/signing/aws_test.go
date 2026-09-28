@@ -12,8 +12,7 @@ func signForTest(
 	body []byte,
 ) (map[string]string, error) {
 	return SignAWSV4At(
-		accessKey,
-		secretKey,
+		Credentials{AccessKeyID: accessKey, SecretAccessKey: secretKey},
 		region,
 		service,
 		method,
@@ -79,8 +78,7 @@ func TestSignAWSV4Deterministic(t *testing.T) {
 func TestSignAWSV4AtUsesProvidedTime(t *testing.T) {
 	now := time.Date(2026, 9, 12, 10, 11, 12, 0, time.UTC)
 	headers, err := SignAWSV4At(
-		"access",
-		"secret",
+		Credentials{AccessKeyID: "access", SecretAccessKey: "secret"},
 		"us-east-1",
 		"sns",
 		"POST",

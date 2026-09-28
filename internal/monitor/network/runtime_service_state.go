@@ -51,6 +51,7 @@ func (r *Runtime) clearService(namespace, name string) {
 	key := namespace + "/" + name
 	delete(r.firstSeen, key+":outage")
 	delete(r.firstSeen, key+":degraded")
+	delete(r.firstSeen, key+":ports")
 	r.mu.Unlock()
 }
 

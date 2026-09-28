@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
+	"net/url"
 	"strings"
 
 	"github.com/abahmed/kwatch/internal/clock"
@@ -38,9 +39,50 @@ type Discord struct {
 		data *discordgo.WebhookParams,
 		options ...discordgo.RequestOption) (st *discordgo.Message, err error)
 
+	// threadID posts into a forum or channel thread when the webhook URL
+	// carries ?thread_id=.
+	threadID   string
+	sendThread func(webhookID,
+		token string,
+		wait bool,
+		threadID string,
+		data *discordgo.WebhookParams,
+		options ...discordgo.RequestOption) (st *discordgo.Message, err error)
+
 	// reference for general app configuration
 	clusterName string
 	clockSource clock.Clock
+}
+
+// parseWebhook extracts the id, token and optional thread id from a
+// webhook URL such as https://discord.com/api/webhooks/ID/TOKEN?thread_id=T.
+func parseWebhook(webhook string) (string, string, string, bool) {
+	parsed, err := url.Parse(webhook)
+	if err != nil {
+		return "", "", "", false
+	}
+	parts := strings.Split(strings.Trim(parsed.Path, "/"), "/")
+	if len(parts) < 2 || parts[len(parts)-1] == "" ||
+		parts[len(parts)-2] == "" {
+		return "", "", "", false
+	}
+	return parts[len(parts)-2], parts[len(parts)-1],
+		parsed.Query().Get("thread_id"), true
+}
+
+// execute sends through the webhook, inside the configured thread if any.
+func (d *Discord) execute(
+	data *discordgo.WebhookParams,
+	options ...discordgo.RequestOption,
+) error {
+	if d.threadID != "" && d.sendThread != nil {
+		_, err := d.sendThread(
+			d.id, d.token, false, d.threadID, data, options...,
+		)
+		return err
+	}
+	_, err := d.send(d.id, d.token, false, data, options...)
+	return err
 }
 
 // NewDiscord returns new Discord instance
@@ -56,15 +98,12 @@ func NewDiscord(
 		return nil
 	}
 
-	webhookList := strings.Split(webhook, "/")
-	if len(webhookList) <= 1 {
+	webhookID, webhookToken, threadID, ok := parseWebhook(webhook)
+	if !ok {
 		klog.InfoS("initializing discord with missing id or token")
 		return nil
 	}
 	klog.InfoS("initializing discord with webhook configured")
-
-	webhookToken := webhookList[len(webhookList)-1]
-	webhookID := webhookList[len(webhookList)-2]
 
 	discordClient, err := discordgo.New("")
 	if err != nil {
@@ -84,6 +123,8 @@ func NewDiscord(
 		title:       title,
 		text:        text,
 		send:        discordClient.WebhookExecute,
+		threadID:    threadID,
+		sendThread:  discordClient.WebhookThreadExecute,
 		clusterName: clusterName,
 		clockSource: clock.Require(dependencies.Clock),
 	}
@@ -210,10 +251,7 @@ func (d *Discord) SendEvent(
 	}
 
 	// send message
-	_, err := d.send(
-		d.id,
-		d.token,
-		false,
+	err := d.execute(
 		&discordgo.WebhookParams{
 			AllowedMentions: noMentions(),
 			Embeds: []*discordgo.MessageEmbed{
@@ -252,10 +290,7 @@ func (d *Discord) SendMessage(
 	msg string,
 ) error {
 	// send message
-	_, err := d.send(
-		d.id,
-		d.token,
-		false,
+	err := d.execute(
 		&discordgo.WebhookParams{
 			AllowedMentions: noMentions(),
 			Content:         msg,

@@ -25,6 +25,7 @@ type Ses struct {
 	url             string
 	region          string
 	accessKeyID     string
+	sessionToken    string
 	secretAccessKey string
 	from            string
 	to              []string
@@ -41,6 +42,7 @@ func NewSes(
 	clusterName string,
 	dependencies transport.Dependencies,
 ) *Ses {
+	sessionToken, _ := config["sessionToken"].(string)
 	accessKeyID, ok := config["accessKeyId"].(string)
 	if !ok || len(accessKeyID) == 0 {
 		klog.InfoS("initializing ses with empty accessKeyId")
@@ -90,6 +92,7 @@ func NewSes(
 		url:             fmt.Sprintf(sesURLFormat, region),
 		region:          region,
 		accessKeyID:     accessKeyID,
+		sessionToken:    sessionToken,
 		secretAccessKey: secretAccessKey,
 		from:            from,
 		to:              recipients,
@@ -133,7 +136,10 @@ func (s *Ses) SendMessage(ctx context.Context, msg string) error {
 	contentType := "application/x-www-form-urlencoded"
 
 	headers, err := signing.SignAWSV4At(
-		s.accessKeyID, s.secretAccessKey, s.region, sesServiceName,
+		signing.Credentials{
+			AccessKeyID: s.accessKeyID, SecretAccessKey: s.secretAccessKey,
+			SessionToken: s.sessionToken,
+		}, s.region, sesServiceName,
 		"POST", s.url, body, s.now())
 	if err != nil {
 		return err

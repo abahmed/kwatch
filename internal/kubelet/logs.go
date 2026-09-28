@@ -3,8 +3,6 @@ package kubelet
 
 import (
 	"context"
-	"fmt"
-	"strings"
 	"time"
 
 	v1 "k8s.io/api/core/v1"
@@ -50,6 +48,10 @@ func GetPodContainerLogs(
 	return string(logs)
 }
 
+// logFetchTimeout bounds one kubelet log read. Logs are optional context, so
+// a slow kubelet must not hold a monitor worker for long.
+const logFetchTimeout = 8 * time.Second
+
 func getContainerLogs(
 	ctx context.Context,
 	c kubernetes.Interface,
@@ -57,40 +59,7 @@ func getContainerLogs(
 	namespace string,
 	options *v1.PodLogOptions,
 ) ([]byte, error) {
-	// Attempt with 15s timeout; retry once on timeout if context allows.
-	for attempt := 0; attempt < 2; attempt++ {
-		cctx, cancel := context.WithTimeout(ctx, 15*time.Second)
-		logs, err := c.CoreV1().Pods(
-			namespace,
-		).GetLogs(
-			name,
-			options,
-		).DoRaw(
-			cctx,
-		)
-		cancel()
-
-		if err == nil {
-			return logs, nil
-		}
-		if attempt == 0 && cctx.Err() == nil && isTimeoutError(err) {
-			klog.V(2).InfoS("log fetch timeout, retrying",
-				"container", name, "namespace", namespace)
-			continue
-		}
-		return nil, err
-	}
-	return nil, fmt.Errorf(
-		"log fetch failed after retries for container %s",
-		name,
-	)
-}
-
-func isTimeoutError(err error) bool {
-	if err == nil {
-		return false
-	}
-	s := err.Error()
-	return strings.Contains(s, "context deadline exceeded") ||
-		strings.Contains(s, "i/o timeout")
+	cctx, cancel := context.WithTimeout(ctx, logFetchTimeout)
+	defer cancel()
+	return c.CoreV1().Pods(namespace).GetLogs(name, options).DoRaw(cctx)
 }

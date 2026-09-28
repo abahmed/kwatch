@@ -144,7 +144,7 @@ func (rb *ReportBuilder) populateState(r *Report, inc *model.Incident) {
 		restarts = int(^uint32(0) >> 1)
 	}
 	r.State = &StateSection{
-		Message:     inc.LastContainerState.Msg,
+		Message:     rb.redact(inc.LastContainerState.Msg),
 		ExitCode:    inc.LastContainerState.ExitCode,
 		Restarts:    int32(restarts),
 		Duration:    durationStr(inc.FirstSeen, inc.LastSeen),
@@ -187,6 +187,15 @@ func dedupeHint(hint string, shown ...string) string {
 		keep = append(keep, frag)
 	}
 	return strings.Join(keep, "; ")
+}
+
+// redact applies the evidence redaction policy to Kubernetes-provided text
+// such as termination messages and hints, which may echo secrets.
+func (rb *ReportBuilder) redact(value string) string {
+	if value == "" {
+		return ""
+	}
+	return RedactEvidenceWithPolicy(value, rb.includePrivateLogAddresses)
 }
 
 func (rb *ReportBuilder) populateEvidence(r *Report, inc *model.Incident) {

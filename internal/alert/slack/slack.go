@@ -44,14 +44,16 @@ type Slack struct {
 	threadMap map[string]string
 	// threadOrder is insertion order for threadMap, so the map can be bounded
 	// by evicting the oldest thread rather than refusing to record new ones.
-	threadOrder       []string
-	conversations     map[string]conversationState
+	threadOrder   []string
+	conversations map[string]conversationState
+	// conversationOrder bounds conversations the same way as threadOrder.
+	conversationOrder []string
 	mu                sync.Mutex
 	conversationLocks [conversationLockCount]sync.Mutex
 
-	// maxThreadMapSize bounds the thread map to prevent unbounded growth.
-	// When exceeded, new threads are not tracked (updates/resolves still work
-	// without threading, just not threaded).
+	// maxThreadMapSize bounds the thread and conversation maps. When
+	// exceeded, the oldest entries are evicted; their later updates post at
+	// top level instead of in a thread.
 	maxThreadMapSize int
 
 	// compact mode sends single-line messages instead of rich embeds
@@ -147,13 +149,31 @@ func (s *Slack) saveConversation(key string, state conversationState) {
 	if s.conversations == nil {
 		s.conversations = make(map[string]conversationState)
 	}
+	if _, exists := s.conversations[key]; !exists {
+		s.conversationOrder = append(s.conversationOrder, key)
+	}
 	s.conversations[key] = state
+	for s.maxThreadMapSize > 0 &&
+		len(s.conversations) > s.maxThreadMapSize &&
+		len(s.conversationOrder) > 0 {
+		oldest := s.conversationOrder[0]
+		s.conversationOrder = s.conversationOrder[1:]
+		delete(s.conversations, oldest)
+	}
 }
 
 func (s *Slack) deleteConversation(key string) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	delete(s.conversations, key)
+	for i, k := range s.conversationOrder {
+		if k == key {
+			s.conversationOrder = append(
+				s.conversationOrder[:i], s.conversationOrder[i+1:]...,
+			)
+			break
+		}
+	}
 	s.forgetThread(key)
 }
 

@@ -30,6 +30,17 @@ func TestServiceOutageRechecksAtSustainDeadline(t *testing.T) {
 	}
 	pods := cache.NewIndexer(cache.MetaNamespaceKeyFunc, indexers)
 	slices := cache.NewIndexer(cache.MetaNamespaceKeyFunc, indexers)
+	pod := &corev1.Pod{
+		ObjectMeta: metav1.ObjectMeta{
+			Name: "api-1", Namespace: "apps",
+			Labels: map[string]string{"app": "api"},
+		},
+		Spec: corev1.PodSpec{},
+		Status: corev1.PodStatus{Conditions: []corev1.PodCondition{{
+			Type: corev1.PodReady, Status: corev1.ConditionTrue,
+		}}},
+	}
+	pods.Add(pod)
 	var rechecks []time.Duration
 	sink := &networkSinkRecorder{}
 	runtime := NewRuntimeWithRuntimeConfig(

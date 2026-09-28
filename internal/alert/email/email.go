@@ -39,9 +39,24 @@ func NewEmail(config map[string]interface{}, clusterName string) *Email {
 		return nil
 	}
 
-	password, ok := config["password"].(string)
-	if !ok || len(password) == 0 {
-		klog.InfoS("initializing email with an empty password")
+	// An internal relay may accept mail without authentication, so the
+	// password is optional; username defaults to the from address.
+	password, _ := config["password"].(string)
+	username, _ := config["username"].(string)
+	if username == "" && password != "" {
+		username = from
+	}
+	tlsMode, _ := config["tls"].(string)
+	if tlsMode == "" {
+		tlsMode = tlsRequired
+	}
+	if tlsMode != tlsRequired && tlsMode != tlsNone {
+		klog.InfoS("initializing email with an invalid tls mode",
+			"tls", tlsMode)
+		return nil
+	}
+	if tlsMode == tlsNone && password != "" {
+		klog.InfoS("email tls none cannot be used with a password")
 		return nil
 	}
 
@@ -72,7 +87,8 @@ func NewEmail(config map[string]interface{}, clusterName string) *Email {
 		to:   to,
 		smtpConfig: smtpConfig{
 			host: host, port: portNumber,
-			username: from, password: password,
+			username: username, password: password,
+			tlsMode: tlsMode,
 		},
 		clusterName: clusterName,
 	}

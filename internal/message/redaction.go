@@ -6,23 +6,55 @@ import (
 	"github.com/abahmed/kwatch/internal/metrics"
 )
 
-var credentialRedactions = []*regexp.Regexp{
-	regexp.MustCompile(`(?i)(bearer\s+)[^\s,;]+`),
-	regexp.MustCompile(`(?i)(basic\s+)[^\s,;]+`),
-	regexp.MustCompile(
-		`(?i)([?&](?:token|secret|password|api[_-]?key|` +
-			`access[_-]?token)=)[^&\s]+`,
-	),
-	regexp.MustCompile(
-		`(?i)\b(?:password|passwd|token|secret|api[_-]?key|` +
-			`access[_-]?token)\s*[:=]\s*[^\s,;]+`,
-	),
+// redactionRule replaces a match with placeholder. The first capture group,
+// when present, is the non-secret prefix that stays visible.
+type redactionRule struct {
+	pattern     *regexp.Regexp
+	placeholder string
+	suffix      string
 }
 
-var privateAddressRedactions = []*regexp.Regexp{
-	regexp.MustCompile(`\b10\.(?:\d{1,3}\.){2}\d{1,3}\b`),
-	regexp.MustCompile(`\b192\.168\.(?:\d{1,3}\.)\d{1,3}\b`),
-	regexp.MustCompile(`\b172\.(?:1[6-9]|2\d|3[01])\.(?:\d{1,3}\.)\d{1,3}\b`),
+const secretKeys = `password|passwd|token|secret|api[_-]?key|` +
+	`access[_-]?token|client[_-]?secret`
+
+var credentialRedactions = []redactionRule{
+	{pattern: regexp.MustCompile(
+		`-----BEGIN [A-Z ]*PRIVATE KEY-----[\s\S]*?` +
+			`(?:-----END [A-Z ]*PRIVATE KEY-----|$)`,
+	), placeholder: "[redacted private key]"},
+	{pattern: regexp.MustCompile(`(?i)(bearer\s+)[^\s,;"]+`),
+		placeholder: "[redacted]"},
+	{pattern: regexp.MustCompile(`(?i)(basic\s+)[^\s,;"]+`),
+		placeholder: "[redacted]"},
+	{pattern: regexp.MustCompile(
+		`(?i)([?&](?:` + secretKeys + `)=)[^&\s]+`,
+	), placeholder: "[redacted]"},
+	{pattern: regexp.MustCompile(
+		`(?i)("(?:` + secretKeys + `)"\s*:\s*)"[^"]*"`,
+	), placeholder: `"[redacted]"`},
+	{pattern: regexp.MustCompile(
+		`(?i)(\b(?:` + secretKeys + `)\s*[:=]\s*)[^\s,;]+`,
+	), placeholder: "[redacted]"},
+	{pattern: regexp.MustCompile(
+		`(?i)(\b[a-z][a-z0-9+.-]*://)[^/\s:@]+:[^/\s@]+@`,
+	), placeholder: "[redacted]", suffix: "@"},
+	{pattern: regexp.MustCompile(`\b(?:AKIA|ASIA)[0-9A-Z]{16}\b`),
+		placeholder: "[redacted]"},
+	{pattern: regexp.MustCompile(
+		`\beyJ[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]+`,
+	), placeholder: "[redacted]"},
+}
+
+var privateAddressRedactions = []redactionRule{
+	{pattern: regexp.MustCompile(`\b10\.(?:\d{1,3}\.){2}\d{1,3}\b`)},
+	{pattern: regexp.MustCompile(`\b192\.168\.(?:\d{1,3}\.)\d{1,3}\b`)},
+	{pattern: regexp.MustCompile(
+		`\b172\.(?:1[6-9]|2\d|3[01])\.(?:\d{1,3}\.)\d{1,3}\b`,
+	)},
+	{pattern: regexp.MustCompile(
+		`(?i)\bf[cd][0-9a-f]{2}:[0-9a-f:]*[0-9a-f]`,
+	)},
+	{pattern: regexp.MustCompile(`(?i)\bfe80:[0-9a-f:]*[0-9a-f]`)},
 }
 
 // RedactEvidence removes credentials and private application addresses at
@@ -37,36 +69,25 @@ func RedactEvidence(value string) string {
 func RedactEvidenceWithPolicy(
 	value string, includePrivateAddresses bool,
 ) string {
-	patterns := credentialRedactions
-	if !includePrivateAddresses {
-		patterns = append(patterns, privateAddressRedactions...)
+	for _, rule := range credentialRedactions {
+		value = applyRedaction(value, rule)
 	}
-	for _, pattern := range patterns {
-		value = pattern.ReplaceAllStringFunc(value, func(match string) string {
-			metrics.DefaultRegistry().RedactedValues.Add(1)
-			if len(match) > 0 && (match[0] == '?' || match[0] == '&') {
-				for i, r := range match {
-					if r == '=' {
-						return match[:i+1] + "[redacted]"
-					}
-				}
-			}
-			if len(match) >= 7 && match[:7] == "Bearer " {
-				return "Bearer [redacted]"
-			}
-			if len(match) >= 6 && match[:6] == "Basic " {
-				return "Basic [redacted]"
-			}
-			if len(match) > 0 && match[0] >= '0' && match[0] <= '9' {
-				return "[private-address]"
-			}
-			for i, r := range match {
-				if r == ':' || r == '=' {
-					return match[:i+1] + "[redacted]"
-				}
-			}
-			return "[redacted]"
-		})
+	if !includePrivateAddresses {
+		for _, rule := range privateAddressRedactions {
+			rule.placeholder = "[private-address]"
+			value = applyRedaction(value, rule)
+		}
 	}
 	return value
+}
+
+func applyRedaction(value string, rule redactionRule) string {
+	return rule.pattern.ReplaceAllStringFunc(value, func(match string) string {
+		metrics.DefaultRegistry().RedactedValues.Add(1)
+		keep := ""
+		if groups := rule.pattern.FindStringSubmatch(match); len(groups) > 1 {
+			keep = groups[1]
+		}
+		return keep + rule.placeholder + rule.suffix
+	})
 }

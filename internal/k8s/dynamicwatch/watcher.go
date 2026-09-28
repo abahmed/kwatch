@@ -380,3 +380,24 @@ func (w *Watcher) WaitForCacheSync(ctx context.Context) bool {
 	}
 	return w.currentGeneration().WaitForCacheSync(ctx)
 }
+
+// SkippedNowAvailable reports whether any resource skipped by the current
+// generation has since been installed, so the caller can replace the
+// generation and start watching it.
+func (w *Watcher) SkippedNowAvailable(ctx context.Context) bool {
+	if w == nil {
+		return false
+	}
+	w.mu.RLock()
+	skipped := append([]schema.GroupVersionResource(nil), w.skippedGVR...)
+	w.mu.RUnlock()
+	for _, gvr := range skipped {
+		discoveryCtx, cancel := context.WithTimeout(ctx, discoveryTimeout)
+		available := ResourceAvailableContext(discoveryCtx, w.discovery, gvr)
+		cancel()
+		if available {
+			return true
+		}
+	}
+	return false
+}

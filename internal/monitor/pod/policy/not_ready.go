@@ -204,6 +204,9 @@ func (rule NotReadyRule) Detect(ctx *Context) Decision {
 		sinceWatch = ctx.now().Sub(watchStart)
 	}
 	if notReadyFor < threshold || sinceWatch < rule.Threshold {
+		ctx.requestRecheck(max(
+			threshold-notReadyFor, rule.Threshold-sinceWatch,
+		))
 		return DecisionDefer
 	}
 

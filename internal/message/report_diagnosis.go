@@ -14,7 +14,9 @@ func (rb *ReportBuilder) populateDiagnosis(
 	ins *insight.Insight,
 ) {
 	d := &DiagnosisSection{
-		Hint: dedupeHint(inc.Hint, r.Name, r.Summary.Label, stateMessage(inc)),
+		Hint: rb.redact(dedupeHint(
+			inc.Hint, r.Name, r.Summary.Label, stateMessage(inc),
+		)),
 	}
 	if ins != nil {
 		d.Cause = ins.Cause

@@ -126,11 +126,7 @@ func headline(r *message.Report) string {
 		label = r.Reason
 	}
 	h := fmt.Sprintf("%s *%s*", r.Summary.Emoji, label)
-	subject := r.Name
-	if r.Namespace != "" && !strings.HasPrefix(subject, r.Namespace+"/") &&
-		!strings.Contains(subject, " ") {
-		subject = r.Namespace + "/" + subject
-	}
+	subject := message.QualifiedName(r.Namespace, r.Name)
 	if subject != "" {
 		h += " — " + subject
 	}

@@ -52,7 +52,11 @@ func TestDetectServicePortIssueFindsMissingNamedAndNumericPorts(t *testing.T) {
 	}
 	port := int32(8080)
 	protocol := corev1.ProtocolTCP
-	slice := &discoveryv1.EndpointSlice{Ports: []discoveryv1.EndpointPort{{
+	slice := &discoveryv1.EndpointSlice{Endpoints: []discoveryv1.Endpoint{{
+		Conditions: discoveryv1.EndpointConditions{
+			Ready: boolPtr(true),
+		},
+	}}, Ports: []discoveryv1.EndpointPort{{
 		Name: func() *string { value := "other"; return &value }(),
 		Port: &port, Protocol: &protocol,
 	}}}

@@ -76,6 +76,20 @@ type Findings struct {
 	PodReason           string
 	PodMsg              string
 	PodLastState        *model.ContainerState
+	// RecheckAfter is when a deferred time-based rule becomes due. Without
+	// it the pod waited for the next informer resync, up to five minutes
+	// past its threshold.
+	RecheckAfter time.Duration
+}
+
+// requestRecheck keeps the earliest positive recheck delay.
+func (c *Context) requestRecheck(delay time.Duration) {
+	if delay <= 0 {
+		return
+	}
+	if c.RecheckAfter == 0 || delay < c.RecheckAfter {
+		c.RecheckAfter = delay
+	}
 }
 
 // ContainerContext is retained as a package-local name for policy callers.

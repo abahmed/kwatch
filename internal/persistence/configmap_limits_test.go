@@ -245,3 +245,97 @@ func containsIncident(
 	}
 	return false
 }
+
+func TestThreadTimestampParsesJSON(t *testing.T) {
+	ts := threadTimestamp(`{"ThreadTS":"1234567890.000100"}`)
+	assert.Equal(t, "1234567890.000100", ts)
+}
+
+func TestThreadTimestampReturnsPlainString(t *testing.T) {
+	ts := threadTimestamp("1234567890.000100")
+	assert.Equal(t, "1234567890.000100", ts)
+}
+
+func TestThreadTimestampHandlesInvalidJSON(t *testing.T) {
+	ts := threadTimestamp(`{"invalid":`)
+	assert.Equal(t, `{"invalid":`, ts)
+}
+
+func TestTrimThreadsDropsOldestByTimestamp(t *testing.T) {
+	threads := make(map[string]map[string]string)
+	threads["slack"] = map[string]string{
+		"inc1": "1.000",
+		"inc2": "2.000",
+		"inc3": "3.000",
+	}
+	data, err := trimThreads(threads)
+	require.NoError(t, err)
+	require.Greater(t, len(data), 0)
+	kept := make(map[string]map[string]string)
+	require.NoError(t, gunzipJSON(data, &kept))
+	assert.NotContains(t, kept["slack"], "inc1")
+	assert.Contains(t, kept["slack"], "inc2")
+	assert.Contains(t, kept["slack"], "inc3")
+}
+
+func TestTrimThreadsDoesNotMutateInput(t *testing.T) {
+	threads := make(map[string]map[string]string)
+	threads["slack"] = map[string]string{
+		"inc1": "1.000",
+		"inc2": "2.000",
+	}
+	orig := make(map[string]map[string]string)
+	for p, m := range threads {
+		orig[p] = make(map[string]string)
+		for k, v := range m {
+			orig[p][k] = v
+		}
+	}
+	_, err := trimThreads(threads)
+	require.NoError(t, err)
+	for p, m := range threads {
+		for k, v := range m {
+			assert.Equal(t, orig[p][k], v)
+		}
+	}
+}
+
+func TestTrimThreadsHandlesLargePayloads(t *testing.T) {
+	threads := make(map[string]map[string]string)
+	threads["slack"] = make(map[string]string)
+	for i := 0; i < 1000; i++ {
+		k := fmt.Sprintf("inc%d", i)
+		ts := fmt.Sprintf("%.3f", float64(1000+i)/1000)
+		v := fmt.Sprintf("%s:%s", ts, strings.Repeat("x", 100))
+		threads["slack"][k] = v
+	}
+	data, err := trimThreads(threads)
+	require.NoError(t, err)
+	assert.LessOrEqual(t, len(data), configMapPayloadMaxBytes)
+}
+
+func TestTrimThreadsWithJSONThreadTS(t *testing.T) {
+	threads := make(map[string]map[string]string)
+	threads["slack"] = map[string]string{
+		"old": `{"ThreadTS":"1.000"}`,
+		"new": `{"ThreadTS":"2.000"}`,
+	}
+	data, err := trimThreads(threads)
+	require.NoError(t, err)
+	kept := make(map[string]map[string]string)
+	require.NoError(t, gunzipJSON(data, &kept))
+	assert.NotContains(t, kept["slack"], "old")
+	assert.Contains(t, kept["slack"], "new")
+}
+
+func TestTrimThreadsReturnsEmptyWhenAllDropped(t *testing.T) {
+	threads := make(map[string]map[string]string)
+	threads["slack"] = map[string]string{
+		"inc1": strings.Repeat("x", configMapPayloadMaxBytes),
+	}
+	data, err := trimThreads(threads)
+	require.NoError(t, err)
+	kept := make(map[string]map[string]string)
+	require.NoError(t, gunzipJSON(data, &kept))
+	assert.Empty(t, kept)
+}

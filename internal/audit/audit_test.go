@@ -170,3 +170,63 @@ func splitLines(data []byte) [][]byte {
 	}
 	return lines
 }
+
+func TestRotatingFileRotatesWhenExceedingMaxBytes(t *testing.T) {
+	tmpDir := t.TempDir()
+	filePath := filepath.Join(tmpDir, "test.log")
+	maxBytes := int64(100)
+
+	rf, err := openRotatingFile(filePath, maxBytes)
+	require.NoError(t, err)
+	defer rf.Close()
+
+	firstWrite := []byte("First write content that is less than max\n")
+	n, err := rf.Write(firstWrite)
+	require.NoError(t, err)
+	require.Equal(t, len(firstWrite), n)
+
+	secondWrite := make([]byte, 80)
+	for i := range secondWrite {
+		secondWrite[i] = 'a'
+	}
+	n, err = rf.Write(secondWrite)
+	require.NoError(t, err)
+	require.Equal(t, len(secondWrite), n)
+
+	rf.Close()
+
+	data, err := os.ReadFile(filePath)
+	require.NoError(t, err)
+	require.True(t, int64(len(data)) < maxBytes)
+
+	backupData, err := os.ReadFile(filePath + ".1")
+	require.NoError(t, err)
+	require.True(t, len(backupData) > 0)
+}
+
+func TestRotatingFilePreservesSizeAcrossReopen(t *testing.T) {
+	tmpDir := t.TempDir()
+	filePath := filepath.Join(tmpDir, "test.log")
+	maxBytes := int64(1000)
+
+	rf, err := openRotatingFile(filePath, maxBytes)
+	require.NoError(t, err)
+	write1 := []byte("content\n")
+	_, err = rf.Write(write1)
+	require.NoError(t, err)
+	rf.Close()
+
+	rf, err = openRotatingFile(filePath, maxBytes)
+	require.NoError(t, err)
+	defer rf.Close()
+	require.Equal(t, int64(len(write1)), rf.size)
+
+	write2 := []byte("more\n")
+	_, err = rf.Write(write2)
+	require.NoError(t, err)
+
+	rf.Close()
+	data, err := os.ReadFile(filePath)
+	require.NoError(t, err)
+	require.Equal(t, string(write1)+string(write2), string(data))
+}

@@ -9,7 +9,9 @@ discord|Discord|webhook|string|true|true|url||Discord webhook URL
 discord|Discord|title|string|false|false|||Custom title
 discord|Discord|text|string|false|false|||Custom text
 email|Email|from|string|true|false|||From address
-email|Email|password|string|true|true|||From password
+email|Email|password|string|false|true|||SMTP password; omit for a relay without authentication
+email|Email|username|string|false|false|||SMTP username; defaults to from
+email|Email|tls|string|false|false|||required (TLS on 465, STARTTLS otherwise) or none for a trusted relay
 email|Email|host|string|true|false|||SMTP host
 email|Email|port|string|true|false|port||SMTP port
 email|Email|to|string|true|false|||Receiver email
@@ -28,6 +30,7 @@ mattermost|Mattermost|text|string|false|false|||Custom text
 opsgenie|Opsgenie|apiKey|string|true|true|||API Key
 opsgenie|Opsgenie|title|string|false|false|||Custom title
 opsgenie|Opsgenie|text|string|false|false|||Custom text
+opsgenie|Opsgenie|region|string|false|false|||API region: us (default) or eu
 matrix|Matrix|homeServer|string|true|false|url||HomeServer URL
 matrix|Matrix|accessToken|string|true|true|||Access token
 matrix|Matrix|internalRoomId|string|true|false|||Room ID
@@ -38,6 +41,7 @@ dingtalk|Dingtalk|secret|string|false|true|||Signing secret
 dingtalk|Dingtalk|title|string|false|false|||Custom title
 feishu|Feishu|webhook|string|true|true|url||Webhook URL
 feishu|Feishu|title|string|false|false|||Custom title
+feishu|Feishu|secret|string|false|true|||Signing secret when the bot has signature verification enabled
 zenduty|Zenduty|integrationKey|string|true|true|||Integration Key
 zenduty|Zenduty|alertType|string|false|false||critical|Alert type (default: critical)
 googlechat|Google Chat|webhook|string|true|true|url||Webhook URL
@@ -134,16 +138,18 @@ signal|Signal|to|string|true|false|||Recipient phone number
 signal|Signal|url|string|false|false|url|http://localhost:8080|REST API URL (default: http://localhost:8080)
 sendgrid|SendGrid|apiKey|string|true|true|||API key
 sendgrid|SendGrid|from|string|true|false|||From address
-sendgrid|SendGrid|to|list|true|false|list||Recipients (list of addresses)
+sendgrid|SendGrid|to|list|true|false|list||Recipients: a list or a comma-separated string
 sendgrid|SendGrid|subject|string|false|false|||Email subject
 ses|SES|accessKeyId|string|true|true|||AWS access key ID
 ses|SES|secretAccessKey|string|true|true|||AWS secret access key
+ses|SES|sessionToken|string|false|true|||Session token for temporary AWS credentials
 ses|SES|region|string|false|false||us-east-1|AWS region (default: us-east-1)
 ses|SES|from|string|true|false|||Verified sender address
 ses|SES|to|string|true|false|||Recipients (comma-separated)
 ses|SES|subject|string|false|false|||Email subject
 sns|SNS|accessKeyId|string|true|true|||AWS access key ID
 sns|SNS|secretAccessKey|string|true|true|||AWS secret access key
+sns|SNS|sessionToken|string|false|true|||Session token for temporary AWS credentials
 sns|SNS|region|string|false|false||us-east-1|AWS region (default: us-east-1)
 sns|SNS|topicArn|string|false|false|||SNS topic ARN (or targetArn)|destination|choice:topic
 sns|SNS|targetArn|string|false|false|||SNS target ARN (alternative to topicArn)|destination|choice:target

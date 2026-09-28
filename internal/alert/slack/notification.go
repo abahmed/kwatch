@@ -71,11 +71,13 @@ func (s *Slack) SendNotification(
 		detailsHash == state.LastDetailHash {
 		return nil
 	}
-	if _, err := post(
-		ctx, notificationDetailBlocks(n), state.ThreadTS,
-	); err != nil {
+	threadTS, err := postWithThreadFallback(
+		ctx, post, notificationDetailBlocks(n), state.ThreadTS,
+	)
+	if err != nil {
 		return err
 	}
+	state.ThreadTS = threadTS
 	state.LastDeliveryID = n.DeliveryID
 	state.LastDetailHash = detailsHash
 	if n.Action == model.ActionResolved {
@@ -99,13 +101,56 @@ func (s *Slack) postNotificationDetails(
 			state.LastDetailHash == detailsHash) {
 		return nil
 	}
-	if _, err := post(ctx, notificationDetailBlocks(n), threadTS); err != nil {
+	threadTS, err := postWithThreadFallback(
+		ctx, post, notificationDetailBlocks(n), threadTS,
+	)
+	if err != nil {
 		return err
 	}
+	state.ThreadTS = threadTS
 	state.LastDeliveryID = n.DeliveryID
 	state.LastDetailHash = detailsHash
 	s.saveConversation(n.ConversationKey, state)
 	return nil
+}
+
+// staleThreadErrors are Slack API errors meaning the thread root is gone,
+// for example deleted or from a channel the bot left.
+var staleThreadErrors = []string{
+	"invalid_thread_ts", "thread_not_found", "message_not_found",
+}
+
+func isStaleThreadError(err error) bool {
+	if err == nil {
+		return false
+	}
+	text := err.Error()
+	for _, code := range staleThreadErrors {
+		if strings.Contains(text, code) {
+			return true
+		}
+	}
+	return false
+}
+
+// postWithThreadFallback posts into threadTS and, when Slack reports the
+// thread no longer exists, posts once at top level so the update is not
+// lost. It returns the thread to use from now on.
+func postWithThreadFallback(
+	ctx context.Context,
+	post func(context.Context, *slackClient.Blocks, string) (string, error),
+	blocks *slackClient.Blocks,
+	threadTS string,
+) (string, error) {
+	_, err := post(ctx, blocks, threadTS)
+	if threadTS == "" || !isStaleThreadError(err) {
+		return threadTS, err
+	}
+	ts, err := post(ctx, blocks, "")
+	if err != nil {
+		return threadTS, err
+	}
+	return ts, nil
 }
 
 func notificationDetailsHash(n *message.Notification) string {
@@ -157,11 +202,7 @@ func notificationSummaryText(n *message.Notification) string {
 		title = "Recovered: " + title
 	}
 	text := s.Emoji + " *" + title + "*"
-	name := s.Location.Name
-	if s.Location.Namespace != "" && name != "" &&
-		!strings.HasPrefix(name, s.Location.Namespace+"/") {
-		name = s.Location.Namespace + "/" + name
-	}
+	name := message.QualifiedName(s.Location.Namespace, s.Location.Name)
 	if name != "" {
 		text += " — " + name
 	}

@@ -12,9 +12,9 @@ import (
 func TestLogCacheDoesNotCacheEmptyKeys(t *testing.T) {
 	cache := NewLogCache(func() time.Time { return time.Unix(0, 0) })
 	fetches := 0
-	fetch := func() string {
+	fetch := func() (string, bool) {
 		fetches++
-		return fmt.Sprintf("logs-%d", fetches)
+		return fmt.Sprintf("logs-%d", fetches), true
 	}
 
 	if got := cache.Do("", fetch); got != "logs-1" {
@@ -32,9 +32,9 @@ func TestLogCacheExpiresEntries(t *testing.T) {
 	now := time.Unix(0, 0)
 	cache := NewLogCache(func() time.Time { return now })
 	fetches := 0
-	fetch := func() string {
+	fetch := func() (string, bool) {
 		fetches++
-		return fmt.Sprintf("logs-%d", fetches)
+		return fmt.Sprintf("logs-%d", fetches), true
 	}
 
 	if got := cache.Do("pod/container/0", fetch); got != "logs-1" {
@@ -70,7 +70,7 @@ func TestLogCacheRemainsBoundedAfterCapacityEviction(t *testing.T) {
 
 	for i := 0; i <= maxLogCacheEntries; i++ {
 		key := fmt.Sprintf("pod/container/%d", i)
-		cache.Do(key, func() string { return key })
+		cache.Do(key, func() (string, bool) { return key, true })
 	}
 
 	cache.mu.Lock()
@@ -83,5 +83,24 @@ func TestLogCacheRemainsBoundedAfterCapacityEviction(t *testing.T) {
 	}
 	if _, ok := cache.m["pod/container/0"]; ok {
 		t.Fatal("capacity eviction retained the oldest entry")
+	}
+}
+
+func TestLogCacheDoesNotCacheNonCacheableResults(t *testing.T) {
+	cache := NewLogCache(func() time.Time { return time.Unix(0, 0) })
+	fetches := 0
+	fetch := func() (string, bool) {
+		fetches++
+		return fmt.Sprintf("logs-%d", fetches), false
+	}
+
+	if got := cache.Do("pod/container/0", fetch); got != "logs-1" {
+		t.Fatalf("first fetch = %q, want logs-1", got)
+	}
+	if got := cache.Do("pod/container/0", fetch); got != "logs-2" {
+		t.Fatalf("second fetch = %q, want logs-2", got)
+	}
+	if fetches != 2 {
+		t.Fatalf("fetch count = %d, want 2", fetches)
 	}
 }

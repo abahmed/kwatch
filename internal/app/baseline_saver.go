@@ -43,6 +43,7 @@ func startBaselineSaverWithStatus(
 		case b := <-ch:
 			state.accept(b, interval, progress)
 		case <-state.timerC:
+			state.timerC = nil
 			if progress != nil {
 				progress()
 			}
@@ -80,6 +81,11 @@ func (s *baselineSaverState) accept(
 		progress()
 	}
 	s.pending = baseline
+	// Arm the timer only for the first pending snapshot. Re-arming on every
+	// update let a steady stream of changes postpone the write forever.
+	if s.timerC != nil {
+		return
+	}
 	s.timer = resetBaselineTimer(s.timer, interval)
 	s.timerC = s.timer.C
 }

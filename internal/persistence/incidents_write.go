@@ -1,7 +1,10 @@
 package persistence
 
 import (
+	"encoding/json"
 	"fmt"
+	"sort"
+	"strings"
 
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/klog/v2"
@@ -84,9 +87,15 @@ func applyThreads(
 			return err
 		}
 		if len(data) > configMapPayloadMaxBytes {
-			// Thread ids are a presentation nicety: losing them costs a
-			// resolve posted at top level, so an oversized payload is
-			// dropped rather than failing the save it travels with.
+			// Thread ids are a presentation nicety: losing one costs an
+			// update posted at top level. Drop the oldest threads until the
+			// payload fits rather than losing every thread at once.
+			data, err = trimThreads(threads)
+			if err != nil {
+				return err
+			}
+		}
+		if len(data) > configMapPayloadMaxBytes {
 			klog.ErrorS(nil, "thread state too large for ConfigMap, skipping",
 				"size", len(data), "max", configMapPayloadMaxBytes)
 			deletePayload(cm, threadsKey)
@@ -129,4 +138,59 @@ func applyEngineState(
 		}
 		return nil
 	}
+}
+
+type threadEntry struct {
+	provider, key, ts string
+}
+
+// trimThreads removes the oldest tenth of thread entries, by thread
+// timestamp, until the encoded payload fits. The input is not modified.
+func trimThreads(threads map[string]map[string]string) ([]byte, error) {
+	entries := make([]threadEntry, 0)
+	for provider, keys := range threads {
+		for key, value := range keys {
+			entries = append(entries, threadEntry{
+				provider: provider, key: key, ts: threadTimestamp(value),
+			})
+		}
+	}
+	sort.Slice(entries, func(i, j int) bool {
+		if entries[i].ts != entries[j].ts {
+			return entries[i].ts < entries[j].ts
+		}
+		return entries[i].provider+entries[i].key <
+			entries[j].provider+entries[j].key
+	})
+	for len(entries) > 0 {
+		entries = entries[max(1, len(entries)/10):]
+		kept := make(map[string]map[string]string)
+		for _, e := range entries {
+			if kept[e.provider] == nil {
+				kept[e.provider] = make(map[string]string)
+			}
+			kept[e.provider][e.key] = threads[e.provider][e.key]
+		}
+		data, err := gzJSON(kept)
+		if err != nil {
+			return nil, err
+		}
+		if len(data) <= configMapPayloadMaxBytes {
+			klog.InfoS("trimmed oldest thread state to fit ConfigMap",
+				"kept", len(entries))
+			return data, nil
+		}
+	}
+	return gzJSON(map[string]map[string]string{})
+}
+
+// threadTimestamp reads the sortable Slack timestamp from a plain thread id
+// or from an encoded conversation state.
+func threadTimestamp(value string) string {
+	var state struct{ ThreadTS string }
+	if strings.HasPrefix(value, "{") &&
+		json.Unmarshal([]byte(value), &state) == nil {
+		return state.ThreadTS
+	}
+	return value
 }

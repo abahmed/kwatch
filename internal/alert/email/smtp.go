@@ -14,11 +14,19 @@ import (
 
 const smtpTimeout = 10 * time.Second
 
+// tlsRequired uses implicit TLS on port 465 and STARTTLS elsewhere.
+// tlsNone is for trusted in-cluster relays and never sends credentials.
+const (
+	tlsRequired = "required"
+	tlsNone     = "none"
+)
+
 type smtpConfig struct {
 	host     string
 	port     int
 	username string
 	password string
+	tlsMode  string
 }
 
 // sendSMTP keeps the SMTP connection tied to the caller's context. gomail's
@@ -46,7 +54,7 @@ func sendSMTP(
 	defer close(stop)
 	defer func() { _ = conn.Close() }()
 
-	if config.port == 465 {
+	if config.port == 465 && config.tlsMode != tlsNone {
 		tlsConn := tls.Client(conn, &tls.Config{ServerName: config.host})
 		if err := tlsConn.HandshakeContext(ctx); err != nil {
 			return err
@@ -59,7 +67,7 @@ func sendSMTP(
 	}
 	defer func() { _ = client.Close() }()
 
-	if config.port != 465 {
+	if config.port != 465 && config.tlsMode != tlsNone {
 		if ok, _ := client.Extension("STARTTLS"); !ok {
 			return fmt.Errorf("SMTP server does not support STARTTLS")
 		}
@@ -67,7 +75,7 @@ func sendSMTP(
 			return smtpContextError(ctx, err)
 		}
 	}
-	if config.username != "" {
+	if config.password != "" {
 		if err := client.Auth(smtp.PlainAuth(
 			"", config.username, config.password, config.host,
 		)); err != nil {

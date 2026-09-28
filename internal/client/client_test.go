@@ -6,6 +6,7 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+	"k8s.io/client-go/rest"
 
 	"github.com/abahmed/kwatch/internal/config"
 )
@@ -144,4 +145,72 @@ users:
 	client, err := newTestKubernetesClient(cfg)
 	assert.Nil(err)
 	assert.NotNil(client)
+}
+
+func TestElectionRestConfigLowerRateLimits(t *testing.T) {
+	assert := assert.New(t)
+	base := &rest.Config{
+		QPS:   50,
+		Burst: 100,
+	}
+
+	electionCfg := electionRestConfig(base)
+
+	assert.Equal(float32(5), electionCfg.QPS)
+	assert.Equal(10, electionCfg.Burst)
+	assert.Nil(electionCfg.RateLimiter)
+}
+
+func TestElectionRestConfigCopiesBase(t *testing.T) {
+	assert := assert.New(t)
+	base := &rest.Config{
+		Host:  "https://example.com",
+		QPS:   50,
+		Burst: 100,
+	}
+
+	electionCfg := electionRestConfig(base)
+
+	assert.Equal("https://example.com", electionCfg.Host)
+	assert.Equal(float32(5), electionCfg.QPS)
+	assert.NotSame(base, electionCfg,
+		"should be a copy, not the same object")
+}
+
+func TestGetRestConfigAppliesDefaultRates(t *testing.T) {
+	assert := assert.New(t)
+
+	kubeconfigContent := `apiVersion: v1
+kind: Config
+clusters:
+- cluster:
+    server: https://localhost:6443
+  name: test-cluster
+contexts:
+- context:
+    cluster: test-cluster
+    user: test-user
+  name: test-context
+current-context: test-context
+users:
+- name: test-user
+  user:
+    token: test-token
+`
+	tmpFile, err := os.CreateTemp("", "kubeconfig-*")
+	assert.Nil(err)
+	defer os.Remove(tmpFile.Name())
+
+	_, err = tmpFile.WriteString(kubeconfigContent)
+	assert.Nil(err)
+	tmpFile.Close()
+
+	os.Setenv("KUBECONFIG", tmpFile.Name())
+	defer os.Unsetenv("KUBECONFIG")
+
+	cfg, err := getRestConfig()
+	assert.Nil(err)
+	assert.NotNil(cfg)
+	assert.Equal(float32(50), cfg.QPS)
+	assert.Equal(100, cfg.Burst)
 }

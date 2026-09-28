@@ -12,13 +12,21 @@ import (
 const (
 	awsAlgorithm   = "AWS4-HMAC-SHA256"
 	awsTerminator  = "aws4_request"
-	awsSignedHdrs  = "content-type;host;x-amz-date"
 	awsContentType = "application/x-www-form-urlencoded"
 )
 
+// Credentials are AWS access keys. SessionToken is set for temporary
+// credentials such as STS or IAM role sessions.
+type Credentials struct {
+	AccessKeyID     string
+	SecretAccessKey string
+	SessionToken    string
+}
+
 // SignAWSV4At signs a request using the supplied time.
 func SignAWSV4At(
-	accessKey, secretKey, region, service, method, rawURL string,
+	creds Credentials,
+	region, service, method, rawURL string,
 	body []byte,
 	now time.Time,
 ) (map[string]string, error) {
@@ -38,13 +46,19 @@ func SignAWSV4At(
 
 	canonicalHeaders := "content-type:" + awsContentType +
 		"\nhost:" + host + "\nx-amz-date:" + amzDate + "\n"
+	signedHeaders := "content-type;host;x-amz-date"
+	if creds.SessionToken != "" {
+		canonicalHeaders += "x-amz-security-token:" +
+			creds.SessionToken + "\n"
+		signedHeaders += ";x-amz-security-token"
+	}
 
 	canonicalRequest := strings.Join([]string{
 		method,
 		path,
 		"",
 		canonicalHeaders,
-		awsSignedHdrs,
+		signedHeaders,
 		sha256Hex(body),
 	}, "\n")
 
@@ -56,16 +70,23 @@ func SignAWSV4At(
 		sha256Hex([]byte(canonicalRequest)),
 	}, "\n")
 
-	signingKey := buildSigningKey(secretKey, dateStamp, region, service)
+	signingKey := buildSigningKey(
+		creds.SecretAccessKey, dateStamp, region, service,
+	)
 	signature := hex.EncodeToString(hmacSHA256(signingKey, []byte(stringToSign)))
 
-	authorization := awsAlgorithm + " Credential=" + accessKey + "/" + scope +
-		", SignedHeaders=" + awsSignedHdrs + ", Signature=" + signature
+	authorization := awsAlgorithm + " Credential=" + creds.AccessKeyID +
+		"/" + scope + ", SignedHeaders=" + signedHeaders +
+		", Signature=" + signature
 
-	return map[string]string{
+	headers := map[string]string{
 		"X-Amz-Date":    amzDate,
 		"Authorization": authorization,
-	}, nil
+	}
+	if creds.SessionToken != "" {
+		headers["X-Amz-Security-Token"] = creds.SessionToken
+	}
+	return headers, nil
 }
 
 func buildSigningKey(secret, date, region, service string) []byte {

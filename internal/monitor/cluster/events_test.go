@@ -160,11 +160,21 @@ func TestEventRuntimeSustainsAndResolvesAutoscalerFailure(t *testing.T) {
 		config.RuntimeConfig{}, sink, time.Now,
 	)
 	runtime.now = func() time.Time { return now }
-	failure := &corev1.Event{Reason: "FailedToScaleUp"}
+	failure := &corev1.Event{
+		Reason:        "FailedToScaleUp",
+		LastTimestamp: metav1.Time{Time: now},
+	}
 	runtime.ProcessClusterAutoscalerEvent(failure)
 	now = now.Add(caSustainedMinutes * time.Minute)
-	runtime.ProcessClusterAutoscalerEvent(failure)
-	runtime.ProcessClusterAutoscalerEvent(&corev1.Event{Reason: "ScaleDown"})
+	runtime.now = func() time.Time { return now }
+	runtime.ProcessClusterAutoscalerEvent(&corev1.Event{
+		Reason:        "FailedToScaleUp",
+		LastTimestamp: metav1.Time{Time: now},
+	})
+	runtime.ProcessClusterAutoscalerEvent(&corev1.Event{
+		Reason:        "TriggeredScaleUp",
+		LastTimestamp: metav1.Time{Time: now},
+	})
 
 	if len(sink.observations) != 1 {
 		t.Fatalf("got %d observations, want 1", len(sink.observations))

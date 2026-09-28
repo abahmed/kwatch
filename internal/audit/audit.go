@@ -90,7 +90,7 @@ func NewLogger(cfg Config) *AuditLogger {
 	if cfg.Output == "" || cfg.Output == "stdout" {
 		l.writer = os.Stdout
 	} else {
-		f, err := os.OpenFile(cfg.Output, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0600)
+		f, err := openRotatingFile(cfg.Output, maxAuditFileBytes)
 		if err != nil {
 			klog.ErrorS(
 				err,
@@ -232,7 +232,7 @@ func (l *AuditLogger) Close() error {
 	if !l.cfg.Enabled || l.writer == nil {
 		return nil
 	}
-	if f, ok := l.writer.(*os.File); ok && f != os.Stdout && f != os.Stderr {
+	if f, ok := l.writer.(*rotatingFile); ok {
 		return f.Close()
 	}
 	return nil

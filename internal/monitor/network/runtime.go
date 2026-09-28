@@ -150,6 +150,12 @@ func (r *Runtime) ProcessServiceObject(
 		}
 	}
 	endpointFinding := DetectServiceEndpointIssue(svc, epSlices)
+	if !hasLiveBackend(pods) {
+		// No pod matches the selector, usually a workload scaled to zero on
+		// purpose. Nothing is failing to serve; a workload that should run
+		// is reported by its own monitor.
+		endpointFinding = nil
+	}
 	degradedFinding := DetectServiceBackendDegradation(
 		svc, epSlices, pods,
 	)
@@ -164,10 +170,15 @@ func (r *Runtime) ProcessServiceObject(
 	degradedFinding = r.sustainServiceFinding(
 		key, "degraded", degradedFinding, degradedServiceSustain,
 	)
+	// EndpointSlices are rewritten during rollouts and briefly publish a
+	// different port set; only a mismatch that outlasts that is reported.
+	portFinding := r.sustainServiceFinding(
+		key, "ports", DetectServicePortIssue(svc, epSlices), serviceSustain,
+	)
 	r.reconcile(subject, []*model.Observation{
 		endpointFinding,
 		degradedFinding,
-		DetectServicePortIssue(svc, epSlices),
+		portFinding,
 		DetectServiceStatusIssue(svc, r.nowTime(),
 			float64(DefaultServiceSustainedSeconds)),
 	})

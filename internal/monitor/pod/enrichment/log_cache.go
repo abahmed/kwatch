@@ -56,10 +56,12 @@ func LogCacheKey(pod *corev1.Pod, container *corev1.ContainerStatus) string {
 }
 
 // Do returns the tail for key, calling fetch only when the cache cannot
-// answer. An empty key is never cached.
-func (c *LogCache) Do(key string, fetch func() string) string {
+// answer. An empty key, or a result fetch marks as not cacheable (a failed
+// read), is never cached.
+func (c *LogCache) Do(key string, fetch func() (string, bool)) string {
 	if c == nil || key == "" {
-		return fetch()
+		logs, _ := fetch()
+		return logs
 	}
 	now := c.now()
 	c.mu.Lock()
@@ -69,7 +71,10 @@ func (c *LogCache) Do(key string, fetch func() string) string {
 		return entry.logs
 	}
 
-	logs := fetch()
+	logs, cacheable := fetch()
+	if !cacheable {
+		return logs
+	}
 
 	c.mu.Lock()
 	c.evictLocked(now)

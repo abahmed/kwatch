@@ -240,11 +240,12 @@ func (t *Teams) buildRequestBodyTeams(e *event.Event) ([]byte, error) {
 // buildRequestBodyMessage builds plain message payload for the Power
 // Automate flow
 func (t *Teams) buildRequestBodyMessage(msg string) ([]byte, error) {
+	// "Post card" flows iterate the attachments, so an empty list showed
+	// nothing while Teams still answered 200. Always send one text card.
 	payload := &teamsFlowPayload{
-		Title: "New Alert",
-		Text:  msg,
-		// Empty attachments array to prevent schema mismatch error
-		Attachment: []map[string]interface{}{},
+		Title:      "New Alert",
+		Text:       msg,
+		Attachment: textCardAttachments("New Alert", msg),
 	}
 
 	jsonBytes, err := json.Marshal(payload)
@@ -256,4 +257,21 @@ func (t *Teams) buildRequestBodyMessage(msg string) ([]byte, error) {
 	}
 
 	return jsonBytes, nil
+}
+
+// textCardAttachments wraps plain text in one adaptive card.
+func textCardAttachments(title, text string) []map[string]interface{} {
+	return []map[string]interface{}{{
+		"contentType": "application/vnd.microsoft.card.adaptive",
+		"content": map[string]interface{}{
+			"$schema": "http://adaptivecards.io/schemas/adaptive-card.json",
+			"type":    "AdaptiveCard",
+			"version": "1.2",
+			"body": []map[string]interface{}{
+				{"type": "TextBlock", "text": title, "weight": "Bolder",
+					"wrap": true},
+				{"type": "TextBlock", "text": text, "wrap": true},
+			},
+		},
+	}}
 }
