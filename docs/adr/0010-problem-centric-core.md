@@ -181,8 +181,8 @@ The model is always the current cluster state, not a periodic snapshot.
   blind "everything created".
 - **Time dimension:** the store keeps history, so kwatch can compare now
   with before: "3 nodes fewer than an hour ago", "replicas were 6 before
-  the HPA hit its max", "this Secret changed while kwatch was down". It
-  can also answer "what did the cluster look like at 10:02?".
+  the HPA hit its max", "this Secret changed while kwatch was down". Root
+  cause and impact use this comparison.
 - **Gaps are explicit:** a kind that cannot be watched (no RBAC, API
   missing) is marked unknown in the model. Rules that depend on it
   report "cannot verify X" instead of guessing, and health lists the
@@ -486,9 +486,9 @@ does not keep only what fits in a ConfigMap.
 
 | Data | Why it helps | Retention (default) |
 | --- | --- | --- |
-| Full graph: entities, relations, trimmed state | Instant warm start; "what did the cluster look like at 10:02?"; offline analysis | Live, plus snapshots every 15m for 7d |
+| Full graph: entities, relations, trimmed state | Instant warm start; diff of the state saved at shutdown and the state at start | Live, plus snapshots every 15m for 7d |
 | Change history: spec diffs, image, replicas, config and Secret hashes, RBAC, taints, node add/remove, actor | "What changed before it broke" across all resources | 30d |
-| Signals and problem history: root, chain, impact, evidence, timeline, resolution | Recurrence ("3rd time this week"), trends, the weekly report | 90d |
+| Signals and problem history: root, chain, impact, evidence, timeline, resolution | Recurrence ("3rd time this week") and flap detection | 90d |
 | Baselines: restart rate, ready time, pending time, Job durations, resource envelope | "Unusual for this workload" | Rolling aggregates, no expiry |
 | Event digest: Warning events, deduplicated | Evidence long after the API server drops events (1h) | 7d |
 | Evidence excerpts: log lines and termination messages used in problems (redacted) | Show what the app said, even after the pod is gone | 30d, size-capped |
@@ -569,35 +569,20 @@ There is one `Store` implementation (bbolt) and no alternative backends.
 
 ## What the store enables
 
-Without the 1 MiB ConfigMap limit, kwatch keeps the history it needs to
-reason over time. Each capability below uses only the store and existing
-sources.
+The store exists to make alerts correct, complete and quiet. Nothing else.
 
-| Capability | How the store is used | Example message |
+| Capability | How the store is used | Effect on alerts |
 | --- | --- | --- |
-| **Predict before failure** | Time series of PVC and node filesystem usage, inodes, and container memory across restarts; certificate expiry | "PVC orders-db is 82% full and grows 3%/h — full in ~6h" · "payments memory grows ~40 MiB/h across restarts (likely leak)" |
-| **Learned normal instead of fixed thresholds** | Per-workload baselines: restarts/day, ready time, pending time, Job duration, usual log errors | "batch-report ran 48m, usually 12m" · silent for a pod that always restarts once at 03:00 |
-| **Change memory** | Every change with actor, kept across restarts; diff of the state saved at shutdown and the state at start | "While kwatch was down: payments image v2.2→v2.3, Secret db-creds changed" |
-| **Deploy outcomes** | History of rollouts and what followed each | "The last 3 deploys of payments caused crash loops for ~5m; this one too" |
-| **Recurrence and flapping** | Problem history keyed by root and kind | "3rd time this week, last Tue for 12m, resolved without a change" |
-| **Evidence that outlives pods** | Log excerpts, termination messages and events stored with the problem | Crash output still shown after the pod was deleted or the events expired |
-| **Self-tuning noise** | Outcomes per problem kind: self-resolved quickly, how often, whether anyone acted (a change followed) | Kinds that always self-heal within 2 minutes move to digest automatically; the move is shown in the weekly report and can be reverted |
-| **Learned dependencies** | `calls` relations from log and probe evidence with decay | "orders fails because it calls payments (seen in its errors), which is down" |
-| **Capacity trends** | Node count, pending frequency, requests vs allocatable over time | "Pending pods waited 3× longer this week; cluster CPU requests are 92% of allocatable" |
-| **Incident timeline and postmortem** | Full problem record: timeline, chain, evidence, changes, resolution | One-command export of a problem as Markdown for a postmortem |
-| **Reports** | Aggregates over problems | Weekly: top problems, time to resolve, noisiest workloads, recurring issues, predicted risks |
-| **Ask the cluster** | Query API over the store (protected endpoint) and CLI | `kwatch explain deploy/payments` · `kwatch what-changed --since 1h` · `kwatch history pvc/orders-db` |
-| **Scorecard from the store** | Decisions and problems recorded directly | `kwatch scorecard` runs on the live store, not on exported logs |
+| **Change memory** | Every change with its actor, kept across restarts; diff of the state saved at shutdown and the state at start | Root cause can name the change, including one made while kwatch was down |
+| **Learned normal** | Per-workload baselines: restarts, ready time, pending time, Job duration, usual errors | Alerts on real deviations; routine behaviour stays quiet |
+| **Recurrence and flapping** | Problem history keyed by root and kind | No repeated alerts; the message says "3rd time this week" |
+| **Evidence that outlives pods** | Log excerpts, termination messages and events stored with the problem | The alert keeps its evidence after the pod or events are gone |
+| **Predictions** | Usage history for PVCs, node disks, container memory; certificate expiry | Warn before failure: "PVC full in ~6h", "memory grows 40 MiB/h" |
+| **Decision state** | Open problems, sent messages, thread IDs | No duplicates or lost updates across restarts |
 
-Order of delivery:
-
-1. The core itself: model, change memory, problems, flapping and
-   recurrence, evidence that outlives pods.
-2. Baselines, predictions (PVC and node disk fill, memory leak,
-   certificates), and deploy outcomes.
-3. Query API and CLI, postmortem export, scorecard from the store.
-4. Reports, self-tuning noise and capacity trends. These are candidates
-   for the paid tier.
+Out of scope for this work: reports, postmortem export, query APIs or
+CLI, self-tuning, and capacity trends. They can be built on the same store
+later.
 
 ## Flapping and recurring issues
 
