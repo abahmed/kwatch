@@ -1,10 +1,12 @@
-# ADR 0010: Problem-centric notification core
+# ADR 0010: Cluster knowledge model and root-cause core
 
 ## Status
 
 Proposed — needs maintainer review before implementation starts.
 
 ## Context
+
+### Measured problem
 
 A 12-hour staging replay of v1.0.0-rc.10 (`kwatch-scorecard`) measured:
 
@@ -16,129 +18,528 @@ A 12-hour staging replay of v1.0.0-rc.10 (`kwatch-scorecard`) measured:
 | Re-created (flapping) incidents | 166 |
 | Repeated "Recovered" messages | 78 |
 | Messages without a cause | 34% |
-| Causes naming the incident itself | 1,596 |
 
-A synthetic storm (5,000 failing pods in 500 workloads) produces 500 creates
-and 4,500 updates.
+A synthetic storm of 5,000 failing pods in 500 workloads produces 500
+creates and 4,500 updates.
 
-The causes are structural, not individual bugs:
+### Root causes of the noise
 
-1. Kwatch notifies per `(object, reason)` symptom. One node problem becomes
-   dozens of pod, Service, HPA and Deployment messages.
-2. Updates follow internal state (counts, confidence, pattern) rather than
-   changes a person would care about.
-3. There is no alert tiering: a missing HPA metric is delivered like an
-   outage.
-4. Resolve has no hysteresis, so flapping re-creates incidents.
-5. Root cause is guessed from graph reachability after the notification
-   decision, so it is often empty or circular.
-6. Seven overlapping grouping and suppression layers each have gaps:
-   reason-keyed groups, revived-incident bypass, the 2-minute mass-failure
-   sustain, node inhibition that ignores pressure, cooldown, cascading
-   suppression, and feedback bias.
+1. Kwatch notifies per `(object, reason)` symptom. It does not notify per
+   problem.
+2. Updates follow internal counters rather than changes a person cares
+   about.
+3. There is no alert tiering.
+4. Resolve has no hysteresis.
+5. Root cause is guessed from graph reachability and is rarely checked
+   against the candidate's own health. Every pod is "connected" to a node,
+   so a node is "likely" even when the node is healthy.
+6. Change tracking records informer resyncs and status churn as changes, and
+   calls any workload update a rollout.
+7. Seven overlapping grouping and suppression layers each have gaps.
+
+### Goal
+
+Kwatch must understand the whole cluster: every resource, how resources
+relate, what changed, and what is abnormal. It uses that understanding to
+find the root cause and tell one story per problem.
+
+The design must be extensible without redesign. Future sources such as a
+node agent (CPU, memory, processes, container runtime details), cloud
+provider APIs, or Prometheus must plug in as data sources, detectors and
+rules. The reasoning core never changes for them.
 
 ## Decision
 
-Replace the incident engine's decision path with five stages. Monitors, every
-currently monitored resource and check, and all providers stay.
+### Architecture
 
 ```
-collectors ─▶ health state ─▶ problem builder ─▶ policy ─▶ writers ─▶ delivery
-(monitors)    (per object)    (one per root)     (tiers)   (per case)  (providers)
+┌──────────────────────── Sources (plugins) ─────────────────────────┐
+│ K8s informers · Events · kubelet summary/metrics · pod logs ·      │
+│ probes (DNS, API, TLS) · metrics-server · CRD status ·             │
+│ future: node agent · cloud APIs · Prometheus · service mesh        │
+└───────────────────────────────┬────────────────────────────────────┘
+                                │ Facts (one common format)
+┌───────────────────────────────▼────────────────────────────────────┐
+│ 1. Cluster model: entities · relations · state · change history    │
+│    · baselines                                                     │
+├────────────────────────────────────────────────────────────────────┤
+│ 2. Signals: detectors (plugins, per entity type) emit abnormal     │
+│    states                                                          │
+├────────────────────────────────────────────────────────────────────┤
+│ 3. Reasoning: causal rules (data) + generic engine → root cause,   │
+│    chain, impact, confidence                                       │
+├────────────────────────────────────────────────────────────────────┤
+│ 4. Problems → policy (tiers, material change, hysteresis) → story  │
+│    writers                                                         │
+└───────────────────────────────┬────────────────────────────────────┘
+                                ▼
+                   Delivery (all existing providers)
 ```
 
-1. **Health state.** Each monitored object has a current health record: a set
-   of active signals with first-seen and last-seen times. Monitor observations
-   and resolves only update this state. No notification decisions are made
-   here.
-2. **Problem builder.** Every 10 seconds, and on demand, signals are joined
-   into problems using explicit causal rules, not graph reachability:
-   - node → pods on that node → owning workloads → Services and Ingresses
-     that select them;
-   - CoreDNS, the API server or an admission webhook → the workloads whose
-     failures match its signature;
-   - a Deployment rollout (a `spec.template` change only) → new ReplicaSet
-     pods;
-   - a missing Secret, ConfigMap or PVC → the pods that reference it.
+The core (model, reasoning engine, problems, policy) knows nothing about
+Pods or Nodes. All Kubernetes knowledge lives in plugins. There are four
+kinds:
 
-   A problem has exactly one root. Signals that cannot be attributed become
-   single-object problems. A new problem waits for a settle window (60–90s,
-   or immediately for page tier) so the first message already contains the
-   grouped picture.
-3. **Policy.** Each signal has a default tier: `page`, `notify`, `digest` or
-   `silent`. A problem takes its highest member tier. Policy decides:
-   - **create**: after the settle window;
-   - **update**: only on a material change — new tier, root change, the
-     affected workload count crossing 1→N or doubling, or new first-seen
-     evidence (for example an OOM after crashes). Count increments never
-     trigger an update;
-   - **resolve**: after hysteresis (the root healthy for N minutes). A
-     re-failure inside the hysteresis window reopens the same problem
-     silently;
-   - **renotify**: at most once per configured interval while unchanged.
+- **source:** produces facts;
+- **entity schema:** kinds, attributes and relation extractors;
+- **detector:** produces signals;
+- **causal rule:** explains how failure propagates across a relation.
 
-   The decision state is persisted so a restart never repeats or re-creates a
-   message.
-4. **Writers.** One writer per problem kind composes the message from the
-   problem's evidence: what broke, why (the root and its evidence), impact
-   (affected workloads and Services), and the next step with real `kubectl`
-   commands for this object. Sections without content are omitted. There is
-   at most one status emoji. Every renderer uses the same structured problem,
-   with plain, markdown and HTML variants.
-5. **Delivery.** One conversation per problem: an edit in place plus a thread
-   where the provider supports it, and a dedupe key for paging providers. The
-   existing generation, retry and transport contracts are unchanged.
+### 1. Cluster model
 
-### Scalability requirements
+#### Fact: the only input format
 
-- **Size target:** 5,000 pods and 500 nodes on one pod within 256–512 MiB.
-  Memory grows with cluster size through informer transforms (unused fields
-  and Secret data stripped). There are no full-object copies in health state.
-- **Indexed lookups:** by node, owner, selector and reference. There are no
-  scans of all incidents or all changes per event. The problem builder costs
-  O(changed objects) per tick.
-- **Incremental graph:** the dependency graph is updated incrementally. There
-  is no hourly full rebuild that drops dynamic edges.
-- **Bounded work:** queues, workers, per-node kubelet concurrency and log
-  fetches are all bounded. Log fetches happen after a problem is created,
-  never on the detection hot path.
-- **API budget:** the API server QPS budget is explicit, and Lease renewal
-  uses its own client (done in step 4).
-- **Bounded state:** problem state is sized by active problems, not history.
-- **Storm behaviour:** 1,000 pods failing at once must produce at most 3
-  messages within 2 minutes (scale test gate).
+```go
+type Fact struct {
+    Source string       // "k8s-informer", "kubelet", "node-agent", ...
+    Time   time.Time
+    Entity EntityID     // kind + namespace + name (+ uid)
+    Kind   FactKind     // Observed | Attribute | Relation | Change | Gone
+    Attr   string       // "ready", "memory.used.pct", "image", ...
+    Value  Value        // typed scalar, bounded size
+    Target EntityID     // for Relation facts
+    Rel    RelationType // "runs-on", "owned-by", ...
+    Diff   []FieldDiff  // for Change facts (spec paths, redacted)
+}
+```
 
-### Acceptance (scorecard gates for cutover)
+#### Entity
 
-A replay of the rc.10 staging log and the scenario suite must reach:
+An entity is anything with identity. Built-in kinds cover every Kubernetes
+API kind (see the catalog below). There are also virtual entities that
+Kubernetes does not model as objects but that fail independently:
+
+- `container` (a container inside a pod);
+- `image` and `registry`;
+- `cluster-dns`, `apiserver`, `etcd`, `scheduler`, `controller-manager`;
+- `kubelet`, `container-runtime`, `cni` and `csi-node` per node;
+- `external-endpoint` (a DNS name or IP the workloads call);
+- `cloud-loadbalancer` and `cloud-disk`, for later sources.
+
+Future sources add kinds such as `process`, `disk-device` or `nic` without
+changing the core.
+
+#### Relation types
+
+Relations are typed, directed, and carry a failure-propagation direction.
+
+| Relation | From → To | Meaning |
+| --- | --- | --- |
+| `owned-by` | Pod → ReplicaSet → Deployment, Pod → StatefulSet/DaemonSet/Job, Job → CronJob, any → ownerRef | Controller ownership |
+| `runs-on` | Pod → Node; container → Pod | Placement |
+| `part-of` | container → Pod; kubelet/runtime/cni → Node | Composition |
+| `selects` | Service/PDB/NetworkPolicy/HPA target → Pods | Label selection |
+| `backs` | EndpointSlice → Service | Endpoints of a Service |
+| `routes-to` | Ingress/HTTPRoute/GRPCRoute → Service; Gateway → Route; Service(ExternalName) → external-endpoint | Traffic path |
+| `references` | Pod → Secret/ConfigMap/ServiceAccount/PVC/image pull Secret/PriorityClass/RuntimeClass/ResourceClaim | Spec reference |
+| `mounts` | Pod → PVC → PV → StorageClass → CSIDriver; PV → VolumeAttachment → Node | Storage chain |
+| `scales` | HPA → Deployment/StatefulSet; HPA → APIService (metrics) | Autoscaling |
+| `intercepts` | Mutating/ValidatingWebhookConfiguration and admission policies → (namespace, kind) scope; webhook → Service | Admission path |
+| `serves` | APIService → Service; CRD → conversion webhook Service | Aggregated APIs |
+| `constrains` | ResourceQuota/LimitRange → Namespace; PDB → Pods; NetworkPolicy → Pods; taints → Pods | Policy limits |
+| `authorizes` | RoleBinding/ClusterRoleBinding → ServiceAccount; binding → Role | RBAC |
+| `resolves-via` | Pod → cluster-dns | DNS dependency |
+| `pulls` | Pod/container → image → registry | Image supply |
+| `calls` | Pod → Service/external-endpoint (from logs, mesh or agent) | Runtime dependency, learned |
+| `schedules` | scheduler → Pod; ResourceSlice/DeviceClass → ResourceClaim | Placement machinery |
+| `leases` | Node → Lease (node heartbeat); component → Lease | Liveness heartbeats |
+
+Relations come from specs (ownerRefs, selectors, references). Some are
+inferred: `calls` comes from log or mesh evidence, `resolves-via` is
+implicit for every pod. Inferred relations carry a weight and an expiry.
+
+#### State, change history and baselines
+
+- **State:** the current attributes per entity. Only attributes used by
+  detectors or rules are kept. Informer transforms strip everything else,
+  including Secret data.
+- **Change history:** meaningful diffs only: spec, image, replicas, config
+  and Secret data (as a hash, never the value), labels that affect
+  selection, taints, and node add or remove. Status, resyncs and
+  resourceVersion churn are excluded. A rollout is a `spec.template`
+  change. Each change records the actor when known (managedFields manager,
+  ReplicaSet revision, `kubectl.kubernetes.io/last-applied`).
+- **Baselines:** per entity: normal restart rate, readiness time, pending
+  time, Job duration and schedule, CPU and memory envelope (when a metrics
+  source exists), and usual error lines. "Unusual for this one" is a
+  first-class input.
+
+### 2. Signals: detectors
+
+A detector is `func(entity, state, history, baseline) []Signal`. A signal has:
+
+- the entity and its kind;
+- a stable reason;
+- a severity hint;
+- evidence: attribute values, event text, log lines, redacted;
+- a start time;
+- `derived: true`, when it is a symptom by construction (for example
+  "Service has no endpoints").
+
+Every check kwatch has today becomes a detector. None are removed.
+
+### 3. Reasoning engine
+
+The engine is generic. It works over entities, relations, signals, changes
+and rules.
+
+1. **Seed:** each new or changed signal seeds a search at its entity.
+2. **Upstream walk:** follow relations in their propagation direction,
+   bounded by depth 6 and a fan-in limit, collecting candidate causes:
+   - entities with their own signals;
+   - entities with changes inside the causal window;
+   - virtual entities (DNS, API server, registry) whose rules match the
+     symptom.
+3. **Rule evaluation:** for each candidate, apply the causal rules for the
+   relation path. A rule returns supporting and contradicting evidence with
+   weights. A candidate with no health problem and no change is rejected,
+   because reachability alone is never a cause.
+4. **Scoring:** combine the evidence:
+   - temporal order: the cause started or changed before the symptom;
+   - coverage: the share of the candidate's dependents that are failing;
+   - specificity: the error text names the candidate;
+   - exclusivity: only dependents of this candidate fail, not their
+     siblings;
+   - the candidate's own severity;
+   - the baseline deviation;
+   - the rule's prior.
+
+   The best explanation wins. Runners-up above a floor become "also
+   possible". Nothing above the floor means the cause is unknown, stated
+   plainly.
+5. **Downstream walk:** from the root, follow relations the other way to
+   collect impact: workloads, Services, Ingresses, Routes, dependent apps.
+6. **Chain:** the path from root to the most user-visible impact becomes the
+   story, for example "Secret rotated → pods crash → Service empty →
+   Ingress 502".
+
+Rules are data. They are declared per relation type and signal pattern,
+versioned, and unit-tested with fixtures:
+
+```yaml
+- id: node-pressure-evicts-pods
+  path: [pod, runs-on, node]
+  when:
+    cause: {signal: [MemoryPressure, DiskPressure, PIDPressure, NodePressureStall]}
+    effect: {signal: [Evicted, OOMKilled, ContainersNotReady, ProbeFailed]}
+  evidence:
+    cause_first: 3
+    coverage_pct_ge_30: 3
+    same_node_only: 2
+  prior: 0.6
+```
+
+A few rules need code, such as parsing error text. They implement the same
+`Rule` interface.
+
+### 4. Problems, policy and story
+
+- **Problem:** one per root cause, holding its chain, impact and evidence.
+  Building is event-driven: a signal marks its entities dirty, and only the
+  affected problems are recomputed.
+- **Settle:** a new problem waits 60–90s before its first message, or 0s for
+  the page tier, so the first message already has the whole picture. The
+  deadline is a delayed requeue, not a global tick.
+- **Tiers:** `page`, `notify`, `digest` or `silent`, set per signal by
+  default. A problem takes its highest member tier.
+- **Material change:**
+  - a new tier;
+  - a different root;
+  - impact crossing 1→N or doubling;
+  - a new kind of evidence.
+
+  Counters never trigger an update.
+- **Hysteresis:** the root must stay healthy for N minutes before resolve.
+  Re-failure within that window reopens the same problem silently.
+- **Persistence:** problem and decision state are persisted and versioned,
+  so a restart never repeats or re-creates a message.
+- **Story writers:** one writer per root kind. Each composes what broke,
+  why, the chain, the impact, the confidence with its evidence, and the
+  next step with real commands. Empty sections are omitted, and a message
+  has at most one status emoji. Plain, markdown and HTML variants feed every
+  provider.
+
+## Resource catalog: failures and links
+
+This catalog is the minimum built-in coverage. "Links" are the relations
+the model extracts. "Root when" is the rule condition that lets this
+resource be blamed for its dependents' failures. Gateway API and common
+operators (cert-manager, CSI snapshotter) are included because kwatch
+already watches them.
+
+### Workloads
+
+| Kind | Failure signals | Links | Root when |
+| --- | --- | --- | --- |
+| Pod | Pending/Unschedulable, ContainerCreating stuck, admission rejected, Evicted, stuck Terminating, not Ready, PodDisruptionCondition | owned-by, runs-on, references, mounts, selects (reverse), resolves-via, pulls | Rarely. Only a single, ownerless pod |
+| container | CrashLoopBackOff, Error/exit code, OOMKilled, ImagePull*, CreateContainerConfigError, CreateContainerError, RunContainerError, probe failures (liveness, readiness, startup), lifecycle hook failure, restarts, CPU throttling, memory near limit | part-of Pod, pulls image | Its own app error when no upstream candidate explains it |
+| ReplicaSet | FailedCreate (quota, admission, SA), replicas mismatch | owned-by Deployment | FailedCreate names quota, webhook or ServiceAccount; that becomes the root |
+| Deployment | ProgressDeadlineExceeded, Available=False, ReplicaFailure, rollout stuck, unavailable replicas | owns ReplicaSets | A recent `spec.template` change and only new-revision pods fail |
+| StatefulSet | Rollout stuck, ordinal blocked, PVC not bound for an ordinal, unavailable | owns Pods, PVC templates | Template change; or the volume chain for its ordinal |
+| DaemonSet | Misscheduled, unavailable on nodes, rollout stuck | owns Pods (per node) | Template change; or the specific node (per-node failures) |
+| Job | BackoffLimitExceeded, DeadlineExceeded, FailedIndexes, pod failure policy | owned-by CronJob, owns Pods | Its pods' root (image, config, OOM) |
+| CronJob | Missed schedules, too many missed starts, last N runs failed, suspended unexpectedly | owns Jobs | Recurring failure across runs → config or image |
+| HPA | ScalingActive=False (FailedGetResourceMetric), AbleToScale=False, ScalingLimited at max, flapping | scales workload, depends on metrics APIService | Stuck at max during load → capacity; metric failures → root is the metrics APIService or metrics-server |
+| ReplicationController | Same as ReplicaSet | owns Pods | Same |
+| PodTemplate / ControllerRevision | None (history source) | revision-of workload | Supplies rollout evidence |
+| PodGroup / Workload (gang scheduling) | Group unschedulable, partial placement | groups Pods | Capacity or quota for the group |
+
+### Networking and service
+
+| Kind | Failure signals | Links | Root when |
+| --- | --- | --- | --- |
+| Service | No endpoints, partial backends, port mismatch, LoadBalancer pending, ExternalName unresolvable, selector matches nothing | selects Pods, backed by EndpointSlice, routes-to external | Selector or port misconfig (a change to the Service); otherwise a symptom of its pods |
+| EndpointSlice / Endpoints | No ready endpoints, terminating only | backs Service | Never. Always a symptom |
+| Ingress | Backend Service missing or empty, TLS Secret missing or expired, class missing, address not assigned | routes-to Service, references Secret, IngressClass | Its own spec change, missing backend or TLS Secret |
+| IngressClass | Controller missing | used by Ingress | Controller down → all its Ingresses |
+| Gateway / GatewayClass | Accepted=False, Programmed=False, listener conflict | routes (reverse), class | Controller or config → all attached Routes |
+| HTTPRoute / GRPCRoute / TLSRoute | Accepted=False, ResolvedRefs=False (BackendNotFound) | routes-to Service, parent Gateway | Its own change or missing backend |
+| NetworkPolicy | Traffic denied (from probes, logs or agent), selects no pods | constrains Pods | A policy change just before connection failures of the pods it selects |
+| ServiceCIDR / IPAddress | CIDR exhaustion, IP allocation failure | used by Service | Allocation failures on Service create |
+| cluster-dns (virtual) | CoreDNS pods down, probe failures, SERVFAIL | resolves-via (all pods) | DNS-shaped errors across several unrelated workloads + DNS unhealthy |
+
+### Config and storage
+
+| Kind | Failure signals | Links | Root when |
+| --- | --- | --- | --- |
+| ConfigMap | Missing (referenced), changed | referenced by Pods | Missing; or changed shortly before its consumers failed |
+| Secret | Missing, changed, TLS cert expired or expiring, pull Secret invalid | referenced by Pods, Ingresses, SAs | Missing, changed, or expired, and the consumers' errors fit |
+| PersistentVolumeClaim | Pending (no PV or provisioner), resize failed, usage high or full, inode high | mounted by Pods, bound to PV | Pending or full → root for pods that mount it |
+| PersistentVolume | Failed or Released stuck, node affinity conflict | bound PVC, StorageClass | PV failure → PVC → pods |
+| StorageClass | Provisioner missing, bad parameters | used by PVCs | All PVCs of the class Pending with provisioning errors |
+| VolumeAttachment | Attach or detach error, stuck | PV ↔ Node | FailedAttachVolume / Multi-Attach for dependent pods |
+| CSIDriver / CSINode | Driver not registered on a node, driver pods down | node ↔ driver | Mount failures on nodes missing the driver |
+| CSIStorageCapacity | Capacity exhausted | StorageClass × topology | Provisioning failures in that topology |
+| VolumeSnapshot (CRD) | ReadyToUse=False, errors | PVC | Backup failures |
+| VolumeAttributesClass | Modify failures | PVC | PVC modify errors |
+
+### Identity, access and policy
+
+| Kind | Failure signals | Links | Root when |
+| --- | --- | --- | --- |
+| ServiceAccount | Missing (referenced), token problems | referenced by Pods | Missing SA blocks pod creation |
+| Role / ClusterRole / bindings | Changed; the app gets "forbidden" | authorizes SA | An RBAC change before "forbidden" errors from that SA |
+| CertificateSigningRequest / PodCertificateRequest / ClusterTrustBundle | Denied, pending, expiring | used by kubelet and workloads | Kubelet or client certificate failures |
+| ResourceQuota | Exceeded | constrains Namespace | FailedCreate "exceeded quota" in the namespace |
+| LimitRange | Violated | constrains Namespace | FailedCreate "limit" violations |
+| PodDisruptionBudget | Disruptions blocked, unhealthy | constrains Pods | Drains or upgrades blocked (a node can't drain) |
+| PriorityClass | Missing, preemption | referenced by Pods | Preempted pods → the higher-priority workload that caused it |
+| Namespace | Terminating stuck (finalizers) | contains all | Its stuck deletion blocks resources inside |
+
+### Admission and API extension
+
+| Kind | Failure signals | Links | Root when |
+| --- | --- | --- | --- |
+| Mutating/ValidatingWebhookConfiguration | Backend Service has no endpoints, timeouts, TLS errors, failurePolicy=Fail with errors | intercepts (scope), backed by Service | Creates or updates in its scope fail naming it → root for many workloads at once |
+| (Mutating/Validating)AdmissionPolicy + Binding | Policy rejects, CEL errors | intercepts (scope) | Rejections naming the policy after its change |
+| CustomResourceDefinition | Not established, conversion webhook failing, storage version issues | served by conversion Service | CR reads or writes failing |
+| APIService | Available=False (FailedDiscoveryCheck) | serves via Service | metrics.k8s.io down → HPA failures; any aggregated API → discovery errors |
+| CRD instances (operators) | Ready=False, Degraded=True and similar failure conditions | owned resources | Operator-reported failure → its owned objects |
+| FlowSchema / PriorityLevelConfiguration | API throttling (429s, rejected requests) | apiserver | Controllers or kwatch throttled → wide slowness |
+
+### Cluster and nodes
+
+| Kind | Failure signals | Links | Root when |
+| --- | --- | --- | --- |
+| Node | NotReady, Unknown (lost), Memory/Disk/PIDPressure, NetworkUnavailable, PSI stall, filesystem or inode high, unschedulable (cordon), taints added, overcommit, lease stale, node added or removed (scale-in, spot) | hosts Pods, has kubelet/runtime/cni/csi-node | Node signal first + a high share of its pods failing + pods on other nodes fine |
+| Lease (node heartbeat) | Stale renewals | Node | Never alone. It is evidence for the Node |
+| kubelet / container-runtime / cni (virtual, per node) | PLEG not healthy, runtime errors, CNI "network not ready", sandbox creation failures | part-of Node | Pod sandbox or network failures confined to that node |
+| RuntimeClass | Handler missing on nodes | referenced by Pods | Pods using it fail on nodes without the handler |
+| ResourceClaim / ResourceSlice / DeviceClass / DeviceTaintRule (DRA) | Claim unallocated, device tainted | referenced by Pods, on nodes | Pods pending or evicted for devices |
+| apiserver / etcd / scheduler / controller-manager (virtual + static pods) | Probe failures, latency, component pods failing, leader Lease stale | cluster-wide | Wide, simultaneous symptoms: everything Pending (scheduler), no reconciliation (controller-manager), API errors |
+| cluster-autoscaler / Karpenter (events, CRDs) | FailedToScaleUp, NotTriggerScaleUp, NodeClaim failures | capacity for Pending pods | Pending pods with an autoscaler failure → capacity root |
+| Event | Warning events (every reason kwatch knows today) | involved object | Evidence only. Events attach to their entity |
+| ComponentStatus | Deprecated; used only if present | components | Evidence only |
+
+### External and future sources
+
+| Entity | Signals | Links | Root when |
+| --- | --- | --- | --- |
+| image / registry (virtual) | Pull errors, auth, rate limit (429), not found | pulls | ImagePull failures across workloads share a registry or pull Secret |
+| external-endpoint (virtual) | Timeouts, refused, DNS NXDOMAIN (from logs, probes or agent) | calls | Several workloads fail calling the same endpoint |
+| node agent: process, disk-device, nic, container runtime detail | CPU and memory saturation, IO wait, disk errors, NIC drops, OOM victims, zombie processes | part-of Node / container | The saturating process or device is the root for slow or failing containers |
+| cloud-loadbalancer / cloud-disk (cloud API source) | Provisioning failure, health checks failing, quota | LoadBalancer Service, PV | Explains LB pending or attach failures |
+
+## Root-cause rule set (initial)
+
+Rules are grouped by the relation they cross. Each lists its evidence;
+unmet contradictions lower the score.
+
+1. **Node → pods**
+   - Supports: the node signal appears first; ≥30% of its pods fail; the
+     sibling replicas on other nodes are healthy.
+   - Contradicts: the node is healthy.
+2. **Rollout → pods** (template change)
+   - Supports: the failure starts within 15m of the change; only the new
+     revision fails; the old revision is healthy.
+3. **Config or Secret change → pods**
+   - Supports: the data hash changed before the failure; the consumers
+     restarted after it; the error names a key or file.
+4. **Missing reference → pods**
+   - Supports: the referenced object doesn't exist;
+     CreateContainerConfigError or FailedMount names it.
+5. **Volume chain → pods**
+   - Supports: the PVC is Pending or full, or the VolumeAttachment failed;
+     only pods using the volume are affected.
+6. **Capacity → pending pods**
+   - Supports: Insufficient cpu or memory, taints, or affinity in
+     FailedScheduling; an autoscaler failure; many pending pods with the
+     same reason.
+7. **Quota or LimitRange → workloads**
+   - Supports: FailedCreate says "exceeded quota" or "forbidden: limit";
+     scoped to the namespace.
+8. **Admission → workloads**
+   - Supports: FailedCreate or update names the webhook or policy; the
+     webhook backend is unhealthy or the policy changed; many kinds in the
+     scope are affected.
+9. **DNS → workloads**
+   - Supports: DNS error signatures in several unrelated workloads; CoreDNS
+     is unhealthy or the probe fails.
+10. **Metrics API → HPAs**
+    - Supports: metrics.k8s.io APIService is unavailable or metrics-server
+      is down; many HPAs fail at once.
+11. **Control plane → cluster**
+    - Supports: component unhealthy; cluster-wide symptoms match (scheduling
+      stalls, no reconciliation, API errors).
+12. **Network policy → pods**
+    - Supports: the policy changed; connection refused or timeouts from the
+      selected pods; unselected pods are fine.
+13. **RBAC → workloads**
+    - Supports: a binding or role changed; "forbidden" errors come from that
+      ServiceAccount.
+14. **Registry → pulls**
+    - Supports: the same registry or pull Secret appears across ImagePull
+      failures; auth errors, 429s or not-found.
+15. **Service misconfiguration → routes**
+    - Supports: a Service port, selector or targetPort change; endpoint loss
+      while the pods are healthy.
+16. **Ingress, Gateway or Route → traffic**
+    - Supports: a missing backend or TLS problem; the route is not accepted
+      after its change.
+17. **Certificate expiry → consumers**
+    - Supports: the certificate expired; TLS errors in the consumers.
+18. **Node lifecycle → workloads**
+    - Supports: a node was removed or replaced (spot, scale-in) just before
+      pods were rescheduled or became Pending; PDB violations.
+19. **Operator CR → owned objects**
+    - Supports: the CR reports a failure condition before its owned
+      resources fail.
+20. **Workload-local** (fallback)
+    - No upstream candidate passes. The root is the workload itself.
+    - The story shows the strongest error evidence and never invents a
+      cause.
+
+Rules are added over time (for example, from a node agent: "process
+saturation → container slow") without touching the engine.
+
+## Storage
+
+Today all state is stored in ConfigMaps. That has limits:
+
+- 1 MiB per object, forcing sharding and trimming;
+- every save is a full rewrite through the API server;
+- API load grows with state size;
+- no queries.
+
+The cluster model adds change history, baselines and problem history.
+These are bigger and written more often.
+
+State is split by how critical it is:
+
+| Class | Examples | Size | Store |
+| --- | --- | --- | --- |
+| Decision state (must survive restart and failover) | Open problems, notification decisions, provider thread and message IDs, dedupe keys, schema version | Small: O(active problems), typically < 200 KiB | Kubernetes API: one versioned ConfigMap per install (or a `KwatchState` CRD later), written on change with debounce |
+| Knowledge state (valuable, rebuildable) | Change history, per-entity baselines, problem history and trends, learned `calls` relations | Large: MBs to hundreds of MBs | Embedded database on a volume: bbolt (pure Go, single file, crash-safe, no CGO) |
+| Live model | Entities, relations, current state | Rebuilt from informers on start | Memory only |
+
+- **Storage interface:** a `KnowledgeStore` port with two implementations.
+  - `disk`: bbolt on a PVC, with TTL compaction and a size cap.
+  - `memory`: a bounded ring, the default when no volume is configured.
+
+  The core never knows which is in use.
+- **Default install:** one replica with a small PVC (1 GiB, RWO), when the
+  cluster has a default StorageClass. The installer detects this and falls
+  back to memory when there is none. Without a disk, kwatch still works;
+  after a restart it simply relearns baselines and history.
+- **HA mode:** Lease election remains. Decision state stays in the API, so
+  failover never repeats or loses notifications. Knowledge state is per
+  replica on the leader's volume (RWO PVCs cannot move between nodes
+  quickly), and a new leader rebuilds or continues with what it has.
+  Losing history degrades explanations slightly; it never causes wrong
+  notifications.
+- **Why not SQLite, Postgres or Redis:** SQLite needs CGO or a large pure-Go
+  port. An external database breaks "easy install, one pod". bbolt is small
+  and battle-tested (etcd uses it), and fits key-by-time access.
+- **Migration:** existing ConfigMap state is read once through the
+  versioned migration path. Old incident state is closed silently and
+  decisions move to the new format. A backup of the old ConfigMaps is kept
+  until the next upgrade.
+
+## Scalability
+
+- **Size:** 5,000 pods and 500 nodes on one pod within 256–512 MiB. The
+  model stores only the attributes rules use. Informer transforms strip
+  the rest (done for Secrets in step 4).
+- **Indexes:** relation adjacency in both directions, by kind and by
+  namespace, and by node. Change history is indexed by entity and by time.
+  There are no scans over all incidents or changes.
+- **Incremental work:** reasoning runs only for dirty entities. The walks
+  are bounded (depth 6, fan-in caps with sampling for huge fan-ins such as
+  node → 110 pods). Results are cached per problem and invalidated by the
+  relation changes they used.
+- **Bounded history:** per entity, 2 hours or 64 changes; baselines keep
+  aggregates, not samples.
+- **Sources:** each runs with its own concurrency, rate and memory budget.
+  Log fetches happen only for problem evidence, never on the hot path.
+  Agent samples are aggregated before becoming facts.
+- **API budget:** an explicit QPS budget. Lease renewal uses its own client
+  (done).
+- **Storm:** 1,000 pods failing at once must produce at most 3 messages
+  within 2 minutes (scale-test gate).
+
+## Acceptance (scorecard gates for cutover)
 
 | KPI | Target |
 | --- | --- |
-| Notifications per hour | ≤ 20 |
+| Notifications per hour (rc.10 staging replay) | ≤ 20 |
 | Messages per problem | ≤ 3 |
 | Unchanged updates | 0% |
-| Re-created problems | ≤ 5% of problems |
+| Re-created problems | ≤ 5% |
 | Repeated recoveries | 0 |
 | Circular causes | 0 |
-| Page or notify messages without a cause or a next step | ≤ 10% |
+| Page or notify problems without a cause or a next step | ≤ 10% |
+| Correct root on labelled scenarios | ≥ 90% |
 
-The redesigned core must also pass every `test/e2e` scenario and the reason
-parity check. The storm test must stay within its message budget.
+Labelled scenarios cover one case per rule above: bad deploy, Secret key
+removed, node memory pressure, node lost (spot), CoreDNS down, blocking
+webhook, quota exhausted, PVC full, registry auth, metrics-server down,
+NetworkPolicy change, RBAC change, certificate expired, capacity pending,
+and an operator CR failure. They also cover negative cases: a healthy node
+with a crashing app must not blame the node.
 
-### Rollout
+## Rollout
 
-The new core is built behind `KWATCH_CORE=v2` next to the current engine and
-fed by the same monitors. Delivery switches by flag. Once v2 beats rc.10 on
-the scorecard and a staging run, the old engine, grouping layers, feedback
-learning and pattern filler are removed (step 9) with release notes.
+1. Build the model (sources, entity schema, relations, change history) and
+   verify it against today's graph with a fidelity test.
+2. Port every current check to detectors. Parity comes from the reason
+   parity test plus scenarios.
+3. Build the reasoning engine and rules with fixture tests per rule.
+4. Build problems, policy and writers behind `KWATCH_CORE=v2`, next to the
+   current engine.
+5. Cut over when v2 beats rc.10 on the scorecard and passes a staging run.
+   Then remove the old engine, grouping layers, feedback learning and
+   pattern filler, with release notes.
 
 ## Consequences
 
-- Fewer, later-but-complete first messages. The page tier bypasses settling.
-- Some configuration becomes obsolete: grouping windows, mass-failure
-  thresholds and feedback settings. Removals are proposed individually
-  before they are made.
-- Persisted incident state gains a versioned problem-state format with a
+- Fewer, complete messages that explain the cause. The page tier bypasses
+  settling.
+- New data sources extend kwatch by adding plugins. The core is stable.
+- Some configuration becomes obsolete (grouping windows, mass-failure
+  thresholds, feedback). Each removal is proposed individually.
+- Persisted state gains a versioned model and problem format with a
   migration. Old incident state is read once and closed silently.
-- Monitors keep their observation contract, so detection changes and core
-  changes stay independently testable.
+- RBAC: understanding everything needs list and watch on more kinds
+  (storage, admission, flowcontrol, DRA, RBAC). Each is optional. A missing
+  permission degrades only the rules that need it, is reported in health,
+  and is documented with least-privilege guidance.
