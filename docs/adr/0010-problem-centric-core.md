@@ -432,48 +432,133 @@ unmet contradictions lower the score.
 Rules are added over time (for example, from a node agent: "process
 saturation → container slow") without touching the engine.
 
-## Storage
+## Storage: one disk, full cluster memory
 
-Today all state is stored in ConfigMaps. That has limits:
+With a disk, kwatch keeps everything that improves its understanding. It
+does not keep only what fits in a ConfigMap.
 
-- 1 MiB per object, forcing sharding and trimming;
-- every save is a full rewrite through the API server;
-- API load grows with state size;
-- no queries.
+### What is stored
 
-The cluster model adds change history, baselines and problem history.
-These are bigger and written more often.
+| Data | Why it helps | Retention (default) |
+| --- | --- | --- |
+| Full graph: entities, relations, trimmed state | Instant warm start; "what did the cluster look like at 10:02?"; offline analysis | Live, plus snapshots every 15m for 7d |
+| Change history: spec diffs, image, replicas, config and Secret hashes, RBAC, taints, node add/remove, actor | "What changed before it broke" across all resources | 30d |
+| Signals and problem history: root, chain, impact, evidence, timeline, resolution | Recurrence ("3rd time this week"), trends, the weekly report | 90d |
+| Baselines: restart rate, ready time, pending time, Job durations, resource envelope | "Unusual for this workload" | Rolling aggregates, no expiry |
+| Event digest: Warning events, deduplicated | Evidence long after the API server drops events (1h) | 7d |
+| Evidence excerpts: log lines and termination messages used in problems (redacted) | Show what the app said, even after the pod is gone | 30d, size-capped |
+| Learned relations (`calls`, from logs, mesh or agent) | Dependency map that Kubernetes doesn't have | Decays when not seen for 7d |
+| Agent and metric aggregates (future) | Saturation context | 1-minute resolution for 24h, 1-hour resolution for 30d |
+| Decision state: open problems, sent messages, thread IDs | No repeats, no losses | While open, plus 7d |
 
-State is split by how critical it is:
+All data is redacted before it is written. Total size is capped: default
+2 GiB, with the oldest and lowest-value data compacted first. Retention and
+caps are configurable.
 
-| Class | Examples | Size | Store |
-| --- | --- | --- | --- |
-| Decision state (must survive restart and failover) | Open problems, notification decisions, provider thread and message IDs, dedupe keys, schema version | Small: O(active problems), typically < 200 KiB | Kubernetes API: one versioned ConfigMap per install (or a `KwatchState` CRD later), written on change with debounce |
-| Knowledge state (valuable, rebuildable) | Change history, per-entity baselines, problem history and trends, learned `calls` relations | Large: MBs to hundreds of MBs | Embedded database on a volume: bbolt (pure Go, single file, crash-safe, no CGO) |
-| Live model | Entities, relations, current state | Rebuilt from informers on start | Memory only |
+### Store engine
 
-- **Storage interface:** a `KnowledgeStore` port with two implementations.
-  - `disk`: bbolt on a PVC, with TTL compaction and a size cap.
-  - `memory`: a bounded ring, the default when no volume is configured.
+The store is an append-only, log-structured segment store with a snapshot.
+There is one writer, and the disk is shared.
 
-  The core never knows which is in use.
-- **Default install:** one replica with a small PVC (1 GiB, RWO), when the
-  cluster has a default StorageClass. The installer detects this and falls
-  back to memory when there is none. Without a disk, kwatch still works;
-  after a restart it simply relearns baselines and history.
-- **HA mode:** Lease election remains. Decision state stays in the API, so
-  failover never repeats or loses notifications. Knowledge state is per
-  replica on the leader's volume (RWO PVCs cannot move between nodes
-  quickly), and a new leader rebuilds or continues with what it has.
-  Losing history degrades explanations slightly; it never causes wrong
-  notifications.
-- **Why not SQLite, Postgres or Redis:** SQLite needs CGO or a large pure-Go
-  port. An external database breaks "easy install, one pod". bbolt is small
-  and battle-tested (etcd uses it), and fits key-by-time access.
-- **Migration:** existing ConfigMap state is read once through the
-  versioned migration path. Old incident state is closed silently and
-  decisions move to the new format. A backup of the old ConfigMaps is kept
-  until the next upgrade.
+- **Writes:** records are appended to a segment file (`0001.log`, ...) with
+  checksums, `fsync` on commit (batched every ≤1s), and a monotonically
+  increasing sequence number.
+- **Snapshot and compaction:** a snapshot of indexes and aggregates is
+  written periodically, and old segments are compacted.
+- **Indexes:** in-memory indexes are rebuilt from the snapshot plus the log
+  tail at start: by entity, by time, and by problem.
+- **Why not bbolt or SQLite:** memory-mapped B-trees are unsafe on network
+  filesystems and cannot be read safely while another pod writes. An
+  append-only log with checksums is safe on both local and shared (NFS or
+  EFS) volumes, allows readers to follow the writer, and recovers from a
+  torn write by truncating to the last valid record.
+
+### N replicas, one disk
+
+The disk is one shared volume. Only the leader writes, and standbys read.
+
+```
+            Lease (leader election, epoch N)
+                     │
+   ┌─────────────────┼─────────────────┐
+   ▼                 ▼                 ▼
+kwatch-0 (leader)  kwatch-1 (standby)  kwatch-2 (standby)
+  writes log         tails log          tails log
+   │  (warm model)     (warm model)       (warm model)
+   └────────────► one RWX volume ◄─────────┘
+                 /data/segments, /data/snapshot, /data/EPOCH
+```
+
+- **Volume:** one PVC with `ReadWriteMany` (EFS, Filestore, Azure Files,
+  NFS or CephFS), mounted by all replicas.
+- **Single writer, fenced:** each leadership term has an epoch (the Lease
+  transition count). The leader writes `EPOCH` before its first append, and
+  every append carries the epoch. A deposed leader re-reads `EPOCH` before
+  each commit batch and stops writing if it changed. Readers ignore records
+  from a stale epoch after a newer one. This prevents two writers even
+  during a network partition.
+- **Warm standby:** standbys tail the log to keep a live copy of the model
+  and problems. On failover the new leader continues within seconds: no
+  relearning, and no repeated or lost notifications.
+- **Decision state is also mirrored** into one small ConfigMap. If the
+  volume is unavailable, failover still never repeats a notification.
+
+### Supported layouts
+
+The installer detects the cluster and picks one:
+
+| Layout | When | Behaviour |
+| --- | --- | --- |
+| **HA shared** (recommended for production) | An RWX StorageClass exists | N replicas, one disk, warm failover in seconds |
+| **Single disk** (default when there is no RWX) | Only RWO storage | 1 replica with a `Recreate` strategy; on node loss the pod and disk move (1–6 min depending on the cloud's detach); decisions stay safe through the ConfigMap mirror |
+| **Diskless** | No StorageClass | Memory model rebuilt from informers; decision state in a ConfigMap; history kept in memory within caps and lost on restart |
+
+The core uses one `Store` interface for all three.
+
+## Flapping and recurring issues
+
+A flap is something that fails, recovers, fails again, and so on. Every
+problem has a lifecycle with memory, not a boolean.
+
+```
+           signal                  root healthy
+ (none) ─────────► OPEN ─────────────────────────► RECOVERING
+                    ▲                                  │
+                    │ re-fails within hold              │ healthy for hold
+                    └──────────── (silent) ◄───────────┤
+                                                        ▼
+   FLAPPING ◄── ≥3 open/recover cycles in 30m ──  RESOLVED
+     │                                                  │
+     │ stable for adaptive hold                         │ same root+kind
+     ▼                                                  ▼ re-fails later
+   RESOLVED                                  REOPENED (linked to history)
+```
+
+- **Adaptive hysteresis:** the resolve hold starts at 3 minutes and grows
+  with the entity's flap history: it doubles per recent cycle, up to 30
+  minutes. A workload that flaps a lot must stay healthy longer before
+  "resolved" is sent.
+- **Flapping state:** after 3 cycles in 30 minutes, the problem turns into
+  one "flapping" problem. One message is sent, for example "orders is
+  flapping: failed 5 times in 20m, each time for about 40s, while probe
+  latency spikes". Individual transitions are then silent. Later updates
+  come only when the pattern changes (a failure lasts longer, or the
+  impact grows), plus one summary when it becomes stable.
+- **Recurrence:** a new problem with the same root and kind as a stored one
+  links to it. The message says "happened again: 3rd time this week, last
+  on Tue for 12m, resolved without changes". After a configurable count it
+  is escalated as a recurring problem.
+- **Known routines:** baselines learn expected patterns, such as nightly
+  Job pods Pending during node scale-up or a readiness blip on every
+  deploy. These stay at digest or silent tier unless they deviate from
+  their normal duration or frequency.
+- **Pod churn vs problem identity:** problems are keyed by root entity and
+  kind, not by pod name. Replaced pods (new names, same owner) continue
+  the same problem instead of creating new ones.
+- **Oscillating resources:** HPA scale flapping, Endpoints churn, and node
+  add/remove loops are detected as rates over time, not as repeated
+  incidents. They produce a single "unstable" signal when the rate exceeds
+  the baseline.
 
 ## Scalability
 
@@ -487,8 +572,10 @@ State is split by how critical it is:
   are bounded (depth 6, fan-in caps with sampling for huge fan-ins such as
   node → 110 pods). Results are cached per problem and invalidated by the
   relation changes they used.
-- **Bounded history:** per entity, 2 hours or 64 changes; baselines keep
-  aggregates, not samples.
+- **Bounded memory:** the hot working set is in memory (current model,
+  open problems, the last 2h of changes per entity). Everything older is
+  on disk under the retention caps above and is loaded on demand through
+  indexes.
 - **Sources:** each runs with its own concurrency, rate and memory budget.
   Log fetches happen only for problem evidence, never on the hot path.
   Agent samples are aggregated before becoming facts.
