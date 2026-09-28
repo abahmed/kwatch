@@ -470,9 +470,10 @@ It is the storage engine used by etcd.
 - **Retention:** a background compactor enforces the retention table and
   the size cap in small batches. It runs with a bounded duration and never
   on the hot path.
-- **Decisions mirror:** open problems and sent-message state are also
-  written to one small ConfigMap. The diskless layout uses only this
-  mirror.
+- **Only store:** the disk is the single source of truth for all state,
+  including decisions (open problems, sent messages, thread IDs). Kwatch
+  keeps no state in ConfigMaps. The only ConfigMap left is the user's
+  configuration.
 
 ### Deployment layout: one replica, one disk, a Lease lock
 
@@ -501,22 +502,25 @@ Lease kwatch-lock   hold before sending or writing; stop on loss
   writes to the store. It stops both as soon as a renewal fails. Every
   store record carries the Lease epoch, so a stale holder's late writes
   are rejected on read.
-- **The disk is optional.** Without a StorageClass, kwatch runs in memory
-  mode. Decision state is kept in a ConfigMap, so notifications stay
-  correct across restarts.
+- **The disk is required.** The installer uses the default StorageClass,
+  or one the user names. A cluster without any StorageClass can use an
+  `emptyDir` volume for evaluation. It runs the same bbolt code, but all
+  state, including sent-message decisions, is lost when the pod moves, and
+  open problems may be announced once more. The installer warns about
+  this.
 - **Node failure:** after the toleration (30s) the pod is rescheduled. The
   RWO volume attaches once the cloud detaches it; this can take up to about
   6 minutes on some clouds, and is faster with non-graceful node shutdown
-  handling. Decision state keeps notifications correct across the gap.
+  handling. State on the disk keeps notifications correct across the gap.
 
-### Supported layouts
+### Volume options
 
-| Layout | When | Behaviour |
+| Volume | When | Behaviour |
 | --- | --- | --- |
-| **Disk** (default) | A default StorageClass exists | Full history and baselines persist across restarts |
-| **Diskless** | No StorageClass | Model rebuilt from informers; decisions in a ConfigMap; history lost on restart |
+| **PVC** (default) | A StorageClass exists | All state persists across restarts and moves |
+| **emptyDir** (evaluation) | No StorageClass | Same store; state lost when the pod is deleted or moved |
 
-The core uses one `Store` interface for both.
+There is one `Store` implementation (bbolt) and no alternative backends.
 
 ## Flapping and recurring issues
 
@@ -628,8 +632,9 @@ with a crashing app must not blame the node.
 - Some configuration becomes obsolete (grouping windows, mass-failure
   thresholds, feedback). Each removal is proposed individually.
 - No migration is needed. Kwatch has no stable release or production
-  users yet, so the new store and state formats replace the current
-  ConfigMap state. The formats are versioned from their first release, so
+  users yet, so the bbolt store replaces all current ConfigMap state
+  (incidents, shards, groups, threads, baselines, changes, feedback) and
+  the persistence manager. The formats are versioned from their first release, so
   later changes can migrate.
 - RBAC: understanding everything needs list and watch on more kinds
   (storage, admission, flowcontrol, DRA, RBAC). Each is optional. A missing
