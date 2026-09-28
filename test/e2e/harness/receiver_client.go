@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"strings"
 	"time"
 
 	"k8s.io/apimachinery/pkg/util/wait"
@@ -105,14 +106,28 @@ func (r *ReceiverClient) Matching(
 	}
 	matched := make([]ReceiverRequest, 0, len(requests))
 	for _, request := range requests {
-		var payload map[string]any
+		var payload struct {
+			Notification struct {
+				ConversationKey string `json:"conversationKey"`
+				Summary         struct {
+					Location struct {
+						Name string `json:"name"`
+					} `json:"location"`
+				} `json:"summary"`
+			} `json:"notification"`
+		}
 		if json.Unmarshal(request.JSON, &payload) != nil {
 			continue
 		}
-		if match.Name != "" && payload["Name"] != match.Name {
+		name := payload.Notification.Summary.Location.Name
+		if match.Name != "" && name != match.Name &&
+			!strings.HasSuffix(name, "/"+match.Name) {
 			continue
 		}
-		if match.Reason != "" && payload["Reason"] != match.Reason {
+		key := payload.Notification.ConversationKey
+		if match.Reason != "" &&
+			!strings.Contains(key, ":"+match.Reason+":") &&
+			!strings.Contains(key, ":"+match.Reason+"|") {
 			continue
 		}
 		matched = append(matched, request)

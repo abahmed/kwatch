@@ -16,8 +16,8 @@ func main() {
 	}
 
 	switch command {
-	case "healthy", "sleep":
-		select {}
+	case "healthy", "sleep", "http":
+		serve(true)
 	case "startup-error", "crash", "recurring-error":
 		os.Exit(42)
 	case "delayed-error":
@@ -30,8 +30,6 @@ func main() {
 		consumeDisk()
 	case "not-ready":
 		serve(false)
-	case "http":
-		serve(true)
 	default:
 		fmt.Fprintf(os.Stderr, "unknown workload command %q\n", command)
 		os.Exit(2)
