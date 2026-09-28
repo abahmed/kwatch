@@ -417,6 +417,62 @@ use them.
     encryption at rest relies on the volume. The store is never exposed
     over the network.
 
+### Investigation and verification
+
+These make each deduction checkable and each alert complete.
+
+1. **Automatic investigation per root kind.** When a problem opens, the
+   investigator collects exactly the evidence its root kind needs, within
+   a bounded budget, before the first message:
+   - crash: previous-container logs and the exit reason;
+   - node: node conditions, top pods by memory or CPU, kubelet summary;
+   - pending: the scheduler message and matching node counts;
+   - config or Secret: which keys changed (names only, never values);
+   - admission: the webhook Service endpoints and the failure text.
+
+   An operator should never need to run `kubectl describe` to understand
+   the alert.
+2. **Noisy neighbour attribution.** Node pressure is traced to the pods
+   using the resource (kubelet summary per pod). The root becomes "pod
+   batch-7f on node X uses 11 GiB of 14 GiB", and the evicted pods are its
+   impact.
+3. **Scheduler message understanding.** FailedScheduling text is parsed
+   into per-reason node counts: insufficient memory on 12 nodes, taint on
+   3, volume zone conflict on 2. The dominant blocker becomes the cause,
+   with its specific fix.
+4. **Log intelligence.** From the crash output, kwatch picks the first
+   meaningful error (not the last line of a stack trace) and normalises it
+   into a signature by removing IDs, timestamps and addresses. Signatures
+   are deduplicated across replicas and matched to known causes (a
+   dependency named, a DNS failure, a missing file or key). The same
+   signature across different workloads links them to a shared cause.
+5. **Impact-aware tiering.** The tier reflects impact, not only the signal
+   type:
+   - user-facing exposure (reachable through an Ingress, Gateway or
+     LoadBalancer);
+   - the share of replicas lost (1 of 10 vs 3 of 3);
+   - dependents affected;
+   - the namespace's criticality: labels or annotations, with production
+     namespaces learned from the presence of Ingress, PDB and HPA when not
+     set.
+
+   A dev pod crash loop is digest; checkout with no endpoints is page.
+6. **Continuous verification.** After the first alert, the hypothesis is
+   re-tested as evidence arrives. When new evidence contradicts it, the
+   problem's cause is revised and the update says so ("cause revised: the
+   node is healthy; pods fail on all nodes with the same config error").
+   Confidence is never inflated by repetition.
+7. **Resolution explanation.** When a problem resolves, kwatch states what
+   fixed it: a rollback, a config fix, a node replaced, scaling, or
+   recovery with no change. This feeds change outcomes and recurrence.
+8. **Explainability.** Every conclusion keeps its reasoning trace:
+   candidates, evidence, scores and rejected alternatives. The trace is
+   stored with the problem and shown in a compact "why" line and in the
+   thread. It is also what rule tests assert on.
+9. **Safe next steps.** Suggested commands use the real object names,
+   namespaces and revisions from the model, and are read-only by default.
+   Remediations such as `rollout undo` are labelled clearly as changes.
+
 ## Resource catalog: failures and links
 
 This catalog is the minimum built-in coverage. "Links" are the relations
@@ -826,7 +882,8 @@ webhook, quota exhausted, PVC full, registry auth, metrics-server down,
 NetworkPolicy change, RBAC change, certificate expired, capacity pending,
 an operator CR failure, a zone or node-pool failure, a memory limit too
 low, a probe timeout too short, a failing sidecar, and a node drain within
-its envelope (must stay quiet). They also cover negative cases: a healthy node
+its envelope (must stay quiet), a noisy-neighbour memory hog, a
+scheduler blocker mix, and a cause revised after contradicting evidence. They also cover negative cases: a healthy node
 with a crashing app must not blame the node.
 
 ## Rollout
