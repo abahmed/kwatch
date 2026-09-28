@@ -19,7 +19,7 @@
 
 > Kubernetes incidents, explained.
 
-kwatch is an open-source Kubernetes incident monitor. It turns failures into
+kwatch is a source-available Kubernetes incident monitor. It turns failures into
 clear alerts that explain **what broke, why it happened, and what to do next**.
 
 It runs in your own cluster. No hosted account is required.
@@ -116,7 +116,7 @@ Connect one or more channels in a few steps. See the
 
 ## 🔐 Trust and privacy
 
-kwatch runs inside your cluster with read access to it, so the source is open
+kwatch runs inside your cluster with read access to it, so the source is public
 for you to review at any time.
 
 - **Your data stays in your cluster.** Alerts go only to the channels you
@@ -175,4 +175,8 @@ request.
 
 ## 📄 License
 
-kwatch is available under the [MIT License](./LICENSE).
+kwatch is source available under the [Elastic License 2.0](./LICENSE).
+You can use it for free in your own clusters, read and change the code, and
+share it. You may not offer kwatch as a hosted service or remove its license
+checks. Releases up to and including `v1.0.0-rc.10` remain under the MIT
+License. See [licensing](./docs/licensing.md).
