@@ -457,63 +457,66 @@ caps are configurable.
 
 ### Store engine
 
-The store is an append-only, log-structured segment store with a snapshot.
-There is one writer, and the disk is shared.
+The store is bbolt: pure Go, one file, ACID transactions and crash safety.
+It is the storage engine used by etcd.
 
-- **Writes:** records are appended to a segment file (`0001.log`, ...) with
-  checksums, `fsync` on commit (batched every ≤1s), and a monotonically
-  increasing sequence number.
-- **Snapshot and compaction:** a snapshot of indexes and aggregates is
-  written periodically, and old segments are compacted.
-- **Indexes:** in-memory indexes are rebuilt from the snapshot plus the log
-  tail at start: by entity, by time, and by problem.
-- **Why not bbolt or SQLite:** memory-mapped B-trees are unsafe on network
-  filesystems and cannot be read safely while another pod writes. An
-  append-only log with checksums is safe on both local and shared (NFS or
-  EFS) volumes, allows readers to follow the writer, and recovers from a
-  torn write by truncating to the last valid record.
+- **One writer:** a single replica on an RWO volume. bbolt's file lock also
+  prevents two processes on the same node from opening it. Every write
+  transaction first checks the stored Lease epoch and aborts if a newer
+  holder has written, so a stale pod can never overwrite newer state.
+- **Layout:** buckets per data class (graph, changes, problems, baselines,
+  events, evidence, decisions). Keys are ordered as entity plus time, so
+  range scans are cheap.
+- **Retention:** a background compactor enforces the retention table and
+  the size cap in small batches. It runs with a bounded duration and never
+  on the hot path.
+- **Decisions mirror:** open problems and sent-message state are also
+  written to one small ConfigMap. The diskless layout uses only this
+  mirror.
 
-### N replicas, one disk
+### Deployment layout: one replica, one disk, a Lease lock
 
-The disk is one shared volume. Only the leader writes, and standbys read.
+Multi-replica HA is removed. Kwatch is not in any request path. A 1–2
+minute monitoring gap while the pod restarts is acceptable. A problem that
+is still happening is detected again, and decision state guarantees no
+duplicate or lost notifications. Standbys, warm failover, the PDB,
+`/availabilityz`, and the ReadWriteMany requirement cost more complexity
+than they return.
 
 ```
-            Lease (leader election, epoch N)
-                     │
-   ┌─────────────────┼─────────────────┐
-   ▼                 ▼                 ▼
-kwatch-0 (leader)  kwatch-1 (standby)  kwatch-2 (standby)
-  writes log         tails log          tails log
-   │  (warm model)     (warm model)       (warm model)
-   └────────────► one RWX volume ◄─────────┘
-                 /data/segments, /data/snapshot, /data/EPOCH
+Deployment kwatch   replicas: 1, strategy: Recreate
+  tolerations: node not-ready / unreachable for 30s
+  volume: PVC kwatch-data (RWO, 2Gi), optional
+Lease kwatch-lock   hold before sending or writing; stop on loss
 ```
 
-- **Volume:** one PVC with `ReadWriteMany` (EFS, Filestore, Azure Files,
-  NFS or CephFS), mounted by all replicas.
-- **Single writer, fenced:** each leadership term has an epoch (the Lease
-  transition count). The leader writes `EPOCH` before its first append, and
-  every append carries the epoch. A deposed leader re-reads `EPOCH` before
-  each commit batch and stops writing if it changed. Readers ignore records
-  from a stale epoch after a newer one. This prevents two writers even
-  during a network partition.
-- **Warm standby:** standbys tail the log to keep a live copy of the model
-  and problems. On failover the new leader continues within seconds: no
-  relearning, and no repeated or lost notifications.
-- **Decision state is also mirrored** into one small ConfigMap. If the
-  volume is unavailable, failover still never repeats a notification.
+- **Deployment, not StatefulSet.** On node loss a StatefulSet waits until
+  the old pod is confirmed gone, which can take a long time for an
+  unreachable node. That stalls monitoring. A Deployment starts the
+  replacement after the short toleration. A standalone PVC can be resized
+  in place, unlike `volumeClaimTemplates`.
+- **The Lease is a lock, not HA.** Two pods can still overlap: during a
+  rollout without `Recreate`, or when a partitioned node keeps the old pod
+  running. The pod must hold the Lease before it sends notifications or
+  writes to the store. It stops both as soon as a renewal fails. Every
+  store record carries the Lease epoch, so a stale holder's late writes
+  are rejected on read.
+- **The disk is optional.** Without a StorageClass, kwatch runs in memory
+  mode. Decision state is kept in a ConfigMap, so notifications stay
+  correct across restarts.
+- **Node failure:** after the toleration (30s) the pod is rescheduled. The
+  RWO volume attaches once the cloud detaches it; this can take up to about
+  6 minutes on some clouds, and is faster with non-graceful node shutdown
+  handling. Decision state keeps notifications correct across the gap.
 
 ### Supported layouts
 
-The installer detects the cluster and picks one:
-
 | Layout | When | Behaviour |
 | --- | --- | --- |
-| **HA shared** (recommended for production) | An RWX StorageClass exists | N replicas, one disk, warm failover in seconds |
-| **Single disk** (default when there is no RWX) | Only RWO storage | 1 replica with a `Recreate` strategy; on node loss the pod and disk move (1–6 min depending on the cloud's detach); decisions stay safe through the ConfigMap mirror |
-| **Diskless** | No StorageClass | Memory model rebuilt from informers; decision state in a ConfigMap; history kept in memory within caps and lost on restart |
+| **Disk** (default) | A default StorageClass exists | Full history and baselines persist across restarts |
+| **Diskless** | No StorageClass | Model rebuilt from informers; decisions in a ConfigMap; history lost on restart |
 
-The core uses one `Store` interface for all three.
+The core uses one `Store` interface for both.
 
 ## Flapping and recurring issues
 
@@ -615,7 +618,7 @@ with a crashing app must not blame the node.
    current engine.
 5. Cut over when v2 beats rc.10 on the scorecard and passes a staging run.
    Then remove the old engine, grouping layers, feedback learning and
-   pattern filler, with release notes.
+   pattern filler.
 
 ## Consequences
 
@@ -624,8 +627,10 @@ with a crashing app must not blame the node.
 - New data sources extend kwatch by adding plugins. The core is stable.
 - Some configuration becomes obsolete (grouping windows, mass-failure
   thresholds, feedback). Each removal is proposed individually.
-- Persisted state gains a versioned model and problem format with a
-  migration. Old incident state is read once and closed silently.
+- No migration is needed. Kwatch has no stable release or production
+  users yet, so the new store and state formats replace the current
+  ConfigMap state. The formats are versioned from their first release, so
+  later changes can migrate.
 - RBAC: understanding everything needs list and watch on more kinds
   (storage, admission, flowcontrol, DRA, RBAC). Each is optional. A missing
   permission degrades only the rules that need it, is reported in health,
