@@ -1,0 +1,255 @@
+package core
+
+import (
+	"context"
+	"errors"
+	"fmt"
+	"sync"
+	"time"
+
+	"k8s.io/klog/v2"
+
+	"github.com/abahmed/kwatch/internal/knowledge"
+	"github.com/abahmed/kwatch/internal/problem"
+	"github.com/abahmed/kwatch/internal/reason"
+	"github.com/abahmed/kwatch/internal/signal"
+	"github.com/abahmed/kwatch/internal/story"
+)
+
+// maxPending bounds facts waiting for the pipeline. Informers deliver in
+// bursts during relists; beyond this, Submit blocks the caller briefly
+// rather than dropping state.
+const maxPending = 50000
+
+// Sink receives every decision with its story. It is called from the
+// pipeline goroutine and must not block for long.
+type Sink func(ctx context.Context, d problem.Decision, m story.Message)
+
+// Clock supplies time and timers so tests can control both.
+type Clock interface {
+	Now() time.Time
+	After(d time.Duration) <-chan time.Time
+}
+
+// heartbeat is the longest the loop sleeps. Each iteration reports
+// progress, so a stuck pipeline is visible as a stall rather than hidden
+// behind a separate heartbeat goroutine.
+const heartbeat = 10 * time.Second
+
+// Dependencies are the collaborators of the engine.
+type Dependencies struct {
+	Model     *knowledge.Model
+	Detectors *signal.Registry
+	Problems  *problem.Manager
+	Sink      Sink
+	Clock     Clock
+	// Progress is called after every loop iteration. Optional.
+	Progress func()
+	// Store persists problems so a restart never repeats a message.
+	// Optional; without it problems live in memory only.
+	Store ProblemStore
+}
+
+// ProblemStore loads and saves problem records.
+type ProblemStore interface {
+	LoadProblems() ([]problem.Record, error)
+	SaveProblems([]problem.Record) error
+}
+
+// restoreGrace is how long restored problems wait for their signals to be
+// re-raised before they may recover. It covers the longest detector
+// threshold.
+const restoreGrace = 10 * time.Minute
+
+// saveInterval bounds how stale persisted problems can be when nothing is
+// decided for a while.
+const saveInterval = time.Minute
+
+// Engine runs the pipeline.
+type Engine struct {
+	deps    Dependencies
+	tracker *signal.Tracker
+
+	mu      sync.Mutex
+	pending []knowledge.Fact
+	wake    chan struct{}
+	space   chan struct{}
+}
+
+// NewEngine validates dependencies and builds an engine.
+func NewEngine(deps Dependencies) (*Engine, error) {
+	if deps.Model == nil || deps.Detectors == nil ||
+		deps.Problems == nil || deps.Sink == nil || deps.Clock == nil {
+		return nil, errors.New("core: incomplete dependencies")
+	}
+	return &Engine{
+		deps: deps, tracker: signal.NewTracker(),
+		wake:  make(chan struct{}, 1),
+		space: make(chan struct{}, 1),
+	}, nil
+}
+
+// Submit queues facts for the pipeline. It blocks only while the queue is
+// full, and returns when ctx ends.
+func (e *Engine) Submit(ctx context.Context, facts ...knowledge.Fact) {
+	for {
+		e.mu.Lock()
+		if len(e.pending)+len(facts) <= maxPending || len(e.pending) == 0 {
+			e.pending = append(e.pending, facts...)
+			e.mu.Unlock()
+			notify(e.wake)
+			return
+		}
+		e.mu.Unlock()
+		select {
+		case <-e.space:
+		case <-ctx.Done():
+			return
+		}
+	}
+}
+
+// Run processes facts, rechecks and lifecycle deadlines until ctx ends.
+func (e *Engine) Run(ctx context.Context) error {
+	if err := e.restore(); err != nil {
+		return err
+	}
+	defer e.save()
+	checks := newRechecks()
+	var nextTick time.Time
+	lastSave := e.deps.Clock.Now()
+	for {
+		timer := e.timer(checks, nextTick)
+		select {
+		case <-ctx.Done():
+			return nil
+		case <-e.wake:
+		case <-timer:
+		}
+		now := e.deps.Clock.Now()
+		var decided bool
+		nextTick, decided = e.step(ctx, now, checks)
+		if decided || now.Sub(lastSave) >= saveInterval {
+			e.save()
+			lastSave = now
+		}
+		if e.deps.Progress != nil {
+			e.deps.Progress()
+		}
+	}
+}
+
+func (e *Engine) restore() error {
+	if e.deps.Store == nil {
+		return nil
+	}
+	records, err := e.deps.Store.LoadProblems()
+	if err != nil {
+		return fmt.Errorf("core: restore problems: %w", err)
+	}
+	e.deps.Problems.Restore(records, e.deps.Clock.Now().Add(restoreGrace))
+	return nil
+}
+
+// save persists problems. A failed save is logged, not fatal: the next
+// save retries, and delivery must not stop because the disk is slow.
+func (e *Engine) save() {
+	if e.deps.Store == nil {
+		return
+	}
+	if err := e.deps.Store.SaveProblems(e.deps.Problems.Export()); err != nil {
+		klog.ErrorS(err, "core: save problems", "component", "core")
+	}
+}
+
+// step runs one pipeline iteration at now. It returns the next lifecycle
+// deadline and whether any decision was made.
+func (e *Engine) step(
+	ctx context.Context, now time.Time, checks *rechecks,
+) (time.Time, bool) {
+	dirty := e.drain()
+	dirty = append(dirty, checks.due(now)...)
+	e.evaluate(ctx, now, dirty, checks)
+	return e.tick(ctx, now)
+}
+
+func (e *Engine) timer(
+	checks *rechecks, nextTick time.Time,
+) <-chan time.Time {
+	now := e.deps.Clock.Now()
+	wait := heartbeat
+	for _, at := range []time.Time{checks.next(), nextTick} {
+		if !at.IsZero() {
+			wait = min(wait, max(at.Sub(now), 0))
+		}
+	}
+	return e.deps.Clock.After(wait)
+}
+
+// drain applies pending facts to the model and returns the touched
+// entities, each once.
+func (e *Engine) drain() []knowledge.EntityID {
+	e.mu.Lock()
+	facts := e.pending
+	e.pending = nil
+	e.mu.Unlock()
+	notify(e.space)
+	seen := make(map[knowledge.EntityID]bool)
+	var dirty []knowledge.EntityID
+	for _, fact := range facts {
+		update, err := e.deps.Model.Apply(fact)
+		if err != nil {
+			klog.V(2).InfoS("core: fact rejected", "error", err,
+				"entity", fact.Entity.String())
+			continue
+		}
+		for _, id := range update.Touched {
+			if !seen[id] {
+				seen[id] = true
+				dirty = append(dirty, id)
+			}
+		}
+	}
+	return dirty
+}
+
+func (e *Engine) evaluate(
+	ctx context.Context, now time.Time,
+	dirty []knowledge.EntityID, checks *rechecks,
+) {
+	query := reason.Query{
+		Model: e.deps.Model, Signals: e.tracker, Now: now,
+	}
+	var transitions []signal.Transition
+	for _, id := range dirty {
+		result := e.deps.Detectors.Evaluate(e.deps.Model, now, id)
+		if result.RecheckAfter > 0 {
+			checks.schedule(id, now.Add(result.RecheckAfter))
+		}
+		transitions = append(transitions,
+			e.tracker.Observe(id, result.Signals)...)
+	}
+	if len(transitions) > 0 && ctx.Err() == nil {
+		e.deps.Problems.Apply(query, transitions)
+	}
+}
+
+func (e *Engine) tick(
+	ctx context.Context, now time.Time,
+) (time.Time, bool) {
+	decisions, next := e.deps.Problems.Tick(now)
+	for _, d := range decisions {
+		e.deps.Sink(ctx, d, story.Write(d, now))
+	}
+	if next == 0 {
+		return time.Time{}, len(decisions) > 0
+	}
+	return now.Add(next), len(decisions) > 0
+}
+
+func notify(ch chan struct{}) {
+	select {
+	case ch <- struct{}{}:
+	default:
+	}
+}

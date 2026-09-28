@@ -313,6 +313,10 @@ func startActiveComponents(
 			return runDelivery(ctx, deps)
 		},
 	})
+	if deps.coreV2 {
+		startCoreV2(ctx, deps, supervisor)
+		return
+	}
 	if deps.startPersistence != nil {
 		deps.startPersistence(
 			ctx, supervisor, deps.persistenceGate.enabled,

@@ -38,3 +38,9 @@ type RealClock struct{}
 
 // Now implements Clock.
 func (RealClock) Now() time.Time { return time.Now() }
+
+// After returns a channel that receives after d, like time.After. Timers
+// created this way are collected once they fire or become unreachable.
+func (RealClock) After(d time.Duration) <-chan time.Time {
+	return time.After(d)
+}

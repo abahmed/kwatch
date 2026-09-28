@@ -10,6 +10,7 @@ require (
 	github.com/robfig/cron/v3 v3.0.1
 	github.com/slack-go/slack v0.29.0
 	github.com/stretchr/testify v1.12.1
+	go.etcd.io/bbolt v1.5.0
 	golang.org/x/exp v0.0.0-20260908205506-85c1c2202aba
 	gopkg.in/mail.v2 v2.3.1
 	gopkg.in/yaml.v3 v3.0.1
@@ -18,6 +19,7 @@ require (
 	k8s.io/client-go v0.37.0
 	k8s.io/klog/v2 v2.140.0
 	sigs.k8s.io/e2e-framework v0.7.0
+	sigs.k8s.io/yaml v1.6.0
 )
 
 require (
@@ -83,5 +85,4 @@ require (
 	sigs.k8s.io/json v0.0.0-20260909141634-11ed52e25bc5 // indirect
 	sigs.k8s.io/randfill v1.0.0 // indirect
 	sigs.k8s.io/structured-merge-diff/v6 v6.4.2 // indirect
-	sigs.k8s.io/yaml v1.6.0 // indirect
 )

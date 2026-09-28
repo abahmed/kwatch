@@ -20,6 +20,9 @@ import (
 // grouping makes ownership and shutdown ordering visible without hiding the
 // composition wiring in a generic component registry.
 type serverDeps struct {
+	// coreV2 runs the problem-centric core (ADR 0010) instead of the
+	// controller and incident engine. Enabled with KWATCH_CORE=v2.
+	coreV2           bool
 	ctx              context.Context
 	cancel           context.CancelFunc
 	runtime          config.RuntimeConfig

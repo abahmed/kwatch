@@ -30,7 +30,8 @@ func makeServerDeps(
 	readiness *readinessCoordinator,
 ) *serverDeps {
 	deps := &serverDeps{
-		ctx: ctx, cancel: cancel, runtime: runtime, clients: boot.clients,
+		coreV2: coreV2Enabled(),
+		ctx:    ctx, cancel: cancel, runtime: runtime, clients: boot.clients,
 		healthServer:    boot.healthServer,
 		readiness:       readiness,
 		deliveryManager: boot.deliveryManager,
