@@ -384,6 +384,16 @@ use them.
    containers), ephemeral containers, Job completion and terminating pods
    each have their own semantics. A sidecar crash is not reported as the
    main app failing. A completed Job pod is not a failure.
+   Newer pod features are covered too:
+   - in-place resize (`PodResizePending` Infeasible or Deferred, and
+     `PodResizeInProgress` errors);
+   - per-container restart rules;
+   - projected volume and ServiceAccount token failures;
+   - `hostPort` conflicts;
+   - static and mirror pods (control plane);
+   - pods on Windows nodes, which have different exit codes and no PSI;
+   - graceful and non-graceful node shutdown (the reasons on terminated
+     pods).
 5. **Multiple simultaneous causes.** Independent problems stay separate.
    Merging requires a proven rule. One entity can be affected by two
    problems, and each message states only its own part.
