@@ -48,7 +48,7 @@ func (a *AuditReader) WaitFor(
 ) ([]AuditEntry, error) {
 	deadline, cancel := context.WithTimeout(ctx, 10*time.Minute)
 	defer cancel()
-	ticker := time.NewTicker(500 * time.Millisecond)
+	ticker := time.NewTicker(2 * time.Second)
 	defer ticker.Stop()
 	for {
 		entries, err := a.snapshot(deadline)
@@ -75,19 +75,23 @@ func (a *AuditReader) snapshot(ctx context.Context) ([]AuditEntry, error) {
 	}
 	var result []AuditEntry
 	for _, pod := range pods.Items {
-		output, err := a.logs(ctx, pod.Name)
-		if err != nil {
-			continue
+		for _, previous := range []bool{true, false} {
+			output, err := a.logs(ctx, pod.Name, previous)
+			if err != nil {
+				continue
+			}
+			result = append(result, parseAudit(output)...)
 		}
-		result = append(result, parseAudit(output)...)
 	}
 	return result, nil
 }
 
-func (a *AuditReader) logs(ctx context.Context, pod string) ([]byte, error) {
+func (a *AuditReader) logs(
+	ctx context.Context, pod string, previous bool,
+) ([]byte, error) {
 	request := a.environment.Client.CoreV1().Pods(
 		a.environment.Config.KwatchNamespace,
-	).GetLogs(pod, &corev1.PodLogOptions{})
+	).GetLogs(pod, &corev1.PodLogOptions{Previous: previous})
 	stream, err := request.Stream(ctx)
 	if err != nil {
 		return nil, err

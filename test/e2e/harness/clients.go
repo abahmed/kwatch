@@ -31,6 +31,8 @@ func NewEnvironment(config Config) (*Environment, error) {
 	if err != nil {
 		return nil, err
 	}
+	restConfig.QPS = 50
+	restConfig.Burst = 100
 	client, err := kubernetes.NewForConfig(restConfig)
 	if err != nil {
 		return nil, fmt.Errorf("create Kubernetes client: %w", err)
