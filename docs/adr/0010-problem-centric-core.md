@@ -256,6 +256,70 @@ versioned, and unit-tested with fixtures:
 A few rules need code, such as parsing error text. They implement the same
 `Rule` interface.
 
+### Change timeline and effect correlation
+
+Every change is tracked forward to its effect. Every failure is traced
+back to changes. Both results feed the same timeline.
+
+**Change record:** entity, fields changed (spec paths, image, replicas,
+config or Secret hash, taints, labels that affect selection, RBAC rules,
+policy), old and new values (redacted), time, and the actor:
+`managedFields` manager, user or ServiceAccount when the audit source is
+available, ReplicaSet or ControllerRevision number, and the GitOps
+annotation when present.
+
+**Forward: change → effect.** After a change, kwatch watches its blast
+radius for an effect window of 15 minutes (adaptive to the workload's
+baseline ready time). The blast radius is the entities downstream of the
+changed one in the graph: a Secret → pods that reference it → their
+Services and Ingresses; a node taint → pods that must move; a NetworkPolicy
+→ pods it selects. The outcome is recorded on the change:
+
+- `healthy`: the dependents stayed or became healthy;
+- `degraded`: the dependents developed signals after the change;
+- `reverted`: the change was undone and the dependents recovered, which
+  confirms causation strongly.
+
+**Backward: effect → change.** For each problem, the reasoning engine
+ranks changes in the upstream graph by:
+
+- time proximity: the failure started after the change, and the closer
+  the stronger;
+- blast-radius overlap: the failing entities are the change's dependents;
+- revision specificity: only the new revision or the changed consumers
+  fail, and old revisions or unaffected siblings stay healthy;
+- error match: the error names the changed field, key, image or port;
+- recovery on revert: the dependents recovered after the change was
+  undone;
+- baseline: this kind of change for this workload has caused failures
+  before (history of outcomes).
+
+**Correlation across resources:** changes close in time on related
+entities are grouped into one change set, for example a CI deploy that
+updates a ConfigMap, a Secret and a Deployment together. The change set is
+evaluated as one cause, so the message says "the 14:02 release (image
+v2.3, ConfigMap app-config)" instead of three separate suspects.
+
+**Timeline:** each problem carries one ordered timeline that merges
+changes, signals, impact spread, recoveries and kwatch's own decisions.
+The first alert shows the relevant part; updates append to it.
+
+```
+14:01:50  ConfigMap app-config changed (feature.flags) by argocd
+14:02:03  Deployment payments rollout started: image v2.2 → v2.3
+14:02:41  payments-7c9 (new revision) CrashLoopBackOff:
+          "missing key DB_PASSWORD_V2"
+14:03:10  Service payments: 0/3 ready endpoints
+14:03:12  Ingress shop /checkout → 502 (no backends)
+14:03:30  orders: timeouts calling payments (dependent impact)
+14:05:00  alert sent — cause: 14:02 release (high confidence)
+14:09:15  Deployment payments rolled back to v2.2 → recovering
+14:12:15  resolved; change marked reverted-and-confirmed
+```
+
+The timeline is stored with the problem, so recurrence and later alerts
+can reference it ("the last v2.3 rollout failed the same way").
+
 ### 4. Problems, policy and story
 
 - **Problem:** one per root cause, holding its chain, impact and evidence.
