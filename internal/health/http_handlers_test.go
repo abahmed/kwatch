@@ -150,7 +150,7 @@ func TestDiagnosticsDisabled(t *testing.T) {
 	mux.HandleFunc("/healthz", h.healthzHandler)
 	mux.HandleFunc("/health", h.healthHandler)
 	mux.HandleFunc("/readyz", h.readyzHandler)
-	// /incidents and /test-alert NOT registered when diagnostics is false
+	// /problems and /test-alert NOT registered when diagnostics is false
 
 	ts := httptest.NewServer(mux)
 	defer ts.Close()
@@ -161,8 +161,8 @@ func TestDiagnosticsDisabled(t *testing.T) {
 	assert.Equal(t, http.StatusOK, resp.StatusCode)
 	resp.Body.Close()
 
-	// /incidents returns 404 when diagnostics disabled
-	resp, err = http.Get(ts.URL + "/incidents")
+	// /problems returns 404 when diagnostics disabled
+	resp, err = http.Get(ts.URL + "/problems")
 	assert.Nil(t, err)
 	assert.Equal(t, http.StatusNotFound, resp.StatusCode)
 	resp.Body.Close()
@@ -177,14 +177,14 @@ func TestDiagnosticsDisabled(t *testing.T) {
 func TestDiagnosticsEnabled(t *testing.T) {
 	h := &HealthServer{diagnostics: true, clock: clock.RealClock{}}
 	assert.NoError(t, h.ConfigureDependencies(Dependencies{
-		Incident: &fakeIncidentLister{snap: []model.IncidentView{}},
+		Problems: &fakeProblemLister{snap: []model.IncidentView{}},
 		Delivery: &fakeAlertSender{},
 	}))
 	mux := http.NewServeMux()
 	mux.HandleFunc("/healthz", h.healthzHandler)
 	mux.HandleFunc("/health", h.healthHandler)
 	mux.HandleFunc("/readyz", h.readyzHandler)
-	mux.HandleFunc("/incidents", h.incidentsHandler)
+	mux.HandleFunc("/problems", h.problemsHandler)
 	mux.HandleFunc("/test-alert", h.testAlertHandler)
 
 	ts := httptest.NewServer(mux)
@@ -196,8 +196,8 @@ func TestDiagnosticsEnabled(t *testing.T) {
 	assert.Equal(t, http.StatusOK, resp.StatusCode)
 	resp.Body.Close()
 
-	// /incidents returns 200 when diagnostics enabled
-	resp, err = http.Get(ts.URL + "/incidents")
+	// /problems returns 200 when diagnostics enabled
+	resp, err = http.Get(ts.URL + "/problems")
 	assert.Nil(t, err)
 	assert.Equal(t, http.StatusOK, resp.StatusCode)
 	resp.Body.Close()

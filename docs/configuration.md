@@ -127,7 +127,7 @@ tests.
 | `healthCheck.enabled` | ✅ Health endpoints (default: true) |
 | `healthCheck.port` | Port to serve health on (default: 8060) |
 | `healthCheck.pprof` | 🔬 Go profiling endpoints (default: false) |
-| `healthCheck.diagnostics` | 🩺 Extra endpoints: `/incidents`, `/test-alert`, `/deadletters` |
+| `healthCheck.diagnostics` | 🩺 Extra diagnostic endpoints |
 | `healthCheck.diagnosticsToken` | 🔑 Bearer token for diagnostics and pprof; use `${file:/absolute/path}` |
 
 **Endpoints:**
@@ -147,7 +147,7 @@ Informer caches discard Kubernetes `managedFields` metadata at ingestion time
 to reduce memory on apply-heavy clusters. Labels, annotations, spec, status,
 resource versions, and deletion metadata remain intact for detection and graph
 analysis.
-- `GET /incidents` — 📋 All active problems (requires diagnostics and its token)
+- `GET /problems` — 📋 Active problems (requires diagnostics and its token)
 - `POST /test-alert` — 📤 Send a test alert (requires diagnostics and its token)
 - `GET /deadletters` — 💀 Recent delivery failures (requires diagnostics and its token)
 

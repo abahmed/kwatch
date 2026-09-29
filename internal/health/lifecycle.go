@@ -85,7 +85,7 @@ func newServeMux(h *HealthServer) *http.ServeMux {
 	mux.HandleFunc("/readyz", h.readyzHandler)
 	mux.HandleFunc("/availabilityz", h.availabilityzHandler)
 	if h.diagnostics {
-		mux.HandleFunc("/incidents", h.guard(h.incidentsHandler))
+		mux.HandleFunc("/problems", h.guard(h.problemsHandler))
 		mux.HandleFunc("/test-alert", h.guard(h.testAlertHandler))
 		mux.HandleFunc("/deadletters", h.guard(h.deadLettersHandler))
 	}
