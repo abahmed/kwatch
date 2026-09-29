@@ -6,10 +6,11 @@ import (
 	"testing"
 	"unicode/utf8"
 
-	"github.com/abahmed/kwatch/internal/notice"
 	slackClient "github.com/slack-go/slack"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
+	"github.com/abahmed/kwatch/internal/notice"
 )
 
 // Slack rejects the whole message with invalid_blocks when any single limit is

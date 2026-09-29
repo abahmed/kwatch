@@ -165,7 +165,7 @@ func TestChangedFieldsDetached(t *testing.T) {
 	fields1 := changes1[0].Fields
 
 	// Mutate the returned Fields
-	fields1 = append(fields1, FieldChange{Path: "new", Before: "a", After: "b"})
+	fields1[0].Path = "mutated"
 
 	// Get changes again and verify original is unchanged
 	changes2 := m.Changes(id, time.Time{})

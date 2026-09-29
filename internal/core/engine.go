@@ -244,8 +244,9 @@ func (e *Engine) save() {
 func (e *Engine) step(
 	ctx context.Context, now time.Time, checks *rechecks,
 ) (time.Time, bool) {
-	dirty := append(e.dirty, e.drain()...)
+	dirty := e.dirty
 	e.dirty = nil
+	dirty = append(dirty, e.drain()...)
 	dirty = append(dirty, checks.due(now)...)
 	e.evaluate(ctx, now, dirty, checks)
 	return e.tick(ctx, now)

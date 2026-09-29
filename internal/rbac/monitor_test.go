@@ -24,8 +24,7 @@ func reviewer(deny map[string]bool, fail error) *fake.Clientset {
 			if fail != nil {
 				return true, nil, fail
 			}
-			review := action.(k8stesting.CreateAction).GetObject().(
-				*authorizationv1.SelfSubjectAccessReview)
+			review := action.(k8stesting.CreateAction).GetObject().(*authorizationv1.SelfSubjectAccessReview)
 			key := ""
 			if attrs := review.Spec.ResourceAttributes; attrs != nil {
 				key = attrs.Resource

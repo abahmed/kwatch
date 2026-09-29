@@ -35,7 +35,8 @@ func (g *growthTracker) observe(
 ) (time.Duration, bool) {
 	g.mu.Lock()
 	defer g.mu.Unlock()
-	samples := append(g.samples[id], usageSample{at: at, used: float64(used)})
+	samples := g.samples[id]
+	samples = append(samples, usageSample{at: at, used: float64(used)})
 	if len(samples) > growthSamples {
 		samples = samples[len(samples)-growthSamples:]
 	}

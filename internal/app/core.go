@@ -39,7 +39,7 @@ func runCore(
 	synced := func(kind knowledge.Kind) bool {
 		return source != nil && source.Synced(kind)
 	}
-	maintenance := deps.runtime.Policy().Maintenance()
+	maintenance := policy.Maintenance()
 	scope, err := filter.NewScope(
 		deps.runtime.Scope(), deps.runtime.Scope().Silences(),
 		maintenance.Enabled, appClock.Now)

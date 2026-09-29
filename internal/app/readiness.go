@@ -10,12 +10,12 @@ import (
 // session. Optional components report through health but do not participate in
 // this gate.
 type readinessCoordinator struct {
-	mu              sync.Mutex
-	health          *health.HealthServer
-	epoch           int64
-	leader          bool
-	required        map[string]bool
-	ready           map[string]bool
+	mu       sync.Mutex
+	health   *health.HealthServer
+	epoch    int64
+	leader   bool
+	required map[string]bool
+	ready    map[string]bool
 }
 
 func newReadinessCoordinator(
