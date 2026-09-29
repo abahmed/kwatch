@@ -2,9 +2,11 @@ package kube_test
 
 import (
 	"context"
+	"errors"
 	"net"
 	"net/http"
 	"net/http/httptest"
+	"sync"
 	"testing"
 	"time"
 
@@ -114,8 +116,16 @@ func TestActiveProberProbesServicePorts(t *testing.T) {
 		require.NoError(t, err)
 		return id
 	}
-	// Unresolvable in-cluster names make the dial fail quickly; the fact
-	// is what matters, not the outcome.
+	var dialed []string
+	var mu sync.Mutex
+	refuse := func(
+		_ context.Context, _, address string,
+	) (net.Conn, error) {
+		mu.Lock()
+		defer mu.Unlock()
+		dialed = append(dialed, address)
+		return nil, errors.New("connection refused")
+	}
 	web := add("ns", "web", "80/TCP->8080")
 	add("skipped", "web", "80/TCP->8080")
 	add("ns", "noports", "")
@@ -126,8 +136,13 @@ func TestActiveProberProbesServicePorts(t *testing.T) {
 		Excluded:     map[string]bool{"skipped": true},
 		Model:        model,
 		Timeout:      200 * time.Millisecond,
+		Dial:         refuse,
 	})
 	assert.Contains(t, facts, web)
+	mu.Lock()
+	assert.ElementsMatch(t, []string{"web.ns.svc:80", "bare.ns.svc:443"},
+		dialed)
+	mu.Unlock()
 	assert.Contains(t, facts,
 		knowledge.NewEntityID(kube.KindService, "ns", "bare"))
 	assert.Len(t, facts, 2)

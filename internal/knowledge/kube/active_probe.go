@@ -47,9 +47,11 @@ type ActiveProbeConfig struct {
 	FailureThreshold int
 	HTTPClient       *http.Client
 	Resolver         Resolver
-	Model            knowledge.Reader
-	Now              func() time.Time
-	Submit           Submit
+	// Dial opens TCP connections; nil uses a net.Dialer.
+	Dial   func(ctx context.Context, network, address string) (net.Conn, error)
+	Model  knowledge.Reader
+	Now    func() time.Time
+	Submit Submit
 }
 
 // ActiveProber runs user-configured HTTP, TCP and DNS probes and, when
@@ -68,6 +70,9 @@ func NewActiveProber(cfg ActiveProbeConfig) *ActiveProber {
 	}
 	if cfg.FailureThreshold <= 0 {
 		cfg.FailureThreshold = 3
+	}
+	if cfg.Dial == nil {
+		cfg.Dial = (&net.Dialer{}).DialContext
 	}
 	return &ActiveProber{cfg: cfg}
 }
@@ -130,7 +135,7 @@ func (p *ActiveProber) check(
 	case target.URL != "":
 		err = p.http(probeCtx, target)
 	case target.Address != "":
-		err = dial(probeCtx, target.Address)
+		err = p.dial(probeCtx, target.Address)
 	case target.Host != "":
 		_, err = p.cfg.Resolver.LookupHost(probeCtx, target.Host)
 	default:
@@ -213,7 +218,7 @@ func (p *ActiveProber) checkService(
 	probeCtx, cancel := context.WithTimeout(ctx, p.cfg.Timeout)
 	defer cancel()
 	start := p.cfg.Now()
-	err := dial(probeCtx, target.address)
+	err := p.dial(probeCtx, target.address)
 	fact := probeFact(target.service, p.cfg.Now(), p.cfg.Now().Sub(start),
 		err)
 	fact.Source = activeProbeSource
@@ -236,9 +241,8 @@ func firstPort(ports string) string {
 	return ports
 }
 
-func dial(ctx context.Context, address string) error {
-	var d net.Dialer
-	conn, err := d.DialContext(ctx, "tcp", address)
+func (p *ActiveProber) dial(ctx context.Context, address string) error {
+	conn, err := p.cfg.Dial(ctx, "tcp", address)
 	if err != nil {
 		return err
 	}
