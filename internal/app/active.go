@@ -56,9 +56,13 @@ func runActiveComponents(ctx context.Context, deps *serverDeps) error {
 		deps.deliveryManager.Notify(msg)
 	}
 
+	threads := newThreadSaver(deps.deliveryManager, disk)
+	threads.Restore()
+
 	supervisor := newComponentSupervisor(deps.clients.Clock.Now)
 	startActiveComponents(activeCtx, deps, supervisor, activeResources{
 		state: state, disk: disk, result: result, session: session,
+		threads: threads,
 	})
 	select {
 	case err = <-supervisor.errCh:
@@ -66,6 +70,7 @@ func runActiveComponents(ctx context.Context, deps *serverDeps) error {
 	}
 	cancel()
 	waitForSupervisor(supervisor)
+	threads.Flush(ctx)
 	reason := "graceful_shutdown"
 	if err != nil {
 		reason = "internal_failure"
@@ -80,6 +85,7 @@ type activeResources struct {
 	disk    diskState
 	result  startup.Result
 	session *startup.StartupManager
+	threads *threadSaver
 }
 
 func startActiveComponents(
@@ -122,6 +128,7 @@ func startActiveComponents(
 		monitoredRun(deps, "rbac", deps.securityMonitor.Start),
 		monitoredComponent(deps, "heartbeat", runHeartbeat),
 		monitoredRun(deps, "alive", aliveRecorder(res.session)),
+		monitoredRun(deps, "threads", runThreadSaver(res.threads)),
 	}
 	if deps.runtime.Lifecycle().CRDEnabled() {
 		optional = append(optional,
