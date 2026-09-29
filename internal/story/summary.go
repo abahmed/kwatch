@@ -33,7 +33,7 @@ func StartupSummary(
 				len(decisions)-maxSummaryLines))
 			break
 		}
-		msg.Lines = append(msg.Lines, "• "+Write(d, now).Title)
+		msg.Lines = append(msg.Lines, "• "+Writer{}.Write(d, now).Title)
 	}
 	msg.Lines = append(msg.Lines, "New changes to these problems are "+
 		"reported as they happen.")

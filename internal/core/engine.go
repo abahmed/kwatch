@@ -44,7 +44,9 @@ type Dependencies struct {
 	Detectors *signal.Registry
 	Problems  *problem.Manager
 	Sink      Sink
-	Clock     Clock
+	// Writer composes messages; the zero value works.
+	Writer story.Writer
+	Clock  Clock
 	// Progress is called after every loop iteration. Optional.
 	Progress func()
 	// Store persists problems so a restart never repeats a message.
@@ -321,7 +323,7 @@ func (e *Engine) tick(
 			i < maxInvestigationsPerTick {
 			d.Output = e.deps.Investigate(ctx, d.Problem)
 		}
-		e.deps.Sink(ctx, d, story.Write(d, now))
+		e.deps.Sink(ctx, d, e.deps.Writer.Write(d, now))
 	}
 	if next == 0 {
 		return time.Time{}, len(decisions) > 0

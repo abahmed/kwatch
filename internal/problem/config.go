@@ -17,6 +17,10 @@ type Config struct {
 	FlapCycles int
 	// Remember is how long a resolved problem is kept for recurrence.
 	Remember time.Duration
+	// SeverityByReason and SeverityByOwnerKind override the derived tier.
+	// Keys match case-insensitively; reasons win over owner kinds.
+	SeverityByReason    map[string]string
+	SeverityByOwnerKind map[string]string
 }
 
 // Defaults for Config.
