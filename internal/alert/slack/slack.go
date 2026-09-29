@@ -40,13 +40,10 @@ type Slack struct {
 	token     string
 	apiClient *slackClient.Client
 
-	// thread support
-	threadMap map[string]string
-	// threadOrder is insertion order for threadMap, so the map can be bounded
-	// by evicting the oldest thread rather than refusing to record new ones.
-	threadOrder   []string
-	conversations map[string]conversationState
-	// conversationOrder bounds conversations the same way as threadOrder.
+	// conversations maps a story key to its thread. conversationOrder is
+	// insertion order so the map is bounded by evicting the oldest thread
+	// rather than refusing to record new ones.
+	conversations     map[string]conversationState
 	conversationOrder []string
 	mu                sync.Mutex
 	conversationLocks [conversationLockCount]sync.Mutex
@@ -174,7 +171,6 @@ func (s *Slack) deleteConversation(key string) {
 			break
 		}
 	}
-	s.forgetThread(key)
 }
 
 // Name returns name of the provider

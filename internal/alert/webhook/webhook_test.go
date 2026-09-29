@@ -12,8 +12,7 @@ import (
 	"github.com/abahmed/kwatch/internal/clock"
 	"github.com/abahmed/kwatch/internal/delivery/transport"
 	"github.com/abahmed/kwatch/internal/event"
-	"github.com/abahmed/kwatch/internal/message"
-	"github.com/abahmed/kwatch/internal/model"
+	"github.com/abahmed/kwatch/internal/notice"
 )
 
 var testDeps = transport.Dependencies{
@@ -164,7 +163,7 @@ func TestSendEventError(t *testing.T) {
 	assert.Nil(c.SendEvent(context.Background(), &ev))
 }
 
-func TestSendNotificationUsesStructuredPayload(t *testing.T) {
+func TestSendStoryUsesStablePayload(t *testing.T) {
 	var received map[string]interface{}
 	s := httptest.NewServer(http.HandlerFunc(func(
 		w http.ResponseWriter, r *http.Request,
@@ -176,19 +175,16 @@ func TestSendNotificationUsesStructuredPayload(t *testing.T) {
 
 	c := NewWebhook(map[string]interface{}{"url": s.URL}, "dev", testDeps)
 	assert.NotNil(t, c)
-	notification := &message.Notification{
-		DeliveryID: "incident-1:2:create",
-		Action:     model.ActionCreate,
-		Summary:    message.NotificationSummary{Title: "Pod failed"},
-		Diagnostic: message.DiagnosticMetadata{
-			Pattern: "internal", Confidence: 0.99,
-		},
-	}
-	assert.NoError(t, c.SendNotification(context.Background(), notification))
+	assert.NoError(t, c.SendStory(context.Background(), notice.Message{
+		Key: "problem-1", Revision: 2, Status: notice.StatusResolved,
+		Title: "api recovered", Lines: []string{"back to 3/3 ready"},
+	}))
 	assert.Equal(t, "dev", received["cluster"])
-	data := received["notification"].(map[string]interface{})
-	assert.Equal(t, "create", data["action"])
-	assert.NotContains(t, string(mustJSON(t, data)), "confidence")
+	assert.Equal(t, "problem-1", received["key"])
+	assert.EqualValues(t, 2, received["revision"])
+	assert.Equal(t, notice.StatusResolved.String(), received["status"])
+	assert.Contains(t, received["text"], "api recovered")
+	assert.NotContains(t, string(mustJSON(t, received)), "confidence")
 }
 
 func mustJSON(t *testing.T, value interface{}) []byte {

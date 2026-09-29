@@ -16,9 +16,6 @@ import (
 	"github.com/abahmed/kwatch/internal/constant"
 	"github.com/abahmed/kwatch/internal/delivery/transport"
 	"github.com/abahmed/kwatch/internal/event"
-	"github.com/abahmed/kwatch/internal/insight"
-	"github.com/abahmed/kwatch/internal/message"
-	"github.com/abahmed/kwatch/internal/model"
 )
 
 const (
@@ -123,40 +120,6 @@ func (d *DingTalk) SendMessage(ctx context.Context, msg string) error {
 	}
 
 	return d.sendAPI(ctx, string(bodyBytes))
-}
-
-// SendIncident implements delivery.ThreadProvider.
-// It renders the incident using the Report model and PlaintextRenderer,
-// producing a context-adaptive text message.
-func (d *DingTalk) SendIncident(
-	ctx context.Context,
-	inc *model.Incident,
-	action model.IncidentAction,
-) error {
-	return d.SendIncidentWithInsight(ctx, inc, action, nil)
-}
-
-// SendIncidentWithInsight implements delivery.InsightThreadProvider, so the
-// diagnosis — likely cause, impact, recent changes — is rendered rather than
-// dropped on the way to this provider.
-func (d *DingTalk) SendIncidentWithInsight(
-	ctx context.Context,
-	inc *model.Incident,
-	action model.IncidentAction,
-	ins *insight.Insight,
-) error {
-	text := message.RenderIncidentWithInsight(
-		inc,
-		action,
-		ins,
-		message.NewPlainTextRenderer(),
-		d.clusterName,
-		d.clockSource,
-	)
-	if text == "" {
-		return nil
-	}
-	return d.SendMessage(ctx, text)
 }
 
 func (d *DingTalk) sendAPI(ctx context.Context, msg string) error {

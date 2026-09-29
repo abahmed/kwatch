@@ -23,9 +23,6 @@ func TestCompileRuntimeConfigCopiesDerivedValues(t *testing.T) {
 			Namespaces: []string{"team-a"},
 			Reasons:    []string{"Evicted"},
 		}},
-		Suppression: SuppressionIndex{
-			ContainerNames: []string{"sidecar"},
-		},
 	}
 
 	runtime := CompileRuntimeConfig(cfg)

@@ -8,9 +8,6 @@ import (
 	"github.com/google/go-github/v55/github"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
-	corev1 "k8s.io/api/core/v1"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/client-go/kubernetes/fake"
 
 	"github.com/abahmed/kwatch/internal/config"
 	"github.com/abahmed/kwatch/internal/delivery"
@@ -63,19 +60,7 @@ func TestCheckReleaseAlreadyNotified(t *testing.T) {
 	mockGithub.On("GetLatestRelease", mock.Anything, "abahmed", "kwatch").
 		Return(&github.RepositoryRelease{TagName: &newVersion}, nil, nil)
 
-	client := fake.NewSimpleClientset()
-	cm := &corev1.ConfigMap{
-		ObjectMeta: metav1.ObjectMeta{
-			Name: "kwatch-state", Namespace: "kwatch",
-		},
-		Data: map[string]string{"notified-version": newVersion},
-	}
-	_, err := client.CoreV1().ConfigMaps("kwatch").Create(
-		context.Background(), cm, metav1.CreateOptions{},
-	)
-	assert.Nil(t, err)
-
-	persistenceManager := newTestPersistenceManager(client, "kwatch")
+	persistenceManager := &memoryVersions{version: newVersion}
 	u := newTestUpgrader(
 		&config.Upgrader{}, &delivery.Manager{}, persistenceManager,
 	)
@@ -95,9 +80,7 @@ func TestCheckReleaseNewVersionNotifies(t *testing.T) {
 	notifier := new(recordingNotifier)
 	notifier.On("Notify", mock.AnythingOfType("string")).Return()
 
-	persistenceManager := newTestPersistenceManager(
-		fake.NewSimpleClientset(), "kwatch",
-	)
+	persistenceManager := &memoryVersions{}
 	u := newTestUpgrader(
 		&config.Upgrader{}, &delivery.Manager{}, persistenceManager,
 	)
@@ -120,19 +103,7 @@ func TestCheckReleaseNewVersionSetsState(t *testing.T) {
 	notifier := new(recordingNotifier)
 	notifier.On("Notify", mock.AnythingOfType("string")).Return()
 
-	client := fake.NewSimpleClientset()
-	cm := &corev1.ConfigMap{
-		ObjectMeta: metav1.ObjectMeta{
-			Name: "kwatch-state", Namespace: "kwatch",
-		},
-		Data: map[string]string{},
-	}
-	_, err := client.CoreV1().ConfigMaps("kwatch").Create(
-		context.Background(), cm, metav1.CreateOptions{},
-	)
-	assert.Nil(t, err)
-
-	persistenceManager := newTestPersistenceManager(client, "kwatch")
+	persistenceManager := &memoryVersions{}
 	u := newTestUpgrader(
 		&config.Upgrader{}, &delivery.Manager{}, persistenceManager,
 	)

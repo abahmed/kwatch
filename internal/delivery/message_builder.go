@@ -2,102 +2,49 @@ package delivery
 
 import (
 	"bytes"
-	"strings"
 	"text/template"
 	"unicode/utf8"
 
-	"github.com/abahmed/kwatch/internal/clock"
-	"github.com/abahmed/kwatch/internal/event"
-	"github.com/abahmed/kwatch/internal/insight"
-	"github.com/abahmed/kwatch/internal/message"
-	"github.com/abahmed/kwatch/internal/model"
+	"github.com/abahmed/kwatch/internal/notice"
 )
 
-func incidentToEvent(
-	inc *model.Incident,
-	action model.IncidentAction,
-	narrative string,
-) *event.Event {
-	return &event.Event{
-		Narrative:     narrative,
-		Resource:      inc.Resource,
-		PodName:       eventPodName(inc),
-		ContainerName: inc.ContainerName,
-		Namespace:     inc.Namespace,
-		NodeName:      inc.NodeName,
-		Reason:        inc.Reason,
-		Logs:          inc.Logs,
-		OwnerKind:     inc.OwnerKind,
-		RestartCount:  inc.RestartCount,
-		Hint:          inc.Hint,
-		Severity:      inc.Severity,
-		IncludeEvents: false,
-		IncludeLogs:   inc.IncludeLogs,
-		Action:        action.String(),
-		DedupKey:      inc.ID,
-	}
+// templateData is what a user's per-reason message template can use: the
+// structured message and its standard text rendering.
+type templateData struct {
+	Message notice.Message
+	Text    string
 }
 
-// eventPodName is the pod a provider should name.
-//
-// A pod incident is keyed by its owning workload, so Incident.Name holds a
-// Deployment or StatefulSet name. Passing that as PodName made every provider
-// that titles its alert with the pod name announce a pod that does not exist.
-// EvidencePod is the replica the logs and events were actually read from.
-func eventPodName(inc *model.Incident) string {
-	if inc.Resource == "pod" && inc.EvidencePod != "" {
-		return inc.EvidencePod
-	}
-	return inc.Name
-}
-
-// NotifyIncident enqueues an incident for delivery to all providers.
-// When Start has been called, delivery is asynchronous via per-provider
-// buffered channels (non-blocking; drops the arriving job when full).
-// Before Start, delivery is retained in the bounded pending queue.
-// insight is optional; nil means no structured analysis available.
-
-func (a *Manager) buildMessage(
-	inc *model.Incident,
-	action model.IncidentAction,
-	ins *insight.Insight,
-	templates map[string]*template.Template,
+// storyText renders a story, applying the first user template whose
+// reason the story contains. A template that fails falls back to the
+// standard text, so a template mistake never loses a message.
+func storyText(
+	m notice.Message, templates map[string]*template.Template,
 ) string {
-	// Raw Kubernetes event text is internal evidence. Keep it out of both the
-	// standard renderer and user-configured delivery templates.
-	inc = inc.Clone()
-	inc.Events = ""
-	inc.IncludeEvents = false
-	rb := message.NewReportBuilderWithPolicy(
-		a.clusterName, clock.Func(a.nowTime),
-		a.includePrivateLogAddresses,
-	)
-	report := rb.Build(inc, action, ins)
-	renderer := message.NewPlainTextRenderer()
-	msg := message.RenderAction(renderer, report)
-
-	if t, ok := templates[strings.ToLower(inc.Reason)]; ok {
+	text := notice.Text(m)
+	for _, reason := range m.Route.Reasons {
+		t, ok := templates[lowerASCII(reason)]
+		if !ok {
+			continue
+		}
 		var buf bytes.Buffer
-		err := t.Execute(&buf, templateData{
-			Incident: inc,
-			Action:   action.String(),
-			Message:  msg,
-		})
-		if err == nil && buf.Len() > 0 {
+		if err := t.Execute(&buf, templateData{
+			Message: m, Text: text,
+		}); err == nil && buf.Len() > 0 {
 			return buf.String()
 		}
 	}
-
-	return msg
+	return text
 }
 
-// fanOut delivers a job to every registered provider channel (non-blocking).
-// Must be called with a.mu held (caller must Lock/Unlock).
-
-type templateData struct {
-	Incident *model.Incident
-	Action   string
-	Message  string
+func lowerASCII(value string) string {
+	out := []byte(value)
+	for i, c := range out {
+		if c >= 'A' && c <= 'Z' {
+			out[i] = c + 'a' - 'A'
+		}
+	}
+	return string(out)
 }
 
 func truncateMsg(s string, maxLen int) string {
@@ -112,82 +59,10 @@ func truncateMsg(s string, maxLen int) string {
 	if cut <= 0 {
 		return suffix
 	}
-	// back up to a valid rune boundary (FIX-4)
 	for cut > 0 && !utf8.RuneStart(s[cut]) {
 		cut--
 	}
 	return s[:cut] + suffix
-}
-
-// providerRenderMargin is reserved when sizing evidence so that provider
-// renderers with extra formatting overhead (e.g. Discord code fences) still
-// produce output within the provider's message limit.
-
-const providerRenderMargin = 64
-
-// clampIncidentForProvider returns a copy of inc with Logs/Events trimmed so
-// that the rendered message fits within maxBytes for ThreadProvider delivery
-// (whose renderers post a single message with no chunking). It returns the
-// original incident when maxBytes <= 0, when the message already fits, or
-// when the overflow cannot be attributed to evidence. fullLen is the length
-// of the pre-rendered message and avoids a redundant render on the fast path.
-
-func (a *Manager) clampIncidentForProvider(
-	inc *model.Incident,
-	action model.IncidentAction,
-	ins *insight.Insight,
-	maxBytes int,
-	tpl map[string]*template.Template,
-	fullLen int,
-) *model.Incident {
-	if maxBytes <= 0 || fullLen <= maxBytes ||
-		(inc.Logs == "" && inc.Events == "") {
-		return inc
-	}
-
-	// Render without evidence to learn the exact fixed-size overhead.
-	fixed := inc.Clone()
-	fixed.Logs = ""
-	fixed.Events = ""
-	fixedLen := len(a.buildMessage(fixed, action, ins, tpl))
-	budget := maxBytes - fixedLen - providerRenderMargin
-	if budget <= 0 {
-		return inc
-	}
-
-	clamped := inc.Clone()
-	trimEvidence(clamped, budget)
-	return clamped
-}
-
-// trimEvidence truncates inc.Logs and inc.Events (with a marker suffix) so
-// their rendered sections fit within budget bytes.
-
-func trimEvidence(inc *model.Incident, budget int) {
-	if budget <= 0 {
-		inc.Logs = ""
-		inc.Events = ""
-		return
-	}
-	logs := inc.Logs
-	events := inc.Events
-	const logHeader = "Logs:\n"
-	const evHeader = "Events:\n"
-	switch {
-	case logs == "":
-		inc.Events = truncateMsg(events, budget-len(evHeader))
-	case events == "":
-		inc.Logs = truncateMsg(logs, budget-len(logHeader))
-	default:
-		total := len(logs) + len(events)
-		if total <= 0 {
-			return
-		}
-		logBudget := int(int64(budget) * int64(len(logs)) / int64(total))
-		evBudget := budget - logBudget
-		inc.Logs = truncateMsg(logs, logBudget-len(logHeader))
-		inc.Events = truncateMsg(events, evBudget-len(evHeader))
-	}
 }
 
 func defaultMaxBytes(providerName string) int {

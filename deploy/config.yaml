@@ -36,8 +36,6 @@ stringData:
       - <optional_container_name>
     ignorePodNames:
       - "<optional_regex_pattern>"
-    ignoreLogPatterns:
-      - "<optional_log_regex>"
     ignoreContainerMessages:
       - "<optional_substring>"
     namespaceSelector:

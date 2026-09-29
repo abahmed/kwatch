@@ -36,7 +36,11 @@ func (a *Manager) dispatchStory(
 			return sp.SendStory(ctx, m)
 		}, opts.retry, p.Name())
 	}
-	text := opts.prefix + notice.Text(m)
+	templates := entry.templates
+	if len(templates) == 0 {
+		templates = a.globalTemplates()
+	}
+	text := opts.prefix + storyText(m, templates)
 	if entry.maxBytes > 0 {
 		text = truncateMsg(text, entry.maxBytes)
 	}

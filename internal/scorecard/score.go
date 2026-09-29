@@ -2,7 +2,6 @@ package scorecard
 
 import (
 	"sort"
-	"strings"
 	"time"
 
 	"github.com/abahmed/kwatch/internal/audit"
@@ -13,9 +12,9 @@ type Report struct {
 	Window           time.Duration `json:"window"`
 	Notifications    int           `json:"notifications"`
 	PerHour          float64       `json:"perHour"`
-	Incidents        int           `json:"incidents"`
-	PerIncident      float64       `json:"perIncident"`
-	PerIncidentP95   int           `json:"perIncidentP95"`
+	Problems         int           `json:"problems"`
+	PerProblem       float64       `json:"perProblem"`
+	PerProblemP95    int           `json:"perProblemP95"`
 	Updates          int           `json:"updates"`
 	UnchangedUpdates int           `json:"unchangedUpdates"`
 	Recreated        int           `json:"recreated"`
@@ -33,7 +32,7 @@ type ReasonCount struct {
 }
 
 // UnchangedUpdatePercent is the share of updates that repeated the previous
-// message for the same incident.
+// message for the same problem.
 func (r Report) UnchangedUpdatePercent() float64 {
 	return percent(r.UnchangedUpdates, r.Updates)
 }
@@ -57,17 +56,14 @@ func Score(entries []audit.Entry) Report {
 	reasons := make(map[string]int)
 	var first, last time.Time
 	for _, entry := range entries {
-		if !notified(entry) {
-			continue
-		}
 		if first.IsZero() {
 			first = entry.Timestamp
 		}
 		last = entry.Timestamp
-		state := keys[entry.IncidentKey]
+		state := keys[entry.Problem]
 		if state == nil {
 			state = &keyState{}
-			keys[entry.IncidentKey] = state
+			keys[entry.Problem] = state
 		}
 		report.Notifications++
 		reasons[entry.Reason]++
@@ -77,8 +73,8 @@ func Score(entries []audit.Entry) Report {
 	if hours := report.Window.Hours(); hours > 0 {
 		report.PerHour = float64(report.Notifications) / hours
 	}
-	report.Incidents = len(keys)
-	report.PerIncident, report.PerIncidentP95 = perIncident(keys)
+	report.Problems = len(keys)
+	report.PerProblem, report.PerProblemP95 = perProblem(keys)
 	report.TopReasons = topReasons(reasons, 10)
 	return report
 }
@@ -92,7 +88,7 @@ func scoreEntry(report *Report, state *keyState, entry audit.Entry) {
 		state.resolved = false
 	case audit.ActionUpdate:
 		report.Updates++
-		if entry.RenderingHash != "" && entry.RenderingHash == state.lastHash {
+		if entry.ContentHash != "" && entry.ContentHash == state.lastHash {
 			report.UnchangedUpdates++
 		}
 	case audit.ActionResolved:
@@ -101,69 +97,25 @@ func scoreEntry(report *Report, state *keyState, entry audit.Entry) {
 		}
 		state.resolved = true
 	}
-	if entry.GroupKey != "" || entry.AffectedCount > 1 {
+	if entry.AffectedCount > 1 {
 		report.Grouped++
 	}
 	if entry.Action != audit.ActionResolved {
-		if entry.CauseState == "" || entry.CauseState == "unknown" {
+		switch entry.CauseState {
+		case "", audit.CauseUnknown:
 			report.UnknownCause++
-		}
-		if circularCause(entry) {
+		case audit.CauseSelf:
 			report.CircularCause++
 		}
 	}
 	state.messages++
 	state.lastSent = entry.Action
-	if entry.RenderingHash != "" {
-		state.lastHash = entry.RenderingHash
+	if entry.ContentHash != "" {
+		state.lastHash = entry.ContentHash
 	}
 }
 
-// notified reports whether the entry was delivered to people.
-func notified(entry audit.Entry) bool {
-	if entry.Action == audit.ActionSkip {
-		return false
-	}
-	return entry.Decision == "" || entry.Decision == "notify"
-}
-
-// circularCause reports a root cause naming the incident's own subject,
-// which tells the reader nothing new. Audit entries do not carry the
-// subject kind, so it is inferred from the reason: a DeploymentUnavailable
-// whose cause is "deployment ns/name" for the same name is circular, while a
-// Service whose cause is the Deployment of the same name is not.
-func circularCause(entry audit.Entry) bool {
-	if entry.RootCause == "" || entry.Name == "" {
-		return false
-	}
-	kind, target, ok := strings.Cut(entry.RootCause, " ")
-	if !ok {
-		return false
-	}
-	if lastSegment(target) != lastSegment(entry.Name) {
-		return false
-	}
-	return strings.Contains(strings.ToLower(entry.Reason), kind) ||
-		reasonKinds[entry.Reason] == kind
-}
-
-// reasonKinds names the subject kind of reasons that do not spell it.
-var reasonKinds = map[string]string{
-	"FailedGetResourceMetric":      "horizontalpodautoscaler",
-	"FailedComputeMetricsReplicas": "horizontalpodautoscaler",
-	"ContainersNotReady":           "pod",
-	"CrashLoopBackOff":             "pod",
-	"OOMKilled":                    "pod",
-}
-
-func lastSegment(value string) string {
-	if i := strings.LastIndex(value, "/"); i >= 0 {
-		return value[i+1:]
-	}
-	return value
-}
-
-func perIncident(keys map[string]*keyState) (float64, int) {
+func perProblem(keys map[string]*keyState) (float64, int) {
 	if len(keys) == 0 {
 		return 0, 0
 	}

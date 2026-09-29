@@ -20,7 +20,6 @@ type KwatchConfigSpec struct {
 	Reasons                      []string               `json:"reasons,omitempty"`
 	IgnoreContainerNames         []string               `json:"ignoreContainerNames,omitempty"`
 	IgnorePodNames               []string               `json:"ignorePodNames,omitempty"`
-	IgnoreLogPatterns            []string               `json:"ignoreLogPatterns,omitempty"`
 	IgnoreContainerMessages      []string               `json:"ignoreContainerMessages,omitempty"`
 	IgnoreNodeReasons            []string               `json:"ignoreNodeReasons,omitempty"`
 	IgnoreNodeMessages           []string               `json:"ignoreNodeMessages,omitempty"`
@@ -168,7 +167,6 @@ type SilenceRule struct {
 	Reasons           []string `json:"reasons,omitempty"`
 	PodNamePatterns   []string `json:"podNamePatterns,omitempty"`
 	ContainerNames    []string `json:"containerNames,omitempty"`
-	LogPatterns       []string `json:"logPatterns,omitempty"`
 	ContainerMessages []string `json:"containerMessages,omitempty"`
 	EventMessages     []string `json:"eventMessages,omitempty"`
 	NodeReasons       []string `json:"nodeReasons,omitempty"`

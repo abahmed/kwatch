@@ -84,3 +84,19 @@ func containsError(errs []error, want string) bool {
 	}
 	return false
 }
+
+func TestValidatePodNamePatterns(t *testing.T) {
+	cfg := DefaultConfig()
+	cfg.Silences = []SilenceRule{{PodNamePatterns: []string{"api-("}}}
+	cfg.IgnorePodNames = []string{"[bad"}
+	errs := Validate(cfg)
+	if !containsError(errs, "silences[0].podNamePatterns") ||
+		!containsError(errs, "ignorePodNames") {
+		t.Fatalf("invalid patterns not reported: %v", errs)
+	}
+	cfg.Silences = []SilenceRule{{PodNamePatterns: []string{"^api-.*"}}}
+	cfg.IgnorePodNames = nil
+	if containsError(Validate(cfg), "podNamePatterns") {
+		t.Fatal("valid pattern rejected")
+	}
+}

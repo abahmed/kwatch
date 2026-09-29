@@ -237,28 +237,12 @@ func validateReasonEntries(items []string) []error {
 	return errs
 }
 
-// prepareConfig normalizes parsed config: splits lists, compiles back-compat
-// patterns, consolidates suppression state, and runs full validation.
+// prepareConfig normalizes parsed config: splits lists, consolidates
+// suppression into silences, and runs full validation.
 func prepareConfig(config *Config) []error {
 	var errs []error
 
 	errs = prepareAllowForbidLists(config, errs)
-
-	var err error
-
-	// Prepare ignored pod name patters (compiled for back-compat)
-	config.IgnorePodNamePatterns, err =
-		getCompiledIgnorePatterns(config.IgnorePodNames)
-	if err != nil {
-		errs = append(errs, fmt.Errorf("failed to compile pod name pattern: %w", err))
-	}
-
-	// Prepare ignored log patterns (compiled for back-compat)
-	config.IgnoreLogPatternsCompiled, err =
-		getCompiledIgnorePatterns(config.IgnoreLogPatterns)
-	if err != nil {
-		errs = append(errs, fmt.Errorf("failed to compile log pattern: %w", err))
-	}
 
 	// Remove synthetic rules from any earlier preparation pass before building
 	// them again. Startup CRD overlays may request a second pass.
@@ -268,14 +252,10 @@ func prepareConfig(config *Config) []error {
 	config.syntheticSilences = 0
 
 	// Consolidation: convert deprecated ignore* fields into synthetic
-	// SilenceRules so detect-time and post-detect filters both read from
-	// the unified Silences / SuppressionIndex.
+	// SilenceRules so scope filtering reads one list.
 	baseLen := len(config.Silences)
 	config.Silences = appendIgnoreFieldSilences(config)
 	config.syntheticSilences = len(config.Silences) - baseLen
-
-	// Build suppression index for detect-time filters
-	config.Suppression = config.BuildSuppressionIndex()
 
 	return append(errs, Validate(config)...)
 }
@@ -346,18 +326,4 @@ func getAllowForbidSlices(items []string) (allow []string, forbid []string) {
 		allow = append(allow, item)
 	}
 	return allow, forbid
-}
-
-func getCompiledIgnorePatterns(patterns []string) (compiledPatterns []*regexp.Regexp, err error) {
-	compiledPatterns = make([]*regexp.Regexp, 0)
-
-	for _, pattern := range patterns {
-		compiledPattern, err := regexp.Compile(pattern)
-		if err != nil {
-			return nil, fmt.Errorf("failed to compile pattern '%s'", pattern)
-		}
-		compiledPatterns = append(compiledPatterns, compiledPattern)
-	}
-
-	return compiledPatterns, nil
 }

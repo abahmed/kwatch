@@ -12,9 +12,7 @@ import (
 	"github.com/abahmed/kwatch/internal/constant"
 	"github.com/abahmed/kwatch/internal/delivery/transport"
 	"github.com/abahmed/kwatch/internal/event"
-	"github.com/abahmed/kwatch/internal/insight"
 	"github.com/abahmed/kwatch/internal/message"
-	"github.com/abahmed/kwatch/internal/model"
 )
 
 type Mattermost struct {
@@ -107,40 +105,6 @@ func (m *Mattermost) SendEvent(ctx context.Context, e *event.Event) error {
 		return err
 	}
 	return m.sendAPI(ctx, b)
-}
-
-// SendIncident implements delivery.ThreadProvider.
-// It renders the incident using the Report model and PlaintextRenderer,
-// producing a context-adaptive text message.
-func (m *Mattermost) SendIncident(
-	ctx context.Context,
-	inc *model.Incident,
-	action model.IncidentAction,
-) error {
-	return m.SendIncidentWithInsight(ctx, inc, action, nil)
-}
-
-// SendIncidentWithInsight implements delivery.InsightThreadProvider, so the
-// diagnosis — likely cause, impact, recent changes — is rendered rather than
-// dropped on the way to this provider.
-func (m *Mattermost) SendIncidentWithInsight(
-	ctx context.Context,
-	inc *model.Incident,
-	action model.IncidentAction,
-	ins *insight.Insight,
-) error {
-	text := message.RenderIncidentWithInsight(
-		inc,
-		action,
-		ins,
-		message.NewPlainTextRenderer(),
-		m.clusterName,
-		m.clockSource,
-	)
-	if text == "" {
-		return nil
-	}
-	return m.SendMessage(ctx, text)
 }
 
 func (m *Mattermost) sendAPI(ctx context.Context, content []byte) error {

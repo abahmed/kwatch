@@ -4,7 +4,6 @@ import (
 	"context"
 	"fmt"
 	"net"
-	"sync"
 	"time"
 
 	"github.com/abahmed/kwatch/internal/alert/catalog"
@@ -13,30 +12,21 @@ import (
 	"github.com/abahmed/kwatch/internal/config"
 	"github.com/abahmed/kwatch/internal/delivery"
 	"github.com/abahmed/kwatch/internal/health"
-	"github.com/abahmed/kwatch/internal/k8s"
-	"github.com/abahmed/kwatch/internal/persistence"
+	"github.com/abahmed/kwatch/internal/heartbeat"
 	"github.com/abahmed/kwatch/internal/rbac"
-	"github.com/abahmed/kwatch/internal/startup"
-	"github.com/abahmed/kwatch/internal/upgrader"
 )
 
-// bootstrap contains infrastructure and startup state that must exist before
-// domain engines or monitor families can be composed.
+// bootstrap is the infrastructure every replica builds before the Lease is
+// acquired: clients, health, delivery. Nothing here writes state; that
+// belongs to the active session.
 type bootstrap struct {
 	runtime         config.RuntimeConfig
-	persistence     *persistence.Manager
-	startupManager  *startup.StartupManager
-	startupResult   startup.Result
-	healthServer    *health.HealthServer
-	securityMonitor *rbac.Monitor
-	deliveryManager *delivery.Manager
 	clients         client.ClientSet
-	telemetryRun    func(context.Context) error
-	telemetryStatus *adoptionTelemetryStatus
-	upgradeRun      func(context.Context) error
+	healthServer    *health.HealthServer
+	deliveryManager *delivery.Manager
+	securityMonitor *rbac.Monitor
+	heartbeat       *heartbeat.HeartbeatMonitor
 	clock           clock.Clock
-	activateOnce    sync.Once
-	activateErr     error
 }
 
 func newBootstrap(
@@ -46,96 +36,39 @@ func newBootstrap(
 ) (*bootstrap, error) {
 	runtime := config.RuntimeConfigFor(cfg)
 	clockSource := clock.Func(now)
-	upgraderConfig := runtime.Lifecycle().Upgrader()
 	clients, err := client.NewClientSetWithRuntime(
 		runtime, &net.Resolver{}, clockSource,
 	)
 	if err != nil {
 		return nil, fmt.Errorf("create application clients: %w", err)
 	}
-	if err := applyStartupCRD(
-		ctx, cfg, clients.Dynamic,
-	); err != nil {
+	if err := applyStartupCRD(ctx, cfg, clients.Dynamic); err != nil {
 		return nil, fmt.Errorf("apply startup CRD configuration: %w", err)
 	}
-	// The CRD overlay may change monitor, alert, or startup settings. Rebuild
-	// the immutable snapshot before composing any domain component.
+	// The CRD overlay may change monitor and alert settings. Rebuild the
+	// immutable snapshot; only the outbound HTTP client depends on it.
 	runtime = config.RuntimeConfigFor(cfg)
-	upgraderConfig = runtime.Lifecycle().Upgrader()
-	// The overlay can change outbound proxy, TLS, or timeout settings. Only
-	// the outbound HTTP client depends on them; Kubernetes clients are kept.
 	clients.HTTP = client.NewHTTPClientWithRuntime(runtime)
 
-	persistenceManager := persistence.NewManagerWithClock(
-		clients.Kubernetes, k8s.GetNamespace(), clock.Func(now),
-		persistence.WithStatePrefix(installationStatePrefix()),
+	deliveryManager := delivery.NewManagerWithDependencies(
+		delivery.Dependencies{HTTPClient: clients.HTTP, Clock: clockSource},
 	)
-	startupManager := startup.NewStartupManagerWithRuntime(
-		persistenceManager,
-		runtime,
-		clockSource,
-		newKubernetesRestartEvidence(
-			clients.Kubernetes, k8s.GetNamespace(),
-		),
-	)
-
-	healthServer := health.NewHealthServerWithClock(
-		runtime.Lifecycle().HealthCheck(), clock.Func(now),
-	)
-	securityMonitor := configureSecurityMonitor(runtime, clients.Kubernetes, now)
-
-	deliveryManager := delivery.NewManagerWithDependencies(delivery.Dependencies{
-		HTTPClient: clients.HTTP,
-		Clock:      clockSource,
-	})
 	if err := deliveryManager.InitRuntime(
 		runtime, catalog.NewProvider,
 	); err != nil {
 		return nil, fmt.Errorf("initialize delivery providers: %w", err)
 	}
-
-	upgrader := upgrader.NewUpgrader(
-		&upgraderConfig,
-		deliveryManager,
-		persistenceManager,
-		clients.HTTP,
-	)
 	return &bootstrap{
-		runtime:         runtime,
-		clients:         clients,
-		persistence:     persistenceManager,
-		startupManager:  startupManager,
-		healthServer:    healthServer,
-		securityMonitor: securityMonitor,
+		runtime: runtime,
+		clients: clients,
+		healthServer: health.NewHealthServerWithClock(
+			runtime.Lifecycle().HealthCheck(), clockSource,
+		),
 		deliveryManager: deliveryManager,
-		telemetryStatus: newAdoptionTelemetryStatus(),
-		upgradeRun:      upgrader.CheckUpdates,
-		clock:           clockSource,
+		securityMonitor: rbac.NewWithRuntimeConfig(
+			clients.Kubernetes, runtime, clockSource),
+		heartbeat: heartbeat.NewHeartbeatMonitorWithRuntime(
+			runtime, clients.HTTP),
+		clock: clockSource,
 	}, nil
-}
-
-// activate performs startup writes only after this process has acquired the
-// application Lease. Standby Pods may construct read-only dependencies, but
-// they must not mutate shared persistence or startup state.
-func (b *bootstrap) activate(ctx context.Context) error {
-	b.activateOnce.Do(func() {
-		result, err := b.startupManager.Start(ctx)
-		if err != nil {
-			recordRequiredRestore(b.persistence, "startup-metadata", err)
-			b.activateErr = fmt.Errorf("run startup: %w", err)
-			return
-		}
-		recordRequiredRestore(b.persistence, "startup-metadata", nil)
-		b.startupResult = result
-		b.telemetryRun = configureTelemetryRunner(
-			b.runtime.Lifecycle().Telemetry(),
-			b.persistence,
-			result.ClusterID,
-			result.CurrentVersion,
-			b.clock.Now,
-			b.clients.HTTP,
-			b.telemetryStatus,
-		)
-	})
-	return b.activateErr
 }

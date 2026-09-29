@@ -77,21 +77,3 @@ func TestReleaseLeaseSkipsUpdateWhenHeldByOther(t *testing.T) {
 		t.Fatalf("did not expect Update when another identity holds it")
 	}
 }
-
-func TestInstallationStatePrefixDefault(t *testing.T) {
-	t.Setenv("KWATCH_LEADER_ELECTION_NAME", "")
-	t.Setenv("KWATCH_INSTALLATION_ID", "")
-
-	if got := installationStatePrefix(); got != "kwatch" {
-		t.Fatalf("expected default prefix %q, got %q", "kwatch", got)
-	}
-}
-
-func TestInstallationStatePrefixFromLeaseName(t *testing.T) {
-	t.Setenv("KWATCH_LEADER_ELECTION_NAME", "team-x-leader")
-	t.Setenv("KWATCH_INSTALLATION_ID", "")
-
-	if got := installationStatePrefix(); got != "team-x" {
-		t.Fatalf("expected prefix %q, got %q", "team-x", got)
-	}
-}

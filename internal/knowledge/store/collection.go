@@ -24,10 +24,14 @@ const (
 	Evidence  Collection = "evidence"
 	Series    Collection = "series"
 	Snapshot  Collection = "snapshot"
+	// State holds small lifecycle values: cluster identity, version,
+	// session, telemetry and upgrade bookkeeping.
+	State Collection = "state"
 )
 
 var collections = []Collection{
 	Decisions, Problems, Changes, Baselines, Evidence, Series, Snapshot,
+	State,
 }
 
 // partitionSeparator ends a partition inside history keys. Partitions are

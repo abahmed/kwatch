@@ -94,12 +94,9 @@ func (a *Manager) digestAdd(
 ) {
 	reason := "message"
 	switch job.kind {
-	case jobIncident:
-		if job.inc != nil {
-			reason = job.inc.Reason
-			if reason == "" {
-				reason = job.action.String()
-			}
+	case jobStory:
+		if job.story != nil {
+			reason = job.story.Title
 		}
 	case jobEvent:
 		if job.ev != nil && job.ev.Reason != "" {

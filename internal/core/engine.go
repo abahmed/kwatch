@@ -53,6 +53,10 @@ type Dependencies struct {
 	// Investigate gathers application output for an announcement.
 	// Optional.
 	Investigate func(context.Context, problem.Problem) []string
+	// InScope reports whether people want to hear about a problem.
+	// Decisions for problems out of scope are dropped before delivery; the
+	// problem is still tracked so reasoning keeps its evidence. Optional.
+	InScope func(problem.Problem) bool
 }
 
 // ProblemStore loads and saves problem records and object fingerprints.
@@ -310,6 +314,7 @@ func (e *Engine) tick(
 	ctx context.Context, now time.Time,
 ) (time.Time, bool) {
 	decisions, next := e.deps.Problems.Tick(now)
+	decisions = e.inScope(decisions)
 	decisions = e.collectStartup(ctx, now, decisions)
 	for i, d := range decisions {
 		if d.Action == problem.Announce && e.deps.Investigate != nil &&
@@ -322,6 +327,19 @@ func (e *Engine) tick(
 		return time.Time{}, len(decisions) > 0
 	}
 	return now.Add(next), len(decisions) > 0
+}
+
+func (e *Engine) inScope(decisions []problem.Decision) []problem.Decision {
+	if e.deps.InScope == nil {
+		return decisions
+	}
+	kept := decisions[:0]
+	for _, d := range decisions {
+		if e.deps.InScope(d.Problem) {
+			kept = append(kept, d)
+		}
+	}
+	return kept
 }
 
 func notify(ch chan struct{}) {

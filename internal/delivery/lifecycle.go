@@ -117,12 +117,6 @@ func (a *Manager) workerFinished() {
 	}
 }
 
-// shutdown waits for all delivery workers to finish (used in tests).
-
-func (a *Manager) shutdown() {
-	_ = a.shutdownContext(context.Background())
-}
-
 func (a *Manager) shutdownContext(ctx context.Context) error {
 	a.mu.Lock()
 	if a.stopped {
@@ -276,17 +270,6 @@ func cloneProviderGeneration(
 		clone.entries[name] = entry
 	}
 	return clone
-}
-
-func generationEntries(generation *providerGeneration) []providerEntry {
-	if generation == nil {
-		return nil
-	}
-	entries := make([]providerEntry, 0, len(generation.order))
-	for _, name := range generation.order {
-		entries = append(entries, generation.entries[name])
-	}
-	return entries
 }
 
 // Done returns a channel that is closed when the Manager has fully

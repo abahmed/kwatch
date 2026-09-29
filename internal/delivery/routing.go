@@ -6,18 +6,11 @@ import (
 	"github.com/abahmed/kwatch/internal/notice"
 )
 
-// routeSubject is what a route matches on, for incidents and stories.
+// routeSubject is what a route matches on.
 type routeSubject struct {
 	namespaces []string
 	severity   model.Severity
 	reasons    []string
-}
-
-func incidentSubject(inc *model.Incident) routeSubject {
-	return routeSubject{
-		namespaces: []string{inc.Namespace}, severity: inc.Severity,
-		reasons: []string{inc.Reason},
-	}
 }
 
 func storySubject(m *notice.Message) routeSubject {
@@ -64,8 +57,6 @@ func routedTo(routes []config.AlertRoute, job deliverJob) bool {
 	switch {
 	case len(routes) == 0:
 		return true
-	case job.kind == jobIncident:
-		return shouldDeliver(routes, job.inc)
 	case job.kind == jobStory:
 		subject := storySubject(job.story)
 		for _, route := range routes {
@@ -77,21 +68,6 @@ func routedTo(routes []config.AlertRoute, job deliverJob) bool {
 	default:
 		return true
 	}
-}
-
-// shouldDeliver checks whether an incident should be delivered to a provider.
-// If the provider has no routes defined, all incidents are delivered.
-
-func shouldDeliver(routes []config.AlertRoute, inc *model.Incident) bool {
-	if len(routes) == 0 {
-		return true
-	}
-	for _, route := range routes {
-		if matchesRoute(route, incidentSubject(inc)) {
-			return true
-		}
-	}
-	return false
 }
 
 // VerifyAll runs context-aware credential pre-flight on all providers that

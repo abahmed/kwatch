@@ -13,9 +13,6 @@ import (
 	"github.com/abahmed/kwatch/internal/delivery/transport"
 	"github.com/abahmed/kwatch/internal/event"
 	"github.com/abahmed/kwatch/internal/format"
-	"github.com/abahmed/kwatch/internal/insight"
-	"github.com/abahmed/kwatch/internal/message"
-	"github.com/abahmed/kwatch/internal/model"
 )
 
 const (
@@ -121,40 +118,6 @@ func (t *Telegram) SendMessage(ctx context.Context, msg string) error {
 
 	reqBody := t.buildRequestBodyTelegram(new(event.Event), t.chatId, msg)
 	return t.sendByTelegramApi(ctx, reqBody)
-}
-
-// SendIncident implements delivery.ThreadProvider.
-// It renders the incident using the Report model and PlaintextRenderer,
-// producing a context-adaptive text message.
-func (t *Telegram) SendIncident(
-	ctx context.Context,
-	inc *model.Incident,
-	action model.IncidentAction,
-) error {
-	return t.SendIncidentWithInsight(ctx, inc, action, nil)
-}
-
-// SendIncidentWithInsight implements delivery.InsightThreadProvider, so the
-// diagnosis — likely cause, impact, recent changes — is rendered rather than
-// dropped on the way to this provider.
-func (t *Telegram) SendIncidentWithInsight(
-	ctx context.Context,
-	inc *model.Incident,
-	action model.IncidentAction,
-	ins *insight.Insight,
-) error {
-	text := message.RenderIncidentWithInsight(
-		inc,
-		action,
-		ins,
-		message.NewPlainTextRenderer(),
-		t.clusterName,
-		t.clockSource,
-	)
-	if text == "" {
-		return nil
-	}
-	return t.SendMessage(ctx, text)
 }
 
 func (t *Telegram) buildRequestBodyTelegram(

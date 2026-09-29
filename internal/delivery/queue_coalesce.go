@@ -1,44 +1,33 @@
 package delivery
 
-import "github.com/abahmed/kwatch/internal/model"
-
 // offerQueuedJob coalesces a full provider queue without growing it. The
 // manager lock serializes producers; the worker may still consume jobs.
 func offerQueuedJob(
 	queue chan deliverJob,
 	job deliverJob,
-) (bool, *deliverJob) {
+) bool {
 	select {
 	case queue <- job:
-		return true, nil
+		return true
 	default:
 	}
 	queued := drainQueuedJobs(queue)
 	index := replacementIndex(queued, job)
 	if index >= 0 {
-		previous := queued[index]
-		if previous.kind == jobIncident &&
-			previous.inc != nil && job.inc != nil &&
-			previous.inc.Key == job.inc.Key {
-			if previous.action == model.ActionCreate &&
-				job.action == model.ActionUpdate {
-				job.action = model.ActionCreate
-			}
-			queued[index] = job
-			refillQueuedJobs(queue, queued)
-			return true, nil
-		}
+		// The newer message of the same conversation supersedes the
+		// queued one in place: it carries everything the older one said
+		// and keeps the conversation's position in the queue.
 		queued[index] = job
 		refillQueuedJobs(queue, queued)
-		return true, &previous
+		return true
 	}
 	if len(queued) < cap(queue) {
 		queued = append(queued, job)
 		refillQueuedJobs(queue, queued)
-		return true, nil
+		return true
 	}
 	refillQueuedJobs(queue, queued)
-	return false, nil
+	return false
 }
 
 func drainQueuedJobs(queue chan deliverJob) []deliverJob {
@@ -62,28 +51,16 @@ func refillQueuedJobs(queue chan deliverJob, jobs []deliverJob) {
 	}
 }
 
+// replacementIndex finds a queued story of the same conversation.
 func replacementIndex(queued []deliverJob, arriving deliverJob) int {
-	if arriving.kind == jobIncident && arriving.inc != nil {
-		for i := len(queued) - 1; i >= 0; i-- {
-			old := queued[i]
-			if old.kind != jobIncident || old.inc == nil ||
-				old.inc.Key != arriving.inc.Key {
-				continue
-			}
-			if old.action == model.ActionUpdate ||
-				(old.action == model.ActionCreate &&
-					arriving.action == model.ActionUpdate) {
-				return i
-			}
-		}
-		if arriving.action == model.ActionCreate ||
-			arriving.action == model.ActionResolved {
-			for i := len(queued) - 1; i >= 0; i-- {
-				if queued[i].kind == jobIncident &&
-					queued[i].action == model.ActionUpdate {
-					return i
-				}
-			}
+	if arriving.kind != jobStory || arriving.story == nil {
+		return -1
+	}
+	for i := len(queued) - 1; i >= 0; i-- {
+		old := queued[i]
+		if old.kind == jobStory && old.story != nil &&
+			old.story.Key == arriving.story.Key {
+			return i
 		}
 	}
 	return -1

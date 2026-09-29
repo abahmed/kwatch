@@ -58,7 +58,7 @@ narrowing the watch list and turning off the noisy reasons.
 | `maintenance.annotation` | Annotation used to mark deliberate maintenance (default: `kwatch.io/maintenance`) |
 | `maintenance.untilAnnotation` | Optional RFC3339 expiry annotation (default: `kwatch.io/maintenance-until`) |
 | `reportStartupBaseline` | 📋 Send one startup summary of pre-existing issues (default: true). Anything already broken when kwatch starts is otherwise quiet for **24 hours** and re-captured on every restart, so this summary is the only way you hear about it — keep it on |
-| `ignore*` fields | 🔕 Deprecated filters (`ignoreContainerNames`, `ignorePodNames`, `ignoreLogPatterns`, `ignoreContainerMessages`, `ignoreNodeReasons`, `ignoreNodeMessages`) — use the more flexible `silences` below |
+| `ignore*` fields | 🔕 Deprecated filters (`ignoreContainerNames`, `ignorePodNames`, `ignoreContainerMessages`, `ignoreNodeReasons`, `ignoreNodeMessages`) — use the more flexible `silences` below |
 
 #### 🔽 Filter by namespace
 
@@ -660,13 +660,14 @@ silences:
   - podNamePatterns: ["my-fancy-pod-.*"]
 ```
 
-Each rule can also filter by `containerNames`, `logPatterns`, `containerMessages`,
-`eventMessages`, `nodeReasons`, and `nodeMessages` (message substrings). An
-incident matching any rule is suppressed entirely. `eventMessages` checks the
-Kubernetes Events attached to the affected Pod, so it can suppress a container
-incident whose status reason is generic but whose Event explains that the
-condition was transient. The deprecated top-level `ignore*` fields map onto
-these rules.
+Each rule can also filter by `containerNames`, `containerMessages`,
+`eventMessages`, `nodeReasons`, and `nodeMessages` (message substrings). A
+rule matches a signal only when every field it sets matches. A problem is
+delivered while at least one signal it explains is in scope and not silenced,
+so silencing a symptom never hides a root cause that affects other workloads.
+Message matchers search the signal summary and its evidence, which includes
+the Event message for Event-backed signals. The deprecated top-level `ignore*`
+fields map onto these rules.
 
 For example, suppress a noisy transient cache-sync error while keeping other
 `CreateContainerConfigError` incidents visible:

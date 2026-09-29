@@ -11,7 +11,7 @@ import (
 
 func TestRunExitCodeZeroSuccess(t *testing.T) {
 	file := tempFileWithContent(t,
-		`{"ts":"2026-01-01T00:00:00Z","incidentKey":"k","action":"create"}`)
+		`{"ts":"2026-01-01T00:00:00Z","problem":"k","action":"create"}`)
 	defer os.Remove(file)
 	out, errOut := &bytes.Buffer{}, &bytes.Buffer{}
 	code := run([]string{"-input", file}, out, errOut)
@@ -20,9 +20,9 @@ func TestRunExitCodeZeroSuccess(t *testing.T) {
 
 func TestRunExitCodeOneThresholdViolated(t *testing.T) {
 	file := tempFileWithContent(t,
-		`{"ts":"2026-01-01T00:00:00Z","incidentKey":"k","action":"create"}
-{"ts":"2026-01-01T00:00:01Z","incidentKey":"k","action":"resolved"}
-{"ts":"2026-01-01T00:00:02Z","incidentKey":"k","action":"create"}`)
+		`{"ts":"2026-01-01T00:00:00Z","problem":"k","action":"create"}
+{"ts":"2026-01-01T00:00:01Z","problem":"k","action":"resolved"}
+{"ts":"2026-01-01T00:00:02Z","problem":"k","action":"create"}`)
 	defer os.Remove(file)
 	out, errOut := &bytes.Buffer{}, &bytes.Buffer{}
 	code := run(
@@ -48,7 +48,7 @@ func TestRunExitCodeTwoInvalidFlags(t *testing.T) {
 
 func TestRunJSONOutput(t *testing.T) {
 	file := tempFileWithContent(t,
-		`{"ts":"2026-01-01T00:00:00Z","incidentKey":"k","action":"create"}`)
+		`{"ts":"2026-01-01T00:00:00Z","problem":"k","action":"create"}`)
 	defer os.Remove(file)
 	out, errOut := &bytes.Buffer{}, &bytes.Buffer{}
 	code := run([]string{"-input", file, "-json"}, out, errOut)
@@ -59,7 +59,7 @@ func TestRunJSONOutput(t *testing.T) {
 
 func TestRunTextOutput(t *testing.T) {
 	file := tempFileWithContent(t,
-		`{"ts":"2026-01-01T00:00:00Z","incidentKey":"k","action":"create"}`)
+		`{"ts":"2026-01-01T00:00:00Z","problem":"k","action":"create"}`)
 	defer os.Remove(file)
 	out, errOut := &bytes.Buffer{}, &bytes.Buffer{}
 	code := run([]string{"-input", file}, out, errOut)
@@ -69,18 +69,18 @@ func TestRunTextOutput(t *testing.T) {
 
 func TestRunMultipleThresholds(t *testing.T) {
 	file := tempFileWithContent(t,
-		`{"ts":"2026-01-01T00:00:00Z","incidentKey":"k","action":"create"}
-{"ts":"2026-01-01T00:00:01Z","incidentKey":"k","action":"resolved"}
-{"ts":"2026-01-01T00:00:02Z","incidentKey":"k","action":"create"}
-{"ts":"2026-01-01T00:00:03Z","incidentKey":"k","action":"update"}
-{"ts":"2026-01-01T00:00:04Z","incidentKey":"k","action":"update"}
-{"ts":"2026-01-01T00:00:05Z","incidentKey":"k","action":"update"}`)
+		`{"ts":"2026-01-01T00:00:00Z","problem":"k","action":"create"}
+{"ts":"2026-01-01T00:00:01Z","problem":"k","action":"resolved"}
+{"ts":"2026-01-01T00:00:02Z","problem":"k","action":"create"}
+{"ts":"2026-01-01T00:00:03Z","problem":"k","action":"update"}
+{"ts":"2026-01-01T00:00:04Z","problem":"k","action":"update"}
+{"ts":"2026-01-01T00:00:05Z","problem":"k","action":"update"}`)
 	defer os.Remove(file)
 	out, errOut := &bytes.Buffer{}, &bytes.Buffer{}
 	code := run(
 		[]string{
 			"-input", file,
-			"-max-per-incident", "4",
+			"-max-per-problem", "4",
 			"-max-recreated", "0",
 		},
 		out, errOut,
@@ -91,9 +91,9 @@ func TestRunMultipleThresholds(t *testing.T) {
 
 func TestRunRecreatedExitCodeOne(t *testing.T) {
 	file := tempFileWithContent(t,
-		`{"ts":"2026-01-01T00:00:00Z","incidentKey":"k","action":"create"}
-{"ts":"2026-01-01T00:00:01Z","incidentKey":"k","action":"resolved"}
-{"ts":"2026-01-01T00:00:02Z","incidentKey":"k","action":"create"}`)
+		`{"ts":"2026-01-01T00:00:00Z","problem":"k","action":"create"}
+{"ts":"2026-01-01T00:00:01Z","problem":"k","action":"resolved"}
+{"ts":"2026-01-01T00:00:02Z","problem":"k","action":"create"}`)
 	defer os.Remove(file)
 	out, errOut := &bytes.Buffer{}, &bytes.Buffer{}
 	code := run(

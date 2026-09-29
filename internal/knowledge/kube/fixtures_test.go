@@ -422,13 +422,3 @@ func factsByKind(
 	}
 	return out
 }
-
-// factsByEntity groups facts by entity for easier assertion.
-func factsByEntity(facts []knowledge.Fact) map[string][]knowledge.Fact {
-	out := make(map[string][]knowledge.Fact)
-	for _, f := range facts {
-		key := f.Entity.String()
-		out[key] = append(out[key], f)
-	}
-	return out
-}

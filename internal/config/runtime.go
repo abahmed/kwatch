@@ -48,7 +48,6 @@ type runtimeScope struct {
 	namespaceSelector   string
 	allowedReasons      []string
 	forbiddenReasons    []string
-	suppression         SuppressionIndex
 }
 
 type runtimeDelivery struct {
@@ -110,10 +109,6 @@ func CompileRuntimeConfig(c *Config) RuntimeConfig {
 	if c == nil {
 		return RuntimeConfig{}
 	}
-	suppression := c.Suppression
-	if suppressionIndexEmpty(suppression) {
-		suppression = c.BuildSuppressionIndex()
-	}
 	providers := make([]string, 0, len(c.Alert))
 	for name := range c.Alert {
 		providers = append(providers, name)
@@ -144,7 +139,6 @@ func CompileRuntimeConfig(c *Config) RuntimeConfig {
 			namespaceSelector:   c.NamespaceSelector,
 			allowedReasons:      cloneStrings(c.AllowedReasons),
 			forbiddenReasons:    cloneStrings(c.ForbiddenReasons),
-			suppression:         cloneSuppressionIndex(suppression),
 		},
 		delivery: runtimeDelivery{
 			providerNames:              providers,
@@ -220,16 +214,6 @@ func CompileRuntimeConfig(c *Config) RuntimeConfig {
 			},
 		},
 	}
-}
-
-func suppressionIndexEmpty(index SuppressionIndex) bool {
-	return len(index.ContainerNames) == 0 &&
-		len(index.PodNamePatterns) == 0 &&
-		len(index.LogPatterns) == 0 &&
-		len(index.ContainerMessages) == 0 &&
-		len(index.EventMessages) == 0 &&
-		len(index.NodeReasons) == 0 &&
-		len(index.NodeMessages) == 0
 }
 
 // IncidentRuntime contains normalized incident lifecycle settings. It keeps

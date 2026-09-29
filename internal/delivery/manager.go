@@ -55,7 +55,6 @@ type providerGeneration struct {
 
 type Manager struct {
 	generation                 *providerGeneration
-	silences                   []silenceMatcher
 	templates                  map[string]*template.Template
 	clusterName                string
 	includePrivateLogAddresses bool
@@ -327,7 +326,6 @@ func (a *Manager) publishRuntime(
 	a.mu.Unlock()
 	a.cfgMu.Lock()
 	deliveryRuntime := runtime.Delivery()
-	a.silences = compileSilences(deliveryRuntime.Silences())
 	a.templates = compileTemplates(deliveryRuntime.Templates())
 	a.cfgMu.Unlock()
 }

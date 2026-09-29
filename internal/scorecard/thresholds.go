@@ -6,7 +6,7 @@ import "fmt"
 // zero can be used to demand, for example, no repeated recoveries at all.
 type Thresholds struct {
 	MaxPerHour          float64
-	MaxPerIncident      float64
+	MaxPerProblem       float64
 	MaxUnchangedPercent float64
 	MaxRecreated        int
 	MaxRepeatedResolves int
@@ -17,7 +17,7 @@ type Thresholds struct {
 // NoThresholds returns thresholds with every check disabled.
 func NoThresholds() Thresholds {
 	return Thresholds{
-		MaxPerHour: -1, MaxPerIncident: -1, MaxUnchangedPercent: -1,
+		MaxPerHour: -1, MaxPerProblem: -1, MaxUnchangedPercent: -1,
 		MaxRecreated: -1, MaxRepeatedResolves: -1, MaxUnknownCausePct: -1,
 		MaxCircularCause: -1,
 	}
@@ -37,10 +37,10 @@ func (t Thresholds) Violations(r Report) []string {
 		}
 	}
 	checkFloat(t.MaxPerHour, r.PerHour, "notifications per hour")
-	checkFloat(t.MaxPerIncident, r.PerIncident, "messages per incident")
+	checkFloat(t.MaxPerProblem, r.PerProblem, "messages per problem")
 	checkFloat(t.MaxUnchangedPercent, r.UnchangedUpdatePercent(),
 		"unchanged updates %")
-	checkInt(t.MaxRecreated, r.Recreated, "re-created incidents")
+	checkInt(t.MaxRecreated, r.Recreated, "re-opened problems")
 	checkInt(t.MaxRepeatedResolves, r.RepeatedResolves,
 		"repeated recoveries")
 	checkFloat(t.MaxUnknownCausePct, r.UnknownCausePercent(),

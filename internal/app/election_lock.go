@@ -4,7 +4,6 @@ import (
 	"context"
 	"fmt"
 	"os"
-	"strings"
 	"time"
 
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -92,13 +91,6 @@ func electionLeaseName() string {
 		return installation + "-leader"
 	}
 	return leaderLeaseName
-}
-
-// installationStatePrefix names this installation's state ConfigMaps after
-// its Lease, so installations that do not share a Lease do not share state.
-// The default Lease keeps the historical kwatch-* names.
-func installationStatePrefix() string {
-	return strings.TrimSuffix(electionLeaseName(), "-leader")
 }
 
 func podIdentity() (string, error) {

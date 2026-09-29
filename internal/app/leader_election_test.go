@@ -36,7 +36,7 @@ func (e *fakeElection) Run(ctx context.Context) {
 }
 
 func testServerDeps() *serverDeps {
-	deps := &serverDeps{
+	return &serverDeps{
 		clients: client.ClientSet{
 			Kubernetes: fake.NewSimpleClientset(),
 			Clock:      clock.RealClock{},
@@ -45,8 +45,6 @@ func testServerDeps() *serverDeps {
 			config.HealthCheck{}, clock.RealClock{},
 		),
 	}
-	deps.persistenceGate = newPersistenceGate()
-	return deps
 }
 
 func TestLeaderElectionStartsActiveSessionAfterAcquisition(t *testing.T) {
@@ -251,9 +249,6 @@ func TestLeaderElectionReturnsLeadershipLoss(t *testing.T) {
 	if got := deps.healthServer.LeadershipStatus(); got == nil ||
 		got.Role != "stopped" || got.LossReason != "leadership_lost" {
 		t.Fatalf("unexpected stopped status: %+v", got)
-	}
-	if deps.persistenceGate == nil || deps.persistenceGate.enabled() {
-		t.Fatal("leadership loss left persistence writes enabled")
 	}
 }
 

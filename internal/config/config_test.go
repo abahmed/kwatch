@@ -115,8 +115,6 @@ reasons:
   - OOMKilling
 ignorePodNames:
   - my-fancy-pod-.*
-ignoreLogPatterns:
-  - leader-election-.*
 app:
   proxyURL: https://localhost
   clusterName: development
@@ -139,30 +137,6 @@ app:
 	os.WriteFile(configPath, []byte("maxRecentLogLines: test"), 0644)
 	_, err = LoadConfig()
 	assert.NotNil(err)
-}
-
-func TestGetCompiledIgnorePatterns(t *testing.T) {
-	assert := assert.New(t)
-
-	validPatterns := []string{
-		"my-fancy-pod-[0-9]",
-		"leaderelection lost",
-	}
-
-	compiledPatterns, err := getCompiledIgnorePatterns(validPatterns)
-
-	assert.Nil(err)
-	assert.True(compiledPatterns[0].MatchString("my-fancy-pod-8"))
-	assert.True(compiledPatterns[1].MatchString(`controllermanager.go:272] "leaderelection lost"`))
-
-	invalidPatterns := []string{
-		"my-fancy-pod-[.*",
-	}
-
-	compiledPatterns, err = getCompiledIgnorePatterns(invalidPatterns)
-
-	assert.NotNil(err)
-	assert.Empty(compiledPatterns)
 }
 
 func TestConfigEnvInterpolation(t *testing.T) {

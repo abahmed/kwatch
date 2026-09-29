@@ -60,7 +60,6 @@ func (c *leaderCallbacks) callbacks() leaderelection.LeaderCallbacks {
 
 func (c *leaderCallbacks) onStartedLeading(leaderCtx context.Context) {
 	c.started.Store(true)
-	c.deps.persistenceGate.enable()
 	currentEpoch := c.epoch.Add(1)
 	if c.deps.readiness != nil {
 		c.deps.readiness.begin(
@@ -99,7 +98,6 @@ func (c *leaderCallbacks) onStoppedLeading() {
 	}
 	loss := c.parent.Err() == nil
 	if loss {
-		c.deps.persistenceGate.disable()
 		metrics.DefaultRegistry().LeadershipLosses.Add(1)
 	}
 	if c.deps.readiness != nil {
@@ -246,42 +244,6 @@ func runLeaderElectionWithRunner(
 	return errLeadershipLost
 }
 
-func runActiveComponents(ctx context.Context, deps *serverDeps) error {
-	if deps.persistenceGate != nil {
-		deps.persistenceGate.enable()
-		defer deps.persistenceGate.disable()
-	}
-	activeCtx, cancel := context.WithCancel(applicationContext(deps))
-	defer cancel()
-	go fenceOnLeadershipLoss(ctx, activeCtx, deps, cancel)
-	if deps.activate != nil {
-		if err := deps.activate(activeCtx); err != nil {
-			if deps.healthServer != nil {
-				deps.healthServer.SetComponentError("persistence", err)
-			}
-			return err
-		}
-	}
-	supervisor := newComponentSupervisor(deps.clients.Clock.Now)
-	startActiveComponents(activeCtx, deps, supervisor)
-	select {
-	case err := <-supervisor.errCh:
-		cancel()
-		if deps.incidentEngine != nil {
-			deps.incidentEngine.Freeze()
-		}
-		waitForSupervisor(supervisor)
-		return err
-	case <-ctx.Done():
-		cancel()
-		if deps.incidentEngine != nil {
-			deps.incidentEngine.Freeze()
-		}
-		waitForSupervisor(supervisor)
-		return nil
-	}
-}
-
 func waitForSupervisor(supervisor *componentSupervisor) {
 	done := make(chan struct{})
 	go func() {
@@ -295,63 +257,12 @@ func waitForSupervisor(supervisor *componentSupervisor) {
 	}
 }
 
-func startActiveComponents(
-	ctx context.Context,
-	deps *serverDeps,
-	supervisor *componentSupervisor,
-) {
-	supervisor.startOwned(ctx, componentSpec{
-		name:     "delivery",
-		required: true,
-		progress: deliveryProgress(deps),
-		onHealthy: func() {
-			if deps.readiness != nil {
-				deps.readiness.setCurrent("delivery", true)
-			}
-		},
-		run: func(ctx context.Context) error {
-			return runDelivery(ctx, deps)
-		},
-	})
-	if deps.coreV2 {
-		startCoreV2(ctx, deps, supervisor)
-		return
-	}
-	if deps.startPersistence != nil {
-		deps.startPersistence(
-			ctx, supervisor, deps.persistenceGate.enabled,
-		)
-	} else if deps.readiness != nil {
-		// Tests and embedded callers may not install persistence writers.
-		// They must not wait forever on a gate they deliberately omitted.
-		deps.readiness.setCurrent("persistence-writers", true)
-	}
-	startCoreComponents(ctx, deps, supervisor)
-	for _, component := range activeOptionalComponents(deps) {
-		supervisor.startOptional(ctx, deps.initialized, component)
-	}
-}
-
 func deliveryProgress(deps *serverDeps) progressReporter {
 	if deps == nil || deps.deliveryManager == nil ||
 		!deps.deliveryManager.HasProviders() {
 		return nil
 	}
 	return deps.deliveryManager
-}
-
-func activeOptionalComponents(deps *serverDeps) []componentSpec {
-	return []componentSpec{
-		monitoredRun(deps, "status", deps.statusRun),
-		monitoredRun(deps, "probe", deps.probeRun),
-		monitoredRun(deps, "kubelet", deps.kubeletRun),
-		monitoredRun(deps, "storage-graph", deps.storageRun),
-		monitoredRun(deps, "network-graph", deps.networkRun),
-		monitoredRun(deps, "rbac", deps.securityRun),
-		monitoredRun(deps, "control-plane", deps.controlPlaneRun),
-		monitoredRun(deps, "telemetry", deps.telemetryRun),
-		monitoredRun(deps, "upgrader", deps.upgradeRun),
-	}
 }
 
 func monitoredRun(
@@ -402,16 +313,13 @@ func applicationContext(deps *serverDeps) context.Context {
 // fenced first: client-go cancels the leader context before it runs
 // OnStoppedLeading, and savers would otherwise make a last write without the
 // Lease.
+// fenceOnLeadershipLoss ends the active session as soon as the Lease is
+// lost. The state file's epoch claim stops any late write.
 func fenceOnLeadershipLoss(
-	leaderCtx, activeCtx context.Context,
-	deps *serverDeps,
-	cancel context.CancelFunc,
+	leaderCtx, activeCtx context.Context, cancel context.CancelFunc,
 ) {
 	select {
 	case <-leaderCtx.Done():
-		if applicationContext(deps).Err() == nil {
-			deps.persistenceGate.disable()
-		}
 		cancel()
 	case <-activeCtx.Done():
 	}

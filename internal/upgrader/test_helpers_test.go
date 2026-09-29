@@ -1,17 +1,19 @@
 package upgrader
 
 import (
-	"k8s.io/client-go/kubernetes"
-
-	"github.com/abahmed/kwatch/internal/clock"
-	"github.com/abahmed/kwatch/internal/persistence"
+	"context"
 )
 
-func newTestPersistenceManager(
-	client kubernetes.Interface,
-	namespace string,
-) *persistence.Manager {
-	return persistence.NewManagerWithClock(
-		client, namespace, clock.RealClock{},
-	)
+// memoryVersions is an in-memory VersionTracker for tests.
+type memoryVersions struct{ version string }
+
+func (m *memoryVersions) GetNotifiedVersion(context.Context) string {
+	return m.version
+}
+
+func (m *memoryVersions) SetNotifiedVersion(
+	_ context.Context, version string,
+) error {
+	m.version = version
+	return nil
 }

@@ -14,9 +14,6 @@ import (
 	"github.com/abahmed/kwatch/internal/clock"
 	"github.com/abahmed/kwatch/internal/delivery/transport"
 	"github.com/abahmed/kwatch/internal/event"
-	"github.com/abahmed/kwatch/internal/insight"
-	"github.com/abahmed/kwatch/internal/message"
-	"github.com/abahmed/kwatch/internal/model"
 )
 
 var htmlTagRegex = regexp.MustCompile(`<.*?>`)
@@ -83,40 +80,6 @@ func (m *Matrix) SendMessage(ctx context.Context, msg string) error {
 	// before they become the HTML body so logs cannot inject markup.
 	formatted := strings.ReplaceAll(html.EscapeString(msg), "\n", "<br/>")
 	return m.sendBodies(ctx, msg, formatted)
-}
-
-// SendIncident implements delivery.ThreadProvider.
-// It renders the incident using the Report model and PlaintextRenderer,
-// producing a context-adaptive text message.
-func (m *Matrix) SendIncident(
-	ctx context.Context,
-	inc *model.Incident,
-	action model.IncidentAction,
-) error {
-	return m.SendIncidentWithInsight(ctx, inc, action, nil)
-}
-
-// SendIncidentWithInsight implements delivery.InsightThreadProvider, so the
-// diagnosis — likely cause, impact, recent changes — is rendered rather than
-// dropped on the way to this provider.
-func (m *Matrix) SendIncidentWithInsight(
-	ctx context.Context,
-	inc *model.Incident,
-	action model.IncidentAction,
-	ins *insight.Insight,
-) error {
-	text := message.RenderIncidentWithInsight(
-		inc,
-		action,
-		ins,
-		message.NewPlainTextRenderer(),
-		m.clusterName,
-		m.clockSource,
-	)
-	if text == "" {
-		return nil
-	}
-	return m.SendMessage(ctx, text)
 }
 
 func (m *Matrix) SendEvent(ctx context.Context, e *event.Event) error {

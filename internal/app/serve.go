@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"os"
 	"os/signal"
-	"strings"
 	"syscall"
 	"time"
 
@@ -32,14 +31,6 @@ func serve(ctx context.Context, deps *serverDeps) int {
 	// even when bootstrap did not provide a separate derived context.
 	deps.ctx = ctx
 	supervisor := newComponentSupervisor(deps.clients.Clock.Now)
-	if deps.initialized == nil {
-		ready := make(chan struct{})
-		close(ready)
-		deps.initialized = ready
-	}
-	if deps.controllerDone == nil {
-		deps.controllerDone = make(chan struct{})
-	}
 	if deps.runtime.Lifecycle().HealthCheck().Enabled {
 		supervisor.startOwned(ctx, componentSpec{
 			name:     "health-server",
@@ -56,18 +47,6 @@ func serve(ctx context.Context, deps *serverDeps) int {
 	})
 
 	return waitShutdown(deps, supervisor)
-}
-
-func waitForInitialization(
-	ctx context.Context,
-	initialized <-chan struct{},
-) bool {
-	select {
-	case <-initialized:
-		return true
-	case <-ctx.Done():
-		return false
-	}
 }
 
 // startCRDWatcher launches the CRD watcher against the cluster rest config.
@@ -151,46 +130,29 @@ func waitShutdown(
 	case err := <-supervisor.errCh:
 		if err != nil {
 			failureErr = err
-			klog.ErrorS(err, "controller startup failed, shutting down")
 			exitCode = 1
 		}
 	case <-applicationContext.Done():
 		klog.InfoS("shutting down because the application context was canceled")
 	}
-	recordStartupFailureIfNeeded(deps, exitCode, failureErr)
+	if failureErr != nil {
+		klog.ErrorS(failureErr, "shutting down after a component failure")
+	}
 	deps.cancel()
 	stopHealthServer(deps)
-	controllerStopped := waitController(deps)
 
-	// Every producer should stop before the final snapshot. Keep a hard bound
-	// so a misbehaving dependency cannot prevent the process from terminating.
+	// The leader session stops its components and writes its final state
+	// before the supervisor finishes; wait for it with a hard bound so a
+	// misbehaving dependency cannot prevent the process from terminating.
 	backgroundDone := make(chan struct{})
 	go func() {
 		supervisor.wg.Wait()
 		close(backgroundDone)
 	}()
-	backgroundStopped := false
 	select {
 	case <-backgroundDone:
-		backgroundStopped = true
 	case <-time.After(backgroundShutdownTimeout):
 		recordShutdownTimeout("background-tasks")
-	}
-	if controllerStopped && backgroundStopped &&
-		deps.persistenceGate.enabled() {
-		if waitSavers(deps) {
-			finalCtx, cancel := boundedShutdownContext(applicationContext)
-			saveFinalIncidentSnapshot(finalCtx, deps)
-			cancel()
-		} else {
-			klog.InfoS(
-				"skipping final incident snapshot while savers are still running",
-			)
-		}
-	} else {
-		klog.InfoS(
-			"skipping final incident snapshot while workers are still running",
-		)
 	}
 
 	shutdownCtx, cancel := boundedShutdownContext(applicationContext)
@@ -200,52 +162,7 @@ func waitShutdown(
 	}
 	cancel()
 	releaseLeaseAfterShutdown(deps, applicationContext)
-	if deps.closeAudit != nil {
-		if err := deps.closeAudit(); err != nil {
-			klog.ErrorS(err, "failed to close audit logger")
-		}
-	}
-	if deps.endSession != nil {
-		reason := "graceful_shutdown"
-		if exitCode != 0 {
-			reason = "internal_failure"
-		}
-		deps.endSession(context.Background(), reason)
-	}
-	deps.cleanup()
 	return exitCode
-}
-
-func recordStartupFailureIfNeeded(
-	deps *serverDeps, exitCode int, failureErr error,
-) {
-	if exitCode != 0 {
-		recordStartupFailure(deps, failureErr)
-	}
-}
-
-func recordStartupFailure(deps *serverDeps, failureErr error) {
-	if deps.recordFailure == nil {
-		return
-	}
-	component, code := "application", "internal_failure"
-	if failureErr != nil {
-		parts := strings.SplitN(failureErr.Error(), ":", 2)
-		if strings.TrimSpace(parts[0]) != "" {
-			component = strings.TrimSpace(parts[0])
-		}
-		lower := strings.ToLower(failureErr.Error())
-		if strings.Contains(lower, "kubernetes") ||
-			strings.Contains(lower, "api") ||
-			strings.Contains(lower, "cache sync") {
-			code = "api_unavailable"
-		}
-		if strings.Contains(lower, "leadership") ||
-			strings.Contains(lower, "leader-election") {
-			code = "leader_handoff"
-		}
-	}
-	deps.recordFailure(context.Background(), component, code)
 }
 
 func stopHealthServer(deps *serverDeps) {
@@ -258,60 +175,13 @@ func stopHealthServer(deps *serverDeps) {
 	}
 }
 
-func waitController(deps *serverDeps) bool {
-	// Standby replicas never start the controller; waiting for it only
-	// delayed their shutdown and counted a false shutdown timeout.
-	if deps.controllerDone == nil || !deps.controllerStarted.Load() {
-		return true
-	}
-	// The controller owns the event workers that can still mutate the
-	// incidentEngine. Its Run method observes the canceled context, so waiting
-	// here
-	// is required before taking the final snapshot.
-	select {
-	case <-deps.controllerDone:
-		return true
-	case <-time.After(componentShutdownTimeout):
-		recordShutdownTimeout("controller")
-		return false
-	}
-}
-
 func recordShutdownTimeout(component string) {
 	metrics.DefaultRegistry().ShutdownTimeouts.Add(1)
 	klog.InfoS("timed out waiting for component", "component", component)
 }
 
-// releaseLeaseAfterShutdown hands the Lease over only after delivery drained
-// and state was written, so the next leader never overlaps with this one.
-// waitSavers waits for every persistence saver concurrently. Waiting one
-// after another let each slow saver add its own timeout to shutdown.
-func waitSavers(deps *serverDeps) bool {
-	waits := []func() bool{
-		func() bool { return waitIncidentSaver(deps) },
-		func() bool {
-			return waitPersistenceComponent(
-				deps.baselineDone, "baseline-saver",
-			)
-		},
-		func() bool {
-			return waitPersistenceComponent(
-				deps.changeDone, "change-history-saver",
-			)
-		},
-		func() bool { return waitFeedbackSaver(deps) },
-	}
-	results := make(chan bool, len(waits))
-	for _, wait := range waits {
-		go func() { results <- wait() }()
-	}
-	stopped := true
-	for range waits {
-		stopped = <-results && stopped
-	}
-	return stopped
-}
-
+// releaseLeaseAfterShutdown hands the Lease over only after delivery
+// drained, so the next leader never overlaps with this one.
 func releaseLeaseAfterShutdown(deps *serverDeps, parent context.Context) {
 	release := deps.leaseRelease()
 	if release == nil {

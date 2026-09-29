@@ -4,7 +4,6 @@ import (
 	"context"
 	"net/http"
 	"testing"
-	"time"
 
 	slackClient "github.com/slack-go/slack"
 	"github.com/stretchr/testify/assert"
@@ -13,7 +12,6 @@ import (
 	"github.com/abahmed/kwatch/internal/delivery/transport"
 	"github.com/abahmed/kwatch/internal/event"
 	"github.com/abahmed/kwatch/internal/message"
-	"github.com/abahmed/kwatch/internal/model"
 )
 
 func mockedSend(url string, msg *slackClient.WebhookMessage) error {
@@ -271,106 +269,3 @@ func TestMarkdownF(t *testing.T) {
 	obj := markdownF("*%s*", "test")
 	assert.NotNil(t, obj)
 }
-
-func testIncident() *model.Incident {
-	return &model.Incident{
-		Subject: model.Subject{
-			Key:       "default:deploy-1:CrashLoopBackOff",
-			Name:      "deploy-1",
-			Namespace: "default",
-			Reason:    "CrashLoopBackOff",
-			Resource:  "pod",
-		},
-		Status: model.Status{
-			Count:     1,
-			FirstSeen: time.Now().Add(-5 * time.Minute),
-			LastSeen:  time.Now(),
-			Resources: map[string]bool{"pod-1": true, "pod-2": true},
-		},
-	}
-
-}
-
-// --- SendIncident: webhook fallback ---
-
-func TestSendIncidentWebhookCreate(t *testing.T) {
-	assert := assert.New(t)
-
-	s := newTestSlack(map[string]interface{}{
-		"webhook": "testtest",
-	}, "dev")
-	assert.NotNil(s)
-
-	var lastMsg string
-	s.send = func(_ string, msg *slackClient.WebhookMessage) error {
-		lastMsg = msg.Text
-		return nil
-	}
-
-	err := s.SendIncident(context.Background(), testIncident(), model.ActionCreate)
-	assert.Nil(err)
-	assert.Contains(lastMsg, "Container keeps crashing")
-	assert.Contains(lastMsg, "deploy-1")
-}
-
-func TestSendIncidentWebhookUpdate(t *testing.T) {
-	assert := assert.New(t)
-
-	s := newTestSlack(map[string]interface{}{
-		"webhook": "testtest",
-	}, "dev")
-	assert.NotNil(s)
-
-	var lastMsg string
-	s.send = func(_ string, msg *slackClient.WebhookMessage) error {
-		lastMsg = msg.Text
-		return nil
-	}
-
-	err := s.SendIncident(context.Background(), testIncident(), model.ActionUpdate)
-	assert.Nil(err)
-	assert.Contains(lastMsg, "Container keeps crashing")
-}
-
-func TestSendIncidentWebhookCompact(t *testing.T) {
-	assert := assert.New(t)
-
-	s := newTestSlack(map[string]interface{}{
-		"webhook": "testtest",
-		"compact": true,
-	}, "dev")
-	assert.NotNil(s)
-	assert.True(s.compact)
-
-	var lastText string
-	s.send = func(_ string, msg *slackClient.WebhookMessage) error {
-		lastText = msg.Text
-		return nil
-	}
-
-	err := s.SendIncident(context.Background(), testIncident(), model.ActionCreate)
-	assert.Nil(err)
-	assert.Contains(lastText, "Container keeps crashing")
-	assert.Contains(lastText, "deploy-1")
-}
-
-func TestSendIncidentWebhookSkip(t *testing.T) {
-	assert := assert.New(t)
-
-	s := newTestSlack(map[string]interface{}{
-		"webhook": "testtest",
-	}, "dev")
-	assert.NotNil(s)
-
-	called := false
-	s.send = func(_ string, _ *slackClient.WebhookMessage) error {
-		called = true
-		return nil
-	}
-
-	err := s.SendIncident(context.Background(), testIncident(), model.ActionSkip)
-	assert.Nil(err)
-	assert.False(called)
-}
-
-// --- SendIncident: token mode with mocked postBlocksFn ---

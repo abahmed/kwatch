@@ -2,7 +2,6 @@ package k8s
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"math/rand"
 	"os"
@@ -19,55 +18,7 @@ import (
 
 	"github.com/abahmed/kwatch/internal/config"
 	"github.com/abahmed/kwatch/internal/event"
-	"github.com/abahmed/kwatch/internal/kubelet"
 )
-
-func TestGetPodContainerLogs(t *testing.T) {
-	assert := assert.New(t)
-
-	client := fake.NewSimpleClientset()
-	logs := kubelet.GetPodContainerLogs(
-		context.Background(),
-		client,
-		"test",
-		"test",
-		"default",
-		false,
-		20)
-
-	assert.Equal(logs, "fake logs")
-}
-
-func TestGetPodContainerLogsError(t *testing.T) {
-	assert := assert.New(t)
-
-	client := fake.NewSimpleClientset()
-	client.PrependReactor(
-		"get",
-		"pods",
-		func(action k8stesting.Action) (bool, runtime.Object, error) {
-			if action.GetSubresource() == "log" {
-				return true, nil, errors.New("log fetch error")
-			}
-			return false, nil, nil
-		},
-	)
-
-	logs := kubelet.GetPodContainerLogs(
-		context.Background(),
-		client,
-		"test-pod",
-		"test-container",
-		"default",
-		false,
-		20)
-
-	assert.Equal(
-		"",
-		logs,
-		"GetPodContainerLogs should return empty string on error",
-	)
-}
 
 func TestGetPodEventsStr(t *testing.T) {
 	assert := assert.New(t)

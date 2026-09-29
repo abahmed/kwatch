@@ -29,10 +29,6 @@ func RunWithClock(now func() time.Time) int {
 		klog.ErrorS(err, "failed to load config")
 		return 1
 	}
-	if _, err := newMonitorRegistry(); err != nil {
-		klog.ErrorS(err, "invalid monitor registry")
-		return 1
-	}
 	cfg.WatchStartTime = now()
 	// WatchStartTime is derived at process start, so compile the snapshot only
 	// after it has been stamped. Runtime consumers must see one consistent
@@ -46,12 +42,5 @@ func RunWithClock(now func() time.Time) int {
 		klog.ErrorS(err, "failed to initialize application")
 		return 1
 	}
-	deps, err := buildServerDeps(
-		ctx, cancel, boot.runtime, boot, now,
-	)
-	if err != nil {
-		klog.ErrorS(err, "failed to build application runtime")
-		return 1
-	}
-	return serve(ctx, deps)
+	return serve(ctx, newServerDeps(ctx, cancel, boot))
 }

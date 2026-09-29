@@ -13,7 +13,6 @@ import (
 	"github.com/abahmed/kwatch/internal/alert/catalog"
 	"github.com/abahmed/kwatch/internal/config"
 	"github.com/abahmed/kwatch/internal/event"
-	"github.com/abahmed/kwatch/internal/model"
 )
 
 func testRetryConfig(settings map[string]interface{}) retryConfig {
@@ -203,7 +202,7 @@ func (p *eventFallbackProvider) SendMessage(context.Context, string) error {
 
 func (p *eventFallbackProvider) UsesEventDelivery() {}
 
-func TestIncidentFallbackUsesEventDeliveryInterface(t *testing.T) {
+func TestStoryFallbackUsesEventDeliveryInterface(t *testing.T) {
 	primary := &errorRecorderProvider{name: "Primary", err: errors.New("fail")}
 	fallback := &eventFallbackProvider{}
 	am := *managerWithEntries([]providerEntry{
@@ -219,16 +218,14 @@ func TestIncidentFallbackUsesEventDeliveryInterface(t *testing.T) {
 	})
 
 	am.deliverOne(
-		context.Background(), &managerEntries(&am)[0], incidentJob(&model.Incident{
-			Subject: model.Subject{Key: "ns:pod:Error", Reason: "Error"},
-		}, model.ActionCreate, nil),
+		context.Background(), &managerEntries(&am)[0], storyJob("k", "default"),
 	)
 
 	assert.Equal(t, 1, fallback.eventCalls)
 	assert.Zero(t, fallback.messageCalls)
 }
 
-func TestIncidentFallbackHonorsFallbackRoutes(t *testing.T) {
+func TestStoryFallbackHonorsFallbackRoutes(t *testing.T) {
 	primary := &errorRecorderProvider{
 		name: "Primary",
 		err:  errors.New("fail"),
@@ -253,13 +250,7 @@ func TestIncidentFallbackHonorsFallbackRoutes(t *testing.T) {
 	})
 
 	am.deliverOne(
-		context.Background(), &managerEntries(&am)[0], incidentJob(&model.Incident{
-			Subject: model.Subject{
-				Key:       "default:pod:Error",
-				Namespace: "default",
-				Reason:    "Error",
-			},
-		}, model.ActionCreate, nil),
+		context.Background(), &managerEntries(&am)[0], storyJob("default:pod:Error", "default"),
 	)
 
 	assert.Zero(t, fallback.callCount)
@@ -357,9 +348,7 @@ func TestFlushDigestUsesEventDelivery(t *testing.T) {
 			delay:       time.Millisecond,
 		},
 	}
-	am.digestAdd(provider.Name(), incidentJob(&model.Incident{
-		Subject: model.Subject{Reason: "Error"},
-	}, model.ActionCreate, nil))
+	am.digestAdd(provider.Name(), storyJob("k", "default"))
 
 	am.flushDigest(context.Background(), entry)
 
@@ -377,9 +366,7 @@ func TestFlushDigestRestoresAfterFailure(t *testing.T) {
 			delay:       time.Millisecond,
 		},
 	}
-	am.digestAdd(provider.Name(), incidentJob(&model.Incident{
-		Subject: model.Subject{Reason: "Error"},
-	}, model.ActionCreate, nil))
+	am.digestAdd(provider.Name(), storyJob("k", "default"))
 
 	am.flushDigest(context.Background(), entry)
 

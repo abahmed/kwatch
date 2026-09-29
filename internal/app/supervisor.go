@@ -84,7 +84,6 @@ func (s *componentSupervisor) startOwned(
 
 func (s *componentSupervisor) startOptional(
 	ctx context.Context,
-	initialized <-chan struct{},
 	component componentSpec,
 ) {
 	if component.run == nil {
@@ -93,9 +92,6 @@ func (s *componentSupervisor) startOptional(
 	s.wg.Add(1)
 	go func() {
 		defer s.wg.Done()
-		if !waitForInitialization(ctx, initialized) {
-			return
-		}
 		delay := optionalRestartInitial
 		klog.InfoS(
 			"starting optional component",

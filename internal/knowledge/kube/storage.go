@@ -167,7 +167,8 @@ func (NamespaceSchema) Describe(obj any) (Description, bool) {
 		return Description{}, false
 	}
 	attrs := map[string]knowledge.Value{
-		AttrPhase: knowledge.Text(string(ns.Status.Phase)),
+		AttrPhase:  knowledge.Text(string(ns.Status.Phase)),
+		AttrLabels: knowledge.Text(labelText(ns.Labels)),
 		AttrPodSecurityInvalid: knowledge.Text(
 			podSecurityProblem(ns.Labels)),
 	}

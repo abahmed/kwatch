@@ -136,7 +136,6 @@ runbooks|Operations|JSON map of reason-to-runbook URLs.|active|
 silences|Noise reduction|JSON array of scoped silence rules, including eventMessages substring matches for attached Kubernetes Events.|active|
 ignoreContainerNames|Compatibility|Legacy container suppression field.|deprecated|silences
 ignorePodNames|Compatibility|Legacy pod-name suppression field.|deprecated|silences
-ignoreLogPatterns|Compatibility|Legacy log suppression field.|deprecated|silences
 ignoreContainerMessages|Compatibility|Legacy container-message suppression field.|deprecated|silences
 ignoreNodeReasons|Compatibility|Legacy node-reason suppression field.|deprecated|silences
 ignoreNodeMessages|Compatibility|Legacy node-message suppression field.|deprecated|silences

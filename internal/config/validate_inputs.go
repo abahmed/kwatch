@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"math"
+	"regexp"
 	"sort"
 	"time"
 
@@ -21,6 +22,26 @@ func validateSelectors(cfg *Config) []error {
 		)}
 	}
 	return nil
+}
+
+// validatePodNamePatterns rejects patterns that cannot compile, so a typo
+// fails configuration loading instead of stopping monitoring at runtime.
+func validatePodNamePatterns(cfg *Config) []error {
+	var errs []error
+	check := func(field, pattern string) {
+		if _, err := regexp.Compile(pattern); err != nil {
+			errs = append(errs, fmt.Errorf("%s %q: %w", field, pattern, err))
+		}
+	}
+	for i, rule := range cfg.Silences {
+		for _, pattern := range rule.PodNamePatterns {
+			check(fmt.Sprintf("silences[%d].podNamePatterns", i), pattern)
+		}
+	}
+	for _, pattern := range cfg.IgnorePodNames {
+		check("ignorePodNames", pattern)
+	}
+	return errs
 }
 
 func validateAlertRetries(cfg *Config) []error {

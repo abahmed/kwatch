@@ -2,8 +2,7 @@ package config
 
 import "time"
 
-// ScopeRuntime groups the normalized namespace, reason, and suppression
-// policy. It is returned by value so callers cannot replace the snapshot's
+// ScopeRuntime groups the normalized namespace and reason policy. It is returned by value so callers cannot replace the snapshot's
 // policy maps or slices.
 type ScopeRuntime struct {
 	values runtimeScope
@@ -27,10 +26,6 @@ func (s ScopeRuntime) AllowedReasons() []string {
 
 func (s ScopeRuntime) ForbiddenReasons() []string {
 	return cloneStrings(s.values.forbiddenReasons)
-}
-
-func (s ScopeRuntime) SuppressionIndex() SuppressionIndex {
-	return cloneSuppressionIndex(s.values.suppression)
 }
 
 // MonitorRuntime groups all normalized monitor policies. The individual
@@ -281,7 +276,6 @@ func cloneRuntimeScope(value runtimeScope) runtimeScope {
 	value.forbiddenNamespaces = cloneStrings(value.forbiddenNamespaces)
 	value.allowedReasons = cloneStrings(value.allowedReasons)
 	value.forbiddenReasons = cloneStrings(value.forbiddenReasons)
-	value.suppression = cloneSuppressionIndex(value.suppression)
 	return value
 }
 

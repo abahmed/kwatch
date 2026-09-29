@@ -1,261 +1,115 @@
+// Package audit writes one JSON line per problem decision so notification
+// quality can be replayed offline by the scorecard.
 package audit
 
 import (
 	"encoding/json"
-	"fmt"
 	"io"
 	"os"
 	"sync"
 	"time"
 
 	"k8s.io/klog/v2"
-
-	"github.com/abahmed/kwatch/internal/clock"
-	"github.com/abahmed/kwatch/internal/insight"
-	"github.com/abahmed/kwatch/internal/model"
 )
 
+// Action is what a decision did to a problem's conversation.
 type Action string
 
+// Actions. The strings are stable: people grep audit logs for them.
 const (
 	ActionCreate   Action = "create"
 	ActionUpdate   Action = "update"
 	ActionResolved Action = "resolved"
-	ActionSkip     Action = "skip"
 )
 
+// Cause states.
+const (
+	// CauseKnown names a root cause other than the failing object.
+	CauseKnown = "known"
+	// CauseSelf blames the failing object itself, which tells the reader
+	// nothing new.
+	CauseSelf = "self"
+	// CauseUnknown has no explanation.
+	CauseUnknown = "unknown"
+)
+
+// Entry is one audit line.
 type Entry struct {
-	Timestamp      time.Time   `json:"ts"`
-	Action         Action      `json:"action"`
-	IncidentKey    string      `json:"incidentKey"`
-	IncidentID     string      `json:"id,omitempty"`
-	Namespace      string      `json:"namespace,omitempty"`
-	Reason         string      `json:"reason,omitempty"`
-	Severity       string      `json:"severity,omitempty"`
-	Name           string      `json:"name,omitempty"`
-	Count          int         `json:"count,omitempty"`
-	Duration       string      `json:"duration,omitempty"`
-	SkipReason     string      `json:"skipReason,omitempty"`
-	DeliveryID     string      `json:"deliveryId,omitempty"`
-	Revision       uint64      `json:"revision,omitempty"`
-	GroupKey       string      `json:"groupKey,omitempty"`
-	AffectedCount  int         `json:"affectedCount,omitempty"`
-	Pattern        string      `json:"pattern,omitempty"`
-	Confidence     float64     `json:"confidence,omitempty"`
-	EvidenceCount  int         `json:"evidenceCount,omitempty"`
-	CauseState     string      `json:"causeState,omitempty"`
-	RootCause      string      `json:"rootCause,omitempty"`
-	Candidates     []Candidate `json:"candidates,omitempty"`
-	Contradictions []string    `json:"contradictions,omitempty"`
-	Timeline       []Timeline  `json:"timeline,omitempty"`
-	Decision       string      `json:"decision,omitempty"`
-	DecisionReason string      `json:"decisionReason,omitempty"`
-	RenderingHash  string      `json:"renderingHash,omitempty"`
-}
-
-type Candidate struct {
-	Resource      string   `json:"resource"`
-	Score         int      `json:"score"`
-	Supporting    []string `json:"supporting,omitempty"`
-	Contradicting []string `json:"contradicting,omitempty"`
-}
-
-type Timeline struct {
 	Timestamp time.Time `json:"ts"`
-	Kind      string    `json:"kind"`
-	Summary   string    `json:"summary"`
+	Action    Action    `json:"action"`
+	Problem   string    `json:"problem"`
+	Namespace string    `json:"namespace,omitempty"`
+	Reason    string    `json:"reason,omitempty"`
+	Severity  string    `json:"severity,omitempty"`
+	Root      string    `json:"root,omitempty"`
+	// Tier is how loudly the message was delivered: page, notify or
+	// digest.
+	Tier          string `json:"tier,omitempty"`
+	Revision      int    `json:"revision,omitempty"`
+	AffectedCount int    `json:"affectedCount,omitempty"`
+	CauseState    string `json:"causeState,omitempty"`
+	RootCause     string `json:"rootCause,omitempty"`
+	Confidence    string `json:"confidence,omitempty"`
+	// DecisionReason explains why the manager sent this message.
+	DecisionReason string `json:"decisionReason,omitempty"`
+	// ContentHash fingerprints the announced content; an update with the
+	// same hash as the previous message repeated it.
+	ContentHash string `json:"contentHash,omitempty"`
 }
 
+// Config selects where entries go.
 type Config struct {
 	Enabled bool
-	Output  string // "stdout" or file path
-	Now     func() time.Time
+	// Output is "stdout" or a file path.
+	Output string
 }
 
-type AuditLogger struct {
+// Logger writes entries as JSON lines. The zero value and a disabled
+// logger discard everything.
+type Logger struct {
 	mu     sync.Mutex
-	writer io.Writer
 	enc    *json.Encoder
-	cfg    Config
-	now    func() time.Time
+	closer io.Closer
 }
 
-func NewLogger(cfg Config) *AuditLogger {
-	now := cfg.Now
-	now = clock.RequireFunc(now)
-	l := &AuditLogger{cfg: cfg, now: now}
+// NewLogger opens the configured output. A file that cannot be opened
+// falls back to stdout so the audit trail is not silently lost.
+func NewLogger(cfg Config) *Logger {
 	if !cfg.Enabled {
-		return l
+		return &Logger{}
 	}
-	if cfg.Output == "" || cfg.Output == "stdout" {
-		l.writer = os.Stdout
-	} else {
+	var writer io.Writer = os.Stdout
+	l := &Logger{}
+	if cfg.Output != "" && cfg.Output != "stdout" {
 		f, err := openRotatingFile(cfg.Output, maxAuditFileBytes)
 		if err != nil {
-			klog.ErrorS(
-				err,
-				"failed to open audit log file, falling back to stdout",
-				"path",
-				cfg.Output,
-			)
-			l.writer = os.Stdout
+			klog.ErrorS(err, "failed to open audit log file, using stdout",
+				"component", "audit", "path", cfg.Output)
 		} else {
-			l.writer = f
+			writer, l.closer = f, f
 		}
 	}
-	l.enc = json.NewEncoder(l.writer)
+	l.enc = json.NewEncoder(writer)
 	return l
 }
 
-func (l *AuditLogger) log(entry Entry) {
-	if !l.cfg.Enabled || l.enc == nil {
+// Record writes one entry.
+func (l *Logger) Record(entry Entry) {
+	if l == nil || l.enc == nil {
 		return
 	}
 	l.mu.Lock()
 	defer l.mu.Unlock()
 	if err := l.enc.Encode(entry); err != nil {
-		klog.ErrorS(err, "failed to write audit log entry")
+		klog.ErrorS(err, "failed to write audit log entry",
+			"component", "audit")
 	}
 }
 
-func (l *AuditLogger) actionFromIncidentAction(a model.IncidentAction) Action {
-	switch a {
-	case model.ActionCreate:
-		return ActionCreate
-	case model.ActionUpdate:
-		return ActionUpdate
-	case model.ActionResolved:
-		return ActionResolved
-	default:
-		return ActionSkip
-	}
-}
-
-func (l *AuditLogger) LogIncident(
-	inc *model.Incident,
-	action model.IncidentAction,
-) {
-	l.LogIncidentWithInsight(inc, action, nil)
-}
-
-func (l *AuditLogger) LogIncidentWithInsight(
-	inc *model.Incident,
-	action model.IncidentAction,
-	ins *insight.Insight,
-) {
-	if !l.cfg.Enabled {
-		return
-	}
-	duration := ""
-	if !inc.FirstSeen.IsZero() && !inc.LastSeen.IsZero() {
-		duration = inc.LastSeen.Sub(inc.FirstSeen).Round(time.Second).String()
-	}
-	entry := Entry{
-		Timestamp:     l.now(),
-		Action:        l.actionFromIncidentAction(action),
-		IncidentKey:   string(inc.Key),
-		IncidentID:    inc.ID,
-		Namespace:     inc.Namespace,
-		Reason:        inc.Reason,
-		Severity:      string(inc.Severity),
-		Name:          inc.Name,
-		Count:         inc.Count,
-		Duration:      duration,
-		DeliveryID:    inc.DeliveryID(action),
-		Revision:      inc.Revision,
-		AffectedCount: affectedCount(inc),
-		RenderingHash: inc.LastRenderedHash,
-	}
-	if inc.SuppressedBy != "" {
-		entry.GroupKey = string(inc.SuppressedBy)
-	}
-	if ins != nil {
-		if ins.Severity != "" {
-			entry.Severity = string(ins.Severity)
-		}
-		entry.Pattern = ins.Pattern
-		entry.Confidence = ins.Confidence
-		entry.EvidenceCount = len(ins.Evidence)
-		entry.CauseState = string(ins.CauseState)
-		entry.RootCause = ins.RootCause.Describe()
-		entry.Contradictions = append(
-			[]string(nil), ins.Contradictions...,
-		)
-		entry.Decision = "notify"
-		entry.DecisionReason = ins.SuppressReason
-		if ins.SuppressReason != "" {
-			entry.Decision = "suppress"
-		}
-		for _, point := range ins.Timeline {
-			entry.Timeline = append(entry.Timeline, Timeline{
-				Timestamp: point.At,
-				Kind:      point.Kind,
-				Summary:   point.Summary,
-			})
-		}
-		for _, candidate := range ins.Candidates {
-			entry.Candidates = append(entry.Candidates, Candidate{
-				Resource: candidate.Ref.Describe(), Score: candidate.Score,
-				Supporting: append([]string(nil), candidate.Supporting...),
-				Contradicting: append(
-					[]string(nil), candidate.Contradicting...,
-				),
-			})
-		}
-	}
-	l.log(entry)
-}
-
-func affectedCount(inc *model.Incident) int {
-	if len(inc.AffectedMembers) > 0 {
-		return len(inc.AffectedMembers)
-	}
-	return inc.PeakResources
-}
-
-func (l *AuditLogger) LogSkip(inc *model.Incident, skipReason string) {
-	if !l.cfg.Enabled {
-		return
-	}
-	l.log(Entry{
-		Timestamp:   l.now(),
-		Action:      ActionSkip,
-		IncidentKey: string(inc.Key),
-		IncidentID:  inc.ID,
-		Namespace:   inc.Namespace,
-		Reason:      inc.Reason,
-		SkipReason:  skipReason,
-	})
-}
-
-func (l *AuditLogger) Close() error {
-	if !l.cfg.Enabled || l.writer == nil {
+// Close releases a file output.
+func (l *Logger) Close() error {
+	if l == nil || l.closer == nil {
 		return nil
 	}
-	if f, ok := l.writer.(*rotatingFile); ok {
-		return f.Close()
-	}
-	return nil
+	return l.closer.Close()
 }
-
-// String returns the human-readable representation of this action.
-func (a Action) String() string {
-	return string(a)
-}
-
-// MarshalJSON implements json.Marshaler.
-func (a Action) MarshalJSON() ([]byte, error) {
-	return json.Marshal(string(a))
-}
-
-// UnmarshalJSON implements json.Unmarshaler.
-func (a *Action) UnmarshalJSON(data []byte) error {
-	var s string
-	if err := json.Unmarshal(data, &s); err != nil {
-		return err
-	}
-	*a = Action(s)
-	return nil
-}
-
-var _ fmt.Stringer = Action("")

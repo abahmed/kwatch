@@ -12,9 +12,7 @@ import (
 	"github.com/abahmed/kwatch/internal/constant"
 	"github.com/abahmed/kwatch/internal/delivery/transport"
 	"github.com/abahmed/kwatch/internal/event"
-	"github.com/abahmed/kwatch/internal/insight"
 	"github.com/abahmed/kwatch/internal/message"
-	"github.com/abahmed/kwatch/internal/model"
 	"github.com/abahmed/kwatch/internal/ratelimit"
 
 	discordgo "github.com/bwmarrin/discordgo"
@@ -298,40 +296,6 @@ func (d *Discord) SendMessage(
 		discordgo.WithContext(ctx),
 	)
 	return wrapDiscordRateLimit(err)
-}
-
-// SendIncident implements delivery.ThreadProvider.
-// It renders the incident using the Report model and DiscordRenderer,
-// producing a rich embed with context-adaptive fields.
-func (d *Discord) SendIncident(
-	ctx context.Context,
-	inc *model.Incident,
-	action model.IncidentAction,
-) error {
-	return d.SendIncidentWithInsight(ctx, inc, action, nil)
-}
-
-// SendIncidentWithInsight implements delivery.InsightThreadProvider, so the
-// diagnosis — likely cause, impact, recent changes — is rendered rather than
-// dropped on the way to this provider.
-func (d *Discord) SendIncidentWithInsight(
-	ctx context.Context,
-	inc *model.Incident,
-	action model.IncidentAction,
-	ins *insight.Insight,
-) error {
-	text := message.RenderIncidentWithInsight(
-		inc,
-		action,
-		ins,
-		message.NewDiscordRenderer(),
-		d.clusterName,
-		d.clockSource,
-	)
-	if text == "" {
-		return nil
-	}
-	return d.SendMessage(ctx, text)
 }
 
 func wrapDiscordRateLimit(err error) error {

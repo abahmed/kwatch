@@ -8,7 +8,6 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/abahmed/kwatch/internal/event"
-	"github.com/abahmed/kwatch/internal/model"
 )
 
 func TestFlushDigestRestoresWhenContextCancelsWhileWaiting(t *testing.T) {
@@ -22,7 +21,6 @@ func TestFlushDigestRestoresWhenContextCancelsWhileWaiting(t *testing.T) {
 	manager.digestAdd("Digest", deliverJob{
 		kind: jobEvent,
 		ev:   &event.Event{Reason: "Error"},
-		inc:  &model.Incident{},
 	})
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel()

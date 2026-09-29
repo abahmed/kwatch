@@ -1,16 +1,12 @@
 package delivery
 
 import (
-	"context"
 	"fmt"
 
 	"k8s.io/klog/v2"
 
 	"github.com/abahmed/kwatch/internal/event"
-	"github.com/abahmed/kwatch/internal/insight"
-	"github.com/abahmed/kwatch/internal/message"
 	"github.com/abahmed/kwatch/internal/metrics"
-	"github.com/abahmed/kwatch/internal/model"
 )
 
 // Notify queues a plain message for every provider.
@@ -77,38 +73,6 @@ func (a *Manager) enqueue(job deliverJob) {
 	a.mu.Unlock()
 }
 
-// ThreadProvider is an optional interface for providers that support
-// incident-aware messaging (e.g., Slack threads).
-
-type ThreadProvider interface {
-	SendIncident(
-		ctx context.Context,
-		inc *model.Incident,
-		action model.IncidentAction,
-	) error
-}
-
-// InsightThreadProvider is a ThreadProvider that can also show the insight
-// engine's diagnosis — likely cause, impact, recent changes — in its own
-// format. Without it a rich provider builds its message from the incident
-// alone and the diagnosis is silently dropped.
-type InsightThreadProvider interface {
-	ThreadProvider
-	SendIncidentWithInsight(
-		ctx context.Context,
-		inc *model.Incident,
-		action model.IncidentAction,
-		ins *insight.Insight,
-	) error
-}
-
-// StructuredNotificationProvider receives the semantic notification composed
-// once by delivery. It is preferred over legacy provider-specific renderers.
-type StructuredNotificationProvider interface {
-	Provider
-	SendNotification(context.Context, *message.Notification) error
-}
-
 // EventDeliveryProvider is a marker interface for providers whose real
 // delivery is implemented in SendEvent (not SendMessage). PagerDuty,
 // Opsgenie, Zenduty, and Email all stub SendMessage to return nil — the
@@ -119,73 +83,6 @@ type EventDeliveryProvider interface {
 	UsesEventDelivery()
 }
 
-// incidentToEvent maps a delivered incident to the legacy event.Event shape
-// these EventDeliveryProvider providers' SendEvent expects.
-
-func (a *Manager) NotifyIncident(
-	inc *model.Incident,
-	action model.IncidentAction,
-	insightValue *insight.Insight,
-) {
-	if inc == nil {
-		klog.ErrorS(nil, "cannot deliver a nil incident")
-		return
-	}
-	if action == model.ActionSkip {
-		return
-	}
-
-	if a.isSilenced(inc) {
-		klog.V(4).InfoS("incident suppressed by silence rule",
-			"key", inc.Key, "id", inc.ID, "reason", inc.Reason,
-			"namespace", inc.Namespace)
-		return
-	}
-
-	klog.InfoS(
-		"sending incident",
-		"action",
-		action,
-		"key",
-		inc.Key,
-		"id",
-		inc.ID,
-		"count",
-		inc.Count,
-	)
-
-	snap := inc.Clone()
-	ins := insightValue
-	if ins != nil {
-		copy := *ins
-		ins = &copy
-	}
-	job := incidentJob(snap, action, ins)
-	a.mu.Lock()
-	started := a.started
-	stopped := a.stopped
-	reconfiguring := a.reconfiguring
-	a.mu.Unlock()
-	if stopped && !reconfiguring {
-		recordStoppedDrop()
-		return
-	}
-	if !started || reconfiguring {
-		a.enqueue(job)
-		return
-	}
-
-	a.mu.Lock()
-	stopped = a.stopped
-	if !stopped {
-		a.fanOut(job)
-	}
-	a.mu.Unlock()
-}
-
-// recordStoppedDrop counts a notification that arrived after delivery
-// stopped, or while a reconfiguration's pending queue was full, so the loss
-// is visible instead of silent.
 func recordStoppedDrop() {
 	metrics.DefaultRegistry().NotificationsDropped.Add(1)
 	klog.V(2).InfoS("notification dropped; delivery is not accepting jobs")

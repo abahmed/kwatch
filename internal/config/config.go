@@ -1,7 +1,6 @@
 package config
 
 import (
-	"regexp"
 	"time"
 )
 
@@ -82,9 +81,6 @@ type Config struct {
 	// IgnorePodNames optional list of pod name regexp patterns to ignore
 	IgnorePodNames []string `yaml:"ignorePodNames"`
 
-	// IgnoreLogPatterns optional list of regexp patterns to ignore
-	IgnoreLogPatterns []string `yaml:"ignoreLogPatterns"`
-
 	// IgnoreContainerMessages optional list of substring patterns; if a
 	// container status Waiting/Terminated Message contains any entry the
 	// incident is suppressed.
@@ -119,14 +115,6 @@ type Config struct {
 	// populating Reasons configuration
 	AllowedReasons   []string
 	ForbiddenReasons []string
-
-	// Patterns are compiled from IgnorePodNames after populating
-	// IgnorePodNames configuration
-	IgnorePodNamePatterns []*regexp.Regexp
-
-	// Patterns are compiled from IgnoreLogPatterns after populating
-	// IgnoreLogPatterns configuration
-	IgnoreLogPatternsCompiled []*regexp.Regexp
 
 	// IgnoreNodeReasons is an optional list of node reasons for which alerting
 	// should be skipped
@@ -227,10 +215,6 @@ type Config struct {
 	// Silences is an optional list of silence rules that suppress matching
 	// incidents.
 	Silences []SilenceRule `yaml:"silences"`
-
-	// SuppressionIndex is compiled from both Silences and deprecated ignore*
-	// fields for efficient detect-time lookup. Populated by LoadConfig.
-	Suppression SuppressionIndex
 
 	// Runtime is the defensive snapshot of derived configuration used by
 	// composition and runtime components. It is never decoded from YAML.

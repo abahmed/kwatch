@@ -10,7 +10,7 @@ import (
 func TestThresholdsNegativeDisables(t *testing.T) {
 	report := Report{
 		PerHour:          100,
-		PerIncident:      10,
+		PerProblem:       10,
 		Updates:          50,
 		UnchangedUpdates: 25,
 		Recreated:        5,
@@ -21,7 +21,7 @@ func TestThresholdsNegativeDisables(t *testing.T) {
 	}
 	thresholds := Thresholds{
 		MaxPerHour:          -1,
-		MaxPerIncident:      -1,
+		MaxPerProblem:       -1,
 		MaxUnchangedPercent: -1,
 		MaxRecreated:        -1,
 		MaxRepeatedResolves: -1,
@@ -35,7 +35,7 @@ func TestThresholdsNegativeDisables(t *testing.T) {
 func TestThresholdsNoThresholdsFunc(t *testing.T) {
 	report := Report{
 		PerHour:          100,
-		PerIncident:      10,
+		PerProblem:       10,
 		Recreated:        5,
 		RepeatedResolves: 3,
 		CircularCause:    2,
@@ -54,15 +54,15 @@ func TestThresholdsViolatesPerHour(t *testing.T) {
 	assert.Contains(t, violations[0], "15.50 > 15.00")
 }
 
-func TestThresholdsViolatesPerIncident(t *testing.T) {
+func TestThresholdsViolatesPerProblem(t *testing.T) {
 	report := Report{
-		PerIncident:   10.5,
+		PerProblem:    10.5,
 		Notifications: 1,
 	}
-	thresholds := Thresholds{MaxPerIncident: 10.0}
+	thresholds := Thresholds{MaxPerProblem: 10.0}
 	violations := thresholds.Violations(report)
 	assert.Len(t, violations, 1)
-	assert.Contains(t, violations[0], "messages per incident")
+	assert.Contains(t, violations[0], "messages per problem")
 }
 
 func TestThresholdsViolatesUnchangedPercent(t *testing.T) {
@@ -82,7 +82,7 @@ func TestThresholdsViolatesRecreated(t *testing.T) {
 	thresholds := Thresholds{MaxRecreated: 5}
 	violations := thresholds.Violations(report)
 	assert.Len(t, violations, 1)
-	assert.Contains(t, violations[0], "re-created incidents")
+	assert.Contains(t, violations[0], "re-opened problems")
 	assert.Contains(t, violations[0], "6 > 5")
 }
 
@@ -133,7 +133,7 @@ func TestThresholdsMultipleViolations(t *testing.T) {
 func TestThresholdsPassesWhenBelowLimits(t *testing.T) {
 	report := Report{
 		PerHour:          10,
-		PerIncident:      5,
+		PerProblem:       5,
 		Recreated:        2,
 		RepeatedResolves: 1,
 		CircularCause:    1,
@@ -145,7 +145,7 @@ func TestThresholdsPassesWhenBelowLimits(t *testing.T) {
 	}
 	thresholds := Thresholds{
 		MaxPerHour:          20,
-		MaxPerIncident:      10,
+		MaxPerProblem:       10,
 		MaxRecreated:        5,
 		MaxRepeatedResolves: 5,
 		MaxCircularCause:    5,
@@ -161,5 +161,5 @@ func TestThresholdsZeroLimitAllows(t *testing.T) {
 	thresholds := Thresholds{MaxRecreated: 0}
 	violations := thresholds.Violations(report)
 	assert.Len(t, violations, 1)
-	assert.Contains(t, violations[0], "re-created incidents")
+	assert.Contains(t, violations[0], "re-opened problems")
 }

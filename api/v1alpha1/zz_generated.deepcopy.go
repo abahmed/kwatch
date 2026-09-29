@@ -184,11 +184,6 @@ func (in *KwatchConfigSpec) DeepCopyInto(out *KwatchConfigSpec) {
 		*out = make([]string, len(*in))
 		copy(*out, *in)
 	}
-	if in.IgnoreLogPatterns != nil {
-		in, out := &in.IgnoreLogPatterns, &out.IgnoreLogPatterns
-		*out = make([]string, len(*in))
-		copy(*out, *in)
-	}
 	if in.IgnoreContainerMessages != nil {
 		in, out := &in.IgnoreContainerMessages, &out.IgnoreContainerMessages
 		*out = make([]string, len(*in))
@@ -391,11 +386,6 @@ func (in *SilenceRule) DeepCopyInto(out *SilenceRule) {
 	}
 	if in.ContainerNames != nil {
 		in, out := &in.ContainerNames, &out.ContainerNames
-		*out = make([]string, len(*in))
-		copy(*out, *in)
-	}
-	if in.LogPatterns != nil {
-		in, out := &in.LogPatterns, &out.LogPatterns
 		*out = make([]string, len(*in))
 		copy(*out, *in)
 	}

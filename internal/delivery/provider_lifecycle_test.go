@@ -11,7 +11,6 @@ import (
 	"github.com/abahmed/kwatch/internal/config"
 	"github.com/abahmed/kwatch/internal/delivery/transport"
 	"github.com/abahmed/kwatch/internal/event"
-	"github.com/abahmed/kwatch/internal/model"
 )
 
 type recordingProvider struct {
@@ -95,7 +94,7 @@ func TestManagerReconfigurationRestartsProviderWorkers(t *testing.T) {
 	case <-time.After(time.Second):
 		t.Fatal("reconfigured provider did not receive a message")
 	}
-	manager.shutdown()
+	shutdownManager(manager)
 }
 
 func TestManagerReconfigurationDoesNotUseOldGeneration(t *testing.T) {
@@ -135,7 +134,7 @@ func TestManagerReconfigurationDoesNotUseOldGeneration(t *testing.T) {
 	case <-time.After(time.Second):
 		t.Fatal("new provider did not receive a message")
 	}
-	manager.shutdown()
+	shutdownManager(manager)
 }
 
 func TestManagerStopBeforeStartIsSafe(t *testing.T) {
@@ -252,7 +251,7 @@ func TestManagerRetainsNotificationsDuringReconfiguration(t *testing.T) {
 	_ = manager.Stop(context.Background())
 }
 
-func TestManagerRetainsIncidentsDuringReconfiguration(t *testing.T) {
+func TestManagerRetainsStoriesDuringReconfiguration(t *testing.T) {
 	first := &recordingProvider{
 		name: "first", messages: make(chan string, 1),
 	}
@@ -266,14 +265,7 @@ func TestManagerRetainsIncidentsDuringReconfiguration(t *testing.T) {
 	manager.reconfiguring = true
 	manager.stopped = true
 	manager.mu.Unlock()
-	manager.NotifyIncident(&model.Incident{
-		Subject: model.Subject{
-			Key:      "apps:deployment:CrashLoopBackOff",
-			Name:     "api",
-			Reason:   "CrashLoopBackOff",
-			Resource: "deployment",
-		},
-	}, model.ActionCreate, nil)
+	manager.NotifyStory(*storyJob("k", "default").story)
 
 	manager.mu.Lock()
 	manager.reconfiguring = false

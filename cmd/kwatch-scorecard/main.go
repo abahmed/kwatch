@@ -27,18 +27,18 @@ func run(args []string, out, errOut io.Writer) int {
 	limits := scorecard.NoThresholds()
 	flags.Float64Var(&limits.MaxPerHour, "max-per-hour", -1,
 		"fail above this many notifications per hour")
-	flags.Float64Var(&limits.MaxPerIncident, "max-per-incident", -1,
-		"fail above this many messages per incident")
+	flags.Float64Var(&limits.MaxPerProblem, "max-per-problem", -1,
+		"fail above this many messages per problem")
 	flags.Float64Var(&limits.MaxUnchangedPercent, "max-unchanged-pct", -1,
 		"fail above this percent of updates without a visible change")
 	flags.IntVar(&limits.MaxRecreated, "max-recreated", -1,
-		"fail above this many re-created (flapping) incidents")
+		"fail above this many re-opened (flapping) problems")
 	flags.IntVar(&limits.MaxRepeatedResolves, "max-repeated-resolves", -1,
 		"fail above this many repeated recovery messages")
 	flags.Float64Var(&limits.MaxUnknownCausePct, "max-unknown-cause-pct", -1,
 		"fail above this percent of notifications without a cause")
 	flags.IntVar(&limits.MaxCircularCause, "max-circular-cause", -1,
-		"fail above this many causes naming the incident itself")
+		"fail above this many causes blaming the failing object itself")
 	if err := flags.Parse(args); err != nil {
 		return 2
 	}

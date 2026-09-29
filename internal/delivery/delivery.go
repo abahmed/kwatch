@@ -9,7 +9,6 @@ import (
 	"k8s.io/klog/v2"
 
 	"github.com/abahmed/kwatch/internal/event"
-	"github.com/abahmed/kwatch/internal/insight"
 	"github.com/abahmed/kwatch/internal/metrics"
 	"github.com/abahmed/kwatch/internal/model"
 	"github.com/abahmed/kwatch/internal/notice"
@@ -22,9 +21,6 @@ import (
 type deliverJob struct {
 	generation *providerGeneration
 	kind       jobKind
-	inc        *model.Incident
-	action     model.IncidentAction
-	insight    *insight.Insight
 	msg        string
 	ev         *event.Event
 	story      *notice.Message
@@ -32,9 +28,6 @@ type deliverJob struct {
 
 // key names the job in logs and dead letters.
 func (j deliverJob) key() string {
-	if j.inc != nil {
-		return string(j.inc.Key)
-	}
 	if j.ev != nil {
 		return j.ev.Reason
 	}
@@ -90,7 +83,6 @@ func (a *Manager) recordDeadLetter(
 	a.dlqRing[a.dlqHead] = DeadLetterEntry{
 		Provider: entry.provider.Name(),
 		Key:      job.key(),
-		Action:   job.action,
 		// Keep provider and transport errors in structured logs only. Dead
 		// letters are exposed through diagnostics and retain only a bounded
 		// reason code.
@@ -203,13 +195,9 @@ func (a *Manager) fanOut(job deliverJob) {
 		if !routedTo(entry.routes, job) {
 			continue
 		}
-		accepted, dropped := offerQueuedJob(entry.ch, job)
-		if dropped != nil {
-			a.recordQueueDrop(entry, *dropped)
-		}
-		if !accepted {
-			// No replaceable update remains. Preserve queued creates and
-			// recoveries; record the overflow for diagnostics and digesting.
+		if !offerQueuedJob(entry.ch, job) {
+			// Nothing queued belongs to the same conversation, so there is
+			// nothing to supersede; record the overflow for diagnostics.
 			a.recordQueueDrop(entry, job)
 		}
 	}

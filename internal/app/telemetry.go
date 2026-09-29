@@ -12,9 +12,14 @@ import (
 
 	"github.com/abahmed/kwatch/internal/config"
 	"github.com/abahmed/kwatch/internal/metrics"
-	"github.com/abahmed/kwatch/internal/persistence"
 	"github.com/abahmed/kwatch/internal/telemetry"
 )
+
+// telemetryStore remembers when the last heartbeat was sent.
+type telemetryStore interface {
+	GetTelemetryLastSent(context.Context) (time.Time, error)
+	SetTelemetryLastSent(context.Context, time.Time) error
+}
 
 var telemetryRetryDelays = [...]time.Duration{
 	time.Minute, 5 * time.Minute, 15 * time.Minute,
@@ -29,7 +34,7 @@ type telemetryRunnerOptions struct {
 
 func configureTelemetryRunner(
 	telemetryConfig config.Telemetry,
-	persistenceManager persistence.TelemetryStore,
+	persistenceManager telemetryStore,
 	clusterID, version string,
 	now func() time.Time,
 	client *http.Client,
@@ -46,7 +51,7 @@ func configureTelemetryRunner(
 
 func configureTelemetryRunnerWithOptions(
 	telemetryConfig config.Telemetry,
-	persistenceManager persistence.TelemetryStore,
+	persistenceManager telemetryStore,
 	clusterID, version string,
 	now func() time.Time,
 	client *http.Client,
@@ -109,7 +114,7 @@ func configureTelemetryRunnerWithOptions(
 
 func telemetrySkipReason(
 	cfg config.Telemetry,
-	store persistence.TelemetryStore,
+	store telemetryStore,
 	clusterID, version string,
 ) string {
 	switch {
@@ -148,7 +153,7 @@ func telemetryEnvDisabled() bool {
 // same heartbeat to be sent again.
 func sendTelemetry(
 	ctx context.Context,
-	store persistence.TelemetryStore,
+	store telemetryStore,
 	clusterID, version string,
 	now func() time.Time,
 	client *http.Client,
@@ -243,5 +248,3 @@ func waitTelemetry(ctx context.Context, delay time.Duration) bool {
 		return true
 	}
 }
-
-var _ persistence.TelemetryStore = (*persistence.Manager)(nil)

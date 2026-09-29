@@ -47,10 +47,6 @@ spec:
                   type: array
                   items:
                     type: string
-                ignoreLogPatterns:
-                  type: array
-                  items:
-                    type: string
                 severityByOwnerKind:
                   type: object
                   additionalProperties:
@@ -127,10 +123,6 @@ spec:
                         items:
                           type: string
                       containerNames:
-                        type: array
-                        items:
-                          type: string
-                      logPatterns:
                         type: array
                         items:
                           type: string

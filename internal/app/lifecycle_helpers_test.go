@@ -37,26 +37,6 @@ func TestProgressCheckIntervalHasBoundedMinimum(t *testing.T) {
 	}
 }
 
-func TestPersistenceGateAndWriteChecks(t *testing.T) {
-	gate := newPersistenceGate()
-	if !gate.enabled() || !writesAllowed(nil) ||
-		!writesAllowed(func() bool { return true }) {
-		t.Fatal("new persistence gate should allow writes")
-	}
-	gate.disable()
-	if gate.enabled() || writesAllowed(func() bool { return false }) {
-		t.Fatal("disabled persistence gate allowed a write")
-	}
-	gate.enable()
-	if !gate.enabled() {
-		t.Fatal("enabled persistence gate rejected writes")
-	}
-	var nilGate *persistenceGate
-	if !nilGate.enabled() {
-		t.Fatal("nil persistence gate should allow writes")
-	}
-}
-
 func TestDetachedShutdownContextsRetainValues(t *testing.T) {
 	parent := context.WithValue(context.Background(), "key", "value")
 	parent, cancel := context.WithCancel(parent)
@@ -68,11 +48,6 @@ func TestDetachedShutdownContextsRetainValues(t *testing.T) {
 	}
 	if shutdown.Err() != nil {
 		t.Fatal("shutdown context inherited cancellation")
-	}
-	final, finalStop := finalWriteContext(parent)
-	defer finalStop()
-	if final.Value("key") != "value" || final.Err() != nil {
-		t.Fatal("final write context was not detached")
 	}
 }
 
