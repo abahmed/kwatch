@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"regexp"
 	"strings"
+	"time"
 
 	"k8s.io/apimachinery/pkg/labels"
 
@@ -23,18 +24,23 @@ type Scope struct {
 	forbiddenReasons    set
 	selector            labels.Selector
 	silences            []silence
+	maintenance         bool
+	now                 func() time.Time
 }
 
 // NewScope compiles the scope policy. An invalid selector or pattern is a
 // configuration error rather than a silently wider scope.
 func NewScope(
 	scope config.ScopeRuntime, rules []config.SilenceRule,
+	maintenance bool, now func() time.Time,
 ) (*Scope, error) {
 	s := &Scope{
 		allowedNamespaces:   newSet(scope.AllowedNamespaces()),
 		forbiddenNamespaces: newSet(scope.ForbiddenNamespaces()),
 		allowedReasons:      newSet(scope.AllowedReasons()),
 		forbiddenReasons:    newSet(scope.ForbiddenReasons()),
+		maintenance:         maintenance,
+		now:                 now,
 	}
 	if raw := scope.NamespaceSelector(); raw != "" {
 		selector, err := labels.Parse(raw)
@@ -61,7 +67,8 @@ func (s *Scope) Allows(model knowledge.Reader, sig signal.Signal) bool {
 	}
 	if !s.namespaceAllowed(model, sig.Entity.Namespace) ||
 		!s.allowedReasons.allows(sig.Reason) ||
-		s.forbiddenReasons.has(sig.Reason) {
+		s.forbiddenReasons.has(sig.Reason) ||
+		s.underMaintenance(model, sig.Entity) {
 		return false
 	}
 	for _, rule := range s.silences {

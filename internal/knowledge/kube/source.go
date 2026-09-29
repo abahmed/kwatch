@@ -22,6 +22,8 @@ type SourceConfig struct {
 	Resync time.Duration
 	Now    func() time.Time
 	Submit Submit
+	// Maintenance names the maintenance annotations; zero disables them.
+	Maintenance MaintenanceAnnotations
 }
 
 // registration pairs a schema with its informer in the shared factory and
@@ -186,7 +188,8 @@ func NewSource(cfg SourceConfig) (*Source, error) {
 	for _, r := range registrations() {
 		informer := r.informer(factory)
 		if _, err := informer.AddEventHandler(translatorHandler(
-			NewTranslator(r.schema), cfg.Submit, cfg.Now),
+			NewTranslator(r.schema).WithMaintenance(cfg.Maintenance),
+			cfg.Submit, cfg.Now),
 		); err != nil {
 			return nil, err
 		}

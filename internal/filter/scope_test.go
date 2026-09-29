@@ -17,7 +17,8 @@ func newScope(
 	t *testing.T, cfg config.Config, rules ...config.SilenceRule,
 ) *Scope {
 	t.Helper()
-	scope, err := NewScope(config.RuntimeConfigFor(&cfg).Scope(), rules)
+	scope, err := NewScope(config.RuntimeConfigFor(&cfg).Scope(),
+		rules, false, nil)
 	require.NoError(t, err)
 	return scope
 }
@@ -128,11 +129,13 @@ func TestScopeSilenceMatchers(t *testing.T) {
 func TestNewScopeRejectsInvalidPolicy(t *testing.T) {
 	cfg := config.Config{}
 	_, err := NewScope(config.RuntimeConfigFor(&cfg).Scope(),
-		[]config.SilenceRule{{PodNamePatterns: []string{"("}}})
+		[]config.SilenceRule{{PodNamePatterns: []string{"("}}},
+		false, nil)
 	assert.Error(t, err)
 
 	cfg.NamespaceSelector = "app in ("
-	_, err = NewScope(config.RuntimeConfigFor(&cfg).Scope(), nil)
+	_, err = NewScope(config.RuntimeConfigFor(&cfg).Scope(),
+		nil, false, nil)
 	assert.Error(t, err)
 
 	var nilScope *Scope

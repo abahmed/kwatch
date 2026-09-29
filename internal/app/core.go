@@ -8,6 +8,7 @@ import (
 	"k8s.io/klog/v2"
 
 	"github.com/abahmed/kwatch/internal/audit"
+	"github.com/abahmed/kwatch/internal/config"
 	"github.com/abahmed/kwatch/internal/core"
 	"github.com/abahmed/kwatch/internal/filter"
 	"github.com/abahmed/kwatch/internal/knowledge"
@@ -36,8 +37,10 @@ func runCore(
 	synced := func(kind knowledge.Kind) bool {
 		return source != nil && source.Synced(kind)
 	}
+	maintenance := deps.runtime.Policy().Maintenance()
 	scope, err := filter.NewScope(
-		deps.runtime.Scope(), deps.runtime.Scope().Silences())
+		deps.runtime.Scope(), deps.runtime.Scope().Silences(),
+		maintenance.Enabled, appClock.Now)
 	if err != nil {
 		return err
 	}
@@ -69,10 +72,11 @@ func runCore(
 		return err
 	}
 	source, err = kube.NewSource(kube.SourceConfig{
-		Client: deps.clients.Kubernetes,
-		Resync: deps.runtime.Lifecycle().ResyncInterval(),
-		Now:    appClock.Now,
-		Submit: engine.Submit,
+		Client:      deps.clients.Kubernetes,
+		Resync:      deps.runtime.Lifecycle().ResyncInterval(),
+		Now:         appClock.Now,
+		Submit:      engine.Submit,
+		Maintenance: maintenanceAnnotations(maintenance),
 	})
 	if err != nil {
 		return err
@@ -246,4 +250,17 @@ func newActiveProber(
 		Now:              deps.clients.Clock.Now,
 		Submit:           engine.Submit,
 	}), true
+}
+
+// maintenanceAnnotations is empty when maintenance holds are disabled, so
+// the source records nothing.
+func maintenanceAnnotations(
+	m config.MaintenanceConfig,
+) kube.MaintenanceAnnotations {
+	if !m.Enabled {
+		return kube.MaintenanceAnnotations{}
+	}
+	return kube.MaintenanceAnnotations{
+		On: m.Annotation, Until: m.UntilAnnotation,
+	}
 }

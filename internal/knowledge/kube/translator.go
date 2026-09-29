@@ -14,7 +14,8 @@ const FactSource = "kubernetes"
 
 // Translator converts informer notifications for one schema into facts.
 type Translator struct {
-	schema Schema
+	schema      Schema
+	maintenance MaintenanceAnnotations
 }
 
 // NewTranslator builds a translator for one schema.
@@ -31,6 +32,7 @@ func (t *Translator) Added(
 	if !ok {
 		return nil
 	}
+	t.annotate(obj, &desc)
 	facts := t.describe(desc, nil, at)
 	if !initialList {
 		facts = append(facts, knowledge.Fact{
@@ -49,6 +51,7 @@ func (t *Translator) Updated(old, new any, at time.Time) []knowledge.Fact {
 	if !ok {
 		return nil
 	}
+	t.annotate(new, &desc)
 	var previous *Description
 	if oldDesc, ok := t.schema.Describe(old); ok {
 		previous = &oldDesc
