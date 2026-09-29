@@ -38,7 +38,7 @@ func TestWriteResolved(t *testing.T) {
 	}
 	d := problem.Decision{Action: problem.Resolve, Problem: p}
 
-	msg := Write(d, now)
+	msg := Writer{}.Write(d, now)
 
 	if msg.Status != notice.StatusResolved {
 		t.Errorf("notice.Status = %v, want %v", msg.Status, notice.StatusResolved)
@@ -76,7 +76,7 @@ func TestWriteAnnounceFlapping(t *testing.T) {
 	}
 	d := problem.Decision{Action: problem.Announce, Problem: p}
 
-	msg := Write(d, now)
+	msg := Writer{}.Write(d, now)
 
 	if msg.Status != notice.StatusFlapping {
 		t.Errorf("notice.Status = %v, want %v", msg.Status, notice.StatusFlapping)
@@ -118,7 +118,7 @@ func TestWriteHeadlineStatesChange(t *testing.T) {
 	}
 	d := problem.Decision{Action: problem.Announce, Problem: p}
 
-	msg := Write(d, now)
+	msg := Writer{}.Write(d, now)
 
 	if !strings.Contains(msg.Title, "is failing after ConfigMap change") {
 		t.Errorf("Title missing change cause: %s", msg.Title)
@@ -152,7 +152,7 @@ func TestWriteEvidenceDedup(t *testing.T) {
 	}
 	d := problem.Decision{Action: problem.Announce, Problem: p}
 
-	msg := Write(d, now)
+	msg := Writer{}.Write(d, now)
 
 	reasonCount := 0
 	for _, line := range msg.Lines {
@@ -195,7 +195,7 @@ func TestWriteTimelineMerging(t *testing.T) {
 	}
 	d := problem.Decision{Action: problem.Announce, Problem: p}
 
-	msg := Write(d, now)
+	msg := Writer{}.Write(d, now)
 
 	if len(msg.Timeline) == 0 {
 		t.Error("timeline empty")
@@ -236,7 +236,7 @@ func TestWriteImpactLine(t *testing.T) {
 	}
 	d := problem.Decision{Action: problem.Announce, Problem: p}
 
-	msg := Write(d, now)
+	msg := Writer{}.Write(d, now)
 
 	found := false
 	for _, line := range msg.Lines {
@@ -305,7 +305,7 @@ func TestWriteConfidenceLevels(t *testing.T) {
 				Problem: p,
 			}
 
-			msg := Write(d, now)
+			msg := Writer{}.Write(d, now)
 
 			if msg.Confidence != tt.wantConf {
 				t.Errorf("Confidence = %s, want %s", msg.Confidence,
@@ -338,7 +338,7 @@ func TestWriteRootOwnSignalInHeadline(t *testing.T) {
 	}
 	d := problem.Decision{Action: problem.Announce, Problem: p}
 
-	msg := Write(d, now)
+	msg := Writer{}.Write(d, now)
 
 	if !strings.Contains(msg.Title, "is low on memory") {
 		t.Errorf("Title should include node's own signal: %s",

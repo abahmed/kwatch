@@ -17,6 +17,7 @@ const maxRootDepth = 4
 type Manager struct {
 	mu       sync.Mutex
 	cfg      Config
+	override overrides
 	engine   *reason.Engine
 	problems map[string]*Problem
 	byMember map[signal.Key]string
@@ -29,6 +30,8 @@ type Manager struct {
 func NewManager(cfg Config, engine *reason.Engine) *Manager {
 	return &Manager{
 		cfg: cfg.withDefaults(), engine: engine,
+		override: newOverrides(
+			cfg.SeverityByReason, cfg.SeverityByOwnerKind),
 		problems: make(map[string]*Problem),
 		byMember: make(map[signal.Key]string),
 	}
@@ -69,7 +72,7 @@ func (m *Manager) attach(q reason.Query, s signal.Signal) {
 	}
 	m.byMember[key] = id
 	p.Impact = impact(q.Model, p)
-	p.Tier = tier(p)
+	p.Tier = m.override.apply(p, tier(p))
 }
 
 // resolveRoot follows explanations until the root has no better cause, so

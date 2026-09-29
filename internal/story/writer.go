@@ -21,8 +21,23 @@ const (
 	maxImpactNames   = 5
 )
 
+// Writer composes messages. The zero value is ready to use.
+type Writer struct {
+	// Runbooks maps a lower-cased reason to a runbook URL.
+	Runbooks map[string]string
+}
+
+// NewWriter builds a Writer; runbook keys are matched case-insensitively.
+func NewWriter(runbooks map[string]string) Writer {
+	lowered := make(map[string]string, len(runbooks))
+	for reason, url := range runbooks {
+		lowered[strings.ToLower(strings.TrimSpace(reason))] = url
+	}
+	return Writer{Runbooks: lowered}
+}
+
 // Write composes the message for one decision.
-func Write(d problem.Decision, now time.Time) notice.Message {
+func (w Writer) Write(d problem.Decision, now time.Time) notice.Message {
 	p := d.Problem
 	members := sortedMembers(p)
 	msg := notice.Message{
@@ -48,7 +63,8 @@ func Write(d problem.Decision, now time.Time) notice.Message {
 	msg.Lines = append(msg.Lines, evidenceLines(members)...)
 	msg.Timeline = timeline(p, maxTimelineLines)
 	msg.Output = d.Output
-	msg.Steps = nextSteps(p, members)
+	msg.Steps = append(nextSteps(p, members),
+		w.runbookSteps(members)...)
 	msg.Confidence = confidence(p.Cause)
 	return msg
 }

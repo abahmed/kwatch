@@ -18,6 +18,7 @@ import (
 	"github.com/abahmed/kwatch/internal/reason"
 	"github.com/abahmed/kwatch/internal/signal"
 	"github.com/abahmed/kwatch/internal/signal/detect"
+	"github.com/abahmed/kwatch/internal/story"
 )
 
 // modelPruneInterval and modelRetention bound in-memory change history.
@@ -31,6 +32,7 @@ func runCore(
 	ctx context.Context, deps *serverDeps, state *store.Store,
 ) error {
 	appClock := deps.clients.Clock
+	policy := deps.runtime.Policy()
 	model := knowledge.NewModel(knowledge.Options{})
 	var source *kube.Source
 	synced := func(kind knowledge.Kind) bool {
@@ -49,7 +51,11 @@ func runCore(
 	engine, err := core.NewEngine(core.Dependencies{
 		Model:     model,
 		Detectors: newDetectorRegistry(synced),
-		Problems:  problem.NewManager(problem.Config{}, newReasoner()),
+		Problems: problem.NewManager(problem.Config{
+			SeverityByReason:    policy.SeverityByReason(),
+			SeverityByOwnerKind: policy.SeverityByOwnerKind(),
+		}, newReasoner()),
+		Writer: story.NewWriter(policy.Runbooks()),
 		Sink: func(_ context.Context, d problem.Decision, m notice.Message) {
 			klog.V(1).InfoS("core decision", "component", "core",
 				"problem", d.Problem.ID, "reason", d.Reason)
