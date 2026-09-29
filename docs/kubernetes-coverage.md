@@ -95,13 +95,11 @@ the categories below intentionally use different signal sources.
 
 ## Dynamic status
 
-When enabled through the cluster-resource monitor, kwatch watches APIService
+kwatch watches APIService
 objects and discovers CRDs dynamically. Every served CRD version with a status
 subresource is watched for failure-shaped `Ready=False`, `Available=False`,
 `Degraded=True`, and `Progressing=False` conditions. Informational conditions
 are ignored, and messages/reasons are preserved as alert evidence.
-These rules can be customized through `crd.failureConditions` for operators
-with different condition semantics.
 
 Built-in APIs introduced in newer Kubernetes versions or protected by feature
 gates are capability-aware: if the API is not served, its watcher remains
@@ -123,9 +121,7 @@ VolumeSnapshots, VolumeSnapshotContents, VolumeSnapshotClasses, and local PV
 node affinity. Gateway API routes are linked to Gateway/GatewayClass, backend
 Services, and listener TLS Secrets; Ingress is linked to IngressClass. Explicit
 HTTP/TCP/DNS probes are also linked to matching Kubernetes Service DNS names or
-kept as external network targets. Generic CRD references can be configured as
-`crd.graphReferences` paths such as `spec.backendRefs.name=service`; arrays are
-traversed automatically.
+kept as external network targets. Generic CRD references are discovered automatically.
 
 ## Noise and recovery controls
 

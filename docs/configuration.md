@@ -21,7 +21,7 @@ interactive installer stores the files in a Kubernetes Secret.
 | Choose where alerts go | [Channels](https://kwatch.dev/docs/channels) |
 | Watch only some namespaces | [Namespace filters](#-filter-by-namespace) |
 | Stop a known, intentional alert | [Silences](#-silences--stop-the-noise) |
-| Group repeated alerts | [Correlation](#-correlation--smart-incident-grouping) |
+| Deliver a problem more or less loudly | [Severity](#-severity) |
 | Add a fix link to an alert | [Runbooks](#-custom-message-templates) |
 | Store credentials safely | [Secret-backed credentials](#-secret-backed-credentials-are-required) |
 
@@ -42,23 +42,21 @@ narrowing the watch list and turning off the noisy reasons.
 
 | Parameter | What it does |
 |:---|---|
-| `maxRecentLogLines` | How many recent log lines to include in each alert (default: 50) |
-| `smartGrouping.namespaceFanOutThreshold` | How many owners failing the same way in one namespace collapse into a single alert (default: 3, `0` disables) |
-| `resyncSeconds` | How often to re-scan everything for problems (default: 300). This is also what re-confirms a problem that is *still* happening, so keep it well below `correlation.window` (default 10m); `0` reacts only to live events and means an unrecovered incident can be closed for lack of news. |
-| `workers` | How many checks to run in parallel (default: 1, raise for big clusters) |
-| `namespaces` | 🔽 Watch only these namespaces — or use `!kube-system` to watch *everything except* it |
+| `resyncSeconds` | How often informers re-list everything (default: 300). It is a safety net for lost watch events, not the detection path; `0` turns it off |
+| `namespaces` | 🔽 Deliver only problems in these namespaces — or use `!kube-system` to deliver *everything except* it |
 | `namespaceSelector` | 🏷️ Pick namespaces by K8s label selector (use *instead of* `namespaces`, not with it) |
-| `reasons` | 🔽 Only alert on these event reasons — or exclude some with `!` (e.g. `reasons: ["!Started"]`) |
-| `ignoreFailedGracefulShutdown` | ✅ Skip containers stopped by a clean/graceful shutdown (default: true — keep it) |
-| `ignoreDisruptionTerminations` | ✅ Skip pods evicted during node drains (default: true — keep it) |
-| `runbooks` | 📚 Add a link to your runbook for each error reason, so every alert comes with help attached |
-| `containerRestartThreshold` | Alert if a container restarts this many times (default: 0, off) |
-| `adaptiveThresholds` | Add bounded workload-aware grace during small partial rollouts (default: true) |
+| `reasons` | 🔽 Deliver only these reasons — or exclude some with `!` (e.g. `reasons: ["!Started"]`) |
+| `runbooks` | 📚 Map a reason to a URL; it is added to the next steps of every matching problem |
+| `severityByReason` / `severityByOwnerKind` | 🎯 Change how loudly a problem is delivered (see [Severity](#-severity)) |
 | `maintenance.enabled` | ✅ Honor maintenance annotations (default: true) |
 | `maintenance.annotation` | Annotation used to mark deliberate maintenance (default: `kwatch.io/maintenance`) |
 | `maintenance.untilAnnotation` | Optional RFC3339 expiry annotation (default: `kwatch.io/maintenance-until`) |
-| `reportStartupBaseline` | 📋 Send one startup summary of pre-existing issues (default: true). Anything already broken when kwatch starts is otherwise quiet for **24 hours** and re-captured on every restart, so this summary is the only way you hear about it — keep it on |
-| `ignore*` fields | 🔕 Deprecated filters (`ignoreContainerNames`, `ignorePodNames`, `ignoreContainerMessages`, `ignoreNodeReasons`, `ignoreNodeMessages`) — use the more flexible `silences` below |
+| `ignore*` fields | 🔕 Deprecated filters (`ignoreContainerNames`, `ignorePodNames`, `ignoreContainerMessages`, `ignoreNodeReasons`, `ignoreNodeMessages`) — each becomes one silence rule; use `silences` below |
+
+kwatch always watches every supported resource. `namespaces`, `namespaceSelector`,
+`reasons` and `silences` only filter what is **delivered**: a problem is
+delivered while at least one signal it explains is in scope and not silenced.
+State lives on a small disk (a PVC), not in ConfigMaps.
 
 #### 🔽 Filter by namespace
 
@@ -77,7 +75,7 @@ namespaces:
 #### 🔽 Filter by reason
 
 ```yaml
-# Only these reasons trigger alerts
+# Only these reasons are delivered
 reasons:
   - CrashLoopBackOff
   - ImagePullBackOff
@@ -90,8 +88,7 @@ reasons:
 
 #### 🔧 Maintenance mode
 
-Mark a workload's pod template (or an individual Pod) when a deliberate change
-should not page for its pod/container symptoms:
+Annotate an object (or a namespace) when a deliberate change should not notify:
 
 ```yaml
 maintenance:
@@ -101,18 +98,14 @@ maintenance:
 ```
 
 Use `kwatch.io/maintenance: "true"`, or set the until annotation to an RFC3339
-time such as `2026-08-31T23:00:00Z`. This suppresses pod/container symptoms only;
-kwatch continues monitoring nodes, control plane, storage, and workload-level
-conditions. Invalid expiry values are ignored rather than suppressing alerts.
-
-The same annotations may be placed on Deployment, StatefulSet, DaemonSet, Job,
-CronJob, HPA, or PDB objects to suppress their own workload-level alerts during
-an intentional maintenance operation. Node and control-plane alerts are never
-suppressed by this setting.
+time such as `2026-08-31T23:00:00Z`. A problem is not delivered when all of its
+signals are on annotated objects, or on objects in annotated namespaces. A
+problem that also has a signal on an unannotated object is still delivered.
+Invalid expiry values are ignored rather than suppressing problems.
 
 ## 📱 App settings
 
-Small but useful global options — mostly about **what alerts look like** and how kwatch
+Small but useful global options — mostly about **what alerts say** and how kwatch
 talks to the outside world.
 
 | Parameter | What it does |
@@ -123,9 +116,6 @@ talks to the outside world.
 | `app.logFormatter` | Log format: `text` (default) or `json` |
 | `app.insecureSkipTLSVerify` | 🔓 Skip TLS verification on outbound HTTP (default: false) |
 | `app.caBundlePath` | 📜 Path to a PEM CA bundle for outbound HTTP |
-| `includeEvents` | ⚠️ Deprecated compatibility field; Kwatch always analyzes events internally. Use the incident message content and `includeLogs` for notification rendering. |
-| `includeLogs` | 📋 Include container logs in alerts (default: true) |
-| `message.includePrivateLogAddresses` | 🌐 Keep private application addresses visible in evidence; credentials remain redacted (default: false) |
 
 ## 💓 Health checks
 
@@ -142,7 +132,7 @@ tests.
 
 **Endpoints:**
 - `GET /healthz` — ✅ Liveness
-- `GET /readyz` — ✅ Readiness. Ready when the leader has restored required state,
+- `GET /readyz` — ✅ Readiness. Ready when the leader has restored its on-disk state,
   configured required sources, and synchronized required informer caches. Optional
   API absence remains degraded and does not fail readiness. An unrecoverable
   required startup or cache failure causes the active process to stop so
@@ -151,13 +141,13 @@ tests.
   participating in Lease election can pass the rolling-update probe.
 - `GET /health` — JSON containing overall status, leadership, component states,
   and bounded degradation reasons.
-- `GET /metrics` — 📊 Prometheus-format metrics (incidents, notifications, baseline, dependency-graph size/rebuild latency, queues, and informer activity). It does not require Prometheus to be installed.
+- `GET /metrics` — 📊 Prometheus-format metrics (problems, notifications, queues, and informer activity). It does not require Prometheus to be installed.
 
 Informer caches discard Kubernetes `managedFields` metadata at ingestion time
 to reduce memory on apply-heavy clusters. Labels, annotations, spec, status,
 resource versions, and deletion metadata remain intact for detection and graph
 analysis.
-- `GET /incidents` — 📋 All active incidents (requires diagnostics and its token)
+- `GET /incidents` — 📋 All active problems (requires diagnostics and its token)
 - `POST /test-alert` — 📤 Send a test alert (requires diagnostics and its token)
 - `GET /deadletters` — 💀 Recent delivery failures (requires diagnostics and its token)
 
@@ -166,12 +156,12 @@ analysis.
 > at `/deadletters`. Diagnostics are off by default because `/test-alert` accepts
 > unauthenticated POSTs in test-only servers; production validation requires
 > `diagnosticsToken` whenever diagnostics or pprof is enabled. Either way, alert on
-> the counter: it is the difference between "no incidents" and "no deliveries".
+> the counter: it is the difference between "no problems" and "no deliveries".
 
 ## 🔐 Kubernetes permissions and graceful degradation
 
-The bundled manifests contain a read-only ClusterRole and a namespace Role for
-kwatch state ConfigMaps. kwatch never needs write access to monitored
+The bundled manifests contain a read-only ClusterRole, derived from the access
+declared by each source kwatch watches. kwatch never needs write access to monitored
 workloads. The ClusterRole covers:
 
 | API group | Resources used |
@@ -191,25 +181,22 @@ workloads. The ClusterRole covers:
 | gateway.networking.k8s.io | GatewayClasses, Gateways, HTTP/TCP/TLS/gRPCRoutes, ReferenceGrants |
 | authorization.k8s.io | SelfSubjectAccessReviews |
 
-Watched resources need only `get`, `list`, and `watch`. Optional monitors expose
+Watched resources need only `get`, `list`, and `watch`. Optional sources expose
 `unavailable` or `rbacDenied` when an API is not served or a permission is
-missing; the controller continues with the remaining monitors. Metrics API
+missing; the controller continues with the remaining sources. Metrics API
 evidence, Prometheus, a service mesh, and a cloud-provider API are not required
 for core Kubernetes object monitoring.
 
-The `/security` capability audit is scoped to the monitors enabled in the
-loaded configuration: disabled rollout, TLS, storage, networking, admission,
-and other optional monitors are not reported as missing capabilities. The
-bundled ClusterRole remains a static superset so one manifest can support any
-configuration; installations requiring least privilege can remove rules for
-disabled monitors from their copied manifest without changing kwatch.
+Because kwatch always watches every supported resource, the ClusterRole covers
+all of them. Installations requiring least privilege can remove rules for
+resources they do not care about from their copied manifest; those sources
+then report `rbacDenied` and are skipped.
 
 The interactive `kwatch.sh` manager downloads the matching
 `deploy/feature-catalog.tsv` from the installed release and caches it in a
 separate ConfigMap. Run `kwatch.sh features` (or choose **Show capabilities**)
 to see the available IDs, dependencies, and plain-language descriptions;
-the catalog is informational and does not change runtime behavior. To disable
-monitoring, use the monitor's normal `enabled` or threshold settings.
+the catalog is informational and does not change runtime behavior.
 
 Guided notification setup uses `deploy/provider-catalog.tsv`. It covers every
 supported provider and documented provider field, and marks every credential
@@ -226,7 +213,7 @@ The `/kubelet` health status reports `healthy`, `partial`, `unavailable`, or
 vocabulary and detailed last-error fields. `partial` means some built-in
 capabilities are working; `rbacDenied` identifies an authorization gap rather
 than a Kubernetes failure. Missing optional endpoints are visible without
-becoming fabricated incidents.
+becoming fabricated problems.
 
 ## 🔄 Upgrader
 
@@ -241,7 +228,7 @@ you manage updates yourself (e.g. you pin images).
 
 Official builds send a small pseudonymous heartbeat so the project can estimate
 adoption. The payload contains only a stable, randomly generated installation
-ID (kept in `kwatch-state`) and the kwatch version. The API field is named
+ID (kept in kwatch's on-disk state) and the kwatch version. The API field is named
 `cluster_uuid` for wire compatibility; it is not the Kubernetes cluster UID.
 It is sent after startup and at most once per week to
 `https://api.kwatch.dev/v1/telemetry/heartbeat`.
@@ -262,214 +249,9 @@ startup or runtime.
 
 ## 📊 Monitors
 
-The **watchdogs**: continuous checks that catch problems *between* events — a disk filling
-up, a node going sick, a rollout stuck. Each one begins with a plain-English summary, then a
-small table (skip the table — defaults are fine). All monitors are **on by default** unless a
-table says `default: false`.
-
-### 💾 PVC Monitor — disk space alerts
-
-It keeps an eye on how full your Persistent Volume Claims get, and warns you before
-they fill up.
-
-| Parameter | What it does |
-|:---|---|
-| `pvcMonitor.enabled` | ✅ Monitor disk usage (default: true) |
-| `pvcMonitor.interval` | Check every N minutes (default: 5) |
-| `pvcMonitor.threshold` | ⚠️ Warn at this % (default: 80) |
-| `pvcMonitor.criticalThreshold` | 🚨 High severity at this % (default: 90) |
-| `pvcMonitor.clearThreshold` | ✅ Resolve below this % (default: 75) |
-
-### 🖥️ Node Monitor
-
- A node that's sick (NotReady, out of memory or disk) stays quiet for a few minutes
-*before* kwatch tells you, so transient blips don't page you.
-
-| Parameter | What it does |
-|:---|---|
-| `nodeMonitor.enabled` | ✅ Watch for node problems (default: true) |
-| `nodeMonitor.sustainedMinutes` | ⏱️ Minutes a node condition must persist before alerting (default: 3) |
-
-Catches: `NotReady`, `Unknown`, `MemoryPressure`, `DiskPressure`, `PIDPressure`, `NetworkUnavailable`.
-
-### 🚀 Rollout Monitor
-
-It catches a **bad rollout** — replicas that never become ready — before it takes
-your whole Deployment down.
-
-| Parameter | What it does |
-|:---|---|
-| `rolloutMonitor.enabled` | ✅ Watch for stuck deployments (default: true) |
-| `rolloutMonitor.sustainedMinutes` | ⏱️ Minutes of unavailability before alerting (default: 5). Kubernetes' own `progressDeadlineSeconds` is 600; anything much shorter flags normal rollouts of slow-booting services |
-
-### 📡 DaemonSet Monitor
-
-It alerts when DaemonSet pods can't run on every node where they should.
-
-| Parameter | What it does |
-|:---|---|
-| `daemonSetMonitor.enabled` | ✅ Watch for unavailable DaemonSet pods (default: true) |
-| `daemonSetMonitor.sustainedMinutes` | ⏱️ Minutes of unavailability before alerting (default: 5) |
-
-### 🧑‍💼 Job Monitor
-
- Failed (or stuck-suspended) Jobs get reported instead of silently failing in a corner.
-
-| Parameter | What it does |
-|:---|---|
-| `jobMonitor.enabled` | ✅ Watch for failed/suspended Jobs (default: true) |
-
-### ⏰ CronJob Monitor
-
- Suspended CronJobs and missed schedules get reported — a quiet cron that never
-ran is a problem too.
-
-| Parameter | What it does |
-|:---|---|
-| `cronJobMonitor.enabled` | ✅ Watch for suspended CronJobs or missed schedules (default: true) |
-| `cronJobMonitor.sustainedMinutes` | ⏱️ Minutes a CronJob must stay suspended before alerting (default: 5) |
-
-### 📈 HPA Monitor
-
- An autoscaler pinned at maximum replicas means your capacity is maxed out; the
-default waits 20 minutes so brief spikes don't page you.
-
-| Parameter | What it does |
-|:---|---|
-| `hpaMonitor.enabled` | ✅ Watch HPAs stuck at max replicas (default: true) |
-| `hpaMonitor.sustainedMinutes` | ⏱️ How long before alerting (default: 20 min) |
-
-### 🚀 Cluster Autoscaler Monitor
-
-It tells you when the cluster autoscaler *can't* add capacity, so pending pods never
-quietly stall.
-
-| Parameter | What it does |
-|:---|---|
-| `clusterAutoscalerMonitor.enabled` | ✅ Watch cluster-autoscaler events (default: true) |
-
-Alerts when the cluster autoscaler reports `FailedToScaleUp` or `NotTriggerScaleUp` for a sustained 5 minutes, meaning pods can't be scheduled because the autoscaler can't add capacity.
-
-### 💓 Heartbeat Monitor (dead man's switch)
-
-| Parameter | What it does |
-|:---|---|
-| `heartbeatMonitor.enabled` | Send pings to a health-check URL (default: false) |
-| `heartbeatMonitor.interval` | ⏱️ Seconds between pings (default: 300) |
-| `heartbeatMonitor.url` | 🔗 Secret-backed `${file:/absolute/path}` heartbeat URL |
-
-If kwatch stops or crashes, the external monitor stops getting pings and pages you. 🔔
-
-### 🔒 TLS Certificate Monitor
-
-It reminds you before before a TLS certificate expires — warn with 30 days to go, page with 3
-days to go. Off by default.
-
-| Parameter | What it does |
-|:---|---|
-| `tlsMonitor.enabled` | 🔐 Watch for expiring certs (default: false) |
-| `tlsMonitor.threshold` | 📅 Days before warning (default: 30) |
-| `tlsMonitor.criticalThreshold` | 🚨 Days before high severity (default: 3) |
-
-### 🔗 Service Endpoint Monitor
-
-| Parameter | What it does |
-|:---|---|
-| `serviceMonitor.enabled` | 🔗 Watch for Services with zero ready endpoints or sustained partial backend loss (default: true) |
-
-Detects when a Service has zero ready EndpointSlice backends after 60 seconds,
-or when some selected Pods stay unready for five minutes while other backends
-still serve traffic. Notifications distinguish an outage from reduced capacity
-and name a shared failing Node only when its Ready condition supports it.
-
-### 🧩 Admission Webhook Monitor
-
-| Parameter | What it does |
-|:---|---|
-| `admissionWebhookMonitor.enabled` | 🧩 Watch for webhooks with unreachable backends (default: true) |
-
-Monitors `MutatingWebhookConfiguration` and `ValidatingWebhookConfiguration` resources. Alerts when a webhook's backing service has no ready endpoints, meaning admission requests may fail or timeout.
-
-### 🏛️ Control-Plane Monitor
-
-| Parameter | What it does |
-|:---|---|
-| `controlPlaneMonitor.enabled` | 🏛️ Watch for broken control-plane components and API health (default: true) |
-| `controlPlaneMonitor.intervalSeconds` | Active API/component probe interval (default: 30) |
-| `controlPlaneMonitor.apiServerLatencyWarningMs` | Sustained `/readyz` latency warning threshold (default: 1000) |
-| `controlPlaneMonitor.failureThreshold` | Consecutive failures before alerting (default: 2) |
-| `controlPlaneMonitor.recoveryThreshold` | Consecutive healthy samples before resolving (default: 2) |
-
-Detects container issues (CrashLoopBackOff, Error, OOMKilled, etc.) in control-plane pods (kube-apiserver, kube-scheduler, kube-controller-manager, etcd, kube-proxy, coredns), actively probes API server `/readyz`, and probes scheduler/controller-manager/etcd health endpoints through the Kubernetes API. It also exposes probe state at `/controlplane`; informer watch interruptions and event freshness are available at `/informer`. Runs a dedicated sweep at startup to catch pre-existing failures.
-
-The same monitor performs an in-cluster DNS lookup of `kubernetes.default.svc`,
-so CoreDNS failures are detected even when CoreDNS Pods still appear Running.
-
-### 🧱 Cluster Resource Monitor
-
-| Parameter | What it does |
-|:---|---|
-| `clusterResourceMonitor.enabled` | ✅ Watch quota, namespace, and node-lease lifecycle failures (default: true) |
-| `clusterResourceMonitor.sustainedMinutes` | ⏱️ Minutes a terminating namespace or quota condition must persist (default: 10) |
-| `clusterResourceMonitor.nodeLeaseStaleSeconds` | ⏱️ Seconds without a node lease renewal before reporting a stale heartbeat (default: 90) |
-
-### 🌐 Ingress Backend Monitor
-
-| Parameter | What it does |
-|:---|---|
-| `ingressMonitor.enabled` | 🌐 Watch for ingress backends with no ready endpoints (default: true) |
-
-Alerts when an Ingress rule references a backend service that has zero ready endpoints, meaning traffic to that host/path would return an error.
-
-### 🚧 Network Policy Monitor
-
-In plain words: finds NetworkPolicies that block **all** inbound traffic — the classic
-"accidentally locked myself out" mistake — so you learn about it before users do.
-
-| Parameter | What it does |
-|:---|---|
-| `networkPolicyMonitor.enabled` | 🚧 Detect overly restrictive network policies (default: true) |
-
-Detects `NetworkPolicy` resources that deny all ingress traffic (no ingress rules defined). Helps identify policies that may unintentionally block legitimate traffic.
-
-### 🧩 StatefulSet Monitor
-
-| Parameter | What it does |
-|:---|---|
-| `statefulSetMonitor.enabled` | ✅ Watch for unavailable StatefulSet pods (default: true) |
-| `statefulSetMonitor.sustainedMinutes` | ⏱️ Minutes of unavailability before alerting, plus 15-minute rollout grace (default: 5) |
-
-Monitors StatefulSets where `readyReplicas < replicas` for a sustained period, with a 15-minute grace window during rollouts to avoid alerting mid-update.
-
-### 🔄 PDB Monitor
-
-| Parameter | What it does |
-|:---|---|
-| `pdbMonitor.enabled` | ✅ Watch for PDBs blocking voluntary disruptions (default: true) |
-| `pdbMonitor.sustainedMinutes` | ⏱️ Minutes of blocking before alerting (default: 5) |
-
-Alerts when a PodDisruptionBudget has `disruptionsAllowed=0` and `currentHealthy < desiredHealthy`, meaning voluntary disruptions (rollouts, node drains) are blocked.
-
-### 🏭 Node Resource Monitor
-
-In plain words: checks whether a node is **over-committed** — pods are promised more CPU or
-memory than the machine can actually deliver. When promise exceeds capacity, the node
-eventually pays the price.
-
-| Parameter | What it does |
-|:---|---|
-| `nodeResourceMonitor.enabled` | ✅ Check node overcommit levels (default: true) |
-| `nodeResourceMonitor.intervalSeconds` | ⏱️ How often to check (default: 300) |
-| `nodeResourceMonitor.cpuWarning` | ⚠️ CPU overcommit ratio for warning (default: 2.0) |
-| `nodeResourceMonitor.cpuCritical` | 🚨 CPU overcommit ratio for critical (default: 4.0) |
-| `nodeResourceMonitor.memWarning` | ⚠️ Memory overcommit ratio for warning (default: 2.0) |
-| `nodeResourceMonitor.memCritical` | 🚨 Memory overcommit ratio for critical (default: 4.0) |
-| `nodeResourceMonitor.filesystemWarningPercent` | ⚠️ Node filesystem usage warning threshold (default: 90; 0 disables) |
-| `nodeResourceMonitor.filesystemCriticalPercent` | 🚨 Node filesystem usage critical threshold (default: 95; 0 disables) |
-| `nodeResourceMonitor.inodeWarningPercent` | ⚠️ Node inode usage warning threshold (default: 90; 0 disables) |
-| `nodeResourceMonitor.inodeCriticalPercent` | 🚨 Node inode usage critical threshold (default: 95; 0 disables) |
-
-Periodically computes the ratio of pod resource requests vs node allocatable for CPU and memory. Data is purely in-memory — no TSDB or persistent storage needed.
+kwatch always watches every supported resource; there are no per-resource monitor
+switches. Two optional checks have their own settings: active probes and the
+heartbeat.
 
 ### 🌐 Active Probes
 
@@ -529,106 +311,21 @@ activeProbeMonitor:
       host: kubernetes.default.svc
 ```
 
-### 🧠 Kubelet Telemetry
-
-`kubeletTelemetryMonitor` uses Kubernetes' built-in kubelet endpoints directly;
-no Agent or Prometheus installation is required.
-
-| Parameter | What it does |
-|:---|:---|
-| `kubeletTelemetryMonitor.enabled` | ✅ Enable built-in kubelet telemetry (default: true) |
-| `kubeletTelemetryMonitor.intervalSeconds` | ⏱️ Collection interval (default: 60) |
-| `kubeletTelemetryMonitor.failureThreshold` | 🔁 Consecutive failing samples before alerting (default: 2) |
-| `kubeletTelemetryMonitor.recoveryThreshold` | ✅ Consecutive healthy samples before resolving (default: 2) |
-| `kubeletTelemetryMonitor.persistState` | 💾 Persist counters and confirmation state across restarts (default: true) |
-| `kubeletTelemetryMonitor.memoryWarningPercent` | ⚠️ Container memory usage warning (default: 90) |
-| `kubeletTelemetryMonitor.memoryCriticalPercent` | 🚨 Container memory usage critical (default: 95) |
-| `kubeletTelemetryMonitor.ephemeralStorageWarningPercent` | ⚠️ Container ephemeral-storage warning (default: 90) |
-| `kubeletTelemetryMonitor.ephemeralStorageCriticalPercent` | 🚨 Container ephemeral-storage critical (default: 95) |
-| `kubeletTelemetryMonitor.cpuWarningPercent` | ⚠️ Container CPU usage warning (default: 90) |
-| `kubeletTelemetryMonitor.cpuCriticalPercent` | 🚨 Container CPU usage critical (default: 100) |
-| `kubeletTelemetryMonitor.cpuThrottlingWarningPercent` | ⚠️ Container throttling warning (default: 50) |
-| `kubeletTelemetryMonitor.cpuThrottlingCriticalPercent` | 🚨 Container throttling critical (default: 75) |
-| `kubeletTelemetryMonitor.psiWarningPercent` | ⚠️ PSI warning threshold (default: 20) |
-| `kubeletTelemetryMonitor.psiCriticalPercent` | 🚨 PSI critical threshold (default: 50) |
-| `kubeletTelemetryMonitor.networkErrorRateWarning` | ⚠️ Node network errors/sec warning (default: 1) |
-| `kubeletTelemetryMonitor.networkErrorRateCritical` | 🚨 Node network errors/sec critical (default: 10) |
-| `kubeletTelemetryMonitor.runtimeErrorRateWarning` | ⚠️ Kubelet runtime errors/sec warning (default: 1) |
-| `kubeletTelemetryMonitor.runtimeErrorRateCritical` | 🚨 Kubelet runtime errors/sec critical (default: 10) |
-
-### 📈 Metrics API evidence
-
-Kwatch automatically checks the optional Kubernetes Metrics API when diagnosing
-HPA and metrics-related failures. It inspects the
-`v1beta1.metrics.k8s.io` APIService and its backing Service EndpointSlices to
-distinguish an unregistered API, an unavailable service, and an API that is
-currently healthy.
-
-There is no `runtimeMetricsMonitor` configuration. If the Metrics API is
-missing or unavailable, Kwatch records that as bounded diagnostic evidence; it
-does not create a synthetic incident.
-
-For dynamically watched CRDs, `crd.failureConditions` can override the default
-failure rules. Use entries such as `Ready=False`, `Available=Unknown`,
-`Degraded=True`, or `Progressing=False`.
-
-When health checks are enabled, `/kubelet` exposes the latest per-node
-availability counts for Summary, cAdvisor, and runtime endpoints, including
-RBAC-denied nodes.
-
-Kubelet usage thresholds learn a bounded per-container baseline after five
-healthy samples. The learned warning threshold can rise up to one percentage
-point below the configured critical threshold; the critical threshold itself
-never changes. Baselines are persisted when telemetry persistence is enabled
-and are discarded after the normal stale-state window.
-
-The Metrics API evidence above is collected automatically when the optional API
-is present. It does not require a separate monitor or configuration block.
-
-### 💥 OOM Pattern Monitor
+### 💓 Heartbeat Monitor (dead man's switch)
 
 | Parameter | What it does |
 |:---|---|
-| `oomMonitor.enabled` | ✅ Track repeating OOMs (default: true) |
-| `oomMonitor.threshold` | 🔢 OOM count within window to flag (default: 3) |
-| `oomMonitor.windowMinutes` | ⏱️ Sliding window in minutes (default: 60) |
+| `heartbeatMonitor.enabled` | Send pings to a health-check URL (default: false) |
+| `heartbeatMonitor.interval` | ⏱️ Seconds between pings (default: 300) |
+| `heartbeatMonitor.url` | 🔗 Secret-backed `${file:/absolute/path}` heartbeat URL |
 
-Tracks OOMKilled events per container in a sliding window. When the threshold is exceeded, the reason changes from `OOMKilled` to `OOMRepeating` with a hint suggesting a potential memory leak.
-
-### 🎯 Scheduling Delay Diagnostics
-
-In plain words: when a pod can't get scheduled, the alert also says **how long** the
-scheduler has been stalling ("unschedulable for 5m30s"), not just that it stalled.
-
-| Parameter | What it does |
-|:---|---|
-| `scheduleMonitor.enabled` | ✅ Compute unschedulable delay (default: true) |
-| `pendingPodMonitor.enabled` | ✅ Watch pods stuck in Pending (default: true) |
-| `pendingPodMonitor.threshold` | ⏱️ Seconds stuck in Pending before alerting (default: 300) |
-
-When a pod is stuck Unschedulable, computes `now - PodScheduled.LastTransitionTime` and prepends the delay to the hint (e.g., `"unschedulable for 5m30s — ..."`).
-
-### 🟡 Not Ready Monitor
-
-| Parameter | What it does |
-|:---|---|
-| `notReadyMonitor.enabled` | ✅ Watch Running pods stuck NotReady (default: true) |
-
-Alerts with `ContainersNotReady` when a Running pod's Ready condition stays false for longer than the pod is allowed. Container-level failures (crashes, waits, non-zero terminations) are handled by the container pipeline, so this fires for otherwise-healthy containers whose pod never becomes ready.
-
-**How long is "too long" is derived from the pod, not from a fixed number.** There is nothing to configure:
-
-- A pod that **has never been ready** is still starting up, so it gets whatever budget its own probes declare — `initialDelaySeconds + failureThreshold × periodSeconds`, taken from `startupProbe` (falling back to `readinessProbe`), across init and app containers. A service that legitimately takes 90 seconds to boot no longer alerts on every rollout, and one with no probes keeps the 60 second floor. The budget is capped at 15 minutes so a generous probe cannot defer an alert indefinitely.
-- A pod that **was ready and stopped being ready** gets the plain 60 second floor. That is a regression rather than a slow start, and it should not wait.
-
-The alert states the real elapsed time (`pod stopped being ready 3h12m ago`), never the threshold.
-
-Restarting kwatch does not reset that clock. There is a short grace period after startup during which pre-existing conditions are not alerted, but the duration you are shown is always how long the pod has actually been unready.
+If kwatch stops or crashes, the external monitor stops getting pings and pages you. 🔔
 
 ### 🎯 Severity
 
-Every alert carries a severity, shown as the colour of its headline, and you control it.
-Severity drives urgent channels, escalation, and re-notification.
+Every problem carries a severity, shown as the colour of its headline, and you control it.
+Severity decides how loudly it is delivered: `critical` pages; `high`, `medium` and
+`warning` notify; `low` and `info` go to the digest.
 
 | Severity | Headline | Meaning |
 |:--|:--|:--|
@@ -643,15 +340,14 @@ means the worst case and a blue one never competes with it.
 | Parameter | What it does |
 |:---|---|
 | `severityByOwnerKind` | Set severity per resource type, e.g. `StatefulSet: "high"` |
-| `severityByReason` | Set severity per event reason, checked before owner kind, e.g. `OOMKilled: "high"` |
+| `severityByReason` | Set severity per reason, checked first, before owner kind, e.g. `OOMKilled: "high"` |
 
-Defaults: `StatefulSet` → 🟠 high, everything else → 🔵 normal
+Keys are used verbatim (`DaemonSet`, not `Daemonset`). Defaults come from the built-in rules for each reason.
 
 ### 🔇 Silences — stop the noise
 
-In plain words: if a rule matches an incident, that incident is **completely ignored** — no
-alert, no group, nothing. Build rules from anything on the incident: namespace, reason, pod
-name pattern, container name, log text, Event message, or node.
+In plain words: if a rule matches a signal, that signal is ignored. Build rules from anything on the signal: namespace, reason, pod
+name pattern, container name, container message, Event message, or node.
 
 ```yaml
 silences:
@@ -670,7 +366,7 @@ the Event message for Event-backed signals. The deprecated top-level `ignore*`
 fields map onto these rules.
 
 For example, suppress a noisy transient cache-sync error while keeping other
-`CreateContainerConfigError` incidents visible:
+`CreateContainerConfigError` problems visible:
 
 ```yaml
 silences:
@@ -679,84 +375,27 @@ silences:
 ```
 
 The match is a case-sensitive substring of an attached Event message. It
-suppresses the whole incident; event evidence is analyzed internally and is
-rendered according to the provider's incident format.
-
-### 🚫 Inhibition — no double alerts
-
-In plain words: when the **node** is down, don't also page you about every **pod** on it —
-you can't fix pods that have no machine. The moment the node recovers, pod alerts resume.
-
-| Parameter | What it does |
-|:---|---|
-| `inhibition.nodeSuppressesPods` | ✅ Don't alert on pod issues if the node itself is down (default: true) |
-
-Pods are suppressed **only while the node is actually down** — once the node recovers, suppression lifts immediately, even during the resolve hold-down window (it doesn't wait for the "resolved" notification to be sent).
+silences the signal backed by that Event.
 
 ### 📝 Custom message templates
 
-In plain words: if the default alert text isn't yours, write your own. Templates use Go
-`{{.Field}}` placeholders and can access the incident, the action, and the hint.
+In plain words: if the default alert text isn't yours, write your own. `templates` maps a
+reason to a Go `text/template` used by plain-text providers. The template receives
+`.Message` and `.Text`; rich providers ignore it.
 
 ```yaml
 templates:
-  CrashLoopBackOff: "{{.Incident.Name}} — {{.Action}} — {{.Incident.Hint}}"
+  CrashLoopBackOff: "{{ .Text }} (see the runbook)"
 ```
 
-### 🧠 Correlation — smart incident grouping
+### 📚 Runbooks
 
-In plain words: this is kwatch's **memory** — how it remembers that "this crash" and "that
-crash five minutes ago" are the same problem, when it's allowed to yell again, and when it
-should escalate a recurring crash to you.
+`runbooks` maps a reason to a URL that is added to the next steps of every problem with that reason.
 
-| Parameter | What it does |
-|:---|---|
-| `correlation.window` | ⏱️ Keep incidents in memory (default: 10 min) |
-| `correlation.resolveHoldDown` | ⏱️ Wait before sending "resolved" (default: 300s) |
-| `correlation.lifecycleInterval` | ⏱️ Lifecycle check frequency (default: 1 min) |
-| `correlation.cooldownMinutes` | ⚠️ Deprecated, accepted and ignored. It gated a pre-filter that dropped repeated crashes before the engine saw them, which defeated the engine's own post-resolve cooldown. That cooldown is `correlation.window` |
-| `correlation.maxBaseline` | 📈 Max baseline entries kept for startup comparison (default: 5000) |
-| `correlation.escalation.enabled` | ✅ Escalate severity on repeated crashes (default: true) |
-| `correlation.escalation.tiers` | 📊 Restart thresholds (default: `[3, 10]`): crossing the first → `high`, the second → `critical`. There is nothing above critical, so a third tier does nothing |
-| `correlation.renotify.intervalBySeverity` | 🔔 Re-alert interval in minutes per severity, `default` key as fallback (default: `critical: 10`, `high: 30`, `medium: 60`, `warning: 60`, `default: 60`). Set a severity to `0` to stop re-alerting it; an empty map turns re-alerting off entirely |
-| `correlation.renotify.maxPerIncident` | 🔔 Max re-alerts per incident (default: 3) |
-
-Incident state, baseline, telemetry state, and recent change history are stored
-in Kubernetes ConfigMaps with retry-on-conflict updates. Older incident layouts
-are migrated on load, and oversized history is truncated to the newest entries
-so persistence cannot block the main monitoring loop. A persistence failure is
-logged and monitoring continues; it does not fabricate a new incident.
-
-### 🧹 Smart Grouping — coalesce duplicate notifications
-
-In plain words: **many pods failing the same way = one alert**, not one per pod. Events
-that share a root dimension are collected over a short window and summarized into a single
-notification, then re-notified on a gentle cooldown instead of on every event.
-
-| Parameter | What it does |
-|:---|---|
-| `smartGrouping.windowSeconds` | ⏱ Grouping window in seconds (default: 60). Set to 0 to disable. |
-| `smartGrouping.namespaceFanOutThreshold` | 🧺 Owners failing the same way in one namespace, within one window, before their groups collapse into a single alert (default: 3; `0` disables) |
-
-**The first failure alerts immediately.** Grouping only holds an incident back once a *second*
-owner in the same namespace fails the same way inside the window — the earliest moment a
-namespace-wide problem can be told apart from an isolated one. An isolated failure therefore
-costs no grouping latency at all. If the fan-out threshold is then reached, the namespace-wide
-alert counts that first owner in its total, and the first owner's own thread gets a short note
-pointing at the wider alert. That thread stays open and resolves when the pod actually recovers
-— it is never marked resolved just because a bigger alert took over. A buffer that ends the
-window with a single member is sent as that incident, under its own name — never announced as
-a "group" of one.
-
-kwatch groups related incidents by the dimension that best captures each failure type's root cause. For example, OOMKilled and probe failures group by owner+namespace, node conditions group by node (not pod errors on the same node), image pull errors group by image (or globally for rate limits), and CrashLoopBackOff with a matching log signature bridges across owners. Each group notification shows affected pods, owners, nodes, or images depending on scope, with overflow counting above 1,000 entries. After a group notification is sent, the same condition is not silently repeated on every event: re-notifications are throttled by a cooldown (4× the grouping window, clamped between 5 and 30 minutes). While the underlying members keep failing, the group resumes with a periodic UPDATE after the cooldown lapses; it resolves (and stops notifying) once the members clear. This prevents per-event flooding while still surfacing ongoing incidents.
-
-**Namespace fan-out collapses into one alert.** Most reasons group by reason + namespace + owner, which is right when one workload is unhealthy and wrong when the whole namespace is — a node going away can make a dozen deployments unready at once and produce a dozen alerts for one event. When `smartGrouping.namespaceFanOutThreshold` distinct owners (default **3**, `0` disables) fail the same way in one namespace inside one grouping window, their separate groups collapse into a single notification listing every affected owner. Groups already scoped to a shared cause — a node, an image, a log signature — are never merged this way, because they already describe the cause. This is the backstop for when the resource graph does not link the failures; when it does, mass-failure detection catches them first.
-
-The order these decisions are made in — baseline, then attribution to a node / shared dependency / owning workload, then cooldown — is described in [How kwatch decides whether to speak](architecture.md#how-kwatch-decides-whether-to-speak).
-
-**Mass failures suppress their own members.** When many workloads fail for one shared reason — a node going away, a ConfigMap breaking — kwatch raises a single blast-radius alert. Incidents whose dependency is already the subject of that alert are suppressed rather than sent alongside it, and recorded in the audit log with `skipReason: mass_failure`. Suppressed incidents are still tracked: they count toward the mass failure, resolve silently if they recover, and any that are **still broken when the mass failure clears are announced at that point** — a symptom that outlives its cause is not lost. The node's own incident is never suppressed: it is the root cause, not a symptom of itself.
-
-**Evidence names the pod it came from.** An incident is keyed by owner rather than by pod, so it survives replicas being replaced and can list several pods under `Resources`. The logs and events attached to it come from exactly one of those pods, and the alert says which (`Events — from pod-abc123`) whenever the incident covers more than that pod.
+```yaml
+runbooks:
+  OOMKilled: https://wiki.example.com/runbooks/oom
+```
 
 ### 🔐 Secret-backed credentials are required
 
@@ -794,10 +433,8 @@ disclosed, not merely moved.
 The shipped manifests and chart run kwatch as a non-root user with a read-only
 root filesystem, disabled privilege escalation, all Linux capabilities dropped,
 and the `RuntimeDefault` seccomp profile. The namespace manifest also requests
-the Kubernetes `restricted` Pod Security profile. The runtime state Role keeps
-ConfigMap writes named to kwatch's ten persistence ConfigMaps; creation remains
-available so missing maps can be created during a fresh install or upgrade. The
-ClusterRole remains read-only.
+the Kubernetes `restricted` Pod Security profile. State is written to a PVC mounted at `/var/lib/kwatch`; kwatch runs as a single
+replica and its Lease is only a lock. The ClusterRole remains read-only.
 
 Keep the Secret protected with least-privilege RBAC, enable encryption at rest
 for Secrets in the API server/etcd, and rotate provider credentials if access
@@ -816,21 +453,17 @@ provider credentials after any suspected exposure.
 
 ### 📝 Audit log
 
-In plain words: for every incident *transition* (created, updated, resolved, skipped),
+In plain words: for every problem decision (announced, updated, resolved, skipped),
 kwatch writes one structured JSON line — feed it to your log pipeline if you want a
-searchable history of everything it decided.
+searchable history of everything it decided. `kwatch-scorecard` reads this log.
 
 | Parameter | What it does |
 |:---|---|
-| `auditLog.enabled` | Write one structured JSON entry per incident transition (default: true) |
+| `auditLog.enabled` | Write one structured JSON entry per problem decision (default: true) |
 | `auditLog.output` | Destination: `stdout` (default) or a file path |
 
 File output is append-only. Configure rotation and retention in the container
 runtime or log collector; kwatch does not rename or delete audit files.
-
-Emits `create`/`update`/`resolved`/`skip` entries (with `incidentKey`, `namespace`, `reason`, `severity`, `count`, `duration`, `skipReason`) to stdout or a file for feeding into your log pipeline.
-
-**`skip` entries record state changes, not every evaluation.** Suppression is a standing condition: a baselined incident is re-evaluated on every poll, and writing a line each time buries everything else — a single baselined HPA can emit thousands of identical entries a day. A skip is therefore recorded the first time it applies to an incident key, and again only if the reason changes (say `baseline` → `cooldown`) or if the incident starts alerting and is later suppressed again. If you are counting suppression *events*, count polls elsewhere; this log answers "what did kwatch decide", not "how often did it re-decide the same thing".
 
 ### 📋 CRD — configuration overlay with automatic restart
 
@@ -846,12 +479,6 @@ before enabling it.
 | Parameter | What it does |
 |:---|---|
 | `crd.enabled` | Watch `KwatchConfig` CRs and restart kwatch when the overlay changes (default: false for the binary; true in Helm and the interactive installer) |
-| `crd.failureConditions` | Override the default failure conditions for dynamically watched CRDs |
-| `crd.graphReferences` | Add custom references that connect CRD objects to dependency-graph resources |
-
-Generic custom-resource status monitoring only starts for resources the kwatch
-ServiceAccount can list and watch. Grant those resource-specific permissions
-when you want kwatch to monitor CRDs outside the APIs in the shipped role.
 
 ```yaml
 apiVersion: kwatch.abahmed.dev/v1alpha1
@@ -860,7 +487,7 @@ metadata:
   name: kwatch-config
   namespace: kwatch
 spec:
-  maxRecentLogLines: 100
+  resyncSeconds: 600
   silences:
     - namespaces: ["kube-system"]
 ```

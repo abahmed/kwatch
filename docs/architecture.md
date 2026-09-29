@@ -410,17 +410,17 @@ one stable record per problem is what stops alert storms.
   kwatch refreshes the incident's data (logs, restart count, timeline) and, in most cases,
   stays **quiet** — nobody wants "CrashLoopBackOff" paged every single event.
 - **RESOLVE** — the problem stops. kwatch waits for a short *hold-down*
-  (`correlation.resolveHoldDown`, default 5 minutes) so brief blips that recover on their own
+  (a fixed hold-down, not configurable) so brief blips that recover on their own
   never show a fake "resolved" — then it sends the "✅ resolved" message.
 - **SKIP** — an event that doesn't deserve a notification right now (already reported, still
   in a cooldown, silenced, part of a group).
 
 **How kwatch knows a problem stopped.** Two things can close an incident, and they are not
 the same claim. An *observed* recovery is the detector saying the condition is gone. The other
-is silence: nothing has re-reported the problem for a whole `correlation.window`. Silence is
+is silence: nothing has re-reported the problem for a whole resolve window. Silence is
 only trustworthy because periodic informer resyncs (`resyncSeconds`, default 300) re-deliver
 every object and re-run every detector, so anything still broken re-reports itself inside the
-window. That relationship is load-bearing — if `resyncSeconds` is 0 or longer than the window,
+window. That relationship is load-bearing — if `resyncSeconds` is 0 or longer than that window,
 nothing re-confirms an incident and kwatch would close problems that are still happening, so
 it warns about that combination at startup.
 
@@ -451,8 +451,7 @@ Two behaviors keep this honest:
   *notified again* with a higher severity — the first crash is a papercut, the third is
   high, the tenth is a page.
 - **Re-notify.** For long-lived incidents that stay broken for hours, kwatch can nudge you
-  again on a timer (`correlation.renotify.intervalBySeverity`, e.g. every 60 minutes for
-  `high`), up to `maxPerIncident` times (default 3) — so a quiet incident can't be forgotten,
+  again on a timer (a fixed interval per severity), up to a fixed maximum number of times — so a quiet incident can't be forgotten,
   but you're not re-paged forever.
 - **Node suppression.** If the problem is a *node* condition, alerts for pods on that node
   are suppressed while the node is actually down. The moment it recovers, suppression lifts
@@ -562,7 +561,7 @@ The point: if kwatch restarts, is rescheduled, or its pod is recreated, persiste
 resume incident identity and grouping instead of re-reporting everything as brand new. A
 takeover also records the monitoring gap, because no in-cluster election can observe events
 while every Kwatch replica is down. That state enables the startup *baseline* check: kwatch
-snapshots the problems that already existed when it boots, and `reportStartupBaseline` tells
+snapshots the problems that already existed when it boots, and kwatch tells
 you about them once (so you know what your cluster already looks like), without treating them
 as fresh crashes.
 

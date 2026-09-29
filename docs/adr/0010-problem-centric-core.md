@@ -916,6 +916,14 @@ with a crashing app must not blame the node.
 - New data sources extend kwatch by adding plugins. The core is stable.
 - Some configuration becomes obsolete (grouping windows, mass-failure
   thresholds, feedback). Each removal is proposed individually.
+  The removals were approved: the `*Monitor` sections except
+  `heartbeatMonitor` and `activeProbeMonitor`, `correlation`,
+  `smartGrouping`, `inhibition`, `workers`, log and event inclusion
+  settings, `ignoreLogPatterns` and `silences[].logPatterns`, restart
+  thresholds and startup-baseline reporting, and `crd.failureConditions` and
+  `crd.graphReferences`. Kwatch now always watches every supported resource
+  and scope settings only filter delivery. RBAC is derived from the sources'
+  declared access.
 - No migration is needed. Kwatch has no stable release or production
   users yet, so the bbolt store replaces all current ConfigMap state
   (incidents, shards, groups, threads, baselines, changes, feedback) and
