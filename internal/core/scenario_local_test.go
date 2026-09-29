@@ -5,10 +5,11 @@ import (
 	"testing"
 	"time"
 
+	"github.com/abahmed/kwatch/internal/notice"
+
 	corev1 "k8s.io/api/core/v1"
 
 	"github.com/abahmed/kwatch/internal/knowledge/kube"
-	"github.com/abahmed/kwatch/internal/story"
 )
 
 // An application crashes on a healthy node with no recent change. No
@@ -39,7 +40,7 @@ func TestEngineAppCrashHasNoInventedCause(t *testing.T) {
 	if p.Root.Kind != kube.KindDeployment || p.Root.Name != "reports" {
 		t.Fatalf("root = %s, want deployment reports", p.Root)
 	}
-	text := story.Text(h.messages[0])
+	text := notice.Text(h.messages[0])
 	if !strings.Contains(text, "No upstream cause") ||
 		!strings.Contains(text, "kubectl logs") {
 		t.Fatalf("message should say no upstream cause and show logs:\n%s",
@@ -81,5 +82,5 @@ func TestEngineMissingSecretIsTheRoot(t *testing.T) {
 	if root.Kind != kube.KindSecret || root.Name != "billing-creds" {
 		t.Fatalf("root = %s, want secret billing-creds", root)
 	}
-	t.Logf("\n%s", story.Text(h.messages[0]))
+	t.Logf("\n%s", notice.Text(h.messages[0]))
 }

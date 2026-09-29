@@ -4,5 +4,5 @@
 // (the proven cause, or an honest "cause unknown"), who is affected, what
 // happened in order, and the next step with commands for the real
 // objects. Sections without content are omitted. The result is a
-// structured Message that every provider renders in its own format.
+// structured notice.Message that every provider renders in its own format.
 package story

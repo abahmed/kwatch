@@ -240,7 +240,7 @@ func TestRouteFilter(t *testing.T) {
 		},
 	}
 
-	assert.True(t, matchesRoute(routes[0], inc))
+	assert.True(t, matchesRoute(routes[0], incidentSubject(inc)))
 
 	inc2 := &model.Incident{
 		Subject: model.Subject{
@@ -254,7 +254,7 @@ func TestRouteFilter(t *testing.T) {
 		},
 	}
 
-	assert.False(t, matchesRoute(routes[0], inc2))
+	assert.False(t, matchesRoute(routes[0], incidentSubject(inc2)))
 
 	inc3 := &model.Incident{
 		Subject: model.Subject{
@@ -268,13 +268,13 @@ func TestRouteFilter(t *testing.T) {
 		},
 	}
 
-	assert.False(t, matchesRoute(routes[0], inc3))
+	assert.False(t, matchesRoute(routes[0], incidentSubject(inc3)))
 }
 
 func TestRouteFilterNormalizesSeverity(t *testing.T) {
 	route := config.AlertRoute{Severities: []string{"HIGH"}}
 	inc := &model.Incident{Status: model.Status{Severity: model.SeverityHigh}}
-	assert.True(t, matchesRoute(route, inc))
+	assert.True(t, matchesRoute(route, incidentSubject(inc)))
 }
 
 func TestShouldDeliverNoRoutes(t *testing.T) {

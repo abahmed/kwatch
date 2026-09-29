@@ -5,6 +5,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/abahmed/kwatch/internal/notice"
+
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -16,7 +18,6 @@ import (
 	"github.com/abahmed/kwatch/internal/reason"
 	"github.com/abahmed/kwatch/internal/signal"
 	"github.com/abahmed/kwatch/internal/signal/detect"
-	"github.com/abahmed/kwatch/internal/story"
 )
 
 // harness drives the pipeline one step at a time with a manual clock.
@@ -26,7 +27,7 @@ type harness struct {
 	checks    *rechecks
 	now       time.Time
 	decisions []problem.Decision
-	messages  []story.Message
+	messages  []notice.Message
 }
 
 func newHarness(t *testing.T, start time.Time) *harness {
@@ -48,7 +49,7 @@ func newHarness(t *testing.T, start time.Time) *harness {
 		Model:     knowledge.NewModel(knowledge.Options{}),
 		Detectors: signal.NewRegistry(nil, detectors()...),
 		Problems:  problem.NewManager(problem.Config{}, rules),
-		Sink: func(_ context.Context, d problem.Decision, m story.Message) {
+		Sink: func(_ context.Context, d problem.Decision, m notice.Message) {
 			h.decisions = append(h.decisions, d)
 			h.messages = append(h.messages, m)
 		},

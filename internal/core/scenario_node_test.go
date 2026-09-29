@@ -4,9 +4,10 @@ import (
 	"testing"
 	"time"
 
+	"github.com/abahmed/kwatch/internal/notice"
+
 	"github.com/abahmed/kwatch/internal/knowledge/kube"
 	"github.com/abahmed/kwatch/internal/problem"
-	"github.com/abahmed/kwatch/internal/story"
 )
 
 // A node under memory pressure makes pods of three workloads unready while
@@ -46,7 +47,7 @@ func TestEngineNodePressureIsOneProblem(t *testing.T) {
 			len(h.decisions))
 	}
 	t.Logf("messages:\n%s", joinTitles(h))
-	t.Logf("last message:\n%s", story.Text(h.messages[len(h.messages)-1]))
+	t.Logf("last message:\n%s", notice.Text(h.messages[len(h.messages)-1]))
 }
 
 func joinTitles(h *harness) string {

@@ -1,4 +1,4 @@
-package story
+package notice
 
 // Message is a provider-neutral story. Renderers turn it into plain text,
 // Markdown, Slack blocks or HTML.
@@ -20,6 +20,17 @@ type Message struct {
 	Steps []Step
 	// Confidence describes how sure the cause is, when there is one.
 	Confidence string
+	// Route is what provider routing rules match on.
+	Route Route
+}
+
+// Route describes a message for provider routing: the namespaces it
+// concerns, the signal reasons it contains, and its severity
+// ("critical", "warning" or "info").
+type Route struct {
+	Namespaces []string
+	Reasons    []string
+	Severity   string
 }
 
 // Status drives the single status marker a renderer shows.
@@ -55,4 +66,20 @@ type Step struct {
 	Text     string
 	Command  string
 	Mutating bool
+}
+
+// String names the status for machine consumers.
+func (s Status) String() string {
+	switch s {
+	case StatusCritical:
+		return "critical"
+	case StatusWarning:
+		return "warning"
+	case StatusFlapping:
+		return "flapping"
+	case StatusResolved:
+		return "resolved"
+	default:
+		return "info"
+	}
 }

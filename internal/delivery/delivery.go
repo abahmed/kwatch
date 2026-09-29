@@ -12,6 +12,7 @@ import (
 	"github.com/abahmed/kwatch/internal/insight"
 	"github.com/abahmed/kwatch/internal/metrics"
 	"github.com/abahmed/kwatch/internal/model"
+	"github.com/abahmed/kwatch/internal/notice"
 )
 
 // deliverJob is one queued delivery. A job is an incident, a plain message,
@@ -26,6 +27,7 @@ type deliverJob struct {
 	insight    *insight.Insight
 	msg        string
 	ev         *event.Event
+	story      *notice.Message
 }
 
 // key names the job in logs and dead letters.
@@ -35,6 +37,9 @@ func (j deliverJob) key() string {
 	}
 	if j.ev != nil {
 		return j.ev.Reason
+	}
+	if j.story != nil {
+		return j.story.Key
 	}
 	return "message"
 }
@@ -55,7 +60,7 @@ func (a *Manager) deliverFallback(
 	primary string,
 	job deliverJob,
 ) error {
-	if job.kind == jobIncident && !shouldDeliver(entry.routes, job.inc) {
+	if !routedTo(entry.routes, job) {
 		return nil
 	}
 	opts := deliverOpts{retry: fallbackRetryConfig(entry.retry)}
@@ -134,7 +139,7 @@ func (a *Manager) deliverOneWithContext(
 
 	// Routes are evaluated before rendering: a filtered incident should not
 	// pay for message building, and routes depend only on the incident.
-	if job.kind == jobIncident && !shouldDeliver(entry.routes, job.inc) {
+	if !routedTo(entry.routes, job) {
 		klog.V(4).InfoS("incident filtered by route",
 			"provider", p.Name(),
 			"key", job.key())
@@ -195,8 +200,7 @@ func (a *Manager) fanOut(job deliverJob) {
 	job.generation = generation
 	for _, name := range generation.order {
 		entry := generation.entries[name]
-		if job.kind == jobIncident &&
-			!shouldDeliver(entry.routes, job.inc) {
+		if !routedTo(entry.routes, job) {
 			continue
 		}
 		accepted, dropped := offerQueuedJob(entry.ch, job)

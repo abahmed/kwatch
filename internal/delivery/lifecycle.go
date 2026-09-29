@@ -87,7 +87,7 @@ func (a *Manager) runProvider(entry providerEntry, ctx context.Context) {
 			// want is not a delivery, and making it wait its turn spent the
 			// provider's send slot on nothing: with a route that matches one
 			// namespace, a storm elsewhere throttled the alerts that did match.
-			if job.kind == jobIncident && !shouldDeliver(entry.routes, job.inc) {
+			if !routedTo(entry.routes, job) {
 				continue
 			}
 			// Pace before delivering: the queue absorbs the burst, the provider

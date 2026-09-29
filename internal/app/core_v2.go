@@ -8,6 +8,8 @@ import (
 	"sync"
 	"time"
 
+	"github.com/abahmed/kwatch/internal/notice"
+
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/klog/v2"
 
@@ -20,7 +22,6 @@ import (
 	"github.com/abahmed/kwatch/internal/reason"
 	"github.com/abahmed/kwatch/internal/signal"
 	"github.com/abahmed/kwatch/internal/signal/detect"
-	"github.com/abahmed/kwatch/internal/story"
 )
 
 // coreV2Enabled selects the problem-centric core. It stays opt-in until it
@@ -134,10 +135,10 @@ func runCoreV2(ctx context.Context, deps *serverDeps) error {
 		Model:     model,
 		Detectors: newDetectorRegistry(synced),
 		Problems:  problem.NewManager(problem.Config{}, newReasoner()),
-		Sink: func(_ context.Context, d problem.Decision, m story.Message) {
+		Sink: func(_ context.Context, d problem.Decision, m notice.Message) {
 			klog.InfoS("core decision", "component", "core",
 				"problem", d.Problem.ID, "reason", d.Reason)
-			deps.deliveryManager.Notify(story.Text(m))
+			deps.deliveryManager.NotifyStory(m)
 		},
 		Clock: coreClock{deps.clients.Clock},
 		Store: core.NewProblemStore(state),

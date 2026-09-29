@@ -7,6 +7,8 @@ import (
 	"sync"
 	"time"
 
+	"github.com/abahmed/kwatch/internal/notice"
+
 	"k8s.io/klog/v2"
 
 	"github.com/abahmed/kwatch/internal/knowledge"
@@ -23,7 +25,7 @@ const maxPending = 50000
 
 // Sink receives every decision with its story. It is called from the
 // pipeline goroutine and must not block for long.
-type Sink func(ctx context.Context, d problem.Decision, m story.Message)
+type Sink func(ctx context.Context, d problem.Decision, m notice.Message)
 
 // Clock supplies time and timers so tests can control both.
 type Clock interface {

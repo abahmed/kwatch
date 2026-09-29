@@ -6,6 +6,8 @@ import (
 	"strings"
 	"time"
 
+	"github.com/abahmed/kwatch/internal/notice"
+
 	"github.com/abahmed/kwatch/internal/format"
 	"github.com/abahmed/kwatch/internal/knowledge"
 	"github.com/abahmed/kwatch/internal/problem"
@@ -20,12 +22,14 @@ const (
 )
 
 // Write composes the message for one decision.
-func Write(d problem.Decision, now time.Time) Message {
+func Write(d problem.Decision, now time.Time) notice.Message {
 	p := d.Problem
-	msg := Message{Key: p.ID, Revision: p.Revision}
 	members := sortedMembers(p)
+	msg := notice.Message{
+		Key: p.ID, Revision: p.Revision, Route: route(p, members),
+	}
 	if d.Action == problem.Resolve {
-		msg.Status = StatusResolved
+		msg.Status = notice.StatusResolved
 		msg.Title = "Resolved: " + lowerFirst(headline(p, members)) +
 			" — lasted " +
 			format.Duration(p.Resolved.Sub(p.Opened))
@@ -49,14 +53,14 @@ func Write(d problem.Decision, now time.Time) Message {
 	return msg
 }
 
-func status(p problem.Problem) Status {
+func status(p problem.Problem) notice.Status {
 	switch {
 	case p.State == problem.Flapping:
-		return StatusFlapping
+		return notice.StatusFlapping
 	case p.Tier == problem.Page:
-		return StatusCritical
+		return notice.StatusCritical
 	default:
-		return StatusWarning
+		return notice.StatusWarning
 	}
 }
 
@@ -364,4 +368,39 @@ func lowerFirst(value string) string {
 		return value
 	}
 	return strings.ToLower(value[:1]) + value[1:]
+}
+
+// route summarises a problem for provider routing rules.
+func route(p problem.Problem, members []signal.Signal) notice.Route {
+	namespaces := map[string]bool{}
+	reasons := map[string]bool{}
+	if p.Root.Namespace != "" {
+		namespaces[p.Root.Namespace] = true
+	}
+	for _, s := range members {
+		if s.Entity.Namespace != "" {
+			namespaces[s.Entity.Namespace] = true
+		}
+		reasons[s.Reason] = true
+	}
+	severity := "warning"
+	switch p.Tier {
+	case problem.Page:
+		severity = "critical"
+	case problem.Digest, problem.Silent:
+		severity = "info"
+	}
+	return notice.Route{
+		Namespaces: sortedSet(namespaces), Reasons: sortedSet(reasons),
+		Severity: severity,
+	}
+}
+
+func sortedSet(values map[string]bool) []string {
+	out := make([]string, 0, len(values))
+	for value := range values {
+		out = append(out, value)
+	}
+	sort.Strings(out)
+	return out
 }

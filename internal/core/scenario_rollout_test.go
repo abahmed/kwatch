@@ -5,6 +5,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/abahmed/kwatch/internal/notice"
+
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -12,7 +14,6 @@ import (
 
 	"github.com/abahmed/kwatch/internal/knowledge/kube"
 	"github.com/abahmed/kwatch/internal/problem"
-	"github.com/abahmed/kwatch/internal/story"
 )
 
 // A rollout changes the image; the new revision crash-loops while the old
@@ -61,7 +62,7 @@ func TestEngineBadRolloutNamesTheChange(t *testing.T) {
 		}
 	}
 	t.Logf("%d messages; first:\n%s", len(h.messages),
-		story.Text(h.messages[0]))
+		notice.Text(h.messages[0]))
 	t.Logf("all:\n%s", joinTitles(h))
 }
 

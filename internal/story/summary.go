@@ -5,6 +5,8 @@ import (
 	"sort"
 	"time"
 
+	"github.com/abahmed/kwatch/internal/notice"
+
 	"github.com/abahmed/kwatch/internal/problem"
 )
 
@@ -13,13 +15,15 @@ const maxSummaryLines = 15
 
 // StartupSummary is one message listing the problems that already existed
 // when kwatch started, instead of one alert each.
-func StartupSummary(decisions []problem.Decision, now time.Time) Message {
+func StartupSummary(
+	decisions []problem.Decision, now time.Time,
+) notice.Message {
 	sort.SliceStable(decisions, func(i, j int) bool {
 		return decisions[i].Problem.Tier > decisions[j].Problem.Tier
 	})
-	msg := Message{
+	msg := notice.Message{
 		Key:    "startup",
-		Status: StatusWarning,
+		Status: notice.StatusWarning,
 		Title: fmt.Sprintf("kwatch started: %d existing problem(s) found",
 			len(decisions)),
 	}

@@ -21,6 +21,7 @@ const (
 	jobIncident jobKind = iota
 	jobMessage
 	jobEvent
+	jobStory
 )
 
 // deliverOpts is what differs between the delivery paths: the retry budget,
@@ -51,6 +52,8 @@ func (a *Manager) dispatch(
 		return sendWithRetry(ctx, func() error {
 			return sendEvent(ctx, p, job.ev)
 		}, opts.retry, p.Name())
+	case jobStory:
+		return a.dispatchStory(ctx, entry, job, opts)
 	}
 	return a.dispatchIncident(ctx, entry, job, opts)
 }
