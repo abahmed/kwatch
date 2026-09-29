@@ -43,6 +43,7 @@ func Write(d problem.Decision, now time.Time) Message {
 	}
 	msg.Lines = append(msg.Lines, evidenceLines(members)...)
 	msg.Timeline = timeline(p, maxTimelineLines)
+	msg.Output = d.Output
 	msg.Steps = nextSteps(p, members)
 	msg.Confidence = confidence(p.Cause)
 	return msg

@@ -11,6 +11,7 @@ type Reader interface {
 	Relations(id EntityID, dir Direction) []Relation
 	Entities(kind Kind) []EntityID
 	Changes(id EntityID, since time.Time) []Change
+	Notes(id EntityID, since time.Time) []Note
 }
 
 var _ Reader = (*Model)(nil)

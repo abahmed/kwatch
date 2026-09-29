@@ -86,13 +86,18 @@ func rolloutHypothesis(
 	if mentionsChange(symptom, change) {
 		s.support(0.2, "the error mentions what the rollout changed")
 	}
+	companions := companionChanges(q, owner, change)
+	if len(companions) > 0 {
+		s.support(0.05, "its configuration changed in the same release")
+	}
 	score, points := s.result()
 	c := change
 	return Hypothesis{
 		Root: owner, Change: &c,
-		Chain:   []knowledge.EntityID{owner, pod},
-		Summary: "the rollout that " + describeFields(change),
-		Points:  points, Score: score,
+		Chain: []knowledge.EntityID{owner, pod},
+		Summary: "the rollout that " + describeFields(change) +
+			describeCompanions(companions),
+		Points: points, Score: score,
 	}
 }
 

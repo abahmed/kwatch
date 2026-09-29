@@ -102,6 +102,7 @@ func (m *Model) Prune(before time.Time) int {
 	defer m.mu.Unlock()
 	removed := 0
 	for id, rec := range m.records {
+		rec.notes = pruneNotes(rec.notes, before)
 		kept := rec.changes[:0]
 		for _, change := range rec.changes {
 			if !change.At.Before(before) {
@@ -110,8 +111,10 @@ func (m *Model) Prune(before time.Time) int {
 		}
 		removed += len(rec.changes) - len(kept)
 		rec.changes = kept
-		if !rec.present && !rec.goneAt.IsZero() &&
-			len(rec.changes) == 0 && len(rec.relations) == 0 &&
+		// Records that hold nothing any more are dropped: tombstones
+		// whose history expired, and notes about never-observed objects.
+		if !rec.present && len(rec.changes) == 0 &&
+			len(rec.relations) == 0 && len(rec.notes) == 0 &&
 			rec.goneAt.Before(before) {
 			delete(m.records, id)
 		}
@@ -122,4 +125,31 @@ func (m *Model) Prune(before time.Time) int {
 func cloneChange(change Change) Change {
 	change.Fields = append([]FieldChange(nil), change.Fields...)
 	return change
+}
+
+// Notes returns the entity's notes at or after since, oldest first.
+func (m *Model) Notes(id EntityID, since time.Time) []Note {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+	rec := m.records[id]
+	if rec == nil {
+		return nil
+	}
+	var out []Note
+	for _, note := range rec.notes {
+		if !note.At.Before(since) {
+			out = append(out, note)
+		}
+	}
+	return out
+}
+
+func pruneNotes(notes []Note, before time.Time) []Note {
+	kept := notes[:0]
+	for _, note := range notes {
+		if !note.At.Before(before) {
+			kept = append(kept, note)
+		}
+	}
+	return kept
 }

@@ -4,6 +4,7 @@ package kube
 // they are persisted and referenced by rule definitions.
 const (
 	AttrPhase           = "phase"
+	AttrLabels          = "labels"
 	AttrReady           = "ready"
 	AttrReadySince      = "ready.transition"
 	AttrReason          = "reason"

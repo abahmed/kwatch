@@ -14,6 +14,8 @@ type Message struct {
 	Lines []string
 	// Timeline lists the relevant events, oldest first.
 	Timeline []string
+	// Output is the application's own recent output, redacted.
+	Output []string
 	// Steps are commands or actions for the reader.
 	Steps []Step
 	// Confidence describes how sure the cause is, when there is one.

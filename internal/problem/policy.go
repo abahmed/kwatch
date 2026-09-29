@@ -22,6 +22,13 @@ var digestReasons = map[string]bool{
 func tier(p *Problem) Tier {
 	worst := signal.Severity(0)
 	digestOnly := true
+	for key := range p.Members {
+		if key.Entity == p.Root && key.Reason == constant.ReasonNodeDraining {
+			// Pods disrupted by a drain or node replacement are the
+			// expected cost of maintenance.
+			return Digest
+		}
+	}
 	for _, s := range p.Members {
 		worst = max(worst, s.Severity)
 		if !digestReasons[s.Reason] {
@@ -31,7 +38,8 @@ func tier(p *Problem) Tier {
 	switch {
 	case len(p.Members) == 0:
 		return p.Tier
-	case digestOnly:
+	case digestOnly || worst <= signal.Info:
+		// Planned disruption or informational only.
 		return Digest
 	case worst == signal.Critical &&
 		(userFacing(p.Impact) || p.Root.Kind == kube.KindNode):

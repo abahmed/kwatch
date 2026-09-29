@@ -45,15 +45,17 @@ func TestRawDeploymentHasProductionShape(t *testing.T) {
 	}
 	defer file.Close()
 	documents := decodeManifestDocuments(t, file)
-	var deployment, pdb *unstructured.Unstructured
+	var deployment, claim *unstructured.Unstructured
 	var hasLeaseRole, hasConfigMapRole bool
 	for i := range documents {
 		document := &documents[i]
 		switch document.GetKind() {
 		case "Deployment":
 			deployment = document
+		case "PersistentVolumeClaim":
+			claim = document
 		case "PodDisruptionBudget":
-			pdb = document
+			t.Fatal("a single-writer deployment must not have a PDB")
 		case "Role":
 			if document.GetName() == "kwatch-leader-election" {
 				hasLeaseRole = true
@@ -63,21 +65,23 @@ func TestRawDeploymentHasProductionShape(t *testing.T) {
 			}
 		}
 	}
-	if deployment == nil || pdb == nil {
-		t.Fatal("raw deployment must include Deployment and PDB")
+	if deployment == nil || claim == nil {
+		t.Fatal("raw deployment must include Deployment and state PVC")
 	}
-	assertField(t, deployment, "spec", "strategy", "type")
+	replicas, _, _ := unstructured.NestedFieldNoCopy(
+		deployment.Object, "spec", "replicas",
+	)
 	strategy, _, _ := unstructured.NestedString(
 		deployment.Object, "spec", "strategy", "type",
 	)
-	if strategy != "RollingUpdate" {
-		t.Fatalf("deployment strategy = %q, want RollingUpdate", strategy)
+	if fmt.Sprint(replicas) != "1" || strategy != "Recreate" {
+		t.Fatalf("deployment = %v replicas, %q; want 1, Recreate",
+			replicas, strategy)
 	}
 	assertField(t, deployment, "spec", "template", "spec",
 		"terminationGracePeriodSeconds")
 	assertField(t, deployment, "spec", "template", "spec", "securityContext")
-	assertField(t, deployment, "spec", "template", "spec",
-		"topologySpreadConstraints")
+	assertField(t, deployment, "spec", "template", "spec", "tolerations")
 	assertField(t, deployment, "spec", "template", "spec", "containers")
 	containers, _, _ := unstructured.NestedSlice(
 		deployment.Object, "spec", "template", "spec", "containers",
@@ -114,29 +118,29 @@ func TestHelmDefaultMatchesRawDeploymentSafety(t *testing.T) {
 		"spec", "template", "spec", "terminationGracePeriodSeconds")
 	compareManifestField(t, rawDeployment, chartDeployment,
 		"spec", "template", "spec", "securityContext")
-	compareTopologySpread(t, rawDeployment, chartDeployment)
+	compareManifestField(t, rawDeployment, chartDeployment,
+		"spec", "template", "spec", "tolerations")
 	compareContainerProbe(t, rawDeployment, chartDeployment, "livenessProbe")
 	compareContainerProbe(t, rawDeployment, chartDeployment, "readinessProbe")
 }
 
-func TestHelmSingleReplicaOmitsDisruptionBudget(t *testing.T) {
+func TestHelmDefaultIsSingleWriterWithState(t *testing.T) {
 	if _, err := exec.LookPath("helm"); err != nil {
 		t.Skip("helm is unavailable")
 	}
 	root := repositoryRoot(t)
-	rendered := renderHelm(
-		t, filepath.Join(root, "deploy", "chart"), "--set", "replicaCount=1",
-	)
+	rendered := renderHelm(t, filepath.Join(root, "deploy", "chart"))
 	deployment := findManifestKind(t, rendered, "Deployment")
 	strategy, _, err := unstructured.NestedString(
 		deployment.Object, "spec", "strategy", "type",
 	)
 	if err != nil || strategy != "Recreate" {
-		t.Fatalf("single replica strategy = %q, want Recreate", strategy)
+		t.Fatalf("strategy = %q, want Recreate", strategy)
 	}
+	findManifestKind(t, rendered, "PersistentVolumeClaim")
 	for _, document := range rendered {
 		if document.GetKind() == "PodDisruptionBudget" {
-			t.Fatal("single replica rendering must omit PodDisruptionBudget")
+			t.Fatal("a single-writer deployment must not have a PDB")
 		}
 	}
 }
@@ -226,30 +230,6 @@ func compareContainerProbe(
 	)
 	if leftPath != rightPath {
 		t.Fatalf("%s path differs: %q != %q", probe, leftPath, rightPath)
-	}
-}
-
-func compareTopologySpread(
-	t *testing.T,
-	left *unstructured.Unstructured,
-	right *unstructured.Unstructured,
-) {
-	t.Helper()
-	leftValues, _, _ := unstructured.NestedSlice(
-		left.Object, "spec", "template", "spec", "topologySpreadConstraints",
-	)
-	rightValues, _, _ := unstructured.NestedSlice(
-		right.Object, "spec", "template", "spec", "topologySpreadConstraints",
-	)
-	if len(leftValues) != len(rightValues) || len(leftValues) == 0 {
-		t.Fatal("topology spread settings are not equivalent")
-	}
-	leftValue := leftValues[0].(map[string]interface{})
-	rightValue := rightValues[0].(map[string]interface{})
-	leftKey, _, _ := unstructured.NestedString(leftValue, "topologyKey")
-	rightKey, _, _ := unstructured.NestedString(rightValue, "topologyKey")
-	if leftKey != rightKey {
-		t.Fatalf("topology key differs: %q != %q", leftKey, rightKey)
 	}
 }
 

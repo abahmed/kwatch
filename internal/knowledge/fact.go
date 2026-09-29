@@ -14,6 +14,9 @@ const (
 	Changed
 	// Gone removes an entity and every relation touching it.
 	Gone
+	// Noted records an occurrence about an entity (an event). The entity
+	// need not be observed; notes about unknown entities are kept too.
+	Noted
 )
 
 // Fact is the only input the model accepts. Every source, from Kubernetes
@@ -37,4 +40,8 @@ type Fact struct {
 
 	// Change is set by Changed facts.
 	Change Change
+
+	// Note is set by Noted facts. A note with the same source and reason
+	// replaces the previous one, so repeated events do not fill the ring.
+	Note Note
 }

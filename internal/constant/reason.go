@@ -60,6 +60,7 @@ const (
 
 	// Node reasons.
 	ReasonNodeNotReady                  = "NodeNotReady"
+	ReasonNodeDraining                  = "NodeDraining"
 	ReasonNotReady                      = "NotReady"
 	ReasonKubeletReady                  = "KubeletReady"
 	ReasonKubeletNotReady               = "KubeletNotReady"
@@ -155,6 +156,7 @@ const (
 
 	// Storage reasons.
 	ReasonVolumeUsageHigh        = "VolumeUsageHigh"
+	ReasonVolumeFillingUp        = "VolumeFillingUp"
 	ReasonPersistentVolumeClaim  = "PersistentVolumeClaimFailure"
 	ReasonPersistentVolume       = "PersistentVolumeFailure"
 	ReasonResourceQuotaExhausted = "ResourceQuotaExhausted"

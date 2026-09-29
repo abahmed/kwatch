@@ -8,6 +8,7 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	discoveryv1 "k8s.io/api/discovery/v1"
 	networkingv1 "k8s.io/api/networking/v1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
 	"github.com/abahmed/kwatch/internal/knowledge"
 )
@@ -230,4 +231,20 @@ func loadBalancerAssigned(svc *corev1.Service) bool {
 		}
 	}
 	return false
+}
+
+func selectorText(selector *metav1.LabelSelector) string {
+	if selector == nil {
+		return ""
+	}
+	return metav1.FormatLabelSelector(selector)
+}
+
+func resourceListText(list corev1.ResourceList) string {
+	parts := make([]string, 0, len(list))
+	for name, quantity := range list {
+		parts = append(parts, string(name)+"="+quantity.String())
+	}
+	sort.Strings(parts)
+	return strings.Join(parts, ",")
 }

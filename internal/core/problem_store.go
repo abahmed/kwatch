@@ -39,3 +39,23 @@ func (d diskProblems) SaveProblems(records []problem.Record) error {
 	}
 	return d.store.ReplaceAll(store.Problems, values)
 }
+
+// LoadFingerprints implements ProblemStore.
+func (d diskProblems) LoadFingerprints() (map[string]string, error) {
+	out := map[string]string{}
+	err := d.store.ForEach(store.Snapshot, "",
+		func(key string, decode func(any) error) error {
+			var value string
+			if err := decode(&value); err != nil {
+				return err
+			}
+			out[key] = value
+			return nil
+		})
+	return out, err
+}
+
+// SaveFingerprints implements ProblemStore.
+func (d diskProblems) SaveFingerprints(values map[string]any) error {
+	return d.store.ReplaceAll(store.Snapshot, values)
+}

@@ -16,6 +16,12 @@ func Text(m Message) string {
 	if m.Confidence != "" {
 		b.WriteString("Confidence: " + m.Confidence + "\n")
 	}
+	if len(m.Output) > 0 {
+		b.WriteString("\nLast output:\n")
+		for _, line := range m.Output {
+			b.WriteString("  " + line + "\n")
+		}
+	}
 	if len(m.Timeline) > 0 {
 		b.WriteString("\nTimeline (UTC):\n")
 		for _, event := range m.Timeline {

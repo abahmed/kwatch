@@ -50,6 +50,11 @@ func (Node) Kinds() []knowledge.Kind { return []knowledge.Kind{kube.KindNode} }
 
 // Detect implements signal.Detector.
 func (d Node) Detect(ctx signal.Context, e knowledge.Entity) []signal.Signal {
+	if draining, s := drainSignal(e); draining {
+		// A cordoned or departing node disrupts pods by design; its
+		// NotReady is expected and is not reported on its own.
+		return []signal.Signal{s}
+	}
 	var out []signal.Signal
 	if s, ok := d.readiness(ctx, e); ok {
 		out = append(out, s)
@@ -97,4 +102,23 @@ func (d Node) readiness(
 			{Label: "message", Value: conditionMessage(e, "Ready")},
 		},
 	}, true
+}
+
+// drainSignal reports a node that is cordoned or being deleted: a drain,
+// an upgrade, autoscaler scale-down or spot replacement.
+func drainSignal(e knowledge.Entity) (bool, signal.Signal) {
+	deleting := flag(e, kube.AttrDeleting)
+	if !deleting && !flag(e, kube.AttrUnschedulable) {
+		return false, signal.Signal{}
+	}
+	summary, since := "Node is cordoned for maintenance",
+		valueSince(e, kube.AttrUnschedulable)
+	if deleting {
+		summary, since = "Node is being removed",
+			valueSince(e, kube.AttrDeleting)
+	}
+	return true, signal.Signal{
+		Reason: constant.ReasonNodeDraining, Severity: signal.Info,
+		Since: since, Summary: summary,
+	}
 }

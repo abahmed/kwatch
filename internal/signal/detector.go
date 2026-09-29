@@ -52,6 +52,10 @@ type Detector interface {
 	Detect(ctx Context, entity knowledge.Entity) []Signal
 }
 
+// AnyKind registers a detector for every entity kind, such as one that
+// reads Warning events attached to any object.
+const AnyKind knowledge.Kind = "*"
+
 // Registry groups detectors by kind. It is built once at composition time
 // and read-only afterwards.
 type Registry struct {
@@ -75,27 +79,34 @@ func NewRegistry(
 	return r
 }
 
-// Evaluate runs every detector for the entity's kind. An absent entity has
-// no signals.
+// Evaluate runs every detector for the entity's kind. An absent entity is
+// evaluated only by AnyKind detectors, which read notes (events) that can
+// concern objects kwatch does not model.
 func (r *Registry) Evaluate(
 	model knowledge.Reader, now time.Time, id knowledge.EntityID,
 ) Evaluation {
-	entity, ok := model.Entity(id)
-	if !ok {
-		return Evaluation{}
+	entity, present := model.Entity(id)
+	if !present {
+		entity = knowledge.Entity{ID: id}
 	}
 	var recheck time.Duration
 	ctx := Context{
 		Model: model, Now: now, recheck: &recheck, synced: r.synced,
 	}
 	var out []Signal
-	for _, detector := range r.byKind[id.Kind] {
-		for _, s := range detector.Detect(ctx, entity) {
-			s.Entity = id
-			if s.Since.IsZero() {
-				s.Since = now
+	groups := [][]Detector{r.byKind[AnyKind]}
+	if present {
+		groups = append(groups, r.byKind[id.Kind])
+	}
+	for _, group := range groups {
+		for _, detector := range group {
+			for _, s := range detector.Detect(ctx, entity) {
+				s.Entity = id
+				if s.Since.IsZero() {
+					s.Since = now
+				}
+				out = append(out, s)
 			}
-			out = append(out, s)
 		}
 	}
 	return Evaluation{Signals: out, RecheckAfter: recheck}

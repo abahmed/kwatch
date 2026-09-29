@@ -36,6 +36,7 @@ type record struct {
 	attrSource map[string]string
 	relations  map[relationKeyBySource][]EntityID
 	changes    []Change
+	notes      []Note
 }
 
 type relationKeyBySource struct {
@@ -89,6 +90,8 @@ func (m *Model) Apply(fact Fact) (Update, error) {
 		return m.change(fact), nil
 	case Gone:
 		return m.remove(fact), nil
+	case Noted:
+		return m.note(fact), nil
 	default:
 		return Update{}, fmt.Errorf("%w: %d", ErrUnknownFactKind, fact.Kind)
 	}
@@ -177,6 +180,25 @@ func (m *Model) change(fact Fact) Update {
 	rec.changes = append(rec.changes, change)
 	if overflow := len(rec.changes) - m.maxChanges; overflow > 0 {
 		rec.changes = append(rec.changes[:0:0], rec.changes[overflow:]...)
+	}
+	return Update{Touched: []EntityID{fact.Entity}}
+}
+
+func (m *Model) note(fact Fact) Update {
+	rec := m.recordFor(fact.Entity)
+	note := fact.Note
+	if note.At.IsZero() {
+		note.At = fact.At
+	}
+	for i, existing := range rec.notes {
+		if existing.Source == note.Source && existing.Reason == note.Reason {
+			rec.notes = append(rec.notes[:i], rec.notes[i+1:]...)
+			break
+		}
+	}
+	rec.notes = append(rec.notes, note)
+	if over := len(rec.notes) - DefaultMaxNotesPerEntity; over > 0 {
+		rec.notes = append(rec.notes[:0:0], rec.notes[over:]...)
 	}
 	return Update{Touched: []EntityID{fact.Entity}}
 }

@@ -102,4 +102,7 @@ type Decision struct {
 	Problem Problem
 	// Reason explains why this decision was made, for the audit trail.
 	Reason string
+	// Output holds application output gathered by investigation after the
+	// decision, already redacted. Empty when none was needed or found.
+	Output []string
 }

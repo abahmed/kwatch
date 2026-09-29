@@ -36,6 +36,12 @@ func newHarness(t *testing.T, start time.Time) *harness {
 		reason.NodeRule{}, reason.RolloutRule{}, reason.ConfigRule{},
 		reason.ReferenceRule{}, reason.BackendRule{},
 		reason.SchedulingRule{}, reason.PodsRule{},
+		reason.AdmissionRule{},
+		reason.QuotaRule{},
+		reason.NetworkPolicyRule{},
+		reason.MetricsAPIRule{},
+		reason.DNSRule{},
+		reason.TopologyRule{},
 	)
 	engine, err := NewEngine(Dependencies{
 		Model:     knowledge.NewModel(knowledge.Options{}),
@@ -59,6 +65,15 @@ func detectors() []signal.Detector {
 		detect.Container{}, detect.NewPod(detect.PodThresholds{}),
 		detect.NewNode(0), detect.NewWorkload(0), detect.Service{},
 		detect.Missing{},
+		detect.Event{},
+		detect.Budget{},
+		detect.Quota{},
+		detect.Attachment{},
+		detect.Webhook{},
+		detect.NodeUsage{},
+		detect.VolumeUsage{},
+		detect.Custom{},
+		detect.ClusterService{},
 	}
 }
 

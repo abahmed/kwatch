@@ -48,18 +48,27 @@ type Dependencies struct {
 	// Store persists problems so a restart never repeats a message.
 	// Optional; without it problems live in memory only.
 	Store ProblemStore
+	// Investigate gathers application output for an announcement.
+	// Optional.
+	Investigate func(context.Context, problem.Problem) []string
 }
 
-// ProblemStore loads and saves problem records.
+// ProblemStore loads and saves problem records and object fingerprints.
 type ProblemStore interface {
 	LoadProblems() ([]problem.Record, error)
 	SaveProblems([]problem.Record) error
+	LoadFingerprints() (map[string]string, error)
+	SaveFingerprints(map[string]any) error
 }
 
 // restoreGrace is how long restored problems wait for their signals to be
 // re-raised before they may recover. It covers the longest detector
 // threshold.
 const restoreGrace = 10 * time.Minute
+
+// maxInvestigationsPerTick bounds the log reads one pipeline iteration
+// makes, so a storm of announcements cannot stall the pipeline.
+const maxInvestigationsPerTick = 3
 
 // saveInterval bounds how stale persisted problems can be when nothing is
 // decided for a while.
@@ -74,7 +83,24 @@ type Engine struct {
 	pending []knowledge.Fact
 	wake    chan struct{}
 	space   chan struct{}
+	synced  chan struct{}
+
+	// saved holds fingerprints from the previous run until the initial
+	// list has been compared with them; snapshots are not written before.
+	saved      map[string]string
+	reconciled bool
+	// dirty carries entities touched outside step, evaluated next step.
+	dirty []knowledge.EntityID
+	// coldStart is true when no problems were restored. Announcements
+	// until startupUntil are collected into one startup summary.
+	coldStart    bool
+	startupUntil time.Time
+	startup      []problem.Decision
 }
+
+// startupWindow covers the initial list plus one settle period, so the
+// problems that already existed are all in the summary.
+const startupWindow = 2 * time.Minute
 
 // NewEngine validates dependencies and builds an engine.
 func NewEngine(deps Dependencies) (*Engine, error) {
@@ -84,9 +110,16 @@ func NewEngine(deps Dependencies) (*Engine, error) {
 	}
 	return &Engine{
 		deps: deps, tracker: signal.NewTracker(),
-		wake:  make(chan struct{}, 1),
-		space: make(chan struct{}, 1),
+		wake:   make(chan struct{}, 1),
+		space:  make(chan struct{}, 1),
+		synced: make(chan struct{}, 1),
 	}, nil
+}
+
+// SourcesSynced tells the engine that every source finished its initial
+// list, so changes made while kwatch was down can be detected.
+func (e *Engine) SourcesSynced() {
+	notify(e.synced)
 }
 
 // Submit queues facts for the pipeline. It blocks only while the queue is
@@ -125,6 +158,8 @@ func (e *Engine) Run(ctx context.Context) error {
 			return nil
 		case <-e.wake:
 		case <-timer:
+		case <-e.synced:
+			e.reconcileDowntime()
 		}
 		now := e.deps.Clock.Now()
 		var decided bool
@@ -141,14 +176,41 @@ func (e *Engine) Run(ctx context.Context) error {
 
 func (e *Engine) restore() error {
 	if e.deps.Store == nil {
+		e.coldStart = true
 		return nil
 	}
 	records, err := e.deps.Store.LoadProblems()
 	if err != nil {
 		return fmt.Errorf("core: restore problems: %w", err)
 	}
+	e.coldStart = len(records) == 0
 	e.deps.Problems.Restore(records, e.deps.Clock.Now().Add(restoreGrace))
+	saved, err := e.deps.Store.LoadFingerprints()
+	if err != nil {
+		return fmt.Errorf("core: restore fingerprints: %w", err)
+	}
+	e.saved = saved
 	return nil
+}
+
+// reconcileDowntime applies pending facts, then records every tracked
+// object that changed while kwatch was down as a change.
+func (e *Engine) reconcileDowntime() {
+	if e.reconciled {
+		return
+	}
+	e.reconciled = true
+	if e.coldStart {
+		e.startupUntil = e.deps.Clock.Now().Add(startupWindow)
+	}
+	e.dirty = append(e.dirty, e.drain()...)
+	facts := DowntimeChanges(e.deps.Model, e.saved, e.deps.Clock.Now())
+	e.saved = nil
+	if len(facts) > 0 {
+		klog.InfoS("core: changes made while kwatch was down",
+			"component", "core", "count", len(facts))
+		e.Submit(context.Background(), facts...)
+	}
 }
 
 // save persists problems. A failed save is logged, not fatal: the next
@@ -160,6 +222,13 @@ func (e *Engine) save() {
 	if err := e.deps.Store.SaveProblems(e.deps.Problems.Export()); err != nil {
 		klog.ErrorS(err, "core: save problems", "component", "core")
 	}
+	if !e.reconciled {
+		return
+	}
+	if err := e.deps.Store.SaveFingerprints(
+		Fingerprints(e.deps.Model, e.deps.Clock.Now())); err != nil {
+		klog.ErrorS(err, "core: save fingerprints", "component", "core")
+	}
 }
 
 // step runs one pipeline iteration at now. It returns the next lifecycle
@@ -167,7 +236,8 @@ func (e *Engine) save() {
 func (e *Engine) step(
 	ctx context.Context, now time.Time, checks *rechecks,
 ) (time.Time, bool) {
-	dirty := e.drain()
+	dirty := append(e.dirty, e.drain()...)
+	e.dirty = nil
 	dirty = append(dirty, checks.due(now)...)
 	e.evaluate(ctx, now, dirty, checks)
 	return e.tick(ctx, now)
@@ -238,7 +308,12 @@ func (e *Engine) tick(
 	ctx context.Context, now time.Time,
 ) (time.Time, bool) {
 	decisions, next := e.deps.Problems.Tick(now)
-	for _, d := range decisions {
+	decisions = e.collectStartup(ctx, now, decisions)
+	for i, d := range decisions {
+		if d.Action == problem.Announce && e.deps.Investigate != nil &&
+			i < maxInvestigationsPerTick {
+			d.Output = e.deps.Investigate(ctx, d.Problem)
+		}
 		e.deps.Sink(ctx, d, story.Write(d, now))
 	}
 	if next == 0 {
@@ -252,4 +327,31 @@ func notify(ch chan struct{}) {
 	case ch <- struct{}{}:
 	default:
 	}
+}
+
+// collectStartup holds cold-start announcements until the startup window
+// ends, then sends them as one summary. Other decisions pass through.
+func (e *Engine) collectStartup(
+	ctx context.Context, now time.Time, decisions []problem.Decision,
+) []problem.Decision {
+	if e.startupUntil.IsZero() {
+		return decisions
+	}
+	var rest []problem.Decision
+	for _, d := range decisions {
+		if d.Action == problem.Announce {
+			e.startup = append(e.startup, d)
+		} else {
+			rest = append(rest, d)
+		}
+	}
+	if now.Before(e.startupUntil) {
+		return rest
+	}
+	if len(e.startup) > 0 {
+		e.deps.Sink(ctx, problem.Decision{Reason: "startup summary"},
+			story.StartupSummary(e.startup, now))
+	}
+	e.startup, e.startupUntil = nil, time.Time{}
+	return rest
 }

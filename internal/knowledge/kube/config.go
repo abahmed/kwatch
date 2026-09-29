@@ -19,6 +19,9 @@ const (
 	AttrSecretType = "secret.type"
 	AttrKeys       = "keys"
 	AttrCertExpiry = "tls.not.after"
+	// AttrDataDigest fingerprints all values, so a change is detectable
+	// without keeping any value.
+	AttrDataDigest = "data.digest"
 )
 
 // certExpiryAnnotation carries a TLS certificate's expiry on the cached
@@ -68,6 +71,7 @@ func (SecretSchema) Describe(obj any) (Description, bool) {
 		AttrSecretType: knowledge.Text(string(secret.Type)),
 		AttrKeys: knowledge.Text(
 			strings.Join(byteKeys(secret.Data), ",")),
+		AttrDataDigest: knowledge.Text(mapDigest(digests(secret.Data))),
 	}
 	if raw := secret.Annotations[certExpiryAnnotation]; raw != "" {
 		if notAfter, err := time.Parse(time.RFC3339, raw); err == nil {
@@ -114,7 +118,8 @@ func (ConfigMapSchema) Describe(obj any) (Description, bool) {
 	return Description{
 		ID: objectID(KindConfigMap, cm), UID: string(cm.UID),
 		Attributes: map[string]knowledge.Value{
-			AttrKeys: knowledge.Text(strings.Join(keys, ",")),
+			AttrKeys:       knowledge.Text(strings.Join(keys, ",")),
+			AttrDataDigest: knowledge.Text(mapDigest(configMapDigests(cm))),
 		},
 	}, true
 }
@@ -229,4 +234,13 @@ func certificateExpiry(data []byte) (time.Time, bool) {
 		return time.Time{}, false
 	}
 	return cert.NotAfter, true
+}
+
+// mapDigest fingerprints a key → value-digest map in key order.
+func mapDigest(values map[string]string) string {
+	var b strings.Builder
+	for _, key := range sortedKeys(values) {
+		b.WriteString(key + "=" + values[key] + ";")
+	}
+	return digest([]byte(b.String()))
 }

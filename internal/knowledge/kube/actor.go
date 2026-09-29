@@ -12,13 +12,18 @@ func Actor(meta metav1.Object) string {
 		manager string
 		latest  metav1.Time
 	)
-	for _, entry := range meta.GetManagedFields() {
+	entries := meta.GetManagedFields()
+	for _, entry := range entries {
 		if entry.Time == nil {
 			continue
 		}
 		if manager == "" || entry.Time.After(latest.Time) {
 			manager, latest = entry.Manager, *entry.Time
 		}
+	}
+	if manager == "" && len(entries) > 0 {
+		// Without timestamps, the last entry is the most recent writer.
+		manager = entries[len(entries)-1].Manager
 	}
 	return manager
 }

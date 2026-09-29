@@ -65,6 +65,7 @@ func podAttributes(pod *corev1.Pod) map[string]knowledge.Value {
 		AttrPhase:    knowledge.Text(string(pod.Status.Phase)),
 		AttrDeleting: knowledge.Bool(pod.DeletionTimestamp != nil),
 		AttrQoS:      knowledge.Text(string(pod.Status.QOSClass)),
+		AttrLabels:   knowledge.Text(labelText(pod.Labels)),
 	}
 	if pod.Status.Reason != "" {
 		attrs[AttrReason] = knowledge.Text(pod.Status.Reason)

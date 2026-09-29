@@ -33,7 +33,8 @@ func (ConfigRule) Explain(q Query, symptom signal.Signal) []Hypothesis {
 			continue
 		}
 		change, ok := latestChange(q, ref, symptom.Since, ConfigWindow)
-		if !ok {
+		if !ok || rolloutNear(q, TopOwner(q.Model, pod), change.At) {
+			// Part of a release: the rollout hypothesis names it.
 			continue
 		}
 		out = append(out, configHypothesis(q, pod, ref, change, symptom))

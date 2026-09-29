@@ -92,6 +92,26 @@ func registrations() []registration {
 		{NamespaceSchema{}, func(f factory) informer {
 			return f.Core().V1().Namespaces().Informer()
 		}},
+		{PDBSchema{}, func(f factory) informer {
+			return f.Policy().V1().PodDisruptionBudgets().Informer()
+		}},
+		{QuotaSchema{}, func(f factory) informer {
+			return f.Core().V1().ResourceQuotas().Informer()
+		}},
+		{NetworkPolicySchema{}, func(f factory) informer {
+			return f.Networking().V1().NetworkPolicies().Informer()
+		}},
+		{VolumeAttachmentSchema{}, func(f factory) informer {
+			return f.Storage().V1().VolumeAttachments().Informer()
+		}},
+		{WebhookSchema{Mutating: true}, func(f factory) informer {
+			return f.Admissionregistration().V1().
+				MutatingWebhookConfigurations().Informer()
+		}},
+		{WebhookSchema{}, func(f factory) informer {
+			return f.Admissionregistration().V1().
+				ValidatingWebhookConfigurations().Informer()
+		}},
 	}
 }
 
@@ -130,14 +150,32 @@ func NewSource(cfg SourceConfig) (*Source, error) {
 	}
 	for _, r := range registrations() {
 		informer := r.informer(factory)
-		if _, err := informer.AddEventHandler(
-			s.handler(NewTranslator(r.schema)),
+		if _, err := informer.AddEventHandler(translatorHandler(
+			NewTranslator(r.schema), cfg.Submit, cfg.Now),
 		); err != nil {
 			return nil, err
 		}
 		s.synced[r.schema.Kind()] = informer.HasSynced
 	}
+	events := factory.Core().V1().Events().Informer()
+	if _, err := events.AddEventHandler(s.eventHandler()); err != nil {
+		return nil, err
+	}
 	return s, nil
+}
+
+// eventHandler records Warning events as notes. Deleting an Event object
+// (expiry) keeps the note: the evidence outlives the event.
+func (s *Source) eventHandler() cache.ResourceEventHandler {
+	note := func(obj any) {
+		if fact, ok := EventNote(obj, s.cfg.Now()); ok {
+			s.cfg.Submit(context.Background(), fact)
+		}
+	}
+	return cache.ResourceEventHandlerFuncs{
+		AddFunc:    note,
+		UpdateFunc: func(_, new any) { note(new) },
+	}
 }
 
 // Run starts the informers and blocks until ctx ends and every informer
@@ -181,21 +219,25 @@ func (s *Source) Synced(kind knowledge.Kind) bool {
 	return fn()
 }
 
-func (s *Source) handler(t *Translator) cache.ResourceEventHandler {
-	submit := func(facts []knowledge.Fact) {
+// translatorHandler submits the facts a translator produces for informer
+// notifications.
+func translatorHandler(
+	t *Translator, submit Submit, now func() time.Time,
+) cache.ResourceEventHandler {
+	send := func(facts []knowledge.Fact) {
 		if len(facts) > 0 {
-			s.cfg.Submit(context.Background(), facts...)
+			submit(context.Background(), facts...)
 		}
 	}
 	return cache.ResourceEventHandlerDetailedFuncs{
 		AddFunc: func(obj any, initialList bool) {
-			submit(t.Added(obj, initialList, s.cfg.Now()))
+			send(t.Added(obj, initialList, now()))
 		},
 		UpdateFunc: func(old, new any) {
-			submit(t.Updated(old, new, s.cfg.Now()))
+			send(t.Updated(old, new, now()))
 		},
 		DeleteFunc: func(obj any) {
-			submit(t.Deleted(obj, s.cfg.Now()))
+			send(t.Deleted(obj, now()))
 		},
 	}
 }

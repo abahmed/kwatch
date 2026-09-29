@@ -93,6 +93,17 @@ func startCoreV2(
 			deps.readiness.setCurrent(name, true)
 		}
 	}
+	// These components do not depend on informer initialization.
+	ready := make(chan struct{})
+	close(ready)
+	for _, component := range []componentSpec{
+		monitoredRun(deps, "telemetry", deps.telemetryRun),
+		monitoredRun(deps, "upgrader", deps.upgradeRun),
+		monitoredRun(deps, "rbac", deps.securityRun),
+		monitoredComponent(deps, "heartbeat", runHeartbeat),
+	} {
+		supervisor.startOptional(ctx, ready, component)
+	}
 	supervisor.startOwned(ctx, componentSpec{
 		name:     "core",
 		required: true,
@@ -130,6 +141,8 @@ func runCoreV2(ctx context.Context, deps *serverDeps) error {
 		},
 		Clock: coreClock{deps.clients.Clock},
 		Store: core.NewProblemStore(state),
+		Investigate: core.NewInvestigator(
+			kube.LogReader{Client: deps.clients.Kubernetes}.Excerpt),
 		Progress: func() {
 			deps.controllerProgress.Touch(appClock.Now())
 		},
@@ -146,8 +159,40 @@ func runCoreV2(ctx context.Context, deps *serverDeps) error {
 	if err != nil {
 		return err
 	}
+	stats := kube.NewStatsPoller(kube.StatsConfig{
+		Client: deps.clients.Kubernetes,
+		Now:    appClock.Now,
+		Submit: engine.Submit,
+		Nodes: func() []knowledge.EntityID {
+			return model.Entities(kube.KindNode)
+		},
+	})
+	dynamicSource := kube.NewDynamicSource(kube.DynamicConfig{
+		Client: deps.clients.Dynamic,
+		Resync: deps.runtime.Lifecycle().ResyncInterval(),
+		Now:    appClock.Now,
+		Submit: engine.Submit,
+	})
+	prober := kube.NewProber(kube.ProbeConfig{
+		Client:   deps.clients.Kubernetes,
+		Resolver: deps.clients.Resolver,
+		Now:      appClock.Now,
+		Submit:   engine.Submit,
+	})
 	var background sync.WaitGroup
-	background.Add(3)
+	background.Add(6)
+	go func() {
+		defer background.Done()
+		prober.Run(ctx)
+	}()
+	go func() {
+		defer background.Done()
+		dynamicSource.Run(ctx)
+	}()
+	go func() {
+		defer background.Done()
+		stats.Run(ctx)
+	}()
 	go func() {
 		defer background.Done()
 		source.Run(ctx)
@@ -158,7 +203,11 @@ func runCoreV2(ctx context.Context, deps *serverDeps) error {
 	}()
 	go func() {
 		defer background.Done()
-		if source.WaitForSync(ctx) && deps.readiness != nil {
+		if !source.WaitForSync(ctx) {
+			return
+		}
+		engine.SourcesSynced()
+		if deps.readiness != nil {
 			deps.readiness.setCurrent("controller", true)
 		}
 	}()
@@ -179,6 +228,15 @@ func newDetectorRegistry(synced func(knowledge.Kind) bool) *signal.Registry {
 		detect.Service{},
 		detect.Certificate{},
 		detect.Missing{},
+		detect.Event{},
+		detect.Budget{},
+		detect.Quota{},
+		detect.Attachment{},
+		detect.Webhook{},
+		detect.NodeUsage{},
+		detect.VolumeUsage{},
+		detect.Custom{},
+		detect.ClusterService{},
 	)
 }
 
@@ -191,6 +249,12 @@ func newReasoner() *reason.Engine {
 		reason.BackendRule{},
 		reason.SchedulingRule{},
 		reason.PodsRule{},
+		reason.AdmissionRule{},
+		reason.QuotaRule{},
+		reason.NetworkPolicyRule{},
+		reason.MetricsAPIRule{},
+		reason.DNSRule{},
+		reason.TopologyRule{},
 	)
 }
 
