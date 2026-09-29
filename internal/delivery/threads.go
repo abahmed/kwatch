@@ -1,13 +1,13 @@
 package delivery
 
-// A restart used to orphan every open incident's Slack thread. The incident
-// itself survived in the ConfigMap, so the resolve went out -- as a brand new
-// top-level message, while the original alert sat above it with no closing
-// reply. Anyone scrolling the channel saw a problem that was never closed.
+// A restart used to orphan every open problem's provider thread: the next
+// update opened a new Slack thread or a new tracker issue while the original
+// sat above it with no closing reply.
 //
-// The thread ids are provider state, not incident state, so they persist
-// beside the incidents rather than inside them: the map is keyed by provider
-// name, and a provider that no longer exists simply has its entry ignored.
+// Thread ids are provider state, not incident state. The application saves
+// them in the disk store (internal/app/thread_state.go) keyed by provider
+// name and restores them before delivery starts; a provider that no longer
+// exists simply has its entry ignored.
 
 // ThreadStateProvider is an optional interface for providers that keep
 // per-incident conversation ids worth surviving a restart.
