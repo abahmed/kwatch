@@ -207,7 +207,9 @@ func normalizeReason(reason string) string {
 		"persistence_restore_failed", "persistence_write_failed",
 		"provider_shutdown_timeout", "component_failed", "component_stopped",
 		"timeout", "canceled", "rate_limited", "standby", "shutdown",
-		"leadership_lost", "cache_sync_pending", "watcher_failed":
+		"leadership_lost", "cache_sync_pending", "watcher_failed",
+		"api_unavailable", "permission_denied",
+		"optional_permission_denied":
 		return reason
 	default:
 		if reason == "" {
