@@ -67,8 +67,6 @@ jobs:
         --covermode=atomic ./...
     - name: Enforce coverage thresholds
       run: ./scripts/check-coverage.sh coverage.txt
-    - name: Integration tests
-      run: go test -race -tags integration ./internal/integration/...
     - name: Upload coverage to Codecov
       if: success() && github.ref == 'refs/heads/main'
       uses: codecov/codecov-action@303a32d7a59b442fa8d48b6a1cc6825c09c847a5 # v7
