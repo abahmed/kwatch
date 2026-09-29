@@ -82,7 +82,7 @@ func (h *HealthServer) LeadershipStatus() *LeadershipStatus {
 }
 
 // SetLeadershipRenewal records the last successful Lease write for the
-// current leader. Stale callbacks cannot update a standby or stopped role.
+// current leader. Stale callbacks cannot update a starting or stopped role.
 func (h *HealthServer) SetLeadershipRenewal(renewal time.Time) {
 	h.componentMu.Lock()
 	defer h.componentMu.Unlock()
@@ -206,7 +206,7 @@ func normalizeReason(reason string) string {
 		"optional_api_unavailable", "discovery_failed", "component_stalled",
 		"persistence_restore_failed", "persistence_write_failed",
 		"provider_shutdown_timeout", "component_failed", "component_stopped",
-		"timeout", "canceled", "rate_limited", "standby", "shutdown",
+		"timeout", "canceled", "rate_limited", "shutdown",
 		"leadership_lost", "cache_sync_pending", "watcher_failed",
 		"api_unavailable", "permission_denied",
 		"optional_permission_denied":
@@ -260,14 +260,15 @@ func (h *HealthServer) readyzHandler(w http.ResponseWriter, _ *http.Request) {
 }
 
 // availabilityzHandler reports whether this Pod is participating in the
-// application lifecycle. It differs from /readyz: standby Pods are
-// available for a rolling update but are not ready to run monitoring work.
+// application lifecycle. It differs from /readyz: a Pod still
+// waiting for the Lease is available for a rolling update but is not ready
+// to run monitoring work.
 func (h *HealthServer) availabilityzHandler(
 	w http.ResponseWriter,
 	_ *http.Request,
 ) {
 	status := h.LeadershipStatus()
-	if status == nil || (status.Role != "leader" && status.Role != "standby") {
+	if status == nil || (status.Role != "leader" && status.Role != "starting") {
 		w.Header().Set("Content-Type", "text/plain")
 		w.WriteHeader(http.StatusServiceUnavailable)
 		if _, err := w.Write([]byte("not available")); err != nil {

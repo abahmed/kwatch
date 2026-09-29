@@ -210,3 +210,15 @@ func ordinal(n int) string {
 	}
 	return strconv.Itoa(n) + suffix
 }
+
+// Problems returns detached copies of every tracked problem ordered by ID,
+// so callers on other goroutines never touch manager state.
+func (m *Manager) Problems() []Problem {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	out := make([]Problem, 0, len(m.problems))
+	for _, id := range m.sortedIDs() {
+		out = append(out, m.problems[id].Snapshot())
+	}
+	return out
+}

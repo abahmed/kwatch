@@ -78,14 +78,14 @@ func TestReadyzHandlerReady(t *testing.T) {
 	assert.Equal(t, "OK", string(body[:n]))
 }
 
-func TestAvailabilityzFollowsElectionParticipation(t *testing.T) {
+func TestAvailabilityzAcceptsStartingAndLeader(t *testing.T) {
 	h := &HealthServer{}
 	req := httptest.NewRequest(http.MethodGet, "/availabilityz", nil)
 	w := httptest.NewRecorder()
 	h.availabilityzHandler(w, req)
 	assert.Equal(t, http.StatusServiceUnavailable, w.Result().StatusCode)
 
-	h.SetLeadership(LeadershipStatus{Role: "standby"})
+	h.SetLeadership(LeadershipStatus{Role: "starting"})
 	w = httptest.NewRecorder()
 	h.availabilityzHandler(w, req)
 	assert.Equal(t, http.StatusOK, w.Result().StatusCode)
@@ -177,7 +177,7 @@ func TestDiagnosticsDisabled(t *testing.T) {
 func TestDiagnosticsEnabled(t *testing.T) {
 	h := &HealthServer{diagnostics: true, clock: clock.RealClock{}}
 	assert.NoError(t, h.ConfigureDependencies(Dependencies{
-		Problems: &fakeProblemLister{snap: []model.IncidentView{}},
+		Problems: &fakeProblemLister{snap: []ProblemView{}},
 		Delivery: &fakeAlertSender{},
 	}))
 	mux := http.NewServeMux()

@@ -18,10 +18,10 @@ import (
 )
 
 type fakeProblemLister struct {
-	snap []model.IncidentView
+	snap []ProblemView
 }
 
-func (f *fakeProblemLister) Snapshot() []model.IncidentView {
+func (f *fakeProblemLister) Snapshot() []ProblemView {
 	return f.snap
 }
 
@@ -165,16 +165,11 @@ func TestProblemsHandlerNoAPI(t *testing.T) {
 func TestProblemsHandler(t *testing.T) {
 	assert := assert.New(t)
 	lister := &fakeProblemLister{
-		snap: []model.IncidentView{
+		snap: []ProblemView{
 			{
-				Key:       "ns:deploy:Err",
-				Reason:    "Err",
-				Namespace: "ns",
-				Name:      "deploy",
-				Count:     1,
-				State:     model.StateActive,
-				FirstSeen: time.Now(),
-				LastSeen:  time.Now(),
+				ID:      "node/n1",
+				State:   "open",
+				Members: 1,
 			},
 		},
 	}
@@ -188,11 +183,11 @@ func TestProblemsHandler(t *testing.T) {
 	assert.Equal(http.StatusOK, resp.StatusCode)
 	assert.Equal("application/json", resp.Header.Get("Content-Type"))
 
-	var got []model.IncidentView
+	var got []ProblemView
 	err := json.NewDecoder(resp.Body).Decode(&got)
 	assert.Nil(err)
 	assert.Len(got, 1)
-	assert.Equal("ns:deploy:Err", string(got[0].Key))
+	assert.Equal("node/n1", got[0].ID)
 }
 
 func TestProblemsHandlerEmpty(t *testing.T) {
@@ -207,7 +202,7 @@ func TestProblemsHandlerEmpty(t *testing.T) {
 	resp := w.Result()
 	assert.Equal(http.StatusOK, resp.StatusCode)
 
-	var got []model.IncidentView
+	var got []ProblemView
 	err := json.NewDecoder(resp.Body).Decode(&got)
 	assert.Nil(err)
 	assert.Len(got, 0)
@@ -380,7 +375,7 @@ func TestGuardWithInvalidTokenReturns401(t *testing.T) {
 func TestPprofEndpointsRegisteredWithGuard(t *testing.T) {
 	h := &HealthServer{diagnostics: true, pprof: true, diagnosticsToken: "tok"}
 	if err := h.ConfigureDependencies(Dependencies{
-		Problems: &fakeProblemLister{snap: []model.IncidentView{}},
+		Problems: &fakeProblemLister{snap: []ProblemView{}},
 	}); err != nil {
 		t.Fatal(err)
 	}

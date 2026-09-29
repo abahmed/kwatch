@@ -105,3 +105,10 @@ func TestSourcesSyncedSignals(t *testing.T) {
 		t.Error("SourcesSynced did not signal")
 	}
 }
+
+func TestEngineProblemsEmptyWithoutSignals(t *testing.T) {
+	engine := newTestEngine(t, &fakeClock{}, (&sinkLog{}).sink, nil)
+	if got := engine.Problems(); len(got) != 0 {
+		t.Fatalf("want no problems, got %+v", got)
+	}
+}

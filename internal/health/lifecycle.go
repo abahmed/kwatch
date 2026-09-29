@@ -98,7 +98,6 @@ func newServeMux(h *HealthServer) *http.ServeMux {
 		"/controlplane", h.guard(h.controlPlaneHandler),
 	)
 	mux.HandleFunc("/informer", h.guard(h.informerHandler))
-	mux.HandleFunc("/persistence", h.guard(h.persistenceHandler))
 	mux.Handle("/metrics", metrics.DefaultRegistry().Handler())
 	if h.pprof {
 		mux.HandleFunc("/debug/pprof/", h.guard(pprof.Index))

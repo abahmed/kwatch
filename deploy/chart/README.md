@@ -88,8 +88,9 @@ when the release is removed so configuration resources are not deleted by
 surprise.
 
 The chart uses `/availabilityz` for the Kubernetes Deployment probe because a
-standby is intentionally not monitoring-ready. Use `/readyz` when checking
-whether the active leader can monitor the cluster.
+Pod still waiting for the Lease is intentionally not
+monitoring-ready. Use `/readyz` when checking whether the active leader
+can monitor the cluster.
 
 ## 🧹 Uninstall
 

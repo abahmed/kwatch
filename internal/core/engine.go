@@ -124,6 +124,12 @@ func NewEngine(deps Dependencies) (*Engine, error) {
 	}, nil
 }
 
+// Problems returns detached copies of the tracked problems. It is safe to
+// call from any goroutine while the engine runs.
+func (e *Engine) Problems() []problem.Problem {
+	return e.deps.Problems.Problems()
+}
+
 // SourcesSynced tells the engine that every source finished its initial
 // list, so changes made while kwatch was down can be detected.
 func (e *Engine) SourcesSynced() {
