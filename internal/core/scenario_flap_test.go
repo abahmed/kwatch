@@ -70,3 +70,48 @@ func running(p *corev1.Pod) *corev1.Pod {
 	out.ResourceVersion = "next"
 	return out
 }
+
+func TestEngineRecoveredProblemResolvesAtHoldDeadline(t *testing.T) {
+	start := time.Date(2026, 9, 29, 12, 0, 0, 0, time.UTC)
+	h := newHarness(t, start)
+	h.add(kube.NodeSchema{}, node("n1", time.Time{}))
+	d, rs := deployment("queue")
+	d.Status.ReadyReplicas = *d.Spec.Replicas
+	h.add(kube.DeploymentSchema(), d)
+	h.add(kube.ReplicaSetSchema(), rs)
+	healthy := pod("queue-a", rs.Name, "n1", true, start)
+	h.add(kube.PodSchema{}, healthy)
+	translator := kube.NewTranslator(kube.PodSchema{})
+	crashing := crashingPod("queue-a", rs.Name, "n1", h.now)
+	h.engine.Submit(ctxBackground(),
+		translator.Updated(healthy, crashing, h.now)...)
+	h.run(h.now.Add(2*time.Minute), 10*time.Second)
+	h.engine.Submit(ctxBackground(),
+		translator.Updated(crashing, running(healthy), h.now)...)
+
+	var recoveringAt time.Time
+	for i := 0; i < 50; i++ {
+		before := len(h.decisions)
+		next, _ := h.engine.step(ctxBackground(), h.now, h.checks)
+		if recoveringAt.IsZero() && h.engine.deps.Problems.Export()[0].
+			State == problem.Recovering {
+			recoveringAt = h.now
+		}
+		if len(h.decisions) > before {
+			last := h.decisions[len(h.decisions)-1]
+			if last.Action != problem.Resolve {
+				t.Fatalf("unexpected decision %v", last.Action)
+			}
+			if got := h.now.Sub(recoveringAt); got != problem.DefaultHold {
+				t.Fatalf("resolved after %v, want hold %v",
+					got, problem.DefaultHold)
+			}
+			return
+		}
+		if next.IsZero() || !next.After(h.now) {
+			t.Fatalf("step at %v reported no next wake", h.now)
+		}
+		h.now = next
+	}
+	t.Fatal("problem never resolved")
+}

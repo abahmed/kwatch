@@ -12,49 +12,90 @@ import (
 )
 
 // Tick advances every problem's lifecycle and returns the decisions that
-// warrant a message, plus the delay until the next deadline (zero when
-// none is pending).
+// warrant a message, plus the delay until the earliest pending deadline
+// computed from the state after all transitions (zero when none).
 func (m *Manager) Tick(now time.Time) ([]Decision, time.Duration) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	var decisions []Decision
-	var next time.Duration
-	wake := func(at time.Time) {
-		if delay := at.Sub(now); delay > 0 && (next == 0 || delay < next) {
-			next = delay
-		}
-	}
 	for _, id := range m.sortedIDs() {
 		p := m.problems[id]
-		if d, ok := m.advance(p, now, wake); ok {
+		if d, ok := m.advance(p, now); ok {
 			decisions = append(decisions, d)
 		}
 		if p.State == Resolved && now.Sub(p.Resolved) > m.cfg.Remember {
 			delete(m.problems, id)
 		}
 	}
-	return decisions, next
+	return decisions, m.nextWake(now)
 }
 
-func (m *Manager) advance(
-	p *Problem, now time.Time, wake func(time.Time),
-) (Decision, bool) {
+// nextWake returns the delay to the earliest future deadline over all
+// problems, or zero when no timer is pending.
+func (m *Manager) nextWake(now time.Time) time.Duration {
+	var next time.Duration
+	for _, p := range m.problems {
+		at, ok := m.deadline(p, now)
+		if !ok {
+			continue
+		}
+		if delay := at.Sub(now); delay > 0 && (next == 0 || delay < next) {
+			next = delay
+		}
+	}
+	return next
+}
+
+// deadline reports when the problem next needs a tick on its own.
+func (m *Manager) deadline(p *Problem, now time.Time) (time.Time, bool) {
 	switch p.State {
 	case Settling:
-		return m.settle(p, now, wake)
+		if len(p.Members) == 0 {
+			return m.graceDeadline(now)
+		}
+		settle := m.cfg.Settle
+		if p.Tier == Page {
+			settle = m.cfg.PageSettle
+		}
+		return p.Opened.Add(settle), true
+	case Open:
+		if len(p.Members) == 0 {
+			return m.graceDeadline(now)
+		}
+	case Recovering:
+		if len(p.Members) == 0 {
+			hold := m.cfg.hold(len(recent(p.Cycles, now, m.cfg.FlapWindow)))
+			return p.RecoveringSince.Add(hold), true
+		}
+	case Flapping:
+		if len(p.Members) == 0 && !p.RecoveringSince.IsZero() {
+			return p.RecoveringSince.Add(m.cfg.MaxHold), true
+		}
+	case Resolved:
+		return p.Resolved.Add(m.cfg.Remember + time.Nanosecond), true
+	}
+	return time.Time{}, false
+}
+
+func (m *Manager) graceDeadline(now time.Time) (time.Time, bool) {
+	return m.restoreGrace, now.Before(m.restoreGrace)
+}
+
+func (m *Manager) advance(p *Problem, now time.Time) (Decision, bool) {
+	switch p.State {
+	case Settling:
+		return m.settle(p, now)
 	case Open:
 		return m.open(p, now)
 	case Recovering:
-		return m.recovering(p, now, wake)
+		return m.recovering(p, now)
 	case Flapping:
-		return m.flapping(p, now, wake)
+		return m.flapping(p, now)
 	}
 	return Decision{}, false
 }
 
-func (m *Manager) settle(
-	p *Problem, now time.Time, wake func(time.Time),
-) (Decision, bool) {
+func (m *Manager) settle(p *Problem, now time.Time) (Decision, bool) {
 	if len(p.Members) == 0 && now.Before(m.restoreGrace) {
 		return Decision{}, false
 	}
@@ -67,8 +108,7 @@ func (m *Manager) settle(
 	if p.Tier == Page {
 		settle = m.cfg.PageSettle
 	}
-	if due := p.Opened.Add(settle); now.Before(due) {
-		wake(due)
+	if now.Before(p.Opened.Add(settle)) {
 		return Decision{}, false
 	}
 	if p.Tier == Silent {
@@ -92,9 +132,7 @@ func (m *Manager) open(p *Problem, now time.Time) (Decision, bool) {
 	return m.decide(p, Update, "material change"), true
 }
 
-func (m *Manager) recovering(
-	p *Problem, now time.Time, wake func(time.Time),
-) (Decision, bool) {
+func (m *Manager) recovering(p *Problem, now time.Time) (Decision, bool) {
 	if len(p.Members) > 0 {
 		// Failed again inside the hold: same problem, no new message.
 		p.Cycles = recent(append(p.Cycles, now), now, m.cfg.FlapWindow)
@@ -109,15 +147,12 @@ func (m *Manager) recovering(
 	}
 	hold := m.cfg.hold(len(recent(p.Cycles, now, m.cfg.FlapWindow)))
 	if due := p.RecoveringSince.Add(hold); now.Before(due) {
-		wake(due)
 		return Decision{}, false
 	}
 	return m.resolve(p, now, "healthy for "+hold.String()), true
 }
 
-func (m *Manager) flapping(
-	p *Problem, now time.Time, wake func(time.Time),
-) (Decision, bool) {
+func (m *Manager) flapping(p *Problem, now time.Time) (Decision, bool) {
 	if len(p.Members) > 0 {
 		p.RecoveringSince = time.Time{}
 		return Decision{}, false
@@ -126,7 +161,6 @@ func (m *Manager) flapping(
 		p.RecoveringSince = now
 	}
 	if due := p.RecoveringSince.Add(m.cfg.MaxHold); now.Before(due) {
-		wake(due)
 		return Decision{}, false
 	}
 	return m.resolve(p, now, "stable for "+m.cfg.MaxHold.String()), true

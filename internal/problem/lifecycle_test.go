@@ -82,9 +82,7 @@ func TestManagerResolvesAfterHold(t *testing.T) {
 	if r.only().State != Recovering {
 		t.Fatal("problem should be recovering")
 	}
-	if _, next := r.m.Tick(gone); next != DefaultHold {
-		t.Fatalf("next wake = %v, want hold %v", next, DefaultHold)
-	}
+	wantNone(t, r.tick(gone.Add(time.Second)))
 	wantNone(t, r.tick(gone.Add(DefaultHold-time.Second)))
 
 	ds := r.tick(gone.Add(DefaultHold))
