@@ -113,7 +113,7 @@ func CheckHTTPResponseAt(
 
 // Event used to represent info needed by providers to send messages
 type Event struct {
-	// Narrative is the provider-neutral incident explanation composed by
+	// Narrative is the provider-neutral problem explanation composed by
 	// delivery. Legacy direct event callers leave it empty.
 	Narrative    string
 	Resource     string // "pod", "node", "pvc"
@@ -141,10 +141,10 @@ type Event struct {
 	Severity      model.Severity
 	IncludeEvents bool // If false, omit events section from output
 	IncludeLogs   bool // If false, omit logs section from output
-	// Action is the incident action: "create", "update", "resolved"; "" means
+	// Action is the problem action: "create", "update", "resolved"; "" means
 	// the legacy event path.
 	Action string
-	// Stable per-incident key for trigger↔resolve correlation
+	// Stable per-problem key for trigger↔resolve correlation
 	DedupKey string
 	// Transient marks a finding that came from a point-in-time Kubernetes
 	// Event rather than from observed object state. See model.Observation.

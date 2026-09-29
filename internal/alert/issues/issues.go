@@ -7,7 +7,7 @@ import (
 	"github.com/abahmed/kwatch/internal/event"
 )
 
-// maxTrackedIssues bounds the incident-to-issue map.
+// maxTrackedIssues bounds the problem-to-issue map.
 const maxTrackedIssues = 1000
 
 // Tracker is the provider-specific issue API.
@@ -18,7 +18,7 @@ type Tracker interface {
 	Close(ctx context.Context, id, body string) error
 }
 
-// Map remembers which issue speaks for which incident. It is persisted
+// Map remembers which issue speaks for which problem. It is persisted
 // through the delivery thread store so a restart keeps commenting on the
 // same issue instead of opening another.
 type Map struct {

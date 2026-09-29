@@ -12,7 +12,7 @@ activeProbeMonitor.enabled|Monitors|Run explicitly configured application probes
 activeProbeMonitor.intervalSeconds|Monitors|Seconds between active probe rounds.|active|
 activeProbeMonitor.timeoutSeconds|Monitors|Timeout for each active probe.|active|
 activeProbeMonitor.failureThreshold|Monitors|Consecutive probe failures before alerting.|active|
-activeProbeMonitor.recoveryThreshold|Monitors|Consecutive successes before resolving a probe incident.|active|
+activeProbeMonitor.recoveryThreshold|Monitors|Consecutive successes before resolving a probe problem.|active|
 activeProbeMonitor.autoServices|Monitors|Probe discoverable Service ports automatically; opt in to avoid unexpected traffic.|active|
 activeProbeMonitor.excludeNamespaces|Monitors|Namespaces automatic Service probing skips, for default-deny ingress that does not admit kwatch.|active|
 activeProbeMonitor.http|Monitors|JSON array of HTTP probe targets with optional paths, headers, and latency limits.|active|
@@ -23,7 +23,7 @@ telemetry.enabled|Operations|Send the weekly adoption heartbeat.|active|
 maintenance.enabled|Operations|Honor maintenance annotations while preserving cluster-level alerts.|active|
 maintenance.annotation|Operations|Annotation that marks deliberate maintenance on a resource.|active|
 maintenance.untilAnnotation|Operations|Optional annotation containing the maintenance expiry timestamp.|active|
-healthCheck.diagnostics|Operations|Expose diagnostic endpoints such as incidents and test-alert.|active|
+healthCheck.diagnostics|Operations|Expose diagnostic endpoints such as problems and test-alert.|active|
 healthCheck.diagnosticsToken|Security|Bearer token for diagnostic endpoints; stored only through a mounted Secret.|secret|
 healthCheck.pprof|Operations|Expose Go profiling endpoints; keep disabled in production.|active|
 app.clusterName|Operations|Cluster name shown in notifications.|active|
@@ -35,7 +35,7 @@ app.caBundlePath|Security|Path to a mounted PEM bundle for outbound provider TLS
 healthCheck.enabled|Operations|Expose the built-in health endpoint.|active|
 healthCheck.port|Operations|Port for health and optional diagnostic endpoints.|active|
 crd.enabled|Operations|Watch KwatchConfig and supported CRD status conditions; restart kwatch when configuration changes; enabled by the interactive installer after installing the CRD.|active|
-auditLog.enabled|Operations|Write structured incident lifecycle records to the configured audit sink.|active|
+auditLog.enabled|Operations|Write structured problem lifecycle records to the configured audit sink.|active|
 auditLog.output|Operations|Audit output: stdout or a supported output sink.|active|
 templates|Operations|JSON map of optional reason-specific message templates.|active|
 runbooks|Operations|JSON map of reason-to-runbook URLs.|active|

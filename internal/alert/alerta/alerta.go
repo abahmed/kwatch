@@ -79,13 +79,13 @@ func (s *Alerta) Name() string {
 }
 
 // SendEvent sends event to the provider
-// UsesEventDelivery routes incidents through SendEvent, which carries the
+// UsesEventDelivery routes problems through SendEvent, which carries the
 // action and a stable key so Alerta can close the alert.
 func (s *Alerta) UsesEventDelivery() {}
 
-// SendEvent raises or closes one Alerta alert per kwatch incident. Alerta
+// SendEvent raises or closes one Alerta alert per kwatch problem. Alerta
 // deduplicates on environment, resource and event, so the resource carries
-// the incident key.
+// the problem key.
 func (s *Alerta) SendEvent(ctx context.Context, e *event.Event) error {
 	resource := e.AlertKey()
 	if len(s.clusterName) > 0 {

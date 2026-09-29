@@ -71,11 +71,11 @@ func (s *Signl4) Name() string {
 }
 
 // SendEvent sends event to the provider
-// UsesEventDelivery routes incidents through SendEvent, which carries the
+// UsesEventDelivery routes problems through SendEvent, which carries the
 // action and a stable key so SIGNL4 can close the alert.
 func (s *Signl4) UsesEventDelivery() {}
 
-// SendEvent raises or resolves one SIGNL4 alert per kwatch incident, keyed by
+// SendEvent raises or resolves one SIGNL4 alert per kwatch problem, keyed by
 // X-S4-ExternalID.
 func (s *Signl4) SendEvent(ctx context.Context, e *event.Event) error {
 	title := s.title

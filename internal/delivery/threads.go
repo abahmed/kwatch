@@ -4,18 +4,18 @@ package delivery
 // update opened a new Slack thread or a new tracker issue while the original
 // sat above it with no closing reply.
 //
-// Thread ids are provider state, not incident state. The application saves
+// Thread ids are provider state, not problem state. The application saves
 // them in the disk store (internal/app/thread_state.go) keyed by provider
 // name and restores them before delivery starts; a provider that no longer
 // exists simply has its entry ignored.
 
 // ThreadStateProvider is an optional interface for providers that keep
-// per-incident conversation ids worth surviving a restart.
+// per-problem conversation ids worth surviving a restart.
 type ThreadStateProvider interface {
-	// SnapshotThreads returns incident key → provider thread id.
+	// SnapshotThreads returns problem key → provider thread id.
 	SnapshotThreads() map[string]string
 	// RestoreThreads adopts a previously saved map. Implementations must
-	// tolerate keys for incidents that no longer exist; those entries expire
+	// tolerate keys for problems that no longer exist; those entries expire
 	// with the provider's own bound.
 	RestoreThreads(map[string]string)
 }

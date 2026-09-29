@@ -17,10 +17,11 @@
 
 # kwatch
 
-> Kubernetes incidents, explained.
+> Kubernetes problems explained by their root cause.
 
-kwatch is a source-available Kubernetes incident monitor. It turns failures into
-clear alerts that explain **what broke, why it happened, and what to do next**.
+kwatch explains each Kubernetes failure by its root cause and sends one alert
+per problem. It turns failures into clear messages that show **what broke, why
+it happened, and what to do next**.
 
 It runs in your own cluster. No hosted account is required.
 
@@ -32,8 +33,8 @@ It runs in your own cluster. No hosted account is required.
 
 Kubernetes shows symptoms. kwatch shows the story.
 
-It helps new teams understand incidents faster. It gives experienced operators
-the context they need in one place.
+It helps new teams understand what broke, why, and what to do faster. It gives
+experienced operators the context they need in one place.
 
 | Kubernetes signal | What kwatch adds |
 | --- | --- |
@@ -150,7 +151,7 @@ for all options.
 The installer handles upgrades, configuration, status checks, and removal.
 It protects your settings during upgrades.
 
-## 🎯 Focused on incidents
+## 🎯 Focused on problems
 
 Use kwatch when something changes and your team needs answers quickly. Pair it
 with Prometheus, Grafana, or Loki for long-term metrics and logs.

@@ -1,47 +1,47 @@
 # kwatch config catalog v1
-resyncSeconds|integer|0|Performance|Periodic safety resync interval in seconds; zero keeps event-driven mode.|active|
-namespaces|list|all|Scope|Comma-separated namespaces to watch; leave empty to watch every namespace.|active|
-namespaceSelector|string|empty|Scope|Kubernetes label selector used to choose namespaces.|active|
-reasons|list|all|Scope|Comma-separated event reasons to allow or exclude with a leading !.|active|
-severityByOwnerKind|json|{}|Alerts|JSON map overriding severity by workload owner kind.|active|
-severityByReason|json|{}|Alerts|JSON map overriding severity by detected reason.|active|
-heartbeatMonitor.enabled|boolean|false|Monitors|Send a periodic external dead-man heartbeat.|active|
-heartbeatMonitor.interval|integer|300|Monitors|Seconds between heartbeat notifications.|active|
-activeProbeMonitor.enabled|boolean|false|Monitors|Run explicitly configured application probes.|active|
-activeProbeMonitor.intervalSeconds|integer|30|Monitors|Seconds between active probe rounds.|active|
-activeProbeMonitor.timeoutSeconds|integer|5|Monitors|Timeout for each active probe.|active|
-activeProbeMonitor.failureThreshold|integer|3|Monitors|Consecutive probe failures before alerting.|active|
-activeProbeMonitor.recoveryThreshold|integer|2|Monitors|Consecutive successes before resolving a probe incident.|active|
-activeProbeMonitor.autoServices|boolean|false|Monitors|Probe discoverable Service ports automatically; opt in to avoid unexpected traffic.|active|
-activeProbeMonitor.excludeNamespaces|list|[]|Monitors|Namespaces automatic Service probing skips, for default-deny ingress that does not admit kwatch.|active|
-activeProbeMonitor.http|json|[]|Monitors|JSON array of HTTP probe targets with optional paths, headers, and latency limits.|active|
-activeProbeMonitor.tcp|json|[]|Monitors|JSON array of TCP probe targets.|active|
-activeProbeMonitor.dns|json|[]|Monitors|JSON array of DNS probe targets.|active|
-upgrader.disableUpdateCheck|boolean|false|Operations|Disable the update notification.|active|
-telemetry.enabled|boolean|true|Operations|Send the weekly adoption heartbeat.|active|
-maintenance.enabled|boolean|true|Operations|Honor maintenance annotations while preserving cluster-level alerts.|active|
-maintenance.annotation|string|kwatch.io/maintenance|Operations|Annotation that marks deliberate maintenance on a resource.|active|
-maintenance.untilAnnotation|string|kwatch.io/maintenance-until|Operations|Optional annotation containing the maintenance expiry timestamp.|active|
-healthCheck.diagnostics|boolean|false|Operations|Expose diagnostic endpoints such as incidents and test-alert.|active|
-healthCheck.pprof|boolean|false|Operations|Expose Go profiling endpoints; keep disabled in production.|active|
-app.clusterName|string|empty|Operations|Cluster name shown in notifications.|active|
 app.proxyURL|string|empty|Operations|Optional proxy for outbound provider requests.|active|
+app.clusterName|string|empty|Operations|Cluster name shown in notifications.|active|
 app.disableStartupMessage|boolean|false|Operations|Disable the startup notification.|active|
 app.logFormatter|string|text|Operations|Log output format: text or json.|active|
 app.insecureSkipTLSVerify|boolean|false|Security|Skip TLS verification for outbound providers; strongly discouraged.|active|
 app.caBundlePath|string|empty|Security|Path to a mounted PEM bundle for outbound provider TLS.|active|
+telemetry.enabled|boolean|true|Operations|Send the weekly adoption heartbeat.|active|
+upgrader.disableUpdateCheck|boolean|false|Operations|Disable the update notification.|active|
+heartbeatMonitor.enabled|boolean|false|Monitors|Send a periodic external dead-man heartbeat.|active|
+heartbeatMonitor.interval|integer|0|Monitors|Seconds between heartbeat notifications.|active|
+heartbeatMonitor.url|string|empty|Security|External dead-man heartbeat URL; stored only through a mounted Secret.|secret|
 healthCheck.enabled|boolean|true|Operations|Expose the built-in health endpoint.|active|
 healthCheck.port|integer|8060|Operations|Port for health and optional diagnostic endpoints.|active|
-crd.enabled|boolean|true|Operations|Watch KwatchConfig and supported CRD status conditions; restart kwatch when configuration changes; enabled by the interactive installer after installing the CRD.|active|
-auditLog.enabled|boolean|true|Operations|Write structured incident lifecycle records to the configured audit sink.|active|
-auditLog.output|string|stdout|Operations|Audit output: stdout or a supported output sink.|active|
-templates|json|{}|Operations|JSON map of optional reason-specific message templates.|active|
-runbooks|json|{}|Operations|JSON map of reason-to-runbook URLs.|active|
-silences|json|[]|Noise reduction|JSON array of scoped silence rules, including eventMessages substring matches for attached Kubernetes Events.|active|
-ignoreContainerNames|list|legacy|Compatibility|Legacy container suppression field.|deprecated|silences
-ignorePodNames|list|legacy|Compatibility|Legacy pod-name suppression field.|deprecated|silences
-ignoreContainerMessages|list|legacy|Compatibility|Legacy container-message suppression field.|deprecated|silences
-ignoreNodeReasons|list|legacy|Compatibility|Legacy node-reason suppression field.|deprecated|silences
-ignoreNodeMessages|list|legacy|Compatibility|Legacy node-message suppression field.|deprecated|silences
-heartbeatMonitor.url|string|empty|Security|External dead-man heartbeat URL; stored only through a mounted Secret.|secret|
+healthCheck.pprof|boolean|false|Operations|Expose Go profiling endpoints; keep disabled in production.|active|
+healthCheck.diagnostics|boolean|false|Operations|Expose diagnostic endpoints such as problems and test-alert.|active|
 healthCheck.diagnosticsToken|string|empty|Security|Bearer token for diagnostic endpoints; stored only through a mounted Secret.|secret|
+maintenance.enabled|boolean|true|Operations|Honor maintenance annotations while preserving cluster-level alerts.|active|
+maintenance.annotation|string|kwatch.io/maintenance|Operations|Annotation that marks deliberate maintenance on a resource.|active|
+maintenance.untilAnnotation|string|kwatch.io/maintenance-until|Operations|Optional annotation containing the maintenance expiry timestamp.|active|
+namespaces|list|null|Scope|Comma-separated namespaces to watch; leave empty to watch every namespace.|active|
+reasons|list|null|Scope|Comma-separated event reasons to allow or exclude with a leading !.|active|
+namespaceSelector|string|empty|Scope|Kubernetes label selector used to choose namespaces.|active|
+ignoreContainerNames|list|null|Compatibility|Legacy container suppression field.|deprecated|silences
+ignorePodNames|list|null|Compatibility|Legacy pod-name suppression field.|deprecated|silences
+ignoreContainerMessages|list|null|Compatibility|Legacy container-message suppression field.|deprecated|silences
+ignoreNodeReasons|list|null|Compatibility|Legacy node-reason suppression field.|deprecated|silences
+ignoreNodeMessages|list|null|Compatibility|Legacy node-message suppression field.|deprecated|silences
+silences|list|null|Noise reduction|JSON array of scoped silence rules, including eventMessages substring matches for attached Kubernetes Events.|active|
+resyncSeconds|integer|300|Performance|Periodic safety resync interval in seconds; zero keeps event-driven mode.|active|
+severityByOwnerKind|json|null|Alerts|JSON map overriding severity by workload owner kind.|active|
+severityByReason|json|null|Alerts|JSON map overriding severity by detected reason.|active|
+activeProbeMonitor.enabled|boolean|false|Monitors|Run explicitly configured application probes.|active|
+activeProbeMonitor.intervalSeconds|integer|30|Monitors|Seconds between active probe rounds.|active|
+activeProbeMonitor.timeoutSeconds|integer|5|Monitors|Timeout for each active probe.|active|
+activeProbeMonitor.failureThreshold|integer|3|Monitors|Consecutive probe failures before alerting.|active|
+activeProbeMonitor.recoveryThreshold|integer|2|Monitors|Consecutive successes before resolving a probe problem.|active|
+activeProbeMonitor.http|list|null|Monitors|JSON array of HTTP probe targets with optional paths, headers, and latency limits.|active|
+activeProbeMonitor.tcp|list|null|Monitors|JSON array of TCP probe targets.|active|
+activeProbeMonitor.dns|list|null|Monitors|JSON array of DNS probe targets.|active|
+activeProbeMonitor.autoServices|boolean|false|Monitors|Probe discoverable Service ports automatically; opt in to avoid unexpected traffic.|active|
+activeProbeMonitor.excludeNamespaces|list|null|Monitors|Namespaces automatic Service probing skips, for default-deny ingress that does not admit kwatch.|active|
+crd.enabled|boolean|false|Operations|Watch KwatchConfig and supported CRD status conditions; restart kwatch when configuration changes; enabled by the interactive installer after installing the CRD.|active|
+templates|json|null|Operations|JSON map of optional reason-specific message templates.|active|
+runbooks|json|null|Operations|JSON map of reason-to-runbook URLs.|active|
+auditLog.enabled|boolean|true|Operations|Write structured problem lifecycle records to the configured audit sink.|active|
+auditLog.output|string|stdout|Operations|Audit output: stdout or a supported output sink.|active|
