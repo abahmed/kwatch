@@ -2,8 +2,10 @@ package kube_test
 
 import (
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
+	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/tools/cache"
 
@@ -280,4 +282,45 @@ func TestTranslatorRelationTypes(t *testing.T) {
 			assert.NotEmpty(t, seenTypes)
 		})
 	}
+}
+
+func maintenancePod(annotations map[string]string) *corev1.Pod {
+	return &corev1.Pod{ObjectMeta: metav1.ObjectMeta{
+		Name: "p", Namespace: "ns", Annotations: annotations,
+	}}
+}
+
+func podAttributes(facts []knowledge.Fact) map[string]knowledge.Value {
+	for _, f := range facts {
+		if f.Kind == knowledge.Observed && f.Entity.Kind == "pod" {
+			return f.Attributes
+		}
+	}
+	return nil
+}
+
+func TestTranslatorMaintenanceAttributes(t *testing.T) {
+	cfg := kube.MaintenanceAnnotations{On: "m", Until: "m-until"}
+	at := time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)
+	pod := maintenancePod(map[string]string{
+		"m": "true", "m-until": "2026-02-01T10:00:00Z",
+	})
+	attrs := podAttributes(kube.NewTranslator(kube.PodSchema{}).
+		WithMaintenance(cfg).Added(pod, true, at))
+	assert.Equal(t, "true", attrs[kube.AttrMaintenance].AsText())
+	want := time.Date(2026, 2, 1, 10, 0, 0, 0, time.UTC)
+	assert.True(t, attrs[kube.AttrMaintenanceUntil].AsTime().Equal(want))
+
+	bad := maintenancePod(map[string]string{"m-until": "soon"})
+	attrs = podAttributes(kube.NewTranslator(kube.PodSchema{}).
+		WithMaintenance(cfg).Added(bad, true, at))
+	assert.NotContains(t, attrs, kube.AttrMaintenanceUntil)
+}
+
+func TestTranslatorMaintenanceZeroConfigRecordsNothing(t *testing.T) {
+	at := time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)
+	pod := maintenancePod(map[string]string{"m": "true"})
+	attrs := podAttributes(kube.NewTranslator(kube.PodSchema{}).
+		Added(pod, true, at))
+	assert.NotContains(t, attrs, kube.AttrMaintenance)
 }
