@@ -168,10 +168,11 @@ func runCoreV2(ctx context.Context, deps *serverDeps) error {
 		},
 	})
 	dynamicSource := kube.NewDynamicSource(kube.DynamicConfig{
-		Client: deps.clients.Dynamic,
-		Resync: deps.runtime.Lifecycle().ResyncInterval(),
-		Now:    appClock.Now,
-		Submit: engine.Submit,
+		Client:    deps.clients.Dynamic,
+		Discovery: deps.clients.Discovery,
+		Resync:    deps.runtime.Lifecycle().ResyncInterval(),
+		Now:       appClock.Now,
+		Submit:    engine.Submit,
 	})
 	prober := kube.NewProber(kube.ProbeConfig{
 		Client:   deps.clients.Kubernetes,
@@ -179,30 +180,14 @@ func runCoreV2(ctx context.Context, deps *serverDeps) error {
 		Now:      appClock.Now,
 		Submit:   engine.Submit,
 	})
-	var background sync.WaitGroup
-	background.Add(6)
-	go func() {
-		defer background.Done()
-		prober.Run(ctx)
-	}()
-	go func() {
-		defer background.Done()
-		dynamicSource.Run(ctx)
-	}()
-	go func() {
-		defer background.Done()
-		stats.Run(ctx)
-	}()
-	go func() {
-		defer background.Done()
-		source.Run(ctx)
-	}()
-	go func() {
-		defer background.Done()
-		pruneModel(ctx, model, appClock.Now)
-	}()
-	go func() {
-		defer background.Done()
+	runners := []func(context.Context){
+		source.Run, stats.Run, dynamicSource.Run, prober.Run,
+		func(ctx context.Context) { pruneModel(ctx, model, appClock.Now) },
+	}
+	if active, ok := newActiveProber(deps, model, engine); ok {
+		runners = append(runners, active.Run)
+	}
+	runners = append(runners, func(ctx context.Context) {
 		if !source.WaitForSync(ctx) {
 			return
 		}
@@ -210,8 +195,21 @@ func runCoreV2(ctx context.Context, deps *serverDeps) error {
 		if deps.readiness != nil {
 			deps.readiness.setCurrent("controller", true)
 		}
-	}()
+	})
+	// Sources run under a child context that ends when the engine
+	// returns for any reason, and the component waits for all of them, so
+	// none outlives it.
+	sourceCtx, stopSources := context.WithCancel(ctx)
+	var background sync.WaitGroup
+	for _, run := range runners {
+		background.Add(1)
+		go func() {
+			defer background.Done()
+			run(sourceCtx)
+		}()
+	}
 	defer background.Wait()
+	defer stopSources()
 	return engine.Run(ctx)
 }
 
@@ -237,6 +235,14 @@ func newDetectorRegistry(synced func(knowledge.Kind) bool) *signal.Registry {
 		detect.VolumeUsage{},
 		detect.Custom{},
 		detect.ClusterService{},
+		detect.Ingress{},
+		detect.EgressPolicy{},
+		detect.Schedule{},
+		detect.Namespace{},
+		detect.ContainerResources{},
+		detect.PodStorage{},
+		detect.NodeHealth{},
+		detect.ActiveProbe{},
 	)
 }
 
@@ -255,6 +261,7 @@ func newReasoner() *reason.Engine {
 		reason.MetricsAPIRule{},
 		reason.DNSRule{},
 		reason.TopologyRule{},
+		reason.RegistryRule{},
 	)
 }
 
@@ -282,4 +289,45 @@ func (c coreClock) Now() time.Time { return c.now.Now() }
 
 func (c coreClock) After(d time.Duration) <-chan time.Time {
 	return time.After(d)
+}
+
+// newActiveProber builds user-configured probes from the probe monitor
+// configuration, when enabled.
+func newActiveProber(
+	deps *serverDeps, model knowledge.Reader, engine *core.Engine,
+) (*kube.ActiveProber, bool) {
+	cfg := deps.runtime.Monitors().ActiveProbe()
+	if !cfg.Enabled {
+		return nil, false
+	}
+	var targets []kube.ProbeTarget
+	for _, t := range cfg.HTTP {
+		targets = append(targets, kube.ProbeTarget{
+			Name: t.Name, URL: t.URL, ExpectedStatus: t.ExpectedStatus,
+			LatencyWarningMs:  t.LatencyWarningMs,
+			LatencyCriticalMs: t.LatencyCriticalMs,
+		})
+	}
+	for _, t := range cfg.TCP {
+		targets = append(targets,
+			kube.ProbeTarget{Name: t.Name, Address: t.Address})
+	}
+	for _, t := range cfg.DNS {
+		targets = append(targets, kube.ProbeTarget{Name: t.Name, Host: t.Host})
+	}
+	excluded := map[string]bool{}
+	for _, ns := range cfg.ExcludeNamespaces {
+		excluded[ns] = true
+	}
+	return kube.NewActiveProber(kube.ActiveProbeConfig{
+		Targets: targets, AutoServices: cfg.AutoServices, Excluded: excluded,
+		Interval:         time.Duration(cfg.IntervalSeconds) * time.Second,
+		Timeout:          time.Duration(cfg.TimeoutSeconds) * time.Second,
+		FailureThreshold: cfg.FailureThreshold,
+		HTTPClient:       deps.clients.HTTP,
+		Resolver:         deps.clients.Resolver,
+		Model:            model,
+		Now:              deps.clients.Clock.Now,
+		Submit:           engine.Submit,
+	}), true
 }

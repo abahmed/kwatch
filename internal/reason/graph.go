@@ -31,7 +31,10 @@ func ownerChain(
 	for current := id; ; {
 		owners := model.Related(
 			current, knowledge.OwnedBy, knowledge.Outgoing)
-		if len(owners) == 0 || seen[owners[0]] {
+		// Static pods are "owned" by their Node; the node is where they
+		// run, not a controller that stamps them out.
+		if len(owners) == 0 || seen[owners[0]] ||
+			owners[0].Kind == kube.KindNode {
 			return chain
 		}
 		current = owners[0]

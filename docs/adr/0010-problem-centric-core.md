@@ -925,3 +925,28 @@ with a crashing app must not blame the node.
   (storage, admission, flowcontrol, DRA, RBAC). Each is optional. A missing
   permission degrades only the rules that need it, is reported in health,
   and is documented with least-privilege guidance.
+
+## Appendix: reasons superseded by the core
+
+Every failure the previous engine detected is detected by the core. The
+reasons below are not emitted as separate signals, because the core
+expresses them differently:
+
+| Previous reason | In the core |
+| --- | --- |
+| CrashLoopHighFrequency, OOMRepeating | Escalated summary and severity of CrashLoopBackOff / OOMKilled with the restart count |
+| HighRestartCount | Emitted for running containers that keep restarting |
+| LivenessProbeFailed, ReadinessProbeFailed, StartupProbeFailed, ProbeError | `Unhealthy` events are evidence; the effect is detected as restarts, crash loops or ContainersNotReady |
+| BackOff | Event evidence for crash loops and image pulls |
+| PostStartHookError, PreStopHookError | FailedPostStartHook / FailedPreStopHook event signals |
+| ContainerCreating, PodInitializing, PodCompleted | Progress states, not failures |
+| NodeAffinity | Part of Unschedulable, with the scheduler's blockers decoded |
+| Preempting | Scheduler event evidence; the preempted pods are rescheduled |
+| RegistryUnavailable | The registry rule: one root for pull failures from the same registry |
+| DeploymentAvailableFalse, DeploymentProgressingFalse | DeploymentUnavailable and ProgressDeadlineExceeded symptoms |
+| StatefulSetConditionFailure, DaemonSetConditionFailure | Availability and replica-failure signals of the workload |
+| FailedGetMetrics, FailedComputeMetricsReplicas, ScalingDisabled, TooManyReplicas, HPAScalingLimited | HPA condition signals (metrics unavailable, cannot scale, maxed out) |
+| NodeLeaseStale | NodeNotReady with the kubelet unreachable (Ready=Unknown) |
+| ControlPlaneComponentFailure | Control-plane pods are ordinary pods (their own root); scheduler, controller-manager, etcd and API server have dedicated probes |
+| SharedDependencyFailure | Replaced by root-cause problems |
+| PreExistingAtStartup | The startup summary |

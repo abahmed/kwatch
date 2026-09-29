@@ -50,6 +50,9 @@ func (NodeSchema) Describe(obj any) (Description, bool) {
 			node.Labels[corev1.LabelInstanceTypeStable]),
 	}
 	attrs[AttrDeleting] = knowledge.Bool(node.DeletionTimestamp != nil)
+	setMilli(attrs, AttrCPUAllocatable, node.Status.Allocatable.Cpu())
+	setQuantity(attrs, AttrMemoryAllocatable,
+		node.Status.Allocatable.Memory())
 	conditions := make([]condition, 0, len(node.Status.Conditions))
 	for _, c := range node.Status.Conditions {
 		conditions = append(conditions, condition{

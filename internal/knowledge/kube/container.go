@@ -55,6 +55,8 @@ func containerSpecAttributes(
 	setQuantity(attrs, AttrMemoryReq, c.Resources.Requests.Memory())
 	setMilli(attrs, AttrCPULimit, c.Resources.Limits.Cpu())
 	setMilli(attrs, AttrCPUReq, c.Resources.Requests.Cpu())
+	setQuantity(attrs, AttrEphemeralLimit,
+		c.Resources.Limits.StorageEphemeral())
 	if budget := probeBudgetSeconds(c); budget > 0 {
 		attrs[AttrProbeBudget] = knowledge.Number(float64(budget))
 	}

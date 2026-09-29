@@ -23,6 +23,8 @@ const (
 	AttrEndpointsReady  = "endpoints.ready"
 	AttrIngressClass    = "ingress.class"
 	AttrExternalName    = "external.name"
+	AttrTargetPorts     = "target.ports"
+	AttrEndpointPorts   = "endpoint.ports"
 	endpointServiceName = discoveryv1.LabelServiceName
 )
 
@@ -47,6 +49,7 @@ func (ServiceSchema) Describe(obj any) (Description, bool) {
 		AttrSelector:     knowledge.Text(labelText(svc.Spec.Selector)),
 		AttrPorts:        knowledge.Text(servicePorts(svc)),
 		AttrLoadBalancer: knowledge.Bool(loadBalancerAssigned(svc)),
+		AttrTargetPorts:  knowledge.Text(targetPorts(svc)),
 	}
 	if svc.Spec.ExternalName != "" {
 		attrs[AttrExternalName] = knowledge.Text(svc.Spec.ExternalName)
@@ -115,6 +118,7 @@ func (EndpointSliceSchema) Describe(obj any) (Description, bool) {
 		Attributes: map[string]knowledge.Value{
 			AttrEndpoints:      knowledge.Number(float64(len(slice.Endpoints))),
 			AttrEndpointsReady: knowledge.Number(float64(ready)),
+			AttrEndpointPorts:  knowledge.Text(endpointPorts(slice)),
 		},
 		Relations: rel,
 	}, true
@@ -244,6 +248,39 @@ func resourceListText(list corev1.ResourceList) string {
 	parts := make([]string, 0, len(list))
 	for name, quantity := range list {
 		parts = append(parts, string(name)+"="+quantity.String())
+	}
+	sort.Strings(parts)
+	return strings.Join(parts, ",")
+}
+
+// targetPorts lists each Service port's target as "name" or "number",
+// the form EndpointSlices publish.
+func targetPorts(svc *corev1.Service) string {
+	parts := make([]string, 0, len(svc.Spec.Ports))
+	for _, port := range svc.Spec.Ports {
+		switch {
+		case port.TargetPort.StrVal != "":
+			parts = append(parts, port.TargetPort.StrVal)
+		case port.TargetPort.IntVal != 0:
+			parts = append(parts, strconv.Itoa(int(port.TargetPort.IntVal)))
+		default:
+			parts = append(parts, strconv.Itoa(int(port.Port)))
+		}
+	}
+	sort.Strings(parts)
+	return strings.Join(parts, ",")
+}
+
+// endpointPorts lists an EndpointSlice's port names and numbers.
+func endpointPorts(slice *discoveryv1.EndpointSlice) string {
+	var parts []string
+	for _, port := range slice.Ports {
+		if port.Name != nil && *port.Name != "" {
+			parts = append(parts, *port.Name)
+		}
+		if port.Port != nil {
+			parts = append(parts, strconv.Itoa(int(*port.Port)))
+		}
 	}
 	sort.Strings(parts)
 	return strings.Join(parts, ",")

@@ -2,7 +2,12 @@ package kube
 
 import (
 	"context"
+	"errors"
+	"fmt"
+	"strings"
 	"time"
+
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
 	"k8s.io/client-go/kubernetes"
 
@@ -13,7 +18,15 @@ import (
 var (
 	APIServer  = knowledge.NewEntityID("apiserver", "", "kube-apiserver")
 	ClusterDNS = knowledge.NewEntityID("cluster-dns", "", "cluster-dns")
+	Etcd       = knowledge.NewEntityID("etcd", "", "etcd")
+	Scheduler  = knowledge.NewEntityID(
+		"scheduler", "", "kube-scheduler")
+	ControllerManager = knowledge.NewEntityID(
+		"controller-manager", "", "kube-controller-manager")
 )
+
+// leaseStale is how old a control-plane leader lease renewal may be.
+const leaseStale = 90 * time.Second
 
 // Probe results recorded on the virtual entities.
 const (
@@ -54,7 +67,9 @@ func (p *Prober) Run(ctx context.Context) {
 	ticker := time.NewTicker(probeInterval)
 	defer ticker.Stop()
 	for {
-		p.cfg.Submit(ctx, p.apiServer(ctx), p.dns(ctx))
+		facts := append(p.apiServer(ctx), p.dns(ctx))
+		facts = append(facts, p.leaders(ctx)...)
+		p.cfg.Submit(ctx, facts...)
 		select {
 		case <-ctx.Done():
 			return
@@ -63,13 +78,61 @@ func (p *Prober) Run(ctx context.Context) {
 	}
 }
 
-func (p *Prober) apiServer(ctx context.Context) knowledge.Fact {
+// apiServer checks /readyz?verbose, which also reports etcd.
+func (p *Prober) apiServer(ctx context.Context) []knowledge.Fact {
 	probeCtx, cancel := context.WithTimeout(ctx, probeTimeout)
 	defer cancel()
 	start := p.cfg.Now()
-	_, err := p.cfg.Client.Discovery().RESTClient().Get().
-		AbsPath("/readyz").DoRaw(probeCtx)
-	return probeFact(APIServer, p.cfg.Now(), p.cfg.Now().Sub(start), err)
+	body, err := p.cfg.Client.Discovery().RESTClient().Get().
+		AbsPath("/readyz").Param("verbose", "true").DoRaw(probeCtx)
+	now := p.cfg.Now()
+	facts := []knowledge.Fact{
+		probeFact(APIServer, now, now.Sub(start), err),
+	}
+	if etcdErr, known := etcdCheck(string(body)); known {
+		facts = append(facts, probeFact(Etcd, now, 0, etcdErr))
+	}
+	return facts
+}
+
+// etcdCheck reads the etcd line of a verbose readyz report.
+func etcdCheck(report string) (error, bool) {
+	for _, line := range strings.Split(report, "\n") {
+		switch {
+		case strings.HasPrefix(line, "[+]etcd ok"):
+			return nil, true
+		case strings.HasPrefix(line, "[-]etcd"):
+			return errors.New(strings.TrimSpace(line)), true
+		}
+	}
+	return nil, false
+}
+
+// leaders checks the kube-system leader leases of the scheduler and the
+// controller-manager. A lease that stopped renewing means the component
+// is down, even on managed clusters where its pods are hidden.
+func (p *Prober) leaders(ctx context.Context) []knowledge.Fact {
+	var facts []knowledge.Fact
+	for _, component := range []knowledge.EntityID{
+		Scheduler, ControllerManager,
+	} {
+		probeCtx, cancel := context.WithTimeout(ctx, probeTimeout)
+		lease, err := p.cfg.Client.CoordinationV1().Leases("kube-system").
+			Get(probeCtx, component.Name, metav1.GetOptions{})
+		cancel()
+		if err != nil || lease.Spec.RenewTime == nil {
+			// Not visible here (managed control plane or no RBAC).
+			continue
+		}
+		age := p.cfg.Now().Sub(lease.Spec.RenewTime.Time)
+		var stale error
+		if age > leaseStale {
+			stale = fmt.Errorf("leader lease not renewed for %s",
+				age.Round(time.Second))
+		}
+		facts = append(facts, probeFact(component, p.cfg.Now(), 0, stale))
+	}
+	return facts
 }
 
 func (p *Prober) dns(ctx context.Context) knowledge.Fact {

@@ -34,6 +34,7 @@ const (
 	AttrAttachError        = "attach.error"
 	AttrFailurePolicy      = "failure.policy"
 	AttrPolicyDigest       = "policy.digest"
+	AttrDeniesEgress       = "denies.all.egress"
 )
 
 // PDBSchema describes PodDisruptionBudgets.
@@ -142,6 +143,7 @@ func (NetworkPolicySchema) Describe(obj any) (Description, bool) {
 			AttrSelector: knowledge.Text(selectorText(&np.Spec.PodSelector)),
 			AttrPolicyDigest: knowledge.Text(
 				digest([]byte(np.Spec.String()))),
+			AttrDeniesEgress: knowledge.Bool(deniesAllEgress(np)),
 		},
 	}, true
 }
@@ -274,4 +276,15 @@ func failurePolicy(policy *admissionv1.FailurePolicyType) string {
 		return string(admissionv1.Fail)
 	}
 	return string(*policy)
+}
+
+// deniesAllEgress reports a policy that selects pods for egress and
+// allows no egress at all.
+func deniesAllEgress(np *networkingv1.NetworkPolicy) bool {
+	for _, t := range np.Spec.PolicyTypes {
+		if t == networkingv1.PolicyTypeEgress {
+			return len(np.Spec.Egress) == 0
+		}
+	}
+	return false
 }

@@ -92,6 +92,9 @@ func registrations() []registration {
 		{NamespaceSchema{}, func(f factory) informer {
 			return f.Core().V1().Namespaces().Informer()
 		}},
+		{LimitRangeSchema{}, func(f factory) informer {
+			return f.Core().V1().LimitRanges().Informer()
+		}},
 		{PDBSchema{}, func(f factory) informer {
 			return f.Policy().V1().PodDisruptionBudgets().Informer()
 		}},

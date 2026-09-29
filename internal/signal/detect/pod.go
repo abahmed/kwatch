@@ -64,6 +64,13 @@ func (d Pod) Detect(ctx signal.Context, e knowledge.Entity) []signal.Signal {
 		return failed(e)
 	case "Running":
 		return d.notReady(ctx, e)
+	case "Unknown":
+		return []signal.Signal{{
+			Reason:   constant.ReasonPodStatusUnknown,
+			Severity: signal.Warning,
+			Since:    valueSince(e, kube.AttrPhase),
+			Summary:  "Pod state is unknown: its node stopped reporting",
+		}}
 	default:
 		return nil
 	}
@@ -86,6 +93,17 @@ func (d Pod) terminating(
 
 func (d Pod) pending(ctx signal.Context, e knowledge.Entity) []signal.Signal {
 	status, reason, since := condition(e, "PodScheduled")
+	if status == "False" && reason == constant.ReasonSchedulingGated {
+		if !sustained(ctx, since, d.thresholds.Pending*5) {
+			return nil
+		}
+		return []signal.Signal{{
+			Reason: constant.ReasonSchedulingGated, Severity: signal.Warning,
+			Since: since,
+			Summary: "Pod is held by scheduling gates that were never " +
+				"removed",
+		}}
+	}
 	if status == "False" {
 		if !sustained(ctx, since, d.thresholds.Pending) {
 			return nil

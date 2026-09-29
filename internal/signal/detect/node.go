@@ -10,6 +10,10 @@ import (
 	"github.com/abahmed/kwatch/internal/signal"
 )
 
+// DefaultNodeRemoval is how long node deletion may take before it is
+// reported as stuck.
+const DefaultNodeRemoval = 30 * time.Minute
+
 // DefaultNodeNotReady is how long a node may be NotReady before it is a
 // signal; brief kubelet restarts recover faster than this.
 const DefaultNodeNotReady = 90 * time.Second
@@ -52,7 +56,18 @@ func (Node) Kinds() []knowledge.Kind { return []knowledge.Kind{kube.KindNode} }
 func (d Node) Detect(ctx signal.Context, e knowledge.Entity) []signal.Signal {
 	if draining, s := drainSignal(e); draining {
 		// A cordoned or departing node disrupts pods by design; its
-		// NotReady is expected and is not reported on its own.
+		// NotReady is expected and is not reported on its own, unless it
+		// never finishes leaving.
+		if flag(e, kube.AttrDeleting) &&
+			ctx.Now.Sub(s.Since) >= DefaultNodeRemoval {
+			s.Reason, s.Severity = constant.ReasonNodeStuckTerminating,
+				signal.Warning
+			s.Summary = "Node has been deleting for " +
+				format.Duration(ctx.Now.Sub(s.Since)) +
+				"; a finalizer or cloud controller may be stuck"
+		} else if flag(e, kube.AttrDeleting) {
+			ctx.RecheckAfter(s.Since.Add(DefaultNodeRemoval).Sub(ctx.Now))
+		}
 		return []signal.Signal{s}
 	}
 	var out []signal.Signal

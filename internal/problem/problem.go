@@ -55,6 +55,9 @@ type Problem struct {
 	Resolved        time.Time
 	// Cycles records when the problem recovered, for flap detection.
 	Cycles []time.Time
+	// Occurrences records when the problem opened, across resolves, so a
+	// routine (same time every day) is recognised.
+	Occurrences []time.Time
 
 	// Revision counts announced messages; Digest fingerprints the last
 	// announced content so unchanged content is never re-sent.
@@ -78,6 +81,7 @@ func (p *Problem) Snapshot() Problem {
 	}
 	out.Impact = append([]knowledge.EntityID(nil), p.Impact...)
 	out.Cycles = append([]time.Time(nil), p.Cycles...)
+	out.Occurrences = append([]time.Time(nil), p.Occurrences...)
 	out.Timeline = append([]Event(nil), p.Timeline...)
 	if p.Cause != nil {
 		cause := *p.Cause

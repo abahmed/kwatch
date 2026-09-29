@@ -1,6 +1,9 @@
 package kube
 
 import (
+	"time"
+
+	robfig "github.com/robfig/cron/v3"
 	autoscalingv2 "k8s.io/api/autoscaling/v2"
 	batchv1 "k8s.io/api/batch/v1"
 
@@ -36,6 +39,9 @@ func (CronJobSchema) Describe(obj any) (Description, bool) {
 	}
 	if last := cron.Status.LastSuccessfulTime; last != nil {
 		attrs[AttrLastSuccess] = knowledge.Time(last.Time)
+	}
+	if next, ok := nextRun(cron); ok {
+		attrs[AttrNextRun] = knowledge.Time(next)
 	}
 	rel := relations{}
 	rel.add(knowledge.References,
@@ -132,4 +138,23 @@ func (HPASchema) Diff(old, new any) []knowledge.FieldChange {
 		})
 	}
 	return fields
+}
+
+// nextRun is when the CronJob should next start: the first schedule time
+// after the last run (or creation), in the CronJob's time zone.
+func nextRun(cron *batchv1.CronJob) (time.Time, bool) {
+	schedule, err := robfig.ParseStandard(cron.Spec.Schedule)
+	if err != nil {
+		return time.Time{}, false
+	}
+	ref := cron.CreationTimestamp.Time
+	if last := cron.Status.LastScheduleTime; last != nil {
+		ref = last.Time
+	}
+	if zone := cron.Spec.TimeZone; zone != nil && *zone != "" {
+		if location, err := time.LoadLocation(*zone); err == nil {
+			ref = ref.In(location)
+		}
+	}
+	return schedule.Next(ref), true
 }

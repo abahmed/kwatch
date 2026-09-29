@@ -42,6 +42,7 @@ func newHarness(t *testing.T, start time.Time) *harness {
 		reason.MetricsAPIRule{},
 		reason.DNSRule{},
 		reason.TopologyRule{},
+		reason.RegistryRule{},
 	)
 	engine, err := NewEngine(Dependencies{
 		Model:     knowledge.NewModel(knowledge.Options{}),
@@ -74,6 +75,14 @@ func detectors() []signal.Detector {
 		detect.VolumeUsage{},
 		detect.Custom{},
 		detect.ClusterService{},
+		detect.Ingress{},
+		detect.EgressPolicy{},
+		detect.Schedule{},
+		detect.Namespace{},
+		detect.ContainerResources{},
+		detect.PodStorage{},
+		detect.NodeHealth{},
+		detect.ActiveProbe{},
 	}
 }
 

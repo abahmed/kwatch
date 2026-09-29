@@ -2,6 +2,7 @@ package detect
 
 import (
 	"strconv"
+	"time"
 
 	"github.com/abahmed/kwatch/internal/constant"
 	"github.com/abahmed/kwatch/internal/knowledge"
@@ -37,15 +38,61 @@ func (Container) Kinds() []knowledge.Kind {
 }
 
 // Detect implements signal.Detector.
-func (Container) Detect(_ signal.Context, e knowledge.Entity) []signal.Signal {
+func (Container) Detect(
+	ctx signal.Context, e knowledge.Entity,
+) []signal.Signal {
 	switch text(e, kube.AttrState) {
 	case "waiting":
 		return waitingSignal(e)
 	case "terminated":
 		return terminatedSignal(e)
+	case "running":
+		return restartingSignal(ctx, e)
 	default:
 		return nil
 	}
+}
+
+// Restart thresholds for running containers.
+const (
+	highRestarts     = 5
+	restartRecency   = 15 * time.Minute
+	repeatedOOMCount = 3
+)
+
+// restartingSignal reports a container that is running now but was
+// recently restarted again after several restarts, typically killed by
+// its liveness probe or the OOM killer between back-offs.
+func restartingSignal(
+	ctx signal.Context, e knowledge.Entity,
+) []signal.Signal {
+	restarts, _ := number(e, kube.AttrRestarts)
+	if restarts < highRestarts {
+		return nil
+	}
+	lastRestart := valueSince(e, kube.AttrRestarts)
+	if ctx.Now.Sub(lastRestart) > restartRecency {
+		return nil
+	}
+	ctx.RecheckAfter(lastRestart.Add(restartRecency).Sub(ctx.Now))
+	count := strconv.Itoa(int(restarts))
+	if text(e, kube.AttrLastReason) == constant.ReasonOOMKilled &&
+		restarts >= repeatedOOMCount {
+		return []signal.Signal{{
+			Reason: constant.ReasonOOMKilled, Severity: signal.Critical,
+			Since: lastRestart,
+			Summary: containerRole(e) + " is repeatedly killed for " +
+				"exceeding its memory limit (" + count + " restarts)",
+			Evidence: containerEvidence(e),
+		}}
+	}
+	return []signal.Signal{{
+		Reason: constant.ReasonHighRestartCount, Severity: signal.Warning,
+		Since: lastRestart,
+		Summary: containerRole(e) + " keeps restarting (" + count +
+			" restarts)",
+		Evidence: containerEvidence(e),
+	}}
 }
 
 func waitingSignal(e knowledge.Entity) []signal.Signal {
@@ -67,6 +114,9 @@ func waitingSignal(e knowledge.Entity) []signal.Signal {
 		s.Reason = constant.ReasonOOMKilled
 		s.Summary = containerRole(e) + " is killed for exceeding its " +
 			"memory limit and restarting"
+	}
+	if restarts, _ := number(e, kube.AttrRestarts); restarts >= 10 {
+		s.Summary += " (" + strconv.Itoa(int(restarts)) + " restarts)"
 	}
 	return []signal.Signal{s}
 }

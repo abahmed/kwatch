@@ -9,6 +9,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime/schema"
+	"k8s.io/client-go/discovery"
 	"k8s.io/client-go/dynamic"
 	"k8s.io/klog/v2"
 
@@ -40,13 +41,36 @@ type watchedResource struct {
 	kind string
 }
 
+// builtinResources are built-in APIs without typed informers here that
+// report failures through status conditions. Each is watched only when
+// the cluster serves it.
+var builtinResources = []watchedResource{
+	{gvr: schema.GroupVersionResource{Group: "certificates.k8s.io",
+		Version: "v1", Resource: "certificatesigningrequests"},
+		kind: "CertificateSigningRequest"},
+	{gvr: schema.GroupVersionResource{Group: "flowcontrol.apiserver.k8s.io",
+		Version: "v1", Resource: "flowschemas"}, kind: "FlowSchema"},
+	{gvr: schema.GroupVersionResource{Group: "flowcontrol.apiserver.k8s.io",
+		Version: "v1", Resource: "prioritylevelconfigurations"},
+		kind: "PriorityLevelConfiguration"},
+	{gvr: schema.GroupVersionResource{Group: "admissionregistration.k8s.io",
+		Version: "v1", Resource: "validatingadmissionpolicies"},
+		kind: "ValidatingAdmissionPolicy"},
+	{gvr: schema.GroupVersionResource{Group: "admissionregistration.k8s.io",
+		Version: "v1", Resource: "validatingadmissionpolicybindings"},
+		kind: "ValidatingAdmissionPolicyBinding"},
+	{gvr: schema.GroupVersionResource{Group: "resource.k8s.io",
+		Version: "v1", Resource: "resourceclaims"}, kind: "ResourceClaim"},
+}
+
 // DynamicConfig configures the dynamic source.
 type DynamicConfig struct {
-	Client dynamic.Interface
-	Resync time.Duration
-	Now    func() time.Time
-	Submit Submit
-	Max    int
+	Client    dynamic.Interface
+	Discovery discovery.DiscoveryInterfaceWithContext
+	Resync    time.Duration
+	Now       func() time.Time
+	Submit    Submit
+	Max       int
 }
 
 // DynamicSource watches APIServices and every custom resource type that
@@ -110,6 +134,12 @@ func (d *DynamicSource) reconcile(ctx context.Context) {
 // with a status subresource, capped at Max custom types.
 func (d *DynamicSource) discover(ctx context.Context) []watchedResource {
 	out := []watchedResource{{gvr: apiServiceResource, kind: "APIService"}}
+	for _, r := range builtinResources {
+		if d.cfg.Discovery != nil && dynamicwatch.ResourceAvailableContext(
+			ctx, d.cfg.Discovery, r.gvr) {
+			out = append(out, r)
+		}
+	}
 	list, err := d.cfg.Client.Resource(crdResource).List(ctx,
 		metav1.ListOptions{})
 	if err != nil {

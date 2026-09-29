@@ -168,6 +168,8 @@ func (NamespaceSchema) Describe(obj any) (Description, bool) {
 	}
 	attrs := map[string]knowledge.Value{
 		AttrPhase: knowledge.Text(string(ns.Status.Phase)),
+		AttrPodSecurityInvalid: knowledge.Text(
+			podSecurityProblem(ns.Labels)),
 	}
 	conditions := make([]condition, 0, len(ns.Status.Conditions))
 	for _, c := range ns.Status.Conditions {

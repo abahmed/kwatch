@@ -1,6 +1,7 @@
 package problem
 
 import (
+	"strconv"
 	"sync"
 	"time"
 
@@ -153,12 +154,16 @@ func (m *Manager) problem(
 	case p == nil:
 		p = &Problem{
 			ID: id, Root: root, State: Settling, Opened: now,
-			Members: make(map[signal.Key]signal.Signal),
+			Members:     make(map[signal.Key]signal.Signal),
+			Occurrences: []time.Time{now},
 		}
 		m.problems[id] = p
 	case p.State == Resolved:
 		p.State, p.Opened, p.Revision, p.Digest = Settling, now, 0, ""
-		p.note(now, "happened again")
+		p.Occurrences = appendOccurrence(p.Occurrences, now)
+		week := recent(p.Occurrences, now, 7*24*time.Hour)
+		p.note(now, "happened again ("+ordinal(len(week))+
+			" time this week)")
 	}
 	return p
 }
@@ -176,4 +181,29 @@ func describe(id knowledge.EntityID) string {
 		return string(id.Kind) + " " + id.Name
 	}
 	return string(id.Kind) + " " + id.Namespace + "/" + id.Name
+}
+
+// maxOccurrences bounds the recurrence history kept per problem.
+const maxOccurrences = 20
+
+func appendOccurrence(times []time.Time, at time.Time) []time.Time {
+	times = append(times, at)
+	if over := len(times) - maxOccurrences; over > 0 {
+		times = append(times[:0:0], times[over:]...)
+	}
+	return times
+}
+
+func ordinal(n int) string {
+	suffix := "th"
+	switch {
+	case n%100 >= 11 && n%100 <= 13:
+	case n%10 == 1:
+		suffix = "st"
+	case n%10 == 2:
+		suffix = "nd"
+	case n%10 == 3:
+		suffix = "rd"
+	}
+	return strconv.Itoa(n) + suffix
 }

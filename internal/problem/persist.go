@@ -22,6 +22,7 @@ type Record struct {
 	RecoveringSince time.Time
 	Resolved        time.Time
 	Cycles          []time.Time
+	Occurrences     []time.Time `json:",omitempty"`
 	Revision        int
 	Digest          string
 	Timeline        []Event
@@ -38,8 +39,8 @@ func (m *Manager) Export() []Record {
 			ID: p.ID, Root: p.Root, Cause: p.Cause, Tier: p.Tier,
 			State: p.State, Opened: p.Opened, Announced: p.Announced,
 			RecoveringSince: p.RecoveringSince, Resolved: p.Resolved,
-			Cycles: p.Cycles, Revision: p.Revision, Digest: p.Digest,
-			Timeline: p.Timeline,
+			Cycles: p.Cycles, Occurrences: p.Occurrences,
+			Revision: p.Revision, Digest: p.Digest, Timeline: p.Timeline,
 		})
 	}
 	return out
@@ -57,9 +58,9 @@ func (m *Manager) Restore(records []Record, graceUntil time.Time) {
 			ID: r.ID, Root: r.Root, Cause: r.Cause, Tier: r.Tier,
 			State: r.State, Opened: r.Opened, Announced: r.Announced,
 			RecoveringSince: r.RecoveringSince, Resolved: r.Resolved,
-			Cycles: r.Cycles, Revision: r.Revision, Digest: r.Digest,
-			Timeline: r.Timeline,
-			Members:  make(map[signal.Key]signal.Signal),
+			Cycles: r.Cycles, Occurrences: r.Occurrences,
+			Revision: r.Revision, Digest: r.Digest, Timeline: r.Timeline,
+			Members: make(map[signal.Key]signal.Signal),
 		}
 	}
 }

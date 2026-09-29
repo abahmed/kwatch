@@ -35,6 +35,7 @@ func (Workload) Name() string { return "workload" }
 func (Workload) Kinds() []knowledge.Kind {
 	return []knowledge.Kind{
 		kube.KindDeployment, kube.KindStatefulSet, kube.KindDaemonSet,
+		kube.KindReplicaSet,
 	}
 }
 
@@ -62,6 +63,14 @@ func (d Workload) Detect(
 				Label: "message", Value: conditionMessage(e, "ReplicaFailure"),
 			}},
 		})
+	}
+	// A ReplicaSet's availability is its Deployment's; only its replica
+	// failures (quota, admission) are its own.
+	if e.ID.Kind == kube.KindReplicaSet {
+		for i := range out {
+			out[i].Reason = constant.ReasonReplicaSetFailure
+		}
+		return out
 	}
 	if s, ok := d.availability(ctx, e); ok {
 		out = append(out, s)

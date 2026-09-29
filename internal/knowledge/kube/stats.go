@@ -3,6 +3,7 @@ package kube
 import (
 	"context"
 	"encoding/json"
+	"strings"
 	"sync"
 	"time"
 
@@ -24,6 +25,12 @@ const (
 	AttrIOPSI          = "psi.io.some.avg60"
 	AttrVolumeUsedPct  = "volume.used.pct"
 	AttrVolumeFillETA  = "volume.full.eta.seconds"
+	AttrCPUUsageMilli  = "cpu.usage.milli"
+	AttrMemoryWorking  = "memory.working.bytes"
+	AttrThrottledPct   = "cpu.throttled.pct"
+	AttrEphemeralUsed  = "ephemeral.used.bytes"
+	AttrNetErrorRate   = "network.errors.per.second"
+	AttrRuntimeErrRate = "runtime.errors.per.second"
 	statsConcurrency   = 8
 	statsRequestBudget = 10 * time.Second
 )
@@ -41,8 +48,9 @@ type StatsConfig struct {
 // StatsPoller reads /stats/summary from every node's kubelet through the
 // API server proxy and records usage as facts.
 type StatsPoller struct {
-	cfg    StatsConfig
-	growth *growthTracker
+	cfg      StatsConfig
+	growth   *growthTracker
+	counters *counterRates
 }
 
 // NewStatsPoller builds a poller.
@@ -50,7 +58,9 @@ func NewStatsPoller(cfg StatsConfig) *StatsPoller {
 	if cfg.Interval <= 0 {
 		cfg.Interval = time.Minute
 	}
-	return &StatsPoller{cfg: cfg, growth: newGrowthTracker()}
+	return &StatsPoller{
+		cfg: cfg, growth: newGrowthTracker(), counters: newCounterRates(),
+	}
 }
 
 // Run polls until ctx ends.
@@ -86,9 +96,7 @@ func (p *StatsPoller) poll(ctx context.Context) {
 func (p *StatsPoller) pollNode(ctx context.Context, node knowledge.EntityID) {
 	reqCtx, cancel := context.WithTimeout(ctx, statsRequestBudget)
 	defer cancel()
-	body, err := p.cfg.Client.CoreV1().RESTClient().Get().
-		Resource("nodes").Name(node.Name).SubResource("proxy").
-		Suffix("stats/summary").DoRaw(reqCtx)
+	body, err := p.proxy(reqCtx, node, "stats/summary")
 	if err != nil {
 		klog.V(3).InfoS("kubelet summary unavailable", "node", node.Name,
 			"error", err)
@@ -99,7 +107,57 @@ func (p *StatsPoller) pollNode(ctx context.Context, node knowledge.EntityID) {
 		return
 	}
 	now := p.cfg.Now()
-	p.cfg.Submit(ctx, p.facts(node, summary, now)...)
+	facts := p.facts(node, summary, now)
+	facts = append(facts, p.kubeletMetrics(reqCtx, node, now)...)
+	p.cfg.Submit(ctx, facts...)
+}
+
+// kubeletMetrics reads CPU throttling from cAdvisor and runtime errors
+// from the kubelet's own metrics. Both are optional: failures only mean
+// fewer attributes.
+func (p *StatsPoller) kubeletMetrics(
+	ctx context.Context, node knowledge.EntityID, now time.Time,
+) []knowledge.Fact {
+	var facts []knowledge.Fact
+	if body, err := p.proxy(ctx, node, "metrics/cadvisor"); err == nil {
+		for key, pct := range p.counters.throttleRatios(body, now) {
+			parts := strings.SplitN(key, "/", 3)
+			if len(parts) != 3 || parts[2] == "" {
+				continue
+			}
+			facts = append(facts, knowledge.Fact{
+				Kind: knowledge.Observed, Source: throttleSource, At: now,
+				Entity: ContainerID(parts[0], parts[1], parts[2]),
+				Attributes: map[string]knowledge.Value{
+					AttrThrottledPct: knowledge.Number(pct),
+				},
+			})
+		}
+	}
+	if body, err := p.proxy(ctx, node, "metrics"); err == nil {
+		if total, ok := sumMetric(body,
+			"kubelet_runtime_operations_errors_total"); ok {
+			if rate, ok := p.counters.rate("runtime/"+node.Name, now,
+				total); ok {
+				facts = append(facts, knowledge.Fact{
+					Kind: knowledge.Observed, Source: runtimeSource, At: now,
+					Entity: node,
+					Attributes: map[string]knowledge.Value{
+						AttrRuntimeErrRate: knowledge.Number(rate),
+					},
+				})
+			}
+		}
+	}
+	return facts
+}
+
+func (p *StatsPoller) proxy(
+	ctx context.Context, node knowledge.EntityID, path string,
+) ([]byte, error) {
+	return p.cfg.Client.CoreV1().RESTClient().Get().
+		Resource("nodes").Name(node.Name).SubResource("proxy").
+		Suffix(path).DoRaw(ctx)
 }
 
 func (p *StatsPoller) facts(
@@ -115,10 +173,17 @@ func (p *StatsPoller) facts(
 	setPSI(attrs, AttrMemoryPSI, s.Node.Memory.PSI)
 	setPSI(attrs, AttrCPUPSI, s.Node.CPU.PSI)
 	setPSI(attrs, AttrIOPSI, s.Node.IO.PSI)
+	if errs, ok := s.Node.Network.errors(); ok {
+		if rate, ok := p.counters.rate("network/"+node.Name, now,
+			float64(errs)); ok {
+			attrs[AttrNetErrorRate] = knowledge.Number(rate)
+		}
+	}
 	facts := []knowledge.Fact{{
 		Kind: knowledge.Observed, Source: StatsSource, At: now,
 		Entity: node, Attributes: attrs,
 	}}
+	facts = append(facts, podUsageFacts(s, now)...)
 	for _, volume := range s.volumes() {
 		claim := knowledge.NewEntityID(KindPVC, volume.Namespace, volume.Name)
 		pct := percent(volume.UsedBytes, volume.CapacityBytes)
@@ -159,4 +224,50 @@ func setPSI(attrs map[string]knowledge.Value, name string, psi *psiStats) {
 	if psi != nil {
 		attrs[name] = knowledge.Number(psi.Some.Avg60)
 	}
+}
+
+// Sources for usage facts, kept separate so each replaces only its own
+// attributes.
+const (
+	throttleSource = "cadvisor"
+	runtimeSource  = "kubelet-metrics"
+)
+
+// podUsageFacts records container CPU and memory use and pod ephemeral
+// storage use from the summary.
+func podUsageFacts(s statsSummary, now time.Time) []knowledge.Fact {
+	var facts []knowledge.Fact
+	for _, pod := range s.Pods {
+		ns, name := pod.PodRef.Namespace, pod.PodRef.Name
+		if name == "" {
+			continue
+		}
+		for _, c := range pod.Containers {
+			attrs := map[string]knowledge.Value{}
+			if c.CPU.UsageNanoCores != nil {
+				attrs[AttrCPUUsageMilli] = knowledge.Number(
+					float64(*c.CPU.UsageNanoCores) / 1e6)
+			}
+			if c.Memory.WorkingSetBytes != nil {
+				attrs[AttrMemoryWorking] = knowledge.Number(
+					float64(*c.Memory.WorkingSetBytes))
+			}
+			if len(attrs) > 0 {
+				facts = append(facts, knowledge.Fact{
+					Kind: knowledge.Observed, Source: StatsSource, At: now,
+					Entity: ContainerID(ns, name, c.Name), Attributes: attrs,
+				})
+			}
+		}
+		if e := pod.EphemeralStorage; e != nil {
+			facts = append(facts, knowledge.Fact{
+				Kind: knowledge.Observed, Source: StatsSource, At: now,
+				Entity: knowledge.NewEntityID(KindPod, ns, name),
+				Attributes: map[string]knowledge.Value{
+					AttrEphemeralUsed: knowledge.Number(float64(e.UsedBytes)),
+				},
+			})
+		}
+	}
+	return facts
 }

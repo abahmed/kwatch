@@ -27,7 +27,9 @@ const (
 	DefaultMaxHold    = 30 * time.Minute
 	DefaultFlapWindow = 30 * time.Minute
 	DefaultFlapCycles = 3
-	DefaultRemember   = 24 * time.Hour
+	// DefaultRemember keeps resolved problems for a week, long enough to
+	// learn daily routines and to say "3rd time this week".
+	DefaultRemember = 7 * 24 * time.Hour
 )
 
 func (c Config) withDefaults() Config {

@@ -23,7 +23,7 @@ var (
 		"Ready", "Available", "Accepted", "Programmed", "ResolvedRefs",
 		"Synced", "Healthy",
 	}
-	failedWhenTrue = []string{"Degraded", "Failed", "Stalled"}
+	failedWhenTrue = []string{"Degraded", "Failed", "Stalled", "Dangling"}
 )
 
 // Custom detects custom resources and APIServices whose status conditions
@@ -91,6 +91,18 @@ func customReason(kind knowledge.Kind) string {
 		return constant.ReasonAPIServiceFailure
 	case "volumesnapshot":
 		return constant.ReasonVolumeSnapshotFailure
+	case "certificatesigningrequest":
+		return constant.ReasonCertificateSigningRequestFailure
+	case "flowschema", "prioritylevelconfiguration":
+		return constant.ReasonAPIPriorityAndFairnessFailure
+	case "validatingadmissionpolicy":
+		return constant.ReasonAdmissionPolicyInvalid
+	case "validatingadmissionpolicybinding":
+		return constant.ReasonAdmissionBindingInvalid
+	case "mutatingadmissionpolicy":
+		return constant.ReasonMutatingAdmissionPolicyInvalid
+	case "resourceclaim":
+		return constant.ReasonResourceClaimFailure
 	default:
 		return constant.ReasonCustomResourceFailure
 	}
