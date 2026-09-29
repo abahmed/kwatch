@@ -63,12 +63,9 @@ grep -Fq "allowPrivilegeEscalation: false" <<<"$OUT1" || {
 grep -Fq "type: RuntimeDefault" <<<"$OUT1" || {
   echo "FAIL: seccomp profile missing"; exit 1;
 }
-grep -Fq "resourceNames:" <<<"$OUT1" || {
-  echo "FAIL: state ConfigMap RBAC is not restricted"; exit 1;
-}
-grep -Fq '  - "kwatch-telemetry"' <<<"$OUT1" || {
-	echo "FAIL: telemetry ConfigMap RBAC is missing"; exit 1;
-}
+if grep -Fq "configmap-manager" <<<"$OUT1"; then
+  echo "FAIL: state lives on disk; no ConfigMap write access"; exit 1;
+fi
 grep -Fq 'apiGroups: ["coordination.k8s.io"]' <<<"$OUT1" || {
 	echo "FAIL: Lease RBAC is missing"; exit 1;
 }

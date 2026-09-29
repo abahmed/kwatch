@@ -68,7 +68,7 @@ func NewWithClient(
 }
 
 func (w *Watcher) Start(ctx context.Context) error {
-	if !w.runtime.Monitors().CRD().Enabled {
+	if !w.runtime.Lifecycle().CRDEnabled() {
 		klog.V(4).InfoS("CRD watcher is disabled")
 		return nil
 	}

@@ -1,450 +1,497 @@
 {
-    "type": "object",
-    "$schema": "http://json-schema.org/draft-07/schema",
-    "required": [
-      "config"
-    ],
-    "properties": {
-      "nameOverride": {
-        "type": "string",
-        "default": "",
-        "description": "Override the base name used in templates"
-      },
-      "fullnameOverride": {
-        "type": "string",
-        "default": "",
-        "description": "Override the full app name used in templates"
-      },
-      "persistence": {
-        "type": "object",
-        "description": "State store volume",
-        "properties": {
-          "size": { "type": "string", "default": "2Gi" },
-          "storageClass": { "type": "string", "default": "" },
-          "existingClaim": { "type": "string", "default": "" },
-          "emptyDir": { "type": "boolean", "default": false }
+  "type": "object",
+  "$schema": "http://json-schema.org/draft-07/schema",
+  "required": [
+    "config"
+  ],
+  "properties": {
+    "nameOverride": {
+      "type": "string",
+      "default": "",
+      "description": "Override the base name used in templates"
+    },
+    "fullnameOverride": {
+      "type": "string",
+      "default": "",
+      "description": "Override the full app name used in templates"
+    },
+    "persistence": {
+      "type": "object",
+      "description": "State store volume",
+      "properties": {
+        "size": {
+          "type": "string",
+          "default": "2Gi"
+        },
+        "storageClass": {
+          "type": "string",
+          "default": ""
+        },
+        "existingClaim": {
+          "type": "string",
+          "default": ""
+        },
+        "emptyDir": {
+          "type": "boolean",
+          "default": false
         }
-      },
-      "image": {
-        "type": "object",
-        "required": [],
-        "properties": {
-          "repository": {
-            "type": [
-              "string",
-              "boolean",
-              "number",
-              "object",
-              "array"
-            ],
-            "default": "ghcr.io/abahmed/kwatch"
-          },
-          "tag": {
-            "type": "string",
-            "default": "",
-            "description": "Overrides the image tag (defaults to .Chart.AppVersion)"
-          },
-          "pullPolicy": {
-            "type": [
-              "string",
-              "boolean",
-              "number",
-              "object",
-              "array"
-            ],
-            "default": "IfNotPresent"
+      }
+    },
+    "image": {
+      "type": "object",
+      "required": [],
+      "properties": {
+        "repository": {
+          "type": [
+            "string",
+            "boolean",
+            "number",
+            "object",
+            "array"
+          ],
+          "default": "ghcr.io/abahmed/kwatch"
+        },
+        "tag": {
+          "type": "string",
+          "default": "",
+          "description": "Overrides the image tag (defaults to .Chart.AppVersion)"
+        },
+        "pullPolicy": {
+          "type": [
+            "string",
+            "boolean",
+            "number",
+            "object",
+            "array"
+          ],
+          "default": "IfNotPresent"
+        }
+      }
+    },
+    "securityContext": {
+      "type": "object",
+      "required": [],
+      "properties": {
+        "runAsUser": {
+          "type": [
+            "string",
+            "boolean",
+            "number",
+            "object",
+            "array"
+          ],
+          "default": "1000"
+        },
+        "runAsGroup": {
+          "type": [
+            "string",
+            "boolean",
+            "number",
+            "object",
+            "array"
+          ],
+          "default": "1000"
+        },
+        "runAsNonRoot": {
+          "type": [
+            "string",
+            "boolean",
+            "number",
+            "object",
+            "array"
+          ],
+          "default": "true"
+        },
+        "readOnlyRootFilesystem": {
+          "type": [
+            "string",
+            "boolean",
+            "number",
+            "object",
+            "array"
+          ],
+          "default": "true"
+        },
+        "allowPrivilegeEscalation": {
+          "type": [
+            "string",
+            "boolean",
+            "number",
+            "object",
+            "array"
+          ],
+          "default": "false"
+        },
+        "capabilities": {
+          "type": "object",
+          "properties": {
+            "drop": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            }
+          }
+        },
+        "seccompProfile": {
+          "type": "object",
+          "properties": {
+            "type": {
+              "type": "string",
+              "default": "RuntimeDefault"
+            }
           }
         }
-      },
-      "securityContext": {
-        "type": "object",
-        "required": [],
-        "properties": {
-          "runAsUser": {
-            "type": [
-              "string",
-              "boolean",
-              "number",
-              "object",
-              "array"
-            ],
-            "default": "1000"
-          },
-          "runAsGroup": {
-            "type": [
-              "string",
-              "boolean",
-              "number",
-              "object",
-              "array"
-            ],
-            "default": "1000"
-          },
-          "runAsNonRoot": {
-            "type": [
-              "string",
-              "boolean",
-              "number",
-              "object",
-              "array"
-            ],
-            "default": "true"
-          },
-          "readOnlyRootFilesystem": {
-            "type": [
-              "string",
-              "boolean",
-              "number",
-              "object",
-              "array"
-            ],
-            "default": "true"
-          },
-          "allowPrivilegeEscalation": {
-            "type": [
-              "string",
-              "boolean",
-              "number",
-              "object",
-              "array"
-            ],
-            "default": "false"
-          },
-          "capabilities": {
+      }
+    },
+    "podSecurityContext": {
+      "type": "object",
+      "required": [],
+      "properties": {
+        "fsGroup": {
+          "type": [
+            "string",
+            "boolean",
+            "number",
+            "object",
+            "array"
+          ],
+          "default": "1000"
+        }
+      }
+    },
+    "resources": {
+      "type": "object",
+      "required": [],
+      "properties": {
+        "limits": {
+          "type": "object",
+          "required": [],
+          "properties": {
+            "memory": {
+              "type": [
+                "string",
+                "boolean",
+                "number",
+                "object",
+                "array"
+              ],
+              "default": "128Mi"
+            },
+            "cpu": {
+              "type": [
+                "string",
+                "boolean",
+                "number",
+                "object",
+                "array"
+              ],
+              "default": "100m"
+            }
+          }
+        }
+      }
+    },
+    "nodeSelector": {
+      "type": [
+        "string",
+        "boolean",
+        "number",
+        "object",
+        "array"
+      ]
+    },
+    "tolerations": {
+      "type": [
+        "string",
+        "boolean",
+        "number",
+        "object",
+        "array"
+      ]
+    },
+    "affinity": {
+      "type": [
+        "string",
+        "boolean",
+        "number",
+        "object",
+        "array"
+      ]
+    },
+    "config": {
+      "type": "object",
+      "description": "kwatch configuration (see deploy/config.yaml for full reference)",
+      "properties": {
+        "resyncSeconds": {
+          "type": "integer"
+        },
+        "namespaces": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "reasons": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "ignorePodNames": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "severityByOwnerKind": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "string"
+          }
+        },
+        "heartbeatMonitor": {
+          "type": "object",
+          "properties": {
+            "enabled": {
+              "type": "boolean"
+            },
+            "interval": {
+              "type": "integer"
+            },
+            "url": {
+              "type": "string"
+            }
+          }
+        },
+        "healthCheck": {
+          "type": "object",
+          "properties": {
+            "enabled": {
+              "type": "boolean"
+            },
+            "port": {
+              "type": "integer"
+            },
+            "pprof": {
+              "type": "boolean"
+            },
+            "diagnostics": {
+              "type": "boolean"
+            },
+            "diagnosticsToken": {
+              "type": "string"
+            }
+          }
+        },
+        "crd": {
+          "type": "object",
+          "properties": {
+            "enabled": {
+              "type": "boolean"
+            }
+          }
+        },
+        "templates": {
+          "type": "object",
+          "description": "Go text/template overrides per incident reason",
+          "additionalProperties": {
+            "type": "string"
+          }
+        },
+        "silences": {
+          "type": "array",
+          "items": {
             "type": "object",
             "properties": {
-              "drop": {
+              "namespaces": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              },
+              "reasons": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              },
+              "podNamePatterns": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              },
+              "containerNames": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              },
+              "containerMessages": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              },
+              "eventMessages": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              },
+              "nodeReasons": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              },
+              "nodeMessages": {
                 "type": "array",
                 "items": {
                   "type": "string"
                 }
               }
             }
-          },
-          "seccompProfile": {
-            "type": "object",
-            "properties": {
-              "type": {
-                "type": "string",
-                "default": "RuntimeDefault"
-              }
+          }
+        },
+        "auditLog": {
+          "type": "object",
+          "description": "Audit logging configuration",
+          "properties": {
+            "enabled": {
+              "type": "boolean",
+              "description": "Stream all incidents as JSON (default true)"
+            },
+            "output": {
+              "type": "string",
+              "description": "Destination: stdout or file path (default stdout)"
             }
           }
-        }
-      },
-      "podSecurityContext": {
-        "type": "object",
-        "required": [],
-        "properties": {
-          "fsGroup": {
-            "type": [
-              "string",
-              "boolean",
-              "number",
-              "object",
-              "array"
-            ],
-            "default": "1000"
-          }
-        }
-      },
-      "resources": {
-        "type": "object",
-        "required": [],
-        "properties": {
-          "limits": {
-            "type": "object",
-            "required": [],
-            "properties": {
-              "memory": {
-                "type": [
-                  "string",
-                  "boolean",
-                  "number",
-                  "object",
-                  "array"
-                ],
-                "default": "128Mi"
-              },
-              "cpu": {
-                "type": [
-                  "string",
-                  "boolean",
-                  "number",
-                  "object",
-                  "array"
-                ],
-                "default": "100m"
-              }
+        },
+        "alert": {
+          "type": "object",
+          "description": "Provider-specific alert configuration"
+        },
+        "app": {
+          "type": "object",
+          "properties": {
+            "clusterName": {
+              "type": "string"
+            },
+            "proxyURL": {
+              "type": "string"
+            },
+            "disableStartupMessage": {
+              "type": "boolean"
+            },
+            "logFormatter": {
+              "type": "string"
             }
           }
-        }
-      },
-      "nodeSelector": {
-        "type": [
-          "string",
-          "boolean",
-          "number",
-          "object",
-          "array"
-        ]
-      },
-      "tolerations": {
-        "type": [
-          "string",
-          "boolean",
-          "number",
-          "object",
-          "array"
-        ]
-      },
-      "affinity": {
-        "type": [
-          "string",
-          "boolean",
-          "number",
-          "object",
-          "array"
-        ]
-      },
-      "config": {
-        "type": "object",
-        "description": "kwatch configuration (see deploy/config.yaml for full reference)",
-        "properties": {
-          "workers": { "type": "integer", "description": "number of reconcile workers" },
-          "maxRecentLogLines": { "type": "integer", "description": "max log lines in alerts" },
-          "ignoreFailedGracefulShutdown": { "type": "boolean" },
-          "resyncSeconds": { "type": "integer" },
-          "namespaces": { "type": "array", "items": { "type": "string" } },
-          "reasons": { "type": "array", "items": { "type": "string" } },
-          "ignorePodNames": { "type": "array", "items": { "type": "string" } },
-          "severityByOwnerKind": { "type": "object", "additionalProperties": { "type": "string" } },
-          "nodeMonitor": {
-            "type": "object",
-            "properties": {
-              "enabled": { "type": "boolean" }
-            }
-          },
-          "pvcMonitor": {
-            "type": "object",
-            "properties": {
-              "enabled": { "type": "boolean" },
-              "interval": { "type": "integer" },
-              "threshold": { "type": "number" },
-              "criticalThreshold": { "type": "number" },
-              "clearThreshold": { "type": "number" }
-            }
-          },
-          "daemonSetMonitor": {
-            "type": "object",
-            "properties": {
-              "enabled": { "type": "boolean" },
-              "sustainedMinutes": { "type": "integer" }
-            }
-          },
-          "cronJobMonitor": {
-            "type": "object",
-            "properties": {
-              "enabled": { "type": "boolean" }
-            }
-          },
-          "clusterAutoscalerMonitor": {
-            "type": "object",
-            "description": "Cluster-autoscaler event monitoring",
-            "properties": {
-              "enabled": { "type": "boolean", "description": "Detect cluster-autoscaler scale failures (default true)" }
-            }
-          },
-          "hpaMonitor": {
-            "type": "object",
-            "properties": {
-              "enabled": { "type": "boolean" },
-              "sustainedMinutes": { "type": "integer" }
-            }
-          },
-          "tlsMonitor": {
-            "type": "object",
-            "properties": {
-              "enabled": { "type": "boolean" },
-              "threshold": { "type": "integer" },
-              "criticalThreshold": { "type": "integer" }
-            }
-          },
-          "serviceMonitor": {
-            "type": "object",
-            "properties": {
-              "enabled": { "type": "boolean" }
-            }
-          },
-          "admissionWebhookMonitor": {
-            "type": "object",
-            "properties": {
-              "enabled": { "type": "boolean" }
-            }
-          },
-          "controlPlaneMonitor": {
-            "type": "object",
-            "properties": {
-              "enabled": { "type": "boolean" },
-              "intervalSeconds": { "type": "integer", "minimum": 1 },
-              "apiServerLatencyWarningMs": { "type": "integer", "minimum": 1 },
-              "failureThreshold": { "type": "integer", "minimum": 1 },
-              "recoveryThreshold": { "type": "integer", "minimum": 1 }
-            }
-          },
-          "ingressMonitor": {
-            "type": "object",
-            "properties": {
-              "enabled": { "type": "boolean" }
-            }
-          },
-          "networkPolicyMonitor": {
-            "type": "object",
-            "properties": {
-              "enabled": { "type": "boolean" }
-            }
-          },
-          "jobMonitor": {
-            "type": "object",
-            "properties": {
-              "enabled": { "type": "boolean" }
-            }
-          },
-          "rolloutMonitor": {
-            "type": "object",
-            "properties": {
-              "enabled": { "type": "boolean" },
-              "sustainedMinutes": { "type": "integer", "default": 2, "minimum": 0 }
-            }
-          },
-          "smartGrouping": {
-            "type": "object",
-            "properties": {
-              "windowSeconds": { "type": "integer", "default": 60, "minimum": 0 }
-            }
-          },
-          "pendingPodMonitor": {
-            "type": "object",
-            "properties": {
-              "enabled": { "type": "boolean" },
-              "threshold": { "type": "integer" }
-            }
-          },
-          "heartbeatMonitor": {
-            "type": "object",
-            "properties": {
-              "enabled": { "type": "boolean" },
-              "interval": { "type": "integer" },
-              "url": { "type": "string" }
-            }
-          },
-          "healthCheck": {
-            "type": "object",
-            "properties": {
-              "enabled": { "type": "boolean" },
-              "port": { "type": "integer" },
-              "pprof": { "type": "boolean" },
-              "diagnostics": { "type": "boolean" },
-              "diagnosticsToken": { "type": "string" }
-            }
-          },
-          "correlation": {
-            "type": "object",
-            "properties": {
-              "window": { "type": "integer" },
-              "lifecycleInterval": { "type": "integer" },
-              "maxBaseline": { "type": "integer" },
-              "resolveHoldDown": { "type": "integer" },
-              "escalation": {
-                "type": "object",
-                "properties": {
-                  "enabled": { "type": "boolean" },
-                  "tiers": { "type": "array", "items": { "type": "integer" } }
-                }
-              },
-              "renotify": {
-                "type": "object",
-                "properties": {
-                  "intervalBySeverity": { "type": "object" },
-                  "maxPerIncident": { "type": "integer" }
-                }
-              }
-            }
-          },
-          "inhibition": {
-            "type": "object",
-            "properties": {
-              "nodeSuppressesPods": { "type": "boolean" }
-            }
-          },
-          "crd": {
-            "type": "object",
-            "properties": {
-              "enabled": { "type": "boolean" }
-            }
-          },
-          "templates": {
-            "type": "object",
-            "description": "Go text/template overrides per incident reason",
-            "additionalProperties": { "type": "string" }
-          },
-          "silences": {
-            "type": "array",
-            "items": {
-              "type": "object",
-              "properties": {
-                "namespaces": { "type": "array", "items": { "type": "string" } },
-                "reasons": { "type": "array", "items": { "type": "string" } },
-                "podNamePatterns": { "type": "array", "items": { "type": "string" } },
-                "containerNames": { "type": "array", "items": { "type": "string" } },
-                "containerMessages": { "type": "array", "items": { "type": "string" } },
-                "eventMessages": { "type": "array", "items": { "type": "string" } },
-                "nodeReasons": { "type": "array", "items": { "type": "string" } },
-                "nodeMessages": { "type": "array", "items": { "type": "string" } }
-              }
-            }
-          },
-          "auditLog": {
-            "type": "object",
-            "description": "Audit logging configuration",
-            "properties": {
-              "enabled": { "type": "boolean", "description": "Stream all incidents as JSON (default true)" },
-              "output": { "type": "string", "description": "Destination: stdout or file path (default stdout)" }
-            }
-          },
-          "alert": {
-            "type": "object",
-            "description": "Provider-specific alert configuration"
-          },
-          "app": {
-            "type": "object",
-            "properties": {
-              "clusterName": { "type": "string" },
-              "proxyURL": { "type": "string" },
-              "disableStartupMessage": { "type": "boolean" },
-              "logFormatter": { "type": "string" }
-            }
-          },
-          "upgrader": {
-            "type": "object",
-            "properties": {
-              "disableUpdateCheck": { "type": "boolean" }
+        },
+        "upgrader": {
+          "type": "object",
+          "properties": {
+            "disableUpdateCheck": {
+              "type": "boolean"
             }
           }
+        },
+        "namespaceSelector": {
+          "type": "string"
+        },
+        "ignoreContainerNames": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "ignoreContainerMessages": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "ignoreNodeReasons": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "ignoreNodeMessages": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "severityByReason": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "string"
+          }
+        },
+        "runbooks": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "string"
+          }
+        },
+        "telemetry": {
+          "type": "object",
+          "properties": {
+            "enabled": {
+              "type": "boolean"
+            }
+          },
+          "additionalProperties": false
+        },
+        "maintenance": {
+          "type": "object",
+          "properties": {
+            "enabled": {
+              "type": "boolean"
+            },
+            "annotation": {
+              "type": "string"
+            },
+            "untilAnnotation": {
+              "type": "string"
+            }
+          },
+          "additionalProperties": false
+        },
+        "activeProbeMonitor": {
+          "type": "object"
         }
       },
-      "networkPolicy": {
-        "type": "object",
-        "properties": {
-          "enabled": { "type": "boolean", "default": false },
-          "ingress": { "type": "array", "items": { "type": "object" } },
-          "egress": { "type": "array", "items": { "type": "object" } }
+      "additionalProperties": false
+    },
+    "networkPolicy": {
+      "type": "object",
+      "properties": {
+        "enabled": {
+          "type": "boolean",
+          "default": false
+        },
+        "ingress": {
+          "type": "array",
+          "items": {
+            "type": "object"
+          }
+        },
+        "egress": {
+          "type": "array",
+          "items": {
+            "type": "object"
+          }
         }
-      },
-      "configSecretName": {
-        "type": "string",
-        "default": "",
-        "description": "Existing Secret containing config.yaml; avoids storing credentials in the chart ConfigMap"
       }
+    },
+    "configSecretName": {
+      "type": "string",
+      "default": "",
+      "description": "Existing Secret containing config.yaml; avoids storing credentials in the chart ConfigMap"
     }
   }
+}

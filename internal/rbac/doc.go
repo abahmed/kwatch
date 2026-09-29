@@ -1,4 +1,3 @@
-// Package rbac audits the permissions Kwatch needs to monitor a cluster.
-// It is separate from monitor/security, which evaluates Kubernetes resource
-// and admission failures.
+// Package rbac audits the permissions kwatch uses and reports what is
+// missing. Sources degrade on their own; the audit only makes it visible.
 package rbac

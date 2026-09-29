@@ -32,7 +32,7 @@ func applyStartupConfig(
 	dynamicClient dynamic.Interface,
 	namespace string,
 ) error {
-	if !config.RuntimeConfigFor(cfg).Monitors().CRD().Enabled {
+	if !config.RuntimeConfigFor(cfg).Lifecycle().CRDEnabled() {
 		return nil
 	}
 	dc := dynamicClient
@@ -59,7 +59,6 @@ func applyStartupConfig(
 	if err := rejectSecretConfig(spec); err != nil {
 		return err
 	}
-	normalizeLegacySpec(spec)
 	raw, err := json.Marshal(spec)
 	if err != nil {
 		return err
@@ -69,29 +68,6 @@ func applyStartupConfig(
 		return err
 	}
 	return config.RebuildAfterOverlay(cfg)
-}
-
-// normalizeLegacySpec keeps the pre-monitor pending threshold usable for
-// existing KwatchConfig objects after the setting moved under
-// pendingPodMonitor. The nested value wins when both forms are present.
-func normalizeLegacySpec(spec interface{}) {
-	root, ok := spec.(map[string]interface{})
-	if !ok {
-		return
-	}
-	legacy, exists := root["pendingPodThreshold"]
-	if !exists {
-		return
-	}
-	monitor, ok := root["pendingPodMonitor"].(map[string]interface{})
-	if !ok {
-		monitor = make(map[string]interface{})
-		root["pendingPodMonitor"] = monitor
-	}
-	if _, exists := monitor["threshold"]; !exists {
-		monitor["threshold"] = legacy
-	}
-	delete(root, "pendingPodThreshold")
 }
 
 func rejectSecretConfig(spec interface{}) error {

@@ -63,19 +63,6 @@ func TestValidateAlertRetrySettingsAcceptsRuntimeEncodings(t *testing.T) {
 	}
 }
 
-func TestValidateNodeLeaseStaleSeconds(t *testing.T) {
-	cfg := DefaultConfig()
-	cfg.ClusterResourceMonitor.NodeLeaseStaleSeconds = -1
-	if errs := Validate(cfg); !containsError(errs, "nodeLeaseStaleSeconds") {
-		t.Fatalf("expected negative Lease threshold error, got %v", errs)
-	}
-
-	cfg.ClusterResourceMonitor.NodeLeaseStaleSeconds = 0
-	if errs := Validate(cfg); len(errs) != 0 {
-		t.Fatalf("zero Lease threshold should select the default: %v", errs)
-	}
-}
-
 func containsError(errs []error, want string) bool {
 	for _, err := range errs {
 		if strings.Contains(err.Error(), want) {

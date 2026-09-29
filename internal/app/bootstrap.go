@@ -13,6 +13,7 @@ import (
 	"github.com/abahmed/kwatch/internal/delivery"
 	"github.com/abahmed/kwatch/internal/health"
 	"github.com/abahmed/kwatch/internal/heartbeat"
+	"github.com/abahmed/kwatch/internal/k8s"
 	"github.com/abahmed/kwatch/internal/rbac"
 )
 
@@ -58,15 +59,18 @@ func newBootstrap(
 	); err != nil {
 		return nil, fmt.Errorf("initialize delivery providers: %w", err)
 	}
+	healthServer := health.NewHealthServerWithClock(
+		runtime.Lifecycle().HealthCheck(), clockSource,
+	)
 	return &bootstrap{
-		runtime: runtime,
-		clients: clients,
-		healthServer: health.NewHealthServerWithClock(
-			runtime.Lifecycle().HealthCheck(), clockSource,
-		),
+		runtime:         runtime,
+		clients:         clients,
+		healthServer:    healthServer,
 		deliveryManager: deliveryManager,
-		securityMonitor: rbac.NewWithRuntimeConfig(
-			clients.Kubernetes, runtime, clockSource),
+		securityMonitor: rbac.NewMonitor(clients.Kubernetes,
+			rbac.Checks(k8s.GetNamespace(),
+				runtime.Lifecycle().CRDEnabled()),
+			clockSource, reportPermissions(healthServer)),
 		heartbeat: heartbeat.NewHeartbeatMonitorWithRuntime(
 			runtime, clients.HTTP),
 		clock: clockSource,

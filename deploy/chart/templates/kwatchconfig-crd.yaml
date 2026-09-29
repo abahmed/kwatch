@@ -24,13 +24,6 @@ spec:
             spec:
               type: object
               properties:
-                maxRecentLogLines:
-                  type: integer
-                  format: int64
-                workers:
-                  type: integer
-                ignoreFailedGracefulShutdown:
-                  type: boolean
                 namespaces:
                   type: array
                   items:
@@ -51,8 +44,6 @@ spec:
                   type: object
                   additionalProperties:
                     type: string
-                pendingPodThreshold:
-                  type: integer
                 resyncSeconds:
                   type: integer
                 crd:
@@ -60,14 +51,6 @@ spec:
                   properties:
                     enabled:
                       type: boolean
-                    failureConditions:
-                      type: array
-                      items:
-                        type: string
-                    graphReferences:
-                      type: array
-                      items:
-                        type: string
                 namespaceSelector:
                   type: string
                 ignoreContainerMessages:
@@ -82,25 +65,6 @@ spec:
                   type: array
                   items:
                     type: string
-                ignoreDisruptionTerminations:
-                  type: boolean
-                containerRestartThreshold:
-                  type: integer
-                reportStartupBaseline:
-                  type: boolean
-                adaptiveThresholds:
-                  type: boolean
-                includeEvents:
-                  description: >-
-                    Deprecated and ignored. Kwatch analyzes events internally.
-                  type: boolean
-                includeLogs:
-                  type: boolean
-                message:
-                  type: object
-                  properties:
-                    includePrivateLogAddresses:
-                      type: boolean
                 severityByReason:
                   type: object
                   additionalProperties:
@@ -142,123 +106,7 @@ spec:
                         type: array
                         items:
                           type: string
-                correlation:
-                  type: object
-                  properties:
-                    window:
-                      type: integer
-                    lifecycleInterval:
-                      type: integer
-                    resolveHoldDown:
-                      type: integer
-                    cooldownMinutes:
-                      type: integer
-                    maxBaseline:
-                      type: integer
-                    escalation:
-                      type: object
-                      properties:
-                        enabled:
-                          type: boolean
-                        tiers:
-                          type: array
-                          items:
-                            type: integer
-                    renotify:
-                      type: object
-                      properties:
-                        intervalBySeverity:
-                          type: object
-                          additionalProperties:
-                            type: integer
-                        maxPerIncident:
-                          type: integer
-                pvcMonitor:
-                  type: object
-                  properties:
-                    enabled:
-                      type: boolean
-                    interval:
-                      type: integer
-                    threshold:
-                      type: number
-                    criticalThreshold:
-                      type: number
-                    clearThreshold:
-                      type: number
-                nodeMonitor:
-                  type: object
-                  x-kubernetes-preserve-unknown-fields: true
-                nodeResourceMonitor:
-                  type: object
-                  x-kubernetes-preserve-unknown-fields: true
-                pendingPodMonitor:
-                  type: object
-                  x-kubernetes-preserve-unknown-fields: true
-                notReadyMonitor:
-                  type: object
-                  x-kubernetes-preserve-unknown-fields: true
-                scheduleMonitor:
-                  type: object
-                  x-kubernetes-preserve-unknown-fields: true
-                oomMonitor:
-                  type: object
-                  x-kubernetes-preserve-unknown-fields: true
-                rolloutMonitor:
-                  type: object
-                  x-kubernetes-preserve-unknown-fields: true
-                daemonSetMonitor:
-                  type: object
-                  x-kubernetes-preserve-unknown-fields: true
-                jobMonitor:
-                  type: object
-                  x-kubernetes-preserve-unknown-fields: true
-                cronJobMonitor:
-                  type: object
-                  x-kubernetes-preserve-unknown-fields: true
-                statefulSetMonitor:
-                  type: object
-                  x-kubernetes-preserve-unknown-fields: true
-                pdbMonitor:
-                  type: object
-                  x-kubernetes-preserve-unknown-fields: true
-                hpaMonitor:
-                  type: object
-                  x-kubernetes-preserve-unknown-fields: true
-                serviceMonitor:
-                  type: object
-                  x-kubernetes-preserve-unknown-fields: true
-                admissionWebhookMonitor:
-                  type: object
-                  x-kubernetes-preserve-unknown-fields: true
-                ingressMonitor:
-                  type: object
-                  x-kubernetes-preserve-unknown-fields: true
-                networkPolicyMonitor:
-                  type: object
-                  x-kubernetes-preserve-unknown-fields: true
-                clusterResourceMonitor:
-                  type: object
-                  x-kubernetes-preserve-unknown-fields: true
-                tlsMonitor:
-                  type: object
-                  properties:
-                    enabled:
-                      type: boolean
-                    threshold:
-                      type: integer
-                    criticalThreshold:
-                      type: integer
-                kubeletTelemetryMonitor:
-                  type: object
-                  x-kubernetes-preserve-unknown-fields: true
                 activeProbeMonitor:
-                  type: object
-                  x-kubernetes-preserve-unknown-fields: true
-                controlPlaneMonitor:
-                  type: object
-                  x-kubernetes-preserve-unknown-fields: true
-                clusterAutoscalerMonitor:
                   type: object
                   x-kubernetes-preserve-unknown-fields: true
                 heartbeatMonitor:
@@ -308,12 +156,6 @@ spec:
                       type: boolean
                     caBundlePath:
                       type: string
-                smartGrouping:
-                  type: object
-                  x-kubernetes-preserve-unknown-fields: true
-                inhibition:
-                  type: object
-                  x-kubernetes-preserve-unknown-fields: true
                 templates:
                   type: object
                   additionalProperties:

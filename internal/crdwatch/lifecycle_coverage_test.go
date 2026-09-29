@@ -39,18 +39,6 @@ func TestWatcherStartsInformerAndStops(t *testing.T) {
 }
 
 func TestWatcherConfigurationValidationHelpers(t *testing.T) {
-	spec := map[string]interface{}{
-		"pendingPodThreshold": int64(3),
-	}
-	normalizeLegacySpec(spec)
-	monitor, ok := spec["pendingPodMonitor"].(map[string]interface{})
-	if !ok || monitor["threshold"] != int64(3) {
-		t.Fatalf("legacy spec normalization = %#v", spec)
-	}
-	normalizeLegacySpec(map[string]interface{}{
-		"pendingPodThreshold": int64(4),
-		"pendingPodMonitor":   map[string]interface{}{"threshold": int64(5)},
-	})
 	if err := rejectSecretConfig(map[string]interface{}{
 		"alert": map[string]interface{}{},
 	}); err == nil {

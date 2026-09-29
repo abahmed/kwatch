@@ -32,7 +32,7 @@ func NewHeartbeatMonitor(
 func NewHeartbeatMonitorWithRuntime(
 	runtime config.RuntimeConfig, client *http.Client,
 ) *HeartbeatMonitor {
-	cfg := runtime.Monitors().Heartbeat()
+	cfg := runtime.Lifecycle().Heartbeat()
 	return NewHeartbeatMonitor(&cfg, client)
 }
 

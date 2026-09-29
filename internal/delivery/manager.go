@@ -54,29 +54,28 @@ type providerGeneration struct {
 }
 
 type Manager struct {
-	generation                 *providerGeneration
-	templates                  map[string]*template.Template
-	clusterName                string
-	includePrivateLogAddresses bool
-	providerDeps               transport.Dependencies
-	started                    bool
-	stopped                    bool
-	reconfiguring              bool
-	reconfigureDone            chan struct{}
-	reconfigureErr             error
-	reconfigureWait            bool
-	generationStuck            bool
-	mu                         sync.Mutex
-	cfgMu                      sync.RWMutex
-	workerCount                int
-	workerDone                 chan struct{}
-	workerCtx                  context.Context
-	cancelWorker               context.CancelFunc
-	pending                    []deliverJob
-	dlqMu                      sync.Mutex
-	dlqRing                    [dlqCap]DeadLetterEntry
-	dlqHead                    int
-	dlqCount                   int
+	generation      *providerGeneration
+	templates       map[string]*template.Template
+	clusterName     string
+	providerDeps    transport.Dependencies
+	started         bool
+	stopped         bool
+	reconfiguring   bool
+	reconfigureDone chan struct{}
+	reconfigureErr  error
+	reconfigureWait bool
+	generationStuck bool
+	mu              sync.Mutex
+	cfgMu           sync.RWMutex
+	workerCount     int
+	workerDone      chan struct{}
+	workerCtx       context.Context
+	cancelWorker    context.CancelFunc
+	pending         []deliverJob
+	dlqMu           sync.Mutex
+	dlqRing         [dlqCap]DeadLetterEntry
+	dlqHead         int
+	dlqCount        int
 
 	managerDone       chan struct{}
 	managerDoneClosed bool
@@ -318,8 +317,6 @@ func (a *Manager) publishRuntime(
 	a.generation = newProviderGeneration(items)
 	a.pacer = sendPacer{}
 	a.clusterName = clusterName
-	a.includePrivateLogAddresses = runtime.Delivery().
-		IncludePrivateLogAddresses()
 	a.started = false
 	a.stopped = false
 	a.ctx = nil

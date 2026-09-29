@@ -15,47 +15,21 @@ metadata:
 stringData:
   config.yaml: |
     # ── General ──────────────────────────────────────────────
-    maxRecentLogLines: <number>    # also caps logs/events in alert message blocks (default 50)
-    ignoreFailedGracefulShutdown: <boolean>
-    ignoreDisruptionTerminations: <boolean>    # skip pods evicted during node drains (default true)
-    reportStartupBaseline: <boolean>           # send one startup summary of pre-existing issues (default true).
-                                               # Issues already present at startup are otherwise quiet for 24h, so keep this on.
-    containerRestartThreshold: <number>        # alert if a container restarts this many times (0 = off, default 0)
-    workers: <number>                          # parallel reconcile workers (default 1)
-
-    # Optional periodic resync (0 = event-driven only); raise to e.g. 600 only if a
-    # periodic full-reconcile safety net is wanted
+    # Periodic informer resync, a safety net for lost watch events
+    # (default 300, 0 = off).
     resyncSeconds: <seconds>
 
-    # ── Namespace / Reason / Container filtering ──────────
+    # ── Scope: what is delivered ──────────────────────────
+    # kwatch watches every supported resource; scope only filters delivery.
+    # A problem is delivered while one signal it explains is in scope.
     namespaces:
-      - <optional_namespace>
+      - <optional_namespace>   # prefix with ! to forbid
     reasons:
-      - <optional_reason>
-    ignoreContainerNames:
-      - <optional_container_name>
-    ignorePodNames:
-      - "<optional_regex_pattern>"
-    ignoreContainerMessages:
-      - "<optional_substring>"
+      - <optional_reason>      # prefix with ! to forbid
     namespaceSelector:
-      "<label_selector>"     # k8s label selector, mutually exclusive with namespaces
-    includeLogs: <boolean>    # include logs section in alerts (default true)
+      "<label_selector>"       # mutually exclusive with namespaces
 
-    # ── Severity ──────────────────────────────────────────
-    # Map owner kinds to severity levels
-    severityByOwnerKind:
-      <owner_kind>: "<severity>"
-    severityByReason:
-      <reason>: "<severity>"     # checked before owner-kind
-
-    # ── Deprecated ignore fields (use silences instead) ──
-    # ignoreNodeReasons:
-    #   - "<reason>"
-    # ignoreNodeMessages:
-    #   - "<message>"
-
-    # ── Silences (suppress matching incidents entirely) ──
+    # ── Silences (every field set in a rule must match) ──
     silences:
       - nodeReasons: ["<reason>"]
         nodeMessages: ["<message>"]
@@ -63,142 +37,53 @@ stringData:
       # - reasons: ["<reason>"]
       # - podNamePatterns: ["<regex>"]
       # - containerNames: ["<container>"]
-      # - logPatterns: ["<regex>"]
       # - containerMessages: ["<substring>"]
       # - eventMessages: ["<substring in a Kubernetes Event message>"]
 
-    # ── Correlation (incident dedup & lifecycle) ──────────
-    correlation:
-      window: <minutes>                # correlation window (default 10 min)
-      lifecycleInterval: <minutes>     # stale-incident check interval (default 1 min)
-      resolveHoldDown: <seconds>       # flap dampening before resolve (default 300)
-      # cooldownMinutes: <minutes>     # min time between identical crash re-alerts (default 10, 0 = off)
-      maxBaseline: 5000                # max baseline entries (default 5000)
-      escalation:
-        enabled: <boolean>             # auto-escalate severity by restart count (default true)
-        tiers: [3, 10]                 # restart thresholds: 3→"high", 10→"critical" (nothing above critical)
-      # renotify:
-      #   intervalBySeverity:
-      #     default: <minutes>         # renotify interval per severity (0 = off)
-      #   maxPerIncident: <number>
+    # Deprecated shorthands, each becomes one silence rule:
+    # ignoreContainerNames, ignorePodNames, ignoreContainerMessages,
+    # ignoreNodeReasons, ignoreNodeMessages
 
-    # ── Monitors ──────────────────────────────────────────
-    pendingPodMonitor:
-      enabled: <boolean>     # detect pods stuck in Pending
-      threshold: <seconds>   # seconds before alerting (default 300)
+    # ── Policy ────────────────────────────────────────────
+    severityByReason:
+      <reason>: "<severity>"      # checked before owner kind
+    severityByOwnerKind:
+      <owner_kind>: "<severity>"
+    # runbooks:
+    #   <reason>: "<url>"         # added to the steps of matching problems
+    maintenance:
+      enabled: <boolean>          # default true
+      # annotation: kwatch.io/maintenance
+      # untilAnnotation: kwatch.io/maintenance-until
 
-    nodeMonitor:
-      enabled: <boolean>
-      # sustainedMinutes: <minutes>    # Debounce for pressure conditions (default 3)
+    # ── Active probes (opt-in) ────────────────────────────
+    # activeProbeMonitor:
+    #   enabled: true
+    #   http: [{name: api, url: "https://api.example.com/healthz"}]
+    #   tcp: [{name: db, address: "db.prod:5432"}]
+    #   dns: [{name: registry, host: "registry.example.com"}]
 
-    rolloutMonitor:
-      enabled: <boolean>
-      # sustainedMinutes: <minutes>    # Debounce before alerting (default 5; Kubernetes' own progressDeadlineSeconds is 600)
-
-    daemonSetMonitor:
-      enabled: <boolean>
-      # sustainedMinutes: <minutes>    # Debounce before alerting (default 5)
-
-    statefulSetMonitor:
-      enabled: <boolean>
-      # sustainedMinutes: <minutes>    # Debounce before alerting (default 5)
-
-    pdbMonitor:
-      enabled: <boolean>
-      # sustainedMinutes: <minutes>    # Debounce before alerting (default 5)
-
-    oomMonitor:
-      enabled: <boolean>
-      # threshold: <count>             # OOM count within window (default 3)
-      # windowMinutes: <minutes>       # Sliding window (default 60)
-
-    scheduleMonitor:
-      enabled: <boolean>   # compute scheduling delay for Unschedulable pods (default true)
-
-    nodeResourceMonitor:
-      enabled: <boolean>
-      # intervalSeconds: <seconds>     # Check interval (default 300)
-      # cpuWarning: <float>            # CPU overcommit warning ratio (default 2.0)
-      # cpuCritical: <float>           # CPU overcommit critical ratio (default 4.0)
-      # memWarning: <float>            # Memory overcommit warning ratio (default 2.0)
-      # memCritical: <float>           # Memory overcommit critical ratio (default 4.0)
-
-    jobMonitor:
-      enabled: <boolean>
-
-    cronJobMonitor:
-      enabled: <boolean>
-      # sustainedMinutes: <minutes>    # Debounce for suspension alert (default 5)
-
-    hpaMonitor:
-      enabled: <boolean>
-      # sustainedMinutes: <minutes>
-
-    clusterAutoscalerMonitor:
-      enabled: <boolean>     # detect cluster-autoscaler events (scale failures, unschedulable pods)
-
-    tlsMonitor:
-      enabled: <boolean>
-      # threshold: <days>              # alert before expiry (default 30)
-      # criticalThreshold: <days>      # high severity before expiry (default 3)
-
-    serviceMonitor:
-      enabled: <boolean>       # detect services with zero ready endpoints (default true); includes a 60-second debounce
-
-    admissionWebhookMonitor:
-      enabled: <boolean>       # detect webhooks with unreachable backends (default true)
-
-    controlPlaneMonitor:
-      enabled: <boolean>       # detect broken control-plane pods (default true)
-
-    ingressMonitor:
-      enabled: <boolean>       # detect ingress backends with no ready endpoints (default true)
-
-    networkPolicyMonitor:
-      enabled: <boolean>       # detect overly restrictive network policies (default true)
-
+    # ── Heartbeat (dead man's switch) ─────────────────────
     heartbeatMonitor:
       enabled: <boolean>
       # interval: <seconds>            # ping interval (default 300)
       # url must come from a Secret-backed ${file:/absolute/path} reference.
 
-    pvcMonitor:
-      # NOTE: usage is read from each node's kubelet stats/summary, which only reports
-      # volumes that are currently MOUNTED by a running pod. A Bound-but-unmounted PVC
-      # (e.g. before its consumer pod schedules) has no usage data and is not checked
-      # until a pod mounts it. Volumes mounted only during CronJob/Job runs are handled
-      # by the last-known-usage cache (retained across unmounts).
-      enabled: <boolean>           # default true
-      interval: 5                  # check interval (minutes, default 5)
-      threshold: 80                # warn at this % (default 80)
-      criticalThreshold: 90        # high severity at this % (default 90)
-      clearThreshold: 75           # resolve below this % (default 75)
-
-    # ── Audit log (JSON incident stream) ─────────────────
+    # ── Audit log (one JSON line per problem decision) ───
     auditLog:
-      enabled: <boolean>     # stream all incidents as JSON (default true)
-      # output: "stdout"     # "stdout" or a file path (default "stdout")
+      enabled: <boolean>     # default true
+      # output: "stdout"     # "stdout" or a file path
 
-    # ── Smart grouping ──────────────────────────────────
-    # smart grouping: coalesces duplicate incidents with the same reason across
-    # different workload owners within a time window into a single notification.
-    # Enabled by default; disable by setting windowSeconds to 0.
-    smartGrouping:
-      windowSeconds: <int>              # grouping window in seconds (default 60, 0 = off)
-      namespaceFanOutThreshold: <int>   # owners failing the same way in one namespace before they collapse into one alert (default 3, 0 = off)
-
-    # ── Templates / Runbooks ──────────────────────────────
+    # ── Text templates for plain-text providers ──────────
     # templates:
-    #   <reason>: "<go_template_string>"
-    # runbooks:
-    #   <reason>: "<url>"
+    #   <reason>: "{{ .Text }}"
 
     # ── Health check ──────────────────────────────────────
     healthCheck:
       enabled: <boolean>           # default true
       port: 8060                   # listen port (default 8060)
       # pprof: <boolean>           # set true to enable /debug/pprof/* profiling endpoints
-      # diagnostics: <boolean>     # set true to enable /incidents, /test-alert endpoints
+      # diagnostics: <boolean>     # set true to enable protected diagnostic endpoints
       # diagnosticsToken must use a Secret-backed ${file:/absolute/path} reference.
 
     # ── App ───────────────────────────────────────────────
@@ -213,10 +98,6 @@ stringData:
     # ── Upgrader ──────────────────────────────────────────
     upgrader:
       disableUpdateCheck: <boolean>
-
-    # ── Inhibition ──────────────────────────────────────────
-    # inhibition:
-    #   nodeSuppressesPods: <boolean>  # suppress pod alerts on unhealthy nodes (default true)
 
     # ── CRD watcher ───────────────────────────────────────
     # crd:

@@ -37,7 +37,7 @@ func runCore(
 		return source != nil && source.Synced(kind)
 	}
 	scope, err := filter.NewScope(
-		deps.runtime.Scope(), deps.runtime.Delivery().Silences())
+		deps.runtime.Scope(), deps.runtime.Scope().Silences())
 	if err != nil {
 		return err
 	}
@@ -212,7 +212,7 @@ func (c coreClock) After(d time.Duration) <-chan time.Time {
 func newActiveProber(
 	deps *serverDeps, model knowledge.Reader, engine *core.Engine,
 ) (*kube.ActiveProber, bool) {
-	cfg := deps.runtime.Monitors().ActiveProbe()
+	cfg := deps.runtime.ActiveProbe()
 	if !cfg.Enabled {
 		return nil, false
 	}

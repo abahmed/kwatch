@@ -10,23 +10,12 @@ import (
 func Validate(cfg *Config) []error {
 	var errs []error
 	errs = append(errs, validateApp(cfg.App)...)
-	errs = append(errs, validateCorrelation(cfg)...)
-	errs = append(errs, validateMonitors(cfg)...)
-	errs = append(errs, validatePvc(cfg)...)
+	errs = append(errs, validateProbes(cfg)...)
 	errs = append(errs, validateSelectors(cfg)...)
 	errs = append(errs, validatePodNamePatterns(cfg)...)
 	errs = append(errs, validateAlertRetries(cfg)...)
-	if cfg.PendingPodMonitor.Enabled && cfg.PendingPodMonitor.Threshold <= 0 {
-		errs = append(
-			errs,
-			errors.New("pendingPodMonitor.threshold must be > 0"),
-		)
-	}
-	if cfg.MaxRecentLogLines < 0 {
-		errs = append(errs, errors.New("maxRecentLogLines must be >= 0"))
-	}
-	if cfg.Workers < 1 {
-		errs = append(errs, errors.New("workers must be >= 1"))
+	if cfg.ResyncSeconds < 0 {
+		errs = append(errs, errors.New("resyncSeconds must be >= 0"))
 	}
 	if cfg.HealthCheck.Enabled && cfg.HealthCheck.Port <= 0 {
 		errs = append(errs, errors.New(
@@ -40,9 +29,6 @@ func Validate(cfg *Config) []error {
 			"healthCheck.diagnosticsToken must be set when diagnostics or "+
 				"pprof is enabled",
 		))
-	}
-	if cfg.Correlation.MaxBaseline < 0 {
-		errs = append(errs, errors.New("correlation.maxBaseline must be >= 0"))
 	}
 	for _, text := range validateMaintenance(cfg) {
 		errs = append(errs, errors.New(text))
@@ -85,74 +71,6 @@ func Validate(cfg *Config) []error {
 					k,
 					cfg.SeverityByOwnerKind[k],
 				),
-			),
-		)
-	}
-	return errs
-}
-
-// validateCorrelation checks the shared correlation tuning knobs.
-func validateCorrelation(cfg *Config) []error {
-	var errs []error
-	if cfg.Correlation.Window <= 0 {
-		errs = append(errs, errors.New("correlation.window must be > 0"))
-	}
-	if cfg.Correlation.LifecycleInterval <= 0 {
-		errs = append(
-			errs,
-			errors.New("correlation.lifecycleInterval must be > 0"),
-		)
-	}
-	if cfg.Correlation.Escalation.Enabled {
-		for i, t := range cfg.Correlation.Escalation.Tiers {
-			if t <= 0 {
-				errs = append(
-					errs,
-					fmt.Errorf("escalation.tiers[%d] must be > 0", i),
-				)
-			}
-			if i > 0 && t <= cfg.Correlation.Escalation.Tiers[i-1] {
-				errs = append(
-					errs,
-					fmt.Errorf(
-						"escalation.tiers must be strictly ascending "+
-							"(tiers[%d]=%d <= tiers[%d]=%d)",
-						i,
-						t,
-						i-1,
-						cfg.Correlation.Escalation.Tiers[i-1],
-					),
-				)
-			}
-		}
-	}
-	if cfg.Correlation.ResolveHoldDown < 0 {
-		errs = append(
-			errs,
-			errors.New("correlation.resolveHoldDown must be >= 0"),
-		)
-	}
-	if int(cfg.Correlation.ResolveHoldDown) > int(cfg.Correlation.Window)*60 {
-		errs = append(
-			errs,
-			errors.New(
-				"correlation.resolveHoldDown must be <= correlation.window "+
-					"(in seconds)",
-			),
-		)
-	}
-	if cfg.Correlation.MaxBaseline < 0 {
-		errs = append(errs, errors.New("correlation.maxBaseline must be >= 0"))
-	}
-	const maxBaselineEntries = 20000
-	if cfg.Correlation.MaxBaseline > maxBaselineEntries {
-		errs = append(
-			errs,
-			fmt.Errorf(
-				"correlation.maxBaseline=%d may exceed the ~1MB ConfigMap "+
-					"limit (max ~%d)",
-				cfg.Correlation.MaxBaseline,
-				maxBaselineEntries,
 			),
 		)
 	}

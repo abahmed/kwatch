@@ -46,7 +46,7 @@ func TestRawDeploymentHasProductionShape(t *testing.T) {
 	defer file.Close()
 	documents := decodeManifestDocuments(t, file)
 	var deployment, claim *unstructured.Unstructured
-	var hasLeaseRole, hasConfigMapRole bool
+	var hasLeaseRole bool
 	for i := range documents {
 		document := &documents[i]
 		switch document.GetKind() {
@@ -61,7 +61,7 @@ func TestRawDeploymentHasProductionShape(t *testing.T) {
 				hasLeaseRole = true
 			}
 			if document.GetName() == "kwatch-configmap-manager" {
-				hasConfigMapRole = true
+				t.Fatal("state lives on disk; no ConfigMap write access")
 			}
 		}
 	}
@@ -95,8 +95,8 @@ func TestRawDeploymentHasProductionShape(t *testing.T) {
 	}
 	assertProbePath(t, container, "livenessProbe", "/healthz")
 	assertProbePath(t, container, "readinessProbe", "/availabilityz")
-	if !hasLeaseRole || !hasConfigMapRole {
-		t.Fatal("raw deployment is missing required persistence/election RBAC")
+	if !hasLeaseRole {
+		t.Fatal("raw deployment is missing the Lease lock RBAC")
 	}
 }
 

@@ -24,8 +24,10 @@ type SourceConfig struct {
 	Submit Submit
 }
 
-// registration pairs a schema with its informer in the shared factory.
+// registration pairs a schema with its informer in the shared factory and
+// the API resource the informer lists and watches.
 type registration struct {
+	resource Resource
 	schema   Schema
 	informer func(informers.SharedInformerFactory) cache.SharedIndexInformer
 }
@@ -33,88 +35,118 @@ type registration struct {
 func registrations() []registration {
 	type factory = informers.SharedInformerFactory
 	type informer = cache.SharedIndexInformer
+	const admission = "admissionregistration.k8s.io"
 	return []registration{
-		{PodSchema{}, func(f factory) informer {
-			return f.Core().V1().Pods().Informer()
-		}},
-		{NodeSchema{}, func(f factory) informer {
-			return f.Core().V1().Nodes().Informer()
-		}},
-		{DeploymentSchema(), func(f factory) informer {
-			return f.Apps().V1().Deployments().Informer()
-		}},
-		{ReplicaSetSchema(), func(f factory) informer {
-			return f.Apps().V1().ReplicaSets().Informer()
-		}},
-		{StatefulSetSchema(), func(f factory) informer {
-			return f.Apps().V1().StatefulSets().Informer()
-		}},
-		{DaemonSetSchema(), func(f factory) informer {
-			return f.Apps().V1().DaemonSets().Informer()
-		}},
-		{JobSchema(), func(f factory) informer {
-			return f.Batch().V1().Jobs().Informer()
-		}},
-		{CronJobSchema{}, func(f factory) informer {
-			return f.Batch().V1().CronJobs().Informer()
-		}},
-		{HPASchema{}, func(f factory) informer {
-			return f.Autoscaling().V2().HorizontalPodAutoscalers().
-				Informer()
-		}},
-		{ServiceSchema{}, func(f factory) informer {
-			return f.Core().V1().Services().Informer()
-		}},
-		{EndpointSliceSchema{}, func(f factory) informer {
-			return f.Discovery().V1().EndpointSlices().Informer()
-		}},
-		{IngressSchema{}, func(f factory) informer {
-			return f.Networking().V1().Ingresses().Informer()
-		}},
-		{SecretSchema{}, func(f factory) informer {
-			return f.Core().V1().Secrets().Informer()
-		}},
-		{ConfigMapSchema{}, func(f factory) informer {
-			return f.Core().V1().ConfigMaps().Informer()
-		}},
-		{ServiceAccountSchema{}, func(f factory) informer {
-			return f.Core().V1().ServiceAccounts().Informer()
-		}},
-		{PVCSchema{}, func(f factory) informer {
-			return f.Core().V1().PersistentVolumeClaims().Informer()
-		}},
-		{PVSchema{}, func(f factory) informer {
-			return f.Core().V1().PersistentVolumes().Informer()
-		}},
-		{StorageClassSchema{}, func(f factory) informer {
-			return f.Storage().V1().StorageClasses().Informer()
-		}},
-		{NamespaceSchema{}, func(f factory) informer {
-			return f.Core().V1().Namespaces().Informer()
-		}},
-		{LimitRangeSchema{}, func(f factory) informer {
-			return f.Core().V1().LimitRanges().Informer()
-		}},
-		{PDBSchema{}, func(f factory) informer {
-			return f.Policy().V1().PodDisruptionBudgets().Informer()
-		}},
-		{QuotaSchema{}, func(f factory) informer {
-			return f.Core().V1().ResourceQuotas().Informer()
-		}},
-		{NetworkPolicySchema{}, func(f factory) informer {
-			return f.Networking().V1().NetworkPolicies().Informer()
-		}},
-		{VolumeAttachmentSchema{}, func(f factory) informer {
-			return f.Storage().V1().VolumeAttachments().Informer()
-		}},
-		{WebhookSchema{Mutating: true}, func(f factory) informer {
-			return f.Admissionregistration().V1().
-				MutatingWebhookConfigurations().Informer()
-		}},
-		{WebhookSchema{}, func(f factory) informer {
-			return f.Admissionregistration().V1().
-				ValidatingWebhookConfigurations().Informer()
-		}},
+		{Resource{"", "pods"}, PodSchema{},
+			func(f factory) informer {
+				return f.Core().V1().Pods().Informer()
+			}},
+		{Resource{"", "nodes"}, NodeSchema{},
+			func(f factory) informer {
+				return f.Core().V1().Nodes().Informer()
+			}},
+		{Resource{"apps", "deployments"}, DeploymentSchema(),
+			func(f factory) informer {
+				return f.Apps().V1().Deployments().Informer()
+			}},
+		{Resource{"apps", "replicasets"}, ReplicaSetSchema(),
+			func(f factory) informer {
+				return f.Apps().V1().ReplicaSets().Informer()
+			}},
+		{Resource{"apps", "statefulsets"}, StatefulSetSchema(),
+			func(f factory) informer {
+				return f.Apps().V1().StatefulSets().Informer()
+			}},
+		{Resource{"apps", "daemonsets"}, DaemonSetSchema(),
+			func(f factory) informer {
+				return f.Apps().V1().DaemonSets().Informer()
+			}},
+		{Resource{"batch", "jobs"}, JobSchema(),
+			func(f factory) informer {
+				return f.Batch().V1().Jobs().Informer()
+			}},
+		{Resource{"batch", "cronjobs"}, CronJobSchema{},
+			func(f factory) informer {
+				return f.Batch().V1().CronJobs().Informer()
+			}},
+		{Resource{"autoscaling", "horizontalpodautoscalers"}, HPASchema{},
+			func(f factory) informer {
+				return f.Autoscaling().V2().HorizontalPodAutoscalers().
+					Informer()
+			}},
+		{Resource{"", "services"}, ServiceSchema{},
+			func(f factory) informer {
+				return f.Core().V1().Services().Informer()
+			}},
+		{Resource{"discovery.k8s.io", "endpointslices"}, EndpointSliceSchema{},
+			func(f factory) informer {
+				return f.Discovery().V1().EndpointSlices().Informer()
+			}},
+		{Resource{"networking.k8s.io", "ingresses"}, IngressSchema{},
+			func(f factory) informer {
+				return f.Networking().V1().Ingresses().Informer()
+			}},
+		{Resource{"", "secrets"}, SecretSchema{},
+			func(f factory) informer {
+				return f.Core().V1().Secrets().Informer()
+			}},
+		{Resource{"", "configmaps"}, ConfigMapSchema{},
+			func(f factory) informer {
+				return f.Core().V1().ConfigMaps().Informer()
+			}},
+		{Resource{"", "serviceaccounts"}, ServiceAccountSchema{},
+			func(f factory) informer {
+				return f.Core().V1().ServiceAccounts().Informer()
+			}},
+		{Resource{"", "persistentvolumeclaims"}, PVCSchema{},
+			func(f factory) informer {
+				return f.Core().V1().PersistentVolumeClaims().Informer()
+			}},
+		{Resource{"", "persistentvolumes"}, PVSchema{},
+			func(f factory) informer {
+				return f.Core().V1().PersistentVolumes().Informer()
+			}},
+		{Resource{"storage.k8s.io", "storageclasses"}, StorageClassSchema{},
+			func(f factory) informer {
+				return f.Storage().V1().StorageClasses().Informer()
+			}},
+		{Resource{"", "namespaces"}, NamespaceSchema{},
+			func(f factory) informer {
+				return f.Core().V1().Namespaces().Informer()
+			}},
+		{Resource{"", "limitranges"}, LimitRangeSchema{},
+			func(f factory) informer {
+				return f.Core().V1().LimitRanges().Informer()
+			}},
+		{Resource{"policy", "poddisruptionbudgets"}, PDBSchema{},
+			func(f factory) informer {
+				return f.Policy().V1().PodDisruptionBudgets().Informer()
+			}},
+		{Resource{"", "resourcequotas"}, QuotaSchema{},
+			func(f factory) informer {
+				return f.Core().V1().ResourceQuotas().Informer()
+			}},
+		{Resource{"networking.k8s.io", "networkpolicies"}, NetworkPolicySchema{},
+			func(f factory) informer {
+				return f.Networking().V1().NetworkPolicies().Informer()
+			}},
+		{Resource{"storage.k8s.io", "volumeattachments"},
+			VolumeAttachmentSchema{},
+			func(f factory) informer {
+				return f.Storage().V1().VolumeAttachments().Informer()
+			}},
+		{Resource{admission, "mutatingwebhookconfigurations"},
+			WebhookSchema{Mutating: true},
+			func(f factory) informer {
+				return f.Admissionregistration().V1().
+					MutatingWebhookConfigurations().Informer()
+			}},
+		{Resource{admission, "validatingwebhookconfigurations"},
+			WebhookSchema{},
+			func(f factory) informer {
+				return f.Admissionregistration().V1().
+					ValidatingWebhookConfigurations().Informer()
+			}},
 	}
 }
 

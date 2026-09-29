@@ -69,17 +69,9 @@ func TestEmptyConfig(t *testing.T) {
 
 	cfg, _ := LoadConfig()
 	assert.NotNil(cfg)
-	assert.Equal(int64(50), cfg.MaxRecentLogLines)
-	// Periodic resync is on by default: without it an object that stops
-	// changing is never re-observed, and the stale sweep then resolves it
-	// while it is still broken.
+	// Periodic resync is on by default as a safety net for lost watch
+	// events.
 	assert.Equal(300, cfg.ResyncSeconds)
-	assert.Equal(true, cfg.PendingPodMonitor.Enabled)
-	assert.Equal(true, cfg.RolloutMonitor.Enabled)
-	assert.Equal(true, cfg.JobMonitor.Enabled)
-	assert.Equal(true, cfg.CronJobMonitor.Enabled)
-	assert.Equal(true, cfg.DaemonSetMonitor.Enabled)
-	assert.Equal(true, cfg.HpaMonitor.Enabled)
 	assert.Equal(true, cfg.HealthCheck.Enabled)
 	assert.Equal(8060, cfg.HealthCheck.Port)
 }
@@ -106,7 +98,7 @@ func TestConfigFromFile(t *testing.T) {
 	t.Setenv("CONFIG_FILE", configPath)
 
 	yamlContent := `
-maxRecentLogLines: 20
+resyncSeconds: 20
 namespaces:
   - default
   - kwatch
@@ -128,13 +120,13 @@ app:
 	assert.Equal(cfg.App.ClusterName, "development")
 	assert.Equal(cfg.App.ProxyURL, "https://localhost")
 
-	assert.Equal(cfg.MaxRecentLogLines, int64(20))
+	assert.Equal(20, cfg.ResyncSeconds)
 	assert.Len(cfg.AllowedNamespaces, 2)
 	assert.Len(cfg.AllowedReasons, 2)
 	assert.Len(cfg.ForbiddenNamespaces, 0)
 	assert.Len(cfg.ForbiddenReasons, 0)
 
-	os.WriteFile(configPath, []byte("maxRecentLogLines: test"), 0644)
+	os.WriteFile(configPath, []byte("resyncSeconds: test"), 0644)
 	_, err = LoadConfig()
 	assert.NotNil(err)
 }

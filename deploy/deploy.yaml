@@ -15,77 +15,72 @@ metadata:
     app.kubernetes.io/instance: kwatch
     app.kubernetes.io/managed-by: kwatch.sh
 rules:
+# Least privilege: informers need list and watch; get is granted only
+# where kwatch reads single objects (kubelet proxy, log excerpts, the
+# kube-system Namespace for the cluster ID). Snapshot and Gateway API
+# grants are optional enrichment for custom resource status.
 - apiGroups: [""]
-  resources: ["events", "nodes", "nodes/proxy", "pods", "pods/log", "pods/proxy", "persistentvolumeclaims", "configmaps", "secrets", "resourcequotas", "limitranges", "endpoints"]
-  verbs: ["get", "watch", "list"]
-- nonResourceURLs: ["/readyz", "/readyz/*"]
-  verbs: ["get"]
+  resources: ["events", "nodes", "pods", "persistentvolumeclaims", "persistentvolumes", "configmaps", "secrets", "serviceaccounts", "resourcequotas", "limitranges", "services"]
+  verbs: ["list", "watch"]
 - apiGroups: [""]
   resources: ["namespaces"]
   verbs: ["get", "list", "watch"]
 - apiGroups: [""]
-  resources: ["services"]
-  verbs: ["get", "watch", "list"]
-- apiGroups: ["coordination.k8s.io"]
-  resources: ["leases"]
-  verbs: ["get", "watch", "list"]
-- apiGroups: ["apiextensions.k8s.io"]
-  resources: ["customresourcedefinitions"]
-  verbs: ["get", "watch", "list"]
-- apiGroups: ["apiregistration.k8s.io"]
-  resources: ["apiservices"]
-  verbs: ["get", "watch", "list"]
-- apiGroups: [""]
-  resources: ["persistentvolumes", "serviceaccounts"]
-  verbs: ["get", "watch", "list"]
-- apiGroups: ["storage.k8s.io"]
-  resources: ["storageclasses"]
-  verbs: ["get", "watch", "list"]
+  resources: ["nodes/proxy", "pods/log"]
+  verbs: ["get"]
+- nonResourceURLs: ["/readyz"]
+  verbs: ["get"]
 - apiGroups: ["apps"]
-  resources: ["daemonsets", "statefulsets", "deployments", "replicasets"]
-  verbs: ["get", "watch", "list"]
-- apiGroups: ["admissionregistration.k8s.io"]
-  resources: ["mutatingwebhookconfigurations", "validatingwebhookconfigurations", "validatingadmissionpolicies", "validatingadmissionpolicybindings"]
-  verbs: ["get", "watch", "list"]
-- apiGroups: ["admissionregistration.k8s.io"]
-  resources: ["mutatingadmissionpolicies", "mutatingadmissionpolicybindings"]
-  verbs: ["get", "watch", "list"]
-- apiGroups: ["certificates.k8s.io"]
-  resources: ["certificatesigningrequests", "podcertificaterequests"]
-  verbs: ["get", "watch", "list"]
-- apiGroups: ["flowcontrol.apiserver.k8s.io"]
-  resources: ["flowschemas", "prioritylevelconfigurations"]
-  verbs: ["get", "watch", "list"]
-- apiGroups: ["networking.k8s.io"]
-  resources: ["ingresses", "networkpolicies"]
-  verbs: ["get", "watch", "list"]
-- apiGroups: ["discovery.k8s.io"]
-  resources: ["endpointslices"]
-  verbs: ["get", "watch", "list"]
-- apiGroups: ["kwatch.abahmed.dev"]
-  resources: ["kwatchconfigs"]
-  verbs: ["get", "watch", "list"]
-- apiGroups: ["autoscaling"]
-  resources: ["horizontalpodautoscalers"]
-  verbs: ["get", "watch", "list"]
+  resources: ["deployments", "replicasets", "statefulsets", "daemonsets"]
+  verbs: ["list", "watch"]
 - apiGroups: ["batch"]
   resources: ["jobs", "cronjobs"]
-  verbs: ["get", "watch", "list"]
+  verbs: ["list", "watch"]
+- apiGroups: ["autoscaling"]
+  resources: ["horizontalpodautoscalers"]
+  verbs: ["list", "watch"]
 - apiGroups: ["policy"]
   resources: ["poddisruptionbudgets"]
-  verbs: ["get", "watch", "list"]
+  verbs: ["list", "watch"]
+- apiGroups: ["discovery.k8s.io"]
+  resources: ["endpointslices"]
+  verbs: ["list", "watch"]
+- apiGroups: ["networking.k8s.io"]
+  resources: ["ingresses", "networkpolicies"]
+  verbs: ["list", "watch"]
+- apiGroups: ["storage.k8s.io"]
+  resources: ["storageclasses", "volumeattachments"]
+  verbs: ["list", "watch"]
+- apiGroups: ["admissionregistration.k8s.io"]
+  resources: ["mutatingwebhookconfigurations", "validatingwebhookconfigurations", "validatingadmissionpolicies", "validatingadmissionpolicybindings"]
+  verbs: ["list", "watch"]
+- apiGroups: ["certificates.k8s.io"]
+  resources: ["certificatesigningrequests"]
+  verbs: ["list", "watch"]
+- apiGroups: ["flowcontrol.apiserver.k8s.io"]
+  resources: ["flowschemas", "prioritylevelconfigurations"]
+  verbs: ["list", "watch"]
+- apiGroups: ["resource.k8s.io"]
+  resources: ["resourceclaims"]
+  verbs: ["list", "watch"]
+- apiGroups: ["apiregistration.k8s.io"]
+  resources: ["apiservices"]
+  verbs: ["list", "watch"]
+- apiGroups: ["apiextensions.k8s.io"]
+  resources: ["customresourcedefinitions"]
+  verbs: ["list"]
+- apiGroups: ["snapshot.storage.k8s.io"]
+  resources: ["volumesnapshots", "volumesnapshotcontents", "volumesnapshotclasses"]
+  verbs: ["list", "watch"]
+- apiGroups: ["gateway.networking.k8s.io"]
+  resources: ["gatewayclasses", "gateways", "httproutes", "grpcroutes", "tcproutes", "tlsroutes", "referencegrants"]
+  verbs: ["list", "watch"]
+- apiGroups: ["kwatch.abahmed.dev"]
+  resources: ["kwatchconfigs"]
+  verbs: ["list", "watch"]
 - apiGroups: ["authorization.k8s.io"]
   resources: ["selfsubjectaccessreviews"]
   verbs: ["create"]
-- apiGroups: ["storage.k8s.io"]
-  resources: ["volumeattachments", "csidrivers"]
-  verbs: ["get", "watch", "list"]
-- apiGroups: ["snapshot.storage.k8s.io"]
-  resources: ["volumesnapshots", "volumesnapshotcontents", "volumesnapshotclasses"]
-  verbs: ["get", "watch", "list"]
-- apiGroups: ["gateway.networking.k8s.io"]
-  resources: ["gatewayclasses", "gateways", "httproutes", "grpcroutes", "tcproutes", "tlsroutes", "referencegrants"]
-  verbs: ["get", "watch", "list"]
 ---
 apiVersion: v1
 kind: ServiceAccount
@@ -124,7 +119,7 @@ metadata:
 rules:
 - apiGroups: ["coordination.k8s.io"]
   resources: ["leases"]
-  verbs: ["create", "get", "update", "patch", "watch"]
+  verbs: ["create", "get", "update"]
 ---
 apiVersion: rbac.authorization.k8s.io/v1
 kind: RoleBinding
@@ -143,49 +138,33 @@ subjects:
   name: kwatch
   namespace: kwatch
 ---
+# The scheduler and controller-manager leader Leases show whether those
+# control-plane components are alive.
 kind: Role
 apiVersion: rbac.authorization.k8s.io/v1
 metadata:
-  name: kwatch-configmap-manager
-  namespace: kwatch
+  name: kwatch-control-plane-leases
+  namespace: kube-system
   labels:
     app.kubernetes.io/instance: kwatch
     app.kubernetes.io/managed-by: kwatch.sh
 rules:
-- apiGroups: [""]
-  resources: ["configmaps"]
-  # Incident shards use generated <prefix>-incidents-<generation>-NNN names
-  # and non-default installations use prefixed state names, so reads,
-  # rewrites and shard garbage collection cannot be name-scoped.
-  verbs: ["create", "get", "list", "update", "delete"]
-- apiGroups: [""]
-  resources: ["configmaps"]
-  resourceNames:
-  - "kwatch-state"
-  - "kwatch-baseline"
-  - "kwatch-incidents"
-  - "kwatch-groups"
-  - "kwatch-threads"
-  - "kwatch-engine"
-  - "kwatch-pvc"
-  - "kwatch-changes"
-  - "kwatch-rca"
-  - "kwatch-telemetry"
-  verbs: ["get", "update", "patch"]
-
+- apiGroups: ["coordination.k8s.io"]
+  resources: ["leases"]
+  verbs: ["get"]
 ---
 apiVersion: rbac.authorization.k8s.io/v1
 kind: RoleBinding
 metadata:
-  name: kwatch-configmap-manager
-  namespace: kwatch
+  name: kwatch-control-plane-leases
+  namespace: kube-system
   labels:
     app.kubernetes.io/instance: kwatch
     app.kubernetes.io/managed-by: kwatch.sh
 roleRef:
   apiGroup: rbac.authorization.k8s.io
   kind: Role
-  name: kwatch-configmap-manager
+  name: kwatch-control-plane-leases
 subjects:
 - kind: ServiceAccount
   name: kwatch

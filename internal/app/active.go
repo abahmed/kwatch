@@ -123,7 +123,7 @@ func startActiveComponents(
 		monitoredComponent(deps, "heartbeat", runHeartbeat),
 		monitoredRun(deps, "alive", aliveRecorder(res.session)),
 	}
-	if deps.runtime.Monitors().CRD().Enabled {
+	if deps.runtime.Lifecycle().CRDEnabled() {
 		optional = append(optional,
 			monitoredComponent(deps, "crd-watcher", runCRDWatcher))
 	}

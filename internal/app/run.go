@@ -29,10 +29,6 @@ func RunWithClock(now func() time.Time) int {
 		klog.ErrorS(err, "failed to load config")
 		return 1
 	}
-	cfg.WatchStartTime = now()
-	// WatchStartTime is derived at process start, so compile the snapshot only
-	// after it has been stamped. Runtime consumers must see one consistent
-	// startup boundary.
 	cfg.Runtime = config.CompileRuntimeConfig(cfg)
 
 	klog.InfoS(fmt.Sprintf(constant.WelcomeMsg, version.Short()))
