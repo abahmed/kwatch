@@ -10,97 +10,80 @@ Start with the package that owns the behavior you are changing:
 
 | Task | Package |
 | --- | --- |
-| Kubernetes informer, queue, or cache sync | `internal/controller` |
-| Controller-owned family wiring | `internal/controller/runtime.go` and `contracts_*.go` |
-| Pod or workload detection | `internal/monitor/pod` or `internal/monitor/workload` |
-| Node, network, security, or cluster detection | matching `internal/monitor/*` family |
-| Kubernetes identity and owner lookup | `internal/observe` |
-| Suppression matching | `internal/filter` |
-| Incident identity, recovery, or grouping | `internal/incident` |
-| Cause, impact, or recent-change analysis | `internal/insight` |
+| Watching a Kubernetes kind, translating it to facts | `internal/knowledge/kube` |
+| Entities, relations, attributes, change history | `internal/knowledge` |
+| Deciding a state is abnormal | `internal/signal/detect` |
+| Explaining a signal's root cause | `internal/reason` |
+| Settling, updates, resolve hold, flapping, tiers | `internal/problem` |
+| The message people read | `internal/story` and `internal/notice` |
+| Scope, silences, maintenance holds | `internal/filter` |
+| The engine loop, downtime reconciliation, audit entries | `internal/core` |
 | Retry, fallback, pacing, or HTTP transport | `internal/delivery` |
 | Provider payload mapping | `internal/alert/<provider>` |
-| Persisted state or migration | `internal/persistence` |
-| Optional dynamic informer lifecycle | `internal/k8s/dynamicwatch` |
-| Composition and shared clients | `internal/app` |
+| Persisted state, epoch fencing, retention | `internal/knowledge/store` |
+| Permission audit | `internal/rbac` |
+| Composition, Lease lock, readiness, supervision | `internal/app` |
 
 After YAML and CRD overlays are applied, `config.CompileRuntimeConfig` creates
 the immutable derived snapshot used by composition. Keep user-facing fields on
 `config.Config`; put normalized namespaces, provider names, compiled provider
-routes/retry policy, suppression indexes, and effective intervals in the
+routes/retry policy, suppression rules, and effective intervals in the
 runtime snapshot. Application composition passes that snapshot to
 `delivery.Manager.InitRuntime`.
 
 The normal flow is:
 
 ```text
-controller → monitor family → observation/filter → incident → insight
-  → delivery transport → provider adapter
+sources → facts → knowledge model → detectors → signals → problems
+  → decisions → scope → stories → delivery transport → provider adapter
 ```
 
-The arrow is also a dependency rule. A monitor does not call a provider, a
-provider does not read Kubernetes, and persistence does not make incident or
-diagnosis decisions.
+The arrow is also a dependency rule. A source does not call a provider, a
+detector does not read Kubernetes, a provider does not read the model, and the
+state file does not make detection or reasoning decisions. Read
+[How kwatch thinks](./architecture.md) for the behavior of each stage and
+[ADR 0010](./adr/0010-problem-centric-core.md) for the design record.
 
 ## Read the application flow
 
-Start at `internal/app/run.go`. The composition is intentionally split by
-phase:
+Start at `internal/app/run.go`. The composition is split by responsibility:
 
-- `bootstrap.go`: clients, startup state, health, providers, and telemetry.
-- `runtime_build.go`: domain construction and top-level assembly.
-- `runtime_controller.go`: lister, restore, graph, and readiness wiring.
-- `runtime_optional.go`: optional monitor run functions.
-- `runtime_deps.go`: the owned runtime dependency bundle passed to serving.
+- `bootstrap.go` and `serve.go`: clients, health, providers, and the serve loop.
+- `leader_election.go` and `election_lock.go`: the Lease lock.
+- `active.go`: the leader session, which opens and claims the state file, runs
+  startup bookkeeping, and supervises components.
+- `core.go`: the model, sources, detector registry, reasoner, and engine.
+- `supervisor.go`, `components.go`, `readiness.go`: component lifecycle.
 
-For RCA, start at `internal/insight/engine.go`, then follow the semantic
-files: `cause.go`, `root_cause.go`, `cause_evidence.go`, `confidence.go`,
-`impact.go`, `changes.go`, and `next_steps.go`. These files share one package
-and engine, but each owns one analysis concern.
+Inside the core, follow one signal end to end: a schema in
+`knowledge/kube` produces facts, `core/engine.go` applies them and evaluates
+detectors, `problem/manager.go` attaches the signal to its root, `Tick`
+decides, and `story/writer.go` writes the message that reaches the sink.
 
-Supporting monitors follow the same rule. `internal/probe` separates target
-configuration, lifecycle dispatch, graph linking, protocol probes, automatic
-Service discovery, and failure-state transitions. Metrics API evidence is
-collected by the application and analyzed through `internal/insight`.
-`internal/statuswatch` separates construction, configuration compilation,
-informer lifecycle, static processing, CRD handling, and admission handling.
-`internal/resource` separates lifecycle, filesystem signals, and node
-overcommit policy. When adding code to these packages, place it beside the
-responsibility it changes instead of growing the package's coordinator file.
+## Add a detector or source
 
-## Add a monitor
+1. For a new Kubernetes kind, add its entity kind and `Schema` in
+   `knowledge/kube` and register it with the informers. The RBAC audit derives
+   from those registrations through `kube.SourceAccess()`.
+2. Put the abnormal-state logic in a small `signal/detect` detector that
+   reads attributes and relations and returns signals with stable reason names
+   from `internal/constant`. Register it in `newDetectorRegistry`.
+3. If the kind can be a cause, add or extend a rule in `internal/reason`, and
+   register it in `newReasoner`. A rule must require the candidate to be
+   unhealthy or changed.
+4. Keep clients, queues, and cache sync in the source. Detectors and rules see
+   only the model and an injected clock.
+5. Add deterministic tests for detection, explanation, and the problem
+   lifecycle, then update the coverage reference and the website documentation.
 
-1. Choose the existing family that owns the Kubernetes resource.
-2. Put pure detection in a small function that accepts the object, config, and
-   injected time where needed.
-3. Add a family runtime with typed sources and a
-   `monitor.ObservationSink` or `monitor.ReconciliationSink`.
-4. Wire the runtime in `internal/app`. The controller assembles synchronized
-   listers and passes one typed source bundle to the family runtime through
-   the narrow capability in `internal/controller/runtime.go` and the family
-   contract in `internal/controller/contracts_*.go`. Workload runtimes use
-   `workload.SourceConfig` and `workload.Sources`; cluster runtimes use
-   `cluster.SourceConfig` and `cluster.Sources`; network and security runtimes
-use their corresponding `SourceConfig` and `Sources` types.
-TLS, RBAC, control-plane, probe, metrics, kubelet metrics, PVC, and watcher
-integrations follow the same one-time `ConfigureSources` rule. Production code
-uses only these canonical source bundles; transitional setter shims have been
-removed before the first stable release.
-5. Keep informer, queue, tombstone, and cache-sync ownership in the
-   controller.
-6. Add semantic unit tests and controller integration tests.
-7. Add catalog metadata and the corresponding website documentation.
-
-Do not add a method to a universal monitor interface. Put new detection in the
-cohesive monitor family that owns the resource, with explicit dependencies.
-
-Health lifecycle is application-owned: composition calls `HealthServer.Open`,
-the supervisor runs `HealthServer.Serve`, and shutdown calls `Stop`.
+Do not add a method to a universal interface. Health lifecycle is
+application-owned: composition calls `HealthServer.Open`, the supervisor runs
+`HealthServer.Serve`, and shutdown calls `Stop`.
 
 Health responses expose bounded component states and reason codes. Detailed
-errors belong in redacted logs, not public diagnostics. A missing lister is an
-unavailable capability: detection skips it and never creates a synthetic
-incident.
+errors belong in redacted logs, not public diagnostics. A source that cannot
+observe its resource is an unavailable capability: its detectors produce no
+signals and never create a synthetic one.
 
 ## Add a provider
 
@@ -116,15 +99,16 @@ tests, then update the generated provider catalog and website reference.
 
 ## Change persistence
 
-Use the narrow store interface required by the consumer. Keep persisted DTOs
-flat and preserve existing ConfigMap names and JSON keys. Any format change
-requires a schema version, migration or documented reset path, backup/recovery
-behavior, old-format fixture, round-trip test, and release note.
+State is one bbolt file owned by `internal/knowledge/store`. Use the typed
+collections and keep persisted records flat. Any format change requires a bump
+of `store.SchemaVersion`, a migration step or documented reset path,
+backup/recovery guidance, an old-format fixture, a round-trip test, and a
+release note.
 
 ## Test and verify
 
 Name tests after behavior and split large test files by responsibility, for
-example `queue_retry_test.go` or `migration_test.go`. Shared fixtures belong
+example `queue_retry_test.go` or `downtime_test.go`. Shared fixtures belong
 in `fixtures_test.go` or `test_helpers_test.go`.
 
 Use fake clocks and fake clients instead of sleeps. Before handoff run:
@@ -168,8 +152,8 @@ review in the same change.
 
 ## Operating model
 
-The deployment uses two replicas and Lease leader election. One leader owns
-observation, delivery, and mutable persistence; other replicas are standby.
-The application supervisor gates active components on leadership and stops the
-active generation when the Lease is lost. A one-replica deployment remains
-supported as an advanced low-resource mode without self-failover.
+The deployment runs one replica with the `Recreate` strategy and a PVC at
+`/var/lib/kwatch`. The Lease is only a lock that prevents two processes from
+sharing the volume, and its transition count fences the state file. There is
+no standby and no ConfigMap state. The application supervisor gates the active
+components on the Lease and stops them when it is lost.

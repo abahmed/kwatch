@@ -19,12 +19,12 @@ if test -s "$tmp_dir/duplicate-adr-numbers"; then
   exit 1
 fi
 
-grep -Fq 'ConfigureSources' docs/architecture.md || {
-  echo "documentation: architecture source contract is missing" >&2
+grep -Fq 'state.db' docs/architecture.md || {
+  echo "documentation: architecture persistence contract is missing" >&2
   exit 1
 }
-if grep -Fq "optional wiring uses \`Set<Type>\`" docs/architecture.md; then
-  echo "documentation: stale mutable source-wiring guidance" >&2
+if grep -Fq 'ConfigMap shard' docs/architecture.md; then
+  echo "documentation: stale ConfigMap persistence guidance" >&2
   exit 1
 fi
 
