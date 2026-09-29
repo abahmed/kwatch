@@ -366,3 +366,14 @@ func TestTelemetryHelpersAndStatusSerialization(t *testing.T) {
 		t.Fatal("jitter escaped its documented range")
 	}
 }
+
+func TestConfigureTelemetryRunnerSkipsWhenDisabled(t *testing.T) {
+	status := newAdoptionTelemetryStatus()
+
+	run := configureTelemetryRunner(config.Telemetry{}, nil, "id", "v1",
+		time.Now, nil, status)
+
+	if run != nil {
+		t.Fatal("disabled telemetry must not build a runner")
+	}
+}
