@@ -17,11 +17,11 @@ import (
 	"github.com/abahmed/kwatch/internal/model"
 )
 
-type fakeIncidentLister struct {
+type fakeProblemLister struct {
 	snap []model.IncidentView
 }
 
-func (f *fakeIncidentLister) Snapshot() []model.IncidentView {
+func (f *fakeProblemLister) Snapshot() []model.IncidentView {
 	return f.snap
 }
 
@@ -152,19 +152,19 @@ func TestHealthServerStopNilServer(t *testing.T) {
 	assert.Nil(err)
 }
 
-func TestIncidentsHandlerNoAPI(t *testing.T) {
+func TestProblemsHandlerNoAPI(t *testing.T) {
 	h := &HealthServer{}
-	req := httptest.NewRequest(http.MethodGet, "/incidents", nil)
+	req := httptest.NewRequest(http.MethodGet, "/problems", nil)
 	w := httptest.NewRecorder()
-	h.incidentsHandler(w, req)
+	h.problemsHandler(w, req)
 
 	resp := w.Result()
 	assert.Equal(t, http.StatusServiceUnavailable, resp.StatusCode)
 }
 
-func TestIncidentsHandler(t *testing.T) {
+func TestProblemsHandler(t *testing.T) {
 	assert := assert.New(t)
-	lister := &fakeIncidentLister{
+	lister := &fakeProblemLister{
 		snap: []model.IncidentView{
 			{
 				Key:       "ns:deploy:Err",
@@ -178,11 +178,11 @@ func TestIncidentsHandler(t *testing.T) {
 			},
 		},
 	}
-	h := &HealthServer{incidentAPI: lister}
+	h := &HealthServer{problemAPI: lister}
 
-	req := httptest.NewRequest(http.MethodGet, "/incidents", nil)
+	req := httptest.NewRequest(http.MethodGet, "/problems", nil)
 	w := httptest.NewRecorder()
-	h.incidentsHandler(w, req)
+	h.problemsHandler(w, req)
 
 	resp := w.Result()
 	assert.Equal(http.StatusOK, resp.StatusCode)
@@ -195,14 +195,14 @@ func TestIncidentsHandler(t *testing.T) {
 	assert.Equal("ns:deploy:Err", string(got[0].Key))
 }
 
-func TestIncidentsHandlerEmpty(t *testing.T) {
+func TestProblemsHandlerEmpty(t *testing.T) {
 	assert := assert.New(t)
-	lister := &fakeIncidentLister{}
-	h := &HealthServer{incidentAPI: lister}
+	lister := &fakeProblemLister{}
+	h := &HealthServer{problemAPI: lister}
 
-	req := httptest.NewRequest(http.MethodGet, "/incidents", nil)
+	req := httptest.NewRequest(http.MethodGet, "/problems", nil)
 	w := httptest.NewRecorder()
-	h.incidentsHandler(w, req)
+	h.problemsHandler(w, req)
 
 	resp := w.Result()
 	assert.Equal(http.StatusOK, resp.StatusCode)
@@ -380,7 +380,7 @@ func TestGuardWithInvalidTokenReturns401(t *testing.T) {
 func TestPprofEndpointsRegisteredWithGuard(t *testing.T) {
 	h := &HealthServer{diagnostics: true, pprof: true, diagnosticsToken: "tok"}
 	if err := h.ConfigureDependencies(Dependencies{
-		Incident: &fakeIncidentLister{snap: []model.IncidentView{}},
+		Problems: &fakeProblemLister{snap: []model.IncidentView{}},
 	}); err != nil {
 		t.Fatal(err)
 	}
@@ -403,7 +403,7 @@ func TestPprofEndpointsRegisteredWithGuard(t *testing.T) {
 	resp.Body.Close()
 
 	// Protected diagnostic endpoints require the configured token.
-	req, _ = http.NewRequest(http.MethodGet, ts.URL+"/incidents", nil)
+	req, _ = http.NewRequest(http.MethodGet, ts.URL+"/problems", nil)
 	resp, err = http.DefaultClient.Do(req)
 	assert.Nil(t, err)
 	assert.Equal(t, http.StatusUnauthorized, resp.StatusCode)

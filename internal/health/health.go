@@ -14,7 +14,7 @@ import (
 	"github.com/abahmed/kwatch/internal/model"
 )
 
-type IncidentLister interface {
+type ProblemLister interface {
 	Snapshot() []model.IncidentView
 }
 
@@ -38,7 +38,7 @@ type StatusProvider interface {
 // Dependencies are configured once before Open. Keeping this boundary typed
 // makes health wiring visible at the application composition root.
 type Dependencies struct {
-	Incident          IncidentLister
+	Problems          ProblemLister
 	Delivery          AlertSender
 	DeadLetters       DeadLetterLister
 	Telemetry         StatusProvider
@@ -57,7 +57,7 @@ type HealthServer struct {
 	pprof                   bool
 	diagnostics             bool
 	diagnosticsToken        string
-	incidentAPI             IncidentLister
+	problemAPI              ProblemLister
 	deliveryManager         AlertSender
 	deadLetterLister        DeadLetterLister
 	telemetryLister         StatusProvider
@@ -144,7 +144,7 @@ func (h *HealthServer) ConfigureDependencies(
 	if h.started {
 		return fmt.Errorf("health dependencies cannot change after start")
 	}
-	h.incidentAPI = deps.Incident
+	h.problemAPI = deps.Problems
 	h.deliveryManager = deps.Delivery
 	h.deadLetterLister = deps.DeadLetters
 	h.telemetryLister = deps.Telemetry

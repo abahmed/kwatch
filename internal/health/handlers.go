@@ -126,29 +126,29 @@ func (h *HealthServer) writeStatus(
 	}
 }
 
-func (h *HealthServer) incidentsHandler(
+func (h *HealthServer) problemsHandler(
 	w http.ResponseWriter, r *http.Request,
 ) {
 	if r.Method != http.MethodGet {
 		w.WriteHeader(http.StatusMethodNotAllowed)
 		return
 	}
-	if h.incidentAPI == nil {
+	if h.problemAPI == nil {
 		w.Header().Set("Content-Type", "text/plain")
 		w.WriteHeader(http.StatusServiceUnavailable)
-		if _, err := w.Write([]byte("incident API not available")); err != nil {
-			klog.ErrorS(err, "health: write incident-not-available response")
+		if _, err := w.Write([]byte("problem API not available")); err != nil {
+			klog.ErrorS(err, "health: write problem-not-available response")
 		}
 		return
 	}
-	snap := h.incidentAPI.Snapshot()
+	snap := h.problemAPI.Snapshot()
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusOK)
 	limited := &boundedResponseWriter{
 		ResponseWriter: w, remaining: maxDiagnosticResponseBytes,
 	}
 	if err := json.NewEncoder(limited).Encode(snap); err != nil {
-		klog.ErrorS(err, "health: encode incidents snapshot")
+		klog.ErrorS(err, "health: encode problems snapshot")
 	}
 }
 
