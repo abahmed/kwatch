@@ -4,145 +4,179 @@ This page answers one question: **what can kwatch notice?** It is a technical
 reference for operators who want to understand the signals behind an alert.
 For a quick overview, see the [README](../README.md).
 
-kwatch combines informer state, status conditions, Kubernetes Events, logs,
-node summary data, active probes, and persisted incident state. It does not
-require Prometheus, Grafana, or another external monitoring product. No single Kubernetes object
+kwatch builds a model of the cluster from informer state, status conditions,
+Kubernetes Events, kubelet statistics, active probes, and short log excerpts.
+Small detectors read that model and raise signals with stable reason names;
+the reasoning rules then look for the one root cause behind them (see
+[How kwatch thinks](./architecture.md)). It does not require Prometheus,
+Grafana, or another external monitoring product. No single Kubernetes object
 status proves that application traffic, DNS, or runtime health is working, so
 the categories below intentionally use different signal sources.
 
 ## Object and lifecycle signals
 
-- Pods: Pending and every `PodScheduled=False` reason, `PodReadyToStartContainers`,
-  `DisruptionTarget`, Failed/Unknown phases, init containers, waiting and
-  terminated container states, restart transitions, CrashLoopBackOff, image
-  pull/config/create/sandbox/probe/lifecycle-hook failures, OOM and eviction
-  evidence, ephemeral-storage and filesystem messages, and stuck pod deletion
-  finalizers.
-- Deployments, ReplicaSets, StatefulSets, DaemonSets, Jobs and CronJobs: rollout
-  and availability conditions, replica failure, scheduling/taint symptoms,
-  partition/update state, Job deadline/backoff/suspension and indexed-job
-  evidence, plus CronJob suspension, missed schedule, concurrency and starting
-  deadline handling.
-- Nodes: Ready, memory/disk/PID/network pressure, sustained pressure, lease
-  heartbeat staleness, node deletion finalizers, bootstrap grace periods,
-  request/allocatable overcommit, and optional kubelet-summary filesystem and
-  inode usage thresholds.
-- Storage: mounted volume usage, PVC Pending/Lost, filesystem-resize and
-  controller/node resize failures, modify-volume failures, PV
-  Released/Failed (including status reason/message), and stuck PVC/PV
-  finalizers.
-- Services and admission backends: EndpointSlice readiness/serving/terminating
-  semantics, missing endpoints, named/numeric port publication mismatches,
-  LoadBalancer provisioning and Service failure conditions, and webhook services
-  with no usable endpoints.
+Each item names what a detector reads. A failing object becomes a signal;
+the signal is then attached to the problem of its explained root, so several
+of these can appear together in one message.
+
+- Pods: Pending and unschedulable reasons, scheduling gates, Failed/Unknown
+  phases, init containers, waiting and terminated container states, restart
+  transitions, CrashLoopBackOff, image pull/config/create/sandbox/probe/
+  lifecycle-hook failures, OOM and eviction evidence, pods not ready longer
+  than their own startup budget, and stuck pod deletion. The pod detector
+  evaluates pod state; a separate container detector evaluates each container
+  as its own entity, so the message names the container that failed.
+- Deployments, ReplicaSets, StatefulSets, DaemonSets, Jobs and CronJobs:
+  progress deadline, availability and replica-failure conditions, sustained
+  unavailability, Job failure/deadline/backoff, and CronJob suspension or a
+  missed schedule. Suspension is informational.
+- Nodes: Ready, memory/disk/PID/network pressure, lease heartbeat staleness,
+  request/allocatable overcommit, and kubelet-summary usage thresholds for
+  memory, filesystem and inodes, plus pressure stall, network error and
+  runtime error rates when the kubelet reports them. Nodes being drained are
+  recognised so the disrupted pods are treated as expected maintenance.
+- Storage: PVC Pending/Lost and resize failures, mounted volume usage and
+  time-to-full estimated from recent growth, PV Released/Failed, and CSI
+  VolumeAttachment attach errors.
+- Services and admission backends: EndpointSlice readiness, missing
+  endpoints, port mismatches, LoadBalancer provisioning, Ingresses whose
+  backend Service does not exist, and webhook configurations whose Service is
+  missing or has no usable endpoints.
 - Cluster resources: exhausted ResourceQuota, contradictory LimitRange
-  constraints, stuck Namespace termination, and ReplicaSet status failures.
-- Resource-level Events: recent failure-shaped Warning Events for scheduling,
-  storage attach/provision/mount, autoscaling, admission, discovery, and node
-  health are correlated to their involved object. Pod and Cluster Autoscaler
-  Events continue through their specialized context-rich detectors.
-- Security and admission: RBAC capability self-checks, missing ServiceAccounts,
-  required Secret/ConfigMap references in volumes and environment injection,
-  unreachable mutating/validating webhook backends, malformed Pod Security
-  Admission namespace labels, and ValidatingAdmissionPolicy type-checking
-  warnings or bindings that reference a missing policy. These signals preserve
-  the exact object and reference name so the alert points to the correction.
-- Built-in platform APIs outside the main workload pipelines: MutatingAdmissionPolicy,
-  CertificateSigningRequest/PodCertificateRequest, legacy Endpoints, and API Priority and Fairness
-  (FlowSchema/PriorityLevelConfiguration) failure conditions are watched when
-  their API and feature gate are present.
-- Control plane: active `/readyz` availability and latency checks for the API
-  server, health endpoint checks for scheduler/controller-manager/etcd when
-  their Pods are visible, and a diagnostic informer status with received-event
-  freshness plus watch-interruption counters. Component absence is reported as
-  unsupported rather than failure because managed control planes are commonly
-  hidden from tenant RBAC.
-- DNS: an in-cluster lookup of `kubernetes.default.svc` validates the complete
-  CoreDNS/service-discovery path from the kwatch Pod, not merely the CoreDNS
-  Pod phase.
-- Services: optional `activeProbeMonitor.autoServices` performs in-cluster TCP
-  checks for advertised Service ports and HTTP checks for ports named `http*`,
-  connecting the result back to the Service in the dependency graph. It is
-  opt-in because a declared port is not proof that an application listener is
-  intended.
-- Application probes can enforce per-target HTTP latency warning/critical
-  thresholds in addition to status-code checks, giving kwatch a lightweight
-  SLO signal without a metrics server.
-- Autoscaling: HPA condition details remain informer-native, while
-  objects are covered by the dynamic CRD status watcher whenever their CRDs
-  expose failure-shaped conditions. Missing metrics APIs are treated as an
-  unavailable optional capability, not as an application incident.
-- Storage lifecycle: CSI VolumeAttachment attach errors and CSI snapshot
-  errors now produce incidents with their controller-provided reason/message;
-  mount/unmount and provisioning failures continue to come from Kubernetes
-  Warning Events and PVC/PV status.
-- Runtime metrics: built-in kubelet Summary API collection of actual
-  per-container CPU and memory usage against declared limits.
-- Metrics API evidence: HPA and metrics-related failures are enriched by the
-  optional `v1beta1.metrics.k8s.io` APIService and backing EndpointSlice health.
-  Missing or unavailable Metrics APIs remain capability evidence, not synthetic
-  incidents; there is no separate Metrics Server monitor configuration.
-- Active probes: opt-in HTTP, TCP, and DNS checks for explicitly configured
-  targets through `activeProbeMonitor`, with consecutive-failure and recovery
-  thresholds. Targets are never inferred automatically from Services.
-- Kubelet telemetry: built-in kubelet `stats/summary` and
-  `metrics/cadvisor` are queried directly through the API server proxy for PSI,
-  node network/runtime error rates, per-container CPU/memory/ephemeral-storage
-  usage, and CPU throttling. Missing or unauthorized endpoints disable only the affected
-  detector and are logged at diagnostic verbosity; they do not create false
-  incidents. New telemetry signals require consecutive samples before firing
-  and recovery samples before resolving.
+  constraints, and stuck Namespace termination.
+- Resource-level Events: recent failure-shaped Warning Events are attached
+  as notes to the object they are about and are read as evidence by
+  detectors and rules. Normal Events are ignored.
+- References: pods that need a Secret, ConfigMap, or ServiceAccount nobody
+  created, TLS Secrets that are expired or expiring soon, and Pod Security
+  Admission and ValidatingAdmissionPolicy misconfiguration reported by the
+  API. The signal preserves the exact object and reference name.
+- Built-in platform APIs outside the typed informers: CertificateSigningRequest,
+  API Priority and Fairness (FlowSchema/PriorityLevelConfiguration),
+  ValidatingAdmissionPolicy and its bindings, and ResourceClaim are watched
+  through the dynamic source when the cluster serves them.
+- Control plane: the API server `/readyz` check (which also reports etcd), the
+  scheduler and controller-manager leader Leases (a Lease that stopped
+  renewing means the component is down even when its Pods are hidden on a
+  managed control plane), and an in-cluster DNS lookup of
+  `kubernetes.default.svc`, which validates the whole service-discovery path
+  from the kwatch Pod rather than the CoreDNS Pod phase.
+- Services (optional): `activeProbeMonitor.autoServices` runs in-cluster TCP
+  checks of ClusterIP Service ports, bounded so a large cluster is not
+  scanned. It is opt-in because a declared port is not proof that an
+  application listener is intended.
+- Active probes (optional): HTTP, TCP, and DNS checks for explicitly
+  configured targets through `activeProbeMonitor`, with consecutive-failure
+  and recovery thresholds and per-target HTTP latency warning and critical
+  thresholds. Targets are never inferred from Services unless `autoServices`
+  is on.
+- Autoscaling: HPAs that cannot compute or apply a scale, or are maxed out
+  (digest tier). A missing metrics API is treated as unavailable evidence, not
+  as an application failure.
+- Runtime usage: the kubelet Summary API, read through the API server
+  proxy, provides actual per-container CPU and memory against declared
+  limits, ephemeral-storage usage, and node and volume usage. Missing or
+  unauthorised endpoints disable only the affected detector. CPU throttling
+  is derived from the same data.
+- Application output: when a problem is announced, a short redacted excerpt of
+  the crashing container's previous (or current) log is read and added to the
+  message. It is bounded to a few containers and lines per announcement.
 
 ## Dynamic status
 
-kwatch watches APIService
-objects and discovers CRDs dynamically. Every served CRD version with a status
-subresource is watched for failure-shaped `Ready=False`, `Available=False`,
-`Degraded=True`, and `Progressing=False` conditions. Informational conditions
-are ignored, and messages/reasons are preserved as alert evidence.
+kwatch watches APIService objects and discovers CRDs at runtime. Every served
+CRD version with a status subresource is watched for failure-shaped
+`Ready=False`, `Available=False`, `Degraded=True`, and `Progressing=False`
+conditions. Informational conditions are ignored, and messages and reasons are
+kept as evidence. Custom resources therefore cover Gateway API, snapshot, and
+operator resources whenever their CRDs expose such conditions.
 
 Built-in APIs introduced in newer Kubernetes versions or protected by feature
-gates are capability-aware: if the API is not served, its watcher remains
-inactive without creating a false incident.
+gates are capability-aware: if the API is not served, its watcher stays
+inactive without creating a false problem.
 
 Some built-in APIs intentionally remain event/relationship based rather than
-being treated as condition resources: DRA `ResourceClaim`/`ResourceSlice`,
-`CSINode`, `VolumeAttributesClass`, and legacy `ReplicationController` do not
-provide a stable, universal failure condition that can be alerted on safely.
-Their scheduling, driver, and lifecycle failures are still covered when they
-surface through Pod/Node status or Kubernetes Warning Events. Legacy `Endpoints`
-is deprecated and EndpointSlice remains the authoritative service signal.
+being treated as condition resources: DRA `ResourceSlice`, `CSINode`,
+`VolumeAttributesClass`, and legacy `ReplicationController` do not provide a
+stable, universal failure condition that can be alerted on safely. Their
+scheduling, driver, and lifecycle failures are still covered when they surface
+through Pod/Node status or Kubernetes Warning Events. Legacy `Endpoints` is
+deprecated and EndpointSlice remains the authoritative service signal.
 
-Root-cause analysis also follows projected ConfigMaps/Secrets, image pull
-Secrets, CSI drivers, Ingress TLS Secrets, PV StorageClasses, owner chains,
-Service selectors, EndpointSlices (including unready/terminating endpoints),
-node Leases, generic Custom Resource owners, VolumeAttachments, CSI drivers,
-VolumeSnapshots, VolumeSnapshotContents, VolumeSnapshotClasses, and local PV
-node affinity. Gateway API routes are linked to Gateway/GatewayClass, backend
-Services, and listener TLS Secrets; Ingress is linked to IngressClass. Explicit
-HTTP/TCP/DNS probes are also linked to matching Kubernetes Service DNS names or
-kept as external network targets. Generic CRD references are discovered automatically.
+## How causes are found
 
-## Noise and recovery controls
+Detecting a symptom is not the same as explaining it. The reasoning rules walk
+the relations the model records to find a root that is itself unhealthy or has
+just changed:
 
-The detection path supports startup baselines, persisted incidents, stable
-identity keys, sustained windows, cooldowns, disruption suppression, node
-inhibition, resolution, and scope-aware storage checks. Signals are sent through
-the incident engine so live, periodic, startup, and recovery decisions share
-the same lifecycle and deduplication rules.
+- owner chains (Pod, ReplicaSet, Deployment, Job, CronJob) and the node a pod
+  runs on, with node health, draining, and shared-node failures;
+- recent rollouts and changes to Secrets, ConfigMaps, Service selectors,
+  NetworkPolicies, and node kubelet versions or taints, including changes made
+  while kwatch was down;
+- Secrets, ConfigMaps, ServiceAccounts, and image pull Secrets that pods
+  reference, and image registries that fail for several workloads;
+- Service selectors and EndpointSlices, including unready and terminating
+  endpoints, and webhook backends that block admission;
+- scheduling constraints, ResourceQuota, PVCs, PVs, StorageClasses, and
+  VolumeAttachments;
+- cluster DNS, the metrics API behind an HPA, and zone or node pool topology.
 
-Security diagnostics include a periodic RBAC self-check for the cluster-scoped
-and selected namespace-scoped permissions needed by the enabled monitors.
-Explicitly allowed namespaces are checked; with cluster-wide scope, the kwatch
-namespace is checked to keep the operation bounded on large clusters. Results
-are available from the diagnostics-protected `/security` health endpoint;
-missing permissions are reported as capability gaps, not incidents, so
-intentionally restricted deployments do not create alert noise.
+When no rule proves a cause, the message says the cause is unknown rather than
+naming the nearest object.
+
+## Noise controls
+
+Detection is deliberately separate from notification. A signal never becomes a
+message by itself; it joins a problem, and the problem decides when a person
+hears about it.
+
+- **Settling**: a new problem waits (75 seconds by default, 15 for page-tier
+  problems) to collect related signals, so one root cause produces one
+  message. A problem that recovers while settling is never announced.
+- **Root-cause grouping**: symptoms attach to the problem of their explained
+  root. Forty pods failing because of one node are one problem.
+- **Material-change digest**: an announced problem is updated only when tier,
+  root, cause, the root's own conditions, or the bucketed size of the impact
+  change. Restart counters, timestamps, and replicas failing one by one never
+  trigger an update.
+- **Adaptive resolve hold**: a problem resolves only after its root stays
+  healthy for a hold that doubles with each recent recovery. Failing again
+  inside the hold reopens the same problem without a new message.
+- **Flapping**: repeated recoveries collapse into one flapping problem whose
+  transitions are silent until it is stable.
+- **Recurrence and routine**: resolved problems are remembered for a week. One
+  that opens at the same time of day on at least three days is treated as
+  routine and reported in the digest tier.
+- **Tiers**: silent, digest, notify, and page. Planned disruption such as node
+  draining, informational signals, and digest-only reasons (certificate
+  expiry, CPU throttling or high usage, HPA at maximum, stuck termination) are
+  digest tier, which is delivered with `info` severity so a route can send it
+  to a quieter channel. A critical failure that reaches users through an
+  Ingress, or a lost node, pages. `severityByReason` and `severityByOwnerKind`
+  override the derived tier.
+- **Startup summary**: problems that already exist when kwatch first starts
+  with no saved state are sent as one summary instead of one message each.
+  Restored problems never repeat their message after a restart.
+- **Scope, silences, and maintenance**: configured namespaces, reasons, the
+  namespace label selector, and silence rules drop decisions before delivery,
+  and objects, pods, or namespaces annotated for maintenance are held. Dropped
+  problems are still tracked so later analysis keeps its evidence.
+- **Delivery pacing**: sends to a provider are spaced out, a newer message of
+  the same conversation replaces a queued one when the queue is full, and
+  overflow is summarised in one digest message.
+
+Security diagnostics include a periodic RBAC self-check. The set of checked
+permissions is derived from the resources the sources actually watch, so it
+cannot drift from them. Results are available from the diagnostics-protected
+`/security` health endpoint; missing permissions are reported as capability
+gaps, not problems, so intentionally restricted deployments do not create
+alert noise.
 
 ## Important boundary
 
-Kubernetes API objects cannot expose every runtime failure. CPU throttling,
-cAdvisor/kubelet health beyond the summary API, API latency, packet loss,
+Kubernetes API objects cannot expose every runtime failure. Kubelet health beyond
+the summary API, API latency, packet loss,
 service-mesh health, cloud-provider volume state,
 VPA/KEDA/Cluster Autoscaler internals, and application SLOs require metrics,
 logs, traces, or active probes. kwatch consumes the runtime evidence available

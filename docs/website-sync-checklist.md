@@ -7,10 +7,10 @@ work. Use this checklist when synchronizing code-derived behavior from Kwatch.
 ## Review subjects
 
 - Architecture and package ownership.
-- One-leader, standby replicas, Lease failover, and single-replica limits.
-- Adding monitors, providers, filters, and RCA behavior.
-- Incident lifecycle, grouping, recovery, and monitoring gaps.
-- Persistence migration, backup, restore, and rollback.
+- Single replica, the Lease lock, epoch fencing, and restart behavior.
+- Adding sources, detectors, reasoning rules, providers, and filters.
+- Problem lifecycle, settling, digest, flapping, tiers, and downtime gaps.
+- State file schema, backup, reset, and rollback.
 - Health, readiness, liveness, diagnostics, and watcher operations.
 - Provider outage recovery, queue limits, and delivery semantics.
 - RBAC, deployment security, topology, and resource sizing.

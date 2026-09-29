@@ -5,26 +5,18 @@ operations reference, not a promise of high availability.
 
 ## Operating model
 
-Kwatch runs two replicas by default with Kubernetes Lease leader election and a
-`RollingUpdate` strategy. Exactly one Pod is active; the other is a standby.
-Only the active Pod watches resources, delivers notifications, and writes
-mutable state. A one-replica override is supported for very small clusters,
-but it has no Kwatch self-failover.
-
-Additional replicas are standby capacity, not monitoring workers. They increase
-resource usage and takeover options but do not increase monitoring throughput.
-Topology spreading is recommended when node failure protection matters.
+Kwatch runs one replica with the `Recreate` strategy. State lives in a bbolt
+file on a PVC mounted at `/var/lib/kwatch`. A Kubernetes Lease is used only as
+a lock: it stops two processes from writing the volume at once, and its
+transition count fences the state file so a process that lost the Lease cannot
+overwrite newer state. There is no standby Pod and no Kwatch self-failover; if
+the Pod or its node fails, Kubernetes restarts it and Kwatch resumes from the
+volume.
 
 Initial operating targets are: readiness within 120 seconds after a healthy
-startup, normal leader takeover within 90 seconds, graceful shutdown within
-45 seconds, and persistence restore within 30 seconds for normal state sizes.
-These are SLO targets for capacity planning and alerting, not election protocol
-guarantees. Queue limits and configured worker counts remain the authority for
-memory and delivery capacity.
-
-Operational CI covers one through five replicas and an explicit scale-up,
-standby-readiness, PDB, standby-removal, leader-removal, scale-down, and
-rollback scenario.
+startup and graceful shutdown within 45 seconds. These are SLO targets for
+capacity planning and alerting, not guarantees. Queue limits and configured
+worker counts remain the authority for memory and delivery capacity.
 
 Use the published image digest for production deployments. Version tags and
 chart versions must refer to the same release. Keep the default diagnostics
@@ -40,55 +32,48 @@ existing installations do not lose connectivity during an upgrade.
 
 - `/healthz` reports process liveness.
 - `/readyz` reports whether required monitoring infrastructure is ready.
-- `/availabilityz` reports whether the Pod is participating in election and can
-  be safely retained during a Deployment rollout. It is the Kubernetes
-  Deployment probe, not monitoring readiness.
+- `/availabilityz` reports whether the Pod is participating in the application
+  lifecycle and is used for Deployment rollouts. It is not monitoring
+  readiness.
 - `/health` reports optional monitor degradation and safe reason codes.
 
 An absent optional Kubernetes API is reported as degraded and does not create a
-synthetic incident. A required informer or source that is not ready keeps the
-application unready until it is available or the configuration disables that
-pipeline.
+synthetic problem. `/readyz` succeeds only when the Pod holds the Lease, has
+claimed the state file, every source finished its initial list, and delivery is
+running.
 
 ## Shutdown and recovery
 
-Kwatch gives workers and persistence savers a bounded shutdown window. On
-termination, producers stop before the final incident snapshot is written.
-If a dependency does not stop within its deadline, Kwatch records a shutdown
-timeout and exits rather than waiting forever.
+Kwatch gives its components a bounded shutdown window. On termination the
+sources stop with the engine, the final problem snapshot is written, and the
+state file is closed. If a dependency does not stop within its deadline,
+Kwatch records a shutdown timeout and exits rather than waiting forever.
 
-The deployment provides a 60-second termination grace period. Required
-component failure or an internal stall makes the active Pod unready, stops its
-active generation, fences persistence, releases leadership, and lets Kubernetes
-restart it. Optional component failures remain visible as bounded degraded
-health states and use bounded restart backoff; they do not create synthetic
-incidents.
+The deployment provides a 60-second termination grace period. A required
+component failure (delivery or the core) or an internal stall makes the Pod
+unready, cancels the active session, and lets Kubernetes restart it. Optional
+component failures remain visible as bounded degraded health states and use
+bounded restart backoff; they do not create synthetic problems.
 
-If the active Pod loses its Lease, the standby cancels the old active
-generation and takes over. The new leader restores persisted state, waits for
-required informer synchronization, and reconciles current Kubernetes state
-before becoming ready. The monitoring gap is reported from the last persisted
-liveness marker. Kubernetes Events that expired while Kwatch was unavailable
-cannot be reconstructed.
+After a restart the core restores open problems from the state file, so they
+are not announced again, and waits ten minutes before it may recover a
+restored problem so detectors can re-raise their signals. Once every source has
+finished its initial list, Kwatch compares the saved object fingerprints with
+the live cluster and records changes made while it was down, so root-cause
+analysis can still find a rollout that happened during the gap. Kubernetes
+Events that expired while Kwatch was unavailable cannot be reconstructed.
 
-Persistence ConfigMaps should be backed up according to the operator's normal
-cluster backup policy. Before upgrading, verify that the backup includes the
-Kwatch state ConfigMaps. Migration failures are reported through the health
-diagnostics and must be resolved or rolled back using the release notes before
-restarting the workload.
-
-Incident shard format v4 writes large snapshots as checksum-verified,
-generation-named ConfigMaps. Shards are written first and the manifest is
-published last, so an interrupted write leaves the prior generation restorable.
-The loader accepts format v3's fixed shard names and migrates them on the next
-successful save. Before rolling back to a binary that predates format v4,
-retain a backup of `kwatch-incidents` and restore the pre-v4 incident data.
+Back up the PVC according to the operator's normal volume backup policy. The
+state file is created with owner-only permissions and can be removed to reset
+Kwatch: it then starts cold and sends one startup summary. A state file written
+by a newer Kwatch is not opened; roll forward, or reset the file, as described
+in the release notes. Store failures are reported through health diagnostics.
 
 ## Outages and capacity
 
 Kubernetes API and provider outages are handled through bounded retries and
-degraded status. Delivery queues are bounded; sustained saturation can drop
-notifications, so operators should alert on queue saturation, terminal
+degraded status. Delivery queues are bounded; sustained saturation coalesces or
+summarises notifications and can drop them, so operators should alert on queue saturation, terminal
 delivery failures, and dead letters.
 
 Size CPU, memory, worker counts, queue capacity, and resync intervals for the
@@ -114,8 +99,8 @@ upgrade recovery behavior.
 
 The `Operational validation` workflow runs a disposable Kind cluster on a
 weekly schedule or by manual dispatch. It verifies chart installation,
-effective ServiceAccount permissions, an older state-schema migration, health
-probes, restart and Helm upgrade retention, a Pod event burst, and recovery
+effective ServiceAccount permissions, health probes, restart and Helm upgrade
+retention, a Pod event burst, and recovery
 after restarting the disposable control-plane node. An API-only outage, a real
 provider outage, and large-cluster capacity still require an operational
 environment because Kind cannot reproduce every production network and scale

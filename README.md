@@ -40,7 +40,7 @@ the context they need in one place.
 | `CrashLoopBackOff` | Reason, logs, events, owner, and next step |
 | `Pending` | Scheduling clues and unschedulable duration |
 | Unhealthy node | Affected workloads and dependency impact |
-| Many related failures | One grouped incident instead of alert noise |
+| Many related failures | One problem with its root cause instead of alert noise |
 
 Alerts give your team useful context and a clear next step.
 
@@ -99,11 +99,10 @@ are available when you need them.
 
 ## 🛡️ Reliable monitoring by design
 
-Kwatch keeps monitoring if a Pod goes down. The installer runs two replicas
-by default with leader election. One monitors your cluster. The other takes
-over automatically.
-
-One-replica mode is available for smaller environments. It has no failover.
+Kwatch runs as one replica and keeps its state on a small volume. If the Pod
+restarts, it resumes where it left off: open problems are not announced again,
+and changes made while it was down are still considered when explaining a
+failure.
 
 ## 📣 Send alerts where your team works
 
@@ -124,7 +123,7 @@ for you to review at any time.
 - **Credentials stay in Kubernetes Secrets.** The installer handles them for
   you. Known secret patterns are redacted from logs and alert text.
 - **Read-only access.** kwatch reads cluster state. It writes only its own
-  ConfigMaps and leader-election Lease in its namespace.
+  leader-election Lease in its namespace and its state file on its volume.
 - **Minimal adoption telemetry.** Once a week kwatch sends an anonymous
   cluster ID and the kwatch version, nothing else. The ID is a one-way hash,
   so it cannot be traced back to your cluster. This helps us know how many
@@ -138,7 +137,7 @@ for you to review at any time.
 | --- | --- |
 | Namespace filters | Focus on the workloads that matter |
 | Silences | Keep planned changes quiet |
-| Smart grouping | Turn alert storms into clear incidents |
+| Root-cause grouping | Turn alert storms into one problem with one cause |
 | Logs and events | Add context to every alert |
 | Runbooks | Give responders a direct next step |
 | Cluster names | Know which cluster needs attention |
