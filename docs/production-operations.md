@@ -9,7 +9,7 @@ Kwatch runs one replica with the `Recreate` strategy. State lives in a bbolt
 file on a PVC mounted at `/var/lib/kwatch`. A Kubernetes Lease is used only as
 a lock: it stops two processes from writing the volume at once, and its
 transition count fences the state file so a process that lost the Lease cannot
-overwrite newer state. There is no standby Pod and no Kwatch self-failover; if
+overwrite newer state. There is no second Pod and no Kwatch self-failover; if
 the Pod or its node fails, Kubernetes restarts it and Kwatch resumes from the
 volume.
 

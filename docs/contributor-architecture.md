@@ -155,5 +155,5 @@ review in the same change.
 The deployment runs one replica with the `Recreate` strategy and a PVC at
 `/var/lib/kwatch`. The Lease is only a lock that prevents two processes from
 sharing the volume, and its transition count fences the state file. There is
-no standby and no ConfigMap state. The application supervisor gates the active
-components on the Lease and stops them when it is lost.
+no second replica and no ConfigMap state. The application supervisor gates
+the active components on the Lease and stops them when it is lost.

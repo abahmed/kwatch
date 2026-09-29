@@ -92,19 +92,6 @@ func (h *HealthServer) informerHandler(w http.ResponseWriter, r *http.Request) {
 	h.writeStatus(w, h.informerLister, "informer")
 }
 
-func (h *HealthServer) persistenceHandler(
-	w http.ResponseWriter, r *http.Request,
-) {
-	if !h.requireDiagnosticsAuth(w, r) {
-		return
-	}
-	if h.persistenceLister == nil {
-		w.WriteHeader(http.StatusServiceUnavailable)
-		return
-	}
-	h.writeStatus(w, h.persistenceLister, "persistence")
-}
-
 func (h *HealthServer) writeStatus(
 	w http.ResponseWriter,
 	provider StatusProvider,

@@ -137,8 +137,8 @@ tests.
   API absence remains degraded and does not fail readiness. An unrecoverable
   required startup or cache failure causes the active process to stop so
   Kubernetes can restart or replace it.
-- `GET /availabilityz` — ✅ Deployment availability. A leader or standby
-  participating in Lease election can pass the rolling-update probe.
+- `GET /availabilityz` — ✅ Deployment availability. A leader, or a Pod
+  still waiting for the Lease, can pass the rolling-update probe.
 - `GET /health` — JSON containing overall status, leadership, component states,
   and bounded degradation reasons.
 - `GET /metrics` — 📊 Prometheus-format metrics (problems, notifications, queues, and informer activity). It does not require Prometheus to be installed.
@@ -147,7 +147,9 @@ Informer caches discard Kubernetes `managedFields` metadata at ingestion time
 to reduce memory on apply-heavy clusters. Labels, annotations, spec, status,
 resource versions, and deletion metadata remain intact for detection and graph
 analysis.
-- `GET /problems` — 📋 Active problems (requires diagnostics and its token)
+- `GET /problems` — 📋 Live problems: ID, state, tier, root, cause summary,
+  confidence, times, member and impact counts; no raw evidence or logs
+  (requires diagnostics and its token)
 - `POST /test-alert` — 📤 Send a test alert (requires diagnostics and its token)
 - `GET /deadletters` — 💀 Recent delivery failures (requires diagnostics and its token)
 

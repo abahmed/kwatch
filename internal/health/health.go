@@ -14,8 +14,10 @@ import (
 	"github.com/abahmed/kwatch/internal/model"
 )
 
+// ProblemLister supplies the safe problem view. Implementations must be
+// safe to call from the HTTP goroutine.
 type ProblemLister interface {
-	Snapshot() []model.IncidentView
+	Snapshot() []ProblemView
 }
 
 type AlertSender interface {
@@ -46,7 +48,6 @@ type Dependencies struct {
 	Security          StatusProvider
 	ControlPlane      StatusProvider
 	Informer          StatusProvider
-	Persistence       StatusProvider
 }
 
 type HealthServer struct {
@@ -65,7 +66,6 @@ type HealthServer struct {
 	securityLister          StatusProvider
 	controlPlaneLister      StatusProvider
 	informerLister          StatusProvider
-	persistenceLister       StatusProvider
 	ready                   atomic.Bool
 	componentMu             sync.RWMutex
 	componentErrors         map[string]string
@@ -152,6 +152,5 @@ func (h *HealthServer) ConfigureDependencies(
 	h.securityLister = deps.Security
 	h.controlPlaneLister = deps.ControlPlane
 	h.informerLister = deps.Informer
-	h.persistenceLister = deps.Persistence
 	return nil
 }

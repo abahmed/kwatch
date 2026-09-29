@@ -121,7 +121,7 @@ func (c *leaderCallbacks) onNewLeader(newLeader string) {
 		c.observedLeader.Store(true)
 	}
 	c.deps.healthServer.SetLeadership(health.LeadershipStatus{
-		Role: "standby", Identity: newLeader, LossReason: "standby",
+		Role: "starting", Identity: newLeader,
 	})
 }
 
@@ -184,7 +184,7 @@ func runLeaderElectionWithRunner(
 		return err
 	}
 	deps.healthServer.SetLeadership(health.LeadershipStatus{
-		Role: "standby", LossReason: "standby",
+		Role: "starting",
 	})
 
 	electionCtx, cancelElection := context.WithCancel(ctx)

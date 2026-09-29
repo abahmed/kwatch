@@ -38,5 +38,10 @@ func RunWithClock(now func() time.Time) int {
 		klog.ErrorS(err, "failed to initialize application")
 		return 1
 	}
-	return serve(ctx, newServerDeps(ctx, cancel, boot))
+	deps := newServerDeps(ctx, cancel, boot)
+	if err := openHealth(deps); err != nil {
+		klog.ErrorS(err, "failed to open health server")
+		return 1
+	}
+	return serve(ctx, deps)
 }

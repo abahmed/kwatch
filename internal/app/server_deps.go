@@ -29,6 +29,7 @@ type serverDeps struct {
 	heartbeat       *heartbeat.HeartbeatMonitor
 	telemetryStatus *adoptionTelemetryStatus
 	coreProgress    *componentProgress
+	problems        *problemFeed
 
 	// releaseLease is set after a graceful active session so shutdown can
 	// hand over the Lease once delivery has drained.
@@ -49,6 +50,7 @@ func newServerDeps(
 		heartbeat:       boot.heartbeat,
 		telemetryStatus: newAdoptionTelemetryStatus(),
 		coreProgress:    newComponentProgress(boot.clock.Now()),
+		problems:        &problemFeed{},
 	}
 }
 

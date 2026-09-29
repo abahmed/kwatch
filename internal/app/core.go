@@ -77,6 +77,8 @@ func runCore(
 	if err != nil {
 		return err
 	}
+	deps.problems.set(engine.Problems)
+	defer deps.problems.clear()
 	source, err = kube.NewSource(kube.SourceConfig{
 		Client:      deps.clients.Kubernetes,
 		Resync:      deps.runtime.Lifecycle().ResyncInterval(),

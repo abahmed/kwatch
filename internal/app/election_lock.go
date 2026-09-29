@@ -106,7 +106,8 @@ func podIdentity() (string, error) {
 }
 
 // releaseLease gives up the Lease if this replica still holds it, the same
-// way client-go does, so a standby can take over without waiting for expiry.
+// way client-go does, so a restarted Pod can take over without waiting for
+// expiry.
 func releaseLease(
 	ctx context.Context,
 	lock resourcelock.Interface,
