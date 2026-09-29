@@ -59,12 +59,12 @@ func (n *NewRelic) Name() string {
 }
 
 // SendEvent sends event to the provider
-// UsesEventDelivery routes incidents through SendEvent, which carries the
-// incident key and action as queryable event attributes.
+// UsesEventDelivery routes problems through SendEvent, which carries the
+// problem key and action as queryable event attributes.
 func (n *NewRelic) UsesEventDelivery() {}
 
-// SendEvent records one KwatchAlert event with the incident key and action,
-// so New Relic queries and alert conditions can follow an incident.
+// SendEvent records one KwatchAlert event with the problem key and action,
+// so New Relic queries and alert conditions can follow a problem.
 func (n *NewRelic) SendEvent(ctx context.Context, e *event.Event) error {
 	action := e.Action
 	if e.IsNotice() {

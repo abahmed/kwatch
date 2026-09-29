@@ -70,12 +70,12 @@ func (s *SplunkOncall) Name() string {
 }
 
 // SendEvent sends event to the provider
-// UsesEventDelivery routes incidents through SendEvent, which carries the
+// UsesEventDelivery routes problems through SendEvent, which carries the
 // action and a stable key so Splunk On-Call can resolve the alert.
 func (s *SplunkOncall) UsesEventDelivery() {}
 
 // SendEvent opens, updates or recovers one Splunk On-Call incident per kwatch
-// incident, keyed by entity_id.
+// problem, keyed by entity_id.
 func (s *SplunkOncall) SendEvent(ctx context.Context, e *event.Event) error {
 	messageType := "CRITICAL"
 	switch {

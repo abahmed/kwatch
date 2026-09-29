@@ -5,7 +5,7 @@ channel for the first time, start with the [quick-start guide](../README.md)
 or the [channel picker on kwatch.dev](https://kwatch.dev/docs/channels).
 
 In simple terms: configure a provider under `alert:`, give kwatch its webhook
-or credential, and it will send incidents to that destination.
+or credential, and it will send problems to that destination.
 
 Provider credentials must never appear directly in `config.yaml`. Put every
 webhook, token, key, password, and other credential in a mounted Kubernetes

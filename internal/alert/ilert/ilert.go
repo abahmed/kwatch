@@ -66,11 +66,11 @@ func (i *Ilert) Name() string {
 }
 
 // SendEvent sends event to the provider
-// UsesEventDelivery routes incidents through SendEvent, which carries the
+// UsesEventDelivery routes problems through SendEvent, which carries the
 // action and a stable key so iLert can resolve the alert.
 func (i *Ilert) UsesEventDelivery() {}
 
-// SendEvent raises or resolves one iLert alert per kwatch incident, keyed by
+// SendEvent raises or resolves one iLert alert per kwatch problem, keyed by
 // alertKey.
 func (i *Ilert) SendEvent(ctx context.Context, e *event.Event) error {
 	eventType := "ALERT"

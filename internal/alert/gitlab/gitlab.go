@@ -74,11 +74,11 @@ func (g *Gitlab) Name() string {
 }
 
 // SendEvent sends event to the provider
-// UsesEventDelivery routes incidents through SendEvent, which carries the
-// action and a stable key so one issue follows one incident.
+// UsesEventDelivery routes problems through SendEvent, which carries the
+// action and a stable key so one issue follows one problem.
 func (g *Gitlab) UsesEventDelivery() {}
 
-// SendEvent opens one issue per incident, comments on updates and closes it
+// SendEvent opens one issue per problem, comments on updates and closes it
 // on recovery.
 func (g *Gitlab) SendEvent(ctx context.Context, e *event.Event) error {
 	return g.issues.Deliver(ctx, g, e, g.issueTitle(e), g.issueBody(e))

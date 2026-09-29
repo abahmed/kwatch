@@ -58,12 +58,12 @@ func (s *Squadcast) Name() string {
 }
 
 // SendEvent sends event to the provider
-// UsesEventDelivery routes incidents through SendEvent, which carries the
+// UsesEventDelivery routes problems through SendEvent, which carries the
 // action and a stable key so Squadcast can deduplicate and resolve.
 func (s *Squadcast) UsesEventDelivery() {}
 
 // SendEvent triggers, updates or resolves one Squadcast incident per kwatch
-// incident, keyed by event_id.
+// problem, keyed by event_id.
 func (s *Squadcast) SendEvent(ctx context.Context, e *event.Event) error {
 	status := "trigger"
 	if e.IsResolve() {

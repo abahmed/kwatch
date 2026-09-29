@@ -49,8 +49,8 @@ resources:
     memory: 128Mi
     cpu: 100m
 
-# -- State store volume (ADR 0010). Kwatch keeps problems, change history
-# and baselines on disk. Set existingClaim to reuse a PVC, or emptyDir for
+# -- State store volume (ADR 0010). Kwatch keeps problems, history and
+# delivery threads on disk. Set existingClaim to reuse a PVC, or emptyDir for
 # evaluation clusters without storage (state is lost when the pod moves).
 persistence:
   size: 2Gi

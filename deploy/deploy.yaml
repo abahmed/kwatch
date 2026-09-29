@@ -289,7 +289,7 @@ spec:
         persistentVolumeClaim:
           claimName: kwatch-data
 ---
-# State store: problems, change history and baselines (ADR 0010). Uses the
+# State store: problems, history and delivery threads (ADR 0010). Uses the
 # cluster's default StorageClass.
 apiVersion: v1
 kind: PersistentVolumeClaim
