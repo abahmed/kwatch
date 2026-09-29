@@ -66,8 +66,9 @@ func (ContainerResources) Detect(
 			s := levelSignal(pct, constant.ReasonContainerCPUThrottled, since,
 				"CPU is throttled "+percentText(pct)+" of the time; "+
 					"requests slow down")
-			if pct < throttleCritical {
-				s.Severity = signal.Warning
+			s.Severity = signal.Warning
+			if pct >= throttleCritical {
+				s.Severity = signal.Critical
 			}
 			out = append(out, s)
 		}
