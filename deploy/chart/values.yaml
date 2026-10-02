@@ -91,7 +91,7 @@ resources:
     memory: 128Mi
     cpu: 100m
 
-# -- State store volume (ADR 0010). Kwatch keeps incidents, changes,
+# -- State store volume. Kwatch keeps incidents, changes,
 # baselines, evidence, timeline, audit, object fingerprints and state
 # (thread IDs, notified version) in one file on it. Retention is enforced in
 # the background and live data is capped at 512 MiB; the file is

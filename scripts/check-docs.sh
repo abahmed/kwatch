@@ -11,17 +11,6 @@ cd "$root_dir"
 tmp_dir=$(mktemp -d)
 trap 'rm -rf "$tmp_dir"' EXIT
 
-find docs/adr -maxdepth 1 -type f -name '*.md' \
-  -exec basename {} \; |
-  sed -n 's/^\([0-9][0-9][0-9][0-9]\)-.*/\1/p' |
-  sort | uniq -d >"$tmp_dir/duplicate-adr-numbers"
-if test -s "$tmp_dir/duplicate-adr-numbers"; then
-
-  echo "documentation: duplicate ADR numbers" >&2
-  cat "$tmp_dir/duplicate-adr-numbers" >&2
-  exit 1
-fi
-
 grep -Fq 'state.db' docs/architecture.md || {
   echo "documentation: architecture persistence contract is missing" >&2
   exit 1

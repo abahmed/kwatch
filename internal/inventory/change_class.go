@@ -6,7 +6,7 @@ import "strings"
 // stable strings: they appear in timelines and persisted history.
 type ChangeClass string
 
-// Change classes, from ADR 0011 "Changes, correlation and timeline".
+// Change classes used to correlate changes with failures.
 const (
 	// ClassRollout is a pod template edit (spec.template).
 	ClassRollout ChangeClass = "rollout"

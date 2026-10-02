@@ -1,7 +1,7 @@
 # Alert-quality scorecard
 
 Alert-quality numbers of the root-cause engine (package
-`internal/rootcause/explain`, ADR 0011), measured by `make alert-quality`.
+`internal/rootcause/explain`), measured by `make alert-quality`.
 Targets are from [docs/production-goals.md](../../docs/production-goals.md).
 `make alert-quality-gate` enforces every gate; it is part of `make verify`
 and of the alert-quality workflow, so a change that misses a gate does not

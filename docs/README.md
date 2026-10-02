@@ -49,10 +49,6 @@ implementation-only notes may remain beside code when they are not published.
 - [Permission matrix](./feature-permissions.md) — feature-to-RBAC guidance.
 - [Production goals](./production-goals.md) — the quality, scale,
   reliability and security bar kwatch must meet.
-- [Architecture ADRs](./adr/) — decisions behind runtime boundaries. ADR 0011
-  (health, propagation and explanation) supersedes the reasoning, storage and
-  message sections of ADR 0010; ADR 0010 supersedes ADRs 0002, 0004, 0006 and
-  0007 and part of 0001; ADRs 0003, 0005, 0008 and 0009 remain in force.
 - [Release integrity](./release-integrity.md) — image, manifest, and chart
   verification.
 - [Licensing](./licensing.md) — project and dependency licensing.

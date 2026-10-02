@@ -26,9 +26,8 @@ const (
 	ModeStartupBudgetShort detection.Mode = "Config.StartupBudgetShort"
 )
 
-// workloadConfigRows cover a workload broken by its own settings (ADR
-// 0010 rule 22). The cause is the workload; the evidence is the
-// container's own record.
+// workloadConfigRows cover a workload broken by its own settings. The
+// cause is the workload; the evidence is the container's own record.
 var workloadConfigRows = []Row{
 	{
 		Name: "memory-limit-too-low",

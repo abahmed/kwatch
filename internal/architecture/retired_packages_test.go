@@ -6,8 +6,8 @@ import (
 	"testing"
 )
 
-// retiredPackages were removed by ADR 0010, or renamed by its naming note,
-// and must not return.
+// retiredPackages were removed or renamed by the core redesign and
+// must not return.
 var retiredPackages = []string{
 	"internal/controller", "internal/insight",
 	"internal/persistence", "internal/handler", "internal/monitor",

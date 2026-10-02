@@ -21,7 +21,7 @@ const (
 	OutcomeReverted Outcome = "reverted"
 )
 
-// Effect window bounds, from ADR 0011.
+// Effect window bounds.
 const (
 	MinEffectWindow = 5 * time.Minute
 	MaxEffectWindow = 30 * time.Minute

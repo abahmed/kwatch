@@ -60,7 +60,7 @@ var specs = []spec{
 	{Outbox, keyed},
 }
 
-// Retention and size defaults, from ADR 0010 and 0011. They are constants
+// Retention and size defaults. They are constants
 // rather than configuration: no existing setting carries them, and the
 // defaults fit the default 2Gi volume budget.
 const (

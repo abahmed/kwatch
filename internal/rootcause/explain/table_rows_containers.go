@@ -6,7 +6,7 @@ import (
 	"github.com/abahmed/kwatch/internal/inventory/kube"
 )
 
-// containerRows cover init and sidecar containers (ADR 0010 rule 24):
+// containerRows cover init and sidecar containers:
 // a failing init container keeps the pod from starting, a failing
 // sidecar (a mesh proxy, a secrets agent) keeps it from being ready.
 // The blame is that container, not the application next to it. Pull

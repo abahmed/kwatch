@@ -3,9 +3,8 @@
 This page is for operators who want to know what kwatch does with their
 cluster, and for contributors who are about to change it. For installation
 use the [interactive manager](./kwatch-sh.md); for settings use the
-[configuration reference](./configuration.md). The design record is
-[ADR 0011](./adr/0011-health-propagation-and-explanation.md) and the bar kwatch
-must meet is in [production goals](./production-goals.md).
+[configuration reference](./configuration.md). The bar kwatch must meet is in
+[production goals](./production-goals.md).
 
 kwatch does not forward Kubernetes events to chat. It keeps a model of the
 whole cluster, finds what is unhealthy, works out the fewest causes that

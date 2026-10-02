@@ -1,4 +1,4 @@
-// Package explain is the root-cause engine of ADR 0011: a propagation
+// Package explain is the root-cause engine: a propagation
 // table, a candidate walk, scorers and a set-cover solver. The incident
 // manager solves through a Solver, which caches areas and solves again
 // only those a change can affect.

@@ -5,7 +5,7 @@ import (
 	"github.com/abahmed/kwatch/internal/inventory/kube"
 )
 
-// trafficRows cover how requests reach pods (ADR 0010 rules 15 to 17):
+// trafficRows cover how requests reach pods:
 // routes to their backend Services, and certificates to the pods and
 // routes that serve or check them. A Service or route broken by its own
 // edit is the generic own-change row.

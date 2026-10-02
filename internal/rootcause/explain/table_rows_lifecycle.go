@@ -16,7 +16,7 @@ const ModeDeleted detection.Mode = "Changed.Deleted"
 // finishing, as a budget keeps a drain from evicting a pod.
 const LinkBlocks LinkType = "blocks"
 
-// nodeLifecycleRows cover nodes leaving the cluster (ADR 0010 rule 18):
+// nodeLifecycleRows cover nodes leaving the cluster:
 // a scale-in, a replacement or a spot interruption takes a node away,
 // its pods go with it and their replacements may find no room.
 var nodeLifecycleRows = []Row{
@@ -156,7 +156,7 @@ func (v *view) runsOn(pod, node inventory.EntityID) bool {
 	return false
 }
 
-// operatorRows cover operators (ADR 0010 rule 19). A custom resource's
+// operatorRows cover operators. A custom resource's
 // own condition is its operator's verdict on it, not a summary of its
 // pods as a Deployment's condition is, so a failing condition explains
 // what the resource owns. A failing operator workload stopping its

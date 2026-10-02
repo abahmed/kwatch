@@ -246,9 +246,7 @@ lease-handover, provider-failure, invalid-configuration, and recovery paths.
 
 ## Package map
 
-Dependency direction flows downward; never import upward. The design record
-is `docs/adr/0011-health-propagation-and-explanation.md`, which supersedes
-the reasoning, storage and message sections of ADR 0010. The same table with
+Dependency direction flows downward; never import upward. The same table with
 plain-English descriptions, and the import rules `scripts/check-architecture.sh`
 enforces, are in `docs/contributor-architecture.md`.
 
@@ -572,9 +570,8 @@ ensures future recursive fallback changes cannot loop indefinitely.
 
 Slack token API calls and Discord webhook execution are the only approved SDK
 transport exceptions. They use injected HTTP clients and caller contexts;
-generic retry and status policy remains in `delivery/transport`. See
-`docs/adr/0005-sdk-provider-transport-exceptions.md` before adding another
-exception.
+generic retry and status policy remains in `delivery/transport`. Adding
+another exception needs a reviewed design change.
 
 
 Health diagnostics expose bounded component state and safe reason codes rather
@@ -644,8 +641,8 @@ is created; there is no migration and no backup), recovery guidance, and
 tests.
 
 Do not use a broad mechanical rewrite to conceal domain changes. Preserve
-load-bearing behavior listed above unless an ADR explicitly approves a new
-contract.
+load-bearing behavior listed above unless a reviewed design change approves
+a new contract.
 
 ## Working in the current tree
 

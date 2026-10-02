@@ -7,7 +7,7 @@ import (
 
 // LinkType names how a cause reaches an effect. The names read from the
 // effect's point of view ("the pod runs-on the node") or the cause's
-// ("the deployment owns the pod"), as in ADR 0011.
+// ("the deployment owns the pod").
 type LinkType string
 
 // Link types of the propagation table.

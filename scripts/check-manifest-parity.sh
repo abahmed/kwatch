@@ -14,7 +14,7 @@ require() {
 	}
 }
 
-# ADR 0010: one writer with a Lease lock and a persistent state volume.
+# One writer with a Lease lock and a persistent state volume.
 require 'replicas: 1' "raw deployment must run one replica"
 require 'type: Recreate' "single-writer deployment must use Recreate"
 require 'path: /availabilityz' "deployment availability probe is missing"

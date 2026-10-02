@@ -13,7 +13,7 @@ const (
 	kindEtcd              inventory.Kind = "etcd"
 )
 
-// controlPlaneRows cover the control plane (ADR 0010 rule 11): a
+// controlPlaneRows cover the control plane: a
 // stopped component shows up across the whole cluster at once. A
 // stopped controller manager needs no row of its own: the generic
 // controller-failing row links it to the workloads it stopped

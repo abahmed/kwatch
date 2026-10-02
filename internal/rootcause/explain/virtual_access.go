@@ -20,7 +20,7 @@ var rbacKinds = []inventory.Kind{
 	"role", "rolebinding", "clusterrole", "clusterrolebinding",
 }
 
-// accessRows cover RBAC (ADR 0010 rule 13): an RBAC object changed just
+// accessRows cover RBAC: an RBAC object changed just
 // before the pods of its namespace failed with "forbidden" errors.
 var accessRows = []Row{
 	{
