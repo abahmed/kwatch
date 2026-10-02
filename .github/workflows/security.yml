@@ -1,51 +1,64 @@
 name: Security and supply chain
 
+# - govulncheck and module verification on every pull request and on main;
+# - source and image CycloneDX SBOMs on main and weekly;
+# - a weekly re-scan of the latest released image digest, so a CVE published
+#   after a release is noticed without a new build.
+# Pull requests do not build an image here: the CI image job builds and
+# scans it once.
 on:
   pull_request:
-    branches: [main]
+    branches: [ main ]
   push:
-    branches: [main]
+    branches: [ main ]
   schedule:
     - cron: "41 2 * * 1"
   workflow_dispatch:
 
-concurrency:
-  group: security-${{ github.workflow }}-${{ github.ref }}
-  cancel-in-progress: true
-
 permissions:
   contents: read
+
+concurrency:
+  group: security-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
   dependencies:
     name: Go dependency scan
     runs-on: ubuntu-24.04
     timeout-minutes: 20
+    permissions:
+      contents: read
     steps:
       - name: Checkout repository
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
 
       - name: Install Go
         uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
         with:
           go-version-file: go.mod
 
-      - name: Verify module content
-        run: go mod verify
-
       - name: Install govulncheck
         run: go install golang.org/x/vuln/cmd/govulncheck@v1.8.0
 
+      # Verifies module content, third-party notices, and runs govulncheck.
       - name: Scan dependencies
         run: make verify-security
 
-  image:
-    name: Container scan and SBOM
+  sbom:
+    name: SBOM
+    if: github.event_name != 'pull_request'
     runs-on: ubuntu-24.04
     timeout-minutes: 30
+    permissions:
+      contents: read
     steps:
       - name: Checkout repository
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4
@@ -54,22 +67,18 @@ jobs:
         uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7
         with:
           context: .
+          platforms: linux/amd64
           load: true
           tags: kwatch:security
+          cache-from: type=gha
           build-args: |
             RELEASE_VERSION=security
             GIT_COMMIT=${{ github.sha }}
             BUILD_DATE=security
 
-      - name: Scan image for high and critical vulnerabilities
-        run: |
-          docker run --rm \
-            -v /var/run/docker.sock:/var/run/docker.sock \
-            aquasec/trivy@sha256:33f816d414b9d582d25bb737ffa4a632ae34e222f7ec1b50252cef0ce2266006 image \
-            --severity HIGH,CRITICAL --exit-code 1 kwatch:security
-
       - name: Generate source CycloneDX SBOM
         run: |
+          set -euo pipefail
           mkdir -p _output/security
           docker run --rm \
             -v "$PWD:/src:ro" \
@@ -78,6 +87,7 @@ jobs:
 
       - name: Generate image CycloneDX SBOM
         run: |
+          set -euo pipefail
           docker run --rm \
             -v /var/run/docker.sock:/var/run/docker.sock \
             anchore/syft@sha256:500e2d872ac019436926e8322b4fc1f39441d94d21f6f4046c6ff29b30e8cb02 \
@@ -89,3 +99,38 @@ jobs:
           name: kwatch-sbom-${{ github.sha }}
           path: _output/security/*.cdx.json
           if-no-files-found: error
+
+  released-image:
+    name: Re-scan latest released image
+    if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    permissions:
+      contents: read
+    env:
+      IMAGE: ghcr.io/abahmed/kwatch
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
+
+      # `latest` moves only on a stable release; scanning by digest keeps
+      # the result tied to the exact released artifact.
+      - name: Resolve the latest released digest
+        id: digest
+        run: |
+          set -euo pipefail
+          digest=$(docker buildx imagetools inspect "$IMAGE:latest" \
+            --format '{{json .Manifest.Digest}}' | tr -d '"')
+          case "$digest" in
+            sha256:*) ;;
+            *) echo "::error::could not resolve $IMAGE:latest"; exit 1 ;;
+          esac
+          echo "digest=$digest" >> "$GITHUB_OUTPUT"
+          echo "scanning $IMAGE@$digest"
+
+      - name: Scan the released image
+        env:
+          DIGEST: ${{ steps.digest.outputs.digest }}
+        run: ./scripts/scan-image.sh "$IMAGE@$DIGEST"

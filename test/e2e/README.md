@@ -19,9 +19,9 @@ make verify-scenarios
 Useful filters are:
 
 ```sh
-SCENARIO_REGEX=TestScenarioPodCrashLoop make verify-scenario
-SCENARIO_FAMILY=workload make verify-scenario
-KEEP_CLUSTER=true make verify-scenario
+SCENARIO_REGEX=TestScenarioPodCrashLoop make verify-scenarios
+SCENARIO_FAMILY=workload make verify-scenarios
+KEEP_CLUSTER=true make verify-scenarios
 ARTIFACTS=/tmp/kwatch-e2e make verify-scenarios
 make verify-negative-regressions
 ```
@@ -30,25 +30,27 @@ The script builds temporary images with `docker build --load`, loads them into
 Kind, and removes them and the cluster after the run. Images are never pushed
 or uploaded.
 
-The manual `scenarios.yml` workflow resolves the latest `main` commit to an
-immutable SHA before building and runs the complete scenario suite, including
-the extended Kind cases. It accepts a scenario regex, family, shard, and
-optional cluster retention for debugging. In compare mode it also accepts a
-release tag or commit. The workflow runs that reported source and the latest
-`main` in separate Kind clusters and writes one of `fixed_on_main`,
-`still_failing`, `regression_on_main`, or `not_reproduced` to the artifacts.
-Both image sets are built locally and removed after each cluster run.
+The `e2e.yml` workflow (nightly, manual, or on PRs labelled `e2e`) resolves the
+latest `main` commit to an immutable SHA before building and runs the complete
+scenario suite, including the extended Kind cases. It accepts a scenario regex,
+family, shard, and optional cluster retention for debugging. In compare mode it
+also accepts a release tag or commit. The workflow runs that reported source
+and the latest `main` in separate Kind clusters and writes one of
+`fixed_on_main`, `still_failing`, `regression_on_main`, or `not_reproduced` to
+the artifacts. Both image sets are built locally and removed after each cluster
+run.
 
 ## Architecture
 
 Kind owns the real Kubernetes cluster. The Go tests use Kubernetes SIG's
 `sigs.k8s.io/e2e-framework` for test lifecycle and client-go for Kubernetes
 operations. Kwatch-specific helpers inspect audit logs, webhook requests,
-health endpoints, metrics, persistence, and Lease leadership.
+health endpoints, metrics, persistence, and the Lease holder.
 
 The source Deployment and CRD are the production manifests from `deploy/`.
-`test/e2e/install/` only changes the candidate image, pull policy, and replica
-count for the disposable cluster.
+`scripts/test-kind-scenarios.sh` substitutes only the candidate image and
+pull policy before applying the Deployment to the disposable cluster. Kwatch
+runs as one replica.
 
 ## Adding a scenario
 
@@ -92,10 +94,18 @@ metadata:
 The Pod should produce one incident and one recovery.
 ~~~
 
-`test/e2e/issue` rejects commands, URLs, credentials, Secrets, privileged
-resources, host mounts, and cluster-scoped RBAC. It rewrites namespaces and
-workload images to the disposable local values. The sanitized output still
-requires human review before it becomes a permanent scenario.
+`test/e2e/issue` accepts only an allowlist of namespaced workload fixture
+kinds: Pod, Deployment, ReplicaSet, StatefulSet, DaemonSet, Job, CronJob,
+Service, ConfigMap, Ingress, HorizontalPodAutoscaler, PodDisruptionBudget,
+PersistentVolumeClaim, NetworkPolicy, ServiceAccount and HTTPRoute. Every
+other kind is rejected, including CRDs, webhook configurations, StorageClass,
+PriorityClass, APIService, Roles and Secrets. It also rejects URLs,
+credentials, privileged containers, host ports, host namespaces, host mounts,
+added capabilities, `runAsUser: 0` and service account tokens. It removes
+`command` and `args` from every container, because the image is replaced and
+issue commands must never run, and rewrites namespaces and workload images to
+the disposable local values. The sanitized output still requires human review
+before it becomes a permanent scenario.
 
 To prepare that output without executing anything, run:
 
@@ -112,6 +122,19 @@ This writes `config.yaml`, sanitized `resources.yaml`, `expectation.txt`, and
 commands, or apply the output. Review the files, copy only the required
 declarative fixture into a permanent scenario, then add positive, negative,
 recovery, and cleanup assertions.
+
+## Root-cause assertions
+
+Failure scenarios assert the incident root, not only a reason. A scenario
+passes a `harness.RootExpectation` (same shape as the `expect.json` files in
+`internal/scenarios/testdata`) to `assertRoot`, which reads Kwatch's audit log
+and requires the expected root (`kind/namespace/name`, group roots such as
+`registry//host` or `node//name`), the expected tier, at most `maxMessages`
+for that incident, optionally `maxTotalMessages` for the whole scope, and no
+incident rooted at any `mustNotBlame` entity. A trailing `*` on a name
+matches a prefix. The evaluation logic is unit-tested without a cluster in
+`harness/rootcause_test.go`. Use a reason-only wait only when the root is the
+failing object itself and nothing else could be blamed.
 
 Every supported Kwatch monitor must have coverage for relevant lifecycle
 profiles: startup failure, delayed failure, one-shot failure, recurring

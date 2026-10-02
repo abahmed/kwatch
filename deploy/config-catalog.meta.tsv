@@ -12,7 +12,6 @@ activeProbeMonitor.enabled|Monitors|Run explicitly configured application probes
 activeProbeMonitor.intervalSeconds|Monitors|Seconds between active probe rounds.|active|
 activeProbeMonitor.timeoutSeconds|Monitors|Timeout for each active probe.|active|
 activeProbeMonitor.failureThreshold|Monitors|Consecutive probe failures before alerting.|active|
-activeProbeMonitor.recoveryThreshold|Monitors|Consecutive successes before resolving a probe incident.|active|
 activeProbeMonitor.autoServices|Monitors|Probe discoverable Service ports automatically; opt in to avoid unexpected traffic.|active|
 activeProbeMonitor.excludeNamespaces|Monitors|Namespaces automatic Service probing skips, for default-deny ingress that does not admit kwatch.|active|
 activeProbeMonitor.http|Monitors|JSON array of HTTP probe targets with optional paths, headers, and latency limits.|active|
@@ -23,9 +22,6 @@ telemetry.enabled|Operations|Send the weekly adoption heartbeat.|active|
 maintenance.enabled|Operations|Honor maintenance annotations while preserving cluster-level alerts.|active|
 maintenance.annotation|Operations|Annotation that marks deliberate maintenance on a resource.|active|
 maintenance.untilAnnotation|Operations|Optional annotation containing the maintenance expiry timestamp.|active|
-healthCheck.diagnostics|Operations|Expose diagnostic endpoints such as incidents and test-alert.|active|
-healthCheck.diagnosticsToken|Security|Bearer token for diagnostic endpoints; stored only through a mounted Secret.|secret|
-healthCheck.pprof|Operations|Expose Go profiling endpoints; keep disabled in production.|active|
 app.clusterName|Operations|Cluster name shown in notifications.|active|
 app.proxyURL|Operations|Optional proxy for outbound provider requests.|active|
 app.disableStartupMessage|Operations|Disable the startup notification.|active|
@@ -45,3 +41,5 @@ ignorePodNames|Compatibility|Legacy pod-name suppression field.|deprecated|silen
 ignoreContainerMessages|Compatibility|Legacy container-message suppression field.|deprecated|silences
 ignoreNodeReasons|Compatibility|Legacy node-reason suppression field.|deprecated|silences
 ignoreNodeMessages|Compatibility|Legacy node-message suppression field.|deprecated|silences
+kubelet.insecureSkipVerify|Security|Skip kubelet serving certificate verification for direct node stats reads; only for self-signed kubelet certificates.|active|
+watch.secrets|Scope|Watch Secrets (values hashed, never stored); false removes Secret RBAC and Secret-based checks report that they cannot verify.|active|

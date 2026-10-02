@@ -25,14 +25,13 @@ type HeartbeatMonitor struct {
 // ActiveProbeMonitor performs checks against configured endpoints and, when
 // AutoServices is enabled, advertised Service ports from inside kwatch.
 type ActiveProbeMonitor struct {
-	Enabled           bool              `yaml:"enabled"`
-	IntervalSeconds   int               `yaml:"intervalSeconds"`
-	TimeoutSeconds    int               `yaml:"timeoutSeconds"`
-	FailureThreshold  int               `yaml:"failureThreshold"`
-	RecoveryThreshold int               `yaml:"recoveryThreshold"`
-	HTTP              []HTTPProbeTarget `yaml:"http"`
-	TCP               []TCPProbeTarget  `yaml:"tcp"`
-	DNS               []DNSProbeTarget  `yaml:"dns"`
+	Enabled          bool              `yaml:"enabled"`
+	IntervalSeconds  int               `yaml:"intervalSeconds"`
+	TimeoutSeconds   int               `yaml:"timeoutSeconds"`
+	FailureThreshold int               `yaml:"failureThreshold"`
+	HTTP             []HTTPProbeTarget `yaml:"http"`
+	TCP              []TCPProbeTarget  `yaml:"tcp"`
+	DNS              []DNSProbeTarget  `yaml:"dns"`
 	// AutoServices probes every Service port in scope from kwatch's own pod.
 	// That is a real TCP connection from a real pod, so a NetworkPolicy that
 	// does not admit kwatch reports the Service as down when it is fine.
@@ -42,6 +41,7 @@ type ActiveProbeMonitor struct {
 	ExcludeNamespaces []string `yaml:"excludeNamespaces"`
 }
 
+// HTTPProbeTarget is one HTTP endpoint the probe monitor checks.
 type HTTPProbeTarget struct {
 	Name              string `yaml:"name"`
 	URL               string `yaml:"url"`
@@ -50,11 +50,13 @@ type HTTPProbeTarget struct {
 	LatencyCriticalMs int    `yaml:"latencyCriticalMs"`
 }
 
+// TCPProbeTarget is one TCP address the probe monitor dials.
 type TCPProbeTarget struct {
 	Name    string `yaml:"name"`
 	Address string `yaml:"address"`
 }
 
+// DNSProbeTarget is one DNS name the probe monitor resolves.
 type DNSProbeTarget struct {
 	Name string `yaml:"name"`
 	Host string `yaml:"host"`

@@ -1,0 +1,7 @@
+{
+  "name": "pvc-wffc-no-consumer",
+  "description": "A claim of a WaitForFirstConsumer StorageClass with no pod using it stays Pending for 30 minutes, as designed; the scheduler reports WaitForFirstConsumer.",
+  "maxMessages": 0,
+  "quiet": true,
+  "tail": "45m0s"
+}

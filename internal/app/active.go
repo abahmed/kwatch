@@ -4,14 +4,11 @@ import (
 	"context"
 	"fmt"
 	"os"
-	"path/filepath"
+	"sync/atomic"
+	"time"
 
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/klog/v2"
-
-	"github.com/abahmed/kwatch/internal/k8s"
-	"github.com/abahmed/kwatch/internal/knowledge/store"
-	"github.com/abahmed/kwatch/internal/startup"
+	"github.com/abahmed/kwatch/internal/kubeclient"
+	"github.com/abahmed/kwatch/internal/storage"
 	"github.com/abahmed/kwatch/internal/upgrader"
 )
 
@@ -39,53 +36,177 @@ func runActiveComponents(ctx context.Context, deps *serverDeps) error {
 		deps.healthServer.SetComponentError("state", err)
 		return fmt.Errorf("state: %w", err)
 	}
-	defer closeStore(state)
+	reportStoreReset(deps, state)
 	disk := diskState{store: state, client: deps.clients.Kubernetes}
-	session := startup.NewStartupManagerWithRuntime(
+	session := newStartupManagerWithRuntime(
 		disk, deps.runtime, deps.clients.Clock,
 		newKubernetesRestartEvidence(
-			deps.clients.Kubernetes, k8s.GetNamespace()),
+			deps.clients.Kubernetes, kubeclient.GetNamespace()),
 	)
 	result, err := session.Start(activeCtx)
 	if err != nil {
+		closeStore(state)
 		deps.healthServer.SetComponentError("state", err)
 		return fmt.Errorf("state: startup: %w", err)
 	}
 	deps.readiness.setCurrent("state", true)
-	if msg, ok := session.StartupMessage(); ok {
-		deps.deliveryManager.Notify(msg)
-	}
+	announceStartup(deps, state, session)
 
-	threads := newThreadSaver(deps.deliveryManager, disk)
-	threads.Restore()
+	threads := restoreThreads(deps, disk)
+	defer deps.threadWake.detach()
 
 	supervisor := newComponentSupervisor(deps.clients.Clock.Now)
+	guard := &storeGuard{}
 	startActiveComponents(activeCtx, deps, supervisor, activeResources{
 		state: state, disk: disk, result: result, session: session,
-		threads: threads,
+		threads: threads, guard: guard,
 	})
 	select {
 	case err = <-supervisor.errCh:
 	case <-ctx.Done():
 	}
+	// Readiness goes first: the session is over from this moment, and the
+	// shutdown work below can take many seconds.
+	deps.readiness.withdraw()
 	cancel()
-	waitForSupervisor(supervisor)
-	threads.Flush(ctx)
+	finishActiveSession(ctx, activeShutdown{
+		supervisor: supervisor, delivery: deps.deliveryManager,
+		threads: threads, session: session, state: state, guard: guard,
+		failed:         err != nil,
+		leadershipLost: leadershipLost(ctx, deps),
+		lastRenewal:    lastRenewalFrom(deps),
+		now:            deps.clients.Clock.Now,
+	})
+	return err
+}
+
+// announceStartup queues the jobs the last session never sent, then the
+// startup message, so old work goes out before any new incident.
+func announceStartup(
+	deps *serverDeps, state *storage.Store, session *startupManager,
+) {
+	attachOutbox(deps, state)
+	if msg, ok := session.StartupMessage(); ok {
+		deps.deliveryManager.Notify(msg)
+	}
+}
+
+// restoreThreads restores saved provider threads and wakes the saver
+// when new ones appear. The caller detaches it when the session ends.
+func restoreThreads(deps *serverDeps, disk diskState) *threadSaver {
+	threads := newThreadSaver(deps.deliveryManager, disk)
+	threads.Restore()
+	deps.threadWake.attach(threads)
+	return threads
+}
+
+// leadershipLost reports whether the leader context ended on its own. On
+// a normal shutdown the application context ends first and the Lease is
+// still held, because kwatch releases it only after shutdown finishes.
+func leadershipLost(leaderCtx context.Context, deps *serverDeps) bool {
+	return leaderCtx.Err() != nil && applicationContext(deps).Err() == nil
+}
+
+// activeShutdown is what the leader session releases when it ends.
+type activeShutdown struct {
+	supervisor *componentSupervisor
+	delivery   deliveryStopper
+	threads    *threadSaver
+	session    sessionEnder
+	state      *storage.Store
+	guard      *storeGuard
+	failed     bool
+	// leadershipLost fences delivery: another replica may already lead,
+	// so queued jobs are dead-lettered instead of sent.
+	leadershipLost bool
+	// lastRenewal and now cap the delivery drain at the remaining Lease
+	// time; both nil keeps the fixed drain timeout.
+	lastRenewal func() time.Time
+	now         func() time.Time
+}
+
+// storeGuard records that a background writer outlived its component and
+// may still reach the store. The zero value and nil mean no such writer.
+type storeGuard struct{ abandoned atomic.Bool }
+
+func (g *storeGuard) abandon() {
+	if g != nil {
+		g.abandoned.Store(true)
+	}
+}
+
+func (g *storeGuard) busy() bool {
+	return g != nil && g.abandoned.Load()
+}
+
+// sessionEnder records how the runtime session ended.
+type sessionEnder interface {
+	EndSession(ctx context.Context, reason string)
+}
+
+// finishActiveSession stops the leader session in order: components,
+// delivery, the final thread save, the session end marker, then the state
+// file. Delivery drains before the thread save so the thread IDs created
+// by the last sends are saved too. Each
+// step is bounded (see serve.go for the budget). The store is closed only
+// when every writer has returned, including the pipeline's storage
+// writer; otherwise it stays open until the process exits, because
+// closing it under a running write is unsafe and the process is
+// terminating anyway.
+func finishActiveSession(parent context.Context, s activeShutdown) {
+	stopped := waitForSupervisor(s.supervisor)
+	if !stopDelivery(
+		parent, s.delivery, s.leadershipLost, s.leaseDrainBudget(),
+	) {
+		// The final outbox write is still running against the store.
+		s.guard.abandon()
+	}
+	flushed := s.threads.Flush(parent)
+	s.threads.Close()
 	reason := "graceful_shutdown"
-	if err != nil {
+	if s.failed {
 		reason = "internal_failure"
 	}
-	session.EndSession(context.WithoutCancel(ctx), reason)
-	return err
+	ended := endSession(parent, s.session, reason, sessionEndTimeout)
+	if !stopped || !flushed || !ended || s.guard.busy() {
+		recordShutdownTimeout("state-store")
+		return
+	}
+	closeStore(s.state)
+}
+
+// endSession writes the session end marker within timeout and reports
+// whether the write returned in time.
+func endSession(
+	parent context.Context, session sessionEnder, reason string,
+	timeout time.Duration,
+) bool {
+	ctx, cancel := context.WithTimeout(
+		context.WithoutCancel(parent), timeout)
+	defer cancel()
+	done := make(chan struct{})
+	go func() {
+		defer close(done)
+		session.EndSession(ctx, reason)
+	}()
+	select {
+	case <-done:
+		return true
+	case <-ctx.Done():
+		recordShutdownTimeout("session-end")
+		return false
+	}
 }
 
 // activeResources are what the leader session hands its components.
 type activeResources struct {
-	state   *store.Store
+	state   *storage.Store
 	disk    diskState
-	result  startup.Result
-	session *startup.StartupManager
+	result  startupResult
+	session *startupManager
 	threads *threadSaver
+	// guard records whether a component may still write to the store.
+	guard *storeGuard
 }
 
 func startActiveComponents(
@@ -94,23 +215,24 @@ func startActiveComponents(
 	supervisor *componentSupervisor,
 	res activeResources,
 ) {
+	// The pipeline's progress clock was stamped when the process booted. A
+	// replica that waited as standby would otherwise look stalled the
+	// moment it starts leading.
+	deps.pipelineProgress.Touch(deps.clients.Clock.Now())
 	supervisor.startOwned(ctx, componentSpec{
 		name:     "delivery",
 		required: true,
 		progress: deliveryProgress(deps),
-		onHealthy: func() {
-			deps.readiness.setCurrent("delivery", true)
-		},
 		run: func(ctx context.Context) error {
 			return runDelivery(ctx, deps)
 		},
 	})
 	supervisor.startOwned(ctx, componentSpec{
-		name:     "core",
+		name:     "pipeline",
 		required: true,
-		progress: deps.coreProgress,
+		progress: deps.pipelineProgress,
 		run: func(ctx context.Context) error {
-			return runCore(ctx, deps, res.state)
+			return runPipeline(ctx, deps, res.state, res.guard)
 		},
 	})
 	upgraderConfig := deps.runtime.Lifecycle().Upgrader()
@@ -119,16 +241,17 @@ func startActiveComponents(
 			deps.runtime.Lifecycle().Telemetry(), res.disk,
 			res.result.ClusterID, res.result.CurrentVersion,
 			deps.clients.Clock.Now, deps.clients.HTTP,
-			deps.telemetryStatus,
 		)),
 		monitoredRun(deps, "upgrader", upgrader.NewUpgrader(
 			&upgraderConfig, deps.deliveryManager, res.disk,
 			deps.clients.HTTP,
 		).CheckUpdates),
-		monitoredRun(deps, "rbac", deps.securityMonitor.Start),
+		selfReportedRun(deps, "rbac", deps.securityMonitor.Start),
 		monitoredComponent(deps, "heartbeat", runHeartbeat),
 		monitoredRun(deps, "alive", aliveRecorder(res.session)),
 		monitoredRun(deps, "threads", runThreadSaver(res.threads)),
+		monitoredRun(deps, "state-compactor",
+			runCompactor(res.state, storeMetrics(deps))),
 	}
 	if deps.runtime.Lifecycle().CRDEnabled() {
 		optional = append(optional,
@@ -137,45 +260,4 @@ func startActiveComponents(
 	for _, component := range optional {
 		supervisor.startOptional(ctx, component)
 	}
-}
-
-// openStore opens the state file and claims it with this leadership term,
-// so a deposed leader can no longer write.
-func openStore(ctx context.Context, deps *serverDeps) (*store.Store, error) {
-	s, err := store.Open(filepath.Join(dataDir(), "state.db"),
-		store.Options{Now: deps.clients.Clock.Now})
-	if err != nil {
-		return nil, err
-	}
-	epoch, err := leaseEpoch(ctx, deps)
-	if err == nil {
-		err = s.Claim(epoch)
-	}
-	if err != nil {
-		closeStore(s)
-		return nil, err
-	}
-	return s, nil
-}
-
-func closeStore(s *store.Store) {
-	if err := s.Close(); err != nil {
-		klog.ErrorS(err, "close state store", "component", "state")
-	}
-}
-
-// leaseEpoch numbers leadership terms from the Lease transition count,
-// which increases with every new holder.
-func leaseEpoch(ctx context.Context, deps *serverDeps) (uint64, error) {
-	lease, err := electionClient(deps.clients).CoordinationV1().
-		Leases(k8s.GetNamespace()).Get(ctx, electionLeaseName(),
-		metav1.GetOptions{})
-	if err != nil {
-		return 0, fmt.Errorf("read lease epoch: %w", err)
-	}
-	transitions := int32(0)
-	if lease.Spec.LeaseTransitions != nil {
-		transitions = *lease.Spec.LeaseTransitions
-	}
-	return uint64(transitions) + 1, nil
 }

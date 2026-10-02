@@ -1,0 +1,10 @@
+{
+  "name": "single-replica-node-loss",
+  "description": "A node stops reporting; a single-replica Deployment on it is fully down while replicated workloads keep serving.",
+  "root": "node//n1",
+  "tier": "page",
+  "maxMessages": 3,
+  "mustNotBlame": [
+    "deployment/billing/worker"
+  ]
+}

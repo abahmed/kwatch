@@ -106,15 +106,15 @@ var definitions = []Definition{
 		Runtime, nil,
 	},
 	{
-		RootCause, "Explain each problem by its most likely root cause",
+		RootCause, "Explain each incident by its most likely root cause",
 		Runtime, nil,
 	},
 	{
-		ChangeCorrelation, "Relate problems to recent changes and who made them",
+		ChangeCorrelation, "Relate incidents to recent changes and who made them",
 		Runtime, []ID{RootCause},
 	},
 	{
-		Impact, "Show which workloads and services a problem affects",
+		Impact, "Show which workloads and services an incident affects",
 		Runtime, []ID{RootCause},
 	},
 	{
@@ -126,15 +126,15 @@ var definitions = []Definition{
 		Runtime, []ID{RootCause},
 	},
 	{
-		Flapping, "Recognise flapping and routine recurring problems",
+		Flapping, "Recognise flapping and routine recurring incidents",
 		Runtime, []ID{NoiseControl},
 	},
 	{
-		StartupSummary, "Summarise pre-existing problems once at cold start",
+		StartupSummary, "Summarise pre-existing incidents once at cold start",
 		StartupOnly, nil,
 	},
 	{
-		DiskState, "Keep problems and history on disk across restarts",
+		DiskState, "Keep incidents and history on disk across restarts",
 		StartupOnly, nil,
 	},
 	{
@@ -150,7 +150,7 @@ var definitions = []Definition{
 		Runtime, nil,
 	},
 	{
-		Maintenance, "Hold problems for objects under maintenance",
+		Maintenance, "Hold incidents for objects under maintenance",
 		Runtime, nil,
 	},
 	{
@@ -158,11 +158,11 @@ var definitions = []Definition{
 		Runtime, nil,
 	},
 	{
-		ProviderRouting, "Route problems to providers by scope",
+		ProviderRouting, "Route incidents to providers by scope",
 		Runtime, nil,
 	},
 	{
-		NativeThreads, "Update one message thread per problem where supported",
+		NativeThreads, "Update one message thread per incident where supported",
 		Runtime, nil,
 	},
 	{
@@ -170,7 +170,7 @@ var definitions = []Definition{
 		Runtime, nil,
 	},
 	{
-		AuditLog, "Write a JSON line for every problem decision",
+		AuditLog, "Write a JSON line for every incident decision",
 		Runtime, nil,
 	},
 	{

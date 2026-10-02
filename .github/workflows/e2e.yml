@@ -1,0 +1,247 @@
+name: E2E
+
+# Real-cluster validation in disposable Kind clusters:
+#   - scenarios: the semantic regression suite from source manifests
+#     (test/e2e), optionally comparing a reported ref with main;
+#   - operational: the Helm production smoke test (install, RBAC, Lease
+#     handover, restart, upgrade, rollback, control-plane node restart)
+#     across the RBAC and Secret-watching chart modes.
+#
+# Runs nightly on main, on demand, and on pull requests labelled `e2e`.
+# Pull-request runs use the pull_request event, so a fork receives no
+# secrets and a read-only token.
+#
+# The release workflow requires a successful "E2E full" run on the commit it
+# tags; run-name marks filtered and compare runs so they never satisfy it.
+run-name: >-
+  ${{ github.event_name == 'pull_request' && 'E2E (pull request)'
+  || inputs.compare_with_main && 'E2E compare'
+  || (inputs.scenario != '' || inputs.family != '' || inputs.shard != ''
+  || (inputs.suite != '' && inputs.suite != 'all')) && 'E2E filtered'
+  || 'E2E full' }}
+
+on:
+  schedule:
+    - cron: "23 2 * * *"
+  pull_request:
+    branches: [ main ]
+    types: [ labeled, opened, synchronize, reopened ]
+  workflow_dispatch:
+    inputs:
+      suite:
+        description: "Which suites to run"
+        required: false
+        default: all
+        type: choice
+        options:
+          - all
+          - scenarios
+          - operational
+      scenario:
+        description: "Optional scenario test regex (not with family)"
+        required: false
+        default: ""
+        type: string
+      family:
+        description: >-
+          Optional scenario family from test/e2e/coverage/coverage.yaml
+          (not with scenario)
+        required: false
+        default: ""
+        type: string
+      shard:
+        description: "Optional shard value"
+        required: false
+        default: ""
+        type: string
+      keep_cluster:
+        description: "Keep the Kind cluster after failure"
+        required: false
+        default: false
+        type: boolean
+      suite_timeout:
+        description: "Maximum Go test duration"
+        required: false
+        default: "60m"
+        type: string
+      reported_ref:
+        description: "Release tag or commit to compare with main"
+        required: false
+        default: ""
+        type: string
+      reported_version:
+        description: "Optional human-readable reported Kwatch version"
+        required: false
+        default: ""
+        type: string
+      compare_with_main:
+        description: >-
+          Run the reported ref and latest main in separate Kind clusters
+        required: false
+        default: false
+        type: boolean
+      load_count:
+        description: "Disposable Pods used by the operational event burst"
+        required: false
+        default: "50"
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: e2e-${{ github.event_name }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+env:
+  KIND_VERSION: v0.30.0
+
+jobs:
+  scenarios:
+    name: Kind regression scenarios
+    if: >-
+      (github.event_name != 'pull_request'
+      || contains(github.event.pull_request.labels.*.name, 'e2e'))
+      && (github.event_name != 'workflow_dispatch'
+      || inputs.suite == 'all' || inputs.suite == 'scenarios')
+    runs-on: ubuntu-24.04
+    timeout-minutes: 150
+    permissions:
+      contents: read
+    env:
+      SOURCE_REF: >-
+        ${{ inputs.compare_with_main && 'main' || github.ref_name }}
+    steps:
+      - name: Validate inputs
+        env:
+          SCENARIO: ${{ inputs.scenario }}
+          FAMILY: ${{ inputs.family }}
+          COMPARE_WITH_MAIN: ${{ inputs.compare_with_main }}
+          REPORTED_REF: ${{ inputs.reported_ref }}
+        run: |
+          set -euo pipefail
+          if [ -n "$SCENARIO" ] && [ -n "$FAMILY" ]; then
+            echo "::error::set either scenario or family, not both"
+            exit 2
+          fi
+          if [ "$COMPARE_WITH_MAIN" = true ] && [ -z "$REPORTED_REF" ]; then
+            echo "::error::reported_ref is required in compare mode"
+            exit 2
+          fi
+
+      - name: Checkout repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          ref: ${{ inputs.compare_with_main && 'main' || '' }}
+          # Compare mode fetches the reported ref itself.
+          fetch-depth: ${{ inputs.compare_with_main && '0' || '1' }}
+          persist-credentials: false
+
+      - name: Set up Go
+        uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: go.mod
+
+      # go install verifies the module against the Go checksum database, so
+      # the kind binary is authenticated without a hand-maintained hash.
+      - name: Install Kind
+        run: |
+          set -euo pipefail
+          go install "sigs.k8s.io/kind@${KIND_VERSION}"
+          echo "$(go env GOPATH)/bin" >> "$GITHUB_PATH"
+          "$(go env GOPATH)/bin/kind" version
+
+      - name: Resolve source commit
+        run: |
+          set -euo pipefail
+          SOURCE_SHA="$(git rev-parse HEAD)"
+          test -n "$SOURCE_SHA"
+          {
+            echo "SOURCE_SHA=$SOURCE_SHA"
+            echo "REQUESTED_REF=$SOURCE_REF"
+          } >> "$GITHUB_ENV"
+          {
+            echo "requested_ref=$SOURCE_REF"
+            echo "resolved_sha=$SOURCE_SHA"
+          } > "${RUNNER_TEMP}/kwatch-source.txt"
+
+      - name: Run Kind scenarios
+        env:
+          ARTIFACTS: "${{ runner.temp }}/kwatch-e2e"
+          KIND_CLUSTER_NAME: "kwatch-e2e-${{ github.run_id }}"
+          KEEP_CLUSTER: "${{ inputs.keep_cluster || false }}"
+          SCENARIO_REGEX: "${{ inputs.scenario }}"
+          SCENARIO_FAMILY: "${{ inputs.family }}"
+          SCENARIO_SHARD: "${{ inputs.shard }}"
+          SUITE_TIMEOUT: "${{ inputs.suite_timeout || '60m' }}"
+          REPORTED_REF: "${{ inputs.reported_ref }}"
+          REPORTED_VERSION: "${{ inputs.reported_version }}"
+          COMPARE_WITH_MAIN: "${{ inputs.compare_with_main || false }}"
+        run: |
+          set -euo pipefail
+          if [ "$COMPARE_WITH_MAIN" = true ]; then
+            ./scripts/test-kind-scenarios-compare.sh
+          else
+            ./scripts/test-kind-scenarios.sh
+          fi
+
+      - name: Upload scenario diagnostics
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: kwatch-e2e-${{ github.run_id }}
+          path: |
+            ${{ runner.temp }}/kwatch-e2e
+            ${{ runner.temp }}/kwatch-source.txt
+          if-no-files-found: warn
+
+  operational:
+    name: Operational smoke (${{ matrix.rbac }}, secrets=${{ matrix.secrets }})
+    if: >-
+      (github.event_name != 'pull_request'
+      || contains(github.event.pull_request.labels.*.name, 'e2e'))
+      && (github.event_name != 'workflow_dispatch'
+      || ((inputs.suite == 'all' || inputs.suite == 'operational')
+      && !inputs.compare_with_main))
+    runs-on: ubuntu-24.04
+    timeout-minutes: 40
+    permissions:
+      contents: read
+    strategy:
+      fail-fast: false
+      matrix:
+        rbac: [ full, least-privilege ]
+        secrets: [ true, false ]
+    env:
+      # One name for the cluster kind-action creates and the script loads
+      # the image into.
+      KIND_CLUSTER_NAME: kwatch-ops
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
+
+      - name: Install Helm
+        uses: azure/setup-helm@9bc31f4ebc9c6b171d7bfbaa5d006ae7abdb4310 # v5
+
+      - name: Create disposable Kubernetes cluster
+        uses: helm/kind-action@06c1ae10762d3b9c1644e7fe69596ae519e015a2 # v1.15.0
+        with:
+          cluster_name: ${{ env.KIND_CLUSTER_NAME }}
+
+      - name: Build image
+        run: docker build --tag kwatch:ci .
+
+      - name: Run production smoke test
+        env:
+          KWATCH_LOAD_COUNT: ${{ inputs.load_count || '50' }}
+          KWATCH_RBAC_MODE: ${{ matrix.rbac }}
+          KWATCH_WATCH_SECRETS: ${{ matrix.secrets }}
+        run: ./scripts/test-kind-production.sh
+
+      - name: Collect cluster diagnostics
+        if: always()
+        run: |
+          kubectl get pods --all-namespaces -o wide || true
+          kubectl get events --all-namespaces --sort-by=.lastTimestamp || true

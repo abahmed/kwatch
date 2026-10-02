@@ -2,6 +2,8 @@ package audit
 
 import (
 	"os"
+
+	"k8s.io/klog/v2"
 )
 
 // maxAuditFileBytes bounds the audit file. The container filesystem is
@@ -44,8 +46,10 @@ func (r *rotatingFile) open() error {
 
 func (r *rotatingFile) Write(p []byte) (int, error) {
 	if r.size > 0 && r.size+int64(len(p)) > r.maxBytes {
+		// A failed rotation must not lose the entry; keep appending.
 		if err := r.rotate(); err != nil {
-			return 0, err
+			klog.ErrorS(err, "failed to rotate audit log",
+				"component", "audit", "operation", "rotate")
 		}
 	}
 	n, err := r.file.Write(p)
@@ -53,14 +57,18 @@ func (r *rotatingFile) Write(p []byte) (int, error) {
 	return n, err
 }
 
+// rotate keeps r.file a writable handle whether it succeeds or fails: the
+// old file is closed only after the new one is open, and a rename on an open
+// file is safe, so a failed step leaves the previous handle in use.
 func (r *rotatingFile) rotate() error {
-	if err := r.file.Close(); err != nil {
-		return err
-	}
 	if err := os.Rename(r.path, r.path+".1"); err != nil {
 		return err
 	}
-	return r.open()
+	old := r.file
+	if err := r.open(); err != nil {
+		return err
+	}
+	return old.Close()
 }
 
 func (r *rotatingFile) Close() error {

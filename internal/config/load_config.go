@@ -33,14 +33,13 @@ func LintStrict() error {
 	if err != nil || document == nil {
 		return err
 	}
-	resolved, err := yaml.Marshal(document)
-	if err != nil {
+	// The expanded document must still decode; unknown keys are then
+	// reported from the original bytes so line numbers match the file.
+	var tmp Config
+	if err := document.Decode(&tmp); err != nil {
 		return err
 	}
-	dec := yaml.NewDecoder(strings.NewReader(string(resolved)))
-	dec.KnownFields(true)
-	var tmp Config
-	return dec.Decode(&tmp)
+	return unknownKeysError(raw)
 }
 
 // expandConfigDocument parses the config and then resolves ${VAR} and exact
@@ -130,10 +129,9 @@ func expandScalar(node *yaml.Node, unset map[string]bool) error {
 	return nil
 }
 
-// LoadConfig loads yaml configuration from file if provided, otherwise
-// loads default configuration
 // parseConfigFile reads CONFIG_FILE and unmarshals it over a fresh default
-// config. A missing or unset file yields the defaults with no error.
+// config. An unset CONFIG_FILE yields the defaults; a set one that does not
+// exist is an error.
 func parseConfigFile() (*Config, error) {
 	configFile := os.Getenv("CONFIG_FILE")
 
@@ -151,8 +149,13 @@ func parseConfigFile() (*Config, error) {
 	yamlFile, err := os.ReadFile(configFile) // #nosec G304,G703 -- intentional operator path
 	if err != nil {
 		if os.IsNotExist(err) {
-			klog.InfoS("config file not found; using default (no alert providers)", "path", configFile)
-			return config, nil
+			// CONFIG_FILE names a file the operator meant to use, for
+			// example a Secret key. Running on defaults would silently
+			// drop every provider, so a missing file stops startup.
+			return nil, fmt.Errorf(
+				"CONFIG_FILE %q does not exist: check that the mounted "+
+					"ConfigMap or Secret has a config.yaml key, or unset "+
+					"CONFIG_FILE to run with defaults", configFile)
 		}
 		klog.InfoS("unable to load config file", "error", err.Error())
 		return nil, err
@@ -173,6 +176,7 @@ func parseConfigFile() (*Config, error) {
 			klog.InfoS("unable to parse config file", "error", err.Error())
 			return nil, err
 		}
+		config.unknownKeys = unknownConfigKeys(yamlFile)
 	}
 
 	return config, nil
@@ -260,11 +264,13 @@ func prepareConfig(config *Config) []error {
 	return append(errs, Validate(config)...)
 }
 
+// LoadConfig reads, overlays and validates the configuration file.
 func LoadConfig() (*Config, error) {
 	config, err := parseConfigFile()
 	if err != nil {
 		return nil, err
 	}
+	applyEnvironmentOverrides(config)
 
 	if errs := prepareConfig(config); len(errs) > 0 {
 		return nil, errors.Join(errs...)
@@ -288,6 +294,7 @@ func LoadConfig() (*Config, error) {
 // RebuildAfterOverlay refreshes validation and derived indexes after a
 // startup-only configuration source has overlaid the base file.
 func RebuildAfterOverlay(c *Config) error {
+	applyEnvironmentOverrides(c)
 	if errs := prepareConfig(c); len(errs) > 0 {
 		return errors.Join(errs...)
 	}

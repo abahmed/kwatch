@@ -7,11 +7,11 @@ import (
 
 	"github.com/stretchr/testify/require"
 
-	"github.com/abahmed/kwatch/internal/client"
 	"github.com/abahmed/kwatch/internal/clock"
 	"github.com/abahmed/kwatch/internal/config"
-	"github.com/abahmed/kwatch/internal/knowledge"
-	"github.com/abahmed/kwatch/internal/knowledge/kube"
+	"github.com/abahmed/kwatch/internal/inventory"
+	inventorykube "github.com/abahmed/kwatch/internal/inventory/kube"
+	"github.com/abahmed/kwatch/internal/kubeclient"
 )
 
 func runtimeWith(cfg *config.Config) config.RuntimeConfig {
@@ -23,7 +23,7 @@ func TestMaintenanceAnnotationsEmptyWhenDisabled(t *testing.T) {
 		Annotation: "hold", UntilAnnotation: "until",
 	})
 
-	require.Equal(t, kube.MaintenanceAnnotations{}, got)
+	require.Equal(t, inventorykube.MaintenanceAnnotations{}, got)
 }
 
 func TestMaintenanceAnnotationsCarryConfiguredNames(t *testing.T) {
@@ -58,11 +58,11 @@ func TestNewActiveProberEnabledBuildsProber(t *testing.T) {
 				ExcludeNamespaces: []string{"locked"},
 			},
 		}),
-		clients: client.ClientSet{Clock: clock.RealClock{}},
+		clients: kubeclient.ClientSet{Clock: clock.RealClock{}},
 	}
 
 	prober, ok := newActiveProber(deps,
-		knowledge.NewModel(knowledge.Options{}), nil)
+		inventory.NewModel(inventory.Options{}), nil)
 
 	require.True(t, ok)
 	require.NotNil(t, prober)
@@ -74,7 +74,7 @@ func TestPruneModelReturnsWhenContextIsCanceled(t *testing.T) {
 	done := make(chan struct{})
 
 	go func() {
-		pruneModel(ctx, knowledge.NewModel(knowledge.Options{}), time.Now)
+		pruneModel(ctx, inventory.NewModel(inventory.Options{}), time.Now)
 		close(done)
 	}()
 
@@ -85,9 +85,9 @@ func TestPruneModelReturnsWhenContextIsCanceled(t *testing.T) {
 	}
 }
 
-func TestCoreClockDelegatesToApplicationClock(t *testing.T) {
+func TestPipelineClockDelegatesToApplicationClock(t *testing.T) {
 	now := time.Date(2026, 9, 30, 1, 2, 3, 0, time.UTC)
-	c := coreClock{clock.Func(func() time.Time { return now })}
+	c := pipelineClock{clock.Func(func() time.Time { return now })}
 
 	require.True(t, c.Now().Equal(now))
 	select {
@@ -98,14 +98,13 @@ func TestCoreClockDelegatesToApplicationClock(t *testing.T) {
 }
 
 func TestNewDetectorRegistryUsesSyncPredicate(t *testing.T) {
-	registry := newDetectorRegistry(func(knowledge.Kind) bool {
+	registry := newDetectorRegistry(func(inventory.Kind) bool {
 		return true
 	})
-	model := knowledge.NewModel(knowledge.Options{})
+	model := inventory.NewModel(inventory.Options{})
 
 	registry.Evaluate(model, time.Now(),
-		knowledge.NewEntityID(kube.KindNode, "", "n1"))
+		inventory.CoreID(inventorykube.KindNode, "", "n1"))
 
 	require.NotNil(t, registry)
-	require.NotNil(t, newReasoner())
 }

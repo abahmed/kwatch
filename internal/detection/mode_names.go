@@ -1,0 +1,190 @@
+package detection
+
+// Mode constants name every failure mode of modeByReason, grouped like
+// its tables. The list was generated from the table values; a new mode
+// gets a constant here before a table, row or rule can use it.
+
+// Container lifecycle and container status modes.
+const (
+	ModeKilled               Mode = "Killed"
+	ModeCompleted            Mode = "Completed"
+	ModeError                Mode = "Error"
+	ModeImagePull            Mode = "ImagePull"
+	ModeImagePullInspect     Mode = "ImagePull.Inspect"
+	ModeImagePullInvalidName Mode = "ImagePull.InvalidName"
+	ModeCrashLoop            Mode = "CrashLoop"
+	ModeOOMKilled            Mode = "OOMKilled"
+	ModeRestarting           Mode = "Restarting"
+	ModeCreating             Mode = "Creating"
+	ModeInitializing         Mode = "Initializing"
+	ModeNotReady             Mode = "NotReady"
+	ModeCannotRun            Mode = "CannotRun"
+	ModeCreateError          Mode = "CreateError"
+	ModeCreateErrorConfig    Mode = "CreateError.Config"
+	ModeInitError            Mode = "InitError"
+	ModeDeadlineExceeded     Mode = "DeadlineExceeded"
+	ModeHookPostStart        Mode = "Hook.PostStart"
+	ModeProbe                Mode = "Probe"
+	ModeProbeStartup         Mode = "Probe.Startup"
+)
+
+// Scheduling and pod phase modes.
+const (
+	ModeUnschedulable     Mode = "Unschedulable"
+	ModePending           Mode = "Pending"
+	ModeFailed            Mode = "Failed"
+	ModeStatusUnknown     Mode = "StatusUnknown"
+	ModeStuckDeleting     Mode = "StuckDeleting"
+	ModeSchedulingGated   Mode = "SchedulingGated"
+	ModeEvicted           Mode = "Evicted"
+	ModeImagePullRegistry Mode = "ImagePull.Registry"
+)
+
+// Node condition and resource usage modes.
+const (
+	ModeDraining             Mode = "Draining"
+	ModeMemoryPressure       Mode = "MemoryPressure"
+	ModeDiskPressure         Mode = "DiskPressure"
+	ModePIDPressure          Mode = "PIDPressure"
+	ModeNetworkUnavailable   Mode = "NetworkUnavailable"
+	ModeResourceHigh         Mode = "ResourceHigh"
+	ModeResourceCritical     Mode = "ResourceCritical"
+	ModeFilesystemUsage      Mode = "Filesystem.Usage"
+	ModeInodesUsage          Mode = "Inodes.Usage"
+	ModeMemoryHigh           Mode = "MemoryHigh"
+	ModeCPUHigh              Mode = "CPUHigh"
+	ModeEphemeralStorageHigh Mode = "EphemeralStorageHigh"
+	ModeActiveProbe          Mode = "ActiveProbe"
+	ModeCPUThrottled         Mode = "CPUThrottled"
+	ModePressureStall        Mode = "PressureStall"
+	ModeNetworkErrors        Mode = "NetworkErrors"
+	ModeRuntimeErrors        Mode = "RuntimeErrors"
+)
+
+// Workload, autoscaler, job and budget modes.
+const (
+	ModeRolloutStuck           Mode = "RolloutStuck"
+	ModeUnavailable            Mode = "Unavailable"
+	ModeReplicaFailure         Mode = "ReplicaFailure"
+	ModeConditionFailure       Mode = "ConditionFailure"
+	ModeScalingDisabled        Mode = "Scaling.Disabled"
+	ModeScalingNoMetrics       Mode = "Scaling.NoMetrics"
+	ModeScalingUpdateFailed    Mode = "Scaling.UpdateFailed"
+	ModeScalingInvalidSelector Mode = "Scaling.InvalidSelector"
+	ModeScalingMaxedOut        Mode = "Scaling.MaxedOut"
+	ModeScalingError           Mode = "Scaling.Error"
+	ModeJobFailed              Mode = "JobFailed"
+	ModeJobFailedDeadline      Mode = "JobFailed.Deadline"
+	ModeJobFailedBackoffLimit  Mode = "JobFailed.BackoffLimit"
+	ModeSuspended              Mode = "Suspended"
+	ModeNotScheduling          Mode = "NotScheduling"
+	ModeInvalidSchedule        Mode = "InvalidSchedule"
+	ModeDisruptionBudget       Mode = "DisruptionBudget"
+)
+
+// Service, admission and reference modes.
+const (
+	ModeNoEndpoints           Mode = "NoEndpoints"
+	ModeBackendsDegraded      Mode = "BackendsDegraded"
+	ModePortMismatch          Mode = "PortMismatch"
+	ModeLoadBalancerPending   Mode = "LoadBalancerPending"
+	ModeBackendMissing        Mode = "BackendMissing"
+	ModeWebhookBackendMissing Mode = "Webhook.BackendMissing"
+	ModeWebhookNoEndpoints    Mode = "Webhook.NoEndpoints"
+	ModeInvalidPolicy         Mode = "InvalidPolicy"
+	ModeInvalidPolicyBinding  Mode = "InvalidPolicy.Binding"
+	ModeInvalidPolicyMutating Mode = "InvalidPolicy.Mutating"
+	ModeCSRFailed             Mode = "CSRFailed"
+	ModeFlowControl           Mode = "FlowControl"
+	ModeClaimFailed           Mode = "ClaimFailed"
+	ModeInvalidPolicySecurity Mode = "InvalidPolicy.Security"
+	ModeMissingServiceAccount Mode = "Missing.ServiceAccount"
+	ModeMissingSecret         Mode = "Missing.Secret"
+	ModeMissingConfigMap      Mode = "Missing.ConfigMap"
+	ModeAPIServiceUnavailable Mode = "APIServiceUnavailable"
+	ModeNotReconciling        Mode = "NotReconciling"
+	ModeNetworkPolicy         Mode = "NetworkPolicy"
+)
+
+// Control-plane, certificate and watch modes.
+const (
+	ModeCertExpired                  Mode = "Cert.Expired"
+	ModeCertExpiring                 Mode = "Cert.Expiring"
+	ModeUnavailableAPIServer         Mode = "Unavailable.APIServer"
+	ModeLatencyAPIServer             Mode = "Latency.APIServer"
+	ModeUnavailableScheduler         Mode = "Unavailable.Scheduler"
+	ModeUnavailableControllerManager Mode = "Unavailable.ControllerManager"
+	ModeUnavailableEtcd              Mode = "Unavailable.Etcd"
+	ModeUnavailableCoreDNS           Mode = "Unavailable.CoreDNS"
+	ModeActiveProbeLatency           Mode = "ActiveProbe.Latency"
+	ModeClusterVersionSkew           Mode = "Cluster.VersionSkew"
+	ModeAttachFailed                 Mode = "AttachFailed"
+	ModeSnapshotFailed               Mode = "SnapshotFailed"
+)
+
+// Storage, quota and deletion modes.
+const (
+	ModeVolumeFull        Mode = "VolumeFull"
+	ModeVolumeFillingUp   Mode = "VolumeFillingUp"
+	ModeVolumeFailed      Mode = "VolumeFailed"
+	ModeQuotaExhausted    Mode = "QuotaExhausted"
+	ModeInvalidLimitRange Mode = "InvalidLimitRange"
+)
+
+// Generic condition modes.
+const (
+	ModeCondition Mode = "Condition"
+)
+
+// Pod, container and node runtime modes.
+const (
+	ModeProbeLiveness         Mode = "Probe.Liveness"
+	ModeProbeReadiness        Mode = "Probe.Readiness"
+	ModeAdmissionRejected     Mode = "Admission.Rejected"
+	ModeExitNotExecutable     Mode = "Exit.NotExecutable"
+	ModeExitCommandNotFound   Mode = "Exit.CommandNotFound"
+	ModeExitKilled            Mode = "Exit.Killed"
+	ModeExitSegfault          Mode = "Exit.Segfault"
+	ModeImagePullNeverPull    Mode = "ImagePull.NeverPull"
+	ModeHookPreStart          Mode = "Hook.PreStart"
+	ModeDiskEvictionThreshold Mode = "Disk.EvictionThreshold"
+	ModeDiskImageGCFailed     Mode = "Disk.ImageGCFailed"
+	ModeDiskFreeSpaceFailed   Mode = "Disk.FreeSpaceFailed"
+	ModeDiskContainerGCFailed Mode = "Disk.ContainerGCFailed"
+	ModeNetworkIPExhausted    Mode = "Network.IPExhausted"
+	ModeNetworkCNINotReady    Mode = "Network.CNINotReady"
+	ModeHeartbeatStale        Mode = "Heartbeat.Stale"
+	ModeResizeInfeasible      Mode = "Resize.Infeasible"
+	ModeResizeDeferred        Mode = "Resize.Deferred"
+	ModeResizeError           Mode = "Resize.Error"
+	ModePreemptedRepeatedly   Mode = "Preempted.Repeatedly"
+)
+
+// Workload, network, storage and admission resource modes.
+const (
+	// ModeStatefulSetRolloutStuck is a StatefulSet rollout that
+	// stopped; it is not the Deployment ModeRolloutStuck.
+	ModeStatefulSetRolloutStuck       Mode = "Rollout.Stuck"
+	ModeScheduleMissed                Mode = "Schedule.Missed"
+	ModeScheduleBlocked               Mode = "Schedule.Blocked"
+	ModeScheduleRepeatedFailure       Mode = "Schedule.RepeatedFailure"
+	ModeLoadBalancerSyncFailed        Mode = "LoadBalancer.SyncFailed"
+	ModeIngressTLSSecretMissing       Mode = "Ingress.TLSSecretMissing"
+	ModeIngressClassMissing           Mode = "Ingress.ClassMissing"
+	ModeReferencePriorityClassMissing Mode = "Reference.PriorityClassMissing"
+	ModeReferenceRuntimeClassMissing  Mode = "Reference.RuntimeClassMissing"
+	ModeBudgetSelectsNothing          Mode = "Budget.SelectsNothing"
+	ModeBudgetOverlap                 Mode = "Budget.Overlap"
+	ModeBudgetSyncFailed              Mode = "Budget.SyncFailed"
+	ModeBudgetBlocksDrain             Mode = "Budget.BlocksDrain"
+	ModeDeviceUnallocated             Mode = "Device.Unallocated"
+	ModeDevicePrepareFailed           Mode = "Device.PrepareFailed"
+	ModeVolumeDetachFailed            Mode = "Volume.DetachFailed"
+	ModeVolumeAttachWaiting           Mode = "Volume.AttachWaiting"
+	ModeVolumeProvisioningFailed      Mode = "Volume.ProvisioningFailed"
+	ModeVolumeMapFailed               Mode = "Volume.MapFailed"
+	ModeQuotaNearLimit                Mode = "Quota.NearLimit"
+	ModeCertificateDenied             Mode = "Certificate.Denied"
+	ModeCertificateNotIssued          Mode = "Certificate.NotIssued"
+	ModeCRDNotEstablished             Mode = "CRD.NotEstablished"
+)

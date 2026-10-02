@@ -7,7 +7,7 @@ import (
 )
 
 func TestStoppedManagerCountsDroppedNotifications(t *testing.T) {
-	a := &Manager{stopped: true}
+	a := &Manager{state: stateStopped}
 	before := metrics.DefaultRegistry().NotificationsDropped.Load()
 	a.Notify("after stop")
 	after := metrics.DefaultRegistry().NotificationsDropped.Load()

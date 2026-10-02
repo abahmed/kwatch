@@ -1,0 +1,3 @@
+🟠 search in shop keeps failing and recovering, and I couldn't find an outside cause. It has recovered and failed again three times recently. To read the output of the last crash, run kubectl logs search-9b -c app -n shop --previous
+
+🟠 search in shop keeps failing and recovering, and I couldn't find an outside cause.

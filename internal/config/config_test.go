@@ -2,6 +2,7 @@ package config
 
 import (
 	"os"
+	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -224,4 +225,28 @@ ignoreNodeReasons:
 	assert.Nil(t, err)
 	assert.NotNil(t, cfg)
 	assert.Equal(t, []string{"reason-1", "reason_2", "reason.with.dot", "reason/with/slash"}, cfg.IgnoreNodeReasons)
+}
+
+func TestConfigMissingFileFailsStartup(t *testing.T) {
+	path := t.TempDir() + "/config.yaml"
+	t.Setenv("CONFIG_FILE", path)
+
+	cfg, err := LoadConfig()
+
+	if cfg != nil || err == nil {
+		t.Fatalf("LoadConfig() = %v, %v; want an error", cfg, err)
+	}
+	if !strings.Contains(err.Error(), path) {
+		t.Fatalf("error %q does not name the missing file", err)
+	}
+}
+
+func TestConfigUnsetFileUsesDefaults(t *testing.T) {
+	t.Setenv("CONFIG_FILE", "")
+
+	cfg, err := LoadConfig()
+
+	if err != nil || cfg == nil {
+		t.Fatalf("LoadConfig() = %v, %v", cfg, err)
+	}
 }

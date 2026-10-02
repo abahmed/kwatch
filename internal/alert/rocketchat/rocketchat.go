@@ -4,19 +4,18 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"strings"
 
 	"k8s.io/klog/v2"
 
 	"github.com/abahmed/kwatch/internal/clock"
 	"github.com/abahmed/kwatch/internal/delivery/transport"
-	"github.com/abahmed/kwatch/internal/event"
-	"github.com/abahmed/kwatch/internal/message"
+	"github.com/abahmed/kwatch/internal/notification"
 )
 
 type RocketChat struct {
 	sender  transport.Sender
 	webhook string
-	text    string
 
 	// reference for general app configuration
 	clusterName string
@@ -40,14 +39,17 @@ func NewRocketChat(
 		return nil
 	}
 
-	klog.InfoS("initializing Rocket Chat with webhook configured")
+	if !transport.ValidEndpoint(webhook) {
+		klog.InfoS("initializing rocketchat with an invalid webhook",
+			"setting", "webhook")
+		return nil
+	}
 
-	text, _ := config["text"].(string)
+	klog.InfoS("initializing Rocket Chat with webhook configured")
 
 	return &RocketChat{
 		sender:      transport.NewSender(dependencies),
 		webhook:     webhook,
-		text:        text,
 		clusterName: clusterName,
 		clockSource: clock.Require(dependencies.Clock),
 	}
@@ -58,10 +60,12 @@ func (r *RocketChat) Name() string {
 	return "Rocket Chat"
 }
 
-// SendEvent sends event to the provider
-func (r *RocketChat) SendEvent(ctx context.Context, e *event.Event) error {
-	formattedMsg := e.FormatMarkdown(r.clusterName, r.text, "")
-	b, err := r.buildRequestBodyRocketChat(formattedMsg)
+// SendIncident posts the incident narrative, followed by the workload's
+// last output as a code block when there is one.
+func (r *RocketChat) SendIncident(
+	ctx context.Context, m notification.Message,
+) error {
+	b, err := r.buildRequestBodyRocketChat(incidentText(m))
 	if err != nil {
 		return err
 	}
@@ -89,7 +93,7 @@ func (r *RocketChat) SendMessage(ctx context.Context, msg string) error {
 
 func (r *RocketChat) buildRequestBodyRocketChat(text string) ([]byte, error) {
 	msgPayload := &rocketChatWebhookPayload{
-		Text: message.NeutralizeMentions(text),
+		Text: notification.NeutralizeMentions(text),
 	}
 
 	jsonBytes, err := json.Marshal(msgPayload)
@@ -97,4 +101,13 @@ func (r *RocketChat) buildRequestBodyRocketChat(text string) ([]byte, error) {
 		return nil, fmt.Errorf("failed to marshal rocketchat payload: %w", err)
 	}
 	return jsonBytes, nil
+}
+
+// incidentText is the Note with the last output as a Markdown code block.
+func incidentText(m notification.Message) string {
+	text := m.NoteText()
+	if len(m.Output) > 0 {
+		text += "\n```\n" + strings.Join(m.Output, "\n") + "\n```"
+	}
+	return text
 }

@@ -4,7 +4,6 @@ import (
 	"context"
 	"errors"
 	"net/http"
-	"strings"
 	"testing"
 
 	discordgo "github.com/bwmarrin/discordgo"
@@ -12,8 +11,6 @@ import (
 
 	"github.com/abahmed/kwatch/internal/clock"
 	"github.com/abahmed/kwatch/internal/delivery/transport"
-	"github.com/abahmed/kwatch/internal/event"
-	"github.com/abahmed/kwatch/internal/message"
 )
 
 func mockedSend(
@@ -76,64 +73,6 @@ func TestSendMessage(t *testing.T) {
 	assert.Nil(c.SendMessage(context.Background(), "test"))
 }
 
-func TestSendEvent(t *testing.T) {
-	assert := assert.New(t)
-
-	configMap := map[string]interface{}{
-		"webhook": "test/test",
-	}
-	c := newTestDiscord(configMap, "dev")
-	assert.NotNil(c)
-
-	c.send = mockedSend
-
-	ev := event.Event{
-		PodName:       "test-pod",
-		ContainerName: "test-container",
-		Namespace:     "default",
-		Reason:        "OOMKILLED",
-		Logs: "Nam quis nulla. Integer malesuada. In in enim a arcu " +
-			"imperdiet malesuada. Sed vel lectus. Donec odio urna, tempus " +
-			"molestie, porttitor ut, iaculis quis, sem. Phasellus rhoncus.\n" +
-			"Nam quis nulla. Integer malesuada. In in enim a arcu " +
-			"imperdiet malesuada. Sed vel lectus. Donec odio urna, tempus " +
-			"molestie, porttitor ut, iaculis quis, sem. Phasellus rhoncus.\n" +
-			"Nam quis nulla. Integer malesuada. In in enim a arcu " +
-			"imperdiet malesuada. Sed vel lectus. Donec odio urna, tempus " +
-			"molestie, porttitor ut, iaculis quis, sem. Phasellus rhoncus.\n" +
-			"Nam quis nulla. Integer malesuada. In in enim a arcu " +
-			"imperdiet malesuada. Sed vel lectus. Donec odio urna, tempus " +
-			"molestie, porttitor ut, iaculis quis, sem. Phasellus rhoncus.\n" +
-			"Nam quis nulla. Integer malesuada. In in enim a arcu " +
-			"imperdiet malesuada. Sed vel lectus. Donec odio urna, tempus " +
-			"molestie, porttitor ut, iaculis quis, sem. Phasellus rhoncus.\n" +
-			"Nam quis nulla. Integer malesuada. In in enim a arcu " +
-			"imperdiet malesuada. Sed vel lectus. Donec odio urna, tempus " +
-			"molestie, porttitor ut, iaculis quis, sem. Phasellus rhoncus.\n",
-		Events: "BackOff Back-off restarting failed container\n" +
-			"event3\nevent5\nevent6-event8-event11-event12",
-	}
-	assert.Nil(c.SendEvent(context.Background(), &ev))
-}
-
-func TestChunks(t *testing.T) {
-	assert := assert.New(t)
-
-	result := message.Chunks("short", 1024)
-	assert.Equal([]string{"short"}, result)
-
-	longString := strings.Repeat("a", 2000)
-	result = message.Chunks(longString, 1024)
-	assert.Equal(2, len(result))
-	assert.Equal(1024, len(result[0]))
-	assert.Equal(976, len(result[1]))
-
-	exactChunk := strings.Repeat("b", 1024)
-	result = message.Chunks(exactChunk, 1024)
-	assert.Equal(1, len(result))
-	assert.Equal(1024, len(result[0]))
-}
-
 func TestDiscordHTTPClientErrorsAreClassified(t *testing.T) {
 	err := &discordgo.RESTError{
 		Response: &http.Response{
@@ -142,7 +81,7 @@ func TestDiscordHTTPClientErrorsAreClassified(t *testing.T) {
 		},
 	}
 	classified := wrapDiscordRateLimit(err)
-	assert.True(t, event.IsPermanent(classified))
+	assert.True(t, transport.IsPermanent(classified))
 
 	transient := &discordgo.RESTError{
 		Response: &http.Response{
@@ -150,6 +89,7 @@ func TestDiscordHTTPClientErrorsAreClassified(t *testing.T) {
 			Status:     "502 Bad Gateway",
 		},
 	}
-	assert.False(t, event.IsPermanent(wrapDiscordRateLimit(transient)))
-	assert.False(t, event.IsPermanent(wrapDiscordRateLimit(errors.New("network"))))
+	assert.False(t, transport.IsPermanent(wrapDiscordRateLimit(transient)))
+	assert.False(t, transport.IsPermanent(
+		wrapDiscordRateLimit(errors.New("network"))))
 }

@@ -101,11 +101,9 @@ func (e *Environment) CaptureDiagnostics(ctx context.Context) error {
 		}
 	}
 	for _, endpoint := range []string{
-		"health", "readyz", "availabilityz", "incidents", "deadletters",
-		"informer", "persistence", "metrics", "kubelet", "controlplane",
+		"health", "readyz", "availabilityz", "metrics",
 	} {
-		body, status, getErr := e.Health.Get(ctx, "/"+endpoint,
-			endpoint != "health" && endpoint != "readyz" && endpoint != "availabilityz")
+		body, status, getErr := e.Health.Get(ctx, "/"+endpoint)
 		if getErr != nil {
 			body = []byte(getErr.Error())
 		}

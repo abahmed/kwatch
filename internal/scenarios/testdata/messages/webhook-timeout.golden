@@ -1,0 +1,4 @@
+10:02:15 settled
+🔴 Replica set gateway-7278a355 in payments (prod-eu-1) cannot create pods because validating webhook image-policy times out on every call. Every error mentions it. Two failing workloads all depend on it. gateway and api in search are affected as well. To check the webhook's backend and timeout, run kubectl get validatingwebhookconfiguration image-policy -o yaml
+🔴 Replica set gateway-7278a355 in payments (prod-eu-1) cannot create pods because validating webhook image-policy times out on every call.
+

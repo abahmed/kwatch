@@ -1,0 +1,11 @@
+{
+  "name": "flapping-workload",
+  "description": "One replica of a Deployment crash-loops for a few minutes, recovers, and crashes again, six times in an hour; the other replica stays healthy.",
+  "root": "deployment/shop/search",
+  "tier": "notify",
+  "maxMessages": 3,
+  "mustNotBlame": [
+    "node//n1"
+  ],
+  "tail": "2h0m0s"
+}

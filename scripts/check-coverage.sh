@@ -1,6 +1,8 @@
 #!/bin/sh
 
 set -eu
+# pipefail is not POSIX; enable it where the shell supports it.
+(set -o pipefail) 2>/dev/null && set -o pipefail
 
 if [ "$#" -ne 1 ]; then
 	printf 'usage: %s coverage-profile\n' "$0" >&2
@@ -16,20 +18,20 @@ fi
 aggregate_min=75
 core_min=70
 core_packages='github.com/abahmed/kwatch/internal/app
-github.com/abahmed/kwatch/internal/core
-github.com/abahmed/kwatch/internal/problem
-github.com/abahmed/kwatch/internal/reason
-github.com/abahmed/kwatch/internal/signal
-github.com/abahmed/kwatch/internal/signal/detect
-github.com/abahmed/kwatch/internal/knowledge
-github.com/abahmed/kwatch/internal/knowledge/kube
-github.com/abahmed/kwatch/internal/knowledge/store
-github.com/abahmed/kwatch/internal/story
-github.com/abahmed/kwatch/internal/notice
-github.com/abahmed/kwatch/internal/filter
+github.com/abahmed/kwatch/internal/pipeline
+github.com/abahmed/kwatch/internal/incident
+github.com/abahmed/kwatch/internal/rootcause
+github.com/abahmed/kwatch/internal/detection
+github.com/abahmed/kwatch/internal/detection/detectors
+github.com/abahmed/kwatch/internal/inventory
+github.com/abahmed/kwatch/internal/inventory/kube
+github.com/abahmed/kwatch/internal/storage
+github.com/abahmed/kwatch/internal/notification/compose
+github.com/abahmed/kwatch/internal/notification
+github.com/abahmed/kwatch/internal/scope
 github.com/abahmed/kwatch/internal/delivery
 github.com/abahmed/kwatch/internal/delivery/transport
-github.com/abahmed/kwatch/internal/crdwatch
+github.com/abahmed/kwatch/internal/config/crd
 github.com/abahmed/kwatch/internal/rbac'
 
 summary=$(mktemp)

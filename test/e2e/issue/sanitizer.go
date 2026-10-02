@@ -11,9 +11,21 @@ import (
 	sigsyaml "sigs.k8s.io/yaml"
 )
 
-var rejectedKinds = map[string]bool{
-	"ClusterRole": true, "ClusterRoleBinding": true, "Namespace": true,
-	"PersistentVolume": true, "Secret": true,
+// allowedKinds is the allowlist of namespaced workload fixture kinds. Every
+// other kind, including cluster-scoped and RBAC kinds, is rejected.
+var allowedKinds = map[string]bool{
+	"Pod": true, "Deployment": true, "ReplicaSet": true,
+	"StatefulSet": true, "DaemonSet": true, "Job": true, "CronJob": true,
+	"Service": true, "ConfigMap": true, "Ingress": true,
+	"HorizontalPodAutoscaler": true, "PodDisruptionBudget": true,
+	"PersistentVolumeClaim": true, "NetworkPolicy": true,
+	"ServiceAccount": true, "HTTPRoute": true,
+}
+
+// truthyUnsafeKeys are rejected only when set to true.
+var truthyUnsafeKeys = map[string]bool{
+	"hostnetwork": true, "hostpid": true, "hostipc": true,
+	"privileged": true, "automountserviceaccounttoken": true,
 }
 
 // SanitizeResources validates and rewrites declarative resources for the
@@ -74,11 +86,11 @@ func sanitizeObject(
 	if kind == "" {
 		return fmt.Errorf("resource kind is required")
 	}
-	if rejectedKinds[kind] {
-		return fmt.Errorf("resource kind %q is not allowed", kind)
-	}
-	if kind == "List" {
-		return fmt.Errorf("List resources are not allowed")
+	if !allowedKinds[kind] {
+		return fmt.Errorf(
+			"resource kind %q is not an allowed namespaced workload "+
+				"fixture kind", kind,
+		)
 	}
 	metadata, _ := object["metadata"].(map[string]interface{})
 	if metadata == nil {
@@ -95,23 +107,7 @@ func sanitizeObject(
 func sanitizeValue(value interface{}, image string) error {
 	switch typed := value.(type) {
 	case map[string]interface{}:
-		for key, child := range typed {
-			lower := strings.ToLower(key)
-			if lower == "hostpath" || lower == "hostnetwork" ||
-				lower == "hostpid" || lower == "hostipc" ||
-				lower == "privileged" || lower == "serviceaccounttoken" {
-				if truthy(child) || lower == "hostpath" {
-					return fmt.Errorf("unsafe field %q is not allowed", key)
-				}
-			}
-			if lower == "image" {
-				typed[key] = image
-				continue
-			}
-			if err := sanitizeValue(child, image); err != nil {
-				return err
-			}
-		}
+		return sanitizeMap(typed, image)
 	case []interface{}:
 		for _, child := range typed {
 			if err := sanitizeValue(child, image); err != nil {
@@ -119,11 +115,76 @@ func sanitizeValue(value interface{}, image string) error {
 			}
 		}
 	case string:
-		if err := ValidateInput(typed); err != nil {
+		return ValidateInput(typed)
+	}
+	return nil
+}
+
+func sanitizeMap(object map[string]interface{}, image string) error {
+	if err := rejectUnsafeFields(object); err != nil {
+		return err
+	}
+	_, isContainer := object["image"]
+	for key, child := range object {
+		lower := strings.ToLower(key)
+		if lower == "image" {
+			object[key] = image
+			continue
+		}
+		// The image is replaced, so issue commands must never run.
+		if isContainer && (lower == "command" || lower == "args") {
+			delete(object, key)
+			continue
+		}
+		if err := sanitizeValue(child, image); err != nil {
 			return err
 		}
 	}
 	return nil
+}
+
+func rejectUnsafeFields(object map[string]interface{}) error {
+	for key, child := range object {
+		lower := strings.ToLower(key)
+		unsafe := lower == "hostpath" ||
+			(truthyUnsafeKeys[lower] && truthy(child)) ||
+			(lower == "hostport" && nonZero(child)) ||
+			(lower == "runasuser" && isZero(child)) ||
+			(lower == "capabilities" && addsCapabilities(child)) ||
+			(lower == "projected" && projectsToken(child))
+		if unsafe {
+			return fmt.Errorf("unsafe field %q is not allowed", key)
+		}
+	}
+	return nil
+}
+
+func addsCapabilities(value interface{}) bool {
+	capabilities, _ := value.(map[string]interface{})
+	added, _ := capabilities["add"].([]interface{})
+	return len(added) > 0
+}
+
+func projectsToken(value interface{}) bool {
+	projected, _ := value.(map[string]interface{})
+	sources, _ := projected["sources"].([]interface{})
+	for _, source := range sources {
+		entry, _ := source.(map[string]interface{})
+		if _, found := entry["serviceAccountToken"]; found {
+			return true
+		}
+	}
+	return false
+}
+
+func nonZero(value interface{}) bool {
+	number, ok := value.(float64)
+	return ok && number != 0
+}
+
+func isZero(value interface{}) bool {
+	number, ok := value.(float64)
+	return ok && number == 0
 }
 
 func truthy(value interface{}) bool {

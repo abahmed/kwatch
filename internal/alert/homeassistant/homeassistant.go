@@ -8,7 +8,7 @@ import (
 	"k8s.io/klog/v2"
 
 	"github.com/abahmed/kwatch/internal/delivery/transport"
-	"github.com/abahmed/kwatch/internal/event"
+	"github.com/abahmed/kwatch/internal/notification"
 )
 
 const defaultHomeAssistantURL = "http://localhost:8123"
@@ -43,6 +43,11 @@ func NewHomeAssistant(
 
 	server := defaultHomeAssistantURL
 	if s, ok := config["url"].(string); ok && len(s) > 0 {
+		if !transport.ValidEndpoint(s) {
+			klog.InfoS("initializing homeassistant with an invalid url",
+				"setting", "url")
+			return nil
+		}
 		server = s
 	}
 
@@ -51,7 +56,9 @@ func NewHomeAssistant(
 		service = s
 	}
 
-	klog.InfoS("initializing homeassistant", "url", server, "service", service)
+	klog.InfoS("initializing homeassistant",
+		"url", transport.LogURL(server),
+		"service", service)
 
 	return &HomeAssistant{
 		sender: transport.NewSender(dependencies),
@@ -68,10 +75,12 @@ func (h *HomeAssistant) Name() string {
 	return "HomeAssistant"
 }
 
-// SendEvent sends event to the provider
-func (h *HomeAssistant) SendEvent(ctx context.Context, e *event.Event) error {
-	msg := e.FormatText(h.clusterName, "")
-	return h.SendMessage(ctx, msg)
+// SendIncident sends the incident's one-line lead as the notification message.
+// The lead starts with the status marker, the only emoji in the payload.
+func (h *HomeAssistant) SendIncident(
+	ctx context.Context, m notification.Message,
+) error {
+	return h.SendMessage(ctx, m.ShortText())
 }
 
 // SendMessage sends text message to the provider

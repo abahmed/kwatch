@@ -17,8 +17,8 @@ func TestLoggerWritesEntriesAsJSONLines(t *testing.T) {
 	logger := NewLogger(Config{Enabled: true, Output: path})
 	at := time.Date(2026, 1, 2, 3, 4, 5, 0, time.UTC)
 
-	logger.Record(Entry{Timestamp: at, Action: ActionCreate, Problem: "p1"})
-	logger.Record(Entry{Timestamp: at, Action: ActionResolved, Problem: "p1"})
+	logger.Record(Entry{Timestamp: at, Action: ActionCreate, Incident: "p1"})
+	logger.Record(Entry{Timestamp: at, Action: ActionResolved, Incident: "p1"})
 	require.NoError(t, logger.Close())
 
 	data, err := os.ReadFile(path)
@@ -28,7 +28,7 @@ func TestLoggerWritesEntriesAsJSONLines(t *testing.T) {
 	for scanner.Scan() {
 		var entry Entry
 		require.NoError(t, json.Unmarshal(scanner.Bytes(), &entry))
-		require.Equal(t, "p1", entry.Problem)
+		require.Equal(t, "p1", entry.Incident)
 		actions = append(actions, entry.Action)
 	}
 	require.Equal(t, []Action{ActionCreate, ActionResolved}, actions)
@@ -37,7 +37,7 @@ func TestLoggerWritesEntriesAsJSONLines(t *testing.T) {
 func TestDisabledLoggerDiscards(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "audit.jsonl")
 	logger := NewLogger(Config{Enabled: false, Output: path})
-	logger.Record(Entry{Problem: "p1"})
+	logger.Record(Entry{Incident: "p1"})
 	require.NoError(t, logger.Close())
 	_, err := os.Stat(path)
 	require.True(t, os.IsNotExist(err))
@@ -113,4 +113,23 @@ func TestRotatingFilePreservesSizeAcrossReopen(t *testing.T) {
 	data, err := os.ReadFile(filePath)
 	require.NoError(t, err)
 	require.Equal(t, string(write1)+string(write2), string(data))
+}
+
+func TestRotatingFileKeepsWritingWhenRotationFails(t *testing.T) {
+	filePath := filepath.Join(t.TempDir(), "audit.log")
+	// A directory at the backup path makes the rename fail.
+	require.NoError(t, os.Mkdir(filePath+".1", 0o700))
+
+	rf, err := openRotatingFile(filePath, 10)
+	require.NoError(t, err)
+	t.Cleanup(func() { _ = rf.Close() })
+
+	for i := 0; i < 3; i++ {
+		n, err := rf.Write([]byte("0123456789\n"))
+		require.NoError(t, err)
+		require.Equal(t, 11, n)
+	}
+	data, err := os.ReadFile(filePath)
+	require.NoError(t, err)
+	require.Equal(t, 33, len(data))
 }

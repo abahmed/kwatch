@@ -27,6 +27,12 @@ type ApplicationRuntime struct {
 	LogFormatter          string
 	InsecureSkipTLSVerify bool
 	CABundlePath          string
+	// KubeletInsecureSkipVerify skips kubelet serving certificate
+	// verification (kubelet.insecureSkipVerify).
+	KubeletInsecureSkipVerify bool
+	// WatchSecrets is false when Secrets must not be watched
+	// (watch.secrets).
+	WatchSecrets bool
 }
 
 // These private views keep the snapshot navigable without exposing mutable
@@ -76,12 +82,14 @@ func CompileRuntimeConfig(c *Config) RuntimeConfig {
 	return RuntimeConfig{
 		compiled: true,
 		application: ApplicationRuntime{
-			ProxyURL:              c.App.ProxyURL,
-			ClusterName:           c.App.ClusterName,
-			DisableStartupMessage: c.App.DisableStartupMessage,
-			LogFormatter:          c.App.LogFormatter,
-			InsecureSkipTLSVerify: c.App.InsecureSkipTLSVerify,
-			CABundlePath:          c.App.CABundlePath,
+			ProxyURL:                  c.App.ProxyURL,
+			ClusterName:               c.App.ClusterName,
+			DisableStartupMessage:     c.App.DisableStartupMessage,
+			LogFormatter:              c.App.LogFormatter,
+			InsecureSkipTLSVerify:     c.App.InsecureSkipTLSVerify,
+			CABundlePath:              c.App.CABundlePath,
+			KubeletInsecureSkipVerify: c.Kubelet.InsecureSkipVerify,
+			WatchSecrets:              c.Watch.Secrets,
 		},
 		lifecycle: runtimeLifecycle{
 			telemetry:   c.Telemetry,

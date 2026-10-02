@@ -13,9 +13,12 @@ import (
 	"k8s.io/klog/v2"
 
 	"github.com/abahmed/kwatch/internal/config"
-	"github.com/abahmed/kwatch/internal/constant"
 	"github.com/abahmed/kwatch/internal/version"
 )
+
+// updateMessage announces a newer release to every provider: one plain
+// sentence with the low marker and no links, like every notice.
+const updateMessage = "🟡 kwatch %s is available; this cluster runs %s."
 
 type GitHubReleaseChecker interface {
 	GetLatestRelease(
@@ -53,6 +56,9 @@ type Upgrader struct {
 	deliveryManager    Notifier
 	persistenceManager VersionTracker
 	githubClient       GitHubReleaseChecker
+	// notified remembers the last announced version for the process
+	// lifetime when there is no persistence manager.
+	notified string
 }
 
 func NewUpgrader(
@@ -61,9 +67,11 @@ func NewUpgrader(
 	persistenceManager VersionTracker,
 	httpClient *http.Client,
 ) *Upgrader {
-	if upCfg == nil {
-		upCfg = &config.Upgrader{}
+	copied := config.Upgrader{}
+	if upCfg != nil {
+		copied = *upCfg
 	}
+	upCfg = &copied
 	if os.Getenv("SKIP_UPGRADE_CHECK") == "1" ||
 		os.Getenv("SKIP_UPGRADE_CHECK") == "true" {
 		upCfg.DisableUpdateCheck = true
@@ -138,18 +146,16 @@ func (u *Upgrader) checkRelease(ctx context.Context) {
 		return
 	}
 
-	if u.persistenceManager != nil {
-		notifiedVersion := u.persistenceManager.GetNotifiedVersion(ctx)
-		if notifiedVersion == *r.TagName {
-			klog.V(4).InfoS(
-				"already notified about version, skipping",
-				"version", *r.TagName)
-			return
-		}
+	if u.lastNotified(ctx) == *r.TagName {
+		klog.V(4).InfoS(
+			"already notified about version, skipping",
+			"version", *r.TagName)
+		return
 	}
 
-	u.deliveryManager.Notify(fmt.Sprintf(constant.KwatchUpdateMsg, *r.TagName))
+	u.deliveryManager.Notify(updateNotice(*r.TagName, version.Short()))
 
+	u.notified = *r.TagName
 	if u.persistenceManager != nil {
 		if err := u.persistenceManager.SetNotifiedVersion(
 			ctx,
@@ -158,6 +164,19 @@ func (u *Upgrader) checkRelease(ctx context.Context) {
 			klog.InfoS("failed to set notified version", "error", err)
 		}
 	}
+}
+
+func (u *Upgrader) lastNotified(ctx context.Context) string {
+	if u.persistenceManager != nil {
+		return u.persistenceManager.GetNotifiedVersion(ctx)
+	}
+	return u.notified
+}
+
+// updateNotice is the message announcing release latest to a cluster
+// that runs current.
+func updateNotice(latest, current string) string {
+	return fmt.Sprintf(updateMessage, latest, current)
 }
 
 // parseSemver reads "v1.2.3" or "1.2.3" (an optional "-pre" suffix is

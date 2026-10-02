@@ -1,0 +1,11 @@
+{
+  "name": "cordoned-node-app-crash",
+  "description": "A node is cordoned; a single-replica app running on it crash-loops for its own reasons.",
+  "root": "deployment/shop/worker",
+  "tier": "notify",
+  "maxMessages": 2,
+  "mustNotBlame": [
+    "node//n1",
+    "zone//zone-a"
+  ]
+}

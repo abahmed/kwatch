@@ -1,0 +1,11 @@
+{
+  "name": "borderline-policy-and-config",
+  "description": "A ConfigMap edit and an egress NetworkPolicy land together; the pods then time out reaching their database.",
+  "root": "networkpolicy/payments/restrict-egress",
+  "tier": "notify",
+  "maxMessages": 2,
+  "mustNotBlame": [
+    "node//n1",
+    "node//n2"
+  ]
+}

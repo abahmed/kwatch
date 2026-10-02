@@ -15,15 +15,14 @@ import (
 )
 
 type Environment struct {
-	Client      kubernetes.Interface
-	Dynamic     dynamic.Interface
-	Discovery   discovery.DiscoveryInterface
-	Config      Config
-	Health      *HealthClient
-	Diagnostics *DiagnosticsClient
-	Audit       *AuditReader
-	Receiver    *ReceiverClient
-	Artifacts   *ArtifactWriter
+	Client    kubernetes.Interface
+	Dynamic   dynamic.Interface
+	Discovery discovery.DiscoveryInterface
+	Config    Config
+	Health    *HealthClient
+	Audit     *AuditReader
+	Receiver  *ReceiverClient
+	Artifacts *ArtifactWriter
 }
 
 func NewEnvironment(config Config) (*Environment, error) {
@@ -50,7 +49,6 @@ func NewEnvironment(config Config) (*Environment, error) {
 		Config:    config,
 	}
 	environment.Health = NewHealthClient(environment)
-	environment.Diagnostics = NewDiagnosticsClient(environment)
 	environment.Audit = NewAuditReader(environment)
 	environment.Receiver = NewReceiverClient(environment)
 	environment.Artifacts, err = NewArtifactWriter(config.Artifacts)
@@ -75,9 +73,12 @@ func loadRESTConfig(config Config) (*rest.Config, error) {
 	).ClientConfig()
 }
 
-func (e *Environment) Lease(namespace, name string) (string, error) {
+func (e *Environment) Lease(
+	ctx context.Context,
+	namespace, name string,
+) (string, error) {
 	lease, err := e.Client.CoordinationV1().Leases(namespace).Get(
-		context.Background(), name, metav1.GetOptions{},
+		ctx, name, metav1.GetOptions{},
 	)
 	if err != nil {
 		return "", err

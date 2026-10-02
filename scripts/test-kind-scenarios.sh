@@ -1,6 +1,8 @@
 #!/bin/sh
 
 set -eu
+# pipefail is not POSIX; enable it where the shell supports it.
+(set -o pipefail) 2>/dev/null && set -o pipefail
 
 default_root=$(CDPATH='' cd -- "$(dirname "$0")/.." && pwd)
 harness_root=${KWATCH_HARNESS_ROOT:-${KWATCH_REPO_ROOT:-$default_root}}
@@ -13,7 +15,6 @@ cd "$harness_root"
 : "${KWATCH_E2E:=true}"
 : "${KEEP_CLUSTER:=false}"
 : "${SUITE_TIMEOUT:=60m}"
-: "${KWATCH_REPLICAS:=2}"
 : "${SOURCE_REF:=main}"
 : "${BUILD_DATE:=$(date -u +%Y-%m-%dT%H:%M:%SZ)}"
 : "${KWATCH_CONFIG_FILE:=test/e2e/testdata/base-config.yaml}"
@@ -48,11 +49,50 @@ require_tool() {
 	fi
 }
 
+# json_escape prints $1 as a JSON string body: backslash, quote and control
+# characters are escaped. jq is used when present.
+json_escape() {
+	if command -v jq >/dev/null 2>&1; then
+		printf '%s' "$1" | jq -Rrs '@json | .[1:-1]'
+		return
+	fi
+	printf '%s' "$1" | awk '
+		BEGIN { ORS = "" }
+		{
+			if (NR > 1) printf "\\n"
+			gsub(/\\/, "\\\\")
+			gsub(/"/, "\\\"")
+			gsub(/\t/, "\\t")
+			gsub(/\r/, "\\r")
+			print
+		}'
+}
+
+# family_regex prints an anchored -run pattern of every covered test whose
+# coverage.yaml entry has the given family, or nothing for an unknown one.
+family_regex() {
+	awk -v want="$1" '
+		function flush() {
+			if (family == want && status == "covered" && test != "" &&
+				!(test in seen)) {
+				seen[test] = 1
+				names = names (names == "" ? "" : "|") test
+			}
+			family = ""; status = ""; test = ""
+		}
+		/^  - id:/ { flush() }
+		/^    family:/ { family = $2 }
+		/^    status:/ { status = $2 }
+		/^    test:/ { test = $2 }
+		END {
+			flush()
+			if (names != "") print "^(" names ")$"
+		}
+	' "$harness_root/test/e2e/coverage/coverage.yaml"
+}
+
 collect_diagnostics() {
 	mkdir -p "$ARTIFACTS"
-	json_escape() {
-		printf '%s' "$1" | sed 's/[\\&]/\\&\\&/g; s/"/\\\\"/g'
-	}
 	requested_ref_json=$(json_escape "$SOURCE_REF")
 	resolved_sha_json=$(json_escape "${source_sha:-unknown}")
 	cluster_name_json=$(json_escape "$KIND_CLUSTER_NAME")
@@ -165,8 +205,7 @@ capture_http_diagnostics() {
 		>"$ARTIFACTS/kwatch/port-forward.log" 2>&1 &
 	kwatch_forward=$!
 	wait_for_http http://127.0.0.1:18081/healthz || true
-	for endpoint in healthz readyz availabilityz incidents deadletters informer \
-		persistence metrics; do
+	for endpoint in healthz readyz availabilityz health metrics; do
 		curl -fsS "http://127.0.0.1:18081/$endpoint" 2>&1 | \
 			sanitize_to "$ARTIFACTS/kwatch/$endpoint" || true
 	done
@@ -235,6 +274,19 @@ cleanup() {
 	fi
 	exit "$status"
 }
+
+# Validate the selection before any image or cluster work.
+if [ -n "${SCENARIO_FAMILY:-}" ]; then
+	if [ -n "${SCENARIO_REGEX:-}" ] || [ -n "${SCENARIOS:-}" ]; then
+		echo "SCENARIO_FAMILY cannot be combined with SCENARIO_REGEX" \
+			"or SCENARIOS" >&2
+		exit 2
+	fi
+	if [ -z "$(family_regex "$SCENARIO_FAMILY")" ]; then
+		echo "unknown SCENARIO_FAMILY: $SCENARIO_FAMILY" >&2
+		exit 2
+	fi
+fi
 
 trap cleanup EXIT INT TERM
 
@@ -308,26 +360,23 @@ kubectl create namespace kwatch --dry-run=client -o yaml | kubectl apply -f -
 kubectl create secret generic kwatch \
 	--namespace kwatch \
 	--from-file=config.yaml="$KWATCH_CONFIG_FILE" \
-	--from-literal=diagnostics-token=e2e-token \
 	--from-literal=webhook-url="$receiver_url" \
 	--dry-run=client -o yaml | kubectl apply -f -
-kubectl apply -f "$candidate_root/deploy/deploy.yaml"
+# Rewrite the image before the first apply so the released image never starts.
+kwatch_manifest="$ARTIFACTS/kwatch-deploy.yaml"
+image_expr="s#^\([[:space:]]*image:\) ghcr.io/abahmed/kwatch:.*#\1 $KWATCH_IMAGE#"
+pull_expr='s#^\([[:space:]]*imagePullPolicy:\) IfNotPresent#\1 Never#'
+mkdir -p "$ARTIFACTS"
+sed -e "$image_expr" -e "$pull_expr" \
+	"$candidate_root/deploy/deploy.yaml" >"$kwatch_manifest"
+if ! grep -q "image: $KWATCH_IMAGE\$" "$kwatch_manifest" ||
+	! grep -q 'imagePullPolicy: Never$' "$kwatch_manifest"; then
+	echo "failed to substitute the candidate image into deploy.yaml" >&2
+	exit 1
+fi
+kubectl apply -f "$kwatch_manifest"
 sed "s#kwatch-e2e-receiver:e2e#$receiver_image#g" \
 	test/e2e/receiver/deployment.yaml | kubectl apply -f -
-kubectl -n kwatch set image deployment/kwatch \
-		kwatch="$KWATCH_IMAGE"
-kwatch_patch=$(cat <<'EOF'
-spec:
-  template:
-    spec:
-      containers:
-        - name: kwatch
-          imagePullPolicy: Never
-EOF
-)
-kubectl -n kwatch patch deployment kwatch --type=strategic \
-	-p "$kwatch_patch"
-kubectl -n kwatch scale deployment/kwatch --replicas="$KWATCH_REPLICAS"
 kubectl -n kwatch rollout status deployment/kwatch --timeout=10m
 kubectl -n kwatch annotate deployment/kwatch \
 		"kwatch.e2e/source-sha=$source_sha" --overwrite
@@ -366,33 +415,14 @@ if [ -n "${SCENARIOS:-}" ]; then
 	done
 	IFS=$old_ifs
 fi
+# A family comes from the family field of test/e2e/coverage/coverage.yaml,
+# so the selection cannot drift from the coverage catalog.
 if [ -n "${SCENARIO_FAMILY:-}" ]; then
-	case "$SCENARIO_FAMILY" in
-	pod) scenario_regex="TestScenarioPod" ;;
-	grouping) scenario_regex="TestScenarioGrouping" ;;
-	lifecycle)
-		scenario_regex="TestScenario(Resolution|Restart|Leader|"
-		scenario_regex="${scenario_regex}Provider|Configuration)"
-		;;
-	node) scenario_regex="TestScenarioNode" ;;
-	workload)
-		scenario_regex="TestScenario(Deployment|Job|CronJob|StatefulSet|"
-		scenario_regex="${scenario_regex}DaemonSet|PDB|ReplicaSet)"
-		;;
-	storage)
-		scenario_regex="TestScenario(PersistentVolumeClaim|ExtendedVolumeAttachment)"
-		;;
-	networking) scenario_regex="TestScenario(Service|MissingIngress)" ;;
-	security)
-		scenario_regex="TestScenario(Missing|InvalidStartup|ExtendedAdmission)"
-		;;
-	integration)
-		scenario_regex="TestScenario(ActiveProbe|Heartbeat|NodeRecovery|"
-		scenario_regex="${scenario_regex}ControlPlane|ExtendedTLS|ExtendedMetrics)"
-		;;
-	invalid-config) scenario_regex="TestScenarioInvalid" ;;
-	*) echo "unknown SCENARIO_FAMILY: $SCENARIO_FAMILY" >&2; exit 2 ;;
-	esac
+	scenario_regex=$(family_regex "$SCENARIO_FAMILY")
+	if [ -z "$scenario_regex" ]; then
+		echo "unknown SCENARIO_FAMILY: $SCENARIO_FAMILY" >&2
+		exit 2
+	fi
 fi
 
 set +e

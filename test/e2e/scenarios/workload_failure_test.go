@@ -27,6 +27,7 @@ func TestScenarioDeploymentRolloutFailure(t *testing.T) {
 			t.Fatal(err)
 		}
 		defer cleanupNamespace(t, e, namespace)
+		started := time.Now()
 		deployment, err := createHealthyDeployment(ctx, e, namespace, "rollout")
 		if err != nil {
 			t.Fatal(err)
@@ -48,12 +49,15 @@ func TestScenarioDeploymentRolloutFailure(t *testing.T) {
 			deployment.Name, "ProgressDeadlineExceeded"); err != nil {
 			t.Fatal(err)
 		}
-		if _, err := e.Audit.WaitFor(ctx, harness.AuditMatch{
-			Namespace: namespace, Resource: deployment.Name,
-			Reason: "ProgressDeadlineExceeded", Count: 1,
-		}); err != nil {
-			t.Fatal(err)
-		}
+		assertRoot(ctx, t, e, namespace, started, harness.RootExpectation{
+			Root:        "deployment/" + namespace + "/" + deployment.Name,
+			Tier:        "notify",
+			MaxMessages: 2,
+			MustNotBlame: append(
+				scheduledNodes(ctx, t, e, namespace),
+				"registry//example.invalid",
+			),
+		})
 	})
 }
 

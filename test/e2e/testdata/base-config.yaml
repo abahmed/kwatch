@@ -4,8 +4,6 @@ app:
 
 healthCheck:
   enabled: true
-  diagnostics: true
-  diagnosticsToken: "${file:/config/diagnostics-token}"
 
 auditLog:
   enabled: true

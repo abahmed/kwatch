@@ -3,11 +3,12 @@ package teamsworkflow
 import (
 	"context"
 	"encoding/json"
+	"strings"
 
 	"k8s.io/klog/v2"
 
 	"github.com/abahmed/kwatch/internal/delivery/transport"
-	"github.com/abahmed/kwatch/internal/event"
+	"github.com/abahmed/kwatch/internal/notification"
 )
 
 type adaptiveTextBlock struct {
@@ -52,6 +53,12 @@ func NewTeamsWorkflow(
 		return nil
 	}
 
+	if !transport.ValidEndpoint(webhook) {
+		klog.InfoS("initializing teamsworkflow with an invalid webhook",
+			"setting", "webhook")
+		return nil
+	}
+
 	klog.InfoS("initializing Teams Workflow with webhook url")
 
 	return &TeamsWorkflow{
@@ -66,10 +73,16 @@ func (t *TeamsWorkflow) Name() string {
 	return "Teams Workflow"
 }
 
-// SendEvent sends event to the provider
-func (t *TeamsWorkflow) SendEvent(ctx context.Context, e *event.Event) error {
-	msg := e.FormatMarkdown(t.clusterName, "", "\n\n")
-	return t.SendMessage(ctx, msg)
+// SendIncident posts the incident narrative as one card text block, with
+// the workload's last output as a Markdown code block.
+func (t *TeamsWorkflow) SendIncident(
+	ctx context.Context, m notification.Message,
+) error {
+	text := m.NoteText()
+	if len(m.Output) > 0 {
+		text += "\n\n```\n" + strings.Join(m.Output, "\n") + "\n```"
+	}
+	return t.SendMessage(ctx, notification.NeutralizeMentions(text))
 }
 
 // SendMessage sends text message to the provider

@@ -2,7 +2,13 @@
 
 ## Status
 
-Accepted
+Superseded by ADR 0010 (2026-09-28).
+
+The `monitor/*` families, controller-owned source bundles, `networkgraph` and
+`pvc` no longer exist. The part that still holds: a missing or unavailable
+source means the capability is unavailable, detection skips it, and no
+synthetic problem is created or resolved. Sources now live under
+`internal/inventory` and report availability through health.
 
 ## Decision
 

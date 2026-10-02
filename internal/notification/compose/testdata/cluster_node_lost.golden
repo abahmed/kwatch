@@ -1,0 +1,3 @@
+🔴 Node n1 (prod-eu-1) has not reported for two minutes. To check the node's conditions and recent events, run kubectl describe node n1
+
+🔴 Node n1 (prod-eu-1) has not reported for two minutes.

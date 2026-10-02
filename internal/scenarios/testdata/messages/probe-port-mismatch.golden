@@ -1,0 +1,4 @@
+10:03:15 settled
+🟠 api in shop (prod-eu-1) keeps failing its readiness probe because its probe checks a port the container does not listen on. The 10:01 release changed the template. Its dependents failed soon after it changed. To see the rollout state, run kubectl rollout status deployment/api -n shop
+🟠 api in shop (prod-eu-1) keeps failing its readiness probe because its probe checks a port the container does not listen on.
+

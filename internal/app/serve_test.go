@@ -32,7 +32,7 @@ func TestWaitShutdownReturnsFailureForComponentError(t *testing.T) {
 	defer cancel()
 	deps := shutdownDeps(ctx, cancel)
 	supervisor := newComponentSupervisor(time.Now)
-	supervisor.errCh <- errors.New("core failed")
+	supervisor.errCh <- errors.New("pipeline failed")
 
 	if got := waitShutdown(deps, supervisor); got != 1 {
 		t.Fatalf("waitShutdown returned %d, want 1", got)

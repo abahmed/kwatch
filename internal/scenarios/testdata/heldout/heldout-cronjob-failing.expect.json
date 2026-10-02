@@ -1,0 +1,10 @@
+{
+  "name": "heldout-cronjob-failing",
+  "description": "Two consecutive runs of an hourly CronJob fail: each Job's pods exit 1 and the Job reaches its backoff limit.",
+  "root": "cronjob/billing/invoice-export",
+  "tier": "notify",
+  "maxMessages": 2,
+  "mustNotBlame": [
+    "node//n1"
+  ]
+}

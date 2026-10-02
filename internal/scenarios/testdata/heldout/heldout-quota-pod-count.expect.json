@@ -1,0 +1,13 @@
+{
+  "name": "heldout-quota-pod-count",
+  "description": "A Deployment scale-up exceeds its namespace's pod-count ResourceQuota while another namespace scales out normally.",
+  "root": "resourcequota/ci/object-counts",
+  "tier": "notify",
+  "maxMessages": 2,
+  "mustNotBlame": [
+    "node//r1",
+    "node//r2",
+    "deployment/ci/runner",
+    "deployment/web/portal"
+  ]
+}

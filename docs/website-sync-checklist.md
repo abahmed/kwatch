@@ -9,10 +9,13 @@ work. Use this checklist when synchronizing code-derived behavior from Kwatch.
 - Architecture and package ownership.
 - Single replica, the Lease lock, epoch fencing, and restart behavior.
 - Adding sources, detectors, reasoning rules, providers, and filters.
-- Problem lifecycle, settling, digest, flapping, tiers, and downtime gaps.
-- State file schema, backup, reset, and rollback.
+- Incident lifecycle, settling, digest, flapping, tiers, and downtime gaps.
+- State file schema, caps and size behavior, reset (no backup), the delivery
+  outbox, and rollback.
 - Health, readiness, liveness, diagnostics, and watcher operations.
-- Provider outage recovery, queue limits, and delivery semantics.
+- Provider outage recovery, queue limits, and delivery semantics (at least
+  once through the outbox).
+- Adoption telemetry: what is sent, how often, and how to disable it.
 - RBAC, deployment security, topology, and resource sizing.
 - Release checksums, signatures, provenance, SBOMs, upgrades, and rollback.
 

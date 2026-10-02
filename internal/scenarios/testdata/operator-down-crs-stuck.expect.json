@@ -1,0 +1,11 @@
+{
+  "name": "operator-down-crs-stuck",
+  "description": "An operator crash-loops; the custom resources it manages stop being reconciled.",
+  "root": "deployment/db-operators/pg-operator",
+  "tier": "notify",
+  "maxMessages": 2,
+  "mustNotBlame": [
+    "postgrescluster.postgres.example.com/data/orders-db",
+    "postgrescluster.postgres.example.com/data/users-db"
+  ]
+}

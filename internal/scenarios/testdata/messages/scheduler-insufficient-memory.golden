@@ -1,0 +1,4 @@
+10:04:15 settled
+🟠 etl in analytics (prod-eu-1) has waited two minutes for a node because no node has enough memory. The scheduler says "0/6 nodes are available: 4 Insufficient memory, 2 node(s) had untolerated taint {node-role.kubernetes.io/control-plane…". Replicas that do not depend on it are healthy. To see the object's state and events, run kubectl describe pod etl-23a8b2cd-c -n analytics
+🟠 etl in analytics (prod-eu-1) has waited two minutes for a node because no node has enough memory.
+

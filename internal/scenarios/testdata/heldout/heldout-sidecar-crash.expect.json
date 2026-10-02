@@ -1,0 +1,11 @@
+{
+  "name": "heldout-sidecar-crash",
+  "description": "A rollout upgrades a log-shipper container that runs beside the app; it crash-loops on its old configuration while the app container keeps running.",
+  "root": "deployment/orders/api",
+  "tier": "notify",
+  "maxMessages": 2,
+  "mustNotBlame": [
+    "node//n1",
+    "node//n2"
+  ]
+}

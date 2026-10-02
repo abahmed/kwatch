@@ -10,7 +10,6 @@ import (
 	"github.com/stretchr/testify/assert"
 
 	"github.com/abahmed/kwatch/internal/delivery/transport"
-	"github.com/abahmed/kwatch/internal/event"
 )
 
 var testDeps = transport.Dependencies{
@@ -82,32 +81,6 @@ func TestSendMessageError(t *testing.T) {
 	c.webhook = s.URL
 
 	assert.NotNil(c.SendMessage(context.Background(), "test"))
-}
-
-func TestSendEvent(t *testing.T) {
-	assert := assert.New(t)
-
-	s := httptest.NewServer(
-		http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			body, _ := io.ReadAll(r.Body)
-			assert.Contains(string(body), "OOMKILLED")
-			w.WriteHeader(http.StatusAccepted)
-		}))
-
-	defer s.Close()
-
-	configMap := map[string]interface{}{
-		"webhook": "https://prod-00.westeurope.logic.azure.com/triggers/manual/run/abc",
-	}
-	c := NewTeamsWorkflow(configMap, testAppConfig(), testDeps)
-	c.webhook = s.URL
-
-	ev := event.Event{
-		PodName:   "test-pod",
-		Namespace: "default",
-		Reason:    "OOMKILLED",
-	}
-	assert.Nil(c.SendEvent(context.Background(), &ev))
 }
 
 func TestInvalidHttpRequest(t *testing.T) {

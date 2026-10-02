@@ -9,7 +9,7 @@ import (
 	"k8s.io/klog/v2"
 
 	"github.com/abahmed/kwatch/internal/delivery/transport"
-	"github.com/abahmed/kwatch/internal/event"
+	"github.com/abahmed/kwatch/internal/notification"
 )
 
 const mailgunAPIURL = "https://api.mailgun.net/v3"
@@ -22,15 +22,13 @@ type Mailgun struct {
 	from    string
 	to      []string
 	subject string
-
-	clusterName string
 }
 
 // NewMailgun returns a new Mailgun object
 
 func NewMailgun(
 	config map[string]interface{},
-	clusterName string,
+	_ string,
 	dependencies transport.Dependencies,
 ) *Mailgun {
 	apiKey, ok := config["apiKey"].(string)
@@ -72,20 +70,24 @@ func NewMailgun(
 
 	server := mailgunAPIURL
 	if u, ok := config["url"].(string); ok && len(u) > 0 {
+		if !transport.ValidEndpoint(u) {
+			klog.InfoS("initializing mailgun with an invalid url",
+				"setting", "url")
+			return nil
+		}
 		server = u
 	}
 
 	klog.InfoS("initializing mailgun", "domain", domain, "from", from)
 
 	return &Mailgun{
-		sender:      transport.NewSender(dependencies),
-		url:         strings.TrimRight(server, "/") + "/" + domain + "/messages",
-		apiKey:      apiKey,
-		domain:      domain,
-		from:        from,
-		to:          recipients,
-		subject:     subject,
-		clusterName: clusterName,
+		sender:  transport.NewSender(dependencies),
+		url:     strings.TrimRight(server, "/") + "/" + domain + "/messages",
+		apiKey:  apiKey,
+		domain:  domain,
+		from:    from,
+		to:      recipients,
+		subject: subject,
 	}
 }
 
@@ -94,19 +96,24 @@ func (s *Mailgun) Name() string {
 	return "Mailgun"
 }
 
-// SendEvent sends event to the provider
-func (s *Mailgun) SendEvent(ctx context.Context, e *event.Event) error {
-	msg := e.FormatText(s.clusterName, "")
-	return s.SendMessage(ctx, msg)
+// SendIncident mails one incident message: the Short lead is the subject
+// and the narrative Note, plus any recent output, is the body.
+func (s *Mailgun) SendIncident(
+	ctx context.Context, m notification.Message,
+) error {
+	return s.send(ctx, m.MailSubject(), m.MailBody())
 }
 
-// SendMessage sends text message to the provider
+// SendMessage mails a plain operator message under the configured subject.
 func (s *Mailgun) SendMessage(ctx context.Context, msg string) error {
 	subject := s.subject
 	if len(subject) == 0 {
 		subject = "kwatch alert"
 	}
+	return s.send(ctx, subject, msg)
+}
 
+func (s *Mailgun) send(ctx context.Context, subject, msg string) error {
 	form := url.Values{}
 	form.Set("from", s.from)
 	for _, t := range s.to {

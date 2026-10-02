@@ -1,0 +1,12 @@
+{
+  "name": "healthy-node-app-crash",
+  "description": "An app crash-loops on two healthy nodes, one of which has an unrelated image GC warning.",
+  "root": "deployment/shop/api",
+  "tier": "notify",
+  "maxMessages": 2,
+  "mustNotBlame": [
+    "node//n1",
+    "node//n2",
+    "zone//zone-a"
+  ]
+}

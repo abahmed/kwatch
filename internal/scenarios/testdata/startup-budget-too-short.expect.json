@@ -1,0 +1,11 @@
+{
+  "name": "startup-budget-too-short",
+  "description": "New replicas are killed by a startup probe that allows 30s, while ready replicas needed 75s.",
+  "root": "deployment/shop/api",
+  "tier": "notify",
+  "maxMessages": 2,
+  "mustNotBlame": [
+    "node//n1",
+    "node//n2"
+  ]
+}

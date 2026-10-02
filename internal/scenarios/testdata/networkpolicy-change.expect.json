@@ -1,0 +1,12 @@
+{
+  "name": "networkpolicy-change",
+  "description": "A NetworkPolicy restricting egress to DNS is created for the api pods; they time out connecting to their database while unselected pods stay healthy.",
+  "root": "networkpolicy/payments/restrict-egress",
+  "tier": "notify",
+  "maxMessages": 2,
+  "mustNotBlame": [
+    "node//n1",
+    "node//n2",
+    "cluster-dns//cluster-dns"
+  ]
+}

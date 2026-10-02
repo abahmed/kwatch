@@ -8,6 +8,7 @@ import (
 	"strings"
 	"time"
 
+	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -49,9 +50,23 @@ func (e *Environment) WaitForDeployment(
 			if err != nil {
 				return false, nil
 			}
-			return deployment.Status.AvailableReplicas >= deployment.Status.Replicas &&
-				deployment.Status.AvailableReplicas > 0, nil
+			return deploymentRolledOut(deployment), nil
 		})
+}
+
+// deploymentRolledOut is true only for the current generation, so a wait
+// cannot pass on the previous rollout.
+func deploymentRolledOut(deployment *appsv1.Deployment) bool {
+	status := deployment.Status
+	replicas := int32(1)
+	if deployment.Spec.Replicas != nil {
+		replicas = *deployment.Spec.Replicas
+	}
+	return status.ObservedGeneration >= deployment.Generation &&
+		status.Replicas == replicas &&
+		status.UpdatedReplicas == replicas &&
+		status.AvailableReplicas == replicas &&
+		replicas > 0
 }
 
 func (e *Environment) WaitForPod(

@@ -14,74 +14,91 @@ import (
 
 const modulePath = "github.com/abahmed/kwatch/"
 
+// forbiddenImports lists, per package directory, the internal packages it
+// must not import. Dependencies flow downward:
+// inventory -> detection -> rootcause -> incident -> notification/compose
+// -> pipeline -> app. notification and storage are leaves.
 var forbiddenImports = map[string][]string{
-	"internal/monitor": {
-		"internal/app", "internal/controller", "internal/handler",
-		"internal/delivery", "internal/alert", "internal/persistence",
-		"internal/startup", "internal/upgrader", "internal/k8s",
+	"internal/inventory": {
+		"internal/detection", "internal/rootcause", "internal/incident",
+		"internal/notification", "internal/pipeline", "internal/storage",
+		"internal/scope", "internal/delivery", "internal/alert",
+		"internal/app", "internal/health", "internal/rbac",
 	},
-	"internal/monitor/cluster": {
-		"internal/monitor/security", "internal/app", "internal/controller",
-		"internal/delivery", "internal/alert", "internal/persistence",
-		"internal/k8s",
+	"internal/detection": {
+		"internal/rootcause", "internal/incident",
+		"internal/notification", "internal/pipeline", "internal/storage",
+		"internal/scope", "internal/delivery", "internal/alert",
+		"internal/app",
 	},
-	"internal/monitor/security": {
-		"internal/monitor/network", "internal/app", "internal/controller",
-		"internal/delivery", "internal/alert", "internal/persistence",
-		"internal/k8s",
+	"internal/rootcause": {
+		"internal/incident", "internal/notification", "internal/pipeline",
+		"internal/storage", "internal/scope", "internal/delivery",
+		"internal/alert", "internal/app",
 	},
-	"internal/monitor/node": {
-		"internal/incident", "internal/delivery", "internal/persistence",
-		"internal/k8s",
+	"internal/incident": {
+		"internal/notification", "internal/pipeline", "internal/storage",
+		"internal/scope", "internal/delivery", "internal/alert",
+		"internal/app",
 	},
-	"internal/monitor/network": {
-		"internal/incident", "internal/delivery", "internal/persistence",
-		"internal/k8s",
+	"internal/notification/compose": {
+		"internal/pipeline", "internal/storage", "internal/scope",
+		"internal/delivery", "internal/alert", "internal/app",
 	},
-	"internal/monitor/pod": {
-		"internal/app", "internal/controller", "internal/delivery",
-		"internal/alert", "internal/persistence", "internal/k8s",
+	"internal/notification": {
+		"internal/notification/compose", "internal/incident",
+		"internal/rootcause", "internal/detection", "internal/inventory",
+		"internal/pipeline", "internal/storage", "internal/delivery",
+		"internal/alert", "internal/app",
 	},
-	"internal/monitor/workload": {
-		"internal/app", "internal/controller", "internal/delivery",
-		"internal/alert", "internal/persistence", "internal/k8s",
+	"internal/storage": {
+		"internal/inventory", "internal/detection", "internal/rootcause",
+		"internal/incident", "internal/notification", "internal/pipeline",
+		"internal/delivery", "internal/alert", "internal/app",
+	},
+	"internal/scope": {
+		"internal/rootcause", "internal/incident", "internal/notification",
+		"internal/pipeline", "internal/delivery", "internal/alert",
+		"internal/app",
+	},
+	"internal/pipeline": {
+		"internal/delivery", "internal/alert", "internal/app",
+		"internal/health", "internal/config",
+	},
+	// replay is test tooling above the pipeline: it drives an engine and
+	// never reaches delivery, persistence, configuration or clusters.
+	"internal/replay": {
+		"internal/app", "internal/delivery", "internal/alert",
+		"internal/health", "internal/config", "internal/storage",
+		"internal/scope", "internal/audit", "internal/kubeclient",
+		"internal/rbac", "internal/inventory/kube",
+	},
+	"internal/rbac": {
+		"internal/detection", "internal/rootcause", "internal/incident",
+		"internal/notification", "internal/pipeline", "internal/delivery",
+		"internal/alert", "internal/app",
 	},
 	"internal/alert": {
-		"internal/app", "internal/controller", "internal/handler",
-		"internal/incident", "internal/persistence", "internal/k8s",
+		"internal/app", "internal/pipeline", "internal/incident",
+		"internal/rootcause", "internal/detection",
+		"internal/notification/compose", "internal/inventory",
+		"internal/storage", "internal/scope", "internal/kubeclient",
+		"internal/config", "internal/health",
+		"internal/audit",
 	},
-	"internal/delivery": {"internal/alert/"},
-	"internal/incident": {
-		"internal/audit", "internal/delivery", "internal/persistence",
-	},
-	"internal/insight": {
-		"internal/audit", "internal/delivery", "internal/persistence",
-		"internal/k8s",
-	},
-	"internal/persistence": {
-		"internal/controller", "internal/delivery", "internal/handler",
-		"internal/insight",
-	},
-	"internal/pvc":            {"internal/persistence"},
-	"internal/kubeletmetrics": {"internal/incident"},
-	"internal/probe":          {"internal/incident"},
-	"internal/resource":       {"internal/incident"},
-	"internal/rbac":           {"internal/incident"},
-	"internal/controlplane":   {"internal/incident"},
-	"internal/statuswatch":    {"internal/incident"},
-	"internal/filter": {
-		"internal/alert", "internal/app", "internal/controller",
-		"internal/delivery", "internal/handler", "internal/incident",
-		"internal/insight", "internal/k8s", "internal/persistence",
+	"internal/delivery": {
+		"internal/app", "internal/pipeline", "internal/incident",
+		"internal/rootcause", "internal/detection",
+		"internal/notification/compose", "internal/inventory",
+		"internal/storage", "internal/scope", "internal/kubeclient",
+		"internal/alert",
 	},
 }
 
 func TestClientConstructionHasOneOwner(t *testing.T) {
 	root := repositoryRoot(t)
 	directories := []string{
-		"internal/networkgraph", "internal/storagegraph",
-		"internal/statuswatch", "internal/controlplane",
-		"internal/crdwatch",
+		"internal/inventory/kube", "internal/config/crd",
 	}
 	for _, directory := range directories {
 		files := goFiles(t, filepath.Join(root, directory))
@@ -136,7 +153,9 @@ func TestProductionCodeDoesNotUseGlobalClients(t *testing.T) {
 
 func TestDynamicInformerConstructionHasOneOwner(t *testing.T) {
 	root := repositoryRoot(t)
-	dynamicwatch := filepath.Join(root, "internal", "k8s", "dynamicwatch")
+	dynamicwatch := filepath.Join(
+		root, "internal", "inventory", "kube", "dynamicwatch",
+	)
 	for _, filename := range goFilesRecursive(t, filepath.Join(root, "internal")) {
 		if strings.HasPrefix(filename, dynamicwatch) {
 			continue
@@ -155,7 +174,7 @@ func TestDynamicInformerConstructionHasOneOwner(t *testing.T) {
 func TestRawConfigurationStaysAtApprovedBoundaries(t *testing.T) {
 	root := repositoryRoot(t)
 	approved := []string{
-		"internal/config/", "internal/app/", "internal/crdwatch/",
+		"internal/config/", "internal/app/",
 		"cmd/configcatalog/", "cmd/kwatch/",
 	}
 	for _, filename := range goFilesRecursive(t, root) {
@@ -193,10 +212,6 @@ func TestRetiredCompatibilityConstructorsAreAbsent(t *testing.T) {
 		name   string
 		needle string
 	}{
-		{
-			name:   "incident engine",
-			needle: "incident.NewEngine(",
-		},
 		{
 			name:   "clock fallback",
 			needle: "clock.From(",
@@ -253,6 +268,9 @@ func TestPackageDependenciesFollowOwnershipRules(t *testing.T) {
 	for packageDir, forbidden := range forbiddenImports {
 		files := goFiles(t, filepath.Join(root, packageDir))
 		for _, filename := range files {
+			if isNestedRuleDir(root, packageDir, filename) {
+				continue
+			}
 			file := parseFile(t, filename)
 			for _, importSpec := range file.Imports {
 				path := strings.Trim(importSpec.Path.Value, "\"")
@@ -260,7 +278,7 @@ func TestPackageDependenciesFollowOwnershipRules(t *testing.T) {
 					continue
 				}
 				for _, forbiddenPath := range forbidden {
-					if strings.Contains(path, forbiddenPath) {
+					if importsPackage(path, forbiddenPath) {
 						t.Errorf(
 							"%s imports forbidden package %s",
 							filename, path,
@@ -272,13 +290,21 @@ func TestPackageDependenciesFollowOwnershipRules(t *testing.T) {
 	}
 }
 
-func TestRetiredMonitorRuntimePackageHasNoProductionCode(t *testing.T) {
-	root := repositoryRoot(t)
-	dir := filepath.Join(root, "internal", "monitor", "runtime")
-	files := goFiles(t, dir)
-	if len(files) != 0 {
-		t.Fatalf("retired monitor runtime package contains Go files: %v", files)
+// isNestedRuleDir reports whether filename belongs to a subpackage that has
+// its own entry in forbiddenImports; that entry governs it instead. This
+// keeps the leaf notification rules from applying to notification/compose.
+func isNestedRuleDir(root, packageDir, filename string) bool {
+	for other := range forbiddenImports {
+		if other == packageDir ||
+			!strings.HasPrefix(other, packageDir+"/") {
+			continue
+		}
+		prefix := filepath.Join(root, other) + string(filepath.Separator)
+		if strings.HasPrefix(filename, prefix) {
+			return true
+		}
 	}
+	return false
 }
 
 func TestGoFilesRecursiveMissingDirectoryIsEmpty(t *testing.T) {

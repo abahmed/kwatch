@@ -1,0 +1,7 @@
+{
+  "name": "metrics-apiservice-down",
+  "description": "APIService v1beta1.metrics.k8s.io loses its backend; three HPAs cannot read CPU metrics.",
+  "root": "apiservice//v1beta1.metrics.k8s.io",
+  "tier": "notify",
+  "maxMessages": 2
+}

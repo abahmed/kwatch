@@ -1,0 +1,4 @@
+10:02:35 settled
+🟠 payments is failing in shop (prod-eu-1) after the 10:01 release of registry.example.com/payments:4. The previous image was registry.example.com/payments:3. It fails with "panic: runtime error: invalid memory address". Service payments can't serve traffic. To see the rollout state, run kubectl rollout status deployment/payments -n shop
+🟠 payments is failing in shop (prod-eu-1) after the 10:01 release of registry.example.com/payments:4.
+

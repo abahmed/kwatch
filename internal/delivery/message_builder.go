@@ -5,23 +5,24 @@ import (
 	"text/template"
 	"unicode/utf8"
 
-	"github.com/abahmed/kwatch/internal/notice"
+	"github.com/abahmed/kwatch/internal/notification"
 )
 
 // templateData is what a user's per-reason message template can use: the
-// structured message and its standard text rendering.
+// structured message and its standard narrative.
 type templateData struct {
-	Message notice.Message
+	Message notification.Message
 	Text    string
 }
 
-// storyText renders a story, applying the first user template whose
-// reason the story contains. A template that fails falls back to the
-// standard text, so a template mistake never loses a message.
-func storyText(
-	m notice.Message, templates map[string]*template.Template,
+// incidentNote is the narrative a provider sends. The first user template
+// whose reason the incident contains replaces it; a template that fails
+// keeps the standard narrative, so a template mistake never loses a
+// message.
+func incidentNote(
+	m notification.Message, templates map[string]*template.Template,
 ) string {
-	text := notice.Text(m)
+	text := m.NoteText()
 	for _, reason := range m.Route.Reasons {
 		t, ok := templates[lowerASCII(reason)]
 		if !ok {

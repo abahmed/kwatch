@@ -44,14 +44,8 @@ func SignAWSV4At(
 	amzDate := now.Format("20060102T150405Z")
 	dateStamp := now.Format("20060102")
 
-	canonicalHeaders := "content-type:" + awsContentType +
-		"\nhost:" + host + "\nx-amz-date:" + amzDate + "\n"
-	signedHeaders := "content-type;host;x-amz-date"
-	if creds.SessionToken != "" {
-		canonicalHeaders += "x-amz-security-token:" +
-			creds.SessionToken + "\n"
-		signedHeaders += ";x-amz-security-token"
-	}
+	canonicalHeaders, signedHeaders := canonicalHeaderBlock(
+		creds.SessionToken, host, amzDate)
 
 	canonicalRequest := strings.Join([]string{
 		method,
@@ -79,14 +73,36 @@ func SignAWSV4At(
 		"/" + scope + ", SignedHeaders=" + signedHeaders +
 		", Signature=" + signature
 
+	return requestHeaders(amzDate, authorization, creds.SessionToken), nil
+}
+
+// canonicalHeaderBlock returns the canonical header text and the matching
+// signed-header list. The session token is signed only when present.
+func canonicalHeaderBlock(
+	sessionToken, host, amzDate string,
+) (canonical, signed string) {
+	canonical = "content-type:" + awsContentType +
+		"\nhost:" + host + "\nx-amz-date:" + amzDate + "\n"
+	signed = "content-type;host;x-amz-date"
+	if sessionToken != "" {
+		canonical += "x-amz-security-token:" + sessionToken + "\n"
+		signed += ";x-amz-security-token"
+	}
+	return canonical, signed
+}
+
+// requestHeaders are the headers the caller adds to the signed request.
+func requestHeaders(
+	amzDate, authorization, sessionToken string,
+) map[string]string {
 	headers := map[string]string{
 		"X-Amz-Date":    amzDate,
 		"Authorization": authorization,
 	}
-	if creds.SessionToken != "" {
-		headers["X-Amz-Security-Token"] = creds.SessionToken
+	if sessionToken != "" {
+		headers["X-Amz-Security-Token"] = sessionToken
 	}
-	return headers, nil
+	return headers
 }
 
 func buildSigningKey(secret, date, region, service string) []byte {

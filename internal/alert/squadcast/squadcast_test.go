@@ -9,9 +9,8 @@ import (
 
 	"github.com/stretchr/testify/assert"
 
+	"github.com/abahmed/kwatch/internal/delivery/providertest"
 	"github.com/abahmed/kwatch/internal/delivery/transport"
-	"github.com/abahmed/kwatch/internal/event"
-	"github.com/abahmed/kwatch/internal/model"
 )
 
 var testDeps = transport.Dependencies{
@@ -41,7 +40,7 @@ func TestSquadcast(t *testing.T) {
 	assert.Equal(c.url, "https://api.squadcast.com/v2/incidents/api/test")
 }
 
-func TestSendMessage(t *testing.T) {
+func TestSquadcastSendMessageSkipsNotice(t *testing.T) {
 	assert := assert.New(t)
 
 	var gotBody string
@@ -60,10 +59,9 @@ func TestSendMessage(t *testing.T) {
 	c := NewSquadcast(configMap, testAppConfig(), testDeps)
 	c.url = s.URL
 
+	// A plain notice must not open an alert on a paging provider.
 	assert.Nil(c.SendMessage(context.Background(), "hello"))
-	assert.Contains(gotBody, `"message"`)
-	assert.Contains(gotBody, `"description":"hello"`)
-	assert.Contains(gotBody, `"status":"trigger"`)
+	assert.Empty(gotBody)
 }
 
 func TestSendMessageError(t *testing.T) {
@@ -82,35 +80,7 @@ func TestSendMessageError(t *testing.T) {
 	c := NewSquadcast(configMap, testAppConfig(), testDeps)
 	c.url = s.URL
 
-	assert.NotNil(c.SendMessage(context.Background(), "test"))
-}
-
-func TestSendEvent(t *testing.T) {
-	assert := assert.New(t)
-
-	s := httptest.NewServer(
-		http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			body, _ := io.ReadAll(r.Body)
-			assert.Contains(string(body), "OOMKILLED")
-			assert.Contains(string(body), "trigger")
-			w.WriteHeader(http.StatusOK)
-		}))
-
-	defer s.Close()
-
-	configMap := map[string]interface{}{
-		"serviceKey": "test",
-	}
-	c := NewSquadcast(configMap, testAppConfig(), testDeps)
-	c.url = s.URL
-
-	ev := event.Event{
-		PodName:   "test-pod",
-		Namespace: "default",
-		Reason:    "OOMKILLED",
-		Severity:  model.SeverityHigh,
-	}
-	assert.Nil(c.SendEvent(context.Background(), &ev))
+	assert.NotNil(c.SendIncident(context.Background(), providertest.Announce()))
 }
 
 func TestInvalidHttpRequest(t *testing.T) {
@@ -122,8 +92,8 @@ func TestInvalidHttpRequest(t *testing.T) {
 	c := NewSquadcast(configMap, testAppConfig(), testDeps)
 	c.url = "h ttp://localhost/%s"
 
-	assert.NotNil(c.SendMessage(context.Background(), "test"))
+	assert.NotNil(c.SendIncident(context.Background(), providertest.Announce()))
 
 	c.url = "http://localhost:132323/%s"
-	assert.NotNil(c.SendMessage(context.Background(), "test"))
+	assert.NotNil(c.SendIncident(context.Background(), providertest.Announce()))
 }

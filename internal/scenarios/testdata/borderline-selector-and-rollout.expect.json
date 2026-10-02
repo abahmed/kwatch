@@ -1,0 +1,10 @@
+{
+  "name": "borderline-selector-and-rollout",
+  "description": "A healthy rollout and a Service selector edit land a minute apart; the selector has a typo and the Service has no endpoints.",
+  "root": "service/shop/checkout",
+  "tier": "notify",
+  "maxMessages": 2,
+  "mustNotBlame": [
+    "node//n1"
+  ]
+}

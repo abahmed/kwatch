@@ -5,25 +5,27 @@ import (
 	"testing"
 	"time"
 
-	"github.com/abahmed/kwatch/internal/event"
+	"github.com/abahmed/kwatch/internal/delivery/transport"
 	"github.com/abahmed/kwatch/internal/ratelimit"
 )
 
-func TestRetryDelayCapsServerRetryAfter(t *testing.T) {
-	rc := normalizeRetryConfig(retryConfig{maxAttempts: 3})
+func TestServerRetryAfterCapsTheProviderWait(t *testing.T) {
 	for _, err := range []error{
 		&ratelimit.Error{RetryAfter: 24 * time.Hour},
-		&event.RetryAfterError{
+		&transport.RetryAfterError{
 			Err: errors.New("429"), RetryAfter: 2 * time.Hour,
 		},
 	} {
-		delay, server := retryDelay(err, 1, rc)
-		if !server || delay != maxServerRetryAfter {
-			t.Fatalf("delay=%s server=%v, want capped wait", delay, server)
+		wait, limited := serverRetryAfter(err)
+		if !limited || wait != maxServerRetryAfter {
+			t.Fatalf("wait=%s limited=%v, want capped wait", wait, limited)
 		}
 	}
-	delay, _ := retryDelay(&ratelimit.Error{RetryAfter: 5 * time.Second}, 1, rc)
-	if delay != 5*time.Second {
-		t.Fatalf("short Retry-After changed to %s", delay)
+	wait, _ := serverRetryAfter(&ratelimit.Error{RetryAfter: 5 * time.Second})
+	if wait != 5*time.Second {
+		t.Fatalf("short Retry-After changed to %s", wait)
+	}
+	if _, limited := serverRetryAfter(errors.New("timeout")); limited {
+		t.Fatal("a plain error is not a rate limit")
 	}
 }

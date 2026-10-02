@@ -47,6 +47,7 @@ func (m *Minutes) UnmarshalYAML(unmarshal func(interface{}) error) error {
 // integer form these fields have always had.
 func (s Seconds) MarshalJSON() ([]byte, error) { return json.Marshal(int(s)) }
 
+// MarshalJSON writes the whole number of minutes.
 func (m Minutes) MarshalJSON() ([]byte, error) { return json.Marshal(int(m)) }
 
 // Duration renders the configured value.
@@ -54,6 +55,7 @@ func (s Seconds) Duration() time.Duration {
 	return time.Duration(s) * time.Second
 }
 
+// Duration converts the minutes to a time.Duration.
 func (m Minutes) Duration() time.Duration {
 	return time.Duration(m) * time.Minute
 }

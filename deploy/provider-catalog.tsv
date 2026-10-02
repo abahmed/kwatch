@@ -1,13 +1,9 @@
 # kwatch provider catalog v1
 slack|Slack|webhook|string|false|true|url||Slack webhook URL|authentication|choice:webhook
 slack|Slack|channel|string|false|false|||Override channel||required-if:authentication=token
-slack|Slack|title|string|false|false|||Custom title
-slack|Slack|text|string|false|false|||Custom text
 slack|Slack|compact|boolean|false|false|boolean|false|Single-line mode
 slack|Slack|token|string|false|true|||Bot token (xoxb-...)|authentication|choice:token
 discord|Discord|webhook|string|true|true|url||Discord webhook URL
-discord|Discord|title|string|false|false|||Custom title
-discord|Discord|text|string|false|false|||Custom text
 email|Email|from|string|true|false|||From address
 email|Email|password|string|false|true|||SMTP password; omit for a relay without authentication
 email|Email|username|string|false|false|||SMTP username; defaults to from
@@ -21,21 +17,13 @@ telegram|Telegram|token|string|true|true|||Bot token
 telegram|Telegram|chatId|string|true|false|signed-integer||Chat ID
 teams|Teams|webhook|string|true|true|url||Webhook URL
 teams|Teams|title|string|false|false|||Custom title
-teams|Teams|text|string|false|false|||Custom text
 rocketchat|Rocket.Chat|webhook|string|true|true|url||Webhook URL
-rocketchat|Rocket.Chat|text|string|false|false|||Custom text
 mattermost|Mattermost|webhook|string|true|true|url||Webhook URL
-mattermost|Mattermost|title|string|false|false|||Custom title
-mattermost|Mattermost|text|string|false|false|||Custom text
 opsgenie|Opsgenie|apiKey|string|true|true|||API Key
-opsgenie|Opsgenie|title|string|false|false|||Custom title
-opsgenie|Opsgenie|text|string|false|false|||Custom text
 opsgenie|Opsgenie|region|string|false|false|||API region: us (default) or eu
 matrix|Matrix|homeServer|string|true|false|url||HomeServer URL
 matrix|Matrix|accessToken|string|true|true|||Access token
 matrix|Matrix|internalRoomId|string|true|false|||Room ID
-matrix|Matrix|title|string|false|false|||Custom title
-matrix|Matrix|text|string|false|false|||Custom text
 dingtalk|Dingtalk|accessToken|string|true|true|||Access token
 dingtalk|Dingtalk|secret|string|false|true|||Signing secret
 dingtalk|Dingtalk|title|string|false|false|||Custom title
@@ -45,7 +33,6 @@ feishu|Feishu|secret|string|false|true|||Signing secret when the bot has signatu
 zenduty|Zenduty|integrationKey|string|true|true|||Integration Key
 zenduty|Zenduty|alertType|string|false|false||critical|Alert type (default: critical)
 googlechat|Google Chat|webhook|string|true|true|url||Webhook URL
-googlechat|Google Chat|text|string|false|false|||Custom text
 gotify|Gotify|url|string|true|false|url||Gotify server URL
 gotify|Gotify|token|string|true|true|||App token
 gotify|Gotify|priority|integer|false|false|integer||Priority (optional)
@@ -77,17 +64,17 @@ gitea|Gitea|repo|string|true|false|||Repository name
 gitea|Gitea|url|string|false|false|url||Optional endpoint override (e.g. self-hosted Gitea)
 zapier|Zapier|url|string|true|true|url||Zap webhook URL
 zapier|Zapier|token|string|false|true|||Optional token
-zapier|Zapier|title|string|false|false|||Custom title
+zapier|Zapier|title|string|false|false|||Title (plain messages only)
 n8n|n8n|url|string|true|true|url||Workflow webhook URL
 n8n|n8n|token|string|false|true|||Optional auth header value
-n8n|n8n|title|string|false|false|||Custom title
+n8n|n8n|title|string|false|false|||Title (plain messages only)
 ifttt|IFTTT|key|string|true|true|||Webhooks key
 ifttt|IFTTT|event|string|false|false||kwatch|Event name (default: kwatch)
 teamsworkflow|Teams Workflow|webhook|string|true|true|url||Power Automate / Teams Workflow URL
 zulip|Zulip|email|string|true|false|||Bot email
 zulip|Zulip|token|string|true|true|||Bot API key
 zulip|Zulip|channel|string|true|false|||Channel/stream to post to
-zulip|Zulip|url|string|false|false|url|https://zulip.example.com/api/v1/messages|Server URL (default: https://zulip.example.com/api/v1/messages)
+zulip|Zulip|url|string|true|false|url||Server URL (required; example hosts are rejected)
 zulip|Zulip|title|string|false|false|||Custom title
 homeassistant|Home Assistant|token|string|true|true|||Long-lived access token
 homeassistant|Home Assistant|url|string|false|false|url|http://localhost:8123|Server URL (default: http://localhost:8123)
@@ -139,14 +126,14 @@ signal|Signal|url|string|false|false|url|http://localhost:8080|REST API URL (def
 sendgrid|SendGrid|apiKey|string|true|true|||API key
 sendgrid|SendGrid|from|string|true|false|||From address
 sendgrid|SendGrid|to|list|true|false|list||Recipients: a list or a comma-separated string
-sendgrid|SendGrid|subject|string|false|false|||Email subject
+sendgrid|SendGrid|subject|string|false|false|||Email subject (plain messages only)
 ses|SES|accessKeyId|string|true|true|||AWS access key ID
 ses|SES|secretAccessKey|string|true|true|||AWS secret access key
 ses|SES|sessionToken|string|false|true|||Session token for temporary AWS credentials
 ses|SES|region|string|false|false||us-east-1|AWS region (default: us-east-1)
 ses|SES|from|string|true|false|||Verified sender address
 ses|SES|to|string|true|false|||Recipients (comma-separated)
-ses|SES|subject|string|false|false|||Email subject
+ses|SES|subject|string|false|false|||Email subject (plain messages only)
 sns|SNS|accessKeyId|string|true|true|||AWS access key ID
 sns|SNS|secretAccessKey|string|true|true|||AWS secret access key
 sns|SNS|sessionToken|string|false|true|||Session token for temporary AWS credentials
@@ -167,12 +154,12 @@ mailgun|Mailgun|apiKey|string|true|true|||API key
 mailgun|Mailgun|domain|string|true|false|||Sending domain
 mailgun|Mailgun|from|string|true|false|||From address
 mailgun|Mailgun|to|string|true|false|||Recipients (comma-separated)
-mailgun|Mailgun|subject|string|false|false|||Email subject
+mailgun|Mailgun|subject|string|false|false|||Email subject (plain messages only)
 mailgun|Mailgun|url|string|false|false|url||Optional endpoint override (e.g. EU region)
 resend|Resend|apiKey|string|true|true|||API key
 resend|Resend|from|string|true|false|||From address
 resend|Resend|to|string|true|false|||Recipients (comma-separated)
-resend|Resend|subject|string|false|false|||Email subject
+resend|Resend|subject|string|false|false|||Email subject (plain messages only)
 goalert|GoAlert|url|string|true|false|url||GoAlert server URL
 goalert|GoAlert|token|string|true|true|||API token
 goalert|GoAlert|serviceId|string|true|false|||Service ID

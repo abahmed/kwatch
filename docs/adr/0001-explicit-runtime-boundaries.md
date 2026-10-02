@@ -1,7 +1,15 @@
 # ADR 0001: explicit runtime boundaries
 
-- Status: accepted
+- Status: partially superseded by ADR 0010 (2026-09-28)
 - Date: 2026-09-13
+
+Still valid: the composition-root rule (`internal/app` wires explicit
+dependencies), small typed interfaces, no service-locator registries, and the
+`internal/delivery` and `internal/alert/*` split. No longer applies:
+`internal/controller`, `internal/incident`, `internal/insight`,
+`internal/persistence` and the monitor families were removed. The current
+layering is `knowledge`, `signal`, `reason`, `problem`, `story`, `core` and
+`app` (see ADR 0010 and the AGENTS.md package map).
 
 ## Context
 

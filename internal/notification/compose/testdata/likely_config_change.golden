@@ -1,0 +1,3 @@
+🟠 orders is failing in shop, probably caused by the 14:01 change to config map orders-config. bob changed key DB_HOST from db-1 to db-2. It changed about two minutes before the failure. To check the object the pods depend on, run kubectl get configmap orders-config -n shop -o yaml
+
+🟠 orders is failing in shop, probably caused by the 14:01 change to config map orders-config.

@@ -1,0 +1,10 @@
+{
+  "name": "pvc-pending-immediate",
+  "description": "A claim of an Immediate-binding StorageClass stays Pending because provisioning fails; the pod that mounts it is unschedulable with unbound claims.",
+  "root": "persistentvolumeclaim/data/orders-db",
+  "tier": "notify",
+  "maxMessages": 2,
+  "mustNotBlame": [
+    "node//n1"
+  ]
+}

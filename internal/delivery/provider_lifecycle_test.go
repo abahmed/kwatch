@@ -10,7 +10,8 @@ import (
 	"github.com/abahmed/kwatch/internal/clock"
 	"github.com/abahmed/kwatch/internal/config"
 	"github.com/abahmed/kwatch/internal/delivery/transport"
-	"github.com/abahmed/kwatch/internal/event"
+	"github.com/abahmed/kwatch/internal/metrics"
+	"github.com/abahmed/kwatch/internal/notification"
 )
 
 type recordingProvider struct {
@@ -33,10 +34,11 @@ func (p *recordingProvider) SendMessage(
 	return nil
 }
 
-func (p *recordingProvider) SendEvent(
+func (p *recordingProvider) SendIncident(
 	_ context.Context,
-	_ *event.Event,
+	m notification.Message,
 ) error {
+	p.messages <- m.Key
 	return nil
 }
 
@@ -52,9 +54,9 @@ func (p *blockingProvider) SendMessage(ctx context.Context, _ string) error {
 	return ctx.Err()
 }
 
-func (p *blockingProvider) SendEvent(
+func (p *blockingProvider) SendIncident(
 	ctx context.Context,
-	_ *event.Event,
+	_ notification.Message,
 ) error {
 	return p.SendMessage(ctx, "event")
 }
@@ -198,6 +200,7 @@ func TestManagerRecordsJobsRemainingAfterShutdownTimeout(t *testing.T) {
 	manager := managerWithEntries([]providerEntry{{provider: provider}})
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
+	before := metrics.DefaultRegistry().DeliveryDeadLetters.Load()
 	require.NoError(t, manager.Start(ctx))
 	manager.Notify("first")
 	manager.Notify("second")
@@ -212,7 +215,8 @@ func TestManagerRecordsJobsRemainingAfterShutdownTimeout(t *testing.T) {
 	)
 	defer stopCancel()
 	require.Error(t, manager.Stop(stopCtx))
-	require.NotEmpty(t, manager.DeadLetters())
+	require.Greater(t,
+		metrics.DefaultRegistry().DeliveryDeadLetters.Load(), before)
 }
 
 func TestManagerRetainsNotificationsDuringReconfiguration(t *testing.T) {
@@ -225,19 +229,15 @@ func TestManagerRetainsNotificationsDuringReconfiguration(t *testing.T) {
 	manager := managerWithEntries([]providerEntry{{provider: first}})
 
 	manager.mu.Lock()
-	manager.started = true
-	manager.reconfiguring = true
-	manager.stopped = true
+	manager.state = stateReconfigureDraining
 	manager.mu.Unlock()
 	manager.Notify("during reconfiguration")
 	manager.mu.Lock()
-	manager.reconfiguring = false
-	manager.stopped = false
 	manager.generation = newProviderGeneration([]providerEntry{{
 		provider: second,
 		ch:       make(chan deliverJob, channelCap),
 	}})
-	manager.started = false
+	manager.state = stateIdle
 	manager.mu.Unlock()
 	require.NoError(t, manager.Start(context.Background()))
 	require.Eventually(t, func() bool {
@@ -251,7 +251,7 @@ func TestManagerRetainsNotificationsDuringReconfiguration(t *testing.T) {
 	_ = manager.Stop(context.Background())
 }
 
-func TestManagerRetainsStoriesDuringReconfiguration(t *testing.T) {
+func TestManagerRetainsIncidentsDuringReconfiguration(t *testing.T) {
 	first := &recordingProvider{
 		name: "first", messages: make(chan string, 1),
 	}
@@ -261,20 +261,16 @@ func TestManagerRetainsStoriesDuringReconfiguration(t *testing.T) {
 	manager := managerWithEntries([]providerEntry{{provider: first}})
 
 	manager.mu.Lock()
-	manager.started = true
-	manager.reconfiguring = true
-	manager.stopped = true
+	manager.state = stateReconfigureDraining
 	manager.mu.Unlock()
-	manager.NotifyStory(*storyJob("k", "default").story)
+	manager.NotifyIncident(*incidentJob("k", "default").incident)
 
 	manager.mu.Lock()
-	manager.reconfiguring = false
-	manager.stopped = false
 	manager.generation = newProviderGeneration([]providerEntry{{
 		provider: second,
 		ch:       make(chan deliverJob, channelCap),
 	}})
-	manager.started = false
+	manager.state = stateIdle
 	manager.mu.Unlock()
 	require.NoError(t, manager.Start(context.Background()))
 	require.Eventually(t, func() bool {
@@ -296,9 +292,8 @@ func TestManagerReportsReconfigurationResultOnce(t *testing.T) {
 	done := make(chan struct{})
 	close(done)
 	manager.mu.Lock()
-	manager.reconfigureDone = done
-	manager.reconfigureErr = result
-	manager.reconfigureWait = true
+	manager.reconfigure.done = done
+	manager.reconfigure.err = result
 	manager.mu.Unlock()
 
 	require.ErrorIs(t,
@@ -316,8 +311,7 @@ func TestManagerReportsSuccessfulReconfiguration(t *testing.T) {
 	done := make(chan struct{})
 	close(done)
 	manager.mu.Lock()
-	manager.reconfigureDone = done
-	manager.reconfigureWait = true
+	manager.reconfigure.done = done
 	manager.mu.Unlock()
 
 	require.NoError(t,

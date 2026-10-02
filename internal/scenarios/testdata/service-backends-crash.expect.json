@@ -1,0 +1,10 @@
+{
+  "name": "service-backends-crash",
+  "description": "A release crash-loops every pod behind a Service; the Service has no ready endpoints.",
+  "root": "deployment/shop/payments",
+  "tier": "notify",
+  "maxMessages": 2,
+  "mustNotBlame": [
+    "service/shop/payments"
+  ]
+}

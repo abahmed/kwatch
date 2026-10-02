@@ -11,7 +11,7 @@ import (
 	"k8s.io/klog/v2"
 
 	"github.com/abahmed/kwatch/internal/clock"
-	"github.com/abahmed/kwatch/internal/knowledge/kube"
+	"github.com/abahmed/kwatch/internal/inventory/kube"
 )
 
 // checkInterval is deliberately slow: grants change rarely and every check
@@ -61,17 +61,24 @@ func NewMonitor(
 }
 
 // Checks is every permission kwatch uses: the sources' access, the Lease
-// kwatch holds in its own namespace, and the KwatchConfig resources when
-// the CRD watcher is enabled.
-func Checks(namespace string, crdEnabled bool) []kube.Access {
+// named lease that kwatch holds in its own namespace, and the KwatchConfig
+// resources when the CRD watcher is enabled. Get and update on the Lease
+// are checked by name because the Role grants them only for that name;
+// create cannot be limited by name in Kubernetes RBAC.
+func Checks(namespace, lease string, crdEnabled bool) []kube.Access {
 	checks := append(kube.SourceAccess(),
 		// The cluster ID is the kube-system Namespace UID.
 		kube.Access{Resource: kube.Resource{Name: "namespaces"},
 			Verb: "get", Required: true})
-	lease := kube.Resource{Group: "coordination.k8s.io", Name: "leases"}
+	checks = append(checks, kube.InstallAccess(namespace)...)
+	leases := kube.Resource{Group: "coordination.k8s.io", Name: "leases"}
 	for _, verb := range []string{"get", "create", "update"} {
-		checks = append(checks, kube.Access{Resource: lease, Verb: verb,
-			Namespace: namespace, Required: true})
+		name := lease
+		if verb == "create" {
+			name = ""
+		}
+		checks = append(checks, kube.Access{Resource: leases, Verb: verb,
+			Namespace: namespace, Name: name, Required: true})
 	}
 	if crdEnabled {
 		config := kube.Resource{Group: "kwatch.abahmed.dev",
@@ -134,7 +141,7 @@ func (m *Monitor) allowed(
 		spec.ResourceAttributes = &authorizationv1.ResourceAttributes{
 			Namespace: access.Namespace, Group: access.Resource.Group,
 			Resource: resource, Subresource: subresource,
-			Verb: access.Verb,
+			Name: access.Name, Verb: access.Verb,
 		}
 	}
 	result, err := m.client.AuthorizationV1().SelfSubjectAccessReviews().

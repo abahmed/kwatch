@@ -3,12 +3,16 @@ package incidentio
 import (
 	"context"
 	"encoding/json"
+	"strings"
 
 	"k8s.io/klog/v2"
 
 	"github.com/abahmed/kwatch/internal/delivery/transport"
-	"github.com/abahmed/kwatch/internal/event"
+	"github.com/abahmed/kwatch/internal/notification"
 )
+
+// titleLimit bounds the alert title incident.io shows in lists.
+const titleLimit = 250
 
 type incidentioPayload struct {
 	Title            string                 `json:"title"`
@@ -38,6 +42,12 @@ func NewIncidentio(
 		klog.InfoS("initializing incidentio with empty url")
 		return nil
 	}
+
+	if !transport.ValidEndpoint(url) {
+		klog.InfoS("initializing incidentio with an invalid url",
+			"setting", "url")
+		return nil
+	}
 	apiKey, _ := config["apiKey"].(string)
 	klog.InfoS("initializing incidentio")
 	return &Incidentio{
@@ -53,30 +63,37 @@ func (i *Incidentio) Name() string {
 	return "Incident.io"
 }
 
-// UsesEventDelivery routes incidents through SendEvent, which carries the
-// action and a stable key so incident.io can resolve the alert.
-func (i *Incidentio) UsesEventDelivery() {}
-
-// SendEvent fires or resolves one incident.io alert per kwatch incident,
-// keyed by deduplication_key.
-func (i *Incidentio) SendEvent(ctx context.Context, e *event.Event) error {
+// SendIncident fires, updates or resolves one incident.io alert per kwatch
+// incident, keyed by deduplication_key.
+func (i *Incidentio) SendIncident(
+	ctx context.Context, m notification.Message,
+) error {
+	// A plain notice (startup, upgrade, test) or the startup summary is
+	// not an incident. Sending it would page for problems that already
+	// have their own alerts, so it is skipped.
+	if m.IsInformational() {
+		klog.V(4).InfoS("skipping informational message",
+			"component", "delivery", "provider", i.Name())
+		return nil
+	}
 	status := "firing"
-	if e.IsResolve() {
+	if m.Resolved() {
 		status = "resolved"
 	}
+	description := m.NoteText()
+	if len(m.Output) > 0 {
+		description += "\n\n" + strings.Join(m.Output, "\n")
+	}
 	payload := incidentioPayload{
-		Title:            e.AlertTitle(250),
-		Description:      e.AlertBody(i.clusterName),
+		Title:            notification.Truncate(m.ShortText(), titleLimit),
+		Description:      description,
 		Status:           status,
-		DeduplicationKey: e.AlertKey(),
+		DeduplicationKey: m.AlertKey(i.clusterName),
 		Metadata: map[string]interface{}{
-			"cluster":   i.clusterName,
-			"pod":       e.PodName,
-			"container": e.ContainerName,
-			"namespace": e.Namespace,
-			"node":      e.NodeName,
-			"reason":    e.Reason,
-			"severity":  string(e.Severity),
+			"cluster":    i.clusterName,
+			"namespaces": m.Route.Namespaces,
+			"reasons":    m.Route.Reasons,
+			"severity":   m.Route.Severity,
 		},
 	}
 	body, err := json.Marshal(payload)
@@ -94,7 +111,12 @@ func (i *Incidentio) SendEvent(ctx context.Context, e *event.Event) error {
 	return err
 }
 
-// SendMessage sends a plain notice as one deduplicated alert.
+// SendMessage skips plain notices: on a paging service they would open an
+// alert that nothing resolves.
 func (i *Incidentio) SendMessage(ctx context.Context, msg string) error {
-	return i.SendEvent(ctx, &event.Event{PodName: msg, Reason: "notify"})
+	return i.SendIncident(ctx, notification.Notice(msg))
 }
+
+// SkipsPlainMessages implements api.PlainMessageSkipper: plain messages
+// become notices, which SendIncident skips.
+func (i *Incidentio) SkipsPlainMessages() bool { return true }

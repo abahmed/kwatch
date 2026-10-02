@@ -9,8 +9,8 @@ import (
 	"github.com/stretchr/testify/assert"
 
 	"github.com/abahmed/kwatch/internal/clock"
+	"github.com/abahmed/kwatch/internal/delivery/providertest"
 	"github.com/abahmed/kwatch/internal/delivery/transport"
-	"github.com/abahmed/kwatch/internal/event"
 )
 
 var testDeps = transport.Dependencies{
@@ -111,46 +111,17 @@ func TestSendMessageError(t *testing.T) {
 	assert.NotNil(c.SendMessage(context.Background(), "test"))
 }
 
-func TestSendEvent(t *testing.T) {
-	assert := assert.New(t)
-
-	s := httptest.NewServer(
-		http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			w.Write([]byte(`{"isOk": true}`))
-		}))
-
-	defer s.Close()
-
-	configMap := map[string]interface{}{
-		"homeServer":     s.URL,
-		"accessToken":    "testToken",
-		"internalRoomId": "room1",
-	}
-	c := NewMatrix(configMap, testAppConfig(), testDeps)
-	assert.NotNil(c)
-
-	ev := event.Event{
-		PodName:       "test-pod",
-		ContainerName: "test-container",
-		Namespace:     "default",
-		Reason:        "OOMKILLED",
-		Logs:          "test\ntestlogs",
-		Events: "event1-event2-event3-event1-event2-event3-event1-event2-" +
-			"event3\nevent5\nevent6-event8-event11-event12",
-	}
-	assert.Nil(c.SendEvent(context.Background(), &ev))
-}
-
 func TestInvaildHttpRequest(t *testing.T) {
 	assert := assert.New(t)
 
 	configMap := map[string]interface{}{
-		"homeServer":     "h ttp://localhost",
+		"homeServer":     "https://example.test/hook",
 		"accessToken":    "testToken",
 		"internalRoomId": "room1",
 	}
 	c := NewMatrix(configMap, testAppConfig(), testDeps)
 	assert.NotNil(c)
+	c.homeServer = "h ttp://localhost"
 
 	assert.NotNil(c.SendMessage(context.Background(), "test"))
 
@@ -163,4 +134,52 @@ func TestInvaildHttpRequest(t *testing.T) {
 	assert.NotNil(c)
 
 	assert.NotNil(c.SendMessage(context.Background(), "test"))
+}
+
+func captureTxnPaths(t *testing.T) (*Matrix, *[]string) {
+	t.Helper()
+	var paths []string
+	s := httptest.NewServer(
+		http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			paths = append(paths, r.URL.EscapedPath())
+			_, _ = w.Write([]byte(`{"event_id": "$e"}`))
+		}))
+	t.Cleanup(s.Close)
+	c := NewMatrix(map[string]interface{}{
+		"homeServer":     s.URL,
+		"accessToken":    "testToken",
+		"internalRoomId": "room1",
+	}, testAppConfig(), testDeps)
+	return c, &paths
+}
+
+func TestMatrixTransactionIDStableAcrossRetries(t *testing.T) {
+	c, paths := captureTxnPaths(t)
+	ctx := context.Background()
+	m := providertest.Announce()
+	assert.NoError(t, c.SendIncident(ctx, m))
+	assert.NoError(t, c.SendIncident(ctx, m))
+	assert.NoError(t, c.SendMessage(ctx, "hello"))
+	assert.NoError(t, c.SendMessage(ctx, "hello"))
+	assert.Equal(t, (*paths)[0], (*paths)[1])
+	assert.NotEqual(t, (*paths)[2], (*paths)[3])
+	assert.NotEqual(t, (*paths)[0], (*paths)[2])
+}
+
+func TestMatrixTransactionIDDiffersPerRevision(t *testing.T) {
+	c, paths := captureTxnPaths(t)
+	ctx := context.Background()
+	for _, tc := range providertest.Lifecycle() {
+		assert.NoError(t, c.SendIncident(ctx, tc.Message))
+	}
+	assert.NotEqual(t, (*paths)[0], (*paths)[1])
+	assert.NotEqual(t, (*paths)[1], (*paths)[2])
+}
+
+func TestMatrixPlainMessagesGetUniqueTransactionIDs(t *testing.T) {
+	c, paths := captureTxnPaths(t)
+	ctx := context.Background()
+	assert.NoError(t, c.SendMessage(ctx, "digest"))
+	assert.NoError(t, c.SendMessage(ctx, "digest"))
+	assert.NotEqual(t, (*paths)[0], (*paths)[1])
 }

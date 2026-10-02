@@ -1,0 +1,10 @@
+10:04:15 settled
+🟠 ledger in billing (prod-eu-1) keeps crashing, and I couldn't find an outside cause. It fails with "java.net.ConnectException: Connection refused
+	at com.zaxxer.hikari.pool.HikariPool.java:512". To read the output of the last crash, run kubectl logs ledger-9c4982b2-a -c app -n billing --previous
+🟠 ledger in billing (prod-eu-1) keeps crashing, and I couldn't find an outside cause.
+
+10:04:15 settled
+🟠 api in orders (prod-eu-1) keeps crashing, and I couldn't find an outside cause. It fails with "java.net.ConnectException: Connection refused
+	at com.zaxxer.hikari.pool.HikariPool.java:512". To read the output of the last crash, run kubectl logs api-2d5f31d3-a -c app -n orders --previous
+🟠 api in orders (prod-eu-1) keeps crashing, and I couldn't find an outside cause.
+

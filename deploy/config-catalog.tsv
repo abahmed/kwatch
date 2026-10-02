@@ -1,5 +1,5 @@
 # kwatch config catalog v1
-resyncSeconds|integer|0|Performance|Periodic safety resync interval in seconds; zero keeps event-driven mode.|active|
+resyncSeconds|integer|300|Performance|Periodic safety resync interval in seconds; zero keeps event-driven mode.|active|
 namespaces|list|all|Scope|Comma-separated namespaces to watch; leave empty to watch every namespace.|active|
 namespaceSelector|string|empty|Scope|Kubernetes label selector used to choose namespaces.|active|
 reasons|list|all|Scope|Comma-separated event reasons to allow or exclude with a leading !.|active|
@@ -11,7 +11,6 @@ activeProbeMonitor.enabled|boolean|false|Monitors|Run explicitly configured appl
 activeProbeMonitor.intervalSeconds|integer|30|Monitors|Seconds between active probe rounds.|active|
 activeProbeMonitor.timeoutSeconds|integer|5|Monitors|Timeout for each active probe.|active|
 activeProbeMonitor.failureThreshold|integer|3|Monitors|Consecutive probe failures before alerting.|active|
-activeProbeMonitor.recoveryThreshold|integer|2|Monitors|Consecutive successes before resolving a probe incident.|active|
 activeProbeMonitor.autoServices|boolean|false|Monitors|Probe discoverable Service ports automatically; opt in to avoid unexpected traffic.|active|
 activeProbeMonitor.excludeNamespaces|list|[]|Monitors|Namespaces automatic Service probing skips, for default-deny ingress that does not admit kwatch.|active|
 activeProbeMonitor.http|json|[]|Monitors|JSON array of HTTP probe targets with optional paths, headers, and latency limits.|active|
@@ -22,8 +21,6 @@ telemetry.enabled|boolean|true|Operations|Send the weekly adoption heartbeat.|ac
 maintenance.enabled|boolean|true|Operations|Honor maintenance annotations while preserving cluster-level alerts.|active|
 maintenance.annotation|string|kwatch.io/maintenance|Operations|Annotation that marks deliberate maintenance on a resource.|active|
 maintenance.untilAnnotation|string|kwatch.io/maintenance-until|Operations|Optional annotation containing the maintenance expiry timestamp.|active|
-healthCheck.diagnostics|boolean|false|Operations|Expose diagnostic endpoints such as incidents and test-alert.|active|
-healthCheck.pprof|boolean|false|Operations|Expose Go profiling endpoints; keep disabled in production.|active|
 app.clusterName|string|empty|Operations|Cluster name shown in notifications.|active|
 app.proxyURL|string|empty|Operations|Optional proxy for outbound provider requests.|active|
 app.disableStartupMessage|boolean|false|Operations|Disable the startup notification.|active|
@@ -32,7 +29,7 @@ app.insecureSkipTLSVerify|boolean|false|Security|Skip TLS verification for outbo
 app.caBundlePath|string|empty|Security|Path to a mounted PEM bundle for outbound provider TLS.|active|
 healthCheck.enabled|boolean|true|Operations|Expose the built-in health endpoint.|active|
 healthCheck.port|integer|8060|Operations|Port for health and optional diagnostic endpoints.|active|
-crd.enabled|boolean|true|Operations|Watch KwatchConfig and supported CRD status conditions; restart kwatch when configuration changes; enabled by the interactive installer after installing the CRD.|active|
+crd.enabled|boolean|false|Operations|Watch KwatchConfig and supported CRD status conditions; restart kwatch when configuration changes; enabled by the interactive installer after installing the CRD.|active|
 auditLog.enabled|boolean|true|Operations|Write structured incident lifecycle records to the configured audit sink.|active|
 auditLog.output|string|stdout|Operations|Audit output: stdout or a supported output sink.|active|
 templates|json|{}|Operations|JSON map of optional reason-specific message templates.|active|
@@ -44,4 +41,5 @@ ignoreContainerMessages|list|legacy|Compatibility|Legacy container-message suppr
 ignoreNodeReasons|list|legacy|Compatibility|Legacy node-reason suppression field.|deprecated|silences
 ignoreNodeMessages|list|legacy|Compatibility|Legacy node-message suppression field.|deprecated|silences
 heartbeatMonitor.url|string|empty|Security|External dead-man heartbeat URL; stored only through a mounted Secret.|secret|
-healthCheck.diagnosticsToken|string|empty|Security|Bearer token for diagnostic endpoints; stored only through a mounted Secret.|secret|
+kubelet.insecureSkipVerify|boolean|false|Security|Skip kubelet serving certificate verification for direct node stats reads; only for self-signed kubelet certificates.|active|
+watch.secrets|boolean|true|Scope|Watch Secrets (values hashed, never stored); false removes Secret RBAC and Secret-based checks report that they cannot verify.|active|

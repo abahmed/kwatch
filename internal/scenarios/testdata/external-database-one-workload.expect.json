@@ -1,0 +1,11 @@
+{
+  "name": "external-database-one-workload",
+  "description": "One Deployment's two replicas crash-loop on a refused database connection; no other workload fails.",
+  "root": "deployment/reports/builder",
+  "tier": "notify",
+  "maxMessages": 2,
+  "mustNotBlame": [
+    "node//s1",
+    "node//s2"
+  ]
+}

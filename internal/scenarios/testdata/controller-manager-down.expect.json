@@ -1,0 +1,12 @@
+{
+  "name": "controller-manager-down",
+  "description": "The controller manager stops renewing its lease; three edited Deployments are never reconciled.",
+  "root": "controller-manager//kube-controller-manager",
+  "tier": "page",
+  "maxMessages": 2,
+  "mustNotBlame": [
+    "deployment/shop/cart",
+    "deployment/shop/search",
+    "deployment/billing/invoices"
+  ]
+}

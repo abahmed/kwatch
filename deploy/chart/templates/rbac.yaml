@@ -1,25 +1,66 @@
 kind: ClusterRole
 apiVersion: rbac.authorization.k8s.io/v1
 metadata:
-  name: {{ .Release.Name }}
+  name: {{ include "kwatch.clusterRoleName" . }}
+  labels:
+    {{- include "kwatch.labels" . | nindent 4 }}
 rules:
-# Least privilege: informers need list and watch; get is granted only
-# where kwatch reads single objects (kubelet proxy, log excerpts, the
-# kube-system Namespace for the cluster ID). Snapshot and Gateway API
-# grants are optional enrichment for custom resource status.
+{{- $secrets := eq (include "kwatch.watchSecrets" .) "true" }}
+{{- if and (eq (.Values.rbac.mode | default "full") "full") $secrets }}
+# rbac.mode=full: list and watch on every resource so the dynamic source
+# can watch any API kind. Secret values are hashed in the informer
+# transform and never stored. The only write is the audit's
+# SelfSubjectAccessReview.
+- apiGroups: ["*"]
+  resources: ["*"]
+  verbs: ["list", "watch"]
+# get only where kwatch reads a single object. Wildcard get is avoided: it
+# would also match subresources such as nodes/proxy, pods/exec and
+# pods/attach for every kind.
 - apiGroups: [""]
-  resources: ["events", "nodes", "pods", "persistentvolumeclaims", "persistentvolumes", "configmaps", "secrets", "serviceaccounts", "resourcequotas", "limitranges", "services"]
+  resources: ["namespaces", "nodes"]
+  verbs: ["get"]
+# Kubelet stats and metrics are read from each kubelet directly; the
+# kubelet authorizes them as get on nodes/stats and nodes/metrics.
+# nodes/proxy is not granted.
+- apiGroups: [""]
+  resources: ["nodes/stats", "nodes/metrics", "pods/log"]
+  verbs: ["get"]
+- nonResourceURLs: ["/readyz"]
+  verbs: ["get"]
+- apiGroups: ["authorization.k8s.io"]
+  resources: ["selfsubjectaccessreviews"]
+  verbs: ["create"]
+{{- else }}
+{{- if not $secrets }}
+# watch.secrets=false: no Secret access in any mode. RBAC cannot subtract
+# one resource from a wildcard, so even rbac.mode=full uses this explicit
+# list, and custom kinds outside it are not watched.
+{{- else }}
+# rbac.mode=least-privilege: only the kinds below are watched; other kinds
+# show as permission_denied in /health coverage.
+{{- end }}
+# Informers need list and watch; get is granted only where kwatch reads
+# single objects. Kept in parity with kube.SourceAccess() by
+# internal/architecture tests.
+- apiGroups: [""]
+  resources: ["events", "nodes", "pods", "persistentvolumeclaims", "persistentvolumes", "configmaps", {{ if $secrets }}"secrets", {{ end }}"serviceaccounts", "resourcequotas", "limitranges", "services"]
   verbs: ["list", "watch"]
 - apiGroups: [""]
   resources: ["namespaces"]
   verbs: ["get", "list", "watch"]
+# Restart evidence reads the node the previous kwatch Pod ran on.
 - apiGroups: [""]
-  resources: ["nodes/proxy", "pods/log"]
+  resources: ["nodes"]
+  verbs: ["get"]
+# Kubelet stats and metrics are read from each kubelet directly.
+- apiGroups: [""]
+  resources: ["nodes/stats", "nodes/metrics", "pods/log"]
   verbs: ["get"]
 - nonResourceURLs: ["/readyz"]
   verbs: ["get"]
 - apiGroups: ["apps"]
-  resources: ["deployments", "replicasets", "statefulsets", "daemonsets"]
+  resources: ["deployments", "replicasets", "statefulsets", "daemonsets", "controllerrevisions"]
   verbs: ["list", "watch"]
 - apiGroups: ["batch"]
   resources: ["jobs", "cronjobs"]
@@ -40,7 +81,7 @@ rules:
   resources: ["storageclasses", "volumeattachments"]
   verbs: ["list", "watch"]
 - apiGroups: ["admissionregistration.k8s.io"]
-  resources: ["mutatingwebhookconfigurations", "validatingwebhookconfigurations", "validatingadmissionpolicies", "validatingadmissionpolicybindings"]
+  resources: ["mutatingwebhookconfigurations", "validatingwebhookconfigurations", "validatingadmissionpolicies", "validatingadmissionpolicybindings", "mutatingadmissionpolicies", "mutatingadmissionpolicybindings"]
   verbs: ["list", "watch"]
 - apiGroups: ["certificates.k8s.io"]
   resources: ["certificatesigningrequests"]
@@ -56,7 +97,13 @@ rules:
   verbs: ["list", "watch"]
 - apiGroups: ["apiextensions.k8s.io"]
   resources: ["customresourcedefinitions"]
-  verbs: ["list"]
+  verbs: ["list", "watch"]
+- apiGroups: ["coordination.k8s.io"]
+  resources: ["leases"]
+  verbs: ["list", "watch"]
+- apiGroups: ["rbac.authorization.k8s.io"]
+  resources: ["roles", "rolebindings", "clusterroles", "clusterrolebindings"]
+  verbs: ["list", "watch"]
 - apiGroups: ["snapshot.storage.k8s.io"]
   resources: ["volumesnapshots", "volumesnapshotcontents", "volumesnapshotclasses"]
   verbs: ["list", "watch"]
@@ -69,15 +116,18 @@ rules:
 - apiGroups: ["authorization.k8s.io"]
   resources: ["selfsubjectaccessreviews"]
   verbs: ["create"]
+{{- end }}
 ---
 apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRoleBinding
 metadata:
-  name: {{ .Release.Name }}
+  name: {{ include "kwatch.clusterRoleName" . }}
+  labels:
+    {{- include "kwatch.labels" . | nindent 4 }}
 roleRef:
   apiGroup: rbac.authorization.k8s.io
   kind: ClusterRole
-  name: {{ .Release.Name }}
+  name: {{ include "kwatch.clusterRoleName" . }}
 subjects:
   - kind: ServiceAccount
     name: {{ .Release.Name }}
@@ -91,9 +141,16 @@ metadata:
   labels:
     {{- include "kwatch.labels" . | nindent 4 }}
 rules:
+# Create cannot be limited by name in RBAC (the name is not known until
+# the object exists), so it is granted on leases in this namespace only.
 - apiGroups: ["coordination.k8s.io"]
   resources: ["leases"]
-  verbs: ["create", "get", "update"]
+  verbs: ["create"]
+# Get and update only on kwatch's own Lease.
+- apiGroups: ["coordination.k8s.io"]
+  resources: ["leases"]
+  resourceNames: [{{ include "kwatch.leaseName" . | quote }}]
+  verbs: ["get", "update"]
 ---
 apiVersion: rbac.authorization.k8s.io/v1
 kind: RoleBinding
@@ -106,6 +163,36 @@ roleRef:
   apiGroup: rbac.authorization.k8s.io
   kind: Role
   name: {{ .Release.Name }}-leader-election
+subjects:
+- kind: ServiceAccount
+  name: {{ .Release.Name }}
+  namespace: {{ .Release.Namespace }}
+---
+# Restart evidence reads the previous kwatch Pod by name, so get on pods
+# is granted only in kwatch's own namespace.
+kind: Role
+apiVersion: rbac.authorization.k8s.io/v1
+metadata:
+  name: {{ .Release.Name }}-restart-evidence
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "kwatch.labels" . | nindent 4 }}
+rules:
+- apiGroups: [""]
+  resources: ["pods"]
+  verbs: ["get"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: {{ .Release.Name }}-restart-evidence
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "kwatch.labels" . | nindent 4 }}
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: {{ .Release.Name }}-restart-evidence
 subjects:
 - kind: ServiceAccount
   name: {{ .Release.Name }}

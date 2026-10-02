@@ -8,8 +8,6 @@ import (
 	"k8s.io/klog/v2"
 
 	"github.com/abahmed/kwatch/internal/clock"
-	"github.com/abahmed/kwatch/internal/config"
-	"github.com/abahmed/kwatch/internal/constant"
 	"github.com/abahmed/kwatch/internal/version"
 )
 
@@ -29,9 +27,9 @@ func RunWithClock(now func() time.Time) int {
 		klog.ErrorS(err, "failed to load config")
 		return 1
 	}
-	cfg.Runtime = config.CompileRuntimeConfig(cfg)
+	applyLogFormat(cfg.Runtime.Application().LogFormatter)
 
-	klog.InfoS(fmt.Sprintf(constant.WelcomeMsg, version.Short()))
+	klog.InfoS(fmt.Sprintf(welcomeMessage, version.Short()))
 
 	boot, err := newBootstrap(ctx, cfg, now)
 	if err != nil {
@@ -39,7 +37,7 @@ func RunWithClock(now func() time.Time) int {
 		return 1
 	}
 	deps := newServerDeps(ctx, cancel, boot)
-	if err := openHealth(deps); err != nil {
+	if err := deps.healthServer.Open(); err != nil {
 		klog.ErrorS(err, "failed to open health server")
 		return 1
 	}

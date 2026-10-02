@@ -1,0 +1,13 @@
+{
+  "name": "heldout-namespace-dns-blocked",
+  "description": "A default-deny egress NetworkPolicy blocks DNS for one namespace; its pods crash on lookups while cluster DNS and other namespaces stay healthy.",
+  "root": "networkpolicy/orders/default-deny-egress",
+  "tier": "notify",
+  "maxMessages": 2,
+  "mustNotBlame": [
+    "cluster-dns//cluster-dns",
+    "deployment/kube-system/coredns",
+    "node//n1",
+    "node//n2"
+  ]
+}

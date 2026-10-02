@@ -1,0 +1,11 @@
+{
+  "name": "budget-blocks-drain",
+  "description": "A node drain stalls: a PodDisruptionBudget with minAvailable 1 protects a single-replica Deployment on it.",
+  "root": "poddisruptionbudget/shop/ledger",
+  "tier": "notify",
+  "maxMessages": 2,
+  "mustNotBlame": [
+    "node//n2",
+    "deployment/shop/ledger"
+  ]
+}

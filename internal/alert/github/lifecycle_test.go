@@ -2,42 +2,112 @@ package github
 
 import (
 	"context"
-	"io"
 	"net/http"
-	"net/http/httptest"
+	"strings"
 	"testing"
 
-	"github.com/stretchr/testify/assert"
-
-	"github.com/abahmed/kwatch/internal/event"
+	"github.com/abahmed/kwatch/internal/delivery/providertest"
 )
 
-func TestGithubFilesOneIssuePerIncident(t *testing.T) {
-	var requests []string
-	s := httptest.NewServer(http.HandlerFunc(
-		func(w http.ResponseWriter, r *http.Request) {
-			body, _ := io.ReadAll(r.Body)
-			requests = append(requests,
-				r.Method+" "+r.URL.Path+" "+string(body))
-			if r.Method == http.MethodPost && r.URL.Path == "/repos/o/r/issues" {
-				_, _ = w.Write([]byte(`{"number":12}`))
-			}
-		}))
-	defer s.Close()
-	c := NewGithub(map[string]interface{}{
-		"token": "t", "owner": "o", "repo": "r", "url": s.URL,
-	}, testAppConfig(), testDeps)
-	ctx := context.Background()
-	for _, action := range []string{"create", "update", "resolved"} {
-		assert.NoError(t, c.SendEvent(ctx, &event.Event{
-			DedupKey: "abc", Action: action, Narrative: "api " + action,
-		}))
+func newRecordedGithub(t *testing.T) (*Github, *providertest.Recorder) {
+	t.Helper()
+	rec := providertest.NewRecorder(t)
+	rec.Reply = func(w http.ResponseWriter, _ providertest.Request) {
+		w.WriteHeader(http.StatusCreated)
+		_, _ = w.Write([]byte(`{"number":42}`))
 	}
-	if assert.Len(t, requests, 4) {
-		assert.Contains(t, requests[0], "POST /repos/o/r/issues ")
-		assert.Contains(t, requests[1], "POST /repos/o/r/issues/12/comments")
-		assert.Contains(t, requests[2], "POST /repos/o/r/issues/12/comments")
-		assert.Contains(t, requests[3],
-			`PATCH /repos/o/r/issues/12 {"state":"closed"}`)
+	g := NewGithub(map[string]interface{}{
+		"token": "secret", "owner": "kwatch", "repo": "kwatch",
+		"url": rec.URL(),
+	}, "dev", rec.Dependencies())
+	if g == nil {
+		t.Fatal("github was not constructed")
+	}
+	return g, rec
+}
+
+func TestGithubIncidentLifecycleFollowsOneIssue(t *testing.T) {
+	g, rec := newRecordedGithub(t)
+	issues := "/repos/kwatch/kwatch/issues"
+	want := map[string][]string{
+		"announce": {"POST " + issues},
+		"update":   {"POST " + issues + "/42/comments"},
+		"resolve": {
+			"POST " + issues + "/42/comments", "PATCH " + issues + "/42",
+		},
+	}
+	for _, tc := range providertest.Lifecycle() {
+		rec.Reset()
+		if err := g.SendIncident(context.Background(), tc.Message); err != nil {
+			t.Fatalf("%s: %v", tc.Name, err)
+		}
+		requests := rec.Requests()
+		if len(requests) != len(want[tc.Name]) {
+			t.Fatalf("%s sent %d requests", tc.Name, len(requests))
+		}
+		for i, req := range requests {
+			if got := req.Method + " " + req.Path; got != want[tc.Name][i] {
+				t.Fatalf("%s request %d = %s", tc.Name, i, got)
+			}
+			if req.Header.Get("Authorization") != "Bearer secret" {
+				t.Fatalf("%s lacks the token", tc.Name)
+			}
+		}
+		first := requests[0].JSON(t)
+		if tc.Name == "announce" {
+			if first["title"] != tc.Message.Short {
+				t.Fatalf("title = %v", first["title"])
+			}
+			providertest.AssertOneLeadingEmoji(t, first["title"].(string))
+		}
+		body, _ := first["body"].(string)
+		providertest.AssertOneLeadingEmoji(t, body)
+		if !strings.Contains(body, tc.Message.Note) {
+			t.Fatalf("%s body = %q", tc.Name, body)
+		}
+	}
+	if last := rec.Last(t).JSON(t); last["state"] != "closed" {
+		t.Fatalf("resolve did not close: %v", last)
+	}
+	if len(g.SnapshotThreads()) != 0 {
+		t.Fatal("closed issue is still tracked")
+	}
+}
+
+func TestGithubRestoredIssueReceivesComments(t *testing.T) {
+	g, rec := newRecordedGithub(t)
+	g.RestoreThreads(map[string]string{
+		providertest.Announce().ThreadKey(): "7",
+	})
+	err := g.SendIncident(context.Background(), providertest.Update())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := rec.Last(t).Path; got != "/repos/kwatch/kwatch/issues/7/comments" {
+		t.Fatalf("comment went to %s", got)
+	}
+}
+
+func TestGithubNoticeOpensNoIssue(t *testing.T) {
+	g, rec := newRecordedGithub(t)
+	if err := g.SendMessage(context.Background(), "started"); err != nil {
+		t.Fatal(err)
+	}
+	if n := len(rec.Requests()); n != 0 {
+		t.Fatalf("notice sent %d requests", n)
+	}
+}
+
+func TestGithubCreateFailureIsReturned(t *testing.T) {
+	g, rec := newRecordedGithub(t)
+	rec.Reply = func(w http.ResponseWriter, _ providertest.Request) {
+		w.WriteHeader(http.StatusUnauthorized)
+	}
+	err := g.SendIncident(context.Background(), providertest.Announce())
+	if err == nil {
+		t.Fatal("unauthorized create must fail")
+	}
+	if len(g.SnapshotThreads()) != 0 {
+		t.Fatal("failed create must not be tracked")
 	}
 }

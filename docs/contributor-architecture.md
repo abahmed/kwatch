@@ -1,159 +1,166 @@
 # Contributor architecture guide
 
-This is a short source-tree guide for contributors. Published tutorials,
-reference pages, and operational runbooks live at
-[kwatch.dev/docs](https://kwatch.dev/docs).
+This is the source-tree guide. Read [How kwatch works](./architecture.md)
+first for behavior. Published tutorials and runbooks live at
+[kwatch.dev/docs](https://kwatch.dev/docs). The dependency rules below are
+enforced by `scripts/check-architecture.sh` (`make architecture-check`).
 
-## Find the right package
+## Packages
 
-Start with the package that owns the behavior you are changing:
+Each line matches the package's `doc.go`.
 
-| Task | Package |
+| Package | What it does |
 | --- | --- |
-| Watching a Kubernetes kind, translating it to facts | `internal/knowledge/kube` |
-| Entities, relations, attributes, change history | `internal/knowledge` |
-| Deciding a state is abnormal | `internal/signal/detect` |
-| Explaining a signal's root cause | `internal/reason` |
-| Settling, updates, resolve hold, flapping, tiers | `internal/problem` |
-| The message people read | `internal/story` and `internal/notice` |
-| Scope, silences, maintenance holds | `internal/filter` |
-| The engine loop, downtime reconciliation, audit entries | `internal/core` |
-| Retry, fallback, pacing, or HTTP transport | `internal/delivery` |
-| Provider payload mapping | `internal/alert/<provider>` |
-| Persisted state, epoch fencing, retention | `internal/knowledge/store` |
-| Permission audit | `internal/rbac` |
-| Composition, Lease lock, readiness, supervision | `internal/app` |
+| `cmd/kwatch` | Thin entrypoint: flags, subcommands, calls `app`. |
+| `internal/app` | Assembles kwatch and owns its process lifecycle: clients, Lease, supervision, readiness, shutdown. |
+| `internal/inventory` | The in-memory model of the cluster: entities, relations, attributes and recent changes. Knows nothing about Kubernetes. |
+| `internal/inventory/kube` | Turns Kubernetes objects into observations: one schema per kind, discovery, watch modes, kubelet stats, probes, log reads. |
+| `internal/inventory/kube/dynamicwatch` | Shared dynamic informer mechanics for discovered kinds. |
+| `internal/detection` | Finds abnormal conditions (findings with health and mode); the tracker reports raised, changed and cleared. |
+| `internal/detection/detectors` | The built-in detectors. Read entity attributes, return findings. |
+| `internal/detection/reasons` | Stable reason codes. A leaf, shared by every layer. |
+| `internal/rootcause` | What the root-cause engine shares with the layers above it: the `Cause` record, confidence levels, scheduler-message helpers. |
+| `internal/rootcause/explain` | The engine: propagation table, candidate walk, scorers, set-cover solver, incremental cache. |
+| `internal/incident` | Groups findings that share a cause into an incident and decides when people hear about it: announce, update, resolve. |
+| `internal/notification` | The provider-neutral `Message`, severities and rendering helpers. A leaf. |
+| `internal/notification/compose` | Writes the note for an incident decision as a short narrative. |
+| `internal/scope` | Namespaces, reasons, silences and maintenance holds: which findings are in scope. |
+| `internal/pipeline` | The decision loop, bounded investigation and storage workers, downtime reconciliation, audit entries. |
+| `internal/storage` | The bbolt state file: one bucket per data class, epoch fencing, retention, reset. |
+| `internal/delivery` | Routing, retries, pacing, fallback and provider dispatch. |
+| `internal/delivery/transport` | The shared outbound HTTP boundary providers use. |
+| `internal/delivery/api` | The small contracts shared by delivery and the provider catalog. |
+| `internal/delivery/providertest` | Provider test fixtures. Never imported by production code. |
+| `internal/delivery/signing` | AWS request signing for providers that talk to AWS. |
+| `internal/alert/*` | One adapter per provider: builds the payload, sends it through transport. |
+| `internal/alert/catalog` | Statically links provider adapters and constructs them. |
+| `internal/provider/catalog` | Provider identities and metadata. |
+| `internal/health` | `/healthz`, `/readyz`, `/availabilityz`, `/health` and `/metrics`. |
+| `internal/metrics` | The process-wide Prometheus registry; labels are always bounded. |
+| `internal/config` | Loads, normalizes and validates configuration. |
+| `internal/config/crd` | Watches `KwatchConfig` resources, including late installs. |
+| `internal/rbac` | Audits the permissions kwatch uses and reports what is missing. |
+| `internal/kubeclient` | Kubernetes client construction and informer helpers. Only `app` constructs clients. |
+| `internal/redact` | Removes secrets from text before kwatch keeps or sends it. A leaf. |
+| `internal/format`, `internal/ratelimit`, `internal/clock` | Pure text helpers, the rate-limit error type, the time dependency. |
+| `internal/audit` | One JSON line per incident decision, for offline scoring. |
+| `internal/replay` | Records and replays observations on a simulated clock. Test tooling only. |
+| `internal/scenarios` | Labelled scenario library and the scorecard gate. Tests only. |
+| `internal/scorecard` | Measures notification quality against the production goals. |
+| `internal/feature`, `internal/heartbeat`, `internal/telemetry`, `internal/upgrader`, `internal/version` | Feature identifiers, the external heartbeat ping, adoption telemetry, release check, build version. |
+| `internal/architecture` | Tests that enforce repository layout. No production code. |
 
-After YAML and CRD overlays are applied, `config.CompileRuntimeConfig` creates
-the immutable derived snapshot used by composition. Keep user-facing fields on
-`config.Config`; put normalized namespaces, provider names, compiled provider
-routes/retry policy, suppression rules, and effective intervals in the
-runtime snapshot. Application composition passes that snapshot to
-`delivery.Manager.InitRuntime`.
+## Import direction
 
-The normal flow is:
+The flow is the dependency direction. Lower layers never import upper ones.
 
 ```text
-sources → facts → knowledge model → detectors → signals → problems
-  → decisions → scope → stories → delivery transport → provider adapter
+inventory → detection → rootcause → incident → notification/compose
+          → pipeline → app
 ```
 
-The arrow is also a dependency rule. A source does not call a provider, a
-detector does not read Kubernetes, a provider does not read the model, and the
-state file does not make detection or reasoning decisions. Read
-[How kwatch thinks](./architecture.md) for the behavior of each stage and
-[ADR 0010](./adr/0010-problem-centric-core.md) for the design record.
+The script enforces these rules:
 
-## Read the application flow
+- `inventory` imports none of detection, rootcause, incident, notification,
+  pipeline, storage, scope, delivery, alert, app, health or rbac. Only
+  `inventory/kube` may import Kubernetes libraries.
+- `detection` does not import rootcause, incident, notification, pipeline,
+  storage, scope, delivery, alert or app. `rootcause` does not import
+  incident or anything above it. `incident` does not import notification,
+  pipeline, storage, scope, delivery, alert or app. `notification/compose`
+  does not import pipeline, storage, scope, delivery, alert or app.
+- `storage` imports no domain package. `scope` imports nothing at or above
+  rootcause, and `rbac` nothing at or above detection.
+- `pipeline` does not import delivery, alert, app, health or config. Only
+  `app` (and `replay`, which is test tooling) imports `pipeline`.
+- Leaf packages (`notification`, `format`, `redact`, `ratelimit`,
+  `detection/reasons`) import no upper layer.
+- `alert/*` and `delivery` import no domain package, no `kube`, no
+  Kubernetes client library and not `app`. Providers never use `net/http`
+  directly; they call `delivery/transport`, which decides status
+  classification, timeout and retry.
+- Clients are built in `internal/kubeclient` and `internal/app` only. Dynamic
+  informers are built only in `dynamicwatch`. `config.Config` is read only
+  by `config`, `app` and commands. Production code does not call `time.Now`
+  (use an injected clock), `http.DefaultClient`, `net.DefaultResolver`,
+  `context.WithValue` or dynamic Prometheus label values.
+- Retired packages (`controller`, `insight`, `persistence`, `handler`,
+  `monitor`, `model`, `message` and others listed in the script) must not
+  return.
 
-Start at `internal/app/run.go`. The composition is split by responsibility:
+## Where to put new code
 
-- `bootstrap.go` and `serve.go`: clients, health, providers, and the serve loop.
-- `leader_election.go` and `election_lock.go`: the Lease lock.
-- `active.go`: the leader session, which opens and claims the state file, runs
-  startup bookkeeping, and supervises components.
-- `core.go`: the model, sources, detector registry, reasoner, and engine.
-- `supervisor.go`, `components.go`, `readiness.go`: component lifecycle.
+| You want to | Put it in | Guide |
+| --- | --- | --- |
+| Detect a new abnormal state | `detection/detectors`, reason in `detection/reasons`, mode in `detection/health.go`, registered in `app/pipeline.go` | [detector](./contributing-detector.md) |
+| Teach root cause a new way failure spreads | A row in `rootcause/explain/table_rows*.go` | [propagation rule](./contributing-propagation-rule.md) |
+| Watch a new kind or add a source | `inventory/kube` (schema, registration, watch mode) | [source](./contributing-source.md) |
+| Say a new fact in the message | A sentence writer in `notification/compose` | [message fact](./contributing-message-fact.md) |
+| Prove a behavior end to end | A labelled scenario in `internal/scenarios` | [scenario](./contributing-scenario.md) |
+| Add a provider | `internal/alert/<provider>`, catalog metadata, transport tests | below |
+| Change the state file | `internal/storage`, bump `SchemaVersion` | below |
 
-Inside the core, follow one signal end to end: a schema in
-`knowledge/kube` produces facts, `core/engine.go` applies them and evaluates
-detectors, `problem/manager.go` attaches the signal to its root, `Tick`
-decides, and `story/writer.go` writes the message that reaches the sink.
+Keep clients, queues and cache sync in the source. Detectors and rules see
+only the model and an injected clock. Do not add a method to a universal
+interface; add a small function or table row instead.
 
-## Add a detector or source
+## Providers
 
-1. For a new Kubernetes kind, add its entity kind and `Schema` in
-   `knowledge/kube` and register it with the informers. The RBAC audit derives
-   from those registrations through `kube.SourceAccess()`.
-2. Put the abnormal-state logic in a small `signal/detect` detector that
-   reads attributes and relations and returns signals with stable reason names
-   from `internal/constant`. Register it in `newDetectorRegistry`.
-3. If the kind can be a cause, add or extend a rule in `internal/reason`, and
-   register it in `newReasoner`. A rule must require the candidate to be
-   unhealthy or changed.
-4. Keep clients, queues, and cache sync in the source. Detectors and rules see
-   only the model and an injected clock.
-5. Add deterministic tests for detection, explanation, and the problem
-   lifecycle, then update the coverage reference and the website documentation.
+An adapter validates settings, renders its payload and calls
+`delivery/transport` with the application-owned client. It does not classify
+HTTP status, retry, rate-limit, build Kubernetes clients or log full
+payloads. Use semantic files (`config.go`, `payload.go`, `incident.go`). Add
+payload, error, cancellation, redaction and size tests, then update the
+provider catalog and the website reference.
 
-Do not add a method to a universal interface. Health lifecycle is
-application-owned: composition calls `HealthServer.Open`, the supervisor runs
-`HealthServer.Serve`, and shutdown calls `Stop`.
+## Persistence
 
-Health responses expose bounded component states and reason codes. Detailed
-errors belong in redacted logs, not public diagnostics. A source that cannot
-observe its resource is an unavailable capability: its detectors produce no
-signals and never create a synthetic one.
-
-## Add a provider
-
-Provider adapters validate settings, render payloads, and call the shared
-`delivery/transport` boundary. HTTP adapters use the application-owned client
-through that package. They do not classify HTTP status,
-retry, rate-limit, construct Kubernetes clients, or log complete payloads.
-
-Keep a large provider readable with semantic files such as `config.go`,
-`payload.go`, `incident.go`, and `verify.go`. Do not create numbered or
-history-based files. Add payload, error, cancellation, redaction, and size
-tests, then update the generated provider catalog and website reference.
-
-## Change persistence
-
-State is one bbolt file owned by `internal/knowledge/store`. Use the typed
-collections and keep persisted records flat. Any format change requires a bump
-of `store.SchemaVersion`, a migration step or documented reset path,
-backup/recovery guidance, an old-format fixture, a round-trip test, and a
-release note.
+Keep persisted records flat. A format change bumps `storage.SchemaVersion`.
+Because an unreadable or mismatched file is deleted and recreated, add a
+test that an old-version file is reset and reported, and a release note.
 
 ## Test and verify
 
-Name tests after behavior and split large test files by responsibility, for
-example `queue_retry_test.go` or `downtime_test.go`. Shared fixtures belong
-in `fixtures_test.go` or `test_helpers_test.go`.
-
-Use fake clocks and fake clients instead of sleeps. Before handoff run:
+Name tests after behavior. Split large test files by responsibility
+(`queue_retry_test.go`), with shared setup in `fixtures_test.go`. Use fake
+clocks and fake clients, not sleeps. Before handoff run:
 
 ```sh
 make verify
-go test -race -p 1 ./...
 ```
 
-For small edits, use the cheaper package-scoped command and expand the package
-list only when an interface changes:
+`make verify` runs the test suite once, with `-race` and coverage, and the
+alert-quality gates run inside that run. `make ci` is what the required `CI`
+workflow runs: `make verify` plus actionlint, ShellCheck and a `go mod tidy`
+drift check. Locally, a check whose tool is not installed is skipped with a
+notice; in CI it fails. `make alert-quality` prints the alert-quality report
+without failing, and `make alert-quality-gate` runs only those gates.
+Real-cluster suites run in the `E2E` workflow: nightly, on demand, or on a
+pull request labelled `e2e`.
+
+During work use the cheaper package-scoped gates:
 
 ```sh
 make verify-fast PKGS="./internal/foo"
 make verify-focused PKGS="./internal/foo ./internal/bar"
 ```
 
-## Real-cluster regression scenarios
+Runnable examples that show the core packages in a few lines:
+`internal/rootcause/explain/example_test.go` and
+`internal/notification/compose/example_test.go`.
 
-The semantic Kubernetes suite lives under `test/e2e/`. It uses Kind, the real
-Kwatch image, source manifests applied with `kubectl`, and Go tests built on
-`sigs.k8s.io/e2e-framework`. It does not use Helm or `kwatch.sh`; those
-installation paths have separate validation.
+## Real-cluster scenarios
 
-Issue reproductions are converted into permanent sanitized scenarios before
-they enter the release suite. The semantic workflow runs the committed
-scenario code in Kind; it does not execute issue-provided commands or depend
-on an issue-reproduction workflow.
-
-Use `test/e2e/README.md` for the complete scenario contribution workflow.
-Every new scenario must update `test/e2e/coverage/coverage.yaml`, use bounded
-watch-based waits, assert forbidden behavior as well as expected behavior, and
-clean up its namespace.
-
-`verify-fast` skips repository-wide checks. Run `verify-focused` once after a
-workstream, then reserve the full gate and complete race suite for handoff.
-
-If a change affects a public setting, metric, provider, persistence format,
-RBAC rule, or extension contract, include the documentation and migration
-review in the same change.
+`test/e2e/` runs the real image in Kind from source manifests. See
+`test/e2e/README.md`. Every new scenario updates
+`test/e2e/coverage/coverage.yaml`, uses bounded watch-based waits, asserts
+forbidden behavior as well as expected behavior, and cleans up its
+namespace. Issue reproductions are sanitized before they join the suite.
 
 ## Operating model
 
-The deployment runs one replica with the `Recreate` strategy and a PVC at
-`/var/lib/kwatch`. The Lease is only a lock that prevents two processes from
-sharing the volume, and its transition count fences the state file. There is
-no second replica and no ConfigMap state. The application supervisor gates
-the active components on the Lease and stops them when it is lost.
+One replica, `Recreate` strategy, a PVC at `/var/lib/kwatch`. The Lease is a
+lock, not a failover mechanism; the state file is fenced by its own epoch
+counter, claimed only by the Lease holder.
+The supervisor starts components when the Lease is held and stops them when
+it is lost. See [production operations](./production-operations.md).

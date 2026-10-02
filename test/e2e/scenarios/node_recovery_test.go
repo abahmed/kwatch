@@ -3,7 +3,6 @@
 package scenarios
 
 import (
-	"bytes"
 	"context"
 	"fmt"
 	"os"
@@ -79,6 +78,7 @@ func TestScenarioNodeRecovery(t *testing.T) {
 		if err := e.Receiver.Clear(ctx); err != nil {
 			t.Fatal(err)
 		}
+		started := time.Now()
 		if err := stopKindNode(ctx, node.Name); err != nil {
 			t.Fatal(err)
 		}
@@ -90,27 +90,13 @@ func TestScenarioNodeRecovery(t *testing.T) {
 		if err := waitForNodeReady(failureCtx, e, node.Name, false); err != nil {
 			t.Fatal(err)
 		}
-		if _, err := e.Audit.WaitFor(failureCtx, harness.AuditMatch{
-			Resource: node.Name, Reason: "NodeNotReady", Count: 1,
-		}); err != nil {
-			t.Fatal(err)
-		}
-		requests, err := e.Receiver.WaitForCount(failureCtx, 1)
-		if err != nil {
-			t.Fatal(err)
-		}
-		if len(requests) != 1 ||
-			!strings.Contains(string(requests[0].Body), node.Name) {
-			t.Fatalf("shared-node failure was not grouped: %#v", requests)
-		}
-		if _, err := e.Audit.WaitFor(failureCtx, harness.AuditMatch{
-			Resource: node.Name, Reason: "NodeLeaseStale", Count: 1,
-		}); err != nil {
-			t.Fatal(err)
-		}
-		if err := waitForKubeletDegradation(failureCtx, e); err != nil {
-			t.Fatal(err)
-		}
+		assertRoot(failureCtx, t, e, namespace, started,
+			harness.RootExpectation{
+				Root:         "node//" + node.Name,
+				Tier:         "page",
+				MaxMessages:  2,
+				MustNotBlame: []string{"pod/" + namespace + "/node-impact-*"},
+			})
 		if err := startKindNode(ctx, node.Name); err != nil {
 			t.Fatal(err)
 		}
@@ -121,22 +107,6 @@ func TestScenarioNodeRecovery(t *testing.T) {
 			t.Fatal(err)
 		}
 	})
-}
-
-func waitForKubeletDegradation(
-	ctx context.Context,
-	e *harness.Environment,
-) error {
-	return wait.PollUntilContextTimeout(ctx, 500*time.Millisecond,
-		2*time.Minute, true, func(ctx context.Context) (bool, error) {
-			body, status, err := e.Health.Get(ctx, "/kubelet", true)
-			if err != nil || status < 200 || status >= 300 {
-				return false, nil
-			}
-			degraded := bytes.Contains(body, []byte("partial")) ||
-				bytes.Contains(body, []byte("unavailable"))
-			return degraded, nil
-		})
 }
 
 func firstWorkerNode(

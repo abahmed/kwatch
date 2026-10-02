@@ -8,7 +8,7 @@ import (
 	"k8s.io/klog/v2"
 
 	"github.com/abahmed/kwatch/internal/delivery/transport"
-	"github.com/abahmed/kwatch/internal/event"
+	"github.com/abahmed/kwatch/internal/notification"
 )
 
 const defaultSignalURL = "http://localhost:8080"
@@ -49,10 +49,17 @@ func NewSignal(
 
 	server := defaultSignalURL
 	if s, ok := config["url"].(string); ok && len(s) > 0 {
+		if !transport.ValidEndpoint(s) {
+			klog.InfoS("initializing signal with an invalid url",
+				"setting", "url")
+			return nil
+		}
 		server = s
 	}
 
-	klog.InfoS("initializing signal", "url", server, "number", number)
+	klog.InfoS("initializing signal",
+		"url", transport.LogURL(server),
+		"number", number)
 
 	return &Signal{
 		sender:      transport.NewSender(dependencies),
@@ -68,10 +75,12 @@ func (s *Signal) Name() string {
 	return "Signal"
 }
 
-// SendEvent sends event to the provider
-func (s *Signal) SendEvent(ctx context.Context, e *event.Event) error {
-	msg := e.FormatText(s.clusterName, "")
-	return s.SendMessage(ctx, msg)
+// SendIncident sends the incident narrative as plain text, followed by
+// the application output as a quoted block.
+func (s *Signal) SendIncident(
+	ctx context.Context, m notification.Message,
+) error {
+	return s.SendMessage(ctx, plainNote(m))
 }
 
 // SendMessage sends text message to the provider
@@ -92,4 +101,13 @@ func (s *Signal) SendMessage(ctx context.Context, msg string) error {
 		ContentType: "application/json",
 	})
 	return err
+}
+
+// plainNote is the Note with the application output quoted after it.
+func plainNote(m notification.Message) string {
+	text := m.NoteText()
+	if len(m.Output) > 0 {
+		text += "\n\n> " + strings.Join(m.Output, "\n> ")
+	}
+	return text
 }

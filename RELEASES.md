@@ -1,5 +1,395 @@
 # Releasing kwatch
 
+## Unreleased
+
+### Highlights
+
+- **A new core.** kwatch now builds an understanding of the whole cluster
+  (workloads, nodes, volumes, networking, configuration) and keeps it current.
+  A root-cause engine ranks the likely cause of each incident, and symptoms of
+  the same cause are folded into one incident.
+- **Narrative messages.** Every notification is one readable message: what is
+  wrong, where, the likely cause, the impact and what to try next. The cluster
+  name is included in every message.
+- **Smaller operational surface.** One state file, a short list of endpoints
+  and a smaller metric set.
+
+### Breaking changes
+
+- **Endpoints.** kwatch serves only `/healthz`, `/readyz`, `/availabilityz`,
+  `/health` and `/metrics`. The diagnostics endpoints are gone. The
+  incident list was first renamed from `/problems` to `/incidents` and then
+  removed with the rest.
+- **Metrics.** Removed: `kwatch_apiserver_latency_milliseconds`,
+  `kwatch_apiserver_probe_errors_total`, `kwatch_baseline_size`,
+  `kwatch_controlplane_probe_errors_total`, `kwatch_graph_edges`,
+  `kwatch_graph_nodes`, `kwatch_graph_rebuild_latency_milliseconds`,
+  `kwatch_graph_rebuilds_total`, `kwatch_group_size`,
+  `kwatch_grouped_children_total`, `kwatch_informer_events_total`,
+  `kwatch_informer_watch_errors_total`, `kwatch_insight_analyses_total`,
+  `kwatch_insight_causes_total`, `kwatch_insight_reevaluations_total`,
+  `kwatch_insight_rollout_suppressions_total`,
+  `kwatch_lifecycle_duplicate_transitions_total`,
+  `kwatch_notifications_dropped_total`, `kwatch_persistence_compactions_total`,
+  `kwatch_persistence_last_success_timestamp_seconds`,
+  `kwatch_persistence_migration_errors_total`,
+  `kwatch_persistence_migrations_total`, `kwatch_persistence_omitted_total`,
+  `kwatch_persistence_payload_bytes`, `kwatch_persistence_retries_total`,
+  `kwatch_processing_latency_milliseconds`, `kwatch_queue_depth`,
+  `kwatch_root_cause_suppressions_total` and
+  `kwatch_startup_summaries_suppressed_total`.
+  Renamed: `kwatch_incidents_active` is now `kwatch_incidents_open`, and
+  `kwatch_notifications_total` is now `kwatch_delivery_notifications_total`.
+  New: `kwatch_delivery_dropped_total` (notifications no provider accepted),
+  `kwatch_delivery_pending_dropped_total`,
+  `kwatch_delivery_budget_folded_total` (notifications folded into the
+  overflow digest),
+  `kwatch_delivery_digest_skipped_total`,
+  `kwatch_delivery_outbox_dropped_total`,
+  `kwatch_delivery_outbox_write_failures_total`,
+  `kwatch_heartbeat_failures_total`,
+  `kwatch_investigations_total{result}`, `kwatch_audit_dropped_total` and
+  `kwatch_storage_corrupt_records_total`, `_evicted_total`, `_expired_total`,
+  `_resets_total{reason}` and `_write_failures_total`. Update dashboards and
+  alert rules.
+- **Feature IDs.** The `problems.*` capability IDs are now `incidents.*`
+  (`incidents.noise-control`, `incidents.flapping`,
+  `incidents.startup-summary`, `incidents.state`,
+  `incidents.downtime-changes`). Update anything that reads the feature
+  catalog.
+- **Provider options.** These options no longer change anything, because
+  incident messages are written by kwatch: `title` and `text` for Slack,
+  Discord, Mattermost, Opsgenie and Matrix; `text` for Teams, Rocket.Chat and
+  Google Chat. They are ignored, and kwatch logs a deprecation warning at
+  startup if one is still set. Remove them from your configuration. Teams
+  `title` still overrides the card title. These options now apply to plain
+  operator messages only: the `subject` of SES, SendGrid, Mailgun and Resend
+  (incident emails use the message's short summary as the subject), and the
+  `title` of n8n and Zapier.
+- **Alert keys include the cluster.** Provider deduplication keys and aliases
+  are now `kwatch-<cluster>-<incident key>`, so two clusters that report the
+  same incident no longer share one alert. Opsgenie alert aliases use this
+  form.
+- **Splunk On-Call.** Severity now follows the incident: info and plain notices
+  send INFO, warning sends WARNING, critical sends CRITICAL, and resolution
+  sends RECOVERY.
+- **Datadog.** `alertType` is no longer defaulted. Unset, each event carries
+  the incident's own severity. Set it to force one type.
+- **Issue trackers.** Issue titles are the incident's short summary, and the
+  body includes the cluster name.
+
+### Upgrade notes
+
+- **RBAC mode.** The chart value `rbac.mode` is `full` by default. `full`
+  grants read-only `list` and `watch` on every resource in every API group so
+  any built-in or custom kind can be understood, including CRDs installed
+  later, and `get` only on namespaces, nodes, `nodes/stats`, `nodes/metrics`
+  and `pods/log`.
+  Both modes add a Role with `get` on pods in kwatch's own namespace, used to
+  explain why the previous kwatch Pod restarted. Secret values are hashed and
+  never stored. Choose `least-privilege` for an explicit `list`/`watch` set;
+  kinds outside it are reported as permission denied in `/health` and custom
+  resources are not covered.
+- **Kubelet stats.** Node stats and metrics are read directly from each
+  kubelet (node `InternalIP`, kubelet port, default 10250) instead of
+  through the API server proxy. RBAC now grants `get` on `nodes/stats` and
+  `nodes/metrics`, and `nodes/proxy` is no longer granted. The kwatch Pod
+  must reach every node on the kubelet port. Kubelet serving certificates
+  are verified with the cluster CA; set `kubelet.insecureSkipVerify: true`
+  only for self-signed kubelet certificates.
+- **Secrets switch.** The chart value and configuration field
+  `watch.secrets` (default `true`) can turn Secret watching off; the chart
+  then grants no Secret permission in either RBAC mode.
+- **Lease RBAC.** `get` and `update` are limited to kwatch's own Lease by
+  name.
+- **Memory.** The default memory limit is 512Mi and `GOMEMLIMIT` is set to
+  90% of it (`KWATCH_MEMORY_LIMIT` replaces the `GOMEMLIMIT` downward-API
+  variable).
+- **CLI.** The `replay` subcommand is removed; `kwatch lint` remains.
+- **Configuration.** `activeProbeMonitor.recoveryThreshold` is removed (it
+  was never applied: a probe resolves on its first success) and is now
+  reported as an unknown key. `app.logFormatter: json` now switches logs to
+  JSON lines. Unknown keys are reported with their full path and line.
+- **State store reset.** There is no migration. At the first start the old
+  `state.db` is deleted and a fresh store is created (reported as
+  `storage_reset` on `/health`). Open incidents are announced once again as
+  new, and a startup summary is sent. No backup of the old file is kept.
+- **Opsgenie and other keyed providers.** Because the alert key format
+  changed (it now includes the cluster), alerts opened by the old version
+  will not be closed automatically when their incidents resolve. Close them
+  by hand during the upgrade.
+- **Storage.** The state store is capped at 512 MiB of logical data
+  (evidence 128 MiB), on the default 2Gi volume. Past the cap the oldest
+  history is dropped first; open incidents, baselines, fingerprints, state,
+  threads and the outbox are never evicted. The cap also covers the file
+  size: a file more than a quarter past it is rewritten at the next start when
+  the volume has room. Baselines are dropped 7 days after their workload is
+  gone. No backups are written. With `persistence.emptyDir`, the chart passes
+  the `sizeLimit` as `KWATCH_VOLUME_LIMIT` so the rewrite checks the real
+  limit.
+- **NetworkPolicy.** If you run your own NetworkPolicy, allow egress from
+  kwatch to TCP 10250 on every node. The chart's opt-in policy now does this
+  (`networkPolicy.kubeletPort`, `networkPolicy.kubeletCIDRs`).
+- **Delivery.** Delivery is at least once. Queued notifications are written
+  to a persisted outbox (at most 2048 jobs, none older than 24 hours) and
+  re-sent after a restart, so a restart no longer loses them. A send that was
+  interrupted mid-request may repeat. Outbox problems show as
+  `persistence_restore_failed` on `/health` and in the new outbox metrics.
+- **Incident IDs.** IDs now look like `inc-20261001-7f3a-0007`: the UTC day,
+  a 4-character random nonce kept with the store, and a sequence number. The
+  nonce keeps IDs unique after a state reset or on a new empty volume, where
+  the sequence starts over.
+- **Telemetry.** Adoption telemetry is on by default in official builds. It
+  sends exactly an anonymous installation ID (a salted hash of the
+  `kube-system` namespace UID, formatted as a UUID) and the kwatch version to
+  `https://api.kwatch.dev/v1/telemetry/heartbeat`, shortly after startup and
+  then at most once every 7 days. Disable it with `telemetry.enabled: false`
+  or `KWATCH_TELEMETRY=false`. See the configuration reference for the full
+  description.
+- **Health reasons.** `/health` reasons come from a fixed vocabulary that now
+  includes `component_stalled`, `heartbeat_failed`, `storage_reset`,
+  `storage_over_cap`, `permission_denied`, `optional_permission_denied`,
+  `api_unavailable`, `cache_sync_pending` and `persistence_restore_failed`;
+  the `coverage` object adds `disabled_by_config`.
+- **Alert-quality gates.** The scorecard now has a calibration gate: stated
+  high confidence must be right 80% to 100% of the time and likely
+  confidence 50% to 90%, once a level has at least 10 labelled cases.
+- **Alert-quality targets.** The scorecard gates realistic production
+  targets: correct root at least 90% on labelled and 80% on a new held-out
+  set that is never used for tuning, wrong high-confidence root at most 5%
+  (gated at 20 or more cases), messages per incident p95 at most 3 and most
+  at most 5 (was most at most 3), time to first message at most 60 seconds
+  for page and 180 seconds for notify, no notification from healthy
+  rollouts, scaling, drains, Jobs or CronJobs, and a busiest-hour ceiling of
+  30 (was 20). `kwatch-scorecard` gains `-max-messages-per-incident-p95`
+  (default 3); `-max-messages-per-incident` now defaults to 5 and
+  `-max-peak-per-hour` to 30. The new histogram
+  `kwatch_pipeline_decision_lag_seconds` measures the time from an
+  observation being submitted to its decisions being applied.
+- **Chart.** `tolerations` are now merged with `defaultTolerations`; an entry
+  with the same key and effect wins (an entry without an effect covers every
+  effect of its key), so a `not-ready` `NoSchedule` toleration keeps the
+  default 30-second `NoExecute` one. The container and probe port now come
+  from `config.healthCheck.port`; the `service.port` value is removed, and
+  rendering fails if `config.healthCheck.enabled` is false. The opt-in
+  NetworkPolicy now admits the health port and allows DNS and API server
+  egress by default (`networkPolicy.allowDefaults`,
+  `networkPolicy.apiServerPorts`). The `emptyDir` volume gets a `sizeLimit`
+  (`persistence.emptyDirSizeLimit`, default 2Gi), and installing with
+  `persistence.emptyDir=true` prints a warning, because state is lost when the
+  Pod is rescheduled.
+- **Hourly budget.** `alert.<provider>.hourlyBudget` (integer >= 0, default
+  60, `0` unlimited) sets how many new conversations a provider announces per
+  hour; the rest are folded into one overflow digest. A negative or
+  non-integer value fails startup.
+- **Delivery retries.** Transient failures are retried with the provider's
+  backoff for up to 24 hours through the outbox. `/health` reports
+  `provider-<name>` components with `provider_unavailable`,
+  `provider_rejected` or `provider_rate_limited`. A provider that is
+  configured but cannot be constructed now fails startup. An incident that
+  opens and resolves before announcement is sent as one "opened and
+  resolved" message.
+- **Roots and paging keys.** External endpoints and shared errors can be
+  reported as roots. Paging dedup keys are built from root and mode, so they
+  survive a state store reset.
+- **New metrics.** `kwatch_delivery_queue_depth{provider}`,
+  `kwatch_delivery_outbox_depth`, `kwatch_delivery_deferred_total`,
+  `kwatch_tracker_untracked_total` and `kwatch_kubelet_stats_failures_total`;
+  `/health` adds the `kubelet-stats` and `config-overlay` components.
+- **Heartbeat.** The heartbeat monitor pings only while monitoring is ready.
+  A leader that is still starting or is shutting down after a failure no
+  longer keeps the external dead man's switch quiet.
+- **Shutdown.** The leader drains queued alerts before saving provider thread
+  IDs, so threads created by the last alerts survive a restart. After a lost
+  Lease nothing more is sent. The drain also stops early, a few seconds
+  before the Lease could expire, and the alerts still queued are
+  dead-lettered rather than sent; their outbox records stay for the next
+  session.
+
+#### Alert keys and providers
+
+- **Open alerts are not resolved after the upgrade.** Keys are now
+  `kwatch-<cluster>-<key>`. An alert opened under an old key is not found
+  when its incident resolves, so close it by hand. The `alertKey` sent by
+  webhook, Zapier and n8n and the `X-Kwatch-Alert-Key` email header change
+  value too; update any automation that matches on them.
+- **Startup and plain notices.** PagerDuty, Opsgenie, Squadcast, GoAlert,
+  Zenduty, incident.io, iLert and SIGNL4 (paging), and GitHub, GitLab, Gitea,
+  Jira and ClickUp (issue trackers) no longer receive the startup summary or
+  plain notices. They only receive incidents, so nothing is opened that cannot
+  be resolved.
+
+- **Zulip needs a `url`.** `alert.zulip.url` is now required. The old
+  default sent the bot email and API key to `api.zulip.com`, which is not a
+  shared Zulip host. Example hosts (`example.com`, `example.org`,
+  `example.net`) are rejected.
+- **Unused reasons removed.** These reason names were defined but nothing
+  raised them, so no routing or silence rule could ever have matched an
+  incident: `BackOff`, `ControlPlaneComponentFailure`,
+  `CrashLoopHighFrequency`, `DaemonSetConditionFailure`,
+  `StatefulSetConditionFailure`, `HPAScalingLimited`, `InformerLag`,
+  `InformerWatchInterrupted`, `Killed`, `Killing`, `KubeletNotReady`,
+  `KubeletReady`, `NodeAffinity`, `OOMRepeating`, `Preempting`,
+  `PreExistingAtStartup`, `PreStopHookError`, `ProbeError`, `Pulled`,
+  `ReplicaSetUpdated`, `Scheduled`, `SharedDependencyFailure`, `Started`,
+  `TestAlert` and `TooManyReplicas`.
+
+#### Configuration
+
+- **Route severities are validated.** An unknown value such as `high` now
+  fails startup. Use `critical`, `warning` or `info`.
+- **Unknown or removed keys.** A key kwatch does not know, including options
+  removed in this release, logs a warning instead of being ignored silently.
+- **An invalid KwatchConfig no longer crash-loops kwatch.** An invalid edit
+  is rejected without a restart and logged with `config_overlay_invalid`. An
+  overlay that is invalid at startup is ignored: kwatch runs on the mounted
+  configuration and `/health` shows `config-overlay` degraded.
+- **Secret watching stays off.** A KwatchConfig can no longer turn Secret
+  watching back on when `KWATCH_WATCH_SECRETS=false`.
+- **Missing config file fails startup.** When `CONFIG_FILE` is set but the
+  file does not exist, kwatch now refuses to start instead of running with
+  defaults and no providers.
+- **Blank matchers are rejected.** An empty string in a silence field or an
+  `ignore*` list, such as `podNamePatterns: [""]`, is a validation error.
+- **Provider option typos.** An unknown `alert.<provider>` key logs a warning
+  with its path and a suggestion for an obvious typo
+  (`alert.slack.webhok`). `kwatch lint` reports "no alert providers
+  configured" as a warning, not an error.
+- **KwatchConfig schema.** The CRD no longer offers `app.proxyURL`,
+  `app.insecureSkipTLSVerify`, `app.caBundlePath` and `auditLog.output`,
+  which an overlay was never allowed to set.
+
+#### Messages
+
+- **One status emoji.** Every message, including the startup message and the
+  upgrade notice, starts with exactly one status emoji: 🔴 page, 🟠 notify,
+  🟡 low, ✅ resolved. The startup and upgrade notices are single sentences
+  without links.
+- **Updates after a restart.** Open incidents restored from the state file may
+  send one update after the upgrade.
+- **Spreading updates.** An "It's spreading" update names every object that
+  became affected since the last delivered message, not only the latest
+  batch.
+
+#### Chart and operations
+
+- **Stricter values.** The chart rejects unknown keys at the root and in
+  `rbac`, `watch`, `persistence`, `networkPolicy`, `config.kubelet` and
+  `config.watch`, a health port outside 1-65535, and setting both
+  `persistence.emptyDir` and `persistence.existingClaim`. Check your values
+  file before upgrading.
+- **ClusterRole names.** The ClusterRole and ClusterRoleBinding are now named
+  `<fullname>-<namespace>` and carry chart labels, so releases with the same
+  name in different namespaces no longer collide. Helm replaces the old
+  objects on upgrade.
+- **CRD overlay with `configSecretName`.** The chart passes
+  `config.crd.enabled` as `KWATCH_CRD_ENABLED`, so installs that bring their
+  own Secret keep the KwatchConfig overlay.
+- **NetworkPolicy ports.** New `networkPolicy.extraEgressPorts` opens
+  provider ports other than 443, such as SMTP 587 for email.
+- **ServiceAccount.** It no longer carries a config checksum annotation.
+- **Kubelet stats health.** Reachability is reported as the optional
+  `/health` component `kubelet-stats` (`kubelet_unreachable`,
+  `kubelet_partially_unreachable`) and counted by the new
+  `kwatch_kubelet_stats_failures_total`. Each round starts where the last
+  one stopped, so the same nodes are not skipped every time.
+- **Bounded informer memory.** The Event informer lists only Warning events.
+  A dynamic kind over its object cap caches the extra objects only as small
+  stubs, and `/health` coverage counts kinds by reason, including the new
+  `object_cap_reached`.
+- **Node failure guidance.** The production guide documents the real
+  failover gap after a node crash (about 7 to 8 minutes), the
+  `ReadWriteOnce` block storage requirement, and the
+  `node.kubernetes.io/out-of-service` taint.
+- **CI and release gates (contributors).** `make ci` is the one required
+  CI gate and `make verify` its local form; both run the tests once with
+  `-race`. `make scorecard` and `make scorecard-gate` are now
+  `make alert-quality` and `make alert-quality-gate`. The `CI`, `E2E` and
+  `Security` workflows replace `Check`, `Alert quality`, `Real-cluster
+  scenarios` and `Operational validation`; required status checks are now
+  `Verify`, `Image`, `Chart lifecycle`, `Go dependency scan` and
+  `Analyze (actions)` (import `.github/rulesets/main-branch.json`). A
+  release now requires green CI, security and full E2E runs on the tagged
+  commit, and the image is scanned before it is pushed.
+- **Readiness follows required sources.** `/readyz` now fails while a
+  required source (Pods, Nodes) is unavailable, such as after its RBAC
+  permission is revoked, and recovers with it. A source counts as synced
+  only after kwatch processed its whole initial list.
+- **Downtime changes of slow kinds.** A kind that has not finished its first
+  list when downtime changes are reconstructed keeps its stored baseline and
+  is compared once it syncs, instead of losing its baseline.
+- **Provider errors.** DingTalk, Feishu, WeCom and IFTTT errors reported in
+  a successful HTTP response are now permanent (not retried for a day),
+  except the providers' rate-limit codes. Alerta alerts use the stable
+  deduplication key as their resource. Matrix no longer drops a plain
+  message whose text repeats an earlier one.
+- **Delivery reconfiguration.** A configuration reload keeps each provider's
+  hourly budget, outage backoff and pending overflow digest instead of
+  resetting them. A fallback leading into a cycle is no longer disabled;
+  only the provider that closes the cycle loses its fallback.
+- **Detection fixes.** A slowly filling volume is no longer reported as
+  full within hours; a lost PVC with a resize error stays Critical; a
+  restored recovering incident no longer sends an empty update; crash log
+  excerpts keep the end of the log, where the crash message is.
+- **Fewer wrong roots.** A zone or node pool is no longer blamed for a
+  crash on a healthy node; stack-trace locations such as `Pool.java:512`
+  are no longer read as external endpoints; one pod's lookup of a
+  mistyped external host no longer blames cluster DNS; only the webhook
+  named in an admission error can be blamed for it, and an `Ignore`
+  webhook whose call failed cannot; "no space left on device" blames a
+  claim only with evidence for that claim; image tags are no longer read
+  as HTTP status codes; a named quota must match; generic errors such as
+  "connection reset by peer" alone no longer form a shared-error root.
+  A cause that starts failing after its effect is now found as well.
+- **Fewer false findings.** Gateway routes to non-Service backends and
+  AWS ALB `use-annotation` actions are not reported as missing Services;
+  completed pods and init containers no longer count toward node
+  overcommit; pod ephemeral storage is compared only when every container
+  has a limit; HPA metric failures wait the two-minute condition grace;
+  a recovered load balancer clears its sync-failure warning; finished or
+  terminating pods no longer block a drain; and one reason raises one
+  finding per object.
+- **Changes made while kwatch was down.** Objects deleted or created while
+  kwatch was not running are now recorded as changes, dated at the last
+  snapshot, like edits already were. A deleted ConfigMap or Secret can
+  therefore be named as the cause of a failure found after a restart.
+  Creations are reported only once a snapshot has covered that kind, so an
+  upgrade does not announce every existing object as new.
+- **"The cause is not clear yet."** When kwatch considered an outside
+  cause and rejected it, and the failing object has no accepted cause, the
+  message says so instead of staying silent about the cause.
+- **Message text.** Quantities such as `500m` or `12h` in names, versions
+  and resource limits are no longer rewritten as durations.
+- **`kwatch lint` is stricter.** It now rejects a provider whose required
+  options are empty after expansion, an out-of-range `healthCheck.port`,
+  an invalid probe URL or TCP address, severity override keys that differ
+  only in case, and unknown arguments (`lint --stirct` used to pass). It
+  constructs providers as startup does, so a config that startup refuses
+  fails lint; `--check` still contacts providers.
+- **Maintenance annotations.** Only `true`, `1`, `yes` or `on` hold an
+  object; a valid `kwatch.io/maintenance-until` in the past ends the hold
+  even when the annotation is still set.
+- **Redaction.** Credentials in URLs are redacted up to the last `@` of the
+  user info; camelCase keys (`secretAccessKey`, `privateKey`),
+  `passphrase`, `pwd`, `credentials`, cookies, `--password X` and `-pX`
+  are covered; plain words after `secret:` or `token:` such as "not found"
+  or "expired" are no longer removed.
+- **KwatchConfig.** A deletion delivered after a watch gap is now seen, and
+  a watcher that fails to start after a late CRD install retries with
+  backoff instead of staying dead.
+- **Matrix.** `@room` is neutralized like other broadcast mentions, and
+  repeated plain notices are no longer deduplicated by the homeserver.
+- **Audit log.** A failed rotation (for example a full volume) no longer
+  stops the audit log; entries keep going to the current file and the
+  error is logged.
+- **Rate limits in response bodies.** DingTalk, Feishu and WeCom frequency
+  limits reported in a 2xx body are classified as rate limits, so the
+  provider is paced rather than marked unavailable.
+- **Contributors.** `make verify` now runs the decision-latency and memory
+  budget tests without the race detector (`make verify-latency`), so the
+  2-second p99 target is enforced. The e2e issue sanitizer uses an
+  allowlist of namespaced workload kinds and removes `command` and `args`.
+
 This document describes how kwatch is branched and released. Releases are cut with the
 `.github/workflows/release.yml` workflow using `workflow_dispatch`. It creates the version
 tag and a GitHub Release; `.github/workflows/publish.yml` then builds and pushes the
@@ -178,7 +568,7 @@ An RC should not be promoted until all of these hold:
 
 - [ ] RC has been published for at least **2 weeks** of soak (unless a critical fix is blocking).
 - [ ] No open **critical** issues / known regressions against the RC.
-- [ ] `check` workflow is green on `main` (lint, build, unit tests with `-race`, integration tests).
+- [ ] `CI`, `Security and supply chain` and a full `E2E` run are green on the RC commit (the release workflow enforces this).
 - [ ] `helm lint` + `test_helm.sh` pass for the released chart.
 - [ ] Release notes reviewed (generated automatically from merged commit titles).
 - [ ] README and `docs/` contain no `🚧 Unreleased` banners (stripped automatically on stable).
@@ -242,7 +632,7 @@ public chart (for stable releases) is not successful.
 The container image bakes the full version string (the release tag name, `v`-prefixed). The
 in-app upgrader only runs on **stable and patch** images: it compares the baked version
 against the latest **non-pre-release** GitHub Release and notifies on a newer one, recording
-the notified version in a ConfigMap so users are nudged once. **RC builds skip the check
+the notified version in the on-disk state store so users are nudged once. **RC builds skip the check
 entirely** (`CheckUpdates` returns early when the baked version contains `-rc`) — RC users
 opted into the dev channel and are never nagged toward stable. Keep this in mind: the baked
 version must equal the release tag name (`v`-prefixed), or the equality comparison in the

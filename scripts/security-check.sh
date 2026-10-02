@@ -19,11 +19,7 @@ fi
 "$vulncheck" ./...
 
 if [[ -n "${KWATCH_IMAGE:-}" ]]; then
-  if ! command -v trivy >/dev/null 2>&1; then
-    echo "trivy is required when KWATCH_IMAGE is set" >&2
-    exit 1
-  fi
-  trivy image --severity HIGH,CRITICAL --exit-code 1 "$KWATCH_IMAGE"
+  ./scripts/scan-image.sh "$KWATCH_IMAGE"
 else
   echo "KWATCH_IMAGE is not set; image scanning is deferred to release CI"
 fi

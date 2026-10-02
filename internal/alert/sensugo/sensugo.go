@@ -9,7 +9,7 @@ import (
 	"k8s.io/klog/v2"
 
 	"github.com/abahmed/kwatch/internal/delivery/transport"
-	"github.com/abahmed/kwatch/internal/event"
+	"github.com/abahmed/kwatch/internal/notification"
 )
 
 const sensuAPIPath = "/api/core/v2/namespaces/%s/events"
@@ -58,6 +58,12 @@ func NewSensugo(
 		return nil
 	}
 
+	if !transport.ValidEndpoint(url) {
+		klog.InfoS("initializing sensugo with an invalid url",
+			"setting", "url")
+		return nil
+	}
+
 	apiKey, ok := config["apiKey"].(string)
 	if !ok || len(apiKey) == 0 {
 		klog.InfoS("initializing sensugo with empty apiKey")
@@ -74,7 +80,9 @@ func NewSensugo(
 		entity = "kwatch"
 	}
 
-	klog.InfoS("initializing sensugo", "url", url, "namespace", namespace)
+	klog.InfoS("initializing sensugo",
+		"url", transport.LogURL(url),
+		"namespace", namespace)
 
 	return &Sensugo{
 		sender: transport.NewSender(dependencies),
@@ -93,29 +101,24 @@ func (s *Sensugo) Name() string {
 	return "Sensu Go"
 }
 
-// SendEvent sends event to the provider
-// UsesEventDelivery routes incidents through SendEvent, which carries the
-// action and a stable key so Sensu can clear the check.
-func (s *Sensugo) UsesEventDelivery() {}
-
-// SendEvent reports one Sensu check per kwatch incident: status 2 while it is
-// firing and 0 once it resolves, so the event clears.
-func (s *Sensugo) SendEvent(ctx context.Context, e *event.Event) error {
-	status := 2
-	switch {
-	case e.IsResolve():
-		status = 0
-	case e.IsNotice():
-		status = 1
+// SendIncident reports one Sensu check per kwatch incident: status 2
+// (critical) or 1 (warning) while it is firing and 0 once it resolves, so
+// the event clears.
+func (s *Sensugo) SendIncident(
+	ctx context.Context, m notification.Message,
+) error {
+	output := m.NoteText()
+	if len(m.Output) > 0 {
+		output += "\n\nLast output:\n" + strings.Join(m.Output, "\n")
 	}
 	payload := sensuPayload{
 		Entity: sensuEntity{
 			Metadata: sensuMetadata{Name: s.entity},
 		},
 		Check: sensuCheck{
-			Metadata: sensuMetadata{Name: e.AlertKey()},
-			Status:   status,
-			Output:   e.AlertBody(s.clusterName),
+			Metadata: sensuMetadata{Name: m.AlertKey(s.clusterName)},
+			Status:   checkStatus(m),
+			Output:   output,
 			Issued:   s.now().Unix(),
 		},
 	}
@@ -132,7 +135,21 @@ func (s *Sensugo) SendEvent(ctx context.Context, e *event.Event) error {
 	return err
 }
 
-// SendMessage sends a plain notice as a warning check.
+// checkStatus maps an incident onto Sensu's exit-code statuses. A plain
+// notice is OK (0), so it is recorded without leaving a failing check open.
+func checkStatus(m notification.Message) int {
+	switch {
+	case m.Resolved(), m.IsNotice():
+		return 0
+	case m.Route.Severity == "critical":
+		return 2
+	case m.Route.Severity == "" && m.Status == notification.StatusCritical:
+		return 2
+	}
+	return 1
+}
+
+// SendMessage sends a plain notice as a passing (OK) check.
 func (s *Sensugo) SendMessage(ctx context.Context, msg string) error {
-	return s.SendEvent(ctx, &event.Event{PodName: msg, Reason: "notify"})
+	return s.SendIncident(ctx, notification.Notice(msg))
 }

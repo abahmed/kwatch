@@ -15,29 +15,33 @@ type KwatchConfig struct {
 // KwatchConfigSpec defines the desired kwatch configuration. It mirrors
 // the configuration file; see the configuration reference for each field.
 type KwatchConfigSpec struct {
-	App                     AppConfig              `json:"app,omitempty"`
-	Telemetry               TelemetryConfig        `json:"telemetry,omitempty"`
-	Upgrader                map[string]interface{} `json:"upgrader,omitempty"`
-	HeartbeatMonitor        HeartbeatMonitorConfig `json:"heartbeatMonitor,omitempty"`
-	HealthCheck             HealthCheckConfig      `json:"healthCheck,omitempty"`
-	Maintenance             MaintenanceConfig      `json:"maintenance,omitempty"`
-	Namespaces              []string               `json:"namespaces,omitempty"`
-	Reasons                 []string               `json:"reasons,omitempty"`
-	NamespaceSelector       string                 `json:"namespaceSelector,omitempty"`
-	IgnoreContainerNames    []string               `json:"ignoreContainerNames,omitempty"`
-	IgnorePodNames          []string               `json:"ignorePodNames,omitempty"`
-	IgnoreContainerMessages []string               `json:"ignoreContainerMessages,omitempty"`
-	IgnoreNodeReasons       []string               `json:"ignoreNodeReasons,omitempty"`
-	IgnoreNodeMessages      []string               `json:"ignoreNodeMessages,omitempty"`
-	Silences                []SilenceRule          `json:"silences,omitempty"`
-	ResyncSeconds           int                    `json:"resyncSeconds,omitempty"`
-	SeverityByOwnerKind     map[string]string      `json:"severityByOwnerKind,omitempty"`
-	SeverityByReason        map[string]string      `json:"severityByReason,omitempty"`
-	ActiveProbeMonitor      MonitorConfig          `json:"activeProbeMonitor,omitempty"`
-	Crd                     MonitorConfig          `json:"crd,omitempty"`
-	Templates               map[string]string      `json:"templates,omitempty"`
-	Runbooks                map[string]string      `json:"runbooks,omitempty"`
-	AuditLog                AuditLogConfig         `json:"auditLog,omitempty"`
+	App              AppConfig              `json:"app,omitempty"`
+	Telemetry        TelemetryConfig        `json:"telemetry,omitempty"`
+	Upgrader         map[string]interface{} `json:"upgrader,omitempty"`
+	HeartbeatMonitor HeartbeatMonitorConfig `json:"heartbeatMonitor,omitempty"`
+	HealthCheck      HealthCheckConfig      `json:"healthCheck,omitempty"`
+	Maintenance      MaintenanceConfig      `json:"maintenance,omitempty"`
+
+	Namespaces        []string `json:"namespaces,omitempty"`
+	Reasons           []string `json:"reasons,omitempty"`
+	NamespaceSelector string   `json:"namespaceSelector,omitempty"`
+
+	IgnoreContainerNames    []string `json:"ignoreContainerNames,omitempty"`
+	IgnorePodNames          []string `json:"ignorePodNames,omitempty"`
+	IgnoreContainerMessages []string `json:"ignoreContainerMessages,omitempty"`
+	IgnoreNodeReasons       []string `json:"ignoreNodeReasons,omitempty"`
+	IgnoreNodeMessages      []string `json:"ignoreNodeMessages,omitempty"`
+
+	Silences            []SilenceRule     `json:"silences,omitempty"`
+	ResyncSeconds       int               `json:"resyncSeconds,omitempty"`
+	SeverityByOwnerKind map[string]string `json:"severityByOwnerKind,omitempty"`
+	SeverityByReason    map[string]string `json:"severityByReason,omitempty"`
+
+	ActiveProbeMonitor MonitorConfig     `json:"activeProbeMonitor,omitempty"`
+	Crd                MonitorConfig     `json:"crd,omitempty"`
+	Templates          map[string]string `json:"templates,omitempty"`
+	Runbooks           map[string]string `json:"runbooks,omitempty"`
+	AuditLog           AuditLogConfig    `json:"auditLog,omitempty"`
 }
 
 // MonitorConfig is intentionally open-ended because monitor options evolve
@@ -55,9 +59,10 @@ type TelemetryConfig struct {
 	Enabled bool `json:"enabled,omitempty"`
 }
 
+// AuditLogConfig omits the output path: KwatchConfig cannot choose where
+// kwatch writes files.
 type AuditLogConfig struct {
-	Enabled bool   `json:"enabled,omitempty"`
-	Output  string `json:"output,omitempty"`
+	Enabled bool `json:"enabled,omitempty"`
 }
 
 // HeartbeatMonitorConfig omits the URL: it can carry a token, so it is
@@ -68,19 +73,17 @@ type HeartbeatMonitorConfig struct {
 }
 
 type HealthCheckConfig struct {
-	Enabled     bool `json:"enabled,omitempty"`
-	Port        int  `json:"port,omitempty"`
-	Pprof       bool `json:"pprof,omitempty"`
-	Diagnostics bool `json:"diagnostics,omitempty"`
+	Enabled bool `json:"enabled,omitempty"`
+	Port    int  `json:"port,omitempty"`
 }
 
+// AppConfig omits the outbound proxy and TLS trust settings: they decide
+// who can observe provider credentials, so only the mounted configuration
+// sets them.
 type AppConfig struct {
 	ClusterName           string `json:"clusterName,omitempty"`
-	ProxyURL              string `json:"proxyURL,omitempty"`
 	DisableStartupMessage bool   `json:"disableStartupMessage,omitempty"`
 	LogFormatter          string `json:"logFormatter,omitempty"`
-	InsecureSkipTLSVerify bool   `json:"insecureSkipTLSVerify,omitempty"`
-	CABundlePath          string `json:"caBundlePath,omitempty"`
 }
 
 type SilenceRule struct {

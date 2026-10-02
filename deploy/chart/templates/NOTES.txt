@@ -1,0 +1,8 @@
+{{- if .Values.persistence.emptyDir }}
+
+WARNING: persistence.emptyDir=true. Kwatch state (open incidents, baselines,
+thread IDs) is stored on an emptyDir volume (limit
+{{ .Values.persistence.emptyDirSizeLimit | default "2Gi" }}) and is lost when the pod is rescheduled or
+restarted on another node. Incidents may be announced again after a restart.
+Use a PersistentVolumeClaim for production.
+{{- end }}

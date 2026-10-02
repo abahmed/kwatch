@@ -2,7 +2,6 @@ package email
 
 import (
 	"context"
-	"fmt"
 	"math"
 	"strconv"
 	"strings"
@@ -10,8 +9,7 @@ import (
 	gomail "gopkg.in/mail.v2"
 	"k8s.io/klog/v2"
 
-	"github.com/abahmed/kwatch/internal/event"
-	"github.com/abahmed/kwatch/internal/format"
+	"github.com/abahmed/kwatch/internal/notification"
 )
 
 type Email struct {
@@ -99,20 +97,25 @@ func (e *Email) Name() string {
 	return "Email"
 }
 
-func (e *Email) UsesEventDelivery() {}
-
-// SendEvent sends event to the provider
-func (e *Email) SendEvent(ctx context.Context, event *event.Event) error {
+// SendIncident mails one incident message: the Short lead is the
+// subject and the narrative Note, plus any recent output, is the body.
+func (e *Email) SendIncident(
+	ctx context.Context, msg notification.Message,
+) error {
 	if err := ctx.Err(); err != nil {
 		return err
 	}
-	subject, body := e.buildMessageSubjectAndBody(event)
-
 	m := gomail.NewMessage()
 	m.SetHeader("From", e.from)
 	m.SetHeader("To", strings.Split(e.to, ",")...)
-	m.SetHeader("Subject", subject)
-	m.SetBody("text/plain", body)
+	m.SetHeader("Subject", msg.MailSubject())
+	if e.clusterName != "" {
+		m.SetHeader("X-Kwatch-Cluster", e.clusterName)
+	}
+	if msg.Key != "" {
+		m.SetHeader("X-Kwatch-Alert-Key", msg.AlertKey(e.clusterName))
+	}
+	m.SetBody("text/plain", msg.MailBody())
 
 	if e.send != nil {
 		return e.send(m)
@@ -120,74 +123,7 @@ func (e *Email) SendEvent(ctx context.Context, event *event.Event) error {
 	return sendSMTP(ctx, e.smtpConfig, e.from, e.to, m)
 }
 
-// SendMessage sends text message to the provider
+// SendMessage mails a plain operator message as a notice.
 func (e *Email) SendMessage(ctx context.Context, s string) error {
-	if err := ctx.Err(); err != nil {
-		return err
-	}
-	return nil
-}
-
-func (e *Email) buildMessageSubjectAndBody(
-	ev *event.Event) (string, string) {
-	subject := "⛑ Kwatch alert"
-	if narrative := strings.TrimSpace(ev.Narrative); narrative != "" {
-		subject = emailFirstLine(narrative, 150)
-	} else if ev.ContainerName != "" {
-		subject = fmt.Sprintf(
-			"⛑ Kwatch detected a crash in pod %s", ev.ContainerName,
-		)
-	} else if ev.PodName != "" {
-		subject = fmt.Sprintf("⛑ Kwatch detected a crash in pod %s", ev.PodName)
-	}
-
-	var parts []string
-	parts = append(parts, fmt.Sprintf(
-		"Reason: %s", format.OrDefault(ev.Reason, "unknown"),
-	))
-
-	if ev.PodName != "" {
-		parts = append(parts, fmt.Sprintf("Pod: %s", ev.PodName))
-	}
-	if ev.ContainerName != "" {
-		parts = append(parts, fmt.Sprintf("Container: %s", ev.ContainerName))
-	}
-	if ev.Namespace != "" {
-		parts = append(parts, fmt.Sprintf("Namespace: %s", ev.Namespace))
-	}
-	if ev.NodeName != "" {
-		parts = append(parts, fmt.Sprintf("Node: %s", ev.NodeName))
-	}
-	if e.clusterName != "" {
-		parts = append(parts, fmt.Sprintf("Cluster: %s", e.clusterName))
-	}
-
-	body := strings.Join(parts, "\n")
-	if narrative := strings.TrimSpace(ev.Narrative); narrative != "" {
-		body = narrative
-	}
-
-	if ev.Narrative == "" && ev.IncludeLogs {
-		logs := strings.TrimSpace(ev.Logs)
-		if len(logs) > 0 {
-			body += "\n\nLogs:\n" + logs
-		}
-	}
-
-	if ev.Narrative == "" && ev.IncludeEvents {
-		events := strings.TrimSpace(ev.Events)
-		if len(events) > 0 {
-			body += "\n\nEvents:\n" + events
-		}
-	}
-
-	return subject, body
-}
-
-func emailFirstLine(value string, limit int) string {
-	line := strings.SplitN(strings.TrimSpace(value), "\n", 2)[0]
-	if len(line) <= limit {
-		return line
-	}
-	return line[:limit-1] + "…"
+	return e.SendIncident(ctx, notification.Notice(s))
 }

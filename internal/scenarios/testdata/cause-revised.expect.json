@@ -1,0 +1,11 @@
+{
+  "name": "cause-revised",
+  "description": "A pod on node n3 is OOM-killed under a generous limit; then n3 reports MemoryPressure and evicts pods of two workloads whose replicas elsewhere stay healthy.",
+  "root": "node//n3",
+  "tier": "notify",
+  "maxMessages": 3,
+  "mustNotBlame": [
+    "node//n1",
+    "zone//zone-a"
+  ]
+}

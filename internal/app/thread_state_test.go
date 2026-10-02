@@ -2,14 +2,11 @@ package app
 
 import (
 	"context"
-	"path/filepath"
 	"sync"
 	"testing"
 	"time"
 
 	"github.com/stretchr/testify/require"
-
-	"github.com/abahmed/kwatch/internal/knowledge/store"
 )
 
 type fakeThreads struct {
@@ -50,7 +47,7 @@ var sampleThreads = map[string]map[string]string{
 func TestThreadSaverRoundTripRestoresSameMap(t *testing.T) {
 	disk := threadDisk(t)
 	src := &fakeThreads{threads: sampleThreads}
-	require.NoError(t, newThreadSaver(src, disk).Save())
+	require.NoError(t, newThreadSaver(src, disk).Save(context.Background()))
 
 	next := &fakeThreads{}
 	newThreadSaver(next, disk).Restore()
@@ -61,7 +58,7 @@ func TestThreadSaverRoundTripRestoresSameMap(t *testing.T) {
 func TestThreadSaverRestoreRunsBeforeFirstSend(t *testing.T) {
 	disk := threadDisk(t)
 	require.NoError(t, newThreadSaver(
-		&fakeThreads{threads: sampleThreads}, disk).Save())
+		&fakeThreads{threads: sampleThreads}, disk).Save(context.Background()))
 	next := &fakeThreads{}
 	newThreadSaver(next, disk).Restore()
 	next.events = append(next.events, "send")
@@ -72,21 +69,21 @@ func TestThreadSaverSavesOnlyWhenChanged(t *testing.T) {
 	disk := threadDisk(t)
 	src := &fakeThreads{threads: sampleThreads}
 	saver := newThreadSaver(src, disk)
-	require.NoError(t, saver.Save())
+	require.NoError(t, saver.Save(context.Background()))
 
 	// Overwrite behind the saver's back: an unchanged snapshot must
 	// not touch the store again.
-	require.NoError(t, disk.put(stateProviderThreads, "marker"))
-	require.NoError(t, saver.Save())
+	require.NoError(t, disk.putThreads("marker"))
+	require.NoError(t, saver.Save(context.Background()))
 	var marker string
-	_, err := disk.get(stateProviderThreads, &marker)
+	_, err := disk.getThreads(&marker)
 	require.NoError(t, err)
 	require.Equal(t, "marker", marker)
 
 	src.set(map[string]map[string]string{"slack": {"p1": "1"}})
-	require.NoError(t, saver.Save())
+	require.NoError(t, saver.Save(context.Background()))
 	var rec threadRecord
-	_, err = disk.get(stateProviderThreads, &rec)
+	_, err = disk.getThreads(&rec)
 	require.NoError(t, err)
 	require.Equal(t, "1", rec.Threads["slack"]["p1"])
 	require.Len(t, rec.Threads["slack"], 1)
@@ -96,9 +93,9 @@ func TestThreadSaverRemovalIsPersisted(t *testing.T) {
 	disk := threadDisk(t)
 	src := &fakeThreads{threads: sampleThreads}
 	saver := newThreadSaver(src, disk)
-	require.NoError(t, saver.Save())
+	require.NoError(t, saver.Save(context.Background()))
 	src.set(nil)
-	require.NoError(t, saver.Save())
+	require.NoError(t, saver.Save(context.Background()))
 	next := &fakeThreads{}
 	newThreadSaver(next, disk).Restore()
 	require.Empty(t, next.restored)
@@ -106,7 +103,7 @@ func TestThreadSaverRemovalIsPersisted(t *testing.T) {
 
 func TestThreadSaverCorruptValueRestoresEmpty(t *testing.T) {
 	disk := threadDisk(t)
-	require.NoError(t, disk.put(stateProviderThreads, "not a record"))
+	require.NoError(t, disk.putThreads("not a record"))
 	next := &fakeThreads{}
 	require.NotPanics(t, func() {
 		newThreadSaver(next, disk).Restore()
@@ -148,30 +145,84 @@ func TestThreadSaverRunSavesOnTick(t *testing.T) {
 	cancel()
 	<-done
 	var rec threadRecord
-	found, err := disk.get(stateProviderThreads, &rec)
+	found, err := disk.getThreads(&rec)
 	require.NoError(t, err)
 	require.True(t, found)
 }
 
-func TestThreadSaverStaleEpochWriteIsRejected(t *testing.T) {
-	path := filepath.Join(t.TempDir(), "state.db")
-	opts := store.Options{Now: time.Now}
-	newer, err := store.Open(path, opts)
-	require.NoError(t, err)
-	require.NoError(t, newer.Claim(2))
-	require.NoError(t, newer.Close())
+func TestThreadSaverSkipsWriteAfterClose(t *testing.T) {
+	disk := threadDisk(t)
+	saver := newThreadSaver(&fakeThreads{threads: sampleThreads}, disk)
+	saver.Close()
 
-	stale, err := store.Open(path, opts)
-	require.NoError(t, err)
-	t.Cleanup(func() { _ = stale.Close() })
-	require.ErrorIs(t, stale.Claim(1), store.ErrFenced)
-
-	saver := newThreadSaver(&fakeThreads{threads: sampleThreads},
-		diskState{store: stale})
-	require.Error(t, saver.Save())
-	require.NotPanics(t, func() { saver.Flush(context.Background()) })
+	require.ErrorIs(t, saver.Save(context.Background()),
+		errThreadSaverClosed)
+	require.True(t, saver.Flush(context.Background()))
 	var rec threadRecord
-	found, err := diskState{store: stale}.get(stateProviderThreads, &rec)
+	found, err := disk.getThreads(&rec)
 	require.NoError(t, err)
 	require.False(t, found)
+}
+
+func TestThreadSaverSkipsWriteAfterCancellation(t *testing.T) {
+	disk := threadDisk(t)
+	saver := newThreadSaver(&fakeThreads{threads: sampleThreads}, disk)
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+
+	require.ErrorIs(t, saver.Save(ctx), context.Canceled)
+	var rec threadRecord
+	found, err := disk.getThreads(&rec)
+	require.NoError(t, err)
+	require.False(t, found)
+}
+
+func TestThreadSaverReportsClosedStore(t *testing.T) {
+	disk := threadDisk(t)
+	saver := newThreadSaver(&fakeThreads{threads: sampleThreads}, disk)
+	require.NoError(t, disk.store.Close())
+
+	require.Error(t, saver.Save(context.Background()))
+	require.NotPanics(t, func() { saver.Flush(context.Background()) })
+}
+
+// blockingThreads holds SnapshotThreads until release is closed.
+type blockingThreads struct {
+	entered chan struct{}
+	release chan struct{}
+}
+
+func (b *blockingThreads) SnapshotThreads() map[string]map[string]string {
+	select {
+	case b.entered <- struct{}{}:
+	default:
+	}
+	<-b.release
+	return sampleThreads
+}
+
+func (b *blockingThreads) RestoreThreads(map[string]map[string]string) {}
+
+// A Flush that times out leaves its save running. Closing the saver must
+// stop that save from writing, and a concurrent save must not race it.
+func TestThreadSaverFlushTimeoutDoesNotWriteAfterClose(t *testing.T) {
+	disk := threadDisk(t)
+	source := &blockingThreads{
+		entered: make(chan struct{}, 1), release: make(chan struct{}),
+	}
+	saver := newThreadSaver(source, disk)
+	saver.flushTimeout = time.Millisecond
+
+	require.False(t, saver.Flush(context.Background()))
+	<-source.entered
+	saver.Close()
+	concurrent := make(chan error, 1)
+	go func() { concurrent <- saver.Save(context.Background()) }()
+	close(source.release)
+
+	require.ErrorIs(t, <-concurrent, errThreadSaverClosed)
+	var rec threadRecord
+	found, err := disk.getThreads(&rec)
+	require.NoError(t, err)
+	require.False(t, found, "no write may follow Close")
 }

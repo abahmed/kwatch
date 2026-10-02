@@ -1,0 +1,13 @@
+{
+  "name": "validating-webhook-deadline",
+  "description": "A fail-closed validating webhook with ready endpoints exceeds its deadline on every call; a Deployment scale-up in one namespace cannot create pods.",
+  "root": "validatingwebhookconfiguration//label-guard",
+  "tier": "page",
+  "maxMessages": 2,
+  "mustNotBlame": [
+    "service/guard/label-guard",
+    "deployment/guard/label-guard",
+    "deployment/analytics/collector",
+    "node//w4"
+  ]
+}

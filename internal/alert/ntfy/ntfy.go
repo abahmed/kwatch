@@ -9,7 +9,7 @@ import (
 	"k8s.io/klog/v2"
 
 	"github.com/abahmed/kwatch/internal/delivery/transport"
-	"github.com/abahmed/kwatch/internal/event"
+	"github.com/abahmed/kwatch/internal/notification"
 )
 
 const defaultNtfyServer = "https://ntfy.sh"
@@ -47,6 +47,11 @@ func NewNtfy(
 
 	server := defaultNtfyServer
 	if s, ok := config["url"].(string); ok && len(s) > 0 {
+		if !transport.ValidEndpoint(s) {
+			klog.InfoS("initializing ntfy with an invalid url",
+				"setting", "url")
+			return nil
+		}
 		server = s
 	}
 
@@ -63,7 +68,9 @@ func NewNtfy(
 		priority = int(v)
 	}
 
-	klog.InfoS("initializing ntfy", "url", server, "title", title)
+	klog.InfoS("initializing ntfy",
+		"url", transport.LogURL(server),
+		"title", title)
 
 	return &Ntfy{
 		sender: transport.NewSender(dependencies),
@@ -81,21 +88,37 @@ func (n *Ntfy) Name() string {
 	return "Ntfy"
 }
 
-// SendEvent sends event to the provider
-func (n *Ntfy) SendEvent(ctx context.Context, e *event.Event) error {
-	msg := e.FormatText(n.clusterName, "")
-	return n.SendMessage(ctx, msg)
+// ntfyDefaultPriority is ntfy's normal priority, used for resolves.
+const ntfyDefaultPriority = 3
+
+// SendIncident sends the incident's one-line lead as the message. Tags
+// are plain words, never ntfy emoji shortcodes, so the status marker at
+// the start of the lead stays the only emoji. A resolve is sent at the
+// normal priority.
+func (n *Ntfy) SendIncident(
+	ctx context.Context, m notification.Message,
+) error {
+	priority := n.priority
+	if m.Resolved() {
+		priority = ntfyDefaultPriority
+	}
+	return n.send(ctx, ntfyPayload{
+		Title: n.title, Message: m.ShortText(), Priority: priority,
+		Tags: []string{"kwatch", "status-" + m.Status.String()},
+	})
 }
 
 // SendMessage sends text message to the provider
 func (n *Ntfy) SendMessage(ctx context.Context, msg string) error {
-	payload := ntfyPayload{
+	return n.send(ctx, ntfyPayload{
 		Title:    n.title,
 		Message:  msg,
 		Priority: n.priority,
 		Tags:     []string{"warning"},
-	}
+	})
+}
 
+func (n *Ntfy) send(ctx context.Context, payload ntfyPayload) error {
 	body, err := json.Marshal(payload)
 	if err != nil {
 		return err

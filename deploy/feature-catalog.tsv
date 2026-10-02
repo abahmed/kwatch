@@ -20,21 +20,21 @@ core.detection.quota|runtime|Detect exhausted ResourceQuotas and LimitRange reje
 core.detection.custom-resources|runtime|Detect failing conditions on custom and built-in resources|
 core.detection.control-plane|runtime|Check API server, etcd, DNS, scheduler and controller-manager|
 core.detection.probes|runtime|Run configured HTTP, TCP and DNS checks|
-analysis.root-cause|runtime|Explain each problem by its most likely root cause|
-analysis.changes|runtime|Relate problems to recent changes and who made them|analysis.root-cause
-analysis.impact|runtime|Show which workloads and services a problem affects|analysis.root-cause
+analysis.root-cause|runtime|Explain each incident by its most likely root cause|
+analysis.changes|runtime|Relate incidents to recent changes and who made them|analysis.root-cause
+analysis.impact|runtime|Show which workloads and services an incident affects|analysis.root-cause
 analysis.investigation|runtime|Attach a redacted log excerpt to announcements|
-problems.noise-control|runtime|Settle, merge symptoms and send only material changes|analysis.root-cause
-problems.flapping|runtime|Recognise flapping and routine recurring problems|problems.noise-control
-problems.startup-summary|startup|Summarise pre-existing problems once at cold start|
-problems.state|startup|Keep problems and history on disk across restarts|
-problems.downtime-changes|startup|Report changes made while kwatch was down|problems.state
+incidents.noise-control|runtime|Settle, merge symptoms and send only material changes|analysis.root-cause
+incidents.flapping|runtime|Recognise flapping and routine recurring incidents|incidents.noise-control
+incidents.startup-summary|startup|Summarise pre-existing incidents once at cold start|
+incidents.state|startup|Keep incidents and history on disk across restarts|
+incidents.downtime-changes|startup|Report changes made while kwatch was down|incidents.state
 policy.scope|runtime|Filter by namespace, reason, selector and silences|
 policy.severity|runtime|Override severity by reason and owner kind|
-policy.maintenance|runtime|Hold problems for objects under maintenance|
+policy.maintenance|runtime|Hold incidents for objects under maintenance|
 policy.runbooks|runtime|Attach reason-aware runbook links|
-delivery.routing|runtime|Route problems to providers by scope|
-delivery.threads|runtime|Update one message thread per problem where supported|
+delivery.routing|runtime|Route incidents to providers by scope|
+delivery.threads|runtime|Update one message thread per incident where supported|
 delivery.templates|runtime|Render operator-selected text templates|
-delivery.audit-log|runtime|Write a JSON line for every problem decision|
+delivery.audit-log|runtime|Write a JSON line for every incident decision|
 security.rbac-audit|runtime|Report missing permissions|

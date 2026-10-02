@@ -1,0 +1,8 @@
+10:01:15 settled
+🔴 Validating webhook policy-validator (prod-eu-1) has no ready pods behind service policy-webhook. It rejects every create and update it checks. To see the object's state and events, run kubectl describe validatingwebhookconfiguration policy-validator
+🔴 Validating webhook policy-validator (prod-eu-1) has no ready pods behind service policy-webhook.
+
+10:04:30 material change
+🔴 Validating webhook policy-validator (prod-eu-1) is spreading to replica set orders-17613114 in shop and replica set indexer-6f987960 in search: they cannot create pods.
+🔴 Validating webhook policy-validator (prod-eu-1) is spreading to replica set orders-17613114 in shop and replica set indexer-6f987960 in search: they cannot create pods.
+

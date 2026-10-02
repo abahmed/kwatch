@@ -9,6 +9,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"strings"
 	"time"
 
 	corev1 "k8s.io/api/core/v1"
@@ -25,17 +26,6 @@ type AuditMatch struct {
 	Reason    string
 	Action    string
 	Count     int
-}
-
-type AuditEntry struct {
-	Timestamp   time.Time `json:"ts"`
-	Action      string    `json:"action"`
-	IncidentKey string    `json:"incidentKey"`
-	IncidentID  string    `json:"id"`
-	Namespace   string    `json:"namespace"`
-	Reason      string    `json:"reason"`
-	Name        string    `json:"name"`
-	Count       int       `json:"count"`
 }
 
 func NewAuditReader(environment *Environment) *AuditReader {
@@ -117,7 +107,7 @@ func matchingEntries(entries []AuditEntry, match AuditMatch) []AuditEntry {
 		if match.Resource != "" && !resourceMatches(entry, match) {
 			continue
 		}
-		if match.Reason != "" && entry.Reason != match.Reason {
+		if match.Reason != "" && !reasonMatches(entry, match) {
 			continue
 		}
 		if match.Action != "" && entry.Action != match.Action {
@@ -128,10 +118,70 @@ func matchingEntries(entries []AuditEntry, match AuditMatch) []AuditEntry {
 	return result
 }
 
+// resourceMatches compares the audit root ("Kind/namespace/name") with the
+// scenario resource. A root that is a Pod owned by the resource
+// (name-hash-suffix) counts as the resource, because the incident may be
+// rooted at the failing Pod or at its owner.
 func resourceMatches(entry AuditEntry, match AuditMatch) bool {
-	if entry.Name == match.Resource {
+	name := entry.Name
+	if name == "" {
+		name = rootName(entry.Root)
+	}
+	if name == match.Resource {
 		return true
 	}
-	return match.Namespace != "" &&
-		entry.Name == match.Namespace+"/"+match.Resource
+	if entry.Namespace != "" &&
+		entry.Namespace+"/"+name == match.Resource {
+		return true
+	}
+	return entry.Root != "" && strings.HasPrefix(name, match.Resource+"-")
+}
+
+// reasonMatches accepts the exact reason list or any one reason in it. The
+// audit reason joins every finding reason of the incident with commas.
+func reasonMatches(entry AuditEntry, match AuditMatch) bool {
+	if entry.Reason == match.Reason {
+		return true
+	}
+	for _, reason := range strings.Split(entry.Reason, ",") {
+		if reason == match.Reason {
+			return true
+		}
+	}
+	return false
+}
+
+func rootName(root string) string {
+	parts := strings.SplitN(root, "/", 3)
+	if len(parts) != 3 {
+		return root
+	}
+	return parts[2]
+}
+
+// AssertRoot polls the audit log until an in-scope incident has the
+// expected root, then requires the complete verdict (tier, message budget,
+// must-not-blame) to be clean. It is bounded by ctx.
+func (a *AuditReader) AssertRoot(
+	ctx context.Context, exp RootExpectation, scope RootScope,
+) error {
+	deadline, cancel := context.WithTimeout(ctx, 10*time.Minute)
+	defer cancel()
+	ticker := time.NewTicker(500 * time.Millisecond)
+	defer ticker.Stop()
+	var verdict RootVerdict
+	for {
+		if entries, err := a.snapshot(deadline); err == nil {
+			verdict = EvaluateRoot(entries, exp, scope)
+			if verdict.Rooted {
+				return verdict.Err()
+			}
+		}
+		select {
+		case <-deadline.Done():
+			return fmt.Errorf("wait for root %q: %w: %v",
+				exp.Root, deadline.Err(), verdict.Problems)
+		case <-ticker.C:
+		}
+	}
 }

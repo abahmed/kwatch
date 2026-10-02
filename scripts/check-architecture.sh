@@ -2,496 +2,263 @@
 
 # Enforce the dependency direction described in AGENTS.md. This is a small
 # import-level guard, not a replacement for design review or Go compilation.
+# It needs only POSIX tools (find and grep).
 set -eu
+# pipefail is not POSIX; enable it where the shell supports it.
+(set -o pipefail) 2>/dev/null && set -o pipefail
 
 root_dir=$(CDPATH='' cd -- "$(dirname "$0")/.." && pwd)
 cd "$root_dir"
 
-# shellcheck disable=SC1091
-. "$root_dir/scripts/require-command.sh"
-require_command rg
-
 status=0
+module='github.com/abahmed/kwatch'
 
-if compatibility_files=$(rg --files internal cmd -g 'compat.go' 2>/dev/null) &&
-	[ -n "$compatibility_files" ]; then
-	echo "architecture violation: transitional compatibility files remain"
-	echo "$compatibility_files"
-	status=1
-fi
+# production_files prints non-test Go files under the given directories,
+# minus any path matching the optional exclusion regular expression.
+production_files() {
+	exclude=$1
+	shift
+	files=$(find "$@" -name '*.go' ! -name '*_test.go' 2>/dev/null | sort)
+	if [ -n "$exclude" ] && [ -n "$files" ]; then
+		files=$(printf '%s\n' "$files" | grep -Ev "$exclude" || true)
+	fi
+	printf '%s\n' "$files"
+}
 
-provider_upper_layer_pattern=$(printf '%s%s' \
-	'"github.com/abahmed/kwatch/internal/(app|controller|handler|' \
-	'incident|persistence|k8s)"')
-
-incident_forbidden_pattern=$(printf '%s' \
-	'"github.com/abahmed/kwatch/internal/(audit|delivery|persistence)"')
-
-insight_forbidden_pattern=$(printf '%s' \
-	'"github.com/abahmed/kwatch/internal/(audit|delivery|persistence|k8s)"')
-
-persistence_forbidden_pattern=$(printf '%s' \
-	'"github.com/abahmed/kwatch/internal/(insight|delivery|handler|controller)"')
-
-filter_forbidden_pattern=$(printf '%s' \
-	'"github.com/abahmed/kwatch/internal/(app|controller|handler|' \
-	'incident|insight|delivery|alert|persistence|startup|upgrader|k8s)"')
-
-monitor_upper_layer_pattern=$(printf '%s%s' \
-	'"github.com/abahmed/kwatch/internal/(app|controller|handler|' \
-	'delivery|alert|persistence|startup|upgrader|k8s)"')
-
-leaf_upper_layer_pattern=$(printf '%s%s%s' \
-	'"github.com/abahmed/kwatch/internal/(app|controller|handler|' \
-	'incident|alert|delivery|k8s|persistence|' \
-	'startup|upgrader)"')
-
-integration_incident_pattern='"github.com/abahmed/kwatch/internal/incident"'
-
-delivery_provider_import_pattern='"github.com/abahmed/kwatch/internal/alert/'
-
+# report_matches label pattern exclude dir...
 report_matches() {
 	label=$1
 	pattern=$2
-	shift 2
-	if matches=$(rg -n "$pattern" "$@" 2>/dev/null); then
+	exclude=$3
+	shift 3
+	files=$(production_files "$exclude" "$@")
+	if [ -z "$files" ]; then
+		return 0
+	fi
+	# shellcheck disable=SC2086
+	if matches=$(grep -nE -e "$pattern" $files); then
 		echo "architecture violation: $label"
 		echo "$matches"
 		status=1
 	fi
 }
 
+# forbid_imports label dir forbidden-alternation [exclude-regexp]
+# Forbidden names are internal package paths, matched with any subpackage.
+# The optional exclusion skips files under a subpackage with its own rule.
+# A rule whose directory no longer exists fails: a renamed package would
+# otherwise leave its rule silently checking nothing.
+forbid_imports() {
+	label=$1
+	dir=$2
+	forbidden=$3
+	exclude=${4:-}
+	if [ ! -d "$dir" ]; then
+		echo "architecture rule targets a missing directory: $dir ($label)"
+		status=1
+		return 0
+	fi
+	report_matches "$label ($dir)" \
+		"\"$module/internal/($forbidden)(/[^\"]*)?\"" "$exclude" "$dir"
+}
+
+# report_unlisted label pattern allowed-regexp dir...
+# Files that match the pattern must be inside the allowed path expression.
+report_unlisted() {
+	label=$1
+	pattern=$2
+	allowed=$3
+	shift 3
+	files=$(production_files '' "$@")
+	[ -n "$files" ] || return 0
+	# shellcheck disable=SC2086
+	matched=$(grep -lE -e "$pattern" $files || true)
+	for file in $matched; do
+		if ! printf '%s\n' "$file" | grep -Eq "$allowed"; then
+			echo "architecture violation: $label"
+			echo "$file"
+			status=1
+		fi
+	done
+}
+
+if compat_files=$(find internal cmd -name 'compat.go' 2>/dev/null) &&
+	[ -n "$compat_files" ]; then
+	echo "architecture violation: transitional compatibility files remain"
+	echo "$compat_files"
+	status=1
+fi
+
+# Retired packages must not return.
+for retired in \
+	internal/controller internal/insight \
+	internal/persistence internal/handler internal/monitor \
+	internal/pvc internal/probe internal/networkgraph \
+	internal/storagegraph internal/statuswatch internal/graphcontext \
+	internal/resource internal/kubeletmetrics internal/controlplane \
+	internal/delivery/util internal/problem internal/reason \
+	internal/signal internal/knowledge internal/core internal/story \
+	internal/notice internal/model internal/message internal/constant \
+	internal/k8s internal/client internal/crdwatch internal/startup \
+	internal/filter
+do
+	if [ -d "$retired" ]; then
+		echo "architecture violation: retired package returned: $retired"
+		status=1
+	fi
+	report_matches "import of retired package $retired" \
+		"\"$module/$retired(/[^\"]*)?\"" '' internal cmd
+done
+
+# Layering from AGENTS.md. Dependencies flow downward:
+# inventory -> detection -> rootcause -> incident -> notification/compose
+# -> pipeline -> app. notification and storage are leaves.
+above_inventory='detection|rootcause|incident|notification|pipeline|storage'
+above_inventory="$above_inventory|scope|delivery|alert|app"
+forbid_imports "inventory imports an upper layer" \
+	internal/inventory "$above_inventory|health|rbac"
+report_matches "inventory model imports Kubernetes" \
+	'"k8s.io/(client-go|api|apimachinery)/|internal/(inventory/kube|kubeclient)' \
+	'internal/inventory/kube/' internal/inventory
+
+forbid_imports "detection imports an upper layer" \
+	internal/detection \
+	'rootcause|incident|notification|pipeline|storage|scope|delivery|alert|app'
+forbid_imports "rootcause imports an upper layer" \
+	internal/rootcause \
+	'incident|notification|pipeline|storage|scope|delivery|alert|app'
+forbid_imports "incident imports an upper layer" \
+	internal/incident \
+	'notification|pipeline|storage|scope|delivery|alert|app'
+forbid_imports "compose imports an upper layer" \
+	internal/notification/compose \
+	'pipeline|storage|scope|delivery|alert|app'
+forbid_imports "storage imports a domain layer" \
+	internal/storage \
+	'inventory|detection|rootcause|incident|notification|pipeline|delivery|alert|app'
+forbid_imports "scope imports an upper layer" \
+	internal/scope \
+	'rootcause|incident|notification|pipeline|delivery|alert|app'
+forbid_imports "pipeline imports delivery or composition" \
+	internal/pipeline 'delivery|alert|app|health|config'
+forbid_imports "rbac imports the domain layers" \
+	internal/rbac \
+	'detection|rootcause|incident|notification|pipeline|delivery|alert|app'
+
+# Only the composition root wires the pipeline. replay is test tooling
+# that drives an engine through a recorded log.
+report_matches "package other than app imports pipeline" \
+	"\"$module/internal/pipeline\"" 'internal/(app|pipeline|replay)/' \
+	internal cmd
+
+# replay sits above the pipeline and below nothing: it never reaches
+# delivery, persistence, configuration or a cluster, and only tests
+# import it.
+forbid_imports "replay imports delivery, storage or cluster access" \
+	internal/replay \
+	'app|delivery|alert|health|config|storage|scope|audit|kubeclient|rbac|inventory/kube'
+report_matches "production code imports replay" \
+	"\"$module/internal/replay(/[^\"]*)?\"" '^internal/replay/' internal cmd
+
+# Shared leaf packages stay below every domain and infrastructure package.
+# notification/compose is a domain package with its own rule above.
+leaf_forbidden='app|pipeline|incident|rootcause|detection|inventory|storage'
+leaf_forbidden="$leaf_forbidden|notification/compose|scope|delivery|alert"
+leaf_forbidden="$leaf_forbidden|config|kubeclient"
+for leaf in notification format redact ratelimit detection/reasons
+do
+	forbid_imports "leaf package imports an upper layer" \
+		"internal/$leaf" "$leaf_forbidden" '^internal/notification/compose/'
+done
+
 # Provider adapters build payloads and use the delivery transport. They must
-# not depend on orchestration, Kubernetes access, or the application root.
-report_matches \
-	"provider package imports an upper-layer package" \
-	"$provider_upper_layer_pattern" \
+# not depend on the domain packages, Kubernetes access, or the application
+# root. They may import the leaf notification package.
+domain='pipeline|incident|rootcause|detection|inventory|storage'
+domain="$domain|notification/compose|scope"
+forbid_imports "provider imports domain or infrastructure" \
 	internal/alert \
-	--glob '*.go' \
-	--glob '!**/*_test.go' \
-	--glob '!util/**'
+	"app|$domain|kubeclient|config|health|audit"
+report_matches "provider imports a Kubernetes client library" \
+	'"k8s.io/(client-go|api|apimachinery)/' '' internal/alert internal/delivery
+forbid_imports "delivery imports domain or composition" \
+	internal/delivery \
+	"app|$domain|kubeclient"
 
 # SDK-backed adapters may translate their SDK's error type, but shared HTTP
 # classification belongs to delivery/transport so retry semantics cannot drift.
-report_matches \
-	"provider package classifies HTTP status directly" \
-	'event\.ClassifyHTTP\(|http\.NewRequest|\.Do\(' \
-	internal/alert \
-	--glob '*.go' \
-	--glob '!**/*_test.go' \
-	--glob '!util/**'
+report_matches "provider classifies HTTP status directly" \
+	'event\.ClassifyHTTP\(|http\.NewRequest|\.Do\(' '' internal/alert
 
 # Slack and Discord use injected SDK clients for provider-owned protocol
 # details. These are the only production provider files allowed to import
 # net/http; raw HTTP and generic status handling remain in delivery/transport.
-provider_http_imports=$(rg -l '"net/http"' internal/alert \
-	--glob '*.go' --glob '!**/*_test.go' || true)
-for provider_file in $provider_http_imports; do
-	case "$provider_file" in
-		internal/alert/slack/transport.go|internal/alert/discord/discord.go)
-			;;
-		*)
-			echo "architecture violation: unapproved provider SDK HTTP import"
-			echo "$provider_file"
-			status=1
-			;;
-	esac
-done
+report_unlisted "unapproved provider SDK HTTP import" '"net/http"' \
+	'^internal/alert/(slack/transport|discord/discord)\.go$' internal/alert
 
-report_matches \
-	"provider package calls compatibility HTTP helper" \
+report_matches "provider calls compatibility HTTP helper" \
 	'(OptionalHTTPClient|PostContext|PostWithClientContext|ClientFrom|clients[[:space:]]+\.\.\.\*http\.Client|dependencies[[:space:]]+\.\.\.transport\.Dependencies|transport\.Post\()' \
-	internal/alert \
-	--glob '*.go' \
-	--glob '!**/*_test.go'
+	'' internal/alert
+report_matches "provider constructs a transport sender during delivery" \
+	'transport\.New\(' '' internal/alert
+report_matches "provider retains application configuration" \
+	'config\.(App|Config)' '' internal/alert
 
-report_matches \
-	"provider constructs a transport sender during delivery" \
-	'transport\.New\(' \
-	internal/alert \
-	--glob '*.go' \
-	--glob '!**/*_test.go'
-
-report_matches \
-	"provider package imports retired delivery util package" \
-	'"github.com/abahmed/kwatch/internal/delivery/util"' \
-	internal/alert \
-	--glob '*.go' \
-	--glob '!**/*_test.go'
-
-report_matches \
-	"provider retains application configuration" \
-	'config\\.(App|Config)|\\*config\\.(App|Config)' \
-	internal/alert \
-	--glob '*.go' \
-	--glob '!**/*_test.go'
-
-# Provider migration is complete: the delivery boundary must not grow a
-# second provider contract or a context adapter. Context belongs in the
-# provider method and is passed to the shared transport sender.
-report_matches \
-	"legacy provider adapter remains" \
+# Delivery owns provider generations; the provider contract has one shape.
+report_matches "legacy provider adapter remains" \
 	'LegacyProvider|ContextProvider|providerContextAdapter|adaptProvider|SendEventContext|SendMessageContext' \
-	internal \
-	--glob '*.go' \
-	--glob '!**/*_test.go'
-
-report_matches \
-	"delivery retains pointer-based fallback state" \
-	'fallback[[:space:]]+\*providerEntry' \
-	internal/delivery \
-	--glob '*.go' \
-	--glob '!**/*_test.go'
-
-report_matches \
-	"delivery keeps a duplicate provider slice" \
+	'' internal
+report_matches "delivery retains pointer-based fallback state" \
+	'fallback[[:space:]]+\*providerEntry' '' internal/delivery
+report_matches "delivery keeps a duplicate provider slice" \
 	'^[[:space:]]+entries[[:space:]]+\[\][[:space:]]*providerEntry' \
-	internal/delivery \
-	--glob '*.go' \
-	--glob '!**/*_test.go'
-
-# Provider construction belongs to the application-selected static catalog.
-# Delivery must remain usable with a test or future catalog without importing
-# every provider implementation.
-report_matches \
-	"delivery package imports concrete provider adapters" \
-	"$delivery_provider_import_pattern" \
-	internal/delivery \
-	--glob '*.go' \
-	--glob '!**/*_test.go'
-
-# Monitor families detect facts and produce observations. They do not own
-# application composition, delivery, provider adapters, or persistence.
-report_matches \
-	"monitor package imports an upper-layer package" \
-	"$monitor_upper_layer_pattern" \
-	internal/monitor \
-	--glob '*.go' \
-	--glob '!**/*_test.go'
-
-report_matches \
-	"production code imports transitional handler package" \
-	'"github.com/abahmed/kwatch/internal/handler"' \
-	internal \
-	--glob '*.go' \
-	--glob '!**/*_test.go'
-
-report_matches \
-	"retired aggregate monitor capability remains" \
-	'components\.(Workloads|Runtime)' \
-	internal \
-	--glob '*.go' \
-	--glob '!**/*_test.go'
-
-# Incident and insight contain domain decisions. Concrete infrastructure must
-# be supplied by the application through small interfaces.
-report_matches \
-	"incident package imports concrete infrastructure" \
-	"$incident_forbidden_pattern" \
-	internal/incident \
-	--glob '*.go' \
-	--glob '!**/*_test.go'
-
-report_matches \
-	"insight package imports an infrastructure package" \
-	"$insight_forbidden_pattern" \
-	internal/insight \
-	--glob '*.go' \
-	--glob '!**/*_test.go'
-
-report_matches \
-	"persistence package imports an upper-layer package" \
-	"$persistence_forbidden_pattern" \
-	internal/persistence \
-	--glob '*.go' \
-	--glob '!**/*_test.go'
-
-report_matches \
-	"filter package imports orchestration or infrastructure" \
-	"$filter_forbidden_pattern" \
-	internal/filter \
-	--glob '*.go' \
-	--glob '!**/*_test.go'
-
-# Runtime integrations report observations through narrow monitor contracts.
-# They must not reach into incident lifecycle implementation directly.
-for integration_dir in \
-internal/kubeletmetrics \
-internal/probe \
-	internal/pvc \
-	internal/resource \
-	internal/rbac \
-	internal/controlplane \
-	internal/statuswatch
-do
-	report_matches \
-		"integration imports concrete incident lifecycle ($integration_dir)" \
-		"$integration_incident_pattern" \
-		"$integration_dir" \
-		--glob '*.go' \
-		--glob '!**/*_test.go'
-done
-
-# Family ownership is deliberately explicit. Cluster-resource policy and
-# admission endpoint policy must not regain their former cross-family imports.
-report_matches \
-	"cluster monitor imports security monitor policy" \
-	'"github.com/abahmed/kwatch/internal/monitor/security"' \
-	internal/monitor/cluster \
-	--glob '*.go' \
-	--glob '!**/*_test.go'
-
-report_matches \
-	"security monitor imports network monitor policy" \
-	'"github.com/abahmed/kwatch/internal/monitor/network"' \
-	internal/monitor/security \
-	--glob '*.go' \
-	--glob '!**/*_test.go'
-
-report_matches \
-	"PVC monitor imports persistence implementation" \
-	'"github.com/abahmed/kwatch/internal/persistence"' \
-	internal/pvc \
-	--glob '*.go' \
-	--glob '!**/*_test.go'
-
-report_matches \
-	"retired monitor runtime aggregate remains" \
-	'monitorruntime\\.(RuntimeSet|Components)|runtime\\.(RuntimeSet|Components)|type[[:space:]]+Components[[:space:]]+struct' \
-	internal \
-	--glob '*.go' \
-	--glob '!**/*_test.go'
-
-# Dynamic informer construction belongs to dynamicwatch. Domain packages may
-# use its shared factory, but must not create a second lifecycle implementation.
-report_matches \
-	"dynamic informer construction outside dynamicwatch" \
-	'k8s.io/client-go/dynamic/dynamicinformer' \
-	internal \
-	--glob '*.go' \
-	--glob '!**/*_test.go' \
-	--glob '!internal/k8s/dynamicwatch/**'
-
-report_matches \
-	"dynamic client construction outside client composition" \
-	'(dynamic\\.NewForConfig|discovery\\.NewDiscoveryClientForConfig|rest\\.RESTClientFor)' \
-	internal \
-	--glob '*.go' \
-	--glob '!**/*_test.go' \
-	--glob '!internal/client/**'
-
-report_matches \
-	"direct group-key parsing outside the codec" \
-	'strings\\.Split\\([^)]*"\\|"' \
-	internal/incident \
-	--glob '*.go' \
-	--glob '!**/*_test.go' \
-	--glob '!group_key.go'
-
-report_matches \
-	"production code uses the wall clock outside the clock package" \
-	'(time\\.Now\\(\\)|clock\\.Now\\(\\))' \
-	internal \
-	--glob '*.go' \
-	--glob '!**/*_test.go' \
-	--glob '!internal/clock/**'
-
-report_matches \
-	"production code uses a process-wide HTTP client" \
-	'http\\.DefaultClient' \
-	internal cmd \
-	--glob '*.go' \
-	--glob '!**/*_test.go'
-
-report_matches \
-	"production code uses a process-wide DNS resolver" \
-	'net\\.DefaultResolver' \
-	internal cmd \
-	--glob '*.go' \
-	--glob '!**/*_test.go'
-
-report_matches \
-	"production code hides dependencies in context values" \
-	'context\\.WithValue\\(' \
-	internal cmd \
-	--glob '*.go' \
-	--glob '!**/*_test.go'
-
-report_matches \
-	"production code uses the compatibility delivery initializer" \
-	'InitWithFactory\(' \
-	internal/app \
-	--glob '*.go' \
-	--glob '!**/*_test.go'
-
-# The YAML model is a loading boundary, not a runtime dependency. These are
-# the only production locations allowed to retain it: decoding, application
-# bootstrap, CRD overlays, migrations, and command metadata.
-raw_config_files=$(rg -l \
-	'config[.]Config|[*]config[.]Config' \
-	internal cmd \
-	--glob '*.go' \
-	--glob '!**/*_test.go' || true)
-for raw_config_file in $raw_config_files; do
-	case "$raw_config_file" in
-		internal/config/*|internal/app/*|internal/crdwatch/*|\
-		cmd/configcatalog/*|cmd/kwatch/*)
-			;;
-		*)
-			echo "architecture violation: raw config.Config runtime consumer"
-			echo "$raw_config_file"
-			status=1
-			;;
-	esac
-done
-
-report_matches \
-	"incident package imports concrete Kubernetes listers" \
-	'k8s.io/client-go/listers/' \
-	internal/incident \
-	--glob '*.go' \
-	--glob '!**/*_test.go'
-
-# REST and dynamic client construction is an application concern. Production
-# composition uses internal/client.ClientSet.
-for construction_dir in \
-internal/networkgraph \
-internal/storagegraph \
-internal/statuswatch \
-internal/controlplane \
-	internal/crdwatch
-do
-	report_matches \
-		"client construction outside client composition ($construction_dir)" \
-		'(dynamic\.NewForConfig|discovery\.NewDiscoveryClientForConfig|rest\.RESTClientFor)' \
-		"$construction_dir" \
-		--glob '*.go' \
-		--glob '!**/*_test.go'
-done
-
-client_construction_files=$(rg -l \
-	'kubernetes\\.NewForConfig|dynamic\\.NewForConfig|discovery\\.NewDiscoveryClientForConfig|rest\\.RESTClientFor' \
-	internal cmd \
-	--glob '*.go' \
-	--glob '!**/*_test.go' || true)
-for client_file in $client_construction_files; do
-	case "$client_file" in
-		internal/client/*|internal/app/*)
-			;;
-		*)
-			echo "architecture violation: local Kubernetes client construction"
-			echo "$client_file"
-			status=1
-			;;
-	esac
-done
-
-# Optional dynamic monitors share informer construction. CRD-specific restart
-# policy remains in crdwatch, but it must not fork the low-level mechanics.
-report_matches \
-	"dynamic monitor constructs informers outside dynamicwatch" \
-	'"k8s.io/client-go/dynamic/dynamicinformer"' \
-	internal/statuswatch \
-	internal/crdwatch \
-	internal/networkgraph \
-	internal/storagegraph \
-	--glob '*.go' \
-	--glob '!**/*_test.go'
-
-# Shared value and graph packages stay below orchestration and integrations.
-for package_dir in \
-	internal/model \
-	internal/event \
-	internal/graphcontext \
-	internal/constant \
-	internal/format
-do
-	report_matches \
-		"leaf package imports an upper-layer package ($package_dir)" \
-		"$leaf_upper_layer_pattern" \
-		"$package_dir" \
-		--glob '*.go' \
-		--glob '!**/*_test.go'
-done
-
-# Decisions must use the injected clock seam. The clock package is the single
-# production boundary allowed to call the standard library clock directly.
-report_matches \
-	"production code calls time.Now directly" \
-	'time\.Now\(' \
-	internal cmd \
-	--glob '*.go' \
-	--glob '!**/*_test.go' \
-	--glob '!internal/clock/clock.go'
-
-report_matches \
-	"production code calls the global clock helper directly" \
-	'(^|[^[:alnum:]_.])clock\.Now\(' \
-	internal cmd \
-	--glob '*.go' \
-	--glob '!**/*_test.go' \
-	--glob '!internal/clock/clock.go'
-
-report_matches \
-	"retired incident constructor remains" \
-	'incident\.NewEngine\(' \
-	internal cmd \
-	--glob '*.go' \
-	--glob '!**/*_test.go'
-
-report_matches \
-	"retired clock fallback remains" \
-	'clock\.From\(' \
-	internal cmd \
-	--glob '*.go' \
-	--glob '!**/*_test.go' \
-	--glob '!internal/clock/**'
-
-report_matches \
-	"feedback clock can be mutated after construction" \
-	'func \(.*\*FeedbackStore\) SetClock\(' \
-	internal/insight \
-	--glob '*.go' \
-	--glob '!**/*_test.go'
-
-# Runtime configuration and component lifecycle are canonical in production.
-# Retired compatibility setters and void-runner adapters must not return.
-report_matches \
-	"delivery configuration setter used outside compatibility" \
-	'func \(.*\*Manager\) Set(Templates|Silences)\(' \
-	internal/delivery \
-	--glob '*.go' \
-	--glob '!**/*_test.go'
-
-report_matches \
-	"application discards component runner errors" \
-	'componentRun\(' \
-	internal/app \
-	--glob '*.go' \
-	--glob '!**/*_test.go'
-
-# Prometheus label values are intentionally absent from current internal
-# metrics. Rejecting the dynamic API keeps resource names and error strings
-# from becoming unbounded cardinality if metrics are extended later.
-report_matches \
-	"workload exposes mutable lister wiring" \
-	'func \\(.*\\*.*Runtime\\) SetLister\\(' \
-	internal/monitor/workload \
-	--glob '*.go' \
-	--glob '!**/*_test.go'
-
-report_matches \
-	"health owns a context shutdown watcher" \
+	'' internal/delivery
+report_matches "delivery configuration setter remains" \
+	'func \(.*\*Manager\) Set(Templates|Silences)\(' '' internal/delivery
+report_matches "application discards component runner errors" \
+	'componentRun\(' '' internal/app
+report_matches "app uses the compatibility delivery initializer" \
+	'InitWithFactory\(' '' internal/app
+report_matches "health owns a context shutdown watcher" \
 	'go[[:space:]]+.*(ctx|context).*Done|go[[:space:]]+.*Shutdown' \
-	internal/health \
-	--glob '*.go' \
-	--glob '!**/*_test.go'
+	'' internal/health
 
-report_matches \
-	"production code uses dynamic Prometheus label values" \
-	'WithLabelValues\(' \
-	internal \
-	--glob '*.go' \
-	--glob '!**/*_test.go'
+# Dynamic informer construction belongs to dynamicwatch.
+report_matches "dynamic informer construction outside dynamicwatch" \
+	'k8s.io/client-go/dynamic/dynamicinformer' \
+	'^internal/inventory/kube/dynamicwatch/' internal
+
+# The YAML model is a loading boundary, not a runtime dependency.
+report_unlisted "raw config.Config runtime consumer" \
+	'config[.]Config' \
+	'^(internal/(config|app)|cmd/(configcatalog|kwatch))/' \
+	internal cmd
+
+# Client construction is an application concern.
+report_unlisted "local Kubernetes client construction" \
+	'kubernetes\.NewForConfig|dynamic\.NewForConfig|discovery\.NewDiscoveryClientForConfig|rest\.RESTClientFor' \
+	'^(internal/(kubeclient|app)|cmd/[a-z0-9-]+)/' internal cmd
+
+# Time-based decisions read an injected clock. The clock package is the
+# single production boundary that calls the standard library clock.
+report_matches "production code calls time.Now directly" \
+	'time\.Now\(' '^internal/clock/clock\.go$' internal cmd
+report_matches "production code calls the global clock helper directly" \
+	'(^|[^[:alnum:]_.])clock\.Now\(' '^internal/clock/clock\.go$' \
+	internal cmd
+report_matches "retired clock fallback remains" \
+	'clock\.From\(' '^internal/clock/' internal cmd
+
+report_matches "production code uses a process-wide HTTP client" \
+	'http\.DefaultClient' '' internal cmd
+report_matches "production code uses a process-wide DNS resolver" \
+	'net\.DefaultResolver' '' internal cmd
+report_matches "production code hides dependencies in context values" \
+	'context\.WithValue\(' '' internal cmd
+
+# Prometheus label values are bounded by construction; rejecting the dynamic
+# API keeps names and error strings from becoming label cardinality.
+report_matches "production code uses dynamic Prometheus label values" \
+	'WithLabelValues\(' '' internal
 
 exit "$status"

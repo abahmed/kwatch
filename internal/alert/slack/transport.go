@@ -7,7 +7,6 @@ import (
 	"strings"
 
 	"github.com/abahmed/kwatch/internal/delivery/transport"
-	"github.com/abahmed/kwatch/internal/event"
 	"github.com/abahmed/kwatch/internal/ratelimit"
 
 	slackClient "github.com/slack-go/slack"
@@ -28,10 +27,12 @@ func (s *Slack) sendAPI(
 	if len(s.channel) > 0 {
 		msg.Channel = s.channel
 	}
+	// Webhook errors get the same redaction and classification as token
+	// errors: the webhook URL is a credential and must never reach a log.
 	if s.send != nil {
-		return s.send(s.webhook, msg)
+		return wrapSlackRateLimit(s.send(s.webhook, msg))
 	}
-	return s.sendContext(ctx, s.webhook, msg)
+	return wrapSlackRateLimit(s.sendContext(ctx, s.webhook, msg))
 }
 
 func (s *Slack) sendAPIWithToken(
@@ -45,11 +46,14 @@ func (s *Slack) sendAPIWithToken(
 	if msg.Blocks != nil {
 		opts = append(opts, slackClient.MsgOptionBlocks(msg.Blocks.BlockSet...))
 	}
-	_, _, err := s.apiClient.PostMessageContext(
+	channelID, _, err := s.apiClient.PostMessageContext(
 		ctx,
 		s.channel,
 		opts...,
 	)
+	if err == nil {
+		s.rememberChannelID(channelID)
+	}
 	return wrapSlackRateLimit(err)
 }
 
@@ -91,10 +95,14 @@ func wrapSlackRateLimit(err error) error {
 	}
 	var statusErr interface{ HTTPStatusCode() int }
 	if errors.As(err, &statusErr) {
-		return transport.ClassifyHTTPStatus(statusErr.HTTPStatusCode(), err)
+		code := statusErr.HTTPStatusCode()
+		if code == http.StatusTooManyRequests {
+			return &ratelimit.Error{Provider: "Slack", StatusCode: code}
+		}
+		return transport.ClassifyHTTPStatus(code, err)
 	}
 	if permanentSlackErrors[strings.TrimSpace(err.Error())] {
-		return event.Permanent(err)
+		return transport.Permanent(err)
 	}
 	return err
 }

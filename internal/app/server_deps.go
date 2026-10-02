@@ -6,11 +6,11 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/abahmed/kwatch/internal/client"
 	"github.com/abahmed/kwatch/internal/config"
 	"github.com/abahmed/kwatch/internal/delivery"
 	"github.com/abahmed/kwatch/internal/health"
 	"github.com/abahmed/kwatch/internal/heartbeat"
+	"github.com/abahmed/kwatch/internal/kubeclient"
 	"github.com/abahmed/kwatch/internal/rbac"
 )
 
@@ -18,18 +18,17 @@ import (
 // grouping makes ownership and shutdown ordering visible without hiding the
 // composition wiring in a generic component registry.
 type serverDeps struct {
-	ctx             context.Context
-	cancel          context.CancelFunc
-	runtime         config.RuntimeConfig
-	clients         client.ClientSet
-	healthServer    *health.HealthServer
-	readiness       *readinessCoordinator
-	deliveryManager *delivery.Manager
-	securityMonitor *rbac.Monitor
-	heartbeat       *heartbeat.HeartbeatMonitor
-	telemetryStatus *adoptionTelemetryStatus
-	coreProgress    *componentProgress
-	problems        *problemFeed
+	ctx              context.Context
+	cancel           context.CancelFunc
+	runtime          config.RuntimeConfig
+	clients          kubeclient.ClientSet
+	healthServer     *health.HealthServer
+	readiness        *readinessCoordinator
+	deliveryManager  *delivery.Manager
+	securityMonitor  *rbac.Monitor
+	heartbeat        *heartbeat.HeartbeatMonitor
+	pipelineProgress *componentProgress
+	threadWake       *threadWake
 
 	// releaseLease is set after a graceful active session so shutdown can
 	// hand over the Lease once delivery has drained.
@@ -42,15 +41,14 @@ func newServerDeps(
 ) *serverDeps {
 	return &serverDeps{
 		ctx: ctx, cancel: cancel, runtime: boot.runtime,
-		clients:         boot.clients,
-		healthServer:    boot.healthServer,
-		readiness:       newReadinessCoordinator(boot.healthServer),
-		deliveryManager: boot.deliveryManager,
-		securityMonitor: boot.securityMonitor,
-		heartbeat:       boot.heartbeat,
-		telemetryStatus: newAdoptionTelemetryStatus(),
-		coreProgress:    newComponentProgress(boot.clock.Now()),
-		problems:        &problemFeed{},
+		clients:          boot.clients,
+		healthServer:     boot.healthServer,
+		readiness:        newReadinessCoordinator(boot.healthServer),
+		deliveryManager:  boot.deliveryManager,
+		securityMonitor:  boot.securityMonitor,
+		heartbeat:        boot.heartbeat,
+		pipelineProgress: newComponentProgress(boot.clock.Now()),
+		threadWake:       boot.threadWake,
 	}
 }
 

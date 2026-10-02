@@ -10,6 +10,7 @@ import (
 	"time"
 
 	gomail "gopkg.in/mail.v2"
+	"k8s.io/klog/v2"
 )
 
 const smtpTimeout = 10 * time.Second
@@ -101,10 +102,14 @@ func sendSMTP(
 	if err := writer.Close(); err != nil {
 		return smtpContextError(ctx, err)
 	}
+	// The server accepted the message when DATA was closed. Reporting a
+	// late cancellation or a failed QUIT now would make delivery retry and
+	// send the same mail twice.
 	if err := client.Quit(); err != nil {
-		return smtpContextError(ctx, err)
+		klog.V(4).InfoS("SMTP QUIT failed after the message was accepted",
+			"component", "delivery", "provider", "Email", "error", err)
 	}
-	return ctx.Err()
+	return nil
 }
 
 func smtpContextError(ctx context.Context, err error) error {

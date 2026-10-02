@@ -2,7 +2,14 @@
 
 ## Status
 
-Accepted
+Superseded by ADR 0010 (2026-09-28).
+
+No longer applies: the persisted ConfigMap names, incident layouts and
+group-key serialization (replaced by the bbolt store, no migration needed
+before a stable release), and the two-replica default with standby Pods
+(now one replica, `Recreate`, Lease as a write lock). Still valid: provider
+names, configuration fields and metrics are compatibility contracts, and
+in-cluster election does not protect against total cluster failure.
 
 ## Decision
 

@@ -1,0 +1,10 @@
+{
+  "name": "init-container-fails",
+  "description": "An init container crash-loops; the pod's application container waits and never starts.",
+  "root": "deployment/shop/orders",
+  "tier": "notify",
+  "maxMessages": 2,
+  "mustNotBlame": [
+    "node//n1"
+  ]
+}

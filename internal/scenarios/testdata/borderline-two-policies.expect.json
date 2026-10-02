@@ -1,0 +1,12 @@
+{
+  "name": "borderline-two-policies",
+  "description": "Two egress NetworkPolicies for the same pods land a minute apart, one allowing and one denying; the pods time out reaching their database.",
+  "root": "networkpolicy/payments/restrict-egress",
+  "tier": "notify",
+  "maxMessages": 2,
+  "mustNotBlame": [
+    "node//n1",
+    "node//n2",
+    "cluster-dns//cluster-dns"
+  ]
+}

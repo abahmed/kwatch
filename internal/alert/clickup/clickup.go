@@ -4,13 +4,12 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"strings"
 
 	"k8s.io/klog/v2"
 
 	"github.com/abahmed/kwatch/internal/alert/issues"
 	"github.com/abahmed/kwatch/internal/delivery/transport"
-	"github.com/abahmed/kwatch/internal/event"
+	"github.com/abahmed/kwatch/internal/notification"
 )
 
 const clickupAPIURL = "https://api.clickup.com/api/v2"
@@ -24,6 +23,7 @@ type clickupPayload struct {
 type Clickup struct {
 	issues   *issues.Map
 	sender   transport.Sender
+	api      string
 	url      string
 	token    string
 	listID   string
@@ -66,6 +66,7 @@ func NewClickup(
 	return &Clickup{
 		issues:      issues.NewMap(),
 		sender:      transport.NewSender(dependencies),
+		api:         clickupAPIURL,
 		url:         fmt.Sprintf("%s/list/%s/task", clickupAPIURL, listID),
 		token:       token,
 		listID:      listID,
@@ -79,40 +80,27 @@ func (g *Clickup) Name() string {
 	return "Clickup"
 }
 
-// SendEvent sends event to the provider
-// UsesEventDelivery routes incidents through SendEvent, which carries the
-// action and a stable key so one issue follows one incident.
-func (g *Clickup) UsesEventDelivery() {}
+// titleLimit is a conservative bound for ClickUp task names.
+const titleLimit = 255
 
-// SendEvent opens one issue per incident, comments on updates and comments
+// SendIncident opens one task per incident and comments on updates and
 // on recovery.
-func (g *Clickup) SendEvent(ctx context.Context, e *event.Event) error {
-	return g.issues.Deliver(ctx, g, e, g.issueTitle(e), g.issueBody(e))
+func (g *Clickup) SendIncident(
+	ctx context.Context, msg notification.Message,
+) error {
+	return g.issues.Deliver(ctx, g, msg,
+		issues.Title(msg, titleLimit), issues.Body(msg))
 }
 
-// SendMessage files a standalone issue for a plain message.
+// SendMessage treats a plain message as a notice, which never opens an
+// issue.
 func (g *Clickup) SendMessage(ctx context.Context, msg string) error {
-	_, err := g.Create(ctx, g.issueTitle(nil), msg)
-	return err
+	return g.SendIncident(ctx, notification.Notice(msg))
 }
 
-func (g *Clickup) issueTitle(e *event.Event) string {
-	title := "kwatch alert"
-	if e != nil {
-		title = e.AlertTitle(200)
-	}
-	if g.clusterName != "" {
-		title = "[" + g.clusterName + "] " + title
-	}
-	return title
-}
-
-func (g *Clickup) issueBody(e *event.Event) string {
-	if strings.TrimSpace(e.Narrative) == "" {
-		return e.FormatMarkdown(g.clusterName, "", "\n\n")
-	}
-	return e.AlertBody(g.clusterName)
-}
+// SkipsPlainMessages implements api.PlainMessageSkipper: plain messages
+// become notices, which SendIncident skips.
+func (g *Clickup) SkipsPlainMessages() bool { return true }
 
 // Create implements issues.Tracker.
 func (g *Clickup) Create(
@@ -138,7 +126,7 @@ func (g *Clickup) Create(
 // Comment implements issues.Tracker.
 func (g *Clickup) Comment(ctx context.Context, id, body string) error {
 	_, err := g.call(ctx, "POST",
-		clickupAPIURL+"/task/"+id+"/comment",
+		g.api+"/task/"+id+"/comment",
 		map[string]string{"comment_text": body})
 	return err
 }

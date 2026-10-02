@@ -15,13 +15,16 @@ import (
 const (
 	maxFieldsPerSection = 10
 	maxFieldChars       = 2000
+	maxSectionTextChars = 3000
 	maxBlocksPerMessage = 50
 )
 
-// truncateField shortens s to Slack's per-field limit. It slices on rune
-// boundaries so a multi-byte character is never split into invalid UTF-8.
-func truncateField(s string) string {
-	const maxChars = maxFieldChars
+// truncateMrkdwn shortens already escaped mrkdwn to maxChars characters.
+// It counts runes, so a multi-byte character is never split into invalid
+// UTF-8, and it never cuts an escape such as "&amp;" in half, which would
+// show a broken entity. Text must be escaped before it is cut: escaping
+// after cutting can push the text past the limit again.
+func truncateMrkdwn(s string, maxChars int) string {
 	r := []rune(s)
 	if len(r) <= maxChars {
 		return s
@@ -30,7 +33,12 @@ func truncateField(s string) string {
 	if maxChars <= len(ellipsis) {
 		return string(r[:maxChars])
 	}
-	return string(r[:maxChars-len(ellipsis)]) + ellipsis
+	kept := string(r[:maxChars-len(ellipsis)])
+	if amp := strings.LastIndexByte(kept, '&'); amp >= 0 &&
+		!strings.Contains(kept[amp:], ";") {
+		kept = kept[:amp]
+	}
+	return kept + ellipsis
 }
 
 // capBlocks keeps a message within Slack's block limit, reserving the last
@@ -51,34 +59,27 @@ func capBlocks(blocks []slackClient.Block) []slackClient.Block {
 	))
 }
 
-func plainSection(txt string) slackClient.SectionBlock {
-	return slackClient.SectionBlock{
-		Type: "section",
-		Text: slackClient.NewTextBlockObject(
-			slackClient.PlainTextType,
-			txt,
-			true,
-			false),
-	}
-}
-
+// markdownSection escapes txt and then cuts it to the section text limit.
 func markdownSection(txt string) slackClient.SectionBlock {
+	return escapedSection(
+		truncateMrkdwn(escapeMrkdwn(txt), maxSectionTextChars))
+}
+
+// codeSection shows txt as a code block. The text is cut before the fences
+// are added, so the closing fence is never lost.
+func codeSection(txt string) slackClient.SectionBlock {
+	const fence = "```"
+	body := truncateMrkdwn(escapeMrkdwn(txt),
+		maxSectionTextChars-2*len(fence))
+	return escapedSection(fence + body + fence)
+}
+
+func escapedSection(escaped string) slackClient.SectionBlock {
 	return slackClient.SectionBlock{
 		Type: "section",
 		Text: slackClient.NewTextBlockObject(
-			slackClient.MarkdownType,
-			escapeMrkdwn(txt),
-			false,
-			true),
+			slackClient.MarkdownType, escaped, false, true),
 	}
-}
-
-func markdownF(format string, a ...interface{}) *slackClient.TextBlockObject {
-	return slackClient.NewTextBlockObject(
-		slackClient.MarkdownType,
-		escapeMrkdwn(truncateField(fmt.Sprintf(format, a...))),
-		false,
-		true)
 }
 
 // mrkdwnEscaper escapes the three characters Slack treats as control

@@ -8,7 +8,7 @@ import (
 	slackClient "github.com/slack-go/slack"
 )
 
-// conversationState is the Slack thread that carries one story.
+// conversationState is the Slack thread that carries one incident.
 type conversationState struct {
 	ThreadTS string
 }
@@ -55,20 +55,48 @@ func postWithThreadFallback(
 func (s *Slack) postBlocks(
 	ctx context.Context,
 	blocks *slackClient.Blocks,
-	threadTS string,
+	text, threadTS string,
 ) (string, error) {
 	opts := []slackClient.MsgOption{
 		slackClient.MsgOptionBlocks(blocks.BlockSet...),
+		slackClient.MsgOptionText(escapeMrkdwn(text), false),
 		slackClient.MsgOptionAsUser(true),
 	}
 	if threadTS != "" {
 		opts = append(opts, slackClient.MsgOptionTS(threadTS))
 	}
-	_, ts, err := s.apiClient.PostMessageContext(ctx, s.channel, opts...)
+	channelID, ts, err := s.apiClient.PostMessageContext(
+		ctx, s.channel, opts...)
+	if err == nil {
+		s.rememberChannelID(channelID)
+	}
 	return ts, wrapSlackRateLimit(err)
 }
 
-// SnapshotThreads implements delivery.ThreadStateProvider: story key to
+// rememberChannelID keeps the channel ID Slack reported for a post.
+// chat.update accepts only an ID, while the configured channel may be a
+// name such as "#alerts"; one provider posts to one channel.
+func (s *Slack) rememberChannelID(channelID string) {
+	if channelID == "" {
+		return
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.channelID = channelID
+}
+
+// updateChannel is the channel for chat.update: the ID from the last post
+// response, or the configured channel before any post has been answered.
+func (s *Slack) updateChannel() string {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.channelID != "" {
+		return s.channelID
+	}
+	return s.channel
+}
+
+// SnapshotThreads implements delivery.ThreadStateProvider: incident key to
 // thread timestamp.
 func (s *Slack) SnapshotThreads() map[string]string {
 	s.mu.Lock()

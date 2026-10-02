@@ -1,0 +1,10 @@
+{
+  "name": "borderline-init-after-rotation",
+  "description": "A Secret rotation and a rollout land two minutes apart; the new pods' init container fails password authentication.",
+  "root": "secret/shop/orders-db",
+  "tier": "notify",
+  "maxMessages": 2,
+  "mustNotBlame": [
+    "node//n1"
+  ]
+}

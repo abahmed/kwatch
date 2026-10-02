@@ -1,0 +1,12 @@
+{
+  "name": "spot-node-removed",
+  "description": "A spot node is reclaimed; the replacements of its pods stay Pending for lack of cpu elsewhere.",
+  "root": "node//n3",
+  "tier": "notify",
+  "maxMessages": 2,
+  "mustNotBlame": [
+    "scheduling//Insufficient cpu",
+    "deployment/shop/cart",
+    "deployment/shop/search"
+  ]
+}

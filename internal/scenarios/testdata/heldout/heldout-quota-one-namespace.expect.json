@@ -1,0 +1,12 @@
+{
+  "name": "heldout-quota-one-namespace",
+  "description": "A Deployment scale-up exceeds its namespace's memory ResourceQuota while another namespace scales out normally on the same nodes.",
+  "root": "resourcequota/ml/team-quota",
+  "tier": "notify",
+  "maxMessages": 2,
+  "mustNotBlame": [
+    "node//n1",
+    "node//n2",
+    "deployment/web/site"
+  ]
+}

@@ -9,7 +9,7 @@ import (
 	"k8s.io/klog/v2"
 
 	"github.com/abahmed/kwatch/internal/delivery/transport"
-	"github.com/abahmed/kwatch/internal/event"
+	"github.com/abahmed/kwatch/internal/notification"
 )
 
 const vonageAPIURL = "https://rest.nexmo.com/sms/json"
@@ -81,10 +81,12 @@ func (v *Vonage) Name() string {
 	return "Vonage"
 }
 
-// SendEvent sends event to the provider
-func (v *Vonage) SendEvent(ctx context.Context, e *event.Event) error {
-	msg := e.FormatText(v.clusterName, "")
-	return v.SendMessage(ctx, msg)
+// SendIncident sends the incident's one-line lead as the SMS body.
+// The lead starts with the status marker, the only emoji in the payload.
+func (v *Vonage) SendIncident(
+	ctx context.Context, m notification.Message,
+) error {
+	return v.SendMessage(ctx, m.ShortText())
 }
 
 // SendMessage sends text message to the provider

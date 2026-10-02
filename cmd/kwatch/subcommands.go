@@ -1,21 +1,16 @@
 package main
 
 import (
-	"bufio"
 	"context"
-	"encoding/json"
 	"fmt"
 	"io"
 	"sort"
-	"strings"
-	"time"
 
 	"github.com/abahmed/kwatch/internal/alert/catalog"
-	"github.com/abahmed/kwatch/internal/client"
 	"github.com/abahmed/kwatch/internal/clock"
 	"github.com/abahmed/kwatch/internal/config"
 	"github.com/abahmed/kwatch/internal/delivery"
-	"github.com/abahmed/kwatch/internal/event"
+	"github.com/abahmed/kwatch/internal/kubeclient"
 )
 
 func runLint(strict, check bool, out, errOut io.Writer) int {
@@ -38,7 +33,7 @@ func runLint(strict, check bool, out, errOut io.Writer) int {
 	// Warnings describe a configuration that works but will mislead. They are
 	// reported, never fatal: a lint that fails on a suboptimal setting is a
 	// lint people stop running.
-	for _, warning := range config.Warnings(cfg) {
+	for _, warning := range config.LintWarnings(cfg) {
 		if _, writeErr := fmt.Fprintf(
 			out, "  warning: %s\n", warning,
 		); writeErr != nil {
@@ -55,8 +50,14 @@ func runLint(strict, check bool, out, errOut io.Writer) int {
 			return 1
 		}
 	}
+	// Construction only validates settings and builds clients; it does no
+	// I/O, so it always runs. Only --check contacts providers.
+	am, code := constructProviders(cfg, errOut)
+	if code != 0 {
+		return 1
+	}
 	if check {
-		if verifyProviders(cfg, out, errOut) != 0 {
+		if verifyProviders(am, out, errOut) != 0 {
 			return 1
 		}
 	}
@@ -66,20 +67,28 @@ func runLint(strict, check bool, out, errOut io.Writer) int {
 	return 0
 }
 
-func verifyProviders(cfg *config.Config, out, errOut io.Writer) int {
+// constructProviders builds the configured providers exactly as startup
+// does, so a setting a constructor refuses fails lint too.
+func constructProviders(
+	cfg *config.Config, errOut io.Writer,
+) (*delivery.Manager, int) {
 	runtime := config.RuntimeConfigFor(cfg)
 	am := delivery.NewManagerWithDependencies(delivery.Dependencies{
-		HTTPClient: client.NewHTTPClientWithRuntime(runtime),
+		HTTPClient: kubeclient.NewHTTPClientWithRuntime(runtime),
 		Clock:      clock.RealClock{},
 	})
 	if err := am.InitRuntime(runtime, catalog.NewProvider); err != nil {
 		if _, writeErr := fmt.Fprintf(
 			errOut, "ERROR: initialize providers: %v\n", err,
 		); writeErr != nil {
-			return 1
+			return nil, 1
 		}
-		return 1
+		return nil, 1
 	}
+	return am, 0
+}
+
+func verifyProviders(am *delivery.Manager, out, errOut io.Writer) int {
 	results := am.VerifyAll(context.Background())
 	hasErr := false
 	names := make([]string, 0, len(results))
@@ -106,95 +115,4 @@ func verifyProviders(cfg *config.Config, out, errOut io.Writer) int {
 		return 1
 	}
 	return 0
-}
-
-func runReplay(dryRun bool, in io.Reader, out, errOut io.Writer) int {
-	cfg, err := config.LoadConfig()
-	if err != nil {
-		if _, writeErr := fmt.Fprintf(errOut, "ERROR: %v\n", err); writeErr != nil {
-			return 1
-		}
-		return 1
-	}
-
-	runtime := config.RuntimeConfigFor(cfg)
-	providers := runtime.Delivery().ProviderNames()
-	am := delivery.NewManagerWithDependencies(delivery.Dependencies{
-		HTTPClient: client.NewHTTPClientWithRuntime(runtime),
-		Clock:      clock.RealClock{},
-	})
-	if err := am.InitRuntime(runtime, catalog.NewProvider); err != nil {
-		if _, writeErr := fmt.Fprintf(
-			errOut, "ERROR: initialize providers: %v\n", err,
-		); writeErr != nil {
-			return 1
-		}
-		return 1
-	}
-
-	if !dryRun {
-		// Queued jobs are only sent by started workers; drain them before
-		// exiting so replayed events are actually delivered.
-		if err := am.Start(context.Background()); err != nil {
-			_, _ = fmt.Fprintf(errOut, "ERROR: start delivery: %v\n", err)
-			return 1
-		}
-		defer stopReplayDelivery(am, errOut)
-	}
-	scanner := bufio.NewScanner(in)
-	for scanner.Scan() {
-		line := strings.TrimSpace(scanner.Text())
-		if line == "" || strings.HasPrefix(line, "#") {
-			continue
-		}
-		var ev event.Event
-		if err := json.Unmarshal([]byte(line), &ev); err != nil {
-			if _, writeErr := fmt.Fprintf(
-				errOut, "ERROR: invalid event line: %v\n  %s\n", err, line,
-			); writeErr != nil {
-				return 1
-			}
-			continue
-		}
-		msg := fmt.Sprintf(
-			"[replay] %s/%s %s: %s",
-			ev.Namespace, ev.PodName, ev.Reason, ev.Events,
-		)
-		if dryRun {
-			if _, writeErr := fmt.Fprintf(
-				out, "would replay to %v: %s\n", providers, msg,
-			); writeErr != nil {
-				return 1
-			}
-			continue
-		}
-		am.NotifyEvent(ev)
-		if _, writeErr := fmt.Fprintf(
-			out, "replayed to %v: %s\n", providers, msg,
-		); writeErr != nil {
-			return 1
-		}
-	}
-	if err := scanner.Err(); err != nil {
-		if _, writeErr := fmt.Fprintf(
-			errOut, "ERROR: reading stdin: %v\n", err,
-		); writeErr != nil {
-			return 1
-		}
-		return 1
-	}
-	return 0
-}
-
-// replayDrainTimeout bounds how long replay waits for queued deliveries.
-const replayDrainTimeout = 2 * time.Minute
-
-func stopReplayDelivery(am *delivery.Manager, errOut io.Writer) {
-	ctx, cancel := context.WithTimeout(
-		context.Background(), replayDrainTimeout,
-	)
-	defer cancel()
-	if err := am.Stop(ctx); err != nil {
-		_, _ = fmt.Fprintf(errOut, "ERROR: delivery did not drain: %v\n", err)
-	}
 }

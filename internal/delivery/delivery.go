@@ -2,100 +2,123 @@ package delivery
 
 import (
 	"context"
-	"fmt"
+	"errors"
 	"strings"
 	"time"
 
 	"k8s.io/klog/v2"
 
-	"github.com/abahmed/kwatch/internal/event"
+	"github.com/abahmed/kwatch/internal/delivery/transport"
 	"github.com/abahmed/kwatch/internal/metrics"
-	"github.com/abahmed/kwatch/internal/model"
-	"github.com/abahmed/kwatch/internal/notice"
+	"github.com/abahmed/kwatch/internal/notification"
 )
 
-// deliverJob is one queued delivery. A job is an incident, a plain message,
-// or a legacy event; queueing all three means messages are paced, digested
+// deliverJob is one queued delivery. A job is an incident or a plain
+// message; queueing both means messages are paced, summarized on overflow
 // and dead-lettered exactly like incidents instead of being written straight
 // to the provider from whatever goroutine happened to call Notify.
 type deliverJob struct {
 	generation *providerGeneration
 	kind       jobKind
 	msg        string
-	ev         *event.Event
-	story      *notice.Message
+	incident   *notification.Message
+	// target is the lookup name of the one provider the job is for. A new
+	// job has none until fanOut copies it into each provider queue; a job
+	// restored from the outbox keeps the provider it was saved for.
+	target string
+	// outboxID names the job's outbox record; "" when none was written.
+	outboxID string
+	// queued is when the job was first queued; zero when unknown. A job
+	// older than outboxMaxAge is given up instead of being sent.
+	queued time.Time
+}
+
+// isResolve reports whether the job closes an incident.
+func (j deliverJob) isResolve() bool {
+	return j.kind == jobIncident && j.incident != nil &&
+		j.incident.Resolved()
 }
 
 // key names the job in logs and dead letters.
 func (j deliverJob) key() string {
-	if j.ev != nil {
-		return j.ev.Reason
-	}
-	if j.story != nil {
-		return j.story.Key
+	if j.incident != nil {
+		return j.incident.Key
 	}
 	return "message"
 }
 
-// DeadLetterEntry is kept as a delivery alias for callers that inspect the
-// delivery package. The diagnostic wire type belongs to model.
-type DeadLetterEntry = model.DeadLetterEntry
-
 // deliverFallback re-sends a job through a provider's configured fallback.
-//
-// A fallback used to have three entry points -- one per job shape -- each
-// repeating the provider-type switch. It is one call now: the shape lives in
-// the job, and only the retry budget and the "primary failed" prefix differ
-// from a normal delivery.
-func (a *Manager) deliverFallback(
+// The job shape lives in the job, so one call covers every shape; only the
+// retry budget and the "primary failed" prefix differ from a normal
+// delivery.
+func (m *Manager) deliverFallback(
 	ctx context.Context,
 	entry *providerEntry,
 	primary string,
 	job deliverJob,
 ) error {
 	if !routedTo(entry.routes, job) {
-		return nil
+		return errFallbackNotRouted
 	}
 	opts := deliverOpts{retry: fallbackRetryConfig(entry.retry)}
 	if entry.provider.Name() != primary {
-		opts.prefix = "[fallback — primary " + primary + " failed] "
+		opts.fallbackFrom = primary
 	}
-	return a.dispatch(ctx, entry, job, opts)
+	return m.dispatch(ctx, entry, job, opts)
 }
 
-const channelCap = 256
-const dlqCap = 100
+// errFallbackNotRouted means the fallback's routes exclude the job, so the
+// job was not delivered anywhere.
+var errFallbackNotRouted = errors.New("fallback_not_routed")
 
+// channelCap is the capacity of each provider queue and, per provider, of
+// the pending queue that holds jobs created before Start.
+const channelCap = 256
+
+// defaultMaxBackoff caps retry backoff when the configured cap is negative.
 const defaultMaxBackoff = 30 * time.Second
 
 func fallbackRetryConfig(rc retryConfig) retryConfig {
 	return normalizeRetryConfig(rc)
 }
 
-func (a *Manager) recordDeadLetter(
-	entry *providerEntry,
+// recordDeadLetter counts a job that was given up on. provider names the
+// provider that failed last, or pendingProvider for a job lost before any
+// provider queue took it. Provider and transport errors stay in the
+// structured logs of the failing send; the dead-letter log carries only a
+// bounded reason code.
+func (m *Manager) recordDeadLetter(
+	provider string,
 	job deliverJob,
 	err error,
 ) {
 	metrics.DefaultRegistry().DeliveryDeadLetters.Add(1)
-	a.dlqMu.Lock()
-	defer a.dlqMu.Unlock()
-	a.dlqRing[a.dlqHead] = DeadLetterEntry{
-		Provider: entry.provider.Name(),
-		Key:      job.key(),
-		// Keep provider and transport errors in structured logs only. Dead
-		// letters are exposed through diagnostics and retain only a bounded
-		// reason code.
-		Error:     deadLetterReason(err),
-		Timestamp: a.nowTime(),
-	}
-	a.dlqHead = (a.dlqHead + 1) % dlqCap
-	if a.dlqCount < dlqCap {
-		a.dlqCount++
-	}
+	klog.InfoS("delivery dead-lettered",
+		"component", "delivery", "operation", "dead_letter",
+		"provider", provider, "key", job.key(),
+		"reason", deadLetterReason(err))
 }
 
+// pendingProvider labels dead letters of jobs that never reached a
+// provider queue.
+const pendingProvider = "pending"
+
 func deadLetterReason(err error) string {
+	if errors.Is(err, errDeliveryShutdown) {
+		return "delivery_shutdown"
+	}
+	if errors.Is(err, errFallbackNotRouted) {
+		return "fallback_not_routed"
+	}
+	if errors.Is(err, errPendingFull) {
+		return "pending_queue_full"
+	}
+	if errors.Is(err, errStoppedBeforeStart) {
+		return "stopped_before_start"
+	}
+	if errors.Is(err, errJobExpired) {
+		return "expired"
+	}
 	if err != nil && strings.Contains(
 		strings.ToLower(err.Error()), "queue saturated",
 	) {
@@ -104,27 +127,120 @@ func deadLetterReason(err error) string {
 	return "delivery_failed"
 }
 
-// deliverOne handles the full send, retry, dead-letter and fallback for one
-// job on one provider.
-func (a *Manager) deliverOne(
+// deliverOutcome is how one delivery attempt ended.
+type deliverOutcome int
+
+const (
+	// outcomeDelivered: a provider (or its fallback) accepted the job,
+	// or the provider's routes do not want it.
+	outcomeDelivered deliverOutcome = iota
+	// outcomeFailed: the provider rejected the job for good and nothing
+	// else accepted it; it was dead-lettered.
+	outcomeFailed
+	// outcomeInterrupted: ctx ended before any provider accepted the job.
+	// It was not dead-lettered; the caller decides what happens to it.
+	outcomeInterrupted
+	// outcomeRetryLater: the provider failed in a way that passes (an
+	// outage, a timeout, a rate limit). The job keeps its outbox record
+	// and is sent again once the provider's backoff ends.
+	outcomeRetryLater
+)
+
+// deliverOne sends one job once, for the shutdown drain. A job it cannot
+// send now is deferred: kept for the next session or generation when it
+// has an outbox record, dead-lettered otherwise.
+func (m *Manager) deliverOne(
 	ctx context.Context,
 	entry *providerEntry,
 	job deliverJob,
 ) bool {
-	return a.deliverOneWithContext(ctx, entry, job)
+	switch m.deliver(ctx, entry, job) {
+	case outcomeDelivered:
+		return true
+	case outcomeInterrupted:
+		m.deferJob(entry, job, errDeliveryShutdown)
+	case outcomeRetryLater:
+		m.deferJob(entry, job, errProviderUnavailable)
+	}
+	return false
 }
 
-func (a *Manager) deliverOneWithContext(
+// errProviderUnavailable marks a job whose provider kept failing until
+// the job could not wait any longer.
+var errProviderUnavailable = errors.New("provider_unavailable")
+
+// errJobExpired marks a job older than outboxMaxAge.
+var errJobExpired = errors.New("expired")
+
+// deliverViaFallback runs after the primary provider rejected the job
+// with err. A job is dead-lettered and counted as dropped once, when
+// nothing is left to try: here when there is no fallback, or when the
+// fallback fails too. A job the fallback delivers was not dropped.
+func (m *Manager) deliverViaFallback(
 	ctx context.Context,
 	entry *providerEntry,
 	job deliverJob,
-) bool {
+	err error,
+) deliverOutcome {
+	p := entry.provider
+	fallback, ok := m.fallbackFor(entry.fallbackName, job.generation)
+	if !ok {
+		m.recordTerminalFailure(entry, job, err)
+		return outcomeFailed
+	}
+	fbErr := m.deliverFallback(ctx, &fallback, p.Name(), job)
+	if fbErr == nil {
+		m.accepted(job)
+		return outcomeDelivered
+	}
+	if ctx.Err() != nil {
+		return outcomeInterrupted
+	}
+	klog.ErrorS(fbErr, "fallback delivery failed",
+		"provider", fallback.provider.Name())
+	m.recordTerminalFailure(&fallback, job, fbErr)
+	return outcomeFailed
+}
+
+// fallbackOrRetry runs after the primary failed in a way that passes.
+// The fallback, when there is one, gets the job now; otherwise, or when
+// the fallback fails too, the job waits for the primary to recover.
+func (m *Manager) fallbackOrRetry(
+	ctx context.Context,
+	entry *providerEntry,
+	job deliverJob,
+) deliverOutcome {
+	fallback, ok := m.fallbackFor(entry.fallbackName, job.generation)
+	if !ok {
+		return outcomeRetryLater
+	}
+	err := m.deliverFallback(ctx, &fallback, entry.provider.Name(), job)
+	switch {
+	case err == nil:
+		m.accepted(job)
+		return outcomeDelivered
+	case ctx.Err() != nil:
+		return outcomeInterrupted
+	}
+	klog.ErrorS(err, "fallback delivery failed",
+		"provider", fallback.provider.Name())
+	return outcomeRetryLater
+}
+
+// deliver sends one job and settles its outbox record, except when ctx
+// ended first or the provider asked to be retried later: such a job
+// keeps its record and is not dead-lettered.
+func (m *Manager) deliver(
+	ctx context.Context,
+	entry *providerEntry,
+	job deliverJob,
+) deliverOutcome {
 	if job.generation == nil {
-		a.mu.Lock()
+		m.mu.Lock()
 		job.generation = cloneProviderGeneration(
-			a.currentGenerationLocked(), false,
+			m.currentGenerationLocked(), false,
 		)
-		a.mu.Unlock()
+		m.mu.Unlock()
 	}
 	p := entry.provider
 	metrics.DefaultRegistry().NotificationsTotal.Add(1)
@@ -135,39 +251,64 @@ func (a *Manager) deliverOneWithContext(
 		klog.V(4).InfoS("incident filtered by route",
 			"provider", p.Name(),
 			"key", job.key())
-		return true
+		m.outbox.Load().remove(job.outboxID)
+		return outcomeDelivered
 	}
 
-	err := a.dispatch(ctx, entry, job, deliverOpts{retry: entry.retry})
+	err := m.dispatch(ctx, entry, job, deliverOpts{retry: entry.retry})
 	if err == nil {
-		return true
+		m.recordProviderSuccess(entry)
+		m.openSettled(entry, job)
+		m.accepted(job)
+		return outcomeDelivered
 	}
-	metrics.DefaultRegistry().NotificationsDropped.Add(1)
+	if ctx.Err() != nil {
+		// Shutting down: no fallback, and no permanent dead letter.
+		return outcomeInterrupted
+	}
 	klog.ErrorS(err, "failed to send",
 		"provider", p.Name(), "key", job.key())
-	a.recordDeadLetter(entry, job, err)
-	fallback, ok := a.fallbackFor(
-		entry.fallbackName, job.generation,
-	)
-	if !ok {
-		metrics.DefaultRegistry().DeliveryTerminalErrors.Add(1)
-		return false
+	m.recordProviderFailure(entry, err)
+	switch {
+	case isRateLimited(err):
+		// A rate limit is not an outage: the fallback is not flooded
+		// with everything the primary asked to slow down.
+		return outcomeRetryLater
+	case transport.IsPermanent(err):
+		m.openFailed(entry, job)
+		return m.deliverViaFallback(ctx, entry, job, err)
 	}
-	if fbErr := a.deliverFallback(
-		ctx, &fallback, p.Name(), job,
-	); fbErr != nil {
-		metrics.DefaultRegistry().DeliveryTerminalErrors.Add(1)
-		klog.ErrorS(fbErr, "fallback delivery failed",
-			"provider", fallback.provider.Name())
-		a.recordDeadLetter(&fallback, job, fbErr)
-		return false
+	return m.fallbackOrRetry(ctx, entry, job)
+}
+
+// accepted settles a job a provider took: its outbox record is removed.
+func (m *Manager) accepted(job deliverJob) {
+	m.outbox.Load().remove(job.outboxID)
+	m.signalDelivered()
+}
+
+// recordTerminalFailure counts a job that no provider accepted,
+// dead-letters it against the provider that failed last, and removes its
+// outbox record: sending it again would fail the same way.
+func (m *Manager) recordTerminalFailure(
+	entry *providerEntry, job deliverJob, err error,
+) {
+	registry := metrics.DefaultRegistry()
+	registry.NotificationsDropped.Add(1)
+	registry.DeliveryTerminalErrors.Add(1)
+	m.recordDeadLetter(entry.provider.Name(), job, err)
+	m.outbox.Load().remove(job.outboxID)
+}
+
+func (m *Manager) signalDelivered() {
+	if m.onDelivered != nil {
+		m.onDelivered()
 	}
-	return true
 }
 
 // fallbackFor returns a value snapshot of the configured fallback entry.
 // Resolving by name keeps fallback state independent of generation storage.
-func (a *Manager) fallbackFor(
+func (m *Manager) fallbackFor(
 	name string,
 	generation *providerGeneration,
 ) (providerEntry, bool) {
@@ -179,38 +320,4 @@ func (a *Manager) fallbackFor(
 		return fallback, ok
 	}
 	return providerEntry{}, false
-}
-
-// buildMessage produces a formatted message string for the given incident.
-// Uses the context-adaptive ReportBuilder and PlainTextRenderer.
-
-func (a *Manager) fanOut(job deliverJob) {
-	generation := a.currentGenerationLocked()
-	if generation == nil {
-		return
-	}
-	job.generation = generation
-	for _, name := range generation.order {
-		entry := generation.entries[name]
-		if !routedTo(entry.routes, job) {
-			continue
-		}
-		if !offerQueuedJob(entry.ch, job) {
-			// Nothing queued belongs to the same conversation, so there is
-			// nothing to supersede; record the overflow for diagnostics.
-			a.recordQueueDrop(entry, job)
-		}
-	}
-}
-
-func (a *Manager) recordQueueDrop(
-	entry providerEntry,
-	job deliverJob,
-) {
-	metrics.DefaultRegistry().NotificationsDropped.Add(1)
-	metrics.DefaultRegistry().DeliveryQueueSaturated.Add(1)
-	a.digestAdd(entry.provider.Name(), job)
-	a.recordDeadLetter(
-		&entry, job, fmt.Errorf("delivery queue saturated"),
-	)
 }

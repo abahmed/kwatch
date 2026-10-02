@@ -4,13 +4,14 @@ import (
 	"context"
 	"fmt"
 	"net/url"
+	"strings"
 	"time"
 
 	"k8s.io/klog/v2"
 
 	"github.com/abahmed/kwatch/internal/delivery/signing"
 	"github.com/abahmed/kwatch/internal/delivery/transport"
-	"github.com/abahmed/kwatch/internal/event"
+	"github.com/abahmed/kwatch/internal/notification"
 )
 
 const (
@@ -90,14 +91,60 @@ func (s *Sns) Name() string {
 	return "SNS"
 }
 
-// SendEvent sends event to the provider
-func (s *Sns) SendEvent(ctx context.Context, e *event.Event) error {
-	msg := e.FormatText(s.clusterName, "")
-	return s.SendMessage(ctx, msg)
+// maxSubjectBytes is SNS's limit: the subject must be shorter than 100
+// characters.
+const maxSubjectBytes = 99
+
+// SendIncident publishes the narrative with the lead as the subject. The
+// incident key and status travel as message attributes, so subscribers
+// can filter and group one incident's messages.
+func (s *Sns) SendIncident(
+	ctx context.Context, m notification.Message,
+) error {
+	subject := s.subject
+	if len(subject) == 0 {
+		subject = asciiSubject(m.ShortText())
+	}
+	message := m.NoteText()
+	if len(m.Output) > 0 {
+		message += "\n\nLast output:\n" + strings.Join(m.Output, "\n")
+	}
+	form := s.publishForm(message, subject)
+	setAttribute(form, 1, "kwatch.key", m.AlertKey(s.clusterName))
+	setAttribute(form, 2, "kwatch.status", m.Status.String())
+	return s.publish(ctx, form)
+}
+
+// asciiSubject keeps only what SNS accepts in a subject: printable ASCII
+// without line breaks, under 100 characters. The status emoji is dropped
+// because SNS rejects it; the message body keeps it.
+func asciiSubject(value string) string {
+	var b strings.Builder
+	for _, r := range value {
+		if r >= 0x20 && r <= 0x7e {
+			b.WriteRune(r)
+		}
+	}
+	subject := strings.TrimSpace(b.String())
+	if len(subject) > maxSubjectBytes {
+		subject = strings.TrimSpace(subject[:maxSubjectBytes])
+	}
+	return subject
+}
+
+func setAttribute(form url.Values, index int, name, value string) {
+	prefix := fmt.Sprintf("MessageAttributes.entry.%d.", index)
+	form.Set(prefix+"Name", name)
+	form.Set(prefix+"Value.DataType", "String")
+	form.Set(prefix+"Value.StringValue", value)
 }
 
 // SendMessage sends text message to the provider
 func (s *Sns) SendMessage(ctx context.Context, msg string) error {
+	return s.publish(ctx, s.publishForm(msg, s.subject))
+}
+
+func (s *Sns) publishForm(message, subject string) url.Values {
 	form := url.Values{}
 	form.Set("Action", "Publish")
 	form.Set("Version", "2010-03-31")
@@ -106,11 +153,15 @@ func (s *Sns) SendMessage(ctx context.Context, msg string) error {
 	} else {
 		form.Set("TopicArn", s.topicArn)
 	}
-	form.Set("Message", msg)
-	if len(s.subject) > 0 {
-		form.Set("Subject", s.subject)
+	form.Set("Message", message)
+	if len(subject) > 0 {
+		form.Set("Subject", subject)
 	}
+	return form
+}
 
+// publish signs and sends one SNS Publish request.
+func (s *Sns) publish(ctx context.Context, form url.Values) error {
 	body := []byte(form.Encode())
 	contentType := "application/x-www-form-urlencoded"
 

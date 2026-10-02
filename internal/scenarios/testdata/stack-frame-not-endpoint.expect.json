@@ -1,0 +1,15 @@
+{
+  "name": "stack-frame-not-endpoint",
+  "description": "Two Deployments crash with a refused connection whose stack frame HikariPool.java:512 looks like host:port.",
+  "root": "deployment/orders/api",
+  "otherRoots": [
+    "deployment/billing/ledger"
+  ],
+  "tier": "notify",
+  "maxMessages": 4,
+  "mustNotBlame": [
+    "node//s1",
+    "node//s2",
+    "external-endpoint//com.zaxxer.hikari.pool.hikaripool.java:512"
+  ]
+}

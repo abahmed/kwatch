@@ -26,7 +26,9 @@ dependency.
 
 1. Fork and clone the repository.
 2. Create a short-lived branch from `main`.
-3. Read [AGENTS.md](./AGENTS.md) before changing Go code.
+3. Read the
+   [contributor architecture guide](./docs/contributor-architecture.md)
+   first, then [AGENTS.md](./AGENTS.md), before changing Go code.
 4. Make a focused change with tests and documentation.
 5. Run the smallest relevant package checks while iterating:
 

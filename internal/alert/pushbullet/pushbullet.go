@@ -7,7 +7,7 @@ import (
 	"k8s.io/klog/v2"
 
 	"github.com/abahmed/kwatch/internal/delivery/transport"
-	"github.com/abahmed/kwatch/internal/event"
+	"github.com/abahmed/kwatch/internal/notification"
 )
 
 const pushbulletAPIURL = "https://api.pushbullet.com/v2/pushes"
@@ -54,10 +54,12 @@ func (s *Pushbullet) Name() string {
 	return "Pushbullet"
 }
 
-// SendEvent sends event to the provider
-func (s *Pushbullet) SendEvent(ctx context.Context, e *event.Event) error {
-	msg := e.FormatText(s.clusterName, "")
-	return s.SendMessage(ctx, msg)
+// SendIncident sends the incident's one-line lead as the push body.
+// The lead starts with the status marker, the only emoji in the payload.
+func (s *Pushbullet) SendIncident(
+	ctx context.Context, m notification.Message,
+) error {
+	return s.SendMessage(ctx, m.ShortText())
 }
 
 // SendMessage sends text message to the provider

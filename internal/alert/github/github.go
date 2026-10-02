@@ -5,13 +5,12 @@ import (
 	"encoding/json"
 	"fmt"
 	"strconv"
-	"strings"
 
 	"k8s.io/klog/v2"
 
 	"github.com/abahmed/kwatch/internal/alert/issues"
 	"github.com/abahmed/kwatch/internal/delivery/transport"
-	"github.com/abahmed/kwatch/internal/event"
+	"github.com/abahmed/kwatch/internal/notification"
 )
 
 const githubAPIURL = "https://api.github.com"
@@ -54,6 +53,11 @@ func NewGithub(
 
 	server := githubAPIURL
 	if s, ok := config["url"].(string); ok && len(s) > 0 {
+		if !transport.ValidEndpoint(s) {
+			klog.InfoS("initializing github with an invalid url",
+				"setting", "url")
+			return nil
+		}
 		server = s
 	}
 
@@ -75,40 +79,27 @@ func (g *Github) Name() string {
 	return "Github"
 }
 
-// SendEvent sends event to the provider
-// UsesEventDelivery routes incidents through SendEvent, which carries the
-// action and a stable key so one issue follows one incident.
-func (g *Github) UsesEventDelivery() {}
+// titleLimit is GitHub's maximum issue title length.
+const titleLimit = 256
 
-// SendEvent opens one issue per incident, comments on updates and closes it
-// on recovery.
-func (g *Github) SendEvent(ctx context.Context, e *event.Event) error {
-	return g.issues.Deliver(ctx, g, e, g.issueTitle(e), g.issueBody(e))
+// SendIncident opens one issue per incident, comments on updates and
+// closes it on recovery.
+func (g *Github) SendIncident(
+	ctx context.Context, msg notification.Message,
+) error {
+	return g.issues.Deliver(ctx, g, msg,
+		issues.Title(msg, titleLimit), issues.Body(msg))
 }
 
-// SendMessage files a standalone issue for a plain message.
+// SendMessage treats a plain message as a notice, which never opens an
+// issue.
 func (g *Github) SendMessage(ctx context.Context, msg string) error {
-	_, err := g.Create(ctx, g.issueTitle(nil), msg)
-	return err
+	return g.SendIncident(ctx, notification.Notice(msg))
 }
 
-func (g *Github) issueTitle(e *event.Event) string {
-	title := "kwatch alert"
-	if e != nil {
-		title = e.AlertTitle(200)
-	}
-	if g.clusterName != "" {
-		title = "[" + g.clusterName + "] " + title
-	}
-	return title
-}
-
-func (g *Github) issueBody(e *event.Event) string {
-	if strings.TrimSpace(e.Narrative) == "" {
-		return e.FormatMarkdown(g.clusterName, "", "\n\n")
-	}
-	return e.AlertBody(g.clusterName)
-}
+// SkipsPlainMessages implements api.PlainMessageSkipper: plain messages
+// become notices, which SendIncident skips.
+func (g *Github) SkipsPlainMessages() bool { return true }
 
 // Create implements issues.Tracker.
 func (g *Github) Create(

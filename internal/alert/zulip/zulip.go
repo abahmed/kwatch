@@ -9,10 +9,8 @@ import (
 	"k8s.io/klog/v2"
 
 	"github.com/abahmed/kwatch/internal/delivery/transport"
-	"github.com/abahmed/kwatch/internal/event"
+	"github.com/abahmed/kwatch/internal/notification"
 )
-
-const zulipAPIURL = "https://api.zulip.com"
 
 type Zulip struct {
 	sender  transport.Sender
@@ -50,14 +48,23 @@ func NewZulip(
 		return nil
 	}
 
-	server := zulipAPIURL
-	if s, ok := config["url"].(string); ok && len(s) > 0 {
-		server = s
+	server, ok := config["url"].(string)
+	if !ok || len(server) == 0 {
+		klog.InfoS("initializing zulip with empty url",
+			"setting", "url", "reason", "url is required")
+		return nil
+	}
+	if !validServer(server) {
+		klog.InfoS("initializing zulip with an invalid url",
+			"setting", "url")
+		return nil
 	}
 
 	title, _ := config["title"].(string)
 
-	klog.InfoS("initializing zulip", "url", server, "channel", channel)
+	klog.InfoS("initializing zulip",
+		"url", transport.LogURL(server),
+		"channel", channel)
 
 	return &Zulip{
 		sender:      transport.NewSender(dependencies),
@@ -75,10 +82,17 @@ func (z *Zulip) Name() string {
 	return "Zulip"
 }
 
-// SendEvent sends event to the provider
-func (z *Zulip) SendEvent(ctx context.Context, e *event.Event) error {
-	msg := e.FormatText(z.clusterName, "")
-	return z.SendMessage(ctx, msg)
+// SendIncident posts the incident narrative to the configured topic, with
+// the application output in a code block after it. Mentions are
+// neutralized so log text cannot notify a whole stream.
+func (z *Zulip) SendIncident(
+	ctx context.Context, m notification.Message,
+) error {
+	content := m.NoteText()
+	if len(m.Output) > 0 {
+		content += "\n\n```\n" + strings.Join(m.Output, "\n") + "\n```"
+	}
+	return z.SendMessage(ctx, notification.NeutralizeZulipMentions(content))
 }
 
 // SendMessage sends text message to the provider
@@ -103,4 +117,26 @@ func (z *Zulip) SendMessage(ctx context.Context, msg string) error {
 		},
 	})
 	return err
+}
+
+// validServer accepts an http(s) server URL. Reserved example domains
+// (RFC 2606) are rejected so a copied sample config never sends the bot
+// API key to a host nobody controls.
+func validServer(server string) bool {
+	if !transport.ValidEndpoint(server) {
+		return false
+	}
+	parsed, err := url.Parse(strings.TrimSpace(server))
+	if err != nil {
+		return false
+	}
+	host := strings.ToLower(parsed.Hostname())
+	for _, reserved := range []string{
+		"example.com", "example.net", "example.org", "example",
+	} {
+		if host == reserved || strings.HasSuffix(host, "."+reserved) {
+			return false
+		}
+	}
+	return true
 }

@@ -27,7 +27,8 @@ metadata:
   name: lifecycle-check
   namespace: kwatch-lifecycle
 spec:
-  includeEvents: true
+  # Any field the CRD schema defines; unknown fields would be pruned.
+  reasons: ["CrashLoopBackOff"]
 EOF
 
 cp -R deploy/chart "$tmp_chart/chart"

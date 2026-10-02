@@ -11,7 +11,7 @@ import (
 
 	"github.com/abahmed/kwatch/internal/delivery/signing"
 	"github.com/abahmed/kwatch/internal/delivery/transport"
-	"github.com/abahmed/kwatch/internal/event"
+	"github.com/abahmed/kwatch/internal/notification"
 )
 
 const (
@@ -31,15 +31,13 @@ type Ses struct {
 	to              []string
 	subject         string
 	now             func() time.Time
-
-	clusterName string
 }
 
 // NewSes returns a new Ses object
 
 func NewSes(
 	config map[string]interface{},
-	clusterName string,
+	_ string,
 	dependencies transport.Dependencies,
 ) *Ses {
 	sessionToken, _ := config["sessionToken"].(string)
@@ -97,7 +95,6 @@ func NewSes(
 		from:            from,
 		to:              recipients,
 		subject:         subject,
-		clusterName:     clusterName,
 		now:             dependencies.Now,
 	}
 }
@@ -107,19 +104,24 @@ func (s *Ses) Name() string {
 	return "SES"
 }
 
-// SendEvent sends event to the provider
-func (s *Ses) SendEvent(ctx context.Context, e *event.Event) error {
-	msg := e.FormatText(s.clusterName, "")
-	return s.SendMessage(ctx, msg)
+// SendIncident mails one incident message: the Short lead is the subject
+// and the narrative Note, plus any recent output, is the body.
+func (s *Ses) SendIncident(
+	ctx context.Context, m notification.Message,
+) error {
+	return s.send(ctx, m.MailSubject(), m.MailBody())
 }
 
-// SendMessage sends text message to the provider
+// SendMessage mails a plain operator message under the configured subject.
 func (s *Ses) SendMessage(ctx context.Context, msg string) error {
 	subject := s.subject
 	if len(subject) == 0 {
 		subject = "kwatch alert"
 	}
+	return s.send(ctx, subject, msg)
+}
 
+func (s *Ses) send(ctx context.Context, subject, msg string) error {
 	form := url.Values{}
 	form.Set("Action", "SendEmail")
 	form.Set("Version", "2010-12-01")

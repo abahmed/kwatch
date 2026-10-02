@@ -10,16 +10,10 @@ import (
 	"k8s.io/klog/v2"
 
 	"github.com/abahmed/kwatch/internal/delivery/transport"
-	"github.com/abahmed/kwatch/internal/event"
-	"github.com/abahmed/kwatch/internal/format"
-	"github.com/abahmed/kwatch/internal/model"
+	"github.com/abahmed/kwatch/internal/notification"
 )
 
-const (
-	defaultZendutyTitle = "kwatch detected a crash in pod: %s"
-	defaultZendutyText  = "There is an issue with container (%s) in pod (%s)"
-	zendutyAPIURL       = "https://www.zenduty.com/api/events"
-)
+const zendutyAPIURL = "https://www.zenduty.com/api/events"
 
 var alertTypes = []string{
 	"critical",
@@ -85,37 +79,32 @@ func (z *Zenduty) Name() string {
 	return "Zenduty"
 }
 
-func (z *Zenduty) UsesEventDelivery() {}
-
-// SendMessage sends text message to the provider
+// SendMessage skips plain notices: on a paging service they would open an
+// alert that nothing resolves.
 func (z *Zenduty) SendMessage(ctx context.Context, msg string) error {
-	return nil
+	return z.SendIncident(ctx, notification.Notice(msg))
 }
 
-// SendEvent sends event to the provider
-func (z *Zenduty) SendEvent(ctx context.Context, e *event.Event) error {
-	if e.Action == "resolved" {
-		return z.resolveAlert(ctx, e.DedupKey)
-	}
-	b, err := z.buildMessage(e)
-	if err != nil {
-		return err
-	}
-	return z.sendAPI(ctx, b)
-}
+// SkipsPlainMessages implements api.PlainMessageSkipper: plain messages
+// become notices, which SendIncident skips.
+func (z *Zenduty) SkipsPlainMessages() bool { return true }
 
-func (z *Zenduty) resolveAlert(
-	ctx context.Context,
-	entityID string,
+// SendIncident opens, updates or resolves one Zenduty alert per incident.
+// The alert's entity_id is the incident's stable alert key.
+func (z *Zenduty) SendIncident(
+	ctx context.Context, m notification.Message,
 ) error {
-	payload := zendutyPayload{
-		AlertType: "resolved",
-		EntityID:  entityID,
-		Message:   "resolved",
+	// A plain notice (startup, upgrade, test) or the startup summary is
+	// not an incident. Sending it would page for problems that already
+	// have their own alerts, so it is skipped.
+	if m.IsInformational() {
+		klog.V(4).InfoS("skipping informational message",
+			"component", "delivery", "provider", z.Name())
+		return nil
 	}
-	body, err := json.Marshal(payload)
+	body, err := json.Marshal(z.buildPayload(m))
 	if err != nil {
-		return fmt.Errorf("failed to marshal zenduty resolve payload: %w", err)
+		return fmt.Errorf("failed to marshal zenduty payload: %w", err)
 	}
 	return z.sendAPI(ctx, body)
 }
@@ -133,101 +122,45 @@ func (z *Zenduty) sendAPI(
 	return err
 }
 
-// alertTypeFor is the operator's configured alert type when they set one,
-// and the incident's own severity otherwise.
-func (z *Zenduty) alertTypeFor(sev model.Severity) string {
+// alertTypeFor is "resolved" for a resolved incident, the operator's
+// configured alert type when they set one, and the incident's own
+// severity otherwise.
+func (z *Zenduty) alertTypeFor(m notification.Message) string {
+	if m.Resolved() {
+		return "resolved"
+	}
 	if z.alertType != "" {
 		return z.alertType
 	}
-	switch sev {
-	case model.SeverityCritical:
+	switch m.Route.Severity {
+	case "critical":
 		return "critical"
-	case model.SeverityHigh:
-		return "error"
-	case model.SeverityMedium, model.SeverityWarning:
+	case "warning":
 		return "warning"
-	case model.SeverityNormal:
+	case "info":
 		return "info"
 	}
-	return "error"
+	if m.Status == notification.StatusCritical {
+		return "critical"
+	}
+	return "warning"
 }
 
-func (z *Zenduty) buildMessage(e *event.Event) ([]byte, error) {
-	payload := zendutyPayload{
-		AlertType: z.alertTypeFor(e.Severity),
-		EntityID:  e.DedupKey,
-	}
+// maxMessageBytes is Zenduty's limit for the alert message (title).
+const maxMessageBytes = 130
 
-	msg := defaultZendutyTitle
-	if narrative := strings.TrimSpace(e.Narrative); narrative != "" {
-		msg = zendutyFirstLine(narrative, 130)
-	} else if e.PodName != "" {
-		msg = fmt.Sprintf(defaultZendutyTitle, e.PodName)
-	}
-	payload.Message = msg
-
-	var summaryParts []string
-	summaryParts = append(
-		summaryParts,
-		fmt.Sprintf("Reason: %s", format.OrDefault(e.Reason, "unknown")),
-	)
-	if e.PodName != "" {
-		summaryParts = append(summaryParts, fmt.Sprintf("Pod: %s", e.PodName))
-	}
-	if e.ContainerName != "" {
-		summaryParts = append(
-			summaryParts,
-			fmt.Sprintf("Container: %s", e.ContainerName),
-		)
-	}
-	if e.Namespace != "" {
-		summaryParts = append(
-			summaryParts,
-			fmt.Sprintf("Namespace: %s", e.Namespace),
-		)
-	}
-	if e.NodeName != "" {
-		summaryParts = append(summaryParts, fmt.Sprintf("Node: %s", e.NodeName))
+func (z *Zenduty) buildPayload(m notification.Message) zendutyPayload {
+	summary := m.NoteText()
+	if len(m.Output) > 0 {
+		summary += "\n\nLast output:\n" + strings.Join(m.Output, "\n")
 	}
 	if z.clusterName != "" {
-		summaryParts = append(
-			summaryParts,
-			fmt.Sprintf("Cluster: %s", z.clusterName),
-		)
+		summary += "\n\nCluster: " + z.clusterName
 	}
-
-	summary := strings.Join(summaryParts, " · ")
-	if narrative := strings.TrimSpace(e.Narrative); narrative != "" {
-		summary = narrative
+	return zendutyPayload{
+		Message:   notification.Truncate(m.ShortText(), maxMessageBytes),
+		Summary:   summary,
+		AlertType: z.alertTypeFor(m),
+		EntityID:  m.AlertKey(z.clusterName),
 	}
-
-	if e.Narrative == "" && e.IncludeLogs {
-		logs := strings.TrimSpace(e.Logs)
-		if len(logs) > 0 {
-			summary += "\n\nLogs:\n" + logs
-		}
-	}
-
-	if e.Narrative == "" && e.IncludeEvents {
-		events := strings.TrimSpace(e.Events)
-		if len(events) > 0 {
-			summary += "\n\nEvents:\n" + events
-		}
-	}
-
-	payload.Summary = summary
-
-	str, err := json.Marshal(payload)
-	if err != nil {
-		return nil, fmt.Errorf("failed to marshal zenduty payload: %w", err)
-	}
-	return str, nil
-}
-
-func zendutyFirstLine(value string, limit int) string {
-	line := strings.SplitN(strings.TrimSpace(value), "\n", 2)[0]
-	if len(line) <= limit {
-		return line
-	}
-	return line[:limit-1] + "…"
 }

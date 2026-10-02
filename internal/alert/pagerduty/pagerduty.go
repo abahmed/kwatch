@@ -3,30 +3,28 @@ package pagerduty
 import (
 	"context"
 	"encoding/json"
-	"fmt"
 	"strings"
 
 	"k8s.io/klog/v2"
 
 	"github.com/abahmed/kwatch/internal/delivery/transport"
-	"github.com/abahmed/kwatch/internal/event"
-	"github.com/abahmed/kwatch/internal/format"
-	"github.com/abahmed/kwatch/internal/model"
+	"github.com/abahmed/kwatch/internal/notification"
 )
 
 const (
-	pagerdutyAPIURL   = "https://events.pagerduty.com/v2/enqueue"
-	defaultEventTitle = "[%s] There is an issue with a container in a pod"
+	pagerdutyAPIURL = "https://events.pagerduty.com/v2/enqueue"
+	// summaryLimit is the Events API v2 maximum summary length.
+	summaryLimit = 1024
 )
 
 type pagerdutyPayload struct {
 	RoutingKey  string                  `json:"routing_key"`
 	EventAction string                  `json:"event_action"`
-	DedupKey    string                  `json:"dedup_key,omitempty"`
-	Payload     pagerdutyPayloadDetails `json:"payload"`
+	DedupKey    string                  `json:"dedup_key"`
+	Payload     *pagerdutyPayloadDetail `json:"payload,omitempty"`
 }
 
-type pagerdutyPayloadDetails struct {
+type pagerdutyPayloadDetail struct {
 	Summary      string                 `json:"summary"`
 	Source       string                 `json:"source"`
 	Severity     string                 `json:"severity"`
@@ -34,27 +32,24 @@ type pagerdutyPayloadDetails struct {
 }
 
 type pagerdutyCustomDetails struct {
-	Cluster   string `json:"Cluster"`
-	Name      string `json:"Name"`
-	Container string `json:"Container"`
-	Namespace string `json:"Namespace"`
-	Node      string `json:"Node"`
-	Reason    string `json:"Reason"`
-	Events    string `json:"Events"`
-	Logs      string `json:"Logs"`
+	Cluster    string   `json:"cluster,omitempty"`
+	Details    string   `json:"details"`
+	Output     []string `json:"output,omitempty"`
+	Namespaces []string `json:"namespaces,omitempty"`
+	Reasons    []string `json:"reasons,omitempty"`
 }
 
+// Pagerduty triggers one PagerDuty alert per incident through the Events
+// API v2 and resolves it with the same dedup key.
 type Pagerduty struct {
 	sender         transport.Sender
 	integrationKey string
 	url            string
 
-	// reference for general app configuration
 	clusterName string
 }
 
 // NewPagerDuty returns new PagerDuty instance
-
 func NewPagerDuty(
 	config map[string]interface{},
 	clusterName string,
@@ -81,92 +76,80 @@ func (p *Pagerduty) Name() string {
 	return "PagerDuty"
 }
 
-func (p *Pagerduty) UsesEventDelivery() {}
+// SendMessage skips plain notices: on a paging service they would open an
+// alert that nothing resolves.
+func (p *Pagerduty) SendMessage(ctx context.Context, msg string) error {
+	return p.SendIncident(ctx, notification.Notice(msg))
+}
 
-// SendEvent sends event to the provider
-func (p *Pagerduty) SendEvent(ctx context.Context, ev *event.Event) error {
-	reqBody, err := p.buildRequestBodyPagerDuty(ev, p.integrationKey)
+// SkipsPlainMessages implements api.PlainMessageSkipper: plain messages
+// become notices, which SendIncident skips.
+func (p *Pagerduty) SkipsPlainMessages() bool { return true }
+
+// SendIncident triggers (or updates) the incident's alert, or resolves it.
+func (p *Pagerduty) SendIncident(
+	ctx context.Context, m notification.Message,
+) error {
+	// A plain notice (startup, upgrade, test) or the startup summary is
+	// not an incident. Sending it would page for problems that already
+	// have their own alerts, so it is skipped.
+	if m.IsInformational() {
+		klog.V(4).InfoS("skipping informational message",
+			"component", "delivery", "provider", p.Name())
+		return nil
+	}
+	body, err := json.Marshal(p.buildPayload(m))
 	if err != nil {
 		return err
 	}
 	_, err = p.sender.Send(ctx, transport.Request{
-		Provider: "PagerDuty", URL: p.url, Body: []byte(reqBody),
+		Provider: "PagerDuty", URL: p.url, Body: body,
 	})
 	return err
 }
 
-// SendMessage sends text message to the provider
-func (p *Pagerduty) SendMessage(ctx context.Context, msg string) error {
-	return nil
-}
-
-// pagerdutySeverity maps kwatch's severity onto the four PagerDuty accepts.
-//
-// Every alert used to be sent as "critical", which is what escalation
-// policies page on: a warning about CPU throttling woke somebody at 3am with
-// the same urgency as a cluster-wide outage, and teams responded by muting
-// the integration. An unknown or unset severity is "error", not "critical" --
-// the safe default is the one that files rather than pages.
-func pagerdutySeverity(sev model.Severity) string {
-	switch sev {
-	case model.SeverityCritical:
+// pagerdutySeverity maps the incident onto the four severities PagerDuty
+// accepts. Only critical incidents page as "critical"; an unknown
+// severity is "warning", the safe default that files rather than pages.
+func pagerdutySeverity(m notification.Message) string {
+	switch {
+	case m.Route.Severity == "critical":
 		return "critical"
-	case model.SeverityHigh:
-		return "error"
-	case model.SeverityMedium, model.SeverityWarning:
-		return "warning"
-	case model.SeverityNormal:
+	case m.Route.Severity == "info":
 		return "info"
+	case m.Route.Severity == "warning":
+		return "warning"
+	case m.Status == notification.StatusCritical:
+		return "critical"
 	}
-	return "error"
+	return "warning"
 }
 
-func (p *Pagerduty) buildRequestBodyPagerDuty(
-	ev *event.Event,
-	key string) (string, error) {
-	eventAction := "trigger"
-	if ev.Action == "resolved" {
-		eventAction = "resolve"
-	}
-
-	summary := fmt.Sprintf("Alert: %s", format.OrDefault(ev.Reason, "unknown"))
-	if narrative := strings.TrimSpace(ev.Narrative); narrative != "" {
-		summary = strings.SplitN(narrative, "\n", 2)[0]
-	}
-	if ev.Narrative == "" && ev.ContainerName != "" {
-		summary = fmt.Sprintf(defaultEventTitle, ev.ContainerName)
-	}
-
-	source := format.OrDefault(
-		ev.ContainerName,
-		format.OrDefault(ev.PodName, "unknown"),
-	)
-
+func (p *Pagerduty) buildPayload(m notification.Message) pagerdutyPayload {
 	payload := pagerdutyPayload{
-		RoutingKey:  key,
-		EventAction: eventAction,
-		DedupKey:    ev.DedupKey,
-		Payload: pagerdutyPayloadDetails{
-			Summary:  summary,
-			Source:   source,
-			Severity: pagerdutySeverity(ev.Severity),
-			CustomDetail: pagerdutyCustomDetails{
-				Cluster:   p.clusterName,
-				Name:      ev.PodName,
-				Container: ev.ContainerName,
-				Namespace: ev.Namespace,
-				Node:      ev.NodeName,
-				Reason:    ev.Reason,
-				Events:    "",
-				Logs:      format.OrDefault(ev.Narrative, ev.Logs),
-			},
+		RoutingKey:  p.integrationKey,
+		EventAction: "trigger",
+		DedupKey:    m.AlertKey(p.clusterName),
+	}
+	if m.Resolved() {
+		payload.EventAction = "resolve"
+		return payload
+	}
+	source := p.clusterName
+	if source == "" {
+		source = "kwatch"
+	}
+	payload.Payload = &pagerdutyPayloadDetail{
+		Summary:  notification.Truncate(m.ShortText(), summaryLimit),
+		Source:   source,
+		Severity: pagerdutySeverity(m),
+		CustomDetail: pagerdutyCustomDetails{
+			Cluster:    p.clusterName,
+			Details:    strings.TrimSpace(m.NoteText()),
+			Output:     m.Output,
+			Namespaces: m.Route.Namespaces,
+			Reasons:    m.Route.Reasons,
 		},
 	}
-
-	bodyBytes, err := json.Marshal(payload)
-	if err != nil {
-		return "", err
-	}
-
-	return string(bodyBytes), nil
+	return payload
 }

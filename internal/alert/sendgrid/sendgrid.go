@@ -8,7 +8,7 @@ import (
 	"k8s.io/klog/v2"
 
 	"github.com/abahmed/kwatch/internal/delivery/transport"
-	"github.com/abahmed/kwatch/internal/event"
+	"github.com/abahmed/kwatch/internal/notification"
 )
 
 const sendgridAPIURL = "https://api.sendgrid.com/v3/mail/send"
@@ -40,15 +40,13 @@ type Sendgrid struct {
 	from    string
 	to      []string
 	subject string
-
-	clusterName string
 }
 
 // NewSendgrid returns a new Sendgrid object
 
 func NewSendgrid(
 	config map[string]interface{},
-	clusterName string,
+	_ string,
 	dependencies transport.Dependencies,
 ) *Sendgrid {
 	apiKey, ok := config["apiKey"].(string)
@@ -74,13 +72,12 @@ func NewSendgrid(
 	klog.InfoS("initializing sendgrid", "from", from)
 
 	return &Sendgrid{
-		sender:      transport.NewSender(dependencies),
-		url:         sendgridAPIURL,
-		apiKey:      apiKey,
-		from:        from,
-		to:          recipients,
-		subject:     subject,
-		clusterName: clusterName,
+		sender:  transport.NewSender(dependencies),
+		url:     sendgridAPIURL,
+		apiKey:  apiKey,
+		from:    from,
+		to:      recipients,
+		subject: subject,
 	}
 }
 
@@ -89,19 +86,24 @@ func (s *Sendgrid) Name() string {
 	return "Sendgrid"
 }
 
-// SendEvent sends event to the provider
-func (s *Sendgrid) SendEvent(ctx context.Context, e *event.Event) error {
-	msg := e.FormatText(s.clusterName, "")
-	return s.SendMessage(ctx, msg)
+// SendIncident mails one incident message: the Short lead is the subject
+// and the narrative Note, plus any recent output, is the body.
+func (s *Sendgrid) SendIncident(
+	ctx context.Context, m notification.Message,
+) error {
+	return s.send(ctx, m.MailSubject(), m.MailBody())
 }
 
-// SendMessage sends text message to the provider
+// SendMessage mails a plain operator message under the configured subject.
 func (s *Sendgrid) SendMessage(ctx context.Context, msg string) error {
 	subject := s.subject
 	if len(subject) == 0 {
 		subject = "kwatch alert"
 	}
+	return s.send(ctx, subject, msg)
+}
 
+func (s *Sendgrid) send(ctx context.Context, subject, msg string) error {
 	personalization := sendgridPersonalization{}
 	for _, recipient := range s.to {
 		personalization.To = append(personalization.To, sendgridEmail{Email: recipient})

@@ -1,0 +1,10 @@
+{
+  "name": "image-typo",
+  "description": "A Deployment rolls out a mistyped image tag that the registry does not have; other workloads from the same registry stay healthy.",
+  "root": "deployment/shop/checkout",
+  "tier": "notify",
+  "maxMessages": 2,
+  "mustNotBlame": [
+    "registry//registry.corp.example"
+  ]
+}
