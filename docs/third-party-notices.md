@@ -69,6 +69,7 @@ listed where a dependency contains a separately licensed fork or subpackage.
 - [github.com/json-iterator/go](https://github.com/json-iterator/go/blob/v1.1.12/LICENSE)
 - [github.com/robfig/cron/v3](https://github.com/robfig/cron/blob/v3.0.1/LICENSE)
 - [github.com/x448/float16](https://github.com/x448/float16/blob/v0.8.4/LICENSE)
+- [go.etcd.io/bbolt](https://github.com/etcd-io/bbolt/blob/v1.5.0/LICENSE)
 - [go.yaml.in/yaml/v3](https://github.com/yaml/go-yaml/blob/v3.0.5/LICENSE)
 - [gopkg.in/mail.v2](https://github.com/go-mail/mail/blob/v2.3.1/LICENSE)
 - [gopkg.in/yaml.v3](https://github.com/go-yaml/yaml/blob/v3.0.1/LICENSE)

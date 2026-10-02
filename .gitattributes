@@ -1,0 +1,1 @@
+internal/scenarios/testdata/messages/*.golden whitespace=-blank-at-eof
