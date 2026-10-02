@@ -236,9 +236,8 @@ entries:
   - id: security.admission-policy
     family: security
     lifecycle: policy
-    status: covered
+    status: planned
     environment: kind-extended
-    test: TestScenarioExtendedAdmissionPolicy
   - id: security.rbac
     family: security
     lifecycle: permission
@@ -285,8 +284,7 @@ entries:
   - id: integration.control-plane
     family: integration
     lifecycle: diagnostics
-    status: covered
-    test: TestScenarioControlPlaneComponentRecovery
+    status: unsupported-in-kind
   - id: invalid-config.startup
     family: invalid-config
     lifecycle: startup

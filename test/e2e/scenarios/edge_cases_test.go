@@ -12,6 +12,7 @@ import (
 	networkingv1 "k8s.io/api/networking/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/types"
 
 	"github.com/abahmed/kwatch/test/e2e/harness"
 )
@@ -212,9 +213,11 @@ func TestScenarioMissingServiceAccountReference(t *testing.T) {
 		); err != nil {
 			t.Fatal(err)
 		}
-		pod.Labels = map[string]string{"kwatch-e2e": "missing-service-account"}
-		if _, err := e.Client.CoreV1().Pods(namespace).Update(
-			ctx, pod, metav1.UpdateOptions{},
+		label := []byte(
+			`{"metadata":{"labels":{"kwatch-e2e":"missing-service-account"}}}`)
+		if _, err := e.Client.CoreV1().Pods(namespace).Patch(
+			ctx, pod.Name, types.MergePatchType, label,
+			metav1.PatchOptions{},
 		); err != nil {
 			t.Fatal(err)
 		}
@@ -263,7 +266,7 @@ func TestScenarioMissingIngressBackend(t *testing.T) {
 		waitCtx, cancel := context.WithTimeout(ctx, 5*time.Minute)
 		defer cancel()
 		if _, err := e.Audit.WaitFor(waitCtx, harness.AuditMatch{
-			Namespace: namespace, Resource: "missing-backend",
+			Namespace: namespace, Resource: "missing-service",
 			Reason: "IngressBackendNotFound", Count: 1,
 		}); err != nil {
 			t.Fatal(err)

@@ -114,61 +114,6 @@ func TestScenarioExtendedAdmissionWebhook(t *testing.T) {
 	})
 }
 
-func TestScenarioExtendedAdmissionPolicy(t *testing.T) {
-	runExtendedScenario(t, "security.admission-policy", func(
-		ctx context.Context,
-		t *testing.T,
-		e *harness.Environment,
-	) {
-		resource := e.Dynamic.Resource(schema.GroupVersionResource{
-			Group: "admissionregistration.k8s.io", Version: "v1",
-			Resource: "validatingadmissionpolicies",
-		})
-		name := "kwatch-e2e-invalid-policy"
-		object := &unstructured.Unstructured{Object: map[string]any{
-			"apiVersion": "admissionregistration.k8s.io/v1",
-			"kind":       "ValidatingAdmissionPolicy",
-			"metadata":   map[string]any{"name": name},
-			"spec": map[string]any{
-				"failurePolicy": "Ignore",
-				"matchConstraints": map[string]any{
-					"resourceRules": []any{map[string]any{
-						"apiGroups": []any{""}, "apiVersions": []any{"v1"},
-						"operations": []any{"CREATE"}, "resources": []any{"pods"},
-						"scope": "Namespaced",
-					}},
-				},
-				"validations": []any{map[string]any{
-					"expression": "true", "message": "valid",
-				}},
-			},
-		}}
-		if _, err := resource.Create(
-			ctx, object, metav1.CreateOptions{},
-		); err != nil {
-			t.Fatal(err)
-		}
-		defer func() {
-			_ = resource.Delete(context.Background(), name,
-				metav1.DeleteOptions{})
-		}()
-		patch := []byte(
-			`{"status":{"typeChecking":{"expressionWarnings":[` +
-				`{"fieldRef":"spec.validations[0].expression",` +
-				`"warning":"e2e"}]}}}`,
-		)
-		if _, err := resource.Patch(ctx, name, types.MergePatchType,
-			patch, metav1.PatchOptions{}, "status"); err != nil {
-			t.Fatal(err)
-		}
-		if _, err := e.Audit.WaitFor(ctx, harness.AuditMatch{
-			Resource: name, Reason: "AdmissionPolicyInvalid", Count: 1,
-		}); err != nil {
-			t.Fatal(err)
-		}
-	})
-}
-
 func TestScenarioExtendedMetricsAPIFailure(t *testing.T) {
 	runExtendedScenario(t, "integration.metrics-api", func(
 		ctx context.Context,

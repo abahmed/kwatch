@@ -215,7 +215,8 @@ assert_can() {
 	local expected="$1"
 	shift
 	local result
-	result=$(kubectl auth can-i "$@")
+	# can-i exits 1 for "no", which is a valid answer here.
+	result=$(kubectl auth can-i "$@" || true)
 	if [[ "$result" != "$expected" ]]; then
 		echo "RBAC check failed: expected $expected, got $result: $*" >&2
 		exit 1

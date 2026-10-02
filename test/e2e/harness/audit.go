@@ -120,8 +120,9 @@ func matchingEntries(entries []AuditEntry, match AuditMatch) []AuditEntry {
 
 // resourceMatches compares the audit root ("Kind/namespace/name") with the
 // scenario resource. A root that is a Pod owned by the resource
-// (name-hash-suffix) counts as the resource, because the incident may be
-// rooted at the failing Pod or at its owner.
+// (name-hash-suffix) or a container of the Pod ("pod/container") counts as
+// the resource, because the incident may be rooted at the failing Pod, at
+// one of its containers or at its owner.
 func resourceMatches(entry AuditEntry, match AuditMatch) bool {
 	name := entry.Name
 	if name == "" {
@@ -134,7 +135,8 @@ func resourceMatches(entry AuditEntry, match AuditMatch) bool {
 		entry.Namespace+"/"+name == match.Resource {
 		return true
 	}
-	return entry.Root != "" && strings.HasPrefix(name, match.Resource+"-")
+	return entry.Root != "" && (strings.HasPrefix(name, match.Resource+"-") ||
+		strings.HasPrefix(name, match.Resource+"/"))
 }
 
 // reasonMatches accepts the exact reason list or any one reason in it. The

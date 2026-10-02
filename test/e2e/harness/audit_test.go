@@ -59,3 +59,20 @@ func TestMatchingEntriesAcceptsNamespacedResourceNames(t *testing.T) {
 		})
 	}
 }
+
+func TestMatchingEntriesAcceptsContainerRoots(t *testing.T) {
+	entries := []AuditEntry{{
+		Namespace: "apps",
+		Root:      "container/apps/post-start/workload",
+		Reason:    "FailedPostStartHook",
+		Action:    "update",
+	}}
+	for resource, want := range map[string]int{
+		"post-start": 1, "workload": 0,
+	} {
+		match := AuditMatch{Namespace: "apps", Resource: resource, Count: 1}
+		if got := len(matchingEntries(entries, match)); got != want {
+			t.Fatalf("resource %q matched %d, want %d", resource, got, want)
+		}
+	}
+}
