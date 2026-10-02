@@ -5,6 +5,7 @@
 # It needs only POSIX tools (find and grep).
 set -eu
 # pipefail is not POSIX; enable it where the shell supports it.
+# shellcheck disable=SC3040
 (set -o pipefail) 2>/dev/null && set -o pipefail
 
 root_dir=$(CDPATH='' cd -- "$(dirname "$0")/.." && pwd)

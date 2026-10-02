@@ -8,6 +8,7 @@
 # checked.
 set -eu
 # pipefail is not POSIX; enable it where the shell supports it.
+# shellcheck disable=SC3040
 (set -o pipefail) 2>/dev/null && set -o pipefail
 
 base_ref=${BASE:-origin/main}
