@@ -10,14 +10,9 @@ import (
 
 	"k8s.io/klog/v2"
 
-	"github.com/abahmed/kwatch/internal/crdwatch"
-	"github.com/abahmed/kwatch/internal/k8s"
+	"github.com/abahmed/kwatch/internal/config/crd"
+	"github.com/abahmed/kwatch/internal/kubeclient"
 	"github.com/abahmed/kwatch/internal/metrics"
-)
-
-const (
-	backgroundShutdownTimeout = 10 * time.Second
-	componentShutdownTimeout  = 10 * time.Second
 )
 
 // serve starts the controller loop and background monitors, then waits for
@@ -52,8 +47,8 @@ func serve(ctx context.Context, deps *serverDeps) int {
 // startCRDWatcher launches the CRD watcher against the cluster rest config.
 func startCRDWatcher(ctx context.Context, deps *serverDeps) error {
 	resync := deps.runtime.Lifecycle().ResyncInterval()
-	w := crdwatch.NewWithClient(
-		deps.runtime, deps.clients.Dynamic, k8s.GetNamespace(), resync,
+	w := crd.NewWithClient(
+		deps.runtime, deps.clients.Dynamic, kubeclient.GetNamespace(), resync,
 		deps.cancel,
 		func(err error) {
 			if err != nil {
@@ -61,7 +56,7 @@ func startCRDWatcher(ctx context.Context, deps *serverDeps) error {
 					"component", "crd-watcher")
 			}
 		},
-		func(status crdwatch.Status) {
+		func(status crd.Status) {
 			if status.State == "waiting" {
 				deps.healthServer.SetComponentStatus(
 					"crd-watcher", "waiting",
@@ -82,12 +77,13 @@ func startCRDWatcher(ctx context.Context, deps *serverDeps) error {
 				)
 			}
 		},
+		loadConfig,
 	)
 	if err := w.Start(ctx); err != nil {
 		return fmt.Errorf("crd watcher: %w", err)
 	}
 	defer func() {
-		stopCtx, cancel := boundedShutdownContext(ctx)
+		stopCtx, cancel := boundedShutdownContext(ctx, watcherStopTimeout)
 		defer cancel()
 		if err := w.Stop(stopCtx); err != nil {
 			metrics.DefaultRegistry().ShutdownTimeouts.Add(1)
@@ -102,7 +98,8 @@ func startCRDWatcher(ctx context.Context, deps *serverDeps) error {
 func crdWatcherReason(reason string) string {
 	switch reason {
 	case "cache_sync_failed", "source_not_configured",
-		"optional_api_unavailable", "watcher_failed":
+		"optional_api_unavailable", "watcher_failed",
+		"config_overlay_invalid":
 		return reason
 	default:
 		return "watcher_failed"
@@ -144,6 +141,7 @@ func waitShutdown(
 	// The leader session stops its components and writes its final state
 	// before the supervisor finishes; wait for it with a hard bound so a
 	// misbehaving dependency cannot prevent the process from terminating.
+	// The bound covers the whole nested session budget (shutdown_context.go).
 	backgroundDone := make(chan struct{})
 	go func() {
 		supervisor.wg.Wait()
@@ -155,7 +153,10 @@ func waitShutdown(
 		recordShutdownTimeout("background-tasks")
 	}
 
-	shutdownCtx, cancel := boundedShutdownContext(applicationContext)
+	// The leader session already drained delivery (active.go); this
+	// stop finishes a manager no session drained, such as on a standby.
+	shutdownCtx, cancel := boundedShutdownContext(
+		applicationContext, deliveryStopTimeout)
 	if err := deps.deliveryManager.Stop(shutdownCtx); err != nil {
 		metrics.DefaultRegistry().ShutdownTimeouts.Add(1)
 		klog.ErrorS(err, "timed out waiting for delivery manager to drain")
@@ -166,7 +167,8 @@ func waitShutdown(
 }
 
 func stopHealthServer(deps *serverDeps) {
-	shutdownCtx, cancel := boundedShutdownContext(deps.ctx)
+	shutdownCtx, cancel := boundedShutdownContext(
+		deps.ctx, healthStopTimeout)
 	defer cancel()
 	deps.healthServer.SetReady(false)
 	if err := deps.healthServer.Stop(shutdownCtx); err != nil {
@@ -187,7 +189,7 @@ func releaseLeaseAfterShutdown(deps *serverDeps, parent context.Context) {
 	if release == nil {
 		return
 	}
-	ctx, cancel := boundedShutdownContext(parent)
+	ctx, cancel := boundedShutdownContext(parent, leaseReleaseTimeout)
 	defer cancel()
 	release(ctx)
 }

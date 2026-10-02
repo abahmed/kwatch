@@ -11,8 +11,7 @@ import (
 
 	"github.com/abahmed/kwatch/internal/clock"
 	"github.com/abahmed/kwatch/internal/delivery/transport"
-	"github.com/abahmed/kwatch/internal/event"
-	"github.com/abahmed/kwatch/internal/notice"
+	"github.com/abahmed/kwatch/internal/notification"
 )
 
 var testDeps = transport.Dependencies{
@@ -35,7 +34,7 @@ func TestWebhook(t *testing.T) {
 	assert := assert.New(t)
 
 	configMap := map[string]interface{}{
-		"url": "testtest",
+		"url": "https://example.test/hook",
 		"headers": []interface{}{
 			map[string]string{
 				"name":  "test",
@@ -97,127 +96,18 @@ func TestSendMessageError(t *testing.T) {
 	assert.Error(c.SendMessage(context.Background(), "test"))
 }
 
-func TestSendEvent(t *testing.T) {
-	assert := assert.New(t)
-
-	s := httptest.NewServer(
-		http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			w.WriteHeader(http.StatusBadGateway)
-		}))
-
-	defer s.Close()
-
-	configMap := map[string]interface{}{
-		"url": s.URL,
-	}
-	c := NewWebhook(configMap, testAppConfig(), testDeps)
-	assert.NotNil(c)
-
-	ev := event.Event{
-		PodName:       "test-pod",
-		ContainerName: "test-container",
-		Namespace:     "default",
-		Reason:        "OOMKILLED",
-		Logs:          "test\ntestlogs",
-		Events: "event1-event2-event3-event1-event2-event3-event1-event2-" +
-			"event3\nevent5\nevent6-event8-event11-event12",
-	}
-	assert.Error(c.SendEvent(context.Background(), &ev))
-}
-
-func TestSendEventError(t *testing.T) {
-	assert := assert.New(t)
-
-	s := httptest.NewServer(
-		http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			w.Write([]byte(`{"isOk": true}`))
-		}))
-
-	defer s.Close()
-
-	configMap := map[string]interface{}{
-		"url": s.URL,
-		"headers": []interface{}{
-			map[string]string{
-				"name":  "test",
-				"value": "test",
-			},
-		},
-		"basicAuth": map[string]string{
-			"username": "test",
-			"password": "test",
-		},
-	}
-	c := NewWebhook(configMap, testAppConfig(), testDeps)
-	assert.NotNil(c)
-
-	ev := event.Event{
-		PodName:       "test-pod",
-		ContainerName: "test-container",
-		Namespace:     "default",
-		Reason:        "OOMKILLED",
-		Logs:          "test\ntestlogs",
-		Events: "event1-event2-event3-event1-event2-event3-event1-event2-" +
-			"event3\nevent5\nevent6-event8-event11-event12",
-	}
-	assert.Nil(c.SendEvent(context.Background(), &ev))
-}
-
-func TestSendStoryUsesStablePayload(t *testing.T) {
-	var received map[string]interface{}
-	s := httptest.NewServer(http.HandlerFunc(func(
-		w http.ResponseWriter, r *http.Request,
-	) {
-		assert.NoError(t, json.NewDecoder(r.Body).Decode(&received))
-		w.WriteHeader(http.StatusAccepted)
-	}))
-	defer s.Close()
-
-	c := NewWebhook(map[string]interface{}{"url": s.URL}, "dev", testDeps)
-	assert.NotNil(t, c)
-	assert.NoError(t, c.SendStory(context.Background(), notice.Message{
-		Key: "problem-1", Revision: 2, Status: notice.StatusResolved,
-		Title: "api recovered", Lines: []string{"back to 3/3 ready"},
-	}))
-	assert.Equal(t, "dev", received["cluster"])
-	assert.Equal(t, "problem-1", received["key"])
-	assert.EqualValues(t, 2, received["revision"])
-	assert.Equal(t, notice.StatusResolved.String(), received["status"])
-	assert.Contains(t, received["text"], "api recovered")
-	assert.NotContains(t, string(mustJSON(t, received)), "confidence")
-}
-
-func mustJSON(t *testing.T, value interface{}) []byte {
-	t.Helper()
-	raw, err := json.Marshal(value)
-	assert.NoError(t, err)
-	return raw
-}
-
-func TestInvaildHttpRequest(t *testing.T) {
+func TestInvalidHTTPRequest(t *testing.T) {
 	assert := assert.New(t)
 
 	configMap := map[string]interface{}{
-		"url": "h ttp://localhost",
+		"url": "https://example.test/hook",
 	}
 	c := NewWebhook(configMap, testAppConfig(), testDeps)
 	assert.NotNil(c)
+	c.webhook = "h ttp://localhost"
+	m := notification.Message{Key: "k", Title: "api failed"}
+	assert.Error(c.SendIncident(context.Background(), m))
 
-	ev := event.Event{
-		PodName:       "test-pod",
-		ContainerName: "test-container",
-		Namespace:     "default",
-		Reason:        "OOMKILLED",
-		Logs:          "test\ntestlogs",
-		Events: "event1-event2-event3-event1-event2-event3-event1-event2-" +
-			"event3\nevent5\nevent6-event8-event11-event12",
-	}
-
-	assert.Error(c.SendEvent(context.Background(), &ev))
-
-	c = NewWebhook(configMap, testAppConfig(), testDeps)
-	assert.NotNil(c)
 	c.webhook = "http://localhost:132323"
-
-	assert.Error(c.SendEvent(context.Background(), &ev))
+	assert.Error(c.SendIncident(context.Background(), m))
 }

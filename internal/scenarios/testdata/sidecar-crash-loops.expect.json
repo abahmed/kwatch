@@ -1,0 +1,10 @@
+{
+  "name": "sidecar-crash-loops",
+  "description": "A native sidecar proxy crash-loops; the app container runs but the pod stays unready.",
+  "root": "deployment/shop/payments",
+  "tier": "notify",
+  "maxMessages": 2,
+  "mustNotBlame": [
+    "node//n1"
+  ]
+}

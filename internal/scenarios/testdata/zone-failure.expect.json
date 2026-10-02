@@ -1,0 +1,11 @@
+{
+  "name": "zone-failure",
+  "description": "Every node of one zone stops reporting; replicas in the other zones stay healthy.",
+  "root": "zone//zone-b",
+  "tier": "page",
+  "maxMessages": 2,
+  "mustNotBlame": [
+    "zone//zone-a",
+    "zone//zone-c"
+  ]
+}

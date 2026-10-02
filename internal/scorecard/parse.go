@@ -91,7 +91,7 @@ func decodeEntry(line string) (audit.Entry, bool) {
 	}
 	var entry audit.Entry
 	if json.Unmarshal([]byte(line), &entry) != nil ||
-		entry.Action == "" || entry.Problem == "" {
+		entry.Action == "" || entry.Incident == "" {
 		return audit.Entry{}, false
 	}
 	return entry, true

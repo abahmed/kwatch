@@ -2,7 +2,14 @@
 
 ## Status
 
-Accepted
+Superseded by ADR 0010 (2026-09-28).
+
+The ConfigMap persistence manager, incident shards and `MigrationReport` were
+removed together with `internal/persistence`. The bbolt store has a schema
+version, and a file with another version is deleted and recreated: there is no
+migration and no backup, and the reset is counted and shown on `/health`
+(`storage_reset`). The principle that unsupported or malformed data is preserved and
+reported instead of overwritten is retained.
 
 ## Decision
 

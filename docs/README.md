@@ -26,11 +26,19 @@ implementation-only notes may remain beside code when they are not published.
 
 ## Technical and operational reference
 
-- [Architecture notes](./architecture.md) — repository-local architecture
-  notes; the published architecture is maintained on `kwatch.dev`.
-- [Contributor architecture guide](./contributor-architecture.md) — package
-  ownership and extension workflows for source-tree contributors.
-- [Production operations](./production-operations.md) — readiness, failover,
+- [How kwatch works](./architecture.md) — the pipeline, the four concepts,
+  one incident from crash to message, watch modes, storage, endpoints and the
+  single-replica Lease lock; the published architecture is maintained on
+  `kwatch.dev`.
+- [Contributor architecture guide](./contributor-architecture.md) — the
+  package table, import direction rules and where new code belongs.
+- Contributor guides, each five steps with a real example and test command:
+  [add a detector](./contributing-detector.md),
+  [add a propagation rule](./contributing-propagation-rule.md),
+  [add a source or kind schema](./contributing-source.md),
+  [add a message fact](./contributing-message-fact.md),
+  [add a labelled scenario](./contributing-scenario.md).
+- [Production operations](./production-operations.md) — readiness, restarts,
   recovery, outage handling, and release operations.
 - [Configuration notes](./configuration.md) — offline configuration and
   endpoint notes; the published reference remains on `kwatch.dev`.
@@ -39,8 +47,12 @@ implementation-only notes may remain beside code when they are not published.
 - [Kubernetes coverage](./kubernetes-coverage.md) — monitored resources and
   graceful degradation boundaries.
 - [Permission matrix](./feature-permissions.md) — feature-to-RBAC guidance.
-- [Architecture ADRs](./adr/) — accepted decisions behind runtime boundaries
-  and persisted-format migration seams.
+- [Production goals](./production-goals.md) — the quality, scale,
+  reliability and security bar kwatch must meet.
+- [Architecture ADRs](./adr/) — decisions behind runtime boundaries. ADR 0011
+  (health, propagation and explanation) supersedes the reasoning, storage and
+  message sections of ADR 0010; ADR 0010 supersedes ADRs 0002, 0004, 0006 and
+  0007 and part of 0001; ADRs 0003, 0005, 0008 and 0009 remain in force.
 - [Release integrity](./release-integrity.md) — image, manifest, and chart
   verification.
 - [Licensing](./licensing.md) — project and dependency licensing.

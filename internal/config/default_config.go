@@ -1,5 +1,6 @@
 package config
 
+// DefaultConfig returns the configuration used before any overlay.
 func DefaultConfig() *Config {
 	return &Config{
 		App: App{LogFormatter: "text"},
@@ -16,7 +17,7 @@ func DefaultConfig() *Config {
 		},
 		ActiveProbeMonitor: ActiveProbeMonitor{
 			IntervalSeconds: 30, TimeoutSeconds: 5,
-			FailureThreshold: 3, RecoveryThreshold: 2,
+			FailureThreshold: 3,
 		},
 		Upgrader: Upgrader{DisableUpdateCheck: false},
 		HealthCheck: HealthCheck{
@@ -24,5 +25,6 @@ func DefaultConfig() *Config {
 			Port:    8060,
 		},
 		AuditLog: AuditLogConfig{Enabled: true, Output: "stdout"},
+		Watch:    WatchConfig{Secrets: true},
 	}
 }

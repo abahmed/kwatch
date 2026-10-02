@@ -1,0 +1,10 @@
+{
+  "name": "operator-cr-stuck",
+  "description": "A custom resource's spec is changed to an invalid value; its operator stays healthy but reports Ready=False with ReconcileError and never observes the new generation.",
+  "root": "postgrescluster.postgres.example.com/data/orders-db",
+  "tier": "notify",
+  "maxMessages": 2,
+  "mustNotBlame": [
+    "deployment/db-operators/pg-operator"
+  ]
+}

@@ -11,7 +11,6 @@ import (
 	"github.com/stretchr/testify/assert"
 
 	"github.com/abahmed/kwatch/internal/delivery/transport"
-	"github.com/abahmed/kwatch/internal/event"
 )
 
 var testDeps = transport.Dependencies{
@@ -33,6 +32,7 @@ func TestZulip(t *testing.T) {
 	assert := assert.New(t)
 
 	configMap := map[string]interface{}{
+		"url":     "https://chat.corp.io",
 		"email":   "kwatch@example.com",
 		"token":   "test",
 		"channel": "alerts",
@@ -40,21 +40,45 @@ func TestZulip(t *testing.T) {
 	c := NewZulip(configMap, testAppConfig(), testDeps)
 	assert.NotNil(c)
 	assert.Equal(c.Name(), "Zulip")
-	assert.Equal(c.url, "https://api.zulip.com/api/v1/messages")
+	assert.Equal(c.url, "https://chat.corp.io/api/v1/messages")
 }
 
 func TestZulipCustomURL(t *testing.T) {
 	assert := assert.New(t)
 
 	configMap := map[string]interface{}{
-		"url":     "https://zulip.example.com",
+		"url":     "https://zulip.corp.io",
 		"email":   "kwatch@example.com",
 		"token":   "test",
 		"channel": "alerts",
 	}
 	c := NewZulip(configMap, testAppConfig(), testDeps)
 	assert.NotNil(c)
-	assert.Equal(c.url, "https://zulip.example.com/api/v1/messages")
+	assert.Equal(c.url, "https://zulip.corp.io/api/v1/messages")
+}
+
+func TestZulipRequiresURL(t *testing.T) {
+	c := NewZulip(map[string]interface{}{
+		"email":   "kwatch@example.com",
+		"token":   "test",
+		"channel": "alerts",
+	}, testAppConfig(), testDeps)
+	assert.Nil(t, c)
+}
+
+func TestZulipRejectsExampleHosts(t *testing.T) {
+	for _, server := range []string{
+		"https://zulip.example.com", "https://example.org",
+		"http://chat.example.net", "https://zulip.example",
+	} {
+		c := NewZulip(map[string]interface{}{
+			"url":     server,
+			"email":   "kwatch@example.com",
+			"token":   "test",
+			"channel": "alerts",
+		}, testAppConfig(), testDeps)
+		assert.Nil(t, c, server)
+	}
 }
 
 func TestZulipInvalidConfig(t *testing.T) {
@@ -107,6 +131,7 @@ func TestSendMessage(t *testing.T) {
 	defer s.Close()
 
 	configMap := map[string]interface{}{
+		"url":     "https://zulip.corp.io",
 		"email":   "kwatch@example.com",
 		"token":   "test",
 		"channel": "alerts",
@@ -133,6 +158,7 @@ func TestSendMessageError(t *testing.T) {
 	defer s.Close()
 
 	configMap := map[string]interface{}{
+		"url":     "https://zulip.corp.io",
 		"email":   "kwatch@example.com",
 		"token":   "test",
 		"channel": "alerts",
@@ -143,38 +169,11 @@ func TestSendMessageError(t *testing.T) {
 	assert.NotNil(c.SendMessage(context.Background(), "test"))
 }
 
-func TestSendEvent(t *testing.T) {
-	assert := assert.New(t)
-
-	s := httptest.NewServer(
-		http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			body, _ := io.ReadAll(r.Body)
-			assert.Contains(string(body), "OOMKILLED")
-			w.Write([]byte(`{"result":"success"}`))
-		}))
-
-	defer s.Close()
-
-	configMap := map[string]interface{}{
-		"email":   "kwatch@example.com",
-		"token":   "test",
-		"channel": "alerts",
-	}
-	c := NewZulip(configMap, testAppConfig(), testDeps)
-	c.url = s.URL
-
-	ev := event.Event{
-		PodName:   "test-pod",
-		Namespace: "default",
-		Reason:    "OOMKILLED",
-	}
-	assert.Nil(c.SendEvent(context.Background(), &ev))
-}
-
 func TestInvalidHttpRequest(t *testing.T) {
 	assert := assert.New(t)
 
 	configMap := map[string]interface{}{
+		"url":     "https://zulip.corp.io",
 		"email":   "kwatch@example.com",
 		"token":   "test",
 		"channel": "alerts",

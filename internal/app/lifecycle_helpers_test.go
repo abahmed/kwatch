@@ -6,8 +6,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/abahmed/kwatch/internal/client"
 	"github.com/abahmed/kwatch/internal/clock"
+	"github.com/abahmed/kwatch/internal/kubeclient"
 )
 
 func TestComponentProgressTracksInjectedTime(t *testing.T) {
@@ -41,7 +41,7 @@ func TestDetachedShutdownContextsRetainValues(t *testing.T) {
 	parent := context.WithValue(context.Background(), "key", "value")
 	parent, cancel := context.WithCancel(parent)
 	cancel()
-	shutdown, stop := boundedShutdownContext(parent)
+	shutdown, stop := boundedShutdownContext(parent, time.Second)
 	defer stop()
 	if shutdown.Value("key") != "value" {
 		t.Fatal("shutdown context lost parent values")
@@ -72,7 +72,7 @@ func TestLeaderIdentityAndLeaseNameUseEnvironment(t *testing.T) {
 func TestRunWithProgressTouchesClockAndRunsFunction(t *testing.T) {
 	now := time.Date(2026, 9, 21, 12, 0, 0, 0, time.UTC)
 	progress := newComponentProgress(time.Time{})
-	deps := &serverDeps{clients: client.ClientSet{
+	deps := &serverDeps{clients: kubeclient.ClientSet{
 		Clock: clock.Func(func() time.Time {
 			return now
 		})}}

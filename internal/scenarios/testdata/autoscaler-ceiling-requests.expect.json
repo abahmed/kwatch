@@ -1,0 +1,11 @@
+{
+  "name": "autoscaler-ceiling-requests",
+  "description": "An HPA reaches maxReplicas and stays limited; the busy replicas fail readiness with client timeouts.",
+  "root": "horizontalpodautoscaler/search/api",
+  "tier": "notify",
+  "maxMessages": 2,
+  "mustNotBlame": [
+    "node//w1",
+    "deployment/search/api"
+  ]
+}

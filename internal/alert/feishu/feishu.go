@@ -8,14 +8,19 @@ import (
 	"encoding/json"
 	"fmt"
 	"strconv"
+	"strings"
 	"time"
 
 	"k8s.io/klog/v2"
 
 	"github.com/abahmed/kwatch/internal/clock"
 	"github.com/abahmed/kwatch/internal/delivery/transport"
-	"github.com/abahmed/kwatch/internal/event"
+	"github.com/abahmed/kwatch/internal/notification"
+	"github.com/abahmed/kwatch/internal/ratelimit"
 )
+
+// feiShuTextLimit keeps the card within Feishu's request size limit.
+const feiShuTextLimit = 30000
 
 type FeiShu struct {
 	sender  transport.Sender
@@ -78,6 +83,12 @@ func NewFeiShu(
 		return nil
 	}
 
+	if !transport.ValidEndpoint(webhook) {
+		klog.InfoS("initializing feishu with an invalid webhook",
+			"setting", "webhook")
+		return nil
+	}
+
 	klog.InfoS("initializing Fei Shu with webhook configured")
 
 	title, _ := config["title"].(string)
@@ -97,16 +108,27 @@ func (f *FeiShu) Name() string {
 	return "Fei Shu"
 }
 
-// SendEvent sends event to the provider
-func (f *FeiShu) SendEvent(ctx context.Context, e *event.Event) error {
+// SendIncident sends the incident narrative as the card's markdown
+// element, with the application output in a code block after it.
+func (f *FeiShu) SendIncident(
+	ctx context.Context, m notification.Message,
+) error {
+	text := m.NoteText()
+	if len(m.Output) > 0 {
+		text += "\n\n```\n" + strings.Join(m.Output, "\n") + "\n```"
+	}
 	body, err := f.buildRequestBodyFeiShu(
-		e.FormatMarkdown(f.clusterName, "", ""),
+		notification.Truncate(text, feiShuTextLimit),
 	)
 	if err != nil {
 		return err
 	}
 	return f.sendByFeiShuApi(ctx, body)
 }
+
+// rateLimitCodes are the documented frequency-limit codes; every other
+// body error is a permanent rejection.
+var rateLimitCodes = map[int]bool{11232: true}
 
 func (f *FeiShu) sendByFeiShuApi(
 	ctx context.Context,
@@ -126,7 +148,12 @@ func (f *FeiShu) sendByFeiShuApi(
 		return fmt.Errorf("feishu returned invalid response")
 	}
 	if response.Code != 0 {
-		return fmt.Errorf("feishu request failed with code %d", response.Code)
+		err := fmt.Errorf("feishu request failed with code %d", response.Code)
+		if rateLimitCodes[response.Code] {
+			return &ratelimit.Error{Provider: "Feishu",
+				StatusCode: ratelimit.InBodyStatus, Err: err}
+		}
+		return transport.Permanent(err)
 	}
 	return nil
 }

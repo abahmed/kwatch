@@ -8,6 +8,10 @@ import (
 	"time"
 )
 
+// InBodyStatus is the StatusCode of a rate limit a provider reported
+// inside a successful HTTP response body rather than with HTTP 429.
+const InBodyStatus = 200
+
 type Error struct {
 	Provider   string
 	StatusCode int

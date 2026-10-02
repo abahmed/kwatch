@@ -15,8 +15,6 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes/fake"
-
-	"github.com/abahmed/kwatch/internal/model"
 )
 
 func TestKubernetesRestartEvidenceClassifiesTermination(t *testing.T) {
@@ -52,7 +50,7 @@ func TestKubernetesRestartEvidenceClassifiesTermination(t *testing.T) {
 	)
 	source := newKubernetesRestartEvidence(client, "kwatch")
 	evidence, err := source.ReadRestartEvidence(
-		context.Background(), model.RuntimeSession{
+		context.Background(), runtimeSession{
 			PodName: "kwatch-old", NodeName: "worker-a",
 		},
 	)
@@ -72,7 +70,7 @@ func TestKubernetesRestartEvidenceMarksMissingNode(t *testing.T) {
 		fake.NewSimpleClientset(), "kwatch",
 	)
 	evidence, err := source.ReadRestartEvidence(
-		context.Background(), model.RuntimeSession{NodeName: "worker-gone"},
+		context.Background(), runtimeSession{NodeName: "worker-gone"},
 	)
 	if err != nil {
 		t.Fatalf("ReadRestartEvidence() error = %v", err)
@@ -101,7 +99,7 @@ func TestKubernetesRestartEvidenceFlagsUnavailableAPI(t *testing.T) {
 		failingEvidence("get", "list"), "kwatch")
 
 	evidence, err := source.ReadRestartEvidence(context.Background(),
-		model.RuntimeSession{PodName: "old", NodeName: "n1"})
+		runtimeSession{PodName: "old", NodeName: "n1"})
 
 	require.NoError(t, err)
 	require.True(t, evidence.APIUnavailable)
@@ -118,7 +116,7 @@ func TestKubernetesRestartEvidenceIgnoresForbiddenReads(t *testing.T) {
 
 	evidence, err := newKubernetesRestartEvidence(client, "kwatch").
 		ReadRestartEvidence(context.Background(),
-			model.RuntimeSession{PodName: "old", NodeName: "n1"})
+			runtimeSession{PodName: "old", NodeName: "n1"})
 
 	require.NoError(t, err)
 	require.False(t, evidence.APIUnavailable)
@@ -135,7 +133,7 @@ func TestKubernetesRestartEvidenceReadsEvictionEvents(t *testing.T) {
 
 	evidence, _ := newKubernetesRestartEvidence(client, "kwatch").
 		ReadRestartEvidence(context.Background(),
-			model.RuntimeSession{PodName: "old"})
+			runtimeSession{PodName: "old"})
 
 	require.Equal(t, "Evicted", evidence.PodReason)
 }
@@ -157,7 +155,7 @@ func TestKubernetesRestartEvidenceRecordsPodStatusReason(t *testing.T) {
 
 	evidence, _ := newKubernetesRestartEvidence(client, "kwatch").
 		ReadRestartEvidence(context.Background(),
-			model.RuntimeSession{PodName: "old"})
+			runtimeSession{PodName: "old"})
 
 	require.Equal(t, "Evicted", evidence.PodReason)
 	require.Equal(t, "Error", evidence.ContainerReason)

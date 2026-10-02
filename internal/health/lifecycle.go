@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"net"
 	"net/http"
-	"net/http/pprof"
 	"strconv"
 	"time"
 
@@ -37,7 +36,7 @@ func (h *HealthServer) Open() error {
 		Handler:           mux,
 		ReadHeaderTimeout: 5 * time.Second,
 		ReadTimeout:       5 * time.Second,
-		WriteTimeout:      writeTimeout(h.pprof),
+		WriteTimeout:      10 * time.Second,
 		IdleTimeout:       60 * time.Second,
 	}
 	ln, err := net.Listen("tcp", h.server.Addr)
@@ -84,48 +83,11 @@ func newServeMux(h *HealthServer) *http.ServeMux {
 	mux.HandleFunc("/health", h.healthHandler)
 	mux.HandleFunc("/readyz", h.readyzHandler)
 	mux.HandleFunc("/availabilityz", h.availabilityzHandler)
-	if h.diagnostics {
-		mux.HandleFunc("/problems", h.guard(h.problemsHandler))
-		mux.HandleFunc("/test-alert", h.guard(h.testAlertHandler))
-		mux.HandleFunc("/deadletters", h.guard(h.deadLettersHandler))
-	}
-	mux.HandleFunc("/kubelet", h.guard(h.kubeletHandler))
-	mux.HandleFunc(
-		"/telemetry", h.guard(h.adoptionTelemetryHandler),
-	)
-	mux.HandleFunc("/security", h.guard(h.securityHandler))
-	mux.HandleFunc(
-		"/controlplane", h.guard(h.controlPlaneHandler),
-	)
-	mux.HandleFunc("/informer", h.guard(h.informerHandler))
 	mux.Handle("/metrics", metrics.DefaultRegistry().Handler())
-	if h.pprof {
-		mux.HandleFunc("/debug/pprof/", h.guard(pprof.Index))
-		mux.HandleFunc("/debug/pprof/cmdline", h.guard(pprof.Cmdline))
-		mux.HandleFunc("/debug/pprof/profile", h.guard(pprof.Profile))
-		mux.HandleFunc("/debug/pprof/symbol", h.guard(pprof.Symbol))
-		mux.HandleFunc("/debug/pprof/trace", h.guard(pprof.Trace))
-		mux.HandleFunc(
-			"/debug/pprof/heap", h.guard(pprof.Handler("heap").ServeHTTP),
-		)
-		mux.HandleFunc(
-			"/debug/pprof/goroutine",
-			h.guard(pprof.Handler("goroutine").ServeHTTP),
-		)
-		mux.HandleFunc(
-			"/debug/pprof/block", h.guard(pprof.Handler("block").ServeHTTP),
-		)
-		mux.HandleFunc(
-			"/debug/pprof/threadcreate",
-			h.guard(pprof.Handler("threadcreate").ServeHTTP),
-		)
-		mux.HandleFunc(
-			"/debug/pprof/mutex", h.guard(pprof.Handler("mutex").ServeHTTP),
-		)
-	}
 	return mux
 }
 
+// Stop shuts the HTTP server down within ctx.
 func (h *HealthServer) Stop(ctx context.Context) error {
 	h.lifecycleMu.Lock()
 	if !h.started {
@@ -150,20 +112,12 @@ func (h *HealthServer) Stop(ctx context.Context) error {
 	return err
 }
 
+// ServeError returns the error that ended Serve, if any.
 func (h *HealthServer) ServeError() error {
 	h.lifecycleMu.Lock()
 	defer h.lifecycleMu.Unlock()
 	return h.serveErr
 }
 
+// ServeErrors delivers the error that ended Serve.
 func (h *HealthServer) ServeErrors() <-chan error { return h.serveErrors }
-
-// writeTimeout bounds response writes. net/http/pprof refuses profiles longer
-// than the server WriteTimeout, and its CPU profile defaults to 30s, so the
-// bound is raised only when pprof is enabled.
-func writeTimeout(pprofEnabled bool) time.Duration {
-	if pprofEnabled {
-		return 65 * time.Second
-	}
-	return 10 * time.Second
-}

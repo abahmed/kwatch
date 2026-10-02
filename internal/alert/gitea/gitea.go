@@ -11,7 +11,7 @@ import (
 
 	"github.com/abahmed/kwatch/internal/alert/issues"
 	"github.com/abahmed/kwatch/internal/delivery/transport"
-	"github.com/abahmed/kwatch/internal/event"
+	"github.com/abahmed/kwatch/internal/notification"
 )
 
 const giteaAPIURL = "https://gitea.com/api/v1"
@@ -54,10 +54,18 @@ func NewGitea(
 
 	server := giteaAPIURL
 	if s, ok := config["url"].(string); ok && len(s) > 0 {
+		if !transport.ValidEndpoint(s) {
+			klog.InfoS("initializing gitea with an invalid url",
+				"setting", "url")
+			return nil
+		}
 		server = s
 	}
 
-	klog.InfoS("initializing gitea", "url", server, "owner", owner, "repo", repo)
+	klog.InfoS("initializing gitea",
+		"url", transport.LogURL(server),
+		"owner", owner,
+		"repo", repo)
 
 	return &Gitea{
 		issues: issues.NewMap(),
@@ -80,40 +88,27 @@ func (g *Gitea) Name() string {
 	return "Gitea"
 }
 
-// SendEvent sends event to the provider
-// UsesEventDelivery routes problems through SendEvent, which carries the
-// action and a stable key so one issue follows one problem.
-func (g *Gitea) UsesEventDelivery() {}
+// titleLimit is Gitea's maximum issue title length.
+const titleLimit = 255
 
-// SendEvent opens one issue per problem, comments on updates and closes it
-// on recovery.
-func (g *Gitea) SendEvent(ctx context.Context, e *event.Event) error {
-	return g.issues.Deliver(ctx, g, e, g.issueTitle(e), g.issueBody(e))
+// SendIncident opens one issue per incident, comments on updates and
+// closes it on recovery.
+func (g *Gitea) SendIncident(
+	ctx context.Context, msg notification.Message,
+) error {
+	return g.issues.Deliver(ctx, g, msg,
+		issues.Title(msg, titleLimit), issues.Body(msg))
 }
 
-// SendMessage files a standalone issue for a plain message.
+// SendMessage treats a plain message as a notice, which never opens an
+// issue.
 func (g *Gitea) SendMessage(ctx context.Context, msg string) error {
-	_, err := g.Create(ctx, g.issueTitle(nil), msg)
-	return err
+	return g.SendIncident(ctx, notification.Notice(msg))
 }
 
-func (g *Gitea) issueTitle(e *event.Event) string {
-	title := "kwatch alert"
-	if e != nil {
-		title = e.AlertTitle(200)
-	}
-	if g.clusterName != "" {
-		title = "[" + g.clusterName + "] " + title
-	}
-	return title
-}
-
-func (g *Gitea) issueBody(e *event.Event) string {
-	if strings.TrimSpace(e.Narrative) == "" {
-		return e.FormatMarkdown(g.clusterName, "", "\n\n")
-	}
-	return e.AlertBody(g.clusterName)
-}
+// SkipsPlainMessages implements api.PlainMessageSkipper: plain messages
+// become notices, which SendIncident skips.
+func (g *Gitea) SkipsPlainMessages() bool { return true }
 
 // Create implements issues.Tracker.
 func (g *Gitea) Create(

@@ -7,7 +7,7 @@ import (
 	"k8s.io/klog/v2"
 
 	"github.com/abahmed/kwatch/internal/delivery/transport"
-	"github.com/abahmed/kwatch/internal/event"
+	"github.com/abahmed/kwatch/internal/notification"
 )
 
 type splunkPayload struct {
@@ -43,6 +43,12 @@ func NewSplunk(
 		return nil
 	}
 
+	if !transport.ValidEndpoint(url) {
+		klog.InfoS("initializing splunk with an invalid url",
+			"setting", "url")
+		return nil
+	}
+
 	token, ok := config["token"].(string)
 	if !ok || len(token) == 0 {
 		klog.InfoS("initializing splunk with empty token")
@@ -54,7 +60,9 @@ func NewSplunk(
 	index, _ := config["index"].(string)
 	host, _ := config["host"].(string)
 
-	klog.InfoS("initializing splunk", "url", url, "source", source)
+	klog.InfoS("initializing splunk",
+		"url", transport.LogURL(url),
+		"source", source)
 
 	return &Splunk{
 		sender:      transport.NewSender(dependencies),
@@ -73,18 +81,49 @@ func (s *Splunk) Name() string {
 	return "Splunk"
 }
 
-// SendEvent sends event to the provider
-func (s *Splunk) SendEvent(ctx context.Context, e *event.Event) error {
-	return s.SendMessage(ctx, e.FormatText(s.clusterName, ""))
+// SendIncident indexes one structured event per incident message. The
+// incident key and state let searches follow an incident from firing to
+// resolved.
+func (s *Splunk) SendIncident(
+	ctx context.Context, m notification.Message,
+) error {
+	state := "firing"
+	if m.Resolved() {
+		state = "resolved"
+	}
+	event := map[string]interface{}{
+		"source":      "kwatch",
+		"cluster":     s.clusterName,
+		"incidentKey": m.AlertKey(s.clusterName),
+		"revision":    m.Revision,
+		"state":       state,
+		"status":      m.Status.String(),
+		"severity":    m.Route.Severity,
+		"title":       m.ShortText(),
+		"message":     m.NoteText(),
+		"namespaces":  m.Route.Namespaces,
+		"reasons":     m.Route.Reasons,
+	}
+	if len(m.Output) > 0 {
+		event["output"] = m.Output
+	}
+	return s.send(ctx, event)
 }
 
 // SendMessage sends text message to the provider
 func (s *Splunk) SendMessage(ctx context.Context, msg string) error {
+	return s.send(ctx, map[string]interface{}{
+		"message": msg,
+		"source":  "kwatch",
+	})
+}
+
+// send posts one event to the HTTP Event Collector.
+func (s *Splunk) send(
+	ctx context.Context, event map[string]interface{},
+) error {
 	payload := splunkPayload{
-		Event: map[string]interface{}{
-			"message": msg,
-			"source":  "kwatch",
-		},
+		Event:      event,
 		Source:     s.source,
 		Sourcetype: s.sourcetype,
 		Index:      s.index,

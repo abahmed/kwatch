@@ -4,18 +4,18 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"strings"
 
 	"k8s.io/klog/v2"
 
 	"github.com/abahmed/kwatch/internal/clock"
 	"github.com/abahmed/kwatch/internal/delivery/transport"
-	"github.com/abahmed/kwatch/internal/event"
+	"github.com/abahmed/kwatch/internal/notification"
 )
 
 type GoogleChat struct {
 	sender  transport.Sender
 	webhook string
-	text    string
 
 	// reference for general app configuration
 	clusterName string
@@ -39,14 +39,17 @@ func NewGoogleChat(
 		return nil
 	}
 
-	klog.InfoS("initializing Google Chat with webhook configured")
+	if !transport.ValidEndpoint(webhook) {
+		klog.InfoS("initializing googlechat with an invalid webhook",
+			"setting", "webhook")
+		return nil
+	}
 
-	text, _ := config["text"].(string)
+	klog.InfoS("initializing Google Chat with webhook configured")
 
 	return &GoogleChat{
 		sender:      transport.NewSender(dependencies),
 		webhook:     webhook,
-		text:        text,
 		clusterName: clusterName,
 		clockSource: clock.Require(dependencies.Clock),
 	}
@@ -57,10 +60,12 @@ func (g *GoogleChat) Name() string {
 	return "Google Chat"
 }
 
-// SendEvent sends event to the provider
-func (g *GoogleChat) SendEvent(ctx context.Context, e *event.Event) error {
-	formattedMsg := e.FormatText(g.clusterName, g.text)
-	b, err := g.buildRequestBody(formattedMsg)
+// SendIncident posts the incident narrative, followed by the workload's
+// last output as a code block when there is one.
+func (g *GoogleChat) SendIncident(
+	ctx context.Context, m notification.Message,
+) error {
+	b, err := g.buildRequestBody(incidentText(m))
 	if err != nil {
 		return err
 	}
@@ -93,4 +98,14 @@ func (g *GoogleChat) buildRequestBody(text string) ([]byte, error) {
 		return nil, fmt.Errorf("failed to marshal google chat payload: %w", err)
 	}
 	return jsonBytes, nil
+}
+
+// incidentText is the Note with the last output as a code block. Mentions
+// are neutralized so log text cannot notify a whole space.
+func incidentText(m notification.Message) string {
+	text := m.NoteText()
+	if len(m.Output) > 0 {
+		text += "\n```\n" + strings.Join(m.Output, "\n") + "\n```"
+	}
+	return notification.NeutralizeGoogleChatMentions(text)
 }

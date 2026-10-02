@@ -7,13 +7,13 @@ import (
 	"time"
 
 	"github.com/abahmed/kwatch/internal/alert/catalog"
-	"github.com/abahmed/kwatch/internal/client"
 	"github.com/abahmed/kwatch/internal/clock"
 	"github.com/abahmed/kwatch/internal/config"
 	"github.com/abahmed/kwatch/internal/delivery"
 	"github.com/abahmed/kwatch/internal/health"
 	"github.com/abahmed/kwatch/internal/heartbeat"
-	"github.com/abahmed/kwatch/internal/k8s"
+	inventorykube "github.com/abahmed/kwatch/internal/inventory/kube"
+	"github.com/abahmed/kwatch/internal/kubeclient"
 	"github.com/abahmed/kwatch/internal/rbac"
 )
 
@@ -22,12 +22,13 @@ import (
 // belongs to the active session.
 type bootstrap struct {
 	runtime         config.RuntimeConfig
-	clients         client.ClientSet
+	clients         kubeclient.ClientSet
 	healthServer    *health.HealthServer
 	deliveryManager *delivery.Manager
 	securityMonitor *rbac.Monitor
 	heartbeat       *heartbeat.HeartbeatMonitor
 	clock           clock.Clock
+	threadWake      *threadWake
 }
 
 func newBootstrap(
@@ -35,24 +36,34 @@ func newBootstrap(
 	cfg *config.Config,
 	now func() time.Time,
 ) (*bootstrap, error) {
-	runtime := config.RuntimeConfigFor(cfg)
 	clockSource := clock.Func(now)
-	clients, err := client.NewClientSetWithRuntime(
-		runtime, &net.Resolver{}, clockSource,
-	)
+	clients, err := kubeclient.NewClusterClientSet(&net.Resolver{}, clockSource)
 	if err != nil {
 		return nil, fmt.Errorf("create application clients: %w", err)
 	}
-	if err := applyStartupCRD(ctx, cfg, clients.Dynamic); err != nil {
+	cfg, overlayInvalid, err := applyStartupCRD(
+		ctx, cfg, clients.Dynamic, loadConfig)
+	if err != nil {
 		return nil, fmt.Errorf("apply startup CRD configuration: %w", err)
 	}
-	// The CRD overlay may change monitor and alert settings. Rebuild the
-	// immutable snapshot; only the outbound HTTP client depends on it.
-	runtime = config.RuntimeConfigFor(cfg)
-	clients.HTTP = client.NewHTTPClientWithRuntime(runtime)
+	// Report warnings once, after the overlay, so KwatchConfig typos are
+	// reported next to the file's.
+	logConfigWarnings(cfg)
+	// The overlay may change monitor and alert settings, so the snapshot
+	// and the clients that depend on it (outbound HTTP, kubelet) are built
+	// once, here.
+	runtime := config.RuntimeConfigFor(cfg)
+	clients, err = clients.WithRuntime(runtime)
+	if err != nil {
+		return nil, fmt.Errorf("create configured clients: %w", err)
+	}
 
+	wake := &threadWake{}
 	deliveryManager := delivery.NewManagerWithDependencies(
-		delivery.Dependencies{HTTPClient: clients.HTTP, Clock: clockSource},
+		delivery.Dependencies{
+			HTTPClient: clients.HTTP, Clock: clockSource,
+			OnDelivered: wake.Notify,
+		},
 	)
 	if err := deliveryManager.InitRuntime(
 		runtime, catalog.NewProvider,
@@ -62,17 +73,32 @@ func newBootstrap(
 	healthServer := health.NewHealthServerWithClock(
 		runtime.Lifecycle().HealthCheck(), clockSource,
 	)
+	reportOverlayHealth(healthServer, overlayInvalid)
 	return &bootstrap{
 		runtime:         runtime,
 		clients:         clients,
 		healthServer:    healthServer,
 		deliveryManager: deliveryManager,
 		securityMonitor: rbac.NewMonitor(clients.Kubernetes,
-			rbac.Checks(k8s.GetNamespace(),
-				runtime.Lifecycle().CRDEnabled()),
-			clockSource, reportPermissions(healthServer)),
+			permissionChecks(runtime), clockSource,
+			reportPermissions(healthServer)),
+		// The heartbeat pings only while monitoring is ready.
 		heartbeat: heartbeat.NewHeartbeatMonitorWithRuntime(
-			runtime, clients.HTTP),
-		clock: clockSource,
+			runtime, clients.HTTP, healthServer.Ready),
+		clock:      clockSource,
+		threadWake: wake,
 	}, nil
+}
+
+// permissionChecks is every permission the audit verifies. With
+// watch.secrets false kwatch is deliberately granted no Secret access, so
+// the audit does not expect it.
+func permissionChecks(runtime config.RuntimeConfig) []inventorykube.Access {
+	checks := rbac.Checks(kubeclient.GetNamespace(), electionLeaseName(),
+		runtime.Lifecycle().CRDEnabled())
+	if !runtime.Application().WatchSecrets {
+		checks = inventorykube.WithoutResource(checks,
+			inventorykube.SecretsResource)
+	}
+	return checks
 }

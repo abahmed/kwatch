@@ -56,30 +56,34 @@ func (s *componentSupervisor) startOwned(
 		if component.onHealthy != nil {
 			component.onHealthy()
 		}
-		err := s.runComponent(ctx, component)
-		var stop bool
-		err, stop = normalizeComponentExit(ctx, component, err)
-		if stop {
-			return
-		}
-		if err != nil {
-			if component.required {
-				s.report(fmt.Errorf("%s: %w", component.name, err))
-				return
-			}
-			if errors.Is(err, errComponentShutdown) {
-				if component.onError != nil {
-					component.onError(err)
-				}
-				return
-			}
-			if component.onError != nil {
-				component.onError(err)
-			}
-			klog.ErrorS(err, "application component stopped",
-				"component", component.name)
+		err, stop := normalizeComponentExit(
+			ctx, component, s.runComponent(ctx, component))
+		if !stop {
+			s.handleOwnedExit(component, err)
 		}
 	}()
+}
+
+// handleOwnedExit reacts to a run that ended with err. A required
+// component's failure ends the application; an optional one is logged.
+func (s *componentSupervisor) handleOwnedExit(
+	component componentSpec, err error,
+) {
+	if err == nil {
+		return
+	}
+	if component.required {
+		s.report(fmt.Errorf("%s: %w", component.name, err))
+		return
+	}
+	if component.onError != nil {
+		component.onError(err)
+	}
+	if errors.Is(err, errComponentShutdown) {
+		return
+	}
+	klog.ErrorS(err, "application component stopped",
+		"component", component.name)
 }
 
 func (s *componentSupervisor) startOptional(
@@ -92,44 +96,56 @@ func (s *componentSupervisor) startOptional(
 	s.wg.Add(1)
 	go func() {
 		defer s.wg.Done()
-		delay := optionalRestartInitial
-		klog.InfoS(
-			"starting optional component",
-			"component", component.name,
-			"required", component.required,
-		)
-		for {
-			startedAt := s.now()
-			if component.onHealthy != nil {
-				component.onHealthy()
-			}
-			err := s.runComponent(ctx, component)
-			var sleep time.Duration
-			sleep, delay = optionalBackoff(delay, s.now().Sub(startedAt))
-			var stop bool
-			err, stop = normalizeComponentExit(ctx, component, err)
-			if stop {
-				return
-			}
-			if s.handleTerminalOptionalExit(component, err) {
-				return
-			}
-			if component.onError != nil {
-				component.onError(err)
-			}
-			klog.ErrorS(err, "optional component stopped; retrying",
-				"component", component.name, "retryIn", sleep)
-			timer := time.NewTimer(sleep)
-			select {
-			case <-ctx.Done():
-				if !timer.Stop() {
-					<-timer.C
-				}
-				return
-			case <-timer.C:
-			}
-		}
+		s.restartLoop(ctx, component)
 	}()
+}
+
+// restartLoop runs an optional component again, with backoff, until ctx
+// ends or the component fails in a way that must not be retried.
+func (s *componentSupervisor) restartLoop(
+	ctx context.Context, component componentSpec,
+) {
+	delay := optionalRestartInitial
+	klog.InfoS(
+		"starting optional component",
+		"component", component.name,
+		"required", component.required,
+	)
+	for {
+		startedAt := s.now()
+		if component.onHealthy != nil {
+			component.onHealthy()
+		}
+		err := s.runComponent(ctx, component)
+		var sleep time.Duration
+		sleep, delay = optionalBackoff(delay, s.now().Sub(startedAt))
+		err, stop := normalizeComponentExit(ctx, component, err)
+		if stop || s.handleTerminalOptionalExit(component, err) {
+			return
+		}
+		if component.onError != nil {
+			component.onError(err)
+		}
+		klog.ErrorS(err, "optional component stopped; retrying",
+			"component", component.name, "retryIn", sleep)
+		if !sleepOrDone(ctx, sleep) {
+			return
+		}
+	}
+}
+
+// sleepOrDone waits for d and reports false when ctx ended first.
+func sleepOrDone(ctx context.Context, d time.Duration) bool {
+	timer := time.NewTimer(d)
+	select {
+	case <-ctx.Done():
+		if !timer.Stop() {
+			<-timer.C
+		}
+		return false
+	case <-timer.C:
+		return true
+	}
 }
 
 func normalizeComponentExit(
@@ -185,14 +201,9 @@ func (s *componentSupervisor) runComponent(
 	runDone := make(chan error, 1)
 	go func() { runDone <- component.run(runCtx) }()
 
-	stallTimeout := component.stallTimeout
-	if stallTimeout == 0 {
-		stallTimeout = defaultComponentStall
-	}
-	startupTimeout := component.startupTimeout
-	if startupTimeout == 0 {
-		startupTimeout = defaultComponentStartup
-	}
+	stallTimeout := durationOr(component.stallTimeout, defaultComponentStall)
+	startupTimeout := durationOr(
+		component.startupTimeout, defaultComponentStartup)
 	if component.progress == nil || stallTimeout <= 0 {
 		err := waitForComponent(ctx, runCtx, cancel, runDone)
 		if err == nil && component.cleanStop {
@@ -200,41 +211,79 @@ func (s *componentSupervisor) runComponent(
 		}
 		return err
 	}
+	return s.watchProgress(runWatch{
+		parent: ctx, runCtx: runCtx, cancel: cancel, done: runDone,
+		component: component, stall: stallTimeout, startup: startupTimeout,
+	})
+}
 
+func durationOr(d, fallback time.Duration) time.Duration {
+	if d == 0 {
+		return fallback
+	}
+	return d
+}
+
+// runWatch is everything watchProgress needs to supervise one run.
+type runWatch struct {
+	parent    context.Context
+	runCtx    context.Context
+	cancel    context.CancelFunc
+	done      <-chan error
+	component componentSpec
+	// stall bounds the time without progress once progress was reported;
+	// startup bounds the wait for the first report.
+	stall   time.Duration
+	startup time.Duration
+}
+
+// watchProgress waits for the run to end and cancels it when it stops
+// reporting progress.
+func (s *componentSupervisor) watchProgress(w runWatch) error {
 	startedAt := s.now()
-	ticker := time.NewTicker(progressCheckInterval(stallTimeout))
+	ticker := time.NewTicker(progressCheckInterval(w.stall))
 	defer ticker.Stop()
 	for {
 		select {
-		case err := <-runDone:
-			if err == nil && ctx.Err() == nil {
-				if component.cleanStop {
-					return errComponentCleanStop
-				}
-				return errComponentStopped
-			}
-			return err
-		case <-ctx.Done():
-			cancel()
-			return waitForComponent(ctx, runCtx, cancel, runDone)
+		case err := <-w.done:
+			return unexpectedReturn(w.parent, w.component, err)
+		case <-w.parent.Done():
+			w.cancel()
+			return waitForComponent(w.parent, w.runCtx, w.cancel, w.done)
 		case <-ticker.C:
-			last := component.progress.LastProgress()
-			if last.IsZero() {
-				last = startedAt
-				if s.now().Sub(last) > startupTimeout {
-					cancel()
-					metrics.DefaultRegistry().ComponentStalls.Add(1)
-					return waitAfterCancellation(errComponentStalled, runDone)
-				}
-				continue
-			}
-			if s.now().Sub(last) > stallTimeout {
-				cancel()
+			last := w.component.progress.LastProgress()
+			if s.progressStalled(last, startedAt, w) {
+				w.cancel()
 				metrics.DefaultRegistry().ComponentStalls.Add(1)
-				return waitAfterCancellation(errComponentStalled, runDone)
+				return waitAfterCancellation(errComponentStalled, w.done)
 			}
 		}
 	}
+}
+
+// progressStalled reports whether the component went too long without
+// progress. Before its first report the startup deadline applies.
+func (s *componentSupervisor) progressStalled(
+	last, startedAt time.Time, w runWatch,
+) bool {
+	if last.IsZero() {
+		return s.now().Sub(startedAt) > w.startup
+	}
+	return s.now().Sub(last) > w.stall
+}
+
+// unexpectedReturn turns a nil return before cancellation into an error,
+// because a running component is not supposed to finish by itself.
+func unexpectedReturn(
+	parent context.Context, component componentSpec, err error,
+) error {
+	if err == nil && parent.Err() == nil {
+		if component.cleanStop {
+			return errComponentCleanStop
+		}
+		return errComponentStopped
+	}
+	return err
 }
 
 func waitForComponent(

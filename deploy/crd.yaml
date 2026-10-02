@@ -123,10 +123,6 @@ spec:
                       type: boolean
                     port:
                       type: integer
-                    pprof:
-                      type: boolean
-                    diagnostics:
-                      type: boolean
                 telemetry:
                   type: object
                   properties:
@@ -146,15 +142,9 @@ spec:
                   properties:
                     clusterName:
                       type: string
-                    proxyURL:
-                      type: string
                     disableStartupMessage:
                       type: boolean
                     logFormatter:
-                      type: string
-                    insecureSkipTLSVerify:
-                      type: boolean
-                    caBundlePath:
                       type: string
                 templates:
                   type: object
@@ -169,8 +159,6 @@ spec:
                   properties:
                     enabled:
                       type: boolean
-                    output:
-                      type: string
                 upgrader:
                   type: object
                   x-kubernetes-preserve-unknown-fields: true

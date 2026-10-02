@@ -1,0 +1,4 @@
+10:04:15 settled
+🟠 broker in messaging (prod-eu-1) keeps crashing because volume claim broker-log is out of space. It fails with "FATAL: log segment append failed: /data/segments/000042.log: No space left on device". To check the size and capacity of the full volume claim, run kubectl describe pvc broker-log -n messaging
+🟠 broker in messaging (prod-eu-1) keeps crashing because volume claim broker-log is out of space.
+

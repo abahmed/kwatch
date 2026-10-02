@@ -1,0 +1,11 @@
+{
+  "name": "certificate-expired",
+  "description": "A client TLS certificate mounted by a Deployment has expired; its pods crash on refused handshakes when they reconnect.",
+  "root": "secret/shop/bank-client-tls",
+  "tier": "notify",
+  "maxMessages": 2,
+  "mustNotBlame": [
+    "deployment/shop/payments",
+    "node//n1"
+  ]
+}

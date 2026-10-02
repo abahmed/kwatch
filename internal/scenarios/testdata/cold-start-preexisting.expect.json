@@ -1,0 +1,16 @@
+{
+  "name": "cold-start-preexisting",
+  "description": "kwatch starts while one Deployment already crash-loops and another cannot start because a Secret it needs does not exist; both belong in one startup summary.",
+  "root": "secret/billing/invoicer-creds",
+  "otherRoots": [
+    "deployment/shop/api"
+  ],
+  "tier": "notify",
+  "maxMessages": 1,
+  "mustNotBlame": [
+    "node//n1",
+    "node//n2",
+    "zone//zone-a"
+  ],
+  "syncAfter": "30s"
+}

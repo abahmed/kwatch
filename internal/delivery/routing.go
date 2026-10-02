@@ -2,21 +2,20 @@ package delivery
 
 import (
 	"github.com/abahmed/kwatch/internal/config"
-	"github.com/abahmed/kwatch/internal/model"
-	"github.com/abahmed/kwatch/internal/notice"
+	"github.com/abahmed/kwatch/internal/notification"
 )
 
 // routeSubject is what a route matches on.
 type routeSubject struct {
 	namespaces []string
-	severity   model.Severity
+	severity   notification.Severity
 	reasons    []string
 }
 
-func storySubject(m *notice.Message) routeSubject {
+func incidentSubject(m *notification.Message) routeSubject {
 	return routeSubject{
 		namespaces: m.Route.Namespaces,
-		severity:   model.NormalizeSeverity(m.Route.Severity),
+		severity:   notification.NormalizeSeverity(m.Route.Severity),
 		reasons:    m.Route.Reasons,
 	}
 }
@@ -31,7 +30,7 @@ func matchesRoute(route config.AlertRoute, subject routeSubject) bool {
 	if len(route.Severities) > 0 {
 		found := false
 		for _, s := range route.Severities {
-			found = found || model.NormalizeSeverity(s) == subject.severity
+			found = found || notification.NormalizeSeverity(s) == subject.severity
 		}
 		if !found {
 			return false
@@ -52,13 +51,13 @@ func anyIn(allowed, values []string) bool {
 }
 
 // routedTo reports whether a job goes to a provider with these routes.
-// Plain messages and events are notices and always go everywhere.
+// Plain messages are notices and always go everywhere.
 func routedTo(routes []config.AlertRoute, job deliverJob) bool {
 	switch {
 	case len(routes) == 0:
 		return true
-	case job.kind == jobStory:
-		subject := storySubject(job.story)
+	case job.kind == jobIncident:
+		subject := incidentSubject(job.incident)
 		for _, route := range routes {
 			if matchesRoute(route, subject) {
 				return true

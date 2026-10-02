@@ -8,7 +8,7 @@ import (
 	"k8s.io/klog/v2"
 
 	"github.com/abahmed/kwatch/internal/delivery/transport"
-	"github.com/abahmed/kwatch/internal/event"
+	"github.com/abahmed/kwatch/internal/notification"
 )
 
 const signl4APIURL = "https://connect.signl4.com/webhook"
@@ -47,6 +47,11 @@ func NewSignl4(
 
 	server := signl4APIURL
 	if s, ok := config["url"].(string); ok && len(s) > 0 {
+		if !transport.ValidEndpoint(s) {
+			klog.InfoS("initializing signl4 with an invalid url",
+				"setting", "url")
+			return nil
+		}
 		server = s
 	}
 
@@ -70,31 +75,37 @@ func (s *Signl4) Name() string {
 	return "SIGNL4"
 }
 
-// SendEvent sends event to the provider
-// UsesEventDelivery routes problems through SendEvent, which carries the
-// action and a stable key so SIGNL4 can close the alert.
-func (s *Signl4) UsesEventDelivery() {}
+// maxTitleBytes keeps the alert title within what SIGNL4 displays.
+const maxTitleBytes = 250
 
-// SendEvent raises or resolves one SIGNL4 alert per kwatch problem, keyed by
-// X-S4-ExternalID.
-func (s *Signl4) SendEvent(ctx context.Context, e *event.Event) error {
+// SendIncident raises or resolves one SIGNL4 alert per kwatch incident,
+// keyed by X-S4-ExternalID.
+func (s *Signl4) SendIncident(
+	ctx context.Context, m notification.Message,
+) error {
+	// A plain notice (startup, upgrade, test) or the startup summary is
+	// not an incident. Sending it would page for problems that already
+	// have their own alerts, so it is skipped.
+	if m.IsInformational() {
+		klog.V(4).InfoS("skipping informational message",
+			"component", "delivery", "provider", s.Name())
+		return nil
+	}
 	title := s.title
 	if len(title) == 0 {
-		title = e.AlertTitle(250)
+		title = notification.Truncate(m.ShortText(), maxTitleBytes)
 	}
-	status, severity := "new", "critical"
-	if e.IsResolve() {
+	status := "new"
+	if m.Resolved() {
 		status = "resolved"
-	} else if e.IsNotice() {
-		severity = "info"
 	}
 	payload := signl4Payload{
 		Title:      title,
-		Message:    e.AlertBody(s.clusterName),
-		Severity:   severity,
+		Message:    alertBody(m, s.clusterName),
+		Severity:   severityFor(m),
 		User:       s.user,
 		XS4Status:  status,
-		ExternalID: e.AlertKey(),
+		ExternalID: m.AlertKey(s.clusterName),
 	}
 	body, err := json.Marshal(payload)
 	if err != nil {
@@ -107,7 +118,35 @@ func (s *Signl4) SendEvent(ctx context.Context, e *event.Event) error {
 	return err
 }
 
-// SendMessage sends a plain notice as an informational alert.
-func (s *Signl4) SendMessage(ctx context.Context, msg string) error {
-	return s.SendEvent(ctx, &event.Event{PodName: msg, Reason: "notify"})
+// severityFor is the incident's routing severity; a message without one
+// (a plain notice) is informational unless its status is critical.
+func severityFor(m notification.Message) string {
+	if m.Route.Severity != "" {
+		return m.Route.Severity
+	}
+	if m.Status == notification.StatusCritical {
+		return "critical"
+	}
+	return "info"
 }
+
+// alertBody is the narrative, the recent output and the cluster.
+func alertBody(m notification.Message, clusterName string) string {
+	body := m.NoteText()
+	if len(m.Output) > 0 {
+		body += "\n\nLast output:\n" + strings.Join(m.Output, "\n")
+	}
+	if clusterName != "" {
+		body += "\n\nCluster: " + clusterName
+	}
+	return body
+}
+
+// SendMessage skips plain notices; SIGNL4 alerts are incidents only.
+func (s *Signl4) SendMessage(ctx context.Context, msg string) error {
+	return s.SendIncident(ctx, notification.Notice(msg))
+}
+
+// SkipsPlainMessages implements api.PlainMessageSkipper: plain messages
+// become notices, which SendIncident skips.
+func (s *Signl4) SkipsPlainMessages() bool { return true }

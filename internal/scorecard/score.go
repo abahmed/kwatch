@@ -9,12 +9,16 @@ import (
 
 // Report is the replayed notification quality of one audit log.
 type Report struct {
-	Window           time.Duration `json:"window"`
-	Notifications    int           `json:"notifications"`
-	PerHour          float64       `json:"perHour"`
-	Problems         int           `json:"problems"`
-	PerProblem       float64       `json:"perProblem"`
-	PerProblemP95    int           `json:"perProblemP95"`
+	Window         time.Duration `json:"window"`
+	Notifications  int           `json:"notifications"`
+	PerHour        float64       `json:"perHour"`
+	Incidents      int           `json:"incidents"`
+	PerIncident    float64       `json:"perIncident"`
+	PerIncidentP95 int           `json:"perIncidentP95"`
+	// MaxPerIncident is the most messages any one incident produced.
+	MaxPerIncident int `json:"maxPerIncident"`
+	// PeakPerHour is the most notifications inside any one-hour window.
+	PeakPerHour      int           `json:"peakPerHour"`
 	Updates          int           `json:"updates"`
 	UnchangedUpdates int           `json:"unchangedUpdates"`
 	Recreated        int           `json:"recreated"`
@@ -32,9 +36,16 @@ type ReasonCount struct {
 }
 
 // UnchangedUpdatePercent is the share of updates that repeated the previous
-// message for the same problem.
+// message for the same incident.
 func (r Report) UnchangedUpdatePercent() float64 {
 	return percent(r.UnchangedUpdates, r.Updates)
+}
+
+// RecreatedPercent is the share of incidents that were announced again
+// after they resolved, either under the same ID or as a new incident
+// linked to the resolved one.
+func (r Report) RecreatedPercent() float64 {
+	return percent(r.Recreated, r.Incidents)
 }
 
 // UnknownCausePercent is the share of notifications without a cause.
@@ -55,15 +66,17 @@ func Score(entries []audit.Entry) Report {
 	keys := make(map[string]*keyState)
 	reasons := make(map[string]int)
 	var first, last time.Time
+	times := make([]time.Time, 0, len(entries))
 	for _, entry := range entries {
+		times = append(times, entry.Timestamp)
 		if first.IsZero() {
 			first = entry.Timestamp
 		}
 		last = entry.Timestamp
-		state := keys[entry.Problem]
+		state := keys[entry.Incident]
 		if state == nil {
 			state = &keyState{}
-			keys[entry.Problem] = state
+			keys[entry.Incident] = state
 		}
 		report.Notifications++
 		reasons[entry.Reason]++
@@ -73,8 +86,10 @@ func Score(entries []audit.Entry) Report {
 	if hours := report.Window.Hours(); hours > 0 {
 		report.PerHour = float64(report.Notifications) / hours
 	}
-	report.Problems = len(keys)
-	report.PerProblem, report.PerProblemP95 = perProblem(keys)
+	report.Incidents = len(keys)
+	report.PerIncident, report.PerIncidentP95 = perIncident(keys)
+	report.MaxPerIncident = maxPerIncident(keys)
+	report.PeakPerHour = PeakInWindow(times, time.Hour)
 	report.TopReasons = topReasons(reasons, 10)
 	return report
 }
@@ -82,7 +97,7 @@ func Score(entries []audit.Entry) Report {
 func scoreEntry(report *Report, state *keyState, entry audit.Entry) {
 	switch entry.Action {
 	case audit.ActionCreate:
-		if state.resolved {
+		if state.resolved || entry.Previous != "" {
 			report.Recreated++
 		}
 		state.resolved = false
@@ -115,7 +130,7 @@ func scoreEntry(report *Report, state *keyState, entry audit.Entry) {
 	}
 }
 
-func perProblem(keys map[string]*keyState) (float64, int) {
+func perIncident(keys map[string]*keyState) (float64, int) {
 	if len(keys) == 0 {
 		return 0, 0
 	}
@@ -128,6 +143,14 @@ func perProblem(keys map[string]*keyState) (float64, int) {
 	sort.Ints(counts)
 	p95 := counts[(len(counts)*95+99)/100-1]
 	return float64(total) / float64(len(keys)), p95
+}
+
+func maxPerIncident(keys map[string]*keyState) int {
+	most := 0
+	for _, state := range keys {
+		most = max(most, state.messages)
+	}
+	return most
 }
 
 func topReasons(reasons map[string]int, limit int) []ReasonCount {

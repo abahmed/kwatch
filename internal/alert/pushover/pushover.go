@@ -8,7 +8,7 @@ import (
 	"k8s.io/klog/v2"
 
 	"github.com/abahmed/kwatch/internal/delivery/transport"
-	"github.com/abahmed/kwatch/internal/event"
+	"github.com/abahmed/kwatch/internal/notification"
 )
 
 const pushoverAPIURL = "https://api.pushover.net/1/messages.json"
@@ -91,14 +91,29 @@ func (p *Pushover) Name() string {
 	return "Pushover"
 }
 
-// SendEvent sends event to the provider
-func (p *Pushover) SendEvent(ctx context.Context, e *event.Event) error {
-	msg := e.FormatText(p.clusterName, "")
-	return p.SendMessage(ctx, msg)
+// SendIncident sends the incident's one-line lead as the push message.
+// Open incidents use the configured priority; a resolve is sent at
+// normal priority so it never repeats an emergency alarm.
+func (p *Pushover) SendIncident(
+	ctx context.Context, m notification.Message,
+) error {
+	priority := p.priority
+	if m.Resolved() {
+		priority = 0
+	}
+	return p.send(ctx, m.ShortText(), priority)
 }
 
 // SendMessage sends text message to the provider
 func (p *Pushover) SendMessage(ctx context.Context, msg string) error {
+	return p.send(ctx, msg, p.priority)
+}
+
+// send posts one message. Emergency priority 2 always carries the retry
+// and expire values validated at construction.
+func (p *Pushover) send(
+	ctx context.Context, msg string, priority int,
+) error {
 	form := url.Values{}
 	form.Set("token", p.token)
 	form.Set("user", p.user)
@@ -106,10 +121,10 @@ func (p *Pushover) SendMessage(ctx context.Context, msg string) error {
 	if len(p.title) > 0 {
 		form.Set("title", p.title)
 	}
-	if p.priority != 0 {
-		form.Set("priority", strconv.Itoa(p.priority))
+	if priority != 0 {
+		form.Set("priority", strconv.Itoa(priority))
 	}
-	if p.priority == 2 {
+	if priority == 2 {
 		form.Set("retry", strconv.Itoa(p.retry))
 		form.Set("expire", strconv.Itoa(p.expire))
 	}

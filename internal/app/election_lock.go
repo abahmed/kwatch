@@ -11,7 +11,7 @@ import (
 	"k8s.io/client-go/tools/leaderelection/resourcelock"
 	"k8s.io/klog/v2"
 
-	"github.com/abahmed/kwatch/internal/k8s"
+	"github.com/abahmed/kwatch/internal/kubeclient"
 )
 
 type renewalTrackingLock struct {
@@ -74,7 +74,7 @@ func newLeaseLock(
 	return &resourcelock.LeaseLock{
 		LeaseMeta: metav1.ObjectMeta{
 			Name:      electionLeaseName(),
-			Namespace: k8s.GetNamespace(),
+			Namespace: kubeclient.GetNamespace(),
 		},
 		Client: client.CoordinationV1(),
 		LockConfig: resourcelock.ResourceLockConfig{

@@ -1,6 +1,3 @@
-// Command kwatch-scorecard replays a Kwatch audit log and reports
-// notification quality KPIs, optionally failing when a threshold is
-// exceeded.
 package main
 
 import (
@@ -25,20 +22,7 @@ func run(args []string, out, errOut io.Writer) int {
 		"audit log: JSON lines or a log export CSV (- for stdin)")
 	asJSON := flags.Bool("json", false, "print the report as JSON")
 	limits := scorecard.NoThresholds()
-	flags.Float64Var(&limits.MaxPerHour, "max-per-hour", -1,
-		"fail above this many notifications per hour")
-	flags.Float64Var(&limits.MaxPerProblem, "max-per-problem", -1,
-		"fail above this many messages per problem")
-	flags.Float64Var(&limits.MaxUnchangedPercent, "max-unchanged-pct", -1,
-		"fail above this percent of updates without a visible change")
-	flags.IntVar(&limits.MaxRecreated, "max-recreated", -1,
-		"fail above this many re-opened (flapping) problems")
-	flags.IntVar(&limits.MaxRepeatedResolves, "max-repeated-resolves", -1,
-		"fail above this many repeated recovery messages")
-	flags.Float64Var(&limits.MaxUnknownCausePct, "max-unknown-cause-pct", -1,
-		"fail above this percent of notifications without a cause")
-	flags.IntVar(&limits.MaxCircularCause, "max-circular-cause", -1,
-		"fail above this many causes blaming the failing object itself")
+	registerLimits(flags, &limits)
 	if err := flags.Parse(args); err != nil {
 		return 2
 	}
@@ -59,6 +43,40 @@ func run(args []string, out, errOut io.Writer) int {
 		return 1
 	}
 	return 0
+}
+
+// registerLimits binds one flag per threshold. Limits with a production
+// goal default to it; a negative value disables a check.
+func registerLimits(flags *flag.FlagSet, limits *scorecard.Thresholds) {
+	flags.Float64Var(&limits.MaxPerHour, "max-per-hour", -1,
+		"fail above this mean number of notifications per hour")
+	flags.Float64Var(&limits.MaxPerIncident, "max-per-incident", -1,
+		"fail above this mean number of messages per incident")
+	flags.Float64Var(&limits.MaxUnchangedPercent, "max-unchanged-pct",
+		scorecard.GoalUnchangedPercent,
+		"fail above this percent of updates without a visible change")
+	flags.IntVar(&limits.MaxRecreated, "max-recreated", -1,
+		"fail above this many re-opened (flapping) incidents")
+	flags.IntVar(&limits.MaxRepeatedResolves, "max-repeated-resolves",
+		scorecard.GoalRepeatedResolves,
+		"fail above this many repeated recovery messages")
+	flags.Float64Var(&limits.MaxUnknownCausePct, "max-unknown-cause-pct", -1,
+		"fail above this percent of notifications without a cause")
+	flags.IntVar(&limits.MaxCircularCause, "max-circular-cause", -1,
+		"fail above this many causes blaming the failing object itself")
+	flags.Float64Var(&limits.MaxRecreatedPercent, "max-recreated-pct",
+		scorecard.GoalRecreatedPercent,
+		"fail above this percent of incidents re-created after resolving")
+	flags.IntVar(&limits.MaxPeakPerHour, "max-peak-per-hour",
+		scorecard.GoalPeakPerHour,
+		"fail above this many notifications inside any one hour")
+	flags.IntVar(&limits.MaxMessagesPerIncident,
+		"max-messages-per-incident", scorecard.GoalMessagesPerIncident,
+		"fail above this many messages for any one incident")
+	flags.IntVar(&limits.MaxMessagesPerIncidentP95,
+		"max-messages-per-incident-p95",
+		scorecard.GoalMessagesPerIncidentP95,
+		"fail above this 95th percentile of messages per incident")
 }
 
 func readEntries(path string) ([]audit.Entry, error) {

@@ -1,0 +1,240 @@
+name: CI
+
+# The required pull-request checks. `make ci` is the whole source gate, so
+# what runs here is exactly what a contributor can run locally.
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+# A new push to a pull request cancels the run for the old commit; runs on
+# main always finish so the release gate can read their result.
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  verify:
+    name: Verify
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    permissions:
+      contents: read
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      with:
+        # line-check and diff-check compare against the merge base.
+        fetch-depth: 0
+        persist-credentials: false
+
+    - name: Install Go
+      uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+      with:
+        # Read from go.mod so the CI Go version can never drift from the repo.
+        go-version-file: go.mod
+
+    - name: Install actionlint
+      run: go install github.com/rhysd/actionlint/cmd/actionlint@v1.7.7
+
+    - name: Install ShellCheck
+      run: |
+        sudo apt-get update
+        sudo apt-get install --no-install-recommends --yes shellcheck
+
+    - name: Install Helm
+      uses: azure/setup-helm@9bc31f4ebc9c6b171d7bfbaa5d006ae7abdb4310 # v5
+
+    # Installed only; `make ci` runs it so lint executes once.
+    - name: Install golangci-lint
+      uses: golangci/golangci-lint-action@ba0d7d2ec06a0ea1cb5fa41b2e4a3ab91d21278a # v9
+      with:
+        # Pinned. "latest" means an upstream release can break CI with no
+        # change on our side.
+        version: v2.13.1
+        install-only: true
+
+    - name: Run make ci
+      env:
+        # Pull requests compare with their base branch; a push to main
+        # compares with the commit it replaced.
+        BASE: >-
+          ${{ github.event_name == 'pull_request'
+          && format('origin/{0}', github.base_ref)
+          || github.event.before || 'origin/main' }}
+      run: make ci
+
+    - name: Publish alert-quality report
+      if: always()
+      run: |
+        if [ -f _output/alert-quality.md ]; then
+          cat _output/alert-quality.md >> "$GITHUB_STEP_SUMMARY"
+        fi
+
+    - name: Upload alert-quality report
+      if: always()
+      uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+      with:
+        name: alert-quality-report
+        path: _output/alert-quality.md
+        if-no-files-found: warn
+
+    - name: Upload coverage to Codecov
+      if: success() && github.event_name == 'push' && github.ref == 'refs/heads/main'
+      uses: codecov/codecov-action@303a32d7a59b442fa8d48b6a1cc6825c09c847a5 # v7
+      with:
+        token: ${{ secrets.CODECOV_TOKEN }}
+        fail_ci_if_error: false
+
+  # publish.yml builds the release image only after a tag exists. This job
+  # catches a broken Dockerfile, a failing binary, or a new HIGH/CRITICAL
+  # finding before merge.
+  image:
+    name: Image
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    permissions:
+      contents: read
+      pull-requests: read
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      with:
+        persist-credentials: false
+
+    - name: Detect image changes
+      id: changes
+      if: github.event_name == 'pull_request'
+      uses: dorny/paths-filter@ceb8a2b8f2d89434be7ff52d3de7ec3738c5cc9d # v4
+      with:
+        filters: |
+          image:
+            - 'Dockerfile'
+            - '.dockerignore'
+            - '.trivyignore'
+            - 'scripts/scan-image.sh'
+            - '**/*.go'
+            - 'go.mod'
+            - 'go.sum'
+
+    - name: Decide whether to build
+      id: run
+      env:
+        EVENT: ${{ github.event_name }}
+        CHANGED: ${{ steps.changes.outputs.image }}
+      run: |
+        if [ "$EVENT" != pull_request ] || [ "$CHANGED" = true ]; then
+          echo "build=true" >> "$GITHUB_OUTPUT"
+        else
+          echo "build=false" >> "$GITHUB_OUTPUT"
+          echo "No image inputs changed; skipping the image build."
+        fi
+
+    - name: Install Go
+      if: steps.run.outputs.build == 'true'
+      uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+      with:
+        go-version-file: go.mod
+
+    # Go cross-compiles without emulation. Building each release target
+    # here proves every platform compiles; inspecting the binary proves the
+    # target was honoured.
+    - name: Cross-compile release platforms
+      if: steps.run.outputs.build == 'true'
+      run: |
+        set -euo pipefail
+        check() {
+          local goarch="$1" goarm="$2" want="$3" out="_output/kwatch-$1$2"
+          CGO_ENABLED=0 GOOS=linux GOARCH="$goarch" GOARM="$goarm" \
+            go build -trimpath -o "$out" ./cmd/kwatch
+          got=$(file -b "$out")
+          echo "linux/$goarch${goarm:+/v$goarm} -> $got"
+          echo "$got" | grep -q "$want" || {
+            echo "::error::linux/$goarch produced the wrong architecture"
+            exit 1
+          }
+        }
+        mkdir -p _output
+        check amd64 "" "x86-64"
+        check arm64 "" "ARM aarch64"
+        check arm 7 "ARM, EABI5"
+        check arm 6 "ARM, EABI5"
+
+    - name: Set up Docker Buildx
+      if: steps.run.outputs.build == 'true'
+      uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4
+
+    # One linux/amd64 build, loaded into the local daemon for the smoke test
+    # and the scan. The cache is read-only so pull requests never add to the
+    # repository cache quota.
+    - name: Build linux/amd64 image
+      if: steps.run.outputs.build == 'true'
+      uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7
+      with:
+        context: .
+        platforms: linux/amd64
+        load: true
+        push: false
+        tags: kwatch:ci
+        cache-from: type=gha
+        build-args: |
+          RELEASE_VERSION=ci
+          GIT_COMMIT=${{ github.sha }}
+          BUILD_DATE=ci
+
+    - name: Smoke-test the image
+      if: steps.run.outputs.build == 'true'
+      env:
+        COMMIT: ${{ github.sha }}
+      run: |
+        set -euo pipefail
+        docker run --rm kwatch:ci version --json | tee _output/version.json
+        test "$(jq -r .version _output/version.json)" = ci
+        test "$(jq -r .commit _output/version.json)" = "$COMMIT"
+
+    - name: Scan the image
+      if: steps.run.outputs.build == 'true'
+      run: ./scripts/scan-image.sh kwatch:ci
+
+  # helm lint and the template tests run inside `make ci`; this job adds the
+  # CRD upgrade/uninstall lifecycle, which needs a real API server.
+  chart-lifecycle:
+    name: Chart lifecycle
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    permissions:
+      contents: read
+      pull-requests: read
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      with:
+        persist-credentials: false
+
+    - name: Detect chart and API changes
+      id: changes
+      uses: dorny/paths-filter@ceb8a2b8f2d89434be7ff52d3de7ec3738c5cc9d # v4
+      with:
+        filters: |
+          chart:
+            - 'deploy/**'
+            - 'api/**'
+
+    - name: Install Helm
+      if: steps.changes.outputs.chart == 'true'
+      uses: azure/setup-helm@9bc31f4ebc9c6b171d7bfbaa5d006ae7abdb4310 # v5
+
+    - name: Create disposable Kubernetes cluster
+      if: steps.changes.outputs.chart == 'true'
+      uses: helm/kind-action@06c1ae10762d3b9c1644e7fe69596ae519e015a2 # v1.15.0
+      with:
+        cluster_name: kwatch-chart
+
+    - name: CRD lifecycle integration test
+      if: steps.changes.outputs.chart == 'true'
+      run: ./deploy/chart/test_helm_lifecycle.sh

@@ -1,0 +1,11 @@
+{
+  "name": "route-not-accepted",
+  "description": "An HTTPRoute edit names a listener the Gateway does not have; the route is no longer accepted.",
+  "root": "httproute.gateway.networking.k8s.io/shop/web",
+  "tier": "notify",
+  "maxMessages": 2,
+  "mustNotBlame": [
+    "gateway.gateway.networking.k8s.io/shop/public",
+    "service/shop/web"
+  ]
+}

@@ -1,5 +1,3 @@
-// Package audit writes one JSON line per problem decision so notification
-// quality can be replayed offline by the scorecard.
 package audit
 
 import (
@@ -12,7 +10,7 @@ import (
 	"k8s.io/klog/v2"
 )
 
-// Action is what a decision did to a problem's conversation.
+// Action is what a decision did to an incident's conversation.
 type Action string
 
 // Actions. The strings are stable: people grep audit logs for them.
@@ -37,7 +35,7 @@ const (
 type Entry struct {
 	Timestamp time.Time `json:"ts"`
 	Action    Action    `json:"action"`
-	Problem   string    `json:"problem"`
+	Incident  string    `json:"incident"`
 	Namespace string    `json:"namespace,omitempty"`
 	Reason    string    `json:"reason,omitempty"`
 	Severity  string    `json:"severity,omitempty"`
@@ -55,6 +53,8 @@ type Entry struct {
 	// ContentHash fingerprints the announced content; an update with the
 	// same hash as the previous message repeated it.
 	ContentHash string `json:"contentHash,omitempty"`
+	// Previous is the resolved incident this one repeats, when linked.
+	Previous string `json:"previous,omitempty"`
 }
 
 // Config selects where entries go.

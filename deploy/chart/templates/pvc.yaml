@@ -1,3 +1,6 @@
+{{- if and .Values.persistence.emptyDir .Values.persistence.existingClaim }}
+{{- fail "persistence.emptyDir and persistence.existingClaim are both set; choose one state volume" }}
+{{- end }}
 {{- if and (not .Values.persistence.emptyDir) (not .Values.persistence.existingClaim) }}
 apiVersion: v1
 kind: PersistentVolumeClaim

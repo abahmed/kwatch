@@ -1,15 +1,22 @@
 version: 2
 updates:
+  # One grouped weekly pull request keeps module updates reviewable and lets
+  # the full CI gate run once for the whole set.
   - package-ecosystem: "gomod"
     directory: "/"
     schedule:
-      interval: "daily"
+      interval: "weekly"
     groups:
       go-dependencies:
         patterns:
           - "*"
+  # The release image and the e2e receiver and workload images. Base images
+  # pinned by digest get their digest bumped here.
   - package-ecosystem: "docker"
-    directory: "/"
+    directories:
+      - "/"
+      - "/test/e2e/receiver"
+      - "/test/e2e/workload"
     schedule:
       interval: "weekly"
     groups:

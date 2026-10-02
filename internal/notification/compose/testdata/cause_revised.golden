@@ -1,0 +1,3 @@
+🔴 api in shop has a revised cause: it was evicted because node n2 is low on memory. 3 of 4 pods on the node are failing.
+
+🔴 api in shop has a revised cause: it was evicted because node n2 is low on memory.

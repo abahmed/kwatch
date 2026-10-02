@@ -11,7 +11,7 @@ import (
 )
 
 func entry(ts, key, reason, action string) string {
-	return `{"ts":"` + ts + `","problem":"` + key +
+	return `{"ts":"` + ts + `","incident":"` + key +
 		`","reason":"` + reason + `","action":"` + action + `"}`
 }
 
@@ -21,7 +21,7 @@ func TestParseJSONLines(t *testing.T) {
 	entries, err := Parse(strings.NewReader(input))
 	require.NoError(t, err)
 	require.Len(t, entries, 2)
-	assert.Equal(t, "ns:key1", entries[0].Problem)
+	assert.Equal(t, "ns:key1", entries[0].Incident)
 	assert.Equal(t, audit.ActionCreate, entries[0].Action)
 	assert.Equal(t, audit.ActionUpdate, entries[1].Action)
 }
@@ -34,18 +34,18 @@ malformed json
 	entries, err := Parse(strings.NewReader(input))
 	require.NoError(t, err)
 	require.Len(t, entries, 1)
-	assert.Equal(t, "ns:key1", entries[0].Problem)
+	assert.Equal(t, "ns:key1", entries[0].Incident)
 }
 
 func TestParseSkipsEntriesWithoutAction(t *testing.T) {
-	input := `{"ts":"2026-01-01T00:00:00Z","problem":"ns:key1","reason":"Test"}
+	input := `{"ts":"2026-01-01T00:00:00Z","incident":"ns:key1","reason":"Test"}
 ` + entry("2026-01-01T00:00:00Z", "ns:key1", "Test", "create")
 	entries, err := Parse(strings.NewReader(input))
 	require.NoError(t, err)
 	require.Len(t, entries, 1)
 }
 
-func TestParseSkipsEntriesWithoutProblem(t *testing.T) {
+func TestParseSkipsEntriesWithoutIncident(t *testing.T) {
 	input := `{"ts":"2026-01-01T00:00:00Z","reason":"Test","action":"create"}
 ` + entry("2026-01-01T00:00:00Z", "ns:key1", "Test", "create")
 	entries, err := Parse(strings.NewReader(input))

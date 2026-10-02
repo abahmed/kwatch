@@ -109,8 +109,7 @@ heartbeatMonitor:
 			&corev1.Secret{
 				ObjectMeta: metav1.ObjectMeta{Name: secretName},
 				Data: map[string][]byte{
-					"config.yaml":       []byte(config),
-					"diagnostics-token": []byte("e2e-token"),
+					"config.yaml": []byte(config),
 				},
 			}, metav1.CreateOptions{})
 		if err != nil {

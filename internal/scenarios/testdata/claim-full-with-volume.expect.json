@@ -1,0 +1,12 @@
+{
+  "name": "claim-full-with-volume",
+  "description": "A log store's PersistentVolumeClaim fills up; the store crash-loops with \"no space left on device\" while its bound PersistentVolume is listed and healthy.",
+  "root": "persistentvolumeclaim/observability/chunks",
+  "tier": "notify",
+  "maxMessages": 2,
+  "mustNotBlame": [
+    "node//w3",
+    "persistentvolume//pv-chunks-0",
+    "storageclass//premium-ssd"
+  ]
+}

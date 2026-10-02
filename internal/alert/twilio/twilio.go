@@ -9,7 +9,7 @@ import (
 	"k8s.io/klog/v2"
 
 	"github.com/abahmed/kwatch/internal/delivery/transport"
-	"github.com/abahmed/kwatch/internal/event"
+	"github.com/abahmed/kwatch/internal/notification"
 )
 
 const twilioAPIURL = "https://api.twilio.com/2010-04-01/Accounts/%s/Messages.json"
@@ -74,10 +74,12 @@ func (t *Twilio) Name() string {
 	return "Twilio"
 }
 
-// SendEvent sends event to the provider
-func (t *Twilio) SendEvent(ctx context.Context, e *event.Event) error {
-	msg := e.FormatText(t.clusterName, "")
-	return t.SendMessage(ctx, msg)
+// SendIncident sends the incident's one-line lead as the SMS body.
+// The lead starts with the status marker, the only emoji in the payload.
+func (t *Twilio) SendIncident(
+	ctx context.Context, m notification.Message,
+) error {
+	return t.SendMessage(ctx, m.ShortText())
 }
 
 // SendMessage sends text message to the provider

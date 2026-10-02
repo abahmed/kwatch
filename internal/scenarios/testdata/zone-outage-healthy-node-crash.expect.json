@@ -1,0 +1,14 @@
+{
+  "name": "zone-outage-healthy-node-crash",
+  "description": "Two nodes of a zone stop reporting while an app on the zone's healthy node crash-loops for its own reasons.",
+  "root": "zone//zone-a",
+  "otherRoots": [
+    "deployment/shop/api"
+  ],
+  "tier": "page",
+  "maxMessages": 4,
+  "mustNotBlame": [
+    "node//n3",
+    "zone//zone-b"
+  ]
+}

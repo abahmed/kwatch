@@ -1,0 +1,4 @@
+10:03:15 settled
+🔴 HTTP route api in storefront (prod-eu-1) is failing because service search-v3 does not exist. The error mentions it. To see the object's state and events, run kubectl describe httproute api -n storefront
+🔴 HTTP route api in storefront (prod-eu-1) is failing because service search-v3 does not exist.
+

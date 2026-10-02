@@ -38,11 +38,10 @@ func configureTelemetryRunner(
 	clusterID, version string,
 	now func() time.Time,
 	client *http.Client,
-	status *adoptionTelemetryStatus,
 ) func(context.Context) error {
 	return configureTelemetryRunnerWithOptions(
 		telemetryConfig, persistenceManager, clusterID, version,
-		now, client, status, telemetryRunnerOptions{
+		now, client, telemetryRunnerOptions{
 			endpoint: telemetry.Endpoint,
 			wait:     waitTelemetry, jitter: jitterDuration,
 		},
@@ -55,7 +54,6 @@ func configureTelemetryRunnerWithOptions(
 	clusterID, version string,
 	now func() time.Time,
 	client *http.Client,
-	status *adoptionTelemetryStatus,
 	options telemetryRunnerOptions,
 ) func(context.Context) error {
 	if options.wait == nil {
@@ -67,17 +65,12 @@ func configureTelemetryRunnerWithOptions(
 	if options.jitter == nil {
 		options.jitter = jitterDuration
 	}
-	if status == nil {
-		status = newAdoptionTelemetryStatus()
-	}
 	if reason := telemetrySkipReason(
 		telemetryConfig, persistenceManager, clusterID, version,
 	); reason != "" {
-		status.configure(telemetryConfig.Enabled, "skipped", reason)
 		klog.InfoS("adoption telemetry skipped", "reason", reason)
 		return nil
 	}
-	status.configure(true, "waiting", "")
 	klog.InfoS("adoption telemetry enabled: a weekly anonymous "+
 		"cluster ID and the kwatch version are sent; set "+
 		"telemetry.enabled=false or KWATCH_TELEMETRY=false to disable",
@@ -91,25 +84,37 @@ func configureTelemetryRunnerWithOptions(
 		for {
 			delay, retry := sendTelemetry(
 				ctx, persistenceManager, clusterID, version,
-				now, client, options.endpoint, status, &sent,
+				now, client, options.endpoint, &sent,
 			)
 			if ctx.Err() != nil {
 				return nil
 			}
-			if !retry {
-				failure = -1
-			} else {
-				if failure < len(telemetryRetryDelays)-1 {
-					failure++
-				}
-				delay = options.jitter(telemetryRetryDelays[failure])
-				metrics.DefaultRegistry().TelemetryRetries.Add(1)
-			}
+			delay, failure = nextTelemetryDelay(
+				delay, retry, failure, options.jitter)
 			if !options.wait(ctx, delay) {
 				return nil
 			}
 		}
 	}
+}
+
+// nextTelemetryDelay picks the wait before the next send. After a failed
+// send it walks telemetryRetryDelays, staying on the last one; after a
+// success it keeps the regular delay and resets the failure count.
+func nextTelemetryDelay(
+	delay time.Duration,
+	retry bool,
+	failure int,
+	jitter func(time.Duration) time.Duration,
+) (time.Duration, int) {
+	if !retry {
+		return delay, -1
+	}
+	if failure < len(telemetryRetryDelays)-1 {
+		failure++
+	}
+	metrics.DefaultRegistry().TelemetryRetries.Add(1)
+	return jitter(telemetryRetryDelays[failure]), failure
 }
 
 func telemetrySkipReason(
@@ -158,15 +163,12 @@ func sendTelemetry(
 	now func() time.Time,
 	client *http.Client,
 	endpoint string,
-	status *adoptionTelemetryStatus,
 	sent *time.Time,
 ) (time.Duration, bool) {
 	sentAt := now()
 	lastSent, err := store.GetTelemetryLastSent(ctx)
 	if err != nil {
-		return telemetryFailure(
-			status, "state_read", time.Minute, err, now,
-		)
+		return telemetryFailure("state_read", time.Minute, err)
 	}
 	if sent != nil && sent.After(lastSent) {
 		lastSent = *sent
@@ -176,11 +178,9 @@ func sendTelemetry(
 		if next.Before(sentAt) {
 			next = sentAt
 		}
-		status.waiting(next)
 		return next.Sub(sentAt), false
 	}
 
-	status.attempt(sentAt)
 	metrics.DefaultRegistry().TelemetryAttempts.Add(1)
 	reportCtx, cancel := context.WithTimeout(ctx, 3*time.Second)
 	err = telemetry.Report(
@@ -189,7 +189,7 @@ func sendTelemetry(
 	cancel()
 	if err != nil {
 		reason := telemetryFailureReason(err)
-		return telemetryFailure(status, reason, time.Minute, err, now)
+		return telemetryFailure(reason, time.Minute, err)
 	}
 	if sent != nil {
 		*sent = sentAt
@@ -201,21 +201,16 @@ func sendTelemetry(
 			"reason", "state_write")
 	}
 	next := sentAt.Add(telemetry.WeeklyInterval)
-	status.success(sentAt, next)
 	klog.InfoS("adoption telemetry sent", "nextAttempt", next)
 	return telemetry.WeeklyInterval, false
 }
 
 func telemetryFailure(
-	status *adoptionTelemetryStatus,
 	reason string,
 	delay time.Duration,
 	err error,
-	now func() time.Time,
 ) (time.Duration, bool) {
 	metrics.DefaultRegistry().IncTelemetryFailure(reason)
-	next := now().Add(delay)
-	status.failure(reason, next)
 	klog.ErrorS(err, "adoption telemetry failed", "reason", reason)
 	return delay, true
 }

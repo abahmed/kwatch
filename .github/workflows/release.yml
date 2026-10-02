@@ -36,9 +36,12 @@ on:
         type: boolean
         default: false
 
+# Every write (main push, tag push, GitHub Release) uses RELEASE_TOKEN in the
+# step that performs it; GITHUB_TOKEN only reads the repository and the
+# results of the gating workflows.
 permissions:
-  contents: write
-  packages: write
+  contents: read
+  actions: read
 
 concurrency:
   group: release
@@ -48,11 +51,14 @@ jobs:
   release:
     name: ${{ inputs.dry_run && 'Preview' || 'Cut' }} ${{ inputs.command }} release
     runs-on: ubuntu-24.04
+    timeout-minutes: 30
     steps:
       - name: Guard branch
         if: github.ref != 'refs/heads/main'
+        env:
+          REF: ${{ github.ref }}
         run: |
-          echo "::error::release must be dispatched from main, got ${{ github.ref }}"
+          echo "::error::release must be dispatched from main, got $REF"
           exit 1
 
       - name: Require release token
@@ -70,7 +76,9 @@ jobs:
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
           fetch-depth: 0
-          token: ${{ secrets.RELEASE_TOKEN || secrets.GITHUB_TOKEN }}
+          # Nothing that runs later (go run, perl) can read a credential
+          # from .git/config; push steps pass RELEASE_TOKEN explicitly.
+          persist-credentials: false
 
       - name: Configure git user
         run: |
@@ -268,6 +276,8 @@ jobs:
         env:
           TARGET: ${{ inputs.target }}
           RESUME: ${{ steps.meta.outputs.resume }}
+          VERSION: ${{ steps.meta.outputs.version }}
+          COMMAND: ${{ inputs.command }}
         run: |
           set -euo pipefail
           if [ "$RESUME" = true ]; then
@@ -275,7 +285,7 @@ jobs:
               echo "::error::target cannot be used while resuming an existing release"
               exit 1
             fi
-            RESOLVED=$(git rev-list -n 1 "refs/tags/${{ steps.meta.outputs.version }}")
+            RESOLVED=$(git rev-list -n 1 "refs/tags/$VERSION")
             {
               echo "sha=$RESOLVED"
               echo "existing_tag=true"
@@ -302,6 +312,49 @@ jobs:
           fi
           echo "sha=$RESOLVED" >> "$GITHUB_OUTPUT"
           echo "tagging at $RESOLVED"
+
+      # The commit being released must already have passed the required CI
+      # run, the security workflow, and a full nightly-equivalent E2E run
+      # (run name "E2E full") on main. Read from the Actions API with the
+      # read-only GITHUB_TOKEN. A dry run reports the gate without failing.
+      - name: Require green CI, security and E2E on the target commit
+        if: ${{ steps.meta.outputs.resume != 'true' }}
+        env:
+          SHA: ${{ steps.target.outputs.sha }}
+          DRY_RUN: ${{ inputs.dry_run }}
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          missing=""
+          check() {
+            local workflow="$1" title="$2" titles
+            # Successful runs of the workflow on main for this exact commit.
+            titles=$(gh api --paginate \
+              "repos/$GITHUB_REPOSITORY/actions/workflows/$workflow/runs?head_sha=$SHA&branch=main&status=success&per_page=100" \
+              --jq '.workflow_runs[].display_title') || {
+              echo "::error::could not read $workflow runs"
+              exit 1
+            }
+            if [ -n "$titles" ] && { [ -z "$title" ] ||
+              printf '%s\n' "$titles" | grep -Fxq "$title"; }; then
+              echo "$workflow${title:+ ($title)}: success on $SHA"
+            else
+              echo "$workflow${title:+ ($title)}: no successful run on $SHA"
+              missing="$missing $workflow"
+            fi
+          }
+          check ci.yml ""
+          check security.yml ""
+          check e2e.yml "E2E full"
+          if [ -n "$missing" ]; then
+            message="no successful run on main for $SHA:$missing. Run the missing workflow on this commit and retry."
+            if [ "$DRY_RUN" = true ]; then
+              echo "::warning::$message"
+            else
+              echo "::error::$message"
+              exit 1
+            fi
+          fi
 
       - name: Generate changelog
         id: changelog
@@ -408,14 +461,9 @@ jobs:
               # Released off an older commit. The bump belongs to the tag only,
               # since pushing it to main would rewrite main's version backwards.
               echo "::warning::target was set, so the version bump is on the tag only. Update main by hand if it should carry $VERSION."
-            else
-              if ! git push origin "HEAD:refs/heads/main"; then
-                echo "::error::could not push the version bump to main. RELEASE_TOKEN must be a classic PAT with repo scope, allowed to bypass branch protection. Push it manually and re-run:"
-                echo "::error::  git push origin $(git rev-parse HEAD):main"
-                exit 1
-              fi
             fi
             echo "bumped=true" >> "$GITHUB_OUTPUT"
+            echo "main_sha=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
           fi
 
           # ---- commit 2, rc only: what the tag carries ----
@@ -436,6 +484,21 @@ jobs:
           fi
 
           echo "sha=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
+
+      - name: Push the version bump to main
+        if: ${{ steps.bump.outputs.bumped == 'true' && inputs.target == '' }}
+        env:
+          RELEASE_TOKEN: ${{ secrets.RELEASE_TOKEN }}
+          MAIN_SHA: ${{ steps.bump.outputs.main_sha }}
+        run: |
+          set -euo pipefail
+          basic=$(printf 'x-access-token:%s' "$RELEASE_TOKEN" | base64 -w0)
+          if ! git -c "http.https://github.com/.extraheader=AUTHORIZATION: basic $basic" \
+            push origin "$MAIN_SHA:refs/heads/main"; then
+            echo "::error::could not push the version bump to main. RELEASE_TOKEN must be a classic PAT with repo scope, allowed to bypass branch protection. Push it manually and re-run:"
+            echo "::error::  git push origin $MAIN_SHA:main"
+            exit 1
+          fi
 
       - name: Verify release contents before tagging
         if: ${{ !inputs.dry_run }}
@@ -476,10 +539,13 @@ jobs:
         env:
           VERSION: ${{ steps.meta.outputs.version }}
           SHA: ${{ steps.bump.outputs.sha || steps.target.outputs.sha }}
+          RELEASE_TOKEN: ${{ secrets.RELEASE_TOKEN }}
         run: |
           set -euo pipefail
           git tag -a "$VERSION" -m "$VERSION" "$SHA"
-          git push origin "$VERSION"
+          basic=$(printf 'x-access-token:%s' "$RELEASE_TOKEN" | base64 -w0)
+          git -c "http.https://github.com/.extraheader=AUTHORIZATION: basic $basic" \
+            push origin "refs/tags/$VERSION"
 
       - name: Create GitHub release
         if: ${{ !inputs.dry_run }}

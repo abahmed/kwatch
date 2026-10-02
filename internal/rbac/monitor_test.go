@@ -13,7 +13,7 @@ import (
 	k8stesting "k8s.io/client-go/testing"
 
 	"github.com/abahmed/kwatch/internal/clock"
-	"github.com/abahmed/kwatch/internal/knowledge/kube"
+	"github.com/abahmed/kwatch/internal/inventory/kube"
 )
 
 // reviewer answers access reviews: deny lists resources and URLs refused.
@@ -24,7 +24,8 @@ func reviewer(deny map[string]bool, fail error) *fake.Clientset {
 			if fail != nil {
 				return true, nil, fail
 			}
-			review := action.(k8stesting.CreateAction).GetObject().(*authorizationv1.SelfSubjectAccessReview)
+			created := action.(k8stesting.CreateAction).GetObject()
+			review := created.(*authorizationv1.SelfSubjectAccessReview)
 			key := ""
 			if attrs := review.Spec.ResourceAttributes; attrs != nil {
 				key = attrs.Resource
@@ -42,7 +43,7 @@ func reviewer(deny map[string]bool, fail error) *fake.Clientset {
 
 func sweep(t *testing.T, deny map[string]bool, fail error) Status {
 	t.Helper()
-	m := NewMonitor(reviewer(deny, fail), Checks("kwatch", true),
+	m := NewMonitor(reviewer(deny, fail), Checks("kwatch", "kwatch-leader", true),
 		clock.RealClock{}, func(Status) {})
 	return m.Sweep(context.Background())
 }
@@ -77,19 +78,33 @@ func TestChecksIncludeLeaseAndOptionalCRD(t *testing.T) {
 		}
 		return false
 	}
-	assert.True(t, has(Checks("kwatch", false), "leases"))
-	assert.False(t, has(Checks("kwatch", false), "kwatchconfigs"))
-	assert.True(t, has(Checks("kwatch", true), "kwatchconfigs"))
+	assert.True(t, has(Checks("kwatch", "kwatch-leader", false), "leases"))
+	assert.False(t, has(Checks("kwatch", "kwatch-leader", false), "kwatchconfigs"))
+	assert.True(t, has(Checks("kwatch", "kwatch-leader", true), "kwatchconfigs"))
 }
 
 func TestStartReportsUntilCanceled(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	reports := 0
-	m := NewMonitor(reviewer(nil, nil), Checks("kwatch", false),
+	m := NewMonitor(reviewer(nil, nil), Checks("kwatch", "kwatch-leader", false),
 		clock.RealClock{}, func(Status) {
 			reports++
 			cancel()
 		})
 	require.NoError(t, m.Start(ctx))
 	assert.Equal(t, 1, reports)
+}
+
+func TestChecksScopeLeaseGetAndUpdateByName(t *testing.T) {
+	names := map[string]string{}
+	for _, check := range Checks("kwatch", "kwatch-leader", false) {
+		if check.Resource.Name == "leases" && check.Namespace == "kwatch" {
+			names[check.Verb] = check.Name
+		}
+	}
+	assert.Equal(t, map[string]string{
+		"get": "kwatch-leader", "update": "kwatch-leader",
+		// RBAC cannot limit create by name.
+		"create": "",
+	}, names)
 }

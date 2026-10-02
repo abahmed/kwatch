@@ -12,19 +12,19 @@ import (
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/kubernetes/fake"
 
-	"github.com/abahmed/kwatch/internal/knowledge/store"
-	"github.com/abahmed/kwatch/internal/model"
+	"github.com/abahmed/kwatch/internal/storage"
 )
 
-func openTestStore(t *testing.T) *store.Store {
+func openTestStore(t *testing.T) *storage.Store {
 	t.Helper()
-	s, err := store.Open(filepath.Join(t.TempDir(), "state.db"),
-		store.Options{Now: func() time.Time {
+	s, err := storage.Open(filepath.Join(t.TempDir(), "state.db"),
+		storage.Options{Now: func() time.Time {
 			return time.Date(2026, 9, 30, 0, 0, 0, 0, time.UTC)
 		}})
 	require.NoError(t, err)
 	t.Cleanup(func() { _ = s.Close() })
-	require.NoError(t, s.Claim(1))
+	_, err = s.Claim()
+	require.NoError(t, err)
 	return s
 }
 
@@ -140,7 +140,7 @@ func TestDiskStateRuntimeSessionRoundTrips(t *testing.T) {
 	require.NoError(t, err)
 	require.Empty(t, empty.PodName)
 	require.NoError(t, disk.SaveRuntimeSession(ctx,
-		model.RuntimeSession{PodName: "kwatch-0", NodeName: "n1"}))
+		runtimeSession{PodName: "kwatch-0", NodeName: "n1"}))
 
 	got, err := disk.GetRuntimeSession(ctx)
 	require.NoError(t, err)

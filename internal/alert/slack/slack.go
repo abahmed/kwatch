@@ -4,27 +4,18 @@ import (
 	"context"
 	"fmt"
 	"hash/fnv"
-	"strings"
 	"sync"
 
 	"github.com/abahmed/kwatch/internal/clock"
-	"github.com/abahmed/kwatch/internal/constant"
 	"github.com/abahmed/kwatch/internal/delivery/transport"
-	"github.com/abahmed/kwatch/internal/event"
-	"github.com/abahmed/kwatch/internal/message"
 
 	slackClient "github.com/slack-go/slack"
 	"k8s.io/klog/v2"
 )
 
-const (
-	chunkSize             = 2000
-	conversationLockCount = 64
-)
+const conversationLockCount = 64
 
 type Slack struct {
-	title       string
-	text        string
 	channel     string
 	clusterName string
 	clockSource clock.Clock
@@ -39,8 +30,11 @@ type Slack struct {
 	// token mode
 	token     string
 	apiClient *slackClient.Client
+	// channelID is the channel ID from the latest post response, guarded
+	// by mu. chat.update needs it when channel is a name.
+	channelID string
 
-	// conversations maps a story key to its thread. conversationOrder is
+	// conversations maps an incident key to its thread. conversationOrder is
 	// insertion order so the map is bounded by evicting the oldest thread
 	// rather than refusing to record new ones.
 	conversations     map[string]conversationState
@@ -75,8 +69,6 @@ func NewSlack(
 	dependencies transport.Dependencies,
 ) *Slack {
 	httpClient := dependencies.HTTPClient
-	title, _ := config["title"].(string)
-	text, _ := config["text"].(string)
 	compact, _ := config["compact"].(bool)
 
 	// token mode: requires token + channel
@@ -95,8 +87,6 @@ func NewSlack(
 		return &Slack{
 			token:       token,
 			channel:     channel,
-			title:       title,
-			text:        text,
 			compact:     compact,
 			clusterName: clusterName,
 			clockSource: clock.Require(dependencies.Clock),
@@ -116,13 +106,17 @@ func NewSlack(
 		return nil
 	}
 
+	if !transport.ValidEndpoint(webhook) {
+		klog.InfoS("initializing slack with an invalid webhook",
+			"setting", "webhook")
+		return nil
+	}
+
 	klog.InfoS("initializing slack with webhook configured")
 
 	return &Slack{
 		webhook:          webhook,
 		channel:          channel,
-		title:            title,
-		text:             text,
 		compact:          compact,
 		maxThreadMapSize: 1000,
 		clusterName:      clusterName,
@@ -188,94 +182,6 @@ func (s *Slack) Verify(ctx context.Context) error {
 		return fmt.Errorf("slack: no webhook or token configured")
 	}
 	return nil
-}
-
-// SendEvent sends an event using the caller's cancellation context.
-func (s *Slack) SendEvent(
-	ctx context.Context,
-	ev *event.Event,
-) error {
-	klog.InfoS(
-		"sending to slack event",
-		"namespace", ev.Namespace,
-		"name", ev.PodName,
-		"reason", ev.Reason,
-		"action", ev.Action,
-	)
-
-	// compact mode: single-line text message
-	if s.compact {
-		text := fmt.Sprintf(
-			"K8s Alert: %s - %s (%s)",
-			ev.PodName, ev.Reason, ev.Namespace,
-		)
-		return s.sendAPI(ctx, &slackClient.WebhookMessage{
-			Text: text,
-		})
-	}
-
-	// use custom title if it's provided, otherwise use default
-	title := s.title
-	if len(title) == 0 {
-		title = constant.DefaultTitle
-	}
-
-	// use custom text if it's provided, otherwise use default
-	text := s.text
-	if len(text) == 0 {
-		text = constant.DefaultText
-	}
-
-	blocks := []slackClient.Block{
-		markdownSection(title),
-		plainSection(text),
-		slackClient.SectionBlock{
-			Type: "section",
-			Fields: []*slackClient.TextBlockObject{
-				markdownF("*Cluster*\n%s", s.clusterName),
-				markdownF("*Name*\n%s", ev.PodName),
-				markdownF("*Container*\n%s", ev.ContainerName),
-				markdownF("*Namespace*\n%s", ev.Namespace),
-				markdownF("*Node*\n%s", ev.NodeName),
-				markdownF("*Reason*\n%s", ev.Reason),
-			},
-		},
-	}
-
-	// add events part if it exists
-	if ev.IncludeEvents {
-		events := strings.TrimSpace(ev.Events)
-		if len(events) > 0 {
-			blocks = append(blocks,
-				markdownSection(":mag: *Events*"))
-
-			for _, chunk := range message.Chunks(events, chunkSize) {
-				blocks = append(blocks,
-					markdownSection("```"+chunk+"```"))
-			}
-		}
-	}
-
-	// add logs part if it exists
-	if ev.IncludeLogs {
-		logs := strings.TrimSpace(ev.Logs)
-		if len(logs) > 0 {
-			blocks = append(blocks,
-				markdownSection(":memo: *Logs*"))
-
-			for _, chunk := range message.Chunks(logs, chunkSize) {
-				blocks = append(blocks,
-					markdownSection("```"+chunk+"```"))
-			}
-		}
-	}
-
-	// send message
-	return s.sendAPI(ctx, &slackClient.WebhookMessage{
-		Blocks: &slackClient.Blocks{
-			BlockSet: append(blocks, markdownSection(constant.Footer)),
-		},
-	})
 }
 
 // SendMessage sends text using the caller's cancellation context.

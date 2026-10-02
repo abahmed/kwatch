@@ -11,7 +11,23 @@ func Warnings(cfg *Config) []string {
 	if cfg == nil {
 		return nil
 	}
-	return providerWarnings(cfg)
+	warnings := providerWarnings(cfg)
+	warnings = append(warnings, removedOptionWarnings(cfg)...)
+	warnings = append(warnings, unknownProviderOptionWarnings(cfg)...)
+	warnings = append(warnings, routeWarnings(cfg)...)
+	return append(warnings, unknownKeyWarnings(cfg)...)
+}
+
+// LintWarnings is Warnings plus the findings only `kwatch lint` reports.
+// A running kwatch with no provider is a legitimate configuration (it still
+// exposes /incidents and metrics), but it is almost never what someone
+// linting a file intended, so lint says so without failing.
+func LintWarnings(cfg *Config) []string {
+	warnings := Warnings(cfg)
+	if cfg != nil && len(cfg.Alert) == 0 {
+		warnings = append(warnings, "no alert providers configured")
+	}
+	return warnings
 }
 
 // providerWarnings flags providers whose upstream service no longer exists.

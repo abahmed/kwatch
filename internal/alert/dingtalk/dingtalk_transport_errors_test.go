@@ -8,7 +8,7 @@ import (
 
 	"github.com/stretchr/testify/assert"
 
-	"github.com/abahmed/kwatch/internal/event"
+	"github.com/abahmed/kwatch/internal/delivery/providertest"
 )
 
 func TestSendMessageNetworkError(t *testing.T) {
@@ -25,7 +25,7 @@ func TestSendMessageNetworkError(t *testing.T) {
 	assert.NotNil(err)
 }
 
-func TestSendEventNetworkError(t *testing.T) {
+func TestSendIncidentNetworkError(t *testing.T) {
 	assert := assert.New(t)
 
 	configMap := map[string]interface{}{
@@ -35,14 +35,7 @@ func TestSendEventNetworkError(t *testing.T) {
 	assert.NotNil(c)
 	c.url = "http://localhost:99999/send"
 
-	ev := &event.Event{
-		PodName:       "test-pod",
-		ContainerName: "test-container",
-		Namespace:     "default",
-		Reason:        "OOMKILLED",
-		Logs:          "test logs",
-	}
-	err := c.SendEvent(context.Background(), ev)
+	err := c.SendIncident(context.Background(), providertest.Announce())
 	assert.NotNil(err)
 }
 

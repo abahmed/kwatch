@@ -3,14 +3,18 @@ package line
 import (
 	"context"
 	"net/url"
+	"strings"
 
 	"k8s.io/klog/v2"
 
 	"github.com/abahmed/kwatch/internal/delivery/transport"
-	"github.com/abahmed/kwatch/internal/event"
+	"github.com/abahmed/kwatch/internal/notification"
 )
 
 const lineAPIURL = "https://notify-api.line.me/api/notify"
+
+// lineTextLimit is LINE Notify's message limit.
+const lineTextLimit = 1000
 
 type Line struct {
 	sender transport.Sender
@@ -48,10 +52,13 @@ func (l *Line) Name() string {
 	return "Line"
 }
 
-// SendEvent sends event to the provider
-func (l *Line) SendEvent(ctx context.Context, e *event.Event) error {
-	msg := e.FormatText(l.clusterName, "")
-	return l.SendMessage(ctx, msg)
+// SendIncident sends the incident narrative as plain text, followed by
+// the application output as a quoted block.
+func (l *Line) SendIncident(
+	ctx context.Context, m notification.Message,
+) error {
+	text := notification.Truncate(plainNote(m), lineTextLimit)
+	return l.SendMessage(ctx, text)
 }
 
 // SendMessage sends text message to the provider
@@ -66,4 +73,13 @@ func (l *Line) SendMessage(ctx context.Context, msg string) error {
 		},
 	})
 	return err
+}
+
+// plainNote is the Note with the application output quoted after it.
+func plainNote(m notification.Message) string {
+	text := m.NoteText()
+	if len(m.Output) > 0 {
+		text += "\n\n> " + strings.Join(m.Output, "\n> ")
+	}
+	return text
 }

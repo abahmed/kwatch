@@ -1,0 +1,13 @@
+{
+  "name": "two-independent-problems",
+  "description": "Node n1 comes under memory pressure and evicts indexer pods while, a minute later on node n2, a new checkout image crash-loops; two unrelated incidents.",
+  "root": "node//n1",
+  "otherRoots": [
+    "deployment/shop/checkout"
+  ],
+  "tier": "notify",
+  "maxMessages": 4,
+  "mustNotBlame": [
+    "node//n2"
+  ]
+}

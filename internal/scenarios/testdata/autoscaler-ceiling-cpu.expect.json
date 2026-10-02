@@ -1,0 +1,12 @@
+{
+  "name": "autoscaler-ceiling-cpu",
+  "description": "An HPA on CPU reaches maxReplicas under load and reports ScalingLimited; saturated replicas time out their readiness probes.",
+  "root": "horizontalpodautoscaler/orders/worker",
+  "tier": "notify",
+  "maxMessages": 2,
+  "mustNotBlame": [
+    "node//w7",
+    "node//w8",
+    "deployment/orders/worker"
+  ]
+}

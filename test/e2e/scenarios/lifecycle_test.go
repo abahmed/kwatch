@@ -193,31 +193,33 @@ func TestScenarioRestartPersistence(t *testing.T) {
 	})
 }
 
-func TestScenarioLeaderFailover(t *testing.T) {
-	runScenario(t, "lifecycle.leader-failover", func(
+// TestScenarioLeaseHandover deletes the only Pod. The replacement must
+// acquire the Lease, become available, and keep detecting new incidents.
+func TestScenarioLeaseHandover(t *testing.T) {
+	runScenario(t, "lifecycle.lease-handover", func(
 		ctx context.Context,
 		t *testing.T,
 		e *harness.Environment,
 	) {
-		oldLeader, err := e.WaitForLeaseHolder(ctx, "kwatch", "kwatch-leader")
+		oldHolder, err := e.WaitForLeaseHolder(ctx, "kwatch", "kwatch-leader")
 		if err != nil {
 			t.Fatal(err)
 		}
 		if err := e.Client.CoreV1().Pods("kwatch").Delete(
-			ctx, oldLeader, metav1.DeleteOptions{},
+			ctx, oldHolder, metav1.DeleteOptions{},
 		); err != nil {
 			t.Fatal(err)
 		}
 		waitCtx, cancel := context.WithTimeout(ctx, 5*time.Minute)
 		defer cancel()
-		newLeader, err := e.WaitForLeaseChange(
-			waitCtx, "kwatch", "kwatch-leader", oldLeader,
+		newHolder, err := e.WaitForLeaseChange(
+			waitCtx, "kwatch", "kwatch-leader", oldHolder,
 		)
 		if err != nil {
 			t.Fatal(err)
 		}
-		if newLeader == oldLeader {
-			t.Fatalf("leader did not change from %q", oldLeader)
+		if newHolder == oldHolder {
+			t.Fatalf("Lease holder did not change from %q", oldHolder)
 		}
 		if err := e.Health.AssertOK(ctx, "/availabilityz"); err != nil {
 			t.Fatal(err)
@@ -242,7 +244,7 @@ func TestScenarioLeaderFailover(t *testing.T) {
 			t.Fatal(err)
 		}
 		if len(entries) != 1 {
-			t.Fatalf("expected one post-failover incident, got %d", len(entries))
+			t.Fatalf("expected one post-handover incident, got %d", len(entries))
 		}
 	})
 }

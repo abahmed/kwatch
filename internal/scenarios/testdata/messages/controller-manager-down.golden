@@ -1,0 +1,8 @@
+10:02:45 settled
+🔴 The controller manager (prod-eu-1) has been failing for about two minutes. It reports "leader lease not renewed for 1m40s".
+🔴 The controller manager (prod-eu-1) has been failing for about two minutes.
+
+10:06:30 material change
+🔴 The controller manager (prod-eu-1) is spreading to invoices in billing and cart and search in shop: they are waiting for their controller to process the latest change.
+🔴 The controller manager (prod-eu-1) is spreading to invoices in billing and cart and search in shop: they are waiting for their controller to process the latest change.
+

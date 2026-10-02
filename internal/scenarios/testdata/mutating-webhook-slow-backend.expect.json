@@ -1,0 +1,15 @@
+{
+  "name": "mutating-webhook-slow-backend",
+  "description": "A fail-closed mutating webhook with ready endpoints times out on every call; pod creation fails in three namespaces.",
+  "root": "mutatingwebhookconfiguration//mesh-injector",
+  "tier": "page",
+  "maxMessages": 2,
+  "mustNotBlame": [
+    "service/mesh-system/injector",
+    "deployment/mesh-system/injector",
+    "deployment/ledger/writer",
+    "deployment/catalog/reader",
+    "deployment/media/resizer",
+    "node//w1"
+  ]
+}

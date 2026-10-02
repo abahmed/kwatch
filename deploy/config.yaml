@@ -21,11 +21,13 @@ stringData:
 
     # ── Scope: what is delivered ──────────────────────────
     # kwatch watches every supported resource; scope only filters delivery.
-    # A problem is delivered while one signal it explains is in scope.
+    # An incident is delivered while one finding it explains is in scope.
     namespaces:
-      - <optional_namespace>   # prefix with ! to forbid
+      # Prefix with ! to exclude, and quote it: "!kube-system".
+      # A bare !name is a YAML tag and does not parse as a string.
+      - <optional_namespace>
     reasons:
-      - <optional_reason>      # prefix with ! to forbid
+      - <optional_reason>      # exclude with a quoted "!Reason"
     namespaceSelector:
       "<label_selector>"       # mutually exclusive with namespaces
 
@@ -50,7 +52,7 @@ stringData:
     severityByOwnerKind:
       <owner_kind>: "<severity>"
     # runbooks:
-    #   <reason>: "<url>"         # added to the steps of matching problems
+    #   <reason>: "<url>"         # added to the steps of matching incidents
     maintenance:
       enabled: <boolean>          # default true
       # annotation: kwatch.io/maintenance
@@ -69,7 +71,7 @@ stringData:
       # interval: <seconds>            # ping interval (default 300)
       # url must come from a Secret-backed ${file:/absolute/path} reference.
 
-    # ── Audit log (one JSON line per problem decision) ───
+    # ── Audit log (one JSON line per incident decision) ──
     auditLog:
       enabled: <boolean>     # default true
       # output: "stdout"     # "stdout" or a file path
@@ -82,9 +84,6 @@ stringData:
     healthCheck:
       enabled: <boolean>           # default true
       port: 8060                   # listen port (default 8060)
-      # pprof: <boolean>           # set true to enable /debug/pprof/* profiling endpoints
-      # diagnostics: <boolean>     # set true to enable protected diagnostic endpoints
-      # diagnosticsToken must use a Secret-backed ${file:/absolute/path} reference.
 
     # ── App ───────────────────────────────────────────────
     app:
@@ -94,6 +93,15 @@ stringData:
       # logFormatter: "<text|json>"
       # insecureSkipTLSVerify: <boolean>
       # caBundlePath: "<path>"
+
+    # ── Kubelet ───────────────────────────────────────────
+    # Node stats are read directly from each kubelet (port 10250).
+    # kubelet:
+    #   insecureSkipVerify: false  # only for self-signed kubelet certs
+
+    # ── Watched resources ─────────────────────────────────
+    # watch:
+    #   secrets: true              # false: no Secret watch or RBAC needed
 
     # ── Upgrader ──────────────────────────────────────────
     upgrader:

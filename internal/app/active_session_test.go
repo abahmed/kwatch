@@ -18,22 +18,19 @@ import (
 
 func activeDeps(t *testing.T) *serverDeps {
 	t.Helper()
-	deps := coreDeps(t, &config.Config{})
+	deps := pipelineDeps(t, &config.Config{})
 	deps.securityMonitor = rbac.NewMonitor(deps.clients.Kubernetes,
-		rbac.Checks("kwatch", false), clock.RealClock{},
+		rbac.Checks("kwatch", "kwatch-leader", false), clock.RealClock{},
 		reportPermissions(deps.healthServer))
 	deps.heartbeat = heartbeat.NewHeartbeatMonitorWithRuntime(
-		deps.runtime, http.DefaultClient)
+		deps.runtime, http.DefaultClient, deps.healthServer.Ready)
 	deps.clients.HTTP = http.DefaultClient
-	deps.telemetryStatus = newAdoptionTelemetryStatus()
 	return deps
 }
 
 func useLease(t *testing.T, deps *serverDeps) {
 	t.Helper()
-	t.Setenv("KWATCH_DATA_DIR", t.TempDir())
-	t.Setenv("POD_NAMESPACE", "kwatch")
-	t.Setenv("KWATCH_LEADER_ELECTION_NAME", "kwatch-test-leader")
+	useStateEnv(t)
 	_, err := deps.clients.Kubernetes.CoordinationV1().Leases("kwatch").
 		Create(context.Background(),
 			leaseWithTransitions(ptr.To(int32(0))),
@@ -53,8 +50,12 @@ func TestRunActiveComponentsServesUntilLeadershipEnds(t *testing.T) {
 
 	require.Eventually(t, deps.healthServer.Ready, 15*time.Second,
 		5*time.Millisecond, "leader session never became ready")
-	require.Equal(t, "running",
-		deps.healthServer.ComponentStatuses()["heartbeat"].State)
+	// Heartbeat is not configured, so it stops at once and is not shown
+	// as running.
+	require.Eventually(t, func() bool {
+		_, shown := deps.healthServer.ComponentStatuses()["heartbeat"]
+		return !shown
+	}, 15*time.Second, 5*time.Millisecond, "disabled heartbeat shown")
 	cancel()
 	select {
 	case err := <-done:

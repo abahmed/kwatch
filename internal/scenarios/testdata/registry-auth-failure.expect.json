@@ -1,0 +1,13 @@
+{
+  "name": "registry-auth-failure",
+  "description": "Pods of three workloads scheduled onto a new node fail to pull from one private registry with 401 Unauthorized; no rollout happened.",
+  "root": "registry//registry.corp.example",
+  "tier": "notify",
+  "maxMessages": 2,
+  "mustNotBlame": [
+    "node//n3",
+    "deployment/shop/api",
+    "deployment/shop/worker",
+    "deployment/billing/ledger"
+  ]
+}

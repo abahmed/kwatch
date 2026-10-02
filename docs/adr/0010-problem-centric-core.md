@@ -2,7 +2,18 @@
 
 ## Status
 
-Accepted (2026-09-28).
+Accepted (2026-09-28). Partially implemented: the cutover is done and the
+previous engine is removed, but several parts of this design are still
+planned. See "Implementation status" below. Sections that describe the
+target design (storage retention, the rule catalog, situational awareness)
+state the goal, not the current behavior.
+
+This ADR supersedes ADRs 0002, 0004, 0006 and 0007 and part of ADR 0001.
+
+ADR 0011 (core redesign: health model, propagation table, explanation
+solver, full-cluster coverage, record/replay) supersedes this ADR's
+reasoning-engine, storage-layout and message sections. The rest is kept as
+history.
 
 ## Context
 
@@ -174,7 +185,7 @@ The model is always the current cluster state, not a periodic snapshot.
   the model reconciles against them.
 - **Complete:** discovery runs at start and whenever CRDs or APIServices
   change, so newly installed APIs and add-ons are watched without a
-  restart (building on the rediscovery added in step 4).
+  restart (building on the rediscovery already in place).
 - **Warm start:** on restart the model loads from the disk snapshot, then
   informers reconcile it with the API. Kwatch knows the previous state
   immediately, and what changed while it was down becomes changes, not a
@@ -709,7 +720,7 @@ does not keep only what fits in a ConfigMap.
 | Full graph: entities, relations, trimmed state | Instant warm start; diff of the state saved at shutdown and the state at start | Live, plus snapshots every 15m for 7d |
 | Change history: spec diffs, image, replicas, config and Secret hashes, RBAC, taints, node add/remove, actor | "What changed before it broke" across all resources | 30d |
 | Signals and problem history: root, chain, impact, evidence, timeline, resolution | Recurrence ("3rd time this week") and flap detection | 90d |
-| Baselines: restart rate, ready time, pending time, Job durations, resource envelope | "Unusual for this workload" | Rolling aggregates, no expiry |
+| Baselines: restart rate, ready time, pending time, Job durations, resource envelope | "Unusual for this workload" | Rolling aggregates, dropped 7d after the workload is gone |
 | Event digest: Warning events, deduplicated | Evidence long after the API server drops events (1h) | 7d |
 | Evidence excerpts: log lines and termination messages used in problems (redacted) | Show what the app said, even after the pod is gone | 30d, size-capped |
 | Learned relations (`calls`, from logs, mesh or agent) | Dependency map that Kubernetes doesn't have | Decays when not seen for 7d |
@@ -717,8 +728,9 @@ does not keep only what fits in a ConfigMap.
 | Decision state: open problems, sent messages, thread IDs | No repeats, no losses | While open, plus 7d |
 
 All data is redacted before it is written. Total size is capped: default
-2 GiB, with the oldest and lowest-value data compacted first. Retention and
-caps are configurable.
+512 MiB of logical data (evidence 128 MiB) on a 2Gi volume, with the oldest
+history compacted first. Retention and caps are fixed defaults in this
+release (see ADR 0011).
 
 ### Store engine
 
@@ -744,10 +756,12 @@ It is the storage engine used by etcd.
 
 Multi-replica HA is removed. Kwatch is not in any request path. A 1–2
 minute monitoring gap while the pod restarts is acceptable. A problem that
-is still happening is detected again, and decision state guarantees no
-duplicate or lost notifications. Standbys, warm failover, the PDB,
-`/availabilityz`, and the ReadWriteMany requirement cost more complexity
-than they return.
+is still happening is detected again, and the persisted delivery outbox
+keeps notifications across restarts (at least once; a send interrupted
+mid-request may repeat). Standbys, warm failover, the PDB,
+and the ReadWriteMany requirement cost more complexity than they return.
+`/availabilityz` is retained as the readiness and availability probe for
+rollouts; `/readyz` still reports whether monitoring is active.
 
 ```
 Deployment kwatch   replicas: 1, strategy: Recreate
@@ -798,7 +812,7 @@ The store exists to make alerts correct, complete and quiet. Nothing else.
 | **Recurrence and flapping** | Problem history keyed by root and kind | No repeated alerts; the message says "3rd time this week" |
 | **Evidence that outlives pods** | Log excerpts, termination messages and events stored with the problem | The alert keeps its evidence after the pod or events are gone |
 | **Predictions** | Usage history for PVCs, node disks, container memory; certificate expiry | Warn before failure: "PVC full in ~6h", "memory grows 40 MiB/h" |
-| **Decision state** | Open problems, sent messages, thread IDs | No duplicates or lost updates across restarts |
+| **Decision state** | Open problems, sent messages, thread IDs | No lost updates across restarts; a rare duplicate is possible |
 
 Out of scope for this work: reports, postmortem export, query APIs or
 CLI, self-tuning, and capacity trends. They can be built on the same store
@@ -853,7 +867,7 @@ problem has a lifecycle with memory, not a boolean.
 
 - **Size:** 5,000 pods and 500 nodes on one pod within 256–512 MiB. The
   model stores only the attributes rules use. Informer transforms strip
-  the rest (done for Secrets in step 4).
+  the rest (done for Secrets).
 - **Indexes:** relation adjacency in both directions, by kind and by
   namespace, and by node. Change history is indexed by entity and by time.
   There are no scans over all incidents or changes.
@@ -898,16 +912,78 @@ with a crashing app must not blame the node.
 
 ## Rollout
 
-1. Build the model (sources, entity schema, relations, change history) and
-   verify it against today's graph with a fidelity test.
-2. Port every current check to detectors. Parity comes from the reason
-   parity test plus scenarios.
-3. Build the reasoning engine and rules with fixture tests per rule.
-4. Build problems, policy and writers behind `KWATCH_CORE=v2`, next to the
-   current engine.
-5. Cut over when v2 beats rc.10 on the scorecard and passes a staging run.
-   Then remove the old engine, grouping layers, feedback learning and
-   pattern filler.
+The rollout is complete:
+
+1. The model (sources, entity schema, relations) was built and verified
+   against the previous graph.
+2. Every previous check was ported to detectors, with the reason parity
+   test guarding coverage.
+3. The reasoning engine and rules were built with fixture tests per rule.
+4. Problems, policy and writers were built next to the previous engine.
+5. The cutover happened on the `feat/kwatch-plan` branch. The previous
+   engine, grouping layers, feedback learning and pattern filler are
+   removed. There is no `KWATCH_CORE` flag; the core is the only engine.
+
+The scorecard gates below were used as targets. They are not yet enforced
+in CI (see "Implementation status").
+
+## Implementation status
+
+Implemented:
+
+- Cluster model from informer, event, kubelet, log, probe and CRD sources,
+  with typed entities and relations (`internal/inventory`,
+  `internal/inventory/kube`).
+- Detectors (`internal/detection`, `internal/detection/detectors`) and the
+  root-cause engine with the rules in `internal/rootcause` (rollout, config change, node, failing pods,
+  registry, cluster DNS, dependency, admission, quota, scheduling,
+  topology, network policy, backend and metrics API).
+- Problems with tiers, material-change policy, hysteresis and one story per
+  problem (`internal/incident`, `internal/notification/compose`,
+  `internal/notification`), orchestrated by `internal/pipeline` and delivered
+  through the existing providers.
+- Crash investigation that attaches recent previous-container log excerpts
+  for crash roots.
+- bbolt store (`internal/storage`) with Lease-fenced writes. It persists problems, object
+  fingerprints and state (provider thread IDs, notified version).
+- Single replica, `Recreate`, Lease as a write lock. `/availabilityz` is the
+  readiness probe.
+- Removal of the previous engine, ConfigMap persistence and the obsolete
+  configuration sections listed under Consequences.
+
+Not yet implemented:
+
+- Persisted change history, baselines and evidence excerpts. Only problems,
+  object fingerprints and state are on disk today.
+- The compactor, the 2 GiB size cap and configurable retention.
+- A generic upstream-walk engine with rules as data. Rules are Go code.
+- Rules 11, 13, 15, 16, 17, 18, 19, 22 and 24 of the rule set.
+- Self-health problems (kwatch reporting its own degradation as a problem).
+- Resolution explanation (why a problem resolved).
+- Markdown and HTML story variants for providers.
+- Digest batching of low-tier problems.
+- Scorecard gates enforced in CI, and the storm gate (1,000 failing pods,
+  at most 3 messages in 2 minutes) has no test.
+
+### Naming
+
+After implementation the packages and types were renamed to common SRE
+vocabulary. This ADR keeps its original wording; read it with this mapping:
+
+| ADR term / old package | Current name |
+|:--|:--|
+| Fact (`knowledge.Fact`) | Observation (`inventory.Observation`) |
+| Cluster knowledge model (`internal/knowledge`) | Inventory (`internal/inventory`) |
+| `internal/knowledge/kube` | `internal/inventory/kube` |
+| `internal/knowledge/store` | `internal/storage` |
+| Signal (`internal/signal`) | Finding (`internal/detection`, `detection.Finding`) |
+| `internal/signal/detect` | `internal/detection/detectors` |
+| Hypothesis (`internal/reason`) | Cause (`internal/rootcause`, `rootcause.Cause`) |
+| Problem (`internal/problem`) | Incident (`internal/incident`, `incident.Incident`) |
+| Story writer (`internal/story`) | `internal/notification/compose` (`compose.Writer`) |
+| Notice (`internal/notice`) | `internal/notification` (`notification.Message`) |
+| Core engine (`internal/core`) | Pipeline (`internal/pipeline`, `pipeline.Engine`) |
+| `/problems` diagnostics endpoint | `/incidents` |
 
 ## Consequences
 

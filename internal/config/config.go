@@ -1,5 +1,6 @@
 package config
 
+// Config is the YAML-facing kwatch configuration.
 type Config struct {
 	// App general configuration
 	App App `yaml:"app"`
@@ -17,7 +18,7 @@ type Config struct {
 	HealthCheck HealthCheck `yaml:"healthCheck"`
 
 	// Maintenance names the annotations that mark deliberate maintenance.
-	// Problems whose objects are under maintenance are not delivered.
+	// Incidents whose objects are under maintenance are not delivered.
 	Maintenance MaintenanceConfig `yaml:"maintenance"`
 
 	// Namespaces is an optional list of namespaces that you want to watch or
@@ -43,7 +44,7 @@ type Config struct {
 	IgnorePodNames []string `yaml:"ignorePodNames"`
 
 	// IgnoreContainerMessages optional list of substrings; a container
-	// signal whose message contains any entry is silenced.
+	// finding whose message contains any entry is silenced.
 	IgnoreContainerMessages []string `yaml:"ignoreContainerMessages"`
 
 	// IgnoreNodeReasons is an optional list of node reasons to silence.
@@ -72,7 +73,7 @@ type Config struct {
 	// resyncs, a safety net for missed watch events. Zero disables it.
 	ResyncSeconds int `yaml:"resyncSeconds"`
 
-	// SeverityByOwnerKind raises or lowers problems by the kind of the
+	// SeverityByOwnerKind raises or lowers incidents by the kind of the
 	// affected workload, e.g. {"StatefulSet": "critical"}.
 	SeverityByOwnerKind map[string]string `yaml:"severityByOwnerKind"`
 
@@ -92,11 +93,17 @@ type Config struct {
 	Templates map[string]string `yaml:"templates"`
 
 	// Runbooks maps reasons to documentation URLs added to the steps of a
-	// problem with that reason.
+	// incident with that reason.
 	Runbooks map[string]string `yaml:"runbooks"`
 
 	// AuditLog configures the JSON decision log.
 	AuditLog AuditLogConfig `yaml:"auditLog"`
+
+	// Kubelet configures the direct connection to each node's kubelet.
+	Kubelet KubeletConfig `yaml:"kubelet"`
+
+	// Watch turns optional watched resources on or off.
+	Watch WatchConfig `yaml:"watch"`
 
 	// Runtime is the defensive snapshot of derived configuration used by
 	// composition and runtime components. It is never decoded from YAML.
@@ -104,6 +111,9 @@ type Config struct {
 	// syntheticSilences counts trailing rules generated from legacy ignore*
 	// fields. It is derived state and is never serialized.
 	syntheticSilences int
+	// unknownKeys are config keys the file sets that no field reads, such
+	// as removed options or typos. They are logged, never fatal.
+	unknownKeys []string
 }
 
 // Telemetry configures the minimal adoption heartbeat. It is enabled
@@ -163,22 +173,9 @@ type HealthCheck struct {
 	// Port is the port to listen on for health check requests
 	// By default, this value is 8060
 	Port int `yaml:"port"`
-
-	// Pprof if set to true, enables /debug/pprof/* profiling endpoints.
-	// Disabled by default — enabling exposes runtime profiling data.
-	Pprof bool `yaml:"pprof"`
-
-	// Diagnostics if set to true, enables protected diagnostic endpoints.
-	// Disabled by default.
-	Diagnostics bool `yaml:"diagnostics"`
-
-	// DiagnosticsToken is the Bearer token required to access diagnostic
-	// endpoints. Production validation requires it when diagnostics or pprof
-	// is enabled.
-	DiagnosticsToken string `yaml:"diagnosticsToken"`
 }
 
-// AlertRoute defines routing filters for a provider. A problem matching at
+// AlertRoute defines routing filters for a provider. An incident matching at
 // least one route is delivered; without routes everything is delivered.
 type AlertRoute struct {
 	// Namespaces is an optional list of allowed namespaces.
@@ -197,4 +194,22 @@ type AuditLogConfig struct {
 	// Output is the destination for audit log entries: "stdout" (default) or a
 	// file path.
 	Output string `yaml:"output"`
+}
+
+// KubeletConfig configures how kwatch reads node stats and metrics
+// directly from each kubelet on port 10250.
+type KubeletConfig struct {
+	// InsecureSkipVerify skips verification of the kubelet serving
+	// certificate. Leave it false when kubelet serving certificates are
+	// signed by the cluster CA; set it only for clusters whose kubelets
+	// use self-signed certificates. Default false.
+	InsecureSkipVerify bool `yaml:"insecureSkipVerify"`
+}
+
+// WatchConfig turns optional watched resources on or off.
+type WatchConfig struct {
+	// Secrets watches Secrets (values are hashed, never stored). When
+	// false kwatch needs no Secret RBAC and checks that need Secrets
+	// report that they cannot verify. Default true.
+	Secrets bool `yaml:"secrets"`
 }

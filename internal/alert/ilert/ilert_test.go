@@ -9,8 +9,8 @@ import (
 
 	"github.com/stretchr/testify/assert"
 
+	"github.com/abahmed/kwatch/internal/delivery/providertest"
 	"github.com/abahmed/kwatch/internal/delivery/transport"
-	"github.com/abahmed/kwatch/internal/event"
 )
 
 var testDeps = transport.Dependencies{
@@ -40,7 +40,7 @@ func TestIlert(t *testing.T) {
 	assert.Equal(c.url, "https://api.ilert.com/api/v1/events/push/test")
 }
 
-func TestSendMessage(t *testing.T) {
+func TestIlertSendMessageSkipsNotice(t *testing.T) {
 	assert := assert.New(t)
 
 	var gotBody string
@@ -60,10 +60,9 @@ func TestSendMessage(t *testing.T) {
 	c := NewIlert(configMap, testAppConfig(), testDeps)
 	c.url = s.URL
 
+	// A plain notice must not open an alert on a paging provider.
 	assert.Nil(c.SendMessage(context.Background(), "hello"))
-	assert.Contains(gotBody, `"eventType":"ALERT"`)
-	assert.Contains(gotBody, `"summary":"hello"`)
-	assert.Contains(gotBody, `"priority":"LOW"`)
+	assert.Empty(gotBody)
 }
 
 func TestSendMessageError(t *testing.T) {
@@ -82,33 +81,7 @@ func TestSendMessageError(t *testing.T) {
 	c := NewIlert(configMap, testAppConfig(), testDeps)
 	c.url = s.URL
 
-	assert.NotNil(c.SendMessage(context.Background(), "test"))
-}
-
-func TestSendEvent(t *testing.T) {
-	assert := assert.New(t)
-
-	s := httptest.NewServer(
-		http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			body, _ := io.ReadAll(r.Body)
-			assert.Contains(string(body), "OOMKILLED")
-			w.WriteHeader(http.StatusAccepted)
-		}))
-
-	defer s.Close()
-
-	configMap := map[string]interface{}{
-		"integrationKey": "test",
-	}
-	c := NewIlert(configMap, testAppConfig(), testDeps)
-	c.url = s.URL
-
-	ev := event.Event{
-		PodName:   "test-pod",
-		Namespace: "default",
-		Reason:    "OOMKILLED",
-	}
-	assert.Nil(c.SendEvent(context.Background(), &ev))
+	assert.NotNil(c.SendIncident(context.Background(), providertest.Announce()))
 }
 
 func TestInvalidHttpRequest(t *testing.T) {
@@ -120,8 +93,8 @@ func TestInvalidHttpRequest(t *testing.T) {
 	c := NewIlert(configMap, testAppConfig(), testDeps)
 	c.url = "h ttp://localhost/%s"
 
-	assert.NotNil(c.SendMessage(context.Background(), "test"))
+	assert.NotNil(c.SendIncident(context.Background(), providertest.Announce()))
 
 	c.url = "http://localhost:132323/%s"
-	assert.NotNil(c.SendMessage(context.Background(), "test"))
+	assert.NotNil(c.SendIncident(context.Background(), providertest.Announce()))
 }

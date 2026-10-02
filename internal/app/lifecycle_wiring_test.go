@@ -93,7 +93,50 @@ func TestMonitoredRunWrapsRunnerWithHealthHooks(t *testing.T) {
 	require.True(t, upgrader.cleanStop)
 	require.False(t, other.cleanStop)
 	require.NotNil(t, other.onError)
-	require.NotNil(t, other.onHealthy)
+	_, published := deps.healthServer.ComponentStatuses()["upgrader"]
+	require.False(t, published, "a cleanly stopped component is cleared")
+}
+
+func TestComponentIsRunningOnlyWhileItRuns(t *testing.T) {
+	deps := componentDeps()
+	running := make(chan struct{})
+	release := make(chan struct{})
+	spec := monitoredRun(deps, "telemetry", func(context.Context) error {
+		close(running)
+		<-release
+		return nil
+	})
+	_, before := deps.healthServer.ComponentStatuses()["telemetry"]
+	done := make(chan error, 1)
+
+	go func() { done <- spec.run(context.Background()) }()
+	<-running
+	during := deps.healthServer.ComponentStatuses()["telemetry"]
+	close(release)
+	require.NoError(t, <-done)
+
+	require.False(t, before, "nothing is published before the run")
+	require.Equal(t, "running", during.State)
+}
+
+func TestSelfReportedRunKeepsComponentStatus(t *testing.T) {
+	deps := componentDeps()
+	deps.healthServer.SetComponentStatus(
+		"rbac", "degraded", "permission_denied", false)
+	ran := make(chan struct{})
+	spec := selfReportedRun(deps, "rbac", func(ctx context.Context) error {
+		close(ran)
+		return nil
+	})
+
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	require.NoError(t, spec.run(ctx))
+	<-ran
+
+	status := deps.healthServer.ComponentStatuses()["rbac"]
+	require.Equal(t, "permission_denied", status.Reason)
+	require.Nil(t, spec.onHealthy)
 }
 
 func TestApplicationContextDefaultsToBackground(t *testing.T) {

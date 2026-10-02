@@ -1,0 +1,13 @@
+{
+  "name": "webhook-timeout",
+  "description": "A fail-closed validating webhook with ready endpoints times out on every call; pod creation fails in two namespaces.",
+  "root": "validatingwebhookconfiguration//image-policy",
+  "tier": "page",
+  "maxMessages": 2,
+  "mustNotBlame": [
+    "deployment/payments/gateway",
+    "deployment/search/api",
+    "node//n1",
+    "node//n2"
+  ]
+}

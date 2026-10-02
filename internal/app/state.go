@@ -3,17 +3,17 @@ package app
 import (
 	"context"
 	"crypto/sha256"
+	"encoding/json"
 	"time"
 
 	"github.com/google/uuid"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes"
 
-	"github.com/abahmed/kwatch/internal/knowledge/store"
-	"github.com/abahmed/kwatch/internal/model"
+	"github.com/abahmed/kwatch/internal/storage"
 )
 
-// State keys in the store's State collection.
+// State keys in the store's state bucket.
 const (
 	stateClusterID      = "cluster.id"
 	stateInitialized    = "initialized"
@@ -28,16 +28,42 @@ const (
 // diskState keeps kwatch's lifecycle values in the state file. It serves
 // startup, telemetry and the upgrade check.
 type diskState struct {
-	store  *store.Store
+	store  *storage.Store
 	client kubernetes.Interface
 }
 
+// get decodes the state value under key into out.
 func (d diskState) get(key string, out any) (bool, error) {
-	return d.store.Get(store.State, key, out)
+	return getRaw(storage.StateValues[json.RawMessage](d.store), key, out)
 }
 
 func (d diskState) put(key string, value any) error {
-	return d.store.Put(store.State, key, value)
+	return putRaw(storage.StateValues[json.RawMessage](d.store), key, value)
+}
+
+// getRaw decodes the value under key into out. A value that does not
+// decode into out reads as absent, like a corrupt record.
+func getRaw(
+	values storage.Keyed[json.RawMessage], key string, out any,
+) (bool, error) {
+	raw, found, err := values.Get(key)
+	if err != nil || !found {
+		return false, err
+	}
+	if json.Unmarshal(raw, out) != nil {
+		return false, nil
+	}
+	return true, nil
+}
+
+func putRaw(
+	values storage.Keyed[json.RawMessage], key string, value any,
+) error {
+	raw, err := json.Marshal(value)
+	if err != nil {
+		return err
+	}
+	return values.Put(key, raw)
 }
 
 // EnsureClusterID returns the stored anonymous cluster ID, deriving a new
@@ -69,21 +95,21 @@ func clusterIDFromUID(uid string) string {
 	return id.String()
 }
 
-// IsFirstRun implements startup.StateStore.
+// IsFirstRun implements startupStateStore.
 func (d diskState) IsFirstRun(context.Context) (bool, error) {
 	var done bool
 	found, err := d.get(stateInitialized, &done)
 	return !found || !done, err
 }
 
-// GetStoredVersion implements startup.StateStore.
+// GetStoredVersion implements startupStateStore.
 func (d diskState) GetStoredVersion(context.Context) (string, error) {
 	var version string
 	_, err := d.get(stateVersion, &version)
 	return version, err
 }
 
-// MarkAsInitialized implements startup.StateStore.
+// MarkAsInitialized implements startupStateStore.
 func (d diskState) MarkAsInitialized(
 	_ context.Context, clusterID, version string,
 ) error {
@@ -96,14 +122,14 @@ func (d diskState) MarkAsInitialized(
 	return d.put(stateInitialized, true)
 }
 
-// GetLastSeen implements startup.StateStore.
+// GetLastSeen implements startupStateStore.
 func (d diskState) GetLastSeen(context.Context) (time.Time, error) {
 	var at time.Time
 	_, err := d.get(stateLastSeen, &at)
 	return at, err
 }
 
-// SetLastSeen implements startup.StateStore.
+// SetLastSeen implements startupStateStore.
 func (d diskState) SetLastSeen(_ context.Context, at time.Time) error {
 	return d.put(stateLastSeen, at)
 }
@@ -111,15 +137,15 @@ func (d diskState) SetLastSeen(_ context.Context, at time.Time) error {
 // GetRuntimeSession lets startup explain how the previous session ended.
 func (d diskState) GetRuntimeSession(
 	context.Context,
-) (model.RuntimeSession, error) {
-	var session model.RuntimeSession
+) (runtimeSession, error) {
+	var session runtimeSession
 	_, err := d.get(stateSession, &session)
 	return session, err
 }
 
 // SaveRuntimeSession records the current session.
 func (d diskState) SaveRuntimeSession(
-	_ context.Context, session model.RuntimeSession,
+	_ context.Context, session runtimeSession,
 ) error {
 	return d.put(stateSession, session)
 }

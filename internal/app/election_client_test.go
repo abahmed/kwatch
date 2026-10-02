@@ -6,14 +6,14 @@ import (
 	"github.com/stretchr/testify/assert"
 	"k8s.io/client-go/kubernetes/fake"
 
-	"github.com/abahmed/kwatch/internal/client"
+	"github.com/abahmed/kwatch/internal/kubeclient"
 )
 
 func TestElectionClientPrefersElectionClient(t *testing.T) {
 	electionClientSet := fake.NewSimpleClientset()
 	kubeClientSet := fake.NewSimpleClientset()
 
-	clients := client.ClientSet{
+	clients := kubeclient.ClientSet{
 		Election:   electionClientSet,
 		Kubernetes: kubeClientSet,
 	}
@@ -25,7 +25,7 @@ func TestElectionClientPrefersElectionClient(t *testing.T) {
 func TestElectionClientFallsBackToKubernetesClient(t *testing.T) {
 	kubeClientSet := fake.NewSimpleClientset()
 
-	clients := client.ClientSet{
+	clients := kubeclient.ClientSet{
 		Election:   nil,
 		Kubernetes: kubeClientSet,
 	}
@@ -38,7 +38,7 @@ func TestElectionClientBothAvailable(t *testing.T) {
 	electionClientSet := fake.NewSimpleClientset()
 	kubeClientSet := fake.NewSimpleClientset()
 
-	clients := client.ClientSet{
+	clients := kubeclient.ClientSet{
 		Election:   electionClientSet,
 		Kubernetes: kubeClientSet,
 	}

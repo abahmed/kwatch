@@ -1,0 +1,4 @@
+10:02:30 settled
+🔴 Cluster DNS (prod-eu-1) has been failing for about two minutes. It reports "lookup kubernetes.default.svc.cluster.local on 10.96.0.10:53: read udp 10.244.1.7:41234->10.96.0.10:53: i/o timeout". Three failing workloads all depend on it. invoices in billing, coredns in kube-system and cart in shop are affected as well.
+🔴 Cluster DNS (prod-eu-1) has been failing for about two minutes.
+

@@ -30,6 +30,7 @@ func TestScenarioNodePressureSignals(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
+		started := time.Now()
 		if err := stopKindNode(ctx, node.Name); err != nil {
 			t.Fatal(err)
 		}
@@ -45,13 +46,10 @@ func TestScenarioNodePressureSignals(t *testing.T) {
 		}
 		waitCtx, cancel := context.WithTimeout(ctx, 7*time.Minute)
 		defer cancel()
-		for _, condition := range conditions {
-			if _, err := e.Audit.WaitFor(waitCtx, harness.AuditMatch{
-				Resource: node.Name, Reason: string(condition), Count: 1,
-			}); err != nil {
-				t.Fatal(err)
-			}
-		}
+		assertRoot(waitCtx, t, e, "", started, harness.RootExpectation{
+			Root:        "node//" + node.Name,
+			MaxMessages: 4,
+		})
 		if err := startKindNode(ctx, node.Name); err != nil {
 			t.Fatal(err)
 		}

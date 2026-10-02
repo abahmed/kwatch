@@ -4,14 +4,19 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"strings"
 
 	"k8s.io/klog/v2"
 
 	"github.com/abahmed/kwatch/internal/delivery/transport"
-	"github.com/abahmed/kwatch/internal/event"
+	"github.com/abahmed/kwatch/internal/notification"
 )
 
-const squadcastAPIURL = "https://api.squadcast.com/v2/incidents/api/%s"
+const (
+	squadcastAPIURL = "https://api.squadcast.com/v2/incidents/api/%s"
+	// messageLimit bounds the incident message Squadcast shows in lists.
+	messageLimit = 250
+)
 
 type squadcastPayload struct {
 	Message     string `json:"message"`
@@ -57,24 +62,33 @@ func (s *Squadcast) Name() string {
 	return "Squadcast"
 }
 
-// SendEvent sends event to the provider
-// UsesEventDelivery routes problems through SendEvent, which carries the
-// action and a stable key so Squadcast can deduplicate and resolve.
-func (s *Squadcast) UsesEventDelivery() {}
-
-// SendEvent triggers, updates or resolves one Squadcast incident per kwatch
-// problem, keyed by event_id.
-func (s *Squadcast) SendEvent(ctx context.Context, e *event.Event) error {
+// SendIncident triggers, updates or resolves one Squadcast incident per
+// kwatch incident, keyed by event_id.
+func (s *Squadcast) SendIncident(
+	ctx context.Context, m notification.Message,
+) error {
+	// A plain notice (startup, upgrade, test) or the startup summary is
+	// not an incident. Sending it would page for problems that already
+	// have their own alerts, so it is skipped.
+	if m.IsInformational() {
+		klog.V(4).InfoS("skipping informational message",
+			"component", "delivery", "provider", s.Name())
+		return nil
+	}
 	status := "trigger"
-	if e.IsResolve() {
+	if m.Resolved() {
 		status = "resolve"
 	}
+	description := m.NoteText()
+	if len(m.Output) > 0 {
+		description += "\n\n" + strings.Join(m.Output, "\n")
+	}
 	payload := squadcastPayload{
-		Message:     e.AlertTitle(250),
-		Description: e.AlertBody(s.clusterName),
+		Message:     notification.Truncate(m.ShortText(), messageLimit),
+		Description: description,
 		Status:      status,
-		EventID:     e.AlertKey(),
-		Severity:    string(e.Severity),
+		EventID:     m.AlertKey(s.clusterName),
+		Severity:    m.Route.Severity,
 	}
 	body, err := json.Marshal(payload)
 	if err != nil {
@@ -87,7 +101,12 @@ func (s *Squadcast) SendEvent(ctx context.Context, e *event.Event) error {
 	return err
 }
 
-// SendMessage sends a plain notice as one deduplicated Squadcast alert.
+// SendMessage skips plain notices: on a paging service they would open an
+// alert that nothing resolves.
 func (s *Squadcast) SendMessage(ctx context.Context, msg string) error {
-	return s.SendEvent(ctx, &event.Event{PodName: msg, Reason: "notify"})
+	return s.SendIncident(ctx, notification.Notice(msg))
 }
+
+// SkipsPlainMessages implements api.PlainMessageSkipper: plain messages
+// become notices, which SendIncident skips.
+func (s *Squadcast) SkipsPlainMessages() bool { return true }

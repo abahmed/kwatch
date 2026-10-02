@@ -8,17 +8,16 @@ import (
 
 	"github.com/stretchr/testify/require"
 
-	"github.com/abahmed/kwatch/internal/client"
 	"github.com/abahmed/kwatch/internal/clock"
 	"github.com/abahmed/kwatch/internal/config"
 	"github.com/abahmed/kwatch/internal/delivery"
 	"github.com/abahmed/kwatch/internal/health"
-	"github.com/abahmed/kwatch/internal/startup"
+	"github.com/abahmed/kwatch/internal/kubeclient"
 )
 
 func componentDeps() *serverDeps {
 	return &serverDeps{
-		clients: client.ClientSet{Clock: clock.RealClock{}},
+		clients: kubeclient.ClientSet{Clock: clock.RealClock{}},
 		healthServer: health.NewHealthServerWithClock(
 			config.HealthCheck{}, clock.RealClock{}),
 	}
@@ -86,7 +85,7 @@ func TestRunDeliveryWithoutProvidersWaitsForCancellation(t *testing.T) {
 
 func TestAliveRecorderStampsAndStopsOnCancel(t *testing.T) {
 	disk := diskState{store: openTestStore(t)}
-	session := startup.NewStartupManagerWithRuntime(disk,
+	session := newStartupManagerWithRuntime(disk,
 		runtimeWith(&config.Config{}), clock.RealClock{})
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel()
@@ -96,4 +95,20 @@ func TestAliveRecorderStampsAndStopsOnCancel(t *testing.T) {
 	require.NoError(t, err)
 	seen, _ := disk.GetLastSeen(context.Background())
 	require.False(t, seen.IsZero(), "liveness must be stamped first")
+}
+
+func TestHeartbeatStatusDegradesOnFailedPing(t *testing.T) {
+	deps := componentDeps()
+	report := heartbeatStatus(deps)
+
+	report(errors.New("ping rejected"))
+	failed := deps.healthServer.ComponentStatuses()["heartbeat"]
+	_, listed := deps.healthServer.ComponentErrors()["heartbeat"]
+	report(nil)
+	recovered := deps.healthServer.ComponentStatuses()["heartbeat"]
+
+	require.Equal(t, "heartbeat_failed", failed.Reason)
+	require.True(t, listed, "a failed ping is listed as degraded")
+	require.Equal(t, "running", recovered.State)
+	require.NotContains(t, deps.healthServer.ComponentErrors(), "heartbeat")
 }

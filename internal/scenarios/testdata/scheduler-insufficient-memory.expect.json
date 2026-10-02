@@ -1,0 +1,12 @@
+{
+  "name": "scheduler-insufficient-memory",
+  "description": "A Deployment scales out and its new pods stay Pending: 4 workers lack memory and 2 control-plane nodes are tainted; preemption cannot help.",
+  "root": "scheduling//Insufficient memory",
+  "tier": "notify",
+  "maxMessages": 2,
+  "mustNotBlame": [
+    "node//w1",
+    "scheduling//untolerated taint",
+    "scheduler//kube-scheduler"
+  ]
+}

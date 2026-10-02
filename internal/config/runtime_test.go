@@ -119,7 +119,7 @@ func TestRuntimeConfigCompilesProviderDeliveryPolicy(t *testing.T) {
 			},
 			"routes": []interface{}{map[string]interface{}{
 				"namespaces": []interface{}{"ops"},
-				"severities": []interface{}{"high"},
+				"severities": []interface{}{"critical"},
 			}},
 		},
 	}}

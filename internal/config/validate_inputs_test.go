@@ -87,3 +87,65 @@ func TestValidatePodNamePatterns(t *testing.T) {
 		t.Fatal("valid pattern rejected")
 	}
 }
+
+func TestValidateSilenceRulesRejectsEmptyRule(t *testing.T) {
+	cfg := DefaultConfig()
+	cfg.Silences = []SilenceRule{
+		{Namespaces: []string{"batch"}},
+		{},
+	}
+	errs := Validate(cfg)
+	if !containsError(errs, "silences[1] sets no matching field") {
+		t.Fatalf("empty silence rule not rejected: %v", errs)
+	}
+	if containsError(errs, "silences[0]") {
+		t.Fatalf("non-empty silence rule rejected: %v", errs)
+	}
+}
+
+func TestValidateAlertHourlyBudget(t *testing.T) {
+	cases := map[string]struct {
+		value   interface{}
+		wantErr bool
+	}{
+		"zero means unlimited": {0, false},
+		"positive integer":     {25, false},
+		"float from yaml":      {float64(10), false},
+		"negative":             {-1, true},
+		"fraction":             {1.5, true},
+		"text":                 {"many", true},
+	}
+	for name, tc := range cases {
+		t.Run(name, func(t *testing.T) {
+			cfg := DefaultConfig()
+			cfg.Alert = map[string]map[string]interface{}{
+				"slack": {"hourlyBudget": tc.value},
+			}
+			errs := validateHourlyBudget("slack", cfg.Alert["slack"])
+			if (len(errs) > 0) != tc.wantErr {
+				t.Fatalf("errs = %v, wantErr %v", errs, tc.wantErr)
+			}
+		})
+	}
+}
+
+func TestCompileHourlyBudgetDefaultsAndOverrides(t *testing.T) {
+	if got := compileHourlyBudget(nil); got != DefaultHourlyBudget {
+		t.Fatalf("default = %d", got)
+	}
+	got := compileHourlyBudget(map[string]interface{}{"hourlyBudget": 0})
+	if got != 0 {
+		t.Fatalf("unlimited = %d", got)
+	}
+	got = compileHourlyBudget(
+		map[string]interface{}{"hourlyBudget": float64(7)})
+	if got != 7 {
+		t.Fatalf("override = %d", got)
+	}
+}
+
+func TestProviderOptionKeysAcceptHourlyBudget(t *testing.T) {
+	if !providerOptionKeys["slack"]["hourlyBudget"] {
+		t.Fatal("hourlyBudget must be a known provider option")
+	}
+}

@@ -1,0 +1,3 @@
+🟠 Node n1 is low on memory. It is at 96%. Container etl in pod etl-7 in batch uses about 11 GiB. api and web in shop are affected as well. To check the node's conditions and recent events, run kubectl describe node n1
+
+🟠 Node n1 is low on memory.

@@ -9,9 +9,8 @@ import (
 
 	"github.com/stretchr/testify/assert"
 
+	"github.com/abahmed/kwatch/internal/delivery/providertest"
 	"github.com/abahmed/kwatch/internal/delivery/transport"
-	"github.com/abahmed/kwatch/internal/event"
-	"github.com/abahmed/kwatch/internal/model"
 )
 
 var testDeps = transport.Dependencies{
@@ -40,7 +39,7 @@ func TestIncidentio(t *testing.T) {
 	assert.Equal(c.Name(), "Incident.io")
 }
 
-func TestSendMessage(t *testing.T) {
+func TestIncidentioSendMessageSkipsNotice(t *testing.T) {
 	assert := assert.New(t)
 
 	var gotAuth string
@@ -62,10 +61,10 @@ func TestSendMessage(t *testing.T) {
 	c := NewIncidentio(configMap, testAppConfig(), testDeps)
 	c.url = s.URL
 
+	// A plain notice must not open an alert on a paging provider.
 	assert.Nil(c.SendMessage(context.Background(), "hello"))
-	assert.Equal("Bearer test", gotAuth)
-	assert.Contains(gotBody, `"status":"firing"`)
-	assert.Contains(gotBody, `"deduplication_key":"kwatch-notice"`)
+	assert.Empty(gotAuth)
+	assert.Empty(gotBody)
 }
 
 func TestSendMessageError(t *testing.T) {
@@ -84,35 +83,7 @@ func TestSendMessageError(t *testing.T) {
 	c := NewIncidentio(configMap, testAppConfig(), testDeps)
 	c.url = s.URL
 
-	assert.NotNil(c.SendMessage(context.Background(), "test"))
-}
-
-func TestSendEvent(t *testing.T) {
-	assert := assert.New(t)
-
-	s := httptest.NewServer(
-		http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			body, _ := io.ReadAll(r.Body)
-			assert.Contains(string(body), "OOMKILLED")
-			assert.Contains(string(body), "test-pod")
-			w.WriteHeader(http.StatusAccepted)
-		}))
-
-	defer s.Close()
-
-	configMap := map[string]interface{}{
-		"url": "https://webhooks.incident.io/abc",
-	}
-	c := NewIncidentio(configMap, testAppConfig(), testDeps)
-	c.url = s.URL
-
-	ev := event.Event{
-		PodName:   "test-pod",
-		Namespace: "default",
-		Reason:    "OOMKILLED",
-		Severity:  model.SeverityHigh,
-	}
-	assert.Nil(c.SendEvent(context.Background(), &ev))
+	assert.NotNil(c.SendIncident(context.Background(), providertest.Announce()))
 }
 
 func TestInvalidHttpRequest(t *testing.T) {
@@ -124,8 +95,8 @@ func TestInvalidHttpRequest(t *testing.T) {
 	c := NewIncidentio(configMap, testAppConfig(), testDeps)
 	c.url = "h ttp://localhost/%s"
 
-	assert.NotNil(c.SendMessage(context.Background(), "test"))
+	assert.NotNil(c.SendIncident(context.Background(), providertest.Announce()))
 
 	c.url = "http://localhost:132323/%s"
-	assert.NotNil(c.SendMessage(context.Background(), "test"))
+	assert.NotNil(c.SendIncident(context.Background(), providertest.Announce()))
 }

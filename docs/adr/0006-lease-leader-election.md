@@ -2,7 +2,12 @@
 
 ## Status
 
-Accepted
+Superseded by ADR 0010 (2026-09-28).
+
+The Lease remains, but only as a write lock for a single replica: the holder
+sends notifications and writes the store, and stops both when renewal fails.
+Standby replicas, warm takeover, the PodDisruptionBudget and `N-1` standbys
+no longer exist.
 
 ## Decision
 

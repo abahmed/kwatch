@@ -4,14 +4,24 @@ import (
 	"context"
 	"sync"
 
-	"github.com/abahmed/kwatch/internal/event"
+	"k8s.io/klog/v2"
+
+	"github.com/abahmed/kwatch/internal/metrics"
+	"github.com/abahmed/kwatch/internal/notification"
 )
 
 // maxTrackedIssues bounds the problem-to-issue map.
 const maxTrackedIssues = 1000
 
+// untracked marks an incident whose issue was created but whose reference
+// could not be read from the tracker response. It keeps later updates
+// from opening a duplicate issue. The NUL byte keeps it apart from any
+// real issue id.
+const untracked = "\x00untracked"
+
 // Tracker is the provider-specific issue API.
 type Tracker interface {
+	Name() string
 	Create(ctx context.Context, title, body string) (string, error)
 	Comment(ctx context.Context, id, body string) error
 	// Close ends the issue; trackers without a generic close just comment.
@@ -32,23 +42,28 @@ func NewMap() *Map {
 	return &Map{ids: make(map[string]string)}
 }
 
-// Deliver files, updates or closes the issue for one event. Notices such as
-// the startup banner are not issues and are skipped.
+// Deliver files, updates or closes the issue for one incident message.
+// The first message of a key creates the issue, later ones comment on it,
+// and the resolve message comments and closes it. Plain notices such as
+// the startup banner, and the startup summary, are not incidents and are
+// skipped: each problem the summary lists gets its own issue.
 func (m *Map) Deliver(
 	ctx context.Context,
 	tracker Tracker,
-	e *event.Event,
+	msg notification.Message,
 	title, body string,
 ) error {
-	if e.IsNotice() {
+	if msg.IsInformational() {
 		return nil
 	}
-	key := e.AlertKey()
+	key := msg.ThreadKey()
 	id := m.lookup(key)
 	switch {
-	case e.IsResolve() && id == "":
+	case msg.Resolved() && id == "":
 		return nil
-	case e.IsResolve():
+	case id == untracked:
+		return m.skipUntracked(tracker, msg, key)
+	case msg.Resolved():
 		if err := tracker.Close(ctx, id, body); err != nil {
 			return err
 		}
@@ -61,9 +76,31 @@ func (m *Map) Deliver(
 	if err != nil {
 		return err
 	}
-	if e.DedupKey != "" && id != "" {
-		m.remember(key, id)
+	if id == "" {
+		id = untracked
+		klog.InfoS("issue created without a readable reference; "+
+			"later updates for this incident are skipped",
+			"component", "delivery", "operation", "create_issue",
+			"provider", tracker.Name(), "key", key)
+		metrics.DefaultRegistry().Delivery.TrackerUntracked.Add(1)
 	}
+	m.remember(key, id)
+	return nil
+}
+
+// skipUntracked drops an update for an incident whose issue cannot be
+// addressed. A resolve ends the conversation and clears the marker, so a
+// later recurrence opens a fresh issue.
+func (m *Map) skipUntracked(
+	tracker Tracker, msg notification.Message, key string,
+) error {
+	if msg.Resolved() {
+		m.forget(key)
+	}
+	klog.V(1).InfoS("skipping update for an untracked issue",
+		"component", "delivery", "operation", "update_issue",
+		"provider", tracker.Name(), "key", key,
+		"resolved", msg.Resolved())
 	return nil
 }
 
@@ -98,16 +135,20 @@ func (m *Map) forget(key string) {
 	}
 }
 
-// SnapshotThreads implements delivery.ThreadStateProvider.
+// SnapshotThreads implements delivery.ThreadStateProvider. Untracked
+// markers are not persisted: the stored format holds real issue ids only,
+// so after a restart such an incident is unknown and may open a new issue.
 func (m *Map) SnapshotThreads() map[string]string {
 	m.mu.Lock()
 	defer m.mu.Unlock()
-	if len(m.ids) == 0 {
-		return nil
-	}
 	out := make(map[string]string, len(m.ids))
 	for key, id := range m.ids {
-		out[key] = id
+		if id != untracked {
+			out[key] = id
+		}
+	}
+	if len(out) == 0 {
+		return nil
 	}
 	return out
 }
@@ -115,7 +156,8 @@ func (m *Map) SnapshotThreads() map[string]string {
 // RestoreThreads implements delivery.ThreadStateProvider.
 func (m *Map) RestoreThreads(saved map[string]string) {
 	for key, id := range saved {
-		if key != "" && id != "" && m.lookup(key) == "" {
+		if key != "" && id != "" && id != untracked &&
+			m.lookup(key) == "" {
 			m.remember(key, id)
 		}
 	}

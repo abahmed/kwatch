@@ -1,0 +1,12 @@
+{
+  "name": "route-backend-renamed",
+  "description": "An HTTPRoute edit names a backend Service that was never created; the route stays accepted but its references do not resolve.",
+  "root": "service/storefront/search-v3",
+  "tier": "page",
+  "maxMessages": 2,
+  "mustNotBlame": [
+    "gateway.gateway.networking.k8s.io/storefront/edge",
+    "service/storefront/search",
+    "deployment/storefront/search"
+  ]
+}

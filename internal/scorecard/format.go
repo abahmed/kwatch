@@ -11,12 +11,15 @@ func Format(r Report) string {
 	fmt.Fprintf(&b, "window                 %s\n", r.Window.Round(1e9))
 	fmt.Fprintf(&b, "notifications          %d (%.1f/h)\n",
 		r.Notifications, r.PerHour)
-	fmt.Fprintf(&b, "problems               %d\n", r.Problems)
-	fmt.Fprintf(&b, "messages per problem  %.2f (p95 %d)\n",
-		r.PerProblem, r.PerProblemP95)
+	fmt.Fprintf(&b, "incidents              %d\n", r.Incidents)
+	fmt.Fprintf(&b, "messages per incident  %.2f (p95 %d)\n",
+		r.PerIncident, r.PerIncidentP95)
+	fmt.Fprintf(&b, "most for one incident  %d\n", r.MaxPerIncident)
+	fmt.Fprintf(&b, "peak hour              %d\n", r.PeakPerHour)
 	fmt.Fprintf(&b, "unchanged updates      %d of %d (%.1f%%)\n",
 		r.UnchangedUpdates, r.Updates, r.UnchangedUpdatePercent())
-	fmt.Fprintf(&b, "re-opened problems   %d\n", r.Recreated)
+	fmt.Fprintf(&b, "re-opened incidents    %d (%.1f%%)\n", r.Recreated,
+		r.RecreatedPercent())
 	fmt.Fprintf(&b, "repeated recoveries    %d\n", r.RepeatedResolves)
 	fmt.Fprintf(&b, "grouped messages       %d\n", r.Grouped)
 	fmt.Fprintf(&b, "without a cause        %d (%.1f%%)\n",

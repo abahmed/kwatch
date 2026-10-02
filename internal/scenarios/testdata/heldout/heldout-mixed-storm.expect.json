@@ -1,0 +1,17 @@
+{
+  "name": "heldout-mixed-storm",
+  "description": "A node is lost, a new Deployment misses its Secret and another rollout has a mistyped image tag, all within three minutes.",
+  "root": "node//n4",
+  "otherRoots": [
+    "secret/finance/payout-keys",
+    "deployment/search/indexer"
+  ],
+  "tier": "page",
+  "maxMessages": 8,
+  "mustNotBlame": [
+    "zone//zone-c",
+    "registry//registry.corp.example",
+    "node//n1",
+    "node//n2"
+  ]
+}

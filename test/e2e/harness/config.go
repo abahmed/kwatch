@@ -19,7 +19,6 @@ type Config struct {
 	KwatchImage       string
 	ScenarioTimeout   time.Duration
 	SuiteTimeout      time.Duration
-	DiagnosticsToken  string
 }
 
 func ConfigFromEnv() Config {
@@ -33,11 +32,10 @@ func ConfigFromEnv() Config {
 		ReceiverService: valueOr(
 			"KWATCH_RECEIVER_SERVICE", "kwatch-e2e-receiver",
 		),
-		Artifacts:        valueOr("ARTIFACTS", "artifacts"),
-		KwatchImage:      valueOr("KWATCH_IMAGE", "kwatch:e2e"),
-		ScenarioTimeout:  durationOr("SCENARIO_TIMEOUT", 10*time.Minute),
-		SuiteTimeout:     durationOr("SUITE_TIMEOUT", 60*time.Minute),
-		DiagnosticsToken: valueOr("KWATCH_DIAGNOSTICS_TOKEN", "e2e-token"),
+		Artifacts:       valueOr("ARTIFACTS", "artifacts"),
+		KwatchImage:     valueOr("KWATCH_IMAGE", "kwatch:e2e"),
+		ScenarioTimeout: durationOr("SCENARIO_TIMEOUT", 10*time.Minute),
+		SuiteTimeout:    durationOr("SUITE_TIMEOUT", 60*time.Minute),
 	}
 }
 

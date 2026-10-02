@@ -14,21 +14,21 @@ func TestScoreUnchangedUpdatesCountByContentHash(t *testing.T) {
 	entries := []audit.Entry{
 		{
 			Timestamp:   now,
-			Problem:     "ns:key",
+			Incident:    "ns:key",
 			Reason:      "Test",
 			Action:      audit.ActionUpdate,
 			ContentHash: "abc123",
 		},
 		{
 			Timestamp:   now.Add(time.Second),
-			Problem:     "ns:key",
+			Incident:    "ns:key",
 			Reason:      "Test",
 			Action:      audit.ActionUpdate,
 			ContentHash: "abc123",
 		},
 		{
 			Timestamp:   now.Add(2 * time.Second),
-			Problem:     "ns:key",
+			Incident:    "ns:key",
 			Reason:      "Test",
 			Action:      audit.ActionUpdate,
 			ContentHash: "def456",
@@ -44,19 +44,19 @@ func TestScoreRecreatedAfterResolve(t *testing.T) {
 	entries := []audit.Entry{
 		{
 			Timestamp: now,
-			Problem:   "ns:key",
+			Incident:  "ns:key",
 			Reason:    "Test",
 			Action:    audit.ActionCreate,
 		},
 		{
 			Timestamp: now.Add(time.Second),
-			Problem:   "ns:key",
+			Incident:  "ns:key",
 			Reason:    "Test",
 			Action:    audit.ActionResolved,
 		},
 		{
 			Timestamp: now.Add(2 * time.Second),
-			Problem:   "ns:key",
+			Incident:  "ns:key",
 			Reason:    "Test",
 			Action:    audit.ActionCreate,
 		},
@@ -70,13 +70,13 @@ func TestScoreRepeatedResolves(t *testing.T) {
 	entries := []audit.Entry{
 		{
 			Timestamp: now,
-			Problem:   "ns:key",
+			Incident:  "ns:key",
 			Reason:    "Test",
 			Action:    audit.ActionResolved,
 		},
 		{
 			Timestamp: now.Add(time.Second),
-			Problem:   "ns:key",
+			Incident:  "ns:key",
 			Reason:    "Test",
 			Action:    audit.ActionResolved,
 		},
@@ -92,29 +92,29 @@ func TestScoreP95Percentile(t *testing.T) {
 		key := "ns:k" + string(rune('0'+i%10))
 		entries = append(entries, audit.Entry{
 			Timestamp: now.Add(time.Duration(i) * time.Second),
-			Problem:   key,
+			Incident:  key,
 			Reason:    "Test",
 			Action:    audit.ActionCreate,
 		})
 	}
 	report := Score(entries)
-	assert.Equal(t, 10, report.Problems)
-	assert.Greater(t, report.PerProblemP95, 0)
+	assert.Equal(t, 10, report.Incidents)
+	assert.Greater(t, report.PerIncidentP95, 0)
 }
 
-func TestScoreGroupedProblems(t *testing.T) {
+func TestScoreGroupedIncidents(t *testing.T) {
 	now := time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)
 	entries := []audit.Entry{
 		{
 			Timestamp:     now,
-			Problem:       "ns:key1",
+			Incident:      "ns:key1",
 			Reason:        "Test",
 			Action:        audit.ActionCreate,
 			AffectedCount: 3,
 		},
 		{
 			Timestamp:     now.Add(time.Second),
-			Problem:       "ns:key2",
+			Incident:      "ns:key2",
 			Reason:        "Test",
 			Action:        audit.ActionCreate,
 			AffectedCount: 5,
@@ -129,21 +129,21 @@ func TestScoreUnknownCause(t *testing.T) {
 	entries := []audit.Entry{
 		{
 			Timestamp:  now,
-			Problem:    "ns:key1",
+			Incident:   "ns:key1",
 			Reason:     "Test",
 			Action:     audit.ActionCreate,
 			CauseState: "unknown",
 		},
 		{
 			Timestamp:  now.Add(time.Second),
-			Problem:    "ns:key2",
+			Incident:   "ns:key2",
 			Reason:     "Test",
 			Action:     audit.ActionCreate,
 			CauseState: "pod",
 		},
 		{
 			Timestamp: now.Add(2 * time.Second),
-			Problem:   "ns:key3",
+			Incident:  "ns:key3",
 			Reason:    "Test",
 			Action:    audit.ActionCreate,
 		},
@@ -158,7 +158,7 @@ func TestScoreResolvedNotCountedAsUnknown(t *testing.T) {
 	entries := []audit.Entry{
 		{
 			Timestamp:  now,
-			Problem:    "ns:key",
+			Incident:   "ns:key",
 			Reason:     "Test",
 			Action:     audit.ActionResolved,
 			CauseState: "",
@@ -172,7 +172,7 @@ func TestScoreCauseStates(t *testing.T) {
 	now := time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)
 	entry := func(key, state string, action audit.Action) audit.Entry {
 		return audit.Entry{
-			Timestamp: now, Problem: key, Action: action, CauseState: state,
+			Timestamp: now, Incident: key, Action: action, CauseState: state,
 		}
 	}
 	report := Score([]audit.Entry{
@@ -184,4 +184,22 @@ func TestScoreCauseStates(t *testing.T) {
 	})
 	assert.Equal(t, 1, report.CircularCause)
 	assert.Equal(t, 2, report.UnknownCause)
+}
+
+func TestScoreRecreatedCountsLinkedIncident(t *testing.T) {
+	now := time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)
+	entries := []audit.Entry{
+		{Timestamp: now, Incident: "a", Action: audit.ActionCreate},
+		{
+			Timestamp: now.Add(time.Second), Incident: "a",
+			Action: audit.ActionResolved,
+		},
+		{
+			Timestamp: now.Add(2 * time.Second), Incident: "b",
+			Action: audit.ActionCreate, Previous: "a",
+		},
+	}
+	report := Score(entries)
+	assert.Equal(t, 1, report.Recreated)
+	assert.Equal(t, 2, report.Incidents)
 }

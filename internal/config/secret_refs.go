@@ -78,11 +78,6 @@ func validateSecretReferences(raw string) error {
 	var errs []error
 	validateSensitivePath(
 		root,
-		[]string{"healthCheck", "diagnosticsToken"},
-		&errs,
-	)
-	validateSensitivePath(
-		root,
 		[]string{"heartbeatMonitor", "url"},
 		&errs,
 	)

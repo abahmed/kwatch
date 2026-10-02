@@ -2,89 +2,58 @@ package delivery
 
 import (
 	"context"
-
-	"github.com/abahmed/kwatch/internal/constant"
-	"github.com/abahmed/kwatch/internal/event"
 )
 
-// jobKind names what a delivery carries. Everything kwatch sends is one of
-// three shapes, and every provider accepts them through the same four-way
-// interface check.
+// jobKind names what a delivery carries: a plain operator message or an
+// incident message.
 type jobKind int
 
 const (
 	jobMessage jobKind = iota
-	jobEvent
-	jobStory
+	jobIncident
 )
 
-// deliverOpts is what differs between the delivery paths: the retry budget,
-// whether a fallback provider may be tried, and the text prefix a fallback
-// adds. The dispatch itself does not vary, and used to be written out three
-// times -- once for normal delivery, once for the synchronous pre-Start path,
-// once for fallbacks. Three copies of a four-way type switch is three places
-// for a provider kind to be handled slightly differently.
+// deliverOpts is what differs between the delivery paths: the retry budget
+// and, for a fallback delivery, the name of the primary that failed. The
+// dispatch itself does not vary between normal, pre-Start and fallback
+// delivery, so a provider is always called the same way.
 type deliverOpts struct {
-	retry  retryConfig
-	prefix string
+	retry        retryConfig
+	fallbackFrom string
 }
 
-// dispatch sends one job to one provider, choosing the richest interface the
-// provider implements. It is the single place that decides how a provider is
-// called.
-func (a *Manager) dispatch(
+// dispatch sends one job to one provider. It is the single place that
+// decides how a provider is called.
+func (m *Manager) dispatch(
+	ctx context.Context,
+	entry *providerEntry,
+	job deliverJob,
+	opts deliverOpts,
+) error {
+	if job.kind == jobIncident && job.incident != nil {
+		return m.dispatchIncident(ctx, entry, job, opts)
+	}
+	return m.dispatchMessage(ctx, entry, job, opts)
+}
+
+// dispatchMessage sends a plain operator message as text, cut to the
+// provider's payload limit.
+func (m *Manager) dispatchMessage(
 	ctx context.Context,
 	entry *providerEntry,
 	job deliverJob,
 	opts deliverOpts,
 ) error {
 	p := entry.provider
-	switch job.kind {
-	case jobMessage:
-		return a.dispatchMessage(ctx, entry, job, opts)
-	case jobEvent:
-		return sendWithRetry(ctx, func() error {
-			return sendEvent(ctx, p, job.ev)
-		}, opts.retry, p.Name())
+	msg := job.msg
+	if opts.fallbackFrom != "" {
+		msg = "[fallback — primary " + opts.fallbackFrom + " failed] " + msg
 	}
-	return a.dispatchStory(ctx, entry, job, opts)
-}
-
-func (a *Manager) dispatchMessage(
-	ctx context.Context,
-	entry *providerEntry,
-	job deliverJob,
-	opts deliverOpts,
-) error {
-	p := entry.provider
-	msg := opts.prefix + job.msg
-	if _, ok := p.(EventDeliveryProvider); ok {
-		ev := &event.Event{PodName: msg, Reason: constant.ReasonNotify}
-		return sendWithRetry(ctx, func() error {
-			return sendEvent(ctx, p, ev)
-		}, opts.retry, p.Name())
-	}
-	truncated := msg
 	if entry.maxBytes > 0 {
-		truncated = truncateMsg(msg, entry.maxBytes)
+		msg = truncateMsg(msg, entry.maxBytes)
 	}
+	requestCtx := m.requestContext(ctx)
 	return sendWithRetry(ctx, func() error {
-		return sendMessage(ctx, p, truncated)
+		return p.SendMessage(requestCtx, msg)
 	}, opts.retry, p.Name())
-}
-
-func sendEvent(
-	ctx context.Context,
-	provider Provider,
-	event *event.Event,
-) error {
-	return provider.SendEvent(ctx, event)
-}
-
-func sendMessage(
-	ctx context.Context,
-	provider Provider,
-	message string,
-) error {
-	return provider.SendMessage(ctx, message)
 }

@@ -4,11 +4,9 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"strings"
 
 	"github.com/abahmed/kwatch/internal/clock"
 	"github.com/abahmed/kwatch/internal/delivery/transport"
-	"github.com/abahmed/kwatch/internal/event"
 
 	"k8s.io/klog/v2"
 )
@@ -54,6 +52,12 @@ func NewWebhook(
 	url, ok := config["url"].(string)
 	if !ok || len(url) == 0 {
 		klog.InfoS("initializing webhook with empty url")
+		return nil
+	}
+
+	if !transport.ValidEndpoint(url) {
+		klog.InfoS("initializing webhook with an invalid url",
+			"setting", "url")
 		return nil
 	}
 	rawHeaders, ok := config["headers"]
@@ -108,16 +112,6 @@ func (w *Webhook) Name() string {
 	return "Webhook"
 }
 
-// SendEvent sends event to the provider
-func (w *Webhook) SendEvent(ctx context.Context, ev *event.Event) error {
-	reqBody, err := w.buildRequestBody(ev)
-	if err != nil {
-		return err
-	}
-	_, err = w.sender.Send(ctx, w.request(reqBody))
-	return err
-}
-
 // request builds the call every webhook delivery makes: the user's headers
 // and optional basic auth on top of a JSON POST.
 func (w *Webhook) request(body []byte) transport.Request {
@@ -137,36 +131,4 @@ func (w *Webhook) request(body []byte) transport.Request {
 		}
 	}
 	return r
-}
-
-func (w *Webhook) buildRequestBody(
-	ev *event.Event,
-) ([]byte, error) {
-	eventsText := ""
-	if ev.IncludeEvents {
-		eventsText = strings.TrimSpace(ev.Events)
-	}
-
-	logsText := ""
-	if ev.IncludeLogs {
-		logsText = strings.TrimSpace(ev.Logs)
-	}
-
-	postBody, err := json.Marshal(map[string]interface{}{
-		"Cluster":   w.clusterName,
-		"Name":      ev.PodName,
-		"Container": ev.ContainerName,
-		"Namespace": ev.Namespace,
-		"Node":      ev.NodeName,
-		"Reason":    ev.Reason,
-		"Events":    eventsText,
-		"Logs":      logsText,
-		"Labels":    ev.Labels,
-	})
-	if err != nil {
-		return nil, fmt.Errorf("failed to marshal request body: %w", err)
-	}
-
-	return postBody, nil
-
 }

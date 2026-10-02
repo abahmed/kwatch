@@ -1,0 +1,4 @@
+10:04:20 settled
+🟠 cart is failing in shop (prod-eu-1) after the 10:01 removal of node n3. The scheduler says "0/2 nodes are available: 2 Insufficient cpu. preemption: 0/2 nodes are available: 2 No preemption victims found for…". Replicas that do not depend on it are healthy. search is affected as well. To see the object's state and events, run kubectl describe pod cart-58d28062-c -n shop
+🟠 cart is failing in shop (prod-eu-1) after the 10:01 removal of node n3.
+

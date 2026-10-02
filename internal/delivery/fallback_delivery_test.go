@@ -5,7 +5,7 @@ import (
 	"testing"
 )
 
-func TestNotifyStoryAfterShutdownIsNoop(t *testing.T) {
+func TestNotifyIncidentAfterShutdownIsNoop(t *testing.T) {
 	am := newTestManager()
 	setManagerEntries(am, []providerEntry{{
 		provider: &fakeProvider{},
@@ -18,7 +18,7 @@ func TestNotifyStoryAfterShutdownIsNoop(t *testing.T) {
 	am.Start(ctx)
 	shutdownManager(am)
 
-	am.NotifyStory(*storyJob("k", "default").story)
+	am.NotifyIncident(*incidentJob("k", "default").incident)
 }
 
 func TestManagerCanRestartAfterShutdown(t *testing.T) {
@@ -37,6 +37,6 @@ func TestManagerCanRestartAfterShutdown(t *testing.T) {
 	ctx2, cancel2 := context.WithCancel(context.Background())
 	defer cancel2()
 	am.Start(ctx2)
-	am.NotifyStory(*storyJob("k", "default").story)
+	am.NotifyIncident(*incidentJob("k", "default").incident)
 	shutdownManager(am)
 }

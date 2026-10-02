@@ -9,28 +9,22 @@ import (
 	"strings"
 
 	"github.com/abahmed/kwatch/internal/clock"
-	"github.com/abahmed/kwatch/internal/constant"
 	"github.com/abahmed/kwatch/internal/delivery/transport"
-	"github.com/abahmed/kwatch/internal/event"
-	"github.com/abahmed/kwatch/internal/message"
+	"github.com/abahmed/kwatch/internal/notification"
 	"github.com/abahmed/kwatch/internal/ratelimit"
 
 	discordgo "github.com/bwmarrin/discordgo"
 	"k8s.io/klog/v2"
 )
 
-const (
-	chunkSize = 1024
-	maxFields = 25
-)
+// maxContent is Discord's message content limit.
+const maxContent = 2000
 
 type Discord struct {
 	httpClient *http.Client
 	sender     transport.Sender
 	id         string
 	token      string
-	title      string
-	text       string
 	send       func(webhookID,
 		token string,
 		wait bool,
@@ -110,16 +104,11 @@ func NewDiscord(
 	}
 	discordClient.Client = httpClient
 
-	title, _ := config["title"].(string)
-	text, _ := config["text"].(string)
-
 	return &Discord{
 		httpClient:  httpClient,
 		sender:      transport.NewSender(dependencies),
 		id:          webhookID,
 		token:       webhookToken,
-		title:       title,
-		text:        text,
 		send:        discordClient.WebhookExecute,
 		threadID:    threadID,
 		sendThread:  discordClient.WebhookThreadExecute,
@@ -144,142 +133,35 @@ func (d *Discord) Verify(ctx context.Context) error {
 	return err
 }
 
-// SendEvent sends an event using the caller's cancellation context.
-func (d *Discord) SendEvent(
+// SendIncident posts the incident narrative as the message content, with
+// the workload's last output as a code block. The content is cut to
+// Discord's 2000-character limit; bytes never undercount characters.
+func (d *Discord) SendIncident(
 	ctx context.Context,
-	ev *event.Event,
+	m notification.Message,
 ) error {
-	klog.V(4).InfoS(
-		"sending to discord event",
-		"namespace", ev.Namespace,
-		"name", ev.PodName,
-		"reason", ev.Reason,
-		"action", ev.Action,
-	)
-
-	// initialize fields with basic info
-	fields := []*discordgo.MessageEmbedField{}
-	if d.clusterName != "" {
-		fields = append(fields, &discordgo.MessageEmbedField{
-			Name: "Cluster", Value: d.clusterName, Inline: true,
-		})
-	}
-	if ev.PodName != "" {
-		fields = append(fields, &discordgo.MessageEmbedField{
-			Name: "Name", Value: ev.PodName, Inline: true,
-		})
-	}
-	if ev.ContainerName != "" {
-		fields = append(fields, &discordgo.MessageEmbedField{
-			Name: "Container", Value: ev.ContainerName, Inline: true,
-		})
-	}
-	if ev.Namespace != "" {
-		fields = append(fields, &discordgo.MessageEmbedField{
-			Name: "Namespace", Value: ev.Namespace, Inline: true,
-		})
-	}
-	if ev.NodeName != "" {
-		fields = append(fields, &discordgo.MessageEmbedField{
-			Name: "Node", Value: ev.NodeName, Inline: true,
-		})
-	}
-	if ev.Reason != "" {
-		fields = append(fields, &discordgo.MessageEmbedField{
-			Name: "Reason", Value: ev.Reason, Inline: true,
-		})
-	}
-
-	// add events part if it exists
-	if ev.IncludeEvents {
-		events := strings.TrimSpace(ev.Events)
-		if len(events) > 0 {
-			parts := message.Chunks(events, chunkSize)
-			for i, chunk := range parts {
-				if len(fields) >= maxFields {
-					appendDiscordTruncation(&fields, len(parts)-i)
-					break
-				}
-				fields = append(fields, &discordgo.MessageEmbedField{
-					Name:  ":mag: Events",
-					Value: "```\n" + chunk + "```",
-				})
-			}
-		}
-	}
-
-	// add logs part if it exists
-	if ev.IncludeLogs {
-		logs := strings.TrimSpace(ev.Logs)
-		if len(logs) > 0 {
-			logData := logs
-
-			parts := message.Chunks(logData, chunkSize)
-			for i, chunk := range parts {
-				if len(fields) >= maxFields {
-					appendDiscordTruncation(&fields, len(parts)-i)
-					break
-				}
-				name := ":memo: Logs"
-				if len(parts) > 1 {
-					name = fmt.Sprintf(
-						":memo: Logs (%d/%d)",
-						i+1,
-						len(parts),
-					)
-				}
-				fields = append(fields, &discordgo.MessageEmbedField{
-					Name:  name,
-					Value: "```\n" + chunk + "```",
-				})
-			}
-		}
-	}
-
-	// use custom title if it's provided, otherwise use default
-	title := d.title
-	if len(title) == 0 {
-		title = constant.DefaultTitle
-	}
-
-	// use custom text if it's provided, otherwise use default
-	text := d.text
-	if len(text) == 0 {
-		text = constant.DefaultText
-	}
-
-	// send message
+	klog.V(4).InfoS("sending incident to discord",
+		"component", "discord", "conversation", m.Key)
 	err := d.execute(
 		&discordgo.WebhookParams{
 			AllowedMentions: noMentions(),
-			Embeds: []*discordgo.MessageEmbed{
-				{
-					Color:       13041664,
-					Title:       title,
-					Description: text,
-					Fields:      fields,
-					Footer: &discordgo.MessageEmbedFooter{
-						Text: constant.Footer,
-					},
-				},
-			},
+			Content:         incidentContent(m),
 		},
 		discordgo.WithContext(ctx),
 	)
 	return wrapDiscordRateLimit(err)
 }
 
-func appendDiscordTruncation(
-	fields *[]*discordgo.MessageEmbedField,
-	remaining int,
-) {
-	if len(*fields) >= maxFields {
-		return
+// incidentContent is the Note plus the last output, mention-neutralized
+// and bounded.
+func incidentContent(m notification.Message) string {
+	text := m.NoteText()
+	if len(m.Output) > 0 {
+		text += "\n```\n" + strings.Join(m.Output, "\n") + "\n```"
 	}
-	*fields = append(*fields, &discordgo.MessageEmbedField{
-		Name:  ":warning: Evidence truncated",
-		Value: fmt.Sprintf("… (truncated, %d more chunk(s))", remaining),
-	})
+	return notification.Truncate(
+		notification.NeutralizeMentions(text), maxContent,
+	)
 }
 
 // SendMessage sends text using the caller's cancellation context.

@@ -6,7 +6,7 @@ import (
 	"github.com/abahmed/kwatch/internal/clock"
 	"github.com/abahmed/kwatch/internal/config"
 	"github.com/abahmed/kwatch/internal/delivery/transport"
-	"github.com/abahmed/kwatch/internal/notice"
+	"github.com/abahmed/kwatch/internal/notification"
 )
 
 func newTestManager() *Manager {
@@ -68,11 +68,11 @@ func generationEntries(generation *providerGeneration) []providerEntry {
 	return entries
 }
 
-// storyJob is a queued story delivery for tests.
-func storyJob(key, namespace string) deliverJob {
-	return deliverJob{kind: jobStory, story: &notice.Message{
-		Key: key, Status: notice.StatusCritical, Title: key + " failed",
-		Route: notice.Route{Namespaces: []string{namespace}},
+// incidentJob is a queued incident delivery for tests.
+func incidentJob(key, namespace string) deliverJob {
+	return deliverJob{kind: jobIncident, incident: &notification.Message{
+		Key: key, Status: notification.StatusCritical, Title: key + " failed",
+		Route: notification.Route{Namespaces: []string{namespace}},
 	}}
 }
 

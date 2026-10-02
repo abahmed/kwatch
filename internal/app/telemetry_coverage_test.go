@@ -6,7 +6,6 @@ import (
 	"errors"
 	"net/http"
 	"net/http/httptest"
-	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -162,7 +161,7 @@ func TestSendTelemetryHandlesDueAndDeferredHeartbeats(t *testing.T) {
 		context.Background(), due, "123e4567-e89b-42d3-a456-426614174000",
 		"v1.2.3", func() time.Time { return now }, client,
 		telemetry.Endpoint,
-		newAdoptionTelemetryStatus(), nil,
+		nil,
 	)
 	if retry || delay != telemetry.WeeklyInterval || !due.setCalled {
 		t.Fatalf("due result = %v, %v, set=%v", delay, retry, due.setCalled)
@@ -174,7 +173,7 @@ func TestSendTelemetryHandlesDueAndDeferredHeartbeats(t *testing.T) {
 		"123e4567-e89b-42d3-a456-426614174000", "v1.2.3",
 		func() time.Time { return now }, client,
 		telemetry.Endpoint,
-		newAdoptionTelemetryStatus(), nil,
+		nil,
 	)
 	if retry || due.setCalled && recent.setCalled {
 		t.Fatal("recent heartbeat should not be written")
@@ -191,7 +190,7 @@ func TestSendTelemetryReportsReadAndWriteFailures(t *testing.T) {
 		context.Background(), readErr, "cluster", "v1",
 		func() time.Time { return now }, http.DefaultClient,
 		telemetry.Endpoint,
-		newAdoptionTelemetryStatus(), nil,
+		nil,
 	)
 	if !retry || delay != time.Minute {
 		t.Fatalf("read failure = %v, %v", delay, retry)
@@ -214,7 +213,7 @@ func TestSendTelemetryReportsReadAndWriteFailures(t *testing.T) {
 		"123e4567-e89b-42d3-a456-426614174000", "v1",
 		func() time.Time { return now }, client,
 		server.URL,
-		newAdoptionTelemetryStatus(), &sent,
+		&sent,
 	)
 	if retry || delay != telemetry.WeeklyInterval {
 		t.Fatalf("write failure = %v, %v", delay, retry)
@@ -228,7 +227,7 @@ func TestSendTelemetryReportsReadAndWriteFailures(t *testing.T) {
 		"123e4567-e89b-42d3-a456-426614174000", "v1",
 		func() time.Time { return now }, client,
 		server.URL,
-		newAdoptionTelemetryStatus(), &sent,
+		&sent,
 	)
 	if retry {
 		t.Fatal("second call with same sent should not retry")
@@ -313,7 +312,7 @@ func TestTelemetryRunnerRetriesAgainstEndpoint(t *testing.T) {
 		"123e4567-e89b-42d3-a456-426614174000", "v1.2.3",
 		func() time.Time {
 			return time.Date(2026, 9, 21, 12, 0, 0, 0, time.UTC)
-		}, server.Client(), newAdoptionTelemetryStatus(),
+		}, server.Client(),
 		telemetryRunnerOptions{
 			endpoint: server.URL,
 			wait: func(context.Context, time.Duration) bool {
@@ -331,7 +330,7 @@ func TestTelemetryRunnerRetriesAgainstEndpoint(t *testing.T) {
 	}
 }
 
-func TestTelemetryHelpersAndStatusSerialization(t *testing.T) {
+func TestTelemetryHelpers(t *testing.T) {
 	if telemetryFailureReason(errors.New("status 503")) != "http_status" {
 		t.Fatal("status errors should be classified as HTTP failures")
 	}
@@ -351,16 +350,6 @@ func TestTelemetryHelpersAndStatusSerialization(t *testing.T) {
 		t.Fatal("canceled wait should stop")
 	}
 
-	status := newAdoptionTelemetryStatus()
-	now := time.Date(2026, 9, 21, 12, 0, 0, 0, time.UTC)
-	status.configure(true, "waiting", "")
-	status.attempt(now)
-	status.failure("network", now.Add(time.Minute))
-	status.success(now, now.Add(telemetry.WeeklyInterval))
-	raw, err := status.StatusJSON()
-	if err != nil || !strings.Contains(string(raw), `"state":"waiting"`) {
-		t.Fatalf("status JSON = %s, err=%v", raw, err)
-	}
 	if jitterDuration(time.Second) < time.Second ||
 		jitterDuration(time.Second) > 1200*time.Millisecond {
 		t.Fatal("jitter escaped its documented range")
@@ -368,10 +357,8 @@ func TestTelemetryHelpersAndStatusSerialization(t *testing.T) {
 }
 
 func TestConfigureTelemetryRunnerSkipsWhenDisabled(t *testing.T) {
-	status := newAdoptionTelemetryStatus()
-
 	run := configureTelemetryRunner(config.Telemetry{}, nil, "id", "v1",
-		time.Now, nil, status)
+		time.Now, nil)
 
 	if run != nil {
 		t.Fatal("disabled telemetry must not build a runner")

@@ -1,0 +1,4 @@
+10:05:15 settled
+🟠 logstore in observability (prod-eu-1) keeps crashing because volume claim chunks is out of space. It fails with "level=error msg="flush chunks" err="write /var/lib/logstore/chunks/1f3a: no space left on device"". The error mentions it. To check the size and capacity of the full volume claim, run kubectl describe pvc chunks -n observability
+🟠 logstore in observability (prod-eu-1) keeps crashing because volume claim chunks is out of space.
+

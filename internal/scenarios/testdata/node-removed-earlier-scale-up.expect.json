@@ -1,0 +1,10 @@
+{
+  "name": "node-removed-earlier-scale-up",
+  "description": "A Deployment scales out 20 minutes after a node was scaled in; its new pods lack cpu.",
+  "root": "scheduling//Insufficient cpu",
+  "tier": "notify",
+  "maxMessages": 2,
+  "mustNotBlame": [
+    "node//n3"
+  ]
+}

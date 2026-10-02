@@ -1,8 +1,8 @@
 package delivery
 
-// A restart used to orphan every open problem's provider thread: the next
-// update opened a new Slack thread or a new tracker issue while the original
-// sat above it with no closing reply.
+// Thread ids must survive a restart. Otherwise the next update of every
+// open incident opens a new Slack thread or a new tracker issue while the
+// original sits above it with no closing reply.
 //
 // Thread ids are provider state, not problem state. The application saves
 // them in the disk store (internal/app/thread_state.go) keyed by provider
@@ -22,10 +22,10 @@ type ThreadStateProvider interface {
 
 // SnapshotThreads collects thread state from every provider that keeps it.
 // Nil when no provider does, so an empty map is never written.
-func (a *Manager) SnapshotThreads() map[string]map[string]string {
-	a.mu.Lock()
+func (m *Manager) SnapshotThreads() map[string]map[string]string {
+	m.mu.Lock()
 	generation := cloneProviderGeneration(
-		a.currentGenerationLocked(), false,
+		m.currentGenerationLocked(), false,
 	)
 	entries := make([]Provider, 0)
 	if generation != nil {
@@ -34,7 +34,7 @@ func (a *Manager) SnapshotThreads() map[string]map[string]string {
 			entries = append(entries, generation.entries[name].provider)
 		}
 	}
-	a.mu.Unlock()
+	m.mu.Unlock()
 
 	var out map[string]map[string]string
 	for _, p := range entries {
@@ -55,13 +55,13 @@ func (a *Manager) SnapshotThreads() map[string]map[string]string {
 }
 
 // RestoreThreads hands each provider back its own saved threads.
-func (a *Manager) RestoreThreads(saved map[string]map[string]string) {
+func (m *Manager) RestoreThreads(saved map[string]map[string]string) {
 	if len(saved) == 0 {
 		return
 	}
-	a.mu.Lock()
+	m.mu.Lock()
 	generation := cloneProviderGeneration(
-		a.currentGenerationLocked(), false,
+		m.currentGenerationLocked(), false,
 	)
 	entries := make([]Provider, 0)
 	if generation != nil {
@@ -70,7 +70,7 @@ func (a *Manager) RestoreThreads(saved map[string]map[string]string) {
 			entries = append(entries, generation.entries[name].provider)
 		}
 	}
-	a.mu.Unlock()
+	m.mu.Unlock()
 
 	for _, p := range entries {
 		threads, ok := saved[p.Name()]

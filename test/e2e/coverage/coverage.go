@@ -15,6 +15,8 @@ type Entry struct {
 	Status      string `yaml:"status"`
 	Test        string `yaml:"test,omitempty"`
 	Environment string `yaml:"environment,omitempty"`
+	// Modes lists the detection failure modes the scenario exercises.
+	Modes []string `yaml:"modes,omitempty"`
 }
 
 type Catalog struct {
@@ -57,7 +59,8 @@ func Validate(catalog Catalog) error {
 		}
 		seen[entry.ID] = struct{}{}
 		switch entry.Status {
-		case "covered", "planned", "skipped-optional", "unsupported-in-kind":
+		case "covered", "pending", "planned", "skipped-optional",
+			"unsupported-in-kind":
 		default:
 			return fmt.Errorf(
 				"coverage entry %q has invalid status %q",

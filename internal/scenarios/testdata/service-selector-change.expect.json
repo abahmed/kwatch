@@ -1,0 +1,10 @@
+{
+  "name": "service-selector-change",
+  "description": "A Service's selector is edited to a typo; it has no endpoints while its pods stay healthy.",
+  "root": "service/shop/payments",
+  "tier": "notify",
+  "maxMessages": 2,
+  "mustNotBlame": [
+    "deployment/shop/payments"
+  ]
+}

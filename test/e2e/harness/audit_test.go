@@ -7,8 +7,8 @@ import "testing"
 func TestMatchingEntriesAcceptsNamespacedResourceNames(t *testing.T) {
 	entries := []AuditEntry{{
 		Namespace: "apps",
-		Name:      "apps/api",
-		Reason:    "DeploymentUnavailable",
+		Root:      "Deployment/apps/api",
+		Reason:    "ReplicaFailure,DeploymentUnavailable",
 		Action:    "create",
 	}}
 
@@ -29,6 +29,14 @@ func TestMatchingEntriesAcceptsNamespacedResourceNames(t *testing.T) {
 			name: "fully qualified name",
 			match: AuditMatch{
 				Namespace: "apps", Resource: "apps/api",
+				Reason: "DeploymentUnavailable", Count: 1,
+			},
+			want: 1,
+		},
+		{
+			name: "one reason of a joined list",
+			match: AuditMatch{
+				Namespace: "apps", Resource: "api",
 				Reason: "DeploymentUnavailable", Count: 1,
 			},
 			want: 1,

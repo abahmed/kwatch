@@ -106,7 +106,8 @@ func TestComponentErrorUsesSafeReasonAndCountsTransitions(t *testing.T) {
 		"provider", "degraded", "rate_limited", false,
 	)
 
-	if got := server.ComponentErrors()["provider"]; got != "component_failed" {
+	// The latest degraded reason replaces the earlier one.
+	if got := server.ComponentErrors()["provider"]; got != "rate_limited" {
 		t.Fatalf("unexpected component error reason: %q", got)
 	}
 	if got := metrics.DefaultRegistry().ComponentDegradations.Load() -
@@ -162,5 +163,16 @@ func TestComponentStatusSanitizesArbitraryReasons(t *testing.T) {
 	}
 	if got := server.ComponentErrors()["watcher"]; got != "component_failed" {
 		t.Fatalf("component error = %q, want safe bounded reason", got)
+	}
+}
+
+func TestComponentStatusReplacesDegradedReasonOnChange(t *testing.T) {
+	server := &HealthServer{}
+	server.SetComponentStatus(
+		"watcher", "waiting", "optional_api_unavailable", false)
+	server.SetComponentStatus("watcher", "degraded", "watcher_failed", false)
+
+	if got := server.ComponentErrors()["watcher"]; got != "watcher_failed" {
+		t.Fatalf("component error = %q, want the latest reason", got)
 	}
 }

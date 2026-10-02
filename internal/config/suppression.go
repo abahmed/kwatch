@@ -24,3 +24,13 @@ type SilenceRule struct {
 	// message contains any entry, the incident is suppressed.
 	NodeMessages []string `yaml:"nodeMessages"`
 }
+
+// IsEmpty reports whether the rule sets no matching field. An empty rule
+// would match every finding, so validation rejects it and scope matching
+// treats it as matching nothing.
+func (r SilenceRule) IsEmpty() bool {
+	return len(r.Namespaces) == 0 && len(r.Reasons) == 0 &&
+		len(r.PodNamePatterns) == 0 && len(r.ContainerNames) == 0 &&
+		len(r.ContainerMessages) == 0 && len(r.EventMessages) == 0 &&
+		len(r.NodeReasons) == 0 && len(r.NodeMessages) == 0
+}

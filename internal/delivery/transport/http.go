@@ -15,7 +15,6 @@ import (
 	"time"
 	"unicode/utf8"
 
-	"github.com/abahmed/kwatch/internal/event"
 	"github.com/abahmed/kwatch/internal/ratelimit"
 )
 
@@ -63,37 +62,17 @@ func ClassifyHTTPStatus(status int, err error) error {
 	if err == nil {
 		return nil
 	}
-	if event.IsPermanentHTTPStatus(status) {
-		return event.Permanent(err)
+	if IsPermanentHTTPStatus(status) {
+		return Permanent(err)
 	}
 	return err
 }
 
 // Send executes a provider request and returns its response body.
 func (c *client) Send(ctx context.Context, r Request) ([]byte, error) {
-	method := r.Method
-	if method == "" {
-		method = http.MethodPost
-	}
-	if ctx == nil {
-		ctx = context.Background()
-	}
-	req, err := http.NewRequestWithContext(
-		ctx, method, r.URL, bytes.NewReader(r.Body),
-	)
+	req, err := buildRequest(ctx, r)
 	if err != nil {
 		return nil, err
-	}
-	for key, value := range r.Headers {
-		req.Header.Set(key, value)
-	}
-	if r.ContentType != "" {
-		req.Header.Set("Content-Type", r.ContentType)
-	} else if r.Body != nil && req.Header.Get("Content-Type") == "" {
-		req.Header.Set("Content-Type", "application/json")
-	}
-	if r.BasicAuth != nil {
-		req.SetBasicAuth(r.BasicAuth.Username, r.BasicAuth.Password)
 	}
 	if c.httpClient == nil {
 		return nil, fmt.Errorf("%s: outbound HTTP client is not configured",
@@ -119,8 +98,50 @@ func (c *client) Send(ctx context.Context, r Request) ([]byte, error) {
 	if _, err := io.Copy(io.Discard, response.Body); err != nil {
 		return body, fmt.Errorf("%s: drain response body: %w", r.Provider, err)
 	}
+	return classifyResponse(r, response, body, c.now)
+}
+
+// buildRequest turns a provider Request into an HTTP request with its
+// headers and credentials. A URL that cannot be parsed is permanent.
+func buildRequest(ctx context.Context, r Request) (*http.Request, error) {
+	method := r.Method
+	if method == "" {
+		method = http.MethodPost
+	}
+	if ctx == nil {
+		ctx = context.Background()
+	}
+	req, err := http.NewRequestWithContext(
+		ctx, method, r.URL, bytes.NewReader(r.Body),
+	)
+	if err != nil {
+		// A URL that cannot be parsed never becomes valid on retry, and the
+		// parse error quotes the URL, which may carry a token.
+		return nil, Permanent(fmt.Errorf("%s: build request: %w",
+			r.Provider, RedactURLError(err)))
+	}
+	for key, value := range r.Headers {
+		req.Header.Set(key, value)
+	}
+	if r.ContentType != "" {
+		req.Header.Set("Content-Type", r.ContentType)
+	} else if r.Body != nil && req.Header.Get("Content-Type") == "" {
+		req.Header.Set("Content-Type", "application/json")
+	}
+	if r.BasicAuth != nil {
+		req.SetBasicAuth(r.BasicAuth.Username, r.BasicAuth.Password)
+	}
+	return req, nil
+}
+
+// classifyResponse maps the status of a completed response to success, a
+// rate-limit error, a permanent error or a retryable error.
+func classifyResponse(
+	r Request, response *http.Response, body []byte,
+	now func() time.Time,
+) ([]byte, error) {
 	if response.StatusCode == http.StatusTooManyRequests {
-		retryAfter := ratelimit.ParseRetryAfterAt(response, c.now())
+		retryAfter := ratelimit.ParseRetryAfterAt(response, now())
 		if retryAfter == 0 && r.RetryAfterFromBody != nil {
 			retryAfter = r.RetryAfterFromBody(body)
 		}
@@ -134,8 +155,8 @@ func (c *client) Send(ctx context.Context, r Request) ([]byte, error) {
 			"call to %s returned status code %d: %s",
 			r.Provider, response.StatusCode, responseSummary(body),
 		)
-		if event.IsPermanentHTTPStatus(response.StatusCode) {
-			return body, event.Permanent(err)
+		if IsPermanentHTTPStatus(response.StatusCode) {
+			return body, Permanent(err)
 		}
 		return body, err
 	}
@@ -183,4 +204,15 @@ func redactedURL(raw string) string {
 		return "[redacted]"
 	}
 	return parsed.Scheme + "://" + parsed.Host + "/[redacted]"
+}
+
+// LogURL is the form of a configured provider URL that is safe to log: the
+// scheme and host only. Credentials in the user info, path or query never
+// reach the logs. A URL without a host logs as "[invalid]".
+func LogURL(raw string) string {
+	parsed, err := url.Parse(raw)
+	if err != nil || parsed.Host == "" {
+		return "[invalid]"
+	}
+	return parsed.Scheme + "://" + parsed.Host
 }

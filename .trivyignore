@@ -1,0 +1,15 @@
+# Trivy vulnerability exceptions for the kwatch image.
+#
+# Every entry is a temporary risk decision recorded under
+# docs/vulnerability-exceptions.md: it needs a reviewed issue or advisory,
+# an owner, and an expiry no more than 90 days out. Write the expiry on the
+# entry itself so Trivy stops honouring it automatically:
+#
+#   # <issue URL> - <component> - <reason> - owner @<handle>
+#   CVE-YYYY-NNNNN exp:YYYY-MM-DD
+#
+# Unfixed findings in the base OS packages are already excluded by the
+# scanner invocation (--ignore-unfixed on the os package scan); Go module
+# findings are never auto-excluded and need an entry here.
+#
+# No exceptions are active.

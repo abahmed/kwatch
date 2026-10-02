@@ -1,0 +1,11 @@
+{
+  "name": "operator-cr-owned-failing",
+  "description": "A custom resource reports a failing condition; the StatefulSet it owns then crash-loops.",
+  "root": "kafkacluster.kafka.example.com/data/events",
+  "tier": "notify",
+  "maxMessages": 2,
+  "mustNotBlame": [
+    "statefulset/data/events-kafka",
+    "deployment/kafka-system/kafka-operator"
+  ]
+}

@@ -11,9 +11,12 @@ import (
 
 	"github.com/abahmed/kwatch/internal/clock"
 	"github.com/abahmed/kwatch/internal/delivery/transport"
-	"github.com/abahmed/kwatch/internal/event"
-	"github.com/abahmed/kwatch/internal/format"
+	"github.com/abahmed/kwatch/internal/notification"
 )
+
+// telegramTextLimit is Telegram's maximum message length. Escaping and the
+// output block can push a delivered Note past it.
+const telegramTextLimit = 4096
 
 const (
 	telegramAPIURL   = "https://api.telegram.org/bot%s/sendMessage"
@@ -95,82 +98,54 @@ func (t *Telegram) Verify(ctx context.Context) error {
 	return err
 }
 
-// SendEvent sends event to the provider
-func (t *Telegram) SendEvent(ctx context.Context, e *event.Event) error {
-	klog.V(4).InfoS(
-		"sending to telegram event",
-		"namespace", e.Namespace,
-		"name", e.PodName,
-		"reason", e.Reason,
-		"action", e.Action,
-	)
-
-	reqBody := t.buildRequestBodyTelegram(e, t.chatId, "")
-	return t.sendByTelegramApi(ctx, reqBody)
+// SendIncident sends the incident narrative in Telegram's Markdown parse
+// mode. Every event-derived character is escaped; the application output
+// follows in a code block.
+func (t *Telegram) SendIncident(
+	ctx context.Context, m notification.Message,
+) error {
+	klog.V(4).InfoS("sending incident to telegram",
+		"conversation", m.Key, "revision", m.Revision)
+	return t.sendByTelegramApi(ctx, t.incidentBody(m))
 }
 
-// SendMessage sends text message to the provider
+// SendMessage sends a plain operator message without a parse mode.
 func (t *Telegram) SendMessage(ctx context.Context, msg string) error {
 	klog.V(4).InfoS(
 		"sending message to telegram",
 		"messageLength", len(msg),
 	)
-
-	reqBody := t.buildRequestBodyTelegram(new(event.Event), t.chatId, msg)
-	return t.sendByTelegramApi(ctx, reqBody)
+	return t.sendByTelegramApi(ctx, t.body(telegramPayload{
+		ChatID: t.chatId, Text: msg,
+	}))
 }
 
-func (t *Telegram) buildRequestBodyTelegram(
-	e *event.Event,
-	chatId string,
-	customMsg string) string {
-	// build text will be sent in the message
-	txt := ""
-	if len(customMsg) == 0 {
-		parts := []string{
-			"*Reason:* " + escapeMarkdown(format.OrDefault(e.Reason, "unknown")),
-		}
-		for _, field := range []struct{ label, value string }{
-			{"Pod", e.PodName},
-			{"Container", e.ContainerName},
-			{"Namespace", e.Namespace},
-			{"Node", e.NodeName},
-			{"Cluster", t.clusterName},
-		} {
-			if field.value != "" {
-				parts = append(
-					parts,
-					"*"+field.label+":* "+escapeMarkdown(field.value),
-				)
-			}
-		}
+func (t *Telegram) incidentBody(m notification.Message) string {
+	return t.body(telegramPayload{
+		ChatID: t.chatId, ParseMode: "MARKDOWN",
+		Text: incidentText(m, telegramTextLimit),
+	})
+}
 
-		txt = "⛑ Kwatch alert\n" + strings.Join(parts, "\n")
-
-		if e.IncludeLogs {
-			logs := strings.TrimSpace(e.Logs)
-			if len(logs) > 0 {
-				txt += "\n\n*Logs:*\n" + escapeMarkdown(logs)
-			}
-		}
-
-		if e.IncludeEvents {
-			events := strings.TrimSpace(e.Events)
-			if len(events) > 0 {
-				txt += "\n\n*Events:*\n" + escapeMarkdown(events)
-			}
-		}
-	} else {
-		txt = customMsg
+// incidentText is the escaped narrative followed by the output in a code
+// block, within limit bytes. Each part is cut before the fences are added,
+// so a long message can never lose its closing fence and break parsing.
+// The output gets at most half of the limit; the narrative comes first.
+func incidentText(m notification.Message, limit int) string {
+	note := escapeMarkdown(m.NoteText())
+	if len(m.Output) == 0 {
+		return notification.Truncate(note, limit)
 	}
+	const open, closing = "\n\n```\n", "\n```"
+	output := strings.ReplaceAll(strings.Join(m.Output, "\n"), "`", "'")
+	outputBudget := min(len(output), limit/2)
+	note = notification.Truncate(note,
+		limit-outputBudget-len(open)-len(closing))
+	outputBudget = limit - len(note) - len(open) - len(closing)
+	return note + open + notification.Truncate(output, outputBudget) + closing
+}
 
-	payload := telegramPayload{ChatID: chatId, Text: txt}
-	// Rendered messages are plain text; only the event layout above uses
-	// Markdown, with every event-derived value escaped.
-	if len(customMsg) == 0 {
-		payload.ParseMode = "MARKDOWN"
-	}
-
+func (t *Telegram) body(payload telegramPayload) string {
 	bodyBytes, err := json.Marshal(payload)
 	if err != nil {
 		return ""

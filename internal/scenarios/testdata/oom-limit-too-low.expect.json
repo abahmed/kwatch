@@ -1,0 +1,12 @@
+{
+  "name": "oom-limit-too-low",
+  "description": "Both replicas of a Deployment with a 64Mi memory limit are OOMKilled (exit 137) again and again on healthy nodes without memory pressure.",
+  "root": "deployment/shop/cart",
+  "tier": "notify",
+  "maxMessages": 2,
+  "mustNotBlame": [
+    "node//n1",
+    "node//n2",
+    "zone//zone-a"
+  ]
+}

@@ -12,6 +12,10 @@ import (
 type Dependencies struct {
 	HTTPClient *http.Client
 	Clock      clock.Clock
+	// OnDelivered, when set, is called after a provider accepts a job. The
+	// application uses it to persist provider thread ids without waiting
+	// for the periodic save. It must not block.
+	OnDelivered func()
 }
 
 // NewManagerWithDependencies constructs delivery with explicit dependencies.
@@ -27,7 +31,8 @@ func NewManagerWithDependencies(deps Dependencies) *Manager {
 			}),
 		},
 		now:               now.Now,
-		managerDone:       make(chan struct{}),
+		onDelivered:       deps.OnDelivered,
+		done:              doneSignal{ch: make(chan struct{})},
 		reconfigureEvents: make(chan struct{}, 1),
 	}
 }

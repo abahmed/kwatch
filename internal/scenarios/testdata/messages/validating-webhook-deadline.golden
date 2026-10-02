@@ -1,0 +1,4 @@
+10:04:15 settled
+🔴 Replica set collector-34d98dcf in analytics (prod-eu-1) cannot create pods because validating webhook label-guard times out on every call. The error mentions it. collector is affected as well. To check the webhook's backend and timeout, run kubectl get validatingwebhookconfiguration label-guard -o yaml
+🔴 Replica set collector-34d98dcf in analytics (prod-eu-1) cannot create pods because validating webhook label-guard times out on every call.
+

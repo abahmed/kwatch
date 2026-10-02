@@ -32,7 +32,7 @@ func (r *readinessCoordinator) begin(
 	defer r.mu.Unlock()
 	r.epoch = epoch
 	r.leader = true
-	r.required = map[string]bool{"state": true, "core": true}
+	r.required = map[string]bool{"state": true, "pipeline": true}
 	if deliveryRequired {
 		r.required["delivery"] = true
 	}
@@ -46,6 +46,19 @@ func (r *readinessCoordinator) end(epoch int64) {
 	if r.epoch != epoch {
 		return
 	}
+	r.leader = false
+	r.setHealthLocked(false)
+}
+
+// withdraw drops readiness for the current session at once and keeps it
+// down: a component that reports ready while the session shuts down must
+// not restore it. The next begin starts a fresh session.
+func (r *readinessCoordinator) withdraw() {
+	if r == nil {
+		return
+	}
+	r.mu.Lock()
+	defer r.mu.Unlock()
 	r.leader = false
 	r.setHealthLocked(false)
 }

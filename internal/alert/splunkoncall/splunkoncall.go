@@ -8,10 +8,15 @@ import (
 	"k8s.io/klog/v2"
 
 	"github.com/abahmed/kwatch/internal/delivery/transport"
-	"github.com/abahmed/kwatch/internal/event"
+	"github.com/abahmed/kwatch/internal/notification"
 )
 
-const splunkOnCallAPIURL = "https://alert.victorops.com/integrations/generic/20131114/alert"
+const (
+	splunkOnCallAPIURL = "https://alert.victorops.com/" +
+		"integrations/generic/20131114/alert"
+	// titleLimit bounds entity_display_name.
+	titleLimit = 250
+)
 
 type splunkOnCallPayload struct {
 	MessageType       string `json:"message_type"`
@@ -50,6 +55,11 @@ func NewSplunkOncall(
 
 	server := splunkOnCallAPIURL
 	if u, ok := config["url"].(string); ok && len(u) > 0 {
+		if !transport.ValidEndpoint(u) {
+			klog.InfoS("initializing splunkoncall with an invalid url",
+				"setting", "url")
+			return nil
+		}
 		server = u
 	}
 
@@ -69,26 +79,16 @@ func (s *SplunkOncall) Name() string {
 	return "Splunk OnCall"
 }
 
-// SendEvent sends event to the provider
-// UsesEventDelivery routes problems through SendEvent, which carries the
-// action and a stable key so Splunk On-Call can resolve the alert.
-func (s *SplunkOncall) UsesEventDelivery() {}
-
-// SendEvent opens, updates or recovers one Splunk On-Call incident per kwatch
-// problem, keyed by entity_id.
-func (s *SplunkOncall) SendEvent(ctx context.Context, e *event.Event) error {
-	messageType := "CRITICAL"
-	switch {
-	case e.IsResolve():
-		messageType = "RECOVERY"
-	case e.IsNotice():
-		messageType = "INFO"
-	}
+// SendIncident opens, updates or recovers one Splunk On-Call incident per
+// kwatch incident, keyed by entity_id.
+func (s *SplunkOncall) SendIncident(
+	ctx context.Context, m notification.Message,
+) error {
 	payload := splunkOnCallPayload{
-		MessageType:       messageType,
-		EntityID:          e.AlertKey(),
-		EntityDisplayName: e.AlertTitle(250),
-		StateMessage:      e.AlertBody(s.clusterName),
+		MessageType:       messageType(m),
+		EntityID:          m.AlertKey(s.clusterName),
+		EntityDisplayName: notification.Truncate(m.ShortText(), titleLimit),
+		StateMessage:      stateMessage(m),
 	}
 	body, err := json.Marshal(payload)
 	if err != nil {
@@ -101,7 +101,30 @@ func (s *SplunkOncall) SendEvent(ctx context.Context, e *event.Event) error {
 	return err
 }
 
+// messageType maps an incident onto Splunk On-Call's message types.
+// Plain notices are INFO so they never open an incident.
+func messageType(m notification.Message) string {
+	switch {
+	case m.Resolved():
+		return "RECOVERY"
+	case m.IsNotice(),
+		m.Route.Severity == "info":
+		return "INFO"
+	case m.Route.Severity == "warning":
+		return "WARNING"
+	}
+	return "CRITICAL"
+}
+
+func stateMessage(m notification.Message) string {
+	text := m.NoteText()
+	if len(m.Output) > 0 {
+		text += "\n\n" + strings.Join(m.Output, "\n")
+	}
+	return text
+}
+
 // SendMessage sends a plain notice as an informational alert.
 func (s *SplunkOncall) SendMessage(ctx context.Context, msg string) error {
-	return s.SendEvent(ctx, &event.Event{PodName: msg, Reason: "notify"})
+	return s.SendIncident(ctx, notification.Notice(msg))
 }

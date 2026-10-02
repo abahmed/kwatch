@@ -4,12 +4,12 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"unicode/utf8"
+	"strings"
 
 	"k8s.io/klog/v2"
 
 	"github.com/abahmed/kwatch/internal/delivery/transport"
-	"github.com/abahmed/kwatch/internal/event"
+	"github.com/abahmed/kwatch/internal/notification"
 )
 
 const newRelicAPIURL = "https://insights-collector.newrelic.com/v1/accounts/%s/events"
@@ -58,34 +58,54 @@ func (n *NewRelic) Name() string {
 	return "New Relic"
 }
 
-// SendEvent sends event to the provider
-// UsesEventDelivery routes problems through SendEvent, which carries the
-// problem key and action as queryable event attributes.
-func (n *NewRelic) UsesEventDelivery() {}
+// New Relic event attribute limits.
+const (
+	maxTitleBytes   = 250
+	maxMessageBytes = 4096
+)
 
-// SendEvent records one KwatchAlert event with the problem key and action,
-// so New Relic queries and alert conditions can follow a problem.
-func (n *NewRelic) SendEvent(ctx context.Context, e *event.Event) error {
-	action := e.Action
-	if e.IsNotice() {
-		action = "notice"
+// SendIncident records one KwatchAlert event carrying the incident key and
+// state, so New Relic queries and alert conditions can follow an incident
+// from firing to resolved.
+func (n *NewRelic) SendIncident(
+	ctx context.Context, m notification.Message,
+) error {
+	return n.send(ctx, buildEvent(m, n.clusterName))
+}
+
+func buildEvent(
+	m notification.Message, clusterName string,
+) map[string]interface{} {
+	state := "firing"
+	switch {
+	case m.Resolved():
+		state = "resolved"
+	case m.IsNotice():
+		state = "notice"
 	}
-	return n.send(ctx, map[string]interface{}{
+	message := m.NoteText()
+	if len(m.Output) > 0 {
+		message += "\n\nLast output:\n" + strings.Join(m.Output, "\n")
+	}
+	return map[string]interface{}{
 		"eventType":   "KwatchAlert",
-		"cluster":     n.clusterName,
-		"message":     truncateMessage(e.AlertBody(n.clusterName), 64*1024),
-		"title":       e.AlertTitle(250),
-		"incidentKey": e.AlertKey(),
-		"action":      action,
-		"reason":      e.Reason,
-		"namespace":   e.Namespace,
-		"severity":    string(e.Severity),
-	})
+		"cluster":     clusterName,
+		"title":       notification.Truncate(m.ShortText(), maxTitleBytes),
+		"message":     notification.Truncate(message, maxMessageBytes),
+		"incidentKey": m.AlertKey(clusterName),
+		"revision":    m.Revision,
+		"state":       state,
+		"action":      state,
+		"status":      m.Status.String(),
+		"reason":      strings.Join(m.Route.Reasons, ","),
+		"namespace":   strings.Join(m.Route.Namespaces, ","),
+		"severity":    m.Route.Severity,
+	}
 }
 
 // SendMessage records a plain notice.
 func (n *NewRelic) SendMessage(ctx context.Context, msg string) error {
-	return n.SendEvent(ctx, &event.Event{PodName: msg, Reason: "notify"})
+	return n.SendIncident(ctx, notification.Notice(msg))
 }
 
 func (n *NewRelic) send(
@@ -102,15 +122,4 @@ func (n *NewRelic) send(
 		},
 	})
 	return err
-}
-
-func truncateMessage(value string, maxBytes int) string {
-	if len(value) <= maxBytes {
-		return value
-	}
-	cut := maxBytes - len("\n…(truncated)")
-	for cut > 0 && !utf8.RuneStart(value[cut]) {
-		cut--
-	}
-	return value[:cut] + "\n…(truncated)"
 }

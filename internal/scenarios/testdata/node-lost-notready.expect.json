@@ -1,0 +1,11 @@
+{
+  "name": "node-lost-notready",
+  "description": "A node stops reporting (Ready=Unknown); the pods of eight workloads on it go not ready and are evicted after five minutes.",
+  "root": "node//n1",
+  "tier": "page",
+  "maxMessages": 2,
+  "mustNotBlame": [
+    "zone//zone-a",
+    "deployment/apps/svc-0"
+  ]
+}

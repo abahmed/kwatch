@@ -1,0 +1,13 @@
+{
+  "name": "heldout-image-tag-missing",
+  "description": "Two Deployments roll out the same release; one image tag was never pushed and its pod fails with ErrImagePull while the other rollout succeeds.",
+  "root": "deployment/storefront/backend",
+  "tier": "notify",
+  "maxMessages": 2,
+  "mustNotBlame": [
+    "registry//registry.corp.example",
+    "deployment/storefront/frontend",
+    "node//n1",
+    "node//n2"
+  ]
+}

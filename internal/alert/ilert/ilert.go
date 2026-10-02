@@ -4,14 +4,19 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"strings"
 
 	"k8s.io/klog/v2"
 
 	"github.com/abahmed/kwatch/internal/delivery/transport"
-	"github.com/abahmed/kwatch/internal/event"
+	"github.com/abahmed/kwatch/internal/notification"
 )
 
-const ilertAPIURL = "https://api.ilert.com/api/v1/events/push/%s"
+const (
+	ilertAPIURL = "https://api.ilert.com/api/v1/events/push/%s"
+	// summaryLimit bounds the alert summary iLert shows in lists.
+	summaryLimit = 250
+)
 
 type ilertPayload struct {
 	EventType string `json:"eventType"`
@@ -65,29 +70,34 @@ func (i *Ilert) Name() string {
 	return "Ilert"
 }
 
-// SendEvent sends event to the provider
-// UsesEventDelivery routes problems through SendEvent, which carries the
-// action and a stable key so iLert can resolve the alert.
-func (i *Ilert) UsesEventDelivery() {}
-
-// SendEvent raises or resolves one iLert alert per kwatch problem, keyed by
-// alertKey.
-func (i *Ilert) SendEvent(ctx context.Context, e *event.Event) error {
+// SendIncident raises, updates or resolves one iLert alert per kwatch
+// incident, keyed by alertKey.
+func (i *Ilert) SendIncident(
+	ctx context.Context, m notification.Message,
+) error {
+	// A plain notice (startup, upgrade, test) or the startup summary is
+	// not an incident. Sending it would page for problems that already
+	// have their own alerts, so it is skipped.
+	if m.IsInformational() {
+		klog.V(4).InfoS("skipping informational message",
+			"component", "delivery", "provider", i.Name())
+		return nil
+	}
 	eventType := "ALERT"
-	if e.IsResolve() {
+	if m.Resolved() {
 		eventType = "RESOLVE"
 	}
-	priority := i.priority
-	if e.IsNotice() {
-		priority = "LOW"
+	details := m.NoteText()
+	if len(m.Output) > 0 {
+		details += "\n\n" + strings.Join(m.Output, "\n")
 	}
 	payload := ilertPayload{
 		EventType: eventType,
-		Summary:   e.AlertTitle(250),
-		Message:   e.AlertBody(i.clusterName),
-		Details:   e.AlertBody(i.clusterName),
-		Priority:  priority,
-		AlertKey:  e.AlertKey(),
+		Summary:   notification.Truncate(m.ShortText(), summaryLimit),
+		Message:   m.NoteText(),
+		Details:   details,
+		Priority:  i.priorityFor(m),
+		AlertKey:  m.AlertKey(i.clusterName),
 	}
 	body, err := json.Marshal(payload)
 	if err != nil {
@@ -100,7 +110,21 @@ func (i *Ilert) SendEvent(ctx context.Context, e *event.Event) error {
 	return err
 }
 
-// SendMessage sends a plain notice as one low-priority deduplicated alert.
-func (i *Ilert) SendMessage(ctx context.Context, msg string) error {
-	return i.SendEvent(ctx, &event.Event{PodName: msg, Reason: "notify"})
+// priorityFor keeps the configured priority for real incidents;
+// informational incidents are LOW so they never page.
+func (i *Ilert) priorityFor(m notification.Message) string {
+	if m.Route.Severity == "info" {
+		return "LOW"
+	}
+	return i.priority
 }
+
+// SendMessage skips plain notices: on a paging service they would open an
+// alert that nothing resolves.
+func (i *Ilert) SendMessage(ctx context.Context, msg string) error {
+	return i.SendIncident(ctx, notification.Notice(msg))
+}
+
+// SkipsPlainMessages implements api.PlainMessageSkipper: plain messages
+// become notices, which SendIncident skips.
+func (i *Ilert) SkipsPlainMessages() bool { return true }

@@ -1,6 +1,8 @@
 #!/bin/sh
 
 set -eu
+# pipefail is not POSIX; enable it where the shell supports it.
+(set -o pipefail) 2>/dev/null && set -o pipefail
 
 root_dir=$(CDPATH='' cd -- "$(dirname "$0")/.." && pwd)
 cd "$root_dir"
@@ -32,9 +34,10 @@ grep -Fq 'required informer caches' docs/configuration.md || {
   echo "documentation: readiness semantics are missing" >&2
   exit 1
 }
-grep -Fq 'production validation requires' docs/configuration.md || {
-  echo "documentation: diagnostic authentication guidance is missing" >&2
+if grep -Eq '/(incidents|deadletters|test-alert|debug/pprof)|diagnosticsToken' \
+  docs/configuration.md; then
+  echo "documentation: removed diagnostic endpoints are still documented" >&2
   exit 1
-}
+fi
 
 echo "documentation checks passed"
