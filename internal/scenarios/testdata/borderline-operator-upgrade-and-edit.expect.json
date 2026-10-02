@@ -1,0 +1,10 @@
+{
+  "name": "borderline-operator-upgrade-and-edit",
+  "description": "An operator upgrade and an invalid custom resource edit land two minutes apart; the resource reports ReconcileError.",
+  "root": "postgrescluster.postgres.example.com/data/orders-db",
+  "tier": "notify",
+  "maxMessages": 2,
+  "mustNotBlame": [
+    "node//n1"
+  ]
+}

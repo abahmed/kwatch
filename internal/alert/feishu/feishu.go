@@ -2,23 +2,32 @@ package feishu
 
 import (
 	"context"
+	"crypto/hmac"
+	"crypto/sha256"
+	"encoding/base64"
 	"encoding/json"
 	"fmt"
+	"strconv"
+	"strings"
+	"time"
 
 	"k8s.io/klog/v2"
 
 	"github.com/abahmed/kwatch/internal/clock"
 	"github.com/abahmed/kwatch/internal/delivery/transport"
-	"github.com/abahmed/kwatch/internal/event"
-	"github.com/abahmed/kwatch/internal/insight"
-	"github.com/abahmed/kwatch/internal/message"
-	"github.com/abahmed/kwatch/internal/model"
+	"github.com/abahmed/kwatch/internal/notification"
+	"github.com/abahmed/kwatch/internal/ratelimit"
 )
+
+// feiShuTextLimit keeps the card within Feishu's request size limit.
+const feiShuTextLimit = 30000
 
 type FeiShu struct {
 	sender  transport.Sender
 	webhook string
 	title   string
+	// secret enables the bot's signature verification when set.
+	secret string
 
 	// reference for general app configuration
 	clusterName string
@@ -51,8 +60,10 @@ type feiShuCard struct {
 }
 
 type feiShuRequestBody struct {
-	MsgType string     `json:"msg_type"`
-	Card    feiShuCard `json:"card"`
+	Timestamp string     `json:"timestamp,omitempty"`
+	Sign      string     `json:"sign,omitempty"`
+	MsgType   string     `json:"msg_type"`
+	Card      feiShuCard `json:"card"`
 }
 
 type feiShuResponse struct {
@@ -69,6 +80,12 @@ func NewFeiShu(
 	webhook, ok := config["webhook"].(string)
 	if !ok || len(webhook) == 0 {
 		klog.InfoS("initializing Fei Shu with empty webhook url")
+		return nil
+	}
+
+	if !transport.ValidEndpoint(webhook) {
+		klog.InfoS("initializing feishu with an invalid webhook",
+			"setting", "webhook")
 		return nil
 	}
 
@@ -91,16 +108,27 @@ func (f *FeiShu) Name() string {
 	return "Fei Shu"
 }
 
-// SendEvent sends event to the provider
-func (f *FeiShu) SendEvent(ctx context.Context, e *event.Event) error {
+// SendIncident sends the incident narrative as the card's markdown
+// element, with the application output in a code block after it.
+func (f *FeiShu) SendIncident(
+	ctx context.Context, m notification.Message,
+) error {
+	text := m.NoteText()
+	if len(m.Output) > 0 {
+		text += "\n\n```\n" + strings.Join(m.Output, "\n") + "\n```"
+	}
 	body, err := f.buildRequestBodyFeiShu(
-		e.FormatMarkdown(f.clusterName, "", ""),
+		notification.Truncate(text, feiShuTextLimit),
 	)
 	if err != nil {
 		return err
 	}
 	return f.sendByFeiShuApi(ctx, body)
 }
+
+// rateLimitCodes are the documented frequency-limit codes; every other
+// body error is a permanent rejection.
+var rateLimitCodes = map[int]bool{11232: true}
 
 func (f *FeiShu) sendByFeiShuApi(
 	ctx context.Context,
@@ -120,7 +148,12 @@ func (f *FeiShu) sendByFeiShuApi(
 		return fmt.Errorf("feishu returned invalid response")
 	}
 	if response.Code != 0 {
-		return fmt.Errorf("feishu request failed with code %d", response.Code)
+		err := fmt.Errorf("feishu request failed with code %d", response.Code)
+		if rateLimitCodes[response.Code] {
+			return &ratelimit.Error{Provider: "Feishu",
+				StatusCode: ratelimit.InBodyStatus, Err: err}
+		}
+		return transport.Permanent(err)
 	}
 	return nil
 }
@@ -132,40 +165,6 @@ func (f *FeiShu) SendMessage(ctx context.Context, msg string) error {
 		return err
 	}
 	return f.sendByFeiShuApi(ctx, body)
-}
-
-// SendIncident implements delivery.ThreadProvider.
-// It renders the incident using the Report model and PlaintextRenderer,
-// producing a context-adaptive text message.
-func (f *FeiShu) SendIncident(
-	ctx context.Context,
-	inc *model.Incident,
-	action model.IncidentAction,
-) error {
-	return f.SendIncidentWithInsight(ctx, inc, action, nil)
-}
-
-// SendIncidentWithInsight implements delivery.InsightThreadProvider, so the
-// diagnosis — likely cause, impact, recent changes — is rendered rather than
-// dropped on the way to this provider.
-func (f *FeiShu) SendIncidentWithInsight(
-	ctx context.Context,
-	inc *model.Incident,
-	action model.IncidentAction,
-	ins *insight.Insight,
-) error {
-	text := message.RenderIncidentWithInsight(
-		inc,
-		action,
-		ins,
-		message.NewPlainTextRenderer(),
-		f.clusterName,
-		f.clockSource,
-	)
-	if text == "" {
-		return nil
-	}
-	return f.SendMessage(ctx, text)
 }
 
 func (f *FeiShu) buildRequestBodyFeiShu(
@@ -191,9 +190,22 @@ func (f *FeiShu) buildRequestBodyFeiShu(
 			},
 		},
 	}
+	if f.secret != "" {
+		body.Timestamp, body.Sign = feiShuSignature(
+			f.secret, f.clockSource.Now(),
+		)
+	}
 	jsonBytes, err := json.Marshal(body)
 	if err != nil {
 		return "", fmt.Errorf("failed to marshal feishu body: %w", err)
 	}
 	return string(jsonBytes), nil
+}
+
+// feiShuSignature implements Feishu custom bot signing: the HMAC-SHA256 key
+// is "timestamp\nsecret" over an empty message, base64 encoded.
+func feiShuSignature(secret string, now time.Time) (string, string) {
+	timestamp := strconv.FormatInt(now.Unix(), 10)
+	mac := hmac.New(sha256.New, []byte(timestamp+"\n"+secret))
+	return timestamp, base64.StdEncoding.EncodeToString(mac.Sum(nil))
 }

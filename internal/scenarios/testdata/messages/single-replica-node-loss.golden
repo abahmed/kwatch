@@ -1,0 +1,12 @@
+10:02:30 settled
+🔴 Node n1 (prod-eu-1) has not reported for about two minutes. It reports "Kubelet stopped posting node status". To check the node's conditions and recent events, run kubectl describe node n1
+🔴 Node n1 (prod-eu-1) has not reported for about two minutes.
+
+10:04:40 material change
+🔴 Node n1 (prod-eu-1) is spreading to pod worker-ce28f42d-a in billing and pods cart-58d28062-a and search-83710f3d-a in shop: they have not been ready for three minutes.
+🔴 Node n1 (prod-eu-1) is spreading to pod worker-ce28f42d-a in billing and pods cart-58d28062-a and search-83710f3d-a in shop: they have not been ready for three minutes.
+
+10:09:40 healthy for 3m0s
+✅ Node n1 (prod-eu-1) is gone and its pods were rescheduled. It was down for eight minutes.
+✅ Node n1 (prod-eu-1) is gone and its pods were rescheduled.
+

@@ -1,0 +1,10 @@
+{
+  "name": "borderline-late-config-reload",
+  "description": "A ConfigMap edit is picked up eleven minutes later on a scheduled reload; the pods crash with a generic configuration error.",
+  "root": "configmap/batch/worker-config",
+  "tier": "notify",
+  "maxMessages": 2,
+  "mustNotBlame": [
+    "node//n1"
+  ]
+}

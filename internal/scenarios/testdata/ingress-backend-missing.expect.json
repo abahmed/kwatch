@@ -1,0 +1,11 @@
+{
+  "name": "ingress-backend-missing",
+  "description": "An Ingress is edited to route to a Service that does not exist.",
+  "root": "service/shop/web-v2",
+  "tier": "page",
+  "maxMessages": 2,
+  "mustNotBlame": [
+    "service/shop/web",
+    "deployment/shop/web"
+  ]
+}

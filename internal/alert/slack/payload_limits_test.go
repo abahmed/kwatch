@@ -10,8 +10,8 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/abahmed/kwatch/internal/clock"
-	"github.com/abahmed/kwatch/internal/model"
+	"github.com/abahmed/kwatch/internal/delivery/providertest"
+	"github.com/abahmed/kwatch/internal/notification"
 )
 
 // Slack rejects the whole message with invalid_blocks when any single limit is
@@ -44,115 +44,90 @@ func payloadStats(
 	return
 }
 
-func hostileIncident(events int, msgLen int) *model.Incident {
-	var ev strings.Builder
-	for i := 0; i < events; i++ {
-		fmt.Fprintf(
-			&ev,
-			"Aug 25 23:%02d:00  FailedScheduling  0/7 nodes are available: 7 "+
-				"node(s) had untolerated taint(s). preemption: 0/7 nodes are "+
-				"available.\n",
-			i%60,
-		)
+func hostileIncident(lines int, lineLen int) notification.Message {
+	m := notification.Message{
+		Key: "incident-1", Status: notification.StatusCritical,
+		Title:      strings.Repeat("api is failing ", lineLen/15),
+		Confidence: "high",
 	}
-	return &model.Incident{
-		Subject: model.Subject{
-			Name:          "api",
-			Reason:        "Error",
-			Namespace:     "dev",
-			OwnerKind:     "Deployment",
-			ContainerName: "api",
-			Image: "registry.example.com/team/api:" +
-				"1.2.0",
-			NodeName: "ip-10-0-81-7.us-east-1.compute.internal",
-		},
-		Status: model.Status{
-			Count:         7,
-			RestartCount:  3,
-			PeakResources: 4,
-			Resources: map[string]bool{
-				"a": true,
-				"b": true,
-				"c": true,
-				"d": true,
-			},
-			LastContainerState: &model.ContainerState{
-				Msg:      strings.Repeat("x", msgLen),
-				ExitCode: 137,
-			},
-		},
-		Evidence: model.Evidence{
-			Hint:          strings.Repeat("hint ", msgLen/5),
-			Runbook:       "https://runbooks.example.com/error",
-			Events:        ev.String(),
-			IncludeEvents: true,
-			Logs:          strings.Repeat("log line\n", 400),
-			IncludeLogs:   true,
-		},
+	for i := 0; i < lines; i++ {
+		m.Lines = append(m.Lines, strings.Repeat("x", lineLen))
+		m.Timeline = append(m.Timeline, fmt.Sprintf(
+			"23:%02d FailedScheduling 0/7 nodes are available", i%60))
+		m.Output = append(m.Output, strings.Repeat("log ", lineLen/4))
+		m.Steps = append(m.Steps, notification.Step{
+			Text: "check the node", Command: "kubectl get nodes",
+		})
 	}
-
+	return m
 }
 
 func TestSlackPayloadStaysWithinEveryLimit(t *testing.T) {
-	app := "dev"
 	for _, tc := range []struct {
-		name   string
-		events int
-		msgLen int
+		name    string
+		lines   int
+		lineLen int
 	}{
-		{"typical", 20, 60},
-		{"busy pod", 400, 60},
-		{"long kubernetes message", 20, 5000},
-		{"pathological", 5000, 5000},
+		{"typical", 5, 60},
+		{"busy incident", 400, 60},
+		{"long lines", 20, 5000},
+		{"pathological", 2000, 5000},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			inc := hostileIncident(tc.events, tc.msgLen)
+			m := hostileIncident(tc.lines, tc.lineLen)
 			for _, b := range []*slackClient.Blocks{
-				buildIncidentBlocksWithInsight(
-					inc, app, nil, clock.RealClock{},
-				),
-				buildIncidentUpdateBlocks(inc, clock.RealClock{}),
-				buildIncidentResolvedBlocks(inc, clock.RealClock{}),
+				rootBlocks(m), noteBlocks(m),
 			} {
 				fields, fieldChars, sectionChars, blocks := payloadStats(b)
-				assert.LessOrEqual(
-					t,
-					fields,
-					maxFieldsPerSection,
-					"fields per section",
-				)
-				assert.LessOrEqual(
-					t,
-					fieldChars,
-					maxFieldChars,
-					"chars per field",
-				)
-				assert.LessOrEqual(
-					t,
-					sectionChars,
-					3000,
-					"chars per section text",
-				)
-				assert.LessOrEqual(
-					t,
-					blocks,
-					maxBlocksPerMessage,
-					"blocks per message",
-				)
+				assert.LessOrEqual(t, fields, maxFieldsPerSection)
+				assert.LessOrEqual(t, fieldChars, maxFieldChars)
+				assert.LessOrEqual(t, sectionChars, maxSectionTextChars)
+				assert.LessOrEqual(t, blocks, maxBlocksPerMessage)
 			}
 		})
 	}
 }
 
-func TestTruncateFieldIsRuneSafe(t *testing.T) {
+func TestTruncateMrkdwnIsRuneSafe(t *testing.T) {
 	// Multi-byte characters must never be split; that produces invalid UTF-8
 	// which Slack also rejects.
 	s := strings.Repeat("é", maxFieldChars+50)
-	out := truncateField(s)
+	out := truncateMrkdwn(s, maxFieldChars)
 	require.True(t, utf8.ValidString(out))
 	assert.LessOrEqual(t, utf8.RuneCountInString(out), maxFieldChars)
 	assert.True(t, strings.HasSuffix(out, "..."))
-	assert.Equal(t, "short", truncateField("short"))
+	assert.Equal(t, "short", truncateMrkdwn("short", maxFieldChars))
+}
+
+func TestTruncateMrkdwnNeverSplitsAnEntity(t *testing.T) {
+	escaped := escapeMrkdwn(strings.Repeat("a<", 20))
+	for limit := 4; limit < 40; limit++ {
+		out := strings.TrimSuffix(truncateMrkdwn(escaped, limit), "...")
+		if amp := strings.LastIndexByte(out, '&'); amp >= 0 {
+			require.Contains(t, out[amp:], ";",
+				"limit %d cut an entity: %q", limit, out)
+		}
+		require.LessOrEqual(t, utf8.RuneCountInString(out)+3, limit)
+	}
+}
+
+func TestSlackSectionsEscapeBeforeTruncating(t *testing.T) {
+	// Every "&" grows to five characters when escaped. Cutting first and
+	// escaping after would send far more than the section limit.
+	m := providertest.Announce()
+	m.Note = strings.Repeat("&", maxSectionTextChars)
+	m.Output = []string{strings.Repeat("<", maxSectionTextChars)}
+	blocks := noteBlocks(m).BlockSet
+	require.Len(t, blocks, 2)
+	for _, block := range blocks {
+		text := block.(slackClient.SectionBlock).Text.Text
+		assert.LessOrEqual(t,
+			utf8.RuneCountInString(text), maxSectionTextChars)
+	}
+	code := blocks[1].(slackClient.SectionBlock).Text.Text
+	assert.True(t, strings.HasPrefix(code, "```"))
+	assert.True(t, strings.HasSuffix(code, "...```"),
+		"the closing fence must survive truncation")
 }
 
 func TestCapBlocksAnnouncesWhatItDropped(t *testing.T) {

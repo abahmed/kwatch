@@ -5,20 +5,17 @@ import (
 	"encoding/json"
 	"fmt"
 	"strings"
-	"time"
 
 	"k8s.io/klog/v2"
 
 	"github.com/abahmed/kwatch/internal/clock"
 	"github.com/abahmed/kwatch/internal/delivery/transport"
-	"github.com/abahmed/kwatch/internal/event"
-	"github.com/abahmed/kwatch/internal/insight"
-	"github.com/abahmed/kwatch/internal/message"
-	"github.com/abahmed/kwatch/internal/model"
+	"github.com/abahmed/kwatch/internal/format"
+	"github.com/abahmed/kwatch/internal/notification"
 )
 
 const (
-	defaultTeamsTitle = "&#9937; Kwatch detected a crash in pod"
+	defaultTeamsTitle = "Kwatch incident"
 )
 
 type Teams struct {
@@ -26,7 +23,6 @@ type Teams struct {
 	// The HTTP trigger URL for the Power Automate flow
 	webhook     string
 	title       string
-	text        string
 	clockSource clock.Clock
 
 	// reference for general app configuration
@@ -52,16 +48,20 @@ func NewTeams(
 		return nil
 	}
 
+	if !transport.ValidEndpoint(webhook) {
+		klog.InfoS("initializing teams with an invalid webhook",
+			"setting", "webhook")
+		return nil
+	}
+
 	klog.InfoS("initializing Teams with flow url configured")
 
 	title, _ := config["title"].(string)
-	text, _ := config["text"].(string)
 
 	return &Teams{
 		sender:      transport.NewSender(dependencies),
 		webhook:     webhook,
 		title:       title,
-		text:        text,
 		clusterName: clusterName,
 		clockSource: clock.Require(dependencies.Clock),
 	}
@@ -72,9 +72,11 @@ func (t *Teams) Name() string {
 	return "Microsoft Teams"
 }
 
-// SendEvent sends event to the Power Automate flow
-func (t *Teams) SendEvent(ctx context.Context, e *event.Event) error {
-	b, err := t.buildRequestBodyTeams(e)
+// SendIncident sends one incident message to the Power Automate flow.
+func (t *Teams) SendIncident(
+	ctx context.Context, m notification.Message,
+) error {
+	b, err := t.buildRequestBodyTeams(m)
 	if err != nil {
 		return err
 	}
@@ -90,40 +92,6 @@ func (t *Teams) SendMessage(ctx context.Context, msg string) error {
 	return t.sendAPI(ctx, b)
 }
 
-// SendIncident implements delivery.ThreadProvider.
-// It renders the incident using the Report model and PlaintextRenderer,
-// producing a context-adaptive text message.
-func (t *Teams) SendIncident(
-	ctx context.Context,
-	inc *model.Incident,
-	action model.IncidentAction,
-) error {
-	return t.SendIncidentWithInsight(ctx, inc, action, nil)
-}
-
-// SendIncidentWithInsight implements delivery.InsightThreadProvider, so the
-// diagnosis — likely cause, impact, recent changes — is rendered rather than
-// dropped on the way to this provider.
-func (t *Teams) SendIncidentWithInsight(
-	ctx context.Context,
-	inc *model.Incident,
-	action model.IncidentAction,
-	ins *insight.Insight,
-) error {
-	text := message.RenderIncidentWithInsight(
-		inc,
-		action,
-		ins,
-		message.NewPlainTextRenderer(),
-		t.clusterName,
-		t.clockSource,
-	)
-	if text == "" {
-		return nil
-	}
-	return t.SendMessage(ctx, text)
-}
-
 // SendApi send the given payload to the Power Automate flow with retry logic
 func (t *Teams) sendAPI(ctx context.Context, payload []byte) error {
 	body, err := t.sender.Send(ctx, transport.Request{
@@ -133,7 +101,7 @@ func (t *Teams) sendAPI(ctx context.Context, payload []byte) error {
 		strings.Contains(string(body), "TriggerInputSchemaMismatch") {
 		// The flow's trigger schema does not accept our payload; no retry
 		// will change that.
-		return event.Permanent(
+		return transport.Permanent(
 			fmt.Errorf(
 				"failed to send message due to schema mismatch: %s",
 				string(body),
@@ -143,108 +111,41 @@ func (t *Teams) sendAPI(ctx context.Context, payload []byte) error {
 	return err
 }
 
-// buildRequestBodyTeams builds the request body for the Power Automate flow
-func (t *Teams) buildRequestBodyTeams(e *event.Event) ([]byte, error) {
-	// Use custom title if it's provided, otherwise use the default title
+// buildRequestBodyTeams builds the incident payload: the configured or
+// incident title, and the narrative as the text and as one card. The
+// title carries no marker, so the narrative's marker is the only emoji.
+func (t *Teams) buildRequestBodyTeams(
+	m notification.Message,
+) ([]byte, error) {
 	title := t.title
 	if len(title) == 0 {
-		title = defaultTeamsTitle
+		title = format.OrDefault(m.Title, defaultTeamsTitle)
 	}
-
-	// Format the message with markdown
-	msg := e.FormatMarkdown(t.clusterName, t.text, "\n\n")
-
-	// Create the attachment for the message with full event details
-	attachments := []map[string]interface{}{
-		{
-			"contentType": "application/vnd.microsoft.card.adaptive",
-			"content": map[string]interface{}{
-				"$schema": "http://adaptivecards.io/schemas/adaptive-card.json",
-				"type":    "AdaptiveCard",
-				"version": "1.2",
-				"body": func() []map[string]interface{} {
-					body := []map[string]interface{}{}
-					body = append(body, map[string]interface{}{
-						"type": "TextBlock",
-						"text": title,
-					})
-					if e.PodName != "" {
-						body = append(body, map[string]interface{}{
-							"type": "TextBlock",
-							"text": fmt.Sprintf("Pod Name: %s", e.PodName),
-						})
-					}
-					if e.Namespace != "" {
-						body = append(body, map[string]interface{}{
-							"type": "TextBlock",
-							"text": fmt.Sprintf("Namespace: %s", e.Namespace),
-						})
-					}
-					if e.NodeName != "" {
-						body = append(body, map[string]interface{}{
-							"type": "TextBlock",
-							"text": fmt.Sprintf("Node: %s", e.NodeName),
-						})
-					}
-					if e.Reason != "" {
-						body = append(body, map[string]interface{}{
-							"type": "TextBlock",
-							"text": fmt.Sprintf("Reason: %s", e.Reason),
-						})
-					}
-					if e.IncludeLogs && strings.TrimSpace(e.Logs) != "" {
-						body = append(body, map[string]interface{}{
-							"type": "TextBlock",
-							"text": fmt.Sprintf(
-								"Logs: %s",
-								strings.TrimSpace(e.Logs),
-							),
-						})
-					}
-					if e.IncludeEvents && strings.TrimSpace(e.Events) != "" {
-						body = append(body, map[string]interface{}{
-							"type": "TextBlock",
-							"text": fmt.Sprintf(
-								"Events: \n%s",
-								strings.TrimSpace(e.Events),
-							),
-						})
-					}
-					body = append(body, map[string]interface{}{
-						"type": "TextBlock",
-						"text": fmt.Sprintf(
-							"Time: %s",
-							t.clockSource.Now().Format(time.RFC1123)),
-					})
-					return body
-				}(),
-			},
-		},
+	text := m.NoteText()
+	if len(m.Output) > 0 {
+		text += "\n\n```\n" + strings.Join(m.Output, "\n") + "\n```"
 	}
-
-	// Prepare the payload for the Power Automate flow
+	text = notification.NeutralizeMentions(text)
 	payload := &teamsFlowPayload{
-		Title:      title,
-		Text:       msg,
-		Attachment: attachments, // Attachment should be an array
+		Title: title, Text: text,
+		Attachment: textCardAttachments(title, text),
 	}
-
 	jsonBytes, err := json.Marshal(payload)
 	if err != nil {
 		return nil, fmt.Errorf("failed to marshal teams event payload: %w", err)
 	}
-
 	return jsonBytes, nil
 }
 
 // buildRequestBodyMessage builds plain message payload for the Power
 // Automate flow
 func (t *Teams) buildRequestBodyMessage(msg string) ([]byte, error) {
+	// "Post card" flows iterate the attachments, so an empty list showed
+	// nothing while Teams still answered 200. Always send one text card.
 	payload := &teamsFlowPayload{
-		Title: "New Alert",
-		Text:  msg,
-		// Empty attachments array to prevent schema mismatch error
-		Attachment: []map[string]interface{}{},
+		Title:      "New Alert",
+		Text:       msg,
+		Attachment: textCardAttachments("New Alert", msg),
 	}
 
 	jsonBytes, err := json.Marshal(payload)
@@ -256,4 +157,21 @@ func (t *Teams) buildRequestBodyMessage(msg string) ([]byte, error) {
 	}
 
 	return jsonBytes, nil
+}
+
+// textCardAttachments wraps plain text in one adaptive card.
+func textCardAttachments(title, text string) []map[string]interface{} {
+	return []map[string]interface{}{{
+		"contentType": "application/vnd.microsoft.card.adaptive",
+		"content": map[string]interface{}{
+			"$schema": "http://adaptivecards.io/schemas/adaptive-card.json",
+			"type":    "AdaptiveCard",
+			"version": "1.2",
+			"body": []map[string]interface{}{
+				{"type": "TextBlock", "text": title, "weight": "Bolder",
+					"wrap": true},
+				{"type": "TextBlock", "text": text, "wrap": true},
+			},
+		},
+	}}
 }

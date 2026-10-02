@@ -3,11 +3,12 @@ package webex
 import (
 	"context"
 	"encoding/json"
+	"strings"
 
 	"k8s.io/klog/v2"
 
 	"github.com/abahmed/kwatch/internal/delivery/transport"
-	"github.com/abahmed/kwatch/internal/event"
+	"github.com/abahmed/kwatch/internal/notification"
 )
 
 const webexAPIURL = "https://webexapis.com/v1/messages"
@@ -66,10 +67,16 @@ func (w *Webex) Name() string {
 	return "Webex"
 }
 
-// SendEvent sends event to the provider
-func (w *Webex) SendEvent(ctx context.Context, e *event.Event) error {
-	msg := e.FormatMarkdown(w.clusterName, "", "\n\n")
-	return w.SendMessage(ctx, msg)
+// SendIncident posts the incident narrative as Markdown, followed by the
+// workload's last output as a code block when there is one.
+func (w *Webex) SendIncident(
+	ctx context.Context, m notification.Message,
+) error {
+	text := m.NoteText()
+	if len(m.Output) > 0 {
+		text += "\n```\n" + strings.Join(m.Output, "\n") + "\n```"
+	}
+	return w.SendMessage(ctx, notification.NeutralizeWebexMentions(text))
 }
 
 // SendMessage sends text message to the provider

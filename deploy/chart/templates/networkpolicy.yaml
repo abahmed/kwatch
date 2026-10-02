@@ -1,4 +1,5 @@
 {{- if .Values.networkPolicy.enabled }}
+{{- $port := include "kwatch.healthPort" . | int }}
 apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy
 metadata:
@@ -13,12 +14,53 @@ spec:
   policyTypes:
     - Ingress
     - Egress
-  {{- with .Values.networkPolicy.ingress }}
   ingress:
+    {{- if .Values.networkPolicy.allowDefaults }}
+    # Health port: kubelet probes and metrics scrapes.
+    - ports:
+        - protocol: TCP
+          port: {{ $port }}
+    {{- end }}
+    {{- with .Values.networkPolicy.ingress }}
     {{- toYaml . | nindent 4 }}
-  {{- end }}
-  {{- with .Values.networkPolicy.egress }}
+    {{- end }}
   egress:
+    {{- if .Values.networkPolicy.allowDefaults }}
+    # DNS.
+    - ports:
+        - protocol: UDP
+          port: 53
+        - protocol: TCP
+          port: 53
+    # Kubernetes API server and HTTPS alert providers. The API server
+    # address differs per cluster, so these ports are open to any address.
+    - ports:
+        {{- range .Values.networkPolicy.apiServerPorts }}
+        - protocol: TCP
+          port: {{ . }}
+        {{- end }}
+    # Kubelet on every node: kwatch reads node stats and metrics directly.
+    - ports:
+        - protocol: TCP
+          port: {{ .Values.networkPolicy.kubeletPort | default 10250 }}
+      {{- with .Values.networkPolicy.kubeletCIDRs }}
+      to:
+        {{- range . }}
+        - ipBlock:
+            cidr: {{ . }}
+        {{- end }}
+      {{- end }}
+    {{- end }}
+    {{- with .Values.networkPolicy.extraEgressPorts }}
+    # extraEgressPorts: provider ports other than 443, such as SMTP
+    # (25, 465, 587) or a webhook on a custom port, open to any address.
+    - ports:
+        {{- range . }}
+        - protocol: TCP
+          port: {{ . }}
+        {{- end }}
+    {{- end }}
+    {{- with .Values.networkPolicy.egress }}
     {{- toYaml . | nindent 4 }}
-  {{- end }}
+    {{- end }}
 {{- end }}

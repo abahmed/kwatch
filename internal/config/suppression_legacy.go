@@ -8,9 +8,6 @@ func warnDeprecatedIgnoreFields(config *Config) {
 	if len(config.IgnoreContainerNames) > 0 {
 		klog.Warning("ignoreContainerNames is deprecated; use silences instead")
 	}
-	if len(config.IgnoreLogPatterns) > 0 {
-		klog.Warning("ignoreLogPatterns is deprecated; use silences instead")
-	}
 	if len(config.IgnoreContainerMessages) > 0 {
 		klog.Warning("ignoreContainerMessages is deprecated; use silences instead")
 	}
@@ -27,8 +24,7 @@ func warnDeprecatedIgnoreFields(config *Config) {
 
 // appendIgnoreFieldSilences converts deprecated ignore* config fields into
 // synthetic SilenceRules and appends them to the existing silences list.
-// This ensures all suppression is consolidated under Silences for unified
-// detect-time and post-detect filtering.
+// This keeps one suppression path: every rule is a SilenceRule.
 func appendIgnoreFieldSilences(c *Config) []SilenceRule {
 	var extra []SilenceRule
 
@@ -37,9 +33,6 @@ func appendIgnoreFieldSilences(c *Config) []SilenceRule {
 	}
 	if len(c.IgnorePodNames) > 0 {
 		extra = append(extra, SilenceRule{PodNamePatterns: c.IgnorePodNames})
-	}
-	if len(c.IgnoreLogPatterns) > 0 {
-		extra = append(extra, SilenceRule{LogPatterns: c.IgnoreLogPatterns})
 	}
 	if len(c.IgnoreContainerMessages) > 0 {
 		extra = append(extra, SilenceRule{

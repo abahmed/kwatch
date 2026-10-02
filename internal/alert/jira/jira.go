@@ -10,7 +10,7 @@ import (
 
 	"github.com/abahmed/kwatch/internal/alert/issues"
 	"github.com/abahmed/kwatch/internal/delivery/transport"
-	"github.com/abahmed/kwatch/internal/event"
+	"github.com/abahmed/kwatch/internal/notification"
 )
 
 const jiraAPIPath = "/rest/api/2/issue"
@@ -51,6 +51,12 @@ func NewJira(
 		return nil
 	}
 
+	if !transport.ValidEndpoint(url) {
+		klog.InfoS("initializing jira with an invalid url",
+			"setting", "url")
+		return nil
+	}
+
 	user, ok := config["user"].(string)
 	if !ok || len(user) == 0 {
 		klog.InfoS("initializing jira with empty user")
@@ -74,7 +80,10 @@ func NewJira(
 		issueType = "Task"
 	}
 
-	klog.InfoS("initializing jira", "url", url, "projectKey", projectKey, "issueType", issueType)
+	klog.InfoS("initializing jira",
+		"url", transport.LogURL(url),
+		"projectKey", projectKey,
+		"issueType", issueType)
 
 	return &Jira{
 		issues:      issues.NewMap(),
@@ -93,40 +102,28 @@ func (g *Jira) Name() string {
 	return "Jira"
 }
 
-// SendEvent sends event to the provider
-// UsesEventDelivery routes incidents through SendEvent, which carries the
-// action and a stable key so one issue follows one incident.
-func (g *Jira) UsesEventDelivery() {}
+// titleLimit is Jira's maximum summary length.
+const titleLimit = 255
 
-// SendEvent opens one issue per incident, comments on updates and comments
+// SendIncident opens one issue per incident and comments on updates and
 // on recovery.
-func (g *Jira) SendEvent(ctx context.Context, e *event.Event) error {
-	return g.issues.Deliver(ctx, g, e, g.issueTitle(e), g.issueBody(e))
+func (g *Jira) SendIncident(
+	ctx context.Context, msg notification.Message,
+) error {
+	return g.issues.Deliver(ctx, g, msg,
+		issues.Title(msg, titleLimit),
+		issues.FencedBody(msg, "{noformat}"))
 }
 
-// SendMessage files a standalone issue for a plain message.
+// SendMessage treats a plain message as a notice, which never opens an
+// issue.
 func (g *Jira) SendMessage(ctx context.Context, msg string) error {
-	_, err := g.Create(ctx, g.issueTitle(nil), msg)
-	return err
+	return g.SendIncident(ctx, notification.Notice(msg))
 }
 
-func (g *Jira) issueTitle(e *event.Event) string {
-	title := "kwatch alert"
-	if e != nil {
-		title = e.AlertTitle(200)
-	}
-	if g.clusterName != "" {
-		title = "[" + g.clusterName + "] " + title
-	}
-	return title
-}
-
-func (g *Jira) issueBody(e *event.Event) string {
-	if strings.TrimSpace(e.Narrative) == "" {
-		return e.FormatText(g.clusterName, "")
-	}
-	return e.AlertBody(g.clusterName)
-}
+// SkipsPlainMessages implements api.PlainMessageSkipper: plain messages
+// become notices, which SendIncident skips.
+func (g *Jira) SkipsPlainMessages() bool { return true }
 
 // Create implements issues.Tracker.
 func (g *Jira) Create(

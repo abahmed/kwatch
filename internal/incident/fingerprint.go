@@ -3,54 +3,113 @@ package incident
 import (
 	"crypto/sha256"
 	"encoding/hex"
-	"fmt"
+	"sort"
+	"strconv"
 	"strings"
+	"time"
 
-	"github.com/abahmed/kwatch/internal/event"
-	"github.com/abahmed/kwatch/internal/model"
+	"github.com/abahmed/kwatch/internal/detection"
+	"github.com/abahmed/kwatch/internal/inventory/kube"
+	"github.com/abahmed/kwatch/internal/rootcause"
 )
 
-// StableFingerprint identifies the failure class rather than the current
-// object instance. Pod names and UIDs are intentionally excluded so a
-// replacement Pod continues the same incident and feedback history.
-func StableFingerprint(
-	ev event.Event,
-	owner string,
-	cs *model.ContainerState,
-) string {
-	resource := ev.Resource
-	if resource == "" {
-		resource = "pod"
-	}
-	container := ev.ContainerName
-	if container == "." {
-		container = ""
-	}
-	identity := owner
-	if ev.Resource == "pod" && ev.OwnerKind == "" &&
-		(owner == "" || owner == ev.PodName) {
-		if lineage := strings.TrimSpace(ev.PodLineageID); lineage != "" {
-			identity = "lineage/" + stableIdentityHash(ev.Namespace+":"+lineage)
-		} else if uid := strings.TrimSpace(ev.PodUID); uid != "" {
-			identity = "uid/" + uid
+// fingerprint hashes what a reader would notice: tier, root, the cause's
+// identity, the root's own conditions and the size of the impact. It is
+// stored as Incident.Digest; an unchanged fingerprint is never re-sent.
+// Symptoms of affected entities count only through the impact size,
+// at its peak: only growth is news.
+// Free text such as summaries carries live counters, percentages and
+// estimates, so it never enters the fingerprint.
+func fingerprint(p *Incident) string {
+	reasons := make([]string, 0, len(p.Members))
+	for key, s := range p.Members {
+		if key.Entity == p.Root && !s.Symptom {
+			reasons = append(reasons, key.Reason)
 		}
 	}
-	canonical := strings.Join([]string{
-		strings.ToLower(strings.TrimSpace(ev.Namespace)),
-		strings.ToLower(strings.TrimSpace(resource)),
-		strings.ToLower(strings.TrimSpace(ev.OwnerKind)),
-		strings.ToLower(strings.TrimSpace(identity)),
-		normalizeReason(ev.Reason),
-		strings.ToLower(strings.TrimSpace(container)),
-	}, "|")
-	return fingerprintHash(canonical)
+	sort.Strings(reasons)
+	parts := []string{
+		strconv.Itoa(int(p.Tier)), p.Root.String(), causeIdentity(p),
+		strings.Join(uniq(reasons), ","),
+		impactBucket(max(p.impactPeak, impactSize(p))),
+		strconv.Itoa(int(p.State)),
+	}
+	// Appended only when present so fingerprints of incidents without gaps
+	// stay what earlier versions persisted.
+	if len(p.Unverified) > 0 {
+		parts = append(parts, strings.Join(p.Unverified, ","))
+	}
+	sum := sha256.Sum256([]byte(strings.Join(parts, "|")))
+	return hex.EncodeToString(sum[:hashBytes])
 }
 
-func legacyFingerprint(key model.IncidentKey) string {
-	return fingerprintHash("legacy|" + string(key))
+// causeIdentity names the cause by rule, blamed entity, the reasons of the
+// root's own findings and the blamed change.
+//
+// A cause that blames the incident's own root and no change tells the
+// reader nothing the fingerprint does not already hold, except root
+// findings that are not members: the root and its member reasons count on
+// their own. Only those extra findings name it, so a cause appearing for
+// an incident that already stated its root is not news.
+func causeIdentity(p *Incident) string {
+	c := p.Cause
+	if c == nil {
+		return ""
+	}
+	change := ""
+	if c.Change != nil {
+		change = c.Change.Entity.String() + "@" + c.Change.Revision +
+			"@" + c.Change.At.UTC().Format(time.RFC3339)
+	}
+	if c.Root == p.Root && change == "" {
+		return strings.Join(rootFindingReasons(c, p.Members), ",")
+	}
+	return strings.Join([]string{
+		c.Rule, c.Root.String(),
+		strings.Join(rootFindingReasons(c, nil), ","), change,
+	}, ";")
 }
 
-func fingerprintHash(value string) string {
-	sum := sha256.Sum256([]byte(value))
-	return fmt.Sprintf("fp-%s", hex.EncodeToString(sum[:8]))
+// rootFindingReasons lists the cause's root findings as sorted, unique
+// "entity=reason" pairs, leaving out those that are members.
+func rootFindingReasons(
+	c *rootcause.CauseRecord, members map[detection.Key]detection.Finding,
+) []string {
+	reasons := make([]string, 0, len(c.RootFindings))
+	for _, s := range c.RootFindings {
+		if _, member := members[s.Key()]; member {
+			continue
+		}
+		reasons = append(reasons, s.Entity.String()+"="+s.Reason)
+	}
+	sort.Strings(reasons)
+	return uniq(reasons)
+}
+
+// impactSize counts affected workloads, Services and Ingresses. Pods and
+// containers are excluded: replicas failing one by one are not news.
+func impactSize(p *Incident) int {
+	n := 0
+	for _, id := range p.Impact {
+		if id.Kind != kube.KindPod && id.Kind != kube.KindContainer {
+			n++
+		}
+	}
+	return n
+}
+
+// impactBucket changes only when impact crosses 1 → N or roughly doubles.
+func impactBucket(n int) string {
+	switch {
+	case n <= 1:
+		return "1"
+	case n <= 3:
+		return "2-3"
+	case n <= 7:
+		return "4-7"
+	case n <= 15:
+		return "8-15"
+	default:
+		return "16+"
+	}
 }

@@ -8,7 +8,7 @@ import (
 	"k8s.io/klog/v2"
 
 	"github.com/abahmed/kwatch/internal/delivery/transport"
-	"github.com/abahmed/kwatch/internal/event"
+	"github.com/abahmed/kwatch/internal/notification"
 )
 
 const gotifyAPIURL = "/message"
@@ -42,6 +42,12 @@ func NewGotify(
 		return nil
 	}
 
+	if !transport.ValidEndpoint(server) {
+		klog.InfoS("initializing gotify with an invalid url",
+			"setting", "url")
+		return nil
+	}
+
 	token, ok := config["token"].(string)
 	if !ok || len(token) == 0 {
 		klog.InfoS("initializing gotify with empty token")
@@ -60,7 +66,9 @@ func NewGotify(
 		priority = int(v)
 	}
 
-	klog.InfoS("initializing gotify", "url", server, "title", title)
+	klog.InfoS("initializing gotify",
+		"url", transport.LogURL(server),
+		"title", title)
 
 	return &Gotify{
 		sender:      transport.NewSender(dependencies),
@@ -77,18 +85,29 @@ func (g *Gotify) Name() string {
 	return "Gotify"
 }
 
-// SendEvent sends event to the provider
-func (g *Gotify) SendEvent(ctx context.Context, e *event.Event) error {
-	msg := e.FormatText(g.clusterName, "")
-	return g.SendMessage(ctx, msg)
+// SendIncident sends the incident's one-line lead as the push message.
+// Open incidents use the configured priority; a resolve uses the server
+// default priority.
+func (g *Gotify) SendIncident(
+	ctx context.Context, m notification.Message,
+) error {
+	priority := g.priority
+	if m.Resolved() {
+		priority = 0
+	}
+	return g.send(ctx, m.ShortText(), priority)
 }
 
 // SendMessage sends text message to the provider
 func (g *Gotify) SendMessage(ctx context.Context, msg string) error {
+	return g.send(ctx, msg, g.priority)
+}
+
+func (g *Gotify) send(ctx context.Context, msg string, priority int) error {
 	payload := gotifyPayload{
 		Title:    g.title,
 		Message:  msg,
-		Priority: g.priority,
+		Priority: priority,
 	}
 
 	body, err := json.Marshal(payload)

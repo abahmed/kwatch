@@ -1,7 +1,6 @@
 package app
 
 import (
-	"errors"
 	"testing"
 
 	"github.com/stretchr/testify/require"
@@ -11,111 +10,63 @@ import (
 	"github.com/abahmed/kwatch/internal/health"
 )
 
-func TestReadinessRequiresAllActiveGates(t *testing.T) {
+func newTestReadiness() (*health.HealthServer, *readinessCoordinator) {
 	server := health.NewHealthServerWithClock(
 		config.HealthCheck{}, clock.RealClock{},
 	)
-	readiness := newReadinessCoordinator(server)
+	return server, newReadinessCoordinator(server)
+}
+
+func TestReadinessRequiresAllActiveGates(t *testing.T) {
+	server, readiness := newTestReadiness()
 	readiness.begin(7, true)
 
-	for _, name := range []string{
-		"restore", "controller", "persistence-writers", "incident",
-		"delivery",
-	} {
+	for _, name := range []string{"state", "pipeline", "delivery"} {
+		require.False(t, server.Ready(), name)
 		readiness.setCurrent(name, true)
-		if name != "delivery" {
-			require.False(t, server.Ready(), name)
-		}
 	}
 	require.True(t, server.Ready())
 
-	readiness.setCurrent("persistence-writers", false)
+	readiness.setCurrent("pipeline", false)
 	require.False(t, server.Ready())
-	readiness.setCurrent("persistence-writers", true)
+	readiness.setCurrent("pipeline", true)
 	require.True(t, server.Ready())
 }
 
-func TestReadinessIgnoresStaleEpoch(t *testing.T) {
-	server := health.NewHealthServerWithClock(
-		config.HealthCheck{}, clock.RealClock{},
-	)
-	readiness := newReadinessCoordinator(server)
+func TestReadinessDeliveryOptionalWhenNotRequired(t *testing.T) {
+	server, readiness := newTestReadiness()
 	readiness.begin(1, false)
-	readiness.setForEpoch(1, "restore", true)
-	readiness.begin(2, false)
-	readiness.setForEpoch(1, "controller", true)
-	require.False(t, server.Ready())
-
-	for _, name := range []string{
-		"restore", "controller", "persistence-writers", "incident",
-	} {
-		readiness.setForEpoch(2, name, true)
-	}
+	readiness.setCurrent("state", true)
+	readiness.setCurrent("pipeline", true)
 	require.True(t, server.Ready())
 }
 
 func TestReadinessEndsWithLeadership(t *testing.T) {
-	server := health.NewHealthServerWithClock(
-		config.HealthCheck{}, clock.RealClock{},
-	)
-	readiness := newReadinessCoordinator(server)
+	server, readiness := newTestReadiness()
 	readiness.begin(3, false)
-	for _, name := range []string{
-		"restore", "controller", "persistence-writers", "incident",
-	} {
-		readiness.setCurrent(name, true)
-	}
+	readiness.setCurrent("state", true)
+	readiness.setCurrent("pipeline", true)
 	require.True(t, server.Ready())
+
+	readiness.end(2)
+	require.True(t, server.Ready(), "stale epoch must not end readiness")
 	readiness.end(3)
 	require.False(t, server.Ready())
+	readiness.setCurrent("pipeline", true)
+	require.False(t, server.Ready(), "no gate reopens after leadership")
 }
 
-func TestReadinessUsesRegisteredPersistenceWriters(t *testing.T) {
-	server := health.NewHealthServerWithClock(
-		config.HealthCheck{}, clock.RealClock{},
-	)
-	readiness := newReadinessCoordinator(server)
-	readiness.begin(4, false)
-	readiness.registerRequiredWriter("baseline-saver")
-	readiness.registerRequiredWriter("incident-saver")
-	for _, name := range []string{
-		"restore", "controller", "incident",
-	} {
-		readiness.setCurrent(name, true)
-	}
-	readiness.writerStarted("baseline-saver")
-	require.False(t, server.Ready())
-	readiness.writerStarted("incident-saver")
-	require.True(t, server.Ready())
-	readiness.writerFailed("incident-saver")
-	require.False(t, server.Ready())
-}
+func TestReadinessWithdrawDropsReadyAndIgnoresLateReports(t *testing.T) {
+	coordinator := newReadinessCoordinator(nil)
+	coordinator.begin(1, false)
+	coordinator.setCurrent("state", true)
+	coordinator.setCurrent("pipeline", true)
+	require.True(t, coordinator.readyNowLocked())
 
-func TestReadinessRecoversAfterTransientWriterFailure(t *testing.T) {
-	healthServer := health.NewHealthServerWithClock(
-		config.HealthCheck{}, clock.RealClock{},
-	)
-	readiness := newReadinessCoordinator(healthServer)
-	readiness.begin(1, false)
-	for _, name := range []string{
-		"restore", "controller", "incident",
-	} {
-		readiness.setCurrent(name, true)
-	}
-	readiness.registerRequiredWriter("incident-saver")
-	readiness.writerStarted("incident-saver")
-	if !healthServer.Ready() {
-		t.Fatal("leader should be ready once all writers started")
-	}
-	status := persistenceStatus(
-		healthServer, "incident-saver", true, readiness,
-	)
-	status(errors.New("conflict"))
-	if healthServer.Ready() {
-		t.Fatal("a failed required write must remove readiness")
-	}
-	status(nil)
-	if !healthServer.Ready() {
-		t.Fatal("a successful write must restore readiness")
-	}
+	coordinator.withdraw()
+	coordinator.setCurrent("pipeline", true)
+
+	require.False(t, coordinator.readyNowLocked())
+	coordinator.begin(2, false)
+	require.False(t, coordinator.readyNowLocked(), "a new session starts unready")
 }

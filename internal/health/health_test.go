@@ -1,428 +1,105 @@
 package health
 
 import (
-	"bytes"
 	"context"
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
 	"testing"
-	"time"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 
 	"github.com/abahmed/kwatch/internal/clock"
 	"github.com/abahmed/kwatch/internal/config"
-	"github.com/abahmed/kwatch/internal/event"
-	"github.com/abahmed/kwatch/internal/model"
 )
 
-type fakeIncidentLister struct {
-	snap []model.IncidentView
-}
-
-func (f *fakeIncidentLister) Snapshot() []model.IncidentView {
-	return f.snap
-}
-
-type fakeAlertSender struct {
-	events []event.Event
-	msgs   []string
-}
-
-func (f *fakeAlertSender) NotifyEvent(ev event.Event) {
-	f.events = append(f.events, ev)
-}
-func (f *fakeAlertSender) Notify(msg string) {
-	f.msgs = append(f.msgs, msg)
-}
-
 func TestNewHealthServer(t *testing.T) {
-	assert := assert.New(t)
-
 	server := NewHealthServerWithClock(
 		config.HealthCheck{Port: 8080, Enabled: true}, clock.RealClock{},
 	)
-	assert.NotNil(server)
-	assert.Equal(8080, server.port)
-	assert.True(server.enabled)
+
+	assert.NotNil(t, server)
+	assert.Equal(t, 8080, server.port)
+	assert.True(t, server.enabled)
 }
 
 func TestNewHealthServerDisabled(t *testing.T) {
-	assert := assert.New(t)
-
 	server := NewHealthServerWithClock(
 		config.HealthCheck{Port: 8080, Enabled: false}, clock.RealClock{},
 	)
-	assert.NotNil(server)
-	assert.Equal(8080, server.port)
-	assert.False(server.enabled)
+
+	assert.NotNil(t, server)
+	assert.False(t, server.enabled)
 }
 
 func TestHealthzHandler(t *testing.T) {
-	assert := assert.New(t)
+	recorder := httptest.NewRecorder()
 
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		h := &HealthServer{}
-		h.healthzHandler(w, r)
-	}))
-	defer server.Close()
+	(&HealthServer{}).healthzHandler(recorder,
+		httptest.NewRequest(http.MethodGet, "/healthz", nil))
 
-	resp, err := http.Get(server.URL)
-	assert.Nil(err)
-	assert.Equal(http.StatusOK, resp.StatusCode)
-
-	body := make([]byte, 100)
-	n, _ := resp.Body.Read(body)
-	assert.Equal("OK", string(body[:n]))
+	assert.Equal(t, http.StatusOK, recorder.Code)
+	assert.Equal(t, "OK", recorder.Body.String())
 }
 
 func TestHealthHandler(t *testing.T) {
-	assert := assert.New(t)
+	recorder := httptest.NewRecorder()
 
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		h := &HealthServer{}
-		h.healthHandler(w, r)
-	}))
-	defer server.Close()
+	(&HealthServer{}).healthHandler(recorder,
+		httptest.NewRequest(http.MethodGet, "/health", nil))
 
-	resp, err := http.Get(server.URL)
-	assert.Nil(err)
-	assert.Equal(http.StatusOK, resp.StatusCode)
-	assert.Equal("application/json", resp.Header.Get("Content-Type"))
-
-	var healthResp HealthResponse
-	err = json.NewDecoder(resp.Body).Decode(&healthResp)
-	assert.Nil(err)
-	assert.Equal("ok", healthResp.Status)
+	assert.Equal(t, http.StatusOK, recorder.Code)
+	assert.Equal(t, "application/json",
+		recorder.Header().Get("Content-Type"))
+	var body HealthResponse
+	require.NoError(t, json.Unmarshal(recorder.Body.Bytes(), &body))
+	assert.Equal(t, "ok", body.Status)
 }
 
 func TestHealthServerStartDisabled(t *testing.T) {
-	assert := assert.New(t)
-
 	server := NewHealthServerWithClock(
-		config.HealthCheck{Port: 8080, Enabled: false}, clock.RealClock{},
+		config.HealthCheck{Port: 0, Enabled: false}, clock.RealClock{},
 	)
-	err := startForTest(server)
-	assert.Nil(err)
+
+	require.NoError(t, server.Open())
+	assert.Nil(t, server.listener, "a disabled server opens no listener")
+	assert.NoError(t, server.Serve(context.Background()))
 }
 
-func TestHealthServerStartEnabled(t *testing.T) {
-	assert := assert.New(t)
-
+func TestHealthServerServesEndpoints(t *testing.T) {
 	server := NewHealthServerWithClock(
-		config.HealthCheck{Port: 8080, Enabled: true}, clock.RealClock{},
+		config.HealthCheck{Port: 0, Enabled: true}, clock.RealClock{},
 	)
-	err := startForTest(server)
-	assert.Nil(err)
+	base := serveForTest(t, server)
 
-	// Test /healthz endpoint
-	resp, err := http.Get("http://localhost:8080/healthz")
-	assert.Nil(err)
-	assert.Equal(http.StatusOK, resp.StatusCode)
+	status, body := getForTest(t, base+"/healthz")
+	assert.Equal(t, http.StatusOK, status)
+	assert.Equal(t, "OK", body)
 
-	// Test /health endpoint
-	resp, err = http.Get("http://localhost:8080/health")
-	assert.Nil(err)
-	assert.Equal(http.StatusOK, resp.StatusCode)
+	status, _ = getForTest(t, base+"/health")
+	assert.Equal(t, http.StatusOK, status)
 
-	server.Stop(context.Background())
+	status, _ = getForTest(t, base+"/readyz")
+	assert.Equal(t, http.StatusServiceUnavailable, status)
 }
 
 func TestHealthServerStop(t *testing.T) {
-	assert := assert.New(t)
-
 	server := NewHealthServerWithClock(
-		config.HealthCheck{Port: 8080, Enabled: true}, clock.RealClock{},
+		config.HealthCheck{Port: 0, Enabled: true}, clock.RealClock{},
 	)
-	err := startForTest(server)
-	assert.Nil(err)
+	require.NoError(t, server.Open())
+	done := make(chan error, 1)
+	go func() { done <- server.Serve(context.Background()) }()
 
-	err = server.Stop(context.Background())
-	assert.Nil(err)
+	require.NoError(t, server.Stop(context.Background()))
+	assert.NoError(t, <-done, "Serve returns cleanly after Stop")
 }
 
 func TestHealthServerStopNilServer(t *testing.T) {
-	assert := assert.New(t)
-
 	server := NewHealthServerWithClock(
-		config.HealthCheck{Port: 8080, Enabled: true}, clock.RealClock{},
-	)
-	err := server.Stop(context.Background())
-	assert.Nil(err)
-}
-
-func TestIncidentsHandlerNoAPI(t *testing.T) {
-	h := &HealthServer{}
-	req := httptest.NewRequest(http.MethodGet, "/incidents", nil)
-	w := httptest.NewRecorder()
-	h.incidentsHandler(w, req)
-
-	resp := w.Result()
-	assert.Equal(t, http.StatusServiceUnavailable, resp.StatusCode)
-}
-
-func TestIncidentsHandler(t *testing.T) {
-	assert := assert.New(t)
-	lister := &fakeIncidentLister{
-		snap: []model.IncidentView{
-			{
-				Key:       "ns:deploy:Err",
-				Reason:    "Err",
-				Namespace: "ns",
-				Name:      "deploy",
-				Count:     1,
-				State:     model.StateActive,
-				FirstSeen: time.Now(),
-				LastSeen:  time.Now(),
-			},
-		},
-	}
-	h := &HealthServer{incidentAPI: lister}
-
-	req := httptest.NewRequest(http.MethodGet, "/incidents", nil)
-	w := httptest.NewRecorder()
-	h.incidentsHandler(w, req)
-
-	resp := w.Result()
-	assert.Equal(http.StatusOK, resp.StatusCode)
-	assert.Equal("application/json", resp.Header.Get("Content-Type"))
-
-	var got []model.IncidentView
-	err := json.NewDecoder(resp.Body).Decode(&got)
-	assert.Nil(err)
-	assert.Len(got, 1)
-	assert.Equal("ns:deploy:Err", string(got[0].Key))
-}
-
-func TestIncidentsHandlerEmpty(t *testing.T) {
-	assert := assert.New(t)
-	lister := &fakeIncidentLister{}
-	h := &HealthServer{incidentAPI: lister}
-
-	req := httptest.NewRequest(http.MethodGet, "/incidents", nil)
-	w := httptest.NewRecorder()
-	h.incidentsHandler(w, req)
-
-	resp := w.Result()
-	assert.Equal(http.StatusOK, resp.StatusCode)
-
-	var got []model.IncidentView
-	err := json.NewDecoder(resp.Body).Decode(&got)
-	assert.Nil(err)
-	assert.Len(got, 0)
-}
-
-func TestTestAlertHandlerNoAM(t *testing.T) {
-	assert := assert.New(t)
-	h := &HealthServer{}
-	req := httptest.NewRequest(http.MethodPost, "/test-alert", nil)
-	w := httptest.NewRecorder()
-	h.testAlertHandler(w, req)
-
-	resp := w.Result()
-	assert.Equal(http.StatusServiceUnavailable, resp.StatusCode)
-}
-
-func TestTestAlertHandlerMethodNotAllowed(t *testing.T) {
-	assert := assert.New(t)
-	am := &fakeAlertSender{}
-	h := &HealthServer{
-		deliveryManager: am,
-		clock:           clock.RealClock{},
-	}
-
-	req := httptest.NewRequest(http.MethodGet, "/test-alert", nil)
-	w := httptest.NewRecorder()
-	h.testAlertHandler(w, req)
-
-	resp := w.Result()
-	assert.Equal(http.StatusMethodNotAllowed, resp.StatusCode)
-}
-
-func TestTestAlertHandler(t *testing.T) {
-	am := &fakeAlertSender{}
-	h := &HealthServer{
-		deliveryManager: am,
-		clock:           clock.RealClock{},
-	}
-
-	req := httptest.NewRequest(http.MethodPost, "/test-alert", bytes.NewReader([]byte{}))
-	w := httptest.NewRecorder()
-	h.testAlertHandler(w, req)
-
-	resp := w.Result()
-	assert.Equal(t, http.StatusOK, resp.StatusCode)
-
-	body := make([]byte, 100)
-	n, _ := resp.Body.Read(body)
-	assert.Equal(t, "test alert sent", string(body[:n]))
-
-	if len(am.events) != 1 {
-		t.Fatalf("expected 1 sent event, got %d", len(am.events))
-	}
-	if len(am.msgs) != 0 {
-		t.Fatalf("expected no plain message (NotifyEvent is the single notification), got %d", len(am.msgs))
-	}
-}
-
-func TestTestAlertHandlerRateLimitsRepeatedRequests(t *testing.T) {
-	h := &HealthServer{
-		deliveryManager: &fakeAlertSender{},
-		clock:           clock.RealClock{},
-	}
-	request := httptest.NewRequest(http.MethodPost, "/test-alert", nil)
-	first := httptest.NewRecorder()
-	h.testAlertHandler(first, request)
-	if first.Code != http.StatusOK {
-		t.Fatalf("first test alert status = %d", first.Code)
-	}
-	second := httptest.NewRecorder()
-	h.testAlertHandler(second, request)
-	if second.Code != http.StatusTooManyRequests {
-		t.Fatalf("second test alert status = %d, want 429", second.Code)
-	}
-}
-
-func TestRequireDiagnosticsAuthEmptyToken(t *testing.T) {
-	h := &HealthServer{diagnosticsToken: ""}
-	req := httptest.NewRequest(http.MethodGet, "/debug/pprof/", nil)
-	w := httptest.NewRecorder()
-	assert.False(
-		t,
-		h.requireDiagnosticsAuth(w, req),
-		"empty token must reject diagnostics",
-	)
-	assert.Equal(t, http.StatusUnauthorized, w.Code)
-}
-
-func TestRequireDiagnosticsAuthValidToken(t *testing.T) {
-	h := &HealthServer{diagnosticsToken: "secret123"}
-	req := httptest.NewRequest(http.MethodGet, "/debug/pprof/", nil)
-	req.Header.Set("Authorization", "Bearer secret123")
-	w := httptest.NewRecorder()
-	assert.True(
-		t,
-		h.requireDiagnosticsAuth(w, req),
-		"valid Bearer token must authenticate",
-	)
-}
-
-func TestRequireDiagnosticsAuthInvalidToken(t *testing.T) {
-	h := &HealthServer{diagnosticsToken: "secret123"}
-	req := httptest.NewRequest(http.MethodGet, "/debug/pprof/", nil)
-	req.Header.Set("Authorization", "Bearer wrong")
-	w := httptest.NewRecorder()
-	assert.False(t, h.requireDiagnosticsAuth(w, req), "wrong token must reject")
-
-	resp := w.Result()
-	assert.Equal(t, http.StatusUnauthorized, resp.StatusCode)
-
-	body := make([]byte, 32)
-	n, _ := resp.Body.Read(body)
-	assert.Equal(t, "unauthorized", string(body[:n]))
-}
-
-func TestRequireDiagnosticsAuthMissingHeader(t *testing.T) {
-	h := &HealthServer{diagnosticsToken: "secret123"}
-	req := httptest.NewRequest(http.MethodGet, "/debug/pprof/", nil)
-	w := httptest.NewRecorder()
-	assert.False(
-		t,
-		h.requireDiagnosticsAuth(w, req),
-		"missing Authorization must reject",
+		config.HealthCheck{Port: 0, Enabled: true}, clock.RealClock{},
 	)
 
-	resp := w.Result()
-	assert.Equal(t, http.StatusUnauthorized, resp.StatusCode)
-}
-
-func TestGuardWithoutTokenRejectsRequest(t *testing.T) {
-	h := &HealthServer{diagnosticsToken: ""}
-	called := false
-	handler := h.guard(func(w http.ResponseWriter, r *http.Request) {
-		called = true
-	})
-	req := httptest.NewRequest(http.MethodGet, "/debug/pprof/", nil)
-	w := httptest.NewRecorder()
-	handler(w, req)
-	assert.False(t, called, "handler must not be called without a token")
-	assert.Equal(t, http.StatusUnauthorized, w.Code)
-}
-
-func TestGuardWithValidTokenCallsHandler(t *testing.T) {
-	h := &HealthServer{diagnosticsToken: "secret123"}
-	called := false
-	handler := h.guard(func(w http.ResponseWriter, r *http.Request) {
-		called = true
-	})
-	req := httptest.NewRequest(http.MethodGet, "/debug/pprof/", nil)
-	req.Header.Set("Authorization", "Bearer secret123")
-	w := httptest.NewRecorder()
-	handler(w, req)
-	assert.True(t, called, "handler must be called with valid token")
-}
-
-func TestGuardWithInvalidTokenReturns401(t *testing.T) {
-	h := &HealthServer{diagnosticsToken: "secret123"}
-	handler := h.guard(func(w http.ResponseWriter, r *http.Request) {
-		t.Error("handler must not be called with invalid token")
-	})
-	req := httptest.NewRequest(http.MethodGet, "/debug/pprof/", nil)
-	req.Header.Set("Authorization", "Bearer wrong")
-	w := httptest.NewRecorder()
-	handler(w, req)
-
-	resp := w.Result()
-	assert.Equal(t, http.StatusUnauthorized, resp.StatusCode)
-}
-
-func TestPprofEndpointsRegisteredWithGuard(t *testing.T) {
-	h := &HealthServer{diagnostics: true, pprof: true, diagnosticsToken: "tok"}
-	if err := h.ConfigureDependencies(Dependencies{
-		Incident: &fakeIncidentLister{snap: []model.IncidentView{}},
-	}); err != nil {
-		t.Fatal(err)
-	}
-	mux := newServeMux(h)
-	ts := httptest.NewServer(mux)
-	defer ts.Close()
-
-	// Without token — pprof should reject
-	req, _ := http.NewRequest(http.MethodGet, ts.URL+"/debug/pprof/", nil)
-	resp, err := http.DefaultClient.Do(req)
-	assert.Nil(t, err)
-	assert.Equal(t, http.StatusUnauthorized, resp.StatusCode)
-	resp.Body.Close()
-
-	// Without token — non-pprof endpoints still work
-	req, _ = http.NewRequest(http.MethodGet, ts.URL+"/healthz", nil)
-	resp, err = http.DefaultClient.Do(req)
-	assert.Nil(t, err)
-	assert.Equal(t, http.StatusOK, resp.StatusCode)
-	resp.Body.Close()
-
-	// Protected diagnostic endpoints require the configured token.
-	req, _ = http.NewRequest(http.MethodGet, ts.URL+"/incidents", nil)
-	resp, err = http.DefaultClient.Do(req)
-	assert.Nil(t, err)
-	assert.Equal(t, http.StatusUnauthorized, resp.StatusCode)
-	resp.Body.Close()
-}
-
-type fakeDeadLetterLister struct {
-	letters []model.DeadLetterEntry
-}
-
-func (f *fakeDeadLetterLister) DeadLetters() []model.DeadLetterEntry {
-	return f.letters
-}
-
-func TestWriteTimeoutAllowsDefaultCPUProfile(t *testing.T) {
-	if got := writeTimeout(true); got <= 30*time.Second {
-		t.Fatalf("pprof write timeout %s blocks the 30s profile", got)
-	}
-	if got := writeTimeout(false); got != 10*time.Second {
-		t.Fatalf("default write timeout = %s", got)
-	}
+	assert.NoError(t, server.Stop(context.Background()))
 }

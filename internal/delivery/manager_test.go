@@ -3,54 +3,24 @@ package delivery
 import (
 	"context"
 	"errors"
-	"strings"
 	"testing"
-	"text/template"
-	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
 	"github.com/abahmed/kwatch/internal/alert/catalog"
 	"github.com/abahmed/kwatch/internal/config"
-	"github.com/abahmed/kwatch/internal/event"
-	"github.com/abahmed/kwatch/internal/model"
+	"github.com/abahmed/kwatch/internal/notification"
 )
-
-func testBuildMessage(
-	inc *model.Incident,
-	action model.IncidentAction,
-	clusterName string,
-) string {
-	am := Manager{clusterName: clusterName}
-	return am.buildMessage(inc, action, nil, nil)
-}
-
-// testBuildMessageWithTemplate is a helper for tests that builds a message
-// with the given parsed templates.
-func testBuildMessageWithTemplate(
-	inc *model.Incident,
-	action model.IncidentAction,
-	clusterName string,
-	rawTpls map[string]string,
-) string {
-	am := Manager{clusterName: clusterName}
-	parsed := map[string]*template.Template{}
-	for k, v := range rawTpls {
-		t, err := template.New(k).Parse(v)
-		if err == nil {
-			parsed[k] = t
-		}
-	}
-	return am.buildMessage(inc, action, nil, parsed)
-}
 
 type fakeProvider struct{}
 
 func (p *fakeProvider) SendMessage(context.Context, string) error {
 	return nil
 }
-func (p *fakeProvider) SendEvent(context.Context, *event.Event) error {
+func (p *fakeProvider) SendIncident(
+	context.Context, notification.Message,
+) error {
 	return nil
 }
 func (p *fakeProvider) Name() string {
@@ -62,7 +32,10 @@ type fakeProviderWithError struct{}
 func (p *fakeProviderWithError) SendMessage(context.Context, string) error {
 	return errors.New("error")
 }
-func (p *fakeProviderWithError) SendEvent(context.Context, *event.Event) error {
+func (p *fakeProviderWithError) SendIncident(
+	_ context.Context,
+	_ notification.Message,
+) error {
 	return errors.New("error")
 }
 func (p *fakeProviderWithError) Name() string {
@@ -80,7 +53,7 @@ func TestGetProvidersRejectsUnknown(t *testing.T) {
 	assert := assert.New(t)
 
 	alertMap := map[string]map[string]interface{}{
-		"slack":        {"webhook": "test"},
+		"slack":        {"webhook": "https://hooks.example.test/x"},
 		"notaprovider": {"key": "val"},
 	}
 
@@ -99,7 +72,7 @@ func TestGetProviders(t *testing.T) {
 
 	alertMap := map[string]map[string]interface{}{
 		"slack": {
-			"webhook": "test",
+			"webhook": "https://hooks.example.test/x",
 		},
 		"pagerduty": {
 			"integrationKey": "test",
@@ -112,13 +85,13 @@ func TestGetProviders(t *testing.T) {
 			"chatId": "test",
 		},
 		"teams": {
-			"webhook": "test",
+			"webhook": "https://hooks.example.test/x",
 		},
 		"mattermost": {
-			"webhook": "test",
+			"webhook": "https://hooks.example.test/x",
 		},
 		"rocketchat": {
-			"webhook": "test",
+			"webhook": "https://hooks.example.test/x",
 		},
 		"opsgenie": {
 			"apiKey": "test",
@@ -131,7 +104,7 @@ func TestGetProviders(t *testing.T) {
 			"password": "test",
 		},
 		"matrix": {
-			"homeServer":     "localhost",
+			"homeServer":     "https://matrix.example.test",
 			"accessToken":    "testToken",
 			"internalRoomId": "room1",
 		},
@@ -139,24 +112,25 @@ func TestGetProviders(t *testing.T) {
 			"accessToken": "testToken",
 		},
 		"feishu": {
-			"webhook": "test",
+			"webhook": "https://hooks.example.test/x",
 		},
 		"webhook": {
-			"url": "test",
+			"url": "https://receiver.example.test/x",
 		},
 		"zenduty": {
 			"integrationKey": "test",
 		},
 		"googlechat": {
-			"webhook": "test",
+			"webhook": "https://hooks.example.test/x",
 		},
 	}
 
 	am := *newTestManager()
-	initTestManager(
+	err := initTestManager(
 		&am,
 		alertMap, &config.App{ClusterName: "dev"}, catalog.NewProvider,
 	)
+	assert.NoError(err)
 
 	assert.Len(
 		managerEntries(&am),
@@ -164,7 +138,7 @@ func TestGetProviders(t *testing.T) {
 		"get providers returned %d expected %d")
 }
 
-func TestSendProvidersEvent(t *testing.T) {
+func TestSendProvidersIncident(t *testing.T) {
 	am := *newTestManager()
 	appendManagerEntries(&am, providerEntry{
 		provider: &fakeProvider{},
@@ -175,7 +149,7 @@ func TestSendProvidersEvent(t *testing.T) {
 			retry:    retryConfig{maxAttempts: 1},
 		},
 	)
-	am.NotifyEvent(event.Event{})
+	am.NotifyIncident(*incidentJob("k", "default").incident)
 }
 
 func TestSendProvidersMsg(t *testing.T) {
@@ -192,215 +166,22 @@ func TestSendProvidersMsg(t *testing.T) {
 	am.Notify("hello world!")
 }
 
-func TestNotifyIncidentCreate(t *testing.T) {
-	am := *newTestManager()
-	appendManagerEntries(&am, providerEntry{
-		provider: &fakeProvider{},
-		retry:    retryConfig{maxAttempts: 1},
-	},
-	)
+func TestInitRuntimeFailsForBrokenProviderSettings(t *testing.T) {
+	for name, settings := range map[string]map[string]interface{}{
+		"slack":   {"webhook": "not a url"},
+		"webhook": {"url": "ftp://receiver.example.test"},
+		"teams":   {},
+	} {
+		t.Run(name, func(t *testing.T) {
+			am := newTestManager()
+			err := initTestManager(am,
+				map[string]map[string]interface{}{name: settings},
+				&config.App{ClusterName: "dev"}, catalog.NewProvider)
 
-	inc := &model.Incident{
-		Subject: model.Subject{
-			Key:       "default:deploy:CrashLoopBackOff",
-			Name:      "deploy",
-			Namespace: "default",
-			Reason:    "CrashLoopBackOff",
-			Resource:  "pod",
-		},
-		Status: model.Status{
-			Count:     1,
-			FirstSeen: time.Now().Add(-5 * time.Minute),
-			LastSeen:  time.Now(),
-			Resources: map[string]bool{"pod-1": true},
-		},
+			require.Error(t, err)
+			assert.Contains(t, err.Error(),
+				"could not be constructed; check its settings")
+			assert.Empty(t, managerEntries(am))
+		})
 	}
-
-	am.NotifyIncident(inc, model.ActionCreate, nil)
-}
-
-func TestNotifyIncidentUpdate(t *testing.T) {
-	am := *newTestManager()
-	appendManagerEntries(&am, providerEntry{
-		provider: &fakeProvider{},
-		retry:    retryConfig{maxAttempts: 1},
-	},
-		providerEntry{
-			provider: &fakeProviderWithError{},
-			retry:    retryConfig{maxAttempts: 1},
-		},
-	)
-
-	inc := &model.Incident{
-		Subject: model.Subject{
-			Key:       "default:deploy:OOMKilled",
-			Name:      "deploy",
-			Namespace: "default",
-			Reason:    "OOMKilled",
-			Resource:  "pod",
-		},
-		Status: model.Status{
-			Count:     3,
-			FirstSeen: time.Now().Add(-10 * time.Minute),
-			LastSeen:  time.Now(),
-			Resources: map[string]bool{"pod-1": true, "pod-2": true},
-		},
-	}
-
-	am.NotifyIncident(inc, model.ActionUpdate, nil)
-}
-
-func TestNotifyIncidentSkip(t *testing.T) {
-	am := *newTestManager()
-	appendManagerEntries(&am, providerEntry{
-		provider: &fakeProvider{},
-		retry:    retryConfig{maxAttempts: 1},
-	},
-	)
-
-	inc := &model.Incident{
-		Subject: model.Subject{
-			Key:  "default:deploy:OOMKilled",
-			Name: "deploy",
-		},
-	}
-
-	am.NotifyIncident(inc, model.ActionSkip, nil)
-}
-
-// fakeThreadProvider implements both Provider and ThreadProvider
-type fakeThreadProvider struct {
-	lastInc *model.Incident
-	lastAct model.IncidentAction
-	done    chan struct{}
-}
-
-func (p *fakeThreadProvider) SendMessage(context.Context, string) error {
-	return nil
-}
-func (p *fakeThreadProvider) SendEvent(context.Context, *event.Event) error {
-	return nil
-}
-
-func (p *fakeThreadProvider) Name() string { return "ThreadSlack" }
-
-func (p *fakeThreadProvider) SendIncident(
-	_ context.Context,
-	inc *model.Incident,
-	action model.IncidentAction,
-) error {
-	p.lastInc = inc
-	p.lastAct = action
-	if p.done != nil {
-		close(p.done)
-	}
-	return nil
-}
-
-func TestNotifyIncidentCallsThreadProvider(t *testing.T) {
-	tp := &fakeThreadProvider{done: make(chan struct{})}
-	am := *newTestManager()
-	appendManagerEntries(&am, providerEntry{
-		provider: tp,
-		retry:    retryConfig{maxAttempts: 1},
-	})
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
-	require.NoError(t, am.Start(ctx))
-	defer am.shutdown()
-
-	inc := &model.Incident{
-		Subject: model.Subject{
-			Key:  "default:deploy:OOMKilled",
-			Name: "deploy",
-		},
-	}
-
-	am.NotifyIncident(inc, model.ActionCreate, nil)
-	select {
-	case <-tp.done:
-	case <-time.After(time.Second):
-		t.Fatal("thread provider was not called")
-	}
-
-	assert.Equal(t, inc.Key, tp.lastInc.Key)
-	assert.Equal(t, inc.Name, tp.lastInc.Name)
-	assert.Equal(t, model.ActionCreate, tp.lastAct)
-}
-
-func TestNotifyIncidentThreadProviderWithSkip(t *testing.T) {
-	tp := &fakeThreadProvider{}
-	am := *newTestManager()
-	appendManagerEntries(&am, providerEntry{
-		provider: tp,
-		retry:    retryConfig{maxAttempts: 1},
-	})
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
-	require.NoError(t, am.Start(ctx))
-	defer am.shutdown()
-
-	inc := &model.Incident{
-		Subject: model.Subject{
-			Key:  "default:deploy:OOMKilled",
-			Name: "deploy",
-		},
-	}
-
-	am.NotifyIncident(inc, model.ActionSkip, nil)
-
-	assert.Nil(t, tp.lastInc)
-}
-
-func TestNotifyIncidentThreadProviderClamped(t *testing.T) {
-	tp := &fakeThreadProvider{done: make(chan struct{})}
-	am := *newTestManager()
-	appendManagerEntries(&am, providerEntry{
-		provider: tp,
-		retry: retryConfig{
-			maxAttempts: 1,
-			delay:       time.Second,
-			maxBackoff:  defaultMaxBackoff,
-		},
-		maxBytes: 2000,
-	})
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
-	require.NoError(t, am.Start(ctx))
-	defer am.shutdown()
-
-	bigLog := strings.Repeat("error: something failed\n", 300)
-	inc := &model.Incident{
-		Subject: model.Subject{
-			Key:       "default:deploy:CrashLoopBackOff",
-			Name:      "deploy",
-			Namespace: "default",
-			Reason:    "CrashLoopBackOff",
-			Resource:  "pod",
-		},
-		Status: model.Status{
-			Count:     2,
-			FirstSeen: time.Now().Add(-5 * time.Minute),
-			LastSeen:  time.Now(),
-			Resources: map[string]bool{"pod-1": true},
-		},
-		Evidence: model.Evidence{
-			Logs:        bigLog,
-			IncludeLogs: true,
-		},
-	}
-
-	am.NotifyIncident(inc, model.ActionCreate, nil)
-	select {
-	case <-tp.done:
-	case <-time.After(time.Second):
-		t.Fatal("thread provider was not called")
-	}
-
-	assert.NotNil(t, tp.lastInc)
-	assert.Less(t, len(tp.lastInc.Logs), len(bigLog))
-	assert.Contains(t, tp.lastInc.Logs, "truncated")
-
-	rendered := testBuildMessage(tp.lastInc, model.ActionCreate, "")
-	assert.LessOrEqual(t, len(rendered), 2000)
 }

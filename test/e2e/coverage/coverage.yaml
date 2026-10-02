@@ -4,6 +4,7 @@ entries:
     lifecycle: recurring
     status: covered
     test: TestScenarioPodCrashLoop
+    modes: [CrashLoop]
   - id: pod.startup-error
     family: pod
     lifecycle: startup
@@ -19,11 +20,13 @@ entries:
     lifecycle: failure
     status: covered
     test: TestScenarioPodOOMKilled
+    modes: [OOMKilled]
   - id: pod.pending-unschedulable
     family: pod
     lifecycle: pending
     status: covered
     test: TestScenarioPodUnschedulable
+    modes: [Unschedulable]
   - id: pod.not-ready
     family: pod
     lifecycle: readiness
@@ -34,6 +37,7 @@ entries:
     lifecycle: startup
     status: covered
     test: TestScenarioPodStartupFailureProfiles
+    modes: [ImagePull]
   - id: pod.liveness-failure
     family: pod
     lifecycle: recurring
@@ -64,31 +68,24 @@ entries:
     lifecycle: re-failure
     status: covered
     test: TestScenarioRefailureAfterRecovery
-  - id: grouping.same-error-many-owners
-    family: grouping
-    lifecycle: grouping
-    status: covered
-    test: TestScenarioGroupingSameErrorManyOwners
-  - id: grouping.same-error-one-owner
-    family: grouping
-    lifecycle: grouping
-    status: covered
-    test: TestScenarioGroupingManyReplicasOneOwner
-  - id: grouping.different-reasons
-    family: grouping
-    lifecycle: grouping
-    status: covered
-    test: TestScenarioGroupingDifferentReasons
-  - id: grouping.cross-namespace
-    family: grouping
-    lifecycle: grouping
-    status: covered
-    test: TestScenarioGroupingCrossNamespace
-  - id: grouping.shared-node
-    family: grouping
+  - id: rootcause.shared-node
+    family: rootcause
     lifecycle: node-impact
     status: covered
-    test: TestScenarioNodeRecovery
+    test: TestScenarioRootCauseSharedNode
+    modes: [NotReady]
+  - id: rootcause.shared-registry
+    family: rootcause
+    lifecycle: grouping
+    status: covered
+    test: TestScenarioRootCauseSharedRegistry
+    modes: [ImagePull]
+  - id: rootcause.small-storm
+    family: rootcause
+    lifecycle: simultaneous
+    status: covered
+    test: TestScenarioRootCauseSmallStorm
+    modes: [CrashLoop]
   - id: lifecycle.resolution
     family: lifecycle
     lifecycle: recovery
@@ -99,11 +96,11 @@ entries:
     lifecycle: restart
     status: covered
     test: TestScenarioRestartPersistence
-  - id: lifecycle.leader-failover
+  - id: lifecycle.lease-handover
     family: lifecycle
-    lifecycle: leadership
+    lifecycle: lease
     status: covered
-    test: TestScenarioLeaderFailover
+    test: TestScenarioLeaseHandover
   - id: lifecycle.provider-failure
     family: lifecycle
     lifecycle: delivery
@@ -119,6 +116,7 @@ entries:
     lifecycle: rollout
     status: covered
     test: TestScenarioDeploymentRolloutFailure
+    modes: [RolloutStuck]
   - id: workload.replicaset
     family: workload
     lifecycle: failure
@@ -160,6 +158,7 @@ entries:
     lifecycle: failure
     status: covered
     test: TestScenarioNodeRecovery
+    modes: [NotReady]
   - id: node.shared-pod-impact
     family: node
     lifecycle: fanout
@@ -175,6 +174,7 @@ entries:
     lifecycle: pressure
     status: covered
     test: TestScenarioNodePressureSignals
+    modes: [MemoryPressure]
   - id: node.disk-pressure
     family: node
     lifecycle: pressure
@@ -195,11 +195,6 @@ entries:
     lifecycle: telemetry
     status: covered
     test: TestScenarioNodeRecovery
-  - id: node.kubelet-telemetry
-    family: node
-    lifecycle: telemetry
-    status: covered
-    test: TestScenarioNodeRecovery
   - id: node.shared-node-impact
     family: node
     lifecycle: fanout
@@ -210,6 +205,7 @@ entries:
     lifecycle: failure
     status: covered
     test: TestScenarioPersistentVolumeClaimFailure
+    modes: [ClaimFailed]
   - id: storage.volume-attachment
     family: storage
     lifecycle: failure
@@ -258,6 +254,7 @@ entries:
     lifecycle: configuration
     status: covered
     test: TestScenarioMissingConfigMapReference
+    modes: [Missing.ConfigMap]
   - id: security.pod-security-admission
     family: security
     lifecycle: admission
@@ -285,11 +282,6 @@ entries:
     status: covered
     environment: kind-extended
     test: TestScenarioExtendedMetricsAPIFailure
-  - id: integration.kubelet
-    family: integration
-    lifecycle: telemetry
-    status: covered
-    test: TestScenarioNodeRecovery
   - id: integration.control-plane
     family: integration
     lifecycle: diagnostics
@@ -305,3 +297,14 @@ entries:
     lifecycle: reload
     status: covered
     test: TestScenarioInvalidLiveConfiguration
+  - id: integration.cluster-dns
+    family: integration
+    lifecycle: failure
+    status: covered
+    environment: kind-extended
+    test: TestScenarioExtendedClusterDNSDown
+    modes: [Unavailable.CoreDNS]
+  - id: rootcause.zone-failure
+    family: rootcause
+    lifecycle: node-impact
+    status: unsupported-in-kind

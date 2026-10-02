@@ -1,9 +1,12 @@
 package delivery
 
 import (
+	"context"
+
 	"github.com/abahmed/kwatch/internal/clock"
 	"github.com/abahmed/kwatch/internal/config"
 	"github.com/abahmed/kwatch/internal/delivery/transport"
+	"github.com/abahmed/kwatch/internal/notification"
 )
 
 func newTestManager() *Manager {
@@ -48,14 +51,31 @@ func initTestManager(
 	return manager.InitRuntime(config.RuntimeConfigFor(cfg), factory)
 }
 
-func setTestSilences(manager *Manager, rules []config.SilenceRule) {
-	manager.cfgMu.Lock()
-	defer manager.cfgMu.Unlock()
-	manager.silences = compileSilences(rules)
-}
-
 func setTestTemplates(manager *Manager, templates map[string]string) {
 	manager.cfgMu.Lock()
 	defer manager.cfgMu.Unlock()
 	manager.templates = compileTemplates(templates)
+}
+
+func generationEntries(generation *providerGeneration) []providerEntry {
+	if generation == nil {
+		return nil
+	}
+	entries := make([]providerEntry, 0, len(generation.order))
+	for _, name := range generation.order {
+		entries = append(entries, generation.entries[name])
+	}
+	return entries
+}
+
+// incidentJob is a queued incident delivery for tests.
+func incidentJob(key, namespace string) deliverJob {
+	return deliverJob{kind: jobIncident, incident: &notification.Message{
+		Key: key, Status: notification.StatusCritical, Title: key + " failed",
+		Route: notification.Route{Namespaces: []string{namespace}},
+	}}
+}
+
+func shutdownManager(m *Manager) {
+	_ = m.Stop(context.Background())
 }

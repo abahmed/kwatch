@@ -2,9 +2,11 @@
 
 Guidance for humans and AI agents making changes to this repository. For the
 user-facing contribution process and published technical documentation, see
-[kwatch.dev/docs](https://kwatch.dev/docs). The root `CONTRIBUTING.md` is a
-short repository entry point; it must not become a second public documentation
-source.
+[kwatch.dev/docs](https://kwatch.dev/docs). New contributors should read
+`docs/contributor-architecture.md` first: it explains the packages and import
+rules in plain English before this file's rules. The root `CONTRIBUTING.md` is
+a short repository entry point; it must not become a second public
+documentation source.
 
 ## The gate
 
@@ -14,12 +16,22 @@ Every change must pass before you are done:
 make verify
 ```
 
-The repository also enforces formatting and line length. Run the complete gate
-with `make verify`; it includes race-enabled coverage enforcement, `line-check`,
-and `git diff --check` should be clean before handoff.
+`make verify` builds, vets (including the `e2e` build tag), lints, runs the
+test suite once with `-race` and coverage (the alert-quality gates run inside
+that run), and runs the architecture, test-layout, catalog, documentation,
+manifest, negative-regression, `line-check` and `diff-check` checks. The line
+and whitespace checks cover every change since the merge base with
+`BASE` (default `origin/main`), committed or not.
+
+`make ci` is exactly what the required CI job runs: `make verify` plus
+actionlint, ShellCheck and a `go mod tidy` drift check. Locally a missing
+actionlint, ShellCheck or Helm skips its check with a notice; under `CI=true`
+it fails. `make alert-quality` prints the alert-quality report and
+`make alert-quality-gate` runs only those gates.
 Coverage enforcement requires at least 75% aggregate statement coverage and at
 least 70% in every package listed as core runtime by
 `scripts/check-coverage.sh`. Only generated deep-copy code is excluded.
+
 
 ## Reliability invariants
 
@@ -32,12 +44,29 @@ true when extending the system:
 - Notifications created before delivery starts wait in a bounded pending queue.
   They must never perform provider I/O on the caller goroutine or use a
   background context for live delivery.
-- Required persistence savers use the active lifecycle context for periodic
-  writes and a bounded final-write context during shutdown. A disabled write
-  gate is a clean stop, not an unexpected component crash.
-- A missing or unavailable source skips detection and never creates or resolves
-  a synthetic incident. Source diagnostics use bounded reason codes and exclude
-  disabled pipelines.
+- State lives in one bbolt file on the data volume. After confirming that the
+  Lease names it, the writer claims the file with a new epoch from the
+  store's own counter (stored value plus one, never a Lease field), and every
+  write transaction verifies the claim, so a process whose claim was
+  superseded fails with a fenced error instead of overwriting newer state. A
+  failed save is logged and retried; it never stops delivery.
+- The leader session ends in a fixed order: readiness is withdrawn at once,
+  components stop, delivery drains, thread IDs are saved, the session end is
+  recorded, and the file is closed. Delivery drains before the thread save
+  so the thread IDs of the last sends survive. After leadership is lost,
+  delivery sends nothing more: queued jobs are dead-lettered.
+- Every queued delivery is written to the persisted outbox when a provider
+  queue accepts it and removed when a provider (or its fallback) accepted it
+  or it was dead-lettered for good. A job cut short by shutdown keeps its
+  record so the next session sends it. The outbox is bounded; a drop is
+  counted, never silent.
+- A detector runs only for kinds whose source has synced. A missing or
+  unavailable source yields no findings and never raises or clears a finding.
+  Optional API loss degrades health only.
+- A root cause needs evidence. Every reasoning rule requires the candidate to
+  be unhealthy or to have changed; reachability in the graph is never enough.
+  Without a cause above the confidence floor the message says the cause is
+  unknown.
 - Matrix HTML escapes all event-derived data while preserving only Kwatch's
   generated tags. Provider response bodies are parsed when an HTTP 2xx can
   still contain a provider-level error.
@@ -47,17 +76,24 @@ true when extending the system:
 - Any new long-running loop must expose cancellation, completion, progress or
   synchronization state, and a bounded shutdown path. Tests must use event
   completion rather than sleeps.
-- Generated Kubernetes deep-copy code must detach pointers, maps, slices, and
-  nested monitor configuration before a CRD object is handed to another
-  controller or goroutine.
+- Generated Kubernetes deep-copy code (`api/v1alpha1`) must detach pointers,
+  maps, slices, and nested configuration before a CRD object is handed to
+  another goroutine.
 
-- Linters: errcheck, gocritic, gocyclo, govet, ineffassign, unparam, unused (`.golangci.yml`).
+- Linters: errcheck, forbidigo, gocritic, gocyclo, govet, funlen, gocognit,
+  ineffassign, nestif, revive, unparam, unused (`.golangci.yml`). The
+  readability linters (funlen at 50 lines and 40 statements, gocognit at 15,
+  nestif at 4, revive) apply to the packages `inventory`, `detection`,
+  `rootcause`, `incident`, `pipeline`, `storage`, `notification`, `replay`,
+  `scorecard`, `scenarios`, `redact`, `delivery`, `app`, `health`,
+  `kubeclient` and `config` (and their subpackages), not to tests.
+  `forbidigo` forbids raw `net/http` request calls in `internal/alert/`.
 - **Cyclomatic complexity limit is 20** (`gocyclo min-complexity: 20`), tests included. When a
   function exceeds it, extract helpers or table data instead of raising the threshold.
 - Formatting: `goimports` with `local-prefixes github.com/abahmed/kwatch` (stdlib first,
   third-party second, kwatch last).
-- Test files are exempt from errcheck/unparam/gocritic/gocyclo; `internal/controller` is
-  exempt from errcheck (informer wiring intentionally ignores AddEventHandler returns).
+- Test files are exempt from errcheck/unparam/gocritic and from the
+  readability linters.
 
 ## Coding style directives
 
@@ -76,12 +112,12 @@ architecture unless a change explicitly expands its scope.
   fragments.
 - Never create `part2`, `part3`, `extra`, or similarly history-based test file
   names. Split tests by domain behavior, lifecycle, transport, persistence,
-  or fixture responsibility; examples include `grouping_scope_test.go`,
-  `controller_queue_test.go`, and `payload_limits_test.go`. A cohesive test
+  or fixture responsibility; examples include `incident_flapping_test.go`,
+  `engine_recheck_test.go`, and `payload_limits_test.go`. A cohesive test
   file may be large when it covers one clear unit, but a large package must
   not be hidden behind arbitrary numbered fragments.
 - Match the package name to the final directory component. For example,
-  `internal/graphcontext` must declare `package graphcontext`.
+  `internal/inventory/kube` must declare `package kube`.
 - Add short comments only where they explain an invariant, persisted-format
   compatibility rule,
   or non-obvious decision. Avoid decorative separator comments and restating
@@ -99,30 +135,33 @@ architecture unless a change explicitly expands its scope.
 - Use `metrics.DefaultRegistry()` at internal call sites; do not introduce
   hidden singleton clients.
 - Construct shared Kubernetes or HTTP clients in `internal/app` and pass them
-  into monitors, providers, and integrations that need them.
-- Import `internal/graphcontext` with an explicit alias when the standard
-  library `context` is also in scope; never disguise a package-name mismatch.
+  into sources, probes, providers, and integrations that need them.
+- Import a package whose name collides with the standard library (for example
+  a package named `context`) with an explicit alias; never disguise a
+  package-name mismatch.
 
 - Do not duplicate provider transport or retry logic. Providers build payloads
 	and call `delivery/transport`; shared transport decides status
 	classification, timeout, retry, and rate-limit behavior.
 - Preserve external behavior while a migration is in progress, but do not let
   the current internal package layout constrain the target design. Persisted
-  formats may change before the first stable release only through an explicit
-  versioned migration, backup, or clearly documented reset path.
+  formats may change before the first stable release only with a schema
+  version bump in `internal/storage`: a file with another version is deleted
+  and recreated (reset only: no migration, no backup), and the reset is
+  documented.
 
 ### Naming standard
 
 - Use `New<Type>` for constructors. Use `Set<Type>` only for narrow optional
-  state that is explicitly documented; source wiring must use one-time
-  `ConfigureSources` and must not use mutable production setters. Keep
+  state that is explicitly documented; wire dependencies through constructors
+  and do not add mutable production setters. Keep
   constructor arguments ordered as configuration, required dependencies, then
   optional dependencies.
 - Name methods after the domain action: `Process`, `Resolve`, `Snapshot`, and
   `Validate`. Avoid vague verbs such as `Do`, `HandleIt`, or `Create` when the
   resource type is known.
 - Use singular package names and lower-case file names. Group files by one
-  responsibility: `graph_resources.go`, `group_flush.go`, and
+  responsibility: `downtime.go`, `incident_store.go`, and
   `payload_limits_test.go` are preferred examples.
 - Follow Go initialisms consistently: `ID`, `UID`, `URL`, `HTTP`, `API`, `PVC`,
   and `JSON`. Do not introduce a new spelling variant for an existing public
@@ -130,9 +169,13 @@ architecture unless a change explicitly expands its scope.
   package renames should converge on the canonical domain vocabulary.
 - Use `camelCase` for local names, `PascalCase` for exported names, and avoid
   redundant package prefixes such as `config.ConfigManager`.
-- Use domain vocabulary in new code: `incidentEngine`, `deliveryManager`, and
-  `persistenceManager`. Do not introduce new `correlator`, `alertManager`, or
-  `stateMgr` identifiers; those names describe the old implementation layout.
+- Use the domain vocabulary in new code: entity, relation, observation
+  (inventory input), finding (detection output), cause (rootcause output),
+  incident (findings grouped by root cause), message (notification output),
+  and `deliveryManager`. Do not reintroduce the retired names `problem`,
+  `signal`, `hypothesis`, `fact`, `knowledge`, `story`, `notice`, or `core`
+  for these concepts, nor the older `correlator`, `alertManager`, or
+  `stateMgr` identifiers.
 - Use `Test<Type><Behavior>` for tests. Name table cases by behavior, not by
   implementation order or issue number.
 
@@ -149,7 +192,7 @@ architecture unless a change explicitly expands its scope.
   sleeps, wall-clock assertions, or live network calls.
 - Add or update focused tests for every behavior change before the work is
   complete, especially lifecycle transitions, suppression decisions, retries,
-  and persisted-format migration.
+  and the persisted-format reset path.
 - Cover success, failure, cancellation, and recovery paths wherever the
   changed behavior has those states. New long-running loops require tests for
   cancellation, completion, progress, and bounded shutdown.
@@ -175,8 +218,9 @@ cluster operations that need Kwatch-specific control. Do not build a second
 scenario DSL or execute arbitrary shell from YAML. YAML is limited to
 fixtures, configuration, and coverage metadata.
 
-The manual `scenarios.yml` workflow validates all semantic runtime behavior
-from source manifests in one disposable Kind cluster. Installer validation is
+The `e2e.yml` workflow (nightly on main, on demand, and on pull requests
+labelled `e2e`) validates all semantic runtime behavior from source manifests
+in one disposable Kind cluster. Installer validation is
 separate from this suite and is not a semantic scenario dependency.
 
 Before adding a scenario:
@@ -198,109 +242,102 @@ committed before it enters the release suite.
 
 Scenarios must cover the relevant lifecycle profile, including startup,
 delayed, one-shot, recurring, simultaneous, grouped, shared-node, restart,
-leader-failover, provider-failure, invalid-configuration, and recovery paths.
+lease-handover, provider-failure, invalid-configuration, and recovery paths.
 
 ## Package map
 
-Dependency direction flows downward; never import upward.
+Dependency direction flows downward; never import upward. The same table with
+plain-English descriptions, and the import rules `scripts/check-architecture.sh`
+enforces, are in `docs/contributor-architecture.md`.
 
 | Package | Responsibility |
 |:--|:--|
 | `cmd/kwatch` | Thin entrypoint: flag parsing, subcommand dispatch, calls `app.Run()` |
-| `internal/app` | Composition root: builds config, controller, incident engine, persistence and runs them |
-| `internal/monitor` | Monitor descriptors and the extension contract for user-visible detection modules |
-| `internal/controller` | Informer wiring, workqueues, graph state, and narrow family contracts |
-| `internal/monitor/pod/policy` | Pure, deterministic Pod/container detection rules and policy decisions |
-| `internal/monitor/pod/enrichment` | Kubernetes-backed Pod event, owner, log, and suppression enrichment |
-| `internal/monitor/node` | Node detection policy and direct queue runtime |
-| `internal/monitor/network` | Network detection policy and direct queue runtime |
-| `internal/monitor/cluster` | Cluster-resource detection and direct queue runtime |
-| `internal/observe` | Kubernetes objects → `model.Observation`; the single pod-ownership resolver |
-| `internal/config` | Config loading/validation, suppression index builder |
-| `internal/filter` | Pure detect-time suppression matching over the compiled index |
-| `internal/incident` | Incident identity, lifecycle, attribution, grouping, and notification decisions; the **only** lifecycle emitter (`emit.go`) |
-| `internal/insight` | Cause/impact/recent-change analysis over the dependency graph |
-| `internal/event`, `internal/graphcontext`, `internal/model` | Shared types |
-| `internal/delivery/*` | Delivery manager, routing, retries, rate limits, transport, and provider dispatch |
+| `internal/app` | Composition root: config, clients, Lease lock, state file, readiness, component supervisor; builds and runs the pipeline and delivery |
+| `internal/inventory` | Cluster model: entities, relations, observations, attributes, changes, notes. Knows nothing about Kubernetes; a leaf-like domain package |
+| `internal/inventory/kube` | Kubernetes plugins: informer sources, per-kind schemas and translators, dynamic and custom resources, kubelet stats, control-plane and active probes, log excerpts, `SourceAccess` |
+| `internal/inventory/kube/dynamicwatch` | Shared dynamic informer discovery, lifecycle, and cache-sync status |
+| `internal/storage` | bbolt state file: keyed and time-ordered collections, retention, schema version, epoch fencing |
+| `internal/detection` | Finding type, detector contract, registry, and the tracker that reports raised, changed, and cleared transitions |
+| `internal/detection/detectors` | Built-in Kubernetes detectors: pure functions of entity attributes and relations |
+| `internal/detection/reasons` | Stable finding reason codes shared by every layer (leaf) |
+| `internal/rootcause` | Shared root-cause types: the `Cause` record, confidence levels, graph and scheduler-message helpers |
+| `internal/rootcause/explain` | The root-cause engine: propagation table (data), candidate walk, scorers and weights, set-cover solver, incremental cache; a pure function of an inventory snapshot |
+| `internal/incident` | Incident manager: root resolution, settling, material-change digest, resolve hold, flapping, recurrence, routine, tiers, severity overrides, restore |
+| `internal/notification/compose` | Writes an incident decision as a `notification.Message`: one narrative note built from per-fact sentence writers, steps, runbooks, startup summary |
+| `internal/notification` | Provider-neutral message type, severity levels, and rendering helpers such as chunking and mention neutralizing (leaf) |
+| `internal/scope` | Delivery scope over findings: namespaces, reasons, silences, and maintenance holds |
+| `internal/pipeline` | Engine loop: observation queue, model update, detectors, incident manager, scope, investigation, downtime reconciliation, audit entries; the only producer of incident decisions |
+| `internal/delivery/*` | Delivery manager for notification messages: routing, retries, fallback, pacing, queue coalescing, transport, provider dispatch |
 | `internal/delivery/api` | Neutral provider contract shared by delivery and the static catalog |
 | `internal/alert/*` | Provider adapters; one subpackage per provider |
 | `internal/alert/catalog` | Statically linked provider construction selected by the application |
-| `internal/persistence` | Restart-safe ConfigMap persistence, format migrations, and recovery |
-| `internal/rbac` | Permission auditing and RBAC health; not resource-security detection |
-| `internal/k8s/dynamicwatch` | Shared dynamic informer discovery, lifecycle, cache-sync, and optional-resource status |
-| `internal/startup`, `internal/upgrader` | Startup lifecycle and upgrade checks |
-| `internal/{pvc,heartbeat,health,audit,crdwatch,integration}` | Periodic watchdogs and integrations |
-| `internal/k8s`, `internal/kubelet`, `internal/client`, `internal/resource` | Kubernetes access helpers |
+| `internal/config` | Config loading/validation and the compiled `RuntimeConfig` |
+| `internal/config/crd` | KwatchConfig resource watcher, including late install and restart |
+| `internal/rbac` | Permission audit derived from `kube.SourceAccess`; reports capability gaps, never incidents |
+| `internal/audit`, `internal/scorecard` | Decision log and its offline noise scorecard |
+| `internal/replay`, `internal/scenarios` | Test tooling only: observation record/replay on a simulated clock, and the labelled scenario library with the scorecard gate; nothing in production imports them |
+| `internal/provider/catalog` | Dependency-free provider identities and metadata |
+| `internal/clock`, `internal/format`, `internal/metrics`, `internal/feature` | Time dependency, pure text helpers, the bounded-label Prometheus registry, feature identifiers |
+| `internal/redact` | Secret and private-address redaction at ingest and in the e2e sanitizer (leaf) |
+| `internal/ratelimit` | Provider rate-limit errors and Retry-After parsing; a leaf because SDK providers and delivery both use it |
+| `internal/health`, `internal/upgrader`, `internal/telemetry`, `internal/heartbeat` | Diagnostics server, upgrade check, telemetry, heartbeat |
+| `internal/kubeclient` | Kubernetes access: the application-owned `ClientSet`, HTTP client, informer trimming, and panic-safe handlers |
 
-Application composition is split by phase so startup wiring stays readable:
+Application composition is split by responsibility:
 
-- `internal/app/bootstrap.go` owns infrastructure and startup state.
-- `internal/app/runtime_build.go` assembles domain components.
-- `internal/app/runtime_controller.go` wires listers, restore, graph, and readiness.
-- `internal/app/runtime_optional.go` builds optional monitor runs.
-- `internal/app/runtime_deps.go` records runtime ownership for serving and shutdown.
+- `internal/app/bootstrap.go` and `serve.go` own infrastructure, health, and
+  the serve loop.
+- `internal/app/leader_election.go` and `election_lock.go` own the Lease lock.
+- `internal/app/active.go` runs the leader session: state file, startup
+  bookkeeping, and supervised components. `startup.go`,
+  `restart_classification.go`, and `startup_message.go` own the runtime
+  session, restart classification, and the startup message.
+- `internal/app/pipeline.go` builds the model, sources, detector registry,
+  reasoner, and engine, and runs them.
+- `internal/app/supervisor.go`, `components.go`, and `readiness.go` own
+  component lifecycle and readiness.
 
 `config.RuntimeConfig` is the immutable snapshot of normalized namespaces,
-reasons, provider settings, routes, retry policy, suppression rules, monitor
-policies, CRD rules, delivery templates, intervals, and worker settings. Build
-it after configuration overlays and do not add new derived fields to the
-YAML-facing model. Runtime accessors return defensive copies where needed;
-delivery and integrations must not reparse raw YAML maps in production.
+reasons, provider settings, routes, retry policy, suppression rules, policies,
+CRD rules, delivery templates, intervals, and worker settings. Build it after
+configuration overlays and do not add new derived fields to the YAML-facing
+model. Runtime accessors return defensive copies where needed; delivery and
+the pipeline must not reparse raw YAML maps in production.
 
-`internal/client.ClientSet` is the application-owned client boundary. Build
+`internal/kubeclient.ClientSet` is the application-owned client boundary. Build
 typed, dynamic, discovery, REST, HTTP, DNS, and kubelet dependencies once in
 the composition root and pass only the narrow client each component needs.
 All production constructors receive application-owned clients and runtime
-dependencies directly. Transitional compatibility constructors were removed
-before the first stable release.
-
-`controller.Controller` groups queue pipelines, typed family source views,
-namespace scope, and informer diagnostics in focused state bundles. The
-controller remains the single owner of synchronized informer sources; family
-runtimes receive only their matching view through explicit wiring.
-
-`controller.NewWithRuntimeConfig` is the composition entrypoint. Application
-code and tests pass the already compiled `config.RuntimeConfig`; family
-constructors follow the same rule.
-
-`incident.AttributionSources` is the only source boundary used by incident
-attribution. The incident package must not retain Kubernetes listers or import
-client-go lister implementations. The controller supplies an adapter during
-composition, before processing starts.
+dependencies directly.
 
 The application owns lifecycle goroutines and shutdown. Health starts and
 stops only its HTTP server; the application calls `Open`, supervises `Serve`,
-and calls `Stop`. Health must not create a second
-context-shutdown goroutine. Every background persistence saver, watcher,
-ticker, and worker has an owner, cancellation path, bounded shutdown, and
-observable failure.
+and calls `Stop`. Health must not create a second context-shutdown goroutine.
+Every background saver, watcher, ticker, source, and worker has an owner,
+cancellation path, bounded shutdown, and observable failure.
 
-Health diagnostics are wired once through `health.Dependencies` before
-`HealthServer.Open`; production code must not use individual health dependency
-setters. A component returning to the running state clears its previous safe
-degradation reason.
-
-The PVC monitor snapshots state while holding its mutex, releases the lock,
-then emits observations or performs persistence I/O. No callback into an
-incident or delivery boundary may run while the PVC state lock is held.
+The health server serves only `/healthz`, `/readyz`, `/availabilityz`,
+`/health` and `/metrics`. A component returning to the running state clears
+its previous safe degradation reason.
 
 Providers and watchers use shared transport and application-owned clients. New
 code must not add a second raw HTTP, retry, status-classification, dynamic
 informer, or REST-client implementation.
 
-RCA is split by behavior inside `internal/insight`: cause evidence and root
-ranking, confidence, impact, recent changes, and next steps each belong in
-their semantic file. Keep `engine.go` as orchestration rather than adding new
-analysis algorithms there.
-
 Rules of thumb:
 
-- `model` / `event` / `graphcontext` / `constant` / `format` must stay leaf
-  packages.
-- Provider packages under `alert/` depend on `event`,
-  `model`, and shared transport; rich renderers may also use
-  `message` and `insight`. Providers must not import `controller`, `handler`,
-  `incident`, or Kubernetes clients.
+- `inventory` / `storage` / `notification` / `detection/reasons` /
+  `redact` / `ratelimit` / `format` must stay free of orchestration,
+  provider, and Kubernetes client imports. Only `inventory/kube` imports
+  Kubernetes clients for the model.
+- The domain layers import downward only: `inventory` <- `detection` <-
+  `rootcause` <- `incident` <- `notification/compose`. `pipeline`
+  orchestrates them, and only `internal/app` imports `pipeline`.
+- Provider packages under `alert/` depend on `notification`,
+  `ratelimit`, and shared transport. Providers and delivery must not import
+  `pipeline`, `incident`, `rootcause`, `detection`, `inventory`, `storage`,
+  `notification/compose`, or Kubernetes clients.
 - Providers that talk HTTP call `delivery/transport`; never `net/http` directly
   in production provider code (the architecture check enforces this). The
   transport is where a status code becomes success, rate-limited, permanent or
@@ -310,39 +347,27 @@ Rules of thumb:
   Providers must not retain `config.App`; the application supplies the HTTP
   client and tests use explicit dependency fixtures.
 - SDK-backed providers receive the configured outbound `http.Client` from the
-  delivery composition root. They must not import `internal/k8s` or construct
+  delivery composition root. They must not import `internal/kubeclient` or construct
   process-wide clients themselves.
-- Nothing outside `incident` calls the delivery manager for incident
-  notifications. Monitor runtimes feed `Engine.Process` and stop; the engine announces every decision — live
-  events, resolves, group flushes, renotify, mass failures — through `LifecycleHook`, so
-  audit, diagnosis and delivery cannot diverge between paths.
-- When a hint carries a fact a renderer needs (a memory limit, a probe endpoint, a delay),
-  put it in `model.Facts` next to the hint. Renderers read facts; they never parse the hint.
-- `model.Incident` is five embedded parts — `Subject`, `Status`, `Evidence`, `Attribution`,
-  `Delivery` — each with one writer (see the type comment). Reads are promoted
-  (`inc.Reason`, `inc.Count`); composite literals name the part. `PersistedIncident` stays
-  flat: it is the on-disk format and must not change shape.
-- `monitor/pod/policy.Context` contains only configuration, the object under evaluation,
-  injected time, and policy findings. It must not gain clients, listers, event sources,
-  log caches, or delivery dependencies.
-- `monitor/pod/enrichment.Context` contains policy findings plus explicit enrichment
-  sources. New monitor code must convert to policy context for detection and use the
-  enrichment package for events, owners, and logs.
-- Direct Pod policy receives owner/event lookups through the Pod runtime's
-  `ConfigureSources` seam. Direct monitor families receive their own read-only source
-  view through the controller-owned `controller.RuntimeSet` family bundle.
-- Startup baseline summaries are built and delivered by `internal/app` through
-  `startup.BuildSummary`. The controller only records baseline counts and does
-  not know about delivery.
-- Time-based decisions read an injected clock (`monitor/pod/enrichment.Sources.Now`,
-  `Engine.now`, `insight.Engine.now`, `ReportBuilder.now`), not
-  `time.Now()` directly, so
+- Nothing outside `pipeline` calls the delivery manager for incident
+  notifications. Sources submit observations through `Engine.Submit` and
+  stop; the engine loop makes every decision and announces it through one
+  `Sink`, so audit and delivery cannot diverge between paths.
+- Detectors, rules, and the incident manager are deterministic functions of the
+  model and an injected clock. They must not gain clients, listers, log
+  readers, or delivery dependencies. Kubernetes access belongs to
+  `inventory/kube` and is reached only through observations (and the
+  investigation callback the application supplies).
+- When a detector needs a detail a renderer will show (a memory limit, a
+  probe endpoint, a delay), put it in the finding's evidence. Renderers read
+  evidence; they never parse a summary string.
+- Time-based decisions read an injected clock (`pipeline.Clock`, the `now`
+  passed to detectors and `Manager.Tick`), not `time.Now()` directly, so
   "unready for 5 minutes" is testable without waiting 5 minutes.
+- Startup summaries are built by `compose.StartupSummary` and emitted by the
+  engine; sources and detectors know nothing about them.
 - Keep files focused; ~400 lines is the soft ceiling — split by responsibility within the
   same package rather than growing a god file.
-- The controller receives its `controller.RuntimeSet`, a set of narrow
-  capability interfaces. Do not add methods to a universal interface when a
-  family capability is sufficient.
 - Run `make architecture-check` when adding a package or moving a dependency;
   `make verify` runs it automatically.
 - During incremental work, use `make verify-focused PKGS="./internal/foo/..."`
@@ -352,103 +377,120 @@ Rules of thumb:
   only package tests, vet, and lint. Run repository-wide checks once after the
   workstream rather than after every file.
 
-Monitor family listers follow one availability contract: a missing lister means
-the capability is not ready, so the family skips detection and does not create
-or resolve a synthetic incident. The condition must be visible through health
-or diagnostics. Source wiring is synchronized and must be complete before a
-runtime begins processing.
-
-Persistence consumers should use the narrow contracts in
-`internal/persistence/interfaces.go` (`BaselineStore`, `IncidentStore`,
-`FeedbackStore`, `ChangeHistoryStore`, and `TelemetryStore`). PVC state uses
-the consumer-owned `pvc.StateStore` port. The concrete manager belongs at the
-composition root. Legacy `any` APIs are isolated to persisted-format migration
-code and are not runtime ports.
+A source that cannot observe its resource (missing API, missing permission,
+cache not synced) makes the dependent detectors and rules unavailable. The
+condition must be visible through health or diagnostics, and it must never
+create or resolve a synthetic finding.
 
 Provider identities are defined by the dependency-free provider catalog leaf;
 the static alert catalog must have exactly one factory for every identity,
 including intentional aliases such as `incidentio` and `incident.io`.
 
-Dynamic Gateway API and storage watchers use `internal/k8s/dynamicwatch` for
-discovery, namespace scope, transforms, informer registration, and cache-sync
-status. Their graph packages keep resource-specific relationship and failure
-semantics in their own callbacks.
+`internal/inventory/kube/dynamicwatch` provides shared dynamic informer
+discovery, lifecycle, and cache-sync status for the dynamic sources and the
+KwatchConfig watcher in `internal/config/crd`; a new dynamic watcher uses it
+instead of building its own informer machinery.
 
-## Controller conventions
+## Pipeline conventions
 
-The controller watches many resource kinds through one abstraction:
+The pipeline is owned by one goroutine (`pipeline.Engine.Run`):
 
-- `resourcePipeline` (`pipeline.go`) bundles everything one watched kind needs: a named
-  rate-limiting queue, informer sync state, a sync function, and a `startWorkers` flag that
-  gates both worker startup and baseline seeding.
-- `NewWithRuntimeConfig()` constructs all pipelines; per-kind wiring lives in small
-  `wire*` functions
-  (`wiring.go`) that attach listers/informers via:
-  - `watch(pipeline, informers...)` — registers HasSynced + event handler + starts workers;
-  - `listen(pipeline, informers...)` — attaches handlers only (used when sync state is
-    tracked separately).
-- Sync dispatch functions in `sync.go` share one signature:
-  `func (c *Controller) syncX(_ context.Context, key string) error`.
-  - Event handlers come from `enqueue.go`: `recordChange` /
-    `changeRecordingHandler` for change tracking, plus the graph-aware Pod
-    handler.
+```text
+observations → inventory model → detectors → finding transitions →
+incidents → decisions → scope → messages → sink
+```
 
-Graph rebuilds use `graphBuilder` (`graph_builder.go`), a small snapshot of
-graph listers and graph state. Do not create a reduced `Controller` copy for
-graph construction; Controller owns queues, lifecycle, and informer
-diagnostics that are not graph inputs.
+- Sources produce `inventory.Observation` values and hand them to
+  `Engine.Submit`. They never read the model to make decisions and never
+  call delivery.
+- `kube.Schema` describes one kind: identity, attributes, relations, and the
+  diff that yields meaningful changes. The translator's first list only
+  observes, and status-only updates refresh attributes without a change.
+- A `detection.Detector` declares the kinds it handles and returns the findings
+  that hold now via `Detect`. It may ask for a re-check after a duration
+  instead of polling. The `Tracker` turns successive results into transitions.
+- `explain.Explain` solves a snapshot: it walks links upstream from each
+  failure, keeps candidates that are unhealthy or changed inside the causal
+  window, scores them against the propagation table rows and picks the fewest
+  causes by set cover. How failure spreads is a table row, not code.
+- `incident.Manager` attaches findings to the incident of their explained root
+  and decides announce, update, and resolve in `Tick`.
+- Detector reason names come from `internal/detection/reasons`; treat them as
+  stable strings people route and silence on.
 
-**Adding a new monitored resource:**
+Step-by-step guides with real examples and test commands:
+`docs/contributing-detector.md`, `contributing-propagation-rule.md`,
+`contributing-source.md`, `contributing-message-fact.md` and
+`contributing-scenario.md`.
 
-1. Add a pipeline field to `Controller` and construct it in `New()` with a name matching
-   the ChangeTracker label (set `track` explicitly if the label differs from the name).
-2. Write a `wire*` function in `wiring.go` using `watch()` (or `listen()`), returning any
-   factories the shutdown path needs. It stores the lister on the `Controller`; it does not
-   talk to a monitor family.
-3. Call it from `New()`, wire its `syncFn`, add it to `allPipelines()`, and
-   expose only the lister needed by its family configuration contract. Dispatch
-   through the controller-owned `RuntimeSet` capability; do not grow a
-   universal interface or add a handler lister setter.
-4. If it needs periodic sweeps (like control-plane pods), check `startWorkers` in `Run()`.
-5. Add its graph edges in `graph_resources.go` if insight analysis should see it.
+**Adding a new watched kind:**
+
+1. Add its entity kind and `Schema` in `inventory/kube` and register it in the
+   informer registrations. `kube.SourceAccess()` and therefore the RBAC audit
+   derive from the registrations; update the ClusterRole manifests and chart to
+   match.
+2. Add a detector in `detection/detectors` and add it to `detectors.Default()`
+   in `internal/detection/detectors/default.go`. That function is the single
+   detector list: `newDetectorRegistry` in `internal/app/pipeline.go` and
+   every test harness build their registry from it, and a parity test fails
+   if production diverges.
+3. If the kind can be a cause, add or extend a row in the propagation table
+   (`internal/rootcause/explain/table_rows*.go`) with a fixture in
+   `TestTableRows`, and a labelled scenario in `internal/scenarios`.
+4. Add the kind to the downtime fingerprint table in `pipeline/downtime.go`
+   only if changes to it are meaningful.
+5. Add deterministic tests for detection, explanation, and the incident
+   lifecycle with the injected clock, and update
+   `docs/kubernetes-coverage.md`.
 
 ## Naming conventions
 
-- `sync*` — workqueue dispatch functions (controller).
-- `wire*` / `watch` / `listen` — informer wiring (controller).
-- `process*` — workqueue worker entry points.
-- `Detect*` — filter/monitor detection entry points returning events or issues.
+- `New*` constructors; `Detect`, `Explain`, `Apply`, `Tick`, `Write`,
+  `Submit`, and `Evaluate` name the pipeline's domain actions.
+- Name propagation rows after the behavior (`certificate-expired`,
+  `node-not-ready`) and detectors after the entity or condition they read.
 - `build*` / `extract*` / `apply*` / `prepare*` / `warn*` — small pure-ish helpers extracted
   to keep complexity ≤ 20; prefer these over inline branching when extending logic.
-- Table-driven pattern lists (see `imagePullPatterns`) beat long switch chains.
+- Table-driven pattern lists beat long switch chains.
 
 ## Behavior-preservation notes
 
 Some quirks are load-bearing. Preserve them unless a change explicitly says otherwise:
 
-- `wirePDB` awaits every PDB informer's HasSynced so baseline seeding never
-  runs against a partially populated namespace cache.
-- StatefulSet listers are always wired and their sync awaited even when monitoring is off;
-  only workers/listeners are gated.
-- Severity map keys (`SeverityByOwnerKind`, `SeverityByReason`) must be preserved verbatim —
-  never `strings.Title` them (breaks multi-word kinds like `DaemonSet`).
-- Exit code 137 with a reason other than `OOMKilled` is a plain SIGKILL, not an OOM.
-- Suppression consolidation: deprecated `ignore*` fields become synthetic `SilenceRule`s in
-  `appendIgnoreFieldSilences`; keep both paths reading the unified index.
-- `Engine.processLocked` runs five stages in a fixed order — baseline, attribution (node →
-  shared dependency → owning workload), cooldown, identity, announcement. Attribution comes
-  *before* cooldown on purpose: a pod whose key is cooling down is still its owner's symptom
-  and must keep being counted against it. Add a new kind of cause to `attribution.go`, not
-  as a new check in `processLocked`.
-- The audit skip reasons `baseline`, `node_inhibition`, `mass_failure`,
-  `cascading_suppression`, `cooldown` are stable strings people grep for.
+- Severity override keys (`SeverityByOwnerKind`, `SeverityByReason`) are
+  matched case-insensitively against the configured key; keep configured
+  strings verbatim in the config model and never title-case them (breaks
+  multi-word kinds like `DaemonSet`). A reason override wins over an owner
+  kind override.
+- Suppression consolidation: deprecated `ignore*` fields become synthetic
+  `SilenceRule`s in `appendIgnoreFieldSilences`; keep both paths reading the
+  unified scope.
+- An incident that recovers while settling is never announced. An incident with
+  no members before the restore grace ends is not recovered, so a restart
+  never resolves incidents whose detectors have not re-run.
+- An update is announced only when the digest changes (tier, root, cause, the
+  root's own reasons, bucketed impact size, state). Counters and timestamps
+  must never enter the digest.
+- Pods and containers are excluded from the impact size that drives the digest:
+  replicas failing one by one are not news.
+- The first list of every source only observes; changes made while kwatch was
+  down are reconstructed from saved fingerprints after every source has
+  synced and are dated at the last snapshot, so they precede the failures
+  they may have caused.
+- Decisions for out-of-scope incidents are dropped before delivery, but the
+  incident is still tracked so reasoning keeps its evidence.
+- The audit decision reason strings (`settled`, `material change`,
+  `flapping`, `healthy for ...`, `stable for ...`, `startup summary`) are
+  stable strings people grep for.
 
 ## Extension contract
 
-New user-visible modules must be added deliberately. A monitor, provider, or
-integration is not complete when its package compiles. The change must include:
+New user-visible modules must be added deliberately. A detector, rule,
+source, provider, or integration is not complete when its package compiles.
+The change must include:
 
-1. A domain-specific descriptor and stable name.
+1. A domain-specific name and, for a user-visible capability, a stable
+   descriptor or catalog entry.
 2. Explicit composition-root wiring.
 3. Configuration and validation, when configurable.
 4. Structured logs, bounded-cardinality metrics, and health behavior.
@@ -456,70 +498,31 @@ integration is not complete when its package compiles. The change must include:
    matter.
 6. Generated reference metadata.
 7. User, operator, and contributor documentation as applicable.
-8. Migration and release notes for changed behavior.
+8. Upgrade and release notes for changed behavior.
 
-The monitor registry is metadata, not a service locator. Do not hide runtime
+The feature catalog is metadata, not a service locator. Do not hide runtime
 wiring in a global registry.
 
-### Monitor family boundaries
+### Source, detector, and rule boundaries
 
-Keep resource-specific detection in cohesive monitor families rather than in
-one detection god object or one package per Kubernetes resource. The preferred
-families are pod/container, workload, node, network, security, and storage.
-Concrete detector packages under `internal/monitor` currently cover pod,
-workload, node, network, and security. Telemetry, control-plane, probe, and
-storage monitors remain in existing cohesive packages until a typed boundary
-adds clarity without duplicating their lifecycle wiring. Existing cohesive
-packages such as `pvc`, `probe`, `controlplane`, and `statuswatch` may remain
-where they already own a clear lifecycle.
+Keep resource-specific knowledge in `inventory/kube` (translation) and
+`detection/detectors` (abnormal states), not in the pipeline. The pipeline
+knows nothing about Pods or Nodes; it works on entities, relations,
+observations, and findings, so a new source such as a node agent or a cloud
+API plugs in as a source, detectors and rules without changing the pipeline.
 
-Family modules use small typed dependencies and injected clocks. They may
-produce observations or use a narrow incident sink, but they must not receive
-the delivery manager, write persistence directly, or import application
-composition. Do not create one universal monitor interface with every
-resource operation; different families have different inputs and lifecycles.
+Sources use small typed dependencies and injected clocks. They submit
+observations; they must not receive the delivery manager or write the state
+file. Detectors and rules read the model through `inventory.Reader`. Do not
+create one universal interface with every resource operation.
 
-The workload slices are the reference migration: the controller uses the
-family-owned runtimes in `monitor/workload` directly through the matching
-`RuntimeSet` capability and configures all workload listers in one operation
-through `workload.SourceConfig` and `workload.Sources`. Deployment, ReplicaSet,
-Job, DaemonSet, StatefulSet, CronJob, HPA, and PDB queue processing now use
-direct family wiring in production. Canonical family wiring uses one
-error-returning `ConfigureSources` operation; resource-specific lister setup is
-private to the workload package and is not an exported production seam.
-The aggregate workload capability has been removed. New controller wiring must
-use the specific family capability for each resource kind.
+Sources, probes, and pollers are started and stopped by the application-owned
+pipeline component, which waits for all of them when the engine returns.
+Kubernetes sources are configured once before they run.
 
-Node, network, cluster-resource, and Pod queue processing follows the same
-direct family wiring pattern through `monitor/node`, `monitor/network`,
-`monitor/cluster`, and `monitor/pod`. Cluster listers are passed through one
-`cluster.SourceConfig`/`cluster.Sources` operation. The Pod runtime owns queue lookup,
-policy evaluation, reference checks, deletion recovery, and source wiring.
-New production paths must use the family capability and its narrow source
-configuration interface.
-
-Network and security runtimes use the same source-bundle rule. The controller
-assembles one `network.Sources` or `security.Sources` value and applies it
-through the family's `SourceConfig` seam. Do not restore positional lister
-setters or add family-crossing policy dependencies.
-
-The same one-time source rule applies to TLS, control-plane, probe, metrics,
-kubelet metrics, PVC, status, graph, and RBAC integrations. Their canonical
-source bundles are configured before processing starts; source mutation after
-startup is rejected.
-
-Optional Gateway API, storage, status, and KwatchConfig resources share
-informer construction and transform mechanics through
-`internal/k8s/dynamicwatch`. Domain packages retain their own graph or status
-semantics. `crdwatch` remains separate because it owns late-install and
-restart behavior for KwatchConfig resources.
-
-The deployment runs two Kwatch replicas by default with Kubernetes Lease leader
-election. Exactly one replica owns observation, delivery, and mutable
-persistence; all other replicas are standby and do not start active monitor
-workers. A one-replica override is supported for constrained clusters but has
-no Kwatch self-failover. Do not add active-active processing without a separate
-deduplication and persistence design.
+The single-replica operating model is described once, under
+"Production-grade guardrails". Do not add active-active processing without a
+separate deduplication and persistence design.
 
 ### Provider checklist
 
@@ -527,10 +530,11 @@ Provider adapters live under `internal/alert/<provider>`, static construction
 lives in `internal/alert/catalog`, while routing,
 retries, rate limits, status classification, and transport live under
 `internal/delivery`. Every provider implements the canonical context-aware
-contract:
+contract (`internal/delivery/api`):
 
 ```go
-SendEvent(context.Context, *event.Event) error
+Name() string
+SendIncident(context.Context, notification.Message) error
 SendMessage(context.Context, string) error
 ```
 
@@ -566,35 +570,19 @@ ensures future recursive fallback changes cannot loop indefinitely.
 
 Slack token API calls and Discord webhook execution are the only approved SDK
 transport exceptions. They use injected HTTP clients and caller contexts;
-generic retry and status policy remains in `delivery/transport`. See
-`docs/adr/0005-sdk-provider-transport-exceptions.md` before adding another
-exception.
+generic retry and status policy remains in `delivery/transport`. Adding
+another exception needs a reviewed design change.
 
-The PVC monitor copies a namespace-filter callback while holding its mutex but
-invokes that callback only after unlocking. Observations, resolutions, and
-persistence I/O likewise happen outside the PVC state lock.
 
 Health diagnostics expose bounded component state and safe reason codes rather
-than arbitrary error strings. Persistence exposes a complete migration report
-for the startup cycle, and dynamic watcher status is tied to a generation so a
-stale watcher cannot clear current readiness or degradation state.
-
-Monitor source availability is exposed through controller diagnostics as
-`unavailableSources` and a bounded source-unavailable metric. A missing active
-lister means that capability is not
-ready: the family skips detection and does not create or resolve a synthetic
-incident. Disabled pipelines are omitted from this diagnostic list.
+than arbitrary error strings. Dynamic watcher status is tied to a generation so
+a stale watcher cannot clear current readiness or degradation state.
 
 Dynamic watcher status includes skipped optional resources and cache-sync
 failures. CRD discovery failures are reported to the application health
 boundary through the status sink injected during construction; waiting for a
 missing CRD is a normal degraded/waiting state, not a process restart
 condition.
-
-Persistence migrations return structured `MigrationResult` values and retain
-the complete startup-cycle `MigrationReport`. Migration status and failures
-contribute to bounded SRE metrics; persisted keys and formats remain
-compatibility-bound.
 
 Health diagnostics expose bounded component state and safe reason codes. Raw
 error strings remain in logs only. `/healthz` is liveness, `/readyz` describes
@@ -615,9 +603,9 @@ through `/health` without making readiness fail.
 - Every retryable external failure must have an observable retry count and
   final failure signal.
 - Delivery dead letters, queue saturation, optional API unavailability,
-  watcher synchronization, component degradation, persistence migration
-  failures, and shutdown timeouts have bounded counters in the default
-  registry. Add labels only when their cardinality is fixed and documented.
+  watcher synchronization, component degradation, state resets, corrupt
+  stored records, delivery outbox drops and write failures, and shutdown
+  timeouts have bounded counters in the default registry. Add labels only when their cardinality is fixed and documented.
 
 ## Documentation contract
 
@@ -641,16 +629,20 @@ contracts require a documentation review.
 ## Refactoring contract
 
 Refactors must proceed in seams that compile and test independently. The
-runtime domain packages are `internal/incident`, `internal/delivery`, and
-`internal/persistence`; do not recreate the retired correlation, alert-manager,
-or state-manager package boundaries. Verify imports with `rg` and run the
-architecture check after package changes.
-Persisted state changes require a schema version, migration or explicit reset
-path, recovery guidance, and tests.
+runtime domain packages are `internal/pipeline`, `internal/incident`,
+`internal/inventory`, and `internal/delivery`; do not recreate the retired
+insight, controller, persistence, or monitor family packages, or the
+pre-rename `problem`, `reason`, `signal`, `knowledge`, `core`, `story`, and
+`notice` packages.
+Verify imports with `rg` and run the architecture check after package changes.
+Persisted state changes require a schema version bump in
+`internal/storage`, the reset path (the old file is deleted and a fresh store
+is created; there is no migration and no backup), recovery guidance, and
+tests.
 
 Do not use a broad mechanical rewrite to conceal domain changes. Preserve
-load-bearing behavior listed above unless an ADR explicitly approves a new
-contract.
+load-bearing behavior listed above unless a reviewed design change approves
+a new contract.
 
 ## Working in the current tree
 
@@ -662,23 +654,34 @@ repository is independent and must not be edited as part of code changes.
 This project has not reached a stable public API release. Do not add internal
 compatibility constructors, setters, aliases, or wrappers merely to preserve
 old tests or historical call paths. Migrate callers to the canonical contract
-and remove the obsolete seam. Persisted data is different: preserve its format
-through explicit versioned migrations, backups, and round-trip tests.
+and remove the obsolete seam. Persisted data follows the reset-only policy:
+a schema version bump makes the next start delete the state file and begin
+fresh, with no migration and no backup, and the change is documented in the
+release notes.
 
 Before adding a long-running component, define its owner, required or optional
 classification, cancellation path, completion handle, startup and shutdown
 deadlines, progress signal, health reason, metrics, and deterministic tests.
-Before adding a provider or monitor, follow the extension checklists below and
+Before adding a provider, source, or detector, follow the extension
+checklists in this file and
 run the smallest focused package validation first.
 
 ## Production-grade guardrails
 
-Kwatch is operated with two replicas and Lease election by default. Only the
-leader runs monitoring, delivery, and mutable persistence; standby Pods keep
-health and election alive so one failed leader can be replaced. A one-replica
-`Recreate` deployment remains an advanced low-resource mode without
-self-failover. Election does not protect against total cluster, node, API, or
-network failure and does not promise exactly-once external delivery.
+Kwatch runs as one replica with the `Recreate` strategy; there is no standby
+and no self-failover. The Lease is a lock, not a failover mechanism: it stops
+two processes from writing the state volume at once, for example during a
+rollout. The epoch that fences the state file is a counter kept in the file
+itself and claimed only by the Lease holder; it does not come from the Lease,
+so a deleted or recreated Lease cannot fence the new leader. The volume must
+be `ReadWriteOnce` block storage, because RWO attach exclusivity is what keeps
+a partitioned node off the file. A restart resumes from the PVC, so incidents
+are not re-announced and
+changes made while kwatch was down are still found. This does not protect
+against total cluster, node, API, volume, or network failure. Delivery is at
+least once: queued jobs persist in the delivery outbox (at most 2048, none
+older than 24 hours) and are re-sent after a restart, and a send interrupted
+mid-request may repeat. Exactly-once delivery is not promised.
 
 Production readiness means that required readiness, bounded shutdown, safe
 persistence recovery, Kubernetes and provider outage behavior, bounded queues,
@@ -686,16 +689,16 @@ safe diagnostics, reviewed RBAC, signed release artifacts, and upgrade/rollback
 procedures are tested and documented. Do not claim zero-loss delivery,
 zero-downtime upgrades, or HA without evidence and an approved design.
 
-The default deployment uses a 60-second termination grace period and a
-multi-replica PodDisruptionBudget with `minAvailable: 1`. The chart renders the
-budget only when more than one replica is configured; one-replica deployments
-remain supported without self-failover.
+The default deployment uses a 60-second termination grace period.
 
 The application supervisor treats an unexpected component return as a failure.
 Required components have bounded startup and stall deadlines; components that
 can be idle must still report lifecycle progress. A required failure or stall
-removes readiness, cancels the active generation, fences delivery and
-persistence, releases leadership, and lets Kubernetes restart the Pod.
+removes readiness immediately, before any shutdown work, then cancels the
+active session, drains delivery, closes the state file, and exits so
+Kubernetes restarts the Pod. The Lease is not released on a failure; the
+next leader takes it when it expires, and the store's epoch claim fences any
+late write.
 Optional components retry with `1s, 2s, 4s, 8s` backoff capped at `60s`; the
 backoff resets after a minute of healthy execution. Component completion is
 awaited during shutdown instead of being inferred from sleeps.
@@ -711,11 +714,10 @@ model remains external and stable; derived policies are compiled once. Runtime
 views and accessors return detached values. Delivery and integrations must not
 reparse raw configuration or add a second normalization path.
 
-Family sources are configured once before processing starts. A missing lister or
-source means that capability is unavailable: skip detection and do not create or
-resolve a synthetic incident. Report the condition using bounded reason codes.
-Disabled pipelines must not report degradation. Compatibility setters, when
-they exist, are not production wiring points.
+Sources are configured once before they run. A missing source or cache means
+that capability is unavailable: its detectors produce no findings and no
+synthetic finding is created or resolved. Report the condition using bounded
+reason codes. Disabled sources must not report degradation.
 
 The application owns component goroutines and shutdown. Every worker, ticker,
 retry timer, informer, and watcher needs an owner, cancellation path, bounded
@@ -732,7 +734,7 @@ changes replace the complete immutable provider generation and in-flight
 fallback stays within the generation that accepted the job.
 
 Canonical dynamic and CRD watcher stop operations accept a caller-owned
-context and return a bounded error. Domain monitor `Stop` methods must not hide
+context and return a bounded error. Component `Stop` methods must not hide
 watcher shutdown errors; application-owned lifecycle wrappers record them as
 safe `shutdown_timeout` or `component_failed` states.
 
@@ -741,31 +743,21 @@ errors, credentials, tokens, complete payloads, secret-bearing URLs, incident
 internals, or arbitrary Kubernetes object data. Metrics use fixed bounded labels
 and transition-based counters.
 
-Provider generations are immutable and use stable names for lookup and fallback.
-Providers validate, render, and call shared transport; delivery owns retries,
-status classification, pacing, and queue policy. Slack and Discord SDK calls
-are the only approved transport exceptions and require the rules in
-`docs/adr/0005-sdk-provider-transport-exceptions.md`.
-
-Provider runtime initialization validates the complete configured generation
-before replacing an active generation. Unknown or unconstructable configured
-providers return an error to the composition root; fallback lookup remains
-generation-bound and missing fallback names are disabled deterministically.
-Provider construction is the only supported registration path; tests replace
-the complete generation rather than mutating provider storage.
-
-Persisted formats are compatibility contracts. Any persisted change requires an
-explicit schema version, migration or reset path, backup/recovery guidance, and
-round-trip tests. Migration diagnostics must report every startup operation with
-safe bounded outcomes.
+Persisted formats change only with a schema version bump. Any persisted change
+requires the reset path (no migration, no backup), recovery guidance, and
+round-trip tests. A state file that bbolt cannot read, or that has another
+schema version (older or newer), is deleted and replaced by a fresh store;
+no backup is kept. The reset is counted in
+`kwatch_storage_resets_total` by reason and shown on `/health` as
+`storage_reset` for the rest of the session.
 
 ## Current lifecycle safeguards
 
-Application readiness is coordinated per leadership epoch. A leader is not ready
-until restore, required informer sources, required persistence writers, the
-incident engine, and configured delivery are all active. Standby replicas remain
-live for election and health serving but are never ready for monitoring. A stale
-callback from an earlier epoch must not restore readiness or clear a newer failure.
+Application readiness is coordinated per leadership epoch. The process is not
+ready until it holds the Lease, has claimed and opened the state file, every
+source finished its initial list, and configured delivery is running. A stale
+callback from an earlier epoch must not restore readiness or clear a newer
+failure.
 
 Delivery generations have explicit `accepting`, `draining`, `stopped`, and
 `failed` states. Reconfiguration publishes a new generation only after the old
@@ -773,10 +765,10 @@ one has stopped. A successful replacement is not a component failure; a failed
 drain is surfaced to the required delivery supervisor. Manager shutdown and
 generation replacement have separate completion signals.
 
-Final persistence writes are created by the application shutdown coordinator with
-a bounded context and must pass the current leadership/write fence immediately
-before I/O. Saver loops use their active generation context; they must not create
-detached background writes that can outlive shutdown or leadership loss.
+The engine writes incidents after a decision and at least once a minute, and
+once more when it stops. Every write passes the store's epoch claim; a saver
+must not create detached background writes that can outlive shutdown or
+leadership loss.
 
 CRD and dynamic watcher generations own their discovery and informer goroutines.
 Failure paths cancel and wait for those routines before retrying or replacing a
@@ -791,7 +783,7 @@ must never be logged in full.
 
 ## Change checklists
 
-When changing a monitor, provider, filter, RCA rule, persistence field,
+When changing a detector, rule, source, provider, filter, persisted field,
 configuration field, metric, integration, RBAC rule, or deployment manifest:
 
 1. Use the existing ownership seam and do not introduce an upward dependency.
@@ -802,16 +794,18 @@ configuration field, metric, integration, RBAC rule, or deployment manifest:
    `git diff --check` after the workstream rather than after every edit.
 4. Update generated catalogs or manifests when their source metadata changes.
 5. Review health, metrics, logging, redaction, and shutdown behavior.
-6. Review configuration, migration, upgrade, rollback, and release-note impact.
+6. Review configuration, state reset, upgrade, rollback, and release-note
+   impact.
 7. Update the canonical website through its separate reviewed synchronization
    workflow; do not treat local documentation as a second public source.
 
-For monitor and integration changes, verify source configuration, optional API
-degradation, missing-lister behavior, namespace filtering, and readiness.
+For source, detector, and rule changes, verify optional API degradation,
+unsynced-source behavior, namespace scope, the incident lifecycle with an
+injected clock, and readiness.
 For provider changes, verify context cancellation, transport classification,
 fallback generation, payload limits, redaction, and catalog registration.
-For persistence changes, verify old formats, corruption, conflicts, trimming,
-partial writes, recovery, and complete migration reports.
+For persistence changes, verify old and newer schemas, corruption, fenced
+writes, retention, recovery, and downtime reconciliation.
 For deployment or RBAC changes, render and lint the chart, inspect the raw
 manifest, review least privilege, and document operational consequences.
 
@@ -829,11 +823,10 @@ as passed.
 
 ## Final operational safeguards
 
-The production Kind harness distinguishes monitoring readiness from deployment
-availability: `/readyz` is successful only for the active Lease holder, while
-`/availabilityz` lets every elected leader or standby participate in a safe
-Deployment rollout. Rollout checks wait for all expected Pods to be running and
-assert that the Lease holder is the active monitoring-ready Pod.
+`/readyz` is successful only when the process holds the Lease and every
+required component is ready. `/availabilityz` reports whether the Pod
+participates in the application lifecycle. During a rollout the new Pod does
+not become ready until it has claimed the state file.
 
 Managed installs rewrite the Lease name with the release identity so separate
 managed installations cannot share a Lease. Direct raw-manifest installs use
@@ -844,39 +837,25 @@ Dynamic discovery dependencies must implement client-go's context-aware
 discovery interface. Do not add a fallback to an unbounded, contextless
 discovery call; discovery must stop with its watcher generation.
 
-Protected diagnostics, including informer, persistence, security, kubelet,
-control-plane, incident, dead-letter, test-alert, and pprof endpoints, require
-the configured bearer token. Liveness, readiness, health, and metrics remain
-separate public operational endpoints. Empty diagnostic credentials must never
-turn a protected handler into an anonymous endpoint.
+Kwatch exposes no user API. Liveness, readiness, availability, health, and
+metrics are the only HTTP endpoints; do not add diagnostics, debug, or
+action endpoints until the core reaches its production goals
+(`docs/production-goals.md`).
 
-Required persistence savers report periodic progress even when their input is
-idle. New periodic components must either expose equivalent progress or be
+Required components report progress even when their input is idle (the
+engine loop reports after every iteration and at least every ten seconds). New
+periodic components must either expose equivalent progress or be
 explicitly classified as idle-safe; otherwise the supervisor cannot distinguish
 healthy idleness from a stalled component.
 
-Standby replicas may construct immutable dependencies and serve health/election,
-but they must not restore incidents, groups, baselines, provider threads, engine
-state, or other mutable monitoring state before acquiring the Lease. Active
-restore, required cache synchronization, source configuration, and saver startup
-belong to the current leadership epoch. A restore failure keeps that epoch
-not-ready and prevents monitoring and delivery from starting.
-
-Migration reports distinguish restore, migrate, recover, write, and initialize
-operations. Do not add an ambiguous duplicate result for the same store without
-recording the operation phase explicitly. Legacy and future persisted formats
-must remain preserved and diagnosable.
-
 Kubernetes list/watch code must handle reflector relists, expired resource
-versions, watch closure, tombstones, handler panics, queue retries, and API
-throttling without creating duplicate workers or synthetic incidents. Required
-cache loss removes readiness; optional API loss degrades health only.
+versions, watch closure, tombstones, handler panics, and API throttling without
+creating duplicate workers or synthetic findings. Required cache loss removes
+readiness; optional API loss degrades health only.
 
-Production controller construction receives its application lifecycle context
-through `controller.RuntimeDependencies`. Compatibility callers may use the
-bounded fallback, but new production code must not introduce unbounded
-`context.Background()` calls for namespace resolution, watcher shutdown,
-transport, or persistence writes.
+Production code must not introduce unbounded `context.Background()` calls for
+namespace resolution, watcher shutdown, transport, or state writes; use the
+application lifecycle context or a bounded shutdown context.
 
 The security workflow pins scanner and SBOM container images by digest and
 publishes source and image CycloneDX SBOMs. The release workflow also generates

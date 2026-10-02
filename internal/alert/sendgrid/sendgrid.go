@@ -3,11 +3,12 @@ package sendgrid
 import (
 	"context"
 	"encoding/json"
+	"strings"
 
 	"k8s.io/klog/v2"
 
 	"github.com/abahmed/kwatch/internal/delivery/transport"
-	"github.com/abahmed/kwatch/internal/event"
+	"github.com/abahmed/kwatch/internal/notification"
 )
 
 const sendgridAPIURL = "https://api.sendgrid.com/v3/mail/send"
@@ -39,15 +40,13 @@ type Sendgrid struct {
 	from    string
 	to      []string
 	subject string
-
-	clusterName string
 }
 
 // NewSendgrid returns a new Sendgrid object
 
 func NewSendgrid(
 	config map[string]interface{},
-	clusterName string,
+	_ string,
 	dependencies transport.Dependencies,
 ) *Sendgrid {
 	apiKey, ok := config["apiKey"].(string)
@@ -62,18 +61,7 @@ func NewSendgrid(
 		return nil
 	}
 
-	to, ok := config["to"].([]interface{})
-	if !ok || len(to) == 0 {
-		klog.InfoS("initializing sendgrid with empty to")
-		return nil
-	}
-
-	var recipients []string
-	for _, t := range to {
-		if s, ok := t.(string); ok && len(s) > 0 {
-			recipients = append(recipients, s)
-		}
-	}
+	recipients := parseRecipients(config["to"])
 	if len(recipients) == 0 {
 		klog.InfoS("initializing sendgrid with empty to")
 		return nil
@@ -84,13 +72,12 @@ func NewSendgrid(
 	klog.InfoS("initializing sendgrid", "from", from)
 
 	return &Sendgrid{
-		sender:      transport.NewSender(dependencies),
-		url:         sendgridAPIURL,
-		apiKey:      apiKey,
-		from:        from,
-		to:          recipients,
-		subject:     subject,
-		clusterName: clusterName,
+		sender:  transport.NewSender(dependencies),
+		url:     sendgridAPIURL,
+		apiKey:  apiKey,
+		from:    from,
+		to:      recipients,
+		subject: subject,
 	}
 }
 
@@ -99,19 +86,24 @@ func (s *Sendgrid) Name() string {
 	return "Sendgrid"
 }
 
-// SendEvent sends event to the provider
-func (s *Sendgrid) SendEvent(ctx context.Context, e *event.Event) error {
-	msg := e.FormatText(s.clusterName, "")
-	return s.SendMessage(ctx, msg)
+// SendIncident mails one incident message: the Short lead is the subject
+// and the narrative Note, plus any recent output, is the body.
+func (s *Sendgrid) SendIncident(
+	ctx context.Context, m notification.Message,
+) error {
+	return s.send(ctx, m.MailSubject(), m.MailBody())
 }
 
-// SendMessage sends text message to the provider
+// SendMessage mails a plain operator message under the configured subject.
 func (s *Sendgrid) SendMessage(ctx context.Context, msg string) error {
 	subject := s.subject
 	if len(subject) == 0 {
 		subject = "kwatch alert"
 	}
+	return s.send(ctx, subject, msg)
+}
 
+func (s *Sendgrid) send(ctx context.Context, subject, msg string) error {
 	personalization := sendgridPersonalization{}
 	for _, recipient := range s.to {
 		personalization.To = append(personalization.To, sendgridEmail{Email: recipient})
@@ -138,4 +130,27 @@ func (s *Sendgrid) SendMessage(ctx context.Context, msg string) error {
 		},
 	})
 	return err
+}
+
+// parseRecipients accepts a YAML list or, like the other email providers, a
+// comma-separated string.
+func parseRecipients(value interface{}) []string {
+	var raw []string
+	switch to := value.(type) {
+	case string:
+		raw = strings.Split(to, ",")
+	case []interface{}:
+		for _, item := range to {
+			if s, ok := item.(string); ok {
+				raw = append(raw, s)
+			}
+		}
+	}
+	recipients := make([]string, 0, len(raw))
+	for _, r := range raw {
+		if r = strings.TrimSpace(r); r != "" {
+			recipients = append(recipients, r)
+		}
+	}
+	return recipients
 }

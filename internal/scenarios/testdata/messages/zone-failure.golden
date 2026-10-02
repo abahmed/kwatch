@@ -1,0 +1,8 @@
+10:02:30 settled
+🔴 Node b1 (prod-eu-1) has not reported for about two minutes because zone zone-b is failing as a whole. It reports "Kubelet stopped posting node status". All of its dependents are failing. To see the object's state and events, run kubectl describe node b1
+🔴 Node b1 (prod-eu-1) has not reported for about two minutes because zone zone-b is failing as a whole.
+
+10:04:40 material change
+🔴 Node b1 (prod-eu-1) is spreading to pods auth-3be3c44d-b, auth-3be3c44d-d, cart-58d28062-b and five others in shop: they have not been ready for three minutes.
+🔴 Node b1 (prod-eu-1) is spreading to pods auth-3be3c44d-b, auth-3be3c44d-d, cart-58d28062-b and five others in shop: they have not been ready for three minutes.
+

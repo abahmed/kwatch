@@ -28,6 +28,9 @@ type ProviderRuntime struct {
 	Routes       []AlertRoute
 	Retry        RetryPolicy
 	FallbackName string
+	// HourlyBudget is the conversations announced per hour; 0 is
+	// unlimited.
+	HourlyBudget int
 }
 
 func compileProviderRuntimes(
@@ -43,6 +46,7 @@ func compileProviderRuntimes(
 			Routes:       compileRoutes(settings),
 			Retry:        compileRetry(settings),
 			FallbackName: stringValue(settings["fallback"]),
+			HourlyBudget: compileHourlyBudget(settings),
 		})
 	}
 	return result
@@ -241,6 +245,7 @@ func cloneProviderRuntimes(
 			Routes:       cloneRoutes(provider.Routes),
 			Retry:        provider.Retry,
 			FallbackName: provider.FallbackName,
+			HourlyBudget: provider.HourlyBudget,
 		})
 	}
 	return result
@@ -256,4 +261,20 @@ func cloneRoutes(routes []AlertRoute) []AlertRoute {
 		})
 	}
 	return result
+}
+
+// DefaultHourlyBudget is the announcements per hour a provider gets when
+// alert.<provider>.hourlyBudget is not set.
+const DefaultHourlyBudget = 60
+
+func compileHourlyBudget(settings map[string]interface{}) int {
+	raw, ok := settings["hourlyBudget"]
+	if !ok {
+		return DefaultHourlyBudget
+	}
+	n, ok := numericValue(raw)
+	if !ok || n < 0 {
+		return DefaultHourlyBudget
+	}
+	return int(n)
 }

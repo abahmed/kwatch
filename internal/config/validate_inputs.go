@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"math"
+	"regexp"
 	"sort"
 	"time"
 
@@ -23,6 +24,41 @@ func validateSelectors(cfg *Config) []error {
 	return nil
 }
 
+// validatePodNamePatterns rejects patterns that cannot compile, so a typo
+// fails configuration loading instead of stopping monitoring at runtime.
+func validatePodNamePatterns(cfg *Config) []error {
+	var errs []error
+	check := func(field, pattern string) {
+		if _, err := regexp.Compile(pattern); err != nil {
+			errs = append(errs, fmt.Errorf("%s %q: %w", field, pattern, err))
+		}
+	}
+	for i, rule := range cfg.Silences {
+		for _, pattern := range rule.PodNamePatterns {
+			check(fmt.Sprintf("silences[%d].podNamePatterns", i), pattern)
+		}
+	}
+	for _, pattern := range cfg.IgnorePodNames {
+		check("ignorePodNames", pattern)
+	}
+	return errs
+}
+
+// validateSilenceRules rejects rules that set no field. Such a rule would
+// otherwise silence every finding in the cluster.
+func validateSilenceRules(cfg *Config) []error {
+	var errs []error
+	for i, rule := range cfg.Silences {
+		if rule.IsEmpty() {
+			errs = append(errs, fmt.Errorf(
+				"silences[%d] sets no matching field; an empty rule "+
+					"would silence everything", i,
+			))
+		}
+	}
+	return errs
+}
+
 func validateAlertRetries(cfg *Config) []error {
 	names := make([]string, 0, len(cfg.Alert))
 	for name := range cfg.Alert {
@@ -32,6 +68,7 @@ func validateAlertRetries(cfg *Config) []error {
 
 	var errs []error
 	for _, name := range names {
+		errs = append(errs, validateHourlyBudget(name, cfg.Alert[name])...)
 		raw, ok := cfg.Alert[name]["retry"]
 		if !ok {
 			continue
@@ -49,6 +86,24 @@ func validateAlertRetries(cfg *Config) []error {
 		errs = append(errs, validateRetryJitterFields(name, rm)...)
 	}
 	return errs
+}
+
+func validateHourlyBudget(
+	provider string, settings map[string]interface{},
+) []error {
+	raw, ok := settings["hourlyBudget"]
+	if !ok {
+		return nil
+	}
+	n, ok := numericValue(raw)
+	if !ok || math.IsNaN(n) || math.IsInf(n, 0) ||
+		math.Trunc(n) != n || n < 0 {
+		return []error{fmt.Errorf(
+			"alert.%s.hourlyBudget must be an integer >= 0 "+
+				"(0 means unlimited)", provider,
+		)}
+	}
+	return nil
 }
 
 func validateRetryMaxAttempts(

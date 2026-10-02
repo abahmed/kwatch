@@ -3,60 +3,84 @@ package incident
 import (
 	"time"
 
-	"github.com/abahmed/kwatch/internal/enricher"
-	"github.com/abahmed/kwatch/internal/model"
+	"github.com/abahmed/kwatch/internal/inventory"
 )
 
-// Config contains incident lifecycle policy and its narrow domain seams.
-// Keeping this contract separate from grouping implementation makes the
-// engine's construction requirements visible to contributors.
+// Config tunes the lifecycle. Zero values take the defaults.
 type Config struct {
-	// Now is the immutable time source for lifecycle decisions. Nil uses the
-	// real clock for standalone callers.
-	Now               func() time.Time
-	Window            time.Duration
-	LifecycleInterval time.Duration
-	Enricher          enricher.Enricher
-	// AuditLogger records intentional lifecycle skips through the incident
-	// domain seam. It is supplied during construction so processing never
-	// observes partially wired dependencies.
-	AuditLogger   SkipLogger
-	LifecycleHook func(inc *model.Incident, action model.IncidentAction)
-	// MassFailureHook is called during a lifecycle tick.
-	MassFailureHook func()
-	BaselineTTL     time.Duration
-	// OwnerBaselineTTL bounds owner-level baseline entries, which are seeded
-	// with an empty pod name and cover every Pod of that owner.
-	OwnerBaselineTTL           time.Duration
-	Baseline                   map[string]map[string]int64
-	OnBaselineChange           func(baseline map[string]map[string]int64)
-	EscalationEnabled          bool
-	EscalationTiers            []int
-	InhibitNodeSuppressesPods  bool
-	MaxBaseline                int
-	RenotifyIntervalBySeverity map[string]time.Duration
-	RenotifyMaxPerIncident     int
-	ResolveHoldDown            time.Duration
-	Runbooks                   map[string]string
-	SmartGroupingWindow        time.Duration
-	// DependenciesOf resolves the shared dependencies an incident touches, so
-	// the engine can suppress symptoms already covered by a mass-failure
-	// alert. Supplied by the app, which owns the resource graph. Nil disables
-	// mass-failure suppression.
-	DependenciesOf func(*model.Incident) []string
-	// NamespaceFanOutThreshold is how many distinct owners must fail the same
-	// way, in one namespace, inside one grouping window before their per-owner
-	// groups are collapsed into a single namespace-level notification. Zero
-	// disables the collapse.
-	NamespaceFanOutThreshold int
-	// SubjectPresent reports whether the object an incident is about still
-	// exists, and whether the caller can answer for that kind at all.
-	//
-	// Staleness alone is a poor resolve signal. A Deployment wedged on a
-	// failed rollout stops producing events once the last replica gives up,
-	// and the engine then closed the incident as if the rollout had
-	// succeeded. Asking whether the object is still there separates "gone,
-	// so genuinely finished" from "still broken, just quiet". Nil keeps the
-	// old staleness-only behaviour.
-	SubjectPresent func(resource, namespace, name string) (exists, known bool)
+	// Settle is how long a new incident collects findings before its first
+	// message. Page-tier incidents use PageSettle.
+	Settle     time.Duration
+	PageSettle time.Duration
+	// ReviseSettle is how long a revised cause must hold before the
+	// "cause revised" update is sent.
+	ReviseSettle time.Duration
+	// Hold is the base time a root must stay healthy before resolve; it
+	// doubles for each recent recovery, up to MaxHold.
+	Hold    time.Duration
+	MaxHold time.Duration
+	// FlapCycles recoveries within FlapWindow make an incident flapping.
+	FlapWindow time.Duration
+	FlapCycles int
+	// Remember is how long a resolved incident is kept for recurrence.
+	Remember time.Duration
+	// SeverityByReason and SeverityByOwnerKind override the derived tier.
+	// Keys match case-insensitively; reasons win over owner kinds.
+	SeverityByReason    map[string]string
+	SeverityByOwnerKind map[string]string
+	// Verifiable reports whether kwatch can currently observe a kind.
+	// An incident whose root kind cannot be observed (missing permission,
+	// API not served) is never resolved: the absence of findings there
+	// is missing data, not recovery. Nil treats every kind as verifiable.
+	Verifiable func(inventory.Kind) bool
+	// IDNonce is the nonce new incident IDs carry, 4 hex characters.
+	// Empty draws a random one. Restore adopts the nonce of the newest
+	// restored ID, so the nonce lives as long as the store's incidents:
+	// a reset or a new volume starts with a new nonce, and its IDs never
+	// equal earlier ones. Tests set it for deterministic IDs.
+	IDNonce string
+}
+
+// Defaults for Config.
+const (
+	DefaultSettle     = 75 * time.Second
+	DefaultPageSettle = 15 * time.Second
+	// DefaultReviseSettle covers the failures that usually follow a
+	// revised cause within seconds, such as evictions after pressure.
+	DefaultReviseSettle = 30 * time.Second
+	DefaultHold         = 3 * time.Minute
+	DefaultMaxHold      = 30 * time.Minute
+	DefaultFlapWindow   = 30 * time.Minute
+	DefaultFlapCycles   = 3
+	// DefaultRemember keeps resolved incidents for a week, long enough to
+	// learn daily routines and to say "3rd time this week".
+	DefaultRemember = 7 * 24 * time.Hour
+)
+
+func (c Config) withDefaults() Config {
+	set := func(v *time.Duration, d time.Duration) {
+		if *v <= 0 {
+			*v = d
+		}
+	}
+	set(&c.Settle, DefaultSettle)
+	set(&c.PageSettle, DefaultPageSettle)
+	set(&c.ReviseSettle, DefaultReviseSettle)
+	set(&c.Hold, DefaultHold)
+	set(&c.MaxHold, DefaultMaxHold)
+	set(&c.FlapWindow, DefaultFlapWindow)
+	set(&c.Remember, DefaultRemember)
+	if c.FlapCycles <= 0 {
+		c.FlapCycles = DefaultFlapCycles
+	}
+	return c
+}
+
+// hold returns the resolve hold for an incident with n recent recoveries.
+func (c Config) hold(recentCycles int) time.Duration {
+	hold := c.Hold
+	for i := 0; i < recentCycles && hold < c.MaxHold; i++ {
+		hold *= 2
+	}
+	return min(hold, c.MaxHold)
 }

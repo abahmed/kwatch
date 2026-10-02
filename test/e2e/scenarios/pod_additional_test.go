@@ -38,6 +38,7 @@ func TestScenarioPodStartupFailureProfiles(t *testing.T) {
 					t.Fatal(err)
 				}
 				defer cleanupNamespace(t, e, namespace)
+				started := time.Now()
 				pod := &corev1.Pod{
 					ObjectMeta: metav1.ObjectMeta{Name: profile.name},
 					Spec: corev1.PodSpec{Containers: []corev1.Container{{
@@ -63,6 +64,14 @@ func TestScenarioPodStartupFailureProfiles(t *testing.T) {
 				); err != nil {
 					t.Fatal(err)
 				}
+				assertRoot(ctx, t, e, namespace, started,
+					harness.RootExpectation{
+						Root:        "pod/" + namespace + "/" + profile.name,
+						Tier:        "notify",
+						MaxMessages: 2,
+						MustNotBlame: scheduledNodes(
+							ctx, t, e, namespace),
+					})
 				if err := e.AssertNoRuntimePanic(ctx); err != nil {
 					t.Fatal(err)
 				}

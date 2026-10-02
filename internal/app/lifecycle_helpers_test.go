@@ -6,8 +6,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/abahmed/kwatch/internal/client"
 	"github.com/abahmed/kwatch/internal/clock"
+	"github.com/abahmed/kwatch/internal/kubeclient"
 )
 
 func TestComponentProgressTracksInjectedTime(t *testing.T) {
@@ -37,42 +37,17 @@ func TestProgressCheckIntervalHasBoundedMinimum(t *testing.T) {
 	}
 }
 
-func TestPersistenceGateAndWriteChecks(t *testing.T) {
-	gate := newPersistenceGate()
-	if !gate.enabled() || !writesAllowed(nil) ||
-		!writesAllowed(func() bool { return true }) {
-		t.Fatal("new persistence gate should allow writes")
-	}
-	gate.disable()
-	if gate.enabled() || writesAllowed(func() bool { return false }) {
-		t.Fatal("disabled persistence gate allowed a write")
-	}
-	gate.enable()
-	if !gate.enabled() {
-		t.Fatal("enabled persistence gate rejected writes")
-	}
-	var nilGate *persistenceGate
-	if !nilGate.enabled() {
-		t.Fatal("nil persistence gate should allow writes")
-	}
-}
-
 func TestDetachedShutdownContextsRetainValues(t *testing.T) {
 	parent := context.WithValue(context.Background(), "key", "value")
 	parent, cancel := context.WithCancel(parent)
 	cancel()
-	shutdown, stop := boundedShutdownContext(parent)
+	shutdown, stop := boundedShutdownContext(parent, time.Second)
 	defer stop()
 	if shutdown.Value("key") != "value" {
 		t.Fatal("shutdown context lost parent values")
 	}
 	if shutdown.Err() != nil {
 		t.Fatal("shutdown context inherited cancellation")
-	}
-	final, finalStop := finalWriteContext(parent)
-	defer finalStop()
-	if final.Value("key") != "value" || final.Err() != nil {
-		t.Fatal("final write context was not detached")
 	}
 }
 
@@ -97,7 +72,7 @@ func TestLeaderIdentityAndLeaseNameUseEnvironment(t *testing.T) {
 func TestRunWithProgressTouchesClockAndRunsFunction(t *testing.T) {
 	now := time.Date(2026, 9, 21, 12, 0, 0, 0, time.UTC)
 	progress := newComponentProgress(time.Time{})
-	deps := &serverDeps{clients: client.ClientSet{
+	deps := &serverDeps{clients: kubeclient.ClientSet{
 		Clock: clock.Func(func() time.Time {
 			return now
 		})}}

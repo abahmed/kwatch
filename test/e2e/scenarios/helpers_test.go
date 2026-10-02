@@ -154,3 +154,49 @@ func belongsToShard(id, value string) bool {
 	hash := sha1.Sum([]byte(id))
 	return int(hash[0])%total == index-1
 }
+
+// assertRoot waits for the incident rooted at exp.Root and requires the
+// expected tier, message budget and absence of blamed entities. started
+// bounds cluster-scoped roots to this scenario.
+func assertRoot(
+	ctx context.Context,
+	t *testing.T,
+	e *harness.Environment,
+	namespace string,
+	started time.Time,
+	exp harness.RootExpectation,
+) {
+	t.Helper()
+	assertCtx, cancel := context.WithTimeout(ctx, 8*time.Minute)
+	defer cancel()
+	scope := harness.RootScope{Namespace: namespace, Since: started}
+	if err := e.Audit.AssertRoot(assertCtx, exp, scope); err != nil {
+		t.Fatal(err)
+	}
+}
+
+// scheduledNodes lists the nodes hosting the namespace's Pods as
+// must-not-blame roots: a workload failure is not a node failure.
+func scheduledNodes(
+	ctx context.Context,
+	t *testing.T,
+	e *harness.Environment,
+	namespace string,
+) []string {
+	t.Helper()
+	pods, err := e.Client.CoreV1().Pods(namespace).List(
+		ctx, metav1.ListOptions{},
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+	seen := make(map[string]bool)
+	var roots []string
+	for _, pod := range pods.Items {
+		if pod.Spec.NodeName != "" && !seen[pod.Spec.NodeName] {
+			seen[pod.Spec.NodeName] = true
+			roots = append(roots, "node//"+pod.Spec.NodeName)
+		}
+	}
+	return roots
+}

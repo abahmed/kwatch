@@ -1,0 +1,4 @@
+10:06:15 settled
+🟠 Postgrescluster orders-db in data (prod-eu-1) is not ready (reconcile error). Its spec changed at 10:03. Its dependents failed soon after it changed. To see the object's state and events, run kubectl describe postgrescluster orders-db -n data
+🟠 Postgrescluster orders-db in data (prod-eu-1) is not ready (reconcile error).
+

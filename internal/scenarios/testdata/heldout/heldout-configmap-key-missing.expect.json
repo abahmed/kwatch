@@ -1,0 +1,12 @@
+{
+  "name": "heldout-configmap-key-missing",
+  "description": "A ConfigMap key the pods read through configMapKeyRef is renamed; the replica that replaces a deleted pod fails with CreateContainerConfigError.",
+  "root": "configmap/catalog/api-settings",
+  "tier": "notify",
+  "maxMessages": 2,
+  "mustNotBlame": [
+    "node//n1",
+    "node//n2",
+    "deployment/catalog/api"
+  ]
+}

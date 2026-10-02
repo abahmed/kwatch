@@ -3,17 +3,16 @@ package upgrader
 import (
 	"context"
 	"errors"
+	"strings"
 	"testing"
 
 	"github.com/google/go-github/v55/github"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
-	corev1 "k8s.io/api/core/v1"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/client-go/kubernetes/fake"
 
 	"github.com/abahmed/kwatch/internal/config"
 	"github.com/abahmed/kwatch/internal/delivery"
+	"github.com/abahmed/kwatch/internal/notification"
 	"github.com/abahmed/kwatch/internal/version"
 )
 
@@ -63,19 +62,7 @@ func TestCheckReleaseAlreadyNotified(t *testing.T) {
 	mockGithub.On("GetLatestRelease", mock.Anything, "abahmed", "kwatch").
 		Return(&github.RepositoryRelease{TagName: &newVersion}, nil, nil)
 
-	client := fake.NewSimpleClientset()
-	cm := &corev1.ConfigMap{
-		ObjectMeta: metav1.ObjectMeta{
-			Name: "kwatch-state", Namespace: "kwatch",
-		},
-		Data: map[string]string{"notified-version": newVersion},
-	}
-	_, err := client.CoreV1().ConfigMaps("kwatch").Create(
-		context.Background(), cm, metav1.CreateOptions{},
-	)
-	assert.Nil(t, err)
-
-	persistenceManager := newTestPersistenceManager(client, "kwatch")
+	persistenceManager := &memoryVersions{version: newVersion}
 	u := newTestUpgrader(
 		&config.Upgrader{}, &delivery.Manager{}, persistenceManager,
 	)
@@ -95,9 +82,7 @@ func TestCheckReleaseNewVersionNotifies(t *testing.T) {
 	notifier := new(recordingNotifier)
 	notifier.On("Notify", mock.AnythingOfType("string")).Return()
 
-	persistenceManager := newTestPersistenceManager(
-		fake.NewSimpleClientset(), "kwatch",
-	)
+	persistenceManager := &memoryVersions{}
 	u := newTestUpgrader(
 		&config.Upgrader{}, &delivery.Manager{}, persistenceManager,
 	)
@@ -109,6 +94,27 @@ func TestCheckReleaseNewVersionNotifies(t *testing.T) {
 	mockGithub.AssertExpectations(t)
 	notifier.AssertExpectations(t)
 	assert.True(t, notifier.NotifyCalled)
+	assert.Equal(t, "🟡 kwatch v99.0.0 is available; this cluster runs "+
+		version.Short()+".", notifier.NotifyLastMsg)
+}
+
+// The upgrade notice is one plain sentence with one leading marker and
+// no links or shortcodes.
+func TestUpdateNoticeIsOnePlainSentence(t *testing.T) {
+	got := updateNotice("v1.3.0", "v1.2.0")
+	assert.Equal(t,
+		"🟡 kwatch v1.3.0 is available; this cluster runs v1.2.0.", got)
+	n := notification.Notice(got)
+	assert.Equal(t, notification.MarkerLow, n.Marker)
+	assert.Equal(t, notification.StatusLow, n.Status)
+	markers := 0
+	for _, m := range notification.Markers() {
+		markers += strings.Count(got, m)
+	}
+	assert.Equal(t, 1, markers)
+	for _, bad := range []string{"http", "<", ":tada:", "\n"} {
+		assert.NotContains(t, got, bad)
+	}
 }
 
 func TestCheckReleaseNewVersionSetsState(t *testing.T) {
@@ -120,19 +126,7 @@ func TestCheckReleaseNewVersionSetsState(t *testing.T) {
 	notifier := new(recordingNotifier)
 	notifier.On("Notify", mock.AnythingOfType("string")).Return()
 
-	client := fake.NewSimpleClientset()
-	cm := &corev1.ConfigMap{
-		ObjectMeta: metav1.ObjectMeta{
-			Name: "kwatch-state", Namespace: "kwatch",
-		},
-		Data: map[string]string{},
-	}
-	_, err := client.CoreV1().ConfigMaps("kwatch").Create(
-		context.Background(), cm, metav1.CreateOptions{},
-	)
-	assert.Nil(t, err)
-
-	persistenceManager := newTestPersistenceManager(client, "kwatch")
+	persistenceManager := &memoryVersions{}
 	u := newTestUpgrader(
 		&config.Upgrader{}, &delivery.Manager{}, persistenceManager,
 	)
@@ -147,4 +141,35 @@ func TestCheckReleaseNewVersionSetsState(t *testing.T) {
 
 	notifiedVersion := persistenceManager.GetNotifiedVersion(context.Background())
 	assert.Equal(t, newVersion, notifiedVersion)
+}
+
+func TestCheckReleaseWithoutPersistenceNotifiesOnce(t *testing.T) {
+	newVersion := "v99.0.0"
+	mockGithub := new(MockGitHubClient)
+	mockGithub.On("GetLatestRelease", mock.Anything, "abahmed", "kwatch").
+		Return(&github.RepositoryRelease{TagName: &newVersion}, nil, nil)
+
+	notifier := new(recordingNotifier)
+	notifier.On("Notify", mock.AnythingOfType("string")).Return()
+
+	u := &Upgrader{
+		config:          &config.Upgrader{},
+		githubClient:    mockGithub,
+		deliveryManager: notifier,
+	}
+
+	u.checkRelease(context.Background())
+	u.checkRelease(context.Background())
+
+	notifier.AssertNumberOfCalls(t, "Notify", 1)
+}
+
+func TestNewUpgraderDoesNotMutateCallerConfig(t *testing.T) {
+	t.Setenv("SKIP_UPGRADE_CHECK", "true")
+	cfg := &config.Upgrader{}
+
+	u := NewUpgrader(cfg, nil, nil, nil)
+
+	assert.False(t, cfg.DisableUpdateCheck)
+	assert.True(t, u.config.DisableUpdateCheck)
 }

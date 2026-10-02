@@ -2,7 +2,8 @@
 
 The deployment ClusterRole is read-only for observed resources. It also grants
 the narrowly scoped `create` operation required for RBAC self-checks.
-The namespaced roles are limited to Lease election and ConfigMap persistence.
+The namespaced roles are limited to the Lease lock in the kwatch namespace and
+read access to the control-plane leader Leases in `kube-system`.
 Use this matrix when disabling features for a least-privilege deployment.
 
 | Feature | API resources | Access |
@@ -11,19 +12,19 @@ Use this matrix when disabling features for a least-privilege deployment.
 | Node and cluster resources | Nodes, leases, namespaces, ResourceQuotas, LimitRanges | get/list/watch |
 | Network and admission | Services, Endpoints, EndpointSlices, Ingresses, NetworkPolicies, webhook and admission policy resources | get/list/watch |
 | Storage and PVC | PersistentVolumeClaims, PersistentVolumes, StorageClasses, VolumeAttachments, CSI drivers, snapshots | get/list/watch |
-| Kubelet and logs | `nodes/proxy`, `pods/log`, `pods/proxy` | get/list/watch |
+| Kubelet stats and logs | `nodes/stats`, `nodes/metrics` (read from each kubelet directly), `pods/log` | get |
 | Metrics API evidence | APIService `v1beta1.metrics.k8s.io`, Services, EndpointSlices | get/list/watch |
 | RBAC health | SelfSubjectAccessReviews | create |
 | CRD overlay | KwatchConfig and CustomResourceDefinitions | get/list/watch |
-| Persistence and election | Namespaced ConfigMaps and Leases | create/get/update/patch/watch |
+| Lease lock | Lease in the kwatch namespace | create; get/update on kwatch's Lease name only |
+| Control-plane health | scheduler and controller-manager Leases in `kube-system` | get |
 
-Secret read access remains because TLS monitoring and dependency-graph
-references can require Secret-backed endpoints. Operators that do not use those
-features should remove that rule in a custom ClusterRole and disable the
-corresponding monitors. Any custom RBAC profile must be validated with
+Secret read access is on by default because missing Secret references and
+certificate expiry need it. Set `watch.secrets: false` to remove every Secret
+permission; those checks then report that they cannot verify. Any custom RBAC profile must be validated with
 `kubectl auth can-i` in the target cluster.
 
-The raw manifest and Helm chart must keep the election, persistence, probe,
-security-context, PDB, and topology settings equivalent. This page is guidance;
+The raw manifest and Helm chart must keep the lock, state volume, probe,
+and security-context settings equivalent. This page is guidance;
 rendered manifests and the checked-in RBAC rules are the executable source of
 truth.

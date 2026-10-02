@@ -2,303 +2,151 @@ package rbac
 
 import (
 	"context"
-	"sync"
+	"strings"
 	"time"
 
 	authorizationv1 "k8s.io/api/authorization/v1"
-	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/klog/v2"
 
 	"github.com/abahmed/kwatch/internal/clock"
-	"github.com/abahmed/kwatch/internal/config"
+	"github.com/abahmed/kwatch/internal/inventory/kube"
 )
 
-type Permission struct {
-	Namespace      string `json:"namespace,omitempty"`
-	Group          string `json:"group"`
-	Resource       string `json:"resource"`
-	Name           string `json:"name,omitempty"`
-	Verb           string `json:"verb"`
-	NonResourceURL string `json:"nonResourceURL,omitempty"`
-}
+// checkInterval is deliberately slow: grants change rarely and every check
+// is one SelfSubjectAccessReview per permission.
+const (
+	checkInterval = 15 * time.Minute
+	checkTimeout  = 15 * time.Second
+)
 
+// Status is the result of one permission sweep.
 type Status struct {
-	State      string       `json:"state"`
-	LastCheck  time.Time    `json:"lastCheck"`
-	Available  bool         `json:"available"`
-	RBACDenied bool         `json:"rbacDenied"`
-	Missing    []Permission `json:"missing,omitempty"`
-	Checks     int          `json:"checks"`
-	Scope      string       `json:"scope"`
+	LastCheck time.Time
+	// Unavailable is true when the review API itself failed.
+	Unavailable bool
+	// Missing lists denied permissions.
+	Missing []kube.Access
 }
 
+// RequiredMissing reports whether a required permission is denied.
+func (s Status) RequiredMissing() bool {
+	for _, access := range s.Missing {
+		if access.Required {
+			return true
+		}
+	}
+	return false
+}
+
+// Monitor periodically verifies the permissions kwatch uses and reports
+// each sweep. It never changes behavior: sources degrade on their own.
 type Monitor struct {
-	client                kubernetes.Interface
-	mu                    sync.RWMutex
-	status                Status
-	namespaces            []string
-	allNamespaces         bool
-	clusterPermissions    []Permission
-	namespacedPermissions []Permission
-	infrastructure        []Permission
-	now                   func() time.Time
-	configured            bool
-	started               bool
-	// cycle counts sweeps, for the namespace round-robin.
-	cycle int
-	// fullSweep asks the next sweep to check every namespace. Set on the
-	// first run and after any denial.
-	fullSweep bool
-	// lastMissing remembers each namespace's last result, so a sweep that
-	// samples one namespace still reports the whole picture.
-	lastMissing map[string][]Permission
+	client kubernetes.Interface
+	checks []kube.Access
+	clock  clock.Clock
+	report func(Status)
 }
 
-func namespacedPermissions() []Permission {
-	resources := []Permission{
-		{Resource: "pods"}, {Resource: "events"}, {Resource: "services"},
-		{Resource: "endpointslices", Group: "discovery.k8s.io"},
-		{Resource: "deployments", Group: "apps"},
-		{Resource: "replicasets", Group: "apps"},
-		{Resource: "statefulsets", Group: "apps"},
-		{Resource: "daemonsets", Group: "apps"},
-		{Resource: "jobs", Group: "batch"}, {Resource: "cronjobs", Group: "batch"},
-		{Resource: "horizontalpodautoscalers", Group: "autoscaling"},
-		{Resource: "poddisruptionbudgets", Group: "policy"},
-		{Resource: "networkpolicies", Group: "networking.k8s.io"},
-		{Resource: "resourcequotas"}, {Resource: "limitranges"},
-	}
-	permissions := make([]Permission, 0, len(resources)*3)
-	for _, resource := range resources {
-		for _, verb := range []string{"get", "list", "watch"} {
-			resource.Verb = verb
-			permissions = append(permissions, resource)
-		}
-	}
-	return permissions
-}
-
-func clusterPermissions() []Permission {
-	resources := []Permission{
-		{Resource: "nodes"}, {Resource: "namespaces"},
-		{Resource: "persistentvolumes"},
-		{Resource: "storageclasses", Group: "storage.k8s.io"},
-		{Resource: "volumeattachments", Group: "storage.k8s.io"},
-		{Resource: "apiservices", Group: "apiregistration.k8s.io"},
-		{Resource: "customresourcedefinitions", Group: "apiextensions.k8s.io"},
-		{Resource: "mutatingwebhookconfigurations",
-			Group: "admissionregistration.k8s.io"},
-		{Resource: "validatingwebhookconfigurations",
-			Group: "admissionregistration.k8s.io"},
-	}
-	permissions := make([]Permission, 0, len(resources)*3)
-	for _, resource := range resources {
-		for _, verb := range []string{"get", "list", "watch"} {
-			resource.Verb = verb
-			permissions = append(permissions, resource)
-		}
-	}
-	permissions = append(permissions, Permission{
-		Resource: "selfsubjectaccessreviews",
-		Group:    "authorization.k8s.io",
-		Verb:     "create",
-	})
-	return permissions
-}
-
-// NewWithRuntimeConfig builds the permission auditor from the immutable
-// runtime snapshot. The application uses this constructor so RBAC checks
-// cannot observe a partially normalized YAML configuration.
-func NewWithRuntimeConfig(
-	client kubernetes.Interface,
-	runtime config.RuntimeConfig,
-	timeSource clock.Clock,
+// NewMonitor builds a monitor for checks. report receives every sweep.
+func NewMonitor(
+	client kubernetes.Interface, checks []kube.Access,
+	clk clock.Clock, report func(Status),
 ) *Monitor {
-	timeSource = clock.Require(timeSource)
-	return newConfiguredMonitor(client, runtime, timeSource.Now, false)
-}
-
-func newConfiguredMonitor(
-	client kubernetes.Interface,
-	runtime config.RuntimeConfig,
-	now func() time.Time,
-	fullPermissions bool,
-) *Monitor {
-	var cluster, namespaced []Permission
-	if fullPermissions {
-		cluster, namespaced = clusterPermissions(), namespacedPermissions()
-	} else {
-		cluster, namespaced = permissionsForRuntime(runtime)
-	}
 	return &Monitor{
-		client:                client,
-		clusterPermissions:    cluster,
-		namespacedPermissions: namespaced,
-		infrastructure:        infrastructurePermissionsForRuntime(runtime),
-		now:                   now,
+		client: client, checks: checks, clock: clock.Require(clk),
+		report: report,
 	}
 }
 
-func (m *Monitor) nowTime() time.Time {
-	return m.now()
+// Checks is every permission kwatch uses: the sources' access, the Lease
+// named lease that kwatch holds in its own namespace, and the KwatchConfig
+// resources when the CRD watcher is enabled. Get and update on the Lease
+// are checked by name because the Role grants them only for that name;
+// create cannot be limited by name in Kubernetes RBAC.
+func Checks(namespace, lease string, crdEnabled bool) []kube.Access {
+	checks := append(kube.SourceAccess(),
+		// The cluster ID is the kube-system Namespace UID.
+		kube.Access{Resource: kube.Resource{Name: "namespaces"},
+			Verb: "get", Required: true})
+	checks = append(checks, kube.InstallAccess(namespace)...)
+	leases := kube.Resource{Group: "coordination.k8s.io", Name: "leases"}
+	for _, verb := range []string{"get", "create", "update"} {
+		name := lease
+		if verb == "create" {
+			name = ""
+		}
+		checks = append(checks, kube.Access{Resource: leases, Verb: verb,
+			Namespace: namespace, Name: name, Required: true})
+	}
+	if crdEnabled {
+		config := kube.Resource{Group: "kwatch.abahmed.dev",
+			Name: "kwatchconfigs"}
+		for _, verb := range []string{"list", "watch"} {
+			checks = append(checks, kube.Access{Resource: config,
+				Verb: verb, Namespace: namespace})
+		}
+	}
+	return checks
 }
 
-func (m *Monitor) check(ctx context.Context) {
-	requestCtx, cancel := context.WithTimeout(ctx, 15*time.Second)
+// Start sweeps at once and then every checkInterval until ctx ends.
+func (m *Monitor) Start(ctx context.Context) error {
+	if m.client == nil {
+		return nil
+	}
+	ticker := time.NewTicker(checkInterval)
+	defer ticker.Stop()
+	for {
+		m.report(m.Sweep(ctx))
+		select {
+		case <-ctx.Done():
+			return nil
+		case <-ticker.C:
+		}
+	}
+}
+
+// Sweep checks every permission once.
+func (m *Monitor) Sweep(ctx context.Context) Status {
+	ctx, cancel := context.WithTimeout(ctx, checkTimeout)
 	defer cancel()
-	m.mu.Lock()
-	namespaces := append([]string(nil), m.namespaces...)
-	allNamespaces := m.allNamespaces
-	infrastructure := append([]Permission(nil), m.infrastructure...)
-	full := m.fullSweep || m.lastMissing == nil
-	if m.lastMissing == nil {
-		m.lastMissing = map[string][]Permission{}
-	}
-	m.cycle++
-	cycle := m.cycle
-	m.mu.Unlock()
-	if allNamespaces {
-		namespaces = []string{""}
-	}
-	status := Status{
-		Available: true, Checks: len(m.clusterPermissions),
-		LastCheck: m.nowTime(), Scope: "cluster",
-	}
-	for _, permission := range m.clusterPermissions {
-		allowed, err := m.allowed(requestCtx, permission)
+	status := Status{LastCheck: m.clock.Now()}
+	for _, access := range m.checks {
+		allowed, err := m.allowed(ctx, access)
 		if err != nil {
-			status.Available = false
-			if apierrors.IsForbidden(err) {
-				status.RBACDenied = true
-			}
-			if requestCtx.Err() != nil {
-				break
-			}
-			klog.V(2).InfoS(
-				"security RBAC check unavailable",
-				"resource", permission.Resource, "error", err,
-			)
-			continue
+			klog.V(2).InfoS("permission review unavailable",
+				"component", "rbac", "error", err)
+			status.Unavailable = true
+			return status
 		}
 		if !allowed {
-			status.RBACDenied = true
-			status.Missing = append(status.Missing, permission)
+			status.Missing = append(status.Missing, access)
 		}
 	}
-	for _, permission := range infrastructure {
-		allowed, err := m.allowed(requestCtx, permission)
-		status.Checks++
-		if err != nil {
-			status.Available = false
-			if apierrors.IsForbidden(err) {
-				status.RBACDenied = true
-			}
-			continue
-		}
-		if !allowed {
-			status.RBACDenied = true
-			status.Missing = append(status.Missing, permission)
-		}
-	}
-	m.checkNamespaces(requestCtx, namespaces, sampled(namespaces, full, cycle),
-		&status)
-
-	m.mu.Lock()
-	m.status = status
-	// A denial anywhere means the next sweep checks everything: the sampled
-	// picture is the one that must not be trusted when something is wrong.
-	m.fullSweep = status.RBACDenied || !status.Available
-	m.mu.Unlock()
-}
-
-// sampled picks the namespaces this sweep actually queries.
-//
-// Checking every namespace meant roughly forty-five SelfSubjectAccessReviews
-// per namespace per sweep, to re-confirm grants that change about never. One
-// namespace per sweep, round-robin, finds a revoked grant within a full
-// rotation; the remembered result stands in for the rest, and a denial
-// promotes the next sweep back to a full one.
-func sampled(namespaces []string, full bool, cycle int) map[string]bool {
-	out := make(map[string]bool, len(namespaces))
-	if full || len(namespaces) <= 1 {
-		for _, ns := range namespaces {
-			out[ns] = true
-		}
-		return out
-	}
-	out[namespaces[cycle%len(namespaces)]] = true
-	return out
-}
-
-// checkNamespaces runs the namespaced permission checks for the sampled
-// namespaces and folds every namespace's latest known result into status.
-func (m *Monitor) checkNamespaces(
-	ctx context.Context,
-	namespaces []string,
-	check map[string]bool,
-	status *Status,
-) {
-	for _, namespace := range namespaces {
-		if namespace != "" {
-			status.Scope = "cluster+namespace"
-		}
-		if !check[namespace] {
-			m.mu.RLock()
-			status.Missing = append(status.Missing, m.lastMissing[namespace]...)
-			m.mu.RUnlock()
-			continue
-		}
-		var missing []Permission
-		for _, permission := range m.namespacedPermissions {
-			permission.Namespace = namespace
-			allowed, err := m.allowed(ctx, permission)
-			status.Checks++
-			if err != nil {
-				status.Available = false
-				if apierrors.IsForbidden(err) {
-					status.RBACDenied = true
-				}
-				continue
-			}
-			if !allowed {
-				missing = append(missing, permission)
-			}
-		}
-		status.Missing = append(status.Missing, missing...)
-		m.mu.Lock()
-		m.lastMissing[namespace] = missing
-		m.mu.Unlock()
-	}
-	if len(status.Missing) > 0 {
-		status.RBACDenied = true
-	}
+	return status
 }
 
 func (m *Monitor) allowed(
-	ctx context.Context, permission Permission,
+	ctx context.Context, access kube.Access,
 ) (bool, error) {
-	request := &authorizationv1.SelfSubjectAccessReview{
-		Spec: authorizationv1.SelfSubjectAccessReviewSpec{},
-	}
-	if permission.NonResourceURL != "" {
-		request.Spec.NonResourceAttributes = &authorizationv1.NonResourceAttributes{
-			Path: permission.NonResourceURL,
-			Verb: permission.Verb,
+	spec := authorizationv1.SelfSubjectAccessReviewSpec{}
+	if access.NonResourceURL != "" {
+		spec.NonResourceAttributes = &authorizationv1.NonResourceAttributes{
+			Path: access.NonResourceURL, Verb: access.Verb,
 		}
 	} else {
-		request.Spec.ResourceAttributes = &authorizationv1.ResourceAttributes{
-			Namespace: permission.Namespace,
-			Group:     permission.Group,
-			Resource:  permission.Resource,
-			Name:      permission.Name,
-			Verb:      permission.Verb,
+		resource, subresource, _ := strings.Cut(access.Resource.Name, "/")
+		spec.ResourceAttributes = &authorizationv1.ResourceAttributes{
+			Namespace: access.Namespace, Group: access.Resource.Group,
+			Resource: resource, Subresource: subresource,
+			Name: access.Name, Verb: access.Verb,
 		}
 	}
-	result, err := m.client.AuthorizationV1().SelfSubjectAccessReviews().Create(
-		ctx, request, metav1.CreateOptions{},
-	)
+	result, err := m.client.AuthorizationV1().SelfSubjectAccessReviews().
+		Create(ctx, &authorizationv1.SelfSubjectAccessReview{Spec: spec},
+			metav1.CreateOptions{})
 	if err != nil {
 		return false, err
 	}

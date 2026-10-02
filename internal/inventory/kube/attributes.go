@@ -1,0 +1,87 @@
+package kube
+
+// Attribute names shared by schemas, detectors and rules. Names are stable:
+// they are persisted and referenced by rule definitions.
+const (
+	AttrPhase           = "phase"
+	AttrLabels          = "labels"
+	AttrReady           = "ready"
+	AttrReadySince      = "ready.transition"
+	AttrReason          = "reason"
+	AttrMessage         = "message"
+	AttrDeleting        = "deleting"
+	AttrQoS             = "qos"
+	AttrScheduled       = "scheduled"
+	AttrScheduledReason = "scheduled.reason"
+	AttrStartTime       = "start.time"
+	// AttrCreated is the pod creation time, for pending and ready
+	// baselines.
+	AttrCreated = "created"
+
+	AttrState        = "state"
+	AttrStateReason  = "state.reason"
+	AttrExitCode     = "exit.code"
+	AttrRestarts     = "restarts"
+	AttrLastReason   = "last.reason"
+	AttrLastExitCode = "last.exit.code"
+	AttrLastFinished = "last.finished"
+	AttrLastMessage  = "last.message"
+	// AttrLastStarted is when the last terminated run started, so the
+	// length of that run is last.finished minus last.started.
+	AttrLastStarted = "last.started"
+	// AttrContainerPorts lists the container's declared port numbers.
+	AttrContainerPorts = "container.ports"
+	// AttrProbePorts lists the ports the container's probes connect to,
+	// named ports resolved against the container's own port names.
+	AttrProbePorts        = "probe.ports"
+	AttrStartedAt         = "started.at"
+	AttrImage             = "image"
+	AttrInit              = "init"
+	AttrSidecar           = "sidecar"
+	AttrMemoryLimit       = "memory.limit"
+	AttrMemoryReq         = "memory.request"
+	AttrCPULimit          = "cpu.limit"
+	AttrCPUReq            = "cpu.request"
+	AttrEphemeralLimit    = "ephemeral.limit"
+	AttrCPUAllocatable    = "cpu.allocatable"
+	AttrMemoryAllocatable = "memory.allocatable"
+	AttrProbeBudget       = "probe.budget.seconds"
+
+	AttrUnschedulable = "unschedulable"
+	AttrTaints        = "taints"
+	AttrKubelet       = "kubelet.version"
+	AttrServerVersion = "server.version"
+	AttrServerMinor   = "server.version.minor"
+	AttrRuntime       = "runtime.version"
+	AttrKernel        = "kernel.version"
+	AttrOS            = "os"
+	AttrInstanceType  = "instance.type"
+
+	AttrReplicas         = "replicas"
+	AttrReadyReplicas    = "replicas.ready"
+	AttrAvailable        = "replicas.available"
+	AttrUpdatedReplicas  = "replicas.updated"
+	AttrUnavailable      = "replicas.unavailable"
+	AttrGeneration       = "generation"
+	AttrObservedGen      = "generation.observed"
+	AttrTemplateHash     = "template.hash"
+	AttrRevision         = "revision"
+	AttrProgressDeadline = "progress.deadline.exceeded"
+	AttrConditionPrefix  = "condition."
+	AttrConditionReason  = ".reason"
+	AttrConditionMessage = ".message"
+	AttrConditionSince   = ".since"
+	AttrSuspended        = "suspended"
+	AttrLastSchedule     = "last.schedule"
+	AttrLastSuccess      = "last.success"
+	AttrNextRun          = "next.run"
+	AttrScheduleProblem  = "schedule.problem"
+	AttrActive           = "active"
+	AttrSucceeded        = "succeeded"
+	AttrFailed           = "failed"
+	AttrBackoffLimit     = "backoff.limit"
+	AttrCurrentReplicas  = "replicas.current"
+	AttrDesiredReplicas  = "replicas.desired"
+	AttrMinReplicas      = "replicas.min"
+	AttrMaxReplicas      = "replicas.max"
+)

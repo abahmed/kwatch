@@ -59,14 +59,11 @@ func TestLoadConfigRejectsEnvironmentProviderSecret(t *testing.T) {
 }
 
 func TestLoadConfigRejectsPlainGlobalSecrets(t *testing.T) {
-	cfg, err := testConfigFile(t, `healthCheck:
-  diagnosticsToken: plain-token
-heartbeatMonitor:
+	cfg, err := testConfigFile(t, `heartbeatMonitor:
   url: https://heartbeat.example.test/secret-path
 `)
 
 	assert.Nil(t, cfg)
-	assert.ErrorContains(t, err, "healthCheck.diagnosticsToken")
 	assert.ErrorContains(t, err, "heartbeatMonitor.url")
 }
 

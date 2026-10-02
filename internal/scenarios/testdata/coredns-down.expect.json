@@ -1,0 +1,13 @@
+{
+  "name": "coredns-down",
+  "description": "CoreDNS pods crash-loop; kwatch's DNS probe fails and apps in several namespaces crash with name-resolution errors.",
+  "root": "cluster-dns//cluster-dns",
+  "tier": "page",
+  "maxMessages": 2,
+  "mustNotBlame": [
+    "node//n1",
+    "node//n2",
+    "deployment/shop/cart",
+    "deployment/billing/invoices"
+  ]
+}

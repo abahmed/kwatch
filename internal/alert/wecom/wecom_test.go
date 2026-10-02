@@ -9,8 +9,8 @@ import (
 
 	"github.com/stretchr/testify/assert"
 
+	"github.com/abahmed/kwatch/internal/delivery/providertest"
 	"github.com/abahmed/kwatch/internal/delivery/transport"
-	"github.com/abahmed/kwatch/internal/event"
 )
 
 var testDeps = transport.Dependencies{
@@ -95,13 +95,13 @@ func TestSendMessageReportsAPIErrorBody(t *testing.T) {
 	assert.Error(t, c.SendMessage(context.Background(), "test"))
 }
 
-func TestSendEvent(t *testing.T) {
+func TestSendIncident(t *testing.T) {
 	assert := assert.New(t)
 
 	s := httptest.NewServer(
 		http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			body, _ := io.ReadAll(r.Body)
-			assert.Contains(string(body), "OOMKILLED")
+			assert.Contains(string(body), "crash-looping")
 			w.Write([]byte(`{"errcode":0}`))
 		}))
 
@@ -112,21 +112,17 @@ func TestSendEvent(t *testing.T) {
 	}
 	c := NewWecom(configMap, testAppConfig(), testDeps)
 
-	ev := event.Event{
-		PodName:   "test-pod",
-		Namespace: "default",
-		Reason:    "OOMKILLED",
-	}
-	assert.Nil(c.SendEvent(context.Background(), &ev))
+	assert.Nil(c.SendIncident(context.Background(), providertest.Announce()))
 }
 
 func TestInvalidHttpRequest(t *testing.T) {
 	assert := assert.New(t)
 
 	configMap := map[string]interface{}{
-		"webhook": "h ttp://localhost",
+		"webhook": "https://example.test/hook",
 	}
 	c := NewWecom(configMap, testAppConfig(), testDeps)
+	c.webhook = "h ttp://localhost"
 
 	assert.NotNil(c.SendMessage(context.Background(), "test"))
 }

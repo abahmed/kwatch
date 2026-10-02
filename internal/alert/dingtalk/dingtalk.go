@@ -8,22 +8,24 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/url"
+	"strings"
 	"time"
 
 	"k8s.io/klog/v2"
 
 	"github.com/abahmed/kwatch/internal/clock"
-	"github.com/abahmed/kwatch/internal/constant"
 	"github.com/abahmed/kwatch/internal/delivery/transport"
-	"github.com/abahmed/kwatch/internal/event"
-	"github.com/abahmed/kwatch/internal/insight"
-	"github.com/abahmed/kwatch/internal/message"
-	"github.com/abahmed/kwatch/internal/model"
+	"github.com/abahmed/kwatch/internal/notification"
+	"github.com/abahmed/kwatch/internal/ratelimit"
 )
 
 const (
 	dingTalkAPIURL = "https://oapi.dingtalk.com/robot/send?access_token=%s"
 )
+
+// rateLimitCodes are the documented frequency-limit codes; every other
+// body error is a permanent rejection.
+var rateLimitCodes = map[int]bool{130101: true}
 
 type dingResponse struct {
 	Errcode int    `json:"errcode"`
@@ -76,14 +78,19 @@ func (d *DingTalk) Name() string {
 	return "DingTalk"
 }
 
-// SendEvent sends event to the provider
-func (d *DingTalk) SendEvent(ctx context.Context, e *event.Event) error {
+// SendIncident sends the incident narrative as a markdown message. The
+// notification title is the configured title or the Short lead.
+func (d *DingTalk) SendIncident(
+	ctx context.Context, m notification.Message,
+) error {
 	title := d.title
 	if len(title) == 0 {
-		title = constant.DefaultTitle
+		title = m.ShortText()
 	}
-
-	msg := e.FormatMarkdown(d.clusterName, "", "")
+	text := m.NoteText()
+	if len(m.Output) > 0 {
+		text += "\n\n```\n" + strings.Join(m.Output, "\n") + "\n```"
+	}
 
 	payload := struct {
 		MsgType  string `json:"msgtype"`
@@ -95,7 +102,7 @@ func (d *DingTalk) SendEvent(ctx context.Context, e *event.Event) error {
 		MsgType: "markdown",
 	}
 	payload.Markdown.Title = title
-	payload.Markdown.Text = msg
+	payload.Markdown.Text = text
 
 	bodyBytes, err := json.Marshal(payload)
 	if err != nil {
@@ -125,40 +132,6 @@ func (d *DingTalk) SendMessage(ctx context.Context, msg string) error {
 	return d.sendAPI(ctx, string(bodyBytes))
 }
 
-// SendIncident implements delivery.ThreadProvider.
-// It renders the incident using the Report model and PlaintextRenderer,
-// producing a context-adaptive text message.
-func (d *DingTalk) SendIncident(
-	ctx context.Context,
-	inc *model.Incident,
-	action model.IncidentAction,
-) error {
-	return d.SendIncidentWithInsight(ctx, inc, action, nil)
-}
-
-// SendIncidentWithInsight implements delivery.InsightThreadProvider, so the
-// diagnosis — likely cause, impact, recent changes — is rendered rather than
-// dropped on the way to this provider.
-func (d *DingTalk) SendIncidentWithInsight(
-	ctx context.Context,
-	inc *model.Incident,
-	action model.IncidentAction,
-	ins *insight.Insight,
-) error {
-	text := message.RenderIncidentWithInsight(
-		inc,
-		action,
-		ins,
-		message.NewPlainTextRenderer(),
-		d.clusterName,
-		d.clockSource,
-	)
-	if text == "" {
-		return nil
-	}
-	return d.SendMessage(ctx, text)
-}
-
 func (d *DingTalk) sendAPI(ctx context.Context, msg string) error {
 	url := fmt.Sprintf(d.url, d.accessToken)
 	if len(d.secret) != 0 {
@@ -173,17 +146,22 @@ func (d *DingTalk) sendAPI(ctx context.Context, msg string) error {
 
 	// DingTalk answers 200 to a rejected message and reports the failure in
 	// the body instead. Some of those codes are transient (130101 is its
-	// frequency limit), so the error stays retryable.
+	// frequency limit), so it is reported as rate limited.
 	var dr dingResponse
 	if err := json.Unmarshal(data, &dr); err != nil {
 		return err
 	}
 	if dr.Errcode != 0 {
-		return fmt.Errorf(
+		err := fmt.Errorf(
 			"call to ding talk alert rejected (errcode %d): %s",
 			dr.Errcode,
 			string(data),
 		)
+		if rateLimitCodes[dr.Errcode] {
+			return &ratelimit.Error{Provider: "DingTalk",
+				StatusCode: ratelimit.InBodyStatus, Err: err}
+		}
+		return transport.Permanent(err)
 	}
 	return nil
 }

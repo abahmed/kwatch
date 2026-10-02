@@ -4,17 +4,26 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"strings"
 
 	"k8s.io/klog/v2"
 
 	"github.com/abahmed/kwatch/internal/delivery/transport"
-	"github.com/abahmed/kwatch/internal/event"
+	"github.com/abahmed/kwatch/internal/notification"
+	"github.com/abahmed/kwatch/internal/ratelimit"
 )
+
+// wecomTextLimit is WeCom's markdown content limit in bytes.
+const wecomTextLimit = 4096
 
 type wecomPayload struct {
 	MsgType  string            `json:"msgtype"`
 	Markdown map[string]string `json:"markdown"`
 }
+
+// rateLimitCodes are the documented frequency-limit codes; every other
+// body error is a permanent rejection.
+var rateLimitCodes = map[int]bool{45009: true, 45033: true}
 
 type wecomResponse struct {
 	ErrorCode int    `json:"errcode"`
@@ -41,6 +50,12 @@ func NewWecom(
 		return nil
 	}
 
+	if !transport.ValidEndpoint(webhook) {
+		klog.InfoS("initializing wecom with an invalid webhook",
+			"setting", "webhook")
+		return nil
+	}
+
 	klog.InfoS("initializing wecom with webhook configured")
 
 	return &Wecom{
@@ -55,10 +70,16 @@ func (s *Wecom) Name() string {
 	return "WeCom"
 }
 
-// SendEvent sends event to the provider
-func (s *Wecom) SendEvent(ctx context.Context, e *event.Event) error {
-	msg := e.FormatText(s.clusterName, "")
-	return s.SendMessage(ctx, msg)
+// SendIncident sends the incident narrative as markdown, with the
+// application output in a code block, within WeCom's content limit.
+func (s *Wecom) SendIncident(
+	ctx context.Context, m notification.Message,
+) error {
+	content := m.NoteText()
+	if len(m.Output) > 0 {
+		content += "\n\n```\n" + strings.Join(m.Output, "\n") + "\n```"
+	}
+	return s.SendMessage(ctx, notification.Truncate(content, wecomTextLimit))
 }
 
 // SendMessage sends text message to the provider
@@ -89,7 +110,14 @@ func (s *Wecom) SendMessage(ctx context.Context, msg string) error {
 		return fmt.Errorf("wecom returned invalid response")
 	}
 	if response.ErrorCode != 0 {
-		return fmt.Errorf("wecom request failed with code %d", response.ErrorCode)
+		err := fmt.Errorf(
+			"wecom request failed with code %d", response.ErrorCode,
+		)
+		if rateLimitCodes[response.ErrorCode] {
+			return &ratelimit.Error{Provider: "WeCom",
+				StatusCode: ratelimit.InBodyStatus, Err: err}
+		}
+		return transport.Permanent(err)
 	}
 	return nil
 }

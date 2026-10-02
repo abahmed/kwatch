@@ -1,0 +1,12 @@
+{
+  "name": "heldout-liveness-too-aggressive",
+  "description": "New replicas of a slow-starting app are killed by a liveness probe that gives up after 20 seconds, while running replicas needed 70 seconds to start.",
+  "root": "deployment/reports/renderer",
+  "tier": "notify",
+  "maxMessages": 2,
+  "mustNotBlame": [
+    "node//q1",
+    "node//q2",
+    "node//q3"
+  ]
+}

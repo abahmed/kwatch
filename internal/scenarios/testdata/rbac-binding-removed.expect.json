@@ -1,0 +1,12 @@
+{
+  "name": "rbac-binding-removed",
+  "description": "A RoleBinding is deleted; the pods of the ServiceAccount it bound crash with forbidden errors.",
+  "root": "rolebinding/shop/api-config-reader",
+  "tier": "notify",
+  "maxMessages": 2,
+  "mustNotBlame": [
+    "deployment/shop/api",
+    "node//n1",
+    "node//n2"
+  ]
+}

@@ -1,6 +1,9 @@
 #!/bin/sh
 
 set -eu
+# pipefail is not POSIX; enable it where the shell supports it.
+# shellcheck disable=SC3040
+(set -o pipefail) 2>/dev/null && set -o pipefail
 
 if [ "$#" -ne 1 ]; then
 	printf 'usage: %s coverage-profile\n' "$0" >&2
@@ -16,25 +19,20 @@ fi
 aggregate_min=75
 core_min=70
 core_packages='github.com/abahmed/kwatch/internal/app
-github.com/abahmed/kwatch/internal/controller
+github.com/abahmed/kwatch/internal/pipeline
 github.com/abahmed/kwatch/internal/incident
+github.com/abahmed/kwatch/internal/rootcause
+github.com/abahmed/kwatch/internal/detection
+github.com/abahmed/kwatch/internal/detection/detectors
+github.com/abahmed/kwatch/internal/inventory
+github.com/abahmed/kwatch/internal/inventory/kube
+github.com/abahmed/kwatch/internal/storage
+github.com/abahmed/kwatch/internal/notification/compose
+github.com/abahmed/kwatch/internal/notification
+github.com/abahmed/kwatch/internal/scope
 github.com/abahmed/kwatch/internal/delivery
 github.com/abahmed/kwatch/internal/delivery/transport
-github.com/abahmed/kwatch/internal/persistence
-github.com/abahmed/kwatch/internal/monitor/pod
-github.com/abahmed/kwatch/internal/monitor/workload
-github.com/abahmed/kwatch/internal/monitor/node
-github.com/abahmed/kwatch/internal/monitor/network
-github.com/abahmed/kwatch/internal/monitor/cluster
-github.com/abahmed/kwatch/internal/monitor/security
-github.com/abahmed/kwatch/internal/probe
-github.com/abahmed/kwatch/internal/kubeletmetrics
-github.com/abahmed/kwatch/internal/statuswatch
-github.com/abahmed/kwatch/internal/resource
-github.com/abahmed/kwatch/internal/observe
-github.com/abahmed/kwatch/internal/pvc
-github.com/abahmed/kwatch/internal/crdwatch
-github.com/abahmed/kwatch/internal/controlplane
+github.com/abahmed/kwatch/internal/config/crd
 github.com/abahmed/kwatch/internal/rbac'
 
 summary=$(mktemp)

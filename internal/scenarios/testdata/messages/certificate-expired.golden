@@ -1,0 +1,4 @@
+10:01:15 settled
+🟠 Secret bank-client-tls in shop (prod-eu-1) has a TLS certificate that expired one hour ago. All of its dependents are failing. Clients are rejecting it now. payments is affected as well. To list the keys of the Secret the pods depend on, run kubectl describe secret bank-client-tls -n shop
+🟠 Secret bank-client-tls in shop (prod-eu-1) has a TLS certificate that expired one hour ago.
+

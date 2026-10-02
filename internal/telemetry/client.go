@@ -16,8 +16,13 @@ const Endpoint = "https://api.kwatch.dev/v1/telemetry/heartbeat"
 // WeeklyInterval is the minimum interval between adoption heartbeats.
 const WeeklyInterval = 7 * 24 * time.Hour
 
-var uuidPattern = regexp.MustCompile(`^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-4[0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}$`)
-var versionPattern = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9._+-]{0,63}$`)
+var uuidPattern = regexp.MustCompile(
+	`^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-4[0-9a-fA-F]{3}-` +
+		`[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}$`,
+)
+var versionPattern = regexp.MustCompile(
+	`^[A-Za-z0-9][A-Za-z0-9._+-]{0,63}$`,
+)
 
 type payload struct {
 	ClusterUUID string `json:"cluster_uuid"`

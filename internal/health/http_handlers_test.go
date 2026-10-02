@@ -2,7 +2,6 @@ package health
 
 import (
 	"context"
-	"encoding/json"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -11,19 +10,7 @@ import (
 
 	"github.com/abahmed/kwatch/internal/clock"
 	"github.com/abahmed/kwatch/internal/config"
-	"github.com/abahmed/kwatch/internal/model"
 )
-
-func TestConfigureDependenciesSetsDeadLetters(t *testing.T) {
-	h := &HealthServer{}
-	assert.Nil(t, h.deadLetterLister)
-	assert.NoError(t, h.ConfigureDependencies(Dependencies{
-		DeadLetters: &fakeDeadLetterLister{
-			letters: []model.DeadLetterEntry{{Key: "a"}},
-		},
-	}))
-	assert.NotNil(t, h.deadLetterLister)
-}
 
 func TestSetReady(t *testing.T) {
 	h := &HealthServer{}
@@ -42,15 +29,6 @@ func TestHealthServerStopIsIdempotent(t *testing.T) {
 	assert.NoError(t, server.Stop(context.Background()))
 	assert.NoError(t, server.Stop(context.Background()))
 	assert.Error(t, startForTest(server))
-}
-
-func TestConfigureDependenciesRejectsChangesAfterOpen(t *testing.T) {
-	server := NewHealthServerWithClock(
-		config.HealthCheck{Port: 0, Enabled: true}, clock.RealClock{},
-	)
-	assert.NoError(t, server.Open())
-	defer server.Stop(context.Background())
-	assert.Error(t, server.ConfigureDependencies(Dependencies{}))
 }
 
 func TestReadyzHandlerNotReady(t *testing.T) {
@@ -78,14 +56,14 @@ func TestReadyzHandlerReady(t *testing.T) {
 	assert.Equal(t, "OK", string(body[:n]))
 }
 
-func TestAvailabilityzFollowsElectionParticipation(t *testing.T) {
+func TestAvailabilityzAcceptsStartingAndLeader(t *testing.T) {
 	h := &HealthServer{}
 	req := httptest.NewRequest(http.MethodGet, "/availabilityz", nil)
 	w := httptest.NewRecorder()
 	h.availabilityzHandler(w, req)
 	assert.Equal(t, http.StatusServiceUnavailable, w.Result().StatusCode)
 
-	h.SetLeadership(LeadershipStatus{Role: "standby"})
+	h.SetLeadership(LeadershipStatus{Role: "starting"})
 	w = httptest.NewRecorder()
 	h.availabilityzHandler(w, req)
 	assert.Equal(t, http.StatusOK, w.Result().StatusCode)
@@ -96,115 +74,29 @@ func TestAvailabilityzFollowsElectionParticipation(t *testing.T) {
 	assert.Equal(t, http.StatusServiceUnavailable, w.Result().StatusCode)
 }
 
-func TestDeadLettersHandlerNoLister(t *testing.T) {
-	h := &HealthServer{}
-	req := httptest.NewRequest(http.MethodGet, "/deadletters", nil)
-	w := httptest.NewRecorder()
-	h.deadLettersHandler(w, req)
-	resp := w.Result()
-	assert.Equal(t, http.StatusServiceUnavailable, resp.StatusCode)
-}
-
-func TestDeadLettersHandlerWithData(t *testing.T) {
-	input := []model.DeadLetterEntry{{Key: "key", Error: "secret webhook URL"}}
-	expected := []model.DeadLetterEntry{{Key: "key", Error: "delivery_failed"}}
-	h := &HealthServer{deadLetterLister: &fakeDeadLetterLister{letters: input}}
-	req := httptest.NewRequest(http.MethodGet, "/deadletters", nil)
-	w := httptest.NewRecorder()
-	h.deadLettersHandler(w, req)
-	resp := w.Result()
-	assert.Equal(t, http.StatusOK, resp.StatusCode)
-	assert.Equal(t, "application/json", resp.Header.Get("Content-Type"))
-	var got []model.DeadLetterEntry
-	err := json.NewDecoder(resp.Body).Decode(&got)
-	assert.Nil(t, err)
-	assert.Equal(t, expected, got)
-}
-
-func TestDeadLettersHandlerAuthFails(t *testing.T) {
-	h := &HealthServer{diagnosticsToken: "secret"}
-	req := httptest.NewRequest(http.MethodGet, "/deadletters", nil)
-	w := httptest.NewRecorder()
-	h.guard(h.deadLettersHandler)(w, req)
-	resp := w.Result()
-	assert.Equal(t, http.StatusUnauthorized, resp.StatusCode)
-}
-
-func TestPprofEndpointsNotRegisteredWhenDisabled(t *testing.T) {
-	h := &HealthServer{pprof: false}
-	mux := http.NewServeMux()
-	mux.HandleFunc("/healthz", h.healthzHandler)
-	// pprof NOT registered
-	ts := httptest.NewServer(mux)
+func TestServeMuxExposesOnlyOperationalEndpoints(t *testing.T) {
+	h := NewHealthServerWithClock(
+		config.HealthCheck{Port: 0, Enabled: true}, clock.RealClock{},
+	)
+	ts := httptest.NewServer(newServeMux(h))
 	defer ts.Close()
 
-	resp, err := http.Get(ts.URL + "/debug/pprof/")
-	assert.Nil(t, err)
-	assert.Equal(t, http.StatusNotFound, resp.StatusCode)
-	resp.Body.Close()
-}
-
-func TestDiagnosticsDisabled(t *testing.T) {
-	h := &HealthServer{diagnostics: false}
-	mux := http.NewServeMux()
-	mux.HandleFunc("/healthz", h.healthzHandler)
-	mux.HandleFunc("/health", h.healthHandler)
-	mux.HandleFunc("/readyz", h.readyzHandler)
-	// /incidents and /test-alert NOT registered when diagnostics is false
-
-	ts := httptest.NewServer(mux)
-	defer ts.Close()
-
-	// /healthz always works
-	resp, err := http.Get(ts.URL + "/healthz")
-	assert.Nil(t, err)
-	assert.Equal(t, http.StatusOK, resp.StatusCode)
-	resp.Body.Close()
-
-	// /incidents returns 404 when diagnostics disabled
-	resp, err = http.Get(ts.URL + "/incidents")
-	assert.Nil(t, err)
-	assert.Equal(t, http.StatusNotFound, resp.StatusCode)
-	resp.Body.Close()
-
-	// /test-alert returns 404 when diagnostics disabled
-	resp, err = http.Post(ts.URL+"/test-alert", "text/plain", nil)
-	assert.Nil(t, err)
-	assert.Equal(t, http.StatusNotFound, resp.StatusCode)
-	resp.Body.Close()
-}
-
-func TestDiagnosticsEnabled(t *testing.T) {
-	h := &HealthServer{diagnostics: true, clock: clock.RealClock{}}
-	assert.NoError(t, h.ConfigureDependencies(Dependencies{
-		Incident: &fakeIncidentLister{snap: []model.IncidentView{}},
-		Delivery: &fakeAlertSender{},
-	}))
-	mux := http.NewServeMux()
-	mux.HandleFunc("/healthz", h.healthzHandler)
-	mux.HandleFunc("/health", h.healthHandler)
-	mux.HandleFunc("/readyz", h.readyzHandler)
-	mux.HandleFunc("/incidents", h.incidentsHandler)
-	mux.HandleFunc("/test-alert", h.testAlertHandler)
-
-	ts := httptest.NewServer(mux)
-	defer ts.Close()
-
-	// /healthz always works
-	resp, err := http.Get(ts.URL + "/healthz")
-	assert.Nil(t, err)
-	assert.Equal(t, http.StatusOK, resp.StatusCode)
-	resp.Body.Close()
-
-	// /incidents returns 200 when diagnostics enabled
-	resp, err = http.Get(ts.URL + "/incidents")
-	assert.Nil(t, err)
-	assert.Equal(t, http.StatusOK, resp.StatusCode)
-	resp.Body.Close()
-
-	// /test-alert returns 200 when diagnostics enabled
-	resp, err = http.Post(ts.URL+"/test-alert", "text/plain", nil)
-	assert.Nil(t, err)
-	assert.Equal(t, http.StatusOK, resp.StatusCode)
-	resp.Body.Close()
+	for _, path := range []string{
+		"/healthz", "/readyz", "/availabilityz", "/health", "/metrics",
+	} {
+		resp, err := http.Get(ts.URL + path)
+		assert.NoError(t, err)
+		assert.NotEqual(t, http.StatusNotFound, resp.StatusCode, path)
+		resp.Body.Close()
+	}
+	for _, path := range []string{
+		"/incidents", "/test-alert", "/deadletters", "/kubelet",
+		"/telemetry", "/security", "/controlplane", "/informer",
+		"/debug/pprof/", "/debug/pprof/heap",
+	} {
+		resp, err := http.Get(ts.URL + path)
+		assert.NoError(t, err)
+		assert.Equal(t, http.StatusNotFound, resp.StatusCode, path)
+		resp.Body.Close()
+	}
 }

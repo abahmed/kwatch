@@ -2,14 +2,18 @@
 set -euo pipefail
 
 # This is a disposable-cluster smoke test. It validates Kubernetes behavior
-# that fake clients cannot prove: RBAC admission, ConfigMap migration, restart
-# recovery, upgrade retention, health probes, and an event burst.
+# that fake clients cannot prove: RBAC admission, restart recovery, Lease
+# handover to a replacement Pod, upgrade retention of the state volume, health
+# probes, and an event burst. Kwatch runs as one replica with the Lease as a
+# write lock.
 release="${KWATCH_RELEASE:-kwatch-ops}"
 namespace="${KWATCH_NAMESPACE:-kwatch-ops}"
-cluster="${KIND_CLUSTER_NAME:-kind}"
+# Must match the cluster_name the workflow gives helm/kind-action.
+cluster="${KIND_CLUSTER_NAME:-kwatch-ops}"
 load_count="${KWATCH_LOAD_COUNT:-50}"
-replicas="${KWATCH_REPLICAS:-2}"
-scale_test="${KWATCH_SCALE_TEST:-false}"
+rbac_mode="${KWATCH_RBAC_MODE:-full}"
+watch_secrets="${KWATCH_WATCH_SECRETS:-true}"
+replicas=1
 image="${KWATCH_IMAGE:-kwatch:ci}"
 port=18060
 
@@ -24,10 +28,22 @@ trap cleanup EXIT
 case "$load_count" in
 	(*[!0-9]*|'') echo "KWATCH_LOAD_COUNT must be numeric" >&2; exit 2;;
 esac
-case "$replicas" in
-	(*[!0-9]*|''|0) echo "KWATCH_REPLICAS must be positive" >&2; exit 2;;
+case "$rbac_mode" in
+	(full|least-privilege) ;;
+	(*) echo "KWATCH_RBAC_MODE must be full or least-privilege" >&2; exit 2;;
 esac
-
+case "$watch_secrets" in
+	(true|false) ;;
+	(*) echo "KWATCH_WATCH_SECRETS must be true or false" >&2; exit 2;;
+esac
+chart_values=(
+	--set image.repository="${image%%:*}"
+	--set image.tag="${image##*:}"
+	--set image.pullPolicy=Never
+	--set config.crd.enabled=true
+	--set rbac.mode="$rbac_mode"
+	--set watch.secrets="$watch_secrets"
+)
 wait_for_running_replicas() {
 	local expected="$1"
 	for _ in $(seq 1 90); do
@@ -79,26 +95,15 @@ assert_leader_pod_available() {
 	fi
 }
 
-echo "Installing $release in $namespace"
+echo "Installing $release in $namespace" \
+	"(rbac.mode=$rbac_mode, watch.secrets=$watch_secrets)"
 kubectl create namespace "$namespace" --dry-run=client -o yaml |
 	kubectl apply -f - >/dev/null
-
-# Seed an older state schema before startup. The application must migrate it
-# without replacing the ConfigMap or losing the cluster identity.
-kubectl create configmap kwatch-state \
-	--namespace "$namespace" \
-	--from-literal=state-schema-version=1 \
-	--from-literal=cluster-id=operational-test \
-	--dry-run=client -o yaml | kubectl apply -f - >/dev/null
 
 kind load docker-image "$image" --name "$cluster"
 helm install "$release" deploy/chart \
 	--namespace "$namespace" \
-	--set image.repository="${image%%:*}" \
-	--set image.tag="${image##*:}" \
-	--set image.pullPolicy=Never \
-	--set replicaCount="$replicas" \
-	--set config.crd.enabled=true \
+	"${chart_values[@]}" \
 	--wait=false
 
 wait_for_deployment_rollout "$replicas"
@@ -130,29 +135,42 @@ kubectl wait pod "$leader_pod" --namespace "$namespace" \
 
 assert_leader_pod_available
 
-if [[ "$replicas" -gt 1 ]]; then
-	pdb_count=$(kubectl get pdb --namespace "$namespace" \
-		-l "app.kubernetes.io/instance=$release" --no-headers |
-		wc -l | tr -d ' ')
-	if [[ "$pdb_count" != 1 ]]; then
-		echo "expected one PodDisruptionBudget, got $pdb_count" >&2
-		exit 1
-	fi
-else
-	pdb_count=$(kubectl get pdb --namespace "$namespace" \
-		-l "app.kubernetes.io/instance=$release" --no-headers |
-		wc -l | tr -d ' ')
-	if [[ "$pdb_count" != 0 ]];
-	then
-		echo "a single-replica release must not create a PodDisruptionBudget" >&2
-		exit 1
-	fi
+pdb_count=$(kubectl get pdb --namespace "$namespace" \
+	-l "app.kubernetes.io/instance=$release" --no-headers |
+	wc -l | tr -d ' ')
+if [[ "$pdb_count" != 0 ]]; then
+	echo "a single-replica release must not create a PodDisruptionBudget" >&2
+	exit 1
+fi
+
+pvc_phase=$(kubectl get pvc "${release}-data" --namespace "$namespace" \
+	-o jsonpath='{.status.phase}')
+if [[ "$pvc_phase" != Bound ]]; then
+	echo "state volume ${release}-data is not bound: $pvc_phase" >&2
+	exit 1
 fi
 
 leader_for_lease() {
 	kubectl get lease "${release}-leader" \
 		--namespace "$namespace" \
 		-o jsonpath='{.spec.holderIdentity}' 2>/dev/null || true
+}
+
+# await_lease_holder sets leader_pod to the current Lease holder once that
+# holder names an existing Pod.
+await_lease_holder() {
+	local current=""
+	for _ in $(seq 1 90); do
+		current=$(leader_for_lease)
+		if [[ -n "$current" ]] && kubectl get pod "$current" \
+			--namespace "$namespace" >/dev/null 2>&1; then
+			leader_pod="$current"
+			return 0
+		fi
+		sleep 2
+	done
+	echo "Lease ${release}-leader has no live holder" >&2
+	exit 1
 }
 
 wait_for_leader() {
@@ -172,73 +190,26 @@ wait_for_leader() {
 	exit 1
 }
 
-if [[ "$replicas" -gt 1 ]]; then
-	old_leader="$leader_pod"
-	echo "Deleting leader $old_leader to test standby takeover"
-	kubectl delete pod "$old_leader" --namespace "$namespace" \
-		--wait=false >/dev/null
-	wait_for_leader "$old_leader"
-	kubectl wait pod "$leader_pod" --namespace "$namespace" \
-		--for=condition=Ready --timeout=180s
-	assert_leader_pod_available
-fi
+# The Deployment recreates a deleted Pod. The replacement must acquire the
+# Lease and become available again.
+old_leader="$leader_pod"
+echo "Deleting Pod $old_leader to test Lease handover"
+kubectl delete pod "$old_leader" --namespace "$namespace" \
+	--wait=false >/dev/null
+wait_for_leader "$old_leader"
+kubectl wait pod "$leader_pod" --namespace "$namespace" \
+	--for=condition=Ready --timeout=180s
+assert_leader_pod_available
 
-if [[ "$scale_test" == true ]]; then
-	echo "Testing scale-up, standby removal, and scale-down"
-	helm upgrade "$release" deploy/chart \
-		--namespace "$namespace" \
-		--set image.repository="${image%%:*}" \
-		--set image.tag="${image##*:}" \
-		--set image.pullPolicy=Never \
-		--set replicaCount=5 \
-		--set config.crd.enabled=true \
-		--wait=false
-	wait_for_running_replicas 5
-	leader_before_standby_delete=$(leader_for_lease)
-	standby_pod=$(kubectl get pods --namespace "$namespace" \
-		-l "app.kubernetes.io/instance=$release" \
-		-o custom-columns='NAME:.metadata.name' --no-headers |
-		awk -v leader="$leader_before_standby_delete" '$1 != leader {print $1; exit}')
-	test -n "$standby_pod"
-	kubectl delete pod "$standby_pod" --namespace "$namespace" \
-		--wait=false >/dev/null
-	for _ in $(seq 1 90); do
-		[[ "$(leader_for_lease)" == "$leader_before_standby_delete" ]] && break
-		sleep 2
-	done
-	if [[ "$(leader_for_lease)" != "$leader_before_standby_delete" ]]; then
-		echo "deleting a standby unexpectedly changed the leader" >&2
+assert_state_volume_bound() {
+	local phase
+	phase=$(kubectl get pvc "${release}-data" --namespace "$namespace" \
+		-o jsonpath='{.status.phase}')
+	if [[ "$phase" != Bound ]]; then
+		echo "state volume was not retained: $phase" >&2
 		exit 1
 	fi
-	assert_leader_pod_available
-
-	echo "Testing leader removal after scale-up"
-	kubectl delete pod "$leader_before_standby_delete" \
-		--namespace "$namespace" --wait=false >/dev/null
-	wait_for_leader "$leader_before_standby_delete"
-	kubectl wait pod "$leader_pod" --namespace "$namespace" \
-		--for=condition=Ready --timeout=180s
-	assert_leader_pod_available
-
-	helm upgrade "$release" deploy/chart \
-		--namespace "$namespace" \
-		--set image.repository="${image%%:*}" \
-		--set image.tag="${image##*:}" \
-		--set image.pullPolicy=Never \
-		--set replicaCount=2 \
-		--set config.crd.enabled=true \
-		--wait=false
-	wait_for_running_replicas 2
-	leader_pod=$(leader_for_lease)
-	kubectl wait pod "$leader_pod" --namespace "$namespace" \
-		--for=condition=Ready --timeout=180s
-	assert_leader_pod_available
-fi
-
-kubectl get configmap kwatch-state --namespace "$namespace" \
-	-o jsonpath='{.data.state-schema-version}' | grep -Fx 2
-kubectl get configmap kwatch-state --namespace "$namespace" \
-	-o jsonpath='{.data.cluster-id}' | grep -Fx operational-test
+}
 
 assert_can() {
 	local expected="$1"
@@ -252,13 +223,35 @@ assert_can() {
 }
 
 sa="system:serviceaccount:$namespace:$release"
+# get on pods is granted only in kwatch's own namespace (restart evidence);
+# other namespaces are list/watch only.
 assert_can yes --as="$sa" --namespace "$namespace" get pods
-assert_can yes --as="$sa" --namespace "$namespace" create configmaps
+assert_can no --as="$sa" --namespace default get pods
+assert_can yes --as="$sa" get nodes
 assert_can yes --as="$sa" --namespace "$namespace" \
-	update configmaps --resource-name kwatch-state
+	update leases --resource-name "${release}-leader"
+# Lease get/update are limited to kwatch's own Lease.
+assert_can no --as="$sa" --namespace "$namespace" \
+	update leases --resource-name not-kwatch
+# Kubelet stats are read from each kubelet directly.
+assert_can yes --as="$sa" get nodes --subresource=stats
+assert_can yes --as="$sa" get nodes --subresource=metrics
+assert_can no --as="$sa" get nodes --subresource=proxy
 assert_can no --as="$sa" --namespace "$namespace" delete pods
 assert_can no --as="$sa" --namespace "$namespace" \
 	update configmaps --resource-name not-owned
+# watch.secrets=false removes every Secret permission in both modes.
+if [[ "$watch_secrets" == true ]]; then
+	assert_can yes --as="$sa" --namespace default list secrets
+else
+	assert_can no --as="$sa" --namespace default list secrets
+fi
+# Only rbac.mode=full (with Secrets watched) lists arbitrary kinds.
+if [[ "$rbac_mode" == full && "$watch_secrets" == true ]]; then
+	assert_can yes --as="$sa" list widgets.example.com
+else
+	assert_can no --as="$sa" list widgets.example.com
+fi
 
 port_forward_log=$(mktemp)
 
@@ -282,26 +275,16 @@ wait_http() {
 	exit 1
 }
 
-if [[ "$replicas" -gt 1 ]]; then
-	standby_pod=$(kubectl get pods --namespace "$namespace" \
-		-l "app.kubernetes.io/instance=$release" \
-		-o custom-columns='NAME:.metadata.name' --no-headers |
-		awk -v leader="$leader_pod" '$1 != leader {print $1; exit}')
-	test -n "$standby_pod"
-	start_port_forward "$standby_pod"
-	wait_http /healthz
-	if curl --fail --silent "http://127.0.0.1:$port/readyz" \
-		>/dev/null; then
-		echo "standby Pod unexpectedly reported ready" >&2
-		exit 1
-	fi
-fi
-
 start_port_forward "$leader_pod"
 wait_http /healthz
 wait_http /readyz
-curl --fail --silent "http://127.0.0.1:$port/metrics" |
-	grep -E '^kwatch_queue_depth([ {]|$)' >/dev/null
+# kwatch_delivery_queue_depth is exported even with no provider configured
+# (provider="none"), so its absence means the metrics endpoint is broken.
+metrics=$(curl --fail --silent "http://127.0.0.1:$port/metrics")
+if ! grep -Eq '^kwatch_delivery_queue_depth([ {]|$)' <<<"$metrics"; then
+	echo "metrics endpoint does not export kwatch_delivery_queue_depth" >&2
+	exit 1
+fi
 
 echo "Generating $load_count pod events"
 {
@@ -327,42 +310,35 @@ curl --fail --silent "http://127.0.0.1:$port/readyz" >/dev/null
 echo "Testing restart and upgrade retention"
 kubectl rollout restart deployment/"$release" --namespace "$namespace"
 wait_for_deployment_rollout "$replicas"
-leader_pod=$(kubectl get lease "${release}-leader" \
-	--namespace "$namespace" -o jsonpath='{.spec.holderIdentity}')
+await_lease_holder
 kubectl wait pod "$leader_pod" --namespace "$namespace" \
 	--for=condition=Ready --timeout=180s
 start_port_forward
 wait_http /readyz
-kubectl get configmap kwatch-state --namespace "$namespace" >/dev/null
+assert_state_volume_bound
 
 helm upgrade "$release" deploy/chart \
 	--namespace "$namespace" \
-	--set image.repository="${image%%:*}" \
-	--set image.tag="${image##*:}" \
-	--set image.pullPolicy=Never \
-	--set replicaCount="$replicas" \
-	--set config.crd.enabled=true \
+	"${chart_values[@]}" \
 	--set podAnnotations.operational-test=upgraded \
 	--wait=false
 wait_for_deployment_rollout "$replicas"
-leader_pod=$(kubectl get lease "${release}-leader" \
-	--namespace "$namespace" -o jsonpath='{.spec.holderIdentity}')
+await_lease_holder
 kubectl wait pod "$leader_pod" --namespace "$namespace" \
 	--for=condition=Ready --timeout=180s
 start_port_forward
 wait_http /readyz
-kubectl get configmap kwatch-state --namespace "$namespace" >/dev/null
+assert_state_volume_bound
 
 echo "Testing rollback retention"
 helm rollback "$release" 1 --namespace "$namespace" --wait=false
 wait_for_deployment_rollout "$replicas"
-leader_pod=$(kubectl get lease "${release}-leader" \
-	--namespace "$namespace" -o jsonpath='{.spec.holderIdentity}')
+await_lease_holder
 kubectl wait pod "$leader_pod" --namespace "$namespace" \
 	--for=condition=Ready --timeout=180s
 start_port_forward "$leader_pod"
 wait_http /readyz
-kubectl get configmap kwatch-state --namespace "$namespace" >/dev/null
+assert_state_volume_bound
 
 # A disposable Kind control-plane restart is a coarse outage/recovery check.
 # It validates release recovery after the API/node returns; a true API-only
@@ -375,7 +351,14 @@ if [[ "${KWATCH_NODE_RECOVERY:-true}" == true ]]; then
 	docker start "$node" >/dev/null
 	kubectl wait node --all --for=condition=Ready --timeout=180s
 	wait_for_deployment_rollout "$replicas"
+	# The API server and the old port-forward went down with the node, so
+	# re-read the Lease holder and forward to it again before probing.
+	await_lease_holder
+	kubectl wait pod "$leader_pod" --namespace "$namespace" \
+		--for=condition=Ready --timeout=180s
+	start_port_forward "$leader_pod"
 	wait_http /healthz
+	wait_http /readyz
 fi
 
 echo "Kind production smoke test passed."

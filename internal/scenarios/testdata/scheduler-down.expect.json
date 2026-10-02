@@ -1,0 +1,14 @@
+{
+  "name": "scheduler-down",
+  "description": "The scheduler stops renewing its lease; new pods of three workloads stay Pending with no node and no scheduling condition.",
+  "root": "scheduler//kube-scheduler",
+  "tier": "page",
+  "maxMessages": 2,
+  "mustNotBlame": [
+    "deployment/shop/cart",
+    "deployment/shop/search",
+    "deployment/billing/invoices",
+    "node//n1",
+    "node//n2"
+  ]
+}

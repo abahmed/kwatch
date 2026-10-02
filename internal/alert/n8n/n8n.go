@@ -7,7 +7,6 @@ import (
 	"k8s.io/klog/v2"
 
 	"github.com/abahmed/kwatch/internal/delivery/transport"
-	"github.com/abahmed/kwatch/internal/event"
 )
 
 type n8nPayload struct {
@@ -38,6 +37,12 @@ func NewN8n(
 		return nil
 	}
 
+	if !transport.ValidEndpoint(url) {
+		klog.InfoS("initializing n8n with an invalid url",
+			"setting", "url")
+		return nil
+	}
+
 	token, _ := config["token"].(string)
 	title, _ := config["title"].(string)
 
@@ -57,12 +62,6 @@ func (n *N8n) Name() string {
 	return "N8n"
 }
 
-// SendEvent sends event to the provider
-func (n *N8n) SendEvent(ctx context.Context, e *event.Event) error {
-	msg := e.FormatText(n.clusterName, "")
-	return n.SendMessage(ctx, msg)
-}
-
 // SendMessage sends text message to the provider
 func (n *N8n) SendMessage(ctx context.Context, msg string) error {
 	payload := n8nPayload{
@@ -75,13 +74,17 @@ func (n *N8n) SendMessage(ctx context.Context, msg string) error {
 	if err != nil {
 		return err
 	}
+	return n.post(ctx, body)
+}
 
+// post sends one JSON body to the configured URL.
+func (n *N8n) post(ctx context.Context, body []byte) error {
 	headers := map[string]string{}
 	if len(n.token) > 0 {
 		headers["Authorization"] = "Bearer " + n.token
 	}
 
-	_, err = n.sender.Send(ctx, transport.Request{
+	_, err := n.sender.Send(ctx, transport.Request{
 		Provider: n.Name(), URL: n.url, Body: body,
 		ContentType: "application/json", Headers: headers,
 	})

@@ -1,166 +1,241 @@
-# 🎯 Kubernetes failure coverage
+# Kubernetes coverage
 
-This page answers one question: **what can kwatch notice?** It is a technical
-reference for operators who want to understand the signals behind an alert.
-For a quick overview, see the [README](../README.md).
+This page is generated from code by `go run ./cmd/coveragedocs`;
+do not edit it by hand. It lists which Kubernetes resources kwatch watches
+and how, and which failure modes the detectors can raise. For how findings
+become incidents, see [architecture](./architecture.md).
 
-kwatch combines informer state, status conditions, Kubernetes Events, logs,
-node summary data, active probes, and persisted incident state. It does not
-require Prometheus, Grafana, or another external monitoring product. No single Kubernetes object
-status proves that application traffic, DNS, or runtime health is working, so
-the categories below intentionally use different signal sources.
+## Resources
 
-## Object and lifecycle signals
+Watch modes: `full` keeps the whole object, `hashed` keeps a content hash, `status` keeps status only, `metadata` keeps metadata only, `excluded` is not watched.
 
-- Pods: Pending and every `PodScheduled=False` reason, `PodReadyToStartContainers`,
-  `DisruptionTarget`, Failed/Unknown phases, init containers, waiting and
-  terminated container states, restart transitions, CrashLoopBackOff, image
-  pull/config/create/sandbox/probe/lifecycle-hook failures, OOM and eviction
-  evidence, ephemeral-storage and filesystem messages, and stuck pod deletion
-  finalizers.
-- Deployments, ReplicaSets, StatefulSets, DaemonSets, Jobs and CronJobs: rollout
-  and availability conditions, replica failure, scheduling/taint symptoms,
-  partition/update state, Job deadline/backoff/suspension and indexed-job
-  evidence, plus CronJob suspension, missed schedule, concurrency and starting
-  deadline handling.
-- Nodes: Ready, memory/disk/PID/network pressure, sustained pressure, lease
-  heartbeat staleness, node deletion finalizers, bootstrap grace periods,
-  request/allocatable overcommit, and optional kubelet-summary filesystem and
-  inode usage thresholds.
-- Storage: mounted volume usage, PVC Pending/Lost, filesystem-resize and
-  controller/node resize failures, modify-volume failures, PV
-  Released/Failed (including status reason/message), and stuck PVC/PV
-  finalizers.
-- Services and admission backends: EndpointSlice readiness/serving/terminating
-  semantics, missing endpoints, named/numeric port publication mismatches,
-  LoadBalancer provisioning and Service failure conditions, and webhook services
-  with no usable endpoints.
-- Cluster resources: exhausted ResourceQuota, contradictory LimitRange
-  constraints, stuck Namespace termination, and ReplicaSet status failures.
-- Resource-level Events: recent failure-shaped Warning Events for scheduling,
-  storage attach/provision/mount, autoscaling, admission, discovery, and node
-  health are correlated to their involved object. Pod and Cluster Autoscaler
-  Events continue through their specialized context-rich detectors.
-- Security and admission: RBAC capability self-checks, missing ServiceAccounts,
-  required Secret/ConfigMap references in volumes and environment injection,
-  unreachable mutating/validating webhook backends, malformed Pod Security
-  Admission namespace labels, and ValidatingAdmissionPolicy type-checking
-  warnings or bindings that reference a missing policy. These signals preserve
-  the exact object and reference name so the alert points to the correction.
-- Built-in platform APIs outside the main workload pipelines: MutatingAdmissionPolicy,
-  CertificateSigningRequest/PodCertificateRequest, legacy Endpoints, and API Priority and Fairness
-  (FlowSchema/PriorityLevelConfiguration) failure conditions are watched when
-  their API and feature gate are present.
-- Control plane: active `/readyz` availability and latency checks for the API
-  server, health endpoint checks for scheduler/controller-manager/etcd when
-  their Pods are visible, and a diagnostic informer status with received-event
-  freshness plus watch-interruption counters. Component absence is reported as
-  unsupported rather than failure because managed control planes are commonly
-  hidden from tenant RBAC.
-- DNS: an in-cluster lookup of `kubernetes.default.svc` validates the complete
-  CoreDNS/service-discovery path from the kwatch Pod, not merely the CoreDNS
-  Pod phase.
-- Services: optional `activeProbeMonitor.autoServices` performs in-cluster TCP
-  checks for advertised Service ports and HTTP checks for ports named `http*`,
-  connecting the result back to the Service in the dependency graph. It is
-  opt-in because a declared port is not proof that an application listener is
-  intended.
-- Application probes can enforce per-target HTTP latency warning/critical
-  thresholds in addition to status-code checks, giving kwatch a lightweight
-  SLO signal without a metrics server.
-- Autoscaling: HPA condition details remain informer-native, while
-  objects are covered by the dynamic CRD status watcher whenever their CRDs
-  expose failure-shaped conditions. Missing metrics APIs are treated as an
-  unavailable optional capability, not as an application incident.
-- Storage lifecycle: CSI VolumeAttachment attach errors and CSI snapshot
-  errors now produce incidents with their controller-provided reason/message;
-  mount/unmount and provisioning failures continue to come from Kubernetes
-  Warning Events and PVC/PV status.
-- Runtime metrics: built-in kubelet Summary API collection of actual
-  per-container CPU and memory usage against declared limits.
-- Metrics API evidence: HPA and metrics-related failures are enriched by the
-  optional `v1beta1.metrics.k8s.io` APIService and backing EndpointSlice health.
-  Missing or unavailable Metrics APIs remain capability evidence, not synthetic
-  incidents; there is no separate Metrics Server monitor configuration.
-- Active probes: opt-in HTTP, TCP, and DNS checks for explicitly configured
-  targets through `activeProbeMonitor`, with consecutive-failure and recovery
-  thresholds. Targets are never inferred automatically from Services.
-- Kubelet telemetry: built-in kubelet `stats/summary` and
-  `metrics/cadvisor` are queried directly through the API server proxy for PSI,
-  node network/runtime error rates, per-container CPU/memory/ephemeral-storage
-  usage, and CPU throttling. Missing or unauthorized endpoints disable only the affected
-  detector and are logged at diagnostic verbosity; they do not create false
-  incidents. New telemetry signals require consecutive samples before firing
-  and recovery samples before resolving.
+| Kind | Group | Watch mode |
+|:--|:--|:--|
+| APIService | apiregistration.k8s.io | status |
+| BackendTLSPolicy | gateway.networking.k8s.io | status |
+| CSIDriver | storage.k8s.io | metadata |
+| CSINode | storage.k8s.io | metadata |
+| CSIStorageCapacity | storage.k8s.io | metadata |
+| CertificateSigningRequest | certificates.k8s.io | status |
+| ClusterRole | rbac.authorization.k8s.io | metadata |
+| ClusterRoleBinding | rbac.authorization.k8s.io | metadata |
+| ClusterTrustBundle | certificates.k8s.io | metadata |
+| ConfigMap | core | hashed |
+| ControllerRevision | apps | metadata |
+| CronJob | batch | full |
+| CustomResourceDefinition | apiextensions.k8s.io | status |
+| DaemonSet | apps | full |
+| Deployment | apps | full |
+| DeviceClass | resource.k8s.io | metadata |
+| DeviceTaintRule | resource.k8s.io | status |
+| EndpointSlice | discovery.k8s.io | full |
+| Endpoints | core | excluded |
+| Event | core | full |
+| Event | events.k8s.io | excluded |
+| FlowSchema | flowcontrol.apiserver.k8s.io | status |
+| GRPCRoute | gateway.networking.k8s.io | status |
+| Gateway | gateway.networking.k8s.io | status |
+| GatewayClass | gateway.networking.k8s.io | status |
+| HTTPRoute | gateway.networking.k8s.io | status |
+| HorizontalPodAutoscaler | autoscaling | full |
+| IPAddress | networking.k8s.io | metadata |
+| Ingress | networking.k8s.io | full |
+| IngressClass | networking.k8s.io | metadata |
+| Job | batch | full |
+| KwatchConfig | kwatch.abahmed.dev | excluded |
+| Lease | coordination.k8s.io | metadata |
+| LeaseCandidate | coordination.k8s.io | metadata |
+| LimitRange | core | full |
+| ListenerSet | gateway.networking.k8s.io | status |
+| MutatingAdmissionPolicy | admissionregistration.k8s.io | status |
+| MutatingAdmissionPolicyBinding | admissionregistration.k8s.io | metadata |
+| MutatingWebhookConfiguration | admissionregistration.k8s.io | full |
+| Namespace | core | full |
+| NetworkPolicy | networking.k8s.io | full |
+| Node | core | full |
+| PersistentVolume | core | full |
+| PersistentVolumeClaim | core | full |
+| Pod | core | full |
+| PodDisruptionBudget | policy | full |
+| PodGroup | scheduling.k8s.io | status |
+| PodTemplate | core | metadata |
+| PriorityClass | scheduling.k8s.io | metadata |
+| PriorityLevelConfiguration | flowcontrol.apiserver.k8s.io | status |
+| ReferenceGrant | gateway.networking.k8s.io | status |
+| ReplicaSet | apps | full |
+| ReplicationController | core | status |
+| ResourceClaim | resource.k8s.io | status |
+| ResourceClaimTemplate | resource.k8s.io | metadata |
+| ResourceQuota | core | full |
+| ResourceSlice | resource.k8s.io | metadata |
+| Role | rbac.authorization.k8s.io | metadata |
+| RoleBinding | rbac.authorization.k8s.io | metadata |
+| RuntimeClass | node.k8s.io | metadata |
+| Secret | core | hashed |
+| Service | core | full |
+| ServiceAccount | core | full |
+| ServiceCIDR | networking.k8s.io | status |
+| StatefulSet | apps | full |
+| StorageClass | storage.k8s.io | full |
+| StorageVersionMigration | storagemigration.k8s.io | status |
+| TCPRoute | gateway.networking.k8s.io | status |
+| TLSRoute | gateway.networking.k8s.io | status |
+| UDPRoute | gateway.networking.k8s.io | status |
+| ValidatingAdmissionPolicy | admissionregistration.k8s.io | status |
+| ValidatingAdmissionPolicyBinding | admissionregistration.k8s.io | metadata |
+| ValidatingWebhookConfiguration | admissionregistration.k8s.io | full |
+| VolumeAttachment | storage.k8s.io | full |
+| VolumeAttributesClass | storage.k8s.io | metadata |
+| VolumeSnapshot | snapshot.storage.k8s.io | status |
+| VolumeSnapshotClass | snapshot.storage.k8s.io | status |
+| VolumeSnapshotContent | snapshot.storage.k8s.io | status |
+| Workload | scheduling.k8s.io | metadata |
 
-## Dynamic status
+## Failure modes
 
-When enabled through the cluster-resource monitor, kwatch watches APIService
-objects and discovers CRDs dynamically. Every served CRD version with a status
-subresource is watched for failure-shaped `Ready=False`, `Available=False`,
-`Degraded=True`, and `Progressing=False` conditions. Informational conditions
-are ignored, and messages/reasons are preserved as alert evidence.
-These rules can be customized through `crd.failureConditions` for operators
-with different condition semantics.
+Health is taken from the severity each detector assigns: warning is degraded, critical is failing; `varies` means the severity depends on the observation.
 
-Built-in APIs introduced in newer Kubernetes versions or protected by feature
-gates are capability-aware: if the API is not served, its watcher remains
-inactive without creating a false incident.
-
-Some built-in APIs intentionally remain event/relationship based rather than
-being treated as condition resources: DRA `ResourceClaim`/`ResourceSlice`,
-`CSINode`, `VolumeAttributesClass`, and legacy `ReplicationController` do not
-provide a stable, universal failure condition that can be alerted on safely.
-Their scheduling, driver, and lifecycle failures are still covered when they
-surface through Pod/Node status or Kubernetes Warning Events. Legacy `Endpoints`
-is deprecated and EndpointSlice remains the authoritative service signal.
-
-Root-cause analysis also follows projected ConfigMaps/Secrets, image pull
-Secrets, CSI drivers, Ingress TLS Secrets, PV StorageClasses, owner chains,
-Service selectors, EndpointSlices (including unready/terminating endpoints),
-node Leases, generic Custom Resource owners, VolumeAttachments, CSI drivers,
-VolumeSnapshots, VolumeSnapshotContents, VolumeSnapshotClasses, and local PV
-node affinity. Gateway API routes are linked to Gateway/GatewayClass, backend
-Services, and listener TLS Secrets; Ingress is linked to IngressClass. Explicit
-HTTP/TCP/DNS probes are also linked to matching Kubernetes Service DNS names or
-kept as external network targets. Generic CRD references can be configured as
-`crd.graphReferences` paths such as `spec.backendRefs.name=service`; arrays are
-traversed automatically.
-
-## Noise and recovery controls
-
-The detection path supports startup baselines, persisted incidents, stable
-identity keys, sustained windows, cooldowns, disruption suppression, node
-inhibition, resolution, and scope-aware storage checks. Signals are sent through
-the incident engine so live, periodic, startup, and recovery decisions share
-the same lifecycle and deduplication rules.
-
-Security diagnostics include a periodic RBAC self-check for the cluster-scoped
-and selected namespace-scoped permissions needed by the enabled monitors.
-Explicitly allowed namespaces are checked; with cluster-wide scope, the kwatch
-namespace is checked to keep the operation bounded on large clusters. Results
-are available from the diagnostics-protected `/security` health endpoint;
-missing permissions are reported as capability gaps, not incidents, so
-intentionally restricted deployments do not create alert noise.
-
-## Important boundary
-
-Kubernetes API objects cannot expose every runtime failure. CPU throttling,
-cAdvisor/kubelet health beyond the summary API, API latency, packet loss,
-service-mesh health, cloud-provider volume state,
-VPA/KEDA/Cluster Autoscaler internals, and application SLOs require metrics,
-logs, traces, or active probes. kwatch consumes the runtime evidence available
-through pod/node summaries, active probes, and events; it does not claim that informer status
-alone covers these signals.
-
-Individual Pod Security or ValidatingAdmissionPolicy denials are returned in
-the API response (and may be present in audit logs), but Kubernetes does not
-retain a watchable object for every denied request. kwatch therefore detects
-durable policy misconfiguration and resulting object/event symptoms; request-
-level denial analytics require an audit-log sink, which is not required.
-
-See the Kubernetes documentation for [Pod lifecycle](https://kubernetes.io/docs/concepts/workloads/pods/pod-lifecycle/),
-[Node status](https://kubernetes.io/docs/reference/node/node-status/),
-[PersistentVolumes](https://kubernetes.io/docs/concepts/storage/persistent-volumes/),
-[EndpointSlices](https://kubernetes.io/docs/concepts/services-networking/endpoint-slices/),
-and [observability](https://kubernetes.io/docs/concepts/cluster-administration/observability/).
+| Mode | Health | Reasons | Detectors |
+|:--|:--|:--|:--|
+| APIServiceUnavailable | varies | `APIServiceFailure` | `custom` |
+| ActiveProbe | failing | `ActiveProbeFailure` | `active_probe` |
+| ActiveProbe.Latency | varies | `ActiveProbeLatency` | `active_probe` |
+| Admission.Rejected | failing | `PodAdmissionRejected` | `pod_admission` |
+| AttachFailed | failing | `VolumeAttachmentFailure` | `policy` |
+| BackendMissing | failing | `IngressBackendNotFound` | `network` |
+| BackendsDegraded | degraded | `ServiceBackendsDegraded` | `network` |
+| Budget.BlocksDrain | degraded | `PdbBlocksDrain` | `budget_drain` |
+| Budget.Overlap | degraded | `PdbOverlap` | `budget` |
+| Budget.SelectsNothing | degraded | `PdbSelectsNothing` | `budget` |
+| Budget.SyncFailed | degraded | `PdbSyncFailed` | `budget` |
+| CPUHigh | degraded | `ContainerCPUUsageHigh` | `resources` |
+| CPUThrottled | varies | `ContainerCPUThrottled` | `resources` |
+| CRD.NotEstablished | degraded | `CustomResourceDefinitionNotEstablished` | `custom_kinds` |
+| CSRFailed | varies | `CertificateSigningRequestFailure` | `custom` |
+| CannotRun | failing | `ContainerCannotRun` | `container` |
+| Cert.Expired | failing | `TLSCertExpired` | `config` |
+| Cert.Expiring | degraded | `TLSCertExpiringSoon` | `config` |
+| Certificate.Denied | degraded | `CertificateSigningRequestDenied` | `custom_kinds` |
+| Certificate.NotIssued | degraded | `CertificateSigningRequestNotIssued` | `custom_kinds` |
+| ClaimFailed | varies | `PersistentVolumeClaimFailure`, `ResourceClaimFailure` | `custom`, `storage` |
+| Cluster.VersionSkew | degraded | `ClusterVersionSkew` | `version_skew` |
+| Completed | varies | `Completed`, `PodCompleted` | `container` |
+| Condition | varies | `ConditionFailure` | - |
+| ConditionFailure | varies | `DaemonSetConditionFailure`, `StatefulSetConditionFailure` | - |
+| CrashLoop | failing | `CrashLoopBackOff` | `container` |
+| CreateError | failing | `CreateContainerError` | `container` |
+| CreateError.Config | failing | `CreateContainerConfigError` | `container` |
+| Creating | varies | `ContainerCreating` | - |
+| DeadlineExceeded | varies | `DeadlineExceeded` | `workload` |
+| Device.PrepareFailed | failing | `FailedPrepareDynamicResources` | `event`, `event_storage` |
+| Device.Unallocated | degraded | `ResourceClaimUnallocated` | `custom_kinds` |
+| Disk.ContainerGCFailed | degraded | `ContainerGCFailed` | `event`, `event_kubelet` |
+| Disk.EvictionThreshold | degraded | `EvictionThresholdMet` | `event`, `event_kubelet` |
+| Disk.FreeSpaceFailed | degraded | `FreeDiskSpaceFailed` | `event`, `event_kubelet` |
+| Disk.ImageGCFailed | degraded | `ImageGCFailed` | `event`, `event_kubelet` |
+| DiskPressure | varies | `DiskPressure` | `node` |
+| DisruptionBudget | degraded | `PdbViolation` | `policy` |
+| Draining | degraded | `NodeDraining` | `node` |
+| EphemeralStorageHigh | varies | `ContainerEphemeralStorageUsageHigh` | `resources` |
+| Error | varies | `Error` | `container` |
+| Evicted | varies | `Evicted` | `pod` |
+| Exit.CommandNotFound | varies | `ContainerExitCommandNotFound` | `container_exit` |
+| Exit.Killed | varies | `ContainerExitKilled` | `container_exit` |
+| Exit.NotExecutable | varies | `ContainerExitNotExecutable` | `container_exit` |
+| Exit.Segfault | varies | `ContainerExitSegfault` | `container_exit` |
+| Failed | degraded | `PhaseFailed`, `PodFailed` | `generic`, `pod` |
+| Filesystem.Usage | varies | `NodeFilesystemUsageCritical`, `NodeFilesystemUsageHigh` | `usage` |
+| FlowControl | varies | `APIPriorityAndFairnessFailure` | `custom` |
+| Heartbeat.Stale | degraded | `NodeHeartbeatStale` | `node_health` |
+| Hook.PostStart | failing | `PostStartHookError` | `container` |
+| Hook.PreStart | failing | `PreStartHookError` | `container` |
+| ImagePull | failing | `ErrImagePull`, `ImagePullBackOff` | `container` |
+| ImagePull.Inspect | failing | `ImageInspectError` | `container` |
+| ImagePull.InvalidName | failing | `InvalidImageName` | `container` |
+| ImagePull.NeverPull | failing | `ErrImageNeverPull` | `container` |
+| ImagePull.Registry | varies | `RegistryUnavailable` | - |
+| Ingress.ClassMissing | degraded | `IngressClassMissing` | `ingress` |
+| Ingress.TLSSecretMissing | degraded | `IngressTLSSecretMissing` | `ingress` |
+| InitError | varies | `InitContainerError` | `container` |
+| Initializing | varies | `PodInitializing` | - |
+| Inodes.Usage | varies | `NodeInodesUsageCritical`, `NodeInodesUsageHigh` | `usage` |
+| InvalidLimitRange | degraded | `LimitRangeInvalid` | `namespace` |
+| InvalidPolicy | varies | `AdmissionPolicyInvalid` | `custom` |
+| InvalidPolicy.Binding | varies | `AdmissionPolicyBindingInvalid` | `custom` |
+| InvalidPolicy.Mutating | varies | `MutatingAdmissionPolicyInvalid` | `custom` |
+| InvalidPolicy.Security | degraded | `PodSecurityPolicyInvalid` | `namespace` |
+| InvalidSchedule | degraded | `CronJobInvalidSchedule` | `schedule` |
+| JobFailed | varies | `JobFailed` | `workload` |
+| JobFailed.BackoffLimit | varies | `JobBackoffLimitExceeded` | `workload` |
+| JobFailed.Deadline | varies | `JobDeadlineExceeded` | `workload` |
+| Killed | varies | `Killed` | - |
+| Latency.APIServer | degraded | `APIServerLatency` | `controlplane` |
+| LoadBalancer.SyncFailed | degraded | `LoadBalancerSyncFailed` | `loadbalancer` |
+| LoadBalancerPending | degraded | `LoadBalancerProvisioning` | `network` |
+| MemoryHigh | varies | `ContainerMemoryUsageHigh` | `resources` |
+| MemoryPressure | varies | `MemoryPressure`, `NodeMemoryPressure` | `node` |
+| Missing.ConfigMap | varies | `ProjectedConfigMapMissing` | `config` |
+| Missing.Secret | varies | `ProjectedSecretMissing` | `config` |
+| Missing.ServiceAccount | varies | `ServiceAccountMissing` | `config` |
+| Network.CNINotReady | varies | `NodeCNINotReady` | `node_health` |
+| Network.IPExhausted | varies | `NodePodIPExhausted` | `node_health` |
+| NetworkErrors | varies | `NodeNetworkErrors` | `resources` |
+| NetworkPolicy | degraded | `RestrictiveNetworkPolicy` | `network` |
+| NetworkUnavailable | failing | `NetworkUnavailable` | `node` |
+| NoEndpoints | failing | `ServiceNoEndpoints` | `network`, `service_selector` |
+| NotReady | varies | `ContainersNotReady`, `NodeNotReady`, `NotReady` | `node`, `pod` |
+| NotReconciling | degraded | `CustomResourceFailure`, `GenerationLagging` | `custom`, `generic` |
+| NotScheduling | degraded | `CronJobNotScheduled` | `schedule` |
+| OOMKilled | failing | `OOMKILLED`, `OOMKilled` | `container`, `container_exit` |
+| PIDPressure | varies | `PIDPressure` | `node` |
+| Pending | degraded | `PhasePending`, `PodPending` | `generic`, `pod` |
+| PortMismatch | degraded | `ServicePortMismatch` | `network` |
+| Preempted.Repeatedly | degraded | `PodPreemptedRepeatedly` | `pod_preemption` |
+| PressureStall | degraded | `NodePressureStall` | `usage` |
+| Probe.Liveness | varies | `LivenessProbeFailed` | `container_probe` |
+| Probe.Readiness | varies | `ReadinessProbeFailed` | `container_probe` |
+| Probe.Startup | varies | `StartupProbeFailed` | `container_probe` |
+| Quota.NearLimit | degraded | `ResourceQuotaNearLimit` | `quota_attach` |
+| QuotaExhausted | degraded | `ResourceQuotaExhausted` | `policy` |
+| Reference.PriorityClassMissing | varies | `PriorityClassMissing` | `references` |
+| Reference.RuntimeClassMissing | varies | `RuntimeClassMissing` | `config`, `references` |
+| ReplicaFailure | failing | `DeploymentReplicaFailure`, `ReplicaSetFailure` | `workload` |
+| Resize.Deferred | varies | `PodResizeDeferred` | `pod_resize` |
+| Resize.Error | varies | `PodResizeError` | `pod_resize` |
+| Resize.Infeasible | varies | `PodResizeInfeasible` | `pod_resize` |
+| ResourceCritical | varies | `NodeResourceCritical` | `resources` |
+| ResourceHigh | varies | `NodeResourceHigh` | `resources` |
+| Restarting | degraded | `HighRestartCount` | `container` |
+| Rollout.Stuck | varies | `StatefulSetRolloutStuck` | `rollout` |
+| RolloutStuck | failing | `DeploymentProgressingFalse`, `ProgressDeadlineExceeded` | `workload` |
+| RuntimeErrors | varies | `NodeRuntimeErrors` | `resources` |
+| Scaling.Disabled | varies | `ScalingDisabled` | `hpa` |
+| Scaling.Error | varies | `HPAScalingError` | `hpa` |
+| Scaling.InvalidSelector | varies | `HPAInvalidSelector` | `hpa` |
+| Scaling.MaxedOut | degraded | `HPAMaxedOut` | `hpa` |
+| Scaling.NoMetrics | varies | `FailedComputeMetricsReplicas`, `FailedGetMetrics`, `FailedGetResourceMetric`, `FailedGetScale` | `hpa` |
+| Scaling.UpdateFailed | varies | `FailedUpdateScale` | `hpa` |
+| Schedule.Blocked | degraded | `CronJobBlocked` | `schedule_history` |
+| Schedule.Missed | degraded | `CronJobMissedRuns` | `schedule_history` |
+| Schedule.RepeatedFailure | degraded | `CronJobRepeatedFailure` | `schedule_history` |
+| SchedulingGated | degraded | `SchedulingGated` | `pod` |
+| SnapshotFailed | varies | `VolumeSnapshotFailure` | `custom` |
+| StatusUnknown | degraded | `PodStatusUnknown` | `pod` |
+| StuckDeleting | degraded | `NamespaceStuckTerminating`, `NodeStuckTerminating`, `PodStuckTerminating`, `StuckDeleting` | `generic`, `namespace`, `node`, `pod` |
+| Suspended | varies | `CronJobSuspended`, `JobSuspended` | `schedule` |
+| Unavailable | varies | `DaemonSetUnavailable`, `DeploymentAvailableFalse`, `DeploymentUnavailable`, `StsUnavailable` | `workload` |
+| Unavailable.APIServer | varies | `APIServerUnavailable` | `controlplane` |
+| Unavailable.ControllerManager | varies | `ControllerManagerUnavailable` | `controlplane` |
+| Unavailable.CoreDNS | varies | `CoreDNSUnavailable` | `controlplane` |
+| Unavailable.Etcd | varies | `EtcdUnavailable` | `controlplane` |
+| Unavailable.Scheduler | varies | `SchedulerUnavailable` | `controlplane` |
+| Unschedulable | degraded | `FailedScheduling`, `Unschedulable` | `pod` |
+| Volume.AttachWaiting | varies | `VolumeAttachWaiting` | `event_storage` |
+| Volume.DetachFailed | degraded | `VolumeDetachFailure` | `quota_attach` |
+| Volume.MapFailed | failing | `FailedMapVolume` | `event`, `event_storage` |
+| Volume.ProvisioningFailed | varies | `ProvisioningFailed` | `event_storage` |
+| VolumeFailed | failing | `PersistentVolumeFailure` | `storage` |
+| VolumeFillingUp | varies | `VolumeFillingUp` | `usage` |
+| VolumeFull | varies | `VolumeUsageHigh` | `usage` |
+| Webhook.BackendMissing | varies | `WebhookBackendNotFound` | `policy` |
+| Webhook.NoEndpoints | varies | `WebhookNoEndpoints` | `policy` |

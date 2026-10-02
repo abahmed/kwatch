@@ -1,0 +1,11 @@
+{
+  "name": "probe-port-mismatch",
+  "description": "A release points the readiness probe at a port the container does not declare; new pods stay unready.",
+  "root": "deployment/shop/api",
+  "tier": "notify",
+  "maxMessages": 2,
+  "mustNotBlame": [
+    "node//n1",
+    "node//n2"
+  ]
+}

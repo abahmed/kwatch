@@ -4,21 +4,18 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"strings"
 
 	"k8s.io/klog/v2"
 
 	"github.com/abahmed/kwatch/internal/clock"
 	"github.com/abahmed/kwatch/internal/delivery/transport"
-	"github.com/abahmed/kwatch/internal/event"
-	"github.com/abahmed/kwatch/internal/insight"
-	"github.com/abahmed/kwatch/internal/message"
-	"github.com/abahmed/kwatch/internal/model"
+	"github.com/abahmed/kwatch/internal/notification"
 )
 
 type RocketChat struct {
 	sender  transport.Sender
 	webhook string
-	text    string
 
 	// reference for general app configuration
 	clusterName string
@@ -42,14 +39,17 @@ func NewRocketChat(
 		return nil
 	}
 
-	klog.InfoS("initializing Rocket Chat with webhook configured")
+	if !transport.ValidEndpoint(webhook) {
+		klog.InfoS("initializing rocketchat with an invalid webhook",
+			"setting", "webhook")
+		return nil
+	}
 
-	text, _ := config["text"].(string)
+	klog.InfoS("initializing Rocket Chat with webhook configured")
 
 	return &RocketChat{
 		sender:      transport.NewSender(dependencies),
 		webhook:     webhook,
-		text:        text,
 		clusterName: clusterName,
 		clockSource: clock.Require(dependencies.Clock),
 	}
@@ -60,10 +60,12 @@ func (r *RocketChat) Name() string {
 	return "Rocket Chat"
 }
 
-// SendEvent sends event to the provider
-func (r *RocketChat) SendEvent(ctx context.Context, e *event.Event) error {
-	formattedMsg := e.FormatMarkdown(r.clusterName, r.text, "")
-	b, err := r.buildRequestBodyRocketChat(formattedMsg)
+// SendIncident posts the incident narrative, followed by the workload's
+// last output as a code block when there is one.
+func (r *RocketChat) SendIncident(
+	ctx context.Context, m notification.Message,
+) error {
+	b, err := r.buildRequestBodyRocketChat(incidentText(m))
 	if err != nil {
 		return err
 	}
@@ -89,43 +91,9 @@ func (r *RocketChat) SendMessage(ctx context.Context, msg string) error {
 	return r.sendByRocketChatApi(ctx, b)
 }
 
-// SendIncident implements delivery.ThreadProvider.
-// It renders the incident using the Report model and PlaintextRenderer,
-// producing a context-adaptive text message.
-func (r *RocketChat) SendIncident(
-	ctx context.Context,
-	inc *model.Incident,
-	action model.IncidentAction,
-) error {
-	return r.SendIncidentWithInsight(ctx, inc, action, nil)
-}
-
-// SendIncidentWithInsight implements delivery.InsightThreadProvider, so the
-// diagnosis — likely cause, impact, recent changes — is rendered rather than
-// dropped on the way to this provider.
-func (r *RocketChat) SendIncidentWithInsight(
-	ctx context.Context,
-	inc *model.Incident,
-	action model.IncidentAction,
-	ins *insight.Insight,
-) error {
-	text := message.RenderIncidentWithInsight(
-		inc,
-		action,
-		ins,
-		message.NewPlainTextRenderer(),
-		r.clusterName,
-		r.clockSource,
-	)
-	if text == "" {
-		return nil
-	}
-	return r.SendMessage(ctx, text)
-}
-
 func (r *RocketChat) buildRequestBodyRocketChat(text string) ([]byte, error) {
 	msgPayload := &rocketChatWebhookPayload{
-		Text: message.NeutralizeMentions(text),
+		Text: notification.NeutralizeMentions(text),
 	}
 
 	jsonBytes, err := json.Marshal(msgPayload)
@@ -133,4 +101,13 @@ func (r *RocketChat) buildRequestBodyRocketChat(text string) ([]byte, error) {
 		return nil, fmt.Errorf("failed to marshal rocketchat payload: %w", err)
 	}
 	return jsonBytes, nil
+}
+
+// incidentText is the Note with the last output as a Markdown code block.
+func incidentText(m notification.Message) string {
+	text := m.NoteText()
+	if len(m.Output) > 0 {
+		text += "\n```\n" + strings.Join(m.Output, "\n") + "\n```"
+	}
+	return text
 }

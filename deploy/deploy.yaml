@@ -15,77 +15,31 @@ metadata:
     app.kubernetes.io/instance: kwatch
     app.kubernetes.io/managed-by: kwatch.sh
 rules:
+# List and watch access to every resource so the dynamic source can
+# watch any API kind. Secret values are hashed in the informer transform and never
+# stored. Use the Helm chart with rbac.mode=least-privilege for an explicit
+# list, or with watch.secrets=false for no Secret access at all. The only
+# write is the audit's SelfSubjectAccessReview.
+- apiGroups: ["*"]
+  resources: ["*"]
+  verbs: ["list", "watch"]
+# get only where kwatch reads a single object. Wildcard get is avoided: it
+# would also match subresources such as nodes/proxy, pods/exec and
+# pods/attach for every kind.
 - apiGroups: [""]
-  resources: ["events", "nodes", "nodes/proxy", "pods", "pods/log", "pods/proxy", "persistentvolumeclaims", "configmaps", "secrets", "resourcequotas", "limitranges", "endpoints"]
-  verbs: ["get", "watch", "list"]
-- nonResourceURLs: ["/readyz", "/readyz/*"]
+  resources: ["namespaces", "nodes"]
   verbs: ["get"]
+# Kubelet stats and metrics are read from each kubelet directly; the
+# kubelet authorizes them as get on nodes/stats and nodes/metrics.
+# nodes/proxy is not granted.
 - apiGroups: [""]
-  resources: ["namespaces"]
-  verbs: ["get", "list", "watch"]
-- apiGroups: [""]
-  resources: ["services"]
-  verbs: ["get", "watch", "list"]
-- apiGroups: ["coordination.k8s.io"]
-  resources: ["leases"]
-  verbs: ["get", "watch", "list"]
-- apiGroups: ["apiextensions.k8s.io"]
-  resources: ["customresourcedefinitions"]
-  verbs: ["get", "watch", "list"]
-- apiGroups: ["apiregistration.k8s.io"]
-  resources: ["apiservices"]
-  verbs: ["get", "watch", "list"]
-- apiGroups: [""]
-  resources: ["persistentvolumes", "serviceaccounts"]
-  verbs: ["get", "watch", "list"]
-- apiGroups: ["storage.k8s.io"]
-  resources: ["storageclasses"]
-  verbs: ["get", "watch", "list"]
-- apiGroups: ["apps"]
-  resources: ["daemonsets", "statefulsets", "deployments", "replicasets"]
-  verbs: ["get", "watch", "list"]
-- apiGroups: ["admissionregistration.k8s.io"]
-  resources: ["mutatingwebhookconfigurations", "validatingwebhookconfigurations", "validatingadmissionpolicies", "validatingadmissionpolicybindings"]
-  verbs: ["get", "watch", "list"]
-- apiGroups: ["admissionregistration.k8s.io"]
-  resources: ["mutatingadmissionpolicies", "mutatingadmissionpolicybindings"]
-  verbs: ["get", "watch", "list"]
-- apiGroups: ["certificates.k8s.io"]
-  resources: ["certificatesigningrequests", "podcertificaterequests"]
-  verbs: ["get", "watch", "list"]
-- apiGroups: ["flowcontrol.apiserver.k8s.io"]
-  resources: ["flowschemas", "prioritylevelconfigurations"]
-  verbs: ["get", "watch", "list"]
-- apiGroups: ["networking.k8s.io"]
-  resources: ["ingresses", "networkpolicies"]
-  verbs: ["get", "watch", "list"]
-- apiGroups: ["discovery.k8s.io"]
-  resources: ["endpointslices"]
-  verbs: ["get", "watch", "list"]
-- apiGroups: ["kwatch.abahmed.dev"]
-  resources: ["kwatchconfigs"]
-  verbs: ["get", "watch", "list"]
-- apiGroups: ["autoscaling"]
-  resources: ["horizontalpodautoscalers"]
-  verbs: ["get", "watch", "list"]
-- apiGroups: ["batch"]
-  resources: ["jobs", "cronjobs"]
-  verbs: ["get", "watch", "list"]
-- apiGroups: ["policy"]
-  resources: ["poddisruptionbudgets"]
-  verbs: ["get", "watch", "list"]
+  resources: ["nodes/stats", "nodes/metrics", "pods/log"]
+  verbs: ["get"]
+- nonResourceURLs: ["/readyz"]
+  verbs: ["get"]
 - apiGroups: ["authorization.k8s.io"]
   resources: ["selfsubjectaccessreviews"]
   verbs: ["create"]
-- apiGroups: ["storage.k8s.io"]
-  resources: ["volumeattachments", "csidrivers"]
-  verbs: ["get", "watch", "list"]
-- apiGroups: ["snapshot.storage.k8s.io"]
-  resources: ["volumesnapshots", "volumesnapshotcontents", "volumesnapshotclasses"]
-  verbs: ["get", "watch", "list"]
-- apiGroups: ["gateway.networking.k8s.io"]
-  resources: ["gatewayclasses", "gateways", "httproutes", "grpcroutes", "tcproutes", "tlsroutes", "referencegrants"]
-  verbs: ["get", "watch", "list"]
 ---
 apiVersion: v1
 kind: ServiceAccount
@@ -122,9 +76,16 @@ metadata:
     app.kubernetes.io/instance: kwatch
     app.kubernetes.io/managed-by: kwatch.sh
 rules:
+# Create cannot be limited by name in RBAC (the name is not known until
+# the object exists), so it is granted on leases in this namespace only.
 - apiGroups: ["coordination.k8s.io"]
   resources: ["leases"]
-  verbs: ["create", "get", "update", "patch", "watch"]
+  verbs: ["create"]
+# Get and update only on kwatch's own Lease (KWATCH_LEADER_ELECTION_NAME).
+- apiGroups: ["coordination.k8s.io"]
+  resources: ["leases"]
+  resourceNames: ["kwatch-leader"]
+  verbs: ["get", "update"]
 ---
 apiVersion: rbac.authorization.k8s.io/v1
 kind: RoleBinding
@@ -143,41 +104,25 @@ subjects:
   name: kwatch
   namespace: kwatch
 ---
+# Restart evidence reads the previous kwatch Pod by name, so get on pods
+# is granted only in kwatch's own namespace.
 kind: Role
 apiVersion: rbac.authorization.k8s.io/v1
 metadata:
-  name: kwatch-configmap-manager
+  name: kwatch-restart-evidence
   namespace: kwatch
   labels:
     app.kubernetes.io/instance: kwatch
     app.kubernetes.io/managed-by: kwatch.sh
 rules:
 - apiGroups: [""]
-  resources: ["configmaps"]
-  # Incident shards use generated <prefix>-incidents-<generation>-NNN names
-  # and non-default installations use prefixed state names, so reads,
-  # rewrites and shard garbage collection cannot be name-scoped.
-  verbs: ["create", "get", "list", "update", "delete"]
-- apiGroups: [""]
-  resources: ["configmaps"]
-  resourceNames:
-  - "kwatch-state"
-  - "kwatch-baseline"
-  - "kwatch-incidents"
-  - "kwatch-groups"
-  - "kwatch-threads"
-  - "kwatch-engine"
-  - "kwatch-pvc"
-  - "kwatch-changes"
-  - "kwatch-rca"
-  - "kwatch-telemetry"
-  verbs: ["get", "update", "patch"]
-
+  resources: ["pods"]
+  verbs: ["get"]
 ---
 apiVersion: rbac.authorization.k8s.io/v1
 kind: RoleBinding
 metadata:
-  name: kwatch-configmap-manager
+  name: kwatch-restart-evidence
   namespace: kwatch
   labels:
     app.kubernetes.io/instance: kwatch
@@ -185,7 +130,39 @@ metadata:
 roleRef:
   apiGroup: rbac.authorization.k8s.io
   kind: Role
-  name: kwatch-configmap-manager
+  name: kwatch-restart-evidence
+subjects:
+- kind: ServiceAccount
+  name: kwatch
+  namespace: kwatch
+---
+# The scheduler and controller-manager leader Leases show whether those
+# control-plane components are alive.
+kind: Role
+apiVersion: rbac.authorization.k8s.io/v1
+metadata:
+  name: kwatch-control-plane-leases
+  namespace: kube-system
+  labels:
+    app.kubernetes.io/instance: kwatch
+    app.kubernetes.io/managed-by: kwatch.sh
+rules:
+- apiGroups: ["coordination.k8s.io"]
+  resources: ["leases"]
+  verbs: ["get"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: kwatch-control-plane-leases
+  namespace: kube-system
+  labels:
+    app.kubernetes.io/instance: kwatch
+    app.kubernetes.io/managed-by: kwatch.sh
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: kwatch-control-plane-leases
 subjects:
 - kind: ServiceAccount
   name: kwatch
@@ -200,12 +177,11 @@ metadata:
     app.kubernetes.io/instance: kwatch
     app.kubernetes.io/managed-by: kwatch.sh
 spec:
-  replicas: 2
+  # One replica: the Lease is a lock that guarantees a single writer, and
+  # Recreate keeps two pods from sharing the RWO data volume.
+  replicas: 1
   strategy:
-    type: RollingUpdate
-    rollingUpdate:
-      maxUnavailable: 0%
-      maxSurge: 1
+    type: Recreate
   selector:
     matchLabels:
       app: kwatch
@@ -222,15 +198,22 @@ spec:
       automountServiceAccountToken: true
       securityContext:
         fsGroup: 1000
-      topologySpreadConstraints:
-      - maxSkew: 1
-        topologyKey: kubernetes.io/hostname
-        whenUnsatisfiable: ScheduleAnyway
-        labelSelector:
-          matchLabels:
-            app: kwatch
+      # Move off a failed node quickly; the Lease stops the old pod from
+      # writing if it is still running.
+      tolerations:
+      - key: node.kubernetes.io/not-ready
+        operator: Exists
+        effect: NoExecute
+        tolerationSeconds: 30
+      - key: node.kubernetes.io/unreachable
+        operator: Exists
+        effect: NoExecute
+        tolerationSeconds: 30
       containers:
       - name: kwatch
+        # Main pins the latest stable release (the release workflow rewrites
+        # this tag; RC tags carry the preview image). It must equal the chart
+        # appVersion (scripts/check-release-consistency.sh).
         image: ghcr.io/abahmed/kwatch:v0.10.5
         imagePullPolicy: IfNotPresent
         securityContext:
@@ -249,6 +232,8 @@ spec:
         volumeMounts:
           - name: config-volume
             mountPath: /config
+          - name: data
+            mountPath: /var/lib/kwatch
         env:
           - name: CONFIG_FILE
             value: "/config/config.yaml"
@@ -270,7 +255,11 @@ spec:
                 fieldPath: spec.nodeName
           - name: KWATCH_LEADER_ELECTION_NAME
             value: "kwatch-leader"
-          - name: GOMEMLIMIT
+          - name: KWATCH_DATA_DIR
+            value: "/var/lib/kwatch"
+          # kwatch sets the Go soft memory limit to 90% of this container
+          # limit, unless GOMEMLIMIT is set explicitly.
+          - name: KWATCH_MEMORY_LIMIT
             valueFrom:
               resourceFieldRef:
                 resource: limits.memory
@@ -289,7 +278,7 @@ spec:
           periodSeconds: 10
         resources:
           limits:
-            memory: "256Mi"
+            memory: "512Mi"
             cpu: "100m"
           requests:
             memory: "128Mi"
@@ -299,18 +288,32 @@ spec:
         secret:
           secretName: kwatch
           defaultMode: 0400
+      # Default: a PVC keeps incidents across restarts. For evaluation
+      # without storage, replace this volume with
+      #   emptyDir:
+      #     sizeLimit: 2Gi
+      # and delete the PersistentVolumeClaim below. Also add this env var
+      # to the container so kwatch knows the volume cap:
+      #   - name: KWATCH_VOLUME_LIMIT
+      #     value: "2Gi"
+      # emptyDir loses state on
+      # reschedule, so incidents may be announced again after a restart.
+      - name: data
+        persistentVolumeClaim:
+          claimName: kwatch-data
 ---
-apiVersion: policy/v1
-kind: PodDisruptionBudget
+# State store: incidents, change history and baselines. Uses the
+# cluster's default StorageClass.
+apiVersion: v1
+kind: PersistentVolumeClaim
 metadata:
-  name: kwatch
+  name: kwatch-data
   namespace: kwatch
   labels:
     app.kubernetes.io/instance: kwatch
     app.kubernetes.io/managed-by: kwatch.sh
 spec:
-  minAvailable: 1
-  selector:
-    matchLabels:
-      app: kwatch
-      app.kubernetes.io/instance: kwatch
+  accessModes: ["ReadWriteOnce"]
+  resources:
+    requests:
+      storage: 2Gi

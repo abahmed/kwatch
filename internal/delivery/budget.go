@@ -2,45 +2,42 @@ package delivery
 
 import (
 	"context"
-	"fmt"
-	"sort"
-	"strings"
 	"sync"
 	"time"
 )
 
-// Notifications used to leave for the provider as fast as the engine produced
-// them. Forty incidents opening in one minute became forty requests, which
-// earned a rate-limit response from the chat provider and delayed everything
-// queued behind them.
+// A burst of incidents must not become a burst of requests: forty requests
+// in one minute earn a rate-limit response from a chat provider and delay
+// everything queued behind them.
 //
-// Two things fix that together. Pacing spreads deliveries at a rate providers
-// tolerate, with the existing queue absorbing the burst. A digest covers the
-// remainder: when the queue is full, what cannot be accepted is summarized in
-// one message rather than dropped into the dead-letter queue where nobody
-// watching the channel would see it.
+// Two things prevent that together. Pacing spreads deliveries at a rate
+// providers tolerate, with the existing queue absorbing the burst. An
+// overflow summary covers the remainder: when the queue is full, what
+// cannot be accepted is summarized in one message rather than dropped into
+// the dead-letter queue where nobody watching the channel would see it.
 const (
 	// defaultSendInterval is the minimum gap between two deliveries to the
 	// same provider — roughly thirty notifications a minute, comfortably
 	// under every provider's published limit.
 	defaultSendInterval = 2 * time.Second
-	// maxDigestReasons bounds how many distinct reasons a digest names.
-	maxDigestReasons = 8
+	// maxOverflowSummaryReasons bounds how many distinct reasons an
+	// overflow summary names.
+	maxOverflowSummaryReasons = 8
 )
 
-// sendPacer holds the per-provider send cadence and overflow digests. It is
+// sendPacer holds the per-provider send cadence and overflow summaries. It is
 // keyed by provider name so providerEntry stays copyable.
 type sendPacer struct {
-	mu       sync.Mutex
-	last     map[string]time.Time
-	digests  map[string]*digestState
-	interval time.Duration
-}
-
-// digestState accumulates what a saturated queue could not accept.
-type digestState struct {
-	byReason map[string]int
-	total    int
+	mu        sync.Mutex
+	last      map[string]time.Time
+	summaries map[string]*overflowSummary
+	interval  time.Duration
+	// blocked is when each blocked provider may be sent to again.
+	blocked map[string]time.Time
+	// failures counts each provider's failed rounds in a row.
+	failures map[string]int
+	// hourly is each provider's notification budget.
+	hourly map[string]*hourlyBudget
 }
 
 func (p *sendPacer) sendInterval() time.Duration {
@@ -57,6 +54,9 @@ func (p *sendPacer) reserve(provider string, now time.Time) time.Duration {
 		p.last = make(map[string]time.Time)
 	}
 	earliest := p.last[provider].Add(p.sendInterval())
+	if blocked := p.blocked[provider]; blocked.After(earliest) {
+		earliest = blocked
+	}
 	if !earliest.After(now) {
 		p.last[provider] = now
 		return 0
@@ -67,145 +67,37 @@ func (p *sendPacer) reserve(provider string, now time.Time) time.Duration {
 
 // waitForSendSlot paces deliveries to one provider. It returns false when the
 // context ended while waiting, in which case the caller must not deliver.
-func (a *Manager) waitForSendSlot(
+func (m *Manager) waitForSendSlot(
 	ctx context.Context,
 	provider string,
 ) bool {
-	a.pacer.mu.Lock()
-	wait := a.pacer.reserve(provider, a.nowTime())
-	a.pacer.mu.Unlock()
+	m.pacer.mu.Lock()
+	wait := m.pacer.reserve(provider, m.nowTime())
+	m.pacer.mu.Unlock()
 	if wait <= 0 {
 		return true
 	}
-	timer := time.NewTimer(wait)
-	defer timer.Stop()
-	select {
-	case <-timer.C:
-		return true
-	case <-ctx.Done():
-		return false
-	}
+	return m.sleep(ctx, wait)
 }
 
-// digestAdd records a notification that could not be queued.
-func (a *Manager) digestAdd(
-	provider string,
-	job deliverJob,
-) {
-	reason := "message"
-	switch job.kind {
-	case jobIncident:
-		if job.inc != nil {
-			reason = job.inc.Reason
-			if reason == "" {
-				reason = job.action.String()
-			}
+// retain keeps the pacing, outage, hourly budget and pending summary state
+// of the providers in keep and drops the rest. A reconfiguration must not
+// refill an exhausted budget, forget a provider outage, or lose an overflow
+// summary whose notifications already left the outbox.
+func (p *sendPacer) retain(keep map[string]struct{}) {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	retainKeys(p.last, keep)
+	retainKeys(p.summaries, keep)
+	retainKeys(p.blocked, keep)
+	retainKeys(p.failures, keep)
+	retainKeys(p.hourly, keep)
+}
+
+func retainKeys[V any](values map[string]V, keep map[string]struct{}) {
+	for name := range values {
+		if _, ok := keep[name]; !ok {
+			delete(values, name)
 		}
-	case jobEvent:
-		if job.ev != nil && job.ev.Reason != "" {
-			reason = job.ev.Reason
-		}
-	}
-	a.pacer.mu.Lock()
-	defer a.pacer.mu.Unlock()
-	if a.pacer.digests == nil {
-		a.pacer.digests = make(map[string]*digestState)
-	}
-	state := a.pacer.digests[provider]
-	if state == nil {
-		state = &digestState{byReason: make(map[string]int)}
-		a.pacer.digests[provider] = state
-	}
-	state.byReason[reason]++
-	state.total++
-}
-
-// takeDigest claims and renders the pending digest for a provider. The caller
-// must restore the state when delivery does not complete.
-func (a *Manager) takeDigest(
-	provider string,
-) (*digestState, string) {
-	a.pacer.mu.Lock()
-	state := a.pacer.digests[provider]
-	if state == nil || state.total == 0 {
-		a.pacer.mu.Unlock()
-		return nil, ""
-	}
-	delete(a.pacer.digests, provider)
-	a.pacer.mu.Unlock()
-	return state, renderDigest(state)
-}
-
-func (a *Manager) restoreDigest(provider string, state *digestState) {
-	if state == nil || state.total == 0 {
-		return
-	}
-	a.pacer.mu.Lock()
-	defer a.pacer.mu.Unlock()
-	current := a.pacer.digests[provider]
-	if current == nil {
-		current = &digestState{byReason: make(map[string]int)}
-		a.pacer.digests[provider] = current
-	}
-	for reason, count := range state.byReason {
-		current.byReason[reason] += count
-	}
-	current.total += state.total
-}
-
-// renderDigest names the most frequent reasons and counts the rest, so a
-// storm reads as one line instead of a wall.
-func renderDigest(state *digestState) string {
-	reasons := make([]string, 0, len(state.byReason))
-	for reason := range state.byReason {
-		reasons = append(reasons, reason)
-	}
-	sort.Slice(reasons, func(i, j int) bool {
-		if state.byReason[reasons[i]] != state.byReason[reasons[j]] {
-			return state.byReason[reasons[i]] > state.byReason[reasons[j]]
-		}
-		return reasons[i] < reasons[j]
-	})
-	parts := make([]string, 0, maxDigestReasons+1)
-	for i, reason := range reasons {
-		if i == maxDigestReasons {
-			parts = append(
-				parts,
-				fmt.Sprintf("+%d other kinds", len(reasons)-i),
-			)
-			break
-		}
-		parts = append(
-			parts,
-			fmt.Sprintf("%s ×%d", reason, state.byReason[reason]),
-		)
-	}
-	return fmt.Sprintf(
-		":warning: %d notification(s) were not delivered individually "+
-			"because the delivery queue was saturated: %s. "+
-			"See /incidents for the full list.",
-		state.total,
-		strings.Join(parts, ", "),
-	)
-}
-
-// flushDigest delivers any pending overflow summary for a provider. It uses
-// the plain-message path every provider implements, and it consumes a send
-// slot like any other delivery so the digest itself cannot cause a burst.
-func (a *Manager) flushDigest(ctx context.Context, entry *providerEntry) {
-	name := entry.provider.Name()
-	state, text := a.takeDigest(name)
-	if text == "" {
-		return
-	}
-	if !a.waitForSendSlot(ctx, name) {
-		a.restoreDigest(name, state)
-		return
-	}
-	if !a.deliverOne(ctx, entry, deliverJob{
-		kind: jobMessage,
-		msg:  text,
-	}) {
-		a.restoreDigest(name, state)
 	}
 }

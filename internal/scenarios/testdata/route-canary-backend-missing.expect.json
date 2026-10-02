@@ -1,0 +1,12 @@
+{
+  "name": "route-canary-backend-missing",
+  "description": "An HTTPRoute canary split adds a backend Service that does not exist next to a healthy one.",
+  "root": "service/storefront/checkout-canary",
+  "tier": "page",
+  "maxMessages": 2,
+  "mustNotBlame": [
+    "gateway.gateway.networking.k8s.io/storefront/edge",
+    "service/storefront/checkout",
+    "deployment/storefront/checkout"
+  ]
+}

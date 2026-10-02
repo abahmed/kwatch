@@ -80,10 +80,7 @@ func TestValidateSeverityValues(t *testing.T) {
 func TestValidateAcceptsCaseVariantSeverity(t *testing.T) {
 	cfg := &Config{
 		Alert:            map[string]map[string]interface{}{"slack": {}},
-		Workers:          1,
 		SeverityByReason: map[string]string{"ImagePullBackOff": "High"},
 	}
-	cfg.Correlation.Window = 10
-	cfg.Correlation.LifecycleInterval = 60
 	assert.Empty(t, ValidateConfig(cfg), "case-variant severity values are accepted")
 }

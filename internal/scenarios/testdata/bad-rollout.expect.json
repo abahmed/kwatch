@@ -1,0 +1,10 @@
+{
+  "name": "bad-rollout",
+  "description": "A Deployment rolls out a new image whose pods crash-loop; pods of the previous revision stay healthy.",
+  "root": "deployment/shop/payments",
+  "tier": "notify",
+  "maxMessages": 2,
+  "mustNotBlame": [
+    "node//n1"
+  ]
+}

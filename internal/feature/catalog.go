@@ -21,185 +21,162 @@ type Definition struct {
 }
 
 var definitions = []Definition{
-	{PodDetection, "Detect pod and container failures", Runtime, nil},
-	{PodScheduling, "Detect pod scheduling failures", Runtime, []ID{PodDetection}},
-	{PodPending, "Detect pods stuck Pending", Runtime, []ID{PodDetection}},
 	{
-		PodOOM, "Detect repeated out-of-memory failures", Runtime,
-		[]ID{PodDetection},
+		PodDetection, "Detect pod and container failures",
+		Runtime, nil,
 	},
 	{
-		PodReadiness, "Detect sustained pod readiness failures", Runtime,
-		[]ID{PodDetection},
+		PodScheduling, "Detect pod scheduling failures",
+		Runtime, []ID{PodDetection},
 	},
 	{
-		PodRestarts, "Detect excessive container restarts", Runtime,
-		[]ID{PodDetection},
+		PodOOM, "Detect out-of-memory kills and repeated OOMs",
+		Runtime, []ID{PodDetection},
 	},
 	{
-		WorkloadDetection, "Detect workload rollout and execution failures", Runtime,
-		nil,
+		PodReadiness, "Detect sustained pod readiness failures",
+		Runtime, []ID{PodDetection},
 	},
 	{
-		DeploymentRollout, "Detect stuck Deployment rollouts", Runtime,
-		[]ID{WorkloadDetection},
+		PodRestarts, "Detect crash loops and excessive restarts",
+		Runtime, []ID{PodDetection},
 	},
 	{
-		StatefulSetRollout, "Detect stuck StatefulSet rollouts", Runtime,
-		[]ID{WorkloadDetection},
+		WorkloadDetection, "Detect workload rollout and execution failures",
+		Runtime, nil,
 	},
 	{
-		DaemonSetRollout, "Detect stuck DaemonSet rollouts", Runtime,
-		[]ID{WorkloadDetection},
+		WorkloadRollouts, "Detect stuck workload rollouts",
+		Runtime, []ID{WorkloadDetection},
 	},
 	{
-		JobFailures, "Detect failed and suspended Jobs", Runtime,
-		[]ID{WorkloadDetection},
+		JobFailures, "Detect failed Jobs and failed or missed CronJobs",
+		Runtime, []ID{WorkloadDetection},
 	},
 	{
-		CronJobFailures, "Detect failed and missed CronJobs", Runtime,
-		[]ID{WorkloadDetection},
+		DisruptionBudgets, "Detect PodDisruptionBudgets that block disruption",
+		Runtime, []ID{WorkloadDetection},
 	},
 	{
-		PDBViolations, "Detect PodDisruptionBudget violations", Runtime,
-		[]ID{WorkloadDetection},
+		Autoscaling, "Diagnose HorizontalPodAutoscaler failures",
+		Runtime, []ID{WorkloadDetection},
 	},
 	{
-		HPADiagnostics, "Diagnose HorizontalPodAutoscaler failures", Runtime,
-		[]ID{WorkloadDetection},
-	},
-	{NodeDetection, "Detect node readiness and resource failures", Runtime, nil},
-	{
-		NodeConditions, "Detect node conditions and lifecycle failures", Runtime,
-		[]ID{NodeDetection},
-	},
-	{NodeResources, "Detect node resource pressure", Runtime, []ID{NodeDetection}},
-	{StorageDetection, "Detect persistent storage failures", Runtime, nil},
-	{
-		PVCUsage, "Detect PVC usage and volume failures", Runtime,
-		[]ID{StorageDetection},
-	},
-	{NetworkDetection, "Detect service and network failures", Runtime, nil},
-	{
-		ServiceEndpoints, "Detect Service and EndpointSlice failures", Runtime,
-		[]ID{NetworkDetection},
+		NodeDetection, "Detect node readiness, pressure and draining",
+		Runtime, nil,
 	},
 	{
-		IngressBackends, "Detect Ingress backend failures", Runtime,
-		[]ID{NetworkDetection},
+		NodeUsage, "Detect node resource pressure from kubelet stats",
+		Runtime, []ID{NodeDetection},
 	},
 	{
-		NetworkPolicies, "Detect NetworkPolicy failures", Runtime,
-		[]ID{NetworkDetection},
-	},
-	{SecurityDetection, "Detect security and admission failures", Runtime, nil},
-	{
-		AdmissionWebhooks, "Detect admission webhook failures", Runtime,
-		[]ID{SecurityDetection},
-	},
-	{ClusterResources, "Detect cluster resource status failures", Runtime, nil},
-	{
-		TLSSignals, "Detect TLS certificate expiry", Runtime,
-		[]ID{SecurityDetection},
-	},
-	{DirectDiagnosis, "Explain the most likely direct cause", Runtime, nil},
-	{
-		DependencyGraph, "Trace related Kubernetes dependencies", Runtime,
-		[]ID{DirectDiagnosis},
+		StorageDetection, "Detect claim, volume and attachment failures",
+		Runtime, nil,
 	},
 	{
-		ImpactAnalysis, "Estimate affected resources and blast radius", Runtime,
-		[]ID{DependencyGraph},
+		VolumeUsage, "Predict volumes filling up",
+		Runtime, []ID{StorageDetection},
 	},
 	{
-		ChangeDiff, "Relate incidents to recent changes", Runtime,
-		[]ID{DirectDiagnosis},
-	},
-	{IncidentTimeline, "Keep a compact incident timeline", Runtime, nil},
-	{
-		RCAConfidence, "Show confidence and supporting evidence", Runtime,
-		[]ID{DirectDiagnosis},
+		NetworkDetection, "Detect Service, Ingress and NetworkPolicy failures",
+		Runtime, nil,
 	},
 	{
-		RCAFeedback, "Persist operator feedback for RCA improvement", Runtime,
-		[]ID{DirectDiagnosis},
-	},
-	{Cooldown, "Suppress repeated notifications during cooldown", Runtime, nil},
-	{SmartGrouping, "Group related incidents into one narrative", Runtime, nil},
-	{
-		MassFailureSuppression, "Reduce noise during broad failures", Runtime,
-		[]ID{SmartGrouping},
+		AdmissionDetection, "Detect admission webhook and policy failures",
+		Runtime, nil,
 	},
 	{
-		CascadeSuppression, "Suppress symptoms after a root cause is known", Runtime,
-		[]ID{DependencyGraph},
+		CertificateDetection, "Detect expiring and invalid TLS certificates",
+		Runtime, nil,
 	},
 	{
-		IncidentPersistence,
-		"Restore active incident lifecycle after restart", StartupOnly,
-		nil,
-	},
-	{BaselinePersistence, "Persist startup baseline state", StartupOnly, nil},
-	{ChangePersistence, "Persist recent change history", Runtime, nil},
-	{KubeletTelemetry, "Read built-in kubelet summary telemetry", Runtime, nil},
-	{CPUUsage, "Detect CPU usage pressure", Runtime, []ID{KubeletTelemetry}},
-	{
-		CPUThrottling, "Detect container CPU throttling", Runtime,
-		[]ID{KubeletTelemetry},
+		QuotaDetection, "Detect exhausted ResourceQuotas and LimitRange rejections",
+		Runtime, nil,
 	},
 	{
-		MemoryUsage, "Detect memory pressure and overuse", Runtime,
-		[]ID{KubeletTelemetry},
+		CustomResources, "Detect failing conditions on custom and built-in resources",
+		Runtime, nil,
 	},
 	{
-		StorageUsage, "Detect ephemeral storage and inode pressure", Runtime,
-		[]ID{KubeletTelemetry},
+		ControlPlane, "Check API server, etcd, DNS, scheduler and controller-manager",
+		Runtime, nil,
 	},
 	{
-		PressureSignals, "Detect cgroup pressure signals", Runtime,
-		[]ID{KubeletTelemetry},
+		ActiveProbes, "Run configured HTTP, TCP and DNS checks",
+		Runtime, nil,
 	},
 	{
-		NetworkErrors, "Detect kubelet-observed network errors", Runtime,
-		[]ID{KubeletTelemetry},
+		RootCause, "Explain each incident by its most likely root cause",
+		Runtime, nil,
 	},
 	{
-		RuntimeErrors, "Detect container runtime error rates", Runtime,
-		[]ID{KubeletTelemetry},
-	},
-	{MetricsAPI, "Read the optional Kubernetes metrics API", Runtime, nil},
-	{AdaptiveBaseline, "Adapt bounded thresholds to observed usage", Runtime, nil},
-	{HTTPProbes, "Run configured HTTP checks", Runtime, nil},
-	{TCPProbes, "Run configured TCP checks", Runtime, nil},
-	{DNSProbes, "Run configured DNS checks", Runtime, nil},
-	{AutomaticProbes, "Derive safe probe targets from services", Runtime, nil},
-	{ProbeLatency, "Detect probe latency regressions", Runtime, nil},
-	{ControlPlanePods, "Observe control-plane component pods", Runtime, nil},
-	{APIServerHealth, "Check Kubernetes API health endpoints", Runtime, nil},
-	{
-		APIServerLatency, "Measure Kubernetes API latency", Runtime,
-		[]ID{APIServerHealth},
-	},
-	{SchedulerHealth, "Observe scheduler health", Runtime, []ID{ControlPlanePods}},
-	{
-		ControllerManagerHealth, "Observe controller-manager health", Runtime,
-		[]ID{ControlPlanePods},
-	},
-	{EtcdHealth, "Observe etcd health signals", Runtime, []ID{APIServerHealth}},
-	{
-		GenericStatus, "Observe status conditions on cluster resources", Runtime,
-		[]ID{ClusterResources},
+		ChangeCorrelation, "Relate incidents to recent changes and who made them",
+		Runtime, []ID{RootCause},
 	},
 	{
-		CRDDiscovery, "Discover supported custom resources dynamically", StartupOnly,
-		nil,
+		Impact, "Show which workloads and services an incident affects",
+		Runtime, []ID{RootCause},
 	},
-	{RBACAudit, "Report missing permissions and RBAC drift", Runtime, nil},
-	{TLSMonitoring, "Monitor configured Kubernetes TLS secrets", Runtime, nil},
-	{AuditLog, "Write structured incident audit records", Runtime, nil},
-	{Escalation, "Escalate incidents through alert tiers", Runtime, nil},
-	{CustomTemplates, "Render operator-selected alert templates", Runtime, nil},
-	{Runbooks, "Attach reason-aware runbook links", Runtime, nil},
+	{
+		Investigation, "Attach a redacted log excerpt to announcements",
+		Runtime, nil,
+	},
+	{
+		NoiseControl, "Settle, merge symptoms and send only material changes",
+		Runtime, []ID{RootCause},
+	},
+	{
+		Flapping, "Recognise flapping and routine recurring incidents",
+		Runtime, []ID{NoiseControl},
+	},
+	{
+		StartupSummary, "Summarise pre-existing incidents once at cold start",
+		StartupOnly, nil,
+	},
+	{
+		DiskState, "Keep incidents and history on disk across restarts",
+		StartupOnly, nil,
+	},
+	{
+		DowntimeChanges, "Report changes made while kwatch was down",
+		StartupOnly, []ID{DiskState},
+	},
+	{
+		Scope, "Filter by namespace, reason, selector and silences",
+		Runtime, nil,
+	},
+	{
+		SeverityOverrides, "Override severity by reason and owner kind",
+		Runtime, nil,
+	},
+	{
+		Maintenance, "Hold incidents for objects under maintenance",
+		Runtime, nil,
+	},
+	{
+		Runbooks, "Attach reason-aware runbook links",
+		Runtime, nil,
+	},
+	{
+		ProviderRouting, "Route incidents to providers by scope",
+		Runtime, nil,
+	},
+	{
+		NativeThreads, "Update one message thread per incident where supported",
+		Runtime, nil,
+	},
+	{
+		CustomTemplates, "Render operator-selected text templates",
+		Runtime, nil,
+	},
+	{
+		AuditLog, "Write a JSON line for every incident decision",
+		Runtime, nil,
+	},
+	{
+		RBACAudit, "Report missing permissions",
+		Runtime, nil,
+	},
 }
 
 // Catalog returns a copy so callers cannot mutate the product registry.
@@ -247,7 +224,8 @@ func ValidateCatalog() error {
 		state[id] = 1
 		for _, dependency := range known[id].Dependencies {
 			if _, exists := known[dependency]; !exists {
-				return fmt.Errorf("feature %q depends on unknown feature %q", id, dependency)
+				return fmt.Errorf(
+					"feature %q depends on unknown feature %q", id, dependency)
 			}
 			if err := visit(dependency); err != nil {
 				return err

@@ -5,7 +5,7 @@ import (
 	"io"
 	"os"
 
-	"github.com/abahmed/kwatch/internal/message"
+	"github.com/abahmed/kwatch/internal/redact"
 )
 
 const maxArtifactInputBytes = 32 << 20
@@ -24,7 +24,7 @@ func main() {
 		))
 		os.Exit(1)
 	}
-	_, err = os.Stdout.WriteString(message.RedactEvidence(string(data)))
+	_, err = os.Stdout.WriteString(redact.Evidence(string(data)))
 	if err != nil {
 		_, _ = os.Stderr.WriteString(err.Error() + "\n")
 		os.Exit(1)

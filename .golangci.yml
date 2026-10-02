@@ -8,7 +8,11 @@ linters:
     - gocritic
     - gocyclo
     - govet
+    - funlen
+    - gocognit
     - ineffassign
+    - nestif
+    - revive
     - unparam
     - unused
   settings:
@@ -23,6 +27,18 @@ linters:
     govet:
       disable:
         - inline
+    funlen:
+      lines: 50
+      statements: 40
+      ignore-comments: true
+    gocognit:
+      min-complexity: 15
+    nestif:
+      min-complexity: 4
+    revive:
+      rules:
+        - name: exported
+        - name: var-naming
     gocyclo:
       min-complexity: 20
     errcheck:
@@ -40,11 +56,22 @@ linters:
       # Tests intentionally ignore errors (e.g. seeding store/indexers).
       - path: "_test.go"
         linters: [errcheck, unparam, gocritic]
-      # Informer wiring is declarative; ignoring AddEventHandler is noise.
-      - path: "internal/controller"
-        linters: [errcheck]
       # The raw-HTTP rule is only about alert providers; shared transport is
       # the one allowed production request boundary.
+      # Readability linters apply to the core packages only.
+      - linters: [funlen, gocognit, nestif, revive]
+        path-except: "^internal/(inventory|detection|rootcause|incident|pipeline|storage|notification|replay|scorecard|scenarios|redact|delivery|app|health|kubeclient|config)(/|$)"
+      - linters: [funlen, gocognit, nestif]
+        path: "_test.go"
+      - linters: [revive]
+        path: "_test.go"
+        text: "exported"
+      # health.HealthServer and health.HealthResponse are referenced by
+      # AGENTS.md and the docs as public names; renaming them is a
+      # separate, deliberate change.
+      - linters: [revive]
+        path: "^internal/health/"
+        text: "stutters"
       - linters: [forbidigo]
         path-except: "^internal/alert/"
 

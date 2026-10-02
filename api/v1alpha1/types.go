@@ -12,69 +12,36 @@ type KwatchConfig struct {
 	Spec KwatchConfigSpec `json:"spec"`
 }
 
-// KwatchConfigSpec defines the desired kwatch configuration.
+// KwatchConfigSpec defines the desired kwatch configuration. It mirrors
+// the configuration file; see the configuration reference for each field.
 type KwatchConfigSpec struct {
-	MaxRecentLogLines            int64                  `json:"maxRecentLogLines,omitempty"`
-	IgnoreFailedGracefulShutdown bool                   `json:"ignoreFailedGracefulShutdown,omitempty"`
-	Namespaces                   []string               `json:"namespaces,omitempty"`
-	Reasons                      []string               `json:"reasons,omitempty"`
-	IgnoreContainerNames         []string               `json:"ignoreContainerNames,omitempty"`
-	IgnorePodNames               []string               `json:"ignorePodNames,omitempty"`
-	IgnoreLogPatterns            []string               `json:"ignoreLogPatterns,omitempty"`
-	IgnoreContainerMessages      []string               `json:"ignoreContainerMessages,omitempty"`
-	IgnoreNodeReasons            []string               `json:"ignoreNodeReasons,omitempty"`
-	IgnoreNodeMessages           []string               `json:"ignoreNodeMessages,omitempty"`
-	IgnoreDisruptionTerminations *bool                  `json:"ignoreDisruptionTerminations,omitempty"`
-	NamespaceSelector            string                 `json:"namespaceSelector,omitempty"`
-	IncludeEvents                *bool                  `json:"includeEvents,omitempty"`
-	IncludeLogs                  *bool                  `json:"includeLogs,omitempty"`
-	ContainerRestartThreshold    int                    `json:"containerRestartThreshold,omitempty"`
-	ReportStartupBaseline        bool                   `json:"reportStartupBaseline,omitempty"`
-	SeverityByOwnerKind          map[string]string      `json:"severityByOwnerKind,omitempty"`
-	SeverityByReason             map[string]string      `json:"severityByReason,omitempty"`
-	PendingPodThreshold          int                    `json:"pendingPodThreshold,omitempty"`
-	ResyncSeconds                int                    `json:"resyncSeconds,omitempty"`
-	Silences                     []SilenceRule          `json:"silences,omitempty"`
-	Correlation                  CorrelationConfig      `json:"correlation,omitempty"`
-	PvcMonitor                   PvcMonitorConfig       `json:"pvcMonitor,omitempty"`
-	NodeMonitor                  NodeMonitorConfig      `json:"nodeMonitor,omitempty"`
-	RolloutMonitor               RolloutMonitorConfig   `json:"rolloutMonitor,omitempty"`
-	DaemonSetMonitor             DaemonSetMonitorConfig `json:"daemonSetMonitor,omitempty"`
-	JobMonitor                   JobMonitorConfig       `json:"jobMonitor,omitempty"`
-	CronJobMonitor               CronJobMonitorConfig   `json:"cronJobMonitor,omitempty"`
-	HeartbeatMonitor             HeartbeatMonitorConfig `json:"heartbeatMonitor,omitempty"`
-	HealthCheck                  HealthCheckConfig      `json:"healthCheck,omitempty"`
-	App                          AppConfig              `json:"app,omitempty"`
-	Upgrader                     map[string]interface{} `json:"upgrader,omitempty"`
-	ScheduleMonitor              MonitorConfig          `json:"scheduleMonitor,omitempty"`
-	OomMonitor                   MonitorConfig          `json:"oomMonitor,omitempty"`
-	PendingPodMonitor            MonitorConfig          `json:"pendingPodMonitor,omitempty"`
-	NotReadyMonitor              MonitorConfig          `json:"notReadyMonitor,omitempty"`
-	StatefulSetMonitor           MonitorConfig          `json:"statefulSetMonitor,omitempty"`
-	PdbMonitor                   MonitorConfig          `json:"pdbMonitor,omitempty"`
-	NodeResourceMonitor          MonitorConfig          `json:"nodeResourceMonitor,omitempty"`
-	ClusterAutoscalerMonitor     MonitorConfig          `json:"clusterAutoscalerMonitor,omitempty"`
-	HpaMonitor                   MonitorConfig          `json:"hpaMonitor,omitempty"`
-	TlsMonitor                   MonitorConfig          `json:"tlsMonitor,omitempty"`
-	ServiceMonitor               MonitorConfig          `json:"serviceMonitor,omitempty"`
-	AdmissionWebhookMonitor      MonitorConfig          `json:"admissionWebhookMonitor,omitempty"`
-	ControlPlaneMonitor          MonitorConfig          `json:"controlPlaneMonitor,omitempty"`
-	IngressMonitor               MonitorConfig          `json:"ingressMonitor,omitempty"`
-	NetworkPolicyMonitor         MonitorConfig          `json:"networkPolicyMonitor,omitempty"`
-	ClusterResourceMonitor       MonitorConfig          `json:"clusterResourceMonitor,omitempty"`
-	KubeletTelemetryMonitor      MonitorConfig          `json:"kubeletTelemetryMonitor,omitempty"`
-	Crd                          MonitorConfig          `json:"crd,omitempty"`
-	SmartGrouping                MonitorConfig          `json:"smartGrouping,omitempty"`
-	Inhibition                   MonitorConfig          `json:"inhibition,omitempty"`
-	Templates                    map[string]string      `json:"templates,omitempty"`
-	Runbooks                     map[string]string      `json:"runbooks,omitempty"`
-	AuditLog                     AuditLogConfig         `json:"auditLog,omitempty"`
-	Workers                      int                    `json:"workers,omitempty"`
+	App              AppConfig              `json:"app,omitempty"`
+	Telemetry        TelemetryConfig        `json:"telemetry,omitempty"`
+	Upgrader         map[string]interface{} `json:"upgrader,omitempty"`
+	HeartbeatMonitor HeartbeatMonitorConfig `json:"heartbeatMonitor,omitempty"`
+	HealthCheck      HealthCheckConfig      `json:"healthCheck,omitempty"`
+	Maintenance      MaintenanceConfig      `json:"maintenance,omitempty"`
 
-	AdaptiveThresholds bool              `json:"adaptiveThresholds,omitempty"`
-	Maintenance        MaintenanceConfig `json:"maintenance,omitempty"`
-	Telemetry          TelemetryConfig   `json:"telemetry,omitempty"`
+	Namespaces        []string `json:"namespaces,omitempty"`
+	Reasons           []string `json:"reasons,omitempty"`
+	NamespaceSelector string   `json:"namespaceSelector,omitempty"`
+
+	IgnoreContainerNames    []string `json:"ignoreContainerNames,omitempty"`
+	IgnorePodNames          []string `json:"ignorePodNames,omitempty"`
+	IgnoreContainerMessages []string `json:"ignoreContainerMessages,omitempty"`
+	IgnoreNodeReasons       []string `json:"ignoreNodeReasons,omitempty"`
+	IgnoreNodeMessages      []string `json:"ignoreNodeMessages,omitempty"`
+
+	Silences            []SilenceRule     `json:"silences,omitempty"`
+	ResyncSeconds       int               `json:"resyncSeconds,omitempty"`
+	SeverityByOwnerKind map[string]string `json:"severityByOwnerKind,omitempty"`
+	SeverityByReason    map[string]string `json:"severityByReason,omitempty"`
+
 	ActiveProbeMonitor MonitorConfig     `json:"activeProbeMonitor,omitempty"`
+	Crd                MonitorConfig     `json:"crd,omitempty"`
+	Templates          map[string]string `json:"templates,omitempty"`
+	Runbooks           map[string]string `json:"runbooks,omitempty"`
+	AuditLog           AuditLogConfig    `json:"auditLog,omitempty"`
 }
 
 // MonitorConfig is intentionally open-ended because monitor options evolve
@@ -92,75 +59,31 @@ type TelemetryConfig struct {
 	Enabled bool `json:"enabled,omitempty"`
 }
 
+// AuditLogConfig omits the output path: KwatchConfig cannot choose where
+// kwatch writes files.
 type AuditLogConfig struct {
-	Enabled bool   `json:"enabled,omitempty"`
-	Output  string `json:"output,omitempty"`
-}
-
-type CorrelationConfig struct {
-	Window            int `json:"window,omitempty"`
-	Cooldown          int `json:"cooldown,omitempty"`
-	StaleThreshold    int `json:"staleThreshold,omitempty"`
-	LifecycleInterval int `json:"lifecycleInterval,omitempty"`
-	ResolveHoldDown   int `json:"resolveHoldDown,omitempty"`
-	// Deprecated: accepted and ignored; the post-resolve cooldown is Window.
-	CooldownMinutes int           `json:"cooldownMinutes,omitempty"`
-	MaxBaseline     int           `json:"maxBaseline,omitempty"`
-	Escalation      MonitorConfig `json:"escalation,omitempty"`
-	Renotify        MonitorConfig `json:"renotify,omitempty"`
-}
-
-type PvcMonitorConfig struct {
-	Enabled           bool    `json:"enabled,omitempty"`
-	Interval          int     `json:"interval,omitempty"`
-	Threshold         float64 `json:"threshold,omitempty"`
-	CriticalThreshold float64 `json:"criticalThreshold,omitempty"`
-	ClearThreshold    float64 `json:"clearThreshold,omitempty"`
-}
-
-type NodeMonitorConfig struct {
-	Enabled          bool `json:"enabled,omitempty"`
-	SustainedMinutes int  `json:"sustainedMinutes,omitempty"`
-}
-
-type RolloutMonitorConfig struct {
-	Enabled          bool `json:"enabled,omitempty"`
-	SustainedMinutes int  `json:"sustainedMinutes,omitempty"`
-}
-
-type DaemonSetMonitorConfig struct {
-	Enabled          bool `json:"enabled,omitempty"`
-	SustainedMinutes int  `json:"sustainedMinutes,omitempty"`
-}
-
-type JobMonitorConfig struct {
 	Enabled bool `json:"enabled,omitempty"`
 }
 
-type CronJobMonitorConfig struct {
-	Enabled          bool `json:"enabled,omitempty"`
-	SustainedMinutes int  `json:"sustainedMinutes,omitempty"`
-}
-
+// HeartbeatMonitorConfig omits the URL: it can carry a token, so it is
+// only accepted from the mounted configuration file.
 type HeartbeatMonitorConfig struct {
 	Enabled  bool `json:"enabled,omitempty"`
 	Interval int  `json:"interval,omitempty"`
 }
 
 type HealthCheckConfig struct {
-	Enabled     bool `json:"enabled,omitempty"`
-	Port        int  `json:"port,omitempty"`
-	Pprof       bool `json:"pprof,omitempty"`
-	Diagnostics bool `json:"diagnostics,omitempty"`
+	Enabled bool `json:"enabled,omitempty"`
+	Port    int  `json:"port,omitempty"`
 }
 
+// AppConfig omits the outbound proxy and TLS trust settings: they decide
+// who can observe provider credentials, so only the mounted configuration
+// sets them.
 type AppConfig struct {
 	ClusterName           string `json:"clusterName,omitempty"`
-	ProxyURL              string `json:"proxyURL,omitempty"`
 	DisableStartupMessage bool   `json:"disableStartupMessage,omitempty"`
 	LogFormatter          string `json:"logFormatter,omitempty"`
-	InsecureSkipTLSVerify bool   `json:"insecureSkipTLSVerify,omitempty"`
-	CABundlePath          string `json:"caBundlePath,omitempty"`
 }
 
 type SilenceRule struct {
@@ -168,7 +91,6 @@ type SilenceRule struct {
 	Reasons           []string `json:"reasons,omitempty"`
 	PodNamePatterns   []string `json:"podNamePatterns,omitempty"`
 	ContainerNames    []string `json:"containerNames,omitempty"`
-	LogPatterns       []string `json:"logPatterns,omitempty"`
 	ContainerMessages []string `json:"containerMessages,omitempty"`
 	EventMessages     []string `json:"eventMessages,omitempty"`
 	NodeReasons       []string `json:"nodeReasons,omitempty"`

@@ -6,14 +6,11 @@ metadata:
   labels:
     {{- include "kwatch.labels" . | nindent 4 }}
 spec:
-  replicas: {{ .Values.replicaCount }}
+  # One writer: the Lease is a lock and Recreate keeps two pods from
+  # sharing the RWO state volume.
+  replicas: 1
   strategy:
-    type: {{ if gt (int .Values.replicaCount) 1 }}RollingUpdate{{ else }}Recreate{{ end }}
-    {{- if gt (int .Values.replicaCount) 1 }}
-    rollingUpdate:
-      maxUnavailable: 0%
-      maxSurge: 1
-    {{- end }}
+    type: Recreate
   selector:
     matchLabels:
       {{- include "kwatch.selectorLabels" . | nindent 6 }}
@@ -53,14 +50,14 @@ spec:
             {{- toYaml .Values.securityContext | nindent 12 }}
           image: "{{ .Values.image.repository }}:{{ .Values.image.tag | default .Chart.AppVersion }}"
           imagePullPolicy: {{ .Values.image.pullPolicy }}
-          {{- with .Values.service.port }}
           ports:
             - name: health
-              containerPort: {{ . }}
-          {{- end }}
+              containerPort: {{ include "kwatch.healthPort" . }}
           volumeMounts:
           - name: config-volume
             mountPath: /config
+          - name: data
+            mountPath: /var/lib/kwatch
           env:
             - name: CONFIG_FILE
               value: "/config/config.yaml"
@@ -81,12 +78,33 @@ spec:
                 fieldRef:
                   fieldPath: spec.nodeName
             - name: KWATCH_LEADER_ELECTION_NAME
-              value: {{ printf "%s-leader" (include "kwatch.fullname" .) | quote }}
-            - name: GOMEMLIMIT
+              value: {{ include "kwatch.leaseName" . | quote }}
+            - name: KWATCH_DATA_DIR
+              value: "/var/lib/kwatch"
+            {{- if .Values.persistence.emptyDir }}
+            # Tells kwatch the real size cap of the emptyDir volume, so
+            # its storage limits follow it.
+            - name: KWATCH_VOLUME_LIMIT
+              value: {{ .Values.persistence.emptyDirSizeLimit | default "2Gi" | quote }}
+            {{- end }}
+            # kwatch sets the Go soft memory limit to 90% of this
+            # container limit, unless GOMEMLIMIT is set explicitly.
+            - name: KWATCH_MEMORY_LIMIT
               valueFrom:
                 resourceFieldRef:
                   resource: limits.memory
                   divisor: "1"
+            # config.crd.enabled reaches kwatch even when config.yaml
+            # comes from configSecretName, so the overlay matches the CRD
+            # and RBAC this chart installs.
+            - name: KWATCH_CRD_ENABLED
+              value: {{ dig "crd" "enabled" true (default dict .Values.config) | toString | quote }}
+            {{- if eq (include "kwatch.watchSecrets" .) "false" }}
+            # watch.secrets=false: matches the RBAC, which grants no
+            # Secret access, even when config.yaml comes from a Secret.
+            - name: KWATCH_WATCH_SECRETS
+              value: "false"
+            {{- end }}
           livenessProbe:
             httpGet:
               path: /healthz
@@ -109,18 +127,19 @@ spec:
       affinity:
         {{- toYaml . | nindent 8 }}
       {{- end }}
-      topologySpreadConstraints:
-        - maxSkew: 1
-          topologyKey: kubernetes.io/hostname
-          whenUnsatisfiable: ScheduleAnyway
-          labelSelector:
-            matchLabels:
-              {{- include "kwatch.selectorLabels" . | nindent 14 }}
-      {{- with .Values.tolerations }}
+      {{- with (include "kwatch.tolerations" . | trim) }}
       tolerations:
-        {{- toYaml . | nindent 8 }}
+        {{- . | nindent 8 }}
       {{- end }}
       volumes:
+        - name: data
+          {{- if .Values.persistence.emptyDir }}
+          emptyDir:
+            sizeLimit: {{ .Values.persistence.emptyDirSizeLimit | default "2Gi" | quote }}
+          {{- else }}
+          persistentVolumeClaim:
+            claimName: {{ .Values.persistence.existingClaim | default (printf "%s-data" (include "kwatch.fullname" .)) }}
+          {{- end }}
         - name: config-volume
           {{- if .Values.configSecretName }}
           secret:

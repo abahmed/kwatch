@@ -7,7 +7,6 @@ import (
 	"k8s.io/klog/v2"
 
 	"github.com/abahmed/kwatch/internal/delivery/transport"
-	"github.com/abahmed/kwatch/internal/event"
 )
 
 type zapierPayload struct {
@@ -37,6 +36,12 @@ func NewZapier(
 		return nil
 	}
 
+	if !transport.ValidEndpoint(url) {
+		klog.InfoS("initializing zapier with an invalid url",
+			"setting", "url")
+		return nil
+	}
+
 	title, _ := config["title"].(string)
 
 	klog.InfoS("initializing zapier", "title", title)
@@ -54,12 +59,6 @@ func (z *Zapier) Name() string {
 	return "Zapier"
 }
 
-// SendEvent sends event to the provider
-func (z *Zapier) SendEvent(ctx context.Context, e *event.Event) error {
-	msg := e.FormatText(z.clusterName, "")
-	return z.SendMessage(ctx, msg)
-}
-
 // SendMessage sends text message to the provider
 func (z *Zapier) SendMessage(ctx context.Context, msg string) error {
 	payload := zapierPayload{
@@ -72,8 +71,12 @@ func (z *Zapier) SendMessage(ctx context.Context, msg string) error {
 	if err != nil {
 		return err
 	}
+	return z.post(ctx, body)
+}
 
-	_, err = z.sender.Send(ctx, transport.Request{
+// post sends one JSON body to the configured URL.
+func (z *Zapier) post(ctx context.Context, body []byte) error {
+	_, err := z.sender.Send(ctx, transport.Request{
 		Provider: z.Name(), URL: z.url, Body: body,
 		ContentType: "application/json",
 	})

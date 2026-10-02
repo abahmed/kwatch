@@ -1,0 +1,12 @@
+{
+  "name": "hpa-at-max",
+  "description": "An HPA reaches maxReplicas under load and reports ScalingLimited; the saturated replicas fail readiness on timeouts.",
+  "root": "horizontalpodautoscaler/shop/web",
+  "tier": "notify",
+  "maxMessages": 2,
+  "mustNotBlame": [
+    "node//n1",
+    "node//n2",
+    "deployment/shop/web"
+  ]
+}

@@ -7,10 +7,6 @@ nameOverride: ""
 # -- Override the full app name used in templates
 fullnameOverride: ""
 
-# -- Number of Kwatch Pods. Two provides automatic process failover through
-# Kubernetes Lease election; one is an advanced low-resource mode.
-replicaCount: 2
-
 image:
   repository: ghcr.io/abahmed/kwatch
   # -- Overrides the image tag (defaults to .Chart.AppVersion)
@@ -32,30 +28,110 @@ securityContext:
 podSecurityContext:
   fsGroup: 1000
 
-service:
-  port: 8060
+rbac:
+  # -- Cluster read access. "full" grants list/watch on every resource so
+  # any API kind can be watched, and get only on namespaces, nodes,
+  # nodes/stats and nodes/metrics (kubelet stats, read from each kubelet
+  # directly) and pods/log (crash output); a wildcard get is avoided
+  # because it would also match pods/exec and similar subresources.
+  # nodes/proxy is never granted. "least-privilege" grants an explicit
+  # list/watch set matching the built-in sources and skips other kinds.
+  # Both modes also grant get on pods in the release namespace only, to
+  # explain why the previous kwatch Pod restarted, and get/update only on
+  # kwatch's own leader-election Lease.
+  mode: full
+
+watch:
+  # -- Watch Secrets. They feed checks such as missing Secret references
+  # and certificate expiry; their values are hashed in kwatch's informer
+  # cache and never stored or sent. false removes every Secret permission
+  # in both RBAC modes (rbac.mode=full then uses the explicit
+  # least-privilege list, because RBAC cannot remove one resource from a
+  # wildcard), stops the Secret watch, lists Secret as
+  # "disabled_by_config" in /health coverage, and checks that need
+  # Secrets report that they cannot verify.
+  secrets: true
 
 # -- Time allowed for workers and persistence savers to stop cleanly.
 terminationGracePeriodSeconds: 60
 
-# -- Optional network isolation. When enabled, provide ingress rules for the
-# health clients and egress rules for the Kubernetes API, DNS, and providers.
+# -- Optional network isolation, disabled by default: the API server
+# address, the kubelet port and every alert provider differ per cluster,
+# and a policy that misses one silently stops monitoring or alerting.
+# Enable it once you know your egress. With allowDefaults the policy admits
+# the health port (kubelet probes, metrics) and lets kwatch reach DNS, TCP
+# apiServerPorts on any address (the Kubernetes API server and HTTPS alert
+# providers) and the kubelet on every node (kubeletPort, for node stats),
+# limited to kubeletCIDRs when set (your node address ranges). Port 443
+# covers HTTPS alert providers. A provider on any other port needs it in
+# extraEgressPorts: the email provider uses SMTP (25, 465 or 587, matching
+# its configured port) and a custom webhook may use its own port. Use
+# ingress/egress for full rules (for example to limit a port to one
+# address). Set allowDefaults=false only when your own rules cover the API
+# server, kubelets and probes; without them kwatch cannot start.
 networkPolicy:
   enabled: false
+  allowDefaults: true
+  apiServerPorts: [443, 6443]
+  kubeletPort: 10250
+  kubeletCIDRs: []
+  # -- Extra TCP egress ports open to any address, e.g. [587] for SMTP.
+  extraEgressPorts: []
   ingress: []
   egress: []
 
+# -- kwatch sets the Go soft memory limit (GOMEMLIMIT) to 90% of the
+# memory limit, so garbage collection works harder before the kernel would
+# kill the Pod. A 5,000-pod cluster model needs about 100 MiB of live heap.
 resources:
   limits:
-    memory: 256Mi
+    memory: 512Mi
     cpu: 100m
   requests:
     memory: 128Mi
     cpu: 100m
 
+# -- State store volume. Kwatch keeps incidents, changes,
+# baselines, evidence, timeline, audit, object fingerprints and state
+# (thread IDs, notified version) in one file on it. Retention is enforced in
+# the background and live data is capped at 512 MiB; the file is
+# rewritten at startup once it passes 640 MiB, and that compaction copy
+# shares the volume (peak about 1.2 GiB), so keep the volume at 2Gi or
+# more. Set
+# existingClaim to reuse a PVC, or emptyDir for evaluation clusters without
+# storage. emptyDir loses all state when the pod is rescheduled or the node
+# fails, so open incidents may be announced again after a restart.
+persistence:
+  size: 2Gi
+  storageClass: ""
+  existingClaim: ""
+  emptyDir: false
+  # -- sizeLimit applied to the emptyDir volume (emptyDir mode only).
+  emptyDirSizeLimit: 2Gi
+
 nodeSelector: {}
 
+# -- Extra tolerations. They are merged with defaultTolerations below: your
+# list is rendered first and every default whose key and effect are not
+# already used by one of your entries is appended, so setting this never
+# drops the 30s not-ready/unreachable failover behavior. For example a
+# not-ready NoSchedule entry keeps the default not-ready NoExecute one. To
+# change a default, add an entry with the same key and effect (an entry
+# with no effect covers every effect of its key).
 tolerations: []
+
+# -- Move off a failed node after 30s; the Lease stops the old pod writing.
+# Merged with tolerations above (a user entry with the same key and effect
+# wins).
+defaultTolerations:
+  - key: node.kubernetes.io/not-ready
+    operator: Exists
+    effect: NoExecute
+    tolerationSeconds: 30
+  - key: node.kubernetes.io/unreachable
+    operator: Exists
+    effect: NoExecute
+    tolerationSeconds: 30
 
 affinity: {}
 
@@ -65,33 +141,42 @@ sacAnnotations: {}
 
 podLabels: {}
 
-# kwatch configuration
-# All detection monitors are ON by default; see docs.
-# resyncSeconds defaults to 300: resyncs are what re-confirm a problem that is
-# still happening, so keep it well below correlation.window (default 10m) or
-# kwatch will close incidents that never recovered. workers defaults to 1 — raise on large
-# clusters (≈1 per few-thousand pods); each worker fans out to ≤7 goroutines.
-# TLS monitoring is opt-in in the interactive installer (it reads TLS Secrets).
-# The chart's read-only Secret permission is retained because the dependency
-# graph also uses Secret references.
-# tlsMonitor:
-#   enabled: true
-#   threshold: 30
+# kwatch configuration. kwatch watches every supported resource; use
+# namespaces, reasons, namespaceSelector and silences to narrow what is
+# delivered. The chart installs the KwatchConfig CRD and enables live
+# configuration overlay by default.
 #
-# smartGrouping:
-#   windowSeconds: 60
-#   namespaceFanOutThreshold: 3   # owners failing the same way in one namespace → one alert
-# The chart installs the KwatchConfig CRD and enables live configuration
-# overlay by default. Other monitors keep their application defaults.
+# config.healthCheck.port sets the container port and the probe port. The
+# health server cannot be disabled: the probes need it.
+#
+# Two outbound checks are on by default. Anonymous adoption telemetry
+# sends an installation ID and the kwatch version at most once every 7
+# days; the update check asks the GitHub API at startup and then daily
+# whether a newer kwatch release exists, and posts one notice per release
+# to your alert providers. Turn them off here, or in the Secret's
+# config.yaml when configSecretName is set:
+#
+#   config:
+#     telemetry:
+#       enabled: false
+#     upgrader:
+#       disableUpdateCheck: true
 config:
   crd:
     enabled: true
 
 # -- Use an existing Secret containing config.yaml and credential files.
-# Required for alert providers, heartbeatMonitor.url, and diagnosticsToken.
+# Required for alert providers and heartbeatMonitor.url. The Secret's
+# config.yaml replaces `config` above; it is not merged.
+#
+# Limitations: the chart cannot read the Secret's config.yaml. Keep
+# config.healthCheck.port in these values equal to the Secret's port, or
+# the probes use the wrong port. To restart kwatch when the Secret
+# changes, the chart hashes the Secret's data with Helm `lookup`, which
+# only works against a live cluster: `helm template`, `--dry-run` and
+# GitOps tools that render offline (such as Argo CD) see no Secret and
+# hash the Secret name instead, so editing the Secret does not restart
+# the Pod. Restart it yourself after a change
+# (kubectl rollout restart on the kwatch Deployment), or use a new Secret
+# name.
 configSecretName: ""
-
-# -- Configure the upgrader/update checker (nested under config)
-# config:
-#   upgrader:
-#     disableUpdateCheck: false

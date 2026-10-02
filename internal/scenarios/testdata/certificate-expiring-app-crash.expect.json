@@ -1,0 +1,10 @@
+{
+  "name": "certificate-expiring-app-crash",
+  "description": "A mounted TLS certificate expires in ten days while its pods crash for an unrelated reason.",
+  "root": "deployment/shop/payments",
+  "tier": "notify",
+  "maxMessages": 2,
+  "mustNotBlame": [
+    "secret/shop/bank-client-tls"
+  ]
+}

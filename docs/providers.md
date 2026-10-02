@@ -5,7 +5,7 @@ channel for the first time, start with the [quick-start guide](../README.md)
 or the [channel picker on kwatch.dev](https://kwatch.dev/docs/channels).
 
 In simple terms: configure a provider under `alert:`, give kwatch its webhook
-or credential, and it will send incidents to that destination.
+or credential, and it will send problems to that destination.
 
 Provider credentials must never appear directly in `config.yaml`. Put every
 webhook, token, key, password, and other credential in a mounted Kubernetes
@@ -25,11 +25,10 @@ plain credentials and `${ENV_VAR}` substitutions for sensitive fields.
   Discord, Teams), paging for serious stuff (PagerDuty, Opsgenie, SIGNL4, Squadcast), email
   or SMS if you want a paper trail, and the **Custom Webhook** if you have anything else in
   mind.
-- **Every provider says the same thing.** All providers receive one composed
-  semantic report. Chat providers render it in their native format; text
-  providers receive the same bounded human-readable content; and the generic
-  Webhook provider receives structured notification JSON. No provider is a
-  second-class citizen.
+- **Every provider says the same thing.** Every provider receives the same
+  incident message and renders it itself (see
+  [What each provider receives](#what-each-provider-receives)). No provider is
+  a second-class citizen.
 - **Reliability is built in.** Every provider shares the same routing, retry, and fallback
   controls (shown at the top under Slack — they apply to all providers).
 - **One HTTP path.** Every provider that talks HTTP sends through the same helper
@@ -37,6 +36,40 @@ plain credentials and `${ENV_VAR}` substitutions for sensitive fields.
   retried (the payload will not get better), and a `5xx` or network error always is. A
   provider cannot have its own idea of what a status code means — the linter rejects raw
   `net/http` calls under `internal/alert/`.
+
+## What each provider receives
+
+kwatch writes one message per incident update. It has two texts:
+
+- **Note** is the full narrative in a few plain sentences: what is wrong, the
+  proof, the consequence and one suggested command.
+- **Short** is the first sentence on its own, for places with little room.
+
+Both start with exactly one status marker and carry no other emoji:
+🔴 page, 🟠 notify, 🟡 low, ✅ resolved. Every message of one incident shares a
+stable key, so a provider can update and close the same alert, thread or
+issue. Paging providers and webhooks use `kwatch-<cluster>-<key>` as that
+id (spaces in the cluster name become `-`; without `app.clusterName` it is
+`kwatch-<key>`), so two clusters that share one service never merge or resolve
+each other's alerts. Plain operator messages (startup, upgrade, test) share
+`kwatch-<cluster>-notice`.
+
+Plain operator messages are not incidents. Providers that open an alert
+someone must close — PagerDuty, Opsgenie, GoAlert, ilert, incident.io,
+Squadcast, Zenduty and SIGNL4 — skip them, so a startup banner never pages
+anyone. Sensu Go records them as a passing (OK) check.
+
+| Group | Providers | What they send |
+|:--|:--|:--|
+| 💬 Chat | Slack, Discord, Microsoft Teams, Teams Workflow, Mattermost, Rocket.Chat, Google Chat, Webex, Matrix, Telegram, Zulip, Feishu, DingTalk, WeCom, LINE, Flock, Threema, Signal | The Note as the message text, escaped for the chat's markup, with recent application output as a code or quoted block when there is any. Broadcast mentions such as `@channel` are neutralized. Matrix sends the Note as `body` and HTML-escaped as `formatted_body`. Slack with a bot token posts the Short as one root message per incident, keeps every update in its thread and edits the root as the status changes. |
+| 🚨 Paging | PagerDuty, Opsgenie, Splunk On-Call, GoAlert, ilert, incident.io, Squadcast, Zenduty, SIGNL4, Alerta, Datadog, New Relic, AWS SNS, Splunk HEC, Sensu Go | The Short as the alert title or summary, the Note (plus output) as details, the incident id as the dedup or alert key, and the provider's resolve or close action when the incident resolves. Severity follows the incident severity. |
+| 📋 Issue trackers | GitHub, GitLab, Gitea, Jira, ClickUp | One issue per incident: the Short as title and the Note (plus output and the cluster name) as body. Updates add a comment. On resolve kwatch comments and closes the issue (GitHub, GitLab, Gitea); Jira and ClickUp get a closing comment, because their closing states are defined per project or list. |
+| 📱 SMS and push | Twilio, Plivo, Vonage, MessageBird, Pushover, Pushbullet, Gotify, ntfy, IFTTT, Home Assistant | The Short. A resolve is sent at normal priority. IFTTT also sends the Note as `value2` and the status as `value3`. |
+| 📧 Email | Email (SMTP), AWS SES, SendGrid, Mailgun, Resend | Subject is the Short on one line; the body is the Note followed by recent output as a `> ` quoted block. |
+| 🔗 Structured | Custom Webhook, n8n, Zapier | The whole message as JSON (fields below). |
+
+Long texts are cut at the provider's size limit on a character boundary and end
+in `…`. The cut is deterministic, so a retried delivery sends the same bytes.
 
 ## How to pick
 
@@ -59,8 +92,6 @@ Everything below is a reference — one section per provider, with the parameter
 |:---|---|
 | `alert.slack.webhook` | 🔗 Slack webhook URL |
 | `alert.slack.channel` | 📢 Override channel |
-| `alert.slack.title` | ✏️ Custom title |
-| `alert.slack.text` | ✏️ Custom text |
 | `alert.slack.compact` | 📏 Single-line mode |
 
 **Bot Token mode:**
@@ -68,8 +99,6 @@ Everything below is a reference — one section per provider, with the parameter
 |:---|---|
 | `alert.slack.token` | 🔑 Bot token (`xoxb-...`) |
 | `alert.slack.channel` | 📢 Channel to post to |
-| `alert.slack.title` | ✏️ Custom title |
-| `alert.slack.text` | ✏️ Custom text |
 | `alert.slack.compact` | 📏 Single-line mode |
 
 **Compact mode:**
@@ -87,7 +116,9 @@ alert:
 In plain words: the same options work for all providers, not just Slack.
 
 - **`routes`** — if you have several *channels* for one provider, send only some alerts to
-  each (filtered by namespace or severity).
+  each (filtered by `namespaces`, `severities` or `reasons`). A route severity is one of
+  `critical` (pages), `warning` (notifies) or `info` (digest); any other value is rejected
+  at startup because it would never match. Other route keys are ignored with a warning.
 - **`retry`** — how hard kwatch tries before giving up: `maxAttempts` times, waiting `delay`
   between tries. Only failures that *can* succeed on a retry are retried — a timeout, a 5xx,
   a rate limit (which waits exactly as long as the provider's `Retry-After` asks). A failure
@@ -103,7 +134,7 @@ alert:
     webhook: "${file:/config/slack-webhook}"
     routes:
       - namespaces: ["production"]
-        severities: ["high", "critical"]
+        severities: ["critical"]
     retry:
       maxAttempts: 3
       delay: 5s
@@ -127,23 +158,31 @@ alert:
 | Parameter | What it does |
 |:---|---|
 | `alert.discord.webhook` | 🔗 Discord webhook URL |
-| `alert.discord.title` | ✏️ Custom title |
-| `alert.discord.text` | ✏️ Custom text |
 
 ### 📧 Email
 
 **What it is:** good old SMTP email to one or more inboxes — a simple paper trail anyone can
 search.
 
+> With the chart's NetworkPolicy enabled, add your SMTP port (25, 465 or
+> 587) to `networkPolicy.extraEgressPorts`; only 443 is open by default.
+
 | Parameter | What it does |
 |:---|---|
 | `alert.email.from` | 📤 From address |
-| `alert.email.password` | 🔑 From password |
+| `alert.email.password` | 🔑 SMTP password (optional for a relay without authentication) |
+| `alert.email.username` | 👤 SMTP username (optional, defaults to `from`) |
+| `alert.email.tls` | 🔒 `required` (default) or `none` for a trusted relay |
 | `alert.email.host` | 🖥️ SMTP host |
 | `alert.email.port` | 🔌 SMTP port |
 | `alert.email.to` | 📥 Receiver email |
 
 ### 💬 LINE
+
+> **Deprecated.** LINE shut down the LINE Notify service on 31 March 2025, so
+> this provider can no longer deliver messages. It stays only so existing
+> configurations still load. Move to another provider, for example the
+> custom webhook with a LINE Messaging API bridge.
 
 | Parameter | What it does |
 |:---|---|
@@ -180,7 +219,6 @@ Father to get a `token` and a `chatId`.
 |:---|---|
 | `alert.teams.webhook` | 🔗 Webhook URL |
 | `alert.teams.title` | ✏️ Custom title |
-| `alert.teams.text` | ✏️ Custom text |
 
 > `alert.teams.maxRetries` is ignored: Teams used to retry inside the provider on top of the
 > shared delivery retry, so a rate-limited flow was hammered twice. Retries are now governed
@@ -191,23 +229,19 @@ Father to get a `token` and a `chatId`.
 | Parameter | What it does |
 |:---|---|
 | `alert.rocketchat.webhook` | 🔗 Webhook URL |
-| `alert.rocketchat.text` | ✏️ Custom text |
 
 ### 🌐 Mattermost
 
 | Parameter | What it does |
 |:---|---|
 | `alert.mattermost.webhook` | 🔗 Webhook URL |
-| `alert.mattermost.title` | ✏️ Custom title |
-| `alert.mattermost.text` | ✏️ Custom text |
 
 ### 🔔 Opsgenie
 
 | Parameter | What it does |
 |:---|---|
 | `alert.opsgenie.apiKey` | 🔑 API Key |
-| `alert.opsgenie.title` | ✏️ Custom title |
-| `alert.opsgenie.text` | ✏️ Custom text |
+| `alert.opsgenie.region` | 🌍 API region: `us` (default) or `eu` |
 
 ### 🏗️ Matrix
 
@@ -216,8 +250,6 @@ Father to get a `token` and a `chatId`.
 | `alert.matrix.homeServer` | 🖥️ HomeServer URL |
 | `alert.matrix.accessToken` | 🔑 Access token |
 | `alert.matrix.internalRoomId` | 🆔 Room ID |
-| `alert.matrix.title` | ✏️ Custom title |
-| `alert.matrix.text` | ✏️ Custom text |
 
 ### 🔔 DingTalk
 
@@ -233,6 +265,7 @@ Father to get a `token` and a `chatId`.
 |:---|---|
 | `alert.feishu.webhook` | 🔗 Webhook URL |
 | `alert.feishu.title` | ✏️ Custom title |
+| `alert.feishu.secret` | 🔑 Signing secret (optional, when signature verification is on) |
 
 ### 🛡️ Zenduty
 
@@ -246,7 +279,6 @@ Father to get a `token` and a `chatId`.
 | Parameter | What it does |
 |:---|---|
 | `alert.googlechat.webhook` | 🔗 Webhook URL |
-| `alert.googlechat.text` | ✏️ Custom text |
 
 ### 📳 Gotify
 
@@ -272,6 +304,7 @@ alert:
 | `alert.ntfy.url` | 🔗 Server URL (default: `https://ntfy.sh`) |
 | `alert.ntfy.token` | 🔑 Optional auth token |
 | `alert.ntfy.priority` | 🎚️ Priority 1-5 (default: 4) |
+| `alert.ntfy.title` | ✏️ Custom title |
 
 ```yaml
 alert:
@@ -345,6 +378,7 @@ alert:
 |:---|---|
 | `alert.zapier.url` | 🔗 Zap webhook URL |
 | `alert.zapier.token` | 🔑 Optional token |
+| `alert.zapier.title` | ✏️ Title (plain messages only) |
 
 ### ⚡ n8n
 
@@ -352,6 +386,7 @@ alert:
 |:---|---|
 | `alert.n8n.url` | 🔗 Workflow webhook URL |
 | `alert.n8n.token` | 🔑 Optional auth header value |
+| `alert.n8n.title` | ✏️ Title (plain messages only) |
 
 ### 🧙 IFTTT
 
@@ -363,7 +398,7 @@ alert:
 ```yaml
 alert:
   ifttt:
-    key: "d3L..."
+    key: "${file:/config/ifttt-key}"
 ```
 
 ### 🗒️ Microsoft Teams Workflow
@@ -379,7 +414,8 @@ alert:
 | `alert.zulip.email` | ✉️ Bot email |
 | `alert.zulip.token` | 🔑 Bot API key |
 | `alert.zulip.channel` | 📢 Channel/stream to post to |
-| `alert.zulip.url` | 🔗 Server URL (default: `https://zulip.example.com/api/v1/messages`) |
+| `alert.zulip.url` | 🔗 Server URL (required; example hosts are rejected) |
+| `alert.zulip.title` | ✏️ Custom title |
 
 ### 🏠 HomeAssistant
 
@@ -414,7 +450,8 @@ alert:
 | `alert.datadog.apiKey` | 🔑 API key |
 | `alert.datadog.site` | 🌍 Datadog site (default: `datadoghq.com`) |
 | `alert.datadog.applicationKey` | 🔑 Optional application key |
-| `alert.datadog.alertType` | 🏷️ Alert type (default: `error`) |
+| `alert.datadog.alertType` | 🏷️ Fixed alert type for every incident: `error`, `warning`, `info`, `success`, `user_update`, `recommendation` or `snapshot`. Unset, each incident uses its own severity; an unknown value is ignored with a log line |
+| `alert.datadog.title` | 🏷️ Fixed event title, cut to Datadog's 100-byte limit |
 | `alert.datadog.tags` | 🏷️ Comma-separated tags |
 
 ### 📈 New Relic
@@ -536,7 +573,7 @@ alert:
 | `alert.sendgrid.apiKey` | 🔑 API key |
 | `alert.sendgrid.from` | 📤 From address |
 | `alert.sendgrid.to` | 📥 Recipients (list of addresses) |
-| `alert.sendgrid.subject` | ✏️ Email subject |
+| `alert.sendgrid.subject` | ✏️ Email subject (plain messages only) |
 
 ```yaml
 alert:
@@ -554,10 +591,11 @@ alert:
 |:---|---|
 | `alert.ses.accessKeyId` | 🔑 AWS access key ID |
 | `alert.ses.secretAccessKey` | 🔑 AWS secret access key |
+| `alert.ses.sessionToken` | 🎟️ Session token for temporary credentials (optional) |
 | `alert.ses.region` | 🌍 AWS region (default: `us-east-1`) |
 | `alert.ses.from` | 📤 Verified sender address |
 | `alert.ses.to` | 📥 Recipients (comma-separated) |
-| `alert.ses.subject` | ✏️ Email subject |
+| `alert.ses.subject` | ✏️ Email subject (plain messages only) |
 
 ```yaml
 alert:
@@ -575,6 +613,7 @@ alert:
 |:---|---|
 | `alert.sns.accessKeyId` | 🔑 AWS access key ID |
 | `alert.sns.secretAccessKey` | 🔑 AWS secret access key |
+| `alert.sns.sessionToken` | 🎟️ Session token for temporary credentials (optional) |
 | `alert.sns.region` | 🌍 AWS region (default: `us-east-1`) |
 | `alert.sns.topicArn` | 📢 SNS topic ARN (optional when using `targetArn`) |
 | `alert.sns.targetArn` | 📢 SNS endpoint or target ARN (alternative to `topicArn`) |
@@ -643,7 +682,7 @@ alert:
 | `alert.mailgun.domain` | 📦 Sending domain |
 | `alert.mailgun.from` | 📤 From address |
 | `alert.mailgun.to` | 📥 Recipients (comma-separated) |
-| `alert.mailgun.subject` | ✏️ Email subject |
+| `alert.mailgun.subject` | ✏️ Email subject (plain messages only) |
 | `alert.mailgun.url` | 🔗 Optional endpoint override (e.g. EU region) |
 
 ```yaml
@@ -662,7 +701,7 @@ alert:
 | `alert.resend.apiKey` | 🔑 API key |
 | `alert.resend.from` | 📤 From address |
 | `alert.resend.to` | 📥 Recipients (comma-separated) |
-| `alert.resend.subject` | ✏️ Email subject |
+| `alert.resend.subject` | ✏️ Email subject (plain messages only) |
 
 ```yaml
 alert:
@@ -749,7 +788,31 @@ dedicated page for — an IRC bot, a home-grown dashboard, a Zapier-style glue j
 |:---|---|
 | `alert.webhook.url` | 🔗 Webhook URL |
 | `alert.webhook.headers` | 📋 Custom headers |
-| `alert.webhook.basicAuth` | 🔐 Username + password |
+| `alert.webhook.basicAuth.username` | 👤 Basic-auth username |
+| `alert.webhook.basicAuth.password` | 🔑 Basic-auth password |
 
 > Requests are sent as `POST` with `Content-Type: application/json` unless one of your
 > `headers` sets `Content-Type` itself.
+
+Incidents are posted as one JSON object. n8n and Zapier receive the same
+object. Plain operator messages keep their own small shape
+(`{"Cluster","Message"}` for the webhook).
+
+| Field | Meaning |
+|:--|:--|
+| `cluster` | Configured cluster name |
+| `key` | Incident key, the same for every message of one incident |
+| `alertKey` | `kwatch-<cluster>-<key>`, the id to deduplicate on |
+| `revision` | Increasing number that orders messages of one incident |
+| `status` | `critical`, `warning`, `flapping`, `resolved` or `info` |
+| `resolved` | `true` only on the message that closes the incident |
+| `marker` | The one status emoji |
+| `short` | The marker and the lead sentence |
+| `note` | The full narrative, starting with the marker |
+| `title` | One line: what is wrong and where |
+| `lines` | Explanation sentences (omitted when empty) |
+| `timeline` | Relevant events, oldest first (omitted when empty) |
+| `output` | The application's recent output, redacted (omitted when empty) |
+| `steps` | Suggested actions as `{"Text","Command","Mutating"}` (omitted when empty) |
+| `confidence` | How sure the cause is (omitted when empty) |
+| `route` | `{"Namespaces","Reasons","Severity"}` used by routing rules |

@@ -4,45 +4,44 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"net/url"
 	"strings"
 
 	"k8s.io/klog/v2"
 
 	"github.com/abahmed/kwatch/internal/delivery/transport"
-	"github.com/abahmed/kwatch/internal/event"
-	"github.com/abahmed/kwatch/internal/model"
+	"github.com/abahmed/kwatch/internal/notification"
 )
 
 const (
-	defaultOpsgenieTitle = "kwatch detected a crash in pod: %s"
-	defaultOpsgenieText  = "There is an issue with container (%s) in pod (%s)"
-	opsgenieAPIURL       = "https://api.opsgenie.com/v2/alerts"
-	opsgenieCloseURL     = "https://api.opsgenie.com/v2/alerts/%s/close" +
-		"?identifierType=alias"
+	opsgenieAPIURL   = "https://api.opsgenie.com/v2/alerts"
+	opsgenieEUAPIURL = "https://api.eu.opsgenie.com/v2/alerts"
+	// messageLimit is Opsgenie's maximum alert message length.
+	messageLimit = 130
+	// descriptionLimit is Opsgenie's maximum description length.
+	descriptionLimit = 15000
 )
 
+// Opsgenie opens one alert per incident, keyed by its alias, and closes
+// it when the incident resolves.
 type Opsgenie struct {
-	sender   transport.Sender
-	apikey   string
-	url      string
-	closeURL string
-	title    string
-	text     string
+	sender transport.Sender
+	apikey string
+	// url is the alerts endpoint; per-alert actions live below it.
+	url string
 
-	// reference for general app configuration
 	clusterName string
 }
 
 type ogPayload struct {
-	Message     string      `json:"message"`
-	Description string      `json:"description"`
-	Details     interface{} `json:"details"`
-	Priority    string      `json:"priority"`
-	Alias       string      `json:"alias,omitempty"`
+	Message     string            `json:"message"`
+	Description string            `json:"description"`
+	Details     map[string]string `json:"details,omitempty"`
+	Priority    string            `json:"priority"`
+	Alias       string            `json:"alias"`
 }
 
 // NewOpsgenie returns new opsgenie instance
-
 func NewOpsgenie(
 	config map[string]interface{},
 	clusterName string,
@@ -56,16 +55,21 @@ func NewOpsgenie(
 
 	klog.InfoS("initializing opsgenie with secret apikey")
 
-	title, _ := config["title"].(string)
-	text, _ := config["text"].(string)
+	apiURL := opsgenieAPIURL
+	switch region, _ := config["region"].(string); region {
+	case "", "us":
+	case "eu":
+		apiURL = opsgenieEUAPIURL
+	default:
+		klog.InfoS("initializing opsgenie with an invalid region",
+			"region", region)
+		return nil
+	}
 
 	return &Opsgenie{
 		sender:      transport.NewSender(dependencies),
 		apikey:      apiKey,
-		url:         opsgenieAPIURL,
-		closeURL:    opsgenieCloseURL,
-		title:       title,
-		text:        text,
+		url:         apiURL,
 		clusterName: clusterName,
 	}
 }
@@ -75,139 +79,132 @@ func (o *Opsgenie) Name() string {
 	return "Opsgenie"
 }
 
-func (o *Opsgenie) UsesEventDelivery() {}
-
-// SendMessage sends text message to the provider
+// SendMessage skips plain notices: on a paging service they would open an
+// alert that nothing resolves.
 func (o *Opsgenie) SendMessage(ctx context.Context, msg string) error {
+	return o.SendIncident(ctx, notification.Notice(msg))
+}
+
+// SkipsPlainMessages implements api.PlainMessageSkipper: plain messages
+// become notices, which SendIncident skips.
+func (o *Opsgenie) SkipsPlainMessages() bool { return true }
+
+// SendIncident creates or updates the incident's alert, or closes it when
+// the incident resolved.
+func (o *Opsgenie) SendIncident(
+	ctx context.Context, m notification.Message,
+) error {
+	// A plain notice (startup, upgrade, test) or the startup summary is
+	// not an incident. Sending it would page for problems that already
+	// have their own alerts, so it is skipped.
+	if m.IsInformational() {
+		klog.V(4).InfoS("skipping informational message",
+			"component", "delivery", "provider", o.Name())
+		return nil
+	}
+	alias := m.AlertKey(o.clusterName)
+	if m.Resolved() {
+		return o.send(ctx, "POST", o.actionURL(alias, "close"), []byte(`{}`))
+	}
+	payload := o.buildPayload(m)
+	body, err := json.Marshal(payload)
+	if err != nil {
+		return fmt.Errorf("failed to marshal opsgenie payload: %w", err)
+	}
+	if err := o.send(ctx, "POST", o.url, body); err != nil {
+		return err
+	}
+	if m.Revision > 1 {
+		return o.updateAlert(ctx, alias, payload)
+	}
 	return nil
 }
 
-// SendEvent sends event to the provider
-func (o *Opsgenie) SendEvent(ctx context.Context, e *event.Event) error {
-	if e.Action == "resolved" && e.DedupKey != "" {
-		return o.closeAlert(ctx, e.DedupKey)
+// updateAlert copies a later revision onto the open alert. Opsgenie's
+// create call only deduplicates an alert that already exists and never
+// changes its priority, message or description, so without this a warning
+// that becomes critical would keep its old, lower priority.
+func (o *Opsgenie) updateAlert(
+	ctx context.Context, alias string, p ogPayload,
+) error {
+	updates := []struct {
+		action string
+		body   map[string]string
+	}{
+		{"priority", map[string]string{"priority": p.Priority}},
+		{"message", map[string]string{"message": p.Message}},
+		{"description", map[string]string{"description": p.Description}},
 	}
-	b, err := o.buildMessage(e)
-	if err != nil {
-		return err
+	for _, update := range updates {
+		body, err := json.Marshal(update.body)
+		if err != nil {
+			return fmt.Errorf("failed to marshal opsgenie %s: %w",
+				update.action, err)
+		}
+		target := o.actionURL(alias, update.action)
+		if err := o.send(ctx, "PUT", target, body); err != nil {
+			return fmt.Errorf("update opsgenie %s: %w", update.action, err)
+		}
 	}
-	return o.sendAPI(ctx, b)
+	return nil
 }
 
-func (o *Opsgenie) closeAlert(
-	ctx context.Context,
-	alias string,
+// actionURL addresses one alert by its alias, e.g. .../{alias}/close.
+func (o *Opsgenie) actionURL(alias, action string) string {
+	return o.url + "/" + url.PathEscape(alias) + "/" + action +
+		"?identifierType=alias"
+}
+
+func (o *Opsgenie) send(
+	ctx context.Context, method, target string, body []byte,
 ) error {
 	_, err := o.sender.Send(ctx, transport.Request{
 		Provider: "Opsgenie",
-		URL:      fmt.Sprintf(o.closeURL, alias),
-		Body:     []byte(`{}`),
+		Method:   method,
+		URL:      target,
+		Body:     body,
 		Headers:  map[string]string{"Authorization": "GenieKey " + o.apikey},
 	})
 	return err
 }
 
-// sendAPI sends http request to Opsgenie API
-func (o *Opsgenie) sendAPI(
-	ctx context.Context,
-	content []byte,
-) error {
-	_, err := o.sender.Send(ctx, transport.Request{
-		Provider: "Opsgenie",
-		URL:      o.url,
-		Body:     content,
-		Headers:  map[string]string{"Authorization": "GenieKey " + o.apikey},
-	})
-	return err
-}
-
-// opsgeniePriority maps kwatch's severity onto Opsgenie's P1-P5 scale.
-//
-// Every alert used to be filed as P1, the level whose whole purpose is to
-// page immediately. A warning arriving at P1 trains people to ignore P1.
-// An unknown severity is P3, which notifies without paging.
-func opsgeniePriority(sev model.Severity) string {
-	switch sev {
-	case model.SeverityCritical:
+// opsgeniePriority maps the incident severity onto Opsgenie's P1-P5 scale.
+// Only critical incidents are P1, the level that pages immediately; an
+// unknown severity is P3, which notifies without paging.
+func opsgeniePriority(m notification.Message) string {
+	switch {
+	case m.Route.Severity == "critical":
 		return "P1"
-	case model.SeverityHigh:
-		return "P2"
-	case model.SeverityMedium, model.SeverityWarning:
+	case m.Route.Severity == "warning":
 		return "P3"
-	case model.SeverityNormal:
+	case m.Route.Severity == "info":
 		return "P4"
+	case m.Status == notification.StatusCritical:
+		return "P1"
 	}
 	return "P3"
 }
 
-func (o *Opsgenie) buildMessage(e *event.Event) ([]byte, error) {
-	payload := ogPayload{
-		Priority: opsgeniePriority(e.Severity),
-	}
-
-	logs := strings.TrimSpace(e.Logs)
-	events := strings.TrimSpace(e.Events)
-
-	// use custom title if it's provided, otherwise use default
-	title := o.title
-	if len(title) == 0 {
-		if narrative := strings.TrimSpace(e.Narrative); narrative != "" {
-			title = firstLine(narrative, 130)
-		} else {
-			title = fmt.Sprintf(defaultOpsgenieTitle, e.PodName)
-		}
-	}
-	payload.Message = title
-
-	// use custom text if it's provided, otherwise use default
-	text := o.text
-	if narrative := strings.TrimSpace(e.Narrative); narrative != "" {
-		text = narrative
-	}
-	if len(text) == 0 {
-		text = fmt.Sprintf(defaultOpsgenieText, e.ContainerName, e.PodName)
-	}
-
-	payload.Description = text
-	payload.Alias = e.DedupKey
+func (o *Opsgenie) buildPayload(m notification.Message) ogPayload {
 	details := map[string]string{}
 	if o.clusterName != "" {
 		details["Cluster"] = o.clusterName
 	}
-	if e.PodName != "" {
-		details["Name"] = e.PodName
+	if len(m.Route.Namespaces) > 0 {
+		details["Namespace"] = strings.Join(m.Route.Namespaces, ",")
 	}
-	if e.ContainerName != "" {
-		details["Container"] = e.ContainerName
+	if len(m.Route.Reasons) > 0 {
+		details["Reason"] = strings.Join(m.Route.Reasons, ",")
 	}
-	if e.Namespace != "" {
-		details["Namespace"] = e.Namespace
+	description := m.NoteText()
+	if len(m.Output) > 0 {
+		description += "\n\n" + strings.Join(m.Output, "\n")
 	}
-	if e.NodeName != "" {
-		details["Node"] = e.NodeName
+	return ogPayload{
+		Message:     notification.Truncate(m.ShortText(), messageLimit),
+		Description: notification.Truncate(description, descriptionLimit),
+		Details:     details,
+		Priority:    opsgeniePriority(m),
+		Alias:       m.AlertKey(o.clusterName),
 	}
-	if e.Reason != "" {
-		details["Reason"] = e.Reason
-	}
-	if e.Narrative == "" && len(events) > 0 {
-		details["Events"] = events
-	}
-	if e.Narrative == "" && len(logs) > 0 {
-		details["Logs"] = logs
-	}
-	payload.Details = details
-
-	str, err := json.Marshal(payload)
-	if err != nil {
-		return nil, fmt.Errorf("failed to marshal opsgenie payload: %w", err)
-	}
-	return str, nil
-}
-
-func firstLine(value string, limit int) string {
-	line := strings.SplitN(strings.TrimSpace(value), "\n", 2)[0]
-	if len(line) <= limit {
-		return line
-	}
-	return line[:limit-1] + "…"
 }

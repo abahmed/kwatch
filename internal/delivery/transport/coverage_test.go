@@ -9,7 +9,6 @@ import (
 	"time"
 
 	"github.com/abahmed/kwatch/internal/clock"
-	"github.com/abahmed/kwatch/internal/event"
 )
 
 func TestSendBuildsRequestWithHeadersAndBasicAuth(t *testing.T) {
@@ -67,7 +66,7 @@ func TestSendClassifiesErrorsAndUsesBodyRetryHint(t *testing.T) {
 			if err == nil || !strings.Contains(err.Error(), tt.want) {
 				t.Fatalf("Send() error = %v", err)
 			}
-			if tt.permanent && !event.IsPermanent(err) {
+			if tt.permanent && !IsPermanent(err) {
 				t.Fatal("permanent error was not wrapped")
 			}
 		})

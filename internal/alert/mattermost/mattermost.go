@@ -9,19 +9,13 @@ import (
 	"k8s.io/klog/v2"
 
 	"github.com/abahmed/kwatch/internal/clock"
-	"github.com/abahmed/kwatch/internal/constant"
 	"github.com/abahmed/kwatch/internal/delivery/transport"
-	"github.com/abahmed/kwatch/internal/event"
-	"github.com/abahmed/kwatch/internal/insight"
-	"github.com/abahmed/kwatch/internal/message"
-	"github.com/abahmed/kwatch/internal/model"
+	"github.com/abahmed/kwatch/internal/notification"
 )
 
 type Mattermost struct {
 	sender  transport.Sender
 	webhook string
-	title   string
-	text    string
 
 	// reference for general app configuration
 	clusterName string
@@ -35,14 +29,12 @@ type mmField struct {
 }
 
 type mmAttachment struct {
-	Title  string    `json:"title"`
-	Text   string    `json:"text"`
 	Fields []mmField `json:"fields"`
 }
 
 type mmPayload struct {
 	Text        string         `json:"text"`
-	Attachments []mmAttachment `json:"attachments"`
+	Attachments []mmAttachment `json:"attachments,omitempty"`
 }
 
 // NewMattermost returns new mattermost instance
@@ -58,16 +50,17 @@ func NewMattermost(
 		return nil
 	}
 
-	klog.InfoS("initializing mattermost with webhook configured")
+	if !transport.ValidEndpoint(webhook) {
+		klog.InfoS("initializing mattermost with an invalid webhook",
+			"setting", "webhook")
+		return nil
+	}
 
-	title, _ := config["title"].(string)
-	text, _ := config["text"].(string)
+	klog.InfoS("initializing mattermost with webhook configured")
 
 	return &Mattermost{
 		sender:      transport.NewSender(dependencies),
 		webhook:     webhook,
-		title:       title,
-		text:        text,
 		clusterName: clusterName,
 		clockSource: clock.Require(dependencies.Clock),
 	}
@@ -85,62 +78,26 @@ func (m *Mattermost) SendMessage(ctx context.Context, msg string) error {
 		"messageLength", len(msg),
 	)
 
-	b, err := m.buildMessage(nil, &msg)
+	b, err := m.buildMessage(msg)
 	if err != nil {
 		return err
 	}
 	return m.sendAPI(ctx, b)
 }
 
-// SendEvent sends event to the provider
-func (m *Mattermost) SendEvent(ctx context.Context, e *event.Event) error {
-	klog.V(4).InfoS(
-		"sending to mattermost event",
-		"namespace", e.Namespace,
-		"name", e.PodName,
-		"reason", e.Reason,
-		"action", e.Action,
-	)
-
-	b, err := m.buildMessage(e, nil)
-	if err != nil {
-		return err
-	}
-	return m.sendAPI(ctx, b)
-}
-
-// SendIncident implements delivery.ThreadProvider.
-// It renders the incident using the Report model and PlaintextRenderer,
-// producing a context-adaptive text message.
+// SendIncident posts the incident narrative as the message text, with the
+// workload's last output as a code block. The cluster rides in an
+// attachment field so the text starts with the status marker.
 func (m *Mattermost) SendIncident(
-	ctx context.Context,
-	inc *model.Incident,
-	action model.IncidentAction,
+	ctx context.Context, msg notification.Message,
 ) error {
-	return m.SendIncidentWithInsight(ctx, inc, action, nil)
-}
-
-// SendIncidentWithInsight implements delivery.InsightThreadProvider, so the
-// diagnosis — likely cause, impact, recent changes — is rendered rather than
-// dropped on the way to this provider.
-func (m *Mattermost) SendIncidentWithInsight(
-	ctx context.Context,
-	inc *model.Incident,
-	action model.IncidentAction,
-	ins *insight.Insight,
-) error {
-	text := message.RenderIncidentWithInsight(
-		inc,
-		action,
-		ins,
-		message.NewPlainTextRenderer(),
-		m.clusterName,
-		m.clockSource,
-	)
-	if text == "" {
-		return nil
+	klog.V(4).InfoS("sending incident to mattermost",
+		"component", "mattermost", "conversation", msg.Key)
+	b, err := m.buildIncident(msg)
+	if err != nil {
+		return err
 	}
-	return m.SendMessage(ctx, text)
+	return m.sendAPI(ctx, b)
 }
 
 func (m *Mattermost) sendAPI(ctx context.Context, content []byte) error {
@@ -150,104 +107,27 @@ func (m *Mattermost) sendAPI(ctx context.Context, content []byte) error {
 	return err
 }
 
-func (m *Mattermost) buildMessage(e *event.Event, msg *string) ([]byte, error) {
-	payload := mmPayload{}
+func (m *Mattermost) buildMessage(msg string) ([]byte, error) {
+	return marshalPayload(mmPayload{
+		Text: notification.NeutralizeMentions(msg),
+	})
+}
 
-	if msg != nil && len(*msg) > 0 {
-		payload.Text = message.NeutralizeMentions(*msg)
+func (m *Mattermost) buildIncident(msg notification.Message) ([]byte, error) {
+	text := msg.NoteText()
+	if len(msg.Output) > 0 {
+		text += "\n```\n" + strings.Join(msg.Output, "\n") + "\n```"
 	}
-
-	if e != nil {
-		logs := message.NeutralizeMentions(strings.TrimSpace(e.Logs))
-		events := message.NeutralizeMentions(strings.TrimSpace(e.Events))
-
-		// use custom title if it's provided, otherwise use default
-		title := m.title
-		if len(title) == 0 {
-			title = constant.DefaultTitle
-		}
-
-		// use custom text if it's provided, otherwise use default
-		text := m.text
-		if len(text) == 0 {
-			text = constant.DefaultText
-		}
-
-		mmFields := []mmField{}
-		if m.clusterName != "" {
-			mmFields = append(
-				mmFields,
-				mmField{
-					Title: "Cluster",
-					Value: m.clusterName,
-					Short: true,
-				},
-			)
-		}
-		if e.PodName != "" {
-			mmFields = append(
-				mmFields,
-				mmField{Title: "Name", Value: e.PodName, Short: true},
-			)
-		}
-		if e.ContainerName != "" {
-			mmFields = append(
-				mmFields,
-				mmField{
-					Title: "Container",
-					Value: e.ContainerName,
-					Short: true,
-				},
-			)
-		}
-		if e.Namespace != "" {
-			mmFields = append(
-				mmFields,
-				mmField{Title: "Namespace", Value: e.Namespace, Short: true},
-			)
-		}
-		if e.NodeName != "" {
-			mmFields = append(
-				mmFields,
-				mmField{Title: "Node", Value: e.NodeName, Short: true},
-			)
-		}
-		if e.Reason != "" {
-			mmFields = append(
-				mmFields,
-				mmField{Title: "Reason", Value: e.Reason, Short: true},
-			)
-		}
-		if logs != "" {
-			mmFields = append(
-				mmFields,
-				mmField{
-					Title: ":memo: Logs",
-					Value: "```\n" + logs + "\n```",
-					Short: false,
-				},
-			)
-		}
-		if events != "" {
-			mmFields = append(
-				mmFields,
-				mmField{
-					Title: ":mag: Events",
-					Value: "```\n" + events + " \n```",
-					Short: false,
-				},
-			)
-		}
-
-		payload.Attachments = []mmAttachment{
-			{
-				Title:  title,
-				Text:   text,
-				Fields: mmFields,
-			},
-		}
+	payload := mmPayload{Text: notification.NeutralizeMentions(text)}
+	if m.clusterName != "" {
+		payload.Attachments = []mmAttachment{{Fields: []mmField{{
+			Title: "Cluster", Value: m.clusterName, Short: true,
+		}}}}
 	}
+	return marshalPayload(payload)
+}
 
+func marshalPayload(payload mmPayload) ([]byte, error) {
 	str, err := json.Marshal(payload)
 	if err != nil {
 		return nil, fmt.Errorf("failed to marshal mattermost payload: %w", err)

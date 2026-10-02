@@ -29,98 +29,109 @@ func LintStrict() error {
 	if err := validateSecretReferences(string(raw)); err != nil {
 		return err
 	}
-	expanded, err := expandEnv(string(raw))
-	if err != nil {
+	document, err := expandConfigDocument(string(raw))
+	if err != nil || document == nil {
 		return err
 	}
-	expanded, err = expandFileRefs(expanded)
-	if err != nil {
-		return err
-	}
-	if strings.TrimSpace(expanded) == "" {
-		return nil
-	}
-	dec := yaml.NewDecoder(strings.NewReader(expanded))
-	dec.KnownFields(true)
+	// The expanded document must still decode; unknown keys are then
+	// reported from the original bytes so line numbers match the file.
 	var tmp Config
-	return dec.Decode(&tmp)
+	if err := document.Decode(&tmp); err != nil {
+		return err
+	}
+	return unknownKeysError(raw)
 }
 
-// expandEnv replaces ${VAR} with the environment value (braced-only;
-// bare $ is preserved for passwords/hashes). A referenced variable that is
-// not set in the environment is reported as an error rather than silently
-// expanding to an empty string, which would corrupt the configuration.
+// expandConfigDocument parses the config and then resolves ${VAR} and exact
+// ${file:/path} references inside scalar values only. Expanding after parsing
+// keeps secret values from changing the YAML structure: a value containing a
+// quote, colon, or newline stays one string. Bare $ is preserved for
+// passwords and hashes. A referenced variable that is not set is an error
+// rather than an empty string that would corrupt the configuration.
 var envVarRe = regexp.MustCompile(`\$\{(\w+)\}`)
 var fileRefRe = regexp.MustCompile(`^\$\{file:(/[^}]*)\}$`)
 
-func expandEnv(s string) (string, error) {
+func expandConfigDocument(raw string) (*yaml.Node, error) {
+	if strings.TrimSpace(raw) == "" {
+		return nil, nil
+	}
+	var document yaml.Node
+	if err := yaml.Unmarshal([]byte(raw), &document); err != nil {
+		return nil, err
+	}
+	if document.Kind == 0 {
+		return nil, nil
+	}
 	unset := map[string]bool{}
-	out := envVarRe.ReplaceAllStringFunc(s, func(m string) string {
-		groups := envVarRe.FindStringSubmatch(m)
-		if groups == nil {
-			return m
-		}
-		v, ok := os.LookupEnv(groups[1])
-		if !ok {
-			unset[groups[1]] = true
-			return m
-		}
-		return v
-	})
+	if err := expandNode(&document, unset); err != nil {
+		return nil, err
+	}
 	if len(unset) > 0 {
 		names := make([]string, 0, len(unset))
 		for n := range unset {
 			names = append(names, n)
 		}
 		sort.Strings(names)
-		return "", fmt.Errorf("environment variable(s) referenced in config are not set: %s", strings.Join(names, ", "))
+		return nil, fmt.Errorf(
+			"environment variable(s) referenced in config are not set: %s",
+			strings.Join(names, ", "),
+		)
 	}
-	return out, nil
+	return &document, nil
 }
 
-// expandFileRefs resolves exact ${file:/path} scalar references after YAML
-// parsing so secret values remain correctly escaped when YAML is re-encoded.
-func expandFileRefs(s string) (string, error) {
-	if strings.TrimSpace(s) == "" {
-		return s, nil
-	}
-	var document yaml.Node
-	if err := yaml.Unmarshal([]byte(s), &document); err != nil {
-		return "", err
-	}
-	if err := resolveFileRefNodes(&document); err != nil {
-		return "", err
-	}
-	resolved, err := yaml.Marshal(&document)
-	if err != nil {
-		return "", err
-	}
-	return string(resolved), nil
-}
-
-func resolveFileRefNodes(node *yaml.Node) error {
-	if node.Kind == yaml.ScalarNode && node.Tag == "!!str" {
-		match := fileRefRe.FindStringSubmatch(node.Value)
-		if match != nil {
-			value, err := os.ReadFile(match[1]) // #nosec G304 -- operator-selected config reference
-			if err != nil {
-				return fmt.Errorf("config file reference %q could not be read: %w", match[1], err)
-			}
-			node.Value = strings.TrimRight(string(value), "\r\n")
+func expandNode(node *yaml.Node, unset map[string]bool) error {
+	if node.Kind == yaml.ScalarNode {
+		if err := expandScalar(node, unset); err != nil {
+			return err
 		}
 	}
 	for _, child := range node.Content {
-		if err := resolveFileRefNodes(child); err != nil {
+		if err := expandNode(child, unset); err != nil {
 			return err
 		}
 	}
 	return nil
 }
 
-// LoadConfig loads yaml configuration from file if provided, otherwise
-// loads default configuration
+func expandScalar(node *yaml.Node, unset map[string]bool) error {
+	if match := fileRefRe.FindStringSubmatch(node.Value); match != nil {
+		// #nosec G304 -- operator-selected config reference
+		value, err := os.ReadFile(match[1])
+		if err != nil {
+			return fmt.Errorf(
+				"config file reference %q could not be read: %w",
+				match[1], err,
+			)
+		}
+		node.Value = strings.TrimRight(string(value), "\r\n")
+		return nil
+	}
+	if !envVarRe.MatchString(node.Value) {
+		return nil
+	}
+	node.Value = envVarRe.ReplaceAllStringFunc(
+		node.Value, func(m string) string {
+			name := envVarRe.FindStringSubmatch(m)[1]
+			v, ok := os.LookupEnv(name)
+			if !ok {
+				unset[name] = true
+				return m
+			}
+			return v
+		},
+	)
+	// A plain `port: ${PORT}` must decode as the value's natural type, as it
+	// did with text expansion. Quoted scalars stay strings.
+	if node.Style == 0 {
+		node.Tag = ""
+	}
+	return nil
+}
+
 // parseConfigFile reads CONFIG_FILE and unmarshals it over a fresh default
-// config. A missing or unset file yields the defaults with no error.
+// config. An unset CONFIG_FILE yields the defaults; a set one that does not
+// exist is an error.
 func parseConfigFile() (*Config, error) {
 	configFile := os.Getenv("CONFIG_FILE")
 
@@ -138,8 +149,13 @@ func parseConfigFile() (*Config, error) {
 	yamlFile, err := os.ReadFile(configFile) // #nosec G304,G703 -- intentional operator path
 	if err != nil {
 		if os.IsNotExist(err) {
-			klog.InfoS("config file not found; using default (no alert providers)", "path", configFile)
-			return config, nil
+			// CONFIG_FILE names a file the operator meant to use, for
+			// example a Secret key. Running on defaults would silently
+			// drop every provider, so a missing file stops startup.
+			return nil, fmt.Errorf(
+				"CONFIG_FILE %q does not exist: check that the mounted "+
+					"ConfigMap or Secret has a config.yaml key, or unset "+
+					"CONFIG_FILE to run with defaults", configFile)
 		}
 		klog.InfoS("unable to load config file", "error", err.Error())
 		return nil, err
@@ -149,22 +165,18 @@ func parseConfigFile() (*Config, error) {
 		return nil, err
 	}
 
-	expanded, err := expandEnv(string(yamlFile))
+	document, err := expandConfigDocument(string(yamlFile))
 	if err != nil {
-		klog.ErrorS(err, "failed to expand environment variables in config", "file", configFile)
+		klog.ErrorS(err, "failed to expand references in config",
+			"file", configFile)
 		return nil, err
 	}
-	expanded, err = expandFileRefs(expanded)
-	if err != nil {
-		klog.ErrorS(err, "failed to resolve file references in config", "file", configFile)
-		return nil, err
-	}
-
-	if strings.TrimSpace(expanded) != "" {
-		if err = yaml.Unmarshal([]byte(expanded), config); err != nil {
+	if document != nil {
+		if err = document.Decode(config); err != nil {
 			klog.InfoS("unable to parse config file", "error", err.Error())
 			return nil, err
 		}
+		config.unknownKeys = unknownConfigKeys(yamlFile)
 	}
 
 	return config, nil
@@ -229,28 +241,12 @@ func validateReasonEntries(items []string) []error {
 	return errs
 }
 
-// prepareConfig normalizes parsed config: splits lists, compiles back-compat
-// patterns, consolidates suppression state, and runs full validation.
+// prepareConfig normalizes parsed config: splits lists, consolidates
+// suppression into silences, and runs full validation.
 func prepareConfig(config *Config) []error {
 	var errs []error
 
 	errs = prepareAllowForbidLists(config, errs)
-
-	var err error
-
-	// Prepare ignored pod name patters (compiled for back-compat)
-	config.IgnorePodNamePatterns, err =
-		getCompiledIgnorePatterns(config.IgnorePodNames)
-	if err != nil {
-		errs = append(errs, fmt.Errorf("failed to compile pod name pattern: %w", err))
-	}
-
-	// Prepare ignored log patterns (compiled for back-compat)
-	config.IgnoreLogPatternsCompiled, err =
-		getCompiledIgnorePatterns(config.IgnoreLogPatterns)
-	if err != nil {
-		errs = append(errs, fmt.Errorf("failed to compile log pattern: %w", err))
-	}
 
 	// Remove synthetic rules from any earlier preparation pass before building
 	// them again. Startup CRD overlays may request a second pass.
@@ -260,23 +256,21 @@ func prepareConfig(config *Config) []error {
 	config.syntheticSilences = 0
 
 	// Consolidation: convert deprecated ignore* fields into synthetic
-	// SilenceRules so detect-time and post-detect filters both read from
-	// the unified Silences / SuppressionIndex.
+	// SilenceRules so scope filtering reads one list.
 	baseLen := len(config.Silences)
 	config.Silences = appendIgnoreFieldSilences(config)
 	config.syntheticSilences = len(config.Silences) - baseLen
 
-	// Build suppression index for detect-time filters
-	config.Suppression = config.BuildSuppressionIndex()
-
 	return append(errs, Validate(config)...)
 }
 
+// LoadConfig reads, overlays and validates the configuration file.
 func LoadConfig() (*Config, error) {
 	config, err := parseConfigFile()
 	if err != nil {
 		return nil, err
 	}
+	applyEnvironmentOverrides(config)
 
 	if errs := prepareConfig(config); len(errs) > 0 {
 		return nil, errors.Join(errs...)
@@ -300,6 +294,7 @@ func LoadConfig() (*Config, error) {
 // RebuildAfterOverlay refreshes validation and derived indexes after a
 // startup-only configuration source has overlaid the base file.
 func RebuildAfterOverlay(c *Config) error {
+	applyEnvironmentOverrides(c)
 	if errs := prepareConfig(c); len(errs) > 0 {
 		return errors.Join(errs...)
 	}
@@ -338,18 +333,4 @@ func getAllowForbidSlices(items []string) (allow []string, forbid []string) {
 		allow = append(allow, item)
 	}
 	return allow, forbid
-}
-
-func getCompiledIgnorePatterns(patterns []string) (compiledPatterns []*regexp.Regexp, err error) {
-	compiledPatterns = make([]*regexp.Regexp, 0)
-
-	for _, pattern := range patterns {
-		compiledPattern, err := regexp.Compile(pattern)
-		if err != nil {
-			return nil, fmt.Errorf("failed to compile pattern '%s'", pattern)
-		}
-		compiledPatterns = append(compiledPatterns, compiledPattern)
-	}
-
-	return compiledPatterns, nil
 }

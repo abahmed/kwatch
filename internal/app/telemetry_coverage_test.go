@@ -6,7 +6,6 @@ import (
 	"errors"
 	"net/http"
 	"net/http/httptest"
-	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -57,6 +56,7 @@ func TestTelemetrySkipReasonCoversConfigurationGuards(t *testing.T) {
 	store := &telemetryStoreStub{}
 	oldCI := ""
 	t.Setenv("CI", oldCI)
+	t.Setenv("KWATCH_TELEMETRY", "")
 	tests := []struct {
 		name  string
 		cfg   config.Telemetry
@@ -67,6 +67,7 @@ func TestTelemetrySkipReasonCoversConfigurationGuards(t *testing.T) {
 		cluster string
 		version string
 		ci      string
+		envOpt  string
 		want    string
 	}{
 		{
@@ -75,7 +76,8 @@ func TestTelemetrySkipReasonCoversConfigurationGuards(t *testing.T) {
 		},
 		{
 			name: "development build", cfg: config.Telemetry{Enabled: true},
-			store: store, cluster: "cluster", version: "dev", want: "dev_build",
+			store: store, cluster: "cluster", version: "dev",
+			want: "dev_build",
 		},
 		{
 			name: "ci environment", cfg: config.Telemetry{Enabled: true},
@@ -84,7 +86,8 @@ func TestTelemetrySkipReasonCoversConfigurationGuards(t *testing.T) {
 		},
 		{
 			name: "missing store", cfg: config.Telemetry{Enabled: true},
-			cluster: "cluster", version: "v1", want: "persistence_unavailable",
+			cluster: "cluster", version: "v1",
+			want: "persistence_unavailable",
 		},
 		{
 			name: "missing cluster", cfg: config.Telemetry{Enabled: true},
@@ -95,13 +98,50 @@ func TestTelemetrySkipReasonCoversConfigurationGuards(t *testing.T) {
 			store: store, cluster: "cluster", want: "missing_version",
 		},
 		{
-			name: "ready", cfg: config.Telemetry{Enabled: true}, store: store,
-			cluster: "cluster", version: "v1", want: "",
+			name: "ready", cfg: config.Telemetry{Enabled: true},
+			store: store, cluster: "cluster", version: "v1", want: "",
+		},
+		{
+			name:  "env disabled false",
+			cfg:   config.Telemetry{Enabled: true},
+			store: store, cluster: "cluster", version: "v1",
+			envOpt: "false", want: "disabled_env",
+		},
+		{
+			name:  "env disabled 0",
+			cfg:   config.Telemetry{Enabled: true},
+			store: store, cluster: "cluster", version: "v1",
+			envOpt: "0", want: "disabled_env",
+		},
+		{
+			name:  "env disabled off",
+			cfg:   config.Telemetry{Enabled: true},
+			store: store, cluster: "cluster", version: "v1",
+			envOpt: "off", want: "disabled_env",
+		},
+		{
+			name:  "env disabled no",
+			cfg:   config.Telemetry{Enabled: true},
+			store: store, cluster: "cluster", version: "v1",
+			envOpt: "no", want: "disabled_env",
+		},
+		{
+			name:  "env disabled case insensitive",
+			cfg:   config.Telemetry{Enabled: true},
+			store: store, cluster: "cluster", version: "v1",
+			envOpt: "FALSE", want: "disabled_env",
+		},
+		{
+			name:  "env disabled with spaces",
+			cfg:   config.Telemetry{Enabled: true},
+			store: store, cluster: "cluster", version: "v1",
+			envOpt: "  false  ", want: "disabled_env",
 		},
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
 			t.Setenv("CI", test.ci)
+			t.Setenv("KWATCH_TELEMETRY", test.envOpt)
 			got := telemetrySkipReason(
 				test.cfg, test.store, test.cluster, test.version,
 			)
@@ -121,7 +161,7 @@ func TestSendTelemetryHandlesDueAndDeferredHeartbeats(t *testing.T) {
 		context.Background(), due, "123e4567-e89b-42d3-a456-426614174000",
 		"v1.2.3", func() time.Time { return now }, client,
 		telemetry.Endpoint,
-		newAdoptionTelemetryStatus(),
+		nil,
 	)
 	if retry || delay != telemetry.WeeklyInterval || !due.setCalled {
 		t.Fatalf("due result = %v, %v, set=%v", delay, retry, due.setCalled)
@@ -133,7 +173,7 @@ func TestSendTelemetryHandlesDueAndDeferredHeartbeats(t *testing.T) {
 		"123e4567-e89b-42d3-a456-426614174000", "v1.2.3",
 		func() time.Time { return now }, client,
 		telemetry.Endpoint,
-		newAdoptionTelemetryStatus(),
+		nil,
 	)
 	if retry || due.setCalled && recent.setCalled {
 		t.Fatal("recent heartbeat should not be written")
@@ -150,23 +190,51 @@ func TestSendTelemetryReportsReadAndWriteFailures(t *testing.T) {
 		context.Background(), readErr, "cluster", "v1",
 		func() time.Time { return now }, http.DefaultClient,
 		telemetry.Endpoint,
-		newAdoptionTelemetryStatus(),
+		nil,
 	)
 	if !retry || delay != time.Minute {
 		t.Fatalf("read failure = %v, %v", delay, retry)
 	}
 
+	requests := 0
+	server := httptest.NewServer(http.HandlerFunc(func(
+		w http.ResponseWriter, _ *http.Request,
+	) {
+		requests++
+		w.WriteHeader(http.StatusNoContent)
+	}))
+	defer server.Close()
+
 	writeErr := &telemetryStoreStub{setErr: errors.New("write failed")}
-	client := &http.Client{Transport: telemetryRoundTripper{status: 204}}
+	client := server.Client()
+	var sent time.Time
+	delay, retry = sendTelemetry(
+		context.Background(), writeErr,
+		"123e4567-e89b-42d3-a456-426614174000", "v1",
+		func() time.Time { return now }, client,
+		server.URL,
+		&sent,
+	)
+	if retry || delay != telemetry.WeeklyInterval {
+		t.Fatalf("write failure = %v, %v", delay, retry)
+	}
+	if requests != 1 {
+		t.Fatalf("first call should hit server")
+	}
+
 	_, retry = sendTelemetry(
 		context.Background(), writeErr,
 		"123e4567-e89b-42d3-a456-426614174000", "v1",
 		func() time.Time { return now }, client,
-		telemetry.Endpoint,
-		newAdoptionTelemetryStatus(),
+		server.URL,
+		&sent,
 	)
-	if !retry {
-		t.Fatal("write failure should request retry")
+	if retry {
+		t.Fatal("second call with same sent should not retry")
+	}
+	if requests != 1 {
+		t.Fatal("second call should not hit server again due to " +
+			"sent pointer")
 	}
 }
 
@@ -244,7 +312,7 @@ func TestTelemetryRunnerRetriesAgainstEndpoint(t *testing.T) {
 		"123e4567-e89b-42d3-a456-426614174000", "v1.2.3",
 		func() time.Time {
 			return time.Date(2026, 9, 21, 12, 0, 0, 0, time.UTC)
-		}, server.Client(), newAdoptionTelemetryStatus(),
+		}, server.Client(),
 		telemetryRunnerOptions{
 			endpoint: server.URL,
 			wait: func(context.Context, time.Duration) bool {
@@ -262,7 +330,7 @@ func TestTelemetryRunnerRetriesAgainstEndpoint(t *testing.T) {
 	}
 }
 
-func TestTelemetryHelpersAndStatusSerialization(t *testing.T) {
+func TestTelemetryHelpers(t *testing.T) {
 	if telemetryFailureReason(errors.New("status 503")) != "http_status" {
 		t.Fatal("status errors should be classified as HTTP failures")
 	}
@@ -282,18 +350,17 @@ func TestTelemetryHelpersAndStatusSerialization(t *testing.T) {
 		t.Fatal("canceled wait should stop")
 	}
 
-	status := newAdoptionTelemetryStatus()
-	now := time.Date(2026, 9, 21, 12, 0, 0, 0, time.UTC)
-	status.configure(true, "waiting", "")
-	status.attempt(now)
-	status.failure("network", now.Add(time.Minute))
-	status.success(now, now.Add(telemetry.WeeklyInterval))
-	raw, err := status.StatusJSON()
-	if err != nil || !strings.Contains(string(raw), `"state":"waiting"`) {
-		t.Fatalf("status JSON = %s, err=%v", raw, err)
-	}
 	if jitterDuration(time.Second) < time.Second ||
 		jitterDuration(time.Second) > 1200*time.Millisecond {
 		t.Fatal("jitter escaped its documented range")
+	}
+}
+
+func TestConfigureTelemetryRunnerSkipsWhenDisabled(t *testing.T) {
+	run := configureTelemetryRunner(config.Telemetry{}, nil, "id", "v1",
+		time.Now, nil)
+
+	if run != nil {
+		t.Fatal("disabled telemetry must not build a runner")
 	}
 }

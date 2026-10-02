@@ -1,0 +1,12 @@
+{
+  "name": "claim-full-unlisted-volume",
+  "description": "A broker's bound PersistentVolumeClaim fills up; the broker exits with \"No space left on device\" and its PersistentVolume is not in view.",
+  "root": "persistentvolumeclaim/messaging/broker-log",
+  "tier": "notify",
+  "maxMessages": 2,
+  "mustNotBlame": [
+    "node//w1",
+    "persistentvolume//pv-broker-log",
+    "storageclass//fast-local"
+  ]
+}

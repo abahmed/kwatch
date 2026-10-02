@@ -58,6 +58,7 @@ func TestScenarioPersistentVolumeClaimFailure(t *testing.T) {
 			t.Fatal(err)
 		}
 		defer cleanupNamespace(t, e, namespace)
+		started := time.Now()
 		_, err := e.Client.CoreV1().PersistentVolumeClaims(namespace).Create(
 			ctx, &corev1.PersistentVolumeClaim{
 				ObjectMeta: metav1.ObjectMeta{Name: "missing-volume"},
@@ -87,12 +88,11 @@ func TestScenarioPersistentVolumeClaimFailure(t *testing.T) {
 			}); err != nil {
 			t.Fatal(err)
 		}
-		if _, err := e.Audit.WaitFor(ctx, harness.AuditMatch{
-			Namespace: namespace, Resource: "missing-volume",
-			Reason: "PersistentVolumeClaimFailure", Count: 1,
-		}); err != nil {
-			t.Fatal(err)
-		}
+		assertRoot(ctx, t, e, namespace, started, harness.RootExpectation{
+			Root:        "persistentvolumeclaim/" + namespace + "/missing-volume",
+			Tier:        "notify",
+			MaxMessages: 2,
+		})
 	})
 }
 

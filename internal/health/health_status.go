@@ -28,6 +28,7 @@ func (h *HealthServer) healthHandler(w http.ResponseWriter, _ *http.Request) {
 		Status:     "ok",
 		Components: h.ComponentStatuses(),
 		Leadership: h.LeadershipStatus(),
+		Coverage:   h.Coverage(),
 	}
 	if degraded := h.ComponentErrors(); len(degraded) > 0 {
 		response.Status = "degraded"
@@ -38,6 +39,7 @@ func (h *HealthServer) healthHandler(w http.ResponseWriter, _ *http.Request) {
 	}
 }
 
+// SetReady sets whether /readyz reports ready.
 func (h *HealthServer) SetReady(value bool) { h.ready.Store(value) }
 
 // Ready reports whether required monitoring is currently available.
@@ -82,7 +84,7 @@ func (h *HealthServer) LeadershipStatus() *LeadershipStatus {
 }
 
 // SetLeadershipRenewal records the last successful Lease write for the
-// current leader. Stale callbacks cannot update a standby or stopped role.
+// current leader. Stale callbacks cannot update a starting or stopped role.
 func (h *HealthServer) SetLeadershipRenewal(renewal time.Time) {
 	h.componentMu.Lock()
 	defer h.componentMu.Unlock()
@@ -92,6 +94,7 @@ func (h *HealthServer) SetLeadershipRenewal(renewal time.Time) {
 	h.leadership.LastRenewal = renewal
 }
 
+// SetComponentError marks a component as failed with err.
 func (h *HealthServer) SetComponentError(name string, err error) {
 	h.componentMu.Lock()
 	defer h.componentMu.Unlock()
@@ -105,7 +108,7 @@ func (h *HealthServer) SetComponentError(name string, err error) {
 		})
 		return
 	}
-	reason := safeComponentReason(err)
+	reason := normalizeReason(safeComponentReason(err))
 	status := ComponentStatus{
 		State: "degraded", Available: false, Reason: reason,
 	}
@@ -128,14 +131,23 @@ func (h *HealthServer) SetComponentStatus(
 	if available && state == "running" {
 		delete(h.componentErrors, name)
 	}
+	// The latest reason always wins: keeping the first one would show a
+	// stale cause after the component degraded for a different reason.
 	if !available && (state == "degraded" || state == "waiting") {
-		if _, exists := h.componentErrors[name]; !exists {
-			h.componentErrors[name] = reason
-		}
+		h.componentErrors[name] = reason
 	}
 	h.setComponentStatusLocked(name, ComponentStatus{
 		State: state, Available: available, Reason: reason,
 	})
+}
+
+// ClearComponentStatus forgets a component that is disabled or finished
+// its work cleanly, so /health does not show it as running forever.
+func (h *HealthServer) ClearComponentStatus(name string) {
+	h.componentMu.Lock()
+	defer h.componentMu.Unlock()
+	delete(h.componentStatus, name)
+	delete(h.componentErrors, name)
 }
 
 func (h *HealthServer) setComponentStatusLocked(
@@ -181,8 +193,8 @@ func safeComponentReason(err error) string {
 	case strings.Contains(message, "source") &&
 		strings.Contains(message, "config"):
 		return "source_not_configured"
-	case strings.Contains(message, "migration"):
-		return "persistence_migration_failed"
+	case strings.Contains(message, "stalled"):
+		return "component_stalled"
 	case strings.Contains(message, "provider") &&
 		strings.Contains(message, "shutdown"):
 		return "provider_shutdown_timeout"
@@ -206,8 +218,13 @@ func normalizeReason(reason string) string {
 		"optional_api_unavailable", "discovery_failed", "component_stalled",
 		"persistence_restore_failed", "persistence_write_failed",
 		"provider_shutdown_timeout", "component_failed", "component_stopped",
-		"timeout", "canceled", "rate_limited", "standby", "shutdown",
-		"leadership_lost", "cache_sync_pending", "watcher_failed":
+		"timeout", "canceled", "rate_limited", "shutdown",
+		"leadership_lost", "cache_sync_pending", "watcher_failed",
+		"api_unavailable", "permission_denied",
+		"optional_permission_denied", "storage_reset", "storage_over_cap",
+		"heartbeat_failed", "config_overlay_invalid",
+		"kubelet_unreachable", "kubelet_partially_unreachable",
+		"provider_unavailable", "provider_rejected", "provider_rate_limited":
 		return reason
 	default:
 		if reason == "" {
@@ -258,14 +275,15 @@ func (h *HealthServer) readyzHandler(w http.ResponseWriter, _ *http.Request) {
 }
 
 // availabilityzHandler reports whether this Pod is participating in the
-// application lifecycle. It differs from /readyz: standby Pods are
-// available for a rolling update but are not ready to run monitoring work.
+// application lifecycle. It differs from /readyz: a Pod still
+// waiting for the Lease is available for a rolling update but is not ready
+// to run monitoring work.
 func (h *HealthServer) availabilityzHandler(
 	w http.ResponseWriter,
 	_ *http.Request,
 ) {
 	status := h.LeadershipStatus()
-	if status == nil || (status.Role != "leader" && status.Role != "standby") {
+	if status == nil || (status.Role != "leader" && status.Role != "starting") {
 		w.Header().Set("Content-Type", "text/plain")
 		w.WriteHeader(http.StatusServiceUnavailable)
 		if _, err := w.Write([]byte("not available")); err != nil {

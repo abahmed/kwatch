@@ -2,15 +2,11 @@
 
 set -eu
 
-script_dir=$(CDPATH='' cd -- "$(dirname "$0")" && pwd)
-# shellcheck disable=SC1091
-. "$script_dir/require-command.sh"
-require_command rg
-
 # Test files are split by behavior or subsystem, never by an arbitrary part
 # number or an "extra" catch-all. This keeps the package tree searchable.
-matches=$(rg --files -g '*_test.go' | rg \
-  '(^|/)[^/]*(part[0-9]+|extra)[^/]*_test\.go$' || true)
+# Plain find and grep keep the check runnable without extra tools.
+matches=$(find . -path ./.git -prune -o -type f -name '*_test.go' -print |
+	grep -E '(^|/)[^/]*(part[0-9]+|extra)[^/]*_test\.go$' || true)
 
 if [ -n "$matches" ]; then
 	echo "test layout violation: use responsibility-based test names"

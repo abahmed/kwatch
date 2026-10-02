@@ -6,32 +6,30 @@ import (
 	"fmt"
 	"html"
 	"net/url"
-	"regexp"
 	"strings"
+	"sync/atomic"
 
 	"k8s.io/klog/v2"
 
 	"github.com/abahmed/kwatch/internal/clock"
 	"github.com/abahmed/kwatch/internal/delivery/transport"
-	"github.com/abahmed/kwatch/internal/event"
-	"github.com/abahmed/kwatch/internal/insight"
-	"github.com/abahmed/kwatch/internal/message"
-	"github.com/abahmed/kwatch/internal/model"
+	"github.com/abahmed/kwatch/internal/notification"
 )
-
-var htmlTagRegex = regexp.MustCompile(`<.*?>`)
 
 type Matrix struct {
 	sender         transport.Sender
 	homeServer     string
 	accessToken    string
 	internalRoomID string
-	title          string
-	text           string
 
 	// reference for general app configuration
 	clusterName string
 	clockSource clock.Clock
+
+	// Plain messages carry no logical identity, so each send gets a unique
+	// one from this instance nonce and counter.
+	nonce   string
+	counter atomic.Uint64
 }
 
 // NewMatrix returns new Matrix instance
@@ -47,6 +45,12 @@ func NewMatrix(
 		return nil
 	}
 
+	if !transport.ValidEndpoint(homeServer) {
+		klog.InfoS("initializing matrix with an invalid homeServer",
+			"setting", "homeServer")
+		return nil
+	}
+
 	accessToken, ok := config["accessToken"].(string)
 	if !ok || len(accessToken) == 0 {
 		klog.InfoS("initializing matrix with empty accessToken")
@@ -59,16 +63,12 @@ func NewMatrix(
 		return nil
 	}
 
-	title, _ := config["title"].(string)
-	text, _ := config["text"].(string)
-
 	return &Matrix{
+		nonce:          newNonce(),
 		sender:         transport.NewSender(dependencies),
 		homeServer:     homeServer,
 		accessToken:    accessToken,
 		internalRoomID: internalRoomID,
-		title:          title,
-		text:           text,
 		clusterName:    clusterName,
 		clockSource:    clock.Require(dependencies.Clock),
 	}
@@ -78,55 +78,43 @@ func (m *Matrix) Name() string {
 	return "Matrix"
 }
 
+// SendMessage sends a plain operator message. The text is escaped before
+// it becomes the HTML body so no markup can be injected.
 func (m *Matrix) SendMessage(ctx context.Context, msg string) error {
-	// Rendered messages are plain text built from event data; escape them
-	// before they become the HTML body so logs cannot inject markup.
-	formatted := strings.ReplaceAll(html.EscapeString(msg), "\n", "<br/>")
-	return m.sendBodies(ctx, msg, formatted)
+	msg = notification.NeutralizeMentions(msg)
+	identity := fmt.Sprintf("plain|%s|%d", m.nonce, m.counter.Add(1))
+	return m.sendBodies(ctx, identity, msg, escapeHTML(msg))
 }
 
-// SendIncident implements delivery.ThreadProvider.
-// It renders the incident using the Report model and PlaintextRenderer,
-// producing a context-adaptive text message.
+// SendIncident posts the incident narrative. The plain body is the Note;
+// the HTML body is the escaped Note, followed by the escaped application
+// output in a kwatch-generated code block.
 func (m *Matrix) SendIncident(
-	ctx context.Context,
-	inc *model.Incident,
-	action model.IncidentAction,
+	ctx context.Context, msg notification.Message,
 ) error {
-	return m.SendIncidentWithInsight(ctx, inc, action, nil)
-}
-
-// SendIncidentWithInsight implements delivery.InsightThreadProvider, so the
-// diagnosis — likely cause, impact, recent changes — is rendered rather than
-// dropped on the way to this provider.
-func (m *Matrix) SendIncidentWithInsight(
-	ctx context.Context,
-	inc *model.Incident,
-	action model.IncidentAction,
-	ins *insight.Insight,
-) error {
-	text := message.RenderIncidentWithInsight(
-		inc,
-		action,
-		ins,
-		message.NewPlainTextRenderer(),
-		m.clusterName,
-		m.clockSource,
-	)
-	if text == "" {
-		return nil
+	plain := notification.NeutralizeMentions(msg.NoteText())
+	formatted := escapeHTML(plain)
+	if len(msg.Output) > 0 {
+		output := notification.NeutralizeMentions(
+			strings.Join(msg.Output, "\n"))
+		plain += "\n\n" + output
+		formatted += "<pre><code>" + html.EscapeString(output) +
+			"</code></pre>"
 	}
-	return m.SendMessage(ctx, text)
+	identity := fmt.Sprintf("%s|%d|%s", msg.AlertKey(m.clusterName), msg.Revision,
+		msg.Status)
+	return m.sendBodies(ctx, identity, plain, formatted)
 }
 
-func (m *Matrix) SendEvent(ctx context.Context, e *event.Event) error {
-	formatted := e.FormatHtml(m.clusterName, m.text)
-	return m.sendBodies(ctx, stripHtmlRegex(formatted), formatted)
+// escapeHTML escapes event-derived text and keeps line breaks as the only
+// generated tag.
+func escapeHTML(text string) string {
+	return strings.ReplaceAll(html.EscapeString(text), "\n", "<br/>")
 }
 
 func (m *Matrix) sendBodies(
 	ctx context.Context,
-	plainMsg, formattedMsg string,
+	identity, plainMsg, formattedMsg string,
 ) error {
 
 	payload := struct {
@@ -146,22 +134,35 @@ func (m *Matrix) sendBodies(
 		return err
 	}
 
-	_, err = m.sender.Send(ctx, transport.Request{
+	txnID := transactionID(m.internalRoomID, identity, plainMsg, formattedMsg)
+	body, err := m.sender.Send(ctx, transport.Request{
 		Provider: "Matrix",
 		Method:   "PUT",
 		URL: fmt.Sprintf(
 			"%s/_matrix/client/v3/rooms/%s/send/m.room.message/%s",
 			m.homeServer,
 			url.PathEscape(m.internalRoomID),
-			randomRoomIDPart(24),
+			txnID,
 		),
 		Body:    msgBytes,
 		Headers: map[string]string{"Authorization": "Bearer " + m.accessToken},
 	})
-	return err
+	if err != nil {
+		return err
+	}
+	return checkMatrixBody(body)
 }
 
-// This method uses a regular expression to remove HTML tags.
-func stripHtmlRegex(s string) string {
-	return htmlTagRegex.ReplaceAllString(s, "")
+// checkMatrixBody rejects a 2xx response that still carries a Matrix
+// error code, so a proxied failure is not counted as delivered.
+func checkMatrixBody(body []byte) error {
+	var reply struct {
+		ErrCode string `json:"errcode"`
+	}
+	if len(body) == 0 || json.Unmarshal(body, &reply) != nil ||
+		reply.ErrCode == "" {
+		return nil
+	}
+	return transport.Permanent(fmt.Errorf(
+		"call to Matrix returned error code %s", reply.ErrCode))
 }

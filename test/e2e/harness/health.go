@@ -15,10 +15,6 @@ type HealthClient struct {
 	client      *http.Client
 }
 
-type DiagnosticsClient struct {
-	Health *HealthClient
-}
-
 func NewHealthClient(environment *Environment) *HealthClient {
 	return &HealthClient{
 		environment: environment,
@@ -26,14 +22,9 @@ func NewHealthClient(environment *Environment) *HealthClient {
 	}
 }
 
-func NewDiagnosticsClient(environment *Environment) *DiagnosticsClient {
-	return &DiagnosticsClient{Health: environment.Health}
-}
-
 func (h *HealthClient) Get(
 	ctx context.Context,
 	path string,
-	diagnostics bool,
 ) ([]byte, int, error) {
 	holder, err := h.environment.WaitForLeaseHolder(
 		ctx, h.environment.Config.KwatchNamespace, "kwatch-leader",
@@ -60,10 +51,6 @@ func (h *HealthClient) Get(
 	if err != nil {
 		return nil, 0, err
 	}
-	if diagnostics {
-		request.Header.Set("Authorization", "Bearer "+
-			h.environment.Config.DiagnosticsToken)
-	}
 	response, err := h.client.Do(request)
 	if err != nil {
 		return nil, 0, err
@@ -77,7 +64,7 @@ func (h *HealthClient) Get(
 }
 
 func (h *HealthClient) AssertOK(ctx context.Context, path string) error {
-	_, status, err := h.Get(ctx, path, false)
+	_, status, err := h.Get(ctx, path)
 	if err != nil {
 		return err
 	}

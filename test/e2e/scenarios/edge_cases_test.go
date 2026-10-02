@@ -47,7 +47,7 @@ func TestScenarioPodLifecycleHookFailure(t *testing.T) {
 		}
 		if _, err := e.Audit.WaitFor(ctx, harness.AuditMatch{
 			Namespace: namespace, Resource: "post-start",
-			Reason: "PostStartHookError", Count: 1,
+			Reason: "FailedPostStartHook", Count: 1,
 		}); err != nil {
 			t.Fatal(err)
 		}
@@ -108,6 +108,7 @@ func TestScenarioMissingRequiredReferences(t *testing.T) {
 			t.Fatal(err)
 		}
 		defer cleanupNamespace(t, e, namespace)
+		started := time.Now()
 		_, err := e.Client.CoreV1().Pods(namespace).Create(ctx, &corev1.Pod{
 			ObjectMeta: metav1.ObjectMeta{Name: "missing-references"},
 			Spec: corev1.PodSpec{Containers: []corev1.Container{{
@@ -126,12 +127,12 @@ func TestScenarioMissingRequiredReferences(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		if _, err := e.Audit.WaitFor(ctx, harness.AuditMatch{
-			Namespace: namespace, Resource: "missing-references",
-			Reason: "ProjectedSecretMissing", Count: 1,
-		}); err != nil {
-			t.Fatal(err)
-		}
+		assertRoot(ctx, t, e, namespace, started, harness.RootExpectation{
+			Root:         "secret/" + namespace + "/missing-secret",
+			Tier:         "notify",
+			MaxMessages:  2,
+			MustNotBlame: []string{"pod/" + namespace + "/missing-references"},
+		})
 	})
 }
 
@@ -146,6 +147,7 @@ func TestScenarioMissingConfigMapReference(t *testing.T) {
 			t.Fatal(err)
 		}
 		defer cleanupNamespace(t, e, namespace)
+		started := time.Now()
 		_, err := e.Client.CoreV1().Pods(namespace).Create(ctx, &corev1.Pod{
 			ObjectMeta: metav1.ObjectMeta{Name: "missing-configmap"},
 			Spec: corev1.PodSpec{Containers: []corev1.Container{{
@@ -164,12 +166,12 @@ func TestScenarioMissingConfigMapReference(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		if _, err := e.Audit.WaitFor(ctx, harness.AuditMatch{
-			Namespace: namespace, Resource: "missing-configmap",
-			Reason: "ProjectedConfigMapMissing", Count: 1,
-		}); err != nil {
-			t.Fatal(err)
-		}
+		assertRoot(ctx, t, e, namespace, started, harness.RootExpectation{
+			Root:         "configmap/" + namespace + "/missing-configmap",
+			Tier:         "notify",
+			MaxMessages:  2,
+			MustNotBlame: []string{"pod/" + namespace + "/missing-configmap"},
+		})
 	})
 }
 

@@ -2,229 +2,284 @@ package delivery
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"time"
 )
 
 // Start launches a worker goroutine for each provider that processes
-// queued deliveries. Workers drain and stop when ctx is cancelled.
-
-func (a *Manager) Start(ctx context.Context) error {
+// queued deliveries. Workers stop when ctx is cancelled and leave queued
+// jobs for Stop, which delivers them within its own deadline.
+func (m *Manager) Start(ctx context.Context) error {
 	if ctx == nil {
 		ctx = context.Background()
 	}
-	a.mu.Lock()
-	a.ensureLifecycleChannelsLocked()
-	if a.managerDoneClosed {
-		a.mu.Unlock()
-		return fmt.Errorf("delivery manager is stopped")
+	launched, err := m.launchWorkers(ctx)
+	if err != nil || !launched {
+		return err
 	}
-	if a.generationStuck && a.workerCount > 0 {
-		a.mu.Unlock()
-		return fmt.Errorf("previous delivery generation is still stopping")
+	m.touchProgress()
+	return nil
+}
+
+// launchWorkers starts one worker per provider of the current generation
+// and replays the jobs that waited for them. It reports false when
+// workers already run.
+func (m *Manager) launchWorkers(ctx context.Context) (bool, error) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	m.ensureLifecycleChannelsLocked()
+	if m.done.closed {
+		return false, fmt.Errorf("delivery manager is stopped")
 	}
-	if a.started && !a.stopped {
-		a.mu.Unlock()
-		return nil
+	if m.workers.stillStopping() {
+		return false, errGenerationStopping
 	}
-	if a.generation == nil {
-		a.generation = a.currentGenerationLocked()
+	if m.state.accepting() {
+		return false, nil
 	}
-	if a.generation == nil {
-		a.generation = newProviderGeneration(nil)
+	m.prepareGenerationLocked()
+	m.setStateLocked(m.state.afterStart())
+	m.ctx = ctx
+	generation := cloneProviderGeneration(m.generation, false)
+	workerCtx := m.workers.launch(ctx, len(generation.order))
+	for _, name := range generation.order {
+		go m.runProvider(generation.entries[name], workerCtx)
 	}
-	a.generation.state = generationAccepting
-	// Start always owns a fresh set of channels. This also makes test and
-	// composition generations that were built without channels safe to run.
-	a.generation = cloneProviderGeneration(a.generation, true)
-	a.started = true
-	a.stopped = false
-	a.ctx = ctx
-	generation := cloneProviderGeneration(a.generation, false)
-	a.workerCtx, a.cancelWorker = context.WithCancel(ctx)
-	a.workerDone = make(chan struct{})
-	a.workerCount = len(generation.order)
-	if a.workerCount == 0 {
-		close(a.workerDone)
+	m.outbox.Load().start(ctx)
+	m.replayQueuedLocked()
+	return true, nil
+}
+
+// prepareGenerationLocked makes the generation accepting. Start always
+// owns a fresh set of channels, which also makes test and composition
+// generations that were built without channels safe to run.
+func (m *Manager) prepareGenerationLocked() {
+	if m.generation == nil {
+		m.generation = newProviderGeneration(nil)
+	}
+	m.generation.state = generationAccepting
+	m.generation = cloneProviderGeneration(m.generation, true)
+}
+
+// replayQueuedLocked queues the jobs an earlier session or generation
+// left unsent, in their old order, then the jobs created before delivery
+// started. Left-over jobs go through the backlog, so any number of them
+// fits; the jobs created before Start fit the queues by construction.
+func (m *Manager) replayQueuedLocked() {
+	generation := m.currentGenerationLocked()
+	if generation == nil {
+		return
+	}
+	leftOver := m.restored
+	for _, name := range sortedKeys(m.backlog) {
+		leftOver = append(leftOver, m.backlog[name]...)
+	}
+	m.restored, m.backlog = nil, nil
+	for _, job := range leftOver {
+		name, ok := m.resolveTargetLocked(generation, job)
+		if !ok {
+			continue
+		}
+		job.target, job.generation = name, generation
+		m.toBacklogLocked(job)
 	}
 	for _, name := range generation.order {
-		entry := generation.entries[name]
-		go a.runProvider(entry, a.workerCtx)
+		m.refillLocked(generation.entries[name])
 	}
-	for _, job := range a.pending {
-		a.fanOut(job)
+	for _, job := range m.pending {
+		m.fanOut(job)
 	}
-	a.pending = nil
-	a.mu.Unlock()
-	a.touchProgress()
-	return nil
+	m.pending = nil
 }
 
 // HasProviders reports whether delivery has active provider workers. An empty
 // provider set is valid and waits for shutdown rather than failing startup.
-func (a *Manager) HasProviders() bool {
-	a.mu.Lock()
-	defer a.mu.Unlock()
-	return a.generation != nil && len(a.generation.order) > 0
+func (m *Manager) HasProviders() bool {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	return m.generation != nil && len(m.generation.order) > 0
 }
 
-func (a *Manager) runProvider(entry providerEntry, ctx context.Context) {
-	defer a.workerFinished()
-	ticker := time.NewTicker(10 * time.Second)
+func (m *Manager) runProvider(entry providerEntry, ctx context.Context) {
+	defer m.workerFinished()
+	ticker := time.NewTicker(workerProgressInterval)
 	defer ticker.Stop()
 	for {
 		select {
 		case <-ctx.Done():
 			return
 		case <-ticker.C:
-			a.touchProgress()
+			m.touchProgress()
 		case job, ok := <-entry.ch:
 			if !ok {
 				return
 			}
-			a.touchProgress()
-			// Routing is decided before pacing. A job this provider does not
-			// want is not a delivery, and making it wait its turn spent the
-			// provider's send slot on nothing: with a route that matches one
-			// namespace, a storm elsewhere throttled the alerts that did match.
-			if job.kind == jobIncident && !shouldDeliver(entry.routes, job.inc) {
-				continue
+			m.touchProgress()
+			m.publishQueueDepth(entry)
+			if !m.workOne(ctx, &entry, job) {
+				return
 			}
-			// Pace before delivering: the queue absorbs the burst, the provider
-			// sees a rate it tolerates. Cancellation stops delivery promptly.
-			if a.waitForSendSlot(ctx, entry.provider.Name()) {
-				a.deliverOne(ctx, &entry, job)
-				a.flushDigest(ctx, &entry)
-				a.touchProgress()
-			}
+			m.refillFromBacklog(entry)
+			m.maybeFlushOverflowSummary(ctx, &entry)
+			m.touchProgress()
 		}
 	}
 }
 
-func (a *Manager) workerFinished() {
-	a.mu.Lock()
-	defer a.mu.Unlock()
-	if a.workerCount == 0 {
-		return
-	}
-	a.workerCount--
-	if a.workerCount == 0 && a.workerDone != nil {
-		a.generationStuck = false
-		close(a.workerDone)
-		if a.stopped && !a.reconfiguring {
-			a.closeManagerDoneLocked()
-		}
+func (m *Manager) workerFinished() {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	// The manager is done after a shutdown, not after the drain of a
+	// reconfiguration, whose next generation takes over.
+	if m.workers.finishOne() && m.state == stateStopped {
+		m.closeManagerDoneLocked()
 	}
 }
 
-// shutdown waits for all delivery workers to finish (used in tests).
-
-func (a *Manager) shutdown() {
-	_ = a.shutdownContext(context.Background())
+// shutdownRun is what one Stop drains: the generation it stopped and the
+// handles of that generation's workers.
+type shutdownRun struct {
+	generation *providerGeneration
+	done       chan struct{}
+	cancel     context.CancelFunc
+	cancelSend context.CancelFunc
 }
 
-func (a *Manager) shutdownContext(ctx context.Context) error {
-	a.mu.Lock()
-	if a.stopped {
-		done := a.workerDone
-		cancel := a.cancelWorker
-		a.mu.Unlock()
-		err := waitForWorkers(ctx, done, cancel)
-		if err == nil {
-			a.mu.Lock()
-			if !a.reconfiguring {
-				a.closeManagerDoneLocked()
-			}
-			a.mu.Unlock()
-		}
-		return err
+func (m *Manager) shutdownContext(ctx context.Context) error {
+	run, first := m.beginShutdown()
+	if !first {
+		return m.finishStoppedShutdown(ctx)
 	}
-	a.stopped = true
-	if a.generation != nil {
-		a.generation.state = generationStopped
+	// A request in flight may finish until the drain deadline, which
+	// avoids sending it twice; it is cut off when ctx ends.
+	if run.cancelSend != nil {
+		stopCut := context.AfterFunc(ctx, run.cancelSend)
+		defer func() {
+			stopCut()
+			run.cancelSend()
+		}()
 	}
-	generation := cloneProviderGeneration(a.generation, false)
-	done := a.workerDone
-	cancel := a.cancelWorker
-	a.mu.Unlock()
 
-	// Anything still queued when we get here is delivered by the per-provider
-	// worker before it returns, but a process killed
-	// mid-shutdown loses the queue. That now includes plain messages and
-	// events, which used to be sent synchronously by their caller: the
-	// startup notification can be lost if kwatch is killed within the pacing
-	// delay of starting. Accepted -- the alternative is holding informer
-	// startup behind a slow provider, which is what the synchronous path did.
+	// Shutdown drains the queue within the caller's deadline:
 	//
-	// 1) close provider channels under a.mu so fanOut (also under a.mu) never
-	//    sends on a closed channel.
-	a.mu.Lock()
-	if generation != nil {
-		for _, name := range generation.order {
-			if ch := generation.entries[name].ch; ch != nil {
-				close(ch)
-			}
-		}
+	// 1) close provider channels under m.mu so fanOut (also under m.mu) never
+	//    sends on a closed channel;
+	// 2) wait for the workers. A live worker delivers what is left in its
+	//    closed channel; a worker whose lifecycle context already ended has
+	//    returned and left its queue in place;
+	// 3) deliver every job still queued, pacing and retrying with ctx;
+	// 4) dead-letter whatever could not be sent before ctx ended.
+	//
+	// A process killed before the deadline still loses the queue; the
+	// deadline is sized to fit the Pod termination grace period.
+	m.closeQueues(run.generation)
+	if err := waitForWorkers(ctx, run.done, run.cancel); err != nil {
+		return m.failShutdown(run.generation, err)
 	}
-	a.mu.Unlock()
-	if done == nil {
-		a.mu.Lock()
-		if !a.reconfiguring {
-			a.closeManagerDoneLocked()
-		}
-		a.mu.Unlock()
-		return nil
+	drainErr := m.deliverQueuedJobs(ctx, run.generation)
+	if m.closeDoneUnlessReconfiguring() {
+		return drainErr
 	}
-	err := waitForWorkers(ctx, done, cancel)
-	if err != nil {
-		a.mu.Lock()
-		a.generationStuck = true
-		if a.generation != nil {
-			a.generation.state = generationFailed
-		}
-		a.mu.Unlock()
-		a.drainQueuedJobs(generation, "delivery_shutdown")
-	}
-	if err == nil {
-		a.mu.Lock()
-		if !a.reconfiguring {
-			a.closeManagerDoneLocked()
-		}
-		a.mu.Unlock()
-	}
-	return err
+	return errors.Join(drainErr, m.closeOutbox())
 }
 
-// drainQueuedJobs records jobs that remained after cancellation or a bounded
-// shutdown timeout. Workers may have consumed some jobs concurrently; only
-// jobs still in the closed channels are recorded here.
-func (a *Manager) drainQueuedJobs(
-	generation *providerGeneration,
-	reason string,
-) {
+// beginShutdown moves the manager to its stopped state and returns what
+// the shutdown drains. It reports false when an earlier Stop, or the
+// drain of a reconfiguration, already began.
+func (m *Manager) beginShutdown() (shutdownRun, bool) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	if m.state.stopped() {
+		return shutdownRun{}, false
+	}
+	m.setStateLocked(m.state.afterStop())
+	if !m.state.reconfiguring() {
+		// Jobs still pending were never handed to a worker; a reconfiguration
+		// replays them into the next generation, a shutdown loses them.
+		m.dropPendingLocked()
+	}
+	if m.generation != nil {
+		m.generation.state = generationStopped
+	}
+	return shutdownRun{
+		generation: cloneProviderGeneration(m.generation, false),
+		done:       m.workers.done,
+		cancel:     m.workers.cancel,
+		cancelSend: m.workers.cancelSend,
+	}, true
+}
+
+// closeQueues closes the provider channels of a stopped generation.
+func (m *Manager) closeQueues(generation *providerGeneration) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
 	if generation == nil {
 		return
 	}
 	for _, name := range generation.order {
-		entry := generation.entries[name]
-		if entry.ch == nil {
-			continue
-		}
-		for {
-			select {
-			case job, ok := <-entry.ch:
-				if !ok {
-					break
-				}
-				a.recordDeadLetter(&entry, job, fmt.Errorf("%s", reason))
-			default:
-				break
-			}
-			if len(entry.ch) == 0 {
-				break
-			}
+		if ch := generation.entries[name].ch; ch != nil {
+			close(ch)
 		}
 	}
+}
+
+// closeDoneUnlessReconfiguring marks the manager done unless a
+// reconfiguration is in progress, which it reports.
+func (m *Manager) closeDoneUnlessReconfiguring() bool {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	if m.state.reconfiguring() {
+		return true
+	}
+	m.closeManagerDoneLocked()
+	return false
+}
+
+// finishStoppedShutdown handles a second Stop: it only waits for the
+// workers of the first one and then marks the manager done.
+func (m *Manager) finishStoppedShutdown(ctx context.Context) error {
+	done, cancel := m.workerHandles()
+	err := waitForWorkers(ctx, done, cancel)
+	if err == nil {
+		m.closeDoneUnlessReconfiguring()
+	}
+	return err
+}
+
+func (m *Manager) workerHandles() (chan struct{}, context.CancelFunc) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	return m.workers.done, m.workers.cancel
+}
+
+// failShutdown records that the workers did not stop in time, dead-letters
+// what is still queued and closes the outbox.
+func (m *Manager) failShutdown(
+	generation *providerGeneration, err error,
+) error {
+	m.markWorkersStuck()
+	m.drainQueuedJobs(generation)
+	return errors.Join(err, m.closeOutbox())
+}
+
+func (m *Manager) markWorkersStuck() {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	m.workers.stuck = true
+	if m.generation != nil {
+		m.generation.state = generationFailed
+	}
+}
+
+// closeOutbox makes the final outbox write once delivery has stopped for
+// good. A reconfiguration keeps the outbox running for the next
+// generation.
+func (m *Manager) closeOutbox() error {
+	if m.IsReconfiguring() {
+		return nil
+	}
+	return m.outbox.Load().close(outboxFinalTimeout)
 }
 
 func waitForWorkers(
@@ -246,69 +301,22 @@ func waitForWorkers(
 	}
 }
 
-// Stop stops all provider workers and waits for the current generation to
-// drain. The application owns this call, which keeps delivery lifecycle
-// visible to the application supervisor instead of hiding a context watcher
-// inside the manager.
-func (a *Manager) Stop(ctx context.Context) error {
+// Stop stops all provider workers, delivers every job still queued within
+// ctx, and dead-letters what it could not send. The application owns this
+// call, which keeps delivery lifecycle visible to the application
+// supervisor instead of hiding a context watcher inside the manager.
+func (m *Manager) Stop(ctx context.Context) error {
 	if ctx == nil {
 		ctx = context.Background()
 	}
-	return a.shutdownContext(ctx)
-}
-
-func cloneProviderGeneration(
-	generation *providerGeneration,
-	newChannels bool,
-) *providerGeneration {
-	if generation == nil {
-		return nil
-	}
-	clone := &providerGeneration{
-		entries: make(map[string]providerEntry, len(generation.entries)),
-		order:   append([]string(nil), generation.order...),
-		state:   generation.state,
-	}
-	for name, entry := range generation.entries {
-		if newChannels {
-			entry.ch = make(chan deliverJob, channelCap)
-		}
-		clone.entries[name] = entry
-	}
-	return clone
-}
-
-func generationEntries(generation *providerGeneration) []providerEntry {
-	if generation == nil {
-		return nil
-	}
-	entries := make([]providerEntry, 0, len(generation.order))
-	for _, name := range generation.order {
-		entries = append(entries, generation.entries[name])
-	}
-	return entries
+	return m.shutdownContext(ctx)
 }
 
 // Done returns a channel that is closed when the Manager has fully
 // drained and shut down (all provider workers finished).
-
-func (a *Manager) Done() <-chan struct{} {
-	a.mu.Lock()
-	defer a.mu.Unlock()
-	a.ensureLifecycleChannelsLocked()
-	return a.managerDone
-}
-
-// DeadLetters returns a copy of the dead-letter ring buffer.
-
-func (a *Manager) DeadLetters() []DeadLetterEntry {
-	a.dlqMu.Lock()
-	defer a.dlqMu.Unlock()
-	n := a.dlqCount
-	out := make([]DeadLetterEntry, n)
-	for i := 0; i < n; i++ {
-		idx := (a.dlqHead - n + i + dlqCap) % dlqCap
-		out[i] = a.dlqRing[idx]
-	}
-	return out
+func (m *Manager) Done() <-chan struct{} {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	m.ensureLifecycleChannelsLocked()
+	return m.done.ch
 }

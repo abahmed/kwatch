@@ -3,6 +3,8 @@ package config
 import (
 	"errors"
 	"fmt"
+	"sort"
+	"strings"
 )
 
 // Validate validates the config for semantic correctness and returns a list
@@ -10,44 +12,43 @@ import (
 func Validate(cfg *Config) []error {
 	var errs []error
 	errs = append(errs, validateApp(cfg.App)...)
-	errs = append(errs, validateCorrelation(cfg)...)
-	errs = append(errs, validateMonitors(cfg)...)
-	errs = append(errs, validatePvc(cfg)...)
+	errs = append(errs, validateProbes(cfg)...)
 	errs = append(errs, validateSelectors(cfg)...)
+	errs = append(errs, validatePodNamePatterns(cfg)...)
+	errs = append(errs, validateSilenceRules(cfg)...)
+	errs = append(errs, validateEmptyMatchers(cfg)...)
 	errs = append(errs, validateAlertRetries(cfg)...)
-	if cfg.PendingPodMonitor.Enabled && cfg.PendingPodMonitor.Threshold <= 0 {
-		errs = append(
-			errs,
-			errors.New("pendingPodMonitor.threshold must be > 0"),
-		)
-	}
-	if cfg.MaxRecentLogLines < 0 {
-		errs = append(errs, errors.New("maxRecentLogLines must be >= 0"))
-	}
-	if cfg.Workers < 1 {
-		errs = append(errs, errors.New("workers must be >= 1"))
-	}
-	if cfg.HealthCheck.Enabled && cfg.HealthCheck.Port <= 0 {
-		errs = append(errs, errors.New(
-			"healthCheck.port must be > 0 when healthCheck.enabled is true",
-		))
-	}
-	if cfg.HealthCheck.Enabled &&
-		(cfg.HealthCheck.Diagnostics || cfg.HealthCheck.Pprof) &&
-		cfg.HealthCheck.DiagnosticsToken == "" {
-		errs = append(errs, errors.New(
-			"healthCheck.diagnosticsToken must be set when diagnostics or "+
-				"pprof is enabled",
-		))
-	}
-	if cfg.Correlation.MaxBaseline < 0 {
-		errs = append(errs, errors.New("correlation.maxBaseline must be >= 0"))
-	}
+	errs = append(errs, validateAlertRoutes(cfg)...)
+	errs = append(errs, validateLifecycleSettings(cfg)...)
 	for _, text := range validateMaintenance(cfg) {
 		errs = append(errs, errors.New(text))
 	}
 	for _, text := range validateRetryJitter(cfg) {
 		errs = append(errs, errors.New(text))
+	}
+	for _, name := range unknownProviders(cfg) {
+		errs = append(errs, fmt.Errorf("unknown alert provider %q", name))
+	}
+	errs = append(errs, validateProviderRequired(cfg)...)
+	errs = append(errs, validateSeverityMaps(cfg)...)
+	errs = append(errs, caseCollisionErrors(
+		"severityByReason", cfg.SeverityByReason)...)
+	errs = append(errs, caseCollisionErrors(
+		"severityByOwnerKind", cfg.SeverityByOwnerKind)...)
+	return errs
+}
+
+// validateLifecycleSettings checks resync, health check and audit log.
+func validateLifecycleSettings(cfg *Config) []error {
+	var errs []error
+	if cfg.ResyncSeconds < 0 {
+		errs = append(errs, errors.New("resyncSeconds must be >= 0"))
+	}
+	if cfg.HealthCheck.Enabled && !validPort(cfg.HealthCheck.Port) {
+		errs = append(errs, errors.New(
+			"healthCheck.port must be between 1 and 65535 when "+
+				"healthCheck.enabled is true",
+		))
 	}
 	if cfg.AuditLog.Enabled && cfg.AuditLog.Output == "" {
 		errs = append(
@@ -58,9 +59,12 @@ func Validate(cfg *Config) []error {
 			),
 		)
 	}
-	for _, name := range unknownProviders(cfg) {
-		errs = append(errs, fmt.Errorf("unknown alert provider %q", name))
-	}
+	return errs
+}
+
+// validateSeverityMaps checks the severity override values.
+func validateSeverityMaps(cfg *Config) []error {
+	var errs []error
 	for _, k := range InvalidSeverityKeys(cfg.SeverityByReason) {
 		errs = append(
 			errs,
@@ -90,70 +94,27 @@ func Validate(cfg *Config) []error {
 	return errs
 }
 
-// validateCorrelation checks the shared correlation tuning knobs.
-func validateCorrelation(cfg *Config) []error {
-	var errs []error
-	if cfg.Correlation.Window <= 0 {
-		errs = append(errs, errors.New("correlation.window must be > 0"))
+// caseCollisionErrors reports keys of m that differ only in case. Severity
+// overrides match case-insensitively, so such keys would be ambiguous.
+func caseCollisionErrors(mapName string, m map[string]string) []error {
+	groups := make(map[string][]string)
+	for key := range m {
+		lower := strings.ToLower(strings.TrimSpace(key))
+		groups[lower] = append(groups[lower], key)
 	}
-	if cfg.Correlation.LifecycleInterval <= 0 {
-		errs = append(
-			errs,
-			errors.New("correlation.lifecycleInterval must be > 0"),
-		)
-	}
-	if cfg.Correlation.Escalation.Enabled {
-		for i, t := range cfg.Correlation.Escalation.Tiers {
-			if t <= 0 {
-				errs = append(
-					errs,
-					fmt.Errorf("escalation.tiers[%d] must be > 0", i),
-				)
-			}
-			if i > 0 && t <= cfg.Correlation.Escalation.Tiers[i-1] {
-				errs = append(
-					errs,
-					fmt.Errorf(
-						"escalation.tiers must be strictly ascending "+
-							"(tiers[%d]=%d <= tiers[%d]=%d)",
-						i,
-						t,
-						i-1,
-						cfg.Correlation.Escalation.Tiers[i-1],
-					),
-				)
-			}
+	lowers := make([]string, 0, len(groups))
+	for lower, keys := range groups {
+		if len(keys) > 1 {
+			lowers = append(lowers, lower)
 		}
 	}
-	if cfg.Correlation.ResolveHoldDown < 0 {
-		errs = append(
-			errs,
-			errors.New("correlation.resolveHoldDown must be >= 0"),
-		)
-	}
-	if int(cfg.Correlation.ResolveHoldDown) > int(cfg.Correlation.Window)*60 {
-		errs = append(
-			errs,
-			errors.New(
-				"correlation.resolveHoldDown must be <= correlation.window "+
-					"(in seconds)",
-			),
-		)
-	}
-	if cfg.Correlation.MaxBaseline < 0 {
-		errs = append(errs, errors.New("correlation.maxBaseline must be >= 0"))
-	}
-	const maxBaselineEntries = 20000
-	if cfg.Correlation.MaxBaseline > maxBaselineEntries {
-		errs = append(
-			errs,
-			fmt.Errorf(
-				"correlation.maxBaseline=%d may exceed the ~1MB ConfigMap "+
-					"limit (max ~%d)",
-				cfg.Correlation.MaxBaseline,
-				maxBaselineEntries,
-			),
-		)
+	sort.Strings(lowers)
+	var errs []error
+	for _, lower := range lowers {
+		keys := groups[lower]
+		sort.Strings(keys)
+		errs = append(errs, fmt.Errorf(
+			"%s keys %q differ only in case", mapName, keys))
 	}
 	return errs
 }

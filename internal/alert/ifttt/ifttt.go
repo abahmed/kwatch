@@ -8,7 +8,7 @@ import (
 	"k8s.io/klog/v2"
 
 	"github.com/abahmed/kwatch/internal/delivery/transport"
-	"github.com/abahmed/kwatch/internal/event"
+	"github.com/abahmed/kwatch/internal/notification"
 )
 
 const iftttAPIURL = "https://maker.ifttt.com/trigger/%s/with/key/%s"
@@ -66,19 +66,27 @@ func (i *Ifttt) Name() string {
 	return "Ifttt"
 }
 
-// SendEvent sends event to the provider
-func (i *Ifttt) SendEvent(ctx context.Context, e *event.Event) error {
-	msg := e.FormatText(i.clusterName, "")
-	return i.SendMessage(ctx, msg)
+// SendIncident fills the applet ingredients: value1 is the one-line
+// lead, value2 the full narrative and value3 the status name
+// ("critical", "warning", "flapping" or "resolved").
+func (i *Ifttt) SendIncident(
+	ctx context.Context, m notification.Message,
+) error {
+	return i.send(ctx, iftttPayload{
+		Value1: m.ShortText(), Value2: m.NoteText(),
+		Value3: m.Status.String(),
+	})
 }
 
 // SendMessage sends text message to the provider
 func (i *Ifttt) SendMessage(ctx context.Context, msg string) error {
-	payload := iftttPayload{
+	return i.send(ctx, iftttPayload{
 		Value1: "kwatch",
 		Value2: msg,
-	}
+	})
+}
 
+func (i *Ifttt) send(ctx context.Context, payload iftttPayload) error {
 	body, err := json.Marshal(payload)
 	if err != nil {
 		return err
@@ -99,7 +107,9 @@ func (i *Ifttt) SendMessage(ctx context.Context, msg string) error {
 		return fmt.Errorf("ifttt returned invalid response")
 	}
 	if len(response.Errors) > 0 {
-		return fmt.Errorf("ifttt response reported errors")
+		return transport.Permanent(
+			fmt.Errorf("ifttt response reported errors"),
+		)
 	}
 	return nil
 }

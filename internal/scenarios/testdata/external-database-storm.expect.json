@@ -1,0 +1,17 @@
+{
+  "name": "external-database-storm",
+  "description": "Six Deployments in two namespaces crash-loop because the database outside the cluster refuses connections.",
+  "root": "external-endpoint//db.example.com:5432",
+  "tier": "notify",
+  "maxMessages": 3,
+  "mustNotBlame": [
+    "node//s1",
+    "node//s2",
+    "deployment/orders/api",
+    "deployment/orders/worker",
+    "deployment/orders/notifier",
+    "deployment/billing/ledger",
+    "deployment/billing/invoicer",
+    "deployment/billing/exporter"
+  ]
+}

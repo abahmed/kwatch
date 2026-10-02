@@ -9,8 +9,8 @@ import (
 
 	"github.com/stretchr/testify/assert"
 
+	"github.com/abahmed/kwatch/internal/delivery/providertest"
 	"github.com/abahmed/kwatch/internal/delivery/transport"
-	"github.com/abahmed/kwatch/internal/event"
 )
 
 var testDeps = transport.Dependencies{
@@ -125,13 +125,13 @@ func TestSendMessageError(t *testing.T) {
 	assert.NotNil(c.SendMessage(context.Background(), "test"))
 }
 
-func TestSendEvent(t *testing.T) {
+func TestSendIncident(t *testing.T) {
 	assert := assert.New(t)
 
 	s := httptest.NewServer(
 		http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			body, _ := io.ReadAll(r.Body)
-			assert.Contains(string(body), "OOMKILLED")
+			assert.Contains(string(body), "crash-looping")
 			w.Write([]byte("OK"))
 		}))
 
@@ -145,12 +145,7 @@ func TestSendEvent(t *testing.T) {
 	c := NewThreema(configMap, testAppConfig(), testDeps)
 	c.url = s.URL
 
-	ev := event.Event{
-		PodName:   "test-pod",
-		Namespace: "default",
-		Reason:    "OOMKILLED",
-	}
-	assert.Nil(c.SendEvent(context.Background(), &ev))
+	assert.Nil(c.SendIncident(context.Background(), providertest.Announce()))
 }
 
 func TestInvalidHttpRequest(t *testing.T) {

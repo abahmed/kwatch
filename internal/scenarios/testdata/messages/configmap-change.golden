@@ -1,0 +1,4 @@
+10:03:35 settled
+🟠 frontend is failing in web (prod-eu-1) after the 10:01 change to config map frontend-config. Key app.yaml changed. It fails with "config: /etc/frontend/app.yaml: max_connections: cannot unmarshal !!str `unlimited` into int". To check the object the pods depend on, run kubectl get configmap frontend-config -n web -o yaml
+🟠 frontend is failing in web (prod-eu-1) after the 10:01 change to config map frontend-config.
+

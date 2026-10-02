@@ -1,0 +1,11 @@
+{
+  "name": "pvc-full",
+  "description": "A database's PersistentVolumeClaim fills up; the database crash-loops with \"No space left on device\" while writing its WAL.",
+  "root": "persistentvolumeclaim/inventory/pgdata",
+  "tier": "notify",
+  "maxMessages": 2,
+  "mustNotBlame": [
+    "node//n1",
+    "storageclass//standard-rwo"
+  ]
+}

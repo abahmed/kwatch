@@ -9,8 +9,8 @@ import (
 
 	"github.com/stretchr/testify/assert"
 
+	"github.com/abahmed/kwatch/internal/delivery/providertest"
 	"github.com/abahmed/kwatch/internal/delivery/transport"
-	"github.com/abahmed/kwatch/internal/event"
 )
 
 var testDeps = transport.Dependencies{
@@ -46,13 +46,13 @@ func TestGoalertCustomURL(t *testing.T) {
 	assert := assert.New(t)
 
 	configMap := map[string]interface{}{
-		"url":       "https://goalert.example.org",
+		"url":       "https://goalert.internal.test",
 		"token":     "test",
 		"serviceId": "SVC123",
 	}
 	c := NewGoalert(configMap, testAppConfig(), testDeps)
 	assert.NotNil(c)
-	assert.Equal(c.url, "https://goalert.example.org/api/v2/generic/incoming")
+	assert.Equal(c.url, "https://goalert.internal.test/api/v2/generic/incoming")
 }
 
 func TestGoalertInvalidConfig(t *testing.T) {
@@ -71,7 +71,7 @@ func TestGoalertInvalidConfig(t *testing.T) {
 	assert.Nil(c)
 }
 
-func TestSendMessage(t *testing.T) {
+func TestGoalertSendMessageSkipsNotice(t *testing.T) {
 	assert := assert.New(t)
 
 	var gotAuth string
@@ -94,11 +94,10 @@ func TestSendMessage(t *testing.T) {
 	c := NewGoalert(configMap, testAppConfig(), testDeps)
 	c.url = s.URL
 
+	// A plain notice must not open an alert on a paging provider.
 	assert.Nil(c.SendMessage(context.Background(), "hello"))
-	assert.Equal("Bearer test", gotAuth)
-	assert.Contains(gotBody, `"summary":"hello"`)
-	assert.Contains(gotBody, `"dedup":"kwatch-notice"`)
-	assert.Contains(gotBody, `"details":"hello"`)
+	assert.Empty(gotAuth)
+	assert.Empty(gotBody)
 }
 
 func TestSendMessageError(t *testing.T) {
@@ -119,35 +118,7 @@ func TestSendMessageError(t *testing.T) {
 	c := NewGoalert(configMap, testAppConfig(), testDeps)
 	c.url = s.URL
 
-	assert.NotNil(c.SendMessage(context.Background(), "test"))
-}
-
-func TestSendEvent(t *testing.T) {
-	assert := assert.New(t)
-
-	s := httptest.NewServer(
-		http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			body, _ := io.ReadAll(r.Body)
-			assert.Contains(string(body), "OOMKILLED")
-			w.WriteHeader(http.StatusAccepted)
-		}))
-
-	defer s.Close()
-
-	configMap := map[string]interface{}{
-		"token":     "test",
-		"serviceId": "SVC123",
-		"url":       "https://goalert.example.test",
-	}
-	c := NewGoalert(configMap, testAppConfig(), testDeps)
-	c.url = s.URL
-
-	ev := event.Event{
-		PodName:   "test-pod",
-		Namespace: "default",
-		Reason:    "OOMKILLED",
-	}
-	assert.Nil(c.SendEvent(context.Background(), &ev))
+	assert.NotNil(c.SendIncident(context.Background(), providertest.Announce()))
 }
 
 func TestInvalidHttpRequest(t *testing.T) {
@@ -161,8 +132,8 @@ func TestInvalidHttpRequest(t *testing.T) {
 	c := NewGoalert(configMap, testAppConfig(), testDeps)
 	c.url = "h ttp://localhost/%s"
 
-	assert.NotNil(c.SendMessage(context.Background(), "test"))
+	assert.NotNil(c.SendIncident(context.Background(), providertest.Announce()))
 
 	c.url = "http://localhost:132323/%s"
-	assert.NotNil(c.SendMessage(context.Background(), "test"))
+	assert.NotNil(c.SendIncident(context.Background(), providertest.Announce()))
 }

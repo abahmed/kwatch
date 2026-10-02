@@ -1,0 +1,4 @@
+10:03:15 settled
+🟠 Service payments in shop (prod-eu-1) selects no pods. Its selector changed at 10:01 from app=payments to app=payment. Its dependents failed soon after it changed. To see the object's state and events, run kubectl describe service payments -n shop
+🟠 Service payments in shop (prod-eu-1) selects no pods.
+

@@ -4,12 +4,12 @@ import (
 	"context"
 	"testing"
 
-	"github.com/abahmed/kwatch/internal/event"
+	"github.com/abahmed/kwatch/internal/notification"
 )
 
 type contextRecordingProvider struct {
-	eventContext   context.Context
-	messageContext context.Context
+	incidentContext context.Context
+	messageContext  context.Context
 }
 
 type contextKey struct{}
@@ -18,11 +18,11 @@ func (p *contextRecordingProvider) Name() string {
 	return "ContextRecording"
 }
 
-func (p *contextRecordingProvider) SendEvent(
+func (p *contextRecordingProvider) SendIncident(
 	ctx context.Context,
-	_ *event.Event,
+	_ notification.Message,
 ) error {
-	p.eventContext = ctx
+	p.incidentContext = ctx
 	return nil
 }
 
@@ -38,13 +38,15 @@ func TestProviderReceivesContext(t *testing.T) {
 	provider := &contextRecordingProvider{}
 	ctx := context.WithValue(context.Background(), contextKey{}, "value")
 
-	if err := provider.SendEvent(ctx, &event.Event{}); err != nil {
-		t.Fatalf("SendEvent() returned error: %v", err)
+	if err := provider.SendIncident(
+		ctx, notification.Message{},
+	); err != nil {
+		t.Fatalf("SendIncident() returned error: %v", err)
 	}
 	if err := provider.SendMessage(ctx, "message"); err != nil {
 		t.Fatalf("SendMessage() returned error: %v", err)
 	}
-	if provider.eventContext != ctx || provider.messageContext != ctx {
+	if provider.incidentContext != ctx || provider.messageContext != ctx {
 		t.Fatal("provider did not receive the delivery context")
 	}
 }

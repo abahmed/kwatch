@@ -1,23 +1,9 @@
 package config
 
-import (
-	"regexp"
-	"time"
-)
-
-// MessageConfig controls optional presentation details. Credential redaction
-// is always enabled; this flag only permits private application addresses in
-// otherwise redacted evidence.
-type MessageConfig struct {
-	IncludePrivateLogAddresses bool `yaml:"includePrivateLogAddresses"`
-}
-
+// Config is the YAML-facing kwatch configuration.
 type Config struct {
 	// App general configuration
 	App App `yaml:"app"`
-
-	// Message controls provider-facing evidence rendering.
-	Message MessageConfig `yaml:"message"`
 
 	// Telemetry configures the minimal adoption heartbeat.
 	Telemetry Telemetry `yaml:"telemetry"`
@@ -25,44 +11,15 @@ type Config struct {
 	// Upgrader configuration
 	Upgrader Upgrader `yaml:"upgrader"`
 
-	// ContainerRestartThreshold, when > 0, opens an incident for any container
-	// whose cumulative restart count reaches this threshold, even while
-	// currently Running. Default 0 (disabled).
-	ContainerRestartThreshold int `yaml:"containerRestartThreshold"`
-
-	// PvcMonitor configuration
-	PvcMonitor PvcMonitor `yaml:"pvcMonitor"`
-
-	// HeartbeatMonitor configuration
+	// HeartbeatMonitor pings an external dead man's switch.
 	HeartbeatMonitor HeartbeatMonitor `yaml:"heartbeatMonitor"`
-
-	// NodeMonitor configuration
-	NodeMonitor NodeMonitor `yaml:"nodeMonitor"`
 
 	// HealthCheck configuration
 	HealthCheck HealthCheck `yaml:"healthCheck"`
 
-	// Correlation configuration for incident dedup/grouping
-	Correlation Correlation `yaml:"correlation"`
-
-	// AdaptiveThresholds adds bounded grace for large workloads during partial
-	// rollouts, reducing alerts caused by normal rollout jitter.
-	AdaptiveThresholds bool              `yaml:"adaptiveThresholds"`
-	Maintenance        MaintenanceConfig `yaml:"maintenance"`
-
-	// ReportStartupBaseline if true (default), emits a single informational
-	// notification at startup summarizing pre-existing issues that are
-	// suppressed from per-incident alerts by the baseline.
-	ReportStartupBaseline bool `yaml:"reportStartupBaseline"`
-
-	// MaxRecentLogLines limits the tail log lines fetched from Kubernetes.
-	// If it is not provided, the built-in default is used.
-	MaxRecentLogLines int64 `yaml:"maxRecentLogLines"`
-
-	// IgnoreFailedGracefulShutdown if set to true, containers which are
-	// forcefully killed during shutdown (as their graceful shutdown failed)
-	// are not reported as error
-	IgnoreFailedGracefulShutdown bool `yaml:"ignoreFailedGracefulShutdown"`
+	// Maintenance names the annotations that mark deliberate maintenance.
+	// Incidents whose objects are under maintenance are not delivered.
+	Maintenance MaintenanceConfig `yaml:"maintenance"`
 
 	// Namespaces is an optional list of namespaces that you want to watch or
 	// forbid, if it's not provided it will watch all namespaces.
@@ -76,35 +33,27 @@ type Config struct {
 	// You can either set forbidden reasons or allowed, not both
 	Reasons []string `yaml:"reasons"`
 
+	// NamespaceSelector is a Kubernetes label selector for namespaces in
+	// scope. Mutually exclusive with Namespaces.
+	NamespaceSelector string `yaml:"namespaceSelector"`
+
 	// IgnoreContainerNames optional list of container names to ignore
 	IgnoreContainerNames []string `yaml:"ignoreContainerNames"`
 
 	// IgnorePodNames optional list of pod name regexp patterns to ignore
 	IgnorePodNames []string `yaml:"ignorePodNames"`
 
-	// IgnoreLogPatterns optional list of regexp patterns to ignore
-	IgnoreLogPatterns []string `yaml:"ignoreLogPatterns"`
-
-	// IgnoreContainerMessages optional list of substring patterns; if a
-	// container status Waiting/Terminated Message contains any entry the
-	// incident is suppressed.
+	// IgnoreContainerMessages optional list of substrings; a container
+	// finding whose message contains any entry is silenced.
 	IgnoreContainerMessages []string `yaml:"ignoreContainerMessages"`
 
-	// IgnoreDisruptionTerminations if true (default), pods with a
-	// DeletionTimestamp or DisruptionTarget condition (eviction, scale-down,
-	// preemption, taint-based termination, etc.) are not alerted.
-	IgnoreDisruptionTerminations *bool `yaml:"ignoreDisruptionTerminations"`
+	// IgnoreNodeReasons is an optional list of node reasons to silence.
+	IgnoreNodeReasons []string `yaml:"ignoreNodeReasons"`
+	// IgnoreNodeMessages is an optional list of node messages to silence.
+	IgnoreNodeMessages []string `yaml:"ignoreNodeMessages"`
 
-	// NamespaceSelector is a Kubernetes label selector to discover namespaces
-	// to watch. Mutually exclusive with Namespaces.
-	NamespaceSelector string `yaml:"namespaceSelector"`
-
-	// IncludeEvents is deprecated and retained for configuration compatibility.
-	// Kubernetes events are always internal analysis evidence.
-	IncludeEvents *bool `yaml:"includeEvents"`
-
-	// IncludeLogs if false, logs section is omitted from alert messages.
-	IncludeLogs *bool `yaml:"includeLogs"`
+	// Silences is an optional list of silence rules.
+	Silences []SilenceRule `yaml:"silences"`
 
 	// Alert is a map contains a map of each provider configuration
 	// e.g. {"slack": {"webhook": "URL"}}
@@ -120,117 +69,41 @@ type Config struct {
 	AllowedReasons   []string
 	ForbiddenReasons []string
 
-	// Patterns are compiled from IgnorePodNames after populating
-	// IgnorePodNames configuration
-	IgnorePodNamePatterns []*regexp.Regexp
-
-	// Patterns are compiled from IgnoreLogPatterns after populating
-	// IgnoreLogPatterns configuration
-	IgnoreLogPatternsCompiled []*regexp.Regexp
-
-	// IgnoreNodeReasons is an optional list of node reasons for which alerting
-	// should be skipped
-	IgnoreNodeReasons []string `yaml:"ignoreNodeReasons"`
-	// IgnoreNodeMessages is an optional list of node messages for which
-	// alerting should be skipped
-	IgnoreNodeMessages []string `yaml:"ignoreNodeMessages"`
-
-	// ResyncSeconds is the interval (in seconds) for periodic informer resyncs.
-	// If 0, no periodic resync occurs (event-driven only).
-	//
-	// It is not only a freshness knob: resyncs re-run every detector, which is
-	// what re-reports a problem that is still happening. The incident engine
-	// closes an incident nothing has re-reported for a whole
-	// Correlation.Window, so a resync interval at or above that window (or 0)
-	// means incidents get closed while still broken. config.Warnings says so
-	// at startup.
-	//
-	// On large clusters with 200+ pods, raise Workers (below) to match;
+	// ResyncSeconds is the interval (in seconds) for periodic informer
+	// resyncs, a safety net for missed watch events. Zero disables it.
 	ResyncSeconds int `yaml:"resyncSeconds"`
 
-	// SeverityByOwnerKind maps owner kinds to severity levels.
-	// e.g. {"StatefulSet": "high", "DaemonSet": "low"}
-	// Default: StatefulSet → "high", everything else → "normal"
+	// SeverityByOwnerKind raises or lowers incidents by the kind of the
+	// affected workload, e.g. {"StatefulSet": "critical"}.
 	SeverityByOwnerKind map[string]string `yaml:"severityByOwnerKind"`
 
-	// SeverityByReason maps event reasons to severity levels, checked before
-	// owner-kind. e.g. {"OOMKilled": "high", "CrashLoopBackOff": "high"}
+	// SeverityByReason overrides severity by reason and is checked before
+	// the owner kind, e.g. {"OOMKilled": "critical"}.
 	SeverityByReason map[string]string `yaml:"severityByReason"`
-
-	// ScheduleMonitor configures scheduling delay diagnostics.
-	ScheduleMonitor ScheduleMonitor `yaml:"scheduleMonitor"`
-
-	// OomMonitor configures OOM pattern / memory leak detection.
-	OomMonitor OomMonitor `yaml:"oomMonitor"`
-
-	// PendingPodMonitor configures Pending-phase pod detection.
-	PendingPodMonitor PendingPodMonitor `yaml:"pendingPodMonitor"`
-
-	// NotReadyMonitor configures sustained not-ready pod detection.
-	NotReadyMonitor NotReadyMonitor `yaml:"notReadyMonitor"`
-
-	// RolloutMonitor configures stuck-rollout detection for Deployments.
-	RolloutMonitor RolloutMonitor `yaml:"rolloutMonitor"`
-
-	// JobMonitor configures failed/suspended Job detection.
-	JobMonitor JobMonitor `yaml:"jobMonitor"`
-
-	// StatefulSetMonitor configures rollout-stuck detection for StatefulSets.
-	StatefulSetMonitor StatefulSetMonitor `yaml:"statefulSetMonitor"`
-
-	// PdbMonitor configures PDB violation detection.
-	PdbMonitor PdbMonitor `yaml:"pdbMonitor"`
-
-	// NodeResourceMonitor configures node resource overcommit prediction.
-	NodeResourceMonitor NodeResourceMonitor `yaml:"nodeResourceMonitor"`
 
 	// ActiveProbeMonitor performs explicitly configured HTTP, TCP, and DNS
 	// checks. It is opt-in because Kubernetes cannot infer safe probe targets.
 	ActiveProbeMonitor ActiveProbeMonitor `yaml:"activeProbeMonitor"`
 
-	// KubeletTelemetryMonitor reads built-in kubelet telemetry without an agent.
-	KubeletTelemetryMonitor KubeletTelemetryMonitor `yaml:"kubeletTelemetryMonitor"`
+	// CrdConfig configures the KwatchConfig CRD watcher.
+	CrdConfig CrdConfig `yaml:"crd"`
 
-	// DaemonSetMonitor configures rollout-stuck detection for DaemonSets.
-	DaemonSetMonitor DaemonSetMonitor `yaml:"daemonSetMonitor"`
+	// Templates maps a reason (lowercased) to a Go text/template for plain
+	// text providers. The template receives .Message and .Text.
+	Templates map[string]string `yaml:"templates"`
 
-	// CronJobMonitor configures failed/suspended CronJob detection.
-	CronJobMonitor CronJobMonitor `yaml:"cronJobMonitor"`
+	// Runbooks maps reasons to documentation URLs added to the steps of a
+	// incident with that reason.
+	Runbooks map[string]string `yaml:"runbooks"`
 
-	// ClusterAutoscalerMonitor configures cluster-autoscaler event monitoring.
-	ClusterAutoscalerMonitor ClusterAutoscalerMonitor `yaml:"clusterAutoscalerMonitor"`
+	// AuditLog configures the JSON decision log.
+	AuditLog AuditLogConfig `yaml:"auditLog"`
 
-	// HpaMonitor configures HPA-maxed-out detection.
-	HpaMonitor HpaMonitor `yaml:"hpaMonitor"`
+	// Kubelet configures the direct connection to each node's kubelet.
+	Kubelet KubeletConfig `yaml:"kubelet"`
 
-	// TlsMonitor configures TLS certificate expiry monitoring.
-	TlsMonitor TlsMonitor `yaml:"tlsMonitor"`
-
-	// ServiceMonitor configures service endpoint health monitoring.
-	ServiceMonitor ServiceMonitor `yaml:"serviceMonitor"`
-
-	// AdmissionWebhookMonitor configures admission webhook failure monitoring.
-	AdmissionWebhookMonitor AdmissionWebhookMonitor `yaml:"admissionWebhookMonitor"`
-
-	// ControlPlaneMonitor configures control-plane health monitoring.
-	ControlPlaneMonitor ControlPlaneMonitor `yaml:"controlPlaneMonitor"`
-
-	// IngressMonitor configures ingress backend health monitoring.
-	IngressMonitor IngressMonitor `yaml:"ingressMonitor"`
-
-	// NetworkPolicyMonitor configures network policy issue monitoring.
-	NetworkPolicyMonitor NetworkPolicyMonitor `yaml:"networkPolicyMonitor"`
-
-	// ClusterResourceMonitor configures quota and namespace lifecycle checks.
-	ClusterResourceMonitor ClusterResourceMonitor `yaml:"clusterResourceMonitor"`
-
-	// Silences is an optional list of silence rules that suppress matching
-	// incidents.
-	Silences []SilenceRule `yaml:"silences"`
-
-	// SuppressionIndex is compiled from both Silences and deprecated ignore*
-	// fields for efficient detect-time lookup. Populated by LoadConfig.
-	Suppression SuppressionIndex
+	// Watch turns optional watched resources on or off.
+	Watch WatchConfig `yaml:"watch"`
 
 	// Runtime is the defensive snapshot of derived configuration used by
 	// composition and runtime components. It is never decoded from YAML.
@@ -238,37 +111,9 @@ type Config struct {
 	// syntheticSilences counts trailing rules generated from legacy ignore*
 	// fields. It is derived state and is never serialized.
 	syntheticSilences int
-
-	// WatchStartTime is set once at startup and used by filters to measure
-	// resource age relative to when kwatch began watching (not pod birth).
-	WatchStartTime time.Time `yaml:"-"`
-
-	// Workers is the number of concurrent reconcile workers per queue.
-	// Default 1. Raising it increases throughput on large clusters; alert
-	// ordering across pods becomes non-deterministic (engine dedup unaffected).
-	Workers int `yaml:"workers"`
-
-	// Inhibition configures suppression rules between monitors.
-	Inhibition Inhibition `yaml:"inhibition"`
-
-	// SmartGrouping configures coalescing same-reason incidents across
-	// owners into a single notification within a time window.
-	SmartGrouping SmartGrouping `yaml:"smartGrouping"`
-
-	// CrdConfig configures the KwatchConfig CRD watcher.
-	CrdConfig CrdConfig `yaml:"crd"`
-
-	// Templates maps incident reason (lowercased) to Go text/template string.
-	// Available template keys: {{.Incident.Key}}, {{.Incident.Reason}},
-	// {{.Action}}, {{.Message}}. Missing keys render as empty string.
-	Templates map[string]string `yaml:"templates"`
-
-	// Runbooks maps Kubernetes event reasons to documentation URLs.
-	// When a reason matches, the URL is appended to the incident hint.
-	Runbooks map[string]string `yaml:"runbooks"`
-
-	// AuditLog configures structured JSON audit logging for all incidents.
-	AuditLog AuditLogConfig `yaml:"auditLog"`
+	// unknownKeys are config keys the file sets that no field reads, such
+	// as removed options or typos. They are logged, never fatal.
+	unknownKeys []string
 }
 
 // Telemetry configures the minimal adoption heartbeat. It is enabled
@@ -279,18 +124,6 @@ type Config struct {
 type Telemetry struct {
 	Enabled bool `yaml:"enabled"`
 }
-
-// Inhibition configures cross-monitor suppression rules.
-type Inhibition struct {
-	// NodeSuppressesPods if true, pod incidents on a node with an active
-	// node incident are suppressed to reduce noise. Default true.
-	NodeSuppressesPods bool `yaml:"nodeSuppressesPods"`
-}
-
-// ClusterAutoscalerMonitor configures cluster-autoscaler event monitoring.
-// Watches cluster-autoscaler events (TriggeredScaleUp, FailedToScaleUp,
-// ScaleDown, etc.) and alerts when the autoscaler cannot scale or
-// detects resource constraints.
 
 // App confing struct
 type App struct {
@@ -325,37 +158,11 @@ type Upgrader struct {
 	DisableUpdateCheck bool `yaml:"disableUpdateCheck"`
 }
 
-// PvcMonitor confing struct
-
 // CrdConfig configures the KwatchConfig CRD watcher.
 type CrdConfig struct {
 	// Enabled if set to true, watches KwatchConfig CRs for live config changes.
 	Enabled bool `yaml:"enabled"`
-	// FailureConditions overrides the default condition rules using entries such
-	// as "Ready=False" or "Degraded=True" for dynamically watched CRDs.
-	FailureConditions []string `yaml:"failureConditions"`
-	// GraphReferences maps dot-separated CR spec paths to Kubernetes kinds,
-	// for example "spec.serviceName=service" or
-	// "spec.backendRefs.name=service". Arrays are traversed automatically.
-	GraphReferences []string `yaml:"graphReferences"`
 }
-
-// SmartGrouping configures coalescing same-reason incidents across
-// different owners into a single notification within a time window.
-type SmartGrouping struct {
-	// WindowSeconds is the time window in seconds for grouping same-reason
-	// incidents together. Default 60. Set to 0 to disable grouping.
-	// A bare number counts seconds; "60s" is also accepted.
-	WindowSeconds Seconds `yaml:"windowSeconds"`
-
-	// NamespaceFanOutThreshold is how many distinct owners must fail the same
-	// way, in one namespace, inside one window before their separate groups
-	// collapse into one namespace-level notification. Default 3. Set to 0 to
-	// keep one notification per owner.
-	NamespaceFanOutThreshold int `yaml:"namespaceFanOutThreshold"`
-}
-
-// ScheduleMonitor configures scheduling delay diagnostics.
 
 // HealthCheck config struct
 type HealthCheck struct {
@@ -366,24 +173,10 @@ type HealthCheck struct {
 	// Port is the port to listen on for health check requests
 	// By default, this value is 8060
 	Port int `yaml:"port"`
-
-	// Pprof if set to true, enables /debug/pprof/* profiling endpoints.
-	// Disabled by default — enabling exposes runtime profiling data.
-	Pprof bool `yaml:"pprof"`
-
-	// Diagnostics if set to true, enables /incidents and /test-alert endpoints.
-	// Disabled by default.
-	Diagnostics bool `yaml:"diagnostics"`
-
-	// DiagnosticsToken is the Bearer token required to access diagnostic
-	// endpoints. Production validation requires it when diagnostics or pprof
-	// is enabled.
-	DiagnosticsToken string `yaml:"diagnosticsToken"`
 }
 
-// AlertRoute defines routing filters for a provider.
-// An incident matching at least one route is delivered; if no routes are
-// configured all incidents are delivered (current behavior).
+// AlertRoute defines routing filters for a provider. An incident matching at
+// least one route is delivered; without routes everything is delivered.
 type AlertRoute struct {
 	// Namespaces is an optional list of allowed namespaces.
 	Namespaces []string `yaml:"namespaces"`
@@ -393,7 +186,7 @@ type AlertRoute struct {
 	Reasons []string `yaml:"reasons"`
 }
 
-// AuditLogConfig configures structured audit logging for all incidents.
+// AuditLogConfig configures the JSON decision log.
 type AuditLogConfig struct {
 	// Enabled toggles audit logging. Default true; entries go to stdout unless
 	// an output file is configured.
@@ -401,4 +194,22 @@ type AuditLogConfig struct {
 	// Output is the destination for audit log entries: "stdout" (default) or a
 	// file path.
 	Output string `yaml:"output"`
+}
+
+// KubeletConfig configures how kwatch reads node stats and metrics
+// directly from each kubelet on port 10250.
+type KubeletConfig struct {
+	// InsecureSkipVerify skips verification of the kubelet serving
+	// certificate. Leave it false when kubelet serving certificates are
+	// signed by the cluster CA; set it only for clusters whose kubelets
+	// use self-signed certificates. Default false.
+	InsecureSkipVerify bool `yaml:"insecureSkipVerify"`
+}
+
+// WatchConfig turns optional watched resources on or off.
+type WatchConfig struct {
+	// Secrets watches Secrets (values are hashed, never stored). When
+	// false kwatch needs no Secret RBAC and checks that need Secrets
+	// report that they cannot verify. Default true.
+	Secrets bool `yaml:"secrets"`
 }

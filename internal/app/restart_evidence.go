@@ -10,9 +10,6 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/fields"
 	"k8s.io/client-go/kubernetes"
-
-	"github.com/abahmed/kwatch/internal/model"
-	"github.com/abahmed/kwatch/internal/startup"
 )
 
 type kubernetesRestartEvidence struct {
@@ -23,7 +20,7 @@ type kubernetesRestartEvidence struct {
 func newKubernetesRestartEvidence(
 	client kubernetes.Interface,
 	namespace string,
-) startup.EvidenceSource {
+) restartEvidenceSource {
 	return &kubernetesRestartEvidence{
 		client: client, namespace: namespace,
 	}
@@ -31,9 +28,9 @@ func newKubernetesRestartEvidence(
 
 func (s *kubernetesRestartEvidence) ReadRestartEvidence(
 	ctx context.Context,
-	previous model.RuntimeSession,
-) (startup.RestartEvidence, error) {
-	evidence := startup.RestartEvidence{}
+	previous runtimeSession,
+) (restartEvidence, error) {
+	evidence := restartEvidence{}
 	if previous.PodName != "" {
 		s.inspectPod(ctx, previous.PodName, &evidence)
 		s.inspectPodEvents(ctx, previous.PodName, &evidence)
@@ -48,7 +45,7 @@ func (s *kubernetesRestartEvidence) ReadRestartEvidence(
 func (s *kubernetesRestartEvidence) inspectPod(
 	ctx context.Context,
 	name string,
-	evidence *startup.RestartEvidence,
+	evidence *restartEvidence,
 ) {
 	pod, err := s.client.CoreV1().Pods(s.namespace).Get(
 		ctx, name, metav1.GetOptions{},
@@ -70,7 +67,7 @@ func (s *kubernetesRestartEvidence) inspectPod(
 
 func setTerminationReason(
 	status corev1.ContainerStatus,
-	evidence *startup.RestartEvidence,
+	evidence *restartEvidence,
 ) {
 	if status.State.Terminated != nil {
 		evidence.ContainerReason = status.State.Terminated.Reason
@@ -85,7 +82,7 @@ func setTerminationReason(
 func (s *kubernetesRestartEvidence) inspectPodEvents(
 	ctx context.Context,
 	name string,
-	evidence *startup.RestartEvidence,
+	evidence *restartEvidence,
 ) {
 	selector := fields.OneTermEqualSelector(
 		"involvedObject.name", name,
@@ -109,7 +106,7 @@ func (s *kubernetesRestartEvidence) inspectPodEvents(
 func (s *kubernetesRestartEvidence) inspectNode(
 	ctx context.Context,
 	name string,
-	evidence *startup.RestartEvidence,
+	evidence *restartEvidence,
 ) {
 	node, err := s.client.CoreV1().Nodes().Get(
 		ctx, name, metav1.GetOptions{},
@@ -140,7 +137,7 @@ func (s *kubernetesRestartEvidence) inspectNode(
 
 func (s *kubernetesRestartEvidence) inspectLease(
 	ctx context.Context,
-	evidence *startup.RestartEvidence,
+	evidence *restartEvidence,
 ) {
 	lease, err := s.client.CoordinationV1().Leases(s.namespace).Get(
 		ctx, electionLeaseName(), metav1.GetOptions{},
@@ -159,4 +156,4 @@ func (s *kubernetesRestartEvidence) inspectLease(
 	}
 }
 
-var _ startup.EvidenceSource = (*kubernetesRestartEvidence)(nil)
+var _ restartEvidenceSource = (*kubernetesRestartEvidence)(nil)

@@ -5,13 +5,16 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"sync"
 	"sync/atomic"
 	"time"
 
 	"k8s.io/apimachinery/pkg/util/validation"
+	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/tools/leaderelection"
 
 	"github.com/abahmed/kwatch/internal/health"
+	"github.com/abahmed/kwatch/internal/kubeclient"
 	"github.com/abahmed/kwatch/internal/metrics"
 )
 
@@ -42,6 +45,12 @@ type leaderCallbacks struct {
 	activeRunner   activeComponentRunner
 	activeErrors   chan error
 	activeDone     chan struct{}
+	// mu orders onStartedLeading against onStoppedLeading. client-go runs
+	// onStartedLeading in a goroutine and onStoppedLeading as Run returns,
+	// so a session could otherwise start after Run returned and nobody
+	// would wait for it. Once stopped is set no session starts.
+	mu             sync.Mutex
+	stopped        bool
 	started        atomic.Bool
 	epoch          atomic.Int64
 	takeovers      atomic.Int64
@@ -57,8 +66,9 @@ func (c *leaderCallbacks) callbacks() leaderelection.LeaderCallbacks {
 }
 
 func (c *leaderCallbacks) onStartedLeading(leaderCtx context.Context) {
-	c.started.Store(true)
-	c.deps.persistenceGate.enable()
+	if !c.markStarted() {
+		return
+	}
 	currentEpoch := c.epoch.Add(1)
 	if c.deps.readiness != nil {
 		c.deps.readiness.begin(
@@ -91,13 +101,28 @@ func (c *leaderCallbacks) onStartedLeading(leaderCtx context.Context) {
 	close(c.activeDone)
 }
 
+// markStarted records that the session starts, unless election already
+// stopped, in which case it reports false and the session never runs.
+func (c *leaderCallbacks) markStarted() bool {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	if c.stopped {
+		return false
+	}
+	c.started.Store(true)
+	return true
+}
+
 func (c *leaderCallbacks) onStoppedLeading() {
-	if !c.started.Load() {
+	c.mu.Lock()
+	c.stopped = true
+	started := c.started.Load()
+	c.mu.Unlock()
+	if !started {
 		return
 	}
 	loss := c.parent.Err() == nil
 	if loss {
-		c.deps.persistenceGate.disable()
 		metrics.DefaultRegistry().LeadershipLosses.Add(1)
 	}
 	if c.deps.readiness != nil {
@@ -108,8 +133,15 @@ func (c *leaderCallbacks) onStoppedLeading() {
 	if loss {
 		reason = "leadership_lost"
 	}
+	// The session may still be draining delivery when this runs; it caps
+	// the drain by the last renewal, so the stopped status keeps it.
+	var lastRenewal time.Time
+	if status := c.deps.healthServer.LeadershipStatus(); status != nil {
+		lastRenewal = status.LastRenewal
+	}
 	c.deps.healthServer.SetLeadership(health.LeadershipStatus{
 		Role: "stopped", Identity: c.identity, LossReason: reason,
+		LastRenewal: lastRenewal,
 	})
 }
 
@@ -121,7 +153,7 @@ func (c *leaderCallbacks) onNewLeader(newLeader string) {
 		c.observedLeader.Store(true)
 	}
 	c.deps.healthServer.SetLeadership(health.LeadershipStatus{
-		Role: "standby", Identity: newLeader, LossReason: "standby",
+		Role: "starting", Identity: newLeader,
 	})
 }
 
@@ -147,8 +179,9 @@ func runLeaderElectionWithFactory(
 	)
 }
 
-func runLeaderElectionWithRunner(
-	ctx context.Context,
+// validateElectionInputs rejects missing dependencies and an unsafe Lease
+// name before any election starts.
+func validateElectionInputs(
 	deps *serverDeps,
 	factory electionFactory,
 	activeRunner activeComponentRunner,
@@ -179,12 +212,44 @@ func runLeaderElectionWithRunner(
 			electionLeaseName(), problems[0],
 		)
 	}
+	return nil
+}
+
+// newElectionConfig is the client-go election configuration for kwatch.
+func newElectionConfig(
+	lock *renewalTrackingLock, callbacks *leaderCallbacks,
+) leaderelection.LeaderElectionConfig {
+	return leaderelection.LeaderElectionConfig{
+		Lock:          lock,
+		LeaseDuration: leaderLeaseDuration,
+		RenewDeadline: leaderRenewDeadline,
+		RetryPeriod:   leaderRetryPeriod,
+		WatchDog:      nil,
+		Callbacks:     callbacks.callbacks(),
+		// client-go would release as soon as the context is cancelled, while
+		// the active session is still draining delivery and writing state.
+		// kwatch releases explicitly once shutdown has finished instead.
+		ReleaseOnCancel: false,
+		Name:            "kwatch",
+	}
+}
+
+func runLeaderElectionWithRunner(
+	ctx context.Context,
+	deps *serverDeps,
+	factory electionFactory,
+	activeRunner activeComponentRunner,
+) error {
+	err := validateElectionInputs(deps, factory, activeRunner)
+	if err != nil {
+		return err
+	}
 	identity, err := podIdentity()
 	if err != nil {
 		return err
 	}
 	deps.healthServer.SetLeadership(health.LeadershipStatus{
-		Role: "standby", LossReason: "standby",
+		Role: "starting",
 	})
 
 	electionCtx, cancelElection := context.WithCancel(ctx)
@@ -199,28 +264,29 @@ func runLeaderElectionWithRunner(
 		activeDone:     make(chan struct{}),
 	}
 	lock := &renewalTrackingLock{
-		delegate:  newLeaseLock(deps.clients.Kubernetes, identity),
+		delegate:  newLeaseLock(electionClient(deps.clients), identity),
 		onRenewal: callbacks.recordRenewal,
 	}
 
-	elector, err := factory(leaderelection.LeaderElectionConfig{
-		Lock:          lock,
-		LeaseDuration: leaderLeaseDuration,
-		RenewDeadline: leaderRenewDeadline,
-		RetryPeriod:   leaderRetryPeriod,
-		WatchDog:      nil,
-		Callbacks:     callbacks.callbacks(),
-		// client-go would release as soon as the context is cancelled, while
-		// the active session is still draining delivery and writing state.
-		// kwatch releases explicitly once shutdown has finished instead.
-		ReleaseOnCancel: false,
-		Name:            "kwatch",
-	})
+	elector, err := factory(newElectionConfig(lock, callbacks))
 	if err != nil {
 		return fmt.Errorf("create leader elector: %w", err)
 	}
 
 	elector.Run(electionCtx)
+	return finishElection(ctx, deps, callbacks, lock, identity)
+}
+
+// finishElection runs after the elector returns. It waits for a started
+// active session, arranges the Lease release for a clean shutdown, and
+// reports why the election ended.
+func finishElection(
+	ctx context.Context,
+	deps *serverDeps,
+	callbacks *leaderCallbacks,
+	lock *renewalTrackingLock,
+	identity string,
+) error {
 	if callbacks.started.Load() {
 		if err := waitForActiveSession(callbacks.activeDone); err != nil {
 			return err
@@ -244,88 +310,27 @@ func runLeaderElectionWithRunner(
 	return errLeadershipLost
 }
 
-func runActiveComponents(ctx context.Context, deps *serverDeps) error {
-	if deps.persistenceGate != nil {
-		deps.persistenceGate.enable()
-		defer deps.persistenceGate.disable()
-	}
-	activeCtx, cancel := context.WithCancel(applicationContext(deps))
-	defer cancel()
-	go fenceOnLeadershipLoss(ctx, activeCtx, deps, cancel)
-	if deps.activate != nil {
-		if err := deps.activate(activeCtx); err != nil {
-			if deps.healthServer != nil {
-				deps.healthServer.SetComponentError("persistence", err)
-			}
-			return err
-		}
-	}
-	supervisor := newComponentSupervisor(deps.clients.Clock.Now)
-	startActiveComponents(activeCtx, deps, supervisor)
-	select {
-	case err := <-supervisor.errCh:
-		cancel()
-		if deps.incidentEngine != nil {
-			deps.incidentEngine.Freeze()
-		}
-		waitForSupervisor(supervisor)
-		return err
-	case <-ctx.Done():
-		cancel()
-		if deps.incidentEngine != nil {
-			deps.incidentEngine.Freeze()
-		}
-		waitForSupervisor(supervisor)
-		return nil
-	}
-}
-
-func waitForSupervisor(supervisor *componentSupervisor) {
+// waitForSupervisor waits for the leader components to return and reports
+// whether they all did within supervisorShutdownTimeout.
+func waitForSupervisor(supervisor *componentSupervisor) bool {
 	done := make(chan struct{})
 	go func() {
 		supervisor.wg.Wait()
 		close(done)
 	}()
+	timer := time.NewTimer(supervisorShutdownTimeout)
+	defer timer.Stop()
 	select {
 	case <-done:
-	case <-time.After(componentShutdownTimeout):
+		return true
+	case <-timer.C:
 		recordShutdownTimeout("leader-components")
+		return false
 	}
 }
 
-func startActiveComponents(
-	ctx context.Context,
-	deps *serverDeps,
-	supervisor *componentSupervisor,
-) {
-	supervisor.startOwned(ctx, componentSpec{
-		name:     "delivery",
-		required: true,
-		progress: deliveryProgress(deps),
-		onHealthy: func() {
-			if deps.readiness != nil {
-				deps.readiness.setCurrent("delivery", true)
-			}
-		},
-		run: func(ctx context.Context) error {
-			return runDelivery(ctx, deps)
-		},
-	})
-	if deps.startPersistence != nil {
-		deps.startPersistence(
-			ctx, supervisor, deps.persistenceGate.enabled,
-		)
-	} else if deps.readiness != nil {
-		// Tests and embedded callers may not install persistence writers.
-		// They must not wait forever on a gate they deliberately omitted.
-		deps.readiness.setCurrent("persistence-writers", true)
-	}
-	startCoreComponents(ctx, deps, supervisor)
-	for _, component := range activeOptionalComponents(deps) {
-		supervisor.startOptional(ctx, deps.initialized, component)
-	}
-}
-
+// deliveryProgress returns the delivery manager as a progress source, or
+// nil when there are no providers and so nothing can report progress.
 func deliveryProgress(deps *serverDeps) progressReporter {
 	if deps == nil || deps.deliveryManager == nil ||
 		!deps.deliveryManager.HasProviders() {
@@ -334,52 +339,26 @@ func deliveryProgress(deps *serverDeps) progressReporter {
 	return deps.deliveryManager
 }
 
-func activeOptionalComponents(deps *serverDeps) []componentSpec {
-	return []componentSpec{
-		monitoredRun(deps, "status", deps.statusRun),
-		monitoredRun(deps, "probe", deps.probeRun),
-		monitoredRun(deps, "kubelet", deps.kubeletRun),
-		monitoredRun(deps, "storage-graph", deps.storageRun),
-		monitoredRun(deps, "network-graph", deps.networkRun),
-		monitoredRun(deps, "rbac", deps.securityRun),
-		monitoredRun(deps, "control-plane", deps.controlPlaneRun),
-		monitoredRun(deps, "telemetry", deps.telemetryRun),
-		monitoredRun(deps, "upgrader", deps.upgradeRun),
-	}
-}
-
-func monitoredRun(
-	deps *serverDeps,
-	name string,
-	run func(context.Context) error,
-) componentSpec {
-	if run == nil {
-		return componentSpec{name: name}
-	}
-	progress := newComponentProgress(componentStartTime(deps))
-	return componentSpec{
-		name:      name,
-		cleanStop: name == "upgrader",
-		onError:   degrade(deps, name),
-		onHealthy: recoverComponent(deps, name),
-		progress:  progress,
-		run: func(ctx context.Context) error {
-			return runWithProgress(ctx, deps, progress, run)
-		},
-	}
-}
-
 func newKubernetesElection(
 	config leaderelection.LeaderElectionConfig,
 ) (electionRunner, error) {
 	return leaderelection.NewLeaderElector(config)
 }
 
+// activeSessionWait is how long the election waits for the session.
+const activeSessionWait = activeSessionTimeout
+
+// waitForActiveSession waits for the active leader session to finish,
+// within activeSessionTimeout: the session stops its components, drains
+// delivery, flushes threads and records its end, so it needs the whole
+// nested budget, not one component's.
 func waitForActiveSession(done <-chan struct{}) error {
+	timer := time.NewTimer(activeSessionWait)
+	defer timer.Stop()
 	select {
 	case <-done:
 		return nil
-	case <-time.After(componentShutdownTimeout):
+	case <-timer.C:
 		return fmt.Errorf("active leader session did not stop")
 	}
 }
@@ -391,22 +370,23 @@ func applicationContext(deps *serverDeps) context.Context {
 	return context.Background()
 }
 
-// fenceOnLeadershipLoss stops the active session when the leader context
-// ends. On a real loss (the application is still running) persistence is
-// fenced first: client-go cancels the leader context before it runs
-// OnStoppedLeading, and savers would otherwise make a last write without the
-// Lease.
+// fenceOnLeadershipLoss ends the active session as soon as the Lease is
+// lost. The state file's epoch claim stops any late write.
 func fenceOnLeadershipLoss(
-	leaderCtx, activeCtx context.Context,
-	deps *serverDeps,
-	cancel context.CancelFunc,
+	leaderCtx, activeCtx context.Context, cancel context.CancelFunc,
 ) {
 	select {
 	case <-leaderCtx.Done():
-		if applicationContext(deps).Err() == nil {
-			deps.persistenceGate.disable()
-		}
 		cancel()
 	case <-activeCtx.Done():
 	}
+}
+
+// electionClient prefers the dedicated Lease client and falls back to the
+// shared client for test compositions that do not build one.
+func electionClient(clients kubeclient.ClientSet) kubernetes.Interface {
+	if clients.Election != nil {
+		return clients.Election
+	}
+	return clients.Kubernetes
 }

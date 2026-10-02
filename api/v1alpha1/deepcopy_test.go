@@ -12,7 +12,6 @@ func TestSilenceRuleDeepCopyIsNotAliased(t *testing.T) {
 		Reasons:           []string{"OOMKilled"},
 		PodNamePatterns:   []string{"^app-"},
 		ContainerNames:    []string{"sidecar"},
-		LogPatterns:       []string{"fatal"},
 		ContainerMessages: []string{"denied"},
 		EventMessages:     []string{"cache timed out"},
 		NodeReasons:       []string{"KubeletNotReady"},
@@ -26,7 +25,6 @@ func TestSilenceRuleDeepCopyIsNotAliased(t *testing.T) {
 	out.Reasons[0] = "mutated"
 	out.PodNamePatterns[0] = "mutated"
 	out.ContainerNames[0] = "mutated"
-	out.LogPatterns[0] = "mutated"
 	out.ContainerMessages[0] = "mutated"
 	out.EventMessages[0] = "mutated"
 	out.NodeReasons[0] = "mutated"
@@ -36,7 +34,6 @@ func TestSilenceRuleDeepCopyIsNotAliased(t *testing.T) {
 	assert.Equal(t, []string{"OOMKilled"}, in.Reasons)
 	assert.Equal(t, []string{"^app-"}, in.PodNamePatterns)
 	assert.Equal(t, []string{"sidecar"}, in.ContainerNames)
-	assert.Equal(t, []string{"fatal"}, in.LogPatterns)
 	assert.Equal(t, []string{"denied"}, in.ContainerMessages)
 	assert.Equal(t, []string{"cache timed out"}, in.EventMessages)
 	assert.Equal(t, []string{"KubeletNotReady"}, in.NodeReasons)
@@ -45,7 +42,6 @@ func TestSilenceRuleDeepCopyIsNotAliased(t *testing.T) {
 
 func TestKwatchConfigSpecDeepCopyCopiesMonitorFields(t *testing.T) {
 	in := &KwatchConfigSpec{
-		AdaptiveThresholds: true,
 		Maintenance: MaintenanceConfig{
 			Enabled:         true,
 			Annotation:      "kwatch.io/maintenance",
@@ -59,7 +55,6 @@ func TestKwatchConfigSpecDeepCopyCopiesMonitorFields(t *testing.T) {
 	out := in.DeepCopy()
 	out.ActiveProbeMonitor["http"].([]interface{})[0] = "changed"
 
-	assert.True(t, out.AdaptiveThresholds)
 	assert.Equal(t, in.Maintenance, out.Maintenance)
 	assert.Equal(t, in.Telemetry, out.Telemetry)
 	assert.Equal(
@@ -70,35 +65,21 @@ func TestKwatchConfigSpecDeepCopyCopiesMonitorFields(t *testing.T) {
 }
 
 func TestKwatchConfigSpecDeepCopyDetachesMutableFields(t *testing.T) {
-	includeEvents := true
-	includeLogs := false
 	in := &KwatchConfigSpec{
-		IncludeEvents: &includeEvents,
-		IncludeLogs:   &includeLogs,
-		Correlation: CorrelationConfig{
-			Escalation: MonitorConfig{
-				"levels": []interface{}{"high"},
-			},
-			Renotify: MonitorConfig{
-				"minutes": []interface{}{float64(5)},
-			},
-		},
+		Crd:              MonitorConfig{"enabled": true},
+		Upgrader:         map[string]interface{}{"disableUpdateCheck": true},
+		SeverityByReason: map[string]string{"OOMKilled": "critical"},
+		Runbooks:         map[string]string{"OOMKilled": "https://runbook"},
 	}
 
 	out := in.DeepCopy()
-	*out.IncludeEvents = false
-	*out.IncludeLogs = true
-	out.Correlation.Escalation["levels"].([]interface{})[0] = "low"
-	out.Correlation.Renotify["minutes"].([]interface{})[0] = float64(10)
+	out.Crd["enabled"] = false
+	out.Upgrader["disableUpdateCheck"] = false
+	out.SeverityByReason["OOMKilled"] = "warning"
+	out.Runbooks["OOMKilled"] = "changed"
 
-	assert.True(t, *in.IncludeEvents)
-	assert.False(t, *in.IncludeLogs)
-	assert.Equal(
-		t, "high",
-		in.Correlation.Escalation["levels"].([]interface{})[0],
-	)
-	assert.Equal(
-		t, float64(5),
-		in.Correlation.Renotify["minutes"].([]interface{})[0],
-	)
+	assert.Equal(t, true, in.Crd["enabled"])
+	assert.Equal(t, true, in.Upgrader["disableUpdateCheck"])
+	assert.Equal(t, "critical", in.SeverityByReason["OOMKilled"])
+	assert.Equal(t, "https://runbook", in.Runbooks["OOMKilled"])
 }

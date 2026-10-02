@@ -9,7 +9,7 @@ import (
 	"k8s.io/klog/v2"
 
 	"github.com/abahmed/kwatch/internal/delivery/transport"
-	"github.com/abahmed/kwatch/internal/event"
+	"github.com/abahmed/kwatch/internal/notification"
 )
 
 const plivoAPIURL = "https://api.plivo.com/v1/Account/%s/Message/"
@@ -74,10 +74,12 @@ func (p *Plivo) Name() string {
 	return "Plivo"
 }
 
-// SendEvent sends event to the provider
-func (p *Plivo) SendEvent(ctx context.Context, e *event.Event) error {
-	msg := e.FormatText(p.clusterName, "")
-	return p.SendMessage(ctx, msg)
+// SendIncident sends the incident's one-line lead as the SMS body.
+// The lead starts with the status marker, the only emoji in the payload.
+func (p *Plivo) SendIncident(
+	ctx context.Context, m notification.Message,
+) error {
+	return p.SendMessage(ctx, m.ShortText())
 }
 
 // SendMessage sends text message to the provider

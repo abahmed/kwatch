@@ -1,0 +1,8 @@
+10:02:15 settled
+🟡 Node n1 (prod-eu-1) cannot garbage-collect images. To check the node's conditions and recent events, run kubectl describe node n1
+🟡 Node n1 (prod-eu-1) cannot garbage-collect images.
+
+10:02:45 settled
+🟠 api in shop (prod-eu-1) keeps crashing, and I couldn't find an outside cause. It fails with "panic: assignment to entry in nil map". To read the output of the last crash, run kubectl logs api-ed3e6bad-a -c app -n shop --previous
+🟠 api in shop (prod-eu-1) keeps crashing, and I couldn't find an outside cause.
+

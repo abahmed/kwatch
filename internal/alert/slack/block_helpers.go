@@ -4,11 +4,7 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/abahmed/kwatch/internal/clock"
-	"github.com/abahmed/kwatch/internal/insight"
-	"github.com/abahmed/kwatch/internal/message"
 	"github.com/abahmed/kwatch/internal/metrics"
-	"github.com/abahmed/kwatch/internal/model"
 
 	slackClient "github.com/slack-go/slack"
 )
@@ -19,13 +15,16 @@ import (
 const (
 	maxFieldsPerSection = 10
 	maxFieldChars       = 2000
+	maxSectionTextChars = 3000
 	maxBlocksPerMessage = 50
 )
 
-// truncateField shortens s to Slack's per-field limit. It slices on rune
-// boundaries so a multi-byte character is never split into invalid UTF-8.
-func truncateField(s string) string {
-	const maxChars = maxFieldChars
+// truncateMrkdwn shortens already escaped mrkdwn to maxChars characters.
+// It counts runes, so a multi-byte character is never split into invalid
+// UTF-8, and it never cuts an escape such as "&amp;" in half, which would
+// show a broken entity. Text must be escaped before it is cut: escaping
+// after cutting can push the text past the limit again.
+func truncateMrkdwn(s string, maxChars int) string {
 	r := []rune(s)
 	if len(r) <= maxChars {
 		return s
@@ -34,7 +33,12 @@ func truncateField(s string) string {
 	if maxChars <= len(ellipsis) {
 		return string(r[:maxChars])
 	}
-	return string(r[:maxChars-len(ellipsis)]) + ellipsis
+	kept := string(r[:maxChars-len(ellipsis)])
+	if amp := strings.LastIndexByte(kept, '&'); amp >= 0 &&
+		!strings.Contains(kept[amp:], ";") {
+		kept = kept[:amp]
+	}
+	return kept + ellipsis
 }
 
 // capBlocks keeps a message within Slack's block limit, reserving the last
@@ -55,190 +59,27 @@ func capBlocks(blocks []slackClient.Block) []slackClient.Block {
 	))
 }
 
-// evidenceTitle names the pod that logs and events were collected from, when
-// the incident covers more than that one pod. An incident is keyed by owner,
-// so it can name several replicas under Resources while the evidence below
-// comes from exactly one of them — saying which removes the contradiction.
-func evidenceTitle(title string, inc *model.Incident) string {
-	pod := inc.EvidencePod
-	if pod == "" {
-		return title
-	}
-	if len(inc.Resources) <= 1 && inc.Ref().Name == pod {
-		return title
-	}
-	return fmt.Sprintf("%s — from `%s`", title, pod)
-}
-
-// chunkedSections renders a titled section whose body is split into
-// fixed-size code blocks.
-func chunkedSections(title, text string) []slackClient.Block {
-	blocks := []slackClient.Block{markdownSection(title)}
-	for _, chunk := range message.Chunks(text, chunkSize) {
-		blocks = append(blocks, markdownSection("```"+chunk+"```"))
-	}
-	return blocks
-}
-
-// contextLine renders a compact "meta" strip: small grey text under the
-// message, where Slack puts things that support the alert without competing
-// with it.
-func contextLine(parts []string) (slackClient.Block, bool) {
-	var kept []string
-	for _, p := range parts {
-		if strings.TrimSpace(p) != "" {
-			kept = append(kept, p)
-		}
-	}
-	if len(kept) == 0 {
-		return nil, false
-	}
-	text := truncateField(strings.Join(kept, "  ·  "))
-	return slackClient.NewContextBlock(
-		"",
-		slackClient.NewTextBlockObject(
-			slackClient.MarkdownType,
-			escapeMrkdwn(text),
-			false,
-			false,
-		),
-	), true
-}
-
-func reportFor(
-	inc *model.Incident,
-	action model.IncidentAction,
-	ins *insight.Insight,
-	clusterName string,
-	timeSource clock.Clock,
-) *message.Report {
-	return message.NewReportBuilderWithClock(
-		clusterName, clock.Require(timeSource),
-	).Build(inc, action, ins)
-}
-
-// headline is the one line a reader sees first: what happened, to what.
-//
-//	🚨 *Pod not ready* — `dev/api` · Deployment · high
-func headline(r *message.Report) string {
-	label := r.Summary.Label
-	if label == "" {
-		label = r.Reason
-	}
-	h := fmt.Sprintf("%s *%s*", r.Summary.Emoji, label)
-	subject := r.Name
-	if r.Namespace != "" && !strings.HasPrefix(subject, r.Namespace+"/") &&
-		!strings.Contains(subject, " ") {
-		subject = r.Namespace + "/" + subject
-	}
-	if subject != "" {
-		h += " — " + subject
-	}
-	// A single workload gets its kind; a group summary is already a sentence
-	// about several, and the first member's kind would mislabel it.
-	if r.Identity != nil && r.Identity.OwnerKind != "" &&
-		!strings.Contains(
-			subject,
-			r.Identity.OwnerKind,
-		) && !strings.Contains(subject, " ") {
-		h += " · " + r.Identity.OwnerKind
-	}
-	if label != r.Reason {
-		h += fmt.Sprintf(" · `%s`", r.Reason)
-	}
-	if r.Severity != "" && r.Severity != "normal" {
-		h += " · *" + r.Severity + "*"
-	}
-	return h
-}
-
-// metaParts is everything that used to be a 14-field grid, as one line.
-func metaParts(r *message.Report, inc *model.Incident) []string {
-	var parts []string
-	if inc.EvidencePod != "" && len(inc.Resources) <= 1 {
-		parts = append(parts, "pod `"+inc.EvidencePod+"`")
-	} else if n := len(inc.Resources); n > 1 {
-		parts = append(parts, fmt.Sprintf("%d pods", n))
-	}
-	if r.Identity != nil {
-		if r.Identity.Container != "" && r.Identity.Container != inc.Name {
-			parts = append(parts, "container `"+r.Identity.Container+"`")
-		}
-		if r.Identity.Image != "" {
-			parts = append(parts, "image `"+r.Identity.Image+"`")
-		}
-		if r.Identity.Node != "" {
-			parts = append(parts, "node `"+r.Identity.Node+"`")
-		}
-	}
-	if r.State != nil {
-		if r.State.Restarts > 0 {
-			parts = append(parts, fmt.Sprintf("restarts %d", r.State.Restarts))
-		}
-		if r.State.ExitCode > 0 {
-			parts = append(parts, fmt.Sprintf("exit %d", r.State.ExitCode))
-		}
-	}
-	if r.Summary.Duration != "" {
-		parts = append(parts, r.Summary.Duration)
-	}
-	if r.Cluster != "" {
-		parts = append(parts, r.Cluster)
-	}
-	return parts
-}
-
-func formatIncidentText(
-	inc *model.Incident,
-	action model.IncidentAction,
-	timeSource clock.Clock,
-) string {
-	return formatIncidentTextWithInsight(
-		inc, action, nil, timeSource,
-	)
-}
-
-func formatIncidentTextWithInsight(
-	inc *model.Incident,
-	action model.IncidentAction,
-	ins *insight.Insight,
-	timeSource clock.Clock,
-) string {
-	renderer := message.NewSlackRenderer()
-	report := message.NewReportBuilderWithClock(
-		"", clock.Require(timeSource),
-	).Build(inc, action, ins)
-	return message.RenderAction(renderer, report)
-}
-
-func plainSection(txt string) slackClient.SectionBlock {
-	return slackClient.SectionBlock{
-		Type: "section",
-		Text: slackClient.NewTextBlockObject(
-			slackClient.PlainTextType,
-			txt,
-			true,
-			false),
-	}
-}
-
+// markdownSection escapes txt and then cuts it to the section text limit.
 func markdownSection(txt string) slackClient.SectionBlock {
+	return escapedSection(
+		truncateMrkdwn(escapeMrkdwn(txt), maxSectionTextChars))
+}
+
+// codeSection shows txt as a code block. The text is cut before the fences
+// are added, so the closing fence is never lost.
+func codeSection(txt string) slackClient.SectionBlock {
+	const fence = "```"
+	body := truncateMrkdwn(escapeMrkdwn(txt),
+		maxSectionTextChars-2*len(fence))
+	return escapedSection(fence + body + fence)
+}
+
+func escapedSection(escaped string) slackClient.SectionBlock {
 	return slackClient.SectionBlock{
 		Type: "section",
 		Text: slackClient.NewTextBlockObject(
-			slackClient.MarkdownType,
-			escapeMrkdwn(txt),
-			false,
-			true),
+			slackClient.MarkdownType, escaped, false, true),
 	}
-}
-
-func markdownF(format string, a ...interface{}) *slackClient.TextBlockObject {
-	return slackClient.NewTextBlockObject(
-		slackClient.MarkdownType,
-		escapeMrkdwn(truncateField(fmt.Sprintf(format, a...))),
-		false,
-		true)
 }
 
 // mrkdwnEscaper escapes the three characters Slack treats as control

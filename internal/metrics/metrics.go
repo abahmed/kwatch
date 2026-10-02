@@ -6,72 +6,57 @@ import (
 	"sync/atomic"
 
 	"github.com/prometheus/client_golang/prometheus"
+	"github.com/prometheus/client_golang/prometheus/collectors"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 )
 
 // Registry is the application metrics state. Atomic fields keep metric writes
 // cheap for hot paths; the Prometheus collector below owns exposition and
-// validates the metric contract through the standard client library.
+// validates the metric contract through the standard client library. Every
+// field has a production writer; TestRegistryFieldsHaveWriters enforces it.
 type Registry struct {
-	IncidentsCreate            atomic.Int64
-	IncidentsUpdate            atomic.Int64
-	IncidentsResolved          atomic.Int64
-	IncidentsGrouped           atomic.Int64
-	NotificationsTotal         atomic.Int64
-	NotificationsDropped       atomic.Int64
-	BaselineSize               atomic.Int64
-	ActiveIncidents            atomic.Int64
-	GraphNodes                 atomic.Int64
-	GraphEdges                 atomic.Int64
-	APIServerProbeErrors       atomic.Int64
-	APIServerLatencyMs         atomic.Int64
-	ControlPlaneProbeErrors    atomic.Int64
-	InformerWatchErrors        atomic.Int64
-	InformerEvents             atomic.Int64
-	InformerHandlerPanics      atomic.Int64
-	QueueDepth                 atomic.Int64
-	ProcessingLatencyMs        atomic.Int64
-	GraphRebuilds              atomic.Int64
-	GraphRebuildLatencyMs      atomic.Int64
-	DeliveryRetries            atomic.Int64
-	DeliveryTerminalErrors     atomic.Int64
-	DeliveryDeadLetters        atomic.Int64
-	DeliveryQueueSaturated     atomic.Int64
-	PersistenceMigrations      atomic.Int64
-	PersistenceMigrationErr    atomic.Int64
-	OptionalAPIUnavailable     atomic.Int64
-	WatcherSyncs               atomic.Int64
-	WatcherSyncFailures        atomic.Int64
-	ComponentDegradations      atomic.Int64
-	ComponentStalls            atomic.Int64
-	ComponentUnexpectedStops   atomic.Int64
-	ShutdownTimeouts           atomic.Int64
-	SourceUnavailable          atomic.Int64
-	LeadershipAcquisitions     atomic.Int64
-	LeadershipLosses           atomic.Int64
-	LeaderTakeovers            atomic.Int64
-	TelemetryAttempts          atomic.Int64
-	TelemetrySuccesses         atomic.Int64
-	TelemetryRetries           atomic.Int64
-	TelemetryFailures          [5]atomic.Int64
-	PersistenceRetries         atomic.Int64
-	PersistenceCompactions     atomic.Int64
-	PersistenceOmitted         atomic.Int64
-	PersistencePayloadBytes    atomic.Int64
-	PersistenceLastSuccess     atomic.Int64
-	DuplicateTransitions       atomic.Int64
-	GroupSize                  atomic.Int64
-	GroupedChildCount          atomic.Int64
-	RootCauseSuppressions      atomic.Int64
-	RenderedDetailsOmitted     atomic.Int64
-	RedactedValues             atomic.Int64
-	StartupSummariesSuppressed atomic.Int64
-	InsightAnalyses            atomic.Int64
-	InsightConfirmed           atomic.Int64
-	InsightLikely              atomic.Int64
-	InsightUnknown             atomic.Int64
-	InsightReevaluations       atomic.Int64
-	InsightRolloutSuppressions atomic.Int64
+	IncidentActions          [3]atomic.Int64
+	IncidentsOpen            atomic.Int64
+	NotificationsTotal       atomic.Int64
+	NotificationsDropped     atomic.Int64
+	InformerHandlerPanics    atomic.Int64
+	DeliveryRetries          atomic.Int64
+	DeliveryTerminalErrors   atomic.Int64
+	DeliveryDeadLetters      atomic.Int64
+	DeliveryQueueSaturated   atomic.Int64
+	DeliveryPendingDropped   atomic.Int64
+	DeliveryDigestSkipped    atomic.Int64
+	OutboxDropped            atomic.Int64
+	OutboxWriteFailures      atomic.Int64
+	HeartbeatFailures        atomic.Int64
+	KubeletStatsFailures     atomic.Int64
+	OptionalAPIUnavailable   atomic.Int64
+	WatcherSyncs             atomic.Int64
+	WatcherSyncFailures      atomic.Int64
+	ComponentDegradations    atomic.Int64
+	ComponentStalls          atomic.Int64
+	ComponentUnexpectedStops atomic.Int64
+	ShutdownTimeouts         atomic.Int64
+	SourceUnavailable        atomic.Int64
+	LeadershipAcquisitions   atomic.Int64
+	LeadershipLosses         atomic.Int64
+	LeaderTakeovers          atomic.Int64
+	TelemetryAttempts        atomic.Int64
+	TelemetrySuccesses       atomic.Int64
+	TelemetryRetries         atomic.Int64
+	TelemetryFailures        [5]atomic.Int64
+	RenderedDetailsOmitted   atomic.Int64
+	RedactedValues           atomic.Int64
+	StorageResets            [2]atomic.Int64
+	StorageCorruptRecords    atomic.Int64
+	StorageExpired           atomic.Int64
+	StorageEvicted           atomic.Int64
+	StorageWriteFailures     atomic.Int64
+	Investigations           [4]atomic.Int64
+	AuditDropped             atomic.Int64
+	DecisionLag              LagHistogram
+	// Delivery holds the per-provider and outbox delivery metrics.
+	Delivery DeliveryMetrics
 
 	registryOnce sync.Once
 	registry     *prometheus.Registry
@@ -88,7 +73,13 @@ func DefaultRegistry() *Registry {
 func (r *Registry) initPrometheus() {
 	r.registryOnce.Do(func() {
 		r.registry = prometheus.NewRegistry()
-		r.registry.MustRegister(r)
+		r.registry.MustRegister(
+			r,
+			collectors.NewGoCollector(),
+			collectors.NewProcessCollector(
+				collectors.ProcessCollectorOpts{},
+			),
+		)
 	})
 }
 
@@ -106,120 +97,175 @@ func (r *Registry) Handler() http.Handler {
 	})
 }
 
-var metricDescs = []*prometheus.Desc{
-	prometheus.NewDesc("kwatch_incidents_total",
-		"Total incidents by action", []string{"action"}, nil),
-	prometheus.NewDesc("kwatch_apiserver_probe_errors_total",
-		"API server health probe failures", nil, nil),
-	prometheus.NewDesc("kwatch_apiserver_latency_milliseconds",
-		"Latest API server readyz latency", nil, nil),
-	prometheus.NewDesc("kwatch_controlplane_probe_errors_total",
-		"Control-plane component probe failures", nil, nil),
-	prometheus.NewDesc("kwatch_informer_watch_errors_total",
-		"Informer watch interruptions", nil, nil),
-	prometheus.NewDesc("kwatch_informer_events_total",
-		"Informer events received by kwatch", nil, nil),
-	prometheus.NewDesc("kwatch_informer_handler_panics_total",
-		"Informer event handler panics recovered by kwatch", nil, nil),
-	prometheus.NewDesc("kwatch_queue_depth",
-		"Current aggregate workqueue depth", nil, nil),
-	prometheus.NewDesc("kwatch_processing_latency_milliseconds",
-		"Latest work item processing latency", nil, nil),
-	prometheus.NewDesc("kwatch_graph_rebuilds_total",
-		"Dependency graph rebuild attempts", nil, nil),
-	prometheus.NewDesc("kwatch_graph_rebuild_latency_milliseconds",
-		"Latest dependency graph rebuild latency", nil, nil),
-	prometheus.NewDesc("kwatch_notifications_total",
-		"Total notification attempts", nil, nil),
-	prometheus.NewDesc("kwatch_notifications_dropped_total",
-		"Notifications dropped (channel full)", nil, nil),
-	prometheus.NewDesc("kwatch_incidents_active",
-		"Currently active incidents", nil, nil),
-	prometheus.NewDesc("kwatch_baseline_size",
-		"Baseline entries (seen pods)", nil, nil),
-	prometheus.NewDesc("kwatch_graph_nodes",
-		"Resources in the dependency graph", nil, nil),
-	prometheus.NewDesc("kwatch_graph_edges",
-		"Relationships in the dependency graph", nil, nil),
-	prometheus.NewDesc("kwatch_delivery_retries_total",
-		"Delivery retry attempts", nil, nil),
-	prometheus.NewDesc("kwatch_delivery_terminal_errors_total",
-		"Terminal delivery failures", nil, nil),
-	prometheus.NewDesc("kwatch_delivery_dead_letters_total",
-		"Delivery dead-letter entries", nil, nil),
-	prometheus.NewDesc("kwatch_delivery_queue_saturated_total",
-		"Delivery queue saturation events", nil, nil),
-	prometheus.NewDesc("kwatch_persistence_migrations_total",
-		"Persistence migrations completed or checked", nil, nil),
-	prometheus.NewDesc("kwatch_persistence_migration_errors_total",
-		"Persistence migration failures", nil, nil),
-	prometheus.NewDesc("kwatch_optional_api_unavailable_total",
-		"Optional APIs unavailable during watcher setup", nil, nil),
-	prometheus.NewDesc("kwatch_watcher_syncs_total",
-		"Dynamic watcher cache synchronization attempts", nil, nil),
-	prometheus.NewDesc("kwatch_watcher_sync_failures_total",
-		"Dynamic watcher cache synchronization failures", nil, nil),
-	prometheus.NewDesc("kwatch_component_degradations_total",
-		"Optional component degradation events", nil, nil),
-	prometheus.NewDesc("kwatch_component_stalls_total",
-		"Required component stall detections", nil, nil),
-	prometheus.NewDesc("kwatch_component_unexpected_stops_total",
-		"Unexpected component stops", nil, nil),
-	prometheus.NewDesc("kwatch_shutdown_timeouts_total",
-		"Component shutdown timeouts", nil, nil),
-	prometheus.NewDesc("kwatch_source_unavailable_total",
-		"Required monitor source capabilities unavailable", nil, nil),
-	prometheus.NewDesc("kwatch_leadership_acquisitions_total",
-		"Leader election acquisitions", nil, nil),
-	prometheus.NewDesc("kwatch_leadership_losses_total",
-		"Leader election losses", nil, nil),
-	prometheus.NewDesc("kwatch_leader_takeovers_total",
-		"Leader election takeovers", nil, nil),
-	prometheus.NewDesc("kwatch_telemetry_attempts_total",
-		"Adoption telemetry HTTP attempts", nil, nil),
-	prometheus.NewDesc("kwatch_telemetry_successes_total",
-		"Successful adoption telemetry reports", nil, nil),
-	prometheus.NewDesc("kwatch_telemetry_failures_total",
-		"Failed adoption telemetry operations", []string{"reason"}, nil),
-	prometheus.NewDesc("kwatch_telemetry_retries_total",
-		"Adoption telemetry retries", nil, nil),
-	prometheus.NewDesc("kwatch_persistence_retries_total",
-		"Persistence write retries", nil, nil),
-	prometheus.NewDesc("kwatch_persistence_compactions_total",
-		"Persistence payload compactions", nil, nil),
-	prometheus.NewDesc("kwatch_persistence_omitted_total",
-		"Persistence entries omitted during compaction", nil, nil),
-	prometheus.NewDesc("kwatch_persistence_payload_bytes",
-		"Latest persistence payload size", nil, nil),
-	prometheus.NewDesc("kwatch_persistence_last_success_timestamp_seconds",
-		"Unix timestamp of the last successful persistence write", nil, nil),
-	prometheus.NewDesc("kwatch_lifecycle_duplicate_transitions_total",
-		"Duplicate lifecycle transitions suppressed", nil, nil),
-	prometheus.NewDesc("kwatch_group_size",
-		"Latest smart-group member count", nil, nil),
-	prometheus.NewDesc("kwatch_grouped_children_total",
-		"Grouped child incidents", nil, nil),
-	prometheus.NewDesc("kwatch_root_cause_suppressions_total",
-		"Child incidents suppressed by root causes", nil, nil),
-	prometheus.NewDesc("kwatch_rendered_details_omitted_total",
-		"Provider detail sections omitted by bounds", nil, nil),
-	prometheus.NewDesc("kwatch_redacted_values_total",
-		"Sensitive values redacted before rendering", nil, nil),
-	prometheus.NewDesc("kwatch_startup_summaries_suppressed_total",
-		"Startup summaries suppressed as routine restarts", nil, nil),
-	prometheus.NewDesc("kwatch_insight_analyses_total",
-		"Incident cause analyses completed", nil, nil),
-	prometheus.NewDesc("kwatch_insight_causes_total",
-		"Cause analyses by confidence state", []string{"state"}, nil),
-	prometheus.NewDesc("kwatch_insight_reevaluations_total",
-		"Active incidents reevaluated with newer evidence", nil, nil),
-	prometheus.NewDesc("kwatch_insight_rollout_suppressions_total",
-		"Provisional rollout symptoms suppressed while capacity remained",
-		nil, nil),
+// scalarMetric is a metric backed by exactly one Registry field.
+type scalarMetric struct {
+	desc  *prometheus.Desc
+	gauge bool
+	load  func(*Registry) int64
 }
 
-var telemetryFailureReasons = [...]string{
-	"state_read", "invalid_identity", "network", "http_status", "state_write",
+func counter(name, help string, load func(*Registry) int64) scalarMetric {
+	return scalarMetric{
+		desc: prometheus.NewDesc(name, help, nil, nil), load: load,
+	}
+}
+
+func gauge(name, help string, load func(*Registry) int64) scalarMetric {
+	return scalarMetric{
+		desc:  prometheus.NewDesc(name, help, nil, nil),
+		gauge: true, load: load,
+	}
+}
+
+var (
+	incidentsDesc = prometheus.NewDesc("kwatch_incidents_total",
+		"Incident lifecycle decisions by action", []string{"action"}, nil)
+	telemetryFailuresDesc = prometheus.NewDesc(
+		"kwatch_telemetry_failures_total",
+		"Failed adoption telemetry operations", []string{"reason"}, nil)
+
+	storageResetsDesc = prometheus.NewDesc(
+		"kwatch_storage_resets_total",
+		"State files deleted and recreated at open", []string{"reason"}, nil)
+
+	investigationsDesc = prometheus.NewDesc(
+		"kwatch_investigations_total",
+		"Announcement investigations by result", []string{"result"}, nil)
+
+	investigationResults = [...]string{"done", "skipped", "late", "timeout"}
+
+	storageResetReasons = [...]string{"schema_mismatch", "unreadable"}
+
+	incidentActions = [...]string{"announce", "update", "resolve"}
+
+	telemetryFailureReasons = [...]string{
+		"state_read", "invalid_identity", "network", "http_status",
+		"state_write",
+	}
+)
+
+var scalarMetrics = []scalarMetric{
+	gauge("kwatch_incidents_open", "Incidents that are not yet resolved",
+		func(r *Registry) int64 { return r.IncidentsOpen.Load() }),
+	counter("kwatch_delivery_notifications_total",
+		"Total notification attempts",
+		func(r *Registry) int64 { return r.NotificationsTotal.Load() }),
+	counter("kwatch_delivery_dropped_total",
+		"Notifications no provider accepted (dead-lettered or dropped)",
+		func(r *Registry) int64 { return r.NotificationsDropped.Load() }),
+	counter("kwatch_delivery_retries_total", "Delivery retry attempts",
+		func(r *Registry) int64 { return r.DeliveryRetries.Load() }),
+	counter("kwatch_delivery_terminal_errors_total",
+		"Terminal delivery failures",
+		func(r *Registry) int64 { return r.DeliveryTerminalErrors.Load() }),
+	counter("kwatch_delivery_dead_letters_total",
+		"Delivery dead-letter entries",
+		func(r *Registry) int64 { return r.DeliveryDeadLetters.Load() }),
+	counter("kwatch_delivery_queue_saturated_total",
+		"Delivery queue saturation events",
+		func(r *Registry) int64 { return r.DeliveryQueueSaturated.Load() }),
+	counter("kwatch_delivery_pending_dropped_total",
+		"Notifications dropped before delivery started",
+		func(r *Registry) int64 { return r.DeliveryPendingDropped.Load() }),
+	counter("kwatch_delivery_digest_skipped_total",
+		"Overflow digests not sent because the provider skips plain messages",
+		func(r *Registry) int64 { return r.DeliveryDigestSkipped.Load() }),
+	counter("kwatch_delivery_outbox_dropped_total",
+		"Persisted delivery jobs dropped by the outbox size or age bound",
+		func(r *Registry) int64 { return r.OutboxDropped.Load() }),
+	counter("kwatch_delivery_outbox_write_failures_total",
+		"Failed writes of the persisted delivery outbox",
+		func(r *Registry) int64 { return r.OutboxWriteFailures.Load() }),
+	counter("kwatch_heartbeat_failures_total",
+		"Heartbeat pings that failed or were rejected",
+		func(r *Registry) int64 { return r.HeartbeatFailures.Load() }),
+	counter("kwatch_kubelet_stats_failures_total",
+		"Kubelet stats summary reads that failed, counted per node",
+		func(r *Registry) int64 { return r.KubeletStatsFailures.Load() }),
+	counter("kwatch_informer_handler_panics_total",
+		"Informer event handler panics recovered by kwatch",
+		func(r *Registry) int64 { return r.InformerHandlerPanics.Load() }),
+	counter("kwatch_optional_api_unavailable_total",
+		"Optional APIs unavailable during watcher setup",
+		func(r *Registry) int64 { return r.OptionalAPIUnavailable.Load() }),
+	counter("kwatch_watcher_syncs_total",
+		"Dynamic watcher cache synchronization attempts",
+		func(r *Registry) int64 { return r.WatcherSyncs.Load() }),
+	counter("kwatch_watcher_sync_failures_total",
+		"Dynamic watcher cache synchronization failures",
+		func(r *Registry) int64 { return r.WatcherSyncFailures.Load() }),
+	counter("kwatch_component_degradations_total",
+		"Optional component degradation events",
+		func(r *Registry) int64 { return r.ComponentDegradations.Load() }),
+	counter("kwatch_component_stalls_total",
+		"Required component stall detections",
+		func(r *Registry) int64 { return r.ComponentStalls.Load() }),
+	counter("kwatch_component_unexpected_stops_total",
+		"Unexpected component stops",
+		func(r *Registry) int64 { return r.ComponentUnexpectedStops.Load() }),
+	counter("kwatch_shutdown_timeouts_total", "Component shutdown timeouts",
+		func(r *Registry) int64 { return r.ShutdownTimeouts.Load() }),
+	counter("kwatch_source_unavailable_total",
+		"Required monitor source capabilities unavailable",
+		func(r *Registry) int64 { return r.SourceUnavailable.Load() }),
+	counter("kwatch_leadership_acquisitions_total",
+		"Leader election acquisitions",
+		func(r *Registry) int64 { return r.LeadershipAcquisitions.Load() }),
+	counter("kwatch_leadership_losses_total", "Leader election losses",
+		func(r *Registry) int64 { return r.LeadershipLosses.Load() }),
+	counter("kwatch_leader_takeovers_total", "Leader election takeovers",
+		func(r *Registry) int64 { return r.LeaderTakeovers.Load() }),
+	counter("kwatch_telemetry_attempts_total",
+		"Adoption telemetry HTTP attempts",
+		func(r *Registry) int64 { return r.TelemetryAttempts.Load() }),
+	counter("kwatch_telemetry_successes_total",
+		"Successful adoption telemetry reports",
+		func(r *Registry) int64 { return r.TelemetrySuccesses.Load() }),
+	counter("kwatch_telemetry_retries_total", "Adoption telemetry retries",
+		func(r *Registry) int64 { return r.TelemetryRetries.Load() }),
+	counter("kwatch_rendered_details_omitted_total",
+		"Provider detail sections omitted by bounds",
+		func(r *Registry) int64 { return r.RenderedDetailsOmitted.Load() }),
+	counter("kwatch_redacted_values_total",
+		"Sensitive values redacted before rendering",
+		func(r *Registry) int64 { return r.RedactedValues.Load() }),
+	counter("kwatch_storage_corrupt_records_total",
+		"Stored values skipped because they did not decode",
+		func(r *Registry) int64 { return r.StorageCorruptRecords.Load() }),
+	counter("kwatch_storage_expired_total",
+		"Stored entries deleted by retention",
+		func(r *Registry) int64 { return r.StorageExpired.Load() }),
+	counter("kwatch_storage_evicted_total",
+		"Stored entries deleted to meet the size cap",
+		func(r *Registry) int64 { return r.StorageEvicted.Load() }),
+	counter("kwatch_storage_write_failures_total",
+		"Pipeline storage batches with at least one failed write",
+		func(r *Registry) int64 { return r.StorageWriteFailures.Load() }),
+	counter("kwatch_audit_dropped_total",
+		"Audit entries dropped because the audit queue was full",
+		func(r *Registry) int64 { return r.AuditDropped.Load() }),
+}
+
+// IncIncident records one lifecycle decision using a bounded action label.
+// Unknown actions are ignored so the label set cannot grow.
+func (r *Registry) IncIncident(action string) {
+	for i, allowed := range incidentActions {
+		if action == allowed {
+			r.IncidentActions[i].Add(1)
+			return
+		}
+	}
+}
+
+// IncInvestigation records one investigation outcome using a bounded
+// result label. Unknown results are ignored.
+func (r *Registry) IncInvestigation(result string) {
+	for i, allowed := range investigationResults {
+		if result == allowed {
+			r.Investigations[i].Add(1)
+			return
+		}
+	}
 }
 
 // IncTelemetryFailure records one failure using a bounded reason label.
@@ -233,116 +279,67 @@ func (r *Registry) IncTelemetryFailure(reason string) {
 	r.TelemetryFailures[2].Add(1)
 }
 
+// IncStorageReset records one state file reset using a bounded reason
+// label; an unknown reason counts as unreadable.
+func (r *Registry) IncStorageReset(reason string) {
+	for i, allowed := range storageResetReasons {
+		if reason == allowed {
+			r.StorageResets[i].Add(1)
+			return
+		}
+	}
+	r.StorageResets[1].Add(1)
+}
+
 // Describe implements prometheus.Collector.
 func (r *Registry) Describe(ch chan<- *prometheus.Desc) {
-	for _, desc := range metricDescs {
-		ch <- desc
+	ch <- incidentsDesc
+	ch <- telemetryFailuresDesc
+	ch <- storageResetsDesc
+	ch <- investigationsDesc
+	ch <- decisionLagDesc
+	r.describeDelivery(ch)
+	for _, m := range scalarMetrics {
+		ch <- m.desc
 	}
 }
 
 // Collect implements prometheus.Collector. Labels are a fixed, bounded set;
 // resource names, incident IDs, and provider URLs never become labels.
 func (r *Registry) Collect(ch chan<- prometheus.Metric) {
-	ch <- prometheus.MustNewConstMetric(
-		metricDescs[0], prometheus.CounterValue,
-		float64(r.IncidentsCreate.Load()), "create",
-	)
-	ch <- prometheus.MustNewConstMetric(
-		metricDescs[0], prometheus.CounterValue,
-		float64(r.IncidentsUpdate.Load()), "update",
-	)
-	ch <- prometheus.MustNewConstMetric(
-		metricDescs[0], prometheus.CounterValue,
-		float64(r.IncidentsResolved.Load()), "resolved",
-	)
-	ch <- prometheus.MustNewConstMetric(
-		metricDescs[0], prometheus.CounterValue,
-		float64(r.IncidentsGrouped.Load()), "grouped",
-	)
-
-	r.collectCounter(ch, 1, r.APIServerProbeErrors.Load())
-	r.collectGauge(ch, 2, r.APIServerLatencyMs.Load())
-	r.collectCounter(ch, 3, r.ControlPlaneProbeErrors.Load())
-	r.collectCounter(ch, 4, r.InformerWatchErrors.Load())
-	r.collectCounter(ch, 5, r.InformerEvents.Load())
-	r.collectCounter(ch, 6, r.InformerHandlerPanics.Load())
-	r.collectGauge(ch, 7, r.QueueDepth.Load())
-	r.collectGauge(ch, 8, r.ProcessingLatencyMs.Load())
-	r.collectCounter(ch, 9, r.GraphRebuilds.Load())
-	r.collectGauge(ch, 10, r.GraphRebuildLatencyMs.Load())
-	r.collectCounter(ch, 11, r.NotificationsTotal.Load())
-	r.collectCounter(ch, 12, r.NotificationsDropped.Load())
-	r.collectGauge(ch, 13, r.ActiveIncidents.Load())
-	r.collectGauge(ch, 14, r.BaselineSize.Load())
-	r.collectGauge(ch, 15, r.GraphNodes.Load())
-	r.collectGauge(ch, 16, r.GraphEdges.Load())
-	r.collectCounter(ch, 17, r.DeliveryRetries.Load())
-	r.collectCounter(ch, 18, r.DeliveryTerminalErrors.Load())
-	r.collectCounter(ch, 19, r.DeliveryDeadLetters.Load())
-	r.collectCounter(ch, 20, r.DeliveryQueueSaturated.Load())
-	r.collectCounter(ch, 21, r.PersistenceMigrations.Load())
-	r.collectCounter(ch, 22, r.PersistenceMigrationErr.Load())
-	r.collectCounter(ch, 23, r.OptionalAPIUnavailable.Load())
-	r.collectCounter(ch, 24, r.WatcherSyncs.Load())
-	r.collectCounter(ch, 25, r.WatcherSyncFailures.Load())
-	r.collectCounter(ch, 26, r.ComponentDegradations.Load())
-	r.collectCounter(ch, 27, r.ComponentStalls.Load())
-	r.collectCounter(ch, 28, r.ComponentUnexpectedStops.Load())
-	r.collectCounter(ch, 29, r.ShutdownTimeouts.Load())
-	r.collectCounter(ch, 30, r.SourceUnavailable.Load())
-	r.collectCounter(ch, 31, r.LeadershipAcquisitions.Load())
-	r.collectCounter(ch, 32, r.LeadershipLosses.Load())
-	r.collectCounter(ch, 33, r.LeaderTakeovers.Load())
-	r.collectCounter(ch, 34, r.TelemetryAttempts.Load())
-	r.collectCounter(ch, 35, r.TelemetrySuccesses.Load())
+	for i, action := range incidentActions {
+		ch <- prometheus.MustNewConstMetric(
+			incidentsDesc, prometheus.CounterValue,
+			float64(r.IncidentActions[i].Load()), action,
+		)
+	}
 	for i, reason := range telemetryFailureReasons {
 		ch <- prometheus.MustNewConstMetric(
-			metricDescs[36], prometheus.CounterValue,
+			telemetryFailuresDesc, prometheus.CounterValue,
 			float64(r.TelemetryFailures[i].Load()), reason,
 		)
 	}
-	r.collectCounter(ch, 37, r.TelemetryRetries.Load())
-	r.collectCounter(ch, 38, r.PersistenceRetries.Load())
-	r.collectCounter(ch, 39, r.PersistenceCompactions.Load())
-	r.collectCounter(ch, 40, r.PersistenceOmitted.Load())
-	r.collectGauge(ch, 41, r.PersistencePayloadBytes.Load())
-	r.collectGauge(ch, 42, r.PersistenceLastSuccess.Load())
-	r.collectCounter(ch, 43, r.DuplicateTransitions.Load())
-	r.collectGauge(ch, 44, r.GroupSize.Load())
-	r.collectCounter(ch, 45, r.GroupedChildCount.Load())
-	r.collectCounter(ch, 46, r.RootCauseSuppressions.Load())
-	r.collectCounter(ch, 47, r.RenderedDetailsOmitted.Load())
-	r.collectCounter(ch, 48, r.RedactedValues.Load())
-	r.collectCounter(ch, 49, r.StartupSummariesSuppressed.Load())
-	r.collectCounter(ch, 50, r.InsightAnalyses.Load())
-	ch <- prometheus.MustNewConstMetric(
-		metricDescs[51], prometheus.CounterValue,
-		float64(r.InsightConfirmed.Load()), "confirmed",
-	)
-	ch <- prometheus.MustNewConstMetric(
-		metricDescs[51], prometheus.CounterValue,
-		float64(r.InsightLikely.Load()), "likely",
-	)
-	ch <- prometheus.MustNewConstMetric(
-		metricDescs[51], prometheus.CounterValue,
-		float64(r.InsightUnknown.Load()), "unknown",
-	)
-	r.collectCounter(ch, 52, r.InsightReevaluations.Load())
-	r.collectCounter(ch, 53, r.InsightRolloutSuppressions.Load())
-}
-
-func (r *Registry) collectCounter(
-	ch chan<- prometheus.Metric, index int, value int64,
-) {
-	ch <- prometheus.MustNewConstMetric(
-		metricDescs[index], prometheus.CounterValue, float64(value),
-	)
-}
-
-func (r *Registry) collectGauge(
-	ch chan<- prometheus.Metric, index int, value int64,
-) {
-	ch <- prometheus.MustNewConstMetric(
-		metricDescs[index], prometheus.GaugeValue, float64(value),
-	)
+	for i, reason := range storageResetReasons {
+		ch <- prometheus.MustNewConstMetric(
+			storageResetsDesc, prometheus.CounterValue,
+			float64(r.StorageResets[i].Load()), reason,
+		)
+	}
+	for i, result := range investigationResults {
+		ch <- prometheus.MustNewConstMetric(
+			investigationsDesc, prometheus.CounterValue,
+			float64(r.Investigations[i].Load()), result,
+		)
+	}
+	ch <- r.DecisionLag.metric()
+	r.collectDelivery(ch)
+	for _, m := range scalarMetrics {
+		kind := prometheus.CounterValue
+		if m.gauge {
+			kind = prometheus.GaugeValue
+		}
+		ch <- prometheus.MustNewConstMetric(
+			m.desc, kind, float64(m.load(r)),
+		)
+	}
 }

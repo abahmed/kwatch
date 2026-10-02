@@ -11,7 +11,6 @@ import (
 
 	"github.com/abahmed/kwatch/internal/clock"
 	"github.com/abahmed/kwatch/internal/delivery/transport"
-	"github.com/abahmed/kwatch/internal/event"
 )
 
 var testDeps = transport.Dependencies{
@@ -53,33 +52,6 @@ func TestNewTeams(t *testing.T) {
 	assert.NotNil(t, teams)
 	assert.Equal(t, "http://example.com", teams.webhook)
 	assert.Equal(t, "Test Title", teams.title)
-	assert.Equal(t, "Test Text", teams.text)
-}
-
-func TestSendEvent(t *testing.T) {
-	configMap := map[string]interface{}{
-		"webhook": "http://example.com",
-	}
-	appCfg := testAppConfig()
-	teams := NewTeams(configMap, appCfg, testDeps)
-
-	e := &event.Event{
-		PodName:   "test-pod",
-		Namespace: "test-namespace",
-		Reason:    "test-reason",
-		Logs:      "test-logs",
-		Events:    "test-events",
-	}
-
-	server := httptest.NewServer(
-		http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			w.WriteHeader(http.StatusOK)
-		}))
-	defer server.Close()
-
-	teams.webhook = server.URL
-	err := teams.SendEvent(context.Background(), e)
-	assert.NoError(t, err)
 }
 
 func TestSendMessage(t *testing.T) {
@@ -209,11 +181,12 @@ func TestInvaildHttpRequest(t *testing.T) {
 	appCfg := testAppConfig()
 
 	configMap := map[string]interface{}{
-		"webhook": "h ttp://localhost/%s",
+		"webhook": "https://example.test/hook",
 	}
 
 	c := NewTeams(configMap, appCfg, testDeps)
 	assert.NotNil(c)
+	c.webhook = "h ttp://localhost/%s"
 	assert.NotNil(c.SendMessage(context.Background(), "test"))
 
 	configMap = map[string]interface{}{
@@ -223,37 +196,6 @@ func TestInvaildHttpRequest(t *testing.T) {
 	c = NewTeams(configMap, appCfg, testDeps)
 	assert.NotNil(c)
 	assert.NotNil(c.SendMessage(context.Background(), "test"))
-}
-
-func TestBuildRequestBodyTeams(t *testing.T) {
-	configMap := map[string]interface{}{
-		"webhook": "http://example.com",
-		"title":   "Test Title",
-		"text":    "Test Text",
-	}
-	teams := NewTeams(configMap, "", testDeps)
-
-	e := &event.Event{
-		PodName:       "test-pod",
-		Namespace:     "test-namespace",
-		Reason:        "test-reason",
-		Logs:          "test-logs",
-		Events:        "test-events",
-		IncludeEvents: true,
-		IncludeLogs:   true,
-	}
-
-	payload, err := teams.buildRequestBodyTeams(e)
-	assert.NoError(t, err)
-	var result teamsFlowPayload
-	err = json.Unmarshal(payload, &result)
-	assert.NoError(t, err)
-	assert.Equal(t, "Test Title", result.Title)
-	assert.Contains(t, result.Text, "test-pod")
-	assert.Contains(t, result.Text, "test-namespace")
-	assert.Contains(t, result.Text, "test-reason")
-	assert.Contains(t, result.Text, "test-logs")
-	assert.Contains(t, result.Text, "test-events")
 }
 
 func TestBuildRequestBodyMessage(t *testing.T) {
@@ -269,7 +211,21 @@ func TestBuildRequestBodyMessage(t *testing.T) {
 	assert.NoError(t, err)
 	assert.Equal(t, "New Alert", result.Title)
 	assert.Equal(t, "test message", result.Text)
-	assert.Empty(t, result.Attachment)
+	assert.Len(t, result.Attachment, 1)
+	assert.Equal(t, "application/vnd.microsoft.card.adaptive",
+		result.Attachment[0]["contentType"])
+	content, ok := result.Attachment[0]["content"].(map[string]interface{})
+	assert.True(t, ok, "content should be a map")
+	body, ok := content["body"].([]interface{})
+	assert.True(t, ok, "body should be a slice")
+	assert.Len(t, body, 2)
+	titleBlock := body[0].(map[string]interface{})
+	assert.Equal(t, "TextBlock", titleBlock["type"])
+	assert.Equal(t, "New Alert", titleBlock["text"])
+	assert.Equal(t, "Bolder", titleBlock["weight"])
+	msgBlock := body[1].(map[string]interface{})
+	assert.Equal(t, "TextBlock", msgBlock["type"])
+	assert.Equal(t, "test message", msgBlock["text"])
 }
 
 func TestNewTeamsIgnoresLegacyRetrySettings(t *testing.T) {
@@ -281,81 +237,4 @@ func TestNewTeamsIgnoresLegacyRetrySettings(t *testing.T) {
 	appCfg := testAppConfig()
 	teams := NewTeams(configMap, appCfg, testDeps)
 	assert.NotNil(t, teams)
-}
-
-func TestBuildRequestBodyTeamsGolden(t *testing.T) {
-	configMap := map[string]interface{}{
-		"webhook": "http://example.com",
-	}
-	clusterName := "production"
-	teams := NewTeams(configMap, clusterName, testDeps)
-
-	e := &event.Event{
-		PodName:   "my-pod",
-		Namespace: "my-namespace",
-		Reason:    "OOMKilled",
-	}
-
-	b, err := teams.buildRequestBodyTeams(e)
-	assert.NoError(t, err)
-	payload := string(b)
-	assert.Contains(t, payload, "my-pod")
-	assert.Contains(t, payload, "my-namespace")
-	assert.Contains(t, payload, "OOMKilled")
-}
-
-func TestBuildRequestBodyTeamsDefaultTitle(t *testing.T) {
-	configMap := map[string]interface{}{
-		"webhook": "http://example.com",
-	}
-	clusterName := ""
-	teams := NewTeams(configMap, clusterName, testDeps)
-
-	e := &event.Event{
-		PodName:       "test-pod",
-		Namespace:     "test-namespace",
-		Reason:        "test-reason",
-		Logs:          "test-logs",
-		Events:        "test-events",
-		NodeName:      "test-node",
-		IncludeEvents: true,
-		IncludeLogs:   true,
-	}
-
-	payload, err := teams.buildRequestBodyTeams(e)
-	assert.NoError(t, err)
-	var result teamsFlowPayload
-	err = json.Unmarshal(payload, &result)
-	assert.NoError(t, err)
-	assert.Contains(t, result.Title, "Kwatch")
-}
-
-func TestSendEventWithCustomTitle(t *testing.T) {
-	configMap := map[string]interface{}{
-		"webhook": "http://example.com",
-		"title":   "Custom Title",
-		"text":    "Custom Text",
-	}
-	appCfg := testAppConfig()
-	teams := NewTeams(configMap, appCfg, testDeps)
-
-	e := &event.Event{
-		PodName:       "test-pod",
-		Namespace:     "test-namespace",
-		Reason:        "test-reason",
-		Logs:          "test-logs",
-		Events:        "test-events",
-		IncludeEvents: true,
-		IncludeLogs:   true,
-	}
-
-	server := httptest.NewServer(
-		http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			w.WriteHeader(http.StatusOK)
-		}))
-	defer server.Close()
-
-	teams.webhook = server.URL
-	err := teams.SendEvent(context.Background(), e)
-	assert.NoError(t, err)
 }

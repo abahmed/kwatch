@@ -1,0 +1,10 @@
+{
+  "name": "quota-exhausted",
+  "description": "A Deployment scales from 4 to 8 replicas in a namespace whose ResourceQuota is used up; the new pods are forbidden.",
+  "root": "resourcequota/analytics/compute-quota",
+  "tier": "notify",
+  "maxMessages": 2,
+  "mustNotBlame": [
+    "node//n1"
+  ]
+}

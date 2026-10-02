@@ -12,10 +12,10 @@ import (
 	"k8s.io/client-go/tools/leaderelection"
 	"k8s.io/client-go/tools/leaderelection/resourcelock"
 
-	"github.com/abahmed/kwatch/internal/client"
 	"github.com/abahmed/kwatch/internal/clock"
 	"github.com/abahmed/kwatch/internal/config"
 	"github.com/abahmed/kwatch/internal/health"
+	"github.com/abahmed/kwatch/internal/kubeclient"
 )
 
 type fakeElection struct {
@@ -36,8 +36,8 @@ func (e *fakeElection) Run(ctx context.Context) {
 }
 
 func testServerDeps() *serverDeps {
-	deps := &serverDeps{
-		clients: client.ClientSet{
+	return &serverDeps{
+		clients: kubeclient.ClientSet{
 			Kubernetes: fake.NewSimpleClientset(),
 			Clock:      clock.RealClock{},
 		},
@@ -45,8 +45,6 @@ func testServerDeps() *serverDeps {
 			config.HealthCheck{}, clock.RealClock{},
 		),
 	}
-	deps.persistenceGate = newPersistenceGate()
-	return deps
 }
 
 func TestLeaderElectionStartsActiveSessionAfterAcquisition(t *testing.T) {
@@ -252,9 +250,6 @@ func TestLeaderElectionReturnsLeadershipLoss(t *testing.T) {
 		got.Role != "stopped" || got.LossReason != "leadership_lost" {
 		t.Fatalf("unexpected stopped status: %+v", got)
 	}
-	if deps.persistenceGate == nil || deps.persistenceGate.enabled() {
-		t.Fatal("leadership loss left persistence writes enabled")
-	}
 }
 
 func TestLeaderElectionRequiresKubernetesClient(t *testing.T) {
@@ -281,5 +276,52 @@ func TestNewLeaseLockUsesConfiguredIdentity(t *testing.T) {
 		lock.LeaseMeta.Namespace != "monitoring" ||
 		lock.Identity() != "pod-1" {
 		t.Fatalf("unexpected lock: %+v", lock.LeaseMeta)
+	}
+}
+
+// lateStartElection returns from Run before client-go's goroutine runs
+// OnStartedLeading, the order the real elector allows.
+type lateStartElection struct {
+	callbacks leaderelection.LeaderCallbacks
+	late      chan struct{}
+}
+
+func (e *lateStartElection) Run(ctx context.Context) {
+	leaderCtx, cancel := context.WithCancel(ctx)
+	cancel()
+	e.callbacks.OnStoppedLeading()
+	go func() {
+		defer close(e.late)
+		e.callbacks.OnStartedLeading(leaderCtx)
+	}()
+}
+
+func TestLeaderElectionNeverStartsSessionAfterRunReturned(t *testing.T) {
+	t.Setenv("POD_NAME", "kwatch-a")
+	t.Setenv("POD_NAMESPACE", "kwatch")
+	t.Setenv("KWATCH_INSTALLATION_ID", "kwatch")
+	deps := testServerDeps()
+	election := &lateStartElection{late: make(chan struct{})}
+	factory := func(
+		config leaderelection.LeaderElectionConfig,
+	) (electionRunner, error) {
+		election.callbacks = config.Callbacks
+		return election, nil
+	}
+	ran := false
+	activeRunner := func(context.Context, *serverDeps) error {
+		ran = true
+		return nil
+	}
+
+	err := runLeaderElectionWithRunner(
+		context.Background(), deps, factory, activeRunner)
+	<-election.late
+
+	if !errors.Is(err, errLeadershipLost) {
+		t.Fatalf("error = %v, want leadership loss", err)
+	}
+	if ran {
+		t.Fatal("a session started after election stopped")
 	}
 }

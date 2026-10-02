@@ -12,8 +12,7 @@ import (
 
 	"github.com/abahmed/kwatch/internal/alert/catalog"
 	"github.com/abahmed/kwatch/internal/config"
-	"github.com/abahmed/kwatch/internal/event"
-	"github.com/abahmed/kwatch/internal/model"
+	"github.com/abahmed/kwatch/internal/notification"
 )
 
 func testRetryConfig(settings map[string]interface{}) retryConfig {
@@ -28,7 +27,7 @@ func TestFallbackResolve(t *testing.T) {
 	am := *newTestManager()
 	initTestManager(&am, map[string]map[string]interface{}{
 		"slack": {
-			"webhook":  "test",
+			"webhook":  "https://hooks.example.test/x",
 			"fallback": "pagerduty",
 		},
 		"pagerduty": {
@@ -65,7 +64,7 @@ func TestFallbackResolveUnknown(t *testing.T) {
 	am := *newTestManager()
 	initTestManager(&am, map[string]map[string]interface{}{
 		"slack": {
-			"webhook":  "test",
+			"webhook":  "https://hooks.example.test/x",
 			"fallback": "nonexistent",
 		},
 	}, &config.App{ClusterName: "dev"}, catalog.NewProvider)
@@ -96,10 +95,11 @@ func (p *errorRecorderProvider) SendMessage(
 	return p.err
 }
 
-func (p *errorRecorderProvider) SendEvent(
+func (p *errorRecorderProvider) SendIncident(
 	_ context.Context,
-	evt *event.Event,
+	_ notification.Message,
 ) error {
+	p.callCount++
 	return p.err
 }
 
@@ -181,36 +181,36 @@ func TestFallbackMessageTruncatedToFallbackMaxBytes(t *testing.T) {
 	assert.Contains(t, fb.msg, "fallback")
 }
 
-type eventFallbackProvider struct {
-	eventCalls   int
-	messageCalls int
+type incidentFallbackProvider struct {
+	incidentCalls int
+	messageCalls  int
 }
 
-func (p *eventFallbackProvider) Name() string { return "Event Fallback" }
+func (p *incidentFallbackProvider) Name() string { return "Incident Fallback" }
 
-func (p *eventFallbackProvider) SendEvent(
+func (p *incidentFallbackProvider) SendIncident(
 	_ context.Context,
-	_ *event.Event,
+	_ notification.Message,
 ) error {
-	p.eventCalls++
+	p.incidentCalls++
 	return nil
 }
 
-func (p *eventFallbackProvider) SendMessage(context.Context, string) error {
+func (p *incidentFallbackProvider) SendMessage(
+	context.Context, string,
+) error {
 	p.messageCalls++
 	return nil
 }
 
-func (p *eventFallbackProvider) UsesEventDelivery() {}
-
-func TestIncidentFallbackUsesEventDeliveryInterface(t *testing.T) {
+func TestIncidentFallbackUsesSendIncident(t *testing.T) {
 	primary := &errorRecorderProvider{name: "Primary", err: errors.New("fail")}
-	fallback := &eventFallbackProvider{}
+	fallback := &incidentFallbackProvider{}
 	am := *managerWithEntries([]providerEntry{
 		{
 			provider:     primary,
 			retry:        retryConfig{maxAttempts: 1, delay: time.Millisecond},
-			fallbackName: "Event Fallback",
+			fallbackName: "Incident Fallback",
 		},
 		{
 			provider: fallback,
@@ -219,12 +219,11 @@ func TestIncidentFallbackUsesEventDeliveryInterface(t *testing.T) {
 	})
 
 	am.deliverOne(
-		context.Background(), &managerEntries(&am)[0], incidentJob(&model.Incident{
-			Subject: model.Subject{Key: "ns:pod:Error", Reason: "Error"},
-		}, model.ActionCreate, nil),
+		context.Background(), &managerEntries(&am)[0],
+		incidentJob("k", "default"),
 	)
 
-	assert.Equal(t, 1, fallback.eventCalls)
+	assert.Equal(t, 1, fallback.incidentCalls)
 	assert.Zero(t, fallback.messageCalls)
 }
 
@@ -253,13 +252,8 @@ func TestIncidentFallbackHonorsFallbackRoutes(t *testing.T) {
 	})
 
 	am.deliverOne(
-		context.Background(), &managerEntries(&am)[0], incidentJob(&model.Incident{
-			Subject: model.Subject{
-				Key:       "default:pod:Error",
-				Namespace: "default",
-				Reason:    "Error",
-			},
-		}, model.ActionCreate, nil),
+		context.Background(), &managerEntries(&am)[0],
+		incidentJob("default:pod:Error", "default"),
 	)
 
 	assert.Zero(t, fallback.callCount)
@@ -347,8 +341,8 @@ func TestSendWithRetryNormalizesEmptyConfig(t *testing.T) {
 	assert.Equal(t, 1, attempts)
 }
 
-func TestFlushDigestUsesEventDelivery(t *testing.T) {
-	provider := &eventFallbackProvider{}
+func TestFlushOverflowSummarySendsPlainMessage(t *testing.T) {
+	provider := &incidentFallbackProvider{}
 	am := *newTestManager()
 	entry := &providerEntry{
 		provider: provider,
@@ -357,17 +351,15 @@ func TestFlushDigestUsesEventDelivery(t *testing.T) {
 			delay:       time.Millisecond,
 		},
 	}
-	am.digestAdd(provider.Name(), incidentJob(&model.Incident{
-		Subject: model.Subject{Reason: "Error"},
-	}, model.ActionCreate, nil))
+	am.addToOverflowSummary(provider.Name(), incidentJob("k", "default"))
 
-	am.flushDigest(context.Background(), entry)
+	am.flushOverflowSummary(context.Background(), entry)
 
-	assert.Equal(t, 1, provider.eventCalls)
-	assert.Zero(t, provider.messageCalls)
+	assert.Zero(t, provider.incidentCalls)
+	assert.Equal(t, 1, provider.messageCalls)
 }
 
-func TestFlushDigestRestoresAfterFailure(t *testing.T) {
+func TestFlushOverflowSummaryRestoresAfterFailure(t *testing.T) {
 	provider := &errorRecorderProvider{name: "Digest", err: errors.New("failed")}
 	am := *newTestManager()
 	entry := &providerEntry{
@@ -377,14 +369,12 @@ func TestFlushDigestRestoresAfterFailure(t *testing.T) {
 			delay:       time.Millisecond,
 		},
 	}
-	am.digestAdd(provider.Name(), incidentJob(&model.Incident{
-		Subject: model.Subject{Reason: "Error"},
-	}, model.ActionCreate, nil))
+	am.addToOverflowSummary(provider.Name(), incidentJob("k", "default"))
 
-	am.flushDigest(context.Background(), entry)
+	am.flushOverflowSummary(context.Background(), entry)
 
 	am.pacer.mu.Lock()
-	state := am.pacer.digests[provider.Name()]
+	state := am.pacer.summaries[provider.Name()]
 	am.pacer.mu.Unlock()
 	require.NotNil(t, state)
 	assert.Equal(t, 1, state.total)

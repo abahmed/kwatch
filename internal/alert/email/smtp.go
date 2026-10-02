@@ -10,15 +10,24 @@ import (
 	"time"
 
 	gomail "gopkg.in/mail.v2"
+	"k8s.io/klog/v2"
 )
 
 const smtpTimeout = 10 * time.Second
+
+// tlsRequired uses implicit TLS on port 465 and STARTTLS elsewhere.
+// tlsNone is for trusted in-cluster relays and never sends credentials.
+const (
+	tlsRequired = "required"
+	tlsNone     = "none"
+)
 
 type smtpConfig struct {
 	host     string
 	port     int
 	username string
 	password string
+	tlsMode  string
 }
 
 // sendSMTP keeps the SMTP connection tied to the caller's context. gomail's
@@ -46,7 +55,7 @@ func sendSMTP(
 	defer close(stop)
 	defer func() { _ = conn.Close() }()
 
-	if config.port == 465 {
+	if config.port == 465 && config.tlsMode != tlsNone {
 		tlsConn := tls.Client(conn, &tls.Config{ServerName: config.host})
 		if err := tlsConn.HandshakeContext(ctx); err != nil {
 			return err
@@ -59,7 +68,7 @@ func sendSMTP(
 	}
 	defer func() { _ = client.Close() }()
 
-	if config.port != 465 {
+	if config.port != 465 && config.tlsMode != tlsNone {
 		if ok, _ := client.Extension("STARTTLS"); !ok {
 			return fmt.Errorf("SMTP server does not support STARTTLS")
 		}
@@ -67,7 +76,7 @@ func sendSMTP(
 			return smtpContextError(ctx, err)
 		}
 	}
-	if config.username != "" {
+	if config.password != "" {
 		if err := client.Auth(smtp.PlainAuth(
 			"", config.username, config.password, config.host,
 		)); err != nil {
@@ -93,10 +102,14 @@ func sendSMTP(
 	if err := writer.Close(); err != nil {
 		return smtpContextError(ctx, err)
 	}
+	// The server accepted the message when DATA was closed. Reporting a
+	// late cancellation or a failed QUIT now would make delivery retry and
+	// send the same mail twice.
 	if err := client.Quit(); err != nil {
-		return smtpContextError(ctx, err)
+		klog.V(4).InfoS("SMTP QUIT failed after the message was accepted",
+			"component", "delivery", "provider", "Email", "error", err)
 	}
-	return ctx.Err()
+	return nil
 }
 
 func smtpContextError(ctx context.Context, err error) error {

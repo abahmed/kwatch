@@ -71,6 +71,7 @@ func TestScenarioExtendedAdmissionWebhook(t *testing.T) {
 			t.Fatal(err)
 		}
 		defer cleanupNamespace(t, e, namespace)
+		started := time.Now()
 		failurePolicy := admissionregistrationv1.Ignore
 		sideEffects := admissionregistrationv1.SideEffectClassNone
 		_, err := e.Client.AdmissionregistrationV1().
@@ -104,12 +105,12 @@ func TestScenarioExtendedAdmissionWebhook(t *testing.T) {
 				metav1.DeleteOptions{},
 			)
 		}()
-		if _, err := e.Audit.WaitFor(ctx, harness.AuditMatch{
-			Resource: "kwatch-e2e-missing-webhook",
-			Reason:   "WebhookBackendNotFound", Count: 1,
-		}); err != nil {
-			t.Fatal(err)
-		}
+		assertRoot(ctx, t, e, namespace, started, harness.RootExpectation{
+			Root: "validatingwebhookconfiguration//" +
+				"kwatch-e2e-missing-webhook",
+			Tier:        "notify",
+			MaxMessages: 2,
+		})
 	})
 }
 
@@ -211,7 +212,7 @@ func TestScenarioExtendedMetricsAPIFailure(t *testing.T) {
 		createMetricsHPA(ctx, t, e, namespace)
 		if _, err := e.Audit.WaitFor(ctx, harness.AuditMatch{
 			Namespace: namespace, Resource: "metrics-target",
-			Reason: "FailedGetMetrics", Count: 1,
+			Reason: "FailedGetResourceMetric", Count: 1,
 		}); err != nil {
 			t.Fatal(err)
 		}

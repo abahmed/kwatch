@@ -17,6 +17,13 @@ var managerHiddenPaths = map[string]bool{
 	"alert": true,
 }
 
+// effectiveDefaults lists fields whose zero value in DefaultConfig means
+// "use the built-in default" at run time; the catalog shows the effective
+// value.
+var effectiveDefaults = map[string]string{
+	"heartbeatMonitor.interval": "300",
+}
+
 type metadata struct {
 	category    string
 	description string
@@ -47,7 +54,7 @@ func main() {
 	for _, line := range oldOrder {
 		path := strings.SplitN(line, "|", 2)[0]
 		if seen[path] {
-			lines = append(lines, line)
+			lines = append(lines, old[path])
 			delete(seen, path)
 		}
 	}
@@ -133,7 +140,8 @@ func walk(t reflect.Type, value reflect.Value, prefix string, old map[string]str
 			walk(fieldType, fieldValue, path, old, friendly, seen, discovered, missing)
 			continue
 		}
-		if _, ok := old[path]; ok {
+		if line, ok := old[path]; ok {
+			old[path] = refreshLine(path, line, fieldType, fieldValue)
 			continue
 		}
 		meta, ok := friendly[path]
@@ -188,4 +196,36 @@ func catalogLine(path string, t reflect.Type, value reflect.Value, meta metadata
 		}
 	}
 	return fmt.Sprintf("%s|%s|%s|%s|%s|%s|%s", path, typeName, defaultValue, meta.category, meta.description, meta.status, meta.replacement)
+}
+
+// refreshLine regenerates the type and default columns of an existing
+// catalog line from the code defaults and keeps the hand-written columns.
+// Nil and empty lists and maps keep the curated wording ("all", "[]")
+// because the code has no better description of an empty collection.
+func refreshLine(
+	path, line string, t reflect.Type, value reflect.Value,
+) string {
+	parts := strings.SplitN(line, "|", 7)
+	if len(parts) != 7 || emptyCollection(t, value) {
+		return line
+	}
+	fresh := strings.SplitN(
+		catalogLine(parts[0], t, value, metadata{}), "|", 7,
+	)
+	parts[1], parts[2] = fresh[1], fresh[2]
+	if effective, ok := effectiveDefaults[path]; ok {
+		parts[2] = effective
+	}
+	return strings.Join(parts, "|")
+}
+
+func emptyCollection(t reflect.Type, value reflect.Value) bool {
+	if t.Kind() == reflect.Pointer {
+		t = t.Elem()
+	}
+	switch t.Kind() {
+	case reflect.Slice, reflect.Map, reflect.Array:
+		return !value.IsValid() || value.Len() == 0
+	}
+	return false
 }

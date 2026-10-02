@@ -73,12 +73,10 @@ func TestComponentSupervisorMarksOptionalFailureDegraded(t *testing.T) {
 	supervisor := newComponentSupervisor(time.Now)
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
-	initialized := make(chan struct{})
-	close(initialized)
 	started := make(chan struct{})
 	var gotError error
 	supervisor.startOptional(
-		ctx, initialized,
+		ctx,
 		componentSpec{
 			name:    "optional-test-component",
 			onError: func(err error) { gotError = err },

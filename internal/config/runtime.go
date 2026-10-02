@@ -7,16 +7,15 @@ import (
 
 // RuntimeConfig is the immutable, derived configuration used at runtime.
 // The YAML-facing Config is confined to loading and overlay boundaries; this
-// value keeps normalization and compilation out of monitor construction.
+// value keeps normalization out of component construction.
 type RuntimeConfig struct {
 	compiled    bool
 	application ApplicationRuntime
-	operations  runtimeOperations
+	lifecycle   runtimeLifecycle
 	scope       runtimeScope
-	monitors    runtimeMonitors
 	delivery    runtimeDelivery
-	persistence runtimePersistence
-	incident    runtimeIncident
+	policy      runtimePolicy
+	activeProbe ActiveProbeMonitor
 }
 
 // ApplicationRuntime contains the application settings needed after config
@@ -28,18 +27,24 @@ type ApplicationRuntime struct {
 	LogFormatter          string
 	InsecureSkipTLSVerify bool
 	CABundlePath          string
+	// KubeletInsecureSkipVerify skips kubelet serving certificate
+	// verification (kubelet.insecureSkipVerify).
+	KubeletInsecureSkipVerify bool
+	// WatchSecrets is false when Secrets must not be watched
+	// (watch.secrets).
+	WatchSecrets bool
 }
 
 // These private views keep the snapshot navigable without exposing mutable
 // maps and slices as public fields. Accessors return defensive copies.
-type runtimeOperations struct {
+type runtimeLifecycle struct {
 	telemetry   Telemetry
 	upgrader    Upgrader
 	healthCheck HealthCheck
 	auditLog    AuditLogConfig
+	heartbeat   HeartbeatMonitor
+	crdEnabled  bool
 	resync      time.Duration
-	workers     int
-	watchStart  time.Time
 }
 
 type runtimeScope struct {
@@ -48,71 +53,26 @@ type runtimeScope struct {
 	namespaceSelector   string
 	allowedReasons      []string
 	forbiddenReasons    []string
-	suppression         SuppressionIndex
+	silences            []SilenceRule
 }
 
 type runtimeDelivery struct {
-	providerNames              []string
-	providers                  []ProviderRuntime
-	silences                   []SilenceRule
-	templates                  map[string]string
-	runbooks                   map[string]string
-	includePrivateLogAddresses bool
+	providerNames []string
+	providers     []ProviderRuntime
+	templates     map[string]string
 }
 
-type runtimePersistence struct {
-	maxBaseline int
-}
-
-type runtimeIncident struct {
-	config IncidentRuntime
-}
-
-type runtimeMonitors struct {
-	node               NodeMonitor
-	nodeResource       NodeResourceMonitor
-	service            ServiceMonitor
-	admissionWebhook   AdmissionWebhookMonitor
-	ingress            IngressMonitor
-	networkPolicy      NetworkPolicyMonitor
-	controlPlane       ControlPlaneMonitor
-	clusterAutoscaler  ClusterAutoscalerMonitor
-	job                JobMonitor
-	pvc                PvcMonitor
-	heartbeat          HeartbeatMonitor
-	activeProbe        ActiveProbeMonitor
-	kubeletTelemetry   KubeletTelemetryMonitor
-	crd                CrdConfig
-	clusterResource    ClusterResourceMonitor
-	tls                TlsMonitor
-	rollout            RolloutMonitor
-	daemonSet          DaemonSetMonitor
-	statefulSet        StatefulSetMonitor
-	cronJob            CronJobMonitor
-	hpa                HpaMonitor
-	pdb                PdbMonitor
-	adaptiveThresholds bool
-	containerRestart   int
-	schedule           ScheduleMonitor
-	oom                OomMonitor
-	includeLogs        bool
-	maintenance        MaintenanceConfig
-	pendingPod         PendingPodMonitor
-	notReady           NotReadyMonitor
-	ignoreDisruptions  bool
-	maxRecentLogLines  int64
-	ignoreGracefulKill bool
-	reportStartup      bool
+type runtimePolicy struct {
+	severityByReason    map[string]string
+	severityByOwnerKind map[string]string
+	runbooks            map[string]string
+	maintenance         MaintenanceConfig
 }
 
 // CompileRuntimeConfig creates a defensive snapshot of derived settings.
 func CompileRuntimeConfig(c *Config) RuntimeConfig {
 	if c == nil {
 		return RuntimeConfig{}
-	}
-	suppression := c.Suppression
-	if suppressionIndexEmpty(suppression) {
-		suppression = c.BuildSuppressionIndex()
 	}
 	providers := make([]string, 0, len(c.Alert))
 	for name := range c.Alert {
@@ -122,21 +82,23 @@ func CompileRuntimeConfig(c *Config) RuntimeConfig {
 	return RuntimeConfig{
 		compiled: true,
 		application: ApplicationRuntime{
-			ProxyURL:              c.App.ProxyURL,
-			ClusterName:           c.App.ClusterName,
-			DisableStartupMessage: c.App.DisableStartupMessage,
-			LogFormatter:          c.App.LogFormatter,
-			InsecureSkipTLSVerify: c.App.InsecureSkipTLSVerify,
-			CABundlePath:          c.App.CABundlePath,
+			ProxyURL:                  c.App.ProxyURL,
+			ClusterName:               c.App.ClusterName,
+			DisableStartupMessage:     c.App.DisableStartupMessage,
+			LogFormatter:              c.App.LogFormatter,
+			InsecureSkipTLSVerify:     c.App.InsecureSkipTLSVerify,
+			CABundlePath:              c.App.CABundlePath,
+			KubeletInsecureSkipVerify: c.Kubelet.InsecureSkipVerify,
+			WatchSecrets:              c.Watch.Secrets,
 		},
-		operations: runtimeOperations{
+		lifecycle: runtimeLifecycle{
 			telemetry:   c.Telemetry,
 			upgrader:    c.Upgrader,
 			healthCheck: c.HealthCheck,
 			auditLog:    c.AuditLog,
+			heartbeat:   c.HeartbeatMonitor,
+			crdEnabled:  c.CrdConfig.Enabled,
 			resync:      time.Duration(c.ResyncSeconds) * time.Second,
-			workers:     c.Workers,
-			watchStart:  c.WatchStartTime,
 		},
 		scope: runtimeScope{
 			allowedNamespaces:   cloneStrings(c.AllowedNamespaces),
@@ -144,118 +106,19 @@ func CompileRuntimeConfig(c *Config) RuntimeConfig {
 			namespaceSelector:   c.NamespaceSelector,
 			allowedReasons:      cloneStrings(c.AllowedReasons),
 			forbiddenReasons:    cloneStrings(c.ForbiddenReasons),
-			suppression:         cloneSuppressionIndex(suppression),
+			silences:            cloneSilenceRules(c.Silences),
 		},
 		delivery: runtimeDelivery{
-			providerNames:              providers,
-			providers:                  compileProviderRuntimes(c.Alert, providers),
-			silences:                   cloneSilenceRules(c.Silences),
-			templates:                  cloneStringMap(c.Templates),
-			runbooks:                   cloneStringMap(c.Runbooks),
-			includePrivateLogAddresses: c.Message.IncludePrivateLogAddresses,
+			providerNames: providers,
+			providers:     compileProviderRuntimes(c.Alert, providers),
+			templates:     cloneStringMap(c.Templates),
 		},
-		monitors: runtimeMonitors{
-			node:              c.NodeMonitor,
-			nodeResource:      c.NodeResourceMonitor,
-			service:           c.ServiceMonitor,
-			admissionWebhook:  c.AdmissionWebhookMonitor,
-			ingress:           c.IngressMonitor,
-			networkPolicy:     c.NetworkPolicyMonitor,
-			controlPlane:      c.ControlPlaneMonitor,
-			clusterAutoscaler: c.ClusterAutoscalerMonitor,
-			job:               c.JobMonitor,
-			pvc:               c.PvcMonitor,
-			heartbeat:         c.HeartbeatMonitor,
-			activeProbe:       cloneActiveProbeMonitor(c.ActiveProbeMonitor),
-			kubeletTelemetry:  c.KubeletTelemetryMonitor,
-			crd: CrdConfig{
-				Enabled:           c.CrdConfig.Enabled,
-				FailureConditions: cloneStrings(c.CrdConfig.FailureConditions),
-				GraphReferences:   cloneStrings(c.CrdConfig.GraphReferences),
-			},
-			clusterResource:    c.ClusterResourceMonitor,
-			tls:                c.TlsMonitor,
-			rollout:            c.RolloutMonitor,
-			daemonSet:          c.DaemonSetMonitor,
-			statefulSet:        c.StatefulSetMonitor,
-			cronJob:            c.CronJobMonitor,
-			hpa:                c.HpaMonitor,
-			pdb:                c.PdbMonitor,
-			adaptiveThresholds: c.AdaptiveThresholds,
-			containerRestart:   c.ContainerRestartThreshold,
-			schedule:           c.ScheduleMonitor,
-			oom:                c.OomMonitor,
-			includeLogs:        c.IncludeLogs == nil || *c.IncludeLogs,
-			maintenance:        c.Maintenance,
-			pendingPod:         c.PendingPodMonitor,
-			notReady:           c.NotReadyMonitor,
-			ignoreDisruptions: c.IgnoreDisruptionTerminations == nil ||
-				*c.IgnoreDisruptionTerminations,
-			maxRecentLogLines:  c.MaxRecentLogLines,
-			ignoreGracefulKill: c.IgnoreFailedGracefulShutdown,
-			reportStartup:      c.ReportStartupBaseline,
+		policy: runtimePolicy{
+			severityByReason:    cloneStringMap(c.SeverityByReason),
+			severityByOwnerKind: cloneStringMap(c.SeverityByOwnerKind),
+			runbooks:            cloneStringMap(c.Runbooks),
+			maintenance:         c.Maintenance,
 		},
-		persistence: runtimePersistence{
-			maxBaseline: c.Correlation.MaxBaseline,
-		},
-		incident: runtimeIncident{
-			config: IncidentRuntime{
-				Window: c.Correlation.Window.Duration(),
-				LifecycleInterval: time.Duration(
-					c.Correlation.LifecycleInterval,
-				) * time.Minute,
-				EscalationEnabled:         c.Correlation.Escalation.Enabled,
-				EscalationTiers:           cloneInts(c.Correlation.Escalation.Tiers),
-				InhibitNodeSuppressesPods: c.Inhibition.NodeSuppressesPods,
-				RenotifyIntervalBySeverity: compileRenotify(
-					c.Correlation.Renotify.IntervalBySeverity,
-				),
-				RenotifyMaxPerIncident:   c.Correlation.Renotify.MaxPerIncident,
-				ResolveHoldDown:          c.Correlation.ResolveHoldDown.Duration(),
-				SmartGroupingWindow:      c.SmartGrouping.WindowSeconds.Duration(),
-				NamespaceFanOutThreshold: c.SmartGrouping.NamespaceFanOutThreshold,
-				MaxBaseline:              c.Correlation.MaxBaseline,
-				severityByOwnerKind:      cloneStringMap(c.SeverityByOwnerKind),
-				severityByReason:         cloneStringMap(c.SeverityByReason),
-			},
-		},
+		activeProbe: cloneActiveProbeMonitor(c.ActiveProbeMonitor),
 	}
-}
-
-func suppressionIndexEmpty(index SuppressionIndex) bool {
-	return len(index.ContainerNames) == 0 &&
-		len(index.PodNamePatterns) == 0 &&
-		len(index.LogPatterns) == 0 &&
-		len(index.ContainerMessages) == 0 &&
-		len(index.EventMessages) == 0 &&
-		len(index.NodeReasons) == 0 &&
-		len(index.NodeMessages) == 0
-}
-
-// IncidentRuntime contains normalized incident lifecycle settings. It keeps
-// the state machine independent from the YAML-facing configuration model.
-type IncidentRuntime struct {
-	Window                     time.Duration
-	LifecycleInterval          time.Duration
-	EscalationEnabled          bool
-	EscalationTiers            []int
-	InhibitNodeSuppressesPods  bool
-	RenotifyIntervalBySeverity map[string]time.Duration
-	RenotifyMaxPerIncident     int
-	ResolveHoldDown            time.Duration
-	SmartGroupingWindow        time.Duration
-	NamespaceFanOutThreshold   int
-	MaxBaseline                int
-	severityByOwnerKind        map[string]string
-	severityByReason           map[string]string
-}
-
-func cloneInts(values []int) []int { return append([]int(nil), values...) }
-
-func compileRenotify(values map[string]int) map[string]time.Duration {
-	result := make(map[string]time.Duration, len(values))
-	for key, value := range values {
-		result[key] = time.Duration(value) * time.Minute
-	}
-	return result
 }

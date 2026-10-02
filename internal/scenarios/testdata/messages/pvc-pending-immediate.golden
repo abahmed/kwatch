@@ -1,0 +1,4 @@
+10:02:15 settled
+🟠 Volume claim orders-db in data (prod-eu-1) has been waiting for a volume for two minutes. It was created at 10:00. The scheduler says "0/2 nodes are available: pod has unbound immediate PersistentVolumeClaims. preemption: 0/2 nodes are available: 2…". orders-db is affected as well. To see why the volume claim is not usable, run kubectl describe pvc orders-db -n data
+🟠 Volume claim orders-db in data (prod-eu-1) has been waiting for a volume for two minutes.
+

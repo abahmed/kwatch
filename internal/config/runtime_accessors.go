@@ -1,9 +1,5 @@
 package config
 
-import (
-	"regexp"
-)
-
 // RuntimeConfigFor returns the derived snapshot used by runtime components.
 // Loaded configurations already carry it; direct callers are compiled without
 // mutating the YAML-facing configuration.
@@ -33,18 +29,6 @@ func (r RuntimeConfig) Application() ApplicationRuntime {
 
 func cloneStrings(values []string) []string {
 	return append([]string(nil), values...)
-}
-
-func cloneSuppressionIndex(index SuppressionIndex) SuppressionIndex {
-	return SuppressionIndex{
-		ContainerNames:    cloneStrings(index.ContainerNames),
-		PodNamePatterns:   append([]*regexp.Regexp(nil), index.PodNamePatterns...),
-		LogPatterns:       append([]*regexp.Regexp(nil), index.LogPatterns...),
-		ContainerMessages: cloneStrings(index.ContainerMessages),
-		EventMessages:     cloneStrings(index.EventMessages),
-		NodeReasons:       cloneStrings(index.NodeReasons),
-		NodeMessages:      cloneStrings(index.NodeMessages),
-	}
 }
 
 func cloneActiveProbeMonitor(m ActiveProbeMonitor) ActiveProbeMonitor {
@@ -77,7 +61,6 @@ func cloneSilenceRules(rules []SilenceRule) []SilenceRule {
 			Reasons:           cloneStrings(rule.Reasons),
 			PodNamePatterns:   cloneStrings(rule.PodNamePatterns),
 			ContainerNames:    cloneStrings(rule.ContainerNames),
-			LogPatterns:       cloneStrings(rule.LogPatterns),
 			ContainerMessages: cloneStrings(rule.ContainerMessages),
 			EventMessages:     cloneStrings(rule.EventMessages),
 			NodeReasons:       cloneStrings(rule.NodeReasons),

@@ -1,0 +1,8 @@
+10:04:15 settled
+🟡 Autoscaler web in shop (prod-eu-1) is at its maximum of 6 replicas and wants more. To see the object's state and events, run kubectl describe horizontalpodautoscaler web -n shop
+🟡 Autoscaler web in shop (prod-eu-1) is at its maximum of 6 replicas and wants more.
+
+10:08:00 material change
+🟠 Autoscaler web in shop (prod-eu-1) is spreading to web: it has only 3 of 6 replicas ready.
+🟠 Autoscaler web in shop (prod-eu-1) is spreading to web: it has only 3 of 6 replicas ready.
+

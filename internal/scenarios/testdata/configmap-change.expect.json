@@ -1,0 +1,13 @@
+{
+  "name": "configmap-change",
+  "description": "A ConfigMap edit breaks the mounted app.yaml; every pod reloads, exits and crash-loops with an error naming the key.",
+  "root": "configmap/web/frontend-config",
+  "tier": "notify",
+  "maxMessages": 2,
+  "mustNotBlame": [
+    "deployment/web/frontend",
+    "node//n1",
+    "node//n2",
+    "zone//zone-a"
+  ]
+}

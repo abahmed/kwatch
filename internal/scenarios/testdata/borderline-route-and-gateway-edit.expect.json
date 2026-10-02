@@ -1,0 +1,11 @@
+{
+  "name": "borderline-route-and-gateway-edit",
+  "description": "A Gateway edit and an HTTPRoute edit land thirty seconds apart; the route names a listener the Gateway does not have.",
+  "root": "httproute.gateway.networking.k8s.io/shop/web",
+  "tier": "notify",
+  "maxMessages": 2,
+  "mustNotBlame": [
+    "service/shop/web",
+    "deployment/shop/web"
+  ]
+}

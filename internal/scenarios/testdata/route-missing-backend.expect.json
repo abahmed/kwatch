@@ -1,0 +1,12 @@
+{
+  "name": "route-missing-backend",
+  "description": "An HTTPRoute names a backend Service that does not exist; the route is accepted but its references do not resolve.",
+  "root": "service/shop/checkout-v2",
+  "tier": "page",
+  "maxMessages": 2,
+  "mustNotBlame": [
+    "gateway.gateway.networking.k8s.io/shop/public",
+    "service/shop/web",
+    "deployment/shop/web"
+  ]
+}

@@ -1,0 +1,10 @@
+{
+  "name": "rbac-change-unrelated-crash",
+  "description": "A Role is created in the namespace while an app crashes on its own configuration; no request is forbidden.",
+  "root": "deployment/shop/api",
+  "tier": "notify",
+  "maxMessages": 2,
+  "mustNotBlame": [
+    "role/shop/metrics-reader"
+  ]
+}

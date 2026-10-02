@@ -30,6 +30,7 @@ var sensitiveFieldNames = map[string]bool{
 	"secret":          true,
 	"secretaccesskey": true,
 	"servicekey":      true,
+	"sessiontoken":    true,
 	"teamsecret":      true,
 	"token":           true,
 }
@@ -75,11 +76,6 @@ func validateSecretReferences(raw string) error {
 	}
 
 	var errs []error
-	validateSensitivePath(
-		root,
-		[]string{"healthCheck", "diagnosticsToken"},
-		&errs,
-	)
 	validateSensitivePath(
 		root,
 		[]string{"heartbeatMonitor", "url"},

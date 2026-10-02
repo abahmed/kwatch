@@ -38,3 +38,24 @@ func TestSanitizeFallbackCyclesLeavesMissingTargetBounded(t *testing.T) {
 	require.Empty(t, disabled)
 	require.Equal(t, "missing", entries[0].fallbackName)
 }
+
+func TestSanitizeFallbackCyclesKeepsFallbackLeadingIntoCycle(t *testing.T) {
+	entries := []providerEntry{
+		{provider: &errorRecorderProvider{
+			name: "alpha",
+		}, fallbackName: "bravo"},
+		{provider: &errorRecorderProvider{
+			name: "bravo",
+		}, fallbackName: "charlie"},
+		{provider: &errorRecorderProvider{
+			name: "charlie",
+		}, fallbackName: "bravo"},
+	}
+
+	disabled := sanitizeFallbackCycles(entries)
+
+	require.Equal(t, []string{"bravo"}, disabled)
+	require.Equal(t, "bravo", entries[0].fallbackName)
+	require.Empty(t, entries[1].fallbackName)
+	require.Equal(t, "bravo", entries[2].fallbackName)
+}

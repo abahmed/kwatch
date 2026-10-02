@@ -8,13 +8,9 @@ import (
 	"github.com/google/go-github/v55/github"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
-	corev1 "k8s.io/api/core/v1"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/client-go/kubernetes/fake"
 
 	"github.com/abahmed/kwatch/internal/config"
 	"github.com/abahmed/kwatch/internal/delivery"
-	"github.com/abahmed/kwatch/internal/persistence"
 	"github.com/abahmed/kwatch/internal/version"
 )
 
@@ -50,7 +46,7 @@ func (m *recordingNotifier) Notify(msg string) {
 func newTestUpgrader(
 	upgraderConfig *config.Upgrader,
 	deliveryManager *delivery.Manager,
-	persistenceManager *persistence.Manager,
+	persistenceManager *memoryVersions,
 ) *Upgrader {
 	return NewUpgrader(
 		upgraderConfig,
@@ -65,10 +61,7 @@ func TestNewUpgrader(t *testing.T) {
 
 	upgraderConfig := &config.Upgrader{}
 	deliveryManager := &delivery.Manager{}
-	persistenceManager := newTestPersistenceManager(
-		fake.NewSimpleClientset(),
-		"kwatch",
-	)
+	persistenceManager := &memoryVersions{}
 
 	u := newTestUpgrader(upgraderConfig, deliveryManager, persistenceManager)
 	assert.NotNil(u)
@@ -95,10 +88,7 @@ func TestCheckUpdatesDisabled(t *testing.T) {
 		DisableUpdateCheck: true,
 	}
 	deliveryManager := &delivery.Manager{}
-	persistenceManager := newTestPersistenceManager(
-		fake.NewSimpleClientset(),
-		"kwatch",
-	)
+	persistenceManager := &memoryVersions{}
 
 	u := newTestUpgrader(upgraderConfig, deliveryManager, persistenceManager)
 	assert.NotNil(u)
@@ -111,10 +101,7 @@ func TestUpgraderFields(t *testing.T) {
 		DisableUpdateCheck: true,
 	}
 	deliveryManager := &delivery.Manager{}
-	persistenceManager := newTestPersistenceManager(
-		fake.NewSimpleClientset(),
-		"kwatch",
-	)
+	persistenceManager := &memoryVersions{}
 
 	u := newTestUpgrader(upgraderConfig, deliveryManager, persistenceManager)
 	assert.NotNil(u)
@@ -149,10 +136,7 @@ func TestUpgraderWithDisabledConfig(t *testing.T) {
 		DisableUpdateCheck: true,
 	}
 	deliveryManager := &delivery.Manager{}
-	persistenceManager := newTestPersistenceManager(
-		fake.NewSimpleClientset(),
-		"kwatch",
-	)
+	persistenceManager := &memoryVersions{}
 
 	u := newTestUpgrader(upgraderConfig, deliveryManager, persistenceManager)
 	assert.NotNil(u)
@@ -166,10 +150,7 @@ func TestUpgraderWithEnabledConfig(t *testing.T) {
 		DisableUpdateCheck: false,
 	}
 	deliveryManager := &delivery.Manager{}
-	persistenceManager := newTestPersistenceManager(
-		fake.NewSimpleClientset(),
-		"kwatch",
-	)
+	persistenceManager := &memoryVersions{}
 
 	u := newTestUpgrader(upgraderConfig, deliveryManager, persistenceManager)
 	assert.NotNil(u)
@@ -181,10 +162,7 @@ func TestUpgraderConfigDefaults(t *testing.T) {
 
 	upgraderConfig := &config.Upgrader{}
 	deliveryManager := &delivery.Manager{}
-	persistenceManager := newTestPersistenceManager(
-		fake.NewSimpleClientset(),
-		"kwatch",
-	)
+	persistenceManager := &memoryVersions{}
 
 	u := newTestUpgrader(upgraderConfig, deliveryManager, persistenceManager)
 	assert.NotNil(u)
@@ -207,10 +185,7 @@ func TestUpgraderReusePersistenceManager(t *testing.T) {
 
 	upgraderConfig := &config.Upgrader{}
 	deliveryManager := &delivery.Manager{}
-	sharedPersistenceManager := newTestPersistenceManager(
-		fake.NewSimpleClientset(),
-		"kwatch",
-	)
+	sharedPersistenceManager := &memoryVersions{}
 
 	u1 := newTestUpgrader(
 		upgraderConfig, deliveryManager, sharedPersistenceManager,
@@ -227,8 +202,7 @@ func TestUpgraderReusePersistenceManager(t *testing.T) {
 func TestUpgraderPersistenceManager(t *testing.T) {
 	assert := assert.New(t)
 
-	client := fake.NewSimpleClientset()
-	persistenceManager := newTestPersistenceManager(client, "kwatch")
+	persistenceManager := &memoryVersions{}
 	upgraderConfig := &config.Upgrader{}
 	deliveryManager := &delivery.Manager{}
 
@@ -240,23 +214,7 @@ func TestUpgraderPersistenceManager(t *testing.T) {
 func TestUpgraderGetNotifiedVersion(t *testing.T) {
 	assert := assert.New(t)
 
-	client := fake.NewSimpleClientset()
-	namespace := "kwatch"
-
-	cm := &corev1.ConfigMap{
-		ObjectMeta: metav1.ObjectMeta{
-			Name:      "kwatch-state",
-			Namespace: namespace,
-		},
-		Data: map[string]string{
-			"notified-version": "v2.0.0",
-		},
-	}
-	_, err := client.CoreV1().ConfigMaps(namespace).Create(
-		context.Background(), cm, metav1.CreateOptions{})
-	assert.Nil(err)
-
-	persistenceManager := newTestPersistenceManager(client, namespace)
+	persistenceManager := &memoryVersions{version: "v2.0.0"}
 	upgraderConfig := &config.Upgrader{}
 	deliveryManager := &delivery.Manager{}
 

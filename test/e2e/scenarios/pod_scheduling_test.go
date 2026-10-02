@@ -25,6 +25,7 @@ func TestScenarioPodOOMKilled(t *testing.T) {
 			t.Fatal(err)
 		}
 		defer cleanupNamespace(t, e, namespace)
+		started := time.Now()
 		_, err := e.Client.CoreV1().Pods(namespace).Create(ctx, &corev1.Pod{
 			ObjectMeta: metav1.ObjectMeta{Name: "oom"},
 			Spec: corev1.PodSpec{Containers: []corev1.Container{{
@@ -54,14 +55,12 @@ func TestScenarioPodOOMKilled(t *testing.T) {
 		}); err != nil {
 			t.Fatal(err)
 		}
-		if _, err := e.Audit.WaitFor(ctx, harness.AuditMatch{
-			Namespace: namespace,
-			Resource:  "oom",
-			Reason:    "OOMKilled",
-			Count:     1,
-		}); err != nil {
-			t.Fatal(err)
-		}
+		assertRoot(ctx, t, e, namespace, started, harness.RootExpectation{
+			Root:         "pod/" + namespace + "/oom",
+			Tier:         "notify",
+			MaxMessages:  2,
+			MustNotBlame: scheduledNodes(ctx, t, e, namespace),
+		})
 		if err := e.AssertHealthy(ctx); err != nil {
 			t.Fatal(err)
 		}
@@ -79,6 +78,7 @@ func TestScenarioPodUnschedulable(t *testing.T) {
 			t.Fatal(err)
 		}
 		defer cleanupNamespace(t, e, namespace)
+		started := time.Now()
 		_, err := e.Client.CoreV1().Pods(namespace).Create(ctx, &corev1.Pod{
 			ObjectMeta: metav1.ObjectMeta{Name: "unschedulable"},
 			Spec: corev1.PodSpec{Containers: []corev1.Container{{
@@ -106,14 +106,12 @@ func TestScenarioPodUnschedulable(t *testing.T) {
 		); err != nil {
 			t.Fatal(err)
 		}
-		if _, err := e.Audit.WaitFor(ctx, harness.AuditMatch{
-			Namespace: namespace,
-			Resource:  "unschedulable",
-			Reason:    "Unschedulable",
-			Count:     1,
-		}); err != nil {
-			t.Fatal(err)
-		}
+		assertRoot(ctx, t, e, namespace, started, harness.RootExpectation{
+			Root:         "scheduling//Insufficient cpu*",
+			Tier:         "notify",
+			MaxMessages:  2,
+			MustNotBlame: []string{"pod/" + namespace + "/unschedulable"},
+		})
 	})
 }
 

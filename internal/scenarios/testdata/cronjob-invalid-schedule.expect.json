@@ -1,0 +1,7 @@
+{
+  "name": "cronjob-invalid-schedule",
+  "description": "A CronJob's schedule is edited to \"0 25 * * *\", which is not a valid cron expression, so it never runs.",
+  "root": "cronjob/reports/nightly-report",
+  "tier": "notify",
+  "maxMessages": 1
+}

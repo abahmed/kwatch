@@ -2,6 +2,7 @@ package config
 
 import (
 	"os"
+	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -69,17 +70,9 @@ func TestEmptyConfig(t *testing.T) {
 
 	cfg, _ := LoadConfig()
 	assert.NotNil(cfg)
-	assert.Equal(int64(50), cfg.MaxRecentLogLines)
-	// Periodic resync is on by default: without it an object that stops
-	// changing is never re-observed, and the stale sweep then resolves it
-	// while it is still broken.
+	// Periodic resync is on by default as a safety net for lost watch
+	// events.
 	assert.Equal(300, cfg.ResyncSeconds)
-	assert.Equal(true, cfg.PendingPodMonitor.Enabled)
-	assert.Equal(true, cfg.RolloutMonitor.Enabled)
-	assert.Equal(true, cfg.JobMonitor.Enabled)
-	assert.Equal(true, cfg.CronJobMonitor.Enabled)
-	assert.Equal(true, cfg.DaemonSetMonitor.Enabled)
-	assert.Equal(true, cfg.HpaMonitor.Enabled)
 	assert.Equal(true, cfg.HealthCheck.Enabled)
 	assert.Equal(8060, cfg.HealthCheck.Port)
 }
@@ -106,7 +99,7 @@ func TestConfigFromFile(t *testing.T) {
 	t.Setenv("CONFIG_FILE", configPath)
 
 	yamlContent := `
-maxRecentLogLines: 20
+resyncSeconds: 20
 namespaces:
   - default
   - kwatch
@@ -115,8 +108,6 @@ reasons:
   - OOMKilling
 ignorePodNames:
   - my-fancy-pod-.*
-ignoreLogPatterns:
-  - leader-election-.*
 app:
   proxyURL: https://localhost
   clusterName: development
@@ -130,39 +121,15 @@ app:
 	assert.Equal(cfg.App.ClusterName, "development")
 	assert.Equal(cfg.App.ProxyURL, "https://localhost")
 
-	assert.Equal(cfg.MaxRecentLogLines, int64(20))
+	assert.Equal(20, cfg.ResyncSeconds)
 	assert.Len(cfg.AllowedNamespaces, 2)
 	assert.Len(cfg.AllowedReasons, 2)
 	assert.Len(cfg.ForbiddenNamespaces, 0)
 	assert.Len(cfg.ForbiddenReasons, 0)
 
-	os.WriteFile(configPath, []byte("maxRecentLogLines: test"), 0644)
+	os.WriteFile(configPath, []byte("resyncSeconds: test"), 0644)
 	_, err = LoadConfig()
 	assert.NotNil(err)
-}
-
-func TestGetCompiledIgnorePatterns(t *testing.T) {
-	assert := assert.New(t)
-
-	validPatterns := []string{
-		"my-fancy-pod-[0-9]",
-		"leaderelection lost",
-	}
-
-	compiledPatterns, err := getCompiledIgnorePatterns(validPatterns)
-
-	assert.Nil(err)
-	assert.True(compiledPatterns[0].MatchString("my-fancy-pod-8"))
-	assert.True(compiledPatterns[1].MatchString(`controllermanager.go:272] "leaderelection lost"`))
-
-	invalidPatterns := []string{
-		"my-fancy-pod-[.*",
-	}
-
-	compiledPatterns, err = getCompiledIgnorePatterns(invalidPatterns)
-
-	assert.NotNil(err)
-	assert.Empty(compiledPatterns)
 }
 
 func TestConfigEnvInterpolation(t *testing.T) {
@@ -258,4 +225,28 @@ ignoreNodeReasons:
 	assert.Nil(t, err)
 	assert.NotNil(t, cfg)
 	assert.Equal(t, []string{"reason-1", "reason_2", "reason.with.dot", "reason/with/slash"}, cfg.IgnoreNodeReasons)
+}
+
+func TestConfigMissingFileFailsStartup(t *testing.T) {
+	path := t.TempDir() + "/config.yaml"
+	t.Setenv("CONFIG_FILE", path)
+
+	cfg, err := LoadConfig()
+
+	if cfg != nil || err == nil {
+		t.Fatalf("LoadConfig() = %v, %v; want an error", cfg, err)
+	}
+	if !strings.Contains(err.Error(), path) {
+		t.Fatalf("error %q does not name the missing file", err)
+	}
+}
+
+func TestConfigUnsetFileUsesDefaults(t *testing.T) {
+	t.Setenv("CONFIG_FILE", "")
+
+	cfg, err := LoadConfig()
+
+	if err != nil || cfg == nil {
+		t.Fatalf("LoadConfig() = %v, %v", cfg, err)
+	}
 }

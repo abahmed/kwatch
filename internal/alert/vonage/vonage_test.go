@@ -10,7 +10,6 @@ import (
 	"github.com/stretchr/testify/assert"
 
 	"github.com/abahmed/kwatch/internal/delivery/transport"
-	"github.com/abahmed/kwatch/internal/event"
 )
 
 var testDeps = transport.Dependencies{
@@ -157,35 +156,6 @@ func TestSendMessageReportsAPIErrorBody(t *testing.T) {
 	c.url = s.URL
 
 	assert.Error(t, c.SendMessage(context.Background(), "test"))
-}
-
-func TestSendEvent(t *testing.T) {
-	assert := assert.New(t)
-
-	s := httptest.NewServer(
-		http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			body, _ := io.ReadAll(r.Body)
-			assert.Contains(string(body), "OOMKILLED")
-			w.Write([]byte(`{"messages":[{"status":"0"}]}`))
-		}))
-
-	defer s.Close()
-
-	configMap := map[string]interface{}{
-		"apiKey":    "test",
-		"apiSecret": "secret",
-		"from":      "kwatch",
-		"to":        "+12025550100",
-	}
-	c := NewVonage(configMap, testAppConfig(), testDeps)
-	c.url = s.URL
-
-	ev := event.Event{
-		PodName:   "test-pod",
-		Namespace: "default",
-		Reason:    "OOMKILLED",
-	}
-	assert.Nil(c.SendEvent(context.Background(), &ev))
 }
 
 func TestInvalidHttpRequest(t *testing.T) {

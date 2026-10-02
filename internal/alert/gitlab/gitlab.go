@@ -12,7 +12,7 @@ import (
 
 	"github.com/abahmed/kwatch/internal/alert/issues"
 	"github.com/abahmed/kwatch/internal/delivery/transport"
-	"github.com/abahmed/kwatch/internal/event"
+	"github.com/abahmed/kwatch/internal/notification"
 )
 
 const gitlabAPIURL = "https://gitlab.com/api/v4"
@@ -48,10 +48,17 @@ func NewGitlab(
 
 	server := gitlabAPIURL
 	if s, ok := config["url"].(string); ok && len(s) > 0 {
+		if !transport.ValidEndpoint(s) {
+			klog.InfoS("initializing gitlab with an invalid url",
+				"setting", "url")
+			return nil
+		}
 		server = s
 	}
 
-	klog.InfoS("initializing gitlab", "url", server, "projectId", projectID)
+	klog.InfoS("initializing gitlab",
+		"url", transport.LogURL(server),
+		"projectId", projectID)
 
 	return &Gitlab{
 		issues: issues.NewMap(),
@@ -73,40 +80,27 @@ func (g *Gitlab) Name() string {
 	return "Gitlab"
 }
 
-// SendEvent sends event to the provider
-// UsesEventDelivery routes incidents through SendEvent, which carries the
-// action and a stable key so one issue follows one incident.
-func (g *Gitlab) UsesEventDelivery() {}
+// titleLimit is GitLab's maximum issue title length.
+const titleLimit = 255
 
-// SendEvent opens one issue per incident, comments on updates and closes it
-// on recovery.
-func (g *Gitlab) SendEvent(ctx context.Context, e *event.Event) error {
-	return g.issues.Deliver(ctx, g, e, g.issueTitle(e), g.issueBody(e))
+// SendIncident opens one issue per incident, comments on updates and
+// closes it on recovery.
+func (g *Gitlab) SendIncident(
+	ctx context.Context, msg notification.Message,
+) error {
+	return g.issues.Deliver(ctx, g, msg,
+		issues.Title(msg, titleLimit), issues.Body(msg))
 }
 
-// SendMessage files a standalone issue for a plain message.
+// SendMessage treats a plain message as a notice, which never opens an
+// issue.
 func (g *Gitlab) SendMessage(ctx context.Context, msg string) error {
-	_, err := g.Create(ctx, g.issueTitle(nil), msg)
-	return err
+	return g.SendIncident(ctx, notification.Notice(msg))
 }
 
-func (g *Gitlab) issueTitle(e *event.Event) string {
-	title := "kwatch alert"
-	if e != nil {
-		title = e.AlertTitle(200)
-	}
-	if g.clusterName != "" {
-		title = "[" + g.clusterName + "] " + title
-	}
-	return title
-}
-
-func (g *Gitlab) issueBody(e *event.Event) string {
-	if strings.TrimSpace(e.Narrative) == "" {
-		return e.FormatMarkdown(g.clusterName, "", "\n\n")
-	}
-	return e.AlertBody(g.clusterName)
-}
+// SkipsPlainMessages implements api.PlainMessageSkipper: plain messages
+// become notices, which SendIncident skips.
+func (g *Gitlab) SkipsPlainMessages() bool { return true }
 
 // Create implements issues.Tracker.
 func (g *Gitlab) Create(

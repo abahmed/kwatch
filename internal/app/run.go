@@ -8,8 +8,6 @@ import (
 	"k8s.io/klog/v2"
 
 	"github.com/abahmed/kwatch/internal/clock"
-	"github.com/abahmed/kwatch/internal/config"
-	"github.com/abahmed/kwatch/internal/constant"
 	"github.com/abahmed/kwatch/internal/version"
 )
 
@@ -29,28 +27,18 @@ func RunWithClock(now func() time.Time) int {
 		klog.ErrorS(err, "failed to load config")
 		return 1
 	}
-	if _, err := newMonitorRegistry(); err != nil {
-		klog.ErrorS(err, "invalid monitor registry")
-		return 1
-	}
-	cfg.WatchStartTime = now()
-	// WatchStartTime is derived at process start, so compile the snapshot only
-	// after it has been stamped. Runtime consumers must see one consistent
-	// startup boundary.
-	cfg.Runtime = config.CompileRuntimeConfig(cfg)
+	applyLogFormat(cfg.Runtime.Application().LogFormatter)
 
-	klog.InfoS(fmt.Sprintf(constant.WelcomeMsg, version.Short()))
+	klog.InfoS(fmt.Sprintf(welcomeMessage, version.Short()))
 
 	boot, err := newBootstrap(ctx, cfg, now)
 	if err != nil {
 		klog.ErrorS(err, "failed to initialize application")
 		return 1
 	}
-	deps, err := buildServerDeps(
-		ctx, cancel, boot.runtime, boot, now,
-	)
-	if err != nil {
-		klog.ErrorS(err, "failed to build application runtime")
+	deps := newServerDeps(ctx, cancel, boot)
+	if err := deps.healthServer.Open(); err != nil {
+		klog.ErrorS(err, "failed to open health server")
 		return 1
 	}
 	return serve(ctx, deps)

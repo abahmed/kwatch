@@ -1,0 +1,12 @@
+{
+  "name": "heldout-node-disk-pressure",
+  "description": "A node reports DiskPressure and the kubelet evicts pods of two workloads for ephemeral storage; replacements start on other nodes.",
+  "root": "node//n2",
+  "tier": "notify",
+  "maxMessages": 2,
+  "mustNotBlame": [
+    "deployment/media/transcoder",
+    "deployment/media/thumbnailer",
+    "zone//zone-b"
+  ]
+}

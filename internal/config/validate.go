@@ -6,7 +6,7 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/abahmed/kwatch/internal/model"
+	"github.com/abahmed/kwatch/internal/notification"
 )
 
 // InvalidSeverityKeys returns the keys of m whose values are not recognized
@@ -16,7 +16,7 @@ import (
 func InvalidSeverityKeys(m map[string]string) []string {
 	var keys []string
 	for k, v := range m {
-		if !model.IsValidSeverity(v) {
+		if !notification.IsValidSeverity(v) {
 			keys = append(keys, k)
 		}
 	}
@@ -43,18 +43,12 @@ func severityValueError(mapName, key, value string) string {
 // did not. So `kwatch lint` could pass a config the process would refuse to
 // start on, and vice versa -- the one thing a config linter must never do.
 // One validator, two renderings. Warnings are deliberately not included:
-// they must not decide lint's exit status, so the command prints them
-// separately.
+// they must not decide lint's exit status, so the command prints
+// LintWarnings separately.
 func ValidateConfig(cfg *Config) []string {
 	errs := make([]string, 0)
 	for _, err := range Validate(cfg) {
 		errs = append(errs, err.Error())
-	}
-	if len(cfg.Alert) == 0 {
-		// Only lint reports this: a running kwatch with no provider is a
-		// legitimate configuration (it still exposes /incidents and metrics),
-		// but it is almost never what someone linting a file intended.
-		errs = append(errs, "no alert providers configured")
 	}
 	return errs
 }
@@ -71,32 +65,35 @@ func validateMaintenance(cfg *Config) []string {
 func validateRetryJitter(cfg *Config) []string {
 	var errs []string
 	for name, p := range cfg.Alert {
-		if r, ok := p["retry"]; ok {
-			if rm, ok := r.(map[string]interface{}); ok {
-				if jf, ok := rm["jitterFactor"]; ok {
-					f, ok := numericFloat(jf)
-					if !ok {
-						errs = append(errs, fmt.Sprintf(
-							"alert.%s.retry.jitterFactor must be a number between "+
-								"0 and 1", name,
-						))
-						continue
-					}
-					if f < 0 || f > 1 {
-						errs = append(
-							errs,
-							fmt.Sprintf(
-								"alert.%s.retry.jitterFactor must be between "+
-									"0 and 1",
-								name,
-							),
-						)
-					}
-				}
-			}
+		if msg := retryJitterProblem(name, p); msg != "" {
+			errs = append(errs, msg)
 		}
 	}
 	return errs
+}
+
+// retryJitterProblem describes an invalid retry.jitterFactor of one
+// provider, or returns "" when it is absent or valid.
+func retryJitterProblem(name string, provider map[string]interface{}) string {
+	retry, ok := provider["retry"].(map[string]interface{})
+	if !ok {
+		return ""
+	}
+	raw, ok := retry["jitterFactor"]
+	if !ok {
+		return ""
+	}
+	f, ok := numericFloat(raw)
+	if !ok {
+		return fmt.Sprintf(
+			"alert.%s.retry.jitterFactor must be a number between 0 and 1",
+			name)
+	}
+	if f < 0 || f > 1 {
+		return fmt.Sprintf(
+			"alert.%s.retry.jitterFactor must be between 0 and 1", name)
+	}
+	return ""
 }
 
 func numericFloat(value interface{}) (float64, bool) {

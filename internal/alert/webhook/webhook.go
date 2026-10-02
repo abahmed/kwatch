@@ -4,14 +4,9 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"strings"
 
 	"github.com/abahmed/kwatch/internal/clock"
 	"github.com/abahmed/kwatch/internal/delivery/transport"
-	"github.com/abahmed/kwatch/internal/event"
-	"github.com/abahmed/kwatch/internal/insight"
-	"github.com/abahmed/kwatch/internal/message"
-	"github.com/abahmed/kwatch/internal/model"
 
 	"k8s.io/klog/v2"
 )
@@ -57,6 +52,12 @@ func NewWebhook(
 	url, ok := config["url"].(string)
 	if !ok || len(url) == 0 {
 		klog.InfoS("initializing webhook with empty url")
+		return nil
+	}
+
+	if !transport.ValidEndpoint(url) {
+		klog.InfoS("initializing webhook with an invalid url",
+			"setting", "url")
 		return nil
 	}
 	rawHeaders, ok := config["headers"]
@@ -111,40 +112,6 @@ func (w *Webhook) Name() string {
 	return "Webhook"
 }
 
-// SendEvent sends event to the provider
-func (w *Webhook) SendEvent(ctx context.Context, ev *event.Event) error {
-	reqBody, err := w.buildRequestBody(ev)
-	if err != nil {
-		return err
-	}
-	_, err = w.sender.Send(ctx, w.request(reqBody))
-	return err
-}
-
-// SendNotification delivers the provider-neutral semantic notification. It
-// keeps webhook consumers independent from Slack's presentation model while
-// retaining the same action, summary, evidence, and safe command data.
-func (w *Webhook) SendNotification(
-	ctx context.Context,
-	n *message.Notification,
-) error {
-	if n == nil || n.Action == model.ActionSkip {
-		return nil
-	}
-	payload, err := json.Marshal(struct {
-		Cluster      string                `json:"cluster"`
-		Notification *message.Notification `json:"notification"`
-	}{
-		Cluster:      w.clusterName,
-		Notification: n,
-	})
-	if err != nil {
-		return fmt.Errorf("marshal webhook notification: %w", err)
-	}
-	_, err = w.sender.Send(ctx, w.request(payload))
-	return err
-}
-
 // request builds the call every webhook delivery makes: the user's headers
 // and optional basic auth on top of a JSON POST.
 func (w *Webhook) request(body []byte) transport.Request {
@@ -164,81 +131,4 @@ func (w *Webhook) request(body []byte) transport.Request {
 		}
 	}
 	return r
-}
-
-// SendIncident implements delivery.ThreadProvider.
-// It renders the incident using the Report model and PlaintextRenderer,
-// producing a context-adaptive text message, then POSTs it as JSON.
-func (w *Webhook) SendIncident(
-	ctx context.Context,
-	inc *model.Incident,
-	action model.IncidentAction,
-) error {
-	return w.SendIncidentWithInsight(ctx, inc, action, nil)
-}
-
-// SendIncidentWithInsight implements delivery.InsightThreadProvider, so the
-// diagnosis — likely cause, impact, recent changes — is rendered rather than
-// dropped on the way to this provider.
-func (w *Webhook) SendIncidentWithInsight(
-	ctx context.Context,
-	inc *model.Incident,
-	action model.IncidentAction,
-	ins *insight.Insight,
-) error {
-	text := message.RenderIncidentWithInsight(
-		inc,
-		action,
-		ins,
-		message.NewPlainTextRenderer(),
-		w.clusterName,
-		w.clockSource,
-	)
-	if text == "" {
-		return nil
-	}
-
-	payload, err := json.Marshal(map[string]interface{}{
-		"Cluster": w.clusterName,
-		"Name":    inc.Name,
-		"Reason":  inc.Reason,
-		"Message": text,
-	})
-	if err != nil {
-		return fmt.Errorf("failed to marshal webhook incident payload: %w", err)
-	}
-	_, err = w.sender.Send(ctx, w.request(payload))
-	return err
-}
-
-func (w *Webhook) buildRequestBody(
-	ev *event.Event,
-) ([]byte, error) {
-	eventsText := ""
-	if ev.IncludeEvents {
-		eventsText = strings.TrimSpace(ev.Events)
-	}
-
-	logsText := ""
-	if ev.IncludeLogs {
-		logsText = strings.TrimSpace(ev.Logs)
-	}
-
-	postBody, err := json.Marshal(map[string]interface{}{
-		"Cluster":   w.clusterName,
-		"Name":      ev.PodName,
-		"Container": ev.ContainerName,
-		"Namespace": ev.Namespace,
-		"Node":      ev.NodeName,
-		"Reason":    ev.Reason,
-		"Events":    eventsText,
-		"Logs":      logsText,
-		"Labels":    ev.Labels,
-	})
-	if err != nil {
-		return nil, fmt.Errorf("failed to marshal request body: %w", err)
-	}
-
-	return postBody, nil
-
 }

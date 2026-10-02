@@ -1,0 +1,14 @@
+{
+  "name": "heldout-statefulset-zone-conflict",
+  "description": "A restarted StatefulSet pod cannot be scheduled: its zonal volume is in a zone whose only node is full.",
+  "root": "persistentvolumeclaim/streaming/data-kafka-2",
+  "tier": "notify",
+  "maxMessages": 2,
+  "mustNotBlame": [
+    "statefulset/streaming/kafka",
+    "node//b1",
+    "node//b2",
+    "node//c1",
+    "node//c2"
+  ]
+}

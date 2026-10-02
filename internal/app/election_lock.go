@@ -4,7 +4,6 @@ import (
 	"context"
 	"fmt"
 	"os"
-	"strings"
 	"time"
 
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -12,7 +11,7 @@ import (
 	"k8s.io/client-go/tools/leaderelection/resourcelock"
 	"k8s.io/klog/v2"
 
-	"github.com/abahmed/kwatch/internal/k8s"
+	"github.com/abahmed/kwatch/internal/kubeclient"
 )
 
 type renewalTrackingLock struct {
@@ -75,7 +74,7 @@ func newLeaseLock(
 	return &resourcelock.LeaseLock{
 		LeaseMeta: metav1.ObjectMeta{
 			Name:      electionLeaseName(),
-			Namespace: k8s.GetNamespace(),
+			Namespace: kubeclient.GetNamespace(),
 		},
 		Client: client.CoordinationV1(),
 		LockConfig: resourcelock.ResourceLockConfig{
@@ -94,13 +93,6 @@ func electionLeaseName() string {
 	return leaderLeaseName
 }
 
-// installationStatePrefix names this installation's state ConfigMaps after
-// its Lease, so installations that do not share a Lease do not share state.
-// The default Lease keeps the historical kwatch-* names.
-func installationStatePrefix() string {
-	return strings.TrimSuffix(electionLeaseName(), "-leader")
-}
-
 func podIdentity() (string, error) {
 	if identity := os.Getenv("POD_NAME"); identity != "" {
 		return identity, nil
@@ -114,7 +106,8 @@ func podIdentity() (string, error) {
 }
 
 // releaseLease gives up the Lease if this replica still holds it, the same
-// way client-go does, so a standby can take over without waiting for expiry.
+// way client-go does, so a restarted Pod can take over without waiting for
+// expiry.
 func releaseLease(
 	ctx context.Context,
 	lock resourcelock.Interface,

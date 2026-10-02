@@ -7,7 +7,7 @@ import (
 	"k8s.io/klog/v2"
 
 	"github.com/abahmed/kwatch/internal/delivery/transport"
-	"github.com/abahmed/kwatch/internal/event"
+	"github.com/abahmed/kwatch/internal/notification"
 )
 
 const messagebirdAPIURL = "https://rest.messagebird.com/messages"
@@ -70,10 +70,12 @@ func (m *Messagebird) Name() string {
 	return "Messagebird"
 }
 
-// SendEvent sends event to the provider
-func (m *Messagebird) SendEvent(ctx context.Context, e *event.Event) error {
-	msg := e.FormatText(m.clusterName, "")
-	return m.SendMessage(ctx, msg)
+// SendIncident sends the incident's one-line lead as the SMS body.
+// The lead starts with the status marker, the only emoji in the payload.
+func (m *Messagebird) SendIncident(
+	ctx context.Context, incident notification.Message,
+) error {
+	return m.SendMessage(ctx, incident.ShortText())
 }
 
 // SendMessage sends text message to the provider

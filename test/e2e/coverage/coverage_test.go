@@ -14,7 +14,10 @@ func TestCoverageCatalog(t *testing.T) {
 		t.Fatal(err)
 	}
 	for _, entry := range catalog.Entries {
-		if entry.Status != "covered" {
+		if entry.Test == "" {
+			if entry.Status == "covered" {
+				t.Fatalf("entry %q is covered without a test", entry.ID)
+			}
 			continue
 		}
 		if !strings.HasPrefix(entry.Test, "TestScenario") {
