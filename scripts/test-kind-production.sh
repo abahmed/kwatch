@@ -275,6 +275,27 @@ http_ready() {
 	return 1
 }
 
+# wait_for_kwatch waits until the current Lease holder answers /healthz and
+# /readyz. Right after a restart the Lease can still name the Pod that is
+# going away, so the holder is looked up and the port-forward restarted on
+# every attempt instead of trusting the first answer.
+wait_for_kwatch() {
+	local when="$1"
+	for _ in $(seq 1 30); do
+		await_lease_holder
+		kubectl wait pod "$leader_pod" --namespace "$namespace" \
+			--for=condition=Ready --timeout=60s >/dev/null 2>&1 || true
+		start_port_forward "$leader_pod"
+		if http_ready /healthz && http_ready /readyz; then
+			return 0
+		fi
+		sleep 5
+	done
+	echo "kwatch did not become ready $when" >&2
+	cat "$port_forward_log" >&2 || true
+	exit 1
+}
+
 wait_http() {
 	local path="$1"
 	for _ in $(seq 1 60); do
@@ -322,11 +343,7 @@ curl --fail --silent "http://127.0.0.1:$port/readyz" >/dev/null
 echo "Testing restart and upgrade retention"
 kubectl rollout restart deployment/"$release" --namespace "$namespace"
 wait_for_deployment_rollout "$replicas"
-await_lease_holder
-kubectl wait pod "$leader_pod" --namespace "$namespace" \
-	--for=condition=Ready --timeout=180s
-start_port_forward
-wait_http /readyz
+wait_for_kwatch "after the restart"
 assert_state_volume_bound
 
 helm upgrade "$release" deploy/chart \
@@ -335,21 +352,13 @@ helm upgrade "$release" deploy/chart \
 	--set podAnnotations.operational-test=upgraded \
 	--wait=false
 wait_for_deployment_rollout "$replicas"
-await_lease_holder
-kubectl wait pod "$leader_pod" --namespace "$namespace" \
-	--for=condition=Ready --timeout=180s
-start_port_forward
-wait_http /readyz
+wait_for_kwatch "after the restart"
 assert_state_volume_bound
 
 echo "Testing rollback retention"
 helm rollback "$release" 1 --namespace "$namespace" --wait=false
 wait_for_deployment_rollout "$replicas"
-await_lease_holder
-kubectl wait pod "$leader_pod" --namespace "$namespace" \
-	--for=condition=Ready --timeout=180s
-start_port_forward "$leader_pod"
-wait_http /readyz
+wait_for_kwatch "after the rollback"
 assert_state_volume_bound
 
 # A disposable Kind control-plane restart is a coarse outage/recovery check.
@@ -372,26 +381,7 @@ if [[ "${KWATCH_NODE_RECOVERY:-true}" == true ]]; then
 	done
 	kubectl wait node --all --for=condition=Ready --timeout=60s
 	wait_for_deployment_rollout "$replicas"
-	# The API server and the old port-forward went down with the node, so
-	# re-read the Lease holder and forward to it again before probing.
-	# The Lease can still name a Pod that the restart replaced, so look the
-	# holder up again on every attempt.
-	recovered=false
-	for _ in $(seq 1 30); do
-		await_lease_holder
-		kubectl wait pod "$leader_pod" --namespace "$namespace" \
-			--for=condition=Ready --timeout=60s >/dev/null 2>&1 || true
-		start_port_forward "$leader_pod"
-		if http_ready /healthz && http_ready /readyz; then
-			recovered=true
-			break
-		fi
-		sleep 5
-	done
-	if [[ "$recovered" != true ]]; then
-		echo "kwatch did not recover after the node restart" >&2
-		exit 1
-	fi
+	wait_for_kwatch "after the node restart"
 fi
 
 echo "Kind production smoke test passed."
