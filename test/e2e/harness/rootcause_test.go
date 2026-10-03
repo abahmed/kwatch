@@ -125,3 +125,22 @@ func TestEvaluateRootIgnoresAnEarlierIncidentResolving(t *testing.T) {
 		t.Fatal(err)
 	}
 }
+
+func TestEvaluateRootIgnoresIncidentsOpenedBeforeTheScenario(t *testing.T) {
+	start := time.Date(2026, 10, 3, 16, 35, 0, 0, time.UTC)
+	entries := []AuditEntry{
+		{Incident: "old", Action: "create", Root: "Node//n2",
+			Timestamp: start.Add(-time.Minute)},
+		{Incident: "old", Action: "resolved", Root: "Node//n2",
+			Timestamp: start.Add(2 * time.Minute)},
+		{Incident: "new", Action: "create", Namespace: "ns",
+			Root: "Deployment/ns/storm", Tier: "notify",
+			Timestamp: start.Add(time.Minute)},
+	}
+	exp := RootExpectation{Root: "deployment/ns/storm", Tier: "notify",
+		MustNotBlame: []string{"node//n2"}}
+	scope := RootScope{Namespace: "ns", Since: start}
+	if err := EvaluateRoot(entries, exp, scope).Err(); err != nil {
+		t.Fatal(err)
+	}
+}

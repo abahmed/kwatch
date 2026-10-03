@@ -277,7 +277,7 @@ func (v *view) virtualModes(
 	}
 	switch id.Kind {
 	case kube.KindRegistry:
-		if class := classifyPull(v.text(effect)); class != pullImage {
+		if class := classifyRegistryPull(v.text(effect)); class != pullImage {
 			return failing(class)
 		}
 	case kindClusterDNS:

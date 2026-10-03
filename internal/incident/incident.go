@@ -129,6 +129,9 @@ type Incident struct {
 	// impactPeak is the largest impact size seen. The fingerprint reads it,
 	// so impact that shrinks while failures churn is not news.
 	impactPeak int
+	// restored marks an incident loaded from the state file; only such
+	// incidents wait out the restore grace.
+	restored bool
 	// trafficLost records that a Service in the impact, routed to by an
 	// Ingress or route, has no ready backends or mostly failing ones.
 	// It is recomputed with the impact; the traffic-lost page reads it.

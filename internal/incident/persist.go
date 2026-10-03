@@ -131,7 +131,7 @@ func restored(r Record) *Incident {
 		Members:    make(map[detection.Key]detection.Finding),
 		impactPeak: r.ImpactPeak, revised: r.Revised,
 		revisedAt: r.RevisedAt, AlertKey: r.AlertKey,
-		sent: restoredMark(len(r.Timeline)),
+		sent: restoredMark(len(r.Timeline)), restored: true,
 	}
 	if p.AlertKey == "" && wasAnnounced(p) {
 		p.AlertKey = alertKey(p.Root, p.Mode)

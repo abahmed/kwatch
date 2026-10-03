@@ -8,8 +8,6 @@ import (
 )
 
 func TestScenarioActiveProbeFailureAndRecovery(t *testing.T) {
-	knownGap(t, "an active-probe incident is not resolved after the "+
-		"endpoint recovers")
 	onCluster(t, "integration.active-probe", func(s *Scenario) {
 		s.SetReceiverMode("http-500")
 		s.CreateKwatchConfig("kwatch-e2e-active-probe", activeProbeSpec())

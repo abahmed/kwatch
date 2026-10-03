@@ -70,20 +70,20 @@ entries:
   - id: pod.re-failure-after-recovery
     family: pod
     lifecycle: re-failure
-    status: pending
+    status: covered
     test: TestScenarioRefailureAfterRecovery
     minutes: 6
   - id: rootcause.shared-node
     family: rootcause
     lifecycle: node-impact
-    status: pending
+    status: covered
     test: TestScenarioRootCauseSharedNode
     minutes: 3
     modes: [NotReady]
   - id: rootcause.shared-registry
     family: rootcause
     lifecycle: grouping
-    status: pending
+    status: covered
     test: TestScenarioRootCauseSharedRegistry
     modes: [ImagePull]
   - id: rootcause.small-storm
@@ -96,7 +96,7 @@ entries:
   - id: lifecycle.resolution
     family: lifecycle
     lifecycle: recovery
-    status: pending
+    status: covered
     test: TestScenarioResolution
     minutes: 6
   - id: lifecycle.restart-persistence
@@ -281,7 +281,7 @@ entries:
   - id: integration.active-probe
     family: integration
     lifecycle: health
-    status: pending
+    status: covered
     test: TestScenarioActiveProbeFailureAndRecovery
   - id: integration.tls
     family: integration

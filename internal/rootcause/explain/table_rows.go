@@ -258,7 +258,7 @@ var clusterRows = []Row{
 		Name: "registry-refuses",
 		Cause: Side{Kind: kube.KindRegistry, Modes: []detection.Mode{
 			pullAuth, pullRateLimit, pullServer, pullTLS, pullNetwork,
-			pullStatus}},
+			pullStatus, pullUnexplained}},
 		Link: LinkPulls, Effect: podSide(detection.ModeImagePull), Prior: 0.7,
 		MinCovered: 2,
 	},
